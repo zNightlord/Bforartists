@@ -29,6 +29,7 @@ set(INC
   # For *_info.hh includes.
   ../compositor/realtime_compositor
   ../draw/engines/eevee_next
+  ../draw/engines/bnpr
   ../draw/engines/workbench
   ../draw/intern
 
@@ -651,6 +652,8 @@ set(SRC_SHADER_CREATE_INFOS
   ../draw/engines/eevee/shaders/infos/eevee_legacy_volume_info.hh
 
   ../draw/engines/image/shaders/infos/engine_image_info.hh
+
+  ../draw/engines/bnpr/shaders/infos/bnpr_test_info.hh
   ../draw/intern/shaders/draw_debug_info.hh
   ../draw/intern/shaders/draw_fullscreen_info.hh
   ../draw/intern/shaders/draw_hair_refine_info.hh

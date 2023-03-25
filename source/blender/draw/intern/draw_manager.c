@@ -97,6 +97,7 @@
 #include "engines/overlay/overlay_engine.h"
 #include "engines/select/select_engine.h"
 #include "engines/workbench/workbench_engine.h"
+#include "engines/bnpr/bnpr_engine.h"
 
 #include "GPU_context.h"
 
@@ -3006,6 +3007,7 @@ void DRW_engines_register(void)
 {
   RE_engines_register(&DRW_engine_viewport_eevee_type);
   RE_engines_register(&DRW_engine_viewport_workbench_type);
+  RE_engines_register(&DRW_engine_viewport_bnpr_type);
 
   DRW_engine_register(&draw_engine_gpencil_type);
 
@@ -3019,6 +3021,8 @@ void DRW_engines_register(void)
 
   DRW_engine_register(&draw_engine_image_type);
   DRW_engine_register(DRW_engine_viewport_external_type.draw_engine);
+
+  DRW_engine_register(&draw_engine_bnpr_type);
 
   /* setup callbacks */
   {

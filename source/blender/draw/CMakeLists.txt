@@ -220,6 +220,15 @@ set(SRC
   engines/overlay/overlay_viewer_attribute.cc
   engines/overlay/overlay_volume.cc
   engines/overlay/overlay_wireframe.cc
+  engines/bnpr/bnpr_engine.cc
+  engines/bnpr/bnpr_shader.cc
+  engines/bnpr/bnpr_instance.cc
+  engines/bnpr/bnpr_sync.cc
+  engines/bnpr/bnpr_strokegen_buffer_pool.cc
+  engines/bnpr/bnpr_strokegen_texture_pool.cc
+  engines/bnpr/bnpr_strokegen_pass.cc
+
+
 
   DRW_engine.h
   DRW_pbvh.hh
@@ -314,6 +323,16 @@ set(SRC
   engines/npr/npr_engine.h
   engines/overlay/overlay_engine.h
   engines/overlay/overlay_private.hh
+  engines/bnpr/bnpr_engine.h
+  engines/bnpr/bnpr_shader.hh
+  engines/bnpr/bnpr_instance.hh
+  engines/bnpr/bnpr_sync_handles.hh
+  engines/bnpr/bnpr_sync.hh
+  engines/bnpr/bnpr_strokegen_buffer_pool.hh
+  engines/bnpr/bnpr_strokegen_texture_pool.hh
+  engines/bnpr/bnpr_strokegen_pass.hh
+  engines/bnpr/bnpr_strokegen_geom_extract.hh
+  engines/bnpr/bnpr_strokegen_geom_extract.cc
 )
 
 set(LIB
@@ -734,6 +753,16 @@ set(GLSL_SRC
   engines/image/shaders/image_engine_color_vert.glsl
   engines/image/shaders/image_engine_depth_frag.glsl
   engines/image/shaders/image_engine_depth_vert.glsl
+
+  engines/bnpr/shaders/bnpr_hlsl_support_lib.glsl
+  engines/bnpr/shaders/bnpr_scan_no_subgroup_lib.glsl
+  engines/bnpr/shaders/bnpr_scan_no_subgroup_codegen_lib.glsl
+  engines/bnpr/shaders/bnpr_strokegen_test_comp.glsl
+  engines/bnpr/shaders/bnpr_scan_test_comp.glsl
+  engines/bnpr/shaders/bnpr_geom_extract_comp.glsl
+
+  engines/bnpr/bnpr_defines.hh
+  engines/bnpr/bnpr_shader_shared.hh
 )
 
 set(GLSL_C)

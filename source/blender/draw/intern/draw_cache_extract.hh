@@ -240,7 +240,7 @@ struct MeshBufferCache {
 
   struct {
     int *tri_first_index;
-    int *mat_tri_len;
+    int *mat_tri_len; 
     int visible_tri_len;
   } poly_sorted;
 };
