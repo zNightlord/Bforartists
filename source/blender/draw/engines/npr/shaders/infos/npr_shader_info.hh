@@ -6,7 +6,7 @@ GPU_SHADER_INTERFACE_INFO(npr_prepass_iface, "")
     .flat(Type::UINT, "id")
     .smooth(Type::VEC3, "normal")
     .smooth(Type::VEC4, "tangent");
-
+ 
 GPU_SHADER_CREATE_INFO(npr_prepass_mesh)
     .vertex_source("npr_prepass_vert.glsl")
     .vertex_in(0, Type::VEC3, "pos")

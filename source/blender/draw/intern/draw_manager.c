@@ -3000,7 +3000,8 @@ void DRW_engines_register_experimental(void)
   if (U.experimental.enable_workbench_next) {
     RE_engines_register(&DRW_engine_viewport_workbench_next_type);
   }
-  RE_engines_register(&DRW_engine_viewport_npr_type);
+  // RE_engines_register(&DRW_engine_viewport_npr_type);
+  // RE_engines_register(&DRW_engine_viewport_bnpr_type);
 }
 
 void DRW_engines_register(void)
@@ -3008,6 +3009,7 @@ void DRW_engines_register(void)
   RE_engines_register(&DRW_engine_viewport_eevee_type);
   RE_engines_register(&DRW_engine_viewport_workbench_type);
   RE_engines_register(&DRW_engine_viewport_bnpr_type);
+  RE_engines_register(&DRW_engine_viewport_npr_type);
 
   DRW_engine_register(&draw_engine_gpencil_type);
 

@@ -97,7 +97,7 @@ namespace blender::bnpr
   { /* Add object draw calls to passes. (Populate render graph) */
     Object *ob = object_ref.object;
 
-    const bool is_renderable_type = ELEM(ob->type, OB_CURVES, OB_GPENCIL, OB_MESH, OB_LAMP);
+    const bool is_renderable_type = ELEM(ob->type, OB_CURVES, OB_MESH, OB_LAMP);
     const int ob_visibility = DRW_object_visibility_in_active_context(ob);
     const bool partsys_is_visible = (ob_visibility & OB_VISIBLE_PARTICLES) != 0 &&
                                     (ob->type == OB_MESH);
