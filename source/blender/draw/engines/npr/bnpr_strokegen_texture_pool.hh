@@ -10,22 +10,22 @@
 
 #include "bnpr_shader_shared.hh"
 
-namespace blender::bnpr
+namespace blender::strokegen
 {
-  class Instance;
+  class StrokegenInstance;
 
   class GPUTexturePoolModule
   {
   private:
     /** Instance */
-    Instance &instance_;
+    StrokegenInstance &instance_;
 
     /** Compute Resources */
     TextureFromPool strokegen_tex_test_;
 
 
   public:
-    GPUTexturePoolModule(Instance &inst) :
+    GPUTexturePoolModule(StrokegenInstance &inst) :
       instance_(inst),
       strokegen_tex_test_("StrokegenTexture_Test"){};
     ~GPUTexturePoolModule() {};

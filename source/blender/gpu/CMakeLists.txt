@@ -29,7 +29,6 @@ set(INC
   # For *_info.hh includes.
   ../compositor/realtime_compositor
   ../draw/engines/eevee_next
-  ../draw/engines/bnpr
   ../draw/engines/npr
   ../draw/engines/workbench
   ../draw/intern
@@ -629,8 +628,6 @@ set(SRC_SHADER_CREATE_INFOS
   ../draw/engines/overlay/shaders/infos/overlay_viewer_attribute_info.hh
   ../draw/engines/overlay/shaders/infos/overlay_volume_info.hh
   ../draw/engines/overlay/shaders/infos/overlay_wireframe_info.hh
-  ../draw/engines/npr/shaders/infos/npr_shader_info.hh
-  ../draw/engines/bnpr/shaders/infos/bnpr_test_info.hh
   ../draw/engines/select/shaders/infos/select_id_info.hh
   ../draw/engines/workbench/shaders/infos/workbench_composite_info.hh
   ../draw/engines/workbench/shaders/infos/workbench_effect_antialiasing_info.hh
@@ -642,6 +639,7 @@ set(SRC_SHADER_CREATE_INFOS
   ../draw/engines/workbench/shaders/infos/workbench_shadow_info.hh
   ../draw/engines/workbench/shaders/infos/workbench_transparent_resolve_info.hh
   ../draw/engines/workbench/shaders/infos/workbench_volume_info.hh
+  ../draw/engines/npr/shaders/infos/npr_shader_info.hh
 
   ../draw/engines/eevee/shaders/infos/eevee_legacy_bloom_info.hh
   ../draw/engines/eevee/shaders/infos/eevee_legacy_common_info.hh

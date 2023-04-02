@@ -9,31 +9,29 @@
  * and static shader usage.
  */
 
-#include "GPU_capabilities.h"
-
 #include "gpu_shader_create_info.hh"
 
 #include "bnpr_shader.hh"
 
-namespace blender::bnpr {
+namespace blender::strokegen {
 
 /* -------------------------------------------------------------------- */
 /** \name Module
  *
  * \{ */
 
-ShaderModule *ShaderModule::g_shader_module = nullptr;
+StrokeGenShaderModule *StrokeGenShaderModule::g_shader_module = nullptr;
 
-ShaderModule *ShaderModule::module_get()
+StrokeGenShaderModule *StrokeGenShaderModule::module_get()
 {
   if (g_shader_module == nullptr) {
     /* TODO(@fclem) thread-safety. */
-    g_shader_module = new ShaderModule();
+    g_shader_module = new StrokeGenShaderModule();
   }
   return g_shader_module;
 }
 
-void ShaderModule::module_free()
+void StrokeGenShaderModule::module_free()
 {
   if (g_shader_module != nullptr) {
     /* TODO(@fclem) thread-safety. */
@@ -42,7 +40,7 @@ void ShaderModule::module_free()
   }
 }
 
-ShaderModule::ShaderModule()
+StrokeGenShaderModule::StrokeGenShaderModule()
 {
   for (GPUShader *&shader : shaders_) {
     shader = nullptr;
@@ -63,7 +61,7 @@ ShaderModule::ShaderModule()
 #endif
 }
 
-ShaderModule::~ShaderModule()
+StrokeGenShaderModule::~StrokeGenShaderModule()
 {
   for (GPUShader *&shader : shaders_) {
     DRW_SHADER_FREE_SAFE(shader);
@@ -77,7 +75,7 @@ ShaderModule::~ShaderModule()
  *
  * \{ */
 
-const char *ShaderModule::static_shader_create_info_name_get(eShaderType shader_type)
+const char *StrokeGenShaderModule::static_shader_create_info_name_get(eShaderType shader_type)
 { // returns the name of ShaderCreateInfo
   switch (shader_type) {
     case DEPTH:
@@ -116,7 +114,7 @@ const char *ShaderModule::static_shader_create_info_name_get(eShaderType shader_
   return "";
 }
 
-GPUShader *ShaderModule::static_shader_get(eShaderType shader_type)
+GPUShader *StrokeGenShaderModule::static_shader_get(eShaderType shader_type)
 {
   if (shaders_[shader_type] == nullptr) {
     const char *shader_name = static_shader_create_info_name_get(shader_type);

@@ -19,7 +19,7 @@
 
 #  include "GPU_shader_shared.h"
 
-namespace blender::bnpr {
+namespace blender::strokegen {
 
 using namespace draw;
 

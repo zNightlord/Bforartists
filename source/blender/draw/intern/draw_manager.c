@@ -97,7 +97,7 @@
 #include "engines/overlay/overlay_engine.h"
 #include "engines/select/select_engine.h"
 #include "engines/workbench/workbench_engine.h"
-#include "engines/bnpr/bnpr_engine.h"
+#include "engines/npr/bnpr_engine.h"
 
 #include "GPU_context.h"
 

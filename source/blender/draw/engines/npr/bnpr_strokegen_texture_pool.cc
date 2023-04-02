@@ -9,7 +9,7 @@
 #include "bnpr_strokegen_texture_pool.hh"
 #include "bnpr_instance.hh"
 
-namespace blender::bnpr
+namespace blender::strokegen
 {
 
 }

@@ -20,7 +20,7 @@
 #include "GPU_shader.h"
 
 
-namespace blender::bnpr {
+namespace blender::strokegen {
 
 /* Keep alphabetical order and clean prefix. */
 enum eShaderType {
@@ -47,23 +47,23 @@ enum eShaderType {
 /**
  * Shader module. shared between instances.
  */
-class ShaderModule {
+class StrokeGenShaderModule {
  private:
   std::array<GPUShader *, MAX_SHADER_TYPE> shaders_;
 
   /** Shared shader module across all engine instances. */
-  static ShaderModule *g_shader_module;
+  static StrokeGenShaderModule *g_shader_module;
 
  public:
-  ShaderModule();
-  ~ShaderModule();
+  StrokeGenShaderModule();
+  ~StrokeGenShaderModule();
 
   GPUShader *static_shader_get(eShaderType shader_type);
   // TODO: GPUMaterial ? (see impl in eevee)
 
 
   /** Only to be used by Instance constructor. */
-  static ShaderModule *module_get();
+  static StrokeGenShaderModule *module_get();
   static void module_free();
 
  private:

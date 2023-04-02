@@ -17,8 +17,8 @@
 #include "bnpr_strokegen_texture_pool.hh"
 #include "bnpr_strokegen_pass.hh"
 
-namespace blender::bnpr {
-class Instance;
+namespace blender::strokegen {
+class StrokegenInstance;
 
 class StrokeGenPassModule // similar to "LineDrawingRenderPass"
 {
@@ -30,7 +30,7 @@ private:
   draw::PassSimple pass_extract_geom = {"StrokeGen Extract Geometry"};
   
   /** Instance */
-  ShaderModule &shaders_;
+  StrokeGenShaderModule &shaders_;
   GPUBufferPoolModule &buffers_;
   GPUTexturePoolModule &textures_;
 
@@ -39,7 +39,7 @@ private:
 
 public:
   StrokeGenPassModule(
-      ShaderModule &strokegen_shaders,
+      StrokeGenShaderModule &strokegen_shaders,
       GPUBufferPoolModule &strokegen_buffers,
       GPUTexturePoolModule &strokegen_textures
       )

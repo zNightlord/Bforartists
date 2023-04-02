@@ -22,7 +22,7 @@
 #include "bnpr_instance.hh"
 #include "bnpr_defines.hh"
 
-namespace blender::bnpr
+namespace blender::strokegen
 {
   /* -------------------------------------------------------------------- */
   /** \name Initialization
@@ -33,7 +33,7 @@ namespace blender::bnpr
    * IMPORTANT: xxx.init() functions are NOT meant to acquire and allocate DRW resources.
    * Any attempt to do so will likely produce use after free situations.
    * \{ */
-  void Instance::init(
+  void StrokegenInstance::init(
     Depsgraph* depsgraph_,
     Manager* manager_,
     const View3D* v3d_,
@@ -55,7 +55,7 @@ namespace blender::bnpr
     frame_counter = 0;
   }
 
-  void Instance::update_eval_members()
+  void StrokegenInstance::update_eval_members()
   {
     scene = DEG_get_evaluated_scene(depsgraph);
     camera_eval_object = (camera_orig_object) ?
@@ -77,7 +77,7 @@ namespace blender::bnpr
    * IMPORTANT: xxx.sync() functions area responsible for creating DRW resources (i.e: DRWView) as
    * well as querying temp texture pool. All DRWPasses should be ready by the end end_sync().
    * \{ */
-  void Instance::begin_sync(Manager& manager)
+  void StrokegenInstance::begin_sync(Manager& manager)
   {
     /* Init draw passes and manager related stuff. (Begin render graph) */
 
@@ -88,12 +88,12 @@ namespace blender::bnpr
     strokegen_passes.on_begin_sync();
   }
 
-  void Instance::end_sync(Manager&)
+  void StrokegenInstance::end_sync(Manager&)
   {
     /* Post processing after all object. (End render graph) */
   }
 
-  void Instance::object_sync(Manager& manager, ObjectRef& object_ref)
+  void StrokegenInstance::object_sync(Manager& manager, ObjectRef& object_ref)
   { /* Add object draw calls to passes. (Populate render graph) */
     Object *ob = object_ref.object;
 
@@ -140,7 +140,7 @@ namespace blender::bnpr
   /** \name Rendering
    * \{ */
 
-  void Instance::draw_viewport(Manager& manager, View& view)
+  void StrokegenInstance::draw_viewport(Manager& manager, View& view)
   {
     /* Submit passes here. (Execute render graph) */
 

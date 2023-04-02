@@ -1,4 +1,4 @@
-#pragma BLENDER_REQUIRE(bnpr_hlsl_support_lib.glsl)
+#pragma BLENDER_REQUIRE(npr_strokegen_hlsl_support_lib.glsl)
 
 #ifndef BNPR_SCAN_NO_SUBGROUP_INCLUDED
 #define BNPR_SCAN_NO_SUBGROUP_INCLUDED

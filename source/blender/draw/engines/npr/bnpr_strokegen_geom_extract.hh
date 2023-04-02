@@ -4,7 +4,7 @@
 #include "gpu_batch_private.hh"
 
 
-namespace blender::bnpr
+namespace blender::strokegen
 {
     struct GeomExtractionData
     {

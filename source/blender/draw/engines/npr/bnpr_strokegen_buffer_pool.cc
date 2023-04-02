@@ -10,7 +10,7 @@
 #include "bnpr_instance.hh"
 #include "bnpr_defines.hh"
 
-namespace blender::bnpr
+namespace blender::strokegen
 {
   void GPUBufferPoolModule::on_begin_sync()
   {

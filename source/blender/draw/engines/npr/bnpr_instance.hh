@@ -27,17 +27,17 @@
 #include "bnpr_strokegen_texture_pool.hh"
 #include "bnpr_strokegen_pass.hh"
 
-namespace blender::bnpr
+namespace blender::strokegen
 {
   using namespace draw;
 
-  class Instance
+  class StrokegenInstance
   {
   private:
 
   public:
     /** Shading Modules */
-    ShaderModule shaders; // singleton class for handling GPUShader(s)
+    StrokeGenShaderModule shaders; // singleton class for handling GPUShader(s)
     SyncModule sync;
     GPUBufferPoolModule   strokegen_buffers;
     GPUTexturePoolModule  strokegen_textures;
@@ -70,8 +70,8 @@ namespace blender::bnpr
 
 
   public:
-    Instance() :
-    shaders(*ShaderModule::module_get()),
+    StrokegenInstance() :
+    shaders(*StrokeGenShaderModule::module_get()),
     sync(*this),
     strokegen_buffers(*this),
     strokegen_textures(*this),

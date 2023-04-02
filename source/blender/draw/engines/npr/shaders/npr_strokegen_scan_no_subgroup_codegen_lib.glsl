@@ -1,7 +1,7 @@
-#ifndef BNPR_SCAN_NO_SUBGROUP_CODEGEN_LIB
-#define BNPR_SCAN_NO_SUBGROUP_CODEGEN_LIB
+#ifndef BNPR_STROKEGEN_SCAN_NO_SUBGROUP_CODEGEN_LIB
+#define BNPR_STROKEGEN_SCAN_NO_SUBGROUP_CODEGEN_LIB
 
-#pragma BLENDER_REQUIRE(bnpr_scan_no_subgroup_lib.glsl)
+#pragma BLENDER_REQUIRE(npr_strokegen_scan_no_subgroup_lib.glsl)
 
 /* -------------------------------------------------------------------- */
 /** \name Tree Scan LDS Cache

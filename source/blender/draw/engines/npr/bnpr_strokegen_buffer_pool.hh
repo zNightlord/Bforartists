@@ -10,9 +10,9 @@
 
 #include "bnpr_shader_shared.hh"
 
-namespace blender::bnpr
+namespace blender::strokegen
 {
-  class Instance;
+  class StrokegenInstance;
 
   class GPUBufferPoolModule
   {
@@ -20,7 +20,7 @@ namespace blender::bnpr
 
   private:
     /** Instance */
-    Instance &instance;
+    StrokegenInstance &instance;
 
     /** Compute Resources */
     SSBO_StrokeGenTest ssbo_bnpr_test_;
@@ -35,7 +35,7 @@ namespace blender::bnpr
     UBO_BnprTreeScan ubo_bnpr_tree_scan_infos_;
 
   public:
-    GPUBufferPoolModule(Instance &inst) : instance(inst) {}
+    GPUBufferPoolModule(StrokegenInstance &inst) : instance(inst) {}
     ~GPUBufferPoolModule() {}
 
     void on_begin_sync();

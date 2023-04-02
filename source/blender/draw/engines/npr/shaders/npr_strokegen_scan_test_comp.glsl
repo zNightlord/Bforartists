@@ -1,4 +1,4 @@
-#pragma BLENDER_REQUIRE(bnpr_scan_no_subgroup_codegen_lib.glsl)
+#pragma BLENDER_REQUIRE(npr_strokegen_scan_no_subgroup_codegen_lib.glsl)
 
 
 /* input buffers:

@@ -53,7 +53,7 @@ typedef struct bnpr_Data {
   bnpr_PassList *psl;
   bnpr_StorageList *stl;
 
-  bnpr::Instance *instance;
+  strokegen::StrokegenInstance *instance;
   char info[GPU_INFO_SIZE];
 
 } bnpr_Data;
@@ -83,7 +83,7 @@ static void bnpr_engine_init(void *vedata)
 
   bnpr_Data *ved = reinterpret_cast<bnpr_Data *>(vedata);
   if (ved->instance == nullptr) {
-    ved->instance = new bnpr::Instance();
+    ved->instance = new strokegen::StrokegenInstance();
   }
 
   draw::Manager *drw_mgr = DRW_manager_get();
@@ -108,19 +108,6 @@ static void bnpr_engine_init(void *vedata)
   );
 }
 
-
-
-static void bnpr_draw_scene_legacy(void *vedata)
-{
-  bnpr_PassList *psl = ((bnpr_Data *)vedata)->psl;
-
-  DRW_draw_pass(psl->depth_pass[0]);
-  DRW_draw_pass(psl->depth_pass_pointcloud[0]);
-  DRW_draw_pass(psl->depth_pass_cull[0]);
-  DRW_draw_pass(psl->depth_pass[1]);
-  DRW_draw_pass(psl->depth_pass_pointcloud[1]);
-  DRW_draw_pass(psl->depth_pass_cull[1]);
-}
 
 static void bnpr_draw_scene(void *vedata)
 {
@@ -178,35 +165,35 @@ static void bnpr_cache_init_legacy(void *vedata)
     );
     DRWState state = DRW_STATE_WRITE_DEPTH | DRW_STATE_DEPTH_LESS_EQUAL;
 
-    blender::bnpr::ShaderModule* shaderModule =
-      blender::bnpr::ShaderModule::module_get();
+    blender::strokegen::StrokeGenShaderModule* shaderModule =
+      blender::strokegen::StrokeGenShaderModule::module_get();
 
     GPUShader *sh = DRW_state_is_select() ?
-                        shaderModule->static_shader_get(blender::bnpr::DEPTH_CONSERVATIVE) :
-                        shaderModule->static_shader_get(blender::bnpr::DEPTH);
+                        shaderModule->static_shader_get(blender::strokegen::DEPTH_CONSERVATIVE) :
+                        shaderModule->static_shader_get(blender::strokegen::DEPTH);
 
     DRW_PASS_CREATE(psl->depth_pass[i], state | clip_state | infront_state);
     stl->g_data->depth_shgrp[i] = grp = DRW_shgroup_create(sh, psl->depth_pass[i]);
     DRW_shgroup_uniform_block(grp, "globalsBlock", G_draw.block_ubo);
 
     sh = DRW_state_is_select() ?
-        shaderModule->static_shader_get(blender::bnpr::POINTCLOUD_DEPTH_CONSERVATIVE) :
-        shaderModule->static_shader_get(blender::bnpr::POINTCLOUD_DEPTH);
+        shaderModule->static_shader_get(blender::strokegen::POINTCLOUD_DEPTH_CONSERVATIVE) :
+        shaderModule->static_shader_get(blender::strokegen::POINTCLOUD_DEPTH);
     DRW_PASS_CREATE(psl->depth_pass_pointcloud[i], state | clip_state | infront_state);
     stl->g_data->depth_pointcloud_shgrp[i] = grp = DRW_shgroup_create(
         sh, psl->depth_pass_pointcloud[i]);
     DRW_shgroup_uniform_block(grp, "globalsBlock", G_draw.block_ubo);
 
     stl->g_data->depth_hair_shgrp[i] = grp = DRW_shgroup_create(
-        shaderModule->static_shader_get(blender::bnpr::DEPTH), psl->depth_pass[i]);
+        shaderModule->static_shader_get(blender::strokegen::DEPTH), psl->depth_pass[i]);
     DRW_shgroup_uniform_block(grp, "globalsBlock", G_draw.block_ubo);
 
     stl->g_data->depth_curves_shgrp[i] = grp = DRW_shgroup_create(
-        shaderModule->static_shader_get(blender::bnpr::CURVES_DEPTH), psl->depth_pass[i]);
+        shaderModule->static_shader_get(blender::strokegen::CURVES_DEPTH), psl->depth_pass[i]);
     DRW_shgroup_uniform_block(grp, "globalsBlock", G_draw.block_ubo);
 
-    sh = DRW_state_is_select() ? shaderModule->static_shader_get(blender::bnpr::DEPTH_CONSERVATIVE) :
-                                 shaderModule->static_shader_get(blender::bnpr::DEPTH);
+    sh = DRW_state_is_select() ? shaderModule->static_shader_get(blender::strokegen::DEPTH_CONSERVATIVE) :
+                                 shaderModule->static_shader_get(blender::strokegen::DEPTH);
     state |= DRW_STATE_CULL_BACK;
     DRW_PASS_CREATE(psl->depth_pass_cull[i], state | clip_state | infront_state);
     stl->g_data->depth_shgrp_cull[i] = grp = DRW_shgroup_create(sh, psl->depth_pass_cull[i]);
@@ -373,12 +360,12 @@ static void bnpr_instance_free(void *instance) {
   if (!GPU_shader_storage_buffer_objects_support()) {
     return;
   }
-  delete reinterpret_cast<bnpr::Instance *>(instance);
+  delete reinterpret_cast<strokegen::StrokegenInstance *>(instance);
 }
 
 static void bnpr_engine_free(void)
 {
-  bnpr::ShaderModule::module_free();
+  strokegen::StrokeGenShaderModule::module_free();
 }
 
 static void bnpr_render_to_image(void *vedata, struct RenderEngine *engine,

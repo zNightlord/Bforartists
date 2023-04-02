@@ -24,7 +24,7 @@
 #include "draw_cache_extract.hh"
 #include "draw_cache_impl.h"
 
-namespace blender::bnpr
+namespace blender::strokegen
 {
   /* -------------------------------------------------------------------- */
   /** \name Draw Data
