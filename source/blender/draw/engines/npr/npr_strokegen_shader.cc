@@ -13,7 +13,7 @@
 
 #include "npr_strokegen_shader.hh"
 
-namespace blender::strokegen {
+namespace blender::npr::strokegen {
 
 /* -------------------------------------------------------------------- */
 /** \name Module

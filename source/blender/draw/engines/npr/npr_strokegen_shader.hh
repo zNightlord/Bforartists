@@ -20,7 +20,7 @@
 #include "GPU_shader.h"
 
 
-namespace blender::strokegen {
+namespace blender::npr::strokegen {
 
 /* Keep alphabetical order and clean prefix. */
 enum eShaderType {

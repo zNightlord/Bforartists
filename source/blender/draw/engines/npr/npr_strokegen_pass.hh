@@ -17,8 +17,8 @@
 #include "npr_strokegen_texture_pool.hh"
 #include "npr_strokegen_pass.hh"
 
-namespace blender::strokegen {
-class StrokegenInstance;
+namespace blender::npr::strokegen {
+class Instance;
 
 class StrokeGenPassModule // similar to "LineDrawingRenderPass"
 {

@@ -11,6 +11,7 @@
 extern "C" {
 #endif
 
+extern DrawEngineType draw_engine_npr_type;
 extern RenderEngineType DRW_engine_viewport_npr_type;
 
 #ifdef __cplusplus

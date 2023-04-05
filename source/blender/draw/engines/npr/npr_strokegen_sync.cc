@@ -18,7 +18,7 @@
 
 #include "draw_cache_extract.hh"
 
-namespace blender::strokegen {
+namespace blender::npr::strokegen {
 /* -------------------------------------------------------------------- */
 /** \name Draw Data
  *
@@ -73,4 +73,4 @@ static void draw_data_init_cb(struct DrawData *dd)
 
 
   }
-  }  // namespace blender::strokegen
+  }  // namespace blender::npr::strokegen

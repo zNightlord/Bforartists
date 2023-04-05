@@ -11,7 +11,7 @@
 
 #include "gpu_batch_private.hh"
 
-namespace blender::strokegen
+namespace blender::npr::strokegen
 {
   using namespace blender;
 

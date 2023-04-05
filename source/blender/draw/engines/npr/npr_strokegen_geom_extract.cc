@@ -15,7 +15,7 @@
  * need to add this with <cref> batch_vert_first unless we are read the index with gl_VertexID.
  * \param batch_inst_len #instances in current batch
  */
-void blender::strokegen::GeomExtractCommand::gpu_batch_draw_parameter_get(
+void blender::npr::strokegen::GeomExtractCommand::gpu_batch_draw_parameter_get(
     GPUBatch* gpu_batch,
     int* batch_vert_len,
     int* batch_vert_first,

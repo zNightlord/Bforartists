@@ -14,7 +14,7 @@
 
 // Copied from eevee_sync.hh
 
-namespace blender::strokegen
+namespace blender::npr::strokegen
 {
   /* -------------------------------------------------------------------- */
   /** \name ObjectKey

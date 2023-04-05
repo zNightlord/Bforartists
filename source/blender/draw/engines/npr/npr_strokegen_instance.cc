@@ -15,14 +15,11 @@
 #include "BLI_rect.h"
 #include "DEG_depsgraph_query.h"
 #include "DNA_ID.h"
-#include "DNA_lightprobe_types.h"
-#include "DNA_modifier_types.h"
-#include "RE_pipeline.h"
 
 #include "npr_strokegen_instance.hh"
 #include "bnpr_defines.hh"
 
-namespace blender::strokegen
+namespace blender::npr::strokegen
 {
   /* -------------------------------------------------------------------- */
   /** \name Initialization
@@ -33,7 +30,7 @@ namespace blender::strokegen
    * IMPORTANT: xxx.init() functions are NOT meant to acquire and allocate DRW resources.
    * Any attempt to do so will likely produce use after free situations.
    * \{ */
-  void StrokegenInstance::init(
+  void Instance::init(
     Depsgraph* depsgraph_,
     Manager* manager_,
     const View3D* v3d_,
@@ -55,7 +52,7 @@ namespace blender::strokegen
     frame_counter = 0;
   }
 
-  void StrokegenInstance::update_eval_members()
+  void Instance::update_eval_members()
   {
     scene = DEG_get_evaluated_scene(depsgraph);
     camera_eval_object = (camera_orig_object) ?
@@ -77,7 +74,7 @@ namespace blender::strokegen
    * IMPORTANT: xxx.sync() functions area responsible for creating DRW resources (i.e: DRWView) as
    * well as querying temp texture pool. All DRWPasses should be ready by the end end_sync().
    * \{ */
-  void StrokegenInstance::begin_sync(Manager& manager)
+  void Instance::begin_sync(Manager& manager)
   {
     /* Init draw passes and manager related stuff. (Begin render graph) */
 
@@ -88,12 +85,12 @@ namespace blender::strokegen
     strokegen_passes.on_begin_sync();
   }
 
-  void StrokegenInstance::end_sync(Manager&)
+  void Instance::end_sync(Manager&)
   {
     /* Post processing after all object. (End render graph) */
   }
 
-  void StrokegenInstance::object_sync(Manager& manager, ObjectRef& object_ref)
+  void Instance::object_sync(Manager& manager, ObjectRef& object_ref)
   { /* Add object draw calls to passes. (Populate render graph) */
     Object *ob = object_ref.object;
 
@@ -140,7 +137,7 @@ namespace blender::strokegen
   /** \name Rendering
    * \{ */
 
-  void StrokegenInstance::draw_viewport(Manager& manager, View& view)
+  void Instance::draw_viewport(Manager& manager, View& view)
   {
     /* Submit passes here. (Execute render graph) */
 

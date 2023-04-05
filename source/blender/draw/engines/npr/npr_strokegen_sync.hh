@@ -20,18 +20,18 @@
 #include "bnpr_shader_shared.hh"
 #include "npr_sync_handles.hh"
 
-namespace blender::strokegen
+namespace blender::npr::strokegen
 {
 
-  class StrokegenInstance;
+  class Instance;
 
   class StrokegenSyncModule
   {
   private:
-    StrokegenInstance &inst_;
+    Instance &inst_;
 
   public:
-    StrokegenSyncModule(StrokegenInstance &inst) : inst_(inst) {};
+    StrokegenSyncModule(Instance &inst) : inst_(inst) {};
     ~StrokegenSyncModule(){};
 
     BnprDrawData &sync_object(Object *ob);
