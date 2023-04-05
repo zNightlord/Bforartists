@@ -10,22 +10,16 @@
 
 #pragma once
 
-#include "BKE_image.h"
-#include "DEG_depsgraph_query.h"
-#include "DNA_shader_fx_types.h"
 #include "DRW_engine.h"
 #include "DRW_render.h"
 #include "ED_view3d.h"
-#include "GPU_capabilities.h"
-#include "IMB_imbuf_types.h"
 
-#include "draw_manager.hh"
+#include "npr_strokegen_shader.hh"
+#include "npr_strokegen_buffer_pool.hh"
+#include "npr_strokegen_pass.hh"
+#include "npr_strokegen_texture_pool.hh"
+#include "npr_strokegen_sync.hh"
 #include "draw_pass.hh"
-#include "bnpr_shader.hh"
-#include "bnpr_sync.hh"
-#include "bnpr_strokegen_buffer_pool.hh"
-#include "bnpr_strokegen_texture_pool.hh"
-#include "bnpr_strokegen_pass.hh"
 
 namespace blender::strokegen
 {
@@ -38,7 +32,7 @@ namespace blender::strokegen
   public:
     /** Shading Modules */
     StrokeGenShaderModule shaders; // singleton class for handling GPUShader(s)
-    SyncModule sync;
+    StrokegenSyncModule sync;
     GPUBufferPoolModule   strokegen_buffers;
     GPUTexturePoolModule  strokegen_textures;
     StrokeGenPassModule   strokegen_passes;

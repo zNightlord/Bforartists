@@ -7,7 +7,7 @@
  *
  */
 
-#include "bnpr_strokegen_pass.hh"
+#include "npr_strokegen_pass.hh"
 
 #include "gpu_batch_private.hh"
 

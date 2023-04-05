@@ -19,10 +19,10 @@
 
 #include "bnpr_engine.h"
 
-#include "bnpr_instance.hh"
-#include "bnpr_shader.hh"
+#include "GPU_capabilities.h"
 #include "intern/mallocn_intern.h"
-
+#include "npr_strokegen_instance.hh"
+#include "npr_strokegen_shader.hh"
 
 using namespace blender;
 

@@ -221,12 +221,13 @@ set(SRC
   engines/overlay/overlay_wireframe.cc
   engines/npr/npr_engine.cc
   engines/npr/bnpr_engine.cc
-  engines/npr/bnpr_shader.cc
-  engines/npr/bnpr_instance.cc
-  engines/npr/bnpr_sync.cc
-  engines/npr/bnpr_strokegen_buffer_pool.cc
-  engines/npr/bnpr_strokegen_texture_pool.cc
-  engines/npr/bnpr_strokegen_pass.cc
+  engines/npr/npr_strokegen_shader.cc
+  engines/npr/npr_strokegen_instance.cc
+  engines/npr/npr_strokegen_sync.cc
+  engines/npr/npr_strokegen_buffer_pool.cc
+  engines/npr/npr_strokegen_texture_pool.cc
+  engines/npr/npr_strokegen_pass.cc
+  engines/npr/npr_strokegen_geom_extract.cc
 
 
 
@@ -324,15 +325,14 @@ set(SRC
   engines/overlay/overlay_private.hh
   engines/npr/npr_engine.h
   engines/npr/bnpr_engine.h
-  engines/npr/bnpr_shader.hh
-  engines/npr/bnpr_instance.hh
-  engines/npr/bnpr_sync_handles.hh
-  engines/npr/bnpr_sync.hh
-  engines/npr/bnpr_strokegen_buffer_pool.hh
-  engines/npr/bnpr_strokegen_texture_pool.hh
-  engines/npr/bnpr_strokegen_pass.hh
-  engines/npr/bnpr_strokegen_geom_extract.hh
-  engines/npr/bnpr_strokegen_geom_extract.cc
+  engines/npr/npr_strokegen_shader.hh
+  engines/npr/npr_strokegen_instance.hh
+  engines/npr/npr_sync_handles.hh
+  engines/npr/npr_strokegen_sync.hh
+  engines/npr/npr_strokegen_buffer_pool.hh
+  engines/npr/npr_strokegen_texture_pool.hh
+  engines/npr/npr_strokegen_pass.hh
+  engines/npr/npr_strokegen_geom_extract.hh
 )
 
 set(LIB

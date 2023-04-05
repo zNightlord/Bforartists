@@ -6,8 +6,8 @@
  * \ingroup bnpr
  */
 
-#include "bnpr_strokegen_buffer_pool.hh"
-#include "bnpr_instance.hh"
+#include "npr_strokegen_buffer_pool.hh"
+#include "npr_strokegen_instance.hh"
 #include "bnpr_defines.hh"
 
 namespace blender::strokegen

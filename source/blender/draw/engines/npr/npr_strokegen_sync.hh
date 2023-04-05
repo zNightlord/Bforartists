@@ -18,21 +18,21 @@
 #include "GPU_material.h"
 
 #include "bnpr_shader_shared.hh"
-#include "bnpr_sync_handles.hh"
+#include "npr_sync_handles.hh"
 
 namespace blender::strokegen
 {
 
   class StrokegenInstance;
 
-  class SyncModule
+  class StrokegenSyncModule
   {
   private:
     StrokegenInstance &inst_;
 
   public:
-    SyncModule(StrokegenInstance &inst) : inst_(inst) {};
-    ~SyncModule(){};
+    StrokegenSyncModule(StrokegenInstance &inst) : inst_(inst) {};
+    ~StrokegenSyncModule(){};
 
     BnprDrawData &sync_object(Object *ob);
     WorldHandle &sync_world(::World *world) {};

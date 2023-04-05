@@ -10,35 +10,28 @@
 
 #include "bnpr_engine.h"
 
-#include "BKE_gpencil.h"
-#include "BKE_object.h"
 #include "DEG_depsgraph_query.h"
 #include "DNA_curves_types.h"
-#include "DNA_gpencil_types.h"
-#include "DNA_modifier_types.h"
-#include "DNA_particle_types.h"
 
-#include "bnpr_instance.hh"
-#include "bnpr_sync.hh"
+#include "npr_strokegen_sync.hh"
+#include "npr_strokegen_instance.hh"
 
 #include "draw_cache_extract.hh"
-#include "draw_cache_impl.h"
 
-namespace blender::strokegen
+namespace blender::strokegen {
+/* -------------------------------------------------------------------- */
+/** \name Draw Data
+ *
+ * \{ */
+
+static void draw_data_init_cb(struct DrawData *dd)
 {
-  /* -------------------------------------------------------------------- */
-  /** \name Draw Data
-   *
-   * \{ */
-
-  static void draw_data_init_cb(struct DrawData* dd)
-  {
-    /* Object has just been created or was never evaluated by the engine. */
-    dd->recalc = ID_RECALC_ALL; /* Tag given ID for an update in all the dependency graphs. */
+  /* Object has just been created or was never evaluated by the engine. */
+  dd->recalc = ID_RECALC_ALL; /* Tag given ID for an update in all the dependency graphs. */
   }
 
 
-  BnprDrawData& SyncModule::sync_object(Object* ob)
+  BnprDrawData& StrokegenSyncModule::sync_object(Object* ob)
   {
     DrawEngineType* owner = (DrawEngineType*)&DRW_engine_viewport_bnpr_type;
     struct DrawData* dd = DRW_drawdata_ensure(
@@ -55,7 +48,7 @@ namespace blender::strokegen
     return dd_bnpr;
   }
 
-  void SyncModule::sync_mesh(
+  void StrokegenSyncModule::sync_mesh(
     Object* ob, BnprDrawData& ob_draw_data,
     draw::ResourceHandle res_handle, const draw::ObjectRef& ob_ref
   )
@@ -80,4 +73,4 @@ namespace blender::strokegen
 
 
   }
-}
+  }  // namespace blender::strokegen

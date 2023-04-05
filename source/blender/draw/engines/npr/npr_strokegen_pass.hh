@@ -11,11 +11,11 @@
 #include "draw_pass.hh"
 #include "draw_manager.hh"
 
-#include "bnpr_shader.hh"
+#include "npr_strokegen_shader.hh"
 #include "bnpr_shader_shared.hh"
-#include "bnpr_strokegen_buffer_pool.hh"
-#include "bnpr_strokegen_texture_pool.hh"
-#include "bnpr_strokegen_pass.hh"
+#include "npr_strokegen_buffer_pool.hh"
+#include "npr_strokegen_texture_pool.hh"
+#include "npr_strokegen_pass.hh"
 
 namespace blender::strokegen {
 class StrokegenInstance;

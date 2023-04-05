@@ -19,7 +19,7 @@
 #include "DNA_modifier_types.h"
 #include "RE_pipeline.h"
 
-#include "bnpr_instance.hh"
+#include "npr_strokegen_instance.hh"
 #include "bnpr_defines.hh"
 
 namespace blender::strokegen

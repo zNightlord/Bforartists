@@ -11,7 +11,7 @@
 
 #include "gpu_shader_create_info.hh"
 
-#include "bnpr_shader.hh"
+#include "npr_strokegen_shader.hh"
 
 namespace blender::strokegen {
 
