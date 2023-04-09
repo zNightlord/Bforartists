@@ -556,11 +556,18 @@ set(GLSL_SRC
   engines/npr/shaders/npr_deferred_frag.glsl
   engines/npr/shaders/npr_prepass_frag.glsl
   engines/npr/shaders/npr_prepass_vert.glsl
+  
   engines/npr/shaders/npr_strokegen_hlsl_support_lib.glsl
+  engines/npr/shaders/npr_strokegen_test_comp.glsl
+  
   engines/npr/shaders/npr_strokegen_scan_no_subgroup_lib.glsl
   engines/npr/shaders/npr_strokegen_scan_no_subgroup_codegen_lib.glsl
-  engines/npr/shaders/npr_strokegen_test_comp.glsl
   engines/npr/shaders/npr_strokegen_scan_test_comp.glsl
+  
+  engines/npr/shaders/npr_strokegen_segloopconv1D_lib.glsl
+  engines/npr/shaders/npr_strokegen_segloopconv1D_codegen_lib.glsl
+  engines/npr/shaders/npr_strokegen_segloopconv1D_test_comp.glsl
+  
   engines/npr/shaders/npr_strokegen_geom_extract_comp.glsl
   
   engines/npr/bnpr_defines.hh

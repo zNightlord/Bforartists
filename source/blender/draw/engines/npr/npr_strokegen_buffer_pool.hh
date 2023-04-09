@@ -27,12 +27,16 @@ namespace blender::npr::strokegen
 
     SSBO_StrokeGenMeshPool      ssbo_bnpr_mesh_pool_;                
     SSBO_StrokeGenMeshPoolArgs  ssbo_bnpr_mesh_pool_args_;   
-    
-    SSBO_BnprScanData       ssbo_bnpr_in_scan_data_;
-    SSBO_BnprScanData       ssbo_bnpr_out_scan_data_;
-    SSBO_BnprScanAggregates ssbo_bnpr_scan_block_sum_;
 
-    UBO_BnprTreeScan ubo_bnpr_tree_scan_infos_;
+    SSBO_BnprScanData           ssbo_in_scan_data_;
+    SSBO_BnprScanData           ssbo_out_scan_data_;
+    SSBO_BnprScanAggregates     ssbo_scan_block_sum_;
+    UBO_BnprTreeScan            ubo_bnpr_tree_scan_infos_;
+
+    SSBO_SegLoopConv1DData      ssbo_in_segloopconv1d_data_;
+    SSBO_SegLoopConv1DData      ssbo_out_segloopconv1d_data_;
+    UBO_SegLoopConv1D           ubo_segloopconv1d_;
+    
 
   public:
     GPUBufferPoolModule(Instance &inst) : instance(inst) {}

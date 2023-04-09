@@ -33,9 +33,9 @@ float f32_add(float a, float b)
 /* Example:                                                                           */
 /* (- basic -)                                                                        */
 /* #define SCAN_DATA_TYPE uvec2			    // Input data type for scan operation        */
-/* #define SCAN_OP(a, b) (a + b)				  // Scan operation                            */
+/* #define SCAN_OP(a, b) (a + b)				  // Scan operation                        */
 /* #define SCAN_ZERO_VAL                // Zero value for scan operator               */
-/* #define SCAN_BLOCK_SIZE 256			      // Typically thread_group_size               */
+/* #define SCAN_BLOCK_SIZE 256			      // Typically thread_group_size             */
 /* #define SCAN_FUNCTION_TAG ScanTest   // Alias name for this set of scan ops        */
 /* ---------------------------------------                                            */
 

@@ -640,6 +640,8 @@ set(SRC_SHADER_CREATE_INFOS
   ../draw/engines/workbench/shaders/infos/workbench_transparent_resolve_info.hh
   ../draw/engines/workbench/shaders/infos/workbench_volume_info.hh
   ../draw/engines/npr/shaders/infos/npr_shader_info.hh
+  ../draw/engines/npr/shaders/infos/npr_strokegen_shader_info.hh
+
 
   ../draw/engines/eevee/shaders/infos/eevee_legacy_bloom_info.hh
   ../draw/engines/eevee/shaders/infos/eevee_legacy_common_info.hh

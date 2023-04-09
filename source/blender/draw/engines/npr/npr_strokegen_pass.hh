@@ -144,11 +144,11 @@ private:
 template<typename T>
 void StrokeGenPassModule::validate_pass_scan_test(bool (*equals)(const T &, const T &))
 {
-  SSBO_BnprScanData &buf_scan_inputs = buffers_.ssbo_bnpr_in_scan_data_;
+  SSBO_BnprScanData &buf_scan_inputs = buffers_.ssbo_in_scan_data_;
   buf_scan_inputs.read();
   T *data_scan_inputs = reinterpret_cast<T *>(buf_scan_inputs.data());
 
-  SSBO_BnprScanData &buf_scan_output = buffers_.ssbo_bnpr_out_scan_data_;
+  SSBO_BnprScanData &buf_scan_output = buffers_.ssbo_out_scan_data_;
   buf_scan_output.read();
   T *data_scan_output = reinterpret_cast<T *>(buf_scan_output.data());
 
@@ -234,11 +234,11 @@ void StrokeGenPassModule::validate_segscan(
   T zero_val,
   bool inclusive)
 {
-  SSBO_BnprScanData &buf_segscan_inputs = buffers_.ssbo_bnpr_in_scan_data_;
+  SSBO_BnprScanData &buf_segscan_inputs = buffers_.ssbo_in_scan_data_;
   buf_segscan_inputs.read();
   T *data_segscan_inputs = reinterpret_cast<T *>(buf_segscan_inputs.data());
 
-  SSBO_BnprScanData &buf_segscan_output = buffers_.ssbo_bnpr_out_scan_data_;
+  SSBO_BnprScanData &buf_segscan_output = buffers_.ssbo_out_scan_data_;
   buf_segscan_output.read();
   T *data_segscan_output = reinterpret_cast<T *>(buf_segscan_output.data());
 

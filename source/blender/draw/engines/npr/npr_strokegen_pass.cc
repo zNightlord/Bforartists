@@ -101,9 +101,9 @@ namespace blender::npr::strokegen
       sub.shader_set(shaders_.static_shader_get(eShaderType::SCAN_TEST_UPSWEEP));
 
       // Note: keep the same slot binding as in shader_create_info
-      sub.bind_ssbo(0, buffers_.ssbo_bnpr_in_scan_data_);
-      sub.bind_ssbo(1, buffers_.ssbo_bnpr_out_scan_data_);
-      sub.bind_ssbo(2, buffers_.ssbo_bnpr_scan_block_sum_);
+      sub.bind_ssbo(0, buffers_.ssbo_in_scan_data_);
+      sub.bind_ssbo(1, buffers_.ssbo_out_scan_data_);
+      sub.bind_ssbo(2, buffers_.ssbo_scan_block_sum_);
       sub.bind_ubo(0, buffers_.ubo_bnpr_tree_scan_infos_);
 
       sub.dispatch(int3(buffers_.ubo_bnpr_tree_scan_infos_.num_thread_groups, 1, 1));
@@ -114,7 +114,7 @@ namespace blender::npr::strokegen
       sub.shader_set(shaders_.static_shader_get(eShaderType::SCAN_TEST_AGGREGATE));
 
       // Note: keep the same slot binding as in shader_create_info
-      sub.bind_ssbo(0, buffers_.ssbo_bnpr_scan_block_sum_);
+      sub.bind_ssbo(0, buffers_.ssbo_scan_block_sum_);
 
       sub.dispatch(int3(1, 1, 1));
       sub.barrier(GPU_BARRIER_SHADER_STORAGE);
@@ -124,8 +124,8 @@ namespace blender::npr::strokegen
       sub.shader_set(shaders_.static_shader_get(eShaderType::SCAN_TEST_DWSWEEP));
 
       // Note: keep the same slot binding as in shader_create_info
-      sub.bind_ssbo(0, buffers_.ssbo_bnpr_out_scan_data_);
-      sub.bind_ssbo(1, buffers_.ssbo_bnpr_scan_block_sum_);
+      sub.bind_ssbo(0, buffers_.ssbo_out_scan_data_);
+      sub.bind_ssbo(1, buffers_.ssbo_scan_block_sum_);
       sub.bind_ubo(0, buffers_.ubo_bnpr_tree_scan_infos_);
 
       sub.dispatch(int3(buffers_.ubo_bnpr_tree_scan_infos_.num_thread_groups, 1, 1));
@@ -141,9 +141,9 @@ namespace blender::npr::strokegen
       sub.shader_set(shaders_.static_shader_get(SEGSCAN_TEST_UPSWEEP));
 
       // Note: keep the same slot binding as in shader_create_info
-      sub.bind_ssbo(0, buffers_.ssbo_bnpr_in_scan_data_);
-      sub.bind_ssbo(1, buffers_.ssbo_bnpr_out_scan_data_);
-      sub.bind_ssbo(2, buffers_.ssbo_bnpr_scan_block_sum_);
+      sub.bind_ssbo(0, buffers_.ssbo_in_scan_data_);
+      sub.bind_ssbo(1, buffers_.ssbo_out_scan_data_);
+      sub.bind_ssbo(2, buffers_.ssbo_scan_block_sum_);
       sub.bind_ubo(0, buffers_.ubo_bnpr_tree_scan_infos_);
 
       sub.dispatch(int3(buffers_.ubo_bnpr_tree_scan_infos_.num_thread_groups, 1, 1));
@@ -154,7 +154,7 @@ namespace blender::npr::strokegen
       sub.shader_set(shaders_.static_shader_get(SEGSCAN_TEST_AGGREGATE));
 
       // Note: keep the same slot binding as in shader_create_info
-      sub.bind_ssbo(0, buffers_.ssbo_bnpr_scan_block_sum_);
+      sub.bind_ssbo(0, buffers_.ssbo_scan_block_sum_);
 
       sub.dispatch(int3(1, 1, 1));
       sub.barrier(GPU_BARRIER_SHADER_STORAGE);
@@ -164,8 +164,8 @@ namespace blender::npr::strokegen
       sub.shader_set(shaders_.static_shader_get(SEGSCAN_TEST_DWSWEEP));
 
       // Note: keep the same slot binding as in shader_create_info
-      sub.bind_ssbo(0, buffers_.ssbo_bnpr_out_scan_data_);
-      sub.bind_ssbo(1, buffers_.ssbo_bnpr_scan_block_sum_);
+      sub.bind_ssbo(0, buffers_.ssbo_out_scan_data_);
+      sub.bind_ssbo(1, buffers_.ssbo_scan_block_sum_);
       sub.bind_ubo(0, buffers_.ubo_bnpr_tree_scan_infos_);
 
       sub.dispatch(int3(buffers_.ubo_bnpr_tree_scan_infos_.num_thread_groups, 1, 1));

@@ -146,7 +146,22 @@ using namespace draw;
   /** \} */
 
 
-  
+
+  /* ----------------------------------------------------- */
+  /** \name GPU 1D Segmented Looped Convolution Testing
+   * \{ */
+  struct UBData_SegLoopConv1D
+  {
+    uint dummy0;
+    uint dummy1;
+    uint dummy2;
+    uint dummy3;
+  };
+  BLI_STATIC_ASSERT_ALIGN(UBData_SegLoopConv1D, 16);
+  /** \} */
+
+
+
   /* -------------------------------------------------------------------- */
   /** \name Geometry Extraction from GPUBatch(es)
    * \{ */
@@ -194,6 +209,10 @@ using SSBO_StrokeGenMeshPoolArgs = draw::StorageBuffer<SSBOData_StrokeGenMeshPoo
 using SSBO_BnprScanData = draw::StorageArrayBuffer<uint, 2048 * 2048 * 2, true>;
 using SSBO_BnprScanAggregates = draw::StorageArrayBuffer<uint, 512 * 16, true>;
 using UBO_BnprTreeScan = draw::UniformBuffer<UBData_TreeScan>;
+
+using SSBO_SegLoopConv1DData = draw::StorageArrayBuffer<uint, 2048 * 2048 * 2, true>;
+using SSBO_SegLoopConv1DPatchTable = draw::StorageArrayBuffer<uint, 128 * 2, true>;
+using UBO_SegLoopConv1D = draw::UniformBuffer<UBData_SegLoopConv1D>;
 
 }
 

@@ -21,16 +21,16 @@ void main()
 	T scanval_A, scanval_B;
 	{ /* init & store random scan input vals */
 		scanval_A = T(
-		wang_hash(scan_ids.global_x2.y + scan_ids.lds_x2.x) % 12u
+			wang_hash(scan_ids.global_x2.y + scan_ids.lds_x2.x) % 12u
 		);
 		scanval_B = T(
-		wang_hash(scan_ids.global_x2.x + scan_ids.lds_x2.y) % 12u
+			wang_hash(scan_ids.global_x2.x + scan_ids.lds_x2.y) % 12u
 		);
 		/* ------------------------------------------------------------------------ */
 		/* avoid invalid loads */
 		_FUNC_CLEAN_SCAN_DATA(
-		scan_ids, ubo_bnpr_tree_scan_infos_.num_scan_items,
-		scanval_A, scanval_B /* <- inout */
+			scan_ids, ubo_bnpr_tree_scan_infos_.num_scan_items,
+			scanval_A, scanval_B /* <- inout */
 		);
 		/* ------------------------------------------------------------------------ */
 
@@ -43,13 +43,13 @@ void main()
 	/* execute block-wise exlusive scan */
 	T scanRes_ai, scanRes_bi;
 	_FUNC_TREE_SCAN_BLOCK(
-	groupId,
-	gl_WorkGroupID.x,
-	scanval_A,
-	scanval_B,
-	/* -out- */
-	scanRes_ai,
-	scanRes_bi
+		groupId,
+		gl_WorkGroupID.x,
+		scanval_A,
+		scanval_B,
+		/* -out- */
+		scanRes_ai,
+		scanRes_bi
 	);
 
 	/* store scan results */
@@ -81,12 +81,12 @@ void main()
 
 	T aggregateSum_A, aggregateSum_B;
 	_FUNC_TREE_SCAN_AGGREGATE(
-	groupId,
-	gIdx,
-	aggregate_A,
-	aggregate_B,
-	aggregateSum_A,
-	aggregateSum_B
+		groupId,
+		gIdx,
+		aggregate_A,
+		aggregate_B,
+		aggregateSum_A,
+		aggregateSum_B
 	);
 
 	bnpr_scan_block_sum_buf_[scanAddrs.global_x2.x] = /**floatBitsToUint*/(aggregateSum_A);
@@ -176,7 +176,7 @@ void main()
 	/* store scan results */
 	/* ----------------------------------------------------------- */
 	bnpr_out_scan_data_buf_[scan_ids.global_x2.x] = SEGSCAN_STRUCT_TYPE(
-	scanRes_ai,
+		scanRes_ai,
 		tree_seg_scan_encode_upsweep_hfs(headFlagPartialSum_A, hf_A)
 	);
 	bnpr_out_scan_data_buf_[scan_ids.global_x2.y] = SEGSCAN_STRUCT_TYPE(
