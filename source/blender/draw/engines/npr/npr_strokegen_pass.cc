@@ -22,8 +22,11 @@ namespace blender::npr::strokegen
       return pass_scan_test;
     case SEGSCAN_TEST:
       return pass_segscan_test;
+    case SEGLOOPCONV_TEST:
+      return pass_conv1d_test; 
     case GEOM_EXTRACTION:
       return pass_extract_geom;
+      
     }
     return pass_comp_test;
   }
@@ -34,6 +37,7 @@ namespace blender::npr::strokegen
   {
     rebuild_pass_scan_test();
     rebuild_pass_segscan_test();
+    rebuild_pass_conv_test();
     
     reset_pass_extract_mesh_geom();
   }
@@ -169,6 +173,24 @@ namespace blender::npr::strokegen
       sub.bind_ubo(0, buffers_.ubo_bnpr_tree_scan_infos_);
 
       sub.dispatch(int3(buffers_.ubo_bnpr_tree_scan_infos_.num_thread_groups, 1, 1));
+      sub.barrier(GPU_BARRIER_SHADER_STORAGE);
+    }
+  }
+
+  void StrokeGenPassModule::rebuild_pass_conv_test()
+  {
+    pass_conv1d_test.init();
+    {
+      auto& sub = pass_conv1d_test.sub("strokegen_segloopconv1d_build_patch_table");
+      sub.shader_set(shaders_.static_shader_get(CONV1D_TEST_BUILD_PATCH));
+
+      // Note: keep the same slot binding as in shader_create_info
+      sub.bind_ssbo(0, buffers_.ssbo_segloopconv1d_patch_table_);
+      sub.bind_ssbo(1, buffers_.ssbo_in_segloopconv1d_data_);
+      sub.bind_ssbo(2, buffers_.ssbo_out_segloopconv1d_data_);
+      sub.bind_ubo(0, buffers_.ubo_segloopconv1d_);
+
+      sub.dispatch(int3(buffers_.ubo_segloopconv1d_.num_thread_groups, 1, 1));
       sub.barrier(GPU_BARRIER_SHADER_STORAGE);
     }
   }

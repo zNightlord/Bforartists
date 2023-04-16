@@ -3,30 +3,10 @@
 #ifndef BNPR_SEGLOOPCONV1D_LIB_INCLUDED
 #define BNPR_SEGLOOPCONV1D_LIB_INCLUDED
 
-
-/* Inputs /////////////////////////////////////////////////
- *-Common------------------------------*                                                
- * LOOPCONV1D_TAG              Test    *
- * LOOPCONV1D_MAX_RADIUS       32u     *
- * LOOPCONV1D_GROUP_SIZE       256u    *
- *-Convolution------------------------------------*
- * #if SEGLOOPCONV1D_LIB_CONVOLUTION_INCLUDED
- *    LOOPCONV1D_DATA_TYPE                   float
- *    FUNC_DEVICE_LOAD_LOOPCONV1D_PATCH_ID
- *    FUNC_DEVICE_LOAD_LOOPCONV1D_DATA
- * #endif 
- *-Build Conv Acc Cache----------------------------*
- * #if SEGLOOPCONV1D_LIB_BUILD_PATCH_TABLE_INCLUDED
- * #endif
-*/
-#define tag                         LOOPCONV1D_TAG
-#define T_CONV                      LOOPCONV1D_DATA_TYPE
-#define MAX_CONV_RADIUS             LOOPCONV1D_MAX_RADIUS
-#define GROUP_SIZE_CONV             ((gl_WorkGroupSize.x))
-#if SEGLOOPCONV1D_LIB_CONVOLUTION_INCLUDED
-	#define DEVICE_LOAD_CONV_PATCH_ID   FUNC_DEVICE_LOAD_LOOPCONV1D_PATCH_ID
-	#define DEVICE_LOAD_CONV_DATA       FUNC_DEVICE_LOAD_LOOPCONV1D_DATA
-#endif
+void func_device_store_loopconv1d_patch_id(uint stAddr, uint val)
+{
+	ssbo_segloopconv1d_patch_table_[stAddr] = val;
+}
 
 /* Macro expansion */
 #ifndef CAT
@@ -34,17 +14,64 @@
 	#define CAT(x, y) CAT_(x, y)
 #endif
 
-/* Reset macro defs */
 
 
 
 
-#ifdef SEGLOOPCONV1D_LIB_CONVOLUTION_INCLUDED
+/* Inputs /////////////////////////////////////////////////////////////////////
+ *-Common------------------------------*                                                
+ * LOOPCONV1D_TAG              Test    *
+ * LOOPCONV1D_MAX_RADIUS       32u     *
+ * LOOPCONV1D_GROUP_SIZE       256u    *
+*/
+#define tag                         LOOPCONV1D_TAG
+#define MAX_CONV_RADIUS             LOOPCONV1D_MAX_RADIUS
+#define GROUP_SIZE_CONV             ((gl_WorkGroupSize.x))
+/*-Convolution------------------------------------*
+ * #if _KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION
+ *    DATA_TYPE_LOOPCONV1D                   float
+ *    FUNC_DEVICE_LOAD_LOOPCONV1D_PATCH_ID
+ *    FUNC_DEVICE_LOAD_LOOPCONV1D_DATA
+ * #endif 
+*/ 
+#if _KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION
+	#define T_CONV                      DATA_TYPE_LOOPCONV1D
+	#define DEVICE_LOAD_CONV_DATA       FUNC_DEVICE_LOAD_LOOPCONV1D_DATA
+	#define DEVICE_LOAD_CONV_PATCH_ID   FUNC_DEVICE_LOAD_LOOPCONV1D_PATCH_ID
+#endif
+/*-Build Conv Acc Cache----------------------------*
+ * #if _KERNEL_MULTICOMPILE__1DSEGLOOP_BUILD_PATCH_TABLE
+ *    FUNC_DEVICE_STORE_LOOPCONV1D_PATCH_ID
+ * #endif
+*/
+#if _KERNEL_MULTICOMPILE__1DSEGLOOP_BUILD_PATCH_TABLE
+	#define DEVICE_STORE_CONV_PATCH_ID  FUNC_DEVICE_STORE_LOOPCONV1D_PATCH_ID
+#endif
+
+
+
+
+
+
+/* Common Defines ///////////////////////////////////////////////// */
+#define NUM_PATCHES_PER_GROUP ((2u * MAX_CONV_RADIUS))
+
+#define _FUNC_GET_PATCH_TABLE_BUFFER_INDEX CAT(GetPatchTableBufferIndex_, tag)
+/* Calculate global buffer address for item in per-thread-group patch table */
+uint _FUNC_GET_PATCH_TABLE_BUFFER_INDEX(uint blockIdx, uint patchId)
+{
+	return (blockIdx * (NUM_PATCHES_PER_GROUP)) + patchId; 
+}
+
+
+
+/* 1D Convolution on Circular Segments  //////////////////////////////////////////////////////////// */
+#ifdef _KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION
 
 	/* Avaliable Interfaces /////////////////////////////////////////////// */
-	#define _FUNC_SETUP_SEGLOOP1DCONV      CAT(SetupSegmentedConvolution_, tag)
-	#define _FUNC_LOAD_CONV_DATA_LDS_LEFT  CAT(LoadLDSConvData_AtLeft_, tag)
-	#define _FUNC_LOAD_CONV_DATA_LDS_RIGHT CAT(LoadLDSConvData_AtRight_, tag)
+	#define _FUNC_SETUP_SEGLOOP1DCONV      CAT(SetupSegmentedConvolution_, tag) /* Setup LDS caches needed for convolution */
+	#define _FUNC_LOAD_CONV_DATA_LDS_LEFT  CAT(LoadLDSConvData_AtLeft_, tag) /* load neighbor item with ngtv circular offset */
+	#define _FUNC_LOAD_CONV_DATA_LDS_RIGHT CAT(LoadLDSConvData_AtRight_, tag) /* load neighbor item with pstv circular offset */
 
 
 	/* 1) Main Cache ////////////////////////////////////////////
@@ -73,7 +100,6 @@
 	 * stored in LDS_ConvPatch_tag.
 	 * For details, see "https://zhuanlan.zhihu.com/p/263566817" 
 	 */
-	#define NUM_PATCHES_PER_GROUP ((2 * MAX_CONV_RADIUS))
 	shared T_CONV CAT(LDS_ConvPatch_, tag)[NUM_PATCHES_PER_GROUP];
 	/* Patch Cache Layout:  (let MAX_CONV_RADIUS==3)
 	/* ElemIdGl |1stSegHead, +1, +2, lastSegTail-2, -1, -0, <- LDS_ConvPatch_tag[0~5]*/
@@ -181,7 +207,8 @@
 	) {
 		if (patchIdLc < NUM_PATCHES_PER_GROUP)
 		{ 
-			uint patchIdGl = DEVICE_LOAD_CONV_PATCH_ID(blockId, patchIdLc);
+			uint patchBufferAddress = _FUNC_GET_PATCH_TABLE_BUFFER_INDEX(blockId, patchIdLc);
+			uint patchIdGl = DEVICE_LOAD_CONV_PATCH_ID(patchBufferAddress);
 			CAT(LDS_ConvPatch_, tag)[patchIdLc] = DEVICE_LOAD_CONV_DATA(patchIdGl);
 		}
 	}
@@ -238,8 +265,6 @@
 		);
 		GroupMemoryBarrierWithGroupSync();
 	}
-	
-	
 	
 	/**
 	 * \brief Load convolution data with left offset
@@ -319,14 +344,14 @@
 		
 		return convData;
 	}
-#endif /* SEGLOOPCONV1D_LIB_CONVOLUTION_INCLUDED */
+#endif /* _KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION */
 
 
 
 
 
 /* Build Patch Table for Given set of segmened loops ///////////////////////////////// */
-#ifdef SEGLOOPCONV1D_LIB_BUILD_PATCH_TABLE_INCLUDED
+#ifdef _KERNEL_MULTICOMPILE__1DSEGLOOP_BUILD_PATCH_TABLE
 	
 	/* Avaliable Interfaces /////////////////////////////////////////////// */
 	#define _FUNC_COMPUTE_PATCH_TABLE   CAT(ComptueBlockPatchElemIds_, tag)
@@ -334,19 +359,20 @@
 
 
 	#ifdef NULL_LEFT_TAIL
-	#	undef NULL_LEFT_TAIL
+		#undef NULL_LEFT_TAIL
 	#endif
 	#define NULL_LEFT_TAIL (0xffffffff)
 	
 	#ifdef NULL_RIGHT_HEAD
-	#	undef NULL_RIGHT_HEAD
+		#undef NULL_RIGHT_HEAD
 	#endif
 	#define NULL_RIGHT_HEAD 0
 	
 	#ifdef INVALID_PATCH_EDGE_ID
-	#	undef INVALID_PATCH_EDGE_ID
+		#undef INVALID_PATCH_EDGE_ID
 	#endif
 	#define INVALID_PATCH_EDGE_ID 0xffffffff
+
 
 	shared uint CAT(LDS_LeftTailGroupId_, tag)  = NULL_LEFT_TAIL;
 	shared uint CAT(LDS_RightHeadGroupId_, tag) = NULL_RIGHT_HEAD;
@@ -366,6 +392,11 @@
 	
 		return elemId;
 	}
+
+	bool CAT(IsActiveThreadForStorePatchTable_, tag)(uint groupIdx)
+	{
+		return groupIdx < NUM_PATCHES_PER_GROUP;
+	}
 	
 
 	/**
@@ -382,7 +413,7 @@
 	 * \param segLen segment length
 	 */
 	void _FUNC_COMPUTE_PATCH_TABLE(
-		uint groupIdx, 
+		uint blockId, uint groupIdx, 
 		bool isSegHead, bool isSegTail, 
 		uint segHead, uint segTail, uint segLen
 	){
@@ -390,11 +421,11 @@
 	
 		/* ------------Loading Extra Neighboring Data---------------- */
 		/* Step 1. Vote for right - most head && left - most tail */
-		if ((isSegHead) != 0u)
+		if (isSegHead)
 		{
 			atomicMax(CAT(LDS_RightHeadGroupId_, tag), groupIdx + 1u);
 		}
-		if ((isSegTail) != 0u)
+		if (isSegTail)
 		{
 			atomicMin(CAT(LDS_LeftTailGroupId_, tag), groupIdx);
 		}
@@ -410,7 +441,7 @@
 			((!foundLeftTail) && (groupIdx == GROUP_SIZE_CONV - 1u)))
 		{
 			/* Patch at LEFT */
-			[unroll]
+			/*[unroll]*/
 			for (uint i = 0u; i < MAX_CONV_RADIUS; ++i)
 			{
 				_LDS_PATCH_ELEMIDGL[i] =
@@ -432,7 +463,7 @@
 					segHead, segLen
 				);
 			/* Patch at RIGHT */
-			[unroll]
+			/*[unroll]*/
 			for (uint i = 0u; i < MAX_CONV_RADIUS; ++i)
 			{
 				_LDS_PATCH_ELEMIDGL[i + MAX_CONV_RADIUS] =
@@ -444,18 +475,19 @@
 			}
 		}
 		barrier();
+		
+		uint patchIdLc = groupIdx;
+		if (CAT(IsActiveThreadForStorePatchTable_, tag)(patchIdLc))
+		{
+			uint patchBufferAddress = _FUNC_GET_PATCH_TABLE_BUFFER_INDEX(blockId, patchIdLc);
+			DEVICE_STORE_CONV_PATCH_ID(patchBufferAddress, _LDS_PATCH_ELEMIDGL[patchIdLc]);
+		}
 	}
 
-#endif /* SEGLOOPCONV1D_LIB_BUILD_PATCH_TABLE_INCLUDED */
+#endif 
+/* _KERNEL_MULTICOMPILE__1DSEGLOOP_BUILD_PATCH_TABLE */
 
 
 
-#undef tag
-/* #undef MAX_CONV_RADIUS */
-/* #undef GROUP_SIZE_CONV */
-#undef NULL_LEFT_TAIL
-#undef NULL_RIGHT_HEAD
-#undef DEVICE_LOAD_CONV_DATA
-#undef DEVICE_LOAD_CONV_PATCH_ID
-
-#endif
+#endif 
+/* BNPR_SEGLOOPCONV1D_LIB_INCLUDED */

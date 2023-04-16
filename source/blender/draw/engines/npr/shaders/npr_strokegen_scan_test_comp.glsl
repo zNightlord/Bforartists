@@ -242,7 +242,7 @@ void main()
 
 
 	_FUNC_TREE_SEG_SCAN_AGGREGATE_FILL_CACHE(
-	groupId, scan_ids,
+		groupId, scan_ids,
 		/* --- LDS inputs --- */
 		firstInitialHFAi, firstInitialHFBi
 	);

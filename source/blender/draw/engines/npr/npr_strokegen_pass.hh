@@ -28,6 +28,7 @@ private:
   draw::PassSimple pass_scan_test = {"Bnpr GPU Blelloch Scan Test"};
   draw::PassSimple pass_segscan_test = {"Bnpr GPU Blelloch SegScan Test"};
   draw::PassSimple pass_extract_geom = {"StrokeGen Extract Geometry"};
+  draw::PassSimple pass_conv1d_test = {"Test GPU 1d conv on circular segments"};
   
   /** Instance */
   StrokeGenShaderModule &shaders_;
@@ -60,6 +61,7 @@ public:
   {
     SCAN_TEST = 0,
     SEGSCAN_TEST,
+    SEGLOOPCONV_TEST, 
     GEOM_EXTRACTION, 
   };
 
@@ -84,6 +86,8 @@ public:
 
   void rebuild_pass_scan_test();
   void rebuild_pass_segscan_test();
+
+  void rebuild_pass_conv_test();
   /** \} */
 
 

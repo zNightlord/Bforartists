@@ -9,7 +9,9 @@
  * dragging larger headers into the createInfo pipeline which would cause problems.
  */
 
-#pragma once
+#ifndef GPU_SHADER
+#  pragma once
+#endif
 
 /* -------------------------------------------------------------------- */
 /** Geometry Extraction from GPUBatch(es)
@@ -41,13 +43,14 @@
 
 
 /* -------------------------------------------------------------------- */
-/** \Scan Test
+/** \Segmented Convolution Test
  * \{ */
+#define NUM_ITEMS_SEGLOOPCONV1D_TEST 1973581u
 #define GROUP_SIZE_SEGLOOPCONV1D_TEST 512u
 
+#define NPR_SEGLOOPCONV1D_TEST_DATA_TYPE uint
 #ifndef GPU_SHADER
-  #define NPR_SEGLOOPCONV1D_TEST_DATA_TYPE uint
-  #define NPR_SEGLOOPCONV1D_TEST_DATA_TYPE_STR "uint"
+ #define NPR_SEGLOOPCONV1D_TEST_DATA_TYPE_STR "uint"
 #endif
 /** \} */
 

@@ -86,8 +86,8 @@ float f32_add(float a, float b)
 
 
 
-// Tree Scan
-// ------------------------------------------------------------
+/* Tree Scan
+ * ------------------------------------------------------------ */
 struct TreeScanIndices
 {
   uvec2 global_x2; /* index of element in global compute buffer */
@@ -99,21 +99,21 @@ struct TreeScanIndices
  *			LDS_scanAddr0/1 : index of element 0/1 in shared memory
  *			Global_scanAddr0/1 : index of element in global compute buffer
  */
-#define DECLARE_TREE_SCAN_INDEXING_FUNCTION                                                             \
-TreeScanIndices GetTreeScanIndices(					                                                        \
-	uint groupIdx, uint gIdx					                                                              \
+#define DECLARE_TREE_SCAN_INDEXING_FUNCTION                                                                                  \
+TreeScanIndices GetTreeScanIndices(					                                                                         \
+	uint groupIdx, uint gIdx					                                                                             \
 ){  																				                                         \
-	const uint groupOffset = (DATA_SIZE) * gIdx.x;									                             \
-                                                                                                        \
-	uint ai = groupIdx;                /*   0   1   2   3 ... 255  => ai	*/	                          \
-	/* ------ + 1 * 512 ------- (Suppose gIdx.x == 1)						*/		                          \
-	uint scanAddrA = groupOffset + ai; /* 512 513 514 515 ... 767  => scanAddrA	*/	                    \
-                                                                                                        \
-	uint bi = ai + DATA_SIZE / 2; /* 256 257 258 259 ... 511   => bi			*/	                          \
-	uint scanAddrB = groupOffset + bi; /* 768 641 642 643 ... 1151  => scanAddrB*/	                    \
-                                                                                                        \
-	return TreeScanIndices(uvec2(scanAddrA, scanAddrB), uvec2(ai, bi));						                 \
-}                                                                                                       \
+	const uint groupOffset = (DATA_SIZE) * gIdx.x;									                                         \
+                                                                                                                             \
+	uint ai = groupIdx;                /*   0   1   2   3 ... 255  => ai	*/	                                             \
+	/* ------ + 1 * 512 ------- (Suppose gIdx.x == 1)						*/		                                         \
+	uint scanAddrA = groupOffset + ai; /* 512 513 514 515 ... 767  => scanAddrA	*/	                                     \
+                                                                                                                             \
+	uint bi = ai + DATA_SIZE / 2; /* 256 257 258 259 ... 511   => bi			*/	                                         \
+	uint scanAddrB = groupOffset + bi; /* 768 641 642 643 ... 1151  => scanAddrB*/	                                     \
+                                                                                                                             \
+	return TreeScanIndices(uvec2(scanAddrA, scanAddrB), uvec2(ai, bi));						                                 \
+}                                                                                                                            \
 
 
 #define _FUNC_CLEAN_SCAN_DATA CAT(TreeScanCleanData, tag)

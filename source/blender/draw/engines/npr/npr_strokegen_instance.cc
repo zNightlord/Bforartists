@@ -141,7 +141,7 @@ namespace blender::npr::strokegen
   {
     /* Submit passes here. (Execute render graph) */
 
-    /* GPU (Seg-)Scan Test */
+    /* GPU (Seg-)Scan Test ------------------------------------------------------------------------- */
     // manager.submit(strokegen_passes.get_compute_pass(StrokeGenPassModule::eType::SCAN_TEST), view);
     manager.submit(strokegen_passes.get_compute_pass(StrokeGenPassModule::eType::SEGSCAN_TEST), view);
 
@@ -166,8 +166,19 @@ namespace blender::npr::strokegen
     frame_counter = (frame_counter + 1) % 100000000;
 
 
-    /* Geometry Extraction for StrokeGen */
+
+    /* GPU 1d looped segmented convolution ----------------------------------------- */
+    manager.submit(strokegen_passes.get_compute_pass(StrokeGenPassModule::eType::SEGLOOPCONV_TEST), view);
+
+
+
+    
+
+    /* Geometry Extraction for StrokeGen ---------------------------------------------------------------- */
     manager.submit(strokegen_passes.get_compute_pass(StrokeGenPassModule::eType::GEOM_EXTRACTION), view);
+
+
+    
     
   }
 

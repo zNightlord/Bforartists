@@ -152,12 +152,18 @@ using namespace draw;
    * \{ */
   struct UBData_SegLoopConv1D
   {
-    uint dummy0;
-    uint dummy1;
+    uint num_thread_groups;
+    uint num_conv_items;
     uint dummy2;
     uint dummy3;
   };
   BLI_STATIC_ASSERT_ALIGN(UBData_SegLoopConv1D, 16);
+
+#define NPR_SEGLOOPCONV1D_TEST_DATA_TYPE uint
+#if defined(GPU_SHADER) && defined(_KERNEL_MULTICOMPILE__1DSEGLOOP_BUILD_PATCH_TABLE)
+
+#endif
+
   /** \} */
 
 
@@ -211,7 +217,7 @@ using SSBO_BnprScanAggregates = draw::StorageArrayBuffer<uint, 512 * 16, true>;
 using UBO_BnprTreeScan = draw::UniformBuffer<UBData_TreeScan>;
 
 using SSBO_SegLoopConv1DData = draw::StorageArrayBuffer<uint, 2048 * 2048 * 2, true>;
-using SSBO_SegLoopConv1DPatchTable = draw::StorageArrayBuffer<uint, 128 * 2, true>;
+using SSBO_SegLoopConvPatchTable = draw::StorageArrayBuffer<uint, 1024 * 64, true>;
 using UBO_SegLoopConv1D = draw::UniformBuffer<UBData_SegLoopConv1D>;
 
 }

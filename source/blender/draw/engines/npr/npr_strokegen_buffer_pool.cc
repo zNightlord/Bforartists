@@ -29,6 +29,17 @@ namespace blender::npr::strokegen
       ubo_tree_scan.dummy = 0u;
     }
     ubo_bnpr_tree_scan_infos_.push_update();
+
+
+    UBO_SegLoopConv1D& ubo_segloopconv1d = ubo_segloopconv1d_;
+    {
+      ubo_segloopconv1d.num_thread_groups = compute_num_groups(
+        NUM_ITEMS_SEGLOOPCONV1D_TEST,
+        GROUP_SIZE_SEGLOOPCONV1D_TEST
+      );
+      ubo_segloopconv1d.num_conv_items = NUM_ITEMS_SEGLOOPCONV1D_TEST; 
+    }
+    ubo_segloopconv1d_.push_update();
   }
 
   void GPUBufferPoolModule::sync_object(Object* ob)
