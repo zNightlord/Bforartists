@@ -249,6 +249,7 @@ GPU_SHADER_CREATE_INFO(strokegen_segloopconv1D_test_build_patch)
                  Qualifier::READ_WRITE,
                  NPR_SEGLOOPCONV1D_TEST_DATA_TYPE_STR,
                  "ssbo_out_segloopconv1d_data_[]")
+    .storage_buf(3, Qualifier::READ_WRITE, "uint", "ssbo_debug_segloopconv1d_data_[]")
     .uniform_buf(0, "UBData_SegLoopConv1D", "ubo_segloopconv1d_")
     .additional_info("npr_segloopconv1D_build_patch")
     .local_group_size(GROUP_SIZE_SEGLOOPCONV1D_TEST)

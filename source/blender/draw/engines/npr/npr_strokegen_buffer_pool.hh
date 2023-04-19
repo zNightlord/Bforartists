@@ -33,6 +33,7 @@ class GPUBufferPoolModule {
 
   SSBO_SegLoopConv1DData     ssbo_in_segloopconv1d_data_;
   SSBO_SegLoopConv1DData     ssbo_out_segloopconv1d_data_;
+  SSBO_SegLoopConvDebugData  ssbo_debug_segloopconv1d_data_;
   SSBO_SegLoopConvPatchTable ssbo_segloopconv1d_patch_table_;
   UBO_SegLoopConv1D          ubo_segloopconv1d_;
 

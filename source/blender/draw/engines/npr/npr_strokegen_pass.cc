@@ -188,6 +188,7 @@ namespace blender::npr::strokegen
       sub.bind_ssbo(0, buffers_.ssbo_segloopconv1d_patch_table_);
       sub.bind_ssbo(1, buffers_.ssbo_in_segloopconv1d_data_);
       sub.bind_ssbo(2, buffers_.ssbo_out_segloopconv1d_data_);
+      sub.bind_ssbo(3, buffers_.ssbo_debug_segloopconv1d_data_);
       sub.bind_ubo(0, buffers_.ubo_segloopconv1d_);
 
       sub.dispatch(int3(buffers_.ubo_segloopconv1d_.num_thread_groups, 1, 1));
