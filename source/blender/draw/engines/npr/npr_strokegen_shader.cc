@@ -108,6 +108,8 @@ const char *StrokeGenShaderModule::static_shader_create_info_name_get(eShaderTyp
       return "bnpr_segscan_test_dwsweep";
     case CONV1D_TEST_BUILD_PATCH:
       return "strokegen_segloopconv1D_test_build_patch";
+    case CONV1D_TEST_CONVOLUTION:
+      return "strokegen_segloopconv1D_test_convolution";
 
     /* To avoid compiler warning about missing case. */
     case MAX_SHADER_TYPE:

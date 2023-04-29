@@ -1,20 +1,15 @@
-﻿#pragma BLENDER_REQUIRE(npr_strokegen_hlsl_support_lib.glsl)
+﻿#pragma BLENDER_REQUIRE(npr_strokegen_segloopconv1d_inputs_lib.glsl)
+
 
 #ifndef BNPR_SEGLOOPCONV1D_LIB_INCLUDED
 #define BNPR_SEGLOOPCONV1D_LIB_INCLUDED
 
-void func_device_store_loopconv1d_patch_id(uint stAddr, uint val)
-{
-	ssbo_segloopconv1d_patch_table_[stAddr] = val;
-}
 
 /* Macro expansion */
 #ifndef CAT
 	#define CAT_(x, y) x ## y
 	#define CAT(x, y) CAT_(x, y)
 #endif
-
-
 
 
 
@@ -197,13 +192,13 @@ uint _FUNC_GET_PATCH_TABLE_BUFFER_INDEX(uint blockIdx, uint patchId)
 		elemIdGl = elemIdGl % segLen;
 		elemIdGl += segHeadId;
 		
-		elemIdLc = CAT(ElemIdGl_To_Lc_, tag)(elemIdGl, blockId);
+		elemIdLc = CAT(ElemIdGl_To_Lc_, tag)(int(elemIdGl), blockId);
 	}
 	
 	/* Setup Patch LDS Cache ------------------*/
 	/* Load elemIdGl at patch_cache[patchIdLc] */
 	void CAT(PatchData_LoadDevice_StoreLDS_, tag)(
-		uint blockId, uint patchIdLc, uint elemCount
+		uint blockId, uint patchIdLc
 	) {
 		if (patchIdLc < NUM_PATCHES_PER_GROUP)
 		{ 
@@ -232,14 +227,15 @@ uint _FUNC_GET_PATCH_TABLE_BUFFER_INDEX(uint blockIdx, uint patchId)
 		bool leftPadding = (0 < blockId) && (groupIdx < MAX_CONV_RADIUS);    /* workers for left padding */
 		bool rightPadding = (GROUP_SIZE_CONV - MAX_CONV_RADIUS) <= groupIdx; /* workers for right padding */
 		
-		int paddingIdLc =
+		int paddingIdLc = int(
 			leftPadding ? (groupIdx) : (
 				(blockId == 0) ? (groupIdx + MAX_CONV_RADIUS) : (groupIdx + 2 * MAX_CONV_RADIUS) /* only padding at right side */
-			);
+			)
+		);
 		
 		uint paddingIdGl = CAT(ElemIdLc_To_Gl_, tag)(paddingIdLc, blockId);
 		
-		/*[branch]*/if (leftPadding || rightPadding)
+		if (leftPadding || rightPadding) /*[branch]*/
 		{
 			CAT(LDS_ConvData_, tag)[paddingIdLc] = DEVICE_LOAD_CONV_DATA(paddingIdGl);
 		}
@@ -249,21 +245,22 @@ uint _FUNC_GET_PATCH_TABLE_BUFFER_INDEX(uint blockIdx, uint patchId)
 	 * \brief Setup everything for a 1d segmented convolution
 	 */
 	void _FUNC_SETUP_SEGLOOP1DCONV(
-		uint3 gIdx, uint groupIdx, uint elemCount,
+		uint gIdx, uint groupIdx,
 		out T_CONV convData
 	){
 		CAT(PatchData_LoadDevice_StoreLDS_, tag)(
-			gIdx.x, groupIdx, elemCount
+			gIdx, groupIdx
 		);
 	
 		CAT(ConvData_LoadDevice_StoreLDS_, tag)(
-			gIdx.x, groupIdx, /*out*/convData
+			gIdx, groupIdx, /*out*/convData
 		);
 	
 		CAT(Padding_LoadDevice_StoreLDS_, tag)(
-			gIdx.x, groupIdx
+			gIdx, groupIdx
 		);
-		GroupMemoryBarrierWithGroupSync();
+		
+		barrier();
 	}
 	
 	/**
@@ -272,7 +269,7 @@ uint _FUNC_GET_PATCH_TABLE_BUFFER_INDEX(uint blockIdx, uint patchId)
 	 */
 	T_CONV _FUNC_LOAD_CONV_DATA_LDS_LEFT(
 		uint offset,
-		uint blockId, uint groupIdx : SV_GroupIndex,
+		uint blockId, uint groupIdx,
 		uint segLen, uint segHeadId
 	)
 	{
@@ -285,12 +282,13 @@ uint _FUNC_GET_PATCH_TABLE_BUFFER_INDEX(uint blockIdx, uint patchId)
 			true, offset,
 			blockId, groupIdx,
 			segLen, segHeadId,
-			// out -----------
+			/* out ----------- */
 			elemIdGl, elemIdLc
 		);
 		
-		bool patch = CAT(IsElemIdLc_RightPatch_, tag)(elemIdLc, blockId);
-		[branch] if (patch)
+		bool patch_ = CAT(IsElemIdLc_RightPatch_, tag)(elemIdLc, blockId);
+		
+		if (patch_) /*[branch]*/
 		{
 			uint patchId = CAT(RightPatchElemId_LastHead_, tag)(
 				segHeadId + segLen - 1,
@@ -325,12 +323,13 @@ uint _FUNC_GET_PATCH_TABLE_BUFFER_INDEX(uint blockIdx, uint patchId)
 			false, offset,
 			blockId, groupIdx,
 			segLen, segHeadId,
-			// out -----------
+			/* out ----------- */
 			elemIdGl, elemIdLc
 		);
 		
-		bool patch = CAT(IsElemIdLc_LeftPatch_, tag) (elemIdLc, blockId);
-		[branch] if (patch)
+		bool patch_ = CAT(IsElemIdLc_LeftPatch_, tag) (elemIdLc, blockId);
+		
+		if (patch_) /*[branch]*/
 		{
 			uint patchId = CAT(LeftPatchElemId_FirstTail_, tag) (
 		      segHeadId, elemIdGl

@@ -181,8 +181,20 @@ namespace blender::npr::strokegen
   {
     pass_conv1d_test.init();
     {
-      auto& sub = pass_conv1d_test.sub("strokegen_segloopconv1d_build_patch_table");
+      auto &sub = pass_conv1d_test.sub("strokegen_segloopconv1D_test_build_patch");
       sub.shader_set(shaders_.static_shader_get(CONV1D_TEST_BUILD_PATCH));
+
+      // Note: keep the same slot binding as in shader_create_info
+      sub.bind_ssbo(0, buffers_.ssbo_segloopconv1d_patch_table_);
+      sub.bind_ssbo(1, buffers_.ssbo_debug_segloopconv1d_data_);
+      sub.bind_ubo(0, buffers_.ubo_segloopconv1d_);
+
+      sub.dispatch(int3(buffers_.ubo_segloopconv1d_.num_thread_groups, 1, 1));
+      sub.barrier(GPU_BARRIER_SHADER_STORAGE);
+    }
+    {
+      auto &sub = pass_conv1d_test.sub("strokegen_segloopconv1D_test_convolution");
+      sub.shader_set(shaders_.static_shader_get(CONV1D_TEST_CONVOLUTION));
 
       // Note: keep the same slot binding as in shader_create_info
       sub.bind_ssbo(0, buffers_.ssbo_segloopconv1d_patch_table_);
