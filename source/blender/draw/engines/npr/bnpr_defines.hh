@@ -14,6 +14,14 @@
 #endif
 
 /* -------------------------------------------------------------------- */
+/** Empty shader test
+ * \{ */
+#define GROUP_SIZE_STROKEGEN_TEST 512u
+/** \} */
+
+
+
+/* -------------------------------------------------------------------- */
 /** Geometry Extraction from GPUBatch(es)
  * \{ */
 #define GROUP_SIZE_STROKEGEN_GEOM_EXTRACT 256u
@@ -24,7 +32,6 @@
 /* -------------------------------------------------------------------- */
 /** \Scan Test
  * \{ */
-#define GROUP_SIZE_STROKEGEN_TEST 512u
 #define GROUP_SIZE_BNPR_SCAN_TEST_SWEEP 1024u
 #define GROUP_SIZE_BNPR_SCAN_TEST_AGGRG 1024u
 
@@ -48,12 +55,13 @@
 #define NUM_ITEMS_SEGLOOPCONV1D_TEST 1973581u
 #define GROUP_SIZE_SEGLOOPCONV1D_TEST 512u
 
+#define NPR_SEGLOOPCONV1D_CONV_RADIUS 32u
+#ifndef GPU_SHADER
+#  define NPR_SEGLOOPCONV1D_CONV_RADIUS_STR "32u"
+#endif
+
 #define NPR_SEGLOOPCONV1D_TEST_DATA_TYPE uint
 #ifndef GPU_SHADER
- #define NPR_SEGLOOPCONV1D_TEST_DATA_TYPE_STR "uint"
+#  define NPR_SEGLOOPCONV1D_TEST_DATA_TYPE_STR "uint"
 #endif
 /** \} */
-
-
-
-

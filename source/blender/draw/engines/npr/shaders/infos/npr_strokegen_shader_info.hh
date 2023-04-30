@@ -108,7 +108,7 @@ GPU_SHADER_CREATE_INFO(bnpr_segscan_test_inputs)
 GPU_SHADER_CREATE_INFO(npr_segloopconv1D_test)
     .typedef_source("bnpr_shader_shared.hh")
     .define("LOOPCONV1D_TAG", "build_patch")
-    .define("LOOPCONV1D_MAX_RADIUS", "32u")
+    .define("LOOPCONV1D_MAX_RADIUS", NPR_SEGLOOPCONV1D_CONV_RADIUS_STR)
     .define("DATA_TYPE_LOOPCONV1D", "uint");
 
 GPU_SHADER_CREATE_INFO(npr_segloopconv1D_test_build_patch)

@@ -1,4 +1,4 @@
-﻿/* SPDX-License-Identifier: GPL-2.0-or-later
+/* SPDX-License-Identifier: GPL-2.0-or-later
 * Copyright 2021 Blender Foundation.
  */
 
@@ -117,7 +117,7 @@ public:
   /** \} */
   
   /* -------------------------------------------------------------------- */
-  /** \name Segment Scan Tester
+  /** \name Segment Scan Validation
    * \{ */
   template<typename T>
   void validate_segscan(
@@ -131,12 +131,34 @@ public:
   bool validate_segscan_internal(
     const T *input,
     const T *output,
-    int blk_size,
+    const int blk_size, const int num_elems,  
     uint (*func_get_hf)(const T&),
     bool (*func_equals)(const T &, const T &),
     T (*func_scan_op)(const T&, const T&),
     T zero_value,
     bool inclusive = false
+  );
+  /** \} */
+
+
+  /* -------------------------------------------------------------------- */
+  /** \name 1D Segmented Looped Convolution Validation
+   * \{ */
+  template<typename T>
+  void validate_segloopconv1d(
+    bool (*func_equals)(const T&, const T&),
+    T (*func_conv_op)(const T&, const T&)
+  );
+
+  template<typename T>
+  bool validate_segloopconv1d_internal(
+    const T *input,
+    const T *output,
+    const int *seg_topo,
+    int num_elems,
+    int conv_radius,
+    bool (*func_equals)(const T &, const T &),
+    T (*func_conv_op)(const T&, const T&)
   );
   /** \} */
 
@@ -250,12 +272,13 @@ void StrokeGenPassModule::validate_segscan(
     data_segscan_inputs,
     data_segscan_output,
     GROUP_SIZE_BNPR_SCAN_TEST_SWEEP * 2u,
+    buffers_.ubo_bnpr_tree_scan_infos_.num_scan_items, 
     func_get_hf, func_equals, func_scan_op, zero_val,
     inclusive
   );
 
   if (!succ)
-    fprintf(stderr, "bnpr: error: segment scan test failed");
+    fprintf(stderr, "strokegen error: segment scan test failed");
 }
 
 template<typename T>
@@ -263,6 +286,7 @@ bool StrokeGenPassModule::validate_segscan_internal(
   const T *input,
   const T *output,
   const int blk_size,
+  const int num_elems, 
   uint (*func_get_hf)(const T &),
   bool (*func_equals)(const T &, const T &),
   T (*func_scan_op)(const T&, const T&),
@@ -272,7 +296,7 @@ bool StrokeGenPassModule::validate_segscan_internal(
   T maxErrorFound = zero_value;
   T currScanValue = zero_value;
 
-  for (int i = 0; i < blk_size; i++) {
+  for (int i = 0; i < num_elems; i++) {
     if (func_get_hf(input[i])) {
       currScanValue = zero_value;
     }
@@ -295,5 +319,77 @@ bool StrokeGenPassModule::validate_segscan_internal(
   return true;
 }
 
+template <typename T>
+void StrokeGenPassModule::validate_segloopconv1d(
+  bool(* func_equals)(const T&, const T&),
+  T(* func_conv_op)(const T&, const T&))
+{
+  SSBO_SegLoopConv1DData &buf_conv_inputs = buffers_.ssbo_in_segloopconv1d_data_;
+  buf_conv_inputs.read();
+  T *data_conv_inputs = reinterpret_cast<T *>(buf_conv_inputs.data());
 
+  SSBO_SegLoopConv1DData &buf_conv_output = buffers_.ssbo_out_segloopconv1d_data_;
+  buf_conv_output.read();
+  T *data_conv_output = reinterpret_cast<T *>(buf_conv_output.data());
+
+  SSBO_SegLoopConvDebugData &buf_dbg_data = buffers_.ssbo_debug_segloopconv1d_data_;
+  buf_dbg_data.read();
+  int* data_conv_debug = reinterpret_cast<int *>(buf_dbg_data.data());
+
+  bool succ = validate_segloopconv1d_internal<T>(
+    data_conv_inputs, data_conv_output, data_conv_debug,
+    buffers_.ubo_segloopconv1d_.num_conv_items,
+    NPR_SEGLOOPCONV1D_CONV_RADIUS,
+    func_equals, func_conv_op
+  );
+
+  if (!succ)
+    fprintf(stderr, "strokegen error: segloopconv1d test failed");
+}
+
+template <typename T>
+bool StrokeGenPassModule::validate_segloopconv1d_internal(
+  const T* input,
+  const T* output,
+  const int* seg_topo,
+  int num_elems,
+  int conv_radius,
+  bool(* func_equals)(const T&, const T&),
+  T(* func_conv_op)(const T&, const T&)
+)
+{
+  T currOutput;
+
+  for (int i = 0; i < num_elems; ++i)
+  {
+    const int seg_head = seg_topo[i * 4];
+    const int seg_tail = seg_topo[i * 4 + 1];
+    
+    currOutput = input[i]; 
+    { // convolution
+      int neigh_id = i; 
+      for (int d = 1; d <= conv_radius; ++d)
+      {
+        neigh_id--;
+        if (neigh_id < seg_head) neigh_id = seg_tail;
+      
+        currOutput = func_conv_op(currOutput, input[neigh_id]);
+      }
+
+      neigh_id = i; 
+      for (int d = 1; d <= conv_radius; ++d)
+      {
+        neigh_id++;
+        if (neigh_id > seg_tail) neigh_id = seg_head;
+      
+        currOutput = func_conv_op(currOutput, input[neigh_id]);
+      }
+    }
+
+    if (!func_equals(currOutput, output[i]))
+      return false;
+  }
+  
+  return true; 
+}
 }

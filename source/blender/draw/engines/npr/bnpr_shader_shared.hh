@@ -217,8 +217,8 @@ using SSBO_BnprScanAggregates = draw::StorageArrayBuffer<uint, 512 * 16, true>;
 using UBO_BnprTreeScan = draw::UniformBuffer<UBData_TreeScan>;
 
 using SSBO_SegLoopConv1DData = draw::StorageArrayBuffer<uint, 2048 * 2048 * 2, true>;
-using SSBO_SegLoopConvDebugData = draw::StorageArrayBuffer<uint, 2048 * 2048 * 4, true>;
-using SSBO_SegLoopConvPatchTable = draw::StorageArrayBuffer<uint, 1024 * 64, true>;
+using SSBO_SegLoopConvDebugData = draw::StorageArrayBuffer<uint, 2048 * 2048 * 8, true>;
+using SSBO_SegLoopConvPatchTable = draw::StorageArrayBuffer<uint, 4096 * 64, true>;
 using UBO_SegLoopConv1D = draw::UniformBuffer<UBData_SegLoopConv1D>;
 
 }

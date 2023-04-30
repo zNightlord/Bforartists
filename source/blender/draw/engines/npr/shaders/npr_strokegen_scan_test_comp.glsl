@@ -135,11 +135,11 @@ void main()
 	{ /* init & store random scan input vals */
 		hf_A = 1u & uint(wang_hash(scan_ids.global_x2.x + scan_ids.lds_x2.x) % 128u == 0u);
 		if (idx == 0) hf_A = 0u;
-			scanval_A = T(
+		scanval_A = T(
 			wang_hash(scan_ids.global_x2.y + scan_ids.lds_x2.x) % 12u
 		);
 		hf_B = 1u & uint(wang_hash(scan_ids.global_x2.y + scan_ids.lds_x2.y) % 128u == 0u);
-			scanval_B = T(
+		scanval_B = T(
 			wang_hash(scan_ids.global_x2.x + scan_ids.lds_x2.y) % 12u
 		);
 
@@ -164,8 +164,8 @@ void main()
 	_FUNC_TREE_SEG_SCAN_UPSWEEP(
 		groupId,
 		gl_WorkGroupID.x,
-		hf_A, 						scanval_A,
-		hf_B, 						scanval_B,
+		hf_A, 					scanval_A,
+		hf_B, 					scanval_B,
 		/* -out- */
 		headFlagPartialSum_A, 	scanRes_ai,
 		headFlagPartialSum_B, 	scanRes_bi
@@ -194,7 +194,7 @@ void main()
 
 		bnpr_scan_block_sum_buf_[gl_WorkGroupID.x] = SEGSCAN_STRUCT_TYPE(
 			/* different from ordinary scan, we store exclusive sum here */
-			scanval_B,
+			scanRes_bi,
 			tree_seg_scan_encode_upsweep_hfs(
 				headFlagPartialSum_B, /* or sum of block hfs */
 				TREE_SCAN_CACHE_HF[0]  /* original hf of block */

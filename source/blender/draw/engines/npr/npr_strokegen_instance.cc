@@ -162,6 +162,11 @@ namespace blender::npr::strokegen
         },
         false
       );
+
+      strokegen_passes.validate_segloopconv1d<int>(
+        [](const int& a, const int& b){ return a == b; },
+        [](const int& a, const int& b){ return a + b; }
+      );
     }
     frame_counter = (frame_counter + 1) % 100000000;
 
