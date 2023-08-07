@@ -110,6 +110,16 @@ const char *StrokeGenShaderModule::static_shader_create_info_name_get(eShaderTyp
       return "strokegen_segloopconv1D_test_build_patch";
     case CONV1D_TEST_CONVOLUTION:
       return "strokegen_segloopconv1D_test_convolution";
+    case LISTRANKING_INIT_ANCHORS:
+      return "strokegen_list_ranking_test_init_anchors";
+    case LISTRANKING_COMPACT_ANCHORS: 
+      return "strokegen_list_ranking_test_compact_anchors";
+    case LISTRANKING_FILL_DISPATCH_ARGS_TO_ANCHORS: 
+      return "strokegen_list_ranking_test_fill_dispatch_args_to_anchors";
+    case LISTRANKING_SUBLIST_RANKING : 
+      return "strokegen_list_ranking_test_sublist_ranking";
+    case LISTRANKING_SUBLIST_POINTER_JUMPING:
+     return "strokegen_list_ranking_test_sublist_pointer_jumping";
 
     /* To avoid compiler warning about missing case. */
     case MAX_SHADER_TYPE:

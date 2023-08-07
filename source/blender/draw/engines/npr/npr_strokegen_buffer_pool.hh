@@ -20,7 +20,7 @@ class GPUBufferPoolModule {
   /** Instance */
   Instance &instance;
 
-  /** Compute Resources */
+  /** GPU Buffers */
   SSBO_StrokeGenTest ssbo_bnpr_test_;
 
   SSBO_StrokeGenMeshPool     ssbo_bnpr_mesh_pool_;
@@ -37,8 +37,50 @@ class GPUBufferPoolModule {
   SSBO_SegLoopConvPatchTable ssbo_segloopconv1d_patch_table_;
   UBO_SegLoopConv1D          ubo_segloopconv1d_;
 
+  SSBO_ListRankingAtomics   ssbo_list_ranking_atomics_;
+  SSBO_IndirectDispatchArgs ssbo_list_ranking_indirect_dispatch_args_;
+  SSBO_ListRankingLinks               ssbo_list_ranking_links_;
+  SSBO_ListRankingOutput              ssbo_list_ranking_output_;
+  SSBO_ListRankingNodeToAnchor        ssbo_list_ranking_node_to_anchor_; 
+  SSBO_ListRankingAnchorToNode        ssbo_list_ranking_anchor_to_node_;
+  SSBO_ListRankingAnchorToNextAnchor  ssbo_list_ranking_anchor_to_next_anchor_;
+  SSBO_ListRankingAnchorJumpingInfo   ssbo_list_ranking_per_anchor_sublist_jumping_info_;
+  UBO_ListRanking                     ubo_list_ranking_tagging_;
+  UBO_BnprTreeScan                    ubo_list_ranking_scan_infos_;
+
+  // Note: Whenever you found weird shader error:
+  // Check following things:
+  // *) the undefined variable "_ubo/_ssbo_xxxx_"
+  //    Check the if there is any commented code at the end of the shader file.
+  //    "// XXX" will fuck up the #pragma .... at the beginning of your code
+  // *) Check the included XXXlib.glsl, if a #endif is at the end without blank lines followed,
+  //    it fucks up with your #pragma
+  // *) Check if you have included the shared .hh file
+  //    with sth. like .typedef_source("bnpr_shader_shared.hh")
+  // *) Check if you have multiple instances of a XXX.glsl included in the shaderinfo,
+  //    for example
+  // GPU_SHADER_CREATE_INFO(bnpr_scan_uint_add)
+  //   .typedef_source("bnpr_shader_shared.hh")
+  //   . ... ... ...;
+  // GPU_SHADER_CREATE_INFO(strokegen_list_ranking_test_compact_anchors)
+  //   .typedef_source("bnpr_shader_shared.hh")
+  //   . ... ... ...
+  //   .additional_info("bnpr_scan_uint_add")
+  //   . ... ... ...;
+  // *) Check if you uses any weird keyword as variable names, such as "packed"
+
+  /** CPU Buffers */
+  Vector<int> listranking_test_nodes_prev_next; /** Temp data for testing shaders  */
+  bool listranking_test_data_uploaded; 
+  bool listranking_test_data_validated; 
+
+
+  
  public:
-  GPUBufferPoolModule(Instance &inst) : instance(inst)
+  GPUBufferPoolModule(Instance &inst) :
+    instance(inst)
+    , listranking_test_data_uploaded(false)
+    , listranking_test_data_validated(false)
   {
   }
   ~GPUBufferPoolModule()
@@ -48,5 +90,12 @@ class GPUBufferPoolModule {
   void on_begin_sync();
   void sync_object(Object *ob);
   void end_sync();
+
+
+  /* -------------------------------------------------------------------- */
+  /** \name List Ranking Validation
+   * \{ */
+  void build_list_ranking_testing_data();
+  /** \} */
 };
 }  // namespace blender::npr::strokegen

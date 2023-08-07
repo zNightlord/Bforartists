@@ -9,6 +9,7 @@
 #ifndef USE_GPU_SHADER_CREATE_INFO
 #  pragma once
 
+#include "BLI_math_bits.h"
 #  include "BLI_memory_utils.hh"
 #  include "DRW_gpu_wrapper.hh"
 
@@ -163,7 +164,54 @@ using namespace draw;
 #if defined(GPU_SHADER) && defined(_KERNEL_MULTICOMPILE__1DSEGLOOP_BUILD_PATCH_TABLE)
 
 #endif
+  /** \} */
 
+
+
+  /* ----------------------------------------------------- */
+  /** \name GPU List Ranking Testing
+   * \{ */
+  struct UBData_ListRanking 
+  {
+    uint num_thread_groups;
+    uint num_nodes;
+    uint subbuff_size;
+    uint num_tagging_iters;
+    uint dummy0;
+    uint dummy1;
+    uint dummy2;
+    uint dummy4; 
+  };
+  BLI_STATIC_ASSERT_ALIGN(UBData_ListRanking, 16);
+
+  struct SSBOData_ListRankingAtomics
+  {
+    uint counter_anchors;
+    uint counter_lists;
+    uint dummy1;
+    uint dummy2;
+  };
+  BLI_STATIC_ASSERT_ALIGN(SSBOData_ListRankingAtomics, 16);
+
+#define BNPR_LIST_RANKING_MAX_SUBLIST_LEN 4u
+  static inline uint ComputeTaggingIters(uint numNodes)
+  {
+    uint iters = 0;
+    uint l = numNodes; /* max #nodes between anchors after tagging for #iters */
+    while (l > (BNPR_LIST_RANKING_MAX_SUBLIST_LEN >> 1u))
+    /* apply tagging iters to make sub-list size <= BNPR_LIST_RANKING_MAX_SUBLIST_LEN */
+    {
+      /* http://www.graphics.stanford.edu/~seander/bithacks.html#DetermineIfPowerOf2 */
+      bool power_of_2 = (l != 0u) && (0u == (l & (l - 1u))); 
+#ifndef GPU_SHADER
+      l = (31 - bitscan_reverse_uint(l)) + 1; /* (highest_set_bit) + 1 == #bits for a tag */
+#else
+      l = findMSB(l) < 0 ? 0u : (findMSB(l) + 1); 
+#endif
+      if (!power_of_2) iters++; /* ceiling. */
+    }
+    return iters; 
+  }
   /** \} */
 
 
@@ -207,6 +255,8 @@ using namespace draw;
 #ifdef __cplusplus
 
 // Template to set buffer size in compile time
+using SSBO_IndirectDispatchArgs = draw::StorageBuffer<DispatchCommand>; 
+
 using SSBO_StrokeGenTest = draw::StorageArrayBuffer<uint, 4096 * 4, true>;
 
 using SSBO_StrokeGenMeshPool = draw::StorageArrayBuffer<uint, 2048 * 2048 * 4, true>;
@@ -220,6 +270,17 @@ using SSBO_SegLoopConv1DData = draw::StorageArrayBuffer<uint, 2048 * 2048 * 2, t
 using SSBO_SegLoopConvDebugData = draw::StorageArrayBuffer<uint, 2048 * 2048 * 8, true>;
 using SSBO_SegLoopConvPatchTable = draw::StorageArrayBuffer<uint, 4096 * 64, true>;
 using UBO_SegLoopConv1D = draw::UniformBuffer<UBData_SegLoopConv1D>;
+
+using SSBO_ListRankingLinks = draw::StorageArrayBuffer<uint, NUM_ITEMS_BNPR_LIST_RANK_TEST * 2, false/* We need to init this from CPU */>;
+using SSBO_ListRankingOutput = draw::StorageArrayBuffer<uint, NUM_ITEMS_BNPR_LIST_RANK_TEST * 2, true>;
+using SSBO_ListRankingNodeToAnchor = draw::StorageArrayBuffer<uint, NUM_ITEMS_BNPR_LIST_RANK_TEST, true>;
+/* #anchors is around #nodes/4 */
+using SSBO_ListRankingAnchorToNode = draw::StorageArrayBuffer<uint, NUM_ITEMS_BNPR_LIST_RANK_TEST, true>;
+using SSBO_ListRankingAnchorToNextAnchor = draw::StorageArrayBuffer<uint, NUM_ITEMS_BNPR_LIST_RANK_TEST, true>;
+using SSBO_ListRankingAnchorJumpingInfo = draw::StorageArrayBuffer<uint, NUM_ITEMS_BNPR_LIST_RANK_TEST * 6, true>;
+
+using SSBO_ListRankingAtomics = draw::StorageBuffer<SSBOData_ListRankingAtomics>;
+using UBO_ListRanking = draw::UniformBuffer<UBData_ListRanking>; 
 
 }
 

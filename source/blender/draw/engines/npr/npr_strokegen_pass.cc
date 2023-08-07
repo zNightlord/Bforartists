@@ -18,15 +18,16 @@ namespace blender::npr::strokegen
   PassSimple& StrokeGenPassModule::get_compute_pass(eType passType)
   {
     switch (passType) {
-    case SCAN_TEST:
-      return pass_scan_test;
-    case SEGSCAN_TEST:
-      return pass_segscan_test;
-    case SEGLOOPCONV_TEST:
-      return pass_conv1d_test; 
-    case GEOM_EXTRACTION:
-      return pass_extract_geom;
-      
+      case SCAN_TEST:
+        return pass_scan_test;
+      case SEGSCAN_TEST:
+        return pass_segscan_test;
+      case SEGLOOPCONV_TEST:
+        return pass_conv1d_test; 
+      case GEOM_EXTRACTION:
+        return pass_extract_geom;
+      case LIST_RANKING_TEST:
+        return pass_listranking_test; 
     }
     return pass_comp_test;
   }
@@ -38,6 +39,7 @@ namespace blender::npr::strokegen
     rebuild_pass_scan_test();
     rebuild_pass_segscan_test();
     rebuild_pass_conv_test();
+    rebuild_pass_list_ranking(); 
     
     reset_pass_extract_mesh_geom();
   }
@@ -207,4 +209,92 @@ namespace blender::npr::strokegen
       sub.barrier(GPU_BARRIER_SHADER_STORAGE);
     }
   }
+
+  void StrokeGenPassModule::rebuild_pass_list_ranking()
+  {
+    // Build render passes
+    pass_listranking_test.init();
+    {
+      auto& sub = pass_listranking_test.sub("strokegen_list_ranking_test_tagging");
+      sub.shader_set(shaders_.static_shader_get(LISTRANKING_INIT_ANCHORS)); 
+
+      for (int i = 0; i < buffers_.ubo_list_ranking_tagging_.num_tagging_iters; ++i)
+      {
+        // Note: keep the same slot binding as in shader_create_info
+        sub.bind_ssbo(0, buffers_.ssbo_list_ranking_links_);
+        sub.bind_ssbo(1, buffers_.ssbo_list_ranking_output_); // w/r tags per node
+        sub.bind_ssbo(2, buffers_.ssbo_list_ranking_atomics_); 
+        sub.bind_ubo(0, buffers_.ubo_list_ranking_tagging_);
+        sub.push_constant("pc_listranking_tagging_iter_", i);
+
+        sub.dispatch(int3(buffers_.ubo_list_ranking_tagging_.num_thread_groups, 1, 1));
+        sub.barrier(GPU_BARRIER_SHADER_STORAGE); 
+      } 
+    }
+    {
+      auto& sub = pass_listranking_test.sub("strokegen_list_ranking_test_compaction");
+      sub.shader_set(shaders_.static_shader_get(LISTRANKING_COMPACT_ANCHORS));
+
+      sub.bind_ssbo(0, buffers_.ssbo_list_ranking_links_); 
+      sub.bind_ssbo(1, buffers_.ssbo_list_ranking_output_); // tags per node
+      sub.bind_ssbo(2, buffers_.ssbo_list_ranking_node_to_anchor_); 
+      sub.bind_ssbo(3, buffers_.ssbo_list_ranking_atomics_); // Note: Zero the atomics before compaction.
+      sub.bind_ssbo(4, buffers_.ssbo_list_ranking_anchor_to_node_);
+      sub.bind_ssbo(5, buffers_.ssbo_list_ranking_anchor_to_next_anchor_); 
+      sub.bind_ubo(0, buffers_.ubo_list_ranking_tagging_);
+      sub.bind_ubo(1, buffers_.ubo_list_ranking_scan_infos_); 
+      sub.push_constant("pc_listranking_tagging_iter_", (int)(buffers_.ubo_list_ranking_tagging_.num_tagging_iters)); // pingpong
+
+      sub.dispatch(int3(buffers_.ubo_list_ranking_scan_infos_.num_thread_groups, 1, 1));
+      sub.barrier(GPU_BARRIER_SHADER_STORAGE); 
+    }
+    {
+      auto& sub = pass_listranking_test.sub("strokegen_list_ranking_test_fill_dispatch_args_to_anchors");
+      sub.shader_set(shaders_.static_shader_get(LISTRANKING_FILL_DISPATCH_ARGS_TO_ANCHORS)); 
+
+      sub.bind_ssbo(0, buffers_.ssbo_list_ranking_atomics_);
+      sub.bind_ssbo(1, buffers_.ssbo_list_ranking_indirect_dispatch_args_);
+
+      sub.dispatch(int3(1, 1, 1));
+      sub.barrier(GPU_BARRIER_SHADER_STORAGE);
+    }
+    {
+      auto& sub = pass_listranking_test.sub("strokegen_list_ranking_test_sublist_ranking"); 
+      sub.shader_set(shaders_.static_shader_get(LISTRANKING_SUBLIST_RANKING));
+
+      sub.bind_ssbo(0, buffers_.ssbo_list_ranking_anchor_to_node_); 
+      sub.bind_ssbo(1, buffers_.ssbo_list_ranking_node_to_anchor_);
+      sub.bind_ssbo(2, buffers_.ssbo_list_ranking_anchor_to_next_anchor_);
+      sub.bind_ssbo(3, buffers_.ssbo_list_ranking_output_);
+      sub.bind_ssbo(4, buffers_.ssbo_list_ranking_links_);
+      sub.bind_ssbo(5, buffers_.ssbo_list_ranking_atomics_); 
+
+      sub.bind_ubo(0, buffers_.ubo_list_ranking_tagging_);
+
+      sub.dispatch(buffers_.ssbo_list_ranking_indirect_dispatch_args_);  
+      sub.barrier(GPU_BARRIER_SHADER_STORAGE); 
+    }
+    {
+      auto& sub = pass_listranking_test.sub("strokegen_list_ranking_test_sublist_pointer_jumping"); 
+      sub.shader_set(shaders_.static_shader_get(LISTRANKING_SUBLIST_POINTER_JUMPING)); 
+
+      for (size_t i = 0; i < MAX_NUM_JUMPS_BNPR_LIST_RANK_TEST; i++)
+      {
+        sub.bind_ssbo(0, buffers_.ssbo_list_ranking_anchor_to_node_);
+        sub.bind_ssbo(1, buffers_.ssbo_list_ranking_anchor_to_next_anchor_);
+        sub.bind_ssbo(2, buffers_.ssbo_list_ranking_per_anchor_sublist_jumping_info_);
+        sub.bind_ssbo(3, buffers_.ssbo_list_ranking_output_);
+        sub.bind_ssbo(4, buffers_.ssbo_list_ranking_links_); 
+        sub.bind_ssbo(5, buffers_.ssbo_list_ranking_atomics_);
+
+        sub.bind_ubo(0, buffers_.ubo_list_ranking_tagging_); 
+
+        sub.push_constant("pc_listranking_jumping_iter_", (int)i);
+
+        sub.dispatch(buffers_.ssbo_list_ranking_indirect_dispatch_args_); 
+        sub.barrier(GPU_BARRIER_SHADER_STORAGE); 
+      }
+    }
+  }
+
 }

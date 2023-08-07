@@ -65,3 +65,15 @@
 #  define NPR_SEGLOOPCONV1D_TEST_DATA_TYPE_STR "uint"
 #endif
 /** \} */
+
+
+
+/* -------------------------------------------------------------------- */
+/** \List Ranking Test
+ * \{ */
+#define GROUP_SIZE_BNPR_LIST_RANK_TEST 1024u
+#define GROUP_SIZE_BNPR_LIST_RANK_TEST_STR "1024u"
+#define NUM_ITEMS_BNPR_LIST_RANK_TEST 2064u 
+/* 4973588u */
+#define MAX_NUM_JUMPS_BNPR_LIST_RANK_TEST 24u
+/** \} */

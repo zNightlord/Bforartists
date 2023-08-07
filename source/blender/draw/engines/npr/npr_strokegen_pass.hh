@@ -17,6 +17,9 @@
 #include "npr_strokegen_texture_pool.hh"
 #include "npr_strokegen_pass.hh"
 
+#include <random>
+
+
 namespace blender::npr::strokegen {
 class Instance;
 
@@ -29,15 +32,17 @@ private:
   draw::PassSimple pass_segscan_test = {"Bnpr GPU Blelloch SegScan Test"};
   draw::PassSimple pass_extract_geom = {"StrokeGen Extract Geometry"};
   draw::PassSimple pass_conv1d_test = {"Test GPU 1d conv on circular segments"};
+  draw::PassSimple pass_listranking_test = { "List ranking test" }; 
   
   /** Instance */
   StrokeGenShaderModule &shaders_;
-  GPUBufferPoolModule &buffers_;
-  GPUTexturePoolModule &textures_;
+  GPUBufferPoolModule   &buffers_;
+  GPUTexturePoolModule  &textures_;
 
   /** Geometry  */
-  
 
+  
+  
 public:
   StrokeGenPassModule(
       StrokeGenShaderModule &strokegen_shaders,
@@ -62,7 +67,8 @@ public:
     SCAN_TEST = 0,
     SEGSCAN_TEST,
     SEGLOOPCONV_TEST, 
-    GEOM_EXTRACTION, 
+    LIST_RANKING_TEST, 
+    GEOM_EXTRACTION
   };
 
   PassSimple& get_compute_pass(eType passType);
@@ -88,6 +94,8 @@ public:
   void rebuild_pass_segscan_test();
 
   void rebuild_pass_conv_test();
+
+  void rebuild_pass_list_ranking(); 
   /** \} */
 
 
@@ -161,7 +169,7 @@ public:
     T (*func_conv_op)(const T&, const T&)
   );
   /** \} */
-
+  
 private:
 
 };
@@ -182,6 +190,7 @@ void StrokeGenPassModule::validate_pass_scan_test(bool (*equals)(const T &, cons
       data_scan_inputs,
       data_scan_output,
       equals,
+
       buffers_.ubo_bnpr_tree_scan_infos_.num_scan_items,
       GROUP_SIZE_BNPR_SCAN_TEST_SWEEP * 2u,
       buffers_.ubo_bnpr_tree_scan_infos_.num_thread_groups

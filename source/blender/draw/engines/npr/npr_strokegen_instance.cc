@@ -172,11 +172,14 @@ namespace blender::npr::strokegen
 
 
 
-    /* GPU 1d looped segmented convolution ----------------------------------------- */
+    /* GPU 1d looped segmented convolution Test ----------------------------------------- */
     manager.submit(strokegen_passes.get_compute_pass(StrokeGenPassModule::eType::SEGLOOPCONV_TEST), view);
 
 
-
+    
+    /* GPU List Ranking Test ---------------------------------------------------------------- */
+    manager.submit(strokegen_passes.get_compute_pass(StrokeGenPassModule::eType::LIST_RANKING_TEST), view); 
+    
     
 
     /* Geometry Extraction for StrokeGen ---------------------------------------------------------------- */

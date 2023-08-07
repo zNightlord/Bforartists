@@ -1,3 +1,4 @@
+
 #pragma BLENDER_REQUIRE(npr_strokegen_hlsl_support_lib.glsl)
 
 #ifndef BNPR_SCAN_NO_SUBGROUP_INCLUDED
@@ -45,6 +46,12 @@ float f32_add(float a, float b)
 /* https://stackoverflow.com/questions/1489932/how-to-concatenate-twice-with-the-c-preprocessor-and-expand-a-macro-as-in-arg */
 #define CAT(x, y) CAT_(x, y)
 #define CAT_(x, y) x ## y
+
+/* Clear macros
+/* --------------------------------------- */
+#ifdef tag
+# undef tag
+#endif
 
 
 /* Type & Type conversion & Scan OP
@@ -565,12 +572,13 @@ void _FUNC_TREE_SEG_SCAN_DWSWEEP( \
 	scanResult_B = TREE_SCAN_CACHE[cacheAddrBi];                                        \
 } \
 
-
-
 /** \} */
 
 
 
 
 #endif
+
+
+
 
