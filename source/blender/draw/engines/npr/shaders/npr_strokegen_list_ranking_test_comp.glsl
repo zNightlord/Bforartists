@@ -27,6 +27,7 @@ void main()
     if (idx == 0u && pc_listranking_tagging_iter_ == 0u) /* clear the atomics */ 
     {
         ssbo_list_ranking_atomics_.counter_anchors = 0; 
+        ssbo_list_ranking_atomics_.counter_spliced = 0;
         ssbo_list_ranking_atomics_.counter_lists = 0; 
     }
 }
@@ -36,152 +37,100 @@ void main()
 
 
 #ifdef _KERNEL_MULTICOMPILE__TEST_LIST_RANKING_COMPACT_ANCHORS
-shared uint LDS_scan_block_offset; 
 
-#define _TEST_ATOMIC_COMPACTION 1u 
-#ifdef _TEST_ATOMIC_COMPACTION
- shared uint LDS_hist_per_lane_slot[32u]; 
- shared uint LDS_hist_blk; 
- shared uint LDS_offset_per_lane_slot[32u]; 
-#endif
+shared uint LDS_digit_per_lane[32u]; 
+shared uint LDS_offset_per_lane_slot[32u][2u]; 
+
+shared uint LDS_hist_blk[2];  
+shared uint LDS_scan_block_offset[2]; 
 
 void main()
 {
-    uint tagging_iter = pc_listranking_tagging_iter_;
-    uint tag_subbuff_size = ubo_list_ranking_tagging_.subbuff_size;
+    const uint tagging_iter = pc_listranking_tagging_iter_;
+    const uint tag_subbuff_size = ubo_list_ranking_tagging_.subbuff_size;
+    const uint num_nodes = ubo_list_ranking_tagging_.num_nodes; 
 
-    const uint groupId = gl_LocalInvocationID.x;
+    const uint groupIdx = gl_LocalInvocationID.x;
+    const uint idx      = gl_GlobalInvocationID.x;
+    const uint blockIdx = gl_WorkGroupID.x;
+    const uint blockSize = gl_WorkGroupSize.x;
 
-    TreeScanIndices scan_ids = GetTreeScanIndices(groupId, gl_WorkGroupID.x);
+    const uint node_id = idx; 
+    bool valid_item = node_id < num_nodes; 
 
-    bool valid_item_A = scan_ids.global_x2.x < ubo_list_ranking_tagging_.num_nodes; 
-    bool valid_item_B = scan_ids.global_x2.y < ubo_list_ranking_tagging_.num_nodes; 
-
-    ListRankingLink links_A; 
-    ListRankingLink links_B; 
-    bool is_anchor_A = _FUNC_IS_NODE_ANCHOR(scan_ids.global_x2.x, tagging_iter, tag_subbuff_size, links_A);
-    bool is_anchor_B = _FUNC_IS_NODE_ANCHOR(scan_ids.global_x2.y, tagging_iter, tag_subbuff_size, links_B); 
-    bool is_head_or_tail_A = FUNC_IS_NODE_HEAD_OR_TAIL(links_A, scan_ids.global_x2.x); 
-    bool is_head_or_tail_B = FUNC_IS_NODE_HEAD_OR_TAIL(links_B, scan_ids.global_x2.y); 
-    bvec2 is_tail_AB = bvec2(
-        FUNC_IS_NODE_TAIL(links_A, scan_ids.global_x2.x), 
-        FUNC_IS_NODE_TAIL(links_B, scan_ids.global_x2.y) 
-    ); 
-    is_anchor_A = is_anchor_A && valid_item_A; 
-    is_anchor_B = is_anchor_B && valid_item_B;
+    ListRankingLink links; 
+    bool is_head_or_tail = FUNC_IS_NODE_HEAD_OR_TAIL(links, node_id); 
+    bool is_tail         = FUNC_IS_NODE_TAIL(links, node_id); 
+    bool is_anchor = _FUNC_IS_NODE_ANCHOR(node_id, tagging_iter, tag_subbuff_size, links);
+    is_anchor = is_anchor && valid_item; 
 
 
-#ifdef _TEST_ATOMIC_COMPACTION
-    const uint wave_id = groupId >> 5u; 
+    const uint wave_id = groupId >> 5u; /* must be < 32 which is ensured since tg size <= 1024 */
     const uint lane_id = groupId % 32u;
+    const uint num_waves = gl_WorkGroupSize.x >> 5u; 
     if (wave_id == 0u) 
     { /* Clear LDS counters */
         if (lane_id == 0u)
             LDS_hist_blk = 0u; 
-        LDS_hist_per_lane_slot[lane_id] = 0u; 
+        LDS_digit_per_lane[lane_id] = 0u; 
     }
-    LDS_hist_per_lane_slot[lane_id] = 0u;
     barrier(); 
 
-    /* Alloc for all 32 set of lanes */ 
-    uint lds_compact_input = uint(is_anchor_A) + uint(is_anchor_B); 
-    uint lds_compact_output = atomicAdd(LDS_hist_per_lane_slot[lane_id], lds_compact_input); 
+    /* Mark 1/0 at bit #wave_id */ 
+    uint compact_bitval = uint(is_anchor); 
+    uint lds_compact_input = compact_bitval << wave_id; 
+    atomicOr(LDS_digit_per_lane[lane_id], lds_compact_input); 
     barrier(); 
 
     /* Prefix sum on lane sums */
-    if (wave_id == 0u)
+    uint lane_digit = LDS_digit_per_lane[lane_id]; 
+#define DIGIT_BITS_BEHIND wave_id
+    uint wave_mask = (0xffffffffu >> (32u - DIGIT_BITS_BEHIND));
+    uint lane_digit_masked = lane_digit & wave_mask; 
+    uint num_1_bits_low = bitCount(lane_digit_masked);
+    uint num_0_bits_low = DIGIT_BITS_BEHIND - lane_offset_1; 
+#undef DIGIT_BITS_BEHIND
+    uint lane_offset = is_anchor ? num_1_bits_low : num_0_bits_low; 
+
+    if (wave_id <= 1u)
     {
-        LDS_offset_per_lane_slot[lane_id] = 
-            atomicAdd(LDS_hist_blk, LDS_hist_per_lane_slot[lane_id]);  
+        uint num_x_bits = bitCount(lane_digit); 
+        if (wave_id == 0u) num_x_bits = num_waves/*#valid bits*/ - lane_digit; 
+        LDS_offset_per_lane_slot[lane_id][wave_id] = atomicAdd(LDS_hist_blk[wave_id], num_x_bits);  
+    }
+    barrier(); 
+
+    /* Add block sum to global counter. */
+    if (groupId == gl_WorkGroupSize.x - 2u)
+    {
+        LDS_scan_block_offset[0] = atomicAdd(
+            ssbo_list_ranking_atomics_.counter_spliced, 
+            LDS_hist_blk[0]
+        ); 
+    }
+    if (groupId == gl_WorkGroupID.x - 1u)
+    {
+        LDS_scan_block_offset[1] = atomicAdd(
+            ssbo_list_ranking_atomics_.counter_anchors, 
+            LDS_hist_blk[1]
+        ); 
     }
     barrier(); 
 
     /* Compute final offset */
-    uint local_offset = LDS_offset_per_lane_slot[lane_id] + lds_compact_output; 
-
-    /* Add block sum to global counter. */
-    if (groupId == gl_WorkGroupSize.x - 1u)
-    {
-        LDS_scan_block_offset = atomicAdd(
-            ssbo_list_ranking_atomics_.counter_anchors, 
-            LDS_hist_blk
-        ); 
-    }
-    barrier(); 
-#endif
-
-#ifndef _TEST_ATOMIC_COMPACTION
-    uint scanval_A, scanval_B;
-    scanval_A = is_anchor_A ? 1u : 0u; 
-    scanval_B = is_anchor_B ? 1u : 0u; 
-    /* avoid invalid loads */
-    _FUNC_CLEAN_SCAN_DATA(
-        scan_ids, ubo_list_ranking_scan_infos_.num_scan_items,
-        scanval_A, scanval_B /* <- inout */
-    );
-
-    /* execute block-wise exlusive scan */
-	uint scanres_A, scanres_B;
-    scanres_A = scanres_B = 0u;  
-    _FUNC_TREE_SCAN_BLOCK(
-		groupId,
-		gl_WorkGroupID.x,
-		scanval_A,
-		scanval_B,
-		/* -out- */
-		scanres_A,
-		scanres_B
-	);
-
-    /* Add block sum to global counter. */
-    if (groupId == gl_WorkGroupSize.x - 1u)
-    {
-        LDS_scan_block_offset = atomicAdd(
-            ssbo_list_ranking_atomics_.counter_anchors, 
-            scanres_B + scanval_B
-        ); 
-    }
-    barrier(); 
-
-    uint blk_offset = LDS_scan_block_offset; 
-
-    scanres_A += blk_offset; 
-    scanres_B += blk_offset; 
-#endif
-
-#ifdef _TEST_ATOMIC_COMPACTION
-    uint scanres_A = local_offset;
-    uint scanres_B = local_offset + (is_anchor_A ? 1u : 0u); 
+    uint local_offset = LDS_offset_per_lane_slot[lane_id][compact_bitval] + lane_offset; 
+    uint blk_offset   = LDS_scan_block_offset[compact_bitval]; 
     
-    uint blk_offset = LDS_scan_block_offset; 
-    scanres_A += blk_offset; 
-    scanres_B += blk_offset; 
-#endif
+    uint scanres = local_offset + blk_offset; 
 
-    uvec2 anchor_id_AB = uvec2(scanres_A, scanres_B); 
-    uvec2 node_id_AB = scan_ids.global_x2.xy; 
-    if (is_anchor_A)
-    { /* addressing already secured by is_anchor_A/B */
-        FUNC_DEVICE_STORE_PER_ANCHOR_NODEID(anchor_id_AB.x, node_id_AB.x); 
-    }
-    if (valid_item_A)
-    {
-        FUNC_DEVICE_STORE_PER_NODE_CONTRACTION_INFO(
-            node_id_AB.x, links_A.next_node_id, is_anchor_A, anchor_id_AB.x
-        ); 
-    }
 
-    if (is_anchor_B)
-    {
-        FUNC_DEVICE_STORE_PER_ANCHOR_NODEID(anchor_id_AB.y, node_id_AB.y); 
+    uint output_id = scanres; /* anchor_id or spliced_node_id */
+    if (is_anchor)
+    { /* addressing already secured by is_anchor */
+        FUNC_DEVICE_STORE_PER_ANCHOR_NODEID(output_id, node_id); 
+    }else{
+        /* FUNC_DEVICE_STORE_PER_SPLICED_NODEID(output_id, node_id); */
     }
-    if (valid_item_B)
-    {
-        FUNC_DEVICE_STORE_PER_NODE_CONTRACTION_INFO(
-            node_id_AB.y, links_B.next_node_id, is_anchor_B, anchor_id_AB.y
-        ); 
-    } 
-
 }
 #endif
 

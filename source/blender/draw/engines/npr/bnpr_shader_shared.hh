@@ -188,7 +188,7 @@ using namespace draw;
   {
     uint counter_anchors;
     uint counter_lists;
-    uint dummy1;
+    uint counter_spliced;
     uint dummy2;
   };
   BLI_STATIC_ASSERT_ALIGN(SSBOData_ListRankingAtomics, 16);
