@@ -193,7 +193,7 @@ using namespace draw;
   };
   BLI_STATIC_ASSERT_ALIGN(SSBOData_ListRankingAtomics, 16);
 
-#define BNPR_LIST_RANKING_MAX_SUBLIST_LEN 4u
+#define BNPR_LIST_RANKING_MAX_SUBLIST_LEN 5u
   static inline uint ComputeTaggingIters(uint numNodes)
   {
     uint iters = 0;
