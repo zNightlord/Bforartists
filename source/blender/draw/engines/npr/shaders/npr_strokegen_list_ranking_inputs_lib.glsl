@@ -85,87 +85,122 @@ JumpingInfo DecodePointerJumpingInfo(uvec2 encoded)
     return ji; 
 }
 
+/* Global Configs */
+#if defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SPLICING) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_COMPACT_ANCHORS) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SUBLIST_POINTER_JUMPING) 
+
+#define NUM_NODES_TOTAL ((ubo_list_ranking_splicing_.num_nodes))
+#define SUB_BUFF_SIZE ((ubo_list_ranking_splicing_.subbuff_size))
+
+#endif
 
 
 
-#if defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_UPDATE_ANCHORS) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_COMPACT_ANCHORS) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SUBLIST_RANKING) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SUBLIST_POINTER_JUMPING) 
-/* buffers:
- ssbo_list_ranking_links_;
- ssbo_list_ranking_anchor_links_; 
- ssbo_list_ranking_output_;
- ubo_list_ranking_tagging_; */
- 
+/* Links */
+#if defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SPLICING) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_COMPACT_ANCHORS) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SUBLIST_POINTER_JUMPING) 
+uint func_device_load_listranking_test_next_node_id(uint node_id)
+{ 
+    uint node_offset = node_id * 2; 
+    return ssbo_list_ranking_links_[node_offset + 1]; 
+}
+#define FUNC_DEVICE_LOAD_LISTRANKING_NODE_NEXT_NODE_ID func_device_load_listranking_test_next_node_id
+
+uint func_device_load_listranking_test_prev_node_id(uint node_id)
+{ 
+    uint node_offset = node_id * 2; 
+    return ssbo_list_ranking_links_[node_offset]; 
+}
+#define FUNC_DEVICE_LOAD_LISTRANKING_NODE_PREV_NODE_ID func_device_load_listranking_test_prev_node_id
+
 ListRankingLink func_device_load_listranking_test_node_links(uint node_id)
 { 
     ListRankingLink link; 
-    uint node_offset = node_id * 2; 
-    link.prev_node_id = ssbo_list_ranking_links_[node_offset];
-    link.next_node_id = ssbo_list_ranking_links_[node_offset + 1];
+
+    link.prev_node_id = FUNC_DEVICE_LOAD_LISTRANKING_NODE_PREV_NODE_ID(node_id); 
+    link.next_node_id = FUNC_DEVICE_LOAD_LISTRANKING_NODE_NEXT_NODE_ID(node_id); 
 
     return link; 
 }
 #define FUNC_DEVICE_LOAD_LISTRANKING_NODE_LINKS func_device_load_listranking_test_node_links
-
 #endif
 
 
-
-
-#if defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_UPDATE_ANCHORS) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_COMPACT_ANCHORS)
-/* buffers:
- ssbo_list_ranking_links_;
- ssbo_list_ranking_anchor_links_; 
- ssbo_list_ranking_output_;
- ubo_list_ranking_tagging_; */
-
-uint func_device_load_listranking_test_tag(uint node_id, uint iter, uint subbuff_size)
+#ifdef _KERNEL_MULTICOMPILE__TEST_LIST_RANKING_COMPACT_ANCHORS
+void func_device_store_listranking_test_next_node_id(uint node_id, uint next_node_id)
 { 
-    if (iter == 0u) /* init tag with node id */
-        return node_id;
-
-    uint subbuff_beg = subbuff_size * ((iter + 1) % 2u); /* output from last iter */
-    uint node_offset = subbuff_beg + node_id; 
-    return ssbo_list_ranking_output_[node_offset]; 
+    uint node_offset = node_id * 2; 
+    ssbo_list_ranking_links_[node_offset + 1] = next_node_id; 
 }
-#define FUNC_DEVICE_LOAD_LISTRANKING_NODE_TAG func_device_load_listranking_test_tag
+#define FUNC_DEVICE_STORE_LISTRANKING_NODE_NEXT_NODE_ID func_device_store_listranking_test_next_node_id
 
-void func_device_store_listranking_test_tag(uint tag, uint node_id, uint iter, uint subbuff_size)
-{ /* reuse rank buffer */
-    uint subbuff_beg = subbuff_size * (iter % 2u); /* output to next iter */
-    uint node_offset = subbuff_beg + node_id; 
-    ssbo_list_ranking_output_[node_offset] = tag; 
+void func_device_store_listranking_test_prev_node_id(uint node_id, uint prev_node_id)
+{ 
+    uint node_offset = node_id * 2; 
+    ssbo_list_ranking_links_[node_offset] = prev_node_id; 
 }
-#define FUNC_DEVICE_STORE_LISTRANKING_NODE_TAG func_device_store_listranking_test_tag
-
+#define FUNC_DEVICE_STORE_LISTRANKING_NODE_PREV_NODE_ID func_device_store_listranking_test_prev_node_id
 #endif
 
 
 
-
+/* node pointers */
+#if defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SPLICING) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_COMPACT_ANCHORS)
+uint func_load_splicing_thread_node_id(uint thread_idx, uint splicing_iter)
+{ /* node_id acts as a pointer to access node buffers */
+    uint node_id = (splicing_iter == 0u) ? thread_idx
+        : ssbo_list_ranking_anchor_to_node_in_[thread_idx]; 
+    return node_id; 
+}
+#define FUNC_GET_NODE_ID_FOR_ANCHOR func_load_splicing_thread_node_id
+#endif
 
 #if defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_COMPACT_ANCHORS)
-
 void func_device_store_anchor_to_node_id(uint anchor_id, uint node_id)
 {
-    ssbo_list_ranking_anchor_to_node_[anchor_id] = node_id; 
+    ssbo_list_ranking_anchor_to_node_out_[anchor_id] = node_id; 
 }
 #define FUNC_DEVICE_STORE_PER_ANCHOR_NODEID func_device_store_anchor_to_node_id
-
-void func_device_cache_contraction_info(
-    uint node_id, uint next_node_id, bool is_anchor, uint anchor_id)
-{
-    bool is_list_end = (next_node_id == node_id); 
-    ssbo_list_ranking_node_to_anchor_[node_id] = EncodeContractionInfo(
-        is_anchor, is_list_end, anchor_id, next_node_id
-    ); 
-}
-#define FUNC_DEVICE_STORE_PER_NODE_CONTRACTION_INFO func_device_cache_contraction_info
-
 #endif
+
+
+
+
+/* node tags */
+#if defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SPLICING)
+void func_device_store_listranking_test_tag(uint node_id, uint tag)
+{
+    ssbo_list_ranking_tags_[node_id] = tag; 
+}
+#define FUNC_DEVICE_STORE_LISTRANKING_NODE_TAG func_device_store_listranking_test_tag
+#endif
+
+#if defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_COMPACT_ANCHORS)
+uint func_device_load_listranking_test_tag(uint node_id)
+{ 
+    return ssbo_list_ranking_tags_[node_id]; 
+}
+#define FUNC_DEVICE_LOAD_LISTRANKING_NODE_TAG func_device_load_listranking_test_tag
+#endif
+
+
+/* node ranks */
+#if defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SPLICING) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_COMPACT_ANCHORS)
+uint func_device_load_node_rank(uint node_id)
+{
+    return ssbo_list_ranking_ranks_[node_id]; 
+}
+#define FUNC_DEVICE_LOAD_LISTRANKING_NODE_RANK func_device_load_node_rank
+
+void func_device_store_node_rank(uint node_id, uint rank)
+{
+    ssbo_list_ranking_ranks_[node_id] = rank; 
+}
+#define FUNC_DEVICE_STORE_LISTRANKING_NODE_RANK func_device_store_node_rank
+#endif
+
 
 
 /* Per-anchor thread validation for all kernels after the compaction */
-#if defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SUBLIST_RANKING) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SUBLIST_POINTER_JUMPING)
+#if defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SUBLIST_POINTER_JUMPING)
 
 bool validate_thread_per_anchor(uint mapped_anchor_id, uint num_anchors)
 {
@@ -173,9 +208,9 @@ bool validate_thread_per_anchor(uint mapped_anchor_id, uint num_anchors)
 }
 #define FUNC_DEVICE_VALIDATE_THREAD_PER_ANCHOR validate_thread_per_anchor
 
-uint get_num_anchors()
+uint get_num_anchors(uint iter)
 {
-    return ssbo_list_ranking_atomics_.counter_anchors; 
+    return ssbo_list_ranking_anchor_counters_[iter];  
 }
 #define FUNC_GET_NUM_ANCHORS get_num_anchors
 
@@ -190,48 +225,7 @@ uint get_num_jump_iters()
 }
 #define FUNC_GET_NUM_JUMPS get_num_jump_iters
 
-
-uint func_device_load_node_id_for_anchor(uint anchor_id)
-{
-    uint node_id = ssbo_list_ranking_anchor_to_node_[anchor_id]; 
-    return node_id; 
-}
-#define FUNC_DEVICE_LOAD_PER_ANCHOR_NODEID(anchor_id) func_device_load_node_id_for_anchor(anchor_id)
-
 #endif
-
-
-
-#if defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SUBLIST_RANKING)
-
-void func_device_load_contraction_info(uint node_id, inout ContractionInfo contraction_info)
-{
-    contraction_info = DecodeContractionInfo(ssbo_list_ranking_node_to_anchor_[node_id]);  
-}
-#define FUNC_DEVICE_LOAD_PER_NODE_CONTRACTION_INFO(node_id, contraction_info) \
-     func_device_load_contraction_info(node_id, contraction_info)
-
-void func_device_store_node_to_anchor(uint node_id, uint anchor_id)
-{
-    ssbo_list_ranking_node_to_anchor_[node_id] = anchor_id;  
-}
-#define FUNC_DEVICE_STORE_PER_NODE_TO_ANCHOR_ID func_device_store_node_to_anchor
-
-void func_device_store_next_anchor_id(uint anchor_id, uint next_anchor_id)
-{
-    ssbo_list_ranking_anchor_to_next_anchor_[anchor_id] = next_anchor_id; 
-}
-#define FUNC_DEVICE_STORE_PER_ANCHOR_NEXT_ANCHORID(anchor_id, next_anchor_id) \
-    func_device_store_next_anchor_id(anchor_id, next_anchor_id)
-
-void func_device_store_per_node_sublist_rank(uint node_id, uint sublist_rank)
-{
-    ssbo_list_ranking_output_[node_id] = sublist_rank; 
-}
-#define FUNC_DEVICE_STORE_PER_NODE_SUBLIST_RANK(node_id, sublist_rank) func_device_store_per_node_sublist_rank(node_id, sublist_rank)
-
-#endif
-
 
 
 
@@ -251,7 +245,7 @@ uint func_device_load_next_anchor_id(uint anchor_id)
 
 uint func_device_load_sublist_length(uint anchor_node_id)
 {
-    return ssbo_list_ranking_output_[anchor_node_id]; 
+    return ssbo_list_ranking_tags_[anchor_node_id]; 
 }
 #define FUNC_DEVICE_LOAD_SUBLIST_LENGTH func_device_load_sublist_length
 
@@ -321,13 +315,6 @@ void func_device_store_per_anchor_list_len_and_addr(
     ssbo_list_ranking_per_anchor_sublist_jumping_info_[st_offset + 1u] = list_info.list_addr;   
 }
 #define FUNC_DEVICE_STORE_TAIL_ANCHOR_LIST_INFO func_device_store_per_anchor_list_len_and_addr
-
-#endif
-
-
-
-#if defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SUBLIST_RANKING)
-
 
 #endif
 

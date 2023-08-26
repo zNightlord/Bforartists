@@ -184,14 +184,6 @@ using namespace draw;
   };
   BLI_STATIC_ASSERT_ALIGN(UBData_ListRanking, 16);
 
-  struct SSBOData_ListRankingAtomics
-  {
-    uint counter_anchors;
-    uint counter_lists;
-    uint counter_spliced;
-    uint dummy2;
-  };
-  BLI_STATIC_ASSERT_ALIGN(SSBOData_ListRankingAtomics, 16);
 
 #define BNPR_LIST_RANKING_MAX_SUBLIST_LEN 5u
   static inline uint ComputeTaggingIters(uint numNodes)
@@ -272,14 +264,15 @@ using SSBO_SegLoopConvPatchTable = draw::StorageArrayBuffer<uint, 4096 * 64, tru
 using UBO_SegLoopConv1D = draw::UniformBuffer<UBData_SegLoopConv1D>;
 
 using SSBO_ListRankingLinks = draw::StorageArrayBuffer<uint, NUM_ITEMS_BNPR_LIST_RANK_TEST * 2, false/* We need to init this from CPU */>;
-using SSBO_ListRankingOutput = draw::StorageArrayBuffer<uint, NUM_ITEMS_BNPR_LIST_RANK_TEST * 2, true>;
-using SSBO_ListRankingNodeToAnchor = draw::StorageArrayBuffer<uint, NUM_ITEMS_BNPR_LIST_RANK_TEST, true>;
+using SSBO_ListRankingTags = draw::StorageArrayBuffer<uint, NUM_ITEMS_BNPR_LIST_RANK_TEST, true>;
+using SSBO_ListRankingRanks = draw::StorageArrayBuffer<uint, NUM_ITEMS_BNPR_LIST_RANK_TEST, true>; 
 /* #anchors is around #nodes/4 */
 using SSBO_ListRankingAnchorToNode = draw::StorageArrayBuffer<uint, NUM_ITEMS_BNPR_LIST_RANK_TEST, true>;
 using SSBO_ListRankingAnchorToNextAnchor = draw::StorageArrayBuffer<uint, NUM_ITEMS_BNPR_LIST_RANK_TEST, true>;
+using SSBO_ListRankingSplicedNodeId = draw::StorageArrayBuffer<uint, NUM_ITEMS_BNPR_LIST_RANK_TEST, true>; 
 using SSBO_ListRankingAnchorJumpingInfo = draw::StorageArrayBuffer<uint, NUM_ITEMS_BNPR_LIST_RANK_TEST * 6, true>;
-
-using SSBO_ListRankingAtomics = draw::StorageBuffer<SSBOData_ListRankingAtomics>;
+using SSBO_ListRankingNodeToAnchor = draw::StorageArrayBuffer<uint, NUM_ITEMS_BNPR_LIST_RANK_TEST, true>;
+using SSBO_ListRankingCounters = draw::StorageArrayBuffer<uint, BNPR_LIST_RANK_ANCHOR_COUNTER_BUFFER_SIZE>;
 using UBO_ListRanking = draw::UniformBuffer<UBData_ListRanking>; 
 
 }

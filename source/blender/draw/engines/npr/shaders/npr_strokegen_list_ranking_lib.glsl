@@ -1,4 +1,5 @@
 
+
 #pragma BLENDER_REQUIRE(npr_strokegen_list_ranking_inputs_lib.glsl)
 
 #ifndef NPR_STROKEGEN_LIST_RANKING_LIB_H
@@ -41,49 +42,53 @@ uint calc_node_tag(uint id_curr, uint id_next)
     /* tag_curr != tag_next is always true from this contruction */
     return tag; 
 }
-bool is_anchor_node(uint tag_curr, uint tag_prev, uint tag_next, bool head_or_tail)
-{ /* "Anchor" node has the minimal ID among its neighbours 
+bool is_node_in_independent_set(uint tag_curr, uint tag_prev, uint tag_next, bool head_or_tail)
+{ /* independent set node has the minimal ID among its neighbours 
     * anchors breaks the chains into small segments, 
     * each seg len < 2(log_2(N)), where N is #tagged nodes*/
     return head_or_tail || ((tag_curr < tag_prev) && (tag_curr < tag_next));
 }
 
-bool is_head_node(ListRankingLink link, uint node_id)
+bool is_head_node(uint prev_node_id, uint node_id)
 {
-    return (link.prev_node_id == node_id); 
+    return (prev_node_id == node_id); 
 }
 #define FUNC_IS_NODE_HEAD is_head_node
-bool is_tail_node(ListRankingLink link, uint node_id)
+bool is_tail_node(uint next_node_id, uint node_id)
 {
-    return (link.next_node_id == node_id); 
+    return (next_node_id == node_id); 
 }
 #define FUNC_IS_NODE_TAIL is_tail_node
 bool is_head_or_tail_node(ListRankingLink link, uint node_id)
 {
-    return is_head_node(link, node_id) || is_tail_node(link, node_id); 
+    return is_head_node(link.prev_node_id, node_id) || is_tail_node(link.next_node_id, node_id); 
 }
 #define FUNC_IS_NODE_HEAD_OR_TAIL is_head_or_tail_node
 
 
 
-#if _KERNEL_MULTICOMPILE__TEST_LIST_RANKING_UPDATE_ANCHORS
+#if defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SPLICING)
 
     /* Public Interfaces ///////////////////////////////// */
     #define _FUNC_UPDATE_NODE_TAG CAT(CalcNewTag_, tag_list_ranking)
-    #define _FUNC_IS_NODE_ANCHOR CAT(IsNodeAnchor_, tag_list_ranking)
+    #define _FUNC_IS_NODE_INSIDE_INDEPENDENT_SET CAT(IsNodeAnchor_, tag_list_ranking)
 
 	/**
 	 * \brief Iteratively calculate & store tag for each node  
 	 */
-    void _FUNC_UPDATE_NODE_TAG(uint node_id, uint iter, uint tag_subbuff_size, out uint tag_new)
+    void _FUNC_UPDATE_NODE_TAG(uint node_id)
     {
-        ListRankingLink link = FUNC_DEVICE_LOAD_LISTRANKING_NODE_LINKS(node_id);
-        uint tag =      FUNC_DEVICE_LOAD_LISTRANKING_NODE_TAG(node_id,           iter, tag_subbuff_size);
-        uint tag_next = FUNC_DEVICE_LOAD_LISTRANKING_NODE_TAG(link.next_node_id, iter, tag_subbuff_size); 
-        
-        tag_new = calc_node_tag(tag, tag_next);
+        uint tag = node_id;
+        uint tag_next = FUNC_DEVICE_LOAD_LISTRANKING_NODE_NEXT_NODE_ID(node_id); 
+        if (FUNC_IS_NODE_TAIL(tag_next, node_id))
+            /* for tail this can be arbitrary unequal value
+             * but we give larger tag to increase the possibility
+             * to mark this into the independent set */
+            tag_next = tag + 1; 
 
-        FUNC_DEVICE_STORE_LISTRANKING_NODE_TAG(tag_new, node_id, iter, tag_subbuff_size); 
+        uint tag_new = calc_node_tag(tag, tag_next);
+
+        FUNC_DEVICE_STORE_LISTRANKING_NODE_TAG(node_id, tag_new); 
     }
 #endif
 
@@ -93,18 +98,54 @@ bool is_head_or_tail_node(ListRankingLink link, uint node_id)
     /**
 	 * \brief Determine if a node is anchor, head/tail node must be anchor for code to work
 	*/
-    bool _FUNC_IS_NODE_ANCHOR(
-        uint node_id, uint iter, uint tag_subbuff_size, 
-        out ListRankingLink link
+    bool _FUNC_IS_NODE_INSIDE_INDEPENDENT_SET(
+        uint node_id, out ListRankingLink link
     ){
         link = FUNC_DEVICE_LOAD_LISTRANKING_NODE_LINKS(node_id);
         bool b_list_head_or_tail = FUNC_IS_NODE_HEAD_OR_TAIL(link, node_id); 
 
-        uint tag =      FUNC_DEVICE_LOAD_LISTRANKING_NODE_TAG(node_id,           iter, tag_subbuff_size);
-        uint tag_prev = FUNC_DEVICE_LOAD_LISTRANKING_NODE_TAG(link.prev_node_id, iter, tag_subbuff_size);
-        uint tag_next = FUNC_DEVICE_LOAD_LISTRANKING_NODE_TAG(link.next_node_id, iter, tag_subbuff_size); 
+        uint tag =      FUNC_DEVICE_LOAD_LISTRANKING_NODE_TAG(node_id);
+        uint tag_prev = FUNC_DEVICE_LOAD_LISTRANKING_NODE_TAG(link.prev_node_id);
+        uint tag_next = FUNC_DEVICE_LOAD_LISTRANKING_NODE_TAG(link.next_node_id); 
 
-        return is_anchor_node(tag, tag_prev, tag_next, b_list_head_or_tail); 
+        return is_node_in_independent_set(tag, tag_prev, tag_next, b_list_head_or_tail); 
+    }
+
+    /* In parallel split, each lane maps to a tgsm u32 counter.
+     * Each node votes 1/0 based on which side they would be split into.
+     * We use counter to collect votes from threads in the same lane but different waves.
+     * But there can be invalid thread (does not map to a node) that votes 0 and corrupts the counter.
+     * hence we need a mask to filter them out. 
+     * 
+     * This function returns an integer value to indicate the number of valid bits 
+     * of the corresponding per-lane u32 counter. 
+     */
+    uint _FUNC_CALC_LDS_DIGIT_MASK(uint lane_id, uint blk_id, uint blk_size, uint num_nodes, out uint digit_mask)
+    {
+        const uint num_blks = (num_nodes + blk_size - 1) / blk_size; 
+        const uint num_nodes_in_blk = 
+            (blk_id == num_blks - 1u) ? num_nodes % blk_size : blk_size;
+
+        int max_wave_id_valid = /* max wave_id that has lane_id mapped to a valid node */
+            lane_id >= num_nodes_in_blk ? -1 : int(((num_nodes_in_blk - 1u) - lane_id) >> 5u);
+        uint num_valid_waves = uint(max_wave_id_valid + 1); 
+        digit_mask = num_valid_waves == 32u ? 0xffffffff : ~(0xffffffff << num_valid_waves); 
+
+        return num_valid_waves; 
+    }
+
+    void _FUNC_SPLICE_NODE_OUT(
+        uint splice_id, uint node_id, uint node_rank, uint prev_node_id, uint next_node_id)
+    {
+        /* update linkage */
+        if (prev_node_id != node_id)
+            FUNC_DEVICE_STORE_LISTRANKING_NODE_NEXT_NODE_ID(prev_node_id, next_node_id);
+        if (next_node_id != node_id)
+            FUNC_DEVICE_STORE_LISTRANKING_NODE_PREV_NODE_ID(next_node_id, prev_node_id);
+        /* update rank */
+        uint prev_node_rank = FUNC_DEVICE_LOAD_LISTRANKING_NODE_RANK(prev_node_id); 
+        prev_node_rank += node_rank; 
+        FUNC_DEVICE_STORE_LISTRANKING_NODE_RANK(prev_node_id, prev_node_rank); 
     }
 #endif
 
@@ -112,15 +153,3 @@ bool is_head_or_tail_node(ListRankingLink link, uint node_id)
 
 
 #endif
-
-
-
-
-
-
-
-
-
-
-
-

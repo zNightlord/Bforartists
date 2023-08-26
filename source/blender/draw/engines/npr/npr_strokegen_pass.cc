@@ -1,4 +1,4 @@
-﻿/* SPDX-License-Identifier: GPL-2.0-or-later
+/* SPDX-License-Identifier: GPL-2.0-or-later
 * Copyright 2021 Blender Foundation.
  */
 
@@ -23,11 +23,11 @@ namespace blender::npr::strokegen
       case SEGSCAN_TEST:
         return pass_segscan_test;
       case SEGLOOPCONV_TEST:
-        return pass_conv1d_test; 
+        return pass_conv1d_test;
       case GEOM_EXTRACTION:
         return pass_extract_geom;
       case LIST_RANKING_TEST:
-        return pass_listranking_test; 
+        return pass_listranking_test;
     }
     return pass_comp_test;
   }
@@ -39,8 +39,8 @@ namespace blender::npr::strokegen
     rebuild_pass_scan_test();
     rebuild_pass_segscan_test();
     rebuild_pass_conv_test();
-    rebuild_pass_list_ranking(); 
-    
+    rebuild_pass_list_ranking();
+
     reset_pass_extract_mesh_geom();
   }
 
@@ -53,7 +53,7 @@ namespace blender::npr::strokegen
   {
     pass_extract_geom.init();
   }
-  
+
   /**
    * \brief Add a subpass for extracting geometry from given GPUBatch.
    * \param ob Mesh Object
@@ -63,7 +63,7 @@ namespace blender::npr::strokegen
   {
     const std::string pass_name = "extract_geom_";
 
-    gpu::Batch* batch = static_cast<gpu::Batch*>(gpu_batch_line_adj); /* see example in "GPU_batch_draw_parameter_get" */ 
+    gpu::Batch* batch = static_cast<gpu::Batch*>(gpu_batch_line_adj); /* see example in "GPU_batch_draw_parameter_get" */
     if (batch == nullptr || batch->elem == nullptr)
       fprintf(stderr, "StrokeGen Error: empty mesh when rebuilding pass 'extract_mesh_geom'");
     int num_edges = batch->elem_()->index_len_get() / 4; // 4 indices per primitive, basically 4 verts around the edge
@@ -71,10 +71,10 @@ namespace blender::npr::strokegen
     gpu::IndexBuf* ib = batch->elem_();
     /* Hack to get ibo format */
     gpu::GPUIndexBufType ib_type = // the actual "index_type_" is protected
-      (ib->size_get() / ib->index_len_get() == sizeof(uint32_t)) 
+      (ib->size_get() / ib->index_len_get() == sizeof(uint32_t))
         ? gpu::GPU_INDEX_U32 : gpu::GPU_INDEX_U16;
-    
-    
+
+
     /* Cache per-edge geometry data */
     {
       auto& sub = pass_extract_geom.sub(pass_name.c_str());
@@ -97,7 +97,7 @@ namespace blender::npr::strokegen
     }
   }
 
-  
+
 
   void StrokeGenPassModule::rebuild_pass_scan_test()
   {
@@ -214,87 +214,89 @@ namespace blender::npr::strokegen
   {
     // Build render passes
     pass_listranking_test.init();
+    for (int splice_iter = 0; splice_iter < 2; ++splice_iter)
     {
-      auto& sub = pass_listranking_test.sub("strokegen_list_ranking_test_tagging");
-      sub.shader_set(shaders_.static_shader_get(LISTRANKING_INIT_ANCHORS)); 
-
-      for (int i = 0; i < buffers_.ubo_list_ranking_tagging_.num_tagging_iters; ++i)
+      rebuild_pass_list_ranking_fill_args(true, false, splice_iter);
       {
-        // Note: keep the same slot binding as in shader_create_info
-        sub.bind_ssbo(0, buffers_.ssbo_list_ranking_links_);
-        sub.bind_ssbo(1, buffers_.ssbo_list_ranking_output_); // w/r tags per node
-        sub.bind_ssbo(2, buffers_.ssbo_list_ranking_atomics_); 
-        sub.bind_ubo(0, buffers_.ubo_list_ranking_tagging_);
-        sub.push_constant("pc_listranking_tagging_iter_", i);
+        auto& sub = pass_listranking_test.sub("strokegen_list_ranking_test_tagging");
+        sub.shader_set(shaders_.static_shader_get(LISTRANKING_INIT_ANCHORS));
+        sub.bind_ssbo(0, buffers_.ssbo_list_ranking_anchor_to_node_[splice_iter % 2]);
+        sub.bind_ssbo(1, buffers_.ssbo_list_ranking_anchor_to_node_[(splice_iter + 1) % 2]);
+        sub.bind_ssbo(2, buffers_.ssbo_list_ranking_links_);
+        sub.bind_ssbo(3, buffers_.ssbo_list_ranking_tags_); // w/r tags per node
+        sub.bind_ssbo(4, buffers_.ssbo_list_ranking_anchor_counters_);
+        sub.bind_ssbo(5, buffers_.ssbo_list_ranking_splice_counters_);
+        sub.bind_ssbo(6, buffers_.ssbo_list_ranking_ranks_);
+        sub.bind_ubo(0, buffers_.ubo_list_ranking_splicing_);
+        sub.push_constant("pc_listranking_splice_iter_", splice_iter);
 
-        sub.dispatch(int3(buffers_.ubo_list_ranking_tagging_.num_thread_groups, 1, 1));
-        sub.barrier(GPU_BARRIER_SHADER_STORAGE); 
-      } 
-    }
-    {
-      auto& sub = pass_listranking_test.sub("strokegen_list_ranking_test_compaction");
-      sub.shader_set(shaders_.static_shader_get(LISTRANKING_COMPACT_ANCHORS));
-
-      sub.bind_ssbo(0, buffers_.ssbo_list_ranking_links_); 
-      sub.bind_ssbo(1, buffers_.ssbo_list_ranking_output_); // tags per node
-      sub.bind_ssbo(2, buffers_.ssbo_list_ranking_node_to_anchor_); 
-      sub.bind_ssbo(3, buffers_.ssbo_list_ranking_atomics_); // Note: Zero the atomics before compaction.
-      sub.bind_ssbo(4, buffers_.ssbo_list_ranking_anchor_to_node_);
-      sub.bind_ssbo(5, buffers_.ssbo_list_ranking_anchor_to_next_anchor_); 
-      sub.bind_ubo(0, buffers_.ubo_list_ranking_tagging_);
-      sub.bind_ubo(1, buffers_.ubo_list_ranking_scan_infos_); 
-      sub.push_constant("pc_listranking_tagging_iter_", (int)(buffers_.ubo_list_ranking_tagging_.num_tagging_iters)); // pingpong
-
-      sub.dispatch(int3(buffers_.ubo_list_ranking_scan_infos_.num_thread_groups, 1, 1));
-      sub.barrier(GPU_BARRIER_SHADER_STORAGE); 
-    }
-    {
-      auto& sub = pass_listranking_test.sub("strokegen_list_ranking_test_fill_dispatch_args_to_anchors");
-      sub.shader_set(shaders_.static_shader_get(LISTRANKING_FILL_DISPATCH_ARGS_TO_ANCHORS)); 
-
-      sub.bind_ssbo(0, buffers_.ssbo_list_ranking_atomics_);
-      sub.bind_ssbo(1, buffers_.ssbo_list_ranking_indirect_dispatch_args_);
-
-      sub.dispatch(int3(1, 1, 1));
-      sub.barrier(GPU_BARRIER_SHADER_STORAGE);
-    }
-    {
-      auto& sub = pass_listranking_test.sub("strokegen_list_ranking_test_sublist_ranking"); 
-      sub.shader_set(shaders_.static_shader_get(LISTRANKING_SUBLIST_RANKING));
-
-      sub.bind_ssbo(0, buffers_.ssbo_list_ranking_anchor_to_node_); 
-      sub.bind_ssbo(1, buffers_.ssbo_list_ranking_node_to_anchor_);
-      sub.bind_ssbo(2, buffers_.ssbo_list_ranking_anchor_to_next_anchor_);
-      sub.bind_ssbo(3, buffers_.ssbo_list_ranking_output_);
-      sub.bind_ssbo(4, buffers_.ssbo_list_ranking_links_);
-      sub.bind_ssbo(5, buffers_.ssbo_list_ranking_atomics_); 
-
-      sub.bind_ubo(0, buffers_.ubo_list_ranking_tagging_);
-
-      sub.dispatch(buffers_.ssbo_list_ranking_indirect_dispatch_args_);  
-      sub.barrier(GPU_BARRIER_SHADER_STORAGE); 
-    }
-    {
-      auto& sub = pass_listranking_test.sub("strokegen_list_ranking_test_sublist_pointer_jumping"); 
-      sub.shader_set(shaders_.static_shader_get(LISTRANKING_SUBLIST_POINTER_JUMPING)); 
-
-      for (size_t i = 0; i < MAX_NUM_JUMPS_BNPR_LIST_RANK_TEST; i++)
-      {
-        sub.bind_ssbo(0, buffers_.ssbo_list_ranking_anchor_to_node_);
-        sub.bind_ssbo(1, buffers_.ssbo_list_ranking_anchor_to_next_anchor_);
-        sub.bind_ssbo(2, buffers_.ssbo_list_ranking_per_anchor_sublist_jumping_info_);
-        sub.bind_ssbo(3, buffers_.ssbo_list_ranking_output_);
-        sub.bind_ssbo(4, buffers_.ssbo_list_ranking_links_); 
-        sub.bind_ssbo(5, buffers_.ssbo_list_ranking_atomics_);
-
-        sub.bind_ubo(0, buffers_.ubo_list_ranking_tagging_); 
-
-        sub.push_constant("pc_listranking_jumping_iter_", (int)i);
-
-        sub.dispatch(buffers_.ssbo_list_ranking_indirect_dispatch_args_); 
-        sub.barrier(GPU_BARRIER_SHADER_STORAGE); 
+        sub.dispatch(buffers_.ssbo_list_ranking_indirect_dispatch_args_per_anchor[splice_iter]);
+        sub.barrier(GPU_BARRIER_SHADER_STORAGE);
       }
+      {
+        auto& sub = pass_listranking_test.sub("strokegen_list_ranking_test_compaction");
+        sub.shader_set(shaders_.static_shader_get(LISTRANKING_COMPACT_ANCHORS));
+
+        sub.bind_ssbo(0, buffers_.ssbo_list_ranking_tags_);
+        sub.bind_ssbo(1, buffers_.ssbo_list_ranking_links_);
+        sub.bind_ssbo(2, buffers_.ssbo_list_ranking_ranks_);
+        sub.bind_ssbo(3, buffers_.ssbo_list_ranking_anchor_to_node_[splice_iter % 2]); // pingpong
+        sub.bind_ssbo(4, buffers_.ssbo_list_ranking_anchor_to_node_[(splice_iter + 1) % 2]);
+        sub.bind_ssbo(5, buffers_.ssbo_list_ranking_spliced_node_id_);
+        sub.bind_ssbo(6, buffers_.ssbo_list_ranking_anchor_to_next_anchor_);
+        sub.bind_ssbo(7, buffers_.ssbo_list_ranking_node_to_anchor_);
+        sub.bind_ssbo(8, buffers_.ssbo_list_ranking_anchor_counters_);
+        sub.bind_ssbo(9, buffers_.ssbo_list_ranking_splice_counters_);
+        sub.bind_ubo(0, buffers_.ubo_list_ranking_splicing_);
+        sub.push_constant("pc_listranking_splice_iter_", splice_iter);
+
+        sub.dispatch(buffers_.ssbo_list_ranking_indirect_dispatch_args_per_anchor[splice_iter]);
+        sub.barrier(GPU_BARRIER_SHADER_STORAGE);
+      }
+    }
+    {
+      // auto& sub = pass_listranking_test.sub("strokegen_list_ranking_test_sublist_pointer_jumping");
+      // sub.shader_set(shaders_.static_shader_get(LISTRANKING_SUBLIST_POINTER_JUMPING));
+      //
+      // for (size_t i = 0; i < MAX_NUM_JUMPS_BNPR_LIST_RANK_TEST; i++)
+      // {
+      //   sub.bind_ssbo(0, buffers_.ssbo_list_ranking_anchor_to_node_);
+      //   sub.bind_ssbo(1, buffers_.ssbo_list_ranking_anchor_to_next_anchor_);
+      //   sub.bind_ssbo(2, buffers_.ssbo_list_ranking_per_anchor_sublist_jumping_info_);
+      //   sub.bind_ssbo(3, buffers_.ssbo_list_ranking_tags_);
+      //   sub.bind_ssbo(4, buffers_.ssbo_list_ranking_links_);
+      //
+      //   sub.bind_ubo(0, buffers_.ubo_list_ranking_splicing_);
+      //
+      //   sub.push_constant("pc_listranking_jumping_iter_", (int)i);
+      //
+      //   sub.dispatch(buffers_.ssbo_list_ranking_indirect_dispatch_args_);
+      //   sub.barrier(GPU_BARRIER_SHADER_STORAGE);
+      // }
     }
   }
 
+  /**
+   * \brief Add a sub pass for filling indirect dispatch args to the list ranking pass.
+   * \param per_anchor true if kernel is dispatched x1 thread per anchor node.
+   * \param per_spliced true if kernel is dispatched x1 thread per spliced node.
+   * \param splicing_or_relinking_iter the iteration of splicing or relinking process.
+   */
+  void StrokeGenPassModule::rebuild_pass_list_ranking_fill_args(
+    bool per_anchor, bool per_spliced, int splicing_or_relinking_iter
+  ){
+    auto sub = pass_listranking_test.sub("strokegen_list_ranking_test_fill_dispatch_args");
+    sub.shader_set(shaders_.static_shader_get(eShaderType::LISTRANKING_FILL_DISPATCH_ARGS));
+
+    sub.bind_ssbo(0, buffers_.ssbo_list_ranking_anchor_counters_);
+    sub.bind_ssbo(1, buffers_.ssbo_list_ranking_splice_counters_);
+    sub.bind_ssbo(2, buffers_.ssbo_list_ranking_indirect_dispatch_args_per_anchor[splicing_or_relinking_iter]);
+    sub.bind_ssbo(3, buffers_.ssbo_list_ranking_indirect_dispatch_args_per_spliced[splicing_or_relinking_iter]);
+    int dispatch_granularity_tag = per_anchor ? 0 : (per_spliced ? 1 : 2);
+    sub.push_constant("pc_listranking_indirect_arg_granularity_", dispatch_granularity_tag); /* 0 := anchors, 1:= spliced nodes */
+    sub.push_constant("pc_listranking_counter_buffer_slot_id_", splicing_or_relinking_iter); /* which counter to use */
+
+    sub.dispatch(int3(1, 1, 1));
+    sub.barrier(GPU_BARRIER_SHADER_STORAGE);
+  }
 }

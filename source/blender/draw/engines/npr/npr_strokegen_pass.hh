@@ -32,8 +32,8 @@ private:
   draw::PassSimple pass_segscan_test = {"Bnpr GPU Blelloch SegScan Test"};
   draw::PassSimple pass_extract_geom = {"StrokeGen Extract Geometry"};
   draw::PassSimple pass_conv1d_test = {"Test GPU 1d conv on circular segments"};
-  draw::PassSimple pass_listranking_test = { "List ranking test" }; 
-  
+  draw::PassSimple pass_listranking_test = { "List ranking test" };
+
   /** Instance */
   StrokeGenShaderModule &shaders_;
   GPUBufferPoolModule   &buffers_;
@@ -41,8 +41,8 @@ private:
 
   /** Geometry  */
 
-  
-  
+
+
 public:
   StrokeGenPassModule(
       StrokeGenShaderModule &strokegen_shaders,
@@ -57,7 +57,7 @@ public:
 
   ~StrokeGenPassModule() {}
 
-  
+
 
   /* -------------------------------------------------------------------- */
   /** \name Passes
@@ -66,8 +66,8 @@ public:
   {
     SCAN_TEST = 0,
     SEGSCAN_TEST,
-    SEGLOOPCONV_TEST, 
-    LIST_RANKING_TEST, 
+    SEGLOOPCONV_TEST,
+    LIST_RANKING_TEST,
     GEOM_EXTRACTION
   };
 
@@ -75,7 +75,7 @@ public:
   /** \} */
 
 
-  
+
   /* -------------------------------------------------------------------- */
   /** \name Sync with Draw Module
      * \{ */
@@ -83,7 +83,7 @@ public:
   /** \} */
 
 
-  
+
   /* -------------------------------------------------------------------- */
   /** \name Rebuild Render Passes
      * \{ */
@@ -95,12 +95,13 @@ public:
 
   void rebuild_pass_conv_test();
 
-  void rebuild_pass_list_ranking(); 
+  void rebuild_pass_list_ranking();
+  void rebuild_pass_list_ranking_fill_args(bool per_anchor, bool per_spliced, int splicing_or_relinking_iter);
   /** \} */
 
 
 
-  
+
   /* -------------------------------------------------------------------- */
   /** \name Scan Tester
    * \{ */
@@ -123,7 +124,7 @@ public:
       uint num_scan_items
       );
   /** \} */
-  
+
   /* -------------------------------------------------------------------- */
   /** \name Segment Scan Validation
    * \{ */
@@ -139,7 +140,7 @@ public:
   bool validate_segscan_internal(
     const T *input,
     const T *output,
-    const int blk_size, const int num_elems,  
+    const int blk_size, const int num_elems,
     uint (*func_get_hf)(const T&),
     bool (*func_equals)(const T &, const T &),
     T (*func_scan_op)(const T&, const T&),
@@ -169,7 +170,7 @@ public:
     T (*func_conv_op)(const T&, const T&)
   );
   /** \} */
-  
+
 private:
 
 };
@@ -281,7 +282,7 @@ void StrokeGenPassModule::validate_segscan(
     data_segscan_inputs,
     data_segscan_output,
     GROUP_SIZE_BNPR_SCAN_TEST_SWEEP * 2u,
-    buffers_.ubo_bnpr_tree_scan_infos_.num_scan_items, 
+    buffers_.ubo_bnpr_tree_scan_infos_.num_scan_items,
     func_get_hf, func_equals, func_scan_op, zero_val,
     inclusive
   );
@@ -295,7 +296,7 @@ bool StrokeGenPassModule::validate_segscan_internal(
   const T *input,
   const T *output,
   const int blk_size,
-  const int num_elems, 
+  const int num_elems,
   uint (*func_get_hf)(const T &),
   bool (*func_equals)(const T &, const T &),
   T (*func_scan_op)(const T&, const T&),
@@ -373,24 +374,24 @@ bool StrokeGenPassModule::validate_segloopconv1d_internal(
   {
     const int seg_head = seg_topo[i * 4];
     const int seg_tail = seg_topo[i * 4 + 1];
-    
-    currOutput = input[i]; 
+
+    currOutput = input[i];
     { // convolution
-      int neigh_id = i; 
+      int neigh_id = i;
       for (int d = 1; d <= conv_radius; ++d)
       {
         neigh_id--;
         if (neigh_id < seg_head) neigh_id = seg_tail;
-      
+
         currOutput = func_conv_op(currOutput, input[neigh_id]);
       }
 
-      neigh_id = i; 
+      neigh_id = i;
       for (int d = 1; d <= conv_radius; ++d)
       {
         neigh_id++;
         if (neigh_id > seg_tail) neigh_id = seg_head;
-      
+
         currOutput = func_conv_op(currOutput, input[neigh_id]);
       }
     }
@@ -398,7 +399,7 @@ bool StrokeGenPassModule::validate_segloopconv1d_internal(
     if (!func_equals(currOutput, output[i]))
       return false;
   }
-  
-  return true; 
+
+  return true;
 }
 }

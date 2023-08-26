@@ -285,67 +285,61 @@ GPU_SHADER_CREATE_INFO(strokegen_segloopconv1D_test_convolution)
 /* -------------------------------------------------------------------- */
 /** \GPU List Ranking Test
  * \{ */
-GPU_SHADER_CREATE_INFO(strokegen_list_ranking_test_init_anchors)
+GPU_SHADER_CREATE_INFO(strokegen_list_ranking_test_fill_dispatch_args)
+    .do_static_compilation(true)
+    .typedef_source("bnpr_defines.hh")
+    .typedef_source("bnpr_shader_shared.hh")
+    .typedef_source("draw_shader_shared.h") /* Always needed for indirect args */
+    .define("_KERNEL_MULTICOMPILE__FILL_DISPATCH_ARGS", "1")
+    .define("_KERNEL_MULTICOMPILE__FILL_DISPATCH_ARGS__LIST_RANKING_ANCHORS", "1")
+
+    .storage_buf(0, Qualifier::READ, "uint", "ssbo_list_ranking_anchor_counters_[]")
+    .storage_buf(1, Qualifier::READ, "uint", "ssbo_list_ranking_splice_counters_[]")
+    .storage_buf(2, Qualifier::WRITE, "DispatchCommand", "ssbo_list_ranking_indirect_dispatch_args_per_anchor")
+    .storage_buf(3, Qualifier::WRITE, "DispatchCommand", "ssbo_list_ranking_indirect_dispatch_args_per_spliced")
+    .push_constant(Type::INT, "pc_listranking_indirect_arg_granularity_") /* 0 := anchors, 1:= spliced nodes */
+    .push_constant(Type::INT, "pc_listranking_counter_buffer_slot_id_") /* which counter to use */
+
+    .local_group_size(32)
+    .compute_source("npr_strokegen_fill_indirect_args_comp.glsl");
+
+GPU_SHADER_CREATE_INFO(strokegen_list_ranking_test_tagging)
     .do_static_compilation(true)
     .typedef_source("bnpr_shader_shared.hh")
-    .define("_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_UPDATE_ANCHORS", "1")
-    .define("BNPR_STROKEGEN_SCAN_NO_SUBGROUP_CODEGEN_LIB",
-            "1") /* define guard to exclude the scan library */
-    .storage_buf(0, Qualifier::READ, "uint", "ssbo_list_ranking_links_[]")
-    .storage_buf(1, Qualifier::READ_WRITE, "uint", "ssbo_list_ranking_output_[]")
-    .storage_buf(2, Qualifier::READ_WRITE, "SSBOData_ListRankingAtomics", "ssbo_list_ranking_atomics_")
-    .push_constant(Type::INT, "pc_listranking_tagging_iter_")
-    .uniform_buf(0, "UBData_ListRanking", "ubo_list_ranking_tagging_")
+    .define("_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SPLICING", "1")
+
+    .storage_buf(0, Qualifier::READ, "uint", "ssbo_list_ranking_anchor_to_node_in_[]")
+    .storage_buf(1, Qualifier::READ_WRITE, "uint", "ssbo_list_ranking_anchor_to_node_out_[]")
+    .storage_buf(2, Qualifier::READ, "uint", "ssbo_list_ranking_links_[]")
+    .storage_buf(3, Qualifier::WRITE, "uint", "ssbo_list_ranking_tags_[]")
+    .storage_buf(4, Qualifier::WRITE, "uint", "ssbo_list_ranking_anchor_counters_[]")
+    .storage_buf(5, Qualifier::WRITE, "uint", "ssbo_list_ranking_splice_counters_[]")
+    .storage_buf(6, Qualifier::READ_WRITE, "uint", "ssbo_list_ranking_ranks_[]")
+    .uniform_buf(0, "UBData_ListRanking", "ubo_list_ranking_splicing_")
+    .push_constant(Type::INT, "pc_listranking_splice_iter_")
+    
     .local_group_size(GROUP_SIZE_BNPR_LIST_RANK_TEST)
     .compute_source("npr_strokegen_list_ranking_test_comp.glsl");
 
 GPU_SHADER_CREATE_INFO(strokegen_list_ranking_test_compact_anchors)
     .do_static_compilation(true)
+    .typedef_source("draw_shader_shared.h")
+    .typedef_source("bnpr_shader_shared.hh")
     .define("_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_COMPACT_ANCHORS", "1")
-    .storage_buf(0, Qualifier::READ, "uint", "ssbo_list_ranking_links_[]")
-    .storage_buf(1, Qualifier::READ_WRITE, "uint", "ssbo_list_ranking_output_[]")
-    .storage_buf(2, Qualifier::READ_WRITE, "uint", "ssbo_list_ranking_node_to_anchor_[]") 
-    .storage_buf(3, Qualifier::READ_WRITE, "SSBOData_ListRankingAtomics", "ssbo_list_ranking_atomics_")
-    .storage_buf(4, Qualifier::WRITE, "uint", "ssbo_list_ranking_anchor_to_node_[]")
-    .uniform_buf(0, "UBData_ListRanking", "ubo_list_ranking_tagging_")
-    .push_constant(Type::INT, "pc_listranking_tagging_iter_")
-    /** stream compaction --- */
-    .additional_info("bnpr_scan_uint_add")
-    .uniform_buf(1, "UBData_TreeScan", "ubo_list_ranking_scan_infos_")
-    /** ---------------------- */
-    .typedef_source("draw_shader_shared.h")
-    .local_group_size(GROUP_SIZE_BNPR_LIST_RANK_TEST)
-    .compute_source("npr_strokegen_list_ranking_test_comp.glsl");
+    
+    .storage_buf(0, Qualifier::READ, "uint", "ssbo_list_ranking_tags_[]")
+    .storage_buf(1, Qualifier::READ_WRITE, "uint", "ssbo_list_ranking_links_[]")
+    .storage_buf(2, Qualifier::READ_WRITE, "uint", "ssbo_list_ranking_ranks_[]")
+    .storage_buf(3, Qualifier::READ, "uint", "ssbo_list_ranking_anchor_to_node_in_[]")
+    .storage_buf(4, Qualifier::WRITE, "uint", "ssbo_list_ranking_anchor_to_node_out_[]")
+    .storage_buf(5, Qualifier::WRITE, "uint", "ssbo_list_ranking_spliced_node_id_[]")
+    .storage_buf(6, Qualifier::WRITE, "uint", "ssbo_list_ranking_anchor_to_next_anchor_[]")
+    .storage_buf(7, Qualifier::WRITE, "uint", "ssbo_list_ranking_node_to_anchor_[]")
+    .storage_buf(8, Qualifier::READ_WRITE, "uint", "ssbo_list_ranking_anchor_counters_[]")
+    .storage_buf(9, Qualifier::READ_WRITE, "uint", "ssbo_list_ranking_splice_counters_[]")
+    .uniform_buf(0, "UBData_ListRanking", "ubo_list_ranking_splicing_")
+    .push_constant(Type::INT, "pc_listranking_splice_iter_")
 
-GPU_SHADER_CREATE_INFO(strokegen_list_ranking_test_fill_dispatch_args_to_anchors)
-    .do_static_compilation(true)
-    .typedef_source("bnpr_shader_shared.hh")
-    .typedef_source("draw_shader_shared.h") /* Always needed for indirect args */
-    .define("_KERNEL_MULTICOMPILE__FILL_DISPATCH_ARGS", "1")
-    .define("_KERNEL_MULTICOMPILE__FILL_DISPATCH_ARGS__LIST_RANKING_ANCHORS", "1")
-    .storage_buf(0, Qualifier::READ, "SSBOData_ListRankingAtomics", "ssbo_list_ranking_atomics_")
-    .storage_buf(1, Qualifier::WRITE, "DispatchCommand", "ssbo_list_ranking_indirect_dispatch_args_")
-    .define("SSBO_ARGS", "ssbo_list_ranking_indirect_dispatch_args_")
-    .define("INDIRECT_THREAD_GROUP_SIZE", GROUP_SIZE_BNPR_LIST_RANK_TEST_STR) 
-    .local_group_size(32)
-    .compute_source("npr_strokegen_fill_indirect_args_comp.glsl");
-
-GPU_SHADER_CREATE_INFO(strokegen_list_ranking_test_sublist_ranking)
-    .do_static_compilation(true)
-    .typedef_source("bnpr_shader_shared.hh")
-    .typedef_source("draw_shader_shared.h")
-    .define("_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SUBLIST_RANKING", "1")
-    .storage_buf(0, Qualifier::READ, "uint", "ssbo_list_ranking_anchor_to_node_[]")
-    .storage_buf(1, Qualifier::READ_WRITE, "uint", "ssbo_list_ranking_node_to_anchor_[]")
-    .storage_buf(2, Qualifier::WRITE, "uint", "ssbo_list_ranking_anchor_to_next_anchor_[]")
-    .storage_buf(3, Qualifier::READ_WRITE, "uint", "ssbo_list_ranking_output_[]")
-    .storage_buf(4, Qualifier::READ, "uint", "ssbo_list_ranking_links_[]")
-    .storage_buf(5, Qualifier::READ, "SSBOData_ListRankingAtomics", "ssbo_list_ranking_atomics_")
-    .uniform_buf(0, "UBData_ListRanking", "ubo_list_ranking_tagging_")
-    /** stream compaction --- */
-    .additional_info("bnpr_scan_uint_add")
-    .uniform_buf(1, "UBData_TreeScan", "ubo_list_ranking_scan_infos_")
-    /** ---------------------- */
     .local_group_size(GROUP_SIZE_BNPR_LIST_RANK_TEST)
     .compute_source("npr_strokegen_list_ranking_test_comp.glsl");
 
@@ -353,17 +347,7 @@ GPU_SHADER_CREATE_INFO(strokegen_list_ranking_test_sublist_pointer_jumping)
     .do_static_compilation(true)
     .typedef_source("bnpr_shader_shared.hh")
     .define("_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SUBLIST_POINTER_JUMPING", "1")
-    .storage_buf(0, Qualifier::READ, "uint", "ssbo_list_ranking_anchor_to_node_[]")
-    .storage_buf(1, Qualifier::READ, "uint", "ssbo_list_ranking_anchor_to_next_anchor_[]")
-    .storage_buf(2, Qualifier::READ_WRITE, "uint", "ssbo_list_ranking_per_anchor_sublist_jumping_info_[]")
-    .storage_buf(3, Qualifier::READ, "uint", "ssbo_list_ranking_output_[]")
-    .storage_buf(4, Qualifier::READ, "uint", "ssbo_list_ranking_links_[]")
-    .storage_buf(5, Qualifier::READ_WRITE, "SSBOData_ListRankingAtomics", "ssbo_list_ranking_atomics_") 
-    .push_constant(Type::INT, "pc_listranking_jumping_iter_")
-    /** stream compaction --- */
-    .additional_info("bnpr_scan_uint_add")
-    .uniform_buf(1, "UBData_TreeScan", "ubo_list_ranking_scan_infos_")
-    /** ---------------------- */
+ 
     .local_group_size(GROUP_SIZE_BNPR_LIST_RANK_TEST)
     .compute_source("npr_strokegen_list_ranking_test_comp.glsl");
 
