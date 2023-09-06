@@ -114,10 +114,14 @@ const char *StrokeGenShaderModule::static_shader_create_info_name_get(eShaderTyp
       return "strokegen_list_ranking_test_tagging";
     case LISTRANKING_COMPACT_ANCHORS: 
       return "strokegen_list_ranking_test_compact_anchors";
+    case LISTRANKING_SPLICE_OUT_NODES: 
+      return "strokegen_list_ranking_test_splice_out_nodes"; 
     case LISTRANKING_FILL_DISPATCH_ARGS: 
       return "strokegen_list_ranking_test_fill_dispatch_args";
     case LISTRANKING_SUBLIST_POINTER_JUMPING:
      return "strokegen_list_ranking_test_sublist_pointer_jumping";
+    case LISTRANKING_UPLOAD_CPU_DATA: 
+     return "strokegen_list_ranking_test_upload_cpu_test_data"; 
 
     /* To avoid compiler warning about missing case. */
     case MAX_SHADER_TYPE:

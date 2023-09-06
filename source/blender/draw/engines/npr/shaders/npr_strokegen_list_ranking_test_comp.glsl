@@ -2,8 +2,8 @@
 
 #pragma BLENDER_REQUIRE(npr_strokegen_list_ranking_lib.glsl)
 
+#ifdef _KERNEL_MULTICOMPILE__TEST_LIST_RANKING_FILL_CPU_DATA
 
-#ifdef _KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SPLICING
 void main()
 {
     const uint groupIdx = gl_LocalInvocationID.x;
@@ -11,21 +11,50 @@ void main()
     const uint blockIdx = gl_WorkGroupID.x;
     const uint blockSize = gl_WorkGroupSize.x;
     
-    uint splicing_iter    = pc_listranking_splice_iter_; 
+    uint node_id = idx; 
 
+    ssbo_list_ranking_links_out_[node_id*2] = ssbo_list_ranking_links_in_[node_id*2];
+    ssbo_list_ranking_links_out_[node_id*2+1] = ssbo_list_ranking_links_in_[node_id*2+1]; 
+}
+
+#endif
+
+#ifdef _KERNEL_MULTICOMPILE__TEST_LIST_RANKING_TAGGING
+void main()
+{
+    const uint groupIdx = gl_LocalInvocationID.x;
+    const uint idx      = gl_GlobalInvocationID.x;
+    const uint blockIdx = gl_WorkGroupID.x;
+    const uint blockSize = gl_WorkGroupSize.x;
+    
+    const uint splicing_iter = pc_listranking_splice_iter_; 
+    const uint tagging_iter = pc_listranking_tagging_iter_; 
+    const uint num_nodes_total = NUM_NODES_TOTAL; 
+    const uint num_anchors = splicing_iter == 0 ? 
+        num_nodes_total : ssbo_list_ranking_anchor_counters_[splicing_iter]; 
+    
     /* compute node tag */
-    uint node_id = FUNC_GET_NODE_ID_FOR_ANCHOR(idx, splicing_iter); 
-    _FUNC_UPDATE_NODE_TAG(node_id);
-
-    if (idx == 0u) 
+    uint anchor_id = idx; 
+    uint node_id = FUNC_GET_NODE_ID_FOR_ANCHOR(anchor_id, splicing_iter); 
+    if (anchor_id < num_anchors && node_id < num_nodes_total)
     {
-        if (splicing_iter == 0u)
-        { /* bootstrap */
-            ssbo_list_ranking_anchor_counters_[0] = NUM_NODES_TOTAL;
+        _FUNC_UPDATE_NODE_TAG(node_id, tagging_iter); 
+    }
+
+    /* bootstraping */
+    if (splicing_iter == 0u && tagging_iter == 0u)
+    { 
+        FUNC_DEVICE_STORE_LISTRANKING_NODE_RANK(node_id, 1u); 
+        if (idx == 0u)
+        {
+            ssbo_list_ranking_anchor_counters_[0] = num_nodes_total;
             ssbo_list_ranking_splice_counters_[0] = 0; 
-            FUNC_DEVICE_STORE_LISTRANKING_NODE_RANK(node_id, 1u); 
         }
-        /* clear the atomics */ 
+    }
+
+    /* clear the atomics */ 
+    if (idx == 0u && tagging_iter == 0u) 
+    { 
         ssbo_list_ranking_anchor_counters_[splicing_iter + 1] = 0;
         ssbo_list_ranking_splice_counters_[splicing_iter + 1] = 0; 
     }
@@ -42,7 +71,7 @@ shared uint LDS_offset_per_lane_slot[32u][2u];
 
 shared uint LDS_hist_blk[2];  
 shared uint LDS_scan_block_offset[2]; 
-
+/* 6 loads + 2 atomic_adds/tg + 1 store */
 void main()
 {
     const uint groupIdx = gl_LocalInvocationID.x;
@@ -111,14 +140,14 @@ void main()
     if (groupIdx == gl_WorkGroupSize.x - 2u)
     {
         LDS_scan_block_offset[0] = atomicAdd(
-            ssbo_list_ranking_splice_counters_[splicing_iter],  
+            ssbo_list_ranking_splice_counters_[splicing_iter + 1],  
             LDS_hist_blk[0]
         ); 
     }
     if (groupIdx == gl_WorkGroupSize.x - 1u)
     {
         LDS_scan_block_offset[1] = atomicAdd(
-            ssbo_list_ranking_anchor_counters_[splicing_iter], 
+            ssbo_list_ranking_anchor_counters_[splicing_iter + 1], 
             LDS_hist_blk[1]
         ); 
     }
@@ -136,14 +165,40 @@ void main()
     { /* addressing already secured by is_anchor */
         FUNC_DEVICE_STORE_PER_ANCHOR_NODEID(output_id, node_id);         
     }else{
-        /* Remove(i.e, splice) this node out of the linked list */
-        uint node_rank = FUNC_DEVICE_LOAD_LISTRANKING_NODE_RANK(node_id); 
-        _FUNC_SPLICE_NODE_OUT(output_id, node_id, node_rank, links.prev_node_id, links.next_node_id); 
+        FUNC_DEVICE_STORE_PER_SPLICED_NODEID(output_id, node_id); 
     }
 }
 #endif
 
 
+
+
+
+
+#ifdef _KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SPLICE_NODES
+/* 4 loads + 3 stores */
+void main()
+{
+    const uint groupIdx = gl_LocalInvocationID.x;
+    const uint idx      = gl_GlobalInvocationID.x;
+    const uint blockIdx = gl_WorkGroupID.x;
+    const uint blockSize = gl_WorkGroupSize.x;
+
+    const uint splicing_iter = pc_listranking_splice_iter_; 
+    const uint num_nodes_total = NUM_NODES_TOTAL; 
+    const uint num_spliced = ssbo_list_ranking_splice_counters_[splicing_iter]; 
+
+    const uint splice_id = idx; 
+    const uint node_id = FUNC_GET_NODE_ID_FOR_SPLICED(splice_id); 
+    bool valid_item = (node_id < num_nodes_total) && (splice_id < num_spliced); 
+
+    ListRankingLink links = FUNC_DEVICE_LOAD_LISTRANKING_NODE_LINKS(node_id); 
+
+    uint node_rank = FUNC_DEVICE_LOAD_LISTRANKING_NODE_RANK(node_id); 
+    _FUNC_SPLICE_NODE_OUT(splice_id, node_id, node_rank, links.prev_node_id, links.next_node_id); 
+}
+
+#endif
 
 
 

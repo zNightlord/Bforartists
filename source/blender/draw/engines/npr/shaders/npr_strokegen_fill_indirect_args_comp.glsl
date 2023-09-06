@@ -10,7 +10,7 @@ void main()
         uvec3 dispatch_args = uvec3(1, 1, 1); 
         GetDispatchArgs(/*out*/ dispatch_args); 
         FillDispatchArgsBuffer(dispatch_args); 
-    }
+    } 
 }
 
 #endif /* _KERNEL_MULTICOMPILE__FILL_DISPATCH_ARGS */

@@ -67,7 +67,7 @@ bool is_head_or_tail_node(ListRankingLink link, uint node_id)
 
 
 
-#if defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SPLICING)
+#if defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_TAGGING)
 
     /* Public Interfaces ///////////////////////////////// */
     #define _FUNC_UPDATE_NODE_TAG CAT(CalcNewTag_, tag_list_ranking)
@@ -76,11 +76,23 @@ bool is_head_or_tail_node(ListRankingLink link, uint node_id)
 	/**
 	 * \brief Iteratively calculate & store tag for each node  
 	 */
-    void _FUNC_UPDATE_NODE_TAG(uint node_id)
+    void _FUNC_UPDATE_NODE_TAG(uint node_id, uint tagging_iter)
     {
-        uint tag = node_id;
-        uint tag_next = FUNC_DEVICE_LOAD_LISTRANKING_NODE_NEXT_NODE_ID(node_id); 
-        if (FUNC_IS_NODE_TAIL(tag_next, node_id))
+        uint next_node_id = FUNC_DEVICE_LOAD_LISTRANKING_NODE_NEXT_NODE_ID(node_id); 
+
+        uint tag, tag_next;
+        if (tagging_iter == 0u)
+        {
+            tag      = node_id; 
+            tag_next = next_node_id; 
+        }
+        else /*tagging_iter > 0u*/
+        {
+            tag      = FUNC_DEVICE_LOAD_LISTRANKING_NODE_TAG(node_id); 
+            tag_next = FUNC_DEVICE_LOAD_LISTRANKING_NODE_TAG(next_node_id); 
+        }
+
+        if (FUNC_IS_NODE_TAIL(next_node_id, node_id))
             /* for tail this can be arbitrary unequal value
              * but we give larger tag to increase the possibility
              * to mark this into the independent set */
@@ -133,20 +145,27 @@ bool is_head_or_tail_node(ListRankingLink link, uint node_id)
 
         return num_valid_waves; 
     }
+#endif
 
+#if defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_COMPACT_ANCHORS) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SPLICE_NODES)
+
+/* update linkage + store rank(no load) : 0.95ms */
+/* load rank + store rank : 0.53ms */
     void _FUNC_SPLICE_NODE_OUT(
         uint splice_id, uint node_id, uint node_rank, uint prev_node_id, uint next_node_id)
     {
         /* update linkage */
         if (prev_node_id != node_id)
-            FUNC_DEVICE_STORE_LISTRANKING_NODE_NEXT_NODE_ID(prev_node_id, next_node_id);
+            FUNC_DEVICE_STORE_LISTRANKING_NODE_NEXT_NODE_ID(prev_node_id, next_node_id); 
         if (next_node_id != node_id)
-            FUNC_DEVICE_STORE_LISTRANKING_NODE_PREV_NODE_ID(next_node_id, prev_node_id);
+            FUNC_DEVICE_STORE_LISTRANKING_NODE_PREV_NODE_ID(next_node_id, prev_node_id); 
         /* update rank */
         uint prev_node_rank = FUNC_DEVICE_LOAD_LISTRANKING_NODE_RANK(prev_node_id); 
         prev_node_rank += node_rank; 
+
         FUNC_DEVICE_STORE_LISTRANKING_NODE_RANK(prev_node_id, prev_node_rank); 
     }
+    
 #endif
 
 

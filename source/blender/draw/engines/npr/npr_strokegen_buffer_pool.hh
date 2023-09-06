@@ -39,18 +39,21 @@ class GPUBufferPoolModule {
 
   SSBO_ListRankingCounters            ssbo_list_ranking_anchor_counters_; // x1 slot per splicing iteration
   SSBO_ListRankingCounters            ssbo_list_ranking_splice_counters_; // x1 slot per re-link iteration
-  SSBO_IndirectDispatchArgs           ssbo_list_ranking_indirect_dispatch_args_per_anchor[NUM_ITERS_BNPR_LIST_RANK_SPLICE];
-  SSBO_IndirectDispatchArgs           ssbo_list_ranking_indirect_dispatch_args_per_spliced[NUM_ITERS_BNPR_LIST_RANK_RELINK];
-  SSBO_ListRankingTags                ssbo_list_ranking_tags_;
+  SSBO_IndirectDispatchArgs           ssbo_list_ranking_indirect_dispatch_args_per_anchor[NUM_ITERS_BNPR_LIST_RANK_SPLICE+1];
+  SSBO_IndirectDispatchArgs           ssbo_list_ranking_indirect_dispatch_args_per_spliced[NUM_ITERS_BNPR_LIST_RANK_RELINK+1];
+  SSBO_ListRankingTags                ssbo_list_ranking_tags_[2];
   SSBO_ListRankingRanks               ssbo_list_ranking_ranks_;
-  SSBO_ListRankingLinks               ssbo_list_ranking_links_; 
+  SSBO_ListRankingLinksStagingBuf     ssbo_list_ranking_links_staging_buf_; 
+  SSBO_ListRankingLinks               ssbo_list_ranking_links_;
   SSBO_ListRankingAnchorToNode        ssbo_list_ranking_anchor_to_node_[2];
-  SSBO_ListRankingSplicedNodeId       ssbo_list_ranking_spliced_node_id_; 
+  SSBO_ListRankingSplicedNodeId       ssbo_list_ranking_spliced_node_id_;
 
   SSBO_ListRankingAnchorToNextAnchor  ssbo_list_ranking_anchor_to_next_anchor_;
   SSBO_ListRankingAnchorJumpingInfo   ssbo_list_ranking_per_anchor_sublist_jumping_info_;
   SSBO_ListRankingNodeToAnchor        ssbo_list_ranking_node_to_anchor_;
-  
+
+  SSBO_ListRankingLinks ssbo_list_ranking_debug_; 
+
   UBO_ListRanking                     ubo_list_ranking_splicing_;
 
   // Note: Whenever you found weird shader error:
@@ -78,17 +81,17 @@ class GPUBufferPoolModule {
   // *) When using parallel primitive lib (scan, loopconv, etc)
   //    with multiple kernels in one shader file
   //    and you dont need the primitive in a certain kernel,
-  //    use define guard to exclude the scan library like this: 
+  //    use define guard to exclude the scan library like this:
   //    (shaderinfo) .define("BNPR_STROKEGEN_SCAN_NO_SUBGROUP_CODEGEN_LIB", "1")
   //    Also, remember to check if there are any other confliction with the primitive library
 
   /** CPU Buffers */
   Vector<int> listranking_test_nodes_prev_next; /** Temp data for testing shaders  */
-  bool listranking_test_data_uploaded; 
-  bool listranking_test_data_validated; 
+  bool listranking_test_data_uploaded;
+  bool listranking_test_data_validated;
 
 
-  
+
  public:
   GPUBufferPoolModule(Instance &inst) :
     instance(inst)

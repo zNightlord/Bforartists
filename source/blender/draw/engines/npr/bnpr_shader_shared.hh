@@ -263,7 +263,8 @@ using SSBO_SegLoopConvDebugData = draw::StorageArrayBuffer<uint, 2048 * 2048 * 8
 using SSBO_SegLoopConvPatchTable = draw::StorageArrayBuffer<uint, 4096 * 64, true>;
 using UBO_SegLoopConv1D = draw::UniformBuffer<UBData_SegLoopConv1D>;
 
-using SSBO_ListRankingLinks = draw::StorageArrayBuffer<uint, NUM_ITEMS_BNPR_LIST_RANK_TEST * 2, false/* We need to init this from CPU */>;
+using SSBO_ListRankingLinksStagingBuf = draw::StorageArrayBuffer<uint, NUM_ITEMS_BNPR_LIST_RANK_TEST * 2, false/* We need to init this from CPU */>;
+using SSBO_ListRankingLinks = draw::StorageArrayBuffer<uint, NUM_ITEMS_BNPR_LIST_RANK_TEST * 2, true>;
 using SSBO_ListRankingTags = draw::StorageArrayBuffer<uint, NUM_ITEMS_BNPR_LIST_RANK_TEST, true>;
 using SSBO_ListRankingRanks = draw::StorageArrayBuffer<uint, NUM_ITEMS_BNPR_LIST_RANK_TEST, true>; 
 /* #anchors is around #nodes/4 */

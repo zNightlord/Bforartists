@@ -50,24 +50,40 @@ namespace blender::npr::strokegen
       ubo_list_ranking_splicing__.num_nodes = NUM_ITEMS_BNPR_LIST_RANK_TEST;
       ubo_list_ranking_splicing__.subbuff_size = 4 * ((ubo_list_ranking_splicing__.num_nodes + 3) / 4);
       ubo_list_ranking_splicing__.num_tagging_iters = 1u;
-        // std::min(8u, ComputeTaggingIters(NUM_ITEMS_BNPR_LIST_RANK_TEST));
-        // fprintf(stdout, "#tagging iters: %i ", num_iters);
     }
     ubo_list_ranking_splicing_.push_update();
 
+
+    {
+      // ssbo_list_ranking_indirect_dispatch_args_per_anchor[0].clear_to_zero();
+      // GPU_memory_barrier(GPU_BARRIER_BUFFER_UPDATE | GPU_BARRIER_COMMAND);
+      
+      // DispatchCommand* data = ssbo_list_ranking_indirect_dispatch_args_per_anchor[0].data();
+      // ssbo_list_ranking_indirect_dispatch_args_per_anchor[0].read();
+      // uint dispatch_args[4] = {
+      //   compute_num_groups(NUM_ITEMS_BNPR_LIST_RANK_TEST, GROUP_SIZE_BNPR_LIST_RANK_TEST),
+      //   1u,
+      //   1u,
+      //   1u
+      // };
+      // memcpy(data, dispatch_args, 4 * sizeof(uint));
+      // ssbo_list_ranking_indirect_dispatch_args_per_anchor[0].push_update();  // glBufferSubData
+      
+      // GPU_memory_barrier(GPU_BARRIER_BUFFER_UPDATE | GPU_BARRIER_COMMAND);
+    }
 
     if (false == listranking_test_data_uploaded)
     { // list ranking test: build nodes on CPU & upload to ssbo
       build_list_ranking_testing_data(); // build listranking_test_nodes_prev_next
 
-      ssbo_list_ranking_links_.resize(NUM_ITEMS_BNPR_LIST_RANK_TEST * 2);
-      ssbo_list_ranking_links_.clear_to_zero();
+      ssbo_list_ranking_links_staging_buf_.resize(NUM_ITEMS_BNPR_LIST_RANK_TEST * 2);
+      ssbo_list_ranking_links_staging_buf_.clear_to_zero();
       GPU_memory_barrier(GPU_BARRIER_BUFFER_UPDATE);
 
-      uint* data = ssbo_list_ranking_links_.data();
-      ssbo_list_ranking_links_.read();
-      memcpy(data, listranking_test_nodes_prev_next.data(), ssbo_list_ranking_links_.size() * sizeof(uint));
-      ssbo_list_ranking_links_.push_update(); // glBufferSubData
+      uint* data = ssbo_list_ranking_links_staging_buf_.data();
+      ssbo_list_ranking_links_staging_buf_.read();
+      memcpy(data, listranking_test_nodes_prev_next.data(), ssbo_list_ranking_links_staging_buf_.size() * sizeof(uint));
+      ssbo_list_ranking_links_staging_buf_.push_update(); // glBufferSubData
 
       GPU_memory_barrier(GPU_BARRIER_BUFFER_UPDATE);
 
@@ -77,8 +93,8 @@ namespace blender::npr::strokegen
     { // list ranking test: validate uploaded nodes int the ssbo
       listranking_test_data_validated = true;
 
-      ssbo_list_ranking_links_.read();
-      uint* readback = ssbo_list_ranking_links_.data();
+      ssbo_list_ranking_links_staging_buf_.read();
+      uint* readback = ssbo_list_ranking_links_staging_buf_.data();
       for (size_t i = 0; i < listranking_test_nodes_prev_next.size(); ++i)
       {
         if (listranking_test_nodes_prev_next[i] != readback[i])
