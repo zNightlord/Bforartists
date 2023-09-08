@@ -23,7 +23,7 @@ struct JumpingInfo
 {
     uint jump_next_anchor_id; 
     uint data; 
-    bool is_list_head; 
+    /* bool is_list_head; */ 
     bool is_list_tail; 
 };
 struct JumpingListInfo
@@ -70,14 +70,14 @@ ContractionInfo DecodeContractionInfo(uint encoded)
 
 uvec2 EncodePointerJumpingInfo(JumpingInfo ji)
 {
-    uint packed_x = (uint(ji.is_list_head) | (ji.jump_next_anchor_id << 1));
+    uint packed_x = /* (uint(ji.is_list_head) |  */(ji.jump_next_anchor_id << 1)/* ) */;
     uint packed_y = (uint(ji.is_list_tail) | (ji.data << 1)); 
     return uvec2(packed_x, packed_y); 
 }
 JumpingInfo DecodePointerJumpingInfo(uvec2 encoded)
 {
     JumpingInfo ji; 
-    ji.is_list_head = (1u == (encoded.x & 1u));
+    /* ji.is_list_head = (1u == (encoded.x & 1u)); */
     ji.jump_next_anchor_id = (encoded.x >> 1);
     ji.is_list_tail = (1u == (encoded.y & 1u));  
     ji.data = (encoded.y >> 1); 
@@ -142,7 +142,7 @@ void func_device_store_listranking_test_prev_node_id(uint node_id, uint prev_nod
 
 
 
-/* node pointers */
+/* anchor/spliced-to-node pointers */
 #if defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_COMPACT_ANCHORS)
 void func_device_store_anchor_to_node_id(uint anchor_id, uint node_id)
 {
@@ -157,7 +157,29 @@ void func_device_store_spliced_node_id(uint spliced_id, uint node_id)
 #define FUNC_DEVICE_STORE_PER_SPLICED_NODEID func_device_store_spliced_node_id
 #endif
 
-#if defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_TAGGING) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_COMPACT_ANCHORS) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SPLICE_NODES)
+
+
+/* node-to-anchor pointers */
+#if defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_COMPACT_ANCHORS)
+void func_device_store_node_to_anchor_id(uint node_id, uint anchor_id)
+{
+    ssbo_list_ranking_node_to_anchor_out_[node_id] = anchor_id; 
+}
+#define FUNC_DEVICE_STORE_PER_NODE_ANCHORID func_device_store_node_to_anchor_id
+#endif
+
+#if defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SUBLIST_POINTER_JUMPING)
+uint func_device_load_node_to_anchor_id(uint node_id)
+{
+    return ssbo_list_ranking_node_to_anchor_in_[node_id]; 
+}
+#define FUNC_DEVICE_LOAD_PER_NODE_ANCHORID func_device_load_node_to_anchor_id
+#endif
+
+
+
+#if defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_TAGGING) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_COMPACT_ANCHORS) || defined (_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SPLICE_NODES) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SUBLIST_POINTER_JUMPING) 
+
 uint func_load_splicing_thread_node_id(uint thread_idx, uint splicing_iter)
 { /* node_id acts as a pointer to access node buffers */
     uint node_id = (splicing_iter == 0u) ? thread_idx
@@ -195,7 +217,7 @@ uint func_device_load_listranking_test_tag(uint node_id)
 
 
 /* node ranks */
-#if defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_TAGGING) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_COMPACT_ANCHORS) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SPLICE_NODES)
+#if defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_TAGGING) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_COMPACT_ANCHORS) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SPLICE_NODES) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SUBLIST_POINTER_JUMPING) 
 uint func_device_load_node_rank(uint node_id)
 {
     return ssbo_list_ranking_ranks_[node_id]; 
@@ -220,19 +242,11 @@ bool validate_thread_per_anchor(uint mapped_anchor_id, uint num_anchors)
 }
 #define FUNC_DEVICE_VALIDATE_THREAD_PER_ANCHOR validate_thread_per_anchor
 
-uint get_num_anchors(uint iter)
-{
-    return ssbo_list_ranking_anchor_counters_[iter];  
-}
-#define FUNC_GET_NUM_ANCHORS get_num_anchors
-
 /* Remember we use the 0th iter to init data, 
  * actual jump iter starts form #1 */
-uint get_num_jump_iters()
+uint get_num_jump_iters(uint num_anchors)
 {
-    uint num_anchors = FUNC_GET_NUM_ANCHORS(); 
     uint num_iters = uint(ceil(log2(float(num_anchors))) + .0001f);
-
     return num_iters; 
 }
 #define FUNC_GET_NUM_JUMPS get_num_jump_iters
@@ -241,71 +255,49 @@ uint get_num_jump_iters()
 
 
 
-/*
-buffers to add:
-ssbo_list_ranking_per_anchor_sublist_jumping_info_[]; 
-pc_listranking_jumping_iter_; 
-*/
 
 #if defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SUBLIST_POINTER_JUMPING)
-
-uint func_device_load_next_anchor_id(uint anchor_id)
+JumpingInfo func_device_init_per_anchor_jumping_info(uint anchor_id, uint splicing_iter)
 {
-    return ssbo_list_ranking_anchor_to_next_anchor_[anchor_id]; 
-}
-#define FUNC_DEVICE_LOAD_PER_ANCHOR_NEXT_ANCHORID func_device_load_next_anchor_id
+    uint node_id = FUNC_GET_NODE_ID_FOR_ANCHOR(anchor_id, splicing_iter);  
 
-uint func_device_load_sublist_length(uint anchor_node_id)
-{
-    return ssbo_list_ranking_tags_[anchor_node_id]; 
-}
-#define FUNC_DEVICE_LOAD_SUBLIST_LENGTH func_device_load_sublist_length
-
-JumpingInfo func_device_init_per_anchor_jumping_info(uint anchor_id, uint node_id)
-{
     JumpingInfo ji; 
-    ji.jump_next_anchor_id = FUNC_DEVICE_LOAD_PER_ANCHOR_NEXT_ANCHORID(anchor_id); 
-    ji.data = FUNC_DEVICE_LOAD_SUBLIST_LENGTH(node_id); 
+    uint next_node_id = FUNC_DEVICE_LOAD_LISTRANKING_NODE_NEXT_NODE_ID(node_id); 
+    ji.jump_next_anchor_id = FUNC_DEVICE_LOAD_PER_NODE_ANCHORID(next_node_id); 
+    ji.data = FUNC_DEVICE_LOAD_LISTRANKING_NODE_RANK(node_id); 
 
-    ListRankingLink link = FUNC_DEVICE_LOAD_LISTRANKING_NODE_LINKS(node_id); 
-    ji.is_list_head = (link.prev_node_id == node_id); 
-    ji.is_list_tail = (link.next_node_id == node_id); 
+    ji.is_list_tail = (next_node_id == node_id); 
 
     return ji; 
 }
 #define FUNC_DEVICE_INIT_PER_ANCHOR_LIST_JUMPING_INFO func_device_init_per_anchor_jumping_info
 
 
-JumpingInfo func_device_load_per_anchor_jumping_info(uint anchor_id, uint jump_iter, uint subbuff_size)
+JumpingInfo func_device_load_per_anchor_jumping_info(uint anchor_id)
 {
-    uint subbuff_beg = subbuff_size * ((jump_iter + 1u) % 2u); /* output from last iter */
-    uint ld_offset = (subbuff_beg + anchor_id);
     uvec2 jump_data_packed = uvec2(
-        ssbo_list_ranking_per_anchor_sublist_jumping_info_[ld_offset*2u ], 
-        ssbo_list_ranking_per_anchor_sublist_jumping_info_[ld_offset*2u + 1u]
+        ssbo_list_ranking_per_anchor_sublist_jumping_info_in_[anchor_id*2u ], 
+        ssbo_list_ranking_per_anchor_sublist_jumping_info_in_[anchor_id*2u+1u]
     );  
      
     return DecodePointerJumpingInfo(jump_data_packed); 
 }
 #define FUNC_DEVICE_LOAD_PER_ANCHOR_LIST_JUMPING_INFO func_device_load_per_anchor_jumping_info
 
-
-void func_device_store_per_anchor_jumping_pointer(uint anchor_id, uint jump_iter, JumpingInfo ji, uint subbuff_size)
+void func_device_store_per_anchor_jumping_pointer(uint anchor_id, JumpingInfo ji)
 {
-    uint subbuff_beg = subbuff_size * (jump_iter % 2u); /* output to next iter */
-    uint st_offset = (subbuff_beg + anchor_id);
-
     uvec2 jump_data_packed = EncodePointerJumpingInfo(ji);
-    ssbo_list_ranking_per_anchor_sublist_jumping_info_[st_offset*2u]      = jump_data_packed.x;
-    ssbo_list_ranking_per_anchor_sublist_jumping_info_[st_offset*2u + 1u] = jump_data_packed.y;  
+    ssbo_list_ranking_per_anchor_sublist_jumping_info_out_[anchor_id*2u]    = jump_data_packed.x;
+    ssbo_list_ranking_per_anchor_sublist_jumping_info_out_[anchor_id*2u+1u] = jump_data_packed.y;  
 }
 #define FUNC_DEVICE_STORE_PER_ANCHOR_LIST_JUMPING_INFO func_device_store_per_anchor_jumping_pointer
+
 
 JumpingInfo func_device_update_anchor_jumping_info(
     JumpingInfo ji, JumpingInfo ji_next, out bool jumped_to_end
 ){
     JumpingInfo ji_updated = ji; /* .is_list_head and .is_list_tail are not updated */ 
-    /* Only update if the next jump has not reached the end of the lsit */
+    /* Only update if the next jump has not reached the end of the list */
     jumped_to_end = ji_next.jump_next_anchor_id == ji.jump_next_anchor_id; 
     if (false == jumped_to_end)
     { 
@@ -316,17 +308,6 @@ JumpingInfo func_device_update_anchor_jumping_info(
     return ji_updated; 
 }
 #define FUNC_DEVICE_UPDATE_ANCHOR_LIST_JUMPING_INFO func_device_update_anchor_jumping_info
-
-void func_device_store_per_anchor_list_len_and_addr(
-    uint tail_anchor_id, JumpingListInfo list_info, uint subbuff_size
-){
-    uint subbuff_beg = subbuff_size * 2u; /* only output at the last iter */ 
-    uint st_offset = (subbuff_beg + tail_anchor_id * 2u);
-
-    ssbo_list_ranking_per_anchor_sublist_jumping_info_[st_offset]      = list_info.list_len;
-    ssbo_list_ranking_per_anchor_sublist_jumping_info_[st_offset + 1u] = list_info.list_addr;   
-}
-#define FUNC_DEVICE_STORE_TAIL_ANCHOR_LIST_INFO func_device_store_per_anchor_list_len_and_addr
 
 #endif
 

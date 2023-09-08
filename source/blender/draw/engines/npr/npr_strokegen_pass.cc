@@ -216,20 +216,21 @@ namespace blender::npr::strokegen
     // Build render passes
     pass_listranking_test.init();
 
-    for (int splice_iter = 0; splice_iter < 3; ++splice_iter)
+    int num_splice_iters = 3;
+    for (int splice_iter = 0; splice_iter < num_splice_iters; ++splice_iter)
     {
       rebuild_pass_list_ranking_fill_args(true, false, splice_iter, (int)GROUP_SIZE_BNPR_LIST_RANK_TEST);
 
       if (splice_iter == 0)
       {
-        { // copy from staging buffer, 
+        { // copy from staging buffer,
           auto &sub = pass_listranking_test.sub("strokegen_list_ranking_test_upload_cpu_data");
           sub.shader_set(shaders_.static_shader_get(LISTRANKING_UPLOAD_CPU_DATA));
           sub.bind_ssbo(0, buffers_.ssbo_list_ranking_links_staging_buf_);
           sub.bind_ssbo(1, buffers_.ssbo_list_ranking_links_);
           sub.bind_ubo(0, buffers_.ubo_list_ranking_splicing_);
 
-          sub.dispatch(buffers_.ssbo_list_ranking_indirect_dispatch_args_per_anchor[0]); 
+          sub.dispatch(buffers_.ssbo_list_ranking_indirect_dispatch_args_per_anchor[0]);
           sub.barrier(GPU_BARRIER_SHADER_STORAGE);
         }
       }
@@ -251,7 +252,7 @@ namespace blender::npr::strokegen
           sub.bind_ssbo(7, buffers_.ssbo_list_ranking_ranks_);
           sub.bind_ubo(0, buffers_.ubo_list_ranking_splicing_);
           sub.push_constant("pc_listranking_splice_iter_", splice_iter);
-          sub.push_constant("pc_listranking_tagging_iter_", tag_iter); 
+          sub.push_constant("pc_listranking_tagging_iter_", tag_iter);
 
           sub.dispatch(buffers_.ssbo_list_ranking_indirect_dispatch_args_per_anchor[splice_iter]);
           sub.barrier(GPU_BARRIER_SHADER_STORAGE);
@@ -272,15 +273,16 @@ namespace blender::npr::strokegen
         sub.bind_ssbo(7, buffers_.ssbo_list_ranking_node_to_anchor_);
         sub.bind_ssbo(8, buffers_.ssbo_list_ranking_anchor_counters_);
         sub.bind_ssbo(9, buffers_.ssbo_list_ranking_splice_counters_);
-        sub.bind_ssbo(10, buffers_.ssbo_list_ranking_debug_); 
+        sub.bind_ssbo(10, buffers_.ssbo_list_ranking_debug_);
         sub.bind_ubo(0, buffers_.ubo_list_ranking_splicing_);
         sub.push_constant("pc_listranking_splice_iter_", splice_iter);
+        sub.push_constant("pc_num_splice_iters_", num_splice_iters);
 
         sub.dispatch(buffers_.ssbo_list_ranking_indirect_dispatch_args_per_anchor[splice_iter]);
         sub.barrier(GPU_BARRIER_SHADER_STORAGE);
       }
 
-      int splice_disptatch_args_slot = splice_iter + 1; 
+      int splice_disptatch_args_slot = splice_iter + 1;
       rebuild_pass_list_ranking_fill_args(false, true, splice_disptatch_args_slot, (int)GROUP_SIZE_BNPR_LIST_RANK_TEST);
       {
         auto& sub = pass_listranking_test.sub("strokegen_list_ranking_test_splice_out_nodes");
@@ -303,25 +305,27 @@ namespace blender::npr::strokegen
         sub.barrier(GPU_BARRIER_SHADER_STORAGE);
       }
     }
+
     {
-      // auto& sub = pass_listranking_test.sub("strokegen_list_ranking_test_sublist_pointer_jumping");
-      // sub.shader_set(shaders_.static_shader_get(LISTRANKING_SUBLIST_POINTER_JUMPING));
-      //
-      // for (size_t i = 0; i < MAX_NUM_JUMPS_BNPR_LIST_RANK_TEST; i++)
-      // {
-      //   sub.bind_ssbo(0, buffers_.ssbo_list_ranking_anchor_to_node_);
-      //   sub.bind_ssbo(1, buffers_.ssbo_list_ranking_anchor_to_next_anchor_);
-      //   sub.bind_ssbo(2, buffers_.ssbo_list_ranking_per_anchor_sublist_jumping_info_);
-      //   sub.bind_ssbo(3, buffers_.ssbo_list_ranking_tags_);
-      //   sub.bind_ssbo(4, buffers_.ssbo_list_ranking_links_);
-      //
-      //   sub.bind_ubo(0, buffers_.ubo_list_ranking_splicing_);
-      //
-      //   sub.push_constant("pc_listranking_jumping_iter_", (int)i);
-      //
-      //   sub.dispatch(buffers_.ssbo_list_ranking_indirect_dispatch_args_);
-      //   sub.barrier(GPU_BARRIER_SHADER_STORAGE);
-      // }
+      for (size_t jump_iter = 0; jump_iter < MAX_NUM_JUMPS_BNPR_LIST_RANK_TEST; jump_iter++)
+      {
+        auto& sub = pass_listranking_test.sub("strokegen_list_ranking_test_sublist_pointer_jumping");
+        sub.shader_set(shaders_.static_shader_get(LISTRANKING_SUBLIST_POINTER_JUMPING));
+
+        sub.bind_ssbo(0, buffers_.ssbo_list_ranking_per_anchor_sublist_jumping_info_[jump_iter%2]);
+        sub.bind_ssbo(1, buffers_.ssbo_list_ranking_per_anchor_sublist_jumping_info_[(jump_iter+1)%2]);
+        sub.bind_ssbo(2, buffers_.ssbo_list_ranking_node_to_anchor_);
+        sub.bind_ssbo(3, buffers_.ssbo_list_ranking_anchor_to_node_[(num_splice_iters)%2]); // note: double check this
+        sub.bind_ssbo(4, buffers_.ssbo_list_ranking_links_);
+        sub.bind_ssbo(5, buffers_.ssbo_list_ranking_ranks_);
+        sub.bind_ssbo(6, buffers_.ssbo_list_ranking_anchor_counters_);
+        sub.bind_ubo(0, buffers_.ubo_list_ranking_splicing_);
+        sub.push_constant("pc_listranking_splice_iter_", num_splice_iters);
+        sub.push_constant("pc_listranking_jumping_iter_", (int)jump_iter);
+
+        sub.dispatch(buffers_.ssbo_list_ranking_indirect_dispatch_args_per_anchor[num_splice_iters]); // note: double check this
+        sub.barrier(GPU_BARRIER_SHADER_STORAGE);
+      }
     }
   }
 

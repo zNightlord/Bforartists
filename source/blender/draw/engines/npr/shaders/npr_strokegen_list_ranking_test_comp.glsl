@@ -79,10 +79,10 @@ void main()
     const uint blockIdx = gl_WorkGroupID.x;
     const uint blockSize = gl_WorkGroupSize.x;
 
-    const uint tag_subbuff_size = SUB_BUFF_SIZE;
     const uint num_nodes_total = NUM_NODES_TOTAL; 
 
     const uint splicing_iter = pc_listranking_splice_iter_; 
+    const uint num_splicing_iters = pc_num_splice_iters_; 
     const uint num_anchors = ssbo_list_ranking_anchor_counters_[splicing_iter]; 
 
     const uint anchor_id = idx; 
@@ -164,6 +164,10 @@ void main()
     if (is_anchor)
     { /* addressing already secured by is_anchor */
         FUNC_DEVICE_STORE_PER_ANCHOR_NODEID(output_id, node_id);         
+        if (splicing_iter == num_splicing_iters - 1u)
+        { /* save back pointers for later pointer jumping */
+            FUNC_DEVICE_STORE_PER_NODE_ANCHORID(node_id, output_id); 
+        }
     }else{
         FUNC_DEVICE_STORE_PER_SPLICED_NODEID(output_id, node_id); 
     }
@@ -214,39 +218,43 @@ void main()
     const uint blockIdx = gl_WorkGroupID.x;
     const uint blockSize = gl_WorkGroupSize.x;
 
-    uint anchor_id = idx; 
-    uint num_anchors = FUNC_GET_NUM_ANCHORS(); 
-    bool b_valid_anchor = FUNC_DEVICE_VALIDATE_THREAD_PER_ANCHOR(anchor_id, num_anchors); 
+    const uint curr_jump_iter = pc_listranking_jumping_iter_; 
+    const uint splicing_iter = pc_listranking_splice_iter_; 
+
+    const uint num_nodes_total = NUM_NODES_TOTAL; 
+    const uint num_anchors = ssbo_list_ranking_anchor_counters_[splicing_iter]; 
+
+    const uint num_iters = FUNC_GET_NUM_JUMPS(num_anchors);
+
+    const uint anchor_id = idx; 
+    bool b_valid_anchor = (anchor_id < num_anchors); 
     if (!b_valid_anchor) return; /* invalid thread, do nothing */
 
-    uint subbuff_size = (((num_anchors + 3u) >> 2u) << 2u); /* ping-pong */
 
-    uint curr_iter = pc_listranking_jumping_iter_; 
-    uint num_iters = FUNC_GET_NUM_JUMPS();
 
     JumpingInfo ji; 
-    if (0u == curr_iter)
+    if (0u == curr_jump_iter)
     {
-        uint anchor_node_id = FUNC_GET_NODE_ID_FOR_ANCHOR(anchor_id, splicing_iter); 
-        ji = FUNC_DEVICE_INIT_PER_ANCHOR_LIST_JUMPING_INFO(anchor_id, anchor_node_id);  
-
-        FUNC_DEVICE_STORE_PER_ANCHOR_LIST_JUMPING_INFO(anchor_id, curr_iter, ji, subbuff_size);
+        /* The first iteration sets up anchor-to-anchor links and per-anchor ranks
+           from per-node buffers. This is for strided mem access. */
+        ji = FUNC_DEVICE_INIT_PER_ANCHOR_LIST_JUMPING_INFO(anchor_id, splicing_iter);  
+        FUNC_DEVICE_STORE_PER_ANCHOR_LIST_JUMPING_INFO(anchor_id, ji);
          
         return; /* 0th iter to init jumping info */
     }
-    if (num_iters < curr_iter) return; /* more than needed, do nothing */
+    if (num_iters < curr_jump_iter) return; /* more than needed, do nothing */
 
 
     /* Pointer-Jumping */
     JumpingInfo ji_next, ji_updated;
-    ji      = FUNC_DEVICE_LOAD_PER_ANCHOR_LIST_JUMPING_INFO(anchor_id,              curr_iter, subbuff_size); 
-    ji_next = FUNC_DEVICE_LOAD_PER_ANCHOR_LIST_JUMPING_INFO(ji.jump_next_anchor_id, curr_iter, subbuff_size);
+    ji      = FUNC_DEVICE_LOAD_PER_ANCHOR_LIST_JUMPING_INFO(anchor_id); 
+    ji_next = FUNC_DEVICE_LOAD_PER_ANCHOR_LIST_JUMPING_INFO(ji.jump_next_anchor_id);
     
     bool jumped_to_end = false; 
-    ji_updated = FUNC_DEVICE_UPDATE_ANCHOR_LIST_JUMPING_INFO(ji, ji_next, jumped_to_end); 
+    ji_updated = FUNC_DEVICE_UPDATE_ANCHOR_LIST_JUMPING_INFO(ji, ji_next, /*out*/jumped_to_end); 
 
 
-    FUNC_DEVICE_STORE_PER_ANCHOR_LIST_JUMPING_INFO(anchor_id, curr_iter, ji_updated, subbuff_size);
+    FUNC_DEVICE_STORE_PER_ANCHOR_LIST_JUMPING_INFO(anchor_id, ji_updated);
 }
 
 #endif
