@@ -171,6 +171,14 @@ public:
   );
   /** \} */
 
+  /* -------------------------------------------------------------------- */
+  /** \name List Ranking Validation
+   * \{ */
+  bool validate_list_ranking() const;
+
+  /** \} */
+
+
 private:
 
 };

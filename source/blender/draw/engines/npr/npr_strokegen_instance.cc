@@ -176,18 +176,22 @@ namespace blender::npr::strokegen
     manager.submit(strokegen_passes.get_compute_pass(StrokeGenPassModule::eType::SEGLOOPCONV_TEST), view);
 
 
-    
+
     /* GPU List Ranking Test ---------------------------------------------------------------- */
-    manager.submit(strokegen_passes.get_compute_pass(StrokeGenPassModule::eType::LIST_RANKING_TEST), view); 
-    
-    
+    manager.submit(strokegen_passes.get_compute_pass(StrokeGenPassModule::eType::LIST_RANKING_TEST), view);
+    if (frame_counter % 64 == 0)
+    {
+      bool succ = strokegen_passes.validate_list_ranking();
+    }
+
+
 
     /* Geometry Extraction for StrokeGen ---------------------------------------------------------------- */
     manager.submit(strokegen_passes.get_compute_pass(StrokeGenPassModule::eType::GEOM_EXTRACTION), view);
 
 
-    
-    
+
+
   }
 
   /** \} */

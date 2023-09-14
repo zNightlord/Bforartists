@@ -44,7 +44,9 @@ void main()
     /* bootstraping */
     if (splicing_iter == 0u && tagging_iter == 0u)
     { 
-        FUNC_DEVICE_STORE_LISTRANKING_NODE_RANK(node_id, 1u); 
+        uint next_node_id = FUNC_DEVICE_LOAD_LISTRANKING_NODE_NEXT_NODE_ID(node_id);
+        bool is_tail_node = node_id == next_node_id; 
+        FUNC_DEVICE_STORE_LISTRANKING_NODE_RANK(node_id, is_tail_node ? 0u : 1u); 
         if (idx == 0u)
         {
             ssbo_list_ranking_anchor_counters_[0] = num_nodes_total;
@@ -168,7 +170,8 @@ void main()
         { /* save back pointers for later pointer jumping */
             FUNC_DEVICE_STORE_PER_NODE_ANCHORID(node_id, output_id); 
         }
-    }else{
+    }else if (valid_item)
+    {
         FUNC_DEVICE_STORE_PER_SPLICED_NODEID(output_id, node_id); 
     }
 }
@@ -190,11 +193,13 @@ void main()
 
     const uint splicing_iter = pc_listranking_splice_iter_; 
     const uint num_nodes_total = NUM_NODES_TOTAL; 
-    const uint num_spliced = ssbo_list_ranking_splice_counters_[splicing_iter]; 
+    const uint num_spliced = ssbo_list_ranking_splice_counters_[splicing_iter + 1]; 
 
     const uint splice_id = idx; 
     const uint node_id = FUNC_GET_NODE_ID_FOR_SPLICED(splice_id); 
     bool valid_item = (node_id < num_nodes_total) && (splice_id < num_spliced); 
+
+    if (!valid_item) return; 
 
     ListRankingLink links = FUNC_DEVICE_LOAD_LISTRANKING_NODE_LINKS(node_id); 
 
@@ -224,12 +229,11 @@ void main()
     const uint num_nodes_total = NUM_NODES_TOTAL; 
     const uint num_anchors = ssbo_list_ranking_anchor_counters_[splicing_iter]; 
 
-    const uint num_iters = FUNC_GET_NUM_JUMPS(num_anchors);
+    const uint num_iters = 1 + FUNC_GET_NUM_JUMPS(num_anchors); /* +1 iter for initialization */
 
     const uint anchor_id = idx; 
     bool b_valid_anchor = (anchor_id < num_anchors); 
     if (!b_valid_anchor) return; /* invalid thread, do nothing */
-
 
 
     JumpingInfo ji; 
@@ -253,8 +257,14 @@ void main()
     bool jumped_to_end = false; 
     ji_updated = FUNC_DEVICE_UPDATE_ANCHOR_LIST_JUMPING_INFO(ji, ji_next, /*out*/jumped_to_end); 
 
-
     FUNC_DEVICE_STORE_PER_ANCHOR_LIST_JUMPING_INFO(anchor_id, ji_updated);
+
+
+    if (num_iters == curr_jump_iter)
+    { /* last iter, write per-anchor rank back to per-node buffers */
+        uint node_id = FUNC_GET_NODE_ID_FOR_ANCHOR(anchor_id, splicing_iter); 
+        FUNC_DEVICE_STORE_LISTRANKING_NODE_RANK(node_id, ji_updated.data); 
+    }
 }
 
 #endif
@@ -264,6 +274,33 @@ void main()
 
 
 
-#ifdef _KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SUBLIST_STITCHING
+#ifdef _KERNEL_MULTICOMPILE__TEST_LIST_RANKING_RELINKING
+
+void main()
+{
+    const uint groupIdx = gl_LocalInvocationID.x;
+    const uint idx      = gl_GlobalInvocationID.x;
+    const uint blockIdx = gl_WorkGroupID.x;
+    const uint blockSize = gl_WorkGroupSize.x;
+
+    uint num_relink_iters = pc_listranking_num_relink_iters_; 
+    uint curr_relink_iter = pc_listranking_relink_iter_; 
+
+    const uint num_nodes_total = NUM_NODES_TOTAL; 
+    const uint num_spliced_nodes = ssbo_list_ranking_splice_counters_[num_relink_iters - curr_relink_iter]; 
+
+    const uint spliced_id = idx; 
+    if (spliced_id >= num_spliced_nodes) return; /* invalid thread, do nothing */ 
+
+    const uint node_id = FUNC_GET_NODE_ID_FOR_SPLICED(spliced_id); 
+    uint node_rank = FUNC_DEVICE_LOAD_LISTRANKING_NODE_RANK(node_id); 
+
+    uint next_node_id = FUNC_DEVICE_LOAD_LISTRANKING_NODE_NEXT_NODE_ID(node_id);  
+    uint next_node_rank = FUNC_DEVICE_LOAD_LISTRANKING_NODE_RANK(next_node_id); 
+
+    node_rank += next_node_rank; 
+
+    FUNC_DEVICE_STORE_LISTRANKING_NODE_RANK(node_id, node_rank);     
+}
 
 #endif

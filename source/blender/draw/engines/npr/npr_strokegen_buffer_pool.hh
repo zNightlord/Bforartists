@@ -43,16 +43,16 @@ class GPUBufferPoolModule {
   SSBO_IndirectDispatchArgs           ssbo_list_ranking_indirect_dispatch_args_per_spliced[NUM_ITERS_BNPR_LIST_RANK_RELINK+1];
   SSBO_ListRankingTags                ssbo_list_ranking_tags_[2];
   SSBO_ListRankingRanks               ssbo_list_ranking_ranks_;
-  SSBO_ListRankingLinksStagingBuf     ssbo_list_ranking_links_staging_buf_; 
+  SSBO_ListRankingLinksStagingBuf     ssbo_list_ranking_links_staging_buf_;
   SSBO_ListRankingLinks               ssbo_list_ranking_links_;
   SSBO_ListRankingAnchorToNode        ssbo_list_ranking_anchor_to_node_[2];
-  SSBO_ListRankingSplicedNodeId       ssbo_list_ranking_spliced_node_id_;
+  SSBO_ListRankingSplicedNodeId       ssbo_list_ranking_spliced_node_id_[NUM_ITERS_BNPR_LIST_RANK_RELINK];
 
   SSBO_ListRankingAnchorToNextAnchor  ssbo_list_ranking_anchor_to_next_anchor_;
   SSBO_ListRankingAnchorJumpingInfo   ssbo_list_ranking_per_anchor_sublist_jumping_info_[2];
   SSBO_ListRankingNodeToAnchor        ssbo_list_ranking_node_to_anchor_;
 
-  SSBO_ListRankingLinks ssbo_list_ranking_debug_; 
+  SSBO_ListRankingLinks ssbo_list_ranking_debug_;
 
   UBO_ListRanking                     ubo_list_ranking_splicing_;
 
@@ -86,7 +86,13 @@ class GPUBufferPoolModule {
   //    Also, remember to check if there are any other confliction with the primitive library
 
   /** CPU Buffers */
-  Vector<int> listranking_test_nodes_prev_next; /** Temp data for testing shaders  */
+  /** Temp data for testing list ranking  */
+  Vector<int> listranking_test_nodes_prev_next;
+  std::vector<int> listranking_test_nodes_rank;
+  std::vector<int> listranking_test_nodes_head;
+  std::vector<int> listranking_test_nodes_tail;
+  std::vector<int> listranking_test_nodes_list_len;
+
   bool listranking_test_data_uploaded;
   bool listranking_test_data_validated;
 

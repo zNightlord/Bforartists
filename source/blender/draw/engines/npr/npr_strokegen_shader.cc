@@ -120,6 +120,8 @@ const char *StrokeGenShaderModule::static_shader_create_info_name_get(eShaderTyp
       return "strokegen_list_ranking_test_fill_dispatch_args";
     case LISTRANKING_SUBLIST_POINTER_JUMPING:
      return "strokegen_list_ranking_test_sublist_pointer_jumping";
+    case LISTRANKING_RELINKING:
+     return "strokegen_list_ranking_test_relinking";
     case LISTRANKING_UPLOAD_CPU_DATA: 
      return "strokegen_list_ranking_test_upload_cpu_test_data"; 
 

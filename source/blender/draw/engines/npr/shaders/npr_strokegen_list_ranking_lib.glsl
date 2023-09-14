@@ -46,7 +46,7 @@ bool is_node_in_independent_set(uint tag_curr, uint tag_prev, uint tag_next, boo
 { /* independent set node has the minimal ID among its neighbours 
     * anchors breaks the chains into small segments, 
     * each seg len < 2(log_2(N)), where N is #tagged nodes*/
-    return head_or_tail || ((tag_curr < tag_prev) && (tag_curr < tag_next));
+    return ((tag_curr < tag_prev) && (tag_curr < tag_next)) && (!head_or_tail/*protect two ends*/);
 }
 
 bool is_head_node(uint prev_node_id, uint node_id)

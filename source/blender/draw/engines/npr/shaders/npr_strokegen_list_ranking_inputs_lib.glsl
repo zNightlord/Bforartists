@@ -8,17 +8,6 @@ struct ListRankingLink
     uint next_node_id; 
 };
 
-struct ContractionInfo
-{
-    uint id; 
-    bool is_anchor; 
-    
-    /* list-end can be head or tail, 
-     * depending on the jumping direction. 
-     * by default is_list_end == is_list_tail */ 
-    bool is_list_end; 
-};
-
 struct JumpingInfo
 {
     uint jump_next_anchor_id; 
@@ -26,47 +15,10 @@ struct JumpingInfo
     /* bool is_list_head; */ 
     bool is_list_tail; 
 };
-struct JumpingListInfo
-{
-    uint list_len; 
-    uint list_addr; 
-}; 
 /* Note: "Specifically, structs cannot be used as input/output variables." 
  * See https://www.khronos.org/opengl/wiki/Data_Type_(GLSL)#Structs
 */
 
-/* TODO: Instead of this port you fucking bit encoding functions from MPipeline */
-#define BITMASK_LIST_RANKING_CONTRACTION_INFO_NODE_ID 0x3fffffffu
-uint EncodeContractionInfo(bool is_anchor, bool is_list_end, uint anchor_id, uint next_node_id)
-{
-    uint encoded = 0u; 
-    if (is_anchor)
-    {
-        encoded = (anchor_id | (1u << 31u) | (uint(is_list_end) << 30u)); 
-    }
-    else
-    {
-        encoded = next_node_id & BITMASK_LIST_RANKING_CONTRACTION_INFO_NODE_ID;
-    }
-    
-    return encoded; 
-}
-
-ContractionInfo DecodeContractionInfo(uint encoded)
-{
-    bool is_anchor = ((encoded >> 31u) == 1u);
-    if (is_anchor)
-    {
-        bool is_list_end = (((encoded >> 30u) & 1u) == 1u);
-        return ContractionInfo(encoded & BITMASK_LIST_RANKING_CONTRACTION_INFO_NODE_ID, true, is_list_end); 
-    }
-    else
-    {
-        return ContractionInfo(encoded & BITMASK_LIST_RANKING_CONTRACTION_INFO_NODE_ID, false, false);
-    }
-
-    return ContractionInfo(0u, false, false); 
-}
 
 uvec2 EncodePointerJumpingInfo(JumpingInfo ji)
 {
@@ -85,18 +37,24 @@ JumpingInfo DecodePointerJumpingInfo(uvec2 encoded)
     return ji; 
 }
 
+
 /* Global Configs */
-#if defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_TAGGING) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_COMPACT_ANCHORS) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SUBLIST_POINTER_JUMPING) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SPLICE_NODES)
+#if defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_TAGGING) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_COMPACT_ANCHORS) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SUBLIST_POINTER_JUMPING) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SPLICE_NODES) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_RELINKING)
 
 #define NUM_NODES_TOTAL ((ubo_list_ranking_splicing_.num_nodes))
-#define SUB_BUFF_SIZE ((ubo_list_ranking_splicing_.subbuff_size))
+
+#define ANCHOR_COUNTER_PREV_ITER(splice_iter) ((ssbo_list_ranking_anchor_counters_[(splice_iter)])) 
+#define ANCHOR_COUNTER(splice_iter) ((ssbo_list_ranking_anchor_counters_[(splice_iter) + 1]))  
+#define SPLICE_COUNTER(splice_iter) ((ssbo_list_ranking_splice_counters_[(splice_iter) + 1]))  
+#define SPLICE_COUNTER_RELINK(num_relink_iters, relink_iter) \
+    ((ssbo_list_ranking_splice_counters_[(num_relink_iters) - (relink_iter)]))
 
 #endif
 
 
 
 /* Links */
-#if defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_TAGGING) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_COMPACT_ANCHORS) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SPLICE_NODES) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SUBLIST_POINTER_JUMPING) 
+#if defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_TAGGING) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_COMPACT_ANCHORS) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SPLICE_NODES) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SUBLIST_POINTER_JUMPING) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_RELINKING)
 uint func_device_load_listranking_test_next_node_id(uint node_id)
 { 
     uint node_offset = node_id * 2; 
@@ -152,7 +110,7 @@ void func_device_store_anchor_to_node_id(uint anchor_id, uint node_id)
 
 void func_device_store_spliced_node_id(uint spliced_id, uint node_id)
 {
-    ssbo_list_ranking_spliced_node_id_[spliced_id] = node_id; 
+    ssbo_list_ranking_spliced_node_id_out_[spliced_id] = node_id; 
 }
 #define FUNC_DEVICE_STORE_PER_SPLICED_NODEID func_device_store_spliced_node_id
 #endif
@@ -178,7 +136,7 @@ uint func_device_load_node_to_anchor_id(uint node_id)
 
 
 
-#if defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_TAGGING) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_COMPACT_ANCHORS) || defined (_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SPLICE_NODES) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SUBLIST_POINTER_JUMPING) 
+#if defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_TAGGING) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_COMPACT_ANCHORS) || defined (_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SPLICE_NODES) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SUBLIST_POINTER_JUMPING)
 
 uint func_load_splicing_thread_node_id(uint thread_idx, uint splicing_iter)
 { /* node_id acts as a pointer to access node buffers */
@@ -189,10 +147,10 @@ uint func_load_splicing_thread_node_id(uint thread_idx, uint splicing_iter)
 #define FUNC_GET_NODE_ID_FOR_ANCHOR func_load_splicing_thread_node_id
 #endif
 
-#if defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SPLICE_NODES)
+#if defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SPLICE_NODES) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_RELINKING)
 uint func_device_load_spliced_node_id(uint spliced_id)
 {
-    return ssbo_list_ranking_spliced_node_id_[spliced_id]; 
+    return ssbo_list_ranking_spliced_node_id_in_[spliced_id]; 
 }
 #define FUNC_GET_NODE_ID_FOR_SPLICED func_device_load_spliced_node_id
 #endif
@@ -217,7 +175,7 @@ uint func_device_load_listranking_test_tag(uint node_id)
 
 
 /* node ranks */
-#if defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_TAGGING) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_COMPACT_ANCHORS) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SPLICE_NODES) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SUBLIST_POINTER_JUMPING) 
+#if defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_TAGGING) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_COMPACT_ANCHORS) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SPLICE_NODES) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SUBLIST_POINTER_JUMPING) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_RELINKING)
 uint func_device_load_node_rank(uint node_id)
 {
     return ssbo_list_ranking_ranks_[node_id]; 

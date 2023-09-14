@@ -268,7 +268,7 @@ namespace blender::npr::strokegen
         sub.bind_ssbo(2, buffers_.ssbo_list_ranking_ranks_);
         sub.bind_ssbo(3, buffers_.ssbo_list_ranking_anchor_to_node_[splice_iter % 2]); // pingpong
         sub.bind_ssbo(4, buffers_.ssbo_list_ranking_anchor_to_node_[(splice_iter + 1) % 2]);
-        sub.bind_ssbo(5, buffers_.ssbo_list_ranking_spliced_node_id_);
+        sub.bind_ssbo(5, buffers_.ssbo_list_ranking_spliced_node_id_[splice_iter]);
         sub.bind_ssbo(6, buffers_.ssbo_list_ranking_anchor_to_next_anchor_);
         sub.bind_ssbo(7, buffers_.ssbo_list_ranking_node_to_anchor_);
         sub.bind_ssbo(8, buffers_.ssbo_list_ranking_anchor_counters_);
@@ -293,7 +293,7 @@ namespace blender::npr::strokegen
         sub.bind_ssbo(2, buffers_.ssbo_list_ranking_ranks_);
         sub.bind_ssbo(3, buffers_.ssbo_list_ranking_anchor_to_node_[splice_iter % 2]); // pingpong
         sub.bind_ssbo(4, buffers_.ssbo_list_ranking_anchor_to_node_[(splice_iter + 1) % 2]);
-        sub.bind_ssbo(5, buffers_.ssbo_list_ranking_spliced_node_id_);
+        sub.bind_ssbo(5, buffers_.ssbo_list_ranking_spliced_node_id_[splice_iter]);
         sub.bind_ssbo(6, buffers_.ssbo_list_ranking_anchor_to_next_anchor_);
         sub.bind_ssbo(7, buffers_.ssbo_list_ranking_node_to_anchor_);
         sub.bind_ssbo(8, buffers_.ssbo_list_ranking_anchor_counters_);
@@ -305,8 +305,9 @@ namespace blender::npr::strokegen
         sub.barrier(GPU_BARRIER_SHADER_STORAGE);
       }
     }
+    rebuild_pass_list_ranking_fill_args(true, false, num_splice_iters, GROUP_SIZE_BNPR_LIST_RANK_TEST);
 
-    {
+    {  // Sublist Pointer Jumping
       for (size_t jump_iter = 0; jump_iter < MAX_NUM_JUMPS_BNPR_LIST_RANK_TEST; jump_iter++)
       {
         auto& sub = pass_listranking_test.sub("strokegen_list_ranking_test_sublist_pointer_jumping");
@@ -327,7 +328,28 @@ namespace blender::npr::strokegen
         sub.barrier(GPU_BARRIER_SHADER_STORAGE);
       }
     }
+
+    { // Relinking spliced nodes back to the list
+      int num_relink_iters = num_splice_iters;
+      for (int relink_iter = 0; relink_iter < num_relink_iters; relink_iter++)
+      {
+        auto& sub = pass_listranking_test.sub("strokegen_list_ranking_test_relink");
+        sub.shader_set(shaders_.static_shader_get(LISTRANKING_RELINKING));
+
+        sub.bind_ssbo(0, buffers_.ssbo_list_ranking_spliced_node_id_[num_relink_iters - 1 - relink_iter]);  // note: double check this
+        sub.bind_ssbo(1, buffers_.ssbo_list_ranking_links_);
+        sub.bind_ssbo(2, buffers_.ssbo_list_ranking_ranks_);
+        sub.bind_ssbo(3, buffers_.ssbo_list_ranking_splice_counters_);
+        sub.bind_ubo(0, buffers_.ubo_list_ranking_splicing_);
+        sub.push_constant("pc_listranking_relink_iter_", relink_iter);
+        sub.push_constant("pc_listranking_num_relink_iters_", num_relink_iters);
+
+        sub.dispatch(buffers_.ssbo_list_ranking_indirect_dispatch_args_per_spliced[num_relink_iters - relink_iter]);
+        sub.barrier(GPU_BARRIER_SHADER_STORAGE);
+      }
+    }
   }
+
 
   /**
    * \brief Add a sub pass for filling indirect dispatch args to the list ranking pass.
@@ -352,5 +374,28 @@ namespace blender::npr::strokegen
 
     sub.dispatch(int3(1, 1, 1));
     sub.barrier(GPU_BARRIER_SHADER_STORAGE);
+  }
+
+  bool StrokeGenPassModule::validate_list_ranking() const
+  {
+    SSBO_ListRankingRanks& buf_final_ranks = buffers_.ssbo_list_ranking_ranks_;
+    buf_final_ranks.read();
+    uint* computed_ranks = reinterpret_cast<uint *>(buf_final_ranks.data());
+
+    const uint num_nodes = buffers_.ubo_list_ranking_splicing_.num_nodes;
+    for (size_t i = 0; i < num_nodes; ++i)
+    {
+      uint rank_gt = buffers_.listranking_test_nodes_rank[i];
+      uint list_len_gt = buffers_.listranking_test_nodes_list_len[i];
+      uint rank_out = computed_ranks[i];
+
+      if (rank_gt != (list_len_gt - 1 - rank_out))
+      {
+        fprintf(stderr, "strokegen error: list ranking test failed");
+        return false;
+      }
+    }
+
+    return true;
   }
 }

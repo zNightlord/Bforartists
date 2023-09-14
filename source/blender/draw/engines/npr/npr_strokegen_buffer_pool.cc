@@ -1,4 +1,4 @@
-﻿/* SPDX-License-Identifier: GPL-2.0-or-later
+/* SPDX-License-Identifier: GPL-2.0-or-later
 * Copyright 2021 Blender Foundation.
  */
 
@@ -57,7 +57,7 @@ namespace blender::npr::strokegen
     {
       // ssbo_list_ranking_indirect_dispatch_args_per_anchor[0].clear_to_zero();
       // GPU_memory_barrier(GPU_BARRIER_BUFFER_UPDATE | GPU_BARRIER_COMMAND);
-      
+
       // DispatchCommand* data = ssbo_list_ranking_indirect_dispatch_args_per_anchor[0].data();
       // ssbo_list_ranking_indirect_dispatch_args_per_anchor[0].read();
       // uint dispatch_args[4] = {
@@ -68,7 +68,7 @@ namespace blender::npr::strokegen
       // };
       // memcpy(data, dispatch_args, 4 * sizeof(uint));
       // ssbo_list_ranking_indirect_dispatch_args_per_anchor[0].push_update();  // glBufferSubData
-      
+
       // GPU_memory_barrier(GPU_BARRIER_BUFFER_UPDATE | GPU_BARRIER_COMMAND);
     }
 
@@ -121,30 +121,67 @@ namespace blender::npr::strokegen
 
   void GPUBufferPoolModule::build_list_ranking_testing_data()
   { // TODO: make multiple lists instead of one long list
-    listranking_test_nodes_prev_next.reinitialize(2 * NUM_ITEMS_BNPR_LIST_RANK_TEST);
-    std::vector<int> nodes;
-    nodes.resize((NUM_ITEMS_BNPR_LIST_RANK_TEST));
-    for (int i = 0; i < NUM_ITEMS_BNPR_LIST_RANK_TEST; ++i)
-      nodes[i] = i;
+    int num_nodes = NUM_ITEMS_BNPR_LIST_RANK_TEST;
+
+    listranking_test_nodes_prev_next.reinitialize(2 * num_nodes);
+
+    listranking_test_nodes_rank.resize(num_nodes);
+    listranking_test_nodes_head.resize(num_nodes);
+    listranking_test_nodes_tail.resize(num_nodes);
+    listranking_test_nodes_list_len.resize(num_nodes);
+
+    std::vector<int> node_array;
+    node_array.resize(num_nodes);
+
+    std::vector<int> head, tail, seg_len, rank;
+    head.resize(num_nodes);
+    tail.resize(num_nodes);
+    seg_len.resize(num_nodes);
+    rank.resize(num_nodes);
+
     std::random_device rd;
-    std::mt19937 rng(rd());
-    std::shuffle(nodes.begin(), nodes.end(), rng);
+    std::mt19937 rng(/*rd()*/(time(0)));
+    int curr_head = 0;
+    int curr_len =  std::max(1, (int)rng() % std::min(num_nodes, 2013));
+    int curr_tail = curr_head + curr_len - 1;
+    for (int arr_id = 0; arr_id < num_nodes; ++arr_id)
+    {
+        rank[arr_id] = arr_id - curr_head;
+        seg_len[arr_id] = curr_len;
+        head[arr_id] = curr_head;
+        tail[arr_id] = curr_tail;
+        if (curr_tail == arr_id)
+        { // update to next sublist
+          curr_head = arr_id + 1;
+          curr_len = std::max(1, (int)rng() % std::min(std::max(1, num_nodes - curr_head), 2013));
+          curr_tail = curr_head + curr_len - 1;
+        }
+
+        node_array[arr_id] = arr_id; // shuffle later
+    }
+    std::shuffle(node_array.begin(), node_array.end(), rng);
 
     Map<int, int> nodeToArr;
     Map<int, int> arrToNode;
-    for (int i = 0; i < NUM_ITEMS_BNPR_LIST_RANK_TEST; ++i) {
-      nodeToArr.add(i, nodes[i]);
-      arrToNode.add(nodes[i], i);
+    for (int node_id = 0; node_id < num_nodes; ++node_id) {
+      uint arr_id = node_array[node_id];
+      nodeToArr.add(node_id, arr_id);
+      arrToNode.add(arr_id, node_id);
     }
 
-    for (int node = 0; node < NUM_ITEMS_BNPR_LIST_RANK_TEST; ++node) {
+    for (int node_id = 0; node_id < num_nodes; ++node_id) {
+      uint arr_id = node_array[node_id];
+      listranking_test_nodes_rank[node_id] = rank[arr_id];
+      listranking_test_nodes_head[node_id] = arrToNode.lookup(head[arr_id]);
+      listranking_test_nodes_tail[node_id] = arrToNode.lookup(tail[arr_id]);
+      listranking_test_nodes_list_len[node_id] = seg_len[arr_id];
+    }
+    for (int node = 0; node < num_nodes; ++node) {
       int arr_id = nodeToArr.lookup(node);
-      int arr_prev = arr_id > 0 ? (arr_id - 1) : arr_id; // head->prev == itself
-      int arr_next = arr_id < NUM_ITEMS_BNPR_LIST_RANK_TEST - 1 ? arr_id + 1 : arr_id; // tail->next= itself
+      int arr_prev = (head[arr_id] == arr_id) ? arr_id : (arr_id - 1); // head->prev == itself
+      int arr_next = (tail[arr_id] == arr_id) ? arr_id : (arr_id + 1); // tail->next= itself
       listranking_test_nodes_prev_next[node*2] = arrToNode.lookup(arr_prev);
       listranking_test_nodes_prev_next[node*2+1] = arrToNode.lookup(arr_next);
     }
   }
-
-
 }

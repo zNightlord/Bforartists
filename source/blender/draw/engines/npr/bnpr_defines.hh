@@ -1,4 +1,4 @@
-﻿/* SPDX-License-Identifier: GPL-2.0-or-later
+/* SPDX-License-Identifier: GPL-2.0-or-later
  * Copyright 2021 Blender Foundation.
  */
 
@@ -66,7 +66,7 @@
 #endif
 /** \} */
 
- 
+
 
 /* -------------------------------------------------------------------- */
 /** \List Ranking Test
@@ -74,7 +74,8 @@
 #define GROUP_SIZE_BNPR_LIST_RANK_TEST 1024u
 #define GROUP_SIZE_BNPR_LIST_RANK_TEST_STR "1024u"
 #define NUM_ITEMS_BNPR_LIST_RANK_TEST 4973588u
-#define MAX_NUM_JUMPS_BNPR_LIST_RANK_TEST 24u
+/*4973588u*/ /*1973588u*/
+#define MAX_NUM_JUMPS_BNPR_LIST_RANK_TEST 26u
 
 #define NUM_ITERS_BNPR_LIST_RANK_SPLICE 3u
 #define BNPR_LIST_RANK_CACHED_ANCHOR_COUNTERS ((1u + NUM_ITERS_BNPR_LIST_RANK_SPLICE))
