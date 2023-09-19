@@ -12,24 +12,22 @@ struct JumpingInfo
 {
     uint jump_next_anchor_id; 
     uint data; 
-    /* bool is_list_head; */ 
+    bool is_list_head; 
     bool is_list_tail; 
 };
-/* Note: "Specifically, structs cannot be used as input/output variables." 
- * See https://www.khronos.org/opengl/wiki/Data_Type_(GLSL)#Structs
-*/
 
 
 uvec2 EncodePointerJumpingInfo(JumpingInfo ji)
 {
-    uint packed_x = /* (uint(ji.is_list_head) |  */(ji.jump_next_anchor_id << 1)/* ) */;
+    uint packed_x = (uint(ji.is_list_head) | (ji.jump_next_anchor_id << 1));
     uint packed_y = (uint(ji.is_list_tail) | (ji.data << 1)); 
+
     return uvec2(packed_x, packed_y); 
 }
 JumpingInfo DecodePointerJumpingInfo(uvec2 encoded)
 {
     JumpingInfo ji; 
-    /* ji.is_list_head = (1u == (encoded.x & 1u)); */
+    ji.is_list_head = (1u == (encoded.x & 1u)); 
     ji.jump_next_anchor_id = (encoded.x >> 1);
     ji.is_list_tail = (1u == (encoded.y & 1u));  
     ji.data = (encoded.y >> 1); 
@@ -82,7 +80,7 @@ ListRankingLink func_device_load_listranking_test_node_links(uint node_id)
 #endif
 
 
-#if defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_COMPACT_ANCHORS) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SPLICE_NODES)
+#if defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_COMPACT_ANCHORS) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SPLICE_NODES) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SUBLIST_POINTER_JUMPING) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_BREAK_CIRCLES) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_RELINKING)
 void func_device_store_listranking_test_next_node_id(uint node_id, uint next_node_id)
 { 
     uint node_offset = node_id * 2; 
@@ -138,7 +136,7 @@ uint func_device_load_node_to_anchor_id(uint node_id)
 
 #if defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_TAGGING) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_COMPACT_ANCHORS) || defined (_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SPLICE_NODES) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SUBLIST_POINTER_JUMPING)
 
-uint func_load_splicing_thread_node_id(uint thread_idx, uint splicing_iter)
+uint func_load_splicing_thread_node_id(uint thread_idx, uint splicing_iter = 1u)
 { /* node_id acts as a pointer to access node buffers */
     uint node_id = (splicing_iter == 0u) ? thread_idx
         : ssbo_list_ranking_anchor_to_node_in_[thread_idx]; 
@@ -187,6 +185,22 @@ void func_device_store_node_rank(uint node_id, uint rank)
     ssbo_list_ranking_ranks_[node_id] = rank; 
 }
 #define FUNC_DEVICE_STORE_LISTRANKING_NODE_RANK func_device_store_node_rank
+
+uint func_device_load_node_rank_with_head_tail_flags(uint node_id, out bool is_head, out bool is_tail)
+{
+    uint data = ssbo_list_ranking_ranks_[node_id]; 
+    uint rank = data & 0x3fffffffu; 
+    is_head = (data >> 31) != 0u;
+    is_tail = (data >> 30) != 0u; 
+    return rank; 
+}
+#define FUNC_DEVICE_LOAD_LISTRANKING_NODE_RANK_WITH_HEAD_TAIL_BITS func_device_load_node_rank_with_head_tail_flags
+
+void func_device_store_node_rank_with_head_tail_flags(uint node_id, uint rank, bool is_head, bool is_tail)
+{
+    ssbo_list_ranking_ranks_[node_id] = ((uint(is_head) << 31) | (uint(is_tail) << 30) | rank & 0x3fffffffu); 
+}
+#define FUNC_DEVICE_STORE_LISTRANKING_NODE_RANK_WITH_HEAD_TAIL_BITS func_device_store_node_rank_with_head_tail_flags
 #endif
 
 
@@ -220,11 +234,18 @@ JumpingInfo func_device_init_per_anchor_jumping_info(uint anchor_id, uint splici
     uint node_id = FUNC_GET_NODE_ID_FOR_ANCHOR(anchor_id, splicing_iter);  
 
     JumpingInfo ji; 
+    uint prev_node_id = FUNC_DEVICE_LOAD_LISTRANKING_NODE_PREV_NODE_ID(node_id); 
     uint next_node_id = FUNC_DEVICE_LOAD_LISTRANKING_NODE_NEXT_NODE_ID(node_id); 
     ji.jump_next_anchor_id = FUNC_DEVICE_LOAD_PER_NODE_ANCHORID(next_node_id); 
+
+#if defined(_KERNEL_MULTICOMPILE__LIST_RANKING_SUBLIST_POINTER_JUMPING__FIND_LOOP_HEAD)
+    ji.data = node_id; /* unique for each anchor */
+#else
     ji.data = FUNC_DEVICE_LOAD_LISTRANKING_NODE_RANK(node_id); 
+#endif
 
     ji.is_list_tail = (next_node_id == node_id); 
+    ji.is_list_head = (prev_node_id == node_id); 
 
     return ji; 
 }
@@ -259,7 +280,11 @@ JumpingInfo func_device_update_anchor_jumping_info(
     jumped_to_end = ji_next.jump_next_anchor_id == ji.jump_next_anchor_id; 
     if (false == jumped_to_end)
     { 
-        ji_updated.data += ji_next.data; 
+#if defined(_KERNEL_MULTICOMPILE__LIST_RANKING_SUBLIST_POINTER_JUMPING__FIND_LOOP_HEAD)
+        ji_updated.data = max(ji_updated.data, ji_next.data); /* find node with max code as head */ 
+#else
+        ji_updated.data += ji_next.data; /* accumulate rank */
+#endif
         ji_updated.jump_next_anchor_id = ji_next.jump_next_anchor_id; 
     }
 
@@ -267,6 +292,40 @@ JumpingInfo func_device_update_anchor_jumping_info(
 }
 #define FUNC_DEVICE_UPDATE_ANCHOR_LIST_JUMPING_INFO func_device_update_anchor_jumping_info
 
+#endif
+
+
+
+#if defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SUBLIST_POINTER_JUMPING)
+uint func_allocate_space_for_list(uint list_len)
+{
+    uint list_start = atomicAdd(ssbo_list_ranking_addressing_counters_[0], list_len); 
+    return list_start;  
+}
+#define FUNC_DEVICE_ALLOC_LIST_ADDR func_allocate_space_for_list
+
+void func_device_broadcast_list_topology(uint broadcast_node_id, uint list_len, uint list_start_addr)
+{
+    ssbo_list_ranking_per_anchor_sublist_jumping_info_out_[broadcast_node_id * 2]     = list_start_addr; 
+    ssbo_list_ranking_per_anchor_sublist_jumping_info_out_[broadcast_node_id * 2 + 1] = list_len;  
+}
+#define FUNC_DEVICE_BROADCAST_LIST_TOPOLOGY func_device_broadcast_list_topology
+#endif
+
+#if defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_RELINKING) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SUBLIST_POINTER_JUMPING)
+void func_device_retrieve_list_topology(uint broadcast_node_id, out uint list_len, out uint list_start_addr)
+{
+    list_start_addr = ssbo_list_ranking_per_anchor_sublist_jumping_info_in_[broadcast_node_id * 2]; 
+    list_len        = ssbo_list_ranking_per_anchor_sublist_jumping_info_in_[broadcast_node_id * 2 + 1];  
+}
+#define FUNC_DEVICE_RETRIEVE_LIST_TOPOLOGY func_device_retrieve_list_topology
+
+void func_device_store_list_topology(uint node_id, uint list_len, uint list_start_addr)
+{
+    ssbo_list_ranking_serialized_topo_[node_id * 2]     = list_start_addr; 
+    ssbo_list_ranking_serialized_topo_[node_id * 2 + 1] = list_len;  
+}
+#define FUNC_DEVICE_STORE_LIST_TOPOLOGY func_device_store_list_topology 
 #endif
 
 

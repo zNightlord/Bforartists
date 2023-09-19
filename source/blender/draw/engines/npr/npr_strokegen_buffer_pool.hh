@@ -39,6 +39,7 @@ class GPUBufferPoolModule {
 
   SSBO_ListRankingCounters            ssbo_list_ranking_anchor_counters_; // x1 slot per splicing iteration
   SSBO_ListRankingCounters            ssbo_list_ranking_splice_counters_; // x1 slot per re-link iteration
+  SSBO_ListRankingAllocationCounters  ssbo_list_ranking_addressing_counters_; // allocate space for serialized lists
   SSBO_IndirectDispatchArgs           ssbo_list_ranking_indirect_dispatch_args_per_anchor[NUM_ITERS_BNPR_LIST_RANK_SPLICE+1];
   SSBO_IndirectDispatchArgs           ssbo_list_ranking_indirect_dispatch_args_per_spliced[NUM_ITERS_BNPR_LIST_RANK_RELINK+1];
   SSBO_ListRankingTags                ssbo_list_ranking_tags_[2];
@@ -47,10 +48,12 @@ class GPUBufferPoolModule {
   SSBO_ListRankingLinks               ssbo_list_ranking_links_;
   SSBO_ListRankingAnchorToNode        ssbo_list_ranking_anchor_to_node_[2];
   SSBO_ListRankingSplicedNodeId       ssbo_list_ranking_spliced_node_id_[NUM_ITERS_BNPR_LIST_RANK_RELINK];
+  SSBO_ListRankingSerializedTopo      ssbo_list_ranking_serialized_topo_; 
 
-  SSBO_ListRankingAnchorToNextAnchor  ssbo_list_ranking_anchor_to_next_anchor_;
+  SSBO_ListRankingAnchorToNextAnchor ssbo_list_ranking_anchor_to_next_anchor_;
   SSBO_ListRankingAnchorJumpingInfo   ssbo_list_ranking_per_anchor_sublist_jumping_info_[2];
   SSBO_ListRankingNodeToAnchor        ssbo_list_ranking_node_to_anchor_;
+  
 
   SSBO_ListRankingLinks ssbo_list_ranking_debug_;
 

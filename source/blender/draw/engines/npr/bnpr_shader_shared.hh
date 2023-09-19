@@ -267,13 +267,16 @@ using SSBO_ListRankingLinksStagingBuf = draw::StorageArrayBuffer<uint, NUM_ITEMS
 using SSBO_ListRankingLinks = draw::StorageArrayBuffer<uint, NUM_ITEMS_BNPR_LIST_RANK_TEST * 2, true>;
 using SSBO_ListRankingTags = draw::StorageArrayBuffer<uint, NUM_ITEMS_BNPR_LIST_RANK_TEST, true>;
 using SSBO_ListRankingRanks = draw::StorageArrayBuffer<uint, NUM_ITEMS_BNPR_LIST_RANK_TEST, true>; 
+using SSBO_ListRankingSerializedTopo = draw::StorageArrayBuffer<uint, NUM_ITEMS_BNPR_LIST_RANK_TEST * 2, true>; /* list-len&start */
+using SSBO_ListRankingAnchorJumpingInfo = draw::StorageArrayBuffer<uint, NUM_ITEMS_BNPR_LIST_RANK_TEST * 6, true>; /* also cache per-node data*/
+
 /* #anchors is around #nodes/4 */
 using SSBO_ListRankingAnchorToNode = draw::StorageArrayBuffer<uint, NUM_ITEMS_BNPR_LIST_RANK_TEST, true>;
 using SSBO_ListRankingAnchorToNextAnchor = draw::StorageArrayBuffer<uint, NUM_ITEMS_BNPR_LIST_RANK_TEST, true>;
 using SSBO_ListRankingSplicedNodeId = draw::StorageArrayBuffer<uint, NUM_ITEMS_BNPR_LIST_RANK_TEST, true>; 
-using SSBO_ListRankingAnchorJumpingInfo = draw::StorageArrayBuffer<uint, NUM_ITEMS_BNPR_LIST_RANK_TEST * 6, true>;
 using SSBO_ListRankingNodeToAnchor = draw::StorageArrayBuffer<uint, NUM_ITEMS_BNPR_LIST_RANK_TEST, true>;
 using SSBO_ListRankingCounters = draw::StorageArrayBuffer<uint, BNPR_LIST_RANK_ANCHOR_COUNTER_BUFFER_SIZE>;
+using SSBO_ListRankingAllocationCounters = draw::StorageArrayBuffer<uint, 4>; 
 using UBO_ListRanking = draw::UniformBuffer<UBData_ListRanking>; 
 
 }
