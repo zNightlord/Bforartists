@@ -254,8 +254,9 @@ void main()
          
         return; /* !!! EXIT !!! ------------------------- */
     }
-    if (iter_finalize == curr_jump_iter)
-    { /* The last iteration sets up the topology for each anchor */
+    if (iter_finalize == curr_jump_iter && !IS_LOOP_BREAKING_PASS())
+    { /* The last iteration sets up the topology for each anchor 
+       * note that we dont need this when finding loop head/tail(s) */
         uint curr_node_id = FUNC_GET_NODE_ID_FOR_ANCHOR(anchor_id, splicing_iter); 
         uint curr_broadcast_node_id = FUNC_DEVICE_LOAD_LISTRANKING_NODE_NEXT_NODE_ID(curr_node_id); 
         /* retrieve broadcasted data */
@@ -282,44 +283,42 @@ void main()
         FUNC_DEVICE_STORE_PER_ANCHOR_LIST_JUMPING_INFO(anchor_id, ji_updated);
     } /* don't need to store at last jump iter (curr_jump_iter == iter_jump_end) */
 
-    /* At last jumping iter, use per-anchor data to update per-node buffers */
-    if (curr_jump_iter == iter_jump_end)
+    /* At last ranking-jump-iter, use per-anchor data to update per-node buffers */
+    if ((curr_jump_iter == iter_jump_end) && !IS_LOOP_BREAKING_PASS())
     { 
         uint node_id = FUNC_GET_NODE_ID_FOR_ANCHOR(anchor_id, splicing_iter); 
 
         /* *) Output anchor rank ------------------------------------------------------- */
-#if defined(_KERNEL_MULTICOMPILE__LIST_RANKING_SUBLIST_POINTER_JUMPING__FIND_LOOP_HEAD)
-        if (pc_listranking_ranking_pass_with_broken_loops_ > 0)
-        { /* cache head flag so that each node can simutaneously know the Rank&Head_Flag of its next node  */
+        if (IS_LOOP_RANKING_PASS())
+        { /* cache head flag so that each node can simutaneously know the Rank&Head_Flag of its next node */
             FUNC_DEVICE_STORE_LISTRANKING_NODE_RANK_WITH_HEAD_TAIL_BITS(
                 node_id, ji_updated.data, ji_updated.is_list_head, ji_updated.is_list_tail
             );
         }
-#else 
-        FUNC_DEVICE_STORE_LISTRANKING_NODE_RANK(node_id, ji_updated.data); 
-#endif
+        else {
+            FUNC_DEVICE_STORE_LISTRANKING_NODE_RANK(node_id, ji_updated.data); 
+        }
 
-        /* *) Store broadcast position ------------------------------------------------ */ 
-        /* for non-loop lists, this is the tail; for loops this is the last anchor. */
-        /* in either way, we get a uniform position for all nodes in a list */
-        uint list_broadcast_node_id = ji_updated.jump_next_anchor_id; 
-#if defined(_KERNEL_MULTICOMPILE__LIST_RANKING_SUBLIST_POINTER_JUMPING__FIND_LOOP_HEAD)
-        if (pc_listranking_ranking_pass_with_broken_loops_ > 0)
-#endif
-            FUNC_DEVICE_STORE_LISTRANKING_NODE_NEXT_NODE_ID(node_id, list_broadcast_node_id); 
+        /* *) Store broadcast position ------------------------------------------------ 
+         * Each head anchor puts topology info at the last anchor
+         * so that we get a uniform position for all nodes in a list */
+        uint list_broadcast_anchor_id = ji_updated.jump_next_anchor_id; 
+        FUNC_DEVICE_STORE_LISTRANKING_NODE_NEXT_NODE_ID(node_id, list_broadcast_anchor_id); 
 
         /* Also put list topology at the tail node, so that all list nodes can access it */ 
-#if defined(_KERNEL_MULTICOMPILE__LIST_RANKING_SUBLIST_POINTER_JUMPING__FIND_LOOP_HEAD)
-        if (pc_listranking_ranking_pass_with_broken_loops_ > 0)
-#endif
         if (ji_updated.is_list_head)
         { /* head node is responsible for this */
             /* for each anchor, rank == dist to list tail */
             /* => for head, rank+1 == list length */
             uint list_len = 1 + ji_updated.data; 
             uint list_addr = FUNC_DEVICE_ALLOC_LIST_ADDR(list_len); 
-            FUNC_DEVICE_BROADCAST_LIST_TOPOLOGY(list_broadcast_node_id, list_len, list_addr); 
+            FUNC_DEVICE_BROADCAST_LIST_TOPOLOGY(list_broadcast_anchor_id, list_len, list_addr); 
         }
+    }
+    /* At last loop-breaking-jump-iter, just output jumping results */
+    if ((curr_jump_iter == iter_jump_end) && IS_LOOP_BREAKING_PASS())
+    {
+        FUNC_DEVICE_STORE_PER_ANCHOR_LIST_JUMPING_INFO(anchor_id, ji_updated);
     }
 }
 
@@ -439,15 +438,15 @@ void main()
 
 
     /* diffuse broadcast-node-id from top spliced layer to the bottom ----------------- */
-    uint broadcast_node_id = FUNC_DEVICE_LOAD_LISTRANKING_NODE_NEXT_NODE_ID(next_node_id); 
+    uint broadcast_anchor_id = FUNC_DEVICE_LOAD_LISTRANKING_NODE_NEXT_NODE_ID(next_node_id); 
 
     uint list_len, list_addr; /* retrieve broadcasted data */
-    FUNC_DEVICE_RETRIEVE_LIST_TOPOLOGY(broadcast_node_id, /*out*/list_len, list_addr); 
+    FUNC_DEVICE_RETRIEVE_LIST_TOPOLOGY(broadcast_anchor_id, /*out*/list_len, list_addr); 
     FUNC_DEVICE_STORE_LIST_TOPOLOGY(node_id, list_len, list_addr); 
 
     /* Since each layer of spliced nodes form a independent set
      * read/write simutaneuosly to this buffer is safe here. */ 
-    FUNC_DEVICE_STORE_LISTRANKING_NODE_NEXT_NODE_ID(node_id, broadcast_node_id); 
+    FUNC_DEVICE_STORE_LISTRANKING_NODE_NEXT_NODE_ID(node_id, broadcast_anchor_id); 
 
 }
 

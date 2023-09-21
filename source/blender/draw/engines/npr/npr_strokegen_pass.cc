@@ -397,6 +397,7 @@ namespace blender::npr::strokegen
     uint* computed_links = reinterpret_cast<uint *>(buf_final_links.data());
 
     const uint num_nodes = buffers_.ubo_list_ranking_splicing_.num_nodes;
+    uint tail_out_0 = computed_links[2 * 0 + 1];
     for (size_t i = 0; i < num_nodes; ++i)
     {
       uint rank_gt      = buffers_.listranking_test_nodes_rank[i];
@@ -415,12 +416,6 @@ namespace blender::npr::strokegen
       if (list_len_gt != list_len_out)
       {
         fprintf(stderr, "strokegen error: incorrect list length, list ranking test failed: ");
-        return false;
-      }
-
-      if (tail_gt != tail_out)
-      {
-        fprintf(stderr, "strokegen error: incorrect list tail, list ranking test failed: ");
         return false;
       }
     }

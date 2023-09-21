@@ -229,6 +229,28 @@ uint get_num_jump_iters(uint num_anchors)
 
 
 #if defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SUBLIST_POINTER_JUMPING)
+
+
+bool func_is_loop_breaking_pass()
+{
+#if defined(_KERNEL_MULTICOMPILE__LIST_RANKING_SUBLIST_POINTER_JUMPING__FIND_LOOP_HEAD)
+    return (pc_listranking_ranking_pass_with_broken_loops_ == 0); 
+#else
+    return false; 
+#endif
+}
+#define IS_LOOP_BREAKING_PASS func_is_loop_breaking_pass 
+
+bool func_is_loop_ranking_pass()
+{
+#if defined(_KERNEL_MULTICOMPILE__LIST_RANKING_SUBLIST_POINTER_JUMPING__FIND_LOOP_HEAD)
+    return (pc_listranking_ranking_pass_with_broken_loops_ > 0); 
+#else
+    return false; 
+#endif
+}
+#define IS_LOOP_RANKING_PASS func_is_loop_ranking_pass 
+
 JumpingInfo func_device_init_per_anchor_jumping_info(uint anchor_id, uint splicing_iter)
 {
     uint node_id = FUNC_GET_NODE_ID_FOR_ANCHOR(anchor_id, splicing_iter);  
@@ -238,11 +260,10 @@ JumpingInfo func_device_init_per_anchor_jumping_info(uint anchor_id, uint splici
     uint next_node_id = FUNC_DEVICE_LOAD_LISTRANKING_NODE_NEXT_NODE_ID(node_id); 
     ji.jump_next_anchor_id = FUNC_DEVICE_LOAD_PER_NODE_ANCHORID(next_node_id); 
 
-#if defined(_KERNEL_MULTICOMPILE__LIST_RANKING_SUBLIST_POINTER_JUMPING__FIND_LOOP_HEAD)
-    ji.data = node_id; /* unique for each anchor */
-#else
-    ji.data = FUNC_DEVICE_LOAD_LISTRANKING_NODE_RANK(node_id); 
-#endif
+    if (IS_LOOP_BREAKING_PASS())
+        ji.data = node_id; /* unique for each anchor */
+    else
+        ji.data = FUNC_DEVICE_LOAD_LISTRANKING_NODE_RANK(node_id); 
 
     ji.is_list_tail = (next_node_id == node_id); 
     ji.is_list_head = (prev_node_id == node_id); 
@@ -280,11 +301,11 @@ JumpingInfo func_device_update_anchor_jumping_info(
     jumped_to_end = ji_next.jump_next_anchor_id == ji.jump_next_anchor_id; 
     if (false == jumped_to_end)
     { 
-#if defined(_KERNEL_MULTICOMPILE__LIST_RANKING_SUBLIST_POINTER_JUMPING__FIND_LOOP_HEAD)
-        ji_updated.data = max(ji_updated.data, ji_next.data); /* find node with max code as head */ 
-#else
-        ji_updated.data += ji_next.data; /* accumulate rank */
-#endif
+        if (IS_LOOP_RANKING_PASS())
+            ji_updated.data = max(ji_updated.data, ji_next.data); /* find node with max code as head */ 
+        else
+            ji_updated.data += ji_next.data; /* accumulate rank */
+
         ji_updated.jump_next_anchor_id = ji_next.jump_next_anchor_id; 
     }
 
@@ -304,19 +325,19 @@ uint func_allocate_space_for_list(uint list_len)
 }
 #define FUNC_DEVICE_ALLOC_LIST_ADDR func_allocate_space_for_list
 
-void func_device_broadcast_list_topology(uint broadcast_node_id, uint list_len, uint list_start_addr)
+void func_device_broadcast_list_topology(uint broadcast_anchor_id, uint list_len, uint list_start_addr)
 {
-    ssbo_list_ranking_per_anchor_sublist_jumping_info_out_[broadcast_node_id * 2]     = list_start_addr; 
-    ssbo_list_ranking_per_anchor_sublist_jumping_info_out_[broadcast_node_id * 2 + 1] = list_len;  
+    ssbo_list_ranking_per_anchor_sublist_jumping_info_out_[broadcast_anchor_id * 2]     = list_start_addr; 
+    ssbo_list_ranking_per_anchor_sublist_jumping_info_out_[broadcast_anchor_id * 2 + 1] = list_len;  
 }
 #define FUNC_DEVICE_BROADCAST_LIST_TOPOLOGY func_device_broadcast_list_topology
 #endif
 
 #if defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_RELINKING) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SUBLIST_POINTER_JUMPING)
-void func_device_retrieve_list_topology(uint broadcast_node_id, out uint list_len, out uint list_start_addr)
+void func_device_retrieve_list_topology(uint broadcast_anchor_id, out uint list_len, out uint list_start_addr)
 {
-    list_start_addr = ssbo_list_ranking_per_anchor_sublist_jumping_info_in_[broadcast_node_id * 2]; 
-    list_len        = ssbo_list_ranking_per_anchor_sublist_jumping_info_in_[broadcast_node_id * 2 + 1];  
+    list_start_addr = ssbo_list_ranking_per_anchor_sublist_jumping_info_in_[broadcast_anchor_id * 2]; 
+    list_len        = ssbo_list_ranking_per_anchor_sublist_jumping_info_in_[broadcast_anchor_id * 2 + 1];  
 }
 #define FUNC_DEVICE_RETRIEVE_LIST_TOPOLOGY func_device_retrieve_list_topology
 

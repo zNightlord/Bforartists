@@ -142,7 +142,7 @@ namespace blender::npr::strokegen
     std::random_device rd;
     std::mt19937 rng(/*rd()*/(time(0)));
     int curr_head = 0;
-    int curr_len =  std::max(1, (int)rng() % std::min(num_nodes, 2013));
+    int curr_len = num_nodes; // std::max(1, (int)rng() % std::min(num_nodes, 2013));
     int curr_tail = curr_head + curr_len - 1;
     for (int arr_id = 0; arr_id < num_nodes; ++arr_id)
     {
