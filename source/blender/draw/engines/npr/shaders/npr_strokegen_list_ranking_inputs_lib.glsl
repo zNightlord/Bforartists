@@ -134,7 +134,7 @@ uint func_device_load_node_to_anchor_id(uint node_id)
 
 
 
-#if defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_TAGGING) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_COMPACT_ANCHORS) || defined (_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SPLICE_NODES) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SUBLIST_POINTER_JUMPING)
+#if defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_TAGGING) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_COMPACT_ANCHORS) || defined (_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SPLICE_NODES) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SUBLIST_POINTER_JUMPING) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_BREAK_CIRCLES)
 
 uint func_load_splicing_thread_node_id(uint thread_idx, uint splicing_iter = 1u)
 { /* node_id acts as a pointer to access node buffers */
@@ -227,10 +227,31 @@ uint get_num_jump_iters(uint num_anchors)
 
 
 
+/* Packed Jumping Info */
+#if defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SUBLIST_POINTER_JUMPING) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_BREAK_CIRCLES)
+JumpingInfo func_device_load_per_anchor_jumping_info(uint anchor_id)
+{
+    uvec2 jump_data_packed = uvec2(
+        ssbo_list_ranking_per_anchor_sublist_jumping_info_in_[anchor_id*2u ], 
+        ssbo_list_ranking_per_anchor_sublist_jumping_info_in_[anchor_id*2u+1u]
+    );  
+     
+    return DecodePointerJumpingInfo(jump_data_packed); 
+}
+#define FUNC_DEVICE_LOAD_PER_ANCHOR_LIST_JUMPING_INFO func_device_load_per_anchor_jumping_info
+
+void func_device_store_per_anchor_jumping_pointer(uint anchor_id, JumpingInfo ji)
+{
+    uvec2 jump_data_packed = EncodePointerJumpingInfo(ji);
+    ssbo_list_ranking_per_anchor_sublist_jumping_info_out_[anchor_id*2u]    = jump_data_packed.x;
+    ssbo_list_ranking_per_anchor_sublist_jumping_info_out_[anchor_id*2u+1u] = jump_data_packed.y;  
+}
+#define FUNC_DEVICE_STORE_PER_ANCHOR_LIST_JUMPING_INFO func_device_store_per_anchor_jumping_pointer
+#endif
+
+
 
 #if defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SUBLIST_POINTER_JUMPING)
-
-
 bool func_is_loop_breaking_pass()
 {
 #if defined(_KERNEL_MULTICOMPILE__LIST_RANKING_SUBLIST_POINTER_JUMPING__FIND_LOOP_HEAD)
@@ -272,27 +293,6 @@ JumpingInfo func_device_init_per_anchor_jumping_info(uint anchor_id, uint splici
 }
 #define FUNC_DEVICE_INIT_PER_ANCHOR_LIST_JUMPING_INFO func_device_init_per_anchor_jumping_info
 
-
-JumpingInfo func_device_load_per_anchor_jumping_info(uint anchor_id)
-{
-    uvec2 jump_data_packed = uvec2(
-        ssbo_list_ranking_per_anchor_sublist_jumping_info_in_[anchor_id*2u ], 
-        ssbo_list_ranking_per_anchor_sublist_jumping_info_in_[anchor_id*2u+1u]
-    );  
-     
-    return DecodePointerJumpingInfo(jump_data_packed); 
-}
-#define FUNC_DEVICE_LOAD_PER_ANCHOR_LIST_JUMPING_INFO func_device_load_per_anchor_jumping_info
-
-void func_device_store_per_anchor_jumping_pointer(uint anchor_id, JumpingInfo ji)
-{
-    uvec2 jump_data_packed = EncodePointerJumpingInfo(ji);
-    ssbo_list_ranking_per_anchor_sublist_jumping_info_out_[anchor_id*2u]    = jump_data_packed.x;
-    ssbo_list_ranking_per_anchor_sublist_jumping_info_out_[anchor_id*2u+1u] = jump_data_packed.y;  
-}
-#define FUNC_DEVICE_STORE_PER_ANCHOR_LIST_JUMPING_INFO func_device_store_per_anchor_jumping_pointer
-
-
 JumpingInfo func_device_update_anchor_jumping_info(
     JumpingInfo ji, JumpingInfo ji_next, out bool jumped_to_end
 ){
@@ -312,7 +312,6 @@ JumpingInfo func_device_update_anchor_jumping_info(
     return ji_updated; 
 }
 #define FUNC_DEVICE_UPDATE_ANCHOR_LIST_JUMPING_INFO func_device_update_anchor_jumping_info
-
 #endif
 
 

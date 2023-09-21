@@ -210,8 +210,41 @@ namespace blender::npr::strokegen
     }
   }
 
+  void StrokeGenPassModule::rebuild_pass_list_ranking_pointer_jumping(
+    int num_splice_iters, const int num_jump_iters,
+    bool loop_breaking_pass = false, bool loop_ranking_pass = false
+  ){
+    // Spliced Pointer Jumping
+    for (size_t jump_iter = 0; jump_iter < num_jump_iters; jump_iter++)
+    {
+      auto& sub = pass_listranking_test.sub("strokegen_list_ranking_test_sublist_pointer_jumping");
+      if (!(loop_breaking_pass || loop_ranking_pass))
+        sub.shader_set(shaders_.static_shader_get(LISTRANKING_SUBLIST_POINTER_JUMPING));
+      else // we are dealing with looped list(s), and we need one more jumping pass to determine head&tail nodes
+        sub.shader_set(shaders_.static_shader_get(LISTRANKING_LOOPED_POINTER_JUMPING));
+
+      sub.bind_ssbo(0, buffers_.ssbo_list_ranking_per_anchor_sublist_jumping_info_[jump_iter%2]);
+      sub.bind_ssbo(1, buffers_.ssbo_list_ranking_per_anchor_sublist_jumping_info_[(jump_iter+1)%2]);
+      sub.bind_ssbo(2, buffers_.ssbo_list_ranking_node_to_anchor_);
+      sub.bind_ssbo(3, buffers_.ssbo_list_ranking_anchor_to_node_[(num_splice_iters)%2]); // note: double check this
+      sub.bind_ssbo(4, buffers_.ssbo_list_ranking_links_);
+      sub.bind_ssbo(5, buffers_.ssbo_list_ranking_ranks_);
+      sub.bind_ssbo(6, buffers_.ssbo_list_ranking_anchor_counters_);
+      sub.bind_ssbo(7, buffers_.ssbo_list_ranking_addressing_counters_);
+      sub.bind_ssbo(8, buffers_.ssbo_list_ranking_serialized_topo_);
+      sub.bind_ubo(0, buffers_.ubo_list_ranking_splicing_);
+      sub.push_constant("pc_listranking_splice_iter_", num_splice_iters);
+      sub.push_constant("pc_listranking_jumping_iter_", (int)jump_iter);
+      int is_looped_ranking_pass = loop_ranking_pass ? 1 : 0;
+      sub.push_constant("pc_listranking_ranking_pass_with_broken_loops_", is_looped_ranking_pass);
+
+      sub.dispatch(buffers_.ssbo_list_ranking_indirect_dispatch_args_per_anchor[num_splice_iters]); // note: double check this
+      sub.barrier(GPU_BARRIER_SHADER_STORAGE);
+    }
+  }
+
   // Note: we must do this within 15 ms(0.64ms x 23iters from willey's algo.), otherwise it for nothing.
-  void StrokeGenPassModule::rebuild_pass_list_ranking()
+  void StrokeGenPassModule::rebuild_pass_list_ranking(bool looped)
   {
     // Build render passes
     pass_listranking_test.init();
@@ -307,30 +340,33 @@ namespace blender::npr::strokegen
       }
     }
     rebuild_pass_list_ranking_fill_args(true, false, num_splice_iters, GROUP_SIZE_BNPR_LIST_RANK_TEST);
-    const int num_jump_iters = MAX_NUM_JUMPS_BNPR_LIST_RANK_TEST;
-    {  // Sublist Pointer Jumping
-      for (size_t jump_iter = 0; jump_iter < num_jump_iters; jump_iter++)
-      {
-        auto& sub = pass_listranking_test.sub("strokegen_list_ranking_test_sublist_pointer_jumping");
-        sub.shader_set(shaders_.static_shader_get(LISTRANKING_SUBLIST_POINTER_JUMPING));
 
-        sub.bind_ssbo(0, buffers_.ssbo_list_ranking_per_anchor_sublist_jumping_info_[jump_iter%2]);
-        sub.bind_ssbo(1, buffers_.ssbo_list_ranking_per_anchor_sublist_jumping_info_[(jump_iter+1)%2]);
-        sub.bind_ssbo(2, buffers_.ssbo_list_ranking_node_to_anchor_);
-        sub.bind_ssbo(3, buffers_.ssbo_list_ranking_anchor_to_node_[(num_splice_iters)%2]); // note: double check this
-        sub.bind_ssbo(4, buffers_.ssbo_list_ranking_links_);
-        sub.bind_ssbo(5, buffers_.ssbo_list_ranking_ranks_);
+    const int num_jump_iters = MAX_NUM_JUMPS_BNPR_LIST_RANK_TEST;
+    if (!looped){
+      rebuild_pass_list_ranking_pointer_jumping(num_splice_iters, num_jump_iters);
+    }else
+    {
+      rebuild_pass_list_ranking_pointer_jumping(
+        num_splice_iters, num_jump_iters, true, false);
+      {
+        auto& sub = pass_listranking_test.sub("strokegen_list_ranking_test_mark_loop_head_tail");
+        sub.shader_set(shaders_.static_shader_get(LISTRANKING_MARK_LOOP_HEAD_TAIL));
+
+        sub.bind_ssbo(0, buffers_.ssbo_list_ranking_anchor_to_node_[num_splice_iters%2]);
+        sub.bind_ssbo(1, buffers_.ssbo_list_ranking_per_anchor_sublist_jumping_info_[num_splice_iters%2]);
+        sub.bind_ssbo(2, buffers_.ssbo_list_ranking_per_anchor_sublist_jumping_info_[(num_splice_iters+1)%2]);
+        sub.bind_ssbo(3, buffers_.ssbo_list_ranking_links_);
+        sub.bind_ssbo(4, buffers_.ssbo_list_ranking_node_to_anchor_);
+        sub.bind_ssbo(5, buffers_.ssbo_list_ranking_links_);
         sub.bind_ssbo(6, buffers_.ssbo_list_ranking_anchor_counters_);
-        sub.bind_ssbo(7, buffers_.ssbo_list_ranking_addressing_counters_);
-        sub.bind_ssbo(8, buffers_.ssbo_list_ranking_serialized_topo_);
         sub.bind_ubo(0, buffers_.ubo_list_ranking_splicing_);
         sub.push_constant("pc_listranking_splice_iter_", num_splice_iters);
-        sub.push_constant("pc_listranking_jumping_iter_", (int)jump_iter);
-        sub.push_constant("pc_listranking_ranking_pass_with_broken_loops_", 0);
 
-        sub.dispatch(buffers_.ssbo_list_ranking_indirect_dispatch_args_per_anchor[num_splice_iters]); // note: double check this
+        sub.dispatch(buffers_.ssbo_list_ranking_indirect_dispatch_args_per_anchor[num_splice_iters]);
         sub.barrier(GPU_BARRIER_SHADER_STORAGE);
       }
+      rebuild_pass_list_ranking_pointer_jumping(
+        num_splice_iters, num_jump_iters, false, true);
     }
 
     { // Relinking spliced nodes back to the list
@@ -392,20 +428,13 @@ namespace blender::npr::strokegen
     buf_final_topo.read();
     uint* computed_topo = reinterpret_cast<uint *>(buf_final_topo.data());
 
-    SSBO_ListRankingLinks& buf_final_links = buffers_.ssbo_list_ranking_links_;
-    buf_final_links.read();
-    uint* computed_links = reinterpret_cast<uint *>(buf_final_links.data());
-
     const uint num_nodes = buffers_.ubo_list_ranking_splicing_.num_nodes;
-    uint tail_out_0 = computed_links[2 * 0 + 1];
     for (size_t i = 0; i < num_nodes; ++i)
     {
       uint rank_gt      = buffers_.listranking_test_nodes_rank[i];
       uint list_len_gt  = buffers_.listranking_test_nodes_list_len[i];
-      uint tail_gt      = buffers_.listranking_test_nodes_tail[i];
       uint rank_out     = computed_ranks[i];
       uint list_len_out = computed_topo[2*i+1];
-      uint tail_out     = computed_links[2*i+1]; // in the end every next pointer links to the tail node
 
       if (rank_gt != (list_len_gt - 1 - rank_out))
       {

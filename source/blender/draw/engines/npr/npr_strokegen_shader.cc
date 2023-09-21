@@ -93,7 +93,7 @@ const char *StrokeGenShaderModule::static_shader_create_info_name_get(eShaderTyp
 
     case COMPUTE_GEOM_EXTRACT:
       return "bnpr_geom_extract";
-    
+
     case SCAN_TEST_UPSWEEP:
       return "bnpr_scan_test_upsweep";
     case SCAN_TEST_AGGREGATE:
@@ -112,18 +112,22 @@ const char *StrokeGenShaderModule::static_shader_create_info_name_get(eShaderTyp
       return "strokegen_segloopconv1D_test_convolution";
     case LISTRANKING_INIT_ANCHORS:
       return "strokegen_list_ranking_test_tagging";
-    case LISTRANKING_COMPACT_ANCHORS: 
+    case LISTRANKING_COMPACT_ANCHORS:
       return "strokegen_list_ranking_test_compact_anchors";
-    case LISTRANKING_SPLICE_OUT_NODES: 
-      return "strokegen_list_ranking_test_splice_out_nodes"; 
-    case LISTRANKING_FILL_DISPATCH_ARGS: 
+    case LISTRANKING_SPLICE_OUT_NODES:
+      return "strokegen_list_ranking_test_splice_out_nodes";
+    case LISTRANKING_FILL_DISPATCH_ARGS:
       return "strokegen_list_ranking_test_fill_dispatch_args";
     case LISTRANKING_SUBLIST_POINTER_JUMPING:
      return "strokegen_list_ranking_test_sublist_pointer_jumping";
+    case LISTRANKING_LOOPED_POINTER_JUMPING:
+     return "strokegen_list_ranking_test_looped_pointer_jumping";
+    case LISTRANKING_MARK_LOOP_HEAD_TAIL:
+      return "strokegen_list_ranking_test_mark_loop_head_tail";
     case LISTRANKING_RELINKING:
      return "strokegen_list_ranking_test_relinking";
-    case LISTRANKING_UPLOAD_CPU_DATA: 
-     return "strokegen_list_ranking_test_upload_cpu_test_data"; 
+    case LISTRANKING_UPLOAD_CPU_DATA:
+     return "strokegen_list_ranking_test_upload_cpu_test_data";
 
     /* To avoid compiler warning about missing case. */
     case MAX_SHADER_TYPE:

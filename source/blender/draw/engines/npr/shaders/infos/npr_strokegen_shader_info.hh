@@ -390,12 +390,34 @@ GPU_SHADER_CREATE_INFO(strokegen_list_ranking_test_sublist_pointer_jumping)
     .uniform_buf(0, "UBData_ListRanking", "ubo_list_ranking_splicing_")
     .push_constant(Type::INT, "pc_listranking_splice_iter_")
     .push_constant(Type::INT, "pc_listranking_jumping_iter_")
-    .push_constant(Type::INT, "pc_listranking_ranking_pass_with_broken_loops_")
 
     .local_group_size(GROUP_SIZE_BNPR_LIST_RANK_TEST)
     .compute_source("npr_strokegen_list_ranking_test_comp.glsl");
 
-GPU_SHADER_CREATE_INFO(strokegen_list_ranking_test_relinking) 
+GPU_SHADER_CREATE_INFO(strokegen_list_ranking_test_looped_pointer_jumping)
+    .additional_info("strokegen_list_ranking_test_sublist_pointer_jumping")
+    .define("_KERNEL_MULTICOMPILE__LIST_RANKING_SUBLIST_POINTER_JUMPING__FIND_LOOP_HEAD", "1")
+    .push_constant(Type::INT, "pc_listranking_ranking_pass_with_broken_loops_");
+
+GPU_SHADER_CREATE_INFO(strokegen_list_ranking_test_mark_loop_head_tail)
+    .do_static_compilation(true)
+    .typedef_source("bnpr_shader_shared.hh")
+    .define("_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_BREAK_CIRCLES")
+
+    .storage_buf(0, Qualifier::READ, "uint", "ssbo_list_ranking_anchor_to_node_in_[]")
+    .storage_buf(1, Qualifier::READ, "uint", "ssbo_list_ranking_per_anchor_sublist_jumping_info_in_[]")
+    .storage_buf(2, Qualifier::WRITE, "uint", "ssbo_list_ranking_per_anchor_sublist_jumping_info_out_[]")
+    .storage_buf(3, Qualifier::READ_WRITE, "uint", "ssbo_list_ranking_links_[]")
+    .storage_buf(4, Qualifier::READ, "uint", "ssbo_list_ranking_node_to_anchor_in_[]")
+    .storage_buf(5, Qualifier::READ, "uint", "ssbo_list_ranking_links_[]")
+    .storage_buf(6, Qualifier::READ, "uint", "ssbo_list_ranking_anchor_counters_[]")
+    .uniform_buf(0, "UBData_ListRanking", "ubo_list_ranking_splicing_")
+    .push_constant(Type::INT, "pc_listranking_splice_iter_")
+
+    .local_group_size(GROUP_SIZE_BNPR_LIST_RANK_TEST)
+    .compute_source("npr_strokegen_list_ranking_test_comp.glsl");
+    
+GPU_SHADER_CREATE_INFO(strokegen_list_ranking_test_relinking)
     .do_static_compilation(true)
     .typedef_source("bnpr_shader_shared.hh")
     .define("_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_RELINKING", "1")
@@ -404,7 +426,7 @@ GPU_SHADER_CREATE_INFO(strokegen_list_ranking_test_relinking)
     .storage_buf(1, Qualifier::READ_WRITE, "uint", "ssbo_list_ranking_links_[]")
     .storage_buf(2, Qualifier::READ_WRITE, "uint", "ssbo_list_ranking_ranks_[]")
     .storage_buf(3, Qualifier::READ, "uint", "ssbo_list_ranking_splice_counters_[]")
-    .storage_buf(4, Qualifier::READ, "uint", "ssbo_list_ranking_per_anchor_sublist_jumping_info_in_[]") 
+    .storage_buf(4, Qualifier::READ, "uint", "ssbo_list_ranking_per_anchor_sublist_jumping_info_in_[]")
     .storage_buf(5, Qualifier::WRITE, "uint", "ssbo_list_ranking_serialized_topo_[]")
     .uniform_buf(0, "UBData_ListRanking", "ubo_list_ranking_splicing_")
     .push_constant(Type::INT, "pc_listranking_relink_iter_")

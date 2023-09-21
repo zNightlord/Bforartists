@@ -246,7 +246,7 @@ void main()
     JumpingInfo ji; 
 
     /* Extra iters - initialization & finalization */
-    if (iter_bootstrap == curr_jump_iter)
+    if (iter_bootstrap == curr_jump_iter && !IS_LOOP_RANKING_PASS())
     { /* The first iteration sets up anchor-to-anchor links and per-anchor ranks
            from per-node buffers. This is for strided mem access. */
         ji = FUNC_DEVICE_INIT_PER_ANCHOR_LIST_JUMPING_INFO(anchor_id, splicing_iter);  
@@ -254,6 +254,9 @@ void main()
          
         return; /* !!! EXIT !!! ------------------------- */
     }
+    if (iter_bootstrap == curr_jump_iter && IS_LOOP_RANKING_PASS())
+        return; /* !!! EXIT !!! do nothing since we did it in _LIST_RANKING_BREAK_CIRCLES */
+
     if (iter_finalize == curr_jump_iter && !IS_LOOP_BREAKING_PASS())
     { /* The last iteration sets up the topology for each anchor 
        * note that we dont need this when finding loop head/tail(s) */
@@ -326,7 +329,14 @@ void main()
 
 
 #ifdef _KERNEL_MULTICOMPILE__TEST_LIST_RANKING_BREAK_CIRCLES
-
+/*
+ssbo_list_ranking_anchor_to_node_in_
+ssbo_list_ranking_per_anchor_sublist_jumping_info_in_
+ssbo_list_ranking_per_anchor_sublist_jumping_info_out_
+ssbo_list_ranking_links_
+ssbo_list_ranking_node_to_anchor_in_
+ssbo_list_ranking_links_
+*/
 void main()
 {
     const uint groupIdx = gl_LocalInvocationID.x;
