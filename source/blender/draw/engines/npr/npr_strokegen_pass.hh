@@ -94,10 +94,15 @@ public:
   void rebuild_pass_segscan_test();
 
   void rebuild_pass_conv_test();
-  void rebuild_pass_list_ranking_pointer_jumping(int num_splice_iters, const int num_jump_iters, bool loop_breaking_pass, bool loop_ranking_pass);
+  void rebuild_pass_list_ranking_pointer_jumping(
+    int num_splice_iters, const int num_jump_iters,
+    int jumping_info_offset, bool loop_breaking_pass, bool loop_ranking_pass
+  );
 
-  void rebuild_pass_list_ranking(bool looped = false);
+  bool looped_pass_list_ranking;
+  void rebuild_pass_list_ranking();
   void rebuild_pass_list_ranking_fill_args(bool per_anchor, bool per_spliced, int splicing_or_relinking_iter, int group_size_x);
+  void print_list_ranking_nodes(int head_node_id, uint* computed_ranks, uint* computed_topo, uint* computed_links) const;
   /** \} */
 
 

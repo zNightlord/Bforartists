@@ -1,4 +1,4 @@
-﻿/* SPDX-License-Identifier: GPL-2.0-or-later
+/* SPDX-License-Identifier: GPL-2.0-or-later
  * Copyright 2021 Blender Foundation.
  */
 
@@ -9,6 +9,8 @@
 #pragma once
 
 #include "bnpr_shader_shared.hh"
+
+#include <set>
 
 namespace blender::npr::strokegen {
 class Instance;
@@ -95,6 +97,7 @@ class GPUBufferPoolModule {
   std::vector<int> listranking_test_nodes_head;
   std::vector<int> listranking_test_nodes_tail;
   std::vector<int> listranking_test_nodes_list_len;
+  std::set<int> listranking_test_head_nodes; 
 
   bool listranking_test_data_uploaded;
   bool listranking_test_data_validated;
@@ -120,7 +123,7 @@ class GPUBufferPoolModule {
   /* -------------------------------------------------------------------- */
   /** \name List Ranking Validation
    * \{ */
-  void build_list_ranking_testing_data();
+  void build_list_ranking_testing_data(bool test_loop_lists = false);
   /** \} */
 };
 }  // namespace blender::npr::strokegen

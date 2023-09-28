@@ -135,8 +135,13 @@ bool is_head_or_tail_node(ListRankingLink link, uint node_id)
     uint _FUNC_CALC_LDS_DIGIT_MASK(uint lane_id, uint blk_id, uint blk_size, uint num_nodes, out uint digit_mask)
     {
         const uint num_blks = (num_nodes + blk_size - 1) / blk_size; 
-        const uint num_nodes_in_blk = 
-            (blk_id == num_blks - 1u) ? num_nodes % blk_size : blk_size;
+        uint num_nodes_in_blk = blk_size; 
+        if (blk_id == num_blks - 1u)
+        {
+            uint num_remain = num_nodes % blk_size; 
+            if (num_remain != 0u)
+                num_nodes_in_blk = num_remain;
+        }
 
         int max_wave_id_valid = /* max wave_id that has lane_id mapped to a valid node */
             lane_id >= num_nodes_in_blk ? -1 : int(((num_nodes_in_blk - 1u) - lane_id) >> 5u);

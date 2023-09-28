@@ -268,7 +268,7 @@ using SSBO_ListRankingLinks = draw::StorageArrayBuffer<uint, NUM_ITEMS_BNPR_LIST
 using SSBO_ListRankingTags = draw::StorageArrayBuffer<uint, NUM_ITEMS_BNPR_LIST_RANK_TEST, true>;
 using SSBO_ListRankingRanks = draw::StorageArrayBuffer<uint, NUM_ITEMS_BNPR_LIST_RANK_TEST, true>; 
 using SSBO_ListRankingSerializedTopo = draw::StorageArrayBuffer<uint, NUM_ITEMS_BNPR_LIST_RANK_TEST * 2, true>; /* list-len&start */
-using SSBO_ListRankingAnchorJumpingInfo = draw::StorageArrayBuffer<uint, NUM_ITEMS_BNPR_LIST_RANK_TEST * 6, true>; /* also cache per-node data*/
+using SSBO_ListRankingAnchorJumpingInfo = draw::StorageArrayBuffer<uint, NUM_ITEMS_BNPR_LIST_RANK_TEST * 8, true>; /* also cache per-node data*/
 
 /* #anchors is around #nodes/4 */
 using SSBO_ListRankingAnchorToNode = draw::StorageArrayBuffer<uint, NUM_ITEMS_BNPR_LIST_RANK_TEST, true>;

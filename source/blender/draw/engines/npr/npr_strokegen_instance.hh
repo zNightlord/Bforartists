@@ -55,15 +55,18 @@ namespace blender::npr::strokegen
     uint frame_counter; // for debugging
 
 
-    
+
    public:
     Instance()
         : shaders(*StrokeGenShaderModule::module_get()),
           sync(*this),
           strokegen_buffers(*this),
           strokegen_textures(*this),
-          strokegen_passes(shaders, strokegen_buffers, strokegen_textures){};
-    
+          strokegen_passes(shaders, strokegen_buffers, strokegen_textures)
+    {
+      strokegen_passes.looped_pass_list_ranking = true; // remember to also set flag at build_list_ranking_testing_data
+    }
+
 
     /** Render Loop Events */
     void init(Depsgraph* depsgraph_, draw::Manager* manager_, const View3D* v3d_, const RegionView3D* rv3d_, const

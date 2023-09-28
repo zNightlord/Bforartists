@@ -1,4 +1,4 @@
-﻿/* SPDX-License-Identifier: GPL-2.0-or-later
+/* SPDX-License-Identifier: GPL-2.0-or-later
 * Copyright 2021 Blender Foundation.
  */
 
@@ -82,7 +82,7 @@ namespace blender::npr::strokegen
     strokegen_buffers.on_begin_sync();
 
     /* Then setup render passes */
-    strokegen_passes.on_begin_sync();
+    strokegen_passes.on_begin_sync(); 
   }
 
   void Instance::end_sync(Manager&)

@@ -126,6 +126,8 @@ const char *StrokeGenShaderModule::static_shader_create_info_name_get(eShaderTyp
       return "strokegen_list_ranking_test_mark_loop_head_tail";
     case LISTRANKING_RELINKING:
      return "strokegen_list_ranking_test_relinking";
+    case LISTRANKING_LOOPED_RELINKING:
+     return "strokegen_list_ranking_test_looped_relinking";
     case LISTRANKING_UPLOAD_CPU_DATA:
      return "strokegen_list_ranking_test_upload_cpu_test_data";
 

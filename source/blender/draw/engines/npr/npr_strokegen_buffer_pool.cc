@@ -7,6 +7,9 @@
  */
 
 #include "npr_strokegen_buffer_pool.hh"
+
+#include <set>
+
 #include "npr_strokegen_instance.hh"
 #include "bnpr_defines.hh"
 
@@ -74,7 +77,7 @@ namespace blender::npr::strokegen
 
     if (false == listranking_test_data_uploaded)
     { // list ranking test: build nodes on CPU & upload to ssbo
-      build_list_ranking_testing_data(); // build listranking_test_nodes_prev_next
+      build_list_ranking_testing_data(true); // build listranking_test_nodes_prev_next
 
       ssbo_list_ranking_links_staging_buf_.resize(NUM_ITEMS_BNPR_LIST_RANK_TEST * 2);
       ssbo_list_ranking_links_staging_buf_.clear_to_zero();
@@ -119,7 +122,7 @@ namespace blender::npr::strokegen
   }
 
 
-  void GPUBufferPoolModule::build_list_ranking_testing_data()
+  void GPUBufferPoolModule::build_list_ranking_testing_data(bool test_loop_lists)
   { // TODO: make multiple lists instead of one long list
     int num_nodes = NUM_ITEMS_BNPR_LIST_RANK_TEST;
 
@@ -129,6 +132,7 @@ namespace blender::npr::strokegen
     listranking_test_nodes_head.resize(num_nodes);
     listranking_test_nodes_tail.resize(num_nodes);
     listranking_test_nodes_list_len.resize(num_nodes);
+    listranking_test_head_nodes.clear();
 
     std::vector<int> node_array;
     node_array.resize(num_nodes);
@@ -140,21 +144,22 @@ namespace blender::npr::strokegen
     rank.resize(num_nodes);
 
     std::random_device rd;
-    std::mt19937 rng(/*rd()*/(time(0)));
-    int curr_head = 0;
-    int curr_len = num_nodes; // std::max(1, (int)rng() % std::min(num_nodes, 2013));
-    int curr_tail = curr_head + curr_len - 1;
-    for (int arr_id = 0; arr_id < num_nodes; ++arr_id)
-    {
-        rank[arr_id] = arr_id - curr_head;
-        seg_len[arr_id] = curr_len;
-        head[arr_id] = curr_head;
-        tail[arr_id] = curr_tail;
-        if (curr_tail == arr_id)
-        { // update to next sublist
-          curr_head = arr_id + 1;
-          curr_len = std::max(1, (int)rng() % std::min(std::max(1, num_nodes - curr_head), 2013));
-          curr_tail = curr_head + curr_len - 1;
+    // std::mt19937 rng(/*rd()*/ (time(0)));
+    std::mt19937 rng((time(0)));
+    std::srand(time(0));
+    int curr_arr_head = 0;
+    int curr_len = std::max(2, (int)std::rand() % num_nodes / 4);
+    int curr_arr_tail = curr_arr_head + curr_len - 1;
+    for (int arr_id = 0; arr_id < num_nodes; ++arr_id) {
+      rank[arr_id] = arr_id - curr_arr_head;
+      seg_len[arr_id] = curr_len;
+      head[arr_id] = curr_arr_head;
+      tail[arr_id] = curr_arr_tail;
+      if (curr_arr_tail == arr_id) {  // update to next sublist
+        curr_arr_head = arr_id + 1;
+        curr_len = std::min(num_nodes - curr_arr_head,
+                            std::max((int)std::rand() % (num_nodes / 4), 2));
+          curr_arr_tail = curr_arr_head + curr_len - 1;
         }
 
         node_array[arr_id] = arr_id; // shuffle later
@@ -169,19 +174,95 @@ namespace blender::npr::strokegen
       arrToNode.add(arr_id, node_id);
     }
 
-    for (int node_id = 0; node_id < num_nodes; ++node_id) {
-      uint arr_id = node_array[node_id];
-      listranking_test_nodes_rank[node_id] = rank[arr_id];
-      listranking_test_nodes_head[node_id] = arrToNode.lookup(head[arr_id]);
-      listranking_test_nodes_tail[node_id] = arrToNode.lookup(tail[arr_id]);
+    std::vector<int> arr_looped_rank, arr_looped_head, arr_looped_tail;
+    arr_looped_rank.resize(num_nodes);
+    arr_looped_head.resize(num_nodes);
+    arr_looped_tail.resize(num_nodes);
+    if (test_loop_lists)
+    {
+      int arr_id = 0;
+      while (arr_id < num_nodes)
+      { // traverse sub-lists
+        curr_arr_head = head[arr_id];
+        curr_arr_tail = tail[arr_id];
+
+        int arr_loop_shift = 0;
+        int loop_head_node_id = arrToNode.lookup(curr_arr_head);
+        int loop_len = seg_len[curr_arr_head];
+
+        // scan list to find loop head
+        for (int arr_id_scan = curr_arr_head; arr_id_scan <= curr_arr_tail; ++arr_id_scan)
+        { // node with maximum address is the loop head
+          int node_id = arrToNode.lookup(arr_id_scan);
+          if (node_id > loop_head_node_id)
+          {
+            loop_head_node_id = node_id;
+            arr_loop_shift = arr_id_scan - curr_arr_head;
+          }
+        }
+        listranking_test_head_nodes.insert(loop_head_node_id);
+        int loop_head_arr_id = nodeToArr.lookup(loop_head_node_id);
+
+        // record mapping from sub-lists to shifted ones
+        for (int arr_id_scan = curr_arr_head; arr_id_scan <= curr_arr_tail; ++arr_id_scan)
+        {
+          int local_rank = arr_id_scan - curr_arr_head;
+          local_rank = (local_rank - arr_loop_shift + loop_len) % loop_len; // shift loop head node to the start
+          arr_looped_rank[arr_id_scan] = local_rank;
+          arr_looped_head[arr_id_scan] = loop_head_arr_id;
+          arr_looped_tail[arr_id_scan] = curr_arr_head + ((arr_loop_shift - 1 + loop_len) % loop_len);
+        }
+
+        arr_id = curr_arr_tail + 1;
+      }
+    }
+
+
+    for (int node_id = 0; node_id < num_nodes; ++node_id)
+    {
+      uint arr_id = nodeToArr.lookup(node_id);
+      listranking_test_nodes_rank[node_id] = (!test_loop_lists) ? rank[arr_id] : arr_looped_rank[arr_id];
+      listranking_test_nodes_head[node_id] = arrToNode.lookup(
+        (!test_loop_lists) ? head[arr_id] : arr_looped_head[arr_id]
+      );
+      listranking_test_nodes_tail[node_id] = arrToNode.lookup(
+        (!test_loop_lists) ? tail[arr_id] : arr_looped_tail[arr_id]
+      );
       listranking_test_nodes_list_len[node_id] = seg_len[arr_id];
     }
     for (int node = 0; node < num_nodes; ++node) {
       int arr_id = nodeToArr.lookup(node);
-      int arr_prev = (head[arr_id] == arr_id) ? arr_id : (arr_id - 1); // head->prev == itself
-      int arr_next = (tail[arr_id] == arr_id) ? arr_id : (arr_id + 1); // tail->next= itself
-      listranking_test_nodes_prev_next[node*2] = arrToNode.lookup(arr_prev);
+      int arr_prev, arr_next;
+      if (!test_loop_lists){
+        arr_prev = (head[arr_id] == arr_id) ? arr_id : (arr_id - 1); // head->prev == itself
+        arr_next = (tail[arr_id] == arr_id) ? arr_id : (arr_id + 1); // tail->next= itself
+      }
+      else{
+        int curr_list_len = listranking_test_nodes_list_len[node];
+        int curr_list_beg = head[arr_id]; // start addr of serialized loop list
+        int list_rank = arr_id - curr_list_beg;
+        arr_prev = curr_list_beg + (list_rank - 1 + curr_list_len) % curr_list_len; // head->prev == itself
+        arr_next = curr_list_beg + (list_rank + 1 + curr_list_len) % curr_list_len; // tail->next == itself
+      }
+      listranking_test_nodes_prev_next[node*2]   = arrToNode.lookup(arr_prev);
       listranking_test_nodes_prev_next[node*2+1] = arrToNode.lookup(arr_next);
+    }
+
+    // Print linked lists
+    if (num_nodes <= 64)
+    {
+      for (int head_node_id : listranking_test_head_nodes)
+      {
+        int list_len = listranking_test_nodes_list_len[head_node_id];
+        int curr_node_id = head_node_id;
+        for (int i = 0; i < list_len; ++i)
+        {
+          std::cout << curr_node_id;
+          if ((i + 1) != list_len) std::cout << "->";
+          curr_node_id = listranking_test_nodes_prev_next[curr_node_id * 2 + 1];
+        }
+        std::cout << std::endl;
+      }
     }
   }
 }

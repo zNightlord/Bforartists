@@ -31,11 +31,15 @@ void main()
     const uint tagging_iter = pc_listranking_tagging_iter_; 
     const uint num_nodes_total = NUM_NODES_TOTAL; 
     const uint num_anchors = splicing_iter == 0 ? 
-        num_nodes_total : ssbo_list_ranking_anchor_counters_[splicing_iter]; 
-    
-    /* compute node tag */
+        num_nodes_total : ssbo_list_ranking_anchor_counters_[splicing_iter];
+        
     uint anchor_id = idx; 
     uint node_id = FUNC_GET_NODE_ID_FOR_ANCHOR(anchor_id, splicing_iter); 
+    
+    if (anchor_id >= num_anchors && node_id >= num_nodes_total)
+        return; 
+
+    /* compute node tag */
     if (anchor_id < num_anchors && node_id < num_nodes_total)
     {
         _FUNC_UPDATE_NODE_TAG(node_id, tagging_iter); 
@@ -46,6 +50,7 @@ void main()
     { 
         uint next_node_id = FUNC_DEVICE_LOAD_LISTRANKING_NODE_NEXT_NODE_ID(node_id);
         bool is_tail_node = node_id == next_node_id; 
+        
         FUNC_DEVICE_STORE_LISTRANKING_NODE_RANK(node_id, is_tail_node ? 0u : 1u); 
         if (idx == 0u)
         {
@@ -269,6 +274,8 @@ void main()
 
         return; /* !!! EXIT !!! -------------------------- */
     }
+    if (iter_finalize == curr_jump_iter && IS_LOOP_BREAKING_PASS())
+        return; /* !!! EXIT !!! do nothing since we are only jumping on maximal tag to find head/tail nodes */
     if (num_iters <= curr_jump_iter) return; /* more than needed, do nothing */
 
 
@@ -280,6 +287,16 @@ void main()
     
     bool jumped_to_end = false; 
     ji_updated = FUNC_DEVICE_UPDATE_ANCHOR_LIST_JUMPING_INFO(ji, ji_next, /*out*/jumped_to_end); 
+    if ((curr_jump_iter == iter_jump_end) && IS_LOOP_RANKING_PASS())
+    { /* We need to add the tail rank here for once,
+       * since we forbid to accumulate when reaches the tail in prev iters
+       * this is only needed in looped ranking since otherwise the rank of tail would be 0 (we never splice the tail out) */
+        if (!ji.is_list_tail)
+        { /* still needs one more jump */
+            JumpingInfo ji_tail = FUNC_DEVICE_LOAD_PER_ANCHOR_LIST_JUMPING_INFO(ji_updated.jump_next_anchor_id); 
+            ji_updated.data += ji_tail.data;
+        }
+    }
 
     if (curr_jump_iter < iter_jump_end)
     { /* iteratively update jumping pointer & data */
@@ -290,6 +307,11 @@ void main()
     if ((curr_jump_iter == iter_jump_end) && !IS_LOOP_BREAKING_PASS())
     { 
         uint node_id = FUNC_GET_NODE_ID_FOR_ANCHOR(anchor_id, splicing_iter); 
+        /* fix rank when loop_list_len==1 */
+        bool singular_loop = (IS_LOOP_RANKING_PASS() && ji_updated.is_list_head && (ji_updated.data == 0u)); 
+        if (singular_loop){
+            ji_updated.data = 1u; 
+        }
 
         /* *) Output anchor rank ------------------------------------------------------- */
         if (IS_LOOP_RANKING_PASS())
@@ -314,6 +336,8 @@ void main()
             /* for each anchor, rank == dist to list tail */
             /* => for head, rank+1 == list length */
             uint list_len = 1 + ji_updated.data; 
+            if (IS_LOOP_RANKING_PASS()) list_len = ji_updated.data; 
+
             uint list_addr = FUNC_DEVICE_ALLOC_LIST_ADDR(list_len); 
             FUNC_DEVICE_BROADCAST_LIST_TOPOLOGY(list_broadcast_anchor_id, list_len, list_addr); 
         }
@@ -386,12 +410,12 @@ void main()
     if (is_loop_tail)
     {
         FUNC_DEVICE_STORE_LISTRANKING_NODE_NEXT_NODE_ID(node_id, node_id); 
-        ji.is_list_tail = true; 
+        ji.is_list_tail = true; /* not neccessarily the actual "tail" */
     }
 
     /* Also setup the jumping info for next jumping pass (which does ranking) */
     ji.data = FUNC_DEVICE_LOAD_LISTRANKING_NODE_RANK(node_id); 
-    ji.next_anchor_id = is_loop_tail ? anchor_id : next_anchor_id; 
+    ji.jump_next_anchor_id = is_loop_tail ? anchor_id : next_anchor_id; 
     FUNC_DEVICE_STORE_PER_ANCHOR_LIST_JUMPING_INFO(anchor_id, ji);  
 }
 

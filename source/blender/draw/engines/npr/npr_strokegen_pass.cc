@@ -11,6 +11,8 @@
 
 #include "gpu_batch_private.hh"
 
+#include <iomanip>
+
 namespace blender::npr::strokegen
 {
   using namespace blender;
@@ -211,11 +213,11 @@ namespace blender::npr::strokegen
   }
 
   void StrokeGenPassModule::rebuild_pass_list_ranking_pointer_jumping(
-    int num_splice_iters, const int num_jump_iters,
+    int num_splice_iters, const int num_jump_iters, int jumping_info_offset = 0,
     bool loop_breaking_pass = false, bool loop_ranking_pass = false
   ){
     // Spliced Pointer Jumping
-    for (size_t jump_iter = 0; jump_iter < num_jump_iters; jump_iter++)
+    for (int jump_iter = 0; jump_iter < num_jump_iters; jump_iter++)
     {
       auto& sub = pass_listranking_test.sub("strokegen_list_ranking_test_sublist_pointer_jumping");
       if (!(loop_breaking_pass || loop_ranking_pass))
@@ -223,8 +225,11 @@ namespace blender::npr::strokegen
       else // we are dealing with looped list(s), and we need one more jumping pass to determine head&tail nodes
         sub.shader_set(shaders_.static_shader_get(LISTRANKING_LOOPED_POINTER_JUMPING));
 
-      sub.bind_ssbo(0, buffers_.ssbo_list_ranking_per_anchor_sublist_jumping_info_[jump_iter%2]);
-      sub.bind_ssbo(1, buffers_.ssbo_list_ranking_per_anchor_sublist_jumping_info_[(jump_iter+1)%2]);
+      int jumping_info_subbuff_in = jump_iter + jumping_info_offset;
+      if (loop_ranking_pass && jump_iter > 0)
+        jumping_info_subbuff_in += 1; // we do nothing in the 0th jumping pass hence did not swap the buffers
+      sub.bind_ssbo(0, buffers_.ssbo_list_ranking_per_anchor_sublist_jumping_info_[(jumping_info_subbuff_in)%2]);
+      sub.bind_ssbo(1, buffers_.ssbo_list_ranking_per_anchor_sublist_jumping_info_[(jumping_info_subbuff_in+1)%2]);
       sub.bind_ssbo(2, buffers_.ssbo_list_ranking_node_to_anchor_);
       sub.bind_ssbo(3, buffers_.ssbo_list_ranking_anchor_to_node_[(num_splice_iters)%2]); // note: double check this
       sub.bind_ssbo(4, buffers_.ssbo_list_ranking_links_);
@@ -234,7 +239,7 @@ namespace blender::npr::strokegen
       sub.bind_ssbo(8, buffers_.ssbo_list_ranking_serialized_topo_);
       sub.bind_ubo(0, buffers_.ubo_list_ranking_splicing_);
       sub.push_constant("pc_listranking_splice_iter_", num_splice_iters);
-      sub.push_constant("pc_listranking_jumping_iter_", (int)jump_iter);
+      sub.push_constant("pc_listranking_jumping_iter_", jump_iter);
       int is_looped_ranking_pass = loop_ranking_pass ? 1 : 0;
       sub.push_constant("pc_listranking_ranking_pass_with_broken_loops_", is_looped_ranking_pass);
 
@@ -244,7 +249,7 @@ namespace blender::npr::strokegen
   }
 
   // Note: we must do this within 15 ms(0.64ms x 23iters from willey's algo.), otherwise it for nothing.
-  void StrokeGenPassModule::rebuild_pass_list_ranking(bool looped)
+  void StrokeGenPassModule::rebuild_pass_list_ranking()
   {
     // Build render passes
     pass_listranking_test.init();
@@ -342,22 +347,23 @@ namespace blender::npr::strokegen
     rebuild_pass_list_ranking_fill_args(true, false, num_splice_iters, GROUP_SIZE_BNPR_LIST_RANK_TEST);
 
     const int num_jump_iters = MAX_NUM_JUMPS_BNPR_LIST_RANK_TEST;
-    if (!looped){
+    if (!looped_pass_list_ranking){
       rebuild_pass_list_ranking_pointer_jumping(num_splice_iters, num_jump_iters);
     }else
     {
       rebuild_pass_list_ranking_pointer_jumping(
-        num_splice_iters, num_jump_iters, true, false);
+        num_splice_iters, num_jump_iters, 0, true, false
+      );
       {
         auto& sub = pass_listranking_test.sub("strokegen_list_ranking_test_mark_loop_head_tail");
         sub.shader_set(shaders_.static_shader_get(LISTRANKING_MARK_LOOP_HEAD_TAIL));
 
         sub.bind_ssbo(0, buffers_.ssbo_list_ranking_anchor_to_node_[num_splice_iters%2]);
-        sub.bind_ssbo(1, buffers_.ssbo_list_ranking_per_anchor_sublist_jumping_info_[num_splice_iters%2]);
-        sub.bind_ssbo(2, buffers_.ssbo_list_ranking_per_anchor_sublist_jumping_info_[(num_splice_iters+1)%2]);
+        sub.bind_ssbo(1, buffers_.ssbo_list_ranking_per_anchor_sublist_jumping_info_[num_jump_iters%2]);
+        sub.bind_ssbo(2, buffers_.ssbo_list_ranking_per_anchor_sublist_jumping_info_[(num_jump_iters+1)%2]);
         sub.bind_ssbo(3, buffers_.ssbo_list_ranking_links_);
         sub.bind_ssbo(4, buffers_.ssbo_list_ranking_node_to_anchor_);
-        sub.bind_ssbo(5, buffers_.ssbo_list_ranking_links_);
+        sub.bind_ssbo(5, buffers_.ssbo_list_ranking_ranks_);
         sub.bind_ssbo(6, buffers_.ssbo_list_ranking_anchor_counters_);
         sub.bind_ubo(0, buffers_.ubo_list_ranking_splicing_);
         sub.push_constant("pc_listranking_splice_iter_", num_splice_iters);
@@ -366,21 +372,25 @@ namespace blender::npr::strokegen
         sub.barrier(GPU_BARRIER_SHADER_STORAGE);
       }
       rebuild_pass_list_ranking_pointer_jumping(
-        num_splice_iters, num_jump_iters, false, true);
+          num_splice_iters, num_jump_iters, 1, false, true);
     }
 
     { // Relinking spliced nodes back to the list
       int num_relink_iters = num_splice_iters;
+      int input_jump_cache_pingpong = 0;
       for (int relink_iter = 0; relink_iter < num_relink_iters; relink_iter++)
       {
         auto& sub = pass_listranking_test.sub("strokegen_list_ranking_test_relink");
-        sub.shader_set(shaders_.static_shader_get(LISTRANKING_RELINKING));
+        if (!looped_pass_list_ranking)
+          sub.shader_set(shaders_.static_shader_get(LISTRANKING_RELINKING));
+        else
+          sub.shader_set(shaders_.static_shader_get(LISTRANKING_LOOPED_RELINKING));
 
         sub.bind_ssbo(0, buffers_.ssbo_list_ranking_spliced_node_id_[num_relink_iters - 1 - relink_iter]);  // note: double check this
         sub.bind_ssbo(1, buffers_.ssbo_list_ranking_links_);
         sub.bind_ssbo(2, buffers_.ssbo_list_ranking_ranks_);
         sub.bind_ssbo(3, buffers_.ssbo_list_ranking_splice_counters_);
-        sub.bind_ssbo(4, buffers_.ssbo_list_ranking_per_anchor_sublist_jumping_info_[(num_jump_iters)%2]);
+        sub.bind_ssbo(4, buffers_.ssbo_list_ranking_per_anchor_sublist_jumping_info_[input_jump_cache_pingpong]);
         sub.bind_ssbo(5, buffers_.ssbo_list_ranking_serialized_topo_);
         sub.bind_ubo(0, buffers_.ubo_list_ranking_splicing_);
         sub.push_constant("pc_listranking_relink_iter_", relink_iter);
@@ -418,6 +428,50 @@ namespace blender::npr::strokegen
     sub.barrier(GPU_BARRIER_SHADER_STORAGE);
   }
 
+  void StrokeGenPassModule::print_list_ranking_nodes(
+    int head_node_id,
+    uint* computed_ranks, uint* computed_topo, uint* computed_links
+  ) const
+{
+    int list_len_gt = buffers_.listranking_test_nodes_list_len[head_node_id];
+    uint list_len_out = computed_topo[2 * head_node_id + 1];
+    std::cout << std::left // output each list in a column
+      << "length: " << list_len_gt << " | " << list_len_out << " | " << std::endl;
+    int curr_node_id = head_node_id;
+
+    for (int i = 0; i < list_len_gt; ++i)
+    {
+      std::stringstream out_str;
+      {
+        uint rank_gt = buffers_.listranking_test_nodes_rank[curr_node_id];
+
+        uint rank_out = computed_ranks[curr_node_id];
+        uint list_len_out = computed_topo[2 * curr_node_id + 1];
+        uint list_addr_out = computed_topo[2 * curr_node_id];
+        uint list_broadcast_anchor_id = computed_links[2 * curr_node_id + 1];
+        if (looped_pass_list_ranking)
+        {
+          rank_out = rank_out & 0x3fffffffu;
+        }
+        int rank_out_adjusted = (list_len_gt - rank_out);
+
+        out_str << curr_node_id << "_r" << rank_out_adjusted << "_l" << list_len_out << "_b" << list_broadcast_anchor_id
+          << "_R" << rank_gt;
+
+        std::cout << std::left << std::setw(20) << out_str.str();
+      }
+
+      if ((i + 1) != list_len_gt)
+        std::cout << std::left << std::setw(2) << "   ->  ";
+
+      if (i % 4 == 1)
+        std::cout << std::endl;
+
+      curr_node_id = buffers_.listranking_test_nodes_prev_next[curr_node_id * 2 + 1];
+    }
+    std::cout << std::endl;
+  }
+
   bool StrokeGenPassModule::validate_list_ranking() const
   {
     SSBO_ListRankingRanks& buf_final_ranks = buffers_.ssbo_list_ranking_ranks_;
@@ -428,26 +482,113 @@ namespace blender::npr::strokegen
     buf_final_topo.read();
     uint* computed_topo = reinterpret_cast<uint *>(buf_final_topo.data());
 
+    SSBO_ListRankingLinks& buf_computed_links = buffers_.ssbo_list_ranking_links_;
+    buf_computed_links.read(); // .next should be pointing to anchor id for broadcasting topo data
+    uint* computed_links = reinterpret_cast<uint *>(buf_computed_links.data());
+
+    // Print linked lists
     const uint num_nodes = buffers_.ubo_list_ranking_splicing_.num_nodes;
-    for (size_t i = 0; i < num_nodes; ++i)
+    if (num_nodes <= 64)
     {
-      uint rank_gt      = buffers_.listranking_test_nodes_rank[i];
-      uint list_len_gt  = buffers_.listranking_test_nodes_list_len[i];
-      uint rank_out     = computed_ranks[i];
-      uint list_len_out = computed_topo[2*i+1];
-
-      if (rank_gt != (list_len_gt - 1 - rank_out))
+      for (int head_node_id : buffers_.listranking_test_head_nodes)
       {
-        fprintf(stderr, "strokegen error: incorrect rank, list ranking test failed: ");
-        return false;
+        print_list_ranking_nodes(head_node_id, computed_ranks, computed_topo, computed_links);
+      } 
+    }
+
+
+    if (!looped_pass_list_ranking)
+      for (size_t i = 0; i < num_nodes; ++i)
+      {
+        uint rank_gt      = buffers_.listranking_test_nodes_rank[i];
+        uint list_len_gt  = buffers_.listranking_test_nodes_list_len[i];
+        uint rank_out     = computed_ranks[i];
+        uint list_len_out = computed_topo[2*i+1];
+
+        if (rank_gt != (list_len_gt - 1 - rank_out))
+        {
+          fprintf(stderr, "strokegen error: incorrect rank, list ranking test failed: ");
+          return false;
+        }
+
+        if (list_len_gt != list_len_out)
+        {
+          fprintf(stderr, "strokegen error: incorrect list length, list ranking test failed: ");
+          return false;
+        }
       }
+    else // looped lists
+    {
+      for (int head_node_id : buffers_.listranking_test_head_nodes)
+      { // now that I understood the heads computed here can be different from GPU outputs
+        // since in shader the head is computed from anchors with max node id,
+        // and head-anchors may not have the max node id among ALL list nodes,
+        // which was the criterion I pick head in the CPU code.
+        uint list_len_gt = buffers_.listranking_test_nodes_list_len[head_node_id];
+        uint prev_list_len_out = computed_topo[2 * head_node_id + 1];
+        uint head_list_addr_out = computed_topo[2 * head_node_id];
+        if (list_len_gt != prev_list_len_out)
+          fprintf(stderr, "incorrect list len");
 
-      if (list_len_gt != list_len_out)
-      {
-        fprintf(stderr, "strokegen error: incorrect list length, list ranking test failed: ");
-        return false;
+        uint prev_node_id = head_node_id;
+        uint prev_rank_out = computed_ranks[prev_node_id];
+
+        auto decode_rank = [](uint raw_rank, uint list_len) {
+          // decode rank, pack with flags
+          raw_rank = raw_rank & 0x3fffffffu;
+          raw_rank = list_len - raw_rank;
+          return raw_rank;
+        };
+
+        auto valid_rank = [](uint rank, uint rank_pre, uint list_len)
+        {
+          return (rank < list_len) && (0 <= rank) && (rank_pre < list_len) && (0 <= rank_pre)
+            && (rank == ((rank_pre + 1 + list_len) % list_len));
+        };
+
+        for (int i = 0; (i + 1) < list_len_gt; ++i) {
+          uint curr_node_id = buffers_.listranking_test_nodes_prev_next[prev_node_id * 2 + 1];
+
+          bool fucked = false;
+
+          uint curr_list_len_out = computed_topo[2 * curr_node_id + 1];
+          if (curr_list_len_out != list_len_gt)
+          {
+            fprintf(stderr, "incorrect list len");
+            fucked = true;
+          }
+
+          uint curr_list_addr_out = computed_topo[2 * curr_node_id];
+          if (curr_list_addr_out != head_list_addr_out)
+          {
+            fprintf(stderr, "incorrect list addr");
+            fucked = true;
+          }
+
+          uint curr_rank_out = computed_ranks[curr_node_id];
+
+          uint curr_rank_out_adjusted = decode_rank(curr_rank_out, list_len_gt);
+          uint prev_rank_out_adjusted = decode_rank(prev_rank_out, list_len_gt);
+          if (false == valid_rank(curr_rank_out_adjusted,
+                                  prev_rank_out_adjusted,
+                                  list_len_gt)
+          ) {
+            fprintf(stderr, "incorrect list rank");
+            fucked = true;
+          }
+
+          if (fucked) {
+            print_list_ranking_nodes(head_node_id, computed_ranks, computed_topo, computed_links);
+            break;
+          }
+
+          prev_node_id = curr_node_id;
+          prev_rank_out = curr_rank_out;
+        }
+        std::cout << std::endl;
       }
     }
+
 
     return true;
   }

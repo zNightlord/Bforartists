@@ -37,7 +37,7 @@ JumpingInfo DecodePointerJumpingInfo(uvec2 encoded)
 
 
 /* Global Configs */
-#if defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_TAGGING) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_COMPACT_ANCHORS) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SUBLIST_POINTER_JUMPING) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SPLICE_NODES) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_RELINKING)
+#if defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_TAGGING) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_COMPACT_ANCHORS) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SUBLIST_POINTER_JUMPING) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SPLICE_NODES) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_RELINKING) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_BREAK_CIRCLES)
 
 #define NUM_NODES_TOTAL ((ubo_list_ranking_splicing_.num_nodes))
 
@@ -52,7 +52,7 @@ JumpingInfo DecodePointerJumpingInfo(uvec2 encoded)
 
 
 /* Links */
-#if defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_TAGGING) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_COMPACT_ANCHORS) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SPLICE_NODES) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SUBLIST_POINTER_JUMPING) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_RELINKING)
+#if defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_TAGGING) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_COMPACT_ANCHORS) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SPLICE_NODES) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SUBLIST_POINTER_JUMPING) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_RELINKING) || defined (_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_BREAK_CIRCLES)
 uint func_device_load_listranking_test_next_node_id(uint node_id)
 { 
     uint node_offset = node_id * 2; 
@@ -124,7 +124,7 @@ void func_device_store_node_to_anchor_id(uint node_id, uint anchor_id)
 #define FUNC_DEVICE_STORE_PER_NODE_ANCHORID func_device_store_node_to_anchor_id
 #endif
 
-#if defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SUBLIST_POINTER_JUMPING)
+#if defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SUBLIST_POINTER_JUMPING) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_BREAK_CIRCLES)
 uint func_device_load_node_to_anchor_id(uint node_id)
 {
     return ssbo_list_ranking_node_to_anchor_in_[node_id]; 
@@ -173,7 +173,7 @@ uint func_device_load_listranking_test_tag(uint node_id)
 
 
 /* node ranks */
-#if defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_TAGGING) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_COMPACT_ANCHORS) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SPLICE_NODES) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SUBLIST_POINTER_JUMPING) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_RELINKING)
+#if defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_TAGGING) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_COMPACT_ANCHORS) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SPLICE_NODES) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SUBLIST_POINTER_JUMPING) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_RELINKING) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_BREAK_CIRCLES)
 uint func_device_load_node_rank(uint node_id)
 {
     return ssbo_list_ranking_ranks_[node_id]; 
@@ -190,15 +190,15 @@ uint func_device_load_node_rank_with_head_tail_flags(uint node_id, out bool is_h
 {
     uint data = ssbo_list_ranking_ranks_[node_id]; 
     uint rank = data & 0x3fffffffu; 
-    is_head = (data >> 31) != 0u;
-    is_tail = (data >> 30) != 0u; 
+    is_head = (((data >> 31) & 1u) != 0u);
+    is_tail = (((data >> 30) & 1u) != 0u); 
     return rank; 
 }
 #define FUNC_DEVICE_LOAD_LISTRANKING_NODE_RANK_WITH_HEAD_TAIL_BITS func_device_load_node_rank_with_head_tail_flags
 
 void func_device_store_node_rank_with_head_tail_flags(uint node_id, uint rank, bool is_head, bool is_tail)
 {
-    ssbo_list_ranking_ranks_[node_id] = ((uint(is_head) << 31) | (uint(is_tail) << 30) | rank & 0x3fffffffu); 
+    ssbo_list_ranking_ranks_[node_id] = ((uint(is_head) << 31) | (uint(is_tail) << 30) | (rank & 0x3fffffffu)); 
 }
 #define FUNC_DEVICE_STORE_LISTRANKING_NODE_RANK_WITH_HEAD_TAIL_BITS func_device_store_node_rank_with_head_tail_flags
 #endif
@@ -214,11 +214,12 @@ bool validate_thread_per_anchor(uint mapped_anchor_id, uint num_anchors)
 }
 #define FUNC_DEVICE_VALIDATE_THREAD_PER_ANCHOR validate_thread_per_anchor
 
-/* Remember we use the 0th iter to init data, 
- * actual jump iter starts form #1 */
+/* Padded to odd number of iterations. *
+ * Must be deterministic about the ping-pong buffer(s)  */
 uint get_num_jump_iters(uint num_anchors)
 {
     uint num_iters = uint(ceil(log2(float(num_anchors))) + .0001f);
+    num_iters = ((num_iters % 2u) == 0u) ? (num_iters + 1u) : (num_iters); 
     return num_iters; 
 }
 #define FUNC_GET_NUM_JUMPS get_num_jump_iters
@@ -281,13 +282,19 @@ JumpingInfo func_device_init_per_anchor_jumping_info(uint anchor_id, uint splici
     uint next_node_id = FUNC_DEVICE_LOAD_LISTRANKING_NODE_NEXT_NODE_ID(node_id); 
     ji.jump_next_anchor_id = FUNC_DEVICE_LOAD_PER_NODE_ANCHORID(next_node_id); 
 
-    if (IS_LOOP_BREAKING_PASS())
-        ji.data = node_id; /* unique for each anchor */
-    else
-        ji.data = FUNC_DEVICE_LOAD_LISTRANKING_NODE_RANK(node_id); 
-
     ji.is_list_tail = (next_node_id == node_id); 
     ji.is_list_head = (prev_node_id == node_id); 
+
+    if (IS_LOOP_BREAKING_PASS())
+    {
+        ji.data = node_id; /* unique for each anchor */
+    }
+    else
+    {
+        ji.data = FUNC_DEVICE_LOAD_LISTRANKING_NODE_RANK(node_id); 
+    }
+
+
 
     return ji; 
 }
@@ -301,7 +308,7 @@ JumpingInfo func_device_update_anchor_jumping_info(
     jumped_to_end = ji_next.jump_next_anchor_id == ji.jump_next_anchor_id; 
     if (false == jumped_to_end)
     { 
-        if (IS_LOOP_RANKING_PASS())
+        if (IS_LOOP_BREAKING_PASS())
             ji_updated.data = max(ji_updated.data, ji_next.data); /* find node with max code as head */ 
         else
             ji_updated.data += ji_next.data; /* accumulate rank */
@@ -309,7 +316,7 @@ JumpingInfo func_device_update_anchor_jumping_info(
         ji_updated.jump_next_anchor_id = ji_next.jump_next_anchor_id; 
     }
 
-    return ji_updated; 
+    return ji_updated;  
 }
 #define FUNC_DEVICE_UPDATE_ANCHOR_LIST_JUMPING_INFO func_device_update_anchor_jumping_info
 #endif
