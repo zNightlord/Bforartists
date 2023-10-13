@@ -54,7 +54,7 @@ class COLLECTION_UL_shared_folders(bpy.types.UIList):
 
 class BASE_PT_SharedFoldersPanel(bpy.types.Panel):
     bl_label = "Shared Folders"
-    bl_category = "SPA.Sequencer"
+    bl_category = "Sequencer"
     bl_region_type = "UI"
     bl_options = {"DEFAULT_CLOSED"}
 

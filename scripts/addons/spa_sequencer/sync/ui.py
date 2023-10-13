@@ -13,7 +13,7 @@ class SEQUENCER_PT_SyncPanel(bpy.types.Panel):
     bl_label = "Timeline Synchronization"
     bl_space_type = "SEQUENCE_EDITOR"
     bl_region_type = "UI"
-    bl_category = "SPA.Sequencer"
+    bl_category = "Sequencer"
 
     def draw(self, context):
         self.layout.use_property_split = True
@@ -35,7 +35,7 @@ class SEQUENCER_PT_SyncPanelAdvancedSettings(bpy.types.Panel):
     bl_parent_id = "SEQUENCER_PT_SyncPanel"
     bl_space_type = "SEQUENCE_EDITOR"
     bl_region_type = "UI"
-    bl_category = "SPA.Sequencer"
+    bl_category = "Sequencer"
 
     def draw(self, context):
         settings = get_sync_settings()

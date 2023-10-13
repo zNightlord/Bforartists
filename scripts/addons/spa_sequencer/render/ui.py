@@ -10,7 +10,7 @@ class SEQUENCER_PT_batch_render(bpy.types.Panel):
     bl_label = "Batch Render"
     bl_space_type = "SEQUENCE_EDITOR"
     bl_region_type = "UI"
-    bl_category = "SPA.Sequencer"
+    bl_category = "Sequencer"
 
     def draw(self, context: bpy.types.Context):
         self.layout.use_property_split = True
