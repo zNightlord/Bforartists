@@ -185,6 +185,14 @@ class SEQUENCER_HT_header(Header):
         st = context.space_data
 
         ALL_MT_editormenu.draw_hidden(context, layout) # bfa - show hide the editormenu
+
+                # Switch between the editors
+
+        # bfa - The tabs to switch between the four animation editors. The classes are in space_dopesheet.py
+        row = layout.row(align=True)
+        row.operator("wm.switch_editor_to_nla", text="", icon='NLA')
+        row.operator("wm.switch_editor_in_sequencer", text="", icon='NLA')
+        
         layout.prop(st, "view_type", text="")
         SEQUENCER_MT_editor_menus.draw_collapsible(context, layout)
         tool_settings = context.tool_settings
