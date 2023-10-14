@@ -175,7 +175,7 @@ class VIEW3D_PT_sequence(bpy.types.Panel):
         col = shot_box.column()
         active_cam = context.scene.camera
         strip_cam = strip.scene_camera
-        if not active_cam and not strip_cam:
+        if not active_cam or not strip_cam:
             text = "None"
             icon = "NONE"
         else:
