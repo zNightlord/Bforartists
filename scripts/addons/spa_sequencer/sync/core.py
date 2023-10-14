@@ -81,7 +81,7 @@ class TimelineSyncSettings(bpy.types.PropertyGroup):
     )
 
     last_master_strip_idx: bpy.props.IntProperty(
-        description="Index of the Scene Strip used during the last Synchronization update.",
+        description="Index of the Scene Strip used during the last Synchronization update",
         default=-1,
         options={"HIDDEN"},
     )
