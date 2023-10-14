@@ -15,7 +15,7 @@ from bl_ui.space_dopesheet import (
 
 class ANIM_OT_switch_editors_to_sequencer(bpy.types.Operator):
     """Switch to sequencer editor"""      # blender will use this as a tooltip for menu items and buttons.
-    bl_idname = "wm.switch_editor_to_sequwncer"        # unique identifier for buttons and menu items to reference.
+    bl_idname = "wm.switch_editor_to_sequencer"        # unique identifier for buttons and menu items to reference.
     bl_label = "Switch to Sequencer Editor"         # display name in the interface.
     bl_options = {'REGISTER', 'UNDO'}  # enable undo for the operator.
 
@@ -61,6 +61,7 @@ class NLA_HT_header(Header):
         row.operator("wm.switch_editor_to_graph", text="", icon='GRAPH')
         row.operator("wm.switch_editor_to_driver", text="", icon='DRIVER')
         row.operator("wm.switch_editor_in_nla", text="", icon='NLA_ACTIVE')
+        row.operator("wm.switch_editor_in_sequencer", text="", icon='SEQ_SEQUENCER')
 
         # tweak strip actions
 
