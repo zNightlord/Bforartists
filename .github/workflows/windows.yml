@@ -1,38 +1,59 @@
 name: Windows
 
 on:
-  #push:
-    #branches: [ master ]
-  schedule:
-    - cron: 0 0 * * 1
   pull_request:
-    branches: [ master ]
+    branches: [ dev ]
 
 permissions: {}
 jobs:
   build:
-
     runs-on: windows-latest
+    env:
+      buildfolder: ${{ github.workspace }}
+      config : lite
+      LIB_CACHE : ${{ github.workspace }}/bforartistsrepo/lib
 
     steps:
-    - name: make
+    - name: Create main folder
       run: |
         mkdir ~\bforartistsrepo
-        cd ~\bforartistsrepo
-        git clone https://github.com/Bforartists/Bforartists
+    - name: Clone Repository
+      uses: actions/checkout@v3
+      with:
+       path : 'bforartistsrepo'
+    #   run: |
+    #    cd ~\bforartistsrepo
+    #    git clone -b work-sequencer https://github.com/zNightlord/Bforartists.git
+    - name: Cache library
+      env:
+        cache-name: ${{ github.ref }}
+      uses: actions/cache@v3
+      with:
+        path: ~/bforartistsrepo/lib
+        key: build-cache-${{ env.cache-name }}
+    - name: Svn lib
+      run: |
         mkdir ~\bforartistsrepo\lib
         cd ~\bforartistsrepo\lib
         svn checkout https://svn.blender.org/svnroot/bf-blender/trunk/lib/win64_vc15/
-        dir
-        cd ~\bforartistsrepo\Bforartists
-        .\make.bat ninja release
+    - name: Print make
+      run: | 
+        echo "${{ github.workspace }}\bforartistsrepo $config"
+    # - name: Make
+    #   run: |
+    #    cd ~\bforartistsrepo\Bforartists
+    #     .\make.bat ninja $config
+    - name: Show dir
+      run: |
         dir
         cd ~\bforartistsrepo
         dir
-
-
-    - name: Upload Build
-      uses: actions/upload-artifact@v2
-      with:
-        name: Bforartists-Release-${{ runner.os }}
-        path: C:/Users/runneradmin/bforartistsrepo/bfa_build_windows_Release_x64_vc16_Release/bin
+        cd ~\bforartistrepo\lib
+        dir
+        cd ~\bforartistrepo\Bforartists
+        dir
+    # - name: Upload Build
+    #   uses: actions/upload-artifact@v2
+    #   with:
+    #     name: Bforartists-Release-${{ runner.os }}
+    #     path: C:/Users/runneradmin/bforartistsrepo/bfa_build_windows*_x64_vc17*/bin
