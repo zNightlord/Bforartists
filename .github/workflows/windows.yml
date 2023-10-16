@@ -34,7 +34,7 @@ jobs:
     - name: Svn lib
       run: |
         mkdir 'D:\a\Bforartists\lib'
-        cd lib
+        cd ..\lib
         svn checkout https://svn.blender.org/svnroot/bf-blender/trunk/lib/win64_vc15/
     - name: Print make
       run: | 
