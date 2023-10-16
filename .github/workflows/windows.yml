@@ -9,8 +9,8 @@ jobs:
   build:
     runs-on: windows-latest
     env:
-      buildfolder: ${{ github.workspace }}
-      config : lite
+      BUILD_FOLDER: ${{ github.workspace }}
+      CONFIG : lite
       LIB_CACHE : ${{ github.workspace }}/bforartistsrepo/lib
 
     steps:
@@ -29,7 +29,7 @@ jobs:
       uses: actions/cache@v3
       with:
         path: ${{ env.LIB_CACHE }}
-        key: build-cache-${{ env.cache-name }}
+        key: lib
     - name: Svn lib
       run: |
         mkdir D:\a\Bforartists\lib
@@ -37,7 +37,7 @@ jobs:
         svn checkout https://svn.blender.org/svnroot/bf-blender/trunk/lib/win64_vc15/
     - name: Print make
       run: | 
-        echo "${{ github.workspace }}\bforartistsrepo $config"
+        echo "${{ github.workspace }}\bforartistsrepo $CONFIG"
     # - name: Make
     #   run: |
     #    cd ~\bforartistsrepo\Bforartists
@@ -45,11 +45,11 @@ jobs:
     - name: Show dir
       run: |
         dir
-        cd ~\bforartistsrepo
+        cd /d D:\a\Bforartists
         dir
-        cd ~\bforartistsrepo\lib
+        cd /d D:\a\Bforartists\lib
         dir
-        cd ~\bforartistrepo\Bforartists
+        cd /d D:\a\Bforartists\Bforartists
         dir
     # - name: Upload Build
     #   uses: actions/upload-artifact@v2
