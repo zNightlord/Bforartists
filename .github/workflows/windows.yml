@@ -19,11 +19,9 @@ jobs:
     #   run: |
     #    cd ~\bforartistsrepo
     #    git clone -b work-sequencer https://github.com/zNightlord/Bforartists.git
-    - name: Pre dir
+    - name: Make Dir
       run: |
-        dir
-        cd ..
-        dir
+        mkdir 'D:\a\Bforartists\lib'
     - name: Cache library
       env:
         cache-name: ${{ github.ref }}
@@ -33,16 +31,12 @@ jobs:
         key: lib
     - name: Svn lib
       run: |
-        mkdir 'D:\a\Bforartists\lib'
         cd ..\lib
         svn checkout https://svn.blender.org/svnroot/bf-blender/trunk/lib/win64_vc15/
-    - name: Print make
-      run: | 
-        echo "${{ github.workspace }}\bforartistsrepo ${{ env.CONFIG }}"
     # - name: Make
     #   run: |
     #    cd ..\Bforartists
-    #    .\make.bat ninja lite
+    #    .\make.bat ninja ${{ env.CONFIG }}
     - name: Show dir
       run: |
         cd ..
