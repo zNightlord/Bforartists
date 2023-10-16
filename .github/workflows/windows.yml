@@ -11,7 +11,7 @@ jobs:
     env:
       BUILD_FOLDER: ${{ github.workspace }}
       CONFIG : lite
-      LIB_CACHE : ${{ github.workspace }}/bforartistsrepo/lib
+      LIB_CACHE : ${{ github.workspace }}/../lib
 
     steps:
     - name: Clone Repository
