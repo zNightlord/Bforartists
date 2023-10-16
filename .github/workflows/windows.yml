@@ -21,8 +21,9 @@ jobs:
     #    git clone -b work-sequencer https://github.com/zNightlord/Bforartists.git
     - name: Pre dir
       run: |
-        cd /d 'D:\a\Bforartists\Bforartists'
+        cd /d 'D:\a'
         dir
+        cd Bforartists\Bforartists
     - name: Cache library
       env:
         cache-name: ${{ github.ref }}
