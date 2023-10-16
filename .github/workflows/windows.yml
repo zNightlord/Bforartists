@@ -14,31 +14,26 @@ jobs:
       LIB_CACHE : ${{ github.workspace }}/bforartistsrepo/lib
 
     steps:
-    - name: Create main folder
-      run: |
-        mkdir ~\bforartistsrepo
     - name: Clone Repository
       uses: actions/checkout@v3
-      with:
-       path : bforartistsrepo
     #   run: |
     #    cd ~\bforartistsrepo
     #    git clone -b work-sequencer https://github.com/zNightlord/Bforartists.git
-    - name : Pre show dir
-      run : | 
-        cd ~\bforartistsrepo
+    - name: Pre dir
+      run: |
+        cd /d D:\a\Bforartists\Bforartists
         dir
     - name: Cache library
       env:
         cache-name: ${{ github.ref }}
       uses: actions/cache@v3
       with:
-        path: ~/bforartistsrepo/lib
+        path: ${{ env.LIB_CACHE }}
         key: build-cache-${{ env.cache-name }}
     - name: Svn lib
       run: |
-        mkdir ~\bforartistsrepo\lib
-        cd ~\bforartistsrepo\lib
+        mkdir D:\a\Bforartists\lib
+        cd /d D:\a\Bforartists\lib
         svn checkout https://svn.blender.org/svnroot/bf-blender/trunk/lib/win64_vc15/
     - name: Print make
       run: | 
