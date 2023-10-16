@@ -21,9 +21,11 @@ jobs:
     #    git clone -b work-sequencer https://github.com/zNightlord/Bforartists.git
     - name: Pre dir
       run: |
-        cd /d 'D:\a'
+        dir
+        cd ..\..
         dir
         cd Bforartists\Bforartists
+        dir
     - name: Cache library
       env:
         cache-name: ${{ github.ref }}
@@ -33,6 +35,7 @@ jobs:
         key: lib
     - name: Svn lib
       run: |
+        dir
         mkdir 'D:\a\Bforartists\lib'
         cd /d 'D:\a\Bforartists\lib'
         svn checkout https://svn.blender.org/svnroot/bf-blender/trunk/lib/win64_vc15/
