@@ -20,10 +20,14 @@ jobs:
     - name: Clone Repository
       uses: actions/checkout@v3
       with:
-       path : 'bforartistsrepo'
+       path : bforartistsrepo
     #   run: |
     #    cd ~\bforartistsrepo
     #    git clone -b work-sequencer https://github.com/zNightlord/Bforartists.git
+    - name : Pre show dir
+      run : | 
+        cd ~\bforartistsrepo
+        dir
     - name: Cache library
       env:
         cache-name: ${{ github.ref }}
@@ -48,7 +52,7 @@ jobs:
         dir
         cd ~\bforartistsrepo
         dir
-        cd ~\bforartistrepo\lib
+        cd ~\bforartistsrepo\lib
         dir
         cd ~\bforartistrepo\Bforartists
         dir
