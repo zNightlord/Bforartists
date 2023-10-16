@@ -22,9 +22,7 @@ jobs:
     - name: Pre dir
       run: |
         dir
-        cd ..\..
-        dir
-        cd Bforartists\Bforartists
+        cd ..
         dir
     - name: Cache library
       env:
@@ -35,21 +33,19 @@ jobs:
         key: lib
     - name: Svn lib
       run: |
-        dir
         mkdir 'D:\a\Bforartists\lib'
-        cd /d 'D:\a\Bforartists\lib'
+        cd lib
         svn checkout https://svn.blender.org/svnroot/bf-blender/trunk/lib/win64_vc15/
     - name: Print make
       run: | 
-        echo "${{ github.workspace }}\bforartistsrepo $CONFIG"
+        echo "${{ github.workspace }}\bforartistsrepo ${{ env.CONFIG }}"
     # - name: Make
     #   run: |
-    #    cd ~\bforartistsrepo\Bforartists
-    #     .\make.bat ninja $config
+    #    cd ..\Bforartists
+    #    .\make.bat ninja lite
     - name: Show dir
       run: |
-        dir
-        cd /d 'D:\a\Bforartists'
+        cd ..
         dir
         cd lib
         dir
