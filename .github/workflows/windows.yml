@@ -11,7 +11,6 @@ jobs:
     env:
       BUILD_FOLDER: ${{ github.workspace }}
       CONFIG : lite
-      LIB_CACHE : ${{ github.workspace }}/../lib
 
     steps:
     - name: Clone Repository
@@ -27,16 +26,18 @@ jobs:
         cache-name: ${{ github.ref }}
       uses: actions/cache@v3
       with:
-        path: ${{ env.LIB_CACHE }}
-        key: lib
+        key: windows
+        path: |
+          D:\a\Bforartists\*
+          !D:\a\Bforartists\Bforartists
     - name: Svn lib
       run: |
         cd ..\lib
         svn checkout https://svn.blender.org/svnroot/bf-blender/trunk/lib/win64_vc15/
-    # - name: Make
-    #   run: |
-    #    cd ..\Bforartists
-    #    .\make.bat ninja ${{ env.CONFIG }}
+    - name: Make
+      run: |
+       cd ..\Bforartists
+       .\make.bat ninja ${{ env.CONFIG }}
     - name: Show dir
       run: |
         cd ..
