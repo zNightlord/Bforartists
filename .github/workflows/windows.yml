@@ -1,38 +1,54 @@
-name: Windows
+name: windows
 
 on:
-  #push:
-    #branches: [ master ]
-  schedule:
-    - cron: 0 0 * * 1
   pull_request:
-    branches: [ master ]
+    branches: [ dev ]
 
 permissions: {}
 jobs:
   build:
-
     runs-on: windows-latest
+    env:
+      CONFIG : lite
 
     steps:
-    - name: make
-      run: |
-        mkdir ~\bforartistsrepo
-        cd ~\bforartistsrepo
-        git clone https://github.com/Bforartists/Bforartists
-        mkdir ~\bforartistsrepo\lib
-        cd ~\bforartistsrepo\lib
-        svn checkout https://svn.blender.org/svnroot/bf-blender/trunk/lib/win64_vc15/
-        dir
-        cd ~\bforartistsrepo\Bforartists
-        .\make.bat ninja release
-        dir
-        cd ~\bforartistsrepo
-        dir
-
-
-    - name: Upload Build
-      uses: actions/upload-artifact@v2
+    - name: Clone Repository
+      uses: actions/checkout@v4
+    #   run: |
+    #    cd ~\bforartistsrepo
+    #    git clone -b work-sequencer https://github.com/zNightlord/Bforartists.git
+    - name: Cache library
+      uses: actions/cache@v3
       with:
-        name: Bforartists-Release-${{ runner.os }}
-        path: C:/Users/runneradmin/bforartistsrepo/bfa_build_windows_Release_x64_vc16_Release/bin
+        key: windows
+        path: |
+          D:\a\Bforartists\*
+          !D:\a\Bforartists\Bforartists
+    - name: Svn library
+      run: |
+        if (!(test-path "D:\a\Bforartists\lib\")) {
+          mkdir 'D:\a\Bforartists\lib'
+          cd ..\lib
+          svn checkout https://svn.blender.org/svnroot/bf-blender/trunk/lib/win64_vc15/
+        } else {
+          cd ..\lib\win64_vc15
+          svn update
+          cd ..
+        }
+    - name: Make
+      run: |
+       cd ..\Bforartists
+       .\make.bat ninja ${{ env.CONFIG }}
+    - name: Show dir
+      run: |
+        cd ..
+        dir
+        cd lib\win64_vc15
+        dir
+        cd ..\..\Bforartists
+        dir
+    - name: Upload Build
+      uses: actions/upload-artifact@v3
+      with:
+        name: Bforartists-${{ env.CONFIG }}-${{ runner.os }}-${{ github.ref_name }}
+        path: D:/a/Bforartists/bfa_build_windows_*_x64_vc1*/bin
