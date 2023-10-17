@@ -333,7 +333,7 @@ int DRW_object_wire_theme_get(Object *ob, ViewLayer *view_layer, float **r_color
     if (UNLIKELY(ob->base_flag & BASE_FROM_SET)) {
       *r_color = G_draw.block.color_wire;
     }
-    else if (is_wire && !(ob->base_flag & BASE_SELECTED) && (ob->wire_col & OB_CUSTOM_WIRE_COLOR)) {
+    else if (is_wire && !(ob->base_flag & BASE_SELECTED) && (ob->dtx & OB_CUSTOM_WIRE_COLOR)) {
       /* Custom wire color. */
       *r_color = ob->color;
     }
