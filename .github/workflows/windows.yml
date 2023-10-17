@@ -50,5 +50,5 @@ jobs:
     - name: Upload Build
       uses: actions/upload-artifact@v3
       with:
-        name: Bforartists-${{ env.CONFIG }}-${{ runner.os }}-${{ github.ref_name }}
+        name: Bforartists-${{ env.CONFIG }}-${{ runner.os }}-${{ github.head_ref }}
         path: D:/a/Bforartists/bfa_build_windows_*_x64_vc1*/bin
