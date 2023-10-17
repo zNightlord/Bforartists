@@ -285,8 +285,6 @@ class OBJECT_PT_display(ObjectButtonsPanel, Panel):
             
             row.prop(obj, "color", text=text_color)
 
-
-
         if has_bounds:
             split = layout.split(factor = 0.35)
             col = split.column()
