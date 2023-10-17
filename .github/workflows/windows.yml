@@ -45,7 +45,7 @@ jobs:
         dir
         cd lib\win64_vc15
         dir
-        cd ..\Bforartists
+        cd ..\..\Bforartists
         dir
     - name: Upload Build
       uses: actions/upload-artifact@v3
