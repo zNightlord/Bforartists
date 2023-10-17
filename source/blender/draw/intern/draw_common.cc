@@ -285,6 +285,7 @@ int DRW_object_wire_theme_get(Object *ob, ViewLayer *view_layer, float **r_color
   const bool active = base && ((ob->base_flag & BASE_FROM_DUPLI) ?
                                    (DRW_object_get_dupli_parent(ob) == base->object) :
                                    (base->object == ob));
+  const bool is_wire = ELEM(ob->type, OB_LAMP, OB_SPEAKER, OB_CAMERA, OB_EMPTY, OB_LIGHTPROBE);
 
   /* confusing logic here, there are 2 methods of setting the color
    * 'colortab[colindex]' and 'theme_id', colindex overrides theme_id.
@@ -331,6 +332,10 @@ int DRW_object_wire_theme_get(Object *ob, ViewLayer *view_layer, float **r_color
   if (r_color != nullptr) {
     if (UNLIKELY(ob->base_flag & BASE_FROM_SET)) {
       *r_color = G_draw.block.color_wire;
+    }
+    else if (is_wire && !(ob->base_flag & BASE_SELECTED) && (ob->wire_col & OB_CUSTOM_WIRE_COLOR)) {
+      /* Custom wire color. */
+      *r_color = ob->color;
     }
     else {
       switch (theme_id) {
