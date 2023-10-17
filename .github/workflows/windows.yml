@@ -26,15 +26,15 @@ jobs:
           !D:\a\Bforartists\Bforartists
     - name: Svn library
       run: |
-        if not exist "D:\a\Bforartists\lib\" (
+        if (not exist "D:\a\Bforartists\lib\") {
           mkdir 'D:\a\Bforartists\lib'
           cd ..\lib
           svn checkout https://svn.blender.org/svnroot/bf-blender/trunk/lib/win64_vc15/
-        ) else (
+        } else {
           cd ..\lib\win64_vc15
           svn update
           cd ..
-        )
+        }
     - name: Make
       run: |
        cd ..\Bforartists
