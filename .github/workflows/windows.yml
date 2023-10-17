@@ -24,11 +24,17 @@ jobs:
         path: |
           D:\a\Bforartists\*
           !D:\a\Bforartists\Bforartists
-    - name: Svn lib
+    - name: Svn library
       run: |
-        mkdir 'D:\a\Bforartists\lib'
-        cd ..\lib
-        svn checkout https://svn.blender.org/svnroot/bf-blender/trunk/lib/win64_vc15/
+        if not exist 'D:\a\Bforartists\lib\' (
+          mkdir 'D:\a\Bforartists\lib'
+          cd ..\lib
+          svn checkout https://svn.blender.org/svnroot/bf-blender/trunk/lib/win64_vc15/
+        ) else (
+          cd ..\lib\win64_vc15
+          svn update
+          cd ..
+        )
     - name: Make
       run: |
        cd ..\Bforartists
@@ -37,7 +43,7 @@ jobs:
       run: |
         cd ..
         dir
-        cd lib
+        cd lib\win64_vc15
         dir
         cd ..\Bforartists
         dir
