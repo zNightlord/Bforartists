@@ -1,4 +1,4 @@
-name: Windows
+name: windows
 
 on:
   pull_request:
@@ -9,21 +9,15 @@ jobs:
   build:
     runs-on: windows-latest
     env:
-      BUILD_FOLDER: ${{ github.workspace }}
       CONFIG : lite
 
     steps:
     - name: Clone Repository
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
     #   run: |
     #    cd ~\bforartistsrepo
     #    git clone -b work-sequencer https://github.com/zNightlord/Bforartists.git
-    - name: Make Dir
-      run: |
-        mkdir 'D:\a\Bforartists\lib'
     - name: Cache library
-      env:
-        cache-name: ${{ github.ref }}
       uses: actions/cache@v3
       with:
         key: windows
@@ -32,6 +26,7 @@ jobs:
           !D:\a\Bforartists\Bforartists
     - name: Svn lib
       run: |
+        mkdir 'D:\a\Bforartists\lib'
         cd ..\lib
         svn checkout https://svn.blender.org/svnroot/bf-blender/trunk/lib/win64_vc15/
     - name: Make
@@ -46,8 +41,8 @@ jobs:
         dir
         cd ..\Bforartists
         dir
-    # - name: Upload Build
-    #   uses: actions/upload-artifact@v2
-    #   with:
-    #     name: Bforartists-Release-${{ runner.os }}
-    #     path: C:/Users/runneradmin/bforartistsrepo/bfa_build_windows*_x64_vc17*/bin
+    - name: Upload Build
+      uses: actions/upload-artifact@v3
+      with:
+        name: Bforartists-Release-${{ runner.os }}-$ {{ github.ref_name }}
+        path: D:/a/Bforartists/bfa_build_windows_*_x64_vc1*/bin
