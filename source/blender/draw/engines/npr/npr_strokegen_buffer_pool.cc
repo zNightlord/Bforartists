@@ -15,7 +15,7 @@
 
 namespace blender::npr::strokegen
 {
-  void GPUBufferPoolModule::on_begin_sync()
+  void GPUBufferPoolModule::on_begin_sync(const DRWView* drw_view)
   {
     UBO_BnprTreeScan& ubo_tree_scan = ubo_bnpr_tree_scan_infos_;
     {
@@ -55,6 +55,16 @@ namespace blender::npr::strokegen
       ubo_list_ranking_splicing__.num_tagging_iters = 1u;
     }
     ubo_list_ranking_splicing_.push_update();
+
+    UBO_ViewMatrices& ubo_view_matrices__ = ubo_view_matrices_;
+    {
+      ubo_view_matrices__.viewmat = drw_view->storage.viewmat;
+      ubo_view_matrices__.viewinv = drw_view->storage.viewinv;
+      ubo_view_matrices__.winmat = drw_view->storage.winmat;
+      ubo_view_matrices__.wininv = drw_view->storage.wininv;
+
+      ubo_view_matrices__.push_update();
+    }
 
 
     {

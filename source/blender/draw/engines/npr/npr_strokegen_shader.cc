@@ -93,6 +93,8 @@ const char *StrokeGenShaderModule::static_shader_create_info_name_get(eShaderTyp
 
     case COMPUTE_GEOM_EXTRACT:
       return "bnpr_geom_extract";
+    case COMPUTE_GEOM_EXTRACT_IBO_16BIT:
+      return "bnpr_geom_extract_ibo_16bits";
 
     case SCAN_TEST_UPSWEEP:
       return "bnpr_scan_test_upsweep";

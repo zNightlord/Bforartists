@@ -328,7 +328,7 @@ static void bnpr_cache_populate(void *vedata, Object *object)
     DRW_object_get_dupli_parent(object)
   };
 
-  ved->instance->object_sync(*drw_mgr, ref);
+  // ved->instance->mesh_sync(*drw_mgr, ref, TODO);
 
 
 

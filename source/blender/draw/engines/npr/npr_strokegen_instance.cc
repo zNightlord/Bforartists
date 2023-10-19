@@ -79,10 +79,10 @@ namespace blender::npr::strokegen
     /* Init draw passes and manager related stuff. (Begin render graph) */
 
     /* First setup resources */
-    strokegen_buffers.on_begin_sync();
+    strokegen_buffers.on_begin_sync(drw_view);
 
     /* Then setup render passes */
-    strokegen_passes.on_begin_sync(); 
+    strokegen_passes.on_begin_sync();
   }
 
   void Instance::end_sync(Manager&)
@@ -90,7 +90,7 @@ namespace blender::npr::strokegen
     /* Post processing after all object. (End render graph) */
   }
 
-  void Instance::object_sync(Manager& manager, ObjectRef& object_ref)
+  void Instance::mesh_sync(Manager& manager, ObjectRef& object_ref, ResourceHandle& rsc_handle)
   { /* Add object draw calls to passes. (Populate render graph) */
     Object *ob = object_ref.object;
 
@@ -107,15 +107,12 @@ namespace blender::npr::strokegen
 
     /* fclem: TODO cleanup. */
     ObjectRef ob_ref = DRW_object_ref_get(ob);
-    ResourceHandle res_handle = manager.resource_handle(ob_ref);
-
     BnprDrawData &bnpr_draw_data = sync.sync_object(ob);
-
 
     if (object_is_visible) {
       switch (ob->type) {
       case OB_MESH:
-        sync.sync_mesh(ob, bnpr_draw_data, res_handle, ob_ref);
+        sync.sync_mesh(ob, ob_ref, bnpr_draw_data, rsc_handle, drw_view);
         break;
       default:
         break;

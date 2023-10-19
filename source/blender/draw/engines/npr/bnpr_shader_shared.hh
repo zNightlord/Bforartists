@@ -82,7 +82,7 @@ using namespace draw;
 
   /* ----------------------------------------------------- */
   /** \name GPU Scan Testing
-   * \{ */  
+   * \{ */
   static inline uint tree_seg_scan_encode_upsweep_hfs(uint hf_partialSum, uint hf_orig)
   {
     return ((hf_orig << 1) | hf_partialSum);
@@ -171,7 +171,7 @@ using namespace draw;
   /* ----------------------------------------------------- */
   /** \name GPU List Ranking Testing
    * \{ */
-  struct UBData_ListRanking 
+  struct UBData_ListRanking
   {
     uint num_thread_groups;
     uint num_nodes;
@@ -180,7 +180,7 @@ using namespace draw;
     uint dummy0;
     uint dummy1;
     uint dummy2;
-    uint dummy4; 
+    uint dummy4;
   };
   BLI_STATIC_ASSERT_ALIGN(UBData_ListRanking, 16);
 
@@ -194,15 +194,15 @@ using namespace draw;
     /* apply tagging iters to make sub-list size <= BNPR_LIST_RANKING_MAX_SUBLIST_LEN */
     {
       /* http://www.graphics.stanford.edu/~seander/bithacks.html#DetermineIfPowerOf2 */
-      bool power_of_2 = (l != 0u) && (0u == (l & (l - 1u))); 
+      bool power_of_2 = (l != 0u) && (0u == (l & (l - 1u)));
 #ifndef GPU_SHADER
       l = (31 - bitscan_reverse_uint(l)) + 1; /* (highest_set_bit) + 1 == #bits for a tag */
 #else
-      l = findMSB(l) < 0 ? 0u : (findMSB(l) + 1); 
+      l = findMSB(l) < 0 ? 0u : (findMSB(l) + 1);
 #endif
       if (!power_of_2) iters++; /* ceiling. */
     }
-    return iters; 
+    return iters;
   }
   /** \} */
 
@@ -211,32 +211,19 @@ using namespace draw;
   /* -------------------------------------------------------------------- */
   /** \name Geometry Extraction from GPUBatch(es)
    * \{ */
-  struct SSBOData_StrokeGenMeshPoolArgs
+  struct SSBOData_StrokeGenMeshPoolCounters
   {
     uint num_verts;
     uint num_edges;
     uint num_faces;
-    uint dummy;
+    uint num_contour_edges;
   };
-  BLI_STATIC_ASSERT_ALIGN(SSBOData_StrokeGenMeshPoolArgs, 16)
+  BLI_STATIC_ASSERT_ALIGN(SSBOData_StrokeGenMeshPoolCounters, 16)
 
   static inline uint get_prim_base_addr_ibo(bool is_ibo_fmt_u16, uint prim_id, uint num_verts_per_prim)
   {
     uint prim_vert_beg = prim_id * num_verts_per_prim;
     return (is_ibo_fmt_u16 ? (prim_vert_beg / 2u) : (prim_vert_beg));
-  }
-
-  static inline uint get_vbo_addr(bool is_ibo_fmt_u16, uint ibo_data, uint prim_id, uint num_verts_per_prim)
-  {
-    uint prim_vert_beg = prim_id * num_verts_per_prim;
-    
-    uint ibo_data_16h = (ibo_data >> 16u);
-    uint ibo_data_16l = (ibo_data & 0xFFFFu);
-    return (is_ibo_fmt_u16
-              ? ( /* TODO: not sure about which 16 bits to use really */ 
-                ((prim_vert_beg & 1u) == 0u) ? ibo_data_16l : ibo_data_16h)
-              : ibo_data
-            );
   }
   /** } */
 
@@ -247,13 +234,15 @@ using namespace draw;
 #ifdef __cplusplus
 
 // Template to set buffer size in compile time
-using SSBO_IndirectDispatchArgs = draw::StorageBuffer<DispatchCommand>; 
+using UBO_ViewMatrices = draw::UniformBuffer<ViewMatrices>;
+
+using SSBO_IndirectDispatchArgs = draw::StorageBuffer<DispatchCommand>;
 
 using SSBO_StrokeGenTest = draw::StorageArrayBuffer<uint, 4096 * 4, true>;
 
 using SSBO_StrokeGenMeshPool = draw::StorageArrayBuffer<uint, 2048 * 2048 * 4, true>;
-using SSBO_StrokeGenMeshPoolArgs = draw::StorageBuffer<SSBOData_StrokeGenMeshPoolArgs>;
-  
+using SSBO_StrokeGenMeshPoolCounters = draw::StorageBuffer<SSBOData_StrokeGenMeshPoolCounters>;
+
 using SSBO_BnprScanData = draw::StorageArrayBuffer<uint, 2048 * 2048 * 2, true>;
 using SSBO_BnprScanAggregates = draw::StorageArrayBuffer<uint, 512 * 16, true>;
 using UBO_BnprTreeScan = draw::UniformBuffer<UBData_TreeScan>;
@@ -266,18 +255,18 @@ using UBO_SegLoopConv1D = draw::UniformBuffer<UBData_SegLoopConv1D>;
 using SSBO_ListRankingLinksStagingBuf = draw::StorageArrayBuffer<uint, NUM_ITEMS_BNPR_LIST_RANK_TEST * 2, false/* We need to init this from CPU */>;
 using SSBO_ListRankingLinks = draw::StorageArrayBuffer<uint, NUM_ITEMS_BNPR_LIST_RANK_TEST * 2, true>;
 using SSBO_ListRankingTags = draw::StorageArrayBuffer<uint, NUM_ITEMS_BNPR_LIST_RANK_TEST, true>;
-using SSBO_ListRankingRanks = draw::StorageArrayBuffer<uint, NUM_ITEMS_BNPR_LIST_RANK_TEST, true>; 
+using SSBO_ListRankingRanks = draw::StorageArrayBuffer<uint, NUM_ITEMS_BNPR_LIST_RANK_TEST, true>;
 using SSBO_ListRankingSerializedTopo = draw::StorageArrayBuffer<uint, NUM_ITEMS_BNPR_LIST_RANK_TEST * 2, true>; /* list-len&start */
 using SSBO_ListRankingAnchorJumpingInfo = draw::StorageArrayBuffer<uint, NUM_ITEMS_BNPR_LIST_RANK_TEST * 8, true>; /* also cache per-node data*/
 
 /* #anchors is around #nodes/4 */
 using SSBO_ListRankingAnchorToNode = draw::StorageArrayBuffer<uint, NUM_ITEMS_BNPR_LIST_RANK_TEST, true>;
 using SSBO_ListRankingAnchorToNextAnchor = draw::StorageArrayBuffer<uint, NUM_ITEMS_BNPR_LIST_RANK_TEST, true>;
-using SSBO_ListRankingSplicedNodeId = draw::StorageArrayBuffer<uint, NUM_ITEMS_BNPR_LIST_RANK_TEST, true>; 
+using SSBO_ListRankingSplicedNodeId = draw::StorageArrayBuffer<uint, NUM_ITEMS_BNPR_LIST_RANK_TEST, true>;
 using SSBO_ListRankingNodeToAnchor = draw::StorageArrayBuffer<uint, NUM_ITEMS_BNPR_LIST_RANK_TEST, true>;
 using SSBO_ListRankingCounters = draw::StorageArrayBuffer<uint, BNPR_LIST_RANK_ANCHOR_COUNTER_BUFFER_SIZE>;
-using SSBO_ListRankingAllocationCounters = draw::StorageArrayBuffer<uint, 4>; 
-using UBO_ListRanking = draw::UniformBuffer<UBData_ListRanking>; 
+using SSBO_ListRankingAllocationCounters = draw::StorageArrayBuffer<uint, 4>;
+using UBO_ListRanking = draw::UniformBuffer<UBData_ListRanking>;
 
 }
 

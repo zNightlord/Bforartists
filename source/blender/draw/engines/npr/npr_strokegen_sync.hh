@@ -39,9 +39,10 @@ namespace blender::npr::strokegen
     SceneHandle &sync_scene(::Scene *scene) {};
 
     void sync_mesh(Object *ob,
+                   const draw::ObjectRef &ob_ref,
                    BnprDrawData &ob_draw_data,
-                   draw::ResourceHandle res_handle,
-                   const draw::ObjectRef &ob_ref);
+                   draw::ResourceHandle& rsc_handle,
+                   const DRWView* drw_view);
   };
 
 

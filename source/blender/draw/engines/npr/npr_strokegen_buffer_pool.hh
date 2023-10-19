@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
+﻿/* SPDX-License-Identifier: GPL-2.0-or-later
  * Copyright 2021 Blender Foundation.
  */
 
@@ -23,10 +23,13 @@ class GPUBufferPoolModule {
   Instance &instance;
 
   /** GPU Buffers */
+  UBO_ViewMatrices ubo_view_matrices_;
+
   SSBO_StrokeGenTest ssbo_bnpr_test_;
 
   SSBO_StrokeGenMeshPool     ssbo_bnpr_mesh_pool_;
-  SSBO_StrokeGenMeshPoolArgs ssbo_bnpr_mesh_pool_args_;
+  SSBO_StrokeGenMeshPoolCounters ssbo_bnpr_mesh_pool_acounters_;
+
 
   SSBO_BnprScanData       ssbo_in_scan_data_;
   SSBO_BnprScanData       ssbo_out_scan_data_;
@@ -50,12 +53,12 @@ class GPUBufferPoolModule {
   SSBO_ListRankingLinks               ssbo_list_ranking_links_;
   SSBO_ListRankingAnchorToNode        ssbo_list_ranking_anchor_to_node_[2];
   SSBO_ListRankingSplicedNodeId       ssbo_list_ranking_spliced_node_id_[NUM_ITERS_BNPR_LIST_RANK_RELINK];
-  SSBO_ListRankingSerializedTopo      ssbo_list_ranking_serialized_topo_; 
+  SSBO_ListRankingSerializedTopo      ssbo_list_ranking_serialized_topo_;
 
   SSBO_ListRankingAnchorToNextAnchor ssbo_list_ranking_anchor_to_next_anchor_;
   SSBO_ListRankingAnchorJumpingInfo   ssbo_list_ranking_per_anchor_sublist_jumping_info_[2];
   SSBO_ListRankingNodeToAnchor        ssbo_list_ranking_node_to_anchor_;
-  
+
 
   SSBO_ListRankingLinks ssbo_list_ranking_debug_;
 
@@ -97,7 +100,7 @@ class GPUBufferPoolModule {
   std::vector<int> listranking_test_nodes_head;
   std::vector<int> listranking_test_nodes_tail;
   std::vector<int> listranking_test_nodes_list_len;
-  std::set<int> listranking_test_head_nodes; 
+  std::set<int> listranking_test_head_nodes;
 
   bool listranking_test_data_uploaded;
   bool listranking_test_data_validated;
@@ -115,7 +118,7 @@ class GPUBufferPoolModule {
   {
   }
 
-  void on_begin_sync();
+  void on_begin_sync(const DRWView* drw_view);
   void sync_object(Object *ob);
   void end_sync();
 

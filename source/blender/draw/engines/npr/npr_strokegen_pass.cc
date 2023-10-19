@@ -38,12 +38,12 @@ namespace blender::npr::strokegen
 
   void StrokeGenPassModule::on_begin_sync()
   {
+    reset_pass_extract_mesh_geom();
+
     rebuild_pass_scan_test();
     rebuild_pass_segscan_test();
     rebuild_pass_conv_test();
     rebuild_pass_list_ranking();
-
-    reset_pass_extract_mesh_geom();
   }
 
 
@@ -54,6 +54,7 @@ namespace blender::npr::strokegen
   void StrokeGenPassModule::reset_pass_extract_mesh_geom()
   {
     pass_extract_geom.init();
+    extract_first_batch = true;
   }
 
   /**
@@ -61,8 +62,12 @@ namespace blender::npr::strokegen
    * \param ob Mesh Object
    * \param gpu_batch_line_adj Mesh geometry stored in GPUBatch, ib stored with line adjacency info.
    */
-  void StrokeGenPassModule::rebuild_sub_pass_extract_mesh_geom(Object* ob, GPUBatch* gpu_batch_line_adj)
-  {
+  void StrokeGenPassModule::rebuild_sub_pass_extract_mesh_geom(
+    Object* ob,
+    GPUBatch* gpu_batch_line_adj,
+    ResourceHandle& rsc_handle,
+    const DRWView* drw_view
+  ){
     const std::string pass_name = "extract_geom_";
 
     gpu::Batch* batch = static_cast<gpu::Batch*>(gpu_batch_line_adj); /* see example in "GPU_batch_draw_parameter_get" */
@@ -79,21 +84,31 @@ namespace blender::npr::strokegen
 
     /* Cache per-edge geometry data */
     {
-      auto& sub = pass_extract_geom.sub(pass_name.c_str());
-      sub.shader_set(shaders_.static_shader_get(eShaderType::COMPUTE_GEOM_EXTRACT));
+      auto& sub = pass_extract_geom.sub(
+        extract_first_batch ? "extract_geom_boostrap" : pass_name.c_str()
+      );
+      if (ib_type == gpu::GPU_INDEX_U16)
+        sub.shader_set(shaders_.static_shader_get(eShaderType::COMPUTE_GEOM_EXTRACT_IBO_16BIT));
+      else
+        sub.shader_set(shaders_.static_shader_get(eShaderType::COMPUTE_GEOM_EXTRACT));
+
       sub.bind_ssbo(0, &(gpu_batch_line_adj->elem)); // TODO: investigate whether double pointer is necessary
       sub.bind_ssbo(1, &(gpu_batch_line_adj->verts[0])); // TODO: investigate what geom->vert[1~15] does
       sub.bind_ssbo(2, buffers_.ssbo_bnpr_mesh_pool_);
+      sub.bind_ssbo(3, DRW_manager_get()->matrix_buf.current());
+      sub.bind_ssbo(4, buffers_.ssbo_bnpr_mesh_pool_acounters_);
+      sub.bind_ubo(0, buffers_.ubo_view_matrices_);
       sub.push_constant("pcs_ib_fmt_u16", ib_type == gpu::GPU_INDEX_U16 ? 1 : 0);
       sub.push_constant("pcs_num_verts", (int)batch->elem_()->index_len_get());
       sub.push_constant(
         "pcs_num_ib_offset",
         (int)batch->elem_()->index_start_get() + (int)batch->elem_()->index_base_get()
       );
+      sub.push_constant("pcs_rsc_handle", (int)rsc_handle.resource_index());
+      sub.push_constant("pcs_clear_compaction_counter_", extract_first_batch ? 1 : 0);
 
       sub.dispatch(int3(
-        compute_num_groups(num_edges, GROUP_SIZE_STROKEGEN_GEOM_EXTRACT, 1),
-        1, 1)
+        compute_num_groups(num_edges, GROUP_SIZE_STROKEGEN_GEOM_EXTRACT, 1), 1, 1)
       );
       sub.barrier(GPU_BARRIER_SHADER_STORAGE);
     }
@@ -493,7 +508,7 @@ namespace blender::npr::strokegen
       for (int head_node_id : buffers_.listranking_test_head_nodes)
       {
         print_list_ranking_nodes(head_node_id, computed_ranks, computed_topo, computed_links);
-      } 
+      }
     }
 
 

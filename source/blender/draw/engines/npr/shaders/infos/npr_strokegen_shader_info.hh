@@ -130,16 +130,26 @@ GPU_SHADER_CREATE_INFO(npr_segloopconv1D_test_convolution)
  * \{ */
 GPU_SHADER_CREATE_INFO(bnpr_geom_extract)
     .typedef_source("bnpr_shader_shared.hh")
-    .do_static_compilation(true)
+    .typedef_source("draw_shader_shared.h")
     .do_static_compilation(true)
     .storage_buf(0, Qualifier::READ, "uint", "buf_ibo[]")
-    .storage_buf(1, Qualifier::READ, "vec3", "buf_vbo[]")
+    .storage_buf(1, Qualifier::READ, "float", "buf_vbo[]") /* cannot use vec3 due to ssbo alignment */
     .storage_buf(2, Qualifier::READ_WRITE, "uint", "buf_strokegen_mesh_pool[]")
-    .push_constant(Type::BOOL, "pcs_ib_fmt_u16")
-    .push_constant(Type::UINT, "pcs_num_verts")
-    .push_constant(Type::UINT, "pcs_num_ib_offset")
+    .storage_buf(3, Qualifier::READ, "ObjectMatrices", "drw_matrix_buf[]")
+    .storage_buf(4, Qualifier::READ_WRITE, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_acounters_")
+    .uniform_buf(0, "ViewMatrices", "ubo_view_matrices_")
+    .push_constant(Type::INT, "pcs_ib_fmt_u16")
+    .push_constant(Type::INT, "pcs_num_verts")
+    .push_constant(Type::INT, "pcs_num_ib_offset")
+    .push_constant(Type::INT, "pcs_rsc_handle")
+    .push_constant(Type::INT, "pcs_clear_compaction_counter_")
     .local_group_size(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT) /* <== from "bnpr_defines.hh" */
     .compute_source("npr_strokegen_geom_extract_comp.glsl");
+
+GPU_SHADER_CREATE_INFO(bnpr_geom_extract_ibo_16bits)
+    .do_static_compilation(true)
+    .additional_info("bnpr_geom_extract")
+    .define("_KERNEL_MULTICOMPILE__INDEX_BUFFER_16BIT", "1");
 /** \} */
 
 /* -------------------------------------------------------------------- */

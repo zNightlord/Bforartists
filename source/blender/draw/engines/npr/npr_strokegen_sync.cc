@@ -1,4 +1,4 @@
-﻿/* SPDX-License-Identifier: GPL-2.0-or-later
+/* SPDX-License-Identifier: GPL-2.0-or-later
 * Copyright 2021 Blender Foundation.
  */
 
@@ -49,8 +49,11 @@ static void draw_data_init_cb(struct DrawData *dd)
   }
 
   void StrokegenSyncModule::sync_mesh(
-    Object* ob, BnprDrawData& ob_draw_data,
-    draw::ResourceHandle res_handle, const draw::ObjectRef& ob_ref
+    Object* ob,
+    const draw::ObjectRef& ob_ref,
+    BnprDrawData& ob_draw_data,
+    draw::ResourceHandle& rsc_handle,
+    const DRWView* drw_view
   )
   {
     bool mesh_is_manifold;
@@ -68,12 +71,16 @@ static void draw_data_init_cb(struct DrawData *dd)
     //  strokegen_passes.dispatch_extract_mesh_contour(ob);
     //  strokegen_passes.dispatch_XXX(...);
     //  ... ... ...
-    inst_.strokegen_passes.rebuild_sub_pass_extract_mesh_geom(ob, geobatch);
 
-
+    if (inst_.strokegen_passes.extract_first_batch)
+    {
+      inst_.strokegen_passes.rebuild_sub_pass_extract_mesh_geom(ob, geobatch, rsc_handle, drw_view); // bootstrapping
+      inst_.strokegen_passes.extract_first_batch = false; // switch off
+    }
+    inst_.strokegen_passes.rebuild_sub_pass_extract_mesh_geom(ob, geobatch, rsc_handle, drw_view);
 
   }
 
 
-  
+
   }  // namespace blender::npr::strokegen

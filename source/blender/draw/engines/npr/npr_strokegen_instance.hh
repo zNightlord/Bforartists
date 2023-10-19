@@ -76,7 +76,7 @@ namespace blender::npr::strokegen
     void begin_sync(Manager& manager);
     void end_sync(Manager& manager);
 
-    void object_sync(Manager& manager, ObjectRef& object_ref);
+    void mesh_sync(Manager& manager, ObjectRef& object_ref, ResourceHandle& rsc_handle);
 
     void draw_viewport(Manager& manager, View& view);
 

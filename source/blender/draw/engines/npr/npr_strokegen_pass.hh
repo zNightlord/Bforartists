@@ -87,8 +87,9 @@ public:
   /* -------------------------------------------------------------------- */
   /** \name Rebuild Render Passes
      * \{ */
+  bool extract_first_batch;
   void reset_pass_extract_mesh_geom();
-  void rebuild_sub_pass_extract_mesh_geom(Object* ob, GPUBatch* gpu_batch_line_adj);
+  void rebuild_sub_pass_extract_mesh_geom(Object* ob, GPUBatch* gpu_batch_line_adj, ResourceHandle& rsc_handle, const DRWView* drw_view);
 
   void rebuild_pass_scan_test();
   void rebuild_pass_segscan_test();

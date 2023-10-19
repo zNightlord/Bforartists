@@ -36,7 +36,7 @@ void Instance::init(Object *camera_ob)
 void Instance::begin_sync()
 {
   eGPUTextureUsage usage_fb_tx = GPU_TEXTURE_USAGE_SHADER_READ | GPU_TEXTURE_USAGE_ATTACHMENT;
-  
+
   id_tx_.ensure_2d(GPU_R32UI, resolution_, usage_fb_tx);
   normal_tx_.ensure_2d(GPU_RGB16F, resolution_, usage_fb_tx);
   tangent_tx_.ensure_2d(GPU_RGBA16F, resolution_, usage_fb_tx);
@@ -71,9 +71,7 @@ void Instance::end_sync()
 void Instance::object_sync(Manager &manager, ObjectRef &ob_ref)
 {
   Object *ob = ob_ref.object;
-  
-  strokegen_inst_->object_sync(manager, ob_ref);
-  
+
   if (!DRW_object_is_renderable(ob)) {
     return;
   }
@@ -84,9 +82,14 @@ void Instance::object_sync(Manager &manager, ObjectRef &ob_ref)
     return;
   }
 
-  if (ob->type == OB_MESH) {
+  if (ob->type == OB_MESH)
+  { // Note: Manager::resource_handle() has side effect,
+    // it will create a new resource every time gets called
+    // so we need to cache the resource handle here
     ResourceHandle handle = manager.resource_handle(ob_ref);
     GPUBatch *batch = DRW_cache_object_surface_get(ob_ref.object);
+
+    strokegen_inst_->mesh_sync(manager, ob_ref, handle);
 
     prepass_ps_.draw(batch, handle);
   }
@@ -103,7 +106,7 @@ void Instance::draw(Manager &manager, View &view, GPUTexture *depth_tx, GPUTextu
   prepass_fb_.bind();
 
   manager.submit(prepass_ps_, view);
-  
+
   strokegen_inst_->draw_viewport(manager, view);
 
   deferred_pass_fb_.ensure(GPU_ATTACHMENT_NONE,
