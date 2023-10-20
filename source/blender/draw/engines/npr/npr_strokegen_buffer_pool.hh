@@ -27,7 +27,7 @@ class GPUBufferPoolModule {
 
   SSBO_StrokeGenTest ssbo_bnpr_test_;
 
-  SSBO_StrokeGenMeshPool     ssbo_bnpr_mesh_pool_;
+  SSBO_StrokeGenMesh     ssbo_bnpr_mesh_pool_;
   SSBO_StrokeGenMeshPoolCounters ssbo_bnpr_mesh_pool_acounters_;
 
 

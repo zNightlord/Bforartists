@@ -1,4 +1,4 @@
-﻿/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /**
  * Shared structures, enums & defines between C++ and GLSL.
@@ -235,12 +235,12 @@ using namespace draw;
 
 // Template to set buffer size in compile time
 using UBO_ViewMatrices = draw::UniformBuffer<ViewMatrices>;
-
+using SSBO_IndirectDrawArgs = draw::StorageBuffer<DrawCommand, true>;
 using SSBO_IndirectDispatchArgs = draw::StorageBuffer<DispatchCommand>;
 
 using SSBO_StrokeGenTest = draw::StorageArrayBuffer<uint, 4096 * 4, true>;
 
-using SSBO_StrokeGenMeshPool = draw::StorageArrayBuffer<uint, 2048 * 2048 * 4, true>;
+using SSBO_StrokeGenMesh = draw::StorageArrayBuffer<uint, 2048 * 2048 * 4, true>;
 using SSBO_StrokeGenMeshPoolCounters = draw::StorageBuffer<SSBOData_StrokeGenMeshPoolCounters>;
 
 using SSBO_BnprScanData = draw::StorageArrayBuffer<uint, 2048 * 2048 * 2, true>;

@@ -335,6 +335,8 @@ set(SRC
   engines/npr/npr_strokegen_texture_pool.hh
   engines/npr/npr_strokegen_pass.hh
   engines/npr/npr_strokegen_geom_extract.hh
+  engines/npr/strokegen_mesh_raster_pass.hh
+  engines/npr/strokegen_mesh_raster_pass.cc
 )
 
 set(LIB
@@ -556,29 +558,29 @@ set(GLSL_SRC
   engines/npr/shaders/npr_deferred_frag.glsl
   engines/npr/shaders/npr_prepass_frag.glsl
   engines/npr/shaders/npr_prepass_vert.glsl
-  
+
   engines/npr/shaders/npr_strokegen_hlsl_support_lib.glsl
   engines/npr/shaders/npr_strokegen_test_comp.glsl
-  
+
   engines/npr/shaders/npr_strokegen_scan_no_subgroup_lib.glsl
   engines/npr/shaders/npr_strokegen_scan_no_subgroup_codegen_lib.glsl
   engines/npr/shaders/npr_strokegen_scan_test_comp.glsl
-  
+
   engines/npr/shaders/npr_strokegen_segloopconv1d_inputs_lib.glsl
   engines/npr/shaders/npr_strokegen_segloopconv1d_lib.glsl
   engines/npr/shaders/npr_strokegen_segloopconv1d_codegen_lib.glsl
   engines/npr/shaders/npr_strokegen_segloopconv1d_test_comp.glsl
-  
+
   engines/npr/shaders/npr_strokegen_list_ranking_inputs_lib.glsl
   engines/npr/shaders/npr_strokegen_list_ranking_lib.glsl
   engines/npr/shaders/npr_strokegen_list_ranking_codegen_lib.glsl
   engines/npr/shaders/npr_strokegen_list_ranking_test_comp.glsl
-  
+
   engines/npr/shaders/npr_strokegen_fill_indirect_args_comp.glsl
   engines/npr/shaders/npr_strokegen_fill_indirect_args_inputs_lib.glsl
-  
+
   engines/npr/shaders/npr_strokegen_geom_extract_comp.glsl
-  
+
   engines/npr/bnpr_defines.hh
   engines/npr/bnpr_shader_shared.hh
 
