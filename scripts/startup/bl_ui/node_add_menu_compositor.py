@@ -25,7 +25,7 @@ class NODE_MT_category_compositor_input(Menu):
         node_add_menu.add_node_type(layout, "CompositorNodeImage")
         node_add_menu.add_node_type(layout, "CompositorNodeMask")
         node_add_menu.add_node_type(layout, "CompositorNodeMovieClip")
-        node_add_menu.add_node_type(layout, "CompositorNodeTexture")
+        node_add_menu.add_node_type(layout, "CompositorNodeTextureCoordinate")
 
         if is_group:
             layout.separator()
@@ -266,6 +266,19 @@ class NODE_MT_category_compositor_transform(Menu):
         node_add_menu.draw_assets_for_catalog(layout, self.bl_label)
 
 
+class NODE_MT_category_compositor_texture(Menu):
+    bl_idname = "NODE_MT_category_compositor_texture"
+    bl_label = "Texture"
+
+    def draw(self, _context):
+        layout = self.layout
+        node_add_menu.add_node_type(layout, "ShaderNodeTexNoise")
+        layout.separator()
+        node_add_menu.add_node_type(layout, "CompositorNodeTexture")
+
+        node_add_menu.draw_assets_for_catalog(layout, self.bl_label)
+
+
 class NODE_MT_category_compositor_utilities(Menu):
     bl_idname = "NODE_MT_category_compositor_utilities"
     bl_label = "Utilities"
@@ -331,6 +344,7 @@ class NODE_MT_compositor_node_add_all(Menu):
         layout.separator()
         layout.menu("NODE_MT_category_compositor_tracking")
         layout.separator()
+        layout.menu("NODE_MT_category_compositor_texture")
         layout.menu("NODE_MT_category_compositor_transform")
         layout.menu("NODE_MT_category_compositor_utilities")
         layout.menu("NODE_MT_category_compositor_vector")
@@ -356,6 +370,7 @@ classes = (
     NODE_MT_category_compositor_mask,
     NODE_MT_category_compositor_tracking,
     NODE_MT_category_compositor_transform,
+    NODE_MT_category_compositor_texture,
     NODE_MT_category_compositor_utilities,
     NODE_MT_category_compositor_vector,
     NODE_MT_category_compositor_group,
