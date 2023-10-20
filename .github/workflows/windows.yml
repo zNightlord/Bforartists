@@ -2,7 +2,7 @@ name: windows
 
 on:
   pull_request:
-    branches: [ dev ]
+    branches: [ dev* ]
 
 permissions: {}
 jobs:
