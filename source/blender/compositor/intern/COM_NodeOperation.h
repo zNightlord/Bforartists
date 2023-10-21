@@ -9,6 +9,7 @@
 
 #include "BLI_ghash.h"
 #include "BLI_hash.hh"
+#include "BLI_math_vector.hh"
 #include "BLI_rect.h"
 #include "BLI_span.hh"
 #include "BLI_threads.h"
@@ -649,6 +650,20 @@ class NodeOperation {
   void get_area_of_interest(NodeOperation *input_op, const rcti &output_area, rcti &r_input_area);
 
   /** \} */
+
+  inline float read_sampled_float(const float x, const float y, const PixelSampler sampler)
+  {
+    float data[4];
+    read_sampled(data, x, y, sampler);
+    return data[0];
+  }
+
+  inline float3 read_sampled_float3(const float x, const float y, const PixelSampler sampler)
+  {
+    float data[4];
+    read_sampled(data, x, y, sampler);
+    return float3(data);
+  }
 
  protected:
   NodeOperation();

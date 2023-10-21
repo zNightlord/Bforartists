@@ -94,6 +94,7 @@
 #include "COM_SunBeamsNode.h"
 #include "COM_SwitchNode.h"
 #include "COM_SwitchViewNode.h"
+#include "COM_TextureCoordinateNode.h"
 #include "COM_TextureNode.h"
 #include "COM_TimeNode.h"
 #include "COM_TonemapNode.h"
@@ -439,6 +440,9 @@ Node *COM_convert_bnode(bNode *b_node)
       break;
     case CMP_NODE_KUWAHARA:
       node = new KuwaharaNode(b_node);
+      break;
+    case CMP_NODE_TEXTURE_COORDINATE:
+      node = new TextureCoordinateNode(b_node);
       break;
   }
   return node;

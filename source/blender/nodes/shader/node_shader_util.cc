@@ -40,8 +40,8 @@ static bool sh_fn_poll_default(const bNodeType * /*ntype*/,
                                const bNodeTree *ntree,
                                const char **r_disabled_hint)
 {
-  if (!STR_ELEM(ntree->idname, "ShaderNodeTree", "GeometryNodeTree")) {
-    *r_disabled_hint = TIP_("Not a shader or geometry node tree");
+  if (!STR_ELEM(ntree->idname, "ShaderNodeTree", "GeometryNodeTree", "CompositorNodeTree")) {
+    *r_disabled_hint = TIP_("Not a shader, geometry, or compositor node tree");
     return false;
   }
   return true;
