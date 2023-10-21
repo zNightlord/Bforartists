@@ -9,6 +9,7 @@
 
 #include "BLI_ghash.h"
 #include "BLI_hash.hh"
+#include "BLI_math_vector.hh"
 #include "BLI_rect.h"
 #include "BLI_span.hh"
 #include "BLI_threads.h"
