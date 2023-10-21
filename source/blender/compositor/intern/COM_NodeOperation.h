@@ -651,6 +651,20 @@ class NodeOperation {
 
   /** \} */
 
+  inline float read_sampled_float(const float x, const float y, const PixelSampler sampler)
+  {
+    float data[4];
+    read_sampled(data, x, y, sampler);
+    return data[0];
+  }
+
+  inline float3 read_sampled_float3(const float x, const float y, const PixelSampler sampler)
+  {
+    float data[4];
+    read_sampled(data, x, y, sampler);
+    return float3(data);
+  }
+
  protected:
   NodeOperation();
 
