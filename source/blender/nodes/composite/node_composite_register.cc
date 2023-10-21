@@ -101,6 +101,7 @@ void register_composite_nodes()
   register_node_type_cmp_switch_view();
   register_node_type_cmp_switch();
   register_node_type_cmp_texture();
+  register_node_type_cmp_texture_coordinate();
   register_node_type_cmp_tonemap();
   register_node_type_cmp_trackpos();
   register_node_type_cmp_transform();

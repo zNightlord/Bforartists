@@ -97,6 +97,7 @@ void register_node_type_cmp_sunbeams();
 void register_node_type_cmp_switch_view();
 void register_node_type_cmp_switch();
 void register_node_type_cmp_texture();
+void register_node_type_cmp_texture_coordinate();
 void register_node_type_cmp_tonemap();
 void register_node_type_cmp_trackpos();
 void register_node_type_cmp_transform();

@@ -1083,6 +1083,7 @@ void BKE_nodetree_remove_layer_n(struct bNodeTree *ntree, struct Scene *scene, i
 #define CMP_NODE_COMBINE_XYZ 331
 #define CMP_NODE_COMBINE_COLOR 332
 #define CMP_NODE_SEPARATE_COLOR 333
+#define CMP_NODE_TEXTURE_COORDINATE 334
 
 /* channel toggles */
 #define CMP_CHAN_RGB 1

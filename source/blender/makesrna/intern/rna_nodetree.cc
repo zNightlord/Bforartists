@@ -8523,6 +8523,8 @@ static void def_cmp_antialiasing(StructRNA *srna)
   RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
 }
 
+static void def_cmp_texture_coordinate(StructRNA * /*srna*/) {}
+
 /* -- Texture Nodes --------------------------------------------------------- */
 
 static void def_tex_output(StructRNA *srna)
