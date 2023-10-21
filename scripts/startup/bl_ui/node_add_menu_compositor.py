@@ -272,8 +272,6 @@ class NODE_MT_category_compositor_texture(Menu):
 
     def draw(self, _context):
         layout = self.layout
-        node_add_menu.add_node_type(layout, "ShaderNodeTexNoise")
-        layout.separator()
         node_add_menu.add_node_type(layout, "CompositorNodeTexture")
 
         node_add_menu.draw_assets_for_catalog(layout, self.bl_label)
