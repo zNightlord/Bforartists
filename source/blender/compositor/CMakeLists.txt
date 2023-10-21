@@ -412,6 +412,8 @@ if(WITH_COMPOSITOR_CPU)
     operations/COM_MultilayerImageOperation.h
     operations/COM_TextureOperation.cc
     operations/COM_TextureOperation.h
+    operations/COM_TextureCoordinateOperation.cc
+    operations/COM_TextureCoordinateOperation.h
 
 
     operations/COM_SocketProxyOperation.cc
