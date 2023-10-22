@@ -129,14 +129,15 @@ GPU_SHADER_CREATE_INFO(npr_segloopconv1D_test_convolution)
 /** \Geometry extraction from GPUBatch(es)
  * \{ */
 GPU_SHADER_CREATE_INFO(bnpr_geom_extract)
+    .do_static_compilation(true)
     .typedef_source("bnpr_shader_shared.hh")
     .typedef_source("draw_shader_shared.h")
-    .do_static_compilation(true)
+    .define("_KERNEL_MULTICOMPILE__GEOM_EXTRACT", "1")
     .storage_buf(0, Qualifier::READ, "uint", "buf_ibo[]")
     .storage_buf(1, Qualifier::READ, "float", "buf_vbo[]") /* cannot use vec3 due to ssbo alignment */
     .storage_buf(2, Qualifier::READ_WRITE, "uint", "buf_strokegen_mesh_pool[]")
     .storage_buf(3, Qualifier::READ, "ObjectMatrices", "drw_matrix_buf[]")
-    .storage_buf(4, Qualifier::READ_WRITE, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_acounters_")
+    .storage_buf(4, Qualifier::READ_WRITE, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
     .uniform_buf(0, "ViewMatrices", "ubo_view_matrices_")
     .push_constant(Type::INT, "pcs_ib_fmt_u16")
     .push_constant(Type::INT, "pcs_num_verts")
@@ -150,6 +151,64 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_extract_ibo_16bits)
     .do_static_compilation(true)
     .additional_info("bnpr_geom_extract")
     .define("_KERNEL_MULTICOMPILE__INDEX_BUFFER_16BIT", "1");
+
+GPU_SHADER_CREATE_INFO(strokegen_fill_dispatch_args_per_contour_edge)
+    .do_static_compilation(true)
+    .typedef_source("bnpr_defines.hh")
+    .typedef_source("bnpr_shader_shared.hh")
+    .typedef_source("draw_shader_shared.h") /* Always needed for indirect args */
+    .define("_KERNEL_MULTICOMPILE__FILL_DISPATCH_ARGS", "1")
+    .define("_KERNEL_MULTICOMPILE__FILL_DISPATCH_ARGS__PER_CONTOUR_EDGE", "1")
+    .storage_buf(0, Qualifier::READ, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
+    .storage_buf(1, Qualifier::READ_WRITE, "DispatchCommand", "ssbo_indirect_dispatch_args_per_contour_edge_")
+    .push_constant(Type::INT, "pc_per_contour_edge_dispatch_group_size_") /* group size of dispatched kernel */
+    .local_group_size(32)
+    .compute_source("npr_strokegen_fill_indirect_args_comp.glsl");
+
+GPU_SHADER_CREATE_INFO(bnpr_geom_extract_calc_contour_edge_raster_data)
+    .do_static_compilation(true)
+    .typedef_source("bnpr_shader_shared.hh")
+    .typedef_source("draw_shader_shared.h")
+    .define("_KERNEL_MULTICOMPILE_CALC_CONTOUR_EDGE_RASTER_DATA", "1")
+    .storage_buf(0, Qualifier::READ_WRITE, "uint", "buf_strokegen_mesh_pool[]")
+    .storage_buf(1, Qualifier::READ, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
+    .uniform_buf(0, "ViewMatrices", "ubo_view_matrices_")
+    .local_group_size(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT) /* <== from "bnpr_defines.hh" */
+    .compute_source("npr_strokegen_geom_extract_comp.glsl");
+
+/* Draw Mesh Contour Edges */
+GPU_SHADER_CREATE_INFO(bnpr_geom_fill_draw_args_contour_edges)
+    .do_static_compilation(true)
+    .typedef_source("bnpr_shader_shared.hh")
+    .typedef_source("draw_shader_shared.h") /*DrawCommand*/
+    .define("_KERNEL_MULTICOMPILE_FILL_DRAW_ARGS", "1")
+    .storage_buf(0, Qualifier::READ, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
+    .storage_buf(1, Qualifier::WRITE, "DrawCommand", "ssbo_bnpr_mesh_pool_draw_args_")
+    .local_group_size(GROUP_SIZE_FILL_ARGS)
+    .compute_source("npr_strokegen_geom_extract_comp.glsl");
+
+GPU_SHADER_INTERFACE_INFO(bnpr_v2f_geom_draw_contour_edges, "")
+    /* .flat(Type::UINT, "id") */
+    .smooth(Type::VEC4, "color") 
+    .smooth(Type::VEC3, "normal")
+    .smooth(Type::VEC4, "tangent");
+
+GPU_SHADER_CREATE_INFO(bnpr_geom_draw_contour_edges)
+    .do_static_compilation(true)
+    .typedef_source("bnpr_shader_shared.hh")
+    .additional_info("draw_modelmat_new", "draw_view", "draw_resource_handle_new")
+    .storage_buf(0, Qualifier::READ, "uint", "buf_strokegen_mesh_pool[]")
+    .storage_buf(1, Qualifier::READ, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
+    .vertex_source("npr_strokegen_mesh_contour_vert.glsl")
+    .vertex_in(0, Type::VEC3, "pos")
+    .vertex_in(1, Type::VEC3, "nor")
+    .vertex_in(2, Type::VEC4, "tan")
+    .vertex_out(bnpr_v2f_geom_draw_contour_edges)
+    .fragment_source("npr_strokegen_mesh_contour_frag.glsl")
+    .fragment_out(0, Type::VEC4, "out_col")
+    .fragment_out(1, Type::VEC3, "out_normal")
+    .fragment_out(2, Type::VEC4, "out_tangent");
+
 /** \} */
 
 /* -------------------------------------------------------------------- */

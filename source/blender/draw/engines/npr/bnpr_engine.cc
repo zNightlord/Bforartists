@@ -205,7 +205,7 @@ static void bnpr_cache_init(void *vedata)
   if (!check_bnpr_support()) return;
 
   draw::Manager* drwmgr = DRW_manager_get();
-  reinterpret_cast<bnpr_Data *>(vedata)->instance->begin_sync(*drwmgr);
+  // reinterpret_cast<bnpr_Data *>(vedata)->instance->begin_sync(*drwmgr, TODO);
 
 
   bnpr_cache_init_legacy(vedata);

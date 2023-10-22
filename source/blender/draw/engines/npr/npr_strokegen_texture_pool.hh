@@ -1,4 +1,4 @@
-﻿/* SPDX-License-Identifier: GPL-2.0-or-later
+/* SPDX-License-Identifier: GPL-2.0-or-later
 * Copyright 2021 Blender Foundation.
  */
 
@@ -20,18 +20,22 @@ namespace blender::npr::strokegen
     /** Instance */
     Instance &instance_;
 
-    /** Compute Resources */
-    TextureFromPool strokegen_tex_test_;
+  public:
+    /** Pooled Textures */
+    TextureFromPool gbuffer_contour_attrib;
 
+    /** Framebuffers */
+    Framebuffer fb_contour_raster; 
 
   public:
     GPUTexturePoolModule(Instance &inst) :
       instance_(inst),
-      strokegen_tex_test_("StrokegenTexture_Test"){};
+      gbuffer_contour_attrib("contour edge gbuffer"){};
     ~GPUTexturePoolModule() {};
 
-    void sync(Object* object) {};
-    void end_sync() {};
+    void on_begin_sync(Texture& tex_prepass_depth); 
+    void sync(Object* object);;
+    void on_finished_draw_viewport();;
 
   };
 }

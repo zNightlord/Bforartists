@@ -1,4 +1,4 @@
-﻿#include "npr_instance.hh"
+#include "npr_instance.hh"
 
 namespace blender::npr {
 
@@ -58,7 +58,7 @@ void Instance::begin_sync()
   deferred_pass_ps_.bind_texture("depth_tx", &depth_tx_);
   deferred_pass_ps_.draw_procedural(GPU_PRIM_TRIS, 1, 3);
 
-  strokegen_inst_->begin_sync(*DRW_manager_get());
+  strokegen_inst_->begin_sync(*DRW_manager_get(), depth_tx_);
 }
 
 
@@ -107,7 +107,9 @@ void Instance::draw(Manager &manager, View &view, GPUTexture *depth_tx, GPUTextu
 
   manager.submit(prepass_ps_, view);
 
+
   strokegen_inst_->draw_viewport(manager, view);
+
 
   deferred_pass_fb_.ensure(GPU_ATTACHMENT_NONE,
                            GPU_ATTACHMENT_TEXTURE(color_tx),
@@ -118,6 +120,8 @@ void Instance::draw(Manager &manager, View &view, GPUTexture *depth_tx, GPUTextu
   manager.submit(deferred_pass_ps_);
 
   GPU_texture_copy(depth_tx, depth_tx_);
+
+  strokegen_inst_->end_draw_viewport(); 
 }
 
 void Instance::draw_viewport(Manager &manager,

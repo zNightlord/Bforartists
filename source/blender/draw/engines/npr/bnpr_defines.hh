@@ -25,6 +25,7 @@
 /** Geometry Extraction from GPUBatch(es)
  * \{ */
 #define GROUP_SIZE_STROKEGEN_GEOM_EXTRACT 256u
+#define GROUP_SIZE_FILL_ARGS 32u
 /** \} */
 
 

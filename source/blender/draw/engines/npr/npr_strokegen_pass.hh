@@ -16,6 +16,7 @@
 #include "npr_strokegen_buffer_pool.hh"
 #include "npr_strokegen_texture_pool.hh"
 #include "npr_strokegen_pass.hh"
+#include "strokegen_mesh_raster_pass.hh"
 
 #include <random>
 
@@ -28,11 +29,15 @@ class StrokeGenPassModule // similar to "LineDrawingRenderPass"
 private:
   /** Compute Passes */
   draw::PassSimple pass_comp_test = {"Strokegen Compute Test"};
+  draw::PassSimple pass_extract_geom = {"StrokeGen Extract Geometry"};
+  draw::PassSimple pass_fill_draw_args_contour_edges = {"Fill Draw Args for Contour Edges"};
   draw::PassSimple pass_scan_test = {"Bnpr GPU Blelloch Scan Test"};
   draw::PassSimple pass_segscan_test = {"Bnpr GPU Blelloch SegScan Test"};
-  draw::PassSimple pass_extract_geom = {"StrokeGen Extract Geometry"};
   draw::PassSimple pass_conv1d_test = {"Test GPU 1d conv on circular segments"};
   draw::PassSimple pass_listranking_test = { "List ranking test" };
+
+  /** Draw Passes */
+  StrokegenMeshRasterPass pass_draw_contour_edges = {"Draw Contour Edges"}; // Inherited from draw::PassMain 
 
   /** Instance */
   StrokeGenShaderModule &shaders_;
@@ -68,10 +73,13 @@ public:
     SEGSCAN_TEST,
     SEGLOOPCONV_TEST,
     LIST_RANKING_TEST,
-    GEOM_EXTRACTION
+    GEOM_EXTRACTION,
+    FILL_DRAW_ARGS_CONTOUR_EDGES,
+    INDIRECT_DRAW_CONTOUR_EDGES
   };
 
   PassSimple& get_compute_pass(eType passType);
+  PassMain &get_contour_edge_draw_pass(eType passType);
   /** \} */
 
 
@@ -87,9 +95,14 @@ public:
   /* -------------------------------------------------------------------- */
   /** \name Rebuild Render Passes
      * \{ */
-  bool extract_first_batch;
-  void reset_pass_extract_mesh_geom();
+  bool boostrap_before_extract_first_batch;
+  void init_pass_extract_mesh_geom();
   void rebuild_sub_pass_extract_mesh_geom(Object* ob, GPUBatch* gpu_batch_line_adj, ResourceHandle& rsc_handle, const DRWView* drw_view);
+
+  void rebuild_pass_fill_draw_args_contour_edges();
+
+  void init_contour_edge_draw_pass(); 
+  void rebuild_pass_append_contour_edge_drawcall(); 
 
   void rebuild_pass_scan_test();
   void rebuild_pass_segscan_test();
@@ -102,6 +115,7 @@ public:
 
   bool looped_pass_list_ranking;
   void rebuild_pass_list_ranking();
+
   void rebuild_pass_list_ranking_fill_args(bool per_anchor, bool per_spliced, int splicing_or_relinking_iter, int group_size_x);
   void print_list_ranking_nodes(int head_node_id, uint* computed_ranks, uint* computed_topo, uint* computed_links) const;
   /** \} */

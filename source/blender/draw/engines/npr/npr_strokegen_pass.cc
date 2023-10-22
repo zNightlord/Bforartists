@@ -30,15 +30,27 @@ namespace blender::npr::strokegen
         return pass_extract_geom;
       case LIST_RANKING_TEST:
         return pass_listranking_test;
+      case FILL_DRAW_ARGS_CONTOUR_EDGES:
+        return pass_fill_draw_args_contour_edges;
     }
     return pass_comp_test;
+  }
+
+  PassMain &StrokeGenPassModule::get_contour_edge_draw_pass(eType passType)
+  {
+    switch (passType) {
+      case INDIRECT_DRAW_CONTOUR_EDGES:
+        return pass_draw_contour_edges;     
+    }
+    return pass_draw_contour_edges; 
   }
 
 
 
   void StrokeGenPassModule::on_begin_sync()
   {
-    reset_pass_extract_mesh_geom();
+    init_pass_extract_mesh_geom();
+    init_contour_edge_draw_pass(); 
 
     rebuild_pass_scan_test();
     rebuild_pass_segscan_test();
@@ -51,10 +63,10 @@ namespace blender::npr::strokegen
   /**
    * \brief In each render loop, re-initialize the compute pass for geometry extraction.
    */
-  void StrokeGenPassModule::reset_pass_extract_mesh_geom()
+  void StrokeGenPassModule::init_pass_extract_mesh_geom()
   {
     pass_extract_geom.init();
-    extract_first_batch = true;
+    boostrap_before_extract_first_batch = true;
   }
 
   /**
@@ -85,7 +97,7 @@ namespace blender::npr::strokegen
     /* Cache per-edge geometry data */
     {
       auto& sub = pass_extract_geom.sub(
-        extract_first_batch ? "extract_geom_boostrap" : pass_name.c_str()
+        boostrap_before_extract_first_batch ? "extract_geom_boostrap" : pass_name.c_str()
       );
       if (ib_type == gpu::GPU_INDEX_U16)
         sub.shader_set(shaders_.static_shader_get(eShaderType::COMPUTE_GEOM_EXTRACT_IBO_16BIT));
@@ -96,7 +108,7 @@ namespace blender::npr::strokegen
       sub.bind_ssbo(1, &(gpu_batch_line_adj->verts[0])); // TODO: investigate what geom->vert[1~15] does
       sub.bind_ssbo(2, buffers_.ssbo_bnpr_mesh_pool_);
       sub.bind_ssbo(3, DRW_manager_get()->matrix_buf.current());
-      sub.bind_ssbo(4, buffers_.ssbo_bnpr_mesh_pool_acounters_);
+      sub.bind_ssbo(4, buffers_.ssbo_bnpr_mesh_pool_counters_);
       sub.bind_ubo(0, buffers_.ubo_view_matrices_);
       sub.push_constant("pcs_ib_fmt_u16", ib_type == gpu::GPU_INDEX_U16 ? 1 : 0);
       sub.push_constant("pcs_num_verts", (int)batch->elem_()->index_len_get());
@@ -105,15 +117,67 @@ namespace blender::npr::strokegen
         (int)batch->elem_()->index_start_get() + (int)batch->elem_()->index_base_get()
       );
       sub.push_constant("pcs_rsc_handle", (int)rsc_handle.resource_index());
-      sub.push_constant("pcs_clear_compaction_counter_", extract_first_batch ? 1 : 0);
+      sub.push_constant("pcs_clear_compaction_counter_", boostrap_before_extract_first_batch ? 1 : 0);
 
       sub.dispatch(int3(
         compute_num_groups(num_edges, GROUP_SIZE_STROKEGEN_GEOM_EXTRACT, 1), 1, 1)
       );
       sub.barrier(GPU_BARRIER_SHADER_STORAGE);
     }
+
+    if (boostrap_before_extract_first_batch) return; // bootstrapping done. 
+
+    { // fill dispatch args for contour edges
+      auto &sub = pass_extract_geom.sub("strokegen_fill_dispatch_args_per_contour_edge");
+      sub.shader_set(shaders_.static_shader_get(eShaderType::FILL_DISPATCH_ARGS_CONTOUR_EDGES));
+
+      sub.bind_ssbo(0, buffers_.ssbo_bnpr_mesh_pool_counters_);
+      sub.bind_ssbo(1, buffers_.ssbo_bnpr_mesh_contour_edge_dispatch_args_);
+      int kernel_size = GROUP_SIZE_STROKEGEN_GEOM_EXTRACT;
+      sub.push_constant("pc_per_contour_edge_dispatch_group_size_", kernel_size);
+
+      sub.dispatch(int3(1, 1, 1));
+      sub.barrier(GPU_BARRIER_SHADER_STORAGE); 
+    }
+
+    {
+      auto &sub = pass_extract_geom.sub("calc contour edge raster data");
+      sub.shader_set(shaders_.static_shader_get(eShaderType::COMPUTE_GEOM_CONTOUR_EDGE_RASTER_DATA));
+      
+      sub.bind_ssbo(0, buffers_.ssbo_bnpr_mesh_pool_); 
+      sub.bind_ssbo(1, buffers_.ssbo_bnpr_mesh_pool_counters_);
+      sub.bind_ubo(0, buffers_.ubo_view_matrices_); 
+
+      sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_edge_dispatch_args_);
+      sub.barrier(GPU_BARRIER_SHADER_STORAGE); 
+    }
   }
 
+  void StrokeGenPassModule::rebuild_pass_fill_draw_args_contour_edges()
+  {
+    pass_fill_draw_args_contour_edges.init();
+    {
+      auto& sub = pass_fill_draw_args_contour_edges.sub("fill_draw_args_contour_edges");
+
+      sub.shader_set(shaders_.static_shader_get(eShaderType::FILL_DRAW_ARGS_CONTOUR_EDGES));
+
+      sub.bind_ssbo(0, buffers_.ssbo_bnpr_mesh_pool_counters_);
+      sub.bind_ssbo(1, buffers_.ssbo_bnpr_mesh_pool_draw_args_);
+
+      sub.dispatch(int3(1, 1, 1));
+      sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_COMMAND);
+    }
+  }
+
+  void StrokeGenPassModule::init_contour_edge_draw_pass()
+  {
+    pass_draw_contour_edges.init_pass(shaders_, textures_); 
+  }
+
+  void StrokeGenPassModule::rebuild_pass_append_contour_edge_drawcall()
+  {
+    pass_draw_contour_edges.append_draw_subpass(buffers_); 
+  }
 
 
   void StrokeGenPassModule::rebuild_pass_scan_test()

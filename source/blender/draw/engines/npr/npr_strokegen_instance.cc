@@ -19,6 +19,10 @@
 #include "npr_strokegen_instance.hh"
 #include "bnpr_defines.hh"
 
+namespace blender::gpu {
+class FrameBuffer;
+}
+
 namespace blender::npr::strokegen
 {
   /* -------------------------------------------------------------------- */
@@ -72,14 +76,15 @@ namespace blender::npr::strokegen
    *
    * Sync will gather data from the scene that can change over a time step (i.e: motion steps).
    * IMPORTANT: xxx.sync() functions area responsible for creating DRW resources (i.e: DRWView) as
-   * well as querying temp texture pool. All DRWPasses should be ready by the end end_sync().
+   * well as querying temp texture pool. All DRWPasses should be ready by the end on_finished_draw_viewport().
    * \{ */
-  void Instance::begin_sync(Manager& manager)
+  void Instance::begin_sync(Manager& manager, Texture& tex_prepass_depth)
   {
     /* Init draw passes and manager related stuff. (Begin render graph) */
 
     /* First setup resources */
     strokegen_buffers.on_begin_sync(drw_view);
+    strokegen_textures.on_begin_sync(tex_prepass_depth); 
 
     /* Then setup render passes */
     strokegen_passes.on_begin_sync();
@@ -87,7 +92,9 @@ namespace blender::npr::strokegen
 
   void Instance::end_sync(Manager&)
   {
-    /* Post processing after all object. (End render graph) */
+    /* Post processing after all object. (Finish recording the commands) */
+    strokegen_passes.rebuild_pass_fill_draw_args_contour_edges();
+    strokegen_passes.rebuild_pass_append_contour_edge_drawcall(); 
   }
 
   void Instance::mesh_sync(Manager& manager, ObjectRef& object_ref, ResourceHandle& rsc_handle)
@@ -138,6 +145,24 @@ namespace blender::npr::strokegen
   {
     /* Submit passes here. (Execute render graph) */
 
+    /* Geometry Extraction for StrokeGen ---------------------------------------------------------------- */
+    manager.submit(strokegen_passes.get_compute_pass(StrokeGenPassModule::eType::GEOM_EXTRACTION), view);
+
+
+    /* Draw Contour Edges */
+    manager.submit(
+      strokegen_passes.get_compute_pass(StrokeGenPassModule::eType::FILL_DRAW_ARGS_CONTOUR_EDGES), view
+    );
+
+    strokegen_textures.fb_contour_raster.bind();
+    float fb_clear_col[4] = {0, 0, 0, 1}; 
+    GPU_framebuffer_clear_color(strokegen_textures.fb_contour_raster, fb_clear_col);
+    GPU_line_width(2.0f); 
+    manager.submit(
+      strokegen_passes.get_contour_edge_draw_pass(StrokeGenPassModule::INDIRECT_DRAW_CONTOUR_EDGES), view
+    ); 
+    GPU_line_width(1.0f); 
+
     /* GPU (Seg-)Scan Test ------------------------------------------------------------------------- */
     // manager.submit(strokegen_passes.get_compute_pass(StrokeGenPassModule::eType::SCAN_TEST), view);
     manager.submit(strokegen_passes.get_compute_pass(StrokeGenPassModule::eType::SEGSCAN_TEST), view);
@@ -181,14 +206,11 @@ namespace blender::npr::strokegen
       bool succ = strokegen_passes.validate_list_ranking();
     }
 
+  }
 
-
-    /* Geometry Extraction for StrokeGen ---------------------------------------------------------------- */
-    manager.submit(strokegen_passes.get_compute_pass(StrokeGenPassModule::eType::GEOM_EXTRACTION), view);
-
-
-
-
+  void Instance::end_draw_viewport()
+  {
+    strokegen_textures.on_finished_draw_viewport(); 
   }
 
   /** \} */

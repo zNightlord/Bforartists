@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
+﻿/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /**
  * Shared structures, enums & defines between C++ and GLSL.
@@ -225,6 +225,18 @@ using namespace draw;
     uint prim_vert_beg = prim_id * num_verts_per_prim;
     return (is_ibo_fmt_u16 ? (prim_vert_beg / 2u) : (prim_vert_beg));
   }
+
+  /* Addressing - buf_strokegen_mesh_pool */
+  static inline uint mesh_pool_addr__wpos(uint contour_edge_id) 
+  {
+    return contour_edge_id * 6u;
+  }
+  static inline uint mesh_pool_addr__edgedir(uint contour_edge_id, uint num_contour_edges)
+  {
+    uint base_addr = mesh_pool_addr__wpos(num_contour_edges);
+    return base_addr + contour_edge_id * 2u;
+  }
+
   /** } */
 
 

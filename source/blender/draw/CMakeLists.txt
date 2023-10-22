@@ -575,11 +575,12 @@ set(GLSL_SRC
   engines/npr/shaders/npr_strokegen_list_ranking_lib.glsl
   engines/npr/shaders/npr_strokegen_list_ranking_codegen_lib.glsl
   engines/npr/shaders/npr_strokegen_list_ranking_test_comp.glsl
-
+ 
+  engines/npr/shaders/npr_strokegen_geom_extract_comp.glsl
   engines/npr/shaders/npr_strokegen_fill_indirect_args_comp.glsl
   engines/npr/shaders/npr_strokegen_fill_indirect_args_inputs_lib.glsl
-
-  engines/npr/shaders/npr_strokegen_geom_extract_comp.glsl
+  engines/npr/shaders/npr_strokegen_mesh_contour_vert.glsl 
+  engines/npr/shaders/npr_strokegen_mesh_contour_frag.glsl 
 
   engines/npr/bnpr_defines.hh
   engines/npr/bnpr_shader_shared.hh

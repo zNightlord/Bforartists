@@ -164,7 +164,7 @@ class Manager {
   SubmitDebugOutput submit_debug(PassMain &pass, View &view);
 
   /**
-   * Check data buffers of the draw manager. Only to be used after end_sync().
+   * Check data buffers of the draw manager. Only to be used after on_finished_draw_viewport().
    */
   DataDebugOutput data_debug();
 

@@ -1,37 +1,19 @@
 
 
-/*    v0
- *   /  \
- *  /    \                
- * v1----v2             
- *  \    /                
- *   \  /                     
- *    v3    winding 012, 321                
-*/
-bool is_contour_edge(vec3 v0, vec3 v1, vec3 v2, vec3 v3, vec3 cam_pos)
-{ /* impl based on overlay_outline_prepass_vert_no_geom.glsl */
-	vec3 v10 = v0 - v1;
-   	vec3 v12 = v2 - v1;
-	vec3 v13 = v3 - v1;
 
-	vec3 n0 = cross(v12, v10);
-	vec3 n3 = cross(v13, v12);
-
-	vec3 view_dir = cam_pos - v1; 
-
-	float face_orient_012 = dot(view_dir, n0);
-  	float face_orient_321 = dot(view_dir, n3);
-	bool is_contour = (sign(face_orient_012) != sign(face_orient_321)); 
-	
-	return is_contour; 
-}
+ 
 
 
+/* ---------------------------------- Compaction --------------------------------- */
+#if defined(_KERNEL_MULTICOMPILE__GEOM_EXTRACT) || defined(_KERNEL_MULTICOMPILE_FILL_DRAW_ARGS)
+	#define GLOBAL_COMPACTION_COUNTER__MESH_EDGES ssbo_bnpr_mesh_pool_counters_.num_contour_edges
+#endif
+
+#if defined(_KERNEL_MULTICOMPILE__GEOM_EXTRACT) || defined(_KERNEL_MULTICOMPILE_FILL_DRAW_ARGS)
 shared uint LDS_digit_per_lane[32u]; 
-shared uint LDS_offset_per_lane_slot[32u]; 
-shared uint LDS_hist_blk;  
+shared uint LDS_offset_per_lane_slot[32u];  
+shared uint LDS_hist_blk;    
 shared uint LDS_scan_block_offset; 
-#define GLOBAL_COMPACTION_COUNTER ssbo_bnpr_mesh_pool_acounters_.num_contour_edges
 
 uint compact(bool val, uint groupIdx)
 {
@@ -95,7 +77,7 @@ uint compact(bool val, uint groupIdx)
     if (groupIdx == gl_WorkGroupSize.x - 1u)
     {
         LDS_scan_block_offset = atomicAdd(
-            GLOBAL_COMPACTION_COUNTER, 
+            GLOBAL_COMPACTION_COUNTER__MESH_EDGES, 
             LDS_hist_blk
         ); 
     }
@@ -107,6 +89,39 @@ uint compact(bool val, uint groupIdx)
     
     uint scanres = local_offset + blk_offset; 
 	return scanres; 
+}
+#endif
+
+
+
+
+
+
+#if defined(_KERNEL_MULTICOMPILE__GEOM_EXTRACT)
+/*    v0
+ *   /  \
+ *  /    \                
+ * v1----v2             
+ *  \    /                
+ *   \  /                     
+ *    v3    winding 012, 321                
+*/
+bool is_contour_edge(vec3 v0, vec3 v1, vec3 v2, vec3 v3, vec3 cam_pos, out float face_orient_012, out float face_orient_321)
+{ /* impl based on overlay_outline_prepass_vert_no_geom.glsl */
+	vec3 v10 = v0 - v1;
+   	vec3 v12 = v2 - v1;
+	vec3 v13 = v3 - v1;
+
+	vec3 n0 = cross(v12, v10);
+	vec3 n3 = cross(v13, v12);
+
+	vec3 view_dir = cam_pos - v1; 
+
+	face_orient_012 = dot(view_dir, n0);
+  	face_orient_321 = dot(view_dir, n3);
+	bool is_contour = (sign(face_orient_012) != sign(face_orient_321)); 
+	
+	return is_contour; 
 }
 
 vec3 ld_vbo(uint vert)
@@ -122,7 +137,7 @@ void main()
 
 	if (pcs_clear_compaction_counter_ != 0u)
 	{ /* bootstrapping pass */
-		GLOBAL_COMPACTION_COUNTER = 0; 
+		GLOBAL_COMPACTION_COUNTER__MESH_EDGES = 0; 
 		return; 
 	}
 	
@@ -165,22 +180,108 @@ void main()
 	}
 #endif
 	
-	bool is_contour = is_contour_edge(v[0], v[1], v[2], v[3], cam_pos_loc); 
+	float face_orient_012, face_orient_321; 
+	bool is_contour = is_contour_edge(
+		v[0], v[1], v[2], v[3], cam_pos_loc
+		, face_orient_012, face_orient_321 /*out*/
+	); 
+	bool rev_edge_dir = face_orient_012 < .0f; 
 	if (false == valid_thread) is_contour = false; 
 
 	uint compacted_idx = compact(is_contour, groupId); 
 
-	uint base_addr = compacted_idx * 12u; 
-	buf_strokegen_mesh_pool[base_addr+0]  = floatBitsToUint(v[0].x); 
-	buf_strokegen_mesh_pool[base_addr+1]  = floatBitsToUint(v[0].y); 
-	buf_strokegen_mesh_pool[base_addr+2]  = floatBitsToUint(v[0].z); 
-	buf_strokegen_mesh_pool[base_addr+3]  = floatBitsToUint(v[1].x); 
-	buf_strokegen_mesh_pool[base_addr+4]  = floatBitsToUint(v[1].y); 
-	buf_strokegen_mesh_pool[base_addr+5]  = floatBitsToUint(v[1].z); 
-	buf_strokegen_mesh_pool[base_addr+6]  = floatBitsToUint(v[2].x); 
-	buf_strokegen_mesh_pool[base_addr+7]  = floatBitsToUint(v[2].y); 
-	buf_strokegen_mesh_pool[base_addr+8]  = floatBitsToUint(v[2].z); 
-	buf_strokegen_mesh_pool[base_addr+9]  = floatBitsToUint(v[3].x); 
-	buf_strokegen_mesh_pool[base_addr+10] = floatBitsToUint(v[3].y); 
-	buf_strokegen_mesh_pool[base_addr+11] = floatBitsToUint(v[3].z); 
+	if (is_contour)
+	{
+		/* transform to world space */
+		for (uint i = 0; i < 4; ++i)
+			v[i] = (model_to_world * vec4(v[i], 1.0f)).xyz; 
+
+		/* write world pos to output buffer */
+		uint base_addr = mesh_pool_addr__wpos(compacted_idx); 
+		uint addr_p0 = rev_edge_dir ? base_addr + 3 : base_addr;  
+		uint addr_p1 = rev_edge_dir ? base_addr : base_addr + 3; 
+		buf_strokegen_mesh_pool[addr_p0+0]  = floatBitsToUint(v[1].x); 
+		buf_strokegen_mesh_pool[addr_p0+1]  = floatBitsToUint(v[1].y); 
+		buf_strokegen_mesh_pool[addr_p0+2]  = floatBitsToUint(v[1].z); 
+		buf_strokegen_mesh_pool[addr_p1+0]  = floatBitsToUint(v[2].x); 
+		buf_strokegen_mesh_pool[addr_p1+1]  = floatBitsToUint(v[2].y); 
+		buf_strokegen_mesh_pool[addr_p1+2]  = floatBitsToUint(v[2].z); 
+	}
 }
+#endif
+
+
+
+
+#if defined(_KERNEL_MULTICOMPILE_FILL_DRAW_ARGS)
+void main()
+{
+	const uint groupId = gl_LocalInvocationID.x; 
+	const uint idx = gl_GlobalInvocationID.x; 
+	if (idx == 0u)
+	{
+		const uint num_contour_edges = ssbo_bnpr_mesh_pool_counters_.num_contour_edges; 
+		ssbo_bnpr_mesh_pool_draw_args_.vertex_len 		= 2u * num_contour_edges;  	/*#verts*/
+		ssbo_bnpr_mesh_pool_draw_args_.instance_len 	= 1;  						/*#instances*/
+		ssbo_bnpr_mesh_pool_draw_args_.vertex_first 	= 0;  						/*ibo offset*/
+		ssbo_bnpr_mesh_pool_draw_args_.base_index 		= 0;  						/*vbo offset*/
+		ssbo_bnpr_mesh_pool_draw_args_.instance_first_indexed = 0; 					/*instance offset*/
+	}
+}
+#endif
+
+
+
+
+
+#if defined(_KERNEL_MULTICOMPILE_CALC_CONTOUR_EDGE_RASTER_DATA)
+vec2 ndc_to_screen_uv(vec4 pos_ndc)
+{
+	pos_ndc.xyz /= pos_ndc.w;
+	pos_ndc.xy = pos_ndc.xy * 0.5f + 0.5f; 
+	return pos_ndc.xy; /* TODO: flip y or not? */
+}
+
+void main()
+{
+	const uint groupId = gl_LocalInvocationID.x; 
+	const uint idx = gl_GlobalInvocationID.x; 
+
+	const uint ContourEdgeIdx = idx; 
+	const uint NumContourEdges = ssbo_bnpr_mesh_pool_counters_.num_contour_edges; 
+	bool valid_thread = ContourEdgeIdx < NumContourEdges; 
+
+	/* transform matrices, see "common_view_lib.glsl" */ 
+	float4x4 world_to_view = ubo_view_matrices_.viewmat;
+	float4x4 mat_camera_proj = ubo_view_matrices_.winmat; 
+
+	vec4 vpos_ws[2]; /* v0, v1 on edge */
+	vec4 vpos_ndc[2]; 
+	vec2 vpos_uv[2]; 
+	if (valid_thread)
+	{ /* read vertex pos transformed to world space */
+		uint base_addr = mesh_pool_addr__wpos(ContourEdgeIdx); 
+		vpos_ws[0].x = uintBitsToFloat(buf_strokegen_mesh_pool[base_addr+0]); 
+		vpos_ws[0].y = uintBitsToFloat(buf_strokegen_mesh_pool[base_addr+1]); 
+		vpos_ws[0].z = uintBitsToFloat(buf_strokegen_mesh_pool[base_addr+2]); 
+		vpos_ws[0].w = 1.0f; 
+		vpos_ws[1].x = uintBitsToFloat(buf_strokegen_mesh_pool[base_addr+3]); 
+		vpos_ws[1].y = uintBitsToFloat(buf_strokegen_mesh_pool[base_addr+4]); 
+		vpos_ws[1].z = uintBitsToFloat(buf_strokegen_mesh_pool[base_addr+5]); 
+		vpos_ws[1].w = 1.0f; 
+
+		vpos_ndc[0] = mat_camera_proj * vec4((world_to_view * vpos_ws[0]).xyz, 1.0f); 
+		vpos_ndc[1] = mat_camera_proj * vec4((world_to_view * vpos_ws[1]).xyz, 1.0f); 
+
+		vpos_uv[0].xy = ndc_to_screen_uv(vpos_ndc[0]);
+		vpos_uv[1].xy = ndc_to_screen_uv(vpos_ndc[1]);
+		vec2 edge_dir = normalize(vpos_uv[1].xy - vpos_uv[0].xy); 
+ 
+		uint addr_st = mesh_pool_addr__edgedir(ContourEdgeIdx, NumContourEdges); 
+		buf_strokegen_mesh_pool[addr_st] = floatBitsToUint(edge_dir.x);
+		buf_strokegen_mesh_pool[addr_st+1] = floatBitsToUint(edge_dir.y);
+	}
+}
+#endif
+
+

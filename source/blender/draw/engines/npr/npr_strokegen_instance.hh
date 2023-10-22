@@ -1,4 +1,4 @@
-﻿/* SPDX-License-Identifier: GPL-2.0-or-later
+/* SPDX-License-Identifier: GPL-2.0-or-later
 * Copyright 2021 Blender Foundation.
  */
 
@@ -20,6 +20,7 @@
 #include "npr_strokegen_texture_pool.hh"
 #include "npr_strokegen_sync.hh"
 #include "draw_pass.hh"
+#include "gpu_framebuffer_private.hh"
 
 namespace blender::npr::strokegen
 {
@@ -73,12 +74,13 @@ namespace blender::npr::strokegen
               DRWView* drw_view_, Object* camera_object_);
     void update_eval_members();
 
-    void begin_sync(Manager& manager);
+    void begin_sync(Manager& manager, Texture& tex_prepass_depth);
     void end_sync(Manager& manager);
 
     void mesh_sync(Manager& manager, ObjectRef& object_ref, ResourceHandle& rsc_handle);
 
     void draw_viewport(Manager& manager, View& view);
+    void end_draw_viewport(); 
 
   };
 }

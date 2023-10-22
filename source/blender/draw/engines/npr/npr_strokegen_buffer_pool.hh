@@ -1,4 +1,4 @@
-﻿/* SPDX-License-Identifier: GPL-2.0-or-later
+/* SPDX-License-Identifier: GPL-2.0-or-later
  * Copyright 2021 Blender Foundation.
  */
 
@@ -17,6 +17,7 @@ class Instance;
 
 class GPUBufferPoolModule {
   friend class StrokeGenPassModule;
+  friend class StrokegenMeshRasterPass; 
 
  private:
   /** Instance */
@@ -28,7 +29,9 @@ class GPUBufferPoolModule {
   SSBO_StrokeGenTest ssbo_bnpr_test_;
 
   SSBO_StrokeGenMesh     ssbo_bnpr_mesh_pool_;
-  SSBO_StrokeGenMeshPoolCounters ssbo_bnpr_mesh_pool_acounters_;
+  SSBO_StrokeGenMeshPoolCounters ssbo_bnpr_mesh_pool_counters_;
+  SSBO_IndirectDrawArgs ssbo_bnpr_mesh_pool_draw_args_;
+  SSBO_IndirectDispatchArgs ssbo_bnpr_mesh_contour_edge_dispatch_args_; 
 
 
   SSBO_BnprScanData       ssbo_in_scan_data_;

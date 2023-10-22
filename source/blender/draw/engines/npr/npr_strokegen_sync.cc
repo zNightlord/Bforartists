@@ -72,10 +72,10 @@ static void draw_data_init_cb(struct DrawData *dd)
     //  strokegen_passes.dispatch_XXX(...);
     //  ... ... ...
 
-    if (inst_.strokegen_passes.extract_first_batch)
+    if (inst_.strokegen_passes.boostrap_before_extract_first_batch)
     {
       inst_.strokegen_passes.rebuild_sub_pass_extract_mesh_geom(ob, geobatch, rsc_handle, drw_view); // bootstrapping
-      inst_.strokegen_passes.extract_first_batch = false; // switch off
+      inst_.strokegen_passes.boostrap_before_extract_first_batch = false; // switch off
     }
     inst_.strokegen_passes.rebuild_sub_pass_extract_mesh_geom(ob, geobatch, rsc_handle, drw_view);
 
