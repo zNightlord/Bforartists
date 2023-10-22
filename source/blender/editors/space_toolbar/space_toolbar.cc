@@ -45,16 +45,16 @@ static SpaceLink *toolbar_create(const ScrArea * /*area*/, const Scene * /*scene
   region->alignment = RGN_ALIGN_TOP;
 
   /* asset shelf */
-  region = MEM_cnew<ARegion>("asset shelf for node");
+  region = MEM_cnew<ARegion>("asset shelf for toolbar");
 
-  BLI_addtail(&snode->regionbase, region);
+  BLI_addtail(&stoolbar->regionbase, region);
   region->regiontype = RGN_TYPE_ASSET_SHELF;
   region->alignment = RGN_ALIGN_BOTTOM;
 
   /* asset shelf header */
-  region = MEM_cnew<ARegion>("asset shelf header for node");
+  region = MEM_cnew<ARegion>("asset shelf header for toolbar");
 
-  BLI_addtail(&snode->regionbase, region);
+  BLI_addtail(&stoolbar->regionbase, region);
   region->regiontype = RGN_TYPE_ASSET_SHELF_HEADER;
   region->alignment = RGN_ALIGN_BOTTOM | RGN_SPLIT_PREV;
 
