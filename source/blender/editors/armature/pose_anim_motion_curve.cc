@@ -38,9 +38,9 @@
 #include "ED_screen.hh"
 #include "ED_view3d.hh"
 
-#include "DEG_depsgraph.h"
-#include "DEG_depsgraph_build.h"
-#include "DEG_depsgraph_query.h"
+#include "DEG_depsgraph.hh"
+#include "DEG_depsgraph_build.hh"
+#include "DEG_depsgraph_query.hh"
 
 #include "GPU_immediate.h"
 #include "GPU_immediate_util.h"
