@@ -212,6 +212,9 @@ void POSELIB_OT_blend_pose_asset(struct wmOperatorType *ot);
 /** \} */
 
 /* -------------------------------------------------------------------- */
+
+void POSE_OT_motion_curve(struct wmOperatorType *ot);
+
 /** \name Pose Sliding Tools
  * \{ */
 
