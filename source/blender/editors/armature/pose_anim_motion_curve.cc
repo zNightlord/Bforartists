@@ -1,5 +1,4 @@
 #include "MEM_guardedalloc.h"
-extern "C" {
 
 #include "DNA_action_types.h"
 #include "DNA_anim_types.h"
@@ -48,7 +47,6 @@ extern "C" {
 #include "armature_intern.h"
 
 #include "PIL_time.h"
-}
 
 #include <algorithm>
 #include <array>
