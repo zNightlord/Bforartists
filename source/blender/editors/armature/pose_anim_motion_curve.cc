@@ -1,4 +1,4 @@
-i#include "MEM_guardedalloc.h"
+#include "MEM_guardedalloc.h"
 
 #include "DNA_action_types.h"
 #include "DNA_anim_types.h"
@@ -1327,7 +1327,7 @@ void POSE_GGT_motion_curve(wmGizmoGroupType *gzgt)
   RNA_def_property_int_default(prop, 1);
   RNA_def_property_ui_text(
       prop, "Motion Curve Range", "range of keyframes in both direction to gather anim data");
-  RNA_def_property_update_runtime(prop, motion_curve_property_update);
+  RNA_def_property_update_runtime(prop, "motion_curve_property_update");
   RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
 }
 
@@ -1338,7 +1338,7 @@ static void gizmo_motion_curve_setup(struct wmGizmo *gz)
 
 static int gizmo_motion_curve_invoke(bContext *C, wmGizmo *gz, const wmEvent *event)
 {
-  WM_operator_name_call(C, "POSE_OT_motion_curve_dummy_for_undo", WM_OP_EXEC_DEFAULT, NULL);
+  WM_operator_name_call(C, "POSE_OT_motion_curve_dummy_for_undo", WM_OP_EXEC_DEFAULT, nullptr, nullptr);
   std::cout << "invoke" << std::endl;
   Scene *scene = CTX_data_scene(C);
   ARegion *ar = CTX_wm_region(C);
@@ -1775,7 +1775,7 @@ void DEG_update(Depsgraph *depsgraph, Main *bmain)
     /* Inform editors about possible changes. */
     // DEG_ids_check_recalc(bmain, depsgraph, scene, view_layer, true);
     /* clear recalc flags */
-    DEG_ids_clear_recalc(depsgraph);
+    DEG_ids_clear_recalc(depsgraph, false);
 
     /* If user callback did not tag anything for update we can skip second iteration.
      * Otherwise we update scene once again, but without running callbacks to bring
@@ -1940,7 +1940,7 @@ void get_fcurve_segment_ex(
 {
   bAction *act = ob->adt->action;
   PointerRNA ptr;
-  RNA_pointer_create((ID *)ob, &RNA_PoseBone, pchan, &ptr);
+  RNA_pointer_create((ID *)ob, &RNA_PoseBone, pchan);
   char *basePath = RNA_path_from_ID_to_struct(&ptr);
 
   ListBase curve = {NULL, NULL};
