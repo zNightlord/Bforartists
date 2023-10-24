@@ -1,4 +1,4 @@
-#include "MEM_guardedalloc.h"
+i#include "MEM_guardedalloc.h"
 
 #include "DNA_action_types.h"
 #include "DNA_anim_types.h"
@@ -528,7 +528,7 @@ void MotionCurve::draw(int final_select_id)
 
       float size = 4.0;
 
-      float frame = p.frame;
+      // float frame = p.frame;
 
       if (p.is_keyframe()) {
         size = 8.0;
@@ -1142,7 +1142,7 @@ static void WIDGETGROUP_motion_curve_refresh(const struct bContext *C,
 
           FrameData fra_data;
           fra_data.is_keyframe = is_keyframe;
-          copy_m4_m4(fra_data.ob_mat, ob_eval->obmat); // TODO zNight: obmat
+          copy_m4_m4(fra_data.ob_mat, ob_eval->object_to_world);
           copy_v3_v3(fra_data.pose_tail, pchan_eval->pose_tail);
           copy_v3_v3(fra_data.pose_head, pchan_eval->pose_head);
           copy_m3_m3(fra_data.gimbal, gim_mat);
@@ -1150,7 +1150,7 @@ static void WIDGETGROUP_motion_curve_refresh(const struct bContext *C,
           copy_v4_v4(fra_data.quat, pchan_eval->quat);
           copy_m4_m4(fra_data.pose_mat, pchan_eval->pose_mat);
 
-          G.fra[ob->id.name][pchan->name][CFRA] = fra_data;
+          G.fra[ob->id.name][pchan->name][scene->r.cfra] = fra_data;
         }
       }
 
@@ -1447,11 +1447,11 @@ static int gizmo_motion_curve_invoke(bContext *C, wmGizmo *gz, const wmEvent *ev
       /* set the new frame number */
       if (scene->r.flag & SCER_SHOW_SUBFRAME) {
         scene->r.cfra = (int)target_fra;
-        scene->r.subfra = target_fra - (int)target_fra;
+        scene->r.subframe = target_fra - (int)target_fra;
       }
       else {
         scene->r.cfra = round_fl_to_int(target_fra);
-        scene->r.subfra = 0.0f;
+        scene->r.subframe = 0.0f;
       }
       FRAMENUMBER_MIN_CLAMP(scene->r.cfra);
 
@@ -1558,8 +1558,8 @@ static void gizmo_motion_curve_draw(const bContext *C, wmGizmo *gz)
           if (win->eventstate->modifier == KM_ALT || win->eventstate->modifier == KM_CTRL) {
             float mval_fl[2];
             // copied from eyedropper_color_sample_fl: screen space to region space
-            mval_fl[0] = win->eventstate->x - region->winrct.xmin;
-            mval_fl[1] = win->eventstate->y - region->winrct.ymin;
+            mval_fl[0] = win->eventstate->xy[0] - region->winrct.xmin;
+            mval_fl[1] = win->eventstate->xy[1] - region->winrct.ymin;
 
             float min_dis = std::numeric_limits<float>::max();
             float i_min_dis = -1;
@@ -1581,11 +1581,11 @@ static void gizmo_motion_curve_draw(const bContext *C, wmGizmo *gz)
           else {
             Scene *scene = CTX_data_scene(C);
             for (int ip = 0; ip < G.curves[i].pt.size(); ip++) {
-              if (G.curves[i].pt[ip].frame == CFRA) {
+              if (G.curves[i].pt[ip].frame == scene->r.cfra) {
                 i_highlight_pt = ip;
                 break;
               }
-              if (G.curves[i].pt[ip].frame > CFRA) {
+              if (G.curves[i].pt[ip].frame > scene->r.cfra) {
                 BLI_assert(ip - 1 >= 0);
                 i_highlight_pt = ip - 1;
                 break;
@@ -1749,7 +1749,7 @@ void DEG_update(Depsgraph *depsgraph, Main *bmain)
     /* Update animated image textures for particles, modifiers, gpu, etc,
      * call this at the start so modifiers with textures don't lag 1 frame.
      */
-    DEG_graph_relations_update(depsgraph, bmain, scene, view_layer);
+    DEG_graph_relations_update(depsgraph);
 #ifdef POSE_ANIMATION_WORKAROUND
     scene_armature_depsgraph_workaround(bmain, depsgraph);
 #endif
@@ -1761,10 +1761,10 @@ void DEG_update(Depsgraph *depsgraph, Main *bmain)
      * would loose any possible unkeyed changes made by the handler. */
     if (pass == 0) {
       const float ctime = BKE_scene_frame_get(scene);
-      DEG_evaluate_on_framechange(bmain, depsgraph, ctime);
+      DEG_evaluate_on_framechange(depsgraph, ctime);
     }
     else {
-      DEG_evaluate_on_refresh(bmain, depsgraph);
+      DEG_evaluate_on_refresh(depsgraph);
     }
 
     /* Notify editors and python about recalc. */
@@ -1775,7 +1775,7 @@ void DEG_update(Depsgraph *depsgraph, Main *bmain)
     /* Inform editors about possible changes. */
     // DEG_ids_check_recalc(bmain, depsgraph, scene, view_layer, true);
     /* clear recalc flags */
-    DEG_ids_clear_recalc(bmain, depsgraph);
+    DEG_ids_clear_recalc(depsgraph);
 
     /* If user callback did not tag anything for update we can skip second iteration.
      * Otherwise we update scene once again, but without running callbacks to bring
@@ -1788,6 +1788,7 @@ void DEG_update(Depsgraph *depsgraph, Main *bmain)
 
 struct bToolRef *WM_toolsystem_ref_from_const_context(const struct bContext *C)
 {
+  Scene *scene = CTX_data_scene(C);
   WorkSpace *workspace = CTX_wm_workspace(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   ScrArea *sa = CTX_wm_area(C);
@@ -1796,7 +1797,7 @@ struct bToolRef *WM_toolsystem_ref_from_const_context(const struct bContext *C)
   }
   const bToolKey tkey = {
       sa->spacetype,
-      WM_toolsystem_mode_from_spacetype(view_layer, sa, sa->spacetype),
+      WM_toolsystem_mode_from_spacetype(scene, view_layer, sa, sa->spacetype),
   };
   bToolRef *tref = WM_toolsystem_ref_find(workspace, &tkey);
   /* We could return 'sa->runtime.tool' in this case. */
@@ -1943,7 +1944,7 @@ void get_fcurve_segment_ex(
   char *basePath = RNA_path_from_ID_to_struct(&ptr);
 
   ListBase curve = {NULL, NULL};
-  action_get_item_transforms(act, ob, pchan, &curve);
+  BKE_action_get_item_transform_flags(act, ob, pchan, &curve);
 
   bool use_limit_rot_x = RNA_boolean_get(&ptr, "use_limit_rot_x");
   bool use_limit_rot_y = RNA_boolean_get(&ptr, "use_limit_rot_y");
@@ -2083,7 +2084,7 @@ void get_sorted_primary_segments(bContext *C, std::vector<FCurveSegment> &segs, 
 
   bPoseChannel *pchan = BKE_pose_channel_find_name(ob->pose, pt.pchan_name.c_str());
   PointerRNA ptr = {0};
-  RNA_pointer_create((ID *)ob, &RNA_PoseBone, pchan, &ptr);
+  RNA_pointer_create((ID *)ob, &RNA_PoseBone, pchan);
   int depth_limit = RNA_int_get(&ptr, "ik_chain_length");
 
   float frame = pt.frame;
