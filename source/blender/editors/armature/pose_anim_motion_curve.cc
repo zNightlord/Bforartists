@@ -10,6 +10,7 @@
 #include "RNA_access.hh"
 #include "RNA_define.hh"
 #include "RNA_types.hh"
+#include "RNA_path.hh"
 
 #include "BLI_listbase.h"
 #include "BLI_math_rotation.h"
@@ -440,9 +441,7 @@ void MotionCurve::draw(int final_select_id)
 
   if (pt.size() > 1) {
 
-    GPU_blend(true);
-    GPU_blend_set_func_separate(
-        GPU_SRC_ALPHA, GPU_ONE_MINUS_SRC_ALPHA, GPU_ONE, GPU_ONE_MINUS_SRC_ALPHA);
+    GPU_blend(GPU_BLEND_ALPHA);
     glDepthMask(GL_FALSE);
     GPU_line_smooth(true);
 
@@ -491,12 +490,10 @@ void MotionCurve::draw(int final_select_id)
     immEnd();
     immUnbindProgram();
 
-    GPU_blend(false);
     glDepthMask(GL_TRUE);
     GPU_line_smooth(false);
     /* Reset default. */
-    GPU_blend_set_func_separate(
-        GPU_SRC_ALPHA, GPU_ONE_MINUS_SRC_ALPHA, GPU_ONE, GPU_ONE_MINUS_SRC_ALPHA);
+    GPU_blend(GPU_BLEND_NONE);
   }
 
   // don use points for selection
@@ -721,14 +718,14 @@ void MCSolver::update_target_interactive(bContext *C, wmGizmo *gz, const wmEvent
 
   View3D *v3d = CTX_wm_view3d(C);
   ARegion *ar = CTX_wm_region(C);
-  float zfac = ED_view3d_calc_zfac((RegionView3D *)ar->regiondata, ref_pos, NULL);
+  float zfac = ED_view3d_calc_zfac((RegionView3D *)ar->regiondata, ref_pos);
   float delta[3] = {0, 0, 0};
 
   float mval_fl[2];
 
-  float mval_del[2] = {event->x - event->prevx, event->y - event->prevy};
+  float mval_del[2] = {event->xy[0] - event->prev_xy[0], event->xy[1] - event->prev_xy[1]};
 
-  ED_view3d_win_to_delta(ar, mval_del, delta, zfac);
+  ED_view3d_win_to_delta(ar, mval_del, zfac, delta);
 
   add_v3_v3v3(targets[0].target, ref_pos, delta);
 }
@@ -956,7 +953,7 @@ void MCSolver::solve(bContext *C)
       Object *seg_ob = get_object_by_name(C, seg.ob_name);
       BLI_assert(seg_ob != NULL);
 
-      RNA_id_pointer_create((ID *)seg_ob, &id_ptr);
+      RNA_id_pointer_create((ID *)seg_ob);
 
       if (RNA_path_resolve_property(&id_ptr, seg.fcu->rna_path, &ptr, &prop)) {
         Scene *scene = CTX_data_scene(C);
@@ -1015,7 +1012,7 @@ static void WIDGETGROUP_motion_curve_refresh(const struct bContext *C,
   // Go through each obj and update its data at each frame
   G.fra.clear();
 
-  float cfra = CFRA;
+  float cfra = scene->r.cfra;
   // double time_start = PIL_check_seconds_timer();
   bToolRef *tref = WM_toolsystem_ref_from_const_context(C);
 
@@ -1108,14 +1105,14 @@ static void WIDGETGROUP_motion_curve_refresh(const struct bContext *C,
       ids[0] = &(ob->id);
 
       /* Build graph from all requested IDs. */
-      DEG_graph_build_from_ids(depsgraph, bmain, scene, view_layer, ids, 1);
+      DEG_graph_build_from_ids(depsgraph, ids, 1);
       MEM_freeN(ids);
 
       int i_keyframes = start_keyframe_idx;
-      for (CFRA = start; CFRA <= end; CFRA++) {
+      for (scene->r.cfra = start; scene->r.cfra <= end; scene->r.cfra++) {
         bool is_keyframe = false;
 
-        if (CFRA == keyframes[i_keyframes]) {
+        if (scene->r.cfra == keyframes[i_keyframes]) {
           is_keyframe = true;
           i_keyframes++;
         }
@@ -1147,7 +1144,7 @@ static void WIDGETGROUP_motion_curve_refresh(const struct bContext *C,
 
           FrameData fra_data;
           fra_data.is_keyframe = is_keyframe;
-          copy_m4_m4(fra_data.ob_mat, ob_eval->obmat);
+          copy_m4_m4(fra_data.ob_mat, ob_eval->obmat); // TODO zNight: obmat
           copy_v3_v3(fra_data.pose_tail, pchan_eval->pose_tail);
           copy_v3_v3(fra_data.pose_head, pchan_eval->pose_head);
           copy_m3_m3(fra_data.gimbal, gim_mat);
@@ -1162,7 +1159,7 @@ static void WIDGETGROUP_motion_curve_refresh(const struct bContext *C,
       DEG_graph_free(depsgraph);
     }
   }
-  CFRA = cfra;
+  scene->r.cfra = cfra;
 
   // Update the visualization of the motin path
   G.curves.clear();
@@ -1186,7 +1183,7 @@ static void WIDGETGROUP_motion_curve_refresh(const struct bContext *C,
       }
 
       PointerRNA ptr;
-      RNA_pointer_create((ID *)ob, &RNA_PoseBone, pchan, &ptr);
+      RNA_pointer_create((ID *)ob, &RNA_PoseBone, &ptr);
 
       bool is_show_head = RNA_boolean_get(&ptr, "show_head_curve");
       bool is_show_tail = RNA_boolean_get(&ptr, "show_tail_curve");
