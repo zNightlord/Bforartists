@@ -1254,7 +1254,8 @@ static void WIDGETGROUP_motion_curve_refresh(const struct bContext *C,
   G.is_updated = true;
 }
 
-static void motion_curve_property_update()
+static void motion_curve_property_update(Main *bmain, Scene *scene, PointerRNA *ptr)
+{
 {
   G.is_updated = false;
 }
@@ -1456,7 +1457,7 @@ static int gizmo_motion_curve_invoke(bContext *C, wmGizmo *gz, const wmEvent *ev
       FRAMENUMBER_MIN_CLAMP(scene->r.cfra);
 
       /* do updates */
-      DEG_id_tag_update(&scene->id, ID_RECALC_AUDIO_SEEK);
+      DEG_id_tag_update(&scene->id, ID_RECALC_AUDIO);
       WM_event_add_notifier(C, NC_SCENE | ND_FRAME, scene);
     }
     else {
