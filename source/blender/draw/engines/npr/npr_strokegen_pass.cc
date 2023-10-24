@@ -32,6 +32,10 @@ namespace blender::npr::strokegen
         return pass_listranking_test;
       case FILL_DRAW_ARGS_CONTOUR_EDGES:
         return pass_fill_draw_args_contour_edges;
+      case FILL_DISPATCH_ARGS_CONTOUR_EDGES:
+        return pass_fill_dispatch_args_contour_edges;
+      case SOFT_RASTER_CONTOUR_EDGES:
+        return pass_soft_raster_contour_edges; 
     }
     return pass_comp_test;
   }
@@ -125,10 +129,14 @@ namespace blender::npr::strokegen
       sub.barrier(GPU_BARRIER_SHADER_STORAGE);
     }
 
-    if (boostrap_before_extract_first_batch) return; // bootstrapping done. 
+    if (boostrap_before_extract_first_batch) return; // bootstrapping done.
+  }
 
-    { // fill dispatch args for contour edges
-      auto &sub = pass_extract_geom.sub("strokegen_fill_dispatch_args_per_contour_edge");
+  void StrokeGenPassModule::rebuild_pass_fill_dispatch_args_contour_edges()
+  { // fill dispatch args for contour edges
+    pass_fill_dispatch_args_contour_edges.init(); 
+    {
+      auto &sub = pass_fill_dispatch_args_contour_edges.sub("fill_dispatch_args_per_contour_edge");
       sub.shader_set(shaders_.static_shader_get(eShaderType::FILL_DISPATCH_ARGS_CONTOUR_EDGES));
 
       sub.bind_ssbo(0, buffers_.ssbo_bnpr_mesh_pool_counters_);
@@ -137,19 +145,24 @@ namespace blender::npr::strokegen
       sub.push_constant("pc_per_contour_edge_dispatch_group_size_", kernel_size);
 
       sub.dispatch(int3(1, 1, 1));
-      sub.barrier(GPU_BARRIER_SHADER_STORAGE); 
+      sub.barrier(GPU_BARRIER_SHADER_STORAGE);
     }
+  }
 
+  void StrokeGenPassModule::rebuild_pass_softraster_geom()
+  {
+    pass_soft_raster_contour_edges.init(); 
     {
-      auto &sub = pass_extract_geom.sub("calc contour edge raster data");
-      sub.shader_set(shaders_.static_shader_get(eShaderType::COMPUTE_GEOM_CONTOUR_EDGE_RASTER_DATA));
-      
-      sub.bind_ssbo(0, buffers_.ssbo_bnpr_mesh_pool_); 
+      auto &sub = pass_soft_raster_contour_edges.sub("calc contour edge raster data");
+      sub.shader_set(
+          shaders_.static_shader_get(eShaderType::COMPUTE_GEOM_CONTOUR_EDGE_RASTER_DATA));
+
+      sub.bind_ssbo(0, buffers_.ssbo_bnpr_mesh_pool_);
       sub.bind_ssbo(1, buffers_.ssbo_bnpr_mesh_pool_counters_);
-      sub.bind_ubo(0, buffers_.ubo_view_matrices_); 
+      sub.bind_ubo(0, buffers_.ubo_view_matrices_);
 
       sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_edge_dispatch_args_);
-      sub.barrier(GPU_BARRIER_SHADER_STORAGE); 
+      sub.barrier(GPU_BARRIER_SHADER_STORAGE);
     }
   }
 

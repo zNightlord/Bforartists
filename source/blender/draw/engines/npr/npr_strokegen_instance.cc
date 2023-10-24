@@ -94,7 +94,10 @@ namespace blender::npr::strokegen
   {
     /* Post processing after all object. (Finish recording the commands) */
     strokegen_passes.rebuild_pass_fill_draw_args_contour_edges();
-    strokegen_passes.rebuild_pass_append_contour_edge_drawcall(); 
+    strokegen_passes.rebuild_pass_fill_dispatch_args_contour_edges(); 
+
+    strokegen_passes.rebuild_pass_append_contour_edge_drawcall();
+    strokegen_passes.rebuild_pass_softraster_geom(); 
   }
 
   void Instance::mesh_sync(Manager& manager, ObjectRef& object_ref, ResourceHandle& rsc_handle)
@@ -143,18 +146,19 @@ namespace blender::npr::strokegen
 
   void Instance::draw_viewport(Manager& manager, View& view, GPUTexture* pre_depth)
   {
+    typedef StrokeGenPassModule::eType PType; 
+
     /* Submit passes here. (Execute render graph) */
     // GPU_storagebuf_copy_sub_from_vertbuf()
     GPU_texture_copy(strokegen_textures.tex_contour_raster_depth, pre_depth); 
 
     /* Geometry Extraction for StrokeGen ---------------------------------------------------------------- */
-    manager.submit(strokegen_passes.get_compute_pass(StrokeGenPassModule::eType::GEOM_EXTRACTION), view);
-
+    manager.submit(strokegen_passes.get_compute_pass(PType::GEOM_EXTRACTION), view);
+    manager.submit(strokegen_passes.get_compute_pass(PType::FILL_DISPATCH_ARGS_CONTOUR_EDGES), view); 
+    manager.submit(strokegen_passes.get_compute_pass(PType::SOFT_RASTER_CONTOUR_EDGES), view);
 
     /* Draw Contour Edges */
-    manager.submit(
-      strokegen_passes.get_compute_pass(StrokeGenPassModule::eType::FILL_DRAW_ARGS_CONTOUR_EDGES), view
-    );
+    manager.submit(strokegen_passes.get_compute_pass(PType::FILL_DRAW_ARGS_CONTOUR_EDGES), view);
 
     strokegen_textures.fb_contour_raster.bind();
     float fb_clear_col[4] = {0, 0, 0, 1}; 
@@ -166,8 +170,8 @@ namespace blender::npr::strokegen
     GPU_line_width(1.0f); 
 
     /* GPU (Seg-)Scan Test ------------------------------------------------------------------------- */
-    // manager.submit(strokegen_passes.get_compute_pass(StrokeGenPassModule::eType::SCAN_TEST), view);
-    manager.submit(strokegen_passes.get_compute_pass(StrokeGenPassModule::eType::SEGSCAN_TEST), view);
+    // manager.submit(strokegen_passes.get_compute_pass(ePassType::SCAN_TEST), view);
+    manager.submit(strokegen_passes.get_compute_pass(PType::SEGSCAN_TEST), view);
 
     if (frame_counter % 32 == 0)
     {
@@ -197,12 +201,12 @@ namespace blender::npr::strokegen
 
 
     /* GPU 1d looped segmented convolution Test ----------------------------------------- */
-    manager.submit(strokegen_passes.get_compute_pass(StrokeGenPassModule::eType::SEGLOOPCONV_TEST), view);
+    manager.submit(strokegen_passes.get_compute_pass(PType::SEGLOOPCONV_TEST), view);
 
 
 
     /* GPU List Ranking Test ---------------------------------------------------------------- */
-    manager.submit(strokegen_passes.get_compute_pass(StrokeGenPassModule::eType::LIST_RANKING_TEST), view);
+    manager.submit(strokegen_passes.get_compute_pass(PType::LIST_RANKING_TEST), view);
     if (frame_counter % 64 == 0)
     {
       bool succ = strokegen_passes.validate_list_ranking();

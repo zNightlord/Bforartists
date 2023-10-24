@@ -128,10 +128,10 @@ bool is_contour_edge(
 
 	/* convexity test */
 	vec3 p0 = v0; 
-	vec3 p1 = (v1+v2+v3) / 3.0f; /* bary center of Tri321 */
+	vec3 p1 = v1;
 	vec3 p10 = p0 - p1;
 	float p10_d_n3 = dot(normalize(p10), normalize(n3)); 
-	bool concave_edge = p10_d_n3 < -.05f; 
+	bool concave_edge = p10_d_n3 > .03f; 
 	if (concave_edge) is_contour = false; /* must be hidden */
 	
 	return is_contour; 
