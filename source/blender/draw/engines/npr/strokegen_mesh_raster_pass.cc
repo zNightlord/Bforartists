@@ -24,12 +24,12 @@ void npr::strokegen::StrokegenMeshRasterPass::init_pass(
       clip_planes.append(rv3d->clip[i]);
     }
   }
-
+  
   shader_set(shader_module.static_shader_get(eShaderType::INDIRECT_DRAW_CONTOUR_EDGES));
 
   DRWState drw_state = DRW_STATE_NO_DRAW;
   drw_state |= (DRW_STATE_WRITE_COLOR); 
-  drw_state |= (DRW_STATE_DEPTH_LESS_EQUAL); // no z-write, lequal
+  drw_state |= (DRW_STATE_DEPTH_LESS_EQUAL | DRW_STATE_WRITE_DEPTH); // no z-write, lequal
   drw_state |= (DRW_STATE_STENCIL_ALWAYS); 
   state_set(drw_state, clip_planes.size());
 

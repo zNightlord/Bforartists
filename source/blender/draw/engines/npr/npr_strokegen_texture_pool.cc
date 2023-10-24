@@ -20,10 +20,13 @@ void GPUTexturePoolModule::on_begin_sync(Texture& tex_prepass_depth)
 
   // Acquire pooled texture. From blender::workbench::OpaquePass::draw
   eGPUTextureUsage usage_fb_tx = GPU_TEXTURE_USAGE_SHADER_READ | GPU_TEXTURE_USAGE_ATTACHMENT;
-  gbuffer_contour_attrib.acquire(screen_res, eGPUTextureFormat::GPU_RGBA32F, usage_fb_tx);
+  tex_contour_raster.acquire(screen_res, eGPUTextureFormat::GPU_RGBA32F, usage_fb_tx);
 
-  GPUAttachment depth_att = GPU_ATTACHMENT_TEXTURE(tex_prepass_depth); 
-  GPUAttachment col_att = GPU_ATTACHMENT_TEXTURE(gbuffer_contour_attrib);
+  int2 prez_res = int2(GPU_texture_width(tex_prepass_depth), GPU_texture_height(tex_prepass_depth)); 
+  tex_contour_raster_depth.acquire(prez_res, eGPUTextureFormat::GPU_DEPTH24_STENCIL8, usage_fb_tx);
+
+  GPUAttachment depth_att = GPU_ATTACHMENT_TEXTURE(tex_contour_raster_depth); 
+  GPUAttachment col_att = GPU_ATTACHMENT_TEXTURE(tex_contour_raster);
 
   fb_contour_raster.ensure(depth_att, col_att); 
 }
@@ -35,7 +38,8 @@ void GPUTexturePoolModule::sync(Object *object)
 
 void GPUTexturePoolModule::on_finished_draw_viewport()
 {
-  gbuffer_contour_attrib.release(); 
+  tex_contour_raster.release();
+  tex_contour_raster_depth.release(); 
 }
 
 

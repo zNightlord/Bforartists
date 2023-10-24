@@ -36,5 +36,5 @@ void main()
     gl_Position = pos_gl;
     /* Apply depth bias to curve breaks, 
      * which can happen due to Z-fighting artifacts. */
-    gl_Position.z -= 0.00005/* 0.00005 */;
+    gl_Position.z -= 0.00003;
 }

@@ -22,7 +22,8 @@ namespace blender::npr::strokegen
 
   public:
     /** Pooled Textures */
-    TextureFromPool gbuffer_contour_attrib;
+    TextureFromPool tex_contour_raster;
+    TextureFromPool tex_contour_raster_depth; 
 
     /** Framebuffers */
     Framebuffer fb_contour_raster; 
@@ -30,7 +31,7 @@ namespace blender::npr::strokegen
   public:
     GPUTexturePoolModule(Instance &inst) :
       instance_(inst),
-      gbuffer_contour_attrib("contour edge gbuffer"){};
+      tex_contour_raster("contour edge gbuffer"){};
     ~GPUTexturePoolModule() {};
 
     void on_begin_sync(Texture& tex_prepass_depth); 

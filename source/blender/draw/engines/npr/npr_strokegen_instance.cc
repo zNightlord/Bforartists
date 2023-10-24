@@ -141,9 +141,11 @@ namespace blender::npr::strokegen
   /** \name Rendering
    * \{ */
 
-  void Instance::draw_viewport(Manager& manager, View& view)
+  void Instance::draw_viewport(Manager& manager, View& view, GPUTexture* pre_depth)
   {
     /* Submit passes here. (Execute render graph) */
+    // GPU_storagebuf_copy_sub_from_vertbuf()
+    GPU_texture_copy(strokegen_textures.tex_contour_raster_depth, pre_depth); 
 
     /* Geometry Extraction for StrokeGen ---------------------------------------------------------------- */
     manager.submit(strokegen_passes.get_compute_pass(StrokeGenPassModule::eType::GEOM_EXTRACTION), view);
@@ -157,7 +159,7 @@ namespace blender::npr::strokegen
     strokegen_textures.fb_contour_raster.bind();
     float fb_clear_col[4] = {0, 0, 0, 1}; 
     GPU_framebuffer_clear_color(strokegen_textures.fb_contour_raster, fb_clear_col);
-    GPU_line_width(2.0f); 
+    GPU_line_width(1.25); 
     manager.submit(
       strokegen_passes.get_contour_edge_draw_pass(StrokeGenPassModule::INDIRECT_DRAW_CONTOUR_EDGES), view
     ); 

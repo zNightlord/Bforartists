@@ -106,7 +106,11 @@ uint compact(bool val, uint groupIdx)
  *   \  /                     
  *    v3    winding 012, 321                
 */
-bool is_contour_edge(vec3 v0, vec3 v1, vec3 v2, vec3 v3, vec3 cam_pos, out float face_orient_012, out float face_orient_321)
+bool is_contour_edge(
+	vec3 v0, vec3 v1, vec3 v2, vec3 v3, vec3 cam_pos, 
+	out float face_orient_012, out float face_orient_321, 
+	out vec3 edge_offset
+)
 { /* impl based on overlay_outline_prepass_vert_no_geom.glsl */
 	vec3 v10 = v0 - v1;
    	vec3 v12 = v2 - v1;
@@ -114,12 +118,21 @@ bool is_contour_edge(vec3 v0, vec3 v1, vec3 v2, vec3 v3, vec3 cam_pos, out float
 
 	vec3 n0 = cross(v12, v10);
 	vec3 n3 = cross(v13, v12);
+	edge_offset = .5f * (normalize(n0), normalize(n3)); 
 
 	vec3 view_dir = cam_pos - v1; 
 
 	face_orient_012 = dot(view_dir, n0);
   	face_orient_321 = dot(view_dir, n3);
 	bool is_contour = (sign(face_orient_012) != sign(face_orient_321)); 
+
+	/* convexity test */
+	vec3 p0 = v0; 
+	vec3 p1 = (v1+v2+v3) / 3.0f; /* bary center of Tri321 */
+	vec3 p10 = p0 - p1;
+	float p10_d_n3 = dot(normalize(p10), normalize(n3)); 
+	bool concave_edge = p10_d_n3 < -.05f; 
+	if (concave_edge) is_contour = false; /* must be hidden */
 	
 	return is_contour; 
 }
@@ -181,9 +194,10 @@ void main()
 #endif
 	
 	float face_orient_012, face_orient_321; 
+	vec3 edge_offset_dir; 
 	bool is_contour = is_contour_edge(
 		v[0], v[1], v[2], v[3], cam_pos_loc
-		, face_orient_012, face_orient_321 /*out*/
+		, face_orient_012, face_orient_321, edge_offset_dir /*out*/
 	); 
 	bool rev_edge_dir = face_orient_012 < .0f; 
 	if (false == valid_thread) is_contour = false; 
@@ -195,7 +209,9 @@ void main()
 		/* transform to world space */
 		for (uint i = 0; i < 4; ++i)
 			v[i] = (model_to_world * vec4(v[i], 1.0f)).xyz; 
-
+		v[1] -= edge_offset_dir * 0.001f; 
+		v[2] -= edge_offset_dir * 0.001f; 
+		
 		/* write world pos to output buffer */
 		uint base_addr = mesh_pool_addr__wpos(compacted_idx); 
 		uint addr_p0 = rev_edge_dir ? base_addr + 3 : base_addr;  

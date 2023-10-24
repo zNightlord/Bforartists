@@ -128,7 +128,7 @@ static void bnpr_draw_scene(void *vedata)
   draw::View view("DefaultView", default_view);
 
   // draw passes
-  ved->instance->draw_viewport(*manager, view);
+  // ved->instance->draw_viewport(*manager, view, TODO);
   // display error msg at the top of the render viewport
   STRNCPY(ved->info, ved->instance->info.c_str());
 

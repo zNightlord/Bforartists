@@ -108,7 +108,7 @@ void Instance::draw(Manager &manager, View &view, GPUTexture *depth_tx, GPUTextu
   manager.submit(prepass_ps_, view);
 
 
-  strokegen_inst_->draw_viewport(manager, view);
+  strokegen_inst_->draw_viewport(manager, view, depth_tx_);
 
 
   deferred_pass_fb_.ensure(GPU_ATTACHMENT_NONE,

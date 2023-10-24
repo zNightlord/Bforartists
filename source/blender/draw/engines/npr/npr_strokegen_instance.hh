@@ -79,7 +79,7 @@ namespace blender::npr::strokegen
 
     void mesh_sync(Manager& manager, ObjectRef& object_ref, ResourceHandle& rsc_handle);
 
-    void draw_viewport(Manager& manager, View& view);
+    void draw_viewport(Manager& manager, View& view, GPUTexture* pre_depth);
     void end_draw_viewport(); 
 
   };
