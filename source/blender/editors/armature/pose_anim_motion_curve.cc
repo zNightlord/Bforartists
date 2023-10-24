@@ -949,7 +949,7 @@ void MCSolver::solve(bContext *C)
       PropertyRNA *prop;
 
       Object *seg_ob = get_object_by_name(C, seg.ob_name);
-      BLI_assert(seg_ob != NULL);
+      BLI_assert(seg_ob != nullptr);
 
       RNA_id_pointer_create((ID *)seg_ob);
 
@@ -962,7 +962,7 @@ void MCSolver::solve(bContext *C)
 
     Object *ob = get_object_by_name(C, targets[0].pt.ob_name);
     DEG_id_tag_update((ID *)ob, ID_RECALC_ANIMATION);
-    if (ob->adt->action != NULL) {
+    if (ob->adt->action != nullptr) {
       DEG_id_tag_update(&ob->adt->action->id, ID_RECALC_ANIMATION);
     }
 
@@ -1029,18 +1029,18 @@ static void WIDGETGROUP_motion_curve_refresh(const struct bContext *C,
     {
       bAction *act = ob->adt->action;
 
-      if (act == NULL) {
+      if (act == nullptr) {
         continue;
       }
 
-      FCurve *fcu = NULL;
+      FCurve *fcu = nullptr;
       for (fcu = (FCurve *)act->curves.first; fcu; fcu = fcu->next) {
         if (fcu->totvert) {
           break;
         }
       }
 
-      if (fcu == NULL) {
+      if (fcu == nullptr) {
         continue;
       }
 
@@ -1327,7 +1327,7 @@ void POSE_GGT_motion_curve(wmGizmoGroupType *gzgt)
   RNA_def_property_int_default(prop, 1);
   RNA_def_property_ui_text(
       prop, "Motion Curve Range", "range of keyframes in both direction to gather anim data");
-  RNA_def_property_update_runtime(prop, "motion_curve_property_update");
+  RNA_def_property_update_runtime(prop, motion_curve_property_update);
   RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
 }
 
@@ -1955,7 +1955,7 @@ void get_fcurve_segment_ex(
 
   LISTBASE_FOREACH (LinkData *, link, &curve) {
     FCurve *fcu = (FCurve *)link->data;
-    const char *bPtr = NULL, *pPtr = NULL;
+    const char *bPtr = nullptr, *pPtr = nullptr;
     bPtr = strstr(fcu->rna_path, basePath);
     bPtr += strlen(basePath);
 
@@ -2052,7 +2052,7 @@ void get_sorted_fcurve_segment(bContext *C, std::vector<FCurveSegment> &segs, Fr
 
   bPoseChannel *chain_pchan = pchan->parent;
 
-  while (chain_pchan != NULL) {
+  while (chain_pchan != nullptr) {
 
     switch (chain_pchan->rotmode) {
       case ROT_MODE_XYZ:
@@ -2097,7 +2097,7 @@ void get_sorted_primary_segments(bContext *C, std::vector<FCurveSegment> &segs, 
   else {
     bPoseChannel *chain_pchan = pchan;
     int chain_depth = 0;
-    while (chain_pchan != NULL) {
+    while (chain_pchan != nullptr) {
 
       switch (chain_pchan->rotmode) {
         case ROT_MODE_XYZ:
