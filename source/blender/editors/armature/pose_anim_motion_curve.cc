@@ -1256,7 +1256,6 @@ static void WIDGETGROUP_motion_curve_refresh(const struct bContext *C,
 
 static void motion_curve_property_update(Main *bmain, Scene *scene, PointerRNA *ptr)
 {
-{
   G.is_updated = false;
 }
 
@@ -1605,7 +1604,6 @@ static void gizmo_motion_curve_draw(const bContext *C, wmGizmo *gz)
 
 static void gizmo_motion_curve_draw_select(const bContext *C, wmGizmo *gz, int select_id)
 {
-
   ARegion *region = CTX_wm_region(C);
 
   if (gz->state & WM_GIZMO_STATE_HIGHLIGHT) {
