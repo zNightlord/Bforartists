@@ -442,7 +442,6 @@ void MotionCurve::draw(int final_select_id)
   if (pt.size() > 1) {
 
     GPU_blend(GPU_BLEND_ALPHA);
-    glDepthMask(GL_FALSE);
     GPU_line_smooth(true);
 
     GPUVertFormat *format = immVertexFormat();
@@ -490,7 +489,6 @@ void MotionCurve::draw(int final_select_id)
     immEnd();
     immUnbindProgram();
 
-    glDepthMask(GL_TRUE);
     GPU_line_smooth(false);
     /* Reset default. */
     GPU_blend(GPU_BLEND_NONE);
@@ -723,7 +721,7 @@ void MCSolver::update_target_interactive(bContext *C, wmGizmo *gz, const wmEvent
 
   float mval_fl[2];
 
-  float mval_del[2] = {event->xy[0] - event->prev_xy[0], event->xy[1] - event->prev_xy[1]};
+  float mval_del[2] = {static_cast<float>(event->xy[0] - event->prev_xy[0]), static_cast<float>(event->xy[1] - event->prev_xy[1])};
 
   ED_view3d_win_to_delta(ar, mval_del, zfac, delta);
 
@@ -1346,7 +1344,7 @@ static int gizmo_motion_curve_invoke(bContext *C, wmGizmo *gz, const wmEvent *ev
   ARegion *ar = CTX_wm_region(C);
   MotionCurve &curve = G.curves[gz->highlight_part];
 
-  FramePoint pt = curve.get_selected_pt(CFRA);
+  FramePoint pt = curve.get_selected_pt(scene->r.cfra);
   G.select_pt = pt;
 
   bool is_check_for_outdated_pin = true;
@@ -1385,7 +1383,7 @@ static int gizmo_motion_curve_invoke(bContext *C, wmGizmo *gz, const wmEvent *ev
   bAction *act = ob->adt->action;
 
   if (act != NULL) {
-    if (event->shift && event->type == LEFTMOUSE) {
+    if (event->modifier == KM_ALT && event->type == LEFTMOUSE) {
 
       MCSolver solver;
       solver.mode = 1;
@@ -1433,7 +1431,7 @@ static int gizmo_motion_curve_invoke(bContext *C, wmGizmo *gz, const wmEvent *ev
         return OPERATOR_RUNNING_MODAL;
       }
     }
-    else if (event->ctrl && event->type == LEFTMOUSE) {
+    else if (event->modifier == KM_CTRL && event->type == LEFTMOUSE) {
       auto iter = std::find(G.pin.begin(), G.pin.end(), pt);
       if (iter == G.pin.end()) {
         pt.get_latest_pos(pt.cached_pos);
@@ -1444,25 +1442,25 @@ static int gizmo_motion_curve_invoke(bContext *C, wmGizmo *gz, const wmEvent *ev
       }
       return OPERATOR_RUNNING_MODAL;
     }
-    else if (event->alt && event->type == LEFTMOUSE) {
+    else if (event->modifier == KM_ALT && event->type == LEFTMOUSE) {
       float target_fra = pt.frame;
       /* set the new frame number */
       if (scene->r.flag & SCER_SHOW_SUBFRAME) {
-        CFRA = (int)target_fra;
-        SUBFRA = target_fra - (int)target_fra;
+        scene->r.cfra = (int)target_fra;
+        scene->r.subfra = target_fra - (int)target_fra;
       }
       else {
-        CFRA = round_fl_to_int(target_fra);
-        SUBFRA = 0.0f;
+        scene->r.cfra = round_fl_to_int(target_fra);
+        scene->r.subfra = 0.0f;
       }
-      FRAMENUMBER_MIN_CLAMP(CFRA);
+      FRAMENUMBER_MIN_CLAMP(scene->r.cfra);
 
       /* do updates */
       DEG_id_tag_update(&scene->id, ID_RECALC_AUDIO_SEEK);
       WM_event_add_notifier(C, NC_SCENE | ND_FRAME, scene);
     }
     else {
-      if (pt.frame == CFRA) {
+      if (pt.frame == scene->r.cfra) {
         MCSolver solver;
         solver.mode = 2;
 
@@ -1498,7 +1496,7 @@ static int gizmo_motion_curve_modal(bContext *C,
                                     eWM_GizmoFlagTweak tweak_flag)
 {
   MotionCurve &curve = G.curves[gz->highlight_part];
-  if (event->ctrl) {
+  if (event->type == EVT_LEFTCTRLKEY || event->type == EVT_RIGHTCTRLKEY) {
     auto iter = std::find(G.pin.begin(), G.pin.end(), G.select_pt);
     if (iter != G.pin.end()) {
       std::vector<FramePoint> curve_pins = curve.pt;
@@ -1557,7 +1555,7 @@ static void gizmo_motion_curve_draw(const bContext *C, wmGizmo *gz)
           ARegion *region = CTX_wm_region(C);
           wmWindow *win = CTX_wm_window(C);
           int i_highlight_pt = 0;
-          if (win->eventstate->alt || win->eventstate->ctrl) {
+          if (win->eventstate->modifier == KM_ALT || win->eventstate->modifier == KM_CTRL) {
             float mval_fl[2];
             // copied from eyedropper_color_sample_fl: screen space to region space
             mval_fl[0] = win->eventstate->x - region->winrct.xmin;
