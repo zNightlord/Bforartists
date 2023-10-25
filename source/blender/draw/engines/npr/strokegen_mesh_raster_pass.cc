@@ -36,10 +36,13 @@ void npr::strokegen::StrokegenMeshRasterPass::init_pass(
   framebuffer_set(&texture_module.fb_contour_raster); 
 }
 
-void npr::strokegen::StrokegenMeshRasterPass::append_draw_subpass(GPUBufferPoolModule& buffers)
+void npr::strokegen::StrokegenMeshRasterPass::append_draw_subpass(GPUBufferPoolModule& buffers, GPUTexturePoolModule& textures)
 {
   draw::PassMain::Sub* subpass = &sub("strokegen raster pass");
   subpass->bind_ssbo(0, buffers.ssbo_bnpr_mesh_pool_);
-  subpass->bind_ssbo(1, buffers.ssbo_bnpr_mesh_pool_counters_); 
+  subpass->bind_ssbo(1, buffers.ssbo_bnpr_mesh_pool_counters_);
+  float2 fb_res = textures.get_contour_raster_screen_res();
+  float2 fb_res_inv = float2(1.0f / fb_res.x, 1.0f / fb_res.y); 
+  subpass->push_constant("pcs_screen_size_inv_", fb_res_inv); 
   subpass->draw_procedural_indirect(GPUPrimType::GPU_PRIM_LINES, buffers.ssbo_bnpr_mesh_pool_draw_args_); 
 }

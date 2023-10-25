@@ -209,8 +209,6 @@ void main()
 		/* transform to world space */
 		for (uint i = 0; i < 4; ++i)
 			v[i] = (model_to_world * vec4(v[i], 1.0f)).xyz; 
-		v[1] -= edge_offset_dir * 0.001f; 
-		v[2] -= edge_offset_dir * 0.001f; 
 		
 		/* write world pos to output buffer */
 		uint base_addr = mesh_pool_addr__wpos(compacted_idx); 
@@ -255,7 +253,7 @@ vec2 ndc_to_screen_uv(vec4 pos_ndc)
 {
 	pos_ndc.xyz /= pos_ndc.w;
 	pos_ndc.xy = pos_ndc.xy * 0.5f + 0.5f; 
-	return pos_ndc.xy; /* TODO: flip y or not? */
+	return pos_ndc.xy * pcs_screen_size_.xy; /* TODO: flip y or not? */
 }
 
 void main()
@@ -288,14 +286,43 @@ void main()
 
 		vpos_ndc[0] = mat_camera_proj * vec4((world_to_view * vpos_ws[0]).xyz, 1.0f); 
 		vpos_ndc[1] = mat_camera_proj * vec4((world_to_view * vpos_ws[1]).xyz, 1.0f); 
+		
+		uint addr_st = mesh_pool_addr__zwhclip(ContourEdgeIdx, NumContourEdges); 
+		buf_strokegen_mesh_pool[addr_st+0] = floatBitsToUint(vpos_ndc[0].z); 
+		buf_strokegen_mesh_pool[addr_st+1] = floatBitsToUint(vpos_ndc[0].w); 
+		buf_strokegen_mesh_pool[addr_st+2] = floatBitsToUint(vpos_ndc[1].z); 
+		buf_strokegen_mesh_pool[addr_st+3] = floatBitsToUint(vpos_ndc[1].w); 
+
+		
 
 		vpos_uv[0].xy = ndc_to_screen_uv(vpos_ndc[0]);
 		vpos_uv[1].xy = ndc_to_screen_uv(vpos_ndc[1]);
-		vec2 edge_dir = normalize(vpos_uv[1].xy - vpos_uv[0].xy); 
- 
-		uint addr_st = mesh_pool_addr__edgedir(ContourEdgeIdx, NumContourEdges); 
-		buf_strokegen_mesh_pool[addr_st] = floatBitsToUint(edge_dir.x);
-		buf_strokegen_mesh_pool[addr_st+1] = floatBitsToUint(edge_dir.y);
+		vec2 edge_dir = (vpos_uv[1].xy - vpos_uv[0].xy); 
+		float edge_dir_len = length(edge_dir);
+		vec2 edge_dir_norm = edge_dir / edge_dir_len; 
+
+		addr_st = mesh_pool_addr__edgedir(ContourEdgeIdx, NumContourEdges); 
+		buf_strokegen_mesh_pool[addr_st] = floatBitsToUint(edge_dir_norm.x);
+		buf_strokegen_mesh_pool[addr_st+1] = floatBitsToUint(edge_dir_norm.y);
+
+
+
+		/* Elongate edges that are too short on screen */
+		const float min_edge_len = 2.0f; 
+		if (edge_dir_len < min_edge_len)
+		{
+			float elongation = (min_edge_len - edge_dir_len) * .5f; 
+			vpos_uv[0].xy -= edge_dir_norm * elongation; 
+			vpos_uv[1].xy += edge_dir_norm * elongation; 
+		}
+
+		addr_st = mesh_pool_addr__edgeuv(ContourEdgeIdx, NumContourEdges); 
+		vpos_uv[0].xy /= pcs_screen_size_.xy; 
+		vpos_uv[1].xy /= pcs_screen_size_.xy; 
+		buf_strokegen_mesh_pool[addr_st] = floatBitsToUint(vpos_uv[0].x); 
+		buf_strokegen_mesh_pool[addr_st+1] = floatBitsToUint(vpos_uv[0].y); 
+		buf_strokegen_mesh_pool[addr_st+2] = floatBitsToUint(vpos_uv[1].x);
+		buf_strokegen_mesh_pool[addr_st+3] = floatBitsToUint(vpos_uv[1].y);
 	}
 }
 #endif
