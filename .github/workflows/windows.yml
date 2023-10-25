@@ -19,10 +19,10 @@ jobs:
        git remote add origin https://github.com/zNightlord/Bforartists
        git fetch
        git checkout dev-build
-       git merge custom-color-wire
-       git merge toolbar-assetshelf
-       git merge comp-tex-coord
-       git merge anim-motion-curve
+       git merge origin/custom-color-wire
+       git merge origin/toolbar-assetshelf
+       git merge origin/comp-tex-coord
+       git merge origin/anim-motion-curve
      # git clone -b work-sequencer https://github.com/zNightlord/Bforartists.git
     - name: Cache library
       uses: actions/cache@v3
