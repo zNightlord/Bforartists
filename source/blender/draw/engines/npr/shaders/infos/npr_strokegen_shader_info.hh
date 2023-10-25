@@ -173,6 +173,7 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_extract_calc_contour_edge_raster_data)
     .storage_buf(0, Qualifier::READ_WRITE, "uint", "buf_strokegen_mesh_pool[]")
     .storage_buf(1, Qualifier::READ, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
     .uniform_buf(0, "ViewMatrices", "ubo_view_matrices_")
+    .push_constant(Type::VEC2, "pcs_screen_size_")
     .local_group_size(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT) /* <== from "bnpr_defines.hh" */
     .compute_source("npr_strokegen_geom_extract_comp.glsl");
 
@@ -197,8 +198,11 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_draw_contour_edges)
     .do_static_compilation(true)
     .typedef_source("bnpr_shader_shared.hh")
     .additional_info("draw_modelmat_new", "draw_view", "draw_resource_handle_new")
+    
     .storage_buf(0, Qualifier::READ, "uint", "buf_strokegen_mesh_pool[]")
     .storage_buf(1, Qualifier::READ, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
+    .push_constant(Type::VEC2, "pcs_screen_size_inv_")
+
     .vertex_source("npr_strokegen_mesh_contour_vert.glsl")
     .vertex_in(0, Type::VEC3, "pos")
     .vertex_in(1, Type::VEC3, "nor")

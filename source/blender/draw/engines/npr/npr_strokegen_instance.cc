@@ -81,9 +81,11 @@ namespace blender::npr::strokegen
   void Instance::begin_sync(Manager& manager, Texture& tex_prepass_depth)
   {
     /* Init draw passes and manager related stuff. (Begin render graph) */
+    strokegen_passes.test_list_ranking = false;
+    strokegen_passes.test_scan = false; 
 
     /* First setup resources */
-    strokegen_buffers.on_begin_sync(drw_view);
+    strokegen_buffers.on_begin_sync(drw_view, strokegen_passes.test_list_ranking);
     strokegen_textures.on_begin_sync(tex_prepass_depth); 
 
     /* Then setup render passes */
@@ -173,7 +175,7 @@ namespace blender::npr::strokegen
     // manager.submit(strokegen_passes.get_compute_pass(ePassType::SCAN_TEST), view);
     manager.submit(strokegen_passes.get_compute_pass(PType::SEGSCAN_TEST), view);
 
-    if (frame_counter % 32 == 0)
+    if (strokegen_passes.test_scan && frame_counter % 32 == 0)
     {
       // strokegen_passes.validate_pass_scan_test<BNPR_SCAN_TEST_DATA_TYPE>(
       //   [](const BNPR_SCAN_TEST_DATA_TYPE& a, const BNPR_SCAN_TEST_DATA_TYPE& b) {return a == b;}
@@ -206,10 +208,13 @@ namespace blender::npr::strokegen
 
 
     /* GPU List Ranking Test ---------------------------------------------------------------- */
-    manager.submit(strokegen_passes.get_compute_pass(PType::LIST_RANKING_TEST), view);
-    if (frame_counter % 64 == 0)
+    if (strokegen_passes.test_list_ranking)
     {
-      bool succ = strokegen_passes.validate_list_ranking();
+      manager.submit(strokegen_passes.get_compute_pass(PType::LIST_RANKING_TEST), view);
+      if (frame_counter % 64 == 0)
+      {
+        bool succ = strokegen_passes.validate_list_ranking();
+      }
     }
 
   }

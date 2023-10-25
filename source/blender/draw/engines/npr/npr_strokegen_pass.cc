@@ -160,6 +160,8 @@ namespace blender::npr::strokegen
       sub.bind_ssbo(0, buffers_.ssbo_bnpr_mesh_pool_);
       sub.bind_ssbo(1, buffers_.ssbo_bnpr_mesh_pool_counters_);
       sub.bind_ubo(0, buffers_.ubo_view_matrices_);
+      float2 fb_res = textures_.get_contour_raster_screen_res(); 
+      sub.push_constant("pcs_screen_size_", fb_res); 
 
       sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_edge_dispatch_args_);
       sub.barrier(GPU_BARRIER_SHADER_STORAGE);
@@ -189,7 +191,7 @@ namespace blender::npr::strokegen
 
   void StrokeGenPassModule::rebuild_pass_append_contour_edge_drawcall()
   {
-    pass_draw_contour_edges.append_draw_subpass(buffers_); 
+    pass_draw_contour_edges.append_draw_subpass(buffers_, textures_); 
   }
 
 

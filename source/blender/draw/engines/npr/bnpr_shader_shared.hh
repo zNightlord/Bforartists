@@ -227,14 +227,28 @@ using namespace draw;
   }
 
   /* Addressing - buf_strokegen_mesh_pool */
+  /*x6*/
   static inline uint mesh_pool_addr__wpos(uint contour_edge_id) 
   {
     return contour_edge_id * 6u;
   }
+  /*x2*/
   static inline uint mesh_pool_addr__edgedir(uint contour_edge_id, uint num_contour_edges)
   {
     uint base_addr = mesh_pool_addr__wpos(num_contour_edges);
     return base_addr + contour_edge_id * 2u;
+  }
+  /*x4*/
+  static inline uint mesh_pool_addr__zwhclip(uint contour_edge_id, uint num_contour_edges)
+  {
+    uint base_addr = mesh_pool_addr__edgedir(num_contour_edges, num_contour_edges);
+    return base_addr + contour_edge_id * 4;
+  }
+  /*x4*/
+  static inline uint mesh_pool_addr__edgeuv(uint contour_edge_id, uint num_contour_edges)
+  {
+    uint base_addr = mesh_pool_addr__zwhclip(num_contour_edges, num_contour_edges);
+    return base_addr + contour_edge_id * 4;
   }
 
   /** } */
@@ -252,7 +266,7 @@ using SSBO_IndirectDispatchArgs = draw::StorageBuffer<DispatchCommand>;
 
 using SSBO_StrokeGenTest = draw::StorageArrayBuffer<uint, 4096 * 4, true>;
 
-using SSBO_StrokeGenMesh = draw::StorageArrayBuffer<uint, 2048 * 2048 * 4, true>;
+using SSBO_StrokeGenMesh = draw::StorageArrayBuffer<uint, 2048 * 2048 * 16, true>;
 using SSBO_StrokeGenMeshPoolCounters = draw::StorageBuffer<SSBOData_StrokeGenMeshPoolCounters>;
 
 using SSBO_BnprScanData = draw::StorageArrayBuffer<uint, 2048 * 2048 * 2, true>;

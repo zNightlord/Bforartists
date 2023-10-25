@@ -26,7 +26,8 @@ namespace blender::npr::strokegen
     TextureFromPool tex_contour_raster_depth; 
 
     /** Framebuffers */
-    Framebuffer fb_contour_raster; 
+    Framebuffer fb_contour_raster;
+    float2 get_contour_raster_screen_res() const;
 
   public:
     GPUTexturePoolModule(Instance &inst) :

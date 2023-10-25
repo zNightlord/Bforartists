@@ -12,6 +12,13 @@
 namespace blender::npr::strokegen
 {
 
+float2 GPUTexturePoolModule::get_contour_raster_screen_res() const
+{
+  float2 fb_res = float2((float)GPU_texture_width(tex_contour_raster),
+                         (float)GPU_texture_height(tex_contour_raster));
+  return fb_res; 
+}
+
 void GPUTexturePoolModule::on_begin_sync(Texture& tex_prepass_depth)
 {
   // Query screen res. From blender::workbench::SceneState::init

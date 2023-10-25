@@ -121,7 +121,7 @@ class GPUBufferPoolModule {
   {
   }
 
-  void on_begin_sync(const DRWView* drw_view);
+  void on_begin_sync(const DRWView* drw_view, bool upload_list_ranking_test_data);
   void sync_object(Object *ob);
   void end_sync();
 

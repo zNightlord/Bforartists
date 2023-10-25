@@ -109,6 +109,7 @@ public:
   void init_contour_edge_draw_pass(); 
   void rebuild_pass_append_contour_edge_drawcall(); 
 
+  bool test_scan; 
   void rebuild_pass_scan_test();
   void rebuild_pass_segscan_test();
 
@@ -118,6 +119,7 @@ public:
     int jumping_info_offset, bool loop_breaking_pass, bool loop_ranking_pass
   );
 
+  bool test_list_ranking; 
   bool looped_pass_list_ranking;
   void rebuild_pass_list_ranking();
 

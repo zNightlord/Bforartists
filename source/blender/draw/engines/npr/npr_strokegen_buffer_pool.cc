@@ -15,7 +15,7 @@
 
 namespace blender::npr::strokegen
 {
-  void GPUBufferPoolModule::on_begin_sync(const DRWView* drw_view)
+  void GPUBufferPoolModule::on_begin_sync(const DRWView* drw_view, bool upload_list_ranking_test_data)
   {
     UBO_BnprTreeScan& ubo_tree_scan = ubo_bnpr_tree_scan_infos_;
     {
@@ -85,40 +85,42 @@ namespace blender::npr::strokegen
       // GPU_memory_barrier(GPU_BARRIER_BUFFER_UPDATE | GPU_BARRIER_COMMAND);
     }
 
-    if (false == listranking_test_data_uploaded)
-    { // list ranking test: build nodes on CPU & upload to ssbo
-      build_list_ranking_testing_data(true); // build listranking_test_nodes_prev_next
+    if (upload_list_ranking_test_data)
+    {
+      if (false == listranking_test_data_uploaded) {  // list ranking test: build nodes on CPU &
+                                                      // upload to ssbo
+        build_list_ranking_testing_data(true);        // build listranking_test_nodes_prev_next
 
-      ssbo_list_ranking_links_staging_buf_.resize(NUM_ITEMS_BNPR_LIST_RANK_TEST * 2);
-      ssbo_list_ranking_links_staging_buf_.clear_to_zero();
-      GPU_memory_barrier(GPU_BARRIER_BUFFER_UPDATE);
+        ssbo_list_ranking_links_staging_buf_.resize(NUM_ITEMS_BNPR_LIST_RANK_TEST * 2);
+        ssbo_list_ranking_links_staging_buf_.clear_to_zero();
+        GPU_memory_barrier(GPU_BARRIER_BUFFER_UPDATE);
 
-      uint* data = ssbo_list_ranking_links_staging_buf_.data();
-      ssbo_list_ranking_links_staging_buf_.read();
-      memcpy(data, listranking_test_nodes_prev_next.data(), ssbo_list_ranking_links_staging_buf_.size() * sizeof(uint));
-      ssbo_list_ranking_links_staging_buf_.push_update(); // glBufferSubData
+        uint *data = ssbo_list_ranking_links_staging_buf_.data();
+        ssbo_list_ranking_links_staging_buf_.read();
+        memcpy(data,
+               listranking_test_nodes_prev_next.data(),
+               ssbo_list_ranking_links_staging_buf_.size() * sizeof(uint));
+        ssbo_list_ranking_links_staging_buf_.push_update();  // glBufferSubData
 
-      GPU_memory_barrier(GPU_BARRIER_BUFFER_UPDATE);
+        GPU_memory_barrier(GPU_BARRIER_BUFFER_UPDATE);
 
-      listranking_test_data_uploaded = true;
-    }
-    if (!listranking_test_data_validated && listranking_test_data_uploaded)
-    { // list ranking test: validate uploaded nodes int the ssbo
-      listranking_test_data_validated = true;
+        listranking_test_data_uploaded = true;
+      }
+      if (!listranking_test_data_validated &&
+          listranking_test_data_uploaded) {  // list ranking test: validate uploaded nodes int the
+                                             // ssbo
+        listranking_test_data_validated = true;
 
-      ssbo_list_ranking_links_staging_buf_.read();
-      uint* readback = ssbo_list_ranking_links_staging_buf_.data();
-      for (size_t i = 0; i < listranking_test_nodes_prev_next.size(); ++i)
-      {
-        if (listranking_test_nodes_prev_next[i] != readback[i])
-        {
-          fprintf(stderr, "error: corrupted gpu buffer for testing list ranking.");
-          listranking_test_data_validated = false;
+        ssbo_list_ranking_links_staging_buf_.read();
+        uint *readback = ssbo_list_ranking_links_staging_buf_.data();
+        for (size_t i = 0; i < listranking_test_nodes_prev_next.size(); ++i) {
+          if (listranking_test_nodes_prev_next[i] != readback[i]) {
+            fprintf(stderr, "error: corrupted gpu buffer for testing list ranking.");
+            listranking_test_data_validated = false;
+          }
         }
       }
     }
-
-
   }
 
   void GPUBufferPoolModule::sync_object(Object* ob)
