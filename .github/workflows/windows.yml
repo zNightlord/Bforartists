@@ -15,10 +15,10 @@ jobs:
     - name: Clone Repository
       # uses: actions/checkout@v4
       run: |
+       git init D:\a\Bforartists\Bforartists
        git config --global --add safe.directory D:\a\Bforartists\Bforartists
        git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
        git config --local http.https://github.com/.extraheader "AUTHORIZATION: basic ***"
-       git init D:\a\Bforartists\Bforartists
        git remote add origin https://github.com/zNightlord/Bforartists
        git fetch
        git checkout dev-build
