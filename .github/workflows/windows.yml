@@ -15,6 +15,7 @@ jobs:
     - name: Clone Repository
       # uses: actions/checkout@v4
       run: |
+       git config --global --add safe.directory D:\a\Bforartists\Bforartists
        git init D:\a\Bforartists\Bforartists
        git remote add origin https://github.com/zNightlord/Bforartists
        git fetch
