@@ -19,7 +19,7 @@ jobs:
        git config --global --add safe.directory D:\a\Bforartists\Bforartists
        git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
        git config --local http.https://github.com/.extraheader "AUTHORIZATION: basic ***"
-       git remote add origin https://github.com/zNightlord/Bforartists
+       git remote add origin https://github.com/zNightlord/Bforartists.git
        git fetch
        git checkout dev-build
        git merge origin/custom-color-wire
