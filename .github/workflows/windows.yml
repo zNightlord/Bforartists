@@ -1,22 +1,29 @@
 name: windows
 
 on:
-  pull_request:
-    branches: [ dev* ]
+  push:
+    branches: [ dev-build ]
 
 permissions: {}
 jobs:
   build:
     runs-on: windows-latest
     env:
-      CONFIG : lite
+      CONFIG : release
 
     steps:
     - name: Clone Repository
-      uses: actions/checkout@v4
-    #   run: |
-    #    cd ~\bforartistsrepo
-    #    git clone -b work-sequencer https://github.com/zNightlord/Bforartists.git
+      # uses: actions/checkout@v4
+      run: |
+       git init D:\a\Bforartists\Bforartists
+       git remote add origin https://github.com/zNightlord/Bforartists
+       git fetch
+       git checkout dev-build
+       git merge custom-color-wire
+       git merge toolbar-assetshelf
+       git merge comp-tex-coord
+       git merge anim-motion-curve
+     # git clone -b work-sequencer https://github.com/zNightlord/Bforartists.git
     - name: Cache library
       uses: actions/cache@v3
       with:
