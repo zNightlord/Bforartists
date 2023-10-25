@@ -22,7 +22,7 @@ jobs:
        git remote add origin https://github.com/zNightlord/Bforartists.git
        git fetch
        git checkout dev-build
-       git merge origin/custom-color-wire
+       git merge origin/custom-wire-color
        git merge origin/toolbar-assetshelf
        git merge origin/comp-tex-coord
        git merge origin/anim-motion-curve
