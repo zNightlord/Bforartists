@@ -503,9 +503,11 @@ static void nla_draw_strip(SpaceNla *snla,
     rect.ymin = yminc;
     rect.ymax = ymaxc;
     UI_draw_roundbox_4fv(&rect, true, 0.0f, color);
-    rect.ymin = ymaxc + (ymaxc - yminc) * 0.2; // zNigh
-    rect.ymax = ymaxc + (ymaxc - yminc) * 0.1;
-    UI_draw_roundbox_4fv(&rect, true, 0.0f, strip_color);
+    if (strip->flag & STRIP_CUSTOM_COLOR){
+      rect.ymin = ymaxc + (ymaxc - yminc) * 0.2;
+      rect.ymax = ymaxc + (ymaxc - yminc) * 0.1;
+      UI_draw_roundbox_4fv(&rect, true, 0.0f, strip_color);
+    }
 
     /* restore current vertex format & program (roundbox trashes it) */
     shdr_pos = GPU_vertformat_attr_add(immVertexFormat(), "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
