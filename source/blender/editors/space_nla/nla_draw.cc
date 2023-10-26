@@ -22,6 +22,7 @@
 #include "BLI_dlrbTree.h"
 #include "BLI_range.h"
 #include "BLI_utildefines.h"
+#include "BLI_math_color.h"
 
 #include "BKE_action.h"
 #include "BKE_context.h"
@@ -438,10 +439,12 @@ static void nla_draw_strip(SpaceNla *snla,
 
   const bool muted = ((nlt->flag & NLATRACK_MUTED) || (strip->flag & NLASTRIP_FLAG_MUTED));
   float color[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+  float color_strip[4] = {1.0f, 1.0f, 1.0f, 1.0f};
   uint shdr_pos;
 
   /* get color of strip */
   nla_strip_get_color_inside(adt, strip, color);
+  rgba_float_args_set(color_strip, strip.color[0], strip.color[1], strip.color[2], 1.0f);
 
   shdr_pos = GPU_vertformat_attr_add(immVertexFormat(), "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
   immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
@@ -500,6 +503,9 @@ static void nla_draw_strip(SpaceNla *snla,
     rect.ymin = yminc;
     rect.ymax = ymaxc;
     UI_draw_roundbox_4fv(&rect, true, 0.0f, color);
+    rect.ymin = ymaxc + (ymaxc - yminc) * 0.2; // zNigh
+    rect.ymax = ymaxc + (ymaxc - yminc) * 0.1;
+    UI_draw_roundbox_4fv(&rect, true, 0.0f, strip_color);
 
     /* restore current vertex format & program (roundbox trashes it) */
     shdr_pos = GPU_vertformat_attr_add(immVertexFormat(), "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
@@ -508,6 +514,8 @@ static void nla_draw_strip(SpaceNla *snla,
   else {
     /* strip is in disabled track - make less visible */
     immUniformColor3fvAlpha(color, 0.1f);
+    immUniformColor3fvAlpha(strip_color, 0.1f);
+    
 
     GPU_blend(GPU_BLEND_ALPHA);
     immRectf(shdr_pos, strip->start, yminc, strip->end, ymaxc);
