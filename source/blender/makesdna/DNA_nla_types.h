@@ -95,6 +95,6 @@ typedef enum eActStrip_Flag {
   ACTSTRIP_MUTE = (1 << 6),
   /* This has yet to be implemented. To indicate that a strip should be played backwards */
   ACTSTRIP_REVERSE = (1 << 7),
-  ACTSTRIP_CUSTOM_COLOR = (1 << 8),
+  NLASTRIP_CUSTOM_COLOR = (1 << 8),
   ACTSTRIP_AUTO_BLENDS = (1 << 11),
 } eActStrip_Flag;
