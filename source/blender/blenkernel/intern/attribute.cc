@@ -31,8 +31,8 @@
 #include "BKE_attribute.hh"
 #include "BKE_curves.hh"
 #include "BKE_customdata.h"
-#include "BKE_deform.h"
 #include "BKE_editmesh.h"
+#include "BKE_grease_pencil.hh"
 #include "BKE_mesh.hh"
 #include "BKE_pointcloud.h"
 #include "BKE_report.h"
@@ -91,6 +91,12 @@ static void get_domains(const ID *id, DomainInfo info[ATTR_DOMAIN_NUM])
       info[ATTR_DOMAIN_CURVE].length = curves->geometry.curve_num;
       break;
     }
+    case ID_GP: {
+      GreasePencil *grease_pencil = (GreasePencil *)id;
+      info[ATTR_DOMAIN_LAYER].customdata = &grease_pencil->layers_data;
+      info[ATTR_DOMAIN_LAYER].length = grease_pencil->layers().size();
+      break;
+    }
     default:
       break;
   }
@@ -116,6 +122,10 @@ static std::optional<blender::bke::MutableAttributeAccessor> get_attribute_acces
       Curves &curves_id = reinterpret_cast<Curves &>(id);
       CurvesGeometry &curves = curves_id.geometry.wrap();
       return curves.attributes_for_write();
+    }
+    case ID_GP: {
+      GreasePencil &grease_pencil = reinterpret_cast<GreasePencil &>(id);
+      return grease_pencil.attributes_for_write();
     }
     default: {
       BLI_assert_unreachable();
@@ -224,14 +234,13 @@ bool BKE_id_attribute_rename(ID *id,
   return true;
 }
 
-bool BKE_id_attribute_and_defgroup_unique_name_check(void *arg, const char *name)
-{
-  AttributeAndDefgroupUniqueNameData *data = static_cast<AttributeAndDefgroupUniqueNameData *>(
-      arg);
+struct AttrUniqueData {
+  ID *id;
+};
 
-  if (BKE_id_supports_vertex_groups(data->id) && BKE_defgroup_unique_name_check(data, name)) {
-    return true;
-  }
+static bool unique_name_cb(void *arg, const char *name)
+{
+  AttrUniqueData *data = (AttrUniqueData *)arg;
 
   DomainInfo info[ATTR_DOMAIN_NUM];
   get_domains(data->id, info);
@@ -256,7 +265,7 @@ bool BKE_id_attribute_and_defgroup_unique_name_check(void *arg, const char *name
 
 bool BKE_id_attribute_calc_unique_name(ID *id, const char *name, char *outname)
 {
-  AttributeAndDefgroupUniqueNameData data{id, nullptr};
+  AttrUniqueData data{id};
 
   const int name_maxncpy = CustomData_name_maxncpy_calc(name);
 
@@ -264,10 +273,8 @@ bool BKE_id_attribute_calc_unique_name(ID *id, const char *name, char *outname)
    * NOTE: We only call IFACE_() if needed to avoid locale lookup overhead. */
   BLI_strncpy_utf8(outname, (name && name[0]) ? name : IFACE_("Attribute"), name_maxncpy);
 
-  /* Avoid name collisions with vertex groups and other attributes. */
   const char *defname = ""; /* Dummy argument, never used as `name` is never zero length. */
-  return BLI_uniquename_cb(
-      BKE_id_attribute_and_defgroup_unique_name_check, &data, defname, '.', outname, name_maxncpy);
+  return BLI_uniquename_cb(unique_name_cb, &data, defname, '.', outname, name_maxncpy);
 }
 
 CustomDataLayer *BKE_id_attribute_new(ID *id,
@@ -710,6 +717,9 @@ int *BKE_id_attributes_active_index_p(ID *id)
     }
     case ID_CV: {
       return &((Curves *)id)->attributes_active_index;
+    }
+    case ID_GP: {
+      return &((GreasePencil *)id)->attributes_active_index;
     }
     default:
       return nullptr;

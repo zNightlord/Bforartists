@@ -218,6 +218,12 @@ class USERPREF_PT_interface_display(InterfacePanel, CenterAlignMixIn, Panel):
             flow.prop(view, "show_tooltips_python")
         flow.prop(view, "show_developer_ui")
 
+        layout.separator()
+
+        flow = layout.grid_flow(row_major=False, columns=0, even_columns=True, even_rows=False, align=False)
+        flow.use_property_split = False
+        flow.prop(prefs, "use_recent_searches", text="Sort search by Most Recent")
+
 
 class USERPREF_PT_interface_text(InterfacePanel, CenterAlignMixIn, Panel):
     bl_label = "Text Rendering"
@@ -234,6 +240,7 @@ class USERPREF_PT_interface_text(InterfacePanel, CenterAlignMixIn, Panel):
         flow.use_property_split = True
         sub = flow.column()
         sub.active = view.use_text_antialiasing
+        sub.prop(view, "use_text_render_subpixelaa", text="Subpixel Anti-Aliasing")
         sub.prop(view, "text_hinting", text="Hinting")
 
         flow.prop(view, "font_path_ui")
@@ -254,13 +261,12 @@ class USERPREF_PT_interface_translation(InterfacePanel, CenterAlignMixIn, Panel)
 
         layout.prop(view, "language")
 
-        flow = layout.grid_flow(row_major=False, columns=0, even_columns=True, even_rows=False, align=False)
-        flow.active = (bpy.app.translations.locale != 'en_US')
-
-        flow.use_property_split = False
-        flow.prop(view, "use_translate_tooltips", text="Tooltips")
-        flow.prop(view, "use_translate_interface", text="Interface")
-        flow.prop(view, "use_translate_new_dataname", text="New Data")
+        col = layout.column(heading="Affect")
+        col.active = (bpy.app.translations.locale != "en_US")
+        col.use_property_split = False #BFA - Left align checkboxes
+        col.prop(view, "use_translate_tooltips", text="Tooltips")
+        col.prop(view, "use_translate_interface", text="Interface")
+        col.prop(view, "use_translate_new_dataname", text="New Data")
 
 
 class USERPREF_PT_interface_editors(InterfacePanel, CenterAlignMixIn, Panel):
@@ -420,7 +426,7 @@ class USERPREF_PT_edit_objects_duplicate_data(EditingPanel, CenterAlignMixIn, Pa
             ("use_duplicate_armature", "Armature", 'OUTLINER_DATA_ARMATURE', ''),
             ("use_duplicate_camera", "Camera", 'OUTLINER_DATA_CAMERA', ''),
             ("use_duplicate_curve", "Curve", 'OUTLINER_DATA_CURVE', ''),
-            ("use_duplicate_curves", "Curves", 'OUTLINER_DATA_CURVES', ''),
+            ("use_duplicate_curves", "Curves", 'OUTLINER_OB_CURVES', ''),
             ("use_duplicate_grease_pencil", "Grease Pencil", 'OUTLINER_OB_GREASEPENCIL', ''),
             ("use_duplicate_lattice", "Lattice", 'OUTLINER_DATA_LATTICE', ''),
             (None, None, None, None),
@@ -807,16 +813,17 @@ class USERPREF_PT_viewport_display(ViewportPanel, CenterAlignMixIn, Panel):
         row.prop(view, "show_view_name", text="View Name")
         row = col.row()
         row.separator()
-        row.prop(view, "show_playback_fps", text="Playback Frame Rate (FPS)")
-        row = col.row()
-        row.prop(view, "show_playback_fps", text="")
-        subrow = row.row()
-        subrow.active = view.show_playback_fps
-        subrow.prop(view, "playback_fps_samples", text="Samples")
-
-        flow = layout.grid_flow(row_major=False, columns=0, even_columns=True, even_rows=False, align=False)
-
-
+        
+        split = row.split()
+        col = split.column()
+        col.use_property_split = False
+        col.prop(view, "show_playback_fps", text="Playback Frame Rate (FPS)")
+        
+        if view.show_playback_fps:
+            split.prop(view, "playback_fps_samples", text="Samples")
+        else:
+            split.label(icon='DISCLOSURE_TRI_RIGHT')
+            
         layout.separator()
 
         flow = layout.grid_flow(row_major=False, columns=0, even_columns=True, even_rows=False, align=False)
@@ -2588,7 +2595,7 @@ class ExperimentalPanel:
 
     @classmethod
     def poll(cls, _context):
-        return bpy.app.version_cycle == 'alpha'
+        return bpy.app.version_cycle == "alpha"
 
     def _draw_items(self, context, items):
         prefs = context.preferences
@@ -2653,7 +2660,6 @@ class USERPREF_PT_experimental_new_features(ExperimentalPanel, Panel):
                  ("blender/blender/projects/10", "Pipeline, Assets & IO Project Page")),
                 ({"property": "use_override_templates"}, ("blender/blender/issues/73318", "Milestone 4")),
                 ({"property": "use_new_volume_nodes"}, ("blender/blender/issues/103248", "#103248")),
-                ({"property": "use_node_group_operators"}, ("/blender/blender/issues/101778", "#101778")),
                 ({"property": "use_shader_node_previews"}, ("blender/blender/issues/110353", "#110353")),
             ),
         )
@@ -2669,7 +2675,6 @@ class USERPREF_PT_experimental_prototypes(ExperimentalPanel, Panel):
                 ({"property": "use_new_point_cloud_type"}, ("blender/blender/issues/75717", "#75717")),
                 ({"property": "use_sculpt_texture_paint"}, ("blender/blender/issues/96225", "#96225")),
                 ({"property": "use_experimental_compositors"}, ("blender/blender/issues/88150", "#88150")),
-                ({"property": "enable_eevee_next"}, ("blender/blender/issues/93220", "#93220")),
                 ({"property": "use_grease_pencil_version3"}, ("blender/blender/projects/6", "Grease Pencil 3.0")),
                 ({"property": "enable_overlay_next"}, ("blender/blender/issues/102179", "#102179")),
                 ({"property": "use_extension_repos"}, ("/blender/blender/issues/106254", "#106254")),

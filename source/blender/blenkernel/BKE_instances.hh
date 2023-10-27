@@ -73,22 +73,22 @@ class InstanceReference {
   Type type() const;
   Object &object() const;
   Collection &collection() const;
+  GeometrySet &geometry_set();
   const GeometrySet &geometry_set() const;
 
   bool owns_direct_data() const;
   void ensure_owns_direct_data();
 
-  uint64_t hash() const;
   friend bool operator==(const InstanceReference &a, const InstanceReference &b);
 };
 
 class Instances {
  private:
   /**
-   * Indexed set containing information about the data that is instanced.
-   * Actual instances store an index ("handle") into this set.
+   * Contains the data that is used by the individual instances.
+   * Actual instances store an index ("handle") into this vector.
    */
-  blender::VectorSet<InstanceReference> references_;
+  blender::Vector<InstanceReference> references_;
 
   /** Indices into `references_`. Determines what data is instanced. */
   blender::Vector<int> reference_handles_;
@@ -102,13 +102,17 @@ class Instances {
   mutable std::mutex almost_unique_ids_mutex_;
   mutable blender::Array<int> almost_unique_ids_;
 
-  CustomDataAttributes attributes_;
+  CustomData attributes_;
 
  public:
-  Instances() = default;
+  Instances();
+  Instances(Instances &&other);
   Instances(const Instances &other);
+  ~Instances();
 
-  void reserve(int min_capacity);
+  Instances &operator=(const Instances &other);
+  Instances &operator=(Instances &&other);
+
   /**
    * Resize the transform, handles, and attributes to the specified capacity.
    *
@@ -123,6 +127,7 @@ class Instances {
    * Otherwise a new handle is added.
    */
   int add_reference(const InstanceReference &reference);
+  std::optional<int> find_reference_handle(const InstanceReference &query);
   /**
    * Add a reference to the instance reference with an index specified by the #instance_handle
    * argument. For adding many instances, using #resize and accessing the transform array
@@ -168,8 +173,8 @@ class Instances {
   blender::bke::AttributeAccessor attributes() const;
   blender::bke::MutableAttributeAccessor attributes_for_write();
 
-  CustomDataAttributes &custom_data_attributes();
-  const CustomDataAttributes &custom_data_attributes() const;
+  CustomData &custom_data_attributes();
+  const CustomData &custom_data_attributes() const;
 
   void foreach_referenced_geometry(
       blender::FunctionRef<void(const GeometrySet &geometry_set)> callback) const;
@@ -243,30 +248,26 @@ inline Collection &InstanceReference::collection() const
   return *(Collection *)data_;
 }
 
+inline GeometrySet &InstanceReference::geometry_set()
+{
+  BLI_assert(type_ == Type::GeometrySet);
+  return *geometry_set_;
+}
+
 inline const GeometrySet &InstanceReference::geometry_set() const
 {
   BLI_assert(type_ == Type::GeometrySet);
   return *geometry_set_;
 }
 
-inline CustomDataAttributes &Instances::custom_data_attributes()
+inline CustomData &Instances::custom_data_attributes()
 {
   return attributes_;
 }
 
-inline const CustomDataAttributes &Instances::custom_data_attributes() const
+inline const CustomData &Instances::custom_data_attributes() const
 {
   return attributes_;
-}
-
-inline uint64_t InstanceReference::hash() const
-{
-  return blender::get_default_hash_2(data_, geometry_set_.get());
-}
-
-inline bool operator==(const InstanceReference &a, const InstanceReference &b)
-{
-  return a.data_ == b.data_ && a.geometry_set_.get() == b.geometry_set_.get();
 }
 
 /** \} */

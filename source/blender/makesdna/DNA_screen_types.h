@@ -10,6 +10,7 @@
 
 #include "BLI_utildefines.h"
 
+#include "DNA_asset_types.h"
 #include "DNA_defs.h"
 #include "DNA_listBase.h"
 #include "DNA_vec_types.h"
@@ -30,6 +31,7 @@ struct uiList;
 struct wmDrawBuffer;
 struct wmTimer;
 struct wmTooltipState;
+struct Panel_Runtime;
 
 /* TODO: Doing this is quite ugly :)
  * Once the top-bar is merged bScreen should be refactored to use ScrAreaMap. */
@@ -119,29 +121,6 @@ typedef struct ScrAreaMap {
   ListBase areabase;
 } ScrAreaMap;
 
-typedef struct Panel_Runtime {
-  /* Applied to Panel.ofsx, but saved separately so we can track changes between redraws. */
-  int region_ofsx;
-
-  char _pad[4];
-
-  /**
-   * Pointer for storing which data the panel corresponds to.
-   * Useful when there can be multiple instances of the same panel type.
-   *
-   * \note A panel and its sub-panels share the same custom data pointer.
-   * This avoids freeing the same pointer twice when panels are removed.
-   */
-  struct PointerRNA *custom_data_ptr;
-
-  /* Pointer to the panel's block. Useful when changes to panel #uiBlocks
-   * need some context from traversal of the panel "tree". */
-  struct uiBlock *block;
-
-  /* Non-owning pointer. The context is stored in the block. */
-  struct bContextStore *context;
-} Panel_Runtime;
-
 /** The part from uiBlock that needs saved in file. */
 typedef struct Panel {
   struct Panel *next, *prev;
@@ -171,7 +150,7 @@ typedef struct Panel {
   /** Sub panels. */
   ListBase children;
 
-  Panel_Runtime runtime;
+  struct Panel_Runtime *runtime;
 } Panel;
 
 /**
@@ -764,6 +743,7 @@ enum {
   /** #ARegionType.poll() failed for the current context, and the region should be treated as if it
    * wouldn't exist. Runtime only flag. */
   RGN_FLAG_POLL_FAILED = (1 << 10),
+  RGN_FLAG_RESIZE_RESPECT_BUTTON_SECTIONS = (1 << 11),
 };
 
 /** #ARegion.do_draw */
@@ -793,6 +773,8 @@ enum {
 
 typedef struct AssetShelfSettings {
   struct AssetShelfSettings *next, *prev;
+
+  AssetLibraryReference asset_library_reference;
 
   ListBase enabled_catalog_paths; /* #LinkData */
   /** If not set (null or empty string), all assets will be displayed ("All" catalog behavior). */

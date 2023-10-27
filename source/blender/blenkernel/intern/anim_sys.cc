@@ -255,7 +255,7 @@ void BKE_keyingsets_foreach_id(LibraryForeachIDData *data, const ListBase *keyin
 
 /* Freeing Tools --------------------------- */
 
-void BKE_keyingset_free(KeyingSet *ks)
+void BKE_keyingset_free_paths(KeyingSet *ks)
 {
   KS_Path *ksp, *kspn;
 
@@ -281,11 +281,11 @@ void BKE_keyingsets_free(ListBase *list)
   }
 
   /* loop over KeyingSets freeing them
-   * - BKE_keyingset_free() doesn't free the set itself, but it frees its sub-data
+   * - BKE_keyingset_free_paths() doesn't free the set itself, but it frees its sub-data
    */
   for (ks = static_cast<KeyingSet *>(list->first); ks; ks = ksn) {
     ksn = ks->next;
-    BKE_keyingset_free(ks);
+    BKE_keyingset_free_paths(ks);
     BLI_freelinkN(list, ks);
   }
 }
@@ -3223,10 +3223,9 @@ static void animsys_create_action_track_strip(const AnimData *adt,
    * (which making new strips doesn't do due to the troublesome nature of that). */
   BKE_action_frame_range_calc(
       r_action_strip->act, true, &r_action_strip->actstart, &r_action_strip->actend);
+  BKE_nla_clip_length_ensure_nonzero(&r_action_strip->actstart, &r_action_strip->actend);
   r_action_strip->start = r_action_strip->actstart;
-  r_action_strip->end = IS_EQF(r_action_strip->actstart, r_action_strip->actend) ?
-                            (r_action_strip->actstart + 1.0f) :
-                            (r_action_strip->actend);
+  r_action_strip->end = r_action_strip->actend;
 
   r_action_strip->blendmode = adt->act_blendmode;
   r_action_strip->extendmode = adt->act_extendmode;

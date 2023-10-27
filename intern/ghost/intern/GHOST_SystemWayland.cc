@@ -37,10 +37,12 @@
 #  include <wayland_dynload_API.h> /* For `ghost_wl_dynload_libraries`. */
 #endif
 
-#ifdef WITH_GHOST_WAYLAND_DYNLOAD
-#  include <wayland_dynload_egl.h>
-#endif
-#include <wayland-egl.h>
+#ifdef WITH_OPENGL_BACKEND
+#  ifdef WITH_GHOST_WAYLAND_DYNLOAD
+#    include <wayland_dynload_egl.h>
+#  endif
+#  include <wayland-egl.h>
+#endif /* WITH_OPENGL_BACKEND */
 
 #include <algorithm>
 #include <atomic>
@@ -53,8 +55,6 @@
 #  include <wayland_dynload_cursor.h>
 #endif
 #include <wayland-cursor.h>
-
-#include "GHOST_WaylandCursorSettings.hh"
 
 #include <xkbcommon/xkbcommon.h>
 
@@ -392,7 +392,7 @@ struct GWL_Cursor {
   /** The size of `custom_data` in bytes. */
   size_t custom_data_size = 0;
   /**
-   * The name of the theme (loaded by DBUS, depends on #WITH_GHOST_WAYLAND_DBUS).
+   * The name of the theme (set by an environment variable).
    * When disabled, leave as an empty string and the default theme will be used.
    */
   std::string theme_name;
@@ -971,6 +971,11 @@ struct GWL_Display {
 #endif
   GWL_XDG_Decor_System *xdg_decor = nullptr;
 
+  /**
+   * NOTE(@ideasman42): Handling of outputs must account for this vector to be empty.
+   * While this seems like something which might not ever happen, it can occur when
+   * unplugging monitors (presumably from dodgy cables/connections too).
+   */
   std::vector<GWL_Output *> outputs;
   std::vector<GWL_Seat *> seats;
   /**
@@ -1000,7 +1005,7 @@ struct GWL_Display {
    * Events added from the event reading thread.
    * Added into the main event queue when on #GHOST_SystemWayland::processEvents.
    */
-  std::vector<GHOST_IEvent *> events_pending;
+  std::vector<const GHOST_IEvent *> events_pending;
   /** Guard against multiple threads accessing `events_pending` at once. */
   std::mutex events_pending_mutex;
 
@@ -1076,7 +1081,7 @@ static void gwl_display_destroy(GWL_Display *display)
     display->ghost_timer_manager = nullptr;
   }
   /* Pending events may be left unhandled. */
-  for (GHOST_IEvent *event : display->events_pending) {
+  for (const GHOST_IEvent *event : display->events_pending) {
     delete event;
   }
 
@@ -2371,6 +2376,17 @@ static void data_device_handle_data_offer(void * /*data*/,
 {
   CLOG_INFO(LOG, 2, "data_offer");
 
+  /* The ownership of data-offer isn't so obvious:
+   * At this point it's not known if this will be used for drag & drop or selection.
+   *
+   * The API docs state that the following callbacks run immediately after this callback:
+   * - #wl_data_device_listener::enter (for drag & drop).
+   * - #wl_data_device_listener::selection (for copy & paste).
+   *
+   * In the case of GHOST, this means they will be assigned to either:
+   * - #GWL_Seat::data_offer_dnd
+   * - #GWL_Seat::data_offer_copy_paste
+   */
   GWL_DataOffer *data_offer = new GWL_DataOffer;
   data_offer->wl.id = id;
   wl_data_offer_add_listener(id, &data_offer_listener, data_offer);
@@ -2384,18 +2400,28 @@ static void data_device_handle_enter(void *data,
                                      const wl_fixed_t y,
                                      wl_data_offer *id)
 {
+  /* Always clear the current data-offer no matter what else happens. */
+  GWL_Seat *seat = static_cast<GWL_Seat *>(data);
+  std::lock_guard lock{seat->data_offer_dnd_mutex};
+  if (seat->data_offer_dnd) {
+    wl_data_offer_destroy(seat->data_offer_dnd->wl.id);
+    delete seat->data_offer_dnd;
+    seat->data_offer_dnd = nullptr;
+  }
+  /* Clearing complete. */
+
+  /* Handle the new offer. */
+  GWL_DataOffer *data_offer = static_cast<GWL_DataOffer *>(wl_data_offer_get_user_data(id));
   if (!ghost_wl_surface_own_with_null_check(wl_surface)) {
     CLOG_INFO(LOG, 2, "enter (skipped)");
+    wl_data_offer_destroy(data_offer->wl.id);
+    delete data_offer;
     return;
   }
   CLOG_INFO(LOG, 2, "enter");
 
-  GWL_Seat *seat = static_cast<GWL_Seat *>(data);
-  std::lock_guard lock{seat->data_offer_dnd_mutex};
-
-  delete seat->data_offer_dnd;
-  seat->data_offer_dnd = static_cast<GWL_DataOffer *>(wl_data_offer_get_user_data(id));
-  GWL_DataOffer *data_offer = seat->data_offer_dnd;
+  /* Transfer ownership of the `data_offer`. */
+  seat->data_offer_dnd = data_offer;
 
   data_offer->dnd.in_use = true;
   data_offer->dnd.xy[0] = x;
@@ -2422,7 +2448,10 @@ static void data_device_handle_leave(void *data, wl_data_device * /*wl_data_devi
 {
   GWL_Seat *seat = static_cast<GWL_Seat *>(data);
   std::lock_guard lock{seat->data_offer_dnd_mutex};
-
+  /* The user may have only dragged over the window decorations. */
+  if (seat->data_offer_dnd == nullptr) {
+    return;
+  }
   CLOG_INFO(LOG, 2, "leave");
 
   dnd_events(seat, GHOST_kEventDraggingExited);
@@ -2443,6 +2472,10 @@ static void data_device_handle_motion(void *data,
 {
   GWL_Seat *seat = static_cast<GWL_Seat *>(data);
   std::lock_guard lock{seat->data_offer_dnd_mutex};
+  /* The user may have only dragged over the window decorations. */
+  if (seat->data_offer_dnd == nullptr) {
+    return;
+  }
 
   CLOG_INFO(LOG, 2, "motion");
 
@@ -2457,6 +2490,8 @@ static void data_device_handle_drop(void *data, wl_data_device * /*wl_data_devic
   GWL_Seat *seat = static_cast<GWL_Seat *>(data);
   std::lock_guard lock{seat->data_offer_dnd_mutex};
 
+  /* No need to check this for null (as other callbacks do).
+   * because the the data-offer has not been accepted (actions set... etc). */
   GWL_DataOffer *data_offer = seat->data_offer_dnd;
 
   /* Use a blank string for  `mime_receive` to prevent crashes, although could also be `nullptr`.
@@ -2537,7 +2572,7 @@ static void data_device_handle_drop(void *data, wl_data_device * /*wl_data_devic
       flist->count = int(uris.size());
       flist->strings = static_cast<uint8_t **>(malloc(uris.size() * sizeof(uint8_t *)));
       for (size_t i = 0; i < uris.size(); i++) {
-        flist->strings[i] = (uint8_t *)GHOST_URL_decode_alloc(uris[i].c_str());
+        flist->strings[i] = reinterpret_cast<uint8_t *>(GHOST_URL_decode_alloc(uris[i].c_str()));
       }
 
       CLOG_INFO(LOG, 2, "drop_read_uris_fn file_count=%d", flist->count);
@@ -2568,27 +2603,25 @@ static void data_device_handle_selection(void *data,
                                          wl_data_device * /*wl_data_device*/,
                                          wl_data_offer *id)
 {
+  /* Always clear the current data-offer no matter what else happens. */
   GWL_Seat *seat = static_cast<GWL_Seat *>(data);
-
   std::lock_guard lock{seat->data_offer_copy_paste_mutex};
-
-  GWL_DataOffer *data_offer = seat->data_offer_copy_paste;
-
-  /* Delete old data offer. */
-  if (data_offer != nullptr) {
-    wl_data_offer_destroy(data_offer->wl.id);
-    delete data_offer;
-    data_offer = nullptr;
+  if (seat->data_offer_copy_paste) {
+    wl_data_offer_destroy(seat->data_offer_copy_paste->wl.id);
+    delete seat->data_offer_copy_paste;
     seat->data_offer_copy_paste = nullptr;
   }
+  /* Clearing complete. */
 
+  /* Handle the new offer. */
   if (id == nullptr) {
     CLOG_INFO(LOG, 2, "selection: (skipped)");
     return;
   }
+
   CLOG_INFO(LOG, 2, "selection");
-  /* Get new data offer. */
-  data_offer = static_cast<GWL_DataOffer *>(wl_data_offer_get_user_data(id));
+  GWL_DataOffer *data_offer = static_cast<GWL_DataOffer *>(wl_data_offer_get_user_data(id));
+  /* Transfer ownership of the `data_offer`. */
   seat->data_offer_copy_paste = data_offer;
 }
 
@@ -3426,8 +3459,6 @@ static void tablet_tool_handle_proximity_in(void *data,
 
   GHOST_WindowWayland *win = ghost_wl_surface_user_data(seat->tablet.wl.surface_window);
 
-  win->activate();
-
   seat->system->cursor_shape_set(win->getCursorShape());
 }
 static void tablet_tool_handle_proximity_out(void *data,
@@ -3688,7 +3719,8 @@ static void tablet_seat_handle_tool_added(void *data,
   tablet_tool->wl.surface_cursor = wl_compositor_create_surface(seat->system->wl_compositor_get());
   ghost_wl_surface_tag_cursor_tablet(tablet_tool->wl.surface_cursor);
 
-  wl_surface_add_listener(tablet_tool->wl.surface_cursor, &cursor_surface_listener, (void *)seat);
+  wl_surface_add_listener(
+      tablet_tool->wl.surface_cursor, &cursor_surface_listener, static_cast<void *>(seat));
 
   zwp_tablet_tool_v2_add_listener(id, &tablet_tool_listner, tablet_tool);
 
@@ -4322,7 +4354,7 @@ static void gwl_seat_capability_pointer_enable(GWL_Seat *seat)
   seat->cursor.wl.surface_cursor = wl_compositor_create_surface(seat->system->wl_compositor_get());
   seat->cursor.visible = true;
   seat->cursor.wl.buffer = nullptr;
-  if (!get_cursor_settings(seat->cursor.theme_name, seat->cursor.theme_size)) {
+  {
     /* Use environment variables, falling back to defaults.
      * These environment variables are used by enough WAYLAND applications
      * that it makes sense to check them (see `Xcursor` man page). */
@@ -4697,14 +4729,9 @@ static void output_handle_done(void *data, wl_output * /*wl_output*/)
   CLOG_INFO(LOG, 2, "done");
 
   GWL_Output *output = static_cast<GWL_Output *>(data);
-  int32_t size_native[2];
-  if (output->transform & WL_OUTPUT_TRANSFORM_90) {
-    size_native[0] = output->size_native[1];
-    size_native[1] = output->size_native[0];
-  }
-  else {
-    size_native[0] = output->size_native[0];
-    size_native[1] = output->size_native[1];
+  int32_t size_native[2] = {UNPACK2(output->size_native)};
+  if (ELEM(output->transform, WL_OUTPUT_TRANSFORM_90, WL_OUTPUT_TRANSFORM_270)) {
+    std::swap(size_native[0], size_native[1]);
   }
 
   /* If `xdg-output` is present, calculate the true scale of the desktop */
@@ -5582,15 +5609,15 @@ static void gwl_display_event_thread_destroy(GWL_Display *display)
  * \{ */
 
 GHOST_SystemWayland::GHOST_SystemWayland(bool background)
-    : GHOST_System(), display_(new GWL_Display)
+    : GHOST_System(),
+#ifdef USE_EVENT_BACKGROUND_THREAD
+      server_mutex(new std::mutex),
+      timer_mutex(new std::mutex),
+      main_thread_id(std::this_thread::get_id()),
+#endif
+      display_(new GWL_Display)
 {
   wl_log_set_handler_client(ghost_wayland_log_handler);
-
-#ifdef USE_EVENT_BACKGROUND_THREAD
-  server_mutex = new std::mutex;
-  timer_mutex = new std::mutex;
-  main_thread_id = std::this_thread::get_id();
-#endif
 
   display_->system = this;
   /* Connect to the Wayland server. */
@@ -5680,6 +5707,12 @@ GHOST_SystemWayland::GHOST_SystemWayland(bool background)
     }
   }
 
+  /* Without this, the output fractional size from `display->xdg.output_manager` isn't known,
+   * while this isn't essential, the first window creation uses this for setting the size.
+   * Supporting both XDG initialized/uninitialized outputs is possible it complicates logic.
+   * see: #113328 for an example of size on startup issues. */
+  wl_display_roundtrip(display_->wl.display);
+
 #ifdef USE_EVENT_BACKGROUND_THREAD
   gwl_display_event_thread_create(display_);
 
@@ -5733,7 +5766,7 @@ bool GHOST_SystemWayland::processEvents(bool waitForEvent)
 
   {
     std::lock_guard lock{display_->events_pending_mutex};
-    for (GHOST_IEvent *event : display_->events_pending) {
+    for (const GHOST_IEvent *event : display_->events_pending) {
 
       /* Perform actions that aren't handled in a thread. */
       switch (event->getType()) {
@@ -6294,12 +6327,16 @@ void GHOST_SystemWayland::getMainDisplayDimensions(uint32_t &width, uint32_t &he
   std::lock_guard lock_server_guard{*server_mutex};
 #endif
 
-  if (display_->outputs.empty()) {
-    return;
+  if (!display_->outputs.empty()) {
+    /* We assume first output as main. */
+    const GWL_Output *output = display_->outputs[0];
+    int32_t size_native[2] = {UNPACK2(output->size_native)};
+    if (ELEM(output->transform, WL_OUTPUT_TRANSFORM_90, WL_OUTPUT_TRANSFORM_270)) {
+      std::swap(size_native[0], size_native[1]);
+    }
+    width = uint32_t(size_native[0]);
+    height = uint32_t(size_native[1]);
   }
-  /* We assume first output as main. */
-  width = uint32_t(display_->outputs[0]->size_native[0]);
-  height = uint32_t(display_->outputs[0]->size_native[1]);
 }
 
 void GHOST_SystemWayland::getAllDisplayDimensions(uint32_t &width, uint32_t &height) const
@@ -6307,24 +6344,29 @@ void GHOST_SystemWayland::getAllDisplayDimensions(uint32_t &width, uint32_t &hei
 #ifdef USE_EVENT_BACKGROUND_THREAD
   std::lock_guard lock_server_guard{*server_mutex};
 #endif
+  if (!display_->outputs.empty()) {
+    int32_t xy_min[2] = {INT32_MAX, INT32_MAX};
+    int32_t xy_max[2] = {INT32_MIN, INT32_MIN};
 
-  int32_t xy_min[2] = {INT32_MAX, INT32_MAX};
-  int32_t xy_max[2] = {INT32_MIN, INT32_MIN};
-
-  for (const GWL_Output *output : display_->outputs) {
-    int32_t xy[2] = {0, 0};
-    if (output->has_position_logical) {
-      xy[0] = output->position_logical[0];
-      xy[1] = output->position_logical[1];
+    for (const GWL_Output *output : display_->outputs) {
+      int32_t xy[2] = {0, 0};
+      int32_t size_native[2] = {UNPACK2(output->size_native)};
+      if (output->has_position_logical) {
+        xy[0] = output->position_logical[0];
+        xy[1] = output->position_logical[1];
+      }
+      if (ELEM(output->transform, WL_OUTPUT_TRANSFORM_90, WL_OUTPUT_TRANSFORM_270)) {
+        std::swap(size_native[0], size_native[1]);
+      }
+      xy_min[0] = std::min(xy_min[0], xy[0]);
+      xy_min[1] = std::min(xy_min[1], xy[1]);
+      xy_max[0] = std::max(xy_max[0], xy[0] + size_native[0]);
+      xy_max[1] = std::max(xy_max[1], xy[1] + size_native[1]);
     }
-    xy_min[0] = std::min(xy_min[0], xy[0]);
-    xy_min[1] = std::min(xy_min[1], xy[1]);
-    xy_max[0] = std::max(xy_max[0], xy[0] + output->size_native[0]);
-    xy_max[1] = std::max(xy_max[1], xy[1] + output->size_native[1]);
-  }
 
-  width = xy_max[0] - xy_min[0];
-  height = xy_max[1] - xy_min[1];
+    width = xy_max[0] - xy_min[0];
+    height = xy_max[1] - xy_min[1];
+  }
 }
 
 GHOST_IContext *GHOST_SystemWayland::createOffscreenContext(GHOST_GPUSettings gpuSettings)
@@ -6333,9 +6375,7 @@ GHOST_IContext *GHOST_SystemWayland::createOffscreenContext(GHOST_GPUSettings gp
   std::lock_guard lock_server_guard{*server_mutex};
 #endif
 
-#ifdef WITH_VULKAN_BACKEND
   const bool debug_context = (gpuSettings.flags & GHOST_gpuDebugContext) != 0;
-#endif
 
   switch (gpuSettings.context_type) {
 
@@ -6350,6 +6390,7 @@ GHOST_IContext *GHOST_SystemWayland::createOffscreenContext(GHOST_GPUSettings gp
                                                    nullptr,
                                                    wl_surface,
                                                    display_->wl.display,
+                                                   nullptr,
                                                    1,
                                                    2,
                                                    debug_context);
@@ -6375,16 +6416,18 @@ GHOST_IContext *GHOST_SystemWayland::createOffscreenContext(GHOST_GPUSettings gp
 
       for (int minor = 6; minor >= 3; --minor) {
         /* Caller must lock `system->server_mutex`. */
-        GHOST_Context *context = new GHOST_ContextEGL(this,
-                                                      false,
-                                                      EGLNativeWindowType(egl_window),
-                                                      EGLNativeDisplayType(display_->wl.display),
-                                                      EGL_CONTEXT_OPENGL_CORE_PROFILE_BIT,
-                                                      4,
-                                                      minor,
-                                                      GHOST_OPENGL_EGL_CONTEXT_FLAGS,
-                                                      GHOST_OPENGL_EGL_RESET_NOTIFICATION_STRATEGY,
-                                                      EGL_OPENGL_API);
+        GHOST_Context *context = new GHOST_ContextEGL(
+            this,
+            false,
+            EGLNativeWindowType(egl_window),
+            EGLNativeDisplayType(display_->wl.display),
+            EGL_CONTEXT_OPENGL_CORE_PROFILE_BIT,
+            4,
+            minor,
+            GHOST_OPENGL_EGL_CONTEXT_FLAGS |
+                (debug_context ? EGL_CONTEXT_OPENGL_DEBUG_BIT_KHR : 0),
+            GHOST_OPENGL_EGL_RESET_NOTIFICATION_STRATEGY,
+            EGL_OPENGL_API);
 
         if (context->initializeDrawingContext()) {
           wl_surface_set_user_data(wl_surface, egl_window);
@@ -6416,16 +6459,38 @@ GHOST_TSuccess GHOST_SystemWayland::disposeContext(GHOST_IContext *context)
 #ifdef USE_EVENT_BACKGROUND_THREAD
   std::lock_guard lock_server_guard{*server_mutex};
 #endif
-  wl_surface *wl_surface = (struct wl_surface *)((GHOST_Context *)context)->getUserData();
+
+  GHOST_TDrawingContextType type = GHOST_kDrawingContextTypeNone;
+#ifdef WITH_OPENGL_BACKEND
+  if (dynamic_cast<GHOST_ContextEGL *>(context)) {
+    type = GHOST_kDrawingContextTypeOpenGL;
+  }
+#endif /* WITH_OPENGL_BACKEND */
+#ifdef WITH_VULKAN_BACKEND
+  if (dynamic_cast<GHOST_ContextVK *>(context)) {
+    type = GHOST_kDrawingContextTypeVulkan;
+  }
+#endif /* WITH_VULKAN_BACKEND */
+
+  wl_surface *wl_surface = static_cast<struct wl_surface *>(
+      (static_cast<GHOST_Context *>(context))->getUserData());
+
   /* Delete the context before the window so the context is able to release
    * native resources (such as the #EGLSurface) before WAYLAND frees them. */
   delete context;
 
-  wl_egl_window *egl_window = (wl_egl_window *)wl_surface_get_user_data(wl_surface);
-  if (egl_window != nullptr) {
-    wl_egl_window_destroy(egl_window);
+#ifdef WITH_OPENGL_BACKEND
+  if (type == GHOST_kDrawingContextTypeOpenGL) {
+    wl_egl_window *egl_window = static_cast<wl_egl_window *>(wl_surface_get_user_data(wl_surface));
+    if (egl_window != nullptr) {
+      wl_egl_window_destroy(egl_window);
+    }
   }
+#endif /* WITH_OPENGL_BACKEND */
+
   wl_surface_destroy(wl_surface);
+
+  (void)type; /* Maybe unused. */
 
   return GHOST_kSuccess;
 }
@@ -6454,7 +6519,8 @@ GHOST_IWindow *GHOST_SystemWayland::createWindow(const char *title,
       gpuSettings.context_type,
       is_dialog,
       ((gpuSettings.flags & GHOST_gpuStereoVisual) != 0),
-      exclusive);
+      exclusive,
+      (gpuSettings.flags & GHOST_gpuDebugContext) != 0);
 
   if (window) {
     if (window->getValid()) {
@@ -6811,7 +6877,7 @@ GHOST_TSuccess GHOST_SystemWayland::cursor_bitmap_get(GHOST_CursorBitmapRef *bit
   bitmap->hot_spot[0] = cursor->wl.image.hotspot_x;
   bitmap->hot_spot[1] = cursor->wl.image.hotspot_y;
 
-  bitmap->data = (uint8_t *)static_cast<void *>(cursor->custom_data);
+  bitmap->data = static_cast<uint8_t *>(cursor->custom_data);
 
   return GHOST_kSuccess;
 }
@@ -6923,12 +6989,14 @@ static const char *ghost_wl_surface_cursor_tablet_tag_id = "GHOST-cursor-tablet"
 
 bool ghost_wl_output_own(const wl_output *wl_output)
 {
-  return wl_proxy_get_tag((wl_proxy *)wl_output) == &ghost_wl_output_tag_id;
+  const wl_proxy *proxy = reinterpret_cast<const wl_proxy *>(wl_output);
+  return wl_proxy_get_tag(const_cast<wl_proxy *>(proxy)) == &ghost_wl_output_tag_id;
 }
 
 bool ghost_wl_surface_own(const wl_surface *wl_surface)
 {
-  return wl_proxy_get_tag((wl_proxy *)wl_surface) == &ghost_wl_surface_tag_id;
+  const wl_proxy *proxy = reinterpret_cast<const wl_proxy *>(wl_surface);
+  return wl_proxy_get_tag(const_cast<wl_proxy *>(proxy)) == &ghost_wl_surface_tag_id;
 }
 
 bool ghost_wl_surface_own_with_null_check(const wl_surface *wl_surface)
@@ -6938,32 +7006,39 @@ bool ghost_wl_surface_own_with_null_check(const wl_surface *wl_surface)
 
 bool ghost_wl_surface_own_cursor_pointer(const wl_surface *wl_surface)
 {
-  return wl_proxy_get_tag((wl_proxy *)wl_surface) == &ghost_wl_surface_cursor_pointer_tag_id;
+  const wl_proxy *proxy = reinterpret_cast<const wl_proxy *>(wl_surface);
+  return wl_proxy_get_tag(const_cast<wl_proxy *>(proxy)) ==
+         &ghost_wl_surface_cursor_pointer_tag_id;
 }
 
 bool ghost_wl_surface_own_cursor_tablet(const wl_surface *wl_surface)
 {
-  return wl_proxy_get_tag((wl_proxy *)wl_surface) == &ghost_wl_surface_cursor_tablet_tag_id;
+  const wl_proxy *proxy = reinterpret_cast<const wl_proxy *>(wl_surface);
+  return wl_proxy_get_tag(const_cast<wl_proxy *>(proxy)) == &ghost_wl_surface_cursor_tablet_tag_id;
 }
 
 void ghost_wl_output_tag(wl_output *wl_output)
 {
-  wl_proxy_set_tag((wl_proxy *)wl_output, &ghost_wl_output_tag_id);
+  wl_proxy *proxy = reinterpret_cast<wl_proxy *>(wl_output);
+  wl_proxy_set_tag(proxy, &ghost_wl_output_tag_id);
 }
 
 void ghost_wl_surface_tag(wl_surface *wl_surface)
 {
-  wl_proxy_set_tag((wl_proxy *)wl_surface, &ghost_wl_surface_tag_id);
+  wl_proxy *proxy = reinterpret_cast<wl_proxy *>(wl_surface);
+  wl_proxy_set_tag(proxy, &ghost_wl_surface_tag_id);
 }
 
 void ghost_wl_surface_tag_cursor_pointer(wl_surface *wl_surface)
 {
-  wl_proxy_set_tag((wl_proxy *)wl_surface, &ghost_wl_surface_cursor_pointer_tag_id);
+  wl_proxy *proxy = reinterpret_cast<wl_proxy *>(wl_surface);
+  wl_proxy_set_tag(proxy, &ghost_wl_surface_cursor_pointer_tag_id);
 }
 
 void ghost_wl_surface_tag_cursor_tablet(wl_surface *wl_surface)
 {
-  wl_proxy_set_tag((wl_proxy *)wl_surface, &ghost_wl_surface_cursor_tablet_tag_id);
+  wl_proxy *proxy = reinterpret_cast<wl_proxy *>(wl_surface);
+  wl_proxy_set_tag(proxy, &ghost_wl_surface_cursor_tablet_tag_id);
 }
 
 /** \} */
@@ -7227,16 +7302,16 @@ bool GHOST_SystemWayland::window_cursor_grab_set(const GHOST_TGrabCursorMode mod
 
   /* Ignore, if the required protocols are not supported. */
   if (UNLIKELY(!display_->wp.relative_pointer_manager || !display_->wp.pointer_constraints)) {
-    return GHOST_kFailure;
+    return false;
   }
 
   GWL_Seat *seat = gwl_display_seat_active_get(display_);
   if (UNLIKELY(!seat)) {
-    return GHOST_kFailure;
+    return false;
   }
   /* No change, success. */
   if (mode == mode_current) {
-    return GHOST_kSuccess;
+    return true;
   }
 
 #ifdef USE_GNOME_CONFINE_HACK
@@ -7357,10 +7432,11 @@ bool GHOST_SystemWayland::window_cursor_grab_set(const GHOST_TGrabCursorMode mod
   if (mode != GHOST_kGrabDisable) {
     if (grab_state_next.use_lock) {
       if (!grab_state_prev.use_lock) {
-        /* TODO(@ideasman42): As WAYLAND does not support warping the pointer it may not be
-         * possible to support #GHOST_kGrabWrap by pragmatically settings it's coordinates.
-         * An alternative could be to draw the cursor in software (and hide the real cursor),
-         * or just accept a locked cursor on WAYLAND. */
+        /* As WAYLAND does not support setting the cursor coordinates programmatically,
+         * #GHOST_kGrabWrap cannot be supported by positioning the cursor directly.
+         * Instead the cursor is locked in place, using a software cursor that is warped.
+         * Then WAYLAND's #zwp_locked_pointer_v1_set_cursor_position_hint is used to restore
+         * the cursor to the warped location. */
         seat->wp.relative_pointer = zwp_relative_pointer_manager_v1_get_relative_pointer(
             display_->wp.relative_pointer_manager, seat->wl.pointer);
         zwp_relative_pointer_v1_add_listener(
@@ -7402,7 +7478,7 @@ bool GHOST_SystemWayland::window_cursor_grab_set(const GHOST_TGrabCursorMode mod
   seat->use_pointer_software_confine = use_software_confine;
 #endif
 
-  return GHOST_kSuccess;
+  return true;
 }
 
 #ifdef WITH_GHOST_WAYLAND_LIBDECOR
@@ -7426,7 +7502,11 @@ bool ghost_wl_dynload_libraries_init()
 
   if (wayland_dynload_client_init(verbose) && /* `libwayland-client`. */
       wayland_dynload_cursor_init(verbose) && /* `libwayland-cursor`. */
-      wayland_dynload_egl_init(verbose)       /* `libwayland-egl`. */
+#  ifdef WITH_OPENGL_BACKEND
+      wayland_dynload_egl_init(verbose) /* `libwayland-egl`. */
+#  else
+      true
+#  endif
   )
   {
 #  ifdef WITH_GHOST_WAYLAND_LIBDECOR
@@ -7437,7 +7517,9 @@ bool ghost_wl_dynload_libraries_init()
 
   wayland_dynload_client_exit();
   wayland_dynload_cursor_exit();
+#  ifdef WITH_OPENGL_BACKEND
   wayland_dynload_egl_exit();
+#  endif
 
   return false;
 }
@@ -7446,7 +7528,9 @@ void ghost_wl_dynload_libraries_exit()
 {
   wayland_dynload_client_exit();
   wayland_dynload_cursor_exit();
+#  ifdef WITH_OPENGL_BACKEND
   wayland_dynload_egl_exit();
+#  endif
 #  ifdef WITH_GHOST_WAYLAND_LIBDECOR
   wayland_dynload_libdecor_exit();
 #  endif

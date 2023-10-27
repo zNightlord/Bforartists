@@ -72,7 +72,7 @@
 #include "BKE_node.h"
 #include "BKE_node_runtime.hh"
 #include "BKE_node_tree_interface.hh"
-#include "BKE_object.h"
+#include "BKE_object.hh"
 #include "BKE_pointcloud.h"
 #include "BKE_report.h"
 #include "BKE_scene.h"
@@ -627,8 +627,8 @@ bool ED_object_parent_set(ReportList *reports,
        * NOTE: the old (2.4x) method was to set ob->partype = PARSKEL,        * creating the
        * virtual modifiers.
        */
-      ob->partype = PAROBJECT;     /* NOTE: DNA define, not operator property. */
-      /* ob->partype = PARSKEL; */ /* NOTE: DNA define, not operator property. */
+      ob->partype = PAROBJECT; /* NOTE: DNA define, not operator property. */
+      // ob->partype = PARSKEL; /* NOTE: DNA define, not operator property. */
 
       /* BUT, to keep the deforms, we need a modifier,        * and then we need to set the object
        * that it uses

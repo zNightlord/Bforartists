@@ -85,7 +85,7 @@ struct TransSeq {
   int start, machine;
   int startofs, endofs;
   int anim_startofs, anim_endofs;
-  /* int final_left, final_right; */ /* UNUSED */
+  // int final_left, final_right; /* UNUSED. */
   int len;
   float content_start;
 };
@@ -1404,6 +1404,23 @@ EnumPropertyItem prop_side_types[] = {
     {0, nullptr, 0, nullptr, nullptr},
 };
 
+/* Get the splitting side for the Split Strips's operator exec() callback. */
+static int sequence_split_side_for_exec_get(wmOperator *op)
+{
+  const int split_side = RNA_enum_get(op->ptr, "side");
+
+  /* The mouse position can not be resolved from the exec() as the mouse coordinate is not
+   * accessible. So fall-back to the RIGHT side instead.
+   *
+   * The SEQ_SIDE_MOUSE is used by the Strip menu, together with the EXEC_DEFAULT operator
+   * context in order to have properly resolved shortcut in the menu. */
+  if (split_side == SEQ_SIDE_MOUSE) {
+    return SEQ_SIDE_RIGHT;
+  }
+
+  return split_side;
+}
+
 static int sequencer_split_exec(bContext *C, wmOperator *op)
 {
   Main *bmain = CTX_data_main(C);
@@ -1412,11 +1429,13 @@ static int sequencer_split_exec(bContext *C, wmOperator *op)
   bool changed = false;
   bool seq_selected = false;
 
-  const int split_frame = RNA_int_get(op->ptr, "frame");
-  const int split_channel = RNA_int_get(op->ptr, "channel");
   const bool use_cursor_position = RNA_boolean_get(op->ptr, "use_cursor_position");
+
+  const int split_frame = use_cursor_position ? RNA_int_get(op->ptr, "frame") : scene->r.cfra;
+  const int split_channel = use_cursor_position ? RNA_int_get(op->ptr, "channel") : 0;
+
   const eSeqSplitMethod method = eSeqSplitMethod(RNA_enum_get(op->ptr, "type"));
-  const int split_side = RNA_enum_get(op->ptr, "side");
+  const int split_side = sequence_split_side_for_exec_get(op);
   const bool ignore_selection = RNA_boolean_get(op->ptr, "ignore_selection");
 
   SEQ_prefetch_stop(scene);
@@ -1736,6 +1755,10 @@ static int sequencer_delete_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
 
+  if (sequencer_retiming_mode_is_active(C)) {
+    sequencer_retiming_key_remove_exec(C, op);
+  }
+
   SEQ_prefetch_stop(scene);
 
   SeqCollection *selected_strips = selected_strips_from_context(C);
@@ -1783,7 +1806,7 @@ void SEQUENCER_OT_delete(wmOperatorType *ot)
   /* Identifiers. */
   ot->name = "Delete Strips";
   ot->idname = "SEQUENCER_OT_delete";
-  ot->description = "Delete selected strips from the sequencer";
+  ot->description = "Delete selected strips or retiming keyframes from the sequencer"; /*BFA - updated tooltip*/
 
   /* Api callbacks. */
   /*ot->invoke = sequencer_delete_invoke;*/ /*bfa - turned this dialog off*/

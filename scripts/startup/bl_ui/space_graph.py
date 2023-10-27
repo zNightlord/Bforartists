@@ -99,8 +99,7 @@ class GRAPH_HT_header(Header):
         sub = row.row(align=True)
         sub.popover(
             panel="GRAPH_PT_snapping",
-            icon='NONE',
-            text="Modes",
+            text="",
         )
 
         row = layout.row(align=True)
@@ -222,7 +221,7 @@ class GRAPH_PT_snapping(Panel):
         col.label(text="Snap To")
         tool_settings = context.tool_settings
         col.prop(tool_settings, "snap_anim_element", expand=True)
-        if tool_settings.snap_anim_element not in ('MARKER', ):
+        if tool_settings.snap_anim_element != 'MARKER':
             col.prop(tool_settings, "use_snap_time_absolute")
 
 
@@ -504,7 +503,7 @@ class GRAPH_MT_key_density(Menu):
         # as we do not have a modal mode for it, so just execute it.
         with operator_context(layout, 'EXEC_REGION_WIN'):
             layout.operator("graph.decimate", text="Decimate (Allowed Change)", icon="DECIMATE").mode = 'ERROR'
-        layout.operator("graph.sample", icon="SAMPLE_KEYFRAMES")
+        layout.operator("graph.bake_keys", icon = 'BAKE_ACTION')
 
         layout.separator()
         layout.operator("graph.clean", icon="CLEAN_KEYS").channels = False
@@ -523,10 +522,10 @@ class GRAPH_MT_key_blending(Menu):
         layout.operator("graph.blend_to_ease", text="Blend to Ease", icon='BLEND_TO_EASE')
         layout.operator("graph.blend_offset", text="Blend Offset", icon='BLEND_OFFSET')
         layout.operator("graph.match_slope", text="Match Slope", icon='SET_CURVE_TILT')
-        layout.operator("graph.push_pull", text="Push Pull")
+        layout.operator("graph.push_pull", text="Push Pull", icon='PUSH_PULL')
         layout.operator("graph.shear", text="Shear Keys", icon='SHEAR')
         layout.operator("graph.scale_average", text="Scale Average", icon='SCALE_AVERAGE')
-        layout.operator("graph.time_offset", text="Time Offset")
+        layout.operator("graph.time_offset", text="Time Offset", icon='MOD_TIME')
 
 
 class GRAPH_MT_key_smoothing(Menu):
@@ -570,17 +569,6 @@ class GRAPH_MT_key(Menu):
 
         layout.separator()
 
-        layout.operator("graph.decimate", text="Decimate (Ratio)", icon="DECIMATE").mode = 'RATIO'
-
-        # Using the modal operation doesn't make sense for this variant
-        # as we do not have a modal mode for it, so just execute it.
-        with operator_context(layout, 'EXEC_REGION_WIN'):
-            layout.operator("graph.decimate", text="Decimate (Allowed Change)", icon="DECIMATE").mode = 'ERROR'
-
-        layout.menu("GRAPH_MT_slider", text="Slider Operators")
-
-        layout.operator("graph.clean", icon="CLEAN_KEYS").channels = False
-        layout.operator("graph.clean", text="Clean Channels", icon="CLEAN_CHANNELS").channels = True
         layout.operator("graph.smooth", icon="SMOOTH_KEYFRAMES")
 
         # BFA - moved from Channel Settings sub-menu
@@ -590,14 +578,13 @@ class GRAPH_MT_key(Menu):
         layout.operator("graph.sound_to_samples", icon="BAKE_SOUND")
 
         # BFA - redundant operators and menus
-        '''
+
         layout.separator()
 
-        layout.menu("GRAPH_MT_key_density") # bfa we already have this
-        # So hide it from here. But keep the classes for the Blender hotkeys ...
+        layout.menu("GRAPH_MT_key_density")
         layout.menu("GRAPH_MT_key_blending")
         layout.menu("GRAPH_MT_key_smoothing")
-        '''
+
 
 class GRAPH_MT_key_mirror(Menu):
     bl_label = "Mirror"
@@ -631,29 +618,6 @@ class GRAPH_MT_key_snap(Menu):
         layout.separator()
         layout.operator("graph.frame_jump", text="Cursor to Selection", icon="JUMP_TO_KEYFRAMES")
         layout.operator("graph.snap_cursor_value", text="Cursor Value to Selection", icon="VALUE_TO_SELECTION")
-
-
-class GRAPH_MT_slider(Menu):
-    bl_label = "Slider Operators"
-
-    def draw(self, _context):
-        layout = self.layout
-        layout.operator_context = 'INVOKE_DEFAULT'
-        layout.operator("graph.breakdown", text="Breakdown", icon='BREAKDOWNER_POSE')
-        layout.operator("graph.blend_to_neighbor", text="Blend to Neighbor", icon='BLEND_TO_NEIGHBOUR')
-        layout.operator("graph.blend_to_default", text="Blend to Default Value", icon='BLEND_TO_DEFAULT')
-        layout.operator("graph.ease", text="Ease", icon='IPO_EASE_IN_OUT')
-        layout.operator("graph.blend_to_ease", text="Blend to Ease", icon='BLEND_TO_EASE')
-        layout.operator("graph.blend_offset", text="Blend Offset", icon='BLEND_OFFSET')
-        layout.operator("graph.match_slope", text="Match Slope", icon='SET_CURVE_TILT')
-        layout.operator("graph.shear", text="Shear", icon='SHEAR')
-        layout.operator("graph.scale_average", text="Scale Average", icon='SCALE_AVERAGE')
-
-        layout.separator()
-
-        layout.operator("graph.gaussian_smooth", text="Smooth (Gaussian)", icon='PARTICLEBRUSH_SMOOTH')
-        layout.operator("graph.smooth", text="Smooth (Legacy)", icon='PARTICLEBRUSH_SMOOTH')
-        layout.operator("graph.butterworth_smooth", icon='PARTICLEBRUSH_SMOOTH')
 
 
 class GRAPH_MT_key_transform(Menu):
@@ -695,7 +659,7 @@ class GRAPH_MT_delete(Menu):
 
 
 class GRAPH_MT_context_menu(Menu):
-    bl_label = "F-Curve Context Menu"
+    bl_label = "F-Curve"
 
     def draw(self, _context):
         layout = self.layout
@@ -754,51 +718,6 @@ class GRAPH_MT_snap_pie(Menu):
         pie.operator("graph.snap_cursor_value", text="Cursor Value to Selection")
 
 
-class GRAPH_MT_channel_context_menu(Menu):
-    bl_label = "F-Curve Channel Context Menu"
-
-    def draw(self, context):
-        layout = self.layout
-        st = context.space_data
-
-        layout.separator()
-        layout.operator("anim.channels_setting_enable", text="Mute Channels", icon='MUTE_IPO_ON').type = 'MUTE'
-        layout.operator("anim.channels_setting_disable", text="Unmute Channels", icon='MUTE_IPO_OFF').type = 'MUTE'
-        layout.separator()
-        layout.operator("anim.channels_setting_enable", text="Protect Channels", icon="LOCKED").type = 'PROTECT'
-        layout.operator("anim.channels_setting_disable", text="Unprotect Channels", icon="UNLOCKED").type = 'PROTECT'
-        layout.operator("anim.channels_editable_toggle", icon="LOCKED")
-
-        layout.separator()
-        layout.operator("anim.channels_group", icon="NEW_GROUP")
-        layout.operator("anim.channels_ungroup", icon="REMOVE_FROM_ALL_GROUPS")
-
-        layout.separator()
-        layout.operator_menu_enum("graph.extrapolation_type", "type", text="Extrapolation Mode")
-        # To get it to display the hotkey.
-        layout.operator_context = operator_context
-        layout.operator_menu_enum("graph.fmodifier_add", "type", text="Add F-Curve Modifier").only_active = False
-        layout.operator_context = 'INVOKE_REGION_CHANNELS'
-
-        layout.separator()
-        layout.operator("graph.hide", text="Hide Selected Curves", icon='HIDE_ON').unselected = False
-        layout.operator("graph.hide", text="Hide Unselected Curves", icon='HIDE_UNSELECTED').unselected = True
-        layout.operator("graph.reveal", icon='HIDE_OFF')
-
-        layout.separator()
-        layout.operator("anim.channels_expand", icon="EXPANDMENU")
-        layout.operator("anim.channels_collapse", icon="COLLAPSEMENU")
-
-        layout.separator()
-        layout.operator_menu_enum("anim.channels_move", "direction", text="Move...")
-
-        layout.separator()
-
-        layout.operator("anim.channels_delete", icon="DELETE")
-        if st.mode == 'DRIVERS':
-            layout.operator("graph.driver_delete_invalid", icon="DELETE")
-
-
 classes = (
     ANIM_OT_switch_editor_in_graph,
     ANIM_OT_switch_editor_in_driver,
@@ -824,12 +743,10 @@ classes = (
     GRAPH_MT_key_blending,
     GRAPH_MT_delete,
     GRAPH_MT_context_menu,
-    GRAPH_MT_channel_context_menu,
     GRAPH_MT_pivot_pie,
     GRAPH_MT_snap_pie,
     GRAPH_MT_view_pie,
     GRAPH_PT_filters,
-    GRAPH_MT_slider,
     GRAPH_PT_snapping,
 )
 

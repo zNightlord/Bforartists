@@ -20,12 +20,15 @@
 #include "BKE_paint.hh"
 #include "BKE_pbvh_api.hh"
 
+#include "BLI_array.hh"
+#include "BLI_bit_vector.hh"
 #include "BLI_bitmap.h"
 #include "BLI_compiler_attrs.h"
 #include "BLI_compiler_compat.h"
 #include "BLI_generic_array.hh"
 #include "BLI_gsqueue.h"
 #include "BLI_implicit_sharing.hh"
+#include "BLI_math_vector_types.hh"
 #include "BLI_set.hh"
 #include "BLI_span.hh"
 #include "BLI_threads.h"
@@ -70,6 +73,7 @@ enum SculptUpdateType {
   SCULPT_UPDATE_VISIBILITY = 1 << 2,
   SCULPT_UPDATE_COLOR = 1 << 3,
   SCULPT_UPDATE_IMAGE = 1 << 4,
+  SCULPT_UPDATE_FACE_SET = 1 << 5,
 };
 
 struct SculptCursorGeometryInfo {
@@ -176,30 +180,30 @@ struct SculptUndoNode {
   char idname[MAX_ID_NAME]; /* Name instead of pointer. */
   void *node;               /* only during push, not valid afterwards! */
 
-  float (*co)[3];
-  float (*orig_co)[3];
-  float (*no)[3];
-  float (*col)[4];
-  float *mask;
+  blender::Array<blender::float3> co;
+  blender::Array<blender::float3> orig_co;
+  blender::Array<blender::float3> no;
+  blender::Array<blender::float4> col;
+  blender::Array<float> mask;
   int totvert;
 
-  float (*loop_col)[4];
-  float (*orig_loop_col)[4];
+  blender::Array<blender::float4> loop_col;
+  blender::Array<blender::float4> orig_loop_col;
   int totloop;
 
   /* non-multires */
-  int maxvert; /* to verify if totvert it still the same */
-  int *index;  /* Unique vertex indices, to restore into right location */
+  int maxvert;               /* to verify if totvert it still the same */
+  blender::Array<int> index; /* Unique vertex indices, to restore into right location */
   int maxloop;
-  int *loop_index;
+  blender::Array<int> loop_index;
 
-  BLI_bitmap *vert_hidden;
+  blender::BitVector<> vert_hidden;
 
   /* multires */
-  int maxgrid;  /* same for grid */
-  int gridsize; /* same for grid */
-  int totgrid;  /* to restore into right location */
-  int *grids;   /* to restore into right location */
+  int maxgrid;               /* same for grid */
+  int gridsize;              /* same for grid */
+  int totgrid;               /* to restore into right location */
+  blender::Array<int> grids; /* to restore into right location */
   BLI_bitmap **grid_hidden;
 
   /* bmesh */
@@ -227,9 +231,9 @@ struct SculptUndoNode {
   float pivot_rot[4];
 
   /* Sculpt Face Sets */
-  int *face_sets;
+  blender::Array<int> face_sets;
 
-  PBVHFaceRef *faces;
+  blender::Array<PBVHFaceRef> faces;
   int faces_num;
 
   size_t undo_size;
@@ -850,6 +854,30 @@ bool SCULPT_stroke_is_first_brush_step_of_symmetry_pass(StrokeCache *cache);
 /* -------------------------------------------------------------------- */
 /** \name Sculpt mesh accessor API
  * \{ */
+
+struct SculptMaskWriteInfo {
+  float *layer = nullptr;
+  int bm_offset = -1;
+};
+SculptMaskWriteInfo SCULPT_mask_get_for_write(SculptSession *ss);
+inline void SCULPT_mask_vert_set(const PBVHType type,
+                                 const SculptMaskWriteInfo mask_write,
+                                 const float value,
+                                 PBVHVertexIter &vd)
+{
+  switch (type) {
+    case PBVH_FACES:
+      mask_write.layer[vd.index] = value;
+      break;
+    case PBVH_BMESH:
+      BM_ELEM_CD_SET_FLOAT(vd.bm_vert, mask_write.bm_offset, value);
+      break;
+    case PBVH_GRIDS:
+      *CCG_elem_mask(&vd.key, vd.grid) = value;
+      break;
+  }
+}
+void SCULPT_mask_write_array(SculptSession *ss, Span<PBVHNode *> nodes, Span<float> mask);
 
 /** Ensure random access; required for PBVH_BMESH */
 void SCULPT_vertex_random_access_ensure(SculptSession *ss);

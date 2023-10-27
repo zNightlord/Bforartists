@@ -321,6 +321,36 @@ class SCENE_PT_physics(SceneButtonsPanel, Panel):
         layout.prop(scene, "gravity")
 
 
+class SCENE_PT_simulation(SceneButtonsPanel, Panel):
+    bl_label = "Simulation"
+    bl_options = {'DEFAULT_CLOSED'}
+
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+
+        scene = context.scene
+
+        col = layout.column()
+        split = col.split(factor=.4)
+        split.use_property_split=False
+        split.prop(scene, "use_custom_simulation_range", text="Simulation Range")
+
+        split.alignment = 'LEFT'
+        if scene.use_custom_simulation_range:
+            split.label(icon='DISCLOSURE_TRI_DOWN')
+        else:
+            split.label(icon='DISCLOSURE_TRI_RIGHT')
+
+        if scene.use_custom_simulation_range:
+            row = col.row()
+            row.separator()
+            row.prop(scene, "simulation_frame_start", text="Start")
+            row = col.row()
+            row.separator()
+            row.prop(scene, "simulation_frame_end", text="End")
+
+
 class SCENE_PT_rigid_body_world(SceneButtonsPanel, Panel):
     bl_label = "Rigid Body World"
     bl_options = {'DEFAULT_CLOSED'}
@@ -422,6 +452,7 @@ classes = (
     SCENE_PT_scene,
     SCENE_PT_unit,
     SCENE_PT_physics,
+    SCENE_PT_simulation,
     SCENE_PT_keying_sets,
     SCENE_PT_keying_set_paths,
     SCENE_PT_keyframing_settings,

@@ -31,7 +31,7 @@
 #include "BKE_context.h"
 #include "BKE_global.h"
 #include "BKE_idprop.h"
-#include "BKE_screen.h"
+#include "BKE_screen.hh"
 
 #include "RNA_access.hh"
 #include "RNA_prototypes.h"
@@ -614,7 +614,7 @@ static void ui_item_array(uiLayout *layout,
     }
 
     w /= dim_size[0];
-    /* h /= dim_size[1]; */ /* UNUSED */
+    // h /= dim_size[1]; /* UNUSED */
 
     for (int a = 0; a < len; a++) {
       col = a % dim_size[0];
@@ -1459,7 +1459,8 @@ void uiItemsFullEnumO_items(uiLayout *layout,
                             wmOperatorCallContext context,
                             eUI_Item_Flag flag,
                             const EnumPropertyItem *item_array,
-                            int totitem)
+                            int totitem,
+                            int active)
 {
   const char *propname = RNA_property_identifier(prop);
   if (RNA_property_type(prop) != PROP_ENUM) {
@@ -1548,7 +1549,13 @@ void uiItemsFullEnumO_items(uiLayout *layout,
                       flag,
                       nullptr);
 
-      ui_but_tip_from_enum_item(static_cast<uiBut *>(block->buttons.last), item);
+      uiBut *but = static_cast<uiBut *>(block->buttons.last);
+
+      if (active == (i - 1)) {
+        but->flag |= UI_SELECT_DRAW;
+      }
+
+      ui_but_tip_from_enum_item(but, item);
     }
     else {
       if (item->name) {
@@ -1603,7 +1610,8 @@ void uiItemsFullEnumO(uiLayout *layout,
                       const char *propname,
                       IDProperty *properties,
                       wmOperatorCallContext context,
-                      eUI_Item_Flag flag)
+                      eUI_Item_Flag flag,
+                      const int active)
 {
   wmOperatorType *ot = WM_operatortype_find(opname, false); /* print error next */
 
@@ -1651,7 +1659,8 @@ void uiItemsFullEnumO(uiLayout *layout,
     }
 
     /* add items */
-    uiItemsFullEnumO_items(layout, ot, ptr, prop, properties, context, flag, item_array, totitem);
+    uiItemsFullEnumO_items(
+        layout, ot, ptr, prop, properties, context, flag, item_array, totitem, active);
 
     if (free) {
       MEM_freeN((void *)item_array);
@@ -2055,7 +2064,8 @@ void uiItemFullR(uiLayout *layout,
                  int value,
                  eUI_Item_Flag flag,
                  const char *name,
-                 int icon)
+                 int icon,
+                 const char *placeholder)
 {
   uiBlock *block = layout->root->block;
   char namestr[UI_MAX_NAME_STR];
@@ -2508,6 +2518,10 @@ void uiItemFullR(uiLayout *layout,
       ELEM(but->emboss, UI_EMBOSS_NONE, UI_EMBOSS_NONE_OR_STATUS))
   {
     UI_but_flag_enable(but, UI_BUT_LIST_ITEM);
+  }
+
+  if (but && placeholder) {
+    UI_but_placeholder_set(but, placeholder);
   }
 
 #ifdef UI_PROP_DECORATE
@@ -3226,6 +3240,8 @@ void uiItemPopoverPanel_ptr(
   if (ok && (pt->draw_header != nullptr)) {
     layout = uiLayoutRow(layout, true);
     Panel panel{};
+    Panel_Runtime panel_runtime{};
+    panel.runtime = &panel_runtime;
     panel.type = pt;
     panel.layout = layout;
     panel.flag = PNL_POPOVER;
@@ -3597,15 +3613,46 @@ struct MenuItemLevel {
   PointerRNA rnapoin;
 };
 
-static void menu_item_enum_opname_menu(bContext * /*C*/, uiLayout *layout, void *arg)
+/* Obtain the active menu item based on the calling button's text. */
+static int menu_item_enum_opname_menu_active(bContext *C, uiBut *but, MenuItemLevel *lvl)
+{
+  wmOperatorType *ot = WM_operatortype_find(lvl->opname, true);
+
+  if (!ot) {
+    return -1;
+  }
+
+  PointerRNA ptr;
+  const EnumPropertyItem *item_array = nullptr;
+  bool free;
+  int totitem;
+  WM_operator_properties_create_ptr(&ptr, ot);
+  /* so the context is passed to itemf functions (some need it) */
+  WM_operator_properties_sanitize(&ptr, false);
+  PropertyRNA *prop = RNA_struct_find_property(&ptr, lvl->propname);
+  RNA_property_enum_items_gettexted(C, &ptr, prop, &item_array, &totitem, &free);
+  int active = RNA_enum_from_name(item_array, but->str);
+  if (free) {
+    MEM_freeN((void *)item_array);
+  }
+
+  return active;
+}
+
+static void menu_item_enum_opname_menu(bContext *C, uiLayout *layout, void *arg)
 {
   uiBut *but = static_cast<uiBut *>(arg);
   MenuItemLevel *lvl = static_cast<MenuItemLevel *>(but->func_argN);
   /* Use the operator properties from the button owning the menu. */
   IDProperty *op_props = but->opptr ? static_cast<IDProperty *>(but->opptr->data) : nullptr;
 
+  /* The calling but's str _probably_ contains the active
+   * menu item name, set in uiItemMenuEnumFullO_ptr. */
+  const int active = menu_item_enum_opname_menu_active(C, but, lvl);
+
   uiLayoutSetOperatorContext(layout, lvl->opcontext);
-  uiItemsFullEnumO(layout, lvl->opname, lvl->propname, op_props, lvl->opcontext, UI_ITEM_NONE);
+  uiItemsFullEnumO(
+      layout, lvl->opname, lvl->propname, op_props, lvl->opcontext, UI_ITEM_NONE, active);
 
   /* override default, needed since this was assumed pre 2.70 */
   UI_block_direction_set(layout->root->block, UI_DIR_DOWN);
@@ -3797,7 +3844,7 @@ static void ui_litem_layout_row(uiLayout *litem)
   int freew, fixedx, freex, flag = 0, lastw = 0;
   float extra_pixel;
 
-  /* x = litem->x; */ /* UNUSED */
+  // x = litem->x; /* UNUSED */
   const int y = litem->y;
   int w = litem->w;
   int totw = 0;
@@ -5975,10 +6022,7 @@ void UI_menutype_draw(bContext *C, MenuType *mt, uiLayout *layout)
   }
   if (mt->listener) {
     /* Forward the menu type listener to the block we're drawing in. */
-    uiBlockDynamicListener *listener = static_cast<uiBlockDynamicListener *>(
-        MEM_mallocN(sizeof(*listener), __func__));
-    listener->listener_func = mt->listener;
-    BLI_addtail(&block->dynamic_listeners, listener);
+    ui_block_add_dynamic_listener(block, mt->listener);
   }
 
   if (layout->context) {
@@ -6016,9 +6060,12 @@ static bool ui_layout_has_panel_label(const uiLayout *layout, const PanelType *p
 
 static void ui_paneltype_draw_impl(bContext *C, PanelType *pt, uiLayout *layout, bool show_header)
 {
-  Panel *panel = MEM_cnew<Panel>(__func__);
-  panel->type = pt;
+  Panel *panel = BKE_panel_new(pt);
   panel->flag = PNL_POPOVER;
+
+  if (pt->listener) {
+    ui_block_add_dynamic_listener(uiLayoutGetBlock(layout), pt->listener);
+  }
 
   uiLayout *last_item = static_cast<uiLayout *>(layout->items.last);
 
@@ -6042,9 +6089,9 @@ static void ui_paneltype_draw_impl(bContext *C, PanelType *pt, uiLayout *layout,
   panel->layout = layout;
   pt->draw(C, panel);
   panel->layout = nullptr;
-  BLI_assert(panel->runtime.custom_data_ptr == nullptr);
+  BLI_assert(panel->runtime->custom_data_ptr == nullptr);
 
-  MEM_freeN(panel);
+  BKE_panel_free(panel);
 
   /* Draw child panels. */
   LISTBASE_FOREACH (LinkData *, link, &pt->children) {

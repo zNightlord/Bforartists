@@ -48,6 +48,7 @@
 #include "UI_view2d.hh"
 #include "UI_resources.hh" /* BFA - needed for icons */
 
+#include "ANIM_keyframing.hh"
 #include "ED_anim_api.hh"
 #include "ED_keyframes_edit.hh"
 #include "ED_keyframing.hh"
@@ -205,17 +206,17 @@ static void insert_graph_keys(bAnimContext *ac, eGraphKeys_InsertKey_Types mode)
        *   up adding the keyframes on a new F-Curve in the action data instead.
        */
       if (ale->id && !ale->owner && !fcu->driver) {
-        insert_keyframe(ac->bmain,
-                        reports,
-                        ale->id,
-                        nullptr,
-                        ((fcu->grp) ? (fcu->grp->name) : (nullptr)),
-                        fcu->rna_path,
-                        fcu->array_index,
-                        &anim_eval_context,
-                        eBezTriple_KeyframeType(ts->keyframe_type),
-                        &nla_cache,
-                        flag);
+        blender::animrig::insert_keyframe(ac->bmain,
+                                          reports,
+                                          ale->id,
+                                          nullptr,
+                                          ((fcu->grp) ? (fcu->grp->name) : (nullptr)),
+                                          fcu->rna_path,
+                                          fcu->array_index,
+                                          &anim_eval_context,
+                                          eBezTriple_KeyframeType(ts->keyframe_type),
+                                          &nla_cache,
+                                          flag);
       }
       else {
         AnimData *adt = ANIM_nla_mapping_get(ac, ale);
@@ -605,7 +606,7 @@ static int graphkeys_paste_exec(bContext *C, wmOperator *op)
 }
 
 static std::string graphkeys_paste_description(bContext * /*C*/,
-                                               wmOperatorType * /*op*/,
+                                               wmOperatorType * /*ot*/,
                                                PointerRNA *ptr)
 {
   /* Custom description if the 'flipped' option is used. */
@@ -831,13 +832,18 @@ static void clean_graph_keys(bAnimContext *ac, float thresh, bool clean_chan)
 
   /* Filter data. */
   filter = (ANIMFILTER_DATA_VISIBLE | ANIMFILTER_CURVE_VISIBLE | ANIMFILTER_FCURVESONLY |
-            ANIMFILTER_FOREDIT | ANIMFILTER_SEL | ANIMFILTER_NODUPLIS);
+            ANIMFILTER_FOREDIT | ANIMFILTER_NODUPLIS);
+  if (clean_chan) {
+    filter |= ANIMFILTER_SEL;
+  }
   ANIM_animdata_filter(
       ac, &anim_data, eAnimFilter_Flags(filter), ac->data, eAnimCont_Types(ac->datatype));
 
+  const bool only_selected_keys = !clean_chan;
   /* Loop through filtered data and clean curves. */
   LISTBASE_FOREACH (bAnimListElem *, ale, &anim_data) {
-    clean_fcurve(ac, ale, thresh, clean_chan);
+
+    clean_fcurve(ac, ale, thresh, clean_chan, only_selected_keys);
 
     ale->update |= ANIM_UPDATE_DEFAULT;
   }

@@ -85,6 +85,9 @@ LANGUAGES = (
     (46, "Thai (ภาษาไทย)", "th_TH"),
     (47, "Slovak (Slovenčina)", "sk_SK"),
     (48, "Georgian (ქართული)", "ka"),
+    (49, "Tamil (தமிழ்)", "ta"),
+    (50, "Khmer (ខ្មែរ)", "km"),
+    (51, "Swahili (Kiswahili)", "sw"),
 )
 
 # Default context, in py (keep in sync with `BLT_translation.h`)!
@@ -101,7 +104,7 @@ IMPORT_MIN_LEVEL = 0.0
 
 # Languages in the working repository that should not be imported in the Blender one currently...
 IMPORT_LANGUAGES_SKIP = {
-    'am_ET', 'bg_BG', 'el_GR', 'et_EE', 'ne_NP', 'ro_RO', 'uz_UZ@latin', 'uz_UZ@cyrillic', 'kk_KZ',
+    'am_ET', 'et_EE', 'ro_RO', 'uz_UZ@latin', 'uz_UZ@cyrillic', 'kk_KZ',
 }
 
 # Languages that need RTL pre-processing.
@@ -272,9 +275,23 @@ PYGETTEXT_KEYWORDS = (() +
     tuple((r"\.{}\(\s*" + _msg_re + r"\s*\)").format(it)
           for it in ("description", "error_message_add")) +
 
-    # Node socket labels
+    # Node socket labels from declarations: context-less names
+    tuple((r"\.{}\(\s*" + _msg_re +
+           r"\s*\)(?![^;]*\.translation_context\()[^;]*;").format(it)
+          for it in ("short_label",)) +
+
+    # Node socket labels from declarations: names with contexts
+    tuple((r"\.{}\(\s*" + _msg_re + r"[^;]*\.translation_context\(\s*" +
+           _ctxt_re + r"\s*\)").format(it)
+          for it in ("short_label",)) +
+
+    # Dynamic node socket labels
     tuple((r"{}\(\s*[^,]+,\s*" + _msg_re + r"\s*\)").format(it)
           for it in ("node_sock_label",)) +
+
+    # Node panel declarations
+    tuple((r"\.{}\(\s*" + _msg_re + r"\s*\)").format(it)
+          for it in ("add_panel",)) +
 
     # Geometry Nodes field inputs
     ((r"FieldInput\(CPPType::get<.*?>\(\),\s*" + _msg_re + r"\s*\)"),) +

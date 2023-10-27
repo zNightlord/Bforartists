@@ -5,7 +5,7 @@
 bl_info = {
     'name': 'glTF 2.0 format',
     'author': 'Julien Duroure, Scurest, Norbert Nopper, Urs Hanselmann, Moritz Becher, Benjamin Schmithüsen, Jim Eckerlein, and many external contributors',
-    "version": (4, 0, 19),
+    "version": (4, 1, 10),
     'blender': (4, 0, 0),
     'location': 'File > Import-Export',
     'description': 'Import-Export as glTF 2.0',
@@ -144,13 +144,10 @@ class ExportGLTF2_Base(ConvertGLTF2_Base):
                 'Most efficient and portable, but more difficult to edit later'),
                ('GLTF_SEPARATE', 'glTF Separate (.gltf + .bin + textures)',
                 'Exports multiple files, with separate JSON, binary and texture data. '
-                'Easiest to edit later'),
-                ('GLTF_EMBEDDED', 'glTF Embedded (.gltf)',
-                 'Exports a single file, with all data packed in JSON. '
-                 'Less efficient than binary, but easier to edit later')),
+                'Easiest to edit later')),
         description=(
-            'Output format and embedding options. Binary is most efficient, '
-            'but JSON (embedded or separate) may be easier to edit later'
+            'Output format. Binary is most efficient, '
+            'but JSON may be easier to edit later'
         ),
         default='GLB', #Warning => If you change the default, need to change the default filter too
         update=on_export_format_changed,
@@ -174,11 +171,13 @@ class ExportGLTF2_Base(ConvertGLTF2_Base):
     export_image_format: EnumProperty(
         name='Images',
         items=(('AUTO', 'Automatic',
-                'Save PNGs as PNGs and JPEGs as JPEGs. '
+                'Save PNGs as PNGs, JPEGs as JPEGs, WebPs as WebPs. '
                 'If neither one, use PNG'),
                 ('JPEG', 'JPEG Format (.jpg)',
                 'Save images as JPEGs. (Images that need alpha are saved as PNGs though.) '
                 'Be aware of a possible loss in quality'),
+                ('WEBP', 'WebP Format',
+                'Save images as WebPs as main image (no fallback)'),
                 ('NONE', 'None',
                  'Don\'t export images'),
                ),
@@ -189,15 +188,42 @@ class ExportGLTF2_Base(ConvertGLTF2_Base):
         default='AUTO'
     )
 
+    export_image_add_webp: BoolProperty(
+        name='Create WebP',
+        description=(
+            "Creates WebP textures for every textures. "
+            "For already WebP textures, nothing happen"
+        ),
+        default=False
+    )
+
+    export_image_webp_fallback: BoolProperty(
+        name='WebP fallback',
+        description=(
+            "For all WebP textures, create a PNG fallback texture"
+        ),
+        default=False
+    )
+
     export_texture_dir: StringProperty(
         name='Textures',
         description='Folder to place texture files in. Relative to the .gltf file',
         default='',
     )
 
+    # Keep for back compatibility
     export_jpeg_quality: IntProperty(
         name='JPEG quality',
         description='Quality of JPEG export',
+        default=75,
+        min=0,
+        max=100
+    )
+
+    # Keep for back compatibility
+    export_image_quality: IntProperty(
+        name='Image quality',
+        description='Quality of image export',
         default=75,
         min=0,
         max=100
@@ -295,14 +321,6 @@ class ExportGLTF2_Base(ConvertGLTF2_Base):
         'Do not export materials, and combine mesh primitive groups, losing material slot information')),
         description='Export materials',
         default='EXPORT'
-    )
-
-    export_original_specular: BoolProperty(
-        name='Export original PBR Specular',
-        description=(
-            'Export original glTF PBR Specular, instead of Blender Principled Shader Specular'
-        ),
-        default=False,
     )
 
     export_colors: BoolProperty(
@@ -455,6 +473,21 @@ class ExportGLTF2_Base(ConvertGLTF2_Base):
         default=False
     )
 
+    export_hierarchy_flatten_objs: BoolProperty(
+        name='Flatten Object Hierarchy',
+        description='Flatten Object Hierarchy. Useful in case of non decomposable transformation matrix',
+        default=False
+    )
+
+    export_armature_object_remove: BoolProperty(
+        name='Remove Armature Object',
+        description=(
+            'Remove Armature object if possible.'
+            'If Armature has multiple root bones, object will not be removed'
+            ),
+        default=False
+    )
+
     export_optimize_animation_size: BoolProperty(
         name='Optimize Animation Size',
         description=(
@@ -565,9 +598,16 @@ class ExportGLTF2_Base(ConvertGLTF2_Base):
         default=True
     )
 
+    export_influence_nb: IntProperty(
+        name='Bone Influences',
+        description='Choose how many Bone influences to export',
+        default=4,
+        min=1
+    )
+
     export_all_influences: BoolProperty(
         name='Include All Bone Influences',
-        description='Allow >4 joint vertex influences. Models may appear incorrectly in many viewers',
+        description='Allow export of all joint vertex influences. Models may appear incorrectly in many viewers',
         default=False
     )
 
@@ -611,6 +651,26 @@ class ExportGLTF2_Base(ConvertGLTF2_Base):
         default=False
     )
 
+    export_try_sparse_sk: BoolProperty(
+        name='Use Sparse Accessor if better',
+        description='Try using Sparce Accessor if it save space',
+        default=True
+    )
+
+    export_try_omit_sparse_sk: BoolProperty(
+        name='Omitting Sparse Accessor if data is empty',
+        description='Omitting Sparse Accessor if data is empty',
+        default=False
+    )
+
+    export_gpu_instances: BoolProperty(
+        name='GPU Instances',
+        description='Export using EXT_mesh_gpu_instancing.'
+                    'Limited to children of a same Empty. '
+                    'multiple Materials might be omitted',
+        default=False
+    )
+
     # This parameter is only here for backward compatibility, as this option is removed in 3.6
     # This option does nothing, and is not displayed in UI
     # What you are looking for is probably "export_animation_mode"
@@ -622,6 +682,15 @@ class ExportGLTF2_Base(ConvertGLTF2_Base):
             "When off, all the currently assigned actions become one glTF animation"
         ),
         default=True
+    )
+
+    # Keep for back compatibility, but no more used
+    export_original_specular: BoolProperty(
+        name='Export original PBR Specular',
+        description=(
+            'Export original glTF PBR Specular, instead of Blender Principled Shader Specular'
+        ),
+        default=False,
     )
 
     will_save_settings: BoolProperty(
@@ -718,7 +787,10 @@ class ExportGLTF2_Base(ConvertGLTF2_Base):
 
         export_settings['gltf_format'] = self.export_format
         export_settings['gltf_image_format'] = self.export_image_format
-        export_settings['gltf_jpeg_quality'] = self.export_jpeg_quality
+        export_settings['gltf_add_webp'] = self.export_image_add_webp
+        export_settings['gltf_webp_fallback'] = self.export_image_webp_fallback
+        export_settings['gltf_image_quality'] = self.export_image_quality
+        export_settings['gltf_image_quality'] = self.export_jpeg_quality #For back compatibility
         export_settings['gltf_copyright'] = self.export_copyright
         export_settings['gltf_texcoords'] = self.export_texcoords
         export_settings['gltf_normals'] = self.export_normals
@@ -742,8 +814,6 @@ class ExportGLTF2_Base(ConvertGLTF2_Base):
         export_settings['gltf_attributes'] = self.export_attributes
         export_settings['gltf_cameras'] = self.export_cameras
 
-        export_settings['gltf_original_specular'] = self.export_original_specular
-
         export_settings['gltf_visible'] = self.use_visible
         export_settings['gltf_renderable'] = self.use_renderable
 
@@ -763,6 +833,8 @@ class ExportGLTF2_Base(ConvertGLTF2_Base):
         export_settings['gltf_animations'] = self.export_animations
         export_settings['gltf_def_bones'] = self.export_def_bones
         export_settings['gltf_flatten_bones_hierarchy'] = self.export_hierarchy_flatten_bones
+        export_settings['gltf_flatten_obj_hierarchy'] = self.export_hierarchy_flatten_objs
+        export_settings['gltf_armature_object_remove'] = self.export_armature_object_remove
         if self.export_animations:
             export_settings['gltf_frame_range'] = self.export_frame_range
             export_settings['gltf_force_sampling'] = self.export_force_sampling
@@ -800,6 +872,7 @@ class ExportGLTF2_Base(ConvertGLTF2_Base):
         export_settings['gltf_skins'] = self.export_skins
         if self.export_skins:
             export_settings['gltf_all_vertex_influences'] = self.export_all_influences
+            export_settings['gltf_vertex_influences_nb'] = self.export_influence_nb
         else:
             export_settings['gltf_all_vertex_influences'] = False
             export_settings['gltf_def_bones'] = False
@@ -818,6 +891,13 @@ class ExportGLTF2_Base(ConvertGLTF2_Base):
 
         export_settings['gltf_lights'] = self.export_lights
         export_settings['gltf_lighting_mode'] = self.export_import_convert_lighting_mode
+        export_settings['gltf_gpu_instances'] = self.export_gpu_instances
+
+        export_settings['gltf_try_sparse_sk'] = self.export_try_sparse_sk
+        export_settings['gltf_try_omit_sparse_sk'] = self.export_try_omit_sparse_sk
+        if not self.export_try_sparse_sk:
+            export_settings['gltf_try_omit_sparse_sk'] = False
+
 
         export_settings['gltf_binary'] = bytearray()
         export_settings['gltf_binaryfilename'] = (
@@ -967,6 +1047,29 @@ class GLTF_PT_export_data(bpy.types.Panel):
     def draw(self, context):
         pass
 
+class GLTF_PT_export_data_scene(bpy.types.Panel):
+    bl_space_type = 'FILE_BROWSER'
+    bl_region_type = 'TOOL_PROPS'
+    bl_label = "Scene Graph"
+    bl_parent_id = "GLTF_PT_export_data"
+    bl_options = {'DEFAULT_CLOSED'}
+
+    @classmethod
+    def poll(cls, context):
+        sfile = context.space_data
+        operator = sfile.active_operator
+        return operator.bl_idname == "EXPORT_SCENE_OT_gltf"
+
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False  # No animation.
+
+        sfile = context.space_data
+        operator = sfile.active_operator
+        layout.prop(operator, 'export_gpu_instances')
+        layout.prop(operator, 'export_hierarchy_flatten_objs')
+
 class GLTF_PT_export_data_mesh(bpy.types.Panel):
     bl_space_type = 'FILE_BROWSER'
     bl_region_type = 'TOOL_PROPS'
@@ -1027,31 +1130,14 @@ class GLTF_PT_export_data_material(bpy.types.Panel):
         col = layout.column()
         col.active = operator.export_materials == "EXPORT"
         col.prop(operator, 'export_image_format')
-        if operator.export_image_format in ["AUTO", "JPEG"]:
-            col.prop(operator, 'export_jpeg_quality')
-
-class GLTF_PT_export_data_original_pbr(bpy.types.Panel):
-    bl_space_type = 'FILE_BROWSER'
-    bl_region_type = 'TOOL_PROPS'
-    bl_label = "PBR Extensions"
-    bl_parent_id = "GLTF_PT_export_data_material"
-    bl_options = {'DEFAULT_CLOSED'}
-
-    @classmethod
-    def poll(cls, context):
-        sfile = context.space_data
-        operator = sfile.active_operator
-        return operator.bl_idname == "EXPORT_SCENE_OT_gltf"
-
-    def draw(self, context):
-        layout = self.layout
-        layout.use_property_split = True
-        layout.use_property_decorate = False  # No animation.
-
-        sfile = context.space_data
-        operator = sfile.active_operator
-
-        layout.prop(operator, 'export_original_specular')
+        if operator.export_image_format in ["AUTO", "JPEG", "WEBP"]:
+            col.prop(operator, 'export_image_quality')
+        col = layout.column()
+        col.active = operator.export_image_format != "WEBP"
+        col.prop(operator, "export_image_add_webp")
+        col = layout.column()
+        col.active = operator.export_image_format != "WEBP"
+        col.prop(operator, "export_image_webp_fallback")
 
 class GLTF_PT_export_data_lighting(bpy.types.Panel):
     bl_space_type = 'FILE_BROWSER'
@@ -1111,6 +1197,36 @@ class GLTF_PT_export_data_shapekeys(bpy.types.Panel):
         col.prop(operator, 'export_morph_tangent')
 
 
+class GLTF_PT_export_data_sk_optimize(bpy.types.Panel):
+    bl_space_type = 'FILE_BROWSER'
+    bl_region_type = 'TOOL_PROPS'
+    bl_label = "Optimize Shape Keys"
+    bl_parent_id = "GLTF_PT_export_data_shapekeys"
+    bl_options = {'DEFAULT_CLOSED'}
+
+    @classmethod
+    def poll(cls, context):
+        sfile = context.space_data
+        operator = sfile.active_operator
+
+        return operator.bl_idname == "EXPORT_SCENE_OT_gltf"
+
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False  # No animation.
+
+        sfile = context.space_data
+        operator = sfile.active_operator
+
+        row = layout.row()
+        row.prop(operator, 'export_try_sparse_sk')
+
+        row = layout.row()
+        row.active = operator.export_try_sparse_sk
+        row.prop(operator, 'export_try_omit_sparse_sk')
+
+
 class GLTF_PT_export_data_skinning(bpy.types.Panel):
     bl_space_type = 'FILE_BROWSER'
     bl_region_type = 'TOOL_PROPS'
@@ -1140,6 +1256,9 @@ class GLTF_PT_export_data_skinning(bpy.types.Panel):
 
         layout.active = operator.export_skins
 
+        row = layout.row()
+        row.prop(operator, 'export_influence_nb')
+        row.active = not operator.export_all_influences
         layout.prop(operator, 'export_all_influences')
 
 
@@ -1174,6 +1293,8 @@ class GLTF_PT_export_data_armature(bpy.types.Panel):
         row.prop(operator, 'export_def_bones')
         if operator.export_force_sampling is False and operator.export_def_bones is True:
             layout.label(text="Export only deformation bones is not possible when not sampling animation")
+        row = layout.row()
+        row.prop(operator, 'export_armature_object_remove')
         row = layout.row()
         row.prop(operator, 'export_hierarchy_flatten_bones')
 
@@ -1349,7 +1470,7 @@ class GLTF_PT_export_animation_armature(bpy.types.Panel):
 class GLTF_PT_export_animation_shapekeys(bpy.types.Panel):
     bl_space_type = 'FILE_BROWSER'
     bl_region_type = 'TOOL_PROPS'
-    bl_label = "Shapekeys Animation"
+    bl_label = "Shape Keys Animation"
     bl_parent_id = "GLTF_PT_export_animation"
     bl_options = {'DEFAULT_CLOSED'}
 
@@ -1542,8 +1663,9 @@ class ImportGLTF2(Operator, ConvertGLTF2_Base, ImportHelper):
     bone_heuristic: EnumProperty(
         name="Bone Dir",
         items=(
-            ("BLENDER", "Blender (best for re-importing)",
-                "Good for re-importing glTFs exported from Blender. "
+            ("BLENDER", "Blender (best for import/export round trip)",
+                "Good for re-importing glTFs exported from Blender, "
+                "and re-exporting glTFs to glTFs after Blender editing"
                 "Bone tips are placed on their local +Y axis (in glTF space)"),
             ("TEMPERANCE", "Temperance (average)",
                 "Decent all-around strategy. "
@@ -1555,7 +1677,7 @@ class ImportGLTF2(Operator, ConvertGLTF2_Base, ImportHelper):
                 "Non-uniform scalings may get messed up though, so beware"),
         ),
         description="Heuristic for placing bones. Tries to make bones pretty",
-        default="TEMPERANCE",
+        default="BLENDER",
     )
 
     guess_original_bind_pose: BoolProperty(
@@ -1566,6 +1688,15 @@ class ImportGLTF2(Operator, ConvertGLTF2_Base, ImportHelper):
             'When off, use default/rest pose as bind pose'
         ),
         default=True,
+    )
+
+    import_webp_texture: BoolProperty(
+        name='Import WebP textures',
+        description=(
+            "If a texture exists in WebP format,"
+            "loads the WebP texture instead of the fallback png/jpg one"
+        ),
+        default=False,
     )
 
     def draw(self, context):
@@ -1580,6 +1711,7 @@ class ImportGLTF2(Operator, ConvertGLTF2_Base, ImportHelper):
         layout.prop(self, 'guess_original_bind_pose')
         layout.prop(self, 'bone_heuristic')
         layout.prop(self, 'export_import_convert_lighting_mode')
+        layout.prop(self, 'import_webp_texture')
 
     def invoke(self, context, event):
         import sys
@@ -1722,10 +1854,11 @@ classes = (
     GLTF_PT_export_include,
     GLTF_PT_export_transform,
     GLTF_PT_export_data,
+    GLTF_PT_export_data_scene,
     GLTF_PT_export_data_mesh,
     GLTF_PT_export_data_material,
-    GLTF_PT_export_data_original_pbr,
     GLTF_PT_export_data_shapekeys,
+    GLTF_PT_export_data_sk_optimize,
     GLTF_PT_export_data_armature,
     GLTF_PT_export_data_skinning,
     GLTF_PT_export_data_lighting,

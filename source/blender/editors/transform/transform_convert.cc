@@ -36,6 +36,9 @@
 #include "ED_particle.hh"
 #include "ED_screen.hh"
 #include "ED_screen_types.hh"
+#include "ED_sequencer.hh"
+
+#include "ANIM_keyframing.hh"
 
 #include "UI_view2d.hh"
 
@@ -324,7 +327,7 @@ static bool pchan_autoik_adjust(bPoseChannel *pchan, short chainlen)
   bool changed = false;
 
   /* don't bother to search if no valid constraints */
-  if ((pchan->constflag & (PCHAN_HAS_IK | PCHAN_HAS_TARGET)) == 0) {
+  if ((pchan->constflag & (PCHAN_HAS_IK | PCHAN_HAS_NO_TARGET)) == 0) {
     return changed;
   }
 
@@ -942,6 +945,9 @@ static TransConvertTypeInfo *convert_type_get(const TransInfo *t, Object **r_obj
     if (t->options & CTX_SEQUENCER_IMAGE) {
       return &TransConvertType_SequencerImage;
     }
+    if (sequencer_retiming_mode_is_active(t->context)) {
+      return &TransConvertType_SequencerRetiming;
+    }
     return &TransConvertType_Sequencer;
   }
   if (t->spacetype == SPACE_GRAPH) {
@@ -1191,7 +1197,7 @@ void animrecord_check_state(TransInfo *t, ID *id)
    * - we're not only keying for available channels
    * - the option to add new actions for each round is not enabled
    */
-  if (IS_AUTOKEY_FLAG(scene, INSERTAVAIL) == 0 &&
+  if (blender::animrig::is_autokey_flag(scene, AUTOKEY_FLAG_INSERTAVAIL) == 0 &&
       (scene->toolsettings->autokey_flag & ANIMRECORD_FLAG_WITHNLA))
   {
     /* if playback has just looped around,

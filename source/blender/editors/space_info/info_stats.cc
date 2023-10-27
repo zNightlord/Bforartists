@@ -49,7 +49,7 @@
 #include "BKE_layer.h"
 #include "BKE_main.h"
 #include "BKE_mesh.hh"
-#include "BKE_object.h"
+#include "BKE_object.hh"
 #include "BKE_paint.hh"
 #include "BKE_particle.h"
 #include "BKE_pbvh_api.hh"
@@ -765,7 +765,7 @@ void ED_info_draw_stats(
   Object *ob = BKE_view_layer_active_object_get(view_layer);
   Object *obedit = OBEDIT_FROM_OBACT(ob);
   eObjectMode object_mode = ob ? (eObjectMode)ob->mode : OB_MODE_OBJECT;
-  const int font_id = BLF_set_default();
+  const int font_id = BLF_default();
 
   UI_FontThemeColor(font_id, TH_TEXT_HI);
   BLF_enable(font_id, BLF_SHADOW);

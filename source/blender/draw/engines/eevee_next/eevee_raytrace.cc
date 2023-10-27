@@ -30,10 +30,12 @@ void RayTraceModule::init()
 
   reflection_options_ = sce_eevee.reflection_options;
   refraction_options_ = sce_eevee.refraction_options;
+  diffuse_options_ = sce_eevee.diffuse_options;
   tracing_method_ = RaytraceEEVEE_Method(sce_eevee.ray_tracing_method);
 
   if (sce_eevee.ray_split_settings == 0) {
     refraction_options_ = reflection_options_;
+    diffuse_options_ = reflection_options_;
   }
 }
 
@@ -60,7 +62,7 @@ void RayTraceModule::sync()
     pass.bind_ssbo("ray_dispatch_buf", &ray_dispatch_buf_);
     pass.bind_ssbo("denoise_dispatch_buf", &denoise_dispatch_buf_);
     inst_.bind_uniform_data(&pass);
-    inst_.gbuffer.bind_resources(&pass);
+    inst_.gbuffer.bind_resources(pass);
     pass.dispatch(&tile_classify_dispatch_size_);
     pass.barrier(GPU_BARRIER_SHADER_IMAGE_ACCESS | GPU_BARRIER_SHADER_STORAGE);
   }
@@ -84,8 +86,8 @@ void RayTraceModule::sync()
     pass.bind_texture(RBUFS_UTILITY_TEX_SLOT, inst_.pipelines.utility_tx);
     pass.bind_image("out_ray_data_img", &ray_data_tx_);
     pass.bind_ssbo("tiles_coord_buf", &ray_tiles_buf_);
-    inst_.sampling.bind_resources(&pass);
-    inst_.gbuffer.bind_resources(&pass);
+    inst_.sampling.bind_resources(pass);
+    inst_.gbuffer.bind_resources(pass);
     pass.dispatch(ray_dispatch_buf_);
     pass.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_TEXTURE_FETCH |
                  GPU_BARRIER_SHADER_IMAGE_ACCESS);
@@ -94,6 +96,23 @@ void RayTraceModule::sync()
   for (auto type : IndexRange(3)) {
     PassSimple &pass = PASS_VARIATION(trace_, type, _ps_);
     pass.init();
+    if (inst_.planar_probes.enabled() && (&pass == &trace_reflect_ps_)) {
+      /* Inject planar tracing in the same pass as reflection tracing. */
+      PassSimple::Sub &sub = pass.sub("Trace.Planar");
+      sub.shader_set(inst_.shaders.static_shader_get(RAY_TRACE_PLANAR));
+      sub.bind_ssbo("tiles_coord_buf", &ray_tiles_buf_);
+      sub.bind_image("ray_data_img", &ray_data_tx_);
+      sub.bind_image("ray_time_img", &ray_time_tx_);
+      sub.bind_image("ray_radiance_img", &ray_radiance_tx_);
+      sub.bind_texture("depth_tx", &depth_tx);
+      inst_.bind_uniform_data(&sub);
+      inst_.planar_probes.bind_resources(sub);
+      inst_.irradiance_cache.bind_resources(sub);
+      inst_.reflection_probes.bind_resources(sub);
+      /* TODO(@fclem): Use another dispatch with only tiles that touches planar captures. */
+      sub.dispatch(ray_dispatch_buf_);
+      sub.barrier(GPU_BARRIER_SHADER_IMAGE_ACCESS);
+    }
     pass.shader_set(inst_.shaders.static_shader_get(SHADER_VARIATION(RAY_TRACE_SCREEN_, type)));
     pass.bind_ssbo("tiles_coord_buf", &ray_tiles_buf_);
     pass.bind_image("ray_data_img", &ray_data_tx_);
@@ -102,9 +121,10 @@ void RayTraceModule::sync()
     pass.bind_texture("depth_tx", &depth_tx);
     pass.bind_image("ray_radiance_img", &ray_radiance_tx_);
     inst_.bind_uniform_data(&pass);
-    inst_.hiz_buffer.bind_resources(&pass);
-    inst_.sampling.bind_resources(&pass);
-    inst_.reflection_probes.bind_resources(&pass);
+    inst_.hiz_buffer.bind_resources(pass);
+    inst_.sampling.bind_resources(pass);
+    inst_.irradiance_cache.bind_resources(pass);
+    inst_.reflection_probes.bind_resources(pass);
     pass.dispatch(ray_dispatch_buf_);
     pass.barrier(GPU_BARRIER_SHADER_IMAGE_ACCESS);
   }
@@ -118,7 +138,8 @@ void RayTraceModule::sync()
     pass.bind_image("ray_radiance_img", &ray_radiance_tx_);
     pass.bind_texture("depth_tx", &depth_tx);
     inst_.bind_uniform_data(&pass);
-    inst_.reflection_probes.bind_resources(&pass);
+    inst_.irradiance_cache.bind_resources(pass);
+    inst_.reflection_probes.bind_resources(pass);
     pass.dispatch(ray_dispatch_buf_);
     pass.barrier(GPU_BARRIER_SHADER_IMAGE_ACCESS);
   }
@@ -138,8 +159,8 @@ void RayTraceModule::sync()
     pass.bind_image("out_hit_depth_img", &hit_depth_tx_);
     pass.bind_image("tile_mask_img", &tile_mask_tx_);
     inst_.bind_uniform_data(&pass);
-    inst_.sampling.bind_resources(&pass);
-    inst_.gbuffer.bind_resources(&pass);
+    inst_.sampling.bind_resources(pass);
+    inst_.gbuffer.bind_resources(pass);
     pass.dispatch(denoise_dispatch_buf_);
     pass.barrier(GPU_BARRIER_SHADER_IMAGE_ACCESS);
   }
@@ -158,7 +179,7 @@ void RayTraceModule::sync()
     pass.bind_image("in_variance_img", &hit_variance_tx_);
     pass.bind_image("out_variance_img", &denoise_variance_tx_);
     pass.bind_ssbo("tiles_coord_buf", &denoise_tiles_buf_);
-    inst_.sampling.bind_resources(&pass);
+    inst_.sampling.bind_resources(pass);
     pass.dispatch(denoise_dispatch_buf_);
     pass.barrier(GPU_BARRIER_SHADER_IMAGE_ACCESS);
   }
@@ -174,8 +195,8 @@ void RayTraceModule::sync()
     pass.bind_image("tile_mask_img", &tile_mask_tx_);
     pass.bind_ssbo("tiles_coord_buf", &denoise_tiles_buf_);
     inst_.bind_uniform_data(&pass);
-    inst_.sampling.bind_resources(&pass);
-    inst_.gbuffer.bind_resources(&pass);
+    inst_.sampling.bind_resources(pass);
+    inst_.gbuffer.bind_resources(pass);
     pass.dispatch(denoise_dispatch_buf_);
     pass.barrier(GPU_BARRIER_SHADER_IMAGE_ACCESS);
   }
@@ -218,9 +239,9 @@ RayTraceResult RayTraceModule::trace(RayTraceBuffer &rt_buffer,
   RayTraceBuffer::DenoiseBuffer *denoise_buf = nullptr;
 
   if (raytrace_closure == CLOSURE_DIFFUSE) {
-    options = reflection_options_;
+    options = diffuse_options_;
     generate_ray_ps = &generate_diffuse_ps_;
-    trace_ray_ps = force_no_tracing ? &trace_diffuse_ps_ : &trace_diffuse_ps_;
+    trace_ray_ps = force_no_tracing ? &trace_fallback_ps_ : &trace_diffuse_ps_;
     denoise_spatial_ps = &denoise_spatial_diffuse_ps_;
     denoise_bilateral_ps = &denoise_bilateral_diffuse_ps_;
     denoise_buf = &rt_buffer.diffuse;

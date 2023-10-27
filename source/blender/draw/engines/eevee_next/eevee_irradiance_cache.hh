@@ -118,6 +118,10 @@ class IrradianceBake {
    * Avoids samples to be too far from their actual origin.
    */
   float max_virtual_offset_ = 0.1f;
+  /**
+   * Surfaces outside the Grid won't generate surfels above this distance.
+   */
+  float clip_distance_;
 
   /** True if world lighting is recorded during irradiance capture. */
   bool capture_world_ = false;
@@ -133,7 +137,7 @@ class IrradianceBake {
   void sync();
 
   /** Create the views used to rasterize the scene into surfel representation. */
-  void surfel_raster_views_sync(const float3 &scene_min, const float3 &scene_max);
+  void surfel_raster_views_sync(float3 scene_min, float3 scene_max, float4x4 probe_to_world);
   /** Create a surfel representation of the scene from the probe using the capture pipeline. */
   void surfels_create(const Object &probe_object);
   /** Evaluate direct lighting (and also clear the surfels radiance). */
@@ -219,11 +223,11 @@ class IrradianceCache {
   Vector<IrradianceBrickPacked> bricks_alloc(int brick_len);
   void bricks_free(Vector<IrradianceBrickPacked> &bricks);
 
-  template<typename T> void bind_resources(draw::detail::PassBase<T> *pass)
+  template<typename PassType> void bind_resources(PassType &pass)
   {
-    pass->bind_ubo(IRRADIANCE_GRID_BUF_SLOT, &grids_infos_buf_);
-    pass->bind_ssbo(IRRADIANCE_BRICK_BUF_SLOT, &bricks_infos_buf_);
-    pass->bind_texture(IRRADIANCE_ATLAS_TEX_SLOT, &irradiance_atlas_tx_);
+    pass.bind_ubo(IRRADIANCE_GRID_BUF_SLOT, &grids_infos_buf_);
+    pass.bind_ssbo(IRRADIANCE_BRICK_BUF_SLOT, &bricks_infos_buf_);
+    pass.bind_texture(IRRADIANCE_ATLAS_TEX_SLOT, &irradiance_atlas_tx_);
   }
 
  private:

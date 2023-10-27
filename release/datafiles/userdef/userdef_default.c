@@ -56,7 +56,8 @@ const UserDef U_default = {
     .mini_axis_type = USER_MINI_AXIS_TYPE_GIZMO,
     /*bfa - added USER_ORBIT_SELECTION */
     .uiflag = (USER_FILTERFILEEXTS | USER_DRAWVIEWINFO | USER_PLAINMENUS |
-               USER_LOCK_CURSOR_ADJUST | USER_DEPTH_CURSOR | USER_AUTOPERSP | USER_ORBIT_SELECTION |
+               USER_LOCK_CURSOR_ADJUST | USER_DEPTH_CURSOR | USER_AUTOPERSP | USER_DEPTH_NAVIGATE |
+               USER_ORBIT_SELECTION |
                USER_NODE_AUTO_OFFSET | USER_GLOBALUNDO | USER_HIDE_DOT | USER_SHOW_GIZMO_NAVIGATE |
                USER_SHOW_VIEWPORTNAME | USER_SHOW_FPS | USER_CONTINUOUS_MOUSE | USER_SAVE_PROMPT),
     .uiflag2 = USER_REGION_OVERLAP,
@@ -171,8 +172,6 @@ const UserDef U_default = {
     .glalphaclip = 0.004,
     .autokey_mode = (AUTOKEY_MODE_NORMAL & ~AUTOKEY_ON),
     .autokey_flag = AUTOKEY_FLAG_XYZ2RGB,
-    .animation_flag = USER_ANIM_SHOW_CHANNEL_GROUP_COLORS, /*bfa - channel group colors on.
-                                                              use_anim_channel_group_colors*/
     .text_render = 0,
     .navigation_mode = VIEW_NAVIGATION_WALK,
     .view_rotate_sensitivity_turntable = DEG2RAD(0.4),

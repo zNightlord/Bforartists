@@ -8,6 +8,10 @@ import bpy
 def get_gltf_node_old_name():
     return "glTF Settings"
 
+# Old group name
+def get_gltf_old_group_node_name():
+    return "glTF Metallic Roughness"
+
 def get_gltf_node_name():
     return "glTF Material Output"
 
@@ -18,9 +22,5 @@ def create_settings_group(name):
     thicknessFactor.default_value = 0.0
     gltf_node_group.nodes.new('NodeGroupOutput')
     gltf_node_group_input = gltf_node_group.nodes.new('NodeGroupInput')
-    specular = gltf_node_group.interface.new_socket("Specular", socket_type="NodeSocketFloat")
-    specular.default_value = 1.0
-    specularColor = gltf_node_group.interface.new_socket("Specular Color", socket_type="NodeSocketColor")
-    specularColor.default_value = [1.0,1.0,1.0,1.0]
     gltf_node_group_input.location = -200, 0
     return gltf_node_group

@@ -36,7 +36,7 @@
 #include "BKE_lib_query.h"
 #include "BKE_main.h"
 #include "BKE_report.h"
-#include "BKE_screen.h"
+#include "BKE_screen.hh"
 #include "BKE_workspace.h"
 
 #include "WM_api.hh"
@@ -167,10 +167,12 @@ static void window_manager_blend_read_data(BlendDataReader *reader, ID *id)
     win->ghostwin = nullptr;
     win->gpuctx = nullptr;
     win->eventstate = nullptr;
+    win->eventstate_prev_press_time_ms = 0;
     win->event_last_handled = nullptr;
     win->cursor_keymap_status = nullptr;
 #if defined(WIN32) || defined(__APPLE__)
     win->ime_data = nullptr;
+    win->ime_data_is_composing = false;
 #endif
 
     BLI_listbase_clear(&win->event_queue);
@@ -291,7 +293,7 @@ void WM_operator_free(wmOperator *op)
   }
 
   if (op->reports && (op->reports->flag & RPT_FREE)) {
-    BKE_reports_clear(op->reports);
+    BKE_reports_free(op->reports);
     MEM_freeN(op->reports);
   }
 
@@ -342,7 +344,7 @@ void WM_operator_type_set(wmOperator *op, wmOperatorType *ot)
 
 static void wm_reports_free(wmWindowManager *wm)
 {
-  BKE_reports_clear(&wm->reports);
+  BKE_reports_free(&wm->reports);
   WM_event_timer_remove(wm, nullptr, wm->reports.reporttimer);
 }
 
@@ -521,6 +523,8 @@ void wm_add_default(Main *bmain, bContext *C)
   bScreen *screen = CTX_wm_screen(C); /* XXX from file read hrmf */
   WorkSpace *workspace;
   WorkSpaceLayout *layout = BKE_workspace_layout_find_global(bmain, screen, &workspace);
+
+  BKE_reports_init(&wm->reports, RPT_STORE);
 
   CTX_wm_manager_set(C, wm);
   win = wm_window_new(bmain, wm, nullptr, false);

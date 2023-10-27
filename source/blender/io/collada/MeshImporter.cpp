@@ -25,7 +25,7 @@
 #include "BKE_lib_id.h"
 #include "BKE_material.h"
 #include "BKE_mesh.hh"
-#include "BKE_object.h"
+#include "BKE_object.hh"
 
 #include "BLI_listbase.h"
 #include "BLI_string.h"
@@ -572,7 +572,7 @@ void MeshImporter::read_lines(COLLADAFW::Mesh *mesh, Mesh *me)
   if (loose_edge_count > 0) {
 
     uint face_edge_count = me->totedge;
-    /* uint total_edge_count = loose_edge_count + face_edge_count; */ /* UNUSED */
+    // uint total_edge_count = loose_edge_count + face_edge_count; /* UNUSED. */
 
     mesh_add_edges(me, loose_edge_count);
     MutableSpan<blender::int2> edges = me->edges_for_write();

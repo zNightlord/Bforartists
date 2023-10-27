@@ -45,7 +45,7 @@
 #include "BKE_node_runtime.hh"
 #include "BKE_node_tree_update.h"
 #include "BKE_node_tree_zones.hh"
-#include "BKE_object.h"
+#include "BKE_object.hh"
 #include "BKE_scene.h"
 #include "BKE_type_conversions.hh"
 
@@ -287,26 +287,37 @@ static bool compare_node_depth(const bNode *a, const bNode *b)
   return false;
 }
 
-void node_sort(bNodeTree &ntree)
+void tree_draw_order_update(bNodeTree &ntree)
 {
   Array<bNode *> sort_nodes = ntree.all_nodes();
   std::stable_sort(sort_nodes.begin(), sort_nodes.end(), compare_node_depth);
-
-  /* If nothing was changed, exit early. Otherwise the node tree's runtime
-   * node vector needs to be rebuilt, since it cannot be reordered in place. */
-  if (sort_nodes == ntree.all_nodes()) {
-    return;
-  }
-
-  BKE_ntree_update_tag_node_reordered(&ntree);
-
-  ntree.runtime->nodes_by_id.clear();
-  BLI_listbase_clear(&ntree.nodes);
   for (const int i : sort_nodes.index_range()) {
-    BLI_addtail(&ntree.nodes, sort_nodes[i]);
-    ntree.runtime->nodes_by_id.add_new(sort_nodes[i]);
-    sort_nodes[i]->runtime->index_in_tree = i;
+    sort_nodes[i]->ui_order = i;
   }
+}
+
+Array<bNode *> tree_draw_order_calc_nodes(bNodeTree &ntree)
+{
+  Array<bNode *> nodes = ntree.all_nodes();
+  if (nodes.is_empty()) {
+    return {};
+  }
+  std::sort(nodes.begin(), nodes.end(), [](const bNode *a, const bNode *b) {
+    return a->ui_order < b->ui_order;
+  });
+  return nodes;
+}
+
+Array<bNode *> tree_draw_order_calc_nodes_reversed(bNodeTree &ntree)
+{
+  Array<bNode *> nodes = ntree.all_nodes();
+  if (nodes.is_empty()) {
+    return {};
+  }
+  std::sort(nodes.begin(), nodes.end(), [](const bNode *a, const bNode *b) {
+    return a->ui_order > b->ui_order;
+  });
+  return nodes;
 }
 
 static Array<uiBlock *> node_uiblocks_init(const bContext &C, const Span<bNode *> nodes)
@@ -374,7 +385,7 @@ static bool node_update_basis_buttons(const bContext &C,
   loc.x = round(loc.x);
   loc.y = round(loc.y);
 
-  dy -= NODE_DYS / 2;
+  dy -= NODE_DYS / 4;
 
   uiLayout *layout = UI_block_layout(&block,
                                      UI_LAYOUT_VERTICAL,
@@ -398,14 +409,22 @@ static bool node_update_basis_buttons(const bContext &C,
   int buty;
   UI_block_layout_resolve(&block, nullptr, &buty);
 
-  dy = buty - NODE_DYS / 2;
+  dy = buty - NODE_DYS / 4;
   return true;
 }
 
 const char *node_socket_get_label(const bNodeSocket *socket, const char *panel_label)
 {
-  const char *socket_label = bke::nodeSocketLabel(socket);
+  /* Get the short label if possible. This is used when grouping sockets under panels,
+   * to avoid redundancy in the label. */
+  const char *socket_short_label = bke::nodeSocketShortLabel(socket);
   const char *socket_translation_context = node_socket_get_translation_context(*socket);
+
+  if (socket_short_label) {
+    return CTX_IFACE_(socket_translation_context, socket_short_label);
+  }
+
+  const char *socket_label = bke::nodeSocketLabel(socket);
   const char *translated_socket_label = CTX_IFACE_(socket_translation_context, socket_label);
 
   /* Shorten socket label if it begins with the panel label. */
@@ -616,92 +635,163 @@ static Vector<NodeInterfaceItemData> node_build_item_data(bNode &node)
   return result;
 }
 
-/* Advanced drawing with panels and arbitrary input/output ordering. */
-static void node_update_basis_from_declaration(
-    const bContext &C, bNodeTree &ntree, bNode &node, uiBlock &block, const int locx, int &locy)
+using ItemIterator = Vector<NodeInterfaceItemData>::const_iterator;
+
+struct VisibilityUpdateState {
+  ItemIterator item_iter;
+  const ItemIterator item_end;
+
+  explicit VisibilityUpdateState(const Span<NodeInterfaceItemData> items)
+      : item_iter(items.begin()), item_end(items.end())
+  {
+  }
+};
+
+/* Recursive function to determine visibility of items before drawing. */
+static void node_update_panel_items_visibility_recursive(int num_items,
+                                                         const bool is_parent_collapsed,
+                                                         bNodePanelState &parent_state,
+                                                         VisibilityUpdateState &state)
 {
-  namespace nodes = blender::nodes;
-
-  BLI_assert(is_node_panels_supported(node));
-  BLI_assert(node.runtime->panels.size() == node.num_panel_states);
-  /* Checked at various places to avoid adding duplicate spacers without anything in between. */
-  bool need_spacer_after_item = false;
-
-  /* Space at the top. */
-  locy -= NODE_DYS / 2;
-
-  /* Makes sure buttons are only drawn once. */
-  bool buttons_drawn = false;
-
-  /* The panel stack keeps track of the hierarchy of panels. When a panel declaration is found a
-   * new #PanelUpdate is added to the stack. Items in the declaration are added to the top panel
-   * of the stack. Each panel expects a number of items to be added, after which the panel is
-   * removed from the stack again. */
-  struct PanelUpdate {
-    /* How many declarations still to add. */
-    int remaining_decls;
-    /* True if the panel or its parent is collapsed. */
-    bool is_collapsed;
-    /* Panel label for shortening socket labels. */
-    const char *label = nullptr;
-    /* Location data, needed to finalize the panel when all items have been added. */
-    bke::bNodePanelRuntime *runtime;
-  };
-  Stack<PanelUpdate> panel_updates;
-  /* Only true for the first item in the layout. */
-  bool is_first = true;
-
-  const Vector<NodeInterfaceItemData> item_data = node_build_item_data(node);
-  for (const NodeInterfaceItemData &item : item_data) {
-    bool is_parent_collapsed = false;
-    const char *parent_label = nullptr;
-    if (PanelUpdate *parent_update = panel_updates.is_empty() ? nullptr : &panel_updates.peek()) {
-      /* Adding an item to the parent panel, will be popped when reaching 0. */
-      BLI_assert(parent_update->remaining_decls > 0);
-      --parent_update->remaining_decls;
-      is_parent_collapsed = parent_update->is_collapsed;
-      parent_label = parent_update->label;
+  parent_state.flag &= ~NODE_PANEL_CONTENT_VISIBLE;
+  while (state.item_iter != state.item_end) {
+    /* Stop after adding the expected number of items.
+     * Root panel consumes all remaining items (num_items == -1). */
+    if (num_items == 0) {
+      break;
     }
+    else if (num_items > 0) {
+      --num_items;
+    }
+    /* Consume item. */
+    const NodeInterfaceItemData &item = *state.item_iter++;
 
     if (item.is_valid_panel()) {
-      /* Draw buttons before the first panel. */
-      if (!buttons_drawn) {
-        buttons_drawn = true;
-        need_spacer_after_item = node_update_basis_buttons(
-            C, ntree, node, node.typeinfo->draw_buttons, block, locy);
-      }
-
-      if (!is_parent_collapsed) {
-        locy -= NODE_DY;
-        is_first = false;
-      }
-
       SET_FLAG_FROM_TEST(item.state->flag, is_parent_collapsed, NODE_PANEL_PARENT_COLLAPSED);
       /* New top panel is collapsed if self or parent is collapsed. */
       const bool is_collapsed = is_parent_collapsed || item.state->is_collapsed();
-      panel_updates.push({item.panel_decl->num_child_decls,
-                          is_collapsed,
-                          item.panel_decl->name.c_str(),
-                          item.runtime});
 
-      /* Round the socket location to stop it from jiggling. */
-      item.runtime->location_y = round(locy + NODE_DYS);
-      if (!is_collapsed) {
-        locy -= NODE_ITEM_SPACING_Y / 2; /* Space at bottom of panel header. */
-      }
-      item.runtime->max_content_y = item.runtime->min_content_y = round(locy);
-      if (!is_collapsed) {
-        locy -= NODE_ITEM_SPACING_Y; /* Space at top of panel contents. */
-        node_update_basis_buttons(C, ntree, node, item.panel_decl->draw_buttons, block, locy);
+      node_update_panel_items_visibility_recursive(
+          item.panel_decl->num_child_decls, is_collapsed, *item.state, state);
+      if (item.state->flag & NODE_PANEL_CONTENT_VISIBLE) {
+        /* If child panel is visible so is the parent panel. */
+        parent_state.flag |= NODE_PANEL_CONTENT_VISIBLE;
       }
     }
     else if (item.is_valid_socket()) {
       if (item.input) {
         SET_FLAG_FROM_TEST(item.input->flag, is_parent_collapsed, SOCK_PANEL_COLLAPSED);
+        if (item.input->is_visible()) {
+          parent_state.flag |= NODE_PANEL_CONTENT_VISIBLE;
+        }
+      }
+      if (item.output) {
+        SET_FLAG_FROM_TEST(item.output->flag, is_parent_collapsed, SOCK_PANEL_COLLAPSED);
+        if (item.output->is_visible()) {
+          parent_state.flag |= NODE_PANEL_CONTENT_VISIBLE;
+        }
+      }
+    }
+    else {
+      /* Should not happen. */
+      BLI_assert_unreachable();
+    }
+  }
+}
+
+struct LocationUpdateState {
+  ItemIterator item_iter;
+  const ItemIterator item_end;
+
+  /* Checked at various places to avoid adding duplicate spacers without anything in between. */
+  bool need_spacer_after_item = false;
+  /* Makes sure buttons are only drawn once. */
+  bool buttons_drawn = false;
+  /* Only true for the first item in the layout. */
+  bool is_first = true;
+
+  explicit LocationUpdateState(const Span<NodeInterfaceItemData> items)
+      : item_iter(items.begin()), item_end(items.end())
+  {
+  }
+};
+
+/* Recursive function that adds the expected number of items in a panel and advances the
+ * iterator. */
+static void add_panel_items_recursive(const bContext &C,
+                                      bNodeTree &ntree,
+                                      bNode &node,
+                                      uiBlock &block,
+                                      const int locx,
+                                      int &locy,
+                                      int num_items,
+                                      const bool is_parent_collapsed,
+                                      const char *parent_label,
+                                      bke::bNodePanelRuntime *parent_runtime,
+                                      LocationUpdateState &state)
+{
+  while (state.item_iter != state.item_end) {
+    /* Stop after adding the expected number of items.
+     * Root panel consumes all remaining items (num_items == -1). */
+    if (num_items == 0) {
+      break;
+    }
+    else if (num_items > 0) {
+      --num_items;
+    }
+    /* Consume item. */
+    const NodeInterfaceItemData &item = *state.item_iter++;
+
+    if (item.is_valid_panel()) {
+      /* Draw buttons before the first panel. */
+      if (!state.buttons_drawn) {
+        state.buttons_drawn = true;
+        state.need_spacer_after_item = node_update_basis_buttons(
+            C, ntree, node, node.typeinfo->draw_buttons, block, locy);
+      }
+
+      /* Panel visible if any content is visible. */
+      if (item.state->has_visible_content()) {
+        if (!is_parent_collapsed) {
+          locy -= NODE_DY;
+          state.is_first = false;
+        }
+
+        /* New top panel is collapsed if self or parent is collapsed. */
+        const bool is_collapsed = is_parent_collapsed || item.state->is_collapsed();
+
+        /* Round the socket location to stop it from jiggling. */
+        item.runtime->location_y = round(locy + NODE_DYS);
+        if (is_collapsed) {
+          item.runtime->max_content_y = item.runtime->min_content_y = round(locy);
+        }
+        else {
+          locy -= NODE_ITEM_SPACING_Y / 2; /* Space at bottom of panel header. */
+          item.runtime->max_content_y = item.runtime->min_content_y = round(locy);
+          locy -= NODE_ITEM_SPACING_Y; /* Space at top of panel contents. */
+
+          node_update_basis_buttons(C, ntree, node, item.panel_decl->draw_buttons, block, locy);
+        }
+
+        add_panel_items_recursive(C,
+                                  ntree,
+                                  node,
+                                  block,
+                                  locx,
+                                  locy,
+                                  item.panel_decl->num_child_decls,
+                                  is_collapsed,
+                                  item.panel_decl->name.c_str(),
+                                  item.runtime,
+                                  state);
+      }
+    }
+    else if (item.is_valid_socket()) {
+      if (item.input) {
         /* Draw buttons before the first input. */
-        if (!buttons_drawn) {
-          buttons_drawn = true;
-          need_spacer_after_item = node_update_basis_buttons(
+        if (!state.buttons_drawn) {
+          state.buttons_drawn = true;
+          state.need_spacer_after_item = node_update_basis_buttons(
               C, ntree, node, node.typeinfo->draw_buttons, block, locy);
         }
 
@@ -710,20 +800,19 @@ static void node_update_basis_from_declaration(
         }
         else {
           /* Space between items. */
-          if (!is_first && item.input->is_visible()) {
+          if (!state.is_first && item.input->is_visible()) {
             locy -= NODE_ITEM_SPACING_Y;
           }
         }
       }
       if (item.output) {
-        SET_FLAG_FROM_TEST(item.output->flag, is_parent_collapsed, SOCK_PANEL_COLLAPSED);
         if (is_parent_collapsed) {
           item.output->runtime->location = float2(round(locx + NODE_WIDTH(node)),
                                                   round(locy + NODE_DYS));
         }
         else {
           /* Space between items. */
-          if (!is_first && item.output->is_visible()) {
+          if (!state.is_first && item.output->is_visible()) {
             locy -= NODE_ITEM_SPACING_Y;
           }
         }
@@ -733,44 +822,58 @@ static void node_update_basis_from_declaration(
           node_update_basis_socket(
               C, ntree, node, parent_label, item.input, item.output, block, locx, locy))
       {
-        is_first = false;
-        need_spacer_after_item = true;
+        state.is_first = false;
+        state.need_spacer_after_item = true;
       }
     }
     else {
       /* Should not happen. */
       BLI_assert_unreachable();
     }
-
-    /* Close parent panels that have all items added. */
-    while (!panel_updates.is_empty()) {
-      PanelUpdate &top_panel = panel_updates.peek();
-      if (top_panel.remaining_decls > 0) {
-        /* Incomplete panel, continue adding items. */
-        break;
-      }
-
-      if (!top_panel.is_collapsed) {
-        /* Finalize the vertical extent of the content. */
-        locy -= 2 * NODE_ITEM_SPACING_Y; /* Space at bottom of panel contents. */
-        top_panel.runtime->min_content_y = round(locy);
-        locy -= NODE_ITEM_SPACING_Y / 2; /* Space at top of next panel header. */
-      }
-
-      /* Close panel and continue checking parent. */
-      panel_updates.pop();
-    }
   }
-  /* Enough items should have been added to close all panels. */
-  BLI_assert(panel_updates.is_empty());
+
+  /* Finalize the vertical extent of the content. */
+  if (!is_parent_collapsed) {
+    if (parent_runtime) {
+      locy -= 2 * NODE_ITEM_SPACING_Y; /* Space at bottom of panel contents. */
+      parent_runtime->min_content_y = round(locy);
+    }
+    locy -= NODE_ITEM_SPACING_Y / 2; /* Space at top of next panel header. */
+  }
+}
+
+/* Advanced drawing with panels and arbitrary input/output ordering. */
+static void node_update_basis_from_declaration(
+    const bContext &C, bNodeTree &ntree, bNode &node, uiBlock &block, const int locx, int &locy)
+{
+  namespace nodes = blender::nodes;
+
+  BLI_assert(is_node_panels_supported(node));
+  BLI_assert(node.runtime->panels.size() == node.num_panel_states);
+
+  const Vector<NodeInterfaceItemData> item_data = node_build_item_data(node);
+
+  /* Update item visibility flags first. */
+  VisibilityUpdateState visibility_state(item_data);
+  /* Dummy state item to write into, unused. */
+  bNodePanelState root_panel_state;
+  node_update_panel_items_visibility_recursive(-1, false, root_panel_state, visibility_state);
+
+  /* Space at the top. */
+  locy -= NODE_DYS / 2;
+
+  /* Start by adding root panel items. */
+  LocationUpdateState location_state(item_data);
+  add_panel_items_recursive(
+      C, ntree, node, block, locx, locy, -1, false, "", nullptr, location_state);
 
   /* Draw buttons at the bottom if no inputs exist. */
-  if (!buttons_drawn) {
-    need_spacer_after_item = node_update_basis_buttons(
+  if (!location_state.buttons_drawn) {
+    location_state.need_spacer_after_item = node_update_basis_buttons(
         C, ntree, node, node.typeinfo->draw_buttons, block, locy);
   }
 
-  if (need_spacer_after_item) {
+  if (location_state.need_spacer_after_item) {
     locy -= NODE_DYS / 2;
   }
 }
@@ -1299,7 +1402,14 @@ static void create_inspection_string_for_geometry_info(const geo_log::GeometryIn
         break;
       }
       case bke::GeometryComponent::Type::GreasePencil: {
-        /* TODO. Do nothing for now. */
+        const geo_log::GeometryInfoLog::GreasePencilInfo &grease_pencil_info =
+            *value_log.grease_pencil_info;
+        char line[256];
+        SNPRINTF(line,
+                 TIP_("\u2022 Grease Pencil: %s layers"),
+                 to_string(grease_pencil_info.layers_num).c_str());
+        ss << line;
+        break;
         break;
       }
     }
@@ -1950,10 +2060,11 @@ static void node_draw_panels_background(const bNode &node, uiBlock &block)
     const bke::bNodePanelRuntime &runtime = node.runtime->panels[panel_i];
 
     /* Don't draw hidden or collapsed panels. */
-    const bool is_visible = !(state.is_collapsed() || state.is_parent_collapsed());
-    is_last_panel_visible = is_visible;
+    const bool is_background_visible = state.has_visible_content() &&
+                                       !(state.is_collapsed() || state.is_parent_collapsed());
+    is_last_panel_visible = is_background_visible;
     last_panel_content_y = runtime.max_content_y;
-    if (!is_visible) {
+    if (!is_background_visible) {
       ++panel_i;
       continue;
     }
@@ -2003,7 +2114,8 @@ static void node_draw_panels(bNodeTree &ntree, const bNode &node, uiBlock &block
 
     const bNodePanelState &state = node.panel_states()[panel_i];
     /* Don't draw hidden panels. */
-    if (state.is_parent_collapsed()) {
+    const bool is_header_visible = state.has_visible_content() && !state.is_parent_collapsed();
+    if (!is_header_visible) {
       ++panel_i;
       continue;
     }
@@ -2039,7 +2151,7 @@ static void node_draw_panels(bNodeTree &ntree, const bNode &node, uiBlock &block
     uiBut *but = uiDefBut(&block,
                           UI_BTYPE_LABEL,
                           0,
-                          panel_decl->name.c_str(),
+                          IFACE_(panel_decl->name.c_str()),
                           int(rct.xmin + NODE_MARGIN_X + 0.4f),
                           int(runtime.location_y - NODE_DYS),
                           short(rct.xmax - rct.xmin - (30.0f * UI_SCALE_FAC)),
@@ -2192,6 +2304,9 @@ static void node_add_error_message_button(const TreeDrawContext &tree_draw_ctx,
       return nullptr;
     }
     const bNodeTreeZone *zone = zones->get_zone_by_node(node.identifier);
+    if (zone && ELEM(&node, zone->input_node, zone->output_node)) {
+      zone = zone->parent_zone;
+    }
     return tree_draw_ctx.geo_log_by_zone.lookup_default(zone, nullptr);
   }();
 
@@ -2553,6 +2668,35 @@ static void node_draw_extra_info_row(const bNode &node,
   }
 }
 
+static void node_draw_extra_info_panel_back(const bNode &node, const rctf &extra_info_rect)
+{
+  const rctf &node_rect = node.runtime->totr;
+  rctf panel_back_rect = extra_info_rect;
+  /* Extend the panel behind hidden nodes to accomodate the large rounded corners. */
+  if (node.flag & NODE_HIDDEN) {
+    panel_back_rect.ymin = BLI_rctf_cent_y(&node_rect);
+  }
+
+  ColorTheme4f color;
+  if (node.flag & NODE_MUTED) {
+    UI_GetThemeColorBlend4f(TH_BACK, TH_NODE, 0.2f, color);
+  }
+  else {
+    UI_GetThemeColorBlend4f(TH_BACK, TH_NODE, 0.75f, color);
+  }
+  color.a -= 0.35f;
+
+  ColorTheme4f color_outline;
+  UI_GetThemeColorBlendShade4fv(TH_BACK, TH_NODE, 0.4f, -20, color_outline);
+
+  const float outline_width = U.pixelsize;
+  BLI_rctf_pad(&panel_back_rect, outline_width, outline_width);
+
+  UI_draw_roundbox_corner_set(UI_CNR_TOP_LEFT | UI_CNR_TOP_RIGHT);
+  UI_draw_roundbox_4fv_ex(
+      &panel_back_rect, color, nullptr, 0.0f, color_outline, outline_width, BASIS_RAD);
+}
+
 static void node_draw_extra_info_panel(const Scene *scene,
                                        TreeDrawContext &tree_draw_ctx,
                                        const SpaceNode &snode,
@@ -2573,10 +2717,7 @@ static void node_draw_extra_info_panel(const Scene *scene,
   }
 
   const rctf &rct = node.runtime->totr;
-  float color[4];
   rctf extra_info_rect;
-
-  const float width = (node.width - 6.0f) * UI_SCALE_FAC;
 
   if (node.is_frame()) {
     extra_info_rect.xmin = rct.xmin;
@@ -2585,62 +2726,40 @@ static void node_draw_extra_info_panel(const Scene *scene,
     extra_info_rect.ymax = rct.ymin + 2.0f * UI_SCALE_FAC;
   }
   else {
-    float preview_height = 0;
-    rctf preview_rect;
+    const float padding = 3.0f * UI_SCALE_FAC;
 
-    extra_info_rect.xmin = rct.xmin + 3.0f * UI_SCALE_FAC;
-    extra_info_rect.xmax = extra_info_rect.xmin + width;
+    extra_info_rect.xmin = rct.xmin + padding;
+    extra_info_rect.xmax = rct.xmax - padding;
     extra_info_rect.ymin = rct.ymax;
     extra_info_rect.ymax = rct.ymax + extra_info_rows.size() * (20.0f * UI_SCALE_FAC);
+
+    float preview_height = 0.0f;
+    rctf preview_rect;
     if (preview) {
+      const float width = BLI_rctf_size_x(&extra_info_rect);
       if (preview->x > preview->y) {
-        const float preview_padding = 3.0f * UI_SCALE_FAC;
-        preview_height = (width - 2.0 * preview_padding) * float(preview->y) / float(preview->x) +
-                         2.0 * preview_padding;
-        preview_rect.ymin = extra_info_rect.ymin + preview_padding;
-        preview_rect.ymax = extra_info_rect.ymin + preview_height - preview_padding;
-        preview_rect.xmin = extra_info_rect.xmin + preview_padding;
-        preview_rect.xmax = extra_info_rect.xmax - preview_padding;
+        preview_height = (width - 2.0f * padding) * float(preview->y) / float(preview->x) +
+                         2.0f * padding;
+        preview_rect.ymin = extra_info_rect.ymin + padding;
+        preview_rect.ymax = extra_info_rect.ymin + preview_height - padding;
+        preview_rect.xmin = extra_info_rect.xmin + padding;
+        preview_rect.xmax = extra_info_rect.xmax - padding;
         extra_info_rect.ymax += preview_height;
       }
       else {
-        const float preview_padding = 3.0f * UI_SCALE_FAC;
         preview_height = width;
-        const float preview_width = (width - 2.0 * preview_padding) * float(preview->x) /
+        const float preview_width = (width - 2.0f * padding) * float(preview->x) /
                                         float(preview->y) +
-                                    2.0 * preview_padding;
-        preview_rect.ymin = extra_info_rect.ymin + preview_padding;
-        preview_rect.ymax = extra_info_rect.ymin + preview_height - preview_padding;
-        preview_rect.xmin = extra_info_rect.xmin + preview_padding + (width - preview_width) / 2;
-        preview_rect.xmax = extra_info_rect.xmax - preview_padding - (width - preview_width) / 2;
+                                    2.0f * padding;
+        preview_rect.ymin = extra_info_rect.ymin + padding;
+        preview_rect.ymax = extra_info_rect.ymin + preview_height - padding;
+        preview_rect.xmin = extra_info_rect.xmin + padding + (width - preview_width) / 2;
+        preview_rect.xmax = extra_info_rect.xmax - padding - (width - preview_width) / 2;
         extra_info_rect.ymax += preview_height;
       }
     }
 
-    if (node.flag & NODE_MUTED) {
-      UI_GetThemeColorBlend4f(TH_BACK, TH_NODE, 0.2f, color);
-    }
-    else {
-      UI_GetThemeColorBlend4f(TH_BACK, TH_NODE, 0.75f, color);
-    }
-    color[3] -= 0.35f;
-    UI_draw_roundbox_corner_set(
-        UI_CNR_ALL & ~UI_CNR_BOTTOM_LEFT &
-        ((rct.xmax) > extra_info_rect.xmax ? ~UI_CNR_BOTTOM_RIGHT : UI_CNR_ALL));
-    UI_draw_roundbox_4fv(&extra_info_rect, true, BASIS_RAD, color);
-
-    /* Draw outline. */
-    const float outline_width = 1.0f;
-    extra_info_rect.xmin -= outline_width;
-    extra_info_rect.xmax += outline_width;
-    extra_info_rect.ymin -= outline_width;
-    extra_info_rect.ymax += outline_width;
-
-    UI_GetThemeColorBlendShade4fv(TH_BACK, TH_NODE, 0.4f, -20, color);
-    UI_draw_roundbox_corner_set(
-        UI_CNR_ALL & ~UI_CNR_BOTTOM_LEFT &
-        ((rct.xmax) > extra_info_rect.xmax ? ~UI_CNR_BOTTOM_RIGHT : UI_CNR_ALL));
-    UI_draw_roundbox_4fv(&extra_info_rect, false, BASIS_RAD, color);
+    node_draw_extra_info_panel_back(node, extra_info_rect);
 
     if (preview) {
       node_draw_preview(scene, preview, &preview_rect);
@@ -3236,13 +3355,9 @@ int node_get_resize_cursor(NodeResizeDirection directions)
 
 static const bNode *find_node_under_cursor(SpaceNode &snode, const float2 &cursor)
 {
-  const Span<bNode *> nodes = snode.edittree->all_nodes();
-  if (nodes.is_empty()) {
-    return nullptr;
-  }
-  for (int i = nodes.index_range().last(); i >= 0; i--) {
-    if (BLI_rctf_isect_pt(&nodes[i]->runtime->totr, cursor[0], cursor[1])) {
-      return nodes[i];
+  for (const bNode *node : tree_draw_order_calc_nodes_reversed(*snode.edittree)) {
+    if (BLI_rctf_isect_pt(&node->runtime->totr, cursor[0], cursor[1])) {
+      return node;
     }
   }
   return nullptr;
@@ -3961,7 +4076,7 @@ static void draw_nodetree(const bContext &C,
   SpaceNode *snode = CTX_wm_space_node(&C);
   ntree.ensure_topology_cache();
 
-  const Span<bNode *> nodes = ntree.all_nodes();
+  Array<bNode *> nodes = tree_draw_order_calc_nodes(ntree);
 
   Array<uiBlock *> blocks = node_uiblocks_init(C, nodes);
 

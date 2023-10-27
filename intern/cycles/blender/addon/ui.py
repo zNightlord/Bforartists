@@ -394,7 +394,8 @@ class CYCLES_RENDER_PT_sampling_advanced(CyclesButtonsPanel, Panel):
         col.prop(cscene, "sample_offset")
 
         col = layout.column(align=True)
-        col.active = cscene.sampling_pattern == 'TABULATED_SOBOL'
+        # Tabulated Sobol is used when the debug UI is turned off.
+        col.active = cscene.sampling_pattern == 'TABULATED_SOBOL' or not CyclesDebugButtonsPanel.poll(context)
         col.label(text="Scrambling Distance")
         row = col.row()
         row.use_property_split = False
@@ -954,7 +955,7 @@ class CYCLES_RENDER_PT_filter(CyclesButtonsPanel, Panel):
 
         row = col.row()
         row.separator()
-        row.prop(view_layer.cycles, 'use_denoising', text='Denoising')
+        row.prop(view_layer.cycles, "use_denoising", text="Denoising")
         row.active = scene.cycles.use_denoising
 
 
@@ -1510,7 +1511,7 @@ class CYCLES_OBJECT_MT_light_linking_context_menu(Menu):
     def draw(self, _context):
         layout = self.layout
 
-        layout.operator("object.light_linking_receivers_select")
+        layout.operator("object.light_linking_receivers_select", icon = 'HAND')
 
 
 class CYCLES_OBJECT_MT_shadow_linking_context_menu(Menu):
@@ -1519,7 +1520,7 @@ class CYCLES_OBJECT_MT_shadow_linking_context_menu(Menu):
     def draw(self, _context):
         layout = self.layout
 
-        layout.operator("object.light_linking_blockers_select")
+        layout.operator("object.light_linking_blockers_select", icon = 'HAND')
 
 
 class CYCLES_OBJECT_PT_light_linking(CyclesButtonsPanel, Panel):
@@ -2177,6 +2178,7 @@ class CYCLES_MATERIAL_PT_settings_surface(CyclesButtonsPanel, Panel):
         col.prop(cmat, "emission_sampling")
         col.use_property_split = False
         col.prop(cmat, "use_transparent_shadow")
+        col.prop(cmat, "use_bump_map_correction")
 
     def draw(self, context):
         self.draw_shared(self, context.material)

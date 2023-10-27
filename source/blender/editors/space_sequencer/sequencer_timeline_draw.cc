@@ -194,10 +194,10 @@ static StripDrawContext strip_draw_context_get(TimelineDrawContext *ctx, Sequenc
   strip_ctx.content_start = SEQ_time_left_handle_frame_get(scene, seq);
   strip_ctx.content_end = SEQ_time_right_handle_frame_get(scene, seq);
   if (SEQ_time_has_left_still_frames(scene, seq)) {
-    SEQ_time_start_frame_get(seq);
+    strip_ctx.content_start = SEQ_time_start_frame_get(seq);
   }
   if (SEQ_time_has_right_still_frames(scene, seq)) {
-    SEQ_time_content_end_frame_get(scene, seq);
+    strip_ctx.content_end = SEQ_time_content_end_frame_get(scene, seq);
   }
   /* Limit body to strip bounds. Meta strip can end up with content outside of strip range. */
   strip_ctx.content_start = min_ff(strip_ctx.content_start,
@@ -2084,6 +2084,7 @@ void draw_timeline_seq(const bContext *C, ARegion *region)
   draw_timeline_backdrop(&ctx);
   draw_timeline_sfra_efra(&ctx);
   draw_seq_strips(&ctx);
+  sequencer_draw_retiming(C);
   draw_timeline_markers(&ctx);
   ANIM_draw_previewrange(C, ctx.v2d, 1);
   draw_timeline_gizmos(&ctx);

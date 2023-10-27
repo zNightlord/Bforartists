@@ -75,7 +75,7 @@ def __gather_gltf(exporter, export_settings):
     export_user_extensions('gather_gltf_hook', export_settings, active_scene_idx, scenes, animations)
 
     for idx, scene in enumerate(scenes):
-        exporter.add_scene(scene, idx==active_scene_idx)
+        exporter.add_scene(scene, idx==active_scene_idx, export_settings=export_settings)
     for animation in animations:
         exporter.add_animation(animation)
     exporter.traverse_unused_skins(unused_skins)
@@ -86,11 +86,8 @@ def __create_buffer(exporter, export_settings):
     if export_settings['gltf_format'] == 'GLB':
         buffer = exporter.finalize_buffer(export_settings['gltf_filedirectory'], is_glb=True)
     else:
-        if export_settings['gltf_format'] == 'GLTF_EMBEDDED':
-            exporter.finalize_buffer(export_settings['gltf_filedirectory'])
-        else:
-            exporter.finalize_buffer(export_settings['gltf_filedirectory'],
-                                     export_settings['gltf_binaryfilename'])
+        exporter.finalize_buffer(export_settings['gltf_filedirectory'],
+                                 export_settings['gltf_binaryfilename'])
 
     return buffer
 
@@ -119,7 +116,7 @@ def __fix_json(obj):
 
 
 def __should_include_json_value(key, value):
-    allowed_empty_collections = ["KHR_materials_unlit"]
+    allowed_empty_collections = ["KHR_materials_unlit", "KHR_materials_specular"]
 
     if value is None:
         return False

@@ -233,7 +233,7 @@ ccl_device_inline int bsdf_sample(KernelGlobals kg,
       *eval *= shift_cos_in(cosNO, frequency_multiplier);
     }
     if (label & LABEL_DIFFUSE) {
-      if (!isequal(sc->N, sd->N)) {
+      if ((sd->flag & SD_USE_BUMP_MAP_CORRECTION) && !isequal(sc->N, sd->N)) {
         *eval *= bump_shadowing_term(sd->N, sc->N, *wo);
       }
     }
@@ -359,7 +359,7 @@ ccl_device_inline int bsdf_label(const KernelGlobals kg,
     case CLOSURE_BSDF_DIFFUSE_ID:
     case CLOSURE_BSSRDF_BURLEY_ID:
     case CLOSURE_BSSRDF_RANDOM_WALK_ID:
-    case CLOSURE_BSSRDF_RANDOM_WALK_FIXED_RADIUS_ID:
+    case CLOSURE_BSSRDF_RANDOM_WALK_SKIN_ID:
       label = LABEL_REFLECT | LABEL_DIFFUSE;
       break;
 #ifdef __SVM__
@@ -521,7 +521,7 @@ ccl_device_inline
   }
 
   if (CLOSURE_IS_BSDF_DIFFUSE(sc->type)) {
-    if (!isequal(sc->N, sd->N)) {
+    if ((sd->flag & SD_USE_BUMP_MAP_CORRECTION) && !isequal(sc->N, sd->N)) {
       eval *= bump_shadowing_term(sd->N, sc->N, wo);
     }
   }
