@@ -444,7 +444,7 @@ static void nla_draw_strip(SpaceNla *snla,
 
   /* get color of strip */
   nla_strip_get_color_inside(adt, strip, color);
-  rgba_float_args_set(color_strip, strip.color[0], strip.color[1], strip.color[2], 1.0f);
+  rgba_float_args_set(color_strip, strip->color[0], strip->color[1], strip->color[2], 1.0f);
 
   shdr_pos = GPU_vertformat_attr_add(immVertexFormat(), "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
   immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
@@ -507,7 +507,7 @@ static void nla_draw_strip(SpaceNla *snla,
     if (strip->flag & NLASTRIP_CUSTOM_COLOR){
       rect.ymin = ymaxc + (ymaxc - yminc) * 0.2;
       rect.ymax = ymaxc + (ymaxc - yminc) * 0.1;
-      UI_draw_roundbox_4fv(&rect, true, 0.0f, strip_color);
+      UI_draw_roundbox_4fv(&rect, true, 0.0f, color_strip);
     }
 
     /* restore current vertex format & program (roundbox trashes it) */
