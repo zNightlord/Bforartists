@@ -967,8 +967,16 @@ static void rna_def_nlastrip(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Mute", "Disable NLA Strip evaluation");
   RNA_def_property_update(prop, NC_ANIMATION | ND_NLA | NA_EDITED, "rna_NlaStrip_update");
 
+  prop = RNA_def_property(srna, "use_reverse", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "flag", NLASTRIP_FLAG_REVERSE);
+  RNA_def_property_ui_text(prop,
+                           "Reversed",
+                           "NLA Strip is played back in reverse order (only when timing is "
+                           "automatically determined)");
+  RNA_def_property_update(prop, NC_ANIMATION | ND_NLA | NA_EDITED, "rna_NlaStrip_update");
+
   prop = RNA_def_property(srna, "use_custom_color", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, nullptr, "flag", STRIP_CUSTOM_COLOR);
+  RNA_def_property_boolean_sdna(prop, nullptr, "flag", NLASTRIP_CUSTOM_COLOR);
   RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
   RNA_def_property_ui_text(prop, "Custom Color", "Use custom color for the strip");
   RNA_def_property_update(prop, NC_ANIMATION | ND_NLA | NA_EDITED, nullptr);
@@ -978,15 +986,7 @@ static void rna_def_nlastrip(BlenderRNA *brna)
   RNA_def_property_range(prop, 0.0f, 1.0f);
   RNA_def_property_ui_text(prop, "Strip Color", "Custom color of the strip");
   RNA_def_property_update(prop, NC_ANIMATION | ND_NLA | NA_EDITED, nullptr);
-
-  prop = RNA_def_property(srna, "use_reverse", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, nullptr, "flag", NLASTRIP_FLAG_REVERSE);
-  RNA_def_property_ui_text(prop,
-                           "Reversed",
-                           "NLA Strip is played back in reverse order (only when timing is "
-                           "automatically determined)");
-  RNA_def_property_update(prop, NC_ANIMATION | ND_NLA | NA_EDITED, "rna_NlaStrip_update");
-
+  
   prop = RNA_def_property(srna, "use_sync_length", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "flag", NLASTRIP_FLAG_SYNC_LENGTH);
   RNA_def_property_ui_text(prop,
