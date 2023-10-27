@@ -162,8 +162,14 @@ class NLA_PT_action(DopesheetActionPanelBase, Panel):
         return strip and strip.type == 'CLIP' and strip.action
 
     def draw(self, context):
-        action = context.active_nla_strip.action
-        self.draw_generic_panel(context, self.layout, action)
+        strip = context.active_nla_strip
+        action = strip.action
+        layout = self.layout
+        layout.label(text="Color:")
+        row = layout.row()
+        row.prop(strip, "use_custom_color", text="")
+        row.prop(strip, "color", text="")
+        self.draw_generic_panel(context, layout, action)
 
 
 class NLA_MT_editor_menus(Menu):
