@@ -581,6 +581,8 @@ set(GLSL_SRC
   engines/npr/shaders/npr_strokegen_fill_indirect_args_inputs_lib.glsl
   engines/npr/shaders/npr_strokegen_mesh_contour_vert.glsl 
   engines/npr/shaders/npr_strokegen_mesh_contour_frag.glsl 
+  engines/npr/shaders/npr_strokegen_pixel_extract_comp.glsl
+  engines/npr/shaders/npr_strokegen_compaction_lib.glsl 
 
   engines/npr/bnpr_defines.hh
   engines/npr/bnpr_shader_shared.hh

@@ -122,6 +122,11 @@ GPU_SHADER_CREATE_INFO(npr_segloopconv1D_test_convolution)
     .define("FUNC_DEVICE_LOAD_LOOPCONV1D_PATCH_ID", "func_device_load_loopconv1d_patch_id")
     .define("FUNC_DEVICE_LOAD_LOOPCONV1D_DATA", "func_device_load_loopconv1d_data");
 
+/** GPU Compaction --------------------
+ */
+GPU_SHADER_CREATE_INFO(npr_compaction_off)
+    .define("COMPACTION_LIB_EXCLUDE", "1");
+
 /** GPU List Ranking --------------------
  */
 
@@ -133,6 +138,8 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_extract)
     .typedef_source("bnpr_shader_shared.hh")
     .typedef_source("draw_shader_shared.h")
     .define("_KERNEL_MULTICOMPILE__GEOM_EXTRACT", "1")
+    .define("GLOBAL_COUNTER", "ssbo_bnpr_mesh_pool_counters_.num_contour_edges")
+    .define("CP_TAG", "contour_edge")
     .storage_buf(0, Qualifier::READ, "uint", "buf_ibo[]")
     .storage_buf(1, Qualifier::READ, "float", "buf_vbo[]") /* cannot use vec3 due to ssbo alignment */
     .storage_buf(2, Qualifier::READ_WRITE, "uint", "buf_strokegen_mesh_pool[]")
@@ -169,6 +176,7 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_extract_calc_contour_edge_raster_data)
     .do_static_compilation(true)
     .typedef_source("bnpr_shader_shared.hh")
     .typedef_source("draw_shader_shared.h")
+    .additional_info("npr_compaction_off") /* Remove compaction code */
     .define("_KERNEL_MULTICOMPILE_CALC_CONTOUR_EDGE_RASTER_DATA", "1")
     .storage_buf(0, Qualifier::READ_WRITE, "uint", "buf_strokegen_mesh_pool[]")
     .storage_buf(1, Qualifier::READ, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
@@ -182,6 +190,7 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_fill_draw_args_contour_edges)
     .do_static_compilation(true)
     .typedef_source("bnpr_shader_shared.hh")
     .typedef_source("draw_shader_shared.h") /*DrawCommand*/
+    .additional_info("npr_compaction_off") /* Remove compaction code */
     .define("_KERNEL_MULTICOMPILE_FILL_DRAW_ARGS", "1")
     .storage_buf(0, Qualifier::READ, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
     .storage_buf(1, Qualifier::WRITE, "DrawCommand", "ssbo_bnpr_mesh_pool_draw_args_")

@@ -1,100 +1,13 @@
 
+#pragma BLENDER_REQUIRE(npr_strokegen_compaction_lib.glsl)
 
 
  
 
 
-/* ---------------------------------- Compaction --------------------------------- */
 #if defined(_KERNEL_MULTICOMPILE__GEOM_EXTRACT) || defined(_KERNEL_MULTICOMPILE_FILL_DRAW_ARGS)
 	#define GLOBAL_COMPACTION_COUNTER__MESH_EDGES ssbo_bnpr_mesh_pool_counters_.num_contour_edges
 #endif
-
-#if defined(_KERNEL_MULTICOMPILE__GEOM_EXTRACT) || defined(_KERNEL_MULTICOMPILE_FILL_DRAW_ARGS)
-shared uint LDS_digit_per_lane[32u]; 
-shared uint LDS_offset_per_lane_slot[32u];  
-shared uint LDS_hist_blk;    
-shared uint LDS_scan_block_offset; 
-
-uint compact(bool val, uint groupIdx)
-{
-	const uint wave_id = groupIdx >> 5u; /* must be < 32 which is ensured since tg size <= 1024 */
-    const uint lane_id = groupIdx % 32u;
-    const uint num_waves = gl_WorkGroupSize.x >> 5u; 
-    
-	/* Clear LDS counters */
-    if (wave_id == 0u) 
-    { 
-        if (lane_id == 0u) LDS_hist_blk = 0u; 
-        LDS_digit_per_lane[lane_id] = 0u; 
-    }
-    barrier(); 
-	/*  w0    w1    w2    w3         LDS_digit_per_lane
-	 * 00:1  04:1  08:0  12:1  l0    0000
-	 * 01:0  05:0  09:0  13:0  l1    0000
-	 * 02:1  06:1  10:0  14:0  l2    0000
-	 * 03:1  07:0  11:1  15:0  l3    0000
-	 * ---------------------------
-	 * LDS_hist_blk
-	 *  0
-	*/
-
-    /* Mark 1/0 at bit #wave_id */ 
-    uint compact_bitval = uint(val); 
-    uint lds_compact_input = compact_bitval << wave_id; 
-    atomicOr(LDS_digit_per_lane[lane_id], lds_compact_input); 
-    barrier(); 
-	/*  w0    w1    w2    w3         LDS_digit_per_lane
-	 * 00:1  04:1  08:0  12:1  l0    1011
-	 * 01:0  05:0  09:0  13:0  l1    0000
-	 * 02:1  06:1  10:0  14:0  l2    0011
-	 * 03:1  07:0  11:1  15:0  l3    0101
-	*/
-
-    /* Prefix sum on lane sums */
-    uint lane_digit = LDS_digit_per_lane[lane_id]; 
-    uint wave_mask = (~(0xffffffffu << wave_id));
-	/*  w0    w1    w2    w3     
-	 * 0000  0001  0011  0111        wave_mask
-	 *
-	 *  w0    w1    w2    w3         lane_digit
-	 * 00:1  04:1  08:0  12:1  l0    1011
-	 * 01:0  05:0  09:0  13:0  l1    0000
-	 * 02:1  06:1  10:0  14:0  l2    0011
-	 * 03:1  07:0  11:1  15:0  l3    0101
-	*/
-    uint lane_digit_masked = lane_digit & wave_mask; 
-    uint num_1_bits_low = bitCount(lane_digit_masked);
-    uint lane_offset = num_1_bits_low; 
-
-    if (wave_id == 0u)
-    {
-        uint lane_digit_sum = bitCount(lane_digit); /* digit sum */ 
-        LDS_offset_per_lane_slot[lane_id] = atomicAdd(LDS_hist_blk, lane_digit_sum);  
-    }
-    barrier(); 
-
-    /* Add block sum to global counter. */
-    if (groupIdx == gl_WorkGroupSize.x - 1u)
-    {
-        LDS_scan_block_offset = atomicAdd(
-            GLOBAL_COMPACTION_COUNTER__MESH_EDGES, 
-            LDS_hist_blk
-        ); 
-    }
-    barrier(); 
-
-    /* Compute final offset */
-    uint local_offset = LDS_offset_per_lane_slot[lane_id] + lane_offset; 
-    uint blk_offset   = LDS_scan_block_offset; 
-    
-    uint scanres = local_offset + blk_offset; 
-	return scanres; 
-}
-#endif
-
-
-
-
 
 
 #if defined(_KERNEL_MULTICOMPILE__GEOM_EXTRACT)
@@ -202,7 +115,7 @@ void main()
 	bool rev_edge_dir = face_orient_012 < .0f; 
 	if (false == valid_thread) is_contour = false; 
 
-	uint compacted_idx = compact(is_contour, groupId); 
+	uint compacted_idx = compact_contour_edge(is_contour, groupId); 
 
 	if (is_contour)
 	{
