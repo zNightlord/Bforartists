@@ -975,12 +975,6 @@ static void rna_def_nlastrip(BlenderRNA *brna)
                            "automatically determined)");
   RNA_def_property_update(prop, NC_ANIMATION | ND_NLA | NA_EDITED, "rna_NlaStrip_update");
 
-  prop = RNA_def_property(srna, "use_custom_color", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, nullptr, "flag", NLASTRIP_CUSTOM_COLOR);
-  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
-  RNA_def_property_ui_text(prop, "Custom Color", "Use custom color for the strip");
-  RNA_def_property_update(prop, NC_ANIMATION | ND_NLA | NA_EDITED, nullptr);
-
   prop = RNA_def_property(srna, "color", PROP_FLOAT, PROP_COLOR_GAMMA);
   RNA_def_property_array(prop, 3);
   RNA_def_property_range(prop, 0.0f, 1.0f);
