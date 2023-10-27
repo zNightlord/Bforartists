@@ -517,7 +517,7 @@ static void nla_draw_strip(SpaceNla *snla,
   else {
     /* strip is in disabled track - make less visible */
     immUniformColor3fvAlpha(color, 0.1f);
-    immUniformColor3fvAlpha(strip_color, 0.1f);
+    immUniformColor3fvAlpha(color_strip, 0.1f);
     
 
     GPU_blend(GPU_BLEND_ALPHA);
