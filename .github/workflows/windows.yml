@@ -17,13 +17,13 @@ jobs:
     #   run: |
     #    cd ~\bforartistsrepo
     #    git clone -b work-sequencer https://github.com/zNightlord/Bforartists.git
-    - name: Cache library
-      uses: actions/cache@v3
-      with:
-        key: windows
-        path: |
-          D:\a\Bforartists\*
-          !D:\a\Bforartists\Bforartists
+    # - name: Cache library
+    #   uses: actions/cache@v3
+    #   with:
+    #     key: windows
+    #    path: |
+    #      D:\a\Bforartists\*
+    #      !D:\a\Bforartists\Bforartists
     - name: Svn library
       run: |
         if (!(test-path "D:\a\Bforartists\lib\")) {
@@ -38,7 +38,7 @@ jobs:
     - name: Make
       run: |
        cd ..\Bforartists
-       .\make.bat ${{ env.CONFIG }}
+       .\make.bat ninja ${{ env.CONFIG }}
     - name: Show dir
       run: |
         cd ..
