@@ -586,10 +586,22 @@ class BFA_OT_toolbar_prefs(Operator):
 
         return {'FINISHED'}
 
+class BFA_OT_toolbar_assetshelf(Operator):
+    bl_idname = "toolbar.apply_asset"
+    bl_label = "Toolbar apply asset"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        info = "Hello world"
+        self.report({'INFO'}, info)
+        print(info)
+
+        return {'FINISHED'}
 
 classes = (
     BFA_OT_toolbar_prefs,
 	BFA_OT_toolbar_settings_prefs,
+    BFA_OT_toolbar_assetshelf
 )
 
 
@@ -598,6 +610,12 @@ def register():
     from bpy.utils import register_class
     for cls in classes:
        register_class(cls)
+    	
+    # Asset Shelf
+    km = wm.keyconfigs.addon.keymaps.new(name="Asset Shelf")
+    # Click to apply asset.
+    kmi = km.keymap_items.new("toolbar.apply_asset", "LEFTMOUSE", "CLICK")
+    addon_keymaps.append((km, kmi))
 
 def unregister():
     from bpy.utils import unregister_class

@@ -110,6 +110,9 @@ static void do_versions_theme(const UserDef *userdef, bTheme *btheme)
   if (!USER_VERSION_ATLEAST(400, 14)) {
     FROM_DEFAULT_V4_UCHAR(space_view3d.asset_shelf.back);
     FROM_DEFAULT_V4_UCHAR(space_view3d.asset_shelf.header_back);
+    // bfa toolbar
+    FROM_DEFAULT_V4_UCHAR(space_toolbar.asset_shelf.back);
+    FROM_DEFAULT_V4_UCHAR(space_toolbar.asset_shelf.header_back);
   }
 
   if (!USER_VERSION_ATLEAST(400, 24)) {

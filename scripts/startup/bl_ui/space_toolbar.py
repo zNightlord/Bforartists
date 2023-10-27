@@ -1935,6 +1935,13 @@ class TOOLBAR_MT_misc(Menu):
 
             row.label(text=scene.statistics(view_layer), translate=False)
 
+class TOOLBAR_AST_shelf(bpy.types.AssetShelf):
+    bl_space_type = 'TOOLBAR'
+
+    @classmethod
+    def asset_poll_temp_api(cls, asset):
+        return True
+
 classes = (
 
     TOOLBAR_HT_header,
@@ -1959,6 +1966,7 @@ classes = (
     TOOLBAR_MT_image_uv_rotate_counterclockwise,
     TOOLBAR_MT_image_uv_mirror_x,
     TOOLBAR_MT_image_uv_mirror_y,
+    TOOLBAR_AST_shelf
 )
 
 

@@ -5,6 +5,7 @@
 
 set(INC
 	../include
+  ../asset
 	../../blenkernel
 	../../blenlib
 	../../blenloader

@@ -6267,6 +6267,8 @@ static void rna_def_space_toolbar(BlenderRNA *brna)
   srna = RNA_def_struct(brna, "SpaceToolbarEditor", "Space");
   RNA_def_struct_sdna(srna, "SpaceToolbar");
   RNA_def_struct_ui_text(srna, "Space Toolbar Editor", "Toolbar editor space data");
+  rna_def_space_generic_show_region_toggles(srna,
+                                           (1 << RGN_TYPE_ASSET_SHELF));
 }
 
 static void rna_def_space_dopesheet(BlenderRNA *brna)
