@@ -222,12 +222,32 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_draw_contour_edges)
     .fragment_out(1, Type::VEC3, "out_normal")
     .fragment_out(2, Type::VEC4, "out_tangent");
 
-/** \} */
+/* Collect Contour Pixels */
+GPU_SHADER_CREATE_INFO(bnpr_compress_contour_pixels)
+    .do_static_compilation(true)
+    .typedef_source("bnpr_shader_shared.hh")
+    .define("_KERNEL_MULTICOMPILE__COMPRESS_CONTOUR_IMG", "1")
 
-/* -------------------------------------------------------------------- */
-/** \Bare minumum compute shader test
- * \{ */
-GPU_SHADER_CREATE_INFO(bnpr_strokegen_test_xxx)
+    .image(0, GPU_RGBA32F, Qualifier::READ, ImageType::FLOAT_2D, "tex2d_contour_image_")
+    .image(1, GPU_R32UI, Qualifier::READ_WRITE, ImageType::UINT_2D, "tex2d_contour_pix_marks_")
+    .push_constant(Type::VEC2, "pcs_screen_size_")
+
+    .local_group_size(GROUP_SIZE_X_CONTOUR_PIXEL_COMPRESS, GROUP_SIZE_Y_CONTOUR_PIXEL_COMPRESS)
+    .compute_source("npr_strokegen_pixel_extract_comp.glsl");
+
+GPU_SHADER_CREATE_INFO(bnpr_compress_contour_pixels_dbg)
+    .do_static_compilation(true)
+    .typedef_source("bnpr_shader_shared.hh")
+    .additional_info("bnpr_compress_contour_pixels")
+    .image(2, GPU_R32UI, Qualifier::WRITE, ImageType::UINT_2D, "tex2d_contour_pix_marks_dbg_")
+    .define("_KERNEL_MULTICOMPILE__COMPRESS_CONTOUR_IMG_VALIDATE", "1"); 
+
+    /** \} */
+
+    /* -------------------------------------------------------------------- */
+    /** \Bare minumum compute shader test
+     * \{ */
+    GPU_SHADER_CREATE_INFO(bnpr_strokegen_test_xxx)
     .do_static_compilation(true)
     .storage_buf(0, Qualifier::READ_WRITE, "uint", "buf_test[]")
     .storage_buf(1, Qualifier::READ, "uint", "buf_ibo[]")
@@ -242,14 +262,8 @@ GPU_SHADER_CREATE_INFO(bnpr_scan_test_upsweep)
     .do_static_compilation(true)
     .additional_info("bnpr_scan_test_inputs")
     .define("_KERNEL_MULTI_COMPILE__TREE_SCAN_UPSWEEP", "1")
-    .storage_buf(0,
-                 Qualifier::READ_WRITE,
-                 BNPR_SCAN_TEST_DATA_TYPE_STR,
-                 "bnpr_in_scan_data_buf_[]")
-    .storage_buf(1,
-                 Qualifier::READ_WRITE,
-                 BNPR_SCAN_TEST_DATA_TYPE_STR,
-                 "bnpr_out_scan_data_buf_[]")
+    .storage_buf(0, Qualifier::READ_WRITE, BNPR_SCAN_TEST_DATA_TYPE_STR, "bnpr_in_scan_data_buf_[]")
+    .storage_buf(1, Qualifier::READ_WRITE, BNPR_SCAN_TEST_DATA_TYPE_STR, "bnpr_out_scan_data_buf_[]")
     .storage_buf(2, Qualifier::WRITE, BNPR_SCAN_TEST_DATA_TYPE_STR, "bnpr_scan_block_sum_buf_[]")
     .uniform_buf(0, "UBData_TreeScan", "ubo_bnpr_tree_scan_infos_")
     .local_group_size(GROUP_SIZE_BNPR_SCAN_TEST_SWEEP) /* <== from "bnpr_defines.hh" */
@@ -259,10 +273,7 @@ GPU_SHADER_CREATE_INFO(bnpr_scan_test_aggregate)
     .do_static_compilation(true)
     .additional_info("bnpr_scan_test_inputs")
     .define("_KERNEL_MULTI_COMPILE__TREE_SCAN_AGGREGATE", "1")
-    .storage_buf(0,
-                 Qualifier::READ_WRITE,
-                 BNPR_SCAN_TEST_DATA_TYPE_STR,
-                 "bnpr_scan_block_sum_buf_[]")
+    .storage_buf(0, Qualifier::READ_WRITE, BNPR_SCAN_TEST_DATA_TYPE_STR, "bnpr_scan_block_sum_buf_[]")
     .local_group_size(GROUP_SIZE_BNPR_SCAN_TEST_AGGRG) /* <== from "bnpr_defines.hh" */
     .compute_source("npr_strokegen_scan_test_comp.glsl");
 
@@ -270,10 +281,7 @@ GPU_SHADER_CREATE_INFO(bnpr_scan_test_dwsweep)
     .do_static_compilation(true)
     .additional_info("bnpr_scan_test_inputs")
     .define("_KERNEL_MULTI_COMPILE__TREE_SCAN_DWSWEEP", "1")
-    .storage_buf(0,
-                 Qualifier::READ_WRITE,
-                 BNPR_SCAN_TEST_DATA_TYPE_STR,
-                 "bnpr_out_scan_data_buf_[]")
+    .storage_buf(0, Qualifier::READ_WRITE, BNPR_SCAN_TEST_DATA_TYPE_STR, "bnpr_out_scan_data_buf_[]")
     .storage_buf(1, Qualifier::READ, BNPR_SCAN_TEST_DATA_TYPE_STR, "bnpr_scan_block_sum_buf_[]")
     .local_group_size(GROUP_SIZE_BNPR_SCAN_TEST_SWEEP) /* <== from "bnpr_defines.hh" */
     .compute_source("npr_strokegen_scan_test_comp.glsl");
@@ -283,18 +291,9 @@ GPU_SHADER_CREATE_INFO(bnpr_segscan_test_upsweep)
     .additional_info("bnpr_segscan_test_inputs")
     .define("IS_TREE_SEG_SCAN", "1")
     .define("_KERNEL_MULTI_COMPILE__TREE_SEG_SCAN_UPSWEEP", "1")
-    .storage_buf(0,
-                 Qualifier::READ_WRITE,
-                 BNPR_SEG_SCAN_TEST_STRUCT_TYPE_STR,
-                 "bnpr_in_scan_data_buf_[]")
-    .storage_buf(1,
-                 Qualifier::READ_WRITE,
-                 BNPR_SEG_SCAN_TEST_STRUCT_TYPE_STR,
-                 "bnpr_out_scan_data_buf_[]")
-    .storage_buf(2,
-                 Qualifier::WRITE,
-                 BNPR_SEG_SCAN_TEST_STRUCT_TYPE_STR,
-                 "bnpr_scan_block_sum_buf_[]")
+    .storage_buf(0, Qualifier::READ_WRITE, BNPR_SEG_SCAN_TEST_STRUCT_TYPE_STR, "bnpr_in_scan_data_buf_[]")
+    .storage_buf(1, Qualifier::READ_WRITE, BNPR_SEG_SCAN_TEST_STRUCT_TYPE_STR, "bnpr_out_scan_data_buf_[]")
+    .storage_buf(2, Qualifier::WRITE, BNPR_SEG_SCAN_TEST_STRUCT_TYPE_STR, "bnpr_scan_block_sum_buf_[]")
     .uniform_buf(0, "UBData_TreeScan", "ubo_bnpr_tree_scan_infos_")
     .local_group_size(GROUP_SIZE_BNPR_SCAN_TEST_SWEEP) /* <== from "bnpr_defines.hh" */
     .compute_source("npr_strokegen_scan_test_comp.glsl");
@@ -304,10 +303,7 @@ GPU_SHADER_CREATE_INFO(bnpr_segscan_test_aggregate)
     .additional_info("bnpr_segscan_test_inputs")
     .define("IS_TREE_SEG_SCAN", "1")
     .define("_KERNEL_MULTI_COMPILE__TREE_SEG_SCAN_AGGREGATE", "1")
-    .storage_buf(0,
-                 Qualifier::READ_WRITE,
-                 BNPR_SEG_SCAN_TEST_STRUCT_TYPE_STR,
-                 "bnpr_scan_block_sum_buf_[]")
+    .storage_buf(0, Qualifier::READ_WRITE, BNPR_SEG_SCAN_TEST_STRUCT_TYPE_STR, "bnpr_scan_block_sum_buf_[]")
     .local_group_size(GROUP_SIZE_BNPR_SCAN_TEST_AGGRG) /* <== from "bnpr_defines.hh" */
     .compute_source("npr_strokegen_scan_test_comp.glsl");
 
@@ -316,14 +312,8 @@ GPU_SHADER_CREATE_INFO(bnpr_segscan_test_dwsweep)
     .additional_info("bnpr_segscan_test_inputs")
     .define("IS_TREE_SEG_SCAN", "1")
     .define("_KERNEL_MULTI_COMPILE__TREE_SEG_SCAN_DWSWEEP", "1")
-    .storage_buf(0,
-                 Qualifier::READ_WRITE,
-                 BNPR_SEG_SCAN_TEST_STRUCT_TYPE_STR,
-                 "bnpr_out_scan_data_buf_[]")
-    .storage_buf(1,
-                 Qualifier::READ,
-                 BNPR_SEG_SCAN_TEST_STRUCT_TYPE_STR,
-                 "bnpr_scan_block_sum_buf_[]")
+    .storage_buf(0, Qualifier::READ_WRITE, BNPR_SEG_SCAN_TEST_STRUCT_TYPE_STR, "bnpr_out_scan_data_buf_[]")
+    .storage_buf(1, Qualifier::READ, BNPR_SEG_SCAN_TEST_STRUCT_TYPE_STR, "bnpr_scan_block_sum_buf_[]")
     .uniform_buf(0, "UBData_TreeScan", "ubo_bnpr_tree_scan_infos_")
     .local_group_size(GROUP_SIZE_BNPR_SCAN_TEST_SWEEP) /* <== from "bnpr_defines.hh" */
     .compute_source("npr_strokegen_scan_test_comp.glsl");
@@ -347,14 +337,8 @@ GPU_SHADER_CREATE_INFO(strokegen_segloopconv1D_test_convolution)
     .do_static_compilation(true)
     .define("_KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION", "1")
     .storage_buf(0, Qualifier::READ, "uint", "ssbo_segloopconv1d_patch_table_[]")
-    .storage_buf(1,
-                 Qualifier::READ_WRITE,
-                 NPR_SEGLOOPCONV1D_TEST_DATA_TYPE_STR,
-                 "ssbo_in_segloopconv1d_data_[]")
-    .storage_buf(2,
-                 Qualifier::READ_WRITE,
-                 NPR_SEGLOOPCONV1D_TEST_DATA_TYPE_STR,
-                 "ssbo_out_segloopconv1d_data_[]")
+    .storage_buf(1, Qualifier::READ_WRITE, NPR_SEGLOOPCONV1D_TEST_DATA_TYPE_STR, "ssbo_in_segloopconv1d_data_[]")
+    .storage_buf(2, Qualifier::READ_WRITE, NPR_SEGLOOPCONV1D_TEST_DATA_TYPE_STR, "ssbo_out_segloopconv1d_data_[]")
     .storage_buf(3, Qualifier::READ_WRITE, "uint", "ssbo_debug_segloopconv1d_data_[]")
     .uniform_buf(0, "UBData_SegLoopConv1D", "ubo_segloopconv1d_")
     .additional_info("npr_segloopconv1D_test")

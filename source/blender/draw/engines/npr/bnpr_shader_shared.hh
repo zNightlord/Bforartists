@@ -250,12 +250,15 @@ using namespace draw;
     uint base_addr = mesh_pool_addr__zwhclip(num_contour_edges, num_contour_edges);
     return base_addr + contour_edge_id * 4;
   }
-
   /** } */
 
-
-
-
+  /* Addressing - tex2d_contour_pix_marks_ */
+#ifndef GPU_SHADER
+#  define CONTOUR_PIX_MARK_COMPRESS_RECT_SIZE (int2(8u, 4u))
+#else
+#  define CONTOUR_PIX_MARK_COMPRESS_RECT_SIZE (uvec2(8u, 4u))
+#endif
+  /** } */
 
 #ifdef __cplusplus
 

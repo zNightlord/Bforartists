@@ -23,11 +23,14 @@ namespace blender::npr::strokegen
   public:
     /** Pooled Textures */
     TextureFromPool tex_contour_raster;
-    TextureFromPool tex_contour_raster_depth; 
+    TextureFromPool tex_contour_raster_depth;
+    TextureFromPool tex2d_contour_pix_marks_;
+    TextureFromPool tex2d_contour_pix_marks_dbg_; 
 
     /** Framebuffers */
     Framebuffer fb_contour_raster;
     float2 get_contour_raster_screen_res() const;
+
 
   public:
     GPUTexturePoolModule(Instance &inst) :

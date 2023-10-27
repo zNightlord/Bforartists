@@ -35,7 +35,9 @@ namespace blender::npr::strokegen
       case FILL_DISPATCH_ARGS_CONTOUR_EDGES:
         return pass_fill_dispatch_args_contour_edges;
       case SOFT_RASTER_CONTOUR_EDGES:
-        return pass_soft_raster_contour_edges; 
+        return pass_soft_raster_contour_edges;
+      case COMPRESS_CONTOUR_PIXELS:
+        return pass_compress_contour_pixels; 
     }
     return pass_comp_test;
   }
@@ -104,9 +106,9 @@ namespace blender::npr::strokegen
         boostrap_before_extract_first_batch ? "extract_geom_boostrap" : pass_name.c_str()
       );
       if (ib_type == gpu::GPU_INDEX_U16)
-        sub.shader_set(shaders_.static_shader_get(eShaderType::COMPUTE_GEOM_EXTRACT_IBO_16BIT));
+        sub.shader_set(shaders_.static_shader_get(eShaderType::CONTOUR_GEOM_EXTRACT_IBO_16BIT));
       else
-        sub.shader_set(shaders_.static_shader_get(eShaderType::COMPUTE_GEOM_EXTRACT));
+        sub.shader_set(shaders_.static_shader_get(eShaderType::CONTOUR_GEOM_EXTRACT));
 
       sub.bind_ssbo(0, &(gpu_batch_line_adj->elem)); // TODO: investigate whether double pointer is necessary
       sub.bind_ssbo(1, &(gpu_batch_line_adj->verts[0])); // TODO: investigate what geom->vert[1~15] does
@@ -155,7 +157,7 @@ namespace blender::npr::strokegen
     {
       auto &sub = pass_soft_raster_contour_edges.sub("calc contour edge raster data");
       sub.shader_set(
-          shaders_.static_shader_get(eShaderType::COMPUTE_GEOM_CONTOUR_EDGE_RASTER_DATA));
+          shaders_.static_shader_get(eShaderType::COMPUTE_CONTOUR_EDGE_RASTER_DATA));
 
       sub.bind_ssbo(0, buffers_.ssbo_bnpr_mesh_pool_);
       sub.bind_ssbo(1, buffers_.ssbo_bnpr_mesh_pool_counters_);
@@ -192,6 +194,41 @@ namespace blender::npr::strokegen
   void StrokeGenPassModule::rebuild_pass_append_contour_edge_drawcall()
   {
     pass_draw_contour_edges.append_draw_subpass(buffers_, textures_); 
+  }
+
+  void StrokeGenPassModule::rebuild_pass_compress_contour_pixels(bool debug)
+  {
+    pass_compress_contour_pixels.init();
+    {
+      auto &sub = pass_compress_contour_pixels.sub("pass_compress_contour_pixels");
+      sub.shader_set(shaders_.static_shader_get(eShaderType::CONTOUR_PIXEL_COMPRESS));
+
+      sub.bind_image(0, textures_.tex_contour_raster);
+      sub.bind_image(1, textures_.tex2d_contour_pix_marks_);
+      sub.push_constant("pcs_screen_size_", textures_.get_contour_raster_screen_res());
+
+      int2 compressed_tex_res = int2(
+          GPU_texture_width(textures_.tex2d_contour_pix_marks_),
+          GPU_texture_height(textures_.tex2d_contour_pix_marks_)
+      );
+      sub.dispatch(int3(compressed_tex_res.x, compressed_tex_res.y, 1));
+      sub.barrier(eGPUBarrier::GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_SHADER_IMAGE_ACCESS); 
+    }
+    if (debug)
+    {
+      auto &sub = pass_compress_contour_pixels.sub("pass_compress_contour_pixels_debug");
+      sub.shader_set(shaders_.static_shader_get(eShaderType::CONTOUR_PIXEL_COMPRESS_DBG));
+
+      sub.bind_image(0, textures_.tex_contour_raster);
+      sub.bind_image(1, textures_.tex2d_contour_pix_marks_);
+      sub.bind_image(2, textures_.tex2d_contour_pix_marks_dbg_);
+      sub.push_constant("pcs_screen_size_", textures_.get_contour_raster_screen_res());
+
+      int2 screen_res = int2(GPU_texture_width(textures_.tex_contour_raster),
+                             GPU_texture_height(textures_.tex_contour_raster));
+      sub.dispatch(int3(screen_res.x, screen_res.y, 1));
+      sub.barrier(eGPUBarrier::GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_SHADER_IMAGE_ACCESS);
+    }
   }
 
 

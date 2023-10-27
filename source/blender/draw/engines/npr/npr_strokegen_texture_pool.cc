@@ -34,8 +34,14 @@ void GPUTexturePoolModule::on_begin_sync(Texture& tex_prepass_depth)
 
   GPUAttachment depth_att = GPU_ATTACHMENT_TEXTURE(tex_contour_raster_depth); 
   GPUAttachment col_att = GPU_ATTACHMENT_TEXTURE(tex_contour_raster);
+  fb_contour_raster.ensure(depth_att, col_att);
 
-  fb_contour_raster.ensure(depth_att, col_att); 
+  eGPUTextureUsage tex_pix_mark_usage = GPU_TEXTURE_USAGE_SHADER_READ | GPU_TEXTURE_USAGE_SHADER_WRITE; 
+  int2 compressed_rect_size = CONTOUR_PIX_MARK_COMPRESS_RECT_SIZE; 
+  int2 pix_marks_res = (screen_res + compressed_rect_size - int2(1, 1)) / compressed_rect_size; 
+  tex2d_contour_pix_marks_.acquire(pix_marks_res, eGPUTextureFormat::GPU_R32UI, tex_pix_mark_usage);
+  tex2d_contour_pix_marks_dbg_.acquire(screen_res, eGPUTextureFormat::GPU_R32UI, tex_pix_mark_usage); 
+
 }
 
 void GPUTexturePoolModule::sync(Object *object)
@@ -46,7 +52,9 @@ void GPUTexturePoolModule::sync(Object *object)
 void GPUTexturePoolModule::on_finished_draw_viewport()
 {
   tex_contour_raster.release();
-  tex_contour_raster_depth.release(); 
+  tex_contour_raster_depth.release();
+  tex2d_contour_pix_marks_.release();
+  tex2d_contour_pix_marks_dbg_.release(); 
 }
 
 

@@ -98,8 +98,9 @@ namespace blender::npr::strokegen
     strokegen_passes.rebuild_pass_fill_draw_args_contour_edges();
     strokegen_passes.rebuild_pass_fill_dispatch_args_contour_edges(); 
 
+    strokegen_passes.rebuild_pass_softraster_geom();
     strokegen_passes.rebuild_pass_append_contour_edge_drawcall();
-    strokegen_passes.rebuild_pass_softraster_geom(); 
+    strokegen_passes.rebuild_pass_compress_contour_pixels(); 
   }
 
   void Instance::mesh_sync(Manager& manager, ObjectRef& object_ref, ResourceHandle& rsc_handle)
@@ -154,10 +155,12 @@ namespace blender::npr::strokegen
     // GPU_storagebuf_copy_sub_from_vertbuf()
     GPU_texture_copy(strokegen_textures.tex_contour_raster_depth, pre_depth); 
 
-    /* Geometry Extraction for StrokeGen ---------------------------------------------------------------- */
+
+    /* Geometry Extraction */
     manager.submit(strokegen_passes.get_compute_pass(PType::GEOM_EXTRACTION), view);
     manager.submit(strokegen_passes.get_compute_pass(PType::FILL_DISPATCH_ARGS_CONTOUR_EDGES), view); 
     manager.submit(strokegen_passes.get_compute_pass(PType::SOFT_RASTER_CONTOUR_EDGES), view);
+
 
     /* Draw Contour Edges */
     manager.submit(strokegen_passes.get_compute_pass(PType::FILL_DRAW_ARGS_CONTOUR_EDGES), view);
@@ -165,11 +168,16 @@ namespace blender::npr::strokegen
     strokegen_textures.fb_contour_raster.bind();
     float fb_clear_col[4] = {0, 0, 0, 1}; 
     GPU_framebuffer_clear_color(strokegen_textures.fb_contour_raster, fb_clear_col);
-    GPU_line_width(1.25); 
+    GPU_line_width(1.0f); // always snap to integer, see the opengl spec on line rasterization
     manager.submit(
       strokegen_passes.get_contour_edge_draw_pass(StrokeGenPassModule::INDIRECT_DRAW_CONTOUR_EDGES), view
     ); 
-    GPU_line_width(1.0f); 
+    GPU_line_width(1.0f);
+
+
+    /* Pixel Extraction */
+    manager.submit(strokegen_passes.get_compute_pass(PType::COMPRESS_CONTOUR_PIXELS), view); 
+
 
     /* GPU (Seg-)Scan Test ------------------------------------------------------------------------- */
     // manager.submit(strokegen_passes.get_compute_pass(ePassType::SCAN_TEST), view);
