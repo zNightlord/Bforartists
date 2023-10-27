@@ -69,9 +69,6 @@ typedef struct bActionStrip {
   char stridechannel[32];
   /** If repeat, use this bone/channel for defining offset. */
   char offs_bone[32];
-  /** Strip additional color*/
-  float color[3];
-  char _pad1[4];
 
   /** Modifier stack. */
   ListBase modifiers;
