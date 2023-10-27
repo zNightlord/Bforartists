@@ -770,6 +770,8 @@ typedef struct NlaStrip {
   /** Settings. */
   int flag;
   char _pad2[4];
+  /** Strip additional color*/
+  float color[3];
 
   /* Pointer to an original NLA strip. */
   struct NlaStrip *orig_strip;
@@ -831,6 +833,7 @@ typedef enum eNlaStrip_Flag {
   NLASTRIP_FLAG_MUTED = (1 << 12),
   /** NLA Strip is played back in 'ping-pong' style */
   /* NLASTRIP_FLAG_MIRROR = (1 << 13), */ /* UNUSED */
+  NLASTRIP_CUSTOM_COLOR = (1 << 13),
 
   /* temporary editing flags */
 
