@@ -772,6 +772,7 @@ typedef struct NlaStrip {
   char _pad2[4];
   /** Strip additional color*/
   float color[3];
+  char _pad4[4];
 
   /* Pointer to an original NLA strip. */
   struct NlaStrip *orig_strip;
