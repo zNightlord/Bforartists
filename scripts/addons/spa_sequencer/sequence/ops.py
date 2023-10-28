@@ -246,6 +246,22 @@ class SEQUENCE_OT_child_scene_setup_create(bpy.types.Operator):
         )
         return {"FINISHED"}
 
+class VIEW3D_OT_camera_select(bpy.types.Operator):
+    bl_idname = "scene.camera_select"
+    bl_label = "Select shot camera"
+    bl_description = "Select camera of the shot"
+
+    def execute(self, context):
+        strip = get_sync_master_strip(use_cache=True)[0]
+        strip_cam = strip.scene_camera
+        scene_cam = context.scene.camera
+        if scene_cam or strip_cam:
+            if scene_cam != strip_cam:
+                strip_cam.select_set(True)
+            elif scene_cam:
+                scene_cam.select_set(True)
+        return {'FINISHED'}
+    
 
 classes = (
     SEQUENCE_OT_check_obj_users_scene,
@@ -253,6 +269,7 @@ classes = (
     SEQUENCE_OT_active_shot_camera_set,
     SEQUENCE_OT_active_shot_scene_set,
     SEQUENCE_OT_child_scene_setup_create,
+    VIEW3D_OT_camera_select
 )
 
 
