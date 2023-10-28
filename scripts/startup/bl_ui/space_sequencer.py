@@ -135,7 +135,7 @@ class ANIM_OT_switch_editors_in_sequencer(bpy.types.Operator):
 
 class ANIM_OT_switch_editors_to_sequencer(bpy.types.Operator):
     """Switch to sequencer editor"""      # blender will use this as a tooltip for menu items and buttons.
-    bl_idname = "wm.switch_editor_to_sequwncer"        # unique identifier for buttons and menu items to reference.
+    bl_idname = "wm.switch_editor_to_sequencer"        # unique identifier for buttons and menu items to reference.
     bl_label = "Switch to Sequencer Editor"         # display name in the interface.
     bl_options = {'REGISTER', 'UNDO'}  # enable undo for the operator.
 
@@ -179,6 +179,9 @@ class SEQUENCER_HT_tool_header(Header):
 class SEQUENCER_HT_header(Header):
     bl_space_type = 'SEQUENCE_EDITOR'
 
+    def draw_seq(self, layout, context):
+        pass
+
     def draw(self, context):
         layout = self.layout
 
@@ -200,8 +203,11 @@ class SEQUENCER_HT_header(Header):
 
         layout.separator(factor=5.0)
         row = layout.row()
+        self.draw_seq(row, context)
+        row = layout.row()
         row.ui_units_x = 6
         row.template_ID(st, "scene_override", unlink="sequencer.remove_scene_override", filter='INACTIVE')
+        
         layout.separator_spacer()
         if st.view_type == 'PREVIEW':
             row = layout.row(align=True)
