@@ -2,6 +2,7 @@
 # Copyright (C) 2023, The SPA Studios. All rights reserved.
 
 import bpy
+from bl_ui.space_sequencer import SEQUENCER_HT_tool_header
 
 from spa_sequencer.sync.core import get_sync_settings
 from spa_sequencer.utils import register_classes, unregister_classes
@@ -12,7 +13,6 @@ class SEQUENCER_PT_SyncPanel(bpy.types.Panel):
 
     bl_label = "Timeline Sync"
     bl_space_type = "SEQUENCE_EDITOR"
-    bl_region_type = "UI"
     bl_region_type = 'HEADER'
 
     def draw(self, context):
@@ -21,12 +21,6 @@ class SEQUENCER_PT_SyncPanel(bpy.types.Panel):
         col.use_property_split = True
         col.use_property_decorate = False
         settings = get_sync_settings()
-        col.operator(
-            "wm.timeline_sync_toggle",
-            text="Synchronize",
-            icon="UV_SYNC_SELECT",
-            depress=settings.enabled,
-        )
         col.prop(settings, "master_scene")
         
         col = layout.column()
@@ -43,6 +37,16 @@ class SEQUENCER_PT_SyncPanel(bpy.types.Panel):
         layout.prop(settings, "sync_all_windows")
         layout.prop(settings, "active_follows_playhead")
 
+def draw_sequencer_popover(self, layout):
+    settings = get_sync_settings()
+    layout.operator(
+        "wm.timeline_sync_toggle",
+        text="",
+        icon="PLAY",
+        depress=settings.enabled,
+    )
+    layout.popover(SEQUENCER_PT_SyncPanel.bl_idname,
+
 classes = (
     SEQUENCER_PT_SyncPanel,
 )
@@ -50,7 +54,11 @@ classes = (
 
 def register():
     register_classes(classes)
+    SEQUENCER_HT_tool_header.draw_seq_old = SEQUENCER_HT_tool_header.draw_seq
+    SEQUENCER_HT_tool_header.draw_seq = draw_sequencer_popover
 
 
 def unregister():
     unregister_classes(classes)
+    SEQUENCER_HT_tool_header.draw_seq = SEQUENCER_HT_tool_header.draw_seq_old
+    
