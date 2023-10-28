@@ -45,7 +45,7 @@ def draw_sequencer_popover(self, layout):
         icon="PLAY",
         depress=settings.enabled,
     )
-    layout.popover(SEQUENCER_PT_SyncPanel.bl_idname,
+    layout.popover(SEQUENCER_PT_SyncPanel.bl_idname, text="")
 
 classes = (
     SEQUENCER_PT_SyncPanel,
