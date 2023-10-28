@@ -21,7 +21,8 @@ jobs:
        git config --global user.name "Your Name"
        git remote add origin https://github.com/zNightlord/Bforartists.git
        git fetch
-       git checkout dev-build
+       git checkout dev
+       git merge origin/addon-sequencer
        git merge origin/custom-wire-color
        git merge origin/toolbar-assetshelf
        git merge origin/comp-tex-coord
@@ -33,7 +34,7 @@ jobs:
       with:
         key: windows
         path: |
-          D:\a\Bforartists\*
+          D:\a\Bforartists\lib
           !D:\a\Bforartists\Bforartists
     - name: Svn library
       run: |
