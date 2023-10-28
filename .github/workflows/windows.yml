@@ -21,8 +21,7 @@ jobs:
        git config --global user.name "Your Name"
        git remote add origin https://github.com/zNightlord/Bforartists.git
        git fetch
-       git checkout dev
-       git merge origin/addon-sequencer
+       git checkout dev-work
        git merge origin/custom-wire-color
        git merge origin/toolbar-assetshelf
        git merge origin/comp-tex-coord
