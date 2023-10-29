@@ -99,11 +99,14 @@ namespace blender::npr::strokegen
     strokegen_passes.rebuild_pass_fill_dispatch_args_contour_edges(); 
 
     strokegen_passes.rebuild_pass_softraster_geom();
+    strokegen_passes.rebuild_pass_meshing_merge_verts(); 
+
     strokegen_passes.rebuild_pass_append_contour_edge_drawcall();
     strokegen_passes.rebuild_pass_compress_contour_pixels(); 
   }
 
-  void Instance::mesh_sync(Manager& manager, ObjectRef& object_ref, ResourceHandle& rsc_handle)
+  void Instance::mesh_sync(
+    Manager& manager, ObjectRef& object_ref, ResourceHandle& rsc_handle, GPUBatch** gpu_batch_surf)
   { /* Add object draw calls to passes. (Populate render graph) */
     Object *ob = object_ref.object;
 
@@ -160,7 +163,7 @@ namespace blender::npr::strokegen
     manager.submit(strokegen_passes.get_compute_pass(PType::GEOM_EXTRACTION), view);
     manager.submit(strokegen_passes.get_compute_pass(PType::FILL_DISPATCH_ARGS_CONTOUR_EDGES), view); 
     manager.submit(strokegen_passes.get_compute_pass(PType::SOFT_RASTER_CONTOUR_EDGES), view);
-
+    manager.submit(strokegen_passes.get_compute_pass(PType::MESHING_MERGE_VERTS), view); 
 
     /* Draw Contour Edges */
     manager.submit(strokegen_passes.get_compute_pass(PType::FILL_DRAW_ARGS_CONTOUR_EDGES), view);
@@ -173,6 +176,7 @@ namespace blender::npr::strokegen
       strokegen_passes.get_contour_edge_draw_pass(StrokeGenPassModule::INDIRECT_DRAW_CONTOUR_EDGES), view
     ); 
     GPU_line_width(1.0f);
+
 
 
     /* Pixel Extraction */

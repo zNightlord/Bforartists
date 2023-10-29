@@ -34,6 +34,9 @@ private:
   draw::PassSimple pass_fill_dispatch_args_contour_edges = {"Fill Dispatch Args for Contour Edges"};
   draw::PassSimple pass_soft_raster_contour_edges = {"Contour Soft Rasterization"}; 
   draw::PassSimple pass_fill_draw_args_contour_edges = {"Fill Draw Args for Contour Edges"};
+
+  draw::PassSimple pass_meshing_merge_verts = {"Meshing Merge Verts"};
+
   draw::PassSimple pass_compress_contour_pixels = {"Generate Contour Pixel Mask"}; 
 
   draw::PassSimple pass_scan_test = {"Bnpr GPU Blelloch Scan Test"};
@@ -78,11 +81,15 @@ public:
     SEGSCAN_TEST,
     SEGLOOPCONV_TEST,
     LIST_RANKING_TEST,
+
     GEOM_EXTRACTION,
     FILL_DRAW_ARGS_CONTOUR_EDGES,
     INDIRECT_DRAW_CONTOUR_EDGES,
     FILL_DISPATCH_ARGS_CONTOUR_EDGES,
     SOFT_RASTER_CONTOUR_EDGES,
+
+    MESHING_MERGE_VERTS, 
+
     COMPRESS_CONTOUR_PIXELS 
   };
 
@@ -105,15 +112,21 @@ public:
      * \{ */
   bool boostrap_before_extract_first_batch; 
   void init_pass_extract_mesh_geom();
-  void rebuild_sub_pass_extract_mesh_geom(Object* ob, GPUBatch* gpu_batch_line_adj, ResourceHandle& rsc_handle, const DRWView* drw_view);
+  void rebuild_sub_pass_extract_mesh_geom(Object* ob, GPUBatch* gpu_batch_line_adj, GPUBatch* gpu_batch_surf, ResourceHandle& rsc_handle, const DRWView* drw_view);
   void rebuild_pass_fill_dispatch_args_contour_edges(); 
   void rebuild_pass_softraster_geom(); 
-
   void rebuild_pass_fill_draw_args_contour_edges();
   void init_contour_edge_draw_pass(); 
   void rebuild_pass_append_contour_edge_drawcall();
 
+  int num_total_mesh_verts;
+  int num_total_mesh_tris;
+  void rebuild_pass_meshing_merge_verts(bool debug = false); 
+
+
   void rebuild_pass_compress_contour_pixels(bool debug = false); 
+
+
 
   bool test_scan; 
   void rebuild_pass_scan_test();

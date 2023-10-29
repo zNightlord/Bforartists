@@ -1,4 +1,4 @@
-﻿/* SPDX-License-Identifier: GPL-2.0-or-later
+/* SPDX-License-Identifier: GPL-2.0-or-later
 * Copyright 2021 Blender Foundation.
  */
 
@@ -38,11 +38,10 @@ namespace blender::npr::strokegen
     WorldHandle &sync_world(::World *world) {};
     SceneHandle &sync_scene(::Scene *scene) {};
 
-    void sync_mesh(Object *ob,
-                   const draw::ObjectRef &ob_ref,
-                   BnprDrawData &ob_draw_data,
-                   draw::ResourceHandle& rsc_handle,
-                   const DRWView* drw_view);
+    void sync_mesh(Object* ob,
+                   const draw::ObjectRef& ob_ref,
+                   BnprDrawData& ob_draw_data,
+                   draw::ResourceHandle& rsc_handle, const DRWView* drw_view);
   };
 
 

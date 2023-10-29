@@ -49,18 +49,21 @@ static void draw_data_init_cb(struct DrawData *dd)
   }
 
   void StrokegenSyncModule::sync_mesh(
-    Object* ob,
-    const draw::ObjectRef& ob_ref,
-    BnprDrawData& ob_draw_data,
-    draw::ResourceHandle& rsc_handle,
-    const DRWView* drw_view
-  )
+      Object* ob,
+      const draw::ObjectRef& ob_ref,
+      BnprDrawData& ob_draw_data,
+      draw::ResourceHandle& rsc_handle,
+      const DRWView* drw_view
+      )
   {
     bool mesh_is_manifold;
-    GPUBatch *geobatch = DRW_cache_object_edge_detection_get(ob, &mesh_is_manifold);
+    GPUBatch *gpu_batch_line_adj = DRW_cache_object_edge_detection_get(ob, &mesh_is_manifold);
+    GPUBatch *gpu_batch_surf = DRW_cache_object_surface_get(ob_ref.object);
 
-    if (geobatch == nullptr) return;
-    if (geobatch->elem == nullptr) return;
+    if (gpu_batch_line_adj == nullptr) return;
+    if (gpu_batch_line_adj->elem == nullptr) return;
+    if (gpu_batch_surf == nullptr) return;
+    if (gpu_batch_surf->elem == nullptr) return;
 
     // Old way to do this:
     // See "draw_subdiv_build_tris_buffer"
@@ -72,12 +75,15 @@ static void draw_data_init_cb(struct DrawData *dd)
     //  strokegen_passes.dispatch_XXX(...);
     //  ... ... ...
 
+
     if (inst_.strokegen_passes.boostrap_before_extract_first_batch)
     {
-      inst_.strokegen_passes.rebuild_sub_pass_extract_mesh_geom(ob, geobatch, rsc_handle, drw_view); // bootstrapping
-      inst_.strokegen_passes.boostrap_before_extract_first_batch = false; // switch off
+      inst_.strokegen_passes.rebuild_sub_pass_extract_mesh_geom(
+          ob, gpu_batch_line_adj, gpu_batch_surf /**gpu_batch_surf*/, rsc_handle, drw_view);  // bootstrapping
+      inst_.strokegen_passes.boostrap_before_extract_first_batch = false;  // switch off
     }
-    inst_.strokegen_passes.rebuild_sub_pass_extract_mesh_geom(ob, geobatch, rsc_handle, drw_view);
+    inst_.strokegen_passes.rebuild_sub_pass_extract_mesh_geom(
+        ob, gpu_batch_line_adj, gpu_batch_surf /**gpu_batch_surf*/, rsc_handle, drw_view);
 
   }
 

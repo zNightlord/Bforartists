@@ -91,6 +91,7 @@ const char *StrokeGenShaderModule::static_shader_create_info_name_get(eShaderTyp
     case COMPUTE_TEST:
       return "bnpr_strokegen_test_xxx";
 
+
     case CONTOUR_GEOM_EXTRACT:
       return "bnpr_geom_extract";
     case CONTOUR_GEOM_EXTRACT_IBO_16BIT:
@@ -103,10 +104,22 @@ const char *StrokeGenShaderModule::static_shader_create_info_name_get(eShaderTyp
       return "bnpr_geom_extract_calc_contour_edge_raster_data"; 
     case INDIRECT_DRAW_CONTOUR_EDGES:
       return "bnpr_geom_draw_contour_edges";
+
+
     case CONTOUR_PIXEL_COMPRESS:
       return "bnpr_compress_contour_pixels";
     case CONTOUR_PIXEL_COMPRESS_DBG:
-      return "bnpr_compress_contour_pixels_dbg"; 
+      return "bnpr_compress_contour_pixels_dbg";
+
+    case MESH_COLLECT_VBO:
+      return "bnpr_geom_extract_collect_verts"; 
+    case MESH_VERT_MERGE_INIT:
+      return "bnpr_meshing_merge_verts_bootstrap";
+    case MESH_VERT_MERGE_HASH:
+      return "bnpr_meshing_merge_verts_spatial_hashing";
+    case MESH_VERT_MERGE_REINDEX:
+      return "bnpr_meshing_merge_verts_deduplicate"; 
+
 
     case SCAN_TEST_UPSWEEP:
       return "bnpr_scan_test_upsweep";

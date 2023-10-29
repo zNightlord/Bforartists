@@ -89,7 +89,7 @@ void Instance::object_sync(Manager &manager, ObjectRef &ob_ref)
     ResourceHandle handle = manager.resource_handle(ob_ref);
     GPUBatch *batch = DRW_cache_object_surface_get(ob_ref.object);
 
-    strokegen_inst_->mesh_sync(manager, ob_ref, handle);
+    strokegen_inst_->mesh_sync(manager, ob_ref, handle, &batch);
 
     prepass_ps_.draw(batch, handle);
   }

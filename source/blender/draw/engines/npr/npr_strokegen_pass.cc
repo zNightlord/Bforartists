@@ -26,16 +26,21 @@ namespace blender::npr::strokegen
         return pass_segscan_test;
       case SEGLOOPCONV_TEST:
         return pass_conv1d_test;
-      case GEOM_EXTRACTION:
-        return pass_extract_geom;
       case LIST_RANKING_TEST:
         return pass_listranking_test;
+
+      case GEOM_EXTRACTION:
+        return pass_extract_geom;
       case FILL_DRAW_ARGS_CONTOUR_EDGES:
         return pass_fill_draw_args_contour_edges;
       case FILL_DISPATCH_ARGS_CONTOUR_EDGES:
         return pass_fill_dispatch_args_contour_edges;
       case SOFT_RASTER_CONTOUR_EDGES:
         return pass_soft_raster_contour_edges;
+
+      case MESHING_MERGE_VERTS:
+        return pass_meshing_merge_verts; 
+
       case COMPRESS_CONTOUR_PIXELS:
         return pass_compress_contour_pixels; 
     }
@@ -62,6 +67,8 @@ namespace blender::npr::strokegen
     rebuild_pass_segscan_test();
     rebuild_pass_conv_test();
     rebuild_pass_list_ranking();
+
+    num_total_mesh_tris = num_total_mesh_verts = 0; // TODO: these should go to the UBO
   }
 
 
@@ -83,24 +90,53 @@ namespace blender::npr::strokegen
   void StrokeGenPassModule::rebuild_sub_pass_extract_mesh_geom(
     Object* ob,
     GPUBatch* gpu_batch_line_adj,
+    GPUBatch* gpu_batch_surf, 
     ResourceHandle& rsc_handle,
     const DRWView* drw_view
   ){
     const std::string pass_name = "extract_geom_";
 
-    gpu::Batch* batch = static_cast<gpu::Batch*>(gpu_batch_line_adj); /* see example in "GPU_batch_draw_parameter_get" */
-    if (batch == nullptr || batch->elem == nullptr)
-      fprintf(stderr, "StrokeGen Error: empty mesh when rebuilding pass 'extract_mesh_geom'");
-    int num_edges = batch->elem_()->index_len_get() / 4; // 4 indices per primitive, basically 4 verts around the edge
+    int batch_resource_index = (int)rsc_handle.resource_index(); 
+    GPUStorageBuf *ssbo_object_matrices = DRW_manager_get()->matrix_buf.current(); 
 
-    gpu::IndexBuf* ib = batch->elem_();
+
+    /* see example in "GPU_batch_draw_parameter_get" */
+    gpu::Batch* edge_batch = static_cast<gpu::Batch*>(gpu_batch_line_adj);
+    if (edge_batch == nullptr || edge_batch->elem == nullptr)
+      fprintf(stderr, "StrokeGen Error: empty mesh when rebuilding pass 'extract_mesh_geom'");
+    int num_edges = edge_batch->elem_()->index_len_get() / 4; // 4 indices per primitive, basically 4 verts around the edge
+
+    gpu::IndexBuf* ib = edge_batch->elem_();
     /* Hack to get ibo format */
     gpu::GPUIndexBufType ib_type = // the actual "index_type_" is protected
       (ib->size_get() / ib->index_len_get() == sizeof(uint32_t))
         ? gpu::GPU_INDEX_U32 : gpu::GPU_INDEX_U16;
 
 
+
+    gpu::Batch *batch_surf = static_cast<gpu::Batch *>(gpu_batch_surf); 
+    gpu::IndexBuf *ibo_surf = batch_surf->elem_();
+    /* Layout of multi vbos, see
+     * "DRW_batch_requested(cache->batch.surface, GPU_PRIM_TRIS)" in
+     * "DRW_mesh_batch_cache_create_requested"
+     *
+     * For the data layout of "posnor" vbo, see
+     * "extract_mesh_vbo_pos_nor.cc"
+     */
+    gpu::VertBuf *vbo_surf_posnor = batch_surf->verts_(1);
+    GPUVertBuf *vbo_surf_posnor_gpuverbuf = gpu_batch_surf->verts[1];
+    int num_tris = ibo_surf->index_len_get() / 3;
+    int num_verts = vbo_surf_posnor->vertex_len; 
+    printf("posnor stride: %i", vbo_surf_posnor->vertex_alloc / num_verts);
+
+
     /* Cache per-edge geometry data */
+    // Note: this also works
+    /*GPU_storagebuf_copy_sub_from_vertbuf(buffers_.ssbo_vbo_full_,
+                                         gpu_batch_surf->verts[0],
+                                         4 * num_total_mesh_verts,
+                                         0,
+                                         4 * num_verts);*/
     {
       auto& sub = pass_extract_geom.sub(
         boostrap_before_extract_first_batch ? "extract_geom_boostrap" : pass_name.c_str()
@@ -117,10 +153,10 @@ namespace blender::npr::strokegen
       sub.bind_ssbo(4, buffers_.ssbo_bnpr_mesh_pool_counters_);
       sub.bind_ubo(0, buffers_.ubo_view_matrices_);
       sub.push_constant("pcs_ib_fmt_u16", ib_type == gpu::GPU_INDEX_U16 ? 1 : 0);
-      sub.push_constant("pcs_num_verts", (int)batch->elem_()->index_len_get());
+      sub.push_constant("pcs_num_verts", (int)edge_batch->elem_()->index_len_get());
       sub.push_constant(
         "pcs_num_ib_offset",
-        (int)batch->elem_()->index_start_get() + (int)batch->elem_()->index_base_get()
+        (int)edge_batch->elem_()->index_start_get() + (int)edge_batch->elem_()->index_base_get()
       );
       sub.push_constant("pcs_rsc_handle", (int)rsc_handle.resource_index());
       sub.push_constant("pcs_clear_compaction_counter_", boostrap_before_extract_first_batch ? 1 : 0);
@@ -131,7 +167,32 @@ namespace blender::npr::strokegen
       sub.barrier(GPU_BARRIER_SHADER_STORAGE);
     }
 
-    if (boostrap_before_extract_first_batch) return; // bootstrapping done.
+    if (boostrap_before_extract_first_batch) return; // bootstrapping done. will re-enter this func for actual work
+
+    {
+      auto &sub = pass_extract_geom.sub("merge batch vbo");
+      
+      sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_COLLECT_VBO)); 
+      
+      sub.bind_ssbo(0, &(gpu_batch_surf->elem));  // TODO: investigate whether double pointer is necessary
+      sub.bind_ssbo(1, &(gpu_batch_surf->verts[1])); 
+      sub.bind_ssbo(2, buffers_.ssbo_vbo_full_);
+      sub.bind_ssbo(3, DRW_manager_get()->matrix_buf.current());
+      
+      sub.bind_ubo(0, buffers_.ubo_view_matrices_); 
+      sub.push_constant("pcs_rsc_handle_", batch_resource_index); 
+      sub.push_constant("pcs_meshbatch_num_verts_", num_verts); 
+      sub.push_constant("pcs_full_vbo_offset_", num_total_mesh_verts);
+      
+      int num_groups = compute_num_groups(num_verts, GROUP_SIZE_STROKEGEN_GEOM_EXTRACT); 
+      sub.dispatch(int3(num_groups, 1, 1));
+      sub.barrier(GPU_BARRIER_SHADER_STORAGE);
+
+
+    }
+
+    num_total_mesh_tris += num_tris;
+    num_total_mesh_verts += num_verts; 
   }
 
   void StrokeGenPassModule::rebuild_pass_fill_dispatch_args_contour_edges()
@@ -194,6 +255,53 @@ namespace blender::npr::strokegen
   void StrokeGenPassModule::rebuild_pass_append_contour_edge_drawcall()
   {
     pass_draw_contour_edges.append_draw_subpass(buffers_, textures_); 
+  }
+
+  void StrokeGenPassModule::rebuild_pass_meshing_merge_verts(bool debug)
+  {
+    const int hashmap_size = std::min(MAX_VERT_HASH_TABLE_SIZE, num_total_mesh_verts * 16); 
+
+    auto bind_rsc = [&](draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub) {
+      sub.bind_ssbo(0, buffers_.ssbo_vert_spatial_map_headers_);
+      sub.bind_ssbo(1, buffers_.ssbo_mesh_buffer_reuse_0_);
+      sub.bind_ssbo(2, buffers_.ssbo_vert_merged_id_);
+      sub.bind_ssbo(3, buffers_.ssbo_vbo_full_);
+      sub.bind_ssbo(4, buffers_.ssbo_bnpr_mesh_pool_counters_);
+      sub.push_constant("pcs_hash_map_size_", hashmap_size);
+      sub.push_constant("pcs_vert_count_", (int)num_total_mesh_verts); 
+    }; 
+
+    pass_meshing_merge_verts.init();
+    {
+      auto &sub = pass_meshing_merge_verts.sub("bnpr_meshing_merge_verts_bootstrap");
+      sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_VERT_MERGE_INIT));
+
+      bind_rsc(sub); 
+      /* TODO: use GL buffer copy function rather than this */
+      int num_groups = compute_num_groups(hashmap_size, GROUP_SIZE_STROKEGEN_GEOM_EXTRACT); 
+      sub.dispatch(int3(num_groups, 1, 1));
+      sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_SHADER_IMAGE_ACCESS); 
+    }
+    {
+      auto &sub = pass_meshing_merge_verts.sub("bnpr_meshing_merge_verts_spatial_hashing");
+      sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_VERT_MERGE_HASH));
+
+      bind_rsc(sub); 
+
+      int num_groups = compute_num_groups(num_total_mesh_verts, GROUP_SIZE_STROKEGEN_GEOM_EXTRACT);
+      sub.dispatch(int3(num_groups, 1, 1));
+      sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_SHADER_IMAGE_ACCESS);
+    }
+    {
+      auto &sub = pass_meshing_merge_verts.sub("bnpr_meshing_merge_verts_deduplicate");
+      sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_VERT_MERGE_REINDEX));
+
+      bind_rsc(sub); 
+
+      int num_groups = compute_num_groups(num_total_mesh_verts, GROUP_SIZE_STROKEGEN_GEOM_EXTRACT);
+      sub.dispatch(int3(num_groups, 1, 1));
+      sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_SHADER_IMAGE_ACCESS);
+    }
   }
 
   void StrokeGenPassModule::rebuild_pass_compress_contour_pixels(bool debug)

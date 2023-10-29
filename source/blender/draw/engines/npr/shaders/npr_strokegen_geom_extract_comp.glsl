@@ -3,10 +3,12 @@
 
 
  
-
-
+/* all counters are cleared in _KERNEL_MULTICOMPILE__GEOM_EXTRACT kernel ------------------- */
 #if defined(_KERNEL_MULTICOMPILE__GEOM_EXTRACT) || defined(_KERNEL_MULTICOMPILE_FILL_DRAW_ARGS)
-	#define GLOBAL_COMPACTION_COUNTER__MESH_EDGES ssbo_bnpr_mesh_pool_counters_.num_contour_edges
+	#define GLOBAL_COMPACTION_COUNTER__MESH_CONTOUR_EDGES ssbo_bnpr_mesh_pool_counters_.num_contour_edges
+	#define GLOBAL_COMPACTION_COUNTER__MESH_VERTS ssbo_bnpr_mesh_pool_counters_.num_verts
+	#define GLOBAL_COMPACTION_COUNTER__MESH_EDGES ssbo_bnpr_mesh_pool_counters_.num_edges
+	#define GLOBAL_COMPACTION_COUNTER__MESH_FACES ssbo_bnpr_mesh_pool_counters_.num_faces
 #endif
 
 
@@ -63,7 +65,10 @@ void main()
 
 	if (pcs_clear_compaction_counter_ != 0u)
 	{ /* bootstrapping pass */
-		GLOBAL_COMPACTION_COUNTER__MESH_EDGES = 0; 
+		GLOBAL_COMPACTION_COUNTER__MESH_CONTOUR_EDGES = 0; 
+		GLOBAL_COMPACTION_COUNTER__MESH_VERTS = 0; 
+		GLOBAL_COMPACTION_COUNTER__MESH_EDGES = 0;
+		GLOBAL_COMPACTION_COUNTER__MESH_FACES = 0; 
 		return; 
 	}
 	
@@ -241,3 +246,49 @@ void main()
 #endif
 
 
+#if defined(_KERNEL_MULTICOMPILE__COMPACT_VBO)
+/*
+ * float ssbo_meshbatch_vbo_[]
+ * int pcs_meshbatch_num_verts_
+ * 
+ * float ssbo_vbo_full_[]
+ * int pcs_full_vbo_offset_
+ * 
+ * int pcs_rsc_handle_
+ * ObjectMatrices drw_matrix_buf[]
+ * ubo ubo_view_matrices_
+ */
+ void main()
+ {
+	const uint groupId = gl_LocalInvocationID.x; 
+	const uint idx = gl_GlobalInvocationID.x; 
+
+	const uint VertID = idx; 
+	const uint NumVerts = pcs_meshbatch_num_verts_;
+	bool valid_thread = VertID < NumVerts;
+	if (!valid_thread) return; 
+
+	const uint ResourceID = pcs_rsc_handle_; 
+
+	/* transform matrices, see "common_view_lib.glsl" */ 
+	float4x4 model_to_world = drw_matrix_buf[ResourceID].model;  
+	float4x4 world_to_model = drw_matrix_buf[ResourceID].model_inverse; 
+	float4x4 view_to_world = ubo_view_matrices_.viewinv;
+	float4x4 world_to_view = ubo_view_matrices_.viewmat;
+
+	vec3 vpos_ls, vpos_ws; 
+
+	uint ld_base_addr = VertID; /* TODO: posnor buf, verify this */ 
+	SSBO_Data_PosNor posnor_packed = ssbo_meshbatch_vbo_[ld_base_addr]; 
+	vpos_ls.x = posnor_packed.x;
+	vpos_ls.y = posnor_packed.y; 
+	vpos_ls.z = posnor_packed.z;
+
+	vpos_ws = (model_to_world * vec4(vpos_ls, 1.0f)).xyz; 
+
+	uint st_base_addr = (pcs_full_vbo_offset_ + VertID) * 3u;  
+	ssbo_vbo_full_[st_base_addr+0] = vpos_ws.x; 
+	ssbo_vbo_full_[st_base_addr+1] = vpos_ws.y;
+	ssbo_vbo_full_[st_base_addr+2] = vpos_ws.z;
+ }
+#endif

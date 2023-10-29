@@ -133,6 +133,7 @@ GPU_SHADER_CREATE_INFO(npr_compaction_off)
 /* -------------------------------------------------------------------- */
 /** \Geometry extraction from GPUBatch(es)
  * \{ */
+/* Collect & Transform Contour Edges */
 GPU_SHADER_CREATE_INFO(bnpr_geom_extract)
     .do_static_compilation(true)
     .typedef_source("bnpr_shader_shared.hh")
@@ -182,7 +183,27 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_extract_calc_contour_edge_raster_data)
     .storage_buf(1, Qualifier::READ, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
     .uniform_buf(0, "ViewMatrices", "ubo_view_matrices_")
     .push_constant(Type::VEC2, "pcs_screen_size_")
-    .local_group_size(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT) /* <== from "bnpr_defines.hh" */
+    .local_group_size(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT) 
+    .compute_source("npr_strokegen_geom_extract_comp.glsl");
+
+/* Collect Mesh Verts */
+GPU_SHADER_CREATE_INFO(bnpr_geom_extract_collect_verts)
+    .do_static_compilation(true)
+    .typedef_source("bnpr_shader_shared.hh")
+    .typedef_source("draw_shader_shared.h")
+    .additional_info("npr_compaction_off") /* Remove compaction code */
+    .define("_KERNEL_MULTICOMPILE__COMPACT_VBO", "1")
+
+    .storage_buf(0, Qualifier::READ, "uint", "ssbo_meshbatch_ibo_[]")
+    .storage_buf(1, Qualifier::READ, "SSBO_Data_PosNor", "ssbo_meshbatch_vbo_[]") /* encoded posnor vbo */
+    .storage_buf(2, Qualifier::WRITE, "float", "ssbo_vbo_full_[]")
+    .storage_buf(3, Qualifier::READ, "ObjectMatrices", "drw_matrix_buf[]")
+    .uniform_buf(0, "ViewMatrices", "ubo_view_matrices_")
+    .push_constant(Type::INT, "pcs_rsc_handle_")
+    .push_constant(Type::INT, "pcs_meshbatch_num_verts_")
+    .push_constant(Type::INT, "pcs_full_vbo_offset_")
+
+    .local_group_size(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT)
     .compute_source("npr_strokegen_geom_extract_comp.glsl");
 
 /* Draw Mesh Contour Edges */
@@ -241,13 +262,55 @@ GPU_SHADER_CREATE_INFO(bnpr_compress_contour_pixels_dbg)
     .additional_info("bnpr_compress_contour_pixels")
     .image(2, GPU_R32UI, Qualifier::WRITE, ImageType::UINT_2D, "tex2d_contour_pix_marks_dbg_")
     .define("_KERNEL_MULTICOMPILE__COMPRESS_CONTOUR_IMG_VALIDATE", "1"); 
+/** \} */
 
-    /** \} */
 
-    /* -------------------------------------------------------------------- */
-    /** \Bare minumum compute shader test
-     * \{ */
-    GPU_SHADER_CREATE_INFO(bnpr_strokegen_test_xxx)
+
+/* -------------------------------------------------------------------- */
+/** \GPU Meshing
+ * \{ */
+GPU_SHADER_CREATE_INFO(bnpr_meshing_merge_verts)
+    .do_static_compilation(true)
+    .typedef_source("bnpr_shader_shared.hh")
+    .define("_KERNEL_MULTICOMPILE__VERT_MERGE", "1")
+
+    .storage_buf(0, Qualifier::READ_WRITE, "uint", "ssbo_vert_spatial_map_headers_[]")
+    .storage_buf(1, Qualifier::READ_WRITE, "uint", "ssbo_vert_spatial_map_payloads_[]")
+    .storage_buf(2, Qualifier::WRITE, "uint", "ssbo_vert_merged_id_[]")
+    .storage_buf(3, Qualifier::READ, "float", "ssbo_vbo_full_[]") /* cannot use vec3 due to ssbo alignment */
+    .storage_buf(4, Qualifier::READ_WRITE, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
+    .push_constant(Type::INT, "pcs_hash_map_size_")
+    .push_constant(Type::INT, "pcs_vert_count_")
+
+    .local_group_size(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT)
+    .compute_source("npr_strokegen_gpu_meshing_compute.glsl");
+;
+GPU_SHADER_CREATE_INFO(bnpr_meshing_merge_verts_bootstrap)     
+    .do_static_compilation(true)
+    .additional_info("bnpr_meshing_merge_verts")
+    .define("_KERNEL_MULTICOMPILE__VERT_MERGE_BOOTSTRP", "1");
+GPU_SHADER_CREATE_INFO(bnpr_meshing_merge_verts_spatial_hashing)
+    .do_static_compilation(true)
+    .additional_info("bnpr_meshing_merge_verts")
+    .define("_KERNEL_MULTICOMPILE__VERT_MERGE_BUILD_HASHMAP", "1");
+GPU_SHADER_CREATE_INFO(bnpr_meshing_merge_verts_deduplicate)
+    .do_static_compilation(true)
+    .additional_info("bnpr_meshing_merge_verts")
+    .define("_KERNEL_MULTICOMPILE__VERT_MERGE_DEDUPLICATE", "1");
+/*
+ * int ssbo_vert_spatial_map_headers_[]; // !!! type must be INT!!!
+ * uint ssbo_vert_spatial_map_payloads_[];
+ * uint ssbo_vert_merged_id_[];
+ * uint pcs_hash_map_size_;
+ * uint pcs_vert_count_;
+ */
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \Bare minumum compute shader test
+ * \{ */
+GPU_SHADER_CREATE_INFO(bnpr_strokegen_test_xxx)
     .do_static_compilation(true)
     .storage_buf(0, Qualifier::READ_WRITE, "uint", "buf_test[]")
     .storage_buf(1, Qualifier::READ, "uint", "buf_ibo[]")

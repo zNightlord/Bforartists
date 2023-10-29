@@ -226,6 +226,18 @@ using namespace draw;
     return (is_ibo_fmt_u16 ? (prim_vert_beg / 2u) : (prim_vert_beg));
   }
 
+  /* The posnor vbo of a Surface GPUBatch
+   * See "PosNorLoop" in mesh_extractors\extract_mesh_vbo_pos_nor.cc
+   */
+  struct SSBO_Data_PosNor {
+    float x;
+    float y;
+    float z;
+    uint packedNormal; 
+  };
+  BLI_STATIC_ASSERT_ALIGN(SSBO_Data_PosNor, 16)
+
+
   /* Addressing - buf_strokegen_mesh_pool */
   /*x6*/
   static inline uint mesh_pool_addr__wpos(uint contour_edge_id) 
@@ -260,6 +272,7 @@ using namespace draw;
 #endif
   /** } */
 
+
 #ifdef __cplusplus
 
 // Template to set buffer size in compile time
@@ -267,9 +280,15 @@ using UBO_ViewMatrices = draw::UniformBuffer<ViewMatrices>;
 using SSBO_IndirectDrawArgs = draw::StorageBuffer<DrawCommand, true>;
 using SSBO_IndirectDispatchArgs = draw::StorageBuffer<DispatchCommand>;
 
-using SSBO_StrokeGenTest = draw::StorageArrayBuffer<uint, 4096 * 4, true>;
+using SSBO_StrokeGenTest = draw::StorageArrayBuffer<uint, 4096 * 4, true>; 
 
-using SSBO_StrokeGenMesh = draw::StorageArrayBuffer<uint, 2048 * 2048 * 16, true>;
+using SSBO_StrokeGenMeshVertHashTable = draw::StorageArrayBuffer<uint, MAX_VERT_HASH_TABLE_SIZE, true>;
+using SSBO_StrokeGenMeshLarge = draw::StorageArrayBuffer<uint, 2048 * 2048 * 16, true>;
+using SSBO_StrokeGenMeshSmall = draw::StorageArrayBuffer<uint, 2048 * 2048 * 4, true>;
+using SSBO_StrokeGenMeshTiny = draw::StorageArrayBuffer<uint, 2048 * 2048 * 2, true>;
+using SSBO_StrokeGenMeshLarge_Float = draw::StorageArrayBuffer<float, 2048 * 2048 * 12, true>;
+using SSBO_StrokeGenMeshSmall_Float = draw::StorageArrayBuffer<float, 2048 * 2048 * 4, true>;
+
 using SSBO_StrokeGenMeshPoolCounters = draw::StorageBuffer<SSBOData_StrokeGenMeshPoolCounters>;
 
 using SSBO_BnprScanData = draw::StorageArrayBuffer<uint, 2048 * 2048 * 2, true>;

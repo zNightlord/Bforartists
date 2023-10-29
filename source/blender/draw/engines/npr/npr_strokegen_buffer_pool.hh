@@ -28,11 +28,16 @@ class GPUBufferPoolModule {
 
   SSBO_StrokeGenTest ssbo_bnpr_test_;
 
-  SSBO_StrokeGenMesh     ssbo_bnpr_mesh_pool_;
+  SSBO_StrokeGenMeshLarge     ssbo_bnpr_mesh_pool_; // contains contour edge data
   SSBO_StrokeGenMeshPoolCounters ssbo_bnpr_mesh_pool_counters_;
   SSBO_IndirectDrawArgs ssbo_bnpr_mesh_pool_draw_args_;
   SSBO_IndirectDispatchArgs ssbo_bnpr_mesh_contour_edge_dispatch_args_; 
 
+  // TODO: these buffers are huge. consider re-use them for each mesh. 
+  SSBO_StrokeGenMeshLarge_Float ssbo_vbo_full_; 
+  SSBO_StrokeGenMeshVertHashTable ssbo_vert_spatial_map_headers_;
+  SSBO_StrokeGenMeshLarge ssbo_mesh_buffer_reuse_0_;
+  SSBO_StrokeGenMeshLarge ssbo_vert_merged_id_;
 
   SSBO_BnprScanData       ssbo_in_scan_data_;
   SSBO_BnprScanData       ssbo_out_scan_data_;
