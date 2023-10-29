@@ -135,7 +135,7 @@ class ANIM_OT_switch_editors_in_sequencer(bpy.types.Operator):
 
 class ANIM_OT_switch_editors_to_sequencer(bpy.types.Operator):
     """Switch to sequencer editor"""      # blender will use this as a tooltip for menu items and buttons.
-    bl_idname = "wm.switch_editor_to_sequwncer"        # unique identifier for buttons and menu items to reference.
+    bl_idname = "wm.switch_editor_to_sequencer"        # unique identifier for buttons and menu items to reference.
     bl_label = "Switch to Sequencer Editor"         # display name in the interface.
     bl_options = {'REGISTER', 'UNDO'}  # enable undo for the operator.
 
@@ -179,6 +179,9 @@ class SEQUENCER_HT_tool_header(Header):
 class SEQUENCER_HT_header(Header):
     bl_space_type = 'SEQUENCE_EDITOR'
 
+    def draw_seq(self, layout, context):
+        pass
+
     def draw(self, context):
         layout = self.layout
 
@@ -189,18 +192,21 @@ class SEQUENCER_HT_header(Header):
         # bfa - The tabs to switch between the four animation editors. The classes are in space_dopesheet.py
         row = layout.row(align=True)
         row.operator("wm.switch_editor_to_nla", text="", icon='NLA')
-        row.operator("wm.switch_editor_in_sequencer", text="", icon='NLA')
+        row.operator("wm.switch_editor_in_sequencer", text="", icon='SEQ_SEQUENCER')
         
         layout.prop(st, "view_type", text="")
         SEQUENCER_MT_editor_menus.draw_collapsible(context, layout)
         tool_settings = context.tool_settings
         sequencer_tool_settings = tool_settings.sequencer_tool_settings
 
-        layout.separator_spacer()
+        layout.separator(factor=5.0)
+        row = layout.row()
+        self.draw_seq(row, context)
         row = layout.row()
         row.ui_units_x = 6
         row.template_ID(st, "scene_override", unlink="sequencer.remove_scene_override", filter='INACTIVE')
-
+        
+        layout.separator_spacer()
         if st.view_type == 'PREVIEW':
             row = layout.row(align=True)
             row.prop(sequencer_tool_settings, "pivot_point", text="", icon_only=True)

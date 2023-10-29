@@ -493,6 +493,7 @@ class NLA_MT_channel_context_menu(Menu):
 
 
 classes = (
+    ANIM_OT_switch_editors_to_sequencer,
     ANIM_OT_switch_editors_in_nla,
     ALL_MT_editormenu,
     NLA_HT_header,
