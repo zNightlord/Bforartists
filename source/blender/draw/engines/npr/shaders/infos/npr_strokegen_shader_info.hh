@@ -273,6 +273,7 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_merge_verts)
     .do_static_compilation(true)
     .typedef_source("bnpr_shader_shared.hh")
     .define("_KERNEL_MULTICOMPILE__VERT_MERGE", "1")
+    .define("DECODE_IBO_EXCLUDE", "1")
 
     .storage_buf(0, Qualifier::READ_WRITE, "uint", "ssbo_vert_spatial_map_headers_[]")
     .storage_buf(1, Qualifier::READ_WRITE, "uint", "ssbo_vert_spatial_map_payloads_[]")

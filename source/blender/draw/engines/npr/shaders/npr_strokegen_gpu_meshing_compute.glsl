@@ -1,6 +1,6 @@
 
 
-
+#pragma BLENDER_REQUIRE(npr_strokegen_decode_ibo_lib.glsl)
 
 
 #if defined(_KERNEL_MULTICOMPILE__VERT_MERGE)
@@ -180,7 +180,7 @@ void main()
     if (inserted) /* store merged vert id. safe since we ensure <=1 vert doing this */
     {
         ssbo_vert_spatial_map_payloads_[hash_id] = VertID; 
-        atomicAdd(GLOBAL_COMPACTION_COUNTER__MESH_VERTS, 1); 
+        /* atomicAdd(GLOBAL_COMPACTION_COUNTER__MESH_VERTS, 1); */ 
     }
 #else
 
@@ -190,7 +190,7 @@ void main()
     vec3 pos = ld_vbo(VertID); 
     uint hash_id = NOT_FOUND; 
     if (valid_thread)
-        spatial_map_search_vtx(pos); 
+        hash_id = spatial_map_search_vtx(pos); 
     
     barrier(); /* must be outside of any dynamic control divergence */ 
 
@@ -217,7 +217,11 @@ void main()
 
 void main()
 {
-    
+    const uint groupId = gl_LocalInvocationID.x; 
+	const uint idx = gl_GlobalInvocationID.x; 
+    const uint EdgeID = idx.x; 
+
+
 }
 
 #endif
