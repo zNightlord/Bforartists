@@ -239,15 +239,15 @@ using namespace draw;
 
 
   /* Addressing - buf_strokegen_mesh_pool */
-  /*x6*/
-  static inline uint mesh_pool_addr__wpos(uint contour_edge_id) 
+  /*x7*/
+  static inline uint mesh_pool_addr__wpos_and_edgeid(uint contour_edge_id) 
   {
-    return contour_edge_id * 6u;
+    return contour_edge_id * 7u;
   }
   /*x2*/
   static inline uint mesh_pool_addr__edgedir(uint contour_edge_id, uint num_contour_edges)
   {
-    uint base_addr = mesh_pool_addr__wpos(num_contour_edges);
+    uint base_addr = mesh_pool_addr__wpos_and_edgeid(num_contour_edges);
     return base_addr + contour_edge_id * 2u;
   } 
   /*x4*/

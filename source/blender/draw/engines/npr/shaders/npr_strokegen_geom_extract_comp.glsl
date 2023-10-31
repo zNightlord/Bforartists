@@ -130,7 +130,7 @@ void main()
 			v[i] = (model_to_world * vec4(v[i], 1.0f)).xyz; 
 		
 		/* write world pos to output buffer */
-		uint base_addr = mesh_pool_addr__wpos(compacted_idx); 
+		uint base_addr = mesh_pool_addr__wpos_and_edgeid(compacted_idx); 
 		uint addr_p0 = rev_edge_dir ? base_addr + 3 : base_addr;  
 		uint addr_p1 = rev_edge_dir ? base_addr : base_addr + 3; 
 		buf_strokegen_mesh_pool[addr_p0+0]  = floatBitsToUint(v[1].x); 
@@ -139,6 +139,7 @@ void main()
 		buf_strokegen_mesh_pool[addr_p1+0]  = floatBitsToUint(v[2].x); 
 		buf_strokegen_mesh_pool[addr_p1+1]  = floatBitsToUint(v[2].y); 
 		buf_strokegen_mesh_pool[addr_p1+2]  = floatBitsToUint(v[2].z); 
+		buf_strokegen_mesh_pool[base_addr+6]  = EdgeId; 
 	}
 }
 #endif
@@ -193,7 +194,7 @@ void main()
 	vec2 vpos_uv[2]; 
 	if (valid_thread)
 	{ /* read vertex pos transformed to world space */
-		uint base_addr = mesh_pool_addr__wpos(ContourEdgeIdx); 
+		uint base_addr = mesh_pool_addr__wpos_and_edgeid(ContourEdgeIdx); 
 		vpos_ws[0].x = uintBitsToFloat(buf_strokegen_mesh_pool[base_addr+0]); 
 		vpos_ws[0].y = uintBitsToFloat(buf_strokegen_mesh_pool[base_addr+1]); 
 		vpos_ws[0].z = uintBitsToFloat(buf_strokegen_mesh_pool[base_addr+2]); 

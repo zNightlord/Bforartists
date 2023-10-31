@@ -264,20 +264,6 @@ void main()
 
 #if defined(_KERNEL_MULTICOMPILE__EDGE_ADJACENCY)
 #define GLOBAL_COMPACTION_COUNTER__NUM_EDGES ssbo_bnpr_mesh_pool_counters_.num_edges
-
-/*
- * uint pcs_hash_map_size_
- * int pcs_edge_count_              note: all edges, NOT just contours 
- *
- * IBO_BUF[]
- * uint ssbo_vert_merged_id_[]
- * uint ssbo_edge_index_map_headers_[]      note: reuse vertex hash buffer
- * uint ssbo_edge_spatial_map_payloads_[]   note: reuse vertex payload buffer
- * uint ssbo_edge_to_vert_[]
- * uint ssbo_edge_to_edges_[]
- * ssbo_bnpr_mesh_pool_counters_
-*/
-
 void main()
 {
     const uint groupId = gl_LocalInvocationID.x; 
