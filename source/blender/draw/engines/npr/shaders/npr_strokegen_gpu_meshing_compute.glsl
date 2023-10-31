@@ -371,7 +371,7 @@ void main()
         {
             if (valid_edge)
                 edge_id[i] = ssbo_edge_spatial_map_payloads_[hashmap_index[i]]; 
-            ssbo_edge_to_edges_[EdgeID+0] = edge_id[i]; 
+            ssbo_edge_to_edges_[EdgeID+i] = edge_id[i]; 
             /* note: == NOT_FOUND when this edge is a duplicated one */
         }
 #endif

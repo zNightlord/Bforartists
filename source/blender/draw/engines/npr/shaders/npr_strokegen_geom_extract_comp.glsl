@@ -244,6 +244,8 @@ void main()
 		buf_strokegen_mesh_pool[addr_st+2] = floatBitsToUint(vpos_uv[1].x);
 		buf_strokegen_mesh_pool[addr_st+3] = floatBitsToUint(vpos_uv[1].y);
 	}
+
+
 }
 #endif
 
