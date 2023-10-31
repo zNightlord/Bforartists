@@ -345,23 +345,36 @@ void main()
     /*    v0
      *   /  \
      *  /    \                
-     * v1----v2             
+     * v1====v2 <-- curr edge            
      *  \    /                
      *   \  /                     
      *    v3    winding 012, 321                
     */
-    uvec2 curr_edge_verts[4] = 
+
+    /* Deduplicate */
+    uvec2 curr_edge = uvec2(edge_adj_verts[1], edge_adj_verts[2]); 
+    uint curr_edge_hash_id = NOT_FOUND; 
+    uint curr_edge_dedup_id = NOT_FOUND; 
+    if (valid_thread)
+    {
+        curr_edge_hash_id = FUNC_HASHMAP_SEARCH(curr_edge);
+        curr_edge_dedup_id = ssbo_edge_spatial_map_payloads_[curr_edge_hash_id];
+    }
+    bool valid_edge = (curr_edge_hash_id != NOT_FOUND)
+        && (curr_edge_dedup_id == EdgeID); 
+
+    /* Search for adj edges */
+    uvec2 adj_edges[4] = 
     {
         uvec2(edge_adj_verts[0], edge_adj_verts[1]), 
         uvec2(edge_adj_verts[2], edge_adj_verts[0]), 
         uvec2(edge_adj_verts[3], edge_adj_verts[2]),
         uvec2(edge_adj_verts[1], edge_adj_verts[3])
     };
-
     uvec4 hashmap_index = uvec4(NOT_FOUND, NOT_FOUND, NOT_FOUND, NOT_FOUND); 
     for (uint i = 0u; i < 4u; i++)
         if (valid_thread)
-            hashmap_index[i] = FUNC_HASHMAP_SEARCH(curr_edge_verts[i]); 
+            hashmap_index[i] = FUNC_HASHMAP_SEARCH(adj_edges[i]); 
     
     barrier(); /* must be outside of any dynamic control divergence */ 
 
@@ -370,8 +383,10 @@ void main()
     if (valid_thread)
         for (uint i = 0u; i < 4u; i++)
         {
-            edge_id[i] = ssbo_edge_spatial_map_payloads_[hashmap_index[i]]; 
-            ssbo_edge_to_edges_[EdgeID+0] = edge_id[i]; /* note: == NOT_FOUND when no edge found in the hashmap */
+            if (valid_edge)
+                edge_id[i] = ssbo_edge_spatial_map_payloads_[hashmap_index[i]]; 
+            ssbo_edge_to_edges_[EdgeID+0] = edge_id[i]; 
+            /* note: == NOT_FOUND when this edge is a duplicated one */
         }
 #endif
 
