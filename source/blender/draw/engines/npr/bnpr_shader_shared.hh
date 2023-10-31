@@ -249,7 +249,7 @@ using namespace draw;
   {
     uint base_addr = mesh_pool_addr__wpos(num_contour_edges);
     return base_addr + contour_edge_id * 2u;
-  }
+  } 
   /*x4*/
   static inline uint mesh_pool_addr__zwhclip(uint contour_edge_id, uint num_contour_edges)
   {
@@ -282,7 +282,7 @@ using SSBO_IndirectDispatchArgs = draw::StorageBuffer<DispatchCommand>;
 
 using SSBO_StrokeGenTest = draw::StorageArrayBuffer<uint, 4096 * 4, true>; 
 
-using SSBO_StrokeGenMeshVertHashTable = draw::StorageArrayBuffer<uint, MAX_VERT_HASH_TABLE_SIZE, true>;
+using SSBO_StrokeGenMeshVertHashTable = draw::StorageArrayBuffer<uint, MAX_GPU_HASH_TABLE_SIZE, true>;
 using SSBO_StrokeGenMeshLarge = draw::StorageArrayBuffer<uint, 2048 * 2048 * 16, true>;
 using SSBO_StrokeGenMeshSmall = draw::StorageArrayBuffer<uint, 2048 * 2048 * 4, true>;
 using SSBO_StrokeGenMeshTiny = draw::StorageArrayBuffer<uint, 2048 * 2048 * 2, true>;

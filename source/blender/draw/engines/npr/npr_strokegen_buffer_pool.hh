@@ -34,7 +34,9 @@ class GPUBufferPoolModule {
   SSBO_IndirectDispatchArgs ssbo_bnpr_mesh_contour_edge_dispatch_args_; 
 
   // TODO: these buffers are huge. consider re-use them for each mesh. 
-  SSBO_StrokeGenMeshLarge_Float ssbo_vbo_full_; 
+  SSBO_StrokeGenMeshLarge_Float ssbo_vbo_full_;
+  SSBO_StrokeGenMeshLarge ssbo_edge_to_vert_;
+  SSBO_StrokeGenMeshLarge ssbo_edge_to_edges_; 
   SSBO_StrokeGenMeshVertHashTable ssbo_vert_spatial_map_headers_;
   SSBO_StrokeGenMeshLarge ssbo_mesh_buffer_reuse_0_;
   SSBO_StrokeGenMeshLarge ssbo_vert_merged_id_;

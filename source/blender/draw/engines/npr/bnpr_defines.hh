@@ -29,7 +29,7 @@
 #define GROUP_SIZE_X_CONTOUR_PIXEL_COMPRESS 8u
 #define GROUP_SIZE_Y_CONTOUR_PIXEL_COMPRESS 8u
 
-#define MAX_VERT_HASH_TABLE_SIZE ((2048 * 2048 * 16)) /* we just cannot afford more than this */
+#define MAX_GPU_HASH_TABLE_SIZE ((2048 * 2048 * 16)) /* we just cannot afford more than this */
  /** \} */
 
 

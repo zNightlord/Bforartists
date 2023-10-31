@@ -118,7 +118,18 @@ const char *StrokeGenShaderModule::static_shader_create_info_name_get(eShaderTyp
     case MESH_VERT_MERGE_HASH:
       return "bnpr_meshing_merge_verts_spatial_hashing";
     case MESH_VERT_MERGE_REINDEX:
-      return "bnpr_meshing_merge_verts_deduplicate"; 
+      return "bnpr_meshing_merge_verts_deduplicate";
+
+    case MESH_COLLECT_EDGE_ADJ_IBO:
+      return "bnpr_geom_extract_collect_edges";
+    case MESH_COLLECT_EDGE_ADJ_IBO_16BIT:
+      return "bnpr_geom_extract_collect_edges_16bits"; 
+    case MESH_EDGE_ADJACENCY_INIT:
+      return "bnpr_meshing_merge_edges_bootstrap"; 
+    case MESH_EDGE_ADJACENCY_HASH:
+      return "bnpr_meshing_merge_edges_hashing"; 
+    case MESH_EDGE_ADJACENCY_FILL:
+      return "bnpr_meshing_merge_edges_fill"; 
 
 
     case SCAN_TEST_UPSWEEP:

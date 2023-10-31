@@ -1,5 +1,6 @@
 
 #pragma BLENDER_REQUIRE(npr_strokegen_compaction_lib.glsl)
+#pragma BLENDER_REQUIRE(npr_strokegen_decode_ibo_lib.glsl)
 
 
  
@@ -292,3 +293,35 @@ void main()
 	ssbo_vbo_full_[st_base_addr+2] = vpos_ws.z;
  }
 #endif
+
+
+
+#if defined(_KERNEL_MULTICOMPILE__COMPACT_EDGE_ADJ_IBO)
+/*
+ * uint IBO_BUF[]
+ * uint pcs_meshbatch_edge_count_
+ * int pcs_full_ibo_offset_
+ * uint pcs_edge_count_
+ * uint ssbo_edge_to_vert_[]
+*/
+ void main()
+ {
+	const uint groupId = gl_LocalInvocationID.x; 
+	const uint idx = gl_GlobalInvocationID.x; 
+    const uint EdgeID = idx.x; 
+
+    bool valid_thread = (EdgeID < pcs_edge_count_); 
+	if (!valid_thread) return; 
+
+	uvec4 vid; 
+    load_and_decode_ibo__edge_adj(EdgeID, 4u, /*out*/vid); 
+
+	uint st_base_addr = (pcs_full_ibo_offset_ + EdgeID) * 4u;  
+	ssbo_edge_to_vert_[st_base_addr+0] = vid[0];
+	ssbo_edge_to_vert_[st_base_addr+1] = vid[1]; 
+	ssbo_edge_to_vert_[st_base_addr+2] = vid[2];
+	ssbo_edge_to_vert_[st_base_addr+3] = vid[3];
+ }
+
+#endif
+

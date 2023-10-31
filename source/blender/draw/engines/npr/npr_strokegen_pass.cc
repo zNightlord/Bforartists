@@ -39,7 +39,9 @@ namespace blender::npr::strokegen
         return pass_soft_raster_contour_edges;
 
       case MESHING_MERGE_VERTS:
-        return pass_meshing_merge_verts; 
+        return pass_meshing_merge_verts;
+      case MESHING_BUILD_EDGE_ADJ:
+        return pass_meshing_edge_adjacency; 
 
       case COMPRESS_CONTOUR_PIXELS:
         return pass_compress_contour_pixels; 
@@ -68,7 +70,7 @@ namespace blender::npr::strokegen
     rebuild_pass_conv_test();
     rebuild_pass_list_ranking();
 
-    num_total_mesh_tris = num_total_mesh_verts = 0; // TODO: these should go to the UBO
+    num_total_mesh_tris = num_total_mesh_verts = num_total_mesh_edges = 0; // TODO: these should go to the UBO
   }
 
 
@@ -111,6 +113,9 @@ namespace blender::npr::strokegen
     gpu::GPUIndexBufType ib_type = // the actual "index_type_" is protected
       (ib->size_get() / ib->index_len_get() == sizeof(uint32_t))
         ? gpu::GPU_INDEX_U32 : gpu::GPU_INDEX_U16;
+    gpu::VertBuf *vbo_edge_adj = edge_batch->verts_(0);
+    int num_verts_edge_vbo = vbo_edge_adj->vertex_len; 
+
 
 
 
@@ -128,7 +133,7 @@ namespace blender::npr::strokegen
     int num_tris = ibo_surf->index_len_get() / 3;
     int num_verts = vbo_surf_posnor->vertex_len; 
     printf("posnor stride: %i", vbo_surf_posnor->vertex_alloc / num_verts);
-
+    printf("edge vbo len: %i, tri vbo len: %i", num_verts_edge_vbo, num_verts); 
 
     /* Cache per-edge geometry data */
     // Note: this also works
@@ -187,12 +192,30 @@ namespace blender::npr::strokegen
       int num_groups = compute_num_groups(num_verts, GROUP_SIZE_STROKEGEN_GEOM_EXTRACT); 
       sub.dispatch(int3(num_groups, 1, 1));
       sub.barrier(GPU_BARRIER_SHADER_STORAGE);
+    }
 
+    {
+      auto &sub = pass_extract_geom.sub("merge batch edge adj ibo");
 
+      if (ib_type == gpu::GPU_INDEX_U16)
+        sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_COLLECT_EDGE_ADJ_IBO_16BIT));
+      else
+        sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_COLLECT_EDGE_ADJ_IBO));
+
+      sub.bind_ssbo(0, &(gpu_batch_line_adj->elem));  // TODO: investigate whether double pointer is necessary
+      sub.bind_ssbo(1, buffers_.ssbo_edge_to_vert_);
+
+      sub.push_constant("pcs_edge_count_", num_edges);
+      sub.push_constant("pcs_full_ibo_offset_", num_total_mesh_edges);
+
+      int num_groups = compute_num_groups(num_edges, GROUP_SIZE_STROKEGEN_GEOM_EXTRACT);
+      sub.dispatch(int3(num_groups, 1, 1));
+      sub.barrier(GPU_BARRIER_SHADER_STORAGE);
     }
 
     num_total_mesh_tris += num_tris;
-    num_total_mesh_verts += num_verts; 
+    num_total_mesh_verts += num_verts;
+    num_total_mesh_edges += num_edges; 
   }
 
   void StrokeGenPassModule::rebuild_pass_fill_dispatch_args_contour_edges()
@@ -259,7 +282,7 @@ namespace blender::npr::strokegen
 
   void StrokeGenPassModule::rebuild_pass_meshing_merge_verts(bool debug)
   {
-    const int hashmap_size = std::min(MAX_VERT_HASH_TABLE_SIZE, num_total_mesh_verts * 16); 
+    const int hashmap_size = std::min(MAX_GPU_HASH_TABLE_SIZE, num_total_mesh_verts * 16); 
 
     auto bind_rsc = [&](draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub) {
       sub.bind_ssbo(0, buffers_.ssbo_vert_spatial_map_headers_);
@@ -299,6 +322,54 @@ namespace blender::npr::strokegen
       bind_rsc(sub); 
 
       int num_groups = compute_num_groups(num_total_mesh_verts, GROUP_SIZE_STROKEGEN_GEOM_EXTRACT);
+      sub.dispatch(int3(num_groups, 1, 1));
+      sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_SHADER_IMAGE_ACCESS);
+    }
+  }
+
+  void StrokeGenPassModule::rebuild_pass_meshing_edge_adjacency(bool debug)
+  {
+    const int hashmap_size = std::min(MAX_GPU_HASH_TABLE_SIZE, num_total_mesh_edges * 16);
+
+    auto bind_rsc = [&](draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub) {
+      sub.bind_ssbo(0, buffers_.ssbo_vert_merged_id_);
+      sub.bind_ssbo(1, buffers_.ssbo_vert_spatial_map_headers_);
+      sub.bind_ssbo(2, buffers_.ssbo_mesh_buffer_reuse_0_);
+      sub.bind_ssbo(3, buffers_.ssbo_edge_to_vert_);
+      sub.bind_ssbo(4, buffers_.ssbo_edge_to_edges_);
+      sub.bind_ssbo(5, buffers_.ssbo_bnpr_mesh_pool_counters_);
+      sub.push_constant("pcs_hash_map_size_", hashmap_size);
+      sub.push_constant("pcs_edge_count_", (int)num_total_mesh_edges);
+    };
+
+    pass_meshing_edge_adjacency.init();
+    {
+      auto &sub = pass_meshing_edge_adjacency.sub("bnpr_meshing_edge_adj_bootstrap");
+      sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_EDGE_ADJACENCY_INIT));
+
+      bind_rsc(sub);
+      /* TODO: use GL buffer copy function rather than this */
+      int num_groups = compute_num_groups(hashmap_size, GROUP_SIZE_STROKEGEN_GEOM_EXTRACT);
+      sub.dispatch(int3(num_groups, 1, 1));
+      sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_SHADER_IMAGE_ACCESS);
+    }
+    {
+      auto &sub = pass_meshing_edge_adjacency.sub("bnpr_meshing_edge_adj_hashing");
+      sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_EDGE_ADJACENCY_HASH));
+
+      bind_rsc(sub);
+
+      int num_groups = compute_num_groups(num_total_mesh_edges, GROUP_SIZE_STROKEGEN_GEOM_EXTRACT);
+      sub.dispatch(int3(num_groups, 1, 1));
+      sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_SHADER_IMAGE_ACCESS);
+    }
+    {
+      auto &sub = pass_meshing_edge_adjacency.sub("bnpr_meshing_edge_adj_finish");
+      sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_EDGE_ADJACENCY_FILL));
+
+      bind_rsc(sub);
+
+      int num_groups = compute_num_groups(num_total_mesh_edges, GROUP_SIZE_STROKEGEN_GEOM_EXTRACT);
       sub.dispatch(int3(num_groups, 1, 1));
       sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_SHADER_IMAGE_ACCESS);
     }

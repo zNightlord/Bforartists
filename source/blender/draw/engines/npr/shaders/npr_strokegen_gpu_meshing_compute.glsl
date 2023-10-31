@@ -1,13 +1,6 @@
 
 
-#pragma BLENDER_REQUIRE(npr_strokegen_decode_ibo_lib.glsl)
-
-
-#if defined(_KERNEL_MULTICOMPILE__VERT_MERGE)
-#define GLOBAL_COMPACTION_COUNTER__MESH_VERTS ssbo_bnpr_mesh_pool_counters_.num_verts
-#define GLOBAL_COMPACTION_COUNTER__DBG_VERTS ssbo_bnpr_mesh_pool_counters_.num_edges
-
-/* Hash Function for 3D Vert Pos ------------------------------------- 
+/* Hash Funcation Primitives ------------------------------------- 
  * code from https://jcgt.org/published/0009/03/02/supplementary.pdf
 */
 /* https://www.pcg-random.org/ */
@@ -17,27 +10,24 @@ uint pcg(uint v) /* pcg hash */
 	uint word = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
 	return (word >> 22u) ^ word;
 }
-uint iqint1(uint n)
-{
-    n = (n << 13u) ^ n;
-    n = n * (n * n * 15731u + 789221u) + 1376312589u;
-    return n;
-}
-uint xxhash32(uvec3 p)
-{
-    const uint PRIME32_2 = 2246822519u, PRIME32_3 = 3266489917u;
-    const uint PRIME32_4 = 668265263u, PRIME32_5 = 374761393u;
-    uint h32 = p.z + PRIME32_5 + p.x*PRIME32_3;
-    h32 = PRIME32_4 * ((h32 << 17) | (h32 >> (32 - 17)));
-    h32 += p.y * PRIME32_3;
-    h32 = PRIME32_4 * ((h32 << 17) | (h32 >> (32 - 17)));
-    h32 = PRIME32_2 * (h32 ^ (h32 >> 15));
-    h32 = PRIME32_3 * (h32 ^ (h32 >> 13));
-    return h32 ^ (h32 >> 16);
-}
+/* http://www.jcgt.org/published/0009/03/02/ */
+uvec3 pcg3d(uvec3 v) {
 
+    v = v * 1664525u + 1013904223u;
 
-/* 3d position hash
+    v.x += v.y*v.z;
+    v.y += v.z*v.x;
+    v.z += v.x*v.y;
+
+    v ^= v >> 16u;
+
+    v.x += v.y*v.z;
+    v.y += v.z*v.x;
+    v.z += v.x*v.y;
+
+    return v;
+}
+/* Hashing 3d vert position
  * Converting 1D hashing func into ND via nesting.
  * this is better than linear combination of N hashes, 
  * see Ch 4.2 of https://jcgt.org/published/0009/03/02/paper.pdf */
@@ -46,36 +36,34 @@ uint pcg_nested_3d(vec3 v)
     uvec3 v3 = floatBitsToUint(v);
     return pcg(v3.z + pcg(v3.y + pcg(v3.x))); 
 }
-uint iqint1_nested_3d(vec3 v)
-{
-    uvec3 v3 = floatBitsToUint(v);
-    return iqint1(v3.z + iqint1(v3.y + iqint1(v3.x))); 
-}
-uint xxhash32_3d(vec3 p)
-{
-    uvec3 v3 = floatBitsToUint(p);
-    return xxhash32(v3); 
-}
 
 
+/* Setup Vertex Hash ------------------------------------------------- */
+#if defined(_KERNEL_MULTICOMPILE__VERT_MERGE)
+
+#define HASH_MAP_SIZE pcs_hash_map_size_
+#define SSBO_HASH_MAP_HEADERS ssbo_vert_spatial_map_headers_
+#define HASH_KEY_TYPE vec3
 
 #define NOT_FOUND 0xffffffffu
-#define MAX_PROBE_STEPS 32u
-
-uint VERT_HASH(vec3 v)
-{
-    return (((pcg_nested_3d(v) % pcs_hash_map_size_))); 
-}
-uint VERT_PROBE_NEXT(uint hid)      
-{
-    return (((pcg(hid)) % pcs_hash_map_size_)); 
-}
 
 #define CHECKSUM_EMPTY 0u
 #define MAX_CHECKSUM_ITER 64u
-uint VERT_CHECKSUM(vec3 v)
+#define MAX_PROBE_STEPS 32u
+
+uint HASH_FUNC(vec3 v)
 {
-    uint c = xxhash32_3d(v.zyx);
+    return (((pcg_nested_3d(v) % pcs_hash_map_size_))); 
+}
+uint HASH_PROBE_NEXT(uint hid)      
+{
+    return (((pcg(hid)) % pcs_hash_map_size_)); 
+}
+uint CHECKSUM_FUNC(vec3 v)
+{
+    uvec3 v3 = floatBitsToUint(v);
+    v3 = pcg3d(v3); 
+    uint c = pcg(v3.z + pcg(v3.y + pcg(v3.x)));
     
     if (c == CHECKSUM_EMPTY) 
     { /* try to roll out a valid checksum */
@@ -89,12 +77,63 @@ uint VERT_CHECKSUM(vec3 v)
 
     return c; 
 }
+#endif
 
-uint spatial_map_insert_vtx(vec3 vpos, out bool inserted)
+
+
+/* Setup Edge Hash ------------------------------------------------- */
+#if defined(_KERNEL_MULTICOMPILE__EDGE_ADJACENCY)
+
+#define HASH_MAP_SIZE pcs_hash_map_size_
+#define SSBO_HASH_MAP_HEADERS ssbo_edge_index_map_headers_
+#define HASH_KEY_TYPE uvec2
+
+#define NOT_FOUND 0xffffffffu
+
+#define CHECKSUM_EMPTY 0u
+#define MAX_CHECKSUM_ITER 64u
+#define MAX_PROBE_STEPS 24u
+
+uvec2 MAKE_HASH_KEY(uint v0, uint v1)
+{ /* note: ensure a deterministic order */
+    return uvec2(min(v0, v1), max(v0, v1)); 
+}
+uint HASH_FUNC(uvec2 v)
+{
+    v = MAKE_HASH_KEY(v.x, v.y); 
+    return pcg(v.x + pcg(v.y)) % pcs_hash_map_size_; 
+}
+uint HASH_PROBE_NEXT(uint hid)      
+{
+    return (((pcg(hid)) % pcs_hash_map_size_)); 
+}
+uint CHECKSUM_FUNC(uvec2 v)
+{
+    v = MAKE_HASH_KEY(v.x, v.y); 
+    uint c = pcg(v.y + pcg(v.x + 13u));
+    
+    if (c == CHECKSUM_EMPTY) 
+    { /* try to roll out a valid checksum */
+        for (uint i = 0u; i < MAX_CHECKSUM_ITER; i++)
+        {
+            c = pcg(c); 
+            if (c != CHECKSUM_EMPTY)
+                return c; 
+        }
+    }
+
+    return c; 
+}
+#endif
+
+
+
+#if defined(_KERNEL_MULTICOMPILE__VERT_MERGE) || defined(_KERNEL_MULTICOMPILE__EDGE_ADJACENCY)
+uint FUNC_HASHMAP_INSERT(HASH_KEY_TYPE vpos, out bool inserted)
 {
     /* Entry allocation */
-    uint hash_id = VERT_HASH(vpos);
-    uint checksum = VERT_CHECKSUM(vpos);
+    uint hash_id = HASH_FUNC(vpos);
+    uint checksum = CHECKSUM_FUNC(vpos);
     inserted = false; 
 
     /* Probing the hash table. Allow limited number of searches */
@@ -102,7 +141,7 @@ uint spatial_map_insert_vtx(vec3 vpos, out bool inserted)
     while (probe_step < MAX_PROBE_STEPS)
     {
         uint stored_checksum = atomicCompSwap(
-            ssbo_vert_spatial_map_headers_[hash_id], 
+            SSBO_HASH_MAP_HEADERS[hash_id], 
             CHECKSUM_EMPTY, 
             checksum
         );
@@ -115,7 +154,7 @@ uint spatial_map_insert_vtx(vec3 vpos, out bool inserted)
 
         if (stored_checksum != checksum)
         { /* collision, compute another index */
-            hash_id = VERT_PROBE_NEXT(hash_id); 
+            hash_id = HASH_PROBE_NEXT(hash_id); 
             probe_step++; 
         }
     }
@@ -123,31 +162,36 @@ uint spatial_map_insert_vtx(vec3 vpos, out bool inserted)
     return NOT_FOUND; 
 }
 
-uint spatial_map_search_vtx(vec3 pos)
+uint FUNC_HASHMAP_SEARCH(HASH_KEY_TYPE pos)
 {
     /* Entry Alloc */
-    uint hash_id = VERT_HASH(pos); 
-    uint checksum = VERT_CHECKSUM(pos);
+    uint hash_id = HASH_FUNC(pos); 
+    uint checksum = CHECKSUM_FUNC(pos);
 
     /* Probing the hash table. Allow limited number of searches */
     uint probe_step = 0u;
     while (probe_step < MAX_PROBE_STEPS)
     {
-        uint stored_checksum = ssbo_vert_spatial_map_headers_[hash_id];
+        uint stored_checksum = SSBO_HASH_MAP_HEADERS[hash_id];
 
         if (stored_checksum == checksum)
             return hash_id; 
 
         /* collision, compute another index */
-        hash_id = VERT_PROBE_NEXT(hash_id); 
+        hash_id = HASH_PROBE_NEXT(hash_id); 
         probe_step++; 
     }
 
     return NOT_FOUND; 
 }
+#endif
 
 
 
+#if defined(_KERNEL_MULTICOMPILE__VERT_MERGE)
+
+#define GLOBAL_COMPACTION_COUNTER__MESH_VERTS ssbo_bnpr_mesh_pool_counters_.num_verts
+#define GLOBAL_COMPACTION_COUNTER__DBG_VERTS ssbo_bnpr_mesh_pool_counters_.num_edges
 vec3 ld_vbo(uint vert)
 {
 	uint base_addr = vert * 3; 
@@ -161,9 +205,9 @@ void main()
 	const uint idx = gl_GlobalInvocationID.x; 
     const uint VertID = idx.x; 
 
-#if defined(_KERNEL_MULTICOMPILE__VERT_MERGE_BOOTSTRP)
+#if defined(_KERNEL_MULTICOMPILE__VERT_MERGE_BOOTSTRAP)
     const uint st_hash_addr = idx.x; /* TODO: use GL buffer copy function rather than this */
-    ssbo_vert_spatial_map_headers_[st_hash_addr] = CHECKSUM_EMPTY; 
+    SSBO_HASH_MAP_HEADERS[st_hash_addr] = CHECKSUM_EMPTY; 
 #else
 
 #if defined(_KERNEL_MULTICOMPILE__VERT_MERGE_BUILD_HASHMAP)
@@ -173,7 +217,7 @@ void main()
     bool inserted = false; 
     uint hash_id = NOT_FOUND;
     if (valid_thread)
-        hash_id = spatial_map_insert_vtx(vpos, inserted); 
+        hash_id = FUNC_HASHMAP_INSERT(vpos, inserted); 
 
     barrier(); /* must be outside of any dynamic control divergence */
 
@@ -190,30 +234,49 @@ void main()
     vec3 pos = ld_vbo(VertID); 
     uint hash_id = NOT_FOUND; 
     if (valid_thread)
-        hash_id = spatial_map_search_vtx(pos); 
+        hash_id = FUNC_HASHMAP_SEARCH(pos); 
     
     barrier(); /* must be outside of any dynamic control divergence */ 
 
     uint merged_vert_id = ssbo_vert_spatial_map_payloads_[hash_id]; 
-    if (valid_thread && merged_vert_id != NOT_FOUND)
+    if (valid_thread)
     {
+        merged_vert_id = (merged_vert_id != NOT_FOUND) ? merged_vert_id 
+            : VertID/*fucked up but at least we can keep it sane here */; 
         ssbo_vert_merged_id_[VertID] = merged_vert_id; 
         
         /* Find if different position hashed to the same position with the same checksum. 
-            * vec3 merged_pos = ld_vbo(merged_vert_id); 
-            * if (any(notEqual(merged_pos, pos)))
-            atomicAdd(GLOBAL_COMPACTION_COUNTER__DBG_VERTS, 1);  */
+         * if (merged_vert_id != NOT_FOUND) {
+         *  vec3 merged_pos = ld_vbo(merged_vert_id); 
+         *  if (any(notEqual(merged_pos, pos)))
+         *  atomicAdd(GLOBAL_COMPACTION_COUNTER__DBG_VERTS, 1);  
+         * }
+         */
     }
 #endif
 #endif
-#endif /* ! _KERNEL_MULTICOMPILE__VERT_MERGE_BOOTSTRP */
+#endif /* ! _KERNEL_MULTICOMPILE__VERT_MERGE_BOOTSTRAP */
 }
 
 #endif /* _KERNEL_MULTICOMPILE__VERT_MERGE */
 
 
 
-#if defined(_KERNEL_MULTICOMPILE__EDGE_LINK)
+#if defined(_KERNEL_MULTICOMPILE__EDGE_ADJACENCY)
+#define GLOBAL_COMPACTION_COUNTER__NUM_EDGES ssbo_bnpr_mesh_pool_counters_.num_edges
+
+/*
+ * uint pcs_hash_map_size_
+ * int pcs_edge_count_              note: all edges, NOT just contours 
+ *
+ * IBO_BUF[]
+ * uint ssbo_vert_merged_id_[]
+ * uint ssbo_edge_index_map_headers_[]      note: reuse vertex hash buffer
+ * uint ssbo_edge_spatial_map_payloads_[]   note: reuse vertex payload buffer
+ * uint ssbo_edge_to_vert_[]
+ * uint ssbo_edge_to_edges_[]
+ * ssbo_bnpr_mesh_pool_counters_
+*/
 
 void main()
 {
@@ -221,6 +284,96 @@ void main()
 	const uint idx = gl_GlobalInvocationID.x; 
     const uint EdgeID = idx.x; 
 
+    bool valid_thread = (EdgeID < pcs_edge_count_); 
+
+
+#if defined(_KERNEL_MULTICOMPILE__EDGE_ADJACENCY_BOOTSTRAP)
+    const uint st_hash_addr = idx.x; /* TODO: use GL buffer copy function rather than this */
+    SSBO_HASH_MAP_HEADERS[st_hash_addr] = CHECKSUM_EMPTY;
+#endif
+
+
+#if defined(_KERNEL_MULTICOMPILE__EDGE_ADJACENCY_HASHING)
+    uvec4 vid; 
+    uint base_addr = EdgeID * 4u; 
+    vid[0] = ssbo_edge_to_vert_[base_addr+0];
+    vid[1] = ssbo_edge_to_vert_[base_addr+1]; 
+    vid[2] = ssbo_edge_to_vert_[base_addr+2];
+    vid[3] = ssbo_edge_to_vert_[base_addr+3];
+   
+    /* fetch merged id */
+    for (uint i = 0u; i < 4u; i++) {
+        uint vert_id = vid[i]; 
+        uint merged_id = ssbo_vert_merged_id_[vert_id]; 
+        vid[i] = merged_id; 
+    }
+    uvec2 edge_verts = uvec2(vid[1], vid[2]); /*v1, 2 is on the edge*/
+
+    /* store merged id */
+    if (valid_thread) {
+        ssbo_edge_to_vert_[base_addr+0] = vid[0];
+        ssbo_edge_to_vert_[base_addr+1] = vid[1]; 
+        ssbo_edge_to_vert_[base_addr+2] = vid[2];
+        ssbo_edge_to_vert_[base_addr+3] = vid[3];
+    }
+
+    /* Hash */
+    bool inserted = false; 
+    uint hash_id = NOT_FOUND;
+    if (valid_thread)
+        hash_id = FUNC_HASHMAP_INSERT(edge_verts, inserted); 
+
+    barrier(); /* must be outside of any dynamic control divergence */
+
+    if (inserted) 
+    { /* store edge id. safe since we ensure <=1 vert doing this */
+        ssbo_edge_spatial_map_payloads_[hash_id] = EdgeID; 
+        /*atomicAdd(GLOBAL_COMPACTION_COUNTER__NUM_EDGES, 1);*/ /*debug only*/
+    }
+#endif
+
+
+#if defined(_KERNEL_MULTICOMPILE__EDGE_ADJACENCY_FIND_ADJ)
+    uvec4 edge_adj_verts;  
+    uint base_addr = EdgeID * 4u; 
+    { /* load edge adjacency */
+        edge_adj_verts[0] = ssbo_edge_to_vert_[base_addr+0];
+        edge_adj_verts[1] = ssbo_edge_to_vert_[base_addr+1];
+        edge_adj_verts[2] = ssbo_edge_to_vert_[base_addr+2];
+        edge_adj_verts[3] = ssbo_edge_to_vert_[base_addr+3];
+    }
+    /*    v0
+     *   /  \
+     *  /    \                
+     * v1----v2             
+     *  \    /                
+     *   \  /                     
+     *    v3    winding 012, 321                
+    */
+    uvec2 curr_edge_verts[4] = 
+    {
+        uvec2(edge_adj_verts[0], edge_adj_verts[1]), 
+        uvec2(edge_adj_verts[2], edge_adj_verts[0]), 
+        uvec2(edge_adj_verts[3], edge_adj_verts[2]),
+        uvec2(edge_adj_verts[1], edge_adj_verts[3])
+    };
+
+    uvec4 hashmap_index = uvec4(NOT_FOUND, NOT_FOUND, NOT_FOUND, NOT_FOUND); 
+    for (uint i = 0u; i < 4u; i++)
+        if (valid_thread)
+            hashmap_index[i] = FUNC_HASHMAP_SEARCH(curr_edge_verts[i]); 
+    
+    barrier(); /* must be outside of any dynamic control divergence */ 
+
+    uvec4 edge_id = uvec4(NOT_FOUND, NOT_FOUND, NOT_FOUND, NOT_FOUND);  
+    uint st_base_addr = EdgeID * 4u; 
+    if (valid_thread)
+        for (uint i = 0u; i < 4u; i++)
+        {
+            edge_id[i] = ssbo_edge_spatial_map_payloads_[hashmap_index[i]]; 
+            ssbo_edge_to_edges_[EdgeID+0] = edge_id[i]; /* note: == NOT_FOUND when no edge found in the hashmap */
+        }
+#endif
 
 }
 

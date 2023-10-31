@@ -36,6 +36,7 @@ private:
   draw::PassSimple pass_fill_draw_args_contour_edges = {"Fill Draw Args for Contour Edges"};
 
   draw::PassSimple pass_meshing_merge_verts = {"Meshing Merge Verts"};
+  draw::PassSimple pass_meshing_edge_adjacency = {"Build Mesh Adjacency"};
 
   draw::PassSimple pass_compress_contour_pixels = {"Generate Contour Pixel Mask"}; 
 
@@ -88,7 +89,8 @@ public:
     FILL_DISPATCH_ARGS_CONTOUR_EDGES,
     SOFT_RASTER_CONTOUR_EDGES,
 
-    MESHING_MERGE_VERTS, 
+    MESHING_MERGE_VERTS,
+    MESHING_BUILD_EDGE_ADJ, 
 
     COMPRESS_CONTOUR_PIXELS 
   };
@@ -120,9 +122,10 @@ public:
   void rebuild_pass_append_contour_edge_drawcall();
 
   int num_total_mesh_verts;
+  int num_total_mesh_edges; 
   int num_total_mesh_tris;
   void rebuild_pass_meshing_merge_verts(bool debug = false); 
-
+  void rebuild_pass_meshing_edge_adjacency(bool debug = false); 
 
   void rebuild_pass_compress_contour_pixels(bool debug = false); 
 
