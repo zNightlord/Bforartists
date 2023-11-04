@@ -140,13 +140,15 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_extract)
     .typedef_source("draw_shader_shared.h")
     .define("_KERNEL_MULTICOMPILE__GEOM_EXTRACT", "1")
     .define("GLOBAL_COUNTER", "ssbo_bnpr_mesh_pool_counters_.num_contour_edges")
-    .define("DECODE_IBO_EXCLUDE", "1") /* exclude ibo decode shader */
+    .define("DECODE_IBO_EXCLUDE",       "1") /* exclude ibo decode shader */
+    .define("WINGED_EDGE_TOPO_INCLUDE", "1")
     .define("CP_TAG", "contour_edge")
     .storage_buf(0, Qualifier::READ, "uint", "buf_ibo[]")
     .storage_buf(1, Qualifier::READ, "float", "buf_vbo[]") /* cannot use vec3 due to ssbo alignment */
     .storage_buf(2, Qualifier::READ_WRITE, "uint", "buf_strokegen_mesh_pool[]")
     .storage_buf(3, Qualifier::READ, "ObjectMatrices", "drw_matrix_buf[]")
     .storage_buf(4, Qualifier::READ_WRITE, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
+    .storage_buf(5, Qualifier::WRITE, "uint", "ssbo_edge_to_contour_[]")
     .uniform_buf(0, "ViewMatrices", "ubo_view_matrices_")
     .push_constant(Type::INT, "pcs_ib_fmt_u16")
     .push_constant(Type::INT, "pcs_num_verts")
@@ -180,9 +182,13 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_extract_calc_contour_edge_raster_data)
     .typedef_source("draw_shader_shared.h")
     .additional_info("npr_compaction_off") /* Remove compaction code */
     .define("DECODE_IBO_EXCLUDE", "1") /* Remove ibo code */
+    .define("WINGED_EDGE_TOPO_INCLUDE", "1")
     .define("_KERNEL_MULTICOMPILE_CALC_CONTOUR_EDGE_RASTER_DATA", "1")
     .storage_buf(0, Qualifier::READ_WRITE, "uint", "buf_strokegen_mesh_pool[]")
     .storage_buf(1, Qualifier::READ, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
+    .storage_buf(2, Qualifier::READ, "uint", "ssbo_edge_to_edges_[]")
+    .storage_buf(3, Qualifier::READ, "uint", "ssbo_edge_to_contour_[]")
+    .storage_buf(4, Qualifier::WRITE, "uint", "ssbo_contour_to_contour_[]")
     .uniform_buf(0, "ViewMatrices", "ubo_view_matrices_")
     .push_constant(Type::VEC2, "pcs_screen_size_")
     .local_group_size(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT) 
@@ -216,6 +222,7 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_extract_collect_edges)
     .typedef_source("draw_shader_shared.h")
     .additional_info("npr_compaction_off") /* Remove compaction code */
     .define("_KERNEL_MULTICOMPILE__COMPACT_EDGE_ADJ_IBO", "1")
+    .define("DECODE_IBO_INCLUDE", "1") 
 
     .storage_buf(0, Qualifier::READ, "uint", "IBO_BUF[]")
     .storage_buf(1, Qualifier::WRITE, "uint", "ssbo_edge_to_vert_[]") /* encoded posnor vbo */
@@ -236,8 +243,8 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_fill_draw_args_contour_edges)
     .typedef_source("bnpr_shader_shared.hh")
     .typedef_source("draw_shader_shared.h") /*DrawCommand*/
     .additional_info("npr_compaction_off") /* Remove compaction code */
-    .define("DECODE_IBO_EXCLUDE", "1") /* Remove ibo code */
-    .define("_KERNEL_MULTICOMPILE_FILL_DRAW_ARGS", "1")
+    .define("DECODE_IBO_EXCLUDE",                   "1") /* Remove ibo code */
+    .define("_KERNEL_MULTICOMPILE_FILL_DRAW_ARGS",  "1")
     .storage_buf(0, Qualifier::READ, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
     .storage_buf(1, Qualifier::WRITE, "DrawCommand", "ssbo_bnpr_mesh_pool_draw_args_")
     .local_group_size(GROUP_SIZE_FILL_ARGS)
@@ -301,7 +308,7 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_merge_verts)
 
     .storage_buf(0, Qualifier::READ_WRITE, "uint", "ssbo_vert_spatial_map_headers_[]")
     .storage_buf(1, Qualifier::READ_WRITE, "uint", "ssbo_vert_spatial_map_payloads_[]")
-    .storage_buf(2, Qualifier::WRITE, "uint", "ssbo_vert_merged_id_[]")
+    .storage_buf(2, Qualifier::READ_WRITE, "uint", "ssbo_vert_merged_id_[]")
     .storage_buf(3, Qualifier::READ, "float", "ssbo_vbo_full_[]")
     .storage_buf(4, Qualifier::READ_WRITE, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
     .push_constant(Type::INT, "pcs_hash_map_size_")
@@ -338,12 +345,14 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_edge_adjecency)
     .do_static_compilation(true)
     .typedef_source("bnpr_shader_shared.hh")
     .define("_KERNEL_MULTICOMPILE__EDGE_ADJACENCY", "1")
+    .define("DECODE_IBO_EXCLUDE", "1") /* Remove ibo code */
+    .define("WINGED_EDGE_TOPO_INCLUDE", "1")
 
     .storage_buf(0, Qualifier::READ, "uint", "ssbo_vert_merged_id_[]")
     .storage_buf(1, Qualifier::READ_WRITE, "uint", "ssbo_edge_index_map_headers_[]")
     .storage_buf(2, Qualifier::READ_WRITE, "uint", "ssbo_edge_spatial_map_payloads_[]")
     .storage_buf(3, Qualifier::READ_WRITE, "uint", "ssbo_edge_to_vert_[]")
-    .storage_buf(4, Qualifier::WRITE, "uint", "ssbo_edge_to_edges_[]")
+    .storage_buf(4, Qualifier::READ_WRITE, "uint", "ssbo_edge_to_edges_[]")
     .storage_buf(5, Qualifier::READ_WRITE, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
     .push_constant(Type::INT, "pcs_hash_map_size_")
     .push_constant(Type::INT, "pcs_edge_count_")

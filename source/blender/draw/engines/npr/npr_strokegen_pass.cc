@@ -156,6 +156,7 @@ namespace blender::npr::strokegen
       sub.bind_ssbo(2, buffers_.ssbo_bnpr_mesh_pool_);
       sub.bind_ssbo(3, DRW_manager_get()->matrix_buf.current());
       sub.bind_ssbo(4, buffers_.ssbo_bnpr_mesh_pool_counters_);
+      sub.bind_ssbo(5, buffers_.ssbo_edge_to_contour_); 
       sub.bind_ubo(0, buffers_.ubo_view_matrices_);
       sub.push_constant("pcs_ib_fmt_u16", ib_type == gpu::GPU_INDEX_U16 ? 1 : 0);
       sub.push_constant("pcs_num_verts", (int)edge_batch->elem_()->index_len_get());
@@ -245,6 +246,9 @@ namespace blender::npr::strokegen
 
       sub.bind_ssbo(0, buffers_.ssbo_bnpr_mesh_pool_);
       sub.bind_ssbo(1, buffers_.ssbo_bnpr_mesh_pool_counters_);
+      sub.bind_ssbo(2, buffers_.ssbo_edge_to_edges_);
+      sub.bind_ssbo(3, buffers_.ssbo_edge_to_contour_);
+      sub.bind_ssbo(4, buffers_.ssbo_contour_to_contour_); 
       sub.bind_ubo(0, buffers_.ubo_view_matrices_);
       float2 fb_res = textures_.get_contour_raster_screen_res(); 
       sub.push_constant("pcs_screen_size_", fb_res); 

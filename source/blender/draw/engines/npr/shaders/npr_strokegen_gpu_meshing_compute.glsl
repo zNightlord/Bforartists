@@ -1,4 +1,7 @@
 
+#pragma BLENDER_REQUIRE(npr_strokegen_topo_lib.glsl)
+
+
 
 /* Hash Funcation Primitives ------------------------------------- 
  * code from https://jcgt.org/published/0009/03/02/supplementary.pdf
@@ -224,25 +227,35 @@ void main()
     if (inserted) /* store merged vert id. safe since we ensure <=1 vert doing this */
     {
         ssbo_vert_spatial_map_payloads_[hash_id] = VertID; 
-        /* atomicAdd(GLOBAL_COMPACTION_COUNTER__MESH_VERTS, 1); */ 
+        /* atomicAdd(GLOBAL_COMPACTION_COUNTER__MESH_VERTS, 1); */
     }
+
+    if (valid_thread) 
+    /* avoid hash search for non-duplicated verts */
+        ssbo_vert_merged_id_[VertID] = inserted ? VertID : NOT_FOUND; 
 #else
 
 #if defined(_KERNEL_MULTICOMPILE__VERT_MERGE_DEDUPLICATE)
     bool valid_thread = (VertID < pcs_vert_count_);
+    uint merged_vert_id = ssbo_vert_merged_id_[VertID];
+    bool is_depli_vert = merged_vert_id == NOT_FOUND; 
 
-    vec3 pos = ld_vbo(VertID); 
+    /* Only apply expensive hash search for duplicated verts */
     uint hash_id = NOT_FOUND; 
-    if (valid_thread)
+    if (is_depli_vert && valid_thread)
+    { 
+        vec3 pos = ld_vbo(VertID); 
         hash_id = FUNC_HASHMAP_SEARCH(pos); 
-    
+    }
     barrier(); /* must be outside of any dynamic control divergence */ 
-
-    uint merged_vert_id = ssbo_vert_spatial_map_payloads_[hash_id]; 
-    if (valid_thread)
+    if (is_depli_vert && valid_thread)
+        merged_vert_id = ssbo_vert_spatial_map_payloads_[hash_id]; 
+    
+    
+    if (is_depli_vert && valid_thread)
     {
         merged_vert_id = (merged_vert_id != NOT_FOUND) ? merged_vert_id 
-            : VertID/*fucked up but at least we can keep it sane here */; 
+            : VertID /*fucked up but at least we can keep it sane here */; 
         ssbo_vert_merged_id_[VertID] = merged_vert_id; 
         
         /* Find if different position hashed to the same position with the same checksum. 
@@ -295,12 +308,13 @@ void main()
     }
     uvec2 edge_verts = uvec2(vid[1], vid[2]); /*v1, 2 is on the edge*/
 
-    /* store merged id */
+    /* store merged id, also transform to wedge index order */
     if (valid_thread) {
-        ssbo_edge_to_vert_[base_addr+0] = vid[0];
-        ssbo_edge_to_vert_[base_addr+1] = vid[1]; 
-        ssbo_edge_to_vert_[base_addr+2] = vid[2];
-        ssbo_edge_to_vert_[base_addr+3] = vid[3];
+        uvec4 wing_verts = line_adj_to_wing_verts(vid); 
+        ssbo_edge_to_vert_[base_addr+0] = wing_verts[0];
+        ssbo_edge_to_vert_[base_addr+1] = wing_verts[1]; 
+        ssbo_edge_to_vert_[base_addr+2] = wing_verts[2];
+        ssbo_edge_to_vert_[base_addr+3] = wing_verts[3];
     }
 
     /* Hash */
@@ -316,62 +330,75 @@ void main()
         ssbo_edge_spatial_map_payloads_[hash_id] = EdgeID; 
         /*atomicAdd(GLOBAL_COMPACTION_COUNTER__NUM_EDGES, 1);*/ /*debug only*/
     }
+
+    if (valid_thread)
+    { /* temp cache inserted flag here to avoid hash search for deduplication */
+        ssbo_edge_to_edges_[EdgeID*4u + 0u] = inserted ? 1u : 0u;
+    }
 #endif
 
 
 #if defined(_KERNEL_MULTICOMPILE__EDGE_ADJACENCY_FIND_ADJ)
-    uvec4 edge_adj_verts;  
-    uint base_addr = EdgeID * 4u; 
+    uint WedgeId = EdgeID; 
+    uint temp_cached_hash_info = ssbo_edge_to_edges_[WedgeId*4u + 0u];
+    bool is_wedge_unique_hashed = (temp_cached_hash_info == 1u);  
+    bool valid_edge = (is_wedge_unique_hashed); 
+
+    uvec4 vids_wedge; /*bwedge:4 border wedges*/
+    uint base_addr = WedgeId * 4u; 
     { /* load edge adjacency */
-        edge_adj_verts[0] = ssbo_edge_to_vert_[base_addr+0];
-        edge_adj_verts[1] = ssbo_edge_to_vert_[base_addr+1];
-        edge_adj_verts[2] = ssbo_edge_to_vert_[base_addr+2];
-        edge_adj_verts[3] = ssbo_edge_to_vert_[base_addr+3];
+        vids_wedge[0] = ssbo_edge_to_vert_[base_addr+0];
+        vids_wedge[1] = ssbo_edge_to_vert_[base_addr+1];
+        vids_wedge[2] = ssbo_edge_to_vert_[base_addr+2];
+        vids_wedge[3] = ssbo_edge_to_vert_[base_addr+3];
     }
-    /*    v0
-     *   /  \
-     *  /    \                
-     * v1====v2 <-- curr edge            
-     *  \    /                
-     *   \  /                     
-     *    v3    winding 012, 321                
-    */
 
-    /* Deduplicate */
-    uvec2 curr_edge = uvec2(edge_adj_verts[1], edge_adj_verts[2]); 
-    uint curr_edge_hash_id = NOT_FOUND; 
-    uint curr_edge_dedup_id = NOT_FOUND; 
-    if (valid_thread)
+    /* Search for adj wedges */
+    uvec2 vids_bwedge[4]; 
+    for (uint iwedge = 0; iwedge < 4; ++iwedge) 
     {
-        curr_edge_hash_id = FUNC_HASHMAP_SEARCH(curr_edge);
-        curr_edge_dedup_id = ssbo_edge_spatial_map_payloads_[curr_edge_hash_id];
+        uvec2 iverts_iwedge = mark__wedge_to_verts(iwedge); 
+        vids_bwedge[iwedge] = uvec2(vids_wedge[iverts_iwedge[0]], vids_wedge[iverts_iwedge[1]]); 
     }
-    bool valid_edge = (curr_edge_hash_id != NOT_FOUND)
-        && (curr_edge_dedup_id == EdgeID); 
-
-    /* Search for adj edges */
-    uvec2 adj_edges[4] = 
-    {
-        uvec2(edge_adj_verts[0], edge_adj_verts[1]), 
-        uvec2(edge_adj_verts[2], edge_adj_verts[0]), 
-        uvec2(edge_adj_verts[3], edge_adj_verts[2]),
-        uvec2(edge_adj_verts[1], edge_adj_verts[3])
-    };
+    
     uvec4 hashmap_index = uvec4(NOT_FOUND, NOT_FOUND, NOT_FOUND, NOT_FOUND); 
     for (uint i = 0u; i < 4u; i++)
         if (valid_thread)
-            hashmap_index[i] = FUNC_HASHMAP_SEARCH(adj_edges[i]); 
+            hashmap_index[i] = FUNC_HASHMAP_SEARCH(vids_bwedge[i]); 
     
     barrier(); /* must be outside of any dynamic control divergence */ 
 
-    uvec4 edge_id = uvec4(NOT_FOUND, NOT_FOUND, NOT_FOUND, NOT_FOUND);  
+    uvec4 wedge_id;
     uint st_base_addr = EdgeID * 4u; 
     if (valid_thread)
-        for (uint i = 0u; i < 4u; i++)
+        for (uint iwedge = 0u; iwedge < 4u; iwedge++)
         {
-            if (valid_edge)
-                edge_id[i] = ssbo_edge_spatial_map_payloads_[hashmap_index[i]]; 
-            ssbo_edge_to_edges_[EdgeID+i] = edge_id[i]; 
+            /* load wedge id */
+            if (valid_edge && (hashmap_index[iwedge] != NOT_FOUND))
+                wedge_id[iwedge] = ssbo_edge_spatial_map_payloads_[hashmap_index[iwedge]]; 
+            else
+                wedge_id[iwedge] = NULL_EDGE; 
+            
+            /* find non-overlapping iface in adj. wedge */
+            uint iface_adj_non_overlapping = 0u; 
+            if (wedge_id[iwedge] != NULL_EDGE)
+            { 
+                uint oppo_vert_id = vids_wedge[mark__border_wedge_to_oppo_vert(iwedge)];
+                
+                uint ld_addr_adj_wedge_data = wedge_id[iwedge] * 4u; 
+                uvec2 vids_oppo_adj_wedge = uvec2(
+                    ssbo_edge_to_vert_[ld_addr_adj_wedge_data + mark__center_wedge_to_oppo_vert__at_face(0)], 
+                    ssbo_edge_to_vert_[ld_addr_adj_wedge_data + mark__center_wedge_to_oppo_vert__at_face(1)]
+                );
+
+                if (oppo_vert_id != vids_oppo_adj_wedge[1])
+                    iface_adj_non_overlapping = 1u;
+            } 
+            
+            AdjWedgeInfo awi; 
+            awi.wedge_id = wedge_id[iwedge]; 
+            awi.iface_adj = iface_adj_non_overlapping; 
+            ssbo_edge_to_edges_[EdgeID*4u + iwedge] = encode_adj_wedge_info(awi); 
             /* note: == NOT_FOUND when this edge is a duplicated one */
         }
 #endif

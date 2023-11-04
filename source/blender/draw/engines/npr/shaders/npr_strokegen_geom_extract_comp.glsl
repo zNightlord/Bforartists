@@ -1,6 +1,6 @@
 
 #pragma BLENDER_REQUIRE(npr_strokegen_compaction_lib.glsl)
-#pragma BLENDER_REQUIRE(npr_strokegen_decode_ibo_lib.glsl)
+#pragma BLENDER_REQUIRE(npr_strokegen_topo_lib.glsl)
 
 
  
@@ -139,7 +139,20 @@ void main()
 		buf_strokegen_mesh_pool[addr_p1+0]  = floatBitsToUint(v[2].x); 
 		buf_strokegen_mesh_pool[addr_p1+1]  = floatBitsToUint(v[2].y); 
 		buf_strokegen_mesh_pool[addr_p1+2]  = floatBitsToUint(v[2].z); 
-		buf_strokegen_mesh_pool[base_addr+6]  = EdgeId; 
+		
+		PerContourWedgeInfo pcwi; 
+		pcwi.wedge_id = EdgeId;
+		pcwi.ifrontface = face_orient_012 > .0f ? 1 : 0; /* see "line_adj_to_wing_verts" */ 
+		buf_strokegen_mesh_pool[base_addr+6]  = encode_per_contour_wedge_info(pcwi); 
+	}
+
+	if (valid_thread)
+	{
+		PerWedgeContourInfo peci; 
+		peci.is_contour = is_contour;
+		peci.contour_id = is_contour ? compacted_idx : NULL_EDGE; 
+		peci.ifrontface = face_orient_012 > .0f ? 1 : 0; /* see "line_adj_to_wing_verts" */
+		ssbo_edge_to_contour_[EdgeId] = encode_per_wedge_contour_info(peci); 
 	}
 }
 #endif
@@ -243,6 +256,58 @@ void main()
 		buf_strokegen_mesh_pool[addr_st+1] = floatBitsToUint(vpos_uv[0].y); 
 		buf_strokegen_mesh_pool[addr_st+2] = floatBitsToUint(vpos_uv[1].x);
 		buf_strokegen_mesh_pool[addr_st+3] = floatBitsToUint(vpos_uv[1].y);
+
+		
+		/* build contour edge adjacency */
+/* 		AdjWedgeInfo awis_x4[4];
+		uint addr_ld_wedge = pcwi.wedge_id * 4u; 
+		for (uint iwedge = 0u; iwedge < 4; ++iwedge)
+			awis_x4[iwedge] = ssbo_edge_to_edges_[addr_ld_wedge+iwedge];  */
+		PerContourWedgeInfo pcwi = decode_per_contour_wedge_info(buf_strokegen_mesh_pool[base_addr+6]);  
+
+		AdjWedgeInfo awi; 
+		awi.iface_adj = pcwi.ifrontface; 
+		awi.wedge_id  = pcwi.wedge_id; 
+		
+		PerWedgeContourInfo pwci; 
+		pwci.is_contour = true;
+		pwci.contour_id = ContourEdgeIdx; 
+#define MAX_WEDGE_ROTATES 16u
+		uint rotate_step = 0u; 
+		do {
+			uint iwedge_prev = mark__cwedge_rotate_back(awi.iface_adj); 
+			awi = decode_adj_wedge_info(ssbo_edge_to_edges_[awi.wedge_id*4u + iwedge_prev]);
+
+			pwci = decode_per_wedge_contour_info(ssbo_edge_to_contour_[awi.wedge_id]);
+			if (pwci.is_contour) break; 
+
+			rotate_step++; 
+		} while (
+			rotate_step < MAX_WEDGE_ROTATES 
+			&& pwci.contour_id != ContourEdgeIdx
+		); 
+		ssbo_contour_to_contour_[ContourEdgeIdx*2] = pwci.contour_id; 
+
+
+		awi.iface_adj = pcwi.ifrontface; 
+		awi.wedge_id  = pcwi.wedge_id; 
+
+		pwci.is_contour = true;
+		pwci.contour_id = ContourEdgeIdx; 
+		do {
+			uint iwedge_next = mark__cwedge_rotate_next(awi.iface_adj); 
+			awi = decode_adj_wedge_info(ssbo_edge_to_edges_[awi.wedge_id*4u + iwedge_next]);
+
+			pwci = decode_per_wedge_contour_info(ssbo_edge_to_contour_[awi.wedge_id]);
+			if (pwci.is_contour) break; 
+
+			rotate_step++; 
+		} while (
+			rotate_step < MAX_WEDGE_ROTATES 
+			&& pwci.contour_id != ContourEdgeIdx
+		); 
+		ssbo_contour_to_contour_[ContourEdgeIdx*2+1] = pwci.contour_id; 
+
 	}
 
 
