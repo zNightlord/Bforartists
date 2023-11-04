@@ -43,7 +43,8 @@ private:
   draw::PassSimple pass_scan_test = {"Bnpr GPU Blelloch Scan Test"};
   draw::PassSimple pass_segscan_test = {"Bnpr GPU Blelloch SegScan Test"};
   draw::PassSimple pass_conv1d_test = {"Test GPU 1d conv on circular segments"};
-  draw::PassSimple pass_listranking_test = { "List ranking test" };
+  draw::PassSimple pass_listranking_test = {"List ranking test"};
+  draw::PassSimple pass_listranking_contour_edges = {"Contour Edge List Ranking"};
 
   /** Draw Passes */
   StrokegenMeshRasterPass pass_draw_contour_edges = {"Draw Contour Edges"}; // Inherited from draw::PassMain 
@@ -88,6 +89,7 @@ public:
     INDIRECT_DRAW_CONTOUR_EDGES,
     FILL_DISPATCH_ARGS_CONTOUR_EDGES,
     SOFT_RASTER_CONTOUR_EDGES,
+    LINK_CONTOUR_EDGES,
 
     MESHING_MERGE_VERTS,
     MESHING_BUILD_EDGE_ADJ, 
@@ -116,7 +118,7 @@ public:
   void init_pass_extract_mesh_geom();
   void rebuild_sub_pass_extract_mesh_geom(Object* ob, GPUBatch* gpu_batch_line_adj, GPUBatch* gpu_batch_surf, ResourceHandle& rsc_handle, const DRWView* drw_view);
   void rebuild_pass_fill_dispatch_args_contour_edges(); 
-  void rebuild_pass_softraster_geom(); 
+  void rebuild_pass_soft_raster_contour_edges(); 
   void rebuild_pass_fill_draw_args_contour_edges();
   void init_contour_edge_draw_pass(); 
   void rebuild_pass_append_contour_edge_drawcall();
@@ -137,15 +139,19 @@ public:
 
   void rebuild_pass_conv_test();
   void rebuild_pass_list_ranking_pointer_jumping(
-    int num_splice_iters, const int num_jump_iters,
-    int jumping_info_offset, bool loop_breaking_pass, bool loop_ranking_pass
-  );
+      PassSimple& pass_listranking, int num_splice_iters,
+      const int num_jump_iters, int jumping_info_offset, bool loop_breaking_pass, bool loop_ranking_pass
+      );
 
   bool test_list_ranking; 
-  bool looped_pass_list_ranking;
-  void rebuild_pass_list_ranking();
+  bool test_looped_pass_list_ranking;
+  enum ListRankingPassType {
+    Test = 0,
+    ContourEdgeLinking = 1
+  };
+  void rebuild_pass_list_ranking(ListRankingPassType passType, PassSimple& pass_listranking, bool looped_pass_list_ranking);
 
-  void rebuild_pass_list_ranking_fill_args(bool per_anchor, bool per_spliced, int splicing_or_relinking_iter, int group_size_x);
+  void rebuild_pass_list_ranking_fill_args(PassSimple& pass_listranking, bool per_anchor, bool per_spliced, int splicing_or_relinking_iter, int group_size_x, bool custom_pass);
   void print_list_ranking_nodes(int head_node_id, uint* computed_ranks, uint* computed_topo, uint* computed_links) const;
   /** \} */
 

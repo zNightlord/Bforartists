@@ -189,6 +189,7 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_extract_calc_contour_edge_raster_data)
     .storage_buf(2, Qualifier::READ, "uint", "ssbo_edge_to_edges_[]")
     .storage_buf(3, Qualifier::READ, "uint", "ssbo_edge_to_contour_[]")
     .storage_buf(4, Qualifier::WRITE, "uint", "ssbo_contour_to_contour_[]")
+    .storage_buf(5, Qualifier::READ_WRITE, "SSBOData_ListRankingInputs", "ssbo_list_ranking_inputs_") 
     .uniform_buf(0, "ViewMatrices", "ubo_view_matrices_")
     .push_constant(Type::VEC2, "pcs_screen_size_")
     .local_group_size(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT) 
@@ -482,6 +483,21 @@ GPU_SHADER_CREATE_INFO(strokegen_segloopconv1D_test_convolution)
 /* -------------------------------------------------------------------- */
 /** \GPU List Ranking Test
  * \{ */
+GPU_SHADER_CREATE_INFO(strokegen_list_ranking_setup_input_data)
+    .do_static_compilation(true)
+    .typedef_source("bnpr_defines.hh")
+    .typedef_source("bnpr_shader_shared.hh")
+    .define("_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SETUP", "1")
+
+    .storage_buf(0, Qualifier::READ, "uint", "ssbo_list_ranking_links_in_[]")
+    .storage_buf(1, Qualifier::WRITE, "uint", "ssbo_list_ranking_links_out_[]")
+    .storage_buf(2, Qualifier::READ_WRITE, "SSBOData_ListRankingInputs", "ssbo_list_ranking_inputs_")
+    .uniform_buf(0, "UBData_ListRanking", "ubo_list_ranking_splicing_")
+    .push_constant(Type::INT, "pc_listranking_custom_") /* 0:=testing pass, 1:=custom pass */
+    
+    .local_group_size(GROUP_SIZE_BNPR_LIST_RANK_TEST)
+    .compute_source("npr_strokegen_list_ranking_test_comp.glsl");
+
 GPU_SHADER_CREATE_INFO(strokegen_list_ranking_test_fill_dispatch_args)
     .do_static_compilation(true)
     .typedef_source("bnpr_defines.hh")
@@ -494,6 +510,8 @@ GPU_SHADER_CREATE_INFO(strokegen_list_ranking_test_fill_dispatch_args)
     .storage_buf(1, Qualifier::READ, "uint", "ssbo_list_ranking_splice_counters_[]")
     .storage_buf(2, Qualifier::READ_WRITE, "DispatchCommand", "ssbo_list_ranking_indirect_dispatch_args_per_anchor")
     .storage_buf(3, Qualifier::READ_WRITE, "DispatchCommand", "ssbo_list_ranking_indirect_dispatch_args_per_spliced")
+    .storage_buf(4, Qualifier::READ, "SSBOData_ListRankingInputs", "ssbo_list_ranking_inputs_")
+    .push_constant(Type::INT, "pc_listranking_custom_") /* 0:=testing pass, 1:=custom pass */
     .push_constant(Type::INT, "pc_listranking_indirect_arg_granularity_") /* 0 := anchors, 1:= spliced nodes */
     .push_constant(Type::INT, "pc_listranking_counter_buffer_slot_id_") /* which counter to use */
     .push_constant(Type::INT, "pc_listranking_dispatch_group_size_") /* group size of dispatched kernel */
@@ -515,6 +533,8 @@ GPU_SHADER_CREATE_INFO(strokegen_list_ranking_test_tagging)
     .storage_buf(6, Qualifier::WRITE, "uint", "ssbo_list_ranking_splice_counters_[]")
     .storage_buf(7, Qualifier::READ_WRITE, "uint", "ssbo_list_ranking_ranks_[]")
     .storage_buf(8, Qualifier::WRITE, "uint", "ssbo_list_ranking_addressing_counters_[]") 
+    .storage_buf(9, Qualifier::READ, "SSBOData_ListRankingInputs", "ssbo_list_ranking_inputs_")
+    
     .uniform_buf(0, "UBData_ListRanking", "ubo_list_ranking_splicing_")
     .push_constant(Type::INT, "pc_listranking_splice_iter_")
     .push_constant(Type::INT, "pc_listranking_tagging_iter_")
@@ -539,7 +559,7 @@ GPU_SHADER_CREATE_INFO(strokegen_list_ranking_test_compact_anchors)
     .storage_buf(7, Qualifier::WRITE, "uint", "ssbo_list_ranking_node_to_anchor_out_[]")
     .storage_buf(8, Qualifier::READ_WRITE, "uint", "ssbo_list_ranking_anchor_counters_[]")
     .storage_buf(9, Qualifier::READ_WRITE, "uint", "ssbo_list_ranking_splice_counters_[]")
-    .storage_buf(10, Qualifier::READ_WRITE, "uint", "ssbo_list_ranking_debug_[]")
+    .storage_buf(10, Qualifier::READ, "SSBOData_ListRankingInputs", "ssbo_list_ranking_inputs_")
     .uniform_buf(0, "UBData_ListRanking", "ubo_list_ranking_splicing_")
     .push_constant(Type::INT, "pc_listranking_splice_iter_")
     .push_constant(Type::INT, "pc_num_splice_iters_")
@@ -563,6 +583,7 @@ GPU_SHADER_CREATE_INFO(strokegen_list_ranking_test_splice_out_nodes)
     .storage_buf(7, Qualifier::WRITE, "uint", "ssbo_list_ranking_node_to_anchor_out_[]")
     .storage_buf(8, Qualifier::READ_WRITE, "uint", "ssbo_list_ranking_anchor_counters_[]")
     .storage_buf(9, Qualifier::READ_WRITE, "uint", "ssbo_list_ranking_splice_counters_[]")
+    .storage_buf(10, Qualifier::READ, "SSBOData_ListRankingInputs", "ssbo_list_ranking_inputs_")
     .uniform_buf(0, "UBData_ListRanking", "ubo_list_ranking_splicing_")
     .push_constant(Type::INT, "pc_listranking_splice_iter_")
 
@@ -584,6 +605,7 @@ GPU_SHADER_CREATE_INFO(strokegen_list_ranking_test_sublist_pointer_jumping)
     .storage_buf(6, Qualifier::READ, "uint", "ssbo_list_ranking_anchor_counters_[]")
     .storage_buf(7, Qualifier::READ_WRITE, "uint", "ssbo_list_ranking_addressing_counters_[]") 
     .storage_buf(8, Qualifier::WRITE, "uint", "ssbo_list_ranking_serialized_topo_[]")
+    .storage_buf(9, Qualifier::READ, "SSBOData_ListRankingInputs", "ssbo_list_ranking_inputs_")
     .uniform_buf(0, "UBData_ListRanking", "ubo_list_ranking_splicing_")
     .push_constant(Type::INT, "pc_listranking_splice_iter_")
     .push_constant(Type::INT, "pc_listranking_jumping_iter_")
@@ -609,6 +631,7 @@ GPU_SHADER_CREATE_INFO(strokegen_list_ranking_test_mark_loop_head_tail)
     .storage_buf(4, Qualifier::READ, "uint", "ssbo_list_ranking_node_to_anchor_in_[]")
     .storage_buf(5, Qualifier::READ_WRITE, "uint", "ssbo_list_ranking_ranks_[]")
     .storage_buf(6, Qualifier::READ, "uint", "ssbo_list_ranking_anchor_counters_[]")
+    .storage_buf(7, Qualifier::READ, "SSBOData_ListRankingInputs", "ssbo_list_ranking_inputs_")
     .uniform_buf(0, "UBData_ListRanking", "ubo_list_ranking_splicing_")
     .push_constant(Type::INT, "pc_listranking_splice_iter_")
 
@@ -626,6 +649,7 @@ GPU_SHADER_CREATE_INFO(strokegen_list_ranking_test_relinking)
     .storage_buf(3, Qualifier::READ, "uint", "ssbo_list_ranking_splice_counters_[]")
     .storage_buf(4, Qualifier::READ, "uint", "ssbo_list_ranking_per_anchor_sublist_jumping_info_in_[]")
     .storage_buf(5, Qualifier::WRITE, "uint", "ssbo_list_ranking_serialized_topo_[]")
+    .storage_buf(6, Qualifier::READ, "SSBOData_ListRankingInputs", "ssbo_list_ranking_inputs_")
     .uniform_buf(0, "UBData_ListRanking", "ubo_list_ranking_splicing_")
     .push_constant(Type::INT, "pc_listranking_relink_iter_")
     .push_constant(Type::INT, "pc_listranking_num_relink_iters_")
@@ -637,18 +661,5 @@ GPU_SHADER_CREATE_INFO(strokegen_list_ranking_test_looped_relinking)
     .do_static_compilation(true)
     .additional_info("strokegen_list_ranking_test_relinking")
     .define("_KERNEL_MULTICOMPILE__LIST_RANKING_SUBLIST_POINTER_JUMPING__FIND_LOOP_HEAD", "1");
-
-GPU_SHADER_CREATE_INFO(strokegen_list_ranking_test_upload_cpu_test_data)
-    .do_static_compilation(true)
-    .typedef_source("bnpr_defines.hh")
-    .typedef_source("bnpr_shader_shared.hh")
-    .define("_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_FILL_CPU_DATA", "1")
-
-    .storage_buf(0, Qualifier::READ, "uint", "ssbo_list_ranking_links_in_[]")
-    .storage_buf(1, Qualifier::WRITE, "uint", "ssbo_list_ranking_links_out_[]")
-    .uniform_buf(0, "UBData_ListRanking", "ubo_list_ranking_splicing_")
-    
-    .local_group_size(GROUP_SIZE_BNPR_LIST_RANK_TEST)
-    .compute_source("npr_strokegen_list_ranking_test_comp.glsl");
 
 /** \} */

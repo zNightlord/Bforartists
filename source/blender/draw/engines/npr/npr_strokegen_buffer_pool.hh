@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
+﻿/* SPDX-License-Identifier: GPL-2.0-or-later
  * Copyright 2021 Blender Foundation.
  */
 
@@ -67,7 +67,7 @@ class GPUBufferPoolModule {
   SSBO_ListRankingSplicedNodeId       ssbo_list_ranking_spliced_node_id_[NUM_ITERS_BNPR_LIST_RANK_RELINK];
   SSBO_ListRankingSerializedTopo      ssbo_list_ranking_serialized_topo_;
 
-  SSBO_ListRankingAnchorToNextAnchor ssbo_list_ranking_anchor_to_next_anchor_;
+  SSBO_ListRankingAnchorToNextAnchor  ssbo_list_ranking_anchor_to_next_anchor_;
   SSBO_ListRankingAnchorJumpingInfo   ssbo_list_ranking_per_anchor_sublist_jumping_info_[2];
   SSBO_ListRankingNodeToAnchor        ssbo_list_ranking_node_to_anchor_;
 
@@ -75,6 +75,7 @@ class GPUBufferPoolModule {
   SSBO_ListRankingLinks ssbo_list_ranking_debug_;
 
   UBO_ListRanking                     ubo_list_ranking_splicing_;
+  SSBO_ListRankingInputs              ssbo_list_ranking_inputs_; 
 
   // Note: Whenever you found weird shader error:
   // Check following things:

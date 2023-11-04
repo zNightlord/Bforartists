@@ -65,7 +65,7 @@ namespace blender::npr::strokegen
           strokegen_textures(*this),
           strokegen_passes(shaders, strokegen_buffers, strokegen_textures)
     {
-      strokegen_passes.looped_pass_list_ranking = true; // remember to also set flag at build_list_ranking_testing_data
+      strokegen_passes.test_looped_pass_list_ranking = true; // remember to also set flag at build_list_ranking_testing_data
     }
 
 

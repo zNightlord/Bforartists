@@ -2,7 +2,7 @@
 
 #pragma BLENDER_REQUIRE(npr_strokegen_list_ranking_lib.glsl)
 
-#ifdef _KERNEL_MULTICOMPILE__TEST_LIST_RANKING_FILL_CPU_DATA
+#ifdef _KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SETUP
 
 void main()
 {
@@ -15,6 +15,9 @@ void main()
 
     ssbo_list_ranking_links_out_[node_id*2] = ssbo_list_ranking_links_in_[node_id*2];
     ssbo_list_ranking_links_out_[node_id*2+1] = ssbo_list_ranking_links_in_[node_id*2+1]; 
+
+    if ((idx == 0u) && (pc_listranking_custom_ == 0)) 
+        NUM_NODES_TOTAL = NUM_ITEMS_BNPR_LIST_RANK_TEST; 
 }
 
 #endif

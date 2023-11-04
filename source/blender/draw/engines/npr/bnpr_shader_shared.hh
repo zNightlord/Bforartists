@@ -1,4 +1,4 @@
-﻿/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /**
  * Shared structures, enums & defines between C++ and GLSL.
@@ -184,6 +184,13 @@ using namespace draw;
   };
   BLI_STATIC_ASSERT_ALIGN(UBData_ListRanking, 16);
 
+  struct SSBOData_ListRankingInputs {
+    uint num_nodes;
+    uint dummy0;
+    uint dummy1;
+    uint dummy2;
+  };
+
 
 #define BNPR_LIST_RANKING_MAX_SUBLIST_LEN 5u
   static inline uint ComputeTaggingIters(uint numNodes)
@@ -315,6 +322,7 @@ using SSBO_ListRankingNodeToAnchor = draw::StorageArrayBuffer<uint, NUM_ITEMS_BN
 using SSBO_ListRankingCounters = draw::StorageArrayBuffer<uint, BNPR_LIST_RANK_ANCHOR_COUNTER_BUFFER_SIZE>;
 using SSBO_ListRankingAllocationCounters = draw::StorageArrayBuffer<uint, 4>;
 using UBO_ListRanking = draw::UniformBuffer<UBData_ListRanking>;
+using SSBO_ListRankingInputs = draw::StorageBuffer<SSBOData_ListRankingInputs>;
 
 }
 

@@ -15,7 +15,8 @@ void GetDispatchArgs(out uvec3 dispatch_args)
     {
         if (pc_listranking_counter_buffer_slot_id_ == 0)
         { /* in practice this could be from other GPU buffer */
-            num_work_items = NUM_ITEMS_BNPR_LIST_RANK_TEST;
+            num_work_items = (pc_listranking_custom_ == 0) ? 
+                NUM_ITEMS_BNPR_LIST_RANK_TEST : ssbo_list_ranking_inputs_.num_nodes; 
         }else{
             num_work_items = ssbo_list_ranking_anchor_counters_[pc_listranking_counter_buffer_slot_id_];
         }

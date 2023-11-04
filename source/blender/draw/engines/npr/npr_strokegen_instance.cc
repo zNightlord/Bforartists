@@ -98,12 +98,18 @@ namespace blender::npr::strokegen
     strokegen_passes.rebuild_pass_fill_draw_args_contour_edges();
     strokegen_passes.rebuild_pass_fill_dispatch_args_contour_edges(); 
 
-    strokegen_passes.rebuild_pass_softraster_geom();
+    strokegen_passes.rebuild_pass_soft_raster_contour_edges();
     strokegen_passes.rebuild_pass_meshing_merge_verts();
     strokegen_passes.rebuild_pass_meshing_edge_adjacency(); 
 
     strokegen_passes.rebuild_pass_append_contour_edge_drawcall();
-    strokegen_passes.rebuild_pass_compress_contour_pixels(); 
+    strokegen_passes.rebuild_pass_compress_contour_pixels();
+
+    strokegen_passes.rebuild_pass_list_ranking(
+        StrokeGenPassModule::ListRankingPassType::ContourEdgeLinking,
+      strokegen_passes.get_compute_pass(StrokeGenPassModule::eType::LINK_CONTOUR_EDGES),
+      false
+    );
   }
 
   void Instance::mesh_sync(
@@ -166,6 +172,7 @@ namespace blender::npr::strokegen
     manager.submit(strokegen_passes.get_compute_pass(PType::MESHING_MERGE_VERTS), view); 
     manager.submit(strokegen_passes.get_compute_pass(PType::MESHING_BUILD_EDGE_ADJ), view); 
     manager.submit(strokegen_passes.get_compute_pass(PType::SOFT_RASTER_CONTOUR_EDGES), view);
+    manager.submit(strokegen_passes.get_compute_pass(PType::LINK_CONTOUR_EDGES), view); 
 
     /* Draw Contour Edges */
     manager.submit(strokegen_passes.get_compute_pass(PType::FILL_DRAW_ARGS_CONTOUR_EDGES), view);

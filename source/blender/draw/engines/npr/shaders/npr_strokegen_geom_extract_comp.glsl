@@ -307,10 +307,10 @@ void main()
 			&& pwci.contour_id != ContourEdgeIdx
 		); 
 		ssbo_contour_to_contour_[ContourEdgeIdx*2+1] = pwci.contour_id; 
-
 	}
 
-
+	if (idx.x == 0)
+		ssbo_list_ranking_inputs_.num_nodes = NumContourEdges; 
 }
 #endif
 

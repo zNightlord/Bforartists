@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
+﻿/* SPDX-License-Identifier: GPL-2.0-or-later
  * Copyright 2021 Blender Foundation.
  */
 
@@ -166,8 +166,8 @@ const char *StrokeGenShaderModule::static_shader_create_info_name_get(eShaderTyp
      return "strokegen_list_ranking_test_relinking";
     case LISTRANKING_LOOPED_RELINKING:
      return "strokegen_list_ranking_test_looped_relinking";
-    case LISTRANKING_UPLOAD_CPU_DATA:
-     return "strokegen_list_ranking_test_upload_cpu_test_data";
+    case LISTRANKING_SETUP_INPUTS:
+     return "strokegen_list_ranking_setup_input_data";
 
     /* To avoid compiler warning about missing case. */
     case MAX_SHADER_TYPE:
