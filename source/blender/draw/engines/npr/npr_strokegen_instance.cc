@@ -163,9 +163,9 @@ namespace blender::npr::strokegen
     /* Geometry Extraction */
     manager.submit(strokegen_passes.get_compute_pass(PType::GEOM_EXTRACTION), view);
     manager.submit(strokegen_passes.get_compute_pass(PType::FILL_DISPATCH_ARGS_CONTOUR_EDGES), view); 
-    manager.submit(strokegen_passes.get_compute_pass(PType::SOFT_RASTER_CONTOUR_EDGES), view);
     manager.submit(strokegen_passes.get_compute_pass(PType::MESHING_MERGE_VERTS), view); 
     manager.submit(strokegen_passes.get_compute_pass(PType::MESHING_BUILD_EDGE_ADJ), view); 
+    manager.submit(strokegen_passes.get_compute_pass(PType::SOFT_RASTER_CONTOUR_EDGES), view);
 
     /* Draw Contour Edges */
     manager.submit(strokegen_passes.get_compute_pass(PType::FILL_DRAW_ARGS_CONTOUR_EDGES), view);
