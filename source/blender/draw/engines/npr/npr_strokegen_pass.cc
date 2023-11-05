@@ -134,8 +134,6 @@ namespace blender::npr::strokegen
     GPUVertBuf *vbo_surf_posnor_gpuverbuf = gpu_batch_surf->verts[1];
     int num_tris = ibo_surf->index_len_get() / 3;
     int num_verts = vbo_surf_posnor->vertex_len; 
-    printf("posnor stride: %i", vbo_surf_posnor->vertex_alloc / num_verts);
-    printf("edge vbo len: %i, tri vbo len: %i", num_verts_edge_vbo, num_verts); 
 
     /* Cache per-edge geometry data */
     // Note: this also works
@@ -734,6 +732,26 @@ namespace blender::npr::strokegen
         sub.dispatch(buffers_.ssbo_list_ranking_indirect_dispatch_args_per_spliced[num_relink_iters - relink_iter]);
         sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_COMMAND);
       }
+    }
+
+    // Output list rank, len, addr to custom buffers
+    if (passType != ListRankingPassType::Test)
+    { 
+      auto& sub = pass_listranking.sub("strokegen_list_ranking_test_output");
+      sub.shader_set(shaders_.static_shader_get(LISTRANKING_OUTPUT_DATA));
+
+      sub.bind_ssbo(0, buffers_.ssbo_list_ranking_ranks_); 
+      sub.bind_ssbo(1, buffers_.ssbo_list_ranking_serialized_topo_);
+      sub.bind_ssbo(2, buffers_.ssbo_list_ranking_inputs_);
+      if (passType == ListRankingPassType::ContourEdgeLinking)
+      {
+        sub.bind_ssbo(3, buffers_.ssbo_contour_edge_rank_);
+        sub.bind_ssbo(4, buffers_.ssbo_contour_edge_list_len_);
+        sub.bind_ssbo(5, buffers_.ssbo_contour_edge_list_head_);
+      }
+
+      sub.dispatch(buffers_.ssbo_list_ranking_indirect_dispatch_args_per_anchor[0]);
+      sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_COMMAND);
     }
   }
 

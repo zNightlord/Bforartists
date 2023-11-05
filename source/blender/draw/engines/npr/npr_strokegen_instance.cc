@@ -108,7 +108,7 @@ namespace blender::npr::strokegen
     strokegen_passes.rebuild_pass_list_ranking(
         StrokeGenPassModule::ListRankingPassType::ContourEdgeLinking,
       strokegen_passes.get_compute_pass(StrokeGenPassModule::eType::LINK_CONTOUR_EDGES),
-      false
+      true
     );
   }
 
@@ -178,9 +178,9 @@ namespace blender::npr::strokegen
     manager.submit(strokegen_passes.get_compute_pass(PType::FILL_DRAW_ARGS_CONTOUR_EDGES), view);
 
     strokegen_textures.fb_contour_raster.bind();
-    float fb_clear_col[4] = {0, 0, 0, 1}; 
+    float fb_clear_col[4] = {0, 0, 0, 0}; 
     GPU_framebuffer_clear_color(strokegen_textures.fb_contour_raster, fb_clear_col);
-    GPU_line_width(1.0f); // always snap to integer, see the opengl spec on line rasterization
+    GPU_line_width(2.0f); // always snap to integer, see the opengl spec on line rasterization
     manager.submit(
       strokegen_passes.get_contour_edge_draw_pass(StrokeGenPassModule::INDIRECT_DRAW_CONTOUR_EDGES), view
     ); 

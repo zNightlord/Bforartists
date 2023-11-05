@@ -488,3 +488,44 @@ void main()
 }
 
 #endif
+
+
+
+#ifdef _KERNEL_MULTICOMPILE__TEST_LIST_RANKING_OUTPUT
+
+uint decode_rank(uint raw_rank, uint list_len) 
+{
+    // decode rank, might be packed with flags
+    raw_rank = raw_rank & 0x3fffffffu;
+    raw_rank = list_len - raw_rank;
+    return raw_rank;
+};
+
+void main()
+{
+    const uint groupIdx = gl_LocalInvocationID.x;
+    const uint idx      = gl_GlobalInvocationID.x;
+    const uint blockIdx = gl_WorkGroupID.x;
+    const uint blockSize = gl_WorkGroupSize.x;
+
+    uint node_id = idx; 
+    const uint num_nodes_total = NUM_NODES_TOTAL; 
+
+    bool valid_thread = (node_id < num_nodes_total); 
+    if (!valid_thread) return; /* invalid thread, do nothing */
+
+    
+    /* fetch ranking results */ 
+    uint list_addr, list_len; 
+    FUNC_DEVICE_LOAD_LIST_TOPOLOGY(node_id, /*out*/list_len, /*out*/list_addr);
+
+    uint node_rank = FUNC_DEVICE_LOAD_LISTRANKING_NODE_RANK(node_id); 
+    node_rank = decode_rank(node_rank, list_len); 
+
+    /* output */
+    ssbo_list_ranking_output_ranks_[node_id]     = node_rank;
+    ssbo_list_ranking_output_list_len_[node_id]  = list_len; 
+    ssbo_list_ranking_output_list_addr_[node_id] = list_addr; 
+}
+
+#endif

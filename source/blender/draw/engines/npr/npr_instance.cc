@@ -56,6 +56,7 @@ void Instance::begin_sync()
   deferred_pass_ps_.bind_texture("id_tx", &id_tx_);
   deferred_pass_ps_.bind_texture("normal_tx", &normal_tx_);
   deferred_pass_ps_.bind_texture("depth_tx", &depth_tx_);
+  deferred_pass_ps_.bind_texture("contour_tx", &(strokegen_inst_->strokegen_textures.tex_contour_raster));
   deferred_pass_ps_.draw_procedural(GPU_PRIM_TRIS, 1, 3);
 
   strokegen_inst_->begin_sync(*DRW_manager_get(), depth_tx_);

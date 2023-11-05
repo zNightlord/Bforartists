@@ -264,6 +264,9 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_draw_contour_edges)
     
     .storage_buf(0, Qualifier::READ, "uint", "buf_strokegen_mesh_pool[]")
     .storage_buf(1, Qualifier::READ, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
+    .storage_buf(2, Qualifier::READ, "uint", "ssbo_contour_edge_rank_[]")
+    .storage_buf(3, Qualifier::READ, "uint", "ssbo_contour_edge_list_len_[]")
+    .storage_buf(4, Qualifier::READ, "uint", "ssbo_contour_edge_list_head_[]")
     .push_constant(Type::VEC2, "pcs_screen_size_inv_")
 
     .vertex_source("npr_strokegen_mesh_contour_vert.glsl")
@@ -661,5 +664,20 @@ GPU_SHADER_CREATE_INFO(strokegen_list_ranking_test_looped_relinking)
     .do_static_compilation(true)
     .additional_info("strokegen_list_ranking_test_relinking")
     .define("_KERNEL_MULTICOMPILE__LIST_RANKING_SUBLIST_POINTER_JUMPING__FIND_LOOP_HEAD", "1");
+
+GPU_SHADER_CREATE_INFO(strokegen_list_ranking_test_output)
+    .do_static_compilation(true)
+    .typedef_source("bnpr_shader_shared.hh")
+    .define("_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_OUTPUT", "1")
+
+    .storage_buf(0, Qualifier::READ_WRITE, "uint", "ssbo_list_ranking_ranks_[]")
+    .storage_buf(1, Qualifier::READ, "uint", "ssbo_list_ranking_serialized_topo_[]")
+    .storage_buf(2, Qualifier::READ, "SSBOData_ListRankingInputs", "ssbo_list_ranking_inputs_")
+    .storage_buf(3, Qualifier::WRITE, "uint", "ssbo_list_ranking_output_ranks_[]")
+    .storage_buf(4, Qualifier::WRITE, "uint", "ssbo_list_ranking_output_list_len_[]")
+    .storage_buf(5, Qualifier::WRITE, "uint", "ssbo_list_ranking_output_list_addr_[]")
+
+    .local_group_size(GROUP_SIZE_BNPR_LIST_RANK_TEST)
+    .compute_source("npr_strokegen_list_ranking_test_comp.glsl");
 
 /** \} */

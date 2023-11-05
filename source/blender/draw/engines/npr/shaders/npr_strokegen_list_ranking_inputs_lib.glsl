@@ -37,7 +37,7 @@ JumpingInfo DecodePointerJumpingInfo(uvec2 encoded)
 
 
 /* Global Configs */
-#if defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SETUP) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_TAGGING) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_COMPACT_ANCHORS) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SUBLIST_POINTER_JUMPING) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SPLICE_NODES) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_RELINKING) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_BREAK_CIRCLES)
+#if defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SETUP) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_TAGGING) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_COMPACT_ANCHORS) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SUBLIST_POINTER_JUMPING) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SPLICE_NODES) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_RELINKING) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_BREAK_CIRCLES) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_OUTPUT)
 
 #define NUM_NODES_TOTAL ((ssbo_list_ranking_inputs_.num_nodes))
 
@@ -173,7 +173,7 @@ uint func_device_load_listranking_test_tag(uint node_id)
 
 
 /* node ranks */
-#if defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_TAGGING) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_COMPACT_ANCHORS) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SPLICE_NODES) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SUBLIST_POINTER_JUMPING) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_RELINKING) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_BREAK_CIRCLES)
+#if defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_TAGGING) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_COMPACT_ANCHORS) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SPLICE_NODES) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SUBLIST_POINTER_JUMPING) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_RELINKING) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_BREAK_CIRCLES) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_OUTPUT)
 uint func_device_load_node_rank(uint node_id)
 {
     return ssbo_list_ranking_ranks_[node_id]; 
@@ -355,6 +355,14 @@ void func_device_store_list_topology(uint node_id, uint list_len, uint list_star
 #define FUNC_DEVICE_STORE_LIST_TOPOLOGY func_device_store_list_topology 
 #endif
 
+#if defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_OUTPUT)
+void func_device_load_list_topology(uint node_id, out uint list_len, out uint list_start_addr)
+{
+    list_start_addr = ssbo_list_ranking_serialized_topo_[node_id * 2]; 
+    list_len =        ssbo_list_ranking_serialized_topo_[node_id * 2 + 1];  
+}
+#define FUNC_DEVICE_LOAD_LIST_TOPOLOGY func_device_load_list_topology 
+#endif
 
 
 

@@ -38,7 +38,10 @@ class GPUBufferPoolModule {
   SSBO_StrokeGenMeshLarge ssbo_edge_to_vert_;
   SSBO_StrokeGenMeshLarge ssbo_edge_to_edges_;
   SSBO_StrokeGenMeshSmall ssbo_edge_to_contour_;
-  SSBO_StrokeGenMeshTiny ssbo_contour_to_contour_; 
+  SSBO_StrokeGenMeshTiny ssbo_contour_to_contour_;
+  SSBO_StrokeGenMeshMinimum ssbo_contour_edge_rank_;
+  SSBO_StrokeGenMeshMinimum ssbo_contour_edge_list_len_;
+  SSBO_StrokeGenMeshMinimum ssbo_contour_edge_list_head_; 
   SSBO_StrokeGenMeshVertHashTable ssbo_vert_spatial_map_headers_;
   SSBO_StrokeGenMeshLarge ssbo_mesh_buffer_reuse_0_;
   SSBO_StrokeGenMeshLarge ssbo_vert_merged_id_;

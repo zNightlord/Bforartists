@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
+﻿/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /**
  * Shared structures, enums & defines between C++ and GLSL.
@@ -293,6 +293,7 @@ using SSBO_StrokeGenMeshVertHashTable = draw::StorageArrayBuffer<uint, MAX_GPU_H
 using SSBO_StrokeGenMeshLarge = draw::StorageArrayBuffer<uint, 2048 * 2048 * 16, true>;
 using SSBO_StrokeGenMeshSmall = draw::StorageArrayBuffer<uint, 2048 * 2048 * 4, true>;
 using SSBO_StrokeGenMeshTiny = draw::StorageArrayBuffer<uint, 2048 * 2048 * 2, true>;
+using SSBO_StrokeGenMeshMinimum = draw::StorageArrayBuffer<uint, 2048 * 2048, true>;
 using SSBO_StrokeGenMeshLarge_Float = draw::StorageArrayBuffer<float, 2048 * 2048 * 12, true>;
 using SSBO_StrokeGenMeshSmall_Float = draw::StorageArrayBuffer<float, 2048 * 2048 * 4, true>;
 

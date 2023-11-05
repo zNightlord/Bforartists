@@ -29,7 +29,7 @@ void npr::strokegen::StrokegenMeshRasterPass::init_pass(
 
   DRWState drw_state = DRW_STATE_NO_DRAW;
   drw_state |= (DRW_STATE_WRITE_COLOR); 
-  drw_state |= (DRW_STATE_DEPTH_LESS_EQUAL | DRW_STATE_WRITE_DEPTH); // no z-write, lequal
+  drw_state |= (DRW_STATE_DEPTH_LESS_EQUAL/*DRW_STATE_DEPTH_ALWAYS*/ | DRW_STATE_WRITE_DEPTH); // no z-write, lequal
   drw_state |= (DRW_STATE_STENCIL_ALWAYS); 
   state_set(drw_state, clip_planes.size());
 
@@ -41,6 +41,9 @@ void npr::strokegen::StrokegenMeshRasterPass::append_draw_subpass(GPUBufferPoolM
   draw::PassMain::Sub* subpass = &sub("strokegen raster pass");
   subpass->bind_ssbo(0, buffers.ssbo_bnpr_mesh_pool_);
   subpass->bind_ssbo(1, buffers.ssbo_bnpr_mesh_pool_counters_);
+  subpass->bind_ssbo(2, buffers.ssbo_contour_edge_rank_);
+  subpass->bind_ssbo(3, buffers.ssbo_contour_edge_list_len_);
+  subpass->bind_ssbo(4, buffers.ssbo_contour_edge_list_head_);
   float2 fb_res = textures.get_contour_raster_screen_res();
   float2 fb_res_inv = float2(1.0f / fb_res.x, 1.0f / fb_res.y); 
   subpass->push_constant("pcs_screen_size_inv_", fb_res_inv); 

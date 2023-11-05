@@ -168,6 +168,8 @@ const char *StrokeGenShaderModule::static_shader_create_info_name_get(eShaderTyp
      return "strokegen_list_ranking_test_looped_relinking";
     case LISTRANKING_SETUP_INPUTS:
      return "strokegen_list_ranking_setup_input_data";
+    case LISTRANKING_OUTPUT_DATA:
+      return "strokegen_list_ranking_test_output"; 
 
     /* To avoid compiler warning about missing case. */
     case MAX_SHADER_TYPE:

@@ -1,6 +1,31 @@
 
 #pragma BLENDER_REQUIRE(common_view_lib.glsl)
 
+/* https://www.shadertoy.com/view/7tlXR4 */
+vec3 hash32(vec2 p) 
+{
+	vec3 p3 = fract(vec3(p.xyx) * vec3(.1031, .1030, .0973));
+    p3 += dot(p3, p3.yxz+33.33);
+    return fract((p3.xxy+p3.yzz)*p3.zyx);
+}
+vec3 hsl2rgb(vec3 c)
+{
+    vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
+    vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
+    return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
+}
+vec3 rand_col_rgb(uint seed0, uint seed1)
+{
+    vec3 rnd = hash32(vec2(float(seed0 * 17), float(seed1 * 33))); 
+
+    float hue = rnd.x;
+    float saturation = 0.6 + rnd.z*0.4;
+    float luminosity  = 0.6 + rnd.y*0.4;
+
+    return hsl2rgb(vec3(hue, saturation, luminosity)); 
+}
+
+
 void main()
 {
     uint vid = gl_VertexID;
@@ -39,7 +64,6 @@ void main()
         uintBitsToFloat(buf_strokegen_mesh_pool[addr_edgedir+1])
     );
     vec2 edgenor_uv = vec2(edgedir_uv.y, -edgedir_uv.x); 
-    color = vec4(edgedir_uv.xy * 0.5f + .5f, 0, 1); 
 
     normal = vec3(0, 0, 1);
     tangent.xyz = vec3(0, 0, 1);
@@ -52,4 +76,13 @@ void main()
     gl_Position.xy += edgenor_uv * whclip * pcs_screen_size_inv_ * 1.0f; 
 	vec2 edge_dir_ext = (vid % 2u == 1u) ? edgedir_uv : -edgedir_uv; 
 	gl_Position.xy += edge_dir_ext * whclip * pcs_screen_size_inv_ * 1.5f; 
+
+
+    uint contour_edge_rank = ssbo_contour_edge_rank_[contour_edge_id]; 
+    uint contour_edge_list_len = ssbo_contour_edge_list_len_[contour_edge_id]; 
+    float contour_edge_param = float(contour_edge_rank) / float(contour_edge_list_len); 
+    uint contour_edge_list_head = ssbo_contour_edge_list_head_[contour_edge_id]; 
+
+    color = min(1.0f, contour_edge_param * 1.5f) * vec4(rand_col_rgb(contour_edge_list_head, contour_edge_list_len).rgb, 1.0f); 
+        /* vec4(edgedir_uv.xy * 0.5f + .5f, 0, 1); */ 
 }

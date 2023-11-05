@@ -48,7 +48,8 @@ bool is_contour_edge(
 	vec3 p10 = p0 - p1;
 	float p10_d_n3 = dot(normalize(p10), normalize(n3)); 
 	bool concave_edge = p10_d_n3 > .01f; 
-	if (concave_edge) is_contour = false; /* must be hidden */
+	/* Note: don't do this when linking contour edges */
+	/* if (concave_edge) is_contour = false; */ /* must be hidden */
 	
 	return is_contour; 
 }
