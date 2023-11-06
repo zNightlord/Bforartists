@@ -269,6 +269,8 @@ void main()
 		
 		/* build contour edge adjacency */
 		PerContourWedgeInfo pcwi = decode_per_contour_wedge_info(buf_strokegen_mesh_pool[base_addr+6]);  
+		bool is_border = pcwi.is_border; 
+		bool backface_border = is_border && !is_border_edge_front_facing(pcwi.ifrontface);
 
 		AdjWedgeInfo awi; 
 		awi.iface_adj = pcwi.ifrontface; 
@@ -291,7 +293,9 @@ void main()
 			rotate_step < MAX_WEDGE_ROTATES 
 			&& pwci.contour_id != ContourEdgeIdx
 		); 
-		ssbo_contour_to_contour_[ContourEdgeIdx*2] = pwci.contour_id; 
+		bool back_face_T_junction = (backface_border && !pwci.is_border); 
+		ssbo_contour_to_contour_[ContourEdgeIdx*2] = 
+			(!back_face_T_junction) ? pwci.contour_id : /*break backface border chain at T-junction*/ContourEdgeIdx; 
 
 
 		awi.iface_adj = pcwi.ifrontface; 
@@ -311,7 +315,9 @@ void main()
 			rotate_step < MAX_WEDGE_ROTATES 
 			&& pwci.contour_id != ContourEdgeIdx
 		); 
-		ssbo_contour_to_contour_[ContourEdgeIdx*2+1] = pwci.contour_id; 
+		back_face_T_junction = (backface_border && !pwci.is_border); 
+		ssbo_contour_to_contour_[ContourEdgeIdx*2+1] = 
+			(!back_face_T_junction) ? pwci.contour_id : /*break backface border chain at T-junction*/ContourEdgeIdx; 
 	}
 
 	if (idx.x == 0)
