@@ -91,6 +91,7 @@ void main()
 	vec3 cam_pos_loc = (world_to_model * vec4(cam_pos_ws, 1.0f)).xyz; 
 	
 	vec3 v[4]; 
+	uvec4 vids; 
 #if defined(_KERNEL_MULTICOMPILE__INDEX_BUFFER_16BIT)
 	for (uint i = 0; i < 2; ++i)
 	{
@@ -99,20 +100,25 @@ void main()
 		/* decode 16 bit index */
 		uint ibo_data_16h = (ibo_data >> 16u);
     	uint ibo_data_16l = (ibo_data & 0xFFFFu);
+		vids[i*2] = ibo_data_16l; 
+		vids[i*2+1] = ibo_data_16h; 
 		/* fetch vertex pos */
-		v[i*2]   = ld_vbo(ibo_data_16l);
-		v[i*2+1] = ld_vbo(ibo_data_16h); 
+		v[i*2]   = ld_vbo(vids[i*2]);
+		v[i*2+1] = ld_vbo(vids[i*2+1]); 
 	}
 #else
 	for (uint i = 0; i < 4; ++i)
 	{
 		uint ibo_addr = 4 * EdgeId + i;
 		uint ibo_data = buf_ibo[ibo_addr];
+		vids[i] = ibo_data; 
 		/* fetch vertex pos */
-		v[i] = ld_vbo(ibo_data);  
+		v[i] = ld_vbo(vids[i]);  
 	}
 #endif
 	
+	bool is_border = line_adj_is_border_edge(vids); 
+
 	float face_orient_012, face_orient_321; 
 	vec3 edge_offset_dir; 
 	bool is_contour = is_contour_edge(
@@ -142,6 +148,7 @@ void main()
 		buf_strokegen_mesh_pool[addr_p1+2]  = floatBitsToUint(v[2].z); 
 		
 		PerContourWedgeInfo pcwi; 
+		pcwi.is_border = is_border; 
 		pcwi.wedge_id = EdgeId;
 		pcwi.ifrontface = face_orient_012 > .0f ? 1 : 0; /* see "line_adj_to_wing_verts" */ 
 		buf_strokegen_mesh_pool[base_addr+6]  = encode_per_contour_wedge_info(pcwi); 
@@ -150,6 +157,7 @@ void main()
 	if (valid_thread)
 	{
 		PerWedgeContourInfo peci; 
+		peci.is_border = is_border; 
 		peci.is_contour = is_contour;
 		peci.contour_id = is_contour ? compacted_idx : NULL_EDGE; 
 		peci.ifrontface = face_orient_012 > .0f ? 1 : 0; /* see "line_adj_to_wing_verts" */
@@ -260,10 +268,6 @@ void main()
 
 		
 		/* build contour edge adjacency */
-/* 		AdjWedgeInfo awis_x4[4];
-		uint addr_ld_wedge = pcwi.wedge_id * 4u; 
-		for (uint iwedge = 0u; iwedge < 4; ++iwedge)
-			awis_x4[iwedge] = ssbo_edge_to_edges_[addr_ld_wedge+iwedge];  */
 		PerContourWedgeInfo pcwi = decode_per_contour_wedge_info(buf_strokegen_mesh_pool[base_addr+6]);  
 
 		AdjWedgeInfo awi; 

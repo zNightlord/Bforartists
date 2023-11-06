@@ -47,12 +47,21 @@ void load_and_decode_ibo__edge_adj(uint prim_id, uint vertsPerPrim, out uvec4 vi
 
 
 #if defined(WINGED_EDGE_TOPO_INCLUDE)
+
 /* Winged edge structure, 
  * derived from line adjacency("edge detection") IBO layout */
+
 uvec4 line_adj_to_wing_verts(uvec4 line_adj_verts)
 {
-    return line_adj_verts.xywz; /* 0123 -> 0132 */
+    uvec4 wing_verts = line_adj_verts.xywz; /* 0123 -> 0132 */
+    return wing_verts;
 }
+uvec4 wing_verts_to_line_adj(uvec4 wing_verts)
+{
+    uvec4 line_adj_verts = wing_verts.xywz; /* 0123 -> 0132 */
+    return line_adj_verts;
+}
+
 /* Vertices: x4 vert ids per wing */
 /*    v2
  *   /  \
@@ -62,6 +71,20 @@ uvec4 line_adj_to_wing_verts(uvec4 line_adj_verts)
  *   \  /   Face winding               
  *    v0    013, 123                                  
 */
+/* Same to line_adj, we treat the border wedge as two overlapping tris with oppo winding */
+bool line_adj_is_border_edge(uvec4 line_adj_verts)
+{ /* see "extract_lines_adjacency_finish" */
+    bool is_border = line_adj_verts.x == line_adj_verts.w;
+    return is_border; 
+}
+bool wing_verts_is_border_edge(uvec4 wing_verts)
+{
+    return line_adj_is_border_edge(wing_verts_to_line_adj(wing_verts)); 
+}
+bool is_border_edge_front_facing(uint ifacefront)
+{
+    return (ifacefront == 1u); /* := the "actual" face (iface==1 in wedge, v0v1v2 in line_adj) */
+}
 
 /* wedges: at most x4 adj. wedges */
 /*          v2           
@@ -80,8 +103,7 @@ uvec4 line_adj_to_wing_verts(uvec4 line_adj_verts)
  *        \\  //        
  *          v0         
 */
-#define NULL_EDGE 0xffffffffu /* non-existing wedges, for example at the mesh border */
-
+#define NULL_EDGE 0xffffffffu /* non-existing wedges */
 uint mark__border_wedge_to_oppo_vert(uint wedge)
 {
     return (wedge <= 1u) ? 3u : 1u; /* w0,1->3, w2,3->1 */
@@ -158,39 +180,45 @@ uint mark__cwedge_rotate_next(uint face)
 /* contour-specific functions */
 struct PerContourWedgeInfo
 {
+    bool is_border; 
     uint wedge_id;
     uint ifrontface;
 };
 uint encode_per_contour_wedge_info(PerContourWedgeInfo pcwi)
 {
-    uint pcwi_enc = ((pcwi.wedge_id << 1u) | (pcwi.ifrontface & 1u));
+    uint pcwi_enc = ((pcwi.wedge_id << 2u) | ((pcwi.ifrontface & 1u) << 1u) | (uint(pcwi.is_border))); 
     return pcwi_enc; 
-}
+} 
 PerContourWedgeInfo decode_per_contour_wedge_info(uint pcwi_enc)
 {
     PerContourWedgeInfo pcwi; 
-    pcwi.wedge_id = (pcwi_enc >> 1u);
-    pcwi.ifrontface = ((pcwi_enc & 1u));
+    pcwi.wedge_id = (pcwi_enc >> 2u);
+    pcwi.ifrontface = ((pcwi_enc >> 1u) & 1u);
+    pcwi.is_border = (0u != (pcwi_enc & 1u));
     return pcwi; 
 }
 
 struct PerWedgeContourInfo
 {
-    bool is_contour;
     uint contour_id;
     uint ifrontface;
+    bool is_contour;
+    bool is_border; 
 };
+/* Encode for all fields in PerWedgeContourInfo */
 uint encode_per_wedge_contour_info(PerWedgeContourInfo peci)
 {
-    uint peci_enc = (peci.contour_id << 2u) | ((peci.ifrontface & 1u) << 1u) | (uint(peci.is_contour)); 
+    uint peci_enc = ((peci.contour_id << 3u) | ((peci.ifrontface & 1u) << 2u) | (uint(peci.is_contour) << 1u) | (uint(peci.is_border))); 
     return peci_enc; 
 }
+/* Decode for all fields in PerWedgeContourInfo */
 PerWedgeContourInfo decode_per_wedge_contour_info(uint peci_enc)
 {
     PerWedgeContourInfo peci; 
-    peci.contour_id = (peci_enc >> 2u);
-    peci.ifrontface = ((peci_enc >> 1u) & 1u);
-    peci.is_contour = (0u != (peci_enc & 1u));
+    peci.contour_id = (peci_enc >> 3u);
+    peci.ifrontface = ((peci_enc >> 2u) & 1u);
+    peci.is_contour = (0u != ((peci_enc >> 1u) & 1u));
+    peci.is_border = (0u != (peci_enc & 1u));
     return peci; 
 }
 
