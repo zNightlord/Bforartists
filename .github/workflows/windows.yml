@@ -24,7 +24,7 @@ jobs:
        git config --global user.name "Your Name"
        git remote add shader https://projects.blender.org/lateasusual/blender.git
        git fetch shader npr_juniper_project
-       git checkout -b npr_juniper_project shader
+       git checkout npr_juniper_project
      # git checkout dev-work
      # git merge origin/custom-wire-color
      # git merge origin/toolbar-assetshelf
