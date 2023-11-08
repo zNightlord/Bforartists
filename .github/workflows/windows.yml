@@ -15,7 +15,7 @@ jobs:
     - name: Clone Repository
       # uses: actions/checkout@v4
       run: |
-       mkdir ~\Bforartisrs
+       mkdir ~\Bforartists
        cd ~\Bforartists
        git clone https://github.com/zNightlord/Bforartists.git
        git config --global --add safe.directory C:\Users\runneradmin\Bforartists\Bforartists
