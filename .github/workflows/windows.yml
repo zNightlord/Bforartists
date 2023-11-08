@@ -9,50 +9,53 @@ jobs:
   build:
     runs-on: windows-latest
     env:
-      CONFIG : lite
+      CONFIG : release
 
     steps:
     - name: Clone Repository
       # uses: actions/checkout@v4
       run: |
-       git init D:\a\Bforartists\Bforartists
-       git config --global --add safe.directory D:\a\Bforartists\Bforartists
+       mkdir ~\Bforartisrs
+       cd ~\Bforartists
+       git clone https://github.com/zNightlord/Bforartists.git
+       git config --global --add safe.directory C:\Users\runneradmin\Bforartists\Bforartists
        git config --global user.email "you@example.com"
        git config --global user.name "Your Name"
-       git remote add origin https://github.com/zNightlord/Bforartists.git
-       git fetch
+       git remote add shader https://projects.blender.org/lateasusual/blender.git
+       git fetch shader npr_juniper_project
        git checkout dev-work
        git merge origin/custom-wire-color
        git merge origin/toolbar-assetshelf
        git merge origin/comp-tex-coord
        git merge origin/anim-motion-curve
        git merge origin/draw-nla
+       git merge shader/npr_juniper_project
      # git clone -b work-sequencer https://github.com/zNightlord/Bforartists.git
     - name: Cache library
       uses: actions/cache@v3
       with:
         key: windows
         path: |
-          D:\a\Bforartists\lib
-          !D:\a\Bforartists\Bforartists
+          C:\Users\runneradmin\Bforartists\*
+          !C:\Users\runneradmin\Bforartists\Bforartists
     - name: Svn library
       run: |
-        if (!(test-path "D:\a\Bforartists\lib\")) {
-          mkdir 'D:\a\Bforartists\lib'
-          cd ..\lib
+        if (!(test-path "C:\Users\runneradmin\Bforartists\lib\")) {
+          mkdir ~\Bforartists\lib
+          cd ~\Bforartists\lib
           svn checkout https://svn.blender.org/svnroot/bf-blender/trunk/lib/win64_vc15/
         } else {
-          cd ..\lib\win64_vc15
+          cd ~\Bforartists\lib\win64_vc15
           svn update
           cd ..
         }
     - name: Make
       run: |
-       cd ..\Bforartists
+       cd ~\Bforartists\Bforartists
        .\make.bat ninja ${{ env.CONFIG }}
     - name: Show dir
       run: |
-        cd ..
+        cd ~\Bforartists
         dir
         cd lib\win64_vc15
         dir
@@ -62,4 +65,4 @@ jobs:
       uses: actions/upload-artifact@v3
       with:
         name: Bforartists-${{ env.CONFIG }}-${{ runner.os }}-${{ github.head_ref }}
-        path: D:/a/Bforartists/bfa_build_windows_*_x64_vc1*/bin
+        path: C:/Users/runneradmin/Bforartists/bfa_build_windows_*_x64_vc1*/bin
