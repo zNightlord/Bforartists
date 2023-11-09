@@ -15,7 +15,7 @@
 
 namespace blender::npr::strokegen
 {
-  void GPUBufferPoolModule::on_begin_sync(const DRWView* drw_view, bool upload_list_ranking_test_data)
+  void GPUBufferPoolModule::on_begin_sync(const DRWView* drw_view, bool upload_list_ranking_test_data, bool update_view_matrices_for_contour_extraction)
   {
     UBO_BnprTreeScan& ubo_tree_scan = ubo_bnpr_tree_scan_infos_;
     {
@@ -64,6 +64,17 @@ namespace blender::npr::strokegen
       ubo_view_matrices__.wininv = drw_view->storage.wininv;
 
       ubo_view_matrices__.push_update();
+    }
+
+    UBO_ViewMatrices & ubo_view_matrices_cache__ = ubo_view_matrices_cache_;
+    if (update_view_matrices_for_contour_extraction)
+    {
+      ubo_view_matrices_cache__.viewmat = drw_view->storage.viewmat;
+      ubo_view_matrices_cache__.viewinv = drw_view->storage.viewinv;
+      ubo_view_matrices_cache__.winmat = drw_view->storage.winmat;
+      ubo_view_matrices_cache__.wininv = drw_view->storage.wininv;
+
+      ubo_view_matrices_cache__.push_update();  
     }
 
 

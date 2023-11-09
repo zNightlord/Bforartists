@@ -1,4 +1,4 @@
-﻿/* SPDX-License-Identifier: GPL-2.0-or-later
+/* SPDX-License-Identifier: GPL-2.0-or-later
  * Copyright 2021 Blender Foundation.
  */
 
@@ -25,6 +25,7 @@ class GPUBufferPoolModule {
 
   /** GPU Buffers */
   UBO_ViewMatrices ubo_view_matrices_;
+  UBO_ViewMatrices ubo_view_matrices_cache_; // for visualizing contour curves in different view
 
   SSBO_StrokeGenTest ssbo_bnpr_test_;
 
@@ -34,10 +35,10 @@ class GPUBufferPoolModule {
   SSBO_IndirectDispatchArgs ssbo_bnpr_mesh_contour_edge_dispatch_args_; 
 
   // TODO: these buffers are huge. consider re-use them for each mesh. 
-  SSBO_StrokeGenMeshLarge_Float ssbo_vbo_full_;
+  SSBO_StrokeGenMeshGiant_Float ssbo_vbo_full_;
   SSBO_StrokeGenMeshLarge ssbo_edge_to_vert_;
   SSBO_StrokeGenMeshLarge ssbo_edge_to_edges_;
-  SSBO_StrokeGenMeshSmall ssbo_edge_to_contour_;
+  SSBO_StrokeGenMeshMedium ssbo_edge_to_contour_;
   SSBO_StrokeGenMeshTiny ssbo_contour_to_contour_;
   SSBO_StrokeGenMeshMinimum ssbo_contour_edge_rank_;
   SSBO_StrokeGenMeshMinimum ssbo_contour_edge_list_len_;
@@ -134,7 +135,7 @@ class GPUBufferPoolModule {
   {
   }
 
-  void on_begin_sync(const DRWView* drw_view, bool upload_list_ranking_test_data);
+  void on_begin_sync(const DRWView* drw_view, bool upload_list_ranking_test_data, bool update_view_matrices_for_contour_extraction = true);
   void sync_object(Object *ob);
   void end_sync();
 
