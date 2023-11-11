@@ -118,7 +118,7 @@ public:
                                          int num_added_edges);
   void append_per_mesh_pass(Object* ob, GPUBatch* gpu_batch_line_adj, GPUBatch* gpu_batch_surf, ResourceHandle& rsc_handle, const DRWView* drw_view);
   void append_subpass_meshing_merge_verts(int num_verts_in, bool debug = false);
-  void append_subpass_meshing_edge_adjacency(int num_edges_in, bool debug = false); 
+  void append_subpass_meshing_edge_adjacency(int num_edges_in, int num_verts_in, bool debug = false); 
 
   void rebuild_pass_process_contours();
   void append_subpass_fill_dispatch_args_contour_edges(PassSimple& pass, bool all_contour_edges);

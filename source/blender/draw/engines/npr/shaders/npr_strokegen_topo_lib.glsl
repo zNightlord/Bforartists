@@ -46,6 +46,7 @@ void load_and_decode_ibo__edge_adj(uint prim_id, uint vertsPerPrim, out uvec4 vi
 
 
 
+
 #if defined(WINGED_EDGE_TOPO_INCLUDE)
 
 /* Winged edge structure, 
@@ -230,6 +231,13 @@ PerWedgeContourInfo decode_per_wedge_contour_info(uint peci_enc)
 
 
 
+
+
+
+#if defined(VERT_WEDGE_LIST_TOPO_INCLUDE)
+/* Non-existing wedges, which should not happen for a 2-manifold mesh with boundaries */
+#define NULL_VERT_ADJ_WEDGE 0xffffffffu 
+#endif
 
 
 

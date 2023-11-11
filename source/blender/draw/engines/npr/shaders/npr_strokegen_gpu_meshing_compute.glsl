@@ -316,7 +316,7 @@ void main()
         ssbo_edge_to_vert_[base_addr+3] = wing_verts[3];
     }
 
-    /* Hash */
+    /* Hash Edge using 2 deduplicated vertex ids*/
     bool inserted = false; 
     uint hash_id = NOT_FOUND;
     if (valid_thread)
@@ -333,6 +333,7 @@ void main()
     if (valid_thread)
     { /* temp cache inserted flag here to avoid hash search for deduplication */
         ssbo_edge_to_edges_[EdgeID*4u + 0u] = inserted ? 1u : 0u;
+        
     }
 #endif
 
@@ -400,6 +401,16 @@ void main()
             ssbo_edge_to_edges_[EdgeID*4u + iwedge] = encode_adj_wedge_info(awi); 
             /* note: == NOT_FOUND when this edge is a duplicated one */
         }
+
+    /* Put an arbitrary neighbor wedge id for each vert */
+    uvec2 iverts_cwedge = mark__wedge_to_verts(4u); 
+    if (valid_thread)
+        for (uint iiverts = 0u; iiverts < 2u; iiverts++)
+        {
+            uint vert_id = vids_wedge[iverts_cwedge[iiverts]]; 
+            ssbo_vert_to_edge_list_header_[vert_id] = EdgeID; 
+        }
+    
 #endif
 
 }

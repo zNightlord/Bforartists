@@ -373,18 +373,21 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_edge_adjecency)
     .define("_KERNEL_MULTICOMPILE__EDGE_ADJACENCY", "1")
     .define("DECODE_IBO_EXCLUDE", "1") /* Remove ibo code */
     .define("WINGED_EDGE_TOPO_INCLUDE", "1")
+    .define("VERT_WEDGE_LIST_TOPO_INCLUDE", "1")
 
     .storage_buf(0, Qualifier::READ, "uint", "ssbo_vert_merged_id_[]")
     .storage_buf(1, Qualifier::READ_WRITE, "uint", "ssbo_edge_index_map_headers_[]")
     .storage_buf(2, Qualifier::READ_WRITE, "uint", "ssbo_edge_spatial_map_payloads_[]")
     .storage_buf(3, Qualifier::READ_WRITE, "uint", "ssbo_edge_to_vert_[]")
     .storage_buf(4, Qualifier::READ_WRITE, "uint", "ssbo_edge_to_edges_[]")
-    .storage_buf(5, Qualifier::READ_WRITE, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
+    .storage_buf(5, Qualifier::READ_WRITE, "uint", "ssbo_vert_to_edge_list_header_[]")
+    .storage_buf(6, Qualifier::READ_WRITE, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
     .push_constant(Type::INT, "pcs_hash_map_size_")
     .push_constant(Type::INT, "pcs_edge_count_")
+    .push_constant(Type::INT, "pcs_vert_count_")
     .push_constant(Type::INT, "pcs_vert_id_offset_")
     .push_constant(Type::INT, "pcs_edge_id_offset_")
-    
+
     .local_group_size(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT)
     .compute_source("npr_strokegen_gpu_meshing_compute.glsl");
 

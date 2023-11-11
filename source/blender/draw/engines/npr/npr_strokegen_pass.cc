@@ -148,7 +148,7 @@ namespace blender::npr::strokegen
     append_subpass_merge_line_adj_ibo(gpu_batch_line_adj, ib_type, num_edges);
 
     append_subpass_meshing_merge_verts(num_verts);
-    append_subpass_meshing_edge_adjacency(num_edges); 
+    append_subpass_meshing_edge_adjacency(num_edges, num_verts); 
 
     append_subpass_extract_contour_edges(gpu_batch_line_adj, rsc_handle, edge_batch, num_edges, ib_type);
 
@@ -257,7 +257,7 @@ namespace blender::npr::strokegen
     }
   }
 
-  void StrokeGenPassModule::append_subpass_meshing_edge_adjacency(int num_edges_in, bool debug)
+  void StrokeGenPassModule::append_subpass_meshing_edge_adjacency(int num_edges_in, int num_verts_in, bool debug)
   {
     const int hashmap_size = std::min(MAX_GPU_HASH_TABLE_SIZE, num_edges_in * 16);
 
@@ -267,9 +267,11 @@ namespace blender::npr::strokegen
       sub.bind_ssbo(2, buffers_.ssbo_mesh_buffer_reuse_0_);
       sub.bind_ssbo(3, buffers_.ssbo_edge_to_vert_);
       sub.bind_ssbo(4, buffers_.ssbo_edge_to_edges_);
-      sub.bind_ssbo(5, buffers_.ssbo_bnpr_mesh_pool_counters_);
+      sub.bind_ssbo(5, buffers_.ssbo_vert_to_edge_list_header_);
+      sub.bind_ssbo(6, buffers_.ssbo_bnpr_mesh_pool_counters_);
       sub.push_constant("pcs_hash_map_size_", hashmap_size);
       sub.push_constant("pcs_edge_count_", (int)num_edges_in);
+      sub.push_constant("pcs_vert_count_", num_verts_in); 
       sub.push_constant("pcs_vert_id_offset_", num_total_mesh_verts);
       sub.push_constant("pcs_edge_id_offset_", num_total_mesh_edges);
     };
