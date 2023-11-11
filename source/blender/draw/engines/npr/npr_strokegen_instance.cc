@@ -85,7 +85,7 @@ namespace blender::npr::strokegen
     strokegen_passes.test_scan = false; 
 
     /* First setup resources */
-    strokegen_buffers.on_begin_sync(drw_view, strokegen_passes.test_list_ranking, frame_counter % 512 == 0u/*true*/);
+    strokegen_buffers.on_begin_sync(drw_view, strokegen_passes.test_list_ranking, /*frame_counter % 512 == 0u*/true);
     strokegen_textures.on_begin_sync(tex_prepass_depth); 
 
     /* Then setup render passes */
@@ -95,21 +95,7 @@ namespace blender::npr::strokegen
   void Instance::end_sync(Manager&)
   {
     /* Post processing after all object. (Finish recording the commands) */
-    strokegen_passes.rebuild_pass_fill_draw_args_contour_edges();
-    strokegen_passes.rebuild_pass_fill_dispatch_args_contour_edges(); 
-
-    strokegen_passes.rebuild_pass_soft_raster_contour_edges();
-    strokegen_passes.rebuild_pass_meshing_merge_verts();
-    strokegen_passes.rebuild_pass_meshing_edge_adjacency(); 
-
-    strokegen_passes.rebuild_pass_append_contour_edge_drawcall();
-    strokegen_passes.rebuild_pass_compress_contour_pixels();
-
-    strokegen_passes.rebuild_pass_list_ranking(
-        StrokeGenPassModule::ListRankingPassType::ContourEdgeLinking,
-      strokegen_passes.get_compute_pass(StrokeGenPassModule::eType::LINK_CONTOUR_EDGES),
-      true
-    );
+    strokegen_passes.on_end_sync();
   }
 
   void Instance::mesh_sync(
@@ -168,15 +154,9 @@ namespace blender::npr::strokegen
 
     /* Geometry Extraction */
     manager.submit(strokegen_passes.get_compute_pass(PType::GEOM_EXTRACTION), view);
-    manager.submit(strokegen_passes.get_compute_pass(PType::FILL_DISPATCH_ARGS_CONTOUR_EDGES), view); 
-    manager.submit(strokegen_passes.get_compute_pass(PType::MESHING_MERGE_VERTS), view); 
-    manager.submit(strokegen_passes.get_compute_pass(PType::MESHING_BUILD_EDGE_ADJ), view); 
-    manager.submit(strokegen_passes.get_compute_pass(PType::SOFT_RASTER_CONTOUR_EDGES), view);
-    manager.submit(strokegen_passes.get_compute_pass(PType::LINK_CONTOUR_EDGES), view); 
+
 
     /* Draw Contour Edges */
-    manager.submit(strokegen_passes.get_compute_pass(PType::FILL_DRAW_ARGS_CONTOUR_EDGES), view);
-
     strokegen_textures.fb_contour_raster.bind();
     float fb_clear_col[4] = {0, 0, 0, 0}; 
     GPU_framebuffer_clear_color(strokegen_textures.fb_contour_raster, fb_clear_col);
@@ -185,11 +165,18 @@ namespace blender::npr::strokegen
       strokegen_passes.get_contour_edge_draw_pass(StrokeGenPassModule::INDIRECT_DRAW_CONTOUR_EDGES), view
     ); 
     GPU_line_width(1.0f);
-
-
-
+    
+    
     /* Pixel Extraction */
     manager.submit(strokegen_passes.get_compute_pass(PType::COMPRESS_CONTOUR_PIXELS), view); 
+
+
+
+
+
+
+
+
 
 
     /* GPU (Seg-)Scan Test ------------------------------------------------------------------------- */

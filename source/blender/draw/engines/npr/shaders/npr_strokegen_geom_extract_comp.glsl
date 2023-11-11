@@ -12,6 +12,11 @@
 	#define GLOBAL_COMPACTION_COUNTER__MESH_FACES ssbo_bnpr_mesh_pool_counters_.num_faces
 #endif
 
+bool is_back_face(float ndv)
+{
+	return ndv < .0f; 
+}
+
 
 #if defined(_KERNEL_MULTICOMPILE__GEOM_EXTRACT)
 /*    v0
@@ -40,7 +45,8 @@ bool is_contour_edge(
 
 	face_orient_012 = dot(view_dir, n0);
   	face_orient_321 = dot(view_dir, n3);
-	bool is_contour = (sign(face_orient_012) != sign(face_orient_321)); 
+	bool is_contour = is_back_face(face_orient_012) != is_back_face(face_orient_321);; 
+		/* (sign(face_orient_012) != sign(face_orient_321)); */
 
 	/* convexity test */
 	vec3 p0 = v0; 
@@ -67,10 +73,13 @@ void main()
 
 	if (pcs_clear_compaction_counter_ != 0u)
 	{ /* bootstrapping pass */
-		GLOBAL_COMPACTION_COUNTER__MESH_CONTOUR_EDGES = 0; 
-		GLOBAL_COMPACTION_COUNTER__MESH_VERTS = 0; 
-		GLOBAL_COMPACTION_COUNTER__MESH_EDGES = 0;
-		GLOBAL_COMPACTION_COUNTER__MESH_FACES = 0; 
+		if (idx == 0u)
+		{
+			GLOBAL_COMPACTION_COUNTER__MESH_CONTOUR_EDGES = 0; 
+			GLOBAL_COMPACTION_COUNTER__MESH_VERTS = 0; 
+			GLOBAL_COMPACTION_COUNTER__MESH_EDGES = 0;
+			GLOBAL_COMPACTION_COUNTER__MESH_FACES = 0; 
+		}
 		return; 
 	}
 	
@@ -125,7 +134,7 @@ void main()
 		v[0], v[1], v[2], v[3], cam_pos_loc
 		, face_orient_012, face_orient_321, edge_offset_dir /*out*/
 	); 
-	bool rev_edge_dir = face_orient_012 < .0f; 
+	bool rev_edge_dir = is_back_face(face_orient_012); 
 	if (false == valid_thread) is_contour = false; 
 
 	uint compacted_idx = compact_contour_edge(is_contour, groupId); 
@@ -150,7 +159,7 @@ void main()
 		PerContourWedgeInfo pcwi; 
 		pcwi.is_border = is_border; 
 		pcwi.wedge_id = EdgeId;
-		pcwi.ifrontface = face_orient_012 > .0f ? 1 : 0; /* see "line_adj_to_wing_verts" */ 
+		pcwi.ifrontface = (!is_back_face(face_orient_012)) ? 1 : 0; /* see "line_adj_to_wing_verts" */ 
 		buf_strokegen_mesh_pool[base_addr+6]  = encode_per_contour_wedge_info(pcwi); 
 	}
 
@@ -160,7 +169,7 @@ void main()
 		peci.is_border = is_border; 
 		peci.is_contour = is_contour;
 		peci.contour_id = is_contour ? compacted_idx : NULL_EDGE; 
-		peci.ifrontface = face_orient_012 > .0f ? 1 : 0; /* see "line_adj_to_wing_verts" */
+		peci.ifrontface = (!is_back_face(face_orient_012)) ? 1 : 0; /* see "line_adj_to_wing_verts" */
 		ssbo_edge_to_contour_[EdgeId] = encode_per_wedge_contour_info(peci); 
 	}
 }
@@ -177,7 +186,7 @@ void main()
 	if (idx == 0u)
 	{
 		const uint num_contour_edges = ssbo_bnpr_mesh_pool_counters_.num_contour_edges; 
-		ssbo_bnpr_mesh_pool_draw_args_.vertex_len 		= 2u * num_contour_edges;  	/*#verts*/
+		ssbo_bnpr_mesh_pool_draw_args_.vertex_len 		= 2u * num_contour_edges;  /*#verts*/
 		ssbo_bnpr_mesh_pool_draw_args_.instance_len 	= 1;  						/*#instances*/
 		ssbo_bnpr_mesh_pool_draw_args_.vertex_first 	= 0;  						/*ibo offset*/
 		ssbo_bnpr_mesh_pool_draw_args_.base_index 		= 0;  						/*vbo offset*/

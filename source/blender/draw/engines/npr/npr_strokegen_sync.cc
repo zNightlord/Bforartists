@@ -78,11 +78,11 @@ static void draw_data_init_cb(struct DrawData *dd)
 
     if (inst_.strokegen_passes.boostrap_before_extract_first_batch)
     {
-      inst_.strokegen_passes.rebuild_sub_pass_extract_mesh_geom(
+      inst_.strokegen_passes.append_per_mesh_pass(
           ob, gpu_batch_line_adj, gpu_batch_surf /**gpu_batch_surf*/, rsc_handle, drw_view);  // bootstrapping
       inst_.strokegen_passes.boostrap_before_extract_first_batch = false;  // switch off
     }
-    inst_.strokegen_passes.rebuild_sub_pass_extract_mesh_geom(
+    inst_.strokegen_passes.append_per_mesh_pass(
         ob, gpu_batch_line_adj, gpu_batch_surf /**gpu_batch_surf*/, rsc_handle, drw_view);
 
   }

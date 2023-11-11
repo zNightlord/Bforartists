@@ -21,7 +21,7 @@ class StrokegenMeshRasterPass : public draw::PassMain {
   }
   
   void init_pass(StrokeGenShaderModule& shader_module, GPUTexturePoolModule& texture_module);
-  void append_draw_subpass(GPUBufferPoolModule& buffers, GPUTexturePoolModule& textures);
+  void append_draw_subpass(StrokeGenShaderModule& shaders, GPUBufferPoolModule& buffers, GPUTexturePoolModule& textures);
 };
 
 }

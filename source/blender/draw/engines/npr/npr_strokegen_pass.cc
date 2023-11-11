@@ -31,20 +31,6 @@ namespace blender::npr::strokegen
 
       case GEOM_EXTRACTION:
         return pass_extract_geom;
-      case FILL_DRAW_ARGS_CONTOUR_EDGES:
-        return pass_fill_draw_args_contour_edges;
-      case FILL_DISPATCH_ARGS_CONTOUR_EDGES:
-        return pass_fill_dispatch_args_contour_edges;
-      case SOFT_RASTER_CONTOUR_EDGES:
-        return pass_soft_raster_contour_edges;
-      case LINK_CONTOUR_EDGES:
-        return pass_listranking_contour_edges; 
-
-      case MESHING_MERGE_VERTS:
-        return pass_meshing_merge_verts;
-      case MESHING_BUILD_EDGE_ADJ:
-        return pass_meshing_edge_adjacency; 
-
       case COMPRESS_CONTOUR_PIXELS:
         return pass_compress_contour_pixels; 
     }
@@ -64,23 +50,29 @@ namespace blender::npr::strokegen
 
   void StrokeGenPassModule::on_begin_sync()
   {
-    init_pass_extract_mesh_geom();
-    init_contour_edge_draw_pass(); 
+    init_per_mesh_pass();
+    pass_draw_contour_edges.init_pass(shaders_, textures_); 
 
     rebuild_pass_scan_test();
     rebuild_pass_segscan_test();
     rebuild_pass_conv_test();
-    rebuild_pass_list_ranking(ListRankingPassType::Test, pass_listranking_test, true);
+    append_subpass_list_ranking(ListRankingPassType::Test, pass_listranking_test, true);
 
     num_total_mesh_tris = num_total_mesh_verts = num_total_mesh_edges = 0; // TODO: these should go to the UBO
   }
 
+  void StrokeGenPassModule::on_end_sync()
+  {
+    /* Post processing after iterated over all meshes. */
+    rebuild_pass_contour_edge_drawcall();
+    rebuild_pass_compress_contour_pixels();
+  }
 
 
   /**
    * \brief In each render loop, re-initialize the compute pass for geometry extraction.
    */
-  void StrokeGenPassModule::init_pass_extract_mesh_geom()
+  void StrokeGenPassModule::init_per_mesh_pass()
   {
     pass_extract_geom.init();
     boostrap_before_extract_first_batch = true;
@@ -91,18 +83,14 @@ namespace blender::npr::strokegen
    * \param ob Mesh Object
    * \param gpu_batch_line_adj Mesh geometry stored in GPUBatch, ib stored with line adjacency info.
    */
-  void StrokeGenPassModule::rebuild_sub_pass_extract_mesh_geom(
+  void StrokeGenPassModule::append_per_mesh_pass(
     Object* ob,
     GPUBatch* gpu_batch_line_adj,
     GPUBatch* gpu_batch_surf, 
     ResourceHandle& rsc_handle,
     const DRWView* drw_view
   ){
-    const std::string pass_name = "extract_geom_";
-
     int batch_resource_index = (int)rsc_handle.resource_index(); 
-    GPUStorageBuf *ssbo_object_matrices = DRW_manager_get()->matrix_buf.current(); 
-
 
     /* see example in "GPU_batch_draw_parameter_get" */
     gpu::Batch* edge_batch = static_cast<gpu::Batch*>(gpu_batch_line_adj);
@@ -144,7 +132,7 @@ namespace blender::npr::strokegen
                                          4 * num_verts);*/
     {
       auto& sub = pass_extract_geom.sub(
-        boostrap_before_extract_first_batch ? "extract_geom_boostrap" : pass_name.c_str()
+        boostrap_before_extract_first_batch ? "extract_geom_boostrap" : "Extract"
       );
       if (ib_type == gpu::GPU_INDEX_U16)
         sub.shader_set(shaders_.static_shader_get(eShaderType::CONTOUR_GEOM_EXTRACT_IBO_16BIT));
@@ -156,7 +144,7 @@ namespace blender::npr::strokegen
       sub.bind_ssbo(2, buffers_.ssbo_bnpr_mesh_pool_);
       sub.bind_ssbo(3, DRW_manager_get()->matrix_buf.current());
       sub.bind_ssbo(4, buffers_.ssbo_bnpr_mesh_pool_counters_);
-      sub.bind_ssbo(5, buffers_.ssbo_edge_to_contour_); 
+      sub.bind_ssbo(5, buffers_.ssbo_edge_to_contour_);
       sub.bind_ubo(0, buffers_.ubo_view_matrices_cache_);
       sub.push_constant("pcs_ib_fmt_u16", ib_type == gpu::GPU_INDEX_U16 ? 1 : 0);
       sub.push_constant("pcs_num_verts", (int)edge_batch->elem_()->index_len_get());
@@ -214,16 +202,28 @@ namespace blender::npr::strokegen
       sub.barrier(GPU_BARRIER_SHADER_STORAGE);
     }
 
+    append_subpass_meshing_merge_verts(num_verts);
+    append_subpass_meshing_edge_adjacency(num_edges); 
+    append_subpass_fill_dispatch_args_contour_edges();
+    // append_subpass_set_draw_args_contour_edges(); 
+    append_subpass_process_contour_edges();
+    append_subpass_list_ranking(
+      StrokeGenPassModule::ListRankingPassType::ContourEdgeLinking,
+      pass_extract_geom, 
+      true
+    );
+
+
+    // Note: this should be  appening at the end
     num_total_mesh_tris += num_tris;
     num_total_mesh_verts += num_verts;
     num_total_mesh_edges += num_edges; 
   }
 
-  void StrokeGenPassModule::rebuild_pass_fill_dispatch_args_contour_edges()
+  void StrokeGenPassModule::append_subpass_fill_dispatch_args_contour_edges()
   { // fill dispatch args for contour edges
-    pass_fill_dispatch_args_contour_edges.init(); 
     {
-      auto &sub = pass_fill_dispatch_args_contour_edges.sub("fill_dispatch_args_per_contour_edge");
+      auto &sub = pass_extract_geom.sub("fill_dispatch_args_per_contour_edge");
       sub.shader_set(shaders_.static_shader_get(eShaderType::FILL_DISPATCH_ARGS_CONTOUR_EDGES));
 
       sub.bind_ssbo(0, buffers_.ssbo_bnpr_mesh_pool_counters_);
@@ -236,13 +236,11 @@ namespace blender::npr::strokegen
     }
   }
 
-  void StrokeGenPassModule::rebuild_pass_soft_raster_contour_edges()
+  void StrokeGenPassModule::append_subpass_process_contour_edges()
   {
-    pass_soft_raster_contour_edges.init(); 
     {
-      auto &sub = pass_soft_raster_contour_edges.sub("calc contour edge raster data");
-      sub.shader_set(
-          shaders_.static_shader_get(eShaderType::COMPUTE_CONTOUR_EDGE_RASTER_DATA));
+      auto &sub = pass_extract_geom.sub("calc contour edge raster data");
+      sub.shader_set(shaders_.static_shader_get(eShaderType::COMPUTE_CONTOUR_EDGE_RASTER_DATA));
 
       sub.bind_ssbo(0, buffers_.ssbo_bnpr_mesh_pool_);
       sub.bind_ssbo(1, buffers_.ssbo_bnpr_mesh_pool_counters_);
@@ -259,11 +257,10 @@ namespace blender::npr::strokegen
     }
   }
 
-  void StrokeGenPassModule::rebuild_pass_fill_draw_args_contour_edges()
+  void StrokeGenPassModule::rebuild_pass_contour_edge_drawcall()
   {
-    pass_fill_draw_args_contour_edges.init();
     {
-      auto& sub = pass_fill_draw_args_contour_edges.sub("fill_draw_args_contour_edges");
+      auto &sub = pass_draw_contour_edges.sub("fill_draw_args_contour_edges");
 
       sub.shader_set(shaders_.static_shader_get(eShaderType::FILL_DRAW_ARGS_CONTOUR_EDGES));
 
@@ -273,21 +270,13 @@ namespace blender::npr::strokegen
       sub.dispatch(int3(1, 1, 1));
       sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_COMMAND);
     }
+    
+    pass_draw_contour_edges.append_draw_subpass(shaders_, buffers_, textures_);
   }
 
-  void StrokeGenPassModule::init_contour_edge_draw_pass()
+  void StrokeGenPassModule::append_subpass_meshing_merge_verts(int num_verts_in, bool debug)
   {
-    pass_draw_contour_edges.init_pass(shaders_, textures_); 
-  }
-
-  void StrokeGenPassModule::rebuild_pass_append_contour_edge_drawcall()
-  {
-    pass_draw_contour_edges.append_draw_subpass(buffers_, textures_); 
-  }
-
-  void StrokeGenPassModule::rebuild_pass_meshing_merge_verts(bool debug)
-  {
-    const int hashmap_size = std::min(MAX_GPU_HASH_TABLE_SIZE, num_total_mesh_verts * 16); 
+    const int hashmap_size = std::min(MAX_GPU_HASH_TABLE_SIZE, num_verts_in * 16);
 
     auto bind_rsc = [&](draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub) {
       sub.bind_ssbo(0, buffers_.ssbo_vert_spatial_map_headers_);
@@ -296,45 +285,44 @@ namespace blender::npr::strokegen
       sub.bind_ssbo(3, buffers_.ssbo_vbo_full_);
       sub.bind_ssbo(4, buffers_.ssbo_bnpr_mesh_pool_counters_);
       sub.push_constant("pcs_hash_map_size_", hashmap_size);
-      sub.push_constant("pcs_vert_count_", (int)num_total_mesh_verts); 
+      sub.push_constant("pcs_vert_count_", (int)num_verts_in); 
     }; 
 
-    pass_meshing_merge_verts.init();
     {
-      auto &sub = pass_meshing_merge_verts.sub("bnpr_meshing_merge_verts_bootstrap");
+      auto &sub = pass_extract_geom.sub("bnpr_meshing_merge_verts_bootstrap");
       sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_VERT_MERGE_INIT));
 
-      bind_rsc(sub); 
+      bind_rsc(sub);
       /* TODO: use GL buffer copy function rather than this */
-      int num_groups = compute_num_groups(hashmap_size, GROUP_SIZE_STROKEGEN_GEOM_EXTRACT); 
-      sub.dispatch(int3(num_groups, 1, 1));
-      sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_SHADER_IMAGE_ACCESS); 
-    }
-    {
-      auto &sub = pass_meshing_merge_verts.sub("bnpr_meshing_merge_verts_spatial_hashing");
-      sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_VERT_MERGE_HASH));
-
-      bind_rsc(sub); 
-
-      int num_groups = compute_num_groups(num_total_mesh_verts, GROUP_SIZE_STROKEGEN_GEOM_EXTRACT);
+      int num_groups = compute_num_groups(hashmap_size, GROUP_SIZE_STROKEGEN_GEOM_EXTRACT);
       sub.dispatch(int3(num_groups, 1, 1));
       sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_SHADER_IMAGE_ACCESS);
     }
     {
-      auto &sub = pass_meshing_merge_verts.sub("bnpr_meshing_merge_verts_deduplicate");
+      auto &sub = pass_extract_geom.sub("bnpr_meshing_merge_verts_spatial_hashing");
+      sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_VERT_MERGE_HASH));
+
+      bind_rsc(sub);
+
+      int num_groups = compute_num_groups(num_verts_in, GROUP_SIZE_STROKEGEN_GEOM_EXTRACT);
+      sub.dispatch(int3(num_groups, 1, 1));
+      sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_SHADER_IMAGE_ACCESS);
+    }
+    {
+      auto &sub = pass_extract_geom.sub("bnpr_meshing_merge_verts_deduplicate");
       sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_VERT_MERGE_REINDEX));
 
       bind_rsc(sub); 
 
-      int num_groups = compute_num_groups(num_total_mesh_verts, GROUP_SIZE_STROKEGEN_GEOM_EXTRACT);
+      int num_groups = compute_num_groups(num_verts_in, GROUP_SIZE_STROKEGEN_GEOM_EXTRACT);
       sub.dispatch(int3(num_groups, 1, 1));
       sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_SHADER_IMAGE_ACCESS);
     }
   }
 
-  void StrokeGenPassModule::rebuild_pass_meshing_edge_adjacency(bool debug)
+  void StrokeGenPassModule::append_subpass_meshing_edge_adjacency(int num_edges_in, bool debug)
   {
-    const int hashmap_size = std::min(MAX_GPU_HASH_TABLE_SIZE, num_total_mesh_edges * 16);
+    const int hashmap_size = std::min(MAX_GPU_HASH_TABLE_SIZE, num_edges_in * 16);
 
     auto bind_rsc = [&](draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub) {
       sub.bind_ssbo(0, buffers_.ssbo_vert_merged_id_);
@@ -344,12 +332,11 @@ namespace blender::npr::strokegen
       sub.bind_ssbo(4, buffers_.ssbo_edge_to_edges_);
       sub.bind_ssbo(5, buffers_.ssbo_bnpr_mesh_pool_counters_);
       sub.push_constant("pcs_hash_map_size_", hashmap_size);
-      sub.push_constant("pcs_edge_count_", (int)num_total_mesh_edges);
+      sub.push_constant("pcs_edge_count_", (int)num_edges_in);
     };
 
-    pass_meshing_edge_adjacency.init();
     {
-      auto &sub = pass_meshing_edge_adjacency.sub("bnpr_meshing_edge_adj_bootstrap");
+      auto &sub = pass_extract_geom.sub("bnpr_meshing_edge_adj_bootstrap");
       sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_EDGE_ADJACENCY_INIT));
 
       bind_rsc(sub);
@@ -359,22 +346,22 @@ namespace blender::npr::strokegen
       sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_SHADER_IMAGE_ACCESS);
     }
     {
-      auto &sub = pass_meshing_edge_adjacency.sub("bnpr_meshing_edge_adj_hashing");
+      auto &sub = pass_extract_geom.sub("bnpr_meshing_edge_adj_hashing");
       sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_EDGE_ADJACENCY_HASH));
 
       bind_rsc(sub);
 
-      int num_groups = compute_num_groups(num_total_mesh_edges, GROUP_SIZE_STROKEGEN_GEOM_EXTRACT);
+      int num_groups = compute_num_groups(num_edges_in, GROUP_SIZE_STROKEGEN_GEOM_EXTRACT);
       sub.dispatch(int3(num_groups, 1, 1));
       sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_SHADER_IMAGE_ACCESS);
     }
     {
-      auto &sub = pass_meshing_edge_adjacency.sub("bnpr_meshing_edge_adj_finish");
+      auto &sub = pass_extract_geom.sub("bnpr_meshing_edge_adj_finish");
       sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_EDGE_ADJACENCY_FILL));
 
       bind_rsc(sub);
 
-      int num_groups = compute_num_groups(num_total_mesh_edges, GROUP_SIZE_STROKEGEN_GEOM_EXTRACT);
+      int num_groups = compute_num_groups(num_edges_in, GROUP_SIZE_STROKEGEN_GEOM_EXTRACT);
       sub.dispatch(int3(num_groups, 1, 1));
       sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_SHADER_IMAGE_ACCESS);
     }
@@ -569,14 +556,13 @@ namespace blender::npr::strokegen
   }
 
   // Note: we must do this within 15 ms(0.64ms x 23iters from willey's algo.), otherwise it for nothing.
-  void StrokeGenPassModule::rebuild_pass_list_ranking(ListRankingPassType passType, 
+  void StrokeGenPassModule::append_subpass_list_ranking(ListRankingPassType passType, 
                                                       PassSimple &pass_listranking,
                                                       bool looped_pass_list_ranking
   )
   {
     // Build render passes
     bool custom_pass = (passType != ListRankingPassType::Test); 
-    pass_listranking.init();
 
     int num_splice_iters = 3;
     for (int splice_iter = 0; splice_iter < num_splice_iters; ++splice_iter)

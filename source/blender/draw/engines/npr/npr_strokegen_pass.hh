@@ -31,25 +31,17 @@ private:
   draw::PassSimple pass_comp_test = {"Strokegen Compute Test"};
 
   draw::PassSimple pass_extract_geom = {"StrokeGen Extract Geometry"};
-  draw::PassSimple pass_fill_dispatch_args_contour_edges = {"Fill Dispatch Args for Contour Edges"};
-  draw::PassSimple pass_soft_raster_contour_edges = {"Contour Soft Rasterization"}; 
-  draw::PassSimple pass_fill_draw_args_contour_edges = {"Fill Draw Args for Contour Edges"};
-
-  draw::PassSimple pass_meshing_merge_verts = {"Meshing Merge Verts"};
-  draw::PassSimple pass_meshing_edge_adjacency = {"Build Mesh Adjacency"};
-
   draw::PassSimple pass_compress_contour_pixels = {"Generate Contour Pixel Mask"}; 
 
   draw::PassSimple pass_scan_test = {"Bnpr GPU Blelloch Scan Test"};
   draw::PassSimple pass_segscan_test = {"Bnpr GPU Blelloch SegScan Test"};
   draw::PassSimple pass_conv1d_test = {"Test GPU 1d conv on circular segments"};
   draw::PassSimple pass_listranking_test = {"List ranking test"};
-  draw::PassSimple pass_listranking_contour_edges = {"Contour Edge List Ranking"};
 
   /** Draw Passes */
   StrokegenMeshRasterPass pass_draw_contour_edges = {"Draw Contour Edges"}; // Inherited from draw::PassMain 
 
-  /** Instance */
+  /** Dependent Modules */
   StrokeGenShaderModule &shaders_;
   GPUBufferPoolModule   &buffers_;
   GPUTexturePoolModule  &textures_;
@@ -85,15 +77,7 @@ public:
     LIST_RANKING_TEST,
 
     GEOM_EXTRACTION,
-    FILL_DRAW_ARGS_CONTOUR_EDGES,
     INDIRECT_DRAW_CONTOUR_EDGES,
-    FILL_DISPATCH_ARGS_CONTOUR_EDGES,
-    SOFT_RASTER_CONTOUR_EDGES,
-    LINK_CONTOUR_EDGES,
-
-    MESHING_MERGE_VERTS,
-    MESHING_BUILD_EDGE_ADJ, 
-
     COMPRESS_CONTOUR_PIXELS 
   };
 
@@ -107,6 +91,7 @@ public:
   /** \name Sync with Draw Module
      * \{ */
   void on_begin_sync();
+  void on_end_sync(); 
   /** \} */
 
 
@@ -115,20 +100,17 @@ public:
   /** \name Rebuild Render Passes
      * \{ */
   bool boostrap_before_extract_first_batch; 
-  void init_pass_extract_mesh_geom();
-  void rebuild_sub_pass_extract_mesh_geom(Object* ob, GPUBatch* gpu_batch_line_adj, GPUBatch* gpu_batch_surf, ResourceHandle& rsc_handle, const DRWView* drw_view);
-  void rebuild_pass_fill_dispatch_args_contour_edges(); 
-  void rebuild_pass_soft_raster_contour_edges(); 
-  void rebuild_pass_fill_draw_args_contour_edges();
-  void init_contour_edge_draw_pass(); 
-  void rebuild_pass_append_contour_edge_drawcall();
-
+  void init_per_mesh_pass();
+  void append_per_mesh_pass(Object* ob, GPUBatch* gpu_batch_line_adj, GPUBatch* gpu_batch_surf, ResourceHandle& rsc_handle, const DRWView* drw_view);
   int num_total_mesh_verts;
-  int num_total_mesh_edges; 
+  int num_total_mesh_edges;
   int num_total_mesh_tris;
-  void rebuild_pass_meshing_merge_verts(bool debug = false); 
-  void rebuild_pass_meshing_edge_adjacency(bool debug = false); 
+  void append_subpass_meshing_merge_verts(int num_verts_in, bool debug = false);
+  void append_subpass_meshing_edge_adjacency(int num_edges_in, bool debug = false); 
+  void append_subpass_fill_dispatch_args_contour_edges();
+  void append_subpass_process_contour_edges();
 
+  void rebuild_pass_contour_edge_drawcall();
   void rebuild_pass_compress_contour_pixels(bool debug = false); 
 
 
@@ -149,7 +131,7 @@ public:
     Test = 0,
     ContourEdgeLinking = 1
   };
-  void rebuild_pass_list_ranking(ListRankingPassType passType, PassSimple& pass_listranking, bool looped_pass_list_ranking);
+  void append_subpass_list_ranking(ListRankingPassType passType, PassSimple& pass_listranking, bool looped_pass_list_ranking);
 
   void rebuild_pass_list_ranking_fill_args(PassSimple& pass_listranking, bool per_anchor, bool per_spliced, int splicing_or_relinking_iter, int group_size_x, bool custom_pass);
   void print_list_ranking_nodes(int head_node_id, uint* computed_ranks, uint* computed_topo, uint* computed_links) const;
