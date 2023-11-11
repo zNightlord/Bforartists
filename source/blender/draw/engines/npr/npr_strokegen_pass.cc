@@ -220,7 +220,9 @@ namespace blender::npr::strokegen
       sub.bind_ssbo(3, buffers_.ssbo_vbo_full_);
       sub.bind_ssbo(4, buffers_.ssbo_bnpr_mesh_pool_counters_);
       sub.push_constant("pcs_hash_map_size_", hashmap_size);
-      sub.push_constant("pcs_vert_count_", (int)num_verts_in); 
+      sub.push_constant("pcs_vert_count_", (int)num_verts_in);
+      sub.push_constant("pcs_vert_id_offset_", num_total_mesh_verts);
+      sub.push_constant("pcs_edge_id_offset_", num_total_mesh_edges);
     }; 
 
     {
@@ -268,6 +270,8 @@ namespace blender::npr::strokegen
       sub.bind_ssbo(5, buffers_.ssbo_bnpr_mesh_pool_counters_);
       sub.push_constant("pcs_hash_map_size_", hashmap_size);
       sub.push_constant("pcs_edge_count_", (int)num_edges_in);
+      sub.push_constant("pcs_vert_id_offset_", num_total_mesh_verts);
+      sub.push_constant("pcs_edge_id_offset_", num_total_mesh_edges);
     };
 
     {

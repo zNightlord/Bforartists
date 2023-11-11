@@ -206,7 +206,8 @@ void main()
 {
 	const uint groupId = gl_LocalInvocationID.x; 
 	const uint idx = gl_GlobalInvocationID.x; 
-    const uint VertID = idx.x; 
+    const uint VertID = pcs_vert_id_offset_ + idx.x; 
+    bool valid_thread = (idx.x < pcs_vert_count_); /* Do not use VertID here since it's offseted with current mesh batch  */
 
 #if defined(_KERNEL_MULTICOMPILE__VERT_MERGE_BOOTSTRAP)
     const uint st_hash_addr = idx.x; /* TODO: use GL buffer copy function rather than this */
@@ -214,7 +215,6 @@ void main()
 #else
 
 #if defined(_KERNEL_MULTICOMPILE__VERT_MERGE_BUILD_HASHMAP)
-    bool valid_thread = (VertID < pcs_vert_count_);
 
     vec3 vpos = ld_vbo(VertID); 
     bool inserted = false; 
@@ -236,7 +236,6 @@ void main()
 #else
 
 #if defined(_KERNEL_MULTICOMPILE__VERT_MERGE_DEDUPLICATE)
-    bool valid_thread = (VertID < pcs_vert_count_);
     uint merged_vert_id = ssbo_vert_merged_id_[VertID];
     bool is_depli_vert = merged_vert_id == NOT_FOUND; 
 
@@ -281,9 +280,9 @@ void main()
 {
     const uint groupId = gl_LocalInvocationID.x; 
 	const uint idx = gl_GlobalInvocationID.x; 
-    const uint EdgeID = idx.x; 
+    bool valid_thread = (idx.x < pcs_edge_count_); /* Do not use EdgeID here since it's offseted with current mesh batch */
 
-    bool valid_thread = (EdgeID < pcs_edge_count_); 
+    const uint EdgeID = idx.x + pcs_edge_id_offset_; 
 
 
 #if defined(_KERNEL_MULTICOMPILE__EDGE_ADJACENCY_BOOTSTRAP)

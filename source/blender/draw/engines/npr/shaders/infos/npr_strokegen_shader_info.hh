@@ -337,6 +337,8 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_merge_verts)
     .storage_buf(4, Qualifier::READ_WRITE, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
     .push_constant(Type::INT, "pcs_hash_map_size_")
     .push_constant(Type::INT, "pcs_vert_count_")
+    .push_constant(Type::INT, "pcs_vert_id_offset_")
+    .push_constant(Type::INT, "pcs_edge_id_offset_")
 
     .local_group_size(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT)
     .compute_source("npr_strokegen_gpu_meshing_compute.glsl");
@@ -380,7 +382,9 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_edge_adjecency)
     .storage_buf(5, Qualifier::READ_WRITE, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
     .push_constant(Type::INT, "pcs_hash_map_size_")
     .push_constant(Type::INT, "pcs_edge_count_")
-
+    .push_constant(Type::INT, "pcs_vert_id_offset_")
+    .push_constant(Type::INT, "pcs_edge_id_offset_")
+    
     .local_group_size(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT)
     .compute_source("npr_strokegen_gpu_meshing_compute.glsl");
 
