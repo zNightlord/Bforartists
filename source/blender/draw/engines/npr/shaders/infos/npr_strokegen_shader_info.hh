@@ -143,6 +143,7 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_extract_boostrap)
     .additional_info("npr_compaction_off")
 
     .storage_buf(0, Qualifier::READ_WRITE, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
+    .storage_buf(1, Qualifier::READ_WRITE, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_prev_")
     .local_group_size(32)
     .compute_source("npr_strokegen_geom_extract_comp.glsl");
 
@@ -183,9 +184,11 @@ GPU_SHADER_CREATE_INFO(strokegen_fill_dispatch_args_per_contour_edge)
     .typedef_source("draw_shader_shared.h") /* Always needed for indirect args */
     .define("_KERNEL_MULTICOMPILE__FILL_DISPATCH_ARGS", "1")
     .define("_KERNEL_MULTICOMPILE__FILL_DISPATCH_ARGS__PER_CONTOUR_EDGE", "1")
-    .storage_buf(0, Qualifier::READ, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
-    .storage_buf(1, Qualifier::READ_WRITE, "DispatchCommand", "ssbo_indirect_dispatch_args_per_contour_edge_")
+    .storage_buf(0, Qualifier::READ_WRITE, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
+    .storage_buf(1, Qualifier::READ, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_prev_")
+    .storage_buf(2, Qualifier::READ_WRITE, "DispatchCommand", "ssbo_indirect_dispatch_args_per_contour_edge_")
     .push_constant(Type::INT, "pc_per_contour_edge_dispatch_group_size_") /* group size of dispatched kernel */
+    .push_constant(Type::INT, "pc_dispatch_for_all_edges_") 
     .local_group_size(32)
     .compute_source("npr_strokegen_fill_indirect_args_comp.glsl");
 
@@ -221,6 +224,8 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_extract_collect_verts)
     .storage_buf(1, Qualifier::READ, "SSBO_Data_PosNor", "ssbo_meshbatch_vbo_[]") /* encoded posnor vbo */
     .storage_buf(2, Qualifier::WRITE, "float", "ssbo_vbo_full_[]")
     .storage_buf(3, Qualifier::READ, "ObjectMatrices", "drw_matrix_buf[]")
+    .storage_buf(4, Qualifier::WRITE, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_prev_")
+    .storage_buf(5, Qualifier::READ, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
     .uniform_buf(0, "ViewMatrices", "ubo_view_matrices_")
     .push_constant(Type::INT, "pcs_rsc_handle_")
     .push_constant(Type::INT, "pcs_meshbatch_num_verts_")

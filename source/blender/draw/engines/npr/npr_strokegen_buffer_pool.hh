@@ -31,6 +31,7 @@ class GPUBufferPoolModule {
 
   SSBO_StrokeGenMeshLarge     ssbo_bnpr_mesh_pool_; // contains contour edge data
   SSBO_StrokeGenMeshPoolCounters ssbo_bnpr_mesh_pool_counters_;
+  SSBO_StrokeGenMeshPoolCounters ssbo_bnpr_mesh_pool_counters_prev_; // keep counters from last mesh extraction iter
   SSBO_IndirectDrawArgs ssbo_bnpr_mesh_pool_draw_args_;
   SSBO_IndirectDispatchArgs ssbo_bnpr_mesh_contour_edge_dispatch_args_; 
 

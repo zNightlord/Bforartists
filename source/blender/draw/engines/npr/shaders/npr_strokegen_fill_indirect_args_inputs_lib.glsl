@@ -61,7 +61,15 @@ void FillDispatchArgsBuffer(uvec3 args)
 */
 void GetDispatchArgs(out uvec3 dispatch_args)
 {
-    uint num_work_items = ssbo_bnpr_mesh_pool_counters_.num_contour_edges;
+    uint num_work_items = 0; 
+    if (pc_dispatch_for_all_edges_ > 1)
+        num_work_items = ssbo_bnpr_mesh_pool_counters_.num_contour_edges;
+    else
+    {
+        num_work_items = ssbo_bnpr_mesh_pool_counters_.num_contour_edges - ssbo_bnpr_mesh_pool_counters_prev_.num_contour_edges; 
+        ssbo_bnpr_mesh_pool_counters_.num_contour_edges_curr = num_work_items; /* we record newly genderated contour edge count here */
+    }
+    
     dispatch_args.x = compute_num_groups(num_work_items, pc_per_contour_edge_dispatch_group_size_);
     dispatch_args.y = 1;
     dispatch_args.z = 1;

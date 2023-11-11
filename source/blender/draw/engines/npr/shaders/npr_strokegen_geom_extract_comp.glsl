@@ -19,10 +19,17 @@ void main()
 	/* bootstrapping pass */
 	if (gl_GlobalInvocationID.x == 0u)
 	{
-		GLOBAL_COMPACTION_COUNTER__MESH_CONTOUR_EDGES = 0; 
-		GLOBAL_COMPACTION_COUNTER__MESH_VERTS = 0; 
-		GLOBAL_COMPACTION_COUNTER__MESH_EDGES = 0;
-		GLOBAL_COMPACTION_COUNTER__MESH_FACES = 0; 
+		ssbo_bnpr_mesh_pool_counters_.num_contour_edges 		 = 0; 
+		ssbo_bnpr_mesh_pool_counters_.num_verts         		 = 0; 
+		ssbo_bnpr_mesh_pool_counters_.num_edges         		 = 0;
+		ssbo_bnpr_mesh_pool_counters_.num_faces         		 = 0; 
+		ssbo_bnpr_mesh_pool_counters_.num_contour_edges_curr = 0; 
+
+		ssbo_bnpr_mesh_pool_counters_prev_.num_contour_edges = 0; 
+		ssbo_bnpr_mesh_pool_counters_prev_.num_verts         = 0; 
+		ssbo_bnpr_mesh_pool_counters_prev_.num_edges         = 0; 
+		ssbo_bnpr_mesh_pool_counters_prev_.num_faces         = 0; 
+		ssbo_bnpr_mesh_pool_counters_prev_.num_contour_edges_curr = 0; 
 	}
 }
 #endif
@@ -61,6 +68,15 @@ void main()
 	ssbo_vbo_full_[st_base_addr+0] = vpos_ws.x; 
 	ssbo_vbo_full_[st_base_addr+1] = vpos_ws.y;
 	ssbo_vbo_full_[st_base_addr+2] = vpos_ws.z;
+
+	if (idx == 0)
+	{ /* cache counters from last mesh extraction pass */
+		ssbo_bnpr_mesh_pool_counters_prev_.num_contour_edges = ssbo_bnpr_mesh_pool_counters_.num_contour_edges; 
+		ssbo_bnpr_mesh_pool_counters_prev_.num_verts         = ssbo_bnpr_mesh_pool_counters_.num_verts; 
+		ssbo_bnpr_mesh_pool_counters_prev_.num_edges         = ssbo_bnpr_mesh_pool_counters_.num_edges; 
+		ssbo_bnpr_mesh_pool_counters_prev_.num_faces         = ssbo_bnpr_mesh_pool_counters_.num_faces; 
+		ssbo_bnpr_mesh_pool_counters_prev_.num_contour_edges_curr = ssbo_bnpr_mesh_pool_counters_.num_contour_edges_curr; 
+	}
  }
 #endif
 
@@ -163,16 +179,16 @@ void main()
 	vec3 cam_pos_ws = view_to_world[3].xyz; /* see "#define cameraPos ViewMatrixInverse[3].xyz" */
 	vec3 cam_pos_loc = (world_to_model * vec4(cam_pos_ws, 1.0f)).xyz; 
 	
-	vec3 v[4]; 
 	uvec4 vids; 
 	for (uint i = 0; i < 4; ++i)
-	{ /* fetch vertex id & pos */
-		uint ibo_data = buf_ibo[4 * EdgeId + i];
-		vids[i] = ibo_data; 
-		v[i] = ld_vbo(vids[i]);  
-	}
-	
+		vids[i] = buf_ibo[4 * EdgeId + i]; 
+	vids = wing_verts_to_line_adj(vids); 
 	bool is_border = line_adj_is_border_edge(vids); 
+	
+	vec3 v[4]; 
+	for (uint i = 0; i < 4; ++i)
+		v[i] = ld_vbo(vids[i]);  
+	
 
 	float face_orient_012, face_orient_321; 
 	bool is_contour = is_contour_edge(
@@ -186,10 +202,6 @@ void main()
 
 	if (is_contour)
 	{
-		/* transform to world space */
-/* 		for (uint i = 0; i < 4; ++i)
-			v[i] = (model_to_world * vec4(v[i], 1.0f)).xyz;  */
-		
 		/* write world pos to output buffer */
 		uint base_addr = mesh_pool_addr__wpos_and_edgeid(compacted_idx); 
 		uint addr_p0 = rev_edge_dir ? base_addr + 3 : base_addr;  

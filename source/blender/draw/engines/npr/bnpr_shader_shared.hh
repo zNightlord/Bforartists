@@ -224,6 +224,10 @@ using namespace draw;
     uint num_edges;
     uint num_faces;
     uint num_contour_edges;
+    uint num_contour_edges_curr;
+    uint dummy_0;
+    uint dummy_1;
+    uint dummy_2;
   };
   BLI_STATIC_ASSERT_ALIGN(SSBOData_StrokeGenMeshPoolCounters, 16)
 
