@@ -145,7 +145,7 @@ namespace blender::npr::strokegen
                                          0,
                                          4 * num_verts);*/
     append_subpass_merge_vbo(gpu_batch_surf, batch_resource_index, num_verts);
-    append_subpass_merge_line_adj_ibo(gpu_batch_line_adj, num_edges, ib_type);
+    append_subpass_merge_line_adj_ibo(gpu_batch_line_adj, ib_type, num_edges);
 
     append_subpass_meshing_merge_verts(num_verts);
     append_subpass_meshing_edge_adjacency(num_edges); 
@@ -187,8 +187,8 @@ namespace blender::npr::strokegen
 
   void StrokeGenPassModule::append_subpass_merge_line_adj_ibo(
       GPUBatch *gpu_batch_line_adj,
-      int num_added_edges,
-      gpu::GPUIndexBufType ib_type)
+      gpu::GPUIndexBufType ib_type,
+      int num_added_edges)
   {
     auto &sub = pass_extract_geom.sub("merge batch edge adj ibo");
 

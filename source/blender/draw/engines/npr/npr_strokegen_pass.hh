@@ -114,8 +114,8 @@ public:
                                             gpu::GPUIndexBufType ib_type);
   void append_subpass_merge_vbo(GPUBatch *gpu_batch_surf, int batch_resource_index, int num_verts);
   void append_subpass_merge_line_adj_ibo(GPUBatch *gpu_batch_line_adj,
-                                         int num_added_edges,
-                                         gpu::GPUIndexBufType ib_type);
+                                         gpu::GPUIndexBufType ib_type,
+                                         int num_added_edges);
   void append_per_mesh_pass(Object* ob, GPUBatch* gpu_batch_line_adj, GPUBatch* gpu_batch_surf, ResourceHandle& rsc_handle, const DRWView* drw_view);
   void append_subpass_meshing_merge_verts(int num_verts_in, bool debug = false);
   void append_subpass_meshing_edge_adjacency(int num_edges_in, bool debug = false); 
