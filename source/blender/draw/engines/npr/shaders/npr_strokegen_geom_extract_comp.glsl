@@ -89,13 +89,12 @@ void main()
     bool valid_thread = (idx < pcs_edge_count_); 
 	if (!valid_thread) return; 
 
-    const uint EdgeID = pcs_edge_id_offset_ + idx.x; 
-
+    const uint EdgeID = idx.x; 
 	uvec4 vid; 
     load_and_decode_ibo__edge_adj(EdgeID, 4u, /*out*/vid); 
 	vid.xyzw += (uint(pcs_vert_id_offset_)).xxxx; 
 
-	uint st_base_addr = (EdgeID) * 4u;  
+	uint st_base_addr = (pcs_edge_id_offset_ + EdgeID) * 4u;  
 	ssbo_edge_to_vert_[st_base_addr+0] = vid[0];
 	ssbo_edge_to_vert_[st_base_addr+1] = vid[1]; 
 	ssbo_edge_to_vert_[st_base_addr+2] = vid[2];

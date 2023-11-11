@@ -116,12 +116,11 @@ namespace blender::npr::strokegen
     int num_edges = edge_batch->elem_()->index_len_get() / 4; // 4 indices per primitive, basically 4 verts around the edge
 
     gpu::IndexBuf* ib = edge_batch->elem_();
+    if (ib->index_len_get() == 0) return; 
     /* Hack to get ibo format */
     gpu::GPUIndexBufType ib_type = // the actual "index_type_" is protected
         (ib->size_get() / ib->index_len_get() == sizeof(uint32_t))
           ? gpu::GPU_INDEX_U32 : gpu::GPU_INDEX_U16;
-    gpu::VertBuf *vbo_edge_adj = edge_batch->verts_(0);
-    int num_verts_edge_vbo = vbo_edge_adj->vertex_len; 
 
 
     gpu::Batch *batch_surf = static_cast<gpu::Batch *>(gpu_batch_surf); 
@@ -363,17 +362,6 @@ namespace blender::npr::strokegen
     sub.barrier(GPU_BARRIER_SHADER_STORAGE);
   }
 
-  void StrokeGenPassModule::rebuild_pass_process_contours()
-  {
-    pass_process_contours.init();
-    append_subpass_fill_dispatch_args_contour_edges(pass_process_contours, true); 
-    // append_subpass_process_contour_edges();
-    append_subpass_list_ranking(
-        StrokeGenPassModule::ListRankingPassType::ContourEdgeLinking,
-        pass_process_contours, true
-      );
-  }
-
   void StrokeGenPassModule::append_subpass_process_contour_edges()
   {
     {
@@ -394,6 +382,17 @@ namespace blender::npr::strokegen
       sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_edge_dispatch_args_);
       sub.barrier(GPU_BARRIER_SHADER_STORAGE);
     }
+  }
+
+  void StrokeGenPassModule::rebuild_pass_process_contours()
+  {
+    pass_process_contours.init();
+    append_subpass_fill_dispatch_args_contour_edges(pass_process_contours, true); 
+    // append_subpass_process_contour_edges();
+    append_subpass_list_ranking(
+        StrokeGenPassModule::ListRankingPassType::ContourEdgeLinking,
+        pass_process_contours, true
+      );
   }
 
   void StrokeGenPassModule::rebuild_pass_contour_edge_drawcall()
