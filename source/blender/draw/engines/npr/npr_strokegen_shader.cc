@@ -1,4 +1,4 @@
-﻿/* SPDX-License-Identifier: GPL-2.0-or-later
+/* SPDX-License-Identifier: GPL-2.0-or-later
  * Copyright 2021 Blender Foundation.
  */
 
@@ -91,7 +91,8 @@ const char *StrokeGenShaderModule::static_shader_create_info_name_get(eShaderTyp
     case COMPUTE_TEST:
       return "bnpr_strokegen_test_xxx";
 
-
+    case GPU_MESHING_BOOSTRAP:
+      return "bnpr_geom_extract_boostrap"; 
     case CONTOUR_GEOM_EXTRACT:
       return "bnpr_geom_extract";
     case CONTOUR_GEOM_EXTRACT_IBO_16BIT:

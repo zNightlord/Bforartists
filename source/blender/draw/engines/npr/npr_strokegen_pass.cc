@@ -31,6 +31,8 @@ namespace blender::npr::strokegen
 
       case GEOM_EXTRACTION:
         return pass_extract_geom;
+      case CONTOUR_PROCESS:
+        return pass_process_contours; 
       case COMPRESS_CONTOUR_PIXELS:
         return pass_compress_contour_pixels; 
     }
@@ -64,6 +66,7 @@ namespace blender::npr::strokegen
   void StrokeGenPassModule::on_end_sync()
   {
     /* Post processing after iterated over all meshes. */
+    rebuild_pass_process_contours(); 
     rebuild_pass_contour_edge_drawcall();
     rebuild_pass_compress_contour_pixels();
   }
@@ -84,12 +87,25 @@ namespace blender::npr::strokegen
    * \param gpu_batch_line_adj Mesh geometry stored in GPUBatch, ib stored with line adjacency info.
    */
   void StrokeGenPassModule::append_per_mesh_pass(
-    Object* ob,
-    GPUBatch* gpu_batch_line_adj,
-    GPUBatch* gpu_batch_surf, 
-    ResourceHandle& rsc_handle,
-    const DRWView* drw_view
-  ){
+      Object* ob,
+      GPUBatch* gpu_batch_line_adj,
+      GPUBatch* gpu_batch_surf, 
+      ResourceHandle& rsc_handle,
+      const DRWView* drw_view
+      ){
+
+    if (boostrap_before_extract_first_batch) {
+      auto &sub = pass_extract_geom.sub("bootstrap meshing passes");
+      sub.shader_set(shaders_.static_shader_get(GPU_MESHING_BOOSTRAP));
+
+      sub.bind_ssbo(0, buffers_.ssbo_bnpr_mesh_pool_counters_);
+      sub.barrier(GPU_BARRIER_SHADER_STORAGE);
+      sub.dispatch(int3(1, 1, 1));
+
+      return; // bootstrapping done. will re-enter this func for actual work
+    }
+
+
     int batch_resource_index = (int)rsc_handle.resource_index(); 
 
     /* see example in "GPU_batch_draw_parameter_get" */
@@ -101,12 +117,10 @@ namespace blender::npr::strokegen
     gpu::IndexBuf* ib = edge_batch->elem_();
     /* Hack to get ibo format */
     gpu::GPUIndexBufType ib_type = // the actual "index_type_" is protected
-      (ib->size_get() / ib->index_len_get() == sizeof(uint32_t))
-        ? gpu::GPU_INDEX_U32 : gpu::GPU_INDEX_U16;
+        (ib->size_get() / ib->index_len_get() == sizeof(uint32_t))
+          ? gpu::GPU_INDEX_U32 : gpu::GPU_INDEX_U16;
     gpu::VertBuf *vbo_edge_adj = edge_batch->verts_(0);
     int num_verts_edge_vbo = vbo_edge_adj->vertex_len; 
-
-
 
 
     gpu::Batch *batch_surf = static_cast<gpu::Batch *>(gpu_batch_surf); 
@@ -130,88 +144,13 @@ namespace blender::npr::strokegen
                                          4 * num_total_mesh_verts,
                                          0,
                                          4 * num_verts);*/
-    {
-      auto& sub = pass_extract_geom.sub(
-        boostrap_before_extract_first_batch ? "extract_geom_boostrap" : "Extract"
-      );
-      if (ib_type == gpu::GPU_INDEX_U16)
-        sub.shader_set(shaders_.static_shader_get(eShaderType::CONTOUR_GEOM_EXTRACT_IBO_16BIT));
-      else
-        sub.shader_set(shaders_.static_shader_get(eShaderType::CONTOUR_GEOM_EXTRACT));
+    append_subpass_merge_vbo(gpu_batch_surf, batch_resource_index, num_verts);
+    append_subpass_merge_line_adj_ibo(gpu_batch_line_adj, num_edges, ib_type);
 
-      sub.bind_ssbo(0, &(gpu_batch_line_adj->elem)); // TODO: investigate whether double pointer is necessary
-      sub.bind_ssbo(1, &(gpu_batch_line_adj->verts[0])); // TODO: investigate what geom->vert[1~15] does
-      sub.bind_ssbo(2, buffers_.ssbo_bnpr_mesh_pool_);
-      sub.bind_ssbo(3, DRW_manager_get()->matrix_buf.current());
-      sub.bind_ssbo(4, buffers_.ssbo_bnpr_mesh_pool_counters_);
-      sub.bind_ssbo(5, buffers_.ssbo_edge_to_contour_);
-      sub.bind_ubo(0, buffers_.ubo_view_matrices_cache_);
-      sub.push_constant("pcs_ib_fmt_u16", ib_type == gpu::GPU_INDEX_U16 ? 1 : 0);
-      sub.push_constant("pcs_num_verts", (int)edge_batch->elem_()->index_len_get());
-      sub.push_constant(
-        "pcs_num_ib_offset",
-        (int)edge_batch->elem_()->index_start_get() + (int)edge_batch->elem_()->index_base_get()
-      );
-      sub.push_constant("pcs_rsc_handle", (int)rsc_handle.resource_index());
-      sub.push_constant("pcs_clear_compaction_counter_", boostrap_before_extract_first_batch ? 1 : 0);
-
-      sub.dispatch(int3(
-        compute_num_groups(num_edges, GROUP_SIZE_STROKEGEN_GEOM_EXTRACT, 1), 1, 1)
-      );
-      sub.barrier(GPU_BARRIER_SHADER_STORAGE);
-    }
-
-    if (boostrap_before_extract_first_batch) return; // bootstrapping done. will re-enter this func for actual work
-
-    {
-      auto &sub = pass_extract_geom.sub("merge batch vbo");
-      
-      sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_COLLECT_VBO)); 
-      
-      sub.bind_ssbo(0, &(gpu_batch_surf->elem));  // TODO: investigate whether double pointer is necessary
-      sub.bind_ssbo(1, &(gpu_batch_surf->verts[1])); 
-      sub.bind_ssbo(2, buffers_.ssbo_vbo_full_);
-      sub.bind_ssbo(3, DRW_manager_get()->matrix_buf.current());
-      
-      sub.bind_ubo(0, buffers_.ubo_view_matrices_); 
-      sub.push_constant("pcs_rsc_handle_", batch_resource_index); 
-      sub.push_constant("pcs_meshbatch_num_verts_", num_verts); 
-      sub.push_constant("pcs_full_vbo_offset_", num_total_mesh_verts);
-      
-      int num_groups = compute_num_groups(num_verts, GROUP_SIZE_STROKEGEN_GEOM_EXTRACT); 
-      sub.dispatch(int3(num_groups, 1, 1));
-      sub.barrier(GPU_BARRIER_SHADER_STORAGE);
-    }
-
-    {
-      auto &sub = pass_extract_geom.sub("merge batch edge adj ibo");
-
-      if (ib_type == gpu::GPU_INDEX_U16)
-        sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_COLLECT_EDGE_ADJ_IBO_16BIT));
-      else
-        sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_COLLECT_EDGE_ADJ_IBO));
-
-      sub.bind_ssbo(0, &(gpu_batch_line_adj->elem));  // TODO: investigate whether double pointer is necessary
-      sub.bind_ssbo(1, buffers_.ssbo_edge_to_vert_);
-
-      sub.push_constant("pcs_edge_count_", num_edges);
-      sub.push_constant("pcs_full_ibo_offset_", num_total_mesh_edges);
-
-      int num_groups = compute_num_groups(num_edges, GROUP_SIZE_STROKEGEN_GEOM_EXTRACT);
-      sub.dispatch(int3(num_groups, 1, 1));
-      sub.barrier(GPU_BARRIER_SHADER_STORAGE);
-    }
+    append_subpass_extract_contour_edges(gpu_batch_line_adj, rsc_handle, edge_batch, num_edges, ib_type);
 
     append_subpass_meshing_merge_verts(num_verts);
     append_subpass_meshing_edge_adjacency(num_edges); 
-    append_subpass_fill_dispatch_args_contour_edges();
-    // append_subpass_set_draw_args_contour_edges(); 
-    append_subpass_process_contour_edges();
-    append_subpass_list_ranking(
-      StrokeGenPassModule::ListRankingPassType::ContourEdgeLinking,
-      pass_extract_geom, 
-      true
-    );
 
 
     // Note: this should be  appening at the end
@@ -220,10 +159,96 @@ namespace blender::npr::strokegen
     num_total_mesh_edges += num_edges; 
   }
 
+  void StrokeGenPassModule::append_subpass_merge_vbo(GPUBatch *gpu_batch_surf, int batch_resource_index, int num_verts)
+  {
+    auto &sub = pass_extract_geom.sub("merge batch vbo");
+      
+    sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_COLLECT_VBO)); 
+      
+    sub.bind_ssbo(0, &(gpu_batch_surf->elem));  // TODO: investigate whether double pointer is necessary
+    sub.bind_ssbo(1, &(gpu_batch_surf->verts[1])); 
+    sub.bind_ssbo(2, buffers_.ssbo_vbo_full_);
+    sub.bind_ssbo(3, DRW_manager_get()->matrix_buf.current());
+      
+    sub.bind_ubo(0, buffers_.ubo_view_matrices_); 
+    sub.push_constant("pcs_rsc_handle_", batch_resource_index); 
+    sub.push_constant("pcs_meshbatch_num_verts_", num_verts); 
+    sub.push_constant("pcs_vert_id_offset_", num_total_mesh_verts);
+      
+    int num_groups = compute_num_groups(num_verts, GROUP_SIZE_STROKEGEN_GEOM_EXTRACT); 
+    sub.dispatch(int3(num_groups, 1, 1));
+    sub.barrier(GPU_BARRIER_SHADER_STORAGE);
+  }
+
+  void StrokeGenPassModule::append_subpass_merge_line_adj_ibo(
+      GPUBatch *gpu_batch_line_adj,
+      int num_added_edges,
+      gpu::GPUIndexBufType ib_type)
+  {
+    auto &sub = pass_extract_geom.sub("merge batch edge adj ibo");
+
+    if (ib_type == gpu::GPU_INDEX_U16)
+      sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_COLLECT_EDGE_ADJ_IBO_16BIT));
+    else
+      sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_COLLECT_EDGE_ADJ_IBO));
+
+    sub.bind_ssbo(0, &(gpu_batch_line_adj->elem));
+    sub.bind_ssbo(1, buffers_.ssbo_edge_to_vert_);
+
+    sub.push_constant("pcs_edge_count_", num_added_edges);
+    sub.push_constant("pcs_vert_id_offset_", num_total_mesh_verts);
+    sub.push_constant("pcs_edge_id_offset_", num_total_mesh_edges);
+
+    int num_groups = compute_num_groups(num_added_edges, GROUP_SIZE_STROKEGEN_GEOM_EXTRACT);
+    sub.dispatch(int3(num_groups, 1, 1));
+    sub.barrier(GPU_BARRIER_SHADER_STORAGE);
+  }
+
+  void StrokeGenPassModule::append_subpass_extract_contour_edges(
+      GPUBatch *gpu_batch_line_adj,
+      ResourceHandle &rsc_handle,
+      gpu::Batch *edge_batch,
+      int num_edges,
+      gpu::GPUIndexBufType ib_type)
+  {
+    auto &sub = pass_extract_geom.sub(
+        boostrap_before_extract_first_batch ? "extract_geom_boostrap" : "Extract"
+      );
+    // if (ib_type == gpu::GPU_INDEX_U16)
+    //   sub.shader_set(shaders_.static_shader_get(eShaderType::CONTOUR_GEOM_EXTRACT_IBO_16BIT));
+    // else
+    sub.shader_set(shaders_.static_shader_get(eShaderType::CONTOUR_GEOM_EXTRACT));
+
+    sub.bind_ssbo(0, buffers_.ssbo_edge_to_vert_/*&(gpu_batch_line_adj->elem)*/);
+    sub.bind_ssbo(1, buffers_.ssbo_vbo_full_ /*&(gpu_batch_line_adj->verts[0])*/);
+    sub.bind_ssbo(2, buffers_.ssbo_bnpr_mesh_pool_);
+    sub.bind_ssbo(3, DRW_manager_get()->matrix_buf.current());
+    sub.bind_ssbo(4, buffers_.ssbo_bnpr_mesh_pool_counters_);
+    sub.bind_ssbo(5, buffers_.ssbo_edge_to_contour_);
+    sub.bind_ubo(0, buffers_.ubo_view_matrices_cache_);
+    sub.push_constant("pcs_ib_fmt_u16", ib_type == gpu::GPU_INDEX_U16 ? 1 : 0);
+    sub.push_constant("pcs_num_edges", (int)edge_batch->elem_()->index_len_get() / 4);
+    sub.push_constant(
+        // not used for now, but I suspect this could be interfering with complex meshes
+        "pcs_num_ib_offset",
+        (int)edge_batch->elem_()->index_start_get() + (int)edge_batch->elem_()->index_base_get()
+        );
+    sub.push_constant("pcs_rsc_handle", (int)rsc_handle.resource_index());
+    sub.push_constant("pcs_vert_id_offset_", num_total_mesh_verts);
+    sub.push_constant("pcs_edge_id_offset_", num_total_mesh_edges);
+
+    sub.dispatch(int3(
+            compute_num_groups(num_edges, GROUP_SIZE_STROKEGEN_GEOM_EXTRACT, 1),
+            1,
+            1)
+        );
+    sub.barrier(GPU_BARRIER_SHADER_STORAGE);
+  }
+
   void StrokeGenPassModule::append_subpass_fill_dispatch_args_contour_edges()
   { // fill dispatch args for contour edges
     {
-      auto &sub = pass_extract_geom.sub("fill_dispatch_args_per_contour_edge");
+      auto &sub = pass_process_contours.sub("fill_dispatch_args_per_contour_edge");
       sub.shader_set(shaders_.static_shader_get(eShaderType::FILL_DISPATCH_ARGS_CONTOUR_EDGES));
 
       sub.bind_ssbo(0, buffers_.ssbo_bnpr_mesh_pool_counters_);
@@ -236,10 +261,21 @@ namespace blender::npr::strokegen
     }
   }
 
+  void StrokeGenPassModule::rebuild_pass_process_contours()
+  {
+    pass_process_contours.init();
+    append_subpass_fill_dispatch_args_contour_edges(); 
+    append_subpass_process_contour_edges();
+    append_subpass_list_ranking(
+        StrokeGenPassModule::ListRankingPassType::ContourEdgeLinking,
+        pass_process_contours, true
+    );
+  }
+
   void StrokeGenPassModule::append_subpass_process_contour_edges()
   {
     {
-      auto &sub = pass_extract_geom.sub("calc contour edge raster data");
+      auto &sub = pass_process_contours.sub("calc contour edge raster data");
       sub.shader_set(shaders_.static_shader_get(eShaderType::COMPUTE_CONTOUR_EDGE_RASTER_DATA));
 
       sub.bind_ssbo(0, buffers_.ssbo_bnpr_mesh_pool_);
@@ -320,6 +356,41 @@ namespace blender::npr::strokegen
     }
   }
 
+  void StrokeGenPassModule::rebuild_pass_compress_contour_pixels(bool debug)
+  {
+    pass_compress_contour_pixels.init();
+    {
+      auto &sub = pass_compress_contour_pixels.sub("pass_compress_contour_pixels");
+      sub.shader_set(shaders_.static_shader_get(eShaderType::CONTOUR_PIXEL_COMPRESS));
+
+      sub.bind_image(0, textures_.tex_contour_raster);
+      sub.bind_image(1, textures_.tex2d_contour_pix_marks_);
+      sub.push_constant("pcs_screen_size_", textures_.get_contour_raster_screen_res());
+
+      int2 compressed_tex_res = int2(
+          GPU_texture_width(textures_.tex2d_contour_pix_marks_),
+          GPU_texture_height(textures_.tex2d_contour_pix_marks_)
+      );
+      sub.dispatch(int3(compressed_tex_res.x, compressed_tex_res.y, 1));
+      sub.barrier(eGPUBarrier::GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_SHADER_IMAGE_ACCESS); 
+    }
+    if (debug)
+    {
+      auto &sub = pass_compress_contour_pixels.sub("pass_compress_contour_pixels_debug");
+      sub.shader_set(shaders_.static_shader_get(eShaderType::CONTOUR_PIXEL_COMPRESS_DBG));
+
+      sub.bind_image(0, textures_.tex_contour_raster);
+      sub.bind_image(1, textures_.tex2d_contour_pix_marks_);
+      sub.bind_image(2, textures_.tex2d_contour_pix_marks_dbg_);
+      sub.push_constant("pcs_screen_size_", textures_.get_contour_raster_screen_res());
+
+      int2 screen_res = int2(GPU_texture_width(textures_.tex_contour_raster),
+                             GPU_texture_height(textures_.tex_contour_raster));
+      sub.dispatch(int3(screen_res.x, screen_res.y, 1));
+      sub.barrier(eGPUBarrier::GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_SHADER_IMAGE_ACCESS);
+    }
+  }
+
   void StrokeGenPassModule::append_subpass_meshing_edge_adjacency(int num_edges_in, bool debug)
   {
     const int hashmap_size = std::min(MAX_GPU_HASH_TABLE_SIZE, num_edges_in * 16);
@@ -364,41 +435,6 @@ namespace blender::npr::strokegen
       int num_groups = compute_num_groups(num_edges_in, GROUP_SIZE_STROKEGEN_GEOM_EXTRACT);
       sub.dispatch(int3(num_groups, 1, 1));
       sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_SHADER_IMAGE_ACCESS);
-    }
-  }
-
-  void StrokeGenPassModule::rebuild_pass_compress_contour_pixels(bool debug)
-  {
-    pass_compress_contour_pixels.init();
-    {
-      auto &sub = pass_compress_contour_pixels.sub("pass_compress_contour_pixels");
-      sub.shader_set(shaders_.static_shader_get(eShaderType::CONTOUR_PIXEL_COMPRESS));
-
-      sub.bind_image(0, textures_.tex_contour_raster);
-      sub.bind_image(1, textures_.tex2d_contour_pix_marks_);
-      sub.push_constant("pcs_screen_size_", textures_.get_contour_raster_screen_res());
-
-      int2 compressed_tex_res = int2(
-          GPU_texture_width(textures_.tex2d_contour_pix_marks_),
-          GPU_texture_height(textures_.tex2d_contour_pix_marks_)
-      );
-      sub.dispatch(int3(compressed_tex_res.x, compressed_tex_res.y, 1));
-      sub.barrier(eGPUBarrier::GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_SHADER_IMAGE_ACCESS); 
-    }
-    if (debug)
-    {
-      auto &sub = pass_compress_contour_pixels.sub("pass_compress_contour_pixels_debug");
-      sub.shader_set(shaders_.static_shader_get(eShaderType::CONTOUR_PIXEL_COMPRESS_DBG));
-
-      sub.bind_image(0, textures_.tex_contour_raster);
-      sub.bind_image(1, textures_.tex2d_contour_pix_marks_);
-      sub.bind_image(2, textures_.tex2d_contour_pix_marks_dbg_);
-      sub.push_constant("pcs_screen_size_", textures_.get_contour_raster_screen_res());
-
-      int2 screen_res = int2(GPU_texture_width(textures_.tex_contour_raster),
-                             GPU_texture_height(textures_.tex_contour_raster));
-      sub.dispatch(int3(screen_res.x, screen_res.y, 1));
-      sub.barrier(eGPUBarrier::GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_SHADER_IMAGE_ACCESS);
     }
   }
 

@@ -5,18 +5,96 @@
 
  
 /* all counters are cleared in _KERNEL_MULTICOMPILE__GEOM_EXTRACT kernel ------------------- */
-#if defined(_KERNEL_MULTICOMPILE__GEOM_EXTRACT) || defined(_KERNEL_MULTICOMPILE_FILL_DRAW_ARGS)
+#if defined(_KERNEL_MULTICOMPILE_BOOSTRAP_GEOM_EXTRACT) || defined(_KERNEL_MULTICOMPILE__GEOM_EXTRACT) || defined(_KERNEL_MULTICOMPILE_FILL_DRAW_ARGS)
 	#define GLOBAL_COMPACTION_COUNTER__MESH_CONTOUR_EDGES ssbo_bnpr_mesh_pool_counters_.num_contour_edges
 	#define GLOBAL_COMPACTION_COUNTER__MESH_VERTS ssbo_bnpr_mesh_pool_counters_.num_verts
 	#define GLOBAL_COMPACTION_COUNTER__MESH_EDGES ssbo_bnpr_mesh_pool_counters_.num_edges
 	#define GLOBAL_COMPACTION_COUNTER__MESH_FACES ssbo_bnpr_mesh_pool_counters_.num_faces
 #endif
 
+
+#if defined(_KERNEL_MULTICOMPILE_BOOSTRAP_GEOM_EXTRACT)
+void main()
+{
+	/* bootstrapping pass */
+	if (gl_GlobalInvocationID.x == 0u)
+	{
+		GLOBAL_COMPACTION_COUNTER__MESH_CONTOUR_EDGES = 0; 
+		GLOBAL_COMPACTION_COUNTER__MESH_VERTS = 0; 
+		GLOBAL_COMPACTION_COUNTER__MESH_EDGES = 0;
+		GLOBAL_COMPACTION_COUNTER__MESH_FACES = 0; 
+	}
+}
+#endif
+
+
+#if defined(_KERNEL_MULTICOMPILE__COMPACT_VBO)
+ void main()
+ {
+	const uint groupId = gl_LocalInvocationID.x; 
+	const uint idx = gl_GlobalInvocationID.x; 
+
+	const uint VertID = idx; 
+	const uint NumVerts = pcs_meshbatch_num_verts_;
+	bool valid_thread = VertID < NumVerts;
+	if (!valid_thread) return; 
+
+	const uint ResourceID = pcs_rsc_handle_; 
+
+	/* transform matrices, see "common_view_lib.glsl" */ 
+	float4x4 model_to_world = drw_matrix_buf[ResourceID].model;  
+	float4x4 world_to_model = drw_matrix_buf[ResourceID].model_inverse; 
+	float4x4 view_to_world = ubo_view_matrices_.viewinv;
+	float4x4 world_to_view = ubo_view_matrices_.viewmat;
+
+	vec3 vpos_ls, vpos_ws; 
+
+	uint ld_base_addr = VertID; /* TODO: posnor buf, verify this */ 
+	SSBO_Data_PosNor posnor_packed = ssbo_meshbatch_vbo_[ld_base_addr]; 
+	vpos_ls.x = posnor_packed.x;
+	vpos_ls.y = posnor_packed.y; 
+	vpos_ls.z = posnor_packed.z;
+
+	vpos_ws = (model_to_world * vec4(vpos_ls, 1.0f)).xyz; 
+
+	uint st_base_addr = (pcs_vert_id_offset_ + VertID) * 3u;  
+	ssbo_vbo_full_[st_base_addr+0] = vpos_ws.x; 
+	ssbo_vbo_full_[st_base_addr+1] = vpos_ws.y;
+	ssbo_vbo_full_[st_base_addr+2] = vpos_ws.z;
+ }
+#endif
+
+
+#if defined(_KERNEL_MULTICOMPILE__COMPACT_EDGE_ADJ_IBO)
+ void main()
+ {
+	const uint groupId = gl_LocalInvocationID.x; 
+	const uint idx = gl_GlobalInvocationID.x; 
+    bool valid_thread = (idx < pcs_edge_count_); 
+	if (!valid_thread) return; 
+
+    const uint EdgeID = pcs_edge_id_offset_ + idx.x; 
+
+	uvec4 vid; 
+    load_and_decode_ibo__edge_adj(EdgeID, 4u, /*out*/vid); 
+	vid.xyzw += (uint(pcs_vert_id_offset_)).xxxx; 
+
+	uint st_base_addr = (EdgeID) * 4u;  
+	ssbo_edge_to_vert_[st_base_addr+0] = vid[0];
+	ssbo_edge_to_vert_[st_base_addr+1] = vid[1]; 
+	ssbo_edge_to_vert_[st_base_addr+2] = vid[2];
+	ssbo_edge_to_vert_[st_base_addr+3] = vid[3];
+ }
+
+#endif
+
+
+
+
 bool is_back_face(float ndv)
 {
-	return ndv < .0f; 
+	return ndv <= .0f; 
 }
-
 
 #if defined(_KERNEL_MULTICOMPILE__GEOM_EXTRACT)
 /*    v0
@@ -29,8 +107,7 @@ bool is_back_face(float ndv)
 */
 bool is_contour_edge(
 	vec3 v0, vec3 v1, vec3 v2, vec3 v3, vec3 cam_pos, 
-	out float face_orient_012, out float face_orient_321, 
-	out vec3 edge_offset
+	out float face_orient_012, out float face_orient_321
 )
 { /* impl based on overlay_outline_prepass_vert_no_geom.glsl */
 	vec3 v10 = v0 - v1;
@@ -39,7 +116,6 @@ bool is_contour_edge(
 
 	vec3 n0 = cross(v12, v10);
 	vec3 n3 = cross(v13, v12);
-	edge_offset = .5f * (normalize(n0), normalize(n3)); 
 
 	vec3 view_dir = cam_pos - v1; 
 
@@ -62,7 +138,7 @@ bool is_contour_edge(
 
 vec3 ld_vbo(uint vert)
 {
-	uint base_addr = vert * 4; /* vbo is aligned to vec4 per vert pos */
+	uint base_addr = vert * 3; /* vbo is aligned to vec4 per vert pos */
 	return vec3(buf_vbo[base_addr], buf_vbo[base_addr+1], buf_vbo[base_addr+2]); 
 }
 
@@ -70,22 +146,10 @@ void main()
 {
 	const uint groupId = gl_LocalInvocationID.x;
 	const uint idx 	   = gl_GlobalInvocationID.x;
-
-	if (pcs_clear_compaction_counter_ != 0u)
-	{ /* bootstrapping pass */
-		if (idx == 0u)
-		{
-			GLOBAL_COMPACTION_COUNTER__MESH_CONTOUR_EDGES = 0; 
-			GLOBAL_COMPACTION_COUNTER__MESH_VERTS = 0; 
-			GLOBAL_COMPACTION_COUNTER__MESH_EDGES = 0;
-			GLOBAL_COMPACTION_COUNTER__MESH_FACES = 0; 
-		}
-		return; 
-	}
 	
-	const uint EdgeId = idx;
-	const uint NumEdges = pcs_num_verts / 4u;
-	bool valid_thread = EdgeId < NumEdges; 
+	const uint NumEdges = pcs_num_edges;
+	bool valid_thread = idx < NumEdges; 
+	const uint EdgeId = idx + pcs_edge_id_offset_;
 
 	const uint resource_id = pcs_rsc_handle; 
 	
@@ -101,38 +165,19 @@ void main()
 	
 	vec3 v[4]; 
 	uvec4 vids; 
-#if defined(_KERNEL_MULTICOMPILE__INDEX_BUFFER_16BIT)
-	for (uint i = 0; i < 2; ++i)
-	{
-		uint ibo_addr = 2 * EdgeId + i;
-		uint ibo_data = buf_ibo[ibo_addr];
-		/* decode 16 bit index */
-		uint ibo_data_16h = (ibo_data >> 16u);
-    	uint ibo_data_16l = (ibo_data & 0xFFFFu);
-		vids[i*2] = ibo_data_16l; 
-		vids[i*2+1] = ibo_data_16h; 
-		/* fetch vertex pos */
-		v[i*2]   = ld_vbo(vids[i*2]);
-		v[i*2+1] = ld_vbo(vids[i*2+1]); 
-	}
-#else
 	for (uint i = 0; i < 4; ++i)
-	{
-		uint ibo_addr = 4 * EdgeId + i;
-		uint ibo_data = buf_ibo[ibo_addr];
+	{ /* fetch vertex id & pos */
+		uint ibo_data = buf_ibo[4 * EdgeId + i];
 		vids[i] = ibo_data; 
-		/* fetch vertex pos */
 		v[i] = ld_vbo(vids[i]);  
 	}
-#endif
 	
 	bool is_border = line_adj_is_border_edge(vids); 
 
 	float face_orient_012, face_orient_321; 
-	vec3 edge_offset_dir; 
 	bool is_contour = is_contour_edge(
-		v[0], v[1], v[2], v[3], cam_pos_loc
-		, face_orient_012, face_orient_321, edge_offset_dir /*out*/
+		v[0], v[1], v[2], v[3], cam_pos_ws
+		, face_orient_012, face_orient_321/*out*/
 	); 
 	bool rev_edge_dir = is_back_face(face_orient_012); 
 	if (false == valid_thread) is_contour = false; 
@@ -142,8 +187,8 @@ void main()
 	if (is_contour)
 	{
 		/* transform to world space */
-		for (uint i = 0; i < 4; ++i)
-			v[i] = (model_to_world * vec4(v[i], 1.0f)).xyz; 
+/* 		for (uint i = 0; i < 4; ++i)
+			v[i] = (model_to_world * vec4(v[i], 1.0f)).xyz;  */
 		
 		/* write world pos to output buffer */
 		uint base_addr = mesh_pool_addr__wpos_and_edgeid(compacted_idx); 
@@ -335,81 +380,5 @@ void main()
 #endif
 
 
-#if defined(_KERNEL_MULTICOMPILE__COMPACT_VBO)
-/*
- * float ssbo_meshbatch_vbo_[]
- * int pcs_meshbatch_num_verts_
- * 
- * float ssbo_vbo_full_[]
- * int pcs_full_vbo_offset_
- * 
- * int pcs_rsc_handle_
- * ObjectMatrices drw_matrix_buf[]
- * ubo ubo_view_matrices_
- */
- void main()
- {
-	const uint groupId = gl_LocalInvocationID.x; 
-	const uint idx = gl_GlobalInvocationID.x; 
 
-	const uint VertID = idx; 
-	const uint NumVerts = pcs_meshbatch_num_verts_;
-	bool valid_thread = VertID < NumVerts;
-	if (!valid_thread) return; 
-
-	const uint ResourceID = pcs_rsc_handle_; 
-
-	/* transform matrices, see "common_view_lib.glsl" */ 
-	float4x4 model_to_world = drw_matrix_buf[ResourceID].model;  
-	float4x4 world_to_model = drw_matrix_buf[ResourceID].model_inverse; 
-	float4x4 view_to_world = ubo_view_matrices_.viewinv;
-	float4x4 world_to_view = ubo_view_matrices_.viewmat;
-
-	vec3 vpos_ls, vpos_ws; 
-
-	uint ld_base_addr = VertID; /* TODO: posnor buf, verify this */ 
-	SSBO_Data_PosNor posnor_packed = ssbo_meshbatch_vbo_[ld_base_addr]; 
-	vpos_ls.x = posnor_packed.x;
-	vpos_ls.y = posnor_packed.y; 
-	vpos_ls.z = posnor_packed.z;
-
-	vpos_ws = (model_to_world * vec4(vpos_ls, 1.0f)).xyz; 
-
-	uint st_base_addr = (pcs_full_vbo_offset_ + VertID) * 3u;  
-	ssbo_vbo_full_[st_base_addr+0] = vpos_ws.x; 
-	ssbo_vbo_full_[st_base_addr+1] = vpos_ws.y;
-	ssbo_vbo_full_[st_base_addr+2] = vpos_ws.z;
- }
-#endif
-
-
-
-#if defined(_KERNEL_MULTICOMPILE__COMPACT_EDGE_ADJ_IBO)
-/*
- * uint IBO_BUF[]
- * uint pcs_meshbatch_edge_count_
- * int pcs_full_ibo_offset_
- * uint pcs_edge_count_
- * uint ssbo_edge_to_vert_[]
-*/
- void main()
- {
-	const uint groupId = gl_LocalInvocationID.x; 
-	const uint idx = gl_GlobalInvocationID.x; 
-    const uint EdgeID = idx.x; 
-
-    bool valid_thread = (EdgeID < pcs_edge_count_); 
-	if (!valid_thread) return; 
-
-	uvec4 vid; 
-    load_and_decode_ibo__edge_adj(EdgeID, 4u, /*out*/vid); 
-
-	uint st_base_addr = (pcs_full_ibo_offset_ + EdgeID) * 4u;  
-	ssbo_edge_to_vert_[st_base_addr+0] = vid[0];
-	ssbo_edge_to_vert_[st_base_addr+1] = vid[1]; 
-	ssbo_edge_to_vert_[st_base_addr+2] = vid[2];
-	ssbo_edge_to_vert_[st_base_addr+3] = vid[3];
- }
-
-#endif
 

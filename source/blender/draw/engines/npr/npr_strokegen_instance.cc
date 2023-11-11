@@ -154,7 +154,7 @@ namespace blender::npr::strokegen
 
     /* Geometry Extraction */
     manager.submit(strokegen_passes.get_compute_pass(PType::GEOM_EXTRACTION), view);
-
+    manager.submit(strokegen_passes.get_compute_pass(PType::CONTOUR_PROCESS), view); 
 
     /* Draw Contour Edges */
     strokegen_textures.fb_contour_raster.bind();

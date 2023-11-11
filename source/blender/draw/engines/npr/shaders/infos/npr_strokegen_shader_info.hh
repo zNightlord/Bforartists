@@ -134,6 +134,18 @@ GPU_SHADER_CREATE_INFO(npr_compaction_off)
 /** \Geometry extraction from GPUBatch(es)
  * \{ */
 /* Collect & Transform Contour Edges */
+GPU_SHADER_CREATE_INFO(bnpr_geom_extract_boostrap)
+    .do_static_compilation(true)
+    .typedef_source("bnpr_shader_shared.hh")
+    .typedef_source("draw_shader_shared.h")
+    .define("_KERNEL_MULTICOMPILE_BOOSTRAP_GEOM_EXTRACT", "1")
+    .define("DECODE_IBO_EXCLUDE",       "1") /* exclude ibo decode shader */
+    .additional_info("npr_compaction_off")
+
+    .storage_buf(0, Qualifier::READ_WRITE, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
+    .local_group_size(32)
+    .compute_source("npr_strokegen_geom_extract_comp.glsl");
+
 GPU_SHADER_CREATE_INFO(bnpr_geom_extract)
     .do_static_compilation(true)
     .typedef_source("bnpr_shader_shared.hh")
@@ -144,17 +156,18 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_extract)
     .define("WINGED_EDGE_TOPO_INCLUDE", "1")
     .define("CP_TAG", "contour_edge")
     .storage_buf(0, Qualifier::READ, "uint", "buf_ibo[]")
-    .storage_buf(1, Qualifier::READ, "float", "buf_vbo[]") /* cannot use vec3 due to ssbo alignment */
+    .storage_buf(1, Qualifier::READ, "float", "buf_vbo[]") 
     .storage_buf(2, Qualifier::READ_WRITE, "uint", "buf_strokegen_mesh_pool[]")
     .storage_buf(3, Qualifier::READ, "ObjectMatrices", "drw_matrix_buf[]")
     .storage_buf(4, Qualifier::READ_WRITE, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
     .storage_buf(5, Qualifier::WRITE, "uint", "ssbo_edge_to_contour_[]")
     .uniform_buf(0, "ViewMatrices", "ubo_view_matrices_")
     .push_constant(Type::INT, "pcs_ib_fmt_u16")
-    .push_constant(Type::INT, "pcs_num_verts")
+    .push_constant(Type::INT, "pcs_num_edges")
     .push_constant(Type::INT, "pcs_num_ib_offset")
     .push_constant(Type::INT, "pcs_rsc_handle")
-    .push_constant(Type::INT, "pcs_clear_compaction_counter_")
+    .push_constant(Type::INT, "pcs_vert_id_offset_")
+    .push_constant(Type::INT, "pcs_edge_id_offset_")
     .local_group_size(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT) /* <== from "bnpr_defines.hh" */
     .compute_source("npr_strokegen_geom_extract_comp.glsl");
 
@@ -211,7 +224,7 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_extract_collect_verts)
     .uniform_buf(0, "ViewMatrices", "ubo_view_matrices_")
     .push_constant(Type::INT, "pcs_rsc_handle_")
     .push_constant(Type::INT, "pcs_meshbatch_num_verts_")
-    .push_constant(Type::INT, "pcs_full_vbo_offset_")
+    .push_constant(Type::INT, "pcs_vert_id_offset_")
 
     .local_group_size(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT)
     .compute_source("npr_strokegen_geom_extract_comp.glsl");
@@ -223,12 +236,13 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_extract_collect_edges)
     .typedef_source("draw_shader_shared.h")
     .additional_info("npr_compaction_off") /* Remove compaction code */
     .define("_KERNEL_MULTICOMPILE__COMPACT_EDGE_ADJ_IBO", "1")
-    .define("DECODE_IBO_INCLUDE", "1") 
+    .define("DECODE_IBO_INCLUDE", "1")
 
     .storage_buf(0, Qualifier::READ, "uint", "IBO_BUF[]")
     .storage_buf(1, Qualifier::WRITE, "uint", "ssbo_edge_to_vert_[]") /* encoded posnor vbo */
     .push_constant(Type::INT, "pcs_edge_count_")
-    .push_constant(Type::INT, "pcs_full_ibo_offset_")
+    .push_constant(Type::INT, "pcs_vert_id_offset_")
+    .push_constant(Type::INT, "pcs_edge_id_offset_")
 
     .local_group_size(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT)
     .compute_source("npr_strokegen_geom_extract_comp.glsl");

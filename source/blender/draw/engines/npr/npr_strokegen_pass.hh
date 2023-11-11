@@ -13,6 +13,7 @@
 
 #include "npr_strokegen_shader.hh"
 #include "bnpr_shader_shared.hh"
+#include "gpu_batch_private.hh"
 #include "npr_strokegen_buffer_pool.hh"
 #include "npr_strokegen_texture_pool.hh"
 #include "npr_strokegen_pass.hh"
@@ -31,6 +32,7 @@ private:
   draw::PassSimple pass_comp_test = {"Strokegen Compute Test"};
 
   draw::PassSimple pass_extract_geom = {"StrokeGen Extract Geometry"};
+  draw::PassSimple pass_process_contours = {"StrokeGen Process Contours"}; 
   draw::PassSimple pass_compress_contour_pixels = {"Generate Contour Pixel Mask"}; 
 
   draw::PassSimple pass_scan_test = {"Bnpr GPU Blelloch Scan Test"};
@@ -77,8 +79,9 @@ public:
     LIST_RANKING_TEST,
 
     GEOM_EXTRACTION,
+    CONTOUR_PROCESS, 
     INDIRECT_DRAW_CONTOUR_EDGES,
-    COMPRESS_CONTOUR_PIXELS 
+    COMPRESS_CONTOUR_PIXELS,
   };
 
   PassSimple& get_compute_pass(eType passType);
@@ -99,14 +102,25 @@ public:
   /* -------------------------------------------------------------------- */
   /** \name Rebuild Render Passes
      * \{ */
-  bool boostrap_before_extract_first_batch; 
-  void init_per_mesh_pass();
-  void append_per_mesh_pass(Object* ob, GPUBatch* gpu_batch_line_adj, GPUBatch* gpu_batch_surf, ResourceHandle& rsc_handle, const DRWView* drw_view);
+  bool boostrap_before_extract_first_batch;
   int num_total_mesh_verts;
   int num_total_mesh_edges;
   int num_total_mesh_tris;
+  void init_per_mesh_pass();
+  void append_subpass_extract_contour_edges(GPUBatch *gpu_batch_line_adj,
+                                            ResourceHandle &rsc_handle,
+                                            gpu::Batch *edge_batch,
+                                            int num_edges,
+                                            gpu::GPUIndexBufType ib_type);
+  void append_subpass_merge_vbo(GPUBatch *gpu_batch_surf, int batch_resource_index, int num_verts);
+  void append_subpass_merge_line_adj_ibo(GPUBatch *gpu_batch_line_adj,
+                                         int num_added_edges,
+                                         gpu::GPUIndexBufType ib_type);
+  void append_per_mesh_pass(Object* ob, GPUBatch* gpu_batch_line_adj, GPUBatch* gpu_batch_surf, ResourceHandle& rsc_handle, const DRWView* drw_view);
   void append_subpass_meshing_merge_verts(int num_verts_in, bool debug = false);
   void append_subpass_meshing_edge_adjacency(int num_edges_in, bool debug = false); 
+
+  void rebuild_pass_process_contours();
   void append_subpass_fill_dispatch_args_contour_edges();
   void append_subpass_process_contour_edges();
 
