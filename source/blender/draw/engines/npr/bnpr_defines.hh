@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
+﻿/* SPDX-License-Identifier: GPL-2.0-or-later
  * Copyright 2021 Blender Foundation.
  */
 
@@ -30,7 +30,7 @@
 #define GROUP_SIZE_Y_CONTOUR_PIXEL_COMPRESS 8u
 
 #define MAX_GPU_HASH_TABLE_SIZE ((2048 * 2048 * 16)) /* we just cannot afford more than this */
- /** \} */
+/** \} */
 
 
 

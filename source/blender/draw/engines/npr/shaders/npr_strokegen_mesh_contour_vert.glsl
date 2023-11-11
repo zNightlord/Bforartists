@@ -33,8 +33,8 @@ void main()
     
     uint base_addr = vid * 6; 
     uint num_contour_edges = ssbo_bnpr_mesh_pool_counters_.num_contour_edges; 
-
-    uint addr_uv = mesh_pool_addr__edgeuv(contour_edge_id, num_contour_edges); 
+ 
+    uint addr_uv = mesh_pool_addr__edgeuv(contour_edge_id); 
     if (vid % 2u == 1u) 
         addr_uv += 2u;
     vec2 uv = vec2(
@@ -42,7 +42,7 @@ void main()
         uintBitsToFloat(buf_strokegen_mesh_pool[addr_uv+1])
     );
 
-    uint addr_zhclip = mesh_pool_addr__zwhclip(contour_edge_id, num_contour_edges); 
+    uint addr_zhclip = mesh_pool_addr__zwhclip(contour_edge_id); 
     if (vid % 2u == 1u) 
         addr_zhclip += 2u; 
     float zhclip = uintBitsToFloat(buf_strokegen_mesh_pool[addr_zhclip+0]); 
@@ -58,7 +58,7 @@ void main()
     pos_hclip.xy *= pos_hclip.w; 
 
     /* Fetch edge dir from ssbo */
-    uint addr_edgedir = mesh_pool_addr__edgedir(contour_edge_id, num_contour_edges); 
+    uint addr_edgedir = mesh_pool_addr__edgedir(contour_edge_id); 
     vec2 edgedir_uv = vec2(
         uintBitsToFloat(buf_strokegen_mesh_pool[addr_edgedir+0]), 
         uintBitsToFloat(buf_strokegen_mesh_pool[addr_edgedir+1])

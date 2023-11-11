@@ -121,7 +121,7 @@ public:
   void append_subpass_meshing_edge_adjacency(int num_edges_in, bool debug = false); 
 
   void rebuild_pass_process_contours();
-  void append_subpass_fill_dispatch_args_contour_edges(bool all_contour_edges);
+  void append_subpass_fill_dispatch_args_contour_edges(PassSimple& pass, bool all_contour_edges);
   void append_subpass_process_contour_edges();
 
   void rebuild_pass_contour_edge_drawcall();

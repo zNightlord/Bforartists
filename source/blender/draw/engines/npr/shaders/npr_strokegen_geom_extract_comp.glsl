@@ -269,9 +269,10 @@ void main()
 	const uint groupId = gl_LocalInvocationID.x; 
 	const uint idx = gl_GlobalInvocationID.x; 
 
-	const uint ContourEdgeIdx = idx; 
-	const uint NumContourEdges = ssbo_bnpr_mesh_pool_counters_.num_contour_edges; 
-	bool valid_thread = ContourEdgeIdx < NumContourEdges; 
+	const uint NumContourEdges = ssbo_bnpr_mesh_pool_counters_.num_contour_edges_curr; 
+	const uint NumContourEdgesTotal = ssbo_bnpr_mesh_pool_counters_.num_contour_edges; 
+	bool valid_thread = idx < NumContourEdges; 
+	const uint ContourEdgeIdx = idx + ssbo_bnpr_mesh_pool_counters_prev_.num_contour_edges; 
 
 	/* transform matrices, see "common_view_lib.glsl" */ 
 	float4x4 world_to_view = ubo_view_matrices_.viewmat;
@@ -295,7 +296,7 @@ void main()
 		vpos_ndc[0] = mat_camera_proj * vec4((world_to_view * vpos_ws[0]).xyz, 1.0f); 
 		vpos_ndc[1] = mat_camera_proj * vec4((world_to_view * vpos_ws[1]).xyz, 1.0f); 
 		
-		uint addr_st = mesh_pool_addr__zwhclip(ContourEdgeIdx, NumContourEdges); 
+		uint addr_st = mesh_pool_addr__zwhclip(ContourEdgeIdx); 
 		buf_strokegen_mesh_pool[addr_st+0] = floatBitsToUint(vpos_ndc[0].z); 
 		buf_strokegen_mesh_pool[addr_st+1] = floatBitsToUint(vpos_ndc[0].w); 
 		buf_strokegen_mesh_pool[addr_st+2] = floatBitsToUint(vpos_ndc[1].z); 
@@ -309,7 +310,7 @@ void main()
 		float edge_dir_len = length(edge_dir);
 		vec2 edge_dir_norm = edge_dir / edge_dir_len; 
 
-		addr_st = mesh_pool_addr__edgedir(ContourEdgeIdx, NumContourEdges); 
+		addr_st = mesh_pool_addr__edgedir(ContourEdgeIdx); 
 		buf_strokegen_mesh_pool[addr_st] = floatBitsToUint(edge_dir_norm.x);
 		buf_strokegen_mesh_pool[addr_st+1] = floatBitsToUint(edge_dir_norm.y);
 
@@ -324,7 +325,7 @@ void main()
 			vpos_uv[1].xy += edge_dir_norm * elongation; 
 		}
 
-		addr_st = mesh_pool_addr__edgeuv(ContourEdgeIdx, NumContourEdges); 
+		addr_st = mesh_pool_addr__edgeuv(ContourEdgeIdx); 
 		vpos_uv[0].xy /= pcs_screen_size_.xy; 
 		vpos_uv[1].xy /= pcs_screen_size_.xy; 
 		buf_strokegen_mesh_pool[addr_st] = floatBitsToUint(vpos_uv[0].x); 
@@ -386,8 +387,8 @@ void main()
 			(!back_face_T_junction) ? pwci.contour_id : /*break backface border chain at T-junction*/ContourEdgeIdx; 
 	}
 
-	if (idx.x == 0)
-		ssbo_list_ranking_inputs_.num_nodes = NumContourEdges; 
+	if (idx.x == 0) /* I dont care, this is cheap, just keep this up to date here */
+		ssbo_list_ranking_inputs_.num_nodes = ssbo_bnpr_mesh_pool_counters_.num_contour_edges; 
 }
 #endif
 

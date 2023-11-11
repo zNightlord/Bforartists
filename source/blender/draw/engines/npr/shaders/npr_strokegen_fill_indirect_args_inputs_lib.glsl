@@ -62,7 +62,7 @@ void FillDispatchArgsBuffer(uvec3 args)
 void GetDispatchArgs(out uvec3 dispatch_args)
 {
     uint num_work_items = 0; 
-    if (pc_dispatch_for_all_edges_ > 1)
+    if (pc_dispatch_for_all_edges_ > 0)
         num_work_items = ssbo_bnpr_mesh_pool_counters_.num_contour_edges;
     else
     {

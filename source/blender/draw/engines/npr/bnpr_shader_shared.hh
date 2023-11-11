@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
+﻿/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /**
  * Shared structures, enums & defines between C++ and GLSL.
@@ -250,27 +250,28 @@ using namespace draw;
 
 
   /* Addressing - buf_strokegen_mesh_pool */
+#define MAX_NUM_CONTOUR_EDGES ((3940000)) /* ssbo buffer cannot be larger than 8192*8192*/
   /*x7*/
   static inline uint mesh_pool_addr__wpos_and_edgeid(uint contour_edge_id) 
   {
     return contour_edge_id * 7u;
   }
   /*x2*/
-  static inline uint mesh_pool_addr__edgedir(uint contour_edge_id, uint num_contour_edges)
+  static inline uint mesh_pool_addr__edgedir(uint contour_edge_id)
   {
-    uint base_addr = mesh_pool_addr__wpos_and_edgeid(num_contour_edges);
+    uint base_addr = mesh_pool_addr__wpos_and_edgeid(MAX_NUM_CONTOUR_EDGES);
     return base_addr + contour_edge_id * 2u;
   } 
   /*x4*/
-  static inline uint mesh_pool_addr__zwhclip(uint contour_edge_id, uint num_contour_edges)
+  static inline uint mesh_pool_addr__zwhclip(uint contour_edge_id)
   {
-    uint base_addr = mesh_pool_addr__edgedir(num_contour_edges, num_contour_edges);
+    uint base_addr = mesh_pool_addr__edgedir(MAX_NUM_CONTOUR_EDGES);
     return base_addr + contour_edge_id * 4;
   }
   /*x4*/
-  static inline uint mesh_pool_addr__edgeuv(uint contour_edge_id, uint num_contour_edges)
+  static inline uint mesh_pool_addr__edgeuv(uint contour_edge_id)
   {
-    uint base_addr = mesh_pool_addr__zwhclip(num_contour_edges, num_contour_edges);
+    uint base_addr = mesh_pool_addr__zwhclip(MAX_NUM_CONTOUR_EDGES);
     return base_addr + contour_edge_id * 4;
   }
   /** } */
