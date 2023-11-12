@@ -107,18 +107,19 @@ public:
   int num_total_mesh_edges;
   int num_total_mesh_tris;
   void init_per_mesh_pass();
-  void append_subpass_extract_contour_edges(GPUBatch *gpu_batch_line_adj,
-                                            ResourceHandle &rsc_handle,
-                                            gpu::Batch *edge_batch,
+  void append_subpass_meshing_wedge_flooding(int num_edges);
+  void append_subpass_extract_contour_edges(GPUBatch* gpu_batch_line_adj,
+                                            ResourceHandle& rsc_handle,
+                                            gpu::Batch* edge_batch,
                                             int num_edges,
-                                            gpu::GPUIndexBufType ib_type);
+                                            gpu::GPUIndexBufType ib_type, bool debug_wedge_flooding = false);
   void append_subpass_merge_vbo(GPUBatch *gpu_batch_surf, int batch_resource_index, int num_verts);
   void append_subpass_merge_line_adj_ibo(GPUBatch *gpu_batch_line_adj,
                                          gpu::GPUIndexBufType ib_type,
                                          int num_added_edges);
   void append_per_mesh_pass(Object* ob, GPUBatch* gpu_batch_line_adj, GPUBatch* gpu_batch_surf, ResourceHandle& rsc_handle, const DRWView* drw_view);
   void append_subpass_meshing_merge_verts(int num_verts_in, bool debug = false);
-  void append_subpass_meshing_edge_adjacency(int num_edges_in, int num_verts_in, bool debug = false); 
+  void append_subpass_meshing_wedge_adjacency_and_init_flooding_ptr(int num_edges_in, int num_verts_in, bool debug = false); 
 
   void rebuild_pass_process_contours();
   void append_subpass_fill_dispatch_args_contour_edges(PassSimple& pass, bool all_contour_edges);

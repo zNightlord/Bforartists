@@ -194,6 +194,13 @@ void main()
 		v[0], v[1], v[2], v[3], cam_pos_ws
 		, face_orient_012, face_orient_321/*out*/
 	); 
+	/* debug view */
+	if (pcs_dbg_wedge_flooding_ > 0)
+	{
+		WedgeFloodingPointer wfptr = decode_wedge_flooding_pointer(ssbo_wedge_flooding_pointers_out_[EdgeId]);
+		is_contour = wfptr.is_seed; 
+	}
+
 	bool rev_edge_dir = is_back_face(face_orient_012); 
 	if (false == valid_thread) is_contour = false; 
 

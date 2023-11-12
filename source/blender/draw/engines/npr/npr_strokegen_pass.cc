@@ -81,6 +81,38 @@ namespace blender::npr::strokegen
     boostrap_before_extract_first_batch = true;
   }
 
+  void StrokeGenPassModule::append_subpass_meshing_wedge_flooding(int num_edges)
+  {
+    auto bind_flooding_rsc = [&](
+        draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub, int flooding_iter = 0)
+    {
+      GPUStorageBuf *reused_ssbo_wedge_flooding_pointers_in_ = nullptr;
+      buffers_.reused_ssbo_wedge_flooding_pointers_(flooding_iter + 1,
+                                                    reused_ssbo_wedge_flooding_pointers_in_);
+      GPUStorageBuf *reused_ssbo_wedge_flooding_pointers_out_ = nullptr;
+      buffers_.reused_ssbo_wedge_flooding_pointers_(flooding_iter,
+                                                    reused_ssbo_wedge_flooding_pointers_out_);
+
+      sub.bind_ssbo(0, reused_ssbo_wedge_flooding_pointers_in_);
+      sub.bind_ssbo(1, reused_ssbo_wedge_flooding_pointers_out_);
+      sub.bind_ssbo(2, buffers_.ssbo_edge_to_edges_);
+      sub.push_constant("pcs_edge_count_", num_edges);
+      sub.push_constant("pcs_edge_id_offset_", num_total_mesh_edges);
+    };
+
+    for (int flooding_iter = 0; flooding_iter < 4; ++flooding_iter)
+    {
+      auto &sub = pass_extract_geom.sub("bnpr_meshing_wedge_flooding");
+      sub.shader_set(shaders_.static_shader_get(MESH_WEDGE_FLOODING_ITER));
+
+      bind_flooding_rsc(sub, flooding_iter);
+
+      int num_groups = compute_num_groups(num_edges, GROUP_SIZE_STROKEGEN_GEOM_EXTRACT);
+      sub.dispatch(int3(num_groups, 1, 1));
+      sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_SHADER_IMAGE_ACCESS);
+    }
+  }
+
   /**
    * \brief Add a subpass for extracting geometry from given GPUBatch.
    * \param ob Mesh Object
@@ -148,9 +180,13 @@ namespace blender::npr::strokegen
     append_subpass_merge_line_adj_ibo(gpu_batch_line_adj, ib_type, num_edges);
 
     append_subpass_meshing_merge_verts(num_verts);
-    append_subpass_meshing_edge_adjacency(num_edges, num_verts); 
+    append_subpass_meshing_wedge_adjacency_and_init_flooding_ptr(num_edges, num_verts);
+    append_subpass_meshing_wedge_flooding(num_edges);
 
-    append_subpass_extract_contour_edges(gpu_batch_line_adj, rsc_handle, edge_batch, num_edges, ib_type);
+    const bool debug_wedge_flooding = true; 
+    append_subpass_extract_contour_edges(
+        gpu_batch_line_adj, rsc_handle, edge_batch, num_edges, ib_type, debug_wedge_flooding
+    );
 
     append_subpass_fill_dispatch_args_contour_edges(pass_extract_geom, false);
     append_subpass_process_contour_edges();
@@ -261,7 +297,9 @@ namespace blender::npr::strokegen
     }
   }
 
-  void StrokeGenPassModule::append_subpass_meshing_edge_adjacency(int num_edges_in, int num_verts_in, bool debug)
+  void StrokeGenPassModule::append_subpass_meshing_wedge_adjacency_and_init_flooding_ptr(
+    int num_edges_in, int num_verts_in, bool debug
+  )
   {
     const int hashmap_size = std::min(MAX_GPU_HASH_TABLE_SIZE, num_edges_in * 16);
 
@@ -281,7 +319,7 @@ namespace blender::npr::strokegen
       sub.bind_ssbo(6, reused_ssbo_wedge_flooding_pointers_out_);
       sub.bind_ssbo(7, buffers_.ssbo_vbo_full_);
       sub.bind_ssbo(8, buffers_.ssbo_bnpr_mesh_pool_counters_);
-      sub.bind_ubo(0, buffers_.ubo_view_matrices_); 
+      sub.bind_ubo(0, buffers_.ubo_view_matrices_cache_); 
       sub.push_constant("pcs_hash_map_size_", hashmap_size);
       sub.push_constant("pcs_edge_count_", (int)num_edges_in);
       sub.push_constant("pcs_vert_count_", num_verts_in); 
@@ -345,7 +383,9 @@ namespace blender::npr::strokegen
       ResourceHandle &rsc_handle,
       gpu::Batch *edge_batch,
       int num_edges,
-      gpu::GPUIndexBufType ib_type)
+      gpu::GPUIndexBufType ib_type,
+      bool debug_wedge_flooding
+  )
   {
     auto &sub = pass_extract_geom.sub(
         boostrap_before_extract_first_batch ? "extract_geom_boostrap" : "Extract"
@@ -361,6 +401,11 @@ namespace blender::npr::strokegen
     sub.bind_ssbo(3, DRW_manager_get()->matrix_buf.current());
     sub.bind_ssbo(4, buffers_.ssbo_bnpr_mesh_pool_counters_);
     sub.bind_ssbo(5, buffers_.ssbo_edge_to_contour_);
+    // for debugging 
+    GPUStorageBuf *reused_ssbo_wedge_flooding_pointers_out_ = nullptr;
+    buffers_.reused_ssbo_wedge_flooding_pointers_(1, reused_ssbo_wedge_flooding_pointers_out_);
+    sub.bind_ssbo(6, reused_ssbo_wedge_flooding_pointers_out_); 
+    // --------------
     sub.bind_ubo(0, buffers_.ubo_view_matrices_cache_);
     sub.push_constant("pcs_ib_fmt_u16", ib_type == gpu::GPU_INDEX_U16 ? 1 : 0);
     sub.push_constant("pcs_num_edges", (int)edge_batch->elem_()->index_len_get() / 4);
@@ -372,6 +417,7 @@ namespace blender::npr::strokegen
     sub.push_constant("pcs_rsc_handle", (int)rsc_handle.resource_index());
     sub.push_constant("pcs_vert_id_offset_", num_total_mesh_verts);
     sub.push_constant("pcs_edge_id_offset_", num_total_mesh_edges);
+    sub.push_constant("pcs_dbg_wedge_flooding_", debug_wedge_flooding ? 1 : 0);
 
     sub.dispatch(int3(
             compute_num_groups(num_edges, GROUP_SIZE_STROKEGEN_GEOM_EXTRACT, 1),
