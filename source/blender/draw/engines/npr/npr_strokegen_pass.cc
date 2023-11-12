@@ -213,9 +213,13 @@ namespace blender::npr::strokegen
   {
     const int hashmap_size = std::min(MAX_GPU_HASH_TABLE_SIZE, num_verts_in * 16);
 
-    auto bind_rsc = [&](draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub) {
+    auto bind_rsc = [&](draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub)
+    {
+      GPUStorageBuf *reused_ssbo_vert_spatial_map_payloads_ = nullptr;
+      buffers_.reused_ssbo_vert_spatial_map_payloads_(reused_ssbo_vert_spatial_map_payloads_);
+
       sub.bind_ssbo(0, buffers_.ssbo_vert_spatial_map_headers_);
-      sub.bind_ssbo(1, buffers_.ssbo_mesh_buffer_reuse_0_);
+      sub.bind_ssbo(1, reused_ssbo_vert_spatial_map_payloads_);
       sub.bind_ssbo(2, buffers_.ssbo_vert_merged_id_);
       sub.bind_ssbo(3, buffers_.ssbo_vbo_full_);
       sub.bind_ssbo(4, buffers_.ssbo_bnpr_mesh_pool_counters_);
@@ -261,14 +265,23 @@ namespace blender::npr::strokegen
   {
     const int hashmap_size = std::min(MAX_GPU_HASH_TABLE_SIZE, num_edges_in * 16);
 
-    auto bind_rsc = [&](draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub) {
+    auto bind_rsc = [&](draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub)
+    {
+      GPUStorageBuf *reused_ssbo_edge_spatial_map_payloads_ = nullptr;
+      buffers_.reused_ssbo_edge_spatial_map_payloads_(reused_ssbo_edge_spatial_map_payloads_);
+      GPUStorageBuf *reused_ssbo_wedge_flooding_pointers_out_ = nullptr;
+      buffers_.reused_ssbo_wedge_flooding_pointers_(1, reused_ssbo_wedge_flooding_pointers_out_); 
+
       sub.bind_ssbo(0, buffers_.ssbo_vert_merged_id_);
       sub.bind_ssbo(1, buffers_.ssbo_vert_spatial_map_headers_);
-      sub.bind_ssbo(2, buffers_.ssbo_mesh_buffer_reuse_0_);
+      sub.bind_ssbo(2, reused_ssbo_edge_spatial_map_payloads_);
       sub.bind_ssbo(3, buffers_.ssbo_edge_to_vert_);
       sub.bind_ssbo(4, buffers_.ssbo_edge_to_edges_);
       sub.bind_ssbo(5, buffers_.ssbo_vert_to_edge_list_header_);
-      sub.bind_ssbo(6, buffers_.ssbo_bnpr_mesh_pool_counters_);
+      sub.bind_ssbo(6, reused_ssbo_wedge_flooding_pointers_out_);
+      sub.bind_ssbo(7, buffers_.ssbo_vbo_full_);
+      sub.bind_ssbo(8, buffers_.ssbo_bnpr_mesh_pool_counters_);
+      sub.bind_ubo(0, buffers_.ubo_view_matrices_); 
       sub.push_constant("pcs_hash_map_size_", hashmap_size);
       sub.push_constant("pcs_edge_count_", (int)num_edges_in);
       sub.push_constant("pcs_vert_count_", num_verts_in); 

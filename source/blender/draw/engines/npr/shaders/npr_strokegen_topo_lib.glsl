@@ -223,7 +223,59 @@ PerWedgeContourInfo decode_per_wedge_contour_info(uint peci_enc)
     return peci; 
 }
 
+struct WedgeQuality
+{
+    float area; 
+    float dihedral; 
+    bool unstable; 
+}; 
 
+WedgeQuality compute_wedge_quality(vec3 p0, vec3 p1, vec3 p2, vec3 p3, vec3 cam_pos_ws) /* world pos of p0~3 */
+{ /* impl based on overlay_outline_prepass_vert_no_geom.glsl */
+    WedgeQuality res; 
+    
+	vec3 v10 = p0 - p1;
+	vec3 v13 = p3 - p1;
+   	vec3 v12 = p2 - p1;
+
+	vec3 n0 = cross(v13, v10);
+	vec3 n2 = cross(v12, v13);
+	
+    mat3 m = mat3(v10, v13, vec3(1, 1, 1));
+    res.area = abs(determinant(m)); 
+
+    /* 
+     * TODO: add dihedral angle, only mark unstable edge with near planar angle 
+     * https://www.cs.cmu.edu/~kmcrane/Projects/Other/TriangleMeshDerivativesCheatSheet.pdf */
+    res.dihedral = atan(dot(v13, cross(n0, n2)), dot(n0, n2));
+
+    vec3 view_dir = cam_pos_ws - p1; 
+	float face_orient_012 = dot(view_dir, n0);
+  	float face_orient_321 = dot(view_dir, n2);
+    res.unstable = (abs(face_orient_012) < 0.01f) || (abs(face_orient_321) < 0.01f);
+
+	return res; 
+}
+
+struct WedgeFloodingPointer
+{
+    uint next_wedge_id; 
+    bool is_border; 
+    bool is_seed; 
+}; 
+uint encode_wedge_flooding_pointer(WedgeFloodingPointer wfp)
+{
+    uint wfp_enc = ((wfp.next_wedge_id << 2u) | ((uint(wfp.is_border) << 1u) | (uint(wfp.is_seed)))); 
+    return wfp_enc; 
+}
+WedgeFloodingPointer decode_wedge_flooding_pointer(uint wfp_enc)
+{
+    WedgeFloodingPointer wfp; 
+    wfp.next_wedge_id = (wfp_enc >> 2u);
+    wfp.is_border = (0u != ((wfp_enc >> 1u) & 1u));
+    wfp.is_seed = (0u != (wfp_enc & 1u));
+    return wfp; 
+}
 
 #endif
 

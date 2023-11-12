@@ -169,10 +169,10 @@ void main()
 	const uint resource_id = pcs_rsc_handle; 
 	
 	/* transform matrices, see "common_view_lib.glsl" */ 
-	float4x4 model_to_world = drw_matrix_buf[resource_id].model; 
-	float4x4 world_to_model = drw_matrix_buf[resource_id].model_inverse; 
-	float4x4 view_to_world = ubo_view_matrices_.viewinv;
-	float4x4 world_to_view = ubo_view_matrices_.viewmat;
+	mat4 model_to_world = drw_matrix_buf[resource_id].model; 
+	mat4 world_to_model = drw_matrix_buf[resource_id].model_inverse; 
+	mat4 view_to_world = ubo_view_matrices_.viewinv;
+	mat4 world_to_view = ubo_view_matrices_.viewmat;
 	
 	bool is_persp = (ubo_view_matrices_.winmat[3][3] == 0.0);
 	vec3 cam_pos_ws = view_to_world[3].xyz; /* see "#define cameraPos ViewMatrixInverse[3].xyz" */

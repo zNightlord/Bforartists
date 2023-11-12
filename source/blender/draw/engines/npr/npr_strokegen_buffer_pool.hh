@@ -48,6 +48,21 @@ class GPUBufferPoolModule {
   SSBO_StrokeGenMeshVertHashTable ssbo_vert_spatial_map_headers_;
   SSBO_StrokeGenMeshLarge ssbo_mesh_buffer_reuse_0_;
   SSBO_StrokeGenMeshLarge ssbo_vert_merged_id_;
+  inline void reused_ssbo_vert_spatial_map_payloads_(GPUStorageBuf *&buf)
+  {
+    buf = ssbo_mesh_buffer_reuse_0_;  
+  }
+  inline void reused_ssbo_edge_spatial_map_payloads_(GPUStorageBuf*& buf)
+  {
+    buf = ssbo_mesh_buffer_reuse_0_; 
+  }
+  inline void reused_ssbo_wedge_flooding_pointers_(uint iter, GPUStorageBuf *&buf) const
+  {
+    if (iter % 2u == 1u)
+      buf = ssbo_edge_to_contour_;
+    else
+      buf = ssbo_mesh_buffer_reuse_0_; 
+  }
 
   SSBO_BnprScanData       ssbo_in_scan_data_;
   SSBO_BnprScanData       ssbo_out_scan_data_;

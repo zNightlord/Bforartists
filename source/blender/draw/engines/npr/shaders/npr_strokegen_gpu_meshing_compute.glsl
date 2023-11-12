@@ -191,16 +191,20 @@ uint FUNC_HASHMAP_SEARCH(HASH_KEY_TYPE pos)
 
 
 
-#if defined(_KERNEL_MULTICOMPILE__VERT_MERGE)
-
-#define GLOBAL_COMPACTION_COUNTER__MESH_VERTS ssbo_bnpr_mesh_pool_counters_.num_verts
-#define GLOBAL_COMPACTION_COUNTER__DBG_VERTS ssbo_bnpr_mesh_pool_counters_.num_edges
+#if defined(_KERNEL_MULTICOMPILE__VERT_MERGE) || defined(_KERNEL_MULTICOMPILE__EDGE_ADJACENCY)
 vec3 ld_vbo(uint vert)
 {
 	uint base_addr = vert * 3; 
 	return vec3(ssbo_vbo_full_[base_addr], ssbo_vbo_full_[base_addr+1], ssbo_vbo_full_[base_addr+2]); 
 }
+#endif
 
+
+
+#if defined(_KERNEL_MULTICOMPILE__VERT_MERGE)
+
+#define GLOBAL_COMPACTION_COUNTER__MESH_VERTS ssbo_bnpr_mesh_pool_counters_.num_verts
+#define GLOBAL_COMPACTION_COUNTER__DBG_VERTS ssbo_bnpr_mesh_pool_counters_.num_edges
 
 void main()
 {
@@ -275,7 +279,9 @@ void main()
 
 
 #if defined(_KERNEL_MULTICOMPILE__EDGE_ADJACENCY)
+
 #define GLOBAL_COMPACTION_COUNTER__NUM_EDGES ssbo_bnpr_mesh_pool_counters_.num_edges
+
 void main()
 {
     const uint groupId = gl_LocalInvocationID.x; 
@@ -352,6 +358,7 @@ void main()
         vids_wedge[2] = ssbo_edge_to_vert_[base_addr+2];
         vids_wedge[3] = ssbo_edge_to_vert_[base_addr+3];
     }
+    bool is_border_wedge = wing_verts_is_border_edge(vids_wedge); 
 
     /* Search for adj wedges */
     uvec2 vids_bwedge[4]; 
@@ -402,15 +409,38 @@ void main()
             /* note: == NOT_FOUND when this edge is a duplicated one */
         }
 
-    /* Put an arbitrary neighbor wedge id for each vert */
+
+    /* Build Vert-to-Wedge link */
     uvec2 iverts_cwedge = mark__wedge_to_verts(4u); 
     if (valid_thread)
         for (uint iiverts = 0u; iiverts < 2u; iiverts++)
-        {
+        { /* Put an arbitrary neighbor wedge id for each vert */
             uint vert_id = vids_wedge[iverts_cwedge[iiverts]]; 
             ssbo_vert_to_edge_list_header_[vert_id] = EdgeID; 
         }
+
+
+    /* Mark unstable wedge & Initialize flooding pointer */
+    vec3 vpos_wedge[4]; 
+	for (uint ivert = 0; ivert < 4; ++ivert)
+		vpos_wedge[ivert] = ld_vbo(vids_wedge[ivert]);  
     
+    /* transform matrices, see "common_view_lib.glsl" */ 
+	mat4 view_to_world = ubo_view_matrices_.viewinv;
+	bool is_persp = (ubo_view_matrices_.winmat[3][3] == 0.0);
+	vec3 cam_pos_ws = view_to_world[3].xyz; /* see "#define cameraPos ViewMatrixInverse[3].xyz" */
+
+    WedgeQuality wq = compute_wedge_quality(
+        vpos_wedge[0], vpos_wedge[1], vpos_wedge[2], vpos_wedge[3], cam_pos_ws
+    ); 
+    
+    WedgeFloodingPointer wfptr; 
+    wfptr.is_seed = wq.unstable; 
+    wfptr.next_wedge_id = EdgeID; 
+    wfptr.is_border = is_border_wedge; 
+    if (valid_thread)
+        ssbo_wedge_flooding_pointers_out_[EdgeID] = encode_wedge_flooding_pointer(wfptr); 
+
 #endif
 
 }
