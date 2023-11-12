@@ -1,4 +1,4 @@
-﻿/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /**
  * Shared structures, enums & defines between C++ and GLSL.
@@ -225,7 +225,7 @@ using namespace draw;
     uint num_faces;
     uint num_contour_edges;
     uint num_contour_edges_curr;
-    uint dummy_0;
+    uint num_filtered_edges;
     uint dummy_1;
     uint dummy_2;
   };

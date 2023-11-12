@@ -410,7 +410,6 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_merge_edges_fill)
     .additional_info("bnpr_meshing_edge_adjecency")
     .define("_KERNEL_MULTICOMPILE__EDGE_ADJACENCY_FIND_ADJ", "1");
 
-
 GPU_SHADER_CREATE_INFO(bnpr_meshing_wedge_flooding)
     .do_static_compilation(true)
     .typedef_source("bnpr_shader_shared.hh")
@@ -419,10 +418,14 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_wedge_flooding)
     .define("DECODE_IBO_EXCLUDE", "1") /* Remove ibo code */
     .define("WINGED_EDGE_TOPO_INCLUDE", "1")
     .define("VERT_WEDGE_LIST_TOPO_INCLUDE", "1")
+    .define("GLOBAL_COUNTER", "ssbo_bnpr_mesh_pool_counters_.num_filtered_edges")
+    .define("CP_TAG", "filtered_edge")
 
     .storage_buf(0, Qualifier::READ_WRITE, "uint", "ssbo_wedge_flooding_pointers_in_[]")
     .storage_buf(1, Qualifier::READ_WRITE, "uint", "ssbo_wedge_flooding_pointers_out_[]")
     .storage_buf(2, Qualifier::READ, "uint", "ssbo_edge_to_edges_[]")
+    .storage_buf(3, Qualifier::WRITE, "uint", "ssbo_filtered_edge_to_edge_[]")
+    .storage_buf(4, Qualifier::READ_WRITE, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
     .push_constant(Type::INT, "pcs_edge_count_")
     .push_constant(Type::INT, "pcs_edge_id_offset_")
     .local_group_size(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT)
@@ -432,6 +435,12 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_wedge_flooding_iter)
     .do_static_compilation(true)
     .additional_info("bnpr_meshing_wedge_flooding")
     .define("_KERNEL_MULTICOMPILE__WEDGE_FLOODING__ITER", "1");
+
+GPU_SHADER_CREATE_INFO(bnpr_meshing_wedge_flooding_last_iter)
+    .do_static_compilation(true)
+    .additional_info("bnpr_meshing_wedge_flooding")
+    .define("_KERNEL_MULTICOMPILE__WEDGE_FLOODING__ITER", "1")
+    .define("_KERNEL_MULTICOMPILE__WEDGE_FLOODING__ITER__LAST_ITER", "1");
 
 /** \} */
 

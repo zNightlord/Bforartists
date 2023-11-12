@@ -92,18 +92,26 @@ namespace blender::npr::strokegen
       GPUStorageBuf *reused_ssbo_wedge_flooding_pointers_out_ = nullptr;
       buffers_.reused_ssbo_wedge_flooding_pointers_(flooding_iter,
                                                     reused_ssbo_wedge_flooding_pointers_out_);
+      GPUStorageBuf *reused_ssbo_wedge_filtered_edge_to_edge = nullptr;
+      buffers_.reused_ssbo_wedge_filtered_edge_to_edge(reused_ssbo_wedge_filtered_edge_to_edge); 
 
       sub.bind_ssbo(0, reused_ssbo_wedge_flooding_pointers_in_);
       sub.bind_ssbo(1, reused_ssbo_wedge_flooding_pointers_out_);
       sub.bind_ssbo(2, buffers_.ssbo_edge_to_edges_);
+      sub.bind_ssbo(3, reused_ssbo_wedge_filtered_edge_to_edge);
+      sub.bind_ssbo(4, buffers_.ssbo_bnpr_mesh_pool_counters_); 
       sub.push_constant("pcs_edge_count_", num_edges);
       sub.push_constant("pcs_edge_id_offset_", num_total_mesh_edges);
     };
 
-    for (int flooding_iter = 0; flooding_iter < 4; ++flooding_iter)
+    const int num_flooding_iters = 4; // Must be even number !!!
+    for (int flooding_iter = 0; flooding_iter < num_flooding_iters; ++flooding_iter)
     {
       auto &sub = pass_extract_geom.sub("bnpr_meshing_wedge_flooding");
-      sub.shader_set(shaders_.static_shader_get(MESH_WEDGE_FLOODING_ITER));
+      if (flooding_iter < num_flooding_iters - 1)
+        sub.shader_set(shaders_.static_shader_get(MESH_WEDGE_FLOODING_ITER));
+      else
+        sub.shader_set(shaders_.static_shader_get(MESH_WEDGE_FLOODING_LAST_ITER)); 
 
       bind_flooding_rsc(sub, flooding_iter);
 
@@ -401,10 +409,10 @@ namespace blender::npr::strokegen
     sub.bind_ssbo(3, DRW_manager_get()->matrix_buf.current());
     sub.bind_ssbo(4, buffers_.ssbo_bnpr_mesh_pool_counters_);
     sub.bind_ssbo(5, buffers_.ssbo_edge_to_contour_);
-    // for debugging 
-    GPUStorageBuf *reused_ssbo_wedge_flooding_pointers_out_ = nullptr;
-    buffers_.reused_ssbo_wedge_flooding_pointers_(1, reused_ssbo_wedge_flooding_pointers_out_);
-    sub.bind_ssbo(6, reused_ssbo_wedge_flooding_pointers_out_); 
+    // for debugging we can only visualize flooded edges in last-1 pass, last pass output is different
+    GPUStorageBuf *reused_ssbo_wedge_flooding_pointers_in_ = nullptr;
+    buffers_.reused_ssbo_wedge_flooding_pointers_(0, reused_ssbo_wedge_flooding_pointers_in_);
+    sub.bind_ssbo(6, reused_ssbo_wedge_flooding_pointers_in_); 
     // --------------
     sub.bind_ubo(0, buffers_.ubo_view_matrices_cache_);
     sub.push_constant("pcs_ib_fmt_u16", ib_type == gpu::GPU_INDEX_U16 ? 1 : 0);

@@ -1,3 +1,4 @@
+#pragma BLENDER_REQUIRE(npr_strokegen_compaction_lib.glsl)
 #pragma BLENDER_REQUIRE(npr_strokegen_topo_lib.glsl)
 
 uint pcg(uint v) /* pcg hash */
@@ -28,59 +29,76 @@ void main()
 
 #if defined(_KERNEL_MULTICOMPILE__WEDGE_FLOODING__ITER)
     WedgeFloodingPointer wfptr = decode_wedge_flooding_pointer(ssbo_wedge_flooding_pointers_in_[EdgeID]); 
-    if (wfptr.is_seed) return; /* already a seed, quit */ 
-
-    /* Now try to find a seed */
-    AdjWedgeInfo awi[4]; 
-    WedgeFloodingPointer wfptr_bwedge[4]; 
-    for (int ibwedge = 0; ibwedge < 4; ++ibwedge)
-    {
-        awi[ibwedge]          = decode_adj_wedge_info(
-            ssbo_edge_to_edges_[EdgeID*4 + ibwedge]
-        ); 
-        wfptr_bwedge[ibwedge] = decode_wedge_flooding_pointer(
-            ssbo_wedge_flooding_pointers_in_[awi[ibwedge].wedge_id]
-        );
-
-        if (wfptr_bwedge[ibwedge].is_seed)
-        {
-            wfptr.next_wedge_id = wfptr_bwedge[ibwedge].next_wedge_id; 
-            wfptr.is_seed = true; 
-            break; /* found a seed, quit */
-        }
-    }
 
     if (false == wfptr.is_seed)
-    { /* no seed is found in adjacent wedges, jump with the long range ptr  */
-        WedgeFloodingPointer wfptr_next = decode_wedge_flooding_pointer(
-            ssbo_wedge_flooding_pointers_in_[wfptr.next_wedge_id]
-        );
-        if (wfptr_next.next_wedge_id != EdgeID)
+    {
+        /* Now try to find a seed */
+        AdjWedgeInfo awi[4]; 
+        WedgeFloodingPointer wfptr_bwedge[4]; 
+        for (int ibwedge = 0; ibwedge < 4; ++ibwedge)
         {
-            wfptr.next_wedge_id = wfptr_next.next_wedge_id;
-            wfptr.is_seed = wfptr_next.is_seed; 
-        }else
-        { /* long range ptr is pointing to this wedge */
-            uint random_select = pcg(EdgeID) % 4u; 
-            for (uint roll = 0; roll < 4u; ++ roll)
+            awi[ibwedge]          = decode_adj_wedge_info(
+                ssbo_edge_to_edges_[EdgeID*4 + ibwedge]
+            ); 
+            wfptr_bwedge[ibwedge] = decode_wedge_flooding_pointer(
+                ssbo_wedge_flooding_pointers_in_[awi[ibwedge].wedge_id]
+            );
+
+            if (wfptr_bwedge[ibwedge].is_seed)
             {
-                uint ibwedge = (random_select + roll) % 4u; 
-                if (wfptr_bwedge[ibwedge].next_wedge_id != EdgeID)
+                wfptr.next_wedge_id = wfptr_bwedge[ibwedge].next_wedge_id; 
+                wfptr.is_seed = true; 
+                break; /* found a seed, quit */
+            }
+        }
+
+        if (false == wfptr.is_seed)
+        { /* no seed is found in adjacent wedges, jump with the long range ptr  */
+            WedgeFloodingPointer wfptr_next = decode_wedge_flooding_pointer(
+                ssbo_wedge_flooding_pointers_in_[wfptr.next_wedge_id]
+            );
+            if (wfptr_next.next_wedge_id != EdgeID)
+            {
+                wfptr.next_wedge_id = wfptr_next.next_wedge_id;
+                wfptr.is_seed = wfptr_next.is_seed; 
+            }else
+            { /* long range ptr is pointing to this wedge */
+                uint random_select = pcg(EdgeID) % 4u; 
+                for (uint roll = 0; roll < 4u; ++ roll)
                 {
-                    wfptr.next_wedge_id = wfptr_bwedge[ibwedge].next_wedge_id;
-                    wfptr.is_seed = wfptr_bwedge[ibwedge].is_seed;
-                    break; 
+                    uint ibwedge = (random_select + roll) % 4u; 
+                    if (wfptr_bwedge[ibwedge].next_wedge_id != EdgeID)
+                    {
+                        wfptr.next_wedge_id = wfptr_bwedge[ibwedge].next_wedge_id;
+                        wfptr.is_seed = wfptr_bwedge[ibwedge].is_seed;
+                        break; 
+                    }
                 }
             }
         }
     }
 
-    if (valid_thread)
-        ssbo_wedge_flooding_pointers_out_[EdgeID] = encode_wedge_flooding_pointer(wfptr); 
+    #if !defined(_KERNEL_MULTICOMPILE__WEDGE_FLOODING__ITER__LAST_ITER)
+        if (valid_thread)
+            ssbo_wedge_flooding_pointers_out_[EdgeID] = encode_wedge_flooding_pointer(wfptr); 
+    #endif
+ 
+    #if defined(_KERNEL_MULTICOMPILE__WEDGE_FLOODING__ITER__LAST_ITER)
+        /* Compact seed edges */
+        bool is_seed_edge = wfptr.is_seed && valid_thread; 
+        uint compacted_idx = compact_filtered_edge(is_seed_edge, groupId); 
+        
+        if (valid_thread) /* store compacted index */
+            ssbo_wedge_flooding_pointers_out_[EdgeID] = is_seed_edge ? compacted_idx : NULL_EDGE; 
+        
+        if (is_seed_edge) /* Store compacted seed edge */
+            ssbo_filtered_edge_to_edge_[compacted_idx] = EdgeID;   
+    #endif
+
 #endif
-
-
-
-
 }
 #endif
+
+
+
+

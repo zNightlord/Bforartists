@@ -1,4 +1,4 @@
-﻿/* SPDX-License-Identifier: GPL-2.0-or-later
+/* SPDX-License-Identifier: GPL-2.0-or-later
  * Copyright 2021 Blender Foundation.
  */
 
@@ -37,6 +37,7 @@ class GPUBufferPoolModule {
 
   // TODO: these buffers are huge. consider re-use them for each mesh. 
   SSBO_StrokeGenMeshGiant_Float ssbo_vbo_full_;
+  SSBO_StrokeGenMeshLarge ssbo_vert_merged_id_;
   SSBO_StrokeGenMeshLarge ssbo_edge_to_vert_;
   SSBO_StrokeGenMeshLarge ssbo_edge_to_edges_;
   SSBO_StrokeGenMeshMedium ssbo_edge_to_contour_;
@@ -47,7 +48,7 @@ class GPUBufferPoolModule {
   SSBO_StrokeGenMeshMinimum ssbo_contour_edge_list_head_; 
   SSBO_StrokeGenMeshVertHashTable ssbo_vert_spatial_map_headers_;
   SSBO_StrokeGenMeshLarge ssbo_mesh_buffer_reuse_0_;
-  SSBO_StrokeGenMeshLarge ssbo_vert_merged_id_;
+  SSBO_StrokeGenMeshMedium ssbo_mesh_buffer_reuse_1_;
   inline void reused_ssbo_vert_spatial_map_payloads_(GPUStorageBuf *&buf)
   {
     buf = ssbo_mesh_buffer_reuse_0_;  
@@ -62,6 +63,14 @@ class GPUBufferPoolModule {
       buf = ssbo_edge_to_contour_;
     else
       buf = ssbo_mesh_buffer_reuse_0_; 
+  }
+  inline void reused_ssbo_wedge_filtered_edge_to_edge(GPUStorageBuf*& buf)
+  {
+    buf = ssbo_mesh_buffer_reuse_1_; 
+  }
+  inline void reused_wedge_edge_to_filtered_edge(GPUStorageBuf*& buf)
+  {
+    reused_ssbo_wedge_flooding_pointers_(1, buf); // output from the last flooding iter.  
   }
 
   SSBO_BnprScanData       ssbo_in_scan_data_;
