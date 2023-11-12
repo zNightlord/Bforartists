@@ -42,7 +42,7 @@ class GPUBufferPoolModule {
   SSBO_StrokeGenMeshLarge ssbo_edge_to_edges_;
   SSBO_StrokeGenMeshMedium ssbo_edge_to_contour_;
   SSBO_StrokeGenMeshSmall ssbo_vert_to_edge_list_header_;
-  SSBO_StrokeGenMeshTiny ssbo_contour_to_contour_;
+  SSBO_StrokeGenMeshTiny ssbo_contour_to_contour_; 
   SSBO_StrokeGenMeshMinimum ssbo_contour_edge_rank_;
   SSBO_StrokeGenMeshMinimum ssbo_contour_edge_list_len_;
   SSBO_StrokeGenMeshMinimum ssbo_contour_edge_list_head_; 
@@ -66,11 +66,11 @@ class GPUBufferPoolModule {
   }
   inline void reused_ssbo_filtered_edge_to_edge_(GPUStorageBuf*& buf)
   {
-    buf = ssbo_mesh_buffer_reuse_1_; 
+    buf = ssbo_contour_to_contour_; 
   }
   inline void reused_ssbo_filtered_vert_to_vert_(GPUStorageBuf *&buf)
   {
-    reused_ssbo_wedge_flooding_pointers_(0, buf); 
+    buf = ssbo_contour_edge_rank_; 
   }
 
   SSBO_BnprScanData       ssbo_in_scan_data_;

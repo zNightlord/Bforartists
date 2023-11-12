@@ -86,7 +86,7 @@ namespace blender::npr::strokegen
 
     /* First setup resources */
     strokegen_buffers.on_begin_sync(
-      drw_view, strokegen_passes.test_list_ranking, (frame_counter % 120u) == 0u
+      drw_view, strokegen_passes.test_list_ranking, /*(frame_counter % 120u) == 0u*/true
     );
     strokegen_textures.on_begin_sync(tex_prepass_depth); 
 

@@ -294,11 +294,11 @@ vec3 store_vbo(uint GlobalVertID, vec3 vpos)
  * uint ssbo_bnpr_mesh_pool_counters_.num_filtered_edges/verts 
  * uint ssbo_filtered_edge_to_edge_[]; 
  * uint ssbo_filtered_vert_to_vert_[]; 
- * uint ssbo_vert_quadric_data_in_[]; 
- * uint ssbo_vert_quadric_data_out_[]; 
- * uint ssbo_edge_quadric_data_[]; 
+ * uint ssbo_vert_quadric_data_in_[];  <- (reuse) ssbo_bnpr_mesh_pool_
+ * uint ssbo_vert_quadric_data_out_[]; <- (reuse) ssbo_mesh_buffer_reuse_0_
+ * uint ssbo_edge_quadric_data_[];     <- (reuse) ssbo_vert_merged_id_
  * float ssbo_vbo_full_[]; rw
- * float ssbo_vbo_filtered_normal_[]; 
+ * float ssbo_vbo_filtered_normal_[];  <- (reuse) ssbo_mesh_buffer_reuse_1_
  * ubo_view_matrices_
 */
 void main()

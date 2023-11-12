@@ -215,7 +215,7 @@ namespace blender::npr::strokegen
     append_subpass_meshing_wedge_adjacency_and_init_flooding_ptr(num_edges, num_verts);
     append_subpass_meshing_wedge_flooding(num_edges, num_verts);
 
-    const bool debug_wedge_flooding = true; 
+    const bool debug_wedge_flooding = false; 
     append_subpass_extract_contour_edges(
         gpu_batch_line_adj, rsc_handle, edge_batch, num_edges, ib_type, debug_wedge_flooding
     );
