@@ -412,7 +412,7 @@ void main()
 
     /* Build Vert-to-Wedge link */
     uvec2 iverts_cwedge = mark__wedge_to_verts(4u); 
-    if (valid_thread)
+    if (valid_edge && valid_thread)
         for (uint iiverts = 0u; iiverts < 2u; iiverts++)
         { /* Put an arbitrary neighbor wedge id for each vert */
             uint vert_id = vids_wedge[iverts_cwedge[iiverts]]; 

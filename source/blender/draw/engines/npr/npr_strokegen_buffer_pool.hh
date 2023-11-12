@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
+﻿/* SPDX-License-Identifier: GPL-2.0-or-later
  * Copyright 2021 Blender Foundation.
  */
 
@@ -64,13 +64,13 @@ class GPUBufferPoolModule {
     else
       buf = ssbo_mesh_buffer_reuse_0_; 
   }
-  inline void reused_ssbo_wedge_filtered_edge_to_edge(GPUStorageBuf*& buf)
+  inline void reused_ssbo_filtered_edge_to_edge_(GPUStorageBuf*& buf)
   {
     buf = ssbo_mesh_buffer_reuse_1_; 
   }
-  inline void reused_wedge_edge_to_filtered_edge(GPUStorageBuf*& buf)
+  inline void reused_ssbo_filtered_vert_to_vert_(GPUStorageBuf *&buf)
   {
-    reused_ssbo_wedge_flooding_pointers_(1, buf); // output from the last flooding iter.  
+    reused_ssbo_wedge_flooding_pointers_(0, buf); 
   }
 
   SSBO_BnprScanData       ssbo_in_scan_data_;

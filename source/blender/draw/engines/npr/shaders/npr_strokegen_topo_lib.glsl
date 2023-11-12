@@ -178,7 +178,8 @@ uint mark__cwedge_rotate_next(uint face)
     return wedge_next; 
 }
 
-/* contour-specific functions */
+
+/* Contour-specific functions ------------------- */
 struct PerContourWedgeInfo
 {
     bool is_border; 
@@ -223,6 +224,9 @@ PerWedgeContourInfo decode_per_wedge_contour_info(uint peci_enc)
     return peci; 
 }
 
+
+
+/* Detect unstable wedges --------------------------------------- */
 struct WedgeQuality
 {
     float area; 
@@ -275,6 +279,57 @@ WedgeFloodingPointer decode_wedge_flooding_pointer(uint wfp_enc)
     wfp.is_border = (0u != ((wfp_enc >> 1u) & 1u));
     wfp.is_seed = (0u != (wfp_enc & 1u));
     return wfp; 
+}
+
+/* Quardratic Filtering */
+struct Quadric
+{
+    mat4 quadric; /* symmetric */
+}; 
+/* Pack lower diagonal of 4x4 symmetric matrix "quadric" into 10 floats */
+void encode_quadric(Quadric q, out vec4 packed_0, out vec4 packed_1, out vec2 packed_2)
+{
+    packed_0 = vec4(q.quadric[0][0], q.quadric[1][1], q.quadric[2][2], q.quadric[3][3]);
+    packed_1 = vec4(q.quadric[1][0], q.quadric[2][1], q.quadric[3][2], q.quadric[2][0]);
+    packed_2 = vec2(q.quadric[3][1], q.quadric[3][0]);
+} 
+/* Unpack lower diagonal of 4x4 symmetric matrix "quadric" from 10 floats */
+Quadric decode_quadric(vec4 packed_0, vec4 packed_1, vec2 packed_2)
+{
+    Quadric q; 
+    q.quadric[0][0] = packed_0.x;
+    q.quadric[1][1] = packed_0.y;
+    q.quadric[2][2] = packed_0.z;
+    q.quadric[3][3] = packed_0.w;
+    q.quadric[1][0] = q.quadric[0][1] = packed_1.x;
+    q.quadric[2][1] = q.quadric[1][2] = packed_1.y;
+    q.quadric[3][2] = q.quadric[2][3] = packed_1.z;
+    q.quadric[2][0] = q.quadric[0][2] = packed_1.w;
+    q.quadric[3][1] = q.quadric[1][3] = packed_2.x;
+    q.quadric[3][0] = q.quadric[0][3] = packed_2.y;
+
+    return q; 
+}
+
+Quadric compute_wedge_quadric(vec3 p0, vec3 p1, vec3 p2, vec3 p3, vec3 cam_pos_ws) /* world pos of p0~3 */
+{ 
+    Quadric q; 
+    
+	vec3 v10 = p0 - p1;
+	vec3 v13 = p3 - p1;
+   	vec3 v12 = p2 - p1;
+
+	vec4 n0 = vec4(normalize(cross(v13, v10)).xyz, 1.0f);
+    n0.w = -dot(n0.xyz, p1.xyz); 
+    mat4 q0 = mat4(n0.x * n0, n0.y * n0, n0.z * n0, n0.w * n0);
+
+	vec4 n2 = vec4(normalize(cross(v12, v13)).xyz, 1.0f);
+	n2.w = -dot(n2.xyz, p1.xyz); 
+    mat4 q2 = mat4(n2.x * n2, n2.y * n2, n2.z * n2, n2.w * n2);
+
+    q.quadric = (q0 + q2) * .5f;
+
+	return q; 
 }
 
 #endif

@@ -135,7 +135,9 @@ const char *StrokeGenShaderModule::static_shader_create_info_name_get(eShaderTyp
     case MESH_WEDGE_FLOODING_ITER:
       return "bnpr_meshing_wedge_flooding_iter"; 
     case MESH_WEDGE_FLOODING_LAST_ITER:
-      return "bnpr_meshing_wedge_flooding_last_iter"; 
+      return "bnpr_meshing_wedge_flooding_last_iter";
+    case MESH_WEDGE_FLOODING_SELECT_VERTS:
+      return "bnpr_meshing_compact_filtered_verts"; 
 
     case SCAN_TEST_UPSWEEP:
       return "bnpr_scan_test_upsweep";

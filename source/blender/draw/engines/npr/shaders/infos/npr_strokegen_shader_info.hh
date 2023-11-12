@@ -442,6 +442,36 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_wedge_flooding_last_iter)
     .define("_KERNEL_MULTICOMPILE__WEDGE_FLOODING__ITER", "1")
     .define("_KERNEL_MULTICOMPILE__WEDGE_FLOODING__ITER__LAST_ITER", "1");
 
+/*
+ * uint pcs_vert_id_offset_;
+ * uint pcs_vert_count_;
+ * uint ssbo_wedge_flooding_pointers_in_[];
+ * uint ssbo_edge_to_edges_[];
+ * uint ssbo_edge_to_vert_[];
+ * uint ssbo_filtered_vert_to_vert_[];
+ */
+GPU_SHADER_CREATE_INFO(bnpr_meshing_compact_filtered_verts)
+    .do_static_compilation(true)
+    .typedef_source("bnpr_shader_shared.hh")
+    .typedef_source("draw_shader_shared.h")
+    .define("_KERNEL_MULTICOMPILE__COMPACT_FILTERED_VERTS", "1")
+    .define("DECODE_IBO_EXCLUDE", "1") /* Remove ibo code */
+    .define("WINGED_EDGE_TOPO_INCLUDE", "1")
+    .define("VERT_WEDGE_LIST_TOPO_INCLUDE", "1")
+    .define("GLOBAL_COUNTER", "ssbo_bnpr_mesh_pool_counters_.num_filtered_verts")
+    .define("CP_TAG", "filtered_vert")
+
+    .storage_buf(0, Qualifier::WRITE, "uint", "ssbo_filtered_vert_to_vert_[]")
+    .storage_buf(1, Qualifier::READ, "uint", "ssbo_wedge_flooding_pointers_in_[]")
+    .storage_buf(2, Qualifier::READ, "uint", "ssbo_edge_to_vert_[]")
+    .storage_buf(3, Qualifier::READ, "uint", "ssbo_edge_to_edges_[]")
+    .storage_buf(4, Qualifier::READ, "uint", "ssbo_vert_to_edge_list_header_[]")
+    .storage_buf(5, Qualifier::READ_WRITE, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
+    .push_constant(Type::INT, "pcs_vert_count_")
+    .push_constant(Type::INT, "pcs_vert_id_offset_")
+    .local_group_size(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT)
+    .compute_source("npr_strokegen_wedge_flooding_compute.glsl");
+
 /** \} */
 
 

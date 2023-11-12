@@ -107,7 +107,7 @@ public:
   int num_total_mesh_edges;
   int num_total_mesh_tris;
   void init_per_mesh_pass();
-  void append_subpass_meshing_wedge_flooding(int num_edges);
+  void append_subpass_meshing_wedge_flooding(int num_edges, int num_verts);
   void append_subpass_extract_contour_edges(GPUBatch* gpu_batch_line_adj,
                                             ResourceHandle& rsc_handle,
                                             gpu::Batch* edge_batch,

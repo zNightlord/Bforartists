@@ -81,7 +81,7 @@ namespace blender::npr::strokegen
     boostrap_before_extract_first_batch = true;
   }
 
-  void StrokeGenPassModule::append_subpass_meshing_wedge_flooding(int num_edges)
+  void StrokeGenPassModule::append_subpass_meshing_wedge_flooding(int num_edges, int num_verts)
   {
     auto bind_flooding_rsc = [&](
         draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub, int flooding_iter = 0)
@@ -92,13 +92,13 @@ namespace blender::npr::strokegen
       GPUStorageBuf *reused_ssbo_wedge_flooding_pointers_out_ = nullptr;
       buffers_.reused_ssbo_wedge_flooding_pointers_(flooding_iter,
                                                     reused_ssbo_wedge_flooding_pointers_out_);
-      GPUStorageBuf *reused_ssbo_wedge_filtered_edge_to_edge = nullptr;
-      buffers_.reused_ssbo_wedge_filtered_edge_to_edge(reused_ssbo_wedge_filtered_edge_to_edge); 
+      GPUStorageBuf *reused_ssbo_filtered_edge_to_edge_ = nullptr;
+      buffers_.reused_ssbo_filtered_edge_to_edge_(reused_ssbo_filtered_edge_to_edge_); 
 
       sub.bind_ssbo(0, reused_ssbo_wedge_flooding_pointers_in_);
       sub.bind_ssbo(1, reused_ssbo_wedge_flooding_pointers_out_);
       sub.bind_ssbo(2, buffers_.ssbo_edge_to_edges_);
-      sub.bind_ssbo(3, reused_ssbo_wedge_filtered_edge_to_edge);
+      sub.bind_ssbo(3, reused_ssbo_filtered_edge_to_edge_);
       sub.bind_ssbo(4, buffers_.ssbo_bnpr_mesh_pool_counters_); 
       sub.push_constant("pcs_edge_count_", num_edges);
       sub.push_constant("pcs_edge_id_offset_", num_total_mesh_edges);
@@ -116,6 +116,30 @@ namespace blender::npr::strokegen
       bind_flooding_rsc(sub, flooding_iter);
 
       int num_groups = compute_num_groups(num_edges, GROUP_SIZE_STROKEGEN_GEOM_EXTRACT);
+      sub.dispatch(int3(num_groups, 1, 1));
+      sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_SHADER_IMAGE_ACCESS);
+    }
+
+    {
+      auto &sub = pass_extract_geom.sub("bnpr_meshing_compact_filtered_verts");
+      sub.shader_set(shaders_.static_shader_get(MESH_WEDGE_FLOODING_SELECT_VERTS));
+
+      GPUStorageBuf *reused_ssbo_wedge_flooding_pointers_in_ = nullptr;
+      buffers_.reused_ssbo_wedge_flooding_pointers_(num_flooding_iters + 1,
+                                                    reused_ssbo_wedge_flooding_pointers_in_);
+      GPUStorageBuf *reused_ssbo_filtered_vert_to_vert_ = nullptr;
+      buffers_.reused_ssbo_filtered_vert_to_vert_(reused_ssbo_filtered_vert_to_vert_);
+
+      sub.bind_ssbo(0, reused_ssbo_filtered_vert_to_vert_);
+      sub.bind_ssbo(1, reused_ssbo_wedge_flooding_pointers_in_);
+      sub.bind_ssbo(2, buffers_.ssbo_edge_to_vert_);
+      sub.bind_ssbo(3, buffers_.ssbo_edge_to_edges_);
+      sub.bind_ssbo(4, buffers_.ssbo_vert_to_edge_list_header_); 
+      sub.bind_ssbo(5, buffers_.ssbo_bnpr_mesh_pool_counters_);
+      sub.push_constant("pcs_vert_count_", num_verts); 
+      sub.push_constant("pcs_vert_id_offset_", num_total_mesh_verts);
+
+      int num_groups = compute_num_groups(num_verts, GROUP_SIZE_STROKEGEN_GEOM_EXTRACT);
       sub.dispatch(int3(num_groups, 1, 1));
       sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_SHADER_IMAGE_ACCESS);
     }
@@ -189,7 +213,7 @@ namespace blender::npr::strokegen
 
     append_subpass_meshing_merge_verts(num_verts);
     append_subpass_meshing_wedge_adjacency_and_init_flooding_ptr(num_edges, num_verts);
-    append_subpass_meshing_wedge_flooding(num_edges);
+    append_subpass_meshing_wedge_flooding(num_edges, num_verts);
 
     const bool debug_wedge_flooding = true; 
     append_subpass_extract_contour_edges(
@@ -409,9 +433,9 @@ namespace blender::npr::strokegen
     sub.bind_ssbo(3, DRW_manager_get()->matrix_buf.current());
     sub.bind_ssbo(4, buffers_.ssbo_bnpr_mesh_pool_counters_);
     sub.bind_ssbo(5, buffers_.ssbo_edge_to_contour_);
-    // for debugging we can only visualize flooded edges in last-1 pass, last pass output is different
+    // for debugging 
     GPUStorageBuf *reused_ssbo_wedge_flooding_pointers_in_ = nullptr;
-    buffers_.reused_ssbo_wedge_flooding_pointers_(0, reused_ssbo_wedge_flooding_pointers_in_);
+    buffers_.reused_ssbo_wedge_flooding_pointers_(1, reused_ssbo_wedge_flooding_pointers_in_);
     sub.bind_ssbo(6, reused_ssbo_wedge_flooding_pointers_in_); 
     // --------------
     sub.bind_ubo(0, buffers_.ubo_view_matrices_cache_);
