@@ -120,6 +120,15 @@ uvec2 mark__wedge_to_verts(uint wedge)
     /* border wedges */
     return uvec2(wedge, (wedge + 1u) % 4u);
 }
+uint mark__cwedge_to_beg_vert(uint face)
+{
+    if (face == 0u) return 3u;
+    /* if (face == 1u) */ return 1u; 
+}
+uint mark__cwedge_to_end_vert(uint face)
+{
+    return (mark__cwedge_to_beg_vert(face) == 1u) ? 3u : 1u; 
+}
 uint mark__he_to_prev_he(uint he)
 {
     return ((he + 2u) % 3u); /* 0->2, 1->0, 2->1 */
@@ -285,16 +294,17 @@ WedgeFloodingPointer decode_wedge_flooding_pointer(uint wfp_enc)
 struct Quadric
 {
     mat4 quadric; /* symmetric */
+    float area; 
 }; 
 /* Pack lower diagonal of 4x4 symmetric matrix "quadric" into 10 floats */
-void encode_quadric(Quadric q, out vec4 packed_0, out vec4 packed_1, out vec2 packed_2)
+void encode_quadric(Quadric q, out vec4 packed_0, out vec4 packed_1, out vec3 packed_2)
 {
     packed_0 = vec4(q.quadric[0][0], q.quadric[1][1], q.quadric[2][2], q.quadric[3][3]);
     packed_1 = vec4(q.quadric[1][0], q.quadric[2][1], q.quadric[3][2], q.quadric[2][0]);
-    packed_2 = vec2(q.quadric[3][1], q.quadric[3][0]);
+    packed_2 = vec3(q.quadric[3][1], q.quadric[3][0], q.area);
 } 
 /* Unpack lower diagonal of 4x4 symmetric matrix "quadric" from 10 floats */
-Quadric decode_quadric(vec4 packed_0, vec4 packed_1, vec2 packed_2)
+Quadric decode_quadric(vec4 packed_0, vec4 packed_1, vec3 packed_2)
 {
     Quadric q; 
     q.quadric[0][0] = packed_0.x;
@@ -307,11 +317,12 @@ Quadric decode_quadric(vec4 packed_0, vec4 packed_1, vec2 packed_2)
     q.quadric[2][0] = q.quadric[0][2] = packed_1.w;
     q.quadric[3][1] = q.quadric[1][3] = packed_2.x;
     q.quadric[3][0] = q.quadric[0][3] = packed_2.y;
+    q.area = packed_2.z; 
 
     return q; 
 }
 
-Quadric compute_wedge_quadric(vec3 p0, vec3 p1, vec3 p2, vec3 p3, vec3 cam_pos_ws) /* world pos of p0~3 */
+Quadric compute_wedge_quadric(vec3 p0, vec3 p1, vec3 p2, vec3 p3, vec3 cam_pos_ws, out vec3 wedge_normal) /* world pos of p0~3 */
 { 
     Quadric q; 
     
@@ -319,6 +330,13 @@ Quadric compute_wedge_quadric(vec3 p0, vec3 p1, vec3 p2, vec3 p3, vec3 cam_pos_w
 	vec3 v13 = p3 - p1;
    	vec3 v12 = p2 - p1;
 
+    /* Averaged area */
+    mat3 det_v013 = mat3(v10, v13, vec3(1, 1, 1));
+    mat3 det_v123 = mat3(v12, v13, vec3(1, 1, 1));
+    q.area = (abs(determinant(det_v013)) + abs(determinant(det_v123))) * .5f; 
+
+
+    /* Quadric for a plane is nnT where n is the plane equation using normalized normal */
 	vec4 n0 = vec4(normalize(cross(v13, v10)).xyz, 1.0f);
     n0.w = -dot(n0.xyz, p1.xyz); 
     mat4 q0 = mat4(n0.x * n0, n0.y * n0, n0.z * n0, n0.w * n0);
@@ -328,8 +346,34 @@ Quadric compute_wedge_quadric(vec3 p0, vec3 p1, vec3 p2, vec3 p3, vec3 cam_pos_w
     mat4 q2 = mat4(n2.x * n2, n2.y * n2, n2.z * n2, n2.w * n2);
 
     q.quadric = (q0 + q2) * .5f;
+    wedge_normal = (n0.xyz + n2.xyz) * .5f; 
 
 	return q; 
+}
+
+float gaussian(float dist, float tau)
+{
+    return exp(-(dist * dist) / (2.0f * tau * tau)); 
+}
+
+float compute_edge_quadric_weight(vec3 p_v, vec3 p_e, Quadric q_e)
+{
+    float dist = distance(p_v, p_e); 
+    float geometry_weight = q_e.area * gaussian(dist, 0.01f); 
+    return geometry_weight; 
+}
+
+float compute_vert_quadric_weight(vec3 p_v, Quadric q_v, vec3 p_x, Quadric q_x)
+{ /* bilateral filtering */
+    float dist = distance(p_v, p_x); 
+    
+    vec4 v = vec4(p_v, 1.0f); 
+    float quadric_dist_v2qx = dot(v, q_x.quadric * v); /* vT Q v */
+    float quadric_weight = gaussian(sqrt(quadric_dist_v2qx), 0.1f); 
+
+    float geometry_weight = q_v.area * gaussian(dist, 0.01f); 
+    
+    return geometry_weight * quadric_weight; 
 }
 
 #endif
@@ -344,6 +388,24 @@ Quadric compute_wedge_quadric(vec3 p0, vec3 p1, vec3 p2, vec3 p3, vec3 cam_pos_w
 #if defined(VERT_WEDGE_LIST_TOPO_INCLUDE)
 /* Non-existing wedges, which should not happen for a 2-manifold mesh with boundaries */
 #define NULL_VERT_ADJ_WEDGE 0xffffffffu 
+struct VertWedgeListHeader
+{
+    uint wedge_id; 
+    /* the face that contains this vertex that begines at the center wedge */
+    uint ivert; /* 1 or 3 */
+}; 
+uint encode_vert_wedge_list_header(VertWedgeListHeader vwlh)
+{
+    uint vwlh_enc = ((vwlh.wedge_id << 2u) | (vwlh.ivert & 3u));
+    return vwlh_enc; 
+}
+VertWedgeListHeader decode_vert_wedge_list_header(uint vwlh_enc)
+{
+    VertWedgeListHeader vwlh; 
+    vwlh.wedge_id = (vwlh_enc >> 2u);
+    vwlh.ivert = ((vwlh_enc & 3u));
+    return vwlh; 
+}
 #endif
 
 

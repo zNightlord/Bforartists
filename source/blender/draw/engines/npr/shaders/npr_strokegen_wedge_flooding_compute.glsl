@@ -117,20 +117,15 @@ void main()
     bool valid_thread = (idx.x < pcs_vert_count_); 
     
     const uint VertID = idx.x + pcs_vert_id_offset_; 
-    
+    uint wedge_id = ssbo_vert_to_edge_list_header_[VertID]; 
+    uint vid_ivert1 = ssbo_edge_to_vert_[wedge_id*4 + 1]; 
+    /* Select how to fwd rotate the center wedge */
+    uint ivert = (VertID == vid_ivert1) ? 1u : 3u;
+    uint iface_beg_rot_fwd = (ivert == 1u) ? 0u : 1u; 
+
     bool vert_linked_to_seeded_wedge = false; 
     if (valid_thread)
     {
-        uint wedge_id = ssbo_vert_to_edge_list_header_[VertID]; 
-        uvec2 vids_cwedge = uvec2(
-            ssbo_edge_to_vert_[wedge_id*4 + 1], 
-            ssbo_edge_to_vert_[wedge_id*4 + 3]
-        ); 
-
-        /* Select how to fwd rotate the center wedge */
-        uint ivert = (VertID == vids_cwedge[0]) ? 1u : 3u;
-        uint iface_beg_rot_fwd = (ivert == 1u) ? 0u : 1u; 
-
         /* Rotate wedge around the vert */
         AdjWedgeInfo awi; 
         awi.iface_adj = iface_beg_rot_fwd; 
@@ -161,6 +156,14 @@ void main()
         
     if (vert_linked_to_seeded_wedge) /* Store compacted seed vert */
         ssbo_filtered_vert_to_vert_[compacted_idx] = VertID;   
+
+    if (valid_thread)
+    {
+        VertWedgeListHeader vwlh;
+        vwlh.wedge_id = wedge_id; 
+        vwlh.ivert = ivert; 
+        ssbo_vert_to_edge_list_header_[VertID] = encode_vert_wedge_list_header(vwlh);
+    }
 }
 #endif
 
@@ -168,44 +171,134 @@ void main()
 
 
 #if defined(_KERNEL_MULTICOMPILE__WEDGE_QUADRICS)
-void store_wedge_quadric(Quadric q)
+void store_wedge_quadric(uint FilteredEdgeID, Quadric q)
 {
     vec4 data_0, data_1; 
-    vec2 data_2; 
+    vec3 data_2; 
     encode_quadric(q_e, /*out*/data_0, data_1, data_2); 
 
-    ssbo_quadric_data_[FilteredEdgeID*10u + 0] = floatBitsToUint(data_0.x);
-    ssbo_quadric_data_[FilteredEdgeID*10u + 1] = floatBitsToUint(data_0.y);
-    ssbo_quadric_data_[FilteredEdgeID*10u + 2] = floatBitsToUint(data_0.z);
-    ssbo_quadric_data_[FilteredEdgeID*10u + 3] = floatBitsToUint(data_0.w);
-    ssbo_quadric_data_[FilteredEdgeID*10u + 4] = floatBitsToUint(data_1.x);
-    ssbo_quadric_data_[FilteredEdgeID*10u + 5] = floatBitsToUint(data_1.y);
-    ssbo_quadric_data_[FilteredEdgeID*10u + 6] = floatBitsToUint(data_1.z);
-    ssbo_quadric_data_[FilteredEdgeID*10u + 7] = floatBitsToUint(data_1.w);
-    ssbo_quadric_data_[FilteredEdgeID*10u + 8] = floatBitsToUint(data_2.x);
-    ssbo_quadric_data_[FilteredEdgeID*10u + 9] = floatBitsToUint(data_2.y);
+    uint st_addr = FilteredEdgeID * 11u; 
+    for (uint i = 0; i < 4; ++i)
+        ssbo_wedge_quadric_data_[st_addr + i] = floatBitsToUint(data_0[i]);
+    st_addr += 4u; 
+    for (uint i = 0; i < 4; ++i)
+        ssbo_wedge_quadric_data_[st_addr + i] = floatBitsToUint(data_1[i]);
+    st_addr += 4u;
+    for (uint i = 0; i < 3; ++i)
+        ssbo_wedge_quadric_data_[st_addr + i] = floatBitsToUint(data_2[i]);
 }
-void load_edge_quadric(uint EdgeID, /*out*/out Quadric q)
+Quadric load_wedge_quadric(uint FilteredEdgeID)
+{
+    Quadric q; 
+
+    uint ld_addr = FilteredEdgeID * 11u; 
+    vec4 data_0, data_1;
+    vec3 data_2;
+    for (uint i = 0; i < 4; ++i)
+        data_0[i] = uintBitsToFloat(ssbo_wedge_quadric_data_[ld_addr + i]);
+    ld_addr += 4u;
+    for (uint i = 0; i < 4; ++i)
+        data_1[i] = uintBitsToFloat(ssbo_wedge_quadric_data_[ld_addr + i]);
+    ld_addr += 4u;
+    for (uint i = 0; i < 3; ++i)
+        data_2[i] = uintBitsToFloat(ssbo_wedge_quadric_data_[ld_addr + i]);
+
+    q = decode_quadric(data_0, data_1, data_2); 
+
+    return q; 
+}
+
+void store_vert_quadric(uint FilteredVertID, Quadric q)
 {
     vec4 data_0, data_1; 
-    vec2 data_2; 
-    data_0.x = uintBitsToFloat(ssbo_quadric_data_[EdgeID*10u + 0]);
-    data_0.y = uintBitsToFloat(ssbo_quadric_data_[EdgeID*10u + 1]);
-    data_0.z = uintBitsToFloat(ssbo_quadric_data_[EdgeID*10u + 2]);
-    data_0.w = uintBitsToFloat(ssbo_quadric_data_[EdgeID*10u + 3]);
-    data_1.x = uintBitsToFloat(ssbo_quadric_data_[EdgeID*10u + 4]);
-    data_1.y = uintBitsToFloat(ssbo_quadric_data_[EdgeID*10u + 5]);
-    data_1.z = uintBitsToFloat(ssbo_quadric_data_[EdgeID*10u + 6]);
-    data_1.w = uintBitsToFloat(ssbo_quadric_data_[EdgeID*10u + 7]);
-    data_2.x = uintBitsToFloat(ssbo_quadric_data_[EdgeID*10u + 8]);
-    data_2.y = uintBitsToFloat(ssbo_quadric_data_[EdgeID*10u + 9]);
+    vec3 data_2; 
+    encode_quadric(q_e, /*out*/data_0, data_1, data_2); 
+
+    uint st_addr = FilteredVertID * 11u; 
+    for (uint i = 0; i < 4; ++i)
+        ssbo_vert_quadric_data_out_[st_addr + i] = floatBitsToUint(data_0[i]);
+    st_addr += 4u; 
+    for (uint i = 0; i < 4; ++i)
+        ssbo_vert_quadric_data_out_[st_addr + i] = floatBitsToUint(data_1[i]);
+    st_addr += 4u;
+    for (uint i = 0; i < 3; ++i)
+        ssbo_vert_quadric_data_out_[st_addr + i] = floatBitsToUint(data_2[i]);
+}
+
+Quadric load_vert_quadric(uint FilteredVertID)
+{
+    Quadric q; 
+
+    uint ld_addr = FilteredVertID * 11u; 
+    vec4 data_0, data_1;
+    vec3 data_2;
+    for (uint i = 0; i < 4; ++i)
+        data_0[i] = uintBitsToFloat(ssbo_vert_quadric_data_in_[ld_addr + i]);
+    ld_addr += 4u;
+    for (uint i = 0; i < 4; ++i)
+        data_1[i] = uintBitsToFloat(ssbo_vert_quadric_data_in_[ld_addr + i]);
+    ld_addr += 4u;
+    for (uint i = 0; i < 3; ++i)
+        data_2[i] = uintBitsToFloat(ssbo_vert_quadric_data_in_[ld_addr + i]);
+
     q = decode_quadric(data_0, data_1, data_2); 
+
+    return q; 
+}
+
+
+void store_filtered_edge_normal(uint FilteredEdgeID, vec3 normal)
+{
+    ssbo_vbo_filtered_normal_edge_[FilteredEdgeID*3u + 0u] = normal.x;
+    ssbo_vbo_filtered_normal_edge_[FilteredEdgeID*3u + 1u] = normal.y;
+    ssbo_vbo_filtered_normal_edge_[FilteredEdgeID*3u + 2u] = normal.z;
+}
+vec3 load_filtered_edge_normal(uint FilteredEdgeID)
+{
+    return vec3(
+        ssbo_vbo_filtered_normal_edge_[FilteredEdgeID*3u + 0u],
+        ssbo_vbo_filtered_normal_edge_[FilteredEdgeID*3u + 1u],
+        ssbo_vbo_filtered_normal_edge_[FilteredEdgeID*3u + 2u]
+    );
+}
+
+void store_filtered_vert_normal(uint FilteredVertID, vec3 normal)
+{
+    ssbo_vbo_filtered_normal_vert_[FilteredVertID*3u + 0u] = normal.x;
+    ssbo_vbo_filtered_normal_vert_[FilteredVertID*3u + 1u] = normal.y;
+    ssbo_vbo_filtered_normal_vert_[FilteredVertID*3u + 2u] = normal.z;
+}
+vec3 load_filtered_vert_normal(uint FilteredVertID)
+{
+    return vec3(
+        ssbo_vbo_filtered_normal_vert_[FilteredVertID*3u + 0u],
+        ssbo_vbo_filtered_normal_vert_[FilteredVertID*3u + 1u],
+        ssbo_vbo_filtered_normal_vert_[FilteredVertID*3u + 2u]
+    );
+}
+
+vec3 ld_vbo(uint GlobalVertID)
+{
+	uint base_addr = GlobalVertID * 3; 
+	return vec3(ssbo_vbo_full_[base_addr], ssbo_vbo_full_[base_addr+1], ssbo_vbo_full_[base_addr+2]); 
+}
+vec3 store_vbo(uint GlobalVertID, vec3 vpos)
+{
+    uint base_addr = GlobalVertID * 3; 
+    ssbo_vbo_full_[base_addr]   = vpos.x;
+    ssbo_vbo_full_[base_addr+1] = vpos.y;
+    ssbo_vbo_full_[base_addr+2] = vpos.z;
 }
 
 /*
- * uint ssbo_bnpr_mesh_pool_counters_.num_filtered_edges 
+ * uint ssbo_bnpr_mesh_pool_counters_.num_filtered_edges/verts 
  * uint ssbo_filtered_edge_to_edge_[]; 
- * uint ssbo_quadric_data_[]; 
+ * uint ssbo_filtered_vert_to_vert_[]; 
+ * uint ssbo_vert_quadric_data_in_[]; 
+ * uint ssbo_vert_quadric_data_out_[]; 
+ * uint ssbo_edge_quadric_data_[]; 
+ * float ssbo_vbo_full_[]; rw
+ * float ssbo_vbo_filtered_normal_[]; 
  * ubo_view_matrices_
 */
 void main()
@@ -217,10 +310,10 @@ void main()
 #if defined(_KERNEL_MULTICOMPILE__WEDGE_QUADRICS__CALC_EDGE)
     const uint FilteredEdgeID = idx.x; 
     const uint NumFilteredEdges = ssbo_bnpr_mesh_pool_counters_.num_filtered_edges; 
+    /* Do not use EdgeID here since it's offseted with current mesh batch */
     bool valid_thread = (idx.x < NumFilteredEdges); 
     if (!valid_thread) return; /* quit if not valid thread */
 
-    /* Do not use EdgeID here since it's offseted with current mesh batch */
     uint wedge_id = ssbo_filtered_edge_to_edge_[FilteredEdgeID]; 
     
     uvec4 vids_wedge;
@@ -237,14 +330,119 @@ void main()
 	bool is_persp = (ubo_view_matrices_.winmat[3][3] == 0.0);
 	vec3 cam_pos_ws = view_to_world[3].xyz; /* see "#define cameraPos ViewMatrixInverse[3].xyz" */
 
-    Quadric q_e = compute_quadric(vpos_wedge[0], vpos_wedge[1], vpos_wedge[2], vpos_wedge[3], cam_pos_ws); 
+    vec3 wedge_normal; 
+    Quadric q_e = compute_wedge_quadric(
+        vpos_wedge[0], vpos_wedge[1], vpos_wedge[2], vpos_wedge[3], cam_pos_ws, 
+        /*out*/ wedge_normal
+    ); 
     if (valid_thread)
-       store_wedge_quadric(q_e); 
+    {
+        store_wedge_quadric(FilteredEdgeID, q_e); 
+        store_filtered_edge_normal(FilteredEdgeID, wedge_normal)
+    }
 #endif
 
 
 #if defined(_KERNEL_MULTICOMPILE__WEDGE_QUADRICS__CALC_VERT)
-    const uint VertID = idx.x; 
+    const uint FilteredVertID = idx.x; 
+    const uint NumFilteredVerts = ssbo_bnpr_mesh_pool_counters_.num_filtered_verts; 
+    /* Do not use VertID here since it's offseted with current mesh batch */
+    bool valid_thread = (idx.x < NumFilteredVerts); 
+    if (!valid_thread) return; /* quit if not valid thread */
+    
+    uint vert_id = ssbo_filtered_vert_to_vert_[FilteredVertID]; 
+    vec3 vpos = ld_vbo(vert_id);
+
+    Quadric q_v; 
+    Quadric q_summed; 
+    float weight_sum = .0f; 
+#if !defined(_KERNEL_MULTICOMPILE__WEDGE_QUADRICS__CALC_VERT_FINAL)
+    /* note: this inits at diagonals with param, other places cleared to .0 */
+    q_v.quadric = mat4(0.0); 
+    q_v.area = .0f; 
+    
+    vec3 filtered_vert_normal = vec3(.0f, .0f, .0f); 
+    float filtered_vert_normal_weight = .0f; 
+#else
+    q_v = load_vert_quadric(FilteredVertID); 
+    weight_sum += compute_vert_quadric_weight(vpos, q_v, vpos, q_v); 
+#endif
+    q_summed = q_v; 
+
+    
+    { /* Rotate wedge around the vert */
+        VertWedgeListHeader vwlh = decode_vert_wedge_list_header(ssbo_vert_to_edge_list_header_[vert_id]); 
+        uint ivert_oppo = (vmlh.ivert == 1u) ? 3 : 1; 
+        
+        AdjWedgeInfo awi; 
+        awi.iface_adj = (vmlh.ivert == 1u) ? 0 : 1; /* which face are we begin to rotate */
+        awi.wedge_id  = vwlh.wedge_id; 
+
+    #define MAX_WEDGE_ROTATES 16u
+        uint rotate_step = 0u; 
+        do {
+#if !defined(_KERNEL_MULTICOMPILE__WEDGE_QUADRICS__CALC_VERT_FINAL)
+            Quadric q_e = load_wedge_quadric(awi.wedge_id);
+            q_summed.area += q_e.area; 
+
+            vec3 vpos_oppo = ld_vbo(ssbo_edge_to_vert_[awi.wedge_id*4u + ivert_oppo]);
+            float w = compute_edge_quadric_weight(vpos, (vpos_oppo + vpos) * .5f, q_e);
+            q_summed.quadric += q_e.quadric * w;
+
+            filtered_vert_normal += load_filtered_edge_normal(awi.wedge_id) * q_e.area; 
+            filtered_vert_normal_weight += q_e.area; 
+#else
+            Quadric q_oppo = load_vert_quadric(awi.wedge_id); 
+            float w = compute_vert_quadric_weight(vpos, q_v, vpos_oppo, q_oppo); 
+            q_summed.quadric += q_oppo.quadric * w; 
+#endif
+            weight_sum += w; 
+
+
+            uint iwedge_next = mark__cwedge_rotate_next(awi.iface_adj); 
+            awi = decode_adj_wedge_info(ssbo_edge_to_edges_[awi.wedge_id*4u + iwedge_next]);
+            ivert_oppo = mark__cwedge_to_beg_vert(awi.iface_adj); 
+
+            rotate_step++; 
+        } while (
+            rotate_step < MAX_WEDGE_ROTATES 
+            && awi.wedge_id != wedge_id
+        ); 
+    }
+
+    if (weight_sum > .0f)
+        q_v.quadric = q_summed.quadric / weight_sum; 
+    if (valid_thread)
+        store_vert_quadric(FilteredVertID, q_v); 
+
+#if !defined(_KERNEL_MULTICOMPILE__WEDGE_QUADRICS__CALC_VERT_FINAL)
+    if (valid_thread)
+        store_filtered_vert_normal(FilteredVertID, filtered_vert_normal / filtered_vert_normal_weight);
+#endif
+
+#endif
+
+
+#if defined(_KERNEL_MULTICOMPILE__WEDGE_QUADRICS__CALC_VERT)
+    const uint FilteredVertID = idx.x; 
+    const uint NumFilteredVerts = ssbo_bnpr_mesh_pool_counters_.num_filtered_verts; 
+    /* Do not use VertID here since it's offseted with current mesh batch */
+    bool valid_thread = (idx.x < NumFilteredVerts); 
+    if (!valid_thread) return; /* quit if not valid thread */
+    
+    Quadric q_v = load_vert_quadric(FilteredVertID); 
+    vec4 nv = load_filtered_vert_normal(FilteredVertID); 
+    
+    uint vert_id = ssbo_filtered_vert_to_vert_[FilteredVertID]; 
+    vec3 vpos = ld_vbo(vert_id);
+
+    mat3 A = mat3(q_v.quadric); /* slice upper 3x3 */
+    vec3 b = vec3(q_v.quadric[3][0], q_v.quadric[3][1], q_v.quadric[3][2]); 
+    float lambda = -(dot(vpos, A * vpos) + dot(b, nv)) / dot(nv, A * nv); 
+    vpos += nv * lambda; 
+
+    if (valid_thread)
+        store_vbo(vert_id, vpos);
 #endif
 
 
