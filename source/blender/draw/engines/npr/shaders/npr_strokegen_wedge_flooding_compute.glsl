@@ -350,11 +350,10 @@ void main()
     bool valid_thread = (idx.x < NumFilteredVerts); 
     if (!valid_thread) return; /* quit if not valid thread */
     
-    uint vert_id = ssbo_filtered_vert_to_vert_[FilteredVertID]; 
-    vec3 vpos = ld_vbo(vert_id);
+    uint vert_id_global = ssbo_filtered_vert_to_vert_[FilteredVertID]; 
+    vec3 vpos = ld_vbo(vert_id_global);
 
     Quadric q_v; 
-    Quadric q_summed; 
     float weight_sum = .0f; 
 #if !defined(_KERNEL_MULTICOMPILE__WEDGE_QUADRICS__CALC_VERT_FINAL)
     /* note: this inits at diagonals with param, other places cleared to .0 */
@@ -367,11 +366,11 @@ void main()
     q_v = load_vert_quadric(FilteredVertID); 
     weight_sum += compute_vert_quadric_weight(vpos, q_v, vpos, q_v); 
 #endif
-    q_summed = q_v; 
+    Quadric q_v_filtered = q_v; 
 
     
     { /* Rotate wedge around the vert */
-        VertWedgeListHeader vwlh = decode_vert_wedge_list_header(ssbo_vert_to_edge_list_header_[vert_id]); 
+        VertWedgeListHeader vwlh = decode_vert_wedge_list_header(ssbo_vert_to_edge_list_header_[vert_id_global]); 
         uint ivert_oppo = (vmlh.ivert == 1u) ? 3 : 1; 
         
         AdjWedgeInfo awi; 
@@ -381,27 +380,28 @@ void main()
     #define MAX_WEDGE_ROTATES 16u
         uint rotate_step = 0u; 
         do {
+            vec3 vpos_oppo = ld_vbo(ssbo_edge_to_vert_[awi.wedge_id*4u + ivert_oppo]);
+
 #if !defined(_KERNEL_MULTICOMPILE__WEDGE_QUADRICS__CALC_VERT_FINAL)
             Quadric q_e = load_wedge_quadric(awi.wedge_id);
-            q_summed.area += q_e.area; 
+            q_v_filtered.area += q_e.area; 
 
-            vec3 vpos_oppo = ld_vbo(ssbo_edge_to_vert_[awi.wedge_id*4u + ivert_oppo]);
             float w = compute_edge_quadric_weight(vpos, (vpos_oppo + vpos) * .5f, q_e);
-            q_summed.quadric += q_e.quadric * w;
+            q_v_filtered.quadric += w * q_e.quadric;
 
-            filtered_vert_normal += load_filtered_edge_normal(awi.wedge_id) * q_e.area; 
+            filtered_vert_normal += q_e.area * load_filtered_edge_normal(awi.wedge_id); 
             filtered_vert_normal_weight += q_e.area; 
 #else
             Quadric q_oppo = load_vert_quadric(awi.wedge_id); 
             float w = compute_vert_quadric_weight(vpos, q_v, vpos_oppo, q_oppo); 
-            q_summed.quadric += q_oppo.quadric * w; 
+            q_v_filtered.quadric += w * q_oppo.quadric; 
 #endif
             weight_sum += w; 
 
 
             uint iwedge_next = mark__cwedge_rotate_next(awi.iface_adj); 
             awi = decode_adj_wedge_info(ssbo_edge_to_edges_[awi.wedge_id*4u + iwedge_next]);
-            ivert_oppo = mark__cwedge_to_beg_vert(awi.iface_adj); 
+            ivert_oppo = mark__cwedge_to_beg_vert(awi.iface_adj); /* we are rotating around the end vert */
 
             rotate_step++; 
         } while (
@@ -411,9 +411,9 @@ void main()
     }
 
     if (weight_sum > .0f)
-        q_v.quadric = q_summed.quadric / weight_sum; 
+        q_v_filtered.quadric = q_v_filtered.quadric / weight_sum; 
     if (valid_thread)
-        store_vert_quadric(FilteredVertID, q_v); 
+        store_vert_quadric(FilteredVertID, q_v_filtered); 
 
 #if !defined(_KERNEL_MULTICOMPILE__WEDGE_QUADRICS__CALC_VERT_FINAL)
     if (valid_thread)
@@ -433,16 +433,23 @@ void main()
     Quadric q_v = load_vert_quadric(FilteredVertID); 
     vec4 nv = load_filtered_vert_normal(FilteredVertID); 
     
-    uint vert_id = ssbo_filtered_vert_to_vert_[FilteredVertID]; 
-    vec3 vpos = ld_vbo(vert_id);
+    uint vert_id_global = ssbo_filtered_vert_to_vert_[FilteredVertID]; 
+    vec3 vpos = ld_vbo(vert_id_global);
 
-    mat3 A = mat3(q_v.quadric); /* slice upper 3x3 */
-    vec3 b = vec3(q_v.quadric[3][0], q_v.quadric[3][1], q_v.quadric[3][2]); 
-    float lambda = -(dot(vpos, A * vpos) + dot(b, nv)) / dot(nv, A * nv); 
-    vpos += nv * lambda; 
+    #if defined(_KERNEL_MULTICOMPILE__WEDGE_QUADRICS__CALC_VERT_CONSTRAINED_SOLVE)
+        mat3 A = mat3(q_v.quadric); /* slice upper 3x3 */
+        vec3 b = vec3(q_v.quadric[3][0], q_v.quadric[3][1], q_v.quadric[3][2]); 
+        float lambda = -(dot(vpos, A * vpos) + dot(b, nv)) / dot(nv, A * nv); 
+        vpos += nv * lambda; 
+    #else /* Directly solve by minimizing the quadrics */
+        dmat4 q_d = dmat4(q_v.quadric); 
+        dmat3 A = dmat3(q_d); 
+        dvec3 b = dvec3(q_d.quadric[3][0], q_d.quadric[3][1], q_d.quadric[3][2]); 
+        vpos = vec3(-inverse(A)*b); 
+    #endif
 
     if (valid_thread)
-        store_vbo(vert_id, vpos);
+        store_vbo(vert_id_global, vpos);
 #endif
 
 

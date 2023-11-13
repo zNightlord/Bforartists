@@ -29,7 +29,7 @@ class GPUBufferPoolModule {
 
   SSBO_StrokeGenTest ssbo_bnpr_test_;
 
-  SSBO_StrokeGenMeshLarge     ssbo_bnpr_mesh_pool_; // contains contour edge data
+  SSBO_StrokeGenMeshLarge ssbo_bnpr_mesh_pool_; // contains contour edge data
   SSBO_StrokeGenMeshPoolCounters ssbo_bnpr_mesh_pool_counters_;
   SSBO_StrokeGenMeshPoolCounters ssbo_bnpr_mesh_pool_counters_prev_; // keep counters from last mesh extraction iter
   SSBO_IndirectDrawArgs ssbo_bnpr_mesh_pool_draw_args_;
@@ -57,12 +57,15 @@ class GPUBufferPoolModule {
   {
     buf = ssbo_mesh_buffer_reuse_0_; 
   }
-  inline void reused_ssbo_wedge_flooding_pointers_(uint iter, GPUStorageBuf *&buf) const
+  inline void reused_ssbo_wedge_flooding_pointers_(uint iter, GPUStorageBuf *&buf_in, GPUStorageBuf*& buf_out) const
   {
-    if (iter % 2u == 1u)
-      buf = ssbo_edge_to_contour_;
-    else
-      buf = ssbo_mesh_buffer_reuse_0_; 
+    if (iter % 2u == 0u) {
+      buf_in = ssbo_edge_to_contour_;
+      buf_out = ssbo_mesh_buffer_reuse_0_; 
+    }else {
+      buf_in = ssbo_mesh_buffer_reuse_0_;
+      buf_out = ssbo_edge_to_contour_; 
+    }
   }
   inline void reused_ssbo_filtered_edge_to_edge_(GPUStorageBuf*& buf)
   {
@@ -72,6 +75,12 @@ class GPUBufferPoolModule {
   {
     buf = ssbo_contour_edge_rank_; 
   }
+  inline void reused_ssbo_vert_quadric_data_in(int iter, GPUStorageBuf*& buf_in, GPUStorageBuf*& buf_out)
+  {
+    buf_in = iter % 2 == 0 ? ssbo_bnpr_mesh_pool_ : ssbo_mesh_buffer_reuse_0_;
+    buf_out = iter % 2 == 0 ? ssbo_mesh_buffer_reuse_0_ : ssbo_bnpr_mesh_pool_; 
+  }
+
 
   SSBO_BnprScanData       ssbo_in_scan_data_;
   SSBO_BnprScanData       ssbo_out_scan_data_;

@@ -329,20 +329,21 @@ Quadric compute_wedge_quadric(vec3 p0, vec3 p1, vec3 p2, vec3 p3, vec3 cam_pos_w
 	vec3 v10 = p0 - p1;
 	vec3 v13 = p3 - p1;
    	vec3 v12 = p2 - p1;
+    
+    vec3 v13_cross_v10 = cross(v13, v10); 
+    vec3 v12_cross_v13 = cross(v12, v13); 
 
     /* Averaged area */
-    mat3 det_v013 = mat3(v10, v13, vec3(1, 1, 1));
-    mat3 det_v123 = mat3(v12, v13, vec3(1, 1, 1));
-    q.area = (abs(determinant(det_v013)) + abs(determinant(det_v123))) * .5f; 
-
+    q.area = ((length(v13_cross_v10)) + length(v12_cross_v13)) * .25f; 
 
     /* Quadric for a plane is nnT where n is the plane equation using normalized normal */
-	vec4 n0 = vec4(normalize(cross(v13, v10)).xyz, 1.0f);
-    n0.w = -dot(n0.xyz, p1.xyz); 
+	vec4 n0 = vec4(normalize(v13_cross_v10).xyz, 1.0f);
+    n0.w = -dot(n0.xyz, (p1+p3+p0)/3.0f); 
+    /* TODO: add camera influence here */
     mat4 q0 = mat4(n0.x * n0, n0.y * n0, n0.z * n0, n0.w * n0);
 
-	vec4 n2 = vec4(normalize(cross(v12, v13)).xyz, 1.0f);
-	n2.w = -dot(n2.xyz, p1.xyz); 
+	vec4 n2 = vec4(normalize(v12_cross_v13).xyz, 1.0f);
+	n2.w = -dot(n2.xyz, (p1+p2+p3)/3.0f); 
     mat4 q2 = mat4(n2.x * n2, n2.y * n2, n2.z * n2, n2.w * n2);
 
     q.quadric = (q0 + q2) * .5f;
@@ -369,7 +370,7 @@ float compute_vert_quadric_weight(vec3 p_v, Quadric q_v, vec3 p_x, Quadric q_x)
     
     vec4 v = vec4(p_v, 1.0f); 
     float quadric_dist_v2qx = dot(v, q_x.quadric * v); /* vT Q v */
-    float quadric_weight = gaussian(sqrt(quadric_dist_v2qx), 0.1f); 
+    float quadric_weight = gaussian(sqrt(abs(quadric_dist_v2qx)), 0.1f); 
 
     float geometry_weight = q_v.area * gaussian(dist, 0.01f); 
     

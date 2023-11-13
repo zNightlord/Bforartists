@@ -87,10 +87,9 @@ namespace blender::npr::strokegen
         draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub, int flooding_iter = 0)
     {
       GPUStorageBuf *reused_ssbo_wedge_flooding_pointers_in_ = nullptr;
-      buffers_.reused_ssbo_wedge_flooding_pointers_(flooding_iter + 1,
-                                                    reused_ssbo_wedge_flooding_pointers_in_);
       GPUStorageBuf *reused_ssbo_wedge_flooding_pointers_out_ = nullptr;
       buffers_.reused_ssbo_wedge_flooding_pointers_(flooding_iter,
+                                                    reused_ssbo_wedge_flooding_pointers_in_,
                                                     reused_ssbo_wedge_flooding_pointers_out_);
       GPUStorageBuf *reused_ssbo_filtered_edge_to_edge_ = nullptr;
       buffers_.reused_ssbo_filtered_edge_to_edge_(reused_ssbo_filtered_edge_to_edge_); 
@@ -105,7 +104,8 @@ namespace blender::npr::strokegen
     };
 
     const int num_flooding_iters = 4; // Must be even number !!!
-    for (int flooding_iter = 0; flooding_iter < num_flooding_iters; ++flooding_iter)
+    int flooding_iter = 0; 
+    for (; flooding_iter < num_flooding_iters; ++flooding_iter)
     {
       auto &sub = pass_extract_geom.sub("bnpr_meshing_wedge_flooding");
       if (flooding_iter < num_flooding_iters - 1)
@@ -125,8 +125,10 @@ namespace blender::npr::strokegen
       sub.shader_set(shaders_.static_shader_get(MESH_WEDGE_FLOODING_SELECT_VERTS));
 
       GPUStorageBuf *reused_ssbo_wedge_flooding_pointers_in_ = nullptr;
-      buffers_.reused_ssbo_wedge_flooding_pointers_(num_flooding_iters + 1,
-                                                    reused_ssbo_wedge_flooding_pointers_in_);
+      GPUStorageBuf *reused_ssbo_wedge_flooding_pointers_out_ = nullptr;
+      buffers_.reused_ssbo_wedge_flooding_pointers_(flooding_iter,
+                                                    reused_ssbo_wedge_flooding_pointers_in_,
+                                                    reused_ssbo_wedge_flooding_pointers_out_);
       GPUStorageBuf *reused_ssbo_filtered_vert_to_vert_ = nullptr;
       buffers_.reused_ssbo_filtered_vert_to_vert_(reused_ssbo_filtered_vert_to_vert_);
 
@@ -215,7 +217,7 @@ namespace blender::npr::strokegen
     append_subpass_meshing_wedge_adjacency_and_init_flooding_ptr(num_edges, num_verts);
     append_subpass_meshing_wedge_flooding(num_edges, num_verts);
 
-    const bool debug_wedge_flooding = false; 
+    const bool debug_wedge_flooding = true; 
     append_subpass_extract_contour_edges(
         gpu_batch_line_adj, rsc_handle, edge_batch, num_edges, ib_type, debug_wedge_flooding
     );
@@ -339,8 +341,11 @@ namespace blender::npr::strokegen
     {
       GPUStorageBuf *reused_ssbo_edge_spatial_map_payloads_ = nullptr;
       buffers_.reused_ssbo_edge_spatial_map_payloads_(reused_ssbo_edge_spatial_map_payloads_);
+      GPUStorageBuf *reused_ssbo_wedge_flooding_pointers_in_ = nullptr;
       GPUStorageBuf *reused_ssbo_wedge_flooding_pointers_out_ = nullptr;
-      buffers_.reused_ssbo_wedge_flooding_pointers_(1, reused_ssbo_wedge_flooding_pointers_out_); 
+      buffers_.reused_ssbo_wedge_flooding_pointers_(
+          1/*iter=="-1"*/, reused_ssbo_wedge_flooding_pointers_in_, reused_ssbo_wedge_flooding_pointers_out_
+      ); 
 
       sub.bind_ssbo(0, buffers_.ssbo_vert_merged_id_);
       sub.bind_ssbo(1, buffers_.ssbo_vert_spatial_map_headers_);
@@ -435,8 +440,13 @@ namespace blender::npr::strokegen
     sub.bind_ssbo(5, buffers_.ssbo_edge_to_contour_);
     // for debugging 
     GPUStorageBuf *reused_ssbo_wedge_flooding_pointers_in_ = nullptr;
-    buffers_.reused_ssbo_wedge_flooding_pointers_(1, reused_ssbo_wedge_flooding_pointers_in_);
-    sub.bind_ssbo(6, reused_ssbo_wedge_flooding_pointers_in_); 
+    GPUStorageBuf *reused_ssbo_wedge_flooding_pointers_out_ = nullptr;
+    buffers_.reused_ssbo_wedge_flooding_pointers_(
+        1/*==last iter*/,
+      reused_ssbo_wedge_flooding_pointers_in_,
+      reused_ssbo_wedge_flooding_pointers_out_
+    );
+    sub.bind_ssbo(6, reused_ssbo_wedge_flooding_pointers_out_); 
     // --------------
     sub.bind_ubo(0, buffers_.ubo_view_matrices_cache_);
     sub.push_constant("pcs_ib_fmt_u16", ib_type == gpu::GPU_INDEX_U16 ? 1 : 0);
