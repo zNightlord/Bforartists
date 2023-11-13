@@ -107,6 +107,7 @@ public:
   int num_total_mesh_edges;
   int num_total_mesh_tris;
   void init_per_mesh_pass();
+  void append_subpass_quadric_mesh_filtering();
   void append_subpass_fill_meshing_indirect_dispatch_args_();
   void append_subpass_meshing_wedge_flooding(int num_edges, int num_verts);
   void append_subpass_extract_contour_edges(GPUBatch* gpu_batch_line_adj,

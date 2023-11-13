@@ -81,30 +81,6 @@ namespace blender::npr::strokegen
     boostrap_before_extract_first_batch = true;
   }
 
-  void StrokeGenPassModule::append_subpass_fill_meshing_indirect_dispatch_args_()
-  {
-    auto bind_src = [&](draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub) {
-      sub.bind_ssbo(0, buffers_.ssbo_bnpr_mesh_pool_counters_);
-      sub.bind_ssbo(1, buffers_.ssbo_indirect_dispatch_args_per_filtered_edge_);
-      sub.bind_ssbo(2, buffers_.ssbo_indirect_dispatch_args_per_filtered_vert_);
-      sub.push_constant("pc_meshing_dispatch_group_size_", (int)GROUP_SIZE_STROKEGEN_GEOM_EXTRACT); 
-    }; 
-    {
-      auto &sub = pass_extract_geom.sub("bnpr_meshing_fill_dispatch_args_per_filtered_edge");
-      sub.shader_set(shaders_.static_shader_get(FILL_DISPATCH_ARGS_FILTERED_EDGES));
-      bind_src(sub);
-      sub.dispatch(int3(1, 1, 1));  
-      sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
-    }
-    {
-      auto &sub = pass_extract_geom.sub("bnpr_meshing_fill_dispatch_args_per_filtered_vert");
-      sub.shader_set(shaders_.static_shader_get(FILL_DISPATCH_ARGS_FILTERED_VERTS));
-      bind_src(sub);
-      sub.dispatch(int3(1, 1, 1));
-      sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
-    }
-  }
-
   /**
    * \brief Add a subpass for extracting geometry from given GPUBatch.
    * \param ob Mesh Object
@@ -175,6 +151,7 @@ namespace blender::npr::strokegen
     append_subpass_meshing_wedge_adjacency_and_init_flooding_ptr(num_edges, num_verts);
     append_subpass_meshing_wedge_flooding(num_edges, num_verts);
     append_subpass_fill_meshing_indirect_dispatch_args_();
+    append_subpass_quadric_mesh_filtering();
 
 
     const bool debug_wedge_flooding = true; 
@@ -190,6 +167,76 @@ namespace blender::npr::strokegen
     num_total_mesh_tris += num_tris;
     num_total_mesh_verts += num_verts;
     num_total_mesh_edges += num_edges; 
+  }
+
+  void StrokeGenPassModule::append_subpass_quadric_mesh_filtering()
+  {
+    auto bind_rsc = [&](draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub, int vert_diffuse_iter = 0)
+    {
+      GPUStorageBuf *reused_ssbo_vert_quadric_data_in_ = nullptr;
+      GPUStorageBuf *reused_ssbo_vert_quadric_data_out_ = nullptr;
+      buffers_.reused_ssbo_vert_quadric_data_(
+          vert_diffuse_iter, reused_ssbo_vert_quadric_data_in_, reused_ssbo_vert_quadric_data_out_); 
+
+      sub.bind_ssbo(0, buffers_.ssbo_bnpr_mesh_pool_counters_);
+      sub.bind_ssbo(1, buffers_.ssbo_edge_to_edges_);
+      sub.bind_ssbo(2, buffers_.ssbo_edge_to_vert_);
+      sub.bind_ssbo(3, buffers_.ssbo_vert_to_edge_list_header_);
+      sub.bind_ssbo(4, buffers_.reused_ssbo_filtered_edge_to_edge_());
+      sub.bind_ssbo(5, buffers_.reused_ssbo_filtered_vert_to_vert_());
+      sub.bind_ssbo(6, buffers_.ssbo_vbo_full_);
+      sub.bind_ssbo(7, buffers_.reused_ssbo_filtered_normal_vert_());
+      sub.bind_ssbo(8, buffers_.reused_ssbo_filtered_normal_edge_());
+      sub.bind_ssbo(9, buffers_.reused_ssbo_edge_quadric_data());
+      sub.bind_ssbo(10, reused_ssbo_vert_quadric_data_in_);
+      sub.bind_ssbo(11, reused_ssbo_vert_quadric_data_out_);
+      sub.bind_ubo(0, buffers_.ubo_view_matrices_); 
+    };
+
+    {
+      auto &sub = pass_extract_geom.sub("bnpr_meshing_mesh_filtering_edge_quadric_");
+      sub.shader_set(shaders_.static_shader_get(MESH_FILTERING_EDGE_QUADRIC)); 
+
+      bind_rsc(sub);
+
+      sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_filtered_edge_);
+      sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE); 
+    }
+
+    const int diffuse_iters = 4;
+    int iter_diffuse = 0;
+    {
+      auto &sub = pass_extract_geom.sub("bnpr_meshing_mesh_filtering_init_vert_quadric_");
+      sub.shader_set(shaders_.static_shader_get(MESH_FILTERING_VERT_QUADRIC_INIT)); 
+
+      bind_rsc(sub, iter_diffuse);
+
+      sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_filtered_vert_); 
+      sub.barrier(GPU_BARRIER_SHADER_STORAGE);
+
+      iter_diffuse++; 
+    }
+       
+    for (; iter_diffuse <= diffuse_iters; ++iter_diffuse)
+    {
+      auto &sub = pass_extract_geom.sub("bnpr_meshing_mesh_filtering_diffuse_vert_quadric_");
+      sub.shader_set(shaders_.static_shader_get(MESH_FILTERING_VERT_QUADRIC_DIFFUSION));
+
+      bind_rsc(sub, iter_diffuse);
+
+      sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_filtered_vert_); 
+      sub.barrier(GPU_BARRIER_SHADER_STORAGE);
+    }
+
+    {
+      auto &sub = pass_extract_geom.sub("bnpr_meshing_mesh_filtering_move_verts_");
+      sub.shader_set(shaders_.static_shader_get(MESH_FILTERING_MOVE_VERTS));
+
+      bind_rsc(sub, iter_diffuse);
+
+      sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_filtered_vert_); 
+      sub.barrier(GPU_BARRIER_SHADER_STORAGE);
+    }
   }
 
   void StrokeGenPassModule::append_subpass_merge_vbo(GPUBatch *gpu_batch_surf, int batch_resource_index, int num_verts)
@@ -366,13 +413,11 @@ namespace blender::npr::strokegen
       buffers_.reused_ssbo_wedge_flooding_pointers_(flooding_iter,
                                                     reused_ssbo_wedge_flooding_pointers_in_,
                                                     reused_ssbo_wedge_flooding_pointers_out_);
-      GPUStorageBuf *reused_ssbo_filtered_edge_to_edge_ = nullptr;
-      buffers_.reused_ssbo_filtered_edge_to_edge_(reused_ssbo_filtered_edge_to_edge_); 
 
       sub.bind_ssbo(0, reused_ssbo_wedge_flooding_pointers_in_);
       sub.bind_ssbo(1, reused_ssbo_wedge_flooding_pointers_out_);
       sub.bind_ssbo(2, buffers_.ssbo_edge_to_edges_);
-      sub.bind_ssbo(3, reused_ssbo_filtered_edge_to_edge_);
+      sub.bind_ssbo(3, buffers_.reused_ssbo_filtered_edge_to_edge_());
       sub.bind_ssbo(4, buffers_.ssbo_bnpr_mesh_pool_counters_); 
       sub.push_constant("pcs_edge_count_", num_edges);
       sub.push_constant("pcs_edge_id_offset_", num_total_mesh_edges);
@@ -404,10 +449,8 @@ namespace blender::npr::strokegen
       buffers_.reused_ssbo_wedge_flooding_pointers_(flooding_iter,
                                                     reused_ssbo_wedge_flooding_pointers_in_,
                                                     reused_ssbo_wedge_flooding_pointers_out_);
-      GPUStorageBuf *reused_ssbo_filtered_vert_to_vert_ = nullptr;
-      buffers_.reused_ssbo_filtered_vert_to_vert_(reused_ssbo_filtered_vert_to_vert_);
 
-      sub.bind_ssbo(0, reused_ssbo_filtered_vert_to_vert_);
+      sub.bind_ssbo(0, buffers_.reused_ssbo_filtered_vert_to_vert_());
       sub.bind_ssbo(1, reused_ssbo_wedge_flooding_pointers_in_);
       sub.bind_ssbo(2, buffers_.ssbo_edge_to_vert_);
       sub.bind_ssbo(3, buffers_.ssbo_edge_to_edges_);
@@ -419,6 +462,30 @@ namespace blender::npr::strokegen
       int num_groups = compute_num_groups(num_verts, GROUP_SIZE_STROKEGEN_GEOM_EXTRACT);
       sub.dispatch(int3(num_groups, 1, 1));
       sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_SHADER_IMAGE_ACCESS);
+    }
+  }
+
+  void StrokeGenPassModule::append_subpass_fill_meshing_indirect_dispatch_args_()
+  {
+    auto bind_src = [&](draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub) {
+      sub.bind_ssbo(0, buffers_.ssbo_bnpr_mesh_pool_counters_);
+      sub.bind_ssbo(1, buffers_.ssbo_indirect_dispatch_args_per_filtered_edge_);
+      sub.bind_ssbo(2, buffers_.ssbo_indirect_dispatch_args_per_filtered_vert_);
+      sub.push_constant("pc_meshing_dispatch_group_size_", (int)GROUP_SIZE_STROKEGEN_GEOM_EXTRACT); 
+    }; 
+    {
+      auto &sub = pass_extract_geom.sub("bnpr_meshing_fill_dispatch_args_per_filtered_edge");
+      sub.shader_set(shaders_.static_shader_get(FILL_DISPATCH_ARGS_FILTERED_EDGES));
+      bind_src(sub);
+      sub.dispatch(int3(1, 1, 1));  
+      sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
+    }
+    {
+      auto &sub = pass_extract_geom.sub("bnpr_meshing_fill_dispatch_args_per_filtered_vert");
+      sub.shader_set(shaders_.static_shader_get(FILL_DISPATCH_ARGS_FILTERED_VERTS));
+      bind_src(sub);
+      sub.dispatch(int3(1, 1, 1));
+      sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
     }
   }
 

@@ -525,22 +525,24 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_mesh_filtering_)
     .typedef_source("draw_shader_shared.h")
     .define("_KERNEL_MULTICOMPILE__MESH_FILTERING_", "1")
     .define("DECODE_IBO_EXCLUDE", "1") /* Remove ibo code */
+    .define("COMPACTION_LIB_EXCLUDE") /* Remove compaction code */
     .define("WINGED_EDGE_TOPO_INCLUDE", "1")
     .define("VERT_WEDGE_LIST_TOPO_INCLUDE", "1")
 
     .storage_buf(0, Qualifier::READ_WRITE, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
     .storage_buf(1, Qualifier::READ, "uint", "ssbo_edge_to_edges_[]")
-    .storage_buf(2, Qualifier::READ_WRITE, "uint", "ssbo_vert_to_edge_list_header_[]")
-    .storage_buf(3, Qualifier::READ, "uint", "ssbo_filtered_edge_to_edge_[]")
-    .storage_buf(4, Qualifier::READ, "uint", "ssbo_filtered_vert_to_vert_[]")
-    .storage_buf(5, Qualifier::READ_WRITE, "uint", "ssbo_vert_quadric_data_in_[]")
-    .storage_buf(6, Qualifier::READ_WRITE, "uint", "ssbo_vert_quadric_data_out_[]")
-    .storage_buf(7, Qualifier::READ_WRITE, "uint", "ssbo_edge_quadric_data_[]")
-    .storage_buf(8, Qualifier::READ_WRITE, "float", "ssbo_vbo_full[]")
-    .storage_buf(9, Qualifier::READ_WRITE, "float", "ssbo_filtered_normal_vert_[]")
-    .storage_buf(10, Qualifier::READ_WRITE, "float", "ssbo_filtered_normal_edge_[]")
-
+    .storage_buf(2, Qualifier::READ, "uint", "ssbo_edge_to_vert_[]")
+    .storage_buf(3, Qualifier::READ_WRITE, "uint", "ssbo_vert_to_edge_list_header_[]")
+    .storage_buf(4, Qualifier::READ, "uint", "ssbo_filtered_edge_to_edge_[]")
+    .storage_buf(5, Qualifier::READ, "uint", "ssbo_filtered_vert_to_vert_[]")
+    .storage_buf(6, Qualifier::READ_WRITE, "float", "ssbo_vbo_full_[]")
+    .storage_buf(7, Qualifier::READ_WRITE, "float", "ssbo_filtered_normal_vert_[]")
+    .storage_buf(8, Qualifier::READ_WRITE, "float", "ssbo_filtered_normal_edge_[]")
+    .storage_buf(9, Qualifier::READ_WRITE, "uint", "ssbo_edge_quadric_data_[]")
+    .storage_buf(10, Qualifier::READ_WRITE, "uint", "ssbo_vert_quadric_data_in_[]")
+    .storage_buf(11, Qualifier::READ_WRITE, "uint", "ssbo_vert_quadric_data_out_[]")
     .uniform_buf(0, "ViewMatrices", "ubo_view_matrices_") 
+    
     .local_group_size(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT)
     .compute_source("npr_strokegen_wedge_flooding_compute.glsl");
 

@@ -175,17 +175,17 @@ void store_wedge_quadric(uint FilteredEdgeID, Quadric q)
 {
     vec4 data_0, data_1; 
     vec3 data_2; 
-    encode_quadric(q_e, /*out*/data_0, data_1, data_2); 
+    encode_quadric(q, /*out*/data_0, data_1, data_2); 
 
     uint st_addr = FilteredEdgeID * 11u; 
     for (uint i = 0; i < 4; ++i)
-        ssbo_wedge_quadric_data_[st_addr + i] = floatBitsToUint(data_0[i]);
+        ssbo_edge_quadric_data_[st_addr + i] = floatBitsToUint(data_0[i]);
     st_addr += 4u; 
     for (uint i = 0; i < 4; ++i)
-        ssbo_wedge_quadric_data_[st_addr + i] = floatBitsToUint(data_1[i]);
+        ssbo_edge_quadric_data_[st_addr + i] = floatBitsToUint(data_1[i]);
     st_addr += 4u;
     for (uint i = 0; i < 3; ++i)
-        ssbo_wedge_quadric_data_[st_addr + i] = floatBitsToUint(data_2[i]);
+        ssbo_edge_quadric_data_[st_addr + i] = floatBitsToUint(data_2[i]);
 }
 Quadric load_wedge_quadric(uint FilteredEdgeID)
 {
@@ -195,13 +195,13 @@ Quadric load_wedge_quadric(uint FilteredEdgeID)
     vec4 data_0, data_1;
     vec3 data_2;
     for (uint i = 0; i < 4; ++i)
-        data_0[i] = uintBitsToFloat(ssbo_wedge_quadric_data_[ld_addr + i]);
+        data_0[i] = uintBitsToFloat(ssbo_edge_quadric_data_[ld_addr + i]);
     ld_addr += 4u;
     for (uint i = 0; i < 4; ++i)
-        data_1[i] = uintBitsToFloat(ssbo_wedge_quadric_data_[ld_addr + i]);
+        data_1[i] = uintBitsToFloat(ssbo_edge_quadric_data_[ld_addr + i]);
     ld_addr += 4u;
     for (uint i = 0; i < 3; ++i)
-        data_2[i] = uintBitsToFloat(ssbo_wedge_quadric_data_[ld_addr + i]);
+        data_2[i] = uintBitsToFloat(ssbo_edge_quadric_data_[ld_addr + i]);
 
     q = decode_quadric(data_0, data_1, data_2); 
 
@@ -212,7 +212,7 @@ void store_vert_quadric(uint FilteredVertID, Quadric q)
 {
     vec4 data_0, data_1; 
     vec3 data_2; 
-    encode_quadric(q_e, /*out*/data_0, data_1, data_2); 
+    encode_quadric(q, /*out*/data_0, data_1, data_2); 
 
     uint st_addr = FilteredVertID * 11u; 
     for (uint i = 0; i < 4; ++i)
@@ -282,7 +282,7 @@ vec3 ld_vbo(uint GlobalVertID)
 	uint base_addr = GlobalVertID * 3; 
 	return vec3(ssbo_vbo_full_[base_addr], ssbo_vbo_full_[base_addr+1], ssbo_vbo_full_[base_addr+2]); 
 }
-vec3 store_vbo(uint GlobalVertID, vec3 vpos)
+void store_vbo(uint GlobalVertID, vec3 vpos)
 {
     uint base_addr = GlobalVertID * 3; 
     ssbo_vbo_full_[base_addr]   = vpos.x;
@@ -341,7 +341,7 @@ void main()
     if (valid_thread)
     {
         store_wedge_quadric(FilteredEdgeID, q_e); 
-        store_filtered_edge_normal(FilteredEdgeID, wedge_normal)
+        store_filtered_edge_normal(FilteredEdgeID, wedge_normal); 
     }
 #endif
 
@@ -374,10 +374,10 @@ void main()
     
     { /* Rotate wedge around the vert */
         VertWedgeListHeader vwlh = decode_vert_wedge_list_header(ssbo_vert_to_edge_list_header_[vert_id_global]); 
-        uint ivert_oppo = (vmlh.ivert == 1u) ? 3 : 1; 
+        uint ivert_oppo = (vwlh.ivert == 1u) ? 3 : 1; 
         
         AdjWedgeInfo awi; 
-        awi.iface_adj = (vmlh.ivert == 1u) ? 0 : 1; /* which face are we begin to rotate */
+        awi.iface_adj = (vwlh.ivert == 1u) ? 0 : 1; /* which face are we begin to rotate */
         awi.wedge_id  = vwlh.wedge_id; 
 
     #define MAX_WEDGE_ROTATES 16u
@@ -409,7 +409,7 @@ void main()
             rotate_step++; 
         } while (
             rotate_step < MAX_WEDGE_ROTATES 
-            && awi.wedge_id != wedge_id
+            && awi.wedge_id != vwlh.wedge_id
         ); 
     }
 
@@ -434,7 +434,7 @@ void main()
     if (!valid_thread) return; /* quit if not valid thread */
     
     Quadric q_v = load_vert_quadric(FilteredVertID); 
-    vec4 nv = load_filtered_vert_normal(FilteredVertID); 
+    vec3 nv = load_filtered_vert_normal(FilteredVertID); 
     
     uint vert_id_global = ssbo_filtered_vert_to_vert_[FilteredVertID]; 
     vec3 vpos = ld_vbo(vert_id_global);
@@ -447,7 +447,7 @@ void main()
     #else /* Directly solve by minimizing the quadrics */
         dmat4 q_d = dmat4(q_v.quadric); 
         dmat3 A = dmat3(q_d); 
-        dvec3 b = dvec3(q_d.quadric[3][0], q_d.quadric[3][1], q_d.quadric[3][2]); 
+        dvec3 b = dvec3(q_d[3][0], q_d[3][1], q_d[3][2]); 
         vpos = vec3(-inverse(A)*b); 
     #endif
 
@@ -455,7 +455,10 @@ void main()
         store_vbo(vert_id_global, vpos);
 #endif
 
-
-
 }
+
+
 #endif
+
+
+

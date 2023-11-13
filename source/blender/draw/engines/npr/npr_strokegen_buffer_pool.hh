@@ -69,31 +69,34 @@ class GPUBufferPoolModule {
       buf_out = ssbo_edge_to_contour_; 
     }
   }
-  inline void reused_ssbo_filtered_edge_to_edge_(GPUStorageBuf*& buf)
+  inline GPUStorageBuf *reused_ssbo_filtered_edge_to_edge_()
   {
-    buf = ssbo_contour_to_contour_; 
+    return ssbo_contour_to_contour_; 
   }
-  inline void reused_ssbo_filtered_vert_to_vert_(GPUStorageBuf *&buf)
+  inline GPUStorageBuf *reused_ssbo_filtered_vert_to_vert_()
   {
-    buf = ssbo_contour_edge_rank_; 
+    return ssbo_contour_edge_rank_; 
   }
-  inline void reused_ssbo_edge_quadric_data(GPUStorageBuf*& buf)
+  inline GPUStorageBuf *reused_ssbo_edge_quadric_data()
   { // TODO: we can actually share one buffer with vert_quadric data if this also goes iterative
-    buf = ssbo_vert_merged_id_; 
+    return ssbo_vert_merged_id_; 
   }
   inline void reused_ssbo_vert_quadric_data_(int iter, GPUStorageBuf*& buf_in, GPUStorageBuf*& buf_out)
   {
     buf_in = iter % 2 == 0 ? ssbo_bnpr_mesh_pool_ : ssbo_mesh_buffer_reuse_0_;
     buf_out = iter % 2 == 0 ? ssbo_mesh_buffer_reuse_0_ : ssbo_bnpr_mesh_pool_; 
   }
-  inline void reused_ssbo_filtered_edge_normal_(GPUStorageBuf *&buf)
+  inline GPUStorageBuf *reused_ssbo_filtered_normal_edge_()
   {
+    GPUStorageBuf *buf_in = nullptr;
     GPUStorageBuf *dummy_out = nullptr; 
-    reused_ssbo_vert_quadric_data_(0, buf, dummy_out); 
+    reused_ssbo_vert_quadric_data_(0, buf_in, dummy_out);
+
+    return buf_in; 
   }
-  inline void reused_ssbo_filtered_normal_vert_(GPUStorageBuf *&buf)
+  inline GPUStorageBuf *reused_ssbo_filtered_normal_vert_()
   {
-    buf = ssbo_mesh_buffer_reuse_1_; 
+    return ssbo_mesh_buffer_reuse_1_; 
   }
 
 
