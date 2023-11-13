@@ -51,7 +51,48 @@ void FillDispatchArgsBuffer(uvec3 args)
 
 #endif
 
+#if defined (_KERNEL_MULTICOMPILE__FILL_DISPATCH_ARGS__MESHING)
+/* In: 
+ * int pc_meshing_dispatch_group_size_
+ * ssbo_bnpr_mesh_pool_counters_
+ * ssbo_indirect_dispatch_args_per_filtered_edge_
+ * ssbo_indirect_dispatch_args_per_filtered_vert_
+*/
+void GetDispatchArgs(out uvec3 dispatch_args)
+{
+    uint num_work_items = 0; 
+    
+#if defined(_KERNEL_MULTICOMPILE__FILL_DISPATCH_ARGS__MESHING__PER_FILTERED_EDGE)
+    num_work_items = ssbo_bnpr_mesh_pool_counters_.num_filtered_edges;
+#endif
 
+#if defined(_KERNEL_MULTICOMPILE__FILL_DISPATCH_ARGS__MESHING__PER_FILTERED_VERT)
+    num_work_items = ssbo_bnpr_mesh_pool_counters_.num_filtered_verts;
+#endif
+    
+    dispatch_args.x = compute_num_groups(num_work_items, pc_meshing_dispatch_group_size_);
+    dispatch_args.y = 1;
+    dispatch_args.z = 1;
+}
+
+void FillDispatchArgsBuffer(uvec3 args)
+{
+#if defined(_KERNEL_MULTICOMPILE__FILL_DISPATCH_ARGS__MESHING__PER_FILTERED_EDGE)
+    ssbo_indirect_dispatch_args_per_filtered_edge_.num_groups_x = args.x;
+    ssbo_indirect_dispatch_args_per_filtered_edge_.num_groups_y = args.y;
+    ssbo_indirect_dispatch_args_per_filtered_edge_.num_groups_z = args.z; 
+    ssbo_indirect_dispatch_args_per_filtered_edge_._pad0 = 0;
+#endif
+ 
+#if defined(_KERNEL_MULTICOMPILE__FILL_DISPATCH_ARGS__MESHING__PER_FILTERED_VERT)
+    ssbo_indirect_dispatch_args_per_filtered_vert_.num_groups_x = args.x;
+    ssbo_indirect_dispatch_args_per_filtered_vert_.num_groups_y = args.y;
+    ssbo_indirect_dispatch_args_per_filtered_vert_.num_groups_z = args.z;
+    ssbo_indirect_dispatch_args_per_filtered_vert_._pad0 = 0;
+#endif
+}
+
+#endif
 
 #if defined (_KERNEL_MULTICOMPILE__FILL_DISPATCH_ARGS__PER_CONTOUR_EDGE)
 /* In: 

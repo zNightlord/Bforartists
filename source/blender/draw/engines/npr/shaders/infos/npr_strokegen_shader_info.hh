@@ -472,6 +472,99 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_compact_filtered_verts)
     .local_group_size(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT)
     .compute_source("npr_strokegen_wedge_flooding_compute.glsl");
 
+
+/* In: 
+ * int pc_meshing_dispatch_group_size_
+ * ssbo_bnpr_mesh_pool_counters_
+ * ssbo_indirect_dispatch_args_per_filtered_edge_
+ * ssbo_indirect_dispatch_args_per_filtered_vert_
+*/
+GPU_SHADER_CREATE_INFO(strokegen_meshing_fill_dispatch_args)
+    .do_static_compilation(true)
+    .typedef_source("bnpr_defines.hh")
+    .typedef_source("bnpr_shader_shared.hh")
+    .typedef_source("draw_shader_shared.h") /* Always needed for indirect args */
+    .define("_KERNEL_MULTICOMPILE__FILL_DISPATCH_ARGS__MESHING", "1")
+    
+    .storage_buf(0, Qualifier::READ, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
+    .storage_buf(1, Qualifier::WRITE, "DispatchCommand", "ssbo_indirect_dispatch_args_per_filtered_edge_")
+    .storage_buf(2, Qualifier::WRITE, "DispatchCommand", "ssbo_indirect_dispatch_args_per_filtered_vert_")
+    .push_constant(Type::INT, "pc_meshing_dispatch_group_size_") 
+
+    .local_group_size(32)
+    .compute_source("npr_strokegen_fill_indirect_args_comp.glsl");
+
+GPU_SHADER_CREATE_INFO(bnpr_meshing_fill_dispatch_args_per_filtered_edge) 
+    .do_static_compilation(true)
+    .additional_info("strokegen_meshing_fill_dispatch_args")
+    .define("_KERNEL_MULTICOMPILE__FILL_DISPATCH_ARGS__MESHING__PER_FILTERED_EDGE", "1"); 
+
+GPU_SHADER_CREATE_INFO(bnpr_meshing_fill_dispatch_args_per_filtered_vert)
+    .do_static_compilation(true)
+    .additional_info("strokegen_meshing_fill_dispatch_args")
+    .define("_KERNEL_MULTICOMPILE__FILL_DISPATCH_ARGS__MESHING__PER_FILTERED_VERT", "1");
+
+
+/*
+ * uint ssbo_bnpr_mesh_pool_counters_.num_filtered_edges/verts
+ * uint ssbo_edge_to_edges_[];
+ * uint ssbo_vert_to_edge_list_header_[]; 
+ * uint ssbo_filtered_edge_to_edge_[];
+ * uint ssbo_filtered_vert_to_vert_[];
+ * uint ssbo_vert_quadric_data_in_[];  <- (reuse) ssbo_bnpr_mesh_pool_
+ * uint ssbo_vert_quadric_data_out_[]; <- (reuse) ssbo_mesh_buffer_reuse_0_
+ * uint ssbo_edge_quadric_data_[];     <- (reuse) ssbo_vert_merged_id_
+ * float ssbo_vbo_full_[]; rw
+ * float ssbo_filtered_normal_vert_[];  <- (reuse) ssbo_mesh_buffer_reuse_1_
+ * float ssbo_filtered_normal_edge_[];  <- (reuse) ssbo_vert_quadric_data_in_ at iter#0
+ * ubo_view_matrices_
+ */
+GPU_SHADER_CREATE_INFO(bnpr_meshing_mesh_filtering_)
+    .do_static_compilation(true)
+    .typedef_source("bnpr_shader_shared.hh")
+    .typedef_source("draw_shader_shared.h")
+    .define("_KERNEL_MULTICOMPILE__MESH_FILTERING_", "1")
+    .define("DECODE_IBO_EXCLUDE", "1") /* Remove ibo code */
+    .define("WINGED_EDGE_TOPO_INCLUDE", "1")
+    .define("VERT_WEDGE_LIST_TOPO_INCLUDE", "1")
+
+    .storage_buf(0, Qualifier::READ_WRITE, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
+    .storage_buf(1, Qualifier::READ, "uint", "ssbo_edge_to_edges_[]")
+    .storage_buf(2, Qualifier::READ_WRITE, "uint", "ssbo_vert_to_edge_list_header_[]")
+    .storage_buf(3, Qualifier::READ, "uint", "ssbo_filtered_edge_to_edge_[]")
+    .storage_buf(4, Qualifier::READ, "uint", "ssbo_filtered_vert_to_vert_[]")
+    .storage_buf(5, Qualifier::READ_WRITE, "uint", "ssbo_vert_quadric_data_in_[]")
+    .storage_buf(6, Qualifier::READ_WRITE, "uint", "ssbo_vert_quadric_data_out_[]")
+    .storage_buf(7, Qualifier::READ_WRITE, "uint", "ssbo_edge_quadric_data_[]")
+    .storage_buf(8, Qualifier::READ_WRITE, "float", "ssbo_vbo_full[]")
+    .storage_buf(9, Qualifier::READ_WRITE, "float", "ssbo_filtered_normal_vert_[]")
+    .storage_buf(10, Qualifier::READ_WRITE, "float", "ssbo_filtered_normal_edge_[]")
+
+    .uniform_buf(0, "ViewMatrices", "ubo_view_matrices_") 
+    .local_group_size(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT)
+    .compute_source("npr_strokegen_wedge_flooding_compute.glsl");
+
+GPU_SHADER_CREATE_INFO(bnpr_meshing_mesh_filtering_edge_quadric_)
+    .do_static_compilation(true)
+    .additional_info("bnpr_meshing_mesh_filtering_")
+    .define("_KERNEL_MULTICOMPILE__MESH_FILTERING__EDGE_QUADRIC", "1");
+
+GPU_SHADER_CREATE_INFO(bnpr_meshing_mesh_filtering_init_vert_quadric_)
+    .do_static_compilation(true)
+    .additional_info("bnpr_meshing_mesh_filtering_")
+    .define("_KERNEL_MULTICOMPILE__MESH_FILTERING__VERT_QUADRIC", "1")
+    .define("_KERNEL_MULTICOMPILE__MESH_FILTERING__VERT_QUADRIC_INIT", "1"); 
+
+GPU_SHADER_CREATE_INFO(bnpr_meshing_mesh_filtering_diffuse_vert_quadric_)
+    .do_static_compilation(true)
+    .additional_info("bnpr_meshing_mesh_filtering_")
+    .define("_KERNEL_MULTICOMPILE__MESH_FILTERING__VERT_QUADRIC", "1"); 
+
+GPU_SHADER_CREATE_INFO(bnpr_meshing_mesh_filtering_move_verts_)
+    .do_static_compilation(true)
+    .additional_info("bnpr_meshing_mesh_filtering_")
+    .define("_KERNEL_MULTICOMPILE__MESH_FILTERING__MOVE_VERTS", "1");
+
 /** \} */
 
 

@@ -137,12 +137,26 @@ const char *StrokeGenShaderModule::static_shader_create_info_name_get(eShaderTyp
     case MESH_WEDGE_FLOODING_LAST_ITER:
       return "bnpr_meshing_wedge_flooding_last_iter";
     case MESH_WEDGE_FLOODING_SELECT_VERTS:
-      return "bnpr_meshing_compact_filtered_verts"; 
+      return "bnpr_meshing_compact_filtered_verts";
 
-    case SCAN_TEST_UPSWEEP:
-      return "bnpr_scan_test_upsweep";
+    case FILL_DISPATCH_ARGS_FILTERED_EDGES:
+      return "bnpr_meshing_fill_dispatch_args_per_filtered_edge";
+    case FILL_DISPATCH_ARGS_FILTERED_VERTS:
+      return "bnpr_meshing_fill_dispatch_args_per_filtered_vert";
+
+    case MESH_FILTERING_EDGE_QUADRIC:
+      return "bnpr_meshing_mesh_filtering_edge_quadric_"; 
+    case MESH_FILTERING_VERT_QUADRIC_INIT:
+      return "bnpr_meshing_mesh_filtering_init_vert_quadric_"; 
+    case MESH_FILTERING_VERT_QUADRIC_DIFFUSION:
+      return "bnpr_meshing_mesh_filtering_diffuse_vert_quadric_"; 
+    case MESH_FILTERING_MOVE_VERTS:
+      return "bnpr_meshing_mesh_filtering_move_verts_"; 
+
     case SCAN_TEST_AGGREGATE:
       return "bnpr_scan_test_aggregate";
+    case SCAN_TEST_UPSWEEP:
+      return "bnpr_scan_test_upsweep";
     case SCAN_TEST_DWSWEEP:
       return "bnpr_scan_test_dwsweep";
     case SEGSCAN_TEST_UPSWEEP:

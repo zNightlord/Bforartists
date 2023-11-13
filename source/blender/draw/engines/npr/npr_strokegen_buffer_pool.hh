@@ -33,6 +33,8 @@ class GPUBufferPoolModule {
   SSBO_StrokeGenMeshPoolCounters ssbo_bnpr_mesh_pool_counters_;
   SSBO_StrokeGenMeshPoolCounters ssbo_bnpr_mesh_pool_counters_prev_; // keep counters from last mesh extraction iter
   SSBO_IndirectDrawArgs ssbo_bnpr_mesh_pool_draw_args_;
+  SSBO_IndirectDispatchArgs ssbo_indirect_dispatch_args_per_filtered_edge_; 
+  SSBO_IndirectDispatchArgs ssbo_indirect_dispatch_args_per_filtered_vert_;
   SSBO_IndirectDispatchArgs ssbo_bnpr_mesh_contour_edge_dispatch_args_; 
 
   // TODO: these buffers are huge. consider re-use them for each mesh. 
@@ -75,10 +77,23 @@ class GPUBufferPoolModule {
   {
     buf = ssbo_contour_edge_rank_; 
   }
-  inline void reused_ssbo_vert_quadric_data_in(int iter, GPUStorageBuf*& buf_in, GPUStorageBuf*& buf_out)
+  inline void reused_ssbo_edge_quadric_data(GPUStorageBuf*& buf)
+  { // TODO: we can actually share one buffer with vert_quadric data if this also goes iterative
+    buf = ssbo_vert_merged_id_; 
+  }
+  inline void reused_ssbo_vert_quadric_data_(int iter, GPUStorageBuf*& buf_in, GPUStorageBuf*& buf_out)
   {
     buf_in = iter % 2 == 0 ? ssbo_bnpr_mesh_pool_ : ssbo_mesh_buffer_reuse_0_;
     buf_out = iter % 2 == 0 ? ssbo_mesh_buffer_reuse_0_ : ssbo_bnpr_mesh_pool_; 
+  }
+  inline void reused_ssbo_filtered_edge_normal_(GPUStorageBuf *&buf)
+  {
+    GPUStorageBuf *dummy_out = nullptr; 
+    reused_ssbo_vert_quadric_data_(0, buf, dummy_out); 
+  }
+  inline void reused_ssbo_filtered_normal_vert_(GPUStorageBuf *&buf)
+  {
+    buf = ssbo_mesh_buffer_reuse_1_; 
   }
 
 
