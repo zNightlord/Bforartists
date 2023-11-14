@@ -123,7 +123,9 @@ void main()
     uint ivert = (VertID == vid_ivert1) ? 1u : 3u;
     uint iface_beg_rot_fwd = (ivert == 1u) ? 0u : 1u; 
 
-    bool vert_linked_to_seeded_wedge = false; 
+    bool vert_linked_to_seeded_wedge = true; 
+    /* only select vert with 1-ring neighbors of full filtered wedges, 
+     * since other non-filtered wedges do not have valid filtered data */
     if (valid_thread)
     {
         /* Rotate wedge around the vert */
@@ -135,8 +137,8 @@ void main()
         uint rotate_step = 0u; 
         do {
             WedgeFloodingPointer wfptr = decode_wedge_flooding_pointer(ssbo_wedge_flooding_pointers_in_[awi.wedge_id]);
-            if (wfptr.is_seed) {
-                vert_linked_to_seeded_wedge = true; 
+            if (!wfptr.is_seed) {
+                vert_linked_to_seeded_wedge = false; 
                 break; 
             }
 
