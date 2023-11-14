@@ -363,19 +363,23 @@ void main()
     vec3 vpos = ld_vbo(vert_id_global);
 
     Quadric q_v; 
+    Quadric q_v_filtered; 
     float weight_sum = .0f; 
 #if defined(_KERNEL_MULTICOMPILE__MESH_FILTERING__VERT_QUADRIC_INIT)
     /* note: this inits at diagonals with param, other places cleared to .0 */
     q_v.quadric = mat4(0.0); 
     q_v.area = .0f; 
+    q_v_filtered = q_v; 
     
     vec3 filtered_vert_normal = vec3(.0f, .0f, .0f); 
     float filtered_vert_normal_weight = .0f; 
 #else
     q_v = load_vert_quadric(FilteredVertID); 
-    weight_sum += compute_vert_quadric_weight(vpos, q_v, vpos, q_v); 
+    weight_sum = compute_vert_quadric_weight(vpos, q_v, vpos, q_v); 
+    q_v_filtered.quadric = weight_sum * q_v.quadric;
+    q_v_filtered.area = q_v.area;
 #endif
-    Quadric q_v_filtered = q_v; 
+    
 
     
     { /* Rotate wedge around the vert */
@@ -402,7 +406,7 @@ void main()
             filtered_vert_normal_weight += q_e.area; 
 #else
             Quadric q_oppo = load_vert_quadric(awi.wedge_id); 
-            float w = compute_vert_quadric_weight(vpos, q_v, vpos_oppo, q_oppo); 
+            float w = compute_vert_quadric_weight(vpos, q_v, vpos_oppo, q_oppo);
             q_v_filtered.quadric += w * q_oppo.quadric; 
 #endif
             weight_sum += w; 
