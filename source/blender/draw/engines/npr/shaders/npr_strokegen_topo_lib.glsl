@@ -347,7 +347,7 @@ Quadric compute_wedge_quadric(vec3 p0, vec3 p1, vec3 p2, vec3 p3, vec3 cam_pos_w
     mat4 q2 = mat4(n2.x * n2, n2.y * n2, n2.z * n2, n2.w * n2);
 
     q.quadric = (q0 + q2) * .5f;
-    wedge_normal = (n0.xyz + n2.xyz) * .5f; 
+    wedge_normal = normalize((n0.xyz + n2.xyz) * .5f); 
 
 	return q; 
 }

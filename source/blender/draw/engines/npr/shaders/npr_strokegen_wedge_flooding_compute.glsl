@@ -151,6 +151,10 @@ void main()
     }
 
     vert_linked_to_seeded_wedge = vert_linked_to_seeded_wedge && valid_thread; 
+
+    uint vert_id_merged = ssbo_vert_merged_id_[VertID];
+    vert_linked_to_seeded_wedge = vert_linked_to_seeded_wedge && (vert_id_merged == VertID); 
+
     /* Compact seed verts */
     uint compacted_idx = compact_filtered_vert(vert_linked_to_seeded_wedge, groupId); 
         
@@ -158,7 +162,7 @@ void main()
         ssbo_filtered_vert_to_vert_[compacted_idx] = VertID;   
 
     if (valid_thread)
-    {
+    {        
         VertWedgeListHeader vwlh;
         vwlh.wedge_id = wedge_id; 
         vwlh.ivert = ivert; 
@@ -419,8 +423,9 @@ void main()
         store_vert_quadric(FilteredVertID, q_v_filtered); 
 
 #if defined(_KERNEL_MULTICOMPILE__MESH_FILTERING__VERT_QUADRIC_INIT)
+    filtered_vert_normal = normalize(filtered_vert_normal / filtered_vert_normal_weight); /*TODO: optimize normal storage*/
     if (valid_thread)
-        store_filtered_vert_normal(FilteredVertID, filtered_vert_normal / filtered_vert_normal_weight);
+        store_filtered_vert_normal(FilteredVertID, filtered_vert_normal);
 #endif
 
 #endif

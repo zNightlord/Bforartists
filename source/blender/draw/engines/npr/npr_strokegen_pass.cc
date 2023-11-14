@@ -456,6 +456,7 @@ namespace blender::npr::strokegen
       sub.bind_ssbo(3, buffers_.ssbo_edge_to_edges_);
       sub.bind_ssbo(4, buffers_.ssbo_vert_to_edge_list_header_); 
       sub.bind_ssbo(5, buffers_.ssbo_bnpr_mesh_pool_counters_);
+      sub.bind_ssbo(6, buffers_.ssbo_vert_merged_id_); 
       sub.push_constant("pcs_vert_count_", num_verts); 
       sub.push_constant("pcs_vert_id_offset_", num_total_mesh_verts);
 
