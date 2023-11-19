@@ -9,7 +9,7 @@ jobs:
   build:
     runs-on: windows-latest
     env:
-      CONFIG : release
+      CONFIG : lite
 
     steps:
     - name: Clone Repository
@@ -52,6 +52,11 @@ jobs:
       run: |
        cd ~\Bforartists\Bforartists
        .\make.bat ninja ${{ env.CONFIG }}
+    - name: Make 2
+      if: success() || failure()
+      run: |
+        cd ~\Bforartists\Bforartists
+        .\make.bat ninja ${{ env.CONFIG }}
     - name: Show dir
       run: |
         cd ~\Bforartists
