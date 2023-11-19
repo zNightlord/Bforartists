@@ -209,7 +209,9 @@ typedef struct Material {
   short paint_active_slot;
   short paint_clone_slot;
   short tot_slots;
-  char _pad2[2];
+
+  /* Script node hash */
+  short script_update_index;
 
   /* Transparency. */
   float alpha_threshold;
@@ -220,6 +222,8 @@ typedef struct Material {
 
   /* Volume. */
   char volume_intersection_method;
+
+  int light_group_bits[4];
 
   /**
    * Cached slots for texture painting, must be refreshed in
@@ -236,6 +240,8 @@ typedef struct Material {
 } Material;
 
 /* **************** MATERIAL ********************* */
+
+#define MA_GROUPS_ALL 0xFFFFFFFF
 
 /* maximum number of materials per material array.
  * (on object, mesh, light, etc.). limited by

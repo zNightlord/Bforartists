@@ -26,6 +26,7 @@ class DATA_PT_context_curves(DataButtonsPanel, Panel):
         'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
+        'JNPR',
     }
 
     def draw(self, context):
@@ -48,6 +49,7 @@ class DATA_PT_curves_surface(DataButtonsPanel, Panel):
         'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
+        'JNPR',
     }
 
     def draw(self, context):
@@ -137,6 +139,7 @@ class DATA_PT_CURVES_attributes(DataButtonsPanel, Panel):
         'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
+        'JNPR',
     }
 
     def draw(self, context):
@@ -167,6 +170,7 @@ class DATA_PT_custom_props_curves(DataButtonsPanel, PropertyPanel, Panel):
         'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
+        'JNPR',
     }
     _context_path = "object.data"
     _property_type = bpy.types.Curves if hasattr(bpy.types, "Curves") else None

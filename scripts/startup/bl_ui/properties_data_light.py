@@ -27,6 +27,7 @@ class DATA_PT_context_light(DataButtonsPanel, Panel):
         'BLENDER_EEVEE_NEXT',
         'BLENDER_EEVEE',
         'BLENDER_WORKBENCH',
+        'JNPR',
     }
 
     def draw(self, context):
@@ -45,7 +46,7 @@ class DATA_PT_context_light(DataButtonsPanel, Panel):
 class DATA_PT_preview(DataButtonsPanel, Panel):
     bl_label = "Preview"
     bl_options = {'DEFAULT_CLOSED'}
-    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE_NEXT', 'BLENDER_EEVEE'}
+    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE_NEXT', 'BLENDER_EEVEE', 'JNPR'}
 
     def draw(self, context):
         self.layout.template_preview(context.light)
@@ -53,7 +54,7 @@ class DATA_PT_preview(DataButtonsPanel, Panel):
 
 class DATA_PT_light(DataButtonsPanel, Panel):
     bl_label = "Light"
-    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_WORKBENCH'}
+    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_WORKBENCH', 'JNPR'}
 
     def draw(self, context):
         layout = self.layout
@@ -71,7 +72,7 @@ class DATA_PT_light(DataButtonsPanel, Panel):
 
 class DATA_PT_EEVEE_light(DataButtonsPanel, Panel):
     bl_label = "Light"
-    COMPAT_ENGINES = {'BLENDER_EEVEE_NEXT', 'BLENDER_EEVEE'}
+    COMPAT_ENGINES = {'BLENDER_EEVEE_NEXT', 'BLENDER_EEVEE', 'JNPR'}
 
     def draw(self, context):
         layout = self.layout
@@ -253,6 +254,7 @@ class DATA_PT_spot(DataButtonsPanel, Panel):
         'BLENDER_EEVEE_NEXT',
         'BLENDER_EEVEE',
         'BLENDER_WORKBENCH',
+        'JNPR',
     }
 
     @classmethod
@@ -285,6 +287,7 @@ class DATA_PT_custom_props_light(DataButtonsPanel, PropertyPanel, Panel):
         'BLENDER_EEVEE_NEXT',
         'BLENDER_EEVEE',
         'BLENDER_WORKBENCH',
+        'JNPR',
     }
     _context_path = "object.data"
     _property_type = bpy.types.Light

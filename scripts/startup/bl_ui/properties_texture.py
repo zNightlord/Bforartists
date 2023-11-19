@@ -1,5 +1,3 @@
-# SPDX-FileCopyrightText: 2009-2023 Blender Authors
-#
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 import bpy
@@ -14,7 +12,6 @@ from bpy.types import (
     ParticleSettings,
     Texture,
 )
-from bpy.app.translations import contexts as i18n_contexts
 
 from rna_prop_ui import PropertyPanel
 from bl_ui.properties_paint_common import brush_texture_settings
@@ -70,12 +67,7 @@ class TextureButtonsPanel:
 
 class TEXTURE_PT_preview(TextureButtonsPanel, Panel):
     bl_label = "Preview"
-    COMPAT_ENGINES = {
-        'BLENDER_RENDER',
-        'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
-        'BLENDER_WORKBENCH',
-    }
+    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_EEVEE_NEXT', 'BLENDER_WORKBENCH', 'JNPR'}
 
     @classmethod
     def poll(cls, context):
@@ -94,7 +86,7 @@ class TEXTURE_PT_preview(TextureButtonsPanel, Panel):
         else:
             layout.template_preview(tex, slot=slot)
 
-        # Show Alpha Button for Brush Textures, see #29502.
+        # Show Alpha Button for Brush Textures, see T29502.
         idblock = context_tex_datablock(context)
         if isinstance(idblock, Brush):
             layout.prop(tex, "use_preview_alpha")
@@ -104,12 +96,7 @@ class TEXTURE_PT_context(TextureButtonsPanel, Panel):
     bl_label = ""
     bl_context = "texture"
     bl_options = {'HIDE_HEADER'}
-    COMPAT_ENGINES = {
-        'BLENDER_RENDER',
-        'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
-        'BLENDER_WORKBENCH',
-    }
+    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_EEVEE_NEXT', 'BLENDER_WORKBENCH', 'JNPR'}
 
     def draw(self, context):
         layout = self.layout
@@ -148,12 +135,7 @@ class TEXTURE_PT_context(TextureButtonsPanel, Panel):
 class TEXTURE_PT_node(TextureButtonsPanel, Panel):
     bl_label = "Node"
     bl_context = "texture"
-    COMPAT_ENGINES = {
-        'BLENDER_RENDER',
-        'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
-        'BLENDER_WORKBENCH',
-    }
+    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_EEVEE_NEXT', 'BLENDER_WORKBENCH', 'JNPR'}
 
     @classmethod
     def poll(cls, context):
@@ -182,12 +164,7 @@ class TextureTypePanel(TextureButtonsPanel):
 class TEXTURE_PT_clouds(TextureTypePanel, Panel):
     bl_label = "Clouds"
     tex_type = 'CLOUDS'
-    COMPAT_ENGINES = {
-        'BLENDER_RENDER',
-        'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
-        'BLENDER_WORKBENCH',
-    }
+    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_EEVEE_NEXT', 'BLENDER_WORKBENCH', 'JNPR'}
 
     def draw(self, context):
         layout = self.layout
@@ -219,12 +196,7 @@ class TEXTURE_PT_clouds(TextureTypePanel, Panel):
 class TEXTURE_PT_wood(TextureTypePanel, Panel):
     bl_label = "Wood"
     tex_type = 'WOOD'
-    COMPAT_ENGINES = {
-        'BLENDER_RENDER',
-        'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
-        'BLENDER_WORKBENCH',
-    }
+    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_EEVEE_NEXT', 'BLENDER_WORKBENCH', 'JNPR'}
 
     def draw(self, context):
         layout = self.layout
@@ -246,27 +218,22 @@ class TEXTURE_PT_wood(TextureTypePanel, Panel):
         col.prop(tex, "noise_basis_2", text="Second Basis")
 
         col = col.column()
-        if tex.wood_type in {'RINGNOISE', 'BANDNOISE'}:
-            col.prop(tex, "noise_type", text="Type")
+        col.active = tex.wood_type in {'RINGNOISE', 'BANDNOISE'}
+        col.prop(tex, "noise_type", text="Type")
 
         col.separator()
 
         sub = flow.column()
-        if tex.wood_type in {'RINGNOISE', 'BANDNOISE'}:
-            sub.prop(tex, "noise_scale", text="Size")
-            sub.prop(tex, "turbulence")
-            sub.prop(tex, "nabla")
+        sub.active = tex.wood_type in {'RINGNOISE', 'BANDNOISE'}
+        sub.prop(tex, "noise_scale", text="Size")
+        sub.prop(tex, "turbulence")
+        sub.prop(tex, "nabla")
 
 
 class TEXTURE_PT_marble(TextureTypePanel, Panel):
     bl_label = "Marble"
     tex_type = 'MARBLE'
-    COMPAT_ENGINES = {
-        'BLENDER_RENDER',
-        'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
-        'BLENDER_WORKBENCH',
-    }
+    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_EEVEE_NEXT', 'BLENDER_WORKBENCH', 'JNPR'}
 
     def draw(self, context):
         layout = self.layout
@@ -300,12 +267,7 @@ class TEXTURE_PT_marble(TextureTypePanel, Panel):
 class TEXTURE_PT_magic(TextureTypePanel, Panel):
     bl_label = "Magic"
     tex_type = 'MAGIC'
-    COMPAT_ENGINES = {
-        'BLENDER_RENDER',
-        'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
-        'BLENDER_WORKBENCH',
-    }
+    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_EEVEE_NEXT', 'BLENDER_WORKBENCH', 'JNPR'}
 
     def draw(self, context):
         layout = self.layout
@@ -324,12 +286,7 @@ class TEXTURE_PT_magic(TextureTypePanel, Panel):
 class TEXTURE_PT_blend(TextureTypePanel, Panel):
     bl_label = "Blend"
     tex_type = 'BLEND'
-    COMPAT_ENGINES = {
-        'BLENDER_RENDER',
-        'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
-        'BLENDER_WORKBENCH',
-    }
+    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_EEVEE_NEXT', 'BLENDER_WORKBENCH', 'JNPR'}
 
     def draw(self, context):
         layout = self.layout
@@ -344,19 +301,14 @@ class TEXTURE_PT_blend(TextureTypePanel, Panel):
         col.separator()
 
         col = flow.column()
-        if (tex.progression in {'LINEAR', 'QUADRATIC', 'EASING', 'RADIAL'}):
-            col.prop(tex, "use_flip_axis", text="Orientation")
+        col.active = (tex.progression in {'LINEAR', 'QUADRATIC', 'EASING', 'RADIAL'})
+        col.prop(tex, "use_flip_axis", text="Orientation")
 
 
 class TEXTURE_PT_stucci(TextureTypePanel, Panel):
     bl_label = "Stucci"
     tex_type = 'STUCCI'
-    COMPAT_ENGINES = {
-        'BLENDER_RENDER',
-        'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
-        'BLENDER_WORKBENCH',
-    }
+    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_EEVEE_NEXT', 'BLENDER_WORKBENCH', 'JNPR'}
 
     def draw(self, context):
         layout = self.layout
@@ -387,12 +339,7 @@ class TEXTURE_PT_stucci(TextureTypePanel, Panel):
 class TEXTURE_PT_image(TextureTypePanel, Panel):
     bl_label = "Image"
     tex_type = 'IMAGE'
-    COMPAT_ENGINES = {
-        'BLENDER_RENDER',
-        'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
-        'BLENDER_WORKBENCH',
-    }
+    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_EEVEE_NEXT', 'BLENDER_WORKBENCH', 'JNPR'}
 
     def draw(self, _context):
         # TODO: maybe expose the template_ID from the template image here.
@@ -402,14 +349,9 @@ class TEXTURE_PT_image(TextureTypePanel, Panel):
 
 class TEXTURE_PT_image_settings(TextureTypePanel, Panel):
     bl_label = "Settings"
-    bl_parent_id = "TEXTURE_PT_image"
+    bl_parent_id = 'TEXTURE_PT_image'
     tex_type = 'IMAGE'
-    COMPAT_ENGINES = {
-        'BLENDER_RENDER',
-        'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
-        'BLENDER_WORKBENCH',
-    }
+    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_EEVEE_NEXT', 'BLENDER_WORKBENCH', 'JNPR'}
 
     def draw(self, context):
         layout = self.layout
@@ -429,17 +371,13 @@ def texture_filter_common(tex, layout):
             col.prop(tex, "filter_eccentricity", text="Eccentricity")
 
     layout.prop(tex, "filter_size", text="Size")
-
-    row = layout.row()
-    row.use_property_split = False
-    row.prop(tex, "use_filter_size_min", text="Minimum Size")
-    row.prop_decorator(tex, "use_filter_size_min")
+    layout.prop(tex, "use_filter_size_min", text="Minimum Size")
 
 
 class TEXTURE_PT_image_sampling(TextureTypePanel, Panel):
     bl_label = "Sampling"
     bl_options = {'DEFAULT_CLOSED'}
-    bl_parent_id = "TEXTURE_PT_image"
+    bl_parent_id = 'TEXTURE_PT_image'
     tex_type = 'IMAGE'
     COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE'}
 
@@ -451,30 +389,15 @@ class TEXTURE_PT_image_sampling(TextureTypePanel, Panel):
         tex = context.texture
 
         col = flow.column()
+        col.prop(tex, "use_interpolation")
 
-        row = col.row()
-        row.use_property_split = False
-        row.prop(tex, "use_interpolation")
-        row.prop_decorator(tex, "use_interpolation")
-
-        row = col.row()
-        row.use_property_split = False
-        row.prop(tex, "use_mipmap")
-        if tex.use_mipmap:
-            row.label(icon='DISCLOSURE_TRI_DOWN')
-        else:
-            row.label(icon='DISCLOSURE_TRI_RIGHT')
-        row.prop_decorator(tex, "use_mipmap")
-
-        if tex.use_mipmap:
-
-            row = col.row()
-            row.use_property_split = False
-            row.separator()
-            row.prop(tex, "use_mipmap_gauss", text="Gaussian Filter")
-            row.prop_decorator(tex, "use_mipmap_gauss")
+        col.separator()
 
         col = flow.column()
+        col.prop(tex, "use_mipmap")
+        sub = col.column()
+        sub.active = tex.use_mipmap
+        sub.prop(tex, "use_mipmap_gauss", text="Gaussian Filter")
 
         col.separator()
 
@@ -484,7 +407,7 @@ class TEXTURE_PT_image_sampling(TextureTypePanel, Panel):
 class TEXTURE_PT_image_alpha(TextureTypePanel, Panel):
     bl_label = "Alpha"
     bl_options = {'DEFAULT_CLOSED'}
-    bl_parent_id = "TEXTURE_PT_image"
+    bl_parent_id = 'TEXTURE_PT_image'
     tex_type = 'IMAGE'
     COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE'}
 
@@ -499,16 +422,15 @@ class TEXTURE_PT_image_alpha(TextureTypePanel, Panel):
         tex = context.texture
 
         col = layout.column()
-        if bool(tex.image and tex.image.alpha_mode != 'NONE'):
-            col.use_property_split = False
-            col.prop(tex, "use_calculate_alpha", text="Calculate")
-            col.prop(tex, "invert_alpha", text="Invert")
+        col.active = bool(tex.image and tex.image.alpha_mode != 'NONE')
+        col.prop(tex, "use_calculate_alpha", text="Calculate")
+        col.prop(tex, "invert_alpha", text="Invert")
 
 
 class TEXTURE_PT_image_mapping(TextureTypePanel, Panel):
     bl_label = "Mapping"
     bl_options = {'DEFAULT_CLOSED'}
-    bl_parent_id = "TEXTURE_PT_image"
+    bl_parent_id = 'TEXTURE_PT_image'
     tex_type = 'IMAGE'
     COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE'}
 
@@ -518,13 +440,13 @@ class TEXTURE_PT_image_mapping(TextureTypePanel, Panel):
 
         tex = context.texture
 
-        row = layout.row()
-        row.use_property_split = False
-        row.prop(tex, "use_flip_axis", text="Flip Axes")
-        row.prop_decorator(tex, "use_flip_axis")
-
         col = layout.column()
-        col.prop(tex, "extension")  # use layout, to keep the same location in case of button cycling.
+        col.prop(tex, "use_flip_axis", text="Flip Axes")
+
+        col.separator()
+
+        subcol = layout.column()
+        subcol.prop(tex, "extension")  # use layout, to keep the same location in case of button cycling.
 
         flow = layout.grid_flow(row_major=True, columns=0, even_columns=True, even_rows=False, align=True)
 
@@ -535,34 +457,24 @@ class TEXTURE_PT_image_mapping(TextureTypePanel, Panel):
             sub.prop(tex, "repeat_x", text="Repeat X")
             sub.prop(tex, "repeat_y", text="Y")
 
-            col = flow.column(heading="Mirror")
-            row.active = (tex.repeat_x > 1)
-            row.use_property_split = False
-            row.prop(tex, "use_mirror_x", text="X")
-            row.prop_decorator(tex, "use_mirror_x")
+            col = flow.column()
+            sub = col.column()
+            sub.active = (tex.repeat_x > 1)
+            sub.prop(tex, "use_mirror_x", text="Mirror X")
 
-            row = layout.row()
-            row.active = (tex.repeat_y > 1)
-            row.use_property_split = False
-            row.prop(tex, "use_mirror_y", text="Y")
-            row.prop_decorator(tex, "use_mirror_y")
+            sub = col.column()
+            sub.active = (tex.repeat_y > 1)
+            sub.prop(tex, "use_mirror_y", text="Y")
 
         elif tex.extension == 'CHECKER':
+            subcol.separator()
 
             col = flow.column()
             col.prop(tex, "checker_distance", text="Distance")
 
-            col = flow.column(heading="Tiles")
-
-            row.use_property_split = False
-            row.prop(tex, "use_checker_even", text="Even", text_ctxt=i18n_contexts.amount)
-            row.prop_decorator(tex, "use_checker_even")
-
-            row = layout.row()
-            row.use_property_split = False
-            row.prop(tex, "use_checker_odd", text="Odd")
-            row.prop_decorator(tex, "use_checker_odd")
-
+            col = flow.column()
+            col.prop(tex, "use_checker_even", text="Tiles Even")
+            col.prop(tex, "use_checker_odd", text="Odd")
         else:
             del flow
 
@@ -570,7 +482,7 @@ class TEXTURE_PT_image_mapping(TextureTypePanel, Panel):
 class TEXTURE_PT_image_mapping_crop(TextureTypePanel, Panel):
     bl_label = "Crop"
     bl_options = {'DEFAULT_CLOSED'}
-    bl_parent_id = "TEXTURE_PT_image_mapping"
+    bl_parent_id = 'TEXTURE_PT_image_mapping'
     tex_type = 'IMAGE'
     COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE'}
 
@@ -594,12 +506,7 @@ class TEXTURE_PT_image_mapping_crop(TextureTypePanel, Panel):
 class TEXTURE_PT_musgrave(TextureTypePanel, Panel):
     bl_label = "Musgrave"
     tex_type = 'MUSGRAVE'
-    COMPAT_ENGINES = {
-        'BLENDER_RENDER',
-        'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
-        'BLENDER_WORKBENCH',
-    }
+    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_EEVEE_NEXT', 'BLENDER_WORKBENCH', 'JNPR'}
 
     def draw(self, context):
         layout = self.layout
@@ -644,12 +551,7 @@ class TEXTURE_PT_musgrave(TextureTypePanel, Panel):
 class TEXTURE_PT_voronoi(TextureTypePanel, Panel):
     bl_label = "Voronoi"
     tex_type = 'VORONOI'
-    COMPAT_ENGINES = {
-        'BLENDER_RENDER',
-        'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
-        'BLENDER_WORKBENCH',
-    }
+    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_EEVEE_NEXT', 'BLENDER_WORKBENCH', 'JNPR'}
 
     def draw(self, context):
         layout = self.layout
@@ -662,8 +564,8 @@ class TEXTURE_PT_voronoi(TextureTypePanel, Panel):
         col.prop(tex, "distance_metric")
 
         sub = col.column()
-        if tex.distance_metric == 'MINKOVSKY':
-            sub.prop(tex, "minkovsky_exponent", text="Exponent")
+        sub.active = tex.distance_metric == 'MINKOVSKY'
+        sub.prop(tex, "minkovsky_exponent", text="Exponent")
 
         sub.separator()
 
@@ -682,12 +584,7 @@ class TEXTURE_PT_voronoi_feature_weights(TextureTypePanel, Panel):
     bl_label = "Feature Weights"
     bl_parent_id = "TEXTURE_PT_voronoi"
     tex_type = 'VORONOI'
-    COMPAT_ENGINES = {
-        'BLENDER_RENDER',
-        'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
-        'BLENDER_WORKBENCH',
-    }
+    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_EEVEE_NEXT', 'BLENDER_WORKBENCH', 'JNPR'}
 
     def draw(self, context):
         layout = self.layout
@@ -708,12 +605,7 @@ class TEXTURE_PT_voronoi_feature_weights(TextureTypePanel, Panel):
 class TEXTURE_PT_distortednoise(TextureTypePanel, Panel):
     bl_label = "Distorted Noise"
     tex_type = 'DISTORTED_NOISE'
-    COMPAT_ENGINES = {
-        'BLENDER_RENDER',
-        'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
-        'BLENDER_WORKBENCH',
-    }
+    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_EEVEE_NEXT', 'BLENDER_WORKBENCH', 'JNPR'}
 
     def draw(self, context):
         layout = self.layout
@@ -738,12 +630,7 @@ class TEXTURE_PT_distortednoise(TextureTypePanel, Panel):
 
 
 class TextureSlotPanel(TextureButtonsPanel):
-    COMPAT_ENGINES = {
-        'BLENDER_RENDER',
-        'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
-        'BLENDER_WORKBENCH',
-    }
+    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_EEVEE_NEXT', 'BLENDER_WORKBENCH', 'JNPR'}
 
     @classmethod
     def poll(cls, context):
@@ -755,12 +642,7 @@ class TextureSlotPanel(TextureButtonsPanel):
 
 class TEXTURE_PT_mapping(TextureSlotPanel, Panel):
     bl_label = "Mapping"
-    COMPAT_ENGINES = {
-        'BLENDER_RENDER',
-        'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
-        'BLENDER_WORKBENCH',
-    }
+    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_EEVEE_NEXT', 'BLENDER_WORKBENCH', 'JNPR'}
 
     @classmethod
     def poll(cls, context):
@@ -828,12 +710,7 @@ class TEXTURE_PT_mapping(TextureSlotPanel, Panel):
 class TEXTURE_PT_influence(TextureSlotPanel, Panel):
     bl_label = "Influence"
     bl_options = {'DEFAULT_CLOSED'}
-    COMPAT_ENGINES = {
-        'BLENDER_RENDER',
-        'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
-        'BLENDER_WORKBENCH',
-    }
+    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_EEVEE_NEXT', 'BLENDER_WORKBENCH', 'JNPR'}
 
     @classmethod
     def poll(cls, context):
@@ -915,12 +792,7 @@ class TextureColorsPoll:
 class TEXTURE_PT_colors(TextureButtonsPanel, TextureColorsPoll, Panel):
     bl_label = "Colors"
     bl_options = {'DEFAULT_CLOSED'}
-    COMPAT_ENGINES = {
-        'BLENDER_RENDER',
-        'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
-        'BLENDER_WORKBENCH',
-    }
+    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_EEVEE_NEXT', 'BLENDER_WORKBENCH', 'JNPR'}
 
     def draw(self, context):
         layout = self.layout
@@ -930,13 +802,7 @@ class TEXTURE_PT_colors(TextureButtonsPanel, TextureColorsPoll, Panel):
         tex = context.texture
 
         col = flow.column()
-
-        row = col.row()
-        row.use_property_split = False
-        row.prop(tex, "use_clamp", text="Clamp")
-        row.prop_decorator(tex, "use_clamp")
-
-        col.separator()
+        col.prop(tex, "use_clamp", text="Clamp")
 
         col = flow.column(align=True)
         col.prop(tex, "factor_red", text="Multiply R")
@@ -954,13 +820,8 @@ class TEXTURE_PT_colors(TextureButtonsPanel, TextureColorsPoll, Panel):
 class TEXTURE_PT_colors_ramp(TextureButtonsPanel, TextureColorsPoll, Panel):
     bl_label = "Color Ramp"
     bl_options = {'DEFAULT_CLOSED'}
-    bl_parent_id = "TEXTURE_PT_colors"
-    COMPAT_ENGINES = {
-        'BLENDER_RENDER',
-        'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
-        'BLENDER_WORKBENCH',
-    }
+    bl_parent_id = 'TEXTURE_PT_colors'
+    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_EEVEE_NEXT', 'BLENDER_WORKBENCH', 'JNPR'}
 
     def draw_header(self, context):
         tex = context.texture
@@ -981,12 +842,7 @@ class TEXTURE_PT_colors_ramp(TextureButtonsPanel, TextureColorsPoll, Panel):
 
 
 class TEXTURE_PT_custom_props(TextureButtonsPanel, PropertyPanel, Panel):
-    COMPAT_ENGINES = {
-        'BLENDER_RENDER',
-        'BLENDER_EEVEE',
-        'BLENDER_EEVEE_NEXT',
-        'BLENDER_WORKBENCH',
-    }
+    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_EEVEE_NEXT', 'BLENDER_WORKBENCH', 'JNPR'}
     _context_path = "texture"
     _property_type = Texture
 

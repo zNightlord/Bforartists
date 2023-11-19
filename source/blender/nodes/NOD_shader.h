@@ -34,7 +34,7 @@ struct bNode *ntreeShaderOutputNode(struct bNodeTree *ntree, int target);
 /**
  * This one needs to work on a local tree.
  */
-void ntreeGPUMaterialNodes(struct bNodeTree *localtree, struct GPUMaterial *mat);
+void ntreeGPUMaterialNodes(struct bNodeTree *localtree, struct GPUMaterial *mat, int target);
 
 #ifdef __cplusplus
 }

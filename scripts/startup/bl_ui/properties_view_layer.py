@@ -58,7 +58,8 @@ class VIEWLAYER_PT_layer(ViewLayerButtonsPanel, Panel):
         'BLENDER_RENDER',
         'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
-        'BLENDER_WORKBENCH',
+        'BLENDER_WORKBENCH', 
+        'JNPR',
     }
 
     def draw(self, context):
@@ -96,7 +97,7 @@ class VIEWLAYER_PT_layer(ViewLayerButtonsPanel, Panel):
 
 class VIEWLAYER_PT_layer_passes(ViewLayerButtonsPanel, Panel):
     bl_label = "Passes"
-    COMPAT_ENGINES = {'BLENDER_EEVEE', 'BLENDER_EEVEE_NEXT'}
+    COMPAT_ENGINES = {'BLENDER_EEVEE', 'BLENDER_EEVEE_NEXT', 'JNPR'}
 
     def draw(self, context):
         pass

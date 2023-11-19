@@ -1257,7 +1257,7 @@ static int rna_3DViewShading_type_get(PointerRNA *ptr)
   RenderEngineType *type = (scene) ? RE_engines_find(scene->r.engine) : nullptr;
   View3DShading *shading = (View3DShading *)ptr->data;
 
-  if (scene == nullptr || BKE_scene_uses_blender_eevee(scene)) {
+  if (scene == NULL || BKE_scene_uses_blender_eevee(scene) || BKE_scene_uses_juniper(scene)) {
     return shading->type;
   }
   else if (BKE_scene_uses_blender_workbench(scene)) {
@@ -1296,7 +1296,7 @@ static const EnumPropertyItem *rna_3DViewShading_type_itemf(bContext * /*C*/,
   RNA_enum_items_add_value(&item, &totitem, rna_enum_shading_type_items, OB_WIRE);
   RNA_enum_items_add_value(&item, &totitem, rna_enum_shading_type_items, OB_SOLID);
 
-  if (scene == nullptr || BKE_scene_uses_blender_eevee(scene)) {
+  if (scene == NULL || BKE_scene_uses_blender_eevee(scene) || BKE_scene_uses_juniper(scene)) {
     RNA_enum_items_add_value(&item, &totitem, rna_enum_shading_type_items, OB_MATERIAL);
     RNA_enum_items_add_value(&item, &totitem, rna_enum_shading_type_items, OB_RENDER);
   }

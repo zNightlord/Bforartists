@@ -27,6 +27,9 @@
 #include "eevee_private.h"
 
 #include "eevee_engine.h" /* own include */
+#include "NOD_socket.h"
+#include "WM_api.h"
+#include "RNA_access.h"
 
 #define EEVEE_ENGINE "BLENDER_EEVEE"
 
@@ -642,6 +645,26 @@ static void eevee_engine_free()
   EEVEE_materials_free();
   EEVEE_occlusion_free();
   EEVEE_volumes_free();
+}
+
+extern StructRNA RNA_Material;
+
+static void eevee_update_script_node(struct RenderEngine *engine,
+                                      struct bNodeTree *ntree,
+                                      struct bNode *node)
+{
+  if (node->id) {
+    GPU_material_library_text_add((struct Text*) node->id, true);
+  }
+  update_node_declaration_and_sockets_p(ntree, node);
+  Material* ma = (Material *) ntree->owner_id;
+
+  if (ma) {
+    ma->script_update_index++;
+  }
+
+  DEG_id_tag_update(&ma->id, ID_RECALC_SHADING | ID_RECALC_PARAMETERS);
+  WM_main_add_notifier(NC_MATERIAL | ND_SHADING, ma);
 }
 
 static const DrawEngineDataSize eevee_data_size = DRW_VIEWPORT_DATA_SIZE(EEVEE_Data);

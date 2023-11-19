@@ -139,6 +139,7 @@ typedef struct GPUCodegenOutput {
   char *surface;
   char *volume;
   char *thickness;
+  char *jnpr_color;
   char *composite;
   char *material_functions;
 
@@ -201,10 +202,13 @@ bool GPU_stack_link(GPUMaterial *mat,
                     GPUNodeStack *out,
                     ...);
 
+void GPU_material_library_text_add(struct Text* text, bool overwrite);
+void GPU_material_node_decl_from_function(void *r_declaration, const char* func_name);
 void GPU_material_output_surface(GPUMaterial *material, GPUNodeLink *link);
 void GPU_material_output_volume(GPUMaterial *material, GPUNodeLink *link);
 void GPU_material_output_displacement(GPUMaterial *material, GPUNodeLink *link);
 void GPU_material_output_thickness(GPUMaterial *material, GPUNodeLink *link);
+void GPU_material_output_jnpr_color(GPUMaterial *material, GPUNodeLink *link);
 
 void GPU_material_add_output_link_aov(GPUMaterial *material, GPUNodeLink *link, int hash);
 
@@ -324,11 +328,14 @@ bool GPU_material_has_volume_output(GPUMaterial *mat);
 void GPU_material_flag_set(GPUMaterial *mat, eGPUMaterialFlag flag);
 bool GPU_material_flag_get(const GPUMaterial *mat, eGPUMaterialFlag flag);
 eGPUMaterialFlag GPU_material_flag(const GPUMaterial *mat);
+int GPU_material_script_flag(const GPUMaterial *mat);
+void GPU_material_light_group_bits_get(GPUMaterial *mat, int* out);
 bool GPU_material_recalc_flag_get(GPUMaterial *mat);
 uint64_t GPU_material_uuid_get(GPUMaterial *mat);
 
 void GPU_pass_cache_init(void);
 void GPU_pass_cache_garbage_collect(void);
+void GPU_pass_cache_garbage_collect_immediate(void);
 void GPU_pass_cache_free(void);
 
 /* Requested Material Attributes and Textures */

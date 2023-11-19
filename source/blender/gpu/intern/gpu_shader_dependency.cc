@@ -51,6 +51,14 @@ struct GPUSource {
   shader::BuiltinBits builtins = shader::BuiltinBits::NONE;
   std::string processed_source;
 
+  ~GPUSource() {
+    // Runtime libraries own their source code string pointers
+    // (see GPU_material_library_text_add)
+    if (is_user_library()) {
+      MEM_freeN((void *) source.c_str());
+    }
+  }
+
   GPUSource(const char *path,
             const char *file,
             const char *datatoc,
@@ -125,7 +133,7 @@ struct GPUSource {
       check_no_quotes();
     }
 
-    if (is_from_material_library()) {
+    if (is_from_material_library() || is_user_library()) {
       material_functions_parse(g_functions);
     }
   };
@@ -134,6 +142,11 @@ struct GPUSource {
   {
     return (input.rfind("/*", offset) > input.rfind("*/", offset)) ||
            (input.rfind("//", offset) > input.rfind("\n", offset));
+  }
+
+  // User libraries have their filepath omitted
+  bool is_user_library() {
+    return fullpath.is_empty();
   }
 
   template<bool check_whole_word = true, bool reversed = false, typename T>
@@ -481,6 +494,12 @@ struct GPUSource {
         continue;
       }
 
+      if (is_user_library()) {
+        func->runtimemeta = MEM_new<GPUFunctionRuntimeMeta>(__func__);
+      } else {
+        func->runtimemeta = nullptr;
+      }
+
       func->totparam = 0;
       int64_t args_cursor = -1;
       StringRef arg_qualifier, arg_type, arg_name;
@@ -540,6 +559,11 @@ struct GPUSource {
 
         func->paramqual[func->totparam] = parse_qualifier(arg_qualifier);
         func->paramtype[func->totparam] = parse_type(arg_type);
+
+        // Only load names if we are a runtime (script node) function
+        if (func->runtimemeta) {
+          arg_name.copy(func->runtimemeta->paramname[func->totparam]);
+        }
 
         if (func->paramtype[func->totparam] == GPU_NONE) {
           std::string err = "Unknown parameter type \"" + arg_type + "\"";
@@ -772,7 +796,8 @@ struct GPUSource {
 
   /* Return 1 one error. */
   int init_dependencies(const GPUSourceDictionnary &dict,
-                        const GPUFunctionDictionnary &g_functions)
+                        const GPUFunctionDictionnary &g_functions,
+                        bool recursive)
   {
     if (this->dependencies_init) {
       return 0;
@@ -811,10 +836,12 @@ struct GPUSource {
         }
       }
 
-      /* Recursive. */
-      int result = dependency_source->init_dependencies(dict, g_functions);
-      if (result != 0) {
-        return 1;
+      if (recursive) {
+        /* Recursive. */
+        int result = dependency_source->init_dependencies(dict, g_functions, true);
+        if (result != 0) {
+          return 1;
+        }
       }
 
       for (auto *dep : dependency_source->dependencies) {
@@ -878,7 +905,7 @@ void gpu_shader_dependency_init()
 
   int errors = 0;
   for (auto *value : g_sources->values()) {
-    errors += value->init_dependencies(*g_sources, *g_functions);
+    errors += value->init_dependencies(*g_sources, *g_functions, true);
   }
   BLI_assert_msg(errors == 0, "Dependency errors detected: Aborting");
   UNUSED_VARS_NDEBUG(errors);
@@ -890,19 +917,82 @@ void gpu_shader_dependency_exit()
     delete value;
   }
   for (auto *value : g_functions->values()) {
+    MEM_delete(value->runtimemeta);
     MEM_delete(value);
   }
   delete g_sources;
   delete g_functions;
 }
 
+void gpu_material_library_runtime_add(const char* name, char* source)
+{
+  // In theory we want to *replace* existing functions. But in practice,
+  // this can't happen since runtime_add may be called multiple times in
+  // on shader creation invocation
+  // gpu_material_library_runtime_remove(name);
+
+  // Skip adding existing sources again, ..._runtime_remove() should be called
+  // if we want to replace.
+  if (g_sources->contains(name)) {
+    // We own *source, so free it TODO move this elsewhere
+    MEM_freeN(source);
+    return;
+  }
+
+  GPUSource* gpuSource = new GPUSource("", name, source, g_functions);
+
+  // Add dependencies, but don't recurse. Custom library sources cannot have interdependencies
+  gpuSource->init_dependencies(*g_sources, *g_functions, false);
+
+  g_sources->add(name, gpuSource);
+}
+
+void gpu_material_library_runtime_remove(const char* name)
+{
+  if (g_sources->contains(name)) {
+    GPUSource* old_source = g_sources->lookup(name);
+
+    if (!old_source->is_user_library()) {
+      std::cout << "WARN: Attempted to remove compile-time material library: " << name << std::endl;
+      BLI_assert(false);
+      return;
+    }
+
+    blender::Vector<blender::StringRef> remove_keys;
+    for (auto item : g_functions->items()) {
+      GPUFunction* func = item.value;
+      GPUSource* func_source = (GPUSource*)func->source;
+      if (func_source == old_source) {
+        remove_keys.append(item.key);
+      }
+    }
+
+    for (auto key : remove_keys) {
+      GPUFunction* func = g_functions->pop(key);
+      MEM_delete(func->runtimemeta);
+      MEM_delete(func);
+    }
+
+    g_sources->remove(name);
+    delete old_source;
+  }
+}
+
 GPUFunction *gpu_material_library_use_function(GSet *used_libraries, const char *name)
 {
   GPUFunction *function = g_functions->lookup_default(name, nullptr);
   BLI_assert_msg(function != nullptr, "Requested function not in the function library");
+  if (!function) {
+    return function;
+  }
   GPUSource *source = reinterpret_cast<GPUSource *>(function->source);
   BLI_gset_add(used_libraries, const_cast<char *>(source->filename.c_str()));
   return function;
+}
+
+GPUFunction *gpu_material_library_lookup_function(const char *name)
+{
+  return g_functions->lookup_default(name, nullptr);
 }
 
 namespace blender::gpu::shader {

@@ -1629,6 +1629,7 @@ const char *RE_engine_id_BLENDER_EEVEE = "BLENDER_EEVEE";
 const char *RE_engine_id_BLENDER_EEVEE_NEXT = "BLENDER_EEVEE_NEXT";
 const char *RE_engine_id_BLENDER_WORKBENCH = "BLENDER_WORKBENCH";
 const char *RE_engine_id_CYCLES = "CYCLES";
+const char *RE_engine_id_JNPR = "JNPR";
 
 void free_avicodecdata(AviCodecData *acd)
 {
@@ -2816,6 +2817,11 @@ bool BKE_scene_uses_blender_eevee(const Scene *scene)
 {
   return STREQ(scene->r.engine, RE_engine_id_BLENDER_EEVEE) ||
          STREQ(scene->r.engine, RE_engine_id_BLENDER_EEVEE_NEXT);
+}
+
+bool BKE_scene_uses_juniper(const Scene *scene)
+{
+  return STREQ(scene->r.engine, RE_engine_id_JNPR);
 }
 
 bool BKE_scene_uses_blender_workbench(const Scene *scene)

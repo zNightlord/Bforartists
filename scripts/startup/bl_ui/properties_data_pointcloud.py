@@ -26,6 +26,7 @@ class DATA_PT_context_pointcloud(DataButtonsPanel, Panel):
         'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
+        'JNPR',
     }
 
     def draw(self, context):
@@ -110,6 +111,7 @@ class DATA_PT_pointcloud_attributes(DataButtonsPanel, Panel):
         'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
+        'JNPR',
     }
 
     def draw(self, context):
@@ -140,6 +142,7 @@ class DATA_PT_custom_props_pointcloud(DataButtonsPanel, PropertyPanel, Panel):
         'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
+        'JNPR',
     }
     _context_path = "object.data"
     _property_type = bpy.types.PointCloud if hasattr(bpy.types, "PointCloud") else None

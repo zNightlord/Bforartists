@@ -1958,6 +1958,12 @@ static void material_default_surface_init(Material *ma)
   output->locy = 300.0f;
 
   nodeSetActive(ntree, output);
+
+  const int default_light_groups[4] = {
+          0, 0, 0, 1
+  };
+
+  copy_v4_v4_int(ma->light_group_bits, default_light_groups);
 }
 
 static void material_default_volume_init(Material *ma)

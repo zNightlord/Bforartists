@@ -623,6 +623,11 @@ bool socket_type_supports_fields(const eNodeSocketDatatype socket_type)
 
 }  // namespace blender::nodes
 
+void update_node_declaration_and_sockets_p(bNodeTree *ntree, bNode *node)
+{
+  nodes::update_node_declaration_and_sockets(*ntree, *node);
+}
+
 void node_verify_sockets(bNodeTree *ntree, bNode *node, bool do_id_user)
 {
   bNodeType *ntype = node->typeinfo;

@@ -94,6 +94,7 @@
 #include "engines/external/external_engine.h"
 #include "engines/gpencil/gpencil_engine.h"
 #include "engines/image/image_engine.h"
+#include "engines/juniper/juniper_engine.h"
 #include "engines/overlay/overlay_engine.h"
 #include "engines/select/select_engine.hh"
 #include "engines/workbench/workbench_engine.h"
@@ -3044,10 +3045,12 @@ void DRW_engines_register()
   RE_engines_register(&DRW_engine_viewport_eevee_next_type);
 
   RE_engines_register(&DRW_engine_viewport_workbench_type);
+  RE_engines_register(&DRW_engine_viewport_juniper_type);
 
   DRW_engine_register(&draw_engine_gpencil_type);
   DRW_engine_register(&draw_engine_gpencil_next_type);
 
+  DRW_engine_register(&draw_engine_juniper_type);
   DRW_engine_register(&draw_engine_overlay_type);
   DRW_engine_register(&draw_engine_overlay_next_type);
   DRW_engine_register(&draw_engine_select_next_type);

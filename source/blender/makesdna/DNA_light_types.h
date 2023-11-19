@@ -59,6 +59,10 @@ typedef struct Light {
   /* Nodes. */
   short pr_texture, use_nodes;
 
+  char _pad[8];
+
+  int light_group_bits[4];
+
   /* Eevee */
   float bias;
   float clipsta;

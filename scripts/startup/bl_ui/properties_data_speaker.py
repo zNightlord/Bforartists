@@ -26,6 +26,7 @@ class DATA_PT_context_speaker(DataButtonsPanel, Panel):
         'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
+        'JNPR',
     }
 
     def draw(self, context):
@@ -48,6 +49,7 @@ class DATA_PT_speaker(DataButtonsPanel, Panel):
         'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
+        'JNPR',
     }
 
     def draw(self, context):
@@ -76,6 +78,7 @@ class DATA_PT_distance(DataButtonsPanel, Panel):
         'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
+        'JNPR',
     }
 
     def draw(self, context):
@@ -105,6 +108,7 @@ class DATA_PT_cone(DataButtonsPanel, Panel):
         'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
+        'JNPR',
     }
 
     def draw(self, context):
@@ -132,6 +136,7 @@ class DATA_PT_custom_props_speaker(DataButtonsPanel, PropertyPanel, Panel):
         'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
+        'JNPR',
     }
     _context_path = "object.data"
     _property_type = bpy.types.Speaker

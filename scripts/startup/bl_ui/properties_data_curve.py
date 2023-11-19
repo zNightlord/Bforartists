@@ -135,6 +135,7 @@ class DATA_PT_curve_texture_space(CurveButtonsPanel, Panel):
         'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
+        'JNPR',
     }
 
     def draw(self, context):
@@ -559,6 +560,7 @@ class DATA_PT_custom_props_curve(CurveButtonsPanel, PropertyPanel, Panel):
         'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
+        'JNPR',
     }
     _context_path = "object.data"
     _property_type = bpy.types.Curve

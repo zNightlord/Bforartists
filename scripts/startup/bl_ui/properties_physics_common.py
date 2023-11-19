@@ -58,6 +58,7 @@ class PHYSICS_PT_add(PhysicButtonsPanel, Panel):
         'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
+        'JNPR',
     }
 
     def draw(self, context):

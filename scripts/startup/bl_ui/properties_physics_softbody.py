@@ -1,5 +1,3 @@
-# SPDX-FileCopyrightText: 2009-2023 Blender Authors
-#
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 from bpy.types import (
@@ -35,6 +33,7 @@ class PHYSICS_PT_softbody(PhysicButtonsPanel, Panel):
         'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
+        'JNPR',
     }
 
     def draw(self, context):
@@ -49,13 +48,14 @@ class PHYSICS_PT_softbody(PhysicButtonsPanel, Panel):
 
 class PHYSICS_PT_softbody_object(PhysicButtonsPanel, Panel):
     bl_label = "Object"
-    bl_parent_id = "PHYSICS_PT_softbody"
+    bl_parent_id = 'PHYSICS_PT_softbody'
     bl_options = {'DEFAULT_CLOSED'}
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
         'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
+        'JNPR',
     }
 
     def draw(self, context):
@@ -82,13 +82,14 @@ class PHYSICS_PT_softbody_object(PhysicButtonsPanel, Panel):
 
 class PHYSICS_PT_softbody_simulation(PhysicButtonsPanel, Panel):
     bl_label = "Simulation"
-    bl_parent_id = "PHYSICS_PT_softbody"
+    bl_parent_id = 'PHYSICS_PT_softbody'
     bl_options = {'DEFAULT_CLOSED'}
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
         'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
+        'JNPR',
     }
 
     def draw(self, context):
@@ -105,13 +106,14 @@ class PHYSICS_PT_softbody_simulation(PhysicButtonsPanel, Panel):
 
 class PHYSICS_PT_softbody_cache(PhysicButtonsPanel, Panel):
     bl_label = "Cache"
-    bl_parent_id = "PHYSICS_PT_softbody"
+    bl_parent_id = 'PHYSICS_PT_softbody'
     bl_options = {'DEFAULT_CLOSED'}
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
         'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
+        'JNPR',
     }
 
     def draw(self, context):
@@ -121,13 +123,14 @@ class PHYSICS_PT_softbody_cache(PhysicButtonsPanel, Panel):
 
 class PHYSICS_PT_softbody_goal(PhysicButtonsPanel, Panel):
     bl_label = "Goal"
-    bl_parent_id = "PHYSICS_PT_softbody"
+    bl_parent_id = 'PHYSICS_PT_softbody'
     bl_options = {'DEFAULT_CLOSED'}
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
         'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
+        'JNPR',
     }
 
     def draw_header(self, context):
@@ -151,13 +154,14 @@ class PHYSICS_PT_softbody_goal(PhysicButtonsPanel, Panel):
 
 class PHYSICS_PT_softbody_goal_strengths(PhysicButtonsPanel, Panel):
     bl_label = "Strengths"
-    bl_parent_id = "PHYSICS_PT_softbody_goal"
+    bl_parent_id = 'PHYSICS_PT_softbody_goal'
     bl_options = {'DEFAULT_CLOSED'}
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
         'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
+        'JNPR',
     }
 
     def draw(self, context):
@@ -182,13 +186,14 @@ class PHYSICS_PT_softbody_goal_strengths(PhysicButtonsPanel, Panel):
 
 class PHYSICS_PT_softbody_goal_settings(PhysicButtonsPanel, Panel):
     bl_label = "Settings"
-    bl_parent_id = "PHYSICS_PT_softbody_goal"
+    bl_parent_id = 'PHYSICS_PT_softbody_goal'
     bl_options = {'DEFAULT_CLOSED'}
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
         'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
+        'JNPR',
     }
 
     def draw(self, context):
@@ -210,13 +215,14 @@ class PHYSICS_PT_softbody_goal_settings(PhysicButtonsPanel, Panel):
 
 class PHYSICS_PT_softbody_edge(PhysicButtonsPanel, Panel):
     bl_label = "Edges"
-    bl_parent_id = "PHYSICS_PT_softbody"
+    bl_parent_id = 'PHYSICS_PT_softbody'
     bl_options = {'DEFAULT_CLOSED'}
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
         'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
+        'JNPR',
     }
 
     def draw_header(self, context):
@@ -256,25 +262,24 @@ class PHYSICS_PT_softbody_edge(PhysicButtonsPanel, Panel):
 
         col = flow.column()
         col.prop(softbody, "spring_length", text="Length")
-        row = col.row()
-        row.use_property_split = False
-        row.prop(softbody, "use_edge_collision", text="Collision Edge")
-        row.prop_decorator(softbody, "use_edge_collision")
-        row = col.row()
-        row.use_property_split = False
-        row.prop(softbody, "use_face_collision", text="Face")
-        row.prop_decorator(softbody, "use_face_collision")
+
+        col.separator()
+
+        col = flow.column(align=True, heading="Collision")
+        col.prop(softbody, "use_edge_collision", text="Edge", toggle=False)
+        col.prop(softbody, "use_face_collision", text="Face", toggle=False)
 
 
 class PHYSICS_PT_softbody_edge_aerodynamics(PhysicButtonsPanel, Panel):
     bl_label = "Aerodynamics"
-    bl_parent_id = "PHYSICS_PT_softbody_edge"
+    bl_parent_id = 'PHYSICS_PT_softbody_edge'
     bl_options = {'DEFAULT_CLOSED'}
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
         'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
+        'JNPR',
     }
 
     def draw(self, context):
@@ -296,13 +301,14 @@ class PHYSICS_PT_softbody_edge_aerodynamics(PhysicButtonsPanel, Panel):
 
 class PHYSICS_PT_softbody_edge_stiffness(PhysicButtonsPanel, Panel):
     bl_label = "Stiffness"
-    bl_parent_id = "PHYSICS_PT_softbody_edge"
+    bl_parent_id = 'PHYSICS_PT_softbody_edge'
     bl_options = {'DEFAULT_CLOSED'}
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
         'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
+        'JNPR',
     }
 
     def draw_header(self, context):
@@ -325,13 +331,14 @@ class PHYSICS_PT_softbody_edge_stiffness(PhysicButtonsPanel, Panel):
 
 class PHYSICS_PT_softbody_collision(PhysicButtonsPanel, Panel):
     bl_label = "Self Collision"
-    bl_parent_id = "PHYSICS_PT_softbody"
+    bl_parent_id = 'PHYSICS_PT_softbody'
     bl_options = {'DEFAULT_CLOSED'}
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
         'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
+        'JNPR',
     }
 
     def draw_header(self, context):
@@ -365,13 +372,14 @@ class PHYSICS_PT_softbody_collision(PhysicButtonsPanel, Panel):
 
 class PHYSICS_PT_softbody_solver(PhysicButtonsPanel, Panel):
     bl_label = "Solver"
-    bl_parent_id = "PHYSICS_PT_softbody"
+    bl_parent_id = 'PHYSICS_PT_softbody'
     bl_options = {'DEFAULT_CLOSED'}
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
         'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
+        'JNPR',
     }
 
     def draw(self, context):
@@ -389,23 +397,20 @@ class PHYSICS_PT_softbody_solver(PhysicButtonsPanel, Panel):
         col.prop(softbody, "step_max", text="Max")
 
         col = flow.column()
-        row = col.row()
-        row.use_property_split = False
-        row.prop(softbody, "use_auto_step", text="Auto-Step")
-        row.prop_decorator(softbody, "use_auto_step")
-
+        col.prop(softbody, "use_auto_step", text="Auto-Step")
         col.prop(softbody, "error_threshold")
 
 
 class PHYSICS_PT_softbody_solver_diagnostics(PhysicButtonsPanel, Panel):
     bl_label = "Diagnostics"
-    bl_parent_id = "PHYSICS_PT_softbody_solver"
+    bl_parent_id = 'PHYSICS_PT_softbody_solver'
     bl_options = {'DEFAULT_CLOSED'}
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
         'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
+        'JNPR',
     }
 
     def draw(self, context):
@@ -416,25 +421,21 @@ class PHYSICS_PT_softbody_solver_diagnostics(PhysicButtonsPanel, Panel):
         softbody = md.settings
 
         layout.active = softbody_panel_enabled(md)
-        row = layout.row()
-        row.use_property_split = False
-        row.prop(softbody, "use_diagnose")
-        row.prop_decorator(softbody, "use_diagnose")
-        row = layout.row()
-        row.use_property_split = False
-        row.prop(softbody, "use_estimate_matrix")
-        row.prop_decorator(softbody, "use_estimate_matrix")
+
+        layout.prop(softbody, "use_diagnose")
+        layout.prop(softbody, "use_estimate_matrix")
 
 
 class PHYSICS_PT_softbody_solver_helpers(PhysicButtonsPanel, Panel):
     bl_label = "Helpers"
-    bl_parent_id = "PHYSICS_PT_softbody_solver"
+    bl_parent_id = 'PHYSICS_PT_softbody_solver'
     bl_options = {'DEFAULT_CLOSED'}
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
         'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
+        'JNPR',
     }
 
     def draw(self, context):
@@ -456,13 +457,14 @@ class PHYSICS_PT_softbody_solver_helpers(PhysicButtonsPanel, Panel):
 
 class PHYSICS_PT_softbody_field_weights(PhysicButtonsPanel, Panel):
     bl_label = "Field Weights"
-    bl_parent_id = "PHYSICS_PT_softbody"
+    bl_parent_id = 'PHYSICS_PT_softbody'
     bl_options = {'DEFAULT_CLOSED'}
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
         'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
+        'JNPR',
     }
 
     def draw(self, context):

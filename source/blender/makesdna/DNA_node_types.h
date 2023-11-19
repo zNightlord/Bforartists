@@ -2513,6 +2513,7 @@ typedef enum NodeShaderOutputTarget {
   SHD_OUTPUT_ALL = 0,
   SHD_OUTPUT_EEVEE = 1,
   SHD_OUTPUT_CYCLES = 2,
+  SHD_OUTPUT_JNPR = 3,
 } NodeShaderOutputTarget;
 
 /* Geometry Nodes */

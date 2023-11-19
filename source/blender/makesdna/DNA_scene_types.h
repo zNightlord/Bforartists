@@ -2249,6 +2249,7 @@ extern const char *RE_engine_id_BLENDER_EEVEE;
 extern const char *RE_engine_id_BLENDER_EEVEE_NEXT;
 extern const char *RE_engine_id_BLENDER_WORKBENCH;
 extern const char *RE_engine_id_CYCLES;
+extern const char *RE_engine_id_JNPR;
 
 /** \} */
 

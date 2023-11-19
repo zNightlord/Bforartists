@@ -234,6 +234,7 @@ bool BKE_scene_use_spherical_stereo(struct Scene *scene);
 bool BKE_scene_uses_blender_eevee(const struct Scene *scene);
 bool BKE_scene_uses_blender_workbench(const struct Scene *scene);
 bool BKE_scene_uses_cycles(const struct Scene *scene);
+bool BKE_scene_uses_juniper(const struct Scene *scene);
 
 bool BKE_scene_uses_shader_previews(const struct Scene *scene);
 

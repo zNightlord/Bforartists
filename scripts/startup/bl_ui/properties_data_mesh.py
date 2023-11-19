@@ -1,13 +1,10 @@
-# SPDX-FileCopyrightText: 2009-2023 Blender Authors
-#
 # SPDX-License-Identifier: GPL-2.0-or-later
-
 import bpy
 from bpy.types import Menu, Panel, UIList
 from rna_prop_ui import PropertyPanel
 
 from bpy.app.translations import (
-    pgettext_iface as iface_,
+    pgettext_tip as iface_,
     pgettext_tip as tip_,
 )
 
@@ -30,21 +27,25 @@ class MESH_MT_vertex_group_context_menu(Menu):
         ).sort_type = 'BONE_HIERARCHY'
         layout.separator()
         layout.operator("object.vertex_group_copy", icon='DUPLICATE')
-        layout.operator("object.vertex_group_copy_to_selected", icon='LINK_AREA')
+        layout.operator("object.vertex_group_copy_to_selected")
         layout.separator()
-        layout.operator("object.vertex_group_mirror", icon='TRANSFORM_MIRROR').use_topology = False
-        layout.operator("object.vertex_group_mirror", text="Mirror Vertex Group (Topology)", icon='TRANSFORM_MIRROR').use_topology = True
+        layout.operator("object.vertex_group_mirror", icon='ARROW_LEFTRIGHT').use_topology = False
+        layout.operator("object.vertex_group_mirror", text="Mirror Vertex Group (Topology)").use_topology = True
         layout.separator()
-        layout.operator("object.vertex_group_remove_from", text="Remove from All Groups", icon='REMOVE_FROM_ALL_GROUPS').use_all_groups = True
-        layout.operator("object.vertex_group_remove_from", text="Clear Active Group", icon='CLEAR').use_all_verts = True
-        layout.operator("object.vertex_group_remove", text="Delete All Unlocked Groups", icon='DELETE').all_unlocked = True
-        layout.operator("object.vertex_group_remove", text="Delete All Groups", icon='DELETE').all = True
+        layout.operator(
+            "object.vertex_group_remove_from",
+            icon='X',
+            text="Remove from All Groups",
+        ).use_all_groups = True
+        layout.operator("object.vertex_group_remove_from", text="Clear Active Group").use_all_verts = True
+        layout.operator("object.vertex_group_remove", text="Delete All Unlocked Groups").all_unlocked = True
+        layout.operator("object.vertex_group_remove", text="Delete All Groups").all = True
         layout.separator()
-        props = layout.operator("object.vertex_group_lock", text="Lock All", icon='LOCKED')
+        props = layout.operator("object.vertex_group_lock", icon='LOCKED', text="Lock All")
         props.action, props.mask = 'LOCK', 'ALL'
-        props = layout.operator("object.vertex_group_lock", text="Unlock All", icon='UNLOCKED')
+        props = layout.operator("object.vertex_group_lock", icon='UNLOCKED', text="Unlock All")
         props.action, props.mask = 'UNLOCK', 'ALL'
-        props = layout.operator("object.vertex_group_lock", text="Lock Invert All", icon = "INVERSE")
+        props = layout.operator("object.vertex_group_lock", text="Lock Invert All")
         props.action, props.mask = 'INVERT', 'ALL'
 
 
@@ -56,18 +57,18 @@ class MESH_MT_shape_key_context_menu(Menu):
 
         layout.operator("object.shape_key_add", icon='ADD', text="New Shape from Mix").from_mix = True
         layout.separator()
-        layout.operator("object.shape_key_mirror", icon='TRANSFORM_MIRROR').use_topology = False
-        layout.operator("object.shape_key_mirror", text="Mirror Shape Key (Topology)", icon = "TRANSFORM_MIRROR").use_topology = True
+        layout.operator("object.shape_key_mirror", icon='ARROW_LEFTRIGHT').use_topology = False
+        layout.operator("object.shape_key_mirror", text="Mirror Shape Key (Topology)").use_topology = True
         layout.separator()
-        layout.operator("object.join_shapes", icon = "JOIN")
-        layout.operator("object.shape_key_transfer", icon = "SHAPEKEY_DATA")
+        layout.operator("object.join_shapes")
+        layout.operator("object.shape_key_transfer")
         layout.separator()
-        props = layout.operator("object.shape_key_remove", icon='DELETE', text="Delete All Shape Keys")
-        props.all = True
-        props.apply_mix = False
-        props = layout.operator("object.shape_key_remove", icon="CHECKMARK", text="Apply All Shape Keys")
-        props.all = True
-        props.apply_mix = True
+        op = layout.operator("object.shape_key_remove", icon='X', text="Delete All Shape Keys")
+        op.all = True
+        op.apply_mix = False
+        op = layout.operator("object.shape_key_remove", text="Apply All Shape Keys")
+        op.all = True
+        op.apply_mix = True
         layout.separator()
         layout.operator("object.shape_key_move", icon='TRIA_UP_BAR', text="Move to Top").type = 'TOP'
         layout.operator("object.shape_key_move", icon='TRIA_DOWN_BAR', text="Move to Bottom").type = 'BOTTOM'
@@ -79,8 +80,11 @@ class MESH_MT_color_attribute_context_menu(Menu):
     def draw(self, _context):
         layout = self.layout
 
-        layout.operator("geometry.color_attribute_duplicate", icon='DUPLICATE')
-        layout.operator("geometry.color_attribute_convert", icon='ATTRIBUTE_CONVERT')
+        layout.operator(
+            "geometry.color_attribute_duplicate",
+            icon='DUPLICATE',
+        )
+        layout.operator("geometry.color_attribute_convert")
 
 
 class MESH_MT_attribute_context_menu(Menu):
@@ -89,7 +93,7 @@ class MESH_MT_attribute_context_menu(Menu):
     def draw(self, _context):
         layout = self.layout
 
-        layout.operator("geometry.attribute_convert", icon = "ATTRIBUTE_CONVERT")
+        layout.operator("geometry.attribute_convert")
 
 
 class MESH_UL_vgroups(UIList):
@@ -100,6 +104,17 @@ class MESH_UL_vgroups(UIList):
             layout.prop(vgroup, "name", text="", emboss=False, icon_value=icon)
             icon = 'LOCKED' if vgroup.lock_weight else 'UNLOCKED'
             layout.prop(vgroup, "lock_weight", text="", icon=icon, emboss=False)
+        elif self.layout_type == 'GRID':
+            layout.alignment = 'CENTER'
+            layout.label(text="", icon_value=icon)
+
+
+class MESH_UL_fmaps(UIList):
+    def draw_item(self, _context, layout, _data, item, icon, _active_data, _active_propname, _index):
+        # assert(isinstance(item, bpy.types.FaceMap))
+        fmap = item
+        if self.layout_type in {'DEFAULT', 'COMPACT'}:
+            layout.prop(fmap, "name", text="", emboss=False, icon='FACE_MAPS')
         elif self.layout_type == 'GRID':
             layout.alignment = 'CENTER'
             layout.label(text="", icon_value=icon)
@@ -117,7 +132,7 @@ class MESH_UL_shape_keys(UIList):
             row = split.row(align=True)
             row.emboss = 'NONE_OR_STATUS'
             if key_block.mute or (obj.mode == 'EDIT' and not (obj.use_shape_key_edit_mode and obj.type == 'MESH')):
-                split.active = False
+                row.active = False
             if not item.id_data.use_relative:
                 row.prop(key_block, "frame", text="")
             elif index > 0:
@@ -161,6 +176,7 @@ class DATA_PT_context_mesh(MeshButtonsPanel, Panel):
         'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
+        'JNPR',
     }
 
     def draw(self, context):
@@ -176,15 +192,16 @@ class DATA_PT_context_mesh(MeshButtonsPanel, Panel):
             layout.template_ID(space, "pin_id")
 
 
-class DATA_PT_normals_auto_smooth(MeshButtonsPanel, Panel):
-    bl_label = "Auto Smooth"
-    bl_parent_id = "DATA_PT_normals"
-    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_WORKBENCH'}
-
-    def draw_header(self, context):
-        mesh = context.mesh
-
-        self.layout.prop(mesh, "use_auto_smooth", text="")
+class DATA_PT_normals(MeshButtonsPanel, Panel):
+    bl_label = "Normals"
+    bl_options = {'DEFAULT_CLOSED'}
+    COMPAT_ENGINES = {
+        'BLENDER_RENDER',
+        'BLENDER_EEVEE',
+        'BLENDER_EEVEE_NEXT',
+        'BLENDER_WORKBENCH',
+        'JNPR',
+    }
 
     def draw(self, context):
         layout = self.layout
@@ -192,8 +209,15 @@ class DATA_PT_normals_auto_smooth(MeshButtonsPanel, Panel):
 
         mesh = context.mesh
 
-        layout.active = mesh.use_auto_smooth and not mesh.has_custom_normals
-        layout.prop(mesh, "auto_smooth_angle", text="Angle")
+        col = layout.column(align=False, heading="Auto Smooth")
+        col.use_property_decorate = False
+        row = col.row(align=True)
+        sub = row.row(align=True)
+        sub.prop(mesh, "use_auto_smooth", text="")
+        sub = sub.row(align=True)
+        sub.active = mesh.use_auto_smooth and not mesh.has_custom_normals
+        sub.prop(mesh, "auto_smooth_angle", text="")
+        row.prop_decorator(mesh, "auto_smooth_angle")
 
 
 class DATA_PT_texture_space(MeshButtonsPanel, Panel):
@@ -204,6 +228,7 @@ class DATA_PT_texture_space(MeshButtonsPanel, Panel):
         'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
+        'JNPR',
     }
 
     def draw(self, context):
@@ -214,10 +239,9 @@ class DATA_PT_texture_space(MeshButtonsPanel, Panel):
 
         layout.prop(mesh, "texture_mesh")
 
-        row = layout.row()
-        row.use_property_split = False
-        row.prop(mesh, "use_auto_texspace")
-        row.prop_decorator(mesh, "use_auto_texspace")
+        layout.separator()
+
+        layout.prop(mesh, "use_auto_texspace")
 
         layout.prop(mesh, "texspace_location", text="Location")
         layout.prop(mesh, "texspace_size", text="Size")
@@ -230,6 +254,7 @@ class DATA_PT_vertex_groups(MeshButtonsPanel, Panel):
         'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
+        'JNPR',
     }
 
     @classmethod
@@ -283,7 +308,55 @@ class DATA_PT_vertex_groups(MeshButtonsPanel, Panel):
 
             layout.prop(context.tool_settings, "vertex_group_weight", text="Weight")
 
-        draw_attribute_warnings(context, layout)
+
+class DATA_PT_face_maps(MeshButtonsPanel, Panel):
+    bl_label = "Face Maps"
+    bl_options = {'DEFAULT_CLOSED'}
+    COMPAT_ENGINES = {
+        'BLENDER_RENDER',
+        'BLENDER_EEVEE',
+        'BLENDER_EEVEE_NEXT',
+        'BLENDER_WORKBENCH',
+        'JNPR',
+    }
+
+    @classmethod
+    def poll(cls, context):
+        obj = context.object
+        return (obj and obj.type == 'MESH')
+
+    def draw(self, context):
+        layout = self.layout
+
+        ob = context.object
+        facemap = ob.face_maps.active
+
+        rows = 2
+        if facemap:
+            rows = 4
+
+        row = layout.row()
+        row.template_list("MESH_UL_fmaps", "", ob, "face_maps", ob.face_maps, "active_index", rows=rows)
+
+        col = row.column(align=True)
+        col.operator("object.face_map_add", icon='ADD', text="")
+        col.operator("object.face_map_remove", icon='REMOVE', text="")
+
+        if facemap:
+            col.separator()
+            col.operator("object.face_map_move", icon='TRIA_UP', text="").direction = 'UP'
+            col.operator("object.face_map_move", icon='TRIA_DOWN', text="").direction = 'DOWN'
+
+        if ob.face_maps and (ob.mode == 'EDIT' and ob.type == 'MESH'):
+            row = layout.row()
+
+            sub = row.row(align=True)
+            sub.operator("object.face_map_assign", text="Assign")
+            sub.operator("object.face_map_remove_from", text="Remove")
+
+            sub = row.row(align=True)
+            sub.operator("object.face_map_select", text="Select")
+            sub.operator("object.face_map_deselect", text="Deselect")
 
 
 class DATA_PT_shape_keys(MeshButtonsPanel, Panel):
@@ -293,6 +366,7 @@ class DATA_PT_shape_keys(MeshButtonsPanel, Panel):
         'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
+        'JNPR',
     }
 
     @classmethod
@@ -395,6 +469,7 @@ class DATA_PT_uv_texture(MeshButtonsPanel, Panel):
         'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
+        'JNPR',
     }
 
     def draw(self, context):
@@ -411,8 +486,6 @@ class DATA_PT_uv_texture(MeshButtonsPanel, Panel):
         col.operator("mesh.uv_texture_add", icon='ADD', text="")
         col.operator("mesh.uv_texture_remove", icon='REMOVE', text="")
 
-        draw_attribute_warnings(context, layout)
-
 
 class DATA_PT_remesh(MeshButtonsPanel, Panel):
     bl_label = "Remesh"
@@ -422,6 +495,7 @@ class DATA_PT_remesh(MeshButtonsPanel, Panel):
         'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
+        'JNPR',
     }
 
     def draw(self, context):
@@ -436,26 +510,15 @@ class DATA_PT_remesh(MeshButtonsPanel, Panel):
         if mesh.remesh_mode == 'VOXEL':
             col.prop(mesh, "remesh_voxel_size")
             col.prop(mesh, "remesh_voxel_adaptivity")
-            col.use_property_split = False
             col.prop(mesh, "use_remesh_fix_poles")
 
-            col.label(text = "Preserve")
-            row.use_property_split = False
-            row = col.row()
-            row.separator()
-            row.prop(mesh, "use_remesh_preserve_volume", text="Volume")
-            row = col.row()
-            row.separator()
-            row.prop(mesh, "use_remesh_preserve_paint_mask", text="Paint Mask")
-            row = col.row()
-            row.separator()
-            row.prop(mesh, "use_remesh_preserve_sculpt_face_sets", text="Face Sets")
-            row = col.row()
-            row.separator()
-            row.prop(mesh, "use_remesh_preserve_vertex_colors", text="Color Attributes")
+            col = layout.column(heading="Preserve")
+            col.prop(mesh, "use_remesh_preserve_volume", text="Volume")
+            col.prop(mesh, "use_remesh_preserve_paint_mask", text="Paint Mask")
+            col.prop(mesh, "use_remesh_preserve_sculpt_face_sets", text="Face Sets")
+            col.prop(mesh, "use_remesh_preserve_vertex_colors", text="Color Attributes")
 
-            row = col.row()
-            row.operator("object.voxel_remesh", text="Voxel Remesh")
+            col.operator("object.voxel_remesh", text="Voxel Remesh")
         else:
             col.operator("object.quadriflow_remesh", text="QuadriFlow Remesh")
 
@@ -468,6 +531,7 @@ class DATA_PT_customdata(MeshButtonsPanel, Panel):
         'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
+        'JNPR',
     }
 
     def draw(self, context):
@@ -475,18 +539,37 @@ class DATA_PT_customdata(MeshButtonsPanel, Panel):
         layout.use_property_split = True
         layout.use_property_decorate = False
 
+        obj = context.object
         me = context.mesh
         col = layout.column()
 
         col.operator("mesh.customdata_mask_clear", icon='X')
         col.operator("mesh.customdata_skin_clear", icon='X')
 
-        layout.separator()
-
         if me.has_custom_normals:
             col.operator("mesh.customdata_custom_splitnormals_clear", icon='X')
         else:
             col.operator("mesh.customdata_custom_splitnormals_add", icon='ADD')
+
+        if me.has_bevel_weight_edge:
+            col.operator("mesh.customdata_bevel_weight_edge_clear", icon='X')
+        else:
+            col.operator("mesh.customdata_bevel_weight_edge_add", icon='ADD')
+
+        if me.has_bevel_weight_vertex:
+            col.operator("mesh.customdata_bevel_weight_vertex_clear", icon='X')
+        else:
+            col.operator("mesh.customdata_bevel_weight_vertex_add", icon='ADD')
+
+        if me.has_crease_edge:
+            col.operator("mesh.customdata_crease_edge_clear", icon='X')
+        else:
+            col.operator("mesh.customdata_crease_edge_add", icon='ADD')
+
+        if me.has_crease_vertex:
+            col.operator("mesh.customdata_crease_vertex_clear", icon='X')
+        else:
+            col.operator("mesh.customdata_crease_vertex_add", icon='ADD')
 
 
 class DATA_PT_custom_props_mesh(MeshButtonsPanel, PropertyPanel, Panel):
@@ -495,6 +578,7 @@ class DATA_PT_custom_props_mesh(MeshButtonsPanel, PropertyPanel, Panel):
         'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
+        'JNPR',
     }
     _context_path = "object.data"
     _property_type = bpy.types.Mesh
@@ -549,6 +633,7 @@ class DATA_PT_mesh_attributes(MeshButtonsPanel, Panel):
         'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
+        'JNPR',
     }
 
     def draw(self, context):
@@ -576,38 +661,33 @@ class DATA_PT_mesh_attributes(MeshButtonsPanel, Panel):
 
         col.menu("MESH_MT_attribute_context_menu", icon='DOWNARROW_HLT', text="")
 
-        draw_attribute_warnings(context, layout)
+        self.draw_attribute_warnings(context, layout)
 
+    def draw_attribute_warnings(self, context, layout):
+        ob = context.object
+        mesh = context.mesh
 
-def draw_attribute_warnings(context, layout):
-    ob = context.object
-    mesh = context.mesh
+        unique_names = set()
+        colliding_names = []
+        for collection in (
+                # Built-in names.
+                {"shade_smooth": None, "normal": None, "crease": None},
+                mesh.attributes,
+                None if ob is None else ob.vertex_groups,
+        ):
+            if collection is None:
+                colliding_names.append("Cannot check for object vertex groups when pinning mesh")
+                continue
+            for name in collection.keys():
+                unique_names_len = len(unique_names)
+                unique_names.add(name)
+                if len(unique_names) == unique_names_len:
+                    colliding_names.append(name)
 
-    if not mesh:
-        return
+        if not colliding_names:
+            return
 
-    unique_names = set()
-    colliding_names = []
-    for collection in (
-            # Built-in names.
-            {"crease": None},
-            mesh.attributes,
-            None if ob is None else ob.vertex_groups,
-    ):
-        if collection is None:
-            colliding_names.append("Cannot check for object vertex groups when pinning mesh")
-            continue
-        for name in collection.keys():
-            unique_names_len = len(unique_names)
-            unique_names.add(name)
-            if len(unique_names) == unique_names_len:
-                colliding_names.append(name)
-
-    if not colliding_names:
-        return
-
-    layout.label(text=tip_("Name collisions: ") + ", ".join(set(colliding_names)),
-                 icon='ERROR', translate=False)
+        layout.label(text=tip_("Name collisions: ") + ", ".join(set(colliding_names)), icon='ERROR')
 
 
 class ColorAttributesListBase():
@@ -632,8 +712,8 @@ class ColorAttributesListBase():
 
         for idx, item in enumerate(attributes):
             skip = (
-                (item.domain not in {'POINT', 'CORNER'}) or
-                (item.data_type not in {'FLOAT_COLOR', 'BYTE_COLOR'}) or
+                (item.domain not in {"POINT", "CORNER"}) or
+                (item.data_type not in {"FLOAT_COLOR", "BYTE_COLOR"}) or
                 item.is_internal
             )
             flags[idx] = 0 if skip else flags[idx]
@@ -661,12 +741,12 @@ class MESH_UL_color_attributes(UIList, ColorAttributesListBase):
 
         row = layout.row()
         row.emboss = 'NONE'
-        props = row.operator(
+        prop = row.operator(
             "geometry.color_attribute_render_set",
             text="",
             icon='RESTRICT_RENDER_OFF' if active_render else 'RESTRICT_RENDER_ON',
         )
-        props.name = attribute.name
+        prop.name = attribute.name
 
 
 class MESH_UL_color_attributes_selector(UIList, ColorAttributesListBase):
@@ -683,6 +763,7 @@ class DATA_PT_vertex_colors(DATA_PT_mesh_attributes, Panel):
         'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
+        'JNPR',
     }
 
     def draw(self, context):
@@ -710,7 +791,7 @@ class DATA_PT_vertex_colors(DATA_PT_mesh_attributes, Panel):
 
         col.menu("MESH_MT_color_attribute_context_menu", icon='DOWNARROW_HLT', text="")
 
-        draw_attribute_warnings(context, layout)
+        self.draw_attribute_warnings(context, layout)
 
 
 classes = (
@@ -719,6 +800,7 @@ classes = (
     MESH_MT_color_attribute_context_menu,
     MESH_MT_attribute_context_menu,
     MESH_UL_vgroups,
+    MESH_UL_fmaps,
     MESH_UL_shape_keys,
     MESH_UL_uvmaps,
     MESH_UL_attributes,
@@ -727,7 +809,9 @@ classes = (
     DATA_PT_shape_keys,
     DATA_PT_uv_texture,
     DATA_PT_vertex_colors,
+    DATA_PT_face_maps,
     DATA_PT_mesh_attributes,
+    DATA_PT_normals,
     DATA_PT_texture_space,
     DATA_PT_remesh,
     DATA_PT_customdata,

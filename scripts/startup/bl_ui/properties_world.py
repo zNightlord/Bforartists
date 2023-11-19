@@ -52,6 +52,7 @@ class WORLD_PT_context_world(WorldButtonsPanel, Panel):
         'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
+        'JNPR',
     }
 
     @classmethod
@@ -75,7 +76,7 @@ class WORLD_PT_context_world(WorldButtonsPanel, Panel):
 # class EEVEE_WORLD_PT_mist(WorldButtonsPanel, Panel):
 #     bl_label = "Mist Pass"
 #     bl_options = {'DEFAULT_CLOSED'}
-#     COMPAT_ENGINES = {'BLENDER_EEVEE', 'BLENDER_EEVEE_NEXT'}
+#     COMPAT_ENGINES = {'BLENDER_EEVEE', 'BLENDER_EEVEE_NEXT', 'JNPR'}
 
 #     @classmethod
 #     def poll(cls, context):
@@ -101,7 +102,8 @@ class WORLD_PT_custom_props(WorldButtonsPanel, PropertyPanel, Panel):
         'BLENDER_RENDER',
         'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
-        'BLENDER_WORKBENCH',
+        'BLENDER_WORKBENCH', 
+        'JNPR',
     }
     _context_path = "world"
     _property_type = bpy.types.World
@@ -109,7 +111,7 @@ class WORLD_PT_custom_props(WorldButtonsPanel, PropertyPanel, Panel):
 
 class EEVEE_WORLD_PT_surface(WorldButtonsPanel, Panel):
     bl_label = "Surface"
-    COMPAT_ENGINES = {'BLENDER_EEVEE', 'BLENDER_EEVEE_NEXT'}
+    COMPAT_ENGINES = {'BLENDER_EEVEE', 'BLENDER_EEVEE_NEXT', 'JNPR'}
 
     @classmethod
     def poll(cls, context):

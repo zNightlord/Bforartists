@@ -275,6 +275,7 @@ class GPUCodegen {
   {
     BLI_hash_mm2a_init(&hm2a_, GPU_material_uuid_get(&mat));
     BLI_hash_mm2a_add_int(&hm2a_, GPU_material_flag(&mat));
+    BLI_hash_mm2a_add_int(&hm2a_, GPU_material_script_flag(&mat));
     create_info = new GPUCodegenCreateInfo("codegen");
     output.create_info = reinterpret_cast<GPUShaderCreateInfo *>(
         static_cast<ShaderCreateInfo *>(create_info));
@@ -293,6 +294,7 @@ class GPUCodegen {
     MEM_SAFE_FREE(output.displacement);
     MEM_SAFE_FREE(output.composite);
     MEM_SAFE_FREE(output.material_functions);
+    MEM_SAFE_FREE(output.jnpr_color);
     MEM_SAFE_FREE(cryptomatte_input_);
     delete create_info;
     BLI_freelistN(&ubo_inputs_);
@@ -692,6 +694,7 @@ void GPUCodegen::generate_graphs()
   output.displacement = graph_serialize(
       GPU_NODE_TAG_DISPLACEMENT, graph.outlink_displacement, nullptr);
   output.thickness = graph_serialize(GPU_NODE_TAG_THICKNESS, graph.outlink_thickness, nullptr);
+  output.jnpr_color = graph_serialize(GPU_NODE_TAG_JNPR_COLOR, graph.outlink_jnpr_color, nullptr);
   if (!BLI_listbase_is_empty(&graph.outlink_compositor)) {
     output.composite = graph_serialize(GPU_NODE_TAG_COMPOSITOR);
   }
@@ -947,6 +950,7 @@ void GPU_pass_release(GPUPass *pass)
 
 void GPU_pass_cache_garbage_collect()
 {
+  static int lasttime = 0;
   const int shadercollectrate = 60; /* hardcoded for now. */
   int ctime = int(PIL_check_seconds_timer());
 

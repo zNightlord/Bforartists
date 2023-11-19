@@ -35,10 +35,10 @@ class TEXT_HT_header(Header):
 
         if text:
             text_name = text.name
-            is_osl = text_name.endswith((".osl", ".oso"))
-
+            is_shader = text.name.endswith((".osl", ".glsl"))
+            
             row = layout.row()
-            if is_osl:
+            if is_shader:
                 row = layout.row()
                 row.operator("node.shader_script_update")
             else:

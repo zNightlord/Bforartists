@@ -167,6 +167,12 @@ set(SRC
   engines/eevee_next/eevee_view.cc
   engines/eevee_next/eevee_volume.cc
   engines/eevee_next/eevee_world.cc
+  engines/juniper/juniper_engine.cc
+  engines/juniper/juniper_shaders.cc
+  engines/juniper/juniper_sync.cc
+  engines/juniper/juniper_pipeline.cc
+  engines/juniper/juniper_buffers.cc
+  engines/juniper/juniper_lights.cc
   engines/workbench/workbench_effect_antialiasing.cc
   engines/workbench/workbench_effect_cavity.cc
   engines/workbench/workbench_effect_dof.cc
@@ -327,6 +333,15 @@ set(SRC
   engines/image/image_space_node.hh
   engines/image/image_texture_info.hh
   engines/image/image_usage.hh
+  engines/juniper/juniper_engine.h
+  engines/juniper/juniper_shaders.hh
+  engines/juniper/juniper_instance.hh
+  engines/juniper/juniper_sync.hh
+  engines/juniper/juniper_pipeline.hh
+  engines/juniper/juniper_defines.hh
+  engines/juniper/juniper_buffers.hh
+  engines/juniper/juniper_lights.hh
+  engines/juniper/juniper_shader_shared.hh
   engines/overlay/overlay_engine.h
   engines/overlay/overlay_next_background.hh
   engines/overlay/overlay_next_empty.hh
@@ -601,6 +616,18 @@ set(GLSL_SRC
 
   engines/eevee_next/eevee_defines.hh
   engines/eevee_next/eevee_shader_shared.hh
+
+  engines/juniper/shaders/juniper_composite_custom.glsl
+  engines/juniper/shaders/juniper_film_composite.glsl
+  engines/juniper/shaders/juniper_surf_test_vert.glsl
+  engines/juniper/shaders/juniper_surf_test_frag.glsl
+  engines/juniper/shaders/juniper_nodetree_lib.glsl
+  engines/juniper/shaders/juniper_attributes_lib.glsl
+  engines/juniper/shaders/juniper_surf_prepass_frag.glsl
+  engines/juniper/shaders/juniper_material_lib.glsl
+
+  engines/juniper/juniper_defines.hh
+  engines/juniper/juniper_shader_shared.hh
 
   engines/workbench/shaders/workbench_cavity_lib.glsl
   engines/workbench/shaders/workbench_common_lib.glsl

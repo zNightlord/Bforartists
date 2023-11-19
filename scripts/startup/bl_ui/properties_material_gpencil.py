@@ -251,7 +251,7 @@ class MATERIAL_PT_gpencil_preview(GPMaterialButtonsPanel, Panel):
 
 
 class MATERIAL_PT_gpencil_custom_props(GPMaterialButtonsPanel, PropertyPanel, Panel):
-    COMPAT_ENGINES = {'BLENDER_EEVEE', 'BLENDER_WORKBENCH'}
+    COMPAT_ENGINES = {'BLENDER_EEVEE', 'BLENDER_WORKBENCH', 'JNPR'}
     _context_path = "object.active_material"
     _property_type = bpy.types.Material
 

@@ -672,6 +672,13 @@ void GPU_material_output_thickness(GPUMaterial *material, GPUNodeLink *link)
   }
 }
 
+void GPU_material_output_jnpr_color(GPUMaterial *material, GPUNodeLink *link)
+{
+  if(!material->graph.outlink_jnpr_color) {
+    material->graph.outlink_jnpr_color = link;
+  }
+}
+
 void GPU_material_add_output_link_aov(GPUMaterial *material, GPUNodeLink *link, int hash)
 {
   GPUNodeGraphOutputLink *aov_link = static_cast<GPUNodeGraphOutputLink *>(
@@ -794,6 +801,28 @@ eGPUMaterialFlag GPU_material_flag(const GPUMaterial *mat)
   return mat->flag;
 }
 
+int GPU_material_script_flag(const GPUMaterial *mat)
+{
+  Material* ma = mat->ma;
+  if (!ma) {
+    return 0;
+  }
+
+  return ma->script_update_index;
+}
+
+void GPU_material_light_group_bits_get(GPUMaterial *mat, int* out)
+{
+  Material* ma = mat->ma;
+  const int grps_all[4] = {MA_GROUPS_ALL, MA_GROUPS_ALL, MA_GROUPS_ALL, MA_GROUPS_ALL};
+  if (ma) {
+    copy_v4_v4_int(out, ma->light_group_bits);
+  } else {
+    copy_v4_v4_int(out, grps_all);
+  }
+}
+
+/* NOTE: Consumes the flags. */
 bool GPU_material_recalc_flag_get(GPUMaterial *mat)
 {
   /* NOTE: Consumes the flags. */
@@ -845,7 +874,9 @@ GPUMaterial *GPU_material_from_nodetree(Scene *scene,
 
   /* Localize tree to create links for reroute and mute. */
   bNodeTree *localtree = ntreeLocalize(ntree);
-  ntreeGPUMaterialNodes(localtree, mat);
+  // Check if we are using EEVEE or JNPR
+  bool use_juniper = STREQ(scene->r.engine, RE_engine_id_JNPR);
+  ntreeGPUMaterialNodes(localtree, mat, use_juniper ? SHD_OUTPUT_JNPR : SHD_OUTPUT_EEVEE);
 
   gpu_material_ramp_texture_build(mat);
   gpu_material_sky_texture_build(mat);

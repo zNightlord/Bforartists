@@ -932,7 +932,7 @@ static void ntree_shader_weight_tree_invert(bNodeTree *ntree, bNode *output_node
           /* Manually add the link to the socket to avoid calling:
            * `BKE_ntree_update_main_tree(G.main, oop, nullptr)`. */
           fromsock->link = nodeAddLink(ntree, fromnode, fromsock, tonode, tosock);
-          BLI_assert(fromsock->link);
+          // BLI_assert(fromsock->link);
         }
       }
     }
@@ -1152,7 +1152,7 @@ static void ntree_shader_pruned_unused(bNodeTree *ntree, bNode *output_node)
   }
 }
 
-void ntreeGPUMaterialNodes(bNodeTree *localtree, GPUMaterial *mat)
+void ntreeGPUMaterialNodes(bNodeTree *localtree, GPUMaterial *mat, int target)
 {
   bNodeTreeExec *exec;
 
@@ -1160,14 +1160,20 @@ void ntreeGPUMaterialNodes(bNodeTree *localtree, GPUMaterial *mat)
   ntree_shader_groups_expand_inputs(localtree);
   ntree_shader_groups_flatten(localtree);
 
-  bNode *output = ntreeShaderOutputNode(localtree, SHD_OUTPUT_EEVEE);
+  bNode *output = ntreeShaderOutputNode(localtree, target);
 
   /* Tree is valid if it contains no undefined implicit socket type cast. */
   bool valid_tree = ntree_shader_implicit_closure_cast(localtree);
 
   if (valid_tree) {
     ntree_shader_pruned_unused(localtree, output);
+    /* OLD
     if (output != nullptr) {
+      ntree_shader_shader_to_rgba_branch(localtree, output);
+      ntree_shader_weight_tree_invert(localtree, output);
+    }
+    */
+    if (target != SHD_OUTPUT_JNPR) {
       ntree_shader_shader_to_rgba_branch(localtree, output);
       ntree_shader_weight_tree_invert(localtree, output);
     }

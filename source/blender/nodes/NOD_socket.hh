@@ -25,6 +25,7 @@ void node_socket_copy_default_value_data(eNodeSocketDatatype datatype, void *to,
 void node_socket_init_default_value(bNodeSocket *sock);
 void node_socket_copy_default_value(bNodeSocket *to, const bNodeSocket *from);
 void register_standard_node_socket_types();
+void update_node_declaration_and_sockets_p(bNodeTree* ntree, bNode* node);
 
 namespace blender::nodes {
 

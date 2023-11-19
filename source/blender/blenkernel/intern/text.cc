@@ -2135,8 +2135,22 @@ static bool txt_select_unprefix(Text *text, const char *remove, const bool requi
   return changed_any;
 }
 
+
+static const char* txt_get_comment_prefix(Text *text) {
+  const char *prefix = "#";
+
+  // Use C-style comments in GLSL files.
+  if (BLI_str_endswith(text->id.name, ".glsl")) {
+    prefix = "//";
+  }
+
+  return prefix;
+}
+
 void txt_comment(Text *text, const char *prefix)
 {
+  const char *prefix = txt_get_comment_prefix(text);
+
   if (ELEM(nullptr, text->curl, text->sell)) {
     return;
   }
@@ -2147,6 +2161,8 @@ void txt_comment(Text *text, const char *prefix)
 
 bool txt_uncomment(Text *text, const char *prefix)
 {
+  const char *prefix = txt_get_comment_prefix(text);
+
   if (ELEM(nullptr, text->curl, text->sell)) {
     return false;
   }

@@ -118,7 +118,7 @@ void ED_text_format_register_py();
 void ED_text_format_register_osl();
 void ED_text_format_register_pov();
 void ED_text_format_register_pov_ini();
-
+void ED_text_format_register_glsl();
 /**
  * Checks the specified source string #text for a string literal in #string_literals array.
  * This string literal must start at the beginning of the source string.

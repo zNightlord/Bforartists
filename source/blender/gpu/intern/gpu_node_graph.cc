@@ -26,6 +26,13 @@
 #include "gpu_material_library.h"
 #include "gpu_node_graph.h"
 
+// For runtime library loading
+#include "BKE_text.h"
+#include "DNA_text_types.h"
+#include "BKE_node.h"
+#include "NOD_node_declaration.hh"
+#include "NOD_socket_declarations.hh"
+
 /* Node Link Functions */
 
 static GPUNodeLink *gpu_node_link_create()
@@ -817,6 +824,115 @@ static bool gpu_stack_link_v(GPUMaterial *material,
   return true;
 }
 
+
+void GPU_material_library_text_add(Text* text, bool overwrite)
+{
+  if (overwrite) {
+    gpu_material_library_runtime_remove(text->id.name);
+  }
+
+  size_t txt_len;
+  char* code = txt_to_buf(text, &txt_len);
+  gpu_material_library_runtime_add(text->id.name, code);
+}
+
+// TODO(Late) this should be moved somewhere else. Not sure where though
+void GPU_material_node_decl_from_function(
+        void *r_declaration,
+        const char* func_name)
+{
+  using namespace blender::nodes;
+
+  GPUFunction *func = gpu_material_library_lookup_function(func_name);
+
+  NodeDeclaration &declaration = *(NodeDeclaration*)r_declaration;
+
+  if (func == nullptr) {
+    std::cout << "GPUFunction " << func_name << " not found" << std::endl;
+    return;
+  }
+  for (int i = 0; i < func->totparam; i++) {
+    std::unique_ptr<SocketDeclaration> sock;
+    bool valid = true;
+
+    switch (func->paramtype[i]) {
+      case GPU_FLOAT:
+        sock = std::make_unique<decl::Float>();
+        break;
+      case GPU_VEC2:
+      case GPU_VEC3:
+        sock = std::make_unique<decl::Vector>();
+        break;
+      case GPU_VEC4:
+        sock = std::make_unique<decl::Color>();
+        break;
+      case GPU_CLOSURE:
+        sock = std::make_unique<decl::Shader>();
+        break;
+      case GPU_MAT3:
+      case GPU_MAT4:
+      case GPU_TEX1D_ARRAY:
+      case GPU_TEX2D:
+      case GPU_TEX2D_ARRAY:
+      case GPU_TEX3D:
+      case GPU_ATTR:
+      case GPU_NONE:
+        // We set unusable socket types to float sockets as a fallback.
+        // The shader will fail to compile...
+        // TODO Not the right place for this - maybe use GPU_NONE?
+        sock = std::make_unique<decl::Float>();
+        valid = false;
+        break;
+    }
+
+    auto name = [](eGPUType type) -> const char* {
+      switch (type) {
+        case GPU_NONE:
+        case GPU_FLOAT:
+          return "Value";
+        case GPU_VEC2:
+        case GPU_VEC3:
+          return "Vector";
+        case GPU_VEC4:
+          return "Color";
+        case GPU_MAT3:
+        case GPU_MAT4:
+        case GPU_TEX1D_ARRAY:
+        case GPU_TEX2D:
+        case GPU_TEX2D_ARRAY:
+        case GPU_TEX3D:
+        case GPU_CLOSURE:
+        case GPU_ATTR:
+          break;
+      }
+      return "Unknown";
+    };
+
+    sock->in_out = func->paramqual[i] == FUNCTION_QUAL_OUT ? SOCK_OUT : SOCK_IN;
+    if (func->runtimemeta) {
+      sock->name = std::string(func->runtimemeta->paramname[i]);
+    } else {
+      sock->name = std::string(name(func->paramtype[i])) + "_" + std::to_string(i);
+    }
+    // TODO should the identifiers be based only on input/output index?
+    sock->identifier = std::string(sock->name);
+
+    if (!valid) {
+      sock->name = "<Invalid Type>";
+    }
+
+    switch (sock->in_out) {
+      case SOCK_IN:
+        declaration.inputs.append(std::move(sock));
+        break;
+      case SOCK_OUT:
+        declaration.outputs.append(std::move(sock));
+        break;
+    }
+  }
+}
+
+
 bool GPU_stack_link(GPUMaterial *material,
                     const bNode *bnode,
                     const char *name,
@@ -888,6 +1004,7 @@ void gpu_node_graph_free_nodes(GPUNodeGraph *graph)
   graph->outlink_volume = nullptr;
   graph->outlink_displacement = nullptr;
   graph->outlink_thickness = nullptr;
+  graph->outlink_jnpr_color = nullptr;
 }
 
 void gpu_node_graph_free(GPUNodeGraph *graph)
@@ -941,6 +1058,7 @@ void gpu_node_graph_prune_unused(GPUNodeGraph *graph)
   gpu_nodes_tag(graph->outlink_volume, GPU_NODE_TAG_VOLUME);
   gpu_nodes_tag(graph->outlink_displacement, GPU_NODE_TAG_DISPLACEMENT);
   gpu_nodes_tag(graph->outlink_thickness, GPU_NODE_TAG_THICKNESS);
+  gpu_nodes_tag(graph->outlink_jnpr_color, GPU_NODE_TAG_JNPR_COLOR);
 
   LISTBASE_FOREACH (GPUNodeGraphOutputLink *, aovlink, &graph->outlink_aovs) {
     gpu_nodes_tag(aovlink->outlink, GPU_NODE_TAG_AOV);

@@ -21,3 +21,8 @@ void node_output_material_thickness(float thickness, out float out_thickness)
 {
   out_thickness = thickness;
 }
+
+void node_output_material_jnpr_color(vec4 color, float alpha, out vec4 out_color)
+{
+  out_color = vec4(color.xyz, alpha);
+}
