@@ -22,9 +22,7 @@ jobs:
        git config --global --add safe.directory C:\Users\runneradmin\Bforartists\Bforartists
        git config --global user.email "you@example.com"
        git config --global user.name "Your Name"
-       git remote add shader https://projects.blender.org/lateasusual/blender.git
-       git fetch shader npr_juniper_project
-       git checkout npr_juniper_project
+       git checkout bforartists-juniper
      # git checkout dev-work
      # git merge origin/custom-wire-color
      # git merge origin/toolbar-assetshelf
@@ -32,13 +30,13 @@ jobs:
      # git merge origin/anim-motion-curve
      # git merge origin/draw-nla   
      # git clone -b work-sequencer https://github.com/zNightlord/Bforartists.git
-    - name: Cache library
-      uses: actions/cache@v3
-      with:
-        key: windows
-        path: |
-          C:\Users\runneradmin\Bforartists\lib
-          !C:\Users\runneradmin\Bforartists\Bforartists
+    # - name: Cache library
+    #   uses: actions/cache@v3
+    #   with:
+    #     key: windows
+    #     path: |
+    #       C:\Users\runneradmin\Bforartists\lib
+    #       !C:\Users\runneradmin\Bforartists\Bforartists
     - name: Svn library
       run: |
         if (!(test-path "C:\Users\runneradmin\Bforartists\lib\")) {
