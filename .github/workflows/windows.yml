@@ -51,12 +51,12 @@ jobs:
     - name: Make
       run: |
        cd ~\Bforartists\Bforartists
-       .\make.bat ninja ${{ env.CONFIG }}
+       .\make.bat ${{ env.CONFIG }}
     - name: Make 2
       if: success() || failure()
       run: |
         cd ~\Bforartists\Bforartists
-        .\make.bat ninja ${{ env.CONFIG }}
+        .\make.bat ${{ env.CONFIG }}
     - name: Show dir
       run: |
         cd ~\Bforartists
