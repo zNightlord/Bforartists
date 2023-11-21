@@ -1842,6 +1842,21 @@ typedef struct SceneEEVEE {
   float light_threshold;
 } SceneEEVEE;
 
+typedef struct SceneNPR {
+  int npr_test_val_0;
+  int npr_test_val_1;
+  float npr_test_val_2; 
+  float npr_test_val_3;
+  float npr_test_val_4; 
+  float npr_test_val_5;
+  float npr_test_val_6; 
+  float npr_test_val_7;
+  float npr_test_val_8; 
+  float npr_test_val_9;
+  float npr_test_val_10; 
+  float npr_test_val_11;
+} SceneNPR;
+
 typedef struct SceneGpencil {
   float smaa_threshold;
   char _pad[4];
@@ -1991,6 +2006,7 @@ typedef struct Scene {
 
   struct SceneDisplay display;
   struct SceneEEVEE eevee;
+  struct SceneNPR npr; 
   struct SceneGpencil grease_pencil_settings;
 } Scene;
 
@@ -2732,6 +2748,15 @@ enum {
   SCE_DISPLAY_AA_SAMPLES_11 = 11,
   SCE_DISPLAY_AA_SAMPLES_16 = 16,
   SCE_DISPLAY_AA_SAMPLES_32 = 32,
+};
+
+/** \} */
+
+
+/** #SceneNPR.flag */
+enum {
+  SCE_STROKEGEN_MESH_FILTERING_ON = 0,
+  SCE_STROKEGEN_MESH_FILTERING_OFF = 0,
 };
 
 /** \} */

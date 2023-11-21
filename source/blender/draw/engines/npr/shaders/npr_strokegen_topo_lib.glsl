@@ -67,7 +67,7 @@ uvec4 wing_verts_to_line_adj(uvec4 wing_verts)
 /*    v2
  *   /  \
  *  /    \                
- * v1>-->v3 for wedge e, vi => ssbo_edge_to_verts_[e*4+i] , i=0,1,2,3            
+ * v1>-->v3 for wedge e, vi => ssbo_edge_to_vert_[e*4+i] , i=0,1,2,3            
  *  \    /  
  *   \  /   Face winding               
  *    v0    013, 123                                  
@@ -103,6 +103,22 @@ bool is_border_edge_front_facing(uint ifacefront)
  *       \\ \/ //      
  *        \\  //        
  *          v0         
+*/
+/*          v0           
+ *        //  \\         v  = vertex     
+ *       // /\ \\        he = half-edge     
+ *      /W h  1 3\       F  = face     
+ *     /0 e    e W\      W  = wedge     
+ *    // 2  F1  h \\            
+ *   // /--eh-0--> \\    short cuts 
+ *    v1=== W4 ===v3     ----------
+ *   \\ <--he-0--/ //    iwedge, ivert, ihe, iface: marks of the current wedge, vertex, half-edge, face       
+ *    \\ h  F0  2 //     cwedge: center wedge W4
+ *     \W e    e 2/      bwedge: border wedges W0~3
+ *      \1 1  h W/       
+ *       \\ \/ //      
+ *        \\  //        
+ *          v2         
 */
 #define NULL_EDGE 0xffffffffu /* non-existing wedges */
 uint mark__border_wedge_to_oppo_vert(uint wedge)
@@ -150,6 +166,20 @@ uint mark__wedge_to_he(uint face, uint wedge)
         return wedge == 4u ? 0u : wedge; /* 4->0, 1->1, 2->2 */
     /* if (face == 1u) */
     return wedge == 4u ? 0u : (wedge+2u)%4u; /* 4->0, 3->1, 0->2 */
+}
+uvec3 mark__face_to_winded_verts(uint face)
+{
+    if (face == 0u)
+        return uvec3(1, 3, 0); /* 013 */
+    /* if (face == 1u) */
+    return uvec3(3, 1, 2); /* 123 */ 
+}
+uvec3 mark__face_to_winded_wedges(uint face)
+{
+    uvec3 res; 
+    for (uint he = 0u; he < 3u; ++he)
+        res[he] = mark__he_to_wedge(face, he); 
+    return res; 
 }
 
 /* 
@@ -290,6 +320,17 @@ WedgeFloodingPointer decode_wedge_flooding_pointer(uint wfp_enc)
     return wfp; 
 }
 
+#endif
+
+
+
+
+
+
+
+
+#if defined(QUADRICS_FILTERING_INCLUDE)
+
 /* Quardratic Filtering */
 struct Quadric
 {
@@ -322,7 +363,99 @@ Quadric decode_quadric(vec4 packed_0, vec4 packed_1, vec3 packed_2)
     return q; 
 }
 
-Quadric compute_wedge_quadric(vec3 p0, vec3 p1, vec3 p2, vec3 p3, vec3 cam_pos_ws, out vec3 wedge_normal) /* world pos of p0~3 */
+/* minimizing [nT(x-p)]^2 */
+mat4 compute_plane_quadric(vec3 n, vec3 p)
+{
+    vec4 nq = vec4(n.xyz, 1.0f);
+    nq.w = -dot(nq.xyz, p); 
+    return mat4(nq.x * nq, nq.y * nq, nq.z * nq, nq.w * nq);
+}
+
+mat4 compute_tri_quadric(vec3 p0, vec3 p1, vec3 p2)
+{
+    mat3 det = mat3(p0, p1, p2); 
+    vec4 nq = vec4(cross(p0, p1)+cross(p1, p2)+cross(p2,p0), -determinant(det)); 
+    return mat4(nq.x * nq, nq.y * nq, nq.z * nq, nq.w * nq); 
+}
+
+/* minimizing ||x-p||^2 */
+mat4 compute_point_quadric(vec3 p)
+{ 
+    mat4 q = mat4(1.0);
+    q[3] = vec4(-p.xyz, dot(p, p));
+    q[0][3] = -p.x; 
+    q[1][3] = -p.y; 
+    q[2][3] = -p.z; 
+
+    return q; 
+}
+
+mat4 compute_view_binormal_plane_quadric(vec3 n, vec3 p, vec3 cam_pos_ws)
+{
+    vec3 v = normalize(cam_pos_ws - p); 
+    vec3 bn = normalize(cross(n, v));
+
+    return compute_plane_quadric(bn, p);  
+}
+
+mat4 compute_view_tagent_plane_quadric(vec3 n, vec3 p, vec3 cam_pos_ws)
+{
+    vec3 v = normalize(cam_pos_ws - p); 
+    vec3 bn = normalize(cross(n, v));
+    vec3 t = normalize(cross(bn, n)); 
+
+    return compute_plane_quadric(t, p);  
+}
+
+mat4 compute_view_plane_quadric(vec3 n, vec3 p, vec3 cam_pos_ws)
+{
+    vec3 v = normalize(cam_pos_ws - p); 
+    vec3 bn = normalize(cross(n, v));
+    vec3 t = normalize(cross(bn, n)); 
+    vec3 n_view_proj = normalize(cross(t, bn));
+
+    return compute_plane_quadric(n_view_proj, p);  
+}
+
+float compute_view_plane_dist(vec3 n0, vec3 p0, vec3 cam_pos_ws, vec3 p1)
+{
+    vec3 v = normalize(cam_pos_ws - p0); 
+    vec3 bn = normalize(cross(n0, v));
+    vec3 t = normalize(cross(bn, n0)); 
+
+    float d = dot(p0, t); 
+    return abs(dot(p1, t) - d); 
+}
+
+/* Match with "GPUMeshQuadricFilter"
+ */ 
+#define GEOM_NORMAL_PLANE 0u
+#define VIEW_NORMAL_PLANE 1u
+#define VIEW_TANGENT_PLANE 2u
+#define VIEW_BINORMAL_PLANE 3u
+mat4 compute_filter_quadric(vec3 n, vec3 p, vec3 cam_pos_ws, float silouetteness, float pos_reg_weight)
+{
+    mat4 res; 
+
+    if (pcs_filtered_quadric_type_ == GEOM_NORMAL_PLANE)
+        res = compute_plane_quadric(n, p); 
+    else if (pcs_filtered_quadric_type_ == VIEW_NORMAL_PLANE)
+        res = (0.2f + silouetteness) * compute_view_plane_quadric(n, p, cam_pos_ws); 
+    else if (pcs_filtered_quadric_type_ == VIEW_TANGENT_PLANE)
+        res = (0.2f + silouetteness) * compute_view_tagent_plane_quadric(n, p, cam_pos_ws);
+    else if (pcs_filtered_quadric_type_ == VIEW_BINORMAL_PLANE)
+        res = (0.2f + silouetteness) * compute_view_binormal_plane_quadric(n, p, cam_pos_ws);
+        
+    res += pos_reg_weight * compute_point_quadric(p); /* regularization */
+
+    return res;
+}
+
+
+Quadric compute_wedge_quadric(
+    vec3 p0, vec3 p1, vec3 p2, vec3 p3, vec3 cam_pos_ws, float position_regularize_weight, 
+    out vec3 wedge_normal
+) /* world pos of p0~3 */
 { 
     Quadric q; 
     
@@ -333,20 +466,31 @@ Quadric compute_wedge_quadric(vec3 p0, vec3 p1, vec3 p2, vec3 p3, vec3 cam_pos_w
     vec3 v13_cross_v10 = cross(v13, v10); 
     vec3 v12_cross_v13 = cross(v12, v13); 
 
+
+
     /* Averaged area */
     q.area = ((length(v13_cross_v10)) + length(v12_cross_v13)) * .25f; 
 
-    /* Quadric for a plane is nnT where n is the plane equation using normalized normal */
-	vec4 n0 = vec4(normalize(v13_cross_v10).xyz, 1.0f);
-    n0.w = -dot(n0.xyz, (p1+p3+p0)/3.0f); 
-    /* TODO: add camera influence here */
-    mat4 q0 = mat4(n0.x * n0, n0.y * n0, n0.z * n0, n0.w * n0);
 
-	vec4 n2 = vec4(normalize(v12_cross_v13).xyz, 1.0f);
-	n2.w = -dot(n2.xyz, (p1+p2+p3)/3.0f); 
-    mat4 q2 = mat4(n2.x * n2, n2.y * n2, n2.z * n2, n2.w * n2);
+    /* Quadric */
+	vec3 n0 = normalize(v13_cross_v10);
+    vec3 c0 = (p0 + p1 + p3) / 3.0f;     
+    float ndv0 = dot(normalize(cam_pos_ws - c0), n0); 
 
+	vec3 n2 = normalize(v12_cross_v13);
+    vec3 c2 = (p1 + p2 + p3) / 3.0f; 
+    float ndv2 = dot(normalize(cam_pos_ws - c2), n2);
+
+    float silouetteness = .0f; 
+    if (sign(ndv0) != sign(ndv2))
+    {
+        silouetteness = abs(ndv0 - ndv2) * .5f; 
+    }
+
+    mat4 q0 = compute_filter_quadric(n0, c0, cam_pos_ws, silouetteness, position_regularize_weight); 
+    mat4 q2 = compute_filter_quadric(n2, c2, cam_pos_ws, silouetteness, position_regularize_weight); 
     q.quadric = (q0 + q2) * .5f;
+
     wedge_normal = normalize((n0.xyz + n2.xyz) * .5f); 
 
 	return q; 
@@ -360,19 +504,19 @@ float gaussian(float dist, float tau)
 float compute_edge_quadric_weight(vec3 p_v, vec3 p_e, Quadric q_e)
 {
     float dist = distance(p_v, p_e); 
-    float geometry_weight = q_e.area * gaussian(dist, 0.01f); 
+    float geometry_weight = q_e.area * gaussian(dist, 1.0f); 
     return geometry_weight; 
 }
 
-float compute_vert_quadric_weight(vec3 p_v, Quadric q_v, vec3 p_x, Quadric q_x)
+float compute_vert_quadric_weight(vec3 p_v, Quadric q_v, vec3 p_x, Quadric q_x, float dev_q, float dev_g)
 { /* bilateral filtering */
     float dist = distance(p_v, p_x); 
     
     vec4 v = vec4(p_v, 1.0f); 
     float quadric_dist_v2qx = dot(v, q_x.quadric * v); /* vT Q v */
-    float quadric_weight = gaussian(sqrt(abs(quadric_dist_v2qx)), 0.1f); 
+    float quadric_weight = gaussian(sqrt(abs(quadric_dist_v2qx)), dev_q); 
 
-    float geometry_weight = q_v.area * gaussian(dist, 0.01f); 
+    float geometry_weight = /* q_v.area *  */gaussian(dist, dev_g); 
     
     return geometry_weight * quadric_weight; 
 }
@@ -407,6 +551,8 @@ VertWedgeListHeader decode_vert_wedge_list_header(uint vwlh_enc)
     vwlh.ivert = ((vwlh_enc & 3u));
     return vwlh; 
 }
+
+#define NULL_FILTERED_VERT 0xffffffffu/* used in vert-to-filtered_vert buffer */
 #endif
 
 

@@ -423,7 +423,7 @@ class RENDER_PT_eevee_screen_space_reflections(RenderButtonsPanel, Panel):
         layout.use_property_split = True
 
         scene = context.scene
-        props = scene.eevee
+        props = scene.eevee 
 
         col = layout.column()
         col.active = props.use_ssr
@@ -883,6 +883,39 @@ class RENDER_PT_simplify_greasepencil(RenderButtonsPanel, Panel, GreasePencilSim
     bl_options = {'DEFAULT_CLOSED'}
 
 
+class RENDER_PT_npr_test(RenderButtonsPanel, Panel):
+    bl_label = "Test"
+    bl_options = {'DEFAULT_CLOSED'}
+    COMPAT_ENGINES = {
+        'BLENDER_NPR'
+    }
+
+    def draw(self, context):
+        rd = context.scene.render
+        layout = self.layout
+        layout.use_property_split = True
+        layout.active = True
+
+        scene = context.scene
+        props = scene.npr
+
+        col = layout.column()
+        # col.operator("", text="")
+        col.prop(props, "npr_test_val_0", text="")
+        col.prop(props, "npr_test_val_1", text="")
+        col.prop(props, "npr_test_val_2", text="")
+        col.prop(props, "npr_test_val_3", text="")
+        col.prop(props, "npr_test_val_4", text="")
+        col.prop(props, "npr_test_val_5", text="")
+        col.prop(props, "npr_test_val_6", text="")
+        col.prop(props, "npr_test_val_7", text="")
+        col.prop(props, "npr_test_val_8", text="")
+        col.prop(props, "npr_test_val_9", text="")
+        col.prop(props, "npr_test_val_10", text="")
+        col.prop(props, "npr_test_val_11", text="")
+
+
+
 classes = (
     RENDER_PT_context,
     RENDER_PT_eevee_sampling,
@@ -921,6 +954,7 @@ classes = (
     RENDER_PT_simplify_viewport,
     RENDER_PT_simplify_render,
     RENDER_PT_simplify_greasepencil,
+    RENDER_PT_npr_test, 
 )
 
 if __name__ == "__main__":  # only for live edit.

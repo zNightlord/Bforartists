@@ -77,11 +77,10 @@ void main()
             }
         }
     }
+    /* wfptr.is_seed = valid_thread; */
 
-    #if !defined(_KERNEL_MULTICOMPILE__WEDGE_FLOODING__ITER__LAST_ITER)
-        if (valid_thread)
-            ssbo_wedge_flooding_pointers_out_[EdgeID] = encode_wedge_flooding_pointer(wfptr); 
-    #endif
+    if (valid_thread)
+        ssbo_wedge_flooding_pointers_out_[EdgeID] = encode_wedge_flooding_pointer(wfptr); 
  
     #if defined(_KERNEL_MULTICOMPILE__WEDGE_FLOODING__ITER__LAST_ITER)
         /* Compact seed edges */
@@ -90,11 +89,20 @@ void main()
         
         if (is_seed_edge) /* Store compacted seed edge */
             ssbo_filtered_edge_to_edge_[compacted_idx] = EdgeID;   
+
+        if (valid_thread)
+        {
+            uint num_all_edges = pcs_edge_id_offset_ + pcs_edge_count_; 
+            uint addr_edge_to_filtered_edge = ssbo_edge_to_edges_addr__edge_to_filtered_edge(EdgeID, num_all_edges); 
+            ssbo_edge_to_edges_[addr_edge_to_filtered_edge] = is_seed_edge ? compacted_idx : NULL_EDGE;
+        }
     #endif
 
 #endif
 }
 #endif
+
+
 
 
 #if defined(_KERNEL_MULTICOMPILE__COMPACT_FILTERED_VERTS)
@@ -169,9 +177,18 @@ void main()
         vwlh.wedge_id = wedge_id; 
         vwlh.ivert = ivert; 
         ssbo_vert_to_edge_list_header_[VertID] = encode_vert_wedge_list_header(vwlh);
+
+        uint num_all_verts = pcs_vert_id_offset_ + pcs_vert_count_;
+        uint addr_vert_to_filtered_vert = ssbo_vert_to_edge_list_header_addr__vert_to_filtered_vert(VertID, num_all_verts);
+        ssbo_vert_to_edge_list_header_[addr_vert_to_filtered_vert] = vert_linked_to_seeded_wedge ? compacted_idx : NULL_FILTERED_VERT;
     }
 }
 #endif
+
+
+
+
+
 
 
 
@@ -341,7 +358,9 @@ void main()
 
     vec3 wedge_normal; 
     Quadric q_e = compute_wedge_quadric(
-        vpos_wedge[0], vpos_wedge[1], vpos_wedge[2], vpos_wedge[3], cam_pos_ws, 
+        vpos_wedge[0], vpos_wedge[1], vpos_wedge[2], vpos_wedge[3], 
+        cam_pos_ws, 
+        0.05f, 
         /*out*/ wedge_normal
     ); 
     if (valid_thread)
@@ -359,8 +378,12 @@ void main()
     bool valid_thread = (idx.x < NumFilteredVerts); 
     if (!valid_thread) return; /* quit if not valid thread */
     
+    uint num_all_edges = pcs_edge_id_offset_ + pcs_edge_count_; 
+    uint num_all_verts = pcs_vert_id_offset_ + pcs_vert_count_; 
+
     uint vert_id_global = ssbo_filtered_vert_to_vert_[FilteredVertID]; 
     vec3 vpos = ld_vbo(vert_id_global);
+
 
     Quadric q_v; 
     Quadric q_v_filtered; 
@@ -375,13 +398,14 @@ void main()
     float filtered_vert_normal_weight = .0f; 
 #else
     q_v = load_vert_quadric(FilteredVertID); 
-    weight_sum = compute_vert_quadric_weight(vpos, q_v, vpos, q_v); 
+    float dev_q = pcs_quadric_deviation_; 
+    float dev_g = pcs_geodist_deviation_; 
+    weight_sum = 1.0f; // compute_vert_quadric_weight(vpos, q_v, vpos, q_v, dev_q, dev_g); 
     q_v_filtered.quadric = weight_sum * q_v.quadric;
     q_v_filtered.area = q_v.area;
 #endif
-    
 
-    
+
     { /* Rotate wedge around the vert */
         VertWedgeListHeader vwlh = decode_vert_wedge_list_header(ssbo_vert_to_edge_list_header_[vert_id_global]); 
         uint ivert_oppo = (vwlh.ivert == 1u) ? 3 : 1; 
@@ -393,21 +417,37 @@ void main()
     #define MAX_WEDGE_ROTATES 16u
         uint rotate_step = 0u; 
         do {
-            vec3 vpos_oppo = ld_vbo(ssbo_edge_to_vert_[awi.wedge_id*4u + ivert_oppo]);
+            uint vid_oppo = ssbo_edge_to_vert_[awi.wedge_id*4u + ivert_oppo]; 
+            vec3 vpos_oppo = ld_vbo(vid_oppo);
 
 #if defined(_KERNEL_MULTICOMPILE__MESH_FILTERING__VERT_QUADRIC_INIT)
-            Quadric q_e = load_wedge_quadric(awi.wedge_id);
+            uint addr = ssbo_edge_to_edges_addr__edge_to_filtered_edge(awi.wedge_id, num_all_edges); 
+            uint awi_wedge_id_filtered = ssbo_edge_to_edges_[addr]; 
+
+            Quadric q_e = load_wedge_quadric(awi_wedge_id_filtered);
             q_v_filtered.area += q_e.area; 
 
             float w = compute_edge_quadric_weight(vpos, (vpos_oppo + vpos) * .5f, q_e);
             q_v_filtered.quadric += w * q_e.quadric;
 
-            filtered_vert_normal += q_e.area * load_filtered_edge_normal(awi.wedge_id); 
+            filtered_vert_normal += q_e.area * load_filtered_edge_normal(awi_wedge_id_filtered); 
             filtered_vert_normal_weight += q_e.area; 
 #else
-            Quadric q_oppo = load_vert_quadric(awi.wedge_id); 
-            float w = compute_vert_quadric_weight(vpos, q_v, vpos_oppo, q_oppo);
-            q_v_filtered.quadric += w * q_oppo.quadric; 
+            uint addr = ssbo_vert_to_edge_list_header_addr__vert_to_filtered_vert(vid_oppo, num_all_verts); 
+            uint vid_filtered = ssbo_vert_to_edge_list_header_[addr]; 
+
+            float w = .0f; 
+            Quadric q_oppo; 
+            if (vid_filtered != NULL_FILTERED_VERT)
+                q_oppo = load_vert_quadric(vid_filtered); 
+            else{
+                uint addr = ssbo_edge_to_edges_addr__edge_to_filtered_edge(awi.wedge_id, num_all_edges); 
+                uint awi_wedge_id_filtered = ssbo_edge_to_edges_[addr]; 
+                q_oppo = load_wedge_quadric(awi_wedge_id_filtered);
+                vpos_oppo = .5f * (vpos + vpos_oppo); 
+            }
+            w = compute_vert_quadric_weight(vpos, q_v, vpos_oppo, q_oppo, dev_q, dev_g);
+            q_v_filtered.quadric += w * q_oppo.quadric;
 #endif
             weight_sum += w; 
 
@@ -434,7 +474,7 @@ void main()
         store_filtered_vert_normal(FilteredVertID, filtered_vert_normal);
 #endif
 
-#endif
+#endif 
 
 
 #if defined(_KERNEL_MULTICOMPILE__MESH_FILTERING__MOVE_VERTS)
@@ -449,6 +489,7 @@ void main()
     
     uint vert_id_global = ssbo_filtered_vert_to_vert_[FilteredVertID]; 
     vec3 vpos = ld_vbo(vert_id_global);
+    vec3 vpos_orig = vpos; 
 
     #if defined(_KERNEL_MULTICOMPILE__MESH_FILTERING__MOVE_VERTS_CONSTRAINED_SOLVE)
         mat3 A = mat3(q_v.quadric); /* slice upper 3x3 */
@@ -456,11 +497,20 @@ void main()
         float lambda = -(dot(vpos, A * vpos) + dot(b, nv)) / dot(nv, A * nv); 
         vpos += nv * lambda; 
     #else /* Directly solve by minimizing the quadrics */
-        dmat4 q_d = dmat4(q_v.quadric); 
+        mat4 q_d = mat4(q_v.quadric); 
+ 
+        mat4 q_reg = compute_plane_quadric(nv, vpos_orig); 
+        q_d = q_d + 1.0f * q_reg; /*damping*/
+
         dmat3 A = dmat3(q_d); 
         dvec3 b = dvec3(q_d[3][0], q_d[3][1], q_d[3][2]); 
         vpos = vec3(-inverse(A)*b); 
     #endif
+
+    vpos -= pcs_positiion_regularization_scale_ * nv; 
+
+    if (any(isnan(vpos)) || any(isinf(vpos)))
+        vpos = vpos_orig; 
 
     if (valid_thread)
         store_vbo(vert_id_global, vpos);

@@ -276,6 +276,42 @@ using namespace draw;
   }
   /** } */
 
+  
+  /* Addressing - topology for filtered mesh edge/verts 
+   * - data is temporary and only used in mesh filtering passes
+   * - hence we reuse the remaining space of original topo buffers
+  */
+  static inline uint ssbo_edge_to_edges_addr__edge_to_filtered_edge(uint edge_id, uint num_all_edges)
+  { 
+    return num_all_edges * 4u + edge_id;
+  }
+  static inline uint ssbo_edge_to_edges_addr__filtered_edge_to_filtered_edges(
+    uint filtered_edge_id, uint num_all_edges
+  ){ 
+    uint base_addr = ssbo_edge_to_edges_addr__edge_to_filtered_edge(num_all_edges, num_all_edges); 
+    return ((base_addr + 3u) / 4u) * 4u + 4u * filtered_edge_id;
+  }
+
+  static inline uint ssbo_edge_to_vert_addr__filtered_edge_to_filtered_verts(
+    uint filtered_edge_id, uint num_all_edges
+  ){
+    return num_all_edges * 4u + filtered_edge_id * 4u;
+  }
+
+  static inline uint ssbo_vert_to_edge_list_header_addr__vert_to_filtered_vert(
+    uint vert_id, uint num_all_verts
+  ){
+    return ((num_all_verts + 3u) / 4u) * 4u + vert_id; 
+  }
+  static inline uint ssbo_vert_to_edge_list_header_addr__filtered_vert_to_filtered_edge(
+    uint filtered_vert_id, uint num_all_verts
+  ){
+    uint base_addr = ssbo_vert_to_edge_list_header_addr__vert_to_filtered_vert(num_all_verts, num_all_verts);
+    return ((base_addr + 3u) / 4u) * 4u + filtered_vert_id;
+  }
+  /** } */
+
+
   /* Addressing - tex2d_contour_pix_marks_ */
 #ifndef GPU_SHADER
 #  define CONTOUR_PIX_MARK_COMPRESS_RECT_SIZE (int2(8u, 4u))

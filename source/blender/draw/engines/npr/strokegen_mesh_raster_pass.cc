@@ -29,7 +29,10 @@ void npr::strokegen::StrokegenMeshRasterPass::init_pass(
 
   DRWState drw_state = DRW_STATE_NO_DRAW;
   drw_state |= (DRW_STATE_WRITE_COLOR); 
-  drw_state |= (DRW_STATE_DEPTH_LESS_EQUAL/*DRW_STATE_DEPTH_ALWAYS*/ | DRW_STATE_WRITE_DEPTH); // no z-write, lequal
+  drw_state |= (
+    (draw_settings.draw_hidden_lines ? DRW_STATE_DEPTH_ALWAYS : DRW_STATE_DEPTH_LESS_EQUAL)
+    | DRW_STATE_WRITE_DEPTH
+  ); // z-write, lequal
   drw_state |= (DRW_STATE_STENCIL_ALWAYS); 
   state_set(drw_state, clip_planes.size());
 

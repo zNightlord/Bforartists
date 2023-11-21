@@ -225,6 +225,22 @@
                     SCE_EEVEE_SSR_HALF_RESOLUTION | SCE_EEVEE_SHADOW_SOFT, \
   }
 
+#define _DNA_DEFAULT_SceneNPR \
+  { \
+    .npr_test_val_0 = 1, \
+    .npr_test_val_1 = 1, \
+    .npr_test_val_2 = 1.0f, \
+    .npr_test_val_3 = 1.0f, \
+    .npr_test_val_4 = 1.0f, \
+    .npr_test_val_5 = 1.0f, \
+    .npr_test_val_6 = 1.0f, \
+    .npr_test_val_7 = 1.0f, \
+    .npr_test_val_8 = 1.0f, \
+    .npr_test_val_9 = 1.0f, \
+    .npr_test_val_10 = 1.0f, \
+    .npr_test_val_11 = 1.0f, \
+  }
+
 #define _DNA_DEFAULT_Scene \
   { \
     .cursor = _DNA_DEFAULT_View3DCursor, \

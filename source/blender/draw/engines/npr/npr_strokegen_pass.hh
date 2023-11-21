@@ -106,10 +106,27 @@ public:
   int num_total_mesh_verts;
   int num_total_mesh_edges;
   int num_total_mesh_tris;
+
   void init_per_mesh_pass();
-  void append_subpass_quadric_mesh_filtering();
   void append_subpass_fill_meshing_indirect_dispatch_args_();
   void append_subpass_meshing_wedge_flooding(int num_edges, int num_verts);
+  enum GPUMeshQuadricFilter {
+    GeomNormalPlane = 0,
+    ViewNormalPlane = 1,
+    ViewTangentPlane = 2,
+    ViewBinormalPlane = 3
+  };
+  struct GPUMeshFilteringParameters {
+    int num_filtering_iters;
+    int num_diffusion_iters;
+    float quadric_deviation;
+    float geodist_deviation;
+    float positiion_regularization_scale; 
+    GPUMeshQuadricFilter alternate_filter_0; 
+    GPUMeshQuadricFilter alternate_filter_1;
+    bool visualize_filtered_geom; 
+  } meshing_params;
+  void append_subpass_quadric_mesh_filtering(int num_edges, int num_verts, blender::npr::strokegen::StrokeGenPassModule::GPUMeshFilteringParameters& params);
   void append_subpass_extract_contour_edges(GPUBatch* gpu_batch_line_adj,
                                             ResourceHandle& rsc_handle,
                                             gpu::Batch* edge_batch,
@@ -119,7 +136,15 @@ public:
   void append_subpass_merge_line_adj_ibo(GPUBatch *gpu_batch_line_adj,
                                          gpu::GPUIndexBufType ib_type,
                                          int num_added_edges);
-  void append_per_mesh_pass(Object* ob, GPUBatch* gpu_batch_line_adj, GPUBatch* gpu_batch_surf, ResourceHandle& rsc_handle, const DRWView* drw_view);
+
+
+  void append_per_mesh_pass(
+      Object* ob,
+      GPUBatch* gpu_batch_line_adj,
+      GPUBatch* gpu_batch_surf,
+      ResourceHandle& rsc_handle,
+      const DRWView* drw_view
+      );
   void append_subpass_meshing_merge_verts(int num_verts_in, bool debug = false);
   void append_subpass_meshing_wedge_adjacency_and_init_flooding_ptr(int num_edges_in, int num_verts_in, bool debug = false); 
 

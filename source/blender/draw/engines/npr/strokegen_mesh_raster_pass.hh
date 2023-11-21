@@ -19,7 +19,10 @@ class StrokegenMeshRasterPass : public draw::PassMain {
   StrokegenMeshRasterPass(const char *name) : draw::PassMain(name)
   {
   }
-  
+
+  struct DrawSettings {
+    bool draw_hidden_lines; 
+  } draw_settings;
   void init_pass(StrokeGenShaderModule& shader_module, GPUTexturePoolModule& texture_module);
   void append_draw_subpass(StrokeGenShaderModule& shaders, GPUBufferPoolModule& buffers, GPUTexturePoolModule& textures);
 };

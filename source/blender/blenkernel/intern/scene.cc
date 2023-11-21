@@ -192,6 +192,11 @@ static void scene_init_data(ID *id)
   /* Anti-Aliasing threshold. */
   scene->grease_pencil_settings.smaa_threshold = 1.0f;
 
+  scene->npr.npr_test_val_0 = 1; 
+  scene->npr.npr_test_val_1 = 1; 
+  scene->npr.npr_test_val_2 = 1.0f; 
+  scene->npr.npr_test_val_3 = 1.0f; 
+
   {
     ParticleEditSettings *pset;
     pset = &scene->toolsettings->particle;
@@ -1749,6 +1754,7 @@ IDTypeInfo IDType_ID_SCE = get_type_info();
 const char *RE_engine_id_BLENDER_EEVEE = "BLENDER_EEVEE";
 const char *RE_engine_id_BLENDER_WORKBENCH = "BLENDER_WORKBENCH";
 const char *RE_engine_id_BLENDER_WORKBENCH_NEXT = "BLENDER_WORKBENCH_NEXT";
+const char *RE_engine_id_BLENDER_NPR = "BLENDER_NPR";
 const char *RE_engine_id_CYCLES = "CYCLES";
 
 void free_avicodecdata(AviCodecData *acd)

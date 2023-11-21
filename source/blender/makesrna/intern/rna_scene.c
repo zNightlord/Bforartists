@@ -1135,6 +1135,11 @@ static char *rna_SceneEEVEE_path(const PointerRNA *UNUSED(ptr))
   return BLI_strdup("eevee");
 }
 
+static char *rna_SceneNPR_path(const PointerRNA *UNUSED(ptr))
+{
+  return BLI_strdup("npr");
+}
+
 static char *rna_SceneGpencil_path(const PointerRNA *UNUSED(ptr))
 {
   return BLI_strdup("grease_pencil_settings");
@@ -7265,6 +7270,56 @@ static void rna_def_scene_display(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Shading Settings", "Shading settings for OpenGL render engine");
 }
 
+static void append_npr_render_debug_param_int(StructRNA *srna, PropertyRNA **prop, const char *name)
+{
+  *prop = RNA_def_property(srna, name, PROP_INT, PROP_NONE);
+  RNA_def_property_ui_text(*prop,
+                           "test",
+                           "test, "
+                           "test");
+  RNA_def_property_range(*prop, 0, INT_MAX);
+  RNA_def_property_override_flag(*prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
+  RNA_def_property_update(*prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
+}
+
+static void append_npr_render_debug_param_float(StructRNA *srna, PropertyRNA **prop, const char *name)
+{
+  *prop = RNA_def_property(srna, name, PROP_FLOAT, PROP_FACTOR);
+  RNA_def_property_override_flag(*prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
+  RNA_def_property_update(*prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
+  RNA_def_property_ui_text(*prop,
+                           "test",
+                           "test, "
+                           "test");
+  RNA_def_property_range(*prop, 0.0f, 100.0f);
+  RNA_def_property_override_flag(*prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
+  RNA_def_property_update(*prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
+}
+
+static void rna_def_scene_npr(BlenderRNA *brna)
+{
+  StructRNA *srna;
+  PropertyRNA *prop;
+
+  srna = RNA_def_struct(brna, "SceneNPR", NULL);
+  RNA_def_struct_path_func(srna, "rna_SceneNPR_path");
+  RNA_def_struct_ui_text(srna, "NPR", "NPR Renderer settings");
+
+  append_npr_render_debug_param_int(srna, &prop, "npr_test_val_0");
+  append_npr_render_debug_param_int(srna, &prop, "npr_test_val_1");
+  append_npr_render_debug_param_float(srna, &prop, "npr_test_val_2");
+  append_npr_render_debug_param_float(srna, &prop, "npr_test_val_3");
+  append_npr_render_debug_param_float(srna, &prop, "npr_test_val_4");
+  append_npr_render_debug_param_float(srna, &prop, "npr_test_val_5");
+  append_npr_render_debug_param_float(srna, &prop, "npr_test_val_6");
+  append_npr_render_debug_param_float(srna, &prop, "npr_test_val_7");
+  append_npr_render_debug_param_float(srna, &prop, "npr_test_val_8");
+  append_npr_render_debug_param_float(srna, &prop, "npr_test_val_9");
+  append_npr_render_debug_param_float(srna, &prop, "npr_test_val_10");
+  append_npr_render_debug_param_float(srna, &prop, "npr_test_val_11");
+
+}
+
 static void rna_def_scene_eevee(BlenderRNA *brna)
 {
   StructRNA *srna;
@@ -8348,6 +8403,11 @@ void RNA_def_scene(BlenderRNA *brna)
   RNA_def_property_struct_type(prop, "SceneEEVEE");
   RNA_def_property_ui_text(prop, "Eevee", "Eevee settings for the scene");
 
+  /* NPR */
+  prop = RNA_def_property(srna, "npr", PROP_POINTER, PROP_NONE);
+  RNA_def_property_struct_type(prop, "SceneNPR");
+  RNA_def_property_ui_text(prop, "NPR", "NPR settings for the scene");
+
   /* Grease Pencil */
   prop = RNA_def_property(srna, "grease_pencil_settings", PROP_POINTER, PROP_NONE);
   RNA_def_property_struct_type(prop, "SceneGpencil");
@@ -8371,6 +8431,7 @@ void RNA_def_scene(BlenderRNA *brna)
   rna_def_display_safe_areas(brna);
   rna_def_scene_display(brna);
   rna_def_scene_eevee(brna);
+  rna_def_scene_npr(brna); 
   rna_def_view_layer_aov(brna);
   rna_def_view_layer_lightgroup(brna);
   rna_def_view_layer_eevee(brna);

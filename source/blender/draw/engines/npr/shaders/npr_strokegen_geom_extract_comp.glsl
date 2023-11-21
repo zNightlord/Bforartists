@@ -142,7 +142,9 @@ bool is_contour_edge(
 
 	face_orient_012 = dot(view_dir, n0);
   	face_orient_321 = dot(view_dir, n3);
-	bool is_contour = is_back_face(face_orient_012) != is_back_face(face_orient_321);; 
+	bool is_contour = 
+		/* !is_back_face(face_orient_012) && !is_back_face(face_orient_321);  */
+		is_back_face(face_orient_012) != is_back_face(face_orient_321); 
 		/* (sign(face_orient_012) != sign(face_orient_321)); */
 
 	/* convexity test */

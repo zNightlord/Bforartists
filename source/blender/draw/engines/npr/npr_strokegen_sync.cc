@@ -60,10 +60,14 @@ static void draw_data_init_cb(struct DrawData *dd)
     GPUBatch *gpu_batch_line_adj = DRW_cache_object_edge_detection_get(ob, &mesh_is_manifold);
     GPUBatch *gpu_batch_surf = DRW_cache_object_surface_get(ob_ref.object);
 
-    if (gpu_batch_line_adj == nullptr) return;
-    if (gpu_batch_line_adj->elem == nullptr) return;
-    if (gpu_batch_surf == nullptr) return;
-    if (gpu_batch_surf->elem == nullptr) return;
+    if (gpu_batch_line_adj == nullptr)
+      return;
+    if (gpu_batch_line_adj->elem == nullptr)
+      return;
+    if (gpu_batch_surf == nullptr)
+      return;
+    if (gpu_batch_surf->elem == nullptr)
+      return;
 
     // Old way to do this:
     // See "draw_subdiv_build_tris_buffer"
@@ -75,15 +79,25 @@ static void draw_data_init_cb(struct DrawData *dd)
     //  strokegen_passes.dispatch_XXX(...);
     //  ... ... ...
 
-
-    if (inst_.strokegen_passes.boostrap_before_extract_first_batch)
-    {
+    if (inst_.strokegen_passes.boostrap_before_extract_first_batch) {
+      // bootstrapping
       inst_.strokegen_passes.append_per_mesh_pass(
-          ob, gpu_batch_line_adj, gpu_batch_surf /**gpu_batch_surf*/, rsc_handle, drw_view);  // bootstrapping
-      inst_.strokegen_passes.boostrap_before_extract_first_batch = false;  // switch off
+          ob,
+          gpu_batch_line_adj,
+          gpu_batch_surf /**gpu_batch_surf*/,
+          rsc_handle,
+          drw_view
+          );
+
+      inst_.strokegen_passes.boostrap_before_extract_first_batch = false; // switch off
     }
     inst_.strokegen_passes.append_per_mesh_pass(
-        ob, gpu_batch_line_adj, gpu_batch_surf /**gpu_batch_surf*/, rsc_handle, drw_view);
+        ob,
+        gpu_batch_line_adj,
+        gpu_batch_surf /**gpu_batch_surf*/,
+        rsc_handle,
+        drw_view
+        );
 
   }
 
