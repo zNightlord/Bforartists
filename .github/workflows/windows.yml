@@ -22,9 +22,8 @@ jobs:
        git config --global --add safe.directory C:\Users\runneradmin\Bforartists\Bforartists
        git config --global user.email "you@example.com"
        git config --global user.name "Your Name"
-       git checkout master
        git fetch
-       git merge origin/bforartists-juniper
+       git checkout bforartists-juniper
      # git checkout dev-work
      # git merge origin/custom-wire-color
      # git merge origin/toolbar-assetshelf
