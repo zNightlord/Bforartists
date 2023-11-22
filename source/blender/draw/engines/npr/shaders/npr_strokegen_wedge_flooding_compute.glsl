@@ -272,16 +272,16 @@ Quadric load_vert_quadric(uint FilteredVertID)
 
 void store_filtered_edge_normal(uint FilteredEdgeID, vec3 normal)
 {
-    ssbo_filtered_normal_edge_[FilteredEdgeID*3u + 0u] = normal.x;
-    ssbo_filtered_normal_edge_[FilteredEdgeID*3u + 1u] = normal.y;
-    ssbo_filtered_normal_edge_[FilteredEdgeID*3u + 2u] = normal.z;
+    ssbo_filtered_normal_edge_out_[FilteredEdgeID*3u + 0u] = normal.x;
+    ssbo_filtered_normal_edge_out_[FilteredEdgeID*3u + 1u] = normal.y;
+    ssbo_filtered_normal_edge_out_[FilteredEdgeID*3u + 2u] = normal.z;
 }
 vec3 load_filtered_edge_normal(uint FilteredEdgeID)
 {
     return vec3(
-        ssbo_filtered_normal_edge_[FilteredEdgeID*3u + 0u],
-        ssbo_filtered_normal_edge_[FilteredEdgeID*3u + 1u],
-        ssbo_filtered_normal_edge_[FilteredEdgeID*3u + 2u]
+        ssbo_filtered_normal_edge_in_[FilteredEdgeID*3u + 0u],
+        ssbo_filtered_normal_edge_in_[FilteredEdgeID*3u + 1u],
+        ssbo_filtered_normal_edge_in_[FilteredEdgeID*3u + 2u]
     );
 }
 
@@ -332,11 +332,105 @@ void main()
     const uint groupId = gl_LocalInvocationID.x; 
 	const uint idx = gl_GlobalInvocationID.x; 
     
+#if defined(_KERNEL_MULTICOMPILE__MESH_FILTERING__EDGE_NORMAL)
+    const uint FilteredEdgeID = idx.x; 
+    const uint NumFilteredEdges = ssbo_bnpr_mesh_pool_counters_.num_filtered_edges; 
+    uint num_all_edges = pcs_edge_id_offset_ + pcs_edge_count_; 
+
+    bool valid_thread = (idx.x < NumFilteredEdges); 
+    if (!valid_thread) return; /* quit if not valid thread */
+
+    uint wedge_id = ssbo_filtered_edge_to_edge_[FilteredEdgeID]; 
+    
+    uvec4 vids_wedge;
+    uint base_addr = wedge_id * 4u; 
+    for (uint ivert = 0; ivert < 4u; ++ivert)
+        vids_wedge[ivert] = ssbo_edge_to_vert_[base_addr+ivert];
+
+    vec3 vpos_curr[4]; 
+	for (uint ivert = 0; ivert < 4; ++ivert)
+		vpos_curr[ivert] = ld_vbo(vids_wedge[ivert]);  
+    
+    /* transform matrices, see "common_view_lib.glsl" */ 
+	mat4 view_to_world = ubo_view_matrices_.viewinv;
+	bool is_persp = (ubo_view_matrices_.winmat[3][3] == 0.0);
+	vec3 cam_pos_ws = view_to_world[3].xyz; /* see "#define cameraPos ViewMatrixInverse[3].xyz" */
+
+    vec3 normal_curr; 
+    if (pcs_first_iter_ > 0)
+    {
+        normal_curr = compute_wedge_normal(vpos_curr[0], vpos_curr[1], vpos_curr[2], vpos_curr[3]); 
+    }else{
+        normal_curr = load_filtered_edge_normal(FilteredEdgeID); 
+    }
+
+    float weight_sum = 1.0f; 
+    vec3 normal_filtered = normal_curr; 
+    for (uint ibwedge = 0u; ibwedge < 4u; ++ibwedge)
+    {
+        AdjWedgeInfo awi = decode_adj_wedge_info(ssbo_edge_to_edges_[wedge_id*4u + ibwedge]);  
+        uint ivert_adj = mark__center_wedge_to_oppo_vert__at_face(awi.iface_adj);
+        
+        uint vid_adj = ssbo_edge_to_vert_[awi.wedge_id*4u + ivert_adj];
+        vec3 vpos_not_overlap = ld_vbo(vid_adj); 
+
+        uint iface_overlap = mark__bwedge_to_face(ibwedge); 
+        uvec3 iverts_overlap;
+        iverts_overlap[0] = mark__border_wedge_to_oppo_vert(ibwedge);  
+        iverts_overlap[1] = mark__vert_to_next_vert(iface_overlap, iverts_overlap[0]); 
+        iverts_overlap[2] = mark__vert_to_next_vert(iface_overlap, iverts_overlap[1]); 
+
+        /* Arrange verts to fit their order in the adjacent wedge */
+        vec3 vpos_adj[4]; 
+        if (ivert_adj == 0u)
+        {
+            vpos_adj[0] = vpos_not_overlap; 
+            vpos_adj[1] = vpos_curr[iverts_overlap[2]]; 
+            vpos_adj[2] = vpos_curr[iverts_overlap[0]]; 
+            vpos_adj[3] = vpos_curr[iverts_overlap[1]]; 
+        }else{ /*ivert_adj == 2u*/
+            vpos_adj[0] = vpos_curr[iverts_overlap[0]];
+            vpos_adj[1] = vpos_curr[iverts_overlap[1]];
+            vpos_adj[2] = vpos_curr[iverts_overlap[2]];
+            vpos_adj[3] = vpos_not_overlap; 
+        }
+
+        uint addr = ssbo_edge_to_edges_addr__edge_to_filtered_edge(awi.wedge_id, num_all_edges); 
+        uint awi_wedge_id_filtered = ssbo_edge_to_edges_[addr]; 
+        
+        vec3 normal_bwedge;
+        if ((pcs_first_iter_ > 0) || (awi_wedge_id_filtered == NULL_EDGE)) 
+            normal_bwedge = compute_wedge_normal(vpos_adj[0], vpos_adj[1], vpos_adj[2], vpos_adj[3]); 
+        else 
+            normal_bwedge = load_filtered_edge_normal(awi_wedge_id_filtered); 
+        
+
+        vec3 adjusted_normal; 
+        float weight; 
+        bilateral_filter_wedge_normal(
+            vpos_curr[0], vpos_curr[1], vpos_curr[2], vpos_curr[3], normal_curr, 
+            vpos_adj[0],  vpos_adj[1],  vpos_adj[2],  vpos_adj[3],  normal_bwedge, 
+            cam_pos_ws, 
+            /* out */ adjusted_normal, weight
+        ); 
+
+
+        normal_filtered += weight * adjusted_normal; 
+        weight_sum += weight; 
+    }
+
+    normal_filtered = normalize(normal_filtered / weight_sum); 
+    if (pcs_use_normal_filtering_ == 0)
+        normal_filtered = normal_curr; 
+
+    if (valid_thread)
+        store_filtered_edge_normal(FilteredEdgeID, normal_filtered); 
+
+#endif
 
 #if defined(_KERNEL_MULTICOMPILE__MESH_FILTERING__EDGE_QUADRIC)
     const uint FilteredEdgeID = idx.x; 
     const uint NumFilteredEdges = ssbo_bnpr_mesh_pool_counters_.num_filtered_edges; 
-    /* Do not use EdgeID here since it's offseted with current mesh batch */
     bool valid_thread = (idx.x < NumFilteredEdges); 
     if (!valid_thread) return; /* quit if not valid thread */
 
@@ -356,18 +450,15 @@ void main()
 	bool is_persp = (ubo_view_matrices_.winmat[3][3] == 0.0);
 	vec3 cam_pos_ws = view_to_world[3].xyz; /* see "#define cameraPos ViewMatrixInverse[3].xyz" */
 
-    vec3 wedge_normal; 
+    vec3 wedge_normal = load_filtered_edge_normal(FilteredEdgeID); 
     Quadric q_e = compute_wedge_quadric(
         vpos_wedge[0], vpos_wedge[1], vpos_wedge[2], vpos_wedge[3], 
         cam_pos_ws, 
         0.05f, 
-        /*out*/ wedge_normal
+        wedge_normal
     ); 
     if (valid_thread)
-    {
         store_wedge_quadric(FilteredEdgeID, q_e); 
-        store_filtered_edge_normal(FilteredEdgeID, wedge_normal); 
-    }
 #endif
 
 
@@ -500,14 +591,12 @@ void main()
         mat4 q_d = mat4(q_v.quadric); 
  
         mat4 q_reg = compute_plane_quadric(nv, vpos_orig); 
-        q_d = q_d + 1.0f * q_reg; /*damping*/
+        q_d = q_d + pcs_positiion_regularization_scale_ * q_reg; /*damping*/
 
         dmat3 A = dmat3(q_d); 
         dvec3 b = dvec3(q_d[3][0], q_d[3][1], q_d[3][2]); 
         vpos = vec3(-inverse(A)*b); 
     #endif
-
-    vpos -= pcs_positiion_regularization_scale_ * nv; 
 
     if (any(isnan(vpos)) || any(isinf(vpos)))
         vpos = vpos_orig; 

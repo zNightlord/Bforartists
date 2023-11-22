@@ -167,12 +167,16 @@ uint mark__wedge_to_he(uint face, uint wedge)
     /* if (face == 1u) */
     return wedge == 4u ? 0u : (wedge+2u)%4u; /* 4->0, 3->1, 0->2 */
 }
-uvec3 mark__face_to_winded_verts(uint face)
+uint mark__bwedge_to_face(uint wedge)
+{
+    return (wedge == 1u || wedge == 2u) ? 0u : 1u; /* 1,2->0, 0,3->1 */
+}
+uint mark__vert_to_next_vert(uint face, uint vert)
 {
     if (face == 0u)
-        return uvec3(1, 3, 0); /* 013 */
+        return (vert == 3u) ? 1u : vert + 1u; /* 1->2, 2->3, 3->1 */
     /* if (face == 1u) */
-    return uvec3(3, 1, 2); /* 123 */ 
+    return (vert == 1u) ? 3u : ((vert + 1u) % 4u); /* 1->3, 3->0, 0->1 */ 
 }
 uvec3 mark__face_to_winded_wedges(uint face)
 {
@@ -452,9 +456,39 @@ mat4 compute_filter_quadric(vec3 n, vec3 p, vec3 cam_pos_ws, float silouetteness
 }
 
 
+float compute_wedge_area(vec3 p0, vec3 p1, vec3 p2, vec3 p3)
+{
+    vec3 v10 = p0 - p1;
+	vec3 v13 = p3 - p1;
+   	vec3 v12 = p2 - p1;
+    
+    vec3 v13_cross_v10 = cross(v13, v10); 
+    vec3 v12_cross_v13 = cross(v12, v13); 
+
+    /* Averaged area */
+    float area = ((length(v13_cross_v10)) + length(v12_cross_v13)) * .25f; 
+
+    return area; 
+}
+
+vec3 compute_wedge_normal(vec3 p0, vec3 p1, vec3 p2, vec3 p3)
+{
+    vec3 v10 = p0 - p1;
+	vec3 v13 = p3 - p1;
+   	vec3 v12 = p2 - p1;
+    
+    vec3 v13_cross_v10 = cross(v13, v10); 
+    vec3 v12_cross_v13 = cross(v12, v13); 
+
+	vec3 n0 = normalize(v13_cross_v10);
+	vec3 n2 = normalize(v12_cross_v13);
+
+    return normalize((n0.xyz + n2.xyz) * .5f); 
+}
+
 Quadric compute_wedge_quadric(
     vec3 p0, vec3 p1, vec3 p2, vec3 p3, vec3 cam_pos_ws, float position_regularize_weight, 
-    out vec3 wedge_normal
+    vec3 wedge_normal
 ) /* world pos of p0~3 */
 { 
     Quadric q; 
@@ -466,11 +500,8 @@ Quadric compute_wedge_quadric(
     vec3 v13_cross_v10 = cross(v13, v10); 
     vec3 v12_cross_v13 = cross(v12, v13); 
 
-
-
     /* Averaged area */
     q.area = ((length(v13_cross_v10)) + length(v12_cross_v13)) * .25f; 
-
 
     /* Quadric */
 	vec3 n0 = normalize(v13_cross_v10);
@@ -500,6 +531,42 @@ float gaussian(float dist, float tau)
 {
     return exp(-(dist * dist) / (2.0f * tau * tau)); 
 }
+
+void bilateral_filter_wedge_normal(
+    vec3 p0, vec3 p1, vec3 p2, vec3 p3, vec3 np, 
+    vec3 q0, vec3 q1, vec3 q2, vec3 q3, vec3 nq, 
+    vec3 cam_pos_ws, 
+    out vec3 n_filtered, out float weight
+){
+    float q_area = compute_wedge_area(q0, q1, q2, q3); 
+
+    float dist = distance(p0, p1); 
+    float geometry_weight = q_area * gaussian(dist, 1.0f);
+    
+    vec3 pp = (p1 + p3) / 3.0f;
+    vec3 qq = (q1 + q3) / 3.0f; 
+    float plane_dist = max(abs(dot(pp - qq, np)), abs(dot(pp - qq, nq)));
+    float plane_weight = gaussian(plane_dist, 0.1f);
+
+    // Fast and Effective Feature-Preserving Mesh Denoising
+    float normal_weight = dot(np, nq);
+    if (normal_weight < 0.8f) normal_weight = 0.0f; 
+    normal_weight *= normal_weight; 
+
+    weight = normal_weight/*  * plane_weight *//*  * geometry_weight */; 
+    
+    
+    vec3 vp = normalize(cam_pos_ws - p0); 
+    float cos_theta = min(1.0f, max(-1.0f, dot(np, vp))); 
+    float sin_theta = sqrt(1.0f - cos_theta * cos_theta); 
+    
+    vec3 bn = normalize(cross(np, vp));
+    vec3 t = normalize(cross(bn, np)); 
+    vec3 n_view_proj = normalize(cross(t, bn));
+
+    n_filtered = nq; // normalize(sin_theta * n_view_proj + cos_theta * vp); 
+}
+
 
 float compute_edge_quadric_weight(vec3 p_v, vec3 p_e, Quadric q_e)
 {

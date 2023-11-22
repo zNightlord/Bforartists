@@ -144,8 +144,10 @@ const char *StrokeGenShaderModule::static_shader_create_info_name_get(eShaderTyp
     case FILL_DISPATCH_ARGS_FILTERED_VERTS:
       return "bnpr_meshing_fill_dispatch_args_per_filtered_vert";
 
+    case MESH_FILTERING_EDGE_NORMAL:
+      return "bnpr_meshing_mesh_filtering_edge_normal_"; 
     case MESH_FILTERING_EDGE_QUADRIC:
-      return "bnpr_meshing_mesh_filtering_edge_quadric_"; 
+      return "bnpr_meshing_mesh_filtering_edge_quadric_";
     case MESH_FILTERING_VERT_QUADRIC_INIT:
       return "bnpr_meshing_mesh_filtering_init_vert_quadric_"; 
     case MESH_FILTERING_VERT_QUADRIC_DIFFUSION:

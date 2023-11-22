@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
+﻿/* SPDX-License-Identifier: GPL-2.0-or-later
  * Copyright 2021 Blender Foundation.
  */
 
@@ -86,13 +86,9 @@ class GPUBufferPoolModule {
     buf_in = iter % 2 == 0 ? ssbo_bnpr_mesh_pool_ : ssbo_mesh_buffer_reuse_0_;
     buf_out = iter % 2 == 0 ? ssbo_mesh_buffer_reuse_0_ : ssbo_bnpr_mesh_pool_; 
   }
-  inline GPUStorageBuf *reused_ssbo_filtered_normal_edge_()
+  inline void reused_ssbo_filtered_normal_edge_(int iter, GPUStorageBuf*& buf_in, GPUStorageBuf*& buf_out)
   {
-    GPUStorageBuf *buf_in = nullptr;
-    GPUStorageBuf *dummy_out = nullptr; 
-    reused_ssbo_vert_quadric_data_(0, buf_in, dummy_out);
-
-    return buf_in; 
+    reused_ssbo_vert_quadric_data_(iter, buf_in, buf_out);
   }
   inline GPUStorageBuf *reused_ssbo_filtered_normal_vert_()
   {

@@ -76,7 +76,10 @@ namespace blender::npr::strokegen
 
     pass_draw_contour_edges.draw_settings.draw_hidden_lines = scene_eval->npr.npr_test_val_7 > .5f;
 
-    meshing_params.positiion_regularization_scale = scene_eval->npr.npr_test_val_8 * 0.1f; 
+    meshing_params.positiion_regularization_scale = scene_eval->npr.npr_test_val_8;
+
+    meshing_params.use_normal_filtering = scene_eval->npr.npr_test_val_9 > 0.5f;
+    meshing_params.num_normal_filtering_iters = 2 * std::max(1, (int)(scene_eval->npr.npr_test_val_10)); 
 
   }
 
@@ -200,13 +203,21 @@ namespace blender::npr::strokegen
   {
     auto bind_rsc = [&](
       draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub,
-      int iter_filtering = 0, 
+      int iter_filtering = 0,
+      int iter_normal_filtering = 0, 
       int iter_diffusion = 0)
     {
       GPUStorageBuf *reused_ssbo_vert_quadric_data_in_ = nullptr;
       GPUStorageBuf *reused_ssbo_vert_quadric_data_out_ = nullptr;
       buffers_.reused_ssbo_vert_quadric_data_(
-          iter_diffusion, reused_ssbo_vert_quadric_data_in_, reused_ssbo_vert_quadric_data_out_); 
+          iter_diffusion, reused_ssbo_vert_quadric_data_in_, reused_ssbo_vert_quadric_data_out_
+      ); 
+
+      GPUStorageBuf *reused_ssbo_filtered_normal_edge_in_ = nullptr;
+      GPUStorageBuf *reused_ssbo_filtered_normal_edge_out_ = nullptr;
+      buffers_.reused_ssbo_filtered_normal_edge_(
+        iter_normal_filtering, reused_ssbo_filtered_normal_edge_in_, reused_ssbo_filtered_normal_edge_out_
+      ); 
 
       sub.bind_ssbo(0, buffers_.ssbo_bnpr_mesh_pool_counters_);
       sub.bind_ssbo(1, buffers_.ssbo_edge_to_edges_);
@@ -216,10 +227,11 @@ namespace blender::npr::strokegen
       sub.bind_ssbo(5, buffers_.reused_ssbo_filtered_vert_to_vert_());
       sub.bind_ssbo(6, buffers_.ssbo_vbo_full_);
       sub.bind_ssbo(7, buffers_.reused_ssbo_filtered_normal_vert_());
-      sub.bind_ssbo(8, buffers_.reused_ssbo_filtered_normal_edge_());
-      sub.bind_ssbo(9, buffers_.reused_ssbo_edge_quadric_data());
-      sub.bind_ssbo(10, reused_ssbo_vert_quadric_data_in_);
-      sub.bind_ssbo(11, reused_ssbo_vert_quadric_data_out_);
+      sub.bind_ssbo(8, reused_ssbo_filtered_normal_edge_in_);
+      sub.bind_ssbo(9, reused_ssbo_filtered_normal_edge_out_);
+      sub.bind_ssbo(10, buffers_.reused_ssbo_edge_quadric_data());
+      sub.bind_ssbo(11, reused_ssbo_vert_quadric_data_in_);
+      sub.bind_ssbo(12, reused_ssbo_vert_quadric_data_out_);
       sub.bind_ubo(0, buffers_.ubo_view_matrices_cache_);
       sub.push_constant("pcs_filtered_quadric_type_",
                         iter_filtering % 2 == 0 ? (int)(meshing_params.alternate_filter_0) :
@@ -230,15 +242,30 @@ namespace blender::npr::strokegen
       sub.push_constant("pcs_vert_id_offset_", num_total_mesh_verts);
       sub.push_constant("pcs_quadric_deviation_", params.quadric_deviation);
       sub.push_constant("pcs_geodist_deviation_", params.geodist_deviation);
-      sub.push_constant("pcs_positiion_regularization_scale_", params.positiion_regularization_scale); 
+      sub.push_constant("pcs_positiion_regularization_scale_", params.positiion_regularization_scale);
     };
 
-    for (int iter_filtering = 0; iter_filtering < params.num_filtering_iters; ++iter_filtering) {
+    for (int iter_filtering = 0; iter_filtering < params.num_filtering_iters; ++iter_filtering)
+    {
+      int iter_normal_filtering = 0; 
+      for (; iter_normal_filtering < meshing_params.num_normal_filtering_iters; ++iter_normal_filtering)
+      {
+        auto &sub = pass_extract_geom.sub("bnpr_meshing_mesh_filtering_edge_normal_");
+        sub.shader_set(shaders_.static_shader_get(MESH_FILTERING_EDGE_NORMAL));
+
+        bind_rsc(sub, iter_filtering, iter_normal_filtering);
+        sub.push_constant("pcs_first_iter_", iter_normal_filtering == 0 ? 1 : 0); 
+        sub.push_constant("pcs_use_normal_filtering_", params.use_normal_filtering ? 1 : 0); 
+
+        sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_filtered_edge_);
+        sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
+      }
+
       {
         auto &sub = pass_extract_geom.sub("bnpr_meshing_mesh_filtering_edge_quadric_");
         sub.shader_set(shaders_.static_shader_get(MESH_FILTERING_EDGE_QUADRIC));
 
-        bind_rsc(sub, iter_filtering);
+        bind_rsc(sub, iter_filtering, iter_normal_filtering);
 
         sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_filtered_edge_);
         sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
@@ -250,7 +277,7 @@ namespace blender::npr::strokegen
         auto &sub = pass_extract_geom.sub("bnpr_meshing_mesh_filtering_init_vert_quadric_");
         sub.shader_set(shaders_.static_shader_get(MESH_FILTERING_VERT_QUADRIC_INIT));
 
-        bind_rsc(sub, iter_filtering, iter_diffuse);
+        bind_rsc(sub, iter_filtering, iter_normal_filtering, iter_diffuse);
 
         sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_filtered_vert_);
         sub.barrier(GPU_BARRIER_SHADER_STORAGE);
@@ -262,7 +289,7 @@ namespace blender::npr::strokegen
         auto &sub = pass_extract_geom.sub("bnpr_meshing_mesh_filtering_diffuse_vert_quadric_");
         sub.shader_set(shaders_.static_shader_get(MESH_FILTERING_VERT_QUADRIC_DIFFUSION));
 
-        bind_rsc(sub, iter_filtering, iter_diffuse);
+        bind_rsc(sub, iter_filtering, iter_normal_filtering, iter_diffuse);
 
         sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_filtered_vert_);
         sub.barrier(GPU_BARRIER_SHADER_STORAGE);
@@ -272,7 +299,7 @@ namespace blender::npr::strokegen
         auto &sub = pass_extract_geom.sub("bnpr_meshing_mesh_filtering_move_verts_");
         sub.shader_set(shaders_.static_shader_get(MESH_FILTERING_MOVE_VERTS));
 
-        bind_rsc(sub, iter_filtering, iter_diffuse);
+        bind_rsc(sub, iter_filtering, iter_normal_filtering, iter_diffuse);
 
         sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_filtered_vert_);
         sub.barrier(GPU_BARRIER_SHADER_STORAGE);
