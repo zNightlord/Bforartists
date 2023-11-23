@@ -300,6 +300,29 @@ vec3 load_filtered_vert_normal(uint FilteredVertID)
     );
 }
 
+uint addr_filtered_vert_pos(uint FilteredVertID, uint num_filtered_verts)
+{
+    uint subbuff_start = num_filtered_verts * 11u; 
+    // subbuff_start = (((subbuff_start + 3u) >> 2u) << 2u); /* align to 4 */
+    return subbuff_start + FilteredVertID * 3u;
+}
+void store_filtered_vert_pos(uint FilteredVertID, uint num_filtered_verts, vec3 pos)
+{
+    uint base_addr = addr_filtered_vert_pos(FilteredVertID, num_filtered_verts); 
+    ssbo_vert_quadric_data_out_[base_addr + 0u] = floatBitsToUint(pos.x);
+    ssbo_vert_quadric_data_out_[base_addr + 1u] = floatBitsToUint(pos.y);
+    ssbo_vert_quadric_data_out_[base_addr + 2u] = floatBitsToUint(pos.z);
+}
+vec3 load_filtered_vert_pos(uint FilteredVertID, uint num_filtered_verts)
+{
+    uint base_addr = addr_filtered_vert_pos(FilteredVertID, num_filtered_verts); 
+    return vec3(
+        uintBitsToFloat(ssbo_vert_quadric_data_in_[base_addr + 0u]),
+        uintBitsToFloat(ssbo_vert_quadric_data_in_[base_addr + 1u]),
+        uintBitsToFloat(ssbo_vert_quadric_data_in_[base_addr + 2u])
+    );
+}
+
 vec3 ld_vbo(uint GlobalVertID)
 {
 	uint base_addr = GlobalVertID * 3; 
@@ -391,18 +414,18 @@ void main()
         }else{ /*ivert_adj == 2u*/
             vpos_adj[0] = vpos_curr[iverts_overlap[0]];
             vpos_adj[1] = vpos_curr[iverts_overlap[1]];
-            vpos_adj[2] = vpos_curr[iverts_overlap[2]];
             vpos_adj[3] = vpos_not_overlap; 
+            vpos_adj[2] = vpos_curr[iverts_overlap[2]];
         }
 
         uint addr = ssbo_edge_to_edges_addr__edge_to_filtered_edge(awi.wedge_id, num_all_edges); 
-        uint awi_wedge_id_filtered = ssbo_edge_to_edges_[addr]; 
+        uint filtered_adj_wedge_id = ssbo_edge_to_edges_[addr]; 
         
         vec3 normal_bwedge;
-        if ((pcs_first_iter_ > 0) || (awi_wedge_id_filtered == NULL_EDGE)) 
+        if ((pcs_first_iter_ > 0) || (filtered_adj_wedge_id == NULL_EDGE)) 
             normal_bwedge = compute_wedge_normal(vpos_adj[0], vpos_adj[1], vpos_adj[2], vpos_adj[3]); 
         else 
-            normal_bwedge = load_filtered_edge_normal(awi_wedge_id_filtered); 
+            normal_bwedge = load_filtered_edge_normal(filtered_adj_wedge_id); 
         
 
         vec3 adjusted_normal; 
@@ -413,7 +436,6 @@ void main()
             cam_pos_ws, 
             /* out */ adjusted_normal, weight
         ); 
-
 
         normal_filtered += weight * adjusted_normal; 
         weight_sum += weight; 
@@ -479,6 +501,11 @@ void main()
     Quadric q_v; 
     Quadric q_v_filtered; 
     float weight_sum = .0f; 
+
+    vec3 vpos_filtered; 
+    vec3 delta_bilateral = vec3(.0f, .0f, .0f);
+    float bilateral_weight_sum = .0f;  
+
 #if defined(_KERNEL_MULTICOMPILE__MESH_FILTERING__VERT_QUADRIC_INIT)
     /* note: this inits at diagonals with param, other places cleared to .0 */
     q_v.quadric = mat4(0.0); 
@@ -487,6 +514,8 @@ void main()
     
     vec3 filtered_vert_normal = vec3(.0f, .0f, .0f); 
     float filtered_vert_normal_weight = .0f; 
+
+    vpos_filtered = vpos; 
 #else
     q_v = load_vert_quadric(FilteredVertID); 
     float dev_q = pcs_quadric_deviation_; 
@@ -494,6 +523,8 @@ void main()
     weight_sum = 1.0f; // compute_vert_quadric_weight(vpos, q_v, vpos, q_v, dev_q, dev_g); 
     q_v_filtered.quadric = weight_sum * q_v.quadric;
     q_v_filtered.area = q_v.area;
+
+    vpos_filtered = load_filtered_vert_pos(FilteredVertID, NumFilteredVerts);
 #endif
 
 
@@ -508,37 +539,53 @@ void main()
     #define MAX_WEDGE_ROTATES 16u
         uint rotate_step = 0u; 
         do {
-            uint vid_oppo = ssbo_edge_to_vert_[awi.wedge_id*4u + ivert_oppo]; 
-            vec3 vpos_oppo = ld_vbo(vid_oppo);
+            uint vid_j = ssbo_edge_to_vert_[awi.wedge_id*4u + ivert_oppo]; 
+            vec3 vpos_j = ld_vbo(vid_j);
 
 #if defined(_KERNEL_MULTICOMPILE__MESH_FILTERING__VERT_QUADRIC_INIT)
-            uint addr = ssbo_edge_to_edges_addr__edge_to_filtered_edge(awi.wedge_id, num_all_edges); 
-            uint awi_wedge_id_filtered = ssbo_edge_to_edges_[addr]; 
+            uint wid_addr = ssbo_edge_to_edges_addr__edge_to_filtered_edge(awi.wedge_id, num_all_edges); 
+            uint filtered_wedge_id = ssbo_edge_to_edges_[wid_addr]; 
 
-            Quadric q_e = load_wedge_quadric(awi_wedge_id_filtered);
+            Quadric q_e = load_wedge_quadric(filtered_wedge_id);
             q_v_filtered.area += q_e.area; 
 
-            float w = compute_edge_quadric_weight(vpos, (vpos_oppo + vpos) * .5f, q_e);
+            float w = compute_edge_quadric_weight(vpos, (vpos_j + vpos) * .5f, q_e);
             q_v_filtered.quadric += w * q_e.quadric;
 
-            filtered_vert_normal += q_e.area * load_filtered_edge_normal(awi_wedge_id_filtered); 
+            filtered_vert_normal += q_e.area * load_filtered_edge_normal(filtered_wedge_id); 
             filtered_vert_normal_weight += q_e.area; 
 #else
-            uint addr = ssbo_vert_to_edge_list_header_addr__vert_to_filtered_vert(vid_oppo, num_all_verts); 
-            uint vid_filtered = ssbo_vert_to_edge_list_header_[addr]; 
+            uint vid_addr = ssbo_vert_to_edge_list_header_addr__vert_to_filtered_vert(vid_j, num_all_verts); 
+            uint filtered_vid_j = ssbo_vert_to_edge_list_header_[vid_addr]; 
 
+            uint wid_addr = ssbo_edge_to_edges_addr__edge_to_filtered_edge(awi.wedge_id, num_all_edges); 
+            uint filtered_wedge_id = ssbo_edge_to_edges_[wid_addr]; 
+
+            /* Vertex Pos Filtering */
+            vec3 filtered_vpos_j;
+            if (filtered_vid_j != NULL_FILTERED_VERT) 
+                filtered_vpos_j = load_filtered_vert_pos(filtered_vid_j, NumFilteredVerts); 
+            else
+                filtered_vpos_j = .5f * (vpos + vpos_j); 
+
+            vec3 wedge_normal_filtered = load_filtered_edge_normal(filtered_wedge_id);
+            vec3 wedge_pos_filtered = .5f * (vpos_filtered + filtered_vpos_j); 
+            delta_bilateral += wedge_normal_filtered * dot(wedge_normal_filtered, wedge_pos_filtered - vpos_filtered);
+            bilateral_weight_sum += 1.0f; 
+
+            /* Quadric Diffusion */
             float w = .0f; 
             Quadric q_oppo; 
-            if (vid_filtered != NULL_FILTERED_VERT)
-                q_oppo = load_vert_quadric(vid_filtered); 
+            vec3 q_pos = vpos_j; 
+            if (filtered_vid_j != NULL_FILTERED_VERT)
+                q_oppo = load_vert_quadric(filtered_vid_j); 
             else{
-                uint addr = ssbo_edge_to_edges_addr__edge_to_filtered_edge(awi.wedge_id, num_all_edges); 
-                uint awi_wedge_id_filtered = ssbo_edge_to_edges_[addr]; 
-                q_oppo = load_wedge_quadric(awi_wedge_id_filtered);
-                vpos_oppo = .5f * (vpos + vpos_oppo); 
+                q_oppo = load_wedge_quadric(filtered_wedge_id);
+                q_pos = .5f * (vpos + vpos_j); 
             }
-            w = compute_vert_quadric_weight(vpos, q_v, vpos_oppo, q_oppo, dev_q, dev_g);
+            w = compute_vert_quadric_weight(vpos, q_v, q_pos, q_oppo, dev_q, dev_g);
             q_v_filtered.quadric += w * q_oppo.quadric;
+
 #endif
             weight_sum += w; 
 
@@ -559,6 +606,16 @@ void main()
     if (valid_thread)
         store_vert_quadric(FilteredVertID, q_v_filtered); 
 
+    if (bilateral_weight_sum > .0f)
+    {
+        bilateral_weight_sum *= 3.0f; 
+        delta_bilateral = delta_bilateral / bilateral_weight_sum;
+        vpos_filtered += delta_bilateral; 
+    }
+    if (valid_thread)
+        store_filtered_vert_pos(FilteredVertID, NumFilteredVerts, vpos_filtered);
+    
+
 #if defined(_KERNEL_MULTICOMPILE__MESH_FILTERING__VERT_QUADRIC_INIT)
     filtered_vert_normal = normalize(filtered_vert_normal / filtered_vert_normal_weight); /*TODO: optimize normal storage*/
     if (valid_thread)
@@ -571,6 +628,8 @@ void main()
 #if defined(_KERNEL_MULTICOMPILE__MESH_FILTERING__MOVE_VERTS)
     const uint FilteredVertID = idx.x; 
     const uint NumFilteredVerts = ssbo_bnpr_mesh_pool_counters_.num_filtered_verts; 
+    uint num_all_verts = pcs_vert_id_offset_ + pcs_vert_count_; 
+
     /* Do not use VertID here since it's offseted with current mesh batch */
     bool valid_thread = (idx.x < NumFilteredVerts); 
     if (!valid_thread) return; /* quit if not valid thread */
@@ -580,6 +639,7 @@ void main()
     
     uint vert_id_global = ssbo_filtered_vert_to_vert_[FilteredVertID]; 
     vec3 vpos = ld_vbo(vert_id_global);
+    vec3 vpos_filtered = load_filtered_vert_pos(FilteredVertID, NumFilteredVerts);
     vec3 vpos_orig = vpos; 
 
     #if defined(_KERNEL_MULTICOMPILE__MESH_FILTERING__MOVE_VERTS_CONSTRAINED_SOLVE)
@@ -598,6 +658,7 @@ void main()
         vpos = vec3(-inverse(A)*b); 
     #endif
 
+    // vpos = vpos_filtered; 
     if (any(isnan(vpos)) || any(isinf(vpos)))
         vpos = vpos_orig; 
 

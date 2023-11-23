@@ -566,9 +566,9 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_mesh_filtering_)
 GPU_SHADER_CREATE_INFO(bnpr_meshing_mesh_filtering_edge_normal_)
     .do_static_compilation(true)
     .additional_info("bnpr_meshing_mesh_filtering_")
+    .define("_KERNEL_MULTICOMPILE__MESH_FILTERING__EDGE_NORMAL", "1")
     .push_constant(Type::INT, "pcs_first_iter_")
-    .push_constant(Type::INT, "pcs_use_normal_filtering_")
-    .define("_KERNEL_MULTICOMPILE__MESH_FILTERING__EDGE_NORMAL", "1");
+    .push_constant(Type::INT, "pcs_use_normal_filtering_");
 
 GPU_SHADER_CREATE_INFO(bnpr_meshing_mesh_filtering_edge_quadric_)
     .do_static_compilation(true)

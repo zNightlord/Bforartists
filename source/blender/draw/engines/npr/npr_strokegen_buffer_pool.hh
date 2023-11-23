@@ -1,4 +1,4 @@
-﻿/* SPDX-License-Identifier: GPL-2.0-or-later
+/* SPDX-License-Identifier: GPL-2.0-or-later
  * Copyright 2021 Blender Foundation.
  */
 
@@ -51,6 +51,7 @@ class GPUBufferPoolModule {
   SSBO_StrokeGenMeshVertHashTable ssbo_vert_spatial_map_headers_;
   SSBO_StrokeGenMeshLarge ssbo_mesh_buffer_reuse_0_;
   SSBO_StrokeGenMeshMedium ssbo_mesh_buffer_reuse_1_;
+  SSBO_StrokeGenMeshMedium ssbo_mesh_buffer_reuse_2_;
   inline void reused_ssbo_vert_spatial_map_payloads_(GPUStorageBuf *&buf)
   {
     buf = ssbo_mesh_buffer_reuse_0_;  
@@ -88,7 +89,8 @@ class GPUBufferPoolModule {
   }
   inline void reused_ssbo_filtered_normal_edge_(int iter, GPUStorageBuf*& buf_in, GPUStorageBuf*& buf_out)
   {
-    reused_ssbo_vert_quadric_data_(iter, buf_in, buf_out);
+    buf_in = iter % 2 == 0 ? ssbo_vert_spatial_map_headers_ : ssbo_mesh_buffer_reuse_2_;
+    buf_out = iter % 2 == 0 ? ssbo_mesh_buffer_reuse_2_ : ssbo_vert_spatial_map_headers_; 
   }
   inline GPUStorageBuf *reused_ssbo_filtered_normal_vert_()
   {
