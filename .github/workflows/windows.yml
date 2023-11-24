@@ -54,12 +54,12 @@ jobs:
        cd ~\Bforartists\Bforartists\source\blender
        dir
        cd ~\Bforartists\Bforartists
-       .\make.bat ${{ env.CONFIG }}
+       .\make.bat ninja ${{ env.CONFIG }}
     - name: Make 2
       if: success() || failure()
       run: |
         cd ~\Bforartists\Bforartists
-        .\make.bat ${{ env.CONFIG }}
+        .\make.bat ninja ${{ env.CONFIG }}
     - name: Show dir
       run: |
         cd ~\Bforartists
