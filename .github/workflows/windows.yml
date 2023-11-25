@@ -43,7 +43,7 @@ jobs:
         if (!(test-path "C:\Users\runneradmin\Bforartists\lib\")) {
           mkdir ~\Bforartists\lib
           cd ~\Bforartists\lib
-          svn checkout https://svn.blender.org/svnroot/bf-blender/trunk/lib/win64_vc15/
+          svn checkout https://svn.blender.org/svnroot/bf-blender/tags/blender-4.0-release/lib/win64_vc15/
         } else {
           cd ~\Bforartists\lib\win64_vc15
           svn update
