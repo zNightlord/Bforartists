@@ -128,6 +128,8 @@ void ED_text_format_register_glsl();
  */
 int text_format_string_literal_find(const Span<const char *> string_literals, const char *text);
 
+bool STR_LITERAL_STARTSWITH(const char *string_literals, const char *text, int len);
+
 #ifndef NDEBUG
 /**
  * Check if #string_literals array is shorted. This validation is required since text formatters do

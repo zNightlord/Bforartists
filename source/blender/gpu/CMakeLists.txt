@@ -10,6 +10,7 @@ set(INC
   opengl
   vulkan
   ../blenkernel
+  ../blentranslation
   ../bmesh
   ../draw
   ../imbuf

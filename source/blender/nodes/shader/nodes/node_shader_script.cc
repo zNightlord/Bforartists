@@ -99,12 +99,16 @@ static int node_shader_gpu_script(GPUMaterial *mat,
   return GPU_stack_link(mat, node, node->label, in, out);
 }
 
-void node_declare_dynamic(const bNodeTree &node_tree,
-                          const bNode &node,
-                          NodeDeclaration &r_declaration)
+static void node_declare(NodeDeclarationBuilder &b)
 {
-  const NodeShaderScript *nss = static_cast<NodeShaderScript *>(node.storage);
-  Text* text = reinterpret_cast<Text *>(node.id);
+  NodeDeclaration &r_declaration = b.declaration();
+  b.add_output<decl::Color>("Color").default_value({0.0f, 0.0f, 0.0f, 1.0f});
+  const bNode *node = b.node_or_null();
+  if (node == nullptr) {
+    return;
+  }
+  const NodeShaderScript *nss = static_cast<NodeShaderScript *>(node->storage);
+  Text* text = reinterpret_cast<Text *>(node->id);
   if (text == nullptr) {
     return;
   }
@@ -112,7 +116,7 @@ void node_declare_dynamic(const bNodeTree &node_tree,
   // Register text as runtime library, but only if it has not already been registered.
   // If the text has changed since, then this will *not* reflect the updated version
   GPU_material_library_text_add(text, false);
-  GPU_material_node_decl_from_function(&r_declaration, node.label);
+  GPU_material_node_decl_from_function(&r_declaration, node->label);
 }
 
 }  // namespace blender::nodes::node_shader_script_cc
@@ -127,7 +131,7 @@ void register_node_type_sh_script()
   ntype.draw_buttons = file_ns::node_shader_buts_script;
   ntype.draw_buttons_ex = file_ns::node_shader_buts_script_ex;
   ntype.initfunc = file_ns::init;
-  ntype.declare_dynamic = file_ns::node_declare_dynamic;
+  ntype.declare = file_ns::node_declare;
   ntype.gpu_fn = file_ns::node_shader_gpu_script;
 
   node_type_storage(

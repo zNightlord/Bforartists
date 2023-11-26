@@ -7,8 +7,8 @@
 
 #pragma once
 
-#include "BKE_object.h"
-#include "DEG_depsgraph.h"
+#include "BKE_object.hh"
+#include "DEG_depsgraph.hh"
 #include "DNA_lightprobe_types.h"
 #include "DRW_render.h"
 #include "juniper_shaders.hh"

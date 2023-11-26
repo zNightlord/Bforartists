@@ -27,9 +27,9 @@
 #include "eevee_private.h"
 
 #include "eevee_engine.h" /* own include */
-#include "NOD_socket.h"
-#include "WM_api.h"
-#include "RNA_access.h"
+#include "NOD_socket.hh"
+#include "WM_api.hh"
+#include "RNA_access.hh"
 
 #define EEVEE_ENGINE "BLENDER_EEVEE"
 

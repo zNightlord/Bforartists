@@ -5,14 +5,14 @@
 
 #include "BKE_editmesh.h"
 #include "BKE_modifier.h"
-#include "BKE_object.h"
-#include "BKE_paint.h"
+#include "BKE_object.hh"
+#include "BKE_paint.hh"
 #include "BKE_particle.h"
 #include "BKE_pbvh.h"
 #include "BKE_report.h"
-#include "DEG_depsgraph_query.h"
+#include "DEG_depsgraph_query.hh"
 #include "DNA_fluid_types.h"
-#include "ED_view3d.h"
+#include "ED_view3d.hh"
 #include "GPU_framebuffer.h"
 
 #include "GPU_compute.h"
@@ -29,9 +29,9 @@
 #include "juniper_instance.hh"
 #include "draw_debug.hh"
 
-#include "NOD_socket.h"
-#include "WM_types.h"
-#include "WM_api.h"
+#include "NOD_socket.hh"
+#include "WM_types.hh"
+#include "WM_api.hh"
 
 #define JNPR_ENGINE "JNPR"
 

@@ -256,6 +256,14 @@ int text_format_string_literal_find(const Span<const char *> string_literals, co
   return 0;
 }
 
+bool STR_LITERAL_STARTSWITH(
+    const char *string_literal, const char *text, 
+    int len)
+{
+  return strncmp(string_literal, text, len = (sizeof(string_literal) - 1)) == 0;
+}
+
+
 #ifndef NDEBUG
 const bool text_format_string_literals_check_sorted_array(
     const Span<const char *> &string_literals)
