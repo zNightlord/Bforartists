@@ -13,13 +13,403 @@
 
 #include "BKE_text.h"
 
-#include "text_format.h"
+#include "text_format.hh"
+
+/* */
+
+static const char *text_format_glsl_literals_builtinfunc_data[]{
+    /* Force single column, sorted list. */
+    /* clang-format off */
+    "acosh",
+    "acos",
+    "asinh",
+    "asin",
+    "atanh",
+    "atan",
+    "cosh",
+    "cos",
+    "degrees",
+    "radians",
+    "sin",
+    "sinh",
+    "tan",
+    "tanh",
+    
+    "abs",
+    "ceil",
+    "clamp",
+    "dFdx",
+    "dFdy",
+    "exp2",
+    "exp",
+    "floor",
+    "fma",
+    "fract",
+    "fwidth",
+    "inversesqrt",
+    "isinf",
+    "isnan",
+    "log2",
+    "log",
+    "max",
+    "min",
+    "mix",
+    "mod",
+    "modf",
+    "noise",
+    "pow",
+    "roundEven",
+    "round",
+    "sign",
+    "smoothstep",
+    "sqrt",
+    "step",
+    "trunc",
+
+    "floatBitsToInt",
+    "frexp",
+    "intBitsToFloat",
+    "ldexp",
+    "packDouble2x32",
+    "packHalf2x16",
+    "packUnorm",
+    "unpackDouble2x32",
+    "unpackHalf2x16",
+    "unpackUnorm",
+
+    "cross",
+    "distance",
+    "dot",
+    "equal",
+    "faceforward",
+    "length",
+    "normalize",
+    "notEqual",
+    "reflect",
+    "refract",
+
+    "all",
+    "any",
+    "greaterThanEqual",
+    "greaterThan",
+    "lessThanEqual",
+    "lessThan",
+    "not",
+
+    "EmitStreamVertex",
+    "EmitVertex",
+    "EndPrimitive",
+    "EndStreamPrimitive",
+
+    "interpolateAtCentroid",
+    "interpolateAtOffset",
+    "interpolateAtSample",
+    "texelFetchOffset",
+    "texelFetch",
+    "textureGatherOffsets",
+    "textureGatherOffset",
+    "textureGather",
+    "textureGradOffset",
+    "textureGrad",
+    "textureLodOffset",
+    "textureLod",
+    "textureOffset",
+    "textureProjGradOffset",
+    "textureProjGrad",
+    "textureProjLodOffset",
+    "textureProjOffset",
+    "textureProjLod",
+    "textureProj",
+    "textureQueryLevels",
+    "textureQueryLod",
+    "textureSamples",
+    "textureSize",
+    "texture",
+
+    "determinant",
+    "groupMemoryBarrier",
+    "inverse",
+    "matrixCompMult",
+    "outerProduct",
+    "transpose",
+
+    "bitCount",
+    "bitfieldExtract",
+    "bitfieldInsert",
+    "bitfieldReverse",
+    "findLSB",
+    "findMSB",
+    "uaddCarry",
+    "umulExtended"
+    "usubBorrow", 
+
+    "imageAtomicAdd",
+    "imageAtomicAnd",
+    "imageAtomicCompSwap",
+    "imageAtomicExchange",
+    "imageAtomicMax",
+    "imageAtomicMin",
+    "imageAtomicOr",
+    "imageAtomicXor",
+    "imageLoad",
+    "imageSamples",
+    "imageSize",
+    "imageStore",
+
+    "atomicAdd",
+    "atomicAnd",
+    "atomicCompSwap",
+    "atomicCounter",
+    "atomicCounterDecrement",
+    "atomicCounterIncrement",
+    "atomicExchange",
+    "atomicMax",
+    "atomicMin",
+    "atomicOr",
+    "atomicXor",
+
+    "barrier",
+    "groupMemoryBarrier", 
+    "memoryBarrierAtomicCounter",
+    "memoryBarrierBuffer",
+    "memoryBarrierImage",
+    "memoryBarrierShared",
+    "memoryBarrier",
+    /* clang-format on */
+};
+
+static const Span<const char *> text_format_glsl_literals_builtinfunc(
+    text_format_glsl_literals_builtinfunc_data,
+    ARRAY_SIZE(text_format_glsl_literals_builtinfunc_data));
+    
+static const char *text_format_glsl_literals_reserved_data[]{
+    /* Force single column, sorted list. */
+    /* clang-format off */
+    "const",
+    "uniform",
+    "buffer",
+    "shared",
+    "attribute",
+    "varying",
+    "volatile",
+    "restrict",
+    "readonly",
+    "writeonly",
+    "atomic_uint",
+    "layout",
+    "centroid",
+    "flat",
+    "smooth",
+    "noperspective",
+    "patch",
+    "sample",
+    "invariant",
+    "precise",
+    "break",
+    "continue",
+    "do",
+    "for",
+    "while",
+    "switch",
+    "case",
+    "default",
+    "if",
+    "else",
+    "subroutine",
+    "discard",
+    "return",
+    "in", "out", "inout", 
+    "lowp", "mediump", "highp",
+    "precision",
+    "gl_CullDistance",
+    "gl_FragCoord", 
+    "gl_FragDepth", 
+    "gl_FrontFacing", 
+    "gl_GlobalInvocationID", 
+    "gl_HelperInvocation", 
+    "gl_InstanceID", 
+    "gl_InvocationID", 
+    "gl_Layer", 
+    "gl_LocalInvocationID", 
+    "gl_LocalInvocationIndex", 
+    "gl_NumSamples", 
+    "gl_NumWorkGroups", 
+    "gl_PatchVerticesIn", 
+    "gl_PointCoord", 
+    "gl_PointSize", 
+    "gl_Position", 
+    "gl_PrimitiveID", 
+    "gl_PrimitiveIDIn", 
+    "gl_SampleID", 
+    "gl_SampleMask", 
+    "gl_SampleMaskIn", 
+    "gl_SamplePosition", 
+    "gl_TessCoord", 
+    "gl_TessLevelInner", 
+    "gl_TessLevelOuter", 
+    "gl_VertexID", 
+    "gl_ViewportIndex", 
+    "gl_WorkGroupID", 
+    "gl_WorkGroupSize",
+    /* clang-format on */
+};
+
+static const Span<const char *> text_format_glsl_literals_reserved(
+    text_format_glsl_literals_reserved_data, ARRAY_SIZE(text_format_glsl_literals_reserved_data));
+
+static const char *text_format_glsl_literals_typename_data[]{
+    /* Force single column, sorted list. */
+    /* clang-format off */
+    "int",
+    "void",
+    "bool",
+    "true",
+    "false",
+    "float",
+    "double",
+    "struct",
+
+    /* Longer identifiers with postfixes must be checked first (to avoid false early matches) */
+    "mat2x2",
+    "mat3x2",
+    "mat4x2",
+    "mat2x3",
+    "mat3x3",
+    "mat4x3",
+    "mat2x4",
+    "mat3x4",
+    "mat4x4",
+
+    "dmat2x2",
+    "dmat3x2",
+    "dmat4x2",
+    "dmat2x3",
+    "dmat3x3",
+    "dmat4x3",
+    "dmat2x4",
+    "dmat3x4",
+    "dmat4x4",
+
+    "vec2",
+    "vec3",
+    "vec4",
+    "ivec2",
+    "ivec3",
+    "ivec4",
+    "bvec2",
+    "bvec3",
+    "bvec4",
+
+    "uint",
+    "uvec2",
+    "uvec3",
+    "uvec4",
+
+    "dvec2",
+    "dvec3",
+    "dvec4",
+
+    "mat2",
+    "mat3",
+    "mat4",
+
+    "sampler1DArrayShadow",
+    "sampler1DShadow",
+    "sampler1DArray",
+    "sampler1D",
+    "isampler1DArray",
+    "isampler1D",
+    "usampler1DArray",
+    "usampler1D",
+
+    "sampler2DArrayShadow",
+    "sampler2DShadow",
+    "sampler2DArray",
+    "sampler2D",
+    "isampler2DArray",
+    "usampler2DArray",
+    "isampler2D",
+    "usampler2D",
+
+    "sampler2DRectShadow",
+    "sampler2DRect",
+    "isampler2DRect",
+    "usampler2DRect",
+
+    "sampler2DMSArray",
+    "sampler2DMS",
+    "isampler2DMSArray",
+    "isampler2DMS",
+    "usampler2DMSArray",
+    "usampler2DMS",
+
+    "sampler3D",
+    "isampler3D",
+    "usampler3D",
+
+    "samplerCubeArrayShadow",
+    "samplerCubeShadow",
+    "samplerCubeArray",
+    "samplerCube",
+    "isamplerCubeArray",
+    "isamplerCube",
+    "usamplerCubeArray",
+    "usamplerCube",
+
+    "samplerBuffer",
+    "isamplerBuffer",
+    "usamplerBuffer",
+
+    "image1DArray",
+    "image1D",
+    "iimage1DArray",
+    "iimage1D",
+    "uimage1DArray",
+    "uimage1D",
+
+    "image2DArray",
+    "image2D",
+    "iimage2DArray",
+    "iimage2D",
+    "uimage2DArray",
+    "uimage2D",
+
+    "image2DRect",
+    "iimage2DRect",
+    "uimage2DRect",
+
+    "image2DMSArray",
+    "image2DMS",
+    "iimage2DMSArray",
+    "iimage2DMS",
+    "uimage2DMSArray",
+    "uimage2DMS",
+
+    "image3D",
+    "iimage3D",
+    "uimage3D",
+
+    "imageCubeArray",
+    "imageCube",
+    "iimageCubeArray",
+    "iimageCube",
+    "uimageCubeArray",
+    "uimageCube",
+
+    "imageBuffer",
+    "iimageBuffer",
+    "uimageBuffer",
+    /* clang-format on */
+};
+static const Span<const char *> text_format_glsl_literals_typename(
+    text_format_glsl_literals_typename_data,
+    ARRAY_SIZE(text_format_glsl_literals_typename_data));
 
 /* *** Local Functions (for format_line) *** */
 
 static int txtfmt_glsl_find_builtin_func(const char *string)
 {
-  int i, len;
+  // int i, len;
 
   /* Keep aligned args for readability. */
   /* clang-format off */
@@ -27,6 +417,7 @@ static int txtfmt_glsl_find_builtin_func(const char *string)
   /* list is from
    * https://registry.khronos.org/OpenGL/specs/gl/GLSLangSpec.4.60.pdf
    */
+  /*
   if        (STR_LITERAL_STARTSWITH(string, "acosh",        len)) { i = len;
   } else if (STR_LITERAL_STARTSWITH(string, "acos",         len)) { i = len;
   } else if (STR_LITERAL_STARTSWITH(string, "asinh",        len)) { i = len;
@@ -184,9 +575,10 @@ static int txtfmt_glsl_find_builtin_func(const char *string)
   } else if (STR_LITERAL_STARTSWITH(string, "memoryBarrier",               len)) { i = len;
 
   } else                                                                         { i = 0;
-  }
+  }*/
 
   /* clang-format on */
+  const int i = text_format_string_literal_find(text_format_glsl_literals_builtinfunc, string);
 
   /* If next source char is an identifier (eg. 'i' in "definite") no match */
   if (i == 0 || text_check_identifier(string[i])) {
@@ -203,7 +595,7 @@ static int txtfmt_glsl_find_builtin_func(const char *string)
 
 static int txtfmt_glsl_find_reserved(const char *string)
 {
-  int i, len;
+  // int i, len;
 
   /* Keep aligned args for readability. */
   /* clang-format off */
@@ -211,6 +603,7 @@ static int txtfmt_glsl_find_reserved(const char *string)
   /* list is from...
    * https://registry.khronos.org/OpenGL/specs/gl/GLSLangSpec.4.60.pdf
    */
+  /* 
   if        (STR_LITERAL_STARTSWITH(string, "const",         len)) { i = len;
   } else if (STR_LITERAL_STARTSWITH(string, "uniform",       len)) { i = len;
   } else if (STR_LITERAL_STARTSWITH(string, "buffer",        len)) { i = len;
@@ -291,6 +684,8 @@ static int txtfmt_glsl_find_reserved(const char *string)
 
   /* clang-format on */
 
+  const int i = text_format_string_literal_find(text_format_glsl_literals_reserved, string);
+  
   /* If next source char is an identifier (eg. 'i' in "definite") no match */
   if (i == 0 || text_check_identifier(string[i])) {
     return -1;
@@ -307,12 +702,13 @@ static int txtfmt_glsl_find_reserved(const char *string)
 
 static int txtfmt_glsl_find_typename(const char *string)
 {
-  int i, len;
+  // int i, len;
 
   /* Keep aligned args for readability. */
   /* clang-format off */
 
   /* OSL shader types */
+  /*
   if        (STR_LITERAL_STARTSWITH(string, "int",        len)) { i = len;
   } else if (STR_LITERAL_STARTSWITH(string, "void",       len)) { i = len;
   } else if (STR_LITERAL_STARTSWITH(string, "bool",       len)) { i = len;
@@ -320,9 +716,10 @@ static int txtfmt_glsl_find_typename(const char *string)
   } else if (STR_LITERAL_STARTSWITH(string, "false",      len)) { i = len;
   } else if (STR_LITERAL_STARTSWITH(string, "float",      len)) { i = len;
   } else if (STR_LITERAL_STARTSWITH(string, "double",     len)) { i = len;
-  } else if (STR_LITERAL_STARTSWITH(string, "struct",     len)) { i = len;
+  } else if (STR_LITERAL_STARTSWITH(string, "struct",     len)) { i = len;*/
 
     /* Longer identifiers with postfixes must be checked first (to avoid false early matches) */
+  /*
   } else if (STR_LITERAL_STARTSWITH(string, "mat2x2",     len)) { i = len;
   } else if (STR_LITERAL_STARTSWITH(string, "mat3x2",     len)) { i = len;
   } else if (STR_LITERAL_STARTSWITH(string, "mat4x2",     len)) { i = len;
@@ -454,10 +851,11 @@ static int txtfmt_glsl_find_typename(const char *string)
   } else if (STR_LITERAL_STARTSWITH(string, "uimageBuffer",           len)) { i = len;
 
   } else                                                          { i = 0;
-  }
+  }*/
 
   /* clang-format on */
-
+  const int i = text_format_string_literal_find(text_format_glsl_literals_typename, string);
+  
   /* If next source char is an identifier (eg. 'i' in "definite") no match */
   if (i == 0 || text_check_identifier(string[i])) {
     return -1;

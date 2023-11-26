@@ -10,6 +10,7 @@
 
 #include <cstdio>
 #include <cstring>
+#include <iostream>
 
 #include "MEM_guardedalloc.h"
 
@@ -18,6 +19,7 @@
 #include "BLI_ghash.h"
 #include "BLI_listbase.h"
 #include "BLI_string.h"
+#include "BLI_string_ref.hh"
 #include "BLI_utildefines.h"
 
 #include "GPU_texture.h"
@@ -854,7 +856,7 @@ void GPU_material_node_decl_from_function(
   for (int i = 0; i < func->totparam; i++) {
     std::unique_ptr<SocketDeclaration> sock;
     bool valid = true;
-
+    
     switch (func->paramtype[i]) {
       case GPU_FLOAT:
         sock = std::make_unique<decl::Float>();
@@ -907,7 +909,6 @@ void GPU_material_node_decl_from_function(
       }
       return "Unknown";
     };
-
     sock->in_out = func->paramqual[i] == FUNCTION_QUAL_OUT ? SOCK_OUT : SOCK_IN;
     if (func->runtimemeta) {
       sock->name = std::string(func->runtimemeta->paramname[i]);
@@ -920,13 +921,16 @@ void GPU_material_node_decl_from_function(
     if (!valid) {
       sock->name = "<Invalid Type>";
     }
-
+    
+    
     switch (sock->in_out) {
       case SOCK_IN:
-        declaration.inputs.append(std::move(sock));
+        declaration.inputs.append(sock.get());
+        declaration.items.append(std::move(sock));
         break;
       case SOCK_OUT:
-        declaration.outputs.append(std::move(sock));
+        declaration.outputs.append(sock.get());
+        declaration.items.append(std::move(sock));
         break;
     }
   }

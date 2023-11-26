@@ -1,7 +1,7 @@
 
 #include "juniper_sync.hh"
 #include "juniper_engine.h"
-#include "BKE_object.h"
+#include "BKE_object.hh"
 #include "draw_manager.hh"
 #include "juniper_instance.hh"
 

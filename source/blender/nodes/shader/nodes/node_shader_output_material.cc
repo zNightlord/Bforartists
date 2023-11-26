@@ -30,14 +30,14 @@ static void node_shader_output_material_update(bNodeTree *ntree, bNode *node)
 
   // PBR-only Sockets
   for (i = 0; i < 2; i++) {
-    nodeSetSocketAvailability(ntree,
+    bke::nodeSetSocketAvailability(ntree,
                               sockets[i],
                               ELEM(target, SHD_OUTPUT_ALL, SHD_OUTPUT_EEVEE, SHD_OUTPUT_CYCLES));
   }
 
   // NPR-only Sockets
   for (i = 4; i < 6; i++) {
-    nodeSetSocketAvailability(ntree,
+    bke::nodeSetSocketAvailability(ntree,
                               sockets[i],
                               ELEM(target, SHD_OUTPUT_ALL, SHD_OUTPUT_JNPR));
 

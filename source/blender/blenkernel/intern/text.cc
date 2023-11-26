@@ -2149,7 +2149,7 @@ static const char* txt_get_comment_prefix(Text *text) {
 
 void txt_comment(Text *text, const char *prefix)
 {
-  const char *prefix = txt_get_comment_prefix(text);
+  prefix = txt_get_comment_prefix(text);
 
   if (ELEM(nullptr, text->curl, text->sell)) {
     return;
@@ -2161,7 +2161,7 @@ void txt_comment(Text *text, const char *prefix)
 
 bool txt_uncomment(Text *text, const char *prefix)
 {
-  const char *prefix = txt_get_comment_prefix(text);
+  prefix = txt_get_comment_prefix(text);
 
   if (ELEM(nullptr, text->curl, text->sell)) {
     return false;

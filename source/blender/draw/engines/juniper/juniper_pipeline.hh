@@ -50,6 +50,7 @@ public:
     draw::PassMain::Sub *
     material_add(Object *ob, Material *blender_mat, GPUMaterial *gpumat, eMaterialPassType pass_type)
     {
+        (void)ob; // Warning
         return test.material_add(blender_mat, gpumat, pass_type);
     }
 

@@ -13,7 +13,7 @@
 #include "gpu_shader_create_info.hh"
 
 #include "NOD_shader.h"
-#include "intern/depsgraph.h"
+#include "intern/depsgraph.hh"
 
 // For overriding builtin shader sources within blender
 #include "gpu_shader_create_info_private.hh"
