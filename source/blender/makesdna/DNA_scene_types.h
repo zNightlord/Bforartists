@@ -1855,6 +1855,10 @@ typedef struct SceneNPR {
   float npr_test_val_9;
   float npr_test_val_10; 
   float npr_test_val_11;
+  float npr_test_val_12;
+  float npr_test_val_13;
+  float npr_test_val_14;
+  float npr_test_val_15;
 } SceneNPR;
 
 typedef struct SceneGpencil {

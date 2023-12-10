@@ -86,7 +86,7 @@ namespace blender::npr::strokegen
 
     /* First setup resources */
     strokegen_buffers.on_begin_sync(
-      drw_view, strokegen_passes.test_list_ranking, (frame_counter % 256u) == 0u/*true*/
+      drw_view, strokegen_passes.test_list_ranking, (frame_counter % 1024u) == 0u/*true*/
     );
     strokegen_textures.on_begin_sync(tex_prepass_depth); 
 
@@ -162,7 +162,7 @@ namespace blender::npr::strokegen
     strokegen_textures.fb_contour_raster.bind();
     float fb_clear_col[4] = {0, 0, 0, 0}; 
     GPU_framebuffer_clear_color(strokegen_textures.fb_contour_raster, fb_clear_col);
-    GPU_line_width(4.0f); // always snap to integer, see the opengl spec on line rasterization
+    GPU_line_width(2.0f); // always snap to integer, see the opengl spec on line rasterization
     manager.submit(
       strokegen_passes.get_contour_edge_draw_pass(StrokeGenPassModule::INDIRECT_DRAW_CONTOUR_EDGES), view
     ); 

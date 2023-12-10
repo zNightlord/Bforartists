@@ -275,6 +275,7 @@ struct WedgeQuality
     float area; 
     float dihedral; 
     bool unstable; 
+    bool unstable_silouette;
 }; 
 
 WedgeQuality compute_wedge_quality(vec3 p0, vec3 p1, vec3 p2, vec3 p3, vec3 cam_pos_ws) /* world pos of p0~3 */
@@ -300,6 +301,7 @@ WedgeQuality compute_wedge_quality(vec3 p0, vec3 p1, vec3 p2, vec3 p3, vec3 cam_
 	float face_orient_012 = dot(view_dir, n0);
   	float face_orient_321 = dot(view_dir, n2);
     res.unstable = (abs(face_orient_012) < 0.08f) || (abs(face_orient_321) < 0.08f);
+    res.unstable_silouette = (abs(face_orient_012) < 0.2f) && (abs(face_orient_321) < 0.2f);
 
 	return res; 
 }
@@ -309,18 +311,25 @@ struct WedgeFloodingPointer
     uint next_wedge_id; 
     bool is_border; /* if current wedge is border */
     bool is_seed; /* if wedge pointed by next_wedge_id is a seed */
+    bool is_unstable; /* if wedge is an unstable sillouette */
 }; 
 uint encode_wedge_flooding_pointer(WedgeFloodingPointer wfp)
 {
-    uint wfp_enc = ((wfp.next_wedge_id << 2u) | ((uint(wfp.is_border) << 1u) | (uint(wfp.is_seed)))); 
+    uint wfp_enc = (
+        (wfp.next_wedge_id << 3u) 
+        | (uint(wfp.is_border) << 2u) 
+        | (uint(wfp.is_seed) << 1u)
+        | (uint(wfp.is_unstable))
+    ); 
     return wfp_enc; 
 }
 WedgeFloodingPointer decode_wedge_flooding_pointer(uint wfp_enc)
 {
     WedgeFloodingPointer wfp; 
-    wfp.next_wedge_id = (wfp_enc >> 2u);
-    wfp.is_border = (0u != ((wfp_enc >> 1u) & 1u));
-    wfp.is_seed = (0u != (wfp_enc & 1u));
+    wfp.next_wedge_id = (wfp_enc >> 3u);
+    wfp.is_border = (0u != ((wfp_enc >> 2u) & 1u));
+    wfp.is_seed = (0u != ((wfp_enc >> 1u) & 1u));
+    wfp.is_unstable = (0u != (wfp_enc & 1u)); 
     return wfp; 
 }
 
@@ -507,22 +516,25 @@ void bilateral_filter_wedge_normal(
     float plane_dist = max(abs(dot(pp - qq, np)), abs(dot(pp - qq, nq)));
     float plane_weight = gaussian(plane_dist, 0.1f);
 
-    // Fast and Effective Feature-Preserving Mesh Denoising
-    float normal_weight = dot(np, nq);
-    if (normal_weight < 0.55f) normal_weight = 0.0f; 
-    normal_weight *= normal_weight; 
 
-    weight = normal_weight/*  * plane_weight *//*  * geometry_weight */; 
+    /* Bilateral weight from "Fast and Effective Feature-Preserving Mesh Denoising" */
+    float normal_weight = dot(np, nq);
+    if (normal_weight < 0.9f) normal_weight = 0.0f; 
+    normal_weight *= normal_weight; 
+    weight = normal_weight * plane_weight/*  * geometry_weight */; 
     
-    
+
+    /* Test for view-aligned filtering --------------- */
     vec3 vq = normalize(cam_pos_ws - qq); 
     float cos_theta = dot(nq, vq); 
     float sin_theta = sqrt(1.0f - cos_theta * cos_theta); 
     
     vec3 vp = normalize(cam_pos_ws - pp); 
     vec3 np_view_proj = normalize(np - dot(np, vp) * vp);
+    vec3 np_view_filtered = normalize(sin_theta * np_view_proj + cos_theta * vp); 
 
-    n_filtered = nq; // normalize(sin_theta * np_view_proj + cos_theta * vp); 
+
+    n_filtered = nq; 
 }
 
 Quadric compute_wedge_quadric(
@@ -580,7 +592,7 @@ float compute_vert_quadric_weight(vec3 p_v, Quadric q_v, vec3 p_x, Quadric q_x, 
     float quadric_dist_v2qx = dot(v, q_x.quadric * v); /* vT Q v */
     float quadric_weight = gaussian(sqrt(abs(quadric_dist_v2qx)), dev_q); 
 
-    float geometry_weight = /* q_v.area *  */gaussian(dist, dev_g); 
+    float geometry_weight = q_v.area * gaussian(dist, dev_g); 
     
     return geometry_weight * quadric_weight; 
 }

@@ -119,11 +119,13 @@ public:
   struct GPUMeshFilteringParameters {
     int num_filtering_iters;
     int num_diffusion_iters;
+    int num_edge_flooding_iters; 
     int num_normal_filtering_iters; 
     float quadric_deviation;
     float geodist_deviation;
     float positiion_regularization_scale;
-    bool use_normal_filtering; 
+    bool use_normal_filtering;
+    bool test_bilateral_filtering; 
     GPUMeshQuadricFilter alternate_filter_0; 
     GPUMeshQuadricFilter alternate_filter_1;
     bool visualize_filtered_geom; 

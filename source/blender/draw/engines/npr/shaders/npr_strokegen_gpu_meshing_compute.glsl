@@ -435,9 +435,10 @@ void main()
     ); 
     
     WedgeFloodingPointer wfptr; 
-    wfptr.is_seed = wq.unstable; 
     wfptr.next_wedge_id = EdgeID; 
-    wfptr.is_border = is_border_wedge; 
+    wfptr.is_seed       = wq.unstable && !is_border_wedge; 
+    wfptr.is_unstable   = wq.unstable_silouette && !is_border_wedge; 
+    wfptr.is_border     = is_border_wedge; 
     if (valid_thread)
         ssbo_wedge_flooding_pointers_out_[EdgeID] = encode_wedge_flooding_pointer(wfptr); 
 

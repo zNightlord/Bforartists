@@ -239,6 +239,10 @@
     .npr_test_val_9 = 1.0f, \
     .npr_test_val_10 = 1.0f, \
     .npr_test_val_11 = 1.0f, \
+    .npr_test_val_12 = 1.0f, \
+    .npr_test_val_13 = 1.0f, \
+    .npr_test_val_14 = 1.0f, \
+    .npr_test_val_15 = 1.0f, \
   }
 
 #define _DNA_DEFAULT_Scene \

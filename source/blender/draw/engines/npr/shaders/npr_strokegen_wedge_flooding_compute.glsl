@@ -8,6 +8,64 @@ uint pcg(uint v) /* pcg hash */
 	return (word >> 22u) ^ word;
 }
 
+struct EdgeFilteringInfo
+{
+    bool is_null_edge; 
+    uint edge_id; 
+    bool is_unstable; 
+    bool is_border; 
+}; 
+uint encode_filtered_edge_info(EdgeFilteringInfo fei)
+{
+    uint data = 0u; 
+    data = (fei.edge_id << 2u); 
+    data |= ((fei.is_unstable ? 1u : 0u) << 1u); 
+    data |= (fei.is_border   ? 1u : 0u); 
+
+    if (fei.is_null_edge)
+        data = NULL_EDGE; 
+        
+    return data; 
+}
+EdgeFilteringInfo decode_filtered_edge_info(uint data)
+{
+    EdgeFilteringInfo fei; 
+    fei.is_null_edge = (data == NULL_EDGE); 
+    fei.edge_id = data >> 2u; 
+    fei.is_unstable = (data & 0x2u) != 0u; 
+    fei.is_border   = (data & 0x1u) != 0u; 
+    return fei; 
+}
+
+struct VertFilteringInfo
+{
+    bool is_null_vert; 
+    uint vert_id; 
+    bool is_unstable; 
+    bool is_border; 
+};
+uint encode_filtered_vert_info(VertFilteringInfo fvi)
+{
+    uint data = 0u; 
+    data = (fvi.vert_id << 2u); 
+    data |= ((fvi.is_unstable ? 1u : 0u) << 1u); 
+    data |= (fvi.is_border   ? 1u : 0u); 
+
+    if (fvi.is_null_vert)
+        data = NULL_FILTERED_VERT; 
+        
+    return data; 
+}
+VertFilteringInfo decode_filtered_vert_info(uint data)
+{
+    VertFilteringInfo fvi; 
+    fvi.is_null_vert = (data == NULL_FILTERED_VERT); 
+    fvi.vert_id = (data >> 2u); 
+    fvi.is_unstable = (data & 0x2u) != 0u; 
+    fvi.is_border   = (data & 0x1u) != 0u; 
+    return fvi; 
+}
+
 
 #if defined(_KERNEL_MULTICOMPILE__WEDGE_FLOODING)
 /*
@@ -87,14 +145,27 @@ void main()
         bool is_seed_edge = wfptr.is_seed && valid_thread; 
         uint compacted_idx = compact_filtered_edge(is_seed_edge, groupId); 
         
-        if (is_seed_edge) /* Store compacted seed edge */
-            ssbo_filtered_edge_to_edge_[compacted_idx] = EdgeID;   
+        /* Store edge <-> filtered_edge pointers */
+        EdgeFilteringInfo fei; 
+        fei.is_unstable = wfptr.is_unstable; 
+        fei.is_border = wfptr.is_border;
+
+        if (is_seed_edge)
+        {
+            fei.is_null_edge = false; 
+            fei.edge_id = EdgeID; 
+
+            ssbo_filtered_edge_to_edge_[compacted_idx] = encode_filtered_edge_info(fei);   
+        }
 
         if (valid_thread)
         {
+            fei.is_null_edge = (false == is_seed_edge); 
+            fei.edge_id = compacted_idx;
+
             uint num_all_edges = pcs_edge_id_offset_ + pcs_edge_count_; 
             uint addr_edge_to_filtered_edge = ssbo_edge_to_edges_addr__edge_to_filtered_edge(EdgeID, num_all_edges); 
-            ssbo_edge_to_edges_[addr_edge_to_filtered_edge] = is_seed_edge ? compacted_idx : NULL_EDGE;
+            ssbo_edge_to_edges_[addr_edge_to_filtered_edge] = encode_filtered_edge_info(fei);
         }
     #endif
 
@@ -131,9 +202,16 @@ void main()
     uint ivert = (VertID == vid_ivert1) ? 1u : 3u;
     uint iface_beg_rot_fwd = (ivert == 1u) ? 0u : 1u; 
 
-    bool vert_linked_to_seeded_wedge = true; 
+    /* Traverse adj edges */
+    VertFilteringInfo vfi;
+    vfi.is_null_vert = false; 
+    vfi.vert_id = VertID; 
+    vfi.is_unstable = false; 
+    vfi.is_border = false; 
     /* only select vert with 1-ring neighbors of full filtered wedges, 
      * since other non-filtered wedges do not have valid filtered data */
+    bool vert_linked_to_seeded_wedge = true; 
+
     if (valid_thread)
     {
         /* Rotate wedge around the vert */
@@ -149,6 +227,8 @@ void main()
                 vert_linked_to_seeded_wedge = false; 
                 break; 
             }
+            vfi.is_unstable = vfi.is_unstable || wfptr.is_unstable; 
+            vfi.is_border   = vfi.is_border   || wfptr.is_border; 
 
             uint iwedge_next = mark__cwedge_rotate_next(awi.iface_adj); 
             awi = decode_adj_wedge_info(ssbo_edge_to_edges_[awi.wedge_id*4u + iwedge_next]);
@@ -167,9 +247,13 @@ void main()
 
     /* Compact seed verts */
     uint compacted_idx = compact_filtered_vert(vert_linked_to_seeded_wedge, groupId); 
-        
+            
     if (vert_linked_to_seeded_wedge) /* Store compacted seed vert */
-        ssbo_filtered_vert_to_vert_[compacted_idx] = VertID;   
+    {
+        vfi.is_null_vert = false; 
+        vfi.vert_id = VertID; 
+        ssbo_filtered_vert_to_vert_[compacted_idx] = encode_filtered_vert_info(vfi);   
+    }
 
     if (valid_thread)
     {        
@@ -178,9 +262,11 @@ void main()
         vwlh.ivert = ivert; 
         ssbo_vert_to_edge_list_header_[VertID] = encode_vert_wedge_list_header(vwlh);
 
+        vfi.is_null_vert = (false == vert_linked_to_seeded_wedge);
+        vfi.vert_id = compacted_idx;
         uint num_all_verts = pcs_vert_id_offset_ + pcs_vert_count_;
         uint addr_vert_to_filtered_vert = ssbo_vert_to_edge_list_header_addr__vert_to_filtered_vert(VertID, num_all_verts);
-        ssbo_vert_to_edge_list_header_[addr_vert_to_filtered_vert] = vert_linked_to_seeded_wedge ? compacted_idx : NULL_FILTERED_VERT;
+        ssbo_vert_to_edge_list_header_[addr_vert_to_filtered_vert] = encode_filtered_vert_info(vfi);
     }
 }
 #endif
@@ -363,7 +449,8 @@ void main()
     bool valid_thread = (idx.x < NumFilteredEdges); 
     if (!valid_thread) return; /* quit if not valid thread */
 
-    uint wedge_id = ssbo_filtered_edge_to_edge_[FilteredEdgeID]; 
+    EdgeFilteringInfo fei = decode_filtered_edge_info(ssbo_filtered_edge_to_edge_[FilteredEdgeID]);
+    uint wedge_id = fei.edge_id; 
     
     uvec4 vids_wedge;
     uint base_addr = wedge_id * 4u; 
@@ -387,7 +474,7 @@ void main()
         normal_curr = load_filtered_edge_normal(FilteredEdgeID); 
     }
 
-    float weight_sum = 1.0f; 
+    float weight_sum = 0.01f; 
     vec3 normal_filtered = normal_curr; 
     for (uint ibwedge = 0u; ibwedge < 4u; ++ibwedge)
     {
@@ -419,10 +506,11 @@ void main()
         }
 
         uint addr = ssbo_edge_to_edges_addr__edge_to_filtered_edge(awi.wedge_id, num_all_edges); 
-        uint filtered_adj_wedge_id = ssbo_edge_to_edges_[addr]; 
+        EdgeFilteringInfo fei = decode_filtered_edge_info(ssbo_edge_to_edges_[addr]);
+        uint filtered_adj_wedge_id = fei.edge_id; 
         
         vec3 normal_bwedge;
-        if ((pcs_first_iter_ > 0) || (filtered_adj_wedge_id == NULL_EDGE)) 
+        if ((pcs_first_iter_ > 0) || (fei.is_null_edge)) 
             normal_bwedge = compute_wedge_normal(vpos_adj[0], vpos_adj[1], vpos_adj[2], vpos_adj[3]); 
         else 
             normal_bwedge = load_filtered_edge_normal(filtered_adj_wedge_id); 
@@ -456,7 +544,8 @@ void main()
     bool valid_thread = (idx.x < NumFilteredEdges); 
     if (!valid_thread) return; /* quit if not valid thread */
 
-    uint wedge_id = ssbo_filtered_edge_to_edge_[FilteredEdgeID]; 
+    EdgeFilteringInfo fei = decode_filtered_edge_info(ssbo_filtered_edge_to_edge_[FilteredEdgeID]); 
+    uint wedge_id = fei.edge_id; 
     
     uvec4 vids_wedge;
     uint base_addr = wedge_id * 4u; 
@@ -494,7 +583,8 @@ void main()
     uint num_all_edges = pcs_edge_id_offset_ + pcs_edge_count_; 
     uint num_all_verts = pcs_vert_id_offset_ + pcs_vert_count_; 
 
-    uint vert_id_global = ssbo_filtered_vert_to_vert_[FilteredVertID]; 
+    VertFilteringInfo vfi = decode_filtered_vert_info(ssbo_filtered_vert_to_vert_[FilteredVertID]); 
+    uint vert_id_global = vfi.vert_id; 
     vec3 vpos = ld_vbo(vert_id_global);
 
 
@@ -542,10 +632,11 @@ void main()
             uint vid_j = ssbo_edge_to_vert_[awi.wedge_id*4u + ivert_oppo]; 
             vec3 vpos_j = ld_vbo(vid_j);
 
-#if defined(_KERNEL_MULTICOMPILE__MESH_FILTERING__VERT_QUADRIC_INIT)
             uint wid_addr = ssbo_edge_to_edges_addr__edge_to_filtered_edge(awi.wedge_id, num_all_edges); 
-            uint filtered_wedge_id = ssbo_edge_to_edges_[wid_addr]; 
+            EdgeFilteringInfo fei = decode_filtered_edge_info(ssbo_edge_to_edges_[wid_addr]); 
+            uint filtered_wedge_id = fei.edge_id; 
 
+#if defined(_KERNEL_MULTICOMPILE__MESH_FILTERING__VERT_QUADRIC_INIT)
             Quadric q_e = load_wedge_quadric(filtered_wedge_id);
             q_v_filtered.area += q_e.area; 
 
@@ -556,14 +647,12 @@ void main()
             filtered_vert_normal_weight += q_e.area; 
 #else
             uint vid_addr = ssbo_vert_to_edge_list_header_addr__vert_to_filtered_vert(vid_j, num_all_verts); 
-            uint filtered_vid_j = ssbo_vert_to_edge_list_header_[vid_addr]; 
-
-            uint wid_addr = ssbo_edge_to_edges_addr__edge_to_filtered_edge(awi.wedge_id, num_all_edges); 
-            uint filtered_wedge_id = ssbo_edge_to_edges_[wid_addr]; 
+            VertFilteringInfo vfi = decode_filtered_vert_info(ssbo_vert_to_edge_list_header_[vid_addr]); 
+            uint filtered_vid_j = vfi.vert_id; 
 
             /* Vertex Pos Filtering */
             vec3 filtered_vpos_j;
-            if (filtered_vid_j != NULL_FILTERED_VERT) 
+            if (false == vfi.is_null_vert) 
                 filtered_vpos_j = load_filtered_vert_pos(filtered_vid_j, NumFilteredVerts); 
             else
                 filtered_vpos_j = .5f * (vpos + vpos_j); 
@@ -577,7 +666,7 @@ void main()
             float w = .0f; 
             Quadric q_oppo; 
             vec3 q_pos = vpos_j; 
-            if (filtered_vid_j != NULL_FILTERED_VERT)
+            if (false == vfi.is_null_vert)
                 q_oppo = load_vert_quadric(filtered_vid_j); 
             else{
                 q_oppo = load_wedge_quadric(filtered_wedge_id);
@@ -608,7 +697,7 @@ void main()
 
     if (bilateral_weight_sum > .0f)
     {
-        bilateral_weight_sum *= 3.0f; 
+        // bilateral_weight_sum *= 3.0f; 
         delta_bilateral = delta_bilateral / bilateral_weight_sum;
         vpos_filtered += delta_bilateral; 
     }
@@ -617,7 +706,8 @@ void main()
     
 
 #if defined(_KERNEL_MULTICOMPILE__MESH_FILTERING__VERT_QUADRIC_INIT)
-    filtered_vert_normal = normalize(filtered_vert_normal / filtered_vert_normal_weight); /*TODO: optimize normal storage*/
+    /*TODO: optimize normal storage*/
+    filtered_vert_normal = normalize(filtered_vert_normal / filtered_vert_normal_weight); 
     if (valid_thread)
         store_filtered_vert_normal(FilteredVertID, filtered_vert_normal);
 #endif
@@ -634,13 +724,19 @@ void main()
     bool valid_thread = (idx.x < NumFilteredVerts); 
     if (!valid_thread) return; /* quit if not valid thread */
     
+    VertFilteringInfo vfi = decode_filtered_vert_info(ssbo_filtered_vert_to_vert_[FilteredVertID]); 
+    uint vert_id_global = vfi.vert_id; 
+    if ((!vfi.is_unstable) || vfi.is_border) return; /* we only move unstable,non-border verts */
+
+    /* vert pos from last filtering iter */
+    vec3 vpos = ld_vbo(vert_id_global);
+    vec3 vpos_orig = vpos; 
+    /* bilateral filtered vert pos */
+    vec3 vpos_filtered = load_filtered_vert_pos(FilteredVertID, NumFilteredVerts);
+
+    /* Project vert pos to quadric surface */
     Quadric q_v = load_vert_quadric(FilteredVertID); 
     vec3 nv = load_filtered_vert_normal(FilteredVertID); 
-    
-    uint vert_id_global = ssbo_filtered_vert_to_vert_[FilteredVertID]; 
-    vec3 vpos = ld_vbo(vert_id_global);
-    vec3 vpos_filtered = load_filtered_vert_pos(FilteredVertID, NumFilteredVerts);
-    vec3 vpos_orig = vpos; 
 
     #if defined(_KERNEL_MULTICOMPILE__MESH_FILTERING__MOVE_VERTS_CONSTRAINED_SOLVE)
         mat3 A = mat3(q_v.quadric); /* slice upper 3x3 */
@@ -658,12 +754,14 @@ void main()
         vpos = vec3(-inverse(A)*b); 
     #endif
 
-    // vpos = vpos_filtered; 
+    if (pcs_test_bilateral_filtering_ > 0) 
+        vpos = vpos_filtered; /* test only */
+
     if (any(isnan(vpos)) || any(isinf(vpos)))
         vpos = vpos_orig; 
 
     if (valid_thread)
-        store_vbo(vert_id_global, vpos);
+        store_vbo(vert_id_global, (pcs_test_bilateral_filtering_ > 0) ? vec3(.0f, .0f, .0f) : vpos);
 #endif
 
 }
