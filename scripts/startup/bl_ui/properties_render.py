@@ -912,7 +912,7 @@ class RENDER_PT_npr_test(RenderButtonsPanel, Panel):
         col.prop(props, "npr_test_val_8",  text="position regularization scale")
         col.prop(props, "npr_test_val_9",  text="use bilateral normal filtering")
         col.prop(props, "npr_test_val_10", text="num normal filtering iters")
-        col.prop(props, "npr_test_val_11", text="test bilateral filtering")
+        col.prop(props, "npr_test_val_11", text="num edge flooding iters")
         col.prop(props, "npr_test_val_12", text="")
         col.prop(props, "npr_test_val_13", text="")
         col.prop(props, "npr_test_val_14", text="")

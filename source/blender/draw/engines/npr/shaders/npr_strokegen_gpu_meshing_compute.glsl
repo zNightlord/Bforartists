@@ -314,8 +314,8 @@ void main()
     uvec2 edge_verts = uvec2(vid[1], vid[2]); /*v1, 2 is on the edge*/
 
     /* store merged id, also transform to wedge index order */
+    uvec4 wing_verts = line_adj_to_wing_verts(vid); 
     if (valid_thread) {
-        uvec4 wing_verts = line_adj_to_wing_verts(vid); 
         ssbo_edge_to_vert_[base_addr+0] = wing_verts[0];
         ssbo_edge_to_vert_[base_addr+1] = wing_verts[1]; 
         ssbo_edge_to_vert_[base_addr+2] = wing_verts[2];
@@ -340,6 +340,14 @@ void main()
     { /* temp cache inserted flag here to avoid hash search for deduplication */
         ssbo_edge_to_edges_[EdgeID*4u + 0u] = inserted ? 1u : 0u;
         
+        /* Build Vert-to-Wedge link */
+        uvec2 iverts_cwedge = mark__wedge_to_verts(4u); 
+        if (inserted)
+            for (uint iiverts = 0u; iiverts < 2u; iiverts++)
+            { /* Put an arbitrary neighbor wedge id for each vert */
+                uint vert_id = wing_verts[iverts_cwedge[iiverts]]; 
+                ssbo_vert_to_edge_list_header_[vert_id] = EdgeID; 
+            }
     }
 #endif
 
@@ -410,16 +418,16 @@ void main()
         }
 
 
-    /* Build Vert-to-Wedge link */
-    uvec2 iverts_cwedge = mark__wedge_to_verts(4u); 
-    if (valid_edge && valid_thread)
-        for (uint iiverts = 0u; iiverts < 2u; iiverts++)
-        { /* Put an arbitrary neighbor wedge id for each vert */
-            uint vert_id = vids_wedge[iverts_cwedge[iiverts]]; 
-            ssbo_vert_to_edge_list_header_[vert_id] = EdgeID; 
-        }
+    /* Adjust Vert-to-Wedge link to ensure border edges are always prefered */
+    if (valid_edge && valid_thread && is_border_wedge)
+    {
+        uint ivert_beg = mark__cwedge_to_beg_vert(mark__border_iface_mainfold()); 
+        uint vert_id = vids_wedge[ivert_beg]; 
+        ssbo_vert_to_edge_list_header_[vert_id] = EdgeID; 
+    }
 
 
+    /* Select wedges for mesh filtering */
     /* Mark unstable wedge & Initialize flooding pointer */
     vec3 vpos_wedge[4]; 
 	for (uint ivert = 0; ivert < 4; ++ivert)

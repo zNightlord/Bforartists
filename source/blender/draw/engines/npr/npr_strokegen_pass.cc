@@ -81,9 +81,7 @@ namespace blender::npr::strokegen
     meshing_params.use_normal_filtering = scene_eval->npr.npr_test_val_9 > 0.5f;
     meshing_params.num_normal_filtering_iters = 2 * std::max(1, (int)(scene_eval->npr.npr_test_val_10));
 
-    meshing_params.test_bilateral_filtering = scene_eval->npr.npr_test_val_11 > 0.5f;
-
-    meshing_params.num_edge_flooding_iters = (int)(scene_eval->npr.npr_test_val_12 + 1e-10f); 
+    meshing_params.num_edge_flooding_iters = (int)(scene_eval->npr.npr_test_val_11 + 1e-10f); 
   }
 
   void StrokeGenPassModule::on_end_sync()
@@ -244,7 +242,6 @@ namespace blender::npr::strokegen
       sub.push_constant("pcs_quadric_deviation_", params.quadric_deviation);
       sub.push_constant("pcs_geodist_deviation_", params.geodist_deviation);
       sub.push_constant("pcs_positiion_regularization_scale_", params.positiion_regularization_scale);
-      sub.push_constant("pcs_test_bilateral_filtering_", params.test_bilateral_filtering ? 1 : 0); 
     };
 
     for (int iter_filtering = 0; iter_filtering < params.num_filtering_iters; ++iter_filtering)

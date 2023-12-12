@@ -62,13 +62,17 @@ uvec4 wing_verts_to_line_adj(uvec4 wing_verts)
     uvec4 line_adj_verts = wing_verts.xywz; /* 0123 -> 0132 */
     return line_adj_verts;
 }
+uint mark__border_iface_mainfold()
+{ /* in line_adj triangle 012 has the valid vertex winding */
+    return 1u; 
+}
 
 /* Vertices: x4 vert ids per wing */
 /*    v2
  *   /  \
- *  /    \                
+ *  / f0 \                
  * v1>-->v3 for wedge e, vi => ssbo_edge_to_vert_[e*4+i] , i=0,1,2,3            
- *  \    /  
+ *  \ f1 /  
  *   \  /   Face winding               
  *    v0    013, 123                                  
 */
@@ -612,7 +616,7 @@ float compute_vert_quadric_weight(vec3 p_v, Quadric q_v, vec3 p_x, Quadric q_x, 
 struct VertWedgeListHeader
 {
     uint wedge_id; 
-    /* the face that contains this vertex that begines at the center wedge */
+    /* the face that contains this vertex that begins at the center wedge */
     uint ivert; /* 1 or 3 */
 }; 
 uint encode_vert_wedge_list_header(VertWedgeListHeader vwlh)

@@ -545,7 +545,6 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_mesh_filtering_)
     .push_constant(Type::FLOAT, "pcs_quadric_deviation_")
     .push_constant(Type::FLOAT, "pcs_geodist_deviation_")
     .push_constant(Type::FLOAT, "pcs_positiion_regularization_scale_")
-    .push_constant(Type::INT, "pcs_test_bilateral_filtering_")
     
     .local_group_size(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT)
     .compute_source("npr_strokegen_wedge_flooding_compute.glsl");

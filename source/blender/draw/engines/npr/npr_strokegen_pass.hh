@@ -127,7 +127,6 @@ public:
     float geodist_deviation;
     float positiion_regularization_scale;
     bool use_normal_filtering;
-    bool test_bilateral_filtering; 
     GPUMeshQuadricFilter alternate_filter_0; 
     GPUMeshQuadricFilter alternate_filter_1;
     bool visualize_filtered_geom; 

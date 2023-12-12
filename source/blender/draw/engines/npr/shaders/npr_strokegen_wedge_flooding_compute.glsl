@@ -752,14 +752,11 @@ void main()
         vpos = vec3(-inverse(A)*b); 
     #endif
 
-    if (pcs_test_bilateral_filtering_ > 0) 
-        vpos = vpos_filtered; /* test only */
-
     if (any(isnan(vpos)) || any(isinf(vpos)))
         vpos = vpos_orig; 
 
     if (valid_thread)
-        store_vbo(vert_id_global, (pcs_test_bilateral_filtering_ > 0) ? vec3(.0f, .0f, .0f) : vpos);
+        store_vbo(vert_id_global, vpos);
 #endif
 
 }
