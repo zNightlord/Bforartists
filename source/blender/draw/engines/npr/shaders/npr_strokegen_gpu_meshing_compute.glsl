@@ -210,7 +210,7 @@ void main()
 {
 	const uint groupId = gl_LocalInvocationID.x; 
 	const uint idx = gl_GlobalInvocationID.x; 
-    const uint VertID = pcs_vert_id_offset_ + idx.x; 
+    const uint VertID = idx.x; 
     bool valid_thread = (idx.x < pcs_vert_count_); /* Do not use VertID here since it's offseted with current mesh batch  */
 
 #if defined(_KERNEL_MULTICOMPILE__VERT_MERGE_BOOTSTRAP)
@@ -288,7 +288,7 @@ void main()
 	const uint idx = gl_GlobalInvocationID.x; 
     bool valid_thread = (idx.x < pcs_edge_count_); /* Do not use EdgeID here since it's offseted with current mesh batch */
 
-    const uint EdgeID = idx.x + pcs_edge_id_offset_; 
+    const uint EdgeID = idx.x; 
 
 
 #if defined(_KERNEL_MULTICOMPILE__EDGE_ADJACENCY_BOOTSTRAP)

@@ -168,8 +168,6 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_extract)
     .push_constant(Type::INT, "pcs_num_edges")
     .push_constant(Type::INT, "pcs_num_ib_offset")
     .push_constant(Type::INT, "pcs_rsc_handle")
-    .push_constant(Type::INT, "pcs_vert_id_offset_")
-    .push_constant(Type::INT, "pcs_edge_id_offset_")
     .push_constant(Type::INT, "pcs_dbg_wedge_flooding_")
     .local_group_size(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT) /* <== from "bnpr_defines.hh" */
     .compute_source("npr_strokegen_geom_extract_comp.glsl");
@@ -232,7 +230,6 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_extract_collect_verts)
     .uniform_buf(0, "ViewMatrices", "ubo_view_matrices_")
     .push_constant(Type::INT, "pcs_rsc_handle_")
     .push_constant(Type::INT, "pcs_meshbatch_num_verts_")
-    .push_constant(Type::INT, "pcs_vert_id_offset_")
 
     .local_group_size(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT)
     .compute_source("npr_strokegen_geom_extract_comp.glsl");
@@ -249,8 +246,6 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_extract_collect_edges)
     .storage_buf(0, Qualifier::READ, "uint", "IBO_BUF[]")
     .storage_buf(1, Qualifier::WRITE, "uint", "ssbo_edge_to_vert_[]") /* encoded posnor vbo */
     .push_constant(Type::INT, "pcs_edge_count_")
-    .push_constant(Type::INT, "pcs_vert_id_offset_")
-    .push_constant(Type::INT, "pcs_edge_id_offset_")
 
     .local_group_size(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT)
     .compute_source("npr_strokegen_geom_extract_comp.glsl");
@@ -339,8 +334,6 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_merge_verts)
     .storage_buf(4, Qualifier::READ_WRITE, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
     .push_constant(Type::INT, "pcs_hash_map_size_")
     .push_constant(Type::INT, "pcs_vert_count_")
-    .push_constant(Type::INT, "pcs_vert_id_offset_")
-    .push_constant(Type::INT, "pcs_edge_id_offset_")
 
     .local_group_size(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT)
     .compute_source("npr_strokegen_gpu_meshing_compute.glsl");
@@ -391,8 +384,6 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_edge_adjecency)
     .push_constant(Type::INT, "pcs_hash_map_size_")
     .push_constant(Type::INT, "pcs_edge_count_")
     .push_constant(Type::INT, "pcs_vert_count_")
-    .push_constant(Type::INT, "pcs_vert_id_offset_")
-    .push_constant(Type::INT, "pcs_edge_id_offset_")
 
     .local_group_size(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT)
     .compute_source("npr_strokegen_gpu_meshing_compute.glsl");
@@ -428,7 +419,6 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_wedge_flooding)
     .storage_buf(3, Qualifier::WRITE, "uint", "ssbo_filtered_edge_to_edge_[]")
     .storage_buf(4, Qualifier::READ_WRITE, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
     .push_constant(Type::INT, "pcs_edge_count_")
-    .push_constant(Type::INT, "pcs_edge_id_offset_")
     .local_group_size(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT)
     .compute_source("npr_strokegen_wedge_flooding_compute.glsl");
 
@@ -445,7 +435,6 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_wedge_flooding_last_iter)
 
 
 /*
- * uint pcs_vert_id_offset_;
  * uint pcs_vert_count_;
  * uint ssbo_wedge_flooding_pointers_in_[];
  * uint ssbo_edge_to_edges_[];
@@ -471,7 +460,6 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_compact_filtered_verts)
     .storage_buf(5, Qualifier::READ_WRITE, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
     .storage_buf(6, Qualifier::READ, "uint", "ssbo_vert_merged_id_[]")
     .push_constant(Type::INT, "pcs_vert_count_")
-    .push_constant(Type::INT, "pcs_vert_id_offset_")
     .local_group_size(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT)
     .compute_source("npr_strokegen_wedge_flooding_compute.glsl");
 
@@ -553,9 +541,7 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_mesh_filtering_)
     .uniform_buf(0, "ViewMatrices", "ubo_view_matrices_") 
     .push_constant(Type::INT, "pcs_filtered_quadric_type_")
     .push_constant(Type::INT, "pcs_edge_count_")
-    .push_constant(Type::INT, "pcs_edge_id_offset_")
     .push_constant(Type::INT, "pcs_vert_count_")
-    .push_constant(Type::INT, "pcs_vert_id_offset_")
     .push_constant(Type::FLOAT, "pcs_quadric_deviation_")
     .push_constant(Type::FLOAT, "pcs_geodist_deviation_")
     .push_constant(Type::FLOAT, "pcs_positiion_regularization_scale_")

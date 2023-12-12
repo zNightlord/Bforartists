@@ -68,7 +68,7 @@ void main()
 
 	vpos_ws = (model_to_world * vec4(vpos_ls, 1.0f)).xyz; 
 
-	uint st_base_addr = (pcs_vert_id_offset_ + VertID) * 3u;  
+	uint st_base_addr = (VertID) * 3u;  
 	ssbo_vbo_full_[st_base_addr+0] = vpos_ws.x; 
 	ssbo_vbo_full_[st_base_addr+1] = vpos_ws.y;
 	ssbo_vbo_full_[st_base_addr+2] = vpos_ws.z;
@@ -98,9 +98,8 @@ void main()
     const uint EdgeID = idx.x; 
 	uvec4 vid; 
     load_and_decode_ibo__edge_adj(EdgeID, 4u, /*out*/vid); 
-	vid.xyzw += (uint(pcs_vert_id_offset_)).xxxx; 
 
-	uint st_base_addr = (pcs_edge_id_offset_ + EdgeID) * 4u;  
+	uint st_base_addr = (EdgeID) * 4u;  
 	ssbo_edge_to_vert_[st_base_addr+0] = vid[0];
 	ssbo_edge_to_vert_[st_base_addr+1] = vid[1]; 
 	ssbo_edge_to_vert_[st_base_addr+2] = vid[2];
@@ -172,7 +171,7 @@ void main()
 	
 	const uint NumEdges = pcs_num_edges;
 	bool valid_thread = idx < NumEdges; 
-	const uint EdgeId = idx + pcs_edge_id_offset_;
+	const uint EdgeId = idx;
 
 	const uint resource_id = pcs_rsc_handle; 
 	

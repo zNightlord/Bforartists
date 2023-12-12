@@ -104,7 +104,9 @@ public:
      * \{ */
   bool boostrap_before_extract_first_batch;
   int num_total_mesh_verts;
+  int get_vtxid_offset() { return 0; }
   int num_total_mesh_edges;
+  int get_edgeid_offset() { return 0; }
   int num_total_mesh_tris;
 
   void init_per_mesh_pass();

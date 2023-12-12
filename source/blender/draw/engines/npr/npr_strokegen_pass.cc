@@ -240,9 +240,7 @@ namespace blender::npr::strokegen
                         iter_filtering % 2 == 0 ? (int)(meshing_params.alternate_filter_0) :
                                                   (int)(meshing_params.alternate_filter_1)); 
       sub.push_constant("pcs_edge_count_", num_edges);
-      sub.push_constant("pcs_edge_id_offset_", num_total_mesh_edges);
       sub.push_constant("pcs_vert_count_", num_verts);
-      sub.push_constant("pcs_vert_id_offset_", num_total_mesh_verts);
       sub.push_constant("pcs_quadric_deviation_", params.quadric_deviation);
       sub.push_constant("pcs_geodist_deviation_", params.geodist_deviation);
       sub.push_constant("pcs_positiion_regularization_scale_", params.positiion_regularization_scale);
@@ -327,7 +325,6 @@ namespace blender::npr::strokegen
     sub.bind_ubo(0, buffers_.ubo_view_matrices_); 
     sub.push_constant("pcs_rsc_handle_", batch_resource_index); 
     sub.push_constant("pcs_meshbatch_num_verts_", num_verts); 
-    sub.push_constant("pcs_vert_id_offset_", num_total_mesh_verts);
       
     int num_groups = compute_num_groups(num_verts, GROUP_SIZE_STROKEGEN_GEOM_EXTRACT); 
     sub.dispatch(int3(num_groups, 1, 1));
@@ -350,8 +347,6 @@ namespace blender::npr::strokegen
     sub.bind_ssbo(1, buffers_.ssbo_edge_to_vert_);
 
     sub.push_constant("pcs_edge_count_", num_added_edges);
-    sub.push_constant("pcs_vert_id_offset_", num_total_mesh_verts);
-    sub.push_constant("pcs_edge_id_offset_", num_total_mesh_edges);
 
     int num_groups = compute_num_groups(num_added_edges, GROUP_SIZE_STROKEGEN_GEOM_EXTRACT);
     sub.dispatch(int3(num_groups, 1, 1));
@@ -374,8 +369,6 @@ namespace blender::npr::strokegen
       sub.bind_ssbo(4, buffers_.ssbo_bnpr_mesh_pool_counters_);
       sub.push_constant("pcs_hash_map_size_", hashmap_size);
       sub.push_constant("pcs_vert_count_", (int)num_verts_in);
-      sub.push_constant("pcs_vert_id_offset_", num_total_mesh_verts);
-      sub.push_constant("pcs_edge_id_offset_", num_total_mesh_edges);
     }; 
 
     {
@@ -439,8 +432,6 @@ namespace blender::npr::strokegen
       sub.push_constant("pcs_hash_map_size_", hashmap_size);
       sub.push_constant("pcs_edge_count_", num_edges_in);
       sub.push_constant("pcs_vert_count_", num_verts_in); 
-      sub.push_constant("pcs_vert_id_offset_", num_total_mesh_verts);
-      sub.push_constant("pcs_edge_id_offset_", num_total_mesh_edges);
     };
 
     {
@@ -492,7 +483,6 @@ namespace blender::npr::strokegen
       sub.bind_ssbo(3, buffers_.reused_ssbo_filtered_edge_to_edge_());
       sub.bind_ssbo(4, buffers_.ssbo_bnpr_mesh_pool_counters_); 
       sub.push_constant("pcs_edge_count_", num_edges);
-      sub.push_constant("pcs_edge_id_offset_", num_total_mesh_edges);
     };
 
     const int num_flooding_iters = meshing_params.num_edge_flooding_iters * 2;  // Must be even number !!!
@@ -530,7 +520,6 @@ namespace blender::npr::strokegen
       sub.bind_ssbo(5, buffers_.ssbo_bnpr_mesh_pool_counters_);
       sub.bind_ssbo(6, buffers_.ssbo_vert_merged_id_); 
       sub.push_constant("pcs_vert_count_", num_verts); 
-      sub.push_constant("pcs_vert_id_offset_", num_total_mesh_verts);
 
       int num_groups = compute_num_groups(num_verts, GROUP_SIZE_STROKEGEN_GEOM_EXTRACT);
       sub.dispatch(int3(num_groups, 1, 1));
@@ -623,8 +612,6 @@ namespace blender::npr::strokegen
         (int)edge_batch->elem_()->index_start_get() + (int)edge_batch->elem_()->index_base_get()
         );
     sub.push_constant("pcs_rsc_handle", (int)rsc_handle.resource_index());
-    sub.push_constant("pcs_vert_id_offset_", num_total_mesh_verts);
-    sub.push_constant("pcs_edge_id_offset_", num_total_mesh_edges);
     sub.push_constant("pcs_dbg_wedge_flooding_", debug_wedge_flooding ? 1 : 0);
 
     sub.dispatch(int3(
