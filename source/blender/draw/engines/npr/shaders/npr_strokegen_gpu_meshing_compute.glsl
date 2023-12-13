@@ -420,10 +420,10 @@ void main()
 
     /* Adjust Vert-to-Wedge link to ensure border edges are always prefered */
     if (valid_edge && valid_thread && is_border_wedge)
-    {
-        uint ivert_beg = mark__cwedge_to_beg_vert(mark__border_iface_mainfold()); 
-        uint vert_id = vids_wedge[ivert_beg]; 
-        ssbo_vert_to_edge_list_header_[vert_id] = EdgeID; 
+    { /* end vert points the border edge */
+        uint ivert_end = mark__cwedge_to_end_vert(mark__border_iface_mainfold()); 
+        uint vtxid_end = vids_wedge[ivert_end]; 
+        ssbo_vert_to_edge_list_header_[vtxid_end] = EdgeID; 
     }
 
 
