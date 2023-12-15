@@ -97,12 +97,13 @@ wedge_id = gl_GlobalInvocationID.x;
 
     float split_score = comp_split_score(v0, v1, v2, v3); 
 
-    bool split = 
+    bool is_split_ok = 
         (!wing_verts_is_border_edge(v0123)) 
         && split_score > .0f 
         && valid_thread; 
-    uint split_edge_id = compact_split_edge(split); 
-    if (split)
+
+    uint split_edge_id = compact_split_edge(is_split_ok); 
+    if (is_split_ok)
     {
         EdgeSplitInfo esi; 
         esi.should_split = true; 
@@ -115,9 +116,9 @@ wedge_id = gl_GlobalInvocationID.x;
     if (valid_thread)
     {
         EdgeSplitInfo esi; 
-        esi.should_split = split; 
+        esi.should_split = is_split_ok; 
         esi.score = split_score; 
-        esi.id = split ? split_edge_id : NULL_EDGE;
+        esi.id = is_split_ok ? split_edge_id : NULL_EDGE;
 
         store_per_edge_split_info(wedge_id, esi);  
     }
@@ -360,6 +361,78 @@ AdjWedgeInfo { w0, w1, w2, w3 } = ssbo_edge_to_edges_[psei_curr.id*4 + 0/1/2/3];
 inputs: 
 comp_collapse_score(v0, v1, v2, v3)
 
+struct CollapseTraverseData_V1
+{
+    bool is_collapse_ok; 
+    
+    vec3 collapse_pos; 
+    
+    uint v; 
+    vec3 vpos; 
+    uint vp; 
+    vec3 vpos_p; 
+    uint vi; 
+    vec3 vpos_i; 
+
+    uint v0; 
+    uint v1; 
+    uint v2; 
+    uint v3; 
+    bool check_topo; 
+}
+bool collapse_visit(
+    AdjWedgeInfo awi, AdjWedgeInfo awi_next, uint rotate_step, 
+    inout CollapseTraverseData_V1 ctx
+)
+{
+/*
+ *        v0  ...  vp                         v_oppo --- vn  ...  v0             
+ *       /  \     /  \                            \     /  \     /  \            
+ *      /    \   wp   \                            \  wo fi wn  /    \           
+ *     / ---> \ /      \                            \ / ---> \ / ---> \          
+ *   v1------- v--wi-- vi                           vi --wi-- v ------ v3        
+ *     \ <--- / \<-----/ \        fi:awi.iface_adj    \ <--- / \ <--- /          
+ *      \    /  wn fi wo  \       wi:awi.wedge_id      \   wp   \    /           
+ *       \  /     \  /     \                            \  /     \  /            
+ *        v2  ...  vn ----- v_oppo                       vp  ...  v2             
+*/          
+    uint iwedge_wo = mark__cwedge_rotate_back(awi.iface_adj); // outside edge
+    AdjWedgeInfo awi_wo = decode_adj_wedge_info(ssbo_edge_to_edges_[awi.wedge_id*4u + iwedge_wo]); 
+    uint ivert_voppo = mark__center_wedge_to_oppo_vert__at_face(awi_wo.iface_adj);
+    uint v_oppo = ssbo_edge_to_vert_[awi_wo.wedge_id*4u + ivert_voppo]; 
+
+    uint ivert_vn = mark__center_wedge_to_oppo_vert__at_face(awi.iface_adj);  
+    uint vn = ssbo_edge_to_vert_[awi.wedge_id*4u + ivert_vn]; 
+    vec3 vpos_n = ld_vpos(vn); 
+    
+
+    /* Check topology consistency */
+    /* must meet the link condition, 
+     * see "SurfaceMesh::is_collapse_ok" in the pmp library 
+     * or "Generic Memoryless Polygonal Simplification" */
+    uvec3 valid_link_verts = v == v1 ? uvec3(v2, v3, v0) : uvec3(v0, v1, v2);
+    uint invalid_link_vert = v == v1 ? v3 : v1;
+    if (all(vi.xxx != valid_link_verts) && v_oppo == invalid_link_vert)
+        ctx.is_collapse_ok = false; // 1-ring of v1 & v3 has neighbor faces (excluding the collapsed faces v013 and v123)
+
+    
+    /* Check geometry consistency */
+    /* Foldover avoidance, see Ch.3.7 in https://www.cs.cmu.edu/~garland/thesis/thesis-onscreen.pdf */
+    vec3 fi_nomral = normalize(cross(vpos_n-ctx.vpos, ctx.vpos_i-ctx.vpos)); // CCW order
+    vec3 clip_plane_normal = normalize(cross(fi_normal, ctx.vpos_i - vpos_n)); 
+
+    if (dot(ctx.collapse_pos - vpos_n, clip_plane_normal) < .0f)
+        ctx.is_collapse_ok = false; 
+
+    /* Update context */
+    ctx.vp = ctx.vi; 
+    ctx.vpos_p = ctx.vpos_i; 
+    ctx.vi = awi_next.wedge_id; 
+    ctx.vpos_i = vpos_n; 
+
+    return ctx.is_collapse_ok; // cont'/break the loop
+}
+
 
 foreach wedge in parallel: --------------------------------------
 uint         { v0, v1, v2, v3 } = ssbo_edge_to_vert_ [wedge*4 + 0/1/2/3]; 
@@ -369,14 +442,17 @@ float collapse_score = comp_collapse_score(v0, v1, v2, v3);
 
 bool is_collapse_ok = collapse_score > .0f && valid_thread; 
 
+if (wing_verts_is_border_edge(v0123))
+    is_collapse_ok = false; // is a border edge
+
 uint q0 = ssbo_edge_to_vert_[w0.wedge_id*4 + mark__center_wedge_to_oppo_vert__at_face(w0.iface_adj)];
 uint q1 = ssbo_edge_to_vert_[w1.wedge_id*4 + mark__center_wedge_to_oppo_vert__at_face(w1.iface_adj)];
 uint q2 = ssbo_edge_to_vert_[w2.wedge_id*4 + mark__center_wedge_to_oppo_vert__at_face(w2.iface_adj)];
 uint q3 = ssbo_edge_to_vert_[w3.wedge_id*4 + mark__center_wedge_to_oppo_vert__at_face(w3.iface_adj)];
 if (any(uvec4(q0, q1, q2, q3) == uvec4(v3, v3, v1, v1)))
-    is_collapse_ok = false; 
+    is_collapse_ok = false; // has a border edge in 1-ring neighborhood
 
-
+VE_CIRCULATOR(v1, collapse_visit_v1)
 
 
 
@@ -425,7 +501,7 @@ if no problem, remove pcs_vert_id_offset_ & pcs_edge_id_offset_
 *     v4          
 *                   
 */ 
-Input: vtx
+Input: vtx, TYPE_VISIT_DATA
 #define VE_CIRCULATOR(vtx, FUNC)
 
 VertWedgeListHeader vwlh = decode_vert_wedge_list_header(ssbo_vert_to_edge_list_header_[vtx]); 
@@ -448,17 +524,19 @@ do {
  *   /    \   /    \    fi:=awi.iface_adj
  *  /      \ /      \  
  * v0 ----- v --wi-- v3 iwedge derivation:       
- *   \__     \<-----/   wp = mark__cwedge_rotate_back(fi)
- *      \__  wn fi wp   wn = mark__cwedge_rotate_next(fi) 
- *         \__ \  /
- *            \_v4   
+ *   \__     \<-----/   wo = mark__cwedge_rotate_back(fi)
+ *      \__  wn fi wo   wn = mark__cwedge_rotate_next(fi) 
+ *         \__ \  /    
+ *            \_v4             
 */
     // find next wedge
     uint iwedge_next = mark__cwedge_rotate_next(awi.iface_adj); 
     AdjWedgeInfo awi_next = decode_adj_wedge_info(ssbo_edge_to_edges_[awi.wedge_id*4u + iwedge_next]);  
-    
+    bool awi_next_border = awi.wedge_id == awi_next.wedge_id; 
+
     // do something here
-    FUNC(awi, awi_next, rotate_step)
+    if (false == FUNC(awi, awi_next, rotate_step, TYPE_VISIT_DATA))
+        break; 
     
     if (awi.wedge_id == awi_next.wedge_id)
         break; // hit the border edge, exit
