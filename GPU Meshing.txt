@@ -1,0 +1,475 @@
+           v4--- v6                                                                                      
+          / \   /|\                                                                                      
+         /   \ / | \                                                                                     
+        v5--- v2-v8-v0                                                                                   
+       / \    |\ |\ |                                                               
+      /   \   | \| \|                                                                                    
+     /     \  |  v9-v1                                                                                   
+    v7__    \ | /                                                                                        
+        \__  \|/                                                                                         
+           \__v3                                                                                         
+
+
+/* New vert pos for split/collapse: 
+ * interp using Butterfly Scheme, see "Robust Topological Operations for Dynamic Explicit Surfaces"
+ *                                  
+ *  q0 ----E00----- v0 -----E31---- q3         q0 ----E00----- v0 ----E31---- q3
+ *    \  <-------  /  \  <-------  /              \_           |           _/   
+ *     \          /    \          0                 \_         |         _/     
+ *      E        W      3        3                    \_       |       _/       
+ *       0      0   f1   W      E                       \_     |     _/         
+ *        1    /          \    /                          \_   |   _/           
+ *         \  /  ------->  \  /                             \_ | _/            
+ *          v1 ---- W4 ---- v3                                \v1 = (v1+v3)/2 + (v0+v2)/8 - (q0+q1+q3+q4)/16               
+ *         /  \  <-------  /  \                             _/ | \_  
+ *        E    \          /    \                          _/   |   \_                       
+ *       1      W   f0   2      1                       _/     |     \_                     
+ *      0        1      W        2                    _/       |       \_                   
+ *     /          \    /          E                 _/         |         \_                 
+ *    /  ------->  \  /  ------->  \              _/           |           \_               
+ *  q1 ----E11----- v2 ----E20----- q2         q1 ----E11----- v2 ----E20---- q2
+*/
+vec3 interp_mid_point(vec3 v0, vec3 v1, vec3 v2, vec3 v3, vec3 q0, vec3 q1, vec3 q2, vec3 q3)
+{
+    return (v1+v3)/2.0f + (v0+v2)/8.0f - (q0+q1+q2+q3)/16.0f;  
+}
+
+
+
+
+
+
+
+
+/* Parallel Edge Split
+ *          v0                   v0          
+ *         /  \                 /||\         
+ *        /    \               / || \        
+ *       W      3             W  ||  3       
+ *      0        W           0   E0   W      
+ *     /          \         /    ||    \     
+ *    /            \       /     ||     \    
+ *  v1 ---- W4 ---- v3   v1 =E1= v4 =E3= v3  
+ *    \            /       \     ||     /    
+ *     \          /         \    ||    /     
+ *      W        2           W   E2   2      
+ *       1      W             1  ||  W       
+ *        \    /               \ || /        
+ *         \  /                 \||/         
+ *          v2                   v2          
+ */
+
+Inputs: 
+    compact_split_edge()
+    compact_split_edge_II()
+
+    ld_vpos(uint vtx_id)
+    st_vpos(uint vtx_id)
+    
+    uint ssbo_per_split_edge_info_[]
+    struct EdgeSplitInfo
+    {
+        bool should_split; 
+        float score; 
+        uint id; 
+    }; 
+    void load / store_per_split_edge_info(uint split_edge_id / EdgeSplitInfo esi)
+    void load / store_per_edge_split_info(uint split_edge_id / EdgeSplitInfo esi)
+    bool split_score_larger(float score_0, score_1, uint wedge_id_0, wedge_id_1)
+    {
+        if (score_0 == score_1)
+            return wedge_id_0 > wedge_id_1; 
+        return score_0 > score_1; 
+    }
+
+    uint pcs_split_iter_; 
+    uint ssbo_dyn_edge_count_[NUM_SPLITS]; 
+    uint ssbo_dyn_vert_count_[NUM_SPLITS]; 
+
+
+
+foreach wedge in parallel: --------------------------------------
+
+wedge_id = gl_GlobalInvocationID.x; 
+
+#if <<Kernel 0>>
+    uint { v0, v1, v2, v3 } = ssbo_edge_to_vert_[wedge_id].xyzw; 
+
+    float split_score = comp_split_score(v0, v1, v2, v3); 
+
+    bool split = 
+        (!wing_verts_is_border_edge(v0123)) 
+        && split_score > .0f 
+        && valid_thread; 
+    uint split_edge_id = compact_split_edge(split); 
+    if (split)
+    {
+        EdgeSplitInfo esi; 
+        esi.should_split = true; 
+        esi.score = split_score; 
+        esi.id = wedge_id; 
+        
+        store_per_split_edge_info(split_edge_id, esi); 
+    }
+
+    if (valid_thread)
+    {
+        EdgeSplitInfo esi; 
+        esi.should_split = split; 
+        esi.score = split_score; 
+        esi.id = split ? split_edge_id : NULL_EDGE;
+
+        store_per_edge_split_info(wedge_id, esi);  
+    }
+#endif 
+    
+endforeach -------------------------------------------------------
+
+
+
+
+foreach split edge in parallel: --------------------------------------
+
+uint split_edge_id = gl_GlobalInvocationID.x; 
+EdgeSplitInfo psei_curr = load_per_split_edge_info(split_edge_id); 
+AdjWedgeInfo { w0, w1, w2, w3 } = ssbo_edge_to_edges_[psei_curr.id*4 + 0/1/2/3]; 
+
+#if <<Kernel 1>>
+    EdgeSplitInfo pesi[4] = 
+    { 
+        load_per_edge_split_info(w0.wedge_id) (w1.wedge_id) (w2.wedge_id) (w3.wedge_id)
+    }; 
+    if (pesi_0.score > .0f)
+    { /* handle collisions */
+        bool split = all_true(split_score_larger(psei_curr.score, pesi[0/1/2/3].score, psei_curr.id, w0/1/2/3)); 
+        if (!split)
+        {
+            psei_curr.should_split = false; 
+            psei_curr.score = .0f; 
+        }
+    }
+    
+    /* Compaction */
+    bool split = psei_curr.should_split && valid_thread; 
+    uint split_edge_alloc_id = compact_split_edge_II(split);
+    
+    /* dont need score now, reuse to store alloc id */
+    psei_curr.score = split ? UintBitsToFloat(split_edge_alloc_id) : NULL_EDGE; 
+    if (valid_thread)
+        store_per_split_edge_info(split_edge_id, psei_curr); 
+#endif
+
+#if <<Kernel 2>> 
+    if (!psei_curr.should_split) return; 
+    uint split_edge_alloc_id = FloatBitsToUint(psei_curr.score); 
+
+    /* Parallel Edge Split
+    *          v0                   v0          
+    *         /  \                 /||\         
+    *        /    \               / || \        
+    *       W      3             W  ||  3       
+    *      0   f1   W           0   E0   W      
+    *     /          \         /    ||    \     
+    *    /  ------->  \       / --> || --> \    
+    *  v1 ---- W4 ---- v3   v1 =E1= v4 =E3= v3  
+    *    \  <-------  /       \ <-- || <-- /    
+    *     \          /         \    ||    /     
+    *      W   f0   2           W   E2   2      
+    *       1      W             1  ||  W       
+    *        \    /               \ || /        
+    *         \  /                 \||/         
+    *          v2                   v2          
+    */
+    { v0, v1, v2, v3 } = { ssbo_edge_to_vert_[psei_curr.id*4 + 0/1/2/3] }; 
+    /* alloc x4 new edges */ 
+    uint alloc_offset_edge = pcs_edge_count_ + ssbo_dyn_edge_count_[pcs_split_iter_]; 
+    { e0, e1, e2, e3 } = { alloc_offset_edge + split_edge_alloc_id*4 + 0/1/2/3 }; 
+    /* alloc x1 new vertex */
+    uint alloc_offset_vert = pcs_vert_count + ssbo_dyn_vert_count_[pcs_split_iter_]; 
+    { v4 } = alloc_offset_vert + split_edge_alloc_id; 
+
+    /* Build ee & ev adj. for NEW edges */
+    /*  ---------------------------------------------------------------                               
+    *    Template               E0                    E2
+    *        v3                  v0            v1 =E1= v4 =E3= v3                
+    *      / | \                /||\             \ <-- || <-- /   
+    *    W3 .|  W2             / || \             \ f1 || f0 /    
+    *    / /|||  \            W  ||  3             W   E2   2     
+    *  v0 f1|W|f0 v2         0   E0   W             1  ||  W      
+    *    \  |||/ /          / f1 || f0 \             \ || /       
+    *    W0 ||. W1         / --> || --> \             \||/        
+    *      \ | /         v1 =E1= v4 =E3= v3            v2         
+    *        v1                  
+    *    { v0~3 }        { v1, v4, v3, v0 }      { v1, v2, v3, v4 }                 
+    *    { w0~3 }        { e1, e3, w3, w0 }      { w1, w2, e3, e1 } 
+    */
+    ssbo_edge_to_vert_[e0]  = { v1, v4, v3, v0 }; // update e0
+    ssbo_edge_to_edges_[e0] = { e1, e3, w3, w0 }; 
+    ssbo_edge_to_vert_[e2]  = { v1, v2, v3, v4 }; // update e2
+    ssbo_edge_to_edges_[e2] = { w1, w2, e3, e1 }; 
+    /*  ---------------------------------------------------------------                               
+    *     Template               E1                    E3
+    *                            v0                    v0        
+    *                           /||                    ||\       
+    *       v0                 / ||                    || \      
+    *      /  \               W  ||                    ||  3     
+    *    W0 f1 W3            0   E0                    E0   W    
+    *    / ---> \           / f1 ||                    || f1 \   
+    *  v1-- W  --v3        / --> ||                    || --> \  
+    *    \ <--- /        v1 =E1= v4                    v4 =E3= v3
+    *    W1 f0  W2         \ <-- ||                    || <-- /   
+    *      \  /             \ f0 ||                    || f0 /   
+    *       v2               W   E2                    E2   2    
+    *                         1  ||                    ||  W     
+    *                          \ ||                    || /      
+    *                           \||                    ||/       
+    *                            v2                    v2    
+    *    { v0~3 }        { v0, v1, v2, v4 }      { v0, v4, v2, v3 }
+    *    { w0~3 }        { w0, w1, e2, e0 }      { e0, e2, w2, w3 }
+    */
+    ssbo_edge_to_vert_[e1]  = { v0, v1, v2, v4 }; // update e1
+    ssbo_edge_to_edges_[e1] = { w0, w1, e2, e0 }; 
+    ssbo_edge_to_vert_[e3]  = { v0, v4, v2, v3 }; // update e3
+    ssbo_edge_to_edges_[e3] = { e0, e2, w2, w3 }; 
+
+    /* Adjust ee & ev adj. for OLD edges 
+    * 
+    *         v0         
+    *        /||\        
+    *       / || \       
+    *      W  ||  3      
+    *     0 f1E0f0 W     
+    *    /    ||    \    
+    *   / f1->||->f1 \   
+    * v1 =E1= v4 =E3= v3 
+    *   \ f0<-||<-f0 /   
+    *    \    ||    /    
+    *     W f1E2f0 2     w0: { {e1,f0}, {e0,f0} } // AdjWedgeInfo data
+    *      1  ||  W      w1: { {e2,f0}, {e1,f1} }
+    *       \ || /       w2: { {e3,f1}, {e2,f1} }
+    *        \||/        w3: { {e0,f1}, {e3,f0} }
+    *         v2         
+    */
+    AdjWedgeInfo awi_updates[8] = {
+        AdjWedgeInfo(e1, 0), AdjWedgeInfo(e0, 0), // w0
+        AdjWedgeInfo(e2, 0), AdjWedgeInfo(e1, 1), // w1
+        AdjWedgeInfo(e3, 1), AdjWedgeInfo(e2, 1), // w2
+        AdjWedgeInfo(e0, 1), AdjWedgeInfo(e3, 0)  // w3
+    }; 
+    for (wi, i=ibwedge=0,1,2,3)
+    {
+        uint iface_overlap = wi.iface_adj == 0 ? 1 : 0; 
+        uvec2 iwedge_update = {
+            mark__he_to_wedge(iface_overlap, 1),  
+            mark__he_to_wedge(iface_overlap, 2)
+        }; 
+        ssbo_edge_to_edges_[wi.wedge_id*4 + iwedge_update[0]] = encode_adj_wedge_info(awi_updates[ibwedge*2+0]); 
+        ssbo_edge_to_edges_[wi.wedge_id*4 + iwedge_update[1]] = encode_adj_wedge_info(awi_updates[ibwedge*2+1]); 
+        
+        uint ivert_update = mark__center_wedge_to_oppo_vert__at_face(iface_overlap); 
+        ssbo_edge_to_vert_[wi.wedge_id*4 + ivert_update] = v4; 
+    }
+    
+
+    /* Build ve adj. for New vert */
+    ssbo_vert_to_edge_list_header_[v4] = e0; 
+
+
+    /* Calc new vert pos */ 
+    vec3 split_pos; 
+    
+    uint q0 = ssbo_edge_to_vert_[w0.wedge_id*4 + mark__center_wedge_to_oppo_vert__at_face(w0.iface_adj)];
+    uint q1 = ssbo_edge_to_vert_[w1.wedge_id*4 + mark__center_wedge_to_oppo_vert__at_face(w1.iface_adj)];
+    uint q2 = ssbo_edge_to_vert_[w2.wedge_id*4 + mark__center_wedge_to_oppo_vert__at_face(w2.iface_adj)];
+    uint q3 = ssbo_edge_to_vert_[w3.wedge_id*4 + mark__center_wedge_to_oppo_vert__at_face(w3.iface_adj)];
+    if (any(uvec4(q0, q1, q2, q3) == uvec4(v3, v3, v1, v1)))
+    { /* handle border */
+        split_pos = (ld_vpos(v1) + ld_vpos(v3)) / 2.0f;
+    }
+    else{ /* Butterfly interp */
+        split_pos = interp_mid_point(
+            ld_vpos(v0), ld_vpos(v1), ld_vpos(v2), ld_vpos(v3), 
+            ld_vpos(q0), ld_vpos(q1), ld_vpos(q2), ld_vpos(q3)
+        ); 
+    }
+    if (valid_thread)
+        st_vpos(v4, split_pos); 
+
+#endif                                                                                          
+                                                                                                        
+                                                                                                        
+                                                                                                        
+
+
+
+/* Parallel Edge Collapse * 
+ * (Following graph are only to clearly show how topology changes, actual position of vertices are not accurate)
+ *                                  
+ *             v0 -----E31---- q3         v0 -----E31---- q3                    
+ *            /  \  <-------  /             \  <-------  /                       
+ *           /    \          0               \          0                        
+ *          W      3        3                 W  W     3                         
+ *         0   f1   W      E                   0<=3   E                          
+ *        /          \    /                     \    /                           
+ *       /  ------->  \  /                       \  /                            
+ *     v1 ---- W4 ---- v3      ==collapse=>       v1 <= v3                         
+ *       \  <-------  /  \                       /  \                            
+ *        \          /    \                     /    \                           
+ *         W   f0   2      1                   W  W   1                          
+ *          1      W        2                 1<=2     2                         
+ *           \    /          E               /          E                        
+ *            \  /  ------->  \             /  ------->  \                       
+ *             v2 ----E20----- q2         v2 ----E20----- q2                     
+ *    Changes: 
+ *    1. del v3, replace by v1; 
+ *    2. del W2, replace by w1;      
+ *    3. del W3, replace by w0; 
+ *    4. del E4; 
+ 
+ *    Affected elems: 
+ *    by v3: e-v link for all edges in v3's 1-ring closure
+ *    by W2: v-e link for v2, e-e link for W1,E20,E21
+ *    by W3: v-e link for v0, e-e link for W0,E30,E31
+ *    by W4: v-e link for v1, e-e link for W0,W1         
+ * 
+ *    Implementation: 
+ *                                  
+ *    mark v3, w2, w3, w4 as deleted    
+ *                                  
+ *    for all edges in v3's 1-ring closure:
+ *      change e-v link from v3 to v1
+ *                                  
+ *    if v-e[v2]==w2: 
+ *      v-e[v2]=w1
+ *    if v-e[v0]==w3:
+ *      v-e[v0]=w0
+ *    if v-e[v1]==w4:
+ *      v-e[v0]=w0 // todo: border not handled 
+ *    
+ *    link  w1.next to e20: e-e[ w1*4 + mark__wedge_to_next_wedge(w1.iface_adj == 1 ? 0 : 1)] = e20
+ *    link e20.prev to  w1: e-e[e20*4 + mark__wedge_to_prev_wedge(e20.iface_adj == 1 ? 0 : 1)] = w1
+ *    link  w1.prev to e21: e-e[ w1*4 + mark__wedge_to_prev_wedge(w1.iface_adj == 1 ? 0 : 1)] = e21
+ *    link e21.next to  w1: e-e[e21*4 + mark__wedge_to_next_wedge(e21.iface_adj == 1 ? 0 : 1)] = w1
+ *    
+ *    link  w0.next to e30: e-e[ w0*4 + mark__wedge_to_next_wedge(w0.iface_adj == 1 ? 0 : 1)] = e30
+ *    link e30.prev to  w0: e-e[e30*4 + mark__wedge_to_prev_wedge(e30.iface_adj == 1 ? 0 : 1)] = w0
+ *    link  w0.prev to e31: e-e[ w0*4 + mark__wedge_to_prev_wedge(w0.iface_adj == 1 ? 0 : 1)] = e31
+ *    link e31.next to  w0: e-e[e31*4 + mark__wedge_to_next_wedge(e31.iface_adj == 1 ? 0 : 1)] = w0
+*/
+
+inputs: 
+comp_collapse_score(v0, v1, v2, v3)
+
+
+foreach wedge in parallel: --------------------------------------
+uint         { v0, v1, v2, v3 } = ssbo_edge_to_vert_ [wedge*4 + 0/1/2/3]; 
+AdjWedgeInfo { w0, w1, w2, w3 } = ssbo_edge_to_edges_[wedge*4 + 0/1/2/3];
+
+float collapse_score = comp_collapse_score(v0, v1, v2, v3); 
+
+bool is_collapse_ok = collapse_score > .0f && valid_thread; 
+
+uint q0 = ssbo_edge_to_vert_[w0.wedge_id*4 + mark__center_wedge_to_oppo_vert__at_face(w0.iface_adj)];
+uint q1 = ssbo_edge_to_vert_[w1.wedge_id*4 + mark__center_wedge_to_oppo_vert__at_face(w1.iface_adj)];
+uint q2 = ssbo_edge_to_vert_[w2.wedge_id*4 + mark__center_wedge_to_oppo_vert__at_face(w2.iface_adj)];
+uint q3 = ssbo_edge_to_vert_[w3.wedge_id*4 + mark__center_wedge_to_oppo_vert__at_face(w3.iface_adj)];
+if (any(uvec4(q0, q1, q2, q3) == uvec4(v3, v3, v1, v1)))
+    is_collapse_ok = false; 
+
+
+
+
+
+
+
+
+
+
+
+                                                                                                        
+                                                                                                        
+
+/* Refactor batching code */
+just copy vbo/ibo at append_subpass_merge_vbo/append_subpass_merge_line_adj_ibo without offset
+pcs_vert_id_offset_ -> 0
+pcs_edge_id_offset_ -> 0
+
+if no problem, remove pcs_vert_id_offset_ & pcs_edge_id_offset_ 
+
+
+/* Refactor meshing code *
+* (Done) Ensure that each vtx points to its starting border edge if there are any
+* (Done) Encode iface for ssbo_vert_to_edge_list_header_[] (beg-vert of half-edge in this face)
+* (Done) Vertex-edge circulator terminates when we found it rotates back
+* 
+* Encode VertWedgeListHeader before flooding pass
+* Ensure that each vtx points to its ending border edge if there are any
+*/
+
+/* Vertex Circulator 
+*                   
+*     v1 --- v2  
+*    /  \   /  \    
+*   /    \ /    \   
+*  v0 --- v --- v3  
+*   \__    \    /   
+*      \__  \  /    
+*         \__v4   
+* 
+*     v2 --- v1       
+*    /  \   /  \    
+*   /    \ /    \   
+*  v3 --- v --->v0  
+*   \    /  vwlh    
+*    \  /           
+*     v4          
+*                   
+*/ 
+Input: vtx
+#define VE_CIRCULATOR(vtx, FUNC)
+
+VertWedgeListHeader vwlh = decode_vert_wedge_list_header(ssbo_vert_to_edge_list_header_[vtx]); 
+uint iface_rotate_fwd = (vwlh.ivert == 1u) ? 0 : 1; 
+
+AdjWedgeInfo awi; 
+awi.wedge_id = vwlh.wedge_id; // current wedge we are traversing
+awi.iface_adj = iface_rotate_fwd; // current iface we are working at
+
+#define MAX_WEDGE_ROTATES 32u
+uint rotate_step = 0u; 
+do {
+
+/* loop invariant: 
+ * rotation winding (CW/CCW) is always reverse to global face winding
+ * hedge w always end at v 
+ * 
+ *     v1 ----- v2  
+ *    /  \     /  \     wi:=awi.wedge_id
+ *   /    \   /    \    fi:=awi.iface_adj
+ *  /      \ /      \  
+ * v0 ----- v --wi-- v3 iwedge derivation:       
+ *   \__     \<-----/   wp = mark__cwedge_rotate_back(fi)
+ *      \__  wn fi wp   wn = mark__cwedge_rotate_next(fi) 
+ *         \__ \  /
+ *            \_v4   
+*/
+    // find next wedge
+    uint iwedge_next = mark__cwedge_rotate_next(awi.iface_adj); 
+    AdjWedgeInfo awi_next = decode_adj_wedge_info(ssbo_edge_to_edges_[awi.wedge_id*4u + iwedge_next]);  
+    
+    // do something here
+    FUNC(awi, awi_next, rotate_step)
+    
+    if (awi.wedge_id == awi_next.wedge_id)
+        break; // hit the border edge, exit
+    awi = awi_next; 
+    rotate_step++; 
+}  while (
+    rotate_step < MAX_WEDGE_ROTATES 
+    && awi.wedge_id != vwlh.wedge_id
+)
+
+
+
+
+

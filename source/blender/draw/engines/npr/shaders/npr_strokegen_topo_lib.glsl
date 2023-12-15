@@ -171,6 +171,18 @@ uint mark__wedge_to_he(uint face, uint wedge)
     /* if (face == 1u) */
     return wedge == 4u ? 0u : (wedge+2u)%4u; /* 4->0, 3->1, 0->2 */
 }
+uint mark__wedge_to_prev_wedge(uint face, uint wedge)
+{
+    uint he = mark__wedge_to_he(face, wedge);
+    uint he_prev = mark__he_to_prev_he(he);
+    return mark__he_to_wedge(face, he_prev);
+}
+uint mark__wedge_to_next_wedge(uint face, uint wedge)
+{
+    uint he = mark__wedge_to_he(face, wedge);
+    uint he_next = mark__he_to_next_he(he);
+    return mark__he_to_wedge(face, he_next);
+}
 uint mark__bwedge_to_face(uint wedge)
 {
     return (wedge == 1u || wedge == 2u) ? 0u : 1u; /* 1,2->0, 0,3->1 */
