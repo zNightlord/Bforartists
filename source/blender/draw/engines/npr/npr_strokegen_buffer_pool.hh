@@ -35,17 +35,16 @@ class GPUBufferPoolModule {
   SSBO_IndirectDispatchArgs ssbo_indirect_dispatch_args_per_filtered_vert_;
   SSBO_IndirectDispatchArgs ssbo_bnpr_mesh_contour_edge_dispatch_args_; 
 
-  // TODO: these buffers are huge. consider re-use them for each mesh. 
-  SSBO_StrokeGenMeshBufPerVert<float, 3> ssbo_vbo_full_;                // 63MB     Total
-  SSBO_StrokeGenMeshBufPerVert<uint, 1> ssbo_vert_merged_id_;           // 21MB     84MB
-  SSBO_StrokeGenMeshBufPerVert<uint, 1> ssbo_vert_to_edge_list_header_; // 21MB     105MB
-  SSBO_StrokeGenMeshBufPerEdge<uint, 4> ssbo_edge_to_vert_;             // 256MB    361MB 
-  SSBO_StrokeGenMeshBufPerEdge<uint, 4> ssbo_edge_to_edges_;            // 256MB    617MB
-  SSBO_StrokeGenMeshBufPerEdge<uint, 1> ssbo_edge_to_contour_;          // 64MB     681MB
-  SSBO_StrokeGenMeshBufPerContour<uint, 2> ssbo_contour_to_contour_;    //  
+  // Persistent Buffers -------------------------------------------------------------------
+  SSBO_StrokeGenMeshBufPerVert<float, 3> ssbo_vbo_full_;                // 126MB    Total
+  SSBO_StrokeGenMeshBufPerVert<uint, 1> ssbo_vert_to_edge_list_header_; // 42MB     210MB
+  SSBO_StrokeGenMeshBufPerEdge<uint, 4> ssbo_edge_to_vert_;             // 256MB    466MB
+  SSBO_StrokeGenMeshBufPerEdge<uint, 4> ssbo_edge_to_edges_;            // 256MB    722MB   
+  SSBO_StrokeGenMeshBufPerEdge<uint, 1> ssbo_edge_to_contour_;          // 64MB     786MB     
+  SSBO_StrokeGenMeshBufPerContour<uint, 2> ssbo_contour_to_contour_;    // 
   SSBO_StrokeGenMeshBufPerContour<uint, 1> ssbo_contour_edge_rank_;     // 
   SSBO_StrokeGenMeshBufPerContour<uint, 1> ssbo_contour_edge_list_len_; // 
-  SSBO_StrokeGenMeshBufPerContour<uint, 1> ssbo_contour_edge_list_head_;//  
+  SSBO_StrokeGenMeshBufPerContour<uint, 1> ssbo_contour_edge_list_head_;// 
 
   // Reusable Large Buffers ---------------------------------------------------------------
   SSBO_StrokeGenReusedLarge ssbo_mesh_buffer_reuse_0_;                    // 256MB    Total 
@@ -55,6 +54,7 @@ class GPUBufferPoolModule {
   SSBO_StrokeGenReusedLarge ssbo_mesh_buffer_reuse_3_;                    // 256MB    768MB
   // temporally used for hashing
   SSBO_StrokeGenReusedLarge ssbo_mesh_buffer_reuse_4_;                    // 256MB    1024MB
+  SSBO_StrokeGenReusedSmall ssbo_mesh_buffer_reuse_5_;                    // 64MB     1088MB    
 
 
   // Reused Buffer Scheme for Basic Meshing ------------------------------------------------
@@ -62,11 +62,15 @@ class GPUBufferPoolModule {
   {
     return ssbo_mesh_buffer_reuse_4_; 
   }
-
+  inline GPUStorageBuf *reused_ssbo_vert_merged_id_()
+  {
+    return ssbo_mesh_buffer_reuse_5_; 
+  }
 
 
   // Reused Buffer Scheme for Meshing Operators --------------------------------------------
-  
+
+
 
   // Reused Buffer Scheme for Mesh Filtering -----------------------------------------------
   inline GPUStorageBuf *reused_ssbo_vert_spatial_map_payloads_()
@@ -97,7 +101,7 @@ class GPUBufferPoolModule {
   }
   inline GPUStorageBuf *reused_ssbo_edge_quadric_data()
   { // TODO: we can actually share one buffer with vert_quadric data if this also goes iterative
-    return ssbo_vert_merged_id_; 
+    return ssbo_mesh_buffer_reuse_5_; 
   }
   inline void reused_ssbo_vert_quadric_data_(int iter, GPUStorageBuf*& buf_in, GPUStorageBuf*& buf_out)
   {

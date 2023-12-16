@@ -159,7 +159,9 @@ namespace blender::npr::strokegen
     int num_tris = ibo_surf->index_len_get() / 3;
     int num_verts = vbo_surf_posnor->vertex_len;
 
-    /* Cache per-edge geometry data */
+
+
+    // Copy VBO/IBO ----------------------------------------------------------
     // Note: this also works
     /*GPU_storagebuf_copy_sub_from_vertbuf(buffers_.ssbo_vbo_full_,
                                          gpu_batch_surf->verts[0],
@@ -169,15 +171,19 @@ namespace blender::npr::strokegen
     append_subpass_merge_vbo(gpu_batch_surf, batch_resource_index, num_verts);
     append_subpass_merge_line_adj_ibo(gpu_batch_line_adj, ib_type, num_edges);
 
+    // Basic Meshing -----------------------------------------------------------
     append_subpass_meshing_merge_verts(num_verts);
     append_subpass_meshing_wedge_adjacency_and_init_flooding_ptr(num_edges, num_verts);
     append_subpass_meshing_wedge_flooding(num_edges, num_verts);
     append_subpass_fill_meshing_indirect_dispatch_args_();
+
+    // Mesh Filtering -----------------------------------------------------------
     append_subpass_quadric_mesh_filtering(num_edges,
                                           num_verts,
                                           meshing_params
         );
 
+    // Contour Processing --------------------------------------------------------
     const bool debug_wedge_flooding = meshing_params.visualize_filtered_geom;
     append_subpass_extract_contour_edges(
         gpu_batch_line_adj,
@@ -358,7 +364,7 @@ namespace blender::npr::strokegen
     {
       sub.bind_ssbo(0, buffers_.reused_ssbo_vert_spatial_map_headers_());
       sub.bind_ssbo(1, buffers_.reused_ssbo_vert_spatial_map_payloads_());
-      sub.bind_ssbo(2, buffers_.ssbo_vert_merged_id_);
+      sub.bind_ssbo(2, buffers_.reused_ssbo_vert_merged_id_());
       sub.bind_ssbo(3, buffers_.ssbo_vbo_full_);
       sub.bind_ssbo(4, buffers_.ssbo_bnpr_mesh_pool_counters_);
       sub.push_constant("pcs_hash_map_size_", hashmap_size);
@@ -411,7 +417,7 @@ namespace blender::npr::strokegen
           1/*iter=="-1"*/, reused_ssbo_wedge_flooding_pointers_in_, reused_ssbo_wedge_flooding_pointers_out_
       ); 
 
-      sub.bind_ssbo(0, buffers_.ssbo_vert_merged_id_);
+      sub.bind_ssbo(0, buffers_.reused_ssbo_vert_merged_id_());
       sub.bind_ssbo(1, buffers_.reused_ssbo_vert_spatial_map_headers_());
       sub.bind_ssbo(2, buffers_.reused_ssbo_edge_spatial_map_payloads_());
       sub.bind_ssbo(3, buffers_.ssbo_edge_to_vert_);
@@ -510,7 +516,7 @@ namespace blender::npr::strokegen
       sub.bind_ssbo(3, buffers_.ssbo_edge_to_edges_);
       sub.bind_ssbo(4, buffers_.ssbo_vert_to_edge_list_header_); 
       sub.bind_ssbo(5, buffers_.ssbo_bnpr_mesh_pool_counters_);
-      sub.bind_ssbo(6, buffers_.ssbo_vert_merged_id_); 
+      sub.bind_ssbo(6, buffers_.reused_ssbo_vert_merged_id_()); 
       sub.push_constant("pcs_vert_count_", num_verts); 
 
       int num_groups = compute_num_groups(num_verts, GROUP_SIZE_STROKEGEN_GEOM_EXTRACT);
