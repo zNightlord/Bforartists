@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
+﻿/* SPDX-License-Identifier: GPL-2.0-or-later
  * Copyright 2021 Blender Foundation.
  */
 
@@ -27,9 +27,7 @@ class GPUBufferPoolModule {
   UBO_ViewMatrices ubo_view_matrices_;
   UBO_ViewMatrices ubo_view_matrices_cache_; // for visualizing contour curves in different view
 
-  SSBO_StrokeGenTest ssbo_bnpr_test_;
 
-  SSBO_StrokeGenMeshLarge ssbo_bnpr_mesh_pool_; // contains contour edge data
   SSBO_StrokeGenMeshPoolCounters ssbo_bnpr_mesh_pool_counters_;
   SSBO_StrokeGenMeshPoolCounters ssbo_bnpr_mesh_pool_counters_prev_; // keep counters from last mesh extraction iter
   SSBO_IndirectDrawArgs ssbo_bnpr_mesh_pool_draw_args_;
@@ -38,20 +36,26 @@ class GPUBufferPoolModule {
   SSBO_IndirectDispatchArgs ssbo_bnpr_mesh_contour_edge_dispatch_args_; 
 
   // TODO: these buffers are huge. consider re-use them for each mesh. 
-  SSBO_StrokeGenMeshGiant_Float ssbo_vbo_full_;
-  SSBO_StrokeGenMeshLarge ssbo_vert_merged_id_;
-  SSBO_StrokeGenMeshLarge ssbo_edge_to_vert_;
-  SSBO_StrokeGenMeshLarge ssbo_edge_to_edges_;
-  SSBO_StrokeGenMeshMedium ssbo_edge_to_contour_;
-  SSBO_StrokeGenMeshMedium ssbo_vert_to_edge_list_header_;
-  SSBO_StrokeGenMeshTiny ssbo_contour_to_contour_; 
-  SSBO_StrokeGenMeshMinimum ssbo_contour_edge_rank_;
-  SSBO_StrokeGenMeshMinimum ssbo_contour_edge_list_len_;
-  SSBO_StrokeGenMeshMinimum ssbo_contour_edge_list_head_; 
-  SSBO_StrokeGenMeshVertHashTable ssbo_vert_spatial_map_headers_;
-  SSBO_StrokeGenMeshLarge ssbo_mesh_buffer_reuse_0_;
-  SSBO_StrokeGenMeshMedium ssbo_mesh_buffer_reuse_1_;
-  SSBO_StrokeGenMeshMedium ssbo_mesh_buffer_reuse_2_;
+  SSBO_StrokeGenMeshBufPerVert<float, 3> ssbo_vbo_full_;                // 63MB     Total
+  SSBO_StrokeGenMeshBufPerVert<uint, 1> ssbo_vert_merged_id_;           // 21MB     84MB
+  SSBO_StrokeGenMeshBufPerVert<uint, 1> ssbo_vert_to_edge_list_header_; // 21MB     105MB
+  SSBO_StrokeGenMeshBufPerEdge<uint, 4> ssbo_edge_to_vert_;             // 256MB    361MB 
+  SSBO_StrokeGenMeshBufPerEdge<uint, 4> ssbo_edge_to_edges_;            // 
+  SSBO_StrokeGenMeshBufPerEdge<uint, 1> ssbo_edge_to_contour_;          // 
+  SSBO_StrokeGenMeshBufPerContour<uint, 2> ssbo_contour_to_contour_;    //  
+  SSBO_StrokeGenMeshBufPerContour<uint, 1> ssbo_contour_edge_rank_;     // 
+  SSBO_StrokeGenMeshBufPerContour<uint, 1> ssbo_contour_edge_list_len_; // 
+  SSBO_StrokeGenMeshBufPerContour<uint, 1> ssbo_contour_edge_list_head_;//  
+
+  // Reusable Large Buffers ---------------------------------------------------------------
+  SSBO_StrokeGenReusedLarge ssbo_mesh_buffer_reuse_0_;                    // 256MB    Total 
+  SSBO_StrokeGenReusedMedium ssbo_mesh_buffer_reuse_1_;                   // 128MB
+  SSBO_StrokeGenReusedMedium ssbo_mesh_buffer_reuse_2_;                   // 128MB    512MB
+  // finally contains contour edge data
+  SSBO_StrokeGenReusedLarge ssbo_bnpr_mesh_pool_;                         // 256MB    768MB
+  // temporally used for hashing
+  SSBO_StrokeGenReusedLarge ssbo_vert_spatial_map_headers_;               // 256MB    1024MB
+
   inline void reused_ssbo_vert_spatial_map_payloads_(GPUStorageBuf *&buf)
   {
     buf = ssbo_mesh_buffer_reuse_0_;  

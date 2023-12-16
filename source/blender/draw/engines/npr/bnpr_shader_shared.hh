@@ -323,25 +323,36 @@ using namespace draw;
 
 #ifdef __cplusplus
 
-// Template to set buffer size in compile time
 using UBO_ViewMatrices = draw::UniformBuffer<ViewMatrices>;
 using SSBO_IndirectDrawArgs = draw::StorageBuffer<DrawCommand, true>;
 using SSBO_IndirectDispatchArgs = draw::StorageBuffer<DispatchCommand>;
 
-using SSBO_StrokeGenTest = draw::StorageArrayBuffer<uint, 4096 * 4, true>; 
 
-using SSBO_StrokeGenMeshVertHashTable = draw::StorageArrayBuffer<uint, MAX_GPU_HASH_TABLE_SIZE, true>;
-using SSBO_StrokeGenMeshLarge = draw::StorageArrayBuffer<uint, 2048 * 2048 * 16, true>;
-using SSBO_StrokeGenMeshMedium = draw::StorageArrayBuffer<uint, 2048 * 2048 * 8, true>;
-using SSBO_StrokeGenMeshSmall = draw::StorageArrayBuffer<uint, 2048 * 2048 * 4, true>;
-using SSBO_StrokeGenMeshTiny = draw::StorageArrayBuffer<uint, 2048 * 2048 * 2, true>;
-using SSBO_StrokeGenMeshMinimum = draw::StorageArrayBuffer<uint, 2048 * 2048, true>;
-using SSBO_StrokeGenMeshGiant_Float = draw::StorageArrayBuffer<float, 2048 * 2048 * 32, true>;
-using SSBO_StrokeGenMeshLarge_Float = draw::StorageArrayBuffer<float, 2048 * 2048 * 12, true>;
-using SSBO_StrokeGenMeshSmall_Float = draw::StorageArrayBuffer<float, 2048 * 2048 * 4, true>;
+// Persistent Mesh Buffers ----------------
+// about 64MB for single stride
+template<typename T, size_t Stride>
+using SSBO_StrokeGenMeshBufPerEdge = draw::StorageArrayBuffer<T, MAX_NUM_EDGES_PER_BATCH * Stride, true>;
+// about 42MB for single stride
+template<typename T, size_t Stride>
+using SSBO_StrokeGenMeshBufPerFace = draw::StorageArrayBuffer<T, MAX_NUM_EDGES_PER_BATCH * Stride, true>;
+// about 21MB for single stride
+template<typename T, size_t Stride>
+using SSBO_StrokeGenMeshBufPerVert = draw::StorageArrayBuffer<T, MAX_NUM_VERTS_PER_BATCH * Stride, true>;
+// about 1MB for single stride
+template<typename T, size_t Stride>
+using SSBO_StrokeGenMeshBufPerContour = draw::StorageArrayBuffer<T, MAX_NUM_CONTOUR_EDGES_PER_BATCH * Stride, true>;
+
+// Reused Buffers --------------------------
+using SSBO_StrokeGenReusedLarge = draw::StorageArrayBuffer<uint, 2048 * 2048 * 16, true>;
+using SSBO_StrokeGenReusedMedium = draw::StorageArrayBuffer<uint, 2048 * 2048 * 8, true>;
+using SSBO_StrokeGenReusedSmall = draw::StorageArrayBuffer<uint, 2048 * 2048 * 4, true>;
+using SSBO_StrokeGenReusedTiny = draw::StorageArrayBuffer<uint, 2048 * 2048 * 2, true>;
+using SSBO_StrokeGenReusedMinimum = draw::StorageArrayBuffer<uint, 2048 * 2048, true>;
 
 using SSBO_StrokeGenMeshPoolCounters = draw::StorageBuffer<SSBOData_StrokeGenMeshPoolCounters>;
 
+
+// Buffers for testing parallel primitives
 using SSBO_BnprScanData = draw::StorageArrayBuffer<uint, 2048 * 2048 * 2, true>;
 using SSBO_BnprScanAggregates = draw::StorageArrayBuffer<uint, 512 * 16, true>;
 using UBO_BnprTreeScan = draw::UniformBuffer<UBData_TreeScan>;
