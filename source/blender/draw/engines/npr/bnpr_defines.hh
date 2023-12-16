@@ -32,9 +32,14 @@
 #define MAX_GPU_HASH_TABLE_SIZE ((2048 * 2048 * 16)) /* we just cannot afford more than this */
 
 #define MAX_NUM_EDGES_PER_BATCH ((2048 * 2048 * 4))
+
 /* https://math.stackexchange.com/questions/1541125/total-number-of-edges-in-a-triangle-mesh-with-n-vertices */
-#define MAX_NUM_VERTS_PER_BATCH (((MAX_NUM_EDGES_PER_BATCH / 3) / 4) * 4)
+// have to make bigger since verts in pos_nor are not merged & vbo is ridiculously huge
+// #define MAX_NUM_VERTS_PER_BATCH (((MAX_NUM_EDGES_PER_BATCH / 3) / 4) * 4)
+#define MAX_NUM_VERTS_PER_BATCH (((MAX_NUM_EDGES_PER_BATCH / 2) / 4) * 4)
+
 #define MAX_NUM_FACES_PER_BATCH (((((MAX_NUM_EDGES_PER_BATCH / 3) * 2) / 4) * 4)
+
 #define MAX_NUM_CONTOUR_EDGES_PER_BATCH ((2 * 1024 * 1024)) /* about MAX_NUM_EDGES_PER_BATCH ^ 0.8f */
 /** \} */
 
