@@ -356,11 +356,8 @@ namespace blender::npr::strokegen
 
     auto bind_rsc = [&](draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub)
     {
-      GPUStorageBuf *reused_ssbo_vert_spatial_map_payloads_ = nullptr;
-      buffers_.reused_ssbo_vert_spatial_map_payloads_(reused_ssbo_vert_spatial_map_payloads_);
-
-      sub.bind_ssbo(0, buffers_.ssbo_vert_spatial_map_headers_);
-      sub.bind_ssbo(1, reused_ssbo_vert_spatial_map_payloads_);
+      sub.bind_ssbo(0, buffers_.reused_ssbo_vert_spatial_map_headers_());
+      sub.bind_ssbo(1, buffers_.reused_ssbo_vert_spatial_map_payloads_());
       sub.bind_ssbo(2, buffers_.ssbo_vert_merged_id_);
       sub.bind_ssbo(3, buffers_.ssbo_vbo_full_);
       sub.bind_ssbo(4, buffers_.ssbo_bnpr_mesh_pool_counters_);
@@ -408,8 +405,6 @@ namespace blender::npr::strokegen
 
     auto bind_rsc = [&](draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub)
     {
-      GPUStorageBuf *reused_ssbo_edge_spatial_map_payloads_ = nullptr;
-      buffers_.reused_ssbo_edge_spatial_map_payloads_(reused_ssbo_edge_spatial_map_payloads_);
       GPUStorageBuf *reused_ssbo_wedge_flooding_pointers_in_ = nullptr;
       GPUStorageBuf *reused_ssbo_wedge_flooding_pointers_out_ = nullptr;
       buffers_.reused_ssbo_wedge_flooding_pointers_(
@@ -417,8 +412,8 @@ namespace blender::npr::strokegen
       ); 
 
       sub.bind_ssbo(0, buffers_.ssbo_vert_merged_id_);
-      sub.bind_ssbo(1, buffers_.ssbo_vert_spatial_map_headers_);
-      sub.bind_ssbo(2, reused_ssbo_edge_spatial_map_payloads_);
+      sub.bind_ssbo(1, buffers_.reused_ssbo_vert_spatial_map_headers_());
+      sub.bind_ssbo(2, buffers_.reused_ssbo_edge_spatial_map_payloads_());
       sub.bind_ssbo(3, buffers_.ssbo_edge_to_vert_);
       sub.bind_ssbo(4, buffers_.ssbo_edge_to_edges_);
       sub.bind_ssbo(5, buffers_.ssbo_vert_to_edge_list_header_);
@@ -586,7 +581,7 @@ namespace blender::npr::strokegen
 
     sub.bind_ssbo(0, buffers_.ssbo_edge_to_vert_/*&(gpu_batch_line_adj->elem)*/);
     sub.bind_ssbo(1, buffers_.ssbo_vbo_full_ /*&(gpu_batch_line_adj->verts[0])*/);
-    sub.bind_ssbo(2, buffers_.ssbo_bnpr_mesh_pool_);
+    sub.bind_ssbo(2, buffers_.reused_ssbo_bnpr_mesh_pool());
     sub.bind_ssbo(3, DRW_manager_get()->matrix_buf.current());
     sub.bind_ssbo(4, buffers_.ssbo_bnpr_mesh_pool_counters_);
     sub.bind_ssbo(5, buffers_.ssbo_edge_to_contour_);
@@ -625,7 +620,7 @@ namespace blender::npr::strokegen
       auto &sub = pass_extract_geom.sub("calc contour edge raster data");
       sub.shader_set(shaders_.static_shader_get(eShaderType::COMPUTE_CONTOUR_EDGE_RASTER_DATA));
 
-      sub.bind_ssbo(0, buffers_.ssbo_bnpr_mesh_pool_);
+      sub.bind_ssbo(0, buffers_.reused_ssbo_bnpr_mesh_pool());
       sub.bind_ssbo(1, buffers_.ssbo_bnpr_mesh_pool_counters_);
       sub.bind_ssbo(2, buffers_.ssbo_bnpr_mesh_pool_counters_prev_);
       sub.bind_ssbo(3, buffers_.ssbo_edge_to_edges_);

@@ -45,7 +45,7 @@ void npr::strokegen::StrokegenMeshRasterPass::append_draw_subpass(
   draw::PassMain::Sub* subpass = &sub("strokegen raster pass");
   subpass->shader_set(shaders.static_shader_get(eShaderType::INDIRECT_DRAW_CONTOUR_EDGES));
 
-  subpass->bind_ssbo(0, buffers.ssbo_bnpr_mesh_pool_);
+  subpass->bind_ssbo(0, buffers.reused_ssbo_bnpr_mesh_pool());
   subpass->bind_ssbo(1, buffers.ssbo_bnpr_mesh_pool_counters_);
   subpass->bind_ssbo(2, buffers.ssbo_contour_edge_rank_);
   subpass->bind_ssbo(3, buffers.ssbo_contour_edge_list_len_);
