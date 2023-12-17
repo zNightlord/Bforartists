@@ -161,8 +161,8 @@ Inputs:
     }
 
     uint pcs_split_iter_; 
-    uint ssbo_dyn_edge_count_[NUM_SPLITS]; 
-    uint ssbo_dyn_vert_count_[NUM_SPLITS]; 
+    uint ssbo_dyn_edge_count_[]; 
+    uint ssbo_dyn_vert_count_[]; 
 
 
 

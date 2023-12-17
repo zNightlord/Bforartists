@@ -223,11 +223,11 @@ using namespace draw;
     uint num_verts;
     uint num_edges;
     uint num_faces;
-    uint num_contour_edges;
+    uint num_contour_edges; // 4
     uint num_contour_edges_curr;
     uint num_filtered_edges;
     uint num_filtered_verts;
-    uint dummy_2;
+    uint dummy_1; // 4
   };
   BLI_STATIC_ASSERT_ALIGN(SSBOData_StrokeGenMeshPoolCounters, 16)
 
@@ -247,6 +247,15 @@ using namespace draw;
     uint packedNormal; 
   };
   BLI_STATIC_ASSERT_ALIGN(SSBO_Data_PosNor, 16)
+
+
+  struct SSBOData_StrokeGenEdgeSplitCounters {
+    uint num_split_edges_pass_1_;
+    uint num_split_edges_;
+    uint num_new_edges_; 
+    uint num_new_verts_;  // 4
+  };
+  BLI_STATIC_ASSERT_ALIGN(SSBOData_StrokeGenEdgeSplitCounters, 16)
 
 
   /* Addressing - buf_strokegen_mesh_pool */
@@ -335,7 +344,7 @@ using SSBO_StrokeGenMeshBufPerEdge = draw::StorageArrayBuffer<T, MAX_NUM_EDGES_P
 // about 42MB for single stride
 template<typename T, size_t Stride>
 using SSBO_StrokeGenMeshBufPerFace = draw::StorageArrayBuffer<T, MAX_NUM_EDGES_PER_BATCH * Stride, true>;
-// about 21MB for single stride
+// about 32MB for single stride
 template<typename T, size_t Stride>
 using SSBO_StrokeGenMeshBufPerVert = draw::StorageArrayBuffer<T, MAX_NUM_VERTS_PER_BATCH * Stride, true>;
 // about 1MB for single stride
@@ -344,24 +353,24 @@ using SSBO_StrokeGenMeshBufPerContour = draw::StorageArrayBuffer<T, MAX_NUM_CONT
 
 
 // Reused Buffers --------------------------
-using SSBO_StrokeGenReusedLarge = draw::StorageArrayBuffer<uint, 2048 * 2048 * 16, true>;
-using SSBO_StrokeGenReusedMedium = draw::StorageArrayBuffer<uint, 2048 * 2048 * 8, true>;
-using SSBO_StrokeGenReusedSmall = draw::StorageArrayBuffer<uint, 2048 * 2048 * 4, true>;
-using SSBO_StrokeGenReusedTiny = draw::StorageArrayBuffer<uint, 2048 * 2048 * 2, true>;
-using SSBO_StrokeGenReusedMinimum = draw::StorageArrayBuffer<uint, 2048 * 2048, true>;
+using SSBO_StrokeGenReusedLarge = StorageArrayBuffer<uint, 2048 * 2048 * 16, true>;
+using SSBO_StrokeGenReusedMedium = StorageArrayBuffer<uint, 2048 * 2048 * 8, true>;
+using SSBO_StrokeGenReusedSmall = StorageArrayBuffer<uint, 2048 * 2048 * 4, true>;
+using SSBO_StrokeGenReusedTiny = StorageArrayBuffer<uint, 2048 * 2048 * 2, true>;
+using SSBO_StrokeGenReusedMinimum = StorageArrayBuffer<uint, 2048 * 2048, true>;
 
-using SSBO_StrokeGenMeshPoolCounters = draw::StorageBuffer<SSBOData_StrokeGenMeshPoolCounters>;
-
+using SSBO_StrokeGenMeshPoolCounters = StorageBuffer<SSBOData_StrokeGenMeshPoolCounters>;
+using SSBO_StrokeGenDynMeshCounters = StorageBuffer<SSBOData_StrokeGenEdgeSplitCounters>; 
 
 // Buffers for testing parallel primitives --------------------
-using SSBO_BnprScanData = draw::StorageArrayBuffer<uint, 2048 * 2048 * 2, true>;
-using SSBO_BnprScanAggregates = draw::StorageArrayBuffer<uint, 512 * 16, true>;
-using UBO_BnprTreeScan = draw::UniformBuffer<UBData_TreeScan>;
+using SSBO_BnprScanData = StorageArrayBuffer<uint, 2048 * 2048 * 2, true>;
+using SSBO_BnprScanAggregates = StorageArrayBuffer<uint, 512 * 16, true>;
+using UBO_BnprTreeScan = UniformBuffer<UBData_TreeScan>;
 
-using SSBO_SegLoopConv1DData = draw::StorageArrayBuffer<uint, 2048 * 2048 * 2, true>;
-using SSBO_SegLoopConvDebugData = draw::StorageArrayBuffer<uint, 2048 * 2048 * 8, true>;
-using SSBO_SegLoopConvPatchTable = draw::StorageArrayBuffer<uint, 4096 * 64, true>;
-using UBO_SegLoopConv1D = draw::UniformBuffer<UBData_SegLoopConv1D>;
+using SSBO_SegLoopConv1DData = StorageArrayBuffer<uint, 2048 * 2048 * 2, true>;
+using SSBO_SegLoopConvDebugData = StorageArrayBuffer<uint, 2048 * 2048 * 8, true>;
+using SSBO_SegLoopConvPatchTable = StorageArrayBuffer<uint, 4096 * 64, true>;
+using UBO_SegLoopConv1D = UniformBuffer<UBData_SegLoopConv1D>;
 
 using SSBO_ListRankingLinksStagingBuf = draw::StorageArrayBuffer<uint, NUM_ITEMS_BNPR_LIST_RANK_TEST * 2, false/* We need to init this from CPU */>;
 using SSBO_ListRankingLinks = draw::StorageArrayBuffer<uint, NUM_ITEMS_BNPR_LIST_RANK_TEST * 2, true>;

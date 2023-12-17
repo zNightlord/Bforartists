@@ -163,11 +163,9 @@ namespace blender::npr::strokegen
 
     // Copy VBO/IBO ----------------------------------------------------------
     // Note: this also works
-    /*GPU_storagebuf_copy_sub_from_vertbuf(buffers_.ssbo_vbo_full_,
-                                         gpu_batch_surf->verts[0],
-                                         4 * num_total_mesh_verts,
-                                         0,
-                                         4 * num_verts);*/
+    /* GPU_storagebuf_copy_sub_from_vertbuf(
+     *  buffers_.ssbo_vbo_full_, gpu_batch_surf->verts[0], 4 * num_total_mesh_verts, 0, 4 * num_verts
+     * ); */
     append_subpass_merge_vbo(gpu_batch_surf, batch_resource_index, num_verts);
     append_subpass_merge_line_adj_ibo(gpu_batch_line_adj, ib_type, num_edges);
 
@@ -178,10 +176,7 @@ namespace blender::npr::strokegen
     append_subpass_fill_meshing_indirect_dispatch_args_();
 
     // Mesh Filtering -----------------------------------------------------------
-    append_subpass_quadric_mesh_filtering(num_edges,
-                                          num_verts,
-                                          meshing_params
-        );
+    append_subpass_quadric_mesh_filtering(num_edges, num_verts, meshing_params);
 
     // Contour Processing --------------------------------------------------------
     const bool debug_wedge_flooding = meshing_params.visualize_filtered_geom;
@@ -587,10 +582,10 @@ namespace blender::npr::strokegen
 
     sub.bind_ssbo(0, buffers_.ssbo_edge_to_vert_/*&(gpu_batch_line_adj->elem)*/);
     sub.bind_ssbo(1, buffers_.ssbo_vbo_full_ /*&(gpu_batch_line_adj->verts[0])*/);
-    sub.bind_ssbo(2, buffers_.reused_ssbo_bnpr_mesh_pool());
+    sub.bind_ssbo(2, buffers_.reused_ssbo_bnpr_mesh_pool_());
     sub.bind_ssbo(3, DRW_manager_get()->matrix_buf.current());
     sub.bind_ssbo(4, buffers_.ssbo_bnpr_mesh_pool_counters_);
-    sub.bind_ssbo(5, buffers_.ssbo_edge_to_contour_);
+    sub.bind_ssbo(5, buffers_.reused_ssbo_edge_to_contour_());
     // for debugging 
     GPUStorageBuf *reused_ssbo_wedge_flooding_pointers_in_ = nullptr;
     GPUStorageBuf *reused_ssbo_wedge_flooding_pointers_out_ = nullptr;
@@ -626,11 +621,11 @@ namespace blender::npr::strokegen
       auto &sub = pass_extract_geom.sub("calc contour edge raster data");
       sub.shader_set(shaders_.static_shader_get(eShaderType::COMPUTE_CONTOUR_EDGE_RASTER_DATA));
 
-      sub.bind_ssbo(0, buffers_.reused_ssbo_bnpr_mesh_pool());
+      sub.bind_ssbo(0, buffers_.reused_ssbo_bnpr_mesh_pool_());
       sub.bind_ssbo(1, buffers_.ssbo_bnpr_mesh_pool_counters_);
       sub.bind_ssbo(2, buffers_.ssbo_bnpr_mesh_pool_counters_prev_);
       sub.bind_ssbo(3, buffers_.ssbo_edge_to_edges_);
-      sub.bind_ssbo(4, buffers_.ssbo_edge_to_contour_);
+      sub.bind_ssbo(4, buffers_.reused_ssbo_edge_to_contour_());
       sub.bind_ssbo(5, buffers_.ssbo_contour_to_contour_);
       sub.bind_ssbo(6, buffers_.ssbo_list_ranking_inputs_); 
       sub.bind_ubo(0, buffers_.ubo_view_matrices_);

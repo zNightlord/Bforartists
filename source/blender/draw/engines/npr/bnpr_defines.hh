@@ -41,6 +41,9 @@
 #define MAX_NUM_FACES_PER_BATCH (((((MAX_NUM_EDGES_PER_BATCH / 3) * 2) / 4) * 4)
 
 #define MAX_NUM_CONTOUR_EDGES_PER_BATCH ((2 * 1024 * 1024)) /* about MAX_NUM_EDGES_PER_BATCH ^ 0.8f */
+
+
+#define MAX_CONSEQ_EDGE_SPLITS 8u /* max consecutive iters for a meshing op(edge split, collapse, flip, etc.) */
 /** \} */
 
 
