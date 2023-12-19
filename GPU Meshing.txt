@@ -10,21 +10,104 @@
            \__v3                                                                                         
 
 /* Common Inputs:  ---------------------------------------------- */
-ld_vpos(uint vtx_id)
-st_vpos(uint vtx_id)
+float ssbo_vbo_full_[]
+uint ssbo_vert_flags_[]
+uint ssbo_edge_flags_[]
 
-struct PerVertDynTopoFlags
+vec3 ld_vpos(uint vtx_id)
 {
+	uint base_addr = vtx_id * 3; 
+	return vec3(ssbo_vbo_full_[base_addr], ssbo_vbo_full_[base_addr+1], ssbo_vbo_full_[base_addr+2]); 
+}
+void st_vpos(uint vtx_id, vec3 vpos)
+{
+    uint base_addr = vtx_id * 3; 
+    ssbo_vbo_full_[base_addr]   = vpos.x;
+    ssbo_vbo_full_[base_addr+1] = vpos.y;
+    ssbo_vbo_full_[base_addr+2] = vpos.z;
+}
+
+
+struct VertFlags
+{
+    bool dupli; 
+    bool new_by_split; 
     bool del_by_collapse; 
 }; 
-void load / store_per_vert_dyn_topo_flags(uint vert_id, PerEdgeDynTopoFlags)
-
-struct PerEdgeDynTopoFlags
+uint encode_vert_flags(VertFlags vf)
 {
+    uint vf_enc = 0u;
+    vf_enc = vf.dupli; 
+    vf_enc <<= 1u; 
+    vf_enc |= uint(new_by_split); 
+    vf_enc <<= 1u; 
+    vf_enc |= uint(del_by_collapse); 
+
+    return vf_enc; 
+}
+VertFlags decode_vert_flags(uint vf_enc)
+{
+    VertFlags vf; 
+    vf.del_by_collapse = vf_enc & 1u; 
+    vf_enc >>= 1u; 
+    vf_new_by_split = vf_enc & 1u; 
+    vf_enc >>= 1u; 
+    vf.dupli = vf_enc & 1u; 
+
+    return vf; 
+}
+VertFlags load_vert_flags(uint vid)
+{
+    return decode_vert_flags(ssbo_vert_flags_[vid]); 
+}
+void store_vert_flags(uint vert_id, VertFlags vf)
+{
+    ssbo_vert_flags_[vid] = encode_edge_flags(vf); 
+}
+
+struct EdgeFlags
+{
+    bool dupli; 
+    bool new_by_split; 
+    bool del_by_split; 
     bool del_by_collapse; 
 }; 
-void load / store_per_edge_dyn_topo_flags(uint wedge_id, PerEdgeDynTopoFlags)
+uint encode_edge_flags(EdgeFlags ef)
+{
+    uint ef_enc = 0u; 
+    ef_enc |= ef.dupli; // d 
+    ef_enc <<= 1u; 
+    ef_enc |= ef.new_by_split; // d_ns 
+    ef_enc <<= 1u; 
+    ef_enc |= ef.del_by_split; // d_ns_ds
+    ef_enc <<= 1u; 
+    ef_enc |= del_by_collapse; // d_ns_ds_dc
 
+    return ef_enc; 
+}
+EdgeFlags decode_edge_flags(uint ef_enc)
+{
+    EdgeFlags ef; // d_ns_ds_dc
+    ef.del_by_collapse = ef_enc & 1u; 
+    ef_enc >>= 1u; // d_ns_ds
+    ef.del_by_split = ef_enc & 1u; 
+    ef_enc >>= 1u; // d_ns
+    ef.new_by_split = ef_enc & 1u; 
+    ef_enc >>= 1u; // d 
+    ef.dupli = ef_enc & 1u; 
+
+    return ef; 
+}
+EdgeFlags load_edge_flags(uint wedge_id)
+{
+    return decode_edge_flags(ssbo_edge_flags_[wedge_id]); 
+}
+void store_edge_flags(uint wedge_id, EdgeFlags ef)
+{
+    ssbo_edge_flags_[wedge_id] = encode_edge_flags(ef); 
+}
+
+/* note: move this to "npr_strokegen_topo_lib.glsl" */
 void try_update_ve_link(uint vtx, uint edge_old, uint edge_new)
 {
     VertWedgeListHeader vwlh = decode_vert_wedge_list_header(ssbo_vert_to_edge_list_header_[vtx]); 
@@ -61,8 +144,24 @@ vec3 interp_mid_point(vec3 v0, vec3 v1, vec3 v2, vec3 v3, vec3 q0, vec3 q1, vec3
 }
 
 
+/* Target Edge Length after Remeshing
+ * see Ch.6.5.3 "Incremental Remeshing" in
+ * http://staff.ustc.edu.cn/~lgliu/Courses/DGP_2014_autumn-winter/References/Book_Polygon%20Mesh%20Processing.pdf
+*/
+float calc_min_edge_len(float targ_edge_len)
+{
+    return (4.0f/5.0f) * targ_edge_len; 
+}
+float calc_max_edge_len(float targ_edge_len)
+{
+    return (4.0f/3.0f) * targ_edge_len; 
+}
 
-/* Paralle Edge Flip 
+
+
+
+
+/* Paralle Edge Flip ////////////////////////////////////////
  *         v0                  v0                                                             
  *        /  \                /|\                                                            
  *       /    \              / | \                                                           
@@ -142,17 +241,55 @@ uint ssbo_dyn_vert_count_[NUM_FLIPS];
  */
 
 Inputs: 
-    compact_split_edge()
-    compact_split_edge_II()
-
+    SSBOData_StrokeGenEdgeSplitCounters ssbo_edge_split_counters_; // remember to clear zero
+    compact_split_edge() // counter: ssbo_edge_split_counters_.num_split_edges_pass_1_
+    compact_split_edge_II() // counter: ssbo_edge_split_counters_.num_split_edges_
+    
+    uint ssbo_per_edge_split_info_[]
+    uint ssbo_per_split_edge_info_[]
     struct EdgeSplitInfo
     {
         bool should_split; 
-        float score; 
+        float edge_len; 
         uint id; 
     }; 
-    void load / store_per_split_edge_info(uint split_edge_id / EdgeSplitInfo esi)
-    void load / store_per_edge_split_info(uint split_edge_id / EdgeSplitInfo esi)
+    uvec2 encode_edge_split_info(EdgeSplitInfo esi)
+    {
+        uvec2 esi_enc = 0; 
+        esi_enc.x = floatBitsToUint(esi.edge_len); 
+        esi_enc.y = ((id << 1u) | esi.should_split);
+
+        return esi_enc;  
+    }
+    EdgeSplitInfo decode_edge_split_info(uvec2 esi_enc)
+    {
+        EdgeSplitInfo esi; 
+        esi.edge_len = uintBitsToFloat(esi_enc.x);
+        esi.should_split = (esi_enc.y & 1u);
+        esi_enc.y >>= 1u; 
+        esi.id = esi_enc.y;  
+
+        return esi; 
+    }
+    
+    void store_per_split_edge_info(uint split_edge_id, EdgeSplitInfo psei)
+    {
+        uvec2 psei_enc = encode_edge_split_info(psei); 
+        ssbo_per_split_edge_info_[split_edge_id*2] = psei_enc[0]; 
+        ssbo_per_split_edge_info_[split_edge_id*2 + 1] = psei_enc[1]; 
+    }
+    EdgeSplitInfo load_per_split_edge_info(uint split_edge_id)
+    {
+        uvec2 psei_enc; 
+        psei_enc[0] = ssbo_per_split_edge_info_[split_edge_id*2]; 
+        psei_enc[1] = ssbo_per_split_edge_info_[split_edge_id*2 + 1]; 
+        return decode_edge_split_info(psei_enc); 
+    }
+    void store_per_edge_split_info(uint split_edge_id / EdgeSplitInfo esi)
+    {
+        ssbo_per_edge_split_info_[split_edge_id]
+    }
+    void load_per_edge_split_info(uint split_edge_id / EdgeSplitInfo esi)
     bool split_score_larger(float score_0, score_1, uint wedge_id_0, wedge_id_1)
     {
         if (score_0 == score_1)
@@ -185,7 +322,7 @@ wedge_id = gl_GlobalInvocationID.x;
     {
         EdgeSplitInfo esi; 
         esi.should_split = true; 
-        esi.score = split_score; 
+        esi.edge_len = split_score; 
         esi.id = wedge_id; 
         
         store_per_split_edge_info(split_edge_id, esi); 
@@ -195,7 +332,7 @@ wedge_id = gl_GlobalInvocationID.x;
     {
         EdgeSplitInfo esi; 
         esi.should_split = is_split_ok; 
-        esi.score = split_score; 
+        esi.edge_len = split_score; 
         esi.id = is_split_ok ? split_edge_id : NULL_EDGE;
 
         store_per_edge_split_info(wedge_id, esi);  
@@ -218,13 +355,13 @@ AdjWedgeInfo { w0, w1, w2, w3 } = ssbo_edge_to_edges_[psei_curr.id*4 + 0/1/2/3];
     { 
         load_per_edge_split_info(w0.wedge_id) (w1.wedge_id) (w2.wedge_id) (w3.wedge_id)
     }; 
-    if (pesi_0.score > .0f)
+    if (pesi_0.edge_len > .0f)
     { /* handle collisions */
-        bool split = all_true(split_score_larger(psei_curr.score, pesi[0/1/2/3].score, psei_curr.id, w0/1/2/3)); 
+        bool split = all_true(split_score_larger(psei_curr.edge_len, pesi[0/1/2/3].edge_len, psei_curr.id, w0/1/2/3)); 
         if (!split)
         {
             psei_curr.should_split = false; 
-            psei_curr.score = .0f; 
+            psei_curr.edge_len = .0f; 
         }
     }
     
@@ -233,14 +370,14 @@ AdjWedgeInfo { w0, w1, w2, w3 } = ssbo_edge_to_edges_[psei_curr.id*4 + 0/1/2/3];
     uint split_edge_alloc_id = compact_split_edge_II(split);
     
     /* dont need score now, reuse to store alloc id */
-    psei_curr.score = split ? UintBitsToFloat(split_edge_alloc_id) : NULL_EDGE; 
+    psei_curr.edge_len = split ? UintBitsToFloat(split_edge_alloc_id) : NULL_EDGE; 
     if (valid_thread)
         store_per_split_edge_info(split_edge_id, psei_curr); 
 #endif
 
 #if <<Kernel 2>> 
     if (!psei_curr.should_split) return; 
-    uint split_edge_alloc_id = FloatBitsToUint(psei_curr.score); 
+    uint split_edge_alloc_id = FloatBitsToUint(psei_curr.edge_len); 
 
     /* Parallel Edge Split
     *          v0                   v0          
@@ -528,7 +665,7 @@ bool collapse_resolve_collision_I(
     EdgeCollapseInfo peci = load_per_edge_collapse_info(iter.awi.wedge_id, ctx.pcs_collapse_iter)
     if (peci.is_collapse_ok && ctx.is_collapse_ok)
     { /* found a better collapse alternative in 1-ring */
-        if (collapse_score_larger(peci.score, ctx.score, iter.awi.wedge_id, ctx.wedge_id))
+        if (collapse_score_larger(peci.edge_len, ctx.edge_len, iter.awi.wedge_id, ctx.wedge_id))
             ctx.is_collapse_ok = false; 
     }
 
@@ -805,10 +942,10 @@ if (!(valid_thread && pcei.is_collapse_ok)) return; // early exit
  *    Implementation: 
  *                                  
  *    mark v3, w2, w3, w4 as deleted    */
-store_per_vert_dyn_topo_flags(v3, PerVertDynTopoFlags(true)); 
-store_per_edge_dyn_topo_flags(w2, PerEdgeDynTopoFlags(true)); 
-store_per_edge_dyn_topo_flags(w3, PerEdgeDynTopoFlags(true)); 
-store_per_edge_dyn_topo_flags(w4, PerEdgeDynTopoFlags(true)); 
+store_vert_flags(v3, VertFlags(true)); 
+store_edge_flags(w2, EdgeFlags(true)); 
+store_edge_flags(w3, EdgeFlags(true)); 
+store_edge_flags(w4, EdgeFlags(true)); 
 /*                                  
  *    for all edges in v3's 1-ring closure:
  *      change e-v link from v3 to v1

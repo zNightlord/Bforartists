@@ -235,8 +235,17 @@ void main()
     }
 
     if (valid_thread) 
-    /* avoid hash search for non-duplicated verts */
-        ssbo_vert_merged_id_[VertID] = inserted ? VertID : NOT_FOUND; 
+    { 
+        /* avoid hash search for non-duplicated verts */
+        ssbo_vert_merged_id_[VertID] = inserted ? VertID : NOT_FOUND;
+
+        /* Init vert flags */
+        VertFlags vf;
+        vf.dupli = (false == inserted); 
+        vf.new_by_split = false; 
+        vf.del_by_collapse = false; 
+        store_vert_flags(VertID, vf);  
+    }
 #else
 
 #if defined(_KERNEL_MULTICOMPILE__VERT_MERGE_DEDUPLICATE)
@@ -261,7 +270,7 @@ void main()
             : VertID /*fucked up but at least we can keep it sane here */; 
         ssbo_vert_merged_id_[VertID] = merged_vert_id; 
         
-        /* Find if different position hashed to the same position with the same checksum. 
+        /* Debug snippet: Find if different position hashed to the same position with the same checksum. 
          * if (merged_vert_id != NOT_FOUND) {
          *  vec3 merged_pos = ld_vbo(merged_vert_id); 
          *  if (any(notEqual(merged_pos, pos)))
@@ -337,10 +346,19 @@ void main()
     }
 
     if (valid_thread)
-    { /* temp cache inserted flag here to avoid hash search for deduplication */
+    { 
+        /* temp cache inserted flag here to avoid hash search for deduplication */
         ssbo_edge_to_edges_[EdgeID*4u + 0u] = inserted ? 1u : 0u;
+
+        /* Init edge states */
+        EdgeFlags ef;
+        ef.dupli = (false == inserted);
+        ef.new_by_split = false;
+        ef.del_by_split = false; 
+        ef.del_by_collapse = false;
+        store_edge_flags(EdgeID, ef); 
         
-        /* Build Vert-to-Wedge link */
+        /* Setup Vert-to-Wedge link */
         uvec2 iverts_cwedge = mark__wedge_to_verts(4u); 
         if (inserted)
             for (uint iiverts = 0u; iiverts < 2u; iiverts++)
