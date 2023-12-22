@@ -665,53 +665,6 @@ void try_update_ve_link(uint vtx, uint edge_old, uint edge_new)
 
 
 
-
-
-#if defined(EDGE_SPLIT_COMMON_INCLUDE) || defined(EDGE_COLLAPSE_COMMON_INCLUDE)
-/* New vert pos for split/collapse: 
- * interp using Butterfly Scheme, see "Robust Topological Operations for Dynamic Explicit Surfaces"
- *                                  
- *  q0 ----E00----- v0 -----E31---- q3         q0 ----E00----- v0 ----E31---- q3
- *    \  <-------  /  \  <-------  /              \_           |           _/   
- *     \          /    \          0                 \_         |         _/     
- *      E        W      3        3                    \_       |       _/       
- *       0      0   f1   W      E                       \_     |     _/         
- *        1    /          \    /                          \_   |   _/           
- *         \  /  ------->  \  /                             \_ | _/            
- *          v1 ---- W4 ---- v3                                \v1 = (v1+v3)/2 + (v0+v2)/8 - (q0+q1+q3+q4)/16               
- *         /  \  <-------  /  \                             _/ | \_  
- *        E    \          /    \                          _/   |   \_                       
- *       1      W   f0   2      1                       _/     |     \_                     
- *      0        1      W        2                    _/       |       \_                   
- *     /          \    /          E                 _/         |         \_                 
- *    /  ------->  \  /  ------->  \              _/           |           \_               
- *  q1 ----E11----- v2 ----E20----- q2         q1 ----E11----- v2 ----E20---- q2
-*/
-vec3 interp_mid_point(vec3 v0, vec3 v1, vec3 v2, vec3 v3, vec3 q0, vec3 q1, vec3 q2, vec3 q3)
-{
-    return (v1+v3)/2.0f + (v0+v2)/8.0f - (q0+q1+q2+q3)/16.0f;  
-}
-
-/* Remeshing threshold, 
- * see Ch.6.5.3 "Incremental Remeshing" in
- * http://staff.ustc.edu.cn/~lgliu/Courses/DGP_2014_autumn-winter/References/Book_Polygon%20Mesh%20Processing.pdf
-*/
-float calc_min_edge_len(float targ_edge_len) // edge shorter than this will be collapsed
-{
-    return (4.0f/5.0f) * targ_edge_len; 
-}
-float calc_max_edge_len(float targ_edge_len) // edge longer than this will be split
-{
-    return (4.0f/3.0f) * targ_edge_len; 
-}
-#endif
-
-
-
-
-
-
-
 /* Mesh Element Flags ------------------------------------------------------------------------- */
 #if defined(VERT_FLAGS_INCLUDED)
 struct VertFlags
@@ -720,6 +673,24 @@ struct VertFlags
     bool new_by_split; // new vertex created by edge split
     bool del_by_collapse; // deleted vertex by edge collapse
 }; 
+VertFlags init_vert_flags(bool dupli)
+{
+    VertFlags vf; 
+    vf.dupli = dupli; 
+    vf.new_by_split = false; 
+    vf.del_by_collapse = false; 
+    
+    return vf; 
+}
+VertFlags init_vert_flags__new_split_edge()
+{
+    VertFlags vf; 
+    vf.dupli = false; 
+    vf.new_by_split = true; 
+    vf.del_by_collapse = false; 
+    
+    return vf; 
+}
 uint encode_vert_flags(VertFlags vf)
 {
     uint vf_enc = 0u;
@@ -756,31 +727,58 @@ void store_vert_flags(uint vid, VertFlags vf)
 struct EdgeFlags
 {
     bool dupli; // duplicated edge, should be ignored
+    bool border; // border edge
     bool new_by_split; // new edge created by edge split
     bool del_by_split; // deleted edge by edge split
     bool del_by_collapse; // deleted edge by edge collapse
 }; 
+EdgeFlags init_edge_flags(bool dupli, bool border)
+{
+    EdgeFlags ef; 
+    ef.dupli = dupli; 
+    ef.border = border; 
+    ef.new_by_split = false; 
+    ef.del_by_split = false;
+    ef.del_by_collapse = false; 
+
+    return ef; 
+}
+EdgeFlags init_edge_flags__new_split_edge()
+{
+    EdgeFlags ef; 
+    ef.dupli = false; 
+    ef.border = false; 
+    ef.new_by_split = false; 
+    ef.del_by_split = false;
+    ef.del_by_collapse = false; 
+
+    return ef; 
+}
 uint encode_edge_flags(EdgeFlags ef)
 {
     uint ef_enc = 0u; 
     ef_enc |= uint(ef.dupli); // d 
     ef_enc <<= 1u; 
-    ef_enc |= uint(ef.new_by_split); // d_ns 
+    ef_enc |= uint(ef.border); // d_b
     ef_enc <<= 1u; 
-    ef_enc |= uint(ef.del_by_split); // d_ns_ds
+    ef_enc |= uint(ef.new_by_split); // d_b_ns 
     ef_enc <<= 1u; 
-    ef_enc |= uint(ef.del_by_collapse); // d_ns_ds_dc
+    ef_enc |= uint(ef.del_by_split); // d_b_ns_ds
+    ef_enc <<= 1u; 
+    ef_enc |= uint(ef.del_by_collapse); // d_b_ns_ds_dc
 
     return ef_enc; 
 }
 EdgeFlags decode_edge_flags(uint ef_enc)
 {
-    EdgeFlags ef; // d_ns_ds_dc
+    EdgeFlags ef; // d_b_ns_ds_dc
     ef.del_by_collapse = (1u == (ef_enc & 1u)); 
-    ef_enc >>= 1u; // d_ns_ds
+    ef_enc >>= 1u; // d_b_ns_ds
     ef.del_by_split = (1u == (ef_enc & 1u)); 
-    ef_enc >>= 1u; // d_ns
+    ef_enc >>= 1u; // d_b_ns
     ef.new_by_split = (1u == (ef_enc & 1u)); 
+    ef_enc >>= 1u; // d_b
+    ef.border = (1u == (ef_enc & 1u));
     ef_enc >>= 1u; // d 
     ef.dupli = (1u == (ef_enc & 1u)); 
 
@@ -796,6 +794,46 @@ void store_edge_flags(uint wedge_id, EdgeFlags ef)
 }
 #endif
 
+
+
+
+/* Remeshing ----------------------------------------------------------------------------------- */
+/* New vert pos for split/collapse: 
+ * interp using Butterfly Scheme, see "Robust Topological Operations for Dynamic Explicit Surfaces"
+ *                                  
+ *  q0 ----E00----- v0 -----E31---- q3         q0 ----E00----- v0 ----E31---- q3
+ *    \  <-------  /  \  <-------  /              \_           |           _/   
+ *     \          /    \          0                 \_         |         _/     
+ *      E        W      3        3                    \_       |       _/       
+ *       0      0   f1   W      E                       \_     |     _/         
+ *        1    /          \    /                          \_   |   _/           
+ *         \  /  ------->  \  /                             \_ | _/            
+ *          v1 ---- W4 ---- v3                                \v1 = (v1+v3)/2 + (v0+v2)/8 - (q0+q1+q3+q4)/16               
+ *         /  \  <-------  /  \                             _/ | \_  
+ *        E    \          /    \                          _/   |   \_                       
+ *       1      W   f0   2      1                       _/     |     \_                     
+ *      0        1      W        2                    _/       |       \_                   
+ *     /          \    /          E                 _/         |         \_                 
+ *    /  ------->  \  /  ------->  \              _/           |           \_               
+ *  q1 ----E11----- v2 ----E20----- q2         q1 ----E11----- v2 ----E20---- q2
+*/
+vec3 interp_mid_point(vec3 v0, vec3 v1, vec3 v2, vec3 v3, vec3 q0, vec3 q1, vec3 q2, vec3 q3)
+{
+    return (v1+v3)/2.0f + (v0+v2)/8.0f - (q0+q1+q2+q3)/16.0f;  
+}
+
+/* Remeshing threshold, 
+ * see Ch.6.5.3 "Incremental Remeshing" in
+ * http://staff.ustc.edu.cn/~lgliu/Courses/DGP_2014_autumn-winter/References/Book_Polygon%20Mesh%20Processing.pdf
+*/
+float calc_remesh_edge_len_min(float targ_edge_len) // edge shorter than this will be collapsed
+{
+    return (4.0f/5.0f) * targ_edge_len; 
+}
+float calc_remesh_edge_len_max(float targ_edge_len) // edge longer than this will be split
+{
+    return (4.0f/3.0f) * targ_edge_len; 
+}
 
 
 

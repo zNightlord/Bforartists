@@ -42,8 +42,15 @@
 
 #define MAX_NUM_CONTOUR_EDGES_PER_BATCH ((2 * 1024 * 1024)) /* about MAX_NUM_EDGES_PER_BATCH ^ 0.8f */
 
+#define MAX_REMESHING_ITERS 4u /* max iters for the main remeshing loop */
 
-#define MAX_CONSEQ_EDGE_SPLITS 8u /* max consecutive iters for a meshing op(edge split, collapse, flip, etc.) */
+/* max consecutive operations in one remesh iter */
+#define MAX_CONSEQ_EDGE_SPLITS 8u 
+#define MAX_CONSEQ_EDGE_COLLAPSE 8u 
+#define MAX_CONSEQ_EDGE_FLIP 8u 
+#define MAX_REMESH_OPS_PER_ITER ((MAX_CONSEQ_EDGE_SPLITS + MAX_CONSEQ_EDGE_COLLAPSE + MAX_CONSEQ_EDGE_FLIP))
+
+#define MAX_REMESHING_OPS (((MAX_REMESHING_ITERS) * (MAX_REMESH_OPS_PER_ITER)))
 /** \} */
 
 

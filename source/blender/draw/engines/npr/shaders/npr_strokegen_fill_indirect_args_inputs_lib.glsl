@@ -94,6 +94,39 @@ void FillDispatchArgsBuffer(uvec3 args)
 
 #endif
 
+
+
+#if defined(_KERNEL_MULTICOMPILE__FILL_DISPATCH_ARGS__REMESHING)
+/* In: 
+ * int pc_edge_split_dispatch_group_size_
+ * int pcs_split_iter_
+ * ssbo_edge_split_counters_[]
+ * ssbo_indirect_dispatch_args_per_split_edge_
+*/
+void GetDispatchArgs(out uvec3 dispatch_args)
+{
+    uint num_work_items = 0; 
+#if defined(_KERNEL_MULTICOMPILE__FILL_DISPATCH_ARGS__REMESHING__PER_SPLIT_EDGE)
+    num_work_items = ssbo_edge_split_counters_[pcs_split_iter_].num_split_edges_pass_1;
+#endif
+    dispatch_args.x = compute_num_groups(num_work_items, pc_edge_split_dispatch_group_size_);
+    dispatch_args.y = 1;
+    dispatch_args.z = 1; 
+}
+
+void FillDispatchArgsBuffer(uvec3 args)
+{
+#if defined(_KERNEL_MULTICOMPILE__FILL_DISPATCH_ARGS__REMESHING__PER_SPLIT_EDGE)
+    ssbo_indirect_dispatch_args_per_split_edge_.num_groups_x = args.x;
+    ssbo_indirect_dispatch_args_per_split_edge_.num_groups_y = args.y;
+    ssbo_indirect_dispatch_args_per_split_edge_.num_groups_z = args.z; 
+    ssbo_indirect_dispatch_args_per_split_edge_._pad0 = 0;
+#endif
+}
+#endif
+
+
+
 #if defined (_KERNEL_MULTICOMPILE__FILL_DISPATCH_ARGS__PER_CONTOUR_EDGE)
 /* In: 
  * pc_per_contour_edge_dispatch_group_size_

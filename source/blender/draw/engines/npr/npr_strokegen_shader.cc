@@ -153,7 +153,18 @@ const char *StrokeGenShaderModule::static_shader_create_info_name_get(eShaderTyp
     case MESH_FILTERING_VERT_QUADRIC_DIFFUSION:
       return "bnpr_meshing_mesh_filtering_diffuse_vert_quadric_"; 
     case MESH_FILTERING_MOVE_VERTS:
-      return "bnpr_meshing_mesh_filtering_move_verts_"; 
+      return "bnpr_meshing_mesh_filtering_move_verts_";
+
+    case FILL_DISPATCH_ARGS_SPLIT_EDGES:
+      return "strokegen_remeshing_fill_dispatch_args_per_split_edge"; 
+
+    case MESH_OP_SPLIT_EDGE_COMPACT:
+      return "bnpr_meshing_edge_split_compact";
+    case MESH_OP_SPLIT_EDGE_RESOLVE_CONFICT:
+      return "bnpr_meshing_edge_split_resolve_conflict";
+    case MESH_OP_SPLIT_EDGE_EXECUTE:
+      return "bnpr_meshing_edge_split_execute"; 
+
 
     case SCAN_TEST_AGGREGATE:
       return "bnpr_scan_test_aggregate";

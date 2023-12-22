@@ -31,11 +31,13 @@ class GPUBufferPoolModule {
   SSBO_StrokeGenMeshPoolCounters ssbo_bnpr_mesh_pool_counters_;
   SSBO_StrokeGenMeshPoolCounters ssbo_bnpr_mesh_pool_counters_prev_; // keep counters from last mesh extraction iter
 
-  SSBO_StrokeGenDynMeshCounters ssbo_edge_split_counters_[MAX_CONSEQ_EDGE_SPLITS];
+  SSBO_StrokeGenDynamicMeshCounters ssbo_dyn_mesh_counters_[MAX_REMESHING_ITERS][2]; 
+  SSBO_StrokeGenEdgeSplitCounters ssbo_edge_split_counters_;
 
   SSBO_IndirectDrawArgs ssbo_bnpr_mesh_pool_draw_args_;
   SSBO_IndirectDispatchArgs ssbo_indirect_dispatch_args_per_filtered_edge_; 
   SSBO_IndirectDispatchArgs ssbo_indirect_dispatch_args_per_filtered_vert_;
+  SSBO_IndirectDispatchArgs ssbo_indirect_dispatch_args_per_split_edge_; 
   SSBO_IndirectDispatchArgs ssbo_bnpr_mesh_contour_edge_dispatch_args_; 
 
   // Persistent Buffers -------------------------------------------------------------------
@@ -78,7 +80,7 @@ class GPUBufferPoolModule {
   {
     return ssbo_mesh_buffer_reuse_1_; 
   }
-  inline GPUStorageBuf *reused_ssbo_per_split_edge_info()
+  inline GPUStorageBuf *reused_ssbo_per_split_edge_info_()
   {
     return ssbo_mesh_buffer_reuse_2_; 
   }
@@ -178,6 +180,7 @@ class GPUBufferPoolModule {
 
   // Note: Whenever you found weird shader error:
   // Check following things:
+  // *) if the data type of your buffer is correct, this often happens with a custom data type
   // *) the undefined variable "_ubo/_ssbo_xxxx_"
   //    Check the if there is any commented code at the end of the shader file.
   //    "// XXX" will fuck up the #pragma .... at the beginning of your code
@@ -204,8 +207,15 @@ class GPUBufferPoolModule {
   //    use define guard to exclude the scan library like this:
   //    (shaderinfo) .define("BNPR_STROKEGEN_SCAN_NO_SUBGROUP_CODEGEN_LIB", "1")
   //    Also, remember to check if there are any other confliction with the primitive library
+  // 
+  //
+  // For "syntax error, unexpected $undefined at token "<undefined>""
+  // *) Check if your multi-line macro has space after the '\'
+  // *) Check any other garbage characters (something other than a printable ASCII character, a space, a tab, or a newline).
+  //    see https://stackoverflow.com/questions/10877386/opengl-shader-compilation-errors-unexpected-undefined-at-token-undefined
+  //
 
-  /** CPU Buffers */
+  /** Mapped Buffers */
   /** Temp data for testing list ranking  */
   Vector<int> listranking_test_nodes_prev_next;
   std::vector<int> listranking_test_nodes_rank;

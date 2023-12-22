@@ -584,6 +584,94 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_mesh_filtering_move_verts_)
 /** \} */
 
 
+/* -------------------------------------------------------------------- */
+/** \ Edge Split
+ * \{ */
+/* In: 
+ * int pc_edge_split_dispatch_group_size_
+ * ssbo_edge_split_counters_
+ * ssbo_indirect_dispatch_args_per_split_edge_
+*/
+GPU_SHADER_CREATE_INFO(strokegen_remeshing_fill_dispatch_args)
+    .do_static_compilation(true)
+    .typedef_source("bnpr_defines.hh")
+    .typedef_source("bnpr_shader_shared.hh")
+    .typedef_source("draw_shader_shared.h") /* Always needed for indirect args */
+    .define("_KERNEL_MULTICOMPILE__FILL_DISPATCH_ARGS__REMESHING", "1")
+    .local_group_size(32)
+    .compute_source("npr_strokegen_fill_indirect_args_comp.glsl");
+
+GPU_SHADER_CREATE_INFO(strokegen_remeshing_fill_dispatch_args_per_split_edge)
+    .do_static_compilation(true)
+    .additional_info("strokegen_remeshing_fill_dispatch_args")
+    .define("_KERNEL_MULTICOMPILE__FILL_DISPATCH_ARGS__REMESHING__PER_SPLIT_EDGE", "1")
+    
+    .storage_buf(0, Qualifier::READ, "SSBOData_StrokeGenEdgeSplitCounters", "ssbo_edge_split_counters_[]")
+    .storage_buf(1, Qualifier::WRITE, "DispatchCommand", "ssbo_indirect_dispatch_args_per_split_edge_")
+    .push_constant(Type::INT, "pc_edge_split_dispatch_group_size_")
+    .push_constant(Type::INT, "pcs_split_iter_"); 
+
+
+
+
+GPU_SHADER_CREATE_INFO(bnpr_meshing_edge_split)
+    .do_static_compilation(true)
+    .typedef_source("bnpr_defines.hh")
+    .typedef_source("bnpr_shader_shared.hh")
+    .typedef_source("draw_shader_shared.h")
+    /* topo lib multicompile macros */
+    .define("DECODE_IBO_EXCLUDE", "1") /* Remove ibo code */
+    .define("WINGED_EDGE_TOPO_INCLUDE", "1")
+    .define("VERT_WEDGE_LIST_TOPO_INCLUDE", "1")
+    .define("EDGE_FLAGS_INCLUDED", "1")
+    .define("EDGE_FLAGS_INCLUDED", "1")
+
+    .storage_buf(0, Qualifier::READ_WRITE, "SSBOData_StrokeGenDynamicMeshCounters", "ssbo_dyn_mesh_counters_in_")
+    .storage_buf(1, Qualifier::READ_WRITE, "SSBOData_StrokeGenDynamicMeshCounters", "ssbo_dyn_mesh_counters_out_")
+    .storage_buf(2, Qualifier::READ_WRITE, "SSBOData_StrokeGenEdgeSplitCounters", "ssbo_edge_split_counters_[]")
+    .storage_buf(3, Qualifier::READ_WRITE, "float", "ssbo_vbo_full_[]")
+    .storage_buf(4, Qualifier::READ_WRITE, "uint", "ssbo_edge_to_vert_[]")
+    .storage_buf(5, Qualifier::READ_WRITE, "uint", "ssbo_edge_to_edges_[]")
+    .storage_buf(6, Qualifier::READ_WRITE, "uint", "ssbo_vert_to_edge_list_header_[]")
+    .storage_buf(7, Qualifier::READ_WRITE, "uint", "ssbo_vert_flags_[]")
+    .storage_buf(8, Qualifier::READ_WRITE, "uint", "ssbo_edge_flags_[]")
+    .storage_buf(9, Qualifier::READ_WRITE, "uint", "ssbo_per_edge_split_info_[]")
+    .storage_buf(10, Qualifier::READ_WRITE, "uint", "ssbo_per_split_edge_info_[]")
+    .push_constant(Type::INT, "pcs_split_iter_")
+    .push_constant(Type::FLOAT, "pcs_remesh_edge_len_")
+    .push_constant(Type::INT, "pcs_edge_count_")
+    .push_constant(Type::INT, "pcs_vert_count_")
+
+    .local_group_size(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT)
+    .compute_source("npr_strokegen_edge_split_comp.glsl");
+;
+
+GPU_SHADER_CREATE_INFO(bnpr_meshing_edge_split_compact)
+    .do_static_compilation(true)
+    .additional_info("bnpr_meshing_edge_split")
+    .define("_KERNEL_MULTICOMPILE__EDGE_SPLIT_COMPACT", "1")
+    .define("GLOBAL_COUNTER", "ssbo_edge_split_counters_[pcs_split_iter_].num_split_edges_pass_1")
+    .define("CP_TAG", "split_select_long_edges");
+
+GPU_SHADER_CREATE_INFO(bnpr_meshing_edge_split_resolve_conflict)
+    .do_static_compilation(true)
+    .additional_info("bnpr_meshing_edge_split")
+    .define("_KERNEL_MULTICOMPILE__EDGE_SPLIT", "1")
+    .define("_KERNEL_MULTICOMPILE__EDGE_SPLIT_RESOLVE_CONFLICT", "1")
+    .define("GLOBAL_COUNTER", "ssbo_edge_split_counters_[pcs_split_iter_].num_split_edges")
+    .define("CP_TAG", "split_resolve_conflict"); 
+
+GPU_SHADER_CREATE_INFO(bnpr_meshing_edge_split_execute)
+    .do_static_compilation(true)
+    .additional_info("bnpr_meshing_edge_split")
+    .define("_KERNEL_MULTICOMPILE__EDGE_SPLIT", "1")
+    .define("_KERNEL_MULTICOMPILE__EDGE_SPLIT_EXECUTE", "1")
+    .define("COMPACTION_LIB_EXCLUDE", "1"); 
+
+/** \} */
+
+
+
 
 /* -------------------------------------------------------------------- */
 /** \Bare minumum compute shader test

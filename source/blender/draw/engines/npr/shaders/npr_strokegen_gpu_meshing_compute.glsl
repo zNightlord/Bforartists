@@ -240,10 +240,7 @@ void main()
         ssbo_vert_merged_id_[VertID] = inserted ? VertID : NOT_FOUND;
 
         /* Init vert flags */
-        VertFlags vf;
-        vf.dupli = (false == inserted); 
-        vf.new_by_split = false; 
-        vf.del_by_collapse = false; 
+        VertFlags vf = init_vert_flags(!inserted/*duplicated?*/);
         store_vert_flags(VertID, vf);  
     }
 #else
@@ -313,6 +310,7 @@ void main()
     vid[1] = ssbo_edge_to_vert_[base_addr+1]; 
     vid[2] = ssbo_edge_to_vert_[base_addr+2];
     vid[3] = ssbo_edge_to_vert_[base_addr+3];
+    bool is_border = line_adj_is_border_edge(vid);
    
     /* fetch merged id */
     for (uint i = 0u; i < 4u; i++) {
@@ -351,11 +349,7 @@ void main()
         ssbo_edge_to_edges_[EdgeID*4u + 0u] = inserted ? 1u : 0u;
 
         /* Init edge states */
-        EdgeFlags ef;
-        ef.dupli = (false == inserted);
-        ef.new_by_split = false;
-        ef.del_by_split = false; 
-        ef.del_by_collapse = false;
+        EdgeFlags ef = init_edge_flags(!inserted, is_border);
         store_edge_flags(EdgeID, ef); 
         
         /* Setup Vert-to-Wedge link */

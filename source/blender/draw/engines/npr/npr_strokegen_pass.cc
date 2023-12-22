@@ -81,7 +81,9 @@ namespace blender::npr::strokegen
     meshing_params.use_normal_filtering = scene_eval->npr.npr_test_val_9 > 0.5f;
     meshing_params.num_normal_filtering_iters = 2 * std::max(1, (int)(scene_eval->npr.npr_test_val_10));
 
-    meshing_params.num_edge_flooding_iters = (int)(scene_eval->npr.npr_test_val_11 + 1e-10f); 
+    meshing_params.num_edge_flooding_iters = (int)(scene_eval->npr.npr_test_val_11 + 1e-10f);
+
+    meshing_params.remeshing_targ_edge_len = scene_eval->npr.npr_test_val_12; 
   }
 
   void StrokeGenPassModule::on_end_sync()
@@ -173,10 +175,13 @@ namespace blender::npr::strokegen
     append_subpass_meshing_merge_verts(num_verts);
     append_subpass_meshing_wedge_adjacency_and_init_flooding_ptr(num_edges, num_verts);
     append_subpass_meshing_wedge_flooding(num_edges, num_verts);
-    append_subpass_fill_meshing_indirect_dispatch_args_();
 
     // Mesh Filtering -----------------------------------------------------------
+    append_subpass_fill_mesh_filtering_indirect_dispatch_args_();
     append_subpass_quadric_mesh_filtering(num_edges, num_verts, meshing_params);
+
+    // Remeshing
+    append_subpass_split_edges(0, 0, num_edges, num_verts); 
 
     // Contour Processing --------------------------------------------------------
     const bool debug_wedge_flooding = meshing_params.visualize_filtered_geom;
@@ -522,7 +527,7 @@ namespace blender::npr::strokegen
     }
   }
 
-  void StrokeGenPassModule::append_subpass_fill_meshing_indirect_dispatch_args_()
+  void StrokeGenPassModule::append_subpass_fill_mesh_filtering_indirect_dispatch_args_()
   {
     auto bind_src = [&](draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub) {
       sub.bind_ssbo(0, buffers_.ssbo_bnpr_mesh_pool_counters_);
@@ -542,6 +547,66 @@ namespace blender::npr::strokegen
       sub.shader_set(shaders_.static_shader_get(FILL_DISPATCH_ARGS_FILTERED_VERTS));
       bind_src(sub);
       sub.dispatch(int3(1, 1, 1));
+      sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
+    }
+  }
+
+  void StrokeGenPassModule::append_subpass_split_edges(int iter_remesh, int iter_split, int num_edges, int num_verts)
+  {
+    auto bind_src = [&](
+      draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub, float remesh_edge_len) {
+        sub.bind_ssbo(0, buffers_.ssbo_dyn_mesh_counters_[iter_remesh][0]);
+        sub.bind_ssbo(1, buffers_.ssbo_dyn_mesh_counters_[iter_remesh][1]);
+        sub.bind_ssbo(2, buffers_.ssbo_edge_split_counters_);
+        sub.bind_ssbo(3, buffers_.ssbo_vbo_full_);
+        sub.bind_ssbo(4, buffers_.ssbo_edge_to_vert_);
+        sub.bind_ssbo(5, buffers_.ssbo_edge_to_edges_);
+        sub.bind_ssbo(6, buffers_.ssbo_vert_to_edge_list_header_);
+        sub.bind_ssbo(7, buffers_.ssbo_vert_flags_);
+        sub.bind_ssbo(8, buffers_.ssbo_edge_flags_);
+        sub.bind_ssbo(9, buffers_.reused_ssbo_per_edge_split_info_()); 
+        sub.bind_ssbo(10, buffers_.reused_ssbo_per_split_edge_info_()); 
+        sub.push_constant("pcs_split_iter_", iter_split); 
+        sub.push_constant("pcs_remesh_edge_len_", remesh_edge_len); 
+        sub.push_constant("pcs_edge_count_", num_edges); 
+        sub.push_constant("pcs_vert_count_", num_verts); 
+    };
+    {
+      auto &sub = pass_extract_geom.sub("bnpr_meshing_edge_split_compact");
+      sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_OP_SPLIT_EDGE_COMPACT));
+      bind_src(sub, meshing_params.remeshing_targ_edge_len);
+      // sub.dispatch(
+      //     int3(compute_num_groups(num_edges, GROUP_SIZE_STROKEGEN_GEOM_EXTRACT, 1), 1, 1)
+      // );
+      sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
+    }
+    {
+      auto &sub = pass_extract_geom.sub("strokegen_remeshing_fill_dispatch_args_per_split_edge"); 
+      sub.shader_set(shaders_.static_shader_get(FILL_DISPATCH_ARGS_SPLIT_EDGES));
+      sub.bind_ssbo(0, buffers_.ssbo_edge_split_counters_);
+      sub.bind_ssbo(1, buffers_.ssbo_indirect_dispatch_args_per_split_edge_);
+      sub.push_constant("pc_edge_split_dispatch_group_size_", (int)(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT));
+      sub.push_constant("pcs_split_iter_", iter_split);
+
+      // sub.dispatch(int3(1, 1, 1));
+      sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
+    }
+    {
+      auto &sub = pass_extract_geom.sub("bnpr_meshing_edge_split_resolve_conflict");
+      sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_OP_SPLIT_EDGE_RESOLVE_CONFICT));
+      bind_src(sub, meshing_params.remeshing_targ_edge_len);
+      // sub.dispatch(
+      //     int3(compute_num_groups(num_edges, GROUP_SIZE_STROKEGEN_GEOM_EXTRACT, 1), 1, 1)
+      // );
+      sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
+    }
+    {
+      auto &sub = pass_extract_geom.sub("bnpr_meshing_edge_split_execute");
+      sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_OP_SPLIT_EDGE_RESOLVE_CONFICT));
+      bind_src(sub, meshing_params.remeshing_targ_edge_len);
+      // sub.dispatch(
+      //     int3(compute_num_groups(num_edges, GROUP_SIZE_STROKEGEN_GEOM_EXTRACT, 1), 1, 1)
+      // );
       sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
     }
   }
@@ -607,7 +672,9 @@ namespace blender::npr::strokegen
         (int)edge_batch->elem_()->index_start_get() + (int)edge_batch->elem_()->index_base_get()
         );
     sub.push_constant("pcs_rsc_handle", (int)rsc_handle.resource_index());
-    sub.push_constant("pcs_dbg_wedge_flooding_", debug_wedge_flooding ? 1 : 0);
+    sub.push_constant("pcs_dbg_wedge_floo"
+                      ""
+                      "ding_", debug_wedge_flooding ? 1 : 0);
 
     sub.dispatch(int3(
             compute_num_groups(num_edges, GROUP_SIZE_STROKEGEN_GEOM_EXTRACT, 1),
@@ -638,6 +705,8 @@ namespace blender::npr::strokegen
       sub.barrier(GPU_BARRIER_SHADER_STORAGE);
     }
   }
+
+
 
   void StrokeGenPassModule::rebuild_pass_process_contours()
   {
