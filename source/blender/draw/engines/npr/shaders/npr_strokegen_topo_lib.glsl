@@ -726,11 +726,15 @@ void store_vert_flags(uint vid, VertFlags vf)
 #if defined(EDGE_FLAGS_INCLUDED)
 struct EdgeFlags
 {
+    // Persistent Flags ----------------------------------
     bool dupli; // duplicated edge, should be ignored
     bool border; // border edge
     bool new_by_split; // new edge created by edge split
     bool del_by_split; // deleted edge by edge split
     bool del_by_collapse; // deleted edge by edge collapse
+
+    // Temp Flags, can share bits across different passes -
+    bool temp_new_by_split_this_round; // new edge created by edge split in current remeshing round
 }; 
 EdgeFlags init_edge_flags(bool dupli, bool border)
 {
@@ -741,6 +745,8 @@ EdgeFlags init_edge_flags(bool dupli, bool border)
     ef.del_by_split = false;
     ef.del_by_collapse = false; 
 
+    ef.temp_new_by_split_this_round = false; 
+
     return ef; 
 }
 EdgeFlags init_edge_flags__new_split_edge()
@@ -748,9 +754,11 @@ EdgeFlags init_edge_flags__new_split_edge()
     EdgeFlags ef; 
     ef.dupli = false; 
     ef.border = false; 
-    ef.new_by_split = false; 
-    ef.del_by_split = false;
+    ef.new_by_split = true; 
+    ef.del_by_split = false; 
     ef.del_by_collapse = false; 
+
+    ef.temp_new_by_split_this_round = true; 
 
     return ef; 
 }
@@ -766,12 +774,16 @@ uint encode_edge_flags(EdgeFlags ef)
     ef_enc |= uint(ef.del_by_split); // d_b_ns_ds
     ef_enc <<= 1u; 
     ef_enc |= uint(ef.del_by_collapse); // d_b_ns_ds_dc
+    ef_enc <<= 1u; 
+    ef_enc |= uint(ef.temp_new_by_split_this_round); // d_b_ns_ds_dc_tnbsr
 
     return ef_enc; 
 }
 EdgeFlags decode_edge_flags(uint ef_enc)
 {
-    EdgeFlags ef; // d_b_ns_ds_dc
+    EdgeFlags ef; // d_b_ns_ds_dc_tnbsr
+    ef.temp_new_by_split_this_round = (1u == (ef_enc & 1u));
+    ef_enc >>= 1u; // d_b_ns_ds_dc
     ef.del_by_collapse = (1u == (ef_enc & 1u)); 
     ef_enc >>= 1u; // d_b_ns_ds
     ef.del_by_split = (1u == (ef_enc & 1u)); 

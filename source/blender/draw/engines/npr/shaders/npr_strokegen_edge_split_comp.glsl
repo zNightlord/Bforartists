@@ -108,19 +108,35 @@ EdgeSplitInfo load_per_edge_split_info(uint wedge_id)
 
 
 /* true/false if esi_0 hase higher/lower priority than esi_1  */
-bool split_priority_higher(EdgeSplitInfo esi_0, EdgeSplitInfo esi_1)
+struct EdgeSplitPriorityContext
 {
-    if (!esi_0.is_split_ok)
+    EdgeSplitInfo pesi; 
+    uint wedge_id; 
+}; 
+bool split_priority_higher(EdgeSplitPriorityContext ctx_0, EdgeSplitPriorityContext ctx_1)
+{
+    if (!ctx_0.pesi.is_split_ok)
         return false;
-    if (!esi_1.is_split_ok)
+    if (!ctx_1.pesi.is_split_ok)
         return true;
 
-    if (esi_0.edge_len == esi_1.edge_len)
-        return esi_0.id < esi_1.id; /* use lower id */
+    if (ctx_0.pesi.edge_len == ctx_1.pesi.edge_len)
+        return ctx_0.wedge_id < ctx_1.wedge_id; /* use lower id */
 
-    return esi_0.edge_len > esi_1.edge_len; /* prefer longer edge */
+    return ctx_0.pesi.edge_len > ctx_1.pesi.edge_len; /* prefer longer edge */
 }
 
+
+#if defined(_KERNEL_MULTICOMPILE__EDGE_SPLIT_INIT)
+void main()
+{ /* Dispatched at beginning of each split sequence */
+    if (gl_GlobalInvocationID.x == 0u)
+    { 
+        ssbo_edge_split_counters_[0].num_split_edges_pass_1 = 0u;
+        ssbo_edge_split_counters_[0].num_split_edges = 0u; 
+    }
+}
+#endif
 
 
 
@@ -132,6 +148,11 @@ void main()
 
     uint wedge_id = gl_GlobalInvocationID.x; 
     bool valid_thread = wedge_id < (pcs_edge_count_ + ssbo_dyn_mesh_counters_out_.num_edges); 
+    if (wedge_id == 0u)
+    {
+        ssbo_dyn_mesh_counters_in_.num_edges = ssbo_dyn_mesh_counters_out_.num_edges; 
+        ssbo_dyn_mesh_counters_in_.num_verts = ssbo_dyn_mesh_counters_out_.num_verts; 
+    }
 
     /* Calc edge length */
     uvec2 iverts_cwedge = mark__wedge_to_verts(4/*mark of cwedge*/); 
@@ -144,11 +165,22 @@ void main()
     vpos_cwedge[1] = ld_vpos(verts_cwedge.y);
     float edge_len = length(vpos_cwedge[0] - vpos_cwedge[1]);
 
-    
-    /* Select long edges */
     EdgeFlags ef = load_edge_flags(wedge_id);
+    /* reset temporary flags */
+    if (pcs_split_iter_ == 0u)
+    {
+        ef.temp_new_by_split_this_round = false;
+        if (valid_thread)
+            store_edge_flags(wedge_id, ef); 
+    }
+
+    /* Select edges based on split conditions */
     bool is_split_ok = valid_thread 
+        && (!ef.dupli)
         && (!ef.border) 
+        && (!ef.del_by_split)
+        && (!ef.del_by_collapse)
+        && (!ef.temp_new_by_split_this_round) /* skip edges generated from current remesh iter */
         && edge_len > get_split_edge_len_min();
 
     uint split_edge_id = compact_split_select_long_edges(is_split_ok, groupId);
@@ -161,7 +193,7 @@ void main()
 
         store_per_split_edge_info(split_edge_id, psei); 
     }
-
+ 
     if (valid_thread)
     {
         EdgeSplitInfo pesi; 
@@ -171,17 +203,25 @@ void main()
 
         store_per_edge_split_info(wedge_id, pesi); 
     }
-
-    if (wedge_id == 0u)
-    {
-        ssbo_dyn_mesh_counters_in_.num_edges = ssbo_dyn_mesh_counters_out_.num_edges; 
-        ssbo_dyn_mesh_counters_in_.num_verts = ssbo_dyn_mesh_counters_out_.num_verts; 
-    }
 }
 #endif
 
 
 #if defined(_KERNEL_MULTICOMPILE__EDGE_SPLIT)
+
+#if defined(_KERNEL_MULTICOMPILE__EDGE_SPLIT_EXECUTE)
+void Store4_EEAdj(uint w, uvec4 adj_wedges, uvec4 adj_iface_adjs)
+{
+    uvec4 data;
+    data[0] = encode_adj_wedge_info(AdjWedgeInfo(adj_wedges[0], adj_iface_adjs[0])); 
+    data[1] = encode_adj_wedge_info(AdjWedgeInfo(adj_wedges[1], adj_iface_adjs[1]));
+    data[2] = encode_adj_wedge_info(AdjWedgeInfo(adj_wedges[2], adj_iface_adjs[2]));
+    data[3] = encode_adj_wedge_info(AdjWedgeInfo(adj_wedges[3], adj_iface_adjs[3]));
+
+    Store4(ssbo_edge_to_edges_, w, uvec4, data); 
+}
+#endif
+
 void main()
 {
     const uint groupId = gl_LocalInvocationID.x; 
@@ -193,30 +233,31 @@ void main()
 
     EdgeSplitInfo psei_curr = load_per_split_edge_info(split_edge_id);
 
-    AdjWedgeInfo w0, w1, w2, w3; 
-    w0 = decode_adj_wedge_info(ssbo_edge_to_edges_[psei_curr.id*4u + 0u]);
-    w1 = decode_adj_wedge_info(ssbo_edge_to_edges_[psei_curr.id*4u + 1u]);
-    w2 = decode_adj_wedge_info(ssbo_edge_to_edges_[psei_curr.id*4u + 2u]);
-    w3 = decode_adj_wedge_info(ssbo_edge_to_edges_[psei_curr.id*4u + 3u]);
+    AdjWedgeInfo w[4]; 
+    w[0] = decode_adj_wedge_info(ssbo_edge_to_edges_[psei_curr.id*4u + 0u]);
+    w[1] = decode_adj_wedge_info(ssbo_edge_to_edges_[psei_curr.id*4u + 1u]);
+    w[2] = decode_adj_wedge_info(ssbo_edge_to_edges_[psei_curr.id*4u + 2u]);
+    w[3] = decode_adj_wedge_info(ssbo_edge_to_edges_[psei_curr.id*4u + 3u]);
 
 
 
 #if defined(_KERNEL_MULTICOMPILE__EDGE_SPLIT_RESOLVE_CONFLICT)
     EdgeSplitInfo pesi[4];
-    pesi[0] = load_per_edge_split_info(w0.wedge_id);
-    pesi[1] = load_per_edge_split_info(w1.wedge_id);
-    pesi[2] = load_per_edge_split_info(w2.wedge_id);
-    pesi[3] = load_per_edge_split_info(w3.wedge_id);
+    pesi[0] = load_per_edge_split_info(w[0].wedge_id);
+    pesi[1] = load_per_edge_split_info(w[1].wedge_id);
+    pesi[2] = load_per_edge_split_info(w[2].wedge_id);
+    pesi[3] = load_per_edge_split_info(w[3].wedge_id);
 
     /* Resolve collision */
     if (psei_curr.is_split_ok && valid_thread)
     {
+        EdgeSplitPriorityContext ctx_curr = EdgeSplitPriorityContext(psei_curr, psei_curr.id); 
         psei_curr.is_split_ok = all(
             bvec4(
-                split_priority_higher(psei_curr, pesi[0]),
-                split_priority_higher(psei_curr, pesi[1]),
-                split_priority_higher(psei_curr, pesi[2]),
-                split_priority_higher(psei_curr, pesi[3])
+                split_priority_higher(ctx_curr, EdgeSplitPriorityContext(pesi[0], w[0].wedge_id)),
+                split_priority_higher(ctx_curr, EdgeSplitPriorityContext(pesi[1], w[1].wedge_id)),
+                split_priority_higher(ctx_curr, EdgeSplitPriorityContext(pesi[2], w[2].wedge_id)),
+                split_priority_higher(ctx_curr, EdgeSplitPriorityContext(pesi[3], w[3].wedge_id))
             )
         ); 
     }
@@ -271,7 +312,12 @@ void main()
     uvec4 e = (num_existing_edges + split_edge_alloc_id * 4u).xxxx + uvec4(0, 1, 2, 3); 
     /* alloc x1 new vertex */
     uint v4 = (num_existing_verts + split_edge_alloc_id); 
-    
+
+#define w0 ((w[0].wedge_id))
+#define w1 ((w[1].wedge_id))
+#define w2 ((w[2].wedge_id))
+#define w3 ((w[3].wedge_id))
+
 #define e0 e[0]
 #define e1 e[1]
 #define e2 e[2]
@@ -291,10 +337,10 @@ void main()
     *    { v0~3 }        { v1, v4, v3, v0 }      { v1, v2, v3, v4 }                 
     *    { w0~3 }        { e1, e3, w3, w0 }      { w1, w2, e3, e1 } 
     */
-    Store4(uvec4(v1, v4, v3, v0), e0, ssbo_edge_to_vert_) ; // update e0
-    Store4(uvec4(e1, e3, w3, w0), e0, ssbo_edge_to_edges_); 
-    Store4(uvec4(v1, v2, v3, v4), e2, ssbo_edge_to_vert_) ; // update e2
-    Store4(uvec4(w1, w2, e3, e1), e2, ssbo_edge_to_edges_); 
+    Store4(ssbo_edge_to_vert_,  e0, uvec4, uvec4(v1, v4, v3, v0)); // update e0
+    Store4_EEAdj(e0, uvec4(e1, e3, w3, w0), uvec4(0, 0, w[3].iface_adj, w[0].iface_adj)); 
+    Store4(ssbo_edge_to_vert_,  e2, uvec4, uvec4(v1, v2, v3, v4)); // update e2
+    Store4_EEAdj(e2, uvec4(w1, w2, e3, e1), uvec4(w[1].iface_adj, w[2].iface_adj, 1, 1)); 
     /*  ---------------------------------------------------------------                               
     *     Template               E1                    E3
     *                            v0                    v0        
@@ -315,10 +361,10 @@ void main()
     *    { v0~3 }        { v0, v1, v2, v4 }      { v0, v4, v2, v3 }
     *    { w0~3 }        { w0, w1, e2, e0 }      { e0, e2, w2, w3 }
     */
-    Store4(uvec4(v0, v1, v2, v4), e1, ssbo_edge_to_vert_); // update e1
-    Store4(uvec4(w0, w1, e2, e0), e1, ssbo_edge_to_edges_); 
-    Store4(uvec4(v0, v4, v2, v3), e3, ssbo_edge_to_vert_); // update e3
-    Store4(uvec4(e0, e2, w2, w3), e3, ssbo_edge_to_edges_); 
+    Store4(ssbo_edge_to_vert_,  e1, uvec4, uvec4(v0, v1, v2, v4)); // update e1
+    Store4_EEAdj(e1, uvec4(w0, w1, e2, e0), uvec4(w[0].iface_adj, w[1].iface_adj, 0, 0)); 
+    Store4(ssbo_edge_to_vert_,  e3, uvec4, uvec4(v0, v4, v2, v3)); // update e3
+    Store4_EEAdj(e3, uvec4(e0, e2, w2, w3), uvec4(1, 1, w[2].iface_adj, w[3].iface_adj)); 
 
     /* Adjust ee & ev adj. for OLD edges 
     * 
@@ -345,7 +391,6 @@ void main()
         AdjWedgeInfo(e0, 1), AdjWedgeInfo(e3, 0)  // w3
     }; 
     
-    AdjWedgeInfo w[4] = {w0, w1, w2, w3}; 
     for (uint i = 0; i < 4; ++i)
     {
         uint iface_overlap = w[i].iface_adj == 0 ? 1 : 0; 
@@ -360,13 +405,18 @@ void main()
         ssbo_edge_to_vert_[w[i].wedge_id*4 + ivert_update] = v4; 
     }
 
-1
+
     /* Store flags for 4 new edges */
     EdgeFlags ef = init_edge_flags__new_split_edge();
     store_edge_flags(e0, ef);
     store_edge_flags(e1, ef);
     store_edge_flags(e2, ef);
     store_edge_flags(e3, ef);
+
+    /* Mark old edge as deleted */
+    EdgeFlags ef_del = load_edge_flags(psei_curr.id);
+    ef_del.del_by_split = true; 
+    store_edge_flags(psei_curr.id, ef_del);
 
 
     /* Build ve adj. for New vert */
@@ -377,22 +427,7 @@ void main()
 
 
     /* Store new vert pos */ 
-    vec3 split_pos; 
-    
-    uint q0 = ssbo_edge_to_vert_[w0.wedge_id*4 + mark__center_wedge_to_oppo_vert__at_face(w0.iface_adj)];
-    uint q1 = ssbo_edge_to_vert_[w1.wedge_id*4 + mark__center_wedge_to_oppo_vert__at_face(w1.iface_adj)];
-    uint q2 = ssbo_edge_to_vert_[w2.wedge_id*4 + mark__center_wedge_to_oppo_vert__at_face(w2.iface_adj)];
-    uint q3 = ssbo_edge_to_vert_[w3.wedge_id*4 + mark__center_wedge_to_oppo_vert__at_face(w3.iface_adj)];
-    if (any(uvec4(q0, q1, q2, q3) == uvec4(v3, v3, v1, v1)))
-    { /* handle border */
-        split_pos = (ld_vpos(v1) + ld_vpos(v3)) / 2.0f;
-    }
-    else{ /* Butterfly interp */
-        split_pos = interp_mid_point(
-            ld_vpos(v0), ld_vpos(v1), ld_vpos(v2), ld_vpos(v3), 
-            ld_vpos(q0), ld_vpos(q1), ld_vpos(q2), ld_vpos(q3)
-        ); 
-    }
+    vec3 split_pos = (ld_vpos(v1) + ld_vpos(v3)) / 2.0f; 
     if (valid_thread)
         st_vpos(v4, split_pos); 
 
@@ -402,12 +437,17 @@ void main()
 
 
     /* Update dynamic mesh counters */
-    if (split_edge_id == 0u)
+    if (split_edge_alloc_id == 0u) // !!! don't do this: split_edge_id == 0u because 0th thread might early exit 
     {
+        /* accumulate global mesh counters */
         ssbo_dyn_mesh_counters_out_.num_edges = 
             ssbo_dyn_mesh_counters_in_.num_edges + 4u * ssbo_edge_split_counters_[pcs_split_iter_].num_split_edges;
         ssbo_dyn_mesh_counters_out_.num_verts = 
             ssbo_dyn_mesh_counters_in_.num_verts + ssbo_edge_split_counters_[pcs_split_iter_].num_split_edges; 
+        
+        /* prep local counters for next split iteration */
+        ssbo_edge_split_counters_[pcs_split_iter_ + 1].num_split_edges_pass_1 = 0u;
+        ssbo_edge_split_counters_[pcs_split_iter_ + 1].num_split_edges = 0u; 
     }
 
 #undef e0
@@ -415,6 +455,10 @@ void main()
 #undef e2
 #undef e3
 
+#undef w0
+#undef w1
+#undef w2
+#undef w3
 
 #endif
 

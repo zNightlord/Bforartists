@@ -53,6 +53,11 @@ void npr::strokegen::StrokegenMeshRasterPass::append_draw_subpass(
   float2 fb_res = textures.get_contour_raster_screen_res();
   float2 fb_res_inv = float2(1.0f / fb_res.x, 1.0f / fb_res.y); 
   subpass->push_constant("pcs_screen_size_inv_", fb_res_inv);
+
+  // debug info
+  subpass->bind_ssbo(5, buffers.ssbo_contour_to_contour_); 
+
+
   subpass->barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE); 
   subpass->draw_procedural_indirect(GPUPrimType::GPU_PRIM_LINES, buffers.ssbo_bnpr_mesh_pool_draw_args_); 
 }

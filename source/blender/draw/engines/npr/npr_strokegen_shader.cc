@@ -156,8 +156,12 @@ const char *StrokeGenShaderModule::static_shader_create_info_name_get(eShaderTyp
       return "bnpr_meshing_mesh_filtering_move_verts_";
 
     case FILL_DISPATCH_ARGS_SPLIT_EDGES:
-      return "strokegen_remeshing_fill_dispatch_args_per_split_edge"; 
+      return "strokegen_remeshing_fill_dispatch_args_per_split_edge";
+    case FILL_DISPATCH_ARGS_REMESHED_EDGES:
+      return "strokegen_remeshing_fill_dispatch_args_per_remeshed_edge"; 
 
+    case MESH_OP_SPLIT_EDGE_INIT:
+      return "bnpr_meshing_edge_split_init"; 
     case MESH_OP_SPLIT_EDGE_COMPACT:
       return "bnpr_meshing_edge_split_compact";
     case MESH_OP_SPLIT_EDGE_RESOLVE_CONFICT:

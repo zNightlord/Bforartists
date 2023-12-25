@@ -1,4 +1,4 @@
-﻿/* SPDX-License-Identifier: GPL-2.0-or-later
+/* SPDX-License-Identifier: GPL-2.0-or-later
  * Copyright 2021 Blender Foundation.
  */
 
@@ -31,14 +31,21 @@ class GPUBufferPoolModule {
   SSBO_StrokeGenMeshPoolCounters ssbo_bnpr_mesh_pool_counters_;
   SSBO_StrokeGenMeshPoolCounters ssbo_bnpr_mesh_pool_counters_prev_; // keep counters from last mesh extraction iter
 
-  SSBO_StrokeGenDynamicMeshCounters ssbo_dyn_mesh_counters_[MAX_REMESHING_ITERS][2]; 
+  SSBO_StrokeGenDynamicMeshCounters ssbo_dyn_mesh_counters_[2]; 
   SSBO_StrokeGenEdgeSplitCounters ssbo_edge_split_counters_;
 
+  // Dispatch Args --------------------------------------------------------
   SSBO_IndirectDrawArgs ssbo_bnpr_mesh_pool_draw_args_;
+
   SSBO_IndirectDispatchArgs ssbo_indirect_dispatch_args_per_filtered_edge_; 
   SSBO_IndirectDispatchArgs ssbo_indirect_dispatch_args_per_filtered_vert_;
-  SSBO_IndirectDispatchArgs ssbo_indirect_dispatch_args_per_split_edge_; 
-  SSBO_IndirectDispatchArgs ssbo_bnpr_mesh_contour_edge_dispatch_args_; 
+
+  SSBO_IndirectDispatchArgs ssbo_indirect_dispatch_args_per_split_edge_;
+
+  SSBO_IndirectDispatchArgs ssbo_bnpr_mesh_contour_edge_dispatch_args_;
+
+  SSBO_IndirectDispatchArgs ssbo_indirect_dispatch_args_per_remeshed_edges_;
+
 
   // Persistent Buffers -------------------------------------------------------------------
   SSBO_StrokeGenMeshBufPerVert<float, 3> ssbo_vbo_full_;                // 96MB    Total

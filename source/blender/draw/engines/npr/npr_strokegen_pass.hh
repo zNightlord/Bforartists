@@ -163,8 +163,9 @@ public:
 
                                           bool debug_wedge_flooding = false);
 
+  int num_remesh_iters = 1; 
   void append_subpass_split_edges(int iter_remesh, int iter_split, int num_edges, int num_verts);
-
+  void append_subpass_fill_dispatched_args_remeshed_edges_(int num_edges); 
 
 
   void rebuild_pass_process_contours();

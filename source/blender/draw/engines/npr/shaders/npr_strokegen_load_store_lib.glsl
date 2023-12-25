@@ -46,11 +46,14 @@
     (val).w = buf[(index)*4+3]; \
 
 
-#define Store4(buf, index, val) \
-    buf[(index)*4+0] = (val).x; \
-    buf[(index)*4+1] = (val).y; \
-    buf[(index)*4+2] = (val).z; \
-    buf[(index)*4+3] = (val).w; \
+#define Store4(buf, index, type, val) \
+    { \
+        type st_val = val; \
+        buf[(index)*4+0] = st_val[0]; \
+        buf[(index)*4+1] = st_val[1]; \
+        buf[(index)*4+2] = st_val[2]; \
+        buf[(index)*4+3] = st_val[3]; \
+    } \
 
 
 

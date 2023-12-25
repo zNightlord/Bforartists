@@ -462,6 +462,19 @@ void main()
     if (valid_thread)
         ssbo_wedge_flooding_pointers_out_[EdgeID] = encode_wedge_flooding_pointer(wfptr); 
 
+    
+    if (WedgeId == 0u)
+    {
+        ssbo_dyn_mesh_counters_in_.num_edges = 0u;
+        ssbo_dyn_mesh_counters_in_.num_verts = 0u;
+
+        ssbo_dyn_mesh_counters_out_.num_edges = 0u;
+        ssbo_dyn_mesh_counters_out_.num_verts = 0u;
+
+        ssbo_edge_split_counters_[0].num_split_edges_pass_1 = 0u;
+        ssbo_edge_split_counters_[0].num_split_edges = 0u; 
+    }
+
 #endif
 
 }

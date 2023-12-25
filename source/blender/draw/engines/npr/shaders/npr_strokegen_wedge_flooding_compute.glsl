@@ -66,20 +66,23 @@ VertFilteringInfo decode_filtered_vert_info(uint data)
     return fvi; 
 }
 
+uint get_vert_count()
+{
+    return pcs_vert_count_; 
+}
+
+uint get_edge_count()
+{
+    return pcs_edge_count_;
+}
 
 #if defined(_KERNEL_MULTICOMPILE__WEDGE_FLOODING)
-/*
- * uint pcs_edge_count_; 
- * uint ssbo_wedge_flooding_pointers_in_[]; 
- * uint ssbo_wedge_flooding_pointers_out_[];
- * uint ssbo_edge_to_edges_[]; 
-*/
 void main()
 {
     const uint groupId = gl_LocalInvocationID.x; 
 	const uint idx = gl_GlobalInvocationID.x; 
     /* Do not use EdgeID here since it's offseted with current mesh batch */
-    bool valid_thread = (idx.x < pcs_edge_count_); 
+    bool valid_thread = (idx.x < get_edge_count()); 
     
     const uint EdgeID = idx.x; 
 
@@ -162,7 +165,7 @@ void main()
             fei.is_null_edge = (false == is_seed_edge); 
             fei.edge_id = compacted_idx;
 
-            uint num_all_edges = pcs_edge_count_; 
+            uint num_all_edges = get_edge_count(); 
             uint addr_edge_to_filtered_edge = ssbo_edge_to_edges_addr__edge_to_filtered_edge(EdgeID, num_all_edges); 
             ssbo_edge_to_edges_[addr_edge_to_filtered_edge] = encode_filtered_edge_info(fei);
         }
@@ -176,22 +179,12 @@ void main()
 
 
 #if defined(_KERNEL_MULTICOMPILE__COMPACT_FILTERED_VERTS)
-/*
- * uint pcs_vert_count_; 
- * uint ssbo_wedge_flooding_pointers_in_[];
- * uint ssbo_vert_to_edge_list_header_[]; 
- * uint ssbo_edge_to_edges_[]; 
- * uint ssbo_edge_to_vert_[]; 
- * uint ssbo_filtered_vert_to_vert_[]; 
- * compact_filtered_vert(bool valid_thread, uint groupId)
- * compact counter: uint ssbo_bnpr_mesh_pool_counters_.num_filtered_verts
-*/
 void main()
 {
     const uint groupId = gl_LocalInvocationID.x; 
 	const uint idx = gl_GlobalInvocationID.x; 
     /* Do not use VertID here since it's offseted with current mesh batch */
-    bool valid_thread = (idx.x < pcs_vert_count_); 
+    bool valid_thread = (idx.x < get_vert_count()); 
     
     const uint VertID = idx.x; 
     uint wedge_id = ssbo_vert_to_edge_list_header_[VertID]; 
@@ -262,7 +255,7 @@ void main()
 
         vfi.is_null_vert = (false == vert_linked_to_seeded_wedge);
         vfi.vert_id = compacted_idx;
-        uint num_all_verts = pcs_vert_count_;
+        uint num_all_verts = get_vert_count();
         uint addr_vert_to_filtered_vert = ssbo_vert_to_edge_list_header_addr__vert_to_filtered_vert(VertID, num_all_verts);
         ssbo_vert_to_edge_list_header_[addr_vert_to_filtered_vert] = encode_filtered_vert_info(vfi);
     }
@@ -442,7 +435,7 @@ void main()
 #if defined(_KERNEL_MULTICOMPILE__MESH_FILTERING__EDGE_NORMAL)
     const uint FilteredEdgeID = idx.x; 
     const uint NumFilteredEdges = ssbo_bnpr_mesh_pool_counters_.num_filtered_edges; 
-    uint num_all_edges = pcs_edge_count_; 
+    uint num_all_edges = get_edge_count(); 
 
     bool valid_thread = (idx.x < NumFilteredEdges); 
     if (!valid_thread) return; /* quit if not valid thread */
@@ -578,8 +571,8 @@ void main()
     bool valid_thread = (idx.x < NumFilteredVerts); 
     if (!valid_thread) return; /* quit if not valid thread */
     
-    uint num_all_edges = pcs_edge_count_; 
-    uint num_all_verts = pcs_vert_count_; 
+    uint num_all_edges = get_edge_count(); 
+    uint num_all_verts = get_vert_count(); 
 
     VertFilteringInfo vfi = decode_filtered_vert_info(ssbo_filtered_vert_to_vert_[FilteredVertID]); 
     uint vert_id_global = vfi.vert_id; 
@@ -716,7 +709,7 @@ void main()
 #if defined(_KERNEL_MULTICOMPILE__MESH_FILTERING__MOVE_VERTS)
     const uint FilteredVertID = idx.x; 
     const uint NumFilteredVerts = ssbo_bnpr_mesh_pool_counters_.num_filtered_verts; 
-    uint num_all_verts = pcs_vert_count_; 
+    uint num_all_verts = get_vert_count(); 
 
     /* Do not use VertID here since it's offseted with current mesh batch */
     bool valid_thread = (idx.x < NumFilteredVerts); 

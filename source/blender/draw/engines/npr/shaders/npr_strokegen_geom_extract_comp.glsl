@@ -164,12 +164,17 @@ vec3 ld_vbo(uint vert)
 	return vec3(buf_vbo[base_addr], buf_vbo[base_addr+1], buf_vbo[base_addr+2]); 
 }
 
+uint get_num_edges()
+{
+	return pcs_num_edges + ssbo_dyn_mesh_counters_.num_edges; 
+}
+
 void main()
 {
 	const uint groupId = gl_LocalInvocationID.x;
 	const uint idx 	   = gl_GlobalInvocationID.x;
 	
-	const uint NumEdges = pcs_num_edges;
+	const uint NumEdges = get_num_edges();
 	bool valid_thread = idx < NumEdges; 
 	const uint EdgeId = idx;
 
@@ -189,23 +194,27 @@ void main()
 	for (uint i = 0; i < 4; ++i)
 		vids[i] = buf_ibo[4 * EdgeId + i]; 
 	vids = wing_verts_to_line_adj(vids); 
-	bool is_border = line_adj_is_border_edge(vids); 
 	
 	vec3 v[4]; 
 	for (uint i = 0; i < 4; ++i)
 		v[i] = ld_vbo(vids[i]);  
-	
+
 
 	float face_orient_012, face_orient_321; 
 	bool is_contour = is_contour_edge(
 		v[0], v[1], v[2], v[3], cam_pos_ws
 		, face_orient_012, face_orient_321/*out*/
 	); 
+
+	EdgeFlags ef = load_edge_flags(EdgeId); 
+	is_contour = is_contour && (!ef.del_by_split) && (!ef.del_by_collapse) && (!ef.dupli); 
+	bool is_border = ef.border; 
+
 	/* debug view */
 	if (pcs_dbg_wedge_flooding_ > 0)
 	{
 		WedgeFloodingPointer wfptr = decode_wedge_flooding_pointer(ssbo_wedge_flooding_pointers_out_[EdgeId]);
-		is_contour = wfptr.is_seed; 
+		is_contour = ef.new_by_split; // wfptr.is_seed; 
 	}
 
 	bool rev_edge_dir = is_back_face(face_orient_012); 
@@ -219,12 +228,12 @@ void main()
 		uint base_addr = mesh_pool_addr__wpos_and_edgeid(compacted_idx); 
 		uint addr_p0 = rev_edge_dir ? base_addr + 3 : base_addr;  
 		uint addr_p1 = rev_edge_dir ? base_addr : base_addr + 3; 
-		buf_strokegen_mesh_pool[addr_p0+0]  = floatBitsToUint(v[1].x); 
-		buf_strokegen_mesh_pool[addr_p0+1]  = floatBitsToUint(v[1].y); 
-		buf_strokegen_mesh_pool[addr_p0+2]  = floatBitsToUint(v[1].z); 
-		buf_strokegen_mesh_pool[addr_p1+0]  = floatBitsToUint(v[2].x); 
-		buf_strokegen_mesh_pool[addr_p1+1]  = floatBitsToUint(v[2].y); 
-		buf_strokegen_mesh_pool[addr_p1+2]  = floatBitsToUint(v[2].z); 
+		buf_strokegen_mesh_pool[addr_p0+0] = floatBitsToUint(v[1].x); 
+		buf_strokegen_mesh_pool[addr_p0+1] = floatBitsToUint(v[1].y); 
+		buf_strokegen_mesh_pool[addr_p0+2] = floatBitsToUint(v[1].z); 
+		buf_strokegen_mesh_pool[addr_p1+0] = floatBitsToUint(v[2].x); 
+		buf_strokegen_mesh_pool[addr_p1+1] = floatBitsToUint(v[2].y); 
+		buf_strokegen_mesh_pool[addr_p1+2] = floatBitsToUint(v[2].z); 
 		
 		PerContourWedgeInfo pcwi; 
 		pcwi.is_border = is_border; 

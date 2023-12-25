@@ -156,13 +156,16 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_extract)
     .define("DECODE_IBO_EXCLUDE",       "1") /* exclude ibo decode shader */
     .define("WINGED_EDGE_TOPO_INCLUDE", "1")
     .define("CP_TAG", "contour_edge")
+    .define("EDGE_FLAGS_INCLUDED", "1")
     .storage_buf(0, Qualifier::READ, "uint", "buf_ibo[]")
     .storage_buf(1, Qualifier::READ, "float", "buf_vbo[]") 
     .storage_buf(2, Qualifier::READ_WRITE, "uint", "buf_strokegen_mesh_pool[]")
     .storage_buf(3, Qualifier::READ, "ObjectMatrices", "drw_matrix_buf[]")
     .storage_buf(4, Qualifier::READ_WRITE, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
     .storage_buf(5, Qualifier::WRITE, "uint", "ssbo_edge_to_contour_[]")
-    .storage_buf(6, Qualifier::READ, "uint", "ssbo_wedge_flooding_pointers_out_[]")
+    .storage_buf(6, Qualifier::READ, "SSBOData_StrokeGenDynamicMeshCounters", "ssbo_dyn_mesh_counters_")
+    .storage_buf(7, Qualifier::READ_WRITE, "uint", "ssbo_edge_flags_[]")
+    .storage_buf(8, Qualifier::READ, "uint", "ssbo_wedge_flooding_pointers_out_[]")
     .uniform_buf(0, "ViewMatrices", "ubo_view_matrices_")
     .push_constant(Type::INT, "pcs_ib_fmt_u16")
     .push_constant(Type::INT, "pcs_num_edges")
@@ -284,7 +287,8 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_draw_contour_edges)
     .storage_buf(2, Qualifier::READ, "uint", "ssbo_contour_edge_rank_[]")
     .storage_buf(3, Qualifier::READ, "uint", "ssbo_contour_edge_list_len_[]")
     .storage_buf(4, Qualifier::READ, "uint", "ssbo_contour_edge_list_head_[]")
-    .push_constant(Type::VEC2, "pcs_screen_size_inv_")
+    .storage_buf(5, Qualifier::READ, "uint", "ssbo_contour_to_contour_[]")
+    .push_constant(Type::VEC2, "pcs_screen_size_inv_") 
 
     .vertex_source("npr_strokegen_mesh_contour_vert.glsl")
     .vertex_in(0, Type::VEC3, "pos")
@@ -384,6 +388,9 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_edge_adjecency)
     .storage_buf(7, Qualifier::READ, "float", "ssbo_vbo_full_[]")
     .storage_buf(8, Qualifier::READ_WRITE, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
     .storage_buf(9, Qualifier::READ_WRITE, "uint", "ssbo_edge_flags_[]")
+    .storage_buf(10, Qualifier::WRITE, "SSBOData_StrokeGenDynamicMeshCounters", "ssbo_dyn_mesh_counters_in_")
+    .storage_buf(11, Qualifier::WRITE, "SSBOData_StrokeGenDynamicMeshCounters", "ssbo_dyn_mesh_counters_out_")
+    .storage_buf(12, Qualifier::WRITE, "SSBOData_StrokeGenEdgeSplitCounters", "ssbo_edge_split_counters_[]")
     .uniform_buf(0, "ViewMatrices", "ubo_view_matrices_")
     .push_constant(Type::INT, "pcs_hash_map_size_")
     .push_constant(Type::INT, "pcs_edge_count_")
@@ -464,6 +471,7 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_compact_filtered_verts)
     .storage_buf(5, Qualifier::READ_WRITE, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
     .storage_buf(6, Qualifier::READ, "uint", "ssbo_vert_merged_id_[]")
     .push_constant(Type::INT, "pcs_vert_count_")
+    .push_constant(Type::INT, "pcs_edge_count_")
     .local_group_size(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT)
     .compute_source("npr_strokegen_wedge_flooding_compute.glsl");
 
@@ -472,12 +480,6 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_compact_filtered_verts)
 
 
 
-/* In: 
- * int pc_meshing_dispatch_group_size_
- * ssbo_bnpr_mesh_pool_counters_
- * ssbo_indirect_dispatch_args_per_filtered_edge_
- * ssbo_indirect_dispatch_args_per_filtered_vert_
-*/
 GPU_SHADER_CREATE_INFO(strokegen_meshing_fill_dispatch_args)
     .do_static_compilation(true)
     .typedef_source("bnpr_defines.hh")
@@ -504,20 +506,8 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_fill_dispatch_args_per_filtered_vert)
     .define("_KERNEL_MULTICOMPILE__FILL_DISPATCH_ARGS__MESHING__PER_FILTERED_VERT", "1");
 
 
-/*
- * uint ssbo_bnpr_mesh_pool_counters_.num_filtered_edges/verts
- * uint ssbo_edge_to_edges_[];
- * uint ssbo_vert_to_edge_list_header_[]; 
- * uint ssbo_filtered_edge_to_edge_[];
- * uint ssbo_filtered_vert_to_vert_[];
- * uint ssbo_vert_quadric_data_in_[];  <- (reuse) ssbo_bnpr_mesh_pool_
- * uint ssbo_vert_quadric_data_out_[]; <- (reuse) ssbo_mesh_buffer_reuse_0_
- * uint ssbo_edge_quadric_data_[];     <- (reuse) ssbo_vert_merged_id_
- * float ssbo_vbo_full_[]; rw
- * float ssbo_filtered_normal_vert_[];  <- (reuse) ssbo_mesh_buffer_reuse_1_
- * float ssbo_filtered_normal_edge_[];  <- (reuse) ssbo_vert_quadric_data_in_ at iter#0
- * ubo_view_matrices_
- */
+
+
 GPU_SHADER_CREATE_INFO(bnpr_meshing_mesh_filtering_)
     .do_static_compilation(true)
     .typedef_source("bnpr_shader_shared.hh")
@@ -588,7 +578,7 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_mesh_filtering_move_verts_)
 /** \ Edge Split
  * \{ */
 /* In: 
- * int pc_edge_split_dispatch_group_size_
+ * int pcs_edge_split_dispatch_group_size_
  * ssbo_edge_split_counters_
  * ssbo_indirect_dispatch_args_per_split_edge_
 */
@@ -608,10 +598,18 @@ GPU_SHADER_CREATE_INFO(strokegen_remeshing_fill_dispatch_args_per_split_edge)
     
     .storage_buf(0, Qualifier::READ, "SSBOData_StrokeGenEdgeSplitCounters", "ssbo_edge_split_counters_[]")
     .storage_buf(1, Qualifier::WRITE, "DispatchCommand", "ssbo_indirect_dispatch_args_per_split_edge_")
-    .push_constant(Type::INT, "pc_edge_split_dispatch_group_size_")
+    .push_constant(Type::INT, "pcs_edge_split_dispatch_group_size_")
     .push_constant(Type::INT, "pcs_split_iter_"); 
 
-
+GPU_SHADER_CREATE_INFO(strokegen_remeshing_fill_dispatch_args_per_remeshed_edge)
+    .do_static_compilation(true)
+    .additional_info("strokegen_remeshing_fill_dispatch_args")
+    .define("_KERNEL_MULTICOMPILE__FILL_DISPATCH_ARGS_PER_REMESHED_EDGE", "1")
+    
+    .storage_buf(0, Qualifier::READ, "SSBOData_StrokeGenDynamicMeshCounters", "ssbo_dyn_mesh_counters_")
+    .storage_buf(1, Qualifier::WRITE, "DispatchCommand", "ssbo_indirect_dispatch_args_per_remeshed_edges_")
+    .push_constant(Type::INT, "pcs_edge_count_")
+    .push_constant(Type::INT, "pcs_remeshed_edges_dispatch_group_size_"); 
 
 
 GPU_SHADER_CREATE_INFO(bnpr_meshing_edge_split)
@@ -623,7 +621,7 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_edge_split)
     .define("DECODE_IBO_EXCLUDE", "1") /* Remove ibo code */
     .define("WINGED_EDGE_TOPO_INCLUDE", "1")
     .define("VERT_WEDGE_LIST_TOPO_INCLUDE", "1")
-    .define("EDGE_FLAGS_INCLUDED", "1")
+    .define("VERT_FLAGS_INCLUDED", "1")
     .define("EDGE_FLAGS_INCLUDED", "1")
 
     .storage_buf(0, Qualifier::READ_WRITE, "SSBOData_StrokeGenDynamicMeshCounters", "ssbo_dyn_mesh_counters_in_")
@@ -645,6 +643,13 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_edge_split)
     .local_group_size(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT)
     .compute_source("npr_strokegen_edge_split_comp.glsl");
 ;
+
+GPU_SHADER_CREATE_INFO(bnpr_meshing_edge_split_init)
+    .do_static_compilation(true)
+    .additional_info("bnpr_meshing_edge_split")
+    .define("_KERNEL_MULTICOMPILE__EDGE_SPLIT_INIT", "1")
+    .define("COMPACTION_LIB_EXCLUDE", "1"); 
+
 
 GPU_SHADER_CREATE_INFO(bnpr_meshing_edge_split_compact)
     .do_static_compilation(true)

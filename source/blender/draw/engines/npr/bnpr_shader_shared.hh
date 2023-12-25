@@ -252,8 +252,8 @@ using namespace draw;
   struct SSBOData_StrokeGenEdgeSplitCounters {
     uint num_split_edges_pass_1;
     uint num_split_edges;
-    uint num_new_edges; 
-    uint num_new_verts;  // 4
+    uint dummy_0; 
+    uint dummy_1;
   };
   BLI_STATIC_ASSERT_ALIGN(SSBOData_StrokeGenEdgeSplitCounters, 16)
 
@@ -369,7 +369,7 @@ using SSBO_StrokeGenReusedTiny = StorageArrayBuffer<uint, 2048 * 2048 * 2, true>
 using SSBO_StrokeGenReusedMinimum = StorageArrayBuffer<uint, 2048 * 2048, true>;
 
 using SSBO_StrokeGenMeshPoolCounters = StorageBuffer<SSBOData_StrokeGenMeshPoolCounters>;
-using SSBO_StrokeGenEdgeSplitCounters = StorageArrayBuffer<SSBOData_StrokeGenEdgeSplitCounters, MAX_CONSEQ_EDGE_SPLITS, true>;
+using SSBO_StrokeGenEdgeSplitCounters = StorageArrayBuffer<SSBOData_StrokeGenEdgeSplitCounters, MAX_CONSEQ_EDGE_SPLITS + 1, true>;
 using SSBO_StrokeGenDynamicMeshCounters = StorageBuffer<SSBOData_StrokeGenDynamicMeshCounters>; 
 
 // Buffers for testing parallel primitives --------------------

@@ -181,10 +181,19 @@ namespace blender::npr::strokegen
     append_subpass_quadric_mesh_filtering(num_edges, num_verts, meshing_params);
 
     // Remeshing
-    append_subpass_split_edges(0, 0, num_edges, num_verts); 
+    int num_remesh_iters = 2; 
+    for (int iter_remesh = 0; iter_remesh < num_remesh_iters; ++iter_remesh)
+    {
+      int num_edge_split_iters = 3; 
+      for (int iter_edge_split = 0; iter_edge_split < num_edge_split_iters; ++iter_edge_split) {
+        append_subpass_fill_dispatched_args_remeshed_edges_(num_edges);
+        append_subpass_split_edges(iter_remesh, iter_edge_split, num_edges, num_verts);  
+      }
+    }
 
     // Contour Processing --------------------------------------------------------
     const bool debug_wedge_flooding = meshing_params.visualize_filtered_geom;
+    append_subpass_fill_dispatched_args_remeshed_edges_(num_edges); 
     append_subpass_extract_contour_edges(
         gpu_batch_line_adj,
         rsc_handle,
@@ -192,7 +201,7 @@ namespace blender::npr::strokegen
         num_edges,
         ib_type,
         debug_wedge_flooding
-        );
+      );
 
     append_subpass_fill_dispatch_args_contour_edges(pass_extract_geom, false);
     append_subpass_process_contour_edges();
@@ -427,7 +436,10 @@ namespace blender::npr::strokegen
       sub.bind_ssbo(6, reused_ssbo_wedge_flooding_pointers_out_);
       sub.bind_ssbo(7, buffers_.ssbo_vbo_full_);
       sub.bind_ssbo(8, buffers_.ssbo_bnpr_mesh_pool_counters_);
-      sub.bind_ssbo(9, buffers_.ssbo_edge_flags_); 
+      sub.bind_ssbo(9, buffers_.ssbo_edge_flags_);
+      sub.bind_ssbo(10, buffers_.ssbo_dyn_mesh_counters_[0]);
+      sub.bind_ssbo(11, buffers_.ssbo_dyn_mesh_counters_[1]);
+      sub.bind_ssbo(12, buffers_.ssbo_edge_split_counters_); 
       sub.bind_ubo(0, buffers_.ubo_view_matrices_cache_); 
       sub.push_constant("pcs_hash_map_size_", hashmap_size);
       sub.push_constant("pcs_edge_count_", num_edges_in);
@@ -519,7 +531,8 @@ namespace blender::npr::strokegen
       sub.bind_ssbo(4, buffers_.ssbo_vert_to_edge_list_header_); 
       sub.bind_ssbo(5, buffers_.ssbo_bnpr_mesh_pool_counters_);
       sub.bind_ssbo(6, buffers_.reused_ssbo_vert_merged_id_()); 
-      sub.push_constant("pcs_vert_count_", num_verts); 
+      sub.push_constant("pcs_vert_count_", num_verts);
+      sub.push_constant("pcs_edge_count_", num_edges); 
 
       int num_groups = compute_num_groups(num_verts, GROUP_SIZE_STROKEGEN_GEOM_EXTRACT);
       sub.dispatch(int3(num_groups, 1, 1));
@@ -555,8 +568,8 @@ namespace blender::npr::strokegen
   {
     auto bind_src = [&](
       draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub, float remesh_edge_len) {
-        sub.bind_ssbo(0, buffers_.ssbo_dyn_mesh_counters_[iter_remesh][0]);
-        sub.bind_ssbo(1, buffers_.ssbo_dyn_mesh_counters_[iter_remesh][1]);
+        sub.bind_ssbo(0, buffers_.ssbo_dyn_mesh_counters_[0]); // in
+        sub.bind_ssbo(1, buffers_.ssbo_dyn_mesh_counters_[1]); // out
         sub.bind_ssbo(2, buffers_.ssbo_edge_split_counters_);
         sub.bind_ssbo(3, buffers_.ssbo_vbo_full_);
         sub.bind_ssbo(4, buffers_.ssbo_edge_to_vert_);
@@ -571,13 +584,20 @@ namespace blender::npr::strokegen
         sub.push_constant("pcs_edge_count_", num_edges); 
         sub.push_constant("pcs_vert_count_", num_verts); 
     };
+
+    float remesh_len_scaled = meshing_params.remeshing_targ_edge_len / 100.0f; 
+    if (iter_split == 0u) {
+      auto &sub = pass_extract_geom.sub("bnpr_meshing_edge_split_init");
+      sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_OP_SPLIT_EDGE_INIT));
+      bind_src(sub, remesh_len_scaled);
+      sub.dispatch(int3(1, 1, 1));
+      sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
+    }
     {
       auto &sub = pass_extract_geom.sub("bnpr_meshing_edge_split_compact");
       sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_OP_SPLIT_EDGE_COMPACT));
-      bind_src(sub, meshing_params.remeshing_targ_edge_len);
-      // sub.dispatch(
-      //     int3(compute_num_groups(num_edges, GROUP_SIZE_STROKEGEN_GEOM_EXTRACT, 1), 1, 1)
-      // );
+      bind_src(sub, remesh_len_scaled);
+      sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_edges_);
       sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
     }
     {
@@ -585,30 +605,38 @@ namespace blender::npr::strokegen
       sub.shader_set(shaders_.static_shader_get(FILL_DISPATCH_ARGS_SPLIT_EDGES));
       sub.bind_ssbo(0, buffers_.ssbo_edge_split_counters_);
       sub.bind_ssbo(1, buffers_.ssbo_indirect_dispatch_args_per_split_edge_);
-      sub.push_constant("pc_edge_split_dispatch_group_size_", (int)(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT));
+      sub.push_constant("pcs_edge_split_dispatch_group_size_", (int)(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT));
       sub.push_constant("pcs_split_iter_", iter_split);
 
-      // sub.dispatch(int3(1, 1, 1));
+      sub.dispatch(int3(1, 1, 1));
       sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
     }
     {
       auto &sub = pass_extract_geom.sub("bnpr_meshing_edge_split_resolve_conflict");
       sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_OP_SPLIT_EDGE_RESOLVE_CONFICT));
       bind_src(sub, meshing_params.remeshing_targ_edge_len);
-      // sub.dispatch(
-      //     int3(compute_num_groups(num_edges, GROUP_SIZE_STROKEGEN_GEOM_EXTRACT, 1), 1, 1)
-      // );
+      sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_split_edge_);
       sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
     }
     {
       auto &sub = pass_extract_geom.sub("bnpr_meshing_edge_split_execute");
-      sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_OP_SPLIT_EDGE_RESOLVE_CONFICT));
+      sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_OP_SPLIT_EDGE_EXECUTE));
       bind_src(sub, meshing_params.remeshing_targ_edge_len);
-      // sub.dispatch(
-      //     int3(compute_num_groups(num_edges, GROUP_SIZE_STROKEGEN_GEOM_EXTRACT, 1), 1, 1)
-      // );
+      sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_split_edge_);
       sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
     }
+  }
+
+  void StrokeGenPassModule::append_subpass_fill_dispatched_args_remeshed_edges_(int num_edges)
+  {
+    auto &sub = pass_extract_geom.sub("strokegen_remeshing_fill_dispatch_args_per_remeshed_edge");
+    sub.shader_set(shaders_.static_shader_get(FILL_DISPATCH_ARGS_REMESHED_EDGES));
+    sub.bind_ssbo(0, buffers_.ssbo_dyn_mesh_counters_[1]);
+    sub.bind_ssbo(1, buffers_.ssbo_indirect_dispatch_args_per_remeshed_edges_); 
+    sub.push_constant("pcs_edge_count_", num_edges); 
+    sub.push_constant("pcs_remeshed_edges_dispatch_group_size_", (int)GROUP_SIZE_STROKEGEN_GEOM_EXTRACT);
+    sub.dispatch(int3(1, 1, 1));
+    sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE); 
   }
 
   void StrokeGenPassModule::append_subpass_fill_dispatch_args_contour_edges(PassSimple& pass, bool all_contour_edges)
@@ -640,7 +668,7 @@ namespace blender::npr::strokegen
   )
   {
     auto &sub = pass_extract_geom.sub(
-        boostrap_before_extract_first_batch ? "extract_geom_boostrap" : "Extract"
+        boostrap_before_extract_first_batch ? "bnpr_geom_extract_boostrap" : "bnpr_geom_extract"
         );
     // if (ib_type == gpu::GPU_INDEX_U16)
     //   sub.shader_set(shaders_.static_shader_get(eShaderType::CONTOUR_GEOM_EXTRACT_IBO_16BIT));
@@ -653,6 +681,8 @@ namespace blender::npr::strokegen
     sub.bind_ssbo(3, DRW_manager_get()->matrix_buf.current());
     sub.bind_ssbo(4, buffers_.ssbo_bnpr_mesh_pool_counters_);
     sub.bind_ssbo(5, buffers_.reused_ssbo_edge_to_contour_());
+    sub.bind_ssbo(6, buffers_.ssbo_dyn_mesh_counters_[1]);
+    sub.bind_ssbo(7, buffers_.ssbo_edge_flags_); 
     // for debugging 
     GPUStorageBuf *reused_ssbo_wedge_flooding_pointers_in_ = nullptr;
     GPUStorageBuf *reused_ssbo_wedge_flooding_pointers_out_ = nullptr;
@@ -661,7 +691,7 @@ namespace blender::npr::strokegen
       reused_ssbo_wedge_flooding_pointers_in_,
       reused_ssbo_wedge_flooding_pointers_out_
     );
-    sub.bind_ssbo(6, reused_ssbo_wedge_flooding_pointers_out_);
+    sub.bind_ssbo(8, reused_ssbo_wedge_flooding_pointers_out_);
     // --------------
     sub.bind_ubo(0, buffers_.ubo_view_matrices_cache_);
     sub.push_constant("pcs_ib_fmt_u16", ib_type == gpu::GPU_INDEX_U16 ? 1 : 0);
@@ -672,15 +702,9 @@ namespace blender::npr::strokegen
         (int)edge_batch->elem_()->index_start_get() + (int)edge_batch->elem_()->index_base_get()
         );
     sub.push_constant("pcs_rsc_handle", (int)rsc_handle.resource_index());
-    sub.push_constant("pcs_dbg_wedge_floo"
-                      ""
-                      "ding_", debug_wedge_flooding ? 1 : 0);
+    sub.push_constant("pcs_dbg_wedge_flooding_", debug_wedge_flooding ? 1 : 0);
 
-    sub.dispatch(int3(
-            compute_num_groups(num_edges, GROUP_SIZE_STROKEGEN_GEOM_EXTRACT, 1),
-            1,
-            1)
-        );
+    sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_edges_);
     sub.barrier(GPU_BARRIER_SHADER_STORAGE);
   }
 
