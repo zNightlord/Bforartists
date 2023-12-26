@@ -11,7 +11,7 @@ int pcs_edge_count_;
 int pcs_vert_count_; 
 
 !!! Remember to zero out these counters !!!
-* SSBO_StrokeGenDynMeshCounters     ssbo_edge_split_counters_[]
+* SSBO_StrokeGenEdgeSplitCounters   ssbo_edge_split_counters_[]
 * SSBO_StrokeGenDynamicMeshCounters ssbo_dyn_mesh_counters_in_
 
 #ifdef _KERNEL_MULTICOMPILE__EDGE_SPLIT_COMPACT
@@ -282,9 +282,9 @@ void main()
         return;
     if (valid_thread && !psei_curr.is_split_ok)
     {
-        EdgeFlags ef = load_edge_flags(psei_curr.id); 
-        ef.del_by_split = false; /* cancel the deletion */
-        store_edge_flags(psei_curr.id, ef); 
+        // EdgeFlags ef = load_edge_flags(psei_curr.id); 
+        // ef.del_by_split = false; /* cancel the deletion */
+        // store_edge_flags(psei_curr.id, ef); 
         return; 
     }
 

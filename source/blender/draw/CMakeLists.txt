@@ -581,6 +581,7 @@ set(GLSL_SRC
   engines/npr/shaders/npr_strokegen_topo_lib.glsl
   engines/npr/shaders/npr_strokegen_gpu_meshing_compute.glsl
   engines/npr/shaders/npr_strokegen_edge_split_comp.glsl
+  engines/npr/shaders/npr_strokegen_edge_collapse_comp.glsl
   engines/npr/shaders/npr_strokegen_wedge_flooding_compute.glsl
   engines/npr/shaders/npr_strokegen_fill_indirect_args_comp.glsl
   engines/npr/shaders/npr_strokegen_fill_indirect_args_inputs_lib.glsl

@@ -900,18 +900,28 @@ if (valid_thread && pcei.is_collapse_ok)
     {
         store_per_collapse_edge_info(collapse_edge_id, pcei_new); 
 
-        EdgeCollapseInfo peci; 
-        peci.is_collapse_ok = false; 
-        peci.score = .0f; 
-        peci.id = split_edge_id; 
-        store_per_edge_collapse_info(pcei.id, peci, pcs_collapse_iter_); 
+        // Not needed
+        // EdgeCollapseInfo peci; 
+        // peci.is_collapse_ok = false; 
+        // peci.score = .0f; 
+        // peci.id = split_edge_id; 
+        // store_per_edge_collapse_info(pcei.id, peci, pcs_collapse_iter_); 
     }
 }
 
 #endif
 
 #if <<Kernel 3>>
-if (!(valid_thread && pcei.is_collapse_ok)) return; // early exit
+/* early exit */
+if (!valid_thread) return; 
+if (pcei.is_collapse_ok)
+{ /* cancel the collapsing */
+    EdgeFlags ef = load_edge_flags(pcei.id);
+    ef.del_by_collapse = false;
+    store_edge_flags(pcei.id, ef);
+    return; 
+} 
+
 /* Parallel Edge Collapse * 
  * (Following graph are only to clearly show how topology changes, actual position of vertices are not accurate)
  *                                  

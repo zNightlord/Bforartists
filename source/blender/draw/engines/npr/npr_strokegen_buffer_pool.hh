@@ -33,6 +33,7 @@ class GPUBufferPoolModule {
 
   SSBO_StrokeGenDynamicMeshCounters ssbo_dyn_mesh_counters_[2]; 
   SSBO_StrokeGenEdgeSplitCounters ssbo_edge_split_counters_;
+  SSBO_StrokeGenEdgeCollapseCounters ssbo_edge_collapse_counters_;
 
   // Dispatch Args --------------------------------------------------------
   SSBO_IndirectDrawArgs ssbo_bnpr_mesh_pool_draw_args_;
@@ -94,9 +95,13 @@ class GPUBufferPoolModule {
   
 
   // Reused Buffer Scheme for Edge Splitting --------------------------------------------
-  inline GPUStorageBuf *reused_ssbo_per_edge_collapse_info()
+  inline GPUStorageBuf *reused_ssbo_per_edge_collapse_info_in_(int step)
   {
-    return ssbo_mesh_buffer_reuse_1_; 
+    return step % 2 == 0 ? ssbo_mesh_buffer_reuse_0_ : ssbo_mesh_buffer_reuse_1_; 
+  }
+  inline GPUStorageBuf *reused_ssbo_per_edge_collapse_info_out_(int step)
+  {
+    return step % 2 == 0 ? ssbo_mesh_buffer_reuse_1_ : ssbo_mesh_buffer_reuse_0_; 
   }
   inline GPUStorageBuf *reused_ssbo_per_collapse_edge_info()
   {

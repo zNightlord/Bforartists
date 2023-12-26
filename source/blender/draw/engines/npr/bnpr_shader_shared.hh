@@ -257,6 +257,14 @@ using namespace draw;
   };
   BLI_STATIC_ASSERT_ALIGN(SSBOData_StrokeGenEdgeSplitCounters, 16)
 
+  struct SSBOData_StrokeGenEdgeCollapseCounters {
+    uint num_collapse_edges_pass_1;
+    uint num_collapse_edges;
+    uint dummy_0;
+    uint dummy_1;
+  };
+  BLI_STATIC_ASSERT_ALIGN(SSBOData_StrokeGenEdgeSplitCounters, 16)
+
 
   struct SSBOData_StrokeGenDynamicMeshCounters {
     uint num_verts;
@@ -265,6 +273,7 @@ using namespace draw;
     uint dummy_1; 
   }; 
   BLI_STATIC_ASSERT_ALIGN(SSBOData_StrokeGenDynamicMeshCounters, 16)
+
 
 
   /* Addressing - buf_strokegen_mesh_pool */
@@ -370,6 +379,7 @@ using SSBO_StrokeGenReusedMinimum = StorageArrayBuffer<uint, 2048 * 2048, true>;
 
 using SSBO_StrokeGenMeshPoolCounters = StorageBuffer<SSBOData_StrokeGenMeshPoolCounters>;
 using SSBO_StrokeGenEdgeSplitCounters = StorageArrayBuffer<SSBOData_StrokeGenEdgeSplitCounters, MAX_CONSEQ_EDGE_SPLITS + 1, true>;
+using SSBO_StrokeGenEdgeCollapseCounters = StorageArrayBuffer<SSBOData_StrokeGenEdgeCollapseCounters, MAX_CONSEQ_EDGE_COLLAPSES + 1, true>;
 using SSBO_StrokeGenDynamicMeshCounters = StorageBuffer<SSBOData_StrokeGenDynamicMeshCounters>; 
 
 // Buffers for testing parallel primitives --------------------
