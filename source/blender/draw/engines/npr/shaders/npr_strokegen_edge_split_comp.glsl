@@ -278,8 +278,15 @@ void main()
 
 #if defined(_KERNEL_MULTICOMPILE__EDGE_SPLIT_EXECUTE)
     /* Apply edge split */
-    if (!psei_curr.is_split_ok || !valid_thread)
+    if (!valid_thread)
         return;
+    if (valid_thread && !psei_curr.is_split_ok)
+    {
+        EdgeFlags ef = load_edge_flags(psei_curr.id); 
+        ef.del_by_split = false; /* cancel the deletion */
+        store_edge_flags(psei_curr.id, ef); 
+        return; 
+    }
 
     uint num_existing_edges = pcs_edge_count_ + ssbo_dyn_mesh_counters_in_.num_edges; 
     uint num_existing_verts = pcs_vert_count_ + ssbo_dyn_mesh_counters_in_.num_verts; 

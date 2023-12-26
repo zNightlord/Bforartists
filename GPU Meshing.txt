@@ -533,15 +533,16 @@ struct EdgeCollapseInfo
 }; 
 void load / store_per_collapse_edge_info(uint collapse_edge_id / EdgeCollapseInfo esi, uint curr_collapse_step)
 void load / store_per_edge_collapse_info(uint collapse_edge_id / EdgeCollapseInfo esi, uint curr_collapse_step)
-bool collapse_score_larger(float score_0, score_1, uint wedge_id_0, wedge_id_1)
+bool collapse_score_larger(EdgeCollapseInfo eci_0, uint wedge_id_0, EdgeCollapseInfo eci_1, uint wedge_id_1)
 {
-    if (score_0 == score_1)
+    if (!eci_0.is_collapse_ok) return false;
+    if (!eci_1.is_collapse_ok) return true;
+    if (eci_0.score == eci_0.score)
         return wedge_id_0 > wedge_id_1; 
-    return score_0 > score_1; 
+    return eci_0.score > eci_0.score; 
 }
 
-void load / store_per_collapse_edge_position(uint collapse_edge_id / vec3 pos)
-void load / store_per_vert_collapse_edge_id(uint vid, uint wedge_id)
+void load / store_per_vert_collapse_wedge_id(uint vid, uint wedge_id)
 
 
 uint pcs_collapse_iter_; 
@@ -653,6 +654,7 @@ bool collapse_validate(
 
 struct CollapseCollisionContext
 {
+    EdgeCollapseInfo eci;
     bool is_collapse_ok; 
     float score; 
     uint wedge_id; 
@@ -665,7 +667,7 @@ bool collapse_resolve_collision_I(
     EdgeCollapseInfo peci = load_per_edge_collapse_info(iter.awi.wedge_id, ctx.pcs_collapse_iter)
     if (peci.is_collapse_ok && ctx.is_collapse_ok)
     { /* found a better collapse alternative in 1-ring */
-        if (collapse_score_larger(peci.edge_len, ctx.edge_len, iter.awi.wedge_id, ctx.wedge_id))
+        if (collapse_score_larger(peci, iter.awi.wedge_id, eci, ctx.wedge_id))
             ctx.is_collapse_ok = false; 
     }
 
@@ -799,7 +801,6 @@ if (validThread && pcei.is_collapse_ok)
 if (valid_thread)
 {
     store_per_collapse_edge_info(collapse_edge_id, pcei, pcs_collapse_iter_); 
-    store_per_collapse_edge_position(collapse_edge_id, collapse_pos); 
     if (false == pcei.is_collapse_ok)
     { /* update per edge data */
         EdgeCollapseInfo peci; 
@@ -812,10 +813,10 @@ if (valid_thread)
     /* initialze vertex marks */
     if (valid_thread)
     {
-        store_per_vert_collapse_edge_id(v0, NULL_EDGE); 
-        store_per_vert_collapse_edge_id(v1, NULL_EDGE); 
-        store_per_vert_collapse_edge_id(v2, NULL_EDGE); 
-        store_per_vert_collapse_edge_id(v3, NULL_EDGE);
+        store_per_vert_collapse_wedge_id(v0, NULL_EDGE); 
+        store_per_vert_collapse_wedge_id(v1, NULL_EDGE); 
+        store_per_vert_collapse_wedge_id(v2, NULL_EDGE); 
+        store_per_vert_collapse_wedge_id(v3, NULL_EDGE);
     }
 }
 #endif
@@ -861,8 +862,8 @@ if (valid_thred && pcei.is_collapse_ok && !pcei_new.is_collapse_ok)
 
 if (valid_thread && pcei_new.is_collapse_ok)
 { /* mark edge score for 2 edge verts */
-    store_per_vert_collapse_edge_id(v1, split_edge_id); 
-    store_per_vert_collapse_edge_id(v3, split_edge_id); 
+    store_per_vert_collapse_wedge_id(v1, pcei.id); 
+    store_per_vert_collapse_wedge_id(v3, pcei.id); 
 }
 
 #endif
@@ -875,18 +876,18 @@ EdgeCollapseInfo pcei_new = pcei;
 if (valid_thread && pcei.is_collapse_ok)
 {
     uvec4 collapse_links = uvec4(
-        load_per_vert_collapse_edge_score(v0), 
-        load_per_vert_collapse_edge_score(v1), 
-        load_per_vert_collapse_edge_score(v2), 
-        load_per_vert_collapse_edge_score(v3)
+        load_per_vert_collapse_wedge_id(v0), 
+        load_per_vert_collapse_wedge_id(v1), 
+        load_per_vert_collapse_wedge_id(v2), 
+        load_per_vert_collapse_wedge_id(v3)
     )
     for (uint ivert = 0; ivert < 4; ++ivert)
     {
-        uint collapsed_edge = collapse_links[ivert]; 
-        if (collapsed_edge != NULL_EDGE)
+        uint wedge_collapsed = collapse_links[ivert]; 
+        if (wedge_collapsed != NULL_EDGE)
         {
-            EdgeCollapseInfo pcei_adj = load_per_collapse_edge_info(collapsed_edge, pcs_collapse_iter_); 
-            if (collapse_score_larger(pcei_adj.score, pcei.score, pcei_adj.id, pcei.id))
+            EdgeCollapseInfo peci_adj = load_per_edge_collapse_info(wedge_collapsed, pcs_collapse_iter_); 
+            if (collapse_score_larger(peci_adj, wedge_collapsed, pcei, pcei.id))
             {
                 pcei_new.is_collapse_ok = false; 
                 break; 
@@ -994,7 +995,7 @@ ssbo_edge_to_edges_[ w0*4 + mark__wedge_to_prev_wedge(w0.iface_adj      == 1 ? 0
 ssbo_edge_to_edges_[e31*4 + mark__wedge_to_next_wedge(ctx.e31.iface_adj == 1 ? 0 : 1)] = encode_adj_wedge_info(ctx.w0); 
 
 /* Update v1 pos */
-vec3 vpos = load_per_collapse_edge_position(collapse_edge_id); 
+vec3 vpos = calc_per_collapse_edge_position(collapse_edge_id); 
 st_vpos(v1, vpos); 
 
 #endif

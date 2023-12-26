@@ -91,6 +91,21 @@ class GPUBufferPoolModule {
   {
     return ssbo_mesh_buffer_reuse_2_; 
   }
+  
+
+  // Reused Buffer Scheme for Edge Splitting --------------------------------------------
+  inline GPUStorageBuf *reused_ssbo_per_edge_collapse_info()
+  {
+    return ssbo_mesh_buffer_reuse_1_; 
+  }
+  inline GPUStorageBuf *reused_ssbo_per_collapse_edge_info()
+  {
+    return ssbo_mesh_buffer_reuse_2_; 
+  }
+  inline GPUStorageBuf *reused_ssbo_per_vert_collapse_wedge_id()
+  {
+    return ssbo_mesh_buffer_reuse_5_; 
+  }
 
 
   // Reused Buffer Scheme for Mesh Filtering -----------------------------------------------
