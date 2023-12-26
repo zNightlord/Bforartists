@@ -286,6 +286,18 @@ vec2 ndc_to_screen_uv(vec4 pos_ndc)
 	return pos_ndc.xy * pcs_screen_size_.xy; /* TODO: flip y or not? */
 }
 
+struct VECircContext_ContourLinking
+{
+	PerWedgeContourInfo pwci; /* pwci of current wedge ("wi") */
+}; 
+bool func_ve_circulator(CirculatorIterData iter, inout VECircContext_ContourLinking ctx)
+{
+	ctx.pwci = decode_per_wedge_contour_info(ssbo_edge_to_contour_[iter.awi_next.wedge_id]);
+
+	if (ctx.pwci.is_contour) return false; /* found a contour, quit circulation */
+	return true;  
+}
+
 void main()
 {
 	const uint groupId = gl_LocalInvocationID.x; 
@@ -359,54 +371,38 @@ void main()
 		/* build contour edge adjacency */
 		PerContourWedgeInfo pcwi = decode_per_contour_wedge_info(buf_strokegen_mesh_pool[base_addr+6]);  
 		bool is_border = pcwi.is_border; 
-		bool backface_border = is_border && !is_border_edge_front_facing(pcwi.ifrontface);
+		bool backface_border = is_border && !is_border_edge_front_facing(pcwi.ifrontface); 
 
-		AdjWedgeInfo awi; 
-		awi.iface_adj = pcwi.ifrontface; 
-		awi.wedge_id  = pcwi.wedge_id; 
-		
-		PerWedgeContourInfo pwci; 
-		pwci.is_contour = true;
-		pwci.contour_id = ContourEdgeIdx; 
-#define MAX_WEDGE_ROTATES 16u
-		uint rotate_step = 0u; 
-		do {
-			uint iwedge_prev = mark__cwedge_rotate_back(awi.iface_adj); 
-			awi = decode_adj_wedge_info(ssbo_edge_to_edges_[awi.wedge_id*4u + iwedge_prev]);
+		VertWedgeListHeader vwlh_beg_vtx, vwlh_end_vtx; 
+		vwlh_beg_vtx.wedge_id = pcwi.wedge_id; 
+		vwlh_beg_vtx.ivert = mark__cwedge_to_beg_vert(pcwi.ifrontface); 
+		vwlh_end_vtx.wedge_id = pcwi.wedge_id;
+		vwlh_end_vtx.ivert = mark__cwedge_to_end_vert(pcwi.ifrontface);
 
-			pwci = decode_per_wedge_contour_info(ssbo_edge_to_contour_[awi.wedge_id]);
-			if (pwci.is_contour) break; 
+		VECircContext_ContourLinking ctx; 
 
-			rotate_step++; 
-		} while (
-			rotate_step < MAX_WEDGE_ROTATES 
-			&& pwci.contour_id != ContourEdgeIdx
-		); 
-		bool back_face_T_junction = (backface_border && !pwci.is_border); 
+		/* Rotate backwards around beg vert of this edge */
+		ctx.pwci.is_contour = true;
+		ctx.pwci.contour_id = ContourEdgeIdx; 
+		bool rot_fwd = false; 
+
+		VE_CIRCULATOR(vwlh_beg_vtx, func_ve_circulator, ctx, rot_fwd)
+
+		bool back_face_T_junction = (backface_border && !ctx.pwci.is_border); 
 		ssbo_contour_to_contour_[ContourEdgeIdx*2] = 
-			(!back_face_T_junction) ? pwci.contour_id : /*break backface border chain at T-junction*/ContourEdgeIdx; 
+			(!back_face_T_junction) ? ctx.pwci.contour_id : /*break backface border chain at T-junction*/ContourEdgeIdx; 
 
 
-		awi.iface_adj = pcwi.ifrontface; 
-		awi.wedge_id  = pcwi.wedge_id; 
+		/* Rotate fowards around end vert of this edge */
+		ctx.pwci.is_contour = true;
+		ctx.pwci.contour_id = ContourEdgeIdx; 
+		rot_fwd = true; 
 
-		pwci.is_contour = true;
-		pwci.contour_id = ContourEdgeIdx; 
-		do {
-			uint iwedge_next = mark__cwedge_rotate_next(awi.iface_adj); 
-			awi = decode_adj_wedge_info(ssbo_edge_to_edges_[awi.wedge_id*4u + iwedge_next]);
+		VE_CIRCULATOR(vwlh_end_vtx, func_ve_circulator, ctx, rot_fwd)
 
-			pwci = decode_per_wedge_contour_info(ssbo_edge_to_contour_[awi.wedge_id]);
-			if (pwci.is_contour) break; 
-
-			rotate_step++; 
-		} while (
-			rotate_step < MAX_WEDGE_ROTATES 
-			&& pwci.contour_id != ContourEdgeIdx
-		); 
-		back_face_T_junction = (backface_border && !pwci.is_border); 
+		back_face_T_junction = (backface_border && !ctx.pwci.is_border); 
 		ssbo_contour_to_contour_[ContourEdgeIdx*2+1] = 
-			(!back_face_T_junction) ? pwci.contour_id : /*break backface border chain at T-junction*/ContourEdgeIdx; 
+			(!back_face_T_junction) ? ctx.pwci.contour_id : /*break backface border chain at T-junction*/ContourEdgeIdx; 
 	}
 
 	if (idx.x == 0) /* I dont care, this is cheap, just keep this up to date here */

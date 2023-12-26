@@ -1,6 +1,12 @@
 #ifndef BNPR_MESHING_TOPO__INCLUDED
 #define BNPR_MESHING_TOPO__INCLUDED
 
+/* Code block dependencies */
+#if defined(VE_CIRCULATOR_INCLUDE)
+    #define WINGED_EDGE_TOPO_INCLUDE 1 
+    #define VERT_WEDGE_LIST_TOPO_INCLUDE 1
+#endif
+
 
 #if !defined(DECODE_IBO_EXCLUDE) && defined(DECODE_IBO_INCLUDE) 
 /* line adjacency("edge detection") IBO layout */
@@ -245,7 +251,7 @@ uint mark__cwedge_rotate_next(uint face)
 /* Contour-specific functions ------------------- */
 struct PerContourWedgeInfo
 {
-    bool is_border; 
+    bool is_border;
     uint wedge_id;
     uint ifrontface;
 };
@@ -359,6 +365,119 @@ WedgeFloodingPointer decode_wedge_flooding_pointer(uint wfp_enc)
 
 
 
+
+#if defined(VERT_WEDGE_LIST_TOPO_INCLUDE)
+/* Non-existing wedges, which should not happen for a 2-manifold mesh with boundaries */
+#define NULL_VERT_ADJ_WEDGE 0xffffffffu 
+struct VertWedgeListHeader
+{
+    uint wedge_id; 
+    /* the face that contains this vertex that begins at the center wedge */
+    uint ivert; /* 1 or 3 */
+}; 
+uint encode_vert_wedge_list_header(VertWedgeListHeader vwlh)
+{
+    uint vwlh_enc = ((vwlh.wedge_id << 2u) | (vwlh.ivert & 3u));
+    return vwlh_enc; 
+}
+VertWedgeListHeader decode_vert_wedge_list_header(uint vwlh_enc)
+{
+    VertWedgeListHeader vwlh; 
+    vwlh.wedge_id = (vwlh_enc >> 2u);
+    vwlh.ivert = ((vwlh_enc & 3u));
+    return vwlh; 
+}
+/* Adjust pointer to another edge */
+void try_update_ve_link(uint vtx, uint edge_old, uint edge_new)
+{
+    VertWedgeListHeader vwlh = decode_vert_wedge_list_header(ssbo_vert_to_edge_list_header_[vtx]); 
+    if (vwlh.wedge_id == edge_old)
+    {
+        vwlh.wedge_id = edge_new; 
+        ssbo_vert_to_edge_list_header_[vtx] = encode_vert_wedge_list_header(vwlh); 
+    }
+}
+
+#define NULL_FILTERED_VERT 0xffffffffu/* used in vert-to-filtered_vert buffer */
+#endif
+
+
+
+#if defined(VE_CIRCULATOR_INCLUDE)
+
+/*      
+ * Rotation winding (CW/CCW) is always reverse to global face winding
+ * Rotate foward/backward: hedge w always end/begin at v 
+ * 
+ *    Rotate fwd around V3           Rotate fwd around V1          fi:awi.iface_adj  
+ *        v0  ...  vp             v_oppo --- vn  ...  v0           wi:awi.wedge_id  
+ *       /  \     /  \                \     /  \     /  \          
+ *      / f1 \   wp   \                \  wo fi wn  /    \         When rotating fowards:            
+ *     / ---> \ /      \                \ / ---> \ / ---> \        wo = ssbo_edge_to_edges[mark__cwedge_rotate_back(fi)]
+ *   v1 ====== v3--wi--vi               vi --wi-- v1 ===== v3      wn = ssbo_edge_to_edges[mark__cwedge_rotate_next(fi)]      
+ *     \ <--- / \<-----/ \                \      / \ <--- /        wp can be cached
+ *      \ f0 /  wn fi wo  \                \   wp   \    /         
+ *       \  /     \  /     \                \  /     \  /          
+ *        v2  ...  vn ----- v_oppo           vp  ...  v2           
+*/  
+struct CirculatorIterData
+{
+    AdjWedgeInfo awi; // wi
+    AdjWedgeInfo awi_next; // wn
+    uint rotate_step; 
+}; 
+#define MAX_WEDGE_ROTATES 32u
+
+
+/* circulation loop invariant: 
+ *     v1 ----- v2  
+ *    /  \     /  \     wi:=awi.wedge_id
+ *   /    \   /    \    fi:=awi.iface_adj
+ *  /      \ /      \  
+ * v0 ----- v --wi-- v3 iwedge derivation:       
+ *   \__     \<-----/   wo = mark__cwedge_rotate_back(fi)
+ *      \__  wn fi wo   wn = mark__cwedge_rotate_next(fi) 
+ *         \__ \  /    
+ *            \_v4             
+*/
+/* Parameters
+ VertWedgeListHeader vwlh
+ bool FUNC(CirculatorIterData, VISIT_DATA)
+ CustomData VISIT_DATA
+ bool ROTATE_FWD
+*/
+#define VE_CIRCULATOR(vwlh, FUNC, VISIT_DATA, ROTATE_FWD) \
+{                                                                                                  \
+    uint iface_rotate_fwd = (vwlh.ivert == 1u) ? 0 : 1;                                            \
+    uint iface_rotate_bcw = (vwlh.ivert == 1u) ? 1 : 0;                                            \
+    uint iface_curr = (ROTATE_FWD) ? iface_rotate_fwd : iface_rotate_bcw;                          \
+                                                                                                   \
+    AdjWedgeInfo awi;                                                                              \
+    awi.wedge_id = vwlh.wedge_id; /* current wedge we are traversing */                            \
+    awi.iface_adj = iface_curr; /* current iface we are working at */                              \
+    uint rotate_step = 0u;                                                                                                 \
+    do {                                                                                                                   \
+        /* find next wedge */                                                                                              \
+        uint iwedge_next = ROTATE_FWD ? mark__cwedge_rotate_next(awi.iface_adj) : mark__cwedge_rotate_back(awi.iface_adj); \
+        AdjWedgeInfo awi_next = decode_adj_wedge_info(ssbo_edge_to_edges_[awi.wedge_id*4u + iwedge_next]);                 \
+        bool awi_next_border = awi.wedge_id == awi_next.wedge_id;                                                          \
+                                                                                                                           \
+        /* do something here */                                                                                            \
+        if (false == FUNC(CirculatorIterData(awi, awi_next, rotate_step), VISIT_DATA))                                     \
+            break;                                                                                                         \
+                                                                                                                           \
+        if (awi.wedge_id == awi_next.wedge_id)                                                                             \
+            break; /* hit the border edge, exit */                                                                         \
+        awi = awi_next;                                                                                                    \
+        rotate_step++;                                                                                                     \
+    }  while (                                                                                                             \
+        rotate_step < MAX_WEDGE_ROTATES                                                                                    \
+        && awi.wedge_id != vwlh.wedge_id                                                                                   \
+    );                                                                                                                     \
+}\
+
+
+#endif
 
 
 
@@ -621,47 +740,6 @@ float compute_vert_quadric_weight(vec3 p_v, Quadric q_v, vec3 p_x, Quadric q_x, 
 
 #endif
 
-
-
-
-
-
-
-
-#if defined(VERT_WEDGE_LIST_TOPO_INCLUDE)
-/* Non-existing wedges, which should not happen for a 2-manifold mesh with boundaries */
-#define NULL_VERT_ADJ_WEDGE 0xffffffffu 
-struct VertWedgeListHeader
-{
-    uint wedge_id; 
-    /* the face that contains this vertex that begins at the center wedge */
-    uint ivert; /* 1 or 3 */
-}; 
-uint encode_vert_wedge_list_header(VertWedgeListHeader vwlh)
-{
-    uint vwlh_enc = ((vwlh.wedge_id << 2u) | (vwlh.ivert & 3u));
-    return vwlh_enc; 
-}
-VertWedgeListHeader decode_vert_wedge_list_header(uint vwlh_enc)
-{
-    VertWedgeListHeader vwlh; 
-    vwlh.wedge_id = (vwlh_enc >> 2u);
-    vwlh.ivert = ((vwlh_enc & 3u));
-    return vwlh; 
-}
-/* Adjust pointer to another edge */
-void try_update_ve_link(uint vtx, uint edge_old, uint edge_new)
-{
-    VertWedgeListHeader vwlh = decode_vert_wedge_list_header(ssbo_vert_to_edge_list_header_[vtx]); 
-    if (vwlh.wedge_id == edge_old)
-    {
-        vwlh.wedge_id = edge_new; 
-        ssbo_vert_to_edge_list_header_[vtx] = encode_vert_wedge_list_header(vwlh); 
-    }
-}
-
-#define NULL_FILTERED_VERT 0xffffffffu/* used in vert-to-filtered_vert buffer */
-#endif
 
 
 
