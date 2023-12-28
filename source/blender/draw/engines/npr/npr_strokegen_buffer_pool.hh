@@ -31,7 +31,9 @@ class GPUBufferPoolModule {
   SSBO_StrokeGenMeshPoolCounters ssbo_bnpr_mesh_pool_counters_;
   SSBO_StrokeGenMeshPoolCounters ssbo_bnpr_mesh_pool_counters_prev_; // keep counters from last mesh extraction iter
 
-  SSBO_StrokeGenDynamicMeshCounters ssbo_dyn_mesh_counters_[2]; 
+  SSBO_StrokeGenDynamicMeshCounters ssbo_dyn_mesh_counters_[2];
+  inline GPUStorageBuf *ssbo_dyn_mesh_counters_in() { return ssbo_dyn_mesh_counters_[0]; }
+  inline GPUStorageBuf *ssbo_dyn_mesh_counters_out() { return ssbo_dyn_mesh_counters_[1]; }
   SSBO_StrokeGenEdgeSplitCounters ssbo_edge_split_counters_;
   SSBO_StrokeGenEdgeCollapseCounters ssbo_edge_collapse_counters_;
 
@@ -42,10 +44,11 @@ class GPUBufferPoolModule {
   SSBO_IndirectDispatchArgs ssbo_indirect_dispatch_args_per_filtered_vert_;
 
   SSBO_IndirectDispatchArgs ssbo_indirect_dispatch_args_per_split_edge_;
+  SSBO_IndirectDispatchArgs ssbo_indirect_dispatch_args_per_collapsed_edge_;
+  SSBO_IndirectDispatchArgs ssbo_indirect_dispatch_args_per_remeshed_edges_;
 
   SSBO_IndirectDispatchArgs ssbo_bnpr_mesh_contour_edge_dispatch_args_;
 
-  SSBO_IndirectDispatchArgs ssbo_indirect_dispatch_args_per_remeshed_edges_;
 
 
   // Persistent Buffers -------------------------------------------------------------------
@@ -83,7 +86,7 @@ class GPUBufferPoolModule {
   }
 
 
-  // Reused Buffer Scheme for Edge Splitting --------------------------------------------
+  // Reused Buffer Scheme for Edge Split --------------------------------------------
   inline GPUStorageBuf *reused_ssbo_per_edge_split_info_()
   {
     return ssbo_mesh_buffer_reuse_1_; 
@@ -94,20 +97,20 @@ class GPUBufferPoolModule {
   }
   
 
-  // Reused Buffer Scheme for Edge Splitting --------------------------------------------
+  // Reused Buffer Scheme for Edge Collapse --------------------------------------------
   inline GPUStorageBuf *reused_ssbo_per_edge_collapse_info_in_(int step)
   {
-    return step % 2 == 0 ? ssbo_mesh_buffer_reuse_0_ : ssbo_mesh_buffer_reuse_1_; 
+    return (step % 2 == 0) ? ssbo_mesh_buffer_reuse_0_ : ssbo_mesh_buffer_reuse_1_; 
   }
   inline GPUStorageBuf *reused_ssbo_per_edge_collapse_info_out_(int step)
   {
-    return step % 2 == 0 ? ssbo_mesh_buffer_reuse_1_ : ssbo_mesh_buffer_reuse_0_; 
+    return (step % 2 == 0) ? ssbo_mesh_buffer_reuse_1_ : ssbo_mesh_buffer_reuse_0_; 
   }
-  inline GPUStorageBuf *reused_ssbo_per_collapse_edge_info()
+  inline GPUStorageBuf *reused_ssbo_per_collapse_edge_info_()
   {
     return ssbo_mesh_buffer_reuse_2_; 
   }
-  inline GPUStorageBuf *reused_ssbo_per_vert_collapse_wedge_id()
+  inline GPUStorageBuf *reused_ssbo_per_vert_collapse_wedge_id_()
   {
     return ssbo_mesh_buffer_reuse_5_; 
   }

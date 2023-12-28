@@ -259,7 +259,7 @@ using namespace draw;
 
   struct SSBOData_StrokeGenEdgeCollapseCounters {
     uint num_collapse_edges_pass_1;
-    uint num_collapse_edges;
+    uint dummy;
     uint dummy_0;
     uint dummy_1;
   };

@@ -181,13 +181,19 @@ namespace blender::npr::strokegen
     append_subpass_quadric_mesh_filtering(num_edges, num_verts, meshing_params);
 
     // Remeshing
-    int num_remesh_iters = 2; 
+    int num_remesh_iters = 1; 
     for (int iter_remesh = 0; iter_remesh < num_remesh_iters; ++iter_remesh)
     {
-      int num_edge_split_iters = 3; 
+      int num_edge_split_iters = 0; 
       for (int iter_edge_split = 0; iter_edge_split < num_edge_split_iters; ++iter_edge_split) {
         append_subpass_fill_dispatched_args_remeshed_edges_(num_edges);
         append_subpass_split_edges(iter_remesh, iter_edge_split, num_edges, num_verts);  
+      }
+
+      int num_edge_collapse_iters = 1;
+      for (int iter_edge_collapse = 0; iter_edge_collapse < num_edge_collapse_iters; ++iter_edge_collapse) {
+        append_subpass_fill_dispatched_args_remeshed_edges_(num_edges);
+        append_subpass_collapse_edges(iter_remesh, iter_edge_collapse, num_edges, num_verts);
       }
     }
 
@@ -613,7 +619,7 @@ namespace blender::npr::strokegen
     }
     {
       auto &sub = pass_extract_geom.sub("bnpr_meshing_edge_split_resolve_conflict");
-      sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_OP_SPLIT_EDGE_RESOLVE_CONFICT));
+      sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_OP_SPLIT_EDGE_RESOLVE_CONFLICT));
       bind_src(sub, meshing_params.remeshing_targ_edge_len);
       sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_split_edge_);
       sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
@@ -623,6 +629,78 @@ namespace blender::npr::strokegen
       sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_OP_SPLIT_EDGE_EXECUTE));
       bind_src(sub, meshing_params.remeshing_targ_edge_len);
       sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_split_edge_);
+      sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
+    }
+  }
+
+  void StrokeGenPassModule::append_subpass_collapse_edges(int iter_remesh, int iter_collapse, int num_edges, int num_verts)
+  {
+    auto bind_src = [&](draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub,
+                        int pingpong_id, float remesh_edge_len) {
+      sub.bind_ssbo(0, buffers_.ssbo_dyn_mesh_counters_in());   // in
+      sub.bind_ssbo(1, buffers_.ssbo_dyn_mesh_counters_out());    // out
+      sub.bind_ssbo(2, buffers_.ssbo_edge_collapse_counters_);
+      sub.bind_ssbo(3, buffers_.ssbo_vbo_full_);
+      sub.bind_ssbo(4, buffers_.ssbo_edge_to_vert_);
+      sub.bind_ssbo(5, buffers_.ssbo_edge_to_edges_);
+      sub.bind_ssbo(6, buffers_.ssbo_vert_to_edge_list_header_);
+      sub.bind_ssbo(7, buffers_.ssbo_vert_flags_);
+      sub.bind_ssbo(8, buffers_.ssbo_edge_flags_);
+      sub.bind_ssbo(9, buffers_.reused_ssbo_per_edge_collapse_info_in_(pingpong_id));
+      sub.bind_ssbo(10, buffers_.reused_ssbo_per_edge_collapse_info_out_(pingpong_id));
+      sub.push_constant("pcs_collapse_iter_", iter_collapse);
+      sub.push_constant("pcs_remesh_edge_len_", remesh_edge_len);
+      sub.push_constant("pcs_edge_count_", num_edges);
+      sub.push_constant("pcs_vert_count_", num_verts);
+    };
+
+    float remesh_len_scaled = meshing_params.remeshing_targ_edge_len / 100.0f;
+    if (iter_collapse == 0u) {
+      auto &sub = pass_extract_geom.sub("bnpr_meshing_edge_collapse_init");
+      sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_OP_COLLAPSE_EDGE_INIT));
+      bind_src(sub, 0, remesh_len_scaled);
+      // sub.dispatch(int3(1, 1, 1));
+      sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
+    }
+    {
+      auto &sub = pass_extract_geom.sub("bnpr_meshing_edge_collapse_compact");
+      sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_OP_COLLAPSE_EDGE_COMPACT));
+      bind_src(sub, 0, remesh_len_scaled);
+      // sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_edges_);
+      sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
+    }
+    {
+      auto &sub = pass_extract_geom.sub("strokegen_remeshing_fill_dispatch_args_per_collapsed_edge");
+      sub.shader_set(shaders_.static_shader_get(FILL_DISPATCH_ARGS_SPLIT_EDGES));
+      sub.bind_ssbo(0, buffers_.ssbo_edge_collapse_counters_);
+      sub.bind_ssbo(1, buffers_.ssbo_indirect_dispatch_args_per_collapsed_edge_);
+      sub.push_constant("pcs_edge_collapse_dispatch_group_size_",
+                        (int)(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT));
+      sub.push_constant("pcs_collapse_iter_", iter_collapse);
+
+      // sub.dispatch(int3(1, 1, 1));
+      sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
+    }
+    {
+      auto &sub = pass_extract_geom.sub("bnpr_meshing_edge_collapse_resolve_conflict_0");
+      sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_OP_COLLAPSE_EDGE_RESOLVE_CONFLICT_0));
+      bind_src(sub, 1, meshing_params.remeshing_targ_edge_len);
+      // sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_collapsed_edge_);
+      sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
+    }
+    {
+      auto &sub = pass_extract_geom.sub("bnpr_meshing_edge_collapse_resolve_conflict_1");
+      sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_OP_COLLAPSE_EDGE_RESOLVE_CONFLICT_1));
+      bind_src(sub, 2, meshing_params.remeshing_targ_edge_len);
+      // sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_collapsed_edge_);
+      sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
+    }
+    {
+      auto &sub = pass_extract_geom.sub("bnpr_meshing_edge_collapse_resolve_conflict_2");
+      sub.shader_set(
+          shaders_.static_shader_get(eShaderType::MESH_OP_COLLAPSE_EDGE_RESOLVE_CONFLICT_2));
+      bind_src(sub, 2, meshing_params.remeshing_targ_edge_len);
+      // sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_collapsed_edge_);
       sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
     }
   }

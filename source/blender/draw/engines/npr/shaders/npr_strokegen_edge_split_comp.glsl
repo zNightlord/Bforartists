@@ -282,9 +282,9 @@ void main()
         return;
     if (valid_thread && !psei_curr.is_split_ok)
     {
-        // EdgeFlags ef = load_edge_flags(psei_curr.id); 
-        // ef.del_by_split = false; /* cancel the deletion */
-        // store_edge_flags(psei_curr.id, ef); 
+        EdgeFlags ef = load_edge_flags(psei_curr.id); 
+        ef.del_by_split = false; /* cancel the deletion */
+        store_edge_flags(psei_curr.id, ef); 
         return; 
     }
 

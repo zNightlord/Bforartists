@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
+﻿/* SPDX-License-Identifier: GPL-2.0-or-later
  * Copyright 2021 Blender Foundation.
  */
 
@@ -164,11 +164,25 @@ const char *StrokeGenShaderModule::static_shader_create_info_name_get(eShaderTyp
       return "bnpr_meshing_edge_split_init"; 
     case MESH_OP_SPLIT_EDGE_COMPACT:
       return "bnpr_meshing_edge_split_compact";
-    case MESH_OP_SPLIT_EDGE_RESOLVE_CONFICT:
+    case MESH_OP_SPLIT_EDGE_RESOLVE_CONFLICT:
       return "bnpr_meshing_edge_split_resolve_conflict";
     case MESH_OP_SPLIT_EDGE_EXECUTE:
       return "bnpr_meshing_edge_split_execute"; 
 
+    case MESH_OP_COLLAPSE_EDGE_INIT: 
+      return "bnpr_meshing_edge_collapse_init"; 
+    case MESH_OP_COLLAPSE_EDGE_COMPACT: 
+      return "bnpr_meshing_edge_collapse_compact"; 
+    case FILL_DISPATCH_ARGS_COLLAPSE_EDGES: 
+      return "strokegen_remeshing_fill_dispatch_args_per_collapsed_edge"; 
+    case MESH_OP_COLLAPSE_EDGE_RESOLVE_CONFLICT_0: 
+      return "bnpr_meshing_edge_collapse_resolve_conflict_0"; 
+    case MESH_OP_COLLAPSE_EDGE_RESOLVE_CONFLICT_1: 
+      return "bnpr_meshing_edge_collapse_resolve_conflict_1"; 
+    case MESH_OP_COLLAPSE_EDGE_RESOLVE_CONFLICT_2: 
+      return "bnpr_meshing_edge_collapse_resolve_conflict_2"; 
+    case MESH_OP_COLLAPSE_EDGE_EXECUTE: 
+      return "bnpr_meshing_edge_collapse_execute"; 
 
     case SCAN_TEST_AGGREGATE:
       return "bnpr_scan_test_aggregate";

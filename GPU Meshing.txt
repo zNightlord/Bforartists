@@ -161,35 +161,12 @@ float calc_max_edge_len(float targ_edge_len)
 
 
 
-/* Paralle Edge Flip ////////////////////////////////////////
- *         v0                  v0                                                             
- *        /  \                /|\                                                            
- *       /    \              / | \                                                           
- *      W      3            W  |  3                                                          
- *     0   f1   W          0   |   W                                                         
- *    /          \        /  . |    \                                                        
- *   /  ------->  \      /  /| | |   \                                                       
- * v1 ---- W4 ---- v3  v1    | W4|    v3                                                     
- *   \  <-------  /      \   | | |/  /                                                       
- *    \          /        \    | '  /                                                        
- *     W   f0   2          W   |   2                                                         
- *      1      W            1  |  W                                                          
- *       \    /              \ | /                                                           
- *        \  /                \|/                                                            
- *         v2                  v2
- * 
- * Affected Topology:
- * e-v[w4] = { v1, v2, v3, v0 }, e-e[w4] = { w1, w2, w3, w0 }
- * 
- * e-e[w0]: { w4, w3 } |-> { w1, w4 }
- * e-e[w1]: { w2, w4 } |-> { w4, w0 }                       
- * e-e[w2]: { w4, w1 } |-> { w3, w4 }                       
- * e-e[w3]: { w0, w4 } |-> { w4, w2 }
- *                        
- * v-e: v1, v3 if v-e[vi] linked to w4                       
- *                        
-*/
+/* Paralle Edge Flip //////////////////////////////////////// */
 /* Inputs: ------------------------------ */
+ssbo_edge_flags_
+
+#define PI ...
+calc_dihedral_angle(vec3 p0~3) // reuse code from compute_wedge_quality
 compact_flip_edge()
 compact_flip_edge_II()
 
@@ -203,11 +180,69 @@ struct EdgeFlipInfo
 void load / store_per_flip_edge_info(uint flip_edge_id / EdgeFlipInfo efi)
 void load / store_per_edge_flip_info(uint flip_edge_id / EdgeFlipInfo efi)
 
-bool flip_score_larger(float score_0, score_1, uint wedge_id_0, wedge_id_1)
+/* See "Automatic and High-quality Surface Mesh Generation for CAD Models" */
+#define EDGE_SPLIT_OPTI_VALENCE 0u
+#define EDGE_SPLIT_OPTI_DELAUNAY 1u
+bool should_edge_split_common(vec3 p0, vec3 p1, vec3 p2, vec3 p3)
 {
-    if (score_0 == score_1)
+    /* only flip when edge is flat */
+    float dihedral_angle = calc_dihedral_angle(p0, p1, p2, p3); 
+    if (abs(dihedral_angle - PI) > PI * .07f /*12.6 degree*/)
+    { 
+        return false; 
+    }
+    return true; 
+}
+
+float comp_edge_split_valence_score(
+    vec3 p0, vec3 p1, vec3 p2, vec3 p3, 
+    uvec4 valences, bvec4 border_edge
+){ 
+    if (!should_edge_split_common(p0, p1, p2, p3))
+        return -10000000.0f; 
+
+    /* only flip when gets closer to optimal valence */
+    vec4 valences_before = vec4(valences); 
+    vec4 valences_after = valences_before + vec4(+1.0f, -1.0f, +1.0f, -1.0f); 
+
+    vec4 opti_valence = border_edge ? 4.0f : 6.0f; 
+    
+    vec4 vec_to_opti_before = opti_valence - valences_before; 
+    float dist_before = dot(vec_to_opti_before, vec_to_opti_before); 
+    vec4 vec_to_opti_after = opti_valence - valences_after; 
+    float dist_after = dot(vec_to_opti_after, vec_to_opti_after); 
+
+    return dist_before - dist_after; 
+}
+
+float comp_edge_split_delaunay_score(
+    vec3 p0, vec3 p1, vec3 p2, vec3 p3, 
+    uvec4 valences, bvec4 border_edge
+){
+    if (!should_edge_split_common(p0, p1, p2, p3))
+        return -10000000.0f; 
+
+    /* Delaunay edge flip condition: two opposite angles sum larger than Pi */
+    vec3 v21 = p2 - p1; 
+    vec3 v23 = p2 - p3; 
+    float angle_123 = acos(dot(v21, v23)); 
+
+    vec3 v01 = p0 - p1; 
+    vec3 v03 = p0 - p3; 
+    float angle_103 = acos(dot(v01, v03)); 
+    if (PI < (angle_123 + angle_103))
+        return 1.0f; 
+    return .0f; 
+}
+
+
+bool flip_score_larger(EdgeFlipInfo efi_0, efi_1, uint wedge_id_0, wedge_id_1)
+{
+    if (!efi_0.is_flip_ok) return false; 
+    if (!efi_1.is_flip_ok) return true; 
+    if (efi_0.score == efi_0.score)
         return wedge_id_0 > wedge_id_1; 
-    return score_0 > score_1; 
+    return efi_0.score > efi_0.score; 
 }
 
 uint pcs_flip_iter_;
@@ -215,6 +250,154 @@ uint ssbo_dyn_edge_count_[NUM_FLIPS];
 uint ssbo_dyn_vert_count_[NUM_FLIPS];
 
 
+
+foreach wedge in parallel: --------------------------------------
+
+wedge_id = gl_GlobalInvocationID.x; 
+
+#if <<Kernel 0>>
+    uint ef = load_edge_flags(wedge_id); 
+    uint { v0, v1, v2, v3 } = ssbo_edge_to_vert_[wedge_id*4u + 0/1/2/3];
+    vec3 vpos[4] = { ld_vpos(v0), ld_vpos(v1), ld_vpos(v2), ld_vpos(v3) }; 
+
+    float score = comp_split_score(vpos[0], vpos[1], vpos[2], vpos[3]); 
+
+    bool is_flip_ok = (score > .0f)
+        && (!ef.dupli)
+        && (!ef.border) 
+        && (!ef.del_by_split)
+        && (!ef.del_by_collapse)
+        && valid_thread; 
+    uint flip_edge_id = compact_flip_edge(is_flip_ok, groupId);
+
+    if (is_flip_ok)
+    {
+        EdgeFlipInfo pfei; 
+        pfei.is_flip_ok = true;
+        pfei.score = score; 
+        pfei.id = wedge_id;
+
+        store_per_flip_edge_info(split_edge_id, pfei); 
+    }
+
+    if (valid_thread)
+    {
+        EdgeFlipInfo pefi; 
+        pefi.is_split_ok = is_split_ok; 
+        pefi.score = score; 
+        pefi.id = is_split_ok ? split_edge_id : NULL_EDGE; 
+
+        store_per_edge_flip_info(wedge_id, pefi); 
+    }
+#endif
+
+
+
+
+
+
+foreach flip-edge in parallel: ---------------------------------------
+
+uint flip_edge_id = gl_GlobalInvocationID.x;
+EdgeFlipInfo pfei = load_per_flip_edge_info(flip_edge_id);  
+AdjWedgeInfo { w0, w1, w2, w3 } = decode_adj_wedge_info(ssbo_edge_to_edges_[pfei.id*4u + 0/1/2/3]); 
+uint w4 = pfei.id; 
+
+#if <<Kernel 0>>
+    EdgeFlipInfo pfei_resolved = pfei;  
+    EdgeFlipInfo pefi[4] = { load_per_edge_flip_info(w0/1/2/3.wedge_id) }; 
+    if (pfei.is_flip_ok && valid_thread)
+    {
+        if (false == all(bvec4(
+            flip_score_larger(pfei, pfei.id, pefi[0/1/2/3], w0/1/2/3.wedge_id)
+        ))){
+            pfei_resolved.is_flip_ok = false;         
+        }
+    }
+
+    pfei = pfei_resolved; 
+    bool is_flip_ok = pfei.is_flip_ok && valid_thread; 
+    uint flip_edge_alloc_id = compact_flip_edge_II(is_flip_ok, groupId); 
+
+    /* Dont need score from now on, so reuse it to store alloc id */
+    if (valid_thread)
+    {
+        pfei.score = uintBitsToFloat(is_flip_ok ? flip_edge_alloc_id : NULL_EDGE);
+        store_per_flip_edge_info(flip_edge_id, pfei); /* no race cond' since only accessed by this thread */
+    }
+#endif
+
+#if <<Kernel 1>>
+if (!valid_thread) return; 
+if (!pfei.is_flip_ok)
+{ /* edge flip canceled */
+    EdgeFlags ef = load_edge_flags(pfei.id); 
+    // no need for rollback any flag(s), for now...
+}
+/* 
+ *         v0                  v0                                                             
+ *        /  \                /|\                                                            
+ *       /    \              / | \                                                           
+ *      W      3            W  |  3                                                          
+ *     0   f1   W          0   |   W                                                         
+ *    /          \        /  . |    \                                                        
+ *   /  ------->  \      /  /| | |   \                                                       
+ * v1 ---- W4 ---- v3  v1  f1| W4|f0  v3                                                     
+ *   \  <-------  /      \   | | |/  /                                                       
+ *    \          /        \    | '  /                                                        
+ *     W   f0   2          W   |   2                                                         
+ *      1      W            1  |  W                                                          
+ *       \    /              \ | /                                                           
+ *        \  /                \|/                                                            
+ *         v2                  v2
+ * 
+ * Affected Topology:
+ * e-v[w4] = { v1, v2, v3, v0 }  
+ * e-e[w4] = { w1, w2, w3, w0 } 
+ */
+ Store4_EVAdj(w4, uvec4(v1, v2, v3, v0)); 
+ Store4_EEAdj(w4, uvec4(w1, w2, w3, w0), uvec4(w[1].iface_adj, w[2].iface_adj, w[3].iface_adj, w[0].iface_adj))
+ /*
+ * e-e[w0]: { w4, w3 } |-> { w1, {w4, 0} }
+ * e-v[w0]: oppo_vert(v3) |-> v2
+ * 
+ * e-e[w1]: { w2, w4 } |-> { {w4, 0}, w0 }                       
+ * e-v[w1]: oppo_vert(v3) |-> v0
+ * 
+ * e-e[w2]: { w4, w1 } |-> { w3, {w4, 1} }                       
+ * e-v[w2]: oppo_vert(v1) |-> v0
+ *
+ * e-e[w3]: { w0, w4 } |-> { {w4, 1}, w2 }
+ * e-v[w3]: oppo_vert(v1) |-> v2
+*/
+ AdjWedgeInfo awi_updates[4][2] = 
+ {
+    { w[1], AdjWedgeInfo(w4, 0u) }, 
+    { AdjWedgeInfo(w4, 0u), w[0] }, 
+    { w[3], AdjWedgeInfo(w4, 1u) }, 
+    { AdjWedgeInfo(w4, 1u), w[2] }
+ }; 
+ uint voppo_updates[4] = { v2, v0, v0, v2 }; 
+ for (uint ibwedge = 0; ibwedge < 4; ++ibwedge)
+ {
+    uint wi = w[ibwedge].wedge_id; 
+    uint iface_overlap = w[ibwedge].iface_adj == 0u ? 1u : 0u; 
+    /* Update edge links */
+    ssbo_edge_to_edges_[wi*4u + mark__he_to_wedge(iface_overlap, 1u)] = awi_updates[ibwedge][0]; 
+    ssbo_edge_to_edges_[wi*4u + mark__he_to_wedge(iface_overlap, 2u)] = awi_updates[ibwedge][1]; 
+    /* Update opposite vertex id */
+    ssbo_edge_to_vert_[wi*4u + mark__center_wedge_to_oppo_vert__at_face(iface_overlap)] = voppo_updates[ibwedge]; 
+ }
+ 
+/* v-e: v1, v3 if v-e[vi] linked to w4 */
+uint ivert_v1_w1 = mark__cwedge_to_end_vert(w[1].iface_adj); 
+try_update_ve_link(v1, w4, VertWedgeListHeader(w1, ivert_v1_w1)); 
+uint ivert_v3_w3 = mark__cwedge_to_end_vert(w[3].iface_adj); 
+try_update_ve_link(v3, w4, VertWedgeListHeader(w3, ivert_v3_w3)); 
+
+/* update edge flags */
+
+#endif
 
 
 
@@ -597,7 +780,7 @@ CollapseValidateContext  init_collapse_validate_context(
     ctx.v3 = v[3]; 
     ctx.check_topo = rotate_v1; // check for 1-side is enough
 }
-{
+
 /*
  *        v0  ...  vp                         v_oppo --- vn  ...  v0             
  *       /  \     /  \                            \     /  \     /  \            
@@ -613,6 +796,7 @@ bool collapse_validate(
     CirculatorIterData iter, 
     inout CollapseValidateContext ctx
 )      
+{
     uint iwedge_wo = mark__cwedge_rotate_back(iter.awi.iface_adj); // outside edge
     AdjWedgeInfo awi_wo = decode_adj_wedge_info(ssbo_edge_to_edges_[iter.awi.wedge_id*4u + iwedge_wo]); 
     uint ivert_voppo = mark__center_wedge_to_oppo_vert__at_face(awi_wo.iface_adj);
