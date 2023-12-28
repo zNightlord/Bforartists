@@ -225,8 +225,7 @@ void main()
         bool check_topo; // wether to check topological consistency
     }; 
     CollapseValidateContext init_collapse_validate_context(
-        bool rotate_v1, vec3 vpos[4], 
-        vec3 collapse_pos, 
+        bool rotate_v1, vec3 vpos[4], vec3 collapse_pos, 
         uvec4 v, uvec4 w
     )
     {
@@ -323,20 +322,67 @@ void main()
         EdgeCollapseInfo eci;
         bool is_collapse_ok; 
         uint wedge_id; 
-        uint pcs_collapse_iter; 
     }; 
     bool collapse_resolve_collision_I(
         CirculatorIterData iter, 
         inout CollapseCollisionContext ctx
     ){
-        EdgeCollapseInfo peci = load_per_edge_collapse_info(iter.awi.wedge_id, ctx.pcs_collapse_iter)
+        EdgeCollapseInfo peci = load_per_edge_collapse_info(iter.awi.wedge_id); 
         if (peci.is_collapse_ok && ctx.is_collapse_ok)
         { /* found a better collapse alternative in 1-ring */
-            if (collapse_score_larger(peci, iter.awi.wedge_id, eci, ctx.wedge_id))
+            if (collapse_score_larger(peci, iter.awi.wedge_id, ctx.eci, ctx.wedge_id))
                 ctx.is_collapse_ok = false; 
         }
 
         return ctx.is_collapse_ok; 
+    }
+#endif
+
+
+#if defined(_KERNEL_MULTICOMPILE__EDGE_COLLAPSE_EXECUTE)
+    struct CollapseAdjustEVLinkContext
+    {
+        uint v1; // we are removing v3
+        uint cwedge; 
+        uint w2; 
+        uint w3; 
+        
+        AdjWedgeInfo e30; 
+        AdjWedgeInfo e31; 
+        AdjWedgeInfo e20; 
+        AdjWedgeInfo e21; 
+    }; 
+
+    bool collapse_adjust_ev_links_to_v1(
+        CirculatorIterData iter, 
+        inout CollapseAdjustEVLinkContext ctx
+    ){ /* fwd rotate around v3 */
+        uint ivert_wo = mark__cwedge_rotate_back(iter.awi.iface_adj); 
+        AdjWedgeInfo wo = decode_adj_wedge_info(ssbo_edge_to_edges_[iter.awi.wedge_id*4u + ivert_wo]); 
+
+        if (all(iter.awi.wedge_id.xxx != uvec3(ctx.cwedge, ctx.w2, ctx.w3)))
+        { /* adjust v-e link for wi and wo */
+            /* wi */
+            uint ivert_v3 = mark__cwedge_to_end_vert(iter.awi.iface_adj); 
+            ssbo_edge_to_vert_[iter.awi.wedge_id*4u + ivert_v3] = ctx.v1; /* no race cond' since these edges already locked */
+            /* wo */
+            ivert_v3 = mark__center_wedge_to_oppo_vert__at_face(wo.iface_adj == 1 ? 0 : 1); 
+            ssbo_edge_to_vert_[wo.wedge_id*4u + ivert_v3] = ctx.v1; 
+        }
+        
+        if (iter.awi.wedge_id == ctx.w3)
+        {
+            ctx.e31 = wo; 
+            ctx.e30 = iter.awi_next; // wn
+        }
+
+        if (iter.awi_next.wedge_id == ctx.w2)
+        {
+            ctx.e20 = wo; 
+            ctx.e21 = iter.awi; // wi
+        }
+
+        return true; 
     }
 #endif
 
@@ -354,20 +400,21 @@ void main()
     EdgeCollapseInfo pcei = load_per_collapse_edge_info(collapse_edge_id);
 
     AdjWedgeInfo w[4]; 
-    w[0] = decode_adj_wedge_info(ssbo_edge_to_edges_[psei_curr.id*4u + 0u]);
-    w[1] = decode_adj_wedge_info(ssbo_edge_to_edges_[psei_curr.id*4u + 1u]);
-    w[2] = decode_adj_wedge_info(ssbo_edge_to_edges_[psei_curr.id*4u + 2u]);
-    w[3] = decode_adj_wedge_info(ssbo_edge_to_edges_[psei_curr.id*4u + 3u]);
+    w[0] = decode_adj_wedge_info(ssbo_edge_to_edges_[pcei.id*4u + 0u]);
+    w[1] = decode_adj_wedge_info(ssbo_edge_to_edges_[pcei.id*4u + 1u]);
+    w[2] = decode_adj_wedge_info(ssbo_edge_to_edges_[pcei.id*4u + 2u]);
+    w[3] = decode_adj_wedge_info(ssbo_edge_to_edges_[pcei.id*4u + 3u]);
 #define w0 ((w[0].wedge_id))
 #define w1 ((w[1].wedge_id))
 #define w2 ((w[2].wedge_id))
 #define w3 ((w[3].wedge_id))
+#define w4 ((pcei.id))
 
     uint v0, v1, v2, v3; 
-    v0 = ssbo_edge_to_vert_[psei_curr.id*4u + 0u];
-    v1 = ssbo_edge_to_vert_[psei_curr.id*4u + 1u];
-    v2 = ssbo_edge_to_vert_[psei_curr.id*4u + 2u];
-    v3 = ssbo_edge_to_vert_[psei_curr.id*4u + 3u];
+    v0 = ssbo_edge_to_vert_[pcei.id*4u + 0u];
+    v1 = ssbo_edge_to_vert_[pcei.id*4u + 1u];
+    v2 = ssbo_edge_to_vert_[pcei.id*4u + 2u];
+    v3 = ssbo_edge_to_vert_[pcei.id*4u + 3u];
 
 
 #if defined(_KERNEL_MULTICOMPILE__EDGE_COLLAPSE_RESOLVE_CONFLICT__PASS_0)
@@ -382,25 +429,32 @@ void main()
 
     /* Validate collapse with geometry/topology consistency 
      * by visiting 1-ring neighborhoods around 2 edge verts */
-    vec3 collapse_pos = vec3(.0f); 
-    if (validThread && pcei.is_collapse_ok)
+    if (valid_thread && pcei.is_collapse_ok)
     {
-        collapse_pos = .5f * (ld_vpos(v1) + ld_vpos(v3)); 
-        CollapseValidateContext ctx_init = init_collapse_validate_context(
-            true/*rotate_v1*/, vpos, collapse_pos, 
-            uvec4(v0, v1, v2, v3), uvec4(w0, w1, w2, w3) 
-        ); 
+        vec3 vpos[4] = { ld_vpos(v0), ld_vpos(v1), ld_vpos(v2), ld_vpos(v3) };
+        vec3 collapse_pos = .5f * (vpos[1] + vpos[3]); 
+        bool rotate_fwd = true; 
+        
+        {        
+            VertWedgeListHeader vwlh_v1 = VertWedgeListHeader(w4, 1);
+            CollapseValidateContext ctx_v1 = init_collapse_validate_context(
+                true, vpos, collapse_pos, 
+                uvec4(v0, v1, v2, v3), uvec4(w0, w1, w2, w3) 
+            ); 
 
-        CollapseValidateContext ctx_v1 = ctx_init; 
-        ctx_v1.rotate_v1 = true;
-        VE_CIRCULATOR_FWD(v1, collapse_validate, ctx_v1); 
-        pcei.is_collapse_ok = ctx_v1.is_collapse_ok; 
+            VE_CIRCULATOR(vwlh_v1, collapse_validate, ctx_v1, rotate_fwd); 
+            pcei.is_collapse_ok = ctx_v1.is_collapse_ok; 
+        }        
 
         if (pcei.is_collapse_ok)
-        {
-            CollapseValidateContext ctx_v3 = ctx_init; 
-            ctx_v3.rotate_v1 = false; 
-            VE_CIRCULATOR_FWD(v3, collapse_validate, ctx_v3)   
+        { /* check around the other vert */
+            VertWedgeListHeader vwlh_v3 = VertWedgeListHeader(w4, 3); 
+            CollapseValidateContext ctx_v3 = init_collapse_validate_context(
+                false, vpos, collapse_pos, 
+                uvec4(v0, v1, v2, v3), uvec4(w0, w1, w2, w3) 
+            ); 
+            
+            VE_CIRCULATOR(vwlh_v3, collapse_validate, ctx_v3, rotate_fwd)   
             pcei.is_collapse_ok = ctx_v3.is_collapse_ok; 
         }
     }
@@ -431,31 +485,36 @@ void main()
 
 #if defined(_KERNEL_MULTICOMPILE__EDGE_COLLAPSE_RESOLVE_CONFLICT__PASS_1)
     /* Resolve collision pass I 
-    * for each edge, traverse 1-ring of its 2 verts */
+     * for each edge, traverse 1-ring of its 2 verts */
     EdgeCollapseInfo pcei_new = pcei; 
+    bool rotate_fwd = true; 
     if (pcei_new.is_collapse_ok)
     {
-        CollapseCollisionContext ctx; 
-        ctx.is_collapse_ok = true; 
-        ctx.edge_len = pcei.edge_len; 
-        ctx.wedge_id = pcei.id; 
-        
-        VE_CIRCULATOR_FWD(v1, ctx, collapse_resolve_collision_I); 
-        
-        pcei_new.is_collapse_ok = ctx.is_collapse_ok; 
-        if (pcei_new.is_collapse_ok)
         {
-            ctx.is_collapse_ok = true; 
-            ctx.edge_len = pcei.edge_len; 
+            VertWedgeListHeader vwlh_v1 = VertWedgeListHeader(w4, 1); 
+            CollapseCollisionContext ctx; 
+            ctx.eci = pcei; 
+            ctx.is_collapse_ok = true;
             ctx.wedge_id = pcei.id; 
             
-            VE_CIRCULATOR_FWD(v3, ctx, collapse_resolve_collision_I); 
+            VE_CIRCULATOR(vwlh_v1, collapse_resolve_collision_I, ctx, rotate_fwd); 
+            pcei_new.is_collapse_ok = ctx.is_collapse_ok; 
+        }
+        
+        if (pcei_new.is_collapse_ok)
+        {
+            VertWedgeListHeader vwlh_v3 = VertWedgeListHeader(w4, 3); 
+            CollapseCollisionContext ctx; 
+            ctx.eci = pcei; 
+            ctx.is_collapse_ok = true; 
+            ctx.wedge_id = pcei.id; 
             
+            VE_CIRCULATOR(vwlh_v3, collapse_resolve_collision_I, ctx, rotate_fwd); 
             pcei_new.is_collapse_ok = ctx.is_collapse_ok; 
         }
     }
 
-    if (valid_thred && pcei.is_collapse_ok && !pcei_new.is_collapse_ok)
+    if (valid_thread && pcei.is_collapse_ok && !pcei_new.is_collapse_ok)
     { /* Update info when the collapse gets canceled */
         store_per_collapse_edge_info(collapse_edge_id, pcei_new); 
         
@@ -484,13 +543,13 @@ void main()
             load_per_vert_collapse_wedge_id(v1), 
             load_per_vert_collapse_wedge_id(v2), 
             load_per_vert_collapse_wedge_id(v3)
-        )
+        ); 
         for (uint ivert = 0; ivert < 4; ++ivert)
         {
             uint wedge_collapsed = collapse_links[ivert]; 
             if (wedge_collapsed != NULL_EDGE)
             {
-                EdgeCollapseInfo peci_adj = load_per_edge_collapse_info(wedge_collapsed, pcs_collapse_iter_); 
+                EdgeCollapseInfo peci_adj = load_per_edge_collapse_info(wedge_collapsed); 
                 if (collapse_score_larger(peci_adj, wedge_collapsed, pcei, pcei.id))
                 {
                     pcei_new.is_collapse_ok = false; 
@@ -516,16 +575,104 @@ void main()
 #if defined(_KERNEL_MULTICOMPILE__EDGE_COLLAPSE_EXECUTE)
     if (!valid_thread)
         return;
-    if (valid_thread && !psei_curr.is_collapse_ok)
+    if (valid_thread && !pcei.is_collapse_ok)
     {
-        EdgeFlags ef = load_edge_flags(psei_curr.id); 
+        EdgeFlags ef = load_edge_flags(pcei.id); 
         ef.del_by_collapse = false; /* cancel the collapse and quite */
-        store_edge_flags(psei_curr.id, ef); 
+        store_edge_flags(pcei.id, ef); 
         return; 
     }
 
     uint num_existing_edges = pcs_edge_count_ + ssbo_dyn_mesh_counters_in_.num_edges; 
     uint num_existing_verts = pcs_vert_count_ + ssbo_dyn_mesh_counters_in_.num_verts; 
+
+    /* Parallel Edge Collapse * 
+    * (Following graph are only to clearly show how topology changes, actual position of vertices are not accurate)
+    *                                  
+    *             v0 -----E31---- q3         v0 -----E31---- q3                    
+    *            /  \  <-------  /             \  <-------  /                       
+    *           /    \          0               \          0                        
+    *          W      3        3                 W  W     3                         
+    *         0   f1   W      E                   0<=3   E                          
+    *        /          \    /                     \    /                           
+    *       /  ------->  \  /                       \  /                            
+    *     v1 ---- W4 ---- v3      ==collapse=>       v1 <= v3                         
+    *       \  <-------  /  \                       /  \                            
+    *        \          /    \                     /    \                           
+    *         W   f0   2      1                   W  W   1                          
+    *          1      W        2                 1<=2     2                         
+    *           \    /          E               /          E                        
+    *            \  /  ------->  \             /  ------->  \                       
+    *             v2 ----E20----- q2         v2 ----E20----- q2                     
+    *    Changes: 
+    *    1. del v3, replace by v1; 
+    *    2. del W2, replace by w1;      
+    *    3. del W3, replace by w0; 
+    *    4. del E4; 
+    
+    *    Affected elems: 
+    *    by v3: e-v link for all edges in v3's 1-ring closure
+    *    by W2: v-e link for v2, e-e link for W1,E20,E21
+    *    by W3: v-e link for v0, e-e link for W0,E30,E31
+    *    by W4: v-e link for v1, e-e link for W0,W1         
+    * 
+    *    Implementation: 
+    *                                  
+    *    mark v3, w2, w3, w4 as deleted    */
+    update_vert_flags__del_by_collapse(v3); 
+    update_edge_flags__del_by_collapse(w2); 
+    update_edge_flags__del_by_collapse(w3); 
+    update_edge_flags__del_by_collapse(w4); 
+    /*                                  
+    *    for all edges in v3's 1-ring closure:
+    *      change e-v link from v3 to v1
+    */
+    bool rot_fwd = true; 
+    VertWedgeListHeader vwlh_v3 = VertWedgeListHeader(w4, 3); 
+    AdjWedgeInfo awi_null = AdjWedgeInfo(NULL_EDGE, 0); 
+    CollapseAdjustEVLinkContext ctx = CollapseAdjustEVLinkContext(
+        v1, pcei.id, w2, w3, 
+        awi_null, awi_null, awi_null, awi_null
+    ); 
+    VE_CIRCULATOR(vwlh_v3, collapse_adjust_ev_links_to_v1, ctx, rot_fwd)
+    /*                                  
+    *    if v-e[v2]==w2: 
+    *      v-e[v2]=w1
+    *    if v-e[v0]==w3:
+    *      v-e[v0]=w0
+    *    if v-e[v1]==w4:
+    *      v-e[v0]=w0 // todo: border not handled 
+    */
+    try_update_ve_link(v2, w2, VertWedgeListHeader(w1, mark__cwedge_to_beg_vert(w[1].iface_adj))); 
+    try_update_ve_link(v0, w3, VertWedgeListHeader(w0, mark__cwedge_to_end_vert(w[0].iface_adj))); 
+    try_update_ve_link(v1, w4, VertWedgeListHeader(w0, mark__cwedge_to_beg_vert(w[0].iface_adj))); 
+    /*    
+    *    link  w1.next to e20: e-e[ w1*4 + mark__wedge_to_next_wedge(w1.iface_adj == 1 ? 0 : 1)] = e20
+    *    link e20.prev to  w1: e-e[e20*4 + mark__wedge_to_prev_wedge(e20.iface_adj == 1 ? 0 : 1)] = w1
+    *    link  w1.prev to e21: e-e[ w1*4 + mark__wedge_to_prev_wedge(w1.iface_adj == 1 ? 0 : 1)] = e21
+    *    link e21.next to  w1: e-e[e21*4 + mark__wedge_to_next_wedge(e21.iface_adj == 1 ? 0 : 1)] = w1
+    *    
+    *    link  w0.next to e30: e-e[ w0*4 + mark__wedge_to_next_wedge(w0.iface_adj == 1 ? 0 : 1)] = e30
+    *    link e30.prev to  w0: e-e[e30*4 + mark__wedge_to_prev_wedge(e30.iface_adj == 1 ? 0 : 1)] = w0
+    *    link  w0.prev to e31: e-e[ w0*4 + mark__wedge_to_prev_wedge(w0.iface_adj == 1 ? 0 : 1)] = e31
+    *    link e31.next to  w0: e-e[e31*4 + mark__wedge_to_next_wedge(e31.iface_adj == 1 ? 0 : 1)] = w0
+    */
+    uint e20 = ctx.e20.wedge_id; 
+    uint e21 = ctx.e21.wedge_id; 
+    uint e30 = ctx.e30.wedge_id; 
+    uint e31 = ctx.e31.wedge_id; 
+    ssbo_edge_to_edges_[ w1*4 + mark__wedge_to_next_wedge(w[1].iface_adj    == 1 ? 0 : 1, 4u)] = encode_adj_wedge_info(ctx.e20); 
+    ssbo_edge_to_edges_[e20*4 + mark__wedge_to_prev_wedge(ctx.e20.iface_adj == 1 ? 0 : 1, 4u)] = encode_adj_wedge_info(w[1]); 
+    ssbo_edge_to_edges_[ w1*4 + mark__wedge_to_prev_wedge(w[1].iface_adj    == 1 ? 0 : 1, 4u)] = encode_adj_wedge_info(ctx.e21); 
+    ssbo_edge_to_edges_[e21*4 + mark__wedge_to_next_wedge(ctx.e21.iface_adj == 1 ? 0 : 1, 4u)] = encode_adj_wedge_info(w[1]); 
+    ssbo_edge_to_edges_[ w0*4 + mark__wedge_to_next_wedge(w[0].iface_adj    == 1 ? 0 : 1, 4u)] = encode_adj_wedge_info(ctx.e30); 
+    ssbo_edge_to_edges_[e30*4 + mark__wedge_to_prev_wedge(ctx.e30.iface_adj == 1 ? 0 : 1, 4u)] = encode_adj_wedge_info(w[0]); 
+    ssbo_edge_to_edges_[ w0*4 + mark__wedge_to_prev_wedge(w[0].iface_adj    == 1 ? 0 : 1, 4u)] = encode_adj_wedge_info(ctx.e31); 
+    ssbo_edge_to_edges_[e31*4 + mark__wedge_to_next_wedge(ctx.e31.iface_adj == 1 ? 0 : 1, 4u)] = encode_adj_wedge_info(w[0]); 
+
+    /* Update v1 pos */
+    vec3 vpos = .5f * (ld_vpos(v1) + ld_vpos(v3)); 
+    st_vpos(v1, vpos); 
 
 #endif
 

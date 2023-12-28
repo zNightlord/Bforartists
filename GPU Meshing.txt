@@ -108,14 +108,11 @@ void store_edge_flags(uint wedge_id, EdgeFlags ef)
 }
 
 /* note: move this to "npr_strokegen_topo_lib.glsl" */
-void try_update_ve_link(uint vtx, uint edge_old, uint edge_new)
+void try_update_ve_link(uint vtx, uint edge_old, VertWedgeListHeader vwlh_new)
 {
     VertWedgeListHeader vwlh = decode_vert_wedge_list_header(ssbo_vert_to_edge_list_header_[vtx]); 
-    if (vwlh.wedge_id = edge_old)
-    {
-        vwlh.wedge_id = edge_new; 
-        ssbo_vert_to_edge_list_header_[vtx] = encode_vert_wedge_list_header(vwlh); 
-    }
+    if (vwlh.wedge_id == edge_old)
+        ssbo_vert_to_edge_list_header_[vtx] = encode_vert_wedge_list_header(vwlh_new); 
 }
 
 

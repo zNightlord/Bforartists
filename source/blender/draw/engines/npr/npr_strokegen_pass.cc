@@ -699,7 +699,14 @@ namespace blender::npr::strokegen
       auto &sub = pass_extract_geom.sub("bnpr_meshing_edge_collapse_resolve_conflict_2");
       sub.shader_set(
           shaders_.static_shader_get(eShaderType::MESH_OP_COLLAPSE_EDGE_RESOLVE_CONFLICT_2));
-      bind_src(sub, 2, meshing_params.remeshing_targ_edge_len);
+      bind_src(sub, 3, meshing_params.remeshing_targ_edge_len);
+      // sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_collapsed_edge_);
+      sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
+    }
+    {
+      auto &sub = pass_extract_geom.sub("bnpr_meshing_edge_collapse_execute");
+      sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_OP_COLLAPSE_EDGE_EXECUTE));
+      bind_src(sub, 4, meshing_params.remeshing_targ_edge_len);
       // sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_collapsed_edge_);
       sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
     }

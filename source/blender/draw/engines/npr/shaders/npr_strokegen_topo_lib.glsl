@@ -388,14 +388,11 @@ VertWedgeListHeader decode_vert_wedge_list_header(uint vwlh_enc)
     return vwlh; 
 }
 /* Adjust pointer to another edge */
-void try_update_ve_link(uint vtx, uint edge_old, uint edge_new)
+void try_update_ve_link(uint vtx, uint edge_old, VertWedgeListHeader vwlh_new)
 {
     VertWedgeListHeader vwlh = decode_vert_wedge_list_header(ssbo_vert_to_edge_list_header_[vtx]); 
     if (vwlh.wedge_id == edge_old)
-    {
-        vwlh.wedge_id = edge_new; 
-        ssbo_vert_to_edge_list_header_[vtx] = encode_vert_wedge_list_header(vwlh); 
-    }
+        ssbo_vert_to_edge_list_header_[vtx] = encode_vert_wedge_list_header(vwlh_new); 
 }
 
 #define NULL_FILTERED_VERT 0xffffffffu/* used in vert-to-filtered_vert buffer */
@@ -444,7 +441,7 @@ struct CirculatorIterData
  VertWedgeListHeader vwlh
  bool FUNC(CirculatorIterData, VISIT_DATA)
  CustomData VISIT_DATA
- bool ROTATE_FWD
+ bool ROTATE_FWD // true then wi always points at v at fi (see graph above), false when wi points from v at fi
 */
 #define VE_CIRCULATOR(vwlh, FUNC, VISIT_DATA, ROTATE_FWD) \
 {                                                                                                  \
@@ -769,6 +766,7 @@ VertFlags init_vert_flags__new_split_edge()
     
     return vf; 
 }
+
 uint encode_vert_flags(VertFlags vf)
 {
     uint vf_enc = 0u;
@@ -798,6 +796,12 @@ VertFlags load_vert_flags(uint vid)
 void store_vert_flags(uint vid, VertFlags vf)
 {
     ssbo_vert_flags_[vid] = encode_vert_flags(vf); 
+}
+void update_vert_flags__del_by_collapse(uint vid)
+{
+    VertFlags vf = load_vert_flags(vid);
+    vf.del_by_collapse = true;
+    store_vert_flags(vid, vf); 
 }
 #endif
 
@@ -840,6 +844,7 @@ EdgeFlags init_edge_flags__new_split_edge()
 
     return ef; 
 }
+
 uint encode_edge_flags(EdgeFlags ef)
 {
     uint ef_enc = 0u; 
@@ -881,6 +886,12 @@ EdgeFlags load_edge_flags(uint wedge_id)
 void store_edge_flags(uint wedge_id, EdgeFlags ef)
 {
     ssbo_edge_flags_[wedge_id] = encode_edge_flags(ef); 
+}
+void update_edge_flags__del_by_collapse(uint edge_id)
+{
+    EdgeFlags ef = load_edge_flags(edge_id); 
+    ef.del_by_collapse = true; 
+    store_edge_flags(edge_id, ef); 
 }
 #endif
 
