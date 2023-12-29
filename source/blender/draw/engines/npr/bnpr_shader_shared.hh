@@ -258,7 +258,7 @@ using namespace draw;
   BLI_STATIC_ASSERT_ALIGN(SSBOData_StrokeGenEdgeSplitCounters, 16)
 
   struct SSBOData_StrokeGenEdgeCollapseCounters {
-    uint num_collapse_edges_pass_1;
+    uint num_collapsed_edges_pass_1;
     uint dummy;
     uint dummy_0;
     uint dummy_1;

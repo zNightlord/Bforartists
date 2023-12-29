@@ -603,7 +603,7 @@ GPU_SHADER_CREATE_INFO(strokegen_remeshing_fill_dispatch_args_per_collapsed_edge
     .additional_info("strokegen_remeshing_fill_dispatch_args")
     .define("_KERNEL_MULTICOMPILE__FILL_DISPATCH_ARGS__REMESHING__PER_COLLAPSED_EDGE", "1")
     
-    .storage_buf(0, Qualifier::READ, "SSBOData_StrokeGenEdgeSplitCounters", "ssbo_edge_collapse_counters_[]")
+    .storage_buf(0, Qualifier::READ, "SSBOData_StrokeGenEdgeCollapseCounters", "ssbo_edge_collapse_counters_[]")
     .storage_buf(1, Qualifier::WRITE, "DispatchCommand", "ssbo_indirect_dispatch_args_per_collapsed_edge_")
     .push_constant(Type::INT, "pcs_edge_collapse_dispatch_group_size_")
     .push_constant(Type::INT, "pcs_collapse_iter_"); 
@@ -713,7 +713,7 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_edge_collapse)
     .storage_buf(9, Qualifier::READ_WRITE, "uint", "ssbo_per_edge_collapse_info_in_[]")
     .storage_buf(10, Qualifier::READ_WRITE, "uint", "ssbo_per_edge_collapse_info_out_[]")
     .storage_buf(11, Qualifier::READ_WRITE, "uint", "ssbo_per_collapse_edge_info_[]")
-    .storage_buf(12, Qualifier::READ_WRITE, "uint", "ssbo_per_vert_collapse_wedge_id_[]")
+    .storage_buf(12, Qualifier::READ_WRITE, "uint", "ssbo_per_vert_collapse_wedge_id_[]") 
     .push_constant(Type::INT, "pcs_collapse_iter_")
     .push_constant(Type::FLOAT, "pcs_remesh_edge_len_")
     .push_constant(Type::INT, "pcs_edge_count_")
@@ -732,7 +732,7 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_edge_collapse_compact)
     .do_static_compilation(true)
     .additional_info("bnpr_meshing_edge_collapse")
     .define("_KERNEL_MULTICOMPILE__EDGE_COLLAPSE_COMPACT", "1")
-    .define("GLOBAL_COUNTER", "ssbo_edge_collapse_counters_[pcs_collapse_iter_].num_collapse_edges_pass_1")
+    .define("GLOBAL_COUNTER", "ssbo_edge_collapse_counters_[pcs_collapse_iter_].num_collapsed_edges_pass_1")
     .define("CP_TAG", "collapse_select_short_edges");
 
 GPU_SHADER_CREATE_INFO(bnpr_meshing_edge_collapse_resolve_conflict_0)

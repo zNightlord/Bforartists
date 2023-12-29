@@ -648,6 +648,8 @@ namespace blender::npr::strokegen
       sub.bind_ssbo(8, buffers_.ssbo_edge_flags_);
       sub.bind_ssbo(9, buffers_.reused_ssbo_per_edge_collapse_info_in_(pingpong_id));
       sub.bind_ssbo(10, buffers_.reused_ssbo_per_edge_collapse_info_out_(pingpong_id));
+      sub.bind_ssbo(11, buffers_.reused_ssbo_per_collapse_edge_info_());
+      sub.bind_ssbo(12, buffers_.reused_ssbo_per_vert_collapse_wedge_id_()); 
       sub.push_constant("pcs_collapse_iter_", iter_collapse);
       sub.push_constant("pcs_remesh_edge_len_", remesh_edge_len);
       sub.push_constant("pcs_edge_count_", num_edges);
@@ -659,40 +661,40 @@ namespace blender::npr::strokegen
       auto &sub = pass_extract_geom.sub("bnpr_meshing_edge_collapse_init");
       sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_OP_COLLAPSE_EDGE_INIT));
       bind_src(sub, 0, remesh_len_scaled);
-      // sub.dispatch(int3(1, 1, 1));
+      sub.dispatch(int3(1, 1, 1));
       sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
     }
     {
       auto &sub = pass_extract_geom.sub("bnpr_meshing_edge_collapse_compact");
       sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_OP_COLLAPSE_EDGE_COMPACT));
       bind_src(sub, 0, remesh_len_scaled);
-      // sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_edges_);
+      sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_edges_);
       sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
     }
     {
       auto &sub = pass_extract_geom.sub("strokegen_remeshing_fill_dispatch_args_per_collapsed_edge");
-      sub.shader_set(shaders_.static_shader_get(FILL_DISPATCH_ARGS_SPLIT_EDGES));
+      sub.shader_set(shaders_.static_shader_get(FILL_DISPATCH_ARGS_COLLAPSE_EDGES));
       sub.bind_ssbo(0, buffers_.ssbo_edge_collapse_counters_);
       sub.bind_ssbo(1, buffers_.ssbo_indirect_dispatch_args_per_collapsed_edge_);
       sub.push_constant("pcs_edge_collapse_dispatch_group_size_",
                         (int)(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT));
       sub.push_constant("pcs_collapse_iter_", iter_collapse);
 
-      // sub.dispatch(int3(1, 1, 1));
+      sub.dispatch(int3(1, 1, 1));
       sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
     }
     {
       auto &sub = pass_extract_geom.sub("bnpr_meshing_edge_collapse_resolve_conflict_0");
       sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_OP_COLLAPSE_EDGE_RESOLVE_CONFLICT_0));
       bind_src(sub, 1, meshing_params.remeshing_targ_edge_len);
-      // sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_collapsed_edge_);
+      sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_collapsed_edge_);
       sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
     }
     {
       auto &sub = pass_extract_geom.sub("bnpr_meshing_edge_collapse_resolve_conflict_1");
       sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_OP_COLLAPSE_EDGE_RESOLVE_CONFLICT_1));
       bind_src(sub, 2, meshing_params.remeshing_targ_edge_len);
-      // sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_collapsed_edge_);
+      sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_collapsed_edge_);
       sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
     }
     {
@@ -700,14 +702,14 @@ namespace blender::npr::strokegen
       sub.shader_set(
           shaders_.static_shader_get(eShaderType::MESH_OP_COLLAPSE_EDGE_RESOLVE_CONFLICT_2));
       bind_src(sub, 3, meshing_params.remeshing_targ_edge_len);
-      // sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_collapsed_edge_);
+      sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_collapsed_edge_);
       sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
     }
     {
       auto &sub = pass_extract_geom.sub("bnpr_meshing_edge_collapse_execute");
       sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_OP_COLLAPSE_EDGE_EXECUTE));
       bind_src(sub, 4, meshing_params.remeshing_targ_edge_len);
-      // sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_collapsed_edge_);
+      sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_collapsed_edge_);
       sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
     }
   }

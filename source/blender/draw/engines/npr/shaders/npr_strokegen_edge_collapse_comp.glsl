@@ -13,7 +13,7 @@ int pcs_collapse_iter_
 * SSBO_StrokeGenDynamicMeshCounters     ssbo_dyn_mesh_counters_out_
 
 #ifdef _KERNEL_MULTICOMPILE__EDGE_COLLAPSE_COMPACT
-.define("GLOBAL_COUNTER", "ssbo_edge_collapse_counters_[pcs_collapse_iter_].num_collapse_edges_pass_1")
+.define("GLOBAL_COUNTER", "ssbo_edge_collapse_counters_[pcs_collapse_iter_].num_collapsed_edges_pass_1")
 .define("CP_TAG", "collapse_inital_selection")
 #endif
 
@@ -124,7 +124,7 @@ void main()
     uint vid = gl_GlobalInvocationID.x; 
     if (pcs_collapse_iter_ == 0 && gl_GlobalInvocationID.x == 0u)
     { 
-        ssbo_edge_collapse_counters_[0].num_collapse_edges_pass_1 = 0u;
+        ssbo_edge_collapse_counters_[0].num_collapsed_edges_pass_1 = 0u;
     }
 }
 #endif
@@ -186,6 +186,15 @@ void main()
         peci.edge_len = edge_len;
         peci.id = is_collapse_ok ? collapse_edge_id : NULL_EDGE;
         store_per_edge_collapse_info(wedge_id, peci); 
+
+        // debug only ---
+        // if (valid_thread && peci.is_collapse_ok)
+        // { 
+        //     EdgeFlags ef = load_edge_flags(wedge_id); 
+        //     ef.del_by_collapse = true; 
+        //     store_edge_flags(wedge_id, ef); 
+        // }
+        // --------------
     }
 }
 #endif
@@ -328,7 +337,7 @@ void main()
         inout CollapseCollisionContext ctx
     ){
         EdgeCollapseInfo peci = load_per_edge_collapse_info(iter.awi.wedge_id); 
-        if (peci.is_collapse_ok && ctx.is_collapse_ok)
+        if (peci.is_collapse_ok && ctx.is_collapse_ok && ctx.wedge_id != iter.awi.wedge_id)
         { /* found a better collapse alternative in 1-ring */
             if (collapse_score_larger(peci, iter.awi.wedge_id, ctx.eci, ctx.wedge_id))
                 ctx.is_collapse_ok = false; 
@@ -394,7 +403,7 @@ void main()
     const uint groupId = gl_LocalInvocationID.x; 
 
     uint collapse_edge_id = gl_GlobalInvocationID.x; 
-    uint num_selected_edges = ssbo_edge_collapse_counters_[pcs_collapse_iter_].num_collapse_edges_pass_1;
+    uint num_selected_edges = ssbo_edge_collapse_counters_[pcs_collapse_iter_].num_collapsed_edges_pass_1;
     bool valid_thread = collapse_edge_id < num_selected_edges; 
 
     EdgeCollapseInfo pcei = load_per_collapse_edge_info(collapse_edge_id);
@@ -435,8 +444,8 @@ void main()
         vec3 collapse_pos = .5f * (vpos[1] + vpos[3]); 
         bool rotate_fwd = true; 
         
-        {        
-            VertWedgeListHeader vwlh_v1 = VertWedgeListHeader(w4, 1);
+        { /* check around the vert */
+            VertWedgeListHeader vwlh_v1 = VertWedgeListHeader(w4, 1); /* rotate around v1 */
             CollapseValidateContext ctx_v1 = init_collapse_validate_context(
                 true, vpos, collapse_pos, 
                 uvec4(v0, v1, v2, v3), uvec4(w0, w1, w2, w3) 
@@ -447,8 +456,8 @@ void main()
         }        
 
         if (pcei.is_collapse_ok)
-        { /* check around the other vert */
-            VertWedgeListHeader vwlh_v3 = VertWedgeListHeader(w4, 3); 
+        { 
+            VertWedgeListHeader vwlh_v3 = VertWedgeListHeader(w4, 3); /* rotate around v3 */
             CollapseValidateContext ctx_v3 = init_collapse_validate_context(
                 false, vpos, collapse_pos, 
                 uvec4(v0, v1, v2, v3), uvec4(w0, w1, w2, w3) 
@@ -466,8 +475,8 @@ void main()
         { /* update per edge data */
             EdgeCollapseInfo peci; 
             peci.is_collapse_ok = false; 
-            peci.edge_len = .0f; 
-            peci.id = collapse_edge_id; /* keep link */
+            peci.edge_len = pcei.edge_len; 
+            peci.id = collapse_edge_id; 
             store_per_edge_collapse_info(pcei.id, peci); 
         }
 
@@ -520,7 +529,7 @@ void main()
         
         EdgeCollapseInfo peci; 
         peci.is_collapse_ok = false; 
-        peci.edge_len = .0f; 
+        peci.edge_len = pcei.edge_len; 
         peci.id = collapse_edge_id; 
         store_per_edge_collapse_info(pcei.id, peci); 
     }
@@ -558,15 +567,10 @@ void main()
             }
         }
 
-        // Not needed
-        // if (valid_thread && pcei.is_collapse_ok && !pcei_new.is_collapse_ok)
-        // {
-        //     // EdgeCollapseInfo peci; 
-        //     // peci.is_collapse_ok = false; 
-        //     // peci.score = .0f; 
-        //     // peci.id = collapse_edge_id; 
-        //     // store_per_edge_collapse_info(pcei.id, peci, pcs_collapse_iter_); 
-        // }
+        if (valid_thread && pcei.is_collapse_ok && !pcei_new.is_collapse_ok)
+        {
+            store_per_collapse_edge_info(collapse_edge_id, pcei_new); 
+        }
     }
 #endif
 
@@ -575,16 +579,13 @@ void main()
 #if defined(_KERNEL_MULTICOMPILE__EDGE_COLLAPSE_EXECUTE)
     if (!valid_thread)
         return;
-    if (valid_thread && !pcei.is_collapse_ok)
-    {
-        EdgeFlags ef = load_edge_flags(pcei.id); 
-        ef.del_by_collapse = false; /* cancel the collapse and quite */
-        store_edge_flags(pcei.id, ef); 
-        return; 
-    }
+    
+    if (gl_GlobalInvocationID.x == 0u) 
+        /* prep local counters for next split iteration, have to do this before early exit */
+        ssbo_edge_collapse_counters_[pcs_collapse_iter_ + 1].num_collapsed_edges_pass_1 = 0u;
 
-    uint num_existing_edges = pcs_edge_count_ + ssbo_dyn_mesh_counters_in_.num_edges; 
-    uint num_existing_verts = pcs_vert_count_ + ssbo_dyn_mesh_counters_in_.num_verts; 
+    if (!pcei.is_collapse_ok)
+        return;
 
     /* Parallel Edge Collapse * 
     * (Following graph are only to clearly show how topology changes, actual position of vertices are not accurate)

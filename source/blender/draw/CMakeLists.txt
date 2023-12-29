@@ -548,7 +548,7 @@ set(GLSL_SRC
   engines/workbench/shaders/workbench_shadow_visibility_comp.glsl
   engines/workbench/shaders/workbench_shadow_vert_no_geom.glsl
   engines/workbench/shaders/workbench_transparent_accum_frag.glsl
-  engines/workbench/shaders/workbench_transparent_resolve_frag.glsl
+  engines/workbench/shaders/workbench_transparent_resolve_frag.glsl 
   engines/workbench/shaders/workbench_volume_frag.glsl
   engines/workbench/shaders/workbench_volume_vert.glsl
   engines/workbench/shaders/workbench_world_light_lib.glsl

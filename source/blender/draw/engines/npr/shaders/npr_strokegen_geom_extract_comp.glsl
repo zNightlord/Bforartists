@@ -214,7 +214,7 @@ void main()
 	if (pcs_dbg_wedge_flooding_ > 0)
 	{
 		WedgeFloodingPointer wfptr = decode_wedge_flooding_pointer(ssbo_wedge_flooding_pointers_out_[EdgeId]);
-		is_contour = ef.new_by_split; // wfptr.is_seed; 
+		is_contour = !ef.del_by_collapse; // ef.new_by_split; // wfptr.is_seed; 
 	}
 
 	bool rev_edge_dir = is_back_face(face_orient_012); 
