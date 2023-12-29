@@ -83,6 +83,12 @@ void store_per_edge_collapse_info(uint wedge_id, EdgeCollapseInfo peci)
     uvec2 peci_enc = encode_edge_collapse_info(peci); 
     Store2(ssbo_per_edge_collapse_info_out_, wedge_id, peci_enc); 
 }
+void store_per_edge_collapse_info_two_buffers(uint wedge_id, EdgeCollapseInfo peci)
+{
+    uvec2 peci_enc = encode_edge_collapse_info(peci); 
+    Store2(ssbo_per_edge_collapse_info_in_, wedge_id, peci_enc); 
+    Store2(ssbo_per_edge_collapse_info_out_, wedge_id, peci_enc); 
+}
 EdgeCollapseInfo load_per_edge_collapse_info(uint wedge_id)
 {
     uvec2 peci_enc;
@@ -111,9 +117,9 @@ bool collapse_score_larger(EdgeCollapseInfo eci_0, uint wedge_id_0, EdgeCollapse
 {
     if (!eci_0.is_collapse_ok) return false;
     if (!eci_1.is_collapse_ok) return true;
-    if (eci_0.edge_len == eci_0.edge_len)
+    if (eci_0.edge_len == eci_1.edge_len)
         return wedge_id_0 < wedge_id_1; 
-    return eci_0.edge_len < eci_0.edge_len; 
+    return eci_0.edge_len < eci_1.edge_len; 
 }
 
 
@@ -123,9 +129,7 @@ void main()
 { 
     uint vid = gl_GlobalInvocationID.x; 
     if (pcs_collapse_iter_ == 0 && gl_GlobalInvocationID.x == 0u)
-    { 
         ssbo_edge_collapse_counters_[0].num_collapsed_edges_pass_1 = 0u;
-    }
 }
 #endif
 
@@ -167,7 +171,7 @@ void main()
         && (!ef.border)
         && (!ef.del_by_collapse)
         && (!ef.del_by_split)
-        && valid_thread;; 
+        && valid_thread; 
 
     uint collapse_edge_id = compact_collapse_select_short_edges(is_collapse_ok, groupId);
     if (is_collapse_ok)
@@ -185,7 +189,7 @@ void main()
         peci.is_collapse_ok = is_collapse_ok;
         peci.edge_len = edge_len;
         peci.id = is_collapse_ok ? collapse_edge_id : NULL_EDGE;
-        store_per_edge_collapse_info(wedge_id, peci); 
+        store_per_edge_collapse_info_two_buffers(wedge_id, peci); 
 
         // debug only ---
         // if (valid_thread && peci.is_collapse_ok)
