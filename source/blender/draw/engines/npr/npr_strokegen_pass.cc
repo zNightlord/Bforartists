@@ -781,7 +781,8 @@ namespace blender::npr::strokegen
     );
     sub.bind_ssbo(8, reused_ssbo_wedge_flooding_pointers_out_);
     sub.bind_ssbo(9, buffers_.ssbo_edge_to_edges_);
-    sub.bind_ssbo(10, buffers_.ssbo_edge_to_vert_); 
+    sub.bind_ssbo(10, buffers_.ssbo_edge_to_vert_);
+    sub.bind_ssbo(11, buffers_.ssbo_vert_to_edge_list_header_); 
     // --------------
     sub.bind_ubo(0, buffers_.ubo_view_matrices_cache_);
     sub.push_constant("pcs_ib_fmt_u16", ib_type == gpu::GPU_INDEX_U16 ? 1 : 0);

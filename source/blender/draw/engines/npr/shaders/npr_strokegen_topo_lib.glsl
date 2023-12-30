@@ -1,11 +1,13 @@
 #ifndef BNPR_MESHING_TOPO__INCLUDED
 #define BNPR_MESHING_TOPO__INCLUDED
 
+
 /* Code block dependencies */
 #if defined(VE_CIRCULATOR_INCLUDE)
     #define WINGED_EDGE_TOPO_INCLUDE 1 
     #define VERT_WEDGE_LIST_TOPO_INCLUDE 1
 #endif
+
 
 
 #if !defined(DECODE_IBO_EXCLUDE) && defined(DECODE_IBO_INCLUDE) 
@@ -72,6 +74,11 @@ uint mark__border_iface_mainfold()
 { /* in line_adj triangle 012 has the valid vertex winding */
     return 1u; 
 }
+uvec2 mark__border_bwedges_mainfold()
+{
+    return uvec2(0, 3); 
+}
+
 
 /* Vertices: x4 vert ids per wing */
 /*    v2
@@ -407,6 +414,163 @@ void try_update_ve_link(uint vtx, uint edge_old, VertWedgeListHeader vwlh_new)
 
 
 
+/* Mesh Element Flags ------------------------------------------------------------------------- */
+#if defined(VERT_FLAGS_INCLUDED)
+struct VertFlags
+{
+    bool dupli; // duplicated vertex, should be ignored, TODO: consider removing in hashing pass
+    bool new_by_split; // new vertex created by edge split
+    bool del_by_collapse; // deleted vertex by edge collapse
+}; 
+VertFlags init_vert_flags(bool dupli)
+{
+    VertFlags vf; 
+    vf.dupli = dupli; 
+    vf.new_by_split = false; 
+    vf.del_by_collapse = false; 
+    
+    return vf; 
+}
+VertFlags init_vert_flags__new_split_edge()
+{
+    VertFlags vf; 
+    vf.dupli = false; 
+    vf.new_by_split = true; 
+    vf.del_by_collapse = false; 
+    
+    return vf; 
+}
+
+uint encode_vert_flags(VertFlags vf)
+{
+    uint vf_enc = 0u;
+    vf_enc = uint(vf.dupli); 
+    vf_enc <<= 1u; 
+    vf_enc |= uint(vf.new_by_split); 
+    vf_enc <<= 1u; 
+    vf_enc |= uint(vf.del_by_collapse); 
+
+    return vf_enc; 
+}
+VertFlags decode_vert_flags(uint vf_enc)
+{
+    VertFlags vf; 
+    vf.del_by_collapse = (1u == (vf_enc & 1u)); 
+    vf_enc >>= 1u; 
+    vf.new_by_split = (1u == (vf_enc & 1u)); 
+    vf_enc >>= 1u; 
+    vf.dupli = (1u == (vf_enc & 1u)); 
+
+    return vf; 
+}
+VertFlags load_vert_flags(uint vid)
+{
+    return decode_vert_flags(ssbo_vert_flags_[vid]); 
+}
+void store_vert_flags(uint vid, VertFlags vf)
+{
+    ssbo_vert_flags_[vid] = encode_vert_flags(vf); 
+}
+void update_vert_flags__del_by_collapse(uint vid)
+{
+    VertFlags vf = load_vert_flags(vid);
+    vf.del_by_collapse = true;
+    store_vert_flags(vid, vf); 
+}
+#endif
+
+#if defined(EDGE_FLAGS_INCLUDED)
+struct EdgeFlags
+{
+    // Persistent Flags ----------------------------------
+    bool dupli; // duplicated edge, should be ignored
+    bool border; // border edge
+    bool new_by_split; // new edge created by edge split
+    bool del_by_split; // deleted edge by edge split
+    bool del_by_collapse; // deleted edge by edge collapse
+
+    // Temp Flags, can share bits across different passes -
+    bool temp_new_by_split_this_round; // new edge created by edge split in current remeshing round
+}; 
+EdgeFlags init_edge_flags(bool dupli, bool border)
+{
+    EdgeFlags ef; 
+    ef.dupli = dupli; 
+    ef.border = border; 
+    ef.new_by_split = false; 
+    ef.del_by_split = false;
+    ef.del_by_collapse = false; 
+
+    ef.temp_new_by_split_this_round = false; 
+
+    return ef; 
+}
+EdgeFlags init_edge_flags__new_split_edge()
+{
+    EdgeFlags ef; 
+    ef.dupli = false; 
+    ef.border = false; 
+    ef.new_by_split = true; 
+    ef.del_by_split = false; 
+    ef.del_by_collapse = false; 
+
+    ef.temp_new_by_split_this_round = true; 
+
+    return ef; 
+}
+
+uint encode_edge_flags(EdgeFlags ef)
+{
+    uint ef_enc = 0u; 
+    ef_enc |= uint(ef.dupli); // d 
+    ef_enc <<= 1u; 
+    ef_enc |= uint(ef.border); // d_b
+    ef_enc <<= 1u; 
+    ef_enc |= uint(ef.new_by_split); // d_b_ns 
+    ef_enc <<= 1u; 
+    ef_enc |= uint(ef.del_by_split); // d_b_ns_ds
+    ef_enc <<= 1u; 
+    ef_enc |= uint(ef.del_by_collapse); // d_b_ns_ds_dc
+    ef_enc <<= 1u; 
+    ef_enc |= uint(ef.temp_new_by_split_this_round); // d_b_ns_ds_dc_tnbsr
+
+    return ef_enc; 
+}
+EdgeFlags decode_edge_flags(uint ef_enc)
+{
+    EdgeFlags ef; // d_b_ns_ds_dc_tnbsr
+    ef.temp_new_by_split_this_round = (1u == (ef_enc & 1u));
+    ef_enc >>= 1u; // d_b_ns_ds_dc
+    ef.del_by_collapse = (1u == (ef_enc & 1u)); 
+    ef_enc >>= 1u; // d_b_ns_ds
+    ef.del_by_split = (1u == (ef_enc & 1u)); 
+    ef_enc >>= 1u; // d_b_ns
+    ef.new_by_split = (1u == (ef_enc & 1u)); 
+    ef_enc >>= 1u; // d_b
+    ef.border = (1u == (ef_enc & 1u));
+    ef_enc >>= 1u; // d 
+    ef.dupli = (1u == (ef_enc & 1u)); 
+
+    return ef; 
+}
+EdgeFlags load_edge_flags(uint wedge_id)
+{
+    return decode_edge_flags(ssbo_edge_flags_[wedge_id]); 
+}
+void store_edge_flags(uint wedge_id, EdgeFlags ef)
+{
+    ssbo_edge_flags_[wedge_id] = encode_edge_flags(ef); 
+}
+void update_edge_flags__del_by_collapse(uint edge_id)
+{
+    EdgeFlags ef = load_edge_flags(edge_id); 
+    ef.del_by_collapse = true; 
+    store_edge_flags(edge_id, ef); 
+}
+#endif
+
+
+
 #if defined(VE_CIRCULATOR_INCLUDE)
 
 /*      
@@ -489,9 +653,9 @@ struct CirculatorIterData
 #if defined(TOPO_DIAGONOSIS_INCLUDE)
 
 /* Diagnose mesh topology */
-void validate_wedge_topo(uint wedge_id, out bool valid_ee, out bool valid_ev)
+void validate_wedge_topo(uint wedge_id, out bool valid_ee, out bool valid_ev, out bool valid_ve)
 {
-    valid_ee = valid_ev = true; 
+    valid_ee = valid_ev = valid_ve = true; 
 
     AdjWedgeInfo w[4] = {
         decode_adj_wedge_info(ssbo_edge_to_edges_[wedge_id*4u + 0u]),
@@ -506,6 +670,9 @@ void validate_wedge_topo(uint wedge_id, out bool valid_ee, out bool valid_ev)
         ssbo_edge_to_vert_[wedge_id*4u + 2u],
         ssbo_edge_to_vert_[wedge_id*4u + 3u]
     ); 
+    
+    bool border_edge = false; // wing_verts_is_border_edge(v); 
+    uvec2 iwedges_border = mark__border_bwedges_mainfold(); 
 
 #define w0 ((w[0].wedge_id))
 #define w1 ((w[1].wedge_id))
@@ -517,6 +684,9 @@ void validate_wedge_topo(uint wedge_id, out bool valid_ee, out bool valid_ev)
 
     for (uint i = 0u; i < 4u; ++i)
     {
+        if (border_edge && all(i.xx != iwedges_border.xy))
+            continue; 
+
         uint wi = w[i].wedge_id; 
         uint iface_overlap_at_wi = w[i].iface_adj == 1u ? 0u : 1u; 
 
@@ -546,6 +716,23 @@ void validate_wedge_topo(uint wedge_id, out bool valid_ee, out bool valid_ev)
         if (v_oppo != v_oppo_at_wi)
             valid_ev = false;
     }
+
+    /* check ve linkage */
+    uvec2 iverts = mark__cwedge_to_verts(0u);
+    for (uint iivert = 0u; iivert < 2u; ++iivert)
+    {
+        uint ivert = iverts[iivert]; 
+        uint vid = v[ivert]; 
+
+        VertWedgeListHeader vwlh = decode_vert_wedge_list_header(ssbo_vert_to_edge_list_header_[vid]); 
+        EdgeFlags ef = load_edge_flags(vwlh.wedge_id); 
+        if (ef.del_by_collapse || ef.del_by_split)
+            valid_ve = false; 
+
+        uint vid_from_ev_adj = ssbo_edge_to_vert_[vwlh.wedge_id*4u + vwlh.ivert];
+        if (vid_from_ev_adj != vid)
+            valid_ve = false;
+    } 
 
 #undef w0
 #undef w1
@@ -817,165 +1004,6 @@ float compute_vert_quadric_weight(vec3 p_v, Quadric q_v, vec3 p_x, Quadric q_x, 
 }
 
 #endif
-
-
-
-
-/* Mesh Element Flags ------------------------------------------------------------------------- */
-#if defined(VERT_FLAGS_INCLUDED)
-struct VertFlags
-{
-    bool dupli; // duplicated vertex, should be ignored, TODO: consider removing in hashing pass
-    bool new_by_split; // new vertex created by edge split
-    bool del_by_collapse; // deleted vertex by edge collapse
-}; 
-VertFlags init_vert_flags(bool dupli)
-{
-    VertFlags vf; 
-    vf.dupli = dupli; 
-    vf.new_by_split = false; 
-    vf.del_by_collapse = false; 
-    
-    return vf; 
-}
-VertFlags init_vert_flags__new_split_edge()
-{
-    VertFlags vf; 
-    vf.dupli = false; 
-    vf.new_by_split = true; 
-    vf.del_by_collapse = false; 
-    
-    return vf; 
-}
-
-uint encode_vert_flags(VertFlags vf)
-{
-    uint vf_enc = 0u;
-    vf_enc = uint(vf.dupli); 
-    vf_enc <<= 1u; 
-    vf_enc |= uint(vf.new_by_split); 
-    vf_enc <<= 1u; 
-    vf_enc |= uint(vf.del_by_collapse); 
-
-    return vf_enc; 
-}
-VertFlags decode_vert_flags(uint vf_enc)
-{
-    VertFlags vf; 
-    vf.del_by_collapse = (1u == (vf_enc & 1u)); 
-    vf_enc >>= 1u; 
-    vf.new_by_split = (1u == (vf_enc & 1u)); 
-    vf_enc >>= 1u; 
-    vf.dupli = (1u == (vf_enc & 1u)); 
-
-    return vf; 
-}
-VertFlags load_vert_flags(uint vid)
-{
-    return decode_vert_flags(ssbo_vert_flags_[vid]); 
-}
-void store_vert_flags(uint vid, VertFlags vf)
-{
-    ssbo_vert_flags_[vid] = encode_vert_flags(vf); 
-}
-void update_vert_flags__del_by_collapse(uint vid)
-{
-    VertFlags vf = load_vert_flags(vid);
-    vf.del_by_collapse = true;
-    store_vert_flags(vid, vf); 
-}
-#endif
-
-#if defined(EDGE_FLAGS_INCLUDED)
-struct EdgeFlags
-{
-    // Persistent Flags ----------------------------------
-    bool dupli; // duplicated edge, should be ignored
-    bool border; // border edge
-    bool new_by_split; // new edge created by edge split
-    bool del_by_split; // deleted edge by edge split
-    bool del_by_collapse; // deleted edge by edge collapse
-
-    // Temp Flags, can share bits across different passes -
-    bool temp_new_by_split_this_round; // new edge created by edge split in current remeshing round
-}; 
-EdgeFlags init_edge_flags(bool dupli, bool border)
-{
-    EdgeFlags ef; 
-    ef.dupli = dupli; 
-    ef.border = border; 
-    ef.new_by_split = false; 
-    ef.del_by_split = false;
-    ef.del_by_collapse = false; 
-
-    ef.temp_new_by_split_this_round = false; 
-
-    return ef; 
-}
-EdgeFlags init_edge_flags__new_split_edge()
-{
-    EdgeFlags ef; 
-    ef.dupli = false; 
-    ef.border = false; 
-    ef.new_by_split = true; 
-    ef.del_by_split = false; 
-    ef.del_by_collapse = false; 
-
-    ef.temp_new_by_split_this_round = true; 
-
-    return ef; 
-}
-
-uint encode_edge_flags(EdgeFlags ef)
-{
-    uint ef_enc = 0u; 
-    ef_enc |= uint(ef.dupli); // d 
-    ef_enc <<= 1u; 
-    ef_enc |= uint(ef.border); // d_b
-    ef_enc <<= 1u; 
-    ef_enc |= uint(ef.new_by_split); // d_b_ns 
-    ef_enc <<= 1u; 
-    ef_enc |= uint(ef.del_by_split); // d_b_ns_ds
-    ef_enc <<= 1u; 
-    ef_enc |= uint(ef.del_by_collapse); // d_b_ns_ds_dc
-    ef_enc <<= 1u; 
-    ef_enc |= uint(ef.temp_new_by_split_this_round); // d_b_ns_ds_dc_tnbsr
-
-    return ef_enc; 
-}
-EdgeFlags decode_edge_flags(uint ef_enc)
-{
-    EdgeFlags ef; // d_b_ns_ds_dc_tnbsr
-    ef.temp_new_by_split_this_round = (1u == (ef_enc & 1u));
-    ef_enc >>= 1u; // d_b_ns_ds_dc
-    ef.del_by_collapse = (1u == (ef_enc & 1u)); 
-    ef_enc >>= 1u; // d_b_ns_ds
-    ef.del_by_split = (1u == (ef_enc & 1u)); 
-    ef_enc >>= 1u; // d_b_ns
-    ef.new_by_split = (1u == (ef_enc & 1u)); 
-    ef_enc >>= 1u; // d_b
-    ef.border = (1u == (ef_enc & 1u));
-    ef_enc >>= 1u; // d 
-    ef.dupli = (1u == (ef_enc & 1u)); 
-
-    return ef; 
-}
-EdgeFlags load_edge_flags(uint wedge_id)
-{
-    return decode_edge_flags(ssbo_edge_flags_[wedge_id]); 
-}
-void store_edge_flags(uint wedge_id, EdgeFlags ef)
-{
-    ssbo_edge_flags_[wedge_id] = encode_edge_flags(ef); 
-}
-void update_edge_flags__del_by_collapse(uint edge_id)
-{
-    EdgeFlags ef = load_edge_flags(edge_id); 
-    ef.del_by_collapse = true; 
-    store_edge_flags(edge_id, ef); 
-}
-#endif
-
 
 
 

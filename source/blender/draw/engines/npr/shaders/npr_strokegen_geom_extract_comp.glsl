@@ -213,10 +213,18 @@ void main()
 	/* debug view */
 	if (pcs_dbg_wedge_flooding_ > 0)
 	{
+		// Check wfptr.is_seed; 
 		WedgeFloodingPointer wfptr = decode_wedge_flooding_pointer(ssbo_wedge_flooding_pointers_out_[EdgeId]);
-		bool valid_ee, valid_ev;
-		validate_wedge_topo(EdgeId, /*out*/ valid_ee, valid_ev);  
-		is_contour = (!ef.del_by_collapse) && (!valid_ee); // !valid_ee; // !ef.del_by_collapse; // ef.new_by_split; // wfptr.is_seed; 
+		
+		// Check topo consistency
+		bool valid_ee, valid_ev, valid_ve;
+		validate_wedge_topo(EdgeId, /*out*/ valid_ee, valid_ev, valid_ve);  
+		
+		is_contour = (!ef.del_by_collapse) && (!ef.dupli) && (
+			(!valid_ev)
+			/*  || (!valid_ev) */ 
+			/* || (!valid_ve) */
+		); 
 	}
 
 	bool rev_edge_dir = is_back_face(face_orient_012); 
