@@ -148,7 +148,8 @@ public:
     GPUMeshQuadricFilter alternate_filter_1;
     bool visualize_filtered_geom;
 
-    float remeshing_targ_edge_len; 
+    float remeshing_targ_edge_len;
+    int remeshing_collapse_iters; 
   } meshing_params;
   void append_subpass_fill_mesh_filtering_indirect_dispatch_args_();
   void append_subpass_meshing_wedge_flooding(int num_edges, int num_verts);

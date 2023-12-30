@@ -364,6 +364,9 @@ void main()
         AdjWedgeInfo e31; 
         AdjWedgeInfo e20; 
         AdjWedgeInfo e21; 
+
+        uint q2; 
+        uint q3; 
     }; 
 
     bool collapse_adjust_ev_links_to_v1(
@@ -373,27 +376,39 @@ void main()
         uint ivert_wo = mark__cwedge_rotate_back(iter.awi.iface_adj); 
         AdjWedgeInfo wo = decode_adj_wedge_info(ssbo_edge_to_edges_[iter.awi.wedge_id*4u + ivert_wo]); 
 
-        if (all(iter.awi.wedge_id.xxx != uvec3(ctx.cwedge, ctx.w2, ctx.w3)))
+        if (all(bvec2(iter.awi.wedge_id.xx != uvec2(ctx.cwedge, ctx.w2))))
         { /* adjust v-e link for wi and wo */
+            uint ivert_v3; 
             /* wi */
-            uint ivert_v3 = mark__cwedge_to_end_vert(iter.awi.iface_adj); 
-            ssbo_edge_to_vert_[iter.awi.wedge_id*4u + ivert_v3] = ctx.v1; /* no race cond' since these edges already locked */
+            if (iter.awi.wedge_id != ctx.w3)
+            { /* dont do this when wi==w3*/
+                ivert_v3 = mark__cwedge_to_end_vert(iter.awi.iface_adj); 
+                ssbo_edge_to_vert_[iter.awi.wedge_id*4u + ivert_v3] = ctx.v1; /* no race cond' since these edges already locked */
+            } 
             /* wo */
             ivert_v3 = mark__center_wedge_to_oppo_vert__at_face(wo.iface_adj == 1 ? 0 : 1); 
             ssbo_edge_to_vert_[wo.wedge_id*4u + ivert_v3] = ctx.v1; 
         }
         
+        /* Cache pointers */
         if (iter.awi.wedge_id == ctx.w3)
         {
             ctx.e31 = wo; 
             ctx.e30 = iter.awi_next; // wn
+
+            uint ivert_q3 = mark__cwedge_to_beg_vert(ctx.e30.iface_adj);
+            ctx.q3 = ssbo_edge_to_vert_[ctx.e30.wedge_id*4u + ivert_q3];
         }
 
         if (iter.awi_next.wedge_id == ctx.w2)
         {
             ctx.e20 = wo; 
             ctx.e21 = iter.awi; // wi
+
+            uint ivert_q2 = mark__cwedge_to_beg_vert(ctx.e21.iface_adj);
+            ctx.q2 = ssbo_edge_to_vert_[ctx.e21.wedge_id*4u + ivert_q2]; 
         }
+
 
         return true; 
     }
@@ -616,9 +631,9 @@ void main()
     *    4. del E4; 
     
     *    Affected elems: 
-    *    by v3: e-v link for all edges in v3's 1-ring closure
-    *    by W2: v-e link for v2, e-e link for W1,E20,E21
-    *    by W3: v-e link for v0, e-e link for W0,E30,E31
+    *    by v3: e-v link for all edges in v3's 1-ring closure, (special)e-v link for W1-q2, e-v link for W0-q3
+    *    by W2: v-e link for v2, e-e link for W1,E20,E21, 
+    *    by W3: v-e link for v0, e-e link for W0,E30,E31, 
     *    by W4: v-e link for v1, e-e link for W0,W1         
     * 
     *    Implementation: 
@@ -637,9 +652,12 @@ void main()
     AdjWedgeInfo awi_null = AdjWedgeInfo(NULL_EDGE, 0); 
     CollapseAdjustEVLinkContext ctx = CollapseAdjustEVLinkContext(
         v1, pcei.id, w2, w3, 
-        awi_null, awi_null, awi_null, awi_null
+        awi_null, awi_null, awi_null, awi_null, 0u, 0u
     ); 
     VE_CIRCULATOR(vwlh_v3, collapse_adjust_ev_links_to_v1, ctx, rot_fwd)
+    /* Specially, link q2 to w1, q3 to w0 */
+    ssbo_edge_to_vert_[w1*4u + mark__center_wedge_to_oppo_vert__at_face(w[1].iface_adj == 0u ? 1u : 0u)] = ctx.q2;
+    ssbo_edge_to_vert_[w0*4u + mark__center_wedge_to_oppo_vert__at_face(w[0].iface_adj == 0u ? 1u : 0u)] = ctx.q3;  
     /*                                  
     *    if v-e[v2]==w2: 
     *      v-e[v2]=w1
@@ -662,7 +680,14 @@ void main()
     *    link  w0.prev to e31: e-e[ w0*4 + mark__wedge_to_prev_wedge(w0.iface_adj == 1 ? 0 : 1)] = e31
     *    link e31.next to  w0: e-e[e31*4 + mark__wedge_to_next_wedge(e31.iface_adj == 1 ? 0 : 1)] = w0
     */
-    uint e20 = ctx.e20.wedge_id; 
+    
+    // debug only ---
+    ctx.e20 = decode_adj_wedge_info(ssbo_edge_to_edges_[w2*4u + mark__wedge_to_next_wedge(w[2].iface_adj, 4u)]); 
+    ctx.e21 = decode_adj_wedge_info(ssbo_edge_to_edges_[w2*4u + mark__wedge_to_prev_wedge(w[2].iface_adj, 4u)]); 
+    ctx.e30 = decode_adj_wedge_info(ssbo_edge_to_edges_[w3*4u + mark__wedge_to_next_wedge(w[3].iface_adj, 4u)]);
+    ctx.e31 = decode_adj_wedge_info(ssbo_edge_to_edges_[w3*4u + mark__wedge_to_prev_wedge(w[3].iface_adj, 4u)]);
+    // --------------
+    uint e20 = ctx.e20.wedge_id;
     uint e21 = ctx.e21.wedge_id; 
     uint e30 = ctx.e30.wedge_id; 
     uint e31 = ctx.e31.wedge_id; 

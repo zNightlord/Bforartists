@@ -155,6 +155,12 @@ uint mark__cwedge_to_end_vert(uint face)
 {
     return (mark__cwedge_to_beg_vert(face) == 1u) ? 3u : 1u; 
 }
+uvec2 mark__cwedge_to_verts(uint face)
+{
+    if (face == 1u) 
+        return uvec2(1u, 3u); 
+    return uvec2(3u, 1u); 
+}
 uint mark__he_to_prev_he(uint he)
 {
     return ((he + 2u) % 3u); /* 0->2, 1->0, 2->1 */
@@ -207,6 +213,7 @@ uvec3 mark__face_to_winded_wedges(uint face)
         res[he] = mark__he_to_wedge(face, he); 
     return res; 
 }
+
 
 /* 
  * Each wedge data also encodes 
@@ -473,8 +480,82 @@ struct CirculatorIterData
     );                                                                                                                     \
 }\
 
+#endif
+
+
+
+
+
+#if defined(TOPO_DIAGONOSIS_INCLUDE)
+
+/* Diagnose mesh topology */
+void validate_wedge_topo(uint wedge_id, out bool valid_ee, out bool valid_ev)
+{
+    valid_ee = valid_ev = true; 
+
+    AdjWedgeInfo w[4] = {
+        decode_adj_wedge_info(ssbo_edge_to_edges_[wedge_id*4u + 0u]),
+        decode_adj_wedge_info(ssbo_edge_to_edges_[wedge_id*4u + 1u]),
+        decode_adj_wedge_info(ssbo_edge_to_edges_[wedge_id*4u + 2u]),
+        decode_adj_wedge_info(ssbo_edge_to_edges_[wedge_id*4u + 3u])
+    }; 
+
+    uvec4 v = uvec4(
+        ssbo_edge_to_vert_[wedge_id*4u + 0u], 
+        ssbo_edge_to_vert_[wedge_id*4u + 1u],
+        ssbo_edge_to_vert_[wedge_id*4u + 2u],
+        ssbo_edge_to_vert_[wedge_id*4u + 3u]
+    ); 
+
+#define w0 ((w[0].wedge_id))
+#define w1 ((w[1].wedge_id))
+#define w2 ((w[2].wedge_id))
+#define w3 ((w[3].wedge_id))
+    
+    if (w0 == w2 || w1 == w3) 
+        valid_ee = false; 
+
+    for (uint i = 0u; i < 4u; ++i)
+    {
+        uint wi = w[i].wedge_id; 
+        uint iface_overlap_at_wi = w[i].iface_adj == 1u ? 0u : 1u; 
+
+        /* Check current wedge's position in neighbor wedge's ee links */
+        bool is_cwedge_next = ((i == 0u) || (i == 2u)); /* cwedge == wi.next */
+        uint iwedge_at_wi = is_cwedge_next ? 
+            mark__cwedge_rotate_next(iface_overlap_at_wi) : 
+            mark__cwedge_rotate_back(iface_overlap_at_wi); 
+
+        AdjWedgeInfo reflex = decode_adj_wedge_info(ssbo_edge_to_edges_[wi*4u + iwedge_at_wi]);
+        if (reflex.wedge_id != wedge_id)
+            valid_ee = false; 
+
+        /* Check ev link coherence */
+        uvec2 iverts_wi = mark__wedge_to_verts(i); 
+        uvec2 verts_wi = uvec2(v[iverts_wi.x], v[iverts_wi.y]); 
+        uvec2 iverts_wi_at_wi = mark__cwedge_to_verts(iface_overlap_at_wi); 
+        uvec2 verts_wi_at_wi = uvec2(
+            ssbo_edge_to_vert_[wi*4u + iverts_wi_at_wi[0]], 
+            ssbo_edge_to_vert_[wi*4u + iverts_wi_at_wi[1]]
+        ); 
+        if (any(verts_wi != verts_wi_at_wi))
+            valid_ev = false;
+
+        uint v_oppo = v[mark__border_wedge_to_oppo_vert(i)]; 
+        uint v_oppo_at_wi = ssbo_edge_to_vert_[wi*4u + mark__center_wedge_to_oppo_vert__at_face(iface_overlap_at_wi)];
+        if (v_oppo != v_oppo_at_wi)
+            valid_ev = false;
+    }
+
+#undef w0
+#undef w1
+#undef w2
+#undef w3
+}
 
 #endif
+
+
 
 
 

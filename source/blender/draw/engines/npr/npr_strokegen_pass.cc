@@ -83,7 +83,8 @@ namespace blender::npr::strokegen
 
     meshing_params.num_edge_flooding_iters = (int)(scene_eval->npr.npr_test_val_11 + 1e-10f);
 
-    meshing_params.remeshing_targ_edge_len = scene_eval->npr.npr_test_val_12; 
+    meshing_params.remeshing_targ_edge_len = scene_eval->npr.npr_test_val_12;
+    meshing_params.remeshing_collapse_iters = (int)(scene_eval->npr.npr_test_val_13 + 1e-10f); 
   }
 
   void StrokeGenPassModule::on_end_sync()
@@ -191,7 +192,7 @@ namespace blender::npr::strokegen
       }
       append_subpass_fill_dispatched_args_remeshed_edges_(num_edges);
 
-      int num_edge_collapse_iters = 1;
+      int num_edge_collapse_iters = meshing_params.remeshing_collapse_iters;
       for (int iter_edge_collapse = 0; iter_edge_collapse < num_edge_collapse_iters; ++iter_edge_collapse) {
         append_subpass_collapse_edges(iter_remesh, iter_edge_collapse, num_edges, num_verts);
       }
@@ -779,6 +780,8 @@ namespace blender::npr::strokegen
       reused_ssbo_wedge_flooding_pointers_out_
     );
     sub.bind_ssbo(8, reused_ssbo_wedge_flooding_pointers_out_);
+    sub.bind_ssbo(9, buffers_.ssbo_edge_to_edges_);
+    sub.bind_ssbo(10, buffers_.ssbo_edge_to_vert_); 
     // --------------
     sub.bind_ubo(0, buffers_.ubo_view_matrices_cache_);
     sub.push_constant("pcs_ib_fmt_u16", ib_type == gpu::GPU_INDEX_U16 ? 1 : 0);
