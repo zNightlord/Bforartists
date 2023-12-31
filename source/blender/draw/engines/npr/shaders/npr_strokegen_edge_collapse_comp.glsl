@@ -284,7 +284,7 @@ void main()
         inout CollapseValidateContext ctx
     )      
     {
-        uint vi = iter.awi.wedge_id; 
+        uint wi = iter.awi.wedge_id; 
 
         uint iwedge_wo = mark__cwedge_rotate_back(iter.awi.iface_adj); // outside edge
         AdjWedgeInfo awi_wo = decode_adj_wedge_info(ssbo_edge_to_edges_[iter.awi.wedge_id*4u + iwedge_wo]); 
@@ -306,7 +306,7 @@ void main()
         
         /* The outer edge is linked to another vert on the collapsed wedge, 
         * <=> 1-ring of v1 & v3 has a common edge (excluding the collapsed faces v013 and v123) */
-        if (ctx.check_topo && all(vi.xxx != valid_link_verts) && v_oppo == v_oppo_invalid)
+        if (ctx.check_topo && all(ctx.vi.xxx != valid_link_verts) && v_oppo == v_oppo_invalid)
             ctx.is_collapse_ok = false; 
 
         
@@ -319,9 +319,9 @@ void main()
             ctx.is_collapse_ok = false; /* falls outside the clipping plane */
 
         /* Update context */
-        ctx.vp = iter.awi.wedge_id; 
+        ctx.vp = ctx.vi; 
         ctx.vpos_p = ctx.vpos_i; 
-        ctx.vi = iter.awi_next.wedge_id; 
+        ctx.vi = vn; 
         ctx.vpos_i = vpos_n; 
 
         return ctx.is_collapse_ok; // cont'/break the loop

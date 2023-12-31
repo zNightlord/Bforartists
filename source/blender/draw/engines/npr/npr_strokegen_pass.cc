@@ -185,14 +185,14 @@ namespace blender::npr::strokegen
     int num_remesh_iters = 1; 
     for (int iter_remesh = 0; iter_remesh < num_remesh_iters; ++iter_remesh)
     {
-      int num_edge_split_iters = meshing_params.remeshing_collapse_iters;
+      int num_edge_split_iters = 0;
       for (int iter_edge_split = 0; iter_edge_split < num_edge_split_iters; ++iter_edge_split) {
         append_subpass_fill_dispatched_args_remeshed_edges_(num_edges);
         append_subpass_split_edges(iter_remesh, iter_edge_split, num_edges, num_verts);  
       }
       append_subpass_fill_dispatched_args_remeshed_edges_(num_edges);
 
-      int num_edge_collapse_iters = 0; // meshing_params.remeshing_collapse_iters;
+      int num_edge_collapse_iters = meshing_params.remeshing_collapse_iters;
       for (int iter_edge_collapse = 0; iter_edge_collapse < num_edge_collapse_iters; ++iter_edge_collapse) {
         append_subpass_collapse_edges(iter_remesh, iter_edge_collapse, num_edges, num_verts);
       }

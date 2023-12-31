@@ -36,6 +36,7 @@ class GPUBufferPoolModule {
   inline GPUStorageBuf *ssbo_dyn_mesh_counters_out() { return ssbo_dyn_mesh_counters_[1]; }
   SSBO_StrokeGenEdgeSplitCounters ssbo_edge_split_counters_;
   SSBO_StrokeGenEdgeCollapseCounters ssbo_edge_collapse_counters_;
+  SSBO_StrokeGenEdgeFlipCounters ssbo_edge_flip_counters_;
 
   // Dispatch Args --------------------------------------------------------
   SSBO_IndirectDrawArgs ssbo_bnpr_mesh_pool_draw_args_;
@@ -114,6 +115,18 @@ class GPUBufferPoolModule {
   {
     return ssbo_mesh_buffer_reuse_5_; 
   }
+
+
+  // Reused Buffer Scheme for Edge Flip --------------------------------------------
+  inline GPUStorageBuf *reuse_ssbo_per_edge_flip_info_()
+  {
+    return ssbo_mesh_buffer_reuse_1_; 
+  }
+  inline GPUStorageBuf *reuse_ssbo_per_flip_edge_info_()
+  {
+    return ssbo_mesh_buffer_reuse_2_; 
+  }
+
 
 
   // Reused Buffer Scheme for Mesh Filtering -----------------------------------------------

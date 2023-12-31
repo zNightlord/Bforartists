@@ -221,10 +221,10 @@ void main()
 		validate_wedge_topo(EdgeId, /*out*/ valid_ee, valid_ev, valid_ve);  
 		
 		is_contour = (!ef.del_by_collapse) && (!ef.dupli) && (!ef.del_by_split) 
-			&& ( 
-				(!valid_ev)
-				|| (!valid_ev)
-				|| (!valid_ve)
+			&& ( true
+				// (!valid_ev)
+				// || (!valid_ev)
+				// || (!valid_ve)
 			); 
 	}
 

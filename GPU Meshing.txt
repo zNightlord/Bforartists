@@ -237,9 +237,9 @@ bool flip_score_larger(EdgeFlipInfo efi_0, efi_1, uint wedge_id_0, wedge_id_1)
 {
     if (!efi_0.is_flip_ok) return false; 
     if (!efi_1.is_flip_ok) return true; 
-    if (efi_0.score == efi_0.score)
+    if (efi_0.score == efi_1.score)
         return wedge_id_0 > wedge_id_1; 
-    return efi_0.score > efi_0.score; 
+    return efi_0.score > efi_1.score; 
 }
 
 uint pcs_flip_iter_;
@@ -253,7 +253,7 @@ foreach wedge in parallel: --------------------------------------
 wedge_id = gl_GlobalInvocationID.x; 
 
 #if <<Kernel 0>>
-    uint ef = load_edge_flags(wedge_id); 
+    EdgeFlags ef = load_edge_flags(wedge_id); 
     uint { v0, v1, v2, v3 } = ssbo_edge_to_vert_[wedge_id*4u + 0/1/2/3];
     vec3 vpos[4] = { ld_vpos(v0), ld_vpos(v1), ld_vpos(v2), ld_vpos(v3) }; 
 
@@ -717,9 +717,9 @@ bool collapse_score_larger(EdgeCollapseInfo eci_0, uint wedge_id_0, EdgeCollapse
 {
     if (!eci_0.is_collapse_ok) return false;
     if (!eci_1.is_collapse_ok) return true;
-    if (eci_0.score == eci_0.score)
+    if (eci_0.score == eci_1.score)
         return wedge_id_0 > wedge_id_1; 
-    return eci_0.score > eci_0.score; 
+    return eci_0.score > eci_1.score; 
 }
 
 void load / store_per_vert_collapse_wedge_id(uint vid, uint wedge_id)
