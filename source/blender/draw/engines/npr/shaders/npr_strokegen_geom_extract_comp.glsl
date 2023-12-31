@@ -220,11 +220,12 @@ void main()
 		bool valid_ee, valid_ev, valid_ve;
 		validate_wedge_topo(EdgeId, /*out*/ valid_ee, valid_ev, valid_ve);  
 		
-		is_contour = (!ef.del_by_collapse) && (!ef.dupli) && (
-			(!valid_ev)
-			/*  || (!valid_ev) */ 
-			/* || (!valid_ve) */
-		); 
+		is_contour = (!ef.del_by_collapse) && (!ef.dupli) && (!ef.del_by_split) 
+			&& ( 
+				(!valid_ev)
+				|| (!valid_ev)
+				|| (!valid_ve)
+			); 
 	}
 
 	bool rev_edge_dir = is_back_face(face_orient_012); 

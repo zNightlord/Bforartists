@@ -426,6 +426,9 @@ void main()
     store_edge_flags(psei_curr.id, ef_del);
 
 
+    /* Update ve adj. for Old verts, if thery were connected to the split edge */
+    try_update_ve_link(v1, psei_curr.id, VertWedgeListHeader(w0, mark__cwedge_to_beg_vert(w[0].iface_adj))); 
+    try_update_ve_link(v3, psei_curr.id, VertWedgeListHeader(w2, mark__cwedge_to_beg_vert(w[2].iface_adj)));
     /* Build ve adj. for New vert */
     VertWedgeListHeader vwlh; 
     vwlh.wedge_id = e0; 
