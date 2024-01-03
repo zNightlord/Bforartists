@@ -149,7 +149,9 @@ public:
     bool visualize_filtered_geom;
 
     float remeshing_targ_edge_len;
-    int remeshing_collapse_iters; 
+    int remeshing_split_iters; 
+    int remeshing_collapse_iters;
+    int remeshing_flip_iters;
   } meshing_params;
   void append_subpass_fill_mesh_filtering_indirect_dispatch_args_();
   void append_subpass_meshing_wedge_flooding(int num_edges, int num_verts);
@@ -164,10 +166,19 @@ public:
 
                                           bool debug_wedge_flooding = false);
 
-  int num_remesh_iters = 1; 
+  int num_remesh_iters = 1;
+  enum EdgeFlipOptiGoal {
+    // Match to shader macros 
+    // #define EDGE_FLIP_OPTI_VALENCE 0u 
+    Valence = 0, 
+    // #define EDGE_FLIP_OPTI_DELAUNAY 1u
+    Delaunay = 1, 
+  };
   void append_subpass_split_edges(int iter_remesh, int iter_split, int num_edges, int num_verts);
   void append_subpass_collapse_edges(int iter_remesh, int iter_collapse, int num_edges, int num_verts);
-  void append_subpass_fill_dispatched_args_remeshed_edges_(int num_edges); 
+  void append_subpass_flip_edges(EdgeFlipOptiGoal opti_goal, int iter_remesh, int iter_flip, int num_edges, int num_verts);
+  void append_subpass_fill_dispatched_args_remeshed_edges_(int num_static_edges);
+  void append_subpass_fill_dispatched_args_remeshed_verts_(int num_static_verts); 
 
 
 

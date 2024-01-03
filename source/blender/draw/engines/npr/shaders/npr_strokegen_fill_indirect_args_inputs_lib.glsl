@@ -114,9 +114,17 @@ void GetDispatchArgs(out uvec3 dispatch_args)
     num_work_items = ssbo_edge_collapse_counters_[pcs_collapse_iter_].num_collapsed_edges_pass_1;
     dispatch_args.x = compute_num_groups(num_work_items, pcs_edge_collapse_dispatch_group_size_);
 #endif
+#if defined(_KERNEL_MULTICOMPILE__FILL_DISPATCH_ARGS__REMESHING__PER_FLIP_EDGE)
+    num_work_items = ssbo_edge_flip_counters_[pcs_flip_iter_].num_flip_edges_pass_1;
+    dispatch_args.x = compute_num_groups(num_work_items, pcs_edge_flip_dispatch_group_size_);
+#endif
 #if defined(_KERNEL_MULTICOMPILE__FILL_DISPATCH_ARGS_PER_REMESHED_EDGE)
     num_work_items = pcs_edge_count_ + ssbo_dyn_mesh_counters_.num_edges;
     dispatch_args.x = compute_num_groups(num_work_items, pcs_remeshed_edges_dispatch_group_size_);
+#endif
+#if defined(_KERNEL_MULTICOMPILE__FILL_DISPATCH_ARGS_PER_REMESHED_VERT)
+    num_work_items = pcs_vert_count_ + ssbo_dyn_mesh_counters_.num_verts;
+    dispatch_args.x = compute_num_groups(num_work_items, pcs_remeshed_verts_dispatch_group_size_);
 #endif
     dispatch_args.y = 1;
     dispatch_args.z = 1; 
@@ -138,11 +146,25 @@ void FillDispatchArgsBuffer(uvec3 args)
     ssbo_indirect_dispatch_args_per_collapsed_edge_._pad0 = 0;
 #endif
 
+#if defined(_KERNEL_MULTICOMPILE__FILL_DISPATCH_ARGS__REMESHING__PER_FLIP_EDGE)
+    ssbo_indirect_dispatch_args_per_flip_edge_.num_groups_x = args.x;
+    ssbo_indirect_dispatch_args_per_flip_edge_.num_groups_y = args.y;
+    ssbo_indirect_dispatch_args_per_flip_edge_.num_groups_z = args.z;
+    ssbo_indirect_dispatch_args_per_flip_edge_._pad0 = 0;
+#endif
+
 #if defined(_KERNEL_MULTICOMPILE__FILL_DISPATCH_ARGS_PER_REMESHED_EDGE)
     ssbo_indirect_dispatch_args_per_remeshed_edges_.num_groups_x = args.x;
     ssbo_indirect_dispatch_args_per_remeshed_edges_.num_groups_y = args.y;
     ssbo_indirect_dispatch_args_per_remeshed_edges_.num_groups_z = args.z;
     ssbo_indirect_dispatch_args_per_remeshed_edges_._pad0 = 0;
+#endif
+
+#if defined(_KERNEL_MULTICOMPILE__FILL_DISPATCH_ARGS_PER_REMESHED_VERT)
+    ssbo_indirect_dispatch_args_per_remeshed_verts_.num_groups_x = args.x;
+    ssbo_indirect_dispatch_args_per_remeshed_verts_.num_groups_y = args.y;
+    ssbo_indirect_dispatch_args_per_remeshed_verts_.num_groups_z = args.z;
+    ssbo_indirect_dispatch_args_per_remeshed_verts_._pad0 = 0;
 #endif
 }
 #endif

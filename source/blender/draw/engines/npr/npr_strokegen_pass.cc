@@ -84,7 +84,9 @@ namespace blender::npr::strokegen
     meshing_params.num_edge_flooding_iters = (int)(scene_eval->npr.npr_test_val_11 + 1e-10f);
 
     meshing_params.remeshing_targ_edge_len = scene_eval->npr.npr_test_val_12;
-    meshing_params.remeshing_collapse_iters = (int)(scene_eval->npr.npr_test_val_13 + 1e-10f); 
+    meshing_params.remeshing_split_iters = (int)(scene_eval->npr.npr_test_val_13 + 1e-10f); 
+    meshing_params.remeshing_collapse_iters = (int)(scene_eval->npr.npr_test_val_14 + 1e-10f);
+    meshing_params.remeshing_flip_iters = (int)(scene_eval->npr.npr_test_val_15 + 1e-10f); 
   }
 
   void StrokeGenPassModule::on_end_sync()
@@ -185,7 +187,7 @@ namespace blender::npr::strokegen
     int num_remesh_iters = 1; 
     for (int iter_remesh = 0; iter_remesh < num_remesh_iters; ++iter_remesh)
     {
-      int num_edge_split_iters = 0;
+      int num_edge_split_iters = meshing_params.remeshing_split_iters;
       for (int iter_edge_split = 0; iter_edge_split < num_edge_split_iters; ++iter_edge_split) {
         append_subpass_fill_dispatched_args_remeshed_edges_(num_edges);
         append_subpass_split_edges(iter_remesh, iter_edge_split, num_edges, num_verts);  
@@ -195,6 +197,12 @@ namespace blender::npr::strokegen
       int num_edge_collapse_iters = meshing_params.remeshing_collapse_iters;
       for (int iter_edge_collapse = 0; iter_edge_collapse < num_edge_collapse_iters; ++iter_edge_collapse) {
         append_subpass_collapse_edges(iter_remesh, iter_edge_collapse, num_edges, num_verts);
+      }
+
+      EdgeFlipOptiGoal opti_goal = Valence; 
+      int num_edge_flip_iters = meshing_params.remeshing_flip_iters;
+      for (int iter_edge_flip = 0; iter_edge_flip < num_edge_flip_iters; ++iter_edge_flip) {
+        append_subpass_flip_edges(opti_goal, iter_remesh, iter_edge_flip, num_edges, num_verts);
       }
     }
 
@@ -715,14 +723,104 @@ namespace blender::npr::strokegen
     }
   }
 
-  void StrokeGenPassModule::append_subpass_fill_dispatched_args_remeshed_edges_(int num_edges)
+  void StrokeGenPassModule::append_subpass_flip_edges(EdgeFlipOptiGoal opti_goal,
+      int iter_remesh,
+      int iter_flip,
+      int num_edges,
+      int num_verts)
+  {
+    auto bind_src = [&](draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub) {
+      sub.bind_ssbo(0, buffers_.ssbo_dyn_mesh_counters_[0]);  // in
+      sub.bind_ssbo(1, buffers_.ssbo_dyn_mesh_counters_[1]);  // out
+      sub.bind_ssbo(2, buffers_.ssbo_edge_flip_counters_);
+      sub.bind_ssbo(3, buffers_.ssbo_vbo_full_);
+      sub.bind_ssbo(4, buffers_.ssbo_edge_to_vert_);
+      sub.bind_ssbo(5, buffers_.ssbo_edge_to_edges_);
+      sub.bind_ssbo(6, buffers_.ssbo_vert_to_edge_list_header_);
+      sub.bind_ssbo(7, buffers_.ssbo_edge_flags_);
+      sub.bind_ssbo(8, buffers_.reused_ssbo_per_edge_flip_info_());
+      sub.bind_ssbo(9, buffers_.reused_ssbo_per_flip_edge_info_());
+      sub.bind_ssbo(10, buffers_.reused_ssbo_vertex_edge_flip_info_());
+      sub.push_constant("pcs_flip_opti_goal_type_", (int)opti_goal); 
+      sub.push_constant("pcs_flip_iter_", iter_flip);
+      sub.push_constant("pcs_edge_count_", num_edges);
+      sub.push_constant("pcs_vert_count_", num_verts);
+    };
+
+    append_subpass_fill_dispatched_args_remeshed_verts_(num_verts);
+    {
+      auto &sub = pass_extract_geom.sub("bnpr_meshing_edge_flip_init");
+      sub.shader_set(shaders_.static_shader_get(MESH_OP_FLIP_EDGE_INIT));
+      bind_src(sub);
+      sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_verts_);
+      sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE); 
+    }
+
+    {
+      auto &sub = pass_extract_geom.sub("bnpr_meshing_edge_flip_compact");
+      sub.shader_set(shaders_.static_shader_get(MESH_OP_FLIP_EDGE_COMPACT));
+      bind_src(sub);
+      sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_edges_);
+      sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
+    }
+
+    {
+      auto &sub = pass_extract_geom.sub("strokegen_remeshing_fill_dispatch_args_per_flip_edge");
+      sub.shader_set(shaders_.static_shader_get(FILL_DISPATCH_ARGS_FLIP_EDGES));
+
+      sub.bind_ssbo(0, buffers_.ssbo_edge_flip_counters_);
+      sub.bind_ssbo(1, buffers_.ssbo_indirect_dispatch_args_per_flip_edge_);
+      sub.push_constant("pcs_edge_flip_dispatch_group_size_", (int)(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT)); 
+      sub.push_constant("pcs_flip_iter_", iter_flip);
+
+      sub.dispatch(int3(1, 1, 1));
+      sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
+    }
+
+    {
+      auto &sub = pass_extract_geom.sub("bnpr_meshing_edge_flip_validate");
+      sub.shader_set(shaders_.static_shader_get(MESH_OP_FLIP_EDGE_VALIDATE));
+      bind_src(sub);
+      sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_flip_edge_);
+      sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
+    }
+    {
+      auto &sub = pass_extract_geom.sub("bnpr_meshing_edge_flip_resolve_conflict");
+      sub.shader_set(shaders_.static_shader_get(MESH_OP_FLIP_EDGE_RESOLVE_CONFLICT));
+      bind_src(sub);
+      sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_flip_edge_);
+      sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
+    }
+    {
+      auto &sub = pass_extract_geom.sub("bnpr_meshing_edge_flip_execute");
+      sub.shader_set(shaders_.static_shader_get(MESH_OP_FLIP_EDGE_EXECUTE));
+      bind_src(sub);
+      sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_flip_edge_);
+      sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
+    }
+  }
+
+  void StrokeGenPassModule::append_subpass_fill_dispatched_args_remeshed_edges_(int num_static_edges)
   {
     auto &sub = pass_extract_geom.sub("strokegen_remeshing_fill_dispatch_args_per_remeshed_edge");
     sub.shader_set(shaders_.static_shader_get(FILL_DISPATCH_ARGS_REMESHED_EDGES));
-    sub.bind_ssbo(0, buffers_.ssbo_dyn_mesh_counters_[1]);
+    sub.bind_ssbo(0, buffers_.ssbo_dyn_mesh_counters_out());
     sub.bind_ssbo(1, buffers_.ssbo_indirect_dispatch_args_per_remeshed_edges_); 
-    sub.push_constant("pcs_edge_count_", num_edges); 
+    sub.push_constant("pcs_edge_count_", num_static_edges); 
     sub.push_constant("pcs_remeshed_edges_dispatch_group_size_", (int)GROUP_SIZE_STROKEGEN_GEOM_EXTRACT);
+    sub.dispatch(int3(1, 1, 1));
+    sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE); 
+  }
+
+  void StrokeGenPassModule::append_subpass_fill_dispatched_args_remeshed_verts_(int num_static_verts)
+  {
+    auto &sub = pass_extract_geom.sub("strokegen_remeshing_fill_dispatch_args_per_remeshed_vert");
+    sub.shader_set(shaders_.static_shader_get(FILL_DISPATCH_ARGS_REMESHED_VERTS));
+    sub.bind_ssbo(0, buffers_.ssbo_dyn_mesh_counters_out());
+    sub.bind_ssbo(1, buffers_.ssbo_indirect_dispatch_args_per_remeshed_verts_);
+    sub.push_constant("pcs_vert_count_", num_static_verts);
+    sub.push_constant("pcs_remeshed_verts_dispatch_group_size_",
+                      (int)GROUP_SIZE_STROKEGEN_GEOM_EXTRACT);
     sub.dispatch(int3(1, 1, 1));
     sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE); 
   }

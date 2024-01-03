@@ -615,6 +615,16 @@ GPU_SHADER_CREATE_INFO(strokegen_remeshing_fill_dispatch_args_per_collapsed_edge
     .push_constant(Type::INT, "pcs_edge_collapse_dispatch_group_size_")
     .push_constant(Type::INT, "pcs_collapse_iter_"); 
 
+GPU_SHADER_CREATE_INFO(strokegen_remeshing_fill_dispatch_args_per_flip_edge)
+    .do_static_compilation(true)
+    .additional_info("strokegen_remeshing_fill_dispatch_args")
+    .define("_KERNEL_MULTICOMPILE__FILL_DISPATCH_ARGS__REMESHING__PER_FLIP_EDGE", "1")
+    
+    .storage_buf(0, Qualifier::READ, "SSBOData_StrokeGenEdgeFlipCounters", "ssbo_edge_flip_counters_[]")
+    .storage_buf(1, Qualifier::WRITE, "DispatchCommand", "ssbo_indirect_dispatch_args_per_flip_edge_")
+    .push_constant(Type::INT, "pcs_edge_flip_dispatch_group_size_")
+    .push_constant(Type::INT, "pcs_flip_iter_"); 
+
 GPU_SHADER_CREATE_INFO(strokegen_remeshing_fill_dispatch_args_per_remeshed_edge)
     .do_static_compilation(true)
     .additional_info("strokegen_remeshing_fill_dispatch_args")
@@ -624,6 +634,16 @@ GPU_SHADER_CREATE_INFO(strokegen_remeshing_fill_dispatch_args_per_remeshed_edge)
     .storage_buf(1, Qualifier::WRITE, "DispatchCommand", "ssbo_indirect_dispatch_args_per_remeshed_edges_")
     .push_constant(Type::INT, "pcs_edge_count_")
     .push_constant(Type::INT, "pcs_remeshed_edges_dispatch_group_size_"); 
+
+GPU_SHADER_CREATE_INFO(strokegen_remeshing_fill_dispatch_args_per_remeshed_vert)
+    .do_static_compilation(true)
+    .additional_info("strokegen_remeshing_fill_dispatch_args")
+    .define("_KERNEL_MULTICOMPILE__FILL_DISPATCH_ARGS_PER_REMESHED_VERT", "1")
+    
+    .storage_buf(0, Qualifier::READ, "SSBOData_StrokeGenDynamicMeshCounters", "ssbo_dyn_mesh_counters_")
+    .storage_buf(1, Qualifier::WRITE, "DispatchCommand", "ssbo_indirect_dispatch_args_per_remeshed_verts_")
+    .push_constant(Type::INT, "pcs_vert_count_")
+    .push_constant(Type::INT, "pcs_remeshed_verts_dispatch_group_size_"); 
 
 
 /* -------------------------------------------------------------------- */
@@ -769,8 +789,78 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_edge_collapse_execute)
     .define("_KERNEL_MULTICOMPILE__EDGE_COLLAPSE", "1")
     .define("_KERNEL_MULTICOMPILE__EDGE_COLLAPSE_EXECUTE", "1")
     .define("COMPACTION_LIB_EXCLUDE", "1"); 
-
 /** \} */
+
+/* -------------------------------------------------------------------- */
+/** \ Edge Flip
+ * \{ */
+GPU_SHADER_CREATE_INFO(bnpr_meshing_edge_flip)
+    .do_static_compilation(true)
+    .typedef_source("bnpr_defines.hh")
+    .typedef_source("bnpr_shader_shared.hh")
+    .typedef_source("draw_shader_shared.h")
+    /* topo lib multicompile macros */
+    .define("DECODE_IBO_EXCLUDE", "1") /* Remove ibo code */
+    .define("WINGED_EDGE_TOPO_INCLUDE", "1")
+    .define("VERT_WEDGE_LIST_TOPO_INCLUDE", "1")
+    .define("EDGE_FLAGS_INCLUDED", "1")
+    .define("VE_CIRCULATOR_INCLUDE", "1")
+
+    .storage_buf(0, Qualifier::READ_WRITE, "SSBOData_StrokeGenDynamicMeshCounters", "ssbo_dyn_mesh_counters_in_")
+    .storage_buf(1, Qualifier::READ_WRITE, "SSBOData_StrokeGenDynamicMeshCounters", "ssbo_dyn_mesh_counters_out_")
+    .storage_buf(2, Qualifier::READ_WRITE, "SSBOData_StrokeGenEdgeFlipCounters", "ssbo_edge_flip_counters_[]")
+    .storage_buf(3, Qualifier::READ_WRITE, "float", "ssbo_vbo_full_[]")
+    .storage_buf(4, Qualifier::READ_WRITE, "uint", "ssbo_edge_to_vert_[]")
+    .storage_buf(5, Qualifier::READ_WRITE, "uint", "ssbo_edge_to_edges_[]")
+    .storage_buf(6, Qualifier::READ_WRITE, "uint", "ssbo_vert_to_edge_list_header_[]")
+    .storage_buf(7, Qualifier::READ_WRITE, "uint", "ssbo_edge_flags_[]")
+    .storage_buf(8, Qualifier::READ_WRITE, "uint", "ssbo_per_edge_flip_info_[]")
+    .storage_buf(9, Qualifier::READ_WRITE, "uint", "ssbo_per_flip_edge_info_[]")
+    .storage_buf(10, Qualifier::READ_WRITE, "uint", "ssbo_vertex_edge_flip_info_[]")
+    .push_constant(Type::INT, "pcs_flip_opti_goal_type_") 
+    .push_constant(Type::INT, "pcs_flip_iter_")
+    .push_constant(Type::INT, "pcs_edge_count_")
+    .push_constant(Type::INT, "pcs_vert_count_")
+
+    .local_group_size(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT)
+    .compute_source("npr_strokegen_edge_flip_comp.glsl")
+;
+
+GPU_SHADER_CREATE_INFO(bnpr_meshing_edge_flip_init)
+    .do_static_compilation(true)
+    .additional_info("bnpr_meshing_edge_flip")
+    .define("_KERNEL_MULTICOMPILE__EDGE_FLIP_INIT", "1")
+    .define("COMPACTION_LIB_EXCLUDE", "1"); 
+
+GPU_SHADER_CREATE_INFO(bnpr_meshing_edge_flip_compact)
+    .do_static_compilation(true)
+    .additional_info("bnpr_meshing_edge_flip")
+    .define("_KERNEL_MULTICOMPILE__EDGE_FLIP_COMPACT", "1")
+    .define("GLOBAL_COUNTER", "ssbo_edge_flip_counters_[pcs_flip_iter_].num_flip_edges_pass_1")
+    .define("CP_TAG", "flip_inital_selection");
+
+GPU_SHADER_CREATE_INFO(bnpr_meshing_edge_flip_validate)
+    .do_static_compilation(true)
+    .additional_info("bnpr_meshing_edge_flip")
+    .define("_KERNEL_MULTICOMPILE__EDGE_FLIP", "1")
+    .define("_KERNEL_MULTICOMPILE__EDGE_FLIP_VALIDATE", "1")
+    .define("COMPACTION_LIB_EXCLUDE", "1"); 
+
+GPU_SHADER_CREATE_INFO(bnpr_meshing_edge_flip_resolve_conflict)
+    .do_static_compilation(true)
+    .additional_info("bnpr_meshing_edge_flip")
+    .define("_KERNEL_MULTICOMPILE__EDGE_FLIP", "1")
+    .define("_KERNEL_MULTICOMPILE__EDGE_FLIP_RESOLVE_CONFLICT", "1")
+    .define("COMPACTION_LIB_EXCLUDE", "1"); 
+
+GPU_SHADER_CREATE_INFO(bnpr_meshing_edge_flip_execute)
+    .do_static_compilation(true)
+    .additional_info("bnpr_meshing_edge_flip")
+    .define("_KERNEL_MULTICOMPILE__EDGE_FLIP", "1")
+    .define("_KERNEL_MULTICOMPILE__EDGE_FLIP_EXECUTE", "1")
+    .define("COMPACTION_LIB_EXCLUDE", "1"); 
+/** \} */
+
 
 
 

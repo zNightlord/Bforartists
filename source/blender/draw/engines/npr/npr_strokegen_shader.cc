@@ -1,4 +1,4 @@
-﻿/* SPDX-License-Identifier: GPL-2.0-or-later
+/* SPDX-License-Identifier: GPL-2.0-or-later
  * Copyright 2021 Blender Foundation.
  */
 
@@ -155,15 +155,18 @@ const char *StrokeGenShaderModule::static_shader_create_info_name_get(eShaderTyp
     case MESH_FILTERING_MOVE_VERTS:
       return "bnpr_meshing_mesh_filtering_move_verts_";
 
-    case FILL_DISPATCH_ARGS_SPLIT_EDGES:
-      return "strokegen_remeshing_fill_dispatch_args_per_split_edge";
+
     case FILL_DISPATCH_ARGS_REMESHED_EDGES:
-      return "strokegen_remeshing_fill_dispatch_args_per_remeshed_edge"; 
+      return "strokegen_remeshing_fill_dispatch_args_per_remeshed_edge";
+    case FILL_DISPATCH_ARGS_REMESHED_VERTS:
+      return "strokegen_remeshing_fill_dispatch_args_per_remeshed_vert"; 
 
     case MESH_OP_SPLIT_EDGE_INIT:
       return "bnpr_meshing_edge_split_init"; 
     case MESH_OP_SPLIT_EDGE_COMPACT:
       return "bnpr_meshing_edge_split_compact";
+    case FILL_DISPATCH_ARGS_SPLIT_EDGES:
+      return "strokegen_remeshing_fill_dispatch_args_per_split_edge";
     case MESH_OP_SPLIT_EDGE_RESOLVE_CONFLICT:
       return "bnpr_meshing_edge_split_resolve_conflict";
     case MESH_OP_SPLIT_EDGE_EXECUTE:
@@ -183,6 +186,19 @@ const char *StrokeGenShaderModule::static_shader_create_info_name_get(eShaderTyp
       return "bnpr_meshing_edge_collapse_resolve_conflict_2"; 
     case MESH_OP_COLLAPSE_EDGE_EXECUTE: 
       return "bnpr_meshing_edge_collapse_execute"; 
+
+    case MESH_OP_FLIP_EDGE_INIT: 
+      return "bnpr_meshing_edge_flip_init"; 
+    case MESH_OP_FLIP_EDGE_COMPACT: 
+      return "bnpr_meshing_edge_flip_compact"; 
+    case FILL_DISPATCH_ARGS_FLIP_EDGES:
+      return "strokegen_remeshing_fill_dispatch_args_per_flip_edge"; 
+    case MESH_OP_FLIP_EDGE_VALIDATE: 
+      return "bnpr_meshing_edge_flip_validate"; 
+    case MESH_OP_FLIP_EDGE_RESOLVE_CONFLICT: 
+      return "bnpr_meshing_edge_flip_resolve_conflict"; 
+    case MESH_OP_FLIP_EDGE_EXECUTE: 
+      return "bnpr_meshing_edge_flip_execute";  
 
     case SCAN_TEST_AGGREGATE:
       return "bnpr_scan_test_aggregate";

@@ -221,11 +221,13 @@ void main()
 		validate_wedge_topo(EdgeId, /*out*/ valid_ee, valid_ev, valid_ve);  
 		
 		is_contour = (!ef.del_by_collapse) && (!ef.dupli) && (!ef.del_by_split) 
-			&& ( true
-				// (!valid_ev)
-				// || (!valid_ev)
-				// || (!valid_ve)
-			); 
+			/* visualize edges with invalid topology */
+			&& ef.temp_flipped_edge; 
+			/* ( 
+				(!valid_ee)
+				|| (!valid_ev)
+				|| (!valid_ve)
+			) */; 
 	}
 
 	bool rev_edge_dir = is_back_face(face_orient_012); 

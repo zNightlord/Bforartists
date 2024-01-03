@@ -491,6 +491,7 @@ struct EdgeFlags
 
     // Temp Flags, can share bits across different passes -
     bool temp_new_by_split_this_round; // new edge created by edge split in current remeshing round
+    bool temp_flipped_edge; // flipped edge
 }; 
 EdgeFlags init_edge_flags(bool dupli, bool border)
 {
@@ -502,6 +503,7 @@ EdgeFlags init_edge_flags(bool dupli, bool border)
     ef.del_by_collapse = false; 
 
     ef.temp_new_by_split_this_round = false; 
+    ef.temp_flipped_edge = false; 
 
     return ef; 
 }
@@ -515,6 +517,7 @@ EdgeFlags init_edge_flags__new_split_edge()
     ef.del_by_collapse = false; 
 
     ef.temp_new_by_split_this_round = true; 
+    ef.temp_flipped_edge = false; 
 
     return ef; 
 }
@@ -533,12 +536,16 @@ uint encode_edge_flags(EdgeFlags ef)
     ef_enc |= uint(ef.del_by_collapse); // d_b_ns_ds_dc
     ef_enc <<= 1u; 
     ef_enc |= uint(ef.temp_new_by_split_this_round); // d_b_ns_ds_dc_tnbsr
+    ef_enc <<= 1u; 
+    ef_enc |= uint(ef.temp_flipped_edge); // d_b_ns_ds_dc_tnbsr_tfe
 
     return ef_enc; 
 }
 EdgeFlags decode_edge_flags(uint ef_enc)
 {
-    EdgeFlags ef; // d_b_ns_ds_dc_tnbsr
+    EdgeFlags ef; // d_b_ns_ds_dc_tnbsr_tfe
+    ef.temp_flipped_edge = (1u == (ef_enc & 1u));
+    ef_enc >>= 1u; // d_b_ns_ds_dc_tnbsr
     ef.temp_new_by_split_this_round = (1u == (ef_enc & 1u));
     ef_enc >>= 1u; // d_b_ns_ds_dc
     ef.del_by_collapse = (1u == (ef_enc & 1u)); 
@@ -565,6 +572,12 @@ void update_edge_flags__del_by_collapse(uint edge_id)
 {
     EdgeFlags ef = load_edge_flags(edge_id); 
     ef.del_by_collapse = true; 
+    store_edge_flags(edge_id, ef); 
+}
+void update_edge_flags__flipped(uint edge_id)
+{
+    EdgeFlags ef = load_edge_flags(edge_id); 
+    ef.temp_flipped_edge = true; 
     store_edge_flags(edge_id, ef); 
 }
 #endif
@@ -644,6 +657,23 @@ struct CirculatorIterData
     );                                                                                                                     \
 }\
 
+/* circulation loop invariant: (rotating foward)
+ *     v1 ----- vp  
+ *    /  \     /  \     wi:=awi.wedge_id
+ *   /    \  wp    \    fi:=awi.iface_adj
+ *  /      \ /      \  
+ * v0 ----- v --wi-- vi iwedge derivation:       
+ *   \__     \<-----/   wo = mark__cwedge_rotate_back(fi)
+ *      \__  wn fi wo   wn = mark__cwedge_rotate_next(fi) 
+ *         \__ \  /    
+ *            \_vn             
+*/
+/* get ivert in the context of wi 
+ * for example, vi = ssbo_edge_to_vert_[wi*4u + ivert_vi] */
+uint mark__ve_circ__get_vi(CirculatorIterData iter) { return mark__cwedge_to_beg_vert(iter.awi.iface_adj); }
+uint mark__ve_circ__get_vn(CirculatorIterData iter) { return mark__center_wedge_to_oppo_vert__at_face(iter.awi.iface_adj); }
+uint mark__ve_circ__get_vp(CirculatorIterData iter) { return mark__center_wedge_to_oppo_vert__at_face(iter.awi.iface_adj == 1u ? 0u : 1u); }
+
 #endif
 
 
@@ -708,7 +738,7 @@ void validate_wedge_topo(uint wedge_id, out bool valid_ee, out bool valid_ev, ou
             ssbo_edge_to_vert_[wi*4u + iverts_wi_at_wi[0]], 
             ssbo_edge_to_vert_[wi*4u + iverts_wi_at_wi[1]]
         ); 
-        if (any(verts_wi != verts_wi_at_wi))
+        if (any(bvec2(verts_wi != verts_wi_at_wi)))
             valid_ev = false;
 
         uint v_oppo = v[mark__border_wedge_to_oppo_vert(i)]; 

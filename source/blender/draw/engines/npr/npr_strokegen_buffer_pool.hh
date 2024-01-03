@@ -46,7 +46,9 @@ class GPUBufferPoolModule {
 
   SSBO_IndirectDispatchArgs ssbo_indirect_dispatch_args_per_split_edge_;
   SSBO_IndirectDispatchArgs ssbo_indirect_dispatch_args_per_collapsed_edge_;
+  SSBO_IndirectDispatchArgs ssbo_indirect_dispatch_args_per_flip_edge_;
   SSBO_IndirectDispatchArgs ssbo_indirect_dispatch_args_per_remeshed_edges_;
+  SSBO_IndirectDispatchArgs ssbo_indirect_dispatch_args_per_remeshed_verts_;
 
   SSBO_IndirectDispatchArgs ssbo_bnpr_mesh_contour_edge_dispatch_args_;
 
@@ -118,13 +120,18 @@ class GPUBufferPoolModule {
 
 
   // Reused Buffer Scheme for Edge Flip --------------------------------------------
-  inline GPUStorageBuf *reuse_ssbo_per_edge_flip_info_()
+  inline GPUStorageBuf *reused_ssbo_per_edge_flip_info_()
   {
     return ssbo_mesh_buffer_reuse_1_; 
   }
-  inline GPUStorageBuf *reuse_ssbo_per_flip_edge_info_()
+  inline GPUStorageBuf *reused_ssbo_per_flip_edge_info_()
   {
+
     return ssbo_mesh_buffer_reuse_2_; 
+  }
+  inline GPUStorageBuf *reused_ssbo_vertex_edge_flip_info_()
+  {
+    return ssbo_mesh_buffer_reuse_5_; 
   }
 
 
