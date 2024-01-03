@@ -192,7 +192,9 @@ namespace blender::npr::strokegen
         append_subpass_fill_dispatched_args_remeshed_edges_(num_edges);
         append_subpass_split_edges(iter_remesh, iter_edge_split, num_edges, num_verts);  
       }
+      // update elem counters after split
       append_subpass_fill_dispatched_args_remeshed_edges_(num_edges);
+      append_subpass_fill_dispatched_args_remeshed_verts_(num_verts); 
 
       int num_edge_collapse_iters = meshing_params.remeshing_collapse_iters;
       for (int iter_edge_collapse = 0; iter_edge_collapse < num_edge_collapse_iters; ++iter_edge_collapse) {
@@ -747,7 +749,6 @@ namespace blender::npr::strokegen
       sub.push_constant("pcs_vert_count_", num_verts);
     };
 
-    append_subpass_fill_dispatched_args_remeshed_verts_(num_verts);
     {
       auto &sub = pass_extract_geom.sub("bnpr_meshing_edge_flip_init");
       sub.shader_set(shaders_.static_shader_get(MESH_OP_FLIP_EDGE_INIT));

@@ -222,7 +222,7 @@ void main()
 		
 		is_contour = (!ef.del_by_collapse) && (!ef.dupli) && (!ef.del_by_split) 
 			/* visualize edges with invalid topology */
-			&& ef.temp_flipped_edge; 
+			/* && ef.temp_flipped_edge */; 
 			/* ( 
 				(!valid_ee)
 				|| (!valid_ev)
@@ -278,7 +278,7 @@ void main()
 	if (idx == 0u)
 	{
 		const uint num_contour_edges = ssbo_bnpr_mesh_pool_counters_.num_contour_edges; 
-		ssbo_bnpr_mesh_pool_draw_args_.vertex_len 		= 2u * num_contour_edges;  /*#verts*/
+		ssbo_bnpr_mesh_pool_draw_args_.vertex_len 		= 2u * num_contour_edges;   /*#verts*/
 		ssbo_bnpr_mesh_pool_draw_args_.instance_len 	= 1;  						/*#instances*/
 		ssbo_bnpr_mesh_pool_draw_args_.vertex_first 	= 0;  						/*ibo offset*/
 		ssbo_bnpr_mesh_pool_draw_args_.base_index 		= 0;  						/*vbo offset*/

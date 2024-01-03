@@ -239,7 +239,7 @@ void main()
 {
     /* Dispatched at beginning of each flip operation */
     if (gl_GlobalInvocationID.x == 0u)
-        ssbo_edge_flip_counters_[0].num_flip_edges_pass_1 = 0u;
+        ssbo_edge_flip_counters_[pcs_flip_iter_].num_flip_edges_pass_1 = 0u;
 
     if (pcs_flip_opti_goal_type_ == EDGE_FLIP_OPTI_VALENCE)
     { /* compute vertex valence, so dispatch per vertex */
