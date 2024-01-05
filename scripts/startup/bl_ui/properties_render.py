@@ -899,8 +899,8 @@ class RENDER_PT_npr_test(RenderButtonsPanel, Panel):
         scene = context.scene
         props = scene.npr
 
-        col = layout.column()
-        # col.operator("", text="")
+        flow = layout.grid_flow(row_major=True, columns=0, even_columns=False, even_rows=False, align=True)
+        col = flow.column()
         col.prop(props, "npr_test_val_0",  text="num total filtering iters")
         col.prop(props, "npr_test_val_1",  text="num quadric diffusion iters")
         col.prop(props, "npr_test_val_2",  text="quadric_deviation")
@@ -913,10 +913,16 @@ class RENDER_PT_npr_test(RenderButtonsPanel, Panel):
         col.prop(props, "npr_test_val_9",  text="use bilateral normal filtering")
         col.prop(props, "npr_test_val_10", text="num normal filtering iters")
         col.prop(props, "npr_test_val_11", text="num edge flooding iters")
-        col.prop(props, "npr_test_val_12", text="")
-        col.prop(props, "npr_test_val_13", text="")
-        col.prop(props, "npr_test_val_14", text="")
-        col.prop(props, "npr_test_val_15", text="")
+
+        col = flow.column()
+        col.prop(props, "npr_test_val_12", text="Remeshing Edge Length")
+        col.prop(props, "npr_test_val_13", text="Edge Split Iters")
+        col.prop(props, "npr_test_val_14", text="Edge Collapse Iters")
+        col.prop(props, "npr_test_val_15", text="Edge Flip Iters")
+        col.prop(props, "npr_test_val_16", text="Remeshing Iters")
+        col.prop(props, "npr_test_val_17", text="")
+        col.prop(props, "npr_test_val_18", text="")
+        col.prop(props, "npr_test_val_19", text="")
 
 
 

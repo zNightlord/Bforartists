@@ -72,7 +72,7 @@ namespace blender::npr::strokegen
     meshing_params.geodist_deviation = scene_eval->npr.npr_test_val_3;
     meshing_params.alternate_filter_0 = (GPUMeshQuadricFilter)((int)(scene_eval->npr.npr_test_val_4 + 1e-10f)); 
     meshing_params.alternate_filter_1 = (GPUMeshQuadricFilter)((int)(scene_eval->npr.npr_test_val_5 + 1e-10f));
-    meshing_params.visualize_filtered_geom = scene_eval->npr.npr_test_val_6 > .5f;
+    meshing_params.edge_visualize_mode = (int)(scene_eval->npr.npr_test_val_6 + 1e-10f);
 
     pass_draw_contour_edges.draw_settings.draw_hidden_lines = scene_eval->npr.npr_test_val_7 > .5f;
 
@@ -86,7 +86,9 @@ namespace blender::npr::strokegen
     meshing_params.remeshing_targ_edge_len = scene_eval->npr.npr_test_val_12;
     meshing_params.remeshing_split_iters = (int)(scene_eval->npr.npr_test_val_13 + 1e-10f); 
     meshing_params.remeshing_collapse_iters = (int)(scene_eval->npr.npr_test_val_14 + 1e-10f);
-    meshing_params.remeshing_flip_iters = (int)(scene_eval->npr.npr_test_val_15 + 1e-10f); 
+    meshing_params.remeshing_flip_iters = (int)(scene_eval->npr.npr_test_val_15 + 1e-10f);
+    meshing_params.remeshing_iters = (int)(scene_eval->npr.npr_test_val_16 + 1e-10f);
+    meshing_params.remeshing_delaunay_flip_iters = (int)(scene_eval->npr.npr_test_val_17 + 1e-10f); 
   }
 
   void StrokeGenPassModule::on_end_sync()
@@ -184,8 +186,7 @@ namespace blender::npr::strokegen
     append_subpass_quadric_mesh_filtering(num_edges, num_verts, meshing_params);
 
     // Remeshing
-    int num_remesh_iters = 1; 
-    for (int iter_remesh = 0; iter_remesh < num_remesh_iters; ++iter_remesh)
+    for (int iter_remesh = 0; iter_remesh < meshing_params.remeshing_iters; ++iter_remesh)
     {
       int num_edge_split_iters = meshing_params.remeshing_split_iters;
       for (int iter_edge_split = 0; iter_edge_split < num_edge_split_iters; ++iter_edge_split) {
@@ -196,20 +197,25 @@ namespace blender::npr::strokegen
       append_subpass_fill_dispatched_args_remeshed_edges_(num_edges);
       append_subpass_fill_dispatched_args_remeshed_verts_(num_verts); 
 
+      EdgeFlipOptiGoal opti_goal = Delaunay;
+      int num_edge_flip_iters = meshing_params.remeshing_delaunay_flip_iters;
+      for (int iter_edge_flip = 0; iter_edge_flip < num_edge_flip_iters; ++iter_edge_flip) {
+        append_subpass_flip_edges(opti_goal, iter_remesh, iter_edge_flip, num_edges, num_verts);
+      }
+
       int num_edge_collapse_iters = meshing_params.remeshing_collapse_iters;
       for (int iter_edge_collapse = 0; iter_edge_collapse < num_edge_collapse_iters; ++iter_edge_collapse) {
         append_subpass_collapse_edges(iter_remesh, iter_edge_collapse, num_edges, num_verts);
       }
 
-      EdgeFlipOptiGoal opti_goal = Valence; 
-      int num_edge_flip_iters = meshing_params.remeshing_flip_iters;
+      opti_goal = Valence; 
+      num_edge_flip_iters = meshing_params.remeshing_flip_iters;
       for (int iter_edge_flip = 0; iter_edge_flip < num_edge_flip_iters; ++iter_edge_flip) {
         append_subpass_flip_edges(opti_goal, iter_remesh, iter_edge_flip, num_edges, num_verts);
       }
     }
 
     // Contour Processing --------------------------------------------------------
-    const bool debug_wedge_flooding = meshing_params.visualize_filtered_geom;
     append_subpass_fill_dispatched_args_remeshed_edges_(num_edges); 
     append_subpass_extract_contour_edges(
         gpu_batch_line_adj,
@@ -217,7 +223,7 @@ namespace blender::npr::strokegen
         edge_batch,
         num_edges,
         ib_type,
-        debug_wedge_flooding
+        meshing_params.edge_visualize_mode
       );
 
     append_subpass_fill_dispatch_args_contour_edges(pass_extract_geom, false);
@@ -851,7 +857,7 @@ namespace blender::npr::strokegen
       gpu::Batch *edge_batch,
       int num_edges,
       gpu::GPUIndexBufType ib_type,
-      bool debug_wedge_flooding
+      int edge_visualize_mode
   )
   {
     auto &sub = pass_extract_geom.sub(
@@ -892,7 +898,7 @@ namespace blender::npr::strokegen
         (int)edge_batch->elem_()->index_start_get() + (int)edge_batch->elem_()->index_base_get()
         );
     sub.push_constant("pcs_rsc_handle", (int)rsc_handle.resource_index());
-    sub.push_constant("pcs_dbg_wedge_flooding_", debug_wedge_flooding ? 1 : 0);
+    sub.push_constant("pcs_edge_visualize_mode_", edge_visualize_mode);
 
     sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_edges_);
     sub.barrier(GPU_BARRIER_SHADER_STORAGE);

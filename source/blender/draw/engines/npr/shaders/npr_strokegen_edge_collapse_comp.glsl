@@ -78,6 +78,7 @@ EdgeCollapseInfo load_per_collapse_edge_info(uint collapse_edge_id)
     Load2(ssbo_per_collapse_edge_info_, collapse_edge_id, pcei_enc); 
     return decode_edge_collapse_info(pcei_enc); 
 }
+
 void store_per_edge_collapse_info(uint wedge_id, EdgeCollapseInfo peci)
 {
     uvec2 peci_enc = encode_edge_collapse_info(peci); 
@@ -89,12 +90,26 @@ void store_per_edge_collapse_info_two_buffers(uint wedge_id, EdgeCollapseInfo pe
     Store2(ssbo_per_edge_collapse_info_in_, wedge_id, peci_enc); 
     Store2(ssbo_per_edge_collapse_info_out_, wedge_id, peci_enc); 
 }
+void store_per_edge_collapse_info__id_and_flag(uint wedge_id, EdgeCollapseInfo peci)
+{
+    uvec2 peci_enc = encode_edge_collapse_info(peci); 
+    ssbo_per_edge_collapse_info_out_[wedge_id*2u + 1u] = peci_enc.y;
+}
 EdgeCollapseInfo load_per_edge_collapse_info(uint wedge_id)
 {
     uvec2 peci_enc;
     Load2(ssbo_per_edge_collapse_info_in_, wedge_id, peci_enc); 
     return decode_edge_collapse_info(peci_enc); 
 }
+bool load_per_edge_collapse_info__is_collapse_ok(uint wedge_id)
+{
+    uvec2 peci_enc;
+    peci_enc.x = 0; // does not matter
+    peci_enc.y = ssbo_per_edge_collapse_info_in_[2*wedge_id + 1u]; 
+    EdgeCollapseInfo eci = decode_edge_collapse_info(peci_enc); 
+    return eci.is_collapse_ok; 
+}
+
 
 
 
@@ -572,19 +587,37 @@ void main()
             load_per_vert_collapse_wedge_id(v2), 
             load_per_vert_collapse_wedge_id(v3)
         ); 
+
+        EdgeCollapseInfo peci_adj[4]; 
+        bvec4 supress_collapse = bvec4(false); 
         for (uint ivert = 0; ivert < 4; ++ivert)
         {
+            peci_adj[ivert] = EdgeCollapseInfo(false, 10000.0f, NULL_EDGE); 
+
             uint wedge_collapsed = collapse_links[ivert]; 
             if (wedge_collapsed != NULL_EDGE)
             {
-                EdgeCollapseInfo peci_adj = load_per_edge_collapse_info(wedge_collapsed); 
-                if (collapse_score_larger(peci_adj, wedge_collapsed, pcei, pcei.id))
-                {
+                peci_adj[ivert] = load_per_edge_collapse_info(wedge_collapsed); 
+                if (collapse_score_larger(peci_adj[ivert], wedge_collapsed, pcei, pcei.id))
                     pcei_new.is_collapse_ok = false; 
-                    break; 
-                }
+                else
+                    supress_collapse[ivert] = true; 
             }
         }
+        if (valid_thread && pcei.is_collapse_ok && pcei_new.is_collapse_ok)
+        { /* cancel conflicted collapses on v0 and v2 */
+            if (supress_collapse[0])
+            {
+                peci_adj[0].is_collapse_ok = false; 
+                store_per_edge_collapse_info/* __id_and_flag */(collapse_links[0], peci_adj[0]);
+            }
+            if (supress_collapse[2])
+            {
+                peci_adj[2].is_collapse_ok = false; 
+                store_per_edge_collapse_info/* __id_and_flag */(collapse_links[2], peci_adj[2]);
+            }
+        }
+        
 
         if (valid_thread && pcei.is_collapse_ok && !pcei_new.is_collapse_ok)
         {
@@ -605,6 +638,10 @@ void main()
 
     if (!pcei.is_collapse_ok)
         return;
+
+    EdgeCollapseInfo peci = load_per_edge_collapse_info(pcei.id);
+    if (!peci.is_collapse_ok) /* canceled by conflit resolve pass #2*/
+        return; 
 
     /* Parallel Edge Collapse * 
     * (Following graph are only to clearly show how topology changes, actual position of vertices are not accurate)

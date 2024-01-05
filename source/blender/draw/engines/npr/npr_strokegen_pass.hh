@@ -146,12 +146,14 @@ public:
     bool use_normal_filtering;
     GPUMeshQuadricFilter alternate_filter_0;
     GPUMeshQuadricFilter alternate_filter_1;
-    bool visualize_filtered_geom;
+    int edge_visualize_mode;
 
     float remeshing_targ_edge_len;
     int remeshing_split_iters; 
     int remeshing_collapse_iters;
     int remeshing_flip_iters;
+    int remeshing_iters;
+    int remeshing_delaunay_flip_iters; 
   } meshing_params;
   void append_subpass_fill_mesh_filtering_indirect_dispatch_args_();
   void append_subpass_meshing_wedge_flooding(int num_edges, int num_verts);
@@ -164,7 +166,7 @@ public:
                                             int num_edges,
                                             gpu::GPUIndexBufType ib_type,
 
-                                          bool debug_wedge_flooding = false);
+                                            int edge_visualize_mode = false);
 
   int num_remesh_iters = 1;
   enum EdgeFlipOptiGoal {

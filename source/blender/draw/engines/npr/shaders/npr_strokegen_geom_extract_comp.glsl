@@ -211,7 +211,7 @@ void main()
 	bool is_border = ef.border; 
 
 	/* debug view */
-	if (pcs_dbg_wedge_flooding_ > 0)
+	if (pcs_edge_visualize_mode_ > 0)
 	{
 		// Check wfptr.is_seed; 
 		WedgeFloodingPointer wfptr = decode_wedge_flooding_pointer(ssbo_wedge_flooding_pointers_out_[EdgeId]);
@@ -220,14 +220,22 @@ void main()
 		bool valid_ee, valid_ev, valid_ve;
 		validate_wedge_topo(EdgeId, /*out*/ valid_ee, valid_ev, valid_ve);  
 		
-		is_contour = (!ef.del_by_collapse) && (!ef.dupli) && (!ef.del_by_split) 
-			/* visualize edges with invalid topology */
-			/* && ef.temp_flipped_edge */; 
-			/* ( 
-				(!valid_ee)
-				|| (!valid_ev)
-				|| (!valid_ve)
-			) */; 
+		is_contour = (!ef.del_by_collapse) && (!ef.dupli) && (!ef.del_by_split); 
+		/* visualize edges with invalid topology */
+		if (pcs_edge_visualize_mode_ == 1) 
+			is_contour = is_contour && (!valid_ee); 
+		if (pcs_edge_visualize_mode_ == 2) 
+			is_contour = is_contour && (!valid_ev); 
+		if (pcs_edge_visualize_mode_ == 3) 
+			is_contour = is_contour && (!valid_ve); 
+		
+		/* visualize all edges */
+		if (pcs_edge_visualize_mode_ == 4)
+			is_contour = is_contour; 
+			
+		if (pcs_edge_visualize_mode_ == 5)
+			is_contour = ef.del_by_collapse; 
+		
 	}
 
 	bool rev_edge_dir = is_back_face(face_orient_012); 

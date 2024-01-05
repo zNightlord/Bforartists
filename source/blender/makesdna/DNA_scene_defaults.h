@@ -227,7 +227,7 @@
 
 #define _DNA_DEFAULT_SceneNPR \
   { \
-    .npr_test_val_0 = 1, \
+    .npr_test_val_0 = 0, \
     .npr_test_val_1 = 1, \
     .npr_test_val_2 = 1.0f, \
     .npr_test_val_3 = 1.0f, \
@@ -243,7 +243,12 @@
     .npr_test_val_13 = 1.0f, \
     .npr_test_val_14 = 1.0f, \
     .npr_test_val_15 = 1.0f, \
+    .npr_test_val_16 = .0f, \
+    .npr_test_val_17 = .0f, \
+    .npr_test_val_18 = .0f, \
+    .npr_test_val_19 = .0f, \
   }
+/* Remember aligning to 16 bytes*/
 
 #define _DNA_DEFAULT_Scene \
   { \

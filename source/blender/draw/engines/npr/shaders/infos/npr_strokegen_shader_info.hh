@@ -178,7 +178,7 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_extract)
     .push_constant(Type::INT, "pcs_num_edges")
     .push_constant(Type::INT, "pcs_num_ib_offset")
     .push_constant(Type::INT, "pcs_rsc_handle")
-    .push_constant(Type::INT, "pcs_dbg_wedge_flooding_")
+    .push_constant(Type::INT, "pcs_edge_visualize_mode_")
     .local_group_size(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT) /* <== from "bnpr_defines.hh" */
     .compute_source("npr_strokegen_geom_extract_comp.glsl");
 
