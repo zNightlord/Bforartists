@@ -666,7 +666,7 @@ namespace blender::npr::strokegen
       sub.bind_ssbo(9, buffers_.reused_ssbo_per_edge_collapse_info_in_(pingpong_id));
       sub.bind_ssbo(10, buffers_.reused_ssbo_per_edge_collapse_info_out_(pingpong_id));
       sub.bind_ssbo(11, buffers_.reused_ssbo_per_collapse_edge_info_());
-      sub.bind_ssbo(12, buffers_.reused_ssbo_per_vert_collapse_wedge_id_()); 
+      sub.bind_ssbo(12, buffers_.reused_ssbo_per_vert_collapse_wedge_id_());
       sub.push_constant("pcs_collapse_iter_", iter_collapse);
       sub.push_constant("pcs_remesh_edge_len_", remesh_edge_len);
       sub.push_constant("pcs_edge_count_", num_edges);
@@ -674,11 +674,11 @@ namespace blender::npr::strokegen
     };
 
     float remesh_len_scaled = meshing_params.remeshing_targ_edge_len / 100.0f;
-    if (iter_collapse == 0u) {
+    {
       auto &sub = pass_extract_geom.sub("bnpr_meshing_edge_collapse_init");
       sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_OP_COLLAPSE_EDGE_INIT));
       bind_src(sub, 0, remesh_len_scaled);
-      sub.dispatch(int3(1, 1, 1));
+      sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_verts_);
       sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
     }
     {

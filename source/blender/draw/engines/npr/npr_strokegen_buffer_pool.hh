@@ -119,6 +119,7 @@ class GPUBufferPoolModule {
   }
 
 
+
   // Reused Buffer Scheme for Edge Flip --------------------------------------------
   inline GPUStorageBuf *reused_ssbo_per_edge_flip_info_()
   {

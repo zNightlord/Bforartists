@@ -670,9 +670,9 @@ struct CirculatorIterData
 */
 /* get ivert in the context of wi 
  * for example, vi = ssbo_edge_to_vert_[wi*4u + ivert_vi] */
-uint mark__ve_circ__get_vi(CirculatorIterData iter) { return mark__cwedge_to_beg_vert(iter.awi.iface_adj); }
-uint mark__ve_circ__get_vn(CirculatorIterData iter) { return mark__center_wedge_to_oppo_vert__at_face(iter.awi.iface_adj); }
-uint mark__ve_circ__get_vp(CirculatorIterData iter) { return mark__center_wedge_to_oppo_vert__at_face(iter.awi.iface_adj == 1u ? 0u : 1u); }
+uint mark__ve_circ_fwd__get_vi(CirculatorIterData iter) { return mark__cwedge_to_beg_vert(iter.awi.iface_adj); }
+uint mark__ve_circ_fwd__get_vn(CirculatorIterData iter) { return mark__center_wedge_to_oppo_vert__at_face(iter.awi.iface_adj); }
+uint mark__ve_circ_fwd__get_vp(CirculatorIterData iter) { return mark__center_wedge_to_oppo_vert__at_face(iter.awi.iface_adj == 1u ? 0u : 1u); }
 
 #endif
 
@@ -745,7 +745,12 @@ void validate_wedge_topo(uint wedge_id, out bool valid_ee, out bool valid_ev, ou
         uint v_oppo_at_wi = ssbo_edge_to_vert_[wi*4u + mark__center_wedge_to_oppo_vert__at_face(iface_overlap_at_wi)];
         if (v_oppo != v_oppo_at_wi)
             valid_ev = false;
+
+        EdgeFlags ef = load_edge_flags(wi); 
+        if (ef.del_by_collapse || ef.del_by_split)
+            valid_ee = false;
     }
+
 
     /* check ve linkage */
     uvec2 iverts = mark__cwedge_to_verts(0u);

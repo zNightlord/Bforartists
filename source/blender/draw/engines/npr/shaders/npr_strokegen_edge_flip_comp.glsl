@@ -362,7 +362,7 @@ struct FlipValidateContext
 bool vertex_1ring_visitor_validate_flip(CirculatorIterData iter, inout FlipValidateContext ctx)
 {
     uint wi = iter.awi.wedge_id; 
-    uint ivert_vi = mark__ve_circ__get_vi(iter); 
+    uint ivert_vi = mark__ve_circ_fwd__get_vi(iter); 
     uint vi = ssbo_edge_to_vert_[wi + ivert_vi]; 
     
     ctx.is_flip_valid = ctx.is_flip_valid && (vi != ctx.v2); 
