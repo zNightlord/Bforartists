@@ -308,9 +308,6 @@ PerWedgeContourInfo decode_per_wedge_contour_info(uint peci_enc)
 }
 
 
-
-
-
 /* Detect unstable wedges --------------------------------------- */
 struct WedgeQuality
 {
@@ -348,6 +345,12 @@ WedgeQuality compute_wedge_quality(vec3 p0, vec3 p1, vec3 p2, vec3 p3, vec3 cam_
 	return res; 
 }
 
+
+
+/* Edge Selection --------------------------------------------------- 
+ * provide function to diffuse from a initial selection
+ * construct mapping between selected-edges and edges 
+*/
 struct WedgeFloodingPointer
 {
     uint next_wedge_id; 
@@ -373,6 +376,35 @@ WedgeFloodingPointer decode_wedge_flooding_pointer(uint wfp_enc)
     wfp.is_seed = (0u != ((wfp_enc >> 1u) & 1u));
     wfp.is_unstable = (0u != (wfp_enc & 1u)); 
     return wfp; 
+}
+
+struct EdgeSelectionInfo
+{
+    bool is_null_edge; 
+    uint edge_id; // mapping between selected-edges and edges
+    bool is_unstable; 
+    bool is_border; 
+}; 
+uint encode_edge_selection_info(EdgeSelectionInfo fei)
+{
+    uint data = 0u; 
+    data = (fei.edge_id << 2u); 
+    data |= ((fei.is_unstable ? 1u : 0u) << 1u); 
+    data |= (fei.is_border   ? 1u : 0u); 
+
+    if (fei.is_null_edge)
+        data = NULL_EDGE; 
+        
+    return data; 
+}
+EdgeSelectionInfo decode_edge_selection_info(uint data)
+{
+    EdgeSelectionInfo fei; 
+    fei.is_null_edge = (data == NULL_EDGE); 
+    fei.edge_id = data >> 2u; 
+    fei.is_unstable = (data & 0x2u) != 0u; 
+    fei.is_border   = (data & 0x1u) != 0u; 
+    return fei; 
 }
 
 #endif
@@ -485,6 +517,7 @@ struct EdgeFlags
     // Persistent Flags ----------------------------------
     bool dupli; // duplicated edge, should be ignored
     bool border; // border edge
+    bool selected; // selected for a certain operation
     bool new_by_split; // new edge created by edge split
     bool del_by_split; // deleted edge by edge split
     bool del_by_collapse; // deleted edge by edge collapse
@@ -493,34 +526,6 @@ struct EdgeFlags
     bool temp_new_by_split_this_round; // new edge created by edge split in current remeshing round
     bool temp_flipped_edge; // flipped edge
 }; 
-EdgeFlags init_edge_flags(bool dupli, bool border)
-{
-    EdgeFlags ef; 
-    ef.dupli = dupli; 
-    ef.border = border; 
-    ef.new_by_split = false; 
-    ef.del_by_split = false;
-    ef.del_by_collapse = false; 
-
-    ef.temp_new_by_split_this_round = false; 
-    ef.temp_flipped_edge = false; 
-
-    return ef; 
-}
-EdgeFlags init_edge_flags__new_split_edge()
-{
-    EdgeFlags ef; 
-    ef.dupli = false; 
-    ef.border = false; 
-    ef.new_by_split = true; 
-    ef.del_by_split = false; 
-    ef.del_by_collapse = false; 
-
-    ef.temp_new_by_split_this_round = true; 
-    ef.temp_flipped_edge = false; 
-
-    return ef; 
-}
 
 uint encode_edge_flags(EdgeFlags ef)
 {
@@ -529,30 +534,34 @@ uint encode_edge_flags(EdgeFlags ef)
     ef_enc <<= 1u; 
     ef_enc |= uint(ef.border); // d_b
     ef_enc <<= 1u; 
-    ef_enc |= uint(ef.new_by_split); // d_b_ns 
+    ef_enc |= uint(ef.selected); // d_b_sel
     ef_enc <<= 1u; 
-    ef_enc |= uint(ef.del_by_split); // d_b_ns_ds
+    ef_enc |= uint(ef.new_by_split); // d_b_sel_ns 
     ef_enc <<= 1u; 
-    ef_enc |= uint(ef.del_by_collapse); // d_b_ns_ds_dc
+    ef_enc |= uint(ef.del_by_split); // d_b_sel_ns_ds
     ef_enc <<= 1u; 
-    ef_enc |= uint(ef.temp_new_by_split_this_round); // d_b_ns_ds_dc_tnbsr
+    ef_enc |= uint(ef.del_by_collapse); // d_b_sel_ns_ds_dc
     ef_enc <<= 1u; 
-    ef_enc |= uint(ef.temp_flipped_edge); // d_b_ns_ds_dc_tnbsr_tfe
+    ef_enc |= uint(ef.temp_new_by_split_this_round); // d_b_sel_ns_ds_dc_tnbsr
+    ef_enc <<= 1u; 
+    ef_enc |= uint(ef.temp_flipped_edge); // d_b_sel_ns_ds_dc_tnbsr_tfe
 
     return ef_enc; 
 }
 EdgeFlags decode_edge_flags(uint ef_enc)
 {
-    EdgeFlags ef; // d_b_ns_ds_dc_tnbsr_tfe
+    EdgeFlags ef; // d_b_sel_ns_ds_dc_tnbsr_tfe
     ef.temp_flipped_edge = (1u == (ef_enc & 1u));
-    ef_enc >>= 1u; // d_b_ns_ds_dc_tnbsr
+    ef_enc >>= 1u; // d_b_sel_ns_ds_dc_tnbsr
     ef.temp_new_by_split_this_round = (1u == (ef_enc & 1u));
-    ef_enc >>= 1u; // d_b_ns_ds_dc
+    ef_enc >>= 1u; // d_b_sel_ns_ds_dc
     ef.del_by_collapse = (1u == (ef_enc & 1u)); 
-    ef_enc >>= 1u; // d_b_ns_ds
+    ef_enc >>= 1u; // d_b_sel_ns_ds
     ef.del_by_split = (1u == (ef_enc & 1u)); 
-    ef_enc >>= 1u; // d_b_ns
+    ef_enc >>= 1u; // d_b_sel_ns
     ef.new_by_split = (1u == (ef_enc & 1u)); 
+    ef_enc >>= 1u; // d_b_sel_ns
+    ef.selected = (1u == (ef_enc & 1u));
     ef_enc >>= 1u; // d_b
     ef.border = (1u == (ef_enc & 1u));
     ef_enc >>= 1u; // d 
@@ -568,12 +577,66 @@ void store_edge_flags(uint wedge_id, EdgeFlags ef)
 {
     ssbo_edge_flags_[wedge_id] = encode_edge_flags(ef); 
 }
+
+
+EdgeFlags init_edge_flags(bool dupli, bool border)
+{
+    EdgeFlags ef; 
+    ef.dupli = dupli; 
+    ef.border = border; 
+    ef.selected = true; 
+    ef.new_by_split = false; 
+    ef.del_by_split = false;
+    ef.del_by_collapse = false; 
+
+    ef.temp_new_by_split_this_round = false; 
+    ef.temp_flipped_edge = false; 
+
+    return ef; 
+}
+
+
+
+
+
+EdgeFlags init_edge_flags__new_split_edge()
+{
+    EdgeFlags ef; 
+    ef.dupli = false; 
+    ef.border = false; 
+    ef.selected = true;
+    ef.new_by_split = true; 
+    ef.del_by_split = false; 
+    ef.del_by_collapse = false; 
+
+    ef.temp_new_by_split_this_round = true; 
+    ef.temp_flipped_edge = false; 
+
+    return ef; 
+}
+void update_edge_flags__del_by_split(uint edge_id)
+{
+    EdgeFlags ef_del = load_edge_flags(edge_id);
+    ef_del.del_by_split = true; 
+    store_edge_flags(edge_id, ef_del);
+}
+void update_edge_flags__revert_split(uint edge_id)
+{
+    EdgeFlags ef = load_edge_flags(edge_id); 
+    ef.del_by_split = false; 
+    store_edge_flags(edge_id, ef);
+}
+
+
 void update_edge_flags__del_by_collapse(uint edge_id)
 {
     EdgeFlags ef = load_edge_flags(edge_id); 
     ef.del_by_collapse = true; 
+    ef.selected = false; 
     store_edge_flags(edge_id, ef); 
 }
+
+
 void update_edge_flags__flipped(uint edge_id)
 {
     EdgeFlags ef = load_edge_flags(edge_id); 

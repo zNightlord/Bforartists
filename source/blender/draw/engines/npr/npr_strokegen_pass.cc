@@ -179,13 +179,27 @@ namespace blender::npr::strokegen
     // Basic Meshing -----------------------------------------------------------
     append_subpass_meshing_merge_verts(num_verts);
     append_subpass_meshing_wedge_adjacency_and_init_flooding_ptr(num_edges, num_verts);
-    append_subpass_meshing_wedge_flooding(num_edges, num_verts);
+
 
     // Mesh Filtering -----------------------------------------------------------
-    append_subpass_fill_mesh_filtering_indirect_dispatch_args_();
-    append_subpass_quadric_mesh_filtering(num_edges, num_verts, meshing_params);
+    EdgeFloodingOptions flooding_options;
+    // flooding_options.compact_edges = true;
+    // flooding_options.output_selected_to_edge = true;
+    // flooding_options.output_edge_to_selected = true;
+    // flooding_options.select_verts = true;
+    // append_subpass_meshing_wedge_flooding(num_edges, num_verts, flooding_options);
+    //
+    // append_subpass_fill_mesh_filtering_indirect_dispatch_args_();
+    // append_subpass_quadric_mesh_filtering(num_edges, num_verts, meshing_params);
 
-    // Remeshing
+
+    // Remeshing --------------------------------------------------------------------------------
+    flooding_options.compact_edges = false;
+    flooding_options.output_selected_to_edge = false;
+    flooding_options.output_edge_to_selected = false;
+    flooding_options.select_verts = false;
+    append_subpass_meshing_wedge_flooding(num_edges, num_verts, flooding_options);
+
     for (int iter_remesh = 0; iter_remesh < meshing_params.remeshing_iters; ++iter_remesh)
     {
       int num_edge_split_iters = meshing_params.remeshing_split_iters;
@@ -194,7 +208,7 @@ namespace blender::npr::strokegen
         append_subpass_split_edges(iter_remesh, iter_edge_split, num_edges, num_verts);  
       }
       // update elem counters after split
-      append_subpass_fill_dispatched_args_remeshed_edges_(num_edges);
+      append_subpass_fill_dispatched_args_remeshed_edges_(num_edges); 
       append_subpass_fill_dispatched_args_remeshed_verts_(num_verts); 
 
       EdgeFlipOptiGoal opti_goal = Delaunay;
@@ -262,8 +276,8 @@ namespace blender::npr::strokegen
       sub.bind_ssbo(1, buffers_.ssbo_edge_to_edges_);
       sub.bind_ssbo(2, buffers_.ssbo_edge_to_vert_);
       sub.bind_ssbo(3, buffers_.ssbo_vert_to_edge_list_header_);
-      sub.bind_ssbo(4, buffers_.reused_ssbo_filtered_edge_to_edge_());
-      sub.bind_ssbo(5, buffers_.reused_ssbo_filtered_vert_to_vert_());
+      sub.bind_ssbo(4, buffers_.ssbo_selected_edge_to_edge_);
+      sub.bind_ssbo(5, buffers_.reused_ssbo_selected_vert_to_vert_());
       sub.bind_ssbo(6, buffers_.ssbo_vbo_full_);
       sub.bind_ssbo(7, buffers_.reused_ssbo_filtered_normal_vert_());
       sub.bind_ssbo(8, reused_ssbo_filtered_normal_edge_in_);
@@ -501,11 +515,12 @@ namespace blender::npr::strokegen
     }
   }
 
-  void StrokeGenPassModule::append_subpass_meshing_wedge_flooding(int num_edges, int num_verts)
+  void StrokeGenPassModule::append_subpass_meshing_wedge_flooding(int num_edges, int num_verts, EdgeFloodingOptions options)
   {
     auto bind_flooding_rsc = [&](
-        draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub, int flooding_iter = 0)
-    {
+        draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub,
+        int flooding_iter = 0
+      ) {
       GPUStorageBuf *reused_ssbo_wedge_flooding_pointers_in_ = nullptr;
       GPUStorageBuf *reused_ssbo_wedge_flooding_pointers_out_ = nullptr;
       buffers_.reused_ssbo_wedge_flooding_pointers_(flooding_iter,
@@ -515,20 +530,43 @@ namespace blender::npr::strokegen
       sub.bind_ssbo(0, reused_ssbo_wedge_flooding_pointers_in_);
       sub.bind_ssbo(1, reused_ssbo_wedge_flooding_pointers_out_);
       sub.bind_ssbo(2, buffers_.ssbo_edge_to_edges_);
-      sub.bind_ssbo(3, buffers_.reused_ssbo_filtered_edge_to_edge_());
-      sub.bind_ssbo(4, buffers_.ssbo_bnpr_mesh_pool_counters_); 
+      sub.bind_ssbo(3, buffers_.ssbo_edge_to_vert_);
+      sub.bind_ssbo(4, buffers_.ssbo_vert_to_edge_list_header_);
+      sub.bind_ssbo(5, buffers_.ssbo_selected_edge_to_edge_);
+      sub.bind_ssbo(6, buffers_.ssbo_bnpr_mesh_pool_counters_);
+      sub.bind_ssbo(7, buffers_.ssbo_dyn_mesh_counters_out_());
+      sub.bind_ssbo(8, buffers_.ssbo_edge_flags_);
+      sub.bind_ssbo(9, buffers_.ssbo_vbo_full_);
+
+      sub.bind_ubo(0, buffers_.ubo_view_matrices_cache_); 
+
       sub.push_constant("pcs_edge_count_", num_edges);
+      sub.push_constant("pcs_vert_count_", num_verts); 
+      sub.push_constant("pcs_output_selected_edge_to_edge_",
+                        (options.compact_edges && options.output_selected_to_edge) ? 1 : 0);
+      sub.push_constant("pcs_output_edge_to_selected_edge_",
+                        (options.compact_edges && options.output_edge_to_selected) ? 1 : 0);
     };
 
-    const int num_flooding_iters = meshing_params.num_edge_flooding_iters * 2;  // Must be even number !!!
-    int flooding_iter = 0; 
-    for (; flooding_iter < num_flooding_iters; ++flooding_iter)
-    {
+    const int num_flooding_iters = meshing_params.num_edge_flooding_iters * 2;
+    // Must be even number !!!
+    int flooding_iter = 0;
+    for (; flooding_iter < num_flooding_iters; ++flooding_iter) {
       auto &sub = pass_extract_geom.sub("bnpr_meshing_wedge_flooding");
-      if (flooding_iter < num_flooding_iters - 1)
+
+      if (flooding_iter == 0) {
+        // first iter, setup selection seeds
+        sub.shader_set(shaders_.static_shader_get(MESH_WEDGE_FLOODING_FIRST_ITER_INIT)); 
+      }
+      else if (flooding_iter < num_flooding_iters - 1)
         sub.shader_set(shaders_.static_shader_get(MESH_WEDGE_FLOODING_ITER));
-      else
-        sub.shader_set(shaders_.static_shader_get(MESH_WEDGE_FLOODING_LAST_ITER)); 
+      else {
+        // last iter, output results
+        if (options.compact_edges)
+          sub.shader_set(shaders_.static_shader_get(MESH_WEDGE_FLOODING_LAST_ITER_COMPACTION));
+        else
+          sub.shader_set(shaders_.static_shader_get(MESH_WEDGE_FLOODING_LAST_ITER_OUTPUT_FLAGS));
+      }
 
       bind_flooding_rsc(sub, flooding_iter);
 
@@ -537,7 +575,7 @@ namespace blender::npr::strokegen
       sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_SHADER_IMAGE_ACCESS);
     }
 
-    {
+    if (options.select_verts) {
       auto &sub = pass_extract_geom.sub("bnpr_meshing_compact_filtered_verts");
       sub.shader_set(shaders_.static_shader_get(MESH_WEDGE_FLOODING_SELECT_VERTS));
 
@@ -547,15 +585,15 @@ namespace blender::npr::strokegen
                                                     reused_ssbo_wedge_flooding_pointers_in_,
                                                     reused_ssbo_wedge_flooding_pointers_out_);
 
-      sub.bind_ssbo(0, buffers_.reused_ssbo_filtered_vert_to_vert_());
+      sub.bind_ssbo(0, buffers_.reused_ssbo_selected_vert_to_vert_());
       sub.bind_ssbo(1, reused_ssbo_wedge_flooding_pointers_in_);
       sub.bind_ssbo(2, buffers_.ssbo_edge_to_vert_);
       sub.bind_ssbo(3, buffers_.ssbo_edge_to_edges_);
-      sub.bind_ssbo(4, buffers_.ssbo_vert_to_edge_list_header_); 
+      sub.bind_ssbo(4, buffers_.ssbo_vert_to_edge_list_header_);
       sub.bind_ssbo(5, buffers_.ssbo_bnpr_mesh_pool_counters_);
-      sub.bind_ssbo(6, buffers_.reused_ssbo_vert_merged_id_()); 
+      sub.bind_ssbo(6, buffers_.reused_ssbo_vert_merged_id_());
       sub.push_constant("pcs_vert_count_", num_verts);
-      sub.push_constant("pcs_edge_count_", num_edges); 
+      sub.push_constant("pcs_edge_count_", num_edges);
 
       int num_groups = compute_num_groups(num_verts, GROUP_SIZE_STROKEGEN_GEOM_EXTRACT);
       sub.dispatch(int3(num_groups, 1, 1));
@@ -654,8 +692,8 @@ namespace blender::npr::strokegen
   {
     auto bind_src = [&](draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub,
                         int pingpong_id, float remesh_edge_len) {
-      sub.bind_ssbo(0, buffers_.ssbo_dyn_mesh_counters_in());   // in
-      sub.bind_ssbo(1, buffers_.ssbo_dyn_mesh_counters_out());    // out
+      sub.bind_ssbo(0, buffers_.ssbo_dyn_mesh_counters_in_());   // in
+      sub.bind_ssbo(1, buffers_.ssbo_dyn_mesh_counters_out_());    // out
       sub.bind_ssbo(2, buffers_.ssbo_edge_collapse_counters_);
       sub.bind_ssbo(3, buffers_.ssbo_vbo_full_);
       sub.bind_ssbo(4, buffers_.ssbo_edge_to_vert_);
@@ -811,7 +849,7 @@ namespace blender::npr::strokegen
   {
     auto &sub = pass_extract_geom.sub("strokegen_remeshing_fill_dispatch_args_per_remeshed_edge");
     sub.shader_set(shaders_.static_shader_get(FILL_DISPATCH_ARGS_REMESHED_EDGES));
-    sub.bind_ssbo(0, buffers_.ssbo_dyn_mesh_counters_out());
+    sub.bind_ssbo(0, buffers_.ssbo_dyn_mesh_counters_out_());
     sub.bind_ssbo(1, buffers_.ssbo_indirect_dispatch_args_per_remeshed_edges_); 
     sub.push_constant("pcs_edge_count_", num_static_edges); 
     sub.push_constant("pcs_remeshed_edges_dispatch_group_size_", (int)GROUP_SIZE_STROKEGEN_GEOM_EXTRACT);
@@ -823,7 +861,7 @@ namespace blender::npr::strokegen
   {
     auto &sub = pass_extract_geom.sub("strokegen_remeshing_fill_dispatch_args_per_remeshed_vert");
     sub.shader_set(shaders_.static_shader_get(FILL_DISPATCH_ARGS_REMESHED_VERTS));
-    sub.bind_ssbo(0, buffers_.ssbo_dyn_mesh_counters_out());
+    sub.bind_ssbo(0, buffers_.ssbo_dyn_mesh_counters_out_());
     sub.bind_ssbo(1, buffers_.ssbo_indirect_dispatch_args_per_remeshed_verts_);
     sub.push_constant("pcs_vert_count_", num_static_verts);
     sub.push_constant("pcs_remeshed_verts_dispatch_group_size_",

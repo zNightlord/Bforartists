@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
+﻿/* SPDX-License-Identifier: GPL-2.0-or-later
  * Copyright 2021 Blender Foundation.
  */
 
@@ -32,8 +32,8 @@ class GPUBufferPoolModule {
   SSBO_StrokeGenMeshPoolCounters ssbo_bnpr_mesh_pool_counters_prev_; // keep counters from last mesh extraction iter
 
   SSBO_StrokeGenDynamicMeshCounters ssbo_dyn_mesh_counters_[2];
-  inline GPUStorageBuf *ssbo_dyn_mesh_counters_in() { return ssbo_dyn_mesh_counters_[0]; }
-  inline GPUStorageBuf *ssbo_dyn_mesh_counters_out() { return ssbo_dyn_mesh_counters_[1]; }
+  inline GPUStorageBuf *ssbo_dyn_mesh_counters_in_() { return ssbo_dyn_mesh_counters_[0]; }
+  inline GPUStorageBuf *ssbo_dyn_mesh_counters_out_() { return ssbo_dyn_mesh_counters_[1]; }
   SSBO_StrokeGenEdgeSplitCounters ssbo_edge_split_counters_;
   SSBO_StrokeGenEdgeCollapseCounters ssbo_edge_collapse_counters_;
   SSBO_StrokeGenEdgeFlipCounters ssbo_edge_flip_counters_;
@@ -61,6 +61,7 @@ class GPUBufferPoolModule {
   SSBO_StrokeGenMeshBufPerEdge<uint, 4> ssbo_edge_to_edges_;            // 256MB   640MB
   SSBO_StrokeGenMeshBufPerVert<uint, 1> ssbo_vert_flags_;               // 32MB    672MB
   SSBO_StrokeGenMeshBufPerEdge<uint, 1> ssbo_edge_flags_;               // 64MB    736MB
+  SSBO_StrokeGenMeshBufPerSelectedEdge<uint, 1> ssbo_selected_edge_to_edge_;   // 32MB    768MB
   SSBO_StrokeGenMeshBufPerContour<uint, 2> ssbo_contour_to_contour_;    // 
   SSBO_StrokeGenMeshBufPerContour<uint, 1> ssbo_contour_edge_rank_;     // 
   SSBO_StrokeGenMeshBufPerContour<uint, 1> ssbo_contour_edge_list_len_; // 
@@ -156,11 +157,11 @@ class GPUBufferPoolModule {
       buf_out = ssbo_mesh_buffer_reuse_6_; 
     }
   }
-  inline GPUStorageBuf *reused_ssbo_filtered_edge_to_edge_()
+  inline GPUStorageBuf *reused_ssbo_selected_edge_to_edge_()
   {
     return ssbo_contour_to_contour_; 
   }
-  inline GPUStorageBuf *reused_ssbo_filtered_vert_to_vert_()
+  inline GPUStorageBuf *reused_ssbo_selected_vert_to_vert_()
   {
     return ssbo_contour_edge_rank_; 
   }

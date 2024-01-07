@@ -133,9 +133,13 @@ const char *StrokeGenShaderModule::static_shader_create_info_name_get(eShaderTyp
       return "bnpr_meshing_merge_edges_fill";
 
     case MESH_WEDGE_FLOODING_ITER:
-      return "bnpr_meshing_wedge_flooding_iter"; 
-    case MESH_WEDGE_FLOODING_LAST_ITER:
-      return "bnpr_meshing_wedge_flooding_last_iter";
+      return "bnpr_meshing_wedge_flooding_iter";
+    case MESH_WEDGE_FLOODING_FIRST_ITER_INIT:
+      return "bnpr_meshing_wedge_flooding_iter_init"; 
+    case MESH_WEDGE_FLOODING_LAST_ITER_OUTPUT_FLAGS:
+      return "bnpr_meshing_wedge_flooding_last_iter_output_flags"; 
+    case MESH_WEDGE_FLOODING_LAST_ITER_COMPACTION:
+      return "bnpr_meshing_wedge_flooding_last_iter_compaction";
     case MESH_WEDGE_FLOODING_SELECT_VERTS:
       return "bnpr_meshing_compact_filtered_verts";
 

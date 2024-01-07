@@ -234,7 +234,7 @@ void main()
 			is_contour = is_contour; 
 			
 		if (pcs_edge_visualize_mode_ == 5)
-			is_contour = ef.del_by_collapse; 
+			is_contour = is_contour && ef.selected; 
 		
 	}
 

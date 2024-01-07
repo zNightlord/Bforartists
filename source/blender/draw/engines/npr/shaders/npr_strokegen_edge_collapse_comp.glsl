@@ -189,6 +189,7 @@ void main()
 
     /* Filter collapse edges */
     bool is_collapse_ok = (edge_len < get_collapse_edge_len_max()) 
+        && (ef.selected)
         && (!ef.dupli)
         && (!ef.border)
         && (!ef.del_by_collapse)
@@ -212,15 +213,6 @@ void main()
         peci.edge_len = edge_len;
         peci.id = is_collapse_ok ? collapse_edge_id : NULL_EDGE;
         store_per_edge_collapse_info_two_buffers(wedge_id, peci); 
-
-        // debug only ---
-        // if (valid_thread && peci.is_collapse_ok)
-        // { 
-        //     EdgeFlags ef = load_edge_flags(wedge_id); 
-        //     ef.del_by_collapse = true; 
-        //     store_edge_flags(wedge_id, ef); 
-        // }
-        // --------------
     }
 }
 #endif

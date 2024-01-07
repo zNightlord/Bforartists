@@ -176,11 +176,12 @@ void main()
 
     /* Select edges based on split conditions */
     bool is_split_ok = valid_thread 
+        && (ef.selected)
         && (!ef.dupli)
         && (!ef.border) 
         && (!ef.del_by_split)
         && (!ef.del_by_collapse)
-        && (!ef.temp_new_by_split_this_round) /* skip edges generated from current remesh iter */
+        // && (!ef.temp_new_by_split_this_round) /* skip edges generated from current remesh iter */
         && edge_len > get_split_edge_len_min();
 
     uint split_edge_id = compact_split_select_long_edges(is_split_ok, groupId);
@@ -282,9 +283,7 @@ void main()
         return;
     if (valid_thread && !psei_curr.is_split_ok)
     {
-        EdgeFlags ef = load_edge_flags(psei_curr.id); 
-        ef.del_by_split = false; /* cancel the deletion */
-        store_edge_flags(psei_curr.id, ef); 
+        update_edge_flags__revert_split(psei_curr.id); 
         return; 
     }
 
@@ -421,10 +420,7 @@ void main()
     store_edge_flags(e3, ef);
 
     /* Mark old edge as deleted */
-    EdgeFlags ef_del = load_edge_flags(psei_curr.id);
-    ef_del.del_by_split = true; 
-    store_edge_flags(psei_curr.id, ef_del);
-
+    update_edge_flags__del_by_split(psei_curr.id);
 
     /* Update ve adj. for Old verts, if thery were connected to the split edge */
     try_update_ve_link(v1, psei_curr.id, VertWedgeListHeader(w0, mark__cwedge_to_beg_vert(w[0].iface_adj))); 

@@ -357,8 +357,10 @@ void main()
         if (inserted)
             for (uint iiverts = 0u; iiverts < 2u; iiverts++)
             { /* Put an arbitrary neighbor wedge id for each vert */
-                uint vert_id = wing_verts[iverts_cwedge[iiverts]]; 
-                ssbo_vert_to_edge_list_header_[vert_id] = EdgeID; 
+                uint ivert = iverts_cwedge[iiverts]; 
+                uint vert_id = wing_verts[ivert];
+                ssbo_vert_to_edge_list_header_[vert_id] = 
+                    encode_vert_wedge_list_header(VertWedgeListHeader(EdgeID, ivert)); 
             }
     }
 #endif
@@ -435,7 +437,7 @@ void main()
     { /* end vert points the border edge */
         uint ivert_end = mark__cwedge_to_end_vert(mark__border_iface_mainfold()); 
         uint vtxid_end = vids_wedge[ivert_end]; 
-        ssbo_vert_to_edge_list_header_[vtxid_end] = EdgeID; 
+        ssbo_vert_to_edge_list_header_[vtxid_end] = encode_vert_wedge_list_header(VertWedgeListHeader(EdgeID, ivert_end)); 
     }
 
 

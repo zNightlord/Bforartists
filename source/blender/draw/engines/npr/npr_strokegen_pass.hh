@@ -129,6 +129,14 @@ public:
 
 
 
+  struct EdgeFloodingOptions {
+   bool compact_edges;
+   bool output_selected_to_edge;
+   bool output_edge_to_selected;
+   bool select_verts;
+  };
+  void append_subpass_meshing_wedge_flooding(int num_edges, int num_verts, EdgeFloodingOptions options);
+
   enum GPUMeshQuadricFilter {
     GeomNormalPlane = 0,
     ViewNormalPlane = 1,
@@ -156,10 +164,11 @@ public:
     int remeshing_delaunay_flip_iters; 
   } meshing_params;
   void append_subpass_fill_mesh_filtering_indirect_dispatch_args_();
-  void append_subpass_meshing_wedge_flooding(int num_edges, int num_verts);
-  void append_subpass_quadric_mesh_filtering(
-      int num_edges, int num_verts,
-      blender::npr::strokegen::StrokeGenPassModule::GPUMeshFilteringParameters &params);
+  void append_subpass_quadric_mesh_filtering(int num_edges, int num_verts, GPUMeshFilteringParameters &params);
+
+
+
+
   void append_subpass_extract_contour_edges(GPUBatch *gpu_batch_line_adj,
                                             ResourceHandle &rsc_handle,
                                             gpu::Batch *edge_batch,
