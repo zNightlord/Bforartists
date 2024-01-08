@@ -61,6 +61,9 @@ void store_vbo(uint GlobalVertID, vec3 vpos)
 }
 
 
+
+
+
 #if defined(_KERNEL_MULTICOMPILE__WEDGE_FLOODING)
 void main()
 {
@@ -68,45 +71,47 @@ void main()
 	const uint idx = gl_GlobalInvocationID.x; 
     /* Do not use EdgeID here since it's offseted with current mesh batch */
     bool valid_thread = (idx.x < get_edge_count()); 
-    
     const uint EdgeID = idx.x; 
-
-
-#if defined(_KERNEL_MULTICOMPILE__WEDGE_FLOODING__ITER)
 
     WedgeFloodingPointer wfptr; 
 
-    #if defined(_KERNEL_MULTICOMPILE__WEDGE_FLOODING__ITER__INIT)
-        uvec4 v; 
-        v[0] = ssbo_edge_to_vert_[EdgeID*4u + 0];
-        v[1] = ssbo_edge_to_vert_[EdgeID*4u + 1];
-        v[2] = ssbo_edge_to_vert_[EdgeID*4u + 2];
-        v[3] = ssbo_edge_to_vert_[EdgeID*4u + 3];
-        bool is_border_wedge = wing_verts_is_border_edge(v); 
-        
-        vec3 vpos_wedge[4]; 
-        for (uint ivert = 0; ivert < 4; ++ivert)
-            vpos_wedge[ivert] = ld_vbo(v[ivert]);
+#if defined(_KERNEL_MULTICOMPILE__WEDGE_FLOODING__ITER__INIT)
+    uvec4 v; 
+    v[0] = ssbo_edge_to_vert_[EdgeID*4u + 0];
+    v[1] = ssbo_edge_to_vert_[EdgeID*4u + 1];
+    v[2] = ssbo_edge_to_vert_[EdgeID*4u + 2];
+    v[3] = ssbo_edge_to_vert_[EdgeID*4u + 3];
+    bool is_border_wedge = wing_verts_is_border_edge(v); 
+    
+    vec3 vpos_wedge[4]; 
+    for (uint ivert = 0; ivert < 4; ++ivert)
+        vpos_wedge[ivert] = ld_vbo(v[ivert]);
 
-        mat4 view_to_world = ubo_view_matrices_.viewinv;
-        vec3 cam_pos_ws = view_to_world[3].xyz; /* see "#define cameraPos ViewMatrixInverse[3].xyz" */
+    mat4 view_to_world = ubo_view_matrices_.viewinv;
+    vec3 cam_pos_ws = view_to_world[3].xyz; /* see "#define cameraPos ViewMatrixInverse[3].xyz" */
 
-        WedgeQuality wq = compute_wedge_quality(
-            vpos_wedge[0], vpos_wedge[1], vpos_wedge[2], vpos_wedge[3], cam_pos_ws
-        ); 
-        
-        wfptr.next_wedge_id = EdgeID; 
-        wfptr.is_seed       = wq.unstable && !is_border_wedge; 
-        wfptr.is_unstable   = wq.unstable_silouette && !is_border_wedge; 
-        wfptr.is_border     = is_border_wedge; 
+    WedgeQuality wq = compute_wedge_quality(
+        vpos_wedge[0], vpos_wedge[1], vpos_wedge[2], vpos_wedge[3], cam_pos_ws
+    ); 
+    
+    wfptr.next_wedge_id = EdgeID; 
+    wfptr.is_seed       = wq.unstable && !is_border_wedge; 
+    wfptr.is_unstable   = wq.unstable_silouette && !is_border_wedge; 
+    wfptr.is_border     = is_border_wedge; 
 
-        if (valid_thread)
-            ssbo_wedge_flooding_pointers_out_[EdgeID] = encode_wedge_flooding_pointer(wfptr); 
+    if (valid_thread)
+        ssbo_wedge_flooding_pointers_out_[EdgeID] = encode_wedge_flooding_pointer(wfptr); 
 
-        return; /* quit after init */
-    #else
-        wfptr = decode_wedge_flooding_pointer(ssbo_wedge_flooding_pointers_in_[EdgeID]); 
-    #endif
+    if (EdgeID == 0u)
+        ssbo_bnpr_mesh_pool_counters_.num_filtered_edges = 0; /* zero selection counter */
+
+    return; /* quit after init */
+#endif /*_KERNEL_MULTICOMPILE__WEDGE_FLOODING__ITER__INIT*/
+
+
+/* flooding logic for 1<= iter < #iters-1---------------------------------------- */
+#if defined(_KERNEL_MULTICOMPILE__WEDGE_FLOODING__ITER)
+    wfptr = decode_wedge_flooding_pointer(ssbo_wedge_flooding_pointers_in_[EdgeID]); 
     
     if (false == wfptr.is_seed)
     {
@@ -194,12 +199,30 @@ void main()
                 uint addr_edge_to_filtered_edge = ssbo_edge_to_edges_addr__edge_to_selected_edge(EdgeID, num_all_edges); 
                 ssbo_edge_to_edges_[addr_edge_to_filtered_edge] = encode_edge_selection_info(fei);
             }
-        #endif
-    #endif
+        #endif 
+    #endif /*_KERNEL_MULTICOMPILE__WEDGE_FLOODING__ITER__LAST_ITER*/
+#endif /*_KERNEL_MULTICOMPILE__WEDGE_FLOODING__ITER */
 
-#endif
+
 }
 #endif
+
+
+#if defined(_KERNEL_MULTICOMPILE__SELECT_VERTS)
+void main()
+{
+#if defined(_KERNEL_MULTICOMPILE__SELECT_VERTS__FROM_SELECTED_EDGES)
+    #if defined(_KERNEL_MULTICOMPILE__SELECT_VERTS__FROM_SELECTED_EDGES__PASS_0)
+    #endif /* _KERNEL_MULTICOMPILE__SELECT_VERTS__FROM_SELECTED_EDGES__PASS_0 */
+
+    #if defined(_KERNEL_MULTICOMPILE__SELECT_VERTS__FROM_SELECTED_EDGES__PASS_1)
+    #endif /* _KERNEL_MULTICOMPILE__SELECT_VERTS__FROM_SELECTED_EDGES__PASS_1 */
+#endif /*_KERNEL_MULTICOMPILE__SELECT_VERTS__FROM_SELECTED_EDGES*/
+}
+#endif
+
+
+
 
 
 

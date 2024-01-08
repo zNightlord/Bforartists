@@ -449,7 +449,7 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_wedge_flooding)
     .push_constant(Type::INT, "pcs_output_edge_to_selected_edge_")
     .push_constant(Type::INT, "pcs_output_selected_edge_to_edge_")
     .uniform_buf(0, "ViewMatrices", "ubo_view_matrices_") 
-    
+
     .local_group_size(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT)
     .compute_source("npr_strokegen_wedge_flooding_compute.glsl");
 
@@ -461,7 +461,6 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_wedge_flooding_iter)
 GPU_SHADER_CREATE_INFO(bnpr_meshing_wedge_flooding_iter_init)
     .do_static_compilation(true)
     .additional_info("bnpr_meshing_wedge_flooding")
-    .define("_KERNEL_MULTICOMPILE__WEDGE_FLOODING__ITER", "1")
     .define("_KERNEL_MULTICOMPILE__WEDGE_FLOODING__ITER__INIT", "1");
 
 GPU_SHADER_CREATE_INFO(bnpr_meshing_wedge_flooding_last_iter_output_flags)
