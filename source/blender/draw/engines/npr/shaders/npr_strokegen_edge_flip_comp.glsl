@@ -166,13 +166,20 @@ bool should_edge_flip_common(vec3 p0, vec3 p1, vec3 p2, vec3 p3)
     return true; 
 }
 
+
+uint pcg(uint v) /* pcg hash */
+{
+	uint state = v * 747796405u + 2891336453u;
+	uint word = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
+	return (word >> 22u) ^ word;
+}
 /* larger score == higher priority */
 bool flip_score_larger(EdgeFlipInfo efi_0, uint wedge_id_0, EdgeFlipInfo efi_1, uint wedge_id_1)
 {
     if (!efi_0.is_flip_ok) return false; 
     if (!efi_1.is_flip_ok) return true; 
     if (efi_0.score == efi_1.score)
-        return wedge_id_0 > wedge_id_1; 
+        return pcg(wedge_id_0) > pcg(wedge_id_1); 
     return efi_0.score > efi_1.score; 
 }
 float comp_edge_flip_valence_score(

@@ -107,6 +107,14 @@ EdgeSplitInfo load_per_edge_split_info(uint wedge_id)
 }
 
 
+uint pcg(uint v) /* pcg hash */
+{
+	uint state = v * 747796405u + 2891336453u;
+	uint word = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
+	return (word >> 22u) ^ word;
+}
+
+
 /* true/false if esi_0 hase higher/lower priority than esi_1  */
 struct EdgeSplitPriorityContext
 {
@@ -121,7 +129,7 @@ bool split_priority_higher(EdgeSplitPriorityContext ctx_0, EdgeSplitPriorityCont
         return true;
 
     if (ctx_0.pesi.edge_len == ctx_1.pesi.edge_len)
-        return ctx_0.wedge_id < ctx_1.wedge_id; /* use lower id */
+        return pcg(ctx_0.wedge_id) < pcg(ctx_1.wedge_id); /* use lower id */
 
     return ctx_0.pesi.edge_len > ctx_1.pesi.edge_len; /* prefer longer edge */
 }

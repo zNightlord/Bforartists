@@ -131,8 +131,9 @@ public:
 
   struct EdgeFloodingOptions {
    bool compact_edges;
-   bool output_selected_to_edge;
-   bool output_edge_to_selected;
+   bool output_selected_to_edge; // has effect only when .compact_edges==true
+   bool output_edge_to_selected; // has effect only when .compact_edges==true
+
    bool select_verts;
   };
   void append_subpass_meshing_wedge_flooding(int num_edges, int num_verts, EdgeFloodingOptions options);
@@ -163,7 +164,7 @@ public:
     int remeshing_iters;
     int remeshing_delaunay_flip_iters; 
   } meshing_params;
-  void append_subpass_fill_mesh_filtering_indirect_dispatch_args_();
+  void append_subpass_fill_selected_mesh_elems_indirect_dispatch_args_();
   void append_subpass_quadric_mesh_filtering(int num_edges, int num_verts, GPUMeshFilteringParameters &params);
 
 
@@ -188,7 +189,7 @@ public:
   void append_subpass_split_edges(int iter_remesh, int iter_split, int num_edges, int num_verts);
   void append_subpass_collapse_edges(int iter_remesh, int iter_collapse, int num_edges, int num_verts);
   void append_subpass_flip_edges(EdgeFlipOptiGoal opti_goal, int iter_remesh, int iter_flip, int num_edges, int num_verts);
-  void append_subpass_fill_dispatched_args_remeshed_edges_(int num_static_edges);
+  void append_subpass_fill_dispatched_args_remeshed_edges_(int num_static_edges, bool only_selected_edges);
   void append_subpass_fill_dispatched_args_remeshed_verts_(int num_static_verts); 
 
 
