@@ -153,9 +153,11 @@ void main()
 void main()
 {
     const uint groupId = gl_LocalInvocationID.x; 
-
-    uint wedge_id = gl_GlobalInvocationID.x; 
-    bool valid_thread = wedge_id < (pcs_edge_count_ + ssbo_dyn_mesh_counters_out_.num_edges); 
+    
+    uint sel_edge_id = gl_GlobalInvocationID.x; 
+    uint wedge_id; bool valid_thread; 
+    get_wedge_id_from_selected_edge(sel_edge_id, /*out*/wedge_id, /*out*/valid_thread); 
+    
     if (wedge_id == 0u)
     {
         ssbo_dyn_mesh_counters_in_.num_edges = ssbo_dyn_mesh_counters_out_.num_edges; 

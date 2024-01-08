@@ -169,40 +169,13 @@ void main()
 
 
 #if defined(_KERNEL_MULTICOMPILE__EDGE_COLLAPSE_COMPACT)
-uint get_num_preselected_edges()
-{
-    return ssbo_bnpr_mesh_pool_counters_.num_filtered_edges; 
-}
 void main()
 {
-    // uint wedge_id = gl_GlobalInvocationID.x; 
-    // const uint groupId = gl_LocalInvocationID.x; 
-    // bool valid_thread = wedge_id < (pcs_edge_count_ + ssbo_dyn_mesh_counters_out_.num_edges); 
     const uint groupId = gl_LocalInvocationID.x; 
-
     uint sel_edge_id = gl_GlobalInvocationID.x; 
+    uint wedge_id; bool valid_thread; 
+    get_wedge_id_from_selected_edge(sel_edge_id, /*out*/wedge_id, /*out*/valid_thread); 
     
-    uint num_dyn_edges = ssbo_dyn_mesh_counters_out_.num_edges;
-    uint num_static_edges = pcs_edge_count_;
-    
-    uint num_presel_edges = get_num_preselected_edges();
-    uint num_all_sel_edges = num_presel_edges + num_dyn_edges; /* all dyn edges are selected */
-
-    bool valid_thread = (sel_edge_id < num_all_sel_edges); 
-    bool is_dyn_edge = (num_presel_edges <= sel_edge_id) && valid_thread; 
-
-    uint wedge_id;
-    if (is_dyn_edge)
-    {
-        wedge_id = num_static_edges + (sel_edge_id - num_presel_edges); 
-    }else{
-        EdgeSelectionInfo eseli = decode_edge_selection_info(
-            ssbo_selected_edge_to_edge_[sel_edge_id]
-        ); 
-        wedge_id = eseli.edge_id;
-    }
-
-
     if (wedge_id == 0u)
     {
         ssbo_dyn_mesh_counters_in_.num_edges = ssbo_dyn_mesh_counters_out_.num_edges; 

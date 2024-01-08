@@ -275,9 +275,9 @@ void main()
 void main()
 {
     const uint groupId = gl_LocalInvocationID.x; 
-    uint wedge_id = gl_GlobalInvocationID.x; 
-    uint num_edges = pcs_edge_count_ + ssbo_dyn_mesh_counters_in_.num_edges;
-    bool valid_thread = wedge_id < num_edges; 
+    uint sel_edge_id = gl_GlobalInvocationID.x; 
+    uint wedge_id; bool valid_thread; 
+    get_wedge_id_from_selected_edge(sel_edge_id, /*out*/wedge_id, /*out*/valid_thread); 
 
     EdgeFlags ef = load_edge_flags(wedge_id); 
 
