@@ -441,30 +441,7 @@ void main()
     }
 
 
-    /* Select wedges for mesh filtering */
-    /* Mark unstable wedge & Initialize flooding pointer */
-    vec3 vpos_wedge[4]; 
-	for (uint ivert = 0; ivert < 4; ++ivert)
-		vpos_wedge[ivert] = ld_vbo(vids_wedge[ivert]);  
-    
-    /* transform matrices, see "common_view_lib.glsl" */ 
-	mat4 view_to_world = ubo_view_matrices_.viewinv;
-	bool is_persp = (ubo_view_matrices_.winmat[3][3] == 0.0);
-	vec3 cam_pos_ws = view_to_world[3].xyz; /* see "#define cameraPos ViewMatrixInverse[3].xyz" */
-
-    WedgeQuality wq = compute_wedge_quality(
-        vpos_wedge[0], vpos_wedge[1], vpos_wedge[2], vpos_wedge[3], cam_pos_ws
-    ); 
-    
-    WedgeFloodingPointer wfptr; 
-    wfptr.next_wedge_id = EdgeID; 
-    wfptr.is_seed       = wq.unstable && !is_border_wedge; 
-    wfptr.is_unstable   = wq.unstable_silouette && !is_border_wedge; 
-    wfptr.is_border     = is_border_wedge; 
-    if (valid_thread)
-        ssbo_wedge_flooding_pointers_out_[EdgeID] = encode_wedge_flooding_pointer(wfptr); 
-
-    
+    /* initialze dynamic topology counters */
     if (WedgeId == 0u)
     {
         ssbo_dyn_mesh_counters_in_.num_edges = 0u;

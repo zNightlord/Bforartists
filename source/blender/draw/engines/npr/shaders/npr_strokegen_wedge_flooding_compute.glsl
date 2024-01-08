@@ -99,6 +99,11 @@ void main()
         wfptr.is_seed       = wq.unstable && !is_border_wedge; 
         wfptr.is_unstable   = wq.unstable_silouette && !is_border_wedge; 
         wfptr.is_border     = is_border_wedge; 
+
+        if (valid_thread)
+            ssbo_wedge_flooding_pointers_out_[EdgeID] = encode_wedge_flooding_pointer(wfptr); 
+
+        return; /* quit after init */
     #else
         wfptr = decode_wedge_flooding_pointer(ssbo_wedge_flooding_pointers_in_[EdgeID]); 
     #endif
