@@ -277,7 +277,7 @@ namespace blender::npr::strokegen
       sub.bind_ssbo(2, buffers_.ssbo_edge_to_vert_);
       sub.bind_ssbo(3, buffers_.ssbo_vert_to_edge_list_header_);
       sub.bind_ssbo(4, buffers_.ssbo_selected_edge_to_edge_);
-      sub.bind_ssbo(5, buffers_.reused_ssbo_selected_vert_to_vert_());
+      sub.bind_ssbo(5, buffers_.ssbo_selected_vert_to_vert_);
       sub.bind_ssbo(6, buffers_.ssbo_vbo_full_);
       sub.bind_ssbo(7, buffers_.reused_ssbo_filtered_normal_vert_());
       sub.bind_ssbo(8, reused_ssbo_filtered_normal_edge_in_);
@@ -575,7 +575,7 @@ namespace blender::npr::strokegen
       sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_SHADER_IMAGE_ACCESS);
     }
 
-    if (options.select_verts) {
+    if (options.select_verts) { // TODO: deprecated, remove this
       auto &sub = pass_extract_geom.sub("bnpr_meshing_compact_filtered_verts");
       sub.shader_set(shaders_.static_shader_get(MESH_WEDGE_FLOODING_SELECT_VERTS));
 
@@ -585,7 +585,7 @@ namespace blender::npr::strokegen
                                                     reused_ssbo_wedge_flooding_pointers_in_,
                                                     reused_ssbo_wedge_flooding_pointers_out_);
 
-      sub.bind_ssbo(0, buffers_.reused_ssbo_selected_vert_to_vert_());
+      sub.bind_ssbo(0, buffers_.ssbo_selected_vert_to_vert_);
       sub.bind_ssbo(1, reused_ssbo_wedge_flooding_pointers_in_);
       sub.bind_ssbo(2, buffers_.ssbo_edge_to_vert_);
       sub.bind_ssbo(3, buffers_.ssbo_edge_to_edges_);

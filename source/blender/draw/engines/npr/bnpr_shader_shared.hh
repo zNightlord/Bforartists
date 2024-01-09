@@ -1,4 +1,4 @@
-﻿/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /**
  * Shared structures, enums & defines between C++ and GLSL.
@@ -347,6 +347,7 @@ using SSBO_IndirectDispatchArgs = draw::StorageBuffer<DispatchCommand>;
 // about 64MB for single stride
 template<typename T, size_t Stride>
 using SSBO_StrokeGenMeshBufPerEdge = draw::StorageArrayBuffer<T, MAX_NUM_EDGES_PER_BATCH * Stride, true>;
+// about 32MB for single stride
 template<typename T, size_t Stride>
 using SSBO_StrokeGenMeshBufPerSelectedEdge = draw::StorageArrayBuffer<T, MAX_NUM_EDGES_PER_BATCH * Stride / 2, true>;
 // about 42MB for single stride
@@ -355,6 +356,9 @@ using SSBO_StrokeGenMeshBufPerFace = draw::StorageArrayBuffer<T, MAX_NUM_EDGES_P
 // about 32MB for single stride
 template<typename T, size_t Stride>
 using SSBO_StrokeGenMeshBufPerVert = draw::StorageArrayBuffer<T, MAX_NUM_VERTS_PER_BATCH * Stride, true>;
+// about 16MB for single stride
+template<typename T, size_t Stride>
+using SSBO_StrokeGenMeshBufPerSelectedVert = draw::StorageArrayBuffer<T, MAX_NUM_VERTS_PER_BATCH * Stride / 2, true>;
 // about 1MB for single stride
 template<typename T, size_t Stride>
 using SSBO_StrokeGenMeshBufPerContour = draw::StorageArrayBuffer<T, MAX_NUM_CONTOUR_EDGES_PER_BATCH * Stride, true>;

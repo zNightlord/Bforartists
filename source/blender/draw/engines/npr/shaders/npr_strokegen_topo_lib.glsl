@@ -406,6 +406,28 @@ EdgeSelectionInfo decode_edge_selection_info(uint data)
     fei.is_border   = (data & 0x1u) != 0u; 
     return fei; 
 }
+
+/* Vertex Selection --------------------------------------------------- 
+ * Select vertex by various ways
+*/
+struct VertSelectionInfo
+{
+    uint vert_id; 
+};
+uint encode_vert_selection_info(VertSelectionInfo fvi)
+{
+    uint data = 0u; 
+    data = fvi.vert_id; 
+
+    return data; 
+}
+VertSelectionInfo decode_vert_selection_info(uint data)
+{
+    VertSelectionInfo fvi; 
+    fvi.vert_id = data; 
+
+    return fvi; 
+}
 #endif
 
 
@@ -452,6 +474,8 @@ struct VertFlags
     bool dupli; // duplicated vertex, should be ignored, TODO: consider removing in hashing pass
     bool new_by_split; // new vertex created by edge split
     bool del_by_collapse; // deleted vertex by edge collapse
+    /* we provide 4 slots for selection */
+    bvec4 selected; // selected for a certain operation
 }; 
 VertFlags init_vert_flags(bool dupli)
 {
@@ -459,6 +483,7 @@ VertFlags init_vert_flags(bool dupli)
     vf.dupli = dupli; 
     vf.new_by_split = false; 
     vf.del_by_collapse = false; 
+    vf.selected = bvec4(true); 
     
     return vf; 
 }
@@ -468,6 +493,7 @@ VertFlags init_vert_flags__new_split_edge()
     vf.dupli = false; 
     vf.new_by_split = true; 
     vf.del_by_collapse = false; 
+    vf.selected = bvec4(true); /* always selected for remeshing */
     
     return vf; 
 }
@@ -480,12 +506,31 @@ uint encode_vert_flags(VertFlags vf)
     vf_enc |= uint(vf.new_by_split); 
     vf_enc <<= 1u; 
     vf_enc |= uint(vf.del_by_collapse); 
+    vf_enc <<= 1u; 
+
+    vf_enc |= uint(vf.selected[0]);
+    vf_enc <<= 1u; 
+    vf_enc |= uint(vf.selected[1]);
+    vf_enc <<= 1u; 
+    vf_enc |= uint(vf.selected[2]);
+    vf_enc <<= 1u; 
+    vf_enc |= uint(vf.selected[3]);
 
     return vf_enc; 
 }
 VertFlags decode_vert_flags(uint vf_enc)
 {
     VertFlags vf; 
+
+    vf.selected[3] = (1u == (vf_enc & 1u));
+    vf_enc >>= 1u;
+    vf.selected[2] = (1u == (vf_enc & 1u));
+    vf_enc >>= 1u;
+    vf.selected[1] = (1u == (vf_enc & 1u));
+    vf_enc >>= 1u;
+    vf.selected[0] = (1u == (vf_enc & 1u));
+    vf_enc >>= 1u;
+
     vf.del_by_collapse = (1u == (vf_enc & 1u)); 
     vf_enc >>= 1u; 
     vf.new_by_split = (1u == (vf_enc & 1u)); 
@@ -502,10 +547,18 @@ void store_vert_flags(uint vid, VertFlags vf)
 {
     ssbo_vert_flags_[vid] = encode_vert_flags(vf); 
 }
+
+void update_vert_flags_selected(uint vid, uint selection_slot)
+{
+    VertFlags vf = load_vert_flags(vid); 
+    vf.selected[selection_slot] = true; 
+    store_vert_flags(vid, vf); 
+}
 void update_vert_flags__del_by_collapse(uint vid)
 {
     VertFlags vf = load_vert_flags(vid);
     vf.del_by_collapse = true;
+    vf.selected = bvec4(false); 
     store_vert_flags(vid, vf); 
 }
 #endif
@@ -617,12 +670,14 @@ void update_edge_flags__del_by_split(uint edge_id)
 {
     EdgeFlags ef_del = load_edge_flags(edge_id);
     ef_del.del_by_split = true; 
+    ef_del.selected = false; 
     store_edge_flags(edge_id, ef_del);
 }
 void update_edge_flags__revert_split(uint edge_id)
 {
     EdgeFlags ef = load_edge_flags(edge_id); 
     ef.del_by_split = false; 
+    ef.selected = true; 
     store_edge_flags(edge_id, ef);
 }
 
@@ -763,7 +818,7 @@ void validate_wedge_topo(uint wedge_id, out bool valid_ee, out bool valid_ev, ou
         ssbo_edge_to_vert_[wedge_id*4u + 3u]
     ); 
     
-    bool border_edge = false; // wing_verts_is_border_edge(v); 
+    bool border_edge = false; 
     uvec2 iwedges_border = mark__border_bwedges_mainfold(); 
 
 #define w0 ((w[0].wedge_id))

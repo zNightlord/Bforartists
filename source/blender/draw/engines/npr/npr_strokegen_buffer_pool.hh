@@ -1,4 +1,4 @@
-﻿/* SPDX-License-Identifier: GPL-2.0-or-later
+/* SPDX-License-Identifier: GPL-2.0-or-later
  * Copyright 2021 Blender Foundation.
  */
 
@@ -54,20 +54,21 @@ class GPUBufferPoolModule {
 
 
 
-  // Persistent Buffers -------------------------------------------------------------------
-  SSBO_StrokeGenMeshBufPerVert<float, 3> ssbo_vbo_full_;                // 96MB    Total
-  SSBO_StrokeGenMeshBufPerVert<uint, 1> ssbo_vert_to_edge_list_header_; // 32MB    128MB
-  SSBO_StrokeGenMeshBufPerEdge<uint, 4> ssbo_edge_to_vert_;             // 256MB   384MB
-  SSBO_StrokeGenMeshBufPerEdge<uint, 4> ssbo_edge_to_edges_;            // 256MB   640MB
-  SSBO_StrokeGenMeshBufPerVert<uint, 1> ssbo_vert_flags_;               // 32MB    672MB
-  SSBO_StrokeGenMeshBufPerEdge<uint, 1> ssbo_edge_flags_;               // 64MB    736MB
-  SSBO_StrokeGenMeshBufPerSelectedEdge<uint, 1> ssbo_selected_edge_to_edge_;   // 32MB    768MB
+  // Persistent Buffers ------------------------------------------------------------------------
+  SSBO_StrokeGenMeshBufPerVert<float, 3> ssbo_vbo_full_;                        // 96MB    Total
+  SSBO_StrokeGenMeshBufPerVert<uint, 1> ssbo_vert_to_edge_list_header_;         // 32MB    128MB
+  SSBO_StrokeGenMeshBufPerEdge<uint, 4> ssbo_edge_to_vert_;                     // 256MB   384MB
+  SSBO_StrokeGenMeshBufPerEdge<uint, 4> ssbo_edge_to_edges_;                    // 256MB   640MB
+  SSBO_StrokeGenMeshBufPerVert<uint, 1> ssbo_vert_flags_;                       // 32MB    672MB
+  SSBO_StrokeGenMeshBufPerEdge<uint, 1> ssbo_edge_flags_;                       // 64MB    736MB
+  SSBO_StrokeGenMeshBufPerSelectedEdge<uint, 1> ssbo_selected_edge_to_edge_;    // 32MB    768MB
+  SSBO_StrokeGenMeshBufPerSelectedVert<uint, 1> ssbo_selected_vert_to_vert_;    // 16MB    784MB
   SSBO_StrokeGenMeshBufPerContour<uint, 2> ssbo_contour_to_contour_;    // 
   SSBO_StrokeGenMeshBufPerContour<uint, 1> ssbo_contour_edge_rank_;     // 
   SSBO_StrokeGenMeshBufPerContour<uint, 1> ssbo_contour_edge_list_len_; // 
   SSBO_StrokeGenMeshBufPerContour<uint, 1> ssbo_contour_edge_list_head_;// 
 
-  // Reusable Large Buffers ---------------------------------------------------------------
+  // Reusable Large Buffers -------------------------------------------------------------
   SSBO_StrokeGenReusedLarge ssbo_mesh_buffer_reuse_0_;                    // 256MB  Total  
   SSBO_StrokeGenReusedMedium ssbo_mesh_buffer_reuse_1_;                   // 128MB  384MB
   SSBO_StrokeGenReusedMedium ssbo_mesh_buffer_reuse_2_;                   // 128MB  512MB
@@ -157,14 +158,7 @@ class GPUBufferPoolModule {
       buf_out = ssbo_mesh_buffer_reuse_6_; 
     }
   }
-  inline GPUStorageBuf *reused_ssbo_selected_edge_to_edge_()
-  {
-    return ssbo_contour_to_contour_; 
-  }
-  inline GPUStorageBuf *reused_ssbo_selected_vert_to_vert_()
-  {
-    return ssbo_contour_edge_rank_; 
-  }
+
   inline GPUStorageBuf *reused_ssbo_edge_quadric_data()
   { // TODO: we can actually share one buffer with vert_quadric data if this also goes iterative
     return ssbo_mesh_buffer_reuse_5_; 
