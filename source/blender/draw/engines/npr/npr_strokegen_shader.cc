@@ -143,6 +143,13 @@ const char *StrokeGenShaderModule::static_shader_create_info_name_get(eShaderTyp
     case MESH_WEDGE_FLOODING_SELECT_VERTS:
       return "bnpr_meshing_compact_filtered_verts";
 
+    case MESH_SELECT_VERTS_FROM_SELECTED_EDGES:
+      return "strokegen_select_verts_from_selected_edges"; 
+    case MESH_EXPAND_VERTS_FROM_SELECTED_EDGES:
+      return "strokegen_expand_verts_from_selected_edges";
+    case MESH_COMPACT_SELECTED_VERTS:
+      return "strokegen_compact_selected_verts";  
+
     case FILL_DISPATCH_ARGS_FILTERED_EDGES:
       return "bnpr_meshing_fill_dispatch_args_per_filtered_edge";
     case FILL_DISPATCH_ARGS_FILTERED_VERTS:

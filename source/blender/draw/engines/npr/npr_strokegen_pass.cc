@@ -187,7 +187,7 @@ namespace blender::npr::strokegen
     // flooding_options.output_selected_to_edge = true;
     // flooding_options.output_edge_to_selected = true;
     // flooding_options.select_verts = true;
-    // append_subpass_meshing_wedge_flooding(num_edges, num_verts, flooding_options);
+    // append_subpass_diffuse_edge_selection(num_edges, num_verts, flooding_options);
     //
     // append_subpass_fill_selected_mesh_elems_indirect_dispatch_args_();
     // append_subpass_quadric_mesh_filtering(num_edges, num_verts, meshing_params);
@@ -198,7 +198,11 @@ namespace blender::npr::strokegen
     flooding_options.output_selected_to_edge = true;
     flooding_options.output_edge_to_selected = false;
     flooding_options.select_verts = false;
-    append_subpass_meshing_wedge_flooding(num_edges, num_verts, flooding_options);
+    append_subpass_diffuse_edge_selection(num_edges, num_verts, flooding_options);
+    append_subpass_fill_selected_mesh_elems_indirect_dispatch_args_(); 
+    append_subpass_fill_dispatched_args_remeshed_edges_(num_edges, true);
+    append_subpass_fill_dispatched_args_remeshed_verts_(num_verts); 
+    append_subpass_select_verts_from_selected_edges(true, true, num_edges, num_verts); 
 
     for (int iter_remesh = 0; iter_remesh < meshing_params.remeshing_iters; ++iter_remesh)
     {
@@ -355,6 +359,50 @@ namespace blender::npr::strokegen
         sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_filtered_vert_);
         sub.barrier(GPU_BARRIER_SHADER_STORAGE);
       }
+    }
+  }
+
+  void StrokeGenPassModule::append_subpass_select_verts_from_selected_edges(
+      bool exanded_select, bool compaction, int num_edges, int num_verts)
+  {
+    auto bind_rsc = [&](draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub) {
+      sub.bind_ssbo(0, buffers_.ssbo_edge_to_edges_);            
+      sub.bind_ssbo(1, buffers_.ssbo_edge_to_vert_);             
+      sub.bind_ssbo(2, buffers_.ssbo_vert_to_edge_list_header_); 
+      sub.bind_ssbo(3, buffers_.ssbo_edge_flags_);               
+      sub.bind_ssbo(4, buffers_.ssbo_vert_flags_);               
+      sub.bind_ssbo(5, buffers_.ssbo_selected_edge_to_edge_);
+      sub.bind_ssbo(6, buffers_.ssbo_selected_vert_to_vert_);
+      sub.bind_ssbo(7, buffers_.ssbo_vbo_full_);    
+      sub.bind_ssbo(8, buffers_.ssbo_bnpr_mesh_pool_counters_);  
+      sub.bind_ssbo(9, buffers_.ssbo_dyn_mesh_counters_out_());
+
+      sub.push_constant("pcs_vert_count_", num_verts);
+      sub.push_constant("pcs_edge_count_", num_edges); 
+    }; 
+
+    {
+      auto &sub = pass_extract_geom.sub("strokegen_select_verts_from_selected_edges");
+      sub.shader_set(shaders_.static_shader_get(MESH_SELECT_VERTS_FROM_SELECTED_EDGES));
+      bind_rsc(sub); 
+      sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_filtered_edge_); 
+      sub.barrier(GPU_BARRIER_SHADER_STORAGE); 
+    }
+
+    if (exanded_select) {
+      auto &sub = pass_extract_geom.sub("strokegen_expand_verts_from_selected_edges");
+      sub.shader_set(shaders_.static_shader_get(MESH_EXPAND_VERTS_FROM_SELECTED_EDGES));
+      bind_rsc(sub);
+      sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_edges_);
+      sub.barrier(GPU_BARRIER_SHADER_STORAGE); 
+    }
+
+    if (compaction) {
+      auto &sub = pass_extract_geom.sub("strokegen_compact_selected_verts");
+      sub.shader_set(shaders_.static_shader_get(MESH_COMPACT_SELECTED_VERTS));
+      bind_rsc(sub);
+      sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_verts_);
+      sub.barrier(GPU_BARRIER_SHADER_STORAGE); 
     }
   }
 
@@ -515,7 +563,7 @@ namespace blender::npr::strokegen
     }
   }
 
-  void StrokeGenPassModule::append_subpass_meshing_wedge_flooding(int num_edges, int num_verts, EdgeFloodingOptions options)
+  void StrokeGenPassModule::append_subpass_diffuse_edge_selection(int num_edges, int num_verts, EdgeFloodingOptions options)
   {
     auto bind_flooding_rsc = [&](
         draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub,

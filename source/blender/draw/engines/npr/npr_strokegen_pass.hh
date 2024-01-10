@@ -110,7 +110,6 @@ public:
   int num_total_mesh_tris;
 
   void init_per_mesh_pass();
-
   void append_per_mesh_pass(
       Object* ob,
       GPUBatch* gpu_batch_line_adj,
@@ -119,16 +118,18 @@ public:
       const DRWView* drw_view
       );
 
+  // ---------------------------------------------------------------------------
   void append_subpass_merge_vbo(GPUBatch *gpu_batch_surf, int batch_resource_index, int num_verts);
   void append_subpass_merge_line_adj_ibo(GPUBatch *gpu_batch_line_adj,
                                          gpu::GPUIndexBufType ib_type,
                                          int num_added_edges);
 
+  // ---------------------------------------------------------------------------
   void append_subpass_meshing_merge_verts(int num_verts_in, bool debug = false);
   void append_subpass_meshing_wedge_adjacency_and_init_flooding_ptr(int num_edges_in, int num_verts_in, bool debug = false);
 
 
-
+  // ---------------------------------------------------------------------------
   struct EdgeFloodingOptions {
    bool compact_edges;
    bool output_selected_to_edge; // has effect only when .compact_edges==true
@@ -136,7 +137,7 @@ public:
 
    bool select_verts;
   };
-  void append_subpass_meshing_wedge_flooding(int num_edges, int num_verts, EdgeFloodingOptions options);
+  void append_subpass_diffuse_edge_selection(int num_edges, int num_verts, EdgeFloodingOptions options);
 
   enum GPUMeshQuadricFilter {
     GeomNormalPlane = 0,
@@ -168,23 +169,18 @@ public:
   void append_subpass_quadric_mesh_filtering(int num_edges, int num_verts, GPUMeshFilteringParameters &params);
 
 
+  // ---------------------------------------------------------------------------
+  void append_subpass_select_verts_from_selected_edges(bool exanded_select, bool compaction, int num_edges, int num_verts); 
+  
 
-
-  void append_subpass_extract_contour_edges(GPUBatch *gpu_batch_line_adj,
-                                            ResourceHandle &rsc_handle,
-                                            gpu::Batch *edge_batch,
-                                            int num_edges,
-                                            gpu::GPUIndexBufType ib_type,
-
-                                            int edge_visualize_mode = false);
-
+  // ---------------------------------------------------------------------------
   int num_remesh_iters = 1;
   enum EdgeFlipOptiGoal {
-    // Match to shader macros 
-    // #define EDGE_FLIP_OPTI_VALENCE 0u 
-    Valence = 0, 
+    // Match to shader macros
+    // #define EDGE_FLIP_OPTI_VALENCE 0u
+    Valence = 0,
     // #define EDGE_FLIP_OPTI_DELAUNAY 1u
-    Delaunay = 1, 
+    Delaunay = 1,
   };
   void append_subpass_split_edges(int iter_remesh, int iter_split, int num_edges, int num_verts);
   void append_subpass_collapse_edges(int iter_remesh, int iter_collapse, int num_edges, int num_verts);
@@ -193,16 +189,31 @@ public:
   void append_subpass_fill_dispatched_args_remeshed_verts_(int num_static_verts); 
 
 
+  // ---------------------------------------------------------------------------
+  void append_subpass_extract_contour_edges(GPUBatch *gpu_batch_line_adj,
+                                            ResourceHandle &rsc_handle,
+                                            gpu::Batch *edge_batch,
+                                            int num_edges,
+                                            gpu::GPUIndexBufType ib_type,
+
+                                            int edge_visualize_mode = false);
 
   void rebuild_pass_process_contours();
   void append_subpass_fill_dispatch_args_contour_edges(PassSimple& pass, bool all_contour_edges);
   void append_subpass_process_contour_edges();
 
+
+  // ---------------------------------------------------------------------------
   void rebuild_pass_contour_edge_drawcall();
   void rebuild_pass_compress_contour_pixels(bool debug = false); 
 
 
 
+
+
+
+
+  // ---------------------------------------------------------------------------
   bool test_scan; 
   void rebuild_pass_scan_test();
   void rebuild_pass_segscan_test();

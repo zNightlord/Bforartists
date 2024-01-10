@@ -431,6 +431,31 @@ VertSelectionInfo decode_vert_selection_info(uint data)
 #endif
 
 
+/* Indexing for selection for dynaremesh */
+#if defined(DYNAMESH_SELECTION_INDEXING_COMMON)
+void get_wedge_id_from_selected_edge(uint sel_edge_id, out uint wedge_id, out bool valid_thread)
+{
+    uint num_dyn_edges = ssbo_dyn_mesh_counters_out_.num_edges; 
+    uint num_static_edges = pcs_edge_count_;
+    
+    uint num_presel_edges = ssbo_bnpr_mesh_pool_counters_.num_filtered_edges;
+    uint num_all_sel_edges = num_presel_edges + num_dyn_edges; /* all dyn edges are selected */
+    valid_thread = (sel_edge_id < num_all_sel_edges); 
+
+    bool is_dyn_edge = (num_presel_edges <= sel_edge_id) && valid_thread; 
+    if (is_dyn_edge)
+    {
+        wedge_id = num_static_edges + (sel_edge_id - num_presel_edges); 
+    }else{
+        EdgeSelectionInfo eseli = decode_edge_selection_info(
+            ssbo_selected_edge_to_edge_[sel_edge_id]
+        ); 
+        wedge_id = eseli.edge_id;
+    }
+}
+#endif
+
+
 
 
 #if defined(VERT_WEDGE_LIST_TOPO_INCLUDE)
@@ -1198,29 +1223,6 @@ float calc_remesh_edge_len_max(float targ_edge_len) // edge longer than this wil
 }
 
 
-
-#if defined(REMESHING_INDEXING_COMMON)
-void get_wedge_id_from_selected_edge(uint sel_edge_id, out uint wedge_id, out bool valid_thread)
-{
-    uint num_dyn_edges = ssbo_dyn_mesh_counters_out_.num_edges;
-    uint num_static_edges = pcs_edge_count_;
-    
-    uint num_presel_edges = ssbo_bnpr_mesh_pool_counters_.num_filtered_edges;
-    uint num_all_sel_edges = num_presel_edges + num_dyn_edges; /* all dyn edges are selected */
-    valid_thread = (sel_edge_id < num_all_sel_edges); 
-
-    bool is_dyn_edge = (num_presel_edges <= sel_edge_id) && valid_thread; 
-    if (is_dyn_edge)
-    {
-        wedge_id = num_static_edges + (sel_edge_id - num_presel_edges); 
-    }else{
-        EdgeSelectionInfo eseli = decode_edge_selection_info(
-            ssbo_selected_edge_to_edge_[sel_edge_id]
-        ); 
-        wedge_id = eseli.edge_id;
-    }
-}
-#endif
 
 
 
