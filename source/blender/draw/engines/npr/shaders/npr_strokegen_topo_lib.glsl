@@ -464,8 +464,7 @@ void get_wedge_id_from_selected_edge(uint sel_edge_id, out uint wedge_id, out bo
 struct VertWedgeListHeader
 {
     uint wedge_id; 
-    /* the face that contains this vertex that begins at the center wedge */
-    uint ivert; /* 1 or 3 */
+    uint ivert; /* 1 or 3, ivert of this vert on #wedge_id */
 }; 
 uint encode_vert_wedge_list_header(VertWedgeListHeader vwlh)
 {

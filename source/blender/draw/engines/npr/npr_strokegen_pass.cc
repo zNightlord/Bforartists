@@ -380,7 +380,7 @@ namespace blender::npr::strokegen
       sub.push_constant("pcs_vert_count_", num_verts);
       sub.push_constant("pcs_edge_count_", num_edges); 
     }; 
-
+     
     {
       auto &sub = pass_extract_geom.sub("strokegen_select_verts_from_selected_edges");
       sub.shader_set(shaders_.static_shader_get(MESH_SELECT_VERTS_FROM_SELECTED_EDGES));
