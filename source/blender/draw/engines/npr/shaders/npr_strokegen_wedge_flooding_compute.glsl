@@ -164,6 +164,9 @@ void main()
     if (valid_thread)
         ssbo_wedge_flooding_pointers_out_[EdgeID] = encode_wedge_flooding_pointer(wfptr); 
  
+
+
+    /* flooding logic for the last iteration ---------------------------------------- */
     #if defined(_KERNEL_MULTICOMPILE__WEDGE_FLOODING__ITER__LAST_ITER)
         bool is_seed_edge = wfptr.is_seed && valid_thread; 
 

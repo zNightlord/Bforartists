@@ -1,6 +1,7 @@
 #include "strokegen_mesh_raster_pass.hh"
 
 #include "npr_strokegen_buffer_pool.hh"
+#include "npr_strokegen_pass.hh"
 #include "npr_strokegen_texture_pool.hh"
 
 void npr::strokegen::StrokegenMeshRasterPass::init_pass(
@@ -39,7 +40,7 @@ void npr::strokegen::StrokegenMeshRasterPass::init_pass(
   framebuffer_set(&texture_module.fb_contour_raster); 
 }
 
-void npr::strokegen::StrokegenMeshRasterPass::append_draw_subpass(
+void npr::strokegen::StrokegenMeshRasterPass::append_draw_contour_subpass(
   StrokeGenShaderModule& shaders, GPUBufferPoolModule& buffers, GPUTexturePoolModule& textures)
 {
   draw::PassMain::Sub* subpass = &sub("strokegen raster pass");
@@ -60,4 +61,19 @@ void npr::strokegen::StrokegenMeshRasterPass::append_draw_subpass(
 
   subpass->barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE); 
   subpass->draw_procedural_indirect(GPUPrimType::GPU_PRIM_LINES, buffers.ssbo_bnpr_mesh_pool_draw_args_); 
+}
+
+void npr::strokegen::StrokegenMeshRasterPass::append_draw_dbg_normal_subpass(
+    StrokeGenShaderModule &shaders,
+    GPUBufferPoolModule &buffers,
+    const SurfaceDebugContext & dbg_ctx)
+{
+  draw::PassMain::Sub *subpass = &sub("strokegen debug normal visualization");
+  subpass->shader_set(shaders.static_shader_get(eShaderType::INDIRECT_DRAW_VERT_NORMAL));
+
+  subpass->bind_ssbo(0, dbg_ctx.ssbo_vnor_lines_);
+  subpass->bind_ubo(0, buffers.ubo_view_matrices_);
+
+  subpass->barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
+  subpass->draw_procedural_indirect(GPUPrimType::GPU_PRIM_LINES, buffers.ssbo_bnpr_vert_normal_debug_draw_args_);
 }

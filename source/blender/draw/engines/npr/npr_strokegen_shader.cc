@@ -209,7 +209,19 @@ const char *StrokeGenShaderModule::static_shader_create_info_name_get(eShaderTyp
     case MESH_OP_FLIP_EDGE_RESOLVE_CONFLICT: 
       return "bnpr_meshing_edge_flip_resolve_conflict"; 
     case MESH_OP_FLIP_EDGE_EXECUTE: 
-      return "bnpr_meshing_edge_flip_execute";  
+      return "bnpr_meshing_edge_flip_execute";
+
+    case MESH_ANALYSE_VERT_NORMAL:
+      return "bnpr_geom_analysis_order_0_vert_normal";
+    case MESH_ANALYSE_VERT_NORMAL_DBG:
+      return "bnpr_geom_analysis_order_0_vert_normal_dbg";
+
+    case FILL_DRAW_ARGS_VERT_NORMAL:
+      return "strokegen_remeshing_fill_draw_args_dbg_vnor"; 
+    case INDIRECT_DRAW_VERT_NORMAL:
+      return "bnpr_geom_draw_debug_lines"; 
+
+
 
     case SCAN_TEST_AGGREGATE:
       return "bnpr_scan_test_aggregate";

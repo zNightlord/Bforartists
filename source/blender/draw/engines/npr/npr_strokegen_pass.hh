@@ -16,7 +16,6 @@
 #include "gpu_batch_private.hh"
 #include "npr_strokegen_buffer_pool.hh"
 #include "npr_strokegen_texture_pool.hh"
-#include "npr_strokegen_pass.hh"
 #include "strokegen_mesh_raster_pass.hh"
 
 #include <random>
@@ -24,6 +23,12 @@
 
 namespace blender::npr::strokegen {
 class Instance;
+
+struct SurfaceDebugContext {
+  bool dbg_vert_normal;
+  GPUStorageBuf *ssbo_vnor_lines_;
+};
+
 
 class StrokeGenPassModule // similar to "LineDrawingRenderPass"
 {
@@ -42,6 +47,7 @@ private:
 
   /** Draw Passes */
   StrokegenMeshRasterPass pass_draw_contour_edges = {"Draw Contour Edges"}; // Inherited from draw::PassMain 
+  StrokegenMeshRasterPass pass_draw_debug_normal = {"Draw Normal Lines"}; // Inherited from draw::PassMain 
 
   /** Dependent Modules */
   StrokeGenShaderModule &shaders_;
@@ -82,10 +88,13 @@ public:
     CONTOUR_PROCESS, 
     INDIRECT_DRAW_CONTOUR_EDGES,
     COMPRESS_CONTOUR_PIXELS,
+
+    INDIRECT_DRAW_DBG_VNOR,
+
   };
 
   PassSimple& get_compute_pass(eType passType);
-  PassMain &get_contour_edge_draw_pass(eType passType);
+  PassMain &get_render_pass(eType passType);
   /** \} */
 
 
@@ -189,6 +198,33 @@ public:
   void append_subpass_fill_dispatched_args_remeshed_verts_(int num_static_verts); 
 
 
+
+
+  // ---------------------------------------------------------------------------
+  struct SurfaceAnalysisContext {
+    bool only_selected; // only calculate attributes on selected elems
+    // Vertex attributes
+    bool calc_vert_normal;
+    GPUStorageBuf *ssbo_vnor_; 
+    bool calc_vert_voronoi_area;
+    GPUStorageBuf *ssbo_varea_;
+  };
+  SurfaceDebugContext surf_dbg_ctx; 
+
+  void append_subpass_surf_geom_analysis(
+    ResourceHandle& rsc_handle, int num_verts,
+    const SurfaceAnalysisContext& options,
+    const SurfaceDebugContext& dbg_options
+  ); 
+
+  void rebuild_pass_dbg_vnor_drawcall(SurfaceDebugContext dbg_ctx);
+
+
+
+
+
+
+
   // ---------------------------------------------------------------------------
   void append_subpass_extract_contour_edges(GPUBatch *gpu_batch_line_adj,
                                             ResourceHandle &rsc_handle,
@@ -206,6 +242,16 @@ public:
   // ---------------------------------------------------------------------------
   void rebuild_pass_contour_edge_drawcall();
   void rebuild_pass_compress_contour_pixels(bool debug = false); 
+
+
+
+  // ---------------------------------------------------------------------------
+  void rebuild_pass_debug_normal_drawcall(const SurfaceDebugContext& dbg_ctx);
+
+
+
+
+
 
 
 

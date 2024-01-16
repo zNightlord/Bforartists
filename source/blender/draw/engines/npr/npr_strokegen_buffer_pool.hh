@@ -40,6 +40,7 @@ class GPUBufferPoolModule {
 
   // Dispatch Args --------------------------------------------------------
   SSBO_IndirectDrawArgs ssbo_bnpr_mesh_pool_draw_args_;
+  SSBO_IndirectDrawArgs ssbo_bnpr_vert_normal_debug_draw_args_;
 
   SSBO_IndirectDispatchArgs ssbo_indirect_dispatch_args_per_filtered_edge_; 
   SSBO_IndirectDispatchArgs ssbo_indirect_dispatch_args_per_filtered_vert_;
@@ -63,7 +64,7 @@ class GPUBufferPoolModule {
   SSBO_StrokeGenMeshBufPerEdge<uint, 1> ssbo_edge_flags_;
 
 
-   // 64MB    736MB
+  // 64MB    736MB
   SSBO_StrokeGenMeshBufPerSelectedEdge<uint, 1> ssbo_selected_edge_to_edge_;    // 32MB    768MB
   SSBO_StrokeGenMeshBufPerSelectedVert<uint, 1> ssbo_selected_vert_to_vert_;    // 16MB    784MB
   SSBO_StrokeGenMeshBufPerContour<uint, 2> ssbo_contour_to_contour_;    // 
@@ -75,7 +76,7 @@ class GPUBufferPoolModule {
   SSBO_StrokeGenReusedLarge ssbo_mesh_buffer_reuse_0_;                    // 256MB  Total  
   SSBO_StrokeGenReusedMedium ssbo_mesh_buffer_reuse_1_;                   // 128MB  384MB
   SSBO_StrokeGenReusedMedium ssbo_mesh_buffer_reuse_2_;                   // 128MB  512MB
-  // finally contains contour edge data
+  // contains extracted geom, contour edges / debug lines
   SSBO_StrokeGenReusedLarge ssbo_mesh_buffer_reuse_3_;                    // 256MB  768MB
   // temporally used for hashing
   SSBO_StrokeGenReusedLarge ssbo_mesh_buffer_reuse_4_;                    // 256MB 1024MB
@@ -181,7 +182,9 @@ class GPUBufferPoolModule {
     return ssbo_mesh_buffer_reuse_1_; 
   }
 
-  // Reused Buffers for per-batch Contour Processing
+
+
+  // Reused Buffers for per-batch Contour Processing --------------------------
   inline GPUStorageBuf *reused_ssbo_bnpr_mesh_pool_()
   {
     return ssbo_mesh_buffer_reuse_3_; 
@@ -189,6 +192,14 @@ class GPUBufferPoolModule {
   inline GPUStorageBuf *reused_ssbo_edge_to_contour_()
   {
     return ssbo_mesh_buffer_reuse_6_; 
+  }
+
+
+
+  // Reused Buffers for debug primitives --------------------------
+  inline GPUStorageBuf *reused_ssbo_bnpr_dbg_geom_()
+  {
+    return ssbo_mesh_buffer_reuse_3_; 
   }
 
 

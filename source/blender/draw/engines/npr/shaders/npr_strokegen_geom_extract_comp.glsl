@@ -26,6 +26,7 @@ void main()
 		ssbo_bnpr_mesh_pool_counters_.num_contour_edges_curr = 0; 
 		ssbo_bnpr_mesh_pool_counters_.num_filtered_edges = 0; 
 		ssbo_bnpr_mesh_pool_counters_.num_filtered_verts = 0; 
+		ssbo_bnpr_mesh_pool_counters_.num_dbg_vnor_lines = 0; 
 
 		ssbo_bnpr_mesh_pool_counters_prev_.num_contour_edges = 0; 
 		ssbo_bnpr_mesh_pool_counters_prev_.num_verts         = 0; 
@@ -34,6 +35,7 @@ void main()
 		ssbo_bnpr_mesh_pool_counters_prev_.num_contour_edges_curr = 0; 
 		ssbo_bnpr_mesh_pool_counters_prev_.num_filtered_edges = 0; 
 		ssbo_bnpr_mesh_pool_counters_prev_.num_filtered_verts = 0; 
+		ssbo_bnpr_mesh_pool_counters_prev_.num_dbg_vnor_lines = 0; 
 	}
 }
 #endif
@@ -82,6 +84,7 @@ void main()
 		ssbo_bnpr_mesh_pool_counters_prev_.num_contour_edges_curr = ssbo_bnpr_mesh_pool_counters_.num_contour_edges_curr; 
 		ssbo_bnpr_mesh_pool_counters_prev_.num_filtered_edges = ssbo_bnpr_mesh_pool_counters_.num_filtered_edges; 
 		ssbo_bnpr_mesh_pool_counters_prev_.num_filtered_verts = ssbo_bnpr_mesh_pool_counters_.num_filtered_verts; 
+		ssbo_bnpr_mesh_pool_counters_prev_.num_dbg_vnor_lines = ssbo_bnpr_mesh_pool_counters_.num_dbg_vnor_lines;
 	}
  }
 #endif
@@ -213,9 +216,6 @@ void main()
 	/* debug view */
 	if (pcs_edge_visualize_mode_ > 0)
 	{
-		// Check wfptr.is_seed; 
-		WedgeFloodingPointer wfptr = decode_wedge_flooding_pointer(ssbo_wedge_flooding_pointers_out_[EdgeId]);
-		
 		// Check topo consistency
 		bool valid_ee, valid_ev, valid_ve;
 		validate_wedge_topo(EdgeId, /*out*/ valid_ee, valid_ev, valid_ve);  
@@ -235,7 +235,6 @@ void main()
 			
 		if (pcs_edge_visualize_mode_ == 5)
 			is_contour = is_contour && ef.selected; 
-		
 	}
 
 	bool rev_edge_dir = is_back_face(face_orient_012); 

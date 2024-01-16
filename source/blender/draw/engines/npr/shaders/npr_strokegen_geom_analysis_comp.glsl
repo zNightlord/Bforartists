@@ -1,4 +1,7 @@
+
+#pragma BLENDER_REQUIRE(npr_strokegen_compaction_lib.glsl)
 #pragma BLENDER_REQUIRE(npr_strokegen_topo_lib.glsl)
+#pragma BLENDER_REQUIRE(npr_strokegen_geom_lib.glsl)
 
 
 
@@ -7,55 +10,27 @@
 .define("VERT_WEDGE_LIST_TOPO_INCLUDE", "1")
 .define("VE_CIRCULATOR_INCLUDE", "1")
 .define("DYNAMESH_SELECTION_INDEXING_COMMON", "1")
+.define("INCLUDE_VERTEX_GEOM", "1")
 
+int pcs_rsc_handle
+ObjectMatrices drw_matrix_buf
 float ssbo_vbo_full_[]
-float ssbo_vnor_[]
-float ssbo_varea_[]
+uint ssbo_vnor_[] // uint so that buffer can be arbitrary
+uint ssbo_varea_[] // uint so that buffer can be arbitrary
 int pcs_vert_count_
 SSBOData_StrokeGenDynamicMeshCounters ssbo_dyn_mesh_counters_out_
 */
+#define PI_HALF 1.57079632679f
 
-vec3 ld_vpos(uint vtx_id)
-{
-	vec3 vpos; 
-    Load3(ssbo_vbo_full_, vtx_id, vpos);
 
-    return vpos; 
-}
-void st_vpos(uint vtx_id, vec3 vpos)
-{
-    Store3(ssbo_vbo_full_, vtx_id, vpos);
-}
-
-vec3 ld_vnor(uint vtx_id)
-{
-	vec3 vnor; 
-    Load3(ssbo_vnor_, vtx_id, vnor);
-    return vnor; 
-}
-void st_vnor(uint vtx_id, vec3 vnor)
-{
-    Store3(ssbo_vnor_, vtx_id, vnor);
-}
-
-float ld_varea(uint vtx_id)
-{
-    float varea; 
-    return ssbo_varea_[vtx_id]; 
-}
-void st_varea(uint vtx_id, float varea)
-{
-    ssbo_varea_[vtx_id] = varea; 
-}
 
 uint get_vert_count()
 {
     return pcs_vert_count_ + ssbo_dyn_mesh_counters_out_.num_verts; 
 }
 
-
 float calc_voronoi_area(
-    vec3 edge_len_sqr, float cot_x, 
+    float edge_len_sqr, float cot_x, 
     float ang_c, bool is_obtuse, float face_area
 ) 
 {
@@ -69,9 +44,6 @@ float calc_voronoi_area(
     return .125f * edge_len_sqr * cot_x;
 }
 
-
-
-
 struct CalcVertAttrContext_Order0
 {
     uint vi; 
@@ -79,7 +51,7 @@ struct CalcVertAttrContext_Order0
 
 #if defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_0__NORMAL)
     vec3 sum_normal;
-    vec3 sum_weight;  
+    float sum_weight;  
 #endif
 
 #if defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_0__AREA)
@@ -95,17 +67,18 @@ CalcVertAttrContext_Order0 init_vert_attr_context_order_0(
     ctx.vpos = vpos; 
 
 #if defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_0__NORMAL)
-    ctx.sum_normal = .0f; 
+    ctx.sum_normal = vec3(.0f); 
     ctx.sum_weight = .0f;
 #endif
 
 #if defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_0__AREA)
     ctx.voronoi_area = .0f;
 #endif
+
+    return ctx; 
 }
 
 
-#define PI_HALF 1.57079632679f
 /*    Rotate fwd around V3(marked as vc)        
  *        v0  ...  vp             
  *       /  \     /  \            
@@ -164,7 +137,7 @@ bool calc_vert_normal_by_angle(
 
         float angle = acos(dp);
         ctx.sum_weight += angle; 
-        ctx.sum_normal += angle * cross(vci_dir, vcn_dir);
+        ctx.sum_normal += angle * cross(vcn_dir, vci_dir/*we are rotating arount CW, but surface oriented CCW*/);
     }
 #endif
 
@@ -206,16 +179,17 @@ bool calc_vert_normal_by_angle(
 #if defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_0)
 void main()
 {
+    uint groupIdx = gl_LocalInvocationID.x; 
     uint vert_id = gl_GlobalInvocationID.x; 
     uint num_verts = get_vert_count(); 
     bool valid_thread = vert_id < num_verts; 
 
-    VertWedgeListHeader vwlh = decode_vert_wedge_list_header(vert_wedge_list_headers[vert_id]);
+    VertWedgeListHeader vwlh = decode_vert_wedge_list_header(ssbo_vert_to_edge_list_header_[vert_id]);
 
-    CalcVertAttrContext_Order0 ctx; 
-    ctx.vi = ssbo_edge_to_vert_[vwlh.wedge_id*4u + (vwlh.ivert == 1u) ? 3u : 1u]; 
-    ctx.vpos = ld_vpos(vert_id); 
-    ctx.sum_weight = ctx.sum_normal = .0f;
+    CalcVertAttrContext_Order0 ctx = init_vert_attr_context_order_0(
+        ssbo_edge_to_vert_[vwlh.wedge_id*4u + ((vwlh.ivert == 1u) ? 3u : 1u)], 
+        ld_vpos(vert_id)
+    ); 
     if (valid_thread)
     {
         bool rotate_fwd = true; 
@@ -226,6 +200,24 @@ void main()
     vec3 vnormal = normalize(ctx.sum_normal / ctx.sum_weight); 
     if (valid_thread)
         st_vnor(vert_id, vnormal);
+
+    #if defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_0__NORMAL__OUTPUT_DEBUG_LINES)
+        VertFlags vf = decode_vert_flags(ssbo_vert_flags_[vert_id]); 
+       
+        bool dbg_vtx_nor = (!vf.dupli) && valid_thread; 
+        uint dbg_prim_id = compact_normal_line(dbg_vtx_nor, groupIdx);
+        
+        if (dbg_vtx_nor)
+        {
+            vec4 vpos_ws_0 = vec4(ctx.vpos, 1.0f);
+            vec4 vpos_ws_1 = vec4(ctx.vpos + vnormal * pcs_dbg_geom_scale_ * .05f, 1.0f);
+
+            uvec3 vpos_enc = floatBitsToUint(vpos_ws_0.xyz); 
+            Store3(ssbo_dbg_lines_, dbg_prim_id*6u, vpos_enc);
+            vpos_enc = floatBitsToUint(vpos_ws_1.xyz); 
+            Store3(ssbo_dbg_lines_, dbg_prim_id*6u + 3u, vpos_enc); 
+        }
+    #endif
 #endif
 
 #if defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_0__AREA)

@@ -8,6 +8,11 @@
 #define CAT_(x, y) x ## y
 
 
+
+/* Code gen Input: */
+/* #define COMPACTION_LIB_EXCLUDE --- wether use the default compaction code generator */
+/* #define GLOBAL_COUNTER XXX --- Global Compaction Counter, should be cleared to 0*/
+/* #define CP_TAG XXX --- Tag, defined in shader info for default code gen */
 #define DECL_LDS_DIGIT_PER_LANE(tag) \
     shared uint CAT(LDS_digit_per_lane_, tag)[32u]; \
 
@@ -20,54 +25,55 @@
 #define DECL_LDS_SCAN_BLOCK_OFFSET(tag) \
     shared uint CAT(LDS_scan_block_offset_, tag); \
 
-#define DECL_COMPACTION_FUNC(tag) \
-uint CAT(compact_, tag)(bool val, uint groupIdx)                                                   \
+
+#define DECL_COMPACTION_FUNC(tag, GLOBAL_ATOMIC_COUNTER) \
+uint CAT(compact_, tag)(bool val, uint groupIdx, uint multiplier = 1u)                             \
 {                                                                                                  \
-	const uint wave_id = groupIdx >> 5u; /* must be < 32 which is ensured since tg size <= 1024 */    \
+	const uint wave_id = groupIdx >> 5u; /* must be < 32 which is ensured since tg size <= 1024 */ \
     const uint lane_id = groupIdx % 32u;                                                           \
     const uint num_waves = gl_WorkGroupSize.x >> 5u;                                               \
                                                                                                    \
-	/* Clear LDS counters */                                                                          \
+	/* Clear LDS counters */                                                                       \
     if (wave_id == 0u)                                                                             \
     {                                                                                              \
         if (lane_id == 0u) LDS_HIST_BLK = 0u;                                                      \
         LDS_DIGIT_PER_LANE[lane_id] = 0u;                                                          \
     }                                                                                              \
     barrier();                                                                                     \
-	/*  w0    w1    w2    w3         LDS_DIGIT_PER_LANE                                               \
-	 * 00:1  04:1  08:0  12:1  l0    0000                                                             \
-	 * 01:0  05:0  09:0  13:0  l1    0000                                                             \
-	 * 02:1  06:1  10:0  14:0  l2    0000                                                             \
-	 * 03:1  07:0  11:1  15:0  l3    0000                                                             \
-	 * ---------------------------                                                                    \
-	 * LDS_HIST_BLK                                                                                   \
-	 *  0                                                                                             \
-	*/                                                                                                \
+	/*  w0    w1    w2    w3         LDS_DIGIT_PER_LANE                                            \
+	 * 00:1  04:1  08:0  12:1  l0    0000                                                          \
+	 * 01:0  05:0  09:0  13:0  l1    0000                                                          \
+	 * 02:1  06:1  10:0  14:0  l2    0000                                                          \
+	 * 03:1  07:0  11:1  15:0  l3    0000                                                          \
+	 * ---------------------------                                                                 \
+	 * LDS_HIST_BLK                                                                                \
+	 *  0                                                                                          \
+	*/                                                                                             \
                                                                                                    \
     /* Mark 1/0 at bit #wave_id */                                                                 \
     uint compact_bitval = uint(val);                                                               \
     uint lds_compact_input = compact_bitval << wave_id;                                            \
     atomicOr(LDS_DIGIT_PER_LANE[lane_id], lds_compact_input);                                      \
     barrier();                                                                                     \
-	/*  w0    w1    w2    w3         LDS_DIGIT_PER_LANE                                               \
-	 * 00:1  04:1  08:0  12:1  l0    1011                                                             \
-	 * 01:0  05:0  09:0  13:0  l1    0000                                                             \
-	 * 02:1  06:1  10:0  14:0  l2    0011                                                             \
-	 * 03:1  07:0  11:1  15:0  l3    0101                                                             \
-	*/                                                                                                \
+	/*  w0    w1    w2    w3         LDS_DIGIT_PER_LANE                                            \
+	 * 00:1  04:1  08:0  12:1  l0    1011                                                          \
+	 * 01:0  05:0  09:0  13:0  l1    0000                                                          \
+	 * 02:1  06:1  10:0  14:0  l2    0011                                                          \
+	 * 03:1  07:0  11:1  15:0  l3    0101                                                          \
+	*/                                                                                             \
                                                                                                    \
     /* Prefix sum on lane sums */                                                                  \
     uint lane_digit = LDS_DIGIT_PER_LANE[lane_id];                                                 \
     uint wave_mask = (~(0xffffffffu << wave_id));                                                  \
-	/*  w0    w1    w2    w3                                                                          \
-	 * 0000  0001  0011  0111        wave_mask                                                        \
-	 *                                                                                                \
-	 *  w0    w1    w2    w3         lane_digit                                                       \
-	 * 00:1  04:1  08:0  12:1  l0    1011                                                             \
-	 * 01:0  05:0  09:0  13:0  l1    0000                                                             \
-	 * 02:1  06:1  10:0  14:0  l2    0011                                                             \
-	 * 03:1  07:0  11:1  15:0  l3    0101                                                             \
-	*/                                                                                                \
+	/*  w0    w1    w2    w3                                                                       \
+	 * 0000  0001  0011  0111        wave_mask                                                     \
+	 *                                                                                             \
+	 *  w0    w1    w2    w3         lane_digit                                                    \
+	 * 00:1  04:1  08:0  12:1  l0    1011                                                          \
+	 * 01:0  05:0  09:0  13:0  l1    0000                                                          \
+	 * 02:1  06:1  10:0  14:0  l2    0011                                                          \
+	 * 03:1  07:0  11:1  15:0  l3    0101                                                          \
+	*/                                                                                             \
     uint lane_digit_masked = lane_digit & wave_mask;                                               \
     uint num_1_bits_low = bitCount(lane_digit_masked);                                             \
     uint lane_offset = num_1_bits_low;                                                             \
@@ -83,15 +89,16 @@ uint CAT(compact_, tag)(bool val, uint groupIdx)                                
     if (groupIdx == gl_WorkGroupSize.x - 1u)                                                       \
     {                                                                                              \
         LDS_SCAN_BLOCK_OFFSET = atomicAdd(                                                         \
-            GLOBAL_COUNTER,                                                                        \
-            LDS_HIST_BLK                                                                           \
+            (GLOBAL_ATOMIC_COUNTER),                                                               \
+            LDS_HIST_BLK * (multiplier)                                                            \
         );                                                                                         \
     }                                                                                              \
     barrier();                                                                                     \
                                                                                                    \
     /* Compute final offset */                                                                     \
     uint local_offset = LDS_OFFSET_PER_LANE_SLOT[lane_id] + lane_offset;                           \
-    uint blk_offset   = LDS_SCAN_BLOCK_OFFSET;                                                     \
+    local_offset *= (multiplier);                                                                  \
+    uint blk_offset = LDS_SCAN_BLOCK_OFFSET;                                                       \
                                                                                                    \
     uint scanres = local_offset + blk_offset;                                                      \
 	return scanres;                                                                                \
@@ -104,11 +111,6 @@ uint CAT(compact_, tag)(bool val, uint groupIdx)                                
 */
 #if !defined(COMPACTION_LIB_EXCLUDE) 
 
-/* Input: */
-/* #define COMPACTION_LIB_EXCLUDE --- define to remove this lib. used for separate kernels in the same file */
-/* #define GLOBAL_COUNTER XXX --- Global Compaction Counter, should be cleared to 0*/
-/* #define CP_TAG XXX --- Tag */
-
 DECL_LDS_DIGIT_PER_LANE(CP_TAG)
 #define LDS_DIGIT_PER_LANE CAT(LDS_digit_per_lane_, CP_TAG)
 DECL_LDS_OFFSET_PER_LANE_SLOT(CP_TAG)
@@ -118,9 +120,15 @@ DECL_LDS_HIST_BLK(CP_TAG)
 DECL_LDS_SCAN_BLOCK_OFFSET(CP_TAG)
 #define LDS_SCAN_BLOCK_OFFSET CAT(LDS_scan_block_offset_, CP_TAG) 
 
-DECL_COMPACTION_FUNC(CP_TAG)
+DECL_COMPACTION_FUNC(CP_TAG, GLOBAL_COUNTER)
 
 #endif
+
+
+
+
+
+
 
 
 /* /////////////////////////////////////////////////////////////////////////
@@ -129,31 +137,33 @@ DECL_COMPACTION_FUNC(CP_TAG)
 
 #if defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_CURVATURE__SELECT_FACES)
 
-DECL_LDS_DIGIT_PER_LANE(op_0)
-#define LDS_DIGIT_PER_LANE CAT(LDS_digit_per_lane_, op_0)
-DECL_LDS_OFFSET_PER_LANE_SLOT(op_0)
-#define LDS_OFFSET_PER_LANE_SLOT CAT(LDS_digit_per_lane_, op_0)
-DECL_LDS_HIST_BLK(op_0)
-#define LDS_HIST_BLK CAT(LDS_hist_blk_, op_0)
-DECL_LDS_SCAN_BLOCK_OFFSET(op_0)
-#define LDS_SCAN_BLOCK_OFFSET CAT(LDS_scan_block_offset_, op_0) 
-
-DECL_COMPACTION_FUNC(CP_TAG)
+#endif
 
 
-DECL_LDS_DIGIT_PER_LANE(op_1)
-#define LDS_DIGIT_PER_LANE CAT(LDS_digit_per_lane_, op_1)
-DECL_LDS_OFFSET_PER_LANE_SLOT(op_1)
-#define LDS_OFFSET_PER_LANE_SLOT CAT(LDS_digit_per_lane_, op_1)
-DECL_LDS_HIST_BLK(op_1)
-#define LDS_HIST_BLK CAT(LDS_hist_blk_, op_1)
-DECL_LDS_SCAN_BLOCK_OFFSET(op_1)
-#define LDS_SCAN_BLOCK_OFFSET CAT(LDS_scan_block_offset_, op_1) 
 
-DECL_COMPACTION_FUNC(CP_TAG)
 
+#if defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_0__NORMAL__OUTPUT_DEBUG_LINES)
+
+#define CP_TAG normal_line
+DECL_LDS_DIGIT_PER_LANE(CP_TAG)
+#define LDS_DIGIT_PER_LANE CAT(LDS_digit_per_lane_, CP_TAG)
+DECL_LDS_OFFSET_PER_LANE_SLOT(CP_TAG)
+#define LDS_OFFSET_PER_LANE_SLOT CAT(LDS_digit_per_lane_, CP_TAG)
+DECL_LDS_HIST_BLK(CP_TAG)
+#define LDS_HIST_BLK CAT(LDS_hist_blk_, CP_TAG)
+DECL_LDS_SCAN_BLOCK_OFFSET(CP_TAG)
+#define LDS_SCAN_BLOCK_OFFSET CAT(LDS_scan_block_offset_, CP_TAG) 
+
+DECL_COMPACTION_FUNC(CP_TAG, ssbo_bnpr_mesh_pool_counters_.num_dbg_vnor_lines)
+#undef CP_TAG
 
 #endif
+
+
+
+
+
+
 
 
 

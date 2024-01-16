@@ -40,11 +40,13 @@ namespace blender::npr::strokegen
     return pass_comp_test;
   }
 
-  PassMain &StrokeGenPassModule::get_contour_edge_draw_pass(eType passType)
+  PassMain &StrokeGenPassModule::get_render_pass(eType passType)
   {
     switch (passType) {
       case INDIRECT_DRAW_CONTOUR_EDGES:
-        return pass_draw_contour_edges;     
+        return pass_draw_contour_edges;
+      case INDIRECT_DRAW_DBG_VNOR:
+        return pass_draw_debug_normal; 
     }
     return pass_draw_contour_edges; 
   }
@@ -54,7 +56,8 @@ namespace blender::npr::strokegen
   void StrokeGenPassModule::on_begin_sync()
   {
     init_per_mesh_pass();
-    pass_draw_contour_edges.init_pass(shaders_, textures_); 
+    pass_draw_contour_edges.init_pass(shaders_, textures_);
+    pass_draw_debug_normal.init_pass(shaders_, textures_); 
 
     rebuild_pass_scan_test();
     rebuild_pass_segscan_test();
@@ -75,6 +78,7 @@ namespace blender::npr::strokegen
     meshing_params.edge_visualize_mode = (int)(scene_eval->npr.npr_test_val_6 + 1e-10f);
 
     pass_draw_contour_edges.draw_settings.draw_hidden_lines = scene_eval->npr.npr_test_val_7 > .5f;
+    pass_draw_debug_normal.draw_settings.draw_hidden_lines = false; 
 
     meshing_params.positiion_regularization_scale = scene_eval->npr.npr_test_val_8;
 
@@ -93,9 +97,13 @@ namespace blender::npr::strokegen
 
   void StrokeGenPassModule::on_end_sync()
   {
+    /* Debug draw */
+    rebuild_pass_dbg_vnor_drawcall(surf_dbg_ctx); 
+    rebuild_pass_debug_normal_drawcall(surf_dbg_ctx); 
+
     /* Post processing after iterated over all meshes. */
     rebuild_pass_process_contours(); 
-    rebuild_pass_contour_edge_drawcall();
+    rebuild_pass_contour_edge_drawcall(); 
     rebuild_pass_compress_contour_pixels();
   }
 
@@ -107,6 +115,8 @@ namespace blender::npr::strokegen
   {
     pass_extract_geom.init();
     boostrap_before_extract_first_batch = true;
+
+    surf_dbg_ctx = {true, buffers_.ssbo_mesh_buffer_reuse_4_}; 
   }
 
   /**
@@ -200,6 +210,7 @@ namespace blender::npr::strokegen
     flooding_options.select_verts = false;
     append_subpass_diffuse_edge_selection(num_edges, num_verts, flooding_options);
     append_subpass_fill_selected_mesh_elems_indirect_dispatch_args_(); 
+
     append_subpass_fill_dispatched_args_remeshed_edges_(num_edges, true);
     append_subpass_fill_dispatched_args_remeshed_verts_(num_verts); 
     append_subpass_select_verts_from_selected_edges(true, true, num_edges, num_verts); 
@@ -232,6 +243,16 @@ namespace blender::npr::strokegen
         append_subpass_flip_edges(opti_goal, iter_remesh, iter_edge_flip, num_edges, num_verts);
       }
     }
+
+    // Test surface analysis
+    SurfaceAnalysisContext surf_analysis_ctx = {
+        false,
+      true, buffers_.ssbo_mesh_buffer_reuse_0_,
+      false
+    };
+    append_subpass_surf_geom_analysis(rsc_handle, num_verts, surf_analysis_ctx, surf_dbg_ctx); 
+
+
 
     // Contour Processing --------------------------------------------------------
     append_subpass_fill_dispatched_args_remeshed_edges_(num_edges, false); 
@@ -524,7 +545,8 @@ namespace blender::npr::strokegen
       sub.bind_ssbo(9, buffers_.ssbo_edge_flags_);
       sub.bind_ssbo(10, buffers_.ssbo_dyn_mesh_counters_[0]);
       sub.bind_ssbo(11, buffers_.ssbo_dyn_mesh_counters_[1]);
-      sub.bind_ssbo(12, buffers_.ssbo_edge_split_counters_); 
+      sub.bind_ssbo(12, buffers_.ssbo_edge_split_counters_);
+      sub.bind_ssbo(13, buffers_.ssbo_bnpr_vert_normal_debug_draw_args_); 
       sub.bind_ubo(0, buffers_.ubo_view_matrices_cache_); 
       sub.push_constant("pcs_hash_map_size_", hashmap_size);
       sub.push_constant("pcs_edge_count_", num_edges_in);
@@ -945,6 +967,69 @@ namespace blender::npr::strokegen
   }
 
 
+  void StrokeGenPassModule::append_subpass_surf_geom_analysis(
+      ResourceHandle& rsc_handle, int num_verts, const SurfaceAnalysisContext & options,
+      const SurfaceDebugContext & dbg_options
+  ){
+    int num_common_bind_ssbo = 0; 
+    auto bind_src = [&](draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub) {
+      sub.bind_ssbo(0,  buffers_.ssbo_dyn_mesh_counters_out_()); 
+      sub.bind_ssbo(1,  buffers_.ssbo_bnpr_mesh_pool_counters_); 
+      sub.bind_ssbo(2,  buffers_.ssbo_selected_edge_to_edge_); 
+      sub.bind_ssbo(3,  buffers_.ssbo_selected_vert_to_vert_); 
+      sub.bind_ssbo(4,  buffers_.ssbo_edge_to_vert_); 
+      sub.bind_ssbo(5,  buffers_.ssbo_edge_to_edges_); 
+      sub.bind_ssbo(6,  buffers_.ssbo_vert_to_edge_list_header_); 
+      sub.bind_ssbo(7,  buffers_.ssbo_edge_flags_); 
+      sub.bind_ssbo(8,  buffers_.ssbo_vert_flags_); 
+      sub.bind_ssbo(9, buffers_.ssbo_vbo_full_);
+      sub.bind_ssbo(10, DRW_manager_get()->matrix_buf.current());
+      num_common_bind_ssbo = 11; 
+
+      sub.push_constant("pcs_vert_count_", num_verts);
+      sub.push_constant("pcs_vert_count_", num_verts);
+      sub.push_constant("pcs_rsc_handle", (int)rsc_handle.resource_index()); 
+    };
+
+    if (options.calc_vert_normal) {
+      auto &sub = pass_extract_geom.sub("bnpr_geom_analysis_order_0_vert_normal");
+      sub.shader_set(
+          shaders_.static_shader_get(
+          dbg_options.dbg_vert_normal ? MESH_ANALYSE_VERT_NORMAL_DBG : MESH_ANALYSE_VERT_NORMAL
+          )
+      );
+
+      bind_src(sub);
+      sub.bind_ssbo(num_common_bind_ssbo, options.ssbo_vnor_);
+      if (dbg_options.dbg_vert_normal) {
+        sub.bind_ssbo(++num_common_bind_ssbo, dbg_options.ssbo_vnor_lines_);
+      }
+      sub.push_constant("pcs_dbg_geom_scale_", 1.0f); 
+
+      sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_verts_);
+      sub.barrier(GPU_BARRIER_SHADER_STORAGE);
+    }
+  }
+
+  void StrokeGenPassModule::rebuild_pass_dbg_vnor_drawcall(SurfaceDebugContext dbg_ctx)
+  {
+    if (!dbg_ctx.dbg_vert_normal)
+      return;
+
+    {
+      auto &sub = pass_draw_debug_normal.sub("fill_draw_args_contour_edges");
+
+      sub.shader_set(shaders_.static_shader_get(FILL_DRAW_ARGS_VERT_NORMAL));
+
+      sub.bind_ssbo(0, buffers_.ssbo_bnpr_mesh_pool_counters_);
+      sub.bind_ssbo(1, buffers_.ssbo_bnpr_vert_normal_debug_draw_args_);
+
+      sub.dispatch(int3(1, 1, 1));
+      sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_COMMAND); 
+    }
+  }
+
+
   void StrokeGenPassModule::append_subpass_extract_contour_edges(
       GPUBatch *gpu_batch_line_adj,
       ResourceHandle &rsc_handle,
@@ -971,17 +1056,9 @@ namespace blender::npr::strokegen
     sub.bind_ssbo(6, buffers_.ssbo_dyn_mesh_counters_[1]);
     sub.bind_ssbo(7, buffers_.ssbo_edge_flags_); 
     // for debugging 
-    GPUStorageBuf *reused_ssbo_wedge_flooding_pointers_in_ = nullptr;
-    GPUStorageBuf *reused_ssbo_wedge_flooding_pointers_out_ = nullptr;
-    buffers_.reused_ssbo_wedge_flooding_pointers_(
-        1/*==last iter*/,
-      reused_ssbo_wedge_flooding_pointers_in_,
-      reused_ssbo_wedge_flooding_pointers_out_
-    );
-    sub.bind_ssbo(8, reused_ssbo_wedge_flooding_pointers_out_);
-    sub.bind_ssbo(9, buffers_.ssbo_edge_to_edges_);
-    sub.bind_ssbo(10, buffers_.ssbo_edge_to_vert_);
-    sub.bind_ssbo(11, buffers_.ssbo_vert_to_edge_list_header_); 
+    sub.bind_ssbo(8, buffers_.ssbo_edge_to_edges_);
+    sub.bind_ssbo(9, buffers_.ssbo_edge_to_vert_);
+    sub.bind_ssbo(10, buffers_.ssbo_vert_to_edge_list_header_); 
     // --------------
     sub.bind_ubo(0, buffers_.ubo_view_matrices_cache_);
     sub.push_constant("pcs_ib_fmt_u16", ib_type == gpu::GPU_INDEX_U16 ? 1 : 0);
@@ -1022,7 +1099,6 @@ namespace blender::npr::strokegen
   }
 
 
-
   void StrokeGenPassModule::rebuild_pass_process_contours()
   {
     pass_process_contours.init();
@@ -1048,7 +1124,7 @@ namespace blender::npr::strokegen
       sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_COMMAND);
     }
     
-    pass_draw_contour_edges.append_draw_subpass(shaders_, buffers_, textures_);
+    pass_draw_contour_edges.append_draw_contour_subpass(shaders_, buffers_, textures_);
   }
 
   void StrokeGenPassModule::rebuild_pass_compress_contour_pixels(bool debug)
@@ -1084,6 +1160,11 @@ namespace blender::npr::strokegen
       sub.dispatch(int3(screen_res.x, screen_res.y, 1));
       sub.barrier(eGPUBarrier::GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_SHADER_IMAGE_ACCESS);
     }
+  }
+
+  void StrokeGenPassModule::rebuild_pass_debug_normal_drawcall(const SurfaceDebugContext& dbg_ctx)
+  {
+    pass_draw_debug_normal.append_draw_dbg_normal_subpass(shaders_, buffers_, dbg_ctx);
   }
 
 

@@ -1,11 +1,7 @@
 #pragma once
 
-#include "DNA_camera_types.h"
-#include "DRW_render.h"
 #include "draw_manager.hh"
 #include "draw_pass.hh"
-#include "bnpr_shader_shared.hh"
-#include "gpu_shader_private.hh"
 #include "npr_strokegen_buffer_pool.hh"
 #include "npr_strokegen_shader.hh"
 #include "npr_strokegen_texture_pool.hh"
@@ -13,6 +9,8 @@
 using namespace blender;
 
 namespace blender::npr::strokegen {
+
+struct SurfaceDebugContext; 
 
 class StrokegenMeshRasterPass : public draw::PassMain {
  public:
@@ -24,7 +22,13 @@ class StrokegenMeshRasterPass : public draw::PassMain {
     bool draw_hidden_lines; 
   } draw_settings;
   void init_pass(StrokeGenShaderModule& shader_module, GPUTexturePoolModule& texture_module);
-  void append_draw_subpass(StrokeGenShaderModule& shaders, GPUBufferPoolModule& buffers, GPUTexturePoolModule& textures);
+  void append_draw_contour_subpass(StrokeGenShaderModule &shaders,
+                                   GPUBufferPoolModule &buffers,
+                                   GPUTexturePoolModule &textures);
+
+  void append_draw_dbg_normal_subpass(StrokeGenShaderModule& shaders,
+                                      GPUBufferPoolModule& buffers,
+                                      const SurfaceDebugContext& dbg_ctx);
 };
 
 }
