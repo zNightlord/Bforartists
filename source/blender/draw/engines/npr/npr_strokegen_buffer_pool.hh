@@ -76,12 +76,13 @@ class GPUBufferPoolModule {
   SSBO_StrokeGenReusedLarge ssbo_mesh_buffer_reuse_0_;                    // 256MB  Total  
   SSBO_StrokeGenReusedMedium ssbo_mesh_buffer_reuse_1_;                   // 128MB  384MB
   SSBO_StrokeGenReusedMedium ssbo_mesh_buffer_reuse_2_;                   // 128MB  512MB
-  // contains extracted geom, contour edges / debug lines
+  // contains extracted geom, contour edges
   SSBO_StrokeGenReusedLarge ssbo_mesh_buffer_reuse_3_;                    // 256MB  768MB
-  // temporally used for hashing
+  // temporally used for hashing / debug lines
   SSBO_StrokeGenReusedLarge ssbo_mesh_buffer_reuse_4_;                    // 256MB 1024MB
   SSBO_StrokeGenReusedSmall ssbo_mesh_buffer_reuse_5_;                    // 64MB  1088MB
   SSBO_StrokeGenReusedSmall ssbo_mesh_buffer_reuse_6_;                    // 64MB  1152MB
+  SSBO_StrokeGenReusedMedium ssbo_mesh_buffer_reuse_7_;                   // 128MB 1280MB
 
 
   // Reused Buffer Scheme for Basic Meshing ------------------------------------------------

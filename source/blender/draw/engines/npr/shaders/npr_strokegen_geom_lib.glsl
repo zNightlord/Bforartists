@@ -46,7 +46,48 @@
     }
 #endif
 
+#if defined(INCLUDE_VERTEX_CURV_TENSOR)
 
+    vec3 ld_vcurv_tensor(uint vtx_id)
+    {
+        uvec3 vcurv_tensor_enc;
+        Load3(ssbo_vcurv_tensor_, vtx_id, vcurv_tensor_enc); 
+        return uintBitsToFloat(vcurv_tensor_enc); 
+    }
+    void st_vcurv_tensor(uint vtx_id, vec3 vcurv_tensor)
+    {
+        uvec3 vcurv_tensor_enc = floatBitsToUint(vcurv_tensor);
+        Store3(ssbo_vcurv_tensor_, vtx_id, vcurv_tensor_enc); 
+    }
+
+    void st_vcurv_pdirs_k1k2(uint vtx_id, vec3 pd1, float k1, vec3 pd2, float k2)
+    {
+        uvec4 pd1_k1_enc = floatBitsToUint(vec4(pd1.xyz, k1));
+        Store4(ssbo_vcurv_pdirs_k1k2_, (vtx_id*2u), pd1_k1_enc); 
+
+        uvec4 pd2_k2_enc = floatBitsToUint(vec4(pd2.xyz, k2));
+        Store4(ssbo_vcurv_pdirs_k1k2_, (vtx_id*2u+1u), pd2_k2_enc); 
+    }
+    void ld_vcurv_pdir1_k1(uint vtx_id, out vec3 pdir, out float k)
+    {
+        uvec4 pd1_k1_enc;
+        Load4(ssbo_vcurv_pdirs_k1k2_, (vtx_id*2u), pd1_k1_enc); 
+        
+        vec4 pd1_k1 = uintBitsToFloat(pd1_k1_enc); 
+        pdir = pd1_k1.xyz;
+        k    = pd1_k1.w;
+    }
+    void ld_vcurv_pdir2_k2(uint vtx_id, out vec3 pdir, out float k)
+    {
+        uvec4 pd2_k2_enc;
+        Load4(ssbo_vcurv_pdirs_k1k2_, (vtx_id*2u+1u), pd2_k2_enc); 
+        
+        vec4 pd2_k2 = uintBitsToFloat(pd2_k2_enc); 
+        pdir = pd2_k2.xyz;
+        k    = pd2_k2.w;
+    }
+
+#endif
 
 
 

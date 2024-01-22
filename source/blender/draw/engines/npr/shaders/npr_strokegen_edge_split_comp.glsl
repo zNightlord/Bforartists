@@ -229,7 +229,7 @@ void Store4_EEAdj(uint w, uvec4 adj_wedges, uvec4 adj_iface_adjs)
     data[2] = encode_adj_wedge_info(AdjWedgeInfo(adj_wedges[2], adj_iface_adjs[2]));
     data[3] = encode_adj_wedge_info(AdjWedgeInfo(adj_wedges[3], adj_iface_adjs[3]));
 
-    Store4(ssbo_edge_to_edges_, w, uvec4, data); 
+    Store4(ssbo_edge_to_edges_, w, data); 
 }
 #endif
 
@@ -353,9 +353,9 @@ void main()
     *    { v0~3 }        { v1, v4, v3, v0 }      { v1, v2, v3, v4 }                 
     *    { w0~3 }        { e1, e3, w3, w0 }      { w1, w2, e3, e1 } 
     */
-    Store4(ssbo_edge_to_vert_,  e0, uvec4, uvec4(v1, v4, v3, v0)); // update e0
+    Store4(ssbo_edge_to_vert_,  e0, uvec4(v1, v4, v3, v0)); // update e0
     Store4_EEAdj(e0, uvec4(e1, e3, w3, w0), uvec4(0, 0, w[3].iface_adj, w[0].iface_adj)); 
-    Store4(ssbo_edge_to_vert_,  e2, uvec4, uvec4(v1, v2, v3, v4)); // update e2
+    Store4(ssbo_edge_to_vert_,  e2, uvec4(v1, v2, v3, v4)); // update e2
     Store4_EEAdj(e2, uvec4(w1, w2, e3, e1), uvec4(w[1].iface_adj, w[2].iface_adj, 1, 1)); 
     /*  ---------------------------------------------------------------                               
     *     Template               E1                    E3
@@ -377,9 +377,9 @@ void main()
     *    { v0~3 }        { v0, v1, v2, v4 }      { v0, v4, v2, v3 }
     *    { w0~3 }        { w0, w1, e2, e0 }      { e0, e2, w2, w3 }
     */
-    Store4(ssbo_edge_to_vert_,  e1, uvec4, uvec4(v0, v1, v2, v4)); // update e1
+    Store4(ssbo_edge_to_vert_,  e1, uvec4(v0, v1, v2, v4)); // update e1
     Store4_EEAdj(e1, uvec4(w0, w1, e2, e0), uvec4(w[0].iface_adj, w[1].iface_adj, 0, 0)); 
-    Store4(ssbo_edge_to_vert_,  e3, uvec4, uvec4(v0, v4, v2, v3)); // update e3
+    Store4(ssbo_edge_to_vert_,  e3, uvec4(v0, v4, v2, v3)); // update e3
     Store4_EEAdj(e3, uvec4(e0, e2, w2, w3), uvec4(1, 1, w[2].iface_adj, w[3].iface_adj)); 
 
     /* Adjust ee & ev adj. for OLD edges 

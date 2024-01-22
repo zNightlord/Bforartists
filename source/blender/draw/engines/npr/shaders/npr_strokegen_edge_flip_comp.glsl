@@ -382,7 +382,7 @@ bool vertex_1ring_visitor_validate_flip(CirculatorIterData iter, inout FlipValid
 #if defined(_KERNEL_MULTICOMPILE__EDGE_FLIP_EXECUTE)
 void Store4_EVAdj(uint wedge, uvec4 verts)
 {
-    Store4(ssbo_edge_to_vert_, wedge, uvec4, verts); 
+    Store4(ssbo_edge_to_vert_, wedge, verts); 
 }
 void Store4_EEAdj(uint wedge, AdjWedgeInfo awi[4])
 {
@@ -392,7 +392,7 @@ void Store4_EEAdj(uint wedge, AdjWedgeInfo awi[4])
     data[2] = encode_adj_wedge_info(awi[2]);
     data[3] = encode_adj_wedge_info(awi[3]);
 
-    Store4(ssbo_edge_to_edges_, wedge, uvec4, data); 
+    Store4(ssbo_edge_to_edges_, wedge, data); 
 }
 #endif
 

@@ -135,15 +135,8 @@ DECL_COMPACTION_FUNC(CP_TAG, GLOBAL_COUNTER)
  * Custom code generation 
 */
 
-#if defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_CURVATURE__SELECT_FACES)
-
-#endif
-
-
-
-
-#if defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_0__NORMAL__OUTPUT_DEBUG_LINES)
-
+#if defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_0)
+// nothing special here, just to demonstrate how to use the custom code gen
 #define CP_TAG normal_line
 DECL_LDS_DIGIT_PER_LANE(CP_TAG)
 #define LDS_DIGIT_PER_LANE CAT(LDS_digit_per_lane_, CP_TAG)

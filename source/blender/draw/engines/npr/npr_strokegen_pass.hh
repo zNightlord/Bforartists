@@ -27,6 +27,9 @@ class Instance;
 struct SurfaceDebugContext {
   bool dbg_vert_normal;
   GPUStorageBuf *ssbo_vnor_lines_;
+
+  bool dbg_vert_curv;
+  GPUStorageBuf *ssbo_vcurv_lines_; 
 };
 
 
@@ -203,11 +206,40 @@ public:
   // ---------------------------------------------------------------------------
   struct SurfaceAnalysisContext {
     bool only_selected; // only calculate attributes on selected elems
+
     // Vertex attributes
     bool calc_vert_normal;
     GPUStorageBuf *ssbo_vnor_; 
     bool calc_vert_voronoi_area;
     GPUStorageBuf *ssbo_varea_;
+    bool calc_vert_curvature;
+    GPUStorageBuf *ssbo_vcurv_tensor_; 
+    GPUStorageBuf *ssbo_vcurv_pdirs_k1k2_;
+    GPUStorageBuf *ssbo_edge_vtensors_; // temp buffer holding partial tensors
+
+    SurfaceAnalysisContext()
+      : only_selected(false),
+        calc_vert_normal(false),
+        ssbo_vnor_(nullptr),
+        calc_vert_voronoi_area(false),
+        ssbo_varea_(nullptr),
+        calc_vert_curvature(false),
+        ssbo_vcurv_tensor_(nullptr),
+        ssbo_vcurv_pdirs_k1k2_(nullptr),
+        ssbo_edge_vtensors_(nullptr)
+    {
+    }
+    void set_only_selected(bool val) { only_selected = val; } 
+    void set_calc_vert_normal(bool val) { calc_vert_normal = val; }
+    void set_calc_vert_voronoi_area(bool val) { calc_vert_voronoi_area = val; }
+    void set_calc_vert_curvature(bool val) 
+    { 
+      calc_vert_curvature = val;
+      if (calc_vert_curvature) {
+        set_calc_vert_normal(true); 
+        set_calc_vert_voronoi_area(true); 
+      } 
+    }
   };
   SurfaceDebugContext surf_dbg_ctx; 
 
@@ -241,22 +273,7 @@ public:
 
   // ---------------------------------------------------------------------------
   void rebuild_pass_contour_edge_drawcall();
-  void rebuild_pass_compress_contour_pixels(bool debug = false); 
-
-
-
-  // ---------------------------------------------------------------------------
-  void rebuild_pass_debug_normal_drawcall(const SurfaceDebugContext& dbg_ctx);
-
-
-
-
-
-
-
-
-
-
+  void rebuild_pass_compress_contour_pixels(bool debug = false);
 
 
   // ---------------------------------------------------------------------------

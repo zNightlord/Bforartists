@@ -1016,15 +1016,19 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_analysis)
     .storage_buf(8, Qualifier::READ_WRITE, "uint", "ssbo_vert_flags_[]")
     .storage_buf(9, Qualifier::READ_WRITE, "float", "ssbo_vbo_full_[]")
     .storage_buf(10, Qualifier::READ, "ObjectMatrices", "drw_matrix_buf[]")
-#define NUM_SSBO 11
+    .storage_buf(11, Qualifier::WRITE, "uint", "ssbo_dbg_lines_[]")
+#define NUM_SSBO_BASE 12
 
     .push_constant(Type::INT, "pcs_edge_count_")
     .push_constant(Type::INT, "pcs_vert_count_")
     .push_constant(Type::INT, "pcs_rsc_handle")
+    .push_constant(Type::INT, "pcs_output_dbg_geom_")
+    .push_constant(Type::FLOAT, "pcs_dbg_geom_scale_")
 
     .local_group_size(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT)
     .compute_source("npr_strokegen_geom_analysis_comp.glsl"); 
 
+/* Estimate order 0 vertex attributes */
 GPU_SHADER_CREATE_INFO(bnpr_geom_analysis_order_0_vert_attrs)
     .do_static_compilation(true)
     .additional_info("bnpr_geom_analysis")
@@ -1035,21 +1039,50 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_analysis_order_0_vert_normal)
     .additional_info("bnpr_geom_analysis_order_0_vert_attrs")
     .define("_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_0__NORMAL", "1")
     .define("INCLUDE_VERTEX_NORMAL", "1")
-    .storage_buf(NUM_SSBO, Qualifier::READ_WRITE, "uint", "ssbo_vnor_[]");
+    .storage_buf(NUM_SSBO_BASE, Qualifier::READ_WRITE, "uint", "ssbo_vnor_[]");
 
 GPU_SHADER_CREATE_INFO(bnpr_geom_analysis_order_0_vert_all)
     .do_static_compilation(true)
     .additional_info("bnpr_geom_analysis_order_0_vert_normal")
     .define("_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_0__AREA", "1")
     .define("INCLUDE_VERTEX_VORONOI_AREA", "1")
-    .storage_buf(NUM_SSBO + 1, Qualifier::READ_WRITE, "uint", "ssbo_varea_[]");
-GPU_SHADER_CREATE_INFO(bnpr_geom_analysis_order_0_vert_normal_dbg)
+    .storage_buf(NUM_SSBO_BASE + 1, Qualifier::READ_WRITE, "uint", "ssbo_varea_[]");
+
+
+/* Estimate order 1 vertex attributes */
+GPU_SHADER_CREATE_INFO(bnpr_geom_analysis_order_1)
     .do_static_compilation(true)
-    .additional_info("bnpr_geom_analysis_order_0_vert_normal")
-    .define("_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_0__NORMAL__OUTPUT_DEBUG_LINES", "1")
-    .storage_buf(NUM_SSBO + 1, Qualifier::WRITE, "uint", "ssbo_dbg_lines_[]")
-    .push_constant(Type::FLOAT, "pcs_dbg_geom_scale_");
-#undef NUM_SSBO
+    .additional_info("bnpr_geom_analysis")
+    .define("_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1", "1")
+    .define("INCLUDE_VERTEX_NORMAL", "1")
+    .define("INCLUDE_VERTEX_VORONOI_AREA", "1")
+    .define("COMPACTION_LIB_EXCLUDE", "1")
+    .storage_buf(NUM_SSBO_BASE + 0u, Qualifier::READ_WRITE, "uint", "ssbo_vnor_[]")
+    .storage_buf(NUM_SSBO_BASE + 1u, Qualifier::READ_WRITE, "uint", "ssbo_varea_[]");
+#define NUM_SSBO_1 ((NUM_SSBO_BASE + 2u))
+
+GPU_SHADER_CREATE_INFO(bnpr_geom_analysis_order_1_main)
+    .do_static_compilation(true)
+    .additional_info("bnpr_geom_analysis_order_1")
+    .define("_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__MAIN", "1"); 
+
+GPU_SHADER_CREATE_INFO(bnpr_geom_analysis_order_1_vert_curv_pass_0)
+    .do_static_compilation(true)
+    .additional_info("bnpr_geom_analysis_order_1")
+    .define("_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__CURV_PER_FACE", "1")
+    .storage_buf(NUM_SSBO_1 + 0, Qualifier::READ_WRITE, "uint", "ssbo_edge_vtensors_[]");
+
+GPU_SHADER_CREATE_INFO(bnpr_geom_analysis_order_1_main_curvature)
+    .do_static_compilation(true)
+    .additional_info("bnpr_geom_analysis_order_1_main")
+    .define("_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__CURVTENSOR", "1")
+    .define("INCLUDE_VERTEX_CURV_TENSOR", "1")
+    .storage_buf(NUM_SSBO_1 + 0, Qualifier::READ_WRITE, "uint", "ssbo_edge_vtensors_[]")
+    .storage_buf(NUM_SSBO_1 + 1, Qualifier::READ_WRITE, "uint", "ssbo_vcurv_tensor_[]")
+    .storage_buf(NUM_SSBO_1 + 2, Qualifier::READ_WRITE, "uint", "ssbo_vcurv_pdirs_k1k2_[]"); 
+
+#undef NUM_SSBO_1
+#undef NUM_SSBO_BASE
 
 
 /** \} */
