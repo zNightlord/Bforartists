@@ -1,4 +1,4 @@
-﻿/* SPDX-License-Identifier: GPL-2.0-or-later
+/* SPDX-License-Identifier: GPL-2.0-or-later
  * Copyright 2021 Blender Foundation.
  */
 
@@ -217,8 +217,10 @@ const char *StrokeGenShaderModule::static_shader_create_info_name_get(eShaderTyp
       return "bnpr_geom_analysis_order_0_vert_all"; 
 
     case FILL_DRAW_ARGS_VERT_NORMAL:
-      return "strokegen_remeshing_fill_draw_args_dbg_vnor"; 
-    case INDIRECT_DRAW_VERT_NORMAL:
+      return "strokegen_remeshing_fill_draw_args_dbg_vnor";
+    case FILL_DRAW_ARGS_VERT_PDIRS:
+      return "strokegen_remeshing_fill_draw_args_dbg_vpdir"; 
+    case INDIRECT_DRAW_DBG_LINES:
       return "bnpr_geom_draw_debug_lines"; 
 
     case MESH_ANALYSE_VERT_CURV_PASS_0:

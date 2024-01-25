@@ -46,7 +46,7 @@ namespace blender::npr::strokegen
       case INDIRECT_DRAW_CONTOUR_EDGES:
         return pass_draw_contour_edges;
       case INDIRECT_DRAW_DBG_VNOR:
-        return pass_draw_debug_normal; 
+        return pass_draw_debug_lines_; 
     }
     return pass_draw_contour_edges; 
   }
@@ -57,7 +57,7 @@ namespace blender::npr::strokegen
   {
     init_per_mesh_pass();
     pass_draw_contour_edges.init_pass(shaders_, textures_);
-    pass_draw_debug_normal.init_pass(shaders_, textures_); 
+    pass_draw_debug_lines_.init_pass(shaders_, textures_); 
 
     rebuild_pass_scan_test();
     rebuild_pass_segscan_test();
@@ -78,7 +78,7 @@ namespace blender::npr::strokegen
     meshing_params.edge_visualize_mode = (int)(scene_eval->npr.npr_test_val_6 + 1e-10f);
 
     pass_draw_contour_edges.draw_settings.draw_hidden_lines = scene_eval->npr.npr_test_val_7 > .5f;
-    pass_draw_debug_normal.draw_settings.draw_hidden_lines = false; 
+    pass_draw_debug_lines_.draw_settings.draw_hidden_lines = false; 
 
     meshing_params.positiion_regularization_scale = scene_eval->npr.npr_test_val_8;
 
@@ -92,13 +92,15 @@ namespace blender::npr::strokegen
     meshing_params.remeshing_collapse_iters = (int)(scene_eval->npr.npr_test_val_14 + 1e-10f);
     meshing_params.remeshing_flip_iters = (int)(scene_eval->npr.npr_test_val_15 + 1e-10f);
     meshing_params.remeshing_iters = (int)(scene_eval->npr.npr_test_val_16 + 1e-10f);
-    meshing_params.remeshing_delaunay_flip_iters = (int)(scene_eval->npr.npr_test_val_17 + 1e-10f); 
+    meshing_params.remeshing_delaunay_flip_iters = (int)(scene_eval->npr.npr_test_val_17 + 1e-10f);
+
+    surf_dbg_ctx.dbg_line_length = scene_eval->npr.npr_test_val_18; 
   }
 
   void StrokeGenPassModule::on_end_sync()
   {
     /* Debug draw */
-    rebuild_pass_dbg_vnor_drawcall(surf_dbg_ctx);
+    rebuild_pass_dbg_geom_drawcall(surf_dbg_ctx);
 
     /* Post processing after iterated over all meshes. */
     rebuild_pass_process_contours(); 
@@ -115,7 +117,7 @@ namespace blender::npr::strokegen
     pass_extract_geom.init();
     boostrap_before_extract_first_batch = true;
 
-    surf_dbg_ctx = {true, buffers_.ssbo_mesh_buffer_reuse_4_}; 
+    surf_dbg_ctx = {false, true, 1.0f, buffers_.ssbo_mesh_buffer_reuse_4_ }; 
   }
 
   /**
@@ -251,12 +253,12 @@ namespace blender::npr::strokegen
     surf_analysis_ctx.ssbo_vnor_ = buffers_.ssbo_mesh_buffer_reuse_0_;
     surf_analysis_ctx.set_calc_vert_voronoi_area(true);
     surf_analysis_ctx.ssbo_varea_ = buffers_.ssbo_mesh_buffer_reuse_5_; 
-    surf_analysis_ctx.set_calc_vert_curvature(false);
+    surf_analysis_ctx.set_calc_vert_curvature(true);
     surf_analysis_ctx.ssbo_edge_vtensors_ = buffers_.ssbo_mesh_buffer_reuse_7_;
     surf_analysis_ctx.ssbo_vcurv_tensor_ = buffers_.ssbo_mesh_buffer_reuse_1_; 
     surf_analysis_ctx.ssbo_vcurv_pdirs_k1k2_ = buffers_.ssbo_mesh_buffer_reuse_2_;
 
-    append_subpass_surf_geom_analysis(rsc_handle, num_verts, surf_analysis_ctx, surf_dbg_ctx); 
+    append_subpass_surf_geom_analysis(rsc_handle, num_verts, num_edges, surf_analysis_ctx, surf_dbg_ctx); 
 
 
 
@@ -552,7 +554,7 @@ namespace blender::npr::strokegen
       sub.bind_ssbo(10, buffers_.ssbo_dyn_mesh_counters_[0]);
       sub.bind_ssbo(11, buffers_.ssbo_dyn_mesh_counters_[1]);
       sub.bind_ssbo(12, buffers_.ssbo_edge_split_counters_);
-      sub.bind_ssbo(13, buffers_.ssbo_bnpr_vert_normal_debug_draw_args_); 
+      sub.bind_ssbo(13, buffers_.ssbo_bnpr_vert_debug_draw_args_); 
       sub.bind_ubo(0, buffers_.ubo_view_matrices_cache_); 
       sub.push_constant("pcs_hash_map_size_", hashmap_size);
       sub.push_constant("pcs_edge_count_", num_edges_in);
@@ -974,7 +976,7 @@ namespace blender::npr::strokegen
 
 
   void StrokeGenPassModule::append_subpass_surf_geom_analysis(
-      ResourceHandle& rsc_handle, int num_verts, const SurfaceAnalysisContext & options,
+      ResourceHandle& rsc_handle, int num_verts, int num_edges, const SurfaceAnalysisContext & options,
       const SurfaceDebugContext & dbg_options
   ){
     int ssbo_offset_base = 0;
@@ -986,25 +988,25 @@ namespace blender::npr::strokegen
       sub.bind_ssbo(4,  buffers_.ssbo_edge_to_vert_); 
       sub.bind_ssbo(5,  buffers_.ssbo_edge_to_edges_); 
       sub.bind_ssbo(6,  buffers_.ssbo_vert_to_edge_list_header_); 
-      sub.bind_ssbo(7,  buffers_.ssbo_edge_flags_); 
-      sub.bind_ssbo(8,  buffers_.ssbo_vert_flags_); 
-      sub.bind_ssbo(9, buffers_.ssbo_vbo_full_);
-      sub.bind_ssbo(10, DRW_manager_get()->matrix_buf.current());
-      sub.bind_ssbo(11, dbg_options.ssbo_vnor_lines_); 
-      ssbo_offset_base = 12;
+      sub.bind_ssbo(7,  buffers_.ssbo_vert_flags_); 
+      sub.bind_ssbo(8, buffers_.ssbo_vbo_full_);
+      sub.bind_ssbo(9, DRW_manager_get()->matrix_buf.current());
+      sub.bind_ssbo(10, dbg_options.ssbo_dbg_lines_); 
+      ssbo_offset_base = 11;
+
+      sub.bind_ubo(0, buffers_.ubo_view_matrices_cache_); 
 
       sub.push_constant("pcs_vert_count_", num_verts);
-      sub.push_constant("pcs_vert_count_", num_verts);
+      sub.push_constant("pcs_edge_count_", num_edges);
       sub.push_constant("pcs_rsc_handle", (int)rsc_handle.resource_index());
       int dbg_lines = output_dbg_lines ? 1 : 0; 
       sub.push_constant("pcs_output_dbg_geom_", dbg_lines);
-      sub.push_constant("pcs_dbg_geom_scale_", 1.0f); 
+      sub.push_constant("pcs_dbg_geom_scale_", dbg_options.dbg_line_length); 
     };
 
     // Calculate Order-0 Vertex Attributes
-    if (options.calc_vert_normal) {
-      bool output_dbg_lines = dbg_options.dbg_vert_normal ? 1 : 0; 
-
+    if (options.calc_vert_normal)
+    {
       auto &sub = pass_extract_geom.sub("bnpr_geom_analysis_order_0_vert_normal");
       sub.shader_set(
           shaders_.static_shader_get(
@@ -1012,7 +1014,7 @@ namespace blender::npr::strokegen
           )
       );
 
-      bind_src(sub, output_dbg_lines);
+      bind_src(sub, dbg_options.dbg_vert_normal);
       sub.bind_ssbo(ssbo_offset_base, options.ssbo_vnor_);
       if (options.calc_vert_voronoi_area)
         sub.bind_ssbo(ssbo_offset_base + 1, options.ssbo_varea_);
@@ -1023,14 +1025,15 @@ namespace blender::npr::strokegen
 
     // Calculate Order-1 Vertex Attributes
     int ssbo_offset_base_1 = 0; 
-    auto bind_src_order_1 =
-        [&](draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub) {
-          bind_src(sub); 
+    auto bind_src_order_1 = [&](draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub,
+                                bool output_dbg_lines = false) {
+          bind_src(sub, output_dbg_lines); 
           sub.bind_ssbo(ssbo_offset_base + 0, options.ssbo_vnor_);
           sub.bind_ssbo(ssbo_offset_base + 1, options.ssbo_varea_);
           ssbo_offset_base_1 = ssbo_offset_base + 2;
         };
-    if (options.calc_vert_curvature) {
+    if (options.calc_vert_curvature)
+    {
       {
         auto &sub = pass_extract_geom.sub("bnpr_geom_analysis_order_1_vert_curv_pass_0");
         sub.shader_set(shaders_.static_shader_get(MESH_ANALYSE_VERT_CURV_PASS_0));
@@ -1038,42 +1041,59 @@ namespace blender::npr::strokegen
         bind_src_order_1(sub); 
         sub.bind_ssbo(ssbo_offset_base_1 + 0, options.ssbo_edge_vtensors_);
 
-        // sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_edges_);
+        sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_edges_);
         sub.barrier(GPU_BARRIER_SHADER_STORAGE); 
       }
       {
         auto &sub = pass_extract_geom.sub("bnpr_geom_analysis_order_1_main_curvature");
         sub.shader_set(shaders_.static_shader_get(MESH_ANALYSE_VERT_CURV_PASS_1));
 
-        bind_src_order_1(sub);
+        bind_src_order_1(sub, dbg_options.dbg_vert_curv);
         sub.bind_ssbo(ssbo_offset_base_1 + 0, options.ssbo_edge_vtensors_);
-        sub.bind_ssbo(ssbo_offset_base_1 + 1, options.ssbo_vcurv_tensor_);
-        sub.bind_ssbo(ssbo_offset_base_1 + 2, options.ssbo_vcurv_pdirs_k1k2_);
+        // sub.bind_ssbo(ssbo_offset_base_1 + 1, options.ssbo_vcurv_tensor_);
+        sub.bind_ssbo(ssbo_offset_base_1 + 1, options.ssbo_vcurv_pdirs_k1k2_);
 
-        // sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_verts_);
+        sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_verts_);
         sub.barrier(GPU_BARRIER_SHADER_STORAGE); 
       }
     }
   }
 
-  void StrokeGenPassModule::rebuild_pass_dbg_vnor_drawcall(SurfaceDebugContext dbg_ctx)
+  void StrokeGenPassModule::rebuild_pass_dbg_geom_drawcall(SurfaceDebugContext dbg_ctx)
   {
-    if (!dbg_ctx.dbg_vert_normal)
-      return;
+    if (dbg_ctx.dbg_vert_normal) {
+      {
+        assert(dbg_ctx.ssbo_dbg_lines_ != nullptr); 
+        auto &sub = pass_draw_debug_lines_.sub("fill_draw_args_debug_lines_vnor_");
 
-    {
-      auto &sub = pass_draw_debug_normal.sub("fill_draw_args_contour_edges");
+        sub.shader_set(shaders_.static_shader_get(FILL_DRAW_ARGS_VERT_NORMAL));
 
-      sub.shader_set(shaders_.static_shader_get(FILL_DRAW_ARGS_VERT_NORMAL));
+        sub.bind_ssbo(0, buffers_.ssbo_bnpr_mesh_pool_counters_);
+        sub.bind_ssbo(1, buffers_.ssbo_bnpr_vert_debug_draw_args_);
 
-      sub.bind_ssbo(0, buffers_.ssbo_bnpr_mesh_pool_counters_);
-      sub.bind_ssbo(1, buffers_.ssbo_bnpr_vert_normal_debug_draw_args_);
+        sub.dispatch(int3(1, 1, 1));
+        sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_COMMAND);
+      }
 
-      sub.dispatch(int3(1, 1, 1));
-      sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_COMMAND); 
+      pass_draw_debug_lines_.append_draw_dbg_lines_subpass(shaders_, buffers_, dbg_ctx);
     }
 
-    pass_draw_debug_normal.append_draw_dbg_normal_subpass(shaders_, buffers_, dbg_ctx);
+    if (dbg_ctx.dbg_vert_curv) {
+      {
+        assert(dbg_ctx.ssbo_dbg_lines_ != nullptr); 
+        auto &sub = pass_draw_debug_lines_.sub("fill_draw_args_debug_lines_vpdirs_");
+
+        sub.shader_set(shaders_.static_shader_get(FILL_DRAW_ARGS_VERT_PDIRS));
+
+        sub.bind_ssbo(0, buffers_.ssbo_bnpr_mesh_pool_counters_);
+        sub.bind_ssbo(1, buffers_.ssbo_bnpr_vert_debug_draw_args_);
+
+        sub.dispatch(int3(1, 1, 1));
+        sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_COMMAND);
+      }
+
+      pass_draw_debug_lines_.append_draw_dbg_lines_subpass(shaders_, buffers_, dbg_ctx);
+    }
   }
 
 

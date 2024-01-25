@@ -26,10 +26,10 @@ class Instance;
 
 struct SurfaceDebugContext {
   bool dbg_vert_normal;
-  GPUStorageBuf *ssbo_vnor_lines_;
-
   bool dbg_vert_curv;
-  GPUStorageBuf *ssbo_vcurv_lines_; 
+  float dbg_line_length; 
+
+  GPUStorageBuf *ssbo_dbg_lines_;
 };
 
 
@@ -50,7 +50,7 @@ private:
 
   /** Draw Passes */
   StrokegenMeshRasterPass pass_draw_contour_edges = {"Draw Contour Edges"}; // Inherited from draw::PassMain 
-  StrokegenMeshRasterPass pass_draw_debug_normal = {"Draw Normal Lines"}; // Inherited from draw::PassMain 
+  StrokegenMeshRasterPass pass_draw_debug_lines_ = {"Draw Normal Lines"}; // Inherited from draw::PassMain 
 
   /** Dependent Modules */
   StrokeGenShaderModule &shaders_;
@@ -175,7 +175,8 @@ public:
     int remeshing_collapse_iters;
     int remeshing_flip_iters;
     int remeshing_iters;
-    int remeshing_delaunay_flip_iters; 
+    int remeshing_delaunay_flip_iters;
+
   } meshing_params;
   void append_subpass_fill_selected_mesh_elems_indirect_dispatch_args_();
   void append_subpass_quadric_mesh_filtering(int num_edges, int num_verts, GPUMeshFilteringParameters &params);
@@ -244,12 +245,12 @@ public:
   SurfaceDebugContext surf_dbg_ctx; 
 
   void append_subpass_surf_geom_analysis(
-    ResourceHandle& rsc_handle, int num_verts,
-    const SurfaceAnalysisContext& options,
-    const SurfaceDebugContext& dbg_options
-  ); 
+      ResourceHandle& rsc_handle, int num_verts,
+      int num_edges,
+      const SurfaceAnalysisContext& options, const SurfaceDebugContext& dbg_options
+      ); 
 
-  void rebuild_pass_dbg_vnor_drawcall(SurfaceDebugContext dbg_ctx);
+  void rebuild_pass_dbg_geom_drawcall(SurfaceDebugContext dbg_ctx);
 
 
 

@@ -90,7 +90,7 @@ void main()
 
     color = /* min(1.0f, contour_edge_param * 1.5f) *  */
         /* vec4(float(contour_edge_id), vec2(dbg_contour_prev_next.xy), 1.0f);   */
-        vec4(rand_col_rgb(contour_edge_list_head, contour_edge_list_len).rgb, 1.0f); 
+        vec4(.5f * rand_col_rgb(contour_edge_list_head, contour_edge_list_len).rgb, 1.0f); 
         /* vec4((float(contour_edge_rank) / float(contour_edge_list_len)).xxx, 1.0f); */
         /* vec4(edgedir_uv.xy * 0.5f + .5f, 0, 1); */ 
 }

@@ -400,7 +400,7 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_edge_adjecency)
     .storage_buf(10, Qualifier::WRITE, "SSBOData_StrokeGenDynamicMeshCounters", "ssbo_dyn_mesh_counters_in_")
     .storage_buf(11, Qualifier::WRITE, "SSBOData_StrokeGenDynamicMeshCounters", "ssbo_dyn_mesh_counters_out_")
     .storage_buf(12, Qualifier::WRITE, "SSBOData_StrokeGenEdgeSplitCounters", "ssbo_edge_split_counters_[]")
-    .storage_buf(13, Qualifier::WRITE, "DrawCommand", "ssbo_bnpr_vert_normal_debug_draw_args_")
+    .storage_buf(13, Qualifier::WRITE, "DrawCommand", "ssbo_bnpr_vert_debug_draw_args_")
     
     .uniform_buf(0, "ViewMatrices", "ubo_view_matrices_")
     .push_constant(Type::INT, "pcs_hash_map_size_")
@@ -759,7 +759,15 @@ GPU_SHADER_CREATE_INFO(strokegen_remeshing_fill_draw_args_dbg_vnor)
     .define("_KERNEL_MULTICOMPILE__FILL_DRAW_ARGS__REMESHING__DBG_VNOR", "1")
     
     .storage_buf(0, Qualifier::READ, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
-    .storage_buf(1, Qualifier::WRITE, "DrawCommand", "ssbo_bnpr_vert_normal_debug_draw_args_"); 
+    .storage_buf(1, Qualifier::WRITE, "DrawCommand", "ssbo_bnpr_vert_debug_draw_args_"); 
+
+GPU_SHADER_CREATE_INFO(strokegen_remeshing_fill_draw_args_dbg_vpdir)
+    .do_static_compilation(true)
+    .additional_info("strokegen_remeshing_fill_draw_args")
+    .define("_KERNEL_MULTICOMPILE__FILL_DRAW_ARGS__REMESHING__DBG_VPDIR", "1")
+    
+    .storage_buf(0, Qualifier::READ, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
+    .storage_buf(1, Qualifier::WRITE, "DrawCommand", "ssbo_bnpr_vert_debug_draw_args_"); 
 /** \} */
 
 
@@ -1000,7 +1008,6 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_analysis)
     .define("WINGED_EDGE_TOPO_INCLUDE", "1")
     .define("VERT_WEDGE_LIST_TOPO_INCLUDE", "1")
     .define("VERT_FLAGS_INCLUDED", "1")
-    .define("EDGE_FLAGS_INCLUDED", "1")
     .define("VE_CIRCULATOR_INCLUDE", "1")
     .define("DYNAMESH_SELECTION_INDEXING_COMMON", "1")
     .define("INCLUDE_VERTEX_POSITION", "1")
@@ -1012,12 +1019,13 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_analysis)
     .storage_buf(4, Qualifier::READ_WRITE, "uint", "ssbo_edge_to_vert_[]")
     .storage_buf(5, Qualifier::READ_WRITE, "uint", "ssbo_edge_to_edges_[]")
     .storage_buf(6, Qualifier::READ_WRITE, "uint", "ssbo_vert_to_edge_list_header_[]")
-    .storage_buf(7, Qualifier::READ_WRITE, "uint", "ssbo_edge_flags_[]")
-    .storage_buf(8, Qualifier::READ_WRITE, "uint", "ssbo_vert_flags_[]")
-    .storage_buf(9, Qualifier::READ_WRITE, "float", "ssbo_vbo_full_[]")
-    .storage_buf(10, Qualifier::READ, "ObjectMatrices", "drw_matrix_buf[]")
-    .storage_buf(11, Qualifier::WRITE, "uint", "ssbo_dbg_lines_[]")
-#define NUM_SSBO_BASE 12
+    .storage_buf(7, Qualifier::READ_WRITE, "uint", "ssbo_vert_flags_[]")
+    .storage_buf(8, Qualifier::READ_WRITE, "float", "ssbo_vbo_full_[]")
+    .storage_buf(9, Qualifier::READ, "ObjectMatrices", "drw_matrix_buf[]")
+    .storage_buf(10, Qualifier::WRITE, "uint", "ssbo_dbg_lines_[]")
+#define NUM_SSBO_BASE 11
+
+    .uniform_buf(0, "ViewMatrices", "ubo_view_matrices_")
 
     .push_constant(Type::INT, "pcs_edge_count_")
     .push_constant(Type::INT, "pcs_vert_count_")
@@ -1076,10 +1084,11 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_analysis_order_1_main_curvature)
     .do_static_compilation(true)
     .additional_info("bnpr_geom_analysis_order_1_main")
     .define("_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__CURVTENSOR", "1")
-    .define("INCLUDE_VERTEX_CURV_TENSOR", "1")
+    .define("_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__MAIN", "1")
+    .define("INCLUDE_VERTEX_CURV_TENSOR", "1") 
     .storage_buf(NUM_SSBO_1 + 0, Qualifier::READ_WRITE, "uint", "ssbo_edge_vtensors_[]")
-    .storage_buf(NUM_SSBO_1 + 1, Qualifier::READ_WRITE, "uint", "ssbo_vcurv_tensor_[]")
-    .storage_buf(NUM_SSBO_1 + 2, Qualifier::READ_WRITE, "uint", "ssbo_vcurv_pdirs_k1k2_[]"); 
+    // .storage_buf(NUM_SSBO_1 + 1, Qualifier::READ_WRITE, "uint", "ssbo_vcurv_tensor_[]")
+    .storage_buf(NUM_SSBO_1 + 1, Qualifier::READ_WRITE, "uint", "ssbo_vcurv_pdirs_k1k2_[]"); 
 
 #undef NUM_SSBO_1
 #undef NUM_SSBO_BASE

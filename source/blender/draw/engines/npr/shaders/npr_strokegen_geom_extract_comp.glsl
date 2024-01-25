@@ -27,6 +27,7 @@ void main()
 		ssbo_bnpr_mesh_pool_counters_.num_filtered_edges = 0; 
 		ssbo_bnpr_mesh_pool_counters_.num_filtered_verts = 0; 
 		ssbo_bnpr_mesh_pool_counters_.num_dbg_vnor_lines = 0; 
+		ssbo_bnpr_mesh_pool_counters_.num_dbg_vpdir_lines = 0; 
 
 		ssbo_bnpr_mesh_pool_counters_prev_.num_contour_edges = 0; 
 		ssbo_bnpr_mesh_pool_counters_prev_.num_verts         = 0; 
@@ -36,6 +37,7 @@ void main()
 		ssbo_bnpr_mesh_pool_counters_prev_.num_filtered_edges = 0; 
 		ssbo_bnpr_mesh_pool_counters_prev_.num_filtered_verts = 0; 
 		ssbo_bnpr_mesh_pool_counters_prev_.num_dbg_vnor_lines = 0; 
+		ssbo_bnpr_mesh_pool_counters_prev_.num_dbg_vpdir_lines = 0; 
 	}
 }
 #endif
@@ -85,6 +87,8 @@ void main()
 		ssbo_bnpr_mesh_pool_counters_prev_.num_filtered_edges = ssbo_bnpr_mesh_pool_counters_.num_filtered_edges; 
 		ssbo_bnpr_mesh_pool_counters_prev_.num_filtered_verts = ssbo_bnpr_mesh_pool_counters_.num_filtered_verts; 
 		ssbo_bnpr_mesh_pool_counters_prev_.num_dbg_vnor_lines = ssbo_bnpr_mesh_pool_counters_.num_dbg_vnor_lines;
+		ssbo_bnpr_mesh_pool_counters_prev_.num_dbg_vpdir_lines = ssbo_bnpr_mesh_pool_counters_.num_dbg_vpdir_lines;
+		
 	}
  }
 #endif

@@ -453,11 +453,11 @@ void main()
         ssbo_edge_split_counters_[0].num_split_edges_pass_1 = 0u;
         ssbo_edge_split_counters_[0].num_split_edges = 0u; 
 
-        ssbo_bnpr_vert_normal_debug_draw_args_.vertex_len = 0u; 
-        ssbo_bnpr_vert_normal_debug_draw_args_.instance_len = 1u;
-        ssbo_bnpr_vert_normal_debug_draw_args_.vertex_first = 0u;
-        ssbo_bnpr_vert_normal_debug_draw_args_.base_index = 0u; 
-        ssbo_bnpr_vert_normal_debug_draw_args_.instance_first_indexed = 0u; 
+        ssbo_bnpr_vert_debug_draw_args_.vertex_len = 0u; 
+        ssbo_bnpr_vert_debug_draw_args_.instance_len = 1u;
+        ssbo_bnpr_vert_debug_draw_args_.vertex_first = 0u;
+        ssbo_bnpr_vert_debug_draw_args_.base_index = 0u; 
+        ssbo_bnpr_vert_debug_draw_args_.instance_first_indexed = 0u; 
     }
 
 #endif

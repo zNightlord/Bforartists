@@ -35,7 +35,7 @@ float calc_voronoi_area_corner(
 ) 
 {
     if (is_obtuse) { /* non-obtuse triangle */
-        if (ang_c > PI_HALF) 
+        if (ang_c > (PI_HALF * .99f)) 
             return .5f * face_area; 
         else 
             return .25f * face_area; 
@@ -82,9 +82,9 @@ float calc_voronoi_area_face(vec3 p1, vec3 p2, vec3 p3)
     vec3 e31 = p1 - p3; 
     vec3 e12 = p2 - p1; 
     vec3 e23 = p3 - p2;
-    float ang_312 = acos(dot(normalize(e31), -normalize(e12)));
-    float ang_123 = acos(dot(normalize(e12), -normalize(e23)));
-    float ang_231 = acos(dot(normalize(e23), -normalize(e31)));
+    float ang_312 = acos(clamp(dot(normalize(e31), -normalize(e12)),-1.0f, 1.0f));
+    float ang_123 = acos(clamp(dot(normalize(e12), -normalize(e23)),-1.0f, 1.0f));
+    float ang_231 = acos(clamp(dot(normalize(e23), -normalize(e31)),-1.0f, 1.0f));
     return calc_voronoi_area_face(-e31, e12, ang_312, ang_231, ang_123); 
 }
 
@@ -280,14 +280,17 @@ void main()
 
 void load_local_vertex_frame(VertWedgeListHeader vwlh, vec3 vpos, vec3 vnor, out vec3 pd1, out vec3 pd2)
 {
-    uint ivert_another_on_edge = vwlh.ivert == 1u ? 3u : 1u; 
-    uint another_vid = ssbo_edge_to_vert_[vwlh.wedge_id*4u + ivert_another_on_edge];
-    vec3 vpos_another = ld_vpos(another_vid);
+	mat4 view_to_world = ubo_view_matrices_.viewinv;
+	vec3 cam_pos_ws = view_to_world[3].xyz; /* see "#define cameraPos ViewMatrixInverse[3].xyz" */
 
-    pd1 = vpos_another - vpos;
-    pd1 = normalize(cross(vnor, pd1));
+    // uint ivert_another_on_edge = vwlh.ivert == 1u ? 3u : 1u; 
+    // uint another_vid = ssbo_edge_to_vert_[vwlh.wedge_id*4u + ivert_another_on_edge];
+    // vec3 vpos_another = ld_vpos(another_vid);
+ 
+    pd1 = cam_pos_ws/* vpos_another */ - vpos;
+    pd1 = normalize(cross(pd1, vnor));
 
-    pd2 = cross(pd1, vnor); 
+    pd2 = cross(vnor, pd1); 
 }
 
 void load_local_vertex_frame(uint vid, vec3 vpos, vec3 vnor, out vec3 pd1, out vec3 pd2)
@@ -320,7 +323,7 @@ void rot_coord_sys(vec3 old_u, vec3 old_v, vec3 new_norm,
 	// vec3 perp_new = ndot * new_norm - old_norm;
 
 	// perp_old - perp_new, with normalization constants folded in
-	vec3 dperp = 1.0f / (1 + ndot) * (old_norm + new_norm);
+	vec3 dperp = (1.0f / (1 + ndot)) * (old_norm + new_norm);
 
 	// Subtracts component along perp_old, and adds the same amount along
 	// perp_new.  Leaves unchanged the component perpendicular to the
@@ -553,7 +556,7 @@ void calc_vert_curv_tensor_at_face( // v012 CCW
     ldltdc(w, diag); /* LU Decomposition */
     ldltsl(w, diag, old_m, /*out*/m);
 
-    // Curvature tensor for each vertex of the face
+    /* Curvature tensor for selected vertex */
     float c1, c12, c2;
     c1 = c12 = c2 = .0f; 
     {
@@ -611,17 +614,13 @@ void main()
         ld_vnor(v.z), 
         ld_vnor(v.w)
     };
-    /* TODO: replace this mapping with a function */
-    const uvec3 iverts_fk[2] = {
-        uvec3(2u, 3u, 1u), /* face0 */
-        uvec3(0u, 1u, 3u)  /* face1 */
-    }; 
-    const uvec2 v1_id_at_iface = uvec2(2u, 1u); 
-    const uvec2 v3_id_at_iface = uvec2(1u, 2u); 
 
     /* calc  2 tensors: v1 at f0, v3 at f1 */
-    #define sl_iface_for_v1 0u
-    #define sl_iface_for_v3 1u
+#define sl_iface_for_v1 0u
+    const uint v1_id_at_solved_face = 2u; 
+#define sl_iface_for_v3 1u
+    const uint v3_id_at_solved_face = 2u; 
+
     float curv1_at_iface[2]; 
     float curv12_at_iface[2]; 
     float curv2_at_iface[2]; 
@@ -633,7 +632,7 @@ void main()
         vec3 vnor_at_face[3] = { vnor[iverts[0]], vnor[iverts[1]], vnor[iverts[2]] };
         calc_vert_curv_tensor_at_face(
             vids_at_face, vpos_at_face, vnor_at_face, 
-            iface == 0 ? v1_id_at_iface[iface]: v3_id_at_iface[iface], 
+            (iface == sl_iface_for_v1) ? v1_id_at_solved_face: v3_id_at_solved_face, 
             /* out */
             curv1_at_iface[iface], curv12_at_iface[iface], curv2_at_iface[iface]
         ); 
@@ -645,25 +644,23 @@ void main()
     corner_weight_v1 = calc_voronoi_area_face(vpos[1], vpos[2], vpos[3]) / varea_1; 
 
     float corner_weight_v3; 
-    float varea_3 = ld_varea(v[3]); 
+    float varea_3 = ld_varea(v[3]); /* TODO: move div-by-varea to next pass */
     corner_weight_v3 = calc_voronoi_area_face(vpos[3], vpos[0], vpos[1]) / varea_3; 
 
     vec3 v1_tensor_at_f0 = vec3(.0f, .0f, .0f); 
     {    
         float w1 = corner_weight_v1; 
-        uint v1_index = v1_id_at_iface[sl_iface_for_v1]; 
-        v1_tensor_at_f0.x += w1 * curv1_at_iface[sl_iface_for_v1]; 
-        v1_tensor_at_f0.y += w1 * curv12_at_iface[sl_iface_for_v1];
-        v1_tensor_at_f0.z += w1 * curv2_at_iface[sl_iface_for_v1]; 
+        v1_tensor_at_f0.x = w1 * curv1_at_iface[sl_iface_for_v1]; 
+        v1_tensor_at_f0.y = w1 * curv12_at_iface[sl_iface_for_v1];
+        v1_tensor_at_f0.z = w1 * curv2_at_iface[sl_iface_for_v1]; 
     }
     
     vec3 v3_tensor_at_f1 = vec3(.0f, .0f, .0f); 
     {
         float w3 = corner_weight_v3;
-        uint v3_index = v3_id_at_iface[sl_iface_for_v3];
-        v3_tensor_at_f1.x += w3 * curv1_at_iface[sl_iface_for_v3];
-        v3_tensor_at_f1.y += w3 * curv12_at_iface[sl_iface_for_v3];
-        v3_tensor_at_f1.z += w3 * curv2_at_iface[sl_iface_for_v3];
+        v3_tensor_at_f1.x = w3 * curv1_at_iface[sl_iface_for_v3];
+        v3_tensor_at_f1.y = w3 * curv12_at_iface[sl_iface_for_v3];
+        v3_tensor_at_f1.z = w3 * curv2_at_iface[sl_iface_for_v3];
     }
 
     uvec3 tensor_enc;
@@ -684,16 +681,24 @@ struct CalcVertAttrContext_Order1
 {
     #if defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__CURVTENSOR)
         vec3 curv_tensor;  
+        // adaptive len for debug lines ---
+        vec3 vpos; 
+        float ave_edge_len; 
+        float num_adj_edges; 
+        // --------------------------------
     #endif
 }; 
 
 CalcVertAttrContext_Order1 init_vert_attr_context_order_1(
-
+    vec3 vpos
 ){
     CalcVertAttrContext_Order1 ctx; 
 
     #if defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__CURVTENSOR)
         ctx.curv_tensor = vec3(.0f); 
+        ctx.vpos = vpos; 
+        ctx.ave_edge_len = .0f;
+        ctx.num_adj_edges = .0f;  
     #endif
 
     return ctx; 
@@ -722,6 +727,11 @@ bool calc_vert_attr_order_1(
         uvec3 tensor_enc; 
         Load3(ssbo_edge_vtensors_, (wi*2u+iface), tensor_enc); 
         ctx.curv_tensor += uintBitsToFloat(tensor_enc); 
+
+        uint ivert_vi = mark__ve_circ_fwd__get_vi(iter);
+        uint vi = ssbo_edge_to_vert_[wi*4u + ivert_vi]; 
+        ctx.ave_edge_len += length(ld_vpos(vi) - ctx.vpos);
+        ctx.num_adj_edges += 1.0f; 
     #endif
 
     return true; 
@@ -740,7 +750,7 @@ void main()
 
     // Accumulate partial tensors from 1-ring faces
     VertWedgeListHeader vwlh_rot = vwlh;
-    CalcVertAttrContext_Order1 ctx = init_vert_attr_context_order_1(); 
+    CalcVertAttrContext_Order1 ctx = init_vert_attr_context_order_1(vpos); 
     if (valid_thread)
     {
         bool rotate_fwd = true; 
@@ -767,6 +777,37 @@ void main()
             // st_vcurv_tensor(vert_id, ctx.curv_tensor); 
             st_vcurv_pdirs_k1k2(vert_id, pdir1, curv_1_fin, pdir2, curv_2_fin);
         }
+
+        // debug lines
+        if (0 < pcs_output_dbg_geom_)
+        {
+            VertFlags vf = decode_vert_flags(ssbo_vert_flags_[vert_id]); 
+        
+            bool dbg_vtx_curv = (!vf.dupli) && (!vf.del_by_collapse) && valid_thread; 
+            uint dbg_prim_id = compact_pdir_lines(dbg_vtx_curv, groupIdx, 2u);
+        
+            if (dbg_vtx_curv)
+            {
+                ctx.ave_edge_len /= float(ctx.num_adj_edges); 
+                float dbg_line_len = .4f * min(ctx.ave_edge_len, pcs_dbg_geom_scale_ * .12f);
+
+                vec4 vpos_ws_10 = vec4(vpos - curv_1_fin * normalize(pdir1) * dbg_line_len, 1.0f);
+                vec4 vpos_ws_11 = vec4(vpos + curv_1_fin * normalize(pdir1) * dbg_line_len, 1.0f);
+
+                uvec3 vpos_enc = floatBitsToUint(vpos_ws_10.xyz); 
+                Store3(ssbo_dbg_lines_, dbg_prim_id*6u,      vpos_enc);
+                vpos_enc = floatBitsToUint(vpos_ws_11.xyz); 
+                Store3(ssbo_dbg_lines_, dbg_prim_id*6u + 3u, vpos_enc); 
+
+                vec4 vpos_ws_20 = vec4(vpos - curv_2_fin * normalize(pdir2) * dbg_line_len, 1.0f);
+                vec4 vpos_ws_22 = vec4(vpos + curv_2_fin * normalize(pdir2) * dbg_line_len, 1.0f);
+                
+                vpos_enc = floatBitsToUint(vpos_ws_20.xyz); 
+                Store3(ssbo_dbg_lines_, dbg_prim_id*6u + 6u, vpos_enc);
+                vpos_enc = floatBitsToUint(vpos_ws_22.xyz); 
+                Store3(ssbo_dbg_lines_, dbg_prim_id*6u + 9u, vpos_enc); 
+            }
+    }
     #endif
 }
 #endif 

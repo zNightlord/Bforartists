@@ -48,17 +48,17 @@
 
 #if defined(INCLUDE_VERTEX_CURV_TENSOR)
 
-    vec3 ld_vcurv_tensor(uint vtx_id)
-    {
-        uvec3 vcurv_tensor_enc;
-        Load3(ssbo_vcurv_tensor_, vtx_id, vcurv_tensor_enc); 
-        return uintBitsToFloat(vcurv_tensor_enc); 
-    }
-    void st_vcurv_tensor(uint vtx_id, vec3 vcurv_tensor)
-    {
-        uvec3 vcurv_tensor_enc = floatBitsToUint(vcurv_tensor);
-        Store3(ssbo_vcurv_tensor_, vtx_id, vcurv_tensor_enc); 
-    }
+    // vec3 ld_vcurv_tensor(uint vtx_id)
+    // {
+    //     uvec3 vcurv_tensor_enc;
+    //     Load3(ssbo_vcurv_tensor_, vtx_id, vcurv_tensor_enc); 
+    //     return uintBitsToFloat(vcurv_tensor_enc); 
+    // }
+    // void st_vcurv_tensor(uint vtx_id, vec3 vcurv_tensor)
+    // {
+    //     uvec3 vcurv_tensor_enc = floatBitsToUint(vcurv_tensor);
+    //     Store3(ssbo_vcurv_tensor_, vtx_id, vcurv_tensor_enc); 
+    // }
 
     void st_vcurv_pdirs_k1k2(uint vtx_id, vec3 pd1, float k1, vec3 pd2, float k2)
     {

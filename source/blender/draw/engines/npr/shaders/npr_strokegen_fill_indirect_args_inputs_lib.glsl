@@ -173,6 +173,10 @@ void GetDrawArgs(out DrawCommand draw_args)
 {
 #if defined(_KERNEL_MULTICOMPILE__FILL_DRAW_ARGS__REMESHING__DBG_VNOR)
     draw_args.vertex_len  = ssbo_bnpr_mesh_pool_counters_.num_dbg_vnor_lines * 2;
+#endif
+#if defined(_KERNEL_MULTICOMPILE__FILL_DRAW_ARGS__REMESHING__DBG_VPDIR)
+    draw_args.vertex_len  = ssbo_bnpr_mesh_pool_counters_.num_dbg_vpdir_lines * 2;
+#endif
     draw_args.instance_len 	= 1;  		/*#instances*/
     draw_args.vertex_first 	= 0;  		/*ibo offset*/
     draw_args.base_index 	= 0;  		/*vbo offset*/
@@ -180,20 +184,17 @@ void GetDrawArgs(out DrawCommand draw_args)
     draw_args._pad0 = 0;
     draw_args._pad1 = 0;
     draw_args._pad2 = 0; 
-#endif
 }
 void FillDrawArgsBuffer(DrawCommand draw_args)
 {
-#if defined(_KERNEL_MULTICOMPILE__FILL_DRAW_ARGS__REMESHING__DBG_VNOR)
-    ssbo_bnpr_vert_normal_debug_draw_args_.vertex_len             = draw_args.vertex_len; 
-    ssbo_bnpr_vert_normal_debug_draw_args_.instance_len           = draw_args.instance_len; 
-    ssbo_bnpr_vert_normal_debug_draw_args_.vertex_first           = draw_args.vertex_first; 
-    ssbo_bnpr_vert_normal_debug_draw_args_.base_index             = draw_args.base_index; 
-    ssbo_bnpr_vert_normal_debug_draw_args_.instance_first_indexed = draw_args.instance_first_indexed; 
-    ssbo_bnpr_vert_normal_debug_draw_args_._pad0                  = draw_args._pad0; 
-    ssbo_bnpr_vert_normal_debug_draw_args_._pad1                  = draw_args._pad1; 
-    ssbo_bnpr_vert_normal_debug_draw_args_._pad2                  = draw_args._pad2; 
-#endif
+    ssbo_bnpr_vert_debug_draw_args_.vertex_len             = draw_args.vertex_len; 
+    ssbo_bnpr_vert_debug_draw_args_.instance_len           = draw_args.instance_len; 
+    ssbo_bnpr_vert_debug_draw_args_.vertex_first           = draw_args.vertex_first; 
+    ssbo_bnpr_vert_debug_draw_args_.base_index             = draw_args.base_index; 
+    ssbo_bnpr_vert_debug_draw_args_.instance_first_indexed = draw_args.instance_first_indexed; 
+    ssbo_bnpr_vert_debug_draw_args_._pad0                  = draw_args._pad0; 
+    ssbo_bnpr_vert_debug_draw_args_._pad1                  = draw_args._pad1; 
+    ssbo_bnpr_vert_debug_draw_args_._pad2                  = draw_args._pad2; 
 }
 #endif
 

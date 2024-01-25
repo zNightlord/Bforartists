@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
+﻿/* SPDX-License-Identifier: GPL-2.0-or-later
  * Copyright 2021 Blender Foundation.
  */
 
@@ -40,7 +40,7 @@ class GPUBufferPoolModule {
 
   // Dispatch Args --------------------------------------------------------
   SSBO_IndirectDrawArgs ssbo_bnpr_mesh_pool_draw_args_;
-  SSBO_IndirectDrawArgs ssbo_bnpr_vert_normal_debug_draw_args_;
+  SSBO_IndirectDrawArgs ssbo_bnpr_vert_debug_draw_args_;
 
   SSBO_IndirectDispatchArgs ssbo_indirect_dispatch_args_per_filtered_edge_; 
   SSBO_IndirectDispatchArgs ssbo_indirect_dispatch_args_per_filtered_vert_;
