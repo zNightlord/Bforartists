@@ -94,7 +94,8 @@ namespace blender::npr::strokegen
     meshing_params.remeshing_iters = (int)(scene_eval->npr.npr_test_val_16 + 1e-10f);
     meshing_params.remeshing_delaunay_flip_iters = (int)(scene_eval->npr.npr_test_val_17 + 1e-10f);
 
-    surf_dbg_ctx.dbg_line_length = scene_eval->npr.npr_test_val_18; 
+    surf_dbg_ctx.dbg_line_length = scene_eval->npr.npr_test_val_18;
+    surf_dbg_ctx.dbg_curv_K_val = scene_eval->npr.npr_test_val_19; 
   }
 
   void StrokeGenPassModule::on_end_sync()
@@ -117,7 +118,7 @@ namespace blender::npr::strokegen
     pass_extract_geom.init();
     boostrap_before_extract_first_batch = true;
 
-    surf_dbg_ctx = {false, true, 1.0f, buffers_.ssbo_mesh_buffer_reuse_4_ }; 
+    surf_dbg_ctx = {false, true, 1.0f, 1.0f, buffers_.ssbo_mesh_buffer_reuse_4_ }; 
   }
 
   /**
@@ -1052,6 +1053,7 @@ namespace blender::npr::strokegen
         sub.bind_ssbo(ssbo_offset_base_1 + 0, options.ssbo_edge_vtensors_);
         // sub.bind_ssbo(ssbo_offset_base_1 + 1, options.ssbo_vcurv_tensor_);
         sub.bind_ssbo(ssbo_offset_base_1 + 1, options.ssbo_vcurv_pdirs_k1k2_);
+        sub.push_constant("pcs_dbg_curv_K_scale_", dbg_options.dbg_curv_K_val); 
 
         sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_verts_);
         sub.barrier(GPU_BARRIER_SHADER_STORAGE); 

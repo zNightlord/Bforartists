@@ -679,30 +679,108 @@ void main()
 #if defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__MAIN)
 struct CalcVertAttrContext_Order1
 {
+    vec3 vpos_c; 
+
     #if defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__CURVTENSOR)
         vec3 curv_tensor;  
-        // adaptive len for debug lines ---
-        vec3 vpos; 
-        float ave_edge_len; 
-        float num_adj_edges; 
-        // --------------------------------
     #endif
+
+    #if defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__INTERPO_CURVTENSOR)
+        mat3 curv_tensor; 
+        float sum_area; 
+
+        vec3 vnor_c; 
+
+        vec3 vpos_i; 
+        vec3 vnor_i;  
+
+        #if defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__INTERPO_CURVTENSOR_2RING)
+            AdjWedgeInfo wo_prev; 
+        #endif
+    #endif
+
+    // adaptive len for debug lines ---
+    float ave_edge_len; 
+    float num_adj_edges; 
+    // --------------------------------
 }; 
 
 CalcVertAttrContext_Order1 init_vert_attr_context_order_1(
     vec3 vpos
+#if defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__INTERPO_CURVTENSOR)
+    , vec3 vnor, vec3 vpos_i, vec3 vnor_i
+#endif
 ){
     CalcVertAttrContext_Order1 ctx; 
 
     #if defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__CURVTENSOR)
         ctx.curv_tensor = vec3(.0f); 
-        ctx.vpos = vpos; 
-        ctx.ave_edge_len = .0f;
-        ctx.num_adj_edges = .0f;  
+        ctx.vpos_c = vpos;  
     #endif
+
+    #if defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__INTERPO_CURVTENSOR)
+        ctx.curv_tensor = mat3(.0f); 
+        ctx.sum_area = .0f; 
+
+        ctx.vpos_c = vpos; 
+        ctx.vnor_c = vnor; 
+
+        ctx.vpos_i = vpos_i; 
+        ctx.vnor_i = vnor_i;
+
+        #if defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__INTERPO_CURVTENSOR_2RING)
+            ctx.wo_prev = AdjWedgeInfo(0u, 0u);  /* init at beginning iter */
+        #endif
+    #endif
+
+    ctx.ave_edge_len = .0f;
+    ctx.num_adj_edges = .0f; 
 
     return ctx; 
 }
+
+
+struct CalcVertAttrContext_Order1_2Ring
+{
+    mat3 curv_tensor; 
+    float sum_area; 
+
+    vec3 vpos_c; 
+    vec3 vnor_c; 
+
+    vec3 vpos_i; 
+    vec3 vnor_i;  
+
+    AdjWedgeInfo w_end; /* end traversal when wn==w_end */
+}; 
+bool calc_vert_attr_order_1_2ring(
+    CirculatorIterData iter, 
+    inout CalcVertAttrContext_Order1_2Ring ctx
+)
+{
+    uint wi = iter.awi.wedge_id; 
+    bool at_end = (iter.awi_next.wedge_id == ctx.w_end.wedge_id); 
+    if (at_end)
+        return false;
+
+    uint ivert_n = mark__ve_circ_bck__get_vn(iter); 
+    uint vn = ssbo_edge_to_vert_[wi*4u + ivert_n];
+
+    vec3 vpos_n = ld_vpos(vn);
+    vec3 vnor_n = ld_vnor(vn);
+
+    float area_tri = mu0InterpolatedU(ctx.vpos_c, ctx.vpos_i, vpos_n, ctx.vnor_c, ctx.vnor_i, vnor_n); 
+    ctx.sum_area += area_tri; 
+    
+    mat3 tensor_tri = /* area_tri * */muXYInterpolatedU(ctx.vpos_c, ctx.vpos_i, vpos_n, ctx.vnor_c, ctx.vnor_i, vnor_n); 
+    ctx.curv_tensor += tensor_tri; 
+
+    ctx.vpos_i = vpos_n; 
+    ctx.vnor_i = vnor_n; 
+
+    return true; 
+}
+
 
 /*    Example: Rotate fwd(CW) around V3(marked as vc)        
  *        v0  ...  vp             
@@ -720,20 +798,72 @@ bool calc_vert_attr_order_1(
     inout CalcVertAttrContext_Order1 ctx
 ){
     uint wi = iter.awi.wedge_id; 
-    
+    uint ivert_i = mark__ve_circ_fwd__get_vi(iter);
+    uint ivert_n = mark__ve_circ_fwd__get_vn(iter); 
+
     #if defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__CURVTENSOR)
         uint iface = iter.awi.iface_adj; 
 
         uvec3 tensor_enc; 
         Load3(ssbo_edge_vtensors_, (wi*2u+iface), tensor_enc); 
         ctx.curv_tensor += uintBitsToFloat(tensor_enc); 
-
-        uint ivert_vi = mark__ve_circ_fwd__get_vi(iter);
-        uint vi = ssbo_edge_to_vert_[wi*4u + ivert_vi]; 
-        ctx.ave_edge_len += length(ld_vpos(vi) - ctx.vpos);
-        ctx.num_adj_edges += 1.0f; 
     #endif
 
+    #if defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__INTERPO_CURVTENSOR)
+        #if !defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__INTERPO_CURVTENSOR_2RING)
+            uint vn = ssbo_edge_to_vert_[wi*4u + ivert_n];
+            vec3 vpos_n = ld_vpos(vn);
+            vec3 vnor_n = ld_vnor(vn);
+            {            
+                float area_tri = mu0InterpolatedU(ctx.vpos_i, ctx.vpos_c, vpos_n, ctx.vnor_i, ctx.vnor_c, vnor_n); 
+                mat3 tensor_tri = /* area_tri *  */muXYInterpolatedU(ctx.vpos_i, ctx.vpos_c, vpos_n, ctx.vnor_i, ctx.vnor_c, vnor_n); 
+                ctx.sum_area += area_tri;
+                ctx.curv_tensor += tensor_tri;
+            }
+            ctx.vpos_i = vpos_n; 
+            ctx.vnor_i = vnor_n; 
+        #else
+            uint vn = ssbo_edge_to_vert_[wi*4u + ivert_n];
+            vec3 vpos_n = ld_vpos(vn);
+            vec3 vnor_n = ld_vnor(vn);
+            {
+                uint iwedge_wo = mark__vecirc_fwd_get_wo(iter); 
+                AdjWedgeInfo wo = decode_adj_wedge_info(ssbo_edge_to_edges_[wi*4u + iwedge_wo]); 
+                if (ctx.num_adj_edges < 1e-10f)
+                { /* Initialize wo_prev */
+                    uint iwedge_woprev = mark__vecirc_fwd_get_wop(iter); 
+                    ctx.wo_prev = decode_adj_wedge_info(ssbo_edge_to_edges_[wi*4u + iwedge_woprev]); 
+                }
+
+                VertWedgeListHeader vwlh_2ring = VertWedgeListHeader(wi, ivert_i); 
+                
+                CalcVertAttrContext_Order1_2Ring ctx_2ring;
+                ctx_2ring.curv_tensor = mat3(.0f);
+                ctx_2ring.sum_area = .0f;
+                ctx_2ring.vpos_c = ctx.vpos_i; 
+                ctx_2ring.vnor_c = ctx.vnor_i;
+                ctx_2ring.vpos_i = ctx.vpos_c;
+                ctx_2ring.vnor_i = ctx.vnor_c;
+                ctx_2ring.w_end = ctx.wo_prev;
+
+                bool rotate_fwd_2ring = false; 
+                VE_CIRCULATOR(vwlh_2ring, calc_vert_attr_order_1_2ring, ctx_2ring, rotate_fwd_2ring); 
+
+                ctx.curv_tensor += ctx_2ring.curv_tensor; 
+                ctx.sum_area += ctx_2ring.sum_area; 
+
+                ctx.wo_prev = wo; 
+            }
+            ctx.vpos_i = vpos_n; 
+            ctx.vnor_i = vnor_n; 
+        #endif
+    #endif
+
+
+    uint vi = ssbo_edge_to_vert_[wi*4u + ivert_i]; 
+    ctx.ave_edge_len += length(ld_vpos(vi) - ctx.vpos_c);
+    ctx.num_adj_edges += 1.0f; 
+        
     return true; 
 }
 
@@ -750,7 +880,20 @@ void main()
 
     // Accumulate partial tensors from 1-ring faces
     VertWedgeListHeader vwlh_rot = vwlh;
-    CalcVertAttrContext_Order1 ctx = init_vert_attr_context_order_1(vpos); 
+    CalcVertAttrContext_Order1 ctx; 
+    #if defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__CURVTENSOR)
+        ctx = init_vert_attr_context_order_1(vpos); 
+    #endif
+    #if defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__INTERPO_CURVTENSOR)
+        uint ivert_vi = vwlh_rot.ivert == 1u ? 3u : 1u;
+        uint vi = ssbo_edge_to_vert_[vwlh_rot.wedge_id*4u + ivert_vi]; 
+        vec3 vpos_vi = ld_vpos(vi);
+        vec3 vnor_vi = ld_vnor(vi);
+        ctx = init_vert_attr_context_order_1(
+            vpos, vnor, vpos_vi, vnor_vi
+        );
+    #endif
+
     if (valid_thread)
     {
         bool rotate_fwd = true; 
@@ -807,8 +950,68 @@ void main()
                 vpos_enc = floatBitsToUint(vpos_ws_22.xyz); 
                 Store3(ssbo_dbg_lines_, dbg_prim_id*6u + 9u, vpos_enc); 
             }
-    }
+        }
     #endif
+
+
+
+    #if defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__INTERPO_CURVTENSOR)
+        ctx.ave_edge_len /= float(ctx.num_adj_edges); 
+
+        mat3 vtx_curv_measure = ctx.curv_tensor/*  / ctx.sum_area */;
+        float vtx_area_measure = ctx.sum_area; 
+        mat3 pdirs; 
+        vec3 evals; 
+        curvDirFromTensor(vtx_curv_measure, vtx_area_measure, vnor, /*out*/pdirs, evals);
+
+        vec3 pdir0 = vec3(pdirs[0][0], pdirs[1][0], pdirs[2][0]); 
+        vec3 pdir1 = vec3(pdirs[0][1], pdirs[1][1], pdirs[2][1]); 
+        vec3 pdir2 = vec3(pdirs[0][2], pdirs[1][2], pdirs[2][2]); 
+
+
+        // debug lines
+        if (0 < pcs_output_dbg_geom_)
+        {
+            VertFlags vf = decode_vert_flags(ssbo_vert_flags_[vert_id]); 
+            bool dbg_vtx_curv = (!vf.dupli) && (!vf.del_by_collapse) && valid_thread; 
+            uint dbg_prim_id = compact_pdir_lines(dbg_vtx_curv, groupIdx, 3u);
+        
+            if (dbg_vtx_curv)
+            {
+                float dbg_line_len = min(ctx.ave_edge_len * .4f, pcs_dbg_geom_scale_ * .12f);
+
+                vec4 vpos_ws_00 = vec4(vpos - normalize(pdir0) * dbg_line_len, 1.0f);
+                vec4 vpos_ws_01 = vec4(vpos + normalize(pdir0) * dbg_line_len, 1.0f);
+
+                uvec3 vpos_enc = floatBitsToUint(vpos_ws_00.xyz); 
+                Store3(ssbo_dbg_lines_, dbg_prim_id*6u,      vpos_enc);
+                vpos_enc = floatBitsToUint(vpos_ws_01.xyz); 
+                Store3(ssbo_dbg_lines_, dbg_prim_id*6u + 3u, vpos_enc); 
+
+                vec4 vpos_ws_10 = vec4(vpos - normalize(pdir1) * dbg_line_len, 1.0f);
+                vec4 vpos_ws_11 = vec4(vpos + normalize(pdir1) * dbg_line_len, 1.0f);
+                
+                vpos_enc = floatBitsToUint(vpos_ws_10.xyz); 
+                Store3(ssbo_dbg_lines_, dbg_prim_id*6u + 6u, vpos_enc);
+                vpos_enc = floatBitsToUint(vpos_ws_11.xyz); 
+                Store3(ssbo_dbg_lines_, dbg_prim_id*6u + 9u, vpos_enc); 
+
+                // dbg_line_len = ctx.sum_area < 1e-13f ? .0f : (evals[1] / ctx.sum_area);
+                dbg_line_len = abs(evals[1]);
+                // dbg_line_len *= min(ctx.ave_edge_len * .4f, pcs_dbg_geom_scale_ * .12f);
+                vec4 vpos_ws_20 = vec4(vpos, 1.0f);
+                vec4 vpos_ws_21 = vec4(vpos + normalize(vnor) * dbg_line_len, 1.0f);
+
+                vpos_enc = floatBitsToUint(vpos_ws_20.xyz);
+                Store3(ssbo_dbg_lines_, dbg_prim_id*6u + 12u, vpos_enc);
+                vpos_enc = floatBitsToUint(vpos_ws_21.xyz);
+                Store3(ssbo_dbg_lines_, dbg_prim_id*6u + 15u, vpos_enc);
+            }
+        }
+    #endif
+
+
+    
 }
 #endif 
 

@@ -27,7 +27,8 @@ class Instance;
 struct SurfaceDebugContext {
   bool dbg_vert_normal;
   bool dbg_vert_curv;
-  float dbg_line_length; 
+  float dbg_line_length;
+  float dbg_curv_K_val; 
 
   GPUStorageBuf *ssbo_dbg_lines_;
 };

@@ -19,5 +19,15 @@ void main()
 
     gl_Position = pos_hclip;
 
-    color = vec4(1, 0, 0, 1); 
+    // if ((line_id % 2u) == 0u) 
+    //     color = vec4(0, 1, 0, 1);
+    // else 
+    //     color = vec4(1, 0, 0, 1); 
+
+    if ((line_id % 3u) == 0u) 
+        color = vec4(0, 1, 0, 1);
+    else if ((line_id % 3u) == 1u)
+        color = vec4(1, 0, 0, 1); 
+    else
+        color = vec4(0, 0, 1, 1); 
 }

@@ -580,6 +580,7 @@ set(GLSL_SRC
   engines/npr/shaders/npr_strokegen_geom_extract_comp.glsl
   engines/npr/shaders/npr_strokegen_topo_lib.glsl
   engines/npr/shaders/npr_strokegen_geom_lib.glsl
+  engines/npr/shaders/npr_strokegen_linear_algebra_lib.glsl
   engines/npr/shaders/npr_strokegen_gpu_meshing_compute.glsl
   engines/npr/shaders/npr_strokegen_edge_split_comp.glsl
   engines/npr/shaders/npr_strokegen_edge_collapse_comp.glsl

@@ -1083,12 +1083,15 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_analysis_order_1_vert_curv_pass_0)
 GPU_SHADER_CREATE_INFO(bnpr_geom_analysis_order_1_main_curvature)
     .do_static_compilation(true)
     .additional_info("bnpr_geom_analysis_order_1_main")
-    .define("_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__CURVTENSOR", "1")
+    // .define("_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__CURVTENSOR", "1")
+    .define("_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__INTERPO_CURVTENSOR", "1")
+    .define("_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__INTERPO_CURVTENSOR_2RING", "1")
     .define("_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__MAIN", "1")
     .define("INCLUDE_VERTEX_CURV_TENSOR", "1") 
     .storage_buf(NUM_SSBO_1 + 0, Qualifier::READ_WRITE, "uint", "ssbo_edge_vtensors_[]")
     // .storage_buf(NUM_SSBO_1 + 1, Qualifier::READ_WRITE, "uint", "ssbo_vcurv_tensor_[]")
-    .storage_buf(NUM_SSBO_1 + 1, Qualifier::READ_WRITE, "uint", "ssbo_vcurv_pdirs_k1k2_[]"); 
+    .storage_buf(NUM_SSBO_1 + 1, Qualifier::READ_WRITE, "uint", "ssbo_vcurv_pdirs_k1k2_[]")
+    .push_constant(Type::FLOAT, "pcs_dbg_curv_K_scale_"); 
 
 #undef NUM_SSBO_1
 #undef NUM_SSBO_BASE

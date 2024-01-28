@@ -206,6 +206,14 @@ uint mark__bwedge_to_face(uint wedge)
 {
     return (wedge == 1u || wedge == 2u) ? 0u : 1u; /* 1,2->0, 0,3->1 */
 }
+uint mark__bwedge_to_prev_bwedge(uint wedge)
+{ /* Walk along the quad border */
+    return ((wedge + 3u) % 4u); 
+}
+uint mark__bwedge_to_next_bwedge(uint wedge)
+{ /* Walk along the quad border */
+    return ((wedge + 1u) % 4u); 
+}
 uint mark__vert_to_next_vert(uint face, uint vert)
 {
     if (face == 0u)
@@ -801,7 +809,7 @@ struct CirculatorIterData
 /* circulation loop invariant: (rotating foward)
  *     v1 ----- vp  
  *    /  \     /  \     wi:=awi.wedge_id
- *   /    \  wp    \    fi:=awi.iface_adj
+ *   /    \  wp   wop   fi:=awi.iface_adj
  *  /      \ /      \  
  * v0 ----- v --wi-- vi iwedge derivation:       
  *   \__     \<-----/   wo = mark__cwedge_rotate_back(fi)
@@ -815,6 +823,13 @@ uint mark__ve_circ_fwd__get_vi(CirculatorIterData iter) { return mark__cwedge_to
 uint mark__ve_circ_fwd__get_vn(CirculatorIterData iter) { return mark__center_wedge_to_oppo_vert__at_face(iter.awi.iface_adj); }
 uint mark__ve_circ_fwd__get_vp(CirculatorIterData iter) { return mark__center_wedge_to_oppo_vert__at_face(iter.awi.iface_adj == 1u ? 0u : 1u); }
 
+uint mark__ve_circ_bck__get_vn(CirculatorIterData iter) { return mark__ve_circ_fwd__get_vn(iter); }
+
+uint mark__vecirc_fwd_get_wo(CirculatorIterData iter) { return mark__cwedge_rotate_back(iter.awi.iface_adj); }
+uint mark__vecirc_fwd_get_wop(CirculatorIterData iter) { 
+    uint iwedge_wo = mark__cwedge_rotate_back(iter.awi.iface_adj); 
+    return mark__bwedge_to_next_bwedge(iwedge_wo); 
+}
 #endif
 
 
