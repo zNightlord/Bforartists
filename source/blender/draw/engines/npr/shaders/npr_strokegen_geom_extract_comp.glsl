@@ -57,10 +57,10 @@ void main()
 	const uint ResourceID = pcs_rsc_handle_; 
 
 	/* transform matrices, see "common_view_lib.glsl" */ 
-	float4x4 model_to_world = drw_matrix_buf[ResourceID].model;  
-	float4x4 world_to_model = drw_matrix_buf[ResourceID].model_inverse; 
-	float4x4 view_to_world = ubo_view_matrices_.viewinv;
-	float4x4 world_to_view = ubo_view_matrices_.viewmat;
+	mat4 model_to_world = drw_matrix_buf[ResourceID].model;  
+	mat4 world_to_model = drw_matrix_buf[ResourceID].model_inverse; 
+	mat4 view_to_world = ubo_view_matrices_.viewinv;
+	mat4 world_to_view = ubo_view_matrices_.viewmat;
 
 	vec3 vpos_ls, vpos_ws; 
 

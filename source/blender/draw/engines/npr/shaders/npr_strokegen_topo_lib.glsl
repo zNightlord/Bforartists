@@ -827,7 +827,7 @@ uint mark__ve_circ_bck__get_vn(CirculatorIterData iter) { return mark__ve_circ_f
 
 uint mark__vecirc_fwd_get_wo(CirculatorIterData iter) { return mark__cwedge_rotate_back(iter.awi.iface_adj); }
 uint mark__vecirc_fwd_get_wop(CirculatorIterData iter) { 
-    uint iwedge_wo = mark__cwedge_rotate_back(iter.awi.iface_adj); 
+    uint iwedge_wo = mark__vecirc_fwd_get_wo(iter); 
     return mark__bwedge_to_next_bwedge(iwedge_wo); 
 }
 #endif

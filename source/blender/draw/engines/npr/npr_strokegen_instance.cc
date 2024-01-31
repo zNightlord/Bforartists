@@ -151,7 +151,8 @@ namespace blender::npr::strokegen
 
     /* Submit passes here. (Execute render graph) */
     // GPU_storagebuf_copy_sub_from_vertbuf()
-    GPU_texture_copy(strokegen_textures.tex_contour_raster_depth, pre_depth); 
+    GPU_texture_copy(strokegen_textures.tex_contour_raster_depth, pre_depth);
+
 
 
     /* Geometry Extraction */
@@ -162,7 +163,7 @@ namespace blender::npr::strokegen
     strokegen_textures.fb_contour_raster.bind();
     float fb_clear_col[4] = {0, 0, 0, 0}; 
     GPU_framebuffer_clear_color(strokegen_textures.fb_contour_raster, fb_clear_col);
-    GPU_line_width(2.0f); // always snap to integer, see the opengl spec on line rasterization
+    GPU_line_width(3.0f); // always snap to integer, see the opengl spec on line rasterization
     manager.submit(strokegen_passes.get_render_pass(StrokeGenPassModule::INDIRECT_DRAW_CONTOUR_EDGES), view);
     manager.submit(strokegen_passes.get_render_pass(StrokeGenPassModule::INDIRECT_DRAW_DBG_VNOR), view); 
     GPU_line_width(1.0f);

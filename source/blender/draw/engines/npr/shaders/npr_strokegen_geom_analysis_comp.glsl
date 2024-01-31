@@ -29,6 +29,11 @@ uint get_vert_count()
     return pcs_vert_count_ + ssbo_dyn_mesh_counters_out_.num_verts; 
 }
 
+
+
+
+
+
 float calc_voronoi_area_corner(
     float edge_len_sqr, float cot_x, 
     float ang_c, bool is_obtuse, float face_area
@@ -677,14 +682,29 @@ void main()
 
 
 #if defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__MAIN)
+
+#if defined(INCLUDE_VERTEX_RADIAL_NORMAL)
+    #define LOAD_VNOR(vid, vpos) ld_vnor_radial(vid, vpos)
+#else
+    #define LOAD_VNOR(vid, vpos) ld_vnor(vid)
+#endif
+
 struct CalcVertAttrContext_Order1
 {
     vec3 vpos_c; 
 
+    /* Rusinkiewicz's Curvature Estimator from 
+     * https://github.com/Forceflow/trimesh2/blob/main/libsrc/TriMesh_curvature.cc 
+    */
     #if defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__CURVTENSOR)
         vec3 curv_tensor;  
     #endif
 
+    /* JacquesOlivierLachaud's Curvature Estimator from 
+     * https://github.com/dcoeurjo/CorrectedNormalCurrent/blob/master/CorrectedNormalCurrentFormula.h
+     * https://dgtal-team.github.io/doc-nightly/moduleCurvatureMeasures.html 
+     * https://github.com/CGAL/cgal/issues/7063
+    */
     #if defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__INTERPO_CURVTENSOR)
         mat3 curv_tensor; 
         float sum_area; 
@@ -697,6 +717,11 @@ struct CalcVertAttrContext_Order1
         #if defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__INTERPO_CURVTENSOR_2RING)
             AdjWedgeInfo wo_prev; 
         #endif
+    #endif
+
+    #if defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1_GRAD_VDOTN)
+        vec3 grad_vdotn; 
+        float sum_weight_gradvdn; 
     #endif
 
     // adaptive len for debug lines ---
@@ -733,6 +758,11 @@ CalcVertAttrContext_Order1 init_vert_attr_context_order_1(
         #endif
     #endif
 
+    #if defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1_GRAD_VDOTN)
+        ctx.grad_vdotn = vec3(.0f); 
+        ctx.sum_weight_gradvdn = .0f;
+    #endif
+
     ctx.ave_edge_len = .0f;
     ctx.num_adj_edges = .0f; 
 
@@ -767,12 +797,12 @@ bool calc_vert_attr_order_1_2ring(
     uint vn = ssbo_edge_to_vert_[wi*4u + ivert_n];
 
     vec3 vpos_n = ld_vpos(vn);
-    vec3 vnor_n = ld_vnor(vn);
+    vec3 vnor_n = LOAD_VNOR(vn, vpos_n);
 
     float area_tri = mu0InterpolatedU(ctx.vpos_c, ctx.vpos_i, vpos_n, ctx.vnor_c, ctx.vnor_i, vnor_n); 
     ctx.sum_area += area_tri; 
     
-    mat3 tensor_tri = /* area_tri * */muXYInterpolatedU(ctx.vpos_c, ctx.vpos_i, vpos_n, ctx.vnor_c, ctx.vnor_i, vnor_n); 
+    mat3 tensor_tri = muXYInterpolatedU(ctx.vpos_c, ctx.vpos_i, vpos_n, ctx.vnor_c, ctx.vnor_i, vnor_n); 
     ctx.curv_tensor += tensor_tri; 
 
     ctx.vpos_i = vpos_n; 
@@ -809,56 +839,82 @@ bool calc_vert_attr_order_1(
         ctx.curv_tensor += uintBitsToFloat(tensor_enc); 
     #endif
 
+    #if defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__INTERPO_CURVTENSOR) || defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1_GRAD_VDOTN)
+        uint vn = ssbo_edge_to_vert_[wi*4u + ivert_n];
+        vec3 vpos_n = ld_vpos(vn);
+        vec3 vnor_n = LOAD_VNOR(vn, vpos_n);
+    #endif
+
     #if defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__INTERPO_CURVTENSOR)
         #if !defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__INTERPO_CURVTENSOR_2RING)
-            uint vn = ssbo_edge_to_vert_[wi*4u + ivert_n];
-            vec3 vpos_n = ld_vpos(vn);
-            vec3 vnor_n = ld_vnor(vn);
-            {            
-                float area_tri = mu0InterpolatedU(ctx.vpos_i, ctx.vpos_c, vpos_n, ctx.vnor_i, ctx.vnor_c, vnor_n); 
-                mat3 tensor_tri = /* area_tri *  */muXYInterpolatedU(ctx.vpos_i, ctx.vpos_c, vpos_n, ctx.vnor_i, ctx.vnor_c, vnor_n); 
-                ctx.sum_area += area_tri;
-                ctx.curv_tensor += tensor_tri;
-            }
-            ctx.vpos_i = vpos_n; 
-            ctx.vnor_i = vnor_n; 
+        {            
+            float area_tri = mu0InterpolatedU(ctx.vpos_i, ctx.vpos_c, vpos_n, ctx.vnor_i, ctx.vnor_c, vnor_n); 
+            mat3 tensor_tri = /* area_tri *  */muXYInterpolatedU(ctx.vpos_i, ctx.vpos_c, vpos_n, ctx.vnor_i, ctx.vnor_c, vnor_n); 
+            ctx.sum_area += area_tri;
+            ctx.curv_tensor += tensor_tri;
+        }
         #else
-            uint vn = ssbo_edge_to_vert_[wi*4u + ivert_n];
-            vec3 vpos_n = ld_vpos(vn);
-            vec3 vnor_n = ld_vnor(vn);
-            {
-                uint iwedge_wo = mark__vecirc_fwd_get_wo(iter); 
-                AdjWedgeInfo wo = decode_adj_wedge_info(ssbo_edge_to_edges_[wi*4u + iwedge_wo]); 
-                if (ctx.num_adj_edges < 1e-10f)
-                { /* Initialize wo_prev */
-                    uint iwedge_woprev = mark__vecirc_fwd_get_wop(iter); 
-                    ctx.wo_prev = decode_adj_wedge_info(ssbo_edge_to_edges_[wi*4u + iwedge_woprev]); 
-                }
-
-                VertWedgeListHeader vwlh_2ring = VertWedgeListHeader(wi, ivert_i); 
-                
-                CalcVertAttrContext_Order1_2Ring ctx_2ring;
-                ctx_2ring.curv_tensor = mat3(.0f);
-                ctx_2ring.sum_area = .0f;
-                ctx_2ring.vpos_c = ctx.vpos_i; 
-                ctx_2ring.vnor_c = ctx.vnor_i;
-                ctx_2ring.vpos_i = ctx.vpos_c;
-                ctx_2ring.vnor_i = ctx.vnor_c;
-                ctx_2ring.w_end = ctx.wo_prev;
-
-                bool rotate_fwd_2ring = false; 
-                VE_CIRCULATOR(vwlh_2ring, calc_vert_attr_order_1_2ring, ctx_2ring, rotate_fwd_2ring); 
-
-                ctx.curv_tensor += ctx_2ring.curv_tensor; 
-                ctx.sum_area += ctx_2ring.sum_area; 
-
-                ctx.wo_prev = wo; 
+        { /* visit 2-ring */
+            uint iwedge_wo = mark__vecirc_fwd_get_wo(iter); 
+            AdjWedgeInfo wo = decode_adj_wedge_info(ssbo_edge_to_edges_[wi*4u + iwedge_wo]); 
+            if (ctx.num_adj_edges < 1e-10f)
+            { /* Initialize wo_prev */
+                uint iwedge_woprev = mark__vecirc_fwd_get_wop(iter); 
+                ctx.wo_prev = decode_adj_wedge_info(ssbo_edge_to_edges_[wi*4u + iwedge_woprev]); 
             }
-            ctx.vpos_i = vpos_n; 
-            ctx.vnor_i = vnor_n; 
+
+            VertWedgeListHeader vwlh_2ring = VertWedgeListHeader(wi, ivert_i); 
+            
+            CalcVertAttrContext_Order1_2Ring ctx_2ring;
+            ctx_2ring.curv_tensor = mat3(.0f);
+            ctx_2ring.sum_area = .0f;
+            ctx_2ring.vpos_c = ctx.vpos_i; 
+            ctx_2ring.vnor_c = ctx.vnor_i;
+            ctx_2ring.vpos_i = ctx.vpos_c;
+            ctx_2ring.vnor_i = ctx.vnor_c;
+            ctx_2ring.w_end = ctx.wo_prev;
+
+            bool rotate_fwd_2ring = false; 
+            VE_CIRCULATOR(vwlh_2ring, calc_vert_attr_order_1_2ring, ctx_2ring, rotate_fwd_2ring); 
+
+            ctx.curv_tensor += ctx_2ring.curv_tensor; 
+            ctx.sum_area += ctx_2ring.sum_area; 
+
+            ctx.wo_prev = wo; 
+        }
         #endif
     #endif
 
+    #if defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1_GRAD_VDOTN)
+    {
+        vec3 cam_pos_ws = ubo_view_matrices_.viewinv[3].xyz; /* see "#define cameraPos ViewMatrixInverse[3].xyz" */
+        vec3 vdir_c = normalize(ctx.vpos_c - cam_pos_ws);
+        float ndv_c = dot(vdir_c, ctx.vnor_c); 
+
+        vec3 vdir_i = normalize(ctx.vpos_i - cam_pos_ws);
+        float ndv_i = dot(vdir_i, ctx.vnor_i);
+
+        vec3 vdir_n = normalize(vpos_n - cam_pos_ws);
+        float ndv_n = dot(vdir_n, vnor_n); 
+
+        vec3 eic = ctx.vpos_c - ctx.vpos_i; float eic_len = length(eic); 
+        vec3 ecn = vpos_n - ctx.vpos_c;     float ecn_len = length(ecn);
+        vec3 eni = ctx.vpos_i - vpos_n;     float eni_len = length(eni); 
+        float fi_area = length(cross(-eni, eic)) * .5f; 
+        vec3 fi_nor = normalize(cross(-eni, eic));
+
+        vec3 grad_fi = cross(fi_nor, (ndv_c * eni + ndv_i * ecn + ndv_n * eic)) / (-2.0f*fi_area);
+
+        float weight_gradvdn = acos(dot(-eni/eni_len, eic/eic_len)); 
+        ctx.grad_vdotn          += weight_gradvdn * grad_fi;
+        ctx.sum_weight_gradvdn  += weight_gradvdn;    
+    }    
+    #endif
+
+    #if defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__INTERPO_CURVTENSOR) || defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1_GRAD_VDOTN)
+    ctx.vpos_i = vpos_n; 
+    ctx.vnor_i = vnor_n; 
+    #endif
 
     uint vi = ssbo_edge_to_vert_[wi*4u + ivert_i]; 
     ctx.ave_edge_len += length(ld_vpos(vi) - ctx.vpos_c);
@@ -875,7 +931,7 @@ void main()
     bool valid_thread = vert_id < num_verts; 
 
     vec3 vpos = ld_vpos(vert_id); 
-    vec3 vnor = ld_vnor(vert_id);
+    vec3 vnor = LOAD_VNOR(vert_id, vpos);
     VertWedgeListHeader vwlh = decode_vert_wedge_list_header(ssbo_vert_to_edge_list_header_[vert_id]); 
 
     // Accumulate partial tensors from 1-ring faces
@@ -888,7 +944,7 @@ void main()
         uint ivert_vi = vwlh_rot.ivert == 1u ? 3u : 1u;
         uint vi = ssbo_edge_to_vert_[vwlh_rot.wedge_id*4u + ivert_vi]; 
         vec3 vpos_vi = ld_vpos(vi);
-        vec3 vnor_vi = ld_vnor(vi);
+        vec3 vnor_vi = LOAD_VNOR(vi, vpos_vi);
         ctx = init_vert_attr_context_order_1(
             vpos, vnor, vpos_vi, vnor_vi
         );
@@ -899,6 +955,8 @@ void main()
         bool rotate_fwd = true; 
         VE_CIRCULATOR(vwlh_rot, calc_vert_attr_order_1, ctx, rotate_fwd);
     }
+    ctx.ave_edge_len /= float(ctx.num_adj_edges); 
+
 
     #if defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__CURVTENSOR)
         // Compute principal direction & curvature
@@ -931,7 +989,6 @@ void main()
         
             if (dbg_vtx_curv)
             {
-                ctx.ave_edge_len /= float(ctx.num_adj_edges); 
                 float dbg_line_len = .4f * min(ctx.ave_edge_len, pcs_dbg_geom_scale_ * .12f);
 
                 vec4 vpos_ws_10 = vec4(vpos - curv_1_fin * normalize(pdir1) * dbg_line_len, 1.0f);
@@ -956,61 +1013,101 @@ void main()
 
 
     #if defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__INTERPO_CURVTENSOR)
-        ctx.ave_edge_len /= float(ctx.num_adj_edges); 
 
-        mat3 vtx_curv_measure = ctx.curv_tensor/*  / ctx.sum_area */;
+        mat3 vtx_curv_measure = ctx.curv_tensor;
         float vtx_area_measure = ctx.sum_area; 
+        vec3 vnor_gt = ld_vnor(vert_id); // NOTE: This must be the geometrically correct normal
         mat3 pdirs; 
         vec3 evals; 
-        curvDirFromTensor(vtx_curv_measure, vtx_area_measure, vnor, /*out*/pdirs, evals);
+        curvDirFromTensor(vtx_curv_measure, (1.0f + pcs_dbg_curv_K_scale_) * ctx.sum_area, vnor_gt, /*out*/pdirs, evals);
 
         vec3 pdir0 = vec3(pdirs[0][0], pdirs[1][0], pdirs[2][0]); 
         vec3 pdir1 = vec3(pdirs[0][1], pdirs[1][1], pdirs[2][1]); 
         vec3 pdir2 = vec3(pdirs[0][2], pdirs[1][2], pdirs[2][2]); 
 
+        // evals /= vtx_area_measure; 
+
 
         // debug lines
         if (0 < pcs_output_dbg_geom_)
         {
+            // VertFlags vf = decode_vert_flags(ssbo_vert_flags_[vert_id]); 
+            // bool dbg_vtx_curv = (!vf.dupli) && (!vf.del_by_collapse) && valid_thread; 
+            // uint dbg_prim_id = compact_pdir_lines(dbg_vtx_curv, groupIdx, 3u);
+
+            // vec3 cam_pos_ws = ubo_view_matrices_.viewinv[3].xyz; /* see "#define cameraPos ViewMatrixInverse[3].xyz" */
+            // vec3 dndv_dp = ctx.curv_tensor * (vpos - cam_pos_ws); 
+
+            // if (dbg_vtx_curv)
+            // {
+            //     float dbg_line_len = min(ctx.ave_edge_len * .4f, pcs_dbg_geom_scale_ * .12f);
+
+            //     vec4 vpos_ws_00 = vec4(vpos - normalize(pdir0) * dbg_line_len, 1.0f);
+            //     vec4 vpos_ws_01 = vec4(vpos + normalize(pdir0) * dbg_line_len, 1.0f);
+
+            //     uvec3 vpos_enc = floatBitsToUint(vpos_ws_00.xyz); 
+            //     Store3(ssbo_dbg_lines_, dbg_prim_id*6u,      vpos_enc);
+            //     vpos_enc = floatBitsToUint(vpos_ws_01.xyz); 
+            //     Store3(ssbo_dbg_lines_, dbg_prim_id*6u + 3u, vpos_enc); 
+
+            //     vec4 vpos_ws_10 = vec4(vpos - normalize(pdir1) * dbg_line_len, 1.0f);
+            //     vec4 vpos_ws_11 = vec4(vpos + normalize(pdir1) * dbg_line_len, 1.0f);
+                
+            //     vpos_enc = floatBitsToUint(vpos_ws_10.xyz); 
+            //     Store3(ssbo_dbg_lines_, dbg_prim_id*6u + 6u, vpos_enc);
+            //     vpos_enc = floatBitsToUint(vpos_ws_11.xyz); 
+            //     Store3(ssbo_dbg_lines_, dbg_prim_id*6u + 9u, vpos_enc); 
+
+            //     // dbg_line_len = pcs_dbg_geom_scale_ * .1f * max(abs(evals[0]), abs(evals[1]));
+            //     dbg_line_len = ctx.ave_edge_len /* * max(abs(dot(normalize(pdir0), vnor_gt)), abs(dot(normalize(pdir1), vnor_gt))) */;
+            //     vec4 vpos_ws_20 = vec4(vpos, 1.0f);
+            //     vec4 vpos_ws_21 = vec4(vpos + normalize(vnor) * dbg_line_len, 1.0f);
+
+            //     vpos_enc = floatBitsToUint(vpos_ws_20.xyz);
+            //     Store3(ssbo_dbg_lines_, dbg_prim_id*6u + 12u, vpos_enc);
+            //     vpos_enc = floatBitsToUint(vpos_ws_21.xyz);
+            //     Store3(ssbo_dbg_lines_, dbg_prim_id*6u + 15u, vpos_enc);
+            // }
+        }
+    #endif
+
+
+
+    #if defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1_GRAD_VDOTN)
+        ctx.grad_vdotn /= ctx.sum_weight_gradvdn;
+        float grad_vdotn_len = length(ctx.grad_vdotn);
+        vec3 bigrad = cross(ctx.grad_vdotn, vnor); 
+        
+        if (0 < pcs_output_dbg_geom_)
+        {
             VertFlags vf = decode_vert_flags(ssbo_vert_flags_[vert_id]); 
             bool dbg_vtx_curv = (!vf.dupli) && (!vf.del_by_collapse) && valid_thread; 
-            uint dbg_prim_id = compact_pdir_lines(dbg_vtx_curv, groupIdx, 3u);
+            uint dbg_prim_id = compact_pdir_lines(dbg_vtx_curv, groupIdx, 2u);
         
             if (dbg_vtx_curv)
             {
                 float dbg_line_len = min(ctx.ave_edge_len * .4f, pcs_dbg_geom_scale_ * .12f);
 
-                vec4 vpos_ws_00 = vec4(vpos - normalize(pdir0) * dbg_line_len, 1.0f);
-                vec4 vpos_ws_01 = vec4(vpos + normalize(pdir0) * dbg_line_len, 1.0f);
+                vec4 vpos_ws_00 = vec4(vpos - (ctx.grad_vdotn / grad_vdotn_len) * dbg_line_len, 1.0f);
+                vec4 vpos_ws_01 = vec4(vpos + (ctx.grad_vdotn / grad_vdotn_len) * dbg_line_len, 1.0f);
 
                 uvec3 vpos_enc = floatBitsToUint(vpos_ws_00.xyz); 
                 Store3(ssbo_dbg_lines_, dbg_prim_id*6u,      vpos_enc);
                 vpos_enc = floatBitsToUint(vpos_ws_01.xyz); 
                 Store3(ssbo_dbg_lines_, dbg_prim_id*6u + 3u, vpos_enc); 
 
-                vec4 vpos_ws_10 = vec4(vpos - normalize(pdir1) * dbg_line_len, 1.0f);
-                vec4 vpos_ws_11 = vec4(vpos + normalize(pdir1) * dbg_line_len, 1.0f);
+                vec4 vpos_ws_10 = vec4(vpos - normalize(vnor) * dbg_line_len, 1.0f);
+                vec4 vpos_ws_11 = vec4(vpos - normalize(vnor) * dbg_line_len, 1.0f);
+                // if (any(isnan(ctx.grad_vdotn.xyz)))
+                //     vpos_ws_11 = vec4(vpos + normalize(vnor) * dbg_line_len, 1.0f);
                 
                 vpos_enc = floatBitsToUint(vpos_ws_10.xyz); 
                 Store3(ssbo_dbg_lines_, dbg_prim_id*6u + 6u, vpos_enc);
                 vpos_enc = floatBitsToUint(vpos_ws_11.xyz); 
                 Store3(ssbo_dbg_lines_, dbg_prim_id*6u + 9u, vpos_enc); 
-
-                // dbg_line_len = ctx.sum_area < 1e-13f ? .0f : (evals[1] / ctx.sum_area);
-                dbg_line_len = abs(evals[1]);
-                // dbg_line_len *= min(ctx.ave_edge_len * .4f, pcs_dbg_geom_scale_ * .12f);
-                vec4 vpos_ws_20 = vec4(vpos, 1.0f);
-                vec4 vpos_ws_21 = vec4(vpos + normalize(vnor) * dbg_line_len, 1.0f);
-
-                vpos_enc = floatBitsToUint(vpos_ws_20.xyz);
-                Store3(ssbo_dbg_lines_, dbg_prim_id*6u + 12u, vpos_enc);
-                vpos_enc = floatBitsToUint(vpos_ws_21.xyz);
-                Store3(ssbo_dbg_lines_, dbg_prim_id*6u + 15u, vpos_enc);
             }
         }
     #endif
-
-
     
 }
 #endif 

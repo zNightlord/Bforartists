@@ -7,13 +7,13 @@
 
 
 #if defined(INCLUDE_VERTEX_POSITION)
-    vec3 ld_vpos(uint vtx_id)
-    {
-        vec3 vpos; 
-        Load3(ssbo_vbo_full_, vtx_id, vpos);
+        vec3 ld_vpos(uint vtx_id)
+        {
+            vec3 vpos; 
+            Load3(ssbo_vbo_full_, vtx_id, vpos);
 
-        return vpos; 
-    }
+            return vpos; 
+        }
     void st_vpos(uint vtx_id, vec3 vpos)
     {
         Store3(ssbo_vbo_full_, vtx_id, vpos);
@@ -25,6 +25,7 @@
     {
         uvec3 vnor_enc; 
         Load3(ssbo_vnor_, vtx_id, vnor_enc);
+
         return uintBitsToFloat(vnor_enc); 
     }
     void st_vnor(uint vtx_id, vec3 vnor)
@@ -32,7 +33,39 @@
         uvec3 vnor_enc = floatBitsToUint(vnor);
         Store3(ssbo_vnor_, vtx_id, vnor_enc);
     }
+
+    #if defined(INCLUDE_VERTEX_RADIAL_NORMAL)
+        vec3 ld_vnor_radial(uint vid, vec3 vpos)
+        {
+            vec3 n = ld_vnor(vid); 
+
+            mat4 view_to_world = ubo_view_matrices_.viewinv;
+            bool is_persp = (ubo_view_matrices_.winmat[3][3] == 0.0);
+            vec3 cam_pos_ws = view_to_world[3].xyz; /* see "#define cameraPos ViewMatrixInverse[3].xyz" */
+            
+            vec3 v = cam_pos_ws - vpos; 
+            vec3 v_ = normalize(v); 
+
+            // vec3 n_view_proj = normalize(n - dot(n, v_) * v_); 
+            // if (dot(n_view_proj, n) < .0f) n_view_proj = -n_view_proj; 
+
+            // return n_view_proj; 
+
+            vec3 bn = normalize(cross(n, v));
+            vec3 t = normalize(cross(bn, n)); 
+            vec3 n_view_proj = normalize(cross(t, bn));
+
+            vec3 res = t; 
+            float cos_theta = dot(v_, n); 
+            res = cos_theta < -.01f ? -res : res; 
+            if (abs(cos_theta) <= .01f) res = n_view_proj; 
+
+            return n_view_proj; 
+        }
+    #endif
 #endif
+
+
 
 #if defined(INCLUDE_VERTEX_VORONOI_AREA)
     float ld_varea(uint vtx_id)
@@ -241,6 +274,7 @@ float mu0InterpolatedU(in vec3 a,
     return 0.5f * dot((cross(( b - a ), ( c - a ))), uM );
 }
 
+
 /// Computes muXY measure (anisotropic curvature) of triangle abc
 /// given an interpolated corrected normal vector \a ua, \a \ub, \a
 /// uc.
@@ -304,8 +338,9 @@ void curvDirFromTensor(in mat3 tensor,
     M += Mt;
     M *= 0.5f;
     const float coef_N = 1000.0f * area;
-    // Adding 1000 area n x n to anisotropic measure
+    // Adding regulated term == 1000 area n x n 
     // force the principal direction eigenvectors to be tangential to the surface
+    // (see @cite lachaud2020interpolated, section 2) 
     for ( uint j = 0u; j < 3u; j++ )
         for ( uint k = 0u; k < 3u; k++ )
             M[ j ][ k ] += coef_N * N[ j ] * N[ k ];
