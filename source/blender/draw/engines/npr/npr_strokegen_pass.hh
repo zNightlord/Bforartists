@@ -139,7 +139,7 @@ public:
 
   // ---------------------------------------------------------------------------
   void append_subpass_meshing_merge_verts(int num_verts_in, bool debug = false);
-  void append_subpass_meshing_wedge_adjacency_and_init_flooding_ptr(int num_edges_in, int num_verts_in, bool debug = false);
+  void append_subpass_meshing_wedge_adjacency(int num_edges_in, int num_verts_in, bool debug = false);
 
 
   // ---------------------------------------------------------------------------

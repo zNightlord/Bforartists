@@ -171,6 +171,7 @@ void main()
         bool is_seed_edge = wfptr.is_seed && valid_thread; 
 
         #if defined(_KERNEL_MULTICOMPILE__WEDGE_FLOODING__ITER__LAST_ITER__OUTPUT_FLAGS) || defined(_KERNEL_MULTICOMPILE__WEDGE_FLOODING__ITER__LAST_ITER__OUTPUT_CAMPACTION)
+            /* Mark as selected */
             EdgeFlags ef = load_edge_flags(EdgeID); 
             ef.selected = is_seed_edge; 
             if (valid_thread)
@@ -307,6 +308,41 @@ void main()
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/* Deprecated ---------------------------------------------------------- */
 #if defined(_KERNEL_MULTICOMPILE__COMPACT_FILTERED_VERTS)
 void main()
 {
@@ -391,13 +427,6 @@ void main()
     }
 }
 #endif
-
-
-
-
-
-
-
 
 
 #if defined(_KERNEL_MULTICOMPILE__MESH_FILTERING_)

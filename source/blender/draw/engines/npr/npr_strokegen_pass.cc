@@ -190,7 +190,7 @@ namespace blender::npr::strokegen
 
     // Basic Meshing -----------------------------------------------------------
     append_subpass_meshing_merge_verts(num_verts);
-    append_subpass_meshing_wedge_adjacency_and_init_flooding_ptr(num_edges, num_verts);
+    append_subpass_meshing_wedge_adjacency(num_edges, num_verts);
 
 
     // Mesh Filtering -----------------------------------------------------------
@@ -528,7 +528,7 @@ namespace blender::npr::strokegen
     }
   }
 
-  void StrokeGenPassModule::append_subpass_meshing_wedge_adjacency_and_init_flooding_ptr(
+  void StrokeGenPassModule::append_subpass_meshing_wedge_adjacency(
     int num_edges_in, int num_verts_in, bool debug
   )
   {
@@ -650,31 +650,6 @@ namespace blender::npr::strokegen
       bind_flooding_rsc(sub, flooding_iter);
 
       int num_groups = compute_num_groups(num_edges, GROUP_SIZE_STROKEGEN_GEOM_EXTRACT);
-      sub.dispatch(int3(num_groups, 1, 1));
-      sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_SHADER_IMAGE_ACCESS);
-    }
-
-    if (options.select_verts) { // TODO: deprecated, remove this
-      auto &sub = pass_extract_geom.sub("bnpr_meshing_compact_filtered_verts");
-      sub.shader_set(shaders_.static_shader_get(MESH_WEDGE_FLOODING_SELECT_VERTS));
-
-      GPUStorageBuf *reused_ssbo_wedge_flooding_pointers_in_ = nullptr;
-      GPUStorageBuf *reused_ssbo_wedge_flooding_pointers_out_ = nullptr;
-      buffers_.reused_ssbo_wedge_flooding_pointers_(flooding_iter,
-                                                    reused_ssbo_wedge_flooding_pointers_in_,
-                                                    reused_ssbo_wedge_flooding_pointers_out_);
-
-      sub.bind_ssbo(0, buffers_.ssbo_selected_vert_to_vert_);
-      sub.bind_ssbo(1, reused_ssbo_wedge_flooding_pointers_in_);
-      sub.bind_ssbo(2, buffers_.ssbo_edge_to_vert_);
-      sub.bind_ssbo(3, buffers_.ssbo_edge_to_edges_);
-      sub.bind_ssbo(4, buffers_.ssbo_vert_to_edge_list_header_);
-      sub.bind_ssbo(5, buffers_.ssbo_bnpr_mesh_pool_counters_);
-      sub.bind_ssbo(6, buffers_.reused_ssbo_vert_merged_id_());
-      sub.push_constant("pcs_vert_count_", num_verts);
-      sub.push_constant("pcs_edge_count_", num_edges);
-
-      int num_groups = compute_num_groups(num_verts, GROUP_SIZE_STROKEGEN_GEOM_EXTRACT);
       sub.dispatch(int3(num_groups, 1, 1));
       sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_SHADER_IMAGE_ACCESS);
     }

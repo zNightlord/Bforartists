@@ -232,11 +232,10 @@ void main()
 			is_contour = is_contour && (!valid_ev); 
 		if (pcs_edge_visualize_mode_ == 3) 
 			is_contour = is_contour && (!valid_ve); 
-		
-		/* visualize all edges */
 		if (pcs_edge_visualize_mode_ == 4)
-			is_contour = is_contour; 
-			
+			is_contour = (ef.new_by_split) && (!ef.dupli); 
+
+		/* visualize selected edges */
 		if (pcs_edge_visualize_mode_ == 5)
 			is_contour = is_contour && ef.selected; 
 	}
