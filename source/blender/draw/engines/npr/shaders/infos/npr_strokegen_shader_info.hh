@@ -804,6 +804,7 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_edge_split)
     .push_constant(Type::FLOAT, "pcs_remesh_edge_len_")
     .push_constant(Type::INT, "pcs_edge_count_")
     .push_constant(Type::INT, "pcs_vert_count_")
+    .push_constant(Type::INT, "pcs_dbg_split_fix_")
 
     .local_group_size(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT)
     .compute_source("npr_strokegen_edge_split_comp.glsl");

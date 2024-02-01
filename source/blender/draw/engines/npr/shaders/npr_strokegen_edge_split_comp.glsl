@@ -259,9 +259,9 @@ void main()
     pesi[2] = load_per_edge_split_info(w[2].wedge_id);
     pesi[3] = load_per_edge_split_info(w[3].wedge_id);
 
-    /* Resolve collision */
+   
     if (psei_curr.is_split_ok && valid_thread)
-    {
+    {  /* Resolve collision */
         EdgeSplitPriorityContext ctx_curr = EdgeSplitPriorityContext(psei_curr, psei_curr.id); 
         psei_curr.is_split_ok = all(
             bvec4(
@@ -270,7 +270,18 @@ void main()
                 split_priority_higher(ctx_curr, EdgeSplitPriorityContext(pesi[2], w[2].wedge_id)),
                 split_priority_higher(ctx_curr, EdgeSplitPriorityContext(pesi[3], w[3].wedge_id))
             )
-        ); 
+        );
+
+        /* except border edges */
+        if (pcs_dbg_split_fix_ > 0)
+        {
+            EdgeFlags ef_w0 = load_edge_flags(w[0].wedge_id); 
+            EdgeFlags ef_w1 = load_edge_flags(w[1].wedge_id); 
+            EdgeFlags ef_w2 = load_edge_flags(w[2].wedge_id); 
+            EdgeFlags ef_w3 = load_edge_flags(w[3].wedge_id); 
+            if (any(bvec4(ef_w0.border, ef_w1.border, ef_w2.border, ef_w3.border))) 
+                psei_curr.is_split_ok = false; 
+        }
     }
 
     /* Compaction */
@@ -288,7 +299,21 @@ void main()
 
 
 #if defined(_KERNEL_MULTICOMPILE__EDGE_SPLIT_EXECUTE)
-    /* Apply edge split */
+    /* Update dynamic mesh counters */
+    if (gl_GlobalInvocationID.x == 0u) 
+    {
+        /* accumulate global mesh counters */
+        ssbo_dyn_mesh_counters_out_.num_edges = 
+            ssbo_dyn_mesh_counters_in_.num_edges + 4u * ssbo_edge_split_counters_[pcs_split_iter_].num_split_edges;
+        ssbo_dyn_mesh_counters_out_.num_verts = 
+            ssbo_dyn_mesh_counters_in_.num_verts + ssbo_edge_split_counters_[pcs_split_iter_].num_split_edges; 
+        
+        /* prep local counters for next split iteration */
+        ssbo_edge_split_counters_[pcs_split_iter_ + 1].num_split_edges_pass_1 = 0u;
+        ssbo_edge_split_counters_[pcs_split_iter_ + 1].num_split_edges = 0u; 
+    }
+
+    /* Early Exists */
     if (!valid_thread)
         return;
     if (valid_thread && !psei_curr.is_split_ok)
@@ -297,6 +322,9 @@ void main()
         return; 
     }
 
+
+
+    /* Apply edge split */
     uint num_existing_edges = pcs_edge_count_ + ssbo_dyn_mesh_counters_in_.num_edges; 
     uint num_existing_verts = pcs_vert_count_ + ssbo_dyn_mesh_counters_in_.num_verts; 
 
@@ -451,20 +479,6 @@ void main()
     VertFlags vf = init_vert_flags__new_split_edge(); 
     store_vert_flags(v4, vf); 
 
-
-    /* Update dynamic mesh counters */
-    if (split_edge_alloc_id == 0u) // !!! don't do this: split_edge_id == 0u because 0th thread might early exit 
-    {
-        /* accumulate global mesh counters */
-        ssbo_dyn_mesh_counters_out_.num_edges = 
-            ssbo_dyn_mesh_counters_in_.num_edges + 4u * ssbo_edge_split_counters_[pcs_split_iter_].num_split_edges;
-        ssbo_dyn_mesh_counters_out_.num_verts = 
-            ssbo_dyn_mesh_counters_in_.num_verts + ssbo_edge_split_counters_[pcs_split_iter_].num_split_edges; 
-        
-        /* prep local counters for next split iteration */
-        ssbo_edge_split_counters_[pcs_split_iter_ + 1].num_split_edges_pass_1 = 0u;
-        ssbo_edge_split_counters_[pcs_split_iter_ + 1].num_split_edges = 0u; 
-    }
 
 #undef e0
 #undef e1

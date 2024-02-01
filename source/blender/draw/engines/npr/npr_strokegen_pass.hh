@@ -159,8 +159,12 @@ public:
     ViewBinormalPlane = 3
   };
   struct GPUMeshFilteringParameters {
-    int num_filtering_iters;
-    int num_diffusion_iters;
+    int num_filtering_iters; // deprecate
+    int num_remesh_dbg_iters;
+     
+    int num_diffusion_iters; // deprecate
+    int dbg_split_fix; 
+
     int num_edge_flooding_iters;
     int num_normal_filtering_iters;
     float quadric_deviation;

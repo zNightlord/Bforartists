@@ -685,13 +685,12 @@ void main()
 
 /* Apply the edge collapse */
 #if defined(_KERNEL_MULTICOMPILE__EDGE_COLLAPSE_EXECUTE)
-    if (!valid_thread)
-        return;
-    
     if (gl_GlobalInvocationID.x == 0u) 
-        /* prep local counters for next split iteration, have to do this before early exit */
+        /* prep local counters for next split iteration, have to do this before early exits */
         ssbo_edge_collapse_counters_[pcs_collapse_iter_ + 1].num_collapsed_edges_pass_1 = 0u;
 
+    if (!valid_thread)
+        return;
     if (!pcei.is_collapse_ok)
         return;
 

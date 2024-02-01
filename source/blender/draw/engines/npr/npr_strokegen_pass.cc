@@ -70,18 +70,20 @@ namespace blender::npr::strokegen
     const DRWContextState *draw_ctx = DRW_context_state_get();
     const Scene *scene_eval = DEG_get_evaluated_scene(draw_ctx->depsgraph);
     meshing_params.num_filtering_iters = 2 * (scene_eval->npr.npr_test_val_0);
+    meshing_params.num_remesh_dbg_iters = scene_eval->npr.npr_test_val_0;
+    meshing_params.dbg_split_fix = (int)(scene_eval->npr.npr_test_val_1 + 1e-10f) > 0; 
     meshing_params.num_diffusion_iters = 2 * (scene_eval->npr.npr_test_val_1);
     meshing_params.quadric_deviation = scene_eval->npr.npr_test_val_2;
     meshing_params.geodist_deviation = scene_eval->npr.npr_test_val_3;
     meshing_params.alternate_filter_0 = (GPUMeshQuadricFilter)((int)(scene_eval->npr.npr_test_val_4 + 1e-10f)); 
     meshing_params.alternate_filter_1 = (GPUMeshQuadricFilter)((int)(scene_eval->npr.npr_test_val_5 + 1e-10f));
     meshing_params.edge_visualize_mode = (int)(scene_eval->npr.npr_test_val_6 + 1e-10f);
-
+    //
     pass_draw_contour_edges.draw_settings.draw_hidden_lines = scene_eval->npr.npr_test_val_7 > .5f;
-    pass_draw_debug_lines_.draw_settings.draw_hidden_lines = false; 
-
+    // pass_draw_debug_lines_.draw_settings.draw_hidden_lines = false; 
+    //
     meshing_params.positiion_regularization_scale = scene_eval->npr.npr_test_val_8;
-
+    
     meshing_params.use_normal_filtering = scene_eval->npr.npr_test_val_9 > 0.5f;
     meshing_params.num_normal_filtering_iters = 2 * std::max(1, (int)(scene_eval->npr.npr_test_val_10));
 
@@ -217,33 +219,48 @@ namespace blender::npr::strokegen
     append_subpass_fill_dispatched_args_remeshed_verts_(num_verts); 
     append_subpass_select_verts_from_selected_edges(true, true, num_edges, num_verts); 
 
+    int dbg_step = 0;
+    bool step_dbg_remesh = true;
+    auto should_remesh_when_dbg = [&]() {
+      return ((!step_dbg_remesh) || (dbg_step < meshing_params.num_remesh_dbg_iters));
+    }; 
+
     for (int iter_remesh = 0; iter_remesh < meshing_params.remeshing_iters; ++iter_remesh)
     {
       int num_edge_split_iters = meshing_params.remeshing_split_iters;
-      for (int iter_edge_split = 0; iter_edge_split < num_edge_split_iters; ++iter_edge_split) {
-        append_subpass_fill_dispatched_args_remeshed_edges_(num_edges, true);
-        append_subpass_split_edges(iter_remesh, iter_edge_split, num_edges, num_verts);  
-      }
+      if (should_remesh_when_dbg())
+        for (int iter_edge_split = 0; iter_edge_split < num_edge_split_iters; ++iter_edge_split) {
+          append_subpass_fill_dispatched_args_remeshed_edges_(num_edges, true);
+          append_subpass_split_edges(iter_remesh, iter_edge_split, num_edges, num_verts);
+          dbg_step++; 
+        }
       // update elem counters after split
       append_subpass_fill_dispatched_args_remeshed_edges_(num_edges, true); 
       append_subpass_fill_dispatched_args_remeshed_verts_(num_verts); 
 
       EdgeFlipOptiGoal opti_goal = Delaunay;
       int num_edge_flip_iters = meshing_params.remeshing_delaunay_flip_iters;
-      for (int iter_edge_flip = 0; iter_edge_flip < num_edge_flip_iters; ++iter_edge_flip) {
-        append_subpass_flip_edges(opti_goal, iter_remesh, iter_edge_flip, num_edges, num_verts);
-      }
+      if (should_remesh_when_dbg())
+        for (int iter_edge_flip = 0; iter_edge_flip < num_edge_flip_iters; ++iter_edge_flip) {
+          append_subpass_flip_edges(opti_goal, iter_remesh, iter_edge_flip, num_edges, num_verts);
+          dbg_step++; 
+        }
 
       int num_edge_collapse_iters = meshing_params.remeshing_collapse_iters;
-      for (int iter_edge_collapse = 0; iter_edge_collapse < num_edge_collapse_iters; ++iter_edge_collapse) {
-        append_subpass_collapse_edges(iter_remesh, iter_edge_collapse, num_edges, num_verts);
-      }
+      if (should_remesh_when_dbg())
+        for (int iter_edge_collapse = 0; iter_edge_collapse < num_edge_collapse_iters;
+             ++iter_edge_collapse) {
+          append_subpass_collapse_edges(iter_remesh, iter_edge_collapse, num_edges, num_verts);
+          dbg_step++; 
+        }
 
       opti_goal = Valence; 
       num_edge_flip_iters = meshing_params.remeshing_flip_iters;
-      for (int iter_edge_flip = 0; iter_edge_flip < num_edge_flip_iters; ++iter_edge_flip) {
-        append_subpass_flip_edges(opti_goal, iter_remesh, iter_edge_flip, num_edges, num_verts);
-      }
+      if (should_remesh_when_dbg())
+        for (int iter_edge_flip = 0; iter_edge_flip < num_edge_flip_iters; ++iter_edge_flip) {
+          append_subpass_flip_edges(opti_goal, iter_remesh, iter_edge_flip, num_edges, num_verts);
+          dbg_step++; 
+        }
     }
 
     append_subpass_fill_dispatched_args_remeshed_edges_(num_edges, false);
@@ -699,7 +716,8 @@ namespace blender::npr::strokegen
         sub.push_constant("pcs_split_iter_", iter_split); 
         sub.push_constant("pcs_remesh_edge_len_", remesh_edge_len); 
         sub.push_constant("pcs_edge_count_", num_edges); 
-        sub.push_constant("pcs_vert_count_", num_verts); 
+        sub.push_constant("pcs_vert_count_", num_verts);
+        sub.push_constant("pcs_dbg_split_fix_", meshing_params.dbg_split_fix); 
     };
 
     float remesh_len_scaled = meshing_params.remeshing_targ_edge_len / 100.0f; 

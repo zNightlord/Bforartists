@@ -124,13 +124,13 @@ bool is_back_face(float ndv)
 }
 
 #if defined(_KERNEL_MULTICOMPILE__GEOM_EXTRACT)
-/*    v0
- *   /  \
- *  /    \                
- * v1----v2             
- *  \    /                
- *   \  /                     
- *    v3    winding 012, 321                
+/*     v0
+ *    /  \
+ *   / f1 \ 
+ *  v1 -- v3 Winding:CCW
+ *   \ f0 / 
+ *    \  /    
+ *     v2                   
 */
 bool is_contour_edge(
 	vec3 v0, vec3 v1, vec3 v2, vec3 v3, vec3 cam_pos, 
@@ -141,8 +141,8 @@ bool is_contour_edge(
    	vec3 v12 = v2 - v1;
 	vec3 v13 = v3 - v1;
 
-	vec3 n0 = cross(v12, v10);
-	vec3 n3 = cross(v13, v12);
+	vec3 n0 = cross(v12, v13);
+	vec3 n3 = cross(v13, v10);
 
 	vec3 view_dir = cam_pos - v1; 
 
@@ -152,15 +152,6 @@ bool is_contour_edge(
 		/* !is_back_face(face_orient_012) && !is_back_face(face_orient_321);  */
 		is_back_face(face_orient_012) != is_back_face(face_orient_321); 
 		/* (sign(face_orient_012) != sign(face_orient_321)); */
-
-	/* convexity test */
-	vec3 p0 = v0; 
-	vec3 p1 = v1;
-	vec3 p10 = p0 - p1;
-	float p10_d_n3 = dot(normalize(p10), normalize(n3)); 
-	bool concave_edge = p10_d_n3 > .01f; 
-	/* Note: don't do this when linking contour edges */
-	/* if (concave_edge) is_contour = false; */ /* must be hidden */
 	
 	return is_contour; 
 }
@@ -200,7 +191,6 @@ void main()
 	uvec4 vids; 
 	for (uint i = 0; i < 4; ++i)
 		vids[i] = buf_ibo[4 * EdgeId + i]; 
-	vids = wing_verts_to_line_adj(vids); 
 	
 	vec3 v[4]; 
 	for (uint i = 0; i < 4; ++i)
@@ -234,6 +224,8 @@ void main()
 			is_contour = is_contour && (!valid_ve); 
 		if (pcs_edge_visualize_mode_ == 4)
 			is_contour = (ef.new_by_split) && (!ef.dupli); 
+		if (EdgeId > MAX_NUM_CONTOUR_EDGES)
+			is_contour = false; 
 
 		/* visualize selected edges */
 		if (pcs_edge_visualize_mode_ == 5)
@@ -254,9 +246,9 @@ void main()
 		buf_strokegen_mesh_pool[addr_p0+0] = floatBitsToUint(v[1].x); 
 		buf_strokegen_mesh_pool[addr_p0+1] = floatBitsToUint(v[1].y); 
 		buf_strokegen_mesh_pool[addr_p0+2] = floatBitsToUint(v[1].z); 
-		buf_strokegen_mesh_pool[addr_p1+0] = floatBitsToUint(v[2].x); 
-		buf_strokegen_mesh_pool[addr_p1+1] = floatBitsToUint(v[2].y); 
-		buf_strokegen_mesh_pool[addr_p1+2] = floatBitsToUint(v[2].z); 
+		buf_strokegen_mesh_pool[addr_p1+0] = floatBitsToUint(v[3].x); 
+		buf_strokegen_mesh_pool[addr_p1+1] = floatBitsToUint(v[3].y); 
+		buf_strokegen_mesh_pool[addr_p1+2] = floatBitsToUint(v[3].z); 
 		
 		PerContourWedgeInfo pcwi; 
 		pcwi.is_border = is_border; 

@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
+﻿/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /**
  * Shared structures, enums & defines between C++ and GLSL.
@@ -288,7 +288,7 @@ using namespace draw;
 
 
   /* Addressing - buf_strokegen_mesh_pool */
-#define MAX_NUM_CONTOUR_EDGES ((3940000)) /* ssbo buffer cannot be larger than 8192*8192*/
+#define MAX_NUM_CONTOUR_EDGES ((3900000)) /* ssbo buffer cannot be larger than 8192*8192*/
   /*x7*/
   static inline uint mesh_pool_addr__wpos_and_edgeid(uint contour_edge_id) 
   {
