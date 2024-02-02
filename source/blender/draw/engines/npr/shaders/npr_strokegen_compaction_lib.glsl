@@ -10,7 +10,7 @@
 
 
 /* Code gen Input: */
-/* #define COMPACTION_LIB_EXCLUDE --- wether use the default compaction code generator */
+/* #define COMPACTION_LIB_EXCLUDE_DEFAULT_CODEGEN --- wether use the default compaction code generator */
 /* #define GLOBAL_COUNTER XXX --- Global Compaction Counter, should be cleared to 0*/
 /* #define CP_TAG XXX --- Tag, defined in shader info for default code gen */
 #define DECL_LDS_DIGIT_PER_LANE(tag) \
@@ -109,7 +109,7 @@ uint CAT(compact_, tag)(bool val, uint groupIdx, uint multiplier = 1u)          
  * Default code generation, 
  * for those kernels only use one simple compaction op 
 */
-#if !defined(COMPACTION_LIB_EXCLUDE) 
+#if !defined(COMPACTION_LIB_EXCLUDE_DEFAULT_CODEGEN) 
 
 DECL_LDS_DIGIT_PER_LANE(CP_TAG)
 #define LDS_DIGIT_PER_LANE CAT(LDS_digit_per_lane_, CP_TAG)
@@ -164,11 +164,40 @@ DECL_LDS_HIST_BLK(CP_TAG)
 DECL_LDS_SCAN_BLOCK_OFFSET(CP_TAG)
 #define LDS_SCAN_BLOCK_OFFSET CAT(LDS_scan_block_offset_, CP_TAG) 
 
-DECL_COMPACTION_FUNC(CP_TAG, ssbo_bnpr_mesh_pool_counters_.num_dbg_vpdir_lines)
+DECL_COMPACTION_FUNC(CP_TAG, ssbo_bnpr_mesh_pool_counters_.num_dbg_lines)
 #undef CP_TAG
 #endif
 
 
+
+
+#if defined(_KERNEL_MULTICOMPILE__GEOM_EXTRACT)
+#define CP_TAG contour_edge
+DECL_LDS_DIGIT_PER_LANE(CP_TAG)
+#define LDS_DIGIT_PER_LANE CAT(LDS_digit_per_lane_, CP_TAG)
+DECL_LDS_OFFSET_PER_LANE_SLOT(CP_TAG)
+#define LDS_OFFSET_PER_LANE_SLOT CAT(LDS_digit_per_lane_, CP_TAG)
+DECL_LDS_HIST_BLK(CP_TAG)
+#define LDS_HIST_BLK CAT(LDS_hist_blk_, CP_TAG)
+DECL_LDS_SCAN_BLOCK_OFFSET(CP_TAG)
+#define LDS_SCAN_BLOCK_OFFSET CAT(LDS_scan_block_offset_, CP_TAG) 
+
+DECL_COMPACTION_FUNC(CP_TAG, ssbo_bnpr_mesh_pool_counters_.num_contour_edges)
+#undef CP_TAG
+
+#define CP_TAG dbg_edge
+DECL_LDS_DIGIT_PER_LANE(CP_TAG)
+#define LDS_DIGIT_PER_LANE CAT(LDS_digit_per_lane_, CP_TAG)
+DECL_LDS_OFFSET_PER_LANE_SLOT(CP_TAG)
+#define LDS_OFFSET_PER_LANE_SLOT CAT(LDS_digit_per_lane_, CP_TAG)
+DECL_LDS_HIST_BLK(CP_TAG)
+#define LDS_HIST_BLK CAT(LDS_hist_blk_, CP_TAG)
+DECL_LDS_SCAN_BLOCK_OFFSET(CP_TAG)
+#define LDS_SCAN_BLOCK_OFFSET CAT(LDS_scan_block_offset_, CP_TAG) 
+
+DECL_COMPACTION_FUNC(CP_TAG, ssbo_bnpr_mesh_pool_counters_.num_dbg_lines)
+#undef CP_TAG
+#endif
 
 
 

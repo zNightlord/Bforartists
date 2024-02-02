@@ -27,7 +27,7 @@ void main()
 		ssbo_bnpr_mesh_pool_counters_.num_filtered_edges = 0; 
 		ssbo_bnpr_mesh_pool_counters_.num_filtered_verts = 0; 
 		ssbo_bnpr_mesh_pool_counters_.num_dbg_vnor_lines = 0; 
-		ssbo_bnpr_mesh_pool_counters_.num_dbg_vpdir_lines = 0; 
+		ssbo_bnpr_mesh_pool_counters_.num_dbg_lines = 0; 
 
 		ssbo_bnpr_mesh_pool_counters_prev_.num_contour_edges = 0; 
 		ssbo_bnpr_mesh_pool_counters_prev_.num_verts         = 0; 
@@ -37,7 +37,7 @@ void main()
 		ssbo_bnpr_mesh_pool_counters_prev_.num_filtered_edges = 0; 
 		ssbo_bnpr_mesh_pool_counters_prev_.num_filtered_verts = 0; 
 		ssbo_bnpr_mesh_pool_counters_prev_.num_dbg_vnor_lines = 0; 
-		ssbo_bnpr_mesh_pool_counters_prev_.num_dbg_vpdir_lines = 0; 
+		ssbo_bnpr_mesh_pool_counters_prev_.num_dbg_lines = 0; 
 	}
 }
 #endif
@@ -87,7 +87,7 @@ void main()
 		ssbo_bnpr_mesh_pool_counters_prev_.num_filtered_edges = ssbo_bnpr_mesh_pool_counters_.num_filtered_edges; 
 		ssbo_bnpr_mesh_pool_counters_prev_.num_filtered_verts = ssbo_bnpr_mesh_pool_counters_.num_filtered_verts; 
 		ssbo_bnpr_mesh_pool_counters_prev_.num_dbg_vnor_lines = ssbo_bnpr_mesh_pool_counters_.num_dbg_vnor_lines;
-		ssbo_bnpr_mesh_pool_counters_prev_.num_dbg_vpdir_lines = ssbo_bnpr_mesh_pool_counters_.num_dbg_vpdir_lines;
+		ssbo_bnpr_mesh_pool_counters_prev_.num_dbg_lines = ssbo_bnpr_mesh_pool_counters_.num_dbg_lines;
 		
 	}
  }
@@ -207,6 +207,8 @@ void main()
 	is_contour = is_contour && (!ef.del_by_split) && (!ef.del_by_collapse) && (!ef.dupli); 
 	bool is_border = ef.border; 
 
+
+
 	/* debug view */
 	if (pcs_edge_visualize_mode_ > 0)
 	{
@@ -214,23 +216,36 @@ void main()
 		bool valid_ee, valid_ev, valid_ve;
 		validate_wedge_topo(EdgeId, /*out*/ valid_ee, valid_ev, valid_ve);  
 		
-		is_contour = (!ef.del_by_collapse) && (!ef.dupli) && (!ef.del_by_split); 
+		bool dbg_line = valid_thread && (!ef.del_by_collapse) && (!ef.dupli) && (!ef.del_by_split); 
 		/* visualize edges with invalid topology */
 		if (pcs_edge_visualize_mode_ == 1) 
-			is_contour = is_contour && (!valid_ee); 
+			dbg_line = dbg_line && (!valid_ee); 
 		if (pcs_edge_visualize_mode_ == 2) 
-			is_contour = is_contour && (!valid_ev); 
+			dbg_line = dbg_line && (!valid_ev); 
 		if (pcs_edge_visualize_mode_ == 3) 
-			is_contour = is_contour && (!valid_ve); 
+			dbg_line = dbg_line && (!valid_ve); 
 		if (pcs_edge_visualize_mode_ == 4)
-			is_contour = (ef.new_by_split) && (!ef.dupli); 
+			dbg_line = (ef.new_by_split) && (!ef.dupli); 
 		if (EdgeId > MAX_NUM_CONTOUR_EDGES)
-			is_contour = false; 
+			dbg_line = false; 
 
 		/* visualize selected edges */
 		if (pcs_edge_visualize_mode_ == 5)
-			is_contour = is_contour && ef.selected; 
+			dbg_line = dbg_line && ef.selected; 
+
+		uint dbg_line_idx = compact_dbg_edge(dbg_line, groupId); 
+		if (dbg_line)
+		{
+			uint base_addr = dbg_line_idx * 6; 
+			ssbo_dbg_lines_[base_addr+0] = floatBitsToUint(v[1].x); 
+			ssbo_dbg_lines_[base_addr+1] = floatBitsToUint(v[1].y); 
+			ssbo_dbg_lines_[base_addr+2] = floatBitsToUint(v[1].z); 
+			ssbo_dbg_lines_[base_addr+3] = floatBitsToUint(v[3].x); 
+			ssbo_dbg_lines_[base_addr+4] = floatBitsToUint(v[3].y); 
+			ssbo_dbg_lines_[base_addr+5] = floatBitsToUint(v[3].z); 
+		}
 	}
+
 
 	bool rev_edge_dir = is_back_face(face_orient_012); 
 	if (false == valid_thread) is_contour = false; 

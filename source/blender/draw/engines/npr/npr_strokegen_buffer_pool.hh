@@ -67,6 +67,7 @@ class GPUBufferPoolModule {
   // 64MB    736MB
   SSBO_StrokeGenMeshBufPerSelectedEdge<uint, 1> ssbo_selected_edge_to_edge_;    // 32MB    768MB
   SSBO_StrokeGenMeshBufPerSelectedVert<uint, 1> ssbo_selected_vert_to_vert_;    // 16MB    784MB
+  SSBO_StrokeGenMeshBufPerEdge<uint, 1> ssbo_dbg_lines_;                        // 256MB   MB
   SSBO_StrokeGenMeshBufPerContour<uint, 2> ssbo_contour_to_contour_;    // 
   SSBO_StrokeGenMeshBufPerContour<uint, 1> ssbo_contour_edge_rank_;     // 
   SSBO_StrokeGenMeshBufPerContour<uint, 1> ssbo_contour_edge_list_len_; // 
@@ -194,15 +195,6 @@ class GPUBufferPoolModule {
   {
     return ssbo_mesh_buffer_reuse_6_; 
   }
-
-
-
-  // Reused Buffers for debug primitives --------------------------
-  inline GPUStorageBuf *reused_ssbo_bnpr_dbg_geom_()
-  {
-    return ssbo_mesh_buffer_reuse_3_; 
-  }
-
 
 
   SSBO_BnprScanData       ssbo_in_scan_data_;

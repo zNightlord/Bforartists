@@ -125,7 +125,7 @@ GPU_SHADER_CREATE_INFO(npr_segloopconv1D_test_convolution)
 /** GPU Compaction --------------------
  */
 GPU_SHADER_CREATE_INFO(npr_compaction_off)
-    .define("COMPACTION_LIB_EXCLUDE", "1");
+    .define("COMPACTION_LIB_EXCLUDE_DEFAULT_CODEGEN", "1");
 
 /** GPU List Ranking --------------------
  */
@@ -152,11 +152,12 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_extract)
     .typedef_source("bnpr_shader_shared.hh")
     .typedef_source("draw_shader_shared.h")
     .define("_KERNEL_MULTICOMPILE__GEOM_EXTRACT", "1")
-    .define("GLOBAL_COUNTER", "ssbo_bnpr_mesh_pool_counters_.num_contour_edges")
     .define("DECODE_IBO_EXCLUDE",       "1") /* exclude ibo decode shader */
     .define("WINGED_EDGE_TOPO_INCLUDE", "1")
     .define("VERT_WEDGE_LIST_TOPO_INCLUDE", "1")
-    .define("CP_TAG", "contour_edge")
+    // .define("GLOBAL_COUNTER", "ssbo_bnpr_mesh_pool_counters_.num_contour_edges")
+    // .define("CP_TAG", "contour_edge")
+    .define("COMPACTION_LIB_EXCLUDE_DEFAULT_CODEGEN", "1")
     .define("EDGE_FLAGS_INCLUDED", "1")
     .define("TOPO_DIAGONOSIS_INCLUDE", "1")
     .storage_buf(0, Qualifier::READ, "uint", "buf_ibo[]")
@@ -171,6 +172,7 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_extract)
     .storage_buf(8, Qualifier::READ, "uint", "ssbo_edge_to_edges_[]")
     .storage_buf(9, Qualifier::READ, "uint", "ssbo_edge_to_vert_[]")
     .storage_buf(10, Qualifier::READ_WRITE, "uint", "ssbo_vert_to_edge_list_header_[]")
+    .storage_buf(11, Qualifier::WRITE, "uint", "ssbo_dbg_lines_[]")
     /* ---------------- */
     .uniform_buf(0, "ViewMatrices", "ubo_view_matrices_")
     .push_constant(Type::INT, "pcs_ib_fmt_u16")
@@ -549,7 +551,7 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_mesh_filtering_)
     .typedef_source("draw_shader_shared.h")
     .define("_KERNEL_MULTICOMPILE__MESH_FILTERING_", "1")
     .define("DECODE_IBO_EXCLUDE", "1") /* Remove ibo code */
-    .define("COMPACTION_LIB_EXCLUDE") /* Remove compaction code */
+    .define("COMPACTION_LIB_EXCLUDE_DEFAULT_CODEGEN") /* Remove compaction code */
     .define("WINGED_EDGE_TOPO_INCLUDE", "1")
     .define("VERT_WEDGE_LIST_TOPO_INCLUDE", "1")
     .define("QUADRICS_FILTERING_INCLUDE", "1")
@@ -644,7 +646,7 @@ GPU_SHADER_CREATE_INFO(strokegen_select_verts)
 GPU_SHADER_CREATE_INFO(strokegen_select_verts_from_selected_edges)
     .do_static_compilation(true)
     .additional_info("strokegen_select_verts")
-    .define("COMPACTION_LIB_EXCLUDE", "1")
+    .define("COMPACTION_LIB_EXCLUDE_DEFAULT_CODEGEN", "1")
     .define("_KERNEL_MULTICOMPILE__SELECT_VERTS__FROM_SELECTED_EDGES", "1")
     .define("_KERNEL_MULTICOMPILE__SELECT_VERTS__FROM_SELECTED_EDGES_MAIN", "1")
     .define("DYNAMESH_SELECTION_INDEXING_COMMON", "1")
@@ -654,7 +656,7 @@ GPU_SHADER_CREATE_INFO(strokegen_select_verts_from_selected_edges)
 GPU_SHADER_CREATE_INFO(strokegen_expand_verts_from_selected_edges)
     .do_static_compilation(true)
     .additional_info("strokegen_select_verts")
-    .define("COMPACTION_LIB_EXCLUDE", "1")
+    .define("COMPACTION_LIB_EXCLUDE_DEFAULT_CODEGEN", "1")
     .define("_KERNEL_MULTICOMPILE__SELECT_VERTS__FROM_SELECTED_EDGES", "1")
     .define("_KERNEL_MULTICOMPILE__EXPAND_VERTS__FROM_SELECTED_EDGES", "1")
     
@@ -761,10 +763,10 @@ GPU_SHADER_CREATE_INFO(strokegen_remeshing_fill_draw_args_dbg_vnor)
     .storage_buf(0, Qualifier::READ, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
     .storage_buf(1, Qualifier::WRITE, "DrawCommand", "ssbo_bnpr_vert_debug_draw_args_"); 
 
-GPU_SHADER_CREATE_INFO(strokegen_remeshing_fill_draw_args_dbg_vpdir)
+GPU_SHADER_CREATE_INFO(strokegen_remeshing_fill_draw_args_dbg_lines)
     .do_static_compilation(true)
     .additional_info("strokegen_remeshing_fill_draw_args")
-    .define("_KERNEL_MULTICOMPILE__FILL_DRAW_ARGS__REMESHING__DBG_VPDIR", "1")
+    .define("_KERNEL_MULTICOMPILE__FILL_DRAW_ARGS__REMESHING__DBG_LINES", "1")
     
     .storage_buf(0, Qualifier::READ, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
     .storage_buf(1, Qualifier::WRITE, "DrawCommand", "ssbo_bnpr_vert_debug_draw_args_"); 
@@ -814,7 +816,7 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_edge_split_init)
     .do_static_compilation(true)
     .additional_info("bnpr_meshing_edge_split")
     .define("_KERNEL_MULTICOMPILE__EDGE_SPLIT_INIT", "1")
-    .define("COMPACTION_LIB_EXCLUDE", "1"); 
+    .define("COMPACTION_LIB_EXCLUDE_DEFAULT_CODEGEN", "1"); 
 
 GPU_SHADER_CREATE_INFO(bnpr_meshing_edge_split_compact)
     .do_static_compilation(true)
@@ -836,7 +838,7 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_edge_split_execute)
     .additional_info("bnpr_meshing_edge_split")
     .define("_KERNEL_MULTICOMPILE__EDGE_SPLIT", "1")
     .define("_KERNEL_MULTICOMPILE__EDGE_SPLIT_EXECUTE", "1")
-    .define("COMPACTION_LIB_EXCLUDE", "1"); 
+    .define("COMPACTION_LIB_EXCLUDE_DEFAULT_CODEGEN", "1"); 
 /** \} */
 
 
@@ -885,7 +887,7 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_edge_collapse_init)
     .do_static_compilation(true)
     .additional_info("bnpr_meshing_edge_collapse")
     .define("_KERNEL_MULTICOMPILE__EDGE_COLLAPSE_INIT", "1")
-    .define("COMPACTION_LIB_EXCLUDE", "1"); 
+    .define("COMPACTION_LIB_EXCLUDE_DEFAULT_CODEGEN", "1"); 
 
 GPU_SHADER_CREATE_INFO(bnpr_meshing_edge_collapse_compact)
     .do_static_compilation(true)
@@ -899,28 +901,28 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_edge_collapse_resolve_conflict_0)
     .additional_info("bnpr_meshing_edge_collapse")
     .define("_KERNEL_MULTICOMPILE__EDGE_COLLAPSE", "1")
     .define("_KERNEL_MULTICOMPILE__EDGE_COLLAPSE_RESOLVE_CONFLICT__PASS_0", "1")
-    .define("COMPACTION_LIB_EXCLUDE", "1"); 
+    .define("COMPACTION_LIB_EXCLUDE_DEFAULT_CODEGEN", "1"); 
 
 GPU_SHADER_CREATE_INFO(bnpr_meshing_edge_collapse_resolve_conflict_1)
     .do_static_compilation(true)
     .additional_info("bnpr_meshing_edge_collapse")
     .define("_KERNEL_MULTICOMPILE__EDGE_COLLAPSE", "1")
     .define("_KERNEL_MULTICOMPILE__EDGE_COLLAPSE_RESOLVE_CONFLICT__PASS_1", "1")
-    .define("COMPACTION_LIB_EXCLUDE", "1"); 
+    .define("COMPACTION_LIB_EXCLUDE_DEFAULT_CODEGEN", "1"); 
 
 GPU_SHADER_CREATE_INFO(bnpr_meshing_edge_collapse_resolve_conflict_2)
     .do_static_compilation(true)
     .additional_info("bnpr_meshing_edge_collapse")
     .define("_KERNEL_MULTICOMPILE__EDGE_COLLAPSE", "1")
     .define("_KERNEL_MULTICOMPILE__EDGE_COLLAPSE_RESOLVE_CONFLICT__PASS_2", "1")
-    .define("COMPACTION_LIB_EXCLUDE", "1"); 
+    .define("COMPACTION_LIB_EXCLUDE_DEFAULT_CODEGEN", "1"); 
 
 GPU_SHADER_CREATE_INFO(bnpr_meshing_edge_collapse_execute)
     .do_static_compilation(true)
     .additional_info("bnpr_meshing_edge_collapse")
     .define("_KERNEL_MULTICOMPILE__EDGE_COLLAPSE", "1")
     .define("_KERNEL_MULTICOMPILE__EDGE_COLLAPSE_EXECUTE", "1")
-    .define("COMPACTION_LIB_EXCLUDE", "1"); 
+    .define("COMPACTION_LIB_EXCLUDE_DEFAULT_CODEGEN", "1"); 
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -965,7 +967,7 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_edge_flip_init)
     .do_static_compilation(true)
     .additional_info("bnpr_meshing_edge_flip")
     .define("_KERNEL_MULTICOMPILE__EDGE_FLIP_INIT", "1")
-    .define("COMPACTION_LIB_EXCLUDE", "1"); 
+    .define("COMPACTION_LIB_EXCLUDE_DEFAULT_CODEGEN", "1"); 
 
 GPU_SHADER_CREATE_INFO(bnpr_meshing_edge_flip_compact)
     .do_static_compilation(true)
@@ -979,21 +981,21 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_edge_flip_validate)
     .additional_info("bnpr_meshing_edge_flip")
     .define("_KERNEL_MULTICOMPILE__EDGE_FLIP", "1")
     .define("_KERNEL_MULTICOMPILE__EDGE_FLIP_VALIDATE", "1")
-    .define("COMPACTION_LIB_EXCLUDE", "1"); 
+    .define("COMPACTION_LIB_EXCLUDE_DEFAULT_CODEGEN", "1"); 
 
 GPU_SHADER_CREATE_INFO(bnpr_meshing_edge_flip_resolve_conflict)
     .do_static_compilation(true)
     .additional_info("bnpr_meshing_edge_flip")
     .define("_KERNEL_MULTICOMPILE__EDGE_FLIP", "1")
     .define("_KERNEL_MULTICOMPILE__EDGE_FLIP_RESOLVE_CONFLICT", "1")
-    .define("COMPACTION_LIB_EXCLUDE", "1"); 
+    .define("COMPACTION_LIB_EXCLUDE_DEFAULT_CODEGEN", "1"); 
 
 GPU_SHADER_CREATE_INFO(bnpr_meshing_edge_flip_execute)
     .do_static_compilation(true)
     .additional_info("bnpr_meshing_edge_flip")
     .define("_KERNEL_MULTICOMPILE__EDGE_FLIP", "1")
     .define("_KERNEL_MULTICOMPILE__EDGE_FLIP_EXECUTE", "1")
-    .define("COMPACTION_LIB_EXCLUDE", "1"); 
+    .define("COMPACTION_LIB_EXCLUDE_DEFAULT_CODEGEN", "1"); 
 /** \} */
 
 
@@ -1042,7 +1044,7 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_analysis_order_0_vert_attrs)
     .do_static_compilation(true)
     .additional_info("bnpr_geom_analysis")
     .define("_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_0", "1")
-    .define("COMPACTION_LIB_EXCLUDE", "1");
+    .define("COMPACTION_LIB_EXCLUDE_DEFAULT_CODEGEN", "1");
 GPU_SHADER_CREATE_INFO(bnpr_geom_analysis_order_0_vert_normal)
     .do_static_compilation(true)
     .additional_info("bnpr_geom_analysis_order_0_vert_attrs")
@@ -1065,7 +1067,7 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_analysis_order_1)
     .define("_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1", "1")
     .define("INCLUDE_VERTEX_NORMAL", "1")
     .define("INCLUDE_VERTEX_VORONOI_AREA", "1")
-    .define("COMPACTION_LIB_EXCLUDE", "1")
+    .define("COMPACTION_LIB_EXCLUDE_DEFAULT_CODEGEN", "1")
     .storage_buf(NUM_SSBO_BASE + 0u, Qualifier::READ_WRITE, "uint", "ssbo_vnor_[]")
     .storage_buf(NUM_SSBO_BASE + 1u, Qualifier::READ_WRITE, "uint", "ssbo_varea_[]");
 #define NUM_SSBO_1 ((NUM_SSBO_BASE + 2u))
@@ -1116,7 +1118,7 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_draw_debug_lines)
     .typedef_source("bnpr_shader_shared.hh")
     .additional_info("draw_modelmat_new", "draw_view", "draw_resource_handle_new")
     
-    .storage_buf(0, Qualifier::READ, "uint", "ssbo_debug_lines_[]")
+    .storage_buf(0, Qualifier::READ, "uint", "ssbo_dbg_lines_[]")
     .uniform_buf(0, "ViewMatrices", "ubo_view_matrices_")
 
     .vertex_source("npr_strokegen_debug_lines_vert.glsl")

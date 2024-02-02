@@ -80,7 +80,7 @@ namespace blender::npr::strokegen
     meshing_params.edge_visualize_mode = (int)(scene_eval->npr.npr_test_val_6 + 1e-10f);
     //
     pass_draw_contour_edges.draw_settings.draw_hidden_lines = scene_eval->npr.npr_test_val_7 > .5f;
-    // pass_draw_debug_lines_.draw_settings.draw_hidden_lines = false; 
+    pass_draw_debug_lines_.draw_settings.draw_hidden_lines = scene_eval->npr.npr_test_val_7 > .5f; 
     //
     meshing_params.positiion_regularization_scale = scene_eval->npr.npr_test_val_8;
     
@@ -120,7 +120,11 @@ namespace blender::npr::strokegen
     pass_extract_geom.init();
     boostrap_before_extract_first_batch = true;
 
-    surf_dbg_ctx = {false, true, 1.0f, 1.0f, buffers_.ssbo_mesh_buffer_reuse_4_ }; 
+    surf_dbg_ctx.dbg_vert_normal = false;
+    surf_dbg_ctx.dbg_vert_curv = false;
+    surf_dbg_ctx.dbg_lines = true; 
+    surf_dbg_ctx.dbg_line_length = 1.0f;
+    surf_dbg_ctx.dbg_curv_K_val = 1.0f;
   }
 
   /**
@@ -985,7 +989,7 @@ namespace blender::npr::strokegen
       sub.bind_ssbo(7,  buffers_.ssbo_vert_flags_); 
       sub.bind_ssbo(8, buffers_.ssbo_vbo_full_);
       sub.bind_ssbo(9, DRW_manager_get()->matrix_buf.current());
-      sub.bind_ssbo(10, dbg_options.ssbo_dbg_lines_); 
+      sub.bind_ssbo(10, buffers_.ssbo_dbg_lines_); 
       ssbo_offset_base = 11;
 
       sub.bind_ubo(0, buffers_.ubo_view_matrices_cache_); 
@@ -1058,7 +1062,6 @@ namespace blender::npr::strokegen
   {
     if (dbg_ctx.dbg_vert_normal) {
       {
-        assert(dbg_ctx.ssbo_dbg_lines_ != nullptr); 
         auto &sub = pass_draw_debug_lines_.sub("fill_draw_args_debug_lines_vnor_");
 
         sub.shader_set(shaders_.static_shader_get(FILL_DRAW_ARGS_VERT_NORMAL));
@@ -1073,12 +1076,11 @@ namespace blender::npr::strokegen
       pass_draw_debug_lines_.append_draw_dbg_lines_subpass(shaders_, buffers_, dbg_ctx);
     }
 
-    if (dbg_ctx.dbg_vert_curv) {
+    if (dbg_ctx.dbg_lines) {
       {
-        assert(dbg_ctx.ssbo_dbg_lines_ != nullptr); 
-        auto &sub = pass_draw_debug_lines_.sub("fill_draw_args_debug_lines_vpdirs_");
+        auto &sub = pass_draw_debug_lines_.sub("fill_draw_args_debug_lines_");
 
-        sub.shader_set(shaders_.static_shader_get(FILL_DRAW_ARGS_VERT_PDIRS));
+        sub.shader_set(shaders_.static_shader_get(FILL_DRAW_ARGS_DBG_LINES));
 
         sub.bind_ssbo(0, buffers_.ssbo_bnpr_mesh_pool_counters_);
         sub.bind_ssbo(1, buffers_.ssbo_bnpr_vert_debug_draw_args_);
@@ -1120,7 +1122,8 @@ namespace blender::npr::strokegen
     // for debugging 
     sub.bind_ssbo(8, buffers_.ssbo_edge_to_edges_);
     sub.bind_ssbo(9, buffers_.ssbo_edge_to_vert_);
-    sub.bind_ssbo(10, buffers_.ssbo_vert_to_edge_list_header_); 
+    sub.bind_ssbo(10, buffers_.ssbo_vert_to_edge_list_header_);
+    sub.bind_ssbo(11, buffers_.ssbo_dbg_lines_); 
     // --------------
     sub.bind_ubo(0, buffers_.ubo_view_matrices_cache_);
     sub.push_constant("pcs_ib_fmt_u16", ib_type == gpu::GPU_INDEX_U16 ? 1 : 0);

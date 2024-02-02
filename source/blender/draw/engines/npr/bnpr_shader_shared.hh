@@ -228,7 +228,7 @@ using namespace draw;
     uint num_filtered_edges;
     uint num_filtered_verts;
     uint num_dbg_vnor_lines;  // 4
-    uint num_dbg_vpdir_lines;  
+    uint num_dbg_lines;  
     uint pad_0;  
     uint pad_1;  
     uint pad_2;  // 4

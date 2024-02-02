@@ -273,15 +273,12 @@ void main()
         );
 
         /* except border edges */
-        if (pcs_dbg_split_fix_ > 0)
-        {
-            EdgeFlags ef_w0 = load_edge_flags(w[0].wedge_id); 
-            EdgeFlags ef_w1 = load_edge_flags(w[1].wedge_id); 
-            EdgeFlags ef_w2 = load_edge_flags(w[2].wedge_id); 
-            EdgeFlags ef_w3 = load_edge_flags(w[3].wedge_id); 
-            if (any(bvec4(ef_w0.border, ef_w1.border, ef_w2.border, ef_w3.border))) 
-                psei_curr.is_split_ok = false; 
-        }
+        EdgeFlags ef_w0 = load_edge_flags(w[0].wedge_id); 
+        EdgeFlags ef_w1 = load_edge_flags(w[1].wedge_id); 
+        EdgeFlags ef_w2 = load_edge_flags(w[2].wedge_id); 
+        EdgeFlags ef_w3 = load_edge_flags(w[3].wedge_id); 
+        if (any(bvec4(ef_w0.border, ef_w1.border, ef_w2.border, ef_w3.border))) 
+            psei_curr.is_split_ok = false; 
     }
 
     /* Compaction */

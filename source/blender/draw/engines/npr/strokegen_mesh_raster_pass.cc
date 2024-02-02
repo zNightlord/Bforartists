@@ -71,7 +71,7 @@ void npr::strokegen::StrokegenMeshRasterPass::append_draw_dbg_lines_subpass(
   draw::PassMain::Sub *subpass = &sub("draw debug lines");
   subpass->shader_set(shaders.static_shader_get(eShaderType::INDIRECT_DRAW_DBG_LINES));
 
-  subpass->bind_ssbo(0, dbg_ctx.ssbo_dbg_lines_);
+  subpass->bind_ssbo(0, buffers.ssbo_dbg_lines_);
   subpass->bind_ubo(0, buffers.ubo_view_matrices_);
 
   subpass->barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);

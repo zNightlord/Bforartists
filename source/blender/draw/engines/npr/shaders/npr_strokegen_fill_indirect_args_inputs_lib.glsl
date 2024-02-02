@@ -174,8 +174,8 @@ void GetDrawArgs(out DrawCommand draw_args)
 #if defined(_KERNEL_MULTICOMPILE__FILL_DRAW_ARGS__REMESHING__DBG_VNOR)
     draw_args.vertex_len  = ssbo_bnpr_mesh_pool_counters_.num_dbg_vnor_lines * 2;
 #endif
-#if defined(_KERNEL_MULTICOMPILE__FILL_DRAW_ARGS__REMESHING__DBG_VPDIR)
-    draw_args.vertex_len  = ssbo_bnpr_mesh_pool_counters_.num_dbg_vpdir_lines * 2;
+#if defined(_KERNEL_MULTICOMPILE__FILL_DRAW_ARGS__REMESHING__DBG_LINES)
+    draw_args.vertex_len  = ssbo_bnpr_mesh_pool_counters_.num_dbg_lines * 2;
 #endif
     draw_args.instance_len 	= 1;  		/*#instances*/
     draw_args.vertex_first 	= 0;  		/*ibo offset*/
