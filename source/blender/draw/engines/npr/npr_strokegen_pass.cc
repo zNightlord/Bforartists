@@ -232,11 +232,12 @@ namespace blender::npr::strokegen
     for (int iter_remesh = 0; iter_remesh < meshing_params.remeshing_iters; ++iter_remesh)
     {
       int num_edge_split_iters = meshing_params.remeshing_split_iters;
-      if (should_remesh_when_dbg())
         for (int iter_edge_split = 0; iter_edge_split < num_edge_split_iters; ++iter_edge_split) {
-          append_subpass_fill_dispatched_args_remeshed_edges_(num_edges, true);
-          append_subpass_split_edges(iter_remesh, iter_edge_split, num_edges, num_verts);
-          dbg_step++; 
+          if (should_remesh_when_dbg()) {
+            append_subpass_fill_dispatched_args_remeshed_edges_(num_edges, true);
+            append_subpass_split_edges(iter_remesh, iter_edge_split, num_edges, num_verts);
+            dbg_step++;   
+          }
         }
       // update elem counters after split
       append_subpass_fill_dispatched_args_remeshed_edges_(num_edges, true); 
@@ -244,26 +245,29 @@ namespace blender::npr::strokegen
 
       EdgeFlipOptiGoal opti_goal = Delaunay;
       int num_edge_flip_iters = meshing_params.remeshing_delaunay_flip_iters;
-      if (should_remesh_when_dbg())
         for (int iter_edge_flip = 0; iter_edge_flip < num_edge_flip_iters; ++iter_edge_flip) {
-          append_subpass_flip_edges(opti_goal, iter_remesh, iter_edge_flip, num_edges, num_verts);
-          dbg_step++; 
+          if (should_remesh_when_dbg()) {
+            append_subpass_flip_edges(opti_goal, iter_remesh, iter_edge_flip, num_edges, num_verts);
+            dbg_step++; 
+          }
         }
 
       int num_edge_collapse_iters = meshing_params.remeshing_collapse_iters;
-      if (should_remesh_when_dbg())
         for (int iter_edge_collapse = 0; iter_edge_collapse < num_edge_collapse_iters;
              ++iter_edge_collapse) {
-          append_subpass_collapse_edges(iter_remesh, iter_edge_collapse, num_edges, num_verts);
-          dbg_step++; 
+          if (should_remesh_when_dbg()) {
+              append_subpass_collapse_edges(iter_remesh, iter_edge_collapse, num_edges, num_verts);
+              dbg_step++;   
+          }
         }
 
       opti_goal = Valence; 
       num_edge_flip_iters = meshing_params.remeshing_flip_iters;
-      if (should_remesh_when_dbg())
         for (int iter_edge_flip = 0; iter_edge_flip < num_edge_flip_iters; ++iter_edge_flip) {
-          append_subpass_flip_edges(opti_goal, iter_remesh, iter_edge_flip, num_edges, num_verts);
-          dbg_step++; 
+          if (should_remesh_when_dbg()) {
+              append_subpass_flip_edges(opti_goal, iter_remesh, iter_edge_flip, num_edges, num_verts);
+              dbg_step++; 
+          }
         }
     }
 
@@ -569,14 +573,13 @@ namespace blender::npr::strokegen
       sub.bind_ssbo(3, buffers_.ssbo_edge_to_vert_);
       sub.bind_ssbo(4, buffers_.ssbo_edge_to_edges_);
       sub.bind_ssbo(5, buffers_.ssbo_vert_to_edge_list_header_);
-      sub.bind_ssbo(6, reused_ssbo_wedge_flooding_pointers_out_);
-      sub.bind_ssbo(7, buffers_.ssbo_vbo_full_);
-      sub.bind_ssbo(8, buffers_.ssbo_bnpr_mesh_pool_counters_);
-      sub.bind_ssbo(9, buffers_.ssbo_edge_flags_);
-      sub.bind_ssbo(10, buffers_.ssbo_dyn_mesh_counters_[0]);
-      sub.bind_ssbo(11, buffers_.ssbo_dyn_mesh_counters_[1]);
-      sub.bind_ssbo(12, buffers_.ssbo_edge_split_counters_);
-      sub.bind_ssbo(13, buffers_.ssbo_bnpr_vert_debug_draw_args_); 
+      sub.bind_ssbo(6, buffers_.ssbo_vbo_full_);
+      sub.bind_ssbo(7, buffers_.ssbo_bnpr_mesh_pool_counters_);
+      sub.bind_ssbo(8, buffers_.ssbo_edge_flags_);
+      sub.bind_ssbo(9, buffers_.ssbo_dyn_mesh_counters_[0]);
+      sub.bind_ssbo(10, buffers_.ssbo_dyn_mesh_counters_[1]);
+      sub.bind_ssbo(11, buffers_.ssbo_edge_split_counters_);
+      sub.bind_ssbo(12, buffers_.ssbo_bnpr_vert_debug_draw_args_); 
       sub.bind_ubo(0, buffers_.ubo_view_matrices_cache_); 
       sub.push_constant("pcs_hash_map_size_", hashmap_size);
       sub.push_constant("pcs_edge_count_", num_edges_in);
@@ -648,7 +651,7 @@ namespace blender::npr::strokegen
                         (options.compact_edges && options.output_edge_to_selected) ? 1 : 0);
     };
 
-    const int num_flooding_iters = meshing_params.num_edge_flooding_iters * 2;
+    const int num_flooding_iters = meshing_params.num_edge_flooding_iters + 1/* +1 init pass */;
     // Must be even number !!!
     int flooding_iter = 0;
     for (; flooding_iter < num_flooding_iters; ++flooding_iter) {
@@ -704,8 +707,8 @@ namespace blender::npr::strokegen
   {
     auto bind_src = [&](
       draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub, float remesh_edge_len) {
-        sub.bind_ssbo(0, buffers_.ssbo_dyn_mesh_counters_[0]); // in
-        sub.bind_ssbo(1, buffers_.ssbo_dyn_mesh_counters_[1]); // out
+        sub.bind_ssbo(0, buffers_.ssbo_dyn_mesh_counters_in_()); // in
+        sub.bind_ssbo(1, buffers_.ssbo_dyn_mesh_counters_out_()); // out
         sub.bind_ssbo(2, buffers_.ssbo_edge_split_counters_);
         sub.bind_ssbo(3, buffers_.ssbo_vbo_full_);
         sub.bind_ssbo(4, buffers_.ssbo_edge_to_vert_);
@@ -931,12 +934,15 @@ namespace blender::npr::strokegen
   {
     auto &sub = pass_extract_geom.sub("strokegen_remeshing_fill_dispatch_args_per_remeshed_edge");
     sub.shader_set(shaders_.static_shader_get(FILL_DISPATCH_ARGS_REMESHED_EDGES));
+
     sub.bind_ssbo(0, buffers_.ssbo_dyn_mesh_counters_out_());
     sub.bind_ssbo(1, buffers_.ssbo_bnpr_mesh_pool_counters_);
     sub.bind_ssbo(2, buffers_.ssbo_indirect_dispatch_args_per_remeshed_edges_); 
+
     sub.push_constant("pcs_edge_count_", num_static_edges);
     sub.push_constant("pcs_only_selected_elems_", only_selected_edges ? 1 : 0); 
     sub.push_constant("pcs_remeshed_edges_dispatch_group_size_", (int)GROUP_SIZE_STROKEGEN_GEOM_EXTRACT);
+
     sub.dispatch(int3(1, 1, 1));
     sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE); 
   }
@@ -1073,7 +1079,7 @@ namespace blender::npr::strokegen
         sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_COMMAND);
       }
 
-      pass_draw_debug_lines_.append_draw_dbg_lines_subpass(shaders_, buffers_, dbg_ctx);
+      pass_draw_debug_lines_.append_draw_dbg_lines_subpass(shaders_, buffers_);
     }
 
     if (dbg_ctx.dbg_lines) {
@@ -1089,7 +1095,7 @@ namespace blender::npr::strokegen
         sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_COMMAND);
       }
 
-      pass_draw_debug_lines_.append_draw_dbg_lines_subpass(shaders_, buffers_, dbg_ctx);
+      pass_draw_debug_lines_.append_draw_dbg_lines_subpass(shaders_, buffers_);
     }
   }
 

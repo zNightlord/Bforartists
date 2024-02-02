@@ -32,7 +32,11 @@ class GPUBufferPoolModule {
   SSBO_StrokeGenMeshPoolCounters ssbo_bnpr_mesh_pool_counters_prev_; // keep counters from last mesh extraction iter
 
   SSBO_StrokeGenDynamicMeshCounters ssbo_dyn_mesh_counters_[2];
-  inline GPUStorageBuf *ssbo_dyn_mesh_counters_in_() { return ssbo_dyn_mesh_counters_[0]; }
+
+  inline GPUStorageBuf *ssbo_dyn_mesh_counters_in_()
+  {
+    return ssbo_dyn_mesh_counters_[0];
+  }
   inline GPUStorageBuf *ssbo_dyn_mesh_counters_out_() { return ssbo_dyn_mesh_counters_[1]; }
   SSBO_StrokeGenEdgeSplitCounters ssbo_edge_split_counters_;
   SSBO_StrokeGenEdgeCollapseCounters ssbo_edge_collapse_counters_;

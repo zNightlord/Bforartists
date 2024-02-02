@@ -65,8 +65,7 @@ void npr::strokegen::StrokegenMeshRasterPass::append_draw_contour_subpass(
 
 void npr::strokegen::StrokegenMeshRasterPass::append_draw_dbg_lines_subpass(
     npr::strokegen::StrokeGenShaderModule& shaders,
-    npr::strokegen::GPUBufferPoolModule& buffers,
-    const npr::strokegen::SurfaceDebugContext& dbg_ctx)
+    npr::strokegen::GPUBufferPoolModule& buffers)
 {
   draw::PassMain::Sub *subpass = &sub("draw debug lines");
   subpass->shader_set(shaders.static_shader_get(eShaderType::INDIRECT_DRAW_DBG_LINES));

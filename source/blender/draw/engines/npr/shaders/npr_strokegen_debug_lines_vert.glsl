@@ -2,6 +2,30 @@
 #pragma BLENDER_REQUIRE(common_view_lib.glsl)
 #pragma BLENDER_REQUIRE(npr_strokegen_load_store_lib.glsl)
 
+/* https://www.shadertoy.com/view/7tlXR4 */
+vec3 hash32(vec2 p) 
+{
+	vec3 p3 = fract(vec3(p.xyx) * vec3(.1031, .1030, .0973));
+    p3 += dot(p3, p3.yxz+33.33);
+    return fract((p3.xxy+p3.yzz)*p3.zyx);
+}
+vec3 hsl2rgb(vec3 c)
+{
+    vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
+    vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
+    return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
+}
+vec3 rand_col_rgb(uint seed0, uint seed1)
+{
+    vec3 rnd = hash32(vec2(float(seed0 * 17), float(seed1 * 33))); 
+
+    float hue = rnd.x;
+    float saturation = 0.6 + rnd.z*0.4;
+    float luminosity  = 0.6 + rnd.y*0.4;
+
+    return hsl2rgb(vec3(hue, saturation, luminosity)); 
+}
+
 void main()
 {
     uint vid = gl_VertexID;
@@ -24,7 +48,8 @@ void main()
     // gl_Position.z -= 2.0e-5 * pos_hclip.w;
 
 
-    color = vec4(0, 1, 0, 1);
+    color.rgb = rand_col_rgb(line_id, line_id * 7u);
+    color.a = 1.0f; 
 
     // if ((line_id % 2u) == 0u) 
     //     color = vec4(0, 1, 0, 1);

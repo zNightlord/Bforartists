@@ -225,7 +225,7 @@ void main()
 		if (pcs_edge_visualize_mode_ == 3) 
 			dbg_line = dbg_line && (!valid_ve); 
 		if (pcs_edge_visualize_mode_ == 4)
-			dbg_line = (ef.new_by_split) && (!ef.dupli); 
+			dbg_line = dbg_line && (ef.new_by_split) && (!ef.dupli); 
 		if (EdgeId > MAX_NUM_CONTOUR_EDGES)
 			dbg_line = false; 
 

@@ -452,6 +452,14 @@ void main()
 
         ssbo_edge_split_counters_[0].num_split_edges_pass_1 = 0u;
         ssbo_edge_split_counters_[0].num_split_edges = 0u; 
+        ssbo_edge_split_counters_[1].num_split_edges_pass_1 = 0u;
+        ssbo_edge_split_counters_[1].num_split_edges = 0u; 
+        // ssbo_edge_split_counters_[2].num_split_edges_pass_1 = 0u;
+        // ssbo_edge_split_counters_[2].num_split_edges = 0u; 
+        // ssbo_edge_split_counters_[3].num_split_edges_pass_1 = 0u;
+        // ssbo_edge_split_counters_[3].num_split_edges = 0u; 
+        // ssbo_edge_split_counters_[4].num_split_edges_pass_1 = 0u;
+        // ssbo_edge_split_counters_[4].num_split_edges = 0u; 
 
         ssbo_bnpr_vert_debug_draw_args_.vertex_len = 0u; 
         ssbo_bnpr_vert_debug_draw_args_.instance_len = 1u;

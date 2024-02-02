@@ -70,7 +70,7 @@ void main()
     const uint groupId = gl_LocalInvocationID.x; 
 	const uint idx = gl_GlobalInvocationID.x; 
     /* Do not use EdgeID here since it's offseted with current mesh batch */
-    bool valid_thread = (idx.x < get_edge_count()); 
+    bool valid_thread = (idx.x < pcs_edge_count_); 
     const uint EdgeID = idx.x; 
 
     WedgeFloodingPointer wfptr; 

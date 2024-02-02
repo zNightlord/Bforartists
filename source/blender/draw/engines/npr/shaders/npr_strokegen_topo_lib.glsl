@@ -459,7 +459,9 @@ void get_wedge_id_from_selected_edge(uint sel_edge_id, out uint wedge_id, out bo
             ssbo_selected_edge_to_edge_[sel_edge_id]
         ); 
         wedge_id = eseli.edge_id;
+        valid_thread = valid_thread && (!eseli.is_null_edge);
     }
+    valid_thread = valid_thread && (wedge_id < (num_static_edges + num_dyn_edges));
 }
 #endif
 

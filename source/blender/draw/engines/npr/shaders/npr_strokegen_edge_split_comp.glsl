@@ -310,10 +310,10 @@ void main()
         ssbo_edge_split_counters_[pcs_split_iter_ + 1].num_split_edges = 0u; 
     }
 
-    /* Early Exists */
+    /* Early Exits */
     if (!valid_thread)
         return;
-    if (valid_thread && !psei_curr.is_split_ok)
+    if (!psei_curr.is_split_ok)
     {
         update_edge_flags__revert_split(psei_curr.id); 
         return; 
@@ -469,8 +469,7 @@ void main()
 
     /* Store new vert pos */ 
     vec3 split_pos = (ld_vpos(v1) + ld_vpos(v3)) / 2.0f; 
-    if (valid_thread)
-        st_vpos(v4, split_pos); 
+    st_vpos(v4, split_pos); 
 
     /* Store new vert states */
     VertFlags vf = init_vert_flags__new_split_edge(); 
