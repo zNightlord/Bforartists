@@ -241,16 +241,20 @@ void main()
             ssbo_edge_to_vert_[wedge_id*4u + iverts[1]]
         );
 
-        uint sel_slot = pcs_vertex_selection_slot_; 
-        update_vert_flags_selected(verts.x, sel_slot); 
-        update_vert_flags_selected(verts.y, sel_slot); 
+        ivec4 sel_slot = ivec4(pcs_vertex_selection_slots_ + 1e-10f);
+        for (uint i = 0; i < 4; ++i) 
+            if (0 <= sel_slot[i] && sel_slot[i] < 4){
+                uint si = sel_slot[i]; 
+                update_vert_flags_selected(verts.x, si); 
+                update_vert_flags_selected(verts.y, si); 
+            } 
     #endif
 
     #if defined(_KERNEL_MULTICOMPILE__EXPAND_VERTS__FROM_SELECTED_EDGES)
         /* Expand selection to any vertex adjacent to a selected edge */
         uint wedge_id = gl_GlobalInvocationID.x; 
         uint num_all_edges = get_edge_count(); 
-        uint sel_slot = pcs_vertex_selection_slot_; 
+        ivec4 sel_slot = ivec4(pcs_vertex_selection_slots_ + 1e-10f); 
 
         bool valid_thread = (wedge_id < num_all_edges);
         if (!valid_thread) return;
@@ -266,10 +270,14 @@ void main()
         };
 
         /* don't care about race condition, just make sure its selected */
-        if (vfs[0].selected[sel_slot] && !vfs[1].selected[sel_slot])
-            update_vert_flags_selected(verts[1], sel_slot);
-        if (vfs[1].selected[sel_slot] && !vfs[0].selected[sel_slot])
-            update_vert_flags_selected(verts[0], sel_slot);
+        for (uint i = 0; i < 4; ++i) 
+            if (0 <= sel_slot[i] && sel_slot[i] < 4){
+                uint si = sel_slot[i];
+                if (vfs[0].selected[si] && !vfs[1].selected[si])
+                    update_vert_flags_selected(verts[1], si);
+                if (vfs[1].selected[si] && !vfs[0].selected[si])
+                    update_vert_flags_selected(verts[0], si);
+            }
     #endif
 #endif /*_KERNEL_MULTICOMPILE__SELECT_VERTS__FROM_SELECTED_EDGES*/
 
@@ -281,16 +289,25 @@ void main()
     uint num_all_verts = get_vert_count();
     bool valid_thread = (vert_id < num_all_verts);
     
-    VertFlags vf = load_vert_flags(vert_id); 
-    uvec4 active_slots = uvec4(pcs_vertex_selected_slots_.xyzw + (1e-10f).xxxx) % 4u; 
-    bvec4 slot_slected = bvec4(
-        vf.selected[active_slots[0]], 
-        vf.selected[active_slots[1]], 
-        vf.selected[active_slots[2]], 
-        vf.selected[active_slots[3]]
-    ); 
+    bool select_all_true = (0 < pcs_vertex_select_all_slots_); 
 
-    bool selected = (0 < pcs_vertex_select_all_slots_) ? all(slot_slected) : any(slot_slected); 
+    VertFlags vf = load_vert_flags(vert_id); 
+
+    bool selected = false;
+    ivec4 active_slots = ivec4(pcs_vertex_selection_slots_ + 1e-10f); 
+    for (uint i = 0u; i < 4u; ++i) 
+        if (0 <= active_slots[i] && active_slots[i] < 4)
+        {
+            bool sel = vf.selected[active_slots[i]]; 
+            if (select_all_true && !sel) {
+                selected = false; 
+                break; 
+            }
+            if ((!select_all_true) && sel) {
+                selected = true; 
+                break; 
+            }
+        }
     selected = selected && valid_thread; 
 
     uint compacted_idx = compact_selected_vert(selected, groupId); 

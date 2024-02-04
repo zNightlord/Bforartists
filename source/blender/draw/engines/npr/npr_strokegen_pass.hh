@@ -25,9 +25,11 @@ namespace blender::npr::strokegen {
 class Instance;
 
 struct SurfaceDebugContext {
+  bool dbg_lines; 
   bool dbg_vert_normal;
   bool dbg_vert_curv;
-  bool dbg_lines; 
+  bool dbg_edges; 
+
   float dbg_line_length;
   float dbg_curv_K_val;
 };
@@ -146,8 +148,6 @@ public:
    bool compact_edges;
    bool output_selected_to_edge; // has effect only when .compact_edges==true
    bool output_edge_to_selected; // has effect only when .compact_edges==true
-
-   bool select_verts;
   };
   void append_subpass_diffuse_edge_selection(int num_edges, int num_verts, EdgeFloodingOptions options);
 
@@ -157,9 +157,9 @@ public:
     ViewTangentPlane = 2,
     ViewBinormalPlane = 3
   };
-  struct GPUMeshFilteringParameters {
+  struct GPURemeshingParameters {
     int num_filtering_iters; // deprecate
-    int num_remesh_dbg_iters;
+    int max_num_remesh_dbg_iters;
      
     int num_diffusion_iters; // deprecate
     float quadric_deviation; // deprecate
@@ -183,11 +183,19 @@ public:
 
   } meshing_params;
   void append_subpass_fill_selected_mesh_elems_indirect_dispatch_args_();
-  void append_subpass_quadric_mesh_filtering(int num_edges, int num_verts, GPUMeshFilteringParameters &params);
+  void append_subpass_quadric_mesh_filtering(int num_edges, int num_verts, GPURemeshingParameters &params);
 
 
   // ---------------------------------------------------------------------------
-  void append_subpass_select_verts_from_selected_edges(bool exanded_select, bool compaction, int num_edges, int num_verts); 
+  struct SelectVertsFromEdgesContext {
+    int4 active_selection_slots; // each vertex has 4 selection flag/slots, -1 if non-active
+
+    bool expand_selection; // expand selection to any vertex connected to selected edge
+
+    bool compact_verts; // output indexing table for verts selected in active slots
+    bool compact_all_slots_selected; // compact when all slots are selected
+  };
+  void append_subpass_select_verts_from_selected_edges(SelectVertsFromEdgesContext ctx, int num_edges, int num_verts); 
   
 
   // ---------------------------------------------------------------------------
@@ -203,7 +211,7 @@ public:
   void append_subpass_collapse_edges(int iter_remesh, int iter_collapse, int num_edges, int num_verts);
   void append_subpass_flip_edges(EdgeFlipOptiGoal opti_goal, int iter_remesh, int iter_flip, int num_edges, int num_verts);
   void append_subpass_fill_dispatched_args_remeshed_edges_(int num_static_edges, bool only_selected_edges);
-  void append_subpass_fill_dispatched_args_remeshed_verts_(int num_static_verts); 
+  void append_subpass_fill_dispatched_args_remeshed_verts_(int num_static_verts, bool only_selected_elems_); 
 
 
 

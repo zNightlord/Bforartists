@@ -9,7 +9,7 @@
 .define("WINGED_EDGE_TOPO_INCLUDE", "1")
 .define("VERT_WEDGE_LIST_TOPO_INCLUDE", "1")
 .define("VE_CIRCULATOR_INCLUDE", "1")
-.define("DYNAMESH_SELECTION_INDEXING_COMMON", "1")
+.define("USE_DYNAMESH_EDGE_SELECTION_INDEXING", "1")
 .define("INCLUDE_VERTEX_GEOM", "1")
 
 int pcs_rsc_handle
@@ -238,9 +238,9 @@ void main()
     // if (0 < pcs_output_dbg_geom_)
     // {
     //     VertFlags vf = decode_vert_flags(ssbo_vert_flags_[vert_id]); 
-       
+        
     //     bool dbg_vtx_nor = (!vf.dupli) && valid_thread; 
-    //     uint dbg_prim_id = compact_normal_line(dbg_vtx_nor, groupIdx);
+    //     uint dbg_line_id = compact_normal_line(dbg_vtx_nor, groupIdx);
         
     //     if (dbg_vtx_nor)
     //     {
@@ -248,9 +248,9 @@ void main()
     //         vec4 vpos_ws_1 = vec4(ctx.vpos + vnormal * pcs_dbg_geom_scale_ * .05f, 1.0f);
 
     //         uvec3 vpos_enc = floatBitsToUint(vpos_ws_0.xyz); 
-    //         Store3(ssbo_dbg_lines_, dbg_prim_id*6u, vpos_enc);
+    //         Store3(ssbo_dbg_lines_, dbg_line_id*6u, vpos_enc);
     //         vpos_enc = floatBitsToUint(vpos_ws_1.xyz); 
-    //         Store3(ssbo_dbg_lines_, dbg_prim_id*6u + 3u, vpos_enc); 
+    //         Store3(ssbo_dbg_lines_, dbg_line_id*6u + 3u, vpos_enc); 
     //     }
     // }
 #endif
@@ -1031,43 +1031,43 @@ void main()
         // debug lines
         if (0 < pcs_output_dbg_geom_)
         {
-            // VertFlags vf = decode_vert_flags(ssbo_vert_flags_[vert_id]); 
-            // bool dbg_vtx_curv = (!vf.dupli) && (!vf.del_by_collapse) && valid_thread; 
-            // uint dbg_prim_id = compact_pdir_lines(dbg_vtx_curv, groupIdx, 3u);
+            VertFlags vf = decode_vert_flags(ssbo_vert_flags_[vert_id]); 
+            bool dbg_vtx_curv = (!vf.dupli) && (!vf.del_by_collapse) && valid_thread; 
+            uint dbg_prim_id = compact_pdir_lines(dbg_vtx_curv, groupIdx, 3u);
 
-            // vec3 cam_pos_ws = ubo_view_matrices_.viewinv[3].xyz; /* see "#define cameraPos ViewMatrixInverse[3].xyz" */
-            // vec3 dndv_dp = ctx.curv_tensor * (vpos - cam_pos_ws); 
+            vec3 cam_pos_ws = ubo_view_matrices_.viewinv[3].xyz; /* see "#define cameraPos ViewMatrixInverse[3].xyz" */
+            vec3 dndv_dp = ctx.curv_tensor * (vpos - cam_pos_ws); 
 
-            // if (dbg_vtx_curv)
-            // {
-            //     float dbg_line_len = min(ctx.ave_edge_len * .4f, pcs_dbg_geom_scale_ * .12f);
+            if (dbg_vtx_curv)
+            {
+                float dbg_line_len = min(ctx.ave_edge_len * .4f, pcs_dbg_geom_scale_ * .12f);
 
-            //     vec4 vpos_ws_00 = vec4(vpos - normalize(pdir0) * dbg_line_len, 1.0f);
-            //     vec4 vpos_ws_01 = vec4(vpos + normalize(pdir0) * dbg_line_len, 1.0f);
+                vec4 vpos_ws_00 = vec4(vpos - normalize(pdir0) * dbg_line_len, 1.0f);
+                vec4 vpos_ws_01 = vec4(vpos + normalize(pdir0) * dbg_line_len, 1.0f);
 
-            //     uvec3 vpos_enc = floatBitsToUint(vpos_ws_00.xyz); 
-            //     Store3(ssbo_dbg_lines_, dbg_prim_id*6u,      vpos_enc);
-            //     vpos_enc = floatBitsToUint(vpos_ws_01.xyz); 
-            //     Store3(ssbo_dbg_lines_, dbg_prim_id*6u + 3u, vpos_enc); 
+                uvec3 vpos_enc = floatBitsToUint(vpos_ws_00.xyz); 
+                Store3(ssbo_dbg_lines_, dbg_prim_id*6u,      vpos_enc);
+                vpos_enc = floatBitsToUint(vpos_ws_01.xyz); 
+                Store3(ssbo_dbg_lines_, dbg_prim_id*6u + 3u, vpos_enc); 
 
-            //     vec4 vpos_ws_10 = vec4(vpos - normalize(pdir1) * dbg_line_len, 1.0f);
-            //     vec4 vpos_ws_11 = vec4(vpos + normalize(pdir1) * dbg_line_len, 1.0f);
+                vec4 vpos_ws_10 = vec4(vpos - normalize(pdir1) * dbg_line_len, 1.0f);
+                vec4 vpos_ws_11 = vec4(vpos + normalize(pdir1) * dbg_line_len, 1.0f);
                 
-            //     vpos_enc = floatBitsToUint(vpos_ws_10.xyz); 
-            //     Store3(ssbo_dbg_lines_, dbg_prim_id*6u + 6u, vpos_enc);
-            //     vpos_enc = floatBitsToUint(vpos_ws_11.xyz); 
-            //     Store3(ssbo_dbg_lines_, dbg_prim_id*6u + 9u, vpos_enc); 
+                vpos_enc = floatBitsToUint(vpos_ws_10.xyz); 
+                Store3(ssbo_dbg_lines_, dbg_prim_id*6u + 6u, vpos_enc);
+                vpos_enc = floatBitsToUint(vpos_ws_11.xyz); 
+                Store3(ssbo_dbg_lines_, dbg_prim_id*6u + 9u, vpos_enc); 
 
-            //     // dbg_line_len = pcs_dbg_geom_scale_ * .1f * max(abs(evals[0]), abs(evals[1]));
-            //     dbg_line_len = ctx.ave_edge_len /* * max(abs(dot(normalize(pdir0), vnor_gt)), abs(dot(normalize(pdir1), vnor_gt))) */;
-            //     vec4 vpos_ws_20 = vec4(vpos, 1.0f);
-            //     vec4 vpos_ws_21 = vec4(vpos + normalize(vnor) * dbg_line_len, 1.0f);
+                // dbg_line_len = pcs_dbg_geom_scale_ * .1f * max(abs(evals[0]), abs(evals[1]));
+                dbg_line_len = ctx.ave_edge_len /* * max(abs(dot(normalize(pdir0), vnor_gt)), abs(dot(normalize(pdir1), vnor_gt))) */;
+                vec4 vpos_ws_20 = vec4(vpos, 1.0f);
+                vec4 vpos_ws_21 = vec4(vpos + normalize(vnor) * dbg_line_len, 1.0f);
 
-            //     vpos_enc = floatBitsToUint(vpos_ws_20.xyz);
-            //     Store3(ssbo_dbg_lines_, dbg_prim_id*6u + 12u, vpos_enc);
-            //     vpos_enc = floatBitsToUint(vpos_ws_21.xyz);
-            //     Store3(ssbo_dbg_lines_, dbg_prim_id*6u + 15u, vpos_enc);
-            // }
+                vpos_enc = floatBitsToUint(vpos_ws_20.xyz);
+                Store3(ssbo_dbg_lines_, dbg_prim_id*6u + 12u, vpos_enc);
+                vpos_enc = floatBitsToUint(vpos_ws_21.xyz);
+                Store3(ssbo_dbg_lines_, dbg_prim_id*6u + 15u, vpos_enc);
+            }
         }
     #endif
 

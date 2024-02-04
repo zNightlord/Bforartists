@@ -69,28 +69,35 @@ namespace blender::npr::strokegen
     // fetch ui inputs
     const DRWContextState *draw_ctx = DRW_context_state_get();
     const Scene *scene_eval = DEG_get_evaluated_scene(draw_ctx->depsgraph);
-    meshing_params.num_filtering_iters = 2 * (scene_eval->npr.npr_test_val_0);
-    meshing_params.num_remesh_dbg_iters = scene_eval->npr.npr_test_val_0;
-
-    meshing_params.num_diffusion_iters = 2 * (scene_eval->npr.npr_test_val_1);
-
+    // deprecated
+    meshing_params.num_filtering_iters = 2 * (scene_eval->npr.npr_test_val_0); 
+    meshing_params.num_diffusion_iters = 2 * (scene_eval->npr.npr_test_val_1); 
     meshing_params.quadric_deviation = scene_eval->npr.npr_test_val_2;
-
-    meshing_params.geodist_deviation = scene_eval->npr.npr_test_val_3; 
-    meshing_params.seconds_sync_view_mat = (int)(scene_eval->npr.npr_test_val_3 + 1e-10f); 
-
-    meshing_params.alternate_filter_0 = (GPUMeshQuadricFilter)((int)(scene_eval->npr.npr_test_val_4 + 1e-10f)); 
+    meshing_params.geodist_deviation = scene_eval->npr.npr_test_val_3;
+    meshing_params.alternate_filter_0 = (GPUMeshQuadricFilter)((int)(scene_eval->npr.npr_test_val_4 + 1e-10f));
     meshing_params.alternate_filter_1 = (GPUMeshQuadricFilter)((int)(scene_eval->npr.npr_test_val_5 + 1e-10f));
-    meshing_params.edge_visualize_mode = (int)(scene_eval->npr.npr_test_val_6 + 1e-10f);
-    //
-    pass_draw_contour_edges.draw_settings.draw_hidden_lines = scene_eval->npr.npr_test_val_7 > .5f;
-    pass_draw_debug_lines_.draw_settings.draw_hidden_lines = scene_eval->npr.npr_test_val_7 > .5f; 
-    //
     meshing_params.positiion_regularization_scale = scene_eval->npr.npr_test_val_8;
-    
     meshing_params.use_normal_filtering = scene_eval->npr.npr_test_val_9 > 0.5f;
     meshing_params.num_normal_filtering_iters = 2 * std::max(1, (int)(scene_eval->npr.npr_test_val_10));
+    // -----------
 
+    meshing_params.max_num_remesh_dbg_iters = 100000; // scene_eval->npr.npr_test_val_0;
+
+    surf_dbg_ctx.dbg_lines = (0 < scene_eval->npr.npr_test_val_1);
+    surf_dbg_ctx.dbg_vert_normal = (1 == scene_eval->npr.npr_test_val_1); 
+    surf_dbg_ctx.dbg_vert_curv   = (2 == scene_eval->npr.npr_test_val_1);
+    surf_dbg_ctx.dbg_edges = (3 == scene_eval->npr.npr_test_val_1);
+
+    meshing_params.edge_visualize_mode = -1;
+    if (surf_dbg_ctx.dbg_edges) {
+      meshing_params.edge_visualize_mode = (int)(scene_eval->npr.npr_test_val_2 + 1e-10f); 
+    }
+
+    meshing_params.seconds_sync_view_mat = (int)(scene_eval->npr.npr_test_val_3 + 1e-10f); 
+
+    pass_draw_contour_edges.draw_settings.draw_hidden_lines = scene_eval->npr.npr_test_val_7 > .5f;
+    pass_draw_debug_lines_.draw_settings.draw_hidden_lines = scene_eval->npr.npr_test_val_7 > .5f; 
+    
     meshing_params.num_edge_flooding_iters = (int)(scene_eval->npr.npr_test_val_11 + 1e-10f);
 
     meshing_params.remeshing_targ_edge_len = scene_eval->npr.npr_test_val_12;
@@ -124,9 +131,6 @@ namespace blender::npr::strokegen
     pass_extract_geom.init();
     boostrap_before_extract_first_batch = true;
 
-    surf_dbg_ctx.dbg_vert_normal = false;
-    surf_dbg_ctx.dbg_vert_curv = false;
-    surf_dbg_ctx.dbg_lines = true; 
     surf_dbg_ctx.dbg_line_length = 1.0f;
     surf_dbg_ctx.dbg_curv_K_val = 1.0f;
   }
@@ -205,32 +209,27 @@ namespace blender::npr::strokegen
 
     // Mesh Filtering -----------------------------------------------------------
     EdgeFloodingOptions flooding_options;
-    // flooding_options.compact_edges = true;
-    // flooding_options.output_selected_to_edge = true;
-    // flooding_options.output_edge_to_selected = true;
-    // flooding_options.select_verts = true;
-    // append_subpass_diffuse_edge_selection(num_edges, num_verts, flooding_options);
-    //
-    // append_subpass_fill_selected_mesh_elems_indirect_dispatch_args_();
-    // append_subpass_quadric_mesh_filtering(num_edges, num_verts, meshing_params);
-
-
-    // Remeshing --------------------------------------------------------------------------------
     flooding_options.compact_edges = true;
     flooding_options.output_selected_to_edge = true;
     flooding_options.output_edge_to_selected = false;
-    flooding_options.select_verts = false;
     append_subpass_diffuse_edge_selection(num_edges, num_verts, flooding_options);
     append_subpass_fill_selected_mesh_elems_indirect_dispatch_args_(); 
-
     append_subpass_fill_dispatched_args_remeshed_edges_(num_edges, true);
-    append_subpass_fill_dispatched_args_remeshed_verts_(num_verts); 
-    append_subpass_select_verts_from_selected_edges(true, true, num_edges, num_verts); 
+
+    append_subpass_fill_dispatched_args_remeshed_verts_(num_verts, false);
+    SelectVertsFromEdgesContext vtx_sel_ctx;
+    vtx_sel_ctx.active_selection_slots = {0, -1, -1, -1};
+    vtx_sel_ctx.expand_selection = true;
+    vtx_sel_ctx.compact_verts = true;
+    vtx_sel_ctx.compact_all_slots_selected = false; 
+    append_subpass_select_verts_from_selected_edges(vtx_sel_ctx, num_edges, num_verts); 
+    append_subpass_fill_dispatched_args_remeshed_verts_(num_verts, false);
+
 
     int dbg_step = 0;
     bool step_dbg_remesh = true;
     auto should_remesh_when_dbg = [&]() {
-      return ((!step_dbg_remesh) || (dbg_step < meshing_params.num_remesh_dbg_iters));
+      return ((!step_dbg_remesh) || (dbg_step < meshing_params.max_num_remesh_dbg_iters));
     }; 
 
     for (int iter_remesh = 0; iter_remesh < meshing_params.remeshing_iters; ++iter_remesh)
@@ -245,7 +244,7 @@ namespace blender::npr::strokegen
         }
       // update elem counters after split
       append_subpass_fill_dispatched_args_remeshed_edges_(num_edges, true); 
-      append_subpass_fill_dispatched_args_remeshed_verts_(num_verts); 
+      append_subpass_fill_dispatched_args_remeshed_verts_(num_verts, false); 
 
       EdgeFlipOptiGoal opti_goal = Delaunay;
       int num_edge_flip_iters = meshing_params.remeshing_delaunay_flip_iters;
@@ -276,7 +275,7 @@ namespace blender::npr::strokegen
     }
 
     append_subpass_fill_dispatched_args_remeshed_edges_(num_edges, false);
-    append_subpass_fill_dispatched_args_remeshed_verts_(num_verts);
+    append_subpass_fill_dispatched_args_remeshed_verts_(num_verts, false);
     // Test surface analysis
     SurfaceAnalysisContext surf_analysis_ctx;
     surf_analysis_ctx.set_calc_vert_normal(true);
@@ -314,7 +313,7 @@ namespace blender::npr::strokegen
 
   void StrokeGenPassModule::append_subpass_quadric_mesh_filtering(int num_edges,
                                                                   int num_verts,
-                                                                  GPUMeshFilteringParameters& params
+                                                                  GPURemeshingParameters& params
   )
   {
     auto bind_rsc = [&](
@@ -422,33 +421,34 @@ namespace blender::npr::strokegen
   }
 
   void StrokeGenPassModule::append_subpass_select_verts_from_selected_edges(
-      bool exanded_select, bool compaction, int num_edges, int num_verts)
+      SelectVertsFromEdgesContext ctx, int num_edges, int num_verts)
   {
     auto bind_rsc = [&](draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub) {
       sub.bind_ssbo(0, buffers_.ssbo_edge_to_edges_);            
       sub.bind_ssbo(1, buffers_.ssbo_edge_to_vert_);             
-      sub.bind_ssbo(2, buffers_.ssbo_vert_to_edge_list_header_); 
+      sub.bind_ssbo(2, buffers_.ssbo_vert_to_edge_list_header_);
       sub.bind_ssbo(3, buffers_.ssbo_edge_flags_);               
       sub.bind_ssbo(4, buffers_.ssbo_vert_flags_);               
       sub.bind_ssbo(5, buffers_.ssbo_selected_edge_to_edge_);
       sub.bind_ssbo(6, buffers_.ssbo_selected_vert_to_vert_);
-      sub.bind_ssbo(7, buffers_.ssbo_vbo_full_);    
-      sub.bind_ssbo(8, buffers_.ssbo_bnpr_mesh_pool_counters_);  
+      sub.bind_ssbo(7, buffers_.ssbo_vbo_full_);
+      sub.bind_ssbo(8, buffers_.ssbo_bnpr_mesh_pool_counters_);
       sub.bind_ssbo(9, buffers_.ssbo_dyn_mesh_counters_out_());
 
       sub.push_constant("pcs_vert_count_", num_verts);
-      sub.push_constant("pcs_edge_count_", num_edges); 
+      sub.push_constant("pcs_edge_count_", num_edges);
+      sub.push_constant("pcs_vertex_selection_slots_", ctx.active_selection_slots); 
     }; 
      
     {
       auto &sub = pass_extract_geom.sub("strokegen_select_verts_from_selected_edges");
       sub.shader_set(shaders_.static_shader_get(MESH_SELECT_VERTS_FROM_SELECTED_EDGES));
-      bind_rsc(sub); 
+      bind_rsc(sub);
       sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_filtered_edge_); 
       sub.barrier(GPU_BARRIER_SHADER_STORAGE); 
     }
 
-    if (exanded_select) {
+    if (ctx.expand_selection) {
       auto &sub = pass_extract_geom.sub("strokegen_expand_verts_from_selected_edges");
       sub.shader_set(shaders_.static_shader_get(MESH_EXPAND_VERTS_FROM_SELECTED_EDGES));
       bind_rsc(sub);
@@ -456,10 +456,13 @@ namespace blender::npr::strokegen
       sub.barrier(GPU_BARRIER_SHADER_STORAGE); 
     }
 
-    if (compaction) {
+    if (ctx.compact_verts) {
       auto &sub = pass_extract_geom.sub("strokegen_compact_selected_verts");
       sub.shader_set(shaders_.static_shader_get(MESH_COMPACT_SELECTED_VERTS));
+
       bind_rsc(sub);
+      sub.push_constant("pcs_vertex_select_all_slots_", ctx.compact_all_slots_selected ? 1 : 0); 
+
       sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_verts_);
       sub.barrier(GPU_BARRIER_SHADER_STORAGE); 
     }
@@ -950,15 +953,17 @@ namespace blender::npr::strokegen
     sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE); 
   }
 
-  void StrokeGenPassModule::append_subpass_fill_dispatched_args_remeshed_verts_(int num_static_verts)
+  void StrokeGenPassModule::append_subpass_fill_dispatched_args_remeshed_verts_(
+      int num_static_verts, bool only_selected_elems_)
   {
     auto &sub = pass_extract_geom.sub("strokegen_remeshing_fill_dispatch_args_per_remeshed_vert");
     sub.shader_set(shaders_.static_shader_get(FILL_DISPATCH_ARGS_REMESHED_VERTS));
     sub.bind_ssbo(0, buffers_.ssbo_dyn_mesh_counters_out_());
-    sub.bind_ssbo(1, buffers_.ssbo_indirect_dispatch_args_per_remeshed_verts_);
+    sub.bind_ssbo(1, buffers_.ssbo_bnpr_mesh_pool_counters_);
+    sub.bind_ssbo(2, buffers_.ssbo_indirect_dispatch_args_per_remeshed_verts_);
     sub.push_constant("pcs_vert_count_", num_static_verts);
-    sub.push_constant("pcs_remeshed_verts_dispatch_group_size_",
-                      (int)GROUP_SIZE_STROKEGEN_GEOM_EXTRACT);
+    sub.push_constant("pcs_only_selected_elems_", only_selected_elems_ ? 1 : 0); 
+    sub.push_constant("pcs_remeshed_verts_dispatch_group_size_", (int)GROUP_SIZE_STROKEGEN_GEOM_EXTRACT);
     sub.dispatch(int3(1, 1, 1));
     sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE); 
   }
@@ -1085,7 +1090,7 @@ namespace blender::npr::strokegen
       pass_draw_debug_lines_.append_draw_dbg_lines_subpass(shaders_, buffers_);
     }
 
-    if (dbg_ctx.dbg_lines) {
+    if (dbg_ctx.dbg_vert_curv || dbg_ctx.dbg_edges) {
       {
         auto &sub = pass_draw_debug_lines_.sub("fill_draw_args_debug_lines_");
 

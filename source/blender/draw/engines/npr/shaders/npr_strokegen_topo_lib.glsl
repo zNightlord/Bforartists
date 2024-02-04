@@ -440,7 +440,7 @@ VertSelectionInfo decode_vert_selection_info(uint data)
 
 
 /* Indexing for selection for dynaremesh */
-#if defined(DYNAMESH_SELECTION_INDEXING_COMMON)
+#if defined(USE_DYNAMESH_EDGE_SELECTION_INDEXING)
 /* Note: DO NOT use wedge_id==0 to do any that must be done by one thread! like initialization or counter-zero-out */
 void get_wedge_id_from_selected_edge(uint sel_edge_id, out uint wedge_id, out bool valid_thread)
 {
@@ -464,6 +464,29 @@ void get_wedge_id_from_selected_edge(uint sel_edge_id, out uint wedge_id, out bo
 }
 #endif
 
+
+#if defined(USE_DYNAMESH_VERT_SELECTION_INDEXING)
+void get_vert_id_from_selected_vert(uint sel_vert_id, out uint vert_id, out bool valid_thread)
+{
+    uint num_dyn_verts = ssbo_dyn_mesh_counters_out_.num_verts; 
+    uint num_static_verts = pcs_vert_count_;
+
+    uint num_presel_verts  = ssbo_bnpr_mesh_pool_counters_.num_filtered_verts;
+    uint num_all_sel_verts = num_presel_verts + num_dyn_verts; /* all dyn verts are selected */
+    valid_thread = (sel_vert_id < num_all_sel_verts); 
+
+    bool is_dyn_vert = (num_presel_verts <= sel_vert_id) && valid_thread; 
+    if (is_dyn_vert)
+    {
+        vert_id = num_static_verts + (sel_vert_id - num_presel_verts); 
+    }else{
+        EdgeSelectionInfo eseli = decode_vert_selection_info(
+            ssbo_selected_vert_to_vert_[sel_vert_id]
+        ); 
+        vert_id = eseli.vert_id;
+    }
+}
+#endif
 
 
 

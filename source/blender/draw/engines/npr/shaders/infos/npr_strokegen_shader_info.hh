@@ -648,9 +648,9 @@ GPU_SHADER_CREATE_INFO(strokegen_select_verts_from_selected_edges)
     .define("COMPACTION_LIB_EXCLUDE_DEFAULT_CODEGEN", "1")
     .define("_KERNEL_MULTICOMPILE__SELECT_VERTS__FROM_SELECTED_EDGES", "1")
     .define("_KERNEL_MULTICOMPILE__SELECT_VERTS__FROM_SELECTED_EDGES_MAIN", "1")
-    .define("DYNAMESH_SELECTION_INDEXING_COMMON", "1")
+    .define("USE_DYNAMESH_EDGE_SELECTION_INDEXING", "1")
     
-    .push_constant(Type::INT, "pcs_vertex_selection_slot_");
+    .push_constant(Type::IVEC4, "pcs_vertex_selection_slots_");
 
 GPU_SHADER_CREATE_INFO(strokegen_expand_verts_from_selected_edges)
     .do_static_compilation(true)
@@ -659,7 +659,7 @@ GPU_SHADER_CREATE_INFO(strokegen_expand_verts_from_selected_edges)
     .define("_KERNEL_MULTICOMPILE__SELECT_VERTS__FROM_SELECTED_EDGES", "1")
     .define("_KERNEL_MULTICOMPILE__EXPAND_VERTS__FROM_SELECTED_EDGES", "1")
     
-    .push_constant(Type::INT, "pcs_vertex_selection_slot_");
+    .push_constant(Type::IVEC4, "pcs_vertex_selection_slots_");
 
 GPU_SHADER_CREATE_INFO(strokegen_compact_selected_verts)
     .do_static_compilation(true)
@@ -669,7 +669,7 @@ GPU_SHADER_CREATE_INFO(strokegen_compact_selected_verts)
     .define("GLOBAL_COUNTER", "ssbo_bnpr_mesh_pool_counters_.num_filtered_verts")
     .define("CP_TAG", "selected_vert")
 
-    .push_constant(Type::VEC4, "pcs_vertex_selected_slots_")
+    .push_constant(Type::VEC4, "pcs_vertex_selection_slots_")
     .push_constant(Type::INT, "pcs_vertex_select_all_slots_"); 
 
 
@@ -735,8 +735,10 @@ GPU_SHADER_CREATE_INFO(strokegen_remeshing_fill_dispatch_args_per_remeshed_vert)
     .define("_KERNEL_MULTICOMPILE__FILL_DISPATCH_ARGS_PER_REMESHED_VERT", "1")
     
     .storage_buf(0, Qualifier::READ, "SSBOData_StrokeGenDynamicMeshCounters", "ssbo_dyn_mesh_counters_")
-    .storage_buf(1, Qualifier::WRITE, "DispatchCommand", "ssbo_indirect_dispatch_args_per_remeshed_verts_")
+    .storage_buf(1, Qualifier::READ, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
+    .storage_buf(2, Qualifier::WRITE, "DispatchCommand", "ssbo_indirect_dispatch_args_per_remeshed_verts_")
     .push_constant(Type::INT, "pcs_vert_count_")
+    .push_constant(Type::INT, "pcs_only_selected_elems_")
     .push_constant(Type::INT, "pcs_remeshed_verts_dispatch_group_size_"); 
 
 /** \} */
@@ -786,7 +788,7 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_edge_split)
     .define("VERT_WEDGE_LIST_TOPO_INCLUDE", "1")
     .define("VERT_FLAGS_INCLUDED", "1")
     .define("EDGE_FLAGS_INCLUDED", "1")
-    .define("DYNAMESH_SELECTION_INDEXING_COMMON", "1")
+    .define("USE_DYNAMESH_EDGE_SELECTION_INDEXING", "1")
 
     .storage_buf(0, Qualifier::READ_WRITE, "SSBOData_StrokeGenDynamicMeshCounters", "ssbo_dyn_mesh_counters_in_")
     .storage_buf(1, Qualifier::READ_WRITE, "SSBOData_StrokeGenDynamicMeshCounters", "ssbo_dyn_mesh_counters_out_")
@@ -856,7 +858,7 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_edge_collapse)
     .define("VERT_FLAGS_INCLUDED", "1")
     .define("EDGE_FLAGS_INCLUDED", "1")
     .define("VE_CIRCULATOR_INCLUDE", "1")
-    .define("DYNAMESH_SELECTION_INDEXING_COMMON", "1")
+    .define("USE_DYNAMESH_EDGE_SELECTION_INDEXING", "1")
 
     .storage_buf(0, Qualifier::READ_WRITE, "SSBOData_StrokeGenDynamicMeshCounters", "ssbo_dyn_mesh_counters_in_")
     .storage_buf(1, Qualifier::READ_WRITE, "SSBOData_StrokeGenDynamicMeshCounters", "ssbo_dyn_mesh_counters_out_")
@@ -937,7 +939,7 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_edge_flip)
     .define("VERT_WEDGE_LIST_TOPO_INCLUDE", "1")
     .define("EDGE_FLAGS_INCLUDED", "1")
     .define("VE_CIRCULATOR_INCLUDE", "1")
-    .define("DYNAMESH_SELECTION_INDEXING_COMMON", "1")
+    .define("USE_DYNAMESH_EDGE_SELECTION_INDEXING", "1")
 
     .storage_buf(0, Qualifier::READ_WRITE, "SSBOData_StrokeGenDynamicMeshCounters", "ssbo_dyn_mesh_counters_in_")
     .storage_buf(1, Qualifier::READ_WRITE, "SSBOData_StrokeGenDynamicMeshCounters", "ssbo_dyn_mesh_counters_out_")
@@ -1010,7 +1012,7 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_analysis)
     .define("VERT_WEDGE_LIST_TOPO_INCLUDE", "1")
     .define("VERT_FLAGS_INCLUDED", "1")
     .define("VE_CIRCULATOR_INCLUDE", "1")
-    .define("DYNAMESH_SELECTION_INDEXING_COMMON", "1")
+    .define("USE_DYNAMESH_EDGE_SELECTION_INDEXING", "1")
     .define("INCLUDE_VERTEX_POSITION", "1")
 
     .storage_buf(0, Qualifier::READ_WRITE, "SSBOData_StrokeGenDynamicMeshCounters", "ssbo_dyn_mesh_counters_out_")

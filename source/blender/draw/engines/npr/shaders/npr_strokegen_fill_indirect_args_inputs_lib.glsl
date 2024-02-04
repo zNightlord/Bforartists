@@ -120,7 +120,9 @@ void GetDispatchArgs(out uvec3 dispatch_args)
     dispatch_args.x = compute_num_groups(num_work_items, pcs_remeshed_edges_dispatch_group_size_);
 #endif
 #if defined(_KERNEL_MULTICOMPILE__FILL_DISPATCH_ARGS_PER_REMESHED_VERT)
-    num_work_items = pcs_vert_count_ + ssbo_dyn_mesh_counters_.num_verts;
+    uint num_verts_dynamesh = ssbo_dyn_mesh_counters_.num_verts; 
+    uint num_verts_static = (0 < pcs_only_selected_elems_) ? ssbo_bnpr_mesh_pool_counters_.num_filtered_verts : pcs_vert_count_; 
+    num_work_items = num_verts_static + num_verts_dynamesh;
     dispatch_args.x = compute_num_groups(num_work_items, pcs_remeshed_verts_dispatch_group_size_);
 #endif
     dispatch_args.y = 1;
