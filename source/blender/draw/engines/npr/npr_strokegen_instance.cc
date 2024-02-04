@@ -85,8 +85,9 @@ namespace blender::npr::strokegen
     strokegen_passes.test_scan = false; 
 
     /* First setup resources */
+    int refresh_rate = std::max(1, strokegen_passes.meshing_params.seconds_sync_view_mat * 24); 
     strokegen_buffers.on_begin_sync(
-      drw_view, strokegen_passes.test_list_ranking, (frame_counter % 1024u) == 0u/*true*/
+      drw_view, strokegen_passes.test_list_ranking, (frame_counter % refresh_rate) == 0u/*true*/
     );
     strokegen_textures.on_begin_sync(tex_prepass_depth); 
 

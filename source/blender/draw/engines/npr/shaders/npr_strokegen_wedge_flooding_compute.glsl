@@ -168,12 +168,15 @@ void main()
 
     /* flooding logic for the last iteration ---------------------------------------- */
     #if defined(_KERNEL_MULTICOMPILE__WEDGE_FLOODING__ITER__LAST_ITER)
+        EdgeFlags ef = load_edge_flags(EdgeID); 
+        
+        wfptr.is_seed = wfptr.is_seed && (!ef.dupli); 
         bool is_seed_edge = wfptr.is_seed && valid_thread; 
 
         #if defined(_KERNEL_MULTICOMPILE__WEDGE_FLOODING__ITER__LAST_ITER__OUTPUT_FLAGS) || defined(_KERNEL_MULTICOMPILE__WEDGE_FLOODING__ITER__LAST_ITER__OUTPUT_CAMPACTION)
             /* Mark as selected */
-            EdgeFlags ef = load_edge_flags(EdgeID); 
             ef.selected = is_seed_edge; 
+            ef.temp_dbg_draw_edge = false; 
             if (valid_thread)
                 store_edge_flags(EdgeID, ef);
         #endif
@@ -229,7 +232,7 @@ void main()
         uint wedge_id; bool valid_thread; 
         get_wedge_id_from_selected_edge(sel_edge_id, /*out*/wedge_id, /*out*/valid_thread);
 
-        if (sel_edge_id == 0u) ssbo_bnpr_mesh_pool_counters_.num_filtered_verts = 0u; 
+        if (gl_GlobalInvocationID.x == 0u) ssbo_bnpr_mesh_pool_counters_.num_filtered_verts = 0u; 
         if (!valid_thread) return; 
 
         uvec2 iverts = mark__cwedge_to_verts(0u); 

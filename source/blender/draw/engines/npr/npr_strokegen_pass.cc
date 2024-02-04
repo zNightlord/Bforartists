@@ -71,10 +71,14 @@ namespace blender::npr::strokegen
     const Scene *scene_eval = DEG_get_evaluated_scene(draw_ctx->depsgraph);
     meshing_params.num_filtering_iters = 2 * (scene_eval->npr.npr_test_val_0);
     meshing_params.num_remesh_dbg_iters = scene_eval->npr.npr_test_val_0;
-    meshing_params.dbg_split_fix = (int)(scene_eval->npr.npr_test_val_1 + 1e-10f) > 0; 
+
     meshing_params.num_diffusion_iters = 2 * (scene_eval->npr.npr_test_val_1);
+
     meshing_params.quadric_deviation = scene_eval->npr.npr_test_val_2;
-    meshing_params.geodist_deviation = scene_eval->npr.npr_test_val_3;
+
+    meshing_params.geodist_deviation = scene_eval->npr.npr_test_val_3; 
+    meshing_params.seconds_sync_view_mat = (int)(scene_eval->npr.npr_test_val_3 + 1e-10f); 
+
     meshing_params.alternate_filter_0 = (GPUMeshQuadricFilter)((int)(scene_eval->npr.npr_test_val_4 + 1e-10f)); 
     meshing_params.alternate_filter_1 = (GPUMeshQuadricFilter)((int)(scene_eval->npr.npr_test_val_5 + 1e-10f));
     meshing_params.edge_visualize_mode = (int)(scene_eval->npr.npr_test_val_6 + 1e-10f);
@@ -219,9 +223,9 @@ namespace blender::npr::strokegen
     append_subpass_diffuse_edge_selection(num_edges, num_verts, flooding_options);
     append_subpass_fill_selected_mesh_elems_indirect_dispatch_args_(); 
 
-    append_subpass_fill_dispatched_args_remeshed_edges_(num_edges, true);
-    append_subpass_fill_dispatched_args_remeshed_verts_(num_verts); 
-    append_subpass_select_verts_from_selected_edges(true, true, num_edges, num_verts); 
+    // append_subpass_fill_dispatched_args_remeshed_edges_(num_edges, true);
+    // append_subpass_fill_dispatched_args_remeshed_verts_(num_verts); 
+    // append_subpass_select_verts_from_selected_edges(true, true, num_edges, num_verts); 
 
     int dbg_step = 0;
     bool step_dbg_remesh = true;
@@ -284,7 +288,7 @@ namespace blender::npr::strokegen
     surf_analysis_ctx.ssbo_vcurv_tensor_ = buffers_.ssbo_mesh_buffer_reuse_1_; 
     surf_analysis_ctx.ssbo_vcurv_pdirs_k1k2_ = buffers_.ssbo_mesh_buffer_reuse_2_;
 
-    append_subpass_surf_geom_analysis(rsc_handle, num_verts, num_edges, surf_analysis_ctx, surf_dbg_ctx); 
+    // append_subpass_surf_geom_analysis(rsc_handle, num_verts, num_edges, surf_analysis_ctx, surf_dbg_ctx); 
 
 
 
@@ -576,8 +580,8 @@ namespace blender::npr::strokegen
       sub.bind_ssbo(6, buffers_.ssbo_vbo_full_);
       sub.bind_ssbo(7, buffers_.ssbo_bnpr_mesh_pool_counters_);
       sub.bind_ssbo(8, buffers_.ssbo_edge_flags_);
-      sub.bind_ssbo(9, buffers_.ssbo_dyn_mesh_counters_[0]);
-      sub.bind_ssbo(10, buffers_.ssbo_dyn_mesh_counters_[1]);
+      sub.bind_ssbo(9, buffers_.ssbo_dyn_mesh_counters_in_());
+      sub.bind_ssbo(10, buffers_.ssbo_dyn_mesh_counters_out_());
       sub.bind_ssbo(11, buffers_.ssbo_edge_split_counters_);
       sub.bind_ssbo(12, buffers_.ssbo_bnpr_vert_debug_draw_args_); 
       sub.bind_ubo(0, buffers_.ubo_view_matrices_cache_); 
@@ -724,7 +728,6 @@ namespace blender::npr::strokegen
         sub.push_constant("pcs_remesh_edge_len_", remesh_edge_len); 
         sub.push_constant("pcs_edge_count_", num_edges); 
         sub.push_constant("pcs_vert_count_", num_verts);
-        sub.push_constant("pcs_dbg_split_fix_", meshing_params.dbg_split_fix); 
     };
 
     float remesh_len_scaled = meshing_params.remeshing_targ_edge_len / 100.0f; 
@@ -859,8 +862,8 @@ namespace blender::npr::strokegen
       int num_verts)
   {
     auto bind_src = [&](draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub) {
-      sub.bind_ssbo(0, buffers_.ssbo_dyn_mesh_counters_[0]);  // in
-      sub.bind_ssbo(1, buffers_.ssbo_dyn_mesh_counters_[1]);  // out
+      sub.bind_ssbo(0, buffers_.ssbo_dyn_mesh_counters_in_());  // in
+      sub.bind_ssbo(1, buffers_.ssbo_dyn_mesh_counters_out_());  // out
       sub.bind_ssbo(2, buffers_.ssbo_edge_flip_counters_);
       sub.bind_ssbo(3, buffers_.ssbo_vbo_full_);
       sub.bind_ssbo(4, buffers_.ssbo_edge_to_vert_);
@@ -1123,7 +1126,7 @@ namespace blender::npr::strokegen
     sub.bind_ssbo(3, DRW_manager_get()->matrix_buf.current());
     sub.bind_ssbo(4, buffers_.ssbo_bnpr_mesh_pool_counters_);
     sub.bind_ssbo(5, buffers_.reused_ssbo_edge_to_contour_());
-    sub.bind_ssbo(6, buffers_.ssbo_dyn_mesh_counters_[1]);
+    sub.bind_ssbo(6, buffers_.ssbo_dyn_mesh_counters_out_());
     sub.bind_ssbo(7, buffers_.ssbo_edge_flags_); 
     // for debugging 
     sub.bind_ssbo(8, buffers_.ssbo_edge_to_edges_);

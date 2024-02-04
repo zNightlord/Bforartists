@@ -441,12 +441,13 @@ VertSelectionInfo decode_vert_selection_info(uint data)
 
 /* Indexing for selection for dynaremesh */
 #if defined(DYNAMESH_SELECTION_INDEXING_COMMON)
+/* Note: DO NOT use wedge_id==0 to do any that must be done by one thread! like initialization or counter-zero-out */
 void get_wedge_id_from_selected_edge(uint sel_edge_id, out uint wedge_id, out bool valid_thread)
 {
     uint num_dyn_edges = ssbo_dyn_mesh_counters_out_.num_edges; 
     uint num_static_edges = pcs_edge_count_;
     
-    uint num_presel_edges = ssbo_bnpr_mesh_pool_counters_.num_filtered_edges;
+    uint num_presel_edges  = ssbo_bnpr_mesh_pool_counters_.num_filtered_edges;
     uint num_all_sel_edges = num_presel_edges + num_dyn_edges; /* all dyn edges are selected */
     valid_thread = (sel_edge_id < num_all_sel_edges); 
 
@@ -459,9 +460,7 @@ void get_wedge_id_from_selected_edge(uint sel_edge_id, out uint wedge_id, out bo
             ssbo_selected_edge_to_edge_[sel_edge_id]
         ); 
         wedge_id = eseli.edge_id;
-        valid_thread = valid_thread && (!eseli.is_null_edge);
     }
-    valid_thread = valid_thread && (wedge_id < (num_static_edges + num_dyn_edges));
 }
 #endif
 
@@ -609,8 +608,8 @@ struct EdgeFlags
     bool del_by_collapse; // deleted edge by edge collapse
 
     // Temp Flags, can share bits across different passes -
-    bool temp_new_by_split_this_round; // new edge created by edge split in current remeshing round
     bool temp_flipped_edge; // flipped edge
+    bool temp_dbg_draw_edge; // whatever you want to debug draw
 }; 
 
 uint encode_edge_flags(EdgeFlags ef)
@@ -628,19 +627,19 @@ uint encode_edge_flags(EdgeFlags ef)
     ef_enc <<= 1u; 
     ef_enc |= uint(ef.del_by_collapse); // d_b_sel_ns_ds_dc
     ef_enc <<= 1u; 
-    ef_enc |= uint(ef.temp_new_by_split_this_round); // d_b_sel_ns_ds_dc_tnbsr
-    ef_enc <<= 1u; 
     ef_enc |= uint(ef.temp_flipped_edge); // d_b_sel_ns_ds_dc_tnbsr_tfe
+    ef_enc <<= 1u;
+    ef_enc |= uint(ef.temp_dbg_draw_edge); // d_b_sel_ns_ds_dc_tnbsr_tfe_tsfr
 
     return ef_enc; 
 }
 EdgeFlags decode_edge_flags(uint ef_enc)
 {
-    EdgeFlags ef; // d_b_sel_ns_ds_dc_tnbsr_tfe
+    EdgeFlags ef; // d_b_sel_ns_ds_dc_tnbsr_tfe_tsfr
+    ef.temp_dbg_draw_edge = (1u == (ef_enc & 1u));
+    ef_enc >>= 1u; // d_b_sel_ns_ds_dc_tnbsr_tfe
     ef.temp_flipped_edge = (1u == (ef_enc & 1u));
     ef_enc >>= 1u; // d_b_sel_ns_ds_dc_tnbsr
-    ef.temp_new_by_split_this_round = (1u == (ef_enc & 1u));
-    ef_enc >>= 1u; // d_b_sel_ns_ds_dc
     ef.del_by_collapse = (1u == (ef_enc & 1u)); 
     ef_enc >>= 1u; // d_b_sel_ns_ds
     ef.del_by_split = (1u == (ef_enc & 1u)); 
@@ -675,8 +674,8 @@ EdgeFlags init_edge_flags(bool dupli, bool border)
     ef.del_by_split = false;
     ef.del_by_collapse = false; 
 
-    ef.temp_new_by_split_this_round = false; 
     ef.temp_flipped_edge = false; 
+    ef.temp_dbg_draw_edge = false; 
 
     return ef; 
 }
@@ -695,8 +694,8 @@ EdgeFlags init_edge_flags__new_split_edge()
     ef.del_by_split = false; 
     ef.del_by_collapse = false; 
 
-    ef.temp_new_by_split_this_round = true; 
     ef.temp_flipped_edge = false; 
+    ef.temp_dbg_draw_edge = false;
 
     return ef; 
 }
@@ -758,7 +757,7 @@ struct CirculatorIterData
     AdjWedgeInfo awi_next; // wn
     uint rotate_step; 
 }; 
-#define MAX_WEDGE_ROTATES 32u
+#define MAX_WEDGE_ROTATES 36u
 
 
 /* circulation loop invariant: 

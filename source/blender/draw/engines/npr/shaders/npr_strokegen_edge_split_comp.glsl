@@ -120,12 +120,13 @@ struct EdgeSplitPriorityContext
 {
     EdgeSplitInfo pesi; 
     uint wedge_id; 
+    bool selected; /* when !selected, pesi is invalid */
 }; 
 bool split_priority_higher(EdgeSplitPriorityContext ctx_0, EdgeSplitPriorityContext ctx_1)
 {
-    if (!ctx_0.pesi.is_split_ok)
+    if ((!ctx_0.pesi.is_split_ok) || (!ctx_0.selected))
         return false;
-    if (!ctx_1.pesi.is_split_ok)
+    if ((!ctx_1.pesi.is_split_ok) || (!ctx_1.selected))
         return true;
 
     if (ctx_0.pesi.edge_len == ctx_1.pesi.edge_len)
@@ -133,6 +134,9 @@ bool split_priority_higher(EdgeSplitPriorityContext ctx_0, EdgeSplitPriorityCont
 
     return ctx_0.pesi.edge_len > ctx_1.pesi.edge_len; /* prefer longer edge */
 }
+
+
+
 
 
 #if defined(_KERNEL_MULTICOMPILE__EDGE_SPLIT_INIT)
@@ -158,7 +162,7 @@ void main()
     uint wedge_id; bool valid_thread; 
     get_wedge_id_from_selected_edge(sel_edge_id, /*out*/wedge_id, /*out*/valid_thread); 
     
-    if (wedge_id == 0u)
+    if (gl_GlobalInvocationID.x == 0u)
     {
         ssbo_dyn_mesh_counters_in_.num_edges = ssbo_dyn_mesh_counters_out_.num_edges; 
         ssbo_dyn_mesh_counters_in_.num_verts = ssbo_dyn_mesh_counters_out_.num_verts; 
@@ -176,13 +180,6 @@ void main()
     float edge_len = length(vpos_cwedge[0] - vpos_cwedge[1]);
 
     EdgeFlags ef = load_edge_flags(wedge_id);
-    /* reset temporary flags */
-    if (pcs_split_iter_ == 0u)
-    {
-        ef.temp_new_by_split_this_round = false;
-        if (valid_thread)
-            store_edge_flags(wedge_id, ef); 
-    }
 
     /* Select edges based on split conditions */
     bool is_split_ok = valid_thread 
@@ -191,7 +188,6 @@ void main()
         && (!ef.border) 
         && (!ef.del_by_split)
         && (!ef.del_by_collapse)
-        // && (!ef.temp_new_by_split_this_round) /* skip edges generated from current remesh iter */
         && edge_len > get_split_edge_len_min();
 
     uint split_edge_id = compact_split_select_long_edges(is_split_ok, groupId);
@@ -199,6 +195,7 @@ void main()
     {
         EdgeSplitInfo psei; 
         psei.is_split_ok = true;
+
         psei.edge_len = edge_len; 
         psei.id = wedge_id;
 
@@ -214,6 +211,7 @@ void main()
 
         store_per_edge_split_info(wedge_id, pesi); 
     }
+
 }
 #endif
 
@@ -253,32 +251,32 @@ void main()
 
 
 #if defined(_KERNEL_MULTICOMPILE__EDGE_SPLIT_RESOLVE_CONFLICT)
-    EdgeSplitInfo pesi[4];
-    pesi[0] = load_per_edge_split_info(w[0].wedge_id);
-    pesi[1] = load_per_edge_split_info(w[1].wedge_id);
-    pesi[2] = load_per_edge_split_info(w[2].wedge_id);
-    pesi[3] = load_per_edge_split_info(w[3].wedge_id);
-
-   
     if (psei_curr.is_split_ok && valid_thread)
-    {  /* Resolve collision */
-        EdgeSplitPriorityContext ctx_curr = EdgeSplitPriorityContext(psei_curr, psei_curr.id); 
-        psei_curr.is_split_ok = all(
-            bvec4(
-                split_priority_higher(ctx_curr, EdgeSplitPriorityContext(pesi[0], w[0].wedge_id)),
-                split_priority_higher(ctx_curr, EdgeSplitPriorityContext(pesi[1], w[1].wedge_id)),
-                split_priority_higher(ctx_curr, EdgeSplitPriorityContext(pesi[2], w[2].wedge_id)),
-                split_priority_higher(ctx_curr, EdgeSplitPriorityContext(pesi[3], w[3].wedge_id))
-            )
-        );
+    {  
+        EdgeSplitInfo pesi[4];
+        pesi[0] = load_per_edge_split_info(w[0].wedge_id);
+        pesi[1] = load_per_edge_split_info(w[1].wedge_id);
+        pesi[2] = load_per_edge_split_info(w[2].wedge_id);
+        pesi[3] = load_per_edge_split_info(w[3].wedge_id);
 
-        /* except border edges */
+        EdgeFlags ef = load_edge_flags(psei_curr.id); 
         EdgeFlags ef_w0 = load_edge_flags(w[0].wedge_id); 
         EdgeFlags ef_w1 = load_edge_flags(w[1].wedge_id); 
         EdgeFlags ef_w2 = load_edge_flags(w[2].wedge_id); 
         EdgeFlags ef_w3 = load_edge_flags(w[3].wedge_id); 
+
+        /* except border edges */
         if (any(bvec4(ef_w0.border, ef_w1.border, ef_w2.border, ef_w3.border))) 
             psei_curr.is_split_ok = false; 
+
+        /* Resolve collision */
+        EdgeSplitPriorityContext ctx_curr = EdgeSplitPriorityContext(psei_curr, psei_curr.id, ef.selected); 
+        bool winner = 
+            split_priority_higher(ctx_curr, EdgeSplitPriorityContext(pesi[0], w[0].wedge_id, ef_w0.selected)) && 
+            split_priority_higher(ctx_curr, EdgeSplitPriorityContext(pesi[1], w[1].wedge_id, ef_w1.selected)) && 
+            split_priority_higher(ctx_curr, EdgeSplitPriorityContext(pesi[2], w[2].wedge_id, ef_w2.selected)) && 
+            split_priority_higher(ctx_curr, EdgeSplitPriorityContext(pesi[3], w[3].wedge_id, ef_w3.selected)); 
+        if (!winner) psei_curr.is_split_ok = false; 
     }
 
     /* Compaction */
@@ -302,22 +300,20 @@ void main()
         /* accumulate global mesh counters */
         ssbo_dyn_mesh_counters_out_.num_edges = 
             ssbo_dyn_mesh_counters_in_.num_edges + 4u * ssbo_edge_split_counters_[pcs_split_iter_].num_split_edges;
-        ssbo_dyn_mesh_counters_out_.num_verts = 
-            ssbo_dyn_mesh_counters_in_.num_verts + ssbo_edge_split_counters_[pcs_split_iter_].num_split_edges; 
+        ssbo_dyn_mesh_counters_out_.num_verts =
+            ssbo_dyn_mesh_counters_in_.num_verts + ssbo_edge_split_counters_[pcs_split_iter_].num_split_edges;
         
         /* prep local counters for next split iteration */
         ssbo_edge_split_counters_[pcs_split_iter_ + 1].num_split_edges_pass_1 = 0u;
-        ssbo_edge_split_counters_[pcs_split_iter_ + 1].num_split_edges = 0u; 
-    }
+        ssbo_edge_split_counters_[pcs_split_iter_ + 1].num_split_edges = 0u;
+    } 
 
     /* Early Exits */
     if (!valid_thread)
         return;
     if (!psei_curr.is_split_ok)
-    {
-        update_edge_flags__revert_split(psei_curr.id); 
         return; 
-    }
+
 
 
 
@@ -444,7 +440,7 @@ void main()
         
         uint ivert_update = mark__center_wedge_to_oppo_vert__at_face(iface_overlap); 
         ssbo_edge_to_vert_[w[i].wedge_id*4 + ivert_update] = v4; 
-    }
+    } 
 
 
     /* Store flags for 4 new edges */

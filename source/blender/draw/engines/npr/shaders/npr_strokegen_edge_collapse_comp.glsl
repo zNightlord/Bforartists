@@ -176,7 +176,7 @@ void main()
     uint wedge_id; bool valid_thread; 
     get_wedge_id_from_selected_edge(sel_edge_id, /*out*/wedge_id, /*out*/valid_thread); 
     
-    if (wedge_id == 0u)
+    if (gl_GlobalInvocationID.x == 0u)
     {
         ssbo_dyn_mesh_counters_in_.num_edges = ssbo_dyn_mesh_counters_out_.num_edges; 
         ssbo_dyn_mesh_counters_in_.num_verts = ssbo_dyn_mesh_counters_out_.num_verts; 
@@ -340,6 +340,13 @@ void main()
 
         if (dot(ctx.collapse_pos - vpos_n, clip_plane_normal) < .0f)
             ctx.is_collapse_ok = false; /* falls outside the clipping plane */
+
+
+        /* Check for selective remeshing */
+        EdgeFlags ef = load_edge_flags(wi); 
+        if (!ef.selected) /* neighbor edge is not selected for remeshing, hence has invalid collapse info */
+            ctx.is_collapse_ok = false; 
+
 
         /* Update context */
         ctx.vp = ctx.vi; 
@@ -545,7 +552,7 @@ void main()
 
             VE_CIRCULATOR(vwlh_v1, collapse_validate, ctx_v1, rotate_fwd); 
             pcei.is_collapse_ok = ctx_v1.is_collapse_ok; 
-        }        
+        }
 
         if (pcei.is_collapse_ok)
         { 

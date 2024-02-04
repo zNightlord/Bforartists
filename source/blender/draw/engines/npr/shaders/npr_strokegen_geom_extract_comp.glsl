@@ -174,7 +174,7 @@ void main()
 	
 	const uint NumEdges = get_num_edges();
 	bool valid_thread = idx < NumEdges; 
-	const uint EdgeId = idx;
+	const uint wedge_id = idx;
 
 	const uint resource_id = pcs_rsc_handle; 
 	
@@ -190,7 +190,7 @@ void main()
 	
 	uvec4 vids; 
 	for (uint i = 0; i < 4; ++i)
-		vids[i] = buf_ibo[4 * EdgeId + i]; 
+		vids[i] = buf_ibo[4 * wedge_id + i]; 
 	
 	vec3 v[4]; 
 	for (uint i = 0; i < 4; ++i)
@@ -203,7 +203,7 @@ void main()
 		, face_orient_012, face_orient_321/*out*/
 	); 
 
-	EdgeFlags ef = load_edge_flags(EdgeId); 
+	EdgeFlags ef = load_edge_flags(wedge_id); 
 	is_contour = is_contour && (!ef.del_by_split) && (!ef.del_by_collapse) && (!ef.dupli); 
 	bool is_border = ef.border; 
 
@@ -214,7 +214,7 @@ void main()
 	{
 		// Check topo consistency
 		bool valid_ee, valid_ev, valid_ve;
-		validate_wedge_topo(EdgeId, /*out*/ valid_ee, valid_ev, valid_ve);  
+		validate_wedge_topo(wedge_id, /*out*/ valid_ee, valid_ev, valid_ve);  
 		
 		bool dbg_line = valid_thread && (!ef.del_by_collapse) && (!ef.dupli) && (!ef.del_by_split); 
 		/* visualize edges with invalid topology */
@@ -225,13 +225,11 @@ void main()
 		if (pcs_edge_visualize_mode_ == 3) 
 			dbg_line = dbg_line && (!valid_ve); 
 		if (pcs_edge_visualize_mode_ == 4)
-			dbg_line = dbg_line && (ef.new_by_split) && (!ef.dupli); 
-		if (EdgeId > MAX_NUM_CONTOUR_EDGES)
-			dbg_line = false; 
+			dbg_line = dbg_line && (ef.selected); 
 
 		/* visualize selected edges */
 		if (pcs_edge_visualize_mode_ == 5)
-			dbg_line = dbg_line && ef.selected; 
+			dbg_line = valid_thread && (!ef.dupli) && (ef.selected) && ef.temp_dbg_draw_edge; 
 
 		uint dbg_line_idx = compact_dbg_edge(dbg_line, groupId); 
 		if (dbg_line)
@@ -246,6 +244,7 @@ void main()
 		}
 	}
 
+	barrier();
 
 	bool rev_edge_dir = is_back_face(face_orient_012); 
 	if (false == valid_thread) is_contour = false; 
@@ -267,7 +266,7 @@ void main()
 		
 		PerContourWedgeInfo pcwi; 
 		pcwi.is_border = is_border; 
-		pcwi.wedge_id = EdgeId;
+		pcwi.wedge_id = wedge_id;
 		pcwi.ifrontface = (!is_back_face(face_orient_012)) ? 1 : 0; /* see "line_adj_to_wing_verts" */ 
 		buf_strokegen_mesh_pool[base_addr+6]  = encode_per_contour_wedge_info(pcwi); 
 	}
@@ -279,7 +278,7 @@ void main()
 		peci.is_contour = is_contour;
 		peci.contour_id = is_contour ? compacted_idx : NULL_EDGE; 
 		peci.ifrontface = (!is_back_face(face_orient_012)) ? 1 : 0; /* see "line_adj_to_wing_verts" */
-		ssbo_edge_to_contour_[EdgeId] = encode_per_wedge_contour_info(peci); 
+		ssbo_edge_to_contour_[wedge_id] = encode_per_wedge_contour_info(peci); 
 	}
 }
 #endif

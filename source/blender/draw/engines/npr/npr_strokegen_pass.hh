@@ -162,12 +162,12 @@ public:
     int num_remesh_dbg_iters;
      
     int num_diffusion_iters; // deprecate
-    int dbg_split_fix; 
+    float quadric_deviation; // deprecate
+    float geodist_deviation; // deprecate
+    int seconds_sync_view_mat; 
 
     int num_edge_flooding_iters;
     int num_normal_filtering_iters;
-    float quadric_deviation;
-    float geodist_deviation;
     float positiion_regularization_scale;
     bool use_normal_filtering;
     GPUMeshQuadricFilter alternate_filter_0;
