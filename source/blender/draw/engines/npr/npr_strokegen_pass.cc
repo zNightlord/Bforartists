@@ -223,9 +223,9 @@ namespace blender::npr::strokegen
     append_subpass_diffuse_edge_selection(num_edges, num_verts, flooding_options);
     append_subpass_fill_selected_mesh_elems_indirect_dispatch_args_(); 
 
-    // append_subpass_fill_dispatched_args_remeshed_edges_(num_edges, true);
-    // append_subpass_fill_dispatched_args_remeshed_verts_(num_verts); 
-    // append_subpass_select_verts_from_selected_edges(true, true, num_edges, num_verts); 
+    append_subpass_fill_dispatched_args_remeshed_edges_(num_edges, true);
+    append_subpass_fill_dispatched_args_remeshed_verts_(num_verts); 
+    append_subpass_select_verts_from_selected_edges(true, true, num_edges, num_verts); 
 
     int dbg_step = 0;
     bool step_dbg_remesh = true;
@@ -288,7 +288,7 @@ namespace blender::npr::strokegen
     surf_analysis_ctx.ssbo_vcurv_tensor_ = buffers_.ssbo_mesh_buffer_reuse_1_; 
     surf_analysis_ctx.ssbo_vcurv_pdirs_k1k2_ = buffers_.ssbo_mesh_buffer_reuse_2_;
 
-    // append_subpass_surf_geom_analysis(rsc_handle, num_verts, num_edges, surf_analysis_ctx, surf_dbg_ctx); 
+    append_subpass_surf_geom_analysis(rsc_handle, num_verts, num_edges, surf_analysis_ctx, surf_dbg_ctx); 
 
 
 
