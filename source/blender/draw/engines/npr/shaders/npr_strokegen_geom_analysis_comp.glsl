@@ -235,24 +235,25 @@ void main()
     if (valid_thread)
         st_vnor(vert_id, vnormal);
 
-    // if (0 < pcs_output_dbg_geom_)
-    // {
-    //     VertFlags vf = decode_vert_flags(ssbo_vert_flags_[vert_id]); 
+    if (0 < pcs_output_dbg_geom_)
+    {
+        VertFlags vf = decode_vert_flags(ssbo_vert_flags_[vert_id]); 
         
-    //     bool dbg_vtx_nor = (!vf.dupli) && valid_thread; 
-    //     uint dbg_line_id = compact_normal_line(dbg_vtx_nor, groupIdx);
-        
-    //     if (dbg_vtx_nor)
-    //     {
-    //         vec4 vpos_ws_0 = vec4(ctx.vpos, 1.0f);
-    //         vec4 vpos_ws_1 = vec4(ctx.vpos + vnormal * pcs_dbg_geom_scale_ * .05f, 1.0f);
+        bool dbg_vtx_nor = (!vf.dupli) && valid_thread; 
+        uint dbg_line_id = compact_normal_line(dbg_vtx_nor, groupIdx);
+        dbg_line_id += get_debug_line_offset(DBG_LINE_TYPE__VNOR); 
+        if (dbg_vtx_nor)
+        {
+            vec4 vpos_ws_0 = vec4(ctx.vpos, 1.0f);
+            vec4 vpos_ws_1 = vec4(ctx.vpos + vnormal * pcs_dbg_geom_scale_ * .05f, 1.0f);
 
-    //         uvec3 vpos_enc = floatBitsToUint(vpos_ws_0.xyz); 
-    //         Store3(ssbo_dbg_lines_, dbg_line_id*6u, vpos_enc);
-    //         vpos_enc = floatBitsToUint(vpos_ws_1.xyz); 
-    //         Store3(ssbo_dbg_lines_, dbg_line_id*6u + 3u, vpos_enc); 
-    //     }
-    // }
+            uvec3 vpos_enc = floatBitsToUint(vpos_ws_0.xyz); 
+            Store3(ssbo_dbg_lines_, dbg_line_id*2u, vpos_enc);
+            vpos_enc = floatBitsToUint(vpos_ws_1.xyz); 
+            Store3(ssbo_dbg_lines_, dbg_line_id*2u + 1u, vpos_enc); 
+            dbg_line_id++; 
+        }
+    }
 #endif
 
 #if defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_0__AREA)
@@ -930,6 +931,8 @@ void main()
     uint num_verts = get_vert_count(); 
     bool valid_thread = vert_id < num_verts; 
 
+    uint dbg_line_offset = ssbo_bnpr_mesh_pool_counters_.num_dbg_vnor_lines; // after normal lines
+
     vec3 vpos = ld_vpos(vert_id); 
     vec3 vnor = LOAD_VNOR(vert_id, vpos);
     VertWedgeListHeader vwlh = decode_vert_wedge_list_header(ssbo_vert_to_edge_list_header_[vert_id]); 
@@ -980,34 +983,36 @@ void main()
         }
 
         // debug lines
-        // if (0 < pcs_output_dbg_geom_)
-        // {
-        //     VertFlags vf = decode_vert_flags(ssbo_vert_flags_[vert_id]); 
+        if (0 < pcs_output_dbg_geom_)
+        {
+            VertFlags vf = decode_vert_flags(ssbo_vert_flags_[vert_id]); 
         
-        //     bool dbg_vtx_curv = (!vf.dupli) && (!vf.del_by_collapse) && valid_thread; 
-        //     uint dbg_prim_id = compact_pdir_lines(dbg_vtx_curv, groupIdx, 2u);
-        
-        //     if (dbg_vtx_curv)
-        //     {
-        //         float dbg_line_len = .4f * min(ctx.ave_edge_len, pcs_dbg_geom_scale_ * .12f);
+            bool dbg_vtx_curv = (!vf.dupli) && (!vf.del_by_collapse) && valid_thread; 
+            uint dbg_line_id = compact_pdir_lines(dbg_vtx_curv, groupIdx, 2u);
+            dbg_line_id += get_debug_line_offset(DBG_LINE_TYPE__VCURV); 
 
-        //         vec4 vpos_ws_10 = vec4(vpos - curv_1_fin * normalize(pdir1) * dbg_line_len, 1.0f);
-        //         vec4 vpos_ws_11 = vec4(vpos + curv_1_fin * normalize(pdir1) * dbg_line_len, 1.0f);
+            if (dbg_vtx_curv)
+            {
+                float dbg_line_len = .4f * min(ctx.ave_edge_len, pcs_dbg_geom_scale_ * .12f);
 
-        //         uvec3 vpos_enc = floatBitsToUint(vpos_ws_10.xyz); 
-        //         Store3(ssbo_dbg_lines_, dbg_prim_id*6u,      vpos_enc);
-        //         vpos_enc = floatBitsToUint(vpos_ws_11.xyz); 
-        //         Store3(ssbo_dbg_lines_, dbg_prim_id*6u + 3u, vpos_enc); 
+                vec4 vpos_ws_10 = vec4(vpos - /* curv_1_fin *  */normalize(pdir1) * dbg_line_len, 1.0f);
+                vec4 vpos_ws_11 = vec4(vpos + /* curv_1_fin *  */normalize(pdir1) * dbg_line_len, 1.0f);
+                uvec3 vpos_enc = floatBitsToUint(vpos_ws_10.xyz); 
+                Store3(ssbo_dbg_lines_, dbg_line_id*2u,      vpos_enc);
+                vpos_enc = floatBitsToUint(vpos_ws_11.xyz); 
+                Store3(ssbo_dbg_lines_, dbg_line_id*2u + 1u, vpos_enc);
+                dbg_line_id++; 
 
-        //         vec4 vpos_ws_20 = vec4(vpos - curv_2_fin * normalize(pdir2) * dbg_line_len, 1.0f);
-        //         vec4 vpos_ws_22 = vec4(vpos + curv_2_fin * normalize(pdir2) * dbg_line_len, 1.0f);
-                
-        //         vpos_enc = floatBitsToUint(vpos_ws_20.xyz); 
-        //         Store3(ssbo_dbg_lines_, dbg_prim_id*6u + 6u, vpos_enc);
-        //         vpos_enc = floatBitsToUint(vpos_ws_22.xyz); 
-        //         Store3(ssbo_dbg_lines_, dbg_prim_id*6u + 9u, vpos_enc); 
-        //     }
-        // }
+                vec4 vpos_ws_20 = vec4(vpos - /* curv_2_fin *  */normalize(pdir2) * dbg_line_len, 1.0f);
+                vec4 vpos_ws_22 = vec4(vpos + /* curv_2_fin *  */normalize(pdir2) * dbg_line_len, 1.0f);
+                vpos_enc = floatBitsToUint(vpos_ws_20.xyz); 
+                Store3(ssbo_dbg_lines_, dbg_line_id*2u,      vpos_enc);
+                vpos_enc = floatBitsToUint(vpos_ws_22.xyz); 
+                Store3(ssbo_dbg_lines_, dbg_line_id*2u + 1u, vpos_enc);
+                dbg_line_id++; 
+
+            }
+        }
     #endif
 
 
@@ -1033,7 +1038,8 @@ void main()
         {
             VertFlags vf = decode_vert_flags(ssbo_vert_flags_[vert_id]); 
             bool dbg_vtx_curv = (!vf.dupli) && (!vf.del_by_collapse) && valid_thread; 
-            uint dbg_prim_id = compact_pdir_lines(dbg_vtx_curv, groupIdx, 3u);
+            uint dbg_line_id = compact_pdir_lines(dbg_vtx_curv, groupIdx, 3u);
+            dbg_line_id += get_debug_line_offset(DBG_LINE_TYPE__VCURV); 
 
             vec3 cam_pos_ws = ubo_view_matrices_.viewinv[3].xyz; /* see "#define cameraPos ViewMatrixInverse[3].xyz" */
             vec3 dndv_dp = ctx.curv_tensor * (vpos - cam_pos_ws); 
@@ -1044,29 +1050,29 @@ void main()
 
                 vec4 vpos_ws_00 = vec4(vpos - normalize(pdir0) * dbg_line_len, 1.0f);
                 vec4 vpos_ws_01 = vec4(vpos + normalize(pdir0) * dbg_line_len, 1.0f);
-
                 uvec3 vpos_enc = floatBitsToUint(vpos_ws_00.xyz); 
-                Store3(ssbo_dbg_lines_, dbg_prim_id*6u,      vpos_enc);
+                Store3(ssbo_dbg_lines_, dbg_line_id*2u,      vpos_enc);
                 vpos_enc = floatBitsToUint(vpos_ws_01.xyz); 
-                Store3(ssbo_dbg_lines_, dbg_prim_id*6u + 3u, vpos_enc); 
+                Store3(ssbo_dbg_lines_, dbg_line_id*2u+1u, vpos_enc); 
+                dbg_line_id++; 
 
                 vec4 vpos_ws_10 = vec4(vpos - normalize(pdir1) * dbg_line_len, 1.0f);
                 vec4 vpos_ws_11 = vec4(vpos + normalize(pdir1) * dbg_line_len, 1.0f);
-                
                 vpos_enc = floatBitsToUint(vpos_ws_10.xyz); 
-                Store3(ssbo_dbg_lines_, dbg_prim_id*6u + 6u, vpos_enc);
+                Store3(ssbo_dbg_lines_, dbg_line_id*2u, vpos_enc);
                 vpos_enc = floatBitsToUint(vpos_ws_11.xyz); 
-                Store3(ssbo_dbg_lines_, dbg_prim_id*6u + 9u, vpos_enc); 
+                Store3(ssbo_dbg_lines_, dbg_line_id*2u+1u, vpos_enc); 
+                dbg_line_id++; 
 
                 // dbg_line_len = pcs_dbg_geom_scale_ * .1f * max(abs(evals[0]), abs(evals[1]));
                 dbg_line_len = ctx.ave_edge_len /* * max(abs(dot(normalize(pdir0), vnor_gt)), abs(dot(normalize(pdir1), vnor_gt))) */;
                 vec4 vpos_ws_20 = vec4(vpos, 1.0f);
-                vec4 vpos_ws_21 = vec4(vpos + normalize(vnor) * dbg_line_len, 1.0f);
-
+                vec4 vpos_ws_21 = vec4(vpos/*  + normalize(vnor) * dbg_line_len */, 1.0f);
                 vpos_enc = floatBitsToUint(vpos_ws_20.xyz);
-                Store3(ssbo_dbg_lines_, dbg_prim_id*6u + 12u, vpos_enc);
+                Store3(ssbo_dbg_lines_, dbg_line_id*2u, vpos_enc);
                 vpos_enc = floatBitsToUint(vpos_ws_21.xyz);
-                Store3(ssbo_dbg_lines_, dbg_prim_id*6u + 15u, vpos_enc);
+                Store3(ssbo_dbg_lines_, dbg_line_id*2u+1u, vpos_enc);
+                dbg_line_id++; 
             }
         }
     #endif
@@ -1082,7 +1088,8 @@ void main()
         // {
         //     VertFlags vf = decode_vert_flags(ssbo_vert_flags_[vert_id]); 
         //     bool dbg_vtx_curv = (!vf.dupli) && (!vf.del_by_collapse) && valid_thread; 
-        //     uint dbg_prim_id = compact_pdir_lines(dbg_vtx_curv, groupIdx, 2u);
+        //     uint dbg_line_id = compact_pdir_lines(dbg_vtx_curv, groupIdx, 2u);
+        //     dbg_line_id += dbg_line_offset; 
         
         //     if (dbg_vtx_curv)
         //     {
@@ -1090,21 +1097,22 @@ void main()
 
         //         vec4 vpos_ws_00 = vec4(vpos - (ctx.grad_vdotn / grad_vdotn_len) * dbg_line_len, 1.0f);
         //         vec4 vpos_ws_01 = vec4(vpos + (ctx.grad_vdotn / grad_vdotn_len) * dbg_line_len, 1.0f);
-
         //         uvec3 vpos_enc = floatBitsToUint(vpos_ws_00.xyz); 
-        //         Store3(ssbo_dbg_lines_, dbg_prim_id*6u,      vpos_enc);
+        //         Store3(ssbo_dbg_lines_, dbg_line_id*2u,      vpos_enc);
         //         vpos_enc = floatBitsToUint(vpos_ws_01.xyz); 
-        //         Store3(ssbo_dbg_lines_, dbg_prim_id*6u + 3u, vpos_enc); 
-
+        //         Store3(ssbo_dbg_lines_, dbg_line_id*2u + 1u, vpos_enc); 
+        //         dbg_line_id++; 
+                
         //         vec4 vpos_ws_10 = vec4(vpos - normalize(vnor) * dbg_line_len, 1.0f);
         //         vec4 vpos_ws_11 = vec4(vpos - normalize(vnor) * dbg_line_len, 1.0f);
         //         // if (any(isnan(ctx.grad_vdotn.xyz)))
         //         //     vpos_ws_11 = vec4(vpos + normalize(vnor) * dbg_line_len, 1.0f);
-                
         //         vpos_enc = floatBitsToUint(vpos_ws_10.xyz); 
-        //         Store3(ssbo_dbg_lines_, dbg_prim_id*6u + 6u, vpos_enc);
+        //         Store3(ssbo_dbg_lines_, dbg_line_id*2u,      vpos_enc);
         //         vpos_enc = floatBitsToUint(vpos_ws_11.xyz); 
-        //         Store3(ssbo_dbg_lines_, dbg_prim_id*6u + 9u, vpos_enc); 
+        //         Store3(ssbo_dbg_lines_, dbg_line_id*2u + 1u, vpos_enc); 
+        //         dbg_line_id++; 
+
         //     }
         // }
     #endif

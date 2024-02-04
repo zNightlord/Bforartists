@@ -1,3 +1,6 @@
+#pragma BLENDER_REQUIRE(npr_strokegen_geom_lib.glsl)
+
+
 #ifndef NPR_STROKEGEN_FILL_INDIRECT_ARGS_INPUTS_LIB_H
 #define NPR_STROKEGEN_FILL_INDIRECT_ARGS_INPUTS_LIB_H
 
@@ -173,11 +176,8 @@ void FillDispatchArgsBuffer(uvec3 args)
 #if defined(_KERNEL_MULTICOMPILE__FILL_DRAW_ARGS__REMESHING)
 void GetDrawArgs(out DrawCommand draw_args)
 {
-#if defined(_KERNEL_MULTICOMPILE__FILL_DRAW_ARGS__REMESHING__DBG_VNOR)
-    draw_args.vertex_len  = ssbo_bnpr_mesh_pool_counters_.num_dbg_vnor_lines * 2;
-#endif
 #if defined(_KERNEL_MULTICOMPILE__FILL_DRAW_ARGS__REMESHING__DBG_LINES)
-    draw_args.vertex_len  = ssbo_bnpr_mesh_pool_counters_.num_dbg_lines * 2;
+    draw_args.vertex_len = 2u * get_debug_line_counter(pcs_line_type_);
 #endif
     draw_args.instance_len 	= 1;  		/*#instances*/
     draw_args.vertex_first 	= 0;  		/*ibo offset*/

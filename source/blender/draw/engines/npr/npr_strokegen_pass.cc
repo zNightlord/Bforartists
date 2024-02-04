@@ -83,10 +83,13 @@ namespace blender::npr::strokegen
 
     meshing_params.max_num_remesh_dbg_iters = 100000; // scene_eval->npr.npr_test_val_0;
 
-    surf_dbg_ctx.dbg_lines = (0 < scene_eval->npr.npr_test_val_1);
-    surf_dbg_ctx.dbg_vert_normal = (1 == scene_eval->npr.npr_test_val_1); 
-    surf_dbg_ctx.dbg_vert_curv   = (2 == scene_eval->npr.npr_test_val_1);
-    surf_dbg_ctx.dbg_edges = (3 == scene_eval->npr.npr_test_val_1);
+    int val_1 = scene_eval->npr.npr_test_val_1; 
+    surf_dbg_ctx.dbg_lines = (0 < val_1);
+    surf_dbg_ctx.dbg_vert_normal = (1 == val_1);
+    surf_dbg_ctx.dbg_vert_curv = (2 == val_1);
+    surf_dbg_ctx.dbg_edges = (3 == val_1);
+    if (val_1 == 4)
+      surf_dbg_ctx.dbg_vert_normal = surf_dbg_ctx.dbg_vert_curv = true; 
 
     meshing_params.edge_visualize_mode = -1;
     if (surf_dbg_ctx.dbg_edges) {
@@ -1074,23 +1077,15 @@ namespace blender::npr::strokegen
 
   void StrokeGenPassModule::rebuild_pass_dbg_geom_drawcall(SurfaceDebugContext dbg_ctx)
   {
-    if (dbg_ctx.dbg_vert_normal) {
-      {
-        auto &sub = pass_draw_debug_lines_.sub("fill_draw_args_debug_lines_vnor_");
+    Vector<int> dbgLineTypes;
+    if (dbg_ctx.dbg_vert_normal)
+      dbgLineTypes.append(SurfaceDebugContext::DbgLineType::vnor); 
+    if (dbg_ctx.dbg_vert_curv)
+      dbgLineTypes.append(SurfaceDebugContext::DbgLineType::vcurv);
+    if (dbg_ctx.dbg_edges)
+      dbgLineTypes.append(SurfaceDebugContext::DbgLineType::edges);
 
-        sub.shader_set(shaders_.static_shader_get(FILL_DRAW_ARGS_VERT_NORMAL));
-
-        sub.bind_ssbo(0, buffers_.ssbo_bnpr_mesh_pool_counters_);
-        sub.bind_ssbo(1, buffers_.ssbo_bnpr_vert_debug_draw_args_);
-
-        sub.dispatch(int3(1, 1, 1));
-        sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_COMMAND);
-      }
-
-      pass_draw_debug_lines_.append_draw_dbg_lines_subpass(shaders_, buffers_);
-    }
-
-    if (dbg_ctx.dbg_vert_curv || dbg_ctx.dbg_edges) {
+    for (int dbg_line_type : dbgLineTypes) {
       {
         auto &sub = pass_draw_debug_lines_.sub("fill_draw_args_debug_lines_");
 
@@ -1098,12 +1093,13 @@ namespace blender::npr::strokegen
 
         sub.bind_ssbo(0, buffers_.ssbo_bnpr_mesh_pool_counters_);
         sub.bind_ssbo(1, buffers_.ssbo_bnpr_vert_debug_draw_args_);
+        sub.push_constant("pcs_line_type_", dbg_line_type);
 
         sub.dispatch(int3(1, 1, 1));
         sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_COMMAND);
       }
 
-      pass_draw_debug_lines_.append_draw_dbg_lines_subpass(shaders_, buffers_);
+      pass_draw_debug_lines_.append_draw_dbg_lines_subpass(shaders_, buffers_, dbg_line_type);
     }
   }
 

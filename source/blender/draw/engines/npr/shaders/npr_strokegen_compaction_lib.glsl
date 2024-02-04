@@ -164,7 +164,7 @@ DECL_LDS_HIST_BLK(CP_TAG)
 DECL_LDS_SCAN_BLOCK_OFFSET(CP_TAG)
 #define LDS_SCAN_BLOCK_OFFSET CAT(LDS_scan_block_offset_, CP_TAG) 
 
-DECL_COMPACTION_FUNC(CP_TAG, ssbo_bnpr_mesh_pool_counters_.num_dbg_lines)
+DECL_COMPACTION_FUNC(CP_TAG, ssbo_bnpr_mesh_pool_counters_.num_dbg_vpdir_lines)
 #undef CP_TAG
 #endif
 
@@ -195,7 +195,7 @@ DECL_LDS_HIST_BLK(CP_TAG)
 DECL_LDS_SCAN_BLOCK_OFFSET(CP_TAG)
 #define LDS_SCAN_BLOCK_OFFSET CAT(LDS_scan_block_offset_, CP_TAG) 
 
-DECL_COMPACTION_FUNC(CP_TAG, ssbo_bnpr_mesh_pool_counters_.num_dbg_lines)
+DECL_COMPACTION_FUNC(CP_TAG, ssbo_bnpr_mesh_pool_counters_.num_dbg_edge_lines)
 #undef CP_TAG
 #endif
 

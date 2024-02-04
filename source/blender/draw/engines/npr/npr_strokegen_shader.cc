@@ -216,8 +216,6 @@ const char *StrokeGenShaderModule::static_shader_create_info_name_get(eShaderTyp
     case MESH_ANALYSE_VERT_NORMAL_VORONOIAREA:
       return "bnpr_geom_analysis_order_0_vert_all"; 
 
-    case FILL_DRAW_ARGS_VERT_NORMAL:
-      return "strokegen_remeshing_fill_draw_args_dbg_vnor";
     case FILL_DRAW_ARGS_DBG_LINES:
       return "strokegen_remeshing_fill_draw_args_dbg_lines"; 
     case INDIRECT_DRAW_DBG_LINES:

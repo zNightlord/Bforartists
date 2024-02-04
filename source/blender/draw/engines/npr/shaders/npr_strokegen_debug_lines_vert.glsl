@@ -1,6 +1,7 @@
 
 #pragma BLENDER_REQUIRE(common_view_lib.glsl)
 #pragma BLENDER_REQUIRE(npr_strokegen_load_store_lib.glsl)
+#pragma BLENDER_REQUIRE(npr_strokegen_geom_lib.glsl)
 
 /* https://www.shadertoy.com/view/7tlXR4 */
 vec3 hash32(vec2 p) 
@@ -26,17 +27,16 @@ vec3 rand_col_rgb(uint seed0, uint seed1)
     return hsl2rgb(vec3(hue, saturation, luminosity)); 
 }
 
+
 void main()
 {
     uint vid = gl_VertexID;
-    uint line_id = vid / 2u; 
     
-    uint ld_addr = vid % 2u == 0u ? line_id*6u : line_id*6u+3u;
-    uvec3 vpos_enc; /* world space pos */
-    vpos_enc.x = ssbo_dbg_lines_[ld_addr+0u]; 
-    vpos_enc.y = ssbo_dbg_lines_[ld_addr+1u];
-    vpos_enc.z = ssbo_dbg_lines_[ld_addr+2u];
+    uint line_id_local = vid / 2u; 
+    uint line_id = line_id_local + get_debug_line_offset(pcs_line_type_); 
 
+    uvec3 vpos_enc; /* load world space vert pos */
+    Load3(ssbo_dbg_lines_, line_id*2u + (vid % 2u), vpos_enc); 
     vec4 vpos = vec4(uintBitsToFloat(vpos_enc).xyz, 1.0f);
 
 	mat4 world_to_view = ubo_view_matrices_.viewmat;
@@ -48,18 +48,28 @@ void main()
     // gl_Position.z -= 2.0e-5 * pos_hclip.w;
 
 
-    color.rgb = rand_col_rgb(line_id, line_id * 7u);
-    color.a = 1.0f; 
+
+    if (pcs_line_type_ == DBG_LINE_TYPE__VNOR)
+        color = vec4(0, 1, 0, 1);
+    else if (pcs_line_type_ == DBG_LINE_TYPE__VCURV)
+    {
+        if ((line_id_local % 3u) == 0u) 
+            color = vec4(0, 0, 1, 1);
+        else if ((line_id_local % 3u) == 1u)
+            color = vec4(1, 0, 0, 1); 
+        else
+            color = vec4(0, 1, 0, 1); 
+    } else if (pcs_line_type_ == DBG_LINE_TYPE__EDGES)
+    {
+        color.rgb = rand_col_rgb(line_id, line_id * 7u);
+        color.a = 1.0f; 
+    }
+
 
     // if ((line_id % 2u) == 0u) 
     //     color = vec4(0, 1, 0, 1);
     // else 
     //     color = vec4(1, 0, 0, 1); 
 
-    // if ((line_id % 3u) == 0u) 
-    //     color = vec4(0, 1, 0, 1);
-    // else if ((line_id % 3u) == 1u)
-    //     color = vec4(1, 0, 0, 1); 
-    // else
-    //     color = vec4(0, 0, 1, 1); 
+
 }

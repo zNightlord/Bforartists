@@ -160,6 +160,7 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_extract)
     .define("COMPACTION_LIB_EXCLUDE_DEFAULT_CODEGEN", "1")
     .define("EDGE_FLAGS_INCLUDED", "1")
     .define("TOPO_DIAGONOSIS_INCLUDE", "1")
+    .define("INCLUDE_DEBUG_LINE_CONFIG", "1")
     .storage_buf(0, Qualifier::READ, "uint", "buf_ibo[]")
     .storage_buf(1, Qualifier::READ, "float", "buf_vbo[]") 
     .storage_buf(2, Qualifier::READ_WRITE, "uint", "buf_strokegen_mesh_pool[]")
@@ -756,21 +757,15 @@ GPU_SHADER_CREATE_INFO(strokegen_remeshing_fill_draw_args)
     .local_group_size(32)
     .compute_source("npr_strokegen_fill_indirect_args_comp.glsl");
 
-GPU_SHADER_CREATE_INFO(strokegen_remeshing_fill_draw_args_dbg_vnor)
-    .do_static_compilation(true)
-    .additional_info("strokegen_remeshing_fill_draw_args")
-    .define("_KERNEL_MULTICOMPILE__FILL_DRAW_ARGS__REMESHING__DBG_VNOR", "1")
-    
-    .storage_buf(0, Qualifier::READ, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
-    .storage_buf(1, Qualifier::WRITE, "DrawCommand", "ssbo_bnpr_vert_debug_draw_args_"); 
-
 GPU_SHADER_CREATE_INFO(strokegen_remeshing_fill_draw_args_dbg_lines)
     .do_static_compilation(true)
     .additional_info("strokegen_remeshing_fill_draw_args")
     .define("_KERNEL_MULTICOMPILE__FILL_DRAW_ARGS__REMESHING__DBG_LINES", "1")
+    .define("INCLUDE_DEBUG_LINE_CONFIG", "1")
     
     .storage_buf(0, Qualifier::READ, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
-    .storage_buf(1, Qualifier::WRITE, "DrawCommand", "ssbo_bnpr_vert_debug_draw_args_"); 
+    .storage_buf(1, Qualifier::WRITE, "DrawCommand", "ssbo_bnpr_vert_debug_draw_args_")
+    .push_constant(Type::INT, "pcs_line_type_");
 /** \} */
 
 
@@ -1014,6 +1009,7 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_analysis)
     .define("VE_CIRCULATOR_INCLUDE", "1")
     .define("USE_DYNAMESH_EDGE_SELECTION_INDEXING", "1")
     .define("INCLUDE_VERTEX_POSITION", "1")
+    .define("INCLUDE_DEBUG_LINE_CONFIG", "1")
 
     .storage_buf(0, Qualifier::READ_WRITE, "SSBOData_StrokeGenDynamicMeshCounters", "ssbo_dyn_mesh_counters_out_")
     .storage_buf(1, Qualifier::READ_WRITE, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
@@ -1117,9 +1113,12 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_draw_debug_lines)
     .do_static_compilation(true)
     .typedef_source("bnpr_shader_shared.hh")
     .additional_info("draw_modelmat_new", "draw_view", "draw_resource_handle_new")
-    
+    .define("INCLUDE_DEBUG_LINE_CONFIG", "1")
+
     .storage_buf(0, Qualifier::READ, "uint", "ssbo_dbg_lines_[]")
+    .storage_buf(1, Qualifier::READ_WRITE, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
     .uniform_buf(0, "ViewMatrices", "ubo_view_matrices_")
+    .push_constant(Type::INT, "pcs_line_type_")
 
     .vertex_source("npr_strokegen_debug_lines_vert.glsl")
     .vertex_in(0, Type::VEC3, "pos")

@@ -25,6 +25,11 @@ namespace blender::npr::strokegen {
 class Instance;
 
 struct SurfaceDebugContext {
+  enum DbgLineType {
+    vnor = 0,
+    vcurv = 1,
+    edges = 2
+  }; // match to shader defines
   bool dbg_lines; 
   bool dbg_vert_normal;
   bool dbg_vert_curv;

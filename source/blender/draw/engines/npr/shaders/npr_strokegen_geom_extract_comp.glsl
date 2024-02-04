@@ -1,6 +1,7 @@
 
 #pragma BLENDER_REQUIRE(npr_strokegen_compaction_lib.glsl)
 #pragma BLENDER_REQUIRE(npr_strokegen_topo_lib.glsl)
+#pragma BLENDER_REQUIRE(npr_strokegen_geom_lib.glsl)
 
 
  
@@ -27,7 +28,8 @@ void main()
 		ssbo_bnpr_mesh_pool_counters_.num_filtered_edges = 0; 
 		ssbo_bnpr_mesh_pool_counters_.num_filtered_verts = 0; 
 		ssbo_bnpr_mesh_pool_counters_.num_dbg_vnor_lines = 0; 
-		ssbo_bnpr_mesh_pool_counters_.num_dbg_lines = 0; 
+		ssbo_bnpr_mesh_pool_counters_.num_dbg_vpdir_lines = 0; 
+		ssbo_bnpr_mesh_pool_counters_.num_dbg_edge_lines = 0; 
 
 		ssbo_bnpr_mesh_pool_counters_prev_.num_contour_edges = 0; 
 		ssbo_bnpr_mesh_pool_counters_prev_.num_verts         = 0; 
@@ -37,7 +39,8 @@ void main()
 		ssbo_bnpr_mesh_pool_counters_prev_.num_filtered_edges = 0; 
 		ssbo_bnpr_mesh_pool_counters_prev_.num_filtered_verts = 0; 
 		ssbo_bnpr_mesh_pool_counters_prev_.num_dbg_vnor_lines = 0; 
-		ssbo_bnpr_mesh_pool_counters_prev_.num_dbg_lines = 0; 
+		ssbo_bnpr_mesh_pool_counters_prev_.num_dbg_vpdir_lines = 0; 
+		ssbo_bnpr_mesh_pool_counters_prev_.num_dbg_edge_lines = 0; 
 	}
 }
 #endif
@@ -87,7 +90,8 @@ void main()
 		ssbo_bnpr_mesh_pool_counters_prev_.num_filtered_edges = ssbo_bnpr_mesh_pool_counters_.num_filtered_edges; 
 		ssbo_bnpr_mesh_pool_counters_prev_.num_filtered_verts = ssbo_bnpr_mesh_pool_counters_.num_filtered_verts; 
 		ssbo_bnpr_mesh_pool_counters_prev_.num_dbg_vnor_lines = ssbo_bnpr_mesh_pool_counters_.num_dbg_vnor_lines;
-		ssbo_bnpr_mesh_pool_counters_prev_.num_dbg_lines = ssbo_bnpr_mesh_pool_counters_.num_dbg_lines;
+		ssbo_bnpr_mesh_pool_counters_prev_.num_dbg_vpdir_lines = ssbo_bnpr_mesh_pool_counters_.num_dbg_vpdir_lines;
+		ssbo_bnpr_mesh_pool_counters_prev_.num_dbg_edge_lines = ssbo_bnpr_mesh_pool_counters_.num_dbg_edge_lines;
 		
 	}
  }
@@ -112,7 +116,6 @@ void main()
 	ssbo_edge_to_vert_[st_base_addr+2] = vid[2];
 	ssbo_edge_to_vert_[st_base_addr+3] = vid[3];
  }
-
 #endif
 
 
@@ -232,6 +235,7 @@ void main()
 			dbg_line = valid_thread && (!ef.dupli) && (ef.selected) && ef.temp_dbg_draw_edge; 
 
 		uint dbg_line_idx = compact_dbg_edge(dbg_line, groupId); 
+		dbg_line_idx += get_debug_line_offset(DBG_LINE_TYPE__EDGES); 
 		if (dbg_line)
 		{
 			uint base_addr = dbg_line_idx * 6; 
