@@ -477,10 +477,9 @@ void get_vert_id_from_selected_vert(uint sel_vert_id, out uint vert_id, out bool
 
     bool is_dyn_vert = (num_presel_verts <= sel_vert_id) && valid_thread; 
     if (is_dyn_vert)
-    {
         vert_id = num_static_verts + (sel_vert_id - num_presel_verts); 
-    }else{
-        EdgeSelectionInfo eseli = decode_vert_selection_info(
+    else{
+        VertSelectionInfo eseli = decode_vert_selection_info(
             ssbo_selected_vert_to_vert_[sel_vert_id]
         ); 
         vert_id = eseli.vert_id;
@@ -539,7 +538,7 @@ VertFlags init_vert_flags(bool dupli)
     vf.dupli = dupli; 
     vf.new_by_split = false; 
     vf.del_by_collapse = false; 
-    vf.selected = bvec4(true); 
+    vf.selected = bvec4(false); 
     
     return vf; 
 }

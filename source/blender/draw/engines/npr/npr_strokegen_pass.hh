@@ -193,12 +193,16 @@ public:
 
   // ---------------------------------------------------------------------------
   struct SelectVertsFromEdgesContext {
-    int4 active_selection_slots; // each vertex has 4 selection flag/slots, -1 if non-active
+    // each vertex has 4 selection flag/slots, -1 if non-active
+    int4 active_selection_slots; 
 
     bool expand_selection; // expand selection to any vertex connected to selected edge
+    int4 input_selection_slots_for_expansion;
+    int4 output_selection_slots_for_expansion;  
 
     bool compact_verts; // output indexing table for verts selected in active slots
     bool compact_all_slots_selected; // compact when all slots are selected
+    int4 selection_slots_for_compation; 
   };
   void append_subpass_select_verts_from_selected_edges(SelectVertsFromEdgesContext ctx, int num_edges, int num_verts); 
   
@@ -223,31 +227,33 @@ public:
 
   // ---------------------------------------------------------------------------
   struct SurfaceAnalysisContext {
-    bool only_selected; // only calculate attributes on selected elems
 
     // Vertex attributes
+    bool order_0_only_selected;  // only calculate order-0 attrs on selected elems
     bool calc_vert_normal;
     GPUStorageBuf *ssbo_vnor_; 
     bool calc_vert_voronoi_area;
     GPUStorageBuf *ssbo_varea_;
+
+    bool order_1_only_selected; 
     bool calc_vert_curvature;
     GPUStorageBuf *ssbo_vcurv_tensor_; 
     GPUStorageBuf *ssbo_vcurv_pdirs_k1k2_;
     GPUStorageBuf *ssbo_edge_vtensors_; // temp buffer holding partial tensors
 
     SurfaceAnalysisContext()
-      : only_selected(false),
+        : order_0_only_selected(false),
         calc_vert_normal(false),
         ssbo_vnor_(nullptr),
         calc_vert_voronoi_area(false),
         ssbo_varea_(nullptr),
+        order_1_only_selected(false),
         calc_vert_curvature(false),
         ssbo_vcurv_tensor_(nullptr),
         ssbo_vcurv_pdirs_k1k2_(nullptr),
         ssbo_edge_vtensors_(nullptr)
     {
     }
-    void set_only_selected(bool val) { only_selected = val; } 
     void set_calc_vert_normal(bool val) { calc_vert_normal = val; }
     void set_calc_vert_voronoi_area(bool val) { calc_vert_voronoi_area = val; }
     void set_calc_vert_curvature(bool val) 
@@ -264,7 +270,7 @@ public:
   void append_subpass_surf_geom_analysis(
       ResourceHandle& rsc_handle, int num_verts,
       int num_edges,
-      const SurfaceAnalysisContext& options, const SurfaceDebugContext& dbg_options
+      const SurfaceAnalysisContext& ctx, const SurfaceDebugContext& dbg_options
       ); 
 
   void rebuild_pass_dbg_geom_drawcall(SurfaceDebugContext dbg_ctx);

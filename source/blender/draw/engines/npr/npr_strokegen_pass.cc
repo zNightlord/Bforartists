@@ -89,7 +89,9 @@ namespace blender::npr::strokegen
     surf_dbg_ctx.dbg_vert_curv = (2 == val_1);
     surf_dbg_ctx.dbg_edges = (3 == val_1);
     if (val_1 == 4)
-      surf_dbg_ctx.dbg_vert_normal = surf_dbg_ctx.dbg_vert_curv = true; 
+      surf_dbg_ctx.dbg_vert_normal = surf_dbg_ctx.dbg_vert_curv = true;
+    if (val_1 == 5)
+      surf_dbg_ctx.dbg_vert_normal = surf_dbg_ctx.dbg_edges = true; 
 
     meshing_params.edge_visualize_mode = -1;
     if (surf_dbg_ctx.dbg_edges) {
@@ -219,16 +221,39 @@ namespace blender::npr::strokegen
     append_subpass_fill_selected_mesh_elems_indirect_dispatch_args_(); 
     append_subpass_fill_dispatched_args_remeshed_edges_(num_edges, true);
 
-    append_subpass_fill_dispatched_args_remeshed_verts_(num_verts, false);
-    SelectVertsFromEdgesContext vtx_sel_ctx;
-    vtx_sel_ctx.active_selection_slots = {0, -1, -1, -1};
-    vtx_sel_ctx.expand_selection = true;
-    vtx_sel_ctx.compact_verts = true;
-    vtx_sel_ctx.compact_all_slots_selected = false; 
-    append_subpass_select_verts_from_selected_edges(vtx_sel_ctx, num_edges, num_verts); 
-    append_subpass_fill_dispatched_args_remeshed_verts_(num_verts, false);
+
+    SelectVertsFromEdgesContext vtx_sel_ctx_flooding;
+    vtx_sel_ctx_flooding.active_selection_slots = {0, -1, -1, -1}; // select flooded verts at slot#0
+    vtx_sel_ctx_flooding.expand_selection = true;
+    vtx_sel_ctx_flooding.input_selection_slots_for_expansion = {0, -1, -1, -1};
+    vtx_sel_ctx_flooding.output_selection_slots_for_expansion = { 1, -1, -1, -1};
+    vtx_sel_ctx_flooding.compact_verts = true;
+    vtx_sel_ctx_flooding.selection_slots_for_compation = {0, 1, -1, -1}; 
+    vtx_sel_ctx_flooding.compact_all_slots_selected = false;
+
+    SelectVertsFromEdgesContext vtx_sel_ctx_vnor = vtx_sel_ctx_flooding;
+    append_subpass_select_verts_from_selected_edges(vtx_sel_ctx_vnor, num_edges, num_verts); 
 
 
+    // Surface analysis: evaluate vertex normal & curvature
+    // SurfaceAnalysisContext surf_analysis_ctx;
+    // surf_analysis_ctx.order_0_only_selected = false;
+    // surf_analysis_ctx.set_calc_vert_normal(true);
+    // surf_analysis_ctx.ssbo_vnor_ = buffers_.ssbo_mesh_buffer_reuse_0_;
+    // surf_analysis_ctx.set_calc_vert_voronoi_area(true);
+    // surf_analysis_ctx.ssbo_varea_ = buffers_.ssbo_mesh_buffer_reuse_5_;
+    // surf_analysis_ctx.order_1_only_selected = false;
+    // surf_analysis_ctx.set_calc_vert_curvature(false);
+    // surf_analysis_ctx.ssbo_edge_vtensors_ = buffers_.ssbo_mesh_buffer_reuse_7_;
+    // surf_analysis_ctx.ssbo_vcurv_tensor_ = buffers_.ssbo_mesh_buffer_reuse_1_;
+    // surf_analysis_ctx.ssbo_vcurv_pdirs_k1k2_ = buffers_.ssbo_mesh_buffer_reuse_2_;
+    //
+    // append_subpass_surf_geom_analysis(
+    //     rsc_handle, num_verts, num_edges, surf_analysis_ctx, surf_dbg_ctx); 
+
+
+
+    // 
     int dbg_step = 0;
     bool step_dbg_remesh = true;
     auto should_remesh_when_dbg = [&]() {
@@ -277,25 +302,27 @@ namespace blender::npr::strokegen
         }
     }
 
-    append_subpass_fill_dispatched_args_remeshed_edges_(num_edges, false);
-    append_subpass_fill_dispatched_args_remeshed_verts_(num_verts, false);
-    // Test surface analysis
+    // Surface analysis: evaluate vertex normal & curvature
     SurfaceAnalysisContext surf_analysis_ctx;
+    surf_analysis_ctx.order_0_only_selected = false;
     surf_analysis_ctx.set_calc_vert_normal(true);
     surf_analysis_ctx.ssbo_vnor_ = buffers_.ssbo_mesh_buffer_reuse_0_;
     surf_analysis_ctx.set_calc_vert_voronoi_area(true);
-    surf_analysis_ctx.ssbo_varea_ = buffers_.ssbo_mesh_buffer_reuse_5_; 
+    surf_analysis_ctx.ssbo_varea_ = buffers_.ssbo_mesh_buffer_reuse_5_;
+    surf_analysis_ctx.order_1_only_selected = false;
     surf_analysis_ctx.set_calc_vert_curvature(true);
     surf_analysis_ctx.ssbo_edge_vtensors_ = buffers_.ssbo_mesh_buffer_reuse_7_;
-    surf_analysis_ctx.ssbo_vcurv_tensor_ = buffers_.ssbo_mesh_buffer_reuse_1_; 
+    surf_analysis_ctx.ssbo_vcurv_tensor_ = buffers_.ssbo_mesh_buffer_reuse_1_;
     surf_analysis_ctx.ssbo_vcurv_pdirs_k1k2_ = buffers_.ssbo_mesh_buffer_reuse_2_;
-
-    append_subpass_surf_geom_analysis(rsc_handle, num_verts, num_edges, surf_analysis_ctx, surf_dbg_ctx); 
+    
+    append_subpass_surf_geom_analysis(
+        rsc_handle, num_verts, num_edges, surf_analysis_ctx, surf_dbg_ctx); 
 
 
 
     // Contour Processing --------------------------------------------------------
-    append_subpass_fill_dispatched_args_remeshed_edges_(num_edges, false); 
+    append_subpass_fill_dispatched_args_remeshed_edges_(num_edges, false);
+    append_subpass_fill_dispatched_args_remeshed_verts_(num_verts, false);
     append_subpass_extract_contour_edges(
         gpu_batch_line_adj,
         rsc_handle,
@@ -426,7 +453,7 @@ namespace blender::npr::strokegen
   void StrokeGenPassModule::append_subpass_select_verts_from_selected_edges(
       SelectVertsFromEdgesContext ctx, int num_edges, int num_verts)
   {
-    auto bind_rsc = [&](draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub) {
+    auto bind_rsc = [&](draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub, int4 active_sel_slots) {
       sub.bind_ssbo(0, buffers_.ssbo_edge_to_edges_);            
       sub.bind_ssbo(1, buffers_.ssbo_edge_to_vert_);             
       sub.bind_ssbo(2, buffers_.ssbo_vert_to_edge_list_header_);
@@ -440,33 +467,38 @@ namespace blender::npr::strokegen
 
       sub.push_constant("pcs_vert_count_", num_verts);
       sub.push_constant("pcs_edge_count_", num_edges);
-      sub.push_constant("pcs_vertex_selection_slots_", ctx.active_selection_slots); 
+      sub.push_constant("pcs_vertex_selection_slots_", active_sel_slots); 
     }; 
-     
+
+    append_subpass_fill_dispatched_args_remeshed_edges_(num_edges, true);
     {
       auto &sub = pass_extract_geom.sub("strokegen_select_verts_from_selected_edges");
       sub.shader_set(shaders_.static_shader_get(MESH_SELECT_VERTS_FROM_SELECTED_EDGES));
-      bind_rsc(sub);
-      sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_filtered_edge_); 
+      bind_rsc(sub, ctx.active_selection_slots);
+      sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_edges_); 
       sub.barrier(GPU_BARRIER_SHADER_STORAGE); 
     }
 
+    append_subpass_fill_dispatched_args_remeshed_edges_(num_edges, false);
     if (ctx.expand_selection) {
       auto &sub = pass_extract_geom.sub("strokegen_expand_verts_from_selected_edges");
       sub.shader_set(shaders_.static_shader_get(MESH_EXPAND_VERTS_FROM_SELECTED_EDGES));
-      bind_rsc(sub);
+      bind_rsc(sub, ctx.input_selection_slots_for_expansion);
+      sub.push_constant("pcs_vertex_selection_slots_out_",
+                        ctx.output_selection_slots_for_expansion); 
       sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_edges_);
       sub.barrier(GPU_BARRIER_SHADER_STORAGE); 
     }
-
+    
+    append_subpass_fill_dispatched_args_remeshed_verts_(num_verts, false);
     if (ctx.compact_verts) {
       auto &sub = pass_extract_geom.sub("strokegen_compact_selected_verts");
       sub.shader_set(shaders_.static_shader_get(MESH_COMPACT_SELECTED_VERTS));
 
-      bind_rsc(sub);
+      bind_rsc(sub, ctx.selection_slots_for_compation);
       sub.push_constant("pcs_vertex_select_all_slots_", ctx.compact_all_slots_selected ? 1 : 0); 
 
-      sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_verts_);
+      sub.dispatch(/*buffers_.ssbo_indirect_dispatch_args_per_remeshed_verts_*/int3(compute_num_groups(num_verts, GROUP_SIZE_STROKEGEN_GEOM_EXTRACT), 1, 1));
       sub.barrier(GPU_BARRIER_SHADER_STORAGE); 
     }
   }
@@ -991,7 +1023,7 @@ namespace blender::npr::strokegen
 
 
   void StrokeGenPassModule::append_subpass_surf_geom_analysis(
-      ResourceHandle& rsc_handle, int num_verts, int num_edges, const SurfaceAnalysisContext & options,
+      ResourceHandle& rsc_handle, int num_verts, int num_edges, const SurfaceAnalysisContext & ctx,
       const SurfaceDebugContext & dbg_options
   ){
     int ssbo_offset_base = 0;
@@ -1020,41 +1052,44 @@ namespace blender::npr::strokegen
     };
 
     // Calculate Order-0 Vertex Attributes
-    if (options.calc_vert_normal)
+    append_subpass_fill_dispatched_args_remeshed_verts_(num_edges, ctx.order_0_only_selected); 
+    if (ctx.calc_vert_normal)
     {
       auto &sub = pass_extract_geom.sub("bnpr_geom_analysis_order_0_vert_normal");
       sub.shader_set(
           shaders_.static_shader_get(
-            options.calc_vert_voronoi_area ? MESH_ANALYSE_VERT_NORMAL_VORONOIAREA: MESH_ANALYSE_VERT_NORMAL
+            ctx.calc_vert_voronoi_area ? MESH_ANALYSE_VERT_NORMAL_VORONOIAREA: MESH_ANALYSE_VERT_NORMAL
           )
       );
 
       bind_src(sub, dbg_options.dbg_vert_normal);
-      sub.bind_ssbo(ssbo_offset_base, options.ssbo_vnor_);
-      if (options.calc_vert_voronoi_area)
-        sub.bind_ssbo(ssbo_offset_base + 1, options.ssbo_varea_);
+      sub.bind_ssbo(ssbo_offset_base, ctx.ssbo_vnor_);
+      if (ctx.calc_vert_voronoi_area)
+        sub.bind_ssbo(ssbo_offset_base + 1, ctx.ssbo_varea_);
 
       sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_verts_);
       sub.barrier(GPU_BARRIER_SHADER_STORAGE);
     }
 
     // Calculate Order-1 Vertex Attributes
+    append_subpass_fill_dispatched_args_remeshed_edges_(num_edges, ctx.order_1_only_selected); 
+    append_subpass_fill_dispatched_args_remeshed_verts_(num_edges, ctx.order_1_only_selected); 
     int ssbo_offset_base_1 = 0; 
     auto bind_src_order_1 = [&](draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub,
                                 bool output_dbg_lines = false) {
           bind_src(sub, output_dbg_lines); 
-          sub.bind_ssbo(ssbo_offset_base + 0, options.ssbo_vnor_);
-          sub.bind_ssbo(ssbo_offset_base + 1, options.ssbo_varea_);
+          sub.bind_ssbo(ssbo_offset_base + 0, ctx.ssbo_vnor_);
+          sub.bind_ssbo(ssbo_offset_base + 1, ctx.ssbo_varea_);
           ssbo_offset_base_1 = ssbo_offset_base + 2;
         };
-    if (options.calc_vert_curvature)
+    if (ctx.calc_vert_curvature)
     {
       {
         auto &sub = pass_extract_geom.sub("bnpr_geom_analysis_order_1_vert_curv_pass_0");
         sub.shader_set(shaders_.static_shader_get(MESH_ANALYSE_VERT_CURV_PASS_0));
 
         bind_src_order_1(sub); 
-        sub.bind_ssbo(ssbo_offset_base_1 + 0, options.ssbo_edge_vtensors_);
+        sub.bind_ssbo(ssbo_offset_base_1 + 0, ctx.ssbo_edge_vtensors_);
 
         sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_edges_);
         sub.barrier(GPU_BARRIER_SHADER_STORAGE); 
@@ -1064,9 +1099,9 @@ namespace blender::npr::strokegen
         sub.shader_set(shaders_.static_shader_get(MESH_ANALYSE_VERT_CURV_PASS_1));
 
         bind_src_order_1(sub, dbg_options.dbg_vert_curv);
-        sub.bind_ssbo(ssbo_offset_base_1 + 0, options.ssbo_edge_vtensors_);
-        // sub.bind_ssbo(ssbo_offset_base_1 + 1, options.ssbo_vcurv_tensor_);
-        sub.bind_ssbo(ssbo_offset_base_1 + 1, options.ssbo_vcurv_pdirs_k1k2_);
+        sub.bind_ssbo(ssbo_offset_base_1 + 0, ctx.ssbo_edge_vtensors_);
+        // sub.bind_ssbo(ssbo_offset_base_1 + 1, ctx.ssbo_vcurv_tensor_);
+        sub.bind_ssbo(ssbo_offset_base_1 + 1, ctx.ssbo_vcurv_pdirs_k1k2_);
         sub.push_constant("pcs_dbg_curv_K_scale_", dbg_options.dbg_curv_K_val); 
 
         sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_verts_);

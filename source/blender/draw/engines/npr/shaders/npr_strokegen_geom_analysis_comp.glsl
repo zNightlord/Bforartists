@@ -214,9 +214,16 @@ bool calc_vert_attr_order_0(
 void main()
 {
     uint groupIdx = gl_LocalInvocationID.x; 
-    uint vert_id = gl_GlobalInvocationID.x; 
-    uint num_verts = get_vert_count(); 
-    bool valid_thread = vert_id < num_verts; 
+    
+// #if !defined(USE_DYNAMESH_VERT_SELECTION_INDEXING)
+//     uint vert_id = gl_GlobalInvocationID.x; 
+//     uint num_verts = get_vert_count(); 
+//     bool valid_thread = vert_id < num_verts; 
+// #else
+    uint sel_vert_id = gl_GlobalInvocationID.x; 
+    uint vert_id; bool valid_thread; 
+    get_vert_id_from_selected_vert(sel_vert_id, /*out*/vert_id, valid_thread);
+// #endif
 
     VertWedgeListHeader vwlh = decode_vert_wedge_list_header(ssbo_vert_to_edge_list_header_[vert_id]);
 
@@ -239,7 +246,7 @@ void main()
     {
         VertFlags vf = decode_vert_flags(ssbo_vert_flags_[vert_id]); 
         
-        bool dbg_vtx_nor = (!vf.dupli) && valid_thread; 
+        bool dbg_vtx_nor = /* (!vf.dupli) &&  */valid_thread; 
         uint dbg_line_id = compact_normal_line(dbg_vtx_nor, groupIdx);
         dbg_line_id += get_debug_line_offset(DBG_LINE_TYPE__VNOR); 
         if (dbg_vtx_nor)

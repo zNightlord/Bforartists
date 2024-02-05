@@ -232,7 +232,7 @@ void main()
         uint wedge_id; bool valid_thread; 
         get_wedge_id_from_selected_edge(sel_edge_id, /*out*/wedge_id, /*out*/valid_thread);
 
-        if (gl_GlobalInvocationID.x == 0u) ssbo_bnpr_mesh_pool_counters_.num_filtered_verts = 0u; 
+        if (gl_GlobalInvocationID.x == 0u) ssbo_bnpr_mesh_pool_counters_.num_filtered_verts = 0u; // clear compaction counter
         if (!valid_thread) return; 
 
         uvec2 iverts = mark__cwedge_to_verts(0u); 
@@ -241,20 +241,27 @@ void main()
             ssbo_edge_to_vert_[wedge_id*4u + iverts[1]]
         );
 
+        VertFlags vfs[2] = {
+            load_vert_flags(verts[0]), 
+            load_vert_flags(verts[1])
+        };
+
         ivec4 sel_slot = ivec4(pcs_vertex_selection_slots_ + 1e-10f);
         for (uint i = 0; i < 4; ++i) 
             if (0 <= sel_slot[i] && sel_slot[i] < 4){
                 uint si = sel_slot[i]; 
-                update_vert_flags_selected(verts.x, si); 
-                update_vert_flags_selected(verts.y, si); 
+                vfs[0].selected[si] = true; 
+                vfs[1].selected[si] = true; 
             } 
+
+        store_vert_flags(verts[0], vfs[0]); 
+        store_vert_flags(verts[1], vfs[1]); 
     #endif
 
     #if defined(_KERNEL_MULTICOMPILE__EXPAND_VERTS__FROM_SELECTED_EDGES)
         /* Expand selection to any vertex adjacent to a selected edge */
         uint wedge_id = gl_GlobalInvocationID.x; 
         uint num_all_edges = get_edge_count(); 
-        ivec4 sel_slot = ivec4(pcs_vertex_selection_slots_ + 1e-10f); 
 
         bool valid_thread = (wedge_id < num_all_edges);
         if (!valid_thread) return;
@@ -264,20 +271,47 @@ void main()
             ssbo_edge_to_vert_[wedge_id*4u + iverts[0]],
             ssbo_edge_to_vert_[wedge_id*4u + iverts[1]]
         );
+
+        EdgeFlags ef = load_edge_flags(wedge_id);
+        bool edge_selected = ef.selected;
+        if (edge_selected) return; 
+
+
         VertFlags vfs[2] = {
             load_vert_flags(verts[0]), 
             load_vert_flags(verts[1])
         };
-
         /* don't care about race condition, just make sure its selected */
+        ivec4 sel_slot_in = ivec4(pcs_vertex_selection_slots_ + 1e-10f); 
+        bool expanded = false; 
+        bvec2 already_selected = {false, false};
         for (uint i = 0; i < 4; ++i) 
-            if (0 <= sel_slot[i] && sel_slot[i] < 4){
-                uint si = sel_slot[i];
-                if (vfs[0].selected[si] && !vfs[1].selected[si])
-                    update_vert_flags_selected(verts[1], si);
-                if (vfs[1].selected[si] && !vfs[0].selected[si])
-                    update_vert_flags_selected(verts[0], si);
+            if (0 <= sel_slot_in[i] && sel_slot_in[i] < 4)
+            {
+                uint si = sel_slot_in[i];
+                if (vfs[0].selected[si] != vfs[1].selected[si])
+                    expanded = true; 
+                if (vfs[0].selected[si]) already_selected[0] = true;
+                if (vfs[1].selected[si]) already_selected[1] = true;
             }
+
+
+        ivec4 sel_slot_out = ivec4(pcs_vertex_selection_slots_out_ + 1e-10f); 
+        if (expanded)
+        {
+            for (uint i = 0; i < 4; ++i) 
+            {
+                uint si =sel_slot_out[i]; 
+                if (0 <= si && si < 4)
+                {
+                    if (!already_selected[0]) vfs[0].selected[si] = true; 
+                    if (!already_selected[1]) vfs[1].selected[si] = true; 
+                }
+            }
+
+            store_vert_flags(verts[0], vfs[0]);
+            store_vert_flags(verts[1], vfs[1]);
+        }
     #endif
 #endif /*_KERNEL_MULTICOMPILE__SELECT_VERTS__FROM_SELECTED_EDGES*/
 
@@ -293,7 +327,7 @@ void main()
 
     VertFlags vf = load_vert_flags(vert_id); 
 
-    bool selected = false;
+    bool selected = select_all_true ? true : false;
     ivec4 active_slots = ivec4(pcs_vertex_selection_slots_ + 1e-10f); 
     for (uint i = 0u; i < 4u; ++i) 
         if (0 <= active_slots[i] && active_slots[i] < 4)
@@ -308,10 +342,10 @@ void main()
                 break; 
             }
         }
-    selected = selected && valid_thread; 
+    selected = selected && (!vf.dupli) && valid_thread; 
 
     uint compacted_idx = compact_selected_vert(selected, groupId); 
-    if (valid_thread)
+    if (selected)
     {
         VertSelectionInfo vsi; 
         vsi.vert_id = vert_id; 

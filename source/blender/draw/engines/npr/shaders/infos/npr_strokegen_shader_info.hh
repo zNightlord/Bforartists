@@ -639,6 +639,7 @@ GPU_SHADER_CREATE_INFO(strokegen_select_verts)
 
     .push_constant(Type::INT, "pcs_vert_count_")
     .push_constant(Type::INT, "pcs_edge_count_")
+    .push_constant(Type::IVEC4, "pcs_vertex_selection_slots_")
 
     .local_group_size(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT)
     .compute_source("npr_strokegen_wedge_flooding_compute.glsl");
@@ -649,9 +650,7 @@ GPU_SHADER_CREATE_INFO(strokegen_select_verts_from_selected_edges)
     .define("COMPACTION_LIB_EXCLUDE_DEFAULT_CODEGEN", "1")
     .define("_KERNEL_MULTICOMPILE__SELECT_VERTS__FROM_SELECTED_EDGES", "1")
     .define("_KERNEL_MULTICOMPILE__SELECT_VERTS__FROM_SELECTED_EDGES_MAIN", "1")
-    .define("USE_DYNAMESH_EDGE_SELECTION_INDEXING", "1")
-    
-    .push_constant(Type::IVEC4, "pcs_vertex_selection_slots_");
+    .define("USE_DYNAMESH_EDGE_SELECTION_INDEXING", "1");
 
 GPU_SHADER_CREATE_INFO(strokegen_expand_verts_from_selected_edges)
     .do_static_compilation(true)
@@ -659,8 +658,8 @@ GPU_SHADER_CREATE_INFO(strokegen_expand_verts_from_selected_edges)
     .define("COMPACTION_LIB_EXCLUDE_DEFAULT_CODEGEN", "1")
     .define("_KERNEL_MULTICOMPILE__SELECT_VERTS__FROM_SELECTED_EDGES", "1")
     .define("_KERNEL_MULTICOMPILE__EXPAND_VERTS__FROM_SELECTED_EDGES", "1")
-    
-    .push_constant(Type::IVEC4, "pcs_vertex_selection_slots_");
+    .push_constant(Type::IVEC4, "pcs_vertex_selection_slots_out_")
+    ;
 
 GPU_SHADER_CREATE_INFO(strokegen_compact_selected_verts)
     .do_static_compilation(true)
@@ -670,7 +669,6 @@ GPU_SHADER_CREATE_INFO(strokegen_compact_selected_verts)
     .define("GLOBAL_COUNTER", "ssbo_bnpr_mesh_pool_counters_.num_filtered_verts")
     .define("CP_TAG", "selected_vert")
 
-    .push_constant(Type::VEC4, "pcs_vertex_selection_slots_")
     .push_constant(Type::INT, "pcs_vertex_select_all_slots_"); 
 
 
@@ -1008,6 +1006,7 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_analysis)
     .define("VERT_FLAGS_INCLUDED", "1")
     .define("VE_CIRCULATOR_INCLUDE", "1")
     .define("USE_DYNAMESH_EDGE_SELECTION_INDEXING", "1")
+    .define("USE_DYNAMESH_VERT_SELECTION_INDEXING", "1")
     .define("INCLUDE_VERTEX_POSITION", "1")
     .define("INCLUDE_DEBUG_LINE_CONFIG", "1")
 
