@@ -482,39 +482,6 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_wedge_flooding_last_iter_compaction)
     .define("_KERNEL_MULTICOMPILE__WEDGE_FLOODING__ITER__LAST_ITER__OUTPUT_CAMPACTION", "1");
 
 
-/*
- * uint pcs_vert_count_;
- * uint ssbo_wedge_flooding_pointers_in_[];
- * uint ssbo_edge_to_edges_[];
- * uint ssbo_edge_to_vert_[];
- * uint ssbo_selected_vert_to_vert_[];
- */
-GPU_SHADER_CREATE_INFO(bnpr_meshing_compact_filtered_verts)
-    .do_static_compilation(true)
-    .typedef_source("bnpr_shader_shared.hh")
-    .typedef_source("draw_shader_shared.h")
-    .define("_KERNEL_MULTICOMPILE__COMPACT_FILTERED_VERTS", "1")
-    .define("DECODE_IBO_EXCLUDE", "1") /* Remove ibo code */
-    .define("WINGED_EDGE_TOPO_INCLUDE", "1")
-    .define("VERT_WEDGE_LIST_TOPO_INCLUDE", "1")
-    .define("GLOBAL_COUNTER", "ssbo_bnpr_mesh_pool_counters_.num_filtered_verts")
-    .define("CP_TAG", "filtered_vert")
-
-    .storage_buf(0, Qualifier::WRITE, "uint", "ssbo_selected_vert_to_vert_[]")
-    .storage_buf(1, Qualifier::READ, "uint", "ssbo_wedge_flooding_pointers_in_[]")
-    .storage_buf(2, Qualifier::READ, "uint", "ssbo_edge_to_vert_[]")
-    .storage_buf(3, Qualifier::READ, "uint", "ssbo_edge_to_edges_[]")
-    .storage_buf(4, Qualifier::READ_WRITE, "uint", "ssbo_vert_to_edge_list_header_[]")
-    .storage_buf(5, Qualifier::READ_WRITE, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
-    .storage_buf(6, Qualifier::READ, "uint", "ssbo_vert_merged_id_[]")
-    .push_constant(Type::INT, "pcs_vert_count_")
-    .push_constant(Type::INT, "pcs_edge_count_")
-    .local_group_size(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT)
-    .compute_source("npr_strokegen_wedge_flooding_compute.glsl");
-
-
-
-
 
 
 GPU_SHADER_CREATE_INFO(strokegen_meshing_fill_dispatch_args)
@@ -545,7 +512,66 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_fill_dispatch_args_per_filtered_vert)
 
 
 
-GPU_SHADER_CREATE_INFO(bnpr_meshing_mesh_filtering_)
+
+GPU_SHADER_CREATE_INFO(bnpr_meshing_surf_filtering_)
+    .do_static_compilation(true)
+    .typedef_source("bnpr_shader_shared.hh")
+    .typedef_source("draw_shader_shared.h")
+    .define("WINGED_EDGE_TOPO_INCLUDE", "1")
+    .define("VERT_WEDGE_LIST_TOPO_INCLUDE", "1")
+    .define("VE_CIRCULATOR_INCLUDE", "1")
+    .define("USE_DYNAMESH_EDGE_SELECTION_INDEXING", "1")
+    .define("USE_DYNAMESH_VERT_SELECTION_INDEXING", "1")
+    .define("INCLUDE_VERTEX_POSITION", "1")
+    .define("INCLUDE_VERTEX_NORMAL", "1")
+    .define("EDGE_FLAGS_INCLUDED", "1")
+
+    .storage_buf(0, Qualifier::READ_WRITE, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
+    .storage_buf(1, Qualifier::READ_WRITE, "SSBOData_StrokeGenDynamicMeshCounters", "ssbo_dyn_mesh_counters_out_")
+    .storage_buf(2, Qualifier::READ, "uint", "ssbo_edge_to_edges_[]")
+    .storage_buf(3, Qualifier::READ, "uint", "ssbo_edge_to_vert_[]")
+    .storage_buf(4, Qualifier::READ_WRITE, "uint", "ssbo_vert_to_edge_list_header_[]")
+    .storage_buf(5, Qualifier::READ, "uint", "ssbo_selected_edge_to_edge_[]")
+    .storage_buf(6, Qualifier::READ, "uint", "ssbo_selected_vert_to_vert_[]")
+    .storage_buf(7, Qualifier::READ_WRITE, "float", "ssbo_vbo_full_[]")
+    .storage_buf(8, Qualifier::READ_WRITE, "uint", "ssbo_vpos_temp_[]")
+    .storage_buf(9, Qualifier::READ_WRITE, "uint", "ssbo_vnor_[]")
+    .storage_buf(10, Qualifier::READ_WRITE, "uint", "ssbo_vnor_temp_in_[]")
+    .storage_buf(11, Qualifier::READ_WRITE, "uint", "ssbo_vnor_temp_out_[]")
+    .storage_buf(12, Qualifier::READ_WRITE, "uint", "ssbo_edge_flags_[]")
+
+    .push_constant(Type::INT, "pcs_edge_count_")
+    .push_constant(Type::INT, "pcs_vert_count_")
+
+    .local_group_size(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT)
+    .compute_source("npr_strokegen_geom_filtering_comp.glsl");
+
+GPU_SHADER_CREATE_INFO(bnpr_meshing_surf_filtering_vnor_filtering)
+    .do_static_compilation(true)
+    .additional_info("bnpr_meshing_surf_filtering_")
+
+    .push_constant(Type::INT, "pcs_vnor_filtering_iter_")
+
+    .define("_KERNEL_MULTICOMPILE__SURF_FILTERING__VNOR_FILTERING", "1");
+
+GPU_SHADER_CREATE_INFO(bnpr_meshing_surf_filtering_vpos_filtering)
+    .do_static_compilation(true)
+    .additional_info("bnpr_meshing_surf_filtering_")
+    .define("_KERNEL_MULTICOMPILE__SURF_FILTERING__VPOS_FILTERING", "1");
+
+GPU_SHADER_CREATE_INFO(bnpr_meshing_surf_filtering_vpos_finish)
+    .do_static_compilation(true)
+    .additional_info("bnpr_meshing_surf_filtering_")
+    .define("_KERNEL_MULTICOMPILE__SURF_FILTERING__VPOS_FILTERING_FINISH", "1");
+
+
+
+
+
+
+
+
+GPU_SHADER_CREATE_INFO(bnpr_meshing_mesh_filtering_) // DEPRECATED
     .do_static_compilation(true)
     .typedef_source("bnpr_shader_shared.hh")
     .typedef_source("draw_shader_shared.h")
@@ -1030,6 +1056,7 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_analysis)
     .push_constant(Type::INT, "pcs_rsc_handle")
     .push_constant(Type::INT, "pcs_output_dbg_geom_")
     .push_constant(Type::FLOAT, "pcs_dbg_geom_scale_")
+    .push_constant(Type::INT, "pcs_only_selected_verts_")
 
     .local_group_size(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT)
     .compute_source("npr_strokegen_geom_analysis_comp.glsl"); 

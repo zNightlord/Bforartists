@@ -45,7 +45,7 @@ void main()
     pos_hclip = proj * vec4(pos_hclip.xyz, 1.0f); 
 
     gl_Position = pos_hclip;
-    // gl_Position.z -= 2.0e-5 * pos_hclip.w;
+    gl_Position.z -= 8.0e-5 * pos_hclip.w;
 
 
 
@@ -61,15 +61,12 @@ void main()
             color = vec4(0, 1, 0, 1); 
     } else if (pcs_line_type_ == DBG_LINE_TYPE__EDGES)
     {
-        color.rgb = rand_col_rgb(line_id, line_id * 7u);
+        color.rgb = .3f * rand_col_rgb(line_id, line_id * 7u);
         color.a = 1.0f; 
     }
 
 
-    // if ((line_id % 2u) == 0u) 
-    //     color = vec4(0, 1, 0, 1);
-    // else 
-    //     color = vec4(1, 0, 0, 1); 
-
+    color = vec4(0, 1, 0, 1);
+    color *= .1f; 
 
 }

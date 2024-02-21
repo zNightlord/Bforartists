@@ -129,6 +129,7 @@ public:
   int num_total_mesh_tris;
 
   void init_per_mesh_pass();
+  void append_subpass_vertex_smoothing(int num_edges, int num_verts, bool only_selected_verts);
   void append_per_mesh_pass(
       Object* ob,
       GPUBatch* gpu_batch_line_adj,
@@ -169,7 +170,8 @@ public:
     int num_diffusion_iters; // deprecate
     float quadric_deviation; // deprecate
     float geodist_deviation; // deprecate
-    int seconds_sync_view_mat; 
+    int seconds_sync_view_mat;
+    int num_vtx_smooth_iters; 
 
     int num_edge_flooding_iters;
     int num_normal_filtering_iters;
@@ -204,11 +206,9 @@ public:
     bool compact_all_slots_selected; // compact when all slots are selected
     int4 selection_slots_for_compation; 
   };
-  void append_subpass_select_verts_from_selected_edges(SelectVertsFromEdgesContext ctx, int num_edges, int num_verts); 
-  
+  void append_subpass_select_verts_from_selected_edges(SelectVertsFromEdgesContext ctx, int num_edges, int num_verts);
 
-  // ---------------------------------------------------------------------------
-  int num_remesh_iters = 1;
+
   enum EdgeFlipOptiGoal {
     // Match to shader macros
     // #define EDGE_FLIP_OPTI_VALENCE 0u

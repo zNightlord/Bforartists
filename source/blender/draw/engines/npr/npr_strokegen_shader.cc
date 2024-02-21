@@ -140,9 +140,7 @@ const char *StrokeGenShaderModule::static_shader_create_info_name_get(eShaderTyp
       return "bnpr_meshing_wedge_flooding_last_iter_output_flags"; 
     case MESH_WEDGE_FLOODING_LAST_ITER_COMPACTION:
       return "bnpr_meshing_wedge_flooding_last_iter_compaction";
-    case MESH_WEDGE_FLOODING_SELECT_VERTS:
-      return "bnpr_meshing_compact_filtered_verts";
-
+    
     case MESH_SELECT_VERTS_FROM_SELECTED_EDGES:
       return "strokegen_select_verts_from_selected_edges"; 
     case MESH_EXPAND_VERTS_FROM_SELECTED_EDGES:
@@ -155,6 +153,7 @@ const char *StrokeGenShaderModule::static_shader_create_info_name_get(eShaderTyp
     case FILL_DISPATCH_ARGS_FILTERED_VERTS:
       return "bnpr_meshing_fill_dispatch_args_per_filtered_vert";
 
+// DEPREACATED ----------------------
     case MESH_FILTERING_EDGE_NORMAL:
       return "bnpr_meshing_mesh_filtering_edge_normal_"; 
     case MESH_FILTERING_EDGE_QUADRIC:
@@ -165,7 +164,14 @@ const char *StrokeGenShaderModule::static_shader_create_info_name_get(eShaderTyp
       return "bnpr_meshing_mesh_filtering_diffuse_vert_quadric_"; 
     case MESH_FILTERING_MOVE_VERTS:
       return "bnpr_meshing_mesh_filtering_move_verts_";
+// ----------------------------------
+    case MESH_FILTER_VNOR_FILTERING:
+      return "bnpr_meshing_surf_filtering_vnor_filtering"; 
 
+    case MESH_FILTER_VPOS_FILTERING:
+      return "bnpr_meshing_surf_filtering_vpos_filtering"; 
+    case MESH_FILTER_VPOS_FILTERING_FINISH:
+      return "bnpr_meshing_surf_filtering_vpos_finish";
 
     case FILL_DISPATCH_ARGS_REMESHED_EDGES:
       return "strokegen_remeshing_fill_dispatch_args_per_remeshed_edge";

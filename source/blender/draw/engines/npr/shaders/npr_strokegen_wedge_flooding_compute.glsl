@@ -788,7 +788,7 @@ void main()
     float bilateral_weight_sum = .0f;  
 
 #if defined(_KERNEL_MULTICOMPILE__MESH_FILTERING__VERT_QUADRIC_INIT)
-    /* note: this inits at diagonals with param, other places cleared to .0 */
+    /* note: this inits at diagonals with param value, other places cleared to .0 */
     q_v.quadric = mat4(0.0); 
     q_v.area = .0f; 
     q_v_filtered = q_v; 

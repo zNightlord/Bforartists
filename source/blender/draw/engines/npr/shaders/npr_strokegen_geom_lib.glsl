@@ -7,13 +7,13 @@
 
 
 #if defined(INCLUDE_VERTEX_POSITION)
-        vec3 ld_vpos(uint vtx_id)
-        {
-            vec3 vpos; 
-            Load3(ssbo_vbo_full_, vtx_id, vpos);
+    vec3 ld_vpos(uint vtx_id)
+    {
+        vec3 vpos; 
+        Load3(ssbo_vbo_full_, vtx_id, vpos);
 
-            return vpos; 
-        }
+        return vpos; 
+    }
     void st_vpos(uint vtx_id, vec3 vpos)
     {
         Store3(ssbo_vbo_full_, vtx_id, vpos);
@@ -148,7 +148,7 @@ uint get_debug_line_counter(uint line_type)
 
 uint get_debug_line_offset(uint line_type)
 {
-    /* offset line_id based on line type */
+    /* memory offset line_id based on line type */
     uint line_offset = 0u; 
     if (line_type == DBG_LINE_TYPE__VNOR)
         return line_offset; 
