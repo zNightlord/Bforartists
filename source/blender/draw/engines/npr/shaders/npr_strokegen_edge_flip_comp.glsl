@@ -291,6 +291,7 @@ void main()
     
     bool is_flip_ok = (v0 != v2) 
         && (ef.selected)
+        && (!ef.sel_border)
         && (!ef.dupli)
         && (!ef.border) 
         && (!ef.del_by_split)

@@ -140,7 +140,10 @@ const char *StrokeGenShaderModule::static_shader_create_info_name_get(eShaderTyp
       return "bnpr_meshing_wedge_flooding_last_iter_output_flags"; 
     case MESH_WEDGE_FLOODING_LAST_ITER_COMPACTION:
       return "bnpr_meshing_wedge_flooding_last_iter_compaction";
-    
+
+    case MESH_WEDGE_MARK_EDGES_ON_SELECTION_BORDER:
+      return "bnpr_meshing_edge_selection_mark_selection_border"; 
+
     case MESH_SELECT_VERTS_FROM_SELECTED_EDGES:
       return "strokegen_select_verts_from_selected_edges"; 
     case MESH_EXPAND_VERTS_FROM_SELECTED_EDGES:
@@ -184,6 +187,8 @@ const char *StrokeGenShaderModule::static_shader_create_info_name_get(eShaderTyp
       return "bnpr_meshing_edge_split_compact";
     case FILL_DISPATCH_ARGS_SPLIT_EDGES:
       return "strokegen_remeshing_fill_dispatch_args_per_split_edge";
+    case MESH_OP_SPLIT_EDGE_EXCLUDE_BORDER:
+      return "bnpr_meshing_edge_split_exclude_border"; 
     case MESH_OP_SPLIT_EDGE_RESOLVE_CONFLICT:
       return "bnpr_meshing_edge_split_resolve_conflict";
     case MESH_OP_SPLIT_EDGE_EXECUTE:

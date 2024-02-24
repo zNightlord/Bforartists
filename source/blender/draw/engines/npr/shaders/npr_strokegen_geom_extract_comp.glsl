@@ -234,6 +234,31 @@ void main()
 		if (pcs_edge_visualize_mode_ == 5)
 			dbg_line = valid_thread && (!ef.dupli) && (ef.selected) && ef.temp_dbg_draw_edge; 
 
+		if (pcs_edge_visualize_mode_ == 6)
+		{
+			VertFlags vf1 = load_vert_flags(vids[1]);
+			VertFlags vf3 = load_vert_flags(vids[3]); 
+			dbg_line = dbg_line && (vf1.contour && vf3.contour); 
+		}
+
+		if (pcs_edge_visualize_mode_ == 7)
+		{
+			// AdjWedgeInfo w[4]; 
+			// w[0] = decode_adj_wedge_info(ssbo_edge_to_edges_[wedge_id*4u + 0u]);
+			// w[1] = decode_adj_wedge_info(ssbo_edge_to_edges_[wedge_id*4u + 1u]);
+			// w[2] = decode_adj_wedge_info(ssbo_edge_to_edges_[wedge_id*4u + 2u]);
+			// w[3] = decode_adj_wedge_info(ssbo_edge_to_edges_[wedge_id*4u + 3u]);
+
+			// EdgeFlags ef_w0 = load_edge_flags(w[0].wedge_id); 
+			// EdgeFlags ef_w1 = load_edge_flags(w[1].wedge_id); 
+			// EdgeFlags ef_w2 = load_edge_flags(w[2].wedge_id); 
+			// EdgeFlags ef_w3 = load_edge_flags(w[3].wedge_id); 
+
+			// bool sel_border = ef.selected && (!all(bvec4(ef_w0.selected, ef_w1.selected, ef_w2.selected, ef_w3.selected)));
+			bool sel_border = ef.sel_border;
+			dbg_line = dbg_line && sel_border; 
+		}
+
 		uint dbg_line_idx = compact_dbg_edge(dbg_line, groupId); 
 		dbg_line_idx += get_debug_line_offset(DBG_LINE_TYPE__EDGES); 
 		if (dbg_line)

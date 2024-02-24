@@ -156,6 +156,8 @@ public:
    bool output_edge_to_selected; // has effect only when .compact_edges==true
   };
   void append_subpass_diffuse_edge_selection(int num_edges, int num_verts, EdgeFloodingOptions options);
+  void append_subpass_mark_selection_border_edges(int num_edges, int num_verts);
+
 
   enum GPUMeshQuadricFilter {
     GeomNormalPlane = 0,
@@ -180,6 +182,7 @@ public:
     GPUMeshQuadricFilter alternate_filter_0;
     GPUMeshQuadricFilter alternate_filter_1;
     int edge_visualize_mode;
+    bool visualize_contour_edges; 
 
     float remeshing_targ_edge_len;
     int remeshing_split_iters; 
@@ -209,6 +212,13 @@ public:
   void append_subpass_select_verts_from_selected_edges(SelectVertsFromEdgesContext ctx, int num_edges, int num_verts);
 
 
+  enum EdgeSplitMode {
+    // Match to shader macros
+    // #define EDGE_SPLIT_LONG_EDGES 0u
+    LongEdge,
+    // #define EDGE_SPLIT_CONTOUR_EDGES 1u
+    InterpContour
+  }; 
   enum EdgeFlipOptiGoal {
     // Match to shader macros
     // #define EDGE_FLIP_OPTI_VALENCE 0u
@@ -216,7 +226,7 @@ public:
     // #define EDGE_FLIP_OPTI_DELAUNAY 1u
     Delaunay = 1,
   };
-  void append_subpass_split_edges(int iter_remesh, int iter_split, int num_edges, int num_verts);
+  void append_subpass_split_edges(EdgeSplitMode mode, int iter_split, int num_edges, int num_verts);
   void append_subpass_collapse_edges(int iter_remesh, int iter_collapse, int num_edges, int num_verts);
   void append_subpass_flip_edges(EdgeFlipOptiGoal opti_goal, int iter_remesh, int iter_flip, int num_edges, int num_verts);
   void append_subpass_fill_dispatched_args_remeshed_edges_(int num_static_edges, bool only_selected_edges);

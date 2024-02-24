@@ -8,34 +8,7 @@ uint pcg(uint v) /* pcg hash */
 	return (word >> 22u) ^ word;
 }
 
-struct VertFilteringInfo
-{
-    bool is_null_vert; 
-    uint vert_id; 
-    bool is_unstable; 
-    bool is_border; 
-};
-uint encode_filtered_vert_info(VertFilteringInfo fvi)
-{
-    uint data = 0u; 
-    data = (fvi.vert_id << 2u); 
-    data |= ((fvi.is_unstable ? 1u : 0u) << 1u); 
-    data |= (fvi.is_border   ? 1u : 0u); 
 
-    if (fvi.is_null_vert)
-        data = NULL_FILTERED_VERT; 
-        
-    return data; 
-}
-VertFilteringInfo decode_filtered_vert_info(uint data)
-{
-    VertFilteringInfo fvi; 
-    fvi.is_null_vert = (data == NULL_FILTERED_VERT); 
-    fvi.vert_id = (data >> 2u); 
-    fvi.is_unstable = (data & 0x2u) != 0u; 
-    fvi.is_border   = (data & 0x1u) != 0u; 
-    return fvi; 
-}
 
 uint get_vert_count()
 {
@@ -47,6 +20,11 @@ uint get_edge_count()
     return pcs_edge_count_ + ssbo_dyn_mesh_counters_out_.num_edges;
 }
 
+
+
+
+
+#if defined(_KERNEL_MULTICOMPILE__WEDGE_FLOODING)
 vec3 ld_vbo(uint GlobalVertID)
 {
 	uint base_addr = GlobalVertID * 3; 
@@ -60,16 +38,10 @@ void store_vbo(uint GlobalVertID, vec3 vpos)
     ssbo_vbo_full_[base_addr+2] = vpos.z;
 }
 
-
-
-
-
-#if defined(_KERNEL_MULTICOMPILE__WEDGE_FLOODING)
 void main()
 {
     const uint groupId = gl_LocalInvocationID.x; 
 	const uint idx = gl_GlobalInvocationID.x; 
-    /* Do not use EdgeID here since it's offseted with current mesh batch */
     bool valid_thread = (idx.x < pcs_edge_count_); 
     const uint EdgeID = idx.x; 
 
@@ -90,12 +62,10 @@ void main()
     mat4 view_to_world = ubo_view_matrices_.viewinv;
     vec3 cam_pos_ws = view_to_world[3].xyz; /* see "#define cameraPos ViewMatrixInverse[3].xyz" */
 
-    WedgeQuality wq = compute_wedge_quality(
-        vpos_wedge[0], vpos_wedge[1], vpos_wedge[2], vpos_wedge[3], cam_pos_ws
-    ); 
+    WedgeQuality wq = compute_wedge_quality(vpos_wedge[0], vpos_wedge[1], vpos_wedge[2], vpos_wedge[3], cam_pos_ws); 
     
     wfptr.next_wedge_id = EdgeID; 
-    wfptr.is_seed       = wq.unstable && !is_border_wedge; 
+    wfptr.is_seed       = (wq.silouette || wq.unstable) && !is_border_wedge; 
     wfptr.is_unstable   = wq.unstable_silouette && !is_border_wedge; 
     wfptr.is_border     = is_border_wedge; 
 
@@ -211,6 +181,37 @@ void main()
 #endif /*_KERNEL_MULTICOMPILE__WEDGE_FLOODING__ITER */
 
 
+}
+#endif
+
+
+
+#if defined(_KERNEL_MULTICOMPILE__SELECT_EDGES)
+void main()
+{
+    uint sel_edge_id = gl_GlobalInvocationID.x; 
+    uint wedge_id; bool valid_thread; 
+    get_wedge_id_from_selected_edge(sel_edge_id, /*out*/wedge_id, /*out*/valid_thread); 
+
+    #if defined(_KERNEL_MULTICOMPILE__SELECT_EDGES__MARK_BORDERS)
+        AdjWedgeInfo w[4]; 
+        w[0] = decode_adj_wedge_info(ssbo_edge_to_edges_[wedge_id*4u + 0u]);
+        w[1] = decode_adj_wedge_info(ssbo_edge_to_edges_[wedge_id*4u + 1u]);
+        w[2] = decode_adj_wedge_info(ssbo_edge_to_edges_[wedge_id*4u + 2u]);
+        w[3] = decode_adj_wedge_info(ssbo_edge_to_edges_[wedge_id*4u + 3u]);
+
+        EdgeFlags ef = load_edge_flags(wedge_id); 
+        EdgeFlags ef_w0 = load_edge_flags(w[0].wedge_id); 
+        EdgeFlags ef_w1 = load_edge_flags(w[1].wedge_id); 
+        EdgeFlags ef_w2 = load_edge_flags(w[2].wedge_id); 
+        EdgeFlags ef_w3 = load_edge_flags(w[3].wedge_id); 
+
+        /* detect edges at selection border */
+        bool sel_border = (!all(bvec4(ef_w0.selected, ef_w1.selected, ef_w2.selected, ef_w3.selected)))
+            && valid_thread && ef.selected; 
+        if (sel_border)
+            update_edge_flags__detect_sel_border(wedge_id, ef); /* race cond' doesn't matter here */
+    #endif
 }
 #endif
 
@@ -397,6 +398,34 @@ void main()
 
 
 /* Deprecated ---------------------------------------------------------- */
+// struct VertFilteringInfo
+// {
+//     bool is_null_vert; 
+//     uint vert_id; 
+//     bool is_unstable; 
+//     bool is_border; 
+// };
+// uint encode_filtered_vert_info(VertFilteringInfo fvi)
+// {
+//     uint data = 0u; 
+//     data = (fvi.vert_id << 2u); 
+//     data |= ((fvi.is_unstable ? 1u : 0u) << 1u); 
+//     data |= (fvi.is_border   ? 1u : 0u); 
+
+//     if (fvi.is_null_vert)
+//         data = NULL_FILTERED_VERT; 
+        
+//     return data; 
+// }
+// VertFilteringInfo decode_filtered_vert_info(uint data)
+// {
+//     VertFilteringInfo fvi; 
+//     fvi.is_null_vert = (data == NULL_FILTERED_VERT); 
+//     fvi.vert_id = (data >> 2u); 
+//     fvi.is_unstable = (data & 0x2u) != 0u; 
+//     fvi.is_border   = (data & 0x1u) != 0u; 
+//     return fvi; 
+// }
 #if defined(_KERNEL_MULTICOMPILE__COMPACT_FILTERED_VERTS)
 void main()
 {

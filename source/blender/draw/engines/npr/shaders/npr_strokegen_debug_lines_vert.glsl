@@ -66,7 +66,7 @@ void main()
     }
 
 
-    color = vec4(0, 1, 0, 1);
-    color *= .1f; 
+    // color = vec4(0, 1, 0, 1);
+    color *= .6f; 
 
 }

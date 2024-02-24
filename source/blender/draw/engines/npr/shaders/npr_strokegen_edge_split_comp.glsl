@@ -3,6 +3,8 @@
 #pragma BLENDER_REQUIRE(npr_strokegen_topo_lib.glsl)
 #pragma BLENDER_REQUIRE(npr_strokegen_load_store_lib.glsl)
 
+#pragma BLENDER_REQUIRE(npr_strokegen_geom_lib.glsl)
+
 
 /* Inputs: 
 uint pcs_split_iter_; 
@@ -62,11 +64,15 @@ struct EdgeSplitInfo
     float edge_len; 
     uint id; 
 }; 
+uint encode_edge_split_info__id__is_collapse_ok(uint edge_id, bool ok)
+{
+    return ((edge_id << 1u) | uint(ok));
+}
 uvec2 encode_edge_split_info(EdgeSplitInfo esi)
 {
     uvec2 esi_enc = uvec2(0, 0); 
     esi_enc.x = floatBitsToUint(esi.edge_len); 
-    esi_enc.y = ((esi.id << 1u) | uint(esi.is_split_ok));
+    esi_enc.y = encode_edge_split_info__id__is_collapse_ok(esi.id, esi.is_split_ok);
 
     return esi_enc;  
 }
@@ -88,16 +94,27 @@ void store_per_split_edge_info(uint split_edge_id, EdgeSplitInfo psei)
     uvec2 psei_enc = encode_edge_split_info(psei); 
     Store2(ssbo_per_split_edge_info_, split_edge_id, psei_enc);
 }
+void store_per_split_edge_info__id__is_split_ok(uint split_edge_id, uint wedge_id, bool is_split_ok)
+{
+    uint enc = encode_edge_split_info__id__is_collapse_ok(wedge_id, is_split_ok); 
+    ssbo_per_split_edge_info_[split_edge_id*2u+1u] = enc;
+}
 EdgeSplitInfo load_per_split_edge_info(uint split_edge_id)
 {
     uvec2 psei_enc; 
     Load2(ssbo_per_split_edge_info_, split_edge_id, psei_enc); 
     return decode_edge_split_info(psei_enc); 
 }
+
 void store_per_edge_split_info(uint wedge_id, EdgeSplitInfo pesi)
 {
     uvec2 pesi_enc = encode_edge_split_info(pesi); 
     Store2(ssbo_per_edge_split_info_, wedge_id, pesi_enc); 
+}
+void store_per_edge_split_info__id__is_split_ok(uint wedge_id, uint split_edge_id, bool is_split_ok)
+{
+    uint enc = encode_edge_split_info__id__is_collapse_ok(split_edge_id, is_split_ok); 
+    ssbo_per_edge_split_info_[wedge_id*2u+1u] = enc;
 }
 EdgeSplitInfo load_per_edge_split_info(uint wedge_id)
 {
@@ -113,7 +130,6 @@ uint pcg(uint v) /* pcg hash */
 	uint word = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
 	return (word >> 22u) ^ word;
 }
-
 
 /* true/false if esi_0 hase higher/lower priority than esi_1  */
 struct EdgeSplitPriorityContext
@@ -137,6 +153,56 @@ bool split_priority_higher(EdgeSplitPriorityContext ctx_0, EdgeSplitPriorityCont
 
 
 
+#define EDGE_SPLIT_LONG_EDGES 0u
+#define EDGE_SPLIT_CONTOUR_EDGES 1u 
+
+bool is_contour_edge_havent_split(vec3 vpos_0, vec3 vnor_0, VertFlags vf_0, vec3 vpos_1, vec3 vnor_1, VertFlags vf_1)
+{
+    if (vf_0.contour || vf_1.contour)
+        return false;
+
+    mat4 view_to_world = ubo_view_matrices_.viewinv;
+    vec3 cam_pos_ws = view_to_world[3].xyz; /* see "#define cameraPos ViewMatrixInverse[3].xyz" */
+    vec2 ndv = vec2(
+        dot(vnor_0, cam_pos_ws - vpos_0),  
+        dot(vnor_1, cam_pos_ws - vpos_1) 
+    ); 
+    
+    return sign(ndv[0]) != sign(ndv[1]);
+}
+
+bool is_contour_split_pass() { return (pcs_split_mode_ == EDGE_SPLIT_CONTOUR_EDGES); }
+
+
+
+
+
+vec3 calc_split_vpos(uint v1, uint v3)
+{
+    vec3 vpos[2] = { ld_vpos(v1), ld_vpos(v3) };
+    if (is_contour_split_pass())
+    {
+        vec3 vnor[2] = { ld_vnor(v1), ld_vnor(v3) }; 
+        float contour_interpo_factor = .5f; 
+        {        
+            mat4 view_to_world = ubo_view_matrices_.viewinv;
+            vec3 cam_pos_ws = view_to_world[3].xyz; /* see "#define cameraPos ViewMatrixInverse[3].xyz" */
+
+            vec2 ndv = vec2(
+                dot(vnor[0], cam_pos_ws - vpos[0]),  
+                dot(vnor[1], cam_pos_ws - vpos[1]) 
+            ); 
+            contour_interpo_factor = ndv[0] / (ndv[0] - ndv[1]); /* split pos = vpos_0 + interpo * (vpos_1 - vpos_0); */
+        }
+
+        return vpos[0] + contour_interpo_factor * (vpos[1] - vpos[0]); 
+    }
+
+    // Return mid point by default
+    return (vpos[0] + vpos[1]) / 2.0f;
+}
+
+
 
 
 #if defined(_KERNEL_MULTICOMPILE__EDGE_SPLIT_INIT)
@@ -154,6 +220,7 @@ void main()
 
 
 #if defined(_KERNEL_MULTICOMPILE__EDGE_SPLIT_COMPACT)
+
 void main()
 {
     const uint groupId = gl_LocalInvocationID.x; 
@@ -179,16 +246,25 @@ void main()
     vpos_cwedge[1] = ld_vpos(verts_cwedge.y);
     float edge_len = length(vpos_cwedge[0] - vpos_cwedge[1]);
 
-    EdgeFlags ef = load_edge_flags(wedge_id);
+    bool is_contour_edge = is_contour_edge_havent_split(
+        vpos_cwedge[0], ld_vnor(verts_cwedge.x), load_vert_flags(verts_cwedge.x), 
+        vpos_cwedge[1], ld_vnor(verts_cwedge.y), load_vert_flags(verts_cwedge.y) 
+    );
 
+    EdgeFlags ef = load_edge_flags(wedge_id);
     /* Select edges based on split conditions */
     bool is_split_ok = valid_thread 
         && (ef.selected)
+        && (!ef.sel_border)
         && (!ef.dupli)
         && (!ef.border) 
         && (!ef.del_by_split)
-        && (!ef.del_by_collapse)
-        && edge_len > get_split_edge_len_min();
+        && (!ef.del_by_collapse); 
+    if (!is_contour_split_pass())
+        is_split_ok = is_split_ok && edge_len > get_split_edge_len_min();
+    else
+        is_split_ok = is_split_ok && is_contour_edge; 
+    
 
     uint split_edge_id = compact_split_select_long_edges(is_split_ok, groupId);
     if (is_split_ok)
@@ -250,6 +326,32 @@ void main()
 
 
 
+#if defined(_KERNEL_MULTICOMPILE__EDGE_SPLIT_EXCLUDE_BORDER)
+    bool update = false; 
+    if (psei_curr.is_split_ok && valid_thread)
+    {  
+        EdgeFlags ef = load_edge_flags(psei_curr.id); 
+        EdgeFlags ef_w0 = load_edge_flags(w[0].wedge_id); 
+        EdgeFlags ef_w1 = load_edge_flags(w[1].wedge_id); 
+        EdgeFlags ef_w2 = load_edge_flags(w[2].wedge_id); 
+        EdgeFlags ef_w3 = load_edge_flags(w[3].wedge_id); 
+
+        /* except border edges */
+        if (any(bvec4(ef_w0.border, ef_w1.border, ef_w2.border, ef_w3.border))) 
+            psei_curr.is_split_ok = false; 
+
+        update = !psei_curr.is_split_ok; 
+    }
+
+    if (update && valid_thread)
+    {
+        store_per_edge_split_info__id__is_split_ok(psei_curr.id, split_edge_id, psei_curr.is_split_ok);  
+        store_per_split_edge_info__id__is_split_ok(split_edge_id, psei_curr.id, psei_curr.is_split_ok); 
+    }
+#endif
+
+
+
 #if defined(_KERNEL_MULTICOMPILE__EDGE_SPLIT_RESOLVE_CONFLICT)
     if (psei_curr.is_split_ok && valid_thread)
     {  
@@ -268,6 +370,9 @@ void main()
         /* except border edges */
         if (any(bvec4(ef_w0.border, ef_w1.border, ef_w2.border, ef_w3.border))) 
             psei_curr.is_split_ok = false; 
+        /* except edges at selection border */
+        if (!all(bvec4(ef_w0.selected, ef_w1.selected, ef_w2.selected, ef_w3.selected)))
+            psei_curr.is_split_ok = false; 
 
         /* Resolve collision */
         EdgeSplitPriorityContext ctx_curr = EdgeSplitPriorityContext(psei_curr, psei_curr.id, ef.selected); 
@@ -285,7 +390,7 @@ void main()
 
     /* Dont need score from now on, so reuse it to store alloc id */
     if (valid_thread)
-    {
+    { 
         psei_curr.edge_len = uintBitsToFloat(split ? split_edge_alloc_id : NULL_EDGE);
         store_per_split_edge_info(split_edge_id, psei_curr); /* no race cond' since only accessed by this thread */
     }
@@ -464,11 +569,11 @@ void main()
 
 
     /* Store new vert pos */ 
-    vec3 split_pos = (ld_vpos(v1) + ld_vpos(v3)) / 2.0f; 
+    vec3 split_pos = calc_split_vpos(v1, v3); 
     st_vpos(v4, split_pos); 
 
     /* Store new vert states */
-    VertFlags vf = init_vert_flags__new_split_edge(); 
+    VertFlags vf = init_vert_flags__new_split_edge(is_contour_split_pass()); 
     store_vert_flags(v4, vf); 
 
 
