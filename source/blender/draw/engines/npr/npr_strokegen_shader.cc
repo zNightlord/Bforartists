@@ -157,19 +157,24 @@ const char *StrokeGenShaderModule::static_shader_create_info_name_get(eShaderTyp
       return "bnpr_meshing_fill_dispatch_args_per_filtered_vert";
 
 // DEPREACATED ----------------------
-    case MESH_FILTERING_EDGE_NORMAL:
+    case DEPRECATED_MESH_FILTERING_EDGE_NORMAL:
       return "bnpr_meshing_mesh_filtering_edge_normal_"; 
-    case MESH_FILTERING_EDGE_QUADRIC:
+    case DEPRECATED_MESH_FILTERING_EDGE_QUADRIC:
       return "bnpr_meshing_mesh_filtering_edge_quadric_";
-    case MESH_FILTERING_VERT_QUADRIC_INIT:
+    case DEPRECATED_MESH_FILTERING_VERT_QUADRIC_INIT:
       return "bnpr_meshing_mesh_filtering_init_vert_quadric_"; 
-    case MESH_FILTERING_VERT_QUADRIC_DIFFUSION:
+    case DEPRECATED_MESH_FILTERING_VERT_QUADRIC_DIFFUSION:
       return "bnpr_meshing_mesh_filtering_diffuse_vert_quadric_"; 
-    case MESH_FILTERING_MOVE_VERTS:
+    case DEPRECATED_MESH_FILTERING_MOVE_VERTS:
       return "bnpr_meshing_mesh_filtering_move_verts_";
 // ----------------------------------
     case MESH_FILTER_VNOR_FILTERING:
       return "bnpr_meshing_surf_filtering_vnor_filtering"; 
+
+    case MESH_FILTER_VQUADRIC_DIFFUSION:
+      return "bnpr_meshing_surf_filtering_vquadric_diffusion"; 
+    case MESH_FILTER_QUADRIC_VPOS_FILTERING:
+      return "bnpr_meshing_surf_filtering_quadric_vpos_filtering"; 
 
     case MESH_FILTER_VPOS_FILTERING:
       return "bnpr_meshing_surf_filtering_vpos_filtering"; 

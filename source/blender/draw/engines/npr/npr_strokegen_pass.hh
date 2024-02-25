@@ -129,7 +129,7 @@ public:
   int num_total_mesh_tris;
 
   void init_per_mesh_pass();
-  void append_subpass_vertex_smoothing(int num_edges, int num_verts, bool only_selected_verts);
+  void append_subpass_vertex_relocation(int num_edges, int num_verts, int num_vnor_filter_iters, bool only_selected_verts, bool use_quadric_filter);
   void append_per_mesh_pass(
       Object* ob,
       GPUBatch* gpu_batch_line_adj,

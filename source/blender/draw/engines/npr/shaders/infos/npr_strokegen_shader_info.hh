@@ -575,6 +575,8 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_surf_filtering_)
     .storage_buf(11, Qualifier::READ_WRITE, "uint", "ssbo_vnor_temp_out_[]")
     .storage_buf(12, Qualifier::READ_WRITE, "uint", "ssbo_edge_flags_[]")
 
+    .uniform_buf(0, "ViewMatrices", "ubo_view_matrices_") 
+
     .push_constant(Type::INT, "pcs_edge_count_")
     .push_constant(Type::INT, "pcs_vert_count_")
 
@@ -584,10 +586,29 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_surf_filtering_)
 GPU_SHADER_CREATE_INFO(bnpr_meshing_surf_filtering_vnor_filtering)
     .do_static_compilation(true)
     .additional_info("bnpr_meshing_surf_filtering_")
-
     .push_constant(Type::INT, "pcs_vnor_filtering_iter_")
-
     .define("_KERNEL_MULTICOMPILE__SURF_FILTERING__VNOR_FILTERING", "1");
+
+GPU_SHADER_CREATE_INFO(bnpr_meshing_surf_filtering_vquadric_common)
+    .do_static_compilation(true)
+    .define("QUADRICS_FILTERING_INCLUDE", "1")
+    .additional_info("bnpr_meshing_surf_filtering_")
+    .push_constant(Type::INT, "pcs_vq_filtering_iter_")
+    .push_constant(Type::INT, "pcs_filtered_quadric_type_")
+    .push_constant(Type::FLOAT, "pcs_quadric_deviation_")
+    .push_constant(Type::FLOAT, "pcs_geodist_deviation_")
+    .push_constant(Type::FLOAT, "pcs_position_regularization_scale_"); 
+
+GPU_SHADER_CREATE_INFO(bnpr_meshing_surf_filtering_vquadric_diffusion)
+    .do_static_compilation(true)
+    .additional_info("bnpr_meshing_surf_filtering_vquadric_common")
+    .define("_KERNEL_MULTICOMPILE__SURF_FILTERING__VQUADRICS_DIFFUSION", "1");
+
+GPU_SHADER_CREATE_INFO(bnpr_meshing_surf_filtering_quadric_vpos_filtering)
+    .do_static_compilation(true)
+    .define("QUADRICS_FILTERING_INCLUDE", "1")
+    .additional_info("bnpr_meshing_surf_filtering_vquadric_common")
+    .define("_KERNEL_MULTICOMPILE__SURF_FILTERING__QUADRIC_VPOS_FILTERING", "1");
 
 GPU_SHADER_CREATE_INFO(bnpr_meshing_surf_filtering_vpos_filtering)
     .do_static_compilation(true)
@@ -636,7 +657,7 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_mesh_filtering_) // DEPRECATED
     .push_constant(Type::INT, "pcs_vert_count_")
     .push_constant(Type::FLOAT, "pcs_quadric_deviation_")
     .push_constant(Type::FLOAT, "pcs_geodist_deviation_")
-    .push_constant(Type::FLOAT, "pcs_positiion_regularization_scale_")
+    .push_constant(Type::FLOAT, "pcs_position_regularization_scale_")
     
     .local_group_size(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT)
     .compute_source("npr_strokegen_wedge_flooding_compute.glsl");

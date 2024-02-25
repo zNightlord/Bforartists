@@ -976,7 +976,10 @@ void validate_wedge_topo(uint wedge_id, out bool valid_ee, out bool valid_ev, ou
 
 
 
-
+float gaussian(float dist, float tau)
+{
+    return exp(-(dist * dist) / (2.0f * tau * tau)); 
+}
 
 #if defined(QUADRICS_FILTERING_INCLUDE)
 
@@ -1131,11 +1134,6 @@ vec3 compute_wedge_normal(vec3 p0, vec3 p1, vec3 p2, vec3 p3)
     return normalize((n0.xyz + n2.xyz) * .5f); 
 }
 
-float gaussian(float dist, float tau)
-{
-    return exp(-(dist * dist) / (2.0f * tau * tau)); 
-}
-
 void bilateral_filter_wedge_normal(
     vec3 p0, vec3 p1, vec3 p2, vec3 p3, vec3 np, 
     vec3 q0, vec3 q1, vec3 q2, vec3 q3, vec3 nq, 
@@ -1228,7 +1226,7 @@ float compute_vert_quadric_weight(vec3 p_v, Quadric q_v, vec3 p_x, Quadric q_x, 
     float quadric_dist_v2qx = dot(v, q_x.quadric * v); /* vT Q v */
     float quadric_weight = gaussian(sqrt(abs(quadric_dist_v2qx)), dev_q); 
 
-    float geometry_weight = q_v.area * gaussian(dist, dev_g); 
+    float geometry_weight = 1.0f; // q_v.area * gaussian(dist, dev_g); 
     
     return geometry_weight * quadric_weight; 
 }

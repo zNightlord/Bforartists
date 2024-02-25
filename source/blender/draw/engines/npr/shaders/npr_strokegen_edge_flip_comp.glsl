@@ -137,7 +137,7 @@ bool should_edge_flip_common(vec3 p0, vec3 p1, vec3 p2, vec3 p3)
         vec3 n0 = normalize(cross(v13, v10));
         vec3 n2 = normalize(cross(v12, v13));
 
-        if (acos(dot(n0, n2)) > PI * .07f /*12.6 degree*/)
+        if (acos(dot(n0, n2)) > PI * .03f /*5.4 degree*/)
             return false; 
     }
 

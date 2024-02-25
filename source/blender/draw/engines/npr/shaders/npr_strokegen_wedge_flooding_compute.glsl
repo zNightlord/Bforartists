@@ -967,7 +967,7 @@ void main()
         mat4 q_d = mat4(q_v.quadric); 
  
         mat4 q_reg = compute_plane_quadric(nv, vpos_orig); 
-        q_d = q_d + pcs_positiion_regularization_scale_ * q_reg; /*damping*/
+        q_d = q_d + pcs_position_regularization_scale_ * q_reg; /*damping*/
 
         dmat3 A = dmat3(q_d); 
         dvec3 b = dvec3(q_d[3][0], q_d[3][1], q_d[3][2]); 

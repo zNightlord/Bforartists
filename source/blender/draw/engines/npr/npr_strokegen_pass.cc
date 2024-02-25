@@ -145,60 +145,6 @@ namespace blender::npr::strokegen
     surf_dbg_ctx.dbg_curv_K_val = 1.0f;
   }
 
-  void StrokeGenPassModule::append_subpass_vertex_smoothing(int num_edges, int num_verts, bool only_selected_verts)
-  {
-    auto bind_src = [&](draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub, int vnor_filter_step) {
-      sub.bind_ssbo(0, buffers_.ssbo_bnpr_mesh_pool_counters_); 
-      sub.bind_ssbo(1, buffers_.ssbo_dyn_mesh_counters_out_()); 
-      sub.bind_ssbo(2, buffers_.ssbo_edge_to_edges_); 
-      sub.bind_ssbo(3, buffers_.ssbo_edge_to_vert_); 
-      sub.bind_ssbo(4, buffers_.ssbo_vert_to_edge_list_header_); 
-      sub.bind_ssbo(5, buffers_.ssbo_selected_edge_to_edge_); 
-      sub.bind_ssbo(6, buffers_.ssbo_selected_vert_to_vert_); 
-      sub.bind_ssbo(7, buffers_.ssbo_vbo_full_); 
-      sub.bind_ssbo(8, buffers_.reused_ssbo_vpos_temp_()); 
-      sub.bind_ssbo(9, buffers_.ssbo_vnor_);
-      sub.bind_ssbo(10, buffers_.reused_ssbo_vnor_temp_in_(vnor_filter_step));
-      sub.bind_ssbo(11, buffers_.reused_ssbo_vnor_temp_out_(vnor_filter_step));
-      sub.bind_ssbo(12, buffers_.ssbo_edge_flags_); 
-      sub.push_constant("pcs_edge_count_", num_edges);
-      sub.push_constant("pcs_vert_count_", num_verts);
-    };
-
-    append_subpass_fill_dispatched_args_remeshed_verts_(num_verts, only_selected_verts);
-
-    int step_vnor_filter = 0; 
-    for (; step_vnor_filter < 4; ++step_vnor_filter) {
-      auto &sub = pass_extract_geom.sub("bnpr_meshing_surf_filtering_vnor_filtering");
-      sub.shader_set(shaders_.static_shader_get(MESH_FILTER_VNOR_FILTERING));
-
-      bind_src(sub, step_vnor_filter);
-      sub.push_constant("pcs_vnor_filtering_iter_", step_vnor_filter); 
-
-      sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_verts_);
-      sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE); 
-    }
-
-    int step_vpos_filter = 0; 
-    for (; step_vpos_filter < meshing_params.num_vtx_smooth_iters; ++step_vpos_filter)
-    {
-      {
-        auto &sub = pass_extract_geom.sub("bnpr_meshing_surf_filtering_vpos_filtering");
-        sub.shader_set(shaders_.static_shader_get(MESH_FILTER_VPOS_FILTERING));
-        bind_src(sub, step_vnor_filter);
-        sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_verts_);
-        sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
-      }
-      {
-        auto &sub = pass_extract_geom.sub("bnpr_meshing_surf_filtering_vpos_finish");
-        sub.shader_set(shaders_.static_shader_get(MESH_FILTER_VPOS_FILTERING_FINISH));
-        bind_src(sub, step_vnor_filter);
-        sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_verts_);
-        sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
-      }
-    }
-  }
-
   /**
    * \brief Add a subpass for extracting geometry from given GPUBatch.
    * \param ob Mesh Object
@@ -344,7 +290,6 @@ namespace blender::npr::strokegen
           }
         }
 
-
       // Surface analysis: evaluate vertex normal & curvature
       SurfaceAnalysisContext surf_analysis_ctx;
       surf_analysis_ctx.order_0_only_selected = false;
@@ -370,13 +315,15 @@ namespace blender::npr::strokegen
 
       // test: simple vertex smoothing
       if (0 < iter_remesh) // only smooth when topo optimized by one pass
-        append_subpass_vertex_smoothing(num_edges, num_verts, true);
+        append_subpass_vertex_relocation(
+            num_edges, num_verts, num_edge_split_iters * (iter_remesh), true, true
+        );
     }
 
 
 
 
-    for (int iter_remesh = 0; iter_remesh < 4; ++iter_remesh) {
+    for (int iter_contour_insertion = 0; iter_contour_insertion < 4; ++iter_contour_insertion) {
       int num_edge_split_iters = meshing_params.remeshing_split_iters;
       for (int iter_edge_split = 0; iter_edge_split < num_edge_split_iters; ++iter_edge_split) {
         append_subpass_fill_dispatched_args_remeshed_edges_(num_edges, true);
@@ -428,10 +375,113 @@ namespace blender::npr::strokegen
     num_total_mesh_edges += num_edges; 
   }
 
+  void StrokeGenPassModule::append_subpass_vertex_relocation(int num_edges,
+                                                             int num_verts,
+                                                             int num_vnor_filter_iters,
+                                                             bool only_selected_verts,
+                                                             bool use_quadric_filter)
+  {
+    auto bind_src = [&](draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub,
+                        int vnor_filter_step) {
+      sub.bind_ssbo(0, buffers_.ssbo_bnpr_mesh_pool_counters_);
+      sub.bind_ssbo(1, buffers_.ssbo_dyn_mesh_counters_out_());
+      sub.bind_ssbo(2, buffers_.ssbo_edge_to_edges_);
+      sub.bind_ssbo(3, buffers_.ssbo_edge_to_vert_);
+      sub.bind_ssbo(4, buffers_.ssbo_vert_to_edge_list_header_);
+      sub.bind_ssbo(5, buffers_.ssbo_selected_edge_to_edge_);
+      sub.bind_ssbo(6, buffers_.ssbo_selected_vert_to_vert_);
+      sub.bind_ssbo(7, buffers_.ssbo_vbo_full_);
+      sub.bind_ssbo(8, buffers_.reused_ssbo_vpos_temp_());
+      sub.bind_ssbo(9, buffers_.ssbo_vnor_);
+      sub.bind_ssbo(10, buffers_.reused_ssbo_vnor_temp_in_(vnor_filter_step));
+      sub.bind_ssbo(11, buffers_.reused_ssbo_vnor_temp_out_(vnor_filter_step));
+      sub.bind_ssbo(12, buffers_.ssbo_edge_flags_);
+
+      sub.bind_ubo(0, buffers_.ubo_view_matrices_cache_);
+
+      sub.push_constant("pcs_edge_count_", num_edges);
+      sub.push_constant("pcs_vert_count_", num_verts);
+    };
+
+    append_subpass_fill_dispatched_args_remeshed_verts_(num_verts, only_selected_verts);
+
+    if (false == use_quadric_filter) {
+      int step_vnor_filter = 0;
+      for (; step_vnor_filter < num_vnor_filter_iters; ++step_vnor_filter) {
+        auto &sub = pass_extract_geom.sub("bnpr_meshing_surf_filtering_vnor_filtering");
+        sub.shader_set(shaders_.static_shader_get(MESH_FILTER_VNOR_FILTERING));
+
+        bind_src(sub, step_vnor_filter);
+        sub.push_constant("pcs_vnor_filtering_iter_", step_vnor_filter);
+
+        sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_verts_);
+        sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
+      }
+
+      int step_vpos_filter = 0;
+      for (; step_vpos_filter < meshing_params.num_vtx_smooth_iters; ++step_vpos_filter) {
+        {
+          auto &sub = pass_extract_geom.sub("bnpr_meshing_surf_filtering_vpos_filtering");
+          sub.shader_set(shaders_.static_shader_get(MESH_FILTER_VPOS_FILTERING));
+          bind_src(sub, step_vnor_filter);
+          sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_verts_);
+          sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
+        }
+        { // TODO: don't have to do this every iter. Just use ping-pong vpos buffers
+          auto &sub = pass_extract_geom.sub("bnpr_meshing_surf_filtering_vpos_finish");
+          sub.shader_set(shaders_.static_shader_get(MESH_FILTER_VPOS_FILTERING_FINISH));
+          bind_src(sub, step_vnor_filter);
+          sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_verts_);
+          sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
+        }
+      }
+    }
+    else { // Quadric Filtering
+      int step_vpos_filter = 0;
+      for (; step_vpos_filter < meshing_params.num_vtx_smooth_iters; ++step_vpos_filter) {
+        {
+          auto bind_src_vq = [&](draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub,
+                                 int vq_filter_step) {
+            sub.push_constant("pcs_vq_filtering_iter_", vq_filter_step);
+            sub.push_constant("pcs_filtered_quadric_type_", (int)0);
+            sub.push_constant("pcs_quadric_deviation_", 0.0001f);
+            sub.push_constant("pcs_geodist_deviation_", 1.0f);
+            sub.push_constant("pcs_position_regularization_scale_", 0.001f);
+          };
+
+          int num_vq_filter_iters = num_vnor_filter_iters; 
+          int step_vq_filter = 0;
+          for (; step_vq_filter < num_vq_filter_iters; ++step_vq_filter) {
+            auto &sub = pass_extract_geom.sub("bnpr_meshing_surf_filtering_vquadric_diffusion");
+            sub.shader_set(shaders_.static_shader_get(MESH_FILTER_VQUADRIC_DIFFUSION));
+
+            bind_src(sub, step_vq_filter);
+            bind_src_vq(sub, step_vq_filter);
+
+            sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_verts_);
+            sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
+          }
+
+          {
+            auto &sub = pass_extract_geom.sub(
+                "bnpr_meshing_surf_filtering_quadric_vpos_filtering");
+            sub.shader_set(shaders_.static_shader_get(MESH_FILTER_QUADRIC_VPOS_FILTERING));
+
+            bind_src(sub, step_vq_filter);
+            bind_src_vq(sub, step_vq_filter);
+
+            sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_verts_);
+            sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
+          }
+        }
+      }
+    }
+  }
+
   void StrokeGenPassModule::append_subpass_quadric_mesh_filtering(int num_edges,
                                                                   int num_verts,
                                                                   GPURemeshingParameters& params
-  )
+      )
   {
     auto bind_rsc = [&](
       draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub,
@@ -481,7 +531,7 @@ namespace blender::npr::strokegen
       for (; iter_normal_filtering < meshing_params.num_normal_filtering_iters; ++iter_normal_filtering)
       {
         auto &sub = pass_extract_geom.sub("bnpr_meshing_mesh_filtering_edge_normal_");
-        sub.shader_set(shaders_.static_shader_get(MESH_FILTERING_EDGE_NORMAL));
+        sub.shader_set(shaders_.static_shader_get(DEPRECATED_MESH_FILTERING_EDGE_NORMAL));
 
         bind_rsc(sub, iter_filtering, iter_normal_filtering);
         sub.push_constant("pcs_first_iter_", iter_normal_filtering == 0 ? 1 : 0); 
@@ -493,7 +543,7 @@ namespace blender::npr::strokegen
 
       {
         auto &sub = pass_extract_geom.sub("bnpr_meshing_mesh_filtering_edge_quadric_");
-        sub.shader_set(shaders_.static_shader_get(MESH_FILTERING_EDGE_QUADRIC));
+        sub.shader_set(shaders_.static_shader_get(DEPRECATED_MESH_FILTERING_EDGE_QUADRIC));
 
         bind_rsc(sub, iter_filtering, iter_normal_filtering);
 
@@ -505,7 +555,7 @@ namespace blender::npr::strokegen
       int iter_diffuse = 0;
       {
         auto &sub = pass_extract_geom.sub("bnpr_meshing_mesh_filtering_init_vert_quadric_");
-        sub.shader_set(shaders_.static_shader_get(MESH_FILTERING_VERT_QUADRIC_INIT));
+        sub.shader_set(shaders_.static_shader_get(DEPRECATED_MESH_FILTERING_VERT_QUADRIC_INIT));
 
         bind_rsc(sub, iter_filtering, iter_normal_filtering, iter_diffuse);
 
@@ -517,7 +567,7 @@ namespace blender::npr::strokegen
 
       for (; iter_diffuse <= diffuse_iters; ++iter_diffuse) {
         auto &sub = pass_extract_geom.sub("bnpr_meshing_mesh_filtering_diffuse_vert_quadric_");
-        sub.shader_set(shaders_.static_shader_get(MESH_FILTERING_VERT_QUADRIC_DIFFUSION));
+        sub.shader_set(shaders_.static_shader_get(DEPRECATED_MESH_FILTERING_VERT_QUADRIC_DIFFUSION));
 
         bind_rsc(sub, iter_filtering, iter_normal_filtering, iter_diffuse);
 
@@ -527,7 +577,7 @@ namespace blender::npr::strokegen
 
       {
         auto &sub = pass_extract_geom.sub("bnpr_meshing_mesh_filtering_move_verts_");
-        sub.shader_set(shaders_.static_shader_get(MESH_FILTERING_MOVE_VERTS));
+        sub.shader_set(shaders_.static_shader_get(DEPRECATED_MESH_FILTERING_MOVE_VERTS));
 
         bind_rsc(sub, iter_filtering, iter_normal_filtering, iter_diffuse);
 
