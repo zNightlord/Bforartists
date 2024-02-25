@@ -405,74 +405,42 @@ namespace blender::npr::strokegen
 
     append_subpass_fill_dispatched_args_remeshed_verts_(num_verts, only_selected_verts);
 
-    if (false == use_quadric_filter) {
-      int step_vnor_filter = 0;
-      for (; step_vnor_filter < num_vnor_filter_iters; ++step_vnor_filter) {
-        auto &sub = pass_extract_geom.sub("bnpr_meshing_surf_filtering_vnor_filtering");
-        sub.shader_set(shaders_.static_shader_get(MESH_FILTER_VNOR_FILTERING));
+    // Quadric Filtering
+    int step_vpos_filter = 0;
+    for (; step_vpos_filter < meshing_params.num_vtx_smooth_iters; ++step_vpos_filter) {
+      {
+        auto bind_src_vq = [&](draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub,
+                               int vq_filter_step) {
+          sub.push_constant("pcs_vq_filtering_iter_", vq_filter_step);
+          sub.push_constant("pcs_filtered_quadric_type_", (int)0);
+          sub.push_constant("pcs_quadric_deviation_", 0.0001f);
+          sub.push_constant("pcs_geodist_deviation_", 1.0f);
+          sub.push_constant("pcs_position_regularization_scale_", 0.001f);
+        };
 
-        bind_src(sub, step_vnor_filter);
-        sub.push_constant("pcs_vnor_filtering_iter_", step_vnor_filter);
+        int num_vq_filter_iters = num_vnor_filter_iters; 
+        int step_vq_filter = 0;
+        for (; step_vq_filter < num_vq_filter_iters; ++step_vq_filter) {
+          auto &sub = pass_extract_geom.sub("bnpr_meshing_surf_filtering_vquadric_diffusion");
+          sub.shader_set(shaders_.static_shader_get(MESH_FILTER_VQUADRIC_DIFFUSION));
 
-        sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_verts_);
-        sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
-      }
+          bind_src(sub, step_vq_filter);
+          bind_src_vq(sub, step_vq_filter);
 
-      int step_vpos_filter = 0;
-      for (; step_vpos_filter < meshing_params.num_vtx_smooth_iters; ++step_vpos_filter) {
-        {
-          auto &sub = pass_extract_geom.sub("bnpr_meshing_surf_filtering_vpos_filtering");
-          sub.shader_set(shaders_.static_shader_get(MESH_FILTER_VPOS_FILTERING));
-          bind_src(sub, step_vnor_filter);
           sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_verts_);
           sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
         }
-        { // TODO: don't have to do this every iter. Just use ping-pong vpos buffers
-          auto &sub = pass_extract_geom.sub("bnpr_meshing_surf_filtering_vpos_finish");
-          sub.shader_set(shaders_.static_shader_get(MESH_FILTER_VPOS_FILTERING_FINISH));
-          bind_src(sub, step_vnor_filter);
+
+        {
+          auto &sub = pass_extract_geom.sub(
+              "bnpr_meshing_surf_filtering_quadric_vpos_filtering");
+          sub.shader_set(shaders_.static_shader_get(MESH_FILTER_QUADRIC_VPOS_FILTERING));
+
+          bind_src(sub, step_vq_filter);
+          bind_src_vq(sub, step_vq_filter);
+
           sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_verts_);
           sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
-        }
-      }
-    }
-    else { // Quadric Filtering
-      int step_vpos_filter = 0;
-      for (; step_vpos_filter < meshing_params.num_vtx_smooth_iters; ++step_vpos_filter) {
-        {
-          auto bind_src_vq = [&](draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub,
-                                 int vq_filter_step) {
-            sub.push_constant("pcs_vq_filtering_iter_", vq_filter_step);
-            sub.push_constant("pcs_filtered_quadric_type_", (int)0);
-            sub.push_constant("pcs_quadric_deviation_", 0.0001f);
-            sub.push_constant("pcs_geodist_deviation_", 1.0f);
-            sub.push_constant("pcs_position_regularization_scale_", 0.001f);
-          };
-
-          int num_vq_filter_iters = num_vnor_filter_iters; 
-          int step_vq_filter = 0;
-          for (; step_vq_filter < num_vq_filter_iters; ++step_vq_filter) {
-            auto &sub = pass_extract_geom.sub("bnpr_meshing_surf_filtering_vquadric_diffusion");
-            sub.shader_set(shaders_.static_shader_get(MESH_FILTER_VQUADRIC_DIFFUSION));
-
-            bind_src(sub, step_vq_filter);
-            bind_src_vq(sub, step_vq_filter);
-
-            sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_verts_);
-            sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
-          }
-
-          {
-            auto &sub = pass_extract_geom.sub(
-                "bnpr_meshing_surf_filtering_quadric_vpos_filtering");
-            sub.shader_set(shaders_.static_shader_get(MESH_FILTER_QUADRIC_VPOS_FILTERING));
-
-            bind_src(sub, step_vq_filter);
-            bind_src_vq(sub, step_vq_filter);
-
-            sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_verts_);
-            sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
-          }
         }
       }
     }

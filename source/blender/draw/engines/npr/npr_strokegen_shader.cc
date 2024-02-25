@@ -176,11 +176,6 @@ const char *StrokeGenShaderModule::static_shader_create_info_name_get(eShaderTyp
     case MESH_FILTER_QUADRIC_VPOS_FILTERING:
       return "bnpr_meshing_surf_filtering_quadric_vpos_filtering"; 
 
-    case MESH_FILTER_VPOS_FILTERING:
-      return "bnpr_meshing_surf_filtering_vpos_filtering"; 
-    case MESH_FILTER_VPOS_FILTERING_FINISH:
-      return "bnpr_meshing_surf_filtering_vpos_finish";
-
     case FILL_DISPATCH_ARGS_REMESHED_EDGES:
       return "strokegen_remeshing_fill_dispatch_args_per_remeshed_edge";
     case FILL_DISPATCH_ARGS_REMESHED_VERTS:

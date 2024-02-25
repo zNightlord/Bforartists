@@ -610,16 +610,6 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_surf_filtering_quadric_vpos_filtering)
     .additional_info("bnpr_meshing_surf_filtering_vquadric_common")
     .define("_KERNEL_MULTICOMPILE__SURF_FILTERING__QUADRIC_VPOS_FILTERING", "1");
 
-GPU_SHADER_CREATE_INFO(bnpr_meshing_surf_filtering_vpos_filtering)
-    .do_static_compilation(true)
-    .additional_info("bnpr_meshing_surf_filtering_")
-    .define("_KERNEL_MULTICOMPILE__SURF_FILTERING__VPOS_FILTERING", "1");
-
-GPU_SHADER_CREATE_INFO(bnpr_meshing_surf_filtering_vpos_finish)
-    .do_static_compilation(true)
-    .additional_info("bnpr_meshing_surf_filtering_")
-    .define("_KERNEL_MULTICOMPILE__SURF_FILTERING__VPOS_FILTERING_FINISH", "1");
-
 
 
 
