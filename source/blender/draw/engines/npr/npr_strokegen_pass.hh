@@ -129,7 +129,6 @@ public:
   int num_total_mesh_tris;
 
   void init_per_mesh_pass();
-  void append_subpass_vertex_relocation(int num_edges, int num_verts, int num_vnor_filter_iters, bool only_selected_verts, bool use_quadric_filter);
   void append_per_mesh_pass(
       Object* ob,
       GPUBatch* gpu_batch_line_adj,
@@ -193,7 +192,6 @@ public:
 
   } meshing_params;
   void append_subpass_fill_selected_mesh_elems_indirect_dispatch_args_();
-  void append_subpass_quadric_mesh_filtering(int num_edges, int num_verts, GPURemeshingParameters &params);
 
 
   // ---------------------------------------------------------------------------
@@ -228,14 +226,14 @@ public:
   };
   void append_subpass_split_edges(EdgeSplitMode mode, int iter_split, int num_edges, int num_verts);
   void append_subpass_collapse_edges(int iter_remesh, int iter_collapse, int num_edges, int num_verts);
-  void append_subpass_flip_edges(EdgeFlipOptiGoal opti_goal, int iter_remesh, int iter_flip, int num_edges, int num_verts);
+  void append_subpass_flip_edges(EdgeFlipOptiGoal opti_goal, int iter_flip, int num_edges, int num_verts);
+  void append_subpass_split_faces(int iter_split, int num_edges, int num_verts); 
   void append_subpass_fill_dispatched_args_remeshed_edges_(int num_static_edges, bool only_selected_edges);
-  void append_subpass_fill_dispatched_args_remeshed_verts_(int num_static_verts, bool only_selected_elems_); 
-
-
+  void append_subpass_fill_dispatched_args_remeshed_verts_(int num_static_verts, bool only_selected_elems_);
 
 
   // ---------------------------------------------------------------------------
+  // Surface Analysis
   struct SurfaceAnalysisContext {
 
     // Vertex attributes
@@ -286,7 +284,13 @@ public:
   void rebuild_pass_dbg_geom_drawcall(SurfaceDebugContext dbg_ctx);
 
 
-
+  // ---------------------------------------------------------------------------
+  // Mesh Filtering
+  void append_subpass_vertex_relocation(int num_edges,
+                                        int num_verts,
+                                        int num_vnor_filter_iters,
+                                        bool only_selected_verts,
+                                        bool use_quadric_filter);
 
 
 

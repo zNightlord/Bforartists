@@ -116,6 +116,10 @@ void GetDispatchArgs(out uvec3 dispatch_args)
     num_work_items = ssbo_edge_flip_counters_[pcs_flip_iter_].num_flip_edges_pass_1;
     dispatch_args.x = compute_num_groups(num_work_items, pcs_edge_flip_dispatch_group_size_);
 #endif
+#if defined(_KERNEL_MULTICOMPILE__FILL_DISPATCH_ARGS__REMESHING__PER_SPLIT_FACE)
+    num_work_items = ssbo_face_split_counters_[pcs_split_iter_].num_split_faces;
+    dispatch_args.x = compute_num_groups(num_work_items, pcs_face_split_dispatch_group_size_);
+#endif
 #if defined(_KERNEL_MULTICOMPILE__FILL_DISPATCH_ARGS_PER_REMESHED_EDGE)
     uint num_edges_dynamesh = ssbo_dyn_mesh_counters_.num_edges; 
     uint num_edges_static = (0 < pcs_only_selected_elems_) ? ssbo_bnpr_mesh_pool_counters_.num_filtered_edges : pcs_edge_count_; 
@@ -153,6 +157,13 @@ void FillDispatchArgsBuffer(uvec3 args)
     ssbo_indirect_dispatch_args_per_flip_edge_.num_groups_y = args.y;
     ssbo_indirect_dispatch_args_per_flip_edge_.num_groups_z = args.z;
     ssbo_indirect_dispatch_args_per_flip_edge_._pad0 = 0;
+#endif
+
+#if defined(_KERNEL_MULTICOMPILE__FILL_DISPATCH_ARGS__REMESHING__PER_SPLIT_FACE)
+    ssbo_indirect_dispatch_args_per_split_face_.num_groups_x = args.x;
+    ssbo_indirect_dispatch_args_per_split_face_.num_groups_y = args.y;
+    ssbo_indirect_dispatch_args_per_split_face_.num_groups_z = args.z;
+    ssbo_indirect_dispatch_args_per_split_face_._pad0 = 0;
 #endif
 
 #if defined(_KERNEL_MULTICOMPILE__FILL_DISPATCH_ARGS_PER_REMESHED_EDGE)

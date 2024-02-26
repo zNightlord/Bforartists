@@ -30,6 +30,7 @@ uint get_vert_count()
     return pcs_vert_count_ + ssbo_dyn_mesh_counters_out_.num_verts; 
 }
 
+// TODO: Store quadrics for selected verts in a compacted manner. 
 void st_vnor_filtered(uint vert_id, vec3 vnor_filtered)
 {
     uvec3 vnor_filtered_enc = floatBitsToUint(vnor_filtered); 

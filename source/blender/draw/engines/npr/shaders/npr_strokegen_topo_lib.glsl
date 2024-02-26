@@ -221,12 +221,10 @@ uint mark__vert_to_next_vert(uint face, uint vert)
     /* if (face == 1u) */
     return (vert == 1u) ? 3u : ((vert + 1u) % 4u); /* 1->3, 3->0, 0->1 */ 
 }
-uvec3 mark__face_to_winded_wedges(uint face)
+uvec3 mark__face_to_winded_verts(uint face)
 {
-    uvec3 res; 
-    for (uint he = 0u; he < 3u; ++he)
-        res[he] = mark__he_to_wedge(face, he); 
-    return res; 
+    if (face == 0u) return uvec3(3u, 1u, 2u);
+    return uvec3(1u, 3u, 0u); // face == 1u
 }
 
 
@@ -530,6 +528,7 @@ struct VertFlags
 {
     bool dupli; // duplicated vertex, should be ignored, TODO: consider removing in hashing pass
     bool new_by_split; // new vertex created by edge split
+    bool new_by_face_split; // new vertex created by face split
     bool del_by_collapse; // deleted vertex by edge collapse
     /* we provide 4 slots for selection */
     bvec4 selected; // selected for a certain operation
@@ -540,6 +539,7 @@ VertFlags init_vert_flags(bool dupli)
     VertFlags vf; 
     vf.dupli = dupli; 
     vf.new_by_split = false; 
+    vf.new_by_face_split = false; 
     vf.del_by_collapse = false; 
     vf.selected = bvec4(false); 
     vf.contour = false;
@@ -551,12 +551,26 @@ VertFlags init_vert_flags__new_split_edge(bool is_split_for_contour)
     VertFlags vf; 
     vf.dupli = false; 
     vf.new_by_split = true; 
+    vf.new_by_face_split = false; 
     vf.del_by_collapse = false; 
     vf.selected = bvec4(true); /* always selected for remeshing */
     vf.contour = is_split_for_contour;
     
     return vf; 
 }
+VertFlags init_vert_flags__new_split_face()
+{
+    VertFlags vf; 
+    vf.dupli = false; 
+    vf.new_by_split = false; 
+    vf.new_by_face_split = true; 
+    vf.del_by_collapse = false; 
+    vf.selected = bvec4(true); /* always selected for remeshing */
+    vf.contour = false;
+    
+    return vf; 
+}
+
 
 uint encode_vert_flags(VertFlags vf)
 {
@@ -565,6 +579,8 @@ uint encode_vert_flags(VertFlags vf)
     vf_enc <<= 1u; 
     vf_enc |= uint(vf.new_by_split); 
     vf_enc <<= 1u; 
+    vf_enc |= uint(vf.new_by_face_split);
+    vf_enc <<= 1u;
     vf_enc |= uint(vf.del_by_collapse); 
     vf_enc <<= 1u; 
 
@@ -599,6 +615,8 @@ VertFlags decode_vert_flags(uint vf_enc)
 
     vf.del_by_collapse = (1u == (vf_enc & 1u)); 
     vf_enc >>= 1u; 
+    vf.new_by_face_split = (1u == (vf_enc & 1u));
+    vf_enc >>= 1u;
     vf.new_by_split = (1u == (vf_enc & 1u)); 
     vf_enc >>= 1u; 
     vf.dupli = (1u == (vf_enc & 1u)); 
@@ -639,6 +657,7 @@ struct EdgeFlags
     bool sel_border; // at the selection border
     bool new_by_split; // new edge created by edge split
     bool del_by_split; // deleted edge by edge split
+    bool new_by_face_split; // new edge created by edge split
     bool del_by_collapse; // deleted edge by edge collapse
 
     // Temp Flags, can share bits across different passes -
@@ -661,23 +680,27 @@ uint encode_edge_flags(EdgeFlags ef)
     ef_enc <<= 1u; 
     ef_enc |= uint(ef.del_by_split); // d_b_sel_sb_ns_ds
     ef_enc <<= 1u; 
-    ef_enc |= uint(ef.del_by_collapse); // d_b_sel_sb_ns_ds_dc
-    ef_enc <<= 1u; 
-    ef_enc |= uint(ef.temp_flipped_edge); // d_b_sel_sb_ns_ds_dc_tnbsr_tfe
+    ef_enc |= uint(ef.new_by_face_split); // d_b_sel_sb_ns_ds_nf
     ef_enc <<= 1u;
-    ef_enc |= uint(ef.temp_dbg_draw_edge); // d_b_sel_sb_ns_ds_dc_tnbsr_tfe_tsfr
+    ef_enc |= uint(ef.del_by_collapse); // d_b_sel_sb_ns_ds_nf_dc
+    ef_enc <<= 1u; 
+    ef_enc |= uint(ef.temp_flipped_edge); // d_b_sel_sb_ns_ds_nf_dc_tfe
+    ef_enc <<= 1u;
+    ef_enc |= uint(ef.temp_dbg_draw_edge); // d_b_sel_sb_ns_ds_nf_dc_tfe_tsfr
 
     return ef_enc; 
 }
 EdgeFlags decode_edge_flags(uint ef_enc)
 {
-    EdgeFlags ef; // d_b_sel_sb_ns_ds_dc_tnbsr_tfe_tsfr
+    EdgeFlags ef; // d_b_sel_sb_ns_ds_nf_dc_tfe_tsfr
     ef.temp_dbg_draw_edge = (1u == (ef_enc & 1u));
-    ef_enc >>= 1u; // d_b_sel_sb_ns_ds_dc_tnbsr_tfe
+    ef_enc >>= 1u; // d_b_sel_sb_ns_ds_nf_dc_tfe
     ef.temp_flipped_edge = (1u == (ef_enc & 1u));
-    ef_enc >>= 1u; // d_b_sel_sb_ns_ds_dc_tnbsr
+    ef_enc >>= 1u; // d_b_sel_sb_ns_ds_nf_dc
     ef.del_by_collapse = (1u == (ef_enc & 1u)); 
-    ef_enc >>= 1u; // d_b_sel_sb_ns_ds
+    ef_enc >>= 1u; // d_b_sel_sb_ns_ds_nf
+    ef.new_by_face_split = (1u == (ef_enc & 1u)); 
+    ef_enc >>= 1u; // d_b_sel_sb_ns_ds_nf
     ef.del_by_split = (1u == (ef_enc & 1u)); 
     ef_enc >>= 1u; // d_b_sel_sb_ns
     ef.new_by_split = (1u == (ef_enc & 1u)); 
@@ -711,6 +734,7 @@ EdgeFlags init_edge_flags(bool dupli, bool border)
     ef.sel_border = false; 
     ef.new_by_split = false; 
     ef.del_by_split = false;
+    ef.new_by_face_split = false; 
     ef.del_by_collapse = false; 
 
     ef.temp_flipped_edge = false; 
@@ -737,6 +761,7 @@ EdgeFlags init_edge_flags__new_split_edge()
     ef.sel_border = false; 
     ef.new_by_split = true; 
     ef.del_by_split = false; 
+    ef.new_by_face_split = false; 
     ef.del_by_collapse = false; 
 
     ef.temp_flipped_edge = false; 
@@ -767,6 +792,24 @@ void update_edge_flags__flipped(uint edge_id)
     EdgeFlags ef = load_edge_flags(edge_id); 
     ef.temp_flipped_edge = true; 
     store_edge_flags(edge_id, ef); 
+}
+
+EdgeFlags init_edge_flags__new_face_split_edge()
+{
+    EdgeFlags ef; 
+    ef.dupli = false; 
+    ef.border = false; 
+    ef.selected = true;
+    ef.sel_border = false; 
+    ef.new_by_split = false; 
+    ef.del_by_split = false; 
+    ef.new_by_face_split = true; 
+    ef.del_by_collapse = false; 
+
+    ef.temp_flipped_edge = false; 
+    ef.temp_dbg_draw_edge = false;
+
+    return ef; 
 }
 #endif
 

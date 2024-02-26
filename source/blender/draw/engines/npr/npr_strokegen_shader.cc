@@ -210,6 +210,15 @@ const char *StrokeGenShaderModule::static_shader_create_info_name_get(eShaderTyp
     case MESH_OP_FLIP_EDGE_EXECUTE: 
       return "bnpr_meshing_edge_flip_execute";
 
+    case MESH_OP_SPLIT_FACE_INIT:
+      return "bnpr_meshing_face_split_init"; 
+    case MESH_OP_SPLIT_FACE_GENERATE_WORKS:
+      return "bnpr_meshing_face_split_work_generation";
+    case FILL_DISPATCH_ARGS_SPLIT_FACES:
+      return "strokegen_remeshing_fill_dispatch_args_per_split_face"; 
+    case MESH_OP_SPLIT_FACE_EXECUTE:
+      return "bnpr_meshing_face_split_execute"; 
+
     case MESH_ANALYSE_VERT_NORMAL:
       return "bnpr_geom_analysis_order_0_vert_normal";
     case MESH_ANALYSE_VERT_NORMAL_VORONOIAREA:

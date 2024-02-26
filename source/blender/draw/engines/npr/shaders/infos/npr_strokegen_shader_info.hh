@@ -717,6 +717,16 @@ GPU_SHADER_CREATE_INFO(strokegen_remeshing_fill_dispatch_args_per_flip_edge)
     .push_constant(Type::INT, "pcs_edge_flip_dispatch_group_size_")
     .push_constant(Type::INT, "pcs_flip_iter_"); 
 
+GPU_SHADER_CREATE_INFO(strokegen_remeshing_fill_dispatch_args_per_split_face)
+    .do_static_compilation(true)
+    .additional_info("strokegen_remeshing_fill_dispatch_args")
+    .define("_KERNEL_MULTICOMPILE__FILL_DISPATCH_ARGS__REMESHING__PER_SPLIT_FACE", "1")
+    
+    .storage_buf(0, Qualifier::READ, "SSBOData_StrokeGenFaceSplitCounters", "ssbo_face_split_counters_[]")
+    .storage_buf(1, Qualifier::WRITE, "DispatchCommand", "ssbo_indirect_dispatch_args_per_split_face_")
+    .push_constant(Type::INT, "pcs_face_split_dispatch_group_size_")
+    .push_constant(Type::INT, "pcs_split_iter_"); 
+
 GPU_SHADER_CREATE_INFO(strokegen_remeshing_fill_dispatch_args_per_remeshed_edge)
     .do_static_compilation(true)
     .additional_info("strokegen_remeshing_fill_dispatch_args")
@@ -1005,6 +1015,61 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_edge_flip_execute)
     .define("_KERNEL_MULTICOMPILE__EDGE_FLIP_EXECUTE", "1")
     .define("COMPACTION_LIB_EXCLUDE_DEFAULT_CODEGEN", "1"); 
 /** \} */
+
+
+
+/* -------------------------------------------------------------------- */
+/** \ Face Split
+ * \{ */
+GPU_SHADER_CREATE_INFO(bnpr_meshing_face_split)
+    .do_static_compilation(true)
+    .typedef_source("bnpr_defines.hh")
+    .typedef_source("bnpr_shader_shared.hh")
+    .typedef_source("draw_shader_shared.h")
+    /* topo lib multicompile macros */
+    .define("DECODE_IBO_EXCLUDE", "1") /* Remove ibo code */
+    .define("WINGED_EDGE_TOPO_INCLUDE", "1")
+    .define("VERT_WEDGE_LIST_TOPO_INCLUDE", "1")
+    .define("VERT_FLAGS_INCLUDED", "1")
+    .define("EDGE_FLAGS_INCLUDED", "1")
+    .define("USE_DYNAMESH_EDGE_SELECTION_INDEXING", "1")
+
+    .storage_buf(0, Qualifier::READ, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
+    .storage_buf(1, Qualifier::READ, "uint", "ssbo_selected_edge_to_edge_[]")
+    .storage_buf(2, Qualifier::READ_WRITE, "SSBOData_StrokeGenDynamicMeshCounters", "ssbo_dyn_mesh_counters_in_")
+    .storage_buf(3, Qualifier::READ_WRITE, "SSBOData_StrokeGenDynamicMeshCounters", "ssbo_dyn_mesh_counters_out_")
+    .storage_buf(4, Qualifier::READ_WRITE, "SSBOData_StrokeGenFaceSplitCounters", "ssbo_face_split_counters_[]")
+    .storage_buf(5, Qualifier::READ_WRITE, "float", "ssbo_vbo_full_[]")
+    .storage_buf(6, Qualifier::READ_WRITE, "uint", "ssbo_edge_to_vert_[]")
+    .storage_buf(7, Qualifier::READ_WRITE, "uint", "ssbo_edge_to_edges_[]")
+    .storage_buf(8, Qualifier::READ_WRITE, "uint", "ssbo_vert_to_edge_list_header_[]")
+    .storage_buf(9, Qualifier::READ_WRITE, "uint", "ssbo_vert_flags_[]")
+    .storage_buf(10, Qualifier::READ_WRITE, "uint", "ssbo_edge_flags_[]")
+    .storage_buf(11, Qualifier::READ_WRITE, "uint", "ssbo_per_face_split_info_[]")
+    .push_constant(Type::INT, "pcs_split_iter_")
+    .push_constant(Type::INT, "pcs_edge_count_")
+    .push_constant(Type::INT, "pcs_vert_count_")
+
+    .local_group_size(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT)
+    .compute_source("npr_strokegen_face_split_comp.glsl"); 
+
+GPU_SHADER_CREATE_INFO(bnpr_meshing_face_split_init)
+    .do_static_compilation(true)
+    .additional_info("bnpr_meshing_face_split")
+    .define("_KERNEL_MULTICOMPILE__FACE_SPLIT_INIT", "1");
+
+GPU_SHADER_CREATE_INFO(bnpr_meshing_face_split_work_generation)
+    .do_static_compilation(true)
+    .additional_info("bnpr_meshing_face_split")
+    .define("_KERNEL_MULTICOMPILE__FACE_SPLIT_WORK_GEN", "1");
+
+GPU_SHADER_CREATE_INFO(bnpr_meshing_face_split_execute)
+    .do_static_compilation(true)
+    .additional_info("bnpr_meshing_face_split")
+    .define("_KERNEL_MULTICOMPILE__FACE_SPLIT_EXECUTE", "1");
+
+/** \} */
+
 
 
 /* -------------------------------------------------------------------- */

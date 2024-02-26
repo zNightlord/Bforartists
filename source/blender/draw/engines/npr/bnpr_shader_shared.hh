@@ -1,4 +1,4 @@
-﻿/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /**
  * Shared structures, enums & defines between C++ and GLSL.
@@ -277,6 +277,15 @@ using namespace draw;
   };
   BLI_STATIC_ASSERT_ALIGN(SSBOData_StrokeGenEdgeFlipCounters, 16)
 
+  struct SSBOData_StrokeGenFaceSplitCounters {
+    uint num_split_faces;
+    uint dummy_0;
+    uint dummy_1;
+    uint dummy_2;
+  };
+  BLI_STATIC_ASSERT_ALIGN(SSBOData_StrokeGenFaceSplitCounters, 16)
+
+
   struct SSBOData_StrokeGenDynamicMeshCounters {
     uint num_verts;
     uint num_edges;
@@ -379,6 +388,7 @@ using SSBO_StrokeGenMeshPoolCounters = StorageBuffer<SSBOData_StrokeGenMeshPoolC
 using SSBO_StrokeGenEdgeSplitCounters = StorageArrayBuffer<SSBOData_StrokeGenEdgeSplitCounters, MAX_CONSEQ_EDGE_SPLITS + 1, true>;
 using SSBO_StrokeGenEdgeCollapseCounters = StorageArrayBuffer<SSBOData_StrokeGenEdgeCollapseCounters, MAX_CONSEQ_EDGE_COLLAPSES + 1, true>;
 using SSBO_StrokeGenEdgeFlipCounters = StorageArrayBuffer<SSBOData_StrokeGenEdgeFlipCounters, MAX_CONSEQ_EDGE_FLIPS + 1, true>;
+using SSBO_StrokeGenFaceSplitCounters = StorageArrayBuffer<SSBOData_StrokeGenFaceSplitCounters, MAX_CONSEQ_FACE_SPLITS + 1, true>;
 using SSBO_StrokeGenDynamicMeshCounters = StorageBuffer<SSBOData_StrokeGenDynamicMeshCounters>; 
 
 // Buffers for testing parallel primitives --------------------

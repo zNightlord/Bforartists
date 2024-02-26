@@ -41,6 +41,7 @@ class GPUBufferPoolModule {
   SSBO_StrokeGenEdgeSplitCounters ssbo_edge_split_counters_;
   SSBO_StrokeGenEdgeCollapseCounters ssbo_edge_collapse_counters_;
   SSBO_StrokeGenEdgeFlipCounters ssbo_edge_flip_counters_;
+  SSBO_StrokeGenFaceSplitCounters ssbo_face_split_counters_; 
 
   // Dispatch Args --------------------------------------------------------
   SSBO_IndirectDrawArgs ssbo_bnpr_mesh_pool_draw_args_;
@@ -52,6 +53,7 @@ class GPUBufferPoolModule {
   SSBO_IndirectDispatchArgs ssbo_indirect_dispatch_args_per_split_edge_;
   SSBO_IndirectDispatchArgs ssbo_indirect_dispatch_args_per_collapsed_edge_;
   SSBO_IndirectDispatchArgs ssbo_indirect_dispatch_args_per_flip_edge_;
+  SSBO_IndirectDispatchArgs ssbo_indirect_dispatch_args_per_split_face_;
   SSBO_IndirectDispatchArgs ssbo_indirect_dispatch_args_per_remeshed_edges_;
   SSBO_IndirectDispatchArgs ssbo_indirect_dispatch_args_per_remeshed_verts_;
 
@@ -160,7 +162,6 @@ class GPUBufferPoolModule {
   }
   inline GPUStorageBuf *reused_ssbo_per_flip_edge_info_()
   {
-
     return ssbo_mesh_buffer_reuse_2_; 
   }
   inline GPUStorageBuf *reused_ssbo_vertex_edge_flip_info_()
@@ -168,7 +169,14 @@ class GPUBufferPoolModule {
     return ssbo_mesh_buffer_reuse_5_; 
   }
 
+  // Reused Buffer Scheme for Face Split --------------------------------------------
+  inline GPUStorageBuf *reused_ssbo_per_face_split_info_()
+  {
+    return ssbo_mesh_buffer_reuse_0_;
+  }
 
+
+  
 
   // Reused Buffer Scheme for Surface Filtering -----------------------------------------------
   inline GPUStorageBuf *reused_ssbo_vpos_temp_()
