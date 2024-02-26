@@ -645,11 +645,10 @@ void update_vert_flags__del_by_collapse(uint vid)
     vf.selected = bvec4(false); 
     store_vert_flags(vid, vf); 
 }
-void update_vert_flags__reset_face_split_new_vert(uint vid)
+void update_vert_flags__reset_face_split_new_vert(uint vid, VertFlags vf_old)
 {
-    VertFlags vf = load_vert_flags(vid);
-    vf.new_by_face_split = false; 
-    store_vert_flags(vid, vf);
+    vf_old.new_by_face_split = false; 
+    store_vert_flags(vid, vf_old);
 }
 #endif
 

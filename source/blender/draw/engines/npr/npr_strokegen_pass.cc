@@ -312,26 +312,24 @@ namespace blender::npr::strokegen
       append_subpass_surf_geom_analysis(
           rsc_handle, num_verts, num_edges, surf_analysis_ctx, surf_dbg_ctx_cpy);
 
-
       // vertex relocation
       if (0 < iter_remesh) // only smooth when topo optimized by one pass
         append_subpass_vertex_relocation(
-            num_edges, num_verts, num_edge_split_iters * (iter_remesh), true, true
+            QuadricFiltering, num_edges, num_verts, num_edge_split_iters * (iter_remesh), true
         );
-
-
-      // test sqrt-3 subdiv
-      {
-        append_subpass_split_faces(0, num_edges, num_verts);
-        // update elem counters after face split
-        append_subpass_fill_dispatched_args_remeshed_edges_(num_edges, true);
-        append_subpass_fill_dispatched_args_remeshed_verts_(num_verts, false);
-
-        append_subpass_flip_edges(SqrtSubdiv, 0, num_edges, num_verts);
-      }
     }
 
+    // test sqrt-3 subdiv
+    {
+      // append_subpass_split_faces(0, num_edges, num_verts);
+      // // update elem counters after face split
+      // append_subpass_fill_dispatched_args_remeshed_edges_(num_edges, true);
+      // append_subpass_fill_dispatched_args_remeshed_verts_(num_verts, false);
+      //
+      // append_subpass_flip_edges(SqrtSubdiv, 0, num_edges, num_verts);
 
+      // append_subpass_vertex_relocation(Sqrt3SubdivSmooth, num_edges, num_verts, 0, true);
+    }
 
     // for (int iter_contour_insertion = 0; iter_contour_insertion < 4; ++iter_contour_insertion) {
     //   int num_edge_split_iters = meshing_params.remeshing_split_iters;
@@ -387,11 +385,12 @@ namespace blender::npr::strokegen
 
 
   // TODO: Store quadrics for selected verts in a compacted manner. 
-  void StrokeGenPassModule::append_subpass_vertex_relocation(int num_edges,
-                                                             int num_verts,
-                                                             int num_vnor_filter_iters,
-                                                             bool only_selected_verts,
-                                                             bool use_quadric_filter)
+  void StrokeGenPassModule::append_subpass_vertex_relocation(
+      VertexRelocationMode mode,
+      int num_edges,
+      int num_verts,
+      int num_vnor_filter_iters,
+      bool only_selected_verts)
   {
     auto bind_src = [&](draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub,
                         int vnor_filter_step) {
@@ -417,44 +416,69 @@ namespace blender::npr::strokegen
 
     append_subpass_fill_dispatched_args_remeshed_verts_(num_verts, only_selected_verts);
 
-    // Quadric Filtering
-    int step_vpos_filter = 0;
-    for (; step_vpos_filter < meshing_params.num_vtx_smooth_iters; ++step_vpos_filter) {
-      {
-        auto bind_src_vq = [&](draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub,
-                               int vq_filter_step) {
-          sub.push_constant("pcs_vq_filtering_iter_", vq_filter_step);
-          sub.push_constant("pcs_filtered_quadric_type_", (int)0);
-          sub.push_constant("pcs_quadric_deviation_", 0.0001f);
-          sub.push_constant("pcs_geodist_deviation_", 1.0f);
-          sub.push_constant("pcs_position_regularization_scale_", 0.001f);
-        };
-
-        int num_vq_filter_iters = num_vnor_filter_iters; 
-        int step_vq_filter = 0;
-        for (; step_vq_filter < num_vq_filter_iters; ++step_vq_filter) {
-          auto &sub = pass_extract_geom.sub("bnpr_meshing_surf_filtering_vquadric_diffusion");
-          sub.shader_set(shaders_.static_shader_get(MESH_FILTER_VQUADRIC_DIFFUSION));
-
-          bind_src(sub, step_vq_filter);
-          bind_src_vq(sub, step_vq_filter);
-
-          sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_verts_);
-          sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
-        }
-
+    if (mode == QuadricFiltering)
+    { // Quadric Filtering
+      int step_vpos_filter = 0;
+      for (; step_vpos_filter < meshing_params.num_vtx_smooth_iters; ++step_vpos_filter) {
         {
-          auto &sub = pass_extract_geom.sub(
-              "bnpr_meshing_surf_filtering_quadric_vpos_filtering");
-          sub.shader_set(shaders_.static_shader_get(MESH_FILTER_QUADRIC_VPOS_FILTERING));
+          auto bind_src_vq = [&](draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub,
+                                 int vq_filter_step) {
+            sub.push_constant("pcs_vq_filtering_iter_", vq_filter_step);
+            sub.push_constant("pcs_filtered_quadric_type_", (int)0);
+            sub.push_constant("pcs_quadric_deviation_", 0.001f);
+            sub.push_constant("pcs_geodist_deviation_", 1.0f);
+            sub.push_constant("pcs_position_regularization_scale_", 0.01f);
+          };
 
-          bind_src(sub, step_vq_filter);
-          bind_src_vq(sub, step_vq_filter);
+          int num_vq_filter_iters = num_vnor_filter_iters;
+          int step_vq_filter = 0;
+          for (; step_vq_filter < num_vq_filter_iters; ++step_vq_filter) {
+            auto &sub = pass_extract_geom.sub("bnpr_meshing_surf_filtering_vquadric_diffusion");
+            sub.shader_set(shaders_.static_shader_get(MESH_FILTER_VQUADRIC_DIFFUSION));
 
-          sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_verts_);
-          sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
+            bind_src(sub, step_vq_filter);
+            bind_src_vq(sub, step_vq_filter);
+
+            sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_verts_);
+            sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
+          }
+
+          {
+            auto &sub = pass_extract_geom.sub(
+                "bnpr_meshing_surf_filtering_quadric_vpos_filtering");
+            sub.shader_set(shaders_.static_shader_get(MESH_FILTER_QUADRIC_VPOS_FILTERING));
+
+            bind_src(sub, step_vq_filter);
+            bind_src_vq(sub, step_vq_filter);
+
+            sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_verts_);
+            sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
+          }
         }
       }
+    }
+
+
+    if (mode == Sqrt3SubdivSmooth)
+    { // TODO: Compact the filtered verts, should be able to cut workload by half
+      // {
+      //   auto &sub = pass_extract_geom.sub("bnpr_meshing_surf_filtering_sqrt3_vpos_smoothing");
+      //   sub.shader_set(shaders_.static_shader_get(MESH_FILTER_SQRT_SUBDIV_VPOS_SMOOTH));
+      //
+      //   bind_src(sub, 0);
+      //
+      //   sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_verts_);
+      //   sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
+      // }
+      // {
+      //   auto &sub = pass_extract_geom.sub("bnpr_meshing_surf_filtering_sqrt3_vpos_smoothing_finish");
+      //   sub.shader_set(shaders_.static_shader_get(MESH_FILTER_SQRT_SUBDIV_VPOS_SMOOTH_FINISH));
+      //
+      //   bind_src(sub, 0);
+      //
+      //   sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_verts_);
+      //   sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
+      // }
     }
   }
 

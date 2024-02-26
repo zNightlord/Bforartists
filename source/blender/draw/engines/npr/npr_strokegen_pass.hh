@@ -288,11 +288,15 @@ public:
 
   // ---------------------------------------------------------------------------
   // Mesh Filtering
-  void append_subpass_vertex_relocation(int num_edges,
+  enum VertexRelocationMode {
+    QuadricFiltering = 0,
+    Sqrt3SubdivSmooth = 1
+  };
+  void append_subpass_vertex_relocation(VertexRelocationMode mode,
+                                        int num_edges,
                                         int num_verts,
                                         int num_vnor_filter_iters,
-                                        bool only_selected_verts,
-                                        bool use_quadric_filter);
+                                        bool only_selected_verts);
 
 
 

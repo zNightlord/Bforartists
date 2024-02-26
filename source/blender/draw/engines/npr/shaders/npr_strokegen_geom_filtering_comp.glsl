@@ -332,6 +332,51 @@ vec3 ld_vnor_filtered(uint vert_id)
 
 
 
+#if defined(_KERNEL_MULTICOMPILE__SURF_FILTERING__SQRT3_VPOS_SMOOTHING)
+float sqrt3_vpos_smooth_weight(float n)
+{
+    return (4.0f - 2.0f * cos(2.0f * 3.14159265359f / n)) / 9.0f;
+}
+struct VtxPositionSmoothForSqrt3SubdivContext
+{
+    vec3 vpos_filtered; 
+    float num_adj_edges; 
+
+    bool border; 
+    bool close_to_sel_border; 
+}
+VtxPositionSmoothForSqrt3SubdivContext init_vpos_sqrt3_smooth_context()
+{
+    VtxPositionSmoothForSqrt3SubdivContext ctx; 
+    ctx.vpos_filtered = vec3(.0f); 
+    ctx.num_adj_edges = .0f; 
+    ctx.border = false;
+    ctx.close_to_sel_border = false;
+
+    return ctx; 
+}
+bool ve_circulator__vpos_smooth_for_sqrt3_subdiv(
+    CirculatorIterData iter, 
+    inout VtxPositionSmoothForSqrt3SubdivContext ctx
+){
+    uint wi = iter.awi.wedge_id; 
+
+    // TODO: cache this in VertFlags
+    EdgeFlags ef = load_edge_flags(wi);
+    if (ef.border) ctx.border = true;
+    if ((!ef.selected) || ef.sel_border) ctx.close_to_sel_border = true; 
+
+    uint ivert_vi = mark__ve_circ_fwd__get_vi(iter); 
+    uint vi = ssbo_edge_to_vert_[wi*4u + ivert_vi]; 
+    vec3 vpos_i = ld_vpos(vi); 
+    
+    ctx.vpos_filtered += vpos_i; 
+    ctx.num_adj_edges += 1.0f; 
+    
+    return true; 
+}
+#endif
+
 
 
 
@@ -436,5 +481,47 @@ void main()
 
     if (valid_thread)
         st_vpos(vert_id, vpos);
+#endif
+
+#if defined(_KERNEL_MULTICOMPILE__SURF_FILTERING__SQRT3_VPOS_SMOOTHING)
+    // if(!valid_thread) return;
+    // // TODO: try to compact filtered verts
+
+    // /* vert pos from last filtering iter */
+    // vec3 vpos = ld_vpos(vert_id);
+    // vec3 vpos_orig = vpos;
+
+    // VertFlags vf = load_vert_flags(vert_id);
+    // bool is_smooth_vert = 
+    //     (!vf.new_by_face_split)
+    //     && (!vf.del_by_collapse)
+    //     && (!vf.dupli)
+    //     && (cf.selected); 
+    // update_vert_flags__reset_face_split_new_vert(vert_id, vf);
+    // if (!is_smooth_vert) return; 
+
+    // VtxPositionSmoothForSqrt3SubdivContext ctx = init_vpos_sqrt3_smooth_context();
+    // VertWedgeListHeader vwlh = decode_vert_wedge_list_header(ssbo_vert_to_edge_list_header_[vert_id]); 
+    // bool rot_fwd = true;
+    // VE_CIRCULATOR(vwlh, ve_circulator__vpos_smooth_for_sqrt3_subdiv, ctx, rot_fwd); 
+    // ctx.vpos_filtered = ctx.vpos_filtered / ctx.num_adj_edges; 
+    // float alpha_n = sqrt3_vpos_smooth_weight(ctx.num_adj_edges); 
+    // vpos = mix(vpos_orig, ctx.vpos_filtered, alpha_n);
+
+    // if (ctx.close_to_sel_border || ctx.border) 
+    //     vpos = vpos_orig; 
+
+    // if (valid_thread)
+    // {
+    //     Store3(ssbo_vpos_temp_, vert_id, vpos); 
+    // }
+#endif
+
+#if defined(_KERNEL_MULTICOMPILE__SURF_FILTERING__SQRT3_VPOS_SMOOTHING_FINISH)
+    // vec3 vpos;
+    // Load3(ssbo_vpos_temp_, vert_id, vpos); 
+
+    // if (valid_thread)
+    //     st_vpos(vert_id, vpos);
 #endif
 }

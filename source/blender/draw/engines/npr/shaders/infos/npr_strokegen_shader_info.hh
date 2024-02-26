@@ -609,6 +609,16 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_surf_filtering_quadric_vpos_filtering)
     .define("QUADRICS_FILTERING_INCLUDE", "1")
     .additional_info("bnpr_meshing_surf_filtering_vquadric_common")
     .define("_KERNEL_MULTICOMPILE__SURF_FILTERING__QUADRIC_VPOS_FILTERING", "1");
+
+// GPU_SHADER_CREATE_INFO(bnpr_meshing_surf_filtering_sqrt3_vpos_smoothing)
+//     .do_static_compilation(true)
+//     .additional_info("bnpr_meshing_surf_filtering_vquadric_common")
+//     .define("_KERNEL_MULTICOMPILE__SURF_FILTERING__SQRT3_VPOS_SMOOTHING", "1");
+
+// GPU_SHADER_CREATE_INFO(bnpr_meshing_surf_filtering_sqrt3_vpos_smoothing_finish)
+//     .do_static_compilation(true)
+//     .additional_info("bnpr_meshing_surf_filtering_vquadric_common")
+//     .define("_KERNEL_MULTICOMPILE__SURF_FILTERING__SQRT3_VPOS_SMOOTHING_FINISH", "1");
 /** \} */
 
 
