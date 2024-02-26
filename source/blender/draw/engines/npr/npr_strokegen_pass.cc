@@ -313,16 +313,22 @@ namespace blender::npr::strokegen
           rsc_handle, num_verts, num_edges, surf_analysis_ctx, surf_dbg_ctx_cpy);
 
 
-      // test: simple vertex smoothing
+      // vertex relocation
       if (0 < iter_remesh) // only smooth when topo optimized by one pass
         append_subpass_vertex_relocation(
             num_edges, num_verts, num_edge_split_iters * (iter_remesh), true, true
         );
 
-      append_subpass_split_faces(0, num_edges, num_verts);
-      // update elem counters after face split
-      append_subpass_fill_dispatched_args_remeshed_edges_(num_edges, true);
-      append_subpass_fill_dispatched_args_remeshed_verts_(num_verts, false);
+
+      // test sqrt-3 subdiv
+      {
+        append_subpass_split_faces(0, num_edges, num_verts);
+        // update elem counters after face split
+        append_subpass_fill_dispatched_args_remeshed_edges_(num_edges, true);
+        append_subpass_fill_dispatched_args_remeshed_verts_(num_verts, false);
+
+        append_subpass_flip_edges(SqrtSubdiv, 0, num_edges, num_verts);
+      }
     }
 
 

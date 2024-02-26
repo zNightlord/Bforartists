@@ -223,6 +223,8 @@ public:
     Valence = 0,
     // #define EDGE_FLIP_OPTI_DELAUNAY 1u
     Delaunay = 1,
+    // #define EDGE_FLIP_OPTI_SQRT3_SUBDIV 2u
+    SqrtSubdiv = 2, 
   };
   void append_subpass_split_edges(EdgeSplitMode mode, int iter_split, int num_edges, int num_verts);
   void append_subpass_collapse_edges(int iter_remesh, int iter_collapse, int num_edges, int num_verts);

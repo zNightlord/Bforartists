@@ -645,6 +645,12 @@ void update_vert_flags__del_by_collapse(uint vid)
     vf.selected = bvec4(false); 
     store_vert_flags(vid, vf); 
 }
+void update_vert_flags__reset_face_split_new_vert(uint vid)
+{
+    VertFlags vf = load_vert_flags(vid);
+    vf.new_by_face_split = false; 
+    store_vert_flags(vid, vf);
+}
 #endif
 
 #if defined(EDGE_FLAGS_INCLUDED)
@@ -661,7 +667,7 @@ struct EdgeFlags
     bool del_by_collapse; // deleted edge by edge collapse
 
     // Temp Flags, can share bits across different passes -
-    bool temp_flipped_edge; // flipped edge
+    bool temp_face_split_new_edge; // flipped edge
     bool temp_dbg_draw_edge; // whatever you want to debug draw
 }; 
 
@@ -684,7 +690,7 @@ uint encode_edge_flags(EdgeFlags ef)
     ef_enc <<= 1u;
     ef_enc |= uint(ef.del_by_collapse); // d_b_sel_sb_ns_ds_nf_dc
     ef_enc <<= 1u; 
-    ef_enc |= uint(ef.temp_flipped_edge); // d_b_sel_sb_ns_ds_nf_dc_tfe
+    ef_enc |= uint(ef.temp_face_split_new_edge); // d_b_sel_sb_ns_ds_nf_dc_tfe
     ef_enc <<= 1u;
     ef_enc |= uint(ef.temp_dbg_draw_edge); // d_b_sel_sb_ns_ds_nf_dc_tfe_tsfr
 
@@ -695,7 +701,7 @@ EdgeFlags decode_edge_flags(uint ef_enc)
     EdgeFlags ef; // d_b_sel_sb_ns_ds_nf_dc_tfe_tsfr
     ef.temp_dbg_draw_edge = (1u == (ef_enc & 1u));
     ef_enc >>= 1u; // d_b_sel_sb_ns_ds_nf_dc_tfe
-    ef.temp_flipped_edge = (1u == (ef_enc & 1u));
+    ef.temp_face_split_new_edge = (1u == (ef_enc & 1u));
     ef_enc >>= 1u; // d_b_sel_sb_ns_ds_nf_dc
     ef.del_by_collapse = (1u == (ef_enc & 1u)); 
     ef_enc >>= 1u; // d_b_sel_sb_ns_ds_nf
@@ -737,7 +743,7 @@ EdgeFlags init_edge_flags(bool dupli, bool border)
     ef.new_by_face_split = false; 
     ef.del_by_collapse = false; 
 
-    ef.temp_flipped_edge = false; 
+    ef.temp_face_split_new_edge = false; 
     ef.temp_dbg_draw_edge = false; 
 
     return ef; 
@@ -750,6 +756,12 @@ void update_edge_flags__detect_sel_border(uint edge_id, EdgeFlags ef_old)
     store_edge_flags(edge_id, ef); 
 }
 
+void update_edge_flags__reset_face_split_new_edge(uint edge_id, EdgeFlags ef_old)
+{
+    EdgeFlags ef = ef_old; 
+    ef.temp_face_split_new_edge = false; 
+    store_edge_flags(edge_id, ef);
+}
 
 
 EdgeFlags init_edge_flags__new_split_edge()
@@ -764,7 +776,7 @@ EdgeFlags init_edge_flags__new_split_edge()
     ef.new_by_face_split = false; 
     ef.del_by_collapse = false; 
 
-    ef.temp_flipped_edge = false; 
+    ef.temp_face_split_new_edge = false; 
     ef.temp_dbg_draw_edge = false;
 
     return ef; 
@@ -787,13 +799,6 @@ void update_edge_flags__del_by_collapse(uint edge_id)
     store_edge_flags(edge_id, ef); 
 }
 
-void update_edge_flags__flipped(uint edge_id)
-{
-    EdgeFlags ef = load_edge_flags(edge_id); 
-    ef.temp_flipped_edge = true; 
-    store_edge_flags(edge_id, ef); 
-}
-
 EdgeFlags init_edge_flags__new_face_split_edge()
 {
     EdgeFlags ef; 
@@ -806,7 +811,7 @@ EdgeFlags init_edge_flags__new_face_split_edge()
     ef.new_by_face_split = true; 
     ef.del_by_collapse = false; 
 
-    ef.temp_flipped_edge = false; 
+    ef.temp_face_split_new_edge = true; 
     ef.temp_dbg_draw_edge = false;
 
     return ef; 

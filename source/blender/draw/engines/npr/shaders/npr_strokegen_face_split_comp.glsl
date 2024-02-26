@@ -121,6 +121,8 @@ void main()
         load_edge_flags(w[2].wedge_id), 
         load_edge_flags(w[3].wedge_id)
     };
+    if (valid_thread)
+        update_edge_flags__reset_face_split_new_edge(wedge_id, ef); // reset to false for sqrt-3 subdiv
 
     bvec2 gen_face; 
     for (uint iface = 0; iface < 2u; ++iface)
@@ -168,7 +170,6 @@ void main()
         barrier(); 
 
         uint global_offset = group_offset + LDS_blk_offset_; 
-
 
         alloc_offset = global_offset; 
     }

@@ -124,6 +124,7 @@ float calc_dihedral_angle(vec3 v0, vec3 v1, vec3 v2, vec3 v3)
 
 #define EDGE_FLIP_OPTI_VALENCE 0u
 #define EDGE_FLIP_OPTI_DELAUNAY 1u
+#define EDGE_FLIP_OPTI_SQRT3_SUBDIV 2u
 
 bool should_edge_flip_common(vec3 p0, vec3 p1, vec3 p2, vec3 p3)
 {
@@ -221,6 +222,12 @@ float comp_edge_flip_delaunay_score(
     vec3 v03 = p0 - p3; 
     float angle_103 = acos(dot(v01, v03)); 
     return (angle_123 + angle_103) - PI; 
+}
+float comp_edge_flip_sqrt3_subdiv_score(
+    EdgeFlags ef
+){
+    if (ef.temp_face_split_new_edge) return -10000000.0f; 
+    return 1.0f; 
 }
 
 
@@ -327,11 +334,16 @@ void main()
         );
     }
     /* Edge flip for optimizing delaunay property */
-    if (pcs_flip_iter_ == EDGE_FLIP_OPTI_DELAUNAY)
+    if (pcs_flip_opti_goal_type_ == EDGE_FLIP_OPTI_DELAUNAY)
     {
         score = comp_edge_flip_delaunay_score(
             vpos[0], vpos[1], vpos[2], vpos[3]
         );
+    }
+    /* Edge flip for sqrt(3) subdivision */
+    if (pcs_flip_opti_goal_type_ == EDGE_FLIP_OPTI_SQRT3_SUBDIV)
+    {
+        score = comp_edge_flip_sqrt3_subdiv_score(ef); 
     }
     
     is_flip_ok = is_flip_ok && (score > 0.0f); 
@@ -546,9 +558,6 @@ void main()
     try_update_ve_link(v1, w4, VertWedgeListHeader(w1, ivert_v1_w1)); 
     uint ivert_v3_w3 = mark__cwedge_to_end_vert(w[3].iface_adj); 
     try_update_ve_link(v3, w4, VertWedgeListHeader(w3, ivert_v3_w3)); 
-
-    /* update edge flags */
-    update_edge_flags__flipped(w4); 
 
 #undef w0
 #undef w1
