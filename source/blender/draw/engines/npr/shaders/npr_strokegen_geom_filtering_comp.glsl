@@ -110,6 +110,92 @@ vec3 ld_vnor_filtered(uint vert_id)
 #endif
 
 
+#if defined(_KERNEL_MULTICOMPILE__SURF_FILTERING__VPOS_FILTERING)
+    vec3 ld_vpos_filtered(uint vert_id)
+    {
+        if (pcs_vpos_filtering_iter_ % 2u == 0u)
+            return ld_vpos(vert_id); 
+        
+        uvec3 vpos_filtered_enc;
+        Load3(ssbo_vpos_temp_, vert_id, vpos_filtered_enc);
+        return uintBitsToFloat(vpos_filtered_enc); 
+    }
+    void st_vpos_filtered(uint vert_id, vec3 vpos_filtered)
+    {
+        if (pcs_vpos_filtering_iter_ % 2u == 0u)
+        {
+            uvec3 vpos_filtered_enc = floatBitsToUint(vpos_filtered); 
+            Store3(ssbo_vpos_temp_, vert_id, vpos_filtered_enc);
+        }
+
+        st_vpos(vert_id, vpos_filtered); 
+    }
+
+    struct VtxPositionFilteringContext
+    {
+        vec3 vpos; 
+        vec3 vpos_p; 
+        vec3 vpos_filtered; 
+        float weight_sum; 
+        
+        bool border; 
+        bool close_to_sel_border; 
+    };
+
+    VtxPositionFilteringContext init_vpos_filter_context(vec3 vpos)
+    {
+        VtxPositionFilteringContext ctx; 
+        
+        ctx.vpos = vpos;
+        ctx.vpos_p = vec3(.0f); /* init in circulator */
+        ctx.vpos_filtered = vec3(.0f); 
+        ctx.weight_sum = .0f; 
+        
+        ctx.border = false;
+        ctx.close_to_sel_border = false; 
+
+        return ctx; 
+    }
+    /* Example: Rotate fwd(CW) around V3(marked as vc)        
+    *        v0  ...  vp             
+    *       /  \     /  \            
+    *      / f1 \   wp   \           
+    *     / ---> \ /      \          
+    *   v1 ====== vc--wi--vi         
+    *     \ <--- / \<-----/ \        
+    *      \ f0 /  wn fi wo  \       
+    *       \  /     \  /     \      
+    *        v2  ...  vn ----- v_oppo
+    */
+    bool ve_circulator__vpos_filter(
+        CirculatorIterData iter, 
+        inout VtxPositionFilteringContext ctx
+    ){
+        uint wi = iter.awi.wedge_id; 
+        uint ivert_vi = mark__ve_circ_fwd__get_vi(iter); 
+        uint vi = ssbo_edge_to_vert_[wi*4u + ivert_vi]; 
+        vec3 vpos_i = ld_vpos_filtered(vi);
+
+        if (iter.rotate_step == 0u)
+        { // init position of vp
+            uint ivert_vp = mark__ve_circ_fwd__get_vp(iter); 
+            uint vp = ssbo_edge_to_vert_[wi*4u + ivert_vp]; 
+            ctx.vpos_p = ld_vpos_filtered(vp); 
+        }
+
+        // TODO: cache this in VertFlags
+        EdgeFlags ef = load_edge_flags(wi);
+        if (ef.border) ctx.border = true;
+        if ((!ef.selected) || ef.sel_border) ctx.close_to_sel_border = true; 
+
+        ctx.vpos_filtered += vpos_i; 
+        ctx.weight_sum += 1.0f; 
+
+        ctx.vpos_p = vpos_i; 
+        return true; 
+    }
+#endif
+
 
 #if defined(_KERNEL_MULTICOMPILE__SURF_FILTERING__VQUADRICS_DIFFUSION) || defined(_KERNEL_MULTICOMPILE__SURF_FILTERING__QUADRIC_VPOS_FILTERING)
 #define ssbo_vert_quadric_data_in_ ssbo_vnor_temp_in_
@@ -257,7 +343,9 @@ vec3 ld_vnor_filtered(uint vert_id)
         ctx.vpos_p = vpos_i; 
         return true; 
     }
+#endif
 
+#if defined(_KERNEL_MULTICOMPILE__SURF_FILTERING__VQUADRICS_DIFFUSION) || defined(_KERNEL_MULTICOMPILE__SURF_FILTERING__QUADRIC_VPOS_FILTERING) || defined(_KERNEL_MULTICOMPILE__SURF_FILTERING__VPOS_FILTERING)
     struct VtxPositionValidationContext
     {
         vec3 vpos;
@@ -332,10 +420,10 @@ vec3 ld_vnor_filtered(uint vert_id)
 
 
 
-#if defined(_KERNEL_MULTICOMPILE__SURF_FILTERING__SQRT3_VPOS_SMOOTHING)
+#if defined(_KERNEL_MULTICOMPILE__SURF_FILTERING__SQRT3_VPOS_SMOOTHING) || defined(_KERNEL_MULTICOMPILE__SURF_FILTERING__SQRT3_VPOS_SMOOTHING_FINISH)
 float sqrt3_vpos_smooth_weight(float n)
 {
-    return (4.0f - 2.0f * cos(2.0f * 3.14159265359f / n)) / 9.0f;
+    return (4.0f - 2.0f * cos((2.0f * 3.14159265359f) / n)) / 9.0f;
 }
 struct VtxPositionSmoothForSqrt3SubdivContext
 {
@@ -344,7 +432,7 @@ struct VtxPositionSmoothForSqrt3SubdivContext
 
     bool border; 
     bool close_to_sel_border; 
-}
+}; 
 VtxPositionSmoothForSqrt3SubdivContext init_vpos_sqrt3_smooth_context()
 {
     VtxPositionSmoothForSqrt3SubdivContext ctx; 
@@ -375,6 +463,14 @@ bool ve_circulator__vpos_smooth_for_sqrt3_subdiv(
     
     return true; 
 }
+bool is_smooth_vert(VertFlags vf)
+{ // TODO: compact these verts instead
+    bool is_smooth_vert = 
+        (!vf.new_by_face_split)
+        && (!vf.del_by_collapse)
+        && (!vf.dupli); 
+    return is_smooth_vert; 
+}
 #endif
 
 
@@ -389,7 +485,7 @@ void main()
 
 #if defined(_KERNEL_MULTICOMPILE__SURF_FILTERING__VNOR_FILTERING)
     if(!valid_thread) return;
-
+    
     vec3 vnor = ld_vnor(vert_id); 
     vec3 vpos = ld_vpos(vert_id);
 
@@ -406,6 +502,36 @@ void main()
 
     if (valid_thread)
         st_vnor_filtered(vert_id, vnor_filtered);
+#endif
+
+#if defined(_KERNEL_MULTICOMPILE__SURF_FILTERING__VPOS_FILTERING)
+    if(!valid_thread) return;
+
+    vec3 vnor = ld_vnor(vert_id); 
+    vec3 vpos_old = ld_vpos(vert_id);
+
+    /* Tangential Smoothing, see "Adaptive Remeshing for Real-Time Mesh Deformation" */
+    VtxPositionFilteringContext ctx = init_vpos_filter_context(vpos_old);
+    VertWedgeListHeader vwlh = decode_vert_wedge_list_header(ssbo_vert_to_edge_list_header_[vert_id]); 
+    bool rot_fwd = true;
+    VE_CIRCULATOR(vwlh, ve_circulator__vpos_filter, ctx, rot_fwd);
+
+    ctx.vpos_filtered /= ctx.weight_sum;
+    vec3 vpos_new = ctx.vpos_filtered - vnor * dot(vnor, ctx.vpos_filtered - vpos_old); 
+    if (ctx.border || ctx.close_to_sel_border) 
+        vpos_new = vpos_old;
+
+
+    /* Avoid fold-over, project to 1-ring fan */
+    // VtxPositionValidationContext ctx_validate = init_filtered_vpos_validate_context(vpos_old, vpos_new);
+    // rot_fwd = true;
+    // VE_CIRCULATOR(vwlh, ve_circulator__vpos_validate, ctx_validate, rot_fwd); 
+    // vpos_new = ctx_validate.vpos_filtered_proj; 
+    // if (ctx.border || ctx.close_to_sel_border) 
+    //     vpos_new = vpos_old;
+
+    if (valid_thread)
+        st_vpos_filtered(vert_id, vpos_new);
 #endif
 
 #if defined(_KERNEL_MULTICOMPILE__SURF_FILTERING__VQUADRICS_DIFFUSION)
@@ -457,7 +583,7 @@ void main()
     #if defined(_KERNEL_MULTICOMPILE__SURF_FILTERING__QUADRIC_VPOS_FILTERING__CONSTRAINED_SOLVE)
         mat3 A = mat3(q_v.quadric); /* slice upper 3x3 */
         vec3 b = vec3(q_v.quadric[3][0], q_v.quadric[3][1], q_v.quadric[3][2]); 
-        float lambda = -(dot(vpos, A * vpos) + dot(b, vnor)) / dot(vnor, A * vnor); 
+        float lambda = -(dot(vpos, A * vnor) + dot(b, vnor)) / dot(vnor, A * vnor); 
         vpos += vnor * lambda; 
     #else /* Directly solve by minimizing the quadrics */
         mat4 q_d = mat4(q_v.quadric); 
@@ -484,44 +610,42 @@ void main()
 #endif
 
 #if defined(_KERNEL_MULTICOMPILE__SURF_FILTERING__SQRT3_VPOS_SMOOTHING)
-    // if(!valid_thread) return;
-    // // TODO: try to compact filtered verts
+    if(!valid_thread) return;
+    // TODO: try to compact filtered verts
+    VertFlags vf = load_vert_flags(vert_id);
+    bool is_smooth_vert = is_smooth_vert(vf); 
+    if (!is_smooth_vert) return; 
 
-    // /* vert pos from last filtering iter */
-    // vec3 vpos = ld_vpos(vert_id);
-    // vec3 vpos_orig = vpos;
+    vec3 vpos = ld_vpos(vert_id);
+    vec3 vpos_orig = vpos;
 
-    // VertFlags vf = load_vert_flags(vert_id);
-    // bool is_smooth_vert = 
-    //     (!vf.new_by_face_split)
-    //     && (!vf.del_by_collapse)
-    //     && (!vf.dupli)
-    //     && (cf.selected); 
-    // update_vert_flags__reset_face_split_new_vert(vert_id, vf);
-    // if (!is_smooth_vert) return; 
+    VtxPositionSmoothForSqrt3SubdivContext ctx = init_vpos_sqrt3_smooth_context();
+    VertWedgeListHeader vwlh = decode_vert_wedge_list_header(ssbo_vert_to_edge_list_header_[vert_id]); 
+    bool rot_fwd = true;
+    VE_CIRCULATOR(vwlh, ve_circulator__vpos_smooth_for_sqrt3_subdiv, ctx, rot_fwd); 
+    ctx.vpos_filtered = ctx.vpos_filtered / ctx.num_adj_edges; 
+    float alpha_n = sqrt3_vpos_smooth_weight(ctx.num_adj_edges); 
+    vpos = (1.0f - alpha_n) * vpos_orig + alpha_n * ctx.vpos_filtered;
 
-    // VtxPositionSmoothForSqrt3SubdivContext ctx = init_vpos_sqrt3_smooth_context();
-    // VertWedgeListHeader vwlh = decode_vert_wedge_list_header(ssbo_vert_to_edge_list_header_[vert_id]); 
-    // bool rot_fwd = true;
-    // VE_CIRCULATOR(vwlh, ve_circulator__vpos_smooth_for_sqrt3_subdiv, ctx, rot_fwd); 
-    // ctx.vpos_filtered = ctx.vpos_filtered / ctx.num_adj_edges; 
-    // float alpha_n = sqrt3_vpos_smooth_weight(ctx.num_adj_edges); 
-    // vpos = mix(vpos_orig, ctx.vpos_filtered, alpha_n);
+    if (ctx.close_to_sel_border || ctx.border) 
+        vpos = vpos_orig; 
 
-    // if (ctx.close_to_sel_border || ctx.border) 
-    //     vpos = vpos_orig; 
-
-    // if (valid_thread)
-    // {
-    //     Store3(ssbo_vpos_temp_, vert_id, vpos); 
-    // }
+    uvec3 vpos_enc = floatBitsToUint(vpos); 
+    Store3(ssbo_vpos_temp_, sel_vert_id, vpos_enc); 
 #endif
 
 #if defined(_KERNEL_MULTICOMPILE__SURF_FILTERING__SQRT3_VPOS_SMOOTHING_FINISH)
-    // vec3 vpos;
-    // Load3(ssbo_vpos_temp_, vert_id, vpos); 
+    if (!valid_thread) return; 
+    
+    // note: this kernel needs to dispatch for all selected verts
+    VertFlags vf = load_vert_flags(vert_id);
+    update_vert_flags__reset_face_split_new_vert(vert_id, vf);
+    if (!is_smooth_vert(vf)) return; 
 
-    // if (valid_thread)
-    //     st_vpos(vert_id, vpos);
+    uvec3 vpos_enc;
+    Load3(ssbo_vpos_temp_, sel_vert_id, vpos_enc); 
+    vec3 vpos = uintBitsToFloat(vpos_enc); 
+    
+    st_vpos(vert_id, vpos);
 #endif
 }

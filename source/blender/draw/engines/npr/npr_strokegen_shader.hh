@@ -24,8 +24,7 @@ namespace blender::npr::strokegen {
 
 /* Keep alphabetical order and clean prefix. */
 enum eShaderType {
-  COMPUTE_TEST = 0,
-  DEPTH,
+  DEPTH = 0,
   POINTCLOUD_DEPTH,
   CURVES_DEPTH,
   DEPTH_CONSERVATIVE,
@@ -43,7 +42,6 @@ enum eShaderType {
   // Contour Pixel Extraction (WIP)
   CONTOUR_PIXEL_COMPRESS,
   CONTOUR_PIXEL_COMPRESS_DBG,
-  // CONTOUR_PIXEL_AND_EDGE_COLLECT
 
   // GPU Meshing Experiment
   MESH_COLLECT_VBO, 
@@ -72,7 +70,7 @@ enum eShaderType {
   FILL_DISPATCH_ARGS_FILTERED_EDGES,
 
   MESH_FILTER_VNOR_FILTERING, 
-
+  MESH_FILTER_VPOS_FILTERING, 
   MESH_FILTER_VQUADRIC_DIFFUSION,
   MESH_FILTER_QUADRIC_VPOS_FILTERING,
   MESH_FILTER_SQRT_SUBDIV_VPOS_SMOOTH,

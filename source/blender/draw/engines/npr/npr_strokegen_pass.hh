@@ -168,20 +168,19 @@ public:
     int num_filtering_iters; // deprecate
     int max_num_remesh_dbg_iters;
      
-    int num_diffusion_iters; // deprecate
+    int num_quadric_diffusion_iters; // deprecate
     float quadric_deviation; // deprecate
     float geodist_deviation; // deprecate
     int seconds_sync_view_mat;
     int num_vtx_smooth_iters; 
 
     int num_edge_flooding_iters;
-    int num_normal_filtering_iters;
-    float positiion_regularization_scale;
-    bool use_normal_filtering;
+    float position_regularization_scale;
     GPUMeshQuadricFilter alternate_filter_0;
     GPUMeshQuadricFilter alternate_filter_1;
     int edge_visualize_mode;
-    bool visualize_contour_edges; 
+    bool visualize_contour_edges;
+    int iters_test_sqrt_subdiv; 
 
     float remeshing_targ_edge_len;
     int remeshing_split_iters; 
@@ -289,8 +288,9 @@ public:
   // ---------------------------------------------------------------------------
   // Mesh Filtering
   enum VertexRelocationMode {
-    QuadricFiltering = 0,
-    Sqrt3SubdivSmooth = 1
+    TangentialSmoothing = 0, 
+    QuadricFiltering = 1,
+    Sqrt3SubdivSmooth = 2
   };
   void append_subpass_vertex_relocation(VertexRelocationMode mode,
                                         int num_edges,

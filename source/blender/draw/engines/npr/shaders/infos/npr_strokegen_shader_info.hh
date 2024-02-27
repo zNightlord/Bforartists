@@ -560,6 +560,7 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_surf_filtering_)
     .define("INCLUDE_VERTEX_POSITION", "1")
     .define("INCLUDE_VERTEX_NORMAL", "1")
     .define("EDGE_FLAGS_INCLUDED", "1")
+    .define("VERT_FLAGS_INCLUDED", "1")
 
     .storage_buf(0, Qualifier::READ_WRITE, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
     .storage_buf(1, Qualifier::READ_WRITE, "SSBOData_StrokeGenDynamicMeshCounters", "ssbo_dyn_mesh_counters_out_")
@@ -574,6 +575,7 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_surf_filtering_)
     .storage_buf(10, Qualifier::READ_WRITE, "uint", "ssbo_vnor_temp_in_[]")
     .storage_buf(11, Qualifier::READ_WRITE, "uint", "ssbo_vnor_temp_out_[]")
     .storage_buf(12, Qualifier::READ_WRITE, "uint", "ssbo_edge_flags_[]")
+    .storage_buf(13, Qualifier::READ_WRITE, "uint", "ssbo_vert_flags_[]")
 
     .uniform_buf(0, "ViewMatrices", "ubo_view_matrices_") 
 
@@ -588,6 +590,12 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_surf_filtering_vnor_filtering)
     .additional_info("bnpr_meshing_surf_filtering_")
     .push_constant(Type::INT, "pcs_vnor_filtering_iter_")
     .define("_KERNEL_MULTICOMPILE__SURF_FILTERING__VNOR_FILTERING", "1");
+
+GPU_SHADER_CREATE_INFO(bnpr_meshing_surf_filtering_vpos_filtering)
+    .do_static_compilation(true)
+    .additional_info("bnpr_meshing_surf_filtering_")
+    .push_constant(Type::INT, "pcs_vpos_filtering_iter_")
+    .define("_KERNEL_MULTICOMPILE__SURF_FILTERING__VPOS_FILTERING", "1");
 
 GPU_SHADER_CREATE_INFO(bnpr_meshing_surf_filtering_vquadric_common)
     .do_static_compilation(true)
@@ -610,15 +618,17 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_surf_filtering_quadric_vpos_filtering)
     .additional_info("bnpr_meshing_surf_filtering_vquadric_common")
     .define("_KERNEL_MULTICOMPILE__SURF_FILTERING__QUADRIC_VPOS_FILTERING", "1");
 
-// GPU_SHADER_CREATE_INFO(bnpr_meshing_surf_filtering_sqrt3_vpos_smoothing)
-//     .do_static_compilation(true)
-//     .additional_info("bnpr_meshing_surf_filtering_vquadric_common")
-//     .define("_KERNEL_MULTICOMPILE__SURF_FILTERING__SQRT3_VPOS_SMOOTHING", "1");
+GPU_SHADER_CREATE_INFO(bnpr_meshing_surf_filtering_sqrt3_vpos_smoothing)
+     .do_static_compilation(true)
+     .additional_info("bnpr_meshing_surf_filtering_vquadric_common")
+     .define("_KERNEL_MULTICOMPILE__SURF_FILTERING__SQRT3_VPOS_SMOOTHING", "1")
+     .define("_KERNEL_MULTICOMPILE__SURF_FILTERING__QUADRIC_VPOS_FILTERING__CONSTRAINED_SOLVE", "1")
+     ;
 
-// GPU_SHADER_CREATE_INFO(bnpr_meshing_surf_filtering_sqrt3_vpos_smoothing_finish)
-//     .do_static_compilation(true)
-//     .additional_info("bnpr_meshing_surf_filtering_vquadric_common")
-//     .define("_KERNEL_MULTICOMPILE__SURF_FILTERING__SQRT3_VPOS_SMOOTHING_FINISH", "1");
+GPU_SHADER_CREATE_INFO(bnpr_meshing_surf_filtering_sqrt3_vpos_smoothing_finish)
+     .do_static_compilation(true)
+     .additional_info("bnpr_meshing_surf_filtering_vquadric_common")
+     .define("_KERNEL_MULTICOMPILE__SURF_FILTERING__SQRT3_VPOS_SMOOTHING_FINISH", "1");
 /** \} */
 
 
@@ -1231,12 +1241,12 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_draw_debug_lines)
 /* -------------------------------------------------------------------- */
 /** \Bare minumum compute shader test
  * \{ */
-GPU_SHADER_CREATE_INFO(bnpr_strokegen_test_xxx)
-    .do_static_compilation(true)
-    .storage_buf(0, Qualifier::READ_WRITE, "uint", "buf_test[]")
-    .storage_buf(1, Qualifier::READ, "uint", "buf_ibo[]")
-    .local_group_size(GROUP_SIZE_STROKEGEN_TEST) /* <== from "bnpr_defines.hh" */
-    .compute_source("npr_strokegen_test_comp.glsl");
+// GPU_SHADER_CREATE_INFO(bnpr_strokegen_test_xxx)
+//     .do_static_compilation(true)
+//     .storage_buf(0, Qualifier::READ_WRITE, "uint", "buf_test[]")
+//     .storage_buf(1, Qualifier::READ, "uint", "buf_ibo[]")
+//     .local_group_size(GROUP_SIZE_STROKEGEN_TEST) /* <== from "bnpr_defines.hh" */
+//     .compute_source("npr_strokegen_test_comp.glsl");
 /** \} */
 
 /* -------------------------------------------------------------------- */
