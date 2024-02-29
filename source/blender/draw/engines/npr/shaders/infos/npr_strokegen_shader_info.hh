@@ -813,6 +813,7 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_edge_split)
     .define("VERT_FLAGS_INCLUDED", "1")
     .define("EDGE_FLAGS_INCLUDED", "1")
     .define("USE_DYNAMESH_EDGE_SELECTION_INDEXING", "1")
+    .define("INCLUDE_VERTEX_REMESH_LEN", "1")
 
     .storage_buf(0, Qualifier::READ_WRITE, "SSBOData_StrokeGenDynamicMeshCounters", "ssbo_dyn_mesh_counters_in_")
     .storage_buf(1, Qualifier::READ_WRITE, "SSBOData_StrokeGenDynamicMeshCounters", "ssbo_dyn_mesh_counters_out_")
@@ -827,6 +828,7 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_edge_split)
     .storage_buf(10, Qualifier::READ_WRITE, "uint", "ssbo_per_split_edge_info_[]")
     .storage_buf(11, Qualifier::READ, "uint", "ssbo_selected_edge_to_edge_[]")
     .storage_buf(12, Qualifier::READ, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
+    .storage_buf(13, Qualifier::READ_WRITE, "uint", "ssbo_vtx_remesh_len_[]")
     .push_constant(Type::INT, "pcs_split_iter_")
     .push_constant(Type::FLOAT, "pcs_remesh_edge_len_")
     .push_constant(Type::INT, "pcs_edge_count_")
@@ -834,7 +836,7 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_edge_split)
 
     /* test contour vert insertion */
     .define("INCLUDE_VERTEX_NORMAL", "1")
-    .storage_buf(13, Qualifier::READ_WRITE, "uint", "ssbo_vnor_[]")
+    .storage_buf(14, Qualifier::READ_WRITE, "uint", "ssbo_vnor_[]")
     .uniform_buf(0, "ViewMatrices", "ubo_view_matrices_")
     .push_constant(Type::INT, "pcs_split_mode_")
     /**/
@@ -922,17 +924,18 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_edge_collapse)
     .compute_source("npr_strokegen_edge_collapse_comp.glsl");
 
 GPU_SHADER_CREATE_INFO(bnpr_meshing_edge_collapse_init)
-    .do_static_compilation(true)
+    .do_static_compilation(true) 
     .additional_info("bnpr_meshing_edge_collapse")
     .define("_KERNEL_MULTICOMPILE__EDGE_COLLAPSE_INIT", "1")
     .define("COMPACTION_LIB_EXCLUDE_DEFAULT_CODEGEN", "1"); 
 
-GPU_SHADER_CREATE_INFO(bnpr_meshing_edge_collapse_compact)
+GPU_SHADER_CREATE_INFO(bnpr_meshing_edge_collapse_compact) 
     .do_static_compilation(true)
     .additional_info("bnpr_meshing_edge_collapse")
     .define("_KERNEL_MULTICOMPILE__EDGE_COLLAPSE_COMPACT", "1")
+    .define("INCLUDE_VERTEX_REMESH_LEN", "1")
     .define("GLOBAL_COUNTER", "ssbo_edge_collapse_counters_[pcs_collapse_iter_].num_collapsed_edges_pass_1")
-    .define("CP_TAG", "collapse_select_short_edges");
+    .define("CP_TAG", "collapse_select_short_edges"); 
 
 GPU_SHADER_CREATE_INFO(bnpr_meshing_edge_collapse_resolve_conflict_0)
     .do_static_compilation(true)
@@ -1119,9 +1122,9 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_analysis)
     .storage_buf(6, Qualifier::READ_WRITE, "uint", "ssbo_vert_to_edge_list_header_[]")
     .storage_buf(7, Qualifier::READ_WRITE, "uint", "ssbo_vert_flags_[]")
     .storage_buf(8, Qualifier::READ_WRITE, "float", "ssbo_vbo_full_[]")
-    .storage_buf(9, Qualifier::READ, "ObjectMatrices", "drw_matrix_buf[]")
-    .storage_buf(10, Qualifier::WRITE, "uint", "ssbo_dbg_lines_[]")
-#define NUM_SSBO_BASE 11
+    // .storage_buf(9, Qualifier::READ, "ObjectMatrices", "drw_matrix_buf[]")
+    .storage_buf(9, Qualifier::WRITE, "uint", "ssbo_dbg_lines_[]")
+#define NUM_SSBO_BASE 10
 
     .uniform_buf(0, "ViewMatrices", "ubo_view_matrices_")
 
@@ -1164,9 +1167,11 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_analysis_order_1)
     .define("INCLUDE_VERTEX_NORMAL", "1")
     .define("INCLUDE_VERTEX_VORONOI_AREA", "1")
     .define("COMPACTION_LIB_EXCLUDE_DEFAULT_CODEGEN", "1")
+    .define("EDGE_FLAGS_INCLUDED", "1")
     .storage_buf(NUM_SSBO_BASE + 0u, Qualifier::READ_WRITE, "uint", "ssbo_vnor_[]")
-    .storage_buf(NUM_SSBO_BASE + 1u, Qualifier::READ_WRITE, "uint", "ssbo_varea_[]");
-#define NUM_SSBO_1 ((NUM_SSBO_BASE + 2u))
+    .storage_buf(NUM_SSBO_BASE + 1u, Qualifier::READ_WRITE, "uint", "ssbo_varea_[]")
+    .storage_buf(NUM_SSBO_BASE + 2u, Qualifier::READ_WRITE, "uint", "ssbo_edge_flags_[]");
+#define NUM_SSBO_1 ((NUM_SSBO_BASE + 3u))
 
 GPU_SHADER_CREATE_INFO(bnpr_geom_analysis_order_1_main)
     .do_static_compilation(true)
@@ -1182,16 +1187,27 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_analysis_order_1_vert_curv_pass_0)
 GPU_SHADER_CREATE_INFO(bnpr_geom_analysis_order_1_main_curvature)
     .do_static_compilation(true)
     .additional_info("bnpr_geom_analysis_order_1_main")
-    // .define("_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__CURVTENSOR", "1")
-    .define("_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__INTERPO_CURVTENSOR", "1")
-    .define("_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__INTERPO_CURVTENSOR_2RING", "1")
+    
+    
+    // Method A
+    .define("_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__CURVTENSOR", "1")
+    
+    /* Method B for principle dirs & curvatures */
+    // .define("_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__INTERPO_2RING", "1")
+    // .define("_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__INTERPO_CURVTENSOR", "1")
     // .define("INCLUDE_VERTEX_RADIAL_NORMAL", "1")
-    .define("_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1_GRAD_VDOTN", "1")
+    // .define("_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1_GRAD_VDOTN", "1")
+    
+    /* Method B for Gaussian & Mean curvatures */
+    // .define("_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__INTERPO_2RING", "1")
+    // .define("_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__INTERPO_CURVATURE", "1")
+    
     .define("_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__MAIN", "1")
     .define("INCLUDE_VERTEX_CURV_TENSOR", "1") 
+    .define("INCLUDE_VERTEX_REMESH_LEN", "1")
     .storage_buf(NUM_SSBO_1 + 0, Qualifier::READ_WRITE, "uint", "ssbo_edge_vtensors_[]")
-    // .storage_buf(NUM_SSBO_1 + 1, Qualifier::READ_WRITE, "uint", "ssbo_vcurv_tensor_[]")
     .storage_buf(NUM_SSBO_1 + 1, Qualifier::READ_WRITE, "uint", "ssbo_vcurv_pdirs_k1k2_[]")
+    .storage_buf(NUM_SSBO_1 + 2, Qualifier::READ_WRITE, "uint", "ssbo_vtx_remesh_len_[]")
     .push_constant(Type::FLOAT, "pcs_dbg_curv_K_scale_"); 
 
 #undef NUM_SSBO_1

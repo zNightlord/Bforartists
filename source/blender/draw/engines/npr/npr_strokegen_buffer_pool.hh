@@ -70,7 +70,6 @@ class GPUBufferPoolModule {
   SSBO_StrokeGenMeshBufPerEdge<uint, 1> ssbo_edge_flags_;                       // 32MB
   SSBO_StrokeGenMeshBufPerVert<float, 3> ssbo_vnor_;                            // 96MB
 
-
   SSBO_StrokeGenMeshBufPerSelectedEdge<uint, 1> ssbo_selected_edge_to_edge_;    // 32MB    
   SSBO_StrokeGenMeshBufPerSelectedVert<uint, 1> ssbo_selected_vert_to_vert_;    // 16MB    
   SSBO_StrokeGenMeshBufPerEdge<uint, 1> ssbo_dbg_lines_;                        // 256MB   
@@ -121,6 +120,13 @@ class GPUBufferPoolModule {
       buf_in = ssbo_mesh_buffer_reuse_0_;
       buf_out = ssbo_mesh_buffer_reuse_6_;
     }
+  }
+
+
+  // Reused Buffer Scheme throughout Edge Split, Collapse, Flip and Relocation ------
+  inline GPUStorageBuf *reused_ssbo_vtx_remesh_len_()
+  {
+    return ssbo_mesh_buffer_reuse_4_; 
   }
 
 
@@ -185,33 +191,12 @@ class GPUBufferPoolModule {
   }
   inline GPUStorageBuf *reused_ssbo_vnor_temp_in_(int step)
   {
-    return step % 2u == 0u ? ssbo_mesh_buffer_reuse_3_ : ssbo_mesh_buffer_reuse_4_; 
+    return step % 2u == 0u ? ssbo_mesh_buffer_reuse_3_ : ssbo_mesh_buffer_reuse_0_;
   }
   inline GPUStorageBuf *reused_ssbo_vnor_temp_out_(int step)
   {
-    return step % 2u == 0u ? ssbo_mesh_buffer_reuse_4_ : ssbo_mesh_buffer_reuse_3_; 
+    return step % 2u == 0u ? ssbo_mesh_buffer_reuse_0_ : ssbo_mesh_buffer_reuse_3_; 
   }
-
-  // Deprecated /////////////////////
-  inline GPUStorageBuf *reused_ssbo_edge_quadric_data()
-  { // TODO: we can actually share one buffer with vert_quadric data if this also goes iterative
-    return ssbo_mesh_buffer_reuse_5_; 
-  }
-  inline void reused_ssbo_vert_quadric_data_(int iter, GPUStorageBuf*& buf_in, GPUStorageBuf*& buf_out)
-  {
-    buf_in = iter % 2 == 0 ? ssbo_mesh_buffer_reuse_3_ : ssbo_mesh_buffer_reuse_0_;
-    buf_out = iter % 2 == 0 ? ssbo_mesh_buffer_reuse_0_ : ssbo_mesh_buffer_reuse_3_; 
-  }
-  inline void reused_ssbo_filtered_normal_edge_(int iter, GPUStorageBuf*& buf_in, GPUStorageBuf*& buf_out)
-  {
-    buf_in = iter % 2 == 0 ? ssbo_mesh_buffer_reuse_4_ : ssbo_mesh_buffer_reuse_2_;
-    buf_out = iter % 2 == 0 ? ssbo_mesh_buffer_reuse_2_ : ssbo_mesh_buffer_reuse_4_; 
-  }
-  inline GPUStorageBuf *reused_ssbo_filtered_normal_vert_()
-  {
-    return ssbo_mesh_buffer_reuse_1_; 
-  }
-///////////////////////////////
 
 
   // Reused Buffers for per-batch Contour Processing --------------------------

@@ -124,6 +124,22 @@
 #endif
 
 
+#if defined(INCLUDE_VERTEX_REMESH_LEN)
+#if defined(_KERNEL_MULTICOMPILE__EDGE_COLLAPSE_COMPACT)
+    #define ssbo_vtx_remesh_len_ ssbo_per_collapse_edge_info_ // the slot is full
+#endif
+    void st_vtx_remesh_len(uint vtx_id, float len)
+    {
+        uint len_enc = floatBitsToUint(len);
+        ssbo_vtx_remesh_len_[vtx_id] = len_enc;
+    }
+    float ld_vtx_remesh_len(uint vtx_id)
+    {
+        uint len_enc = ssbo_vtx_remesh_len_[vtx_id];
+        return uintBitsToFloat(len_enc);
+    }
+#endif
+
 
 
 
@@ -318,6 +334,64 @@ float mu0InterpolatedU(in vec3 a,
     return 0.5f * dot((cross(( b - a ), ( c - a ))), uM );
 }
 
+ /// Computes mu1 measure (mean curvature) of triangle abc given an interpolated
+/// corrected normal vector \a ua, \a \ub, \a uc.
+/// @param a any point
+/// @param b any point
+/// @param c any point
+/// @param ua the corrected normal vector at point a
+/// @param ub the corrected normal vector at point b
+/// @param uc the corrected normal vector at point c
+/// @param unit_u when 'true' considers that interpolated
+/// corrected normals should be made unitary, otherwise
+/// interpolated corrected normals may have smaller norms.
+/// @return the mu1-measure of triangle abc, i.e. \b twice its mean curvature.
+float mu1InterpolatedU(in vec3 a,
+                    in vec3 b,
+                    in vec3 c,
+                    in vec3 ua,
+                    in vec3 ub,
+                    in vec3 uc,
+                    bool unit_u = false)
+  {
+    // MU1=1/2( | uM u_C-u_B A | + | uM u_A-u_C B | + | uM u_B-u_A C |
+    vec3 uM = ( ua+ub+uc ) / 3.0f;
+    if ( unit_u ) uM /= length(uM);
+    return 0.5f * dot(cross(uM, ( uc - ub )), a)
+                   + dot(cross(uM, ( ua - uc )), b)
+                   + dot(cross(uM, ( ub - ua )), c);
+  }
+
+    
+  /// Computes mu2 measure (Gaussian curvature) of triangle abc given an interpolated
+  /// corrected normal vector \a ua, \a \ub, \a uc.
+  /// @param a any point
+  /// @param b any point
+  /// @param c any point
+  /// @param ua the corrected normal vector at point a
+  /// @param ub the corrected normal vector at point b
+  /// @param uc the corrected normal vector at point c
+  /// @param unit_u when 'true' considers that interpolated
+  /// corrected normals should be made unitary, otherwise
+  /// interpolated corrected normals may have smaller norms.
+  /// @return the mu2-measure of triangle abc, i.e. its Gaussian curvature.
+  float mu2InterpolatedU(in vec3 a,
+                    in vec3 b,
+                    in vec3 c,
+                    in vec3 ua,
+                    in vec3 ub,
+                    in vec3 uc,
+                    bool unit_u = false)
+  {
+    
+    // Using non unitary interpolated normals give
+    // MU2=1/2*det( uA, uB, uC )
+    // When normals are unitary, it is the area of a spherical triangle.
+    if ( unit_u )
+      return algebraicArea(ua,ub,uc);
+    else
+      return 0.5f * dot(cross(ua, ub), uc);
+  }
 
 /// Computes muXY measure (anisotropic curvature) of triangle abc
 /// given an interpolated corrected normal vector \a ua, \a \ub, \a
@@ -417,7 +491,6 @@ void curvDirFromTensor(in mat3 tensor,
 #undef SWAP_EVAL_EVEC
 
 }
-
 
 
 

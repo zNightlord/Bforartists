@@ -1,6 +1,7 @@
 
 #pragma BLENDER_REQUIRE(npr_strokegen_compaction_lib.glsl)
 #pragma BLENDER_REQUIRE(npr_strokegen_topo_lib.glsl)
+#pragma BLENDER_REQUIRE(npr_strokegen_geom_lib.glsl)
 #pragma BLENDER_REQUIRE(npr_strokegen_load_store_lib.glsl)
 
 
@@ -40,10 +41,16 @@ void st_vpos(uint vtx_id, vec3 vpos)
     Store3(ssbo_vbo_full_, vtx_id, vpos);
 }
 
-float get_collapse_edge_len_max()
+#if defined(_KERNEL_MULTICOMPILE__EDGE_COLLAPSE_COMPACT)
+float get_collapse_edge_len_max(uint v1, uint v3)
 {
+    // float vlen_1 = ld_vtx_remesh_len(v1); 
+    // float vlen_3 = ld_vtx_remesh_len(v3);
+    // return min(vlen_1, vlen_3);
+     
     return calc_remesh_edge_len_min(pcs_remesh_edge_len_); 
 }
+#endif
 
 struct EdgeCollapseInfo
 {
@@ -196,7 +203,7 @@ void main()
     EdgeFlags ef = load_edge_flags(wedge_id);
 
     /* Filter collapse edges */
-    bool is_collapse_ok = (edge_len < get_collapse_edge_len_max()) 
+    bool is_collapse_ok = (edge_len < get_collapse_edge_len_max(verts_cwedge.x, verts_cwedge.y)) 
         && (ef.selected)
         && (!ef.dupli)
         && (!ef.border)

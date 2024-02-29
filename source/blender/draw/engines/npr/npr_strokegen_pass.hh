@@ -118,6 +118,9 @@ public:
 
 
 
+  SurfaceDebugContext surf_dbg_ctx; 
+
+
   /* -------------------------------------------------------------------- */
   /** \name Rebuild Render Passes
      * \{ */
@@ -250,8 +253,10 @@ public:
     GPUStorageBuf *ssbo_vcurv_pdirs_k1k2_;
     GPUStorageBuf *ssbo_edge_vtensors_; // temp buffer holding partial tensors
 
+    bool output_remesh_len; 
+
     SurfaceAnalysisContext()
-        : order_0_only_selected(false),
+      : order_0_only_selected(false),
         calc_vert_normal(false),
         ssbo_vnor_(nullptr),
         calc_vert_voronoi_area(false),
@@ -260,9 +265,11 @@ public:
         calc_vert_curvature(false),
         ssbo_vcurv_tensor_(nullptr),
         ssbo_vcurv_pdirs_k1k2_(nullptr),
-        ssbo_edge_vtensors_(nullptr)
+        ssbo_edge_vtensors_(nullptr),
+        output_remesh_len(false)
     {
     }
+
     void set_calc_vert_normal(bool val) { calc_vert_normal = val; }
     void set_calc_vert_voronoi_area(bool val) { calc_vert_voronoi_area = val; }
     void set_calc_vert_curvature(bool val) 
@@ -273,8 +280,17 @@ public:
         set_calc_vert_voronoi_area(true); 
       } 
     }
+    void set_calc_remesh_len(bool val)
+    {
+      output_remesh_len = true;
+      if (output_remesh_len)
+        set_calc_vert_curvature(true); 
+    }
   };
-  SurfaceDebugContext surf_dbg_ctx; 
+  void GetSurfaceAnalysisContext_InitPass(SurfaceAnalysisContext &surf_analysis_ctx) const;
+  void GetSurfaceAnalysisContext_RemeshPass(SurfaceAnalysisContext &surf_analysis_ctx) const;
+  void GetSurfaceAnalysisContext_ContourInsertionPass(
+      SurfaceAnalysisContext &surf_analysis_ctx) const;
 
   void append_subpass_surf_geom_analysis(
       ResourceHandle& rsc_handle, int num_verts,

@@ -52,9 +52,20 @@ void st_vpos(uint vtx_id, vec3 vpos)
     Store3(ssbo_vbo_full_, vtx_id, vpos);
 }
 
-float get_split_edge_len_min()
+float get_split_edge_len_min(uint v1, uint v3)
 {
+    // float vlen_1 = ld_vtx_remesh_len(v1); 
+    // float vlen_3 = ld_vtx_remesh_len(v3);
+    // return min(vlen_1, vlen_3); 
+    
     return calc_remesh_edge_len_max(pcs_remesh_edge_len_); 
+}
+
+float get_split_vert_len(uint v1, uint v3)
+{
+    float vlen_1 = ld_vtx_remesh_len(v1); 
+    float vlen_3 = ld_vtx_remesh_len(v3);
+    return .5f * (vlen_1 + vlen_3); 
 }
 
 
@@ -261,7 +272,7 @@ void main()
         && (!ef.del_by_split)
         && (!ef.del_by_collapse); 
     if (!is_contour_split_pass())
-        is_split_ok = is_split_ok && edge_len > get_split_edge_len_min();
+        is_split_ok = is_split_ok && edge_len > get_split_edge_len_min(verts_cwedge.x, verts_cwedge.y);
     else
         is_split_ok = is_split_ok && is_contour_edge; 
     
@@ -576,6 +587,9 @@ void main()
     VertFlags vf = init_vert_flags__new_split_edge(is_contour_split_pass()); 
     store_vert_flags(v4, vf); 
 
+    /* Store adaptive remesh length */
+    float edge_len = get_split_vert_len(v1, v3);
+    st_vtx_remesh_len(v4, edge_len);
 
 #undef e0
 #undef e1

@@ -1319,6 +1319,21 @@ float calc_remesh_edge_len_max(float targ_edge_len) // edge longer than this wil
 {
     return (4.0f/3.0f) * targ_edge_len; 
 }
+/* Adaptive Remeshing Length 
+ * see "Adaptive Remeshing for Real-Time Mesh Deformation" 
+*/
+float get_adaptive_remesh_len(float k/*max_curvature*/, float targ_edge_len_min, float targ_edge_len_max)
+{
+
+    const float epsi = 1e-3f; 
+    if (k < 1e-10f) return targ_edge_len_min; 
+
+    float l = epsi * ((6.0f / k) - (3.0f * epsi)); 
+    l = sqrt(max(.0f, l)); 
+    // l = clamp(l, targ_edge_len_min, targ_edge_len_max);
+
+    return l; 
+}
 
 
 

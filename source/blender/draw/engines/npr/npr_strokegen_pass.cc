@@ -146,6 +146,51 @@ namespace blender::npr::strokegen
     surf_dbg_ctx.dbg_curv_K_val = 1.0f;
   }
 
+  void StrokeGenPassModule::GetSurfaceAnalysisContext_InitPass(SurfaceAnalysisContext &surf_analysis_ctx) const
+  {
+    surf_analysis_ctx.order_0_only_selected = false;
+    surf_analysis_ctx.set_calc_vert_normal(true);
+    surf_analysis_ctx.ssbo_vnor_ = buffers_.ssbo_vnor_; 
+    
+    surf_analysis_ctx.set_calc_vert_voronoi_area(true);
+    surf_analysis_ctx.ssbo_varea_ = buffers_.ssbo_mesh_buffer_reuse_5_;
+    surf_analysis_ctx.order_1_only_selected = false;
+    surf_analysis_ctx.set_calc_vert_curvature(true);
+    surf_analysis_ctx.ssbo_edge_vtensors_ = buffers_.ssbo_mesh_buffer_reuse_7_;
+    surf_analysis_ctx.ssbo_vcurv_tensor_ = buffers_.ssbo_mesh_buffer_reuse_1_;
+    surf_analysis_ctx.ssbo_vcurv_pdirs_k1k2_ = buffers_.ssbo_mesh_buffer_reuse_2_;
+  }
+
+  void StrokeGenPassModule::GetSurfaceAnalysisContext_RemeshPass(SurfaceAnalysisContext &surf_analysis_ctx) const
+  {
+    surf_analysis_ctx.order_0_only_selected = false;
+    surf_analysis_ctx.set_calc_vert_normal(true);
+    surf_analysis_ctx.ssbo_vnor_ = buffers_.ssbo_vnor_; 
+
+    surf_analysis_ctx.set_calc_vert_voronoi_area(false);
+    surf_analysis_ctx.ssbo_varea_ = buffers_.ssbo_mesh_buffer_reuse_5_;
+    surf_analysis_ctx.order_1_only_selected = false;
+    surf_analysis_ctx.set_calc_vert_curvature(false);
+    surf_analysis_ctx.ssbo_edge_vtensors_ = buffers_.ssbo_mesh_buffer_reuse_7_;
+    surf_analysis_ctx.ssbo_vcurv_tensor_ = buffers_.ssbo_mesh_buffer_reuse_1_;
+    surf_analysis_ctx.ssbo_vcurv_pdirs_k1k2_ = buffers_.ssbo_mesh_buffer_reuse_2_;
+  }
+
+  void StrokeGenPassModule::GetSurfaceAnalysisContext_ContourInsertionPass(SurfaceAnalysisContext &surf_analysis_ctx) const
+  {
+    surf_analysis_ctx.order_0_only_selected = false;
+    surf_analysis_ctx.set_calc_vert_normal(true);
+    surf_analysis_ctx.ssbo_vnor_ = buffers_.ssbo_vnor_;
+
+    surf_analysis_ctx.set_calc_vert_voronoi_area(false);
+    surf_analysis_ctx.ssbo_varea_ = buffers_.ssbo_mesh_buffer_reuse_5_;
+    surf_analysis_ctx.order_1_only_selected = false;
+    surf_analysis_ctx.set_calc_vert_curvature(false);
+    surf_analysis_ctx.ssbo_edge_vtensors_ = buffers_.ssbo_mesh_buffer_reuse_7_;
+    surf_analysis_ctx.ssbo_vcurv_tensor_ = buffers_.ssbo_mesh_buffer_reuse_1_;
+    surf_analysis_ctx.ssbo_vcurv_pdirs_k1k2_ = buffers_.ssbo_mesh_buffer_reuse_2_;
+  }
+
   /**
    * \brief Add a subpass for extracting geometry from given GPUBatch.
    * \param ob Mesh Object
@@ -241,17 +286,10 @@ namespace blender::npr::strokegen
     append_subpass_select_verts_from_selected_edges(vtx_sel_ctx_vnor, num_edges, num_verts); 
 
     SurfaceAnalysisContext surf_analysis_ctx;
-    surf_analysis_ctx.order_0_only_selected = false;
-    surf_analysis_ctx.set_calc_vert_normal(true);
-    surf_analysis_ctx.ssbo_vnor_ = buffers_.ssbo_vnor_; /*buffers_.ssbo_mesh_buffer_reuse_0_*/
-    
-    surf_analysis_ctx.set_calc_vert_voronoi_area(true);
-    surf_analysis_ctx.ssbo_varea_ = buffers_.ssbo_mesh_buffer_reuse_5_;
-    surf_analysis_ctx.order_1_only_selected = false;
-    surf_analysis_ctx.set_calc_vert_curvature(true);
-    surf_analysis_ctx.ssbo_edge_vtensors_ = buffers_.ssbo_mesh_buffer_reuse_7_;
-    surf_analysis_ctx.ssbo_vcurv_tensor_ = buffers_.ssbo_mesh_buffer_reuse_1_;
-    surf_analysis_ctx.ssbo_vcurv_pdirs_k1k2_ = buffers_.ssbo_mesh_buffer_reuse_2_;
+    GetSurfaceAnalysisContext_InitPass(surf_analysis_ctx);
+    auto surf_dbg_ctx_cpy = surf_dbg_ctx;
+    append_subpass_surf_geom_analysis(
+        rsc_handle, num_verts, num_edges, surf_analysis_ctx, surf_dbg_ctx_cpy);
 
 
     // GPU Remesher -------------------------------------------------------------------------
@@ -304,13 +342,13 @@ namespace blender::npr::strokegen
         }
 
       // Surface analysis: evaluate vertex normal & curvature
+      SurfaceAnalysisContext surf_analysis_ctx_remesh;
+      GetSurfaceAnalysisContext_RemeshPass(surf_analysis_ctx_remesh); 
       auto surf_dbg_ctx_cpy = surf_dbg_ctx;
-      surf_dbg_ctx_cpy.dbg_vert_normal = surf_dbg_ctx_cpy.dbg_vert_normal &&
-                                         (iter_remesh == meshing_params.remeshing_iters - 1);
-      surf_dbg_ctx_cpy.dbg_vert_curv = surf_dbg_ctx_cpy.dbg_vert_curv &&
-                                           (iter_remesh == meshing_params.remeshing_iters - 1);
+      surf_dbg_ctx_cpy.dbg_vert_normal = false;
+      surf_dbg_ctx_cpy.dbg_vert_curv = false;
       append_subpass_surf_geom_analysis(
-          rsc_handle, num_verts, num_edges, surf_analysis_ctx, surf_dbg_ctx_cpy);
+          rsc_handle, num_verts, num_edges, surf_analysis_ctx_remesh, surf_dbg_ctx_cpy);
 
       // vertex relocation
       VertexRelocationMode relocation_mode = TangentialSmoothing; // QuadricFiltering
@@ -341,18 +379,16 @@ namespace blender::npr::strokegen
 
     // test interpolated contour tessellation
     {
+      SurfaceAnalysisContext surf_analysis_ctx_contour;
+      GetSurfaceAnalysisContext_ContourInsertionPass(surf_analysis_ctx_contour); 
       auto surf_dbg_ctx_cpy = surf_dbg_ctx;
-      surf_dbg_ctx_cpy.dbg_vert_normal = true;
+      surf_dbg_ctx_cpy.dbg_vert_normal = false;
       surf_dbg_ctx_cpy.dbg_vert_curv = false;
-      append_subpass_surf_geom_analysis(
-          rsc_handle, num_verts, num_edges, surf_analysis_ctx, surf_dbg_ctx_cpy);
+      append_subpass_surf_geom_analysis(rsc_handle, num_verts, num_edges, surf_analysis_ctx, surf_dbg_ctx_cpy);
       
       for (int iter_contour_insertion = 0; iter_contour_insertion < 4; ++iter_contour_insertion) {
-        int num_edge_split_iters = meshing_params.remeshing_split_iters;
-        for (int iter_edge_split = 0; iter_edge_split < num_edge_split_iters; ++iter_edge_split) {
-          append_subpass_fill_dispatched_args_remeshed_edges_(num_edges, true);
-          append_subpass_split_edges(InterpContour, iter_edge_split, num_edges, num_verts);
-        }
+        append_subpass_fill_dispatched_args_remeshed_edges_(num_edges, true);
+        append_subpass_split_edges(InterpContour, iter_contour_insertion, num_edges, num_verts);
         // update elem counters after split
         append_subpass_fill_dispatched_args_remeshed_edges_(num_edges, true);
         append_subpass_fill_dispatched_args_remeshed_verts_(num_verts, false);
@@ -855,14 +891,15 @@ namespace blender::npr::strokegen
         sub.bind_ssbo(9, buffers_.reused_ssbo_per_edge_split_info_()); 
         sub.bind_ssbo(10, buffers_.reused_ssbo_per_split_edge_info_());
         sub.bind_ssbo(11, buffers_.ssbo_selected_edge_to_edge_);
-        sub.bind_ssbo(12, buffers_.ssbo_bnpr_mesh_pool_counters_); 
+        sub.bind_ssbo(12, buffers_.ssbo_bnpr_mesh_pool_counters_);
+        sub.bind_ssbo(13, buffers_.reused_ssbo_vtx_remesh_len_()); 
         sub.push_constant("pcs_split_iter_", iter_split); 
         sub.push_constant("pcs_remesh_edge_len_", remesh_edge_len); 
         sub.push_constant("pcs_edge_count_", num_edges); 
         sub.push_constant("pcs_vert_count_", num_verts);
 
         // Test contour insertion
-        sub.bind_ssbo(13, buffers_.ssbo_vnor_);
+        sub.bind_ssbo(14, buffers_.ssbo_vnor_);
         sub.bind_ubo(0, buffers_.ubo_view_matrices_cache_);
         sub.push_constant("pcs_split_mode_", (int)mode); 
         // ----------------------
@@ -920,7 +957,7 @@ namespace blender::npr::strokegen
   void StrokeGenPassModule::append_subpass_collapse_edges(int iter_remesh, int iter_collapse, int num_edges, int num_verts)
   {
     auto bind_src = [&](draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub,
-                        int pingpong_id, float remesh_edge_len) {
+                        int pingpong_id, float remesh_edge_len, bool compaction_pass = false) {
       sub.bind_ssbo(0, buffers_.ssbo_dyn_mesh_counters_in_());   // in
       sub.bind_ssbo(1, buffers_.ssbo_dyn_mesh_counters_out_());    // out
       sub.bind_ssbo(2, buffers_.ssbo_edge_collapse_counters_);
@@ -933,9 +970,12 @@ namespace blender::npr::strokegen
       sub.bind_ssbo(9, buffers_.reused_ssbo_per_edge_collapse_info_in_(pingpong_id));
       sub.bind_ssbo(10, buffers_.reused_ssbo_per_edge_collapse_info_out_(pingpong_id));
       sub.bind_ssbo(11, buffers_.reused_ssbo_per_collapse_edge_info_());
-      sub.bind_ssbo(12, buffers_.reused_ssbo_per_vert_collapse_wedge_id_());
+      if (compaction_pass)
+        sub.bind_ssbo(12, buffers_.reused_ssbo_vtx_remesh_len_());  // overwrite, we don't have slot for that
+      else
+        sub.bind_ssbo(12, buffers_.reused_ssbo_per_vert_collapse_wedge_id_());
       sub.bind_ssbo(13, buffers_.ssbo_selected_edge_to_edge_);
-      sub.bind_ssbo(14, buffers_.ssbo_bnpr_mesh_pool_counters_); 
+      sub.bind_ssbo(14, buffers_.ssbo_bnpr_mesh_pool_counters_);
       sub.push_constant("pcs_collapse_iter_", iter_collapse);
       sub.push_constant("pcs_remesh_edge_len_", remesh_edge_len);
       sub.push_constant("pcs_edge_count_", num_edges);
@@ -953,7 +993,7 @@ namespace blender::npr::strokegen
     {
       auto &sub = pass_extract_geom.sub("bnpr_meshing_edge_collapse_compact");
       sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_OP_COLLAPSE_EDGE_COMPACT));
-      bind_src(sub, 0, remesh_len_scaled);
+      bind_src(sub, 0, remesh_len_scaled, true);
       sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_edges_);
       sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
     }
@@ -1198,9 +1238,9 @@ namespace blender::npr::strokegen
       sub.bind_ssbo(6,  buffers_.ssbo_vert_to_edge_list_header_); 
       sub.bind_ssbo(7,  buffers_.ssbo_vert_flags_); 
       sub.bind_ssbo(8, buffers_.ssbo_vbo_full_);
-      sub.bind_ssbo(9, DRW_manager_get()->matrix_buf.current());
-      sub.bind_ssbo(10, buffers_.ssbo_dbg_lines_); 
-      ssbo_offset_base = 11;
+      // sub.bind_ssbo(9, DRW_manager_get()->matrix_buf.current());
+      sub.bind_ssbo(9, buffers_.ssbo_dbg_lines_); 
+      ssbo_offset_base = 10;
 
       sub.bind_ubo(0, buffers_.ubo_view_matrices_cache_); 
 
@@ -1242,7 +1282,8 @@ namespace blender::npr::strokegen
           bind_src(sub, ctx.order_1_only_selected, output_dbg_lines); 
           sub.bind_ssbo(ssbo_offset_base + 0, ctx.ssbo_vnor_);
           sub.bind_ssbo(ssbo_offset_base + 1, ctx.ssbo_varea_);
-          ssbo_offset_base_1 = ssbo_offset_base + 2;
+          sub.bind_ssbo(ssbo_offset_base + 2, buffers_.ssbo_edge_flags_);
+          ssbo_offset_base_1 = ssbo_offset_base + 3;
         };
     if (ctx.calc_vert_curvature)
     {
@@ -1262,8 +1303,8 @@ namespace blender::npr::strokegen
 
         bind_src_order_1(sub, dbg_options.dbg_vert_curv);
         sub.bind_ssbo(ssbo_offset_base_1 + 0, ctx.ssbo_edge_vtensors_);
-        // sub.bind_ssbo(ssbo_offset_base_1 + 1, ctx.ssbo_vcurv_tensor_);
         sub.bind_ssbo(ssbo_offset_base_1 + 1, ctx.ssbo_vcurv_pdirs_k1k2_);
+        sub.bind_ssbo(ssbo_offset_base_1 + 2, buffers_.reused_ssbo_vtx_remesh_len_());
         sub.push_constant("pcs_dbg_curv_K_scale_", dbg_options.dbg_curv_K_val); 
 
         sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_verts_);
