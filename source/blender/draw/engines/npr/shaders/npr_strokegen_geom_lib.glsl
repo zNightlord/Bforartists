@@ -120,13 +120,26 @@
         pdir = pd2_k2.xyz;
         k    = pd2_k2.w;
     }
-
 #endif
+
+#if defined(INCLUDE_VERTEX_CURV_MAX)
+    float ld_vcurv_max(uint vtx_id)
+    {
+        uint vcurv_max_enc = ssbo_vcurv_max_[vtx_id]; 
+        return uintBitsToFloat(vcurv_max_enc); 
+    }
+    void st_vcurv_max(uint vtx_id, float vcurv_max)
+    {
+        uint vcurv_max_enc = floatBitsToUint(vcurv_max);
+        ssbo_vcurv_max_[vtx_id] = vcurv_max_enc;
+    }
+#endif
+
 
 
 #if defined(INCLUDE_VERTEX_REMESH_LEN)
 #if defined(_KERNEL_MULTICOMPILE__EDGE_COLLAPSE_COMPACT)
-    #define ssbo_vtx_remesh_len_ ssbo_per_collapse_edge_info_ // the slot is full
+    #define ssbo_vtx_remesh_len_ ssbo_per_collapse_edge_info_ // ssbo slots are full (x16)
 #endif
     void st_vtx_remesh_len(uint vtx_id, float len)
     {

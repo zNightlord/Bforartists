@@ -473,6 +473,51 @@ bool is_smooth_vert(VertFlags vf)
 }
 #endif
 
+#if defined(_KERNEL_MULTICOMPILE__SURF_FILTERING__VCURVE_SMOOTHING)
+vec3 ld_vcurv_max_smoothed(uint vert_id)
+{
+    if (pcs_vcurv_smooth_iter_ % 2u == 0u)
+        return ld_vcurv_max(vert_id); 
+    
+    return uintBitsToFloat(ssbo_vcurv_max_temp_[vert_id]); 
+}
+void st_vcurv_max_smoothed(uint vert_id, vec3 vcurv_smoothed)
+{
+    if (pcs_vcurv_smooth_iter_ % 2u == 0u)
+        ssbo_vcurv_max_temp_[vert_id] = floatBitsToUint(vcurv_smoothed);
+
+    st_vcurv_max(vert_id, vpos_filtered); 
+}
+
+struct VtxCurvatureSmoothingContext
+{
+    vec3 vcurv_summed; 
+    float num_adj_edges; 
+}; 
+VtxCurvatureSmoothingContext init_vcurv_smooth_context()
+{
+    VtxCurvatureSmoothingContext ctx; 
+    ctx.vcurv_summed = vec3(.0f); 
+    ctx.num_adj_edges = .0f; 
+
+    return ctx; 
+}
+bool ve_circulator__vcurv_smooth(
+    CirculatorIterData iter, 
+    inout VtxCurvatureSmoothingContext ctx
+){
+    uint wi = iter.awi.wedge_id; 
+
+    uint ivert_vi = mark__ve_circ_fwd__get_vi(iter); 
+    uint vi = ssbo_edge_to_vert_[wi*4u + ivert_vi]; 
+    float vcurv_i = ld_vcurv_max_smoothed(vi); 
+    
+    ctx.vcurv_summed += vcurv_i; 
+    ctx.num_adj_edges += 1.0f; 
+    
+    return true; 
+}
+#endif
 
 
 
@@ -647,5 +692,22 @@ void main()
     vec3 vpos = uintBitsToFloat(vpos_enc); 
     
     st_vpos(vert_id, vpos);
+#endif
+
+#if defined(_KERNEL_MULTICOMPILE__SURF_FILTERING__VCURVE_SMOOTHING)
+    if(!valid_thread) return;
+
+    vec3 vcurv = ld_vcurv_max(vert_id); 
+    
+    VtxCurvatureSmoothingContext ctx = init_vcurv_smooth_context();
+    VertWedgeListHeader vwlh = decode_vert_wedge_list_header(ssbo_vert_to_edge_list_header_[vert_id]); 
+    bool rot_fwd = true;
+    VE_CIRCULATOR(vwlh, ve_circulator__vcurv_smooth, ctx, rot_fwd); 
+    ctx.vcurv_summed = ctx.summed / ctx.num_adj_edges;
+
+    vurv = mix(vcurv, ctx.vcurv_summed, .1f); 
+
+    if (valid_thread)
+        st_vcurv_max_smoothed(vert_id, vcurv);  
 #endif
 }

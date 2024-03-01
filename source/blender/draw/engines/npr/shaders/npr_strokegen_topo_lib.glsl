@@ -1322,15 +1322,18 @@ float calc_remesh_edge_len_max(float targ_edge_len) // edge longer than this wil
 /* Adaptive Remeshing Length 
  * see "Adaptive Remeshing for Real-Time Mesh Deformation" 
 */
-float get_adaptive_remesh_len(float k/*max_curvature*/, float targ_edge_len_min, float targ_edge_len_max)
+float get_adaptive_remesh_len(float k/*max_curvature*/, float ref_edge_len)
 {
 
+    float targ_edge_len_min = ref_edge_len * .125f; // scales according the how many split/collapse we want 
+    float targ_edge_len_max = ref_edge_len * 8.0f;
+
     const float epsi = 1e-3f; 
-    if (k < 1e-10f) return targ_edge_len_min; 
+    if (k < 1e-10f) return targ_edge_len_max; 
 
     float l = epsi * ((6.0f / k) - (3.0f * epsi)); 
     l = sqrt(max(.0f, l)); 
-    // l = clamp(l, targ_edge_len_min, targ_edge_len_max);
+    l = clamp(l, targ_edge_len_min, targ_edge_len_max);
 
     return l; 
 }

@@ -140,6 +140,7 @@ public:
       const DRWView* drw_view
       );
 
+
   // ---------------------------------------------------------------------------
   void append_subpass_merge_vbo(GPUBatch *gpu_batch_surf, int batch_resource_index, int num_verts);
   void append_subpass_merge_line_adj_ibo(GPUBatch *gpu_batch_line_adj,
@@ -303,6 +304,12 @@ public:
 
   // ---------------------------------------------------------------------------
   // Mesh Filtering
+  void bind_rsc_for_bnpr_meshing_surf_filtering_(
+      int num_verts,
+      int num_edges,
+      draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf>& sub,
+      int vnor_filter_step, int& out_num_ssbo);
+
   enum VertexRelocationMode {
     TangentialSmoothing = 0, 
     QuadricFiltering = 1,
@@ -313,8 +320,7 @@ public:
                                         int num_verts,
                                         int num_vnor_filter_iters,
                                         bool only_selected_verts);
-
-
+  void append_subpass_vertex_curv_smoothing();
 
 
   // ---------------------------------------------------------------------------
