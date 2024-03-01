@@ -570,13 +570,10 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_surf_filtering_)
     .storage_buf(5, Qualifier::READ, "uint", "ssbo_selected_edge_to_edge_[]")
     .storage_buf(6, Qualifier::READ, "uint", "ssbo_selected_vert_to_vert_[]")
     .storage_buf(7, Qualifier::READ_WRITE, "float", "ssbo_vbo_full_[]")
-    // .storage_buf(8, Qualifier::READ_WRITE, "uint", "ssbo_vpos_temp_[]")
     .storage_buf(8, Qualifier::READ_WRITE, "uint", "ssbo_vnor_[]")
-    .storage_buf(9, Qualifier::READ_WRITE, "uint", "ssbo_vnor_temp_in_[]")
-    .storage_buf(10, Qualifier::READ_WRITE, "uint", "ssbo_vnor_temp_out_[]")
-    .storage_buf(11, Qualifier::READ_WRITE, "uint", "ssbo_edge_flags_[]")
-    .storage_buf(12, Qualifier::READ_WRITE, "uint", "ssbo_vert_flags_[]")
-#define NUM_SSBO_bnpr_meshing_surf_filtering_ 13
+    .storage_buf(9, Qualifier::READ_WRITE, "uint", "ssbo_edge_flags_[]")
+    .storage_buf(10, Qualifier::READ_WRITE, "uint", "ssbo_vert_flags_[]")
+#define NUM_SSBO_bnpr_meshing_surf_filtering_ 11
 
     .uniform_buf(0, "ViewMatrices", "ubo_view_matrices_") 
 
@@ -591,6 +588,10 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_surf_filtering_vnor_filtering)
     .do_static_compilation(true)
     .additional_info("bnpr_meshing_surf_filtering_")
     .push_constant(Type::INT, "pcs_vnor_filtering_iter_")
+#define SSBO_OFFSET NUM_SSBO_bnpr_meshing_surf_filtering_
+    .storage_buf(SSBO_OFFSET+0, Qualifier::READ_WRITE, "uint", "ssbo_vnor_temp_in_[]")
+    .storage_buf(SSBO_OFFSET+1, Qualifier::READ_WRITE, "uint", "ssbo_vnor_temp_out_[]")
+#undef SSBO_OFFSET
     .define("_KERNEL_MULTICOMPILE__SURF_FILTERING__VNOR_FILTERING", "1");
 
 
@@ -608,6 +609,10 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_surf_filtering_vquadric_common)
     .do_static_compilation(true)
     .define("QUADRICS_FILTERING_INCLUDE", "1")
     .additional_info("bnpr_meshing_surf_filtering_")
+#define SSBO_OFFSET NUM_SSBO_bnpr_meshing_surf_filtering_
+    .storage_buf(SSBO_OFFSET+0, Qualifier::READ_WRITE, "uint", "ssbo_vert_quadric_data_in_[]")
+    .storage_buf(SSBO_OFFSET+1, Qualifier::READ_WRITE, "uint", "ssbo_vert_quadric_data_out_[]")
+#undef SSBO_OFFSET
     .push_constant(Type::INT, "pcs_vq_filtering_iter_")
     .push_constant(Type::INT, "pcs_filtered_quadric_type_")
     .push_constant(Type::FLOAT, "pcs_quadric_deviation_")
@@ -623,24 +628,26 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_surf_filtering_quadric_vpos_filtering)
     .do_static_compilation(true)
     .define("QUADRICS_FILTERING_INCLUDE", "1")
     .additional_info("bnpr_meshing_surf_filtering_vquadric_common")
-    .define("_KERNEL_MULTICOMPILE__SURF_FILTERING__QUADRIC_VPOS_FILTERING", "1");
+    .define("_KERNEL_MULTICOMPILE__SURF_FILTERING__QUADRIC_VPOS_FILTERING", "1")
+    // .define("_KERNEL_MULTICOMPILE__SURF_FILTERING__QUADRIC_VPOS_FILTERING__CONSTRAINED_SOLVE", "1")
+    ;
 
+
+GPU_SHADER_CREATE_INFO(bnpr_meshing_surf_filtering_sqrt3_common)
+    .do_static_compilation(true)
+    .additional_info("bnpr_meshing_surf_filtering_")
+#define SSBO_OFFSET NUM_SSBO_bnpr_meshing_surf_filtering_
+    .storage_buf(SSBO_OFFSET, Qualifier::READ_WRITE, "uint", "ssbo_vpos_temp_[]"); 
+#undef SSBO_OFFSET 
 
 GPU_SHADER_CREATE_INFO(bnpr_meshing_surf_filtering_sqrt3_vpos_smoothing)
      .do_static_compilation(true)
-     .additional_info("bnpr_meshing_surf_filtering_")
-#define SSBO_OFFSET NUM_SSBO_bnpr_meshing_surf_filtering_
-    .storage_buf(SSBO_OFFSET, Qualifier::READ_WRITE, "uint", "ssbo_vpos_temp_[]")
-#undef SSBO_OFFSET
-     .define("_KERNEL_MULTICOMPILE__SURF_FILTERING__SQRT3_VPOS_SMOOTHING", "1")
-     .define("_KERNEL_MULTICOMPILE__SURF_FILTERING__QUADRIC_VPOS_FILTERING__CONSTRAINED_SOLVE", "1"); 
+     .additional_info("bnpr_meshing_surf_filtering_sqrt3_common")
+     .define("_KERNEL_MULTICOMPILE__SURF_FILTERING__SQRT3_VPOS_SMOOTHING", "1"); 
 
 GPU_SHADER_CREATE_INFO(bnpr_meshing_surf_filtering_sqrt3_vpos_smoothing_finish)
      .do_static_compilation(true)
-     .additional_info("bnpr_meshing_surf_filtering_")
-#define SSBO_OFFSET NUM_SSBO_bnpr_meshing_surf_filtering_
-    .storage_buf(SSBO_OFFSET, Qualifier::READ_WRITE, "uint", "ssbo_vpos_temp_[]")
-#undef SSBO_OFFSET
+     .additional_info("bnpr_meshing_surf_filtering_sqrt3_common")
      .define("_KERNEL_MULTICOMPILE__SURF_FILTERING__SQRT3_VPOS_SMOOTHING_FINISH", "1");
 
 

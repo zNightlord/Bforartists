@@ -25,25 +25,26 @@ ssbo_dyn_mesh_counters_out_
 ssbo_bnpr_mesh_pool_counters_
 */
 
+// TODO: Store data for selected verts in a compacted manner. 
+
 uint get_vert_count()
 {
     return pcs_vert_count_ + ssbo_dyn_mesh_counters_out_.num_verts; 
 }
 
-// TODO: Store quadrics for selected verts in a compacted manner. 
-void st_vnor_filtered(uint vert_id, vec3 vnor_filtered)
-{
-    uvec3 vnor_filtered_enc = floatBitsToUint(vnor_filtered); 
-    Store3(ssbo_vnor_temp_out_, vert_id, vnor_filtered_enc);
-}
-vec3 ld_vnor_filtered(uint vert_id)
-{
-    uvec3 vnor_filtered_enc; 
-    Load3(ssbo_vnor_temp_in_, vert_id, vnor_filtered_enc);
-    return uintBitsToFloat(vnor_filtered_enc); 
-}
-
 #if defined(_KERNEL_MULTICOMPILE__SURF_FILTERING__VNOR_FILTERING)
+    void st_vnor_filtered(uint vert_id, vec3 vnor_filtered)
+    {
+        uvec3 vnor_filtered_enc = floatBitsToUint(vnor_filtered); 
+        Store3(ssbo_vnor_temp_out_, vert_id, vnor_filtered_enc);
+    }
+    vec3 ld_vnor_filtered(uint vert_id)
+    {
+        uvec3 vnor_filtered_enc; 
+        Load3(ssbo_vnor_temp_in_, vert_id, vnor_filtered_enc);
+        return uintBitsToFloat(vnor_filtered_enc); 
+    }
+
     struct VtxNormalFilteringContext
     {
         vec3 vpos; 
@@ -198,9 +199,6 @@ vec3 ld_vnor_filtered(uint vert_id)
 
 
 #if defined(_KERNEL_MULTICOMPILE__SURF_FILTERING__VQUADRICS_DIFFUSION) || defined(_KERNEL_MULTICOMPILE__SURF_FILTERING__QUADRIC_VPOS_FILTERING)
-#define ssbo_vert_quadric_data_in_ ssbo_vnor_temp_in_
-#define ssbo_vert_quadric_data_out_ ssbo_vnor_temp_out_
-
     bool valid_quadric(Quadric q)
     {
         return (q.area > 0.0f); // invalid quadrics are marked as -1.0f
@@ -338,7 +336,6 @@ vec3 ld_vnor_filtered(uint vert_id)
                 ctx.weight_sum += w; 
             }
         }
-
 
         ctx.vpos_p = vpos_i; 
         return true; 

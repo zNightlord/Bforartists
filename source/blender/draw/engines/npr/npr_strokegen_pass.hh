@@ -305,10 +305,10 @@ public:
   // ---------------------------------------------------------------------------
   // Mesh Filtering
   void bind_rsc_for_bnpr_meshing_surf_filtering_(
+      draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf>& sub,
       int num_verts,
       int num_edges,
-      draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf>& sub,
-      int vnor_filter_step, int& out_num_ssbo);
+      int& out_num_ssbo);
 
   enum VertexRelocationMode {
     TangentialSmoothing = 0, 

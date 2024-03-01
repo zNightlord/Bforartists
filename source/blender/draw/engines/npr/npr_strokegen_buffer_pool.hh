@@ -185,11 +185,13 @@ class GPUBufferPoolModule {
 
   
 
-  // Reused Buffer Scheme for Surface Filtering -----------------------------------------------
+  // Reused Buffer Scheme for Vertex Position Filtering -----------------------------------------------
   inline GPUStorageBuf *reused_ssbo_vpos_temp_()
   {
     return ssbo_mesh_buffer_reuse_0_; 
   }
+
+  // Reused Buffer Scheme for Vertex Normal Filtering -----------------------------------------------
   inline GPUStorageBuf *reused_ssbo_vnor_temp_in_(int step)
   {
     return step % 2u == 0u ? ssbo_mesh_buffer_reuse_3_ : ssbo_mesh_buffer_reuse_0_;
@@ -199,6 +201,15 @@ class GPUBufferPoolModule {
     return step % 2u == 0u ? ssbo_mesh_buffer_reuse_0_ : ssbo_mesh_buffer_reuse_3_; 
   }
 
+  // Reused Buffer Scheme for Quadric-based Filtering -----------------------------------------------
+  inline GPUStorageBuf *reused_ssbo_vert_quadric_data_in_(int step)
+  {
+    return step % 2u == 0u ? ssbo_mesh_buffer_reuse_3_ : ssbo_mesh_buffer_reuse_0_;
+  }
+  inline GPUStorageBuf *reused_ssbo_vert_quadric_data_out_(int step)
+  {
+    return step % 2u == 0u ? ssbo_mesh_buffer_reuse_0_ : ssbo_mesh_buffer_reuse_3_;
+  }
 
   // Reused Buffers for per-batch Contour Processing --------------------------
   inline GPUStorageBuf *reused_ssbo_bnpr_mesh_pool_()
