@@ -320,7 +320,10 @@ public:
                                         int num_verts,
                                         int num_vnor_filter_iters,
                                         bool only_selected_verts);
-  void append_subpass_vertex_curv_smoothing();
+  void append_subpass_vertex_curv_smoothing(
+    int iter_smooth, int num_verts, int num_edges,
+    bool only_selected_verts = false, bool output_remesh_len = false
+  );
 
 
   // ---------------------------------------------------------------------------

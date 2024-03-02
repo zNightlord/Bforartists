@@ -471,30 +471,49 @@ bool is_smooth_vert(VertFlags vf)
 #endif
 
 #if defined(_KERNEL_MULTICOMPILE__SURF_FILTERING__VCURVE_SMOOTHING)
-vec3 ld_vcurv_max_smoothed(uint vert_id)
+float ld_vcurv_max_smoothed(uint vert_id)
 {
     if (pcs_vcurv_smooth_iter_ % 2u == 0u)
         return ld_vcurv_max(vert_id); 
     
     return uintBitsToFloat(ssbo_vcurv_max_temp_[vert_id]); 
 }
-void st_vcurv_max_smoothed(uint vert_id, vec3 vcurv_smoothed)
+void st_vcurv_max_smoothed(uint vert_id, float vcurv_smoothed)
 {
     if (pcs_vcurv_smooth_iter_ % 2u == 0u)
         ssbo_vcurv_max_temp_[vert_id] = floatBitsToUint(vcurv_smoothed);
 
-    st_vcurv_max(vert_id, vpos_filtered); 
+    st_vcurv_max(vert_id, vcurv_smoothed); 
 }
 
 struct VtxCurvatureSmoothingContext
 {
-    vec3 vcurv_summed; 
+    float vcurv_summed; 
+    float vcurv_weight_sum; 
+
+#if defined(_KERNEL_MULTICOMPILE__SURF_FILTERING__VCURVE_SMOOTHING__OUTPUT_REMESH_LEN)
+    vec3 vpos; 
+    float ave_edge_len; 
+#endif
+
     float num_adj_edges; 
+
 }; 
-VtxCurvatureSmoothingContext init_vcurv_smooth_context()
+VtxCurvatureSmoothingContext init_vcurv_smooth_context(
+#if defined(_KERNEL_MULTICOMPILE__SURF_FILTERING__VCURVE_SMOOTHING__OUTPUT_REMESH_LEN)
+    vec3 vpos
+#endif
+)
 {
     VtxCurvatureSmoothingContext ctx; 
-    ctx.vcurv_summed = vec3(.0f); 
+    ctx.vcurv_summed = .0f; 
+    ctx.vcurv_weight_sum = .0f; 
+
+#if defined(_KERNEL_MULTICOMPILE__SURF_FILTERING__VCURVE_SMOOTHING__OUTPUT_REMESH_LEN)
+    ctx.vpos = vpos; 
+    ctx.ave_edge_len = .0f; 
+#endif
+
     ctx.num_adj_edges = .0f; 
 
     return ctx; 
@@ -509,9 +528,20 @@ bool ve_circulator__vcurv_smooth(
     uint vi = ssbo_edge_to_vert_[wi*4u + ivert_vi]; 
     float vcurv_i = ld_vcurv_max_smoothed(vi); 
     
-    ctx.vcurv_summed += vcurv_i; 
+    if (valid_vcurv_max(vcurv_i))
+    {
+        ctx.vcurv_summed += vcurv_i; 
+        ctx.vcurv_weight_sum += 1.0f; 
+    }
+
+#if defined(_KERNEL_MULTICOMPILE__SURF_FILTERING__VCURVE_SMOOTHING__OUTPUT_REMESH_LEN)
+    vec3 vpos_i = ld_vpos(vi); 
+    float edge_len = length(vpos_i - ctx.vpos); 
+    ctx.ave_edge_len += edge_len; 
+#endif
+
+
     ctx.num_adj_edges += 1.0f; 
-    
     return true; 
 }
 #endif
@@ -565,12 +595,12 @@ void main()
 
 
     /* Avoid fold-over, project to 1-ring fan */
-    // VtxPositionValidationContext ctx_validate = init_filtered_vpos_validate_context(vpos_old, vpos_new);
-    // rot_fwd = true;
-    // VE_CIRCULATOR(vwlh, ve_circulator__vpos_validate, ctx_validate, rot_fwd); 
-    // vpos_new = ctx_validate.vpos_filtered_proj; 
-    // if (ctx.border || ctx.close_to_sel_border) 
-    //     vpos_new = vpos_old;
+    VtxPositionValidationContext ctx_validate = init_filtered_vpos_validate_context(vpos_old, vpos_new);
+    rot_fwd = true;
+    VE_CIRCULATOR(vwlh, ve_circulator__vpos_validate, ctx_validate, rot_fwd); 
+    vpos_new = ctx_validate.vpos_filtered_proj; 
+    if (ctx.border || ctx.close_to_sel_border) 
+        vpos_new = vpos_old;
 
     if (valid_thread)
         st_vpos_filtered(vert_id, vpos_new);
@@ -692,19 +722,53 @@ void main()
 #endif
 
 #if defined(_KERNEL_MULTICOMPILE__SURF_FILTERING__VCURVE_SMOOTHING)
+    vert_id = gl_GlobalInvocationID.x; 
+    uint num_verts = get_vert_count(); 
+    valid_thread = vert_id < num_verts; 
+
     if(!valid_thread) return;
 
-    vec3 vcurv = ld_vcurv_max(vert_id); 
-    
-    VtxCurvatureSmoothingContext ctx = init_vcurv_smooth_context();
+    float vcurv = ld_vcurv_max(vert_id); 
+#if defined(_KERNEL_MULTICOMPILE__SURF_FILTERING__VCURVE_SMOOTHING__OUTPUT_REMESH_LEN)
+    vec3 vpos = ld_vpos(vert_id); 
+#endif
+
+    VtxCurvatureSmoothingContext ctx = init_vcurv_smooth_context(
+#if defined(_KERNEL_MULTICOMPILE__SURF_FILTERING__VCURVE_SMOOTHING__OUTPUT_REMESH_LEN)
+        vpos
+#endif
+    );
     VertWedgeListHeader vwlh = decode_vert_wedge_list_header(ssbo_vert_to_edge_list_header_[vert_id]); 
     bool rot_fwd = true;
     VE_CIRCULATOR(vwlh, ve_circulator__vcurv_smooth, ctx, rot_fwd); 
-    ctx.vcurv_summed = ctx.summed / ctx.num_adj_edges;
+    
+    float vurv_new = vcurv; 
+    { /* Calculate new curvature */ 
+        bool valid_vcurv = valid_vcurv_max(vcurv); 
+        bool valid_vcurv_sum = ctx.vcurv_weight_sum > .0f;  
+        if (valid_vcurv_sum)
+        { 
+            ctx.vcurv_summed = ctx.vcurv_summed / ctx.vcurv_weight_sum;
+            if (valid_vcurv)
+                vurv_new = mix(vcurv, ctx.vcurv_summed, .1f); 
+            else
+                vurv_new = ctx.vcurv_summed; 
+        }
+    }
 
-    vurv = mix(vcurv, ctx.vcurv_summed, .1f); 
+#if defined(_KERNEL_MULTICOMPILE__SURF_FILTERING__VCURVE_SMOOTHING__OUTPUT_REMESH_LEN)
+    ctx.ave_edge_len = ctx.ave_edge_len / ctx.num_adj_edges; 
+#endif
+
 
     if (valid_thread)
-        st_vcurv_max_smoothed(vert_id, vcurv);  
+    {
+        st_vcurv_max_smoothed(vert_id, vurv_new);  
+#if defined(_KERNEL_MULTICOMPILE__SURF_FILTERING__VCURVE_SMOOTHING__OUTPUT_REMESH_LEN)
+        float edge_len = get_adaptive_remesh_len(vurv_new, ctx.ave_edge_len); 
+        if (!valid_vcurv_max(vurv_new)) edge_len = ctx.ave_edge_len;
+        st_vtx_remesh_len(vert_id, edge_len);
+#endif
+    }
 #endif
 }

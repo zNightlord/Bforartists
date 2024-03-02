@@ -654,7 +654,20 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_surf_filtering_sqrt3_vpos_smoothing_finish)
 GPU_SHADER_CREATE_INFO(bnpr_meshing_surf_filtering_vcurv_smoothing)
      .do_static_compilation(true)
      .additional_info("bnpr_meshing_surf_filtering_")
-     .define("_KERNEL_MULTICOMPILE__SURF_FILTERING__VCURVE_SMOOTHING", "1");
+     .define("_KERNEL_MULTICOMPILE__SURF_FILTERING__VCURVE_SMOOTHING", "1")
+     .define("INCLUDE_VERTEX_CURV_MAX", "1")
+     .define("INCLUDE_VERTEX_REMESH_LEN", "1")
+#define SSBO_OFFSET NUM_SSBO_bnpr_meshing_surf_filtering_
+    .storage_buf(SSBO_OFFSET, Qualifier::READ_WRITE, "uint", "ssbo_vcurv_max_[]")
+    .storage_buf(SSBO_OFFSET+1, Qualifier::READ_WRITE, "uint", "ssbo_vcurv_max_temp_[]")
+    .storage_buf(SSBO_OFFSET+2, Qualifier::READ_WRITE, "uint", "ssbo_vtx_remesh_len_[]")
+#undef SSBO_OFFSET
+    .push_constant(Type::INT, "pcs_vcurv_smooth_iter_");
+
+GPU_SHADER_CREATE_INFO(bnpr_meshing_surf_filtering_vcurv_smoothing_output_remesh_len)
+     .do_static_compilation(true)
+     .additional_info("bnpr_meshing_surf_filtering_vcurv_smoothing")
+     .define("_KERNEL_MULTICOMPILE__SURF_FILTERING__VCURVE_SMOOTHING__OUTPUT_REMESH_LEN", "1");
 /** \} */
 
 
@@ -1215,13 +1228,13 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_analysis_order_1_main_curvature)
     
     
     // Method A
-    // .define("_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__CURVTENSOR", "1")
+    .define("_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__CURVTENSOR", "1")
     
     /* Method B for principle dirs & curvatures */
-    .define("_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__INTERPO_2RING", "1")
-    .define("_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__INTERPO_CURVTENSOR", "1")
-    .define("INCLUDE_VERTEX_RADIAL_NORMAL", "1")
-    .define("_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1_GRAD_VDOTN", "1")
+    // .define("_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__INTERPO_2RING", "1")
+    // .define("_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__INTERPO_CURVTENSOR", "1")
+    // // .define("INCLUDE_VERTEX_RADIAL_NORMAL", "1")
+    // .define("_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1_GRAD_VDOTN", "1")
     
     /* Method B for Gaussian & Mean curvatures */
     // .define("_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__INTERPO_2RING", "1")

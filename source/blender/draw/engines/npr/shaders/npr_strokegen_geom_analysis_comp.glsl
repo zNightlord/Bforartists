@@ -286,13 +286,6 @@ void main()
  * which is a GPU adaptation of Rusinkiewicz curvature estimator from 
  * http://graphics.zcu.cz/curvature.html */
 #if defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1)
-/* Inputs
- * uint ssbo_edge_vtensors_[] // temp buffer
- * uint ssbo_vcurv_tensor_[] // final output 
- * uint ssbo_vcurv_pdirs_k1k2_[]
-
-
-*/
 
 void load_local_vertex_frame(VertWedgeListHeader vwlh, vec3 vpos, vec3 vnor, out vec3 pd1, out vec3 pd2)
 {
@@ -381,7 +374,7 @@ void diagonalize_curv(vec3 old_u, vec3 old_v,
 
 	float c = 1, s = 0, tt = 0;
 	// if (likely(kuv != 0.0f)) 
-	if ((kuv != 0.0f)) 
+	// if ((kuv != 0.0f)) 
     { // Jacobi rotation to diagonalize
 		float h = 0.5f * (kv - ku) / kuv;
 		tt = (h < 0.0f) ?
@@ -1051,17 +1044,17 @@ void main()
             /*out*/pdir1, pdir2, curv_1_fin, curv_2_fin
         ); 
 
-        if (ctx.border) curv_1_fin = curv_2_fin = .0f;  
+        // if (ctx.border) curv_1_fin = curv_2_fin = .0f;  
 
-
-        vec2 curv_fin = vec2(curv_1_fin, curv_2_fin); 
-        bool valid_curv = !((any(isnan(curv_fin)) || any(isinf(curv_fin))) || ctx.border);
         float max_curv = max(abs(curv_1_fin), abs(curv_2_fin)); 
-        float edge_len = get_adaptive_remesh_len(max_curv, pcs_dbg_geom_scale_ * ctx.ave_edge_len); 
-        if (!valid_curv) edge_len = ctx.ave_edge_len;
+        bool valid_curv = !(isnan(max_curv) || isinf(max_curv) || ctx.border);
+        if (!valid_curv) max_curv = -1.0f; 
 
         if (valid_thread)
-            st_vcurv_pdirs_k1k2(vert_id, pdir1, curv_1_fin, pdir2, curv_2_fin);
+        {
+            // st_vcurv_pdirs_k1k2(vert_id, pdir1, curv_1_fin, pdir2, curv_2_fin);
+            st_vcurv_max(vert_id, max_curv); 
+        }
 
         // debug lines
         if (0 < pcs_output_dbg_geom_)
@@ -1092,8 +1085,13 @@ void main()
                 Store3(ssbo_dbg_lines_, dbg_line_id*2u + 1u, vpos_enc);
                 dbg_line_id++; 
                 
+#define ssbo_vtx_remesh_len_ ssbo_vcurv_pdirs_k1k2_
+                float remesh_edge_len = uintBitsToFloat(ssbo_vtx_remesh_len_[vert_id]); 
+#undef ssbo_vtx_remesh_len_
+                dbg_line_len = valid_curv ? pcs_dbg_geom_scale_ * remesh_edge_len : .0f;
+
                 vec4 vpos_ws_30 = vec4(vpos, 1.0f);
-                vec4 vpos_ws_32 = vec4(vpos + vnor * /* edge_len */max_curv * dbg_line_len, 1.0f);
+                vec4 vpos_ws_32 = vec4(vpos + vnor * dbg_line_len, 1.0f);
                 vpos_enc = floatBitsToUint(vpos_ws_30.xyz); 
                 Store3(ssbo_dbg_lines_, dbg_line_id*2u,      vpos_enc);
                 vpos_enc = floatBitsToUint(vpos_ws_32.xyz); 
@@ -1111,9 +1109,6 @@ void main()
         bool valid_curv = !((any(isnan(curv_fin)) || any(isinf(curv_fin))) || ctx.border);
         if (!valid_curv) ctx.mu1 = ctx.mu2 = .0f;  
         float max_curv = ctx.mu1 + sqrt(max(.0f, ctx.mu1 * ctx.mu1 - abs(ctx.mu2)));
-
-        float edge_len = get_adaptive_remesh_len(max_curv, ctx.ave_edge_len); 
-        if (!valid_curv) edge_len = ctx.ave_edge_len;
 
         // debug lines
         if (0 < pcs_output_dbg_geom_)
@@ -1145,7 +1140,7 @@ void main()
 
                 dbg_line_len = pcs_dbg_geom_scale_ * .1f;
                 vec4 vpos_ws_20 = vec4(vpos, 1.0f);
-                vec4 vpos_ws_21 = vec4(vpos + vnor * edge_len/* max_curv * dbg_line_len */, 1.0f);
+                vec4 vpos_ws_21 = vec4(vpos + vnor * max_curv * dbg_line_len, 1.0f);
                 vpos_enc = floatBitsToUint(vpos_ws_20.xyz);
                 Store3(ssbo_dbg_lines_, dbg_line_id*2u, vpos_enc);
                 vpos_enc = floatBitsToUint(vpos_ws_21.xyz);
@@ -1168,16 +1163,14 @@ void main()
         vec3 pdir2 = vec3(pdirs[0][2], pdirs[1][2], pdirs[2][2]); 
         evals /= vtx_area_measure; 
 
-        float max_curv = max(abs(evals[0]), abs(evals[1])); 
-
-        vec2 curv_fin = vec2(evals[0], evals[1]); 
-        bool valid_curv = !((any(isnan(curv_fin)) || any(isinf(curv_fin))) || ctx.border);
-        if (!valid_curv)
-            evals[0] = evals[1] = .0f; 
-
         if (valid_thread)
         {
             // st_vcurv_pdirs_k1k2(vert_id, pdir0, evals[0], pdir1, evals[1]);
+
+            float max_curv = max(abs(evals[0]), abs(evals[1])); 
+            bool valid_curv = !(isnan(max_curv) || isinf(max_curv));
+            if (!valid_curv)
+                max_curv = evals[0] = evals[1] = -1.0f; 
             st_vcurv_max(vert_id, max_curv); 
         }
 
@@ -1212,8 +1205,10 @@ void main()
                 Store3(ssbo_dbg_lines_, dbg_line_id*2u+1u, vpos_enc); 
                 dbg_line_id++; 
                 
-                float edge_len = get_adaptive_remesh_len(max_curv, ctx.ave_edge_len); 
-                dbg_line_len = pcs_dbg_geom_scale_ * edge_len /* edge_len *//* pcs_dbg_geom_scale_ * max_curv */;
+#define ssbo_vtx_remesh_len_ ssbo_vcurv_pdirs_k1k2_
+                float remesh_edge_len = uintBitsToFloat(ssbo_vtx_remesh_len_[vert_id]); 
+#undef ssbo_vtx_remesh_len_
+                dbg_line_len = pcs_dbg_geom_scale_ * remesh_edge_len;
                 vec4 vpos_ws_20 = vec4(vpos, 1.0f);
                 vec4 vpos_ws_21 = vec4(vpos + normalize(vnor) * dbg_line_len, 1.0f);
                 vpos_enc = floatBitsToUint(vpos_ws_20.xyz);

@@ -1333,7 +1333,7 @@ float get_adaptive_remesh_len(float k/*max_curvature*/, float ref_edge_len)
 
     float l = epsi * ((6.0f / k) - (3.0f * epsi)); 
     l = sqrt(max(.0f, l)); 
-    l = clamp(l, targ_edge_len_min, targ_edge_len_max);
+    // l = clamp(l, targ_edge_len_min, targ_edge_len_max);
 
     return l; 
 }

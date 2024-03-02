@@ -285,9 +285,22 @@ namespace blender::npr::strokegen
     SelectVertsFromEdgesContext vtx_sel_ctx_vnor = vtx_sel_ctx_flooding;
     append_subpass_select_verts_from_selected_edges(vtx_sel_ctx_vnor, num_edges, num_verts); 
 
+    // Init vert curvatures -------------------------------------------------------------------
     SurfaceAnalysisContext surf_analysis_ctx;
     GetSurfaceAnalysisContext_InitPass(surf_analysis_ctx);
     auto surf_dbg_ctx_cpy = surf_dbg_ctx;
+    surf_dbg_ctx_cpy.dbg_vert_curv = false; 
+    append_subpass_surf_geom_analysis(
+        rsc_handle, num_verts, num_edges, surf_analysis_ctx, surf_dbg_ctx_cpy);
+    int num_steps_vcurv_smooth = 2 * 1 /*must be even*/; 
+    for (int step_vcurv_smooth = 0; step_vcurv_smooth < num_steps_vcurv_smooth; ++step_vcurv_smooth) {
+      append_subpass_vertex_curv_smoothing(
+        step_vcurv_smooth, num_verts, num_edges,
+        false, step_vcurv_smooth == num_steps_vcurv_smooth - 1
+      ); 
+    }
+    surf_dbg_ctx_cpy = surf_dbg_ctx;
+    surf_dbg_ctx_cpy.dbg_vert_curv = true;
     append_subpass_surf_geom_analysis(
         rsc_handle, num_verts, num_edges, surf_analysis_ctx, surf_dbg_ctx_cpy);
 
@@ -352,14 +365,13 @@ namespace blender::npr::strokegen
 
       // vertex relocation
       VertexRelocationMode relocation_mode = TangentialSmoothing; // QuadricFiltering; 
-      /*if (0 < iter_remesh)*/ // only smooth when topo optimized by one pass
-        append_subpass_vertex_relocation(
-          relocation_mode,
-          num_edges,
-          num_verts,
-          meshing_params.num_quadric_diffusion_iters /** (iter_remesh)*/,
-          true
-        );
+      append_subpass_vertex_relocation(
+        relocation_mode,
+        num_edges,
+        num_verts,
+        meshing_params.num_quadric_diffusion_iters,
+        true
+      );
     }
 
     // test sqrt-3 subdiv
@@ -567,8 +579,28 @@ namespace blender::npr::strokegen
     }
   }
 
-  void StrokeGenPassModule::append_subpass_vertex_curv_smoothing()
+  void StrokeGenPassModule::append_subpass_vertex_curv_smoothing(
+    int iter_smooth, int num_verts, int num_edges, bool only_selected_verts, bool output_remesh_len)
   {
+    append_subpass_fill_dispatched_args_remeshed_verts_(num_verts, only_selected_verts);
+
+    {
+      auto &sub = pass_extract_geom.sub("bnpr_meshing_surf_filtering_vcurv_smoothing");
+      if (false == output_remesh_len)
+        sub.shader_set(shaders_.static_shader_get(MESH_FILTER_VCURV_SMOOTHING));
+      else
+        sub.shader_set(shaders_.static_shader_get(MESH_FILTER_VCURV_SMOOTHING_OUTPUT_REMESH_LEN)); 
+
+      int ssbo_offset = 0; 
+      bind_rsc_for_bnpr_meshing_surf_filtering_(sub, num_verts, num_edges, ssbo_offset);
+      sub.bind_ssbo(ssbo_offset, buffers_.ssbo_vcurv_max_);
+      sub.bind_ssbo(ssbo_offset + 1, buffers_.reused_ssbo_vcurv_max_temp_());
+      sub.bind_ssbo(ssbo_offset + 2, buffers_.reused_ssbo_vtx_remesh_len_());
+      sub.push_constant("pcs_vcurv_smooth_iter_", iter_smooth); 
+
+      sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_verts_);
+      sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
+    }
   }
 
   void StrokeGenPassModule::append_subpass_mark_selection_border_edges(int num_edges, int num_verts)
@@ -1254,7 +1286,6 @@ namespace blender::npr::strokegen
       sub.bind_ssbo(6,  buffers_.ssbo_vert_to_edge_list_header_); 
       sub.bind_ssbo(7,  buffers_.ssbo_vert_flags_); 
       sub.bind_ssbo(8, buffers_.ssbo_vbo_full_);
-      // sub.bind_ssbo(9, DRW_manager_get()->matrix_buf.current());
       sub.bind_ssbo(9, buffers_.ssbo_dbg_lines_); 
       ssbo_offset_base = 10;
 
@@ -1319,7 +1350,7 @@ namespace blender::npr::strokegen
 
         bind_src_order_1(sub, dbg_options.dbg_vert_curv);
         sub.bind_ssbo(ssbo_offset_base_1 + 0, ctx.ssbo_edge_vtensors_);
-        sub.bind_ssbo(ssbo_offset_base_1 + 1, ctx.ssbo_vcurv_pdirs_k1k2_);
+        sub.bind_ssbo(ssbo_offset_base_1 + 1, /*ctx.ssbo_vcurv_pdirs_k1k2_*/buffers_.reused_ssbo_vtx_remesh_len_());
         sub.bind_ssbo(ssbo_offset_base_1 + 2, buffers_.ssbo_vcurv_max_); 
         sub.push_constant("pcs_dbg_curv_K_scale_", dbg_options.dbg_curv_K_val); 
 

@@ -170,7 +170,9 @@ const char *StrokeGenShaderModule::static_shader_create_info_name_get(eShaderTyp
     case MESH_FILTER_SQRT_SUBDIV_VPOS_SMOOTH_FINISH:
       return "bnpr_meshing_surf_filtering_sqrt3_vpos_smoothing_finish";
     case MESH_FILTER_VCURV_SMOOTHING:
-      return "bnpr_meshing_surf_filtering_vcurv_smoothing"; 
+      return "bnpr_meshing_surf_filtering_vcurv_smoothing";
+    case MESH_FILTER_VCURV_SMOOTHING_OUTPUT_REMESH_LEN:
+      return "bnpr_meshing_surf_filtering_vcurv_smoothing_output_remesh_len"; 
 
     case FILL_DISPATCH_ARGS_REMESHED_EDGES:
       return "strokegen_remeshing_fill_dispatch_args_per_remeshed_edge";

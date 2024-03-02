@@ -122,6 +122,11 @@
     }
 #endif
 
+bool valid_vcurv_max(float vcurv_max)
+{
+    return vcurv_max >= 0.0f; 
+}
+
 #if defined(INCLUDE_VERTEX_CURV_MAX)
     float ld_vcurv_max(uint vtx_id)
     {
@@ -135,11 +140,9 @@
     }
 #endif
 
-
-
 #if defined(INCLUDE_VERTEX_REMESH_LEN)
 #if defined(_KERNEL_MULTICOMPILE__EDGE_COLLAPSE_COMPACT)
-    #define ssbo_vtx_remesh_len_ ssbo_per_collapse_edge_info_ // ssbo slots are full (x16)
+    #define ssbo_vtx_remesh_len_ ssbo_per_vert_collapse_wedge_id_ // ssbo slots are full (x16)
 #endif
     void st_vtx_remesh_len(uint vtx_id, float len)
     {

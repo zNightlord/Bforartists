@@ -85,11 +85,11 @@ class GPUBufferPoolModule {
   SSBO_StrokeGenReusedMedium ssbo_mesh_buffer_reuse_2_;                   // 128MB  512MB
   // contains extracted geom, contour edges
   SSBO_StrokeGenReusedLarge ssbo_mesh_buffer_reuse_3_;                    // 256MB  768MB
-  // temporally used for hashing / debug lines
   SSBO_StrokeGenReusedLarge ssbo_mesh_buffer_reuse_4_;                    // 256MB 1024MB
   SSBO_StrokeGenReusedSmall ssbo_mesh_buffer_reuse_5_;                    // 64MB  1088MB
   SSBO_StrokeGenReusedSmall ssbo_mesh_buffer_reuse_6_;                    // 64MB  1152MB
   SSBO_StrokeGenReusedMedium ssbo_mesh_buffer_reuse_7_;                   // 128MB 1280MB
+  // Notes: DO NOT use reuse_4 when remeshing, it holds per-vertex remesh len
 
 
   // Reused Buffer Scheme for Basic Meshing ------------------------------------------------
@@ -209,6 +209,12 @@ class GPUBufferPoolModule {
   inline GPUStorageBuf *reused_ssbo_vert_quadric_data_out_(int step)
   {
     return step % 2u == 0u ? ssbo_mesh_buffer_reuse_0_ : ssbo_mesh_buffer_reuse_3_;
+  }
+
+  // Reused Buffer Scheme for Curvature Smoothing -----------------------------------------------
+  inline GPUStorageBuf *reused_ssbo_vcurv_max_temp_()
+  {
+    return ssbo_mesh_buffer_reuse_1_;
   }
 
   // Reused Buffers for per-batch Contour Processing --------------------------
