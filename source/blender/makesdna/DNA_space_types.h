@@ -1611,6 +1611,8 @@ typedef struct SpaceNode {
   /** Grease-pencil data. */
   struct bGPdata *gpd;
 
+  struct Scene *scene_override;
+
   SpaceNodeOverlay overlay;
 
   SpaceNode_Runtime *runtime;
