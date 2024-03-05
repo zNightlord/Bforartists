@@ -3,8 +3,8 @@ name: Ubuntu
 on:
   #push:
     #branches: [ master ]
-  schedule:
-    - cron: 0 0 * * 1
+  #schedule:
+  #  - cron: 0 0 * * 1
   pull_request:
     branches: [ master ]
 
@@ -21,14 +21,16 @@ jobs:
         sudo apt install build-essential git subversion cmake libx11-dev libxxf86vm-dev libxcursor-dev libxi-dev libxrandr-dev libxinerama-dev libegl-dev libepoxy-dev
         sudo apt install libwayland-dev wayland-protocols libxkbcommon-dev libdbus-1-dev linux-libc-dev
 
-    - name: make
+    - name: Fetch source & libs
       run: |
         mkdir ~/bforartistsrepo
         cd ~/bforartistsrepo
         git clone https://github.com/Bforartists/Bforartists
-        mkdir ~/bforartistsrepo/lib
-        cd ~/bforartistsrepo/lib
-        svn checkout https://svn.blender.org/svnroot/bf-blender/trunk/lib/linux_x86_64_glibc_228
+        cd ~/bforartistsrepo/Bforartists
+        make update
+    
+    - name: Build
+      run: |
         cd ~/bforartistsrepo/Bforartists
         make
 
