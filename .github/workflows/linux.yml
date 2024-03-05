@@ -28,6 +28,7 @@ jobs:
         git clone https://github.com/Bforartists/Bforartists
         cd ~/bforartistsrepo/Bforartists
         make update
+        ./build_files/build_environment/install_linux_packages.py --all
     
     - name: Build
       run: |
