@@ -19,7 +19,7 @@ jobs:
       run: |
         mkdir ~\bforartistsrepo
         cd ~\bforartistsrepo
-        git clone https://github.com/Bforartists/Bforartists
+        git clone -b windows-workflow https://github.com/zNightlord/Bforartists
         dir
         cd ~\bforartistsrepo\Bforartists
         make update
