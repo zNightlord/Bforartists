@@ -7,10 +7,6 @@ if NOT EXIST "%BUILD_VS_LIBDIR%\.git" (
 	rem libs not found, but git is on the system
 	if not "%GIT%"=="" (
 		echo.
-		echo The required external libraries in %BUILD_VS_LIBDIR% are missing
-		echo.
-		set /p GetLibs= "Would you like to download them? (y/n)"
-		echo.
 		echo Downloading %BUILD_VS_LIBDIR% libraries, please wait.
 		echo.
 		echo *********************************************************
@@ -23,7 +19,6 @@ if NOT EXIST "%BUILD_VS_LIBDIR%\.git" (
 		echo *       complete depending on your internet connection. *
 		echo *                                                       *
 		echo *********************************************************
-                :RETRY
 		"%GIT%" -C "%BLENDER_DIR%\" config --local "submodule.%BUILD_VS_LIBDIR%.update" "checkout"
 		set GIT_LFS_SKIP_SMUDGE=1
 		"%GIT%" -C "%BLENDER_DIR%\" submodule update --progress --init "%BUILD_VS_LIBDIR%"
