@@ -25,7 +25,9 @@ jobs:
         make update
         git submodule update --init --progress lib/windows_x64
         cd lib\windows_x64
-        git lfs pull
+        dir
+        git pull
+        dir
         
     - name: Build
       run: |
