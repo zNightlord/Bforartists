@@ -24,6 +24,8 @@ jobs:
         cd ~\bforartistsrepo\Bforartists
         make update
         git submodule update --init --progress lib/windows_x64
+        cd lib\windows_x64
+        git lfs pull
         
     - name: Build
       run: |
