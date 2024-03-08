@@ -15,7 +15,7 @@ jobs:
     runs-on: windows-latest
 
     steps:
-    - name: make
+    - name: Clone, get libraries
       run: |
         mkdir ~\bforartistsrepo
         cd ~\bforartistsrepo
@@ -23,7 +23,12 @@ jobs:
         dir
         cd ~\bforartistsrepo\Bforartists
         make update
-        .\make.bat ninja release
+        git submodule update --init --progress lib/windows_x64
+        
+    - name: Build
+      run: |
+        cd ~\bforartistsrepo\Bforartists
+        .\make.bat ninja lite
         dir
         cd ~\bforartistsrepo
         dir
