@@ -47,7 +47,8 @@ float get_collapse_edge_len_max(uint v1, uint v3)
     float vlen_1 = ld_vtx_remesh_len(v1); 
     float vlen_3 = ld_vtx_remesh_len(v3);
     float targ_len = min(vlen_1, vlen_3); 
-    return (4.0f/5.0f) * min(vlen_1, vlen_3);
+    return (4.0f/5.0f) * targ_len;
+    // return (3.0f/5.0f) * targ_len;
      
     // return calc_remesh_edge_len_min(pcs_remesh_edge_len_); 
 }
@@ -805,6 +806,9 @@ void main()
     /* Update v1 pos */
     vec3 vpos = .5f * (ld_vpos(v1) + ld_vpos(v3)); 
     st_vpos(v1, vpos); 
+
+    /* Update v1 flags */
+    update_vert_flags__mov_by_collapse(v1); 
 
 #endif
 

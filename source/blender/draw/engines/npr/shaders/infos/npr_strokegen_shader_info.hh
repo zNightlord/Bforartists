@@ -598,10 +598,13 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_surf_filtering_vnor_filtering)
 GPU_SHADER_CREATE_INFO(bnpr_meshing_surf_filtering_vpos_filtering)
     .do_static_compilation(true)
     .additional_info("bnpr_meshing_surf_filtering_")
+    .define("INCLUDE_VERTEX_REMESH_LEN", "1")
 #define SSBO_OFFSET NUM_SSBO_bnpr_meshing_surf_filtering_
     .storage_buf(SSBO_OFFSET, Qualifier::READ_WRITE, "uint", "ssbo_vpos_temp_[]")
+    .storage_buf(SSBO_OFFSET+1, Qualifier::READ_WRITE, "uint", "ssbo_vtx_remesh_len_[]")
 #undef SSBO_OFFSET
     .push_constant(Type::INT, "pcs_vpos_filtering_iter_")
+    .push_constant(Type::INT, "pcs_num_vpos_filtering_iters_")
     .define("_KERNEL_MULTICOMPILE__SURF_FILTERING__VPOS_FILTERING", "1");
 
 
@@ -633,22 +636,30 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_surf_filtering_quadric_vpos_filtering)
     ;
 
 
-GPU_SHADER_CREATE_INFO(bnpr_meshing_surf_filtering_sqrt3_common)
+GPU_SHADER_CREATE_INFO(bnpr_meshing_surf_filtering_subd_common)
     .do_static_compilation(true)
     .additional_info("bnpr_meshing_surf_filtering_")
 #define SSBO_OFFSET NUM_SSBO_bnpr_meshing_surf_filtering_
-    .storage_buf(SSBO_OFFSET, Qualifier::READ_WRITE, "uint", "ssbo_vpos_temp_[]"); 
+    .storage_buf(SSBO_OFFSET, Qualifier::READ_WRITE, "uint", "ssbo_vpos_subd_[]")
+    .storage_buf(SSBO_OFFSET+1, Qualifier::READ_WRITE, "uint", "ssbo_epos_subd_[]")
+    .push_constant(Type::INT, "pcs_subdiv_type_"); 
 #undef SSBO_OFFSET 
 
-GPU_SHADER_CREATE_INFO(bnpr_meshing_surf_filtering_sqrt3_vpos_smoothing)
+GPU_SHADER_CREATE_INFO(bnpr_meshing_surf_filtering_subdiv_vpos_smoothing)
      .do_static_compilation(true)
-     .additional_info("bnpr_meshing_surf_filtering_sqrt3_common")
-     .define("_KERNEL_MULTICOMPILE__SURF_FILTERING__SQRT3_VPOS_SMOOTHING", "1"); 
+     .additional_info("bnpr_meshing_surf_filtering_subd_common")
+     .define("_KERNEL_MULTICOMPILE__SURF_FILTERING__SUBDIV_VPOS_FILTERING", "1"); 
 
-GPU_SHADER_CREATE_INFO(bnpr_meshing_surf_filtering_sqrt3_vpos_smoothing_finish)
+GPU_SHADER_CREATE_INFO(bnpr_meshing_surf_filtering_subdiv_vpos_smoothing_finish)
      .do_static_compilation(true)
-     .additional_info("bnpr_meshing_surf_filtering_sqrt3_common")
-     .define("_KERNEL_MULTICOMPILE__SURF_FILTERING__SQRT3_VPOS_SMOOTHING_FINISH", "1");
+     .additional_info("bnpr_meshing_surf_filtering_subd_common")
+     .define("_KERNEL_MULTICOMPILE__SURF_FILTERING__SUBDIV_VPOS_FILTERING_FINISH", "1");
+
+GPU_SHADER_CREATE_INFO(bnpr_meshing_surf_filtering_subdiv_edge_points)
+     .do_static_compilation(true)
+     .additional_info("bnpr_meshing_surf_filtering_subd_common")
+     .define("_KERNEL_MULTICOMPILE__SURF_FILTERING__EDGES", "1")
+     .define("_KERNEL_MULTICOMPILE__SURF_FILTERING__LOOP_SUBD_EDGE_POINTS", "1"); 
 
 
 GPU_SHADER_CREATE_INFO(bnpr_meshing_surf_filtering_vcurv_smoothing)
@@ -868,6 +879,9 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_edge_split)
     .storage_buf(11, Qualifier::READ, "uint", "ssbo_selected_edge_to_edge_[]")
     .storage_buf(12, Qualifier::READ, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
     .storage_buf(13, Qualifier::READ_WRITE, "uint", "ssbo_vtx_remesh_len_[]")
+    .storage_buf(14, Qualifier::READ_WRITE, "uint", "ssbo_epos_subd_[]")
+    .storage_buf(15, Qualifier::READ_WRITE, "uint", "ssbo_vnor_[]")
+
     .push_constant(Type::INT, "pcs_split_iter_")
     .push_constant(Type::FLOAT, "pcs_remesh_edge_len_")
     .push_constant(Type::INT, "pcs_edge_count_")
@@ -875,7 +889,6 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_edge_split)
 
     /* test contour vert insertion */
     .define("INCLUDE_VERTEX_NORMAL", "1")
-    .storage_buf(14, Qualifier::READ_WRITE, "uint", "ssbo_vnor_[]")
     .uniform_buf(0, "ViewMatrices", "ubo_view_matrices_")
     .push_constant(Type::INT, "pcs_split_mode_")
     /**/
@@ -1018,6 +1031,7 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_edge_flip)
     .define("WINGED_EDGE_TOPO_INCLUDE", "1")
     .define("VERT_WEDGE_LIST_TOPO_INCLUDE", "1")
     .define("EDGE_FLAGS_INCLUDED", "1")
+    .define("VERT_FLAGS_INCLUDED", "1")
     .define("VE_CIRCULATOR_INCLUDE", "1")
     .define("USE_DYNAMESH_EDGE_SELECTION_INDEXING", "1")
 
@@ -1034,6 +1048,7 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_edge_flip)
     .storage_buf(10, Qualifier::READ_WRITE, "uint", "ssbo_vertex_edge_flip_info_[]")
     .storage_buf(11, Qualifier::READ, "uint", "ssbo_selected_edge_to_edge_[]")
     .storage_buf(12, Qualifier::READ, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
+    .storage_buf(13, Qualifier::READ_WRITE, "uint", "ssbo_vert_flags_[]")
     .push_constant(Type::INT, "pcs_flip_opti_goal_type_") 
     .push_constant(Type::INT, "pcs_flip_iter_")
     .push_constant(Type::INT, "pcs_edge_count_")
@@ -1225,28 +1240,26 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_analysis_order_1_vert_curv_pass_0)
 GPU_SHADER_CREATE_INFO(bnpr_geom_analysis_order_1_main_curvature)
     .do_static_compilation(true)
     .additional_info("bnpr_geom_analysis_order_1_main")
-    
-    
+
     // Method A
     .define("_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__CURVTENSOR", "1")
-    
+
     /* Method B for principle dirs & curvatures */
     // .define("_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__INTERPO_2RING", "1")
     // .define("_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__INTERPO_CURVTENSOR", "1")
     // // .define("INCLUDE_VERTEX_RADIAL_NORMAL", "1")
     // .define("_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1_GRAD_VDOTN", "1")
-    
+
     /* Method B for Gaussian & Mean curvatures */
     // .define("_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__INTERPO_2RING", "1")
     // .define("_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__INTERPO_CURVATURE", "1")
-    
+
     .define("_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__MAIN", "1")
-    .define("INCLUDE_VERTEX_CURV_TENSOR", "1") 
+    .define("INCLUDE_VERTEX_CURV_TENSOR", "1")
     .define("INCLUDE_VERTEX_CURV_MAX", "1")
     .storage_buf(NUM_SSBO_1 + 0, Qualifier::READ_WRITE, "uint", "ssbo_edge_vtensors_[]")
     .storage_buf(NUM_SSBO_1 + 1, Qualifier::READ_WRITE, "uint", "ssbo_vcurv_pdirs_k1k2_[]")
-    .storage_buf(NUM_SSBO_1 + 2, Qualifier::READ_WRITE, "uint", "ssbo_vcurv_max_[]")
-    .push_constant(Type::FLOAT, "pcs_dbg_curv_K_scale_"); 
+    .storage_buf(NUM_SSBO_1 + 2, Qualifier::READ_WRITE, "uint", "ssbo_vcurv_max_[]"); 
 
 #undef NUM_SSBO_1
 #undef NUM_SSBO_BASE

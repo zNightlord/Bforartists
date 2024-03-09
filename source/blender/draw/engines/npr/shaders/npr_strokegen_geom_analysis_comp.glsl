@@ -1156,7 +1156,7 @@ void main()
         vec3 vnor_gt = ld_vnor(vert_id); // NOTE: This must be the geometrically correct normal
         mat3 pdirs; 
         vec3 evals; 
-        curvDirFromTensor(vtx_curv_measure, (1.0f + pcs_dbg_curv_K_scale_) * ctx.sum_area, vnor_gt, /*out*/pdirs, evals);
+        curvDirFromTensor(vtx_curv_measure, ctx.sum_area, vnor_gt, /*out*/pdirs, evals);
 
         vec3 pdir0 = vec3(pdirs[0][0], pdirs[1][0], pdirs[2][0]); 
         vec3 pdir1 = vec3(pdirs[0][1], pdirs[1][1], pdirs[2][1]); 

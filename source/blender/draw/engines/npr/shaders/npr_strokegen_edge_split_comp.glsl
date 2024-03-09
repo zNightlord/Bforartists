@@ -58,6 +58,7 @@ float get_split_edge_len_min(uint v1, uint v3)
     float vlen_3 = ld_vtx_remesh_len(v3);
     float targ_len = min(vlen_1, vlen_3); 
     return (4.0f/3.0f) * targ_len; 
+    // return (5.0f/3.0f) * targ_len; 
     
     // return calc_remesh_edge_len_max(pcs_remesh_edge_len_); 
 }
@@ -143,30 +144,16 @@ uint pcg(uint v) /* pcg hash */
 	return (word >> 22u) ^ word;
 }
 
-/* true/false if esi_0 hase higher/lower priority than esi_1  */
-struct EdgeSplitPriorityContext
-{
-    EdgeSplitInfo pesi; 
-    uint wedge_id; 
-    bool selected; /* when !selected, pesi is invalid */
-}; 
-bool split_priority_higher(EdgeSplitPriorityContext ctx_0, EdgeSplitPriorityContext ctx_1)
-{
-    if ((!ctx_0.pesi.is_split_ok) || (!ctx_0.selected))
-        return false;
-    if ((!ctx_1.pesi.is_split_ok) || (!ctx_1.selected))
-        return true;
 
-    if (ctx_0.pesi.edge_len == ctx_1.pesi.edge_len)
-        return pcg(ctx_0.wedge_id) < pcg(ctx_1.wedge_id); /* use lower id */
-
-    return ctx_0.pesi.edge_len > ctx_1.pesi.edge_len; /* prefer longer edge */
-}
 
 
 
 #define EDGE_SPLIT_LONG_EDGES 0u
 #define EDGE_SPLIT_CONTOUR_EDGES 1u 
+#define EDGE_SPLIT_LOOP_SUBDIV 2u 
+
+bool is_contour_split_pass() { return (pcs_split_mode_ == EDGE_SPLIT_CONTOUR_EDGES); }
+bool is_loop_subdiv_pass() { return (pcs_split_mode_ == EDGE_SPLIT_LOOP_SUBDIV); } 
 
 bool is_contour_edge_havent_split(vec3 vpos_0, vec3 vnor_0, VertFlags vf_0, vec3 vpos_1, vec3 vnor_1, VertFlags vf_1)
 {
@@ -183,17 +170,17 @@ bool is_contour_edge_havent_split(vec3 vpos_0, vec3 vnor_0, VertFlags vf_0, vec3
     return sign(ndv[0]) != sign(ndv[1]);
 }
 
-bool is_contour_split_pass() { return (pcs_split_mode_ == EDGE_SPLIT_CONTOUR_EDGES); }
-
-
-
-
-
-vec3 calc_split_vpos(uint v1, uint v3)
+bool is_loop_subdiv_havent_split(EdgeFlags ef, VertFlags vf_0, VertFlags vf_1)
 {
-    vec3 vpos[2] = { ld_vpos(v1), ld_vpos(v3) };
+    return ((!ef.new_by_split));
+}
+
+
+vec3 calc_split_vpos(uint v1, uint v3, uint wedge_id)
+{
+    vec3 edge_vpos[2] = { ld_vpos(v1), ld_vpos(v3) };
     if (is_contour_split_pass())
-    {
+    { /* interpolated contour */
         vec3 vnor[2] = { ld_vnor(v1), ld_vnor(v3) }; 
         float contour_interpo_factor = .5f; 
         {        
@@ -201,19 +188,49 @@ vec3 calc_split_vpos(uint v1, uint v3)
             vec3 cam_pos_ws = view_to_world[3].xyz; /* see "#define cameraPos ViewMatrixInverse[3].xyz" */
 
             vec2 ndv = vec2(
-                dot(vnor[0], cam_pos_ws - vpos[0]),  
-                dot(vnor[1], cam_pos_ws - vpos[1]) 
+                dot(vnor[0], cam_pos_ws - edge_vpos[0]),  
+                dot(vnor[1], cam_pos_ws - edge_vpos[1]) 
             ); 
             contour_interpo_factor = ndv[0] / (ndv[0] - ndv[1]); /* split pos = vpos_0 + interpo * (vpos_1 - vpos_0); */
         }
 
-        return vpos[0] + contour_interpo_factor * (vpos[1] - vpos[0]); 
+        return edge_vpos[0] + contour_interpo_factor * (edge_vpos[1] - edge_vpos[0]); 
+    }
+    if (is_loop_subdiv_pass())
+    { /* loop subdiv for new verts */
+        uvec3 edge_point_pos_enc;
+        Load3(ssbo_epos_subd_, wedge_id, edge_point_pos_enc); 
+        return uintBitsToFloat(edge_point_pos_enc); 
     }
 
     // Return mid point by default
-    return (vpos[0] + vpos[1]) / 2.0f;
+    return (edge_vpos[0] + edge_vpos[1]) / 2.0f;
 }
 
+
+
+/* true/false if esi_0 hase higher/lower priority than esi_1  */
+struct EdgeSplitPriorityContext
+{
+    EdgeSplitInfo pesi; 
+    uint wedge_id; 
+    bool selected; /* when !selected, pesi is invalid */
+}; 
+bool split_priority_higher(EdgeSplitPriorityContext ctx_0, EdgeSplitPriorityContext ctx_1)
+{
+    if ((!ctx_0.pesi.is_split_ok) || (!ctx_0.selected))
+        return false;
+    if ((!ctx_1.pesi.is_split_ok) || (!ctx_1.selected))
+        return true;
+
+    if (pcs_split_mode_ == EDGE_SPLIT_LOOP_SUBDIV)
+        return pcg(ctx_0.wedge_id * pcs_split_iter_) < pcg(ctx_1.wedge_id * pcs_split_iter_); /* use lower id */
+
+    if (ctx_0.pesi.edge_len == ctx_1.pesi.edge_len)
+        return pcg(ctx_0.wedge_id) < pcg(ctx_1.wedge_id); /* use lower id */
+
+    return ctx_0.pesi.edge_len > ctx_1.pesi.edge_len; /* prefer longer edge */
+}
 
 
 
@@ -258,24 +275,42 @@ void main()
     vpos_cwedge[1] = ld_vpos(verts_cwedge.y);
     float edge_len = length(vpos_cwedge[0] - vpos_cwedge[1]);
 
-    bool is_contour_edge = is_contour_edge_havent_split(
-        vpos_cwedge[0], ld_vnor(verts_cwedge.x), load_vert_flags(verts_cwedge.x), 
-        vpos_cwedge[1], ld_vnor(verts_cwedge.y), load_vert_flags(verts_cwedge.y) 
-    );
-
-    EdgeFlags ef = load_edge_flags(wedge_id);
+   
+   
     /* Select edges based on split conditions */
+    EdgeFlags ef = load_edge_flags(wedge_id);
+    if (valid_thread && pcs_split_iter_ == 0u)
+        update_edge_flags__reset_new_split_edge(wedge_id, ef); 
+    
+    bool is_contour_edge = false; 
+    if (is_contour_split_pass())
+        is_contour_edge = is_contour_edge_havent_split(
+            vpos_cwedge[0], ld_vnor(verts_cwedge.x), load_vert_flags(verts_cwedge.x), 
+            vpos_cwedge[1], ld_vnor(verts_cwedge.y), load_vert_flags(verts_cwedge.y) 
+        );
+
+    bool is_loop_subd_edge = false;
+    if (is_loop_subdiv_pass()) 
+        is_loop_subd_edge = is_loop_subdiv_havent_split(
+            ef, 
+            load_vert_flags(verts_cwedge.x), 
+            load_vert_flags(verts_cwedge.y)
+        ); 
+
     bool is_split_ok = valid_thread 
         && (ef.selected)
         && (!ef.sel_border)
         && (!ef.dupli)
         && (!ef.border) 
         && (!ef.del_by_split)
-        && (!ef.del_by_collapse); 
-    if (!is_contour_split_pass())
-        is_split_ok = is_split_ok && edge_len > get_split_edge_len_min(verts_cwedge.x, verts_cwedge.y);
+        && (!ef.del_by_collapse)
+        && (!ef.new_by_split); 
+    if (is_contour_split_pass())
+        is_split_ok = is_split_ok && is_contour_edge;
+    else if (is_loop_subdiv_pass())
+        is_split_ok = is_split_ok && is_loop_subd_edge; 
     else
-        is_split_ok = is_split_ok && is_contour_edge; 
+        is_split_ok = is_split_ok && edge_len > get_split_edge_len_min(verts_cwedge.x, verts_cwedge.y);
     
 
     uint split_edge_id = compact_split_select_long_edges(is_split_ok, groupId);
@@ -352,6 +387,10 @@ void main()
         if (any(bvec4(ef_w0.border, ef_w1.border, ef_w2.border, ef_w3.border))) 
             psei_curr.is_split_ok = false; 
 
+        /* except edges at selection border */
+        if (!all(bvec4(ef_w0.selected, ef_w1.selected, ef_w2.selected, ef_w3.selected)))
+            psei_curr.is_split_ok = false; 
+
         update = !psei_curr.is_split_ok; 
     }
 
@@ -379,12 +418,12 @@ void main()
         EdgeFlags ef_w2 = load_edge_flags(w[2].wedge_id); 
         EdgeFlags ef_w3 = load_edge_flags(w[3].wedge_id); 
 
-        /* except border edges */
-        if (any(bvec4(ef_w0.border, ef_w1.border, ef_w2.border, ef_w3.border))) 
-            psei_curr.is_split_ok = false; 
-        /* except edges at selection border */
-        if (!all(bvec4(ef_w0.selected, ef_w1.selected, ef_w2.selected, ef_w3.selected)))
-            psei_curr.is_split_ok = false; 
+        // /* except border edges */
+        // if (any(bvec4(ef_w0.border, ef_w1.border, ef_w2.border, ef_w3.border))) 
+        //     psei_curr.is_split_ok = false; 
+        // /* except edges at selection border */
+        // if (!all(bvec4(ef_w0.selected, ef_w1.selected, ef_w2.selected, ef_w3.selected)))
+        //     psei_curr.is_split_ok = false; 
 
         /* Resolve collision */
         EdgeSplitPriorityContext ctx_curr = EdgeSplitPriorityContext(psei_curr, psei_curr.id, ef.selected); 
@@ -561,10 +600,12 @@ void main()
 
 
     /* Store flags for 4 new edges */
-    EdgeFlags ef = init_edge_flags__new_split_edge();
+    EdgeFlags ef = init_edge_flags__new_split_edge(false);
+    ef.new_by_split_on_old_edge = false; 
     store_edge_flags(e0, ef);
-    store_edge_flags(e1, ef);
     store_edge_flags(e2, ef);
+    ef.new_by_split_on_old_edge = true; 
+    store_edge_flags(e1, ef);
     store_edge_flags(e3, ef);
 
     /* Mark old edge as deleted */
@@ -581,7 +622,7 @@ void main()
 
 
     /* Store new vert pos */ 
-    vec3 split_pos = calc_split_vpos(v1, v3); 
+    vec3 split_pos = calc_split_vpos(v1, v3, psei_curr.id); 
     st_vpos(v4, split_pos); 
 
     /* Store new vert states */

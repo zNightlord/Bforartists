@@ -165,10 +165,12 @@ const char *StrokeGenShaderModule::static_shader_create_info_name_get(eShaderTyp
       return "bnpr_meshing_surf_filtering_vquadric_diffusion"; 
     case MESH_FILTER_QUADRIC_VPOS_FILTERING:
       return "bnpr_meshing_surf_filtering_quadric_vpos_filtering";
-    case MESH_FILTER_SQRT_SUBDIV_VPOS_SMOOTH:
-      return "bnpr_meshing_surf_filtering_sqrt3_vpos_smoothing"; 
-    case MESH_FILTER_SQRT_SUBDIV_VPOS_SMOOTH_FINISH:
-      return "bnpr_meshing_surf_filtering_sqrt3_vpos_smoothing_finish";
+    case MESH_FILTER_SUBDIV_VPOS_SMOOTH:
+      return "bnpr_meshing_surf_filtering_subdiv_vpos_smoothing"; 
+    case MESH_FILTER_SUBDIV_VPOS_SMOOTH_FINISH:
+      return "bnpr_meshing_surf_filtering_subdiv_vpos_smoothing_finish";
+    case MESH_FILTER_LOOP_SUBDIV_EDGE_POINTS:
+      return "bnpr_meshing_surf_filtering_subdiv_edge_points"; 
     case MESH_FILTER_VCURV_SMOOTHING:
       return "bnpr_meshing_surf_filtering_vcurv_smoothing";
     case MESH_FILTER_VCURV_SMOOTHING_OUTPUT_REMESH_LEN:

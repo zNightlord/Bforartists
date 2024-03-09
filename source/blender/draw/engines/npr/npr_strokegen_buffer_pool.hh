@@ -89,6 +89,7 @@ class GPUBufferPoolModule {
   SSBO_StrokeGenReusedSmall ssbo_mesh_buffer_reuse_5_;                    // 64MB  1088MB
   SSBO_StrokeGenReusedSmall ssbo_mesh_buffer_reuse_6_;                    // 64MB  1152MB
   SSBO_StrokeGenReusedMedium ssbo_mesh_buffer_reuse_7_;                   // 128MB 1280MB
+  SSBO_StrokeGenReusedMedium ssbo_mesh_buffer_reuse_8_;                   // 128MB 1280MB
   // Notes: DO NOT use reuse_4 when remeshing, it holds per-vertex remesh len
 
 
@@ -128,6 +129,16 @@ class GPUBufferPoolModule {
   inline GPUStorageBuf *reused_ssbo_vtx_remesh_len_()
   {
     return ssbo_mesh_buffer_reuse_4_; 
+  }
+
+  // Reused Buffer Scheme throughout Sqrt-3/Loop Subdiv ------
+  inline GPUStorageBuf *reused_ssbo_vpos_subd_()
+  {
+    return ssbo_mesh_buffer_reuse_8_;
+  }
+  inline GPUStorageBuf *reused_ssbo_epos_subd_()
+  {
+    return ssbo_mesh_buffer_reuse_7_; 
   }
 
 

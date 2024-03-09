@@ -125,11 +125,13 @@ float calc_dihedral_angle(vec3 v0, vec3 v1, vec3 v2, vec3 v3)
 #define EDGE_FLIP_OPTI_VALENCE 0u
 #define EDGE_FLIP_OPTI_DELAUNAY 1u
 #define EDGE_FLIP_OPTI_SQRT3_SUBDIV 2u
+#define EDGE_FLIP_OPTI_LOOP_SUBDIV 3u
 
-bool should_edge_flip_common(vec3 p0, vec3 p1, vec3 p2, vec3 p3)
+bool should_edge_flip_common(vec3 p0, vec3 p1, vec3 p2, vec3 p3, bool only_flat_edge = true, float max_inner_angle_in_quad = .6f)
 {
     /* only flip when edge is flat */
     // float dihedral_angle = calc_dihedral_angle(p0, p1, p2, p3); // buggy
+    if (only_flat_edge)
     {
         vec3 v10 = p0 - p1;
         vec3 v13 = p3 - p1;
@@ -143,23 +145,23 @@ bool should_edge_flip_common(vec3 p0, vec3 p1, vec3 p2, vec3 p3)
     }
 
     /* wedge quad must be convex */
-    vec3 v01 = p0 - p1;
-    vec3 v21 = p2 - p1;
-    vec3 v31 = p3 - p1;
-    float angle_013 = acos(dot(normalize(v01), normalize(v31)));
-    float angle_213 = acos(dot(normalize(v21), normalize(v31)));
+    vec3 v10 = p0 - p1;
+    vec3 v12 = p2 - p1;
+    vec3 v13 = p3 - p1;
+    float angle_013 = acos(clamp(dot(normalize(v10), normalize(v13)), -1.0f, 1.0f));
+    float angle_213 = acos(clamp(dot(normalize(v12), normalize(v13)), -1.0f, 1.0f));
     float angle_012 = angle_013 + angle_213; // triangle inner angle always < pi, but not for quad angle
-    if (angle_012 > PI * .6f) // < .6Pi, this also avoids sliver triangle after flipping
+    if (angle_012 > PI * max_inner_angle_in_quad) // < .6Pi, this also avoids sliver triangle after flipping
     {
         return false;
     }
-    vec3 v03 = p0 - p3;
-    vec3 v13 = -v31; 
-    vec3 v23 = p2 - p3;
-    float angle_031 = acos(dot(normalize(v03), normalize(v13)));
-    float angle_231 = acos(dot(normalize(v23), normalize(v13)));
+    vec3 v30 = p0 - p3;
+    vec3 v31 = -v13; 
+    vec3 v32 = p2 - p3;
+    float angle_031 = acos(clamp(dot(normalize(v30), normalize(v31)), -1.0f, 1.0f));
+    float angle_231 = acos(clamp(dot(normalize(v32), normalize(v31)), -1.0f, 1.0f));
     float angle_032 = angle_031 + angle_231;
-    if (angle_032 > PI * .6f)
+    if (angle_032 > PI * max_inner_angle_in_quad)
     {
         return false;
     }
@@ -226,8 +228,20 @@ float comp_edge_flip_delaunay_score(
 float comp_edge_flip_sqrt3_subdiv_score(
     EdgeFlags ef
 ){
-    if (ef.temp_face_split_new_edge) return -10000000.0f; 
+    if (ef.temp_face_split_new_edge) return -10000000.0f; // quit split 
     return 1.0f; 
+}
+float comp_edge_flip_loop_subdiv_score(
+    EdgeFlags ef, uint v1, uint v3, 
+    vec3 p0, vec3 p1, vec3 p2, vec3 p3 
+){
+    if (!should_edge_flip_common(p0, p1, p2, p3, false, .9999999f))
+        return -10000000.0f; /* no, fuck off */
+
+    VertFlags vf1 = load_vert_flags(v1); 
+    VertFlags vf3 = load_vert_flags(v3);
+    if (ef.new_by_split_on_old_edge || (vf1.new_by_split == vf3.new_by_split)) return -10000000.0f; // quit split
+    return 1.0f;
 }
 
 
@@ -345,6 +359,16 @@ void main()
     {
         score = comp_edge_flip_sqrt3_subdiv_score(ef); 
     }
+    /* Edge flip for loop subdivision */
+    if (pcs_flip_opti_goal_type_ == EDGE_FLIP_OPTI_LOOP_SUBDIV)
+    {
+        score = comp_edge_flip_loop_subdiv_score(
+            ef, v1, v3, 
+            vpos[0], vpos[1], vpos[2], vpos[3]
+        ); 
+    }
+    
+
     
     is_flip_ok = is_flip_ok && (score > 0.0f); 
     uint flip_edge_id = compact_flip_inital_selection(is_flip_ok, groupId); 

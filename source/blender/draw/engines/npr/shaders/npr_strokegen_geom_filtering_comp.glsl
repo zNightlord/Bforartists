@@ -17,6 +17,43 @@ float vnor_bilateral_filter_weight(vec3 vnor_i, vec3 vpos_i, vec3 vnor_j, vec3 v
     return w_vnor * w_vpos; 
 }
 
+float sqrt3_vpos_smooth_weight(float n)
+{
+    return (4.0f - 2.0f * cos((2.0f * 3.14159265359f) / n)) / 9.0f;
+}
+
+float sqrt3_vpos_limit_weight(float n, int step, bool step_inf = false)
+{
+    float alpha_n = sqrt3_vpos_smooth_weight(n); 
+    alpha_n *= 3.0f; 
+    float beta_n_inf = alpha_n / (1.0f + alpha_n); 
+
+    if (step_inf) return beta_n_inf; 
+
+    float gamma_n_step = pow(2.0f/3.0f - alpha_n, step); 
+    return gamma_n_step; 
+}
+
+vec3 sqrt3_limit_vpos(vec3 vpos, vec3 vpos_sum, float n, int step, bool step_inf)
+{
+    float w = sqrt3_vpos_limit_weight(n, step, step_inf); 
+    vec3 lim_pos_inf = (1.0f - w) * vpos + w * (vpos_sum / n); 
+    if (step_inf) return lim_pos_inf; 
+    return w * vpos + (1.0f - w) * lim_pos_inf;
+}
+
+float loop_vpos_smooth_weight(float n)
+{ /* mask for interior verts in loop subdiv */
+    /* see "Subdivision methods for geometric design - Ch.7.3 Smooth Subdivision for Triangle Meshes" */
+    
+    if (n == 6.0f) return 3.0f / 8.0f; // fast path, actually same as the formula below
+
+    float alpha_n = (3.0f/8.0f) + (cos((2.0f * 3.14159265359f) / n) / 4.0f);
+    alpha_n = (5.0f/8.0f) - alpha_n * alpha_n;
+    return alpha_n; 
+}
+
+
 /* Inputs: 
 ssbo_vbo_full_[]
 ssbo_vert_to_edge_list_header_[] 
@@ -135,20 +172,26 @@ uint get_vert_count()
     struct VtxPositionFilteringContext
     {
         vec3 vpos; 
+        float remesh_len;  
+
         vec3 vpos_p; 
-        vec3 vpos_filtered; 
+        float remesh_len_p; 
+
+        vec3 vpos_filtered;
         float weight_sum; 
         
         bool border; 
         bool close_to_sel_border; 
     };
 
-    VtxPositionFilteringContext init_vpos_filter_context(vec3 vpos)
+    VtxPositionFilteringContext init_vpos_filter_context(vec3 vpos, float remesh_len)
     {
         VtxPositionFilteringContext ctx; 
         
         ctx.vpos = vpos;
+        ctx.remesh_len = remesh_len; 
         ctx.vpos_p = vec3(.0f); /* init in circulator */
+        ctx.remesh_len_p = .0f; /* init in circulator */
         ctx.vpos_filtered = vec3(.0f); 
         ctx.weight_sum = .0f; 
         
@@ -176,12 +219,14 @@ uint get_vert_count()
         uint ivert_vi = mark__ve_circ_fwd__get_vi(iter); 
         uint vi = ssbo_edge_to_vert_[wi*4u + ivert_vi]; 
         vec3 vpos_i = ld_vpos_filtered(vi);
+        float remesh_len_i = ld_vtx_remesh_len(vi); 
 
         if (iter.rotate_step == 0u)
         { // init position of vp
             uint ivert_vp = mark__ve_circ_fwd__get_vp(iter); 
             uint vp = ssbo_edge_to_vert_[wi*4u + ivert_vp]; 
             ctx.vpos_p = ld_vpos_filtered(vp); 
+            ctx.remesh_len_p = ld_vtx_remesh_len(vp);
         }
 
         // TODO: cache this in VertFlags
@@ -189,10 +234,19 @@ uint get_vert_count()
         if (ef.border) ctx.border = true;
         if ((!ef.selected) || ef.sel_border) ctx.close_to_sel_border = true; 
 
-        ctx.vpos_filtered += vpos_i; 
-        ctx.weight_sum += 1.0f; 
+        // float tri_area = abs(length(cross(vpos_i - ctx.vpos, ctx.vpos_p - ctx.vpos)) * 0.5f);
+        // float tri_remesh_len = ((remesh_len_i + ctx.remesh_len_p + ctx.remesh_len) / 3.0f);
+        // float w = tri_area * tri_remesh_len; 
+        // ctx.vpos_filtered += w * ((vpos_i + ctx.vpos_p + ctx.vpos) / 3.0f); 
+
+        float w = 1.0f; 
+        ctx.vpos_filtered += w * vpos_i; 
+
+
+        ctx.weight_sum += w; 
 
         ctx.vpos_p = vpos_i; 
+        ctx.remesh_len_p = remesh_len_i; 
         return true; 
     }
 #endif
@@ -417,12 +471,10 @@ uint get_vert_count()
 
 
 
-#if defined(_KERNEL_MULTICOMPILE__SURF_FILTERING__SQRT3_VPOS_SMOOTHING) || defined(_KERNEL_MULTICOMPILE__SURF_FILTERING__SQRT3_VPOS_SMOOTHING_FINISH)
-float sqrt3_vpos_smooth_weight(float n)
-{
-    return (4.0f - 2.0f * cos((2.0f * 3.14159265359f) / n)) / 9.0f;
-}
-struct VtxPositionSmoothForSqrt3SubdivContext
+#if defined(_KERNEL_MULTICOMPILE__SURF_FILTERING__SUBDIV_VPOS_FILTERING) || defined(_KERNEL_MULTICOMPILE__SURF_FILTERING__SUBDIV_VPOS_FILTERING_FINISH)
+#define SUBDIV_VPOS_FILTER_TYPE__SQRT3 0u
+#define SUBDIV_VPOS_FILTER_TYPE__LOOP 1u 
+struct VtxPositionSmoothForSubdivContext
 {
     vec3 vpos_filtered; 
     float num_adj_edges; 
@@ -430,9 +482,9 @@ struct VtxPositionSmoothForSqrt3SubdivContext
     bool border; 
     bool close_to_sel_border; 
 }; 
-VtxPositionSmoothForSqrt3SubdivContext init_vpos_sqrt3_smooth_context()
+VtxPositionSmoothForSubdivContext init_vpos_subd_smooth_context()
 {
-    VtxPositionSmoothForSqrt3SubdivContext ctx; 
+    VtxPositionSmoothForSubdivContext ctx; 
     ctx.vpos_filtered = vec3(.0f); 
     ctx.num_adj_edges = .0f; 
     ctx.border = false;
@@ -440,9 +492,9 @@ VtxPositionSmoothForSqrt3SubdivContext init_vpos_sqrt3_smooth_context()
 
     return ctx; 
 }
-bool ve_circulator__vpos_smooth_for_sqrt3_subdiv(
+bool ve_circulator__vpos_smooth_for_subdiv(
     CirculatorIterData iter, 
-    inout VtxPositionSmoothForSqrt3SubdivContext ctx
+    inout VtxPositionSmoothForSubdivContext ctx
 ){
     uint wi = iter.awi.wedge_id; 
 
@@ -460,15 +512,29 @@ bool ve_circulator__vpos_smooth_for_sqrt3_subdiv(
     
     return true; 
 }
-bool is_smooth_vert(VertFlags vf)
-{ // TODO: compact these verts instead
-    bool is_smooth_vert = 
+bool is_old_vert_sqrt3(VertFlags vf)
+{ 
+    bool is_old_vtx = 
         (!vf.new_by_face_split)
         && (!vf.del_by_collapse)
         && (!vf.dupli); 
-    return is_smooth_vert; 
+    return is_old_vtx; 
+}
+bool is_old_vert_loop(VertFlags vf)
+{ 
+    bool is_old_vtx = 
+        (!vf.new_by_split)
+        && (!vf.del_by_collapse)
+        && (!vf.dupli); 
+    return is_old_vtx; 
 }
 #endif
+
+
+
+
+
+
 
 #if defined(_KERNEL_MULTICOMPILE__SURF_FILTERING__VCURVE_SMOOTHING)
 float ld_vcurv_max_smoothed(uint vert_id)
@@ -547,8 +613,7 @@ bool ve_circulator__vcurv_smooth(
 #endif
 
 
-
-
+#if !defined(_KERNEL_MULTICOMPILE__SURF_FILTERING__EDGES)
 void main()
 {
     uint sel_vert_id = gl_GlobalInvocationID.x; 
@@ -579,28 +644,50 @@ void main()
 #if defined(_KERNEL_MULTICOMPILE__SURF_FILTERING__VPOS_FILTERING)
     if(!valid_thread) return;
 
+    VertFlags vf = load_vert_flags(vert_id);
+    if (pcs_vpos_filtering_iter_ == pcs_num_vpos_filtering_iters_ - 1)
+        update_vert_flags__reset_edge_split_new_vert__mov_by_collapse(vert_id, vf);
+
     vec3 vnor = ld_vnor(vert_id); 
     vec3 vpos_old = ld_vpos(vert_id);
+    float remesh_len = ld_vtx_remesh_len(vert_id); 
+    vec3 vpos_new = vpos_old; 
 
-    /* Tangential Smoothing, see "Adaptive Remeshing for Real-Time Mesh Deformation" */
-    VtxPositionFilteringContext ctx = init_vpos_filter_context(vpos_old);
-    VertWedgeListHeader vwlh = decode_vert_wedge_list_header(ssbo_vert_to_edge_list_header_[vert_id]); 
-    bool rot_fwd = true;
-    VE_CIRCULATOR(vwlh, ve_circulator__vpos_filter, ctx, rot_fwd);
+    if (pcs_vpos_filtering_iter_ < pcs_num_vpos_filtering_iters_)
+    {
+        /* Tangential Smoothing, see "Adaptive Remeshing for Real-Time Mesh Deformation" */
+        VtxPositionFilteringContext ctx = init_vpos_filter_context(vpos_old, remesh_len);
+        VertWedgeListHeader vwlh = decode_vert_wedge_list_header(ssbo_vert_to_edge_list_header_[vert_id]); 
+        bool rot_fwd = true;
+        VE_CIRCULATOR(vwlh, ve_circulator__vpos_filter, ctx, rot_fwd);
 
-    ctx.vpos_filtered /= ctx.weight_sum;
-    vec3 vpos_new = ctx.vpos_filtered - vnor * dot(vnor, ctx.vpos_filtered - vpos_old); 
-    if (ctx.border || ctx.close_to_sel_border) 
-        vpos_new = vpos_old;
+        if ((vf.new_by_split || vf.mov_by_collapse))
+        {
+            /* Putting verts at infinite subdiv level */
+            vec3 vpos_subd = sqrt3_limit_vpos(
+                vpos_old, ctx.vpos_filtered, ctx.weight_sum, 1, true
+            );
+            vpos_new = mix(vpos_old, vpos_subd, .1f); 
+        }else{
+            float alpha_n = sqrt3_vpos_smooth_weight(ctx.weight_sum); 
+            vpos_new = (1.0f - alpha_n) * vpos_old + alpha_n * ctx.vpos_filtered / ctx.weight_sum;
+            vpos_new = mix(vpos_old, vpos_new, .1f);
+        }
 
+        /* Tangential smoothing, weighted by remesh len & tri area */
+        // ctx.vpos_filtered /= ctx.weight_sum;
+        // vec3 vpos_new = ctx.vpos_filtered - vnor * dot(vnor, ctx.vpos_filtered - vpos_old); 
 
-    /* Avoid fold-over, project to 1-ring fan */
-    VtxPositionValidationContext ctx_validate = init_filtered_vpos_validate_context(vpos_old, vpos_new);
-    rot_fwd = true;
-    VE_CIRCULATOR(vwlh, ve_circulator__vpos_validate, ctx_validate, rot_fwd); 
-    vpos_new = ctx_validate.vpos_filtered_proj; 
-    if (ctx.border || ctx.close_to_sel_border) 
-        vpos_new = vpos_old;
+        /* Avoid fold-over, project to 1-ring fan */
+        // VtxPositionValidationContext ctx_validate = init_filtered_vpos_validate_context(vpos_old, vpos_new);
+        // rot_fwd = true;
+        // VE_CIRCULATOR(vwlh, ve_circulator__vpos_validate, ctx_validate, rot_fwd); 
+        // vpos_new = ctx_validate.vpos_filtered_proj; 
+
+        if (ctx.border || ctx.close_to_sel_border) 
+            vpos_new = vpos_old;
+    }
+
 
     if (valid_thread)
         st_vpos_filtered(vert_id, vpos_new);
@@ -646,6 +733,8 @@ void main()
     /* vert pos from last filtering iter */
     vec3 vpos = ld_vpos(vert_id);
     vec3 vpos_orig = vpos; 
+    
+    VertFlags vf = load_vert_flags(vert_id);
 
     /* Project vert pos to quadric surface */
     Quadric q_v = load_vert_quadric(vert_id); 
@@ -674,48 +763,60 @@ void main()
     VE_CIRCULATOR(vwlh, ve_circulator__vpos_validate, ctx_validate, rot_fwd); 
     vpos = ctx_validate.vpos_filtered_proj; 
 
-    if ((!is_qv_valid) || any(isnan(vpos)) || any(isinf(vpos)) || ctx_validate.close_to_sel_border || ctx_validate.border) 
+    if ((!is_qv_valid) || any(isnan(vpos)) || any(isinf(vpos)) || 
+            ctx_validate.close_to_sel_border || ctx_validate.border ||  (!(vf.new_by_split || vf.mov_by_collapse))) 
         vpos = vpos_orig; 
 
     if (valid_thread)
         st_vpos(vert_id, vpos);
 #endif
 
-#if defined(_KERNEL_MULTICOMPILE__SURF_FILTERING__SQRT3_VPOS_SMOOTHING)
+#if defined(_KERNEL_MULTICOMPILE__SURF_FILTERING__SUBDIV_VPOS_FILTERING)
     if(!valid_thread) return;
-    // TODO: try to compact filtered verts
-    VertFlags vf = load_vert_flags(vert_id);
-    bool is_smooth_vert = is_smooth_vert(vf); 
-    if (!is_smooth_vert) return; 
 
     vec3 vpos = ld_vpos(vert_id);
     vec3 vpos_orig = vpos;
 
-    VtxPositionSmoothForSqrt3SubdivContext ctx = init_vpos_sqrt3_smooth_context();
+    VtxPositionSmoothForSubdivContext ctx = init_vpos_subd_smooth_context();
     VertWedgeListHeader vwlh = decode_vert_wedge_list_header(ssbo_vert_to_edge_list_header_[vert_id]); 
     bool rot_fwd = true;
-    VE_CIRCULATOR(vwlh, ve_circulator__vpos_smooth_for_sqrt3_subdiv, ctx, rot_fwd); 
+    VE_CIRCULATOR(vwlh, ve_circulator__vpos_smooth_for_subdiv, ctx, rot_fwd); 
     ctx.vpos_filtered = ctx.vpos_filtered / ctx.num_adj_edges; 
-    float alpha_n = sqrt3_vpos_smooth_weight(ctx.num_adj_edges); 
-    vpos = (1.0f - alpha_n) * vpos_orig + alpha_n * ctx.vpos_filtered;
+    
+    if (pcs_subdiv_type_ == SUBDIV_VPOS_FILTER_TYPE__SQRT3)
+    {
+        float alpha_n = sqrt3_vpos_smooth_weight(ctx.num_adj_edges); 
+        vpos = (1.0f - alpha_n) * vpos_orig + alpha_n * ctx.vpos_filtered;
+    }
+    if (pcs_subdiv_type_ == SUBDIV_VPOS_FILTER_TYPE__LOOP)
+    {
+        float alpha_n = loop_vpos_smooth_weight(ctx.num_adj_edges); 
+        vpos = (1.0f - alpha_n) * vpos_orig + alpha_n * ctx.vpos_filtered; 
+    }
 
     if (ctx.close_to_sel_border || ctx.border) 
         vpos = vpos_orig; 
 
     uvec3 vpos_enc = floatBitsToUint(vpos); 
-    Store3(ssbo_vpos_temp_, sel_vert_id, vpos_enc); 
+    Store3(ssbo_vpos_subd_, sel_vert_id, vpos_enc); 
 #endif
 
-#if defined(_KERNEL_MULTICOMPILE__SURF_FILTERING__SQRT3_VPOS_SMOOTHING_FINISH)
+#if defined(_KERNEL_MULTICOMPILE__SURF_FILTERING__SUBDIV_VPOS_FILTERING_FINISH)
     if (!valid_thread) return; 
     
-    // note: this kernel needs to dispatch for all selected verts
     VertFlags vf = load_vert_flags(vert_id);
-    update_vert_flags__reset_face_split_new_vert(vert_id, vf);
-    if (!is_smooth_vert(vf)) return; 
+    
+    if (pcs_subdiv_type_ == SUBDIV_VPOS_FILTER_TYPE__SQRT3)
+        update_vert_flags__reset_face_split_new_vert(vert_id, vf);
+    if (pcs_subdiv_type_ == SUBDIV_VPOS_FILTER_TYPE__SQRT3 && !is_old_vert_sqrt3(vf)) return; 
 
+    if (pcs_subdiv_type_ == SUBDIV_VPOS_FILTER_TYPE__LOOP)
+        update_vert_flags__reset_edge_split_tags(vert_id, vf); 
+    if (pcs_subdiv_type_ == SUBDIV_VPOS_FILTER_TYPE__LOOP && !is_old_vert_loop(vf)) return; 
+
+    
     uvec3 vpos_enc;
-    Load3(ssbo_vpos_temp_, sel_vert_id, vpos_enc); 
+    Load3(ssbo_vpos_subd_, sel_vert_id, vpos_enc); 
     vec3 vpos = uintBitsToFloat(vpos_enc); 
     
     st_vpos(vert_id, vpos);
@@ -772,3 +873,43 @@ void main()
     }
 #endif
 }
+#endif
+
+#if defined(_KERNEL_MULTICOMPILE__SURF_FILTERING__EDGES)
+/* Filter for edges */
+void main()
+{
+    const uint groupId = gl_LocalInvocationID.x; 
+    uint sel_edge_id = gl_GlobalInvocationID.x; 
+    uint wedge_id; bool valid_thread; 
+    get_wedge_id_from_selected_edge(sel_edge_id, /*out*/wedge_id, /*out*/valid_thread); 
+
+#if defined(_KERNEL_MULTICOMPILE__SURF_FILTERING__LOOP_SUBD_EDGE_POINTS)
+    if (!valid_thread) return; 
+
+    // EdgeFlags ef = load_edge_flags(wedge_id); 
+    // update_edge_flags__reset_new_split_edge(wedge_id, ef); 
+    // not needed, will be done at first split operator
+
+    /* Compute subdiv position for new points on each edge */
+    uint v[4] = {
+        ssbo_edge_to_vert_[wedge_id*4u + 0u], 
+        ssbo_edge_to_vert_[wedge_id*4u + 1u], 
+        ssbo_edge_to_vert_[wedge_id*4u + 2u], 
+        ssbo_edge_to_vert_[wedge_id*4u + 3u]
+    };
+
+    vec3 vpos[4] = {
+        ld_vpos(v[0]), 
+        ld_vpos(v[1]), 
+        ld_vpos(v[2]), 
+        ld_vpos(v[3])
+    };
+
+    vec3 vpos_new = .125f * vpos[0] + .125f * vpos[2] + .375f * vpos[1] + .375f * vpos[3]; 
+    uvec3 vpos_new_enc = floatBitsToUint(vpos_new); 
+    Store3(ssbo_epos_subd_, wedge_id, vpos_new_enc);
+#endif
+
+}
+#endif

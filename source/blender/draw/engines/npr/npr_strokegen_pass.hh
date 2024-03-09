@@ -36,7 +36,6 @@ struct SurfaceDebugContext {
   bool dbg_edges; 
 
   float dbg_line_length;
-  float dbg_curv_K_val;
 };
 
 
@@ -193,6 +192,8 @@ public:
     int remeshing_iters;
     int remeshing_delaunay_flip_iters;
 
+    int dbg_subdiv_type; 
+
   } meshing_params;
   void append_subpass_fill_selected_mesh_elems_indirect_dispatch_args_();
 
@@ -216,9 +217,11 @@ public:
   enum EdgeSplitMode {
     // Match to shader macros
     // #define EDGE_SPLIT_LONG_EDGES 0u
-    LongEdge,
+    LongEdge = 0u,
     // #define EDGE_SPLIT_CONTOUR_EDGES 1u
-    InterpContour
+    InterpContour = 1u, 
+    // #define EDGE_SPLIT_LOOP_SUBDIV 2u
+    LoopSubdivSplit = 2u, 
   }; 
   enum EdgeFlipOptiGoal {
     // Match to shader macros
@@ -227,7 +230,9 @@ public:
     // #define EDGE_FLIP_OPTI_DELAUNAY 1u
     Delaunay = 1,
     // #define EDGE_FLIP_OPTI_SQRT3_SUBDIV 2u
-    SqrtSubdiv = 2, 
+    SqrtSubdiv = 2,
+    // #define EDGE_FLIP_OPTI_SQRT3_SUBDIV 3u
+    LoopSubdivFlip = 3, 
   };
   void append_subpass_split_edges(EdgeSplitMode mode, int iter_split, int num_edges, int num_verts);
   void append_subpass_collapse_edges(int iter_remesh, int iter_collapse, int num_edges, int num_verts);
@@ -292,6 +297,11 @@ public:
   void GetSurfaceAnalysisContext_RemeshPass(SurfaceAnalysisContext &surf_analysis_ctx) const;
   void GetSurfaceAnalysisContext_ContourInsertionPass(
       SurfaceAnalysisContext &surf_analysis_ctx) const;
+  void append_subpasses_analyse_curvature(ResourceHandle& rsc_handle,
+                                          int num_edges,
+                                          int num_verts, bool output_dbg_lines = false);
+  void append_subpasses_sqrt_subdiv(int num_edges, int num_verts);
+  void append_subpasses_loop_subdiv(int num_edges, int num_verts);
 
   void append_subpass_surf_geom_analysis(
       ResourceHandle& rsc_handle, int num_verts,
@@ -313,7 +323,10 @@ public:
   enum VertexRelocationMode {
     TangentialSmoothing = 0, 
     QuadricFiltering = 1,
-    Sqrt3SubdivSmooth = 2
+    Sqrt3SubdivSmoothCache = 2, 
+    Sqrt3SubdivSmoothApply = 3,
+    LoopSubdivSmoothCache = 4,
+    LoopSubdivSmoothApply = 5,
   };
   void append_subpass_vertex_relocation(VertexRelocationMode mode,
                                         int num_edges,
