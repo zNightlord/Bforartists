@@ -33,9 +33,7 @@ jobs:
       if: success() || failure()
       run: |
         cd ~\bforartistsrepo\Bforartists
-        git fetch origin b3.6
-        git checkout b3.6
-        .\make.bat ninja release
+        .\make.bat ninja lite
         dir
         cd ~\bforartistsrepo
         dir
@@ -43,7 +41,9 @@ jobs:
       if: success() || failure()
       run: |
         cd ~\bforartistsrepo\Bforartists
-        .\make.bat ninja lite
+        git fetch origin b3.6
+        git checkout b3.6
+        .\make.bat ninja release
         dir
 
 
