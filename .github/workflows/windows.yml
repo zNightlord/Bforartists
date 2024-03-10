@@ -7,6 +7,7 @@ on:
     - cron: 0 0 * * 1
   pull_request:
     branches: [ master ]
+  workflow_dispatch:
 
 permissions: {}
 jobs:
@@ -16,21 +17,21 @@ jobs:
 
     steps:
     - name: make
+      shell: cmd
       run: |
-        mkdir ~\bforartistsrepo
-        cd ~\bforartistsrepo
-        git clone https://github.com/Bforartists/Bforartists
+        mkdir C:/Users/runneradmin/bforartistsrepo
+        cd C:/Users/runneradmin/bforartistsrepo
+        git clone -b b3.6 https://github.com/zNightlord/Bforartists
+        cd Bforartists
+        python ./build_files/utils/make_update.py
+        make ninja release
         dir
-        cd ~\bforartistsrepo\Bforartists
-        make update
-        .\make.bat ninja release
-        dir
-        cd ~\bforartistsrepo
+        cd ..
         dir
 
 
     - name: Upload Build
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v4
       with:
         name: Bforartists-Release-${{ runner.os }}
-        path: C:/Users/runneradmin/bforartistsrepo/bfa_build_windows_Release_x64_vc16_Release/bin
+        path: C:/Users/runneradmin/bforartistsrepo/bfa_build_windows_Release_x64_vc17_Release/bin
