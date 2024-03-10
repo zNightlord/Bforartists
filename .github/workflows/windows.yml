@@ -1,12 +1,13 @@
 name: Windows
 
 on:
-  push:
-    branches: [ windows-workflow ]
-  #schedule:
-  #  - cron: 0 0 * * 1
-  #pull_request:
-  #  branches: [ master ]
+  #push:
+    #branches: [ master ]
+  schedule:
+    - cron: 0 0 * * 1
+  pull_request:
+    branches: [ master ]
+  workflow_dispatch:
 
 permissions: {}
 jobs:
@@ -15,41 +16,22 @@ jobs:
     runs-on: windows-latest
 
     steps:
-    - name: Clone, get libraries
+    - name: make
+      shell: cmd
       run: |
-        mkdir ~\bforartistsrepo
-        cd ~\bforartistsrepo
+        mkdir C:/Users/runneradmin/bforartistsrepo
+        cd C:/Users/runneradmin/bforartistsrepo
         git clone -b b3.6 https://github.com/zNightlord/Bforartists
+        cd Bforartists
+        python ./build_files/utils/make_update.py
+        make ninja release
         dir
-        cd ~\bforartistsrepo\Bforartists
-        make update
-        git submodule update --init --progress lib/windows_x64
-        cd lib\windows_x64
+        cd ..
         dir
-        git pull
-        dir
-        
-    - name: Build
-      if: success() || failure()
-      run: |
-        cd ~\bforartistsrepo\Bforartists
-        .\make.bat ninja release
-        dir
-        cd ~\bforartistsrepo
-        dir
-    #- name: Build 2
-    #  if: success() || failure()
-    #  run: |
-    #    cd ~\bforartistsrepo\Bforartists
-    #    git fetch origin b3.6
-    #    git checkout b3.6
-    #    .\make.bat ninja release
-    #    dir
 
 
     - name: Upload Build
-      if: success() || failure()
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v4
       with:
         name: Bforartists-Release-${{ runner.os }}
-        path: C:/Users/runneradmin/bforartistsrepo/bfa_build_windows_Release_x64_vc16_Release/bin
+        path: C:/Users/runneradmin/bforartistsrepo/bfa_build_windows_Release_x64_vc17_Release/bin
