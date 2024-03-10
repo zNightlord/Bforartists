@@ -19,7 +19,7 @@ jobs:
       run: |
         mkdir ~\bforartistsrepo
         cd ~\bforartistsrepo
-        git clone -b windows-workflow https://github.com/zNightlord/Bforartists
+        git clone -b b3.6 https://github.com/zNightlord/Bforartists
         dir
         cd ~\bforartistsrepo\Bforartists
         make update
@@ -33,18 +33,18 @@ jobs:
       if: success() || failure()
       run: |
         cd ~\bforartistsrepo\Bforartists
-        .\make.bat ninja lite
+        .\make.bat ninja release
         dir
         cd ~\bforartistsrepo
         dir
-    - name: Build 2
-      if: success() || failure()
-      run: |
-        cd ~\bforartistsrepo\Bforartists
-        git fetch origin b3.6
-        git checkout b3.6
-        .\make.bat ninja release
-        dir
+    #- name: Build 2
+    #  if: success() || failure()
+    #  run: |
+    #    cd ~\bforartistsrepo\Bforartists
+    #    git fetch origin b3.6
+    #    git checkout b3.6
+    #    .\make.bat ninja release
+    #    dir
 
 
     - name: Upload Build
