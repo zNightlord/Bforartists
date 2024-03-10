@@ -1,18 +1,12 @@
-if "%BUILD_VS_YEAR%"=="2019" set BUILD_VS_LIBDIRPOST=vc15
-if "%BUILD_VS_YEAR%"=="2022" set BUILD_VS_LIBDIRPOST=vc15
-
-set BUILD_VS_SVNDIR=win64_%BUILD_VS_LIBDIRPOST%
 set BUILD_VS_LIBDIR=lib/windows_x64
 
 if NOT "%verbose%" == "" (
 	echo Library Directory = "%BUILD_VS_LIBDIR%"
 )
-if NOT EXIST %BUILD_VS_LIBDIR% (
-	rem libs not found, but svn is on the system
+if NOT EXIST "%BUILD_VS_LIBDIR%\.git" (
+	rem libs not found, but git is on the system
 	if not "%GIT%"=="" (
 		echo.
-		echo The required external libraries in %BUILD_VS_LIBDIR% are missing
-				echo.
 		echo Downloading %BUILD_VS_LIBDIR% libraries, please wait.
 		echo.
 		echo *********************************************************
@@ -41,14 +35,18 @@ if NOT EXIST %BUILD_VS_LIBDIR% (
 		        echo.
 		        exit /b 1
 		)
+		) else (
+           echo Not downloading libraries, until this is resolved you CANNOT make a successful blender build.
+           exit /b 1
+        )
 	)
 ) else (
 	if NOT EXIST %PYTHON% (
-		if not "%SVN%"=="" (
+		if not "%GIT%"=="" (
 			echo.
 			echo Python not found in external libraries, updating to latest version
 			echo.
-			"%SVN%" update %BUILD_VS_LIBDIR%
+			"%GIT%" -C "%BLENDER_DIR%" submodule update "%BUILD_VS_LIBDIR%"
 		)
 	)
 )
@@ -58,8 +56,8 @@ if NOT EXIST %BUILD_VS_LIBDIR% (
 	echo Error: Required libraries not found at "%BUILD_VS_LIBDIR%"
 	echo This is needed for building, aborting!
 	echo.
-	if "%SVN%"=="" (
-		echo This is most likely caused by svn.exe not being available.
+	if "%GIT%"=="" (
+		echo This is most likely caused by git.exe not being available.
 	)
 	exit /b 1
 )
