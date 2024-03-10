@@ -101,7 +101,7 @@ bool wing_verts_is_border_edge(uvec4 wing_verts)
 }
 bool is_border_edge_front_facing(uint ifacefront)
 {
-    return (ifacefront == 1u); /* := the "actual" face (iface==1 in wedge, v0v1v2 in line_adj) */
+    return (ifacefront == mark__border_iface_mainfold()); /* := the "actual" face (iface==1 in wedge, v0v1v2 in line_adj) */
 }
 
 /* wedges: at most x4 adj. wedges */

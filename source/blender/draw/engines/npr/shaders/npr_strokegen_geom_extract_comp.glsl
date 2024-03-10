@@ -137,7 +137,8 @@ bool is_back_face(float ndv)
 */
 bool is_contour_edge(
 	vec3 v0, vec3 v1, vec3 v2, vec3 v3, vec3 cam_pos, 
-	out float face_orient_012, out float face_orient_321
+	out float face_orient_123, out float face_orient_013, 
+	out vec3 dbg_n123, out vec3 dbg_v013 
 )
 { /* impl based on overlay_outline_prepass_vert_no_geom.glsl */
 	vec3 v10 = v0 - v1;
@@ -147,14 +148,17 @@ bool is_contour_edge(
 	vec3 n0 = cross(v12, v13);
 	vec3 n3 = cross(v13, v10);
 
+	dbg_n123 = length(v12) * normalize(n0);
+	dbg_v013 = length(v13) * normalize(n3); 
+
 	vec3 view_dir = cam_pos - v1; 
 
-	face_orient_012 = dot(view_dir, n0);
-  	face_orient_321 = dot(view_dir, n3);
+	face_orient_123 = dot(view_dir, n0);
+  	face_orient_013 = dot(view_dir, n3);
 	bool is_contour = 
-		/* !is_back_face(face_orient_012) && !is_back_face(face_orient_321);  */
-		is_back_face(face_orient_012) != is_back_face(face_orient_321); 
-		/* (sign(face_orient_012) != sign(face_orient_321)); */
+		/* !is_back_face(face_orient_123) && !is_back_face(face_orient_013);  */
+		is_back_face(face_orient_123) != is_back_face(face_orient_013); 
+		/* (sign(face_orient_123) != sign(face_orient_013)); */
 	
 	return is_contour; 
 }
@@ -200,10 +204,12 @@ void main()
 		v[i] = ld_vbo(vids[i]);  
 
 
-	float face_orient_012, face_orient_321; 
+	float face_orient_123, face_orient_013; 
+	vec3 dbg_n123, dbg_v013; 
 	bool is_contour = is_contour_edge(
 		v[0], v[1], v[2], v[3], cam_pos_ws
-		, face_orient_012, face_orient_321/*out*/
+		, face_orient_123, face_orient_013/*out*/
+		, dbg_n123, dbg_v013 /*out*/
 	); 
 
 	EdgeFlags ef = load_edge_flags(wedge_id); 
@@ -243,60 +249,61 @@ void main()
 
 		if (pcs_edge_visualize_mode_ == 7)
 		{
-			// AdjWedgeInfo w[4]; 
-			// w[0] = decode_adj_wedge_info(ssbo_edge_to_edges_[wedge_id*4u + 0u]);
-			// w[1] = decode_adj_wedge_info(ssbo_edge_to_edges_[wedge_id*4u + 1u]);
-			// w[2] = decode_adj_wedge_info(ssbo_edge_to_edges_[wedge_id*4u + 2u]);
-			// w[3] = decode_adj_wedge_info(ssbo_edge_to_edges_[wedge_id*4u + 3u]);
-
-			// EdgeFlags ef_w0 = load_edge_flags(w[0].wedge_id); 
-			// EdgeFlags ef_w1 = load_edge_flags(w[1].wedge_id); 
-			// EdgeFlags ef_w2 = load_edge_flags(w[2].wedge_id); 
-			// EdgeFlags ef_w3 = load_edge_flags(w[3].wedge_id); 
-
-			// bool sel_border = ef.selected && (!all(bvec4(ef_w0.selected, ef_w1.selected, ef_w2.selected, ef_w3.selected)));
 			bool sel_border = ef.sel_border;
 			dbg_line = dbg_line && sel_border; 
+		}
+
+		if (pcs_edge_visualize_mode_ == 8)
+		{
+			dbg_line = is_contour; 
 		}
 
 		uint dbg_line_idx = compact_dbg_edge(dbg_line, groupId); 
 		dbg_line_idx += get_debug_line_offset(DBG_LINE_TYPE__EDGES); 
 		if (dbg_line)
 		{
+			vec3 dbg_vpos_0 = v[1]; 
+			vec3 dbg_vpos_1 = v[3]; 
+
+			if (pcs_edge_visualize_mode_ == 8)
+			{
+				dbg_vpos_0 = face_orient_123 > 0.0f ? v[2] : v[0];  
+				vec3 nor_dir = face_orient_123 > 0.0f ? dbg_n123 : dbg_v013;
+				dbg_vpos_1 = dbg_vpos_0 + nor_dir;  
+			}
+			
 			uint base_addr = dbg_line_idx * 6; 
-			ssbo_dbg_lines_[base_addr+0] = floatBitsToUint(v[1].x); 
-			ssbo_dbg_lines_[base_addr+1] = floatBitsToUint(v[1].y); 
-			ssbo_dbg_lines_[base_addr+2] = floatBitsToUint(v[1].z); 
-			ssbo_dbg_lines_[base_addr+3] = floatBitsToUint(v[3].x); 
-			ssbo_dbg_lines_[base_addr+4] = floatBitsToUint(v[3].y); 
-			ssbo_dbg_lines_[base_addr+5] = floatBitsToUint(v[3].z); 
+			ssbo_dbg_lines_[base_addr+0] = floatBitsToUint(dbg_vpos_0.x); 
+			ssbo_dbg_lines_[base_addr+1] = floatBitsToUint(dbg_vpos_0.y); 
+			ssbo_dbg_lines_[base_addr+2] = floatBitsToUint(dbg_vpos_0.z); 
+			ssbo_dbg_lines_[base_addr+3] = floatBitsToUint(dbg_vpos_1.x); 
+			ssbo_dbg_lines_[base_addr+4] = floatBitsToUint(dbg_vpos_1.y); 
+			ssbo_dbg_lines_[base_addr+5] = floatBitsToUint(dbg_vpos_1.z); 
 		}
 	}
 
 	barrier();
 
-	bool rev_edge_dir = is_back_face(face_orient_012); 
 	if (false == valid_thread) is_contour = false; 
 
 	uint compacted_idx = compact_contour_edge(is_contour, groupId); 
 
+	uint ifrontface = is_back_face(face_orient_123) ? 1 : 0; 
+	uvec2 iverts_frontface = mark__cwedge_to_verts(ifrontface); 
 	if (is_contour)
-	{
-		/* write world pos to output buffer */
+	{ /* write world pos to output buffer */
 		uint base_addr = mesh_pool_addr__wpos_and_edgeid(compacted_idx); 
-		uint addr_p0 = rev_edge_dir ? base_addr + 3 : base_addr;  
-		uint addr_p1 = rev_edge_dir ? base_addr : base_addr + 3; 
-		buf_strokegen_mesh_pool[addr_p0+0] = floatBitsToUint(v[1].x); 
-		buf_strokegen_mesh_pool[addr_p0+1] = floatBitsToUint(v[1].y); 
-		buf_strokegen_mesh_pool[addr_p0+2] = floatBitsToUint(v[1].z); 
-		buf_strokegen_mesh_pool[addr_p1+0] = floatBitsToUint(v[3].x); 
-		buf_strokegen_mesh_pool[addr_p1+1] = floatBitsToUint(v[3].y); 
-		buf_strokegen_mesh_pool[addr_p1+2] = floatBitsToUint(v[3].z); 
+		buf_strokegen_mesh_pool[base_addr+0] = floatBitsToUint(v[iverts_frontface[0]].x); 
+		buf_strokegen_mesh_pool[base_addr+1] = floatBitsToUint(v[iverts_frontface[0]].y); 
+		buf_strokegen_mesh_pool[base_addr+2] = floatBitsToUint(v[iverts_frontface[0]].z); 
+		buf_strokegen_mesh_pool[base_addr+3] = floatBitsToUint(v[iverts_frontface[1]].x); 
+		buf_strokegen_mesh_pool[base_addr+4] = floatBitsToUint(v[iverts_frontface[1]].y); 
+		buf_strokegen_mesh_pool[base_addr+5] = floatBitsToUint(v[iverts_frontface[1]].z); 
 		
 		PerContourWedgeInfo pcwi; 
 		pcwi.is_border = is_border; 
 		pcwi.wedge_id = wedge_id;
-		pcwi.ifrontface = (!is_back_face(face_orient_012)) ? 1 : 0; /* see "line_adj_to_wing_verts" */ 
+		pcwi.ifrontface = ifrontface; 
 		buf_strokegen_mesh_pool[base_addr+6]  = encode_per_contour_wedge_info(pcwi); 
 	}
 
@@ -306,7 +313,7 @@ void main()
 		peci.is_border = is_border; 
 		peci.is_contour = is_contour;
 		peci.contour_id = is_contour ? compacted_idx : NULL_EDGE; 
-		peci.ifrontface = (!is_back_face(face_orient_012)) ? 1 : 0; /* see "line_adj_to_wing_verts" */
+		peci.ifrontface = ifrontface; 
 		ssbo_edge_to_contour_[wedge_id] = encode_per_wedge_contour_info(peci); 
 	}
 }
@@ -371,6 +378,7 @@ void main()
 	float4x4 mat_camera_proj = ubo_view_matrices_.winmat; 
 
 	vec4 vpos_ws[2]; /* v0, v1 on edge */
+	vec3 vnor_ws[2]; 
 	vec4 vpos_ndc[2]; 
 	vec2 vpos_uv[2]; 
 	if (valid_thread)
@@ -384,6 +392,8 @@ void main()
 		vpos_ws[1].y = uintBitsToFloat(buf_strokegen_mesh_pool[base_addr+4]); 
 		vpos_ws[1].z = uintBitsToFloat(buf_strokegen_mesh_pool[base_addr+5]); 
 		vpos_ws[1].w = 1.0f; 
+
+		PerContourWedgeInfo pcwi = decode_per_contour_wedge_info(buf_strokegen_mesh_pool[base_addr+6]);  
 
 		vpos_ndc[0] = mat_camera_proj * vec4((world_to_view * vpos_ws[0]).xyz, 1.0f); 
 		vpos_ndc[1] = mat_camera_proj * vec4((world_to_view * vpos_ws[1]).xyz, 1.0f); 
@@ -424,10 +434,9 @@ void main()
 		buf_strokegen_mesh_pool[addr_st+1] = floatBitsToUint(vpos_uv[0].y); 
 		buf_strokegen_mesh_pool[addr_st+2] = floatBitsToUint(vpos_uv[1].x);
 		buf_strokegen_mesh_pool[addr_st+3] = floatBitsToUint(vpos_uv[1].y);
-
 		
+
 		/* build contour edge adjacency */
-		PerContourWedgeInfo pcwi = decode_per_contour_wedge_info(buf_strokegen_mesh_pool[base_addr+6]);  
 		bool is_border = pcwi.is_border; 
 		bool backface_border = is_border && !is_border_edge_front_facing(pcwi.ifrontface); 
 
@@ -452,7 +461,7 @@ void main()
 
 
 		/* Rotate fowards around end vert of this edge */
-		ctx.pwci.is_contour = true;
+		ctx.pwci.is_contour = true; 
 		ctx.pwci.contour_id = ContourEdgeIdx; 
 		rot_fwd = true; 
 

@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
+﻿/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /**
  * Shared structures, enums & defines between C++ and GLSL.
@@ -321,12 +321,18 @@ using namespace draw;
     uint base_addr = mesh_pool_addr__zwhclip(MAX_NUM_CONTOUR_EDGES);
     return base_addr + contour_edge_id * 4;
   }
+  /*x2*/
+  static inline uint mesh_pool_addr__edgenor(uint contour_edge_id)
+  {
+    uint base_addr = mesh_pool_addr__edgeuv(MAX_NUM_CONTOUR_EDGES);
+    return base_addr + contour_edge_id * 2;
+  }
   /** } */
 
   
   /* Addressing - topology for filtered mesh edge/verts 
    * - data is temporary and only used in mesh filtering passes
-   * - hence we reuse the remaining space of original topo buffers
+   * - hence we reuse this buffer
   */
   static inline uint ssbo_edge_to_edges_addr__edge_to_selected_edge(uint edge_id, uint num_all_edges)
   { 
