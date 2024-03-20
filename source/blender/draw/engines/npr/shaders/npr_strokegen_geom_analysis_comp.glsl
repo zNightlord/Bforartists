@@ -373,8 +373,9 @@ void diagonalize_curv(vec3 old_u, vec3 old_v,
 	rot_coord_sys(old_u, old_v, new_norm, r_old_u, r_old_v);
 
 	float c = 1, s = 0, tt = 0;
-	// if (likely(kuv != 0.0f)) 
-	// if ((kuv != 0.0f)) 
+    /* jwzw: if kuv == 0, I found it's mostly a planar vertex, 
+     * just skip this branch and we will get min/max curvature of 0s */
+	if ((kuv != 0.0f)) 
     { // Jacobi rotation to diagonalize
 		float h = 0.5f * (kv - ku) / kuv;
 		tt = (h < 0.0f) ?
@@ -489,6 +490,8 @@ uvec3 get_iverts_face(uint iface)
     return uvec3(0u, 1u, 3u);  /* face1 */
 }
 
+/* Code adopted from "TriMesh::need_curvatures()" in TriMesh_curvature.cc 
+ * ----------------------------------------------------------- */
 void calc_vert_curv_tensor_at_face( // v012 CCW
     uvec3 vid, vec3 vpos[3], vec3 vnor[3], 
     uint calc_for_vtx_i/*which vertex to solve, we dont need all 3 tensors*/, 
@@ -526,9 +529,9 @@ void calc_vert_curv_tensor_at_face( // v012 CCW
     * dnvi    := dot(dni, v)
     * => 
     * m = SymmetricMatrix_3x3 [
-    *   sum(ui^2), sum(dot(ui,vi)), 0  
-    *       ~      sum(ui^2+vi^2),  sum(dot(ui,vi))        
-    *       ~            ~          sum(vi^2)        
+    *   sum(ui^2),  sum((ui*vi)   ,  0 
+    *       ~       sum(ui^2+vi^2),  sum(dot(ui,vi))        
+    *       ~             ~          sum(vi^2)        
     * ]
     * w = [sum(dnui*ui), sum(dnui*vi+dnvi*ui), sum(dnvi*vi)]
     * ---------------------------------------- */
@@ -559,12 +562,29 @@ void calc_vert_curv_tensor_at_face( // v012 CCW
     w[1][1] = w[0][0] + w[2][2];
     w[1][2] = w[0][1];
 
+#define USE_SFU_INVERSE_MATRIX 1
+#if defined(USE_SFU_INVERSE_MATRIX)
+    dmat3 w_cpy;
+    for (uint col = 0u; col < 3u; ++col)
+        w_cpy[col] = dvec3(double(w[0][col]), double(w[1][col]), double(w[2][col]));
+    w_cpy[0][1] = w_cpy[1][0];
+    w_cpy[0][2] = w_cpy[2][0];
+    w_cpy[1][2] = w_cpy[2][1]; 
+    dvec3 m_cpy = dvec3(m[0], m[1], m[2]);  
+
+    dvec3 m_sol = (inverse(w_cpy) * m_cpy); 
+    m[0] = float(m_sol[0]);
+    m[1] = float(m_sol[1]);
+    m[2] = float(m_sol[2]);
+#else
     /* 3x3 LU Solve
     * See "ldltdc" and "ldltsl" in "RusinkiewiczEstimator.cs", from http://graphics.zcu.cz/curvature.html */
     float diag[3] = {0,0,0};
     float old_m[3] = { m[0], m[1], m[2] }; 
     ldltdc(w, diag); /* LU Decomposition */
     ldltsl(w, diag, old_m, /*out*/m);
+#endif
+
 
     /* Curvature tensor for selected vertex */
     float c1, c12, c2;
@@ -1088,7 +1108,8 @@ void main()
 #define ssbo_vtx_remesh_len_ ssbo_vcurv_pdirs_k1k2_
                 float remesh_edge_len = uintBitsToFloat(ssbo_vtx_remesh_len_[vert_id]); 
 #undef ssbo_vtx_remesh_len_
-                dbg_line_len = valid_curv ? pcs_dbg_geom_scale_ * remesh_edge_len : .0f;
+                // dbg_line_len = valid_curv ? max_curv * pcs_dbg_geom_scale_ : .0f;
+                dbg_line_len = valid_curv ? max_curv * pcs_dbg_geom_scale_ : .0f;
 
                 vec4 vpos_ws_30 = vec4(vpos, 1.0f);
                 vec4 vpos_ws_32 = vec4(vpos + vnor * dbg_line_len, 1.0f);

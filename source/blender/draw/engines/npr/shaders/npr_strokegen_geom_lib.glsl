@@ -201,8 +201,42 @@ uint get_debug_line_offset(uint line_type)
 
 
 
+// Subdivision Surfaces -------------------------------------------------------
+float sqrt3_vpos_smooth_weight(float n)
+{
+    return (4.0f - 2.0f * cos((2.0f * 3.14159265359f) / n)) / 9.0f;
+}
 
+float sqrt3_vpos_limit_weight(float n, int step, bool step_inf = false)
+{
+    float alpha_n = sqrt3_vpos_smooth_weight(n); 
+    alpha_n *= 3.0f; 
+    float beta_n_inf = alpha_n / (1.0f + alpha_n); 
 
+    if (step_inf) return beta_n_inf; 
+
+    float gamma_n_step = pow(2.0f/3.0f - alpha_n, step); 
+    return gamma_n_step; 
+}
+
+vec3 sqrt3_limit_vpos(vec3 vpos, vec3 vpos_sum, float n, int step, bool step_inf)
+{
+    float w = sqrt3_vpos_limit_weight(n, step, step_inf); 
+    vec3 lim_pos_inf = (1.0f - w) * vpos + w * (vpos_sum / n); 
+    if (step_inf) return lim_pos_inf; 
+    return w * vpos + (1.0f - w) * lim_pos_inf;
+}
+
+float loop_vpos_smooth_weight(float n)
+{ /* mask for interior verts in loop subdiv */
+    /* see "Subdivision methods for geometric design - Ch.7.3 Smooth Subdivision for Triangle Meshes" */
+    
+    if (n == 6.0f) return 3.0f / 8.0f; // fast path, actually same as the formula below
+
+    float alpha_n = (3.0f/8.0f) + (cos((2.0f * 3.14159265359f) / n) / 4.0f);
+    alpha_n = (5.0f/8.0f) - alpha_n * alpha_n;
+    return alpha_n; 
+}
 
 
 

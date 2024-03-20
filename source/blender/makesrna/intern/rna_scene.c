@@ -7325,7 +7325,10 @@ static void rna_def_scene_npr(BlenderRNA *brna)
   append_npr_render_debug_param_float(srna, &prop, "npr_test_val_17");
   append_npr_render_debug_param_float(srna, &prop, "npr_test_val_18");
   append_npr_render_debug_param_float(srna, &prop, "npr_test_val_19");
-
+  append_npr_render_debug_param_float(srna, &prop, "npr_test_val_20");
+  append_npr_render_debug_param_float(srna, &prop, "npr_test_val_21");
+  append_npr_render_debug_param_float(srna, &prop, "npr_test_val_22");
+  append_npr_render_debug_param_float(srna, &prop, "npr_test_val_23");
 }
 
 static void rna_def_scene_eevee(BlenderRNA *brna)

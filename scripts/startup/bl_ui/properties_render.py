@@ -924,6 +924,11 @@ class RENDER_PT_npr_test(RenderButtonsPanel, Panel):
         col.prop(props, "npr_test_val_18", text="dbg_line_length")
         col.prop(props, "npr_test_val_19", text="dbg_curv_K_val")
 
+        col.prop(props, "npr_test_val_20", text="")
+        col.prop(props, "npr_test_val_21", text="")
+        col.prop(props, "npr_test_val_22", text="")
+        col.prop(props, "npr_test_val_23", text="")
+
 
 
 classes = (

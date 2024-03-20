@@ -110,9 +110,8 @@ namespace blender::npr::strokegen
     meshing_params.remeshing_delaunay_flip_iters = (int)(scene_eval->npr.npr_test_val_17 + 1e-10f);
 
     surf_dbg_ctx.dbg_line_length = scene_eval->npr.npr_test_val_18;
-
     meshing_params.dbg_subdiv_type = (int)(scene_eval->npr.npr_test_val_19 + 1e-10f);
-
+    meshing_params.remeshing_subdiv_limit_dist = scene_eval->npr.npr_test_val_20; 
 
     // meshing_params.geodist_deviation = scene_eval->npr.npr_test_val_3;
     // meshing_params.alternate_filter_0 = (GPUMeshQuadricFilter)((
@@ -170,7 +169,7 @@ namespace blender::npr::strokegen
     surf_analysis_ctx.ssbo_varea_ = buffers_.ssbo_mesh_buffer_reuse_5_;
 
     surf_analysis_ctx.order_1_only_selected = false;
-    surf_analysis_ctx.set_calc_vert_curvature(false);
+    surf_analysis_ctx.set_calc_vert_curvature(true);
     surf_analysis_ctx.ssbo_edge_vtensors_ = buffers_.ssbo_mesh_buffer_reuse_7_;
     surf_analysis_ctx.ssbo_vcurv_tensor_ = buffers_.ssbo_mesh_buffer_reuse_1_;
     surf_analysis_ctx.ssbo_vcurv_pdirs_k1k2_ = buffers_.ssbo_mesh_buffer_reuse_2_;
@@ -200,6 +199,10 @@ namespace blender::npr::strokegen
     surf_dbg_ctx_cpy.dbg_vert_curv = false; 
     append_subpass_surf_geom_analysis(
         rsc_handle, num_verts, num_edges, surf_analysis_ctx, surf_dbg_ctx_cpy);
+
+    // Note: in fact, this smoothing is not very necessary.
+    // we don't really have that much of nan/inf curvatures
+    // but I still do this to ensure the curvature is robust
     int num_steps_vcurv_smooth = 2 * 1 /*must be even*/; 
     for (int step_vcurv_smooth = 0; step_vcurv_smooth < num_steps_vcurv_smooth; ++step_vcurv_smooth) {
       append_subpass_vertex_curv_smoothing(

@@ -321,12 +321,6 @@ using namespace draw;
     uint base_addr = mesh_pool_addr__zwhclip(MAX_NUM_CONTOUR_EDGES);
     return base_addr + contour_edge_id * 4;
   }
-  /*x2*/
-  static inline uint mesh_pool_addr__edgenor(uint contour_edge_id)
-  {
-    uint base_addr = mesh_pool_addr__edgeuv(MAX_NUM_CONTOUR_EDGES);
-    return base_addr + contour_edge_id * 2;
-  }
   /** } */
 
   

@@ -1368,7 +1368,7 @@ float get_adaptive_remesh_len(float k/*max_curvature*/, float ref_edge_len)
 {
 
     float targ_edge_len_min = ref_edge_len * .125f; // scales according the how many split/collapse we want 
-    float targ_edge_len_max = ref_edge_len * 8.0f;
+    float targ_edge_len_max = ref_edge_len * 128.0f;
 
     const float epsi = 1e-3f; 
     if (k < 1e-10f) return targ_edge_len_max; 
