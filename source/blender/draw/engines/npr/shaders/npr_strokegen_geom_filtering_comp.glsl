@@ -807,7 +807,7 @@ void main()
     bool rot_fwd = true;
     VE_CIRCULATOR(vwlh, ve_circulator__vcurv_smooth, ctx, rot_fwd); 
     
-    float vurv_new = vcurv; 
+    float vcurv_new = vcurv; 
     { /* Calculate new curvature */ 
         bool valid_vcurv = valid_vcurv_max(vcurv); 
         bool valid_vcurv_sum = ctx.vcurv_weight_sum > .0f;  
@@ -815,9 +815,9 @@ void main()
         { 
             ctx.vcurv_summed = ctx.vcurv_summed / ctx.vcurv_weight_sum;
             if (valid_vcurv)
-                vurv_new = mix(vcurv, ctx.vcurv_summed, .1f); 
+                vcurv_new = mix(vcurv, ctx.vcurv_summed, .1f); 
             else
-                vurv_new = ctx.vcurv_summed; 
+                vcurv_new = ctx.vcurv_summed; 
         }
     }
 
@@ -828,10 +828,11 @@ void main()
 
     if (valid_thread)
     {
-        st_vcurv_max_smoothed(vert_id, vcurv/* vurv_new */);  
+        // vcurv_new = vcurv; 
+        st_vcurv_max_smoothed(vert_id, vcurv_new);  
 #if defined(_KERNEL_MULTICOMPILE__SURF_FILTERING__VCURVE_SMOOTHING__OUTPUT_REMESH_LEN)
-        float edge_len = get_adaptive_remesh_len(vurv_new, ctx.ave_edge_len); 
-        if (!valid_vcurv_max(vurv_new)) edge_len = ctx.ave_edge_len;
+        float edge_len = get_adaptive_remesh_len(vcurv_new, ctx.ave_edge_len); 
+        if (!valid_vcurv_max(vcurv_new)) edge_len = ctx.ave_edge_len;
         st_vtx_remesh_len(vert_id, edge_len);
 #endif
     }

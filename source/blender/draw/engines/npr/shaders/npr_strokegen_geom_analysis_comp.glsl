@@ -1109,7 +1109,7 @@ void main()
                 float remesh_edge_len = uintBitsToFloat(ssbo_vtx_remesh_len_[vert_id]); 
 #undef ssbo_vtx_remesh_len_
                 // dbg_line_len = valid_curv ? max_curv * pcs_dbg_geom_scale_ : .0f;
-                dbg_line_len = valid_curv ? max_curv * pcs_dbg_geom_scale_ : .0f;
+                dbg_line_len = valid_curv ? remesh_edge_len * pcs_dbg_geom_scale_ : .0f;
 
                 vec4 vpos_ws_30 = vec4(vpos, 1.0f);
                 vec4 vpos_ws_32 = vec4(vpos + vnor * dbg_line_len, 1.0f);
