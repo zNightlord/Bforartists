@@ -608,10 +608,20 @@ void calc_vert_curv_tensor_at_face( // v012 CCW
 
 void main()
 {
-    uint wedge = gl_GlobalInvocationID.x; 
     uint groupIdx = gl_LocalInvocationID.x; 
-    uint num_edges = pcs_edge_count_ + ssbo_dyn_mesh_counters_out_.num_edges; 
-    bool valid_thread = wedge < num_edges; 
+    
+    uint wedge; bool valid_thread; 
+    if (0 < pcs_only_selected_verts_/* note: verts on selection border will fuck this up */)
+    {
+        uint sel_edge_id = gl_GlobalInvocationID.x; 
+        get_wedge_id_from_selected_edge(sel_edge_id, /*out*/wedge, /*out*/valid_thread); 
+    }else
+    {
+        wedge = gl_GlobalInvocationID.x; 
+        uint num_edges = pcs_edge_count_ + ssbo_dyn_mesh_counters_out_.num_edges; 
+        valid_thread = wedge < num_edges; 
+    }
+
 
     uvec4 v;
     Load4(ssbo_edge_to_vert_, wedge, v);
@@ -1015,10 +1025,21 @@ bool calc_vert_attr_order_1(
 void main()
 {
     uint groupIdx = gl_LocalInvocationID.x; 
-    uint vert_id = gl_GlobalInvocationID.x; 
-    uint num_verts = get_vert_count(); 
-    bool valid_thread = vert_id < num_verts; 
 
+    uint vert_id; 
+    bool valid_thread; 
+    if (0 < pcs_only_selected_verts_)
+    {
+        uint sel_vert_id = gl_GlobalInvocationID.x; 
+        get_vert_id_from_selected_vert(sel_vert_id, /*out*/vert_id, valid_thread);
+    }
+    else
+    {
+        vert_id = gl_GlobalInvocationID.x; 
+        uint num_verts = get_vert_count(); 
+        valid_thread = vert_id < num_verts; 
+    }
+    
     uint dbg_line_offset = ssbo_bnpr_mesh_pool_counters_.num_dbg_vnor_lines; // after normal lines
 
     vec3 vpos = ld_vpos(vert_id); 
@@ -1108,8 +1129,8 @@ void main()
 #define ssbo_vtx_remesh_len_ ssbo_vcurv_pdirs_k1k2_
                 float remesh_edge_len = uintBitsToFloat(ssbo_vtx_remesh_len_[vert_id]); 
 #undef ssbo_vtx_remesh_len_
-                // dbg_line_len = valid_curv ? max_curv * pcs_dbg_geom_scale_ : .0f;
-                dbg_line_len = valid_curv ? remesh_edge_len * pcs_dbg_geom_scale_ : .0f;
+                dbg_line_len = valid_curv ? max_curv * pcs_dbg_geom_scale_ : .0f;
+                // dbg_line_len = valid_curv ? remesh_edge_len * pcs_dbg_geom_scale_ : .0f;
 
                 vec4 vpos_ws_30 = vec4(vpos, 1.0f);
                 vec4 vpos_ws_32 = vec4(vpos + vnor * dbg_line_len, 1.0f);
@@ -1129,7 +1150,15 @@ void main()
         vec2 curv_fin = vec2(ctx.mu1, ctx.mu2); 
         bool valid_curv = !((any(isnan(curv_fin)) || any(isinf(curv_fin))) || ctx.border);
         if (!valid_curv) ctx.mu1 = ctx.mu2 = .0f;  
+        
         float max_curv = ctx.mu1 + sqrt(max(.0f, ctx.mu1 * ctx.mu1 - abs(ctx.mu2)));
+        if (!valid_curv) max_curv = -1.0f; 
+
+        if (valid_thread)
+        {
+            // st_vcurv_pdirs_k1k2(vert_id, pdir1, curv_1_fin, pdir2, curv_2_fin);
+            st_vcurv_max(vert_id, max_curv); 
+        }
 
         // debug lines
         if (0 < pcs_output_dbg_geom_)
@@ -1184,19 +1213,20 @@ void main()
         vec3 pdir2 = vec3(pdirs[0][2], pdirs[1][2], pdirs[2][2]); 
         evals /= vtx_area_measure; 
 
+        
+        float max_curv = max(abs(evals[0]), abs(evals[1])); 
+        
+        bool valid_curv = !(isnan(max_curv) || isinf(max_curv));
+        if (!valid_curv)
+            max_curv = evals[0] = evals[1] = -1.0f; 
         if (valid_thread)
         {
             // st_vcurv_pdirs_k1k2(vert_id, pdir0, evals[0], pdir1, evals[1]);
-
-            float max_curv = max(abs(evals[0]), abs(evals[1])); 
-            bool valid_curv = !(isnan(max_curv) || isinf(max_curv));
-            if (!valid_curv)
-                max_curv = evals[0] = evals[1] = -1.0f; 
             st_vcurv_max(vert_id, max_curv); 
         }
 
         // debug lines
-        if (0 < pcs_output_dbg_geom_)
+        if (valid_thread && 0 < pcs_output_dbg_geom_)
         {
             VertFlags vf = decode_vert_flags(ssbo_vert_flags_[vert_id]); 
             bool dbg_vtx_curv = (!vf.dupli) && (!vf.del_by_collapse) && valid_thread; 
@@ -1230,6 +1260,8 @@ void main()
                 float remesh_edge_len = uintBitsToFloat(ssbo_vtx_remesh_len_[vert_id]); 
 #undef ssbo_vtx_remesh_len_
                 dbg_line_len = pcs_dbg_geom_scale_ * remesh_edge_len;
+                // dbg_line_len = pcs_dbg_geom_scale_ * max_curv;
+                // dbg_line_len = valid_curv ? .0f : pcs_dbg_geom_scale_;
                 vec4 vpos_ws_20 = vec4(vpos, 1.0f);
                 vec4 vpos_ws_21 = vec4(vpos + normalize(vnor) * dbg_line_len, 1.0f);
                 vpos_enc = floatBitsToUint(vpos_ws_20.xyz);

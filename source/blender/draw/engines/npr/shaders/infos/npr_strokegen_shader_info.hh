@@ -1018,7 +1018,8 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_edge_collapse_execute)
     .additional_info("bnpr_meshing_edge_collapse")
     .define("_KERNEL_MULTICOMPILE__EDGE_COLLAPSE", "1")
     .define("_KERNEL_MULTICOMPILE__EDGE_COLLAPSE_EXECUTE", "1")
-    .define("COMPACTION_LIB_EXCLUDE_DEFAULT_CODEGEN", "1"); 
+    .define("COMPACTION_LIB_EXCLUDE_DEFAULT_CODEGEN", "1")
+    .define("INCLUDE_VERTEX_REMESH_LEN", "1"); 
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -1244,25 +1245,40 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_analysis_order_1_main_curvature)
     .do_static_compilation(true)
     .additional_info("bnpr_geom_analysis_order_1_main")
 
-    // Method A
-    .define("_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__CURVTENSOR", "1")
-
-    /* Method B for principle dirs & curvatures */
-    // .define("_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__INTERPO_2RING", "1")
-    // .define("_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__INTERPO_CURVTENSOR", "1")
-    // // .define("INCLUDE_VERTEX_RADIAL_NORMAL", "1")
-    // .define("_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1_GRAD_VDOTN", "1")
-
-    /* Method B for Gaussian & Mean curvatures */
-    // .define("_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__INTERPO_2RING", "1")
-    // .define("_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__INTERPO_CURVATURE", "1")
-
     .define("_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__MAIN", "1")
     .define("INCLUDE_VERTEX_CURV_TENSOR", "1")
     .define("INCLUDE_VERTEX_CURV_MAX", "1")
     .storage_buf(NUM_SSBO_1 + 0, Qualifier::READ_WRITE, "uint", "ssbo_edge_vtensors_[]")
     .storage_buf(NUM_SSBO_1 + 1, Qualifier::READ_WRITE, "uint", "ssbo_vcurv_pdirs_k1k2_[]")
     .storage_buf(NUM_SSBO_1 + 2, Qualifier::READ_WRITE, "uint", "ssbo_vcurv_max_[]"); 
+
+/* Rusinkiewicz's Curvature Estimator
+ * Outputs both Curvature and Tensor
+ * Requires 2 passes, one per-edge, one per-vertex 
+ * https://github.com/Forceflow/trimesh2/blob/main/libsrc/TriMesh_curvature.cc */
+GPU_SHADER_CREATE_INFO(bnpr_geom_analysis_order_1_main_curvature_rusinkiewicz)
+    .do_static_compilation(true)
+    .additional_info("bnpr_geom_analysis_order_1_main_curvature")
+    .define("_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__CURVTENSOR", "1"); 
+
+/* JacquesOlivierLachaud's Curvature Estimator
+ * Outputs both Curvature and Tensor, single pass
+ * https://github.com/dcoeurjo/CorrectedNormalCurrent/blob/master/CorrectedNormalCurrentFormula.h
+ * https://dgtal-team.github.io/doc-nightly/moduleCurvatureMeasures.html
+ * https://github.com/CGAL/cgal/issues/7063 */
+GPU_SHADER_CREATE_INFO(bnpr_geom_analysis_order_1_main_curvature_jacques)
+    .do_static_compilation(true)
+    .additional_info("bnpr_geom_analysis_order_1_main_curvature")
+    .define("_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__INTERPO_2RING", "1")
+    .define("_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__INTERPO_CURVTENSOR", "1")
+    .define("_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1_GRAD_VDOTN", "1")
+    // .define("INCLUDE_VERTEX_RADIAL_NORMAL", "1")
+    
+    /* Only for solving Gaussian & Mean curvatures, but seems not correct, 
+     * need fix if we want this cheaper version */
+    // .define("_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__INTERPO_2RING", "1")
+    // .define("_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__INTERPO_CURVATURE", "1")
+    ; 
 
 #undef NUM_SSBO_1
 #undef NUM_SSBO_BASE

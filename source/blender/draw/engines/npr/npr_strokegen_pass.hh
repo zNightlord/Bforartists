@@ -279,7 +279,12 @@ public:
 
     void set_calc_vert_normal(bool val) { calc_vert_normal = val; }
     void set_calc_vert_voronoi_area(bool val) { calc_vert_voronoi_area = val; }
-    void set_calc_vert_curvature(bool val) 
+
+    enum CurvatureEstimator {
+      Rusinkiewicz = 0,
+      Jacques
+    } curvature_estimator;
+    void set_calc_vert_curvature(bool val, CurvatureEstimator = Jacques) 
     { 
       calc_vert_curvature = val;
       if (calc_vert_curvature) {
@@ -295,10 +300,14 @@ public:
     }
   };
   void GetSurfaceAnalysisContext_InitPass(SurfaceAnalysisContext &surf_analysis_ctx) const;
+  void GetSurfaceAnalysisContext_VertexRelocationPass(
+      SurfaceAnalysisContext &surf_analysis_ctx) const;
   void GetSurfaceAnalysisContext_RemeshPass(SurfaceAnalysisContext &surf_analysis_ctx) const;
   void GetSurfaceAnalysisContext_ContourInsertionPass(
       SurfaceAnalysisContext &surf_analysis_ctx) const;
-  void append_subpasses_analyse_curvature(ResourceHandle& rsc_handle,
+  void GetSurfaceAnalysisContext_CurvatureForAdaptiveRemeshing(
+      SurfaceAnalysisContext &surf_analysis_ctx) const;
+  void append_subpasses_estimate_curvature_for_adaptive_remeshing(ResourceHandle& rsc_handle,
                                           int num_edges,
                                           int num_verts, bool output_dbg_lines = false);
   void append_subpasses_sqrt_subdiv(int num_edges, int num_verts);

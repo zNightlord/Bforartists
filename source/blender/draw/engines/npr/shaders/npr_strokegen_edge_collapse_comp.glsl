@@ -41,7 +41,7 @@ void st_vpos(uint vtx_id, vec3 vpos)
     Store3(ssbo_vbo_full_, vtx_id, vpos);
 }
 
-#if defined(_KERNEL_MULTICOMPILE__EDGE_COLLAPSE_COMPACT)
+#if defined(_KERNEL_MULTICOMPILE__EDGE_COLLAPSE_COMPACT) || defined(_KERNEL_MULTICOMPILE__EDGE_COLLAPSE_EXECUTE)
 float get_collapse_edge_len_max(uint v1, uint v3)
 {
     float vlen_1 = ld_vtx_remesh_len(v1); 
@@ -51,6 +51,17 @@ float get_collapse_edge_len_max(uint v1, uint v3)
     // return (3.0f/5.0f) * targ_len;
      
     // return calc_remesh_edge_len_min(pcs_remesh_edge_len_); 
+}
+
+float get_collapse_vert_remesh_len(uint v1, uint v3)
+{
+    float vlen_1 = ld_vtx_remesh_len(v1); 
+    float vcurv_1 = average_adaptive_remesh_len_to_vcurv(vlen_1); 
+
+    float vlen_3 = ld_vtx_remesh_len(v3);
+    float vcurv_3 = average_adaptive_remesh_len_to_vcurv(vlen_3); 
+
+    return get_adaptive_remesh_len(.5f * (vcurv_1 + vcurv_3)); 
 }
 #endif
 
@@ -809,6 +820,10 @@ void main()
 
     /* Update v1 flags */
     update_vert_flags__mov_by_collapse(v1); 
+
+    /* Update adaptive remesh length */
+    float remesh_len = get_collapse_vert_remesh_len(v1, v3); 
+    st_vtx_remesh_len(v1, remesh_len); 
 
 #endif
 

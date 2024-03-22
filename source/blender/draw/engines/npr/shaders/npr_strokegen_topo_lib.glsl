@@ -1364,20 +1364,31 @@ float calc_remesh_edge_len_max(float targ_edge_len) // edge longer than this wil
 /* Adaptive Remeshing Length 
  * see "Adaptive Remeshing for Real-Time Mesh Deformation" 
 */
-float get_adaptive_remesh_len(float k/*max_curvature*/, float ref_edge_len)
+#define EPSI_ADAPTIVE_REMESH_LEN 1e-3f
+float get_adaptive_remesh_len(float k/*max_curvature*/, float ref_edge_len = -1.0f)
 {
+    const float epsi = EPSI_ADAPTIVE_REMESH_LEN; 
 
-    float targ_edge_len_min = ref_edge_len * .125f; // scales according the how many split/collapse we want 
-    float targ_edge_len_max = ref_edge_len * 128.0f;
-
-    const float epsi = 1e-3f; 
-    if (k < 1e-10f) return targ_edge_len_max; 
+    if (ref_edge_len > .0f)
+    { // >.0f: use ref_edge_len as the target edge length 
+        float targ_edge_len_min = ref_edge_len * .125f; // scales according the how many split/collapse we want 
+        float targ_edge_len_max = ref_edge_len * 128.0f;
+        if (k < 1e-10f) return targ_edge_len_max; 
+    }
 
     float l = epsi * ((6.0f / k) - (3.0f * epsi)); 
     l = sqrt(max(.0f, l)); 
-    // l = clamp(l, targ_edge_len_min, targ_edge_len_max);
+    // if (ref_edge_len > .0f)
+    //     l = clamp(l, targ_edge_len_min, targ_edge_len_max);
 
     return l; 
+}
+
+float average_adaptive_remesh_len_to_vcurv(float l)
+{
+    const float epsi = EPSI_ADAPTIVE_REMESH_LEN; 
+    float k = epsi * (6.0f / (l*l + 3.0f*epsi*epsi));  
+    return k;  
 }
 
 

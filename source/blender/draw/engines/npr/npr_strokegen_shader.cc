@@ -243,9 +243,10 @@ const char *StrokeGenShaderModule::static_shader_create_info_name_get(eShaderTyp
 
     case MESH_ANALYSE_VERT_CURV_PASS_0:
       return "bnpr_geom_analysis_order_1_vert_curv_pass_0";
-    case MESH_ANALYSE_VERT_CURV_PASS_1:
-      return "bnpr_geom_analysis_order_1_main_curvature"; 
-
+    case MESH_ANALYSE_VERT_CURV_PASS_1_RUSINKIEWICZ:
+      return "bnpr_geom_analysis_order_1_main_curvature_rusinkiewicz"; 
+    case MESH_ANALYSE_VERT_CURV_PASS_1_JACQUES:
+      return "bnpr_geom_analysis_order_1_main_curvature_jacques"; 
 
     case SCAN_TEST_AGGREGATE:
       return "bnpr_scan_test_aggregate";

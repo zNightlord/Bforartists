@@ -66,8 +66,12 @@ float get_split_edge_len_min(uint v1, uint v3)
 float get_split_vert_len(uint v1, uint v3)
 {
     float vlen_1 = ld_vtx_remesh_len(v1); 
+    float vcurv_1 = average_adaptive_remesh_len_to_vcurv(vlen_1); 
+
     float vlen_3 = ld_vtx_remesh_len(v3);
-    return .5f * (vlen_1 + vlen_3); 
+    float vcurv_3 = average_adaptive_remesh_len_to_vcurv(vlen_3); 
+
+    return get_adaptive_remesh_len(.5f * (vcurv_1 + vcurv_3)); 
 }
 
 

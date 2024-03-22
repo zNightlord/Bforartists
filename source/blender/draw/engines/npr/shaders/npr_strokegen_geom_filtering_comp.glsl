@@ -501,6 +501,11 @@ bool is_old_vert_loop(VertFlags vf)
 
 
 #if defined(_KERNEL_MULTICOMPILE__SURF_FILTERING__VCURVE_SMOOTHING)
+
+    #if defined(_KERNEL_MULTICOMPILE__EDGE_SPLIT_EXECUTE)
+        #define ssbo_vcurv_max_temp_ ssbo_epos_subd_ 
+    #endif
+
 float ld_vcurv_max_smoothed(uint vert_id)
 {
     if (pcs_vcurv_smooth_iter_ % 2u == 0u)
@@ -794,14 +799,14 @@ void main()
     if(!valid_thread) return;
 
     float vcurv = ld_vcurv_max(vert_id); 
-#if defined(_KERNEL_MULTICOMPILE__SURF_FILTERING__VCURVE_SMOOTHING__OUTPUT_REMESH_LEN)
+    #if defined(_KERNEL_MULTICOMPILE__SURF_FILTERING__VCURVE_SMOOTHING__OUTPUT_REMESH_LEN)
     vec3 vpos = ld_vpos(vert_id); 
-#endif
+    #endif
 
     VtxCurvatureSmoothingContext ctx = init_vcurv_smooth_context(
-#if defined(_KERNEL_MULTICOMPILE__SURF_FILTERING__VCURVE_SMOOTHING__OUTPUT_REMESH_LEN)
+    #if defined(_KERNEL_MULTICOMPILE__SURF_FILTERING__VCURVE_SMOOTHING__OUTPUT_REMESH_LEN)
         vpos
-#endif
+    #endif
     );
     VertWedgeListHeader vwlh = decode_vert_wedge_list_header(ssbo_vert_to_edge_list_header_[vert_id]); 
     bool rot_fwd = true;
@@ -828,7 +833,6 @@ void main()
 
     if (valid_thread)
     {
-        // vcurv_new = vcurv; 
         st_vcurv_max_smoothed(vert_id, vcurv_new);  
 #if defined(_KERNEL_MULTICOMPILE__SURF_FILTERING__VCURVE_SMOOTHING__OUTPUT_REMESH_LEN)
         float edge_len = get_adaptive_remesh_len(vcurv_new, ctx.ave_edge_len); 
