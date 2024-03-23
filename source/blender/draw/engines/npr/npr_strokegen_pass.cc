@@ -225,7 +225,7 @@ namespace blender::npr::strokegen
   void StrokeGenPassModule::append_subpasses_estimate_curvature_for_adaptive_remeshing(
     ResourceHandle &rsc_handle, int num_edges, int num_verts, bool output_dbg_lines)
   {
-    const bool debug_remesh_edge_len = true; 
+    const bool debug_remesh_edge_len = false; 
 
     SurfaceAnalysisContext surf_analysis_ctx;
     GetSurfaceAnalysisContext_CurvatureForAdaptiveRemeshing(surf_analysis_ctx);

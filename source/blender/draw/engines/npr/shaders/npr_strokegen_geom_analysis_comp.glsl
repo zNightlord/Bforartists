@@ -1225,6 +1225,19 @@ void main()
             st_vcurv_max(vert_id, max_curv); 
         }
 
+
+        // Cusp detection
+        mat4 view_to_world = ubo_view_matrices_.viewinv;
+        bool is_persp = (ubo_view_matrices_.winmat[3][3] == 0.0);
+        vec3 cam_pos_ws = view_to_world[3].xyz; /* see "#define cameraPos ViewMatrixInverse[3].xyz" */
+        
+        vec3 v = cam_pos_ws - vpos; 
+        vec3 v_ = normalize(v); 
+
+        vec2 cusp_func = vec2(dot(v, pdir0), dot(v, pdir1)); 
+        cusp_func *= cusp_func;
+        cusp_func.x = dot(cusp_func, evals.xy); 
+
         // debug lines
         if (valid_thread && 0 < pcs_output_dbg_geom_)
         {
@@ -1239,6 +1252,7 @@ void main()
             if (dbg_vtx_curv)
             {
                 float dbg_line_len = min(ctx.ave_edge_len * .4f, pcs_dbg_geom_scale_ * .12f);
+                dbg_line_len = .0f; 
 
                 vec4 vpos_ws_00 = vec4(vpos - normalize(pdir0) * dbg_line_len, 1.0f);
                 vec4 vpos_ws_01 = vec4(vpos + normalize(pdir0) * dbg_line_len, 1.0f);
@@ -1259,9 +1273,11 @@ void main()
 #define ssbo_vtx_remesh_len_ ssbo_vcurv_pdirs_k1k2_
                 float remesh_edge_len = uintBitsToFloat(ssbo_vtx_remesh_len_[vert_id]); 
 #undef ssbo_vtx_remesh_len_
-                dbg_line_len = pcs_dbg_geom_scale_ * remesh_edge_len;
+                dbg_line_len = pcs_dbg_geom_scale_;
                 // dbg_line_len = pcs_dbg_geom_scale_ * max_curv;
+                // dbg_line_len = pcs_dbg_geom_scale_ * remesh_edge_len;
                 // dbg_line_len = valid_curv ? .0f : pcs_dbg_geom_scale_;
+                // dbg_line_len = pcs_dbg_geom_scale_ * cusp_func.x; 
                 vec4 vpos_ws_20 = vec4(vpos, 1.0f);
                 vec4 vpos_ws_21 = vec4(vpos + normalize(vnor) * dbg_line_len, 1.0f);
                 vpos_enc = floatBitsToUint(vpos_ws_20.xyz);
