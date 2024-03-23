@@ -396,6 +396,8 @@ namespace blender::npr::strokegen
     surf_dbg_ctx_cpy.dbg_vert_curv = false;
     append_subpass_surf_geom_analysis(
         rsc_handle, num_verts, num_edges, surf_analysis_ctx_init, surf_dbg_ctx_cpy);
+    append_subpasses_estimate_curvature_for_adaptive_remeshing(
+        rsc_handle, num_edges, num_verts, false);
 
 
     // GPU Remesher -------------------------------------------------------------------------
@@ -407,9 +409,6 @@ namespace blender::npr::strokegen
 
     for (int iter_remesh = 0; iter_remesh < meshing_params.remeshing_iters; ++iter_remesh)
     {
-      append_subpasses_estimate_curvature_for_adaptive_remeshing(
-          rsc_handle, num_edges, num_verts, iter_remesh == meshing_params.remeshing_iters - 1);
-
       int num_edge_split_iters = meshing_params.remeshing_split_iters;
         for (int iter_edge_split = 0; iter_edge_split < num_edge_split_iters; ++iter_edge_split) {
           if (should_remesh_when_dbg()) {
@@ -431,6 +430,9 @@ namespace blender::npr::strokegen
             dbg_step++; 
           }
         }
+
+      append_subpasses_estimate_curvature_for_adaptive_remeshing(
+        rsc_handle, num_edges, num_verts, iter_remesh == meshing_params.remeshing_iters - 1);
 
       int num_edge_collapse_iters = meshing_params.remeshing_collapse_iters;
         for (int iter_edge_collapse = 0; iter_edge_collapse < num_edge_collapse_iters;
