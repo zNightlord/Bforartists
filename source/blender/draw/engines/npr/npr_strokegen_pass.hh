@@ -306,6 +306,8 @@ public:
       SurfaceAnalysisContext &surf_analysis_ctx) const;
   void GetSurfaceAnalysisContext_ContourInsertionPass(
       SurfaceAnalysisContext &surf_analysis_ctx) const;
+  void GetSurfaceAnalysisContext_CuspDetectionPass(
+      SurfaceAnalysisContext &surf_analysis_ctx) const;
   void GetSurfaceAnalysisContext_CurvatureForAdaptiveRemeshing(
       SurfaceAnalysisContext &surf_analysis_ctx) const;
   void append_subpasses_estimate_curvature_for_adaptive_remeshing(ResourceHandle& rsc_handle,

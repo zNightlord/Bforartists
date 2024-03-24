@@ -161,6 +161,23 @@ namespace blender::npr::strokegen
     surf_analysis_ctx.ssbo_vcurv_pdirs_k1k2_ = buffers_.ssbo_mesh_buffer_reuse_2_;
   }
 
+  void StrokeGenPassModule::GetSurfaceAnalysisContext_CurvatureForAdaptiveRemeshing(
+      SurfaceAnalysisContext &surf_analysis_ctx) const
+  {
+    surf_analysis_ctx.order_0_only_selected = false;
+    surf_analysis_ctx.set_calc_vert_normal(true);
+    surf_analysis_ctx.ssbo_vnor_ = buffers_.ssbo_vnor_;
+    surf_analysis_ctx.set_calc_vert_voronoi_area(true);
+    surf_analysis_ctx.ssbo_varea_ = buffers_.ssbo_mesh_buffer_reuse_5_;
+
+    surf_analysis_ctx.order_1_only_selected = true;
+    surf_analysis_ctx.set_calc_vert_curvature(true,
+                                              SurfaceAnalysisContext::CurvatureEstimator::Jacques);
+    surf_analysis_ctx.ssbo_edge_vtensors_ = buffers_.ssbo_mesh_buffer_reuse_7_;
+    surf_analysis_ctx.ssbo_vcurv_tensor_ = buffers_.ssbo_mesh_buffer_reuse_1_;
+    surf_analysis_ctx.ssbo_vcurv_pdirs_k1k2_ = buffers_.ssbo_mesh_buffer_reuse_2_;
+  }
+
   void StrokeGenPassModule::GetSurfaceAnalysisContext_VertexRelocationPass(
       SurfaceAnalysisContext &surf_analysis_ctx) const
   {
@@ -194,13 +211,13 @@ namespace blender::npr::strokegen
     surf_analysis_ctx.ssbo_vcurv_pdirs_k1k2_ = buffers_.ssbo_mesh_buffer_reuse_2_;
   }
 
-  void StrokeGenPassModule::GetSurfaceAnalysisContext_CurvatureForAdaptiveRemeshing(
+  void StrokeGenPassModule::GetSurfaceAnalysisContext_CuspDetectionPass(
       SurfaceAnalysisContext &surf_analysis_ctx) const
   {
     surf_analysis_ctx.order_0_only_selected = false;
     surf_analysis_ctx.set_calc_vert_normal(true);
     surf_analysis_ctx.ssbo_vnor_ = buffers_.ssbo_vnor_;
-    surf_analysis_ctx.set_calc_vert_voronoi_area(true);
+    surf_analysis_ctx.set_calc_vert_voronoi_area(false);
     surf_analysis_ctx.ssbo_varea_ = buffers_.ssbo_mesh_buffer_reuse_5_;
 
     surf_analysis_ctx.order_1_only_selected = true;
@@ -398,6 +415,12 @@ namespace blender::npr::strokegen
 
     for (int iter_remesh = 0; iter_remesh < meshing_params.remeshing_iters; ++iter_remesh)
     {
+      append_subpasses_estimate_curvature_for_adaptive_remeshing(
+          rsc_handle,
+          num_edges,
+          num_verts,
+          false /*iter_remesh == meshing_params.remeshing_iters - 1*/);
+
       int num_edge_split_iters = meshing_params.remeshing_split_iters;
         for (int iter_edge_split = 0; iter_edge_split < num_edge_split_iters; ++iter_edge_split) {
           if (should_remesh_when_dbg()) {
@@ -419,9 +442,6 @@ namespace blender::npr::strokegen
             dbg_step++; 
           }
         }
-
-      append_subpasses_estimate_curvature_for_adaptive_remeshing(
-        rsc_handle, num_edges, num_verts, iter_remesh == meshing_params.remeshing_iters - 1);
 
       int num_edge_collapse_iters = meshing_params.remeshing_collapse_iters;
         for (int iter_edge_collapse = 0; iter_edge_collapse < num_edge_collapse_iters;
@@ -486,23 +506,16 @@ namespace blender::npr::strokegen
       }
     }
 
-
-    // Surface analysis: evaluate vertex normal & curvature
-    // surf_dbg_ctx.dbg_vert_normal = surf_dbg_ctx.dbg_vert_curv = true;
-    // SurfaceAnalysisContext surf_analysis_ctx;
-    // surf_analysis_ctx.order_0_only_selected = false;
-    // surf_analysis_ctx.set_calc_vert_normal(true);
-    // surf_analysis_ctx.ssbo_vnor_ = buffers_.ssbo_mesh_buffer_reuse_0_;
-    // surf_analysis_ctx.set_calc_vert_voronoi_area(true);
-    // surf_analysis_ctx.ssbo_varea_ = buffers_.ssbo_mesh_buffer_reuse_5_;
-    // surf_analysis_ctx.order_1_only_selected = false;
-    // surf_analysis_ctx.set_calc_vert_curvature(true);
-    // surf_analysis_ctx.ssbo_edge_vtensors_ = buffers_.ssbo_mesh_buffer_reuse_7_;
-    // surf_analysis_ctx.ssbo_vcurv_tensor_ = buffers_.ssbo_mesh_buffer_reuse_1_;
-    // surf_analysis_ctx.ssbo_vcurv_pdirs_k1k2_ = buffers_.ssbo_mesh_buffer_reuse_2_;
-    //
-    // append_subpass_surf_geom_analysis(
-    //     rsc_handle, num_verts, num_edges, surf_analysis_ctx, surf_dbg_ctx); 
+    // test cusp detection
+    {
+      SurfaceAnalysisContext surf_analysis_ctx_contour;
+      GetSurfaceAnalysisContext_CuspDetectionPass(surf_analysis_ctx_contour);
+      auto surf_dbg_ctx_cpy = surf_dbg_ctx;
+      surf_dbg_ctx_cpy.dbg_vert_normal = false;
+      surf_dbg_ctx_cpy.dbg_vert_curv = true;
+      append_subpass_surf_geom_analysis(
+          rsc_handle, num_verts, num_edges, surf_analysis_ctx_contour, surf_dbg_ctx_cpy);
+    }
 
 
 
@@ -516,7 +529,7 @@ namespace blender::npr::strokegen
         num_edges,
         ib_type,
         meshing_params.edge_visualize_mode
-      );
+    );
 
     append_subpass_fill_dispatch_args_contour_edges(pass_extract_geom, false);
     append_subpass_process_contour_edges();

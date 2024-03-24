@@ -1233,28 +1233,29 @@ void main()
         
         vec3 v = cam_pos_ws - vpos; 
         vec3 v_ = normalize(v); 
+        float ndv = dot(v_, vnor);
 
-        vec2 cusp_func = vec2(dot(v, pdir0), dot(v, pdir1)); 
+        vec2 cusp_func = vec2(dot(v, normalize(pdir0)), dot(v, normalize(pdir1))); 
         cusp_func *= cusp_func;
         cusp_func.x = dot(cusp_func, evals.xy); 
+        bool near_contour = abs(ndv) < .01f; 
+        if (!near_contour)
+            cusp_func.x = -.0f;
 
         
-        
-        // debug lines
-        VertFlags vf = decode_vert_flags(ssbo_vert_flags_[vert_id]); 
-        bool dbg_vtx_curv = (!vf.dupli) && (!vf.del_by_collapse) && valid_thread;
-
-        uint dbg_line_id = compact_pdir_lines(dbg_vtx_curv, groupIdx, 3u); /* must run for every thread */
-        dbg_line_id += get_debug_line_offset(DBG_LINE_TYPE__VCURV); 
-        
-        if (valid_thread && 0 < pcs_output_dbg_geom_)
+        if (0 < pcs_output_dbg_geom_)
         {
-            vec3 cam_pos_ws = ubo_view_matrices_.viewinv[3].xyz; /* see "#define cameraPos ViewMatrixInverse[3].xyz" */
-            vec3 dndv_dp = ctx.curv_tensor * (vpos - cam_pos_ws); 
+            // debug lines
+            VertFlags vf = decode_vert_flags(ssbo_vert_flags_[vert_id]); 
+            bool dbg_vtx_curv = (!vf.dupli) && (!vf.del_by_collapse) && valid_thread;
+
+            uint dbg_line_id = compact_pdir_lines(dbg_vtx_curv, groupIdx, 3u); /* must run for every thread */
+            dbg_line_id += get_debug_line_offset(DBG_LINE_TYPE__VCURV); 
 
             if (dbg_vtx_curv)
             {
                 float dbg_line_len = min(ctx.ave_edge_len * .4f, pcs_dbg_geom_scale_ * .12f);
+                dbg_line_len = .0f; 
 
                 vec4 vpos_ws_00 = vec4(vpos - normalize(pdir0) * dbg_line_len, 1.0f);
                 vec4 vpos_ws_01 = vec4(vpos + normalize(pdir0) * dbg_line_len, 1.0f);
@@ -1264,14 +1265,23 @@ void main()
                 Store3(ssbo_dbg_lines_, dbg_line_id*2u+1u, vpos_enc); 
                 dbg_line_id++; 
 
-                vec4 vpos_ws_10 = vec4(vpos - normalize(pdir1) * dbg_line_len, 1.0f);
-                vec4 vpos_ws_11 = vec4(vpos + normalize(pdir1) * dbg_line_len, 1.0f);
+                // vec4 vpos_ws_10 = vec4(vpos - normalize(pdir1) * dbg_line_len, 1.0f);
+                // vec4 vpos_ws_11 = vec4(vpos + normalize(pdir1) * dbg_line_len, 1.0f);
+                // vpos_enc = floatBitsToUint(vpos_ws_10.xyz); 
+                // Store3(ssbo_dbg_lines_, dbg_line_id*2u, vpos_enc);
+                // vpos_enc = floatBitsToUint(vpos_ws_11.xyz); 
+                // Store3(ssbo_dbg_lines_, dbg_line_id*2u+1u, vpos_enc); 
+                // dbg_line_id++; 
+                
+                dbg_line_len = cusp_func.x < .0f ? pcs_dbg_geom_scale_ * cusp_func.x : .0f; 
+                vec4 vpos_ws_10 = vec4(vpos, 1.0f);
+                vec4 vpos_ws_11 = vec4(vpos + normalize(vnor) * dbg_line_len, 1.0f);
                 vpos_enc = floatBitsToUint(vpos_ws_10.xyz); 
                 Store3(ssbo_dbg_lines_, dbg_line_id*2u, vpos_enc);
                 vpos_enc = floatBitsToUint(vpos_ws_11.xyz); 
                 Store3(ssbo_dbg_lines_, dbg_line_id*2u+1u, vpos_enc); 
                 dbg_line_id++; 
-                
+
 #define ssbo_vtx_remesh_len_ ssbo_vcurv_pdirs_k1k2_
                 float remesh_edge_len = uintBitsToFloat(ssbo_vtx_remesh_len_[vert_id]); 
 #undef ssbo_vtx_remesh_len_
@@ -1279,7 +1289,8 @@ void main()
                 // dbg_line_len = pcs_dbg_geom_scale_ * max_curv;
                 // dbg_line_len = pcs_dbg_geom_scale_ * remesh_edge_len;
                 // dbg_line_len = valid_curv ? .0f : pcs_dbg_geom_scale_;
-                dbg_line_len = pcs_dbg_geom_scale_ * cusp_func.x; 
+                // dbg_line_len = pcs_dbg_geom_scale_ * cusp_func.x; 
+                dbg_line_len = cusp_func.x > .0f ? pcs_dbg_geom_scale_ * cusp_func.x : .0f; 
                 vec4 vpos_ws_20 = vec4(vpos, 1.0f);
                 vec4 vpos_ws_21 = vec4(vpos + normalize(vnor) * dbg_line_len, 1.0f);
                 vpos_enc = floatBitsToUint(vpos_ws_20.xyz);
