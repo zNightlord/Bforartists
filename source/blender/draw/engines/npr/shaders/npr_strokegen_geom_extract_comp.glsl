@@ -292,6 +292,7 @@ void main()
 	uvec2 iverts_frontface = mark__cwedge_to_verts(ifrontface); 
 	if (is_contour)
 	{ /* write world pos to output buffer */
+		/* Note: wpos_and_edgeid will be overwrite in the next pass, for saving space */
 		uint base_addr = mesh_pool_addr__wpos_and_edgeid(compacted_idx); 
 		buf_strokegen_mesh_pool[base_addr+0] = floatBitsToUint(v[iverts_frontface[0]].x); 
 		buf_strokegen_mesh_pool[base_addr+1] = floatBitsToUint(v[iverts_frontface[0]].y); 
@@ -383,6 +384,7 @@ void main()
 	vec2 vpos_uv[2]; 
 	if (valid_thread)
 	{ /* read vertex pos transformed to world space */
+	  /* Note: wpos_and_edgeid will be overwrite, for saving space */
 		uint base_addr = mesh_pool_addr__wpos_and_edgeid(ContourEdgeIdx); 
 		vpos_ws[0].x = uintBitsToFloat(buf_strokegen_mesh_pool[base_addr+0]); 
 		vpos_ws[0].y = uintBitsToFloat(buf_strokegen_mesh_pool[base_addr+1]); 

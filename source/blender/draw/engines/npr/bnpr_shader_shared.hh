@@ -297,16 +297,18 @@ using namespace draw;
 
 
   /* Addressing - buf_strokegen_mesh_pool */
-#define MAX_NUM_CONTOUR_EDGES ((3900000)) /* ssbo buffer cannot be larger than 8192*8192*/
+#define MAX_NUM_CONTOUR_EDGES ((7300710)) /* ssbo buffer cannot be larger than 8192*8192*/
   /*x7*/
   static inline uint mesh_pool_addr__wpos_and_edgeid(uint contour_edge_id) 
   {
     return contour_edge_id * 7u;
   }
+  
+  /* ! Reuse the whole buffer ! */
   /*x2*/
   static inline uint mesh_pool_addr__edgedir(uint contour_edge_id)
-  {
-    uint base_addr = mesh_pool_addr__wpos_and_edgeid(MAX_NUM_CONTOUR_EDGES);
+  { 
+    uint base_addr = 0; // mesh_pool_addr__wpos_and_edgeid(MAX_NUM_CONTOUR_EDGES);
     return base_addr + contour_edge_id * 2u;
   } 
   /*x4*/

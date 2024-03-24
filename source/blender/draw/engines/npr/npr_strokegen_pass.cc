@@ -149,13 +149,14 @@ namespace blender::npr::strokegen
   {
     surf_analysis_ctx.order_0_only_selected = false;
     surf_analysis_ctx.set_calc_vert_normal(true);
-    surf_analysis_ctx.ssbo_vnor_ = buffers_.ssbo_vnor_; 
+    surf_analysis_ctx.ssbo_vnor_ = buffers_.ssbo_vnor_;
     surf_analysis_ctx.set_calc_vert_voronoi_area(true);
     surf_analysis_ctx.ssbo_varea_ = buffers_.ssbo_mesh_buffer_reuse_5_;
 
     surf_analysis_ctx.order_1_only_selected = false;
     surf_analysis_ctx.set_calc_vert_curvature(true,
-                                              SurfaceAnalysisContext::CurvatureEstimator::Jacques);
+                                              SurfaceAnalysisContext::CurvatureEstimator::Jacques,
+                                              false);
     surf_analysis_ctx.ssbo_edge_vtensors_ = buffers_.ssbo_mesh_buffer_reuse_7_;
     surf_analysis_ctx.ssbo_vcurv_tensor_ = buffers_.ssbo_mesh_buffer_reuse_1_;
     surf_analysis_ctx.ssbo_vcurv_pdirs_k1k2_ = buffers_.ssbo_mesh_buffer_reuse_2_;
@@ -172,7 +173,8 @@ namespace blender::npr::strokegen
 
     surf_analysis_ctx.order_1_only_selected = true;
     surf_analysis_ctx.set_calc_vert_curvature(true,
-                                              SurfaceAnalysisContext::CurvatureEstimator::Jacques);
+                                              SurfaceAnalysisContext::CurvatureEstimator::Jacques,
+                                              false);
     surf_analysis_ctx.ssbo_edge_vtensors_ = buffers_.ssbo_mesh_buffer_reuse_7_;
     surf_analysis_ctx.ssbo_vcurv_tensor_ = buffers_.ssbo_mesh_buffer_reuse_1_;
     surf_analysis_ctx.ssbo_vcurv_pdirs_k1k2_ = buffers_.ssbo_mesh_buffer_reuse_2_;
@@ -189,7 +191,8 @@ namespace blender::npr::strokegen
 
     surf_analysis_ctx.order_1_only_selected = false;
     surf_analysis_ctx.set_calc_vert_curvature(false,
-                                              SurfaceAnalysisContext::CurvatureEstimator::Jacques);
+                                              SurfaceAnalysisContext::CurvatureEstimator::Jacques,
+                                  false);
     surf_analysis_ctx.ssbo_edge_vtensors_ = buffers_.ssbo_mesh_buffer_reuse_7_;
     surf_analysis_ctx.ssbo_vcurv_tensor_ = buffers_.ssbo_mesh_buffer_reuse_1_;
     surf_analysis_ctx.ssbo_vcurv_pdirs_k1k2_ = buffers_.ssbo_mesh_buffer_reuse_2_;
@@ -204,8 +207,7 @@ namespace blender::npr::strokegen
     surf_analysis_ctx.ssbo_varea_ = buffers_.ssbo_mesh_buffer_reuse_5_;
 
     surf_analysis_ctx.order_1_only_selected = false;
-    surf_analysis_ctx.set_calc_vert_curvature(false,
-                                              SurfaceAnalysisContext::CurvatureEstimator::Jacques);
+    surf_analysis_ctx.set_calc_vert_curvature(false, SurfaceAnalysisContext::CurvatureEstimator::Jacques, false);
     surf_analysis_ctx.ssbo_edge_vtensors_ = buffers_.ssbo_mesh_buffer_reuse_7_;
     surf_analysis_ctx.ssbo_vcurv_tensor_ = buffers_.ssbo_mesh_buffer_reuse_1_;
     surf_analysis_ctx.ssbo_vcurv_pdirs_k1k2_ = buffers_.ssbo_mesh_buffer_reuse_2_;
@@ -222,7 +224,7 @@ namespace blender::npr::strokegen
 
     surf_analysis_ctx.order_1_only_selected = true;
     surf_analysis_ctx.set_calc_vert_curvature(true,
-                                              SurfaceAnalysisContext::CurvatureEstimator::Jacques);
+                                              SurfaceAnalysisContext::CurvatureEstimator::Jacques, false);
     surf_analysis_ctx.ssbo_edge_vtensors_ = buffers_.ssbo_mesh_buffer_reuse_7_;
     surf_analysis_ctx.ssbo_vcurv_tensor_ = buffers_.ssbo_mesh_buffer_reuse_1_;
     surf_analysis_ctx.ssbo_vcurv_pdirs_k1k2_ = buffers_.ssbo_mesh_buffer_reuse_2_;
@@ -251,13 +253,17 @@ namespace blender::npr::strokegen
         ); 
     }
 
-    // Uncomment this for debugging remesh length
     if (debug_remesh_edge_len && output_dbg_lines)
-    { 
+    {
+      SurfaceAnalysisContext surf_ctx_cpy = surf_analysis_ctx;
+      surf_ctx_cpy.ssbo_vcurv_pdirs_k1k2_ = buffers_.reused_ssbo_vtx_remesh_len_();
+      surf_ctx_cpy.output_curvature_tensors = false; 
+
       surf_dbg_ctx_cpy = surf_dbg_ctx;
       surf_dbg_ctx_cpy.dbg_vert_curv = true;
+      
       append_subpass_surf_geom_analysis(
-          rsc_handle, num_verts, num_edges, surf_analysis_ctx, surf_dbg_ctx_cpy);  
+          rsc_handle, num_verts, num_edges, surf_ctx_cpy, surf_dbg_ctx_cpy);  
     }
   }
 
@@ -402,6 +408,7 @@ namespace blender::npr::strokegen
     surf_dbg_ctx_cpy.dbg_vert_curv = false;
     append_subpass_surf_geom_analysis(
         rsc_handle, num_verts, num_edges, surf_analysis_ctx_init, surf_dbg_ctx_cpy);
+
     append_subpasses_estimate_curvature_for_adaptive_remeshing(
         rsc_handle, num_edges, num_verts, false);
 
@@ -415,12 +422,6 @@ namespace blender::npr::strokegen
 
     for (int iter_remesh = 0; iter_remesh < meshing_params.remeshing_iters; ++iter_remesh)
     {
-      append_subpasses_estimate_curvature_for_adaptive_remeshing(
-          rsc_handle,
-          num_edges,
-          num_verts,
-          false /*iter_remesh == meshing_params.remeshing_iters - 1*/);
-
       int num_edge_split_iters = meshing_params.remeshing_split_iters;
         for (int iter_edge_split = 0; iter_edge_split < num_edge_split_iters; ++iter_edge_split) {
           if (should_remesh_when_dbg()) {
@@ -442,6 +443,12 @@ namespace blender::npr::strokegen
             dbg_step++; 
           }
         }
+
+      append_subpasses_estimate_curvature_for_adaptive_remeshing(
+          rsc_handle,
+          num_edges,
+          num_verts,
+          false /*iter_remesh == meshing_params.remeshing_iters - 1*/);
 
       int num_edge_collapse_iters = meshing_params.remeshing_collapse_iters;
         for (int iter_edge_collapse = 0; iter_edge_collapse < num_edge_collapse_iters;
@@ -512,7 +519,7 @@ namespace blender::npr::strokegen
       GetSurfaceAnalysisContext_CuspDetectionPass(surf_analysis_ctx_contour);
       auto surf_dbg_ctx_cpy = surf_dbg_ctx;
       surf_dbg_ctx_cpy.dbg_vert_normal = false;
-      surf_dbg_ctx_cpy.dbg_vert_curv = true;
+      surf_dbg_ctx_cpy.dbg_vert_curv = surf_dbg_ctx.dbg_vert_curv;
       append_subpass_surf_geom_analysis(
           rsc_handle, num_verts, num_edges, surf_analysis_ctx_contour, surf_dbg_ctx_cpy);
     }
@@ -1491,8 +1498,9 @@ namespace blender::npr::strokegen
 
         bind_src_order_1(sub, dbg_options.dbg_vert_curv);
         sub.bind_ssbo(ssbo_offset_base_1 + 0, ctx.ssbo_edge_vtensors_);
-        sub.bind_ssbo(ssbo_offset_base_1 + 1, /*ctx.ssbo_vcurv_pdirs_k1k2_*/buffers_.reused_ssbo_vtx_remesh_len_());
-        sub.bind_ssbo(ssbo_offset_base_1 + 2, buffers_.ssbo_vcurv_max_); 
+        sub.bind_ssbo(ssbo_offset_base_1 + 1, ctx.ssbo_vcurv_pdirs_k1k2_);
+        sub.bind_ssbo(ssbo_offset_base_1 + 2, buffers_.ssbo_vcurv_max_);
+        sub.push_constant("pcs_output_curv_tensors", ctx.output_curvature_tensors); 
 
         sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_verts_);
         sub.barrier(GPU_BARRIER_SHADER_STORAGE); 

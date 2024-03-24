@@ -1250,7 +1250,8 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_analysis_order_1_main_curvature)
     .define("INCLUDE_VERTEX_CURV_MAX", "1")
     .storage_buf(NUM_SSBO_1 + 0, Qualifier::READ_WRITE, "uint", "ssbo_edge_vtensors_[]")
     .storage_buf(NUM_SSBO_1 + 1, Qualifier::READ_WRITE, "uint", "ssbo_vcurv_pdirs_k1k2_[]")
-    .storage_buf(NUM_SSBO_1 + 2, Qualifier::READ_WRITE, "uint", "ssbo_vcurv_max_[]"); 
+    .storage_buf(NUM_SSBO_1 + 2, Qualifier::READ_WRITE, "uint", "ssbo_vcurv_max_[]")
+    .push_constant(Type::INT, "pcs_output_curv_tensors"); 
 
 /* Rusinkiewicz's Curvature Estimator
  * Outputs both Curvature and Tensor

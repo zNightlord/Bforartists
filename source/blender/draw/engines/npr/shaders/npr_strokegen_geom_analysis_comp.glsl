@@ -1085,7 +1085,6 @@ void main()
             /*out*/pdir1, pdir2, curv_1_fin, curv_2_fin
         ); 
 
-        // if (ctx.border) curv_1_fin = curv_2_fin = .0f;  
 
         float max_curv = max(abs(curv_1_fin), abs(curv_2_fin)); 
         bool valid_curv = !(isnan(max_curv) || isinf(max_curv) || ctx.border);
@@ -1093,7 +1092,8 @@ void main()
 
         if (valid_thread)
         {
-            // st_vcurv_pdirs_k1k2(vert_id, pdir1, curv_1_fin, pdir2, curv_2_fin);
+            if (0 < pcs_output_curv_tensors)
+                st_vcurv_pdirs_k1k2(vert_id, pdir1, curv_1_fin, pdir2, curv_2_fin);
             st_vcurv_max(vert_id, max_curv); 
         }
 
@@ -1156,7 +1156,8 @@ void main()
 
         if (valid_thread)
         {
-            // st_vcurv_pdirs_k1k2(vert_id, pdir1, curv_1_fin, pdir2, curv_2_fin);
+            if (0 < pcs_output_curv_tensors)
+                st_vcurv_pdirs_k1k2(vert_id, pdir1, curv_1_fin, pdir2, curv_2_fin);
             st_vcurv_max(vert_id, max_curv); 
         }
 
@@ -1221,7 +1222,8 @@ void main()
             max_curv = evals[0] = evals[1] = -1.0f; 
         if (valid_thread)
         {
-            // st_vcurv_pdirs_k1k2(vert_id, pdir0, evals[0], pdir1, evals[1]);
+            if (0 < pcs_output_curv_tensors)
+                st_vcurv_pdirs_k1k2(vert_id, pdir0, evals[0], pdir1, evals[1]);
             st_vcurv_max(vert_id, max_curv); 
         }
 
@@ -1238,9 +1240,8 @@ void main()
         vec2 cusp_func = vec2(dot(v, normalize(pdir0)), dot(v, normalize(pdir1))); 
         cusp_func *= cusp_func;
         cusp_func.x = dot(cusp_func, evals.xy); 
-        bool near_contour = abs(ndv) < .01f; 
-        if (!near_contour)
-            cusp_func.x = -.0f;
+        bool near_contour = abs(ndv) < .03f; 
+
 
         
         if (0 < pcs_output_dbg_geom_)
@@ -1273,7 +1274,7 @@ void main()
                 // Store3(ssbo_dbg_lines_, dbg_line_id*2u+1u, vpos_enc); 
                 // dbg_line_id++; 
                 
-                dbg_line_len = cusp_func.x < .0f ? pcs_dbg_geom_scale_ * cusp_func.x : .0f; 
+                dbg_line_len = (near_contour && cusp_func.x < .0f) ? pcs_dbg_geom_scale_/*  * cusp_func.x */ : .0f; 
                 vec4 vpos_ws_10 = vec4(vpos, 1.0f);
                 vec4 vpos_ws_11 = vec4(vpos + normalize(vnor) * dbg_line_len, 1.0f);
                 vpos_enc = floatBitsToUint(vpos_ws_10.xyz); 
@@ -1290,7 +1291,7 @@ void main()
                 // dbg_line_len = pcs_dbg_geom_scale_ * remesh_edge_len;
                 // dbg_line_len = valid_curv ? .0f : pcs_dbg_geom_scale_;
                 // dbg_line_len = pcs_dbg_geom_scale_ * cusp_func.x; 
-                dbg_line_len = cusp_func.x > .0f ? pcs_dbg_geom_scale_ * cusp_func.x : .0f; 
+                dbg_line_len = (near_contour && cusp_func.x >= .0f) ? pcs_dbg_geom_scale_/*  * cusp_func.x */ : .0f; 
                 vec4 vpos_ws_20 = vec4(vpos, 1.0f);
                 vec4 vpos_ws_21 = vec4(vpos + normalize(vnor) * dbg_line_len, 1.0f);
                 vpos_enc = floatBitsToUint(vpos_ws_20.xyz);
