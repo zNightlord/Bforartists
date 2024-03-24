@@ -273,7 +273,8 @@ public:
         ssbo_vcurv_tensor_(nullptr),
         ssbo_vcurv_pdirs_k1k2_(nullptr),
         ssbo_edge_vtensors_(nullptr),
-        output_remesh_len(false)
+        output_remesh_len(false),
+        curvature_estimator(Jacques)
     {
     }
 
@@ -284,9 +285,10 @@ public:
       Rusinkiewicz = 0,
       Jacques
     } curvature_estimator;
-    void set_calc_vert_curvature(bool val, CurvatureEstimator = Jacques) 
+    void set_calc_vert_curvature(bool val, CurvatureEstimator algo) 
     { 
       calc_vert_curvature = val;
+      curvature_estimator = algo; 
       if (calc_vert_curvature) {
         set_calc_vert_normal(true); 
         set_calc_vert_voronoi_area(true); 
@@ -296,13 +298,12 @@ public:
     {
       output_remesh_len = true;
       if (output_remesh_len)
-        set_calc_vert_curvature(true); 
+        set_calc_vert_curvature(true, Jacques); 
     }
   };
   void GetSurfaceAnalysisContext_InitPass(SurfaceAnalysisContext &surf_analysis_ctx) const;
   void GetSurfaceAnalysisContext_VertexRelocationPass(
       SurfaceAnalysisContext &surf_analysis_ctx) const;
-  void GetSurfaceAnalysisContext_RemeshPass(SurfaceAnalysisContext &surf_analysis_ctx) const;
   void GetSurfaceAnalysisContext_ContourInsertionPass(
       SurfaceAnalysisContext &surf_analysis_ctx) const;
   void GetSurfaceAnalysisContext_CurvatureForAdaptiveRemeshing(

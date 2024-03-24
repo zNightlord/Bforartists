@@ -154,7 +154,8 @@ namespace blender::npr::strokegen
     surf_analysis_ctx.ssbo_varea_ = buffers_.ssbo_mesh_buffer_reuse_5_;
 
     surf_analysis_ctx.order_1_only_selected = false;
-    surf_analysis_ctx.set_calc_vert_curvature(true);
+    surf_analysis_ctx.set_calc_vert_curvature(true,
+                                              SurfaceAnalysisContext::CurvatureEstimator::Jacques);
     surf_analysis_ctx.ssbo_edge_vtensors_ = buffers_.ssbo_mesh_buffer_reuse_7_;
     surf_analysis_ctx.ssbo_vcurv_tensor_ = buffers_.ssbo_mesh_buffer_reuse_1_;
     surf_analysis_ctx.ssbo_vcurv_pdirs_k1k2_ = buffers_.ssbo_mesh_buffer_reuse_2_;
@@ -170,22 +171,8 @@ namespace blender::npr::strokegen
     surf_analysis_ctx.ssbo_varea_ = buffers_.ssbo_mesh_buffer_reuse_5_;
 
     surf_analysis_ctx.order_1_only_selected = false;
-    surf_analysis_ctx.set_calc_vert_curvature(false);
-    surf_analysis_ctx.ssbo_edge_vtensors_ = buffers_.ssbo_mesh_buffer_reuse_7_;
-    surf_analysis_ctx.ssbo_vcurv_tensor_ = buffers_.ssbo_mesh_buffer_reuse_1_;
-    surf_analysis_ctx.ssbo_vcurv_pdirs_k1k2_ = buffers_.ssbo_mesh_buffer_reuse_2_;
-  }
-
-  void StrokeGenPassModule::GetSurfaceAnalysisContext_RemeshPass(SurfaceAnalysisContext &surf_analysis_ctx) const
-  {
-    surf_analysis_ctx.order_0_only_selected = false;
-    surf_analysis_ctx.set_calc_vert_normal(true);
-    surf_analysis_ctx.ssbo_vnor_ = buffers_.ssbo_vnor_; 
-    surf_analysis_ctx.set_calc_vert_voronoi_area(false);
-    surf_analysis_ctx.ssbo_varea_ = buffers_.ssbo_mesh_buffer_reuse_5_;
-
-    surf_analysis_ctx.order_1_only_selected = false;
-    surf_analysis_ctx.set_calc_vert_curvature(true);
+    surf_analysis_ctx.set_calc_vert_curvature(false,
+                                              SurfaceAnalysisContext::CurvatureEstimator::Jacques);
     surf_analysis_ctx.ssbo_edge_vtensors_ = buffers_.ssbo_mesh_buffer_reuse_7_;
     surf_analysis_ctx.ssbo_vcurv_tensor_ = buffers_.ssbo_mesh_buffer_reuse_1_;
     surf_analysis_ctx.ssbo_vcurv_pdirs_k1k2_ = buffers_.ssbo_mesh_buffer_reuse_2_;
@@ -200,7 +187,8 @@ namespace blender::npr::strokegen
     surf_analysis_ctx.ssbo_varea_ = buffers_.ssbo_mesh_buffer_reuse_5_;
 
     surf_analysis_ctx.order_1_only_selected = false;
-    surf_analysis_ctx.set_calc_vert_curvature(false);
+    surf_analysis_ctx.set_calc_vert_curvature(false,
+                                              SurfaceAnalysisContext::CurvatureEstimator::Jacques);
     surf_analysis_ctx.ssbo_edge_vtensors_ = buffers_.ssbo_mesh_buffer_reuse_7_;
     surf_analysis_ctx.ssbo_vcurv_tensor_ = buffers_.ssbo_mesh_buffer_reuse_1_;
     surf_analysis_ctx.ssbo_vcurv_pdirs_k1k2_ = buffers_.ssbo_mesh_buffer_reuse_2_;
@@ -216,7 +204,8 @@ namespace blender::npr::strokegen
     surf_analysis_ctx.ssbo_varea_ = buffers_.ssbo_mesh_buffer_reuse_5_;
 
     surf_analysis_ctx.order_1_only_selected = true;
-    surf_analysis_ctx.set_calc_vert_curvature(true);
+    surf_analysis_ctx.set_calc_vert_curvature(true,
+                                              SurfaceAnalysisContext::CurvatureEstimator::Jacques);
     surf_analysis_ctx.ssbo_edge_vtensors_ = buffers_.ssbo_mesh_buffer_reuse_7_;
     surf_analysis_ctx.ssbo_vcurv_tensor_ = buffers_.ssbo_mesh_buffer_reuse_1_;
     surf_analysis_ctx.ssbo_vcurv_pdirs_k1k2_ = buffers_.ssbo_mesh_buffer_reuse_2_;

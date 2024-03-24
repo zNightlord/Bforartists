@@ -50,7 +50,7 @@ void main()
 
 
     if (pcs_line_type_ == DBG_LINE_TYPE__VNOR)
-        color = vec4(0, 1, 0, 1);
+        color = vec4(1, 1, 0, 1);
     else if (pcs_line_type_ == DBG_LINE_TYPE__VCURV)
     {
         if ((line_id_local % 3u) == 0u) 

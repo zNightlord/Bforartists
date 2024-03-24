@@ -8,6 +8,9 @@
 #define CAT_(x, y) x ## y
 
 
+/* !!! Must invoke this for EVERY thread in the work group !!! 
+ * not matter if your thread maps to "invalid" element(s) */
+
 
 /* Code gen Input: */
 /* #define COMPACTION_LIB_EXCLUDE_DEFAULT_CODEGEN --- wether use the default compaction code generator */
