@@ -183,6 +183,7 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_extract)
     .push_constant(Type::INT, "pcs_num_ib_offset")
     .push_constant(Type::INT, "pcs_rsc_handle")
     .push_constant(Type::INT, "pcs_edge_visualize_mode_")
+    .push_constant(Type::INT, "pcs_chain_interpo_contour_")
     .local_group_size(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT) /* <== from "bnpr_defines.hh" */
     .compute_source("npr_strokegen_geom_extract_comp.glsl");
 
@@ -1206,14 +1207,22 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_analysis_order_0_vert_normal)
     .additional_info("bnpr_geom_analysis_order_0_vert_attrs")
     .define("_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_0__NORMAL", "1")
     .define("INCLUDE_VERTEX_NORMAL", "1")
-    .storage_buf(NUM_SSBO_BASE, Qualifier::READ_WRITE, "uint", "ssbo_vnor_[]");
+    .storage_buf(NUM_SSBO_BASE, Qualifier::READ_WRITE, "uint", "ssbo_vnor_[]")
+    .push_constant(Type::INT, "pcs_output_vertex_facing_flag_");
 
-GPU_SHADER_CREATE_INFO(bnpr_geom_analysis_order_0_vert_all)
+GPU_SHADER_CREATE_INFO(bnpr_geom_analysis_order_0_vert_normal_voroarea)
     .do_static_compilation(true)
     .additional_info("bnpr_geom_analysis_order_0_vert_normal")
     .define("_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_0__AREA", "1")
     .define("INCLUDE_VERTEX_VORONOI_AREA", "1")
     .storage_buf(NUM_SSBO_BASE + 1, Qualifier::READ_WRITE, "uint", "ssbo_varea_[]");
+
+GPU_SHADER_CREATE_INFO(bnpr_geom_analysis_order_0_vert_normal_topoflags)
+    .do_static_compilation(true)
+    .additional_info("bnpr_geom_analysis_order_0_vert_normal")
+    .define("_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_0__BORDER", "1")
+    .define("EDGE_FLAGS_INCLUDED", "1")
+    .storage_buf(NUM_SSBO_BASE + 1, Qualifier::READ_WRITE, "uint", "ssbo_edge_flags_[]");
 
 
 /* Estimate order 1 vertex attributes */
@@ -1251,7 +1260,7 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_analysis_order_1_main_curvature)
     .storage_buf(NUM_SSBO_1 + 0, Qualifier::READ_WRITE, "uint", "ssbo_edge_vtensors_[]")
     .storage_buf(NUM_SSBO_1 + 1, Qualifier::READ_WRITE, "uint", "ssbo_vcurv_pdirs_k1k2_[]")
     .storage_buf(NUM_SSBO_1 + 2, Qualifier::READ_WRITE, "uint", "ssbo_vcurv_max_[]")
-    .push_constant(Type::INT, "pcs_output_curv_tensors"); 
+    .push_constant(Type::INT, "pcs_output_curv_tensors_"); 
 
 /* Rusinkiewicz's Curvature Estimator
  * Outputs both Curvature and Tensor

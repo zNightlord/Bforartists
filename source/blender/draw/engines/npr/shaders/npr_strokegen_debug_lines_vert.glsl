@@ -61,7 +61,7 @@ void main()
             color = vec4(0, 1, 0, 1); 
     } else if (pcs_line_type_ == DBG_LINE_TYPE__EDGES)
     {
-        color.rgb = .3f * rand_col_rgb(line_id, line_id * 7u);
+        color.rgb = .1f * rand_col_rgb(line_id, line_id * 7u);
         color.a = 1.0f; 
     }
 

@@ -106,6 +106,11 @@ struct CalcVertAttrContext_Order0
 #if defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_0__AREA)
     float voronoi_area; 
 #endif
+
+#if defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_0__BORDER)
+    bool is_border; 
+#endif
+
 }; 
 
 CalcVertAttrContext_Order0 init_vert_attr_context_order_0(
@@ -122,6 +127,10 @@ CalcVertAttrContext_Order0 init_vert_attr_context_order_0(
 
 #if defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_0__AREA)
     ctx.voronoi_area = .0f;
+#endif
+
+#if defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_0__BORDER)
+    ctx.is_border = false; 
 #endif
 
     return ctx; 
@@ -198,6 +207,11 @@ bool calc_vert_attr_order_0(
     }
 #endif
 
+#if defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_0__BORDER)
+    EdgeFlags ef = load_edge_flags(wi);
+    ctx.is_border = ctx.is_border || ef.border;
+#endif
+
     ctx.vi = vn; 
     return true; 
 
@@ -227,12 +241,15 @@ void main()
         vert_id = gl_GlobalInvocationID.x; 
         valid_thread = vert_id < get_vert_count(); 
     }
+    VertFlags vf = load_vert_flags(vert_id); 
+
 
     VertWedgeListHeader vwlh = decode_vert_wedge_list_header(ssbo_vert_to_edge_list_header_[vert_id]);
 
+    vec3 vpos = ld_vpos(vert_id); 
     CalcVertAttrContext_Order0 ctx = init_vert_attr_context_order_0(
         ssbo_edge_to_vert_[vwlh.wedge_id*4u + ((vwlh.ivert == 1u) ? 3u : 1u)], 
-        ld_vpos(vert_id)
+        vpos
     ); 
     if (valid_thread)
     {
@@ -240,15 +257,32 @@ void main()
         VE_CIRCULATOR(vwlh, calc_vert_attr_order_0, ctx, rotate_fwd);
     }
     
+    VertFlags vf_new = vf; 
+    bool update_vf = false; 
+#if defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_0__BORDER)
+    update_vert_flags__border(ctx.is_border, /*inout*/vf_new);
+    update_vf = true; 
+#endif
+    
 #if defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_0__NORMAL)
     vec3 vnormal = normalize(ctx.sum_normal / ctx.sum_weight); 
     if (valid_thread)
+    {
         st_vnor(vert_id, vnormal);
+	    
+        if (0 < pcs_output_vertex_facing_flag_)
+        {
+            mat4 view_to_world = ubo_view_matrices_.viewinv;
+            vec3 cam_pos_ws = view_to_world[3].xyz; /* see "#define cameraPos ViewMatrixInverse[3].xyz" */
+            vec3 view_dir = vpos - cam_pos_ws; 
+            float dot_vn = dot(view_dir, vnormal);
+            update_vert_flags__facing_direction(dot_vn >= .0f, dot_vn < .0f, /*inout*/vf_new); 
+            update_vf = true; 
+        }
+    }
 
     if (0 < pcs_output_dbg_geom_)
     {
-        VertFlags vf = decode_vert_flags(ssbo_vert_flags_[vert_id]); 
-        
         bool dbg_vtx_nor = (!vf.dupli) && valid_thread; 
         uint dbg_line_id = compact_normal_line(dbg_vtx_nor, groupIdx);
         dbg_line_id += get_debug_line_offset(DBG_LINE_TYPE__VNOR); 
@@ -271,7 +305,8 @@ void main()
         st_varea(vert_id, ctx.voronoi_area); 
 #endif
 
-
+    if (update_vf)
+        store_vert_flags(vert_id, vf_new);
 }
 #endif
 
@@ -1092,7 +1127,7 @@ void main()
 
         if (valid_thread)
         {
-            if (0 < pcs_output_curv_tensors)
+            if (0 < pcs_output_curv_tensors_)
                 st_vcurv_pdirs_k1k2(vert_id, pdir1, curv_1_fin, pdir2, curv_2_fin);
             st_vcurv_max(vert_id, max_curv); 
         }
@@ -1156,7 +1191,7 @@ void main()
 
         if (valid_thread)
         {
-            if (0 < pcs_output_curv_tensors)
+            if (0 < pcs_output_curv_tensors_)
                 st_vcurv_pdirs_k1k2(vert_id, pdir1, curv_1_fin, pdir2, curv_2_fin);
             st_vcurv_max(vert_id, max_curv); 
         }
@@ -1222,7 +1257,7 @@ void main()
             max_curv = evals[0] = evals[1] = -1.0f; 
         if (valid_thread)
         {
-            if (0 < pcs_output_curv_tensors)
+            if (0 < pcs_output_curv_tensors_)
                 st_vcurv_pdirs_k1k2(vert_id, pdir0, evals[0], pdir1, evals[1]);
             st_vcurv_max(vert_id, max_curv); 
         }
@@ -1240,7 +1275,7 @@ void main()
         vec2 cusp_func = vec2(dot(v, normalize(pdir0)), dot(v, normalize(pdir1))); 
         cusp_func *= cusp_func;
         cusp_func.x = dot(cusp_func, evals.xy); 
-        bool near_contour = abs(ndv) < .03f; 
+        bool near_contour = abs(ndv) < .01f; 
 
 
         
@@ -1274,7 +1309,8 @@ void main()
                 // Store3(ssbo_dbg_lines_, dbg_line_id*2u+1u, vpos_enc); 
                 // dbg_line_id++; 
                 
-                dbg_line_len = (near_contour && cusp_func.x < .0f) ? pcs_dbg_geom_scale_/*  * cusp_func.x */ : .0f; 
+                // dbg_line_len = (near_contour && cusp_func.x < .0f) ? pcs_dbg_geom_scale_/*  * cusp_func.x */ : .0f; 
+                dbg_line_len = (vf.front_facing) ? pcs_dbg_geom_scale_/*  * cusp_func.x */ : .0f; 
                 vec4 vpos_ws_10 = vec4(vpos, 1.0f);
                 vec4 vpos_ws_11 = vec4(vpos + normalize(vnor) * dbg_line_len, 1.0f);
                 vpos_enc = floatBitsToUint(vpos_ws_10.xyz); 
@@ -1291,7 +1327,9 @@ void main()
                 // dbg_line_len = pcs_dbg_geom_scale_ * remesh_edge_len;
                 // dbg_line_len = valid_curv ? .0f : pcs_dbg_geom_scale_;
                 // dbg_line_len = pcs_dbg_geom_scale_ * cusp_func.x; 
-                dbg_line_len = (near_contour && cusp_func.x >= .0f) ? pcs_dbg_geom_scale_/*  * cusp_func.x */ : .0f; 
+                
+                // dbg_line_len = (near_contour && cusp_func.x >= .0f) ? pcs_dbg_geom_scale_/*  * cusp_func.x */ : .0f; 
+                dbg_line_len = (vf.back_facing) ? pcs_dbg_geom_scale_/*  * cusp_func.x */ : .0f; 
                 vec4 vpos_ws_20 = vec4(vpos, 1.0f);
                 vec4 vpos_ws_21 = vec4(vpos + normalize(vnor) * dbg_line_len, 1.0f);
                 vpos_enc = floatBitsToUint(vpos_ws_20.xyz);

@@ -250,9 +250,13 @@ public:
     // Vertex attributes
     bool order_0_only_selected;  // only calculate order-0 attrs on selected elems
     bool calc_vert_normal;
+    bool output_vertex_facing_flag; // mark facing by dot(n, view_dir) 
     GPUStorageBuf *ssbo_vnor_; 
     bool calc_vert_voronoi_area;
     GPUStorageBuf *ssbo_varea_;
+    bool calc_vert_topo_flags;
+    // note: due to shader variant issues (I'm lazy to generate all the variants),
+    // calc_vert_topo_flags conflicts against calc_vert_voronoi_area
 
     bool order_1_only_selected; 
     bool calc_vert_curvature;
@@ -265,9 +269,11 @@ public:
     SurfaceAnalysisContext()
       : order_0_only_selected(false),
         calc_vert_normal(false),
+        output_vertex_facing_flag(false), 
         ssbo_vnor_(nullptr),
         calc_vert_voronoi_area(false),
         ssbo_varea_(nullptr),
+        calc_vert_topo_flags(false), 
         order_1_only_selected(false),
         calc_vert_curvature(false),
         curvature_estimator(Jacques), 
@@ -278,8 +284,13 @@ public:
     {
     }
 
-    void set_calc_vert_normal(bool val) { calc_vert_normal = val; }
+    void set_calc_vert_normal(bool val, bool output_facing_flags)
+    {
+      calc_vert_normal = val;
+      output_vertex_facing_flag = output_facing_flags; 
+    }
     void set_calc_vert_voronoi_area(bool val) { calc_vert_voronoi_area = val; }
+    void set_calc_vert_topo_flags(bool val) { calc_vert_topo_flags = val; }
 
 
     void set_calc_vert_curvature(bool val, CurvatureEstimator algo, bool output_tensors) 
@@ -287,7 +298,7 @@ public:
       calc_vert_curvature = val;
       curvature_estimator = algo; 
       if (calc_vert_curvature) {
-        set_calc_vert_normal(true); 
+        set_calc_vert_normal(true, output_vertex_facing_flag); 
         set_calc_vert_voronoi_area(true);
         output_curvature_tensors = output_tensors; 
       } 

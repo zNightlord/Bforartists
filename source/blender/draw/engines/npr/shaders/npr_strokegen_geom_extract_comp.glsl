@@ -137,8 +137,7 @@ bool is_back_face(float ndv)
 */
 bool is_contour_edge(
 	vec3 v0, vec3 v1, vec3 v2, vec3 v3, vec3 cam_pos, 
-	out float face_orient_123, out float face_orient_013, 
-	out vec3 dbg_n123, out vec3 dbg_v013 
+	out float face_orient_123, out float face_orient_013
 )
 { /* impl based on overlay_outline_prepass_vert_no_geom.glsl */
 	vec3 v10 = v0 - v1;
@@ -147,9 +146,6 @@ bool is_contour_edge(
 
 	vec3 n0 = cross(v12, v13);
 	vec3 n3 = cross(v13, v10);
-
-	dbg_n123 = length(v12) * normalize(n0);
-	dbg_v013 = length(v13) * normalize(n3); 
 
 	vec3 view_dir = cam_pos - v1; 
 
@@ -160,6 +156,18 @@ bool is_contour_edge(
 		is_back_face(face_orient_123) != is_back_face(face_orient_013); 
 		/* (sign(face_orient_123) != sign(face_orient_013)); */
 	
+	return is_contour; 
+}
+
+bool is_interp_contour_edge(
+	VertFlags vf_0, VertFlags vf_1, VertFlags vf_2, VertFlags vf_3, 
+	out float face_orient_123, out float face_orient_013
+)
+{
+	bool is_contour = vf_1.contour && vf_3.contour;  
+	face_orient_123 = vf_2.front_facing ? 1.0f : -1.0f; 
+	face_orient_013 = vf_0.front_facing ? 1.0f : -1.0f; 
+
 	return is_contour; 
 }
 
@@ -203,14 +211,24 @@ void main()
 	for (uint i = 0; i < 4; ++i)
 		v[i] = ld_vbo(vids[i]);  
 
+	VertFlags vf[4]; 
+	for (uint i = 0; i < 4; ++i)
+		vf[i] = load_vert_flags(vids[i]);
 
 	float face_orient_123, face_orient_013; 
-	vec3 dbg_n123, dbg_v013; 
-	bool is_contour = is_contour_edge(
-		v[0], v[1], v[2], v[3], cam_pos_ws
-		, face_orient_123, face_orient_013/*out*/
-		, dbg_n123, dbg_v013 /*out*/
-	); 
+	
+	bool is_contour = false; 
+	if (0 == pcs_chain_interpo_contour_)
+	{
+		is_contour = is_contour_edge(
+			v[0], v[1], v[2], v[3], cam_pos_ws
+			, /*out*/face_orient_123, face_orient_013
+		);
+	}else
+		is_contour = is_interp_contour_edge(
+			vf[0], vf[1], vf[2], vf[3]
+			, /*out*/ face_orient_123, face_orient_013
+		);
 
 	EdgeFlags ef = load_edge_flags(wedge_id); 
 	is_contour = is_contour && (!ef.del_by_split) && (!ef.del_by_collapse) && (!ef.dupli); 
@@ -242,9 +260,7 @@ void main()
 
 		if (pcs_edge_visualize_mode_ == 6)
 		{
-			VertFlags vf1 = load_vert_flags(vids[1]);
-			VertFlags vf3 = load_vert_flags(vids[3]); 
-			dbg_line = dbg_line && (vf1.contour && vf3.contour); 
+			dbg_line = dbg_line && (vf[1].contour && vf[3].contour); 
 		}
 
 		if (pcs_edge_visualize_mode_ == 7)
@@ -255,8 +271,10 @@ void main()
 
 		if (pcs_edge_visualize_mode_ == 8)
 		{
-			dbg_line = is_contour; 
+			bool border_from_vtx_flags = vf[1].border_eval && vf[3].border_eval; 
+			dbg_line = dbg_line && border_from_vtx_flags; 
 		}
+
 
 		uint dbg_line_idx = compact_dbg_edge(dbg_line, groupId); 
 		dbg_line_idx += get_debug_line_offset(DBG_LINE_TYPE__EDGES); 
@@ -264,13 +282,6 @@ void main()
 		{
 			vec3 dbg_vpos_0 = v[1]; 
 			vec3 dbg_vpos_1 = v[3]; 
-
-			if (pcs_edge_visualize_mode_ == 8)
-			{
-				dbg_vpos_0 = face_orient_123 > 0.0f ? v[2] : v[0];  
-				vec3 nor_dir = face_orient_123 > 0.0f ? dbg_n123 : dbg_v013;
-				dbg_vpos_1 = dbg_vpos_0 + nor_dir;  
-			}
 			
 			uint base_addr = dbg_line_idx * 6; 
 			ssbo_dbg_lines_[base_addr+0] = floatBitsToUint(dbg_vpos_0.x); 

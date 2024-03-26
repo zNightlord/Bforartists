@@ -58,12 +58,9 @@ float get_split_edge_len_min(uint v1, uint v3)
     float vlen_3 = ld_vtx_remesh_len(v3);
     float targ_len = min(vlen_1, vlen_3); 
     return (4.0f/3.0f) * targ_len; 
-    // return (5.0f/3.0f) * targ_len; 
-    
-    // return calc_remesh_edge_len_max(pcs_remesh_edge_len_); 
 }
 
-float get_split_vert_len(uint v1, uint v3)
+float estimate_split_vert_remesh_edge_len(uint v1, uint v3)
 {
     float vlen_1 = ld_vtx_remesh_len(v1); 
     float vcurv_1 = average_adaptive_remesh_len_to_vcurv(vlen_1); 
@@ -71,6 +68,7 @@ float get_split_vert_len(uint v1, uint v3)
     float vlen_3 = ld_vtx_remesh_len(v3);
     float vcurv_3 = average_adaptive_remesh_len_to_vcurv(vlen_3); 
 
+    /* It is better to calc form curvatures */
     return get_adaptive_remesh_len(.5f * (vcurv_1 + vcurv_3)); 
 }
 
@@ -164,6 +162,11 @@ bool is_contour_edge_havent_split(vec3 vpos_0, vec3 vnor_0, VertFlags vf_0, vec3
     if (vf_0.contour || vf_1.contour)
         return false;
 
+    // return (
+    //     (vf_0.front_facing && vf_1.back_facing)
+    //     || (vf_0.back_facing && vf_1.front_facing)
+    // ); 
+
     mat4 view_to_world = ubo_view_matrices_.viewinv;
     vec3 cam_pos_ws = view_to_world[3].xyz; /* see "#define cameraPos ViewMatrixInverse[3].xyz" */
     vec2 ndv = vec2(
@@ -227,7 +230,8 @@ bool split_priority_higher(EdgeSplitPriorityContext ctx_0, EdgeSplitPriorityCont
     if ((!ctx_1.pesi.is_split_ok) || (!ctx_1.selected))
         return true;
 
-    if (pcs_split_mode_ == EDGE_SPLIT_LOOP_SUBDIV)
+    if (pcs_split_mode_ == EDGE_SPLIT_LOOP_SUBDIV
+        || pcs_split_mode_ == EDGE_SPLIT_CONTOUR_EDGES)
         return pcg(ctx_0.wedge_id * pcs_split_iter_) < pcg(ctx_1.wedge_id * pcs_split_iter_); /* use lower id */
 
     if (ctx_0.pesi.edge_len == ctx_1.pesi.edge_len)
@@ -634,7 +638,7 @@ void main()
     store_vert_flags(v4, vf); 
 
     /* Store adaptive remesh length */
-    float edge_len = get_split_vert_len(v1, v3);
+    float edge_len = estimate_split_vert_remesh_edge_len(v1, v3);
     st_vtx_remesh_len(v4, edge_len);
 
 #undef e0

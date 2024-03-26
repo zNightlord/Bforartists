@@ -148,10 +148,11 @@ namespace blender::npr::strokegen
   void StrokeGenPassModule::GetSurfaceAnalysisContext_InitPass(SurfaceAnalysisContext &surf_analysis_ctx) const
   {
     surf_analysis_ctx.order_0_only_selected = false;
-    surf_analysis_ctx.set_calc_vert_normal(true);
+    surf_analysis_ctx.set_calc_vert_normal(true, false);
     surf_analysis_ctx.ssbo_vnor_ = buffers_.ssbo_vnor_;
     surf_analysis_ctx.set_calc_vert_voronoi_area(true);
     surf_analysis_ctx.ssbo_varea_ = buffers_.ssbo_mesh_buffer_reuse_5_;
+    surf_analysis_ctx.set_calc_vert_topo_flags(false); 
 
     surf_analysis_ctx.order_1_only_selected = false;
     surf_analysis_ctx.set_calc_vert_curvature(true,
@@ -166,10 +167,11 @@ namespace blender::npr::strokegen
       SurfaceAnalysisContext &surf_analysis_ctx) const
   {
     surf_analysis_ctx.order_0_only_selected = false;
-    surf_analysis_ctx.set_calc_vert_normal(true);
+    surf_analysis_ctx.set_calc_vert_normal(true, false);
     surf_analysis_ctx.ssbo_vnor_ = buffers_.ssbo_vnor_;
     surf_analysis_ctx.set_calc_vert_voronoi_area(true);
     surf_analysis_ctx.ssbo_varea_ = buffers_.ssbo_mesh_buffer_reuse_5_;
+    surf_analysis_ctx.set_calc_vert_topo_flags(false); 
 
     surf_analysis_ctx.order_1_only_selected = true;
     surf_analysis_ctx.set_calc_vert_curvature(true,
@@ -184,10 +186,11 @@ namespace blender::npr::strokegen
       SurfaceAnalysisContext &surf_analysis_ctx) const
   {
     surf_analysis_ctx.order_0_only_selected = false;
-    surf_analysis_ctx.set_calc_vert_normal(true);
+    surf_analysis_ctx.set_calc_vert_normal(true, false);
     surf_analysis_ctx.ssbo_vnor_ = buffers_.ssbo_vnor_;
     surf_analysis_ctx.set_calc_vert_voronoi_area(false);
     surf_analysis_ctx.ssbo_varea_ = buffers_.ssbo_mesh_buffer_reuse_5_;
+    surf_analysis_ctx.set_calc_vert_topo_flags(false); 
 
     surf_analysis_ctx.order_1_only_selected = false;
     surf_analysis_ctx.set_calc_vert_curvature(false,
@@ -201,10 +204,11 @@ namespace blender::npr::strokegen
   void StrokeGenPassModule::GetSurfaceAnalysisContext_ContourInsertionPass(SurfaceAnalysisContext &surf_analysis_ctx) const
   {
     surf_analysis_ctx.order_0_only_selected = false;
-    surf_analysis_ctx.set_calc_vert_normal(true);
+    surf_analysis_ctx.set_calc_vert_normal(true, true);
     surf_analysis_ctx.ssbo_vnor_ = buffers_.ssbo_vnor_;
     surf_analysis_ctx.set_calc_vert_voronoi_area(false);
     surf_analysis_ctx.ssbo_varea_ = buffers_.ssbo_mesh_buffer_reuse_5_;
+    surf_analysis_ctx.set_calc_vert_topo_flags(true); 
 
     surf_analysis_ctx.order_1_only_selected = false;
     surf_analysis_ctx.set_calc_vert_curvature(false, SurfaceAnalysisContext::CurvatureEstimator::Jacques, false);
@@ -217,10 +221,11 @@ namespace blender::npr::strokegen
       SurfaceAnalysisContext &surf_analysis_ctx) const
   {
     surf_analysis_ctx.order_0_only_selected = false;
-    surf_analysis_ctx.set_calc_vert_normal(true);
+    surf_analysis_ctx.set_calc_vert_normal(true, false);
     surf_analysis_ctx.ssbo_vnor_ = buffers_.ssbo_vnor_;
     surf_analysis_ctx.set_calc_vert_voronoi_area(false);
     surf_analysis_ctx.ssbo_varea_ = buffers_.ssbo_mesh_buffer_reuse_5_;
+    surf_analysis_ctx.set_calc_vert_topo_flags(false); 
 
     surf_analysis_ctx.order_1_only_selected = true;
     surf_analysis_ctx.set_calc_vert_curvature(true,
@@ -258,6 +263,7 @@ namespace blender::npr::strokegen
       SurfaceAnalysisContext surf_ctx_cpy = surf_analysis_ctx;
       surf_ctx_cpy.ssbo_vcurv_pdirs_k1k2_ = buffers_.reused_ssbo_vtx_remesh_len_();
       surf_ctx_cpy.output_curvature_tensors = false; 
+      // surf_ctx_cpy.output_vertex_facing_flag = true; 
 
       surf_dbg_ctx_cpy = surf_dbg_ctx;
       surf_dbg_ctx_cpy.dbg_vert_curv = true;
@@ -504,7 +510,7 @@ namespace blender::npr::strokegen
       append_subpass_surf_geom_analysis(
           rsc_handle, num_verts, num_edges, surf_analysis_ctx_contour, surf_dbg_ctx_cpy);
       
-      for (int iter_contour_insertion = 0; iter_contour_insertion < 4; ++iter_contour_insertion) {
+      for (int iter_contour_insertion = 0; iter_contour_insertion < 6; ++iter_contour_insertion) {
         append_subpass_fill_dispatched_args_remeshed_edges_(num_edges, true);
         append_subpass_split_edges(InterpContour, iter_contour_insertion, num_edges, num_verts);
         // update elem counters after split
@@ -1452,14 +1458,22 @@ namespace blender::npr::strokegen
       auto &sub = pass_extract_geom.sub("bnpr_geom_analysis_order_0_vert_normal");
       sub.shader_set(
           shaders_.static_shader_get(
-            ctx.calc_vert_voronoi_area ? MESH_ANALYSE_VERT_NORMAL_VORONOIAREA: MESH_ANALYSE_VERT_NORMAL
-          )
-      );
+              ctx.calc_vert_voronoi_area ?
+                MESH_ANALYSE_VERT_NORMAL_VORONOIAREA :
+                ctx.calc_vert_topo_flags ?
+                  MESH_ANALYSE_VERT_NORMAL_TOPOFLAGS :
+                  MESH_ANALYSE_VERT_NORMAL
+              )
+          );
 
       bind_src(sub, ctx.order_0_only_selected, dbg_options.dbg_vert_normal);
       sub.bind_ssbo(ssbo_offset_base, ctx.ssbo_vnor_);
       if (ctx.calc_vert_voronoi_area)
         sub.bind_ssbo(ssbo_offset_base + 1, ctx.ssbo_varea_);
+      else if (ctx.calc_vert_topo_flags)
+        sub.bind_ssbo(ssbo_offset_base + 1, buffers_.ssbo_edge_flags_);
+
+      sub.push_constant("pcs_output_vertex_facing_flag_", ctx.output_vertex_facing_flag); 
 
       sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_verts_);
       sub.barrier(GPU_BARRIER_SHADER_STORAGE);
@@ -1500,7 +1514,7 @@ namespace blender::npr::strokegen
         sub.bind_ssbo(ssbo_offset_base_1 + 0, ctx.ssbo_edge_vtensors_);
         sub.bind_ssbo(ssbo_offset_base_1 + 1, ctx.ssbo_vcurv_pdirs_k1k2_);
         sub.bind_ssbo(ssbo_offset_base_1 + 2, buffers_.ssbo_vcurv_max_);
-        sub.push_constant("pcs_output_curv_tensors", ctx.output_curvature_tensors); 
+        sub.push_constant("pcs_output_curv_tensors_", ctx.output_curvature_tensors); 
 
         sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_verts_);
         sub.barrier(GPU_BARRIER_SHADER_STORAGE); 
@@ -1579,6 +1593,7 @@ namespace blender::npr::strokegen
         );
     sub.push_constant("pcs_rsc_handle", (int)rsc_handle.resource_index());
     sub.push_constant("pcs_edge_visualize_mode_", edge_visualize_mode);
+    sub.push_constant("pcs_chain_interpo_contour_", 1); 
 
     sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_edges_);
     sub.barrier(GPU_BARRIER_SHADER_STORAGE);

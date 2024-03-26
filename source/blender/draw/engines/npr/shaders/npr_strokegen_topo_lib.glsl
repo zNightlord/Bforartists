@@ -534,6 +534,9 @@ struct VertFlags
     /* we provide 4 slots for selection */
     bvec4 selected; // selected for a certain operation
     bool contour; // contour vertex
+    bool front_facing; // front facing vertex (dot(n, v) > .0f)
+    bool back_facing;  // back facing vertex (dot(n, v) < .0f)
+    bool border_eval; // border vertex, only valid after evaluated
 }; 
 VertFlags init_vert_flags(bool dupli)
 {
@@ -545,6 +548,10 @@ VertFlags init_vert_flags(bool dupli)
     vf.del_by_collapse = false; 
     vf.selected = bvec4(false); 
     vf.contour = false;
+    // mark facing as undefined
+    vf.front_facing = false;
+    vf.back_facing = false;
+    vf.border_eval = false; 
     
     return vf; 
 }
@@ -558,6 +565,10 @@ VertFlags init_vert_flags__new_split_edge(bool is_split_for_contour)
     vf.del_by_collapse = false; 
     vf.selected = bvec4(true); /* always selected for remeshing */
     vf.contour = is_split_for_contour;
+    // mark facing as undefined
+    vf.front_facing = false;
+    vf.back_facing = false;
+    vf.border_eval = false;
     
     return vf; 
 }
@@ -571,6 +582,10 @@ VertFlags init_vert_flags__new_split_face()
     vf.del_by_collapse = false; 
     vf.selected = bvec4(true); /* always selected for remeshing */
     vf.contour = false;
+    // mark facing as undefined
+    vf.front_facing = false;
+    vf.back_facing = false;
+    vf.border_eval = false;
     
     return vf; 
 }
@@ -600,6 +615,13 @@ uint encode_vert_flags(VertFlags vf)
 
     vf_enc <<= 1u;
     vf_enc |= uint(vf.contour);
+    vf_enc <<= 1u;
+    vf_enc |= uint(vf.front_facing);
+    vf_enc <<= 1u;
+    vf_enc |= uint(vf.back_facing);
+    
+    vf_enc <<= 1u;
+    vf_enc |= uint(vf.border_eval);
 
     return vf_enc; 
 }
@@ -607,6 +629,13 @@ VertFlags decode_vert_flags(uint vf_enc)
 {
     VertFlags vf; 
 
+    vf.border_eval = (1u == (vf_enc & 1u));
+    vf_enc >>= 1u;
+
+    vf.back_facing = (1u == (vf_enc & 1u));
+    vf_enc >>= 1u;
+    vf.front_facing = (1u == (vf_enc & 1u));
+    vf_enc >>= 1u;
     vf.contour = (1u == (vf_enc & 1u));
     vf_enc >>= 1u;
 
@@ -675,6 +704,15 @@ void update_vert_flags__reset_face_split_new_vert(uint vid, VertFlags vf_old)
 {
     vf_old.new_by_face_split = false; 
     store_vert_flags(vid, vf_old);
+}
+void update_vert_flags__facing_direction(bool front_facing, bool back_facing, inout VertFlags vf_update)
+{
+    vf_update.front_facing = front_facing; 
+    vf_update.back_facing = back_facing; 
+}
+void update_vert_flags__border(bool border, inout VertFlags vf_update)
+{
+    vf_update.border_eval = border; 
 }
 #endif
 
