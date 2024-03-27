@@ -171,7 +171,7 @@ namespace blender::npr::strokegen
     std::mt19937 rng((time(0)));
     std::srand(time(0));
     int curr_arr_head = 0;
-    int curr_len = std::max(2, (int)std::rand() % num_nodes / 4);
+    int curr_len = std::max(2, (int)std::rand() % num_nodes / 2);
     int curr_arr_tail = curr_arr_head + curr_len - 1;
     for (int arr_id = 0; arr_id < num_nodes; ++arr_id) {
       rank[arr_id] = arr_id - curr_arr_head;
@@ -181,7 +181,7 @@ namespace blender::npr::strokegen
       if (curr_arr_tail == arr_id) {  // update to next sublist
         curr_arr_head = arr_id + 1;
         curr_len = std::min(num_nodes - curr_arr_head,
-                            std::max((int)std::rand() % (num_nodes / 4), 2));
+                            std::max((int)std::rand() % (num_nodes / 2), 2));
           curr_arr_tail = curr_arr_head + curr_len - 1;
         }
 

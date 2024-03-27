@@ -222,7 +222,7 @@ namespace blender::npr::strokegen
     if (strokegen_passes.test_list_ranking)
     {
       manager.submit(strokegen_passes.get_compute_pass(PType::LIST_RANKING_TEST), view);
-      if (frame_counter % 64 == 0)
+      if (frame_counter % 8 == 0)
       {
         bool succ = strokegen_passes.validate_list_ranking();
       }

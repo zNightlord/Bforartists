@@ -54,7 +54,7 @@ void main()
         uint next_node_id = FUNC_DEVICE_LOAD_LISTRANKING_NODE_NEXT_NODE_ID(node_id);
         bool is_tail_node = node_id == next_node_id; 
         
-        FUNC_DEVICE_STORE_LISTRANKING_NODE_RANK(node_id, is_tail_node ? 0u : 1u); 
+        FUNC_DEVICE_STORE_LISTRANKING_NODE_RANK(node_id, /* is_tail_node ? 0u :  */1u); 
         if (idx == 0u)
         {
             ssbo_list_ranking_anchor_counters_[0] = num_nodes_total;
@@ -338,7 +338,7 @@ void main()
         { /* head node is responsible for this */
             /* for each anchor, rank == dist to list tail */
             /* => for head, rank+1 == list length */
-            uint list_len = 1 + ji_updated.data; 
+            uint list_len = /* 1 +  */ji_updated.data; 
             if (IS_LOOP_RANKING_PASS()) list_len = ji_updated.data; 
 
             uint list_addr = FUNC_DEVICE_ALLOC_LIST_ADDR(list_len); 
@@ -383,27 +383,32 @@ void main()
 
     JumpingInfo ji;
     ji = FUNC_DEVICE_LOAD_PER_ANCHOR_LIST_JUMPING_INFO(anchor_id); 
-    
+	
+    /* We can infer if this list is looped from jumping result */
+    JumpingInfo ji_tail; 
+	ji_tail = FUNC_DEVICE_LOAD_PER_ANCHOR_LIST_JUMPING_INFO(ji.jump_next_anchor_id); 
+	bool not_a_loop_list = ji_tail.jump_next_anchor_id == ji.jump_next_anchor_id;      
+
     bool is_loop_head, is_loop_tail; 
     /* Non-loop head/tail flags are already there. */
     is_loop_head = is_loop_tail = false; 
 
+
     /* Find loop head */
     uint node_id = FUNC_GET_NODE_ID_FOR_ANCHOR(anchor_id); 
     const uint anchor_code = node_id; 
-    if (ji.data == anchor_code && !ji.is_list_head/*exclude non-loop cases*/) 
+    if (ji.data == anchor_code && !(ji.is_list_head || not_a_loop_list)/*exclude non-loop cases*/) 
         is_loop_head = true;
 
     /* Find loop tail */
-    /* TODO: this can be rough, consider cache next anchor id for performance. */
     uint next_node_id = FUNC_DEVICE_LOAD_LISTRANKING_NODE_NEXT_NODE_ID(node_id); 
     uint next_anchor_id = FUNC_DEVICE_LOAD_PER_NODE_ANCHORID(next_node_id); 
     JumpingInfo ji_next = FUNC_DEVICE_LOAD_PER_ANCHOR_LIST_JUMPING_INFO(next_anchor_id); 
-    
     const uint next_anchor_code = next_node_id; 
-    if (ji_next.data == next_node_id && !ji.is_list_tail)
+    if (ji_next.data == next_node_id && !(ji.is_list_tail || not_a_loop_list)/*exclude non-loop cases*/)
         is_loop_tail = true;     
 
+    
     /* Update linkage to break the loop */
     if (is_loop_head)
     {

@@ -1593,7 +1593,7 @@ namespace blender::npr::strokegen
         );
     sub.push_constant("pcs_rsc_handle", (int)rsc_handle.resource_index());
     sub.push_constant("pcs_edge_visualize_mode_", edge_visualize_mode);
-    sub.push_constant("pcs_chain_interpo_contour_", 1); 
+    sub.push_constant("pcs_chain_interpo_contour_", 0); 
 
     sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_edges_);
     sub.barrier(GPU_BARRIER_SHADER_STORAGE);
@@ -2077,7 +2077,7 @@ namespace blender::npr::strokegen
         uint list_len_out = computed_topo[2 * curr_node_id + 1];
         uint list_addr_out = computed_topo[2 * curr_node_id];
         uint list_broadcast_anchor_id = computed_links[2 * curr_node_id + 1];
-        if (test_looped_pass_list_ranking)
+        // if (test_looped_pass_list_ranking)
         {
           rank_out = rank_out & 0x3fffffffu;
         }
@@ -2133,15 +2133,22 @@ namespace blender::npr::strokegen
         uint rank_out     = computed_ranks[i];
         uint list_len_out = computed_topo[2*i+1];
 
-        if (rank_gt != (list_len_gt - 1 - rank_out))
-        {
-          fprintf(stderr, "strokegen error: incorrect rank, list ranking test failed: ");
+        uint head_node_id_gt = buffers_.listranking_test_nodes_head[i]; 
+
+        rank_out = rank_out & 0x3fffffffu;
+
+        if (list_len_gt != list_len_out) {
+          fprintf(stderr, "strokegen error: incorrect list length, list ranking test failed: ");
+          print_list_ranking_nodes(head_node_id_gt, computed_ranks, computed_topo, computed_links);
+
           return false;
         }
 
-        if (list_len_gt != list_len_out)
+        if (rank_gt != (list_len_gt - 1 - rank_out))
         {
-          fprintf(stderr, "strokegen error: incorrect list length, list ranking test failed: ");
+          fprintf(stderr, "strokegen error: incorrect rank, list ranking test failed: ");
+          print_list_ranking_nodes(head_node_id_gt, computed_ranks, computed_topo, computed_links);
+
           return false;
         }
       }
