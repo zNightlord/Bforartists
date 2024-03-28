@@ -51,6 +51,7 @@ void npr::strokegen::StrokegenMeshRasterPass::append_draw_contour_subpass(
   subpass->bind_ssbo(2, buffers.ssbo_contour_edge_rank_);
   subpass->bind_ssbo(3, buffers.ssbo_contour_edge_list_len_);
   subpass->bind_ssbo(4, buffers.ssbo_contour_edge_list_head_);
+  subpass->bind_ssbo(5, buffers.ssbo_contour_to_contour_);
   float2 fb_res = textures.get_contour_raster_screen_res();
   float2 fb_res_inv = float2(1.0f / fb_res.x, 1.0f / fb_res.y); 
   subpass->push_constant("pcs_screen_size_inv_", fb_res_inv);

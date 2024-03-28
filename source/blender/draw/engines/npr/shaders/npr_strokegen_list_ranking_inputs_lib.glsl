@@ -14,13 +14,14 @@ struct JumpingInfo
     uint data; 
     bool is_list_head; 
     bool is_list_tail; 
+    bool is_loop_list; 
 };
 
 
 uvec2 EncodePointerJumpingInfo(JumpingInfo ji)
 {
     uint packed_x = (uint(ji.is_list_head) | (ji.jump_next_anchor_id << 1));
-    uint packed_y = (uint(ji.is_list_tail) | (ji.data << 1)); 
+    uint packed_y = (uint(ji.is_list_tail) | (uint(ji.is_loop_list) << 1) | (ji.data << 2)); 
 
     return uvec2(packed_x, packed_y); 
 }
@@ -30,7 +31,8 @@ JumpingInfo DecodePointerJumpingInfo(uvec2 encoded)
     ji.is_list_head = (1u == (encoded.x & 1u)); 
     ji.jump_next_anchor_id = (encoded.x >> 1);
     ji.is_list_tail = (1u == (encoded.y & 1u));  
-    ji.data = (encoded.y >> 1); 
+    ji.is_loop_list = (1u == ((encoded.y >> 1) & 1u));
+    ji.data = (encoded.y >> 2); 
 
     return ji; 
 }
@@ -284,6 +286,7 @@ JumpingInfo func_device_init_per_anchor_jumping_info(uint anchor_id, uint splici
 
     ji.is_list_tail = (next_node_id == node_id); 
     ji.is_list_head = (prev_node_id == node_id); 
+    ji.is_loop_list = true; // initalized in loop-breaking pass
 
     if (IS_LOOP_BREAKING_PASS())
     {

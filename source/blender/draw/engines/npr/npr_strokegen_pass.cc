@@ -1593,7 +1593,7 @@ namespace blender::npr::strokegen
         );
     sub.push_constant("pcs_rsc_handle", (int)rsc_handle.resource_index());
     sub.push_constant("pcs_edge_visualize_mode_", edge_visualize_mode);
-    sub.push_constant("pcs_chain_interpo_contour_", 0); 
+    sub.push_constant("pcs_chain_interpo_contour_", 1); 
 
     sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_edges_);
     sub.barrier(GPU_BARRIER_SHADER_STORAGE);
@@ -2201,6 +2201,11 @@ namespace blender::npr::strokegen
           }
 
           uint curr_rank_out = computed_ranks[curr_node_id];
+          curr_rank_out = (curr_rank_out & 0x3fffffffu); 
+          if (curr_rank_out > list_len_gt || curr_rank_out > curr_list_len_out) {
+            fprintf(stderr, "incorrect list addr");
+            fucked = true;
+          }
 
           uint curr_rank_out_adjusted = decode_rank(curr_rank_out, list_len_gt);
           uint prev_rank_out_adjusted = decode_rank(prev_rank_out, list_len_gt);

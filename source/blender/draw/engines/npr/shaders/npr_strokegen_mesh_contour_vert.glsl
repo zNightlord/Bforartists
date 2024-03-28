@@ -72,20 +72,42 @@ void main()
     uint contour_edge_list_len = ssbo_contour_edge_list_len_[contour_edge_id]; 
     float contour_edge_param = float(contour_edge_rank) / float(contour_edge_list_len); 
     uint contour_edge_list_head = ssbo_contour_edge_list_head_[contour_edge_id]; 
-    uvec2 dbg_contour_prev_next = uvec2(
+    uvec2 link = uvec2(
         ssbo_contour_to_contour_[2*contour_edge_id], 
         ssbo_contour_to_contour_[2*contour_edge_id+1u]
     ); 
+    uvec2 link_prev = uvec2(
+        ssbo_contour_to_contour_[2*link.x], 
+        ssbo_contour_to_contour_[2*link.x+1u]
+    ); 
+    uvec2 link_next = uvec2(
+        ssbo_contour_to_contour_[2*link.y], 
+        ssbo_contour_to_contour_[2*link.y+1u]
+    ); 
+    bool invalid_link = (contour_edge_id != link_prev.y) && (contour_edge_id != link_next.x);
+
+    
+    uint end_node_id = contour_edge_list_head; 
+    uvec2 link_end = uvec2(
+        ssbo_contour_to_contour_[2*end_node_id], 
+        ssbo_contour_to_contour_[2*end_node_id+1u]
+    ); 
+	uint end_node_rank = ssbo_contour_edge_rank_[end_node_id]; 
 
     color = 
-        // vec4(1.0f, .1.0f, .1f, 1.0f); 
         /* min(1.0f, contour_edge_param * 1.5f) *  */
         // vec4(edgedir_uv.xy * 0.5f + .5f, 0, 1); 
-        vec4(
-            contour_edge_param * .5f * rand_col_rgb(contour_edge_list_head, contour_edge_list_len).rgb, 
-            1/* contour_edge_list_head */
-        ); 
-        // vec4(float(contour_edge_id), vec2(dbg_contour_prev_next.xy), 1.0f);  
+
+        // vec4(
+        //     /* contour_edge_param *  */.5f * rand_col_rgb(contour_edge_list_len, contour_edge_list_len).rgb, 
+        //     1.0f/* contour_edge_rank *//* contour_edge_list_head */
+        // ); 
+
+        contour_edge_list_len < contour_edge_rank ? 
+            vec4(contour_edge_rank, contour_edge_list_len, contour_edge_list_head, end_node_rank + 1) 
+            : vec4(contour_edge_rank, contour_edge_list_len, contour_edge_list_head, 0);
+        
+		// vec4(float(contour_edge_id), vec2(link.xy), 1.0f);  
         /* vec4((float(contour_edge_rank) / float(contour_edge_list_len)).xxx, 1.0f); */
         /* vec4(edgedir_uv.xy * 0.5f + .5f, 0, 1); */ 
 

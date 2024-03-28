@@ -294,7 +294,7 @@ void main()
     { /* We need to add the tail rank here for once,
        * since we forbid to accumulate when reaches the tail in prev iters
        * this is only needed in looped ranking since otherwise the rank of tail would be 0 (we never splice the tail out) */
-        if (!ji.is_list_tail)
+        if (ji.is_loop_list && (!ji.is_list_tail))
         { /* still needs one more jump */
             JumpingInfo ji_tail = FUNC_DEVICE_LOAD_PER_ANCHOR_LIST_JUMPING_INFO(ji_updated.jump_next_anchor_id); 
             ji_updated.data += ji_tail.data;
@@ -342,7 +342,12 @@ void main()
             if (IS_LOOP_RANKING_PASS()) list_len = ji_updated.data; 
 
             uint list_addr = FUNC_DEVICE_ALLOC_LIST_ADDR(list_len); 
-            FUNC_DEVICE_BROADCAST_LIST_TOPOLOGY(list_broadcast_anchor_id, list_len, list_addr); 
+            // FUNC_DEVICE_BROADCAST_LIST_TOPOLOGY(list_broadcast_anchor_id, list_len, list_addr); 
+
+            // debug only
+            uint tail_node_id = FUNC_GET_NODE_ID_FOR_ANCHOR(list_broadcast_anchor_id, splicing_iter); 
+            FUNC_DEVICE_BROADCAST_LIST_TOPOLOGY(list_broadcast_anchor_id, list_len, tail_node_id);
+            // ----------
         }
     }
     /* At last loop-breaking-jump-iter, just output jumping results */
@@ -387,7 +392,7 @@ void main()
     /* We can infer if this list is looped from jumping result */
     JumpingInfo ji_tail; 
 	ji_tail = FUNC_DEVICE_LOAD_PER_ANCHOR_LIST_JUMPING_INFO(ji.jump_next_anchor_id); 
-	bool not_a_loop_list = ji_tail.jump_next_anchor_id == ji.jump_next_anchor_id;      
+	bool not_a_loop_list = ji_tail.is_list_tail; 
 
     bool is_loop_head, is_loop_tail; 
     /* Non-loop head/tail flags are already there. */
@@ -424,6 +429,7 @@ void main()
     /* Also setup the jumping info for next jumping pass (which does ranking) */
     ji.data = FUNC_DEVICE_LOAD_LISTRANKING_NODE_RANK(node_id); 
     ji.jump_next_anchor_id = is_loop_tail ? anchor_id : next_anchor_id; 
+    ji.is_loop_list = !not_a_loop_list;     
     FUNC_DEVICE_STORE_PER_ANCHOR_LIST_JUMPING_INFO(anchor_id, ji);  
 }
 
@@ -501,8 +507,8 @@ void main()
 uint decode_rank(uint raw_rank, uint list_len) 
 {
     // decode rank, might be packed with flags
-    raw_rank = raw_rank & 0x3fffffffu;
-    raw_rank = list_len - raw_rank;
+    raw_rank = (raw_rank & 0x3fffffffu);
+    // raw_rank = list_len - raw_rank;
     return raw_rank;
 };
 
