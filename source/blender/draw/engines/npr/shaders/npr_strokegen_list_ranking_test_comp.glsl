@@ -290,14 +290,17 @@ void main()
     
     bool jumped_to_end = false; 
     ji_updated = FUNC_DEVICE_UPDATE_ANCHOR_LIST_JUMPING_INFO(ji, ji_next, /*out*/jumped_to_end); 
-    if ((curr_jump_iter == iter_jump_end) && IS_LOOP_RANKING_PASS())
+    if ((curr_jump_iter == iter_jump_end) && (IS_LOOP_RANKING_PASS() || IS_LOOP_BREAKING_PASS()))
     { /* We need to add the tail rank here for once,
        * since we forbid to accumulate when reaches the tail in prev iters
        * this is only needed in looped ranking since otherwise the rank of tail would be 0 (we never splice the tail out) */
         if (ji.is_loop_list && (!ji.is_list_tail))
         { /* still needs one more jump */
             JumpingInfo ji_tail = FUNC_DEVICE_LOAD_PER_ANCHOR_LIST_JUMPING_INFO(ji_updated.jump_next_anchor_id); 
-            ji_updated.data += ji_tail.data;
+            if (IS_LOOP_RANKING_PASS())
+                ji_updated.data += ji_tail.data;  
+            if (IS_LOOP_BREAKING_PASS())
+                ji_updated.data = max(ji_updated.data, ji_tail.data); /* find node with max code as head */ 
         }
     }
 
@@ -312,7 +315,7 @@ void main()
         uint node_id = FUNC_GET_NODE_ID_FOR_ANCHOR(anchor_id, splicing_iter); 
         /* fix rank when loop_list_len==1 */
         bool singular_loop = (IS_LOOP_RANKING_PASS() && ji_updated.is_list_head && (ji_updated.data == 0u)); 
-        if (singular_loop){
+        if (singular_loop) {
             ji_updated.data = 1u; 
         }
 
@@ -346,7 +349,7 @@ void main()
 
             // debug only
             uint tail_node_id = FUNC_GET_NODE_ID_FOR_ANCHOR(list_broadcast_anchor_id, splicing_iter); 
-            FUNC_DEVICE_BROADCAST_LIST_TOPOLOGY(list_broadcast_anchor_id, list_len, tail_node_id);
+            FUNC_DEVICE_BROADCAST_LIST_TOPOLOGY(list_broadcast_anchor_id, list_len, node_id);
             // ----------
         }
     }
