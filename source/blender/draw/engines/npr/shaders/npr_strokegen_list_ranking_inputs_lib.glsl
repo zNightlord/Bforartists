@@ -14,7 +14,7 @@ struct JumpingInfo
     uint data; 
     bool is_list_head; 
     bool is_list_tail; 
-    bool is_loop_list; 
+    bool is_loop_list; /* only valid after the loop-breaking pass */
 };
 
 

@@ -13,8 +13,18 @@ void main()
     
     uint node_id = idx; 
 
-    ssbo_list_ranking_links_out_[node_id*2] = ssbo_list_ranking_links_in_[node_id*2];
-    ssbo_list_ranking_links_out_[node_id*2+1] = ssbo_list_ranking_links_in_[node_id*2+1]; 
+    /* combat against invalid linkage */
+    uint prev = ssbo_list_ranking_links_in_[node_id*2]; 
+    uint next = ssbo_list_ranking_links_in_[node_id*2+1];
+    uint prev_next = ssbo_list_ranking_links_in_[prev*2+1];
+    uint next_prev = ssbo_list_ranking_links_in_[next*2];
+    if (prev_next != node_id)
+        prev = node_id; 
+    if (next_prev != node_id)
+        next = node_id;
+
+    ssbo_list_ranking_links_out_[node_id*2] = prev;
+    ssbo_list_ranking_links_out_[node_id*2+1] = next; 
 
     if ((idx == 0u) && (pc_listranking_custom_ == 0)) 
         NUM_NODES_TOTAL = NUM_ITEMS_BNPR_LIST_RANK_TEST; 
@@ -291,16 +301,17 @@ void main()
     bool jumped_to_end = false; 
     ji_updated = FUNC_DEVICE_UPDATE_ANCHOR_LIST_JUMPING_INFO(ji, ji_next, /*out*/jumped_to_end); 
     if ((curr_jump_iter == iter_jump_end) && (IS_LOOP_RANKING_PASS() || IS_LOOP_BREAKING_PASS()))
-    { /* We need to add the tail rank here for once,
-       * since we forbid to accumulate when reaches the tail in prev iters
-       * this is only needed in looped ranking since otherwise the rank of tail would be 0 (we never splice the tail out) */
+    { /* still needs one more jump */
         if (ji.is_loop_list && (!ji.is_list_tail))
-        { /* still needs one more jump */
+        /* We need to add the tail rank here for once,
+         * since we forbid to accumulate when reaches the tail in prev iters
+         * this is only needed in looped ranking since otherwise the rank of tail would be 0 (we never splice the tail out) */
+        { 
             JumpingInfo ji_tail = FUNC_DEVICE_LOAD_PER_ANCHOR_LIST_JUMPING_INFO(ji_updated.jump_next_anchor_id); 
             if (IS_LOOP_RANKING_PASS())
                 ji_updated.data += ji_tail.data;  
             if (IS_LOOP_BREAKING_PASS())
-                ji_updated.data = max(ji_updated.data, ji_tail.data); /* find node with max code as head */ 
+                ji_updated.data = max(ji_updated.data, ji_tail.data); 
         }
     }
 
@@ -345,12 +356,7 @@ void main()
             if (IS_LOOP_RANKING_PASS()) list_len = ji_updated.data; 
 
             uint list_addr = FUNC_DEVICE_ALLOC_LIST_ADDR(list_len); 
-            // FUNC_DEVICE_BROADCAST_LIST_TOPOLOGY(list_broadcast_anchor_id, list_len, list_addr); 
-
-            // debug only
-            uint tail_node_id = FUNC_GET_NODE_ID_FOR_ANCHOR(list_broadcast_anchor_id, splicing_iter); 
-            FUNC_DEVICE_BROADCAST_LIST_TOPOLOGY(list_broadcast_anchor_id, list_len, node_id);
-            // ----------
+            FUNC_DEVICE_BROADCAST_LIST_TOPOLOGY(list_broadcast_anchor_id, list_len, list_addr); 
         }
     }
     /* At last loop-breaking-jump-iter, just output jumping results */
@@ -483,7 +489,7 @@ void main()
     node_rank += next_node_rank; 
 #endif
 
-    FUNC_DEVICE_STORE_LISTRANKING_NODE_RANK(node_id, node_rank);   
+    FUNC_DEVICE_STORE_LISTRANKING_NODE_RANK(node_id, node_rank); 
 
 
 
