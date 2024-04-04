@@ -518,7 +518,7 @@ namespace blender::npr::strokegen
         append_subpass_fill_dispatched_args_remeshed_verts_(num_verts, false);
       }
     }
-
+    
     // test cusp detection
     {
       SurfaceAnalysisContext surf_analysis_ctx_contour;
@@ -1560,43 +1560,52 @@ namespace blender::npr::strokegen
       int edge_visualize_mode
   )
   {
-    auto &sub = pass_extract_geom.sub(
-        boostrap_before_extract_first_batch ? "bnpr_geom_extract_boostrap" : "bnpr_geom_extract"
-        );
-    // if (ib_type == gpu::GPU_INDEX_U16)
-    //   sub.shader_set(shaders_.static_shader_get(eShaderType::CONTOUR_GEOM_EXTRACT_IBO_16BIT));
-    // else
-    sub.shader_set(shaders_.static_shader_get(eShaderType::CONTOUR_GEOM_EXTRACT));
+    auto bind_rsc = [&](ResourceHandle &rsc_handle,
+                        gpu::Batch *edge_batch,
+                        gpu::GPUIndexBufType ib_type,
+                        int edge_visualize_mode,
+                        draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub)
+    {
+      sub.bind_ssbo(0, buffers_.ssbo_edge_to_vert_ /*&(gpu_batch_line_adj->elem)*/);
+      sub.bind_ssbo(1, buffers_.ssbo_vbo_full_ /*&(gpu_batch_line_adj->verts[0])*/);
+      sub.bind_ssbo(2, buffers_.reused_ssbo_contour_temp_data_());
+      sub.bind_ssbo(3, DRW_manager_get()->matrix_buf.current());
+      sub.bind_ssbo(4, buffers_.ssbo_bnpr_mesh_pool_counters_);
+      sub.bind_ssbo(5, buffers_.reused_ssbo_edge_to_contour_());
+      sub.bind_ssbo(6, buffers_.ssbo_dyn_mesh_counters_out_());
+      sub.bind_ssbo(7, buffers_.ssbo_edge_flags_);
+      // for debugging
+      sub.bind_ssbo(8, buffers_.ssbo_edge_to_edges_);
+      sub.bind_ssbo(9, buffers_.ssbo_edge_to_vert_);
+      sub.bind_ssbo(10, buffers_.ssbo_vert_to_edge_list_header_);
+      sub.bind_ssbo(11, buffers_.ssbo_dbg_lines_);
+      sub.bind_ssbo(12, buffers_.ssbo_vert_flags_);
+      // --------------
+      sub.bind_ubo(0, buffers_.ubo_view_matrices_cache_);
+      sub.push_constant("pcs_ib_fmt_u16", ib_type == gpu::GPU_INDEX_U16 ? 1 : 0);
+      sub.push_constant("pcs_num_edges", (int)edge_batch->elem_()->index_len_get() / 4);
+      sub.push_constant(
+          // not used for now, but I suspect this could be interfering with complex meshes
+          "pcs_num_ib_offset",
+          (int)edge_batch->elem_()->index_start_get() +
+              (int)edge_batch->elem_()->index_base_get());
+      sub.push_constant("pcs_rsc_handle", (int)rsc_handle.resource_index());
+      sub.push_constant("pcs_edge_visualize_mode_", edge_visualize_mode);
+      sub.push_constant("pcs_chain_interpo_contour_", 0);
+      float2 fb_res = textures_.get_contour_raster_screen_res();
+      sub.push_constant("pcs_screen_size_", fb_res);
+    };
 
-    sub.bind_ssbo(0, buffers_.ssbo_edge_to_vert_/*&(gpu_batch_line_adj->elem)*/);
-    sub.bind_ssbo(1, buffers_.ssbo_vbo_full_ /*&(gpu_batch_line_adj->verts[0])*/);
-    sub.bind_ssbo(2, buffers_.reused_ssbo_bnpr_mesh_pool_());
-    sub.bind_ssbo(3, DRW_manager_get()->matrix_buf.current());
-    sub.bind_ssbo(4, buffers_.ssbo_bnpr_mesh_pool_counters_);
-    sub.bind_ssbo(5, buffers_.reused_ssbo_edge_to_contour_());
-    sub.bind_ssbo(6, buffers_.ssbo_dyn_mesh_counters_out_());
-    sub.bind_ssbo(7, buffers_.ssbo_edge_flags_); 
-    // for debugging 
-    sub.bind_ssbo(8, buffers_.ssbo_edge_to_edges_);
-    sub.bind_ssbo(9, buffers_.ssbo_edge_to_vert_);
-    sub.bind_ssbo(10, buffers_.ssbo_vert_to_edge_list_header_);
-    sub.bind_ssbo(11, buffers_.ssbo_dbg_lines_);
-    sub.bind_ssbo(12, buffers_.ssbo_vert_flags_);
-    // --------------
-    sub.bind_ubo(0, buffers_.ubo_view_matrices_cache_);
-    sub.push_constant("pcs_ib_fmt_u16", ib_type == gpu::GPU_INDEX_U16 ? 1 : 0);
-    sub.push_constant("pcs_num_edges", (int)edge_batch->elem_()->index_len_get() / 4);
-    sub.push_constant(
-        // not used for now, but I suspect this could be interfering with complex meshes
-        "pcs_num_ib_offset",
-        (int)edge_batch->elem_()->index_start_get() + (int)edge_batch->elem_()->index_base_get()
-        );
-    sub.push_constant("pcs_rsc_handle", (int)rsc_handle.resource_index());
-    sub.push_constant("pcs_edge_visualize_mode_", edge_visualize_mode);
-    sub.push_constant("pcs_chain_interpo_contour_", 1); 
+    {
+      auto &sub = pass_extract_geom.sub(
+         boostrap_before_extract_first_batch ? "bnpr_geom_extract_boostrap" : "bnpr_geom_extract");
+      sub.shader_set(shaders_.static_shader_get(eShaderType::CONTOUR_GEOM_EXTRACT));
 
-    sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_edges_);
-    sub.barrier(GPU_BARRIER_SHADER_STORAGE);
+      bind_rsc(rsc_handle, edge_batch, ib_type, edge_visualize_mode, sub);
+
+      sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_edges_);
+      sub.barrier(GPU_BARRIER_SHADER_STORAGE);
+    }
   }
 
   void StrokeGenPassModule::append_subpass_process_contour_edges()
@@ -1605,16 +1614,18 @@ namespace blender::npr::strokegen
       auto &sub = pass_extract_geom.sub("calc contour edge raster data");
       sub.shader_set(shaders_.static_shader_get(eShaderType::COMPUTE_CONTOUR_EDGE_RASTER_DATA));
 
-      sub.bind_ssbo(0, buffers_.reused_ssbo_bnpr_mesh_pool_());
-      sub.bind_ssbo(1, buffers_.ssbo_bnpr_mesh_pool_counters_);
-      sub.bind_ssbo(2, buffers_.ssbo_bnpr_mesh_pool_counters_prev_);
-      sub.bind_ssbo(3, buffers_.ssbo_edge_to_edges_);
-      sub.bind_ssbo(4, buffers_.reused_ssbo_edge_to_contour_());
-      sub.bind_ssbo(5, buffers_.ssbo_contour_to_contour_);
-      sub.bind_ssbo(6, buffers_.ssbo_list_ranking_inputs_);
-      sub.bind_ssbo(7, buffers_.ssbo_vert_to_edge_list_header_);
-      sub.bind_ssbo(8, buffers_.ssbo_vnor_);
-      sub.bind_ssbo(9, buffers_.ssbo_edge_to_vert_); 
+      sub.bind_ssbo(0, buffers_.reused_ssbo_contour_temp_data_());
+      sub.bind_ssbo(1, buffers_.reused_ssbo_bnpr_mesh_pool_());
+      sub.bind_ssbo(2, buffers_.ssbo_bnpr_mesh_pool_counters_);
+      sub.bind_ssbo(3, buffers_.ssbo_bnpr_mesh_pool_counters_prev_);
+      sub.bind_ssbo(4, buffers_.ssbo_edge_to_edges_);
+      sub.bind_ssbo(5, buffers_.reused_ssbo_edge_to_contour_());
+      sub.bind_ssbo(6, buffers_.ssbo_contour_to_contour_);
+      sub.bind_ssbo(7, buffers_.ssbo_list_ranking_inputs_);
+      sub.bind_ssbo(8, buffers_.ssbo_vert_to_edge_list_header_);
+      sub.bind_ssbo(9, buffers_.ssbo_vnor_);
+      sub.bind_ssbo(10, buffers_.ssbo_edge_to_vert_);
+      sub.bind_ssbo(11, buffers_.ssbo_vbo_full_);
       sub.bind_ubo(0, buffers_.ubo_view_matrices_);
       float2 fb_res = textures_.get_contour_raster_screen_res(); 
       sub.push_constant("pcs_screen_size_", fb_res); 

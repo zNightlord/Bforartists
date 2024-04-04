@@ -88,6 +88,7 @@ uint CAT(compact_, tag)(bool val, uint groupIdx, uint multiplier = 1u)          
     }                                                                                              \
     barrier();                                                                                     \
                                                                                                    \
+    memoryBarrier();                                                                               \
     /* Add block sum to global counter. */                                                         \
     if (groupIdx == gl_WorkGroupSize.x - 1u)                                                       \
     {                                                                                              \
@@ -96,6 +97,7 @@ uint CAT(compact_, tag)(bool val, uint groupIdx, uint multiplier = 1u)          
             LDS_HIST_BLK * (multiplier)                                                            \
         );                                                                                         \
     }                                                                                              \
+    memoryBarrier();                                                                               \
     barrier();                                                                                     \
                                                                                                    \
     /* Compute final offset */                                                                     \
@@ -176,30 +178,37 @@ DECL_COMPACTION_FUNC(CP_TAG, ssbo_bnpr_mesh_pool_counters_.num_dbg_vpdir_lines)
 
 #if defined(_KERNEL_MULTICOMPILE__GEOM_EXTRACT)
 #define CP_TAG contour_edge
-DECL_LDS_DIGIT_PER_LANE(CP_TAG)
-#define LDS_DIGIT_PER_LANE CAT(LDS_digit_per_lane_, CP_TAG)
-DECL_LDS_OFFSET_PER_LANE_SLOT(CP_TAG)
-#define LDS_OFFSET_PER_LANE_SLOT CAT(LDS_digit_per_lane_, CP_TAG)
-DECL_LDS_HIST_BLK(CP_TAG)
-#define LDS_HIST_BLK CAT(LDS_hist_blk_, CP_TAG)
-DECL_LDS_SCAN_BLOCK_OFFSET(CP_TAG)
-#define LDS_SCAN_BLOCK_OFFSET CAT(LDS_scan_block_offset_, CP_TAG) 
+    DECL_LDS_DIGIT_PER_LANE(CP_TAG)
+    #define LDS_DIGIT_PER_LANE CAT(LDS_digit_per_lane_, CP_TAG)
+    DECL_LDS_OFFSET_PER_LANE_SLOT(CP_TAG)
+    #define LDS_OFFSET_PER_LANE_SLOT CAT(LDS_digit_per_lane_, CP_TAG)
+    DECL_LDS_HIST_BLK(CP_TAG)
+    #define LDS_HIST_BLK CAT(LDS_hist_blk_, CP_TAG)
+    DECL_LDS_SCAN_BLOCK_OFFSET(CP_TAG)
+    #define LDS_SCAN_BLOCK_OFFSET CAT(LDS_scan_block_offset_, CP_TAG) 
 
-DECL_COMPACTION_FUNC(CP_TAG, ssbo_bnpr_mesh_pool_counters_.num_contour_edges)
+    DECL_COMPACTION_FUNC(CP_TAG, ssbo_bnpr_mesh_pool_counters_.num_contour_edges)
+    #undef LDS_HIST_BLK
+    #undef LDS_OFFSET_PER_LANE_SLOT
+    #undef LDS_DIGIT_PER_LANE
 #undef CP_TAG
 
 #define CP_TAG dbg_edge
-DECL_LDS_DIGIT_PER_LANE(CP_TAG)
-#define LDS_DIGIT_PER_LANE CAT(LDS_digit_per_lane_, CP_TAG)
-DECL_LDS_OFFSET_PER_LANE_SLOT(CP_TAG)
-#define LDS_OFFSET_PER_LANE_SLOT CAT(LDS_digit_per_lane_, CP_TAG)
-DECL_LDS_HIST_BLK(CP_TAG)
-#define LDS_HIST_BLK CAT(LDS_hist_blk_, CP_TAG)
-DECL_LDS_SCAN_BLOCK_OFFSET(CP_TAG)
-#define LDS_SCAN_BLOCK_OFFSET CAT(LDS_scan_block_offset_, CP_TAG) 
+    DECL_LDS_DIGIT_PER_LANE(CP_TAG)
+    #define LDS_DIGIT_PER_LANE CAT(LDS_digit_per_lane_, CP_TAG)
+    DECL_LDS_OFFSET_PER_LANE_SLOT(CP_TAG)
+    #define LDS_OFFSET_PER_LANE_SLOT CAT(LDS_digit_per_lane_, CP_TAG)
+    DECL_LDS_HIST_BLK(CP_TAG)
+    #define LDS_HIST_BLK CAT(LDS_hist_blk_, CP_TAG)
+    DECL_LDS_SCAN_BLOCK_OFFSET(CP_TAG)
+    #define LDS_SCAN_BLOCK_OFFSET CAT(LDS_scan_block_offset_, CP_TAG) 
 
-DECL_COMPACTION_FUNC(CP_TAG, ssbo_bnpr_mesh_pool_counters_.num_dbg_edge_lines)
-#undef CP_TAG
+    DECL_COMPACTION_FUNC(CP_TAG, ssbo_bnpr_mesh_pool_counters_.num_dbg_edge_lines)
+    #undef LDS_HIST_BLK
+    #undef LDS_OFFSET_PER_LANE_SLOT
+    #undef LDS_DIGIT_PER_LANE
+    #undef CP_TAG
+    #undef CP_TAG
 #endif
 
 

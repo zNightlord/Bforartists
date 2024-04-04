@@ -3,7 +3,6 @@
 #pragma BLENDER_REQUIRE(npr_strokegen_topo_lib.glsl)
 #pragma BLENDER_REQUIRE(npr_strokegen_geom_lib.glsl)
 
-
  
 /* all counters are cleared in _KERNEL_MULTICOMPILE__GEOM_EXTRACT kernel ------------------- */
 #if defined(_KERNEL_MULTICOMPILE_BOOSTRAP_GEOM_EXTRACT) || defined(_KERNEL_MULTICOMPILE__GEOM_EXTRACT) || defined(_KERNEL_MULTICOMPILE_FILL_DRAW_ARGS)
@@ -182,6 +181,14 @@ uint get_num_edges()
 	return pcs_num_edges + ssbo_dyn_mesh_counters_.num_edges; 
 }
 
+vec2 ndc_to_screen_uv(vec4 pos_ndc)
+{
+	pos_ndc.xyz /= pos_ndc.w;
+	pos_ndc.xy = pos_ndc.xy * 0.5f + 0.5f; 
+	return pos_ndc.xy * pcs_screen_size_.xy; /* TODO: flip y or not? */
+}
+
+
 void main()
 {
 	const uint groupId = gl_LocalInvocationID.x;
@@ -190,14 +197,15 @@ void main()
 	const uint NumEdges = get_num_edges();
 	bool valid_thread = idx < NumEdges; 
 	const uint wedge_id = idx;
-
 	const uint resource_id = pcs_rsc_handle; 
+
 	
 	/* transform matrices, see "common_view_lib.glsl" */ 
 	mat4 model_to_world = drw_matrix_buf[resource_id].model; 
 	mat4 world_to_model = drw_matrix_buf[resource_id].model_inverse; 
 	mat4 view_to_world = ubo_view_matrices_.viewinv;
 	mat4 world_to_view = ubo_view_matrices_.viewmat;
+	mat4 mat_camera_proj = ubo_view_matrices_.winmat; 
 	
 	bool is_persp = (ubo_view_matrices_.winmat[3][3] == 0.0);
 	vec3 cam_pos_ws = view_to_world[3].xyz; /* see "#define cameraPos ViewMatrixInverse[3].xyz" */
@@ -231,9 +239,9 @@ void main()
 		);
 
 	EdgeFlags ef = load_edge_flags(wedge_id); 
-	is_contour = is_contour && (!ef.del_by_split) && (!ef.del_by_collapse) && (!ef.dupli); 
 	bool is_border = ef.border; 
-
+	is_contour = is_contour && (!ef.del_by_split) && (!ef.del_by_collapse) && (!ef.dupli); 
+	is_contour = is_contour && (!ef.border); // TODO: support for border edges
 
 
 	/* debug view */
@@ -251,14 +259,14 @@ void main()
 			dbg_line = dbg_line && (!valid_ev); 
 		if (pcs_edge_visualize_mode_ == 3) 
 			dbg_line = dbg_line && (!valid_ve); 
-		if (pcs_edge_visualize_mode_ == 4)
+		if (pcs_edge_visualize_mode_ == 4) 
 			dbg_line = dbg_line && (ef.selected); 
 
-		/* visualize selected edges */
-		if (pcs_edge_visualize_mode_ == 5)
+		/* visualize selected edges */ 
+		if (pcs_edge_visualize_mode_ == 5) 
 			dbg_line = valid_thread && (!ef.dupli) && (ef.selected) && ef.temp_dbg_draw_edge; 
 
-		if (pcs_edge_visualize_mode_ == 6)
+		if (pcs_edge_visualize_mode_ == 6) 
 		{
 			dbg_line = dbg_line && (vf[1].contour && vf[3].contour); 
 		}
@@ -273,6 +281,17 @@ void main()
 		{
 			bool border_from_vtx_flags = vf[1].border_eval && vf[3].border_eval; 
 			dbg_line = dbg_line && border_from_vtx_flags; 
+		}
+
+		if (pcs_edge_visualize_mode_ == 9)
+		{
+			vec2 uv_v1 = ndc_to_screen_uv(mat_camera_proj * vec4((world_to_view * vec4(v[1], 1.0f)).xyz, 1.0f));
+			vec2 uv_v3 = ndc_to_screen_uv(mat_camera_proj * vec4((world_to_view * vec4(v[3], 1.0f)).xyz, 1.0f));
+			vec2 edge_dir = (uv_v3 - uv_v1);
+			float edge_len = length(edge_dir);
+			dbg_line = false; // dbg_line && (edge_len > 100.0f);
+
+			is_contour = is_contour && (edge_len < 100.0f); 
 		}
 
 
@@ -292,31 +311,25 @@ void main()
 			ssbo_dbg_lines_[base_addr+5] = floatBitsToUint(dbg_vpos_1.z); 
 		}
 	}
-
 	barrier();
 
+	
 	if (false == valid_thread) is_contour = false; 
-
+	
 	uint compacted_idx = compact_contour_edge(is_contour, groupId); 
 
 	uint ifrontface = is_back_face(face_orient_123) ? 1 : 0; 
-	uvec2 iverts_frontface = mark__cwedge_to_verts(ifrontface); 
 	if (is_contour)
 	{ /* write world pos to output buffer */
 		/* Note: wpos_and_edgeid will be overwrite in the next pass, for saving space */
 		uint base_addr = mesh_pool_addr__wpos_and_edgeid(compacted_idx); 
-		buf_strokegen_mesh_pool[base_addr+0] = floatBitsToUint(v[iverts_frontface[0]].x); 
-		buf_strokegen_mesh_pool[base_addr+1] = floatBitsToUint(v[iverts_frontface[0]].y); 
-		buf_strokegen_mesh_pool[base_addr+2] = floatBitsToUint(v[iverts_frontface[0]].z); 
-		buf_strokegen_mesh_pool[base_addr+3] = floatBitsToUint(v[iverts_frontface[1]].x); 
-		buf_strokegen_mesh_pool[base_addr+4] = floatBitsToUint(v[iverts_frontface[1]].y); 
-		buf_strokegen_mesh_pool[base_addr+5] = floatBitsToUint(v[iverts_frontface[1]].z); 
+		ssbo_contour_temp_data_[base_addr+0] = wedge_id; 
 		
 		PerContourWedgeInfo pcwi; 
 		pcwi.is_border = is_border; 
 		pcwi.wedge_id = wedge_id;
 		pcwi.ifrontface = ifrontface; 
-		buf_strokegen_mesh_pool[base_addr+6]  = encode_per_contour_wedge_info(pcwi); 
+		ssbo_contour_temp_data_[base_addr+1] = encode_per_contour_wedge_info(pcwi); 
 	}
 
 	if (valid_thread)
@@ -380,43 +393,54 @@ void main()
 	const uint groupId = gl_LocalInvocationID.x; 
 	const uint idx = gl_GlobalInvocationID.x; 
 
-	const uint NumContourEdges = ssbo_bnpr_mesh_pool_counters_.num_contour_edges_curr; 
-	const uint NumContourEdgesTotal = ssbo_bnpr_mesh_pool_counters_.num_contour_edges; 
+	const uint NumContourEdges = ssbo_bnpr_mesh_pool_counters_.num_contour_edges; 
 	bool valid_thread = idx < NumContourEdges; 
-	const uint ContourEdgeIdx = idx + ssbo_bnpr_mesh_pool_counters_prev_.num_contour_edges; 
+	const uint ContourEdgeIdx = idx; 
 
 	/* transform matrices, see "common_view_lib.glsl" */ 
-	float4x4 world_to_view = ubo_view_matrices_.viewmat;
-	float4x4 mat_camera_proj = ubo_view_matrices_.winmat; 
+	mat4 world_to_view = ubo_view_matrices_.viewmat;
+	mat4 mat_camera_proj = ubo_view_matrices_.winmat; 
 
 	vec4 vpos_ws[2]; /* v0, v1 on edge */
 	vec3 vnor_ws[2]; 
 	vec4 vpos_ndc[2]; 
 	vec2 vpos_uv[2]; 
+	PerContourWedgeInfo pcwi; 
+
+
+
 	if (valid_thread)
 	{ /* read vertex pos transformed to world space */
 	  /* Note: wpos_and_edgeid will be overwrite, for saving space */
 		uint base_addr = mesh_pool_addr__wpos_and_edgeid(ContourEdgeIdx); 
-		vpos_ws[0].x = uintBitsToFloat(buf_strokegen_mesh_pool[base_addr+0]); 
-		vpos_ws[0].y = uintBitsToFloat(buf_strokegen_mesh_pool[base_addr+1]); 
-		vpos_ws[0].z = uintBitsToFloat(buf_strokegen_mesh_pool[base_addr+2]); 
+		
+		uint wedge_id = ssbo_contour_temp_data_[base_addr+0];
+		pcwi = decode_per_contour_wedge_info(ssbo_contour_temp_data_[base_addr+1]);  
+		
+		uvec2 iverts_frontface = mark__cwedge_to_verts(pcwi.ifrontface); 
+		uint v0 = ssbo_edge_to_vert_[wedge_id*4 + iverts_frontface[0]];
+		vpos_ws[0].x = (ssbo_vbo_full_[v0*3+0]); 
+		vpos_ws[0].y = (ssbo_vbo_full_[v0*3+1]); 
+		vpos_ws[0].z = (ssbo_vbo_full_[v0*3+2]); 
 		vpos_ws[0].w = 1.0f; 
-		vpos_ws[1].x = uintBitsToFloat(buf_strokegen_mesh_pool[base_addr+3]); 
-		vpos_ws[1].y = uintBitsToFloat(buf_strokegen_mesh_pool[base_addr+4]); 
-		vpos_ws[1].z = uintBitsToFloat(buf_strokegen_mesh_pool[base_addr+5]); 
-		vpos_ws[1].w = 1.0f; 
 
-		PerContourWedgeInfo pcwi = decode_per_contour_wedge_info(buf_strokegen_mesh_pool[base_addr+6]);  
+		uint v1 = ssbo_edge_to_vert_[wedge_id*4 + iverts_frontface[1]];
+		vpos_ws[1].x = (ssbo_vbo_full_[v1*3+0]);
+		vpos_ws[1].y = (ssbo_vbo_full_[v1*3+1]);
+		vpos_ws[1].z = (ssbo_vbo_full_[v1*3+2]); 
+		vpos_ws[1].w = 1.0f; 
 
 		vpos_ndc[0] = mat_camera_proj * vec4((world_to_view * vpos_ws[0]).xyz, 1.0f); 
 		vpos_ndc[1] = mat_camera_proj * vec4((world_to_view * vpos_ws[1]).xyz, 1.0f); 
-		
+
+
+
+		/* write to output buffer */
 		uint addr_st = mesh_pool_addr__zwhclip(ContourEdgeIdx); 
 		buf_strokegen_mesh_pool[addr_st+0] = floatBitsToUint(vpos_ndc[0].z); 
 		buf_strokegen_mesh_pool[addr_st+1] = floatBitsToUint(vpos_ndc[0].w); 
 		buf_strokegen_mesh_pool[addr_st+2] = floatBitsToUint(vpos_ndc[1].z); 
 		buf_strokegen_mesh_pool[addr_st+3] = floatBitsToUint(vpos_ndc[1].w); 
-
 		
 
 		vpos_uv[0].xy = ndc_to_screen_uv(vpos_ndc[0]);
@@ -430,16 +454,6 @@ void main()
 		buf_strokegen_mesh_pool[addr_st+1] = floatBitsToUint(edge_dir_norm.y);
 
 
-
-		/* Elongate edges that are too short on screen */
-		const float min_edge_len = 2.0f; 
-		if (edge_dir_len < min_edge_len)
-		{
-			float elongation = (min_edge_len - edge_dir_len) * .5f; 
-			vpos_uv[0].xy -= edge_dir_norm * elongation; 
-			vpos_uv[1].xy += edge_dir_norm * elongation; 
-		}
-
 		addr_st = mesh_pool_addr__edgeuv(ContourEdgeIdx); 
 		vpos_uv[0].xy /= pcs_screen_size_.xy; 
 		vpos_uv[1].xy /= pcs_screen_size_.xy; 
@@ -447,7 +461,7 @@ void main()
 		buf_strokegen_mesh_pool[addr_st+1] = floatBitsToUint(vpos_uv[0].y); 
 		buf_strokegen_mesh_pool[addr_st+2] = floatBitsToUint(vpos_uv[1].x);
 		buf_strokegen_mesh_pool[addr_st+3] = floatBitsToUint(vpos_uv[1].y);
-		
+
 
 		/* build contour edge adjacency */
 		bool is_border = pcwi.is_border; 

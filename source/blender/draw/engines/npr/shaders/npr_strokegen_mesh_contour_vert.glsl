@@ -228,12 +228,25 @@ void main()
         draw_contour_edge_id = dbg_draw_node_id; 
 
     uint addr_uv = mesh_pool_addr__edgeuv(draw_contour_edge_id); 
+    uint wedge_id = buf_strokegen_mesh_pool[addr_uv+4u];
+
     if (vid % 2u == 1u) 
         addr_uv += 2u;
     vec2 uv = vec2(
         uintBitsToFloat(buf_strokegen_mesh_pool[addr_uv+0]), 
         uintBitsToFloat(buf_strokegen_mesh_pool[addr_uv+1])
     );
+
+    uint addr_uv_another = mesh_pool_addr__edgeuv(draw_contour_edge_id);
+    if (vid % 2u == 0u) 
+        addr_uv_another += 2u;
+    vec2 uv_another_vtx = vec2(
+        uintBitsToFloat(buf_strokegen_mesh_pool[addr_uv_another+0]), 
+        uintBitsToFloat(buf_strokegen_mesh_pool[addr_uv_another+1])
+    );
+    float edge_len = length((uv - uv_another_vtx) / pcs_screen_size_inv_.xy); 
+
+
 
     uint addr_zhclip = mesh_pool_addr__zwhclip(draw_contour_edge_id); 
     if (vid % 2u == 1u) 
@@ -260,8 +273,11 @@ void main()
     vec2 edgenor_uv = vec2(edgedir_uv.y, -edgedir_uv.x); 
 
 
+    color = 
+        vec4(rand_col_rgb(contour_edge_list_len, contour_edge_list_len), wedge_id);
 
-    color = vec4(rand_col_rgb(contour_edge_list_len, contour_edge_list_len), 1.0f);
+        // edge_len < 100.0f ? vec4(rand_col_rgb(contour_edge_list_len, contour_edge_list_len), 1.0f) : vec4(.0f);
+
         // contour_edge_list_len < contour_edge_rank ? 
         //     vec4(1.0f)
 		// 	// vec4( 

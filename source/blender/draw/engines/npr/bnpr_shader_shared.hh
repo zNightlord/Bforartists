@@ -1,4 +1,4 @@
-﻿/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /**
  * Shared structures, enums & defines between C++ and GLSL.
@@ -296,19 +296,19 @@ using namespace draw;
 
 
 
-  /* Addressing - buf_strokegen_mesh_pool */
-#define MAX_NUM_CONTOUR_EDGES ((7300710)) /* ssbo buffer cannot be larger than 8192*8192*/
+  /* Addressing */
+#define MAX_NUM_CONTOUR_EDGES ((6000000)) /* ssbo buffer cannot be larger than 8192*8192*/
   /*x7*/
   static inline uint mesh_pool_addr__wpos_and_edgeid(uint contour_edge_id) 
   {
-    return contour_edge_id * 7u;
+    return contour_edge_id * 2u;
   }
-  
+
   /* ! Reuse the whole buffer ! */
   /*x2*/
   static inline uint mesh_pool_addr__edgedir(uint contour_edge_id)
   { 
-    uint base_addr = 0; // mesh_pool_addr__wpos_and_edgeid(MAX_NUM_CONTOUR_EDGES);
+    uint base_addr = 0; 
     return base_addr + contour_edge_id * 2u;
   } 
   /*x4*/
@@ -317,11 +317,11 @@ using namespace draw;
     uint base_addr = mesh_pool_addr__edgedir(MAX_NUM_CONTOUR_EDGES);
     return base_addr + contour_edge_id * 4;
   }
-  /*x4*/
+  /*x4(+1debug)*/
   static inline uint mesh_pool_addr__edgeuv(uint contour_edge_id)
   {
     uint base_addr = mesh_pool_addr__zwhclip(MAX_NUM_CONTOUR_EDGES);
-    return base_addr + contour_edge_id * 4;
+    return base_addr + contour_edge_id * 5/* 4 */;
   }
   /** } */
 

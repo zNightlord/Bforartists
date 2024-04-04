@@ -58,6 +58,7 @@ float get_split_edge_len_min(uint v1, uint v3)
     float vlen_3 = ld_vtx_remesh_len(v3);
     float targ_len = min(vlen_1, vlen_3); 
     return (4.0f/3.0f) * targ_len; 
+    // return pcs_remesh_edge_len_;
 }
 
 float estimate_split_vert_remesh_edge_len(uint v1, uint v3)
