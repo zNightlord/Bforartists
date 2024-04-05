@@ -922,7 +922,7 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_edge_split_exclude_border)
     .additional_info("bnpr_meshing_edge_split")
     .define("_KERNEL_MULTICOMPILE__EDGE_SPLIT", "1")
     .define("_KERNEL_MULTICOMPILE__EDGE_SPLIT_EXCLUDE_BORDER", "1")
-    .define("COMPACTION_LIB_EXCLUDE_DEFAULT_CODEGEN", "1"); 
+    .define("COMPACTION_LIB_EXCLUDE_DEFAULT_CODEGEN", "1");
 
 GPU_SHADER_CREATE_INFO(bnpr_meshing_edge_split_resolve_conflict)
     .do_static_compilation(true)

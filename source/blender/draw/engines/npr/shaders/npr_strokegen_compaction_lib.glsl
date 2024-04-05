@@ -54,7 +54,7 @@ uint CAT(compact_, tag)(bool val, uint groupIdx, uint multiplier = 1u)          
 	*/                                                                                             \
                                                                                                    \
     /* Mark 1/0 at bit #wave_id */                                                                 \
-    uint compact_bitval = uint(val);                                                               \
+    uint compact_bitval = (val ? 1u : 0u);                                                         \
     uint lds_compact_input = compact_bitval << wave_id;                                            \
     atomicOr(LDS_DIGIT_PER_LANE[lane_id], lds_compact_input);                                      \
     barrier();                                                                                     \
@@ -80,6 +80,7 @@ uint CAT(compact_, tag)(bool val, uint groupIdx, uint multiplier = 1u)          
     uint lane_digit_masked = lane_digit & wave_mask;                                               \
     uint num_1_bits_low = bitCount(lane_digit_masked);                                             \
     uint lane_offset = num_1_bits_low;                                                             \
+    barrier();                                                                                     \
                                                                                                    \
     if (wave_id == 0u)                                                                             \
     {                                                                                              \
@@ -117,15 +118,20 @@ uint CAT(compact_, tag)(bool val, uint groupIdx, uint multiplier = 1u)          
 #if !defined(COMPACTION_LIB_EXCLUDE_DEFAULT_CODEGEN) 
 
 DECL_LDS_DIGIT_PER_LANE(CP_TAG)
-#define LDS_DIGIT_PER_LANE CAT(LDS_digit_per_lane_, CP_TAG)
-DECL_LDS_OFFSET_PER_LANE_SLOT(CP_TAG)
-#define LDS_OFFSET_PER_LANE_SLOT CAT(LDS_digit_per_lane_, CP_TAG)
-DECL_LDS_HIST_BLK(CP_TAG)
-#define LDS_HIST_BLK CAT(LDS_hist_blk_, CP_TAG)
-DECL_LDS_SCAN_BLOCK_OFFSET(CP_TAG)
-#define LDS_SCAN_BLOCK_OFFSET CAT(LDS_scan_block_offset_, CP_TAG) 
+    #define LDS_DIGIT_PER_LANE CAT(LDS_digit_per_lane_, CP_TAG)
+    DECL_LDS_OFFSET_PER_LANE_SLOT(CP_TAG)
+    #define LDS_OFFSET_PER_LANE_SLOT CAT(LDS_digit_per_lane_, CP_TAG)
+    DECL_LDS_HIST_BLK(CP_TAG)
+    #define LDS_HIST_BLK CAT(LDS_hist_blk_, CP_TAG)
+    DECL_LDS_SCAN_BLOCK_OFFSET(CP_TAG)
+    #define LDS_SCAN_BLOCK_OFFSET CAT(LDS_scan_block_offset_, CP_TAG) 
 
-DECL_COMPACTION_FUNC(CP_TAG, GLOBAL_COUNTER)
+    DECL_COMPACTION_FUNC(CP_TAG, GLOBAL_COUNTER)
+
+    #undef LDS_HIST_BLK
+    #undef LDS_OFFSET_PER_LANE_SLOT
+    #undef LDS_DIGIT_PER_LANE
+#undef CP_TAG
 
 #endif
 
@@ -143,16 +149,16 @@ DECL_COMPACTION_FUNC(CP_TAG, GLOBAL_COUNTER)
 #if defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_0)
 // nothing special here, just to demonstrate how to use the custom code gen
 #define CP_TAG normal_line
-DECL_LDS_DIGIT_PER_LANE(CP_TAG)
-#define LDS_DIGIT_PER_LANE CAT(LDS_digit_per_lane_, CP_TAG)
-DECL_LDS_OFFSET_PER_LANE_SLOT(CP_TAG)
-#define LDS_OFFSET_PER_LANE_SLOT CAT(LDS_digit_per_lane_, CP_TAG)
-DECL_LDS_HIST_BLK(CP_TAG)
-#define LDS_HIST_BLK CAT(LDS_hist_blk_, CP_TAG)
-DECL_LDS_SCAN_BLOCK_OFFSET(CP_TAG)
-#define LDS_SCAN_BLOCK_OFFSET CAT(LDS_scan_block_offset_, CP_TAG) 
+    DECL_LDS_DIGIT_PER_LANE(CP_TAG)
+    #define LDS_DIGIT_PER_LANE CAT(LDS_digit_per_lane_, CP_TAG)
+    DECL_LDS_OFFSET_PER_LANE_SLOT(CP_TAG)
+    #define LDS_OFFSET_PER_LANE_SLOT CAT(LDS_digit_per_lane_, CP_TAG)
+    DECL_LDS_HIST_BLK(CP_TAG)
+    #define LDS_HIST_BLK CAT(LDS_hist_blk_, CP_TAG)
+    DECL_LDS_SCAN_BLOCK_OFFSET(CP_TAG)
+    #define LDS_SCAN_BLOCK_OFFSET CAT(LDS_scan_block_offset_, CP_TAG) 
 
-DECL_COMPACTION_FUNC(CP_TAG, ssbo_bnpr_mesh_pool_counters_.num_dbg_vnor_lines)
+    DECL_COMPACTION_FUNC(CP_TAG, ssbo_bnpr_mesh_pool_counters_.num_dbg_vnor_lines)
 #undef CP_TAG
 #endif
 

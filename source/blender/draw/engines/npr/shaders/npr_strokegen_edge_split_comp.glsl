@@ -58,7 +58,7 @@ float get_split_edge_len_min(uint v1, uint v3)
     float vlen_3 = ld_vtx_remesh_len(v3);
     float targ_len = min(vlen_1, vlen_3); 
     return (4.0f/3.0f) * targ_len; 
-    // return pcs_remesh_edge_len_;
+    // return pcs_remesh_edge_len_; // use this to stress-test the split kernel
 }
 
 float estimate_split_vert_remesh_edge_len(uint v1, uint v3)
@@ -235,8 +235,15 @@ bool split_priority_higher(EdgeSplitPriorityContext ctx_0, EdgeSplitPriorityCont
         || pcs_split_mode_ == EDGE_SPLIT_CONTOUR_EDGES)
         return pcg(ctx_0.wedge_id * pcs_split_iter_) < pcg(ctx_1.wedge_id * pcs_split_iter_); /* use lower id */
 
+    /* Sort Key: [wid | pcg(wid) | edge_len] */
     if (ctx_0.pesi.edge_len == ctx_1.pesi.edge_len)
-        return pcg(ctx_0.wedge_id) < pcg(ctx_1.wedge_id); /* use lower id */
+    { /* use pcg to break tie */
+        uint pcg_w0 = pcg(ctx_0.wedge_id + pcs_split_iter_);
+        uint pcg_w1 = pcg(ctx_1.wedge_id + pcs_split_iter_);
+        if (pcg_w0 == pcg_w1)
+            return (ctx_0.wedge_id) < (ctx_1.wedge_id); /* use lower id */
+        return pcg_w0 < pcg_w1; /* use lower id */
+    }
 
     return ctx_0.pesi.edge_len > ctx_1.pesi.edge_len; /* prefer longer edge */
 }
@@ -322,7 +329,7 @@ void main()
         is_split_ok = is_split_ok && edge_len > get_split_edge_len_min(verts_cwedge.x, verts_cwedge.y);
     
 
-    uint split_edge_id = compact_split_select_long_edges(is_split_ok, groupId);
+    uint split_edge_id = compact_split_select_long_edges(is_split_ok, groupId); 
     if (is_split_ok)
     {
         EdgeSplitInfo psei; 
