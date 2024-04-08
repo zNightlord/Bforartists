@@ -1263,7 +1263,12 @@ void main()
         }
 
 
-        // Cusp detection
+        // Cusp detection from "Illustrating smooth surface" by Hertzmann et al.
+        // Surface point p is a cusp when the tangent to the silhouette at p is parallel to the viewing direction v. 
+        // 
+        // using min&max pricipal dirs w1, w2 & curvatures k1, k2, 
+        // the local vicinity of a contour point P is parameterized as a quadartic surface,
+        // and the cusp function C(P) = k1(dot(v, w1))^2 + k2(dot(v, w2))^2, where v = p - camera_pos
         mat4 view_to_world = ubo_view_matrices_.viewinv;
         bool is_persp = (ubo_view_matrices_.winmat[3][3] == 0.0);
         vec3 cam_pos_ws = view_to_world[3].xyz; /* see "#define cameraPos ViewMatrixInverse[3].xyz" */
@@ -1275,7 +1280,7 @@ void main()
         vec2 cusp_func = vec2(dot(v, normalize(pdir0)), dot(v, normalize(pdir1))); 
         cusp_func *= cusp_func;
         cusp_func.x = dot(cusp_func, evals.xy); 
-        bool near_contour = abs(ndv) < .01f; 
+        bool near_contour = abs(ndv) < .05f; 
 
 
         
@@ -1309,8 +1314,10 @@ void main()
                 // Store3(ssbo_dbg_lines_, dbg_line_id*2u+1u, vpos_enc); 
                 // dbg_line_id++; 
                 
+                dbg_line_len = .0f; 
+                dbg_line_len = max_curv > pcs_dbg_geom_scale_ ? .05f : .0f; 
                 // dbg_line_len = (near_contour && cusp_func.x < .0f) ? pcs_dbg_geom_scale_/*  * cusp_func.x */ : .0f; 
-                dbg_line_len = (vf.front_facing) ? pcs_dbg_geom_scale_/*  * cusp_func.x */ : .0f; 
+                // dbg_line_len = (vf.front_facing) ? pcs_dbg_geom_scale_/*  * cusp_func.x */ : .0f; 
                 vec4 vpos_ws_10 = vec4(vpos, 1.0f);
                 vec4 vpos_ws_11 = vec4(vpos + normalize(vnor) * dbg_line_len, 1.0f);
                 vpos_enc = floatBitsToUint(vpos_ws_10.xyz); 
@@ -1319,17 +1326,16 @@ void main()
                 Store3(ssbo_dbg_lines_, dbg_line_id*2u+1u, vpos_enc); 
                 dbg_line_id++; 
 
+                dbg_line_len = .0f; 
 #define ssbo_vtx_remesh_len_ ssbo_vcurv_pdirs_k1k2_
                 float remesh_edge_len = uintBitsToFloat(ssbo_vtx_remesh_len_[vert_id]); 
+                // dbg_line_len = pcs_dbg_geom_scale_ * remesh_edge_len;
 #undef ssbo_vtx_remesh_len_
                 // dbg_line_len = pcs_dbg_geom_scale_;
                 // dbg_line_len = pcs_dbg_geom_scale_ * max_curv;
-                // dbg_line_len = pcs_dbg_geom_scale_ * remesh_edge_len;
-                // dbg_line_len = valid_curv ? .0f : pcs_dbg_geom_scale_;
-                // dbg_line_len = pcs_dbg_geom_scale_ * cusp_func.x; 
-                
+                // dbg_line_len = valid_curv ? .0f : pcs_dbg_geom_scale_;                
                 // dbg_line_len = (near_contour && cusp_func.x >= .0f) ? pcs_dbg_geom_scale_/*  * cusp_func.x */ : .0f; 
-                dbg_line_len = (vf.back_facing) ? pcs_dbg_geom_scale_/*  * cusp_func.x */ : .0f; 
+                // dbg_line_len = (vf.back_facing) ? pcs_dbg_geom_scale_/*  * cusp_func.x */ : .0f; 
                 vec4 vpos_ws_20 = vec4(vpos, 1.0f);
                 vec4 vpos_ws_21 = vec4(vpos + normalize(vnor) * dbg_line_len, 1.0f);
                 vpos_enc = floatBitsToUint(vpos_ws_20.xyz);
@@ -1383,7 +1389,54 @@ void main()
     
 }
 #endif 
+#endif
 
 
+
+
+
+
+#if defined(_KERNEL_MULTICOMPILE__CALC_FEATURE_EDGES)
+
+uint get_edge_count()
+{
+    return pcs_edge_count_ + ssbo_dyn_mesh_counters_out_.num_edges; 
+}
+
+void main()
+{
+    uint groupIdx = gl_LocalInvocationID.x; 
+
+    uint edge_id; 
+    bool valid_thread; 
+    if (0 < pcs_only_selected_edges_)
+    {
+        uint sel_edge_id = gl_GlobalInvocationID.x; 
+        get_wedge_id_from_selected_edge(sel_edge_id, /*out*/edge_id, valid_thread);
+    }
+    else
+    {
+        edge_id = gl_GlobalInvocationID.x; 
+        uint num_edges = get_edge_count(); 
+        valid_thread = edge_id < num_edges; 
+    }
+
+    EdgeFlags ef = load_edge_flags(edge_id); 
+
+    uvec4 v;
+    for (uint i = 0u; i < 4u; i++)
+        v[i] = ssbo_edge_to_vert_[edge_id*4u + i]; 
+
+    vec3 vpos[4]; 
+    for (uint i = 0u; i < 4u; i++)
+        vpos[i] = ld_vpos(v[i]);
+    float dihedral = calc_dihedral_angle(vpos[0], vpos[1], vpos[2], vpos[3]); 
+
+    uint crease_level = ((M_PI / 4.0f) < abs(dihedral - M_PI)) ? 3 : 0; 
+    if (ef.border) crease_level = 3; 
+
+    if (valid_thread && 0u < crease_level)
+        update_edge_flags__detect_crease(edge_id, ef, crease_level);
+}
 
 #endif

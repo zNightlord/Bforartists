@@ -180,6 +180,8 @@ namespace blender::npr::strokegen
     surf_analysis_ctx.ssbo_edge_vtensors_ = buffers_.ssbo_mesh_buffer_reuse_7_;
     surf_analysis_ctx.ssbo_vcurv_tensor_ = buffers_.ssbo_mesh_buffer_reuse_1_;
     surf_analysis_ctx.ssbo_vcurv_pdirs_k1k2_ = buffers_.ssbo_mesh_buffer_reuse_2_;
+
+    surf_analysis_ctx.set_calc_feature_edges(true, true); 
   }
 
   void StrokeGenPassModule::GetSurfaceAnalysisContext_VertexRelocationPass(
@@ -1520,6 +1522,23 @@ namespace blender::npr::strokegen
         sub.barrier(GPU_BARRIER_SHADER_STORAGE); 
       }
     }
+
+    // Calculate Feature Edges
+    if (ctx.calc_feature_edges)
+    {
+      append_subpass_fill_dispatched_args_remeshed_edges_(num_edges, ctx.only_selected_edges); 
+      {
+        auto &sub = pass_extract_geom.sub("bnpr_geom_analysis_feature_edges");
+        sub.shader_set(shaders_.static_shader_get(MESH_ANALYSE_EDGE_FEATURES));
+
+        bind_src(sub, false, false);
+        sub.bind_ssbo(ssbo_offset_base, buffers_.ssbo_edge_flags_);
+        sub.push_constant("pcs_only_selected_edges_", ctx.only_selected_edges);
+
+        sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_edges_);
+        sub.barrier(GPU_BARRIER_SHADER_STORAGE); 
+      }    
+    }
   }
 
   void StrokeGenPassModule::rebuild_pass_dbg_geom_drawcall(SurfaceDebugContext dbg_ctx)
@@ -1591,9 +1610,10 @@ namespace blender::npr::strokegen
               (int)edge_batch->elem_()->index_base_get());
       sub.push_constant("pcs_rsc_handle", (int)rsc_handle.resource_index());
       sub.push_constant("pcs_edge_visualize_mode_", edge_visualize_mode);
-      sub.push_constant("pcs_chain_interpo_contour_", 0);
+      sub.push_constant("pcs_chain_interpo_contour_", 1);
       float2 fb_res = textures_.get_contour_raster_screen_res();
       sub.push_constant("pcs_screen_size_", fb_res);
+      sub.push_constant("pcs_dbg_geom_scale_", surf_dbg_ctx.dbg_line_length); 
     };
 
     {

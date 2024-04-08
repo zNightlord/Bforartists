@@ -729,6 +729,7 @@ struct EdgeFlags
     bool del_by_split; // deleted edge by edge split
     bool new_by_face_split; // new edge created by edge split
     bool del_by_collapse; // deleted edge by edge collapse
+    uint crease_level; // crease level, 2 bits 0~3
 
     // Temp Flags, can share bits across different passes -
     bool temp_face_split_new_edge; // flipped edge
@@ -755,6 +756,8 @@ uint encode_edge_flags(EdgeFlags ef)
     ef_enc |= uint(ef.new_by_face_split); 
     ef_enc <<= 1u;
     ef_enc |= uint(ef.del_by_collapse); 
+    ef_enc <<= 2u;
+    ef_enc |= (ef.crease_level & 0x3u); 
     ef_enc <<= 1u; 
     ef_enc |= uint(ef.temp_face_split_new_edge); 
     ef_enc <<= 1u;
@@ -769,6 +772,8 @@ EdgeFlags decode_edge_flags(uint ef_enc)
     ef_enc >>= 1u; 
     ef.temp_face_split_new_edge = (1u == (ef_enc & 1u));
     ef_enc >>= 1u; 
+    ef.crease_level = (ef_enc & 0x3u);
+    ef_enc >>= 2u; 
     ef.del_by_collapse = (1u == (ef_enc & 1u)); 
     ef_enc >>= 1u; 
     ef.new_by_face_split = (1u == (ef_enc & 1u)); 
@@ -811,6 +816,7 @@ EdgeFlags init_edge_flags(bool dupli, bool border)
     ef.del_by_split = false;
     ef.new_by_face_split = false; 
     ef.del_by_collapse = false; 
+    ef.crease_level = 0u; 
 
     ef.temp_face_split_new_edge = false; 
     ef.temp_dbg_draw_edge = false; 
@@ -822,6 +828,13 @@ void update_edge_flags__detect_sel_border(uint edge_id, EdgeFlags ef_old)
 {
     EdgeFlags ef = ef_old; 
     ef.sel_border = true; 
+    store_edge_flags(edge_id, ef); 
+}
+
+void update_edge_flags__detect_crease(uint edge_id, EdgeFlags ef_old, uint crease_level)
+{
+    EdgeFlags ef = ef_old; 
+    ef.crease_level = crease_level; 
     store_edge_flags(edge_id, ef); 
 }
 
@@ -853,6 +866,7 @@ EdgeFlags init_edge_flags__new_split_edge(bool is_on_old_edge)
     ef.del_by_split = false; 
     ef.new_by_face_split = false; 
     ef.del_by_collapse = false; 
+    ef.crease_level = 0u; 
 
     ef.temp_face_split_new_edge = false; 
     ef.temp_dbg_draw_edge = false;
@@ -889,6 +903,7 @@ EdgeFlags init_edge_flags__new_face_split_edge()
     ef.del_by_split = false; 
     ef.new_by_face_split = true; 
     ef.del_by_collapse = false; 
+    ef.crease_level = 0u; 
 
     ef.temp_face_split_new_edge = true; 
     ef.temp_dbg_draw_edge = false;

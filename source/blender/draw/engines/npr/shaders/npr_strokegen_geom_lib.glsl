@@ -243,10 +243,10 @@ float loop_vpos_smooth_weight(float n)
 
 /* Scalable Curvature Computations on Triangle Meshes ----------------------- */
 #ifndef M_PI
-#define M_PI           (3.14159265358979323846)
+#define M_PI           (3.1415926535897932384626433832795)
 #endif
 #ifndef M_PI_2
-#define M_PI_2         (1.57079632679489661923)
+#define M_PI_2         (1.5707963267948966192313216916398)
 #endif
 // struct SphericalTriangle ----------------------------------------------------
 // https://www.cs.cmu.edu/~kmcrane/Projects/ScalableCurvature/
@@ -544,6 +544,38 @@ void curvDirFromTensor(in mat3 tensor,
 
 
 
+/*
+ * Compute the dihedral angle between two triangles sharing an edge v1-v3.
+ *     v1 ------- v3                       
+ *    /->\ <----_/                                 
+ *   / __/\   _/                                 
+ *  /_/    \_/  we're using quad edge layout in npr_strokegen_topo_lib.glsl.                              
+ * v0      v2     
+ *                                        
+ * Calculated Dihedral Angle                         
+ *  0                                v0    v2        v0v2 
+ *  v1        v1    v0 -- v1 -- v2    \    /          ||                   
+ *  ||       /..\        '..'         .\  /.        .'||'.                 
+ *  ||      /pi/2\        pi          . v1 .        . v1 . 2pi             
+ * v0v2    v0    v2                    '''' 3pi/2    ''''      
+*/
+float calc_dihedral_angle(vec3 v0, vec3 v1, vec3 v2, vec3 v3)
+{ 
+	vec3 v10 = v0 - v1;
+	vec3 v13 = v3 - v1;
+   	vec3 v12 = v2 - v1;
+
+	vec3 n0 = normalize(cross(v13, v10));
+	vec3 n2 = normalize(cross(v12, v13));
+	
+    /* https://www.cs.cmu.edu/~kmcrane/Projects/Other/TriangleMeshDerivativesCheatSheet.pdf */
+    float dihedral = acos(dot(n0, n2)); /* [0, pi] */
+    float convex = .0f < dot(v13, cross(n0, n2)) ? -1.0 : 1.0f; 
+    dihedral *= convex; /* [-pi, pi] */
+    dihedral += M_PI; /* [0, 2pi] */
+
+    return dihedral; 
+}
 
 
 

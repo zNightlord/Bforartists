@@ -7282,7 +7282,9 @@ static void append_npr_render_debug_param_int(StructRNA *srna, PropertyRNA **pro
   RNA_def_property_update(*prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
 }
 
-static void append_npr_render_debug_param_float(StructRNA *srna, PropertyRNA **prop, const char *name)
+static void append_npr_render_debug_param_float(StructRNA *srna,
+                                                PropertyRNA **prop,
+                                                const char *name, double min, double max)
 {
   *prop = RNA_def_property(srna, name, PROP_FLOAT, PROP_FACTOR);
   RNA_def_property_override_flag(*prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
@@ -7291,9 +7293,16 @@ static void append_npr_render_debug_param_float(StructRNA *srna, PropertyRNA **p
                            "test",
                            "test, "
                            "test");
-  RNA_def_property_range(*prop, 0.0f, 100.0f);
+  RNA_def_property_range(*prop, min, max);
   RNA_def_property_override_flag(*prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
   RNA_def_property_update(*prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
+}
+
+
+static void append_npr_render_debug_param_float_default(
+    StructRNA *srna, PropertyRNA **prop, const char *name)
+{
+  append_npr_render_debug_param_float(srna, prop, name, .0, 100.0);
 }
 
 static void rna_def_scene_npr(BlenderRNA *brna)
@@ -7307,28 +7316,28 @@ static void rna_def_scene_npr(BlenderRNA *brna)
 
   append_npr_render_debug_param_int(srna, &prop, "npr_test_val_0");
   append_npr_render_debug_param_int(srna, &prop, "npr_test_val_1");
-  append_npr_render_debug_param_float(srna, &prop, "npr_test_val_2");
-  append_npr_render_debug_param_float(srna, &prop, "npr_test_val_3");
-  append_npr_render_debug_param_float(srna, &prop, "npr_test_val_4");
-  append_npr_render_debug_param_float(srna, &prop, "npr_test_val_5");
-  append_npr_render_debug_param_float(srna, &prop, "npr_test_val_6");
-  append_npr_render_debug_param_float(srna, &prop, "npr_test_val_7");
-  append_npr_render_debug_param_float(srna, &prop, "npr_test_val_8");
-  append_npr_render_debug_param_float(srna, &prop, "npr_test_val_9");
-  append_npr_render_debug_param_float(srna, &prop, "npr_test_val_10");
-  append_npr_render_debug_param_float(srna, &prop, "npr_test_val_11");
-  append_npr_render_debug_param_float(srna, &prop, "npr_test_val_12");
-  append_npr_render_debug_param_float(srna, &prop, "npr_test_val_13");
-  append_npr_render_debug_param_float(srna, &prop, "npr_test_val_14");
-  append_npr_render_debug_param_float(srna, &prop, "npr_test_val_15");
-  append_npr_render_debug_param_float(srna, &prop, "npr_test_val_16");
-  append_npr_render_debug_param_float(srna, &prop, "npr_test_val_17");
-  append_npr_render_debug_param_float(srna, &prop, "npr_test_val_18");
-  append_npr_render_debug_param_float(srna, &prop, "npr_test_val_19");
-  append_npr_render_debug_param_float(srna, &prop, "npr_test_val_20");
-  append_npr_render_debug_param_float(srna, &prop, "npr_test_val_21");
-  append_npr_render_debug_param_float(srna, &prop, "npr_test_val_22");
-  append_npr_render_debug_param_float(srna, &prop, "npr_test_val_23");
+  append_npr_render_debug_param_float_default(srna, &prop, "npr_test_val_2");
+  append_npr_render_debug_param_float_default(srna, &prop, "npr_test_val_3");
+  append_npr_render_debug_param_float_default(srna, &prop, "npr_test_val_4");
+  append_npr_render_debug_param_float_default(srna, &prop, "npr_test_val_5");
+  append_npr_render_debug_param_float_default(srna, &prop, "npr_test_val_6");
+  append_npr_render_debug_param_float_default(srna, &prop, "npr_test_val_7");
+  append_npr_render_debug_param_float_default(srna, &prop, "npr_test_val_8");
+  append_npr_render_debug_param_float_default(srna, &prop, "npr_test_val_9");
+  append_npr_render_debug_param_float_default(srna, &prop, "npr_test_val_10");
+  append_npr_render_debug_param_float_default(srna, &prop, "npr_test_val_11");
+  append_npr_render_debug_param_float_default(srna, &prop, "npr_test_val_12");
+  append_npr_render_debug_param_float_default(srna, &prop, "npr_test_val_13");
+  append_npr_render_debug_param_float_default(srna, &prop, "npr_test_val_14");
+  append_npr_render_debug_param_float_default(srna, &prop, "npr_test_val_15");
+  append_npr_render_debug_param_float_default(srna, &prop, "npr_test_val_16");
+  append_npr_render_debug_param_float_default(srna, &prop, "npr_test_val_17");
+  append_npr_render_debug_param_float(srna, &prop, "npr_test_val_18", .0, 100.);
+  append_npr_render_debug_param_float_default(srna, &prop, "npr_test_val_19");
+  append_npr_render_debug_param_float_default(srna, &prop, "npr_test_val_20");
+  append_npr_render_debug_param_float_default(srna, &prop, "npr_test_val_21");
+  append_npr_render_debug_param_float_default(srna, &prop, "npr_test_val_22");
+  append_npr_render_debug_param_float_default(srna, &prop, "npr_test_val_23");
 }
 
 static void rna_def_scene_eevee(BlenderRNA *brna)

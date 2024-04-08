@@ -102,21 +102,6 @@ VertexEdgeFlipInfo load_ssbo_vertex_edge_flip_info(uint vert_id)
 
 
 
-
-float calc_dihedral_angle(vec3 v0, vec3 v1, vec3 v2, vec3 v3)
-{ /* TODO: not verified, can be buggy */
-	vec3 v10 = v0 - v1;
-	vec3 v13 = v3 - v1;
-   	vec3 v12 = v2 - v1;
-
-	vec3 n0 = normalize(cross(v13, v10));
-	vec3 n2 = normalize(cross(v12, v13));
-	
-    /* https://www.cs.cmu.edu/~kmcrane/Projects/Other/TriangleMeshDerivativesCheatSheet.pdf */
-    float dihedral = atan(dot(v13, cross(n0, n2)), dot(n0, n2));
-    return dihedral; 
-}
-
 /* Edge flipping for different opti goals.
  * See "Automatic and High-quality Surface Mesh Generation for CAD Models" 
  */
@@ -130,7 +115,6 @@ float calc_dihedral_angle(vec3 v0, vec3 v1, vec3 v2, vec3 v3)
 bool should_edge_flip_common(vec3 p0, vec3 p1, vec3 p2, vec3 p3, bool only_flat_edge = true, float max_inner_angle_in_quad = .6f)
 {
     /* only flip when edge is flat */
-    // float dihedral_angle = calc_dihedral_angle(p0, p1, p2, p3); // buggy
     if (only_flat_edge)
     {
         vec3 v10 = p0 - p1;

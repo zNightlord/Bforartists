@@ -266,6 +266,12 @@ public:
     GPUStorageBuf *ssbo_vcurv_pdirs_k1k2_;
     GPUStorageBuf *ssbo_edge_vtensors_; // temp buffer holding partial tensors
 
+
+    // Edge attrs
+    bool calc_feature_edges; 
+    bool only_selected_edges; 
+
+
     SurfaceAnalysisContext()
       : order_0_only_selected(false),
         calc_vert_normal(false),
@@ -280,7 +286,9 @@ public:
         output_curvature_tensors(false), 
         ssbo_vcurv_tensor_(nullptr),
         ssbo_vcurv_pdirs_k1k2_(nullptr),
-        ssbo_edge_vtensors_(nullptr)
+        ssbo_edge_vtensors_(nullptr),
+        calc_feature_edges(false),
+        only_selected_edges(false)
     {
     }
 
@@ -302,6 +310,12 @@ public:
         set_calc_vert_voronoi_area(true);
         output_curvature_tensors = output_tensors; 
       } 
+    }
+
+    void set_calc_feature_edges(bool val, bool only_selected)
+    {
+      calc_feature_edges = true;
+      only_selected_edges = only_selected; 
     }
   };
   void GetSurfaceAnalysisContext_InitPass(SurfaceAnalysisContext &surf_analysis_ctx) const;

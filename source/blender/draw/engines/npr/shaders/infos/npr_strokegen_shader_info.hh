@@ -185,6 +185,7 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_extract)
     .push_constant(Type::INT, "pcs_edge_visualize_mode_")
     .push_constant(Type::INT, "pcs_chain_interpo_contour_")
     .push_constant(Type::VEC2, "pcs_screen_size_")
+    .push_constant(Type::FLOAT, "pcs_dbg_geom_scale_")
     .local_group_size(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT) /* <== from "bnpr_defines.hh" */
     .compute_source("npr_strokegen_geom_extract_comp.glsl");
 
@@ -1294,6 +1295,17 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_analysis_order_1_main_curvature_jacques)
     ; 
 
 #undef NUM_SSBO_1
+
+/* Estimate order 0 edge attributes */
+GPU_SHADER_CREATE_INFO(bnpr_geom_analysis_feature_edges)
+    .do_static_compilation(true)
+    .additional_info("bnpr_geom_analysis")
+    .define("_KERNEL_MULTICOMPILE__CALC_FEATURE_EDGES", "1")
+    .define("COMPACTION_LIB_EXCLUDE_DEFAULT_CODEGEN", "1")
+    .define("EDGE_FLAGS_INCLUDED", "1")
+    .storage_buf(NUM_SSBO_BASE, Qualifier::READ_WRITE, "uint", "ssbo_edge_flags_[]")
+    .push_constant(Type::INT, "pcs_only_selected_edges_");
+
 #undef NUM_SSBO_BASE
 
 

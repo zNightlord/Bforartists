@@ -285,13 +285,10 @@ void main()
 
 		if (pcs_edge_visualize_mode_ == 9)
 		{
-			vec2 uv_v1 = ndc_to_screen_uv(mat_camera_proj * vec4((world_to_view * vec4(v[1], 1.0f)).xyz, 1.0f));
-			vec2 uv_v3 = ndc_to_screen_uv(mat_camera_proj * vec4((world_to_view * vec4(v[3], 1.0f)).xyz, 1.0f));
-			vec2 edge_dir = (uv_v3 - uv_v1);
-			float edge_len = length(edge_dir);
-			dbg_line = false; // dbg_line && (edge_len > 100.0f);
+			// float dihedral_angle = calc_dihedral_angle(v[0], v[1], v[2], v[3]);
+			// dbg_line = dbg_line && (dihedral_angle > pcs_dbg_geom_scale_);
 
-			is_contour = is_contour && (edge_len < 100.0f); 
+			dbg_line = dbg_line && (0 < ef.crease_level); 
 		}
 
 
