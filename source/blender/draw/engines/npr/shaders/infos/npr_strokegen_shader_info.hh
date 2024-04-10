@@ -60,76 +60,6 @@
 /** \shared shader infos
  * \{ */
 
-/** GPU Scan / Segscan --------------------
- */
-GPU_SHADER_CREATE_INFO(bnpr_scan_uint_add)
-    .typedef_source("bnpr_shader_shared.hh")
-    .define("SCAN_DATA_TYPE", "uint")
-    .define("SCAN_OP", "u32_add")
-    .define("SCAN_ZERO_VAL", "0u")
-    .define("SCAN_FUNCTION_TAG", "_u32_add");
-
-GPU_SHADER_CREATE_INFO(bnpr_scan_uvec2_add)
-    .typedef_source("bnpr_shader_shared.hh")
-    .define("SCAN_DATA_TYPE", "uvec2")
-    .define("SCAN_OP", "uvec2_add")
-    .define("SCAN_ZERO_VAL", "uvec2(0u, 0u)")
-    .define("SCAN_FUNCTION_TAG", "uvec2_add");
-
-GPU_SHADER_CREATE_INFO(bnpr_scan_uvec3_add)
-    .typedef_source("bnpr_shader_shared.hh")
-    .define("SCAN_DATA_TYPE", "uvec3")
-    .define("SCAN_OP", "uvec3_add")
-    .define("SCAN_ZERO_VAL", "uvec3(0u, 0u, 0u)")
-    .define("SCAN_FUNCTION_TAG", "uvec3_add");
-
-GPU_SHADER_CREATE_INFO(bnpr_scan_uvec4_add)
-    .typedef_source("bnpr_shader_shared.hh")
-    .define("SCAN_DATA_TYPE", "uvec4")
-    .define("SCAN_OP", "uvec4_add")
-    .define("SCAN_ZERO_VAL", "uvec4(0u, 0u, 0u, 0u)")
-    .define("SCAN_FUNCTION_TAG", "uvec4_add");
-
-GPU_SHADER_CREATE_INFO(bnpr_scan_float_add)
-    .typedef_source("bnpr_shader_shared.hh")
-    .define("SCAN_DATA_TYPE", "float")
-    .define("SCAN_OP", "f32_add")
-    .define("SCAN_ZERO_VAL", ".0f")
-    .define("SCAN_FUNCTION_TAG", "_f32_add");
-
-GPU_SHADER_CREATE_INFO(bnpr_scan_test_inputs).additional_info("bnpr_scan_uvec3_add");
-
-GPU_SHADER_CREATE_INFO(bnpr_segscan_test_inputs)
-    .additional_info("bnpr_scan_uvec3_add")
-    .define("SEGSCAN_STRUCT_TYPE", "SSBOData_SegScanTest");
-
-/** GPU 1D Segmented & Looped Convolution --------------------
- */
-GPU_SHADER_CREATE_INFO(npr_segloopconv1D_test)
-    .typedef_source("bnpr_shader_shared.hh")
-    .define("LOOPCONV1D_TAG", "build_patch")
-    .define("LOOPCONV1D_MAX_RADIUS", NPR_SEGLOOPCONV1D_CONV_RADIUS_STR)
-    .define("DATA_TYPE_LOOPCONV1D", "uint");
-
-GPU_SHADER_CREATE_INFO(npr_segloopconv1D_test_build_patch)
-    /* input functions related to buffer load/store can only be defined in a .glsl file
-     * see npr_strokegen_segloopconv1d_inputs_lib.glsl */
-    .define("FUNC_DEVICE_STORE_LOOPCONV1D_PATCH_ID", "func_device_store_loopconv1d_patch_id");
-
-GPU_SHADER_CREATE_INFO(npr_segloopconv1D_test_convolution)
-    /* input functions related to buffer load/store can only be defined in a .glsl file
-     * see npr_strokegen_segloopconv1d_inputs_lib.glsl */
-    .define("FUNC_DEVICE_LOAD_LOOPCONV1D_PATCH_ID", "func_device_load_loopconv1d_patch_id")
-    .define("FUNC_DEVICE_LOAD_LOOPCONV1D_DATA", "func_device_load_loopconv1d_data");
-
-/** GPU Compaction --------------------
- */
-GPU_SHADER_CREATE_INFO(npr_compaction_off)
-    .define("COMPACTION_LIB_EXCLUDE_DEFAULT_CODEGEN", "1");
-
-/** GPU List Ranking --------------------
- */
-
 /* -------------------------------------------------------------------- */
 /** \Geometry extraction from GPUBatch(es)
  * \{ */
@@ -226,11 +156,12 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_extract_calc_contour_edge_raster_data)
     .storage_buf(4, Qualifier::READ, "uint", "ssbo_edge_to_edges_[]")
     .storage_buf(5, Qualifier::READ_WRITE, "uint", "ssbo_edge_to_contour_[]")
     .storage_buf(6, Qualifier::WRITE, "uint", "ssbo_contour_to_contour_[]")
-    .storage_buf(7, Qualifier::READ_WRITE, "SSBOData_ListRankingInputs", "ssbo_list_ranking_inputs_") 
-    .storage_buf(8, Qualifier::READ_WRITE, "uint", "ssbo_vert_to_edge_list_header_[]") 
-    .storage_buf(9, Qualifier::READ_WRITE, "uint", "ssbo_vnor_[]") 
-    .storage_buf(10, Qualifier::READ_WRITE, "uint", "ssbo_edge_to_vert_[]") 
-    .storage_buf(11, Qualifier::READ, "float", "ssbo_vbo_full_[]")
+    .storage_buf(7, Qualifier::READ_WRITE, "uint", "ssbo_vert_to_edge_list_header_[]") 
+    .storage_buf(8, Qualifier::READ_WRITE, "uint", "ssbo_vnor_[]") 
+    .storage_buf(9, Qualifier::READ_WRITE, "uint", "ssbo_edge_to_vert_[]") 
+    .storage_buf(10, Qualifier::READ, "float", "ssbo_vbo_full_[]")
+    .storage_buf(11, Qualifier::READ_WRITE, "SSBOData_ListRankingInputs", "ssbo_list_ranking_inputs_") 
+    .storage_buf(12, Qualifier::READ_WRITE, "UBData_TreeScan", "ssbo_tree_scan_infos_")
     .uniform_buf(0, "ViewMatrices", "ubo_view_matrices_")
     .push_constant(Type::VEC2, "pcs_screen_size_")
     .local_group_size(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT) 
@@ -1373,6 +1304,78 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_draw_debug_lines)
 //     .compute_source("npr_strokegen_test_comp.glsl");
 /** \} */
 
+/** GPU Scan / Segscan --------------------
+ */
+GPU_SHADER_CREATE_INFO(bnpr_scan_uint_add)
+    .typedef_source("bnpr_shader_shared.hh")
+    .define("SCAN_DATA_TYPE", "uint")
+    .define("SCAN_OP", "u32_add")
+    .define("SCAN_ZERO_VAL", "0u")
+    .define("SCAN_FUNCTION_TAG", "_u32_add");
+
+GPU_SHADER_CREATE_INFO(bnpr_scan_uvec2_add)
+    .typedef_source("bnpr_shader_shared.hh")
+    .define("SCAN_DATA_TYPE", "uvec2")
+    .define("SCAN_OP", "uvec2_add")
+    .define("SCAN_ZERO_VAL", "uvec2(0u, 0u)")
+    .define("SCAN_FUNCTION_TAG", "uvec2_add");
+
+GPU_SHADER_CREATE_INFO(bnpr_scan_uvec3_add)
+    .typedef_source("bnpr_shader_shared.hh")
+    .define("SCAN_DATA_TYPE", "uvec3")
+    .define("SCAN_OP", "uvec3_add")
+    .define("SCAN_ZERO_VAL", "uvec3(0u, 0u, 0u)")
+    .define("SCAN_FUNCTION_TAG", "uvec3_add");
+
+GPU_SHADER_CREATE_INFO(bnpr_scan_uvec4_add)
+    .typedef_source("bnpr_shader_shared.hh")
+    .define("SCAN_DATA_TYPE", "uvec4")
+    .define("SCAN_OP", "uvec4_add")
+    .define("SCAN_ZERO_VAL", "uvec4(0u, 0u, 0u, 0u)")
+    .define("SCAN_FUNCTION_TAG", "uvec4_add");
+
+GPU_SHADER_CREATE_INFO(bnpr_scan_float_add)
+    .typedef_source("bnpr_shader_shared.hh")
+    .define("SCAN_DATA_TYPE", "float")
+    .define("SCAN_OP", "f32_add")
+    .define("SCAN_ZERO_VAL", ".0f")
+    .define("SCAN_FUNCTION_TAG", "_f32_add");
+
+GPU_SHADER_CREATE_INFO(bnpr_scan_test_inputs).additional_info("bnpr_scan_uvec3_add");
+
+GPU_SHADER_CREATE_INFO(bnpr_segscan_test_inputs)
+    .additional_info("bnpr_scan_uvec3_add")
+    .define("SEGSCAN_STRUCT_TYPE", "SSBOData_SegScanTest");
+
+/** GPU 1D Segmented & Looped Convolution --------------------
+ */
+GPU_SHADER_CREATE_INFO(npr_segloopconv1D_test)
+    .typedef_source("bnpr_shader_shared.hh")
+    .define("LOOPCONV1D_TAG", "build_patch")
+    .define("LOOPCONV1D_MAX_RADIUS", NPR_SEGLOOPCONV1D_CONV_RADIUS_STR)
+    .define("DATA_TYPE_LOOPCONV1D", "uint");
+
+GPU_SHADER_CREATE_INFO(npr_segloopconv1D_test_build_patch)
+    /* input functions related to buffer load/store can only be defined in a .glsl file
+     * see npr_strokegen_segloopconv1d_inputs_lib.glsl */
+    .define("FUNC_DEVICE_STORE_LOOPCONV1D_PATCH_ID", "func_device_store_loopconv1d_patch_id");
+
+GPU_SHADER_CREATE_INFO(npr_segloopconv1D_test_convolution)
+    /* input functions related to buffer load/store can only be defined in a .glsl file
+     * see npr_strokegen_segloopconv1d_inputs_lib.glsl */
+    .define("FUNC_DEVICE_LOAD_LOOPCONV1D_PATCH_ID", "func_device_load_loopconv1d_patch_id")
+    .define("FUNC_DEVICE_LOAD_LOOPCONV1D_DATA", "func_device_load_loopconv1d_data");
+
+/** GPU Compaction --------------------
+ */
+GPU_SHADER_CREATE_INFO(npr_compaction_off)
+    .define("COMPACTION_LIB_EXCLUDE_DEFAULT_CODEGEN", "1");
+
+/** GPU List Ranking --------------------
+ */
+
+
+
 /* -------------------------------------------------------------------- */
 /** \GPU (Segmented)Scan Test
  * \{ */
@@ -1384,7 +1387,7 @@ GPU_SHADER_CREATE_INFO(bnpr_scan_test_upsweep)
     .storage_buf(1, Qualifier::READ_WRITE, BNPR_SCAN_TEST_DATA_TYPE_STR, "bnpr_out_scan_data_buf_[]")
     .storage_buf(2, Qualifier::WRITE, BNPR_SCAN_TEST_DATA_TYPE_STR, "bnpr_scan_block_sum_buf_[]")
     .uniform_buf(0, "UBData_TreeScan", "ubo_bnpr_tree_scan_infos_")
-    .local_group_size(GROUP_SIZE_BNPR_SCAN_TEST_SWEEP) /* <== from "bnpr_defines.hh" */
+    .local_group_size(GROUP_SIZE_BNPR_SCAN_SWEEP) /* <== from "bnpr_defines.hh" */
     .compute_source("npr_strokegen_scan_test_comp.glsl");
 
 GPU_SHADER_CREATE_INFO(bnpr_scan_test_aggregate)
@@ -1392,7 +1395,7 @@ GPU_SHADER_CREATE_INFO(bnpr_scan_test_aggregate)
     .additional_info("bnpr_scan_test_inputs")
     .define("_KERNEL_MULTI_COMPILE__TREE_SCAN_AGGREGATE", "1")
     .storage_buf(0, Qualifier::READ_WRITE, BNPR_SCAN_TEST_DATA_TYPE_STR, "bnpr_scan_block_sum_buf_[]")
-    .local_group_size(GROUP_SIZE_BNPR_SCAN_TEST_AGGRG) /* <== from "bnpr_defines.hh" */
+    .local_group_size(GROUP_SIZE_BNPR_SCAN_AGGRG) /* <== from "bnpr_defines.hh" */
     .compute_source("npr_strokegen_scan_test_comp.glsl");
 
 GPU_SHADER_CREATE_INFO(bnpr_scan_test_dwsweep)
@@ -1401,7 +1404,7 @@ GPU_SHADER_CREATE_INFO(bnpr_scan_test_dwsweep)
     .define("_KERNEL_MULTI_COMPILE__TREE_SCAN_DWSWEEP", "1")
     .storage_buf(0, Qualifier::READ_WRITE, BNPR_SCAN_TEST_DATA_TYPE_STR, "bnpr_out_scan_data_buf_[]")
     .storage_buf(1, Qualifier::READ, BNPR_SCAN_TEST_DATA_TYPE_STR, "bnpr_scan_block_sum_buf_[]")
-    .local_group_size(GROUP_SIZE_BNPR_SCAN_TEST_SWEEP) /* <== from "bnpr_defines.hh" */
+    .local_group_size(GROUP_SIZE_BNPR_SCAN_SWEEP) /* <== from "bnpr_defines.hh" */
     .compute_source("npr_strokegen_scan_test_comp.glsl");
 
 GPU_SHADER_CREATE_INFO(bnpr_segscan_test_upsweep)
@@ -1413,7 +1416,7 @@ GPU_SHADER_CREATE_INFO(bnpr_segscan_test_upsweep)
     .storage_buf(1, Qualifier::READ_WRITE, BNPR_SEG_SCAN_TEST_STRUCT_TYPE_STR, "bnpr_out_scan_data_buf_[]")
     .storage_buf(2, Qualifier::WRITE, BNPR_SEG_SCAN_TEST_STRUCT_TYPE_STR, "bnpr_scan_block_sum_buf_[]")
     .uniform_buf(0, "UBData_TreeScan", "ubo_bnpr_tree_scan_infos_")
-    .local_group_size(GROUP_SIZE_BNPR_SCAN_TEST_SWEEP) /* <== from "bnpr_defines.hh" */
+    .local_group_size(GROUP_SIZE_BNPR_SCAN_SWEEP) /* <== from "bnpr_defines.hh" */
     .compute_source("npr_strokegen_scan_test_comp.glsl");
 
 GPU_SHADER_CREATE_INFO(bnpr_segscan_test_aggregate)
@@ -1422,7 +1425,7 @@ GPU_SHADER_CREATE_INFO(bnpr_segscan_test_aggregate)
     .define("IS_TREE_SEG_SCAN", "1")
     .define("_KERNEL_MULTI_COMPILE__TREE_SEG_SCAN_AGGREGATE", "1")
     .storage_buf(0, Qualifier::READ_WRITE, BNPR_SEG_SCAN_TEST_STRUCT_TYPE_STR, "bnpr_scan_block_sum_buf_[]")
-    .local_group_size(GROUP_SIZE_BNPR_SCAN_TEST_AGGRG) /* <== from "bnpr_defines.hh" */
+    .local_group_size(GROUP_SIZE_BNPR_SCAN_AGGRG) /* <== from "bnpr_defines.hh" */
     .compute_source("npr_strokegen_scan_test_comp.glsl");
 
 GPU_SHADER_CREATE_INFO(bnpr_segscan_test_dwsweep)
@@ -1433,7 +1436,7 @@ GPU_SHADER_CREATE_INFO(bnpr_segscan_test_dwsweep)
     .storage_buf(0, Qualifier::READ_WRITE, BNPR_SEG_SCAN_TEST_STRUCT_TYPE_STR, "bnpr_out_scan_data_buf_[]")
     .storage_buf(1, Qualifier::READ, BNPR_SEG_SCAN_TEST_STRUCT_TYPE_STR, "bnpr_scan_block_sum_buf_[]")
     .uniform_buf(0, "UBData_TreeScan", "ubo_bnpr_tree_scan_infos_")
-    .local_group_size(GROUP_SIZE_BNPR_SCAN_TEST_SWEEP) /* <== from "bnpr_defines.hh" */
+    .local_group_size(GROUP_SIZE_BNPR_SCAN_SWEEP) /* <== from "bnpr_defines.hh" */
     .compute_source("npr_strokegen_scan_test_comp.glsl");
 /** \} */
 

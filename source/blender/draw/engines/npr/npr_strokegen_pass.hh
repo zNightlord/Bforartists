@@ -389,9 +389,10 @@ public:
 
 
   // ---------------------------------------------------------------------------
-  bool test_scan; 
+  bool test_scan;
   void rebuild_pass_scan_test();
-  void rebuild_pass_segscan_test();
+  enum SegScanPassUsage { TestSegScan = 0, };
+  void rebuild_pass_segscan_test(SegScanPassUsage segscan_usage, PassSimple& pass);
 
   void rebuild_pass_conv_test();
   void rebuild_pass_list_ranking_pointer_jumping(
@@ -401,11 +402,11 @@ public:
 
   bool test_list_ranking; 
   bool test_looped_pass_list_ranking;
-  enum ListRankingPassType {
-    Test = 0,
+  enum ListRankingPassUsage {
+    TestListRanking = 0,
     ContourEdgeLinking = 1
   };
-  void append_subpass_list_ranking(ListRankingPassType passType, PassSimple& pass_listranking, bool looped_pass_list_ranking);
+  void append_subpass_list_ranking(ListRankingPassUsage passType, PassSimple& pass_listranking, bool looped_pass_list_ranking);
 
   void rebuild_pass_list_ranking_fill_args(PassSimple& pass_listranking, bool per_anchor, bool per_spliced, int splicing_or_relinking_iter, int group_size_x, bool custom_pass);
   void print_list_ranking_nodes(int head_node_id, uint* computed_ranks, uint* computed_topo, uint* computed_links) const;
@@ -513,7 +514,7 @@ void StrokeGenPassModule::validate_pass_scan_test(bool (*equals)(const T &, cons
       equals,
 
       buffers_.ubo_bnpr_tree_scan_infos_.num_scan_items,
-      GROUP_SIZE_BNPR_SCAN_TEST_SWEEP * 2u,
+      GROUP_SIZE_BNPR_SCAN_SWEEP * 2u,
       buffers_.ubo_bnpr_tree_scan_infos_.num_thread_groups
       );
   if (!valid_inter_block_scan)
@@ -601,7 +602,7 @@ void StrokeGenPassModule::validate_segscan(
   bool succ = validate_segscan_internal(
     data_segscan_inputs,
     data_segscan_output,
-    GROUP_SIZE_BNPR_SCAN_TEST_SWEEP * 2u,
+    GROUP_SIZE_BNPR_SCAN_SWEEP * 2u,
     buffers_.ubo_bnpr_tree_scan_infos_.num_scan_items,
     func_get_hf, func_equals, func_scan_op, zero_val,
     inclusive

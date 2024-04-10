@@ -1,6 +1,4 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
-
-/**
+﻿/**
  * Shared structures, enums & defines between C++ and GLSL.
  * Can also include some math functions but they need to be simple enough to be valid in both
  * language.
@@ -350,6 +348,11 @@ using namespace draw;
 #endif
   /** } */
 
+#ifdef GPU_SHADER
+  #define GROUP_SIZE_BNPR_SCAN_SWEEP 1024u
+  #define GROUP_SIZE_BNPR_SCAN_AGGRG 1024u  // for recursive-scan should be as large as possible
+#endif
+
 
 #ifdef __cplusplus
 
@@ -397,6 +400,7 @@ using SSBO_StrokeGenDynamicMeshCounters = StorageBuffer<SSBOData_StrokeGenDynami
 using SSBO_BnprScanData = StorageArrayBuffer<uint, 2048 * 2048 * 2, true>;
 using SSBO_BnprScanAggregates = StorageArrayBuffer<uint, 512 * 16, true>;
 using UBO_BnprTreeScan = UniformBuffer<UBData_TreeScan>;
+using SSBO_BnprTreeScan = StorageBuffer<UBData_TreeScan>;
 
 using SSBO_SegLoopConv1DData = StorageArrayBuffer<uint, 2048 * 2048 * 2, true>;
 using SSBO_SegLoopConvDebugData = StorageArrayBuffer<uint, 2048 * 2048 * 8, true>;

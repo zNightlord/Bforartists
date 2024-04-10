@@ -60,9 +60,9 @@ namespace blender::npr::strokegen
     pass_draw_debug_lines_.init_pass(shaders_, textures_); 
 
     rebuild_pass_scan_test();
-    rebuild_pass_segscan_test();
+    rebuild_pass_segscan_test(SegScanPassUsage::TestSegScan, pass_segscan_test);
     rebuild_pass_conv_test();
-    append_subpass_list_ranking(ListRankingPassType::Test, pass_listranking_test, true);
+    append_subpass_list_ranking(ListRankingPassUsage::TestListRanking, pass_listranking_test, true);
 
     num_total_mesh_tris = num_total_mesh_verts = num_total_mesh_edges = 0; // TODO: these should go to the UBO
 
@@ -1639,7 +1639,7 @@ namespace blender::npr::strokegen
   void StrokeGenPassModule::append_subpass_process_contour_edges()
   {
     {
-      auto &sub = pass_extract_geom.sub("calc contour edge raster data");
+      auto &sub = pass_extract_geom.sub("bnpr_geom_extract_calc_contour_edge_raster_data");
       sub.shader_set(shaders_.static_shader_get(eShaderType::COMPUTE_CONTOUR_EDGE_RASTER_DATA));
 
       sub.bind_ssbo(0, buffers_.reused_ssbo_contour_temp_data_());
@@ -1649,11 +1649,12 @@ namespace blender::npr::strokegen
       sub.bind_ssbo(4, buffers_.ssbo_edge_to_edges_);
       sub.bind_ssbo(5, buffers_.reused_ssbo_edge_to_contour_());
       sub.bind_ssbo(6, buffers_.ssbo_contour_to_contour_);
-      sub.bind_ssbo(7, buffers_.ssbo_list_ranking_inputs_);
-      sub.bind_ssbo(8, buffers_.ssbo_vert_to_edge_list_header_);
-      sub.bind_ssbo(9, buffers_.ssbo_vnor_);
-      sub.bind_ssbo(10, buffers_.ssbo_edge_to_vert_);
-      sub.bind_ssbo(11, buffers_.ssbo_vbo_full_);
+      sub.bind_ssbo(7, buffers_.ssbo_vert_to_edge_list_header_);
+      sub.bind_ssbo(8, buffers_.ssbo_vnor_);
+      sub.bind_ssbo(9, buffers_.ssbo_edge_to_vert_);
+      sub.bind_ssbo(10, buffers_.ssbo_vbo_full_);
+      sub.bind_ssbo(11, buffers_.ssbo_list_ranking_inputs_);
+      sub.bind_ssbo(12, buffers_.ssbo_tree_scan_infos_); 
       sub.bind_ubo(0, buffers_.ubo_view_matrices_);
       float2 fb_res = textures_.get_contour_raster_screen_res(); 
       sub.push_constant("pcs_screen_size_", fb_res); 
@@ -1670,7 +1671,7 @@ namespace blender::npr::strokegen
     append_subpass_fill_dispatch_args_contour_edges(pass_process_contours, true); 
     // append_subpass_process_contour_edges();
     append_subpass_list_ranking(
-        StrokeGenPassModule::ListRankingPassType::ContourEdgeLinking,
+        StrokeGenPassModule::ListRankingPassUsage::ContourEdgeLinking,
         pass_process_contours, true
       );
   }
@@ -1768,11 +1769,13 @@ namespace blender::npr::strokegen
     }
   }
 
-  void StrokeGenPassModule::rebuild_pass_segscan_test()
+  // TODO: we need to have single-pass version for this
+  void StrokeGenPassModule::rebuild_pass_segscan_test(SegScanPassUsage segscan_usage, PassSimple &pass)
   {
-    pass_segscan_test.init();
+    if (segscan_usage == TestSegScan) pass.init();
+
     { // upsweep for tree-scan
-      auto& sub = pass_segscan_test.sub("strokegen_segscan_test_upsweep");
+      auto& sub = pass.sub("strokegen_segscan_test_upsweep");
       sub.shader_set(shaders_.static_shader_get(SEGSCAN_TEST_UPSWEEP));
 
       // Note: keep the same slot binding as in shader_create_info
@@ -1785,7 +1788,7 @@ namespace blender::npr::strokegen
       sub.barrier(GPU_BARRIER_SHADER_STORAGE);
     }
     { // reduction for tree-scan
-      auto& sub = pass_segscan_test.sub("strokegen_segscan_test_aggregate");
+      auto& sub = pass.sub("strokegen_segscan_test_aggregate");
       sub.shader_set(shaders_.static_shader_get(SEGSCAN_TEST_AGGREGATE));
 
       // Note: keep the same slot binding as in shader_create_info
@@ -1795,7 +1798,7 @@ namespace blender::npr::strokegen
       sub.barrier(GPU_BARRIER_SHADER_STORAGE);
     }
     { // down sweep for tree-scan
-      auto& sub = pass_segscan_test.sub("strokegen_segscan_test_dwsweep");
+      auto& sub = pass.sub("strokegen_segscan_test_dwsweep");
       sub.shader_set(shaders_.static_shader_get(SEGSCAN_TEST_DWSWEEP));
 
       // Note: keep the same slot binding as in shader_create_info
@@ -1881,13 +1884,13 @@ namespace blender::npr::strokegen
   }
 
   // Note: we must do this within 15 ms(0.64ms x 23iters from willey's algo.), otherwise it for nothing.
-  void StrokeGenPassModule::append_subpass_list_ranking(ListRankingPassType passType, 
+  void StrokeGenPassModule::append_subpass_list_ranking(ListRankingPassUsage passType, 
                                                       PassSimple &pass_listranking,
                                                       bool looped_pass_list_ranking
   )
   {
     // Build render passes
-    bool custom_pass = (passType != ListRankingPassType::Test); 
+    bool custom_pass = (passType != ListRankingPassUsage::TestListRanking); 
 
     int num_splice_iters = 3;
     for (int splice_iter = 0; splice_iter < num_splice_iters; ++splice_iter)
@@ -1901,7 +1904,7 @@ namespace blender::npr::strokegen
           sub.shader_set(shaders_.static_shader_get(LISTRANKING_SETUP_INPUTS));
           if (!custom_pass)
             sub.bind_ssbo(0, buffers_.ssbo_list_ranking_links_staging_buf_);
-          else if (passType == ListRankingPassType::ContourEdgeLinking)
+          else if (passType == ListRankingPassUsage::ContourEdgeLinking)
             sub.bind_ssbo(0, buffers_.ssbo_contour_to_contour_); 
           sub.bind_ssbo(1, buffers_.ssbo_list_ranking_links_);
           sub.bind_ssbo(2, buffers_.ssbo_list_ranking_inputs_); 
@@ -2046,7 +2049,7 @@ namespace blender::npr::strokegen
     }
 
     // Output list rank, len, addr to custom buffers
-    if (passType != ListRankingPassType::Test)
+    if (passType != ListRankingPassUsage::TestListRanking)
     { 
       auto& sub = pass_listranking.sub("strokegen_list_ranking_test_output");
       sub.shader_set(shaders_.static_shader_get(LISTRANKING_OUTPUT_DATA));
@@ -2054,7 +2057,7 @@ namespace blender::npr::strokegen
       sub.bind_ssbo(0, buffers_.ssbo_list_ranking_ranks_); 
       sub.bind_ssbo(1, buffers_.ssbo_list_ranking_serialized_topo_);
       sub.bind_ssbo(2, buffers_.ssbo_list_ranking_inputs_);
-      if (passType == ListRankingPassType::ContourEdgeLinking)
+      if (passType == ListRankingPassUsage::ContourEdgeLinking)
       {
         sub.bind_ssbo(3, buffers_.ssbo_contour_edge_rank_);
         sub.bind_ssbo(4, buffers_.ssbo_contour_edge_list_len_);

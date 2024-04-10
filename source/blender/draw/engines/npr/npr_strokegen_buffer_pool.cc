@@ -26,7 +26,7 @@ namespace blender::npr::strokegen
       );
       ubo_bnpr_tree_scan_infos_.num_thread_groups = compute_num_groups(
         NUM_ITEMS_BNPR_SCAN_TEST,
-        GROUP_SIZE_BNPR_SCAN_TEST_SWEEP,
+        GROUP_SIZE_BNPR_SCAN_SWEEP,
         2u
       );
       ubo_bnpr_tree_scan_infos_.dummy = 0u;

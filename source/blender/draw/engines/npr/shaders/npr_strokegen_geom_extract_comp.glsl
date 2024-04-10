@@ -497,7 +497,20 @@ void main()
 	}
 
 	if (idx.x == 0) /* I dont care, this is cheap, just keep this up to date here */
-		ssbo_list_ranking_inputs_.num_nodes = ssbo_bnpr_mesh_pool_counters_.num_contour_edges; 
+	{
+		uint num_contours = ssbo_bnpr_mesh_pool_counters_.num_contour_edges; 
+		
+		ssbo_list_ranking_inputs_.num_nodes = num_contours; 
+
+		ssbo_tree_scan_infos_.num_scan_items = num_contours; 
+		ssbo_tree_scan_infos_.num_valid_scan_threads = compute_num_threads(
+			num_contours, 2u
+		);
+      	ssbo_tree_scan_infos_.num_thread_groups = compute_num_groups(
+			num_contours, GROUP_SIZE_BNPR_SCAN_SWEEP, 2u
+      	);
+	}
+
 }
 #endif
 

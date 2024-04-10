@@ -242,18 +242,21 @@ class GPUBufferPoolModule {
     return ssbo_mesh_buffer_reuse_4_; 
   }
 
-
+  // Scan Working Buffers -----------------------------------
   SSBO_BnprScanData       ssbo_in_scan_data_;
   SSBO_BnprScanData       ssbo_out_scan_data_;
   SSBO_BnprScanAggregates ssbo_scan_block_sum_;
   UBO_BnprTreeScan        ubo_bnpr_tree_scan_infos_;
+  SSBO_BnprTreeScan       ssbo_tree_scan_infos_; 
 
+  // Segmented Loop Convolution Working Buffers -----------------------------------
   SSBO_SegLoopConv1DData     ssbo_in_segloopconv1d_data_;
   SSBO_SegLoopConv1DData     ssbo_out_segloopconv1d_data_;
   SSBO_SegLoopConvDebugData  ssbo_debug_segloopconv1d_data_;
   SSBO_SegLoopConvPatchTable ssbo_segloopconv1d_patch_table_;
   UBO_SegLoopConv1D          ubo_segloopconv1d_;
 
+  // List Ranking Working Buffers ------------------------------------------------------------------------------------
   SSBO_ListRankingCounters            ssbo_list_ranking_anchor_counters_; // x1 slot per splicing iteration
   SSBO_ListRankingCounters            ssbo_list_ranking_splice_counters_; // x1 slot per re-link iteration
   SSBO_ListRankingAllocationCounters  ssbo_list_ranking_addressing_counters_; // allocate space for serialized lists
