@@ -227,7 +227,6 @@ vec3 sqrt3_limit_vpos(vec3 vpos, vec3 vpos_sum, float n, int step, bool step_inf
     return w * vpos + (1.0f - w) * lim_pos_inf;
 }
 
-// #define SUBDIV_LOOP_CREASE 1u
 
 float loop_vpos_smooth_weight(float n, bool crease = false, bool corner = false)
 { /* mask for interior verts in loop subdiv */
