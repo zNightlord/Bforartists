@@ -492,6 +492,10 @@ void main()
     /* Apply edge split */
     uint num_existing_edges = pcs_edge_count_ + ssbo_dyn_mesh_counters_in_.num_edges; 
     uint num_existing_verts = pcs_vert_count_ + ssbo_dyn_mesh_counters_in_.num_verts; 
+    
+    /* Inherit old edge tags */
+    EdgeFlags ef_old = load_edge_flags(psei_curr.id); 
+
 
     /* Parallel Edge Split
     *          v0                   v0          
@@ -621,6 +625,7 @@ void main()
     store_edge_flags(e0, ef);
     store_edge_flags(e2, ef);
     ef.new_by_split_on_old_edge = true; 
+    ef.crease_level = ef_old.crease_level; 
     store_edge_flags(e1, ef);
     store_edge_flags(e3, ef);
 
@@ -642,7 +647,7 @@ void main()
     st_vpos(v4, split_pos); 
 
     /* Store new vert states */
-    VertFlags vf = init_vert_flags__new_split_edge(is_contour_split_pass()); 
+    VertFlags vf = init_vert_flags__new_split_edge(is_contour_split_pass(), 0u < ef_old.crease_level); 
     store_vert_flags(v4, vf); 
 
     /* Store adaptive remesh length */

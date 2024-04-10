@@ -650,7 +650,8 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_surf_filtering_subd_common)
 #define SSBO_OFFSET NUM_SSBO_bnpr_meshing_surf_filtering_
     .storage_buf(SSBO_OFFSET, Qualifier::READ_WRITE, "uint", "ssbo_vpos_subd_[]")
     .storage_buf(SSBO_OFFSET+1, Qualifier::READ_WRITE, "uint", "ssbo_epos_subd_[]")
-    .push_constant(Type::INT, "pcs_subdiv_type_"); 
+    .push_constant(Type::INT, "pcs_subdiv_type_")
+    .push_constant(Type::INT, "pcs_loop_subd_enable_crease_"); 
 #undef SSBO_OFFSET 
 
 GPU_SHADER_CREATE_INFO(bnpr_meshing_surf_filtering_subdiv_vpos_smoothing)
@@ -1225,8 +1226,20 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_analysis_order_0_vert_normal_topoflags)
     .do_static_compilation(true)
     .additional_info("bnpr_geom_analysis_order_0_vert_normal")
     .define("_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_0__BORDER", "1")
+    .define("_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_0__CREASE", "1")
     .define("EDGE_FLAGS_INCLUDED", "1")
     .storage_buf(NUM_SSBO_BASE + 1, Qualifier::READ_WRITE, "uint", "ssbo_edge_flags_[]");
+
+GPU_SHADER_CREATE_INFO(bnpr_geom_analysis_order_0_vert_normal_voroarea_topoflags)
+    .do_static_compilation(true)
+    .additional_info("bnpr_geom_analysis_order_0_vert_normal")
+    .define("_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_0__AREA", "1")
+    .define("INCLUDE_VERTEX_VORONOI_AREA", "1")
+    .define("_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_0__BORDER", "1")
+    .define("_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_0__CREASE", "1")
+    .define("EDGE_FLAGS_INCLUDED", "1")
+    .storage_buf(NUM_SSBO_BASE + 1, Qualifier::READ_WRITE, "uint", "ssbo_varea_[]")
+    .storage_buf(NUM_SSBO_BASE + 2, Qualifier::READ_WRITE, "uint", "ssbo_edge_flags_[]");
 
 
 /* Estimate order 1 vertex attributes */

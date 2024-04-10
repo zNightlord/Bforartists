@@ -192,8 +192,8 @@ public:
     int remeshing_iters;
     int remeshing_delaunay_flip_iters;
 
-    int dbg_subdiv_type;
-    float remeshing_subdiv_limit_dist; 
+    int subdiv_type;
+    bool subdiv_use_crease; 
 
   } meshing_params;
   void append_subpass_fill_selected_mesh_elems_indirect_dispatch_args_();

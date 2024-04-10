@@ -537,6 +537,8 @@ struct VertFlags
     bool front_facing; // front facing vertex (dot(n, v) > .0f)
     bool back_facing;  // back facing vertex (dot(n, v) < .0f)
     bool border_eval; // border vertex, only valid after evaluated
+    bool crease; // crease vertex for subdivision
+    bool corner; // corner vertex for subdivision 
 }; 
 VertFlags init_vert_flags(bool dupli)
 {
@@ -552,10 +554,12 @@ VertFlags init_vert_flags(bool dupli)
     vf.front_facing = false;
     vf.back_facing = false;
     vf.border_eval = false; 
+    vf.crease = false;
+    vf.corner = false;
     
     return vf; 
 }
-VertFlags init_vert_flags__new_split_edge(bool is_split_for_contour)
+VertFlags init_vert_flags__new_split_edge(bool is_split_for_contour, bool is_crease_edge)
 {
     VertFlags vf; 
     vf.dupli = false; 
@@ -569,6 +573,8 @@ VertFlags init_vert_flags__new_split_edge(bool is_split_for_contour)
     vf.front_facing = false;
     vf.back_facing = false;
     vf.border_eval = false;
+    vf.crease = is_crease_edge;
+    vf.corner = false;
     
     return vf; 
 }
@@ -586,6 +592,8 @@ VertFlags init_vert_flags__new_split_face()
     vf.front_facing = false;
     vf.back_facing = false;
     vf.border_eval = false;
+    vf.crease = false;
+    vf.corner = false;
     
     return vf; 
 }
@@ -622,6 +630,10 @@ uint encode_vert_flags(VertFlags vf)
     
     vf_enc <<= 1u;
     vf_enc |= uint(vf.border_eval);
+    vf_enc <<= 1u;
+    vf_enc |= uint(vf.crease);
+    vf_enc <<= 1u;
+    vf_enc |= uint(vf.corner);
 
     return vf_enc; 
 }
@@ -629,6 +641,10 @@ VertFlags decode_vert_flags(uint vf_enc)
 {
     VertFlags vf; 
 
+    vf.corner = (1u == (vf_enc & 1u));
+    vf_enc >>= 1u;
+    vf.crease = (1u == (vf_enc & 1u));
+    vf_enc >>= 1u;
     vf.border_eval = (1u == (vf_enc & 1u));
     vf_enc >>= 1u;
 
@@ -713,6 +729,14 @@ void update_vert_flags__facing_direction(bool front_facing, bool back_facing, in
 void update_vert_flags__border(bool border, inout VertFlags vf_update)
 {
     vf_update.border_eval = border; 
+}
+void update_vert_flags__crease(bool crease, inout VertFlags vf_update)
+{
+    vf_update.crease = crease; 
+}
+void update_vert_flags__corner(bool corner, inout VertFlags vf_update)
+{
+    vf_update.corner = corner; 
 }
 #endif
 

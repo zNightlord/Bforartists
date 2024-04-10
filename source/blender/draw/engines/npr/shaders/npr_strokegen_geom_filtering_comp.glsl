@@ -434,10 +434,20 @@ uint get_vert_count()
 #endif
 
 
+#if defined(_KERNEL_MULTICOMPILE__SURF_FILTERING__LOOP_SUBD_EDGE_POINTS) || defined(_KERNEL_MULTICOMPILE__SURF_FILTERING__SUBDIV_VPOS_FILTERING) || defined(_KERNEL_MULTICOMPILE__SURF_FILTERING__SUBDIV_VPOS_FILTERING_FINISH)
+    #define SUBDIV_VPOS_FILTER_TYPE__SQRT3 0u
+    #define SUBDIV_VPOS_FILTER_TYPE__LOOP 1u 
+
+    // sharp features are marked as crease or corner
+    bool loop_subdiv_enable_crease()
+    {
+        return (pcs_subdiv_type_ == SUBDIV_VPOS_FILTER_TYPE__LOOP) && (0 < pcs_loop_subd_enable_crease_); 
+    }
+#endif
+
 
 #if defined(_KERNEL_MULTICOMPILE__SURF_FILTERING__SUBDIV_VPOS_FILTERING) || defined(_KERNEL_MULTICOMPILE__SURF_FILTERING__SUBDIV_VPOS_FILTERING_FINISH)
-#define SUBDIV_VPOS_FILTER_TYPE__SQRT3 0u
-#define SUBDIV_VPOS_FILTER_TYPE__LOOP 1u 
+
 struct VtxPositionSmoothForSubdivContext
 {
     vec3 vpos_filtered; 
@@ -445,14 +455,17 @@ struct VtxPositionSmoothForSubdivContext
 
     bool border; 
     bool close_to_sel_border; 
+
+    VertFlags vf; // for creases
 }; 
-VtxPositionSmoothForSubdivContext init_vpos_subd_smooth_context()
+VtxPositionSmoothForSubdivContext init_vpos_subd_smooth_context(VertFlags vf)
 {
     VtxPositionSmoothForSubdivContext ctx; 
     ctx.vpos_filtered = vec3(.0f); 
     ctx.num_adj_edges = .0f; 
     ctx.border = false;
     ctx.close_to_sel_border = false;
+    ctx.vf = vf;
 
     return ctx; 
 }
@@ -471,9 +484,14 @@ bool ve_circulator__vpos_smooth_for_subdiv(
     uint vi = ssbo_edge_to_vert_[wi*4u + ivert_vi]; 
     vec3 vpos_i = ld_vpos(vi); 
     
-    ctx.vpos_filtered += vpos_i; 
-    ctx.num_adj_edges += 1.0f; 
-    
+    if (!loop_subdiv_enable_crease() // disable crease
+        || (!(ctx.vf.crease || ctx.vf.corner)) // normal vertex
+        || (0u < ef.crease_level) // crease/corner vertex 
+    )
+    {
+        ctx.vpos_filtered += vpos_i; 
+        ctx.num_adj_edges += 1.0f; 
+    }
     return true; 
 }
 bool is_old_vert_sqrt3(VertFlags vf)
@@ -746,7 +764,9 @@ void main()
     vec3 vpos = ld_vpos(vert_id);
     vec3 vpos_orig = vpos;
 
-    VtxPositionSmoothForSubdivContext ctx = init_vpos_subd_smooth_context();
+    VertFlags vf = load_vert_flags(vert_id);
+
+    VtxPositionSmoothForSubdivContext ctx = init_vpos_subd_smooth_context(vf);
     VertWedgeListHeader vwlh = decode_vert_wedge_list_header(ssbo_vert_to_edge_list_header_[vert_id]); 
     bool rot_fwd = true;
     VE_CIRCULATOR(vwlh, ve_circulator__vpos_smooth_for_subdiv, ctx, rot_fwd); 
@@ -759,7 +779,12 @@ void main()
     }
     if (pcs_subdiv_type_ == SUBDIV_VPOS_FILTER_TYPE__LOOP)
     {
-        float alpha_n = loop_vpos_smooth_weight(ctx.num_adj_edges); 
+        float alpha_n;
+        if (loop_subdiv_enable_crease()) 
+            alpha_n = loop_vpos_smooth_weight(ctx.num_adj_edges, vf.crease, vf.corner); 
+        else
+            alpha_n = loop_vpos_smooth_weight(ctx.num_adj_edges);
+
         vpos = (1.0f - alpha_n) * vpos_orig + alpha_n * ctx.vpos_filtered; 
     }
 
@@ -875,10 +900,16 @@ void main()
         ld_vpos(v[3])
     };
 
+    EdgeFlags ef = load_edge_flags(wedge_id); 
+
     vec3 vpos_new = .125f * vpos[0] + .125f * vpos[2] + .375f * vpos[1] + .375f * vpos[3]; 
+    if (loop_subdiv_enable_crease() && 0u < ef.crease_level)
+        vpos_new = .5f * vpos[1] + .5f * vpos[3]; 
     uvec3 vpos_new_enc = floatBitsToUint(vpos_new); 
     Store3(ssbo_epos_subd_, wedge_id, vpos_new_enc);
 #endif
+
+
 
 }
 #endif

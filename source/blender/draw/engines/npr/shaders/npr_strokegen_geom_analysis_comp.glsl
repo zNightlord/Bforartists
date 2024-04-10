@@ -111,6 +111,10 @@ struct CalcVertAttrContext_Order0
     bool is_border; 
 #endif
 
+#if defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_0__CREASE)
+    uint num_adj_crease_edges; 
+#endif
+
 }; 
 
 CalcVertAttrContext_Order0 init_vert_attr_context_order_0(
@@ -131,6 +135,10 @@ CalcVertAttrContext_Order0 init_vert_attr_context_order_0(
 
 #if defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_0__BORDER)
     ctx.is_border = false; 
+#endif
+
+#if defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_0__CREASE)
+    ctx.num_adj_crease_edges = 0u; 
 #endif
 
     return ctx; 
@@ -211,6 +219,9 @@ bool calc_vert_attr_order_0(
     EdgeFlags ef = load_edge_flags(wi);
     ctx.is_border = ctx.is_border || ef.border;
 #endif
+#if defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_0__CREASE)
+    ctx.num_adj_crease_edges += (0u < ef.crease_level ? 1 : 0); 
+#endif
 
     ctx.vi = vn; 
     return true; 
@@ -263,6 +274,12 @@ void main()
     update_vert_flags__border(ctx.is_border, /*inout*/vf_new);
     update_vf = true; 
 #endif
+
+#if defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_0__CREASE)
+    update_vert_flags__crease(2u == ctx.num_adj_crease_edges, /*inout*/vf_new);
+    update_vert_flags__corner(2u < ctx.num_adj_crease_edges,  /*inout*/vf_new);
+    update_vf = true;
+#endif
     
 #if defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_0__NORMAL)
     vec3 vnormal = normalize(ctx.sum_normal / ctx.sum_weight); 
@@ -288,8 +305,10 @@ void main()
         dbg_line_id += get_debug_line_offset(DBG_LINE_TYPE__VNOR); 
         if (dbg_vtx_nor)
         {
+            float dbg_line_len = pcs_dbg_geom_scale_; 
+
             vec4 vpos_ws_0 = vec4(ctx.vpos, 1.0f);
-            vec4 vpos_ws_1 = vec4(ctx.vpos + vnormal * pcs_dbg_geom_scale_ * .05f, 1.0f);
+            vec4 vpos_ws_1 = vec4(ctx.vpos + vnormal * dbg_line_len * .05f, 1.0f);
 
             uvec3 vpos_enc = floatBitsToUint(vpos_ws_0.xyz); 
             Store3(ssbo_dbg_lines_, dbg_line_id*2u, vpos_enc);
@@ -1314,8 +1333,9 @@ void main()
                 // Store3(ssbo_dbg_lines_, dbg_line_id*2u+1u, vpos_enc); 
                 // dbg_line_id++; 
                 
-                dbg_line_len = .0f; 
-                dbg_line_len = max_curv > pcs_dbg_geom_scale_ ? .05f : .0f; 
+                dbg_line_len = pcs_dbg_geom_scale_; 
+                if (!vf.crease) dbg_line_len = .0f; 
+                // dbg_line_len = max_curv > pcs_dbg_geom_scale_ ? .05f : .0f; 
                 // dbg_line_len = (near_contour && cusp_func.x < .0f) ? pcs_dbg_geom_scale_/*  * cusp_func.x */ : .0f; 
                 // dbg_line_len = (vf.front_facing) ? pcs_dbg_geom_scale_/*  * cusp_func.x */ : .0f; 
                 vec4 vpos_ws_10 = vec4(vpos, 1.0f);
@@ -1326,7 +1346,9 @@ void main()
                 Store3(ssbo_dbg_lines_, dbg_line_id*2u+1u, vpos_enc); 
                 dbg_line_id++; 
 
-                dbg_line_len = .0f; 
+                dbg_line_len = pcs_dbg_geom_scale_; 
+                if (!vf.corner) dbg_line_len = .0f; 
+                // dbg_line_len = .0f; 
 #define ssbo_vtx_remesh_len_ ssbo_vcurv_pdirs_k1k2_
                 float remesh_edge_len = uintBitsToFloat(ssbo_vtx_remesh_len_[vert_id]); 
                 // dbg_line_len = pcs_dbg_geom_scale_ * remesh_edge_len;
@@ -1432,7 +1454,7 @@ void main()
         vpos[i] = ld_vpos(v[i]);
     float dihedral = calc_dihedral_angle(vpos[0], vpos[1], vpos[2], vpos[3]); 
 
-    uint crease_level = ((M_PI / 4.0f) < abs(dihedral - M_PI)) ? 3 : 0; 
+    uint crease_level = ((M_PI / 3.0f) < abs(dihedral - M_PI)) ? 3 : 0; 
     if (ef.border) crease_level = 3; 
 
     if (valid_thread && 0u < crease_level)

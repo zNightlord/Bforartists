@@ -227,10 +227,14 @@ vec3 sqrt3_limit_vpos(vec3 vpos, vec3 vpos_sum, float n, int step, bool step_inf
     return w * vpos + (1.0f - w) * lim_pos_inf;
 }
 
-float loop_vpos_smooth_weight(float n)
+// #define SUBDIV_LOOP_CREASE 1u
+
+float loop_vpos_smooth_weight(float n, bool crease = false, bool corner = false)
 { /* mask for interior verts in loop subdiv */
     /* see "Subdivision methods for geometric design - Ch.7.3 Smooth Subdivision for Triangle Meshes" */
-    
+    if (corner) return .0f; 
+    if (crease) return .25f; 
+
     if (n == 6.0f) return 3.0f / 8.0f; // fast path, actually same as the formula below
 
     float alpha_n = (3.0f/8.0f) + (cos((2.0f * 3.14159265359f) / n) / 4.0f);

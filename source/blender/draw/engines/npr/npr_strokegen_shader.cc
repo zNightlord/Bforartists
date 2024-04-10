@@ -237,6 +237,8 @@ const char *StrokeGenShaderModule::static_shader_create_info_name_get(eShaderTyp
       return "bnpr_geom_analysis_order_0_vert_normal_voroarea";
     case MESH_ANALYSE_VERT_NORMAL_TOPOFLAGS:
       return "bnpr_geom_analysis_order_0_vert_normal_topoflags";
+    case MESH_ANALYSE_VERT_NORMAL_VORONOIAREA_TOPOFLAGS:
+      return "bnpr_geom_analysis_order_0_vert_normal_voroarea_topoflags"; 
     case MESH_ANALYSE_EDGE_FEATURES:
       return "bnpr_geom_analysis_feature_edges"; 
 

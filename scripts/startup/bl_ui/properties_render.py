@@ -922,9 +922,9 @@ class RENDER_PT_npr_test(RenderButtonsPanel, Panel):
         col.prop(props, "npr_test_val_16", text="Remeshing Iters")
         col.prop(props, "npr_test_val_17", text="remeshing_delaunay_flip_iters")
         col.prop(props, "npr_test_val_18", text="dbg_line_length")
-        col.prop(props, "npr_test_val_19", text="dbg_curv_K_val")
+        col.prop(props, "npr_test_val_19", text="Subdiv Type")
 
-        col.prop(props, "npr_test_val_20", text="")
+        col.prop(props, "npr_test_val_20", text="Subdiv Crease")
         col.prop(props, "npr_test_val_21", text="")
         col.prop(props, "npr_test_val_22", text="")
         col.prop(props, "npr_test_val_23", text="")

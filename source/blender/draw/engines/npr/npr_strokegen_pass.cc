@@ -110,8 +110,8 @@ namespace blender::npr::strokegen
     meshing_params.remeshing_delaunay_flip_iters = (int)(scene_eval->npr.npr_test_val_17 + 1e-10f);
 
     surf_dbg_ctx.dbg_line_length = scene_eval->npr.npr_test_val_18;
-    meshing_params.dbg_subdiv_type = (int)(scene_eval->npr.npr_test_val_19 + 1e-10f);
-    meshing_params.remeshing_subdiv_limit_dist = scene_eval->npr.npr_test_val_20; 
+    meshing_params.subdiv_type = (int)(scene_eval->npr.npr_test_val_19 + 1e-10f);
+    meshing_params.subdiv_use_crease = .0f < scene_eval->npr.npr_test_val_20; 
 
     // meshing_params.geodist_deviation = scene_eval->npr.npr_test_val_3;
     // meshing_params.alternate_filter_0 = (GPUMeshQuadricFilter)((
@@ -147,12 +147,14 @@ namespace blender::npr::strokegen
 
   void StrokeGenPassModule::GetSurfaceAnalysisContext_InitPass(SurfaceAnalysisContext &surf_analysis_ctx) const
   {
+    surf_analysis_ctx.set_calc_feature_edges(true, false); 
+
     surf_analysis_ctx.order_0_only_selected = false;
     surf_analysis_ctx.set_calc_vert_normal(true, false);
     surf_analysis_ctx.ssbo_vnor_ = buffers_.ssbo_vnor_;
     surf_analysis_ctx.set_calc_vert_voronoi_area(true);
     surf_analysis_ctx.ssbo_varea_ = buffers_.ssbo_mesh_buffer_reuse_5_;
-    surf_analysis_ctx.set_calc_vert_topo_flags(false); 
+    surf_analysis_ctx.set_calc_vert_topo_flags(true); 
 
     surf_analysis_ctx.order_1_only_selected = false;
     surf_analysis_ctx.set_calc_vert_curvature(true,
@@ -161,17 +163,20 @@ namespace blender::npr::strokegen
     surf_analysis_ctx.ssbo_edge_vtensors_ = buffers_.ssbo_mesh_buffer_reuse_7_;
     surf_analysis_ctx.ssbo_vcurv_tensor_ = buffers_.ssbo_mesh_buffer_reuse_1_;
     surf_analysis_ctx.ssbo_vcurv_pdirs_k1k2_ = buffers_.ssbo_mesh_buffer_reuse_2_;
+
   }
 
   void StrokeGenPassModule::GetSurfaceAnalysisContext_CurvatureForAdaptiveRemeshing(
       SurfaceAnalysisContext &surf_analysis_ctx) const
   {
+    surf_analysis_ctx.set_calc_feature_edges(true, true); 
+
     surf_analysis_ctx.order_0_only_selected = false;
     surf_analysis_ctx.set_calc_vert_normal(true, false);
     surf_analysis_ctx.ssbo_vnor_ = buffers_.ssbo_vnor_;
     surf_analysis_ctx.set_calc_vert_voronoi_area(true);
     surf_analysis_ctx.ssbo_varea_ = buffers_.ssbo_mesh_buffer_reuse_5_;
-    surf_analysis_ctx.set_calc_vert_topo_flags(false); 
+    surf_analysis_ctx.set_calc_vert_topo_flags(true); 
 
     surf_analysis_ctx.order_1_only_selected = true;
     surf_analysis_ctx.set_calc_vert_curvature(true,
@@ -180,8 +185,6 @@ namespace blender::npr::strokegen
     surf_analysis_ctx.ssbo_edge_vtensors_ = buffers_.ssbo_mesh_buffer_reuse_7_;
     surf_analysis_ctx.ssbo_vcurv_tensor_ = buffers_.ssbo_mesh_buffer_reuse_1_;
     surf_analysis_ctx.ssbo_vcurv_pdirs_k1k2_ = buffers_.ssbo_mesh_buffer_reuse_2_;
-
-    surf_analysis_ctx.set_calc_feature_edges(true, true); 
   }
 
   void StrokeGenPassModule::GetSurfaceAnalysisContext_VertexRelocationPass(
@@ -413,12 +416,10 @@ namespace blender::npr::strokegen
     GetSurfaceAnalysisContext_InitPass(surf_analysis_ctx_init);
     auto surf_dbg_ctx_cpy = surf_dbg_ctx;
     surf_dbg_ctx_cpy.dbg_vert_normal = false;
-    surf_dbg_ctx_cpy.dbg_vert_curv = false;
+    surf_dbg_ctx_cpy.dbg_vert_curv = true;
     append_subpass_surf_geom_analysis(
         rsc_handle, num_verts, num_edges, surf_analysis_ctx_init, surf_dbg_ctx_cpy);
 
-    append_subpasses_estimate_curvature_for_adaptive_remeshing(
-        rsc_handle, num_edges, num_verts, false);
 
 
     // GPU Remesher -------------------------------------------------------------------------
@@ -497,7 +498,7 @@ namespace blender::npr::strokegen
       }
     }
 
-    if (meshing_params.dbg_subdiv_type == 0) 
+    if (meshing_params.subdiv_type == 0) 
       append_subpasses_sqrt_subdiv(num_edges, num_verts);
     else
       append_subpasses_loop_subdiv(num_edges, num_verts);
@@ -527,7 +528,7 @@ namespace blender::npr::strokegen
       GetSurfaceAnalysisContext_CuspDetectionPass(surf_analysis_ctx_contour);
       auto surf_dbg_ctx_cpy = surf_dbg_ctx;
       surf_dbg_ctx_cpy.dbg_vert_normal = false;
-      surf_dbg_ctx_cpy.dbg_vert_curv = surf_dbg_ctx.dbg_vert_curv;
+      surf_dbg_ctx_cpy.dbg_vert_curv = false; // surf_dbg_ctx.dbg_vert_curv;
       append_subpass_surf_geom_analysis(
           rsc_handle, num_verts, num_edges, surf_analysis_ctx_contour, surf_dbg_ctx_cpy);
     }
@@ -675,7 +676,8 @@ namespace blender::npr::strokegen
     {
       sub.bind_ssbo(ssbo_offset, buffers_.reused_ssbo_vpos_subd_());
       sub.bind_ssbo(ssbo_offset + 1, buffers_.reused_ssbo_epos_subd_());
-      sub.push_constant("pcs_subdiv_type_", subdType); 
+      sub.push_constant("pcs_subdiv_type_", subdType);
+      sub.push_constant("pcs_loop_subd_enable_crease_", meshing_params.subdiv_use_crease ? 1 : 0); 
     };
 
     // Smooth old vertices
@@ -1453,26 +1455,48 @@ namespace blender::npr::strokegen
       sub.push_constant("pcs_only_selected_verts_", only_selected_verts ? 1 : 0); 
     };
 
+    // Calculate Feature Edges
+    if (ctx.calc_feature_edges) {
+      append_subpass_fill_dispatched_args_remeshed_edges_(num_edges, ctx.only_selected_edges);
+      {
+        auto &sub = pass_extract_geom.sub("bnpr_geom_analysis_feature_edges");
+        sub.shader_set(shaders_.static_shader_get(MESH_ANALYSE_EDGE_FEATURES));
+
+        bind_src(sub, false, false);
+        sub.bind_ssbo(ssbo_offset_base, buffers_.ssbo_edge_flags_);
+        sub.push_constant("pcs_only_selected_edges_", ctx.only_selected_edges);
+
+        sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_edges_);
+        sub.barrier(GPU_BARRIER_SHADER_STORAGE);
+      }
+    }
+
+
     // Calculate Order-0 Vertex Attributes
     append_subpass_fill_dispatched_args_remeshed_verts_(num_verts, ctx.order_0_only_selected); 
     if (ctx.calc_vert_normal)
     {
       auto &sub = pass_extract_geom.sub("bnpr_geom_analysis_order_0_vert_normal");
-      sub.shader_set(
-          shaders_.static_shader_get(
-              ctx.calc_vert_voronoi_area ?
-                MESH_ANALYSE_VERT_NORMAL_VORONOIAREA :
-                ctx.calc_vert_topo_flags ?
-                  MESH_ANALYSE_VERT_NORMAL_TOPOFLAGS :
-                  MESH_ANALYSE_VERT_NORMAL
-              )
-          );
+      eShaderType shaderType =
+          ctx.calc_vert_voronoi_area && ctx.calc_vert_topo_flags ?
+              MESH_ANALYSE_VERT_NORMAL_VORONOIAREA_TOPOFLAGS :
+          ctx.calc_vert_voronoi_area ?
+              MESH_ANALYSE_VERT_NORMAL_VORONOIAREA :
+          ctx.calc_vert_topo_flags ?
+              MESH_ANALYSE_VERT_NORMAL_TOPOFLAGS :
+              MESH_ANALYSE_VERT_NORMAL; 
+      sub.shader_set(shaders_.static_shader_get(shaderType));
+
 
       bind_src(sub, ctx.order_0_only_selected, dbg_options.dbg_vert_normal);
       sub.bind_ssbo(ssbo_offset_base, ctx.ssbo_vnor_);
-      if (ctx.calc_vert_voronoi_area)
+      if (shaderType == MESH_ANALYSE_VERT_NORMAL_VORONOIAREA_TOPOFLAGS) {
         sub.bind_ssbo(ssbo_offset_base + 1, ctx.ssbo_varea_);
-      else if (ctx.calc_vert_topo_flags)
+        sub.bind_ssbo(ssbo_offset_base + 2, buffers_.ssbo_edge_flags_);
+      }
+      else if (shaderType == MESH_ANALYSE_VERT_NORMAL_VORONOIAREA)
+        sub.bind_ssbo(ssbo_offset_base + 1, ctx.ssbo_varea_);
+      else if (shaderType == MESH_ANALYSE_VERT_NORMAL_TOPOFLAGS)
         sub.bind_ssbo(ssbo_offset_base + 1, buffers_.ssbo_edge_flags_);
 
       sub.push_constant("pcs_output_vertex_facing_flag_", ctx.output_vertex_facing_flag); 
@@ -1523,22 +1547,6 @@ namespace blender::npr::strokegen
       }
     }
 
-    // Calculate Feature Edges
-    if (ctx.calc_feature_edges)
-    {
-      append_subpass_fill_dispatched_args_remeshed_edges_(num_edges, ctx.only_selected_edges); 
-      {
-        auto &sub = pass_extract_geom.sub("bnpr_geom_analysis_feature_edges");
-        sub.shader_set(shaders_.static_shader_get(MESH_ANALYSE_EDGE_FEATURES));
-
-        bind_src(sub, false, false);
-        sub.bind_ssbo(ssbo_offset_base, buffers_.ssbo_edge_flags_);
-        sub.push_constant("pcs_only_selected_edges_", ctx.only_selected_edges);
-
-        sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_edges_);
-        sub.barrier(GPU_BARRIER_SHADER_STORAGE); 
-      }    
-    }
   }
 
   void StrokeGenPassModule::rebuild_pass_dbg_geom_drawcall(SurfaceDebugContext dbg_ctx)
