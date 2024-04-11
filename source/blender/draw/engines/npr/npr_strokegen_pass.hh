@@ -111,7 +111,7 @@ public:
   /* -------------------------------------------------------------------- */
   /** \name Sync with Draw Module
      * \{ */
-  void on_begin_sync();
+  void on_begin_sync(int frame_counter);
   void on_end_sync(); 
   /** \} */
 
@@ -391,8 +391,8 @@ public:
   // ---------------------------------------------------------------------------
   bool test_scan;
   void rebuild_pass_scan_test();
-  enum SegScanPassUsage { TestSegScan = 0, };
-  void rebuild_pass_segscan_test(SegScanPassUsage segscan_usage, PassSimple& pass);
+  enum SegScanPassUsage { TestSegScan = 0, ContourSegmentation = 1 };
+  void rebuild_pass_segscan_test(SegScanPassUsage segscan_usage, PassSimple& pass, int frame_counter);
 
   void rebuild_pass_conv_test();
   void rebuild_pass_list_ranking_pointer_jumping(

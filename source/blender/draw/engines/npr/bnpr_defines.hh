@@ -61,7 +61,8 @@
  * \{ */
 /* Match against bnpr_shader_shared.hh --- */
 #define GROUP_SIZE_BNPR_SCAN_SWEEP 1024u
-#define GROUP_SIZE_BNPR_SCAN_AGGRG 1024u // for recursive-scan should be as large as possible
+#define GROUP_SIZE_BNPR_SCAN_AGGRG 1024u
+// for recursive-scan should be as large as possible, or make each thread scan multiple items
 /* --------------------------------------- */
 #define NUM_ITEMS_BNPR_SCAN_TEST 1973581u
 

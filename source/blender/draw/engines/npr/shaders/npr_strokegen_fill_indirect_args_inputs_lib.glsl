@@ -6,6 +6,27 @@
 
 
 
+#if defined(_KERNEL_MULTICOMPILE__FILL_DISPATCH_ARGS__SCAN)
+
+void GetDispatchArgs(out uvec3 dispatch_args)
+{
+    dispatch_args.x = ssbo_tree_scan_infos_.num_thread_groups;
+    dispatch_args.y = 1;
+    dispatch_args.z = 1;
+}
+
+void FillDispatchArgsBuffer(uvec3 args)
+{
+    ssbo_scan_dispatch_args_.num_groups_x = args.x;
+    ssbo_scan_dispatch_args_.num_groups_y = args.y;
+    ssbo_scan_dispatch_args_.num_groups_z = args.z;
+    ssbo_scan_dispatch_args_._pad0 = 0; 
+}
+
+#endif
+
+
+
 #if defined(_KERNEL_MULTICOMPILE__FILL_DISPATCH_ARGS__LIST_RANKING_ANCHORS)
 
 #define DISTPATCH_GRANULARITY__PER_ANCHOR 0u

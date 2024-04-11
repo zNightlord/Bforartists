@@ -53,14 +53,14 @@ namespace blender::npr::strokegen
 
 
 
-  void StrokeGenPassModule::on_begin_sync()
+  void StrokeGenPassModule::on_begin_sync(int frame_counter)
   {
     init_per_mesh_pass();
     pass_draw_contour_edges.init_pass(shaders_, textures_);
     pass_draw_debug_lines_.init_pass(shaders_, textures_); 
 
     rebuild_pass_scan_test();
-    rebuild_pass_segscan_test(SegScanPassUsage::TestSegScan, pass_segscan_test);
+    rebuild_pass_segscan_test(SegScanPassUsage::TestSegScan, pass_segscan_test, frame_counter);
     rebuild_pass_conv_test();
     append_subpass_list_ranking(ListRankingPassUsage::TestListRanking, pass_listranking_test, true);
 
@@ -1654,7 +1654,7 @@ namespace blender::npr::strokegen
       sub.bind_ssbo(9, buffers_.ssbo_edge_to_vert_);
       sub.bind_ssbo(10, buffers_.ssbo_vbo_full_);
       sub.bind_ssbo(11, buffers_.ssbo_list_ranking_inputs_);
-      sub.bind_ssbo(12, buffers_.ssbo_tree_scan_infos_); 
+      sub.bind_ssbo(12, buffers_.reused_ssbo_tree_scan_infos_contour_segmentation_()); 
       sub.bind_ubo(0, buffers_.ubo_view_matrices_);
       float2 fb_res = textures_.get_contour_raster_screen_res(); 
       sub.push_constant("pcs_screen_size_", fb_res); 
@@ -1770,28 +1770,41 @@ namespace blender::npr::strokegen
   }
 
   // TODO: we need to have single-pass version for this
-  void StrokeGenPassModule::rebuild_pass_segscan_test(SegScanPassUsage segscan_usage, PassSimple &pass)
+  void StrokeGenPassModule::rebuild_pass_segscan_test(SegScanPassUsage segscan_usage, PassSimple &pass, int frame_counter)
   {
     if (segscan_usage == TestSegScan) pass.init();
+
+    if (segscan_usage == ContourSegmentation)
+    {
+      auto& sub = pass.sub("strokegen_scan_fill_dispatch_args");
+      sub.shader_set(shaders_.static_shader_get(SCAN_FILL_DISPTACH_ARGS));
+
+      sub.bind_ssbo(0, buffers_.reused_ssbo_tree_scan_infos_contour_segmentation_());
+      sub.bind_ssbo(1, buffers_.reused_ssbo_scan_dispatch_args_contour_segmentation_());
+
+      sub.dispatch(int3(1, 1, 1));
+      sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_COMMAND); 
+    }
 
     { // upsweep for tree-scan
       auto& sub = pass.sub("strokegen_segscan_test_upsweep");
       sub.shader_set(shaders_.static_shader_get(SEGSCAN_TEST_UPSWEEP));
 
-      // Note: keep the same slot binding as in shader_create_info
       sub.bind_ssbo(0, buffers_.ssbo_in_scan_data_);
       sub.bind_ssbo(1, buffers_.ssbo_out_scan_data_);
       sub.bind_ssbo(2, buffers_.ssbo_scan_block_sum_);
       sub.bind_ubo(0, buffers_.ubo_bnpr_tree_scan_infos_);
 
+      if (segscan_usage == SegScanPassUsage::TestSegScan)
+        sub.push_constant("pcs_segscan_test_random_seed_", frame_counter); 
+
       sub.dispatch(int3(buffers_.ubo_bnpr_tree_scan_infos_.num_thread_groups, 1, 1));
-      sub.barrier(GPU_BARRIER_SHADER_STORAGE);
+      sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_COMMAND);
     }
     { // reduction for tree-scan
       auto& sub = pass.sub("strokegen_segscan_test_aggregate");
       sub.shader_set(shaders_.static_shader_get(SEGSCAN_TEST_AGGREGATE));
 
-      // Note: keep the same slot binding as in shader_create_info
       sub.bind_ssbo(0, buffers_.ssbo_scan_block_sum_);
 
       sub.dispatch(int3(1, 1, 1));
@@ -1801,7 +1814,6 @@ namespace blender::npr::strokegen
       auto& sub = pass.sub("strokegen_segscan_test_dwsweep");
       sub.shader_set(shaders_.static_shader_get(SEGSCAN_TEST_DWSWEEP));
 
-      // Note: keep the same slot binding as in shader_create_info
       sub.bind_ssbo(0, buffers_.ssbo_out_scan_data_);
       sub.bind_ssbo(1, buffers_.ssbo_scan_block_sum_);
       sub.bind_ubo(0, buffers_.ubo_bnpr_tree_scan_infos_);

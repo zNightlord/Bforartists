@@ -91,8 +91,6 @@ void main()
 
 	bnpr_scan_block_sum_buf_[scanAddrs.global_x2.x] = /**floatBitsToUint*/(aggregateSum_A);
 	bnpr_scan_block_sum_buf_[scanAddrs.global_x2.y] = /**floatBitsToUint*/(aggregateSum_B);
-
-
 }
 #endif
 
@@ -130,17 +128,21 @@ void main()
 
 	TreeScanIndices scan_ids = GetTreeScanIndices(groupId, gl_WorkGroupID.x);
 
+ 	/* init & store random scan input vals */
 	T scanval_A, scanval_B;
-	uint hf_A, hf_B;
-	{ /* init & store random scan input vals */
-		hf_A = 1u & uint(wang_hash(scan_ids.global_x2.x + scan_ids.lds_x2.x) % 128u == 0u);
+	uint hf_A = 0, hf_B = 0;
+	#if defined(_KERNEL_MULTI_COMPILE__TREE_SEG_SCAN_TEST)
+	{
+		uint rand_seed = pcs_segscan_test_random_seed_; 
+
+		hf_A = 1u & uint(wang_hash(scan_ids.global_x2.x + scan_ids.lds_x2.x * rand_seed) % 12324u == 0u);
 		if (idx == 0) hf_A = 0u;
 		scanval_A = T(
-			wang_hash(scan_ids.global_x2.y + scan_ids.lds_x2.x) % 12u
+			wang_hash(scan_ids.global_x2.y + scan_ids.lds_x2.x + rand_seed) % 12u
 		);
-		hf_B = 1u & uint(wang_hash(scan_ids.global_x2.y + scan_ids.lds_x2.y) % 128u == 0u);
+		hf_B = 1u & uint(wang_hash(scan_ids.global_x2.y + scan_ids.lds_x2.y * rand_seed) % 12324u == 0u);
 		scanval_B = T(
-			wang_hash(scan_ids.global_x2.x + scan_ids.lds_x2.y) % 12u
+			wang_hash(scan_ids.global_x2.x + scan_ids.lds_x2.y + rand_seed) % 12u
 		);
 
 		/* avoid invalid loads */
@@ -154,7 +156,7 @@ void main()
 		bnpr_in_scan_data_buf_[scan_ids.global_x2.x] = SEGSCAN_STRUCT_TYPE(scanval_A, hf_A);
 		bnpr_in_scan_data_buf_[scan_ids.global_x2.y] = SEGSCAN_STRUCT_TYPE(scanval_B, hf_B);
 	}
-
+	#endif
 
 
 	/* execute block-wise exlusive scan */

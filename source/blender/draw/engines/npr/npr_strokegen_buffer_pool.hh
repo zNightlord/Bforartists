@@ -243,11 +243,20 @@ class GPUBufferPoolModule {
   }
 
   // Scan Working Buffers -----------------------------------
-  SSBO_BnprScanData       ssbo_in_scan_data_;
-  SSBO_BnprScanData       ssbo_out_scan_data_;
-  SSBO_BnprScanAggregates ssbo_scan_block_sum_;
-  UBO_BnprTreeScan        ubo_bnpr_tree_scan_infos_;
-  SSBO_BnprTreeScan       ssbo_tree_scan_infos_; 
+  SSBO_BnprScanData         ssbo_in_scan_data_;
+  SSBO_BnprScanData         ssbo_out_scan_data_;
+  SSBO_BnprScanAggregates   ssbo_scan_block_sum_;
+  UBO_BnprTreeScan          ubo_bnpr_tree_scan_infos_;
+  SSBO_BnprTreeScan         ssbo_tree_scan_infos_[32]; 
+  SSBO_IndirectDispatchArgs ssbo_scan_dispatch_args_[32];
+  inline GPUStorageBuf *reused_ssbo_tree_scan_infos_contour_segmentation_()
+  {
+    return ssbo_tree_scan_infos_[0];
+  }
+  inline GPUStorageBuf *reused_ssbo_scan_dispatch_args_contour_segmentation_()
+  {
+    return ssbo_scan_dispatch_args_[0]; 
+  }
 
   // Segmented Loop Convolution Working Buffers -----------------------------------
   SSBO_SegLoopConv1DData     ssbo_in_segloopconv1d_data_;

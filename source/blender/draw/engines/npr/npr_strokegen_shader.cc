@@ -266,6 +266,8 @@ const char *StrokeGenShaderModule::static_shader_create_info_name_get(eShaderTyp
       return "bnpr_segscan_test_aggregate";
     case SEGSCAN_TEST_DWSWEEP:
       return "bnpr_segscan_test_dwsweep";
+    case SCAN_FILL_DISPTACH_ARGS:
+      return "strokegen_scan_fill_dispatch_args"; 
     case CONV1D_TEST_BUILD_PATCH:
       return "strokegen_segloopconv1D_test_build_patch";
     case CONV1D_TEST_CONVOLUTION:

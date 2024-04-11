@@ -82,7 +82,7 @@ namespace blender::npr::strokegen
   {
     /* Init draw passes and manager related stuff. (Begin render graph) */
     strokegen_passes.test_list_ranking = false;
-    strokegen_passes.test_scan = false; 
+    strokegen_passes.test_scan = true; 
 
     /* First setup resources */
     int refresh_rate = std::max(1, strokegen_passes.meshing_params.seconds_sync_view_mat * 24); 
@@ -92,7 +92,7 @@ namespace blender::npr::strokegen
     strokegen_textures.on_begin_sync(tex_prepass_depth); 
 
     /* Then setup render passes */
-    strokegen_passes.on_begin_sync();
+    strokegen_passes.on_begin_sync((int)frame_counter);
   }
 
   void Instance::end_sync(Manager&)

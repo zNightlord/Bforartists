@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Shared structures, enums & defines between C++ and GLSL.
  * Can also include some math functions but they need to be simple enough to be valid in both
  * language.
@@ -141,7 +141,7 @@ using namespace draw;
 #endif
     uint hf;
   };
-  BLI_STATIC_ASSERT_ALIGN(SSBOData_SegScanTest, 16)
+  // BLI_STATIC_ASSERT_ALIGN(SSBOData_SegScanTest, 16)
   /** \} */
 
 
