@@ -25,7 +25,10 @@ float f32_add(float a, float b)
 {
 	return a + b;
 }
-
+vec3 vec3_add(vec3 a, vec3 b)
+{
+	return a + b;
+}
 
 
 

@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
+﻿/* SPDX-License-Identifier: GPL-2.0-or-later
  * Copyright 2021 Blender Foundation.
  */
 
@@ -67,12 +67,8 @@
 #define NUM_ITEMS_BNPR_SCAN_TEST 1973581u
 
 #ifndef GPU_SHADER
-  #define BNPR_SCAN_TEST_DATA_TYPE uint3
-  #define BNPR_SCAN_TEST_DATA_TYPE_STR "uvec3"
-
-  // remember to update SSBOData_SegScanTest if this changes
-  #define BNPR_SEG_SCAN_TEST_STRUCT_TYPE SSBOData_SegScanTest
-  #define BNPR_SEG_SCAN_TEST_STRUCT_TYPE_STR "SSBOData_SegScanTest"
+  #define BNPR_SCAN_TEST_DATA_TYPE uint
+  #define BNPR_SCAN_TEST_DATA_TYPE_STR "uint"
 #endif
 /** \} */
 

@@ -1312,6 +1312,11 @@ GPU_SHADER_CREATE_INFO(bnpr_scan_uint_add)
     .define("SCAN_OP", "u32_add")
     .define("SCAN_ZERO_VAL", "0u")
     .define("SCAN_FUNCTION_TAG", "_u32_add");
+GPU_SHADER_CREATE_INFO(bnpr_segscan_uint_storage)
+    .define("SEGSCAN_STRUCT_TYPE", "SSBOData_SegScanType_uint")
+    .define("SEGSCAN_STRUCT_TYPE_ENCODED", "uint")
+    .define("SEGSCAN_ENCODE", "segscan_uint_hf_encode")
+    .define("SEGSCAN_DECODE", "segscan_uint_hf_decode"); 
 
 GPU_SHADER_CREATE_INFO(bnpr_scan_uvec2_add)
     .typedef_source("bnpr_shader_shared.hh")
@@ -1319,13 +1324,19 @@ GPU_SHADER_CREATE_INFO(bnpr_scan_uvec2_add)
     .define("SCAN_OP", "uvec2_add")
     .define("SCAN_ZERO_VAL", "uvec2(0u, 0u)")
     .define("SCAN_FUNCTION_TAG", "uvec2_add");
+GPU_SHADER_CREATE_INFO(bnpr_segscan_uvec2_storage)
+    .define("SEGSCAN_STRUCT_TYPE", "SSBOData_SegScanType_uvec2")
+    .define("SEGSCAN_STRUCT_TYPE_ENCODED", "uvec2")
+    .define("SEGSCAN_ENCODE", "segscan_uvec2_hf_encode")
+    .define("SEGSCAN_DECODE", "segscan_uvec2_hf_decode"); 
 
-GPU_SHADER_CREATE_INFO(bnpr_scan_uvec3_add)
-    .typedef_source("bnpr_shader_shared.hh")
-    .define("SCAN_DATA_TYPE", "uvec3")
-    .define("SCAN_OP", "uvec3_add")
-    .define("SCAN_ZERO_VAL", "uvec3(0u, 0u, 0u)")
-    .define("SCAN_FUNCTION_TAG", "uvec3_add");
+// uvec3 is not supported since std430 layout requires 8-byte or 16-byte alignment
+// GPU_SHADER_CREATE_INFO(bnpr_scan_uvec3_add) 
+//     .typedef_source("bnpr_shader_shared.hh")
+//     .define("SCAN_DATA_TYPE", "uvec3")
+//     .define("SCAN_OP", "uvec3_add")
+//     .define("SCAN_ZERO_VAL", "uvec3(0u, 0u, 0u)")
+//     .define("SCAN_FUNCTION_TAG", "uvec3_add");
 
 GPU_SHADER_CREATE_INFO(bnpr_scan_uvec4_add)
     .typedef_source("bnpr_shader_shared.hh")
@@ -1333,6 +1344,11 @@ GPU_SHADER_CREATE_INFO(bnpr_scan_uvec4_add)
     .define("SCAN_OP", "uvec4_add")
     .define("SCAN_ZERO_VAL", "uvec4(0u, 0u, 0u, 0u)")
     .define("SCAN_FUNCTION_TAG", "uvec4_add");
+GPU_SHADER_CREATE_INFO(bnpr_segscan_uvec4_storage)
+    .define("SEGSCAN_STRUCT_TYPE", "SSBOData_SegScanType_uvec4")
+    .define("SEGSCAN_STRUCT_TYPE_ENCODED", "uvec4")
+    .define("SEGSCAN_ENCODE", "segscan_uvec4_hf_encode")
+    .define("SEGSCAN_DECODE", "segscan_uvec4_hf_decode");    
 
 GPU_SHADER_CREATE_INFO(bnpr_scan_float_add)
     .typedef_source("bnpr_shader_shared.hh")
@@ -1340,13 +1356,31 @@ GPU_SHADER_CREATE_INFO(bnpr_scan_float_add)
     .define("SCAN_OP", "f32_add")
     .define("SCAN_ZERO_VAL", ".0f")
     .define("SCAN_FUNCTION_TAG", "_f32_add");
+GPU_SHADER_CREATE_INFO(bnpr_segscan_float_storage)
+    .define("SEGSCAN_STRUCT_TYPE", "SSBOData_SegScanType_float")
+    .define("SEGSCAN_STRUCT_TYPE_ENCODED", "uvec2")
+    .define("SEGSCAN_ENCODE", "segscan_float_hf_encode")
+    .define("SEGSCAN_DECODE", "segscan_float_hf_decode"); 
 
-GPU_SHADER_CREATE_INFO(bnpr_scan_test_inputs).additional_info("bnpr_scan_uvec3_add");
+GPU_SHADER_CREATE_INFO(bnpr_scan_vec3_add)
+    .typedef_source("bnpr_shader_shared.hh")
+    .define("SCAN_DATA_TYPE", "vec3")
+    .define("SCAN_OP", "vec3_add")
+    .define("SCAN_ZERO_VAL", "vec3(.0f, .0f, .0f)")
+    .define("SCAN_FUNCTION_TAG", "_vec3_add");
+GPU_SHADER_CREATE_INFO(bnpr_segscan_vec3_storage)
+    .define("SEGSCAN_STRUCT_TYPE", "SSBOData_SegScanType_vec3")
+    .define("SEGSCAN_STRUCT_TYPE_ENCODED", "uvec4")
+    .define("SEGSCAN_ENCODE", "segscan_vec3_hf_encode")
+    .define("SEGSCAN_DECODE", "segscan_vec3_hf_decode"); 
+
+GPU_SHADER_CREATE_INFO(bnpr_scan_test_inputs).additional_info("bnpr_scan_uint_add");
 
 GPU_SHADER_CREATE_INFO(bnpr_segscan_test_inputs)
-    .additional_info("bnpr_scan_uvec3_add")
+    .additional_info("bnpr_scan_uint_add")
+    .additional_info("bnpr_segscan_uint_storage")
+
     .define("_KERNEL_MULTI_COMPILE__TREE_SEG_SCAN_TEST")
-    .define("SEGSCAN_STRUCT_TYPE", "SSBOData_SegScanTest")
     .push_constant(Type::INT, "pcs_segscan_test_random_seed_");
 
 /** GPU 1D Segmented & Looped Convolution --------------------
@@ -1435,9 +1469,9 @@ GPU_SHADER_CREATE_INFO(bnpr_segscan_test_upsweep)
     .define("IS_TREE_SEG_SCAN", "1")
     .define("_KERNEL_MULTI_COMPILE__TREE_SEG_SCAN_UPSWEEP", "1")
     
-    .storage_buf(0, Qualifier::READ_WRITE, BNPR_SEG_SCAN_TEST_STRUCT_TYPE_STR, "bnpr_in_scan_data_buf_[]")
-    .storage_buf(1, Qualifier::READ_WRITE, BNPR_SEG_SCAN_TEST_STRUCT_TYPE_STR, "bnpr_out_scan_data_buf_[]")
-    .storage_buf(2, Qualifier::WRITE, BNPR_SEG_SCAN_TEST_STRUCT_TYPE_STR, "bnpr_scan_block_sum_buf_[]")
+    .storage_buf(0, Qualifier::READ_WRITE, "SEGSCAN_STRUCT_TYPE_ENCODED", "bnpr_in_scan_data_buf_[]")
+    .storage_buf(1, Qualifier::READ_WRITE, "SEGSCAN_STRUCT_TYPE_ENCODED", "bnpr_out_scan_data_buf_[]")
+    .storage_buf(2, Qualifier::WRITE, "SEGSCAN_STRUCT_TYPE_ENCODED", "bnpr_scan_block_sum_buf_[]")
     .uniform_buf(0, "UBData_TreeScan", "ubo_bnpr_tree_scan_infos_")
     
     .local_group_size(GROUP_SIZE_BNPR_SCAN_SWEEP) /* <== from "bnpr_defines.hh" */
@@ -1449,7 +1483,7 @@ GPU_SHADER_CREATE_INFO(bnpr_segscan_test_aggregate)
     .define("IS_TREE_SEG_SCAN", "1")
     .define("_KERNEL_MULTI_COMPILE__TREE_SEG_SCAN_AGGREGATE", "1")
     
-    .storage_buf(0, Qualifier::READ_WRITE, BNPR_SEG_SCAN_TEST_STRUCT_TYPE_STR, "bnpr_scan_block_sum_buf_[]")
+    .storage_buf(0, Qualifier::READ_WRITE, "SEGSCAN_STRUCT_TYPE_ENCODED", "bnpr_scan_block_sum_buf_[]")
     
     .local_group_size(GROUP_SIZE_BNPR_SCAN_AGGRG) /* <== from "bnpr_defines.hh" */
     .compute_source("npr_strokegen_scan_test_comp.glsl");
@@ -1460,8 +1494,8 @@ GPU_SHADER_CREATE_INFO(bnpr_segscan_test_dwsweep)
     .define("IS_TREE_SEG_SCAN", "1")
     .define("_KERNEL_MULTI_COMPILE__TREE_SEG_SCAN_DWSWEEP", "1")
     
-    .storage_buf(0, Qualifier::READ_WRITE, BNPR_SEG_SCAN_TEST_STRUCT_TYPE_STR, "bnpr_out_scan_data_buf_[]")
-    .storage_buf(1, Qualifier::READ, BNPR_SEG_SCAN_TEST_STRUCT_TYPE_STR, "bnpr_scan_block_sum_buf_[]")
+    .storage_buf(0, Qualifier::READ_WRITE, "SEGSCAN_STRUCT_TYPE_ENCODED", "bnpr_out_scan_data_buf_[]")
+    .storage_buf(1, Qualifier::READ, "SEGSCAN_STRUCT_TYPE_ENCODED", "bnpr_scan_block_sum_buf_[]")
     .uniform_buf(0, "UBData_TreeScan", "ubo_bnpr_tree_scan_infos_")
     
     .local_group_size(GROUP_SIZE_BNPR_SCAN_SWEEP) /* <== from "bnpr_defines.hh" */

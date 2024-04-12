@@ -183,31 +183,32 @@ namespace blender::npr::strokegen
 
 
     /* GPU (Seg-)Scan Test ------------------------------------------------------------------------- */
-    // manager.submit(strokegen_passes.get_compute_pass(ePassType::SCAN_TEST), view);
-    manager.submit(strokegen_passes.get_compute_pass(PType::SEGSCAN_TEST), view);
+    const bool dbg_segscan = false; 
+    manager.submit(strokegen_passes.get_compute_pass(dbg_segscan ? PType::SEGSCAN_TEST : PType::SCAN_TEST), view);
 
     if (strokegen_passes.test_scan && frame_counter % 32 == 0)
     {
-      // strokegen_passes.validate_pass_scan_test<BNPR_SCAN_TEST_DATA_TYPE>(
-      //   [](const BNPR_SCAN_TEST_DATA_TYPE& a, const BNPR_SCAN_TEST_DATA_TYPE& b) {return a == b;}
-      // );
-      strokegen_passes.validate_segscan<SSBOData_SegScanTest>(
-        [](const SSBOData_SegScanTest& a, const SSBOData_SegScanTest& b) { return a.val == b.val; },
-        [](const SSBOData_SegScanTest& a) { return a.hf; },
-        [](const SSBOData_SegScanTest& a, const SSBOData_SegScanTest& b)
-        {
-          return SSBOData_SegScanTest{a.val + b.val, 0};
-        },
-        SSBOData_SegScanTest{
-          uint3(0u, 0u, 0u), 1u
-        },
-        false
-      );
-
-      strokegen_passes.validate_segloopconv1d<int>(
-        [](const int& a, const int& b){ return a == b; },
-        [](const int& a, const int& b){ return a + b; }
-      );
+      // validate scan operators
+      if (dbg_segscan) {
+        strokegen_passes.validate_segscan<SSBOData_SegScanTest, SSBOData_SegScanTestEncoded>(
+            SSBOData_SegScanTestDecodeFunc,
+          [](const SSBOData_SegScanTest& a, const SSBOData_SegScanTest& b) { return a.val ==
+          b.val; },
+          [](const SSBOData_SegScanTest& a) { return a.hf; },
+          [](const SSBOData_SegScanTest& a, const SSBOData_SegScanTest& b)
+          {
+            return SSBOData_SegScanTest{a.val + b.val, 0};
+          },
+          SSBOData_SegScanZeroValue,
+          false
+        );
+      }else {
+        strokegen_passes.validate_pass_scan_test<BNPR_SCAN_TEST_DATA_TYPE>(
+            [](const BNPR_SCAN_TEST_DATA_TYPE &a, const BNPR_SCAN_TEST_DATA_TYPE &b) {
+              return a == b;
+            });  
+      }
+      
     }
     frame_counter = (frame_counter + 1) % 100000000;
 
@@ -215,7 +216,13 @@ namespace blender::npr::strokegen
 
     /* GPU 1d looped segmented convolution Test ----------------------------------------- */
     manager.submit(strokegen_passes.get_compute_pass(PType::SEGLOOPCONV_TEST), view);
-
+    if (frame_counter % 32 == 0) {
+      // validate segloopconv1d
+      // strokegen_passes.validate_segloopconv1d<int>(
+      //   [](const int& a, const int& b){ return a == b; },
+      //   [](const int& a, const int& b){ return a + b; }
+      // );
+    }
 
 
     /* GPU List Ranking Test ---------------------------------------------------------------- */

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Shared structures, enums & defines between C++ and GLSL.
  * Can also include some math functions but they need to be simple enough to be valid in both
  * language.
@@ -132,16 +132,192 @@ using namespace draw;
   };
   BLI_STATIC_ASSERT_ALIGN(UBData_TreeScan, 16)
 
-  struct SSBOData_SegScanTest
-  {
+
+  /* Segmented scan: pack hf and data together */
 #ifndef GPU_SHADER
-    uint3 val;
-#else
-    uvec3 val;
+#  define uvec2 uint2
+#  define uvec3 uint3
+#  define uvec4 uint4
+#  define vec2 float2
+#  define vec3 float3
+#  define vec4 float4
 #endif
+    
+  static inline uint segscan_encode_hf_with_val(
+    uint val, uint hfs/* can have 2 flags for per-block aggregates; this only happens for segscan */)
+  {
+    uint encoded = (val << 2u) | (hfs & 0x00000003u);
+    return encoded;
+  }
+  static inline uint segscan_decode_hf(uint encoded)
+  {
+    return encoded & 0x3u; 
+  }
+  static inline uint segscan_decode_val(uint encoded)
+  {
+    return (encoded >> 2u);
+  }
+
+  // Scan data type, encoder/decoders are pre-defined here
+  // use these to spawn different shader infos
+  struct SSBOData_SegScanType_uint { // scan on uint
+    uint val;
     uint hf;
   };
-  // BLI_STATIC_ASSERT_ALIGN(SSBOData_SegScanTest, 16)
+  static inline uint segscan_uint_hf_encode(SSBOData_SegScanType_uint data)
+  {
+    uint encoded = segscan_encode_hf_with_val(data.val, data.hf); 
+    return encoded;
+  }
+  static inline SSBOData_SegScanType_uint segscan_uint_hf_decode(uint encoded)
+  {
+    SSBOData_SegScanType_uint data;
+    data.val = segscan_decode_val(encoded);
+    data.hf = segscan_decode_hf(encoded);
+    return data;
+  }
+
+  struct SSBOData_SegScanType_uvec2 { // scan on uvec2
+    uvec2 val;
+    uint hf;
+  };
+  static inline uvec2 segscan_uvec2_hf_encode(SSBOData_SegScanType_uvec2 data)
+  {
+    uvec2 encoded;
+    encoded.x = segscan_encode_hf_with_val(data.val.x, data.hf);
+    encoded.y = data.val.y;
+    return encoded;
+  }
+  static inline SSBOData_SegScanType_uvec2 segscan_uvec2_hf_decode(uvec2 encoded)
+  {
+    SSBOData_SegScanType_uvec2 data;
+    data.val.x = segscan_decode_val(encoded.x);
+    data.hf = segscan_decode_hf(encoded.x);
+    data.val.y = encoded.y;
+    return data;
+  }
+
+  struct SSBOData_SegScanType_uvec3 { // scan on uvec3
+    uvec3 val;
+    uint hf;
+  };
+  static inline uvec3 segscan_uvec3_hf_encode(SSBOData_SegScanType_uvec3 data)
+  {
+    uvec3 encoded;
+    encoded.x = segscan_encode_hf_with_val(data.val.x, data.hf);
+    encoded.y = data.val.y;
+    encoded.z = data.val.z;
+    return encoded;
+  }
+  static inline SSBOData_SegScanType_uvec3 segscan_uvec3_hf_decode(uvec3 encoded)
+  {
+    SSBOData_SegScanType_uvec3 data;
+    data.val.x = segscan_decode_val(encoded.x);
+    data.hf = segscan_decode_hf(encoded.x);
+    data.val.y = encoded.y;
+    data.val.z = encoded.z;
+    return data;
+  }
+
+  struct SSBOData_SegScanType_uvec4 {  // scan on uvec4
+    uvec4 val;
+    uint hf;
+  };
+  static inline uvec4 segscan_uvec4_hf_encode(SSBOData_SegScanType_uvec4 data)
+  {
+    uvec4 encoded;
+    encoded.x = segscan_encode_hf_with_val(data.val.x, data.hf);
+    encoded.y = data.val.y;
+    encoded.z = data.val.z;
+    encoded.w = data.val.w; 
+    return encoded;
+  }
+  static inline SSBOData_SegScanType_uvec4 segscan_uvec4_hf_decode(uvec4 encoded)
+  {
+    SSBOData_SegScanType_uvec4 data;
+    data.val.x = segscan_decode_val(encoded.x);
+    data.hf = segscan_decode_hf(encoded.x);
+    data.val.y = encoded.y;
+    data.val.z = encoded.z;
+    data.val.w = encoded.w; 
+    return data;
+  }
+
+  struct SSBOData_SegScanType_float {  // scan on float
+    float val;
+    uint hf;
+  };
+  static inline uvec2 segscan_float_hf_encode(SSBOData_SegScanType_float data)
+  {
+    uvec2 encoded;
+#ifdef GPU_SHADER
+    encoded.x = floatBitsToUint(data.val);
+#else
+    encoded.x = float_as_uint(data.val);
+#endif
+
+    encoded.y = data.hf;
+
+    return encoded;
+  }
+  static inline SSBOData_SegScanType_float segscan_float_hf_decode(uvec2 encoded)
+  {
+    SSBOData_SegScanType_float data;
+    #ifdef GPU_SHADER
+      data.val = uintBitsToFloat(encoded.x);
+    #else
+      data.val = uint_as_float(encoded.x);
+    #endif
+
+    data.hf = encoded.y;
+
+    return data;
+  }
+
+  struct SSBOData_SegScanType_vec3 {  // scan on vec2/vec3
+    vec3 val;
+    uint hf;
+  };
+  static inline uvec4 segscan_vec3_hf_encode(SSBOData_SegScanType_vec3 data)
+  {
+    uvec4 encoded;
+#ifdef GPU_SHADER
+    encoded.xyz = floatBitsToUint(data.val);
+#else
+    encoded.x = float_as_uint(data.val.x);
+    encoded.y = float_as_uint(data.val.y);
+    encoded.z = float_as_uint(data.val.z);
+#endif
+
+    encoded.w = data.hf;
+
+    return encoded;
+  }
+  static inline SSBOData_SegScanType_vec3 segscan_vec3_hf_decode(uvec4 encoded)
+  {
+    SSBOData_SegScanType_vec3 data;
+#ifdef GPU_SHADER
+    data.val = uintBitsToFloat(encoded.xyz);
+#else
+    data.val.x = uint_as_float(encoded.x);
+    data.val.y = uint_as_float(encoded.y);
+    data.val.z = uint_as_float(encoded.z);
+#endif
+
+    data.hf = encoded.w;
+
+    return data;
+  }
+#ifndef GPU_SHADER
+  #undef uvec2
+  #undef uvec3
+  #undef uvec4
+
+#  define SSBOData_SegScanTestEncoded uint
+#  define SSBOData_SegScanTestDecodeFunc segscan_uint_hf_decode
+#  define SSBOData_SegScanTest SSBOData_SegScanType_uint
+#  define SSBOData_SegScanZeroValue ((SSBOData_SegScanTest{uint(0u), 1u}))
+#endif
   /** \} */
 
 

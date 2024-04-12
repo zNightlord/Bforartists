@@ -441,19 +441,21 @@ public:
   /* -------------------------------------------------------------------- */
   /** \name Segment Scan Validation
    * \{ */
-  template<typename T>
+  template<typename T, typename TD>
   void validate_segscan(
+    T (*func_decode)(TD), 
     bool (*func_equals)(const T&, const T&),
     uint (*func_get_hf)(const T&),
     T (*func_scan_op)(const T&, const T&),
     T zero_val,
     bool inclusive = false
   );
-  template<typename T>
+  template<typename T, typename TD>
   bool validate_segscan_internal(
-    const T *input,
-    const T *output,
+    const TD *input,
+    const TD *output,
     const int blk_size, const int num_elems,
+    T (*func_decode)(TD), 
     uint (*func_get_hf)(const T&),
     bool (*func_equals)(const T &, const T &),
     T (*func_scan_op)(const T&, const T&),
@@ -583,8 +585,9 @@ bool StrokeGenPassModule::validate_exclusive_scan(const T *bufferInputVals,
       );
 }
 
-template<typename T>
+template<typename T, typename TD>
 void StrokeGenPassModule::validate_segscan(
+  T (*func_decode)(TD), 
   bool (*func_equals)(const T&, const T&),
   uint (*func_get_hf)(const T&),
   T (*func_scan_op)(const T&, const T&),
@@ -593,18 +596,18 @@ void StrokeGenPassModule::validate_segscan(
 {
   SSBO_BnprScanData &buf_segscan_inputs = buffers_.ssbo_in_scan_data_;
   buf_segscan_inputs.read();
-  T *data_segscan_inputs = reinterpret_cast<T *>(buf_segscan_inputs.data());
+  TD *data_segscan_inputs = reinterpret_cast<TD *>(buf_segscan_inputs.data());
 
   SSBO_BnprScanData &buf_segscan_output = buffers_.ssbo_out_scan_data_;
   buf_segscan_output.read();
-  T *data_segscan_output = reinterpret_cast<T *>(buf_segscan_output.data());
+  TD *data_segscan_output = reinterpret_cast<TD *>(buf_segscan_output.data());
 
-  bool succ = validate_segscan_internal(
+  bool succ = validate_segscan_internal<T, TD>(
     data_segscan_inputs,
     data_segscan_output,
     GROUP_SIZE_BNPR_SCAN_SWEEP * 2u,
     buffers_.ubo_bnpr_tree_scan_infos_.num_scan_items,
-    func_get_hf, func_equals, func_scan_op, zero_val,
+    func_decode, func_get_hf, func_equals, func_scan_op, zero_val,
     inclusive
   );
 
@@ -612,12 +615,13 @@ void StrokeGenPassModule::validate_segscan(
     fprintf(stderr, "strokegen error: segment scan test failed");
 }
 
-template<typename T>
+template<typename T, typename TD>
 bool StrokeGenPassModule::validate_segscan_internal(
-  const T *input,
-  const T *output,
+  const TD *input,
+  const TD *output,
   const int blk_size,
   const int num_elems,
+  T (*func_decode)(TD), 
   uint (*func_get_hf)(const T &),
   bool (*func_equals)(const T &, const T &),
   T (*func_scan_op)(const T&, const T&),
@@ -627,23 +631,27 @@ bool StrokeGenPassModule::validate_segscan_internal(
   T maxErrorFound = zero_value;
   T currScanValue = zero_value;
 
-  for (int i = 0; i < num_elems; i++) {
-    if (func_get_hf(input[i])) {
+  for (int i = 0; i < num_elems; i++)
+  {
+    T input_t = func_decode(input[i]); 
+    T output_t = func_decode(output[i]);
+
+    if (func_get_hf(input_t)) {
       currScanValue = zero_value;
     }
 
     if (inclusive) {
       // Inclusive scan
-      currScanValue = func_scan_op(currScanValue, input[i]);
+      currScanValue = func_scan_op(currScanValue, input_t);
     }
 
-    if (false == func_equals(currScanValue, output[i])) {
+    if (false == func_equals(currScanValue, output_t)) {
       return false;
     }
 
     if (!inclusive) {
       // Exclusive scan
-      currScanValue = func_scan_op(currScanValue, input[i]);
+      currScanValue = func_scan_op(currScanValue, input_t);
     }
   }
 

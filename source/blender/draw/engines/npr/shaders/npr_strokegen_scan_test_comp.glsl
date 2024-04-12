@@ -121,6 +121,7 @@ void main()
 
 
 #if defined(_KERNEL_MULTI_COMPILE__TREE_SEG_SCAN_UPSWEEP)
+
 void main()
 {
 	const uint groupId =  gl_LocalInvocationID.x;
@@ -153,8 +154,8 @@ void main()
 		);
 		/* ----------------------------------------------------------- */
 
-		bnpr_in_scan_data_buf_[scan_ids.global_x2.x] = SEGSCAN_STRUCT_TYPE(scanval_A, hf_A);
-		bnpr_in_scan_data_buf_[scan_ids.global_x2.y] = SEGSCAN_STRUCT_TYPE(scanval_B, hf_B);
+		bnpr_in_scan_data_buf_[scan_ids.global_x2.x] = SEGSCAN_ENCODE(SEGSCAN_STRUCT_TYPE(scanval_A, hf_A));
+		bnpr_in_scan_data_buf_[scan_ids.global_x2.y] = SEGSCAN_ENCODE(SEGSCAN_STRUCT_TYPE(scanval_B, hf_B));
 	}
 	#endif
 
@@ -177,13 +178,17 @@ void main()
 	
 	/* store scan results */
 	/* ----------------------------------------------------------- */
-	bnpr_out_scan_data_buf_[scan_ids.global_x2.x] = SEGSCAN_STRUCT_TYPE(
-		scanRes_ai,
-		tree_seg_scan_encode_upsweep_hfs(headFlagPartialSum_A, hf_A)
+	bnpr_out_scan_data_buf_[scan_ids.global_x2.x] = SEGSCAN_ENCODE(
+		SEGSCAN_STRUCT_TYPE(
+			scanRes_ai,
+			tree_seg_scan_encode_upsweep_hfs(headFlagPartialSum_A, hf_A)
+		)
 	);
-	bnpr_out_scan_data_buf_[scan_ids.global_x2.y] = SEGSCAN_STRUCT_TYPE(
-		scanRes_bi,
-		tree_seg_scan_encode_upsweep_hfs(headFlagPartialSum_B, hf_B)
+	bnpr_out_scan_data_buf_[scan_ids.global_x2.y] = SEGSCAN_ENCODE(
+		SEGSCAN_STRUCT_TYPE(
+			scanRes_bi,
+			tree_seg_scan_encode_upsweep_hfs(headFlagPartialSum_B, hf_B)
+		)
 	);
 	/* ----------------------------------------------------------- */
 
@@ -194,12 +199,14 @@ void main()
 	{
 		uint debug_hf = uint((wang_hash(gl_WorkGroupID.x * 17u) % 12u) == 0u); /* debug only */
 
-		bnpr_scan_block_sum_buf_[gl_WorkGroupID.x] = SEGSCAN_STRUCT_TYPE(
-			/* different from ordinary scan, we store exclusive sum here */
-			scanRes_bi,
-			tree_seg_scan_encode_upsweep_hfs(
-				headFlagPartialSum_B, /* or sum of block hfs */
-				TREE_SCAN_CACHE_HF[0]  /* original hf of block */
+		bnpr_scan_block_sum_buf_[gl_WorkGroupID.x] = SEGSCAN_ENCODE(
+			SEGSCAN_STRUCT_TYPE(
+				/* different from ordinary scan, we store exclusive sum here */
+				scanRes_bi,
+				tree_seg_scan_encode_upsweep_hfs(
+					headFlagPartialSum_B, /* or sum of block hfs */
+					TREE_SCAN_CACHE_HF[0]  /* original hf of block */
+				)
 			)
 		);
 	}
@@ -217,12 +224,12 @@ void main()
 
 	TreeScanIndices scan_ids = GetTreeScanIndices(groupId, 0);
 
-	SEGSCAN_STRUCT_TYPE aggregate_A = bnpr_scan_block_sum_buf_[scan_ids.global_x2.x];
+	SEGSCAN_STRUCT_TYPE aggregate_A = SEGSCAN_DECODE(bnpr_scan_block_sum_buf_[scan_ids.global_x2.x]);
 	T partialSumTreeAi = aggregate_A.val;
 	uint partialOrTreeAi = tree_seg_scan_decode_upsweep_hfs_get_sumHF(aggregate_A.hf);
 	uint firstInitialHFAi = tree_seg_scan_decode_upsweep_hfs_get_origHF(aggregate_A.hf);
 
-	SEGSCAN_STRUCT_TYPE aggregate_B = bnpr_scan_block_sum_buf_[scan_ids.global_x2.y];
+	SEGSCAN_STRUCT_TYPE aggregate_B = SEGSCAN_DECODE(bnpr_scan_block_sum_buf_[scan_ids.global_x2.y]);
 	T partialSumTreeBi = aggregate_B.val;
 	uint partialOrTreeBi = tree_seg_scan_decode_upsweep_hfs_get_sumHF(aggregate_B.hf);
 	uint firstInitialHFBi = tree_seg_scan_decode_upsweep_hfs_get_origHF(aggregate_B.hf);
@@ -261,8 +268,10 @@ void main()
 
 
 	/* store scan results */
-	bnpr_scan_block_sum_buf_[scan_ids.global_x2.x] = SEGSCAN_STRUCT_TYPE(scan_res_A, 0); /* no hf needed */
-	bnpr_scan_block_sum_buf_[scan_ids.global_x2.y] = SEGSCAN_STRUCT_TYPE(scan_res_B, 0); /* no hf needed */
+	bnpr_scan_block_sum_buf_[scan_ids.global_x2.x] = 
+		SEGSCAN_ENCODE(SEGSCAN_STRUCT_TYPE(scan_res_A, 0)); /* no hf needed */
+	bnpr_scan_block_sum_buf_[scan_ids.global_x2.y] = 
+		SEGSCAN_ENCODE(SEGSCAN_STRUCT_TYPE(scan_res_B, 0)); /* no hf needed */
 }
 #endif
 
@@ -276,9 +285,9 @@ void main()
 	TreeScanIndices scan_ids = GetTreeScanIndices(groupId, gl_WorkGroupID.x);
 
 	SEGSCAN_STRUCT_TYPE block_scan_res_A, block_scan_res_B, aggregate_scan_res;
-	block_scan_res_A = /**uintBitsToFloat*/(bnpr_out_scan_data_buf_[scan_ids.global_x2.x]);
-	block_scan_res_B = /**uintBitsToFloat*/(bnpr_out_scan_data_buf_[scan_ids.global_x2.y]);
-	aggregate_scan_res = /**uintBitsToFloat*/(bnpr_scan_block_sum_buf_[gIdx]);
+	block_scan_res_A   = SEGSCAN_DECODE(bnpr_out_scan_data_buf_[scan_ids.global_x2.x]);
+	block_scan_res_B   = SEGSCAN_DECODE(bnpr_out_scan_data_buf_[scan_ids.global_x2.y]);
+	aggregate_scan_res = SEGSCAN_DECODE(bnpr_scan_block_sum_buf_[gIdx]);
 
 	_FUNC_TREE_SEG_SCAN_DWSWEEP_FILL_CACHE(
 	    groupId, scan_ids,
@@ -297,7 +306,11 @@ void main()
 		scan_res_A, scan_res_B
 	);
 
-	bnpr_out_scan_data_buf_[scan_ids.global_x2.x] = SEGSCAN_STRUCT_TYPE(scan_res_A, block_scan_res_A.hf);
-	bnpr_out_scan_data_buf_[scan_ids.global_x2.y] = SEGSCAN_STRUCT_TYPE(scan_res_B, block_scan_res_B.hf);
+	bnpr_out_scan_data_buf_[scan_ids.global_x2.x] = SEGSCAN_ENCODE(
+		SEGSCAN_STRUCT_TYPE(scan_res_A, block_scan_res_A.hf)
+	);
+	bnpr_out_scan_data_buf_[scan_ids.global_x2.y] = SEGSCAN_ENCODE(
+		SEGSCAN_STRUCT_TYPE(scan_res_B, block_scan_res_B.hf)
+	);
 }
 #endif
