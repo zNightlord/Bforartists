@@ -1740,6 +1740,7 @@ namespace blender::npr::strokegen
       sub.bind_ssbo(0, buffers_.ssbo_in_scan_data_);
       sub.bind_ssbo(1, buffers_.ssbo_out_scan_data_);
       sub.bind_ssbo(2, buffers_.ssbo_scan_block_sum_);
+      sub.bind_ssbo(3, buffers_.ssbo_tree_scan_infos_[0]); // TODO: switch based on scan usage
       sub.bind_ubo(0, buffers_.ubo_bnpr_tree_scan_infos_);
 
       sub.dispatch(int3(buffers_.ubo_bnpr_tree_scan_infos_.num_thread_groups, 1, 1));
@@ -1774,6 +1775,11 @@ namespace blender::npr::strokegen
   {
     if (segscan_usage == TestSegScan) pass.init();
 
+    // prep tree-scan args
+    GPUStorageBuf *buf_tree_scan_infos_ = buffers_.ssbo_tree_scan_infos_[0];
+    if (segscan_usage == ContourSegmentation)
+      buf_tree_scan_infos_ = buffers_.reused_ssbo_tree_scan_infos_contour_segmentation_();
+
     if (segscan_usage == ContourSegmentation)
     {
       auto& sub = pass.sub("strokegen_scan_fill_dispatch_args");
@@ -1793,6 +1799,7 @@ namespace blender::npr::strokegen
       sub.bind_ssbo(0, buffers_.ssbo_in_scan_data_);
       sub.bind_ssbo(1, buffers_.ssbo_out_scan_data_);
       sub.bind_ssbo(2, buffers_.ssbo_scan_block_sum_);
+      sub.bind_ssbo(3, buf_tree_scan_infos_);
       sub.bind_ubo(0, buffers_.ubo_bnpr_tree_scan_infos_);
 
       if (segscan_usage == SegScanPassUsage::TestSegScan)

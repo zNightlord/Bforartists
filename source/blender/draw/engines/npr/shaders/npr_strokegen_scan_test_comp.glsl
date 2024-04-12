@@ -11,6 +11,18 @@
 #define T_To_Uint(x) x
 #define Uint_To_T(x) x
 
+#if defined(_KERNEL_MULTI_COMPILE__TREE_SCAN_UPSWEEP) || defined(_KERNEL_MULTI_COMPILE__TREE_SEG_SCAN_UPSWEEP)
+	uint get_num_scan_items()
+	{
+		#if (_KERNEL_MULTI_COMPILE__TREE_SCAN_INFO_SSBO == 1)
+			return ssbo_tree_scan_infos_.num_scan_items; 
+		#else
+			return ubo_bnpr_tree_scan_infos_.num_scan_items;
+		#endif 
+	}
+#endif
+
+
 #if defined(_KERNEL_MULTI_COMPILE__TREE_SCAN_UPSWEEP)
 void main()
 {
@@ -29,7 +41,7 @@ void main()
 		/* ------------------------------------------------------------------------ */
 		/* avoid invalid loads */
 		_FUNC_CLEAN_SCAN_DATA(
-			scan_ids, ubo_bnpr_tree_scan_infos_.num_scan_items,
+			scan_ids, get_num_scan_items(),
 			scanval_A, scanval_B /* <- inout */
 		);
 		/* ------------------------------------------------------------------------ */
@@ -149,7 +161,7 @@ void main()
 		/* avoid invalid loads */
 		/* ----------------------------------------------------------- */
 		_FUNC_CLEAN_SEG_SCAN_DATA(
-			scan_ids, ubo_bnpr_tree_scan_infos_.num_scan_items,
+			scan_ids, get_num_scan_items(),
 			hf_A, scanval_A, hf_B, scanval_B /* <- inout */
 		);
 		/* ----------------------------------------------------------- */

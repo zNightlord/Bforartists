@@ -313,10 +313,10 @@ using namespace draw;
   #undef uvec3
   #undef uvec4
 
-#  define SSBOData_SegScanTestEncoded uint
-#  define SSBOData_SegScanTestDecodeFunc segscan_uint_hf_decode
-#  define SSBOData_SegScanTest SSBOData_SegScanType_uint
-#  define SSBOData_SegScanZeroValue ((SSBOData_SegScanTest{uint(0u), 1u}))
+#  define SSBOData_SegScanTestEncoded uint4
+#  define SSBOData_SegScanTestDecodeFunc segscan_uvec4_hf_decode
+#  define SSBOData_SegScanTest SSBOData_SegScanType_uvec4
+#  define SSBOData_SegScanZeroValue ((SSBOData_SegScanTest{uint4(0u, 0u, 0u, 0u), 1u}))
 #endif
   /** \} */
 

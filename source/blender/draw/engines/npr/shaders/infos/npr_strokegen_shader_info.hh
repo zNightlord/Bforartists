@@ -1374,11 +1374,13 @@ GPU_SHADER_CREATE_INFO(bnpr_segscan_vec3_storage)
     .define("SEGSCAN_ENCODE", "segscan_vec3_hf_encode")
     .define("SEGSCAN_DECODE", "segscan_vec3_hf_decode"); 
 
-GPU_SHADER_CREATE_INFO(bnpr_scan_test_inputs).additional_info("bnpr_scan_uint_add");
+GPU_SHADER_CREATE_INFO(bnpr_scan_test_inputs)
+    .additional_info("bnpr_scan_uvec4_add");
 
 GPU_SHADER_CREATE_INFO(bnpr_segscan_test_inputs)
-    .additional_info("bnpr_scan_uint_add")
-    .additional_info("bnpr_segscan_uint_storage")
+    .additional_info("bnpr_scan_uvec4_add")
+    .additional_info("bnpr_segscan_uvec4_storage")
+    .define("_KERNEL_MULTI_COMPILE__TREE_SCAN_INFO_SSBO", "0")
 
     .define("_KERNEL_MULTI_COMPILE__TREE_SEG_SCAN_TEST")
     .push_constant(Type::INT, "pcs_segscan_test_random_seed_");
@@ -1415,40 +1417,6 @@ GPU_SHADER_CREATE_INFO(npr_compaction_off)
 /* -------------------------------------------------------------------- */
 /** \GPU (Segmented)Scan Test
  * \{ */
-GPU_SHADER_CREATE_INFO(bnpr_scan_test_upsweep)
-    .do_static_compilation(true)
-    .additional_info("bnpr_scan_test_inputs")
-    .define("_KERNEL_MULTI_COMPILE__TREE_SCAN_UPSWEEP", "1")
-    
-    .storage_buf(0, Qualifier::READ_WRITE, BNPR_SCAN_TEST_DATA_TYPE_STR, "bnpr_in_scan_data_buf_[]")
-    .storage_buf(1, Qualifier::READ_WRITE, BNPR_SCAN_TEST_DATA_TYPE_STR, "bnpr_out_scan_data_buf_[]")
-    .storage_buf(2, Qualifier::WRITE, BNPR_SCAN_TEST_DATA_TYPE_STR, "bnpr_scan_block_sum_buf_[]")
-    .uniform_buf(0, "UBData_TreeScan", "ubo_bnpr_tree_scan_infos_")
-    
-    .local_group_size(GROUP_SIZE_BNPR_SCAN_SWEEP) /* <== from "bnpr_defines.hh" */
-    .compute_source("npr_strokegen_scan_test_comp.glsl");
-
-GPU_SHADER_CREATE_INFO(bnpr_scan_test_aggregate)
-    .do_static_compilation(true)
-    .additional_info("bnpr_scan_test_inputs")
-    .define("_KERNEL_MULTI_COMPILE__TREE_SCAN_AGGREGATE", "1")
-    
-    .storage_buf(0, Qualifier::READ_WRITE, BNPR_SCAN_TEST_DATA_TYPE_STR, "bnpr_scan_block_sum_buf_[]")
-    
-    .local_group_size(GROUP_SIZE_BNPR_SCAN_AGGRG) /* <== from "bnpr_defines.hh" */
-    .compute_source("npr_strokegen_scan_test_comp.glsl");
-
-GPU_SHADER_CREATE_INFO(bnpr_scan_test_dwsweep)
-    .do_static_compilation(true)
-    .additional_info("bnpr_scan_test_inputs")
-    .define("_KERNEL_MULTI_COMPILE__TREE_SCAN_DWSWEEP", "1")
-    
-    .storage_buf(0, Qualifier::READ_WRITE, BNPR_SCAN_TEST_DATA_TYPE_STR, "bnpr_out_scan_data_buf_[]")
-    .storage_buf(1, Qualifier::READ, BNPR_SCAN_TEST_DATA_TYPE_STR, "bnpr_scan_block_sum_buf_[]")
-    
-    .local_group_size(GROUP_SIZE_BNPR_SCAN_SWEEP) /* <== from "bnpr_defines.hh" */
-    .compute_source("npr_strokegen_scan_test_comp.glsl");
-
 GPU_SHADER_CREATE_INFO(strokegen_scan_fill_dispatch_args)
     .do_static_compilation(true)
     .typedef_source("bnpr_defines.hh")
@@ -1463,44 +1431,89 @@ GPU_SHADER_CREATE_INFO(strokegen_scan_fill_dispatch_args)
     .local_group_size(32)
     .compute_source("npr_strokegen_fill_indirect_args_comp.glsl");
 
-GPU_SHADER_CREATE_INFO(bnpr_segscan_test_upsweep)
-    .do_static_compilation(true)
-    .additional_info("bnpr_segscan_test_inputs")
-    .define("IS_TREE_SEG_SCAN", "1")
-    .define("_KERNEL_MULTI_COMPILE__TREE_SEG_SCAN_UPSWEEP", "1")
-    
-    .storage_buf(0, Qualifier::READ_WRITE, "SEGSCAN_STRUCT_TYPE_ENCODED", "bnpr_in_scan_data_buf_[]")
-    .storage_buf(1, Qualifier::READ_WRITE, "SEGSCAN_STRUCT_TYPE_ENCODED", "bnpr_out_scan_data_buf_[]")
-    .storage_buf(2, Qualifier::WRITE, "SEGSCAN_STRUCT_TYPE_ENCODED", "bnpr_scan_block_sum_buf_[]")
-    .uniform_buf(0, "UBData_TreeScan", "ubo_bnpr_tree_scan_infos_")
-    
-    .local_group_size(GROUP_SIZE_BNPR_SCAN_SWEEP) /* <== from "bnpr_defines.hh" */
-    .compute_source("npr_strokegen_scan_test_comp.glsl");
+#define GPU_SHADER_CREATE_INFO__TREE_SCAN(name, input_shader_info, scan_data_type)                     \
+GPU_SHADER_CREATE_INFO(name##_upsweep)                                                                 \
+    .do_static_compilation(true)                                                                       \
+    .additional_info(#input_shader_info)                                                               \
+    .define("_KERNEL_MULTI_COMPILE__TREE_SCAN_UPSWEEP", "1")                                           \
+                                                                                                       \
+    .storage_buf(0, Qualifier::READ_WRITE, #scan_data_type, "bnpr_in_scan_data_buf_[]")                \
+    .storage_buf(1, Qualifier::READ_WRITE, #scan_data_type, "bnpr_out_scan_data_buf_[]")               \
+    .storage_buf(2, Qualifier::WRITE, #scan_data_type, "bnpr_scan_block_sum_buf_[]")                   \
+    .storage_buf(3, Qualifier::READ_WRITE, "UBData_TreeScan", "ssbo_tree_scan_infos_[]")               \
+    .uniform_buf(0, "UBData_TreeScan", "ubo_bnpr_tree_scan_infos_")                                    \
+                                                                                                       \
+    .local_group_size(GROUP_SIZE_BNPR_SCAN_SWEEP)                                                      \
+    .compute_source("npr_strokegen_scan_test_comp.glsl");                                              \
+                                                                                                       \
+GPU_SHADER_CREATE_INFO(name##_aggregate)                                                               \
+    .do_static_compilation(true)                                                                       \
+    .additional_info(#input_shader_info)                                                               \
+    .define("_KERNEL_MULTI_COMPILE__TREE_SCAN_AGGREGATE", "1")                                         \
+                                                                                                       \
+    .storage_buf(0, Qualifier::READ_WRITE, #scan_data_type, "bnpr_scan_block_sum_buf_[]")              \
+                                                                                                       \
+    .local_group_size(GROUP_SIZE_BNPR_SCAN_AGGRG)                                                      \
+    .compute_source("npr_strokegen_scan_test_comp.glsl");                                              \
+                                                                                                       \
+GPU_SHADER_CREATE_INFO(name##_dwsweep)                                                                 \
+    .do_static_compilation(true)                                                                       \
+    .additional_info(#input_shader_info)                                                               \
+    .define("_KERNEL_MULTI_COMPILE__TREE_SCAN_DWSWEEP", "1")                                           \
+                                                                                                       \
+    .storage_buf(0, Qualifier::READ_WRITE, #scan_data_type, "bnpr_out_scan_data_buf_[]")               \
+    .storage_buf(1, Qualifier::READ, #scan_data_type, "bnpr_scan_block_sum_buf_[]")                    \
+                                                                                                       \
+    .local_group_size(GROUP_SIZE_BNPR_SCAN_SWEEP)                                                      \
+    .compute_source("npr_strokegen_scan_test_comp.glsl");                                              \
 
-GPU_SHADER_CREATE_INFO(bnpr_segscan_test_aggregate)
-    .do_static_compilation(true)
-    .additional_info("bnpr_segscan_test_inputs")
-    .define("IS_TREE_SEG_SCAN", "1")
-    .define("_KERNEL_MULTI_COMPILE__TREE_SEG_SCAN_AGGREGATE", "1")
-    
-    .storage_buf(0, Qualifier::READ_WRITE, "SEGSCAN_STRUCT_TYPE_ENCODED", "bnpr_scan_block_sum_buf_[]")
-    
-    .local_group_size(GROUP_SIZE_BNPR_SCAN_AGGRG) /* <== from "bnpr_defines.hh" */
-    .compute_source("npr_strokegen_scan_test_comp.glsl");
 
-GPU_SHADER_CREATE_INFO(bnpr_segscan_test_dwsweep)
-    .do_static_compilation(true)
-    .additional_info("bnpr_segscan_test_inputs")
-    .define("IS_TREE_SEG_SCAN", "1")
-    .define("_KERNEL_MULTI_COMPILE__TREE_SEG_SCAN_DWSWEEP", "1")
-    
-    .storage_buf(0, Qualifier::READ_WRITE, "SEGSCAN_STRUCT_TYPE_ENCODED", "bnpr_out_scan_data_buf_[]")
-    .storage_buf(1, Qualifier::READ, "SEGSCAN_STRUCT_TYPE_ENCODED", "bnpr_scan_block_sum_buf_[]")
-    .uniform_buf(0, "UBData_TreeScan", "ubo_bnpr_tree_scan_infos_")
-    
-    .local_group_size(GROUP_SIZE_BNPR_SCAN_SWEEP) /* <== from "bnpr_defines.hh" */
-    .compute_source("npr_strokegen_scan_test_comp.glsl");
+GPU_SHADER_CREATE_INFO__TREE_SCAN(bnpr_scan_test, bnpr_scan_test_inputs, SCAN_DATA_TYPE)
+
+
+#define GPU_SHADER_CREATE_INFO__TREE_SEGSCAN(name, input_shader_info, scan_data_type_str)     \
+GPU_SHADER_CREATE_INFO(name##_upsweep)                                                        \
+    .do_static_compilation(true)                                                              \
+    .additional_info(#input_shader_info)                                                      \
+    .define("IS_TREE_SEG_SCAN", "1")                                                          \
+    .define("_KERNEL_MULTI_COMPILE__TREE_SEG_SCAN_UPSWEEP", "1")                              \
+                                                                                              \
+    .storage_buf(0, Qualifier::READ_WRITE, #scan_data_type_str, "bnpr_in_scan_data_buf_[]")   \
+    .storage_buf(1, Qualifier::READ_WRITE, #scan_data_type_str, "bnpr_out_scan_data_buf_[]")  \
+    .storage_buf(2, Qualifier::WRITE, #scan_data_type_str, "bnpr_scan_block_sum_buf_[]")      \
+    .storage_buf(3, Qualifier::READ_WRITE, "UBData_TreeScan", "ssbo_tree_scan_infos_")        \
+    .uniform_buf(0, "UBData_TreeScan", "ubo_bnpr_tree_scan_infos_")                           \
+                                                                                              \
+    .local_group_size(GROUP_SIZE_BNPR_SCAN_SWEEP)                                             \
+    .compute_source("npr_strokegen_scan_test_comp.glsl");                                     \
+                                                                                              \
+GPU_SHADER_CREATE_INFO(name##_aggregate)                                                      \
+    .do_static_compilation(true)                                                              \
+    .additional_info(#input_shader_info)                                                      \
+    .define("IS_TREE_SEG_SCAN", "1")                                                          \
+    .define("_KERNEL_MULTI_COMPILE__TREE_SEG_SCAN_AGGREGATE", "1")                            \
+                                                                                              \
+    .storage_buf(0, Qualifier::READ_WRITE, #scan_data_type_str, "bnpr_scan_block_sum_buf_[]") \
+                                                                                              \
+    .local_group_size(GROUP_SIZE_BNPR_SCAN_AGGRG)                                             \
+    .compute_source("npr_strokegen_scan_test_comp.glsl");                                     \
+                                                                                              \
+GPU_SHADER_CREATE_INFO(name##_dwsweep)                                                        \
+    .do_static_compilation(true)                                                              \
+    .additional_info(#input_shader_info)                                                      \
+    .define("IS_TREE_SEG_SCAN", "1")                                                          \
+    .define("_KERNEL_MULTI_COMPILE__TREE_SEG_SCAN_DWSWEEP", "1")                              \
+                                                                                              \
+    .storage_buf(0, Qualifier::READ_WRITE, #scan_data_type_str, "bnpr_out_scan_data_buf_[]")  \
+    .storage_buf(1, Qualifier::READ, #scan_data_type_str, "bnpr_scan_block_sum_buf_[]")       \
+    .uniform_buf(0, "UBData_TreeScan", "ubo_bnpr_tree_scan_infos_")                           \
+                                                                                              \
+    .local_group_size(GROUP_SIZE_BNPR_SCAN_SWEEP)                                             \
+    .compute_source("npr_strokegen_scan_test_comp.glsl");                                     \
+
+GPU_SHADER_CREATE_INFO__TREE_SEGSCAN(bnpr_segscan_test, bnpr_segscan_test_inputs, SEGSCAN_STRUCT_TYPE_ENCODED)
 /** \} */
+
 
 /* -------------------------------------------------------------------- */
 /** \GPU 1D Segmented Looped Convolution
