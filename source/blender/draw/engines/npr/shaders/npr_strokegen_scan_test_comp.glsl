@@ -169,6 +169,23 @@ void main()
 		bnpr_in_scan_data_buf_[scan_ids.global_x2.x] = SEGSCAN_ENCODE(SEGSCAN_STRUCT_TYPE(scanval_A, hf_A));
 		bnpr_in_scan_data_buf_[scan_ids.global_x2.y] = SEGSCAN_ENCODE(SEGSCAN_STRUCT_TYPE(scanval_B, hf_B));
 	}
+	#else
+	{
+		SEGSCAN_STRUCT_TYPE scan_data_A = SEGSCAN_DECODE(bnpr_in_scan_data_buf_[scan_ids.global_x2.x]);
+		scanval_A = scan_data_A.val;
+		hf_A = scan_data_A.hf;
+
+		SEGSCAN_STRUCT_TYPE scan_data_B = SEGSCAN_DECODE(bnpr_in_scan_data_buf_[scan_ids.global_x2.y]);
+		scanval_B = scan_data_B.val;
+		hf_B = scan_data_B.hf;
+
+		/* avoid invalid loads */
+		/* ----------------------------------------------------------- */
+		_FUNC_CLEAN_SEG_SCAN_DATA(
+			scan_ids, get_num_scan_items(),
+			hf_A, scanval_A, hf_B, scanval_B /* <- inout */
+		);
+	}
 	#endif
 
 

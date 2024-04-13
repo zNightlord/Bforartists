@@ -97,7 +97,7 @@ static void draw_data_init_cb(struct DrawData *dd)
         gpu_batch_surf /**gpu_batch_surf*/,
         rsc_handle,
         drw_view
-        );
+      );
 
   }
 

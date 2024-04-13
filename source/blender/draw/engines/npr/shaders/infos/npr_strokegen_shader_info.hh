@@ -1374,6 +1374,7 @@ GPU_SHADER_CREATE_INFO(bnpr_segscan_vec3_storage)
     .define("SEGSCAN_ENCODE", "segscan_vec3_hf_encode")
     .define("SEGSCAN_DECODE", "segscan_vec3_hf_decode"); 
 
+
 GPU_SHADER_CREATE_INFO(bnpr_scan_test_inputs)
     .additional_info("bnpr_scan_uvec4_add");
 
@@ -1384,6 +1385,11 @@ GPU_SHADER_CREATE_INFO(bnpr_segscan_test_inputs)
 
     .define("_KERNEL_MULTI_COMPILE__TREE_SEG_SCAN_TEST")
     .push_constant(Type::INT, "pcs_segscan_test_random_seed_");
+
+GPU_SHADER_CREATE_INFO(bnpr_segscan_uint_add_inputs)
+    .additional_info("bnpr_scan_uint_add")
+    .additional_info("bnpr_segscan_uint_storage")
+    .define("_KERNEL_MULTI_COMPILE__TREE_SCAN_INFO_SSBO", "1"); 
 
 /** GPU 1D Segmented & Looped Convolution --------------------
  */
@@ -1511,7 +1517,11 @@ GPU_SHADER_CREATE_INFO(name##_dwsweep)                                          
     .local_group_size(GROUP_SIZE_BNPR_SCAN_SWEEP)                                             \
     .compute_source("npr_strokegen_scan_test_comp.glsl");                                     \
 
+
 GPU_SHADER_CREATE_INFO__TREE_SEGSCAN(bnpr_segscan_test, bnpr_segscan_test_inputs, SEGSCAN_STRUCT_TYPE_ENCODED)
+
+GPU_SHADER_CREATE_INFO__TREE_SEGSCAN(bnpr_segscan_uint_add, bnpr_segscan_uint_add_inputs, SEGSCAN_STRUCT_TYPE_ENCODED)
+
 /** \} */
 
 

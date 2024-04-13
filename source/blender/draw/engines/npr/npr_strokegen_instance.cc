@@ -183,7 +183,7 @@ namespace blender::npr::strokegen
 
 
     /* GPU (Seg-)Scan Test ------------------------------------------------------------------------- */
-    const bool dbg_segscan = false; 
+    const bool dbg_segscan = true; 
     manager.submit(strokegen_passes.get_compute_pass(dbg_segscan ? PType::SEGSCAN_TEST : PType::SCAN_TEST), view);
 
     if (strokegen_passes.test_scan && frame_counter % 32 == 0)

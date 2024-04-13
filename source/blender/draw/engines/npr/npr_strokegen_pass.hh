@@ -391,8 +391,24 @@ public:
   // ---------------------------------------------------------------------------
   bool test_scan;
   void rebuild_pass_scan_test();
-  enum SegScanPassUsage { TestSegScan = 0, ContourSegmentation = 1 };
-  void rebuild_pass_segscan_test(SegScanPassUsage segscan_usage, PassSimple& pass, int frame_counter);
+  struct ScanSettings {
+    bool is_validation_shader;
+    int frame_counter; 
+
+    bool use_indirect_dispatch;
+    GPUStorageBuf *ssbo_scan_infos_;
+    SSBO_IndirectDispatchArgs *ssbo_dispatch_args_;
+
+    GPUStorageBuf *ssbo_in_scan_data_;
+    GPUStorageBuf *ssbo_out_scan_data_; 
+    GPUStorageBuf *ssbo_scan_block_sum_;
+
+    eShaderType shader_upsweep;
+    eShaderType shader_aggregate;
+    eShaderType shader_dwsweep;
+  };
+  void rebuild_pass_segscan_test(ScanSettings scan_settings,
+                                 PassSimple& pass);
 
   void rebuild_pass_conv_test();
   void rebuild_pass_list_ranking_pointer_jumping(
