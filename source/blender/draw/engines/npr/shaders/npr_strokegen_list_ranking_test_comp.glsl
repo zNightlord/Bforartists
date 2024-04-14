@@ -517,7 +517,7 @@ uint decode_rank(uint raw_rank, uint list_len)
 {
     // decode rank, might be packed with flags
     raw_rank = (raw_rank & 0x3fffffffu);
-    // raw_rank = list_len - raw_rank;
+    raw_rank = list_len - raw_rank;
     return raw_rank;
 };
 

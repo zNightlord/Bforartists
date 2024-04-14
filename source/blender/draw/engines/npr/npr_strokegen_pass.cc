@@ -1652,29 +1652,67 @@ namespace blender::npr::strokegen
   void StrokeGenPassModule::append_subpass_process_contour_edges()
   {
     {
-      auto &sub = pass_extract_geom.sub("bnpr_geom_extract_calc_contour_edge_raster_data");
-      sub.shader_set(shaders_.static_shader_get(eShaderType::COMPUTE_CONTOUR_EDGE_RASTER_DATA));
+      auto &sub = pass_extract_geom.sub("bnpr_geom_extract_mesh_contour_data");
+      sub.shader_set(shaders_.static_shader_get(eShaderType::EXTRACT_CURRENT_MESH_CONTOUR_DATA));
 
       sub.bind_ssbo(0, buffers_.reused_ssbo_contour_temp_data_());
-      sub.bind_ssbo(1, buffers_.reused_ssbo_bnpr_mesh_pool_());
-      sub.bind_ssbo(2, buffers_.ssbo_bnpr_mesh_pool_counters_);
-      sub.bind_ssbo(3, buffers_.ssbo_bnpr_mesh_pool_counters_prev_);
-      sub.bind_ssbo(4, buffers_.ssbo_edge_to_edges_);
-      sub.bind_ssbo(5, buffers_.reused_ssbo_edge_to_contour_());
-      sub.bind_ssbo(6, buffers_.ssbo_contour_to_contour_);
-      sub.bind_ssbo(7, buffers_.ssbo_vert_to_edge_list_header_);
-      sub.bind_ssbo(8, buffers_.ssbo_vnor_);
-      sub.bind_ssbo(9, buffers_.ssbo_edge_to_vert_);
-      sub.bind_ssbo(10, buffers_.ssbo_vbo_full_);
-      sub.bind_ssbo(11, buffers_.ssbo_list_ranking_inputs_);
-      sub.bind_ssbo(12, buffers_.reused_ssbo_tree_scan_infos_contour_segmentation_()); 
-      sub.bind_ubo(0, buffers_.ubo_view_matrices_);
+      sub.bind_ssbo(1, buffers_.ssbo_bnpr_mesh_pool_counters_);
+      sub.bind_ssbo(2, buffers_.ssbo_bnpr_mesh_pool_counters_prev_);
+      sub.bind_ssbo(3, buffers_.ssbo_edge_to_edges_);
+      sub.bind_ssbo(4, buffers_.reused_ssbo_edge_to_contour_());
+      sub.bind_ssbo(5, buffers_.reused_ssbo_contour_to_contour_());
+      sub.bind_ssbo(6, buffers_.ssbo_vert_to_edge_list_header_);
+      sub.bind_ssbo(7, buffers_.ssbo_edge_to_vert_);
+      sub.bind_ssbo(8, buffers_.ssbo_vbo_full_);
+      sub.bind_ssbo(9, buffers_.ssbo_list_ranking_inputs_);
+      sub.bind_ssbo(10, buffers_.reused_ssbo_contour_edge_vpos_()); 
       float2 fb_res = textures_.get_contour_raster_screen_res(); 
       sub.push_constant("pcs_screen_size_", fb_res); 
 
       sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_edge_dispatch_args_);
       sub.barrier(GPU_BARRIER_SHADER_STORAGE);
     }
+  }
+
+  void StrokeGenPassModule::append_subpass_serialize_contour_edges()
+  {
+    {
+      auto &sub = pass_process_contours.sub("strokegen_serialize_contour_edges");
+      sub.shader_set(shaders_.static_shader_get(SERIALIZE_CONTOUR_EDGES));
+
+      sub.bind_ssbo(0, buffers_.reused_ssbo_contour_edge_rank_());
+      sub.bind_ssbo(1, buffers_.reused_ssbo_contour_edge_list_len_());
+      sub.bind_ssbo(2, buffers_.reused_ssbo_contour_edge_list_head_());
+      sub.bind_ssbo(3, buffers_.reused_ssbo_contour_edge_vpos_()); 
+      sub.bind_ssbo(4, buffers_.ssbo_contour_edge_rank_); 
+      sub.bind_ssbo(5, buffers_.ssbo_contour_edge_list_len_);
+      sub.bind_ssbo(6, buffers_.ssbo_contour_edge_list_head_);
+      sub.bind_ssbo(7, buffers_.ssbo_contour_edge_vpos_);
+      sub.bind_ssbo(8, buffers_.ssbo_bnpr_mesh_pool_counters_);
+
+      sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_edge_dispatch_args_);
+      sub.barrier(GPU_BARRIER_SHADER_STORAGE); 
+    }
+  }
+
+  void StrokeGenPassModule::append_subpass_calc_contour_edges_draw_data()
+  {
+    auto &sub = pass_process_contours.sub("strokegen_calc_contour_edges_draw_data"); 
+    sub.shader_set(shaders_.static_shader_get(CALC_CONTOUR_EDGES_DRAW_DATA));
+
+    sub.bind_ssbo(0, buffers_.ssbo_contour_edge_rank_);
+    sub.bind_ssbo(1, buffers_.ssbo_contour_edge_list_len_);
+    sub.bind_ssbo(2, buffers_.ssbo_contour_edge_list_head_);
+    sub.bind_ssbo(3, buffers_.ssbo_contour_edge_vpos_);
+    sub.bind_ssbo(4, buffers_.reused_ssbo_bnpr_mesh_pool_());
+    sub.bind_ssbo(5, buffers_.ssbo_bnpr_mesh_pool_counters_);
+    sub.bind_ssbo(6, buffers_.reused_ssbo_tree_scan_infos_contour_segmentation_()); 
+
+    sub.bind_ubo(0, buffers_.ubo_view_matrices_);
+    sub.push_constant("pcs_screen_size_", textures_.get_contour_raster_screen_res()); 
+
+    sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_edge_dispatch_args_);
+    sub.barrier(GPU_BARRIER_SHADER_STORAGE);
   }
 
 
@@ -1687,6 +1725,10 @@ namespace blender::npr::strokegen
         StrokeGenPassModule::ListRankingPassUsage::ContourEdgeLinking,
         pass_process_contours, true
       );
+
+    append_subpass_fill_dispatch_args_contour_edges(pass_process_contours, true);
+    append_subpass_serialize_contour_edges();
+    append_subpass_calc_contour_edges_draw_data();
   }
 
   void StrokeGenPassModule::rebuild_pass_contour_edge_drawcall()
@@ -1944,7 +1986,7 @@ namespace blender::npr::strokegen
           if (!custom_pass)
             sub.bind_ssbo(0, buffers_.ssbo_list_ranking_links_staging_buf_);
           else if (passType == ListRankingPassUsage::ContourEdgeLinking)
-            sub.bind_ssbo(0, buffers_.ssbo_contour_to_contour_); 
+            sub.bind_ssbo(0, buffers_.reused_ssbo_contour_to_contour_()); 
           sub.bind_ssbo(1, buffers_.ssbo_list_ranking_links_);
           sub.bind_ssbo(2, buffers_.ssbo_list_ranking_inputs_); 
           sub.bind_ubo(0, buffers_.ubo_list_ranking_splicing_);
@@ -2098,9 +2140,9 @@ namespace blender::npr::strokegen
       sub.bind_ssbo(2, buffers_.ssbo_list_ranking_inputs_);
       if (passType == ListRankingPassUsage::ContourEdgeLinking)
       {
-        sub.bind_ssbo(3, buffers_.ssbo_contour_edge_rank_);
-        sub.bind_ssbo(4, buffers_.ssbo_contour_edge_list_len_);
-        sub.bind_ssbo(5, buffers_.ssbo_contour_edge_list_head_);
+        sub.bind_ssbo(3, buffers_.reused_ssbo_contour_edge_rank_());
+        sub.bind_ssbo(4, buffers_.reused_ssbo_contour_edge_list_len_());
+        sub.bind_ssbo(5, buffers_.reused_ssbo_contour_edge_list_head_());
       }
 
       sub.dispatch(buffers_.ssbo_list_ranking_indirect_dispatch_args_per_anchor[0]);

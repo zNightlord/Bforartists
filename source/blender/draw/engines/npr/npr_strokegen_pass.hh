@@ -382,6 +382,9 @@ public:
   void append_subpass_fill_dispatch_args_contour_edges(PassSimple& pass, bool all_contour_edges);
   void append_subpass_process_contour_edges();
 
+  // ---------------------------------------------------------------------------
+  void append_subpass_serialize_contour_edges();
+  void append_subpass_calc_contour_edges_draw_data(); 
 
   // ---------------------------------------------------------------------------
   void rebuild_pass_contour_edge_drawcall();

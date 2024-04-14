@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
+﻿/* SPDX-License-Identifier: GPL-2.0-or-later
  * Copyright 2021 Blender Foundation.
  */
 
@@ -101,8 +101,12 @@ const char *StrokeGenShaderModule::static_shader_create_info_name_get(eShaderTyp
       return "bnpr_geom_fill_draw_args_contour_edges";
     case FILL_DISPATCH_ARGS_CONTOUR_EDGES:
       return "strokegen_fill_dispatch_args_per_contour_edge";
-    case COMPUTE_CONTOUR_EDGE_RASTER_DATA:
-      return "bnpr_geom_extract_calc_contour_edge_raster_data"; 
+    case EXTRACT_CURRENT_MESH_CONTOUR_DATA:
+      return "bnpr_geom_extract_mesh_contour_data";
+    case SERIALIZE_CONTOUR_EDGES:
+      return "strokegen_serialize_contour_edges";
+    case CALC_CONTOUR_EDGES_DRAW_DATA:
+      return "strokegen_calc_contour_edges_draw_data"; 
     case INDIRECT_DRAW_CONTOUR_EDGES:
       return "bnpr_geom_draw_contour_edges";
 

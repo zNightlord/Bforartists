@@ -365,7 +365,7 @@ void main()
 
 
 
-#if defined(_KERNEL_MULTICOMPILE_CALC_CONTOUR_EDGE_RASTER_DATA)
+#if defined(_KERNEL_MULTICOMPILE__EXTRACT_MESH_CONTOUR_DATA)
 vec2 ndc_to_screen_uv(vec4 pos_ndc)
 {
 	pos_ndc.xyz /= pos_ndc.w;
@@ -394,17 +394,8 @@ void main()
 	bool valid_thread = idx < NumContourEdges; 
 	const uint ContourEdgeIdx = idx; 
 
-	/* transform matrices, see "common_view_lib.glsl" */ 
-	mat4 world_to_view = ubo_view_matrices_.viewmat;
-	mat4 mat_camera_proj = ubo_view_matrices_.winmat; 
-
-	vec4 vpos_ws[2]; /* v0, v1 on edge */
-	vec3 vnor_ws[2]; 
-	vec4 vpos_ndc[2]; 
-	vec2 vpos_uv[2]; 
+	vec4 vpos_ws[2]; 
 	PerContourWedgeInfo pcwi; 
-
-
 
 	if (valid_thread)
 	{ /* read vertex pos transformed to world space */
@@ -427,38 +418,13 @@ void main()
 		vpos_ws[1].z = (ssbo_vbo_full_[v1*3+2]); 
 		vpos_ws[1].w = 1.0f; 
 
-		vpos_ndc[0] = mat_camera_proj * vec4((world_to_view * vpos_ws[0]).xyz, 1.0f); 
-		vpos_ndc[1] = mat_camera_proj * vec4((world_to_view * vpos_ws[1]).xyz, 1.0f); 
-
-
-
 		/* write to output buffer */
-		uint addr_st = mesh_pool_addr__zwhclip(ContourEdgeIdx); 
-		buf_strokegen_mesh_pool[addr_st+0] = floatBitsToUint(vpos_ndc[0].z); 
-		buf_strokegen_mesh_pool[addr_st+1] = floatBitsToUint(vpos_ndc[0].w); 
-		buf_strokegen_mesh_pool[addr_st+2] = floatBitsToUint(vpos_ndc[1].z); 
-		buf_strokegen_mesh_pool[addr_st+3] = floatBitsToUint(vpos_ndc[1].w); 
-		
-
-		vpos_uv[0].xy = ndc_to_screen_uv(vpos_ndc[0]);
-		vpos_uv[1].xy = ndc_to_screen_uv(vpos_ndc[1]);
-		vec2 edge_dir = (vpos_uv[1].xy - vpos_uv[0].xy); 
-		float edge_dir_len = length(edge_dir);
-		vec2 edge_dir_norm = edge_dir / edge_dir_len; 
-
-		addr_st = mesh_pool_addr__edgedir(ContourEdgeIdx); 
-		buf_strokegen_mesh_pool[addr_st] = floatBitsToUint(edge_dir_norm.x);
-		buf_strokegen_mesh_pool[addr_st+1] = floatBitsToUint(edge_dir_norm.y);
-
-
-		addr_st = mesh_pool_addr__edgeuv(ContourEdgeIdx); 
-		vpos_uv[0].xy /= pcs_screen_size_.xy; 
-		vpos_uv[1].xy /= pcs_screen_size_.xy; 
-		buf_strokegen_mesh_pool[addr_st] = floatBitsToUint(vpos_uv[0].x); 
-		buf_strokegen_mesh_pool[addr_st+1] = floatBitsToUint(vpos_uv[0].y); 
-		buf_strokegen_mesh_pool[addr_st+2] = floatBitsToUint(vpos_uv[1].x);
-		buf_strokegen_mesh_pool[addr_st+3] = floatBitsToUint(vpos_uv[1].y);
-
+		ssbo_contour_edge_vpos_[ContourEdgeIdx*6+0] = floatBitsToUint(vpos_ws[0].x);
+		ssbo_contour_edge_vpos_[ContourEdgeIdx*6+1] = floatBitsToUint(vpos_ws[0].y);
+		ssbo_contour_edge_vpos_[ContourEdgeIdx*6+2] = floatBitsToUint(vpos_ws[0].z);
+		ssbo_contour_edge_vpos_[ContourEdgeIdx*6+3] = floatBitsToUint(vpos_ws[1].x);
+		ssbo_contour_edge_vpos_[ContourEdgeIdx*6+4] = floatBitsToUint(vpos_ws[1].y);
+		ssbo_contour_edge_vpos_[ContourEdgeIdx*6+5] = floatBitsToUint(vpos_ws[1].z);
 
 		/* build contour edge adjacency */
 		bool is_border = pcwi.is_border; 
@@ -499,16 +465,7 @@ void main()
 	if (idx.x == 0) /* I dont care, this is cheap, just keep this up to date here */
 	{
 		uint num_contours = ssbo_bnpr_mesh_pool_counters_.num_contour_edges; 
-		
 		ssbo_list_ranking_inputs_.num_nodes = num_contours; 
-
-		ssbo_tree_scan_infos_.num_scan_items = num_contours; 
-		ssbo_tree_scan_infos_.num_valid_scan_threads = compute_num_threads(
-			num_contours, 2u
-		);
-      	ssbo_tree_scan_infos_.num_thread_groups = compute_num_groups(
-			num_contours, GROUP_SIZE_BNPR_SCAN_SWEEP, 2u
-      	);
 	}
 
 }

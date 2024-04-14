@@ -57,7 +57,7 @@ void npr::strokegen::StrokegenMeshRasterPass::append_draw_contour_subpass(
   subpass->push_constant("pcs_screen_size_inv_", fb_res_inv);
 
   // debug info
-  subpass->bind_ssbo(5, buffers.ssbo_contour_to_contour_); 
+  subpass->bind_ssbo(5, buffers.reused_ssbo_contour_to_contour_()); 
 
 
   subpass->barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE); 

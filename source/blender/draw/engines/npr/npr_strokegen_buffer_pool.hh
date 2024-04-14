@@ -77,7 +77,8 @@ class GPUBufferPoolModule {
   SSBO_StrokeGenMeshBufPerContour<uint, 2> ssbo_contour_to_contour_;    // 
   SSBO_StrokeGenMeshBufPerContour<uint, 1> ssbo_contour_edge_rank_;     // 
   SSBO_StrokeGenMeshBufPerContour<uint, 1> ssbo_contour_edge_list_len_; // 
-  SSBO_StrokeGenMeshBufPerContour<uint, 1> ssbo_contour_edge_list_head_;// 
+  SSBO_StrokeGenMeshBufPerContour<uint, 1> ssbo_contour_edge_list_head_;  //
+  SSBO_StrokeGenMeshBufPerContour<uint, 6> ssbo_contour_edge_vpos_;  // 
 
   // Reusable Large Buffers -------------------------------------------------------------
   SSBO_StrokeGenReusedLarge ssbo_mesh_buffer_reuse_0_;                    // 256MB  Total  
@@ -228,7 +229,7 @@ class GPUBufferPoolModule {
     return ssbo_mesh_buffer_reuse_1_;
   }
 
-  // Reused Buffers for per-batch Contour Processing --------------------------
+  // Reused buffers for per-batch contour processing --------------------------
   inline GPUStorageBuf *reused_ssbo_bnpr_mesh_pool_()
   {
     return ssbo_mesh_buffer_reuse_3_; 
@@ -240,6 +241,29 @@ class GPUBufferPoolModule {
   inline GPUStorageBuf *reused_ssbo_contour_temp_data_()
   {
     return ssbo_mesh_buffer_reuse_4_; 
+  }
+
+  // Reused buffers for global contour processing --------------------------
+  // intermediate buffer to store results from list ranking. 
+  inline GPUStorageBuf *reused_ssbo_contour_to_contour_()
+  { 
+    return ssbo_mesh_buffer_reuse_7_; 
+  }
+  inline GPUStorageBuf *reused_ssbo_contour_edge_rank_()
+  {
+    return ssbo_mesh_buffer_reuse_5_; 
+  }
+  inline GPUStorageBuf *reused_ssbo_contour_edge_list_len_()
+  {
+    return ssbo_mesh_buffer_reuse_2_; 
+  }
+  inline GPUStorageBuf *reused_ssbo_contour_edge_list_head_()
+  {
+    return ssbo_mesh_buffer_reuse_8_; 
+  }
+  inline GPUStorageBuf *reused_ssbo_contour_edge_vpos_()
+  {
+    return ssbo_mesh_buffer_reuse_0_; 
   }
 
   // Scan Working Buffers -----------------------------------
