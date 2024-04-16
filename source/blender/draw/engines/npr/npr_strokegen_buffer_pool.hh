@@ -12,6 +12,10 @@
 
 #include <set>
 
+namespace blender::gpu {
+class StorageBuf;
+}
+
 namespace blender::npr::strokegen {
 class Instance;
 
@@ -74,11 +78,13 @@ class GPUBufferPoolModule {
   SSBO_StrokeGenMeshBufPerSelectedEdge<uint, 1> ssbo_selected_edge_to_edge_;    // 32MB    
   SSBO_StrokeGenMeshBufPerSelectedVert<uint, 1> ssbo_selected_vert_to_vert_;    // 16MB    
   SSBO_StrokeGenMeshBufPerEdge<uint, 6> ssbo_dbg_lines_;                        // 256MB   
-  SSBO_StrokeGenMeshBufPerContour<uint, 2> ssbo_contour_to_contour_;    // 
-  SSBO_StrokeGenMeshBufPerContour<uint, 1> ssbo_contour_edge_rank_;     // 
-  SSBO_StrokeGenMeshBufPerContour<uint, 1> ssbo_contour_edge_list_len_; // 
+  SSBO_StrokeGenMeshBufPerContour<uint, 1> ssbo_contour_edge_rank_;       // 
+  SSBO_StrokeGenMeshBufPerContour<uint, 1> ssbo_contour_edge_list_len_;   // 
   SSBO_StrokeGenMeshBufPerContour<uint, 1> ssbo_contour_edge_list_head_;  //
-  SSBO_StrokeGenMeshBufPerContour<uint, 6> ssbo_contour_edge_vpos_;  // 
+  SSBO_StrokeGenMeshBufPerContour<uint, 1> ssbo_contour_edge_seg_rank_;   //
+  SSBO_StrokeGenMeshBufPerContour<uint, 1> ssbo_contour_edge_seg_len_;    //
+  SSBO_StrokeGenMeshBufPerContour<uint, 6> ssbo_contour_edge_vpos_;       //
+  SSBO_StrokeGenMeshBufPerContour<uint, 1> ssbo_contour_edge_flags_;      // 
 
   // Reusable Large Buffers -------------------------------------------------------------
   SSBO_StrokeGenReusedLarge ssbo_mesh_buffer_reuse_0_;                    // 256MB  Total  
@@ -261,7 +267,7 @@ class GPUBufferPoolModule {
   {
     return ssbo_mesh_buffer_reuse_8_; 
   }
-  inline GPUStorageBuf *reused_ssbo_contour_edge_vpos_()
+  inline GPUStorageBuf *reused_ssbo_contour_edge_transfer_data_()
   {
     return ssbo_mesh_buffer_reuse_0_; 
   }
@@ -272,14 +278,26 @@ class GPUBufferPoolModule {
   SSBO_BnprScanAggregates   ssbo_scan_block_sum_;
   UBO_BnprTreeScan          ubo_bnpr_tree_scan_infos_;
   SSBO_BnprTreeScan         ssbo_tree_scan_infos_[32]; 
-  SSBO_IndirectDispatchArgs ssbo_scan_dispatch_args_[32];
+  SSBO_IndirectDispatchArgs ssbo_scan_dispatch_args_;
   inline GPUStorageBuf *reused_ssbo_tree_scan_infos_contour_segmentation_()
   {
     return ssbo_tree_scan_infos_[0];
   }
-  inline GPUStorageBuf *reused_ssbo_scan_dispatch_args_contour_segmentation_()
+  inline GPUStorageBuf *reused_ssbo_tree_scan_input_contour_segmentation_step_0()
   {
-    return ssbo_scan_dispatch_args_[0]; 
+    return ssbo_mesh_buffer_reuse_5_; 
+  }
+  inline GPUStorageBuf *reused_ssbo_tree_scan_output_contour_segmentation_step_0()
+  {
+    return ssbo_mesh_buffer_reuse_7_;
+  }
+  inline GPUStorageBuf *reused_ssbo_tree_scan_input_contour_segmentation_step_1()
+  {
+    return ssbo_mesh_buffer_reuse_6_; 
+  }
+  inline GPUStorageBuf *reused_ssbo_tree_scan_output_contour_segmentation_step_1()
+  {
+    return ssbo_mesh_buffer_reuse_8_;
   }
 
   // Segmented Loop Convolution Working Buffers -----------------------------------

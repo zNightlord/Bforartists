@@ -2,6 +2,7 @@
 #pragma BLENDER_REQUIRE(npr_strokegen_compaction_lib.glsl)
 #pragma BLENDER_REQUIRE(npr_strokegen_topo_lib.glsl)
 #pragma BLENDER_REQUIRE(npr_strokegen_geom_lib.glsl)
+#pragma BLENDER_REQUIRE(npr_strokegen_contour_topo_lib.glsl)
 
  
 /* all counters are cleared in _KERNEL_MULTICOMPILE__GEOM_EXTRACT kernel ------------------- */
@@ -418,14 +419,25 @@ void main()
 		vpos_ws[1].z = (ssbo_vbo_full_[v1*3+2]); 
 		vpos_ws[1].w = 1.0f; 
 
-		/* write to output buffer */
-		ssbo_contour_edge_vpos_[ContourEdgeIdx*6+0] = floatBitsToUint(vpos_ws[0].x);
-		ssbo_contour_edge_vpos_[ContourEdgeIdx*6+1] = floatBitsToUint(vpos_ws[0].y);
-		ssbo_contour_edge_vpos_[ContourEdgeIdx*6+2] = floatBitsToUint(vpos_ws[0].z);
-		ssbo_contour_edge_vpos_[ContourEdgeIdx*6+3] = floatBitsToUint(vpos_ws[1].x);
-		ssbo_contour_edge_vpos_[ContourEdgeIdx*6+4] = floatBitsToUint(vpos_ws[1].y);
-		ssbo_contour_edge_vpos_[ContourEdgeIdx*6+5] = floatBitsToUint(vpos_ws[1].z);
+		
+		/* write to intermediate buffer, will be shuffled after list ranking */
+		ssbo_contour_edge_transfer_data_[ContourEdgeIdx*8+0] = floatBitsToUint(vpos_ws[0].x);
+		ssbo_contour_edge_transfer_data_[ContourEdgeIdx*8+1] = floatBitsToUint(vpos_ws[0].y);
+		ssbo_contour_edge_transfer_data_[ContourEdgeIdx*8+2] = floatBitsToUint(vpos_ws[0].z);
+		ssbo_contour_edge_transfer_data_[ContourEdgeIdx*8+3] = floatBitsToUint(vpos_ws[1].x);
+		ssbo_contour_edge_transfer_data_[ContourEdgeIdx*8+4] = floatBitsToUint(vpos_ws[1].y);
+		ssbo_contour_edge_transfer_data_[ContourEdgeIdx*8+5] = floatBitsToUint(vpos_ws[1].z);
+		
+		vec2 maxcurv; vec2 cusp_func; 
+		ld_vcurv_max_with_cusp(v0, /*out*/maxcurv[0], cusp_func[0]);
+		ld_vcurv_max_with_cusp(v1, /*out*/maxcurv[1], cusp_func[1]);
+		bool seg_head = sign(cusp_func[0]) != sign(cusp_func[1]); 
+		ContourFlags cf = init_contour_flags(seg_head);
+		ssbo_contour_edge_transfer_data_[ContourEdgeIdx*8+6] = encode_contour_flags(cf);
+		
+		ssbo_contour_edge_transfer_data_[ContourEdgeIdx*8+7] = 0u; // unused
 
+		
 		/* build contour edge adjacency */
 		bool is_border = pcwi.is_border; 
 		bool backface_border = is_border && !is_border_edge_front_facing(pcwi.ifrontface); 

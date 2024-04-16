@@ -40,6 +40,8 @@ void main()
     uint contour_edge_list_len = ssbo_contour_edge_list_len_[contour_edge_id]; 
     float contour_edge_param = float(contour_edge_rank) / float(contour_edge_list_len); 
     uint contour_edge_list_head = ssbo_contour_edge_list_head_[contour_edge_id]; 
+    uint contour_seg_rank = ssbo_contour_edge_seg_rank_[contour_edge_id];
+    uint contour_seg_len = ssbo_contour_edge_seg_len_[contour_edge_id];
 
     
     uint end_node_id = contour_edge_list_head; 
@@ -98,7 +100,8 @@ void main()
 
 
     color = 
-        vec4(rand_col_rgb(contour_edge_list_len, contour_edge_list_len), wedge_id);
+        // vec4(rand_col_rgb(contour_edge_list_len, contour_edge_list_len), wedge_id);
+        vec4(rand_col_rgb(contour_seg_len, contour_seg_len), contour_seg_rank);
 
         // edge_len < 100.0f ? vec4(rand_col_rgb(contour_edge_list_len, contour_edge_list_len), 1.0f) : vec4(.0f);
 

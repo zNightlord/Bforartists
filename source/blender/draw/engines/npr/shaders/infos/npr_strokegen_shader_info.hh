@@ -148,6 +148,7 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_extract_mesh_contour_data)
     .define("WINGED_EDGE_TOPO_INCLUDE", "1")
     .define("_KERNEL_MULTICOMPILE__EXTRACT_MESH_CONTOUR_DATA", "1")
     .define("VE_CIRCULATOR_INCLUDE", "1")
+    .define("INCLUDE_VERTEX_CURV_MAX", "1")
     .storage_buf(0, Qualifier::READ_WRITE, "uint", "ssbo_contour_temp_data_[]")
     .storage_buf(1, Qualifier::READ, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
     .storage_buf(2, Qualifier::READ, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_prev_")
@@ -158,7 +159,8 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_extract_mesh_contour_data)
     .storage_buf(7, Qualifier::READ_WRITE, "uint", "ssbo_edge_to_vert_[]") 
     .storage_buf(8, Qualifier::READ, "float", "ssbo_vbo_full_[]")
     .storage_buf(9, Qualifier::READ_WRITE, "SSBOData_ListRankingInputs", "ssbo_list_ranking_inputs_") 
-    .storage_buf(10, Qualifier::READ_WRITE, "uint", "ssbo_contour_edge_vpos_[]")
+    .storage_buf(10, Qualifier::READ_WRITE, "uint", "ssbo_contour_edge_transfer_data_[]")
+    .storage_buf(11, Qualifier::READ_WRITE, "uint", "ssbo_vcurv_max_[]")
     .push_constant(Type::VEC2, "pcs_screen_size_")
     .local_group_size(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT) 
     .compute_source("npr_strokegen_geom_extract_comp.glsl");
@@ -168,19 +170,66 @@ GPU_SHADER_CREATE_INFO(strokegen_serialize_contour_edges)
     .typedef_source("bnpr_shader_shared.hh")
     .typedef_source("draw_shader_shared.h")
     .define("_KERNEL_MULTICOMPILE__CONTOUR_SERIALIZATION", "1")
+    .define("INCLUDE_CONTOUR_FLAGS_LOAD_STORE", "1")
 
     .storage_buf(0, Qualifier::READ, "uint", "ssbo_contour_edge_rank_in_[]")
     .storage_buf(1, Qualifier::READ, "uint", "ssbo_contour_edge_list_len_in_[]")
     .storage_buf(2, Qualifier::READ, "uint", "ssbo_contour_edge_list_head_in_[]")
-    .storage_buf(3, Qualifier::READ, "uint", "ssbo_contour_edge_vpos_in_[]")
+    .storage_buf(3, Qualifier::READ, "uint", "ssbo_contour_edge_transfer_data_[]")
     .storage_buf(4, Qualifier::WRITE, "uint", "ssbo_contour_edge_rank_out_[]")
     .storage_buf(5, Qualifier::WRITE, "uint", "ssbo_contour_edge_list_len_out_[]")
-    .storage_buf(6, Qualifier::WRITE, "uint", "ssbo_contour_edge_list_head_out_[]")
+    .storage_buf(6, Qualifier::READ_WRITE, "uint", "ssbo_contour_edge_list_head_out_[]")
     .storage_buf(7, Qualifier::WRITE, "uint", "ssbo_contour_edge_vpos_out_[]")
-    .storage_buf(8, Qualifier::READ, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
+    .storage_buf(8, Qualifier::READ_WRITE, "uint", "ssbo_contour_edge_flags_[]")
+    .storage_buf(9, Qualifier::READ_WRITE, "uint", "ssbo_contour_to_contour_[]")
+    .storage_buf(10, Qualifier::READ, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
 
     .local_group_size(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT) 
     .compute_source("npr_strokegen_contour_processing.glsl");
+
+GPU_SHADER_CREATE_INFO(strokegen_serialize_contour_edges_pass_0)
+    .do_static_compilation(true)
+    .additional_info("strokegen_serialize_contour_edges")
+    .define("_KERNEL_MULTICOMPILE__CONTOUR_SERIALIZATION__PASS_0", "1");
+
+GPU_SHADER_CREATE_INFO(strokegen_serialize_contour_edges_pass_1)
+    .do_static_compilation(true)
+    .additional_info("strokegen_serialize_contour_edges")
+    .define("_KERNEL_MULTICOMPILE__CONTOUR_SERIALIZATION__PASS_1", "1");
+
+GPU_SHADER_CREATE_INFO(strokegen_contour_segmentation)
+    .do_static_compilation(true)
+    .typedef_source("bnpr_shader_shared.hh")
+    .typedef_source("draw_shader_shared.h")
+    .define("_KERNEL_MULTICOMPILE__CONTOUR_SEGMENTATION", "1")
+    .define("INCLUDE_CONTOUR_FLAGS_LOAD_STORE", "1")
+    .define("INCLUDE_CONTOUR_CURVE_TOPOLOGY_LOAD", "1")
+
+    .storage_buf(0, Qualifier::READ, "uint", "ssbo_contour_edge_rank_[]")
+    .storage_buf(1, Qualifier::READ, "uint", "ssbo_contour_edge_list_len_[]")
+    .storage_buf(2, Qualifier::READ, "uint", "ssbo_contour_edge_list_head_[]")
+    .storage_buf(3, Qualifier::READ_WRITE, "uint", "ssbo_contour_edge_flags_[]")
+    .storage_buf(4, Qualifier::READ_WRITE, "uint", "scan_data_buf_0_[]")
+    .storage_buf(5, Qualifier::READ_WRITE, "uint", "scan_data_buf_1_[]")
+    .storage_buf(6, Qualifier::READ_WRITE, "uint", "scan_output_buf_0_[]")
+    .storage_buf(7, Qualifier::READ_WRITE, "uint", "scan_output_buf_1_[]")
+    .storage_buf(8, Qualifier::WRITE, "uint", "ssbo_contour_edge_seg_rank_[]")
+    .storage_buf(9, Qualifier::WRITE, "uint", "ssbo_contour_edge_seg_len_[]")
+    .storage_buf(10, Qualifier::WRITE, "UBData_TreeScan", "ssbo_tree_scan_infos_contour_segmentation_")
+    .storage_buf(11, Qualifier::READ, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
+
+    .local_group_size(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT) 
+    .compute_source("npr_strokegen_contour_processing.glsl");
+
+GPU_SHADER_CREATE_INFO(strokegen_setup_contour_segmentation)
+    .do_static_compilation(true)
+    .additional_info("strokegen_contour_segmentation")
+    .define("_KERNEL_MULTICOMPILE__CONTOUR_SEGMENTATION__SETUP", "1");
+
+GPU_SHADER_CREATE_INFO(strokegen_finish_contour_segmentation)
+    .do_static_compilation(true)
+    .additional_info("strokegen_contour_segmentation")
+    .define("_KERNEL_MULTICOMPILE__CONTOUR_SEGMENTATION__FINISH", "1");
 
 GPU_SHADER_CREATE_INFO(strokegen_calc_contour_edges_draw_data)
     .do_static_compilation(true)
@@ -274,6 +323,8 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_draw_contour_edges)
     .storage_buf(3, Qualifier::READ, "uint", "ssbo_contour_edge_list_len_[]")
     .storage_buf(4, Qualifier::READ, "uint", "ssbo_contour_edge_list_head_[]")
     .storage_buf(5, Qualifier::READ, "uint", "ssbo_contour_to_contour_[]")
+    .storage_buf(6, Qualifier::READ, "uint", "ssbo_contour_edge_seg_rank_[]")
+    .storage_buf(7, Qualifier::READ, "uint", "ssbo_contour_edge_seg_len_[]")
     .push_constant(Type::VEC2, "pcs_screen_size_inv_") 
 
     .vertex_source("npr_strokegen_mesh_contour_vert.glsl")
@@ -1270,6 +1321,8 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_analysis_order_1_main_curvature_jacques)
      * need fix if we want this cheaper version */
     // .define("_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__INTERPO_2RING", "1")
     // .define("_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__INTERPO_CURVATURE", "1")
+
+    .push_constant(Type::INT, "pcs_output_maxcurv_with_cusp_function_")
     ; 
 
 #undef NUM_SSBO_1

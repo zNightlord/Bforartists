@@ -138,6 +138,19 @@ bool valid_vcurv_max(float vcurv_max)
         uint vcurv_max_enc = floatBitsToUint(vcurv_max);
         ssbo_vcurv_max_[vtx_id] = vcurv_max_enc;
     }
+    void ld_vcurv_max_with_cusp(uint vtx_id, out float vcurv_max, out float cusp_func)
+    {
+        uint vcurv_max_enc = ssbo_vcurv_max_[vtx_id*2u]; 
+        vcurv_max = uintBitsToFloat(vcurv_max_enc); 
+
+        uint cusp_enc = ssbo_vcurv_max_[vtx_id*2u+1u];
+        cusp_func = uintBitsToFloat(cusp_enc);
+    }
+    void st_vcurv_max_with_cusp(uint vtx_id, float vcurv_max, float cusp_func)
+    {
+        ssbo_vcurv_max_[vtx_id*2u] = floatBitsToUint(vcurv_max);
+        ssbo_vcurv_max_[vtx_id*2u+1u] = floatBitsToUint(cusp_func);
+    }
 #endif
 
 #if defined(INCLUDE_VERTEX_REMESH_LEN)
@@ -545,6 +558,26 @@ void curvDirFromTensor(in mat3 tensor,
 
 }
 
+/* Compute cusp function *
+ * Cusp detection from "Illustrating smooth surface" by Hertzmann et al.
+ * Surface point p is a cusp when the tangent to the silhouette at p is parallel to the viewing direction v. 
+ * 
+ * using min&max pricipal dirs w1, w2 & curvatures k1, k2, 
+ * the local vicinity of a contour point P is parameterized as a quadartic surface,
+ * and the cusp function C(P) = k1(dot(v, w1))^2 + k2(dot(v, w2))^2, where v = p - camera_pos
+*/
+float calc_cusp_func(vec3 pdir0, vec3 pdir1, float curv0, float curv1, vec3 vpos, vec3 vnor, vec3 cam_pos_ws)
+{
+    vec3 v = cam_pos_ws - vpos; 
+    vec3 v_ = normalize(v); 
+    float ndv = dot(v_, vnor);
+
+    vec2 cusp_func = vec2(dot(v, normalize(pdir0)), dot(v, normalize(pdir1))); 
+    cusp_func *= cusp_func;
+    cusp_func.x = dot(cusp_func, vec2(curv0, curv1)); 
+
+    return cusp_func.x; 
+}
 
 
 /*

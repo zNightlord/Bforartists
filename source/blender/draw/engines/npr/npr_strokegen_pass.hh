@@ -137,7 +137,7 @@ public:
       GPUBatch* gpu_batch_surf,
       ResourceHandle& rsc_handle,
       const DRWView* drw_view
-      );
+    );
 
 
   // ---------------------------------------------------------------------------
@@ -182,6 +182,7 @@ public:
     GPUMeshQuadricFilter alternate_filter_0;
     GPUMeshQuadricFilter alternate_filter_1;
     int edge_visualize_mode;
+    int contour_mode; // 0: no visuals, 1: interpo contour, 2: raw contour
     bool visualize_contour_edges;
     int iters_test_sqrt_subdiv; 
 
@@ -193,7 +194,7 @@ public:
     int remeshing_delaunay_flip_iters;
 
     int subdiv_type;
-    bool subdiv_use_crease; 
+    bool subdiv_use_crease;
 
   } meshing_params;
   void append_subpass_fill_selected_mesh_elems_indirect_dispatch_args_();
@@ -261,9 +262,10 @@ public:
     bool order_1_only_selected; 
     bool calc_vert_curvature;
     enum CurvatureEstimator { Rusinkiewicz = 0, Jacques } curvature_estimator;
-    bool output_curvature_tensors; 
+    bool output_curvature_tensors;
+    bool output_maxcurv_with_cusp_function; 
     GPUStorageBuf *ssbo_vcurv_tensor_; 
-    GPUStorageBuf *ssbo_vcurv_pdirs_k1k2_;
+    GPUStorageBuf *ssbo_vcurv_pdirs_k1k2_; 
     GPUStorageBuf *ssbo_edge_vtensors_; // temp buffer holding partial tensors
 
 
@@ -283,7 +285,8 @@ public:
         order_1_only_selected(false),
         calc_vert_curvature(false),
         curvature_estimator(Jacques), 
-        output_curvature_tensors(false), 
+        output_curvature_tensors(false),
+        output_maxcurv_with_cusp_function(false), 
         ssbo_vcurv_tensor_(nullptr),
         ssbo_vcurv_pdirs_k1k2_(nullptr),
         ssbo_edge_vtensors_(nullptr),
@@ -301,14 +304,15 @@ public:
     void set_calc_vert_topo_flags(bool val) { calc_vert_topo_flags = val; }
 
 
-    void set_calc_vert_curvature(bool val, CurvatureEstimator algo, bool output_tensors) 
+    void set_calc_vert_curvature(bool val, CurvatureEstimator algo, bool output_tensors, bool output_cusp_and_maxcurv) 
     { 
       calc_vert_curvature = val;
       curvature_estimator = algo; 
       if (calc_vert_curvature) {
         set_calc_vert_normal(true, output_vertex_facing_flag); 
         set_calc_vert_voronoi_area(true);
-        output_curvature_tensors = output_tensors; 
+        output_curvature_tensors = output_tensors;
+        output_maxcurv_with_cusp_function = output_cusp_and_maxcurv; 
       } 
     }
 
@@ -375,8 +379,8 @@ public:
                                             gpu::Batch *edge_batch,
                                             int num_edges,
                                             gpu::GPUIndexBufType ib_type,
-
-                                            int edge_visualize_mode = false);
+                                            int edge_visualize_mode,
+                                            int contour_visualize_mode);
 
   void rebuild_pass_process_contours();
   void append_subpass_fill_dispatch_args_contour_edges(PassSimple& pass, bool all_contour_edges);
@@ -384,6 +388,7 @@ public:
 
   // ---------------------------------------------------------------------------
   void append_subpass_serialize_contour_edges();
+  void append_subpass_contour_segmentation(); 
   void append_subpass_calc_contour_edges_draw_data(); 
 
   // ---------------------------------------------------------------------------
@@ -400,7 +405,6 @@ public:
 
     bool use_indirect_dispatch;
     GPUStorageBuf *ssbo_scan_infos_;
-    SSBO_IndirectDispatchArgs *ssbo_dispatch_args_;
 
     GPUStorageBuf *ssbo_in_scan_data_;
     GPUStorageBuf *ssbo_out_scan_data_; 

@@ -1270,37 +1270,35 @@ void main()
 
         
         float max_curv = max(abs(evals[0]), abs(evals[1])); 
-        
         bool valid_curv = !(isnan(max_curv) || isinf(max_curv));
         if (!valid_curv)
             max_curv = evals[0] = evals[1] = -1.0f; 
+
+
+        float cusp_func = .0f; 
+        bool near_contour = false; 
+        if (0 < pcs_output_maxcurv_with_cusp_function_)
+        { // Cusp detection from "Illustrating smooth surface" by Hertzmann et al.
+            mat4 view_to_world = ubo_view_matrices_.viewinv;
+            bool is_persp = (ubo_view_matrices_.winmat[3][3] == 0.0);
+            vec3 cam_pos_ws = view_to_world[3].xyz; /* see "#define cameraPos ViewMatrixInverse[3].xyz" */
+            
+            cusp_func = calc_cusp_func(pdir0, pdir1, evals.x, evals.y, vpos, vnor, cam_pos_ws); 
+
+            float ndv = dot(normalize(cam_pos_ws - vpos), vnor);
+            near_contour = ndv < .05f; 
+        }
+        
+
         if (valid_thread)
         {
             if (0 < pcs_output_curv_tensors_)
                 st_vcurv_pdirs_k1k2(vert_id, pdir0, evals[0], pdir1, evals[1]);
-            st_vcurv_max(vert_id, max_curv); 
+            if (0 == pcs_output_maxcurv_with_cusp_function_)
+                st_vcurv_max(vert_id, max_curv); 
+            else
+                st_vcurv_max_with_cusp(vert_id, max_curv, cusp_func);
         }
-
-
-        // Cusp detection from "Illustrating smooth surface" by Hertzmann et al.
-        // Surface point p is a cusp when the tangent to the silhouette at p is parallel to the viewing direction v. 
-        // 
-        // using min&max pricipal dirs w1, w2 & curvatures k1, k2, 
-        // the local vicinity of a contour point P is parameterized as a quadartic surface,
-        // and the cusp function C(P) = k1(dot(v, w1))^2 + k2(dot(v, w2))^2, where v = p - camera_pos
-        mat4 view_to_world = ubo_view_matrices_.viewinv;
-        bool is_persp = (ubo_view_matrices_.winmat[3][3] == 0.0);
-        vec3 cam_pos_ws = view_to_world[3].xyz; /* see "#define cameraPos ViewMatrixInverse[3].xyz" */
-        
-        vec3 v = cam_pos_ws - vpos; 
-        vec3 v_ = normalize(v); 
-        float ndv = dot(v_, vnor);
-
-        vec2 cusp_func = vec2(dot(v, normalize(pdir0)), dot(v, normalize(pdir1))); 
-        cusp_func *= cusp_func;
-        cusp_func.x = dot(cusp_func, evals.xy); 
-        bool near_contour = abs(ndv) < .05f; 
-
 
         
         if (0 < pcs_output_dbg_geom_)
@@ -1334,9 +1332,9 @@ void main()
                 // dbg_line_id++; 
                 
                 dbg_line_len = pcs_dbg_geom_scale_; 
-                if (!vf.crease) dbg_line_len = .0f; 
+                // if (!vf.crease) dbg_line_len = .0f; 
                 // dbg_line_len = max_curv > pcs_dbg_geom_scale_ ? .05f : .0f; 
-                // dbg_line_len = (near_contour && cusp_func.x < .0f) ? pcs_dbg_geom_scale_/*  * cusp_func.x */ : .0f; 
+                dbg_line_len = (near_contour && cusp_func.x < .0f) ? pcs_dbg_geom_scale_/*  * cusp_func.x */ : .0f; 
                 // dbg_line_len = (vf.front_facing) ? pcs_dbg_geom_scale_/*  * cusp_func.x */ : .0f; 
                 vec4 vpos_ws_10 = vec4(vpos, 1.0f);
                 vec4 vpos_ws_11 = vec4(vpos + normalize(vnor) * dbg_line_len, 1.0f);
@@ -1356,7 +1354,7 @@ void main()
                 // dbg_line_len = pcs_dbg_geom_scale_;
                 // dbg_line_len = pcs_dbg_geom_scale_ * max_curv;
                 // dbg_line_len = valid_curv ? .0f : pcs_dbg_geom_scale_;                
-                // dbg_line_len = (near_contour && cusp_func.x >= .0f) ? pcs_dbg_geom_scale_/*  * cusp_func.x */ : .0f; 
+                dbg_line_len = (near_contour && cusp_func.x >= .0f) ? pcs_dbg_geom_scale_/*  * cusp_func.x */ : .0f; 
                 // dbg_line_len = (vf.back_facing) ? pcs_dbg_geom_scale_/*  * cusp_func.x */ : .0f; 
                 vec4 vpos_ws_20 = vec4(vpos, 1.0f);
                 vec4 vpos_ws_21 = vec4(vpos + normalize(vnor) * dbg_line_len, 1.0f);
