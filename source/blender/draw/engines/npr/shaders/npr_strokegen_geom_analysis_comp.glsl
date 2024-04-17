@@ -1286,7 +1286,7 @@ void main()
             cusp_func = calc_cusp_func(pdir0, pdir1, evals.x, evals.y, vpos, vnor, cam_pos_ws); 
 
             float ndv = dot(normalize(cam_pos_ws - vpos), vnor);
-            near_contour = ndv < .05f; 
+            near_contour = abs(ndv) < .2f; 
         }
         
 
