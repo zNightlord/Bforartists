@@ -236,11 +236,6 @@ void main()
 	if (valid_thread)
 	{ /* read vertex pos transformed to world space */
 	  /* Note: wpos_and_edgeid will be overwrite, for saving space */
-        uint head_contour_id = ssbo_contour_edge_list_head_[contour_id];
-        uint list_len        = ssbo_contour_edge_list_len_[contour_id]; 
-        uint rank            = ssbo_contour_edge_rank_[contour_id]; 
-        uint addr_ld = head_contour_id + rank; 
-
         uvec3 vpos_0_enc, vpos_1_enc;
         Load3(ssbo_contour_edge_vpos_, contour_id*2u,    vpos_0_enc);
         Load3(ssbo_contour_edge_vpos_, contour_id*2u+1u, vpos_1_enc);

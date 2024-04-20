@@ -1070,7 +1070,7 @@ void validate_wedge_topo(uint wedge_id, out bool valid_ee, out bool valid_ev, ou
 #define w2 ((w[2].wedge_id))
 #define w3 ((w[3].wedge_id))
     
-    if (w0 == w2 || w1 == w3) 
+    if (w0 == w2 || w1 == w3 || w0 == w3 || w1 == w2) 
         valid_ee = false; 
 
     for (uint i = 0u; i < 4u; ++i)

@@ -255,7 +255,25 @@ void main()
 		bool dbg_line = valid_thread && (!ef.del_by_collapse) && (!ef.dupli) && (!ef.del_by_split); 
 		/* visualize edges with invalid topology */
 		if (pcs_edge_visualize_mode_ == 1) 
+		{
+			AdjWedgeInfo w[4] = {
+				decode_adj_wedge_info(ssbo_edge_to_edges_[wedge_id*4u + 0u]),
+				decode_adj_wedge_info(ssbo_edge_to_edges_[wedge_id*4u + 1u]),
+				decode_adj_wedge_info(ssbo_edge_to_edges_[wedge_id*4u + 2u]),
+				decode_adj_wedge_info(ssbo_edge_to_edges_[wedge_id*4u + 3u])
+			}; 
+
+			uint w0 = ((w[0].wedge_id)); 
+			uint w1 = ((w[1].wedge_id)); 
+			uint w2 = ((w[2].wedge_id)); 
+			uint w3 = ((w[3].wedge_id)); 
+		
+			if (/* w0 == w2 || w1 == w3 ||  */w0 == w3 || w1 == w2) 
+				valid_ee = false; 
+			else valid_ee = true; 
+
 			dbg_line = dbg_line && (!valid_ee); 
+		}
 		if (pcs_edge_visualize_mode_ == 2) 
 			dbg_line = dbg_line && (!valid_ev); 
 		if (pcs_edge_visualize_mode_ == 3) 
@@ -286,9 +304,6 @@ void main()
 
 		if (pcs_edge_visualize_mode_ == 9)
 		{
-			// float dihedral_angle = calc_dihedral_angle(v[0], v[1], v[2], v[3]);
-			// dbg_line = dbg_line && (dihedral_angle > pcs_dbg_geom_scale_);
-
 			dbg_line = dbg_line && (0 < ef.crease_level); 
 		}
 
@@ -320,7 +335,7 @@ void main()
 	if (is_contour)
 	{ /* write world pos to output buffer */
 		/* Note: wpos_and_edgeid will be overwrite in the next pass, for saving space */
-		uint base_addr = mesh_pool_addr__wpos_and_edgeid(compacted_idx); 
+		uint base_addr = compacted_idx * 2u; 
 		ssbo_contour_temp_data_[base_addr+0] = wedge_id; 
 		
 		PerContourWedgeInfo pcwi; 
@@ -383,7 +398,7 @@ bool func_ve_circulator(CirculatorIterData iter, inout VECircContext_ContourLink
 	ctx.pwci = decode_per_wedge_contour_info(ssbo_edge_to_contour_[iter.awi_next.wedge_id]);
 
 	if (ctx.pwci.is_contour) return false; /* found a contour, quit circulation */
-	return true;  
+	return true; 
 }
 
 void main()
@@ -401,7 +416,7 @@ void main()
 	if (valid_thread)
 	{ /* read vertex pos transformed to world space */
 	  /* Note: wpos_and_edgeid will be overwrite, for saving space */
-		uint base_addr = mesh_pool_addr__wpos_and_edgeid(ContourEdgeIdx); 
+		uint base_addr = ContourEdgeIdx * 2u; 
 		
 		uint wedge_id = ssbo_contour_temp_data_[base_addr+0];
 		pcwi = decode_per_contour_wedge_info(ssbo_contour_temp_data_[base_addr+1]);  
@@ -437,7 +452,7 @@ void main()
 		
 		ssbo_contour_edge_transfer_data_[ContourEdgeIdx*8+7] = 0u; // unused
 
-		
+
 		/* build contour edge adjacency */
 		bool is_border = pcwi.is_border; 
 		bool backface_border = is_border && !is_border_edge_front_facing(pcwi.ifrontface); 
@@ -457,6 +472,9 @@ void main()
 
 		VE_CIRCULATOR(vwlh_beg_vtx, func_ve_circulator, ctx, rot_fwd)
 
+		if (ctx.pwci.contour_id == 0x1fffffffu) // hitting bad border edges (e0==e3,e1==e2) this is bad and should not happen
+			ctx.pwci.contour_id = ContourEdgeIdx; 
+
 		bool back_face_T_junction = (backface_border && !ctx.pwci.is_border); 
 		ssbo_contour_to_contour_[ContourEdgeIdx*2] = 
 			(!back_face_T_junction) ? ctx.pwci.contour_id : /*break backface border chain at T-junction*/ContourEdgeIdx; 
@@ -468,6 +486,9 @@ void main()
 		rot_fwd = true; 
 
 		VE_CIRCULATOR(vwlh_end_vtx, func_ve_circulator, ctx, rot_fwd)
+
+		if (ctx.pwci.contour_id == 0x1fffffffu) // hitting bad border edges (e0==e3,e1==e2)
+			ctx.pwci.contour_id = ContourEdgeIdx; 
 
 		back_face_T_junction = (backface_border && !ctx.pwci.is_border); 
 		ssbo_contour_to_contour_[ContourEdgeIdx*2+1] = 

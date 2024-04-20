@@ -472,12 +472,6 @@ using namespace draw;
 
   /* Addressing */
 #define MAX_NUM_CONTOUR_EDGES ((6000000)) /* ssbo buffer cannot be larger than 8192*8192*/
-  /*x7*/
-  static inline uint mesh_pool_addr__wpos_and_edgeid(uint contour_edge_id) 
-  {
-    return contour_edge_id * 2u;
-  }
-
   /* ! Reuse the whole buffer ! */
   /*x2*/
   static inline uint mesh_pool_addr__edgedir(uint contour_edge_id)

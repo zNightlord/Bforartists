@@ -167,6 +167,10 @@ public:
     ViewTangentPlane = 2,
     ViewBinormalPlane = 3
   };
+  enum ContourType {
+    Interpolated = 1,
+    Raw = 2
+  };
   struct GPURemeshingParameters {
     int num_filtering_iters; // deprecate
     int max_num_remesh_dbg_iters;

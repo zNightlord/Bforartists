@@ -42,7 +42,8 @@ void main()
     uint contour_edge_list_head = ssbo_contour_edge_list_head_[contour_edge_id]; 
     uint contour_seg_rank = ssbo_contour_edge_seg_rank_[contour_edge_id];
     uint contour_seg_len = ssbo_contour_edge_seg_len_[contour_edge_id];
-
+    uint prev_contour_id = ssbo_contour_to_contour_[2*contour_edge_id];
+    uint next_contour_id = ssbo_contour_to_contour_[2*contour_edge_id+1u];
     
     uint end_node_id = contour_edge_list_head; 
     uvec2 link_end = uvec2(
@@ -52,6 +53,10 @@ void main()
 	uint end_node_rank = ssbo_contour_edge_rank_[end_node_id]; 
 
     
+
+
+
+
     uint draw_contour_edge_id = contour_edge_id;
     uint addr_uv = mesh_pool_addr__edgeuv(draw_contour_edge_id); 
     uint wedge_id = buf_strokegen_mesh_pool[addr_uv+4u];
@@ -100,23 +105,10 @@ void main()
 
 
     color = 
-        // vec4(rand_col_rgb(contour_edge_list_len, contour_edge_list_len), wedge_id);
-        vec4(rand_col_rgb(contour_seg_len, contour_seg_len), contour_seg_rank);
+        vec4(rand_col_rgb(contour_seg_len, contour_seg_len), contour_edge_id);
 
-        // edge_len < 100.0f ? vec4(rand_col_rgb(contour_edge_list_len, contour_edge_list_len), 1.0f) : vec4(.0f);
-
-        // contour_edge_list_len < contour_edge_rank ? 
-        //     vec4(1.0f)
-		// 	// vec4( 
-		// 	// 	first_fail_node_id, 
-		// 	// 	max_rank, 
-		// 	// 	ctx_another.num_rank_fails, 
-		// 	// 	ctx_another.num_jumps
-		// 	// )
-        //     // vec4(contour_edge_rank, contour_edge_list_len, contour_edge_list_head, end_node_rank + 1) 
-        //     : vec4(.0f); 
-        //     // : vec4(contour_edge_list_len.xxx, .0f); 
-        //     // vec4(contour_edge_rank, contour_edge_list_len, contour_edge_list_head, 0);
+        // (contour_edge_list_len < contour_edge_rank || contour_edge_rank == 0) ? 
+        // vec4(prev_contour_id, contour_edge_rank, contour_edge_list_len, contour_edge_list_head) : vec4(.0f);
 
 
     normal = vec3(0, 0, 1);

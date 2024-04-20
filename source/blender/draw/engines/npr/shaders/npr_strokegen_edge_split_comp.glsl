@@ -231,10 +231,18 @@ bool split_priority_higher(EdgeSplitPriorityContext ctx_0, EdgeSplitPriorityCont
     if ((!ctx_1.pesi.is_split_ok) || (!ctx_1.selected))
         return true;
 
+    /* -------- Simple Split (no special priority) --------- */
     if (pcs_split_mode_ == EDGE_SPLIT_LOOP_SUBDIV
         || pcs_split_mode_ == EDGE_SPLIT_CONTOUR_EDGES)
-        return pcg(ctx_0.wedge_id * pcs_split_iter_) < pcg(ctx_1.wedge_id * pcs_split_iter_); /* use lower id */
+    {
+        uint key_w0 = pcg(ctx_0.wedge_id * pcs_split_iter_); 
+        uint key_w1 = pcg(ctx_1.wedge_id * pcs_split_iter_);  
+        if (key_w0 == key_w1)
+            return (ctx_0.wedge_id) < (ctx_1.wedge_id); /* use lower id */
+        return key_w0 < key_w1; /* use lower id */
+    }
 
+    /* -------- Split based on edge length --------- */
     /* Sort Key: [wid | pcg(wid) | edge_len] */
     if (ctx_0.pesi.edge_len == ctx_1.pesi.edge_len)
     { /* use pcg to break tie */
@@ -296,7 +304,10 @@ void main()
     /* Select edges based on split conditions */
     EdgeFlags ef = load_edge_flags(wedge_id);
     if (valid_thread && pcs_split_iter_ == 0u)
+    {
         update_edge_flags__reset_new_split_edge(wedge_id, ef); 
+        ef.new_by_split = false; 
+    }
     
     bool is_contour_edge = false; 
     if (is_contour_split_pass())

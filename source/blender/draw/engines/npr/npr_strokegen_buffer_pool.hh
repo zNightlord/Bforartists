@@ -84,7 +84,7 @@ class GPUBufferPoolModule {
   SSBO_StrokeGenMeshBufPerContour<uint, 1> ssbo_contour_edge_seg_rank_;   //
   SSBO_StrokeGenMeshBufPerContour<uint, 1> ssbo_contour_edge_seg_len_;    //
   SSBO_StrokeGenMeshBufPerContour<uint, 6> ssbo_contour_edge_vpos_;       //
-  SSBO_StrokeGenMeshBufPerContour<uint, 1> ssbo_contour_edge_flags_;      // 
+  SSBO_StrokeGenMeshBufPerContour<uint, 1> ssbo_contour_edge_flags_;      //
 
   // Reusable Large Buffers -------------------------------------------------------------
   SSBO_StrokeGenReusedLarge ssbo_mesh_buffer_reuse_0_;                    // 256MB  Total  

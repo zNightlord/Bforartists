@@ -326,7 +326,7 @@ namespace blender::npr::strokegen
         // update elem counters after split
         append_subpass_fill_dispatched_args_remeshed_edges_(num_edges, true);
         append_subpass_fill_dispatched_args_remeshed_verts_(num_verts, false);
-      } 
+      }  
 
       append_subpass_flip_edges(LoopSubdivFlip, 0, num_edges, num_verts);
 
@@ -521,7 +521,7 @@ namespace blender::npr::strokegen
       append_subpasses_loop_subdiv(num_edges, num_verts);
 
     // test interpolated contour tessellation
-    {
+    if (meshing_params.contour_mode != ContourType::Raw) {
       SurfaceAnalysisContext surf_analysis_ctx_contour;
       GetSurfaceAnalysisContext_ContourInsertionPass(surf_analysis_ctx_contour); 
       auto surf_dbg_ctx_cpy = surf_dbg_ctx;
