@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
+﻿/* SPDX-License-Identifier: GPL-2.0-or-later
  * Copyright 2021 Blender Foundation.
  */
 
@@ -80,14 +80,9 @@
 #define NUM_ITEMS_SEGLOOPCONV1D_TEST 1973581u
 #define GROUP_SIZE_SEGLOOPCONV1D_TEST 512u
 
-#define NPR_SEGLOOPCONV1D_CONV_RADIUS 32u
+#define NPR_TEST_SEGLOOPCONV1D_CONV_RADIUS 32u
 #ifndef GPU_SHADER
-#  define NPR_SEGLOOPCONV1D_CONV_RADIUS_STR "32u"
-#endif
-
-#define NPR_SEGLOOPCONV1D_TEST_DATA_TYPE uint
-#ifndef GPU_SHADER
-#  define NPR_SEGLOOPCONV1D_TEST_DATA_TYPE_STR "uint"
+#  define NPR_TEST_SEGLOOPCONV1D_CONV_RADIUS_STR "32u"
 #endif
 /** \} */
 

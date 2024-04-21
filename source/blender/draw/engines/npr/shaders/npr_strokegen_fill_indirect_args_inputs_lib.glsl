@@ -7,7 +7,6 @@
 
 
 #if defined(_KERNEL_MULTICOMPILE__FILL_DISPATCH_ARGS__SCAN)
-
 void GetDispatchArgs(out uvec3 dispatch_args)
 {
     dispatch_args.x = ssbo_tree_scan_infos_.num_thread_groups;
@@ -22,7 +21,26 @@ void FillDispatchArgsBuffer(uvec3 args)
     ssbo_scan_dispatch_args_.num_groups_z = args.z;
     ssbo_scan_dispatch_args_._pad0 = 0; 
 }
+#endif
 
+
+
+#if defined(_KERNEL_MULTICOMPILE__FILL_DISPATCH_ARGS__SEGLOOPCONV1D)
+void GetDispatchArgs(out uvec3 dispatch_args)
+{
+    uint num_work_items = ssbo_segloopconv1d_info_.num_conv_items; 
+    dispatch_args.x = compute_num_groups(num_work_items, pc_segloopconv1d_dispatch_group_size_);
+    dispatch_args.y = 1;
+    dispatch_args.z = 1;
+}
+
+void FillDispatchArgsBuffer(uvec3 args)
+{
+    ssbo_segloopconv1d_dispatch_args_.num_groups_x = args.x;
+    ssbo_segloopconv1d_dispatch_args_.num_groups_y = args.y;
+    ssbo_segloopconv1d_dispatch_args_.num_groups_z = args.z;
+    ssbo_segloopconv1d_dispatch_args_._pad0 = 0; 
+}
 #endif
 
 

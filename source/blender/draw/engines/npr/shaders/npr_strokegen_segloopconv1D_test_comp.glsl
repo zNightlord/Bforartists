@@ -1,44 +1,9 @@
 #pragma BLENDER_REQUIRE(npr_strokegen_segloopconv1d_lib.glsl)
 
 
-/* input buffers:
- * ssbo_in_segloopconv1d_data_
- * ssbo_out_segloopconv1d_data_
- * ssbo_segloopconv1d_patch_table_
- * ubo_segloopconv1d_
- * -----------------------------------------------
-*/
 
-#define T_To_Uint(x) x
-#define Uint_To_T(x) x
 
-/* Generate segment topology for testing the right half of patch table.
-* - that is, we let the seg tail cross the thread group border. */
-void get_test_seg_topo(uint gl_invoc_id, out uint seg_head_id, out uint seg_tail_id, out uint seg_len)
-{
-    #define SECTION_LEN 1731u
-    
-    uint section_id =  gl_invoc_id / SECTION_LEN;
-    uint sec_head_id = section_id * SECTION_LEN;
-    uint sec_tail_id = (sec_head_id + SECTION_LEN) - 1u;
 
-    seg_len = max(1, wang_hash(section_id) % SECTION_LEN);
-    uint id_seg_lc = (gl_invoc_id - sec_head_id) / seg_len;
-
-    seg_head_id = id_seg_lc * seg_len + sec_head_id;
-    seg_tail_id = (seg_head_id + seg_len) - 1u;
-
-    if (sec_tail_id < seg_tail_id)
-        seg_tail_id = sec_tail_id;
-    
-    uint last_valid_elem_id = uint(ubo_segloopconv1d_.num_conv_items) - 1u; 
-    if (seg_head_id <= last_valid_elem_id && last_valid_elem_id <= seg_tail_id)
-        seg_tail_id = last_valid_elem_id; 
-
-    seg_len = seg_tail_id - seg_head_id + 1u;
-
-    #undef SECTION_LEN
-}
 
 
 #if defined(_KERNEL_MULTICOMPILE__1DSEGLOOP_BUILD_PATCH_TABLE)
@@ -49,8 +14,9 @@ void main()
     const uint idx = gl_GlobalInvocationID.x;
     const uint blockIdx = gl_WorkGroupID.x;
     
+    bool seg_is_loop; 
     uint seg_head_id, seg_tail_id, seg_len;
-    get_test_seg_topo(idx, seg_head_id, seg_tail_id, seg_len);
+    FUNC_GET_LOOP_TOPOLOGY(idx, seg_is_loop, seg_head_id, seg_tail_id, seg_len);
     
     /* Setup segment topo */
     bool hf = (idx == seg_head_id);
@@ -62,12 +28,14 @@ void main()
         hf, tf, seg_head_id, seg_tail_id, seg_len 
     );
     
+#if defined(_KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__TEST)
     /* Output debug info */
     uint addr_dbg_st = idx << 2;
     ssbo_debug_segloopconv1d_data_[addr_dbg_st++] = (seg_head_id);
     ssbo_debug_segloopconv1d_data_[addr_dbg_st++] = (seg_tail_id);
     ssbo_debug_segloopconv1d_data_[addr_dbg_st++] = (seg_len);
     ssbo_debug_segloopconv1d_data_[addr_dbg_st++] = ((hf ? 1 : (tf ? 2 : 0)));
+#endif
 }
 
 #endif
@@ -82,38 +50,48 @@ void main()
     const uint idx = gl_GlobalInvocationID.x;
     const uint blockIdx = gl_WorkGroupID.x;
 
+    bool seg_is_loop; 
     uint seg_head_id, seg_tail_id, seg_len;
-    get_test_seg_topo(idx, seg_head_id, seg_tail_id, seg_len);
+    FUNC_GET_LOOP_TOPOLOGY(idx, seg_is_loop, seg_head_id, seg_tail_id, seg_len);
 
-    uint convData; 
+    DATA_TYPE_LOOPCONV1D orig_data; 
     _FUNC_SETUP_SEGLOOP1DCONV(
         blockIdx, groupIdx, 
-        /*out*/ convData
+        /*out*/ orig_data
     );
-    ssbo_in_segloopconv1d_data_[idx] = convData;
+#if defined(_KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__TEST)
+    ssbo_in_segloopconv1d_data_[idx] = floatBitsToUint(orig_data); // input is natively calculated rather than loaded from buffer
+#endif
 
-    
-    
+    T_CONV_TEMP_DATA conv_temp_data; 
     for (uint d = 1; d <= MAX_CONV_RADIUS; ++d)
     {
-        uint neighData = _FUNC_LOAD_CONV_DATA_LDS_LEFT(
+        DATA_TYPE_LOOPCONV1D neigh_data = _FUNC_LOAD_CONV_DATA_LDS_LEFT(
             d, blockIdx, groupIdx,
             seg_len, seg_head_id
         );
-        
-        convData += neighData; 
+
+        FUNC_CONVOLUTION(
+            /*mov_left*/true, d, seg_is_loop, seg_head_id, seg_tail_id, idx/*item_id*/, 
+            neigh_data, orig_data, /*inout*/conv_temp_data
+        ); 
     }
 
     for (uint d = 1; d <= MAX_CONV_RADIUS; ++d)
     {
-        uint neighData = _FUNC_LOAD_CONV_DATA_LDS_RIGHT(
+        DATA_TYPE_LOOPCONV1D neigh_data = _FUNC_LOAD_CONV_DATA_LDS_RIGHT(
             d, blockIdx, groupIdx,
             seg_len, seg_head_id
         );
  
-        convData += neighData;
+        FUNC_CONVOLUTION(
+            /*mov_left*/false, d, seg_is_loop, seg_head_id, seg_tail_id, idx, 
+            neigh_data, orig_data, /*inout*/conv_temp_data); 
     }
-    ssbo_out_segloopconv1d_data_[idx] = convData;
+
+    #if defined(_KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__TEST)
+        ssbo_out_segloopconv1d_data_[idx] = floatBitsToUint(conv_temp_data.val);
+    #endif
 }
 
 #endif

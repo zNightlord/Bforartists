@@ -250,7 +250,7 @@ class GPUBufferPoolModule {
   }
 
   // Reused buffers for global contour processing --------------------------
-  // intermediate buffer to store results from list ranking. 
+  // intermediate buffer to store results from list ranking, contour serialization and segmentation. 
   inline GPUStorageBuf *reused_ssbo_contour_to_contour_()
   { 
     return ssbo_mesh_buffer_reuse_7_; 
@@ -271,6 +271,11 @@ class GPUBufferPoolModule {
   {
     return ssbo_mesh_buffer_reuse_0_; 
   }
+  inline GPUStorageBuf *reused_ssbo_in_segloopconv1d_data_contour_seg_denoise()
+  {
+    return ssbo_mesh_buffer_reuse_4_; 
+  }
+
 
   // Scan Working Buffers -----------------------------------
   SSBO_BnprScanData         ssbo_in_scan_data_;
@@ -306,6 +311,8 @@ class GPUBufferPoolModule {
   SSBO_SegLoopConvDebugData  ssbo_debug_segloopconv1d_data_;
   SSBO_SegLoopConvPatchTable ssbo_segloopconv1d_patch_table_;
   UBO_SegLoopConv1D          ubo_segloopconv1d_;
+  SSBO_SegLoopConv1DInfo     ssbo_segloopconv1d_info_;
+  SSBO_IndirectDispatchArgs  ssbo_segloopconv1d_dispatch_args_;
 
   // List Ranking Working Buffers ------------------------------------------------------------------------------------
   SSBO_ListRankingCounters            ssbo_list_ranking_anchor_counters_; // x1 slot per splicing iteration

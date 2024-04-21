@@ -63,7 +63,13 @@ void main()
 	{ /* broadcast loop flag to all contour edges in the curve */
 		cf.looped_curve = false;
 		store_contour_flags(contour_id, cf); /* race condition does not hurt */
+
+		/* copy to segloopconv1d input buffer */
+		ssbo_in_segloopconv1d_data_[contour_id] = encode_contour_flags(cf); 
 	}
+
+	if (idx == 0u)
+		ssbo_segloopconv1d_info_.num_conv_items = num_contours; 
 #endif
 
 }

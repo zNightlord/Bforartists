@@ -333,8 +333,9 @@ using namespace draw;
     uint dummy3;
   };
   BLI_STATIC_ASSERT_ALIGN(UBData_SegLoopConv1D, 16);
-
-#define NPR_SEGLOOPCONV1D_TEST_DATA_TYPE uint
+  #ifndef GPU_SHADER
+    #define NPR_SEGLOOPCONV1D_TEST_DATA_TYPE float
+  #endif
 #if defined(GPU_SHADER) && defined(_KERNEL_MULTICOMPILE__1DSEGLOOP_BUILD_PATCH_TABLE)
 
 #endif
@@ -576,6 +577,7 @@ using SSBO_SegLoopConv1DData = StorageArrayBuffer<uint, 2048 * 2048 * 2, true>;
 using SSBO_SegLoopConvDebugData = StorageArrayBuffer<uint, 2048 * 2048 * 8, true>;
 using SSBO_SegLoopConvPatchTable = StorageArrayBuffer<uint, 4096 * 64, true>;
 using UBO_SegLoopConv1D = UniformBuffer<UBData_SegLoopConv1D>;
+using SSBO_SegLoopConv1DInfo = StorageBuffer<UBData_SegLoopConv1D>; 
 
 using SSBO_ListRankingLinksStagingBuf = draw::StorageArrayBuffer<uint, NUM_ITEMS_BNPR_LIST_RANK_TEST * 2, false/* We need to init this from CPU */>;
 using SSBO_ListRankingLinks = draw::StorageArrayBuffer<uint, NUM_ITEMS_BNPR_LIST_RANK_TEST * 2, true>;

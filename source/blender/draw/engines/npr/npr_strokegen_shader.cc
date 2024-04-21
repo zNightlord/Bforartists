@@ -283,11 +283,17 @@ const char *StrokeGenShaderModule::static_shader_create_info_name_get(eShaderTyp
     case SEGSCAN_UINT_DWSWEEP:
       return "bnpr_segscan_uint_add_dwsweep";
     case SCAN_FILL_DISPTACH_ARGS:
-      return "strokegen_scan_fill_dispatch_args"; 
+      return "strokegen_scan_fill_dispatch_args";
+    case CONV1D_FILL_DISPATCH_ARGS:
+      return "strokegen_segloopconv1d_fill_dispatch_args";
     case CONV1D_TEST_BUILD_PATCH:
       return "strokegen_segloopconv1D_test_build_patch";
     case CONV1D_TEST_CONVOLUTION:
       return "strokegen_segloopconv1D_test_convolution";
+    case CONV1D_SEG_DENOISE_BUILD_PATCH:
+      return "strokegen_segloopconv1D_seg_denoising_build_patch";
+    case CONV1D_SEG_DENOISE_CONVOLUTION:
+      return "strokegen_segloopconv1D_seg_denoising_convolution";
     case LISTRANKING_INIT_ANCHORS:
       return "strokegen_list_ranking_test_tagging";
     case LISTRANKING_COMPACT_ANCHORS:

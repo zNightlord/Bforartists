@@ -183,6 +183,8 @@ GPU_SHADER_CREATE_INFO(strokegen_serialize_contour_edges)
     .storage_buf(8, Qualifier::READ_WRITE, "uint", "ssbo_contour_edge_flags_[]")
     .storage_buf(9, Qualifier::READ_WRITE, "uint", "ssbo_contour_to_contour_[]")
     .storage_buf(10, Qualifier::READ, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
+    .storage_buf(11, Qualifier::WRITE, "UBData_SegLoopConv1D", "ssbo_segloopconv1d_info_")
+    .storage_buf(12, Qualifier::WRITE, "uint", "ssbo_in_segloopconv1d_data_[]")
 
     .local_group_size(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT) 
     .compute_source("npr_strokegen_contour_processing.glsl");
@@ -1478,24 +1480,6 @@ GPU_SHADER_CREATE_INFO(bnpr_segscan_uint_add_inputs)
     .additional_info("bnpr_segscan_uint_storage")
     .define("_KERNEL_MULTI_COMPILE__TREE_SCAN_INFO_SSBO", "1"); 
 
-/** GPU 1D Segmented & Looped Convolution --------------------
- */
-GPU_SHADER_CREATE_INFO(npr_segloopconv1D_test)
-    .typedef_source("bnpr_shader_shared.hh")
-    .define("LOOPCONV1D_TAG", "build_patch")
-    .define("LOOPCONV1D_MAX_RADIUS", NPR_SEGLOOPCONV1D_CONV_RADIUS_STR)
-    .define("DATA_TYPE_LOOPCONV1D", "uint");
-
-GPU_SHADER_CREATE_INFO(npr_segloopconv1D_test_build_patch)
-    /* input functions related to buffer load/store can only be defined in a .glsl file
-     * see npr_strokegen_segloopconv1d_inputs_lib.glsl */
-    .define("FUNC_DEVICE_STORE_LOOPCONV1D_PATCH_ID", "func_device_store_loopconv1d_patch_id");
-
-GPU_SHADER_CREATE_INFO(npr_segloopconv1D_test_convolution)
-    /* input functions related to buffer load/store can only be defined in a .glsl file
-     * see npr_strokegen_segloopconv1d_inputs_lib.glsl */
-    .define("FUNC_DEVICE_LOAD_LOOPCONV1D_PATCH_ID", "func_device_load_loopconv1d_patch_id")
-    .define("FUNC_DEVICE_LOAD_LOOPCONV1D_DATA", "func_device_load_loopconv1d_data");
 
 /** GPU Compaction --------------------
  */
@@ -1615,29 +1599,84 @@ GPU_SHADER_CREATE_INFO__TREE_SEGSCAN(bnpr_segscan_uint_add, bnpr_segscan_uint_ad
 /* -------------------------------------------------------------------- */
 /** \GPU 1D Segmented Looped Convolution
  * \{ */
-GPU_SHADER_CREATE_INFO(strokegen_segloopconv1D_test_build_patch)
+GPU_SHADER_CREATE_INFO(strokegen_segloopconv1d_fill_dispatch_args)
     .do_static_compilation(true)
-    .define("_KERNEL_MULTICOMPILE__1DSEGLOOP_BUILD_PATCH_TABLE", "1")
-    .storage_buf(0, Qualifier::READ_WRITE, "uint", "ssbo_segloopconv1d_patch_table_[]")
-    .storage_buf(1, Qualifier::READ_WRITE, "uint", "ssbo_debug_segloopconv1d_data_[]")
-    .uniform_buf(0, "UBData_SegLoopConv1D", "ubo_segloopconv1d_")
-    .additional_info("npr_segloopconv1D_test")
-    .additional_info("npr_segloopconv1D_test_build_patch")
-    .local_group_size(GROUP_SIZE_SEGLOOPCONV1D_TEST)
-    .compute_source("npr_strokegen_segloopconv1d_test_comp.glsl");
+    .typedef_source("bnpr_defines.hh")
+    .typedef_source("bnpr_shader_shared.hh")
+    .typedef_source("draw_shader_shared.h") /* Always needed for indirect args */
+    .define("_KERNEL_MULTICOMPILE__FILL_DISPATCH_ARGS", "1")
+    .define("_KERNEL_MULTICOMPILE__FILL_DISPATCH_ARGS__SEGLOOPCONV1D", "1")
 
-GPU_SHADER_CREATE_INFO(strokegen_segloopconv1D_test_convolution)
-    .do_static_compilation(true)
-    .define("_KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION", "1")
-    .storage_buf(0, Qualifier::READ, "uint", "ssbo_segloopconv1d_patch_table_[]")
-    .storage_buf(1, Qualifier::READ_WRITE, NPR_SEGLOOPCONV1D_TEST_DATA_TYPE_STR, "ssbo_in_segloopconv1d_data_[]")
-    .storage_buf(2, Qualifier::READ_WRITE, NPR_SEGLOOPCONV1D_TEST_DATA_TYPE_STR, "ssbo_out_segloopconv1d_data_[]")
-    .storage_buf(3, Qualifier::READ_WRITE, "uint", "ssbo_debug_segloopconv1d_data_[]")
-    .uniform_buf(0, "UBData_SegLoopConv1D", "ubo_segloopconv1d_")
+    .storage_buf(0, Qualifier::READ_WRITE, "UBData_SegLoopConv1D", "ssbo_segloopconv1d_info_")
+    .storage_buf(1, Qualifier::READ_WRITE, "DispatchCommand", "ssbo_segloopconv1d_dispatch_args_")
+    .push_constant(Type::INT, "pc_segloopconv1d_dispatch_group_size_")
+    
+    .local_group_size(32)
+    .compute_source("npr_strokegen_fill_indirect_args_comp.glsl");
+
+GPU_SHADER_CREATE_INFO(npr_segloopconv1D_test)
+    .typedef_source("bnpr_shader_shared.hh")
+    .define("LOOPCONV1D_TAG", "build_patch")
+    .define("LOOPCONV1D_MAX_RADIUS", NPR_TEST_SEGLOOPCONV1D_CONV_RADIUS_STR)
+    .define("DATA_TYPE_LOOPCONV1D", "float")
+    .define("_KERNEL_MULTI_COMPILE__SEGLOOPCONV1D_INFO_SSBO", "0")
+    .define("_KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__TEST", "1");
+GPU_SHADER_CREATE_INFO(npr_segloopconv1D_test_build_patch)
     .additional_info("npr_segloopconv1D_test")
-    .additional_info("npr_segloopconv1D_test_convolution")
-    .local_group_size(GROUP_SIZE_SEGLOOPCONV1D_TEST)
-    .compute_source("npr_strokegen_segloopconv1d_test_comp.glsl");
+    .storage_buf(2, Qualifier::READ_WRITE, "uint", "ssbo_debug_segloopconv1d_data_[]");
+GPU_SHADER_CREATE_INFO(npr_segloopconv1D_test_convolution)
+    .additional_info("npr_segloopconv1D_test")
+    .storage_buf(4, Qualifier::READ_WRITE, "uint", "ssbo_debug_segloopconv1d_data_[]");
+
+GPU_SHADER_CREATE_INFO(npr_segloopconv1D_seg_denoising)
+    .typedef_source("bnpr_shader_shared.hh")
+    .define("LOOPCONV1D_TAG", "seg_denoising")
+    .define("LOOPCONV1D_MAX_RADIUS", "8")
+    .define("DATA_TYPE_LOOPCONV1D", "uint")
+    .define("_KERNEL_MULTI_COMPILE__SEGLOOPCONV1D_INFO_SSBO", "1")
+    .define("_KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__SEG_DENOISING", "1");
+GPU_SHADER_CREATE_INFO(npr_segloopconv1D_seg_denoising_build_patch)
+    .additional_info("npr_segloopconv1D_seg_denoising")
+    .storage_buf(2, Qualifier::READ_WRITE, "uint", "ssbo_contour_edge_rank_[]")
+    .storage_buf(3, Qualifier::READ_WRITE, "uint", "ssbo_contour_edge_list_len_[]")
+    .storage_buf(4, Qualifier::READ_WRITE, "uint", "ssbo_contour_edge_flags_[]");
+GPU_SHADER_CREATE_INFO(npr_segloopconv1D_seg_denoising_convolution)
+    .additional_info("npr_segloopconv1D_seg_denoising")
+    .storage_buf(4, Qualifier::READ_WRITE, "uint", "ssbo_contour_edge_rank_[]")
+    .storage_buf(5, Qualifier::READ_WRITE, "uint", "ssbo_contour_edge_list_len_[]");
+
+#define GPU_SHADER_CREATE_INFO__SEGLOOPCONV1D_BUILD_PATCH(name, input_shader_info_build_patch) \
+GPU_SHADER_CREATE_INFO(strokegen_segloopconv1D_##name##_build_patch)                     \
+    .do_static_compilation(true)                                                         \
+    .additional_info(#input_shader_info_build_patch)                                     \
+    .define("_KERNEL_MULTICOMPILE__1DSEGLOOP_BUILD_PATCH_TABLE", "1")                    \
+    .storage_buf(0, Qualifier::READ_WRITE, "uint", "ssbo_segloopconv1d_patch_table_[]")  \
+    .storage_buf(1, Qualifier::READ, "UBData_SegLoopConv1D", "ssbo_segloopconv1d_info_") \
+    .uniform_buf(0, "UBData_SegLoopConv1D", "ubo_segloopconv1d_")                        \
+                                                                                         \
+    .local_group_size(GROUP_SIZE_SEGLOOPCONV1D_TEST)                                     \
+    .compute_source("npr_strokegen_segloopconv1d_test_comp.glsl");                       \
+
+GPU_SHADER_CREATE_INFO__SEGLOOPCONV1D_BUILD_PATCH(test, npr_segloopconv1D_test_build_patch)
+GPU_SHADER_CREATE_INFO__SEGLOOPCONV1D_BUILD_PATCH(seg_denoising, npr_segloopconv1D_seg_denoising_build_patch)
+
+
+#define GPU_SHADER_CREATE_INFO__SEGLOOPCONV1D_CONV(name, input_shader_info_conv) \
+GPU_SHADER_CREATE_INFO(strokegen_segloopconv1D_##name##_convolution)                     \
+    .do_static_compilation(true)                                                         \
+    .additional_info(#input_shader_info_conv)                                            \
+    .define("_KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION", "1")                          \
+    .storage_buf(0, Qualifier::READ, "uint", "ssbo_segloopconv1d_patch_table_[]")        \
+    .storage_buf(1, Qualifier::READ_WRITE, "uint", "ssbo_in_segloopconv1d_data_[]")      \
+    .storage_buf(2, Qualifier::READ_WRITE, "uint", "ssbo_out_segloopconv1d_data_[]")     \
+    .storage_buf(3, Qualifier::READ, "UBData_SegLoopConv1D", "ssbo_segloopconv1d_info_") \
+    .uniform_buf(0, "UBData_SegLoopConv1D", "ubo_segloopconv1d_")                        \
+                                                                                         \
+    .local_group_size(GROUP_SIZE_SEGLOOPCONV1D_TEST)                                     \
+    .compute_source("npr_strokegen_segloopconv1d_test_comp.glsl");                       \
+
+GPU_SHADER_CREATE_INFO__SEGLOOPCONV1D_CONV(test, npr_segloopconv1D_test_convolution)
+GPU_SHADER_CREATE_INFO__SEGLOOPCONV1D_CONV(seg_denoising, npr_segloopconv1D_seg_denoising_convolution)
 /** \} */
 
 

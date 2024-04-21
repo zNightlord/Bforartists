@@ -420,12 +420,22 @@ public:
   };
   void rebuild_pass_segscan_test(ScanSettings scan_settings,
                                  PassSimple& pass);
+  struct SegLoopConv1DSettings {
+    bool is_validation_shader;
 
-  void rebuild_pass_conv_test();
-  void rebuild_pass_list_ranking_pointer_jumping(
-      PassSimple& pass_listranking, int num_splice_iters,
-      const int num_jump_iters, int jumping_info_offset, bool loop_breaking_pass, bool loop_ranking_pass
-      );
+    bool use_indirect_dispatch;
+    GPUStorageBuf *ssbo_segloopconv1d_info_;
+
+    GPUStorageBuf *ssbo_in_segloopconv1d_data_;
+    GPUStorageBuf *ssbo_out_segloopconv1d_data_;
+    GPUStorageBuf *ssbo_segloopconv1d_patch_table_;
+
+    eShaderType shader_build_patch_table;
+    bool lazy_dispatch; // skip shader_build_patch_table and reuse ssbo_segloopconv1d_patch_table_ 
+    eShaderType shader_convolution;
+  };
+  bool test_segloopconv; 
+  void rebuild_pass_segloopconv1d(SegLoopConv1DSettings settings, PassSimple& pass);
 
   bool test_list_ranking; 
   bool test_looped_pass_list_ranking;
@@ -434,7 +444,12 @@ public:
     ContourEdgeLinking = 1
   };
   void append_subpass_list_ranking(ListRankingPassUsage passType, PassSimple& pass_listranking, bool looped_pass_list_ranking);
-
+  void rebuild_pass_list_ranking_pointer_jumping(PassSimple &pass_listranking,
+                                                 int num_splice_iters,
+                                                 const int num_jump_iters,
+                                                 int jumping_info_offset,
+                                                 bool loop_breaking_pass,
+                                                 bool loop_ranking_pass);
   void rebuild_pass_list_ranking_fill_args(PassSimple& pass_listranking, bool per_anchor, bool per_spliced, int splicing_or_relinking_iter, int group_size_x, bool custom_pass);
   void print_list_ranking_nodes(int head_node_id, uint* computed_ranks, uint* computed_topo, uint* computed_links) const;
   /** \} */
@@ -705,7 +720,7 @@ void StrokeGenPassModule::validate_segloopconv1d(
   bool succ = validate_segloopconv1d_internal<T>(
     data_conv_inputs, data_conv_output, data_conv_debug,
     buffers_.ubo_segloopconv1d_.num_conv_items,
-    NPR_SEGLOOPCONV1D_CONV_RADIUS,
+    NPR_TEST_SEGLOOPCONV1D_CONV_RADIUS,
     func_equals, func_conv_op
   );
 

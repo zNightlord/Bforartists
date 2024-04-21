@@ -82,7 +82,8 @@ namespace blender::npr::strokegen
   {
     /* Init draw passes and manager related stuff. (Begin render graph) */
     strokegen_passes.test_list_ranking = false;
-    strokegen_passes.test_scan = false; 
+    strokegen_passes.test_scan = false;
+    strokegen_passes.test_segloopconv = true; 
 
     /* First setup resources */
     int refresh_rate = std::max(1, strokegen_passes.meshing_params.seconds_sync_view_mat * 24); 
@@ -216,12 +217,14 @@ namespace blender::npr::strokegen
 
     /* GPU 1d looped segmented convolution Test ----------------------------------------- */
     manager.submit(strokegen_passes.get_compute_pass(PType::SEGLOOPCONV_TEST), view);
-    if (frame_counter % 32 == 0) {
+    if (frame_counter % 32 == 0 && strokegen_passes.test_segloopconv) {
       // validate segloopconv1d
-      // strokegen_passes.validate_segloopconv1d<int>(
-      //   [](const int& a, const int& b){ return a == b; },
-      //   [](const int& a, const int& b){ return a + b; }
-      // );
+      strokegen_passes.validate_segloopconv1d<NPR_SEGLOOPCONV1D_TEST_DATA_TYPE>(
+          [](const NPR_SEGLOOPCONV1D_TEST_DATA_TYPE &a,
+             const NPR_SEGLOOPCONV1D_TEST_DATA_TYPE &b) { return a == b; },
+          [](const NPR_SEGLOOPCONV1D_TEST_DATA_TYPE &a,
+             const NPR_SEGLOOPCONV1D_TEST_DATA_TYPE &b) { return a + b; }
+      );
     }
 
 
