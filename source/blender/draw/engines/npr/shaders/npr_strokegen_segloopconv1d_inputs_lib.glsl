@@ -91,6 +91,8 @@ uint FUNC_DEVICE_LOAD_LOOPCONV1D_PATCH_ID(uint ldAddr)
     return ssbo_segloopconv1d_patch_table_[ldAddr]; // should be shared in most cases
 }
 
+bool should_init_conv_data(bool mov_left, uint mov_step) { return mov_left && (mov_step == 1u); }
+
 #define T_CV DATA_TYPE_LOOPCONV1D
     #if defined(_KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__TEST)
         struct T_CONV_TEMP_DATA
@@ -105,7 +107,7 @@ uint FUNC_DEVICE_LOAD_LOOPCONV1D_PATCH_ID(uint ldAddr)
             bool mov_left, uint mov_step, bool seg_is_loop, uint seg_head_id, uint seg_tail_id, uint item_id, 
             T_CV neighbor_data, T_CV ori_data, inout T_CONV_TEMP_DATA conv_data)
         {
-            if (mov_step == 0u) conv_data.val = ori_data; // initialization
+            if (should_init_conv_data(mov_left, mov_step)) conv_data.val = ori_data; // initialization
             conv_data.val += neighbor_data; // simple add
         }
     #endif
