@@ -439,9 +439,9 @@ public:
 
   bool test_list_ranking; 
   bool test_looped_pass_list_ranking;
-  enum ListRankingPassUsage {
-    TestListRanking = 0,
-    ContourEdgeLinking = 1
+  enum ListRankingPassUsage { // match to shader defines
+    TestListRanking = 0,      // OUTPUT_PASS_TYPE__TEST
+    ContourEdgeLinking = 1,   // OUTPUT_PASS_TYPE__CONTOUR_EDGE_LINKING
   };
   void append_subpass_list_ranking(ListRankingPassUsage passType, PassSimple& pass_listranking, bool looped_pass_list_ranking);
   void rebuild_pass_list_ranking_pointer_jumping(PassSimple &pass_listranking,

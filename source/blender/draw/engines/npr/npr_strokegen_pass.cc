@@ -2302,6 +2302,7 @@ namespace blender::npr::strokegen
           sub.bind_ssbo(5, buffers_.reused_ssbo_contour_edge_list_len_());
           sub.bind_ssbo(6, buffers_.reused_ssbo_contour_edge_list_head_info_());
         }
+        sub.push_constant("pcs_contour_edge_linking_output_pass_type_", passType); 
 
         sub.dispatch(buffers_.ssbo_list_ranking_indirect_dispatch_args_per_anchor[0]);
         sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_COMMAND);

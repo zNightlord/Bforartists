@@ -281,9 +281,9 @@ void main()
         uint curr_node_id = FUNC_GET_NODE_ID_FOR_ANCHOR(anchor_id, splicing_iter); 
         uint curr_broadcast_node_id = FUNC_DEVICE_LOAD_LISTRANKING_NODE_NEXT_NODE_ID(curr_node_id); 
         /* retrieve broadcasted data */
-        uint list_len, list_addr; 
-        FUNC_DEVICE_RETRIEVE_LIST_TOPOLOGY(curr_broadcast_node_id, /*out*/list_len, list_addr);
-        FUNC_DEVICE_STORE_LIST_TOPOLOGY(curr_node_id, list_len, list_addr); 
+        uint list_len, head_node_id; bool looped_list; 
+        FUNC_DEVICE_RETRIEVE_LIST_TOPOLOGY(curr_broadcast_node_id, /*out*/list_len, head_node_id, looped_list);
+        FUNC_DEVICE_STORE_LIST_TOPOLOGY(curr_node_id, list_len, head_node_id, looped_list); 
 
         return; /* !!! EXIT !!! -------------------------- */
     }
@@ -353,9 +353,10 @@ void main()
             /* for each anchor, rank == dist to list tail */
             /* => for head, rank+1 == list length */
             uint list_len = /* 1 +  */ji_updated.data; 
+            bool looped_list = ji_updated.is_loop_list;
             if (IS_LOOP_RANKING_PASS()) list_len = ji_updated.data; 
 
-            FUNC_DEVICE_BROADCAST_LIST_TOPOLOGY(list_broadcast_anchor_id, list_len, node_id); 
+            FUNC_DEVICE_BROADCAST_LIST_TOPOLOGY(list_broadcast_anchor_id, list_len, node_id, looped_list); 
         }
     }
     /* At last loop-breaking-jump-iter, just output jumping results */
@@ -496,9 +497,9 @@ void main()
     /* diffuse broadcast-node-id from top spliced layer to the bottom ----------------- */
     uint broadcast_anchor_id = FUNC_DEVICE_LOAD_LISTRANKING_NODE_NEXT_NODE_ID(next_node_id); 
 
-    uint list_len, list_addr; /* retrieve broadcasted data */
-    FUNC_DEVICE_RETRIEVE_LIST_TOPOLOGY(broadcast_anchor_id, /*out*/list_len, list_addr); 
-    FUNC_DEVICE_STORE_LIST_TOPOLOGY(node_id, list_len, list_addr); 
+    uint list_len, list_addr; bool looped_list; /* retrieve broadcasted data */
+    FUNC_DEVICE_RETRIEVE_LIST_TOPOLOGY(broadcast_anchor_id, /*out*/list_len, list_addr, looped_list); 
+    FUNC_DEVICE_STORE_LIST_TOPOLOGY(node_id, list_len, list_addr, looped_list); 
 
     /* Since each layer of spliced nodes form a independent set
      * read/write simutaneuosly to this buffer is safe here. */ 
@@ -511,6 +512,9 @@ void main()
 
 
 #ifdef _KERNEL_MULTICOMPILE__TEST_LIST_RANKING_OUTPUT
+
+#define OUTPUT_PASS_TYPE__TEST 0u
+#define OUTPUT_PASS_TYPE__CONTOUR_EDGE_LINKING 1u
 
 uint decode_rank(uint raw_rank, uint list_len) 
 {
@@ -536,8 +540,8 @@ void main()
 
 #if defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_OUTPUT__PASS_0)
     /* fetch ranking results */ 
-    uint head_node_id, list_len; 
-    FUNC_DEVICE_LOAD_LIST_TOPOLOGY(node_id, /*out*/list_len, /*out*/head_node_id);
+    uint head_node_id, list_len; bool looped_list; 
+    FUNC_DEVICE_LOAD_LIST_TOPOLOGY(node_id, /*out*/list_len, head_node_id, looped_list);
 
     uint list_addr = 0xffffffffu; 
     uint list_len_alloc = list_len; 

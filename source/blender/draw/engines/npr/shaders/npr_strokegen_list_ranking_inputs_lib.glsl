@@ -325,37 +325,49 @@ JumpingInfo func_device_update_anchor_jumping_info(
 #endif
 
 
-
-#if defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SUBLIST_POINTER_JUMPING)
-void func_device_broadcast_list_topology(uint broadcast_anchor_id, uint list_len, uint head_node_id)
+uint encode_list_head_id_and_flags(uint head_node_id, bool looped_list)
 {
-    ssbo_list_ranking_per_anchor_sublist_jumping_info_out_[broadcast_anchor_id * 2]     = head_node_id; 
+    return ((head_node_id << 1u) | (looped_list ? 1u : 0u)); 
+}
+void decode_list_head_id_and_flags(uint encoded, out uint head_node_id, out bool looped_list)
+{
+    looped_list  = (1u == (encoded & 1u)); 
+    head_node_id = (encoded >> 1u);
+}
+#if defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SUBLIST_POINTER_JUMPING)
+void func_device_broadcast_list_topology(uint broadcast_anchor_id, uint list_len, uint head_node_id, bool looped_list)
+{
+    uint encoded = encode_list_head_id_and_flags(head_node_id, looped_list); 
+    ssbo_list_ranking_per_anchor_sublist_jumping_info_out_[broadcast_anchor_id * 2] = encoded; 
     ssbo_list_ranking_per_anchor_sublist_jumping_info_out_[broadcast_anchor_id * 2 + 1] = list_len;  
 }
 #define FUNC_DEVICE_BROADCAST_LIST_TOPOLOGY func_device_broadcast_list_topology
 #endif
 
 #if defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_RELINKING) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SUBLIST_POINTER_JUMPING)
-void func_device_retrieve_list_topology(uint broadcast_anchor_id, out uint list_len, out uint head_node_id)
+void func_device_retrieve_list_topology(uint broadcast_anchor_id, out uint list_len, out uint head_node_id, out bool looped_list)
 {
-    head_node_id    = ssbo_list_ranking_per_anchor_sublist_jumping_info_in_[broadcast_anchor_id * 2]; 
+    uint encoded    = ssbo_list_ranking_per_anchor_sublist_jumping_info_in_[broadcast_anchor_id * 2]; 
+    decode_list_head_id_and_flags(encoded, head_node_id, looped_list);
     list_len        = ssbo_list_ranking_per_anchor_sublist_jumping_info_in_[broadcast_anchor_id * 2 + 1];  
 }
 #define FUNC_DEVICE_RETRIEVE_LIST_TOPOLOGY func_device_retrieve_list_topology
 
-void func_device_store_list_topology(uint node_id, uint list_len, uint list_start_addr)
+void func_device_store_list_topology(uint node_id, uint list_len, uint head_node_id, bool looped_list)
 {
-    ssbo_list_ranking_serialized_topo_[node_id * 2]     = list_start_addr; 
+    uint encoded = encode_list_head_id_and_flags(head_node_id, looped_list); 
+    ssbo_list_ranking_serialized_topo_[node_id * 2]     = encoded; 
     ssbo_list_ranking_serialized_topo_[node_id * 2 + 1] = list_len;  
 }
 #define FUNC_DEVICE_STORE_LIST_TOPOLOGY func_device_store_list_topology 
 #endif
 
 #if defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_OUTPUT)
-void func_device_load_list_topology(uint node_id, out uint list_len, out uint list_start_addr)
+void func_device_load_list_topology(uint node_id, out uint list_len, out uint head_node_id, out bool looped_list)
 {
-    list_start_addr = ssbo_list_ranking_serialized_topo_[node_id * 2]; 
-    list_len =        ssbo_list_ranking_serialized_topo_[node_id * 2 + 1];  
+    uint encoded = ssbo_list_ranking_serialized_topo_[node_id * 2]; 
+    decode_list_head_id_and_flags(encoded, head_node_id, looped_list);
+    list_len     = ssbo_list_ranking_serialized_topo_[node_id * 2 + 1];  
 }
 #define FUNC_DEVICE_LOAD_LIST_TOPOLOGY func_device_load_list_topology 
 

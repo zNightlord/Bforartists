@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Shared structures, enums & defines between C++ and GLSL.
  * Can also include some math functions but they need to be simple enough to be valid in both
  * language.
@@ -399,7 +399,7 @@ using namespace draw;
     uint num_edges;
     uint num_faces;
     uint num_contour_edges; // 4
-    uint num_contour_edges_curr;
+    uint num_contour_points;
     uint num_filtered_edges;
     uint num_filtered_verts;
     uint num_dbg_vnor_lines;  // 4

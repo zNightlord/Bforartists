@@ -24,7 +24,7 @@ void main()
 		ssbo_bnpr_mesh_pool_counters_.num_verts         		 = 0; 
 		ssbo_bnpr_mesh_pool_counters_.num_edges         		 = 0;
 		ssbo_bnpr_mesh_pool_counters_.num_faces         		 = 0; 
-		ssbo_bnpr_mesh_pool_counters_.num_contour_edges_curr = 0; 
+		ssbo_bnpr_mesh_pool_counters_.num_contour_points = 0; 
 		ssbo_bnpr_mesh_pool_counters_.num_filtered_edges = 0; 
 		ssbo_bnpr_mesh_pool_counters_.num_filtered_verts = 0; 
 		ssbo_bnpr_mesh_pool_counters_.num_dbg_vnor_lines = 0; 
@@ -35,7 +35,7 @@ void main()
 		ssbo_bnpr_mesh_pool_counters_prev_.num_verts         = 0; 
 		ssbo_bnpr_mesh_pool_counters_prev_.num_edges         = 0; 
 		ssbo_bnpr_mesh_pool_counters_prev_.num_faces         = 0; 
-		ssbo_bnpr_mesh_pool_counters_prev_.num_contour_edges_curr = 0; 
+		ssbo_bnpr_mesh_pool_counters_prev_.num_contour_points = 0; 
 		ssbo_bnpr_mesh_pool_counters_prev_.num_filtered_edges = 0; 
 		ssbo_bnpr_mesh_pool_counters_prev_.num_filtered_verts = 0; 
 		ssbo_bnpr_mesh_pool_counters_prev_.num_dbg_vnor_lines = 0; 
@@ -86,7 +86,7 @@ void main()
 		ssbo_bnpr_mesh_pool_counters_prev_.num_verts         = ssbo_bnpr_mesh_pool_counters_.num_verts; 
 		ssbo_bnpr_mesh_pool_counters_prev_.num_edges         = ssbo_bnpr_mesh_pool_counters_.num_edges; 
 		ssbo_bnpr_mesh_pool_counters_prev_.num_faces         = ssbo_bnpr_mesh_pool_counters_.num_faces; 
-		ssbo_bnpr_mesh_pool_counters_prev_.num_contour_edges_curr = ssbo_bnpr_mesh_pool_counters_.num_contour_edges_curr; 
+		ssbo_bnpr_mesh_pool_counters_prev_.num_contour_points = ssbo_bnpr_mesh_pool_counters_.num_contour_points; 
 		ssbo_bnpr_mesh_pool_counters_prev_.num_filtered_edges = ssbo_bnpr_mesh_pool_counters_.num_filtered_edges; 
 		ssbo_bnpr_mesh_pool_counters_prev_.num_filtered_verts = ssbo_bnpr_mesh_pool_counters_.num_filtered_verts; 
 		ssbo_bnpr_mesh_pool_counters_prev_.num_dbg_vnor_lines = ssbo_bnpr_mesh_pool_counters_.num_dbg_vnor_lines;
