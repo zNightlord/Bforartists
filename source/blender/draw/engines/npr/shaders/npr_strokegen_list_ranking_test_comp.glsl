@@ -355,8 +355,7 @@ void main()
             uint list_len = /* 1 +  */ji_updated.data; 
             if (IS_LOOP_RANKING_PASS()) list_len = ji_updated.data; 
 
-            // uint list_addr = FUNC_DEVICE_ALLOC_LIST_ADDR(list_len); 
-            FUNC_DEVICE_BROADCAST_LIST_TOPOLOGY(list_broadcast_anchor_id, list_len, node_id/* list_addr */); 
+            FUNC_DEVICE_BROADCAST_LIST_TOPOLOGY(list_broadcast_anchor_id, list_len, node_id); 
         }
     }
     /* At last loop-breaking-jump-iter, just output jumping results */
@@ -541,6 +540,7 @@ void main()
     FUNC_DEVICE_LOAD_LIST_TOPOLOGY(node_id, /*out*/list_len, /*out*/head_node_id);
 
     uint list_addr = 0xffffffffu; 
+    uint list_len_alloc = list_len; 
     if (node_id == head_node_id && valid_thread)
         list_addr = FUNC_DEVICE_ALLOC_LIST_ADDR(list_len); 
     barrier(); 
@@ -549,9 +549,9 @@ void main()
     node_rank = decode_rank(node_rank, list_len); 
 
     /* output */
-    ssbo_list_ranking_output_ranks_[node_id]        = node_rank;
-    ssbo_list_ranking_output_list_len_[node_id]     = list_len; 
-    ssbo_list_ranking_list_head_info_[node_id*2u]   = head_node_id;
+    ssbo_list_ranking_output_ranks_[node_id]         = node_rank;
+    ssbo_list_ranking_output_list_len_[node_id]      = list_len; 
+    ssbo_list_ranking_list_head_info_[node_id*2u]    = head_node_id;
     ssbo_list_ranking_list_head_info_[node_id*2u+1u] = list_addr; 
 #endif
 

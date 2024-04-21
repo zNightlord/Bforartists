@@ -74,7 +74,7 @@ namespace blender::npr::strokegen
     segscan_test_settings.shader_upsweep = eShaderType::SEGSCAN_TEST_UPSWEEP;
     segscan_test_settings.shader_aggregate = eShaderType::SEGSCAN_TEST_AGGREGATE;
     segscan_test_settings.shader_dwsweep = eShaderType::SEGSCAN_TEST_DWSWEEP;
-    rebuild_pass_segscan_test(segscan_test_settings, pass_segscan_test);
+    append_subpass_segscan(segscan_test_settings, pass_segscan_test);
 
     SegLoopConv1DSettings segloopconv1d_test_settings;
     segloopconv1d_test_settings.is_validation_shader = true;
@@ -86,7 +86,7 @@ namespace blender::npr::strokegen
     segloopconv1d_test_settings.shader_build_patch_table = CONV1D_TEST_BUILD_PATCH;
     segloopconv1d_test_settings.lazy_dispatch = false;
     segloopconv1d_test_settings.shader_convolution = CONV1D_TEST_CONVOLUTION; 
-    rebuild_pass_segloopconv1d(segloopconv1d_test_settings, pass_conv1d_test);
+    append_subpass_segloopconv1d(segloopconv1d_test_settings, pass_conv1d_test);
 
     append_subpass_list_ranking(ListRankingPassUsage::TestListRanking, pass_listranking_test, true);
 
@@ -1771,7 +1771,7 @@ namespace blender::npr::strokegen
       scan_settings.shader_aggregate = SEGSCAN_UINT_AGGREGATE;
       scan_settings.shader_dwsweep= SEGSCAN_UINT_DWSWEEP;
 
-      rebuild_pass_segscan_test(scan_settings, pass_process_contours); 
+      append_subpass_segscan(scan_settings, pass_process_contours); 
     }
     {
       ScanSettings scan_settings;
@@ -1786,7 +1786,7 @@ namespace blender::npr::strokegen
       scan_settings.shader_aggregate = SEGSCAN_UINT_AGGREGATE;
       scan_settings.shader_dwsweep= SEGSCAN_UINT_DWSWEEP;
 
-      rebuild_pass_segscan_test(scan_settings, pass_process_contours); 
+      append_subpass_segscan(scan_settings, pass_process_contours); 
     }
 
     {
@@ -1841,7 +1841,7 @@ namespace blender::npr::strokegen
       conv1d_settings.shader_build_patch_table = CONV1D_SEG_DENOISE_BUILD_PATCH;
       conv1d_settings.shader_convolution = CONV1D_SEG_DENOISE_CONVOLUTION;
 
-      rebuild_pass_segloopconv1d(conv1d_settings, pass_process_contours); 
+      append_subpass_segloopconv1d(conv1d_settings, pass_process_contours); 
     }
     append_subpass_contour_segmentation(); 
     append_subpass_calc_contour_edges_draw_data();
@@ -1942,7 +1942,7 @@ namespace blender::npr::strokegen
   }
 
   // TODO: we need to have single-pass version for this
-  void StrokeGenPassModule::rebuild_pass_segscan_test(
+  void StrokeGenPassModule::append_subpass_segscan(
     ScanSettings scan_settings, 
     PassSimple &pass)
   {
@@ -2010,7 +2010,7 @@ namespace blender::npr::strokegen
     }
   }
 
-  void StrokeGenPassModule::rebuild_pass_segloopconv1d(
+  void StrokeGenPassModule::append_subpass_segloopconv1d(
       SegLoopConv1DSettings settings, PassSimple& pass)
   {
     if (settings.is_validation_shader)

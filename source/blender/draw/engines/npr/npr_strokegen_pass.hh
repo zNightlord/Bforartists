@@ -418,7 +418,7 @@ public:
     eShaderType shader_aggregate;
     eShaderType shader_dwsweep;
   };
-  void rebuild_pass_segscan_test(ScanSettings scan_settings,
+  void append_subpass_segscan(ScanSettings scan_settings,
                                  PassSimple& pass);
   struct SegLoopConv1DSettings {
     bool is_validation_shader;
@@ -435,7 +435,7 @@ public:
     eShaderType shader_convolution;
   };
   bool test_segloopconv; 
-  void rebuild_pass_segloopconv1d(SegLoopConv1DSettings settings, PassSimple& pass);
+  void append_subpass_segloopconv1d(SegLoopConv1DSettings settings, PassSimple& pass);
 
   bool test_list_ranking; 
   bool test_looped_pass_list_ranking;
