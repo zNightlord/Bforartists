@@ -1698,7 +1698,7 @@ namespace blender::npr::strokegen
     auto bind_src = [&](draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub) {
       sub.bind_ssbo(0, buffers_.reused_ssbo_contour_edge_rank_());
       sub.bind_ssbo(1, buffers_.reused_ssbo_contour_edge_list_len_());
-      sub.bind_ssbo(2, buffers_.reused_ssbo_contour_edge_list_head_());
+      sub.bind_ssbo(2, buffers_.reused_ssbo_contour_edge_list_head_info_());
       sub.bind_ssbo(3, buffers_.reused_ssbo_contour_edge_transfer_data_());
       sub.bind_ssbo(4, buffers_.ssbo_contour_edge_rank_);
       sub.bind_ssbo(5, buffers_.ssbo_contour_edge_list_len_);
@@ -2103,9 +2103,8 @@ namespace blender::npr::strokegen
       sub.bind_ssbo(4, buffers_.ssbo_list_ranking_links_);
       sub.bind_ssbo(5, buffers_.ssbo_list_ranking_ranks_);
       sub.bind_ssbo(6, buffers_.ssbo_list_ranking_anchor_counters_);
-      sub.bind_ssbo(7, buffers_.ssbo_list_ranking_addressing_counters_);
-      sub.bind_ssbo(8, buffers_.ssbo_list_ranking_serialized_topo_);
-      sub.bind_ssbo(9, buffers_.ssbo_list_ranking_inputs_);
+      sub.bind_ssbo(7, buffers_.ssbo_list_ranking_serialized_topo_);
+      sub.bind_ssbo(8, buffers_.ssbo_list_ranking_inputs_);
       sub.bind_ubo(0, buffers_.ubo_list_ranking_splicing_);
       sub.push_constant("pc_listranking_splice_iter_", num_splice_iters);
       sub.push_constant("pc_listranking_jumping_iter_", jump_iter);
@@ -2286,22 +2285,27 @@ namespace blender::npr::strokegen
 
     // Output list rank, len, addr to custom buffers
     if (passType != ListRankingPassUsage::TestListRanking)
-    { 
-      auto& sub = pass_listranking.sub("strokegen_list_ranking_test_output");
-      sub.shader_set(shaders_.static_shader_get(LISTRANKING_OUTPUT_DATA));
-
-      sub.bind_ssbo(0, buffers_.ssbo_list_ranking_ranks_); 
-      sub.bind_ssbo(1, buffers_.ssbo_list_ranking_serialized_topo_);
-      sub.bind_ssbo(2, buffers_.ssbo_list_ranking_inputs_);
-      if (passType == ListRankingPassUsage::ContourEdgeLinking)
+    {
+      for (int i = 0; i < 2; ++i)
       {
-        sub.bind_ssbo(3, buffers_.reused_ssbo_contour_edge_rank_());
-        sub.bind_ssbo(4, buffers_.reused_ssbo_contour_edge_list_len_());
-        sub.bind_ssbo(5, buffers_.reused_ssbo_contour_edge_list_head_());
-      }
+        auto &sub = pass_listranking.sub("strokegen_list_ranking_test_output");
+        sub.shader_set(shaders_.static_shader_get(
+          i == 0 ? LISTRANKING_OUTPUT_DATA_PASS_0 : LISTRANKING_OUTPUT_DATA_PASS_1
+        ));
 
-      sub.dispatch(buffers_.ssbo_list_ranking_indirect_dispatch_args_per_anchor[0]);
-      sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_COMMAND);
+        sub.bind_ssbo(0, buffers_.ssbo_list_ranking_ranks_);
+        sub.bind_ssbo(1, buffers_.ssbo_list_ranking_serialized_topo_);
+        sub.bind_ssbo(2, buffers_.ssbo_list_ranking_inputs_);
+        sub.bind_ssbo(3, buffers_.ssbo_list_ranking_addressing_counters_);
+        if (passType == ListRankingPassUsage::ContourEdgeLinking) {
+          sub.bind_ssbo(4, buffers_.reused_ssbo_contour_edge_rank_());
+          sub.bind_ssbo(5, buffers_.reused_ssbo_contour_edge_list_len_());
+          sub.bind_ssbo(6, buffers_.reused_ssbo_contour_edge_list_head_info_());
+        }
+
+        sub.dispatch(buffers_.ssbo_list_ranking_indirect_dispatch_args_per_anchor[0]);
+        sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_COMMAND);
+      }
     }
   }
 

@@ -327,25 +327,18 @@ JumpingInfo func_device_update_anchor_jumping_info(
 
 
 #if defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SUBLIST_POINTER_JUMPING)
-uint func_allocate_space_for_list(uint list_len)
+void func_device_broadcast_list_topology(uint broadcast_anchor_id, uint list_len, uint head_node_id)
 {
-    uint list_start = atomicAdd(ssbo_list_ranking_addressing_counters_[0], list_len); 
-    return list_start;  
-}
-#define FUNC_DEVICE_ALLOC_LIST_ADDR func_allocate_space_for_list
-
-void func_device_broadcast_list_topology(uint broadcast_anchor_id, uint list_len, uint list_start_addr)
-{
-    ssbo_list_ranking_per_anchor_sublist_jumping_info_out_[broadcast_anchor_id * 2]     = list_start_addr; 
+    ssbo_list_ranking_per_anchor_sublist_jumping_info_out_[broadcast_anchor_id * 2]     = head_node_id; 
     ssbo_list_ranking_per_anchor_sublist_jumping_info_out_[broadcast_anchor_id * 2 + 1] = list_len;  
 }
 #define FUNC_DEVICE_BROADCAST_LIST_TOPOLOGY func_device_broadcast_list_topology
 #endif
 
 #if defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_RELINKING) || defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SUBLIST_POINTER_JUMPING)
-void func_device_retrieve_list_topology(uint broadcast_anchor_id, out uint list_len, out uint list_start_addr)
+void func_device_retrieve_list_topology(uint broadcast_anchor_id, out uint list_len, out uint head_node_id)
 {
-    list_start_addr = ssbo_list_ranking_per_anchor_sublist_jumping_info_in_[broadcast_anchor_id * 2]; 
+    head_node_id    = ssbo_list_ranking_per_anchor_sublist_jumping_info_in_[broadcast_anchor_id * 2]; 
     list_len        = ssbo_list_ranking_per_anchor_sublist_jumping_info_in_[broadcast_anchor_id * 2 + 1];  
 }
 #define FUNC_DEVICE_RETRIEVE_LIST_TOPOLOGY func_device_retrieve_list_topology
@@ -365,6 +358,13 @@ void func_device_load_list_topology(uint node_id, out uint list_len, out uint li
     list_len =        ssbo_list_ranking_serialized_topo_[node_id * 2 + 1];  
 }
 #define FUNC_DEVICE_LOAD_LIST_TOPOLOGY func_device_load_list_topology 
+
+uint func_allocate_space_for_list(uint list_len)
+{
+    uint list_start = atomicAdd(ssbo_list_ranking_addressing_counters_[0], list_len); 
+    return list_start;  
+}
+#define FUNC_DEVICE_ALLOC_LIST_ADDR func_allocate_space_for_list
 #endif
 
 

@@ -355,8 +355,8 @@ void main()
             uint list_len = /* 1 +  */ji_updated.data; 
             if (IS_LOOP_RANKING_PASS()) list_len = ji_updated.data; 
 
-            uint list_addr = FUNC_DEVICE_ALLOC_LIST_ADDR(list_len); 
-            FUNC_DEVICE_BROADCAST_LIST_TOPOLOGY(list_broadcast_anchor_id, list_len, list_addr); 
+            // uint list_addr = FUNC_DEVICE_ALLOC_LIST_ADDR(list_len); 
+            FUNC_DEVICE_BROADCAST_LIST_TOPOLOGY(list_broadcast_anchor_id, list_len, node_id/* list_addr */); 
         }
     }
     /* At last loop-breaking-jump-iter, just output jumping results */
@@ -534,18 +534,36 @@ void main()
     bool valid_thread = (node_id < num_nodes_total); 
     if (!valid_thread) return; /* invalid thread, do nothing */
 
-    
+
+#if defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_OUTPUT__PASS_0)
     /* fetch ranking results */ 
-    uint list_addr, list_len; 
-    FUNC_DEVICE_LOAD_LIST_TOPOLOGY(node_id, /*out*/list_len, /*out*/list_addr);
+    uint head_node_id, list_len; 
+    FUNC_DEVICE_LOAD_LIST_TOPOLOGY(node_id, /*out*/list_len, /*out*/head_node_id);
+
+    uint list_addr = 0xffffffffu; 
+    if (node_id == head_node_id && valid_thread)
+        list_addr = FUNC_DEVICE_ALLOC_LIST_ADDR(list_len); 
+    barrier(); 
 
     uint node_rank = FUNC_DEVICE_LOAD_LISTRANKING_NODE_RANK(node_id); 
     node_rank = decode_rank(node_rank, list_len); 
 
     /* output */
-    ssbo_list_ranking_output_ranks_[node_id]     = node_rank;
-    ssbo_list_ranking_output_list_len_[node_id]  = list_len; 
-    ssbo_list_ranking_output_list_addr_[node_id] = list_addr; 
+    ssbo_list_ranking_output_ranks_[node_id]        = node_rank;
+    ssbo_list_ranking_output_list_len_[node_id]     = list_len; 
+    ssbo_list_ranking_list_head_info_[node_id*2u]   = head_node_id;
+    ssbo_list_ranking_list_head_info_[node_id*2u+1u] = list_addr; 
+#endif
+
+
+#if defined(_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_OUTPUT__PASS_1)
+    uint head_node_id = ssbo_list_ranking_list_head_info_[node_id*2u]; 
+    if (node_id != head_node_id && valid_thread)
+    { // broadcast form head to all nodes
+        uint list_addr = ssbo_list_ranking_list_head_info_[head_node_id*2u+1u];
+        ssbo_list_ranking_list_head_info_[node_id*2u+1u] = list_addr;  
+    }
+#endif
 }
 
 #endif

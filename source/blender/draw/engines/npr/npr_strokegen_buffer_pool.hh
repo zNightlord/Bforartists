@@ -263,7 +263,7 @@ class GPUBufferPoolModule {
   {
     return ssbo_mesh_buffer_reuse_2_; 
   }
-  inline GPUStorageBuf *reused_ssbo_contour_edge_list_head_()
+  inline GPUStorageBuf *reused_ssbo_contour_edge_list_head_info_()
   {
     return ssbo_mesh_buffer_reuse_8_; 
   }

@@ -15,7 +15,7 @@ void main()
 	bool valid_thread = contour_id < num_contours; 
 
 #if defined(_KERNEL_MULTICOMPILE__CONTOUR_SERIALIZATION__PASS_0)
-    uint head_contour_id = ssbo_contour_edge_list_head_in_[contour_id];
+    uint serialized_head_id = ssbo_list_ranking_list_head_info_[contour_id*2u + 1u];
     uint list_len        = ssbo_contour_edge_list_len_in_[contour_id]; 
     uint rank            = ssbo_contour_edge_rank_in_[contour_id]; 
 
@@ -25,13 +25,13 @@ void main()
 	uint prev_contour_id = ssbo_contour_to_contour_[2u*contour_id]; 
 	bool prev_equ_self = prev_contour_id == contour_id; 
     
-    uint output_addr = head_contour_id + rank; 
+    uint output_addr = serialized_head_id + rank; 
     if (valid_thread)
     {
 		// transfer topology data from list ranking
         ssbo_contour_edge_rank_out_[output_addr]      = rank; 
         ssbo_contour_edge_list_len_out_[output_addr]  = list_len;
-        ssbo_contour_edge_list_head_out_[output_addr] = head_contour_id;
+        ssbo_contour_edge_list_head_out_[output_addr] = serialized_head_id;
 
 		// transfer packed data from the intermediate buffer
 		uvec4 enc_data[2];

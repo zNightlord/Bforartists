@@ -174,7 +174,7 @@ GPU_SHADER_CREATE_INFO(strokegen_serialize_contour_edges)
 
     .storage_buf(0, Qualifier::READ, "uint", "ssbo_contour_edge_rank_in_[]")
     .storage_buf(1, Qualifier::READ, "uint", "ssbo_contour_edge_list_len_in_[]")
-    .storage_buf(2, Qualifier::READ, "uint", "ssbo_contour_edge_list_head_in_[]")
+    .storage_buf(2, Qualifier::READ, "uint", "ssbo_list_ranking_list_head_info_[]")
     .storage_buf(3, Qualifier::READ, "uint", "ssbo_contour_edge_transfer_data_[]")
     .storage_buf(4, Qualifier::WRITE, "uint", "ssbo_contour_edge_rank_out_[]")
     .storage_buf(5, Qualifier::WRITE, "uint", "ssbo_contour_edge_list_len_out_[]")
@@ -1803,9 +1803,8 @@ GPU_SHADER_CREATE_INFO(strokegen_list_ranking_test_sublist_pointer_jumping)
     .storage_buf(4, Qualifier::READ_WRITE, "uint", "ssbo_list_ranking_links_[]")
     .storage_buf(5, Qualifier::READ_WRITE, "uint", "ssbo_list_ranking_ranks_[]")
     .storage_buf(6, Qualifier::READ, "uint", "ssbo_list_ranking_anchor_counters_[]")
-    .storage_buf(7, Qualifier::READ_WRITE, "uint", "ssbo_list_ranking_addressing_counters_[]") 
-    .storage_buf(8, Qualifier::WRITE, "uint", "ssbo_list_ranking_serialized_topo_[]")
-    .storage_buf(9, Qualifier::READ, "SSBOData_ListRankingInputs", "ssbo_list_ranking_inputs_")
+    .storage_buf(7, Qualifier::WRITE, "uint", "ssbo_list_ranking_serialized_topo_[]")
+    .storage_buf(8, Qualifier::READ, "SSBOData_ListRankingInputs", "ssbo_list_ranking_inputs_")
     .uniform_buf(0, "UBData_ListRanking", "ubo_list_ranking_splicing_")
     .push_constant(Type::INT, "pc_listranking_splice_iter_")
     .push_constant(Type::INT, "pc_listranking_jumping_iter_")
@@ -1870,11 +1869,21 @@ GPU_SHADER_CREATE_INFO(strokegen_list_ranking_test_output)
     .storage_buf(0, Qualifier::READ_WRITE, "uint", "ssbo_list_ranking_ranks_[]")
     .storage_buf(1, Qualifier::READ, "uint", "ssbo_list_ranking_serialized_topo_[]")
     .storage_buf(2, Qualifier::READ, "SSBOData_ListRankingInputs", "ssbo_list_ranking_inputs_")
-    .storage_buf(3, Qualifier::WRITE, "uint", "ssbo_list_ranking_output_ranks_[]")
-    .storage_buf(4, Qualifier::WRITE, "uint", "ssbo_list_ranking_output_list_len_[]")
-    .storage_buf(5, Qualifier::WRITE, "uint", "ssbo_list_ranking_output_list_addr_[]")
+    .storage_buf(3, Qualifier::READ_WRITE, "uint", "ssbo_list_ranking_addressing_counters_[]")
+    .storage_buf(4, Qualifier::READ_WRITE, "uint", "ssbo_list_ranking_output_ranks_[]")
+    .storage_buf(5, Qualifier::READ_WRITE, "uint", "ssbo_list_ranking_output_list_len_[]")
+    .storage_buf(6, Qualifier::READ_WRITE, "uint", "ssbo_list_ranking_list_head_info_[]")
 
     .local_group_size(GROUP_SIZE_BNPR_LIST_RANK_TEST)
     .compute_source("npr_strokegen_list_ranking_test_comp.glsl");
+
+GPU_SHADER_CREATE_INFO(strokegen_list_ranking_test_output_pass_0)
+    .additional_info("strokegen_list_ranking_test_output")
+    .define("_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_OUTPUT__PASS_0", "1");
+
+GPU_SHADER_CREATE_INFO(strokegen_list_ranking_test_output_pass_1)
+    .additional_info("strokegen_list_ranking_test_output")
+    .define("_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_OUTPUT__PASS_1", "1");
+
 
 /** \} */
