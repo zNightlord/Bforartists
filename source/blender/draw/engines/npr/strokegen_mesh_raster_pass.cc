@@ -43,12 +43,12 @@ void npr::strokegen::StrokegenMeshRasterPass::init_pass(
 void npr::strokegen::StrokegenMeshRasterPass::append_draw_contour_subpass(
   StrokeGenShaderModule& shaders, GPUBufferPoolModule& buffers, GPUTexturePoolModule& textures)
 {
-  draw::PassMain::Sub* subpass = &sub("strokegen raster pass");
+  draw::PassMain::Sub* subpass = &sub("bnpr_geom_draw_contour_edges");
   subpass->shader_set(shaders.static_shader_get(eShaderType::INDIRECT_DRAW_CONTOUR_EDGES));
 
   subpass->bind_ssbo(0, buffers.reused_ssbo_bnpr_mesh_pool_());
   subpass->bind_ssbo(1, buffers.ssbo_bnpr_mesh_pool_counters_);
-  subpass->bind_ssbo(2, buffers.ssbo_contour_edge_rank_);
+  subpass->bind_ssbo(2, buffers.ssbo_contour_snake_rank_);
   subpass->bind_ssbo(3, buffers.ssbo_contour_edge_list_len_);
   subpass->bind_ssbo(4, buffers.ssbo_contour_edge_list_head_);
   subpass->bind_ssbo(5, buffers.reused_ssbo_contour_to_contour_());

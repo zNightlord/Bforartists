@@ -54,7 +54,7 @@ uint get_num_items()
 #if defined(_KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__SEG_DENOISING)
     void FUNC_GET_LOOP_TOPOLOGY(uint elem_id, out bool seg_is_loop, out uint seg_head_id, out uint seg_tail_id, out uint seg_len)
     {
-        uint rank = ssbo_contour_edge_rank_[elem_id];
+        uint rank = ssbo_contour_snake_rank_[elem_id];
         seg_head_id = elem_id - rank; 
 
         uint len = ssbo_contour_edge_list_len_[elem_id];

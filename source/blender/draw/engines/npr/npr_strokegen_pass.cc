@@ -1717,7 +1717,7 @@ namespace blender::npr::strokegen
       sub.bind_ssbo(1, buffers_.reused_ssbo_contour_edge_list_len_());
       sub.bind_ssbo(2, buffers_.reused_ssbo_contour_edge_list_head_info_());
       sub.bind_ssbo(3, buffers_.reused_ssbo_contour_edge_transfer_data_());
-      sub.bind_ssbo(4, buffers_.ssbo_contour_edge_rank_);
+      sub.bind_ssbo(4, buffers_.ssbo_contour_snake_rank_);
       sub.bind_ssbo(5, buffers_.ssbo_contour_edge_list_len_);
       sub.bind_ssbo(6, buffers_.ssbo_contour_edge_list_head_);
       sub.bind_ssbo(7, buffers_.ssbo_contour_edge_vpos_);
@@ -1752,7 +1752,7 @@ namespace blender::npr::strokegen
   void StrokeGenPassModule::append_subpass_contour_segmentation()
   {
     auto bind_rsc = [&](draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub) {
-      sub.bind_ssbo(0, buffers_.ssbo_contour_edge_rank_);
+      sub.bind_ssbo(0, buffers_.ssbo_contour_snake_rank_);
       sub.bind_ssbo(1, buffers_.ssbo_contour_edge_list_len_);
       sub.bind_ssbo(2, buffers_.ssbo_contour_edge_list_head_);
       sub.bind_ssbo(3, buffers_.ssbo_contour_edge_flags_);
@@ -1823,7 +1823,7 @@ namespace blender::npr::strokegen
     auto &sub = pass_process_contours.sub("strokegen_calc_contour_edges_draw_data"); 
     sub.shader_set(shaders_.static_shader_get(CALC_CONTOUR_EDGES_DRAW_DATA));
 
-    sub.bind_ssbo(0, buffers_.ssbo_contour_edge_rank_);
+    sub.bind_ssbo(0, buffers_.ssbo_contour_snake_rank_);
     sub.bind_ssbo(1, buffers_.ssbo_contour_edge_list_len_);
     sub.bind_ssbo(2, buffers_.ssbo_contour_edge_list_head_);
     sub.bind_ssbo(3, buffers_.ssbo_contour_edge_vpos_);
@@ -2059,7 +2059,7 @@ namespace blender::npr::strokegen
       if (settings.is_validation_shader)
         sub.bind_ssbo(2, buffers_.ssbo_debug_segloopconv1d_data_);
       else if (settings.shader_build_patch_table == CONV1D_SEG_DENOISE_BUILD_PATCH) {
-        sub.bind_ssbo(2, buffers_.ssbo_contour_edge_rank_);
+        sub.bind_ssbo(2, buffers_.ssbo_contour_snake_rank_);
         sub.bind_ssbo(3, buffers_.ssbo_contour_edge_list_len_);
         sub.bind_ssbo(4, buffers_.ssbo_contour_edge_flags_); 
       }
@@ -2084,7 +2084,7 @@ namespace blender::npr::strokegen
       if (settings.is_validation_shader)
         sub.bind_ssbo(4, buffers_.ssbo_debug_segloopconv1d_data_);
       else if (settings.shader_convolution == CONV1D_SEG_DENOISE_CONVOLUTION) {
-        sub.bind_ssbo(4, buffers_.ssbo_contour_edge_rank_);
+        sub.bind_ssbo(4, buffers_.ssbo_contour_snake_rank_);
         sub.bind_ssbo(5, buffers_.ssbo_contour_edge_list_len_);
       }
       sub.bind_ubo(0, buffers_.ubo_segloopconv1d_);

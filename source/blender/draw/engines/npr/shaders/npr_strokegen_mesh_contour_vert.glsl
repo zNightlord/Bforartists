@@ -36,7 +36,7 @@ void main()
 
 
     // Debug stroke topo
-    uint contour_edge_rank = ssbo_contour_edge_rank_[contour_edge_id]; 
+    uint contour_edge_rank = ssbo_contour_snake_rank_[contour_edge_id]; 
     uint contour_edge_list_len = ssbo_contour_edge_list_len_[contour_edge_id]; 
     float contour_edge_param = float(contour_edge_rank) / float(contour_edge_list_len); 
     uint contour_edge_list_head = ssbo_contour_edge_list_head_[contour_edge_id]; 
@@ -50,7 +50,7 @@ void main()
         ssbo_contour_to_contour_[2*end_node_id], 
         ssbo_contour_to_contour_[2*end_node_id+1u]
     ); 
-	uint end_node_rank = ssbo_contour_edge_rank_[end_node_id]; 
+	uint end_node_rank = ssbo_contour_snake_rank_[end_node_id]; 
 
     
 
