@@ -527,10 +527,12 @@ namespace blender::npr::strokegen
       }
     }
 
-    if (meshing_params.subdiv_type == 0) 
-      append_subpasses_sqrt_subdiv(num_edges, num_verts);
-    else
-      append_subpasses_loop_subdiv(num_edges, num_verts);
+    if (meshing_params.contour_mode != ContourType::Raw) {
+      if (meshing_params.subdiv_type == 0)
+        append_subpasses_sqrt_subdiv(num_edges, num_verts);
+      else
+        append_subpasses_loop_subdiv(num_edges, num_verts);
+    }
 
     // test interpolated contour tessellation
     if (meshing_params.contour_mode != ContourType::Raw) {
@@ -1719,7 +1721,7 @@ namespace blender::npr::strokegen
       sub.bind_ssbo(3, buffers_.reused_ssbo_contour_edge_transfer_data_());
       sub.bind_ssbo(4, buffers_.ssbo_contour_snake_rank_);
       sub.bind_ssbo(5, buffers_.ssbo_contour_snake_list_len_);
-      sub.bind_ssbo(6, buffers_.ssbo_contour_edge_list_head_);
+      sub.bind_ssbo(6, buffers_.ssbo_contour_snake_list_head_);
       sub.bind_ssbo(7, buffers_.ssbo_contour_edge_vpos_);
       sub.bind_ssbo(8, buffers_.ssbo_contour_edge_flags_);
       sub.bind_ssbo(9, buffers_.reused_ssbo_contour_to_contour_());
@@ -1754,7 +1756,7 @@ namespace blender::npr::strokegen
     auto bind_rsc = [&](draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub) {
       sub.bind_ssbo(0, buffers_.ssbo_contour_snake_rank_);
       sub.bind_ssbo(1, buffers_.ssbo_contour_snake_list_len_);
-      sub.bind_ssbo(2, buffers_.ssbo_contour_edge_list_head_);
+      sub.bind_ssbo(2, buffers_.ssbo_contour_snake_list_head_);
       sub.bind_ssbo(3, buffers_.ssbo_contour_edge_flags_);
       sub.bind_ssbo(4, buffers_.reused_ssbo_tree_scan_input_contour_segmentation_step_0());
       sub.bind_ssbo(5, buffers_.reused_ssbo_tree_scan_input_contour_segmentation_step_1());
@@ -1825,7 +1827,7 @@ namespace blender::npr::strokegen
 
     sub.bind_ssbo(0, buffers_.ssbo_contour_snake_rank_);
     sub.bind_ssbo(1, buffers_.ssbo_contour_snake_list_len_);
-    sub.bind_ssbo(2, buffers_.ssbo_contour_edge_list_head_);
+    sub.bind_ssbo(2, buffers_.ssbo_contour_snake_list_head_);
     sub.bind_ssbo(3, buffers_.ssbo_contour_edge_vpos_);
     sub.bind_ssbo(4, buffers_.ssbo_contour_edge_flags_); 
     sub.bind_ssbo(5, buffers_.reused_ssbo_bnpr_mesh_pool_());

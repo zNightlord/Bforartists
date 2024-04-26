@@ -39,7 +39,7 @@ void main()
     uint contour_edge_rank = ssbo_contour_snake_rank_[contour_edge_id]; 
     uint contour_edge_list_len = ssbo_contour_snake_list_len_[contour_edge_id]; 
     float contour_edge_param = float(contour_edge_rank) / float(contour_edge_list_len); 
-    uint contour_edge_list_head = ssbo_contour_edge_list_head_[contour_edge_id]; 
+    uint contour_edge_list_head = ssbo_contour_snake_list_head_[contour_edge_id]; 
     uint contour_seg_rank = ssbo_contour_edge_seg_rank_[contour_edge_id];
     uint contour_seg_len = ssbo_contour_edge_seg_len_[contour_edge_id];
     uint prev_contour_id = ssbo_contour_to_contour_[2*contour_edge_id];

@@ -81,7 +81,7 @@ class GPUBufferPoolModule {
   SSBO_StrokeGenMeshBufPerEdge<uint, 6> ssbo_dbg_lines_;                        // 256MB   
   SSBO_StrokeGenMeshBufPerContour<uint, 1> ssbo_contour_snake_rank_;       // 
   SSBO_StrokeGenMeshBufPerContour<uint, 1> ssbo_contour_snake_list_len_;   // 
-  SSBO_StrokeGenMeshBufPerContour<uint, 1> ssbo_contour_edge_list_head_;  //
+  SSBO_StrokeGenMeshBufPerContour<uint, 1> ssbo_contour_snake_list_head_;  //
   SSBO_StrokeGenMeshBufPerContour<uint, 1> ssbo_contour_edge_seg_rank_;   //
   SSBO_StrokeGenMeshBufPerContour<uint, 1> ssbo_contour_edge_seg_len_;    //
   SSBO_StrokeGenMeshBufPerContour<uint, 6> ssbo_contour_edge_vpos_;       //

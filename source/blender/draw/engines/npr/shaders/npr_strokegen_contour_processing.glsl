@@ -39,12 +39,12 @@ void main()
 		// transfer topology data from list ranking
         ssbo_contour_snake_rank_[vtx_addr]      = vtx_rank_in_curve; 
         ssbo_contour_snake_list_len_[vtx_addr]  = num_verts_in_curve;
-        ssbo_contour_edge_list_head_out_[vtx_addr] = head_vtx_addr;
+        ssbo_contour_snake_list_head_[vtx_addr] = head_vtx_addr;
 		if (additional_output_tail_vtx)
 		{ // last edge outputs its end vertex
 			ssbo_contour_snake_rank_[vtx_addr + 1u]      = vtx_rank_in_curve + 1; 
 			ssbo_contour_snake_list_len_[vtx_addr + 1u]  = num_verts_in_curve;
-			ssbo_contour_edge_list_head_out_[vtx_addr + 1u] = head_vtx_addr;
+			ssbo_contour_snake_list_head_[vtx_addr + 1u] = head_vtx_addr;
 		}
 
 		// transfer packed edge data from the intermediate buffer
@@ -71,7 +71,7 @@ void main()
 #endif
 
 #if defined(_KERNEL_MULTICOMPILE__CONTOUR_SERIALIZATION__PASS_1)
-    uint head_contour_id = ssbo_contour_edge_list_head_out_[contour_id];
+    uint head_contour_id = ssbo_contour_snake_list_head_[contour_id];
 
 	ContourFlags cf = load_contour_flags(contour_id);
 	ContourFlags cf_head = load_contour_flags(head_contour_id); 
