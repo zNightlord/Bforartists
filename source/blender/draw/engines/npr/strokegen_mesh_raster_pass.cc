@@ -49,7 +49,7 @@ void npr::strokegen::StrokegenMeshRasterPass::append_draw_contour_subpass(
   subpass->bind_ssbo(0, buffers.reused_ssbo_bnpr_mesh_pool_());
   subpass->bind_ssbo(1, buffers.ssbo_bnpr_mesh_pool_counters_);
   subpass->bind_ssbo(2, buffers.ssbo_contour_snake_rank_);
-  subpass->bind_ssbo(3, buffers.ssbo_contour_edge_list_len_);
+  subpass->bind_ssbo(3, buffers.ssbo_contour_snake_list_len_);
   subpass->bind_ssbo(4, buffers.ssbo_contour_edge_list_head_);
   subpass->bind_ssbo(5, buffers.reused_ssbo_contour_to_contour_());
   subpass->bind_ssbo(6, buffers.ssbo_contour_edge_seg_rank_);

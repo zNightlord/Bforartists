@@ -57,7 +57,7 @@ uint get_num_items()
         uint rank = ssbo_contour_snake_rank_[elem_id];
         seg_head_id = elem_id - rank; 
 
-        uint len = ssbo_contour_edge_list_len_[elem_id];
+        uint len = ssbo_contour_snake_list_len_[elem_id];
         seg_len = len; 
 
         seg_tail_id = seg_head_id + len - 1u; 

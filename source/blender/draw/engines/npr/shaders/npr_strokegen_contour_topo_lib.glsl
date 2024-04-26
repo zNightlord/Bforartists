@@ -90,7 +90,7 @@ ContourCurveTopo load_contour_curve_topo(uint contour_id, ContourFlags cf)
     ContourCurveTopo cct; 
     cct.looped_curve    = cf.looped_curve; 
     cct.head_contour_id = ssbo_contour_edge_list_head_[contour_id]; 
-    cct.len             = ssbo_contour_edge_list_len_[contour_id]; 
+    cct.len             = ssbo_contour_snake_list_len_[contour_id]; 
     cct.tail_contour_id = cct.head_contour_id + cct.len - 1u;  
     return cct; 
 }

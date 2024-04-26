@@ -38,12 +38,12 @@ void main()
     {
 		// transfer topology data from list ranking
         ssbo_contour_snake_rank_[vtx_addr]      = vtx_rank_in_curve; 
-        ssbo_contour_edge_list_len_out_[vtx_addr]  = num_verts_in_curve;
+        ssbo_contour_snake_list_len_[vtx_addr]  = num_verts_in_curve;
         ssbo_contour_edge_list_head_out_[vtx_addr] = head_vtx_addr;
 		if (additional_output_tail_vtx)
 		{ // last edge outputs its end vertex
 			ssbo_contour_snake_rank_[vtx_addr + 1u]      = vtx_rank_in_curve + 1; 
-			ssbo_contour_edge_list_len_out_[vtx_addr + 1u]  = num_verts_in_curve;
+			ssbo_contour_snake_list_len_[vtx_addr + 1u]  = num_verts_in_curve;
 			ssbo_contour_edge_list_head_out_[vtx_addr + 1u] = head_vtx_addr;
 		}
 
