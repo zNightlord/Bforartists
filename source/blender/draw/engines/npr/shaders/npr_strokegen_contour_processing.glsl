@@ -59,11 +59,11 @@ void main()
 		ContourFlags cf = decode_contour_flags(enc_data[1].z); 
 		cf.looped_curve = looped_curve;
 
-		Store3(ssbo_contour_edge_vpos_out_, vtx_addr, vpos_0_enc);
+		Store3(ssbo_contour_snake_vpos_, vtx_addr, vpos_0_enc);
 		store_contour_flags(vtx_addr, cf); 
 		if (additional_output_tail_vtx)
 		{
-        	Store3(ssbo_contour_edge_vpos_out_, vtx_addr+1u, vpos_1_enc);
+        	Store3(ssbo_contour_snake_vpos_, vtx_addr+1u, vpos_1_enc);
 			cf.seg_head = false; 
 			store_contour_flags(vtx_addr+1u, cf);
 		}
@@ -201,8 +201,8 @@ void main()
 	if (valid_thread)
 	{ // Store to buffer
 		// Update seg_rank & seg_len
-		ssbo_contour_edge_seg_rank_[contour_id] = seg_rank;
-		ssbo_contour_edge_seg_len_[contour_id] = seg_len;
+		ssbo_contour_snake_seg_rank_[contour_id] = seg_rank;
+		ssbo_contour_snake_seg_len_[contour_id] = seg_len;
 
 		// TODO: Update seg_head/tail for curve head/tail in next pass
 		// cannot do it here due to data racing
@@ -262,8 +262,8 @@ void main()
 	{ /* read vertex pos transformed to world space */
 	  /* Note: wpos_and_edgeid will be overwrite, for saving space */
         uvec3 vpos_0_enc, vpos_1_enc;
-        Load3(ssbo_contour_edge_vpos_, contour_id,    	vpos_0_enc);
-        Load3(ssbo_contour_edge_vpos_, next_contour_id, vpos_1_enc);
+        Load3(ssbo_contour_snake_vpos_, contour_id,    	vpos_0_enc);
+        Load3(ssbo_contour_snake_vpos_, next_contour_id, vpos_1_enc);
         vec3 vpos_0, vpos_1;
         vpos_0 = uintBitsToFloat(vpos_0_enc);
         vpos_1 = uintBitsToFloat(vpos_1_enc);

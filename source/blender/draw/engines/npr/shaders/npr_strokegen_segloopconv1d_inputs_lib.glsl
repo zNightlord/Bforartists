@@ -63,7 +63,7 @@ uint get_num_items()
         seg_tail_id = seg_head_id + len - 1u; 
 
         #if defined(_KERNEL_MULTICOMPILE__1DSEGLOOP_BUILD_PATCH_TABLE)
-            ContourFlags cfs = decode_contour_flags(ssbo_contour_edge_flags_[elem_id]);
+            ContourFlags cfs = decode_contour_flags(ssbo_contour_snake_flags_[elem_id]);
         #endif
         #if defined(_KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION)
             ContourFlags cfs = decode_contour_flags(ssbo_in_segloopconv1d_data_[elem_id]);

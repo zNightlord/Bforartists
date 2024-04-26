@@ -44,11 +44,11 @@ ContourFlags init_contour_flags(bool seg_head)
 #if defined(INCLUDE_CONTOUR_FLAGS_LOAD_STORE)
 void store_contour_flags(uint contour_id, ContourFlags cf)
 {
-    ssbo_contour_edge_flags_[contour_id] = encode_contour_flags(cf); 
+    ssbo_contour_snake_flags_[contour_id] = encode_contour_flags(cf); 
 }
 ContourFlags load_contour_flags(uint contour_id)
 {
-    return decode_contour_flags(ssbo_contour_edge_flags_[contour_id]); 
+    return decode_contour_flags(ssbo_contour_snake_flags_[contour_id]); 
 }
 #endif
 

@@ -1722,8 +1722,8 @@ namespace blender::npr::strokegen
       sub.bind_ssbo(4, buffers_.ssbo_contour_snake_rank_);
       sub.bind_ssbo(5, buffers_.ssbo_contour_snake_list_len_);
       sub.bind_ssbo(6, buffers_.ssbo_contour_snake_list_head_);
-      sub.bind_ssbo(7, buffers_.ssbo_contour_edge_vpos_);
-      sub.bind_ssbo(8, buffers_.ssbo_contour_edge_flags_);
+      sub.bind_ssbo(7, buffers_.ssbo_contour_snake_vpos_);
+      sub.bind_ssbo(8, buffers_.ssbo_contour_snake_flags_);
       sub.bind_ssbo(9, buffers_.reused_ssbo_contour_to_contour_());
       sub.bind_ssbo(10, buffers_.ssbo_bnpr_mesh_pool_counters_);
       sub.bind_ssbo(11, buffers_.ssbo_segloopconv1d_info_);
@@ -1757,13 +1757,13 @@ namespace blender::npr::strokegen
       sub.bind_ssbo(0, buffers_.ssbo_contour_snake_rank_);
       sub.bind_ssbo(1, buffers_.ssbo_contour_snake_list_len_);
       sub.bind_ssbo(2, buffers_.ssbo_contour_snake_list_head_);
-      sub.bind_ssbo(3, buffers_.ssbo_contour_edge_flags_);
+      sub.bind_ssbo(3, buffers_.ssbo_contour_snake_flags_);
       sub.bind_ssbo(4, buffers_.reused_ssbo_tree_scan_input_contour_segmentation_step_0());
       sub.bind_ssbo(5, buffers_.reused_ssbo_tree_scan_input_contour_segmentation_step_1());
       sub.bind_ssbo(6, buffers_.reused_ssbo_tree_scan_output_contour_segmentation_step_0());
       sub.bind_ssbo(7, buffers_.reused_ssbo_tree_scan_output_contour_segmentation_step_1());
-      sub.bind_ssbo(8, buffers_.ssbo_contour_edge_seg_rank_);
-      sub.bind_ssbo(9, buffers_.ssbo_contour_edge_seg_len_);
+      sub.bind_ssbo(8, buffers_.ssbo_contour_snake_seg_rank_);
+      sub.bind_ssbo(9, buffers_.ssbo_contour_snake_seg_len_);
       sub.bind_ssbo(10, buffers_.reused_ssbo_tree_scan_infos_contour_segmentation_());
       sub.bind_ssbo(11, buffers_.ssbo_bnpr_mesh_pool_counters_);
     }; 
@@ -1828,8 +1828,8 @@ namespace blender::npr::strokegen
     sub.bind_ssbo(0, buffers_.ssbo_contour_snake_rank_);
     sub.bind_ssbo(1, buffers_.ssbo_contour_snake_list_len_);
     sub.bind_ssbo(2, buffers_.ssbo_contour_snake_list_head_);
-    sub.bind_ssbo(3, buffers_.ssbo_contour_edge_vpos_);
-    sub.bind_ssbo(4, buffers_.ssbo_contour_edge_flags_); 
+    sub.bind_ssbo(3, buffers_.ssbo_contour_snake_vpos_);
+    sub.bind_ssbo(4, buffers_.ssbo_contour_snake_flags_); 
     sub.bind_ssbo(5, buffers_.reused_ssbo_bnpr_mesh_pool_());
     sub.bind_ssbo(6, buffers_.ssbo_bnpr_mesh_pool_counters_);
     sub.bind_ssbo(7, buffers_.reused_ssbo_tree_scan_infos_contour_segmentation_()); 
@@ -1859,7 +1859,7 @@ namespace blender::npr::strokegen
     //   conv1d_settings.ssbo_segloopconv1d_info_ = buffers_.ssbo_segloopconv1d_info_;
     //   conv1d_settings.ssbo_segloopconv1d_patch_table_ = buffers_.ssbo_segloopconv1d_patch_table_;
     //   conv1d_settings.ssbo_in_segloopconv1d_data_ = buffers_.reused_ssbo_in_segloopconv1d_data_contour_seg_denoise();
-    //   conv1d_settings.ssbo_out_segloopconv1d_data_ = buffers_.ssbo_contour_edge_flags_;
+    //   conv1d_settings.ssbo_out_segloopconv1d_data_ = buffers_.ssbo_contour_snake_flags_;
     //   conv1d_settings.shader_build_patch_table = CONV1D_SEG_DENOISE_BUILD_PATCH;
     //   conv1d_settings.shader_convolution = CONV1D_SEG_DENOISE_CONVOLUTION;
     //
@@ -2063,7 +2063,7 @@ namespace blender::npr::strokegen
       else if (settings.shader_build_patch_table == CONV1D_SEG_DENOISE_BUILD_PATCH) {
         sub.bind_ssbo(2, buffers_.ssbo_contour_snake_rank_);
         sub.bind_ssbo(3, buffers_.ssbo_contour_snake_list_len_);
-        sub.bind_ssbo(4, buffers_.ssbo_contour_edge_flags_); 
+        sub.bind_ssbo(4, buffers_.ssbo_contour_snake_flags_); 
       }
       sub.bind_ubo(0, buffers_.ubo_segloopconv1d_);
 
