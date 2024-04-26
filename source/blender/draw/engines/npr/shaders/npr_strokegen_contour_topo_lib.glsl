@@ -77,7 +77,7 @@ uint move_elem_along_loop(uint curr_elem_id, int offset, uint loop_head_elem_id,
 
 	return curr_elem_id;
 }
-uint mode_contour_id_along_loop(ContourCurveTopo curve_topo, uint start_contour_id, float offset)
+uint move_contour_id_along_loop(ContourCurveTopo curve_topo, uint start_contour_id, float offset)
 {
 	return move_elem_along_loop(
 		start_contour_id, (int(offset + 1e-10f)), 

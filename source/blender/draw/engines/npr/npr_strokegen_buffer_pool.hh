@@ -62,6 +62,7 @@ class GPUBufferPoolModule {
   SSBO_IndirectDispatchArgs ssbo_indirect_dispatch_args_per_remeshed_verts_;
 
   SSBO_IndirectDispatchArgs ssbo_bnpr_mesh_contour_edge_dispatch_args_;
+  SSBO_IndirectDispatchArgs ssbo_bnpr_mesh_contour_vert_dispatch_args_;
 
 
 
@@ -73,7 +74,7 @@ class GPUBufferPoolModule {
   SSBO_StrokeGenMeshBufPerVert<uint, 1> ssbo_vert_flags_;                       // 32MB    672MB
   SSBO_StrokeGenMeshBufPerEdge<uint, 1> ssbo_edge_flags_;                       // 64MB
   SSBO_StrokeGenMeshBufPerVert<float, 3> ssbo_vnor_;                            // 96MB
-  SSBO_StrokeGenMeshBufPerVert<uint, 1> ssbo_vcurv_max_;                        // 32MB
+  SSBO_StrokeGenMeshBufPerVert<uint, 2> ssbo_vcurv_max_;                        // 32MB
 
   SSBO_StrokeGenMeshBufPerSelectedEdge<uint, 1> ssbo_selected_edge_to_edge_;    // 32MB    
   SSBO_StrokeGenMeshBufPerSelectedVert<uint, 1> ssbo_selected_vert_to_vert_;    // 16MB    

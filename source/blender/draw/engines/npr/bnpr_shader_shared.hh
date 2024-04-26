@@ -399,8 +399,9 @@ using namespace draw;
     uint num_edges;
     uint num_faces;
     uint num_contour_edges; // 4
-    uint num_contour_points;
+    uint num_contour_verts;
     uint num_filtered_edges;
+
     uint num_filtered_verts;
     uint num_dbg_vnor_lines;  // 4
     uint num_dbg_vpdir_lines;  

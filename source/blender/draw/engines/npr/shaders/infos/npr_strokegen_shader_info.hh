@@ -101,11 +101,13 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_extract)
     /* debugging */
     .define("INCLUDE_DEBUG_LINE_CONFIG", "1")
     .define("VERT_FLAGS_INCLUDED", "1")
+    .define("INCLUDE_VERTEX_CURV_MAX", "1")
     .storage_buf(8, Qualifier::READ, "uint", "ssbo_edge_to_edges_[]")
     .storage_buf(9, Qualifier::READ, "uint", "ssbo_edge_to_vert_[]")
     .storage_buf(10, Qualifier::READ_WRITE, "uint", "ssbo_vert_to_edge_list_header_[]")
     .storage_buf(11, Qualifier::WRITE, "uint", "ssbo_dbg_lines_[]")
     .storage_buf(12, Qualifier::READ_WRITE, "uint", "ssbo_vert_flags_[]")
+    .storage_buf(13, Qualifier::READ_WRITE, "uint", "ssbo_vcurv_max_[]")
     /* ---------------- */
     .uniform_buf(0, "ViewMatrices", "ubo_view_matrices_")
     .push_constant(Type::INT, "pcs_ib_fmt_u16")
@@ -136,6 +138,19 @@ GPU_SHADER_CREATE_INFO(strokegen_fill_dispatch_args_per_contour_edge)
     .storage_buf(2, Qualifier::READ_WRITE, "DispatchCommand", "ssbo_indirect_dispatch_args_per_contour_edge_")
     .push_constant(Type::INT, "pc_per_contour_edge_dispatch_group_size_") /* group size of dispatched kernel */
     .push_constant(Type::INT, "pc_dispatch_for_all_edges_") 
+    .local_group_size(32)
+    .compute_source("npr_strokegen_fill_indirect_args_comp.glsl");
+
+GPU_SHADER_CREATE_INFO(strokegen_fill_dispatch_args_per_contour_vert)
+    .do_static_compilation(true)
+    .typedef_source("bnpr_defines.hh")
+    .typedef_source("bnpr_shader_shared.hh")
+    .typedef_source("draw_shader_shared.h") /* Always needed for indirect args */
+    .define("_KERNEL_MULTICOMPILE__FILL_DISPATCH_ARGS", "1")
+    .define("_KERNEL_MULTICOMPILE__FILL_DISPATCH_ARGS__PER_CONTOUR_VERT", "1")
+    .storage_buf(0, Qualifier::READ_WRITE, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
+    .storage_buf(1, Qualifier::READ_WRITE, "DispatchCommand", "ssbo_indirect_dispatch_args_per_contour_vert_")
+    .push_constant(Type::INT, "pc_per_contour_vert_dispatch_group_size_") /* group size of dispatched kernel */
     .local_group_size(32)
     .compute_source("npr_strokegen_fill_indirect_args_comp.glsl");
 
@@ -182,9 +197,10 @@ GPU_SHADER_CREATE_INFO(strokegen_serialize_contour_edges)
     .storage_buf(7, Qualifier::WRITE, "uint", "ssbo_contour_edge_vpos_out_[]")
     .storage_buf(8, Qualifier::READ_WRITE, "uint", "ssbo_contour_edge_flags_[]")
     .storage_buf(9, Qualifier::READ_WRITE, "uint", "ssbo_contour_to_contour_[]")
-    .storage_buf(10, Qualifier::READ, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
+    .storage_buf(10, Qualifier::READ_WRITE, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
     .storage_buf(11, Qualifier::WRITE, "UBData_SegLoopConv1D", "ssbo_segloopconv1d_info_")
     .storage_buf(12, Qualifier::WRITE, "uint", "ssbo_in_segloopconv1d_data_[]")
+    .storage_buf(13, Qualifier::READ, "uint", "ssbo_list_ranking_addressing_counters_[]")
 
     .local_group_size(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT) 
     .compute_source("npr_strokegen_contour_processing.glsl");
@@ -237,15 +253,18 @@ GPU_SHADER_CREATE_INFO(strokegen_calc_contour_edges_draw_data)
     .do_static_compilation(true)
     .typedef_source("bnpr_shader_shared.hh")
     .typedef_source("draw_shader_shared.h")
-    .define("_KERNEL_MULTICOMPILE__CALC_CONTOUR_EDGE_SCREEN_POSITIONS", "1")
+    .define("_KERNEL_MULTICOMPILE__CALC_CONTOUR_SCREEN_POSITIONS", "1")
+    .define("INCLUDE_CONTOUR_FLAGS_LOAD_STORE", "1")
+    .define("INCLUDE_CONTOUR_CURVE_TOPOLOGY_LOAD", "1")
 
     .storage_buf(0, Qualifier::READ, "uint", "ssbo_contour_edge_rank_[]")
     .storage_buf(1, Qualifier::READ, "uint", "ssbo_contour_edge_list_len_[]")
     .storage_buf(2, Qualifier::READ, "uint", "ssbo_contour_edge_list_head_[]")
     .storage_buf(3, Qualifier::READ, "uint", "ssbo_contour_edge_vpos_[]")
-    .storage_buf(4, Qualifier::WRITE, "uint", "buf_strokegen_mesh_pool[]")
-    .storage_buf(5, Qualifier::READ, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
-    .storage_buf(6, Qualifier::WRITE, "UBData_TreeScan", "ssbo_tree_scan_infos_contour_segmentation_")
+    .storage_buf(4, Qualifier::READ_WRITE, "uint", "ssbo_contour_edge_flags_[]")
+    .storage_buf(5, Qualifier::WRITE, "uint", "buf_strokegen_mesh_pool[]")
+    .storage_buf(6, Qualifier::READ, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
+    .storage_buf(7, Qualifier::WRITE, "UBData_TreeScan", "ssbo_tree_scan_infos_contour_segmentation_")
     .uniform_buf(0, "ViewMatrices", "ubo_view_matrices_")
     .push_constant(Type::VEC2, "pcs_screen_size_")
     
@@ -1873,15 +1892,18 @@ GPU_SHADER_CREATE_INFO(strokegen_list_ranking_test_output)
     .storage_buf(4, Qualifier::READ_WRITE, "uint", "ssbo_list_ranking_output_ranks_[]")
     .storage_buf(5, Qualifier::READ_WRITE, "uint", "ssbo_list_ranking_output_list_len_[]")
     .storage_buf(6, Qualifier::READ_WRITE, "uint", "ssbo_list_ranking_list_head_info_[]")
+    .push_constant(Type::INT, "pcs_contour_edge_linking_output_pass_type_")
 
     .local_group_size(GROUP_SIZE_BNPR_LIST_RANK_TEST)
     .compute_source("npr_strokegen_list_ranking_test_comp.glsl");
 
 GPU_SHADER_CREATE_INFO(strokegen_list_ranking_test_output_pass_0)
+    .do_static_compilation(true)
     .additional_info("strokegen_list_ranking_test_output")
     .define("_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_OUTPUT__PASS_0", "1");
 
 GPU_SHADER_CREATE_INFO(strokegen_list_ranking_test_output_pass_1)
+    .do_static_compilation(true)
     .additional_info("strokegen_list_ranking_test_output")
     .define("_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_OUTPUT__PASS_1", "1");
 

@@ -83,7 +83,7 @@ namespace blender::npr::strokegen
     /* Init draw passes and manager related stuff. (Begin render graph) */
     strokegen_passes.test_list_ranking = false;
     strokegen_passes.test_scan = false;
-    strokegen_passes.test_segloopconv = true; 
+    strokegen_passes.test_segloopconv = false; 
 
     /* First setup resources */
     int refresh_rate = std::max(1, strokegen_passes.meshing_params.seconds_sync_view_mat * 24); 

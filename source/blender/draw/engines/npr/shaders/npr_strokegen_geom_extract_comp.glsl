@@ -24,7 +24,7 @@ void main()
 		ssbo_bnpr_mesh_pool_counters_.num_verts         		 = 0; 
 		ssbo_bnpr_mesh_pool_counters_.num_edges         		 = 0;
 		ssbo_bnpr_mesh_pool_counters_.num_faces         		 = 0; 
-		ssbo_bnpr_mesh_pool_counters_.num_contour_points = 0; 
+		ssbo_bnpr_mesh_pool_counters_.num_contour_verts = 0; 
 		ssbo_bnpr_mesh_pool_counters_.num_filtered_edges = 0; 
 		ssbo_bnpr_mesh_pool_counters_.num_filtered_verts = 0; 
 		ssbo_bnpr_mesh_pool_counters_.num_dbg_vnor_lines = 0; 
@@ -35,7 +35,7 @@ void main()
 		ssbo_bnpr_mesh_pool_counters_prev_.num_verts         = 0; 
 		ssbo_bnpr_mesh_pool_counters_prev_.num_edges         = 0; 
 		ssbo_bnpr_mesh_pool_counters_prev_.num_faces         = 0; 
-		ssbo_bnpr_mesh_pool_counters_prev_.num_contour_points = 0; 
+		ssbo_bnpr_mesh_pool_counters_prev_.num_contour_verts = 0; 
 		ssbo_bnpr_mesh_pool_counters_prev_.num_filtered_edges = 0; 
 		ssbo_bnpr_mesh_pool_counters_prev_.num_filtered_verts = 0; 
 		ssbo_bnpr_mesh_pool_counters_prev_.num_dbg_vnor_lines = 0; 
@@ -86,7 +86,7 @@ void main()
 		ssbo_bnpr_mesh_pool_counters_prev_.num_verts         = ssbo_bnpr_mesh_pool_counters_.num_verts; 
 		ssbo_bnpr_mesh_pool_counters_prev_.num_edges         = ssbo_bnpr_mesh_pool_counters_.num_edges; 
 		ssbo_bnpr_mesh_pool_counters_prev_.num_faces         = ssbo_bnpr_mesh_pool_counters_.num_faces; 
-		ssbo_bnpr_mesh_pool_counters_prev_.num_contour_points = ssbo_bnpr_mesh_pool_counters_.num_contour_points; 
+		ssbo_bnpr_mesh_pool_counters_prev_.num_contour_verts = ssbo_bnpr_mesh_pool_counters_.num_contour_verts; 
 		ssbo_bnpr_mesh_pool_counters_prev_.num_filtered_edges = ssbo_bnpr_mesh_pool_counters_.num_filtered_edges; 
 		ssbo_bnpr_mesh_pool_counters_prev_.num_filtered_verts = ssbo_bnpr_mesh_pool_counters_.num_filtered_verts; 
 		ssbo_bnpr_mesh_pool_counters_prev_.num_dbg_vnor_lines = ssbo_bnpr_mesh_pool_counters_.num_dbg_vnor_lines;
@@ -307,6 +307,16 @@ void main()
 			dbg_line = dbg_line && (0 < ef.crease_level); 
 		}
 
+		if (pcs_edge_visualize_mode_ == 10)
+		{
+			vec2 maxcurv; vec2 cusp_func; 
+			ld_vcurv_max_with_cusp(vids[1], /*out*/maxcurv[0], cusp_func[0]);
+			ld_vcurv_max_with_cusp(vids[3], /*out*/maxcurv[1], cusp_func[1]);
+			bool seg_head = sign(cusp_func[0]) != sign(cusp_func[1]);  
+
+			dbg_line = dbg_line && seg_head && is_contour; 
+		}
+
 
 		uint dbg_line_idx = compact_dbg_edge(dbg_line, groupId); 
 		dbg_line_idx += get_debug_line_offset(DBG_LINE_TYPE__EDGES); 
@@ -367,8 +377,8 @@ void main()
 	const uint idx = gl_GlobalInvocationID.x; 
 	if (idx == 0u)
 	{
-		const uint num_contour_edges = ssbo_bnpr_mesh_pool_counters_.num_contour_edges; 
-		ssbo_bnpr_mesh_pool_draw_args_.vertex_len 		= 2u * num_contour_edges;   /*#verts*/
+		const uint num_draws = ssbo_bnpr_mesh_pool_counters_.num_contour_verts; // last edge of non-loop curve has zero length
+		ssbo_bnpr_mesh_pool_draw_args_.vertex_len 		= 2u * num_draws;   		/*#verts*/
 		ssbo_bnpr_mesh_pool_draw_args_.instance_len 	= 1;  						/*#instances*/
 		ssbo_bnpr_mesh_pool_draw_args_.vertex_first 	= 0;  						/*ibo offset*/
 		ssbo_bnpr_mesh_pool_draw_args_.base_index 		= 0;  						/*vbo offset*/

@@ -545,8 +545,11 @@ void main()
 
     uint list_addr = 0xffffffffu; 
     uint list_len_alloc = list_len; 
+    if (pcs_contour_edge_linking_output_pass_type_ == OUTPUT_PASS_TYPE__CONTOUR_EDGE_LINKING)
+        list_len_alloc = looped_list ? list_len : list_len + 1; // alloc for vertices
+
     if (node_id == head_node_id && valid_thread)
-        list_addr = FUNC_DEVICE_ALLOC_LIST_ADDR(list_len); 
+        list_addr = FUNC_DEVICE_ALLOC_LIST_ADDR(list_len_alloc); 
     barrier(); 
 
     uint node_rank = FUNC_DEVICE_LOAD_LISTRANKING_NODE_RANK(node_id); 
@@ -556,7 +559,7 @@ void main()
     ssbo_list_ranking_output_ranks_[node_id]         = node_rank;
     ssbo_list_ranking_output_list_len_[node_id]      = list_len; 
     ssbo_list_ranking_list_head_info_[node_id*2u]    = head_node_id;
-    ssbo_list_ranking_list_head_info_[node_id*2u+1u] = list_addr; 
+    ssbo_list_ranking_list_head_info_[node_id*2u+1u] = ((list_addr << 1u) | (looped_list ? 1u : 0u)); 
 #endif
 
 
@@ -564,8 +567,8 @@ void main()
     uint head_node_id = ssbo_list_ranking_list_head_info_[node_id*2u]; 
     if (node_id != head_node_id && valid_thread)
     { // broadcast form head to all nodes
-        uint list_addr = ssbo_list_ranking_list_head_info_[head_node_id*2u+1u];
-        ssbo_list_ranking_list_head_info_[node_id*2u+1u] = list_addr;  
+        uint encoded = ssbo_list_ranking_list_head_info_[head_node_id*2u+1u];
+        ssbo_list_ranking_list_head_info_[node_id*2u+1u] = encoded;  
     }
 #endif
 }

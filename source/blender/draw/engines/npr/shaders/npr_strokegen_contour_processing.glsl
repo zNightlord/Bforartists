@@ -15,25 +15,39 @@ void main()
 	bool valid_thread = contour_id < num_contours; 
 
 #if defined(_KERNEL_MULTICOMPILE__CONTOUR_SERIALIZATION__PASS_0)
-    uint serialized_head_id = ssbo_list_ranking_list_head_info_[contour_id*2u + 1u];
-    uint list_len        = ssbo_contour_edge_list_len_in_[contour_id]; 
-    uint rank            = ssbo_contour_edge_rank_in_[contour_id]; 
+	if (idx == 0u)
+		ssbo_bnpr_mesh_pool_counters_.num_contour_verts = ssbo_list_ranking_addressing_counters_[0]; 
+	
+    uint head_vtx_addr; bool looped_curve; 
+	uint encoded_info = ssbo_list_ranking_list_head_info_[contour_id*2u + 1u];
+	head_vtx_addr = (encoded_info >> 1u); 
+	looped_curve  = ((encoded_info & 1u) == 1u);
 
-	bool is_head_contour = rank == 0; 
-	// TODO: can be bad if ssbo_contour_to_contour has invalid links
-	// should rectify the links in the future
-	uint prev_contour_id = ssbo_contour_to_contour_[2u*contour_id]; 
-	bool prev_equ_self = prev_contour_id == contour_id; 
+	uint num_edges_in_curve = ssbo_contour_edge_list_len_in_[contour_id]; 
+	uint num_verts_in_curve = looped_curve ? num_edges_in_curve : num_edges_in_curve + 1u; 
+
+	uint edge_rank_in_curve = ssbo_contour_edge_rank_in_[contour_id]; 
+	uint vtx_rank_in_curve = edge_rank_in_curve; 
+
+	bool is_head_edge = edge_rank_in_curve == 0; 
+	bool is_tail_edge = edge_rank_in_curve == num_edges_in_curve - 1; 
     
-    uint output_addr = serialized_head_id + rank; 
+    uint vtx_addr = head_vtx_addr + edge_rank_in_curve; 
+	bool additional_output_tail_vtx = is_tail_edge && !looped_curve; 
     if (valid_thread)
     {
 		// transfer topology data from list ranking
-        ssbo_contour_edge_rank_out_[output_addr]      = rank; 
-        ssbo_contour_edge_list_len_out_[output_addr]  = list_len;
-        ssbo_contour_edge_list_head_out_[output_addr] = serialized_head_id;
+        ssbo_contour_edge_rank_out_[vtx_addr]      = vtx_rank_in_curve; 
+        ssbo_contour_edge_list_len_out_[vtx_addr]  = num_verts_in_curve;
+        ssbo_contour_edge_list_head_out_[vtx_addr] = head_vtx_addr;
+		if (additional_output_tail_vtx)
+		{ // last edge outputs its end vertex
+			ssbo_contour_edge_rank_out_[vtx_addr + 1u]      = vtx_rank_in_curve + 1; 
+			ssbo_contour_edge_list_len_out_[vtx_addr + 1u]  = num_verts_in_curve;
+			ssbo_contour_edge_list_head_out_[vtx_addr + 1u] = head_vtx_addr;
+		}
 
-		// transfer packed data from the intermediate buffer
+		// transfer packed edge data from the intermediate buffer
 		uvec4 enc_data[2];
 		Load4(ssbo_contour_edge_transfer_data_, contour_id*2u,    enc_data[0]); 
 		Load4(ssbo_contour_edge_transfer_data_, contour_id*2u+1u, enc_data[1]);
@@ -43,14 +57,16 @@ void main()
 		vpos_1_enc = uvec3(enc_data[0].w, enc_data[1].xy);
 		
 		ContourFlags cf = decode_contour_flags(enc_data[1].z); 
-		if (is_head_contour && prev_equ_self)
-			cf.looped_curve = false; // will broadcast this next pass
-		else 
-			cf.looped_curve = true; 
+		cf.looped_curve = looped_curve;
 
-		Store3(ssbo_contour_edge_vpos_out_, output_addr*2u,    vpos_0_enc);
-        Store3(ssbo_contour_edge_vpos_out_, output_addr*2u+1u, vpos_1_enc);
-		store_contour_flags(output_addr, cf); 
+		Store3(ssbo_contour_edge_vpos_out_, vtx_addr, vpos_0_enc);
+		store_contour_flags(vtx_addr, cf); 
+		if (additional_output_tail_vtx)
+		{
+        	Store3(ssbo_contour_edge_vpos_out_, vtx_addr+1u, vpos_1_enc);
+			cf.seg_head = false; 
+			store_contour_flags(vtx_addr+1u, cf);
+		}
     }
 #endif
 
@@ -59,11 +75,8 @@ void main()
 
 	ContourFlags cf = load_contour_flags(contour_id);
 	ContourFlags cf_head = load_contour_flags(head_contour_id); 
-	if (valid_thread && !cf_head.looped_curve)
+	if (valid_thread)
 	{ /* broadcast loop flag to all contour edges in the curve */
-		cf.looped_curve = false;
-		store_contour_flags(contour_id, cf); /* race condition does not hurt */
-
 		/* copy to segloopconv1d input buffer */
 		ssbo_in_segloopconv1d_data_[contour_id] = encode_contour_flags(cf); 
 	}
@@ -83,13 +96,13 @@ void main()
     const uint idx = gl_GlobalInvocationID.x; 
 	const uint contour_id = idx; 
 
-	const uint num_contours = ssbo_bnpr_mesh_pool_counters_.num_contour_edges; 
+	const uint num_contours = ssbo_bnpr_mesh_pool_counters_.num_contour_verts; 
 	bool valid_thread = contour_id < num_contours; 
 
 	ContourFlags cf = load_contour_flags(contour_id);
 	ContourCurveTopo cct = load_contour_curve_topo(contour_id, cf);
-	bool is_curve_tail = cct.tail_contour_id == contour_id;
 	bool is_curve_head = cct.head_contour_id == contour_id; 
+	bool is_curve_tail = cct.tail_contour_id == contour_id;
 
 #if defined(_KERNEL_MULTICOMPILE__CONTOUR_SEGMENTATION__SETUP)
 	uint next_contour_id = is_curve_tail ? cct.head_contour_id : contour_id + 1u;
@@ -209,7 +222,7 @@ void main()
 
 
 
-#if defined(_KERNEL_MULTICOMPILE__CALC_CONTOUR_EDGE_SCREEN_POSITIONS)
+#if defined(_KERNEL_MULTICOMPILE__CALC_CONTOUR_SCREEN_POSITIONS)
 /*
  * ubo_view_matrices_
  * pcs_screen_size_
@@ -226,13 +239,19 @@ void main()
 {
 	const uint idx = gl_GlobalInvocationID.x; 
 
-	const uint num_contours = ssbo_bnpr_mesh_pool_counters_.num_contour_edges; 
+	const uint num_contours = ssbo_bnpr_mesh_pool_counters_.num_contour_verts; 
 	const uint contour_id = idx; 
 	bool valid_thread = contour_id < num_contours; 
 
 	/* transform matrices, see "common_view_lib.glsl" */ 
 	mat4 world_to_view = ubo_view_matrices_.viewmat;
 	mat4 mat_camera_proj = ubo_view_matrices_.winmat; 
+
+	ContourFlags cf = load_contour_flags(contour_id); 
+	ContourCurveTopo cct = load_contour_curve_topo(contour_id, cf); // TODO: encode tail flag
+	uint next_contour_id = move_contour_id_along_loop(cct, contour_id, 1.0f); 
+	bool curve_tail = cct.tail_contour_id == contour_id; 
+
 
 	vec4 vpos_ws[2]; /* v0, v1 on edge */
 	vec3 vnor_ws[2]; 
@@ -243,17 +262,21 @@ void main()
 	{ /* read vertex pos transformed to world space */
 	  /* Note: wpos_and_edgeid will be overwrite, for saving space */
         uvec3 vpos_0_enc, vpos_1_enc;
-        Load3(ssbo_contour_edge_vpos_, contour_id*2u,    vpos_0_enc);
-        Load3(ssbo_contour_edge_vpos_, contour_id*2u+1u, vpos_1_enc);
+        Load3(ssbo_contour_edge_vpos_, contour_id,    	vpos_0_enc);
+        Load3(ssbo_contour_edge_vpos_, next_contour_id, vpos_1_enc);
         vec3 vpos_0, vpos_1;
         vpos_0 = uintBitsToFloat(vpos_0_enc);
+        vpos_1 = uintBitsToFloat(vpos_1_enc);
+		if (curve_tail && !cf.looped_curve) vpos_1 = vpos_0; /* omit at the end of a curve */
+		
+
         vpos_ws[0] = vec4(vpos_0.xyz, 1.0f);
 		vpos_ndc[0] = mat_camera_proj * vec4((world_to_view * vpos_ws[0]).xyz, 1.0f); 
-        vpos_1 = uintBitsToFloat(vpos_1_enc);
         vpos_ws[1] = vec4(vpos_1.xyz, 1.0f);
 		vpos_ndc[1] = mat_camera_proj * vec4((world_to_view * vpos_ws[1]).xyz, 1.0f); 
 
-		/* write to mesh pool TODO: these should be removed */
+
+		/* write to draw data */
 		uint addr_st = mesh_pool_addr__zwhclip(contour_id); 
 		buf_strokegen_mesh_pool[addr_st+0] = floatBitsToUint(vpos_ndc[0].z); 
 		buf_strokegen_mesh_pool[addr_st+1] = floatBitsToUint(vpos_ndc[0].w); 
@@ -277,8 +300,5 @@ void main()
 		buf_strokegen_mesh_pool[addr_st+2] = floatBitsToUint(vpos_uv[1].x);
 		buf_strokegen_mesh_pool[addr_st+3] = floatBitsToUint(vpos_uv[1].y);
 	}
-
-
-
 }
 #endif

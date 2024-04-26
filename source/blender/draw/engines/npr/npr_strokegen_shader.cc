@@ -101,6 +101,8 @@ const char *StrokeGenShaderModule::static_shader_create_info_name_get(eShaderTyp
       return "bnpr_geom_fill_draw_args_contour_edges";
     case FILL_DISPATCH_ARGS_CONTOUR_EDGES:
       return "strokegen_fill_dispatch_args_per_contour_edge";
+    case FILL_DISPATCH_ARGS_CONTOUR_VERTS:
+      return "strokegen_fill_dispatch_args_per_contour_vert"; 
     case EXTRACT_CURRENT_MESH_CONTOUR_DATA:
       return "bnpr_geom_extract_mesh_contour_data";
     case SERIALIZE_CONTOUR_EDGES_PASS_0:

@@ -32,7 +32,7 @@ void main()
     uint contour_edge_id = vid / 2u; 
     
     uint base_addr = vid * 6; 
-    uint num_contour_edges = ssbo_bnpr_mesh_pool_counters_.num_contour_edges; 
+    uint num_contour_lines = ssbo_bnpr_mesh_pool_counters_.num_contour_verts; 
 
 
     // Debug stroke topo
@@ -68,6 +68,7 @@ void main()
         uintBitsToFloat(buf_strokegen_mesh_pool[addr_uv+1])
     );
 
+
     uint addr_uv_another = mesh_pool_addr__edgeuv(draw_contour_edge_id);
     if (vid % 2u == 0u) 
         addr_uv_another += 2u;
@@ -76,7 +77,6 @@ void main()
         uintBitsToFloat(buf_strokegen_mesh_pool[addr_uv_another+1])
     );
     float edge_len = length((uv - uv_another_vtx) / pcs_screen_size_inv_.xy); 
-
 
 
     uint addr_zhclip = mesh_pool_addr__zwhclip(draw_contour_edge_id); 
@@ -106,7 +106,6 @@ void main()
 
     color = 
         vec4(rand_col_rgb(contour_seg_len, contour_seg_len), contour_edge_id);
-
         // (contour_edge_list_len < contour_edge_rank || contour_edge_rank == 0) ? 
         // vec4(prev_contour_id, contour_edge_rank, contour_edge_list_len, contour_edge_list_head) : vec4(.0f);
 
