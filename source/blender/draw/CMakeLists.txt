@@ -599,6 +599,7 @@ set(GLSL_SRC
   engines/npr/shaders/npr_strokegen_compaction_lib.glsl 
   engines/npr/shaders/npr_strokegen_contour_processing.glsl
   engines/npr/shaders/npr_strokegen_contour_topo_lib.glsl
+  engines/npr/shaders/npr_strokegen_contour_geom_lib.glsl
 
   engines/npr/bnpr_defines.hh
   engines/npr/bnpr_shader_shared.hh
