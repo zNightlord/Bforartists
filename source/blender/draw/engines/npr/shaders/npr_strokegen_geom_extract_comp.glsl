@@ -459,7 +459,12 @@ void main()
 		bool seg_head = sign(cusp_func[0]) != sign(cusp_func[1]); 
 		ContourFlags cf = init_contour_flags(seg_head);
 		ssbo_contour_edge_transfer_data_[ContourEdgeIdx*8+6] = encode_contour_flags(cf);
-		ssbo_contour_edge_transfer_data_[ContourEdgeIdx*8+7] = 0u; // unused
+		ssbo_contour_edge_transfer_data_[ContourEdgeIdx*8+7] = packHalf2x16(
+			vec2(
+				cusp_func[0] > .0f ? 1.0f : -1.0f, 
+				cusp_func[1] > .0f ? 1.0f : -1.0f
+			)
+		);
 
 
 		/* build contour edge adjacency */

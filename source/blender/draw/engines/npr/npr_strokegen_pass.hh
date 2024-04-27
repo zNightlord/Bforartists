@@ -200,6 +200,8 @@ public:
     int subdiv_type;
     bool subdiv_use_crease;
 
+    bool denoise_cusp_segmentation; 
+
   } meshing_params;
   void append_subpass_fill_selected_mesh_elems_indirect_dispatch_args_();
 

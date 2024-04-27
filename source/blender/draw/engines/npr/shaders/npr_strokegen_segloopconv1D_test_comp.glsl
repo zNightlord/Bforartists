@@ -92,6 +92,25 @@ void main()
     #if defined(_KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__TEST)
         ssbo_out_segloopconv1d_data_[idx] = floatBitsToUint(conv_temp_data.val);
     #endif
+    #if defined(_KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__SEG_DENOISING)
+        float num_pstv_cusps_left = float(conv_temp_data.num_pstv_cusps_left);
+        bool left_seg_is_positive = num_pstv_cusps_left > float(MAX_CONV_RADIUS) * .9f;
+        bool left_seg_is_negative = num_pstv_cusps_left <= float(MAX_CONV_RADIUS) * .1f; 
+        
+        float num_pstv_cusps_right = float(conv_temp_data.num_pstv_cusps_right);
+        bool right_seg_is_positive = num_pstv_cusps_right > float(MAX_CONV_RADIUS) * .9f;
+        bool right_seg_is_negative = num_pstv_cusps_right <= float(MAX_CONV_RADIUS) * .1f;
+
+        bool at_seg_break = 
+            (left_seg_is_positive && right_seg_is_negative)
+            || (left_seg_is_negative && right_seg_is_positive);
+        
+        ContourFlags efs_ori = decode_contour_flags(orig_data);
+        set_contour_seg_head(at_seg_break, efs_ori); 
+
+        if (idx < get_num_items())
+            ssbo_out_segloopconv1d_data_[idx] = encode_contour_flags(efs_ori);
+    #endif
 }
 
 #endif

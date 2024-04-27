@@ -16,8 +16,12 @@ void main()
 
 #if defined(_KERNEL_MULTICOMPILE__CONTOUR_SERIALIZATION__PASS_0)
 	if (idx == 0u)
-		ssbo_bnpr_mesh_pool_counters_.num_contour_verts = ssbo_list_ranking_addressing_counters_[0]; 
-	
+	{
+		uint num_snakes = ssbo_list_ranking_addressing_counters_[0]; 
+		ssbo_bnpr_mesh_pool_counters_.num_contour_verts = num_snakes; 
+		ssbo_segloopconv1d_info_.num_conv_items 		= num_snakes; 
+	}
+
     uint head_vtx_addr; bool looped_curve; 
 	uint encoded_info = ssbo_list_ranking_list_head_info_[contour_id*2u + 1u];
 	head_vtx_addr = (encoded_info >> 1u); 
@@ -57,7 +61,12 @@ void main()
 		vpos_1_enc = uvec3(enc_data[0].w, enc_data[1].xy);
 		
 		ContourFlags cf = decode_contour_flags(enc_data[1].z); 
-		cf.looped_curve = looped_curve;
+		init_contour_looped_curve(looped_curve, cf);
+
+		vec2 cusp_func_v; // cusp function at 2 verts
+		cusp_func_v = unpackHalf2x16(enc_data[1].w); 
+		init_contour_cusp_flags(.0f < cusp_func_v[0], cf); 
+		
 
 		Store3(ssbo_contour_snake_vpos_, vtx_addr, vpos_0_enc);
 		store_contour_flags(vtx_addr, cf); 
@@ -65,24 +74,15 @@ void main()
 		{
         	Store3(ssbo_contour_snake_vpos_, vtx_addr+1u, vpos_1_enc);
 			cf.seg_head = false; 
+			init_contour_cusp_flags(.0f < cusp_func_v[1], cf); 
 			store_contour_flags(vtx_addr+1u, cf);
 		}
-    }
-#endif
 
-#if defined(_KERNEL_MULTICOMPILE__CONTOUR_SERIALIZATION__PASS_1)
-    uint head_contour_id = ssbo_contour_snake_list_head_[contour_id];
-
-	ContourFlags cf = load_contour_flags(contour_id);
-	ContourFlags cf_head = load_contour_flags(head_contour_id); 
-	if (valid_thread)
-	{ /* broadcast loop flag to all contour edges in the curve */
 		/* copy to segloopconv1d input buffer */
-		ssbo_in_segloopconv1d_data_[contour_id] = encode_contour_flags(cf); 
-	}
-
-	if (idx == 0u)
-		ssbo_segloopconv1d_info_.num_conv_items = num_contours; 
+		ssbo_in_segloopconv1d_data_[vtx_addr] = encode_contour_flags(cf); 
+		if (additional_output_tail_vtx)
+			ssbo_in_segloopconv1d_data_[vtx_addr+1u] = encode_contour_flags(cf); 
+    }
 #endif
 
 }
@@ -115,7 +115,7 @@ void main()
 	{
 		if (cf_next.seg_head)
 		{
-			cf.seg_tail = true; 
+			set_contour_seg_tail(true, cf); 
 			store_contour_flags(contour_id, cf); 
 		}
 

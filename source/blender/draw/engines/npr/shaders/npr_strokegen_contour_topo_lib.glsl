@@ -6,6 +6,7 @@ struct ContourFlags
     bool seg_head; 
     bool seg_tail; 
     bool looped_curve; 
+    bool cusp_func_pstv; /*has positive cusp function*/
 }; 
 
 uint encode_contour_flags(ContourFlags cf)
@@ -16,6 +17,8 @@ uint encode_contour_flags(ContourFlags cf)
     cf_enc |= uint(cf.seg_tail); 
     cf_enc <<= 1u;
     cf_enc |= uint(cf.looped_curve);
+    cf_enc <<= 1u;
+    cf_enc |= uint(cf.cusp_func_pstv);
 
     return cf_enc; 
 }
@@ -23,6 +26,8 @@ uint encode_contour_flags(ContourFlags cf)
 ContourFlags decode_contour_flags(uint cf_enc)
 {
     ContourFlags cf; 
+    cf.cusp_func_pstv = (1u == (cf_enc & 1u));
+    cf_enc >>= 1u;
     cf.looped_curve = (1u == (cf_enc & 1u));
     cf_enc >>= 1u;
     cf.seg_tail = (1u == (cf_enc & 1u)); 
@@ -36,9 +41,30 @@ ContourFlags init_contour_flags(bool seg_head)
 {
     ContourFlags cf;
     cf.seg_head = seg_head;
-    cf.seg_tail = false;
-    cf.looped_curve = true; 
+    cf.seg_tail = false;       // needs further setup
+    cf.looped_curve = true;    // needs further setup
+    cf.cusp_func_pstv = false; // needs further setup
     return cf; 
+}
+
+void set_contour_seg_head(bool seg_head, inout ContourFlags cf)
+{
+    cf.seg_head = seg_head; 
+}
+
+void set_contour_seg_tail(bool seg_tail, inout ContourFlags cf)
+{
+    cf.seg_tail = seg_tail; 
+}
+
+void init_contour_looped_curve(bool looped, inout ContourFlags cf)
+{
+    cf.looped_curve = looped; 
+}
+
+void init_contour_cusp_flags(bool cusp_func_pstv, inout ContourFlags cf)
+{
+    cf.cusp_func_pstv = cusp_func_pstv; 
 }
 
 #if defined(INCLUDE_CONTOUR_FLAGS_LOAD_STORE)

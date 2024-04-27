@@ -79,7 +79,7 @@ namespace blender::npr::strokegen
     SegLoopConv1DSettings segloopconv1d_test_settings;
     segloopconv1d_test_settings.is_validation_shader = true;
     segloopconv1d_test_settings.use_indirect_dispatch = false;
-    segloopconv1d_test_settings.ssbo_segloopconv1d_info_ = nullptr;
+    segloopconv1d_test_settings.ssbo_segloopconv1d_info_ = buffers_.ssbo_segloopconv1d_info_;
     segloopconv1d_test_settings.ssbo_in_segloopconv1d_data_ = buffers_.ssbo_in_segloopconv1d_data_;
     segloopconv1d_test_settings.ssbo_out_segloopconv1d_data_ = buffers_.ssbo_out_segloopconv1d_data_;
     segloopconv1d_test_settings.ssbo_segloopconv1d_patch_table_ = buffers_.ssbo_segloopconv1d_patch_table_;
@@ -140,11 +140,8 @@ namespace blender::npr::strokegen
     meshing_params.subdiv_type = (int)(scene_eval->npr.npr_test_val_19 + 1e-10f);
     meshing_params.subdiv_use_crease = .0f < scene_eval->npr.npr_test_val_20; 
 
-    // meshing_params.geodist_deviation = scene_eval->npr.npr_test_val_3;
-    // meshing_params.alternate_filter_0 = (GPUMeshQuadricFilter)((
-    //     int)(scene_eval->npr.npr_test_val_4 + 1e-10f));
-    // meshing_params.alternate_filter_1 = (GPUMeshQuadricFilter)((
-    //     int)(scene_eval->npr.npr_test_val_5 + 1e-10f));
+    meshing_params.denoise_cusp_segmentation = .0f < scene_eval->npr.npr_test_val_21; 
+
   }
 
   void StrokeGenPassModule::on_end_sync()
@@ -1740,15 +1737,6 @@ namespace blender::npr::strokegen
       sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_edge_dispatch_args_);
       sub.barrier(GPU_BARRIER_SHADER_STORAGE); 
     }
-    {
-      auto &sub = pass_process_contours.sub("strokegen_serialize_contour_edges_pass_1");
-      sub.shader_set(shaders_.static_shader_get(SERIALIZE_CONTOUR_EDGES_PASS_1));
-
-      bind_src(sub);
-
-      sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_edge_dispatch_args_);
-      sub.barrier(GPU_BARRIER_SHADER_STORAGE);
-    }
   }
 
   void StrokeGenPassModule::append_subpass_contour_segmentation()
@@ -1851,20 +1839,20 @@ namespace blender::npr::strokegen
     append_subpass_fill_dispatch_args_contour_edges(pass_process_contours, true);
     append_subpass_serialize_contour_edges();
     append_subpass_fill_dispatch_args_contour_verts(pass_process_contours); 
-    // {
-    //   SegLoopConv1DSettings conv1d_settings;
-    //   conv1d_settings.is_validation_shader = false;
-    //   conv1d_settings.use_indirect_dispatch = true;
-    //   conv1d_settings.lazy_dispatch = false;
-    //   conv1d_settings.ssbo_segloopconv1d_info_ = buffers_.ssbo_segloopconv1d_info_;
-    //   conv1d_settings.ssbo_segloopconv1d_patch_table_ = buffers_.ssbo_segloopconv1d_patch_table_;
-    //   conv1d_settings.ssbo_in_segloopconv1d_data_ = buffers_.reused_ssbo_in_segloopconv1d_data_contour_seg_denoise();
-    //   conv1d_settings.ssbo_out_segloopconv1d_data_ = buffers_.ssbo_contour_snake_flags_;
-    //   conv1d_settings.shader_build_patch_table = CONV1D_SEG_DENOISE_BUILD_PATCH;
-    //   conv1d_settings.shader_convolution = CONV1D_SEG_DENOISE_CONVOLUTION;
-    //
-    //   append_subpass_segloopconv1d(conv1d_settings, pass_process_contours); 
-    // }
+    if (meshing_params.denoise_cusp_segmentation){
+      SegLoopConv1DSettings conv1d_settings;
+      conv1d_settings.is_validation_shader = false;
+      conv1d_settings.use_indirect_dispatch = true;
+      conv1d_settings.lazy_dispatch = false;
+      conv1d_settings.ssbo_segloopconv1d_info_ = buffers_.ssbo_segloopconv1d_info_;
+      conv1d_settings.ssbo_segloopconv1d_patch_table_ = buffers_.ssbo_segloopconv1d_patch_table_;
+      conv1d_settings.ssbo_in_segloopconv1d_data_ = buffers_.reused_ssbo_in_segloopconv1d_data_contour_seg_denoise();
+      conv1d_settings.ssbo_out_segloopconv1d_data_ = buffers_.ssbo_contour_snake_flags_;
+      conv1d_settings.shader_build_patch_table = CONV1D_SEG_DENOISE_BUILD_PATCH;
+      conv1d_settings.shader_convolution = CONV1D_SEG_DENOISE_CONVOLUTION;
+    
+      append_subpass_segloopconv1d(conv1d_settings, pass_process_contours); 
+    }
     append_subpass_contour_segmentation(); 
     append_subpass_calc_contour_edges_draw_data();
   }
@@ -2042,7 +2030,7 @@ namespace blender::npr::strokegen
       auto &sub = pass.sub("strokegen_segloopconv1d_fill_dispatch_args");
       sub.shader_set(shaders_.static_shader_get(CONV1D_FILL_DISPATCH_ARGS));
 
-      sub.bind_ssbo(0, buffers_.ssbo_segloopconv1d_info_);
+      sub.bind_ssbo(0, settings.ssbo_segloopconv1d_info_);
       sub.bind_ssbo(1, buffers_.ssbo_segloopconv1d_dispatch_args_);
       sub.push_constant("pc_segloopconv1d_dispatch_group_size_", (int)GROUP_SIZE_STROKEGEN_GEOM_EXTRACT);
 
@@ -2052,18 +2040,18 @@ namespace blender::npr::strokegen
 
     if (!settings.lazy_dispatch)
     {
-      auto &sub = pass_conv1d_test.sub("strokegen_segloopconv1D_build_patch");
+      auto &sub = pass.sub("strokegen_segloopconv1D_build_patch");
       sub.shader_set(shaders_.static_shader_get(settings.shader_build_patch_table));
 
       // Note: keep the same slot binding as in shader_create_info
-      sub.bind_ssbo(0, buffers_.ssbo_segloopconv1d_patch_table_);
-      sub.bind_ssbo(1, buffers_.ssbo_segloopconv1d_info_);
+      sub.bind_ssbo(0, settings.ssbo_segloopconv1d_patch_table_);
+      sub.bind_ssbo(1, settings.ssbo_segloopconv1d_info_);
       if (settings.is_validation_shader)
         sub.bind_ssbo(2, buffers_.ssbo_debug_segloopconv1d_data_);
       else if (settings.shader_build_patch_table == CONV1D_SEG_DENOISE_BUILD_PATCH) {
         sub.bind_ssbo(2, buffers_.ssbo_contour_snake_rank_);
         sub.bind_ssbo(3, buffers_.ssbo_contour_snake_list_len_);
-        sub.bind_ssbo(4, buffers_.ssbo_contour_snake_flags_); 
+        sub.bind_ssbo(4, buffers_.ssbo_contour_snake_flags_);
       }
       sub.bind_ubo(0, buffers_.ubo_segloopconv1d_);
 
@@ -2075,14 +2063,14 @@ namespace blender::npr::strokegen
       sub.barrier(GPU_BARRIER_SHADER_STORAGE);
     }
     {
-      auto &sub = pass_conv1d_test.sub("strokegen_segloopconv1D_convolution");
+      auto &sub = pass.sub("strokegen_segloopconv1D_convolution");
       sub.shader_set(shaders_.static_shader_get(settings.shader_convolution));
 
       // Note: keep the same slot binding as in shader_create_info
-      sub.bind_ssbo(0, buffers_.ssbo_segloopconv1d_patch_table_);
-      sub.bind_ssbo(1, buffers_.ssbo_in_segloopconv1d_data_);
-      sub.bind_ssbo(2, buffers_.ssbo_out_segloopconv1d_data_);
-      sub.bind_ssbo(3, buffers_.ssbo_segloopconv1d_info_); 
+      sub.bind_ssbo(0, settings.ssbo_segloopconv1d_patch_table_);
+      sub.bind_ssbo(1, settings.ssbo_in_segloopconv1d_data_);
+      sub.bind_ssbo(2, settings.ssbo_out_segloopconv1d_data_);
+      sub.bind_ssbo(3, settings.ssbo_segloopconv1d_info_); 
       if (settings.is_validation_shader)
         sub.bind_ssbo(4, buffers_.ssbo_debug_segloopconv1d_data_);
       else if (settings.shader_convolution == CONV1D_SEG_DENOISE_CONVOLUTION) {

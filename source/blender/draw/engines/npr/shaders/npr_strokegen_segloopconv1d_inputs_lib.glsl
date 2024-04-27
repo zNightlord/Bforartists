@@ -105,9 +105,9 @@ bool should_init_conv_data(bool mov_left, uint mov_step) { return mov_left && (m
         }
         void FUNC_CONVOLUTION_LOOPCONV1D(
             bool mov_left, uint mov_step, bool seg_is_loop, uint seg_head_id, uint seg_tail_id, uint item_id, 
-            T_CV neighbor_data, T_CV ori_data, inout T_CONV_TEMP_DATA conv_data)
+            T_CV neighbor_data, T_CV orig_data, inout T_CONV_TEMP_DATA conv_data)
         {
-            if (should_init_conv_data(mov_left, mov_step)) conv_data.val = ori_data; // initialization
+            if (should_init_conv_data(mov_left, mov_step)) conv_data.val = orig_data; // initialization
             conv_data.val += neighbor_data; // simple add
         }
     #endif
@@ -115,7 +115,10 @@ bool should_init_conv_data(bool mov_left, uint mov_step) { return mov_left && (m
     #if defined(_KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__SEG_DENOISING)
         struct T_CONV_TEMP_DATA
         {
-            uint num_neg_cusp_funcs; 
+            uint num_pstv_cusps_left;
+            uint num_pstv_cusps_right;  
+            bool is_self_pstv_cusp; 
+            bool is_seg_head; 
         }; 
         T_CV FUNC_DEVICE_LOAD_LOOPCONV1D_DATA(uint elemId)
         {
@@ -123,13 +126,22 @@ bool should_init_conv_data(bool mov_left, uint mov_step) { return mov_left && (m
         }
         void FUNC_CONVOLUTION_LOOPCONV1D(
             bool mov_left, uint mov_step, bool seg_is_loop, uint seg_head_id, uint seg_tail_id, uint item_id, 
-            T_CV neighbor_data, T_CV ori_data, inout T_CONV_TEMP_DATA conv_data)
+            T_CV neighbor_data, T_CV orig_data, inout T_CONV_TEMP_DATA conv_data)
         {
             ContourFlags efs_neigh = decode_contour_flags(neighbor_data);
-            ContourFlags efs_ori = decode_contour_flags(ori_data);
+            ContourFlags efs_ori = decode_contour_flags(orig_data);
             
-            conv_data.num_neg_cusp_funcs = 0u; 
-            // efs_conv.seg_head
+            if (should_init_conv_data(mov_left, mov_step))
+            {
+                conv_data.is_seg_head = efs_ori.seg_head; 
+                conv_data.is_self_pstv_cusp = efs_ori.cusp_func_pstv;
+                conv_data.num_pstv_cusps_left = 0u;
+                conv_data.num_pstv_cusps_right = 0u;
+            }
+            if (mov_left)
+                conv_data.num_pstv_cusps_left += efs_neigh.cusp_func_pstv ? 1 : 0; 
+            else
+                conv_data.num_pstv_cusps_right += efs_neigh.cusp_func_pstv ? 1 : 0; 
         }
     #endif
 #undef T_CV

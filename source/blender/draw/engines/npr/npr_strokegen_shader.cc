@@ -107,8 +107,6 @@ const char *StrokeGenShaderModule::static_shader_create_info_name_get(eShaderTyp
       return "bnpr_geom_extract_mesh_contour_data";
     case SERIALIZE_CONTOUR_EDGES_PASS_0:
       return "strokegen_serialize_contour_edges_pass_0";
-    case SERIALIZE_CONTOUR_EDGES_PASS_1:
-      return "strokegen_serialize_contour_edges_pass_1";
     case SETUP_CONTOUR_SEGMENTATION:
       return "strokegen_setup_contour_segmentation";
     case FINISH_CONTOUR_SEGMENTATION:

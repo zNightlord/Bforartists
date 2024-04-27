@@ -210,11 +210,6 @@ GPU_SHADER_CREATE_INFO(strokegen_serialize_contour_edges_pass_0)
     .additional_info("strokegen_serialize_contour_edges")
     .define("_KERNEL_MULTICOMPILE__CONTOUR_SERIALIZATION__PASS_0", "1");
 
-GPU_SHADER_CREATE_INFO(strokegen_serialize_contour_edges_pass_1)
-    .do_static_compilation(true)
-    .additional_info("strokegen_serialize_contour_edges")
-    .define("_KERNEL_MULTICOMPILE__CONTOUR_SERIALIZATION__PASS_1", "1");
-
 GPU_SHADER_CREATE_INFO(strokegen_contour_segmentation)
     .do_static_compilation(true)
     .typedef_source("bnpr_shader_shared.hh")
