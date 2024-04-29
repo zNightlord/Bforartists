@@ -575,6 +575,9 @@ set(GLSL_SRC
   engines/npr/shaders/npr_strokegen_list_ranking_lib.glsl
   engines/npr/shaders/npr_strokegen_list_ranking_codegen_lib.glsl
   engines/npr/shaders/npr_strokegen_list_ranking_test_comp.glsl 
+
+  engines/npr/shaders/npr_strokegen_compaction_lib.glsl 
+  engines/npr/shaders/npr_strokegen_allocation_lib.glsl
  
   engines/npr/shaders/npr_strokegen_load_store_lib.glsl
   engines/npr/shaders/npr_strokegen_geom_extract_comp.glsl
@@ -596,10 +599,9 @@ set(GLSL_SRC
   engines/npr/shaders/npr_strokegen_debug_lines_vert.glsl 
   engines/npr/shaders/npr_strokegen_debug_lines_frag.glsl 
   engines/npr/shaders/npr_strokegen_pixel_extract_comp.glsl
-  engines/npr/shaders/npr_strokegen_compaction_lib.glsl 
   engines/npr/shaders/npr_strokegen_contour_processing.glsl
   engines/npr/shaders/npr_strokegen_contour_topo_lib.glsl
-  engines/npr/shaders/npr_strokegen_contour_geom_lib.glsl
+  engines/npr/shaders/npr_strokegen_contour_geom_lib.glsl 
 
   engines/npr/bnpr_defines.hh
   engines/npr/bnpr_shader_shared.hh

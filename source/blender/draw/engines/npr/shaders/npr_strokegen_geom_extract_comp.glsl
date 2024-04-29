@@ -1,5 +1,6 @@
 
 #pragma BLENDER_REQUIRE(npr_strokegen_compaction_lib.glsl)
+#pragma BLENDER_REQUIRE(npr_strokegen_allocation_lib.glsl)
 #pragma BLENDER_REQUIRE(npr_strokegen_topo_lib.glsl)
 #pragma BLENDER_REQUIRE(npr_strokegen_geom_lib.glsl)
 #pragma BLENDER_REQUIRE(npr_strokegen_contour_topo_lib.glsl)
@@ -30,7 +31,8 @@ void main()
 		ssbo_bnpr_mesh_pool_counters_.num_dbg_vnor_lines = 0; 
 		ssbo_bnpr_mesh_pool_counters_.num_dbg_vpdir_lines = 0; 
 		ssbo_bnpr_mesh_pool_counters_.num_dbg_edge_lines = 0; 
-
+		ssbo_bnpr_mesh_pool_counters_.num_draw_faces = 0; 
+		
 		ssbo_bnpr_mesh_pool_counters_prev_.num_contour_edges = 0; 
 		ssbo_bnpr_mesh_pool_counters_prev_.num_verts         = 0; 
 		ssbo_bnpr_mesh_pool_counters_prev_.num_edges         = 0; 
@@ -41,6 +43,7 @@ void main()
 		ssbo_bnpr_mesh_pool_counters_prev_.num_dbg_vnor_lines = 0; 
 		ssbo_bnpr_mesh_pool_counters_prev_.num_dbg_vpdir_lines = 0; 
 		ssbo_bnpr_mesh_pool_counters_prev_.num_dbg_edge_lines = 0; 
+		ssbo_bnpr_mesh_pool_counters_prev_.num_draw_faces = 0; 
 	}
 }
 #endif
@@ -82,17 +85,17 @@ void main()
 
 	if (idx == 0)
 	{ /* cache counters from last mesh extraction pass */
-		ssbo_bnpr_mesh_pool_counters_prev_.num_contour_edges = ssbo_bnpr_mesh_pool_counters_.num_contour_edges; 
-		ssbo_bnpr_mesh_pool_counters_prev_.num_verts         = ssbo_bnpr_mesh_pool_counters_.num_verts; 
-		ssbo_bnpr_mesh_pool_counters_prev_.num_edges         = ssbo_bnpr_mesh_pool_counters_.num_edges; 
-		ssbo_bnpr_mesh_pool_counters_prev_.num_faces         = ssbo_bnpr_mesh_pool_counters_.num_faces; 
-		ssbo_bnpr_mesh_pool_counters_prev_.num_contour_verts = ssbo_bnpr_mesh_pool_counters_.num_contour_verts; 
-		ssbo_bnpr_mesh_pool_counters_prev_.num_filtered_edges = ssbo_bnpr_mesh_pool_counters_.num_filtered_edges; 
-		ssbo_bnpr_mesh_pool_counters_prev_.num_filtered_verts = ssbo_bnpr_mesh_pool_counters_.num_filtered_verts; 
-		ssbo_bnpr_mesh_pool_counters_prev_.num_dbg_vnor_lines = ssbo_bnpr_mesh_pool_counters_.num_dbg_vnor_lines;
+		ssbo_bnpr_mesh_pool_counters_prev_.num_contour_edges   = ssbo_bnpr_mesh_pool_counters_.num_contour_edges; 
+		ssbo_bnpr_mesh_pool_counters_prev_.num_verts           = ssbo_bnpr_mesh_pool_counters_.num_verts; 
+		ssbo_bnpr_mesh_pool_counters_prev_.num_edges           = ssbo_bnpr_mesh_pool_counters_.num_edges; 
+		ssbo_bnpr_mesh_pool_counters_prev_.num_faces           = ssbo_bnpr_mesh_pool_counters_.num_faces; 
+		ssbo_bnpr_mesh_pool_counters_prev_.num_contour_verts   = ssbo_bnpr_mesh_pool_counters_.num_contour_verts; 
+		ssbo_bnpr_mesh_pool_counters_prev_.num_filtered_edges  = ssbo_bnpr_mesh_pool_counters_.num_filtered_edges; 
+		ssbo_bnpr_mesh_pool_counters_prev_.num_filtered_verts  = ssbo_bnpr_mesh_pool_counters_.num_filtered_verts; 
+		ssbo_bnpr_mesh_pool_counters_prev_.num_dbg_vnor_lines  = ssbo_bnpr_mesh_pool_counters_.num_dbg_vnor_lines;
 		ssbo_bnpr_mesh_pool_counters_prev_.num_dbg_vpdir_lines = ssbo_bnpr_mesh_pool_counters_.num_dbg_vpdir_lines;
-		ssbo_bnpr_mesh_pool_counters_prev_.num_dbg_edge_lines = ssbo_bnpr_mesh_pool_counters_.num_dbg_edge_lines;
-		
+		ssbo_bnpr_mesh_pool_counters_prev_.num_dbg_edge_lines  = ssbo_bnpr_mesh_pool_counters_.num_dbg_edge_lines;
+		ssbo_bnpr_mesh_pool_counters_prev_.num_draw_faces 	   = ssbo_bnpr_mesh_pool_counters_.num_draw_faces;
 	}
  }
 #endif
@@ -200,7 +203,16 @@ void main()
 	const uint wedge_id = idx;
 	const uint resource_id = pcs_rsc_handle; 
 
+	EdgeFlags ef = load_edge_flags(wedge_id); 
+	AdjWedgeInfo w[4] = {
+		decode_adj_wedge_info(ssbo_edge_to_edges_[wedge_id*4u + 0u]),
+		decode_adj_wedge_info(ssbo_edge_to_edges_[wedge_id*4u + 1u]),
+		decode_adj_wedge_info(ssbo_edge_to_edges_[wedge_id*4u + 2u]),
+		decode_adj_wedge_info(ssbo_edge_to_edges_[wedge_id*4u + 3u])
+	}; 
 	
+	/* Extract Contour Edges -------------------------------------------------------------- */
+
 	/* transform matrices, see "common_view_lib.glsl" */ 
 	mat4 model_to_world = drw_matrix_buf[resource_id].model; 
 	mat4 world_to_model = drw_matrix_buf[resource_id].model_inverse; 
@@ -210,8 +222,7 @@ void main()
 	
 	bool is_persp = (ubo_view_matrices_.winmat[3][3] == 0.0);
 	vec3 cam_pos_ws = view_to_world[3].xyz; /* see "#define cameraPos ViewMatrixInverse[3].xyz" */
-	vec3 cam_pos_loc = (world_to_model * vec4(cam_pos_ws, 1.0f)).xyz; 
-	
+
 	uvec4 vids; 
 	for (uint i = 0; i < 4; ++i)
 		vids[i] = buf_ibo[4 * wedge_id + i]; 
@@ -223,10 +234,9 @@ void main()
 	VertFlags vf[4]; 
 	for (uint i = 0; i < 4; ++i)
 		vf[i] = load_vert_flags(vids[i]);
-
-	float face_orient_123, face_orient_013; 
 	
 	bool is_contour = false; 
+	float face_orient_123, face_orient_013; 
 	if (0 == pcs_chain_interpo_contour_)
 	{
 		is_contour = is_contour_edge(
@@ -238,13 +248,46 @@ void main()
 			vf[0], vf[1], vf[2], vf[3]
 			, /*out*/ face_orient_123, face_orient_013
 		);
-
-	EdgeFlags ef = load_edge_flags(wedge_id); 
-	bool is_border = ef.border; 
 	is_contour = is_contour && (!ef.del_by_split) && (!ef.del_by_collapse) && (!ef.dupli); 
 	is_contour = is_contour && (!ef.border); // TODO: support for border edges
+	if (false == valid_thread) is_contour = false; 
+
+	uint compacted_idx = compact_contour_edge(is_contour, groupId); 
+	
+	barrier();
+
+	uint ifrontface = is_back_face(face_orient_123) ? 1 : 0; 
+	if (is_contour)
+	{ /* write world pos to output buffer */
+		/* Note: wpos_and_edgeid will be overwrite in the next pass, for saving space */
+		uint base_addr = compacted_idx * 2u; 
+		ssbo_contour_temp_data_[base_addr+0] = wedge_id; 
+		
+		PerContourWedgeInfo pcwi; 
+		pcwi.is_border = ef.border; 
+		pcwi.wedge_id = wedge_id;
+		pcwi.ifrontface = ifrontface; 
+		ssbo_contour_temp_data_[base_addr+1] = encode_per_contour_wedge_info(pcwi); 
+	}
+
+	if (valid_thread)
+	{
+		PerWedgeContourInfo peci; 
+		peci.is_border = ef.border; 
+		peci.is_contour = is_contour;
+		peci.contour_id = is_contour ? compacted_idx : NULL_EDGE; 
+		peci.ifrontface = ifrontface; 
+		ssbo_edge_to_contour_[wedge_id] = encode_per_wedge_contour_info(peci); 
+	}
 
 
+
+	/* Extract Triangle Index List -------------------------------------------------------------- */
+	// alloc_draw_face()
+
+
+
+	barrier(); 
 	/* debug view */
 	if (pcs_edge_visualize_mode_ > 0)
 	{
@@ -256,13 +299,6 @@ void main()
 		/* visualize edges with invalid topology */
 		if (pcs_edge_visualize_mode_ == 1) 
 		{
-			AdjWedgeInfo w[4] = {
-				decode_adj_wedge_info(ssbo_edge_to_edges_[wedge_id*4u + 0u]),
-				decode_adj_wedge_info(ssbo_edge_to_edges_[wedge_id*4u + 1u]),
-				decode_adj_wedge_info(ssbo_edge_to_edges_[wedge_id*4u + 2u]),
-				decode_adj_wedge_info(ssbo_edge_to_edges_[wedge_id*4u + 3u])
-			}; 
-
 			uint w0 = ((w[0].wedge_id)); 
 			uint w1 = ((w[1].wedge_id)); 
 			uint w2 = ((w[2].wedge_id)); 
@@ -307,16 +343,6 @@ void main()
 			dbg_line = dbg_line && (0 < ef.crease_level); 
 		}
 
-		if (pcs_edge_visualize_mode_ == 10)
-		{
-			vec2 maxcurv; vec2 cusp_func; 
-			ld_vcurv_max_with_cusp(vids[1], /*out*/maxcurv[0], cusp_func[0]);
-			ld_vcurv_max_with_cusp(vids[3], /*out*/maxcurv[1], cusp_func[1]);
-			bool seg_head = sign(cusp_func[0]) != sign(cusp_func[1]);  
-
-			dbg_line = dbg_line && seg_head && is_contour; 
-		}
-
 
 		uint dbg_line_idx = compact_dbg_edge(dbg_line, groupId); 
 		dbg_line_idx += get_debug_line_offset(DBG_LINE_TYPE__EDGES); 
@@ -334,36 +360,7 @@ void main()
 			ssbo_dbg_lines_[base_addr+5] = floatBitsToUint(dbg_vpos_1.z); 
 		}
 	}
-	barrier();
 
-	
-	if (false == valid_thread) is_contour = false; 
-	
-	uint compacted_idx = compact_contour_edge(is_contour, groupId); 
-
-	uint ifrontface = is_back_face(face_orient_123) ? 1 : 0; 
-	if (is_contour)
-	{ /* write world pos to output buffer */
-		/* Note: wpos_and_edgeid will be overwrite in the next pass, for saving space */
-		uint base_addr = compacted_idx * 2u; 
-		ssbo_contour_temp_data_[base_addr+0] = wedge_id; 
-		
-		PerContourWedgeInfo pcwi; 
-		pcwi.is_border = is_border; 
-		pcwi.wedge_id = wedge_id;
-		pcwi.ifrontface = ifrontface; 
-		ssbo_contour_temp_data_[base_addr+1] = encode_per_contour_wedge_info(pcwi); 
-	}
-
-	if (valid_thread)
-	{
-		PerWedgeContourInfo peci; 
-		peci.is_border = is_border; 
-		peci.is_contour = is_contour;
-		peci.contour_id = is_contour ? compacted_idx : NULL_EDGE; 
-		peci.ifrontface = ifrontface; 
-		ssbo_edge_to_contour_[wedge_id] = encode_per_wedge_contour_info(peci); 
-	}
 }
 #endif
 
@@ -412,6 +409,7 @@ bool func_ve_circulator(CirculatorIterData iter, inout VECircContext_ContourLink
 }
 
 void main()
+
 {
 	const uint groupId = gl_LocalInvocationID.x; 
 	const uint idx = gl_GlobalInvocationID.x; 

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Shared structures, enums & defines between C++ and GLSL.
  * Can also include some math functions but they need to be simple enough to be valid in both
  * language.
@@ -406,7 +406,7 @@ using namespace draw;
     uint num_dbg_vnor_lines;  // 4
     uint num_dbg_vpdir_lines;  
     uint num_dbg_edge_lines;  
-    uint pad_1;  
+    uint num_draw_faces;  
     uint pad_2;  // 4
   };
   BLI_STATIC_ASSERT_ALIGN(SSBOData_StrokeGenMeshPoolCounters, 16)

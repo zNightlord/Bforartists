@@ -26,8 +26,14 @@ class StrokegenMeshRasterPass : public draw::PassMain {
                                    GPUBufferPoolModule &buffers,
                                    GPUTexturePoolModule &textures);
 
-  void append_draw_dbg_lines_subpass(npr::strokegen::StrokeGenShaderModule& shaders,
-                                     npr::strokegen::GPUBufferPoolModule& buffers, int line_type);
+  void append_draw_dbg_lines_subpass(StrokeGenShaderModule & shaders,
+                                     GPUBufferPoolModule & buffers, int line_type);
+
+  void append_draw_contour_per_obj_z_subpass(
+      GPUBatch* batch,
+      ResourceHandle& rsc_handle,
+      StrokeGenShaderModule& shaders,
+      GPUBufferPoolModule& buffers, GPUTexturePoolModule& textures);
 };
 
 }

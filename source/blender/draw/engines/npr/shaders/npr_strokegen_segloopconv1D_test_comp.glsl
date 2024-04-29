@@ -1,11 +1,7 @@
 #pragma BLENDER_REQUIRE(npr_strokegen_segloopconv1d_lib.glsl)
 
 
-
-
-
-
-
+ 
 #if defined(_KERNEL_MULTICOMPILE__1DSEGLOOP_BUILD_PATCH_TABLE)
 
 void main()

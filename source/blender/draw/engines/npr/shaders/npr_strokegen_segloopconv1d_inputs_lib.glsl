@@ -111,7 +111,7 @@ bool should_init_conv_data(bool mov_left, uint mov_step) { return mov_left && (m
             conv_data.val += neighbor_data; // simple add
         }
     #endif
-
+ 
     #if defined(_KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__SEG_DENOISING)
         struct T_CONV_TEMP_DATA
         {
@@ -120,7 +120,7 @@ bool should_init_conv_data(bool mov_left, uint mov_step) { return mov_left && (m
             bool is_self_pstv_cusp; 
             bool is_seg_head; 
         }; 
-        T_CV FUNC_DEVICE_LOAD_LOOPCONV1D_DATA(uint elemId)
+        T_CV FUNC_DEVICE_LOAD_LOOPCONV1D_DATA(uint elemId) 
         {
             return ssbo_in_segloopconv1d_data_[elemId];
         }

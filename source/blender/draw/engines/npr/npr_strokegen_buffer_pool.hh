@@ -249,6 +249,7 @@ class GPUBufferPoolModule {
   {
     return ssbo_mesh_buffer_reuse_4_; 
   }
+  
 
   // Reused buffers for global contour processing --------------------------
   // intermediate buffer to store results from list ranking, contour serialization and segmentation. 

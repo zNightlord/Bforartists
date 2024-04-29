@@ -2,13 +2,15 @@
 #pragma BLENDER_REQUIRE(common_view_clipping_lib.glsl)
 #pragma BLENDER_REQUIRE(common_view_lib.glsl)
 
+/*
+ubo_view_matrices_
+drw_matrix_buf
+*/
+
 void main()
 {
-  GPU_INTEL_VERTEX_SHADER_WORKAROUND
-
-  vec3 world_pos = point_object_to_world(pos);
-
-  gl_Position = point_world_to_ndc(world_pos);
-
-  view_clipping_distances(world_pos);
+	// mat4 model_to_world = drw_matrix_buf[ResourceID].model;  
+	// mat4 world_to_model = drw_matrix_buf[ResourceID].model_inverse;
+  // mat4 world_to_view = ubo_view_matrices_.viewmat;
+	// mat4 mat_camera_proj = ubo_view_matrices_.winmat; 
 }

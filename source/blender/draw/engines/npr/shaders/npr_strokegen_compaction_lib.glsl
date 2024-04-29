@@ -7,11 +7,9 @@
 #define CAT(x, y) CAT_(x, y)
 #define CAT_(x, y) x ## y
 
-
+/* Parallel Compaction --------------------------------------------------------------------------------------------- */
 /* !!! Must invoke this for EVERY thread in the work group !!! 
  * not matter if your thread maps to "invalid" element(s) */
-
-
 /* Code gen Input: */
 /* #define COMPACTION_LIB_EXCLUDE_DEFAULT_CODEGEN --- wether use the default compaction code generator */
 /* #define GLOBAL_COUNTER XXX --- Global Compaction Counter, should be cleared to 0*/
@@ -213,12 +211,25 @@ DECL_COMPACTION_FUNC(CP_TAG, ssbo_bnpr_mesh_pool_counters_.num_dbg_vpdir_lines)
     #undef LDS_HIST_BLK
     #undef LDS_OFFSET_PER_LANE_SLOT
     #undef LDS_DIGIT_PER_LANE
-    #undef CP_TAG
-    #undef CP_TAG
-#endif
+#undef CP_TAG
 
+#define CP_TAG draw_faces
+    DECL_LDS_DIGIT_PER_LANE(CP_TAG)
+    #define LDS_DIGIT_PER_LANE CAT(LDS_digit_per_lane_, CP_TAG)
+    DECL_LDS_OFFSET_PER_LANE_SLOT(CP_TAG)
+    #define LDS_OFFSET_PER_LANE_SLOT CAT(LDS_digit_per_lane_, CP_TAG)
+    DECL_LDS_HIST_BLK(CP_TAG)
+    #define LDS_HIST_BLK CAT(LDS_hist_blk_, CP_TAG)
+    DECL_LDS_SCAN_BLOCK_OFFSET(CP_TAG)
+    #define LDS_SCAN_BLOCK_OFFSET CAT(LDS_scan_block_offset_, CP_TAG) 
 
+    DECL_COMPACTION_FUNC(CP_TAG, ssbo_bnpr_mesh_pool_counters_.num_draw_faces)
+    #undef LDS_HIST_BLK
+    #undef LDS_OFFSET_PER_LANE_SLOT
+    #undef LDS_DIGIT_PER_LANE
+#undef CP_TAG
 
+#endif /* _KERNEL_MULTICOMPILE__GEOM_EXTRACT */
 
 
 

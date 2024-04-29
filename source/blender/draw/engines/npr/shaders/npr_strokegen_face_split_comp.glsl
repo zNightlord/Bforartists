@@ -1,6 +1,7 @@
 
 #pragma BLENDER_REQUIRE(npr_strokegen_topo_lib.glsl)
 #pragma BLENDER_REQUIRE(npr_strokegen_load_store_lib.glsl)
+#pragma BLENDER_REQUIRE(npr_strokegen_allocation_lib.glsl)
 
 // pcs_split_iter_
 // SSBOData_StrokeGenFaceSplitCounters   ssbo_face_split_counters_[]
@@ -61,10 +62,19 @@ void main()
 
 #if defined(_KERNEL_MULTICOMPILE__FACE_SPLIT_WORK_GEN)
 
-shared uint LDS_counters_per_lane_[32u];
-shared uint LDS_counters_per_lane_sum_[32u]; 
-shared uint LDS_blk_counter_; 
-shared uint LDS_blk_offset_; 
+
+// #define AC_TAG split_face
+
+// DECL_LDS_COUNTERS_PER_LANE(AC_TAG)
+// #define LDS_COUNTERS_PER_LANE CAT(LDS_counters_per_lane_, AC_TAG)
+// DECL_LDS_COUNTERS_PER_LANE_SUM(AC_TAG)
+// #define LDS_COUNTERS_PER_LANE_SUM CAT(LDS_counters_per_lane_sum_, AC_TAG)
+// DECL_LDS_ALLOC_BLK_COUNTER(AC_TAG)
+// #define LDS_ALLOC_BLK_COUNTER CAT(LDS_alloc_blk_counter_, AC_TAG)
+// DECL_LDS_ALLOC_BLOCK_OFFSET(AC_TAG)
+// #define LDS_ALLOC_BLOCK_OFFSET CAT(LDS_alloc_blk_offset_, AC_TAG)
+
+// DECL_ALLOCATION_FUNC(AC_TAG, ssbo_face_split_counters_[pcs_split_iter_].num_split_faces)
 
 
 bool should_wedge_generate_iface(uint wedge_id, uint iface, AdjWedgeInfo w[4], EdgeFlags efs[4])
@@ -133,46 +143,7 @@ void main()
 
 
     uint alloc_offset = 0u; 
-    { /* allocation */
-        const uint wave_id = groupIdx >> 5u; /* must be < 32 which is ensured since tg size <= 1024 */ 
-        const uint lane_id = groupIdx % 32u; 
-        const uint num_waves = gl_WorkGroupSize.x >> 5u; 
-
-        /* Clear LDS counters */
-        if (wave_id == 0u)
-        {
-            LDS_counters_per_lane_[lane_id] = 0u; 
-            LDS_counters_per_lane_sum_[lane_id] = 0u; 
-            if (lane_id == 0u)
-                LDS_blk_counter_ = 0u; 
-        }
-        barrier(); 
-        
-        uint lane_offset = atomicAdd(LDS_counters_per_lane_[lane_id], num_gen_faces); 
-        barrier();
-
-        if (wave_id == 0u)
-            LDS_counters_per_lane_sum_[lane_id] = 
-                atomicAdd(LDS_blk_counter_, LDS_counters_per_lane_[lane_id]);
-        barrier(); 
-
-        uint lane_sum = LDS_counters_per_lane_sum_[lane_id];
-        uint group_offset = lane_offset + lane_sum;
-        
-        /* Add block sum to global counter. */
-        if (groupIdx == gl_WorkGroupSize.x - 1u)
-        {
-            LDS_blk_offset_ = atomicAdd(
-                (SPLIT_FACE_COUNTER),
-                LDS_blk_counter_
-            );
-        }
-        barrier(); 
-
-        uint global_offset = group_offset + LDS_blk_offset_; 
-
-        alloc_offset = global_offset; 
-    }
+    alloc_offset = alloc_split_face(groupIdx, num_gen_faces);  
 
 
     // Store per-face split info

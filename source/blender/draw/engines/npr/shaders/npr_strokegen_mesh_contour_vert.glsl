@@ -105,7 +105,7 @@ void main()
 
 
     color = 
-        vec4(rand_col_rgb(contour_seg_len, contour_seg_len), contour_edge_id);
+        vec4(rand_col_rgb(contour_seg_len / 16, contour_seg_len / 16), contour_edge_id);
         // (contour_edge_list_len < contour_edge_rank || contour_edge_rank == 0) ? 
         // vec4(prev_contour_id, contour_edge_rank, contour_edge_list_len, contour_edge_list_head) : vec4(.0f);
 

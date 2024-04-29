@@ -82,3 +82,14 @@ void npr::strokegen::StrokegenMeshRasterPass::append_draw_dbg_lines_subpass(
   subpass->barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
   subpass->draw_procedural_indirect(GPUPrimType::GPU_PRIM_LINES, buffers.ssbo_bnpr_vert_debug_draw_args_);
 }
+
+void npr::strokegen::StrokegenMeshRasterPass::append_draw_contour_per_obj_z_subpass(
+    GPUBatch *batch,
+    ResourceHandle &rsc_handle, 
+    StrokeGenShaderModule &shaders,
+    GPUBufferPoolModule &buffers,
+    GPUTexturePoolModule &textures)
+{
+  auto& bounds = DRW_manager_get()->bounds_buf.current();
+
+}
