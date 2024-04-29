@@ -1899,7 +1899,7 @@ namespace blender::npr::strokegen
 
       sub.bind_image(0, textures_.tex_contour_raster);
       sub.bind_image(1, textures_.tex2d_contour_pix_marks_);
-      sub.bind_image(2, textures_.tex2d_contour_pix_marks_dbg_);
+      sub.bind_image(2, textures_.tex2d_contour_dbg_);
       sub.push_constant("pcs_screen_size_", textures_.get_contour_raster_screen_res());
 
       int2 screen_res = int2(GPU_texture_width(textures_.tex_contour_raster),

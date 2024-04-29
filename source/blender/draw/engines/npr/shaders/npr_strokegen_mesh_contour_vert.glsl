@@ -1,5 +1,6 @@
 
 #pragma BLENDER_REQUIRE(common_view_lib.glsl)
+#pragma BLENDER_REQUIRE(npr_strokegen_contour_topo_lib.glsl)
 
 /* https://www.shadertoy.com/view/7tlXR4 */
 vec3 hash32(vec2 p) 
@@ -44,6 +45,7 @@ void main()
     uint contour_seg_len = ssbo_contour_snake_seg_len_[contour_edge_id];
     uint prev_contour_id = ssbo_contour_to_contour_[2*contour_edge_id];
     uint next_contour_id = ssbo_contour_to_contour_[2*contour_edge_id+1u];
+    ContourFlags cf = load_contour_flags(contour_edge_id); 
     
     uint end_node_id = contour_edge_list_head; 
     uvec2 link_end = uvec2(

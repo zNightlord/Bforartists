@@ -27,7 +27,7 @@ namespace blender::npr::strokegen
     TextureFromPool tex_contour_per_obj_z_col;
     TextureFromPool tex_contour_per_obj_z_depth; 
     TextureFromPool tex2d_contour_pix_marks_;
-    TextureFromPool tex2d_contour_pix_marks_dbg_; 
+    TextureFromPool tex2d_contour_dbg_;
 
     /** Framebuffers */
     Framebuffer fb_contour_per_obj_depth; 

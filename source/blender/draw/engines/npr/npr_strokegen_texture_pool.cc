@@ -55,7 +55,7 @@ void GPUTexturePoolModule::on_begin_sync(Texture& tex_prepass_depth)
     int2 compressed_rect_size = CONTOUR_PIX_MARK_COMPRESS_RECT_SIZE; 
     int2 pix_marks_res = (screen_res + compressed_rect_size - int2(1, 1)) / compressed_rect_size; 
     tex2d_contour_pix_marks_.acquire(pix_marks_res, eGPUTextureFormat::GPU_R32UI, tex_pix_mark_usage);
-    tex2d_contour_pix_marks_dbg_.acquire(screen_res, eGPUTextureFormat::GPU_R32UI, tex_pix_mark_usage);
+    tex2d_contour_dbg_.acquire(screen_res, eGPUTextureFormat::GPU_RGBA32F, tex_pix_mark_usage);
   }
 
 }
@@ -72,7 +72,7 @@ void GPUTexturePoolModule::on_finished_draw_viewport()
   tex_contour_per_obj_z_col.release();
   tex_contour_per_obj_z_depth.release(); 
   tex2d_contour_pix_marks_.release();
-  tex2d_contour_pix_marks_dbg_.release(); 
+  tex2d_contour_dbg_.release(); 
 }
 
 

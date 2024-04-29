@@ -138,6 +138,13 @@ bool should_init_conv_data(bool mov_left, uint mov_step) { return mov_left && (m
                 conv_data.num_pstv_cusps_left = 0u;
                 conv_data.num_pstv_cusps_right = 0u;
             }
+
+            bool moved_across_end = 
+                (mov_left && (seg_head_id + mov_step > item_id)) 
+                || (!mov_left && (seg_tail_id < item_id + mov_step));
+            bool skip_when_not_looped = (!seg_is_loop) && moved_across_end; 
+            if (skip_when_not_looped) return; 
+
             if (mov_left)
                 conv_data.num_pstv_cusps_left += efs_neigh.cusp_func_pstv ? 1 : 0; 
             else
