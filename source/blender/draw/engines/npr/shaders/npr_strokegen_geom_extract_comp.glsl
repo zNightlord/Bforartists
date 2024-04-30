@@ -211,8 +211,8 @@ void main()
 		decode_adj_wedge_info(ssbo_edge_to_edges_[wedge_id*4u + 3u])
 	}; 
 	
+	
 	/* Extract Contour Edges -------------------------------------------------------------- */
-
 	/* transform matrices, see "common_view_lib.glsl" */ 
 	mat4 model_to_world = drw_matrix_buf[resource_id].model; 
 	mat4 world_to_model = drw_matrix_buf[resource_id].model_inverse; 
@@ -283,7 +283,23 @@ void main()
 
 
 	/* Extract Triangle Index List -------------------------------------------------------------- */
-	// alloc_draw_face()
+    bvec2 gen_face = bvec2(true, true);
+	for (uint iface = 0; iface < 2; ++iface)
+	{
+		uvec2 iwedges_fi = (iface == 0u) ? uvec2(1, 2) : uvec2(3, 0); 
+		for (uint iiw = 0u; iiw < 2u; ++iiw)
+		{ // Only wedge with the highest id generates the face 
+			uint iwedge = iwedges_fi[iiw]; 
+
+			if (wedge_id < w[iwedge].wedge_id)
+				gen_face[iface] = false;
+		}
+	}
+
+	uint num_gen_faces = uint(gen_face.x) + uint(gen_face.y); 
+	if (!valid_thread) num_gen_faces = 0; 
+	uint faces_offet = alloc_draw_face(groupId, num_gen_faces); 
+
 
 
 

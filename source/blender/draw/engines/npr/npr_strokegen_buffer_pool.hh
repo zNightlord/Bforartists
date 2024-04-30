@@ -236,11 +236,8 @@ class GPUBufferPoolModule {
     return ssbo_mesh_buffer_reuse_1_;
   }
 
-  // Reused buffers for per-batch contour processing --------------------------
-  inline GPUStorageBuf *reused_ssbo_bnpr_mesh_pool_()
-  {
-    return ssbo_mesh_buffer_reuse_3_; 
-  }
+  // Reused buffers for Contour Processing
+  // lifetime [append_subpass_extract_contour_edges, append_subpass_setup_contour_edge_data]
   inline GPUStorageBuf *reused_ssbo_edge_to_contour_()
   {
     return ssbo_mesh_buffer_reuse_6_; 
@@ -249,34 +246,49 @@ class GPUBufferPoolModule {
   {
     return ssbo_mesh_buffer_reuse_4_; 
   }
-  
 
-  // Reused buffers for global contour processing --------------------------
-  // intermediate buffer to store results from list ranking, contour serialization and segmentation. 
-  inline GPUStorageBuf *reused_ssbo_contour_to_contour_()
-  { 
-    return ssbo_mesh_buffer_reuse_7_; 
+  // lifetime [append_subpass_setup_contour_edge_data, append_subpass_serialize_contour_edges]
+  inline GPUStorageBuf *reused_ssbo_contour_edge_transfer_data_()
+  {
+    return ssbo_mesh_buffer_reuse_0_;
   }
+
+  // intermediate buffer to store results from list ranking, contour serialization and segmentation.
+  // lifetime [append_subpass_list_ranking, append_subpass_serialize_contour_edges]
   inline GPUStorageBuf *reused_ssbo_contour_edge_rank_()
   {
-    return ssbo_mesh_buffer_reuse_5_; 
+    return ssbo_mesh_buffer_reuse_5_;
   }
   inline GPUStorageBuf *reused_ssbo_contour_edge_list_len_()
   {
-    return ssbo_mesh_buffer_reuse_2_; 
+    return ssbo_mesh_buffer_reuse_2_;
   }
   inline GPUStorageBuf *reused_ssbo_contour_edge_list_head_info_()
   {
-    return ssbo_mesh_buffer_reuse_8_; 
+    return ssbo_mesh_buffer_reuse_8_;
   }
-  inline GPUStorageBuf *reused_ssbo_contour_edge_transfer_data_()
-  {
-    return ssbo_mesh_buffer_reuse_0_; 
-  }
+
+  // lifetime [append_subpass_serialize_contour_edges, append_subpass_contour_segmentation)
   inline GPUStorageBuf *reused_ssbo_in_segloopconv1d_data_contour_seg_denoise()
   {
-    return ssbo_mesh_buffer_reuse_4_; 
+    return ssbo_mesh_buffer_reuse_4_;
   }
+
+  // lifetime [append_subpass_calc_contour_edges_draw_data, append_draw_contour_subpass]
+  inline GPUStorageBuf *reused_ssbo_bnpr_mesh_pool_()
+  {
+    return ssbo_mesh_buffer_reuse_3_;
+  }
+
+  // lifetime [append_subpass_setup_contour_edge_data, append_draw_contour_subpass]
+  inline GPUStorageBuf *reused_ssbo_contour_to_contour_()
+  {
+    return ssbo_mesh_buffer_reuse_7_;
+  }
+
+
+
+
 
 
   // Scan Working Buffers -----------------------------------
