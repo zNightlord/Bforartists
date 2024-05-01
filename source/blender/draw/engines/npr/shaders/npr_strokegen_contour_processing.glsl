@@ -3,6 +3,7 @@
 #pragma BLENDER_REQUIRE(npr_strokegen_geom_lib.glsl)
 #pragma BLENDER_REQUIRE(npr_strokegen_load_store_lib.glsl)
 #pragma BLENDER_REQUIRE(npr_strokegen_contour_topo_lib.glsl)
+#pragma BLENDER_REQUIRE(npr_strokegen_contour_geom_lib.glsl)
 
 
 #if defined(_KERNEL_MULTICOMPILE__CONTOUR_SERIALIZATION)
@@ -220,9 +221,7 @@ void main()
 
 
 
-
-
-#if defined(_KERNEL_MULTICOMPILE__CALC_CONTOUR_SCREEN_POSITIONS)
+#if defined(_KERNEL_MULTICOMPILE__CALC_CONTOUR_EDGES_RENDER_DATA)
 /*
  * ubo_view_matrices_
  * pcs_screen_size_

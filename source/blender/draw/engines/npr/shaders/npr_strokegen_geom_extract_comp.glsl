@@ -4,6 +4,7 @@
 #pragma BLENDER_REQUIRE(npr_strokegen_topo_lib.glsl)
 #pragma BLENDER_REQUIRE(npr_strokegen_geom_lib.glsl)
 #pragma BLENDER_REQUIRE(npr_strokegen_contour_topo_lib.glsl)
+#pragma BLENDER_REQUIRE(npr_strokegen_contour_geom_lib.glsl)
 
  
 /* all counters are cleared in _KERNEL_MULTICOMPILE__GEOM_EXTRACT kernel ------------------- */
@@ -158,10 +159,7 @@ bool is_contour_edge(
 
 	face_orient_123 = dot(view_dir, n0);
   	face_orient_013 = dot(view_dir, n3);
-	bool is_contour = 
-		/* !is_back_face(face_orient_123) && !is_back_face(face_orient_013);  */
-		is_back_face(face_orient_123) != is_back_face(face_orient_013); 
-		/* (sign(face_orient_123) != sign(face_orient_013)); */
+	bool is_contour = is_back_face(face_orient_123) != is_back_face(face_orient_013); 
 	
 	return is_contour; 
 }

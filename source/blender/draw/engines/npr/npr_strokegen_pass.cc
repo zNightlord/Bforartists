@@ -1833,23 +1833,29 @@ namespace blender::npr::strokegen
 
   void StrokeGenPassModule::append_subpass_calc_contour_edges_draw_data()
   {
-    auto &sub = pass_process_contours.sub("strokegen_calc_contour_edges_draw_data"); 
-    sub.shader_set(shaders_.static_shader_get(CALC_CONTOUR_EDGES_DRAW_DATA));
+    int ssbo_offset = 0; 
+    auto bind_src = [&](draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub) {
+      sub.bind_ssbo(0, buffers_.ssbo_contour_snake_rank_);
+      sub.bind_ssbo(1, buffers_.ssbo_contour_snake_list_len_);
+      sub.bind_ssbo(2, buffers_.ssbo_contour_snake_list_head_);
+      sub.bind_ssbo(3, buffers_.ssbo_contour_snake_vpos_);
+      sub.bind_ssbo(4, buffers_.ssbo_contour_snake_flags_);
+      sub.bind_ssbo(5, buffers_.ssbo_bnpr_mesh_pool_counters_);
+      ssbo_offset = 6; 
 
-    sub.bind_ssbo(0, buffers_.ssbo_contour_snake_rank_);
-    sub.bind_ssbo(1, buffers_.ssbo_contour_snake_list_len_);
-    sub.bind_ssbo(2, buffers_.ssbo_contour_snake_list_head_);
-    sub.bind_ssbo(3, buffers_.ssbo_contour_snake_vpos_);
-    sub.bind_ssbo(4, buffers_.ssbo_contour_snake_flags_); 
-    sub.bind_ssbo(5, buffers_.reused_ssbo_bnpr_mesh_pool_());
-    sub.bind_ssbo(6, buffers_.ssbo_bnpr_mesh_pool_counters_);
-    sub.bind_ssbo(7, buffers_.reused_ssbo_tree_scan_infos_contour_segmentation_()); 
+      sub.bind_ubo(0, buffers_.ubo_view_matrices_);
+      sub.push_constant("pcs_screen_size_", textures_.get_contour_raster_screen_res()); 
+    };
 
-    sub.bind_ubo(0, buffers_.ubo_view_matrices_);
-    sub.push_constant("pcs_screen_size_", textures_.get_contour_raster_screen_res()); 
+    {
+      auto &sub = pass_process_contours.sub("strokegen_calc_contour_edges_draw_data"); 
+      sub.shader_set(shaders_.static_shader_get(CALC_CONTOUR_EDGES_DRAW_DATA));
+      bind_src(sub); 
+      sub.bind_ssbo(ssbo_offset, buffers_.reused_ssbo_bnpr_mesh_pool_());
 
-    sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_vert_dispatch_args_);
-    sub.barrier(GPU_BARRIER_SHADER_STORAGE);
+      sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_vert_dispatch_args_);
+      sub.barrier(GPU_BARRIER_SHADER_STORAGE);
+    }
   }
 
 

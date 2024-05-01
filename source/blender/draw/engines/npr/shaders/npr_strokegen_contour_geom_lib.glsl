@@ -1,15 +1,10 @@
 #ifndef BNPR_CONTOUR_GEOM__INCLUDED
 #define BNPR_CONTOUR_GEOM__INCLUDED
 
-
-
-
-
-
 // ----------------------------------------------------------
 // Functions for Rasterization
 // ----------------------------------------------------------
-uniform vec2 pcs_screen_size_;
+// uniform vec2 pcs_line_raster_resolution_;
 
 // Note: Some drivers do not implement uniform initializers correctly.
 // https://www.khronos.org/opengl/wiki/Uniform_(GLSL)
@@ -95,23 +90,23 @@ vec2 frustum_clip_line_segment(
 }
 
 
-vec2 ndc_to_viewport(vec2 coord_ndc)
+vec2 ndc_to_viewport(vec2 coord_ndc, vec2 raster_resolution)
 {
 	vec2 coordVP =
 		max(
 			vec2(0.5, 0.5),
 			min(
-				coord_ndc * pcs_screen_size_.xy,
-				pcs_screen_size_.xy - 1
+				coord_ndc * raster_resolution.xy,
+				raster_resolution.xy - vec2(1.0f)
 			)
 		);
 	return coordVP;
 }
 
-vec2 viewport_to_ndc(vec2 coord_ss)
+vec2 viewport_to_ndc(vec2 coord_ss, vec2 raster_resolution)
 {
-	vec2 coordNDC = coord_ss / pcs_screen_size_.xy;
-	return saturate(coordNDC);
+	vec2 coordNDC = coord_ss / raster_resolution.xy;
+	return clamp(coordNDC, vec2(.0f), vec2(1.0f));
 }
 
 
@@ -121,50 +116,52 @@ struct LineRasterResult
     vec4 begend_uvs; // note: must be range of 0-1
     vec2 begend_wclips; 
     
-    bool is_outside_frust_line; 
+    bool is_line_clip_rejected; // totally outside frustum
+	bool is_line_clipped; 		// partially within frustum 
     bool is_x_major_line; 
     bool beg_from_p0; // raster begins at the first vert on the original line 
 }; 
 void encode_line_raster_result(LineRasterResult res, out uvec4 d0123, out uint d4)
 {
-    uint d0 = frag_count; // 28 bits for frag_count should be sufficient
+    uint d0 = res.frag_count; // 28 bits for frag_count should be sufficient
     d0 <<= 1u; 
-    d0 |= (is_outside_frust_line ? 1u : 0u);
+    d0 |= (res.is_line_clip_rejected ? 1u : 0u);
+	d0 <<= 1u;
+	d0 |= (res.is_line_clipped ? 1u : 0u); 
 	d0 <<= 1u; 
-	d0 |= (is_x_major_line ? 1u : 0u); 
+	d0 |= (res.is_x_major_line ? 1u : 0u); 
 	d0 <<= 1u; 
-	d0 |= (beg_from_p0 ? 1u : 0u)
+	d0 |= (res.beg_from_p0 ? 1u : 0u); 
 
 	uvec2 d12 = uvec2(0u); 
-	begend_uvs = clamp(begend_uvs, vec4(.0f), vec4(1.0f)); 
+	res.begend_uvs = clamp(res.begend_uvs, vec4(.0f), vec4(1.0f)); 
 	float fixed_factor = float((1u << 16u) - 1u); 
-	uvec4 uv_fixed = uvec4(begend_uvs * fixed_factor) & 0xffffu; 
+	uvec4 uv_fixed = uvec4(res.begend_uvs * fixed_factor) & 0xffffu; 
 	d12 = uv_fixed.xy | (uv_fixed.zw << 16u); 
 
 	uvec2 d34 = uvec2(0u);
-	d34.x = floatBitsToUint(begend_wclips.x);
-	d34.y = floatBitsToUint(begend_wclips.y);
+	d34.x = floatBitsToUint(res.begend_wclips.x);
+	d34.y = floatBitsToUint(res.begend_wclips.y);
 
-	d123 = uvec4(d0, d12, d34.x);
+	d0123 = uvec4(d0, d12, d34.x);
 	d4 = d34.y;
 }
 
-void raster_line_segment(
-    vec4 vpos_0, vec4 vpos_1, vec4 vnor_0, vec4 vnor_1, 
-    /* mat4 Matrix_M,  */mat4 Matrix_V, mat4 Matrix_P, 
-    bool is_valid_thread
+LineRasterResult raster_line_segment(
+    vec4 vpos_0, vec4 vpos_1, 
+    vec2 raster_resolution, /* mat4 Matrix_M,  */mat4 Matrix_V, mat4 Matrix_P
 ) {
     // OS --> WS (nothing here since all contours are in world space) 
 
     // WS --> VS
     // -----------------------------------------------------------------
-    vpos_0 = mul(Matrix_V, vpos_0); // mul(Matrix_M, vpos_0));
-    vpos_1 = mul(Matrix_V, vpos_1); // mul(Matrix_M, vpos_1));
+    vpos_0 = (Matrix_V * vpos_0); // mul(Matrix_M, vpos_0));
+    vpos_1 = (Matrix_V * vpos_1); // mul(Matrix_M, vpos_1));
 
     // VS --> HClip
     // --------------------------------------------------------------------
-    vpos_0 = mul(Matrix_P, vpos_0); // HClip coord  
-    vpos_1 = mul(Matrix_P, vpos_1); // HClip coord
+    vpos_0 = (Matrix_P * vec4(vpos_0.xyz, 1.0f)); // HClip coord  
+    vpos_1 = (Matrix_P * vec4(vpos_1.xyz, 1.0f)); // HClip coord
 
     // HClip --> HClip(Clipped) 
     // -----------------------------------------------------------------------------
@@ -173,8 +170,8 @@ void raster_line_segment(
         vpos_0, vpos_1, // in
         reject, inside  // out
     );
-    vpos_0 = lerp(vpos_0, vpos_1, interpolate.x);
-    vpos_1 = lerp(vpos_0, vpos_1, interpolate.y);
+    vpos_0 = mix(vpos_0, vpos_1, interpolate.x);
+    vpos_1 = mix(vpos_0, vpos_1, interpolate.y);
     vec2 whclip_v0v1 = vec2(vpos_0.w, vpos_1.w);
 
     // HClip(Clipped)->NDC
@@ -186,8 +183,10 @@ void raster_line_segment(
 
     // NDC->Viewport
     // -------------------------------------------------------------------------
-    vec4 frags_pos = // easier to swizzle this way
-        vec4(ndc_to_viewport(vpos_0.xy).xy, ndc_to_viewport(vpos_1.xy).xy);
+    vec4 frags_coord = vec4(
+		ndc_to_viewport(vpos_0.xy, raster_resolution).xy, 
+		ndc_to_viewport(vpos_1.xy, raster_resolution).xy
+	);
 
     // Compute fragment(== segment, in our context) count
     // Is edge X or Y major?
@@ -198,20 +197,38 @@ void raster_line_segment(
     //    /    \     | 
     //  /   D    \   | 
     ///            \ | 
-    vec2 dxdy = abs(frags_pos.zw - frags_pos.xy);
+    vec2 dxdy = abs(frags_coord.zw - frags_coord.xy);
     bool is_x_major_line = (dxdy.y < dxdy.x);
 
-    bvec2 is_p0_lower = frags_pos.xy < frags_pos.zw;
-    bool beg_from_p0 = is_x_major_line ? is_p0_lower.x : is_p0_lower.y;
+	// raster begins at the lower point of the line
+    bvec2 is_p0_lower = lessThan(frags_coord.xy, frags_coord.zw);
+    bool beg_from_p0 = is_x_major_line ? is_p0_lower.x : is_p0_lower.y; 
 
-    frags_pos = beg_from_p0 ? frags_pos.xyzw : frags_pos.zwxy;
+	// Reorder two points to fit rasterization order
+    frags_coord = beg_from_p0 ? frags_coord.xyzw : frags_coord.zwxy;
+	vec2 frags_whclip = beg_from_p0 ? whclip_v0v1.xy : whclip_v0v1.yx; 
 
     // Compute fragment count according to X or Y major
     // Only accept contours that passes frustum clipping 
-    uint fragCount = reject ? 0 : (uint) max(0, ceil(max(dxdy.x, dxdy.y) + 0.0001f));
-    fragCount = (is_valid_thread) ? fragCount : 0;
+    uint frag_count = reject ? 0 : uint(max(0, ceil(max(dxdy.x, dxdy.y) + 0.0001f)));
+
+
+	// Assembly the result
+	LineRasterResult res; 
+	res.frag_count = frag_count; 
+    res.begend_uvs = frags_coord.xyzw / raster_resolution.xyxy; // in original shader, I encoded coord instead of 01uv
+    res.begend_wclips = frags_whclip; 
+    
+    res.is_line_clip_rejected = reject;
+	res.is_line_clipped = (!reject) && (!inside); 
+    res.is_x_major_line = is_x_major_line; 
+    res.beg_from_p0 = beg_from_p0; 
+
+	return res; 
 }
 
     
 
 #endif
+
+

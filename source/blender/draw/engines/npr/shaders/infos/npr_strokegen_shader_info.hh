@@ -242,11 +242,11 @@ GPU_SHADER_CREATE_INFO(strokegen_finish_contour_segmentation)
     .additional_info("strokegen_contour_segmentation")
     .define("_KERNEL_MULTICOMPILE__CONTOUR_SEGMENTATION__FINISH", "1");
 
-GPU_SHADER_CREATE_INFO(strokegen_calc_contour_edges_draw_data)
+GPU_SHADER_CREATE_INFO(strokegen_calc_contour_edges_render_data)
     .do_static_compilation(true)
     .typedef_source("bnpr_shader_shared.hh")
     .typedef_source("draw_shader_shared.h")
-    .define("_KERNEL_MULTICOMPILE__CALC_CONTOUR_SCREEN_POSITIONS", "1")
+    .define("_KERNEL_MULTICOMPILE__CALC_CONTOUR_EDGES_RENDER_DATA", "1")
     .define("INCLUDE_CONTOUR_FLAGS_LOAD_STORE", "1")
     .define("INCLUDE_CONTOUR_CURVE_TOPOLOGY_LOAD", "1")
 
@@ -255,14 +255,20 @@ GPU_SHADER_CREATE_INFO(strokegen_calc_contour_edges_draw_data)
     .storage_buf(2, Qualifier::READ, "uint", "ssbo_contour_snake_list_head_[]")
     .storage_buf(3, Qualifier::READ, "uint", "ssbo_contour_snake_vpos_[]")
     .storage_buf(4, Qualifier::READ_WRITE, "uint", "ssbo_contour_snake_flags_[]")
-    .storage_buf(5, Qualifier::WRITE, "uint", "buf_strokegen_mesh_pool[]")
-    .storage_buf(6, Qualifier::READ, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
-    .storage_buf(7, Qualifier::WRITE, "UBData_TreeScan", "ssbo_tree_scan_infos_contour_segmentation_")
+    .storage_buf(5, Qualifier::READ, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
+#define NUM_SSBO_strokegen_calc_contour_edges_render_data 6
     .uniform_buf(0, "ViewMatrices", "ubo_view_matrices_")
     .push_constant(Type::VEC2, "pcs_screen_size_")
     
     .local_group_size(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT) 
     .compute_source("npr_strokegen_contour_processing.glsl");
+
+GPU_SHADER_CREATE_INFO(strokegen_calc_contour_edges_draw_data)
+    .do_static_compilation(true)
+    .additional_info("strokegen_calc_contour_edges_render_data")
+#define SSBO_OFFSET NUM_SSBO_strokegen_calc_contour_edges_render_data
+    .storage_buf(SSBO_OFFSET + 0, Qualifier::WRITE, "uint", "buf_strokegen_mesh_pool[]"); 
+#undef SSBO_OFFSET
 
 /* Collect Mesh Verts */
 GPU_SHADER_CREATE_INFO(bnpr_geom_extract_collect_verts)
