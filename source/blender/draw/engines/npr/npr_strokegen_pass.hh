@@ -38,14 +38,24 @@ struct SurfaceDebugContext {
   float dbg_line_length;
 };
 
+class StrokegenMeshComputePass : public draw::PassSimple {
+public:
+  StrokegenMeshComputePass(const char *name = "unkown strokegen compute pass") : draw::PassSimple(name) {}
+};
 
 class StrokeGenPassModule // similar to "LineDrawingRenderPass"
 {
-private:
+public:
+  int get_num_passes_extract_geom() { return curr_mesh_id_extract_geom + 1; }
+  int get_num_passes_remeshed_surf_depth() { return curr_mesh_id_surf_depth + 1; }
+
+ private:
   /** Compute Passes */
   draw::PassSimple pass_comp_test = {"Strokegen Compute Test"};
 
-  draw::PassSimple pass_extract_geom = {"StrokeGen Extract Geometry"};
+  int curr_mesh_id_extract_geom; 
+  std::array<StrokegenMeshComputePass, 1024> pass_extract_geom_arr;
+  StrokegenMeshComputePass &pass_extract_geom() { return pass_extract_geom_arr[curr_mesh_id_extract_geom]; }
   draw::PassSimple pass_process_contours = {"StrokeGen Process Contours"}; 
   draw::PassSimple pass_compress_contour_pixels = {"Generate Contour Pixel Mask"}; 
 
@@ -55,7 +65,8 @@ private:
   draw::PassSimple pass_listranking_test = {"List ranking test"};
 
   /** Draw Passes */
-  StrokegenMeshRasterPass pass_draw_contour_edges = {"Draw Contour Edges"}; // Inherited from draw::PassMain 
+  StrokegenMeshRasterPass pass_draw_contour_edges = {"Draw Contour Edges"}; // Inherited from draw::PassMain
+  int curr_mesh_id_surf_depth; 
   std::array<StrokegenMeshRasterPass, 1024> pass_draw_remeshed_surface_depth_;  
   StrokegenMeshRasterPass pass_draw_debug_lines_ = {"Draw Normal Lines"}; // Inherited from draw::PassMain 
 
@@ -105,8 +116,9 @@ public:
 
   };
 
-  PassSimple& get_compute_pass(eType passType);
+  PassSimple& get_compute_pass(eType passType, int pass_id = 0);
   PassMain &get_render_pass(eType passType, int pass_id = 0);
+  void init_surface_depth_passes();
   /** \} */
 
 
@@ -133,7 +145,7 @@ public:
   int get_edgeid_offset() { return 0; }
   int num_total_mesh_tris;
 
-  void init_per_mesh_pass();
+  void init_mesh_extraction_passes();
   void append_per_mesh_pass(
       Object* ob,
       GPUBatch* gpu_batch_line_adj,
@@ -405,8 +417,7 @@ public:
   void rebuild_pass_contour_edge_drawcall();
   void rebuild_pass_compress_contour_pixels(bool debug = false);
 
-  int curr_mesh_id; 
-  void rebuild_pass_remeshed_surface_depth_drawcall();
+  void append_pass_remeshed_surface_depth_drawcall();
 
 
   // ---------------------------------------------------------------------------

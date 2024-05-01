@@ -81,6 +81,8 @@ class GPUBufferPoolModule {
   SSBO_StrokeGenMeshBufPerSelectedVert<uint, 1> ssbo_selected_vert_to_vert_;    // 16MB    
   SSBO_StrokeGenMeshBufPerEdge<uint, 6> ssbo_dbg_lines_;                        // 256MB
 
+  SSBO_StrokeGenMeshBufPerContour<uint, 2> ssbo_contour_to_contour_;  // 
+  SSBO_StrokeGenMeshBufPerContour<uint, 8> ssbo_contour_edge_transfer_data_;  // 64MB 
   SSBO_StrokeGenMeshBufPerContour<uint, 1> ssbo_contour_snake_rank_;       // 
   SSBO_StrokeGenMeshBufPerContour<uint, 1> ssbo_contour_snake_list_len_;   // 
   SSBO_StrokeGenMeshBufPerContour<uint, 1> ssbo_contour_snake_list_head_;  //
@@ -249,18 +251,6 @@ class GPUBufferPoolModule {
   inline GPUStorageBuf *reused_ssbo_contour_temp_data_()
   {
     return ssbo_mesh_buffer_reuse_4_; 
-  }
-
-  // lifetime [append_subpass_setup_contour_edge_data, append_subpass_serialize_contour_edges]
-  inline GPUStorageBuf *reused_ssbo_contour_edge_transfer_data_()
-  {
-    return ssbo_mesh_buffer_reuse_0_;
-  }
-
-  // lifetime [append_subpass_setup_contour_edge_data, append_draw_contour_subpass]
-  inline GPUStorageBuf *reused_ssbo_contour_to_contour_()
-  {
-    return ssbo_mesh_buffer_reuse_7_;
   }
 
   // lifetime [append_subpass_extract_contour_edges, draw contour visibility)

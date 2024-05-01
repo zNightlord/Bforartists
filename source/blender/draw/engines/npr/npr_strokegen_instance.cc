@@ -157,20 +157,24 @@ namespace blender::npr::strokegen
 
 
 
-    /* Geometry Extraction */
-    manager.submit(strokegen_passes.get_compute_pass(PType::GEOM_EXTRACTION), view);
+    
+    for (int i = 0; i < strokegen_passes.get_num_passes_extract_geom(); ++i)
+    {
+      /* Geometry Extraction */
+      manager.submit(strokegen_passes.get_compute_pass(PType::GEOM_EXTRACTION, i), view);
 
+      /* Draw remeshed visibility */
+      PassMain &render_pass_remesh_depth = strokegen_passes.get_render_pass(PType::INDIRECT_DRAW_REMESHED_DEPTH, i);
+      render_pass_remesh_depth.framebuffer_set(&strokegen_textures.fb_remeshed_depth);
+      strokegen_textures.fb_remeshed_depth.bind();
+      if (i == 0) {
+        float fb_clear_col[4] = {1, 1, 1, 1};
+        GPU_framebuffer_clear_color(strokegen_textures.fb_remeshed_depth, fb_clear_col);
+        GPU_framebuffer_clear_depth(strokegen_textures.fb_remeshed_depth, 1.0f);  
+      }
+      manager.submit(render_pass_remesh_depth, view); 
+    }
 
-
-    /* Draw remeshed visibility */
-    PassMain &render_pass_remesh_depth =
-      strokegen_passes.get_render_pass(PType::INDIRECT_DRAW_REMESHED_DEPTH, 0);
-    render_pass_remesh_depth.framebuffer_set(&strokegen_textures.fb_remeshed_depth); 
-    strokegen_textures.fb_remeshed_depth.bind();
-    float fb_clear_col[4] = {1, 1, 1, 1};
-    GPU_framebuffer_clear_color(strokegen_textures.fb_remeshed_depth, fb_clear_col);
-    GPU_framebuffer_clear_depth(strokegen_textures.fb_remeshed_depth, 1.0f); 
-    manager.submit(render_pass_remesh_depth, view); 
 
 
 

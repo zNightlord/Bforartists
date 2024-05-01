@@ -98,7 +98,7 @@ static void draw_data_init_cb(struct DrawData *dd)
         rsc_handle,
         drw_view
       );
-    inst_.strokegen_passes.rebuild_pass_remeshed_surface_depth_drawcall(); 
+    inst_.strokegen_passes.append_pass_remeshed_surface_depth_drawcall(); 
 
   }
 

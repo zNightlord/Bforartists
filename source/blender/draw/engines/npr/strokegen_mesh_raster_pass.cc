@@ -57,16 +57,13 @@ void npr::strokegen::StrokegenMeshRasterPass::append_draw_contour_subpass(
   subpass->bind_ssbo(2, buffers.ssbo_contour_snake_rank_);
   subpass->bind_ssbo(3, buffers.ssbo_contour_snake_list_len_);
   subpass->bind_ssbo(4, buffers.ssbo_contour_snake_list_head_);
-  subpass->bind_ssbo(5, buffers.reused_ssbo_contour_to_contour_());
+  subpass->bind_ssbo(5, buffers.ssbo_contour_to_contour_);
   subpass->bind_ssbo(6, buffers.ssbo_contour_snake_seg_rank_);
   subpass->bind_ssbo(7, buffers.ssbo_contour_snake_seg_len_);
   subpass->bind_ssbo(8, buffers.ssbo_contour_snake_flags_);
   float2 fb_res = textures.get_contour_raster_screen_res();
   float2 fb_res_inv = float2(1.0f / fb_res.x, 1.0f / fb_res.y); 
   subpass->push_constant("pcs_screen_size_inv_", fb_res_inv);
-
-  // debug info
-  subpass->bind_ssbo(5, buffers.reused_ssbo_contour_to_contour_()); 
 
 
   subpass->barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE); 

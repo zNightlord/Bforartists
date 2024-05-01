@@ -15,6 +15,7 @@
 #endif
 
 
+
 #if defined(_KERNEL_MULTICOMPILE_BOOSTRAP_GEOM_EXTRACT)
 void main()
 {
@@ -256,6 +257,7 @@ void main()
 	if (false == valid_thread) is_contour = false; 
 
 	uint compacted_idx = compact_contour_edge(is_contour, groupId); 
+	uint local_contour_edge_id = calc_local_contour_edge_id(compacted_idx);
 	
 	barrier();
 
@@ -263,7 +265,7 @@ void main()
 	if (is_contour)
 	{ /* write world pos to output buffer */
 		/* Note: wpos_and_edgeid will be overwrite in the next pass, for saving space */
-		uint base_addr = compacted_idx * 2u; 
+		uint base_addr = local_contour_edge_id * 2u; 
 		ssbo_contour_temp_data_[base_addr+0] = wedge_id; 
 		
 		PerContourWedgeInfo pcwi; 
@@ -278,7 +280,7 @@ void main()
 		PerWedgeContourInfo peci; 
 		peci.is_border = ef.border; 
 		peci.is_contour = is_contour;
-		peci.contour_id = is_contour ? compacted_idx : NULL_EDGE; 
+		peci.contour_id = is_contour ? local_contour_edge_id : NULL_EDGE; 
 		peci.ifrontface = ifrontface; 
 		ssbo_edge_to_contour_[wedge_id] = encode_per_wedge_contour_info(peci); 
 	}
@@ -457,14 +459,16 @@ bool func_ve_circulator(CirculatorIterData iter, inout VECircContext_ContourLink
 }
 
 void main()
-
 {
 	const uint groupId = gl_LocalInvocationID.x; 
 	const uint idx = gl_GlobalInvocationID.x; 
 
-	const uint NumContourEdges = ssbo_bnpr_mesh_pool_counters_.num_contour_edges; 
-	bool valid_thread = idx < NumContourEdges; 
-	const uint ContourEdgeIdx = idx; 
+	const uint NumContourEdgesCurr = ssbo_bnpr_mesh_pool_counters_.num_contour_edges; 
+	
+	/* use local id to load temp data, use global id to store */
+	const uint contour_id_local = idx; 
+	const uint contour_id_global = calc_global_contour_edge_id(contour_id_local); 
+	bool valid_thread = contour_id_global < NumContourEdgesCurr; 
 
 	vec4 vpos_ws[2]; 
 	PerContourWedgeInfo pcwi; 
@@ -472,7 +476,7 @@ void main()
 	if (valid_thread)
 	{ /* read vertex pos transformed to world space */
 	  /* Note: wpos_and_edgeid will be overwrite, for saving space */
-		uint base_addr = ContourEdgeIdx * 2u; 
+		uint base_addr = contour_id_local * 2u; 
 		
 		uint wedge_id = ssbo_contour_temp_data_[base_addr+0];
 		pcwi = decode_per_contour_wedge_info(ssbo_contour_temp_data_[base_addr+1]);  
@@ -492,20 +496,20 @@ void main()
 
 		
 		/* write to intermediate buffer, will be shuffled after list ranking */
-		ssbo_contour_edge_transfer_data_[ContourEdgeIdx*8+0] = floatBitsToUint(vpos_ws[0].x);
-		ssbo_contour_edge_transfer_data_[ContourEdgeIdx*8+1] = floatBitsToUint(vpos_ws[0].y);
-		ssbo_contour_edge_transfer_data_[ContourEdgeIdx*8+2] = floatBitsToUint(vpos_ws[0].z);
-		ssbo_contour_edge_transfer_data_[ContourEdgeIdx*8+3] = floatBitsToUint(vpos_ws[1].x);
-		ssbo_contour_edge_transfer_data_[ContourEdgeIdx*8+4] = floatBitsToUint(vpos_ws[1].y);
-		ssbo_contour_edge_transfer_data_[ContourEdgeIdx*8+5] = floatBitsToUint(vpos_ws[1].z);
+		ssbo_contour_edge_transfer_data_[contour_id_global*8+0] = floatBitsToUint(vpos_ws[0].x);
+		ssbo_contour_edge_transfer_data_[contour_id_global*8+1] = floatBitsToUint(vpos_ws[0].y);
+		ssbo_contour_edge_transfer_data_[contour_id_global*8+2] = floatBitsToUint(vpos_ws[0].z);
+		ssbo_contour_edge_transfer_data_[contour_id_global*8+3] = floatBitsToUint(vpos_ws[1].x);
+		ssbo_contour_edge_transfer_data_[contour_id_global*8+4] = floatBitsToUint(vpos_ws[1].y);
+		ssbo_contour_edge_transfer_data_[contour_id_global*8+5] = floatBitsToUint(vpos_ws[1].z);
 		
 		vec2 maxcurv; vec2 cusp_func; 
 		ld_vcurv_max_with_cusp(v0, /*out*/maxcurv[0], cusp_func[0]);
 		ld_vcurv_max_with_cusp(v1, /*out*/maxcurv[1], cusp_func[1]);
 		bool seg_head = sign(cusp_func[0]) != sign(cusp_func[1]); 
 		ContourFlags cf = init_contour_flags(seg_head);
-		ssbo_contour_edge_transfer_data_[ContourEdgeIdx*8+6] = encode_contour_flags(cf);
-		ssbo_contour_edge_transfer_data_[ContourEdgeIdx*8+7] = packHalf2x16(
+		ssbo_contour_edge_transfer_data_[contour_id_global*8+6] = encode_contour_flags(cf);
+		ssbo_contour_edge_transfer_data_[contour_id_global*8+7] = packHalf2x16(
 			vec2(
 				cusp_func[0] > .0f ? 1.0f : -1.0f, 
 				cusp_func[1] > .0f ? 1.0f : -1.0f
@@ -527,38 +531,39 @@ void main()
 
 		/* Rotate backwards around beg vert of this edge */
 		ctx.pwci.is_contour = true;
-		ctx.pwci.contour_id = ContourEdgeIdx; 
+		ctx.pwci.contour_id = contour_id_local; 
 		bool rot_fwd = false; 
 
 		VE_CIRCULATOR(vwlh_beg_vtx, func_ve_circulator, ctx, rot_fwd)
 
 		if (ctx.pwci.contour_id == 0x1fffffffu) // hitting bad border edges (e0==e3,e1==e2) this is bad and should not happen
-			ctx.pwci.contour_id = ContourEdgeIdx; 
+			ctx.pwci.contour_id = contour_id_local; 
 
 		bool back_face_T_junction = (backface_border && !ctx.pwci.is_border); 
-		ssbo_contour_to_contour_[ContourEdgeIdx*2] = 
-			(!back_face_T_junction) ? ctx.pwci.contour_id : /*break backface border chain at T-junction*/ContourEdgeIdx; 
+		ssbo_contour_to_contour_[contour_id_global*2] = calc_global_contour_edge_id(
+			(!back_face_T_junction) ? ctx.pwci.contour_id : /*break backface border chain at T-junction*/contour_id_local
+		); 
 
 
 		/* Rotate fowards around end vert of this edge */
 		ctx.pwci.is_contour = true; 
-		ctx.pwci.contour_id = ContourEdgeIdx; 
+		ctx.pwci.contour_id = contour_id_local; 
 		rot_fwd = true; 
 
 		VE_CIRCULATOR(vwlh_end_vtx, func_ve_circulator, ctx, rot_fwd)
 
 		if (ctx.pwci.contour_id == 0x1fffffffu) // hitting bad border edges (e0==e3,e1==e2)
-			ctx.pwci.contour_id = ContourEdgeIdx; 
+			ctx.pwci.contour_id = contour_id_local; 
 
 		back_face_T_junction = (backface_border && !ctx.pwci.is_border); 
-		ssbo_contour_to_contour_[ContourEdgeIdx*2+1] = 
-			(!back_face_T_junction) ? ctx.pwci.contour_id : /*break backface border chain at T-junction*/ContourEdgeIdx; 
+		ssbo_contour_to_contour_[contour_id_global*2+1] = calc_global_contour_edge_id(
+			(!back_face_T_junction) ? ctx.pwci.contour_id : /*break backface border chain at T-junction*/contour_id_local
+		); 
 	}
 
 	if (idx.x == 0) /* I dont care, this is cheap, just keep this up to date here */
 	{
-		uint num_contours = ssbo_bnpr_mesh_pool_counters_.num_contour_edges; 
-		ssbo_list_ranking_inputs_.num_nodes = num_contours; 
+		ssbo_list_ranking_inputs_.num_nodes = NumContourEdgesCurr; 
 	}
 
 }
