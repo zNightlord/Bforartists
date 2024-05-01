@@ -5,10 +5,13 @@
 #include "npr_strokegen_texture_pool.hh"
 
 void npr::strokegen::StrokegenMeshRasterPass::init_pass(
-    npr::strokegen::StrokeGenShaderModule &shader_module,
-    GPUTexturePoolModule &texture_module
-){
+    npr::strokegen::StrokeGenShaderModule& shader_module,
+    npr::strokegen::GPUTexturePoolModule& texture_module,
+    npr::strokegen::StrokegenMeshRasterPass::Usage usage
+    ){
   PassMain::init(); 
+
+  this->usage = usage; 
 
   // From "blender::workbench::SceneState::init"
   const DRWContextState *context = DRW_context_state_get();
@@ -25,19 +28,22 @@ void npr::strokegen::StrokegenMeshRasterPass::init_pass(
       clip_planes.append(rv3d->clip[i]);
     }
   }
-  
-  shader_set(shader_module.static_shader_get(eShaderType::INDIRECT_DRAW_CONTOUR_EDGES));
 
   DRWState drw_state = DRW_STATE_NO_DRAW;
-  drw_state |= (DRW_STATE_WRITE_COLOR); 
-  drw_state |= (
-    (draw_settings.draw_hidden_lines ? DRW_STATE_DEPTH_ALWAYS : DRW_STATE_DEPTH_LESS_EQUAL)
-    | DRW_STATE_WRITE_DEPTH
-  ); // z-write, lequal
-  drw_state |= (DRW_STATE_STENCIL_ALWAYS); 
-  state_set(drw_state, clip_planes.size());
-
-  framebuffer_set(&texture_module.fb_contour_raster); 
+  if (usage == Usage::DRAW_CONTOUR_EDGES || usage == Usage::DBG_LINES) {
+    drw_state |= (DRW_STATE_WRITE_COLOR);
+    drw_state |= ((draw_settings.draw_hidden_lines ? DRW_STATE_DEPTH_ALWAYS :
+                                                     DRW_STATE_DEPTH_LESS_EQUAL) |
+                  DRW_STATE_WRITE_DEPTH);  // z-write, lequal
+    drw_state |= (DRW_STATE_STENCIL_ALWAYS);
+    state_set(drw_state, clip_planes.size());  
+  }
+  if (usage == Usage::REMESHED_SURFACE_DEPTH) {
+    drw_state |= (DRW_STATE_WRITE_COLOR);
+    drw_state |= (DRW_STATE_DEPTH_LESS_EQUAL | DRW_STATE_WRITE_DEPTH);  // z-write, lequal
+    drw_state |= (DRW_STATE_STENCIL_ALWAYS);
+    state_set(drw_state, clip_planes.size());  
+  }
 }
 
 void npr::strokegen::StrokegenMeshRasterPass::append_draw_contour_subpass(
@@ -73,7 +79,7 @@ void npr::strokegen::StrokegenMeshRasterPass::append_draw_dbg_lines_subpass(
     int line_type)
 {
   draw::PassMain::Sub *subpass = &sub("draw debug lines");
-  subpass->shader_set(shaders.static_shader_get(eShaderType::INDIRECT_DRAW_DBG_LINES));
+  subpass->shader_set(shaders.static_shader_get(INDIRECT_DRAW_DBG_LINES));
 
   subpass->bind_ssbo(0, buffers.ssbo_dbg_lines_);
   subpass->bind_ssbo(1, buffers.ssbo_bnpr_mesh_pool_counters_); 
@@ -84,13 +90,19 @@ void npr::strokegen::StrokegenMeshRasterPass::append_draw_dbg_lines_subpass(
   subpass->draw_procedural_indirect(GPUPrimType::GPU_PRIM_LINES, buffers.ssbo_bnpr_vert_debug_draw_args_);
 }
 
-void npr::strokegen::StrokegenMeshRasterPass::append_draw_contour_per_obj_z_subpass(
-    GPUBatch *batch,
-    ResourceHandle &rsc_handle, 
-    StrokeGenShaderModule &shaders,
-    GPUBufferPoolModule &buffers,
-    GPUTexturePoolModule &textures)
+void npr::strokegen::StrokegenMeshRasterPass::append_draw_remeshed_surface_depth_subpass(
+    npr::strokegen::StrokeGenShaderModule& shaders,
+    npr::strokegen::GPUBufferPoolModule& buffers,
+    npr::strokegen::GPUTexturePoolModule& textures)
 {
-  auto& bounds = DRW_manager_get()->bounds_buf.current();
+  draw::PassMain::Sub *subpass = &sub("draw contour per obj z");
 
+  subpass->shader_set(shaders.static_shader_get(INDIRECT_DRAW_CONTOUR_MESH_DEPTH));
+
+  subpass->bind_ssbo(0, buffers.reused_ssbo_face_to_vert_draw_depth_());
+  subpass->bind_ssbo(1, buffers.ssbo_vbo_full_);
+  subpass->bind_ubo(0, buffers.ubo_view_matrices_);
+
+  subpass->barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
+  subpass->draw_procedural_indirect(GPUPrimType::GPU_PRIM_TRIS, buffers.ssbo_bnpr_mesh_pool_draw_args_); 
 }

@@ -12,16 +12,31 @@ namespace blender::npr::strokegen {
 
 struct SurfaceDebugContext; 
 
+
 class StrokegenMeshRasterPass : public draw::PassMain {
  public:
-  StrokegenMeshRasterPass(const char *name) : draw::PassMain(name)
+  enum Usage {
+    DRAW_CONTOUR_EDGES,
+    REMESHED_SURFACE_DEPTH,
+    DBG_LINES,
+  } usage;
+
+  StrokegenMeshRasterPass(const char *name = "unknown strokegen render pass") : draw::PassMain(name)
   {
+    usage = DRAW_CONTOUR_EDGES;
   }
+
+  StrokegenMeshRasterPass(const StrokegenMeshRasterPass& pass) : draw::PassMain(pass.debug_name)
+  {
+    // don't copy anything
+  }
+
+  
 
   struct DrawSettings {
     bool draw_hidden_lines; 
   } draw_settings;
-  void init_pass(StrokeGenShaderModule& shader_module, GPUTexturePoolModule& texture_module);
+  void init_pass(StrokeGenShaderModule& shader_module, GPUTexturePoolModule& texture_module, Usage usage);
   void append_draw_contour_subpass(StrokeGenShaderModule &shaders,
                                    GPUBufferPoolModule &buffers,
                                    GPUTexturePoolModule &textures);
@@ -29,11 +44,9 @@ class StrokegenMeshRasterPass : public draw::PassMain {
   void append_draw_dbg_lines_subpass(StrokeGenShaderModule & shaders,
                                      GPUBufferPoolModule & buffers, int line_type);
 
-  void append_draw_contour_per_obj_z_subpass(
-      GPUBatch* batch,
-      ResourceHandle& rsc_handle,
-      StrokeGenShaderModule& shaders,
-      GPUBufferPoolModule& buffers, GPUTexturePoolModule& textures);
+  void append_draw_remeshed_surface_depth_subpass(
+      npr::strokegen::StrokeGenShaderModule& shaders,
+      npr::strokegen::GPUBufferPoolModule& buffers, npr::strokegen::GPUTexturePoolModule& textures);
 };
 
 }

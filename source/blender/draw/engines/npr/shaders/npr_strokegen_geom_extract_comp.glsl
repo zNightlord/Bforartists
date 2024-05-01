@@ -96,6 +96,9 @@ void main()
 		ssbo_bnpr_mesh_pool_counters_prev_.num_dbg_vpdir_lines = ssbo_bnpr_mesh_pool_counters_.num_dbg_vpdir_lines;
 		ssbo_bnpr_mesh_pool_counters_prev_.num_dbg_edge_lines  = ssbo_bnpr_mesh_pool_counters_.num_dbg_edge_lines;
 		ssbo_bnpr_mesh_pool_counters_prev_.num_draw_faces 	   = ssbo_bnpr_mesh_pool_counters_.num_draw_faces;
+
+
+		ssbo_bnpr_mesh_pool_counters_.num_draw_faces = 0u; /* reset for each mesh */
 	}
  }
 #endif
@@ -283,14 +286,13 @@ void main()
 
 
 	/* Extract Triangle Index List -------------------------------------------------------------- */
-    bvec2 gen_face = bvec2(true, true);
+    bvec2 gen_face = bvec2(valid_thread, valid_thread);
 	for (uint iface = 0; iface < 2; ++iface)
 	{
 		uvec2 iwedges_fi = (iface == 0u) ? uvec2(1, 2) : uvec2(3, 0); 
 		for (uint iiw = 0u; iiw < 2u; ++iiw)
 		{ // Only wedge with the highest id generates the face 
 			uint iwedge = iwedges_fi[iiw]; 
-
 			if (wedge_id < w[iwedge].wedge_id)
 				gen_face[iface] = false;
 		}
@@ -298,12 +300,27 @@ void main()
 
 	uint num_gen_faces = uint(gen_face.x) + uint(gen_face.y); 
 	if (!valid_thread) num_gen_faces = 0; 
-	uint faces_offet = alloc_draw_face(groupId, num_gen_faces); 
-
-
-
+	
+	uint faces_offset = alloc_draw_face(groupId, num_gen_faces); 
 
 	barrier(); 
+
+	uint st_face_addr = 4u * faces_offset;
+	for (uint iface = 0; iface < 2; ++iface)
+		if (gen_face[iface])
+		{
+			uvec3 iverts_face = mark__face_to_winded_verts(iface); 
+
+			ssbo_face_to_vert_draw_depth_[st_face_addr + 0u] = vids[iverts_face[0]];
+			ssbo_face_to_vert_draw_depth_[st_face_addr + 1u] = vids[iverts_face[1]];
+			ssbo_face_to_vert_draw_depth_[st_face_addr + 2u] = vids[iverts_face[2]];
+			ssbo_face_to_vert_draw_depth_[st_face_addr + 3u] = wedge_id;
+
+			st_face_addr += 4u; 
+		}
+
+
+
 	/* debug view */
 	if (pcs_edge_visualize_mode_ > 0)
 	{
@@ -388,6 +405,8 @@ void main()
 {
 	const uint groupId = gl_LocalInvocationID.x; 
 	const uint idx = gl_GlobalInvocationID.x; 
+	
+	#if defined(_KERNEL_MULTICOMPILE_FILL_DRAW_ARGS__CONTOUR_EDGES)
 	if (idx == 0u)
 	{
 		const uint num_draws = ssbo_bnpr_mesh_pool_counters_.num_contour_verts; // last edge of non-loop curve has zero length
@@ -397,6 +416,19 @@ void main()
 		ssbo_bnpr_mesh_pool_draw_args_.base_index 		= 0;  						/*vbo offset*/
 		ssbo_bnpr_mesh_pool_draw_args_.instance_first_indexed = 0; 					/*instance offset*/
 	}
+	#endif
+
+	#if defined(_KERNEL_MULTICOMPILE_FILL_DRAW_ARGS_DEPTH)
+	if (idx == 0u)
+	{
+		const uint num_draws = ssbo_bnpr_mesh_pool_counters_.num_draw_faces; // last edge of non-loop curve has zero length
+		ssbo_bnpr_mesh_pool_draw_args_.vertex_len 		= 3u * num_draws;   		/*#verts*/
+		ssbo_bnpr_mesh_pool_draw_args_.instance_len 	= 1;  						/*#instances*/
+		ssbo_bnpr_mesh_pool_draw_args_.vertex_first 	= 0;  						/*ibo offset*/
+		ssbo_bnpr_mesh_pool_draw_args_.base_index 		= 0;  						/*vbo offset*/
+		ssbo_bnpr_mesh_pool_draw_args_.instance_first_indexed = 0; 					/*instance offset*/
+	}
+	#endif
 }
 #endif
 

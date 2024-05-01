@@ -159,17 +159,38 @@ namespace blender::npr::strokegen
 
     /* Geometry Extraction */
     manager.submit(strokegen_passes.get_compute_pass(PType::GEOM_EXTRACTION), view);
+
+
+
+    /* Draw remeshed visibility */
+    PassMain &render_pass_remesh_depth =
+      strokegen_passes.get_render_pass(PType::INDIRECT_DRAW_REMESHED_DEPTH, 0);
+    render_pass_remesh_depth.framebuffer_set(&strokegen_textures.fb_remeshed_depth); 
+    strokegen_textures.fb_remeshed_depth.bind();
+    float fb_clear_col[4] = {1, 1, 1, 1};
+    GPU_framebuffer_clear_color(strokegen_textures.fb_remeshed_depth, fb_clear_col);
+    GPU_framebuffer_clear_depth(strokegen_textures.fb_remeshed_depth, 1.0f); 
+    manager.submit(render_pass_remesh_depth, view); 
+
+
+
+    /* Process Contour Edges */
     manager.submit(strokegen_passes.get_compute_pass(PType::CONTOUR_PROCESS), view); 
 
+
+
+
     /* Draw Contour Edges */
+    PassMain &render_pass_contour_raster =
+      strokegen_passes.get_render_pass(PType::INDIRECT_DRAW_CONTOUR_EDGES);
+    render_pass_contour_raster.framebuffer_set(&strokegen_textures.fb_contour_raster); 
     strokegen_textures.fb_contour_raster.bind();
-    float fb_clear_col[4] = {0, 0, 0, 0}; 
-    GPU_framebuffer_clear_color(strokegen_textures.fb_contour_raster, fb_clear_col);
+    float fb_clear_col_1[4] = {0, 0, 0, 0};
+    GPU_framebuffer_clear_color(strokegen_textures.fb_contour_raster, fb_clear_col_1);
     GPU_line_width(4.0f); // always snap to integer, see the opengl spec on line rasterization
     manager.submit(strokegen_passes.get_render_pass(StrokeGenPassModule::INDIRECT_DRAW_CONTOUR_EDGES), view);
     manager.submit(strokegen_passes.get_render_pass(StrokeGenPassModule::INDIRECT_DRAW_DBG_VNOR), view); 
     GPU_line_width(1.0f);
-    
     
     /* Pixel Extraction */
     manager.submit(strokegen_passes.get_compute_pass(PType::COMPRESS_CONTOUR_PIXELS), view); 

@@ -30,7 +30,7 @@ namespace blender::npr::strokegen
     TextureFromPool tex2d_contour_dbg_;
 
     /** Framebuffers */
-    Framebuffer fb_contour_per_obj_depth; 
+    Framebuffer fb_remeshed_depth; 
     Framebuffer fb_contour_raster;
     float2 get_contour_raster_screen_res() const;
 

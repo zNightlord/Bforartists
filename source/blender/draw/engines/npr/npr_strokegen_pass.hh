@@ -56,6 +56,7 @@ private:
 
   /** Draw Passes */
   StrokegenMeshRasterPass pass_draw_contour_edges = {"Draw Contour Edges"}; // Inherited from draw::PassMain 
+  std::array<StrokegenMeshRasterPass, 1024> pass_draw_remeshed_surface_depth_;  
   StrokegenMeshRasterPass pass_draw_debug_lines_ = {"Draw Normal Lines"}; // Inherited from draw::PassMain 
 
   /** Dependent Modules */
@@ -77,6 +78,7 @@ public:
       buffers_(strokegen_buffers),
       textures_(strokegen_textures)
   {
+    ;
   }
 
   ~StrokeGenPassModule() {}
@@ -96,6 +98,7 @@ public:
     GEOM_EXTRACTION,
     CONTOUR_PROCESS, 
     INDIRECT_DRAW_CONTOUR_EDGES,
+    INDIRECT_DRAW_REMESHED_DEPTH,
     COMPRESS_CONTOUR_PIXELS,
 
     INDIRECT_DRAW_DBG_VNOR,
@@ -103,7 +106,7 @@ public:
   };
 
   PassSimple& get_compute_pass(eType passType);
-  PassMain &get_render_pass(eType passType);
+  PassMain &get_render_pass(eType passType, int pass_id = 0);
   /** \} */
 
 
@@ -401,6 +404,9 @@ public:
   // ---------------------------------------------------------------------------
   void rebuild_pass_contour_edge_drawcall();
   void rebuild_pass_compress_contour_pixels(bool debug = false);
+
+  int curr_mesh_id; 
+  void rebuild_pass_remeshed_surface_depth_drawcall();
 
 
   // ---------------------------------------------------------------------------

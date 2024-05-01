@@ -97,13 +97,14 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_extract)
     .storage_buf(6, Qualifier::READ, "SSBOData_StrokeGenDynamicMeshCounters", "ssbo_dyn_mesh_counters_")
     .storage_buf(7, Qualifier::READ_WRITE, "uint", "ssbo_edge_flags_[]") 
     .storage_buf(8, Qualifier::READ, "uint", "ssbo_edge_to_edges_[]")
+    .storage_buf(9, Qualifier::WRITE, "uint", "ssbo_face_to_vert_draw_depth_[]")
     /* debugging */
     .define("INCLUDE_DEBUG_LINE_CONFIG", "1")
     .define("VERT_FLAGS_INCLUDED", "1")
-    .storage_buf(9, Qualifier::READ, "uint", "ssbo_edge_to_vert_[]")
-    .storage_buf(10, Qualifier::READ_WRITE, "uint", "ssbo_vert_to_edge_list_header_[]")
-    .storage_buf(11, Qualifier::WRITE, "uint", "ssbo_dbg_lines_[]")
-    .storage_buf(12, Qualifier::READ_WRITE, "uint", "ssbo_vert_flags_[]")
+    .storage_buf(10, Qualifier::READ, "uint", "ssbo_edge_to_vert_[]")
+    .storage_buf(11, Qualifier::READ_WRITE, "uint", "ssbo_vert_to_edge_list_header_[]")
+    .storage_buf(12, Qualifier::WRITE, "uint", "ssbo_dbg_lines_[]")
+    .storage_buf(13, Qualifier::READ_WRITE, "uint", "ssbo_vert_flags_[]")
     /* ---------------- */
     .uniform_buf(0, "ViewMatrices", "ubo_view_matrices_")
     .push_constant(Type::INT, "pcs_ib_fmt_u16")
@@ -276,7 +277,7 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_extract_collect_verts)
     .storage_buf(2, Qualifier::WRITE, "float", "ssbo_vbo_full_[]")
     .storage_buf(3, Qualifier::READ, "ObjectMatrices", "drw_matrix_buf[]")
     .storage_buf(4, Qualifier::WRITE, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_prev_")
-    .storage_buf(5, Qualifier::READ, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
+    .storage_buf(5, Qualifier::READ_WRITE, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
     .uniform_buf(0, "ViewMatrices", "ubo_view_matrices_")
     .push_constant(Type::INT, "pcs_rsc_handle_")
     .push_constant(Type::INT, "pcs_meshbatch_num_verts_")
@@ -313,6 +314,7 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_fill_draw_args_contour_edges)
     .additional_info("npr_compaction_off") /* Remove compaction code */
     .define("DECODE_IBO_EXCLUDE",                   "1") /* Remove ibo code */
     .define("_KERNEL_MULTICOMPILE_FILL_DRAW_ARGS",  "1")
+    .define("_KERNEL_MULTICOMPILE_FILL_DRAW_ARGS__CONTOUR_EDGES",  "1")
     .storage_buf(0, Qualifier::READ, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
     .storage_buf(1, Qualifier::WRITE, "DrawCommand", "ssbo_bnpr_mesh_pool_draw_args_")
     .local_group_size(GROUP_SIZE_FILL_ARGS)
@@ -351,7 +353,53 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_draw_contour_edges)
     .fragment_out(1, Type::VEC3, "out_normal")
     .fragment_out(2, Type::VEC4, "out_tangent");
 
-/* Collect Contour Pixels */
+
+
+/* Draw remeshed surface ----------------------------------------- */
+GPU_SHADER_CREATE_INFO(bnpr_geom_fill_draw_args_remeshed_surface)
+    .do_static_compilation(true)
+    .typedef_source("bnpr_shader_shared.hh")
+    .typedef_source("draw_shader_shared.h") /*DrawCommand*/
+    .additional_info("npr_compaction_off") /* Remove compaction code */
+    .define("DECODE_IBO_EXCLUDE", "1") /* Remove ibo code */
+    .define("_KERNEL_MULTICOMPILE_FILL_DRAW_ARGS",  "1")
+    .storage_buf(0, Qualifier::READ, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
+    .storage_buf(1, Qualifier::WRITE, "DrawCommand", "ssbo_bnpr_mesh_pool_draw_args_")
+    .local_group_size(GROUP_SIZE_FILL_ARGS)
+    .compute_source("npr_strokegen_geom_extract_comp.glsl");
+
+GPU_SHADER_CREATE_INFO(bnpr_geom_fill_draw_args_remeshed_surface_depth)
+    .additional_info("bnpr_geom_fill_draw_args_remeshed_surface")
+    .do_static_compilation(true)
+    .define("_KERNEL_MULTICOMPILE_FILL_DRAW_ARGS_DEPTH", "1"); 
+
+GPU_SHADER_INTERFACE_INFO(bnpr_v2f_geom_draw_remeshed_surface_depth, "")
+    .flat(Type::UINT, "id")
+    .smooth(Type::VEC4, "color") 
+    .smooth(Type::VEC3, "normal")
+    .smooth(Type::VEC4, "tangent");
+
+GPU_SHADER_CREATE_INFO(bnpr_geom_draw_remeshed_surface_depth)
+    .do_static_compilation(true)
+    .typedef_source("bnpr_shader_shared.hh")
+    .additional_info("draw_modelmat_new", "draw_view", "draw_resource_handle_new")
+    .define("INCLUDE_CONTOUR_FLAGS_LOAD_STORE", "1")
+    
+    .storage_buf(0, Qualifier::READ, "uint", "ssbo_face_to_vert_draw_depth_[]")
+    .storage_buf(1, Qualifier::READ, "float", "ssbo_vbo_full_[]") 
+    .uniform_buf(0, "ViewMatrices", "ubo_view_matrices_")
+
+    .vertex_source("npr_strokegen_remeshed_surface_vert.glsl")
+    .vertex_in(0, Type::VEC3, "pos")
+    .vertex_in(1, Type::VEC3, "nor")
+    .vertex_in(2, Type::VEC4, "tan")
+    .vertex_out(bnpr_v2f_geom_draw_remeshed_surface_depth)
+    .fragment_source("npr_strokegen_remeshed_surface_frag.glsl")
+    .fragment_out(0, Type::VEC4, "out_col");
+
+
+
+/* Collect Contour Pixels --------------------------------- */
 GPU_SHADER_CREATE_INFO(bnpr_compress_contour_pixels)
     .do_static_compilation(true)
     .typedef_source("bnpr_shader_shared.hh")

@@ -99,6 +99,8 @@ const char *StrokeGenShaderModule::static_shader_create_info_name_get(eShaderTyp
       return "bnpr_geom_extract_ibo_16bits";
     case FILL_DRAW_ARGS_CONTOUR_EDGES:
       return "bnpr_geom_fill_draw_args_contour_edges";
+    case FILL_DRAW_ARGS_REMESHED_SURFACE_DEPTH:
+      return "bnpr_geom_fill_draw_args_remeshed_surface_depth"; 
     case FILL_DISPATCH_ARGS_CONTOUR_EDGES:
       return "strokegen_fill_dispatch_args_per_contour_edge";
     case FILL_DISPATCH_ARGS_CONTOUR_VERTS:
@@ -112,7 +114,9 @@ const char *StrokeGenShaderModule::static_shader_create_info_name_get(eShaderTyp
     case FINISH_CONTOUR_SEGMENTATION:
       return "strokegen_finish_contour_segmentation";
     case CALC_CONTOUR_EDGES_DRAW_DATA:
-      return "strokegen_calc_contour_edges_draw_data"; 
+      return "strokegen_calc_contour_edges_draw_data";
+    case INDIRECT_DRAW_CONTOUR_MESH_DEPTH:
+      return "bnpr_geom_draw_remeshed_surface_depth"; 
     case INDIRECT_DRAW_CONTOUR_EDGES:
       return "bnpr_geom_draw_contour_edges";
 

@@ -42,11 +42,13 @@ namespace blender::npr::strokegen
     return pass_comp_test;
   }
 
-  PassMain &StrokeGenPassModule::get_render_pass(eType passType)
+  PassMain &StrokeGenPassModule::get_render_pass(eType passType, int pass_id)
   {
     switch (passType) {
       case INDIRECT_DRAW_CONTOUR_EDGES:
         return pass_draw_contour_edges;
+      case INDIRECT_DRAW_REMESHED_DEPTH:
+        return pass_draw_remeshed_surface_depth_[pass_id]; 
       case INDIRECT_DRAW_DBG_VNOR:
         return pass_draw_debug_lines_; 
     }
@@ -58,8 +60,14 @@ namespace blender::npr::strokegen
   void StrokeGenPassModule::on_begin_sync(int frame_counter)
   {
     init_per_mesh_pass();
-    pass_draw_contour_edges.init_pass(shaders_, textures_);
-    pass_draw_debug_lines_.init_pass(shaders_, textures_); 
+    pass_draw_contour_edges.init_pass(shaders_, textures_, StrokegenMeshRasterPass::DRAW_CONTOUR_EDGES);
+
+    curr_mesh_id = -1; 
+    for (StrokegenMeshRasterPass &surf_depth_pass : pass_draw_remeshed_surface_depth_) {
+      surf_depth_pass.init_pass(shaders_, textures_, StrokegenMeshRasterPass::REMESHED_SURFACE_DEPTH);
+    }
+
+    pass_draw_debug_lines_.init_pass(shaders_, textures_, StrokegenMeshRasterPass::DBG_LINES); 
 
     rebuild_pass_scan_test();
 
@@ -1647,13 +1655,13 @@ namespace blender::npr::strokegen
       sub.bind_ssbo(5, buffers_.reused_ssbo_edge_to_contour_());
       sub.bind_ssbo(6, buffers_.ssbo_dyn_mesh_counters_out_());
       sub.bind_ssbo(7, buffers_.ssbo_edge_flags_);
-      // for debugging
       sub.bind_ssbo(8, buffers_.ssbo_edge_to_edges_);
-      sub.bind_ssbo(9, buffers_.ssbo_edge_to_vert_);
-      sub.bind_ssbo(10, buffers_.ssbo_vert_to_edge_list_header_);
-      sub.bind_ssbo(11, buffers_.ssbo_dbg_lines_);
-      sub.bind_ssbo(12, buffers_.ssbo_vert_flags_);
-      sub.bind_ssbo(13, buffers_.ssbo_vcurv_max_);
+      sub.bind_ssbo(9, buffers_.reused_ssbo_face_to_vert_draw_depth_());
+      // for debugging
+      sub.bind_ssbo(10, buffers_.ssbo_edge_to_vert_);
+      sub.bind_ssbo(11, buffers_.ssbo_vert_to_edge_list_header_);
+      sub.bind_ssbo(12, buffers_.ssbo_dbg_lines_);
+      sub.bind_ssbo(13, buffers_.ssbo_vert_flags_);
       // --------------
       sub.bind_ubo(0, buffers_.ubo_view_matrices_cache_);
       sub.push_constant("pcs_ib_fmt_u16", ib_type == gpu::GPU_INDEX_U16 ? 1 : 0);
@@ -1872,6 +1880,25 @@ namespace blender::npr::strokegen
     }
     
     pass_draw_contour_edges.append_draw_contour_subpass(shaders_, buffers_, textures_);
+  }
+
+  void StrokeGenPassModule::rebuild_pass_remeshed_surface_depth_drawcall()
+  {
+    StrokegenMeshRasterPass &pass = pass_draw_remeshed_surface_depth_[++curr_mesh_id];
+
+    {
+      auto &sub = pass.sub("bnpr_geom_fill_draw_args_remeshed_surface_depth");
+
+      sub.shader_set(shaders_.static_shader_get(eShaderType::FILL_DRAW_ARGS_REMESHED_SURFACE_DEPTH));
+
+      sub.bind_ssbo(0, buffers_.ssbo_bnpr_mesh_pool_counters_);
+      sub.bind_ssbo(1, buffers_.ssbo_bnpr_mesh_pool_draw_args_);
+
+      sub.dispatch(int3(1, 1, 1));
+      sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_COMMAND);
+    }
+
+    pass.append_draw_remeshed_surface_depth_subpass(shaders_, buffers_, textures_);
   }
 
   void StrokeGenPassModule::rebuild_pass_compress_contour_pixels(bool debug)

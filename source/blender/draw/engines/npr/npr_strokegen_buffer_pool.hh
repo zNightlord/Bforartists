@@ -67,6 +67,7 @@ class GPUBufferPoolModule {
 
 
   // Persistent Buffers ------------------------------------------------------------------------
+  // TODO: Consider compress some of them when the data became static
   SSBO_StrokeGenMeshBufPerVert<float, 3> ssbo_vbo_full_;                        // 96MB    Total
   SSBO_StrokeGenMeshBufPerVert<uint, 1> ssbo_vert_to_edge_list_header_;         // 32MB    128MB
   SSBO_StrokeGenMeshBufPerEdge<uint, 4> ssbo_edge_to_vert_;                     // 256MB   384MB
@@ -78,7 +79,8 @@ class GPUBufferPoolModule {
 
   SSBO_StrokeGenMeshBufPerSelectedEdge<uint, 1> ssbo_selected_edge_to_edge_;    // 32MB    
   SSBO_StrokeGenMeshBufPerSelectedVert<uint, 1> ssbo_selected_vert_to_vert_;    // 16MB    
-  SSBO_StrokeGenMeshBufPerEdge<uint, 6> ssbo_dbg_lines_;                        // 256MB   
+  SSBO_StrokeGenMeshBufPerEdge<uint, 6> ssbo_dbg_lines_;                        // 256MB
+
   SSBO_StrokeGenMeshBufPerContour<uint, 1> ssbo_contour_snake_rank_;       // 
   SSBO_StrokeGenMeshBufPerContour<uint, 1> ssbo_contour_snake_list_len_;   // 
   SSBO_StrokeGenMeshBufPerContour<uint, 1> ssbo_contour_snake_list_head_;  //
@@ -236,7 +238,9 @@ class GPUBufferPoolModule {
     return ssbo_mesh_buffer_reuse_1_;
   }
 
-  // Reused buffers for Contour Processing
+
+
+  // Reused buffers for Contour Processing -------------------------------------------------------
   // lifetime [append_subpass_extract_contour_edges, append_subpass_setup_contour_edge_data]
   inline GPUStorageBuf *reused_ssbo_edge_to_contour_()
   {
@@ -253,7 +257,18 @@ class GPUBufferPoolModule {
     return ssbo_mesh_buffer_reuse_0_;
   }
 
-  // intermediate buffer to store results from list ranking, contour serialization and segmentation.
+  // lifetime [append_subpass_setup_contour_edge_data, append_draw_contour_subpass]
+  inline GPUStorageBuf *reused_ssbo_contour_to_contour_()
+  {
+    return ssbo_mesh_buffer_reuse_7_;
+  }
+
+  // lifetime [append_subpass_extract_contour_edges, draw contour visibility)
+  inline GPUStorageBuf *reused_ssbo_face_to_vert_draw_depth_()
+  {
+    return ssbo_mesh_buffer_reuse_2_; 
+  }
+
   // lifetime [append_subpass_list_ranking, append_subpass_serialize_contour_edges]
   inline GPUStorageBuf *reused_ssbo_contour_edge_rank_()
   {
@@ -280,11 +295,7 @@ class GPUBufferPoolModule {
     return ssbo_mesh_buffer_reuse_3_;
   }
 
-  // lifetime [append_subpass_setup_contour_edge_data, append_draw_contour_subpass]
-  inline GPUStorageBuf *reused_ssbo_contour_to_contour_()
-  {
-    return ssbo_mesh_buffer_reuse_7_;
-  }
+
 
 
 
