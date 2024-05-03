@@ -9,6 +9,10 @@ uint u32_add(uint a, uint b)
 {
 	return a + b;
 }
+uint u32_min(uint a, uint b)
+{
+	return min(a, b); 
+}
 uvec2 uvec2_add(uvec2 a, uvec2 b)
 {
 	return a + b;

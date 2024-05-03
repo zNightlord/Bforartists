@@ -84,6 +84,7 @@ DECL_ALLOCATION_FUNC(AC_TAG, ssbo_face_split_counters_[pcs_split_iter_].num_spli
 #endif
 
 
+
 #if defined(_KERNEL_MULTICOMPILE__GEOM_EXTRACT)
 #define AC_TAG draw_face
 
@@ -101,6 +102,22 @@ DECL_ALLOCATION_FUNC(AC_TAG, ssbo_bnpr_mesh_pool_counters_.num_draw_faces)
 #endif
 
 
+
+#if defined(_KERNEL_MULTICOMPILE__EXTRACT_MESH_CONTOUR_DATA)
+#define AC_TAG raster_frags
+
+DECL_LDS_COUNTERS_PER_LANE(AC_TAG)
+#define LDS_COUNTERS_PER_LANE CAT(LDS_counters_per_lane_, AC_TAG)
+DECL_LDS_COUNTERS_PER_LANE_SUM(AC_TAG)
+#define LDS_COUNTERS_PER_LANE_SUM CAT(LDS_counters_per_lane_sum_, AC_TAG)
+DECL_LDS_ALLOC_BLK_COUNTER(AC_TAG)
+#define LDS_ALLOC_BLK_COUNTER CAT(LDS_alloc_blk_counter_, AC_TAG)
+DECL_LDS_ALLOC_BLOCK_OFFSET(AC_TAG)
+#define LDS_ALLOC_BLOCK_OFFSET CAT(LDS_alloc_blk_offset_, AC_TAG)
+
+DECL_ALLOCATION_FUNC(AC_TAG, ssbo_bnpr_mesh_pool_counters_.num_frags)
+#undef AC_TAG
+#endif
 
 
 

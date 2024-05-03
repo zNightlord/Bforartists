@@ -104,10 +104,23 @@ const char *StrokeGenShaderModule::static_shader_create_info_name_get(eShaderTyp
     case FILL_DISPATCH_ARGS_CONTOUR_EDGES:
       return "strokegen_fill_dispatch_args_per_contour_edge";
     case FILL_DISPATCH_ARGS_CONTOUR_VERTS:
-      return "strokegen_fill_dispatch_args_per_contour_vert"; 
+      return "strokegen_fill_dispatch_args_per_contour_vert";
+    case FILL_DISPATCH_ARGS_CONTOUR_FRAGS:
+      return "strokegen_fill_dispatch_args_per_contour_fragment"; 
     case EXTRACT_CURRENT_MESH_CONTOUR_DATA:
       return "bnpr_geom_extract_mesh_contour_data";
-    case SERIALIZE_CONTOUR_EDGES_PASS_0:
+
+
+    case CLEAR_FRAG_TO_CONTOUR_IDMAPPING:
+      return "strokegen_clear_frag_to_contour_idmapping";
+    case PREP_FRAG_TO_CONTOUR_IDMAPPING:
+      return "strokegen_prep_segscan_frag_to_contour_idmapping";
+    case FINISH_FRAG_TO_CONTOUR_IDMAPPING:
+      return "strokegen_finish_segscan_frag_to_contour_idmapping"; 
+    case CONTOUR_FRAG_VISIBILITY_TEST:
+      return "strokegen_contour_frag_visibility_test"; 
+
+    case SERIALIZE_RANKED_CONTOUR_EDGES:
       return "strokegen_serialize_contour_edges_pass_0";
     case SETUP_CONTOUR_SEGMENTATION:
       return "strokegen_setup_contour_segmentation";
@@ -274,20 +287,31 @@ const char *StrokeGenShaderModule::static_shader_create_info_name_get(eShaderTyp
       return "bnpr_scan_test_upsweep";
     case SCAN_TEST_DWSWEEP:
       return "bnpr_scan_test_dwsweep";
+
     case SEGSCAN_TEST_UPSWEEP:
       return "bnpr_segscan_test_upsweep";
     case SEGSCAN_TEST_AGGREGATE:
       return "bnpr_segscan_test_aggregate";
     case SEGSCAN_TEST_DWSWEEP:
       return "bnpr_segscan_test_dwsweep";
-    case SEGSCAN_UINT_UPSWEEP:
+
+    case SEGSCAN_UINT_ADD_UPSWEEP:
       return "bnpr_segscan_uint_add_upsweep";
-    case SEGSCAN_UINT_AGGREGATE:
+    case SEGSCAN_UINT_ADD_AGGREGATE:
       return "bnpr_segscan_uint_add_aggregate";
-    case SEGSCAN_UINT_DWSWEEP:
+    case SEGSCAN_UINT_ADD_DWSWEEP:
       return "bnpr_segscan_uint_add_dwsweep";
+
+    case SEGSCAN_UINT_MIN_UPSWEEP:
+      return "bnpr_segscan_uint_min_upsweep";
+    case SEGSCAN_UINT_MIN_AGGREGATE:
+      return "bnpr_segscan_uint_min_aggregate";
+    case SEGSCAN_UINT_MIN_DWSWEEP:
+      return "bnpr_segscan_uint_min_dwsweep"; 
+
     case SCAN_FILL_DISPTACH_ARGS:
       return "strokegen_scan_fill_dispatch_args";
+
     case CONV1D_FILL_DISPATCH_ARGS:
       return "strokegen_segloopconv1d_fill_dispatch_args";
     case CONV1D_TEST_BUILD_PATCH:

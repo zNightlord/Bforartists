@@ -112,7 +112,7 @@ vec2 viewport_to_ndc(vec2 coord_ss, vec2 raster_resolution)
 
 struct LineRasterResult
 {
-    uint frag_count; 
+    uint num_frags; 
     vec4 begend_uvs; // note: must be range of 0-1
     vec2 begend_wclips; 
     
@@ -123,7 +123,7 @@ struct LineRasterResult
 }; 
 void encode_line_raster_result(LineRasterResult res, out uvec4 d0123, out uint d4)
 {
-    uint d0 = res.frag_count; // 28 bits for frag_count should be sufficient
+    uint d0 = res.num_frags; // 28 bits for num_frags should be sufficient
     d0 <<= 1u; 
     d0 |= (res.is_line_clip_rejected ? 1u : 0u);
 	d0 <<= 1u;
@@ -136,7 +136,7 @@ void encode_line_raster_result(LineRasterResult res, out uvec4 d0123, out uint d
 	uvec2 d12 = uvec2(0u); 
 	res.begend_uvs = clamp(res.begend_uvs, vec4(.0f), vec4(1.0f)); 
 	float fixed_factor = float((1u << 16u) - 1u); 
-	uvec4 uv_fixed = uvec4(res.begend_uvs * fixed_factor) & 0xffffu; 
+	uvec4 uv_fixed = uvec4(round(res.begend_uvs * fixed_factor)) & 0xffffu; 
 	d12 = uv_fixed.xy | (uv_fixed.zw << 16u); 
 
 	uvec2 d34 = uvec2(0u);
@@ -145,6 +145,31 @@ void encode_line_raster_result(LineRasterResult res, out uvec4 d0123, out uint d
 
 	d0123 = uvec4(d0, d12, d34.x);
 	d4 = d34.y;
+}
+LineRasterResult decode_line_raster_result(uvec4 d0123, uint d4)
+{
+	LineRasterResult res; 
+
+	uint d0 = d0123.x; 
+	res.num_frags = (d0 >> 4u); 
+	res.beg_from_p0           = (d0 & 0x1u) != 0u; 
+	res.is_x_major_line       = (d0 & 0x2u) != 0u; 
+	res.is_line_clipped       = (d0 & 0x4u) != 0u; 
+	res.is_line_clip_rejected = (d0 & 0x8u) != 0u; 
+
+	uvec2 d12 = uvec2(d0123.yz);
+	uvec4 uv_fixed = uvec4(
+		d12 & 0xffffu, 
+		d12 >> 16u
+	); 
+	float fixed_factor = float((1u << 16u) - 1u); 
+	res.begend_uvs = clamp(vec4(uv_fixed) / fixed_factor, vec4(.0f), vec4(1.0f)); 
+
+	uvec2 d34 = uvec2(d0123.w, d4); 
+	res.begend_wclips.x = uintBitsToFloat(d34.x); 
+	res.begend_wclips.y = uintBitsToFloat(d34.y); 
+
+	return res; 
 }
 
 LineRasterResult raster_line_segment(
@@ -210,12 +235,12 @@ LineRasterResult raster_line_segment(
 
     // Compute fragment count according to X or Y major
     // Only accept contours that passes frustum clipping 
-    uint frag_count = reject ? 0 : uint(max(0, ceil(max(dxdy.x, dxdy.y) + 0.0001f)));
+    uint num_frags = reject ? 0 : uint(max(0, ceil(max(dxdy.x, dxdy.y) + 0.0001f)));
 
 
 	// Assembly the result
 	LineRasterResult res; 
-	res.frag_count = frag_count; 
+	res.num_frags = num_frags; 
     res.begend_uvs = frags_coord.xyzw / raster_resolution.xyxy; // in original shader, I encoded coord instead of 01uv
     res.begend_wclips = frags_whclip; 
     
@@ -228,6 +253,49 @@ LineRasterResult raster_line_segment(
 }
 
     
+
+vec2 calc_frag_screen_pos(
+	vec4 line_beg_end_coords, 
+	uint head_frag_id, uint curr_frag_id,
+	bool is_x_major,
+	out float linear_factor,
+	out float linear_step
+)
+{
+	// line_beg_end_coords.x = floor(line_beg_end_coords.x);
+	// line_beg_end_coords.z = ceil(line_beg_end_coords.z);
+	// Flip xy/zw to yx/wz if edge is y-major,
+	// so that we always have 'major' axis coord in first slot
+	line_beg_end_coords = is_x_major ? line_beg_end_coords.xyzw : line_beg_end_coords.yxwz;
+	float majorAxisBegPos = floor(line_beg_end_coords.x);
+	float majorAxisOffset = float(curr_frag_id - head_frag_id) + 0.5;
+
+	vec2 targTexel; // .x: Major axis, .y: Dual axis
+	targTexel.x = majorAxisBegPos + majorAxisOffset;
+	linear_step = 1.0 / (line_beg_end_coords.z - line_beg_end_coords.x);
+	linear_factor = clamp((targTexel.x - line_beg_end_coords.x) * linear_step, .0f, 1.0f);
+	targTexel.y = mix(line_beg_end_coords.y, line_beg_end_coords.w, linear_factor);
+
+	
+	targTexel = is_x_major ? targTexel.xy : targTexel.yx; // Flip to actual coord
+
+	linear_step =
+		abs(line_beg_end_coords.w - line_beg_end_coords.y) / 
+		(ceil(line_beg_end_coords.z) - floor(line_beg_end_coords.x));
+	
+	return targTexel;
+}
+
+float interpolate_frag_depth(float whclip0, float whclip1, float linear_factor)
+{
+	return 1.0f / mix(
+			1.0f / whclip0, 
+			1.0f / whclip1, 
+			linear_factor
+		);
+}
+
+
 
 #endif
 

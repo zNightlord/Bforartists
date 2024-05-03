@@ -407,7 +407,7 @@ using namespace draw;
     uint num_dbg_vpdir_lines;  
     uint num_dbg_edge_lines;  
     uint num_draw_faces;  
-    uint pad_2;  // 4
+    uint num_frags;  // 4
   };
   BLI_STATIC_ASSERT_ALIGN(SSBOData_StrokeGenMeshPoolCounters, 16)
 

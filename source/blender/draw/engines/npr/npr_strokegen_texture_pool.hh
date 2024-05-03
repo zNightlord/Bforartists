@@ -25,13 +25,14 @@ namespace blender::npr::strokegen
     TextureFromPool tex_contour_raster;
     TextureFromPool tex_contour_raster_depth;
     TextureFromPool tex_contour_per_obj_z_col;
-    TextureFromPool tex_contour_per_obj_z_depth; 
+    TextureFromPool tex_remeshed_surf_depth_; 
     TextureFromPool tex2d_contour_pix_marks_;
     TextureFromPool tex2d_contour_dbg_;
 
     /** Framebuffers */
     Framebuffer fb_remeshed_depth; 
     Framebuffer fb_contour_raster;
+    Framebuffer fb_contour_dbg; 
     float2 get_contour_raster_screen_res() const;
 
 

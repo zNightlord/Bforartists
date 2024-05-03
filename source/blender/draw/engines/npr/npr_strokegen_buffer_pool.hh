@@ -63,6 +63,7 @@ class GPUBufferPoolModule {
 
   SSBO_IndirectDispatchArgs ssbo_bnpr_mesh_contour_edge_dispatch_args_;
   SSBO_IndirectDispatchArgs ssbo_bnpr_mesh_contour_vert_dispatch_args_;
+  SSBO_IndirectDispatchArgs ssbo_bnpr_mesh_contour_frag_dispatch_args_;
 
 
 
@@ -253,10 +254,32 @@ class GPUBufferPoolModule {
     return ssbo_mesh_buffer_reuse_4_; 
   }
 
-  // lifetime [append_subpass_extract_contour_edges, draw contour visibility)
+  // lifetime [append_subpass_extract_contour_edges, append_pass_remeshed_surface_depth_drawcall]
   inline GPUStorageBuf *reused_ssbo_face_to_vert_draw_depth_()
   {
     return ssbo_mesh_buffer_reuse_2_; 
+  }
+
+  // lifetime [append_subpass_extract_contour_edges, append_subpass_list_ranking)
+  inline GPUStorageBuf *reused_ssbo_contour_raster_data_()
+  {
+    return ssbo_mesh_buffer_reuse_7_; 
+  }
+  inline GPUStorageBuf *reused_ssbo_frag_to_contour_()
+  {
+    return ssbo_mesh_buffer_reuse_0_;
+  }
+  inline GPUStorageBuf *reused_ssbo_frag_raster_data_()
+  {
+    return ssbo_mesh_buffer_reuse_3_;
+  }
+  inline GPUStorageBuf *reused_ssbo_tree_scan_input_contour_fragment_idmapping_()
+  { // only used within the segscan passes
+    return ssbo_mesh_buffer_reuse_8_;
+  }
+  inline GPUStorageBuf *reused_ssbo_tree_scan_output_contour_fragment_idmapping_()
+  { 
+    return reused_ssbo_frag_to_contour_();
   }
 
   // lifetime [append_subpass_list_ranking, append_subpass_serialize_contour_edges]
@@ -299,6 +322,13 @@ class GPUBufferPoolModule {
   UBO_BnprTreeScan          ubo_bnpr_tree_scan_infos_;
   SSBO_BnprTreeScan         ssbo_tree_scan_infos_[32]; 
   SSBO_IndirectDispatchArgs ssbo_scan_dispatch_args_;
+  inline GPUStorageBuf *reused_ssbo_tree_scan_infos_contour_fragment_idmapping_()
+  {
+    return ssbo_tree_scan_infos_[0];
+  }
+
+
+
   inline GPUStorageBuf *reused_ssbo_tree_scan_infos_contour_segmentation_()
   {
     return ssbo_tree_scan_infos_[0];

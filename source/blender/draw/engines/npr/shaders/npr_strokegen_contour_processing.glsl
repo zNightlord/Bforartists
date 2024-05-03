@@ -6,6 +6,7 @@
 #pragma BLENDER_REQUIRE(npr_strokegen_contour_geom_lib.glsl)
 
 
+
 #if defined(_KERNEL_MULTICOMPILE__CONTOUR_SERIALIZATION)
 void main()
 {
@@ -131,7 +132,7 @@ void main()
 		scan_data_buf_1_[scan_item_id] = segscan_uint_hf_encode(SSBOData_SegScanType_uint(scan_val, hf)); 
 	}
 
-	if (idx.x == 0) /* I dont care, this is cheap, just keep this up to date here */
+	if (idx.x == 0) 
 	{
 		ssbo_tree_scan_infos_contour_segmentation_.num_scan_items = num_contours; 
 		ssbo_tree_scan_infos_contour_segmentation_.num_valid_scan_threads = compute_num_threads(
@@ -250,30 +251,30 @@ void main()
 	ContourCurveTopo cct = load_contour_curve_topo(contour_id, cf); // TODO: encode tail flag
 	uint next_contour_id = move_contour_id_along_loop(cct, contour_id, 1.0f); 
 	bool curve_tail = cct.tail_contour_id == contour_id; 
+	
+	vec3 vpos_0, vpos_1;
+	{ // read vertex pos
+		uvec3 vpos_0_enc, vpos_1_enc;
+		Load3(ssbo_contour_snake_vpos_, contour_id,    	vpos_0_enc);
+		Load3(ssbo_contour_snake_vpos_, next_contour_id, vpos_1_enc);
+		vpos_0 = uintBitsToFloat(vpos_0_enc);
+		vpos_1 = uintBitsToFloat(vpos_1_enc);
+	}
 
-
-	vec4 vpos_ws[2]; /* v0, v1 on edge */
-	vec3 vnor_ws[2]; 
-	vec4 vpos_ndc[2]; 
-	vec2 vpos_uv[2]; 
-
+#if defined(_KERNEL_MULTICOMPILE__CALC_CONTOUR_EDGES_DRAW_DATA)
 	if (valid_thread)
-	{ /* read vertex pos transformed to world space */
-	  /* Note: wpos_and_edgeid will be overwrite, for saving space */
-        uvec3 vpos_0_enc, vpos_1_enc;
-        Load3(ssbo_contour_snake_vpos_, contour_id,    	vpos_0_enc);
-        Load3(ssbo_contour_snake_vpos_, next_contour_id, vpos_1_enc);
-        vec3 vpos_0, vpos_1;
-        vpos_0 = uintBitsToFloat(vpos_0_enc);
-        vpos_1 = uintBitsToFloat(vpos_1_enc);
+	{ 
 		if (curve_tail && !cf.looped_curve) vpos_1 = vpos_0; /* omit at the end of a curve */
 		
+		vec4 vpos_ws[2]; /* v0, v1 on edge */
+		vec3 vnor_ws[2]; 
+		vec4 vpos_ndc[2]; 
+		vec2 vpos_uv[2]; 
 
         vpos_ws[0] = vec4(vpos_0.xyz, 1.0f);
 		vpos_ndc[0] = mat_camera_proj * vec4((world_to_view * vpos_ws[0]).xyz, 1.0f); 
         vpos_ws[1] = vec4(vpos_1.xyz, 1.0f);
 		vpos_ndc[1] = mat_camera_proj * vec4((world_to_view * vpos_ws[1]).xyz, 1.0f); 
-
 
 		/* write to draw data */
 		uint addr_st = mesh_pool_addr__zwhclip(contour_id); 
@@ -299,5 +300,6 @@ void main()
 		buf_strokegen_mesh_pool[addr_st+2] = floatBitsToUint(vpos_uv[1].x);
 		buf_strokegen_mesh_pool[addr_st+3] = floatBitsToUint(vpos_uv[1].y);
 	}
+#endif
 }
 #endif

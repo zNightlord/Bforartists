@@ -34,6 +34,7 @@ void main()
 		ssbo_bnpr_mesh_pool_counters_.num_dbg_vpdir_lines = 0; 
 		ssbo_bnpr_mesh_pool_counters_.num_dbg_edge_lines = 0; 
 		ssbo_bnpr_mesh_pool_counters_.num_draw_faces = 0; 
+		ssbo_bnpr_mesh_pool_counters_.num_frags = 0;
 		
 		ssbo_bnpr_mesh_pool_counters_prev_.num_contour_edges = 0; 
 		ssbo_bnpr_mesh_pool_counters_prev_.num_verts         = 0; 
@@ -46,6 +47,7 @@ void main()
 		ssbo_bnpr_mesh_pool_counters_prev_.num_dbg_vpdir_lines = 0; 
 		ssbo_bnpr_mesh_pool_counters_prev_.num_dbg_edge_lines = 0; 
 		ssbo_bnpr_mesh_pool_counters_prev_.num_draw_faces = 0; 
+		ssbo_bnpr_mesh_pool_counters_prev_.num_frags = 0;
 	}
 }
 #endif
@@ -86,7 +88,7 @@ void main()
 	ssbo_vbo_full_[st_base_addr+2] = vpos_ws.z;
 
 	if (idx == 0)
-	{ /* cache counters from last mesh extraction pass */
+	{ /* cache counters until last extracted mesh */
 		ssbo_bnpr_mesh_pool_counters_prev_.num_contour_edges   = ssbo_bnpr_mesh_pool_counters_.num_contour_edges; 
 		ssbo_bnpr_mesh_pool_counters_prev_.num_verts           = ssbo_bnpr_mesh_pool_counters_.num_verts; 
 		ssbo_bnpr_mesh_pool_counters_prev_.num_edges           = ssbo_bnpr_mesh_pool_counters_.num_edges; 
@@ -98,9 +100,10 @@ void main()
 		ssbo_bnpr_mesh_pool_counters_prev_.num_dbg_vpdir_lines = ssbo_bnpr_mesh_pool_counters_.num_dbg_vpdir_lines;
 		ssbo_bnpr_mesh_pool_counters_prev_.num_dbg_edge_lines  = ssbo_bnpr_mesh_pool_counters_.num_dbg_edge_lines;
 		ssbo_bnpr_mesh_pool_counters_prev_.num_draw_faces 	   = ssbo_bnpr_mesh_pool_counters_.num_draw_faces;
+		ssbo_bnpr_mesh_pool_counters_prev_.num_frags 		   = ssbo_bnpr_mesh_pool_counters_.num_frags;
 
-
-		ssbo_bnpr_mesh_pool_counters_.num_draw_faces = 0u; /* reset for each mesh */
+		/* reset for each mesh */
+		ssbo_bnpr_mesh_pool_counters_.num_draw_faces = 0u; 
 	}
  }
 #endif
@@ -462,37 +465,39 @@ void main()
 	const uint idx = gl_GlobalInvocationID.x; 
 
 	const uint NumContourEdgesCurr = ssbo_bnpr_mesh_pool_counters_.num_contour_edges; 
-	
-	/* use local id to load temp data, use global id to store */
+
 	const uint contour_id_local = idx; 
 	const uint contour_id_global = calc_global_contour_edge_id(contour_id_local); 
 	bool valid_thread = contour_id_global < NumContourEdgesCurr; 
 
-	vec4 vpos_ws[2]; 
 	PerContourWedgeInfo pcwi; 
-
-	if (valid_thread)
-	{ /* read vertex pos transformed to world space */
-	  /* Note: wpos_and_edgeid will be overwrite, for saving space */
+	uint v0, v1; 
+	vec4 vpos_ws[2]; 
+	{
 		uint base_addr = contour_id_local * 2u; 
 		
 		uint wedge_id = ssbo_contour_temp_data_[base_addr+0];
 		pcwi = decode_per_contour_wedge_info(ssbo_contour_temp_data_[base_addr+1]);  
 		
 		uvec2 iverts_frontface = mark__cwedge_to_verts(pcwi.ifrontface); 
-		uint v0 = ssbo_edge_to_vert_[wedge_id*4 + iverts_frontface[0]];
+		v0 = ssbo_edge_to_vert_[wedge_id*4 + iverts_frontface[0]];
 		vpos_ws[0].x = (ssbo_vbo_full_[v0*3+0]); 
 		vpos_ws[0].y = (ssbo_vbo_full_[v0*3+1]); 
 		vpos_ws[0].z = (ssbo_vbo_full_[v0*3+2]); 
 		vpos_ws[0].w = 1.0f; 
 
-		uint v1 = ssbo_edge_to_vert_[wedge_id*4 + iverts_frontface[1]];
+		v1 = ssbo_edge_to_vert_[wedge_id*4 + iverts_frontface[1]];
 		vpos_ws[1].x = (ssbo_vbo_full_[v1*3+0]);
 		vpos_ws[1].y = (ssbo_vbo_full_[v1*3+1]);
 		vpos_ws[1].z = (ssbo_vbo_full_[v1*3+2]); 
 		vpos_ws[1].w = 1.0f; 
+	}
 
-		
+	/* Store Contour Data ------------------------------------------------------------- */
+	/* use local id to load temp data, use global id to store */
+	if (valid_thread)
+	{ /* read vertex pos transformed to world space */
+	  /* Note: wpos_and_edgeid will be overwrite, for saving space */
 		/* write to intermediate buffer, will be shuffled after list ranking */
 		ssbo_contour_edge_transfer_data_[contour_id_global*8+0] = floatBitsToUint(vpos_ws[0].x);
 		ssbo_contour_edge_transfer_data_[contour_id_global*8+1] = floatBitsToUint(vpos_ws[0].y);
@@ -564,9 +569,207 @@ void main()
 		ssbo_list_ranking_inputs_.num_nodes = NumContourEdgesCurr; 
 	}
 
+
+
+	/* Prepare Soft Raster Data ------------------------------------------------------------- */
+	uint num_raster_frags = 0u;
+	if (valid_thread)
+	{
+		/* transform matrices, see "common_view_lib.glsl" */ 
+		mat4 world_to_view = ubo_view_matrices_.viewmat;
+		mat4 mat_camera_proj = ubo_view_matrices_.winmat; 
+
+		LineRasterResult line_raster_data = raster_line_segment(
+			vpos_ws[0], vpos_ws[1], pcs_screen_size_.xy, 
+			world_to_view, mat_camera_proj
+		);
+		num_raster_frags = line_raster_data.num_frags; 
+
+		uvec4 data_enc_0123; 
+		uint data_enc_4; 
+		encode_line_raster_result(line_raster_data, /*out*/data_enc_0123, data_enc_4); 
+
+		ssbo_contour_raster_data_[contour_id_global * 6 + 0u] = data_enc_0123[0];
+		ssbo_contour_raster_data_[contour_id_global * 6 + 1u] = data_enc_0123[1];
+		ssbo_contour_raster_data_[contour_id_global * 6 + 2u] = data_enc_0123[2];
+		ssbo_contour_raster_data_[contour_id_global * 6 + 3u] = data_enc_0123[3];
+		ssbo_contour_raster_data_[contour_id_global * 6 + 4u] = data_enc_4;
+	}
+
+	uint frag_offset = alloc_raster_frags(groupId, num_raster_frags);
+
+	if (valid_thread)
+	{ /* store header fragment */
+		ssbo_contour_raster_data_[contour_id_global * 6 + 5u] = 0 < num_raster_frags ? frag_offset : 0xffffffffu;
+	}
 }
 #endif
 
 
 
 
+#if defined(_KERNEL_MULTICOMPILE__PROCESS_CONTOUR_FRAGMENTS)
+
+float load_depth_at(ivec2 coord, mat4 mat_camera_proj_inv)
+{
+	vec2 uvcoords = vec2(coord + .5f) / pcs_screen_size_.xy; 
+
+	float z_ndc = texture(tex_remeshed_surf_depth_, uvcoords).r;
+	vec3 ndc = vec3(uvcoords, z_ndc) * 2.0 - 1.0;
+	
+	vec4 pos_vs = mat_camera_proj_inv * vec4(ndc, 1.0);
+	pos_vs.xyz = pos_vs.xyz / pos_vs.w;
+
+	return pos_vs.z; 
+}
+
+mat3 load_depth_3x3(ivec2 coord, mat4 mat_camera_proj_inv)
+{
+	mat3 z_samples_3x3 = mat3(1.0f);
+	z_samples_3x3[0][0] = load_depth_at(coord + ivec2(-1, 1),  mat_camera_proj_inv);
+	z_samples_3x3[1][0] = load_depth_at(coord + ivec2(0, 1),   mat_camera_proj_inv);
+	z_samples_3x3[2][0] = load_depth_at(coord + ivec2(1, 1),   mat_camera_proj_inv);
+
+	z_samples_3x3[0][1] = load_depth_at(coord + ivec2(-1, 0),  mat_camera_proj_inv);
+	z_samples_3x3[1][1] = load_depth_at(coord,                 mat_camera_proj_inv);
+	z_samples_3x3[2][1] = load_depth_at(coord + ivec2(1, 0),   mat_camera_proj_inv);
+
+	z_samples_3x3[0][2] = load_depth_at(coord + ivec2(-1, -1), mat_camera_proj_inv);
+	z_samples_3x3[1][2] = load_depth_at(coord + ivec2(0, -1),  mat_camera_proj_inv);
+	z_samples_3x3[2][2] = load_depth_at(coord + ivec2(1, -1),  mat_camera_proj_inv);
+
+	return z_samples_3x3; 
+}
+
+float frag_depth_test(mat3 z_vs_3x3, float z_frag, float z_tolerance)
+{	
+	float z = z_frag + z_tolerance; /* move a bit closer */
+
+	float occ_counter = .0f; 	
+	for (uint i = 0; i < 3; ++i)
+		for (uint j = 0; j < 3; ++j)
+			if (z_vs_3x3[i][j] < z)
+				++occ_counter; 
+
+	return occ_counter;
+}
+
+void main()
+{
+#if defined(_KERNEL_MULTICOMPILE__PROCESS_CONTOUR_FRAGMENTS__IDMAPPING__CLEAR_BUFFER)
+	uint frag_id_global = gl_GlobalInvocationID.x;
+	uint num_frags = ssbo_bnpr_mesh_pool_counters_.num_frags;
+	bool valid_thread = frag_id_global < num_frags; 
+
+	if (valid_thread)
+		ssbo_tree_scan_input_contour_fragment_idmapping_[frag_id_global] = 
+			segscan_uint_hf_encode(SSBOData_SegScanType_uint(0x3fffffffu, 0u));
+	
+	// debug only
+	if (valid_thread)
+		ssbo_frag_to_contour_[frag_id_global] = frag_id_global; 
+
+#endif
+
+#if defined(_KERNEL_MULTICOMPILE__PROCESS_CONTOUR_FRAGMENTS__IDMAPPING__SETUP_SEGSCAN)
+	uint contour_id = gl_GlobalInvocationID.x;
+	uint num_contours = ssbo_bnpr_mesh_pool_counters_.num_contour_edges;
+	bool valid_thread = contour_id < num_contours;
+
+	/* Setup segscan data */
+	if (valid_thread)
+	{
+		uint frag_offset = ssbo_contour_raster_data_[contour_id * 6u + 5u];
+		bool contour_has_frags = frag_offset != 0xffffffffu; 
+		
+		if (contour_has_frags)
+			ssbo_tree_scan_input_contour_fragment_idmapping_[frag_offset] = 
+				segscan_uint_hf_encode(SSBOData_SegScanType_uint(contour_id, 1u)); 
+	}
+
+	if (contour_id == 0) 
+	{
+		uint num_frags = ssbo_bnpr_mesh_pool_counters_.num_frags;
+
+		ssbo_tree_scan_infos_contour_segmentation_.num_scan_items = num_frags; 
+		ssbo_tree_scan_infos_contour_segmentation_.num_valid_scan_threads = compute_num_threads(
+			num_frags, 2u
+		);
+		ssbo_tree_scan_infos_contour_segmentation_.num_thread_groups = compute_num_groups(
+			num_frags, GROUP_SIZE_BNPR_SCAN_SWEEP, 2u
+		);
+	}
+#endif
+
+#if defined(_KERNEL_MULTICOMPILE__PROCESS_CONTOUR_FRAGMENTS__IDMAPPING__FINISH_SEGSCAN)
+	uint frag_id_global = gl_GlobalInvocationID.x;
+	uint num_frags = ssbo_bnpr_mesh_pool_counters_.num_frags;
+	bool valid_thread = frag_id_global < num_frags; 
+
+	/* Finish segscan results */
+	if (valid_thread)
+	{
+		// ssbo_tree_scan_output_contour_fragment_idmapping_ := ssbo_frag_to_contour_
+		SSBOData_SegScanType_uint segscan_output = 
+			segscan_uint_hf_decode(ssbo_frag_to_contour_[frag_id_global]); 
+		SSBOData_SegScanType_uint segscan_input = 
+			segscan_uint_hf_decode(ssbo_tree_scan_input_contour_fragment_idmapping_[frag_id_global]);
+		
+		// transform exclusive scan into inclusive
+		segscan_output.val = min(segscan_output.val, segscan_input.val); 
+
+		ssbo_frag_to_contour_[frag_id_global] = (segscan_output.val);
+	}
+#endif
+
+#if defined(_KERNEL_MULTICOMPILE__PROCESS_CONTOUR_FRAGMENTS__VISIBILITY_TEST)
+	uint frag_id = gl_GlobalInvocationID.x;
+	uint num_frags = ssbo_bnpr_mesh_pool_counters_.num_frags;
+	bool valid_thread = frag_id < num_frags;
+
+	mat4 mat_camera_proj_inv = ubo_view_matrices_.wininv; 
+
+	uint contour_edge_id = ssbo_frag_to_contour_[frag_id]; 
+
+	LineRasterResult line_raster_data = decode_line_raster_result(
+		uvec4(
+			ssbo_contour_raster_data_[contour_edge_id * 6u + 0u],
+			ssbo_contour_raster_data_[contour_edge_id * 6u + 1u],
+			ssbo_contour_raster_data_[contour_edge_id * 6u + 2u],
+			ssbo_contour_raster_data_[contour_edge_id * 6u + 3u]
+		), 
+		ssbo_contour_raster_data_[contour_edge_id * 6u + 4u]
+	);
+	uint head_frag_id = ssbo_contour_raster_data_[contour_edge_id * 6u + 5u]; 
+	
+
+	vec4 begend_frags = line_raster_data.begend_uvs.xyzw * pcs_screen_size_.xyxy;
+	float linear_interp = 0;
+    float linear_step = 0; // how much "factor" costs to go to neighbor frag on edge
+	vec2 sampleTexel = calc_frag_screen_pos(
+        begend_frags,
+        head_frag_id,
+        frag_id,
+        line_raster_data.is_x_major_line,
+        /* out */linear_interp, linear_step 
+    );
+
+	/* visibility test */
+	mat3 z_vs_3x3 = load_depth_3x3(ivec2(sampleTexel.xy + 1e-10f), mat_camera_proj_inv); 
+	float z_frag = -interpolate_frag_depth(
+		line_raster_data.begend_wclips.x, 
+		line_raster_data.begend_wclips.y, 
+		linear_interp
+	);
+	bool visible = 1.0f < frag_depth_test(z_vs_3x3, z_frag, 0.001f);
+	
+
+	
+	if (valid_thread && visible)
+		imageStore(tex2d_contour_dbg_, ivec2(sampleTexel), vec4(-z_frag, -z_vs_3x3[1][1], visible, 1.0f)); 
+
+#endif
+
+}
+
+#endif

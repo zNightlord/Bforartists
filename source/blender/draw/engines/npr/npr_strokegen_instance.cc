@@ -156,7 +156,11 @@ namespace blender::npr::strokegen
     GPU_texture_copy(strokegen_textures.tex_contour_raster_depth, pre_depth);
 
 
-
+    { /* Clear debug textures */
+      strokegen_textures.fb_contour_dbg.bind();
+      float fb_clear_col[4] = {0, 0, 0, 0};
+      GPU_framebuffer_clear_color(strokegen_textures.fb_contour_dbg, fb_clear_col);
+    }
     
     for (int i = 0; i < strokegen_passes.get_num_passes_extract_geom(); ++i)
     {

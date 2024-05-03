@@ -1460,38 +1460,49 @@ namespace blender::npr::strokegen
 
   void StrokeGenPassModule::append_subpass_fill_dispatch_args_contour_edges(PassSimple& pass, bool all_contour_edges)
   { // fill dispatch args for contour edges
-    {
-      auto &sub = pass.sub("strokegen_fill_dispatch_args_per_contour_edge");
-      sub.shader_set(shaders_.static_shader_get(eShaderType::FILL_DISPATCH_ARGS_CONTOUR_EDGES));
+    auto &sub = pass.sub("strokegen_fill_dispatch_args_per_contour_edge");
+    sub.shader_set(shaders_.static_shader_get(eShaderType::FILL_DISPATCH_ARGS_CONTOUR_EDGES));
 
-      sub.bind_ssbo(0, buffers_.ssbo_bnpr_mesh_pool_counters_);
-      sub.bind_ssbo(1, buffers_.ssbo_bnpr_mesh_pool_counters_prev_);
-      sub.bind_ssbo(2, buffers_.ssbo_bnpr_mesh_contour_edge_dispatch_args_);
-      int kernel_size = GROUP_SIZE_STROKEGEN_GEOM_EXTRACT;
-      sub.push_constant("pc_per_contour_edge_dispatch_group_size_", kernel_size);
-      sub.push_constant("pc_dispatch_for_all_edges_", all_contour_edges ? 1 : 0);
+    sub.bind_ssbo(0, buffers_.ssbo_bnpr_mesh_pool_counters_);
+    sub.bind_ssbo(1, buffers_.ssbo_bnpr_mesh_pool_counters_prev_);
+    sub.bind_ssbo(2, buffers_.ssbo_bnpr_mesh_contour_edge_dispatch_args_);
+    int kernel_size = GROUP_SIZE_STROKEGEN_GEOM_EXTRACT;
+    sub.push_constant("pc_per_contour_edge_dispatch_group_size_", kernel_size);
+    sub.push_constant("pc_dispatch_for_all_edges_", all_contour_edges ? 1 : 0);
 
-      sub.dispatch(int3(1, 1, 1));
-      sub.barrier(GPU_BARRIER_SHADER_STORAGE);
-    }
+    sub.dispatch(int3(1, 1, 1));
+    sub.barrier(GPU_BARRIER_SHADER_STORAGE);
   }
 
   void StrokeGenPassModule::append_subpass_fill_dispatch_args_contour_verts(PassSimple &pass)
   {  // fill dispatch args for contour edges
-    {
-      auto &sub = pass.sub("strokegen_fill_dispatch_args_per_contour_vert");
-      sub.shader_set(shaders_.static_shader_get(eShaderType::FILL_DISPATCH_ARGS_CONTOUR_VERTS));
+    auto &sub = pass.sub("strokegen_fill_dispatch_args_per_contour_vert");
+    sub.shader_set(shaders_.static_shader_get(eShaderType::FILL_DISPATCH_ARGS_CONTOUR_VERTS));
 
-      sub.bind_ssbo(0, buffers_.ssbo_bnpr_mesh_pool_counters_);
-      sub.bind_ssbo(1, buffers_.ssbo_bnpr_mesh_contour_vert_dispatch_args_);
-      int kernel_size = GROUP_SIZE_STROKEGEN_GEOM_EXTRACT;
-      sub.push_constant("pc_per_contour_vert_dispatch_group_size_", kernel_size);
+    sub.bind_ssbo(0, buffers_.ssbo_bnpr_mesh_pool_counters_);
+    sub.bind_ssbo(1, buffers_.ssbo_bnpr_mesh_contour_vert_dispatch_args_);
+    int kernel_size = GROUP_SIZE_STROKEGEN_GEOM_EXTRACT;
+    sub.push_constant("pc_per_contour_vert_dispatch_group_size_", kernel_size);
 
-      sub.dispatch(int3(1, 1, 1));
-      sub.barrier(GPU_BARRIER_SHADER_STORAGE);
-    }
+    sub.dispatch(int3(1, 1, 1));
+    sub.barrier(GPU_BARRIER_SHADER_STORAGE);
   }
 
+  void StrokeGenPassModule::append_subpass_fill_dispatch_args_contour_frags(PassSimple& pass, bool all_contour_frags)
+  {
+    auto &sub = pass.sub("strokegen_fill_dispatch_args_per_contour_fragment");
+    sub.shader_set(shaders_.static_shader_get(eShaderType::FILL_DISPATCH_ARGS_CONTOUR_FRAGS));
+
+    sub.bind_ssbo(0, buffers_.ssbo_bnpr_mesh_pool_counters_);
+    sub.bind_ssbo(1, buffers_.ssbo_bnpr_mesh_pool_counters_prev_);
+    sub.bind_ssbo(2, buffers_.ssbo_bnpr_mesh_contour_frag_dispatch_args_);
+    int kernel_size = GROUP_SIZE_STROKEGEN_GEOM_EXTRACT;
+    sub.push_constant("pc_per_contour_frag_dispatch_group_size_", kernel_size);
+    sub.push_constant("pc_dispatch_for_all_frags_", all_contour_frags ? 1 : 0);
+
+    sub.dispatch(int3(1, 1, 1));
+    sub.barrier(GPU_BARRIER_SHADER_STORAGE);
+  }
 
   void StrokeGenPassModule::append_subpass_surf_geom_analysis(
       ResourceHandle& rsc_handle, int num_verts, int num_edges, const SurfaceAnalysisContext & ctx,
@@ -1724,6 +1735,8 @@ namespace blender::npr::strokegen
       sub.bind_ssbo(9, buffers_.ssbo_list_ranking_inputs_);
       sub.bind_ssbo(10, buffers_.ssbo_contour_edge_transfer_data_);
       sub.bind_ssbo(11, buffers_.ssbo_vcurv_max_);
+      sub.bind_ssbo(12, buffers_.reused_ssbo_contour_raster_data_()); 
+      sub.bind_ubo(0, buffers_.ubo_view_matrices_cache_); 
       float2 fb_res = textures_.get_contour_raster_screen_res(); 
       sub.push_constant("pcs_screen_size_", fb_res); 
 
@@ -1753,7 +1766,7 @@ namespace blender::npr::strokegen
     
     {
       auto &sub = pass_process_contours.sub("strokegen_serialize_contour_edges_pass_0");
-      sub.shader_set(shaders_.static_shader_get(SERIALIZE_CONTOUR_EDGES_PASS_0));
+      sub.shader_set(shaders_.static_shader_get(SERIALIZE_RANKED_CONTOUR_EDGES));
 
       bind_src(sub); 
 
@@ -1798,9 +1811,9 @@ namespace blender::npr::strokegen
       scan_settings.ssbo_in_scan_data_ = buffers_.reused_ssbo_tree_scan_input_contour_segmentation_step_0();
       scan_settings.ssbo_out_scan_data_ = buffers_.reused_ssbo_tree_scan_output_contour_segmentation_step_0();
       scan_settings.ssbo_scan_block_sum_ = buffers_.ssbo_scan_block_sum_;
-      scan_settings.shader_upsweep = SEGSCAN_UINT_UPSWEEP;
-      scan_settings.shader_aggregate = SEGSCAN_UINT_AGGREGATE;
-      scan_settings.shader_dwsweep= SEGSCAN_UINT_DWSWEEP;
+      scan_settings.shader_upsweep = SEGSCAN_UINT_ADD_UPSWEEP;
+      scan_settings.shader_aggregate = SEGSCAN_UINT_ADD_AGGREGATE;
+      scan_settings.shader_dwsweep= SEGSCAN_UINT_ADD_DWSWEEP;
 
       append_subpass_segscan(scan_settings, pass_process_contours); 
     }
@@ -1813,9 +1826,9 @@ namespace blender::npr::strokegen
       scan_settings.ssbo_in_scan_data_ = buffers_.reused_ssbo_tree_scan_input_contour_segmentation_step_1();
       scan_settings.ssbo_out_scan_data_ = buffers_.reused_ssbo_tree_scan_output_contour_segmentation_step_1();
       scan_settings.ssbo_scan_block_sum_ = buffers_.ssbo_scan_block_sum_;
-      scan_settings.shader_upsweep = SEGSCAN_UINT_UPSWEEP;
-      scan_settings.shader_aggregate = SEGSCAN_UINT_AGGREGATE;
-      scan_settings.shader_dwsweep= SEGSCAN_UINT_DWSWEEP;
+      scan_settings.shader_upsweep = SEGSCAN_UINT_ADD_UPSWEEP;
+      scan_settings.shader_aggregate = SEGSCAN_UINT_ADD_AGGREGATE;
+      scan_settings.shader_dwsweep= SEGSCAN_UINT_ADD_DWSWEEP;
 
       append_subpass_segscan(scan_settings, pass_process_contours); 
     }
@@ -1862,6 +1875,11 @@ namespace blender::npr::strokegen
   void StrokeGenPassModule::rebuild_pass_process_contours()
   {
     pass_process_contours.init();
+
+
+    append_subpass_contour_edges_soft_rasterization();
+
+
     append_subpass_fill_dispatch_args_contour_edges(pass_process_contours, true); 
     append_subpass_list_ranking(ContourEdgeLinking, pass_process_contours, true);
 
@@ -1888,18 +1906,16 @@ namespace blender::npr::strokegen
 
   void StrokeGenPassModule::rebuild_pass_contour_edge_drawcall()
   {
-    {
-      auto &sub = pass_draw_contour_edges.sub("fill_draw_args_contour_edges");
+    auto &sub = pass_draw_contour_edges.sub("fill_draw_args_contour_edges");
 
-      sub.shader_set(shaders_.static_shader_get(eShaderType::FILL_DRAW_ARGS_CONTOUR_EDGES));
+    sub.shader_set(shaders_.static_shader_get(eShaderType::FILL_DRAW_ARGS_CONTOUR_EDGES));
 
-      sub.bind_ssbo(0, buffers_.ssbo_bnpr_mesh_pool_counters_);
-      sub.bind_ssbo(1, buffers_.ssbo_bnpr_mesh_pool_draw_args_);
+    sub.bind_ssbo(0, buffers_.ssbo_bnpr_mesh_pool_counters_);
+    sub.bind_ssbo(1, buffers_.ssbo_bnpr_mesh_pool_draw_args_);
 
-      sub.dispatch(int3(1, 1, 1));
-      sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_COMMAND);
-    }
-    
+    sub.dispatch(int3(1, 1, 1));
+    sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_COMMAND);
+
     pass_draw_contour_edges.append_draw_contour_subpass(shaders_, buffers_, textures_);
   }
 
@@ -1920,6 +1936,89 @@ namespace blender::npr::strokegen
     }
 
     pass.append_draw_remeshed_surface_depth_subpass(shaders_, buffers_, textures_);
+  }
+
+  void StrokeGenPassModule::append_subpass_contour_edges_soft_rasterization()
+  {
+    auto bind_rsc = [&](draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub)
+    {
+      sub.bind_ssbo(0, buffers_.ssbo_bnpr_mesh_pool_counters_);
+      sub.bind_ssbo(1, buffers_.reused_ssbo_frag_to_contour_());
+      sub.bind_ssbo(2, buffers_.reused_ssbo_contour_raster_data_());
+      sub.bind_ssbo(3, buffers_.reused_ssbo_frag_raster_data_());
+      sub.bind_ssbo(4, buffers_.reused_ssbo_tree_scan_infos_contour_fragment_idmapping_()); 
+      sub.bind_ssbo(5, buffers_.reused_ssbo_tree_scan_input_contour_fragment_idmapping_());
+      sub.bind_ubo(0, buffers_.ubo_view_matrices_cache_); 
+      sub.bind_image(0, textures_.tex2d_contour_dbg_); 
+      sub.bind_texture(0, textures_.tex_remeshed_surf_depth_, eGPUSamplerState::GPU_SAMPLER_CLAMP_BORDER); 
+
+      sub.bind_ubo(0, buffers_.ubo_view_matrices_);
+      sub.push_constant("pcs_screen_size_", textures_.get_contour_raster_screen_res());
+    };
+
+    append_subpass_fill_dispatch_args_contour_frags(pass_process_contours, true);
+
+    eGPUBarrier barrier_all = GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_COMMAND |
+                          GPU_BARRIER_SHADER_IMAGE_ACCESS | GPU_BARRIER_TEXTURE_FETCH; 
+
+    { // Clear frag to contour id mapping, dispatch per-fragment
+      auto &sub = pass_process_contours.sub("strokegen_clear_frag_to_contour_idmapping");
+      sub.shader_set(shaders_.static_shader_get(eShaderType::CLEAR_FRAG_TO_CONTOUR_IDMAPPING));
+
+      bind_rsc(sub);
+
+      sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_frag_dispatch_args_);
+      sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_COMMAND);
+    }
+
+    append_subpass_fill_dispatch_args_contour_edges(pass_process_contours, true); 
+    { // Seed at the segment heads
+      auto &sub = pass_process_contours.sub("strokegen_prep_segscan_frag_to_contour_idmapping");
+      sub.shader_set(shaders_.static_shader_get(eShaderType::PREP_FRAG_TO_CONTOUR_IDMAPPING));
+
+      bind_rsc(sub);
+
+      sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_edge_dispatch_args_);
+      sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_COMMAND); 
+    }
+
+    { // Segscan to broadcast seeds to all fragments 
+      ScanSettings scan_settings;
+      scan_settings.is_validation_shader = false;
+      scan_settings.frame_counter = 0; 
+      scan_settings.use_indirect_dispatch = true;
+      scan_settings.ssbo_scan_infos_ = buffers_.reused_ssbo_tree_scan_infos_contour_fragment_idmapping_();
+      scan_settings.ssbo_in_scan_data_ = buffers_.reused_ssbo_tree_scan_input_contour_fragment_idmapping_();
+      scan_settings.ssbo_out_scan_data_ = buffers_.reused_ssbo_tree_scan_output_contour_fragment_idmapping_();
+      scan_settings.ssbo_scan_block_sum_ = buffers_.ssbo_scan_block_sum_;
+      scan_settings.shader_upsweep = SEGSCAN_UINT_MIN_UPSWEEP;
+      scan_settings.shader_aggregate = SEGSCAN_UINT_MIN_AGGREGATE;
+      scan_settings.shader_dwsweep= SEGSCAN_UINT_MIN_DWSWEEP;
+
+      append_subpass_segscan(scan_settings, pass_process_contours); 
+    }
+
+    { // Finish segscan
+      auto &sub = pass_process_contours.sub("strokegen_finish_segscan_frag_to_contour_idmapping");
+      sub.shader_set(shaders_.static_shader_get(eShaderType::FINISH_FRAG_TO_CONTOUR_IDMAPPING));
+
+      bind_rsc(sub);
+
+      sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_frag_dispatch_args_);
+      sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_COMMAND); 
+    }
+
+    { // Visibility test
+      auto &sub = pass_process_contours.sub("strokegen_contour_frag_visibility_test");
+      sub.shader_set(shaders_.static_shader_get(eShaderType::CONTOUR_FRAG_VISIBILITY_TEST));
+
+      bind_rsc(sub);
+
+      sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_frag_dispatch_args_);
+      sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_COMMAND |
+                  GPU_BARRIER_SHADER_IMAGE_ACCESS | GPU_BARRIER_TEXTURE_FETCH); 
+    }
+
   }
 
   void StrokeGenPassModule::rebuild_pass_compress_contour_pixels(bool debug)

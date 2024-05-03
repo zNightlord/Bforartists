@@ -406,7 +406,15 @@ public:
   void rebuild_pass_process_contours();
   void append_subpass_fill_dispatch_args_contour_edges(PassSimple& pass, bool all_contour_edges);
   void append_subpass_fill_dispatch_args_contour_verts(PassSimple &pass);
+  void append_subpass_fill_dispatch_args_contour_frags(PassSimple &pass, bool all_contour_frags);
   void append_subpass_setup_contour_edge_data();
+
+  // ---------------------------------------------------------------------------
+  void append_pass_remeshed_surface_depth_drawcall();
+
+  // ---------------------------------------------------------------------------
+  void append_subpass_contour_edges_soft_rasterization(); 
+
 
   // ---------------------------------------------------------------------------
   void append_subpass_serialize_contour_edges();
@@ -417,7 +425,6 @@ public:
   void rebuild_pass_contour_edge_drawcall();
   void rebuild_pass_compress_contour_pixels(bool debug = false);
 
-  void append_pass_remeshed_surface_depth_drawcall();
 
 
   // ---------------------------------------------------------------------------
