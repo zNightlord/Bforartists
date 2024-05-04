@@ -54,27 +54,20 @@ void main()
 		}
 
 		// transfer packed edge data from the intermediate buffer
-		uvec4 enc_data[2];
-		Load4(ssbo_contour_edge_transfer_data_, contour_id*2u,    enc_data[0]); 
-		Load4(ssbo_contour_edge_transfer_data_, contour_id*2u+1u, enc_data[1]);
+		ContourEdgeTransferData cetd = load_contour_edge_transfer_data(contour_id); 
 
-        uvec3 vpos_0_enc, vpos_1_enc; 
-		vpos_0_enc = enc_data[0].xyz;
-		vpos_1_enc = uvec3(enc_data[0].w, enc_data[1].xy);
-		
-		ContourFlags cf = decode_contour_flags(enc_data[1].z); 
+		ContourFlags cf = cetd.cf; 
 		init_contour_looped_curve(looped_curve, cf);
 
-		vec2 cusp_func_v; // cusp function at 2 verts
-		cusp_func_v = unpackHalf2x16(enc_data[1].w); 
+		vec2 cusp_func_v = cetd.cusp_funcs; 
 		init_contour_cusp_flags(.0f < cusp_func_v[0], cf); 
 		
 
-		Store3(ssbo_contour_snake_vpos_, vtx_addr, vpos_0_enc);
+		Store3(ssbo_contour_snake_vpos_, vtx_addr, floatBitsToUint(cetd.vpos_ws[0]));
 		store_contour_flags(vtx_addr, cf); 
 		if (additional_output_tail_vtx)
 		{
-        	Store3(ssbo_contour_snake_vpos_, vtx_addr+1u, vpos_1_enc);
+        	Store3(ssbo_contour_snake_vpos_, vtx_addr+1u, floatBitsToUint(cetd.vpos_ws[1]));
 			cf.seg_head = false; 
 			init_contour_cusp_flags(.0f < cusp_func_v[1], cf); 
 			store_contour_flags(vtx_addr+1u, cf);

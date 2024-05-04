@@ -83,7 +83,8 @@ class GPUBufferPoolModule {
   SSBO_StrokeGenMeshBufPerEdge<uint, 6> ssbo_dbg_lines_;                        // 256MB
 
   SSBO_StrokeGenMeshBufPerContour<uint, 2> ssbo_contour_to_contour_;  // 
-  SSBO_StrokeGenMeshBufPerContour<uint, 8> ssbo_contour_edge_transfer_data_;  // 64MB 
+  SSBO_StrokeGenMeshBufPerContour<uint, 8> ssbo_contour_edge_transfer_data_;  // 64MB
+  SSBO_StrokeGenMeshBufPerContour<uint, 5> ssbo_contour_raster_data_; // 40MB
   SSBO_StrokeGenMeshBufPerContour<uint, 1> ssbo_contour_snake_rank_;       // 
   SSBO_StrokeGenMeshBufPerContour<uint, 1> ssbo_contour_snake_list_len_;   // 
   SSBO_StrokeGenMeshBufPerContour<uint, 1> ssbo_contour_snake_list_head_;  //
@@ -260,11 +261,6 @@ class GPUBufferPoolModule {
     return ssbo_mesh_buffer_reuse_2_; 
   }
 
-  // lifetime [append_subpass_extract_contour_edges, append_subpass_list_ranking)
-  inline GPUStorageBuf *reused_ssbo_contour_raster_data_()
-  {
-    return ssbo_mesh_buffer_reuse_7_; 
-  }
   inline GPUStorageBuf *reused_ssbo_frag_to_contour_()
   {
     return ssbo_mesh_buffer_reuse_0_;
@@ -281,6 +277,31 @@ class GPUBufferPoolModule {
   { 
     return reused_ssbo_frag_to_contour_();
   }
+  inline GPUStorageBuf *reused_ssbo_tree_scan_input_contour_visibility_split_0_()
+  {  // only used within the segscan passes
+    return ssbo_mesh_buffer_reuse_8_;
+  }
+  inline GPUStorageBuf *reused_ssbo_tree_scan_output_contour_visibility_split_0_()
+  { 
+    return ssbo_mesh_buffer_reuse_2_; 
+  }
+  inline GPUStorageBuf *reused_ssbo_tree_scan_input_contour_visibility_split_1_()
+  {  // only used within the segscan passes
+    return ssbo_mesh_buffer_reuse_1_;
+  }
+  inline GPUStorageBuf *reused_ssbo_tree_scan_output_contour_visibility_split_1_()
+  {
+    return ssbo_mesh_buffer_reuse_4_; 
+  }
+  inline GPUStorageBuf *reused_ssbo_contour_visibility_split_info_()
+  {  
+    return ssbo_mesh_buffer_reuse_8_;
+  }
+  inline GPUStorageBuf *reused_ssbo_frag_seg_head_to_visibility_split_contour_()
+  {
+    return ssbo_mesh_buffer_reuse_1_;
+  }
+  
 
   // lifetime [append_subpass_list_ranking, append_subpass_serialize_contour_edges]
   inline GPUStorageBuf *reused_ssbo_contour_edge_rank_()
@@ -327,6 +348,10 @@ class GPUBufferPoolModule {
     return ssbo_tree_scan_infos_[0];
   }
 
+  inline GPUStorageBuf *reused_ssbo_tree_scan_infos_contour_visibility_split_()
+  {
+    return ssbo_tree_scan_infos_[0];
+  }
 
 
   inline GPUStorageBuf *reused_ssbo_tree_scan_infos_contour_segmentation_()

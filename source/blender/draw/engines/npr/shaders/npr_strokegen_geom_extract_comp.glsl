@@ -499,25 +499,20 @@ void main()
 	{ /* read vertex pos transformed to world space */
 	  /* Note: wpos_and_edgeid will be overwrite, for saving space */
 		/* write to intermediate buffer, will be shuffled after list ranking */
-		ssbo_contour_edge_transfer_data_[contour_id_global*8+0] = floatBitsToUint(vpos_ws[0].x);
-		ssbo_contour_edge_transfer_data_[contour_id_global*8+1] = floatBitsToUint(vpos_ws[0].y);
-		ssbo_contour_edge_transfer_data_[contour_id_global*8+2] = floatBitsToUint(vpos_ws[0].z);
-		ssbo_contour_edge_transfer_data_[contour_id_global*8+3] = floatBitsToUint(vpos_ws[1].x);
-		ssbo_contour_edge_transfer_data_[contour_id_global*8+4] = floatBitsToUint(vpos_ws[1].y);
-		ssbo_contour_edge_transfer_data_[contour_id_global*8+5] = floatBitsToUint(vpos_ws[1].z);
-		
 		vec2 maxcurv; vec2 cusp_func; 
 		ld_vcurv_max_with_cusp(v0, /*out*/maxcurv[0], cusp_func[0]);
 		ld_vcurv_max_with_cusp(v1, /*out*/maxcurv[1], cusp_func[1]);
 		bool seg_head = sign(cusp_func[0]) != sign(cusp_func[1]); 
 		ContourFlags cf = init_contour_flags(seg_head);
-		ssbo_contour_edge_transfer_data_[contour_id_global*8+6] = encode_contour_flags(cf);
-		ssbo_contour_edge_transfer_data_[contour_id_global*8+7] = packHalf2x16(
-			vec2(
-				cusp_func[0] > .0f ? 1.0f : -1.0f, 
-				cusp_func[1] > .0f ? 1.0f : -1.0f
-			)
-		);
+
+		ContourEdgeTransferData cetd; 
+		cetd.vpos_ws[0] = vpos_ws[0].xyz;
+		cetd.vpos_ws[1] = vpos_ws[1].xyz;
+		cetd.cf = cf;
+		cetd.cusp_funcs = cusp_func;
+
+		store_contour_edge_transfer_data_(contour_id_global, cetd); 
+
 
 
 		/* build contour edge adjacency */
@@ -597,6 +592,7 @@ void main()
 	}
 
 	uint frag_offset = alloc_raster_frags(groupId, num_raster_frags);
+	barrier(); 
 
 	if (valid_thread)
 	{ /* store header fragment */
@@ -653,6 +649,48 @@ float frag_depth_test(mat3 z_vs_3x3, float z_frag, float z_tolerance)
 
 	return occ_counter;
 }
+
+LineRasterResult load_contour_edge_raster_data(uint contour_edge_id)
+{
+	LineRasterResult line_raster_data = decode_line_raster_result(
+		uvec4(
+			ssbo_contour_raster_data_[contour_edge_id * 6u + 0u],
+			ssbo_contour_raster_data_[contour_edge_id * 6u + 1u],
+			ssbo_contour_raster_data_[contour_edge_id * 6u + 2u],
+			ssbo_contour_raster_data_[contour_edge_id * 6u + 3u]
+		), 
+		ssbo_contour_raster_data_[contour_edge_id * 6u + 4u]
+	);
+	
+	return line_raster_data; 
+}
+
+LineRasterResult load_contour_edge_raster_data(uint contour_edge_id, out uint head_frag_id)
+{
+	LineRasterResult line_raster_data = load_contour_edge_raster_data(contour_edge_id);
+	
+	head_frag_id = ssbo_contour_raster_data_[contour_edge_id * 6u + 5u]; 
+	
+	return line_raster_data; 
+}
+
+#if defined(_KERNEL_MULTICOMPILE__PROCESS_CONTOUR_FRAGMENTS__SPLIT_VISIBILITY__GENERATE_NEW_CONTOURS_STEP_2)
+
+/* interpolate edge data for contour #contour_id */
+void interpo_contour_edge_transfer_data(uint contour_id, uint parent_contour_id, float beg_ratio, float end_ratio)
+{
+	ContourEdgeTransferData cetd_parent = load_contour_edge_transfer_data(parent_contour_id);
+	ContourEdgeTransferData cetd; 
+	cetd.vpos_ws[0]    = mix(cetd_parent.vpos_ws[0], 	cetd_parent.vpos_ws[1],    beg_ratio);
+	cetd.vpos_ws[1]    = mix(cetd_parent.vpos_ws[0], 	cetd_parent.vpos_ws[1],    end_ratio);
+	cetd.cf = cetd_parent.cf; // TODO: interpolate flags?
+	cetd.cusp_funcs[0] = mix(cetd_parent.cusp_funcs[0], cetd_parent.cusp_funcs[1], beg_ratio);
+	cetd.cusp_funcs[1] = mix(cetd_parent.cusp_funcs[0], cetd_parent.cusp_funcs[1], end_ratio); 
+
+	store_contour_edge_transfer_data_(contour_id, cetd); 
+}
+#endif
+
 
 void main()
 {
@@ -731,17 +769,8 @@ void main()
 
 	uint contour_edge_id = ssbo_frag_to_contour_[frag_id]; 
 
-	LineRasterResult line_raster_data = decode_line_raster_result(
-		uvec4(
-			ssbo_contour_raster_data_[contour_edge_id * 6u + 0u],
-			ssbo_contour_raster_data_[contour_edge_id * 6u + 1u],
-			ssbo_contour_raster_data_[contour_edge_id * 6u + 2u],
-			ssbo_contour_raster_data_[contour_edge_id * 6u + 3u]
-		), 
-		ssbo_contour_raster_data_[contour_edge_id * 6u + 4u]
-	);
-	uint head_frag_id = ssbo_contour_raster_data_[contour_edge_id * 6u + 5u]; 
-	
+	uint head_frag_id; 
+	LineRasterResult line_raster_data = load_contour_edge_raster_data(contour_edge_id, /*out*/head_frag_id); 
 
 	vec4 begend_frags = line_raster_data.begend_uvs.xyzw * pcs_screen_size_.xyxy;
 	float linear_interp = 0;
@@ -756,7 +785,7 @@ void main()
 
 	/* visibility test */
 	mat3 z_vs_3x3 = load_depth_3x3(ivec2(sampleTexel.xy + 1e-10f), mat_camera_proj_inv); 
-	float z_frag = -interpolate_frag_depth(
+	float z_frag = - interpolate_frag_depth(
 		line_raster_data.begend_wclips.x, 
 		line_raster_data.begend_wclips.y, 
 		linear_interp
@@ -768,7 +797,276 @@ void main()
 	if (valid_thread && visible)
 		imageStore(tex2d_contour_dbg_, ivec2(sampleTexel), vec4(-z_frag, -z_vs_3x3[1][1], visible, 1.0f)); 
 
+	if (valid_thread)
+	{
+		FragVisibilityTestResult fvtr;
+		fvtr.visible = visible;
+		fvtr.head_frag_id = head_frag_id; 
+		ssbo_frag_raster_data_[frag_id] = encode_frag_visibility_test_result(fvtr); 
+	}
+
 #endif
+
+#if defined(_KERNEL_MULTICOMPILE__PROCESS_CONTOUR_FRAGMENTS__SPLIT_VISIBILITY__SETUP_SEGSCAN)
+	uint frag_id = gl_GlobalInvocationID.x;
+	uint num_frags = ssbo_bnpr_mesh_pool_counters_.num_frags;
+	bool valid_thread = frag_id < num_frags;
+
+	/* Setup segscan data */
+	if (valid_thread)
+	{
+		FragVisibilityTestResult fvtr = decode_frag_visibility_test_result(ssbo_frag_raster_data_[frag_id]);
+		
+		/* Mark segment heads */
+		uint prev_frag_id = max(1u, frag_id) - 1u; 
+		FragVisibilityTestResult fvtr_prev = decode_frag_visibility_test_result(ssbo_frag_raster_data_[prev_frag_id]); 
+		uint hf = 0u; 
+		{
+			bool head_frag_at_contour = (frag_id == 0u 				|| fvtr.head_frag_id == frag_id); // start of contour edge
+			bool split_frag = (fvtr_prev.visible != fvtr.visible); // split frag if visibility changes
+			hf = (head_frag_at_contour || split_frag) ? 1u : 0u; 
+		}
+
+		/* Mark segment tails */
+		uint next_frag_id = min(num_frags - 1u, frag_id + 1u);
+		FragVisibilityTestResult fvtr_next = decode_frag_visibility_test_result(ssbo_frag_raster_data_[next_frag_id]); 
+		uint tf = 0u; 
+		{
+			bool tail_frag_at_contour = (frag_id == (num_frags - 1u) || fvtr_next.head_frag_id == next_frag_id); // end of contour edge
+			bool split_frag = (fvtr.visible != fvtr_next.visible); // split frag if visibility changes
+			tf = (tail_frag_at_contour || split_frag) ? 1u : 0u; 
+		}
+
+		/* 2 segscans to build segment topo */
+		uint scan_item_id = frag_id; 		
+		ssbo_tree_scan_input_contour_visibility_split_0_[scan_item_id] = segscan_uint_hf_encode(SSBOData_SegScanType_uint(1u, hf)); 
+		scan_item_id = num_frags - 1u - frag_id; 
+		ssbo_tree_scan_input_contour_visibility_split_1_[scan_item_id] = segscan_uint_hf_encode(SSBOData_SegScanType_uint(1u, tf)); 
+	}
+
+	if (contour_id == 0) 
+	{
+		uint num_frags = ssbo_bnpr_mesh_pool_counters_.num_frags;
+
+		ssbo_tree_scan_infos_contour_segmentation_.num_scan_items = num_frags; 
+		ssbo_tree_scan_infos_contour_segmentation_.num_valid_scan_threads = compute_num_threads(
+			num_frags, 2u
+		);
+		ssbo_tree_scan_infos_contour_segmentation_.num_thread_groups = compute_num_groups(
+			num_frags, GROUP_SIZE_BNPR_SCAN_SWEEP, 2u
+		);
+	}
+#endif
+
+#if defined(_KERNEL_MULTICOMPILE__PROCESS_CONTOUR_FRAGMENTS__SPLIT_VISIBILITY__GENERATE_NEW_CONTOURS_STEP_0)
+	uint contour_id = gl_GlobalInvocationID.x;
+	uint num_contours = ssbo_bnpr_mesh_pool_counters_.num_contour_edges;
+	bool valid_thread = contour_id < num_contours;
+
+	/* Initialize per-contour vis-split info */
+	if (valid_thread)
+	{
+		ContourVisibilitySplitInfo cvsi;
+		init_contour_visibility_split_info(contour_id, /*inout*/cvsi);
+
+		uvec4 cvsi_enc = encode_contour_visibility_split_info(cvsi); 
+		Store4(ssbo_contour_visibility_split_info_, contour_id, cvsi_enc);
+	}
+#endif
+
+#if defined(_KERNEL_MULTICOMPILE__PROCESS_CONTOUR_FRAGMENTS__SPLIT_VISIBILITY__GENERATE_NEW_CONTOURS_STEP_1)
+	uint frag_id = gl_GlobalInvocationID.x;
+	uint num_frags = ssbo_bnpr_mesh_pool_counters_.num_frags;
+	bool valid_thread = frag_id < num_frags;
+	const uint groupId = gl_LocalInvocationID.x; 
+
+	FragVisibilityTestResult fvtr = decode_frag_visibility_test_result(ssbo_frag_raster_data_[frag_id]);
+	FragVisibilityTestResult fvtr_next = decode_frag_visibility_test_result(ssbo_frag_raster_data_[frag_id + 1]);
+	bool next_frag_has_different_contour = 
+		(frag_id + 1 < num_frags) && (fvtr_next.head_frag_id != (frag_id + 1)) && valid_thread;
+
+	LineRasterResult line_raster_data = load_contour_edge_raster_data(contour_edge_id, /*out*/head_frag_id); 
+
+
+	/* Analyse segmented scan outputs */
+	uint seg_len, seg_head, seg_tail, seg_rank;
+	bool is_seg_head; 
+	{
+		SSBOData_SegScanType_uint segscan_output_0 = 
+			segscan_uint_hf_decode(ssbo_tree_scan_output_contour_visibility_split_0_[frag_id]);
+		SSBOData_SegScanType_uint segscan_output_1 =
+			segscan_uint_hf_decode(ssbo_tree_scan_output_contour_visibility_split_1_[frag_id]);
+
+		uint dist_to_seg_head = segscan_output_0.val; // frag_id - seg_head_frag_id
+		uint dist_to_seg_tail = segscan_output_1.val; // seg_tail_frag_id - frag_id
+		
+		seg_len = dist_to_seg_head + dist_to_seg_tail + 1u; 
+		seg_head = frag_id - dist_to_seg_head;
+		seg_tail = frag_id + dist_to_seg_tail;
+		seg_rank = dist_to_seg_head; 
+		is_seg_head = valid_thread && (seg_rank == 0u); 
+	}
+
+	uint prev_seg_head, next_seg_head; 
+	{
+		/* Find previous segment head := (prev_seg_tail - prev_seg_tail_rank) */
+		uint prev_seg_tail, prev_seg_tail_rank;
+
+		bool has_prev_seg = valid_thread && (fvtr.head_frag_id < frag_id);
+		if (has_prev_seg)
+		{ /* find previous segment within the SAME conatour */
+			prev_seg_tail = max(1u, seg_head) - 1u;
+
+			SSBOData_SegScanType_uint segscan_output_0_prev_seg_tail = 
+				segscan_uint_hf_decode(ssbo_tree_scan_output_contour_visibility_split_0_[prev_seg_tail]);
+			prev_seg_tail_rank = segscan_output_0_prev_seg_tail.val;
+		}else
+		{ /* Link to previous contour */
+			uint contour_edge_id = ssbo_frag_to_contour_[frag_id]; 
+			uint prev_contour_id = ssbo_contour_to_contour_[2u * contour_edge_id]; 
+
+			if (prev_contour_id == contour_edge_id)
+			{ /* point to self if there is nothing ahead */
+				prev_seg_tail = seg_head; 
+				prev_seg_tail_rank = 0u;
+			}
+			else
+			{ /* find last seg of previous contour */
+				uint prev_contour_head_frag_id; 
+				LineRasterResult line_raster_data_prev = 
+					load_contour_edge_raster_data(prev_contour_id, /*out*/prev_contour_head_frag_id);
+				uint prev_contour_last_frag = prev_contour_head_frag_id + line_raster_data_prev.num_frags - 1u;
+				prev_seg_tail = prev_contour_last_frag;
+
+				SSBOData_SegScanType_uint segscan_output_0_prev_seg_tail = 
+					segscan_uint_hf_decode(ssbo_tree_scan_output_contour_visibility_split_0_[prev_contour_last_frag]);
+				prev_seg_tail_rank = segscan_output_0_prev_seg_tail.val;
+			}
+		}
+		prev_seg_head = prev_seg_tail - prev_seg_tail_rank; 
+		
+
+		/* Find next segment */
+		bool has_next_seg = valid_thread && (next_frag_has_different_contour); 
+		if (has_next_seg)
+			next_seg_head = seg_tail + 1u;
+		else
+		{ /* Link to next contour */
+			uint contour_edge_id = ssbo_frag_to_contour_[frag_id]; 
+			uint next_contour_id = ssbo_contour_to_contour_[2u * contour_edge_id + 1u]; 
+
+			if (next_contour_id == contour_edge_id)
+			{ /* point to self if there is nothing ahead */
+				next_seg_head = seg_head; 
+			}
+			else
+			{ /* find first seg of next contour */
+				uint next_contour_head_frag_id; 
+				LineRasterResult line_raster_data_next = 
+					load_contour_edge_raster_data(next_contour_id, /*out*/next_contour_head_frag_id);
+				next_seg_head = next_contour_head_frag_id;
+			}
+		}
+	}
+	
+	
+	/* Analyse contour edge */	
+	uint contour_edge_id = ssbo_frag_to_contour_[frag_id]; 
+	
+	bool no_occlusion_at_edge = (seg_len == line_raster_data.num_frags) || (0u == line_raster_data.num_frags/* totally clipped */); 
+	bool is_frag_contour_header = cvtr.head_frag_id == frag_id; 
+	bool add_new_contour = is_seg_head 
+		&& !(is_frag_contour_header || no_occlusion_at_edge) 
+		/* 1st split just reuses the original contour edge */
+	
+	uint compact_val = uint(add_new_contour); 
+	uint new_contour_id = compact_visibility_contour_split(compact_val, groupId); 
+	barrier(); 
+
+	if (is_seg_head && valid_thread)
+	{ /* This should be ran for EVERY contour edge EXACTLY once */
+		ContourVisibilitySplitInfo cvsi;
+		cvsi.parent_contour_id = contour_edge_id;
+		cvsi.is_visible = fvtr.visible;
+		if (add_new_contour)
+		{
+			float beg_factor = float(seg_head - cvtr.head_frag_id) / float(line_raster_data.num_frags);
+			float end_factor = float(seg_tail - cvtr.head_frag_id + 1.0f) / float(line_raster_data.num_frags);
+
+			cvsi.begend_ratios = vec2(beg_factor, end_factor);
+			cvsi.is_new_contour = true; 
+		}else
+		{
+			cvsi.begend_ratios = vec2(0.0f, 1.0f);
+			cvsi.is_new_contour = false; 
+		}
+		cvsi.prev_frag_seg_head_id = prev_seg_head;
+		cvsi.next_frag_seg_head_id = next_seg_head; 
+		cvsi.no_occlusion 	   = no_occlusion_at_edge;
+		cvsi.is_contour_header = is_frag_contour_header; 
+		
+		uint update_contour_id = add_new_contour ? new_contour_id : contour_edge_id;
+		uvec4 cvsi_enc = encode_contour_visibility_split_info(cvsi); 
+		Store4(ssbo_contour_visibility_split_info_, update_contour_id, cvsi_enc);
+
+		/* Cache linkage */
+		ssbo_frag_seg_head_to_visibility_split_contour_[frag_id] = update_contour_id; 
+	}
+#endif
+
+#if defined(_KERNEL_MULTICOMPILE__PROCESS_CONTOUR_FRAGMENTS__SPLIT_VISIBILITY__GENERATE_NEW_CONTOURS_STEP_2_3)
+	uint contour_id = gl_GlobalInvocationID.x;
+	uint num_contours = ssbo_bnpr_mesh_pool_counters_.num_contour_edges;
+	bool valid_thread = contour_id < num_contours;
+
+	ContourVisibilitySplitInfo cvsi; 
+	{
+		uvec4 cvsi_enc; 
+		Load4(ssbo_contour_visibility_split_info_, contour_id, cvsi_enc);
+		cvsi = decode_contour_visibility_split_info(cvsi_enc);
+	}
+
+	if (!valid_thread) return;
+	if (cvsi.no_occlusion) return; 
+
+#if defined(_KERNEL_MULTICOMPILE__PROCESS_CONTOUR_FRAGMENTS__SPLIT_VISIBILITY__GENERATE_NEW_CONTOURS_STEP_2)
+	/* Generate new contour edges */
+	if (cvsi.is_new_contour)
+	{
+		/* interpolate contour edge data */
+		interpo_contour_edge_transfer_data(
+			contour_id, 
+			cvsi.parent_contour_id, cvsi.begend_ratios[0], cvsi.begend_ratios[1]
+		); 
+
+		/* build contour edge adjacency */
+		uint prev_contour_id = ssbo_frag_seg_head_to_visibility_split_contour_[cvsi.prev_frag_seg_head_id]; 
+		uint next_contour_id = ssbo_frag_seg_head_to_visibility_split_contour_[cvsi.next_frag_seg_head_id]; 
+		ssbo_contour_to_contour_[2u * contour_id + 0u] = prev_contour_id;
+		ssbo_contour_to_contour_[2u * contour_id + 1u] = next_contour_id;
+	}
+#endif
+#if defined(_KERNEL_MULTICOMPILE__PROCESS_CONTOUR_FRAGMENTS__SPLIT_VISIBILITY__GENERATE_NEW_CONTOURS_STEP_3)
+	/* Update old contour edges */
+	if ((!cvsi.is_new_contour) && cvsi.is_contour_header)
+	{
+		/* interpolate contour edge data */
+		interpo_contour_edge_transfer_data(
+			contour_id, 
+			contour_id, .0f, cvsi.begend_ratios[1]
+		); 
+
+		/* build contour edge adjacency */
+		uint prev_contour_id = ssbo_frag_seg_head_to_visibility_split_contour_[cvsi.prev_frag_seg_head_id]; 
+		uint next_contour_id = ssbo_frag_seg_head_to_visibility_split_contour_[cvsi.next_frag_seg_head_id]; 
+		ssbo_contour_to_contour_[2u * contour_id + 0u] = prev_contour_id;
+		ssbo_contour_to_contour_[2u * contour_id + 1u] = next_contour_id;
+	}
+#endif
+	
+
+#endif
+
 
 }
 

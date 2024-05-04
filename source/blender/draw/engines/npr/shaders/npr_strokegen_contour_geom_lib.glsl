@@ -1,6 +1,31 @@
 #ifndef BNPR_CONTOUR_GEOM__INCLUDED
 #define BNPR_CONTOUR_GEOM__INCLUDED
 
+uvec3 pack_u24_x4(uvec4 u)
+{
+    uvec3 p = uvec3(0u);
+    p.xyz = (u.xyz << 8);
+
+    p.x |= (u.w & 0x000000ff);
+    u.w >>= 8;
+    p.y |= (u.w & 0x000000ff);
+    u.w >>= 8;
+    p.z |= (u.w & 0x000000ff);
+
+    return p;
+}
+
+uvec4 unpack_u24_x4(uvec3 p)
+{
+    uvec4 u = uvec4(0u);
+    u.xyz = (p.xyz >> 8);
+    p.xyz &= 0x000000ff;
+    u.w = ((p.z << 16) | (p.y << 8) | p.x);
+
+    return u;
+}
+
+
 // ----------------------------------------------------------
 // Functions for Rasterization
 // ----------------------------------------------------------
@@ -295,7 +320,102 @@ float interpolate_frag_depth(float whclip0, float whclip1, float linear_factor)
 		);
 }
 
+struct FragVisibilityTestResult
+{ 
+	bool visible; 
+	uint head_frag_id; 
+}; 
 
+uint encode_frag_visibility_test_result(FragVisibilityTestResult res)
+{
+	uint d0 = res.head_frag_id; 
+	d0 <<= 1u; 
+	d0 |= (res.visible ? 1u : 0u); 
+	return d0; 
+}
+
+FragVisibilityTestResult decode_frag_visibility_test_result(uint d0)
+{
+	FragVisibilityTestResult res; 
+	res.visible = (d0 & 0x1u) != 0u; 
+	res.head_frag_id = (d0 >> 1u); 
+	return res; 
+}
+
+struct ContourVisibilitySplitInfo
+{
+	// d0
+	uint parent_contour_id; 
+	bool is_new_contour; 
+	bool is_visible; 
+	bool no_occlusion; 
+	bool is_contour_header;
+	// d123, 24 bits for each
+	vec2 begend_ratios; // range [0, 1], the ratio of start/end of this segment at the parent contour
+	uint prev_frag_seg_head_id; 
+	uint next_frag_seg_head_id; 
+}; 
+
+void init_contour_visibility_split_info(uint contour_id, inout ContourVisibilitySplitInfo cvsi)
+{
+	cvsi.parent_contour_id = contour_id; 
+	cvsi.is_new_contour = false; 
+	cvsi.is_visible = true; 
+	cvsi.no_occlusion = true;
+	cvsi.is_contour_header = true;  
+	
+	cvsi.begend_ratios = vec2(.0f, 1.0f); 
+	cvsi.prev_frag_seg_head_id = 0u;
+	cvsi.next_frag_seg_head_id = 0u;
+}
+
+uvec4 encode_contour_visibility_split_info(ContourVisibilitySplitInfo cvsi)
+{
+	uvec4 d0123 = uvec4(0u); 
+	d0123.x = cvsi.parent_contour_id; 
+	d0123.x <<= 1u; 
+	d0123.x |= (cvsi.is_new_contour 	? 1u : 0u);
+	d0123.x <<= 1u;
+	d0123.x |= (cvsi.is_visible     	? 1u : 0u);
+	d0123.x <<= 1u;
+	d0123.x |= (cvsi.no_occlusion    	? 1u : 0u);
+	d0123.x <<= 1u;
+	d0123.x |= (cvsi.is_contour_header 	? 1u : 0u);
+
+	uvec2 begend_ratios_fixed; 
+	{ // Pack into 2x24 bits
+		cvsi.begend_ratios = clamp(cvsi.begend_ratios, vec2(.0f), vec2(1.0f));
+		float fixed_factor = float((1u << 24u) - 1u);
+		begend_ratios_fixed = uvec2(round(cvsi.begend_ratios * fixed_factor)) & 0x00ffffffu; 
+	}
+	d0123.yzw = pack_u24_x4(
+		uvec4(
+			begend_ratios_fixed.x, 
+			begend_ratios_fixed.y, 
+			cvsi.prev_frag_seg_head_id & 0x00ffffffu, 
+			cvsi.next_frag_seg_head_id & 0x00ffffffu
+		)
+	); 
+
+	return d0123; 
+}
+
+ContourVisibilitySplitInfo decode_contour_visibility_split_info(uvec4 d0123)
+{
+	ContourVisibilitySplitInfo cvsi; 
+	cvsi.is_contour_header = ((d0123.x & 0x1u) != 0u);
+	cvsi.no_occlusion      = ((d0123.x & 0x2u) != 0u);
+	cvsi.is_visible        = ((d0123.x & 0x4u) != 0u); 
+	cvsi.is_new_contour    = ((d0123.x & 0x8u) != 0u); 
+	cvsi.parent_contour_id = (d0123.x >> 4u); 
+
+	uvec4 d123_dec = unpack_u24_x4(d0123.yzw);
+	cvsi.begend_ratios = vec2(d123_dec.xy) / float((1u << 24u) - 1u);
+	cvsi.prev_frag_seg_head_id = d123_dec.z;
+	cvsi.next_frag_seg_head_id = d123_dec.w;
+
+	return cvsi; 
+}
 
 #endif
 

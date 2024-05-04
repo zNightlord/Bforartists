@@ -1735,7 +1735,7 @@ namespace blender::npr::strokegen
       sub.bind_ssbo(9, buffers_.ssbo_list_ranking_inputs_);
       sub.bind_ssbo(10, buffers_.ssbo_contour_edge_transfer_data_);
       sub.bind_ssbo(11, buffers_.ssbo_vcurv_max_);
-      sub.bind_ssbo(12, buffers_.reused_ssbo_contour_raster_data_()); 
+      sub.bind_ssbo(12, buffers_.ssbo_contour_raster_data_); 
       sub.bind_ubo(0, buffers_.ubo_view_matrices_cache_); 
       float2 fb_res = textures_.get_contour_raster_screen_res(); 
       sub.push_constant("pcs_screen_size_", fb_res); 
@@ -1944,7 +1944,7 @@ namespace blender::npr::strokegen
     {
       sub.bind_ssbo(0, buffers_.ssbo_bnpr_mesh_pool_counters_);
       sub.bind_ssbo(1, buffers_.reused_ssbo_frag_to_contour_());
-      sub.bind_ssbo(2, buffers_.reused_ssbo_contour_raster_data_());
+      sub.bind_ssbo(2, buffers_.ssbo_contour_raster_data_);
       sub.bind_ssbo(3, buffers_.reused_ssbo_frag_raster_data_());
       sub.bind_ssbo(4, buffers_.reused_ssbo_tree_scan_infos_contour_fragment_idmapping_()); 
       sub.bind_ssbo(5, buffers_.reused_ssbo_tree_scan_input_contour_fragment_idmapping_());
