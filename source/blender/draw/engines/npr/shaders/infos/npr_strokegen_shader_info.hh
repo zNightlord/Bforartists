@@ -240,6 +240,96 @@ GPU_SHADER_CREATE_INFO(strokegen_contour_frag_visibility_test)
     .additional_info("strokegen_build_contour_fragments")
     .define("_KERNEL_MULTICOMPILE__PROCESS_CONTOUR_FRAGMENTS__VISIBILITY_TEST", "1");
 
+GPU_SHADER_CREATE_INFO(strokegen_visibility_split_contour_edges)
+    .do_static_compilation(true)
+    .typedef_source("bnpr_shader_shared.hh")
+    .typedef_source("draw_shader_shared.h")
+    .define("_KERNEL_MULTICOMPILE__PROCESS_CONTOUR_FRAGMENTS", "1")
+    .define("COMPACTION_LIB_EXCLUDE_DEFAULT_CODEGEN", "1")
+    
+    .storage_buf(0, Qualifier::READ_WRITE, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
+    .storage_buf(1, Qualifier::READ_WRITE, "uint", "ssbo_frag_to_contour_[]")
+    .storage_buf(2, Qualifier::READ_WRITE, "uint", "ssbo_contour_raster_data_[]")
+    .storage_buf(3, Qualifier::READ_WRITE, "uint", "ssbo_frag_raster_data_[]")
+    .storage_buf(4, Qualifier::WRITE, "UBData_TreeScan", "ssbo_tree_scan_infos_contour_segmentation_")
+#define NUM_SSBO_strokegen_visibility_split_contour_edges 5
+    .uniform_buf(0, "ViewMatrices", "ubo_view_matrices_")
+    .image(0, GPU_RGBA32F, Qualifier::WRITE, ImageType::FLOAT_2D, "tex2d_contour_dbg_")
+
+    .local_group_size(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT) 
+    .compute_source("npr_strokegen_geom_extract_comp.glsl"); 
+
+GPU_SHADER_CREATE_INFO(strokegen_contour_frag_setup_visibility_segmentation)
+    .do_static_compilation(true)
+    .additional_info("strokegen_visibility_split_contour_edges")
+    .define("_KERNEL_MULTICOMPILE__PROCESS_CONTOUR_FRAGMENTS__SPLIT_VISIBILITY__SETUP_SEGSCAN", "1")
+#define SSBO_OFFSET NUM_SSBO_strokegen_visibility_split_contour_edges
+    .storage_buf(SSBO_OFFSET + 0, Qualifier::WRITE, "uint", "ssbo_tree_scan_input_contour_visibility_split_0_[]")
+    .storage_buf(SSBO_OFFSET + 1, Qualifier::WRITE, "uint", "ssbo_tree_scan_input_contour_visibility_split_1_[]")
+#undef SSBO_OFFSET
+    ;
+
+GPU_SHADER_CREATE_INFO(strokegen_contour_visibility_split_step_0)
+    .do_static_compilation(true)
+    .additional_info("strokegen_visibility_split_contour_edges")
+    .define("_KERNEL_MULTICOMPILE__PROCESS_CONTOUR_FRAGMENTS__SPLIT_VISIBILITY__GENERATE_NEW_CONTOURS_STEP_0", "1")
+#define SSBO_OFFSET NUM_SSBO_strokegen_visibility_split_contour_edges
+    .storage_buf(SSBO_OFFSET + 0, Qualifier::READ_WRITE, "uint", "ssbo_contour_visibility_split_info_[]")
+#undef SSBO_OFFSET
+    ;
+
+GPU_SHADER_CREATE_INFO(strokegen_contour_visibility_split_step_1)
+    .do_static_compilation(true)
+    .additional_info("strokegen_visibility_split_contour_edges")
+    .define("_KERNEL_MULTICOMPILE__PROCESS_CONTOUR_FRAGMENTS__SPLIT_VISIBILITY__GENERATE_NEW_CONTOURS_STEP_1", "1")
+#define SSBO_OFFSET NUM_SSBO_strokegen_visibility_split_contour_edges
+    .storage_buf(SSBO_OFFSET + 0, Qualifier::READ_WRITE, "uint", "ssbo_contour_visibility_split_info_[]")
+    .storage_buf(SSBO_OFFSET + 1, Qualifier::READ_WRITE, "uint", "ssbo_frag_seg_head_to_visibility_split_contour_[]")
+    .storage_buf(SSBO_OFFSET + 2, Qualifier::READ, "uint", "ssbo_tree_scan_output_contour_visibility_split_0_[]")
+    .storage_buf(SSBO_OFFSET + 3, Qualifier::READ, "uint", "ssbo_tree_scan_output_contour_visibility_split_1_[]")
+    .storage_buf(SSBO_OFFSET + 4, Qualifier::READ_WRITE, "uint", "ssbo_contour_to_contour_[]")
+#undef SSBO_OFFSET
+    ;
+
+GPU_SHADER_CREATE_INFO(strokegen_contour_visibility_split_step_2)
+    .do_static_compilation(true)
+    .additional_info("strokegen_visibility_split_contour_edges")
+    .define("_KERNEL_MULTICOMPILE__PROCESS_CONTOUR_FRAGMENTS__SPLIT_VISIBILITY__GENERATE_NEW_CONTOURS_STEP_2_3", "1")
+    .define("_KERNEL_MULTICOMPILE__PROCESS_CONTOUR_FRAGMENTS__SPLIT_VISIBILITY__GENERATE_NEW_CONTOURS_STEP_2", "1")
+    .define("USE_CONTOUR_TRANSFER_DATA_BUFFER", "1")
+#define SSBO_OFFSET NUM_SSBO_strokegen_visibility_split_contour_edges
+    .storage_buf(SSBO_OFFSET + 0, Qualifier::READ_WRITE, "uint", "ssbo_contour_visibility_split_info_[]")
+    .storage_buf(SSBO_OFFSET + 1, Qualifier::READ_WRITE, "uint", "ssbo_frag_seg_head_to_visibility_split_contour_[]")
+    .storage_buf(SSBO_OFFSET + 2, Qualifier::READ_WRITE, "uint", "ssbo_contour_to_contour_[]")
+    .storage_buf(SSBO_OFFSET + 3, Qualifier::READ_WRITE, "uint", "ssbo_contour_edge_transfer_data_[]")
+#undef SSBO_OFFSET
+    ;
+
+GPU_SHADER_CREATE_INFO(strokegen_contour_visibility_split_step_3)
+    .do_static_compilation(true)
+    .additional_info("strokegen_visibility_split_contour_edges")
+    .define("_KERNEL_MULTICOMPILE__PROCESS_CONTOUR_FRAGMENTS__SPLIT_VISIBILITY__GENERATE_NEW_CONTOURS_STEP_2_3", "1")
+    .define("_KERNEL_MULTICOMPILE__PROCESS_CONTOUR_FRAGMENTS__SPLIT_VISIBILITY__GENERATE_NEW_CONTOURS_STEP_3", "1")
+    .define("USE_CONTOUR_TRANSFER_DATA_BUFFER", "1")
+#define SSBO_OFFSET NUM_SSBO_strokegen_visibility_split_contour_edges
+    .storage_buf(SSBO_OFFSET + 0, Qualifier::READ_WRITE, "uint", "ssbo_contour_visibility_split_info_[]")
+    .storage_buf(SSBO_OFFSET + 1, Qualifier::READ_WRITE, "uint", "ssbo_frag_seg_head_to_visibility_split_contour_[]")
+    .storage_buf(SSBO_OFFSET + 2, Qualifier::READ_WRITE, "uint", "ssbo_contour_to_contour_[]")
+    .storage_buf(SSBO_OFFSET + 3, Qualifier::READ_WRITE, "uint", "ssbo_contour_edge_transfer_data_[]")
+#undef SSBO_OFFSET
+    ;
+
+GPU_SHADER_CREATE_INFO(strokegen_fill_cotour_edge_ranking_inputs)
+    .do_static_compilation(true)
+    .typedef_source("bnpr_shader_shared.hh")
+    .define("_KERNEL_MULTICOMPILE__FILL_LIST_RANKING_INPUTS_FOR_CONTOUR_EDGES", "1")
+    .define("COMPACTION_LIB_EXCLUDE_DEFAULT_CODEGEN", "1")
+
+    .storage_buf(0, Qualifier::READ_WRITE, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
+    .storage_buf(1, Qualifier::READ_WRITE, "SSBOData_ListRankingInputs", "ssbo_list_ranking_inputs_")
+
+    .local_group_size(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT) 
+    .compute_source("npr_strokegen_geom_extract_comp.glsl");
 
 GPU_SHADER_CREATE_INFO(strokegen_serialize_contour_edges)
     .do_static_compilation(true)

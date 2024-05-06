@@ -100,9 +100,14 @@ void main()
 	bool is_curve_tail = cct.tail_contour_id == contour_id;
 
 #if defined(_KERNEL_MULTICOMPILE__CONTOUR_SEGMENTATION__SETUP)
+
+	uint prev_contour_id = is_curve_head ? cct.tail_contour_id : contour_id - 1u;
+	ContourFlags cf_prev = load_contour_flags(prev_contour_id);
+
 	uint next_contour_id = is_curve_tail ? cct.head_contour_id : contour_id + 1u;
 	ContourFlags cf_next = load_contour_flags(next_contour_id);
 	
+	// cf.seg_head:= segment head due to cusp variation
 	bool is_scan_seg_head = cf.seg_head 	 || is_curve_head;  
 	bool is_scan_seg_tail = cf_next.seg_head || is_curve_tail;  
 

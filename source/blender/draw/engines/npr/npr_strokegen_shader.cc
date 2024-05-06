@@ -118,7 +118,20 @@ const char *StrokeGenShaderModule::static_shader_create_info_name_get(eShaderTyp
     case FINISH_FRAG_TO_CONTOUR_IDMAPPING:
       return "strokegen_finish_segscan_frag_to_contour_idmapping"; 
     case CONTOUR_FRAG_VISIBILITY_TEST:
-      return "strokegen_contour_frag_visibility_test"; 
+      return "strokegen_contour_frag_visibility_test";
+    case CONTOUR_FRAG_SETUP_VISIBILITY_SEGMENTATION:
+      return "strokegen_contour_frag_setup_visibility_segmentation"; 
+    case CONTOUR_VISIBILITY_SPLIT_STEP_0:
+      return "strokegen_contour_visibility_split_step_0";
+    case CONTOUR_VISIBILITY_SPLIT_STEP_1:
+      return "strokegen_contour_visibility_split_step_1";
+    case CONTOUR_VISIBILITY_SPLIT_STEP_2:
+      return "strokegen_contour_visibility_split_step_2";
+    case CONTOUR_VISIBILITY_SPLIT_STEP_3:
+      return "strokegen_contour_visibility_split_step_3";
+
+    case FILL_CONTOUR_EDGE_RANKING_INPUTS:
+      return "strokegen_fill_cotour_edge_ranking_inputs"; 
 
     case SERIALIZE_RANKED_CONTOUR_EDGES:
       return "strokegen_serialize_contour_edges_pass_0";

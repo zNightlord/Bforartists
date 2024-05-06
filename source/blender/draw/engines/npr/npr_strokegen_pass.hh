@@ -413,9 +413,12 @@ public:
   void append_pass_remeshed_surface_depth_drawcall();
 
   // ---------------------------------------------------------------------------
-  void append_subpass_contour_edges_soft_rasterization(); 
+  void append_subpass_contour_edges_soft_rasterization();
+  void append_subpass_visibility_split_contour_edges(); // split edges based on soft rasterization
 
-
+  // ---------------------------------------------------------------------------
+  void append_subpass_fill_contour_list_ranking_inputs(); 
+  
   // ---------------------------------------------------------------------------
   void append_subpass_serialize_contour_edges();
   void append_subpass_contour_segmentation(); 

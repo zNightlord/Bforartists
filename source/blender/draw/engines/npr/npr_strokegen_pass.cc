@@ -1878,8 +1878,9 @@ namespace blender::npr::strokegen
 
 
     append_subpass_contour_edges_soft_rasterization();
+    append_subpass_visibility_split_contour_edges(); 
 
-
+    append_subpass_fill_contour_list_ranking_inputs(); 
     append_subpass_fill_dispatch_args_contour_edges(pass_process_contours, true); 
     append_subpass_list_ranking(ContourEdgeLinking, pass_process_contours, true);
 
@@ -1952,7 +1953,6 @@ namespace blender::npr::strokegen
       sub.bind_image(0, textures_.tex2d_contour_dbg_); 
       sub.bind_texture(0, textures_.tex_remeshed_surf_depth_, eGPUSamplerState::GPU_SAMPLER_CLAMP_BORDER); 
 
-      sub.bind_ubo(0, buffers_.ubo_view_matrices_);
       sub.push_constant("pcs_screen_size_", textures_.get_contour_raster_screen_res());
     };
 
@@ -2018,7 +2018,137 @@ namespace blender::npr::strokegen
       sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_COMMAND |
                   GPU_BARRIER_SHADER_IMAGE_ACCESS | GPU_BARRIER_TEXTURE_FETCH); 
     }
+  }
 
+  void StrokeGenPassModule::append_subpass_visibility_split_contour_edges()
+  {
+    int ssbo_offset = 0; 
+    auto bind_rsc = [&](draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub) {
+      sub.bind_ssbo(0, buffers_.ssbo_bnpr_mesh_pool_counters_);
+      sub.bind_ssbo(1, buffers_.reused_ssbo_frag_to_contour_());
+      sub.bind_ssbo(2, buffers_.ssbo_contour_raster_data_);
+      sub.bind_ssbo(3, buffers_.reused_ssbo_frag_raster_data_());
+      sub.bind_ssbo(4, buffers_.reused_ssbo_tree_scan_infos_contour_visibility_split_());
+      ssbo_offset = 5; 
+
+      sub.bind_image(0, textures_.tex2d_contour_dbg_);
+      sub.bind_ubo(0, buffers_.ubo_view_matrices_cache_);
+    };
+
+    { 
+      auto &sub = pass_process_contours.sub("strokegen_contour_frag_setup_visibility_segmentation");
+      sub.shader_set(shaders_.static_shader_get(eShaderType::CONTOUR_FRAG_SETUP_VISIBILITY_SEGMENTATION));
+
+      bind_rsc(sub);
+      sub.bind_ssbo(ssbo_offset + 0, buffers_.reused_ssbo_tree_scan_input_contour_visibility_split_0_());
+      sub.bind_ssbo(ssbo_offset + 1, buffers_.reused_ssbo_tree_scan_input_contour_visibility_split_1_()); 
+
+      sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_frag_dispatch_args_);
+      sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_COMMAND);
+    }
+
+    {
+      ScanSettings segscan_test_settings;
+      segscan_test_settings.is_validation_shader = false;
+      segscan_test_settings.frame_counter = 0;
+      segscan_test_settings.use_indirect_dispatch = true;
+      segscan_test_settings.ssbo_scan_infos_ = buffers_.reused_ssbo_tree_scan_infos_contour_visibility_split_();
+      segscan_test_settings.ssbo_in_scan_data_ = buffers_.reused_ssbo_tree_scan_input_contour_visibility_split_0_();
+      segscan_test_settings.ssbo_out_scan_data_ = buffers_.reused_ssbo_tree_scan_output_contour_visibility_split_0_();
+      segscan_test_settings.ssbo_scan_block_sum_ = buffers_.ssbo_scan_block_sum_;
+      segscan_test_settings.shader_upsweep = eShaderType::SEGSCAN_UINT_ADD_UPSWEEP;
+      segscan_test_settings.shader_aggregate = eShaderType::SEGSCAN_UINT_ADD_AGGREGATE;
+      segscan_test_settings.shader_dwsweep = eShaderType::SEGSCAN_UINT_ADD_DWSWEEP;
+
+      append_subpass_segscan(segscan_test_settings, pass_process_contours);
+    }
+
+    {
+      ScanSettings segscan_test_settings;
+      segscan_test_settings.is_validation_shader = false;
+      segscan_test_settings.frame_counter = 0;
+      segscan_test_settings.use_indirect_dispatch = true;
+      segscan_test_settings.ssbo_scan_infos_ =
+          buffers_.reused_ssbo_tree_scan_infos_contour_visibility_split_();
+      segscan_test_settings.ssbo_in_scan_data_ =
+          buffers_.reused_ssbo_tree_scan_input_contour_visibility_split_1_();
+      segscan_test_settings.ssbo_out_scan_data_ =
+          buffers_.reused_ssbo_tree_scan_output_contour_visibility_split_1_();
+      segscan_test_settings.ssbo_scan_block_sum_ = buffers_.ssbo_scan_block_sum_;
+      segscan_test_settings.shader_upsweep = eShaderType::SEGSCAN_UINT_ADD_UPSWEEP;
+      segscan_test_settings.shader_aggregate = eShaderType::SEGSCAN_UINT_ADD_AGGREGATE;
+      segscan_test_settings.shader_dwsweep = eShaderType::SEGSCAN_UINT_ADD_DWSWEEP;
+
+      append_subpass_segscan(segscan_test_settings, pass_process_contours);
+    }
+
+    {
+      auto &sub = pass_process_contours.sub("strokegen_contour_visibility_split_step_0");
+      sub.shader_set(shaders_.static_shader_get(eShaderType::CONTOUR_VISIBILITY_SPLIT_STEP_0));
+
+      bind_rsc(sub);
+      sub.bind_ssbo(ssbo_offset + 0, buffers_.reused_ssbo_contour_visibility_split_info_());
+
+      sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_edge_dispatch_args_);
+      sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_COMMAND);
+    }
+
+    {
+      auto &sub = pass_process_contours.sub("strokegen_contour_visibility_split_step_1");
+      sub.shader_set(shaders_.static_shader_get(eShaderType::CONTOUR_VISIBILITY_SPLIT_STEP_1));
+
+      bind_rsc(sub);
+      sub.bind_ssbo(ssbo_offset + 0, buffers_.reused_ssbo_contour_visibility_split_info_());
+      sub.bind_ssbo(ssbo_offset + 1, buffers_.reused_ssbo_frag_seg_head_to_visibility_split_contour_());
+      sub.bind_ssbo(ssbo_offset + 2, buffers_.reused_ssbo_tree_scan_output_contour_visibility_split_0_());
+      sub.bind_ssbo(ssbo_offset + 3, buffers_.reused_ssbo_tree_scan_output_contour_visibility_split_1_());
+      sub.bind_ssbo(ssbo_offset + 4, buffers_.ssbo_contour_to_contour_);
+
+      sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_frag_dispatch_args_);
+      sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_COMMAND |
+                  GPU_BARRIER_SHADER_IMAGE_ACCESS | GPU_BARRIER_TEXTURE_FETCH);
+    }
+    // step 1 pass has generated new contour edges
+    append_subpass_fill_dispatch_args_contour_edges(pass_process_contours, true);
+
+    {
+      auto &sub = pass_process_contours.sub("strokegen_contour_visibility_split_step_2");
+      sub.shader_set(shaders_.static_shader_get(eShaderType::CONTOUR_VISIBILITY_SPLIT_STEP_2));
+
+      bind_rsc(sub);
+      sub.bind_ssbo(ssbo_offset + 0, buffers_.reused_ssbo_contour_visibility_split_info_());
+      sub.bind_ssbo(ssbo_offset + 1, buffers_.reused_ssbo_frag_seg_head_to_visibility_split_contour_());
+      sub.bind_ssbo(ssbo_offset + 2, buffers_.ssbo_contour_to_contour_);
+      sub.bind_ssbo(ssbo_offset + 3, buffers_.ssbo_contour_edge_transfer_data_);
+
+      sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_edge_dispatch_args_);
+      sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_COMMAND);
+    }
+    {
+      auto &sub = pass_process_contours.sub("strokegen_contour_visibility_split_step_3");
+      sub.shader_set(shaders_.static_shader_get(eShaderType::CONTOUR_VISIBILITY_SPLIT_STEP_3));
+
+      bind_rsc(sub);
+      sub.bind_ssbo(ssbo_offset + 0, buffers_.reused_ssbo_contour_visibility_split_info_());
+      sub.bind_ssbo(ssbo_offset + 1, buffers_.reused_ssbo_frag_seg_head_to_visibility_split_contour_());
+      sub.bind_ssbo(ssbo_offset + 2, buffers_.ssbo_contour_to_contour_);
+      sub.bind_ssbo(ssbo_offset + 3, buffers_.ssbo_contour_edge_transfer_data_);
+
+      sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_edge_dispatch_args_);
+      sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_COMMAND);
+    }
+  }
+
+  void StrokeGenPassModule::append_subpass_fill_contour_list_ranking_inputs()
+  {
+    auto &sub = pass_process_contours.sub("strokegen_fill_cotour_edge_ranking_inputs");
+    sub.shader_set(shaders_.static_shader_get(FILL_CONTOUR_EDGE_RANKING_INPUTS));
+
+    sub.bind_ssbo(0, buffers_.ssbo_bnpr_mesh_pool_counters_);
+    sub.bind_ssbo(1, buffers_.ssbo_list_ranking_inputs_);
+
+    sub.dispatch(int3(1, 1, 1));
+    sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_COMMAND); 
   }
 
   void StrokeGenPassModule::rebuild_pass_compress_contour_pixels(bool debug)

@@ -348,25 +348,52 @@ struct ContourVisibilitySplitInfo
 	uint parent_contour_id; 
 	bool is_new_contour; 
 	bool is_visible; 
-	bool no_occlusion; 
-	bool is_contour_header;
+	bool no_rastered_frags; 
+	bool split_by_occlusion;
 	// d123, 24 bits for each
 	vec2 begend_ratios; // range [0, 1], the ratio of start/end of this segment at the parent contour
-	uint prev_frag_seg_head_id; 
-	uint next_frag_seg_head_id; 
+#define FRAG_SEG_ID_MASK 0x00ffffffu
+	uint prev_frag_seg_head_id; // 24 bits 
+	bool no_rastered_prev_contour; // prev contour is clipped away from view
+	uint next_frag_seg_head_id; // 24 bits
+	bool no_rastered_next_contour; // next contour is clipped away from view
 }; 
+
+
+#define BIT_TYPE_CONTOUR_VIS_SPLIT__NEW_EDGE 0x1u
+#define BIT_TYPE_CONTOUR_VIS_SPLIT__OLD_EDGE_NOT_RASTERED 0x2u
+#define BIT_TYPE_CONTOUR_VIS_SPLIT__OLD_EDGE_SPLIT 0x4u
+#define BIT_TYPE_CONTOUR_VIS_SPLIT__OLD_EDGE_RASTERED_NO_SPLIT 0x8u
+uint calc_contour_visibility_states(ContourVisibilitySplitInfo cvsi)
+{ // note: partially clipped edges are considered old_edge_rastered_no_split
+	bool new_edge                   = cvsi.is_new_contour;
+	bool old_edge_not_rastered      = cvsi.no_rastered_frags;
+	bool old_edge_split             = !(new_edge || old_edge_not_rastered) && cvsi.split_by_occlusion; 
+	bool old_edge_rastered_no_split = !(new_edge || old_edge_split || old_edge_not_rastered); 
+
+	uint res = 0u; 
+	res |= (new_edge                   ? BIT_TYPE_CONTOUR_VIS_SPLIT__NEW_EDGE : 0u);
+	res |= (old_edge_not_rastered      ? BIT_TYPE_CONTOUR_VIS_SPLIT__OLD_EDGE_NOT_RASTERED : 0u);
+	res |= (old_edge_split             ? BIT_TYPE_CONTOUR_VIS_SPLIT__OLD_EDGE_SPLIT : 0u);
+	res |= (old_edge_rastered_no_split ? BIT_TYPE_CONTOUR_VIS_SPLIT__OLD_EDGE_RASTERED_NO_SPLIT : 0u);
+
+	return res; 
+}
+
+
 
 void init_contour_visibility_split_info(uint contour_id, inout ContourVisibilitySplitInfo cvsi)
 {
 	cvsi.parent_contour_id = contour_id; 
 	cvsi.is_new_contour = false; 
-	cvsi.is_visible = true; 
-	cvsi.no_occlusion = true;
-	cvsi.is_contour_header = true;  
+	cvsi.is_visible = true; // match the default state in ContourFlags 
+	cvsi.no_rastered_frags = true;
 	
 	cvsi.begend_ratios = vec2(.0f, 1.0f); 
 	cvsi.prev_frag_seg_head_id = 0u;
 	cvsi.next_frag_seg_head_id = 0u;
+	cvsi.no_rastered_prev_contour = true; 
+	cvsi.no_rastered_next_contour = true; 
 }
 
 uvec4 encode_contour_visibility_split_info(ContourVisibilitySplitInfo cvsi)
@@ -378,22 +405,25 @@ uvec4 encode_contour_visibility_split_info(ContourVisibilitySplitInfo cvsi)
 	d0123.x <<= 1u;
 	d0123.x |= (cvsi.is_visible     	? 1u : 0u);
 	d0123.x <<= 1u;
-	d0123.x |= (cvsi.no_occlusion    	? 1u : 0u);
+	d0123.x |= (cvsi.no_rastered_frags    	? 1u : 0u);
 	d0123.x <<= 1u;
-	d0123.x |= (cvsi.is_contour_header 	? 1u : 0u);
+	d0123.x |= (cvsi.split_by_occlusion 	? 1u : 0u);
 
 	uvec2 begend_ratios_fixed; 
 	{ // Pack into 2x24 bits
 		cvsi.begend_ratios = clamp(cvsi.begend_ratios, vec2(.0f), vec2(1.0f));
 		float fixed_factor = float((1u << 24u) - 1u);
-		begend_ratios_fixed = uvec2(round(cvsi.begend_ratios * fixed_factor)) & 0x00ffffffu; 
+		begend_ratios_fixed = uvec2(round(cvsi.begend_ratios * fixed_factor)) & FRAG_SEG_ID_MASK; 
 	}
+	if (cvsi.no_rastered_prev_contour) cvsi.prev_frag_seg_head_id = FRAG_SEG_ID_MASK; 
+	if (cvsi.no_rastered_next_contour) cvsi.next_frag_seg_head_id = FRAG_SEG_ID_MASK;
+	
 	d0123.yzw = pack_u24_x4(
 		uvec4(
 			begend_ratios_fixed.x, 
 			begend_ratios_fixed.y, 
-			cvsi.prev_frag_seg_head_id & 0x00ffffffu, 
-			cvsi.next_frag_seg_head_id & 0x00ffffffu
+			cvsi.prev_frag_seg_head_id & FRAG_SEG_ID_MASK, 
+			cvsi.next_frag_seg_head_id & FRAG_SEG_ID_MASK
 		)
 	); 
 
@@ -403,16 +433,18 @@ uvec4 encode_contour_visibility_split_info(ContourVisibilitySplitInfo cvsi)
 ContourVisibilitySplitInfo decode_contour_visibility_split_info(uvec4 d0123)
 {
 	ContourVisibilitySplitInfo cvsi; 
-	cvsi.is_contour_header = ((d0123.x & 0x1u) != 0u);
-	cvsi.no_occlusion      = ((d0123.x & 0x2u) != 0u);
+	cvsi.split_by_occlusion = ((d0123.x & 0x1u) != 0u); 
+	cvsi.no_rastered_frags      = ((d0123.x & 0x2u) != 0u); 
 	cvsi.is_visible        = ((d0123.x & 0x4u) != 0u); 
 	cvsi.is_new_contour    = ((d0123.x & 0x8u) != 0u); 
 	cvsi.parent_contour_id = (d0123.x >> 4u); 
 
-	uvec4 d123_dec = unpack_u24_x4(d0123.yzw);
-	cvsi.begend_ratios = vec2(d123_dec.xy) / float((1u << 24u) - 1u);
-	cvsi.prev_frag_seg_head_id = d123_dec.z;
-	cvsi.next_frag_seg_head_id = d123_dec.w;
+	uvec4 d123_dec = unpack_u24_x4(d0123.yzw); 
+	cvsi.begend_ratios = vec2(d123_dec.xy) / float((1u << 24u) - 1u); 
+	cvsi.prev_frag_seg_head_id = d123_dec.z; 
+	cvsi.no_rastered_prev_contour = cvsi.prev_frag_seg_head_id == FRAG_SEG_ID_MASK; 
+	cvsi.next_frag_seg_head_id = d123_dec.w; 
+	cvsi.no_rastered_next_contour = cvsi.next_frag_seg_head_id == FRAG_SEG_ID_MASK; 
 
 	return cvsi; 
 }

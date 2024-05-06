@@ -26,6 +26,7 @@ struct ContourFlags
     bool seg_tail; 
     bool looped_curve; 
     bool cusp_func_pstv; /*has positive cusp function*/
+	bool occluded; /* valid when visibility test activated */
 }; 
 
 uint encode_contour_flags(ContourFlags cf)
@@ -38,6 +39,8 @@ uint encode_contour_flags(ContourFlags cf)
     cf_enc |= uint(cf.looped_curve);
     cf_enc <<= 1u;
     cf_enc |= uint(cf.cusp_func_pstv);
+	cf_enc <<= 1u;
+	cf_enc |= uint(cf.occluded);
 
     return cf_enc; 
 }
@@ -45,6 +48,8 @@ uint encode_contour_flags(ContourFlags cf)
 ContourFlags decode_contour_flags(uint cf_enc)
 {
     ContourFlags cf; 
+	cf.occluded = (1u == (cf_enc & 1u));
+	cf_enc >>= 1u;
     cf.cusp_func_pstv = (1u == (cf_enc & 1u));
     cf_enc >>= 1u;
     cf.looped_curve = (1u == (cf_enc & 1u));
@@ -63,6 +68,7 @@ ContourFlags init_contour_flags(bool seg_head)
     cf.seg_tail = false;       // needs further setup
     cf.looped_curve = true;    // needs further setup
     cf.cusp_func_pstv = false; // needs further setup
+	cf.occluded = false;       // needs further setup
     return cf; 
 }
 
@@ -84,6 +90,11 @@ void init_contour_looped_curve(bool looped, inout ContourFlags cf)
 void init_contour_cusp_flags(bool cusp_func_pstv, inout ContourFlags cf)
 {
     cf.cusp_func_pstv = cusp_func_pstv; 
+}
+
+void set_contour_flags_occluded(inout ContourFlags cf)
+{
+	cf.occluded = true; 
 }
 
 #if defined(INCLUDE_CONTOUR_FLAGS_LOAD_STORE)
