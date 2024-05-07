@@ -1,4 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* SPDX-FileCopyrightText: 2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #pragma once
 
@@ -17,20 +19,18 @@ namespace Freestyle {
 
 class PseudoNoise {
  public:
-  virtual ~PseudoNoise()
-  {
-  }
+  virtual ~PseudoNoise() {}
 
   real smoothNoise(real x);
   real linearNoise(real x);
 
-  real turbulenceSmooth(real x, unsigned nbOctave = 8);
-  real turbulenceLinear(real x, unsigned nbOctave = 8);
+  real turbulenceSmooth(real x, uint nbOctave = 8);
+  real turbulenceLinear(real x, uint nbOctave = 8);
 
   static void init(long seed);
 
  protected:
-  static const unsigned NB_VALUE_NOISE = 512;
+  static const uint NB_VALUE_NOISE = 512;
   static real _values[NB_VALUE_NOISE];
 
 #ifdef WITH_CXX_GUARDEDALLOC

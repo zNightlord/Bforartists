@@ -1,3 +1,6 @@
+/* SPDX-FileCopyrightText: 2017-2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #pragma BLENDER_REQUIRE(engine_eevee_shared_defines.h)
 #pragma BLENDER_REQUIRE(engine_eevee_legacy_shared.h)
@@ -83,10 +86,17 @@ uniform depth2DArrayShadow shadowCascadeTexture;
 /** \name Shadow Functions
  * \{ */
 
-/* type */
-#define POINT 0.0
+/* Type. Consistent with DNA `Light::type`, except for `OMNI_DISK`/`SPOT_DISK` and `AREA_ELLIPSE`,
+ * which are reinterpreted from `light.mode` and `light.area_type`. The decimal numbers are chosen
+ * so that they can be exactly represented by float, and guarantee an increasing sequence. */
+#define OMNI_SPHERE 0.0
+#define OMNI_DISK 0.5
+
 #define SUN 1.0
-#define SPOT 2.0
+
+#define SPOT_SPHERE 2.0
+#define SPOT_DISK 2.5
+
 #define AREA_RECT 4.0
 /* Used to define the area light shape, doesn't directly correspond to a Blender light type. */
 #define AREA_ELLIPSE 100.0
@@ -164,7 +174,7 @@ float sample_cube_shadow(int shadow_id, vec3 P)
   /* TODO: Shadow Cube Array. */
   float face = cubeFaceIndexEEVEE(cubevec);
   vec2 coord = cubeFaceCoordEEVEE(cubevec, face, shadowCubeTexture);
-  /* tex_id == data_id for cube shadowmap */
+  /* `tex_id == data_id` for cube shadow-map. */
   float tex_id = float(data_id);
   return texture(shadowCubeTexture, vec4(coord, tex_id * 6.0 + face, dist));
 }
@@ -230,10 +240,10 @@ float spot_attenuation(LightData ld, vec3 l_vector)
 float light_attenuation(LightData ld, vec4 l_vector)
 {
   float vis = 1.0;
-  if (ld.l_type == SPOT) {
+  if (ld.l_type == SPOT_SPHERE || ld.l_type == SPOT_DISK) {
     vis *= spot_attenuation(ld, l_vector.xyz);
   }
-  if (ld.l_type >= SPOT) {
+  if (ld.l_type >= SPOT_SPHERE) {
     vis *= step(0.0, -dot(l_vector.xyz, ld.l_forward));
   }
   if (ld.l_type != SUN) {
@@ -298,12 +308,17 @@ float light_contact_shadows(LightData ld, vec3 P, vec3 vP, vec3 vNg, float rand_
   }
   return 1.0;
 }
-#endif /* VOLUMETRICS */
+#endif /* !VOLUMETRICS */
 
 float light_visibility(LightData ld, vec3 P, vec4 l_vector)
 {
   float l_atten = light_attenuation(ld, l_vector);
   return light_shadowing(ld, P, l_atten);
+}
+
+bool is_sphere_light(float type)
+{
+  return type == OMNI_SPHERE || type == SPOT_SPHERE;
 }
 
 float light_diffuse(LightData ld, vec3 N, vec3 V, vec4 l_vector)
@@ -325,7 +340,22 @@ float light_diffuse(LightData ld, vec3 N, vec3 V, vec4 l_vector)
 
     return ltc_evaluate_disk(N, V, mat3(1.0), points);
   }
+  else if (is_sphere_light(ld.l_type)) {
+    if (l_vector.w < ld.l_radius) {
+      /* Inside, treat as hemispherical light. */
+      return 1.0;
+    }
+    else {
+      /* Outside, treat as disk light spanning the same solid angle. */
+      /* The result is the same as passing the scaled radius to #ltc_evaluate_disk_simple (see
+       * #light_specular), using simplified math here. */
+      float r_sq = sqr(ld.l_radius / l_vector.w);
+      vec3 L = l_vector.xyz / l_vector.w;
+      return r_sq * diffuse_sphere_integral(dot(N, L), r_sq);
+    }
+  }
   else {
+    /* Sun light or omni disk light. */
     float radius = ld.l_radius;
     radius /= (ld.l_type == SUN) ? 1.0 : l_vector.w;
     vec3 L = (ld.l_type == SUN) ? -ld.l_forward : (l_vector.xyz / l_vector.w);
@@ -347,16 +377,31 @@ float light_specular(LightData ld, vec4 ltc_mat, vec3 N, vec3 V, vec4 l_vector)
 
     return ltc_evaluate_quad(corners, vec3(0.0, 0.0, 1.0));
   }
+  else if (is_sphere_light(ld.l_type) && l_vector.w < ld.l_radius) {
+    /* Inside the sphere light, integrate over the hemisphere. */
+    return 1.0;
+  }
   else {
     bool is_ellipse = (ld.l_type == AREA_ELLIPSE);
     float radius_x = is_ellipse ? ld.l_sizex : ld.l_radius;
     float radius_y = is_ellipse ? ld.l_sizey : ld.l_radius;
 
-    vec3 L = (ld.l_type == SUN) ? -ld.l_forward : l_vector.xyz;
-    vec3 Px = ld.l_right;
-    vec3 Py = ld.l_up;
+    if (is_sphere_light(ld.l_type)) {
+      /* The sine of the half-angle spanned by a sphere light is equal to the tangent of the
+       * half-angle spanned by a disk light with the same radius. */
+      radius_x *= inversesqrt(1.0 - sqr(radius_x / l_vector.w));
+      radius_y *= inversesqrt(1.0 - sqr(radius_y / l_vector.w));
+    }
 
-    if (ld.l_type == SPOT || ld.l_type == POINT) {
+    vec3 L = (ld.l_type == SUN) ? -ld.l_forward : l_vector.xyz;
+    vec3 Px, Py;
+
+    if (ld.l_type == SUN || ld.l_type == AREA_ELLIPSE) {
+      Px = ld.l_right;
+      Py = ld.l_up;
+    }
+    else {
+      /* Omni and spot lights. */
       make_orthonormal_basis(l_vector.xyz / l_vector.w, Px, Py);
     }
 

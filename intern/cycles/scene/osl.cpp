@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: Apache-2.0
- * Copyright 2011-2022 Blender Foundation */
+/* SPDX-FileCopyrightText: 2011-2022 Blender Foundation
+ *
+ * SPDX-License-Identifier: Apache-2.0 */
 
 #include "device/device.h"
 
@@ -165,8 +166,9 @@ void OSLShaderManager::device_update_specific(Device *device,
   for (const auto &[device_type, ss] : ss_shared) {
     OSLRenderServices *services = static_cast<OSLRenderServices *>(ss->renderer());
 
-    services->textures.insert(ustring("@ao"), new OSLTextureHandle(OSLTextureHandle::AO));
-    services->textures.insert(ustring("@bevel"), new OSLTextureHandle(OSLTextureHandle::BEVEL));
+    services->textures.insert(OSLUStringHash("@ao"), new OSLTextureHandle(OSLTextureHandle::AO));
+    services->textures.insert(OSLUStringHash("@bevel"),
+                              new OSLTextureHandle(OSLTextureHandle::BEVEL));
   }
 
   device_update_common(device, dscene, scene, progress);
@@ -702,9 +704,12 @@ OSLCompiler::OSLCompiler(OSLShaderManager *manager, OSL::ShadingSystem *ss, Scen
 string OSLCompiler::id(ShaderNode *node)
 {
   /* assign layer unique name based on pointer address + bump mode */
-  stringstream stream;
-  stream.imbue(std::locale("C")); /* Ensure that no grouping characters (e.g. commas with en_US
-                                     locale) are added to the pointer string */
+  std::stringstream stream;
+
+  /* Ensure that no grouping characters (e.g. commas with en_US locale)
+   * are added to the pointer string. */
+  stream.imbue(std::locale("C"));
+
   stream << "node_" << node->type->name << "_" << node;
 
   return stream.str();
@@ -891,10 +896,6 @@ void OSLCompiler::add(ShaderNode *node, const char *name, bool isfilepath)
     if (node->has_attribute_dependency())
       current_shader->has_volume_attribute_dependency = true;
   }
-
-  if (node->has_integrator_dependency()) {
-    current_shader->has_integrator_dependency = true;
-  }
 }
 
 static TypeDesc array_typedesc(TypeDesc typedesc, int arraylength)
@@ -1048,8 +1049,10 @@ void OSLCompiler::parameter(ShaderNode *node, const char *name)
     case SocketType::CLOSURE:
     case SocketType::NODE:
     case SocketType::NODE_ARRAY:
+    case SocketType::UINT:
+    case SocketType::UINT64:
     case SocketType::UNDEFINED:
-    case SocketType::UINT: {
+    case SocketType::NUM_TYPES: {
       assert(0);
       break;
     }
@@ -1202,7 +1205,7 @@ OSL::ShaderGroupRef OSLCompiler::compile_type(Shader *shader, ShaderGraph *graph
   current_type = type;
 
   /* Use name hash to identify shader group to avoid issues with non-alphanumeric characters */
-  stringstream name;
+  std::stringstream name;
   name.imbue(std::locale("C"));
   name << "shader_" << shader->name.hash();
 
@@ -1253,10 +1256,7 @@ void OSLCompiler::compile(OSLGlobals *og, Shader *shader)
                     output->input("Surface")->link && output->input("Displacement")->link;
 
     /* finalize */
-    shader->graph->finalize(scene,
-                            has_bump,
-                            shader->has_integrator_dependency,
-                            shader->get_displacement_method() == DISPLACE_BOTH);
+    shader->graph->finalize(scene, has_bump, shader->get_displacement_method() == DISPLACE_BOTH);
 
     current_shader = shader;
 
@@ -1271,7 +1271,6 @@ void OSLCompiler::compile(OSLGlobals *og, Shader *shader)
     shader->has_surface_spatial_varying = false;
     shader->has_volume_spatial_varying = false;
     shader->has_volume_attribute_dependency = false;
-    shader->has_integrator_dependency = false;
 
     /* generate surface shader */
     if (shader->reference_count() && graph && output->input("Surface")->link) {
@@ -1322,7 +1321,7 @@ void OSLCompiler::parameter_texture(const char *name, ustring filename, ustring 
    * case we need to do runtime color space conversion. */
   OSLTextureHandle *handle = new OSLTextureHandle(OSLTextureHandle::OIIO);
   handle->processor = ColorSpaceManager::get_processor(colorspace);
-  services->textures.insert(filename, handle);
+  services->textures.insert(OSLUStringHash(filename), handle);
   parameter(name, filename);
 }
 
@@ -1333,7 +1332,7 @@ void OSLCompiler::parameter_texture(const char *name, const ImageHandle &handle)
    * to get handle again. Note that this name must be unique between multiple
    * render sessions as the render services are shared. */
   ustring filename(string_printf("@svm%d", texture_shared_unique_id++).c_str());
-  services->textures.insert(filename,
+  services->textures.insert(OSLUStringHash(filename),
                             new OSLTextureHandle(OSLTextureHandle::SVM, handle.get_svm_slots()));
   parameter(name, filename);
 }
@@ -1342,77 +1341,48 @@ void OSLCompiler::parameter_texture_ies(const char *name, int svm_slot)
 {
   /* IES light textures stored in SVM. */
   ustring filename(string_printf("@svm%d", texture_shared_unique_id++).c_str());
-  services->textures.insert(filename, new OSLTextureHandle(OSLTextureHandle::IES, svm_slot));
+  services->textures.insert(OSLUStringHash(filename),
+                            new OSLTextureHandle(OSLTextureHandle::IES, svm_slot));
   parameter(name, filename);
 }
 
 #else
 
-void OSLCompiler::add(ShaderNode * /*node*/, const char * /*name*/, bool /*isfilepath*/)
+void OSLCompiler::add(ShaderNode * /*node*/, const char * /*name*/, bool /*isfilepath*/) {}
+
+void OSLCompiler::parameter(ShaderNode * /*node*/, const char * /*name*/) {}
+
+void OSLCompiler::parameter(const char * /*name*/, float /*f*/) {}
+
+void OSLCompiler::parameter_color(const char * /*name*/, float3 /*f*/) {}
+
+void OSLCompiler::parameter_vector(const char * /*name*/, float3 /*f*/) {}
+
+void OSLCompiler::parameter_point(const char * /*name*/, float3 /*f*/) {}
+
+void OSLCompiler::parameter_normal(const char * /*name*/, float3 /*f*/) {}
+
+void OSLCompiler::parameter(const char * /*name*/, int /*f*/) {}
+
+void OSLCompiler::parameter(const char * /*name*/, const char * /*s*/) {}
+
+void OSLCompiler::parameter(const char * /*name*/, ustring /*s*/) {}
+
+void OSLCompiler::parameter(const char * /*name*/, const Transform & /*tfm*/) {}
+
+void OSLCompiler::parameter_array(const char * /*name*/, const float /*f*/[], int /*arraylen*/) {}
+
+void OSLCompiler::parameter_color_array(const char * /*name*/, const array<float3> & /*f*/) {}
+
+void OSLCompiler::parameter_texture(const char * /*name*/,
+                                    ustring /*filename*/,
+                                    ustring /*colorspace*/)
 {
 }
 
-void OSLCompiler::parameter(ShaderNode * /*node*/, const char * /*name*/)
-{
-}
+void OSLCompiler::parameter_texture(const char * /*name*/, const ImageHandle & /*handle*/) {}
 
-void OSLCompiler::parameter(const char * /*name*/, float /*f*/)
-{
-}
-
-void OSLCompiler::parameter_color(const char * /*name*/, float3 /*f*/)
-{
-}
-
-void OSLCompiler::parameter_vector(const char * /*name*/, float3 /*f*/)
-{
-}
-
-void OSLCompiler::parameter_point(const char * /*name*/, float3 /*f*/)
-{
-}
-
-void OSLCompiler::parameter_normal(const char * /*name*/, float3 /*f*/)
-{
-}
-
-void OSLCompiler::parameter(const char * /*name*/, int /*f*/)
-{
-}
-
-void OSLCompiler::parameter(const char * /*name*/, const char * /*s*/)
-{
-}
-
-void OSLCompiler::parameter(const char * /*name*/, ustring /*s*/)
-{
-}
-
-void OSLCompiler::parameter(const char * /*name*/, const Transform & /*tfm*/)
-{
-}
-
-void OSLCompiler::parameter_array(const char * /*name*/, const float /*f*/[], int /*arraylen*/)
-{
-}
-
-void OSLCompiler::parameter_color_array(const char * /*name*/, const array<float3> & /*f*/)
-{
-}
-
-void OSLCompiler::parameter_texture(const char * /* name */,
-                                    ustring /* filename */,
-                                    ustring /* colorspace */)
-{
-}
-
-void OSLCompiler::parameter_texture(const char * /* name */, const ImageHandle & /*handle*/)
-{
-}
-
-void OSLCompiler::parameter_texture_ies(const char * /* name */, int /* svm_slot */)
-{
-}
+void OSLCompiler::parameter_texture_ies(const char * /*name*/, int /*svm_slot*/) {}
 
 #endif /* WITH_OSL */
 

@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2001-2002 NaN Holding BV. All rights reserved. */
+/* SPDX-FileCopyrightText: 2001-2002 NaN Holding BV. All rights reserved.
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #pragma once
 
@@ -113,8 +114,8 @@ void BLI_scanfill_end_arena(ScanFillContext *sf_ctx, struct MemArena *arena);
  * \return false if no changes were made.
  */
 bool BLI_scanfill_calc_self_isect(ScanFillContext *sf_ctx,
-                                  ListBase *fillvertbase,
-                                  ListBase *filledgebase);
+                                  ListBase *remvertbase,
+                                  ListBase *remedgebase);
 
 #ifdef __cplusplus
 }

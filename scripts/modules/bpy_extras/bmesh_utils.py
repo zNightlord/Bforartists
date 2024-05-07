@@ -1,10 +1,10 @@
+# SPDX-FileCopyrightText: 2022-2023 Blender Authors
+#
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 __all__ = (
     "bmesh_linked_uv_islands",
 )
-
-import bmesh
 
 
 def match_uv(face, vert, uv, uv_layer):

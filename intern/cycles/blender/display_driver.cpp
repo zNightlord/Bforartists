@@ -1,11 +1,12 @@
-/* SPDX-License-Identifier: Apache-2.0
- * Copyright 2021-2022 Blender Foundation */
+/* SPDX-FileCopyrightText: 2021-2022 Blender Foundation
+ *
+ * SPDX-License-Identifier: Apache-2.0 */
 
-#include "GPU_context.h"
-#include "GPU_immediate.h"
-#include "GPU_shader.h"
-#include "GPU_state.h"
-#include "GPU_texture.h"
+#include "GPU_context.hh"
+#include "GPU_immediate.hh"
+#include "GPU_shader.hh"
+#include "GPU_state.hh"
+#include "GPU_texture.hh"
 
 #include "RE_engine.h"
 
@@ -230,7 +231,7 @@ class DisplayGPUTexture {
     }
 
     GPU_texture_filter_mode(gpu_texture, false);
-    GPU_texture_wrap_mode(gpu_texture, false, true);
+    GPU_texture_extend_mode(gpu_texture, GPU_SAMPLER_EXTEND_MODE_EXTEND);
 
     ++num_used;
 
@@ -312,7 +313,8 @@ class DisplayGPUPixelBuffer {
     /* Try to re-use the existing PBO if it has usable size. */
     if (gpu_pixel_buffer) {
       if (new_width != width || new_height != height ||
-          GPU_pixel_buffer_size(gpu_pixel_buffer) < required_size) {
+          GPU_pixel_buffer_size(gpu_pixel_buffer) < required_size)
+      {
         gpu_resources_destroy();
       }
     }
@@ -513,7 +515,8 @@ bool BlenderDisplayDriver::update_begin(const Params &params,
   const int buffer_height = params.size.y;
 
   if (!current_tile_buffer_object.gpu_resources_ensure(buffer_width, buffer_height) ||
-      !current_tile.texture.gpu_resources_ensure(texture_width, texture_height)) {
+      !current_tile.texture.gpu_resources_ensure(texture_width, texture_height))
+  {
     tiles_->current_tile.gpu_resources_destroy();
     gpu_context_disable();
     return false;
@@ -563,7 +566,8 @@ void BlenderDisplayDriver::update_end()
    * renders while Blender is drawing. As a workaround update texture during draw, under assumption
    * that there is no graphics interop on macOS and viewport render has a single tile. */
   if (!background_ &&
-      GPU_type_matches_ex(GPU_DEVICE_NVIDIA, GPU_OS_MAC, GPU_DRIVER_ANY, GPU_BACKEND_ANY)) {
+      GPU_type_matches_ex(GPU_DEVICE_NVIDIA, GPU_OS_MAC, GPU_DRIVER_ANY, GPU_BACKEND_ANY))
+  {
     tiles_->current_tile.need_update_texture_pixels = true;
   }
   else {
@@ -695,8 +699,7 @@ static void draw_tile(const float2 &zoom,
 
   /* Trick to keep sharp rendering without jagged edges on all GPUs.
    *
-   * The idea here is to enforce driver to use linear interpolation when the image is not zoomed
-   * in.
+   * The idea here is to enforce driver to use linear interpolation when the image is zoomed out.
    * For the render result with a resolution divider in effect we always use nearest interpolation.
    *
    * Use explicit MIN assignment to make sure the driver does not have an undefined behavior at
@@ -705,14 +708,15 @@ static void draw_tile(const float2 &zoom,
   const float zoomed_height = draw_tile.params.size.y * zoom.y;
   if (texture.width != draw_tile.params.size.x || texture.height != draw_tile.params.size.y) {
     /* Resolution divider is different from 1, force nearest interpolation. */
-    GPU_texture_bind_ex(texture.gpu_texture, GPU_SAMPLER_DEFAULT, 0);
+    GPU_texture_bind_ex(texture.gpu_texture, GPUSamplerState::default_sampler(), 0);
   }
-  else if (zoomed_width - draw_tile.params.size.x > 0.5f ||
-           zoomed_height - draw_tile.params.size.y > 0.5f) {
-    GPU_texture_bind_ex(texture.gpu_texture, GPU_SAMPLER_DEFAULT, 0);
+  else if (zoomed_width - draw_tile.params.size.x > -0.5f ||
+           zoomed_height - draw_tile.params.size.y > -0.5f)
+  {
+    GPU_texture_bind_ex(texture.gpu_texture, GPUSamplerState::default_sampler(), 0);
   }
   else {
-    GPU_texture_bind_ex(texture.gpu_texture, GPU_SAMPLER_FILTER, 0);
+    GPU_texture_bind_ex(texture.gpu_texture, {GPU_SAMPLER_FILTERING_LINEAR}, 0);
   }
 
   /* Draw at the parameters for which the texture has been updated for. This allows to always draw
@@ -855,7 +859,7 @@ bool BlenderDisplayDriver::gpu_resources_create()
   gpu_render_sync_ = GPU_fence_create();
 
   if (!DCHECK_NOTNULL(gpu_upload_sync_) || !DCHECK_NOTNULL(gpu_render_sync_)) {
-    LOG(ERROR) << "Error creating GPU synchronization primtiives.";
+    LOG(ERROR) << "Error creating GPU synchronization primitives.";
     assert(0);
     return false;
   }

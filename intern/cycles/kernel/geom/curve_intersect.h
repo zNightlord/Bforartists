@@ -1,6 +1,8 @@
-/* SPDX-License-Identifier: Apache-2.0
- * Copyright 2009-2020 Intel Corporation. Adapted from Embree with
- * with modifications. */
+/* SPDX-FileCopyrightText: 2009-2020 Intel Corporation
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Adapted from Embree with with modifications. */
 
 #pragma once
 
@@ -648,7 +650,7 @@ ccl_device_forceinline bool curve_intersect(KernelGlobals kg,
     curve[3] = kernel_data_fetch(curve_keys, kb);
   }
   else {
-    motion_curve_keys(kg, object, prim, time, ka, k0, k1, kb, curve);
+    motion_curve_keys(kg, object, time, ka, k0, k1, kb, curve);
   }
 
   if (type & PRIMITIVE_CURVE_RIBBON) {
@@ -680,7 +682,6 @@ ccl_device_inline void curve_shader_setup(KernelGlobals kg,
                                           float3 P,
                                           float3 D,
                                           float t,
-                                          const int isect_object,
                                           const int isect_prim)
 {
   if (!(sd->object_flag & SD_OBJECT_TRANSFORM_APPLIED)) {
@@ -707,7 +708,7 @@ ccl_device_inline void curve_shader_setup(KernelGlobals kg,
     P_curve[3] = kernel_data_fetch(curve_keys, kb);
   }
   else {
-    motion_curve_keys(kg, sd->object, sd->prim, sd->time, ka, k0, k1, kb, P_curve);
+    motion_curve_keys(kg, sd->object, sd->time, ka, k0, k1, kb, P_curve);
   }
 
   P = P + D * t;

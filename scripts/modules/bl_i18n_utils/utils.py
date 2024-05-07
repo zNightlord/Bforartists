@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2012-2023 Blender Authors
+#
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 # Some misc utilities...
@@ -7,12 +9,13 @@ import os
 import re
 import struct
 import tempfile
-# import time
+import time
 
 from bl_i18n_utils import (
     settings,
     utils_rtl,
 )
+from typing import Dict
 
 
 ##### Misc Utils #####
@@ -53,7 +56,7 @@ def get_best_similar(data):
     return key, tmp
 
 
-_locale_explode_re = re.compile(r"^([a-z]{2,})(?:_([A-Z]{2,}))?(?:@([a-z]{2,}))?$")
+_locale_explode_re = re.compile(r"^([a-z]{2,})(?:_([A-Za-z]{2,}))?(?:@([a-z]{2,}))?$")
 
 
 def locale_explode(locale):
@@ -131,9 +134,9 @@ def find_best_isocode_matches(uid, iso_codes):
 
 def get_po_files_from_dir(root_dir, langs=set()):
     """
-    Yield tuples (uid, po_path) of translations for each po file found in the given dir, which should be either
-    a dir containing po files using language uid's as names (e.g. fr.po, es_ES.po, etc.), or
-    a dir containing dirs which names are language uids, and containing po files of the same names.
+    Yield tuples (uid, po_path) of translations for each po file found in the given directory, which should be either
+    a directory containing po files using language uid's as names (e.g. fr.po, es_ES.po, etc.), or
+    a directory containing directories which names are language uids, and containing po files of the same names.
     """
     found_uids = set()
     for p in os.listdir(root_dir):
@@ -210,7 +213,7 @@ def enable_addons(addons=None, support=None, disable=False, check_only=False):
         support = {}
 
     prefs = bpy.context.preferences
-    used_ext = {ext.module for ext in prefs.addons}
+    used_addon_module_names = {addon.module for addon in prefs.addons}
     # In case we need to blacklist some add-ons...
     black_list = {}
 
@@ -224,19 +227,19 @@ def enable_addons(addons=None, support=None, disable=False, check_only=False):
     if not check_only:
         for mod in ret:
             try:
-                module_name = mod.__name__
+                addon_module_name = mod.__name__
                 if disable:
-                    if module_name not in used_ext:
+                    if addon_module_name not in used_addon_module_names:
                         continue
-                    print("    Disabling module ", module_name)
-                    bpy.ops.preferences.addon_disable(module=module_name)
+                    print("    Disabling module ", addon_module_name)
+                    bpy.ops.preferences.addon_disable(module=addon_module_name)
                 else:
-                    if module_name in used_ext:
+                    if addon_module_name in used_addon_module_names:
                         continue
-                    print("    Enabling module ", module_name)
-                    bpy.ops.preferences.addon_enable(module=module_name)
-            except Exception as e:  # XXX TEMP WORKAROUND
-                print(e)
+                    print("    Enabling module ", addon_module_name)
+                    bpy.ops.preferences.addon_enable(module=addon_module_name)
+            except BaseException as ex:  # XXX TEMP WORKAROUND
+                print(ex)
 
         # XXX There are currently some problems with bpy/rna...
         #     *Very* tricky to solve!
@@ -322,12 +325,12 @@ class I18nMessage:
     sources = property(_get_sources, _set_sources)
 
     def _get_is_tooltip(self):
-        # XXX For now, we assume that all messages > 30 chars are tooltips!
+        # XXX For now, we assume that all messages > 30 chars are tool-tips!
         return len(self.msgid) > 30
     is_tooltip = property(_get_is_tooltip)
 
     def copy(self):
-        # Deepcopy everything but the settings!
+        # Deep-copy everything but the settings!
         return self.__class__(msgctxt_lines=self.msgctxt_lines[:], msgid_lines=self.msgid_lines[:],
                               msgstr_lines=self.msgstr_lines[:], comment_lines=self.comment_lines[:],
                               is_commented=self.is_commented, is_fuzzy=self.is_fuzzy, settings=self.settings)
@@ -343,7 +346,7 @@ class I18nMessage:
             lns = text.splitlines()
             return [l + "\n" for l in lns[:-1]] + lns[-1:]
 
-        # We do not need the full power of textwrap... We just split first at escaped new lines, then into each line
+        # We do not need the full power of text-wrap... We just split first at escaped new lines, then into each line
         # if needed... No word splitting, nor fancy spaces handling!
         def _wrap(text, max_len, init_len):
             if len(text) + init_len < max_len:
@@ -473,16 +476,20 @@ class I18nMessages:
 
     @staticmethod
     def _new_messages():
-        return getattr(collections, 'OrderedDict', dict)()
+        return getattr(collections, "OrderedDict", dict)()
 
     @classmethod
-    def gen_empty_messages(cls, uid, blender_ver, blender_hash, time, year, default_copyright=True, settings=settings):
+    def gen_empty_messages(cls, uid, blender_ver, blender_hash, bl_time, default_copyright=True, settings=settings):
         """Generate an empty I18nMessages object (only header is present!)."""
         fmt = settings.PO_HEADER_MSGSTR
-        msgstr = fmt.format(blender_ver=str(blender_ver), blender_hash=blender_hash, time=str(time), uid=str(uid))
+        msgstr = fmt.format(
+            blender_ver=str(blender_ver),
+            blender_hash=blender_hash,
+            time=time.strftime("%Y-%m-%d %H:%M%z", bl_time),
+            uid=str(uid))
         comment = ""
         if default_copyright:
-            comment = settings.PO_HEADER_COMMENT_COPYRIGHT.format(year=str(year))
+            comment = settings.PO_HEADER_COMMENT_COPYRIGHT.format(year=str(time.gmtime().tm_year))
         comment = comment + settings.PO_HEADER_COMMENT
 
         msgs = cls(uid=uid, settings=settings)
@@ -731,6 +738,7 @@ class I18nMessages:
         self._reverse_cache = None
         if rebuild_now:
             src_to_msg, ctxt_to_msg, msgid_to_msg, msgstr_to_msg = {}, {}, {}, {}
+            ctxt_to_msg.setdefault(self.settings.DEFAULT_CONTEXT, set())
             for key, msg in self.msgs.items():
                 if msg.is_commented:
                     continue
@@ -793,7 +801,7 @@ class I18nMessages:
         rlbl = getattr(msgs, msgmap["rna_label"]["msgstr"])
         # print("rna label: " + rlbl, rlbl in msgid_to_msg, rlbl in msgstr_to_msg)
         if rlbl:
-            k = ctxt_to_msg[rna_ctxt].copy()
+            k = ctxt_to_msg.get(rna_ctxt, set()).copy()
             if k and rlbl in msgid_to_msg:
                 k &= msgid_to_msg[rlbl]
             elif k and rlbl in msgstr_to_msg:
@@ -1046,7 +1054,7 @@ class I18nMessages:
         self.unescape()
 
     def write(self, kind, dest):
-        self.writers[kind](self, dest)
+        return self.writers[kind](self, dest)
 
     def write_messages_to_po(self, fname, compact=False):
         """
@@ -1126,8 +1134,8 @@ class I18nMessages:
                 "-o",
                 fname,
             )
-            ret = subprocess.call(cmd)
-            return
+            ret = subprocess.run(cmd, capture_output=True)
+            return ret
         # XXX Code below is currently broken (generates corrupted mo files it seems :( )!
         # Using http://www.gnu.org/software/gettext/manual/html_node/MO-Files.html notation.
         # Not generating hash table!
@@ -1247,7 +1255,7 @@ class I18n:
 
     def __init__(self, kind=None, src=None, langs=set(), settings=settings):
         self.settings = settings
-        self.trans = {}
+        self.trans: Dict[str, I18nMessages] = {}
         self.src = {}  # Should have the same keys as self.trans (plus PARSER_PY_ID for py file)!
         self.dst = self._dst  # A callable that transforms src_path into dst_path!
         if kind and src:
@@ -1427,7 +1435,7 @@ class I18n:
         self.unescape()
 
     def write(self, kind, langs=set()):
-        self.writers[kind](self, langs)
+        return self.writers[kind](self, langs)
 
     def write_to_po(self, langs=set()):
         """
@@ -1479,6 +1487,7 @@ class I18n:
             if langs:
                 translations &= langs
             translations = [('"' + lng + '"', " " * (len(lng) + 6), self.trans[lng]) for lng in sorted(translations)]
+            print("Translated keys saved to .py file:")
             print(*(k for k in keys.keys()))
             for key in keys.keys():
                 if ref.msgs[key].is_commented:

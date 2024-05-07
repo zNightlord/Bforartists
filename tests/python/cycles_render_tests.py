@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2015-2023 Blender Authors
+#
 # SPDX-License-Identifier: Apache-2.0
 
 import argparse
 import os
 import shlex
-import shutil
-import subprocess
 import sys
 from pathlib import Path
 
@@ -53,6 +53,7 @@ BLACKLIST_GPU = [
     "hair_transmission.blend",
     'principled_hair_.*.blend',
     'transparent_shadow_hair.*.blend',
+    "microfacet_hair_orientation.blend",
     # Inconsistent handling of overlapping objects.
     "T41143.blend",
     "visibility_particles.blend",
@@ -68,7 +69,6 @@ def get_arguments(filepath, output_filepath):
 
     args = [
         "--background",
-        "-noaudio",
         "--factory-startup",
         "--enable-autoexec",
         "--debug-memory",
@@ -104,9 +104,10 @@ def create_argparse():
     parser.add_argument("-blender", nargs="+")
     parser.add_argument("-testdir", nargs=1)
     parser.add_argument("-outdir", nargs=1)
-    parser.add_argument("-idiff", nargs=1)
+    parser.add_argument("-oiiotool", nargs=1)
     parser.add_argument("-device", nargs=1)
     parser.add_argument("-blacklist", nargs="*")
+    parser.add_argument('--batch', default=False, action='store_true')
     return parser
 
 
@@ -116,7 +117,7 @@ def main():
 
     blender = args.blender[0]
     test_dir = args.testdir[0]
-    idiff = args.idiff[0]
+    oiiotool = args.oiiotool[0]
     output_dir = args.outdir[0]
     device = args.device[0]
 
@@ -131,7 +132,7 @@ def main():
         blacklist += BLACKLIST_METAL
 
     from modules import render_report
-    report = render_report.Report('Cycles', output_dir, idiff, device, blacklist)
+    report = render_report.Report('Cycles', output_dir, oiiotool, device, blacklist)
     report.set_pixelated(True)
     report.set_reference_dir("cycles_renders")
     if device == 'CPU':
@@ -140,11 +141,14 @@ def main():
         report.set_compare_engine('cycles', 'CPU')
 
     # Increase threshold for motion blur, see #78777.
+    #
+    # underwater_caustics.blend gives quite different results on Linux and Intel macOS compared to
+    # Windows and Arm macOS.
     test_dir_name = Path(test_dir).name
-    if test_dir_name == 'motion_blur':
+    if test_dir_name in {'motion_blur', 'integrator'}:
         report.set_fail_threshold(0.032)
 
-    ok = report.run(test_dir, blender, get_arguments, batch=True)
+    ok = report.run(test_dir, blender, get_arguments, batch=args.batch)
 
     sys.exit(not ok)
 

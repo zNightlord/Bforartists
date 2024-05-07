@@ -1,6 +1,6 @@
+# SPDX-FileCopyrightText: 2009 Campbell Barton
+#
 # SPDX-License-Identifier: GPL-2.0-or-later
-# Copyright Campbell Barton.
-
 
 def ensure_active_color_attribute(me):
     if me.attributes.active_color:
@@ -129,7 +129,7 @@ from math import pi
 
 
 class VertexPaintDirt(Operator):
-    '''Generate a dirt map gradient based on cavity'''
+    """Generate a dirt map gradient based on cavity"""
     bl_idname = "paint.vertex_color_dirt"
     bl_label = "Dirty Vertex Colors"
     bl_options = {'REGISTER', 'UNDO'}

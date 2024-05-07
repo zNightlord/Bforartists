@@ -1,4 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* SPDX-FileCopyrightText: 2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup gpu
@@ -10,7 +12,7 @@
 
 #include "BLI_assert.h"
 
-#include "GPU_primitive.h"
+#include "GPU_primitive.hh"
 
 #include <Metal/Metal.h>
 

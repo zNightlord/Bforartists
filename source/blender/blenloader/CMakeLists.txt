@@ -1,29 +1,22 @@
+# SPDX-FileCopyrightText: 2006 Blender Authors
+#
 # SPDX-License-Identifier: GPL-2.0-or-later
-# Copyright 2006 Blender Foundation. All rights reserved.
 
 set(INC
   .
-  ../blenfont
   ../blenkernel
-  ../blenlib
   ../blentranslation
-  ../depsgraph
   ../draw
   ../editors/include
+  ../bmesh
   ../gpu
   ../imbuf
-  ../makesdna
   ../makesrna
   ../nodes
   ../render
   ../sequencer
   ../windowmanager
-  ../../../intern/clog
-  ../../../intern/guardedalloc
-  ../bmesh
 
-  # for writefile.c: dna_type_offsets.h
-  ${CMAKE_BINARY_DIR}/source/blender/makesdna/intern
   # RNA_prototypes.h
   ${CMAKE_BINARY_DIR}/source/blender/makesrna
 )
@@ -39,34 +32,40 @@ set(SRC
   intern/readfile.cc
   intern/readfile_tempload.cc
   intern/undofile.cc
-  intern/versioning_250.c
-  intern/versioning_260.c
-  intern/versioning_270.c
-  intern/versioning_280.c
+  intern/versioning_250.cc
+  intern/versioning_260.cc
+  intern/versioning_270.cc
+  intern/versioning_280.cc
   intern/versioning_290.cc
   intern/versioning_300.cc
   intern/versioning_400.cc
   intern/versioning_common.cc
-  intern/versioning_cycles.c
   intern/versioning_defaults.cc
-  intern/versioning_dna.c
-  intern/versioning_legacy.c
-  intern/versioning_userdef.c
+  intern/versioning_dna.cc
+  intern/versioning_legacy.cc
+  intern/versioning_userdef.cc
   intern/writefile.cc
 
-  BLO_blend_defs.h
-  BLO_blend_validate.h
-  BLO_read_write.h
-  BLO_readfile.h
-  BLO_undofile.h
-  BLO_writefile.h
-  intern/readfile.h
-  intern/versioning_common.h
+  BLO_blend_defs.hh
+  BLO_blend_validate.hh
+  BLO_read_write.hh
+  BLO_readfile.hh
+  BLO_undofile.hh
+  BLO_userdef_default.h
+  BLO_writefile.hh
+  intern/readfile.hh
+  intern/versioning_common.hh
 )
 
 set(LIB
+  PRIVATE bf::animrig
   bf_blenkernel
-  bf_blenlib
+  PRIVATE bf::blenlib
+  PRIVATE bf::depsgraph
+  PRIVATE bf::dna
+  PRIVATE bf::intern::clog
+  PRIVATE bf::intern::guardedalloc
+  PRIVATE bf::extern::fmtlib
 )
 
 if(WITH_BUILDINFO)
@@ -97,24 +96,45 @@ endif()
 
 blender_add_lib(bf_blenloader "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
 
-# needed so writefile.c can use dna_type_offsets.h
-add_dependencies(bf_blenloader bf_dna)
 # RNA_prototypes.h
 add_dependencies(bf_blenloader bf_rna)
 
 if(WITH_GTESTS)
-  set(TEST_SRC
-    tests/blendfile_load_test.cc
+  # Utility functions for test also used by other tests.
+  set(TEST_UTIL_SRC
     tests/blendfile_loading_base_test.cc
-
     tests/blendfile_loading_base_test.h
   )
-  set(TEST_INC
+  set(TEST_UTIL_INC
+    ${INC}
+    ../../../tests/gtests
     ../../../intern/ghost
   )
-  set(TEST_LIB
+  set(TEST_UTIL_INC_SYS
+    ${INC_SYS}
+    ${GFLAGS_INCLUDE_DIRS}
+    ${GLOG_INCLUDE_DIRS}
+    ${CMAKE_SOURCE_DIR}/extern/gtest/include
+  )
+  set(TEST_UTIL_LIB
+    ${LIB}
+    PRIVATE bf::blenfont
     bf_blenloader
   )
-  include(GTestTesting)
-  blender_add_test_lib(bf_blenloader_tests "${TEST_SRC}" "${INC};${TEST_INC}" "${INC_SYS}" "${LIB};${TEST_LIB}")
+  blender_add_lib(bf_blenloader_test_util "${TEST_UTIL_SRC}" "${TEST_UTIL_INC}" "${TEST_UTIL_INC_SYS}" "${TEST_UTIL_LIB}")
+
+  # Actual blenloader tests.
+  set(TEST_SRC
+    tests/blendfile_load_test.cc
+  )
+  set(TEST_LIB
+    ${LIB}
+    bf_blenloader
+    bf_blenloader_test_util
+  )
+  blender_add_test_suite_lib(blenloader "${TEST_SRC}" "${INC}" "${INC_SYS}" "${TEST_LIB}")
+endif()
+
+if(WITH_EXPERIMENTAL_FEATURES)
+  add_definitions(-DWITH_EXPERIMENTAL_FEATURES)
 endif()

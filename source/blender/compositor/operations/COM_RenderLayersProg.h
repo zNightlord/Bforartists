@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2011 Blender Foundation. */
+/* SPDX-FileCopyrightText: 2011 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #pragma once
 
@@ -68,8 +69,6 @@ class RenderLayersProg : public MultiThreadedOperation {
     return input_buffer_;
   }
 
-  void do_interpolation(float output[4], float x, float y, PixelSampler sampler);
-
  public:
   /**
    * Constructor
@@ -110,7 +109,6 @@ class RenderLayersProg : public MultiThreadedOperation {
   }
   void init_execution() override;
   void deinit_execution() override;
-  void execute_pixel_sampled(float output[4], float x, float y, PixelSampler sampler) override;
 
   std::unique_ptr<MetaData> get_meta_data() override;
 
@@ -125,7 +123,6 @@ class RenderLayersAOOperation : public RenderLayersProg {
       : RenderLayersProg(pass_name, type, elementsize)
   {
   }
-  void execute_pixel_sampled(float output[4], float x, float y, PixelSampler sampler) override;
 
   void update_memory_buffer_partial(MemoryBuffer *output,
                                     const rcti &area,
@@ -138,7 +135,6 @@ class RenderLayersAlphaProg : public RenderLayersProg {
       : RenderLayersProg(pass_name, type, elementsize)
   {
   }
-  void execute_pixel_sampled(float output[4], float x, float y, PixelSampler sampler) override;
 
   void update_memory_buffer_partial(MemoryBuffer *output,
                                     const rcti &area,
@@ -151,7 +147,6 @@ class RenderLayersDepthProg : public RenderLayersProg {
       : RenderLayersProg(pass_name, type, elementsize)
   {
   }
-  void execute_pixel_sampled(float output[4], float x, float y, PixelSampler sampler) override;
 
   void update_memory_buffer_partial(MemoryBuffer *output,
                                     const rcti &area,

@@ -1,5 +1,6 @@
+# SPDX-FileCopyrightText: 2020 Blender Authors
+#
 # SPDX-License-Identifier: GPL-2.0-or-later
-# Copyright 2020 Blender Foundation. All rights reserved.
 
 if(WITH_IO_WAVEFRONT_OBJ OR WITH_IO_PLY OR WITH_IO_STL OR WITH_IO_GPENCIL OR WITH_ALEMBIC OR WITH_USD)
   add_subdirectory(common)
@@ -23,10 +24,6 @@ endif()
 
 if(WITH_ALEMBIC)
   add_subdirectory(alembic)
-endif()
-
-if(WITH_CODEC_AVI)
-  add_subdirectory(avi)
 endif()
 
 if(WITH_OPENCOLLADA)

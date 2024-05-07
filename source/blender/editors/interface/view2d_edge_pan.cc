@@ -1,35 +1,35 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2021 Blender Foundation. All rights reserved. */
+/* SPDX-FileCopyrightText: 2021 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup spnode
  */
 
-#include "BKE_context.h"
+#include "BKE_context.hh"
 
-#include "BLI_math.h"
 #include "BLI_rect.h"
+#include "BLI_time.h"
 
-#include "ED_screen.h"
+#include "ED_screen.hh"
 
 #include "MEM_guardedalloc.h"
 
-#include "PIL_time.h"
+#include "RNA_access.hh"
+#include "RNA_define.hh"
 
-#include "RNA_access.h"
-#include "RNA_define.h"
+#include "UI_view2d.hh"
 
-#include "UI_interface.h"
-#include "UI_view2d.h"
+#include "WM_api.hh"
+#include "WM_types.hh"
 
-#include "WM_api.h"
-#include "WM_types.h"
+#include "view2d_intern.hh"
 
 /* -------------------------------------------------------------------- */
 /** \name Edge Pan Operator Utilities
  * \{ */
 
-bool UI_view2d_edge_pan_poll(bContext *C)
+bool view2d_edge_pan_poll(bContext *C)
 {
   ARegion *region = CTX_wm_region(C);
 
@@ -58,7 +58,7 @@ void UI_view2d_edge_pan_init(bContext *C,
                              float delay,
                              float zoom_influence)
 {
-  if (!UI_view2d_edge_pan_poll(C)) {
+  if (!view2d_edge_pan_poll(C)) {
     return;
   }
 
@@ -98,7 +98,7 @@ void UI_view2d_edge_pan_reset(View2DEdgePanData *vpd)
 {
   vpd->edge_pan_start_time_x = 0.0;
   vpd->edge_pan_start_time_y = 0.0;
-  vpd->edge_pan_last_time = PIL_check_seconds_timer();
+  vpd->edge_pan_last_time = BLI_time_now_seconds();
   vpd->initial_rect = vpd->region->v2d.cur;
 }
 
@@ -171,10 +171,10 @@ static float edge_pan_speed(View2DEdgePanData *vpd,
   /* Zoom factor increases speed when zooming in and decreases speed when zooming out. */
   const float zoomx = float(BLI_rcti_size_x(&region->winrct) + 1) /
                       BLI_rctf_size_x(&region->v2d.cur);
-  const float zoom_factor = 1.0f + CLAMPIS(vpd->zoom_influence, 0.0f, 1.0f) * (zoomx - 1.0f);
+  const float zoom_factor = 1.0f + std::clamp(vpd->zoom_influence, 0.0f, 1.0f) * (zoomx - 1.0f);
 
   return distance_factor * delay_factor * zoom_factor * vpd->max_speed * U.widget_unit *
-         float(U.dpi_fac);
+         float(UI_SCALE_FAC);
 }
 
 static void edge_pan_apply_delta(bContext *C, View2DEdgePanData *vpd, float dx, float dy)
@@ -198,16 +198,18 @@ static void edge_pan_apply_delta(bContext *C, View2DEdgePanData *vpd, float dx, 
     v2d->cur.ymax += dy;
   }
 
-  /* Inform v2d about changes after this operation. */
-  UI_view2d_curRect_changed(C, v2d);
+  if (dx != 0.0f || dy != 0.0f) {
+    /* Inform v2d about changes after this operation. */
+    UI_view2d_curRect_changed(C, v2d);
 
-  /* Don't rebuild full tree in outliner, since we're just changing our view. */
-  ED_region_tag_redraw_no_rebuild(vpd->region);
+    /* Don't rebuild full tree in outliner, since we're just changing our view. */
+    ED_region_tag_redraw_no_rebuild(vpd->region);
 
-  /* Request updates to be done. */
-  WM_event_add_mousemove(CTX_wm_window(C));
+    /* Request updates to be done. */
+    WM_event_add_mousemove(CTX_wm_window(C));
 
-  UI_view2d_sync(vpd->screen, vpd->area, v2d, V2D_LOCK_COPY);
+    UI_view2d_sync(vpd->screen, vpd->area, v2d, V2D_LOCK_COPY);
+  }
 }
 
 void UI_view2d_edge_pan_apply(bContext *C, View2DEdgePanData *vpd, const int xy[2])
@@ -248,7 +250,7 @@ void UI_view2d_edge_pan_apply(bContext *C, View2DEdgePanData *vpd, const int xy[
     }
   }
 
-  const double current_time = PIL_check_seconds_timer();
+  const double current_time = BLI_time_now_seconds();
   edge_pan_manage_delay_timers(vpd, pan_dir_x, pan_dir_y, current_time);
 
   /* Calculate the delta since the last time the operator was called. */
@@ -311,7 +313,7 @@ void UI_view2d_edge_pan_operator_properties(wmOperatorType *ot)
                                             /*zoom_influence*/ 0.0f);
 }
 
-void UI_view2d_edge_pan_operator_properties_ex(struct wmOperatorType *ot,
+void UI_view2d_edge_pan_operator_properties_ex(wmOperatorType *ot,
                                                float inside_pad,
                                                float outside_pad,
                                                float speed_ramp,

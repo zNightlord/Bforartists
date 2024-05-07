@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2011 Blender Foundation. */
+/* SPDX-FileCopyrightText: 2011 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "COM_GammaCorrectOperation.h"
 
@@ -9,38 +10,7 @@ GammaCorrectOperation::GammaCorrectOperation()
 {
   this->add_input_socket(DataType::Color);
   this->add_output_socket(DataType::Color);
-  input_program_ = nullptr;
   flags_.can_be_constant = true;
-}
-void GammaCorrectOperation::init_execution()
-{
-  input_program_ = this->get_input_socket_reader(0);
-}
-
-void GammaCorrectOperation::execute_pixel_sampled(float output[4],
-                                                  float x,
-                                                  float y,
-                                                  PixelSampler sampler)
-{
-  float input_color[4];
-  input_program_->read_sampled(input_color, x, y, sampler);
-  if (input_color[3] > 0.0f) {
-    input_color[0] /= input_color[3];
-    input_color[1] /= input_color[3];
-    input_color[2] /= input_color[3];
-  }
-
-  /* check for negative to avoid nan's */
-  output[0] = input_color[0] > 0.0f ? input_color[0] * input_color[0] : 0.0f;
-  output[1] = input_color[1] > 0.0f ? input_color[1] * input_color[1] : 0.0f;
-  output[2] = input_color[2] > 0.0f ? input_color[2] * input_color[2] : 0.0f;
-  output[3] = input_color[3];
-
-  if (input_color[3] > 0.0f) {
-    output[0] *= input_color[3];
-    output[1] *= input_color[3];
-    output[2] *= input_color[3];
-  }
 }
 
 void GammaCorrectOperation::update_memory_buffer_partial(MemoryBuffer *output,
@@ -57,7 +27,7 @@ void GammaCorrectOperation::update_memory_buffer_partial(MemoryBuffer *output,
       color[2] /= color[3];
     }
 
-    /* Check for negative to avoid nan's. */
+    /* Check for negative to avoid NAN's. */
     it.out[0] = color[0] > 0.0f ? color[0] * color[0] : 0.0f;
     it.out[1] = color[1] > 0.0f ? color[1] * color[1] : 0.0f;
     it.out[2] = color[2] > 0.0f ? color[2] * color[2] : 0.0f;
@@ -71,47 +41,11 @@ void GammaCorrectOperation::update_memory_buffer_partial(MemoryBuffer *output,
   }
 }
 
-void GammaCorrectOperation::deinit_execution()
-{
-  input_program_ = nullptr;
-}
-
 GammaUncorrectOperation::GammaUncorrectOperation()
 {
   this->add_input_socket(DataType::Color);
   this->add_output_socket(DataType::Color);
-  input_program_ = nullptr;
   flags_.can_be_constant = true;
-}
-void GammaUncorrectOperation::init_execution()
-{
-  input_program_ = this->get_input_socket_reader(0);
-}
-
-void GammaUncorrectOperation::execute_pixel_sampled(float output[4],
-                                                    float x,
-                                                    float y,
-                                                    PixelSampler sampler)
-{
-  float input_color[4];
-  input_program_->read_sampled(input_color, x, y, sampler);
-
-  if (input_color[3] > 0.0f) {
-    input_color[0] /= input_color[3];
-    input_color[1] /= input_color[3];
-    input_color[2] /= input_color[3];
-  }
-
-  output[0] = input_color[0] > 0.0f ? sqrtf(input_color[0]) : 0.0f;
-  output[1] = input_color[1] > 0.0f ? sqrtf(input_color[1]) : 0.0f;
-  output[2] = input_color[2] > 0.0f ? sqrtf(input_color[2]) : 0.0f;
-  output[3] = input_color[3];
-
-  if (input_color[3] > 0.0f) {
-    output[0] *= input_color[3];
-    output[1] *= input_color[3];
-    output[2] *= input_color[3];
-  }
 }
 
 void GammaUncorrectOperation::update_memory_buffer_partial(MemoryBuffer *output,
@@ -139,11 +73,6 @@ void GammaUncorrectOperation::update_memory_buffer_partial(MemoryBuffer *output,
       it.out[2] *= color[3];
     }
   }
-}
-
-void GammaUncorrectOperation::deinit_execution()
-{
-  input_program_ = nullptr;
 }
 
 }  // namespace blender::compositor

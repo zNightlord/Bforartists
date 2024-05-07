@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2019 Blender Foundation. All rights reserved. */
+/* SPDX-FileCopyrightText: 2019 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup depsgraph
@@ -33,13 +34,13 @@ class RuntimeBackup {
 
   /* Denotes whether init_from_id did put anything into the backup storage.
    * This will not be the case when init_from_id() is called for an ID which has never been
-   * copied-on-write. In this case there is no need to backup or restore anything.
+   * copied-on-eval. In this case there is no need to backup or restore anything.
    *
    * It also allows to have restore() logic to be symmetrical to init() without need to worry
    * that init() might not have happened.
    *
    * In practice this is used by audio system to lock audio while scene is going through
-   * copy-on-write mechanism. */
+   * copy-on-evaluation mechanism. */
   bool have_backup;
 
   /* Struct members of the ID pointer. */

@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2020 Blender Foundation. All rights reserved. */
+/* SPDX-FileCopyrightText: 2020 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup bke
@@ -10,27 +11,25 @@
 #include "MEM_guardedalloc.h"
 
 #include "DNA_mesh_types.h"
-#include "DNA_meshdata_types.h"
-#include "DNA_modifier_types.h"
 
-#include "BLI_bitmap.h"
+#include "BLI_math_matrix.h"
 #include "BLI_math_vector.h"
 #include "BLI_task.h"
 #include "BLI_utildefines.h"
 
-#include "BKE_customdata.h"
-#include "BKE_multires.h"
-#include "BKE_subdiv.h"
-#include "BKE_subdiv_eval.h"
+#include "BKE_customdata.hh"
+#include "BKE_mesh.hh"
+#include "BKE_multires.hh"
+#include "BKE_subdiv.hh"
+#include "BKE_subdiv_eval.hh"
 #include "BKE_subdiv_foreach.hh"
 #include "BKE_subdiv_mesh.hh"
 
-#include "opensubdiv_converter_capi.h"
-#include "opensubdiv_evaluator_capi.h"
-#include "opensubdiv_topology_refiner_capi.h"
+#include "opensubdiv_converter_capi.hh"
+#include "opensubdiv_evaluator_capi.hh"
 
 #include "atomic_ops.h"
-#include "subdiv_converter.h"
+#include "subdiv_converter.hh"
 
 /* -------------------------------------------------------------------- */
 /** \name Local Structs
@@ -135,11 +134,11 @@ struct MultiresReshapeSmoothContext {
    * The data is actually stored as a delta, which is then to be added to the higher levels. */
   LinearGrids linear_delta_grids;
 
-  /* Index i of this map indicates that base edge i is adjacent to at least one face. */
-  BLI_bitmap *non_loose_base_edge_map;
+  /* From #Mesh::loose_edges(). May be empty. */
+  blender::BitSpan loose_base_edges;
 
   /* Subdivision surface created for geometry at a reshape level. */
-  Subdiv *reshape_subdiv;
+  blender::bke::subdiv::Subdiv *reshape_subdiv;
 
   /* Limit surface of the base mesh with original sculpt level details on it, subdivided up to the
    * top level.
@@ -177,7 +176,7 @@ static void linear_grids_init(LinearGrids *linear_grids)
 
 static void linear_grids_allocate(LinearGrids *linear_grids, int num_grids, int level)
 {
-  const size_t grid_size = BKE_subdiv_grid_size_from_level(level);
+  const size_t grid_size = blender::bke::subdiv::grid_size_from_level(level);
   const size_t grid_area = grid_size * grid_size;
   const size_t num_grid_elements = num_grids * grid_area;
 
@@ -488,10 +487,12 @@ static float get_effective_crease(const MultiresReshapeSmoothContext *reshape_sm
                                   const int base_edge_index)
 {
   if (!is_crease_supported(reshape_smooth_context)) {
-    return 255;
+    return 1.0f;
   }
-  const float *creases = reshape_smooth_context->reshape_context->cd_vertex_crease;
-  return creases ? creases[base_edge_index] : 0.0f;
+  if (reshape_smooth_context->reshape_context->cd_edge_crease.is_empty()) {
+    return 0.0f;
+  }
+  return reshape_smooth_context->reshape_context->cd_edge_crease[base_edge_index];
 }
 
 static float get_effective_crease_float(const MultiresReshapeSmoothContext *reshape_smooth_context,
@@ -524,7 +525,7 @@ static void context_init(MultiresReshapeSmoothContext *reshape_smooth_context,
 
   linear_grids_init(&reshape_smooth_context->linear_delta_grids);
 
-  reshape_smooth_context->non_loose_base_edge_map = nullptr;
+  reshape_smooth_context->loose_base_edges = {};
   reshape_smooth_context->reshape_subdiv = nullptr;
   reshape_smooth_context->base_surface_grids = nullptr;
 
@@ -551,24 +552,22 @@ static void context_free_subdiv(MultiresReshapeSmoothContext *reshape_smooth_con
   if (reshape_smooth_context->reshape_subdiv == nullptr) {
     return;
   }
-  BKE_subdiv_free(reshape_smooth_context->reshape_subdiv);
+  blender::bke::subdiv::free(reshape_smooth_context->reshape_subdiv);
 }
 
 static void context_free(MultiresReshapeSmoothContext *reshape_smooth_context)
 {
-  MEM_freeN(reshape_smooth_context->non_loose_base_edge_map);
-
   context_free_geometry(reshape_smooth_context);
   context_free_subdiv(reshape_smooth_context);
   base_surface_grids_free(reshape_smooth_context);
 }
 
-static bool foreach_topology_info(const SubdivForeachContext *foreach_context,
+static bool foreach_topology_info(const blender::bke::subdiv::ForeachContext *foreach_context,
                                   const int num_vertices,
                                   const int num_edges,
                                   const int num_loops,
-                                  const int num_polygons,
-                                  const int * /*subdiv_polygon_offset*/)
+                                  const int num_faces,
+                                  const int * /*subdiv_face_offset*/)
 {
   MultiresReshapeSmoothContext *reshape_smooth_context =
       static_cast<MultiresReshapeSmoothContext *>(foreach_context->user_data);
@@ -589,14 +588,14 @@ static bool foreach_topology_info(const SubdivForeachContext *foreach_context,
   reshape_smooth_context->geometry.corners = static_cast<Corner *>(
       MEM_malloc_arrayN(num_loops, sizeof(Corner), "smooth corners"));
 
-  reshape_smooth_context->geometry.num_faces = num_polygons;
+  reshape_smooth_context->geometry.num_faces = num_faces;
   reshape_smooth_context->geometry.faces = static_cast<Face *>(
-      MEM_malloc_arrayN(num_polygons, sizeof(Face), "smooth faces"));
+      MEM_malloc_arrayN(num_faces, sizeof(Face), "smooth faces"));
 
   return true;
 }
 
-static void foreach_single_vertex(const SubdivForeachContext *foreach_context,
+static void foreach_single_vertex(const blender::bke::subdiv::ForeachContext *foreach_context,
                                   const GridCoord *grid_coord,
                                   const int coarse_vertex_index,
                                   const int subdiv_vertex_index)
@@ -618,24 +617,21 @@ static void foreach_single_vertex(const SubdivForeachContext *foreach_context,
   }
 
   const MultiresReshapeContext *reshape_context = reshape_smooth_context->reshape_context;
-  const float *cd_vertex_crease = reshape_context->cd_vertex_crease;
-
-  if (cd_vertex_crease == nullptr) {
+  if (reshape_context->cd_vertex_crease.is_empty()) {
     return;
   }
 
-  float crease = cd_vertex_crease[coarse_vertex_index];
-
+  float crease = reshape_context->cd_vertex_crease[coarse_vertex_index];
   if (crease == 0.0f) {
     return;
   }
 
   crease = get_effective_crease_float(reshape_smooth_context, crease);
-  vertex->sharpness = BKE_subdiv_crease_to_sharpness_f(crease);
+  vertex->sharpness = blender::bke::subdiv::crease_to_sharpness(crease);
 }
 
 /* TODO(sergey): De-duplicate with similar function in multires_reshape_vertcos.cc */
-static void foreach_vertex(const SubdivForeachContext *foreach_context,
+static void foreach_vertex(const blender::bke::subdiv::ForeachContext *foreach_context,
                            const PTexCoord *ptex_coord,
                            const int coarse_vertex_index,
                            const int subdiv_vertex_index)
@@ -648,8 +644,7 @@ static void foreach_vertex(const SubdivForeachContext *foreach_context,
   const int face_index = multires_reshape_grid_to_face_index(reshape_context,
                                                              grid_coord.grid_index);
 
-  const MPoly &base_poly = reshape_context->base_polys[face_index];
-  const int num_corners = base_poly.totloop;
+  const int num_corners = reshape_context->base_faces[face_index].size();
   const int start_grid_index = reshape_context->face_start_grid_index[face_index];
   const int corner = grid_coord.grid_index - start_grid_index;
 
@@ -686,12 +681,12 @@ static void foreach_vertex(const SubdivForeachContext *foreach_context,
   }
 }
 
-static void foreach_vertex_inner(const SubdivForeachContext *foreach_context,
+static void foreach_vertex_inner(const blender::bke::subdiv::ForeachContext *foreach_context,
                                  void * /*tls*/,
                                  const int ptex_face_index,
                                  const float ptex_face_u,
                                  const float ptex_face_v,
-                                 const int /*coarse_poly_index*/,
+                                 const int /*coarse_face_index*/,
                                  const int /*coarse_corner*/,
                                  const int subdiv_vertex_index)
 {
@@ -702,15 +697,16 @@ static void foreach_vertex_inner(const SubdivForeachContext *foreach_context,
   foreach_vertex(foreach_context, &ptex_coord, -1, subdiv_vertex_index);
 }
 
-static void foreach_vertex_every_corner(const SubdivForeachContext *foreach_context,
-                                        void * /*tls_v*/,
-                                        const int ptex_face_index,
-                                        const float ptex_face_u,
-                                        const float ptex_face_v,
-                                        const int coarse_vertex_index,
-                                        const int /*coarse_face_index*/,
-                                        const int /*coarse_face_corner*/,
-                                        const int subdiv_vertex_index)
+static void foreach_vertex_every_corner(
+    const blender::bke::subdiv::ForeachContext *foreach_context,
+    void * /*tls_v*/,
+    const int ptex_face_index,
+    const float ptex_face_u,
+    const float ptex_face_v,
+    const int coarse_vertex_index,
+    const int /*coarse_face_index*/,
+    const int /*coarse_face_corner*/,
+    const int subdiv_vertex_index)
 {
   PTexCoord ptex_coord{};
   ptex_coord.ptex_face_index = ptex_face_index;
@@ -719,7 +715,7 @@ static void foreach_vertex_every_corner(const SubdivForeachContext *foreach_cont
   foreach_vertex(foreach_context, &ptex_coord, coarse_vertex_index, subdiv_vertex_index);
 }
 
-static void foreach_vertex_every_edge(const SubdivForeachContext *foreach_context,
+static void foreach_vertex_every_edge(const blender::bke::subdiv::ForeachContext *foreach_context,
                                       void * /*tls_v*/,
                                       const int ptex_face_index,
                                       const float ptex_face_u,
@@ -736,13 +732,13 @@ static void foreach_vertex_every_edge(const SubdivForeachContext *foreach_contex
   foreach_vertex(foreach_context, &ptex_coord, -1, subdiv_vertex_index);
 }
 
-static void foreach_loop(const SubdivForeachContext *foreach_context,
+static void foreach_loop(const blender::bke::subdiv::ForeachContext *foreach_context,
                          void * /*tls*/,
                          const int /*ptex_face_index*/,
                          const float /*ptex_face_u*/,
                          const float /*ptex_face_v*/,
                          const int /*coarse_loop_index*/,
-                         const int coarse_poly_index,
+                         const int coarse_face_index,
                          const int coarse_corner,
                          const int subdiv_loop_index,
                          const int subdiv_vertex_index,
@@ -757,32 +753,33 @@ static void foreach_loop(const SubdivForeachContext *foreach_context,
   Corner *corner = &reshape_smooth_context->geometry.corners[subdiv_loop_index];
   corner->vertex = &reshape_smooth_context->geometry.vertices[subdiv_vertex_index];
 
-  const int first_grid_index = reshape_context->face_start_grid_index[coarse_poly_index];
+  const int first_grid_index = reshape_context->face_start_grid_index[coarse_face_index];
   corner->grid_index = first_grid_index + coarse_corner;
 }
 
-static void foreach_poly(const SubdivForeachContext *foreach_context,
+static void foreach_poly(const blender::bke::subdiv::ForeachContext *foreach_context,
                          void * /*tls*/,
-                         const int /*coarse_poly_index*/,
-                         const int subdiv_poly_index,
+                         const int /*coarse_face_index*/,
+                         const int subdiv_face_index,
                          const int start_loop_index,
                          const int num_loops)
 {
   const MultiresReshapeSmoothContext *reshape_smooth_context =
       static_cast<const MultiresReshapeSmoothContext *>(foreach_context->user_data);
 
-  BLI_assert(subdiv_poly_index < reshape_smooth_context->geometry.num_faces);
+  BLI_assert(subdiv_face_index < reshape_smooth_context->geometry.num_faces);
 
-  Face *face = &reshape_smooth_context->geometry.faces[subdiv_poly_index];
+  Face *face = &reshape_smooth_context->geometry.faces[subdiv_face_index];
   face->start_corner_index = start_loop_index;
   face->num_corners = num_loops;
 }
 
-static void foreach_vertex_of_loose_edge(const SubdivForeachContext *foreach_context,
-                                         void * /*tls*/,
-                                         const int /*coarse_edge_index*/,
-                                         const float /*u*/,
-                                         const int vertex_index)
+static void foreach_vertex_of_loose_edge(
+    const blender::bke::subdiv::ForeachContext *foreach_context,
+    void * /*tls*/,
+    const int /*coarse_edge_index*/,
+    const float /*u*/,
+    const int vertex_index)
 {
   const MultiresReshapeSmoothContext *reshape_smooth_context =
       static_cast<const MultiresReshapeSmoothContext *>(foreach_context->user_data);
@@ -796,7 +793,7 @@ static void foreach_vertex_of_loose_edge(const SubdivForeachContext *foreach_con
 static void store_edge(MultiresReshapeSmoothContext *reshape_smooth_context,
                        const int subdiv_v1,
                        const int subdiv_v2,
-                       const char crease)
+                       const float crease)
 {
   /* This is a bit overhead to use atomics in such a simple function called from many threads,
    * but this allows to save quite measurable amount of memory. */
@@ -806,10 +803,10 @@ static void store_edge(MultiresReshapeSmoothContext *reshape_smooth_context,
   Edge *edge = &reshape_smooth_context->geometry.edges[edge_index];
   edge->v1 = subdiv_v1;
   edge->v2 = subdiv_v2;
-  edge->sharpness = BKE_subdiv_crease_to_sharpness_char(crease);
+  edge->sharpness = blender::bke::subdiv::crease_to_sharpness(crease);
 }
 
-static void foreach_edge(const SubdivForeachContext *foreach_context,
+static void foreach_edge(const blender::bke::subdiv::ForeachContext *foreach_context,
                          void * /*tls*/,
                          const int coarse_edge_index,
                          const int /*subdiv_edge_index*/,
@@ -822,24 +819,24 @@ static void foreach_edge(const SubdivForeachContext *foreach_context,
 
   if (reshape_smooth_context->smoothing_type == MULTIRES_SUBDIVIDE_LINEAR) {
     if (!is_loose) {
-      store_edge(reshape_smooth_context, subdiv_v1, subdiv_v2, char(255));
+      store_edge(reshape_smooth_context, subdiv_v1, subdiv_v2, 1.0f);
     }
     return;
   }
 
-  /* Ignore all inner face edges as they have sharpness of zero when using Catmull-Clark mode. In
-   * simple mode, all edges have maximum sharpness, so they can't be skipped. */
-  if (coarse_edge_index == ORIGINDEX_NONE &&
-      reshape_smooth_context->smoothing_type != MULTIRES_SUBDIVIDE_SIMPLE) {
+  /* Ignore all inner face edges as they have sharpness of zero. */
+  if (coarse_edge_index == ORIGINDEX_NONE) {
     return;
   }
   /* Ignore all loose edges as well, as they are not communicated to the OpenSubdiv. */
-  if (!BLI_BITMAP_TEST_BOOL(reshape_smooth_context->non_loose_base_edge_map, coarse_edge_index)) {
-    return;
+  if (!reshape_smooth_context->loose_base_edges.is_empty()) {
+    if (reshape_smooth_context->loose_base_edges[coarse_edge_index]) {
+      return;
+    }
   }
   /* Edges without crease are to be ignored as well. */
-  const char crease = get_effective_crease(reshape_smooth_context, coarse_edge_index);
-  if (crease == 0) {
+  const float crease = get_effective_crease(reshape_smooth_context, coarse_edge_index);
+  if (crease == 0.0f) {
     return;
   }
   store_edge(reshape_smooth_context, subdiv_v1, subdiv_v2, crease);
@@ -849,26 +846,20 @@ static void geometry_init_loose_information(MultiresReshapeSmoothContext *reshap
 {
   const MultiresReshapeContext *reshape_context = reshape_smooth_context->reshape_context;
   const Mesh *base_mesh = reshape_context->base_mesh;
-  const blender::Span<MPoly> base_polys = reshape_context->base_polys;
-  const blender::Span<MLoop> base_loops = reshape_context->base_loops;
 
-  reshape_smooth_context->non_loose_base_edge_map = BLI_BITMAP_NEW(base_mesh->totedge,
-                                                                   "non_loose_base_edge_map");
+  const blender::bke::LooseEdgeCache &loose_edges = base_mesh->loose_edges();
+  reshape_smooth_context->loose_base_edges = loose_edges.is_loose_bits;
 
   int num_used_edges = 0;
-  for (const int poly_index : base_polys.index_range()) {
-    const MPoly &base_poly = base_polys[poly_index];
-    for (int corner = 0; corner < base_poly.totloop; corner++) {
-      const MLoop *loop = &base_loops[base_poly.loopstart + corner];
-      if (!BLI_BITMAP_TEST_BOOL(reshape_smooth_context->non_loose_base_edge_map, loop->e)) {
-        BLI_BITMAP_ENABLE(reshape_smooth_context->non_loose_base_edge_map, loop->e);
-
-        const float crease = get_effective_crease(reshape_smooth_context, loop->e);
-        if (crease > 0.0f) {
-          ++num_used_edges;
-        }
-      }
+  for (const int edge : blender::IndexRange(base_mesh->edges_num)) {
+    if (loose_edges.count > 0 && loose_edges.is_loose_bits[edge]) {
+      continue;
     }
+    const float crease = get_effective_crease(reshape_smooth_context, edge);
+    if (crease == 0.0f) {
+      continue;
+    }
+    num_used_edges++;
   }
 
   const int resolution = get_reshape_level_resolution(reshape_context);
@@ -881,7 +872,7 @@ static void geometry_create(MultiresReshapeSmoothContext *reshape_smooth_context
 {
   const MultiresReshapeContext *reshape_context = reshape_smooth_context->reshape_context;
 
-  SubdivForeachContext foreach_context{};
+  blender::bke::subdiv::ForeachContext foreach_context{};
   foreach_context.topology_info = foreach_topology_info;
   foreach_context.vertex_inner = foreach_vertex_inner;
   foreach_context.vertex_every_corner = foreach_vertex_every_corner;
@@ -894,12 +885,12 @@ static void geometry_create(MultiresReshapeSmoothContext *reshape_smooth_context
 
   geometry_init_loose_information(reshape_smooth_context);
 
-  SubdivToMeshSettings mesh_settings;
+  blender::bke::subdiv::ToMeshSettings mesh_settings;
   mesh_settings.resolution = get_reshape_level_resolution(reshape_context);
   mesh_settings.use_optimal_display = false;
 
   /* TODO(sergey): Tell the foreach() to ignore loose vertices. */
-  BKE_subdiv_foreach_subdiv_geometry(
+  blender::bke::subdiv::foreach_subdiv_geometry(
       reshape_context->subdiv, &foreach_context, &mesh_settings, reshape_context->base_mesh);
 }
 
@@ -920,10 +911,10 @@ static OpenSubdiv_VtxBoundaryInterpolation get_vtx_boundary_interpolation(
   const MultiresReshapeSmoothContext *reshape_smooth_context =
       static_cast<const MultiresReshapeSmoothContext *>(converter->user_data);
   const MultiresReshapeContext *reshape_context = reshape_smooth_context->reshape_context;
-  const SubdivSettings *settings = &reshape_context->subdiv->settings;
+  const blender::bke::subdiv::Settings *settings = &reshape_context->subdiv->settings;
 
   return OpenSubdiv_VtxBoundaryInterpolation(
-      BKE_subdiv_converter_vtx_boundary_interpolation_from_settings(settings));
+      blender::bke::subdiv::converter_vtx_boundary_interpolation_from_settings(settings));
 }
 
 static OpenSubdiv_FVarLinearInterpolation get_fvar_linear_interpolation(
@@ -932,10 +923,10 @@ static OpenSubdiv_FVarLinearInterpolation get_fvar_linear_interpolation(
   const MultiresReshapeSmoothContext *reshape_smooth_context =
       static_cast<const MultiresReshapeSmoothContext *>(converter->user_data);
   const MultiresReshapeContext *reshape_context = reshape_smooth_context->reshape_context;
-  const SubdivSettings *settings = &reshape_context->subdiv->settings;
+  const blender::bke::subdiv::Settings *settings = &reshape_context->subdiv->settings;
 
   return OpenSubdiv_FVarLinearInterpolation(
-      BKE_subdiv_converter_fvar_linear_from_settings(settings));
+      blender::bke::subdiv::converter_fvar_linear_from_settings(settings));
 }
 
 static bool specifies_full_topology(const OpenSubdiv_Converter * /*converter*/)
@@ -1080,32 +1071,36 @@ static void converter_init(const MultiresReshapeSmoothContext *reshape_smooth_co
 static void reshape_subdiv_create(MultiresReshapeSmoothContext *reshape_smooth_context)
 {
   const MultiresReshapeContext *reshape_context = reshape_smooth_context->reshape_context;
-  const SubdivSettings *settings = &reshape_context->subdiv->settings;
+  const blender::bke::subdiv::Settings *settings = &reshape_context->subdiv->settings;
 
   OpenSubdiv_Converter converter;
   converter_init(reshape_smooth_context, &converter);
 
-  Subdiv *reshape_subdiv = BKE_subdiv_new_from_converter(settings, &converter);
+  blender::bke::subdiv::Subdiv *reshape_subdiv = blender::bke::subdiv::new_from_converter(
+      settings, &converter);
 
   OpenSubdiv_EvaluatorSettings evaluator_settings = {0};
-  BKE_subdiv_eval_begin(reshape_subdiv, SUBDIV_EVALUATOR_TYPE_CPU, nullptr, &evaluator_settings);
+  blender::bke::subdiv::eval_begin(reshape_subdiv,
+                                   blender::bke::subdiv::SUBDIV_EVALUATOR_TYPE_CPU,
+                                   nullptr,
+                                   &evaluator_settings);
 
   reshape_smooth_context->reshape_subdiv = reshape_subdiv;
 
-  BKE_subdiv_converter_free(&converter);
+  blender::bke::subdiv::converter_free(&converter);
 }
 
 /* Callback to provide coarse position for subdivision surface topology at a reshape level. */
-typedef void(ReshapeSubdivCoarsePositionCb)(
-    const MultiresReshapeSmoothContext *reshape_smooth_context,
-    const Vertex *vertex,
-    float r_P[3]);
+using ReshapeSubdivCoarsePositionCb =
+    void(const MultiresReshapeSmoothContext *reshape_smooth_context,
+         const Vertex *vertex,
+         float r_P[3]);
 
 /* Refine subdivision surface topology at a reshape level for new coarse vertices positions. */
 static void reshape_subdiv_refine(const MultiresReshapeSmoothContext *reshape_smooth_context,
                                   ReshapeSubdivCoarsePositionCb coarse_position_cb)
 {
-  Subdiv *reshape_subdiv = reshape_smooth_context->reshape_subdiv;
+  blender::bke::subdiv::Subdiv *reshape_subdiv = reshape_smooth_context->reshape_subdiv;
 
   /* TODO(sergey): For non-trivial coarse_position_cb we should multi-thread this loop. */
 
@@ -1197,13 +1192,13 @@ static void reshape_subdiv_evaluate_limit_at_grid(
   const MultiresReshapeContext *reshape_context = reshape_smooth_context->reshape_context;
 
   float dPdu[3], dPdv[3];
-  BKE_subdiv_eval_limit_point_and_derivatives(reshape_smooth_context->reshape_subdiv,
-                                              ptex_coord->ptex_face_index,
-                                              ptex_coord->u,
-                                              ptex_coord->v,
-                                              limit_P,
-                                              dPdu,
-                                              dPdv);
+  blender::bke::subdiv::eval_limit_point_and_derivatives(reshape_smooth_context->reshape_subdiv,
+                                                         ptex_coord->ptex_face_index,
+                                                         ptex_coord->u,
+                                                         ptex_coord->v,
+                                                         limit_P,
+                                                         dPdu,
+                                                         dPdv);
 
   const int face_index = multires_reshape_grid_to_face_index(reshape_context,
                                                              grid_coord->grid_index);
@@ -1263,7 +1258,7 @@ static void linear_grid_element_delta_interpolate(
   const MultiresReshapeContext *reshape_context = reshape_smooth_context->reshape_context;
 
   const int reshape_level = reshape_context->reshape.level;
-  const int reshape_level_grid_size = BKE_subdiv_grid_size_from_level(reshape_level);
+  const int reshape_level_grid_size = blender::bke::subdiv::grid_size_from_level(reshape_level);
   const int reshape_level_grid_size_1 = reshape_level_grid_size - 1;
   const float reshape_level_grid_size_1_inv = 1.0f / float(reshape_level_grid_size_1);
 
@@ -1463,14 +1458,14 @@ static void evaluate_higher_grid_positions_callback(
     void * /*userdata_v*/)
 {
   const MultiresReshapeContext *reshape_context = reshape_smooth_context->reshape_context;
-  Subdiv *reshape_subdiv = reshape_smooth_context->reshape_subdiv;
+  blender::bke::subdiv::Subdiv *reshape_subdiv = reshape_smooth_context->reshape_subdiv;
 
   ReshapeGridElement grid_element = multires_reshape_grid_element_for_grid_coord(reshape_context,
                                                                                  grid_coord);
 
   /* Surface. */
   float P[3];
-  BKE_subdiv_eval_limit_point(
+  blender::bke::subdiv::eval_limit_point(
       reshape_subdiv, ptex_coord->ptex_face_index, ptex_coord->u, ptex_coord->v, P);
 
   copy_v3_v3(grid_element.displacement, P);

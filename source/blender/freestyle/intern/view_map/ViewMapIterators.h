@@ -1,4 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* SPDX-FileCopyrightText: 2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #pragma once
 
@@ -60,9 +62,7 @@ class orientedViewEdgeIterator : public Iterator {
 
  public:
   /** Default constructor */
-  inline orientedViewEdgeIterator()
-  {
-  }
+  inline orientedViewEdgeIterator() {}
 
   inline orientedViewEdgeIterator(Nature::VertexNature iNature)
   {
@@ -85,9 +85,7 @@ class orientedViewEdgeIterator : public Iterator {
     }
   }
 
-  virtual ~orientedViewEdgeIterator()
-  {
-  }
+  virtual ~orientedViewEdgeIterator() {}
 
  public:
   inline orientedViewEdgeIterator(edge_pointers_container::iterator begin,
@@ -240,10 +238,10 @@ class SVertexIterator : public Interface0DIteratorNested {
  public:
   SVertexIterator()
   {
-    _vertex = NULL;
-    _begin = NULL;
-    _previous_edge = NULL;
-    _next_edge = NULL;
+    _vertex = nullptr;
+    _begin = nullptr;
+    _previous_edge = nullptr;
+    _next_edge = nullptr;
     _t = 0;
   }
 
@@ -275,9 +273,7 @@ class SVertexIterator : public Interface0DIteratorNested {
     return *this;
   }
 
-  virtual ~SVertexIterator()
-  {
-  }
+  virtual ~SVertexIterator() {}
 
   virtual string getExactTypeName() const
   {
@@ -323,7 +319,7 @@ class SVertexIterator : public Interface0DIteratorNested {
   virtual int increment()
   {
     if (!_next_edge) {
-      _vertex = NULL;
+      _vertex = nullptr;
       return 0;
     }
     _t += (float)_next_edge->getLength2D();
@@ -336,7 +332,7 @@ class SVertexIterator : public Interface0DIteratorNested {
   virtual int decrement()
   {
     if (!_previous_edge) {
-      _vertex = NULL;
+      _vertex = nullptr;
       return 0;
     }
     if ((!_next_edge) && (!_vertex)) {
@@ -416,7 +412,7 @@ class ViewEdgeIterator : public Iterator {
    *    ViewVertex of begin. If false, we'll search over the ViewEdges surrounding the ending
    *    ViewVertex of begin.
    */
-  ViewEdgeIterator(ViewEdge *begin = NULL, bool orientation = true)
+  ViewEdgeIterator(ViewEdge *begin = nullptr, bool orientation = true)
   {
     _orientation = orientation;
     _edge = begin;
@@ -431,9 +427,7 @@ class ViewEdgeIterator : public Iterator {
     _begin = it._begin;
   }
 
-  virtual ~ViewEdgeIterator()
-  {
-  }
+  virtual ~ViewEdgeIterator() {}
 
   /** Returns the string "ViewEdgeIterator" */
   virtual string getExactTypeName() const

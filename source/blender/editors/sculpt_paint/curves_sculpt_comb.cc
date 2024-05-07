@@ -1,60 +1,57 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* SPDX-FileCopyrightText: 2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include <algorithm>
 
 #include "curves_sculpt_intern.hh"
 
-#include "BLI_index_mask_ops.hh"
 #include "BLI_kdtree.h"
+#include "BLI_math_geom.h"
 #include "BLI_math_matrix_types.hh"
 #include "BLI_rand.hh"
 #include "BLI_vector.hh"
 
-#include "PIL_time.h"
-
-#include "DEG_depsgraph.h"
-#include "DEG_depsgraph_query.h"
+#include "DEG_depsgraph.hh"
+#include "DEG_depsgraph_query.hh"
 
 #include "BKE_attribute_math.hh"
-#include "BKE_brush.h"
-#include "BKE_bvhutils.h"
-#include "BKE_colortools.h"
-#include "BKE_context.h"
+#include "BKE_brush.hh"
+#include "BKE_bvhutils.hh"
+#include "BKE_colortools.hh"
+#include "BKE_context.hh"
 #include "BKE_crazyspace.hh"
 #include "BKE_curves.hh"
 #include "BKE_geometry_set.hh"
-#include "BKE_mesh.h"
-#include "BKE_mesh_runtime.h"
-#include "BKE_paint.h"
+#include "BKE_mesh.hh"
+#include "BKE_mesh_runtime.hh"
+#include "BKE_paint.hh"
 
 #include "DNA_brush_enums.h"
 #include "DNA_brush_types.h"
 #include "DNA_curves_types.h"
-#include "DNA_mesh_types.h"
-#include "DNA_meshdata_types.h"
 #include "DNA_object_types.h"
 #include "DNA_screen_types.h"
 #include "DNA_space_types.h"
 
-#include "ED_screen.h"
-#include "ED_view3d.h"
+#include "ED_screen.hh"
+#include "ED_view3d.hh"
 
-#include "UI_interface.h"
+#include "UI_interface.hh"
 
-#include "WM_api.h"
+#include "WM_api.hh"
 
 /**
  * The code below uses a prefix naming convention to indicate the coordinate space:
- * cu: Local space of the curves object that is being edited.
- * su: Local space of the surface object.
- * wo: World space.
- * re: 2D coordinates within the region.
+ * `cu`: Local space of the curves object that is being edited.
+ * `su`: Local space of the surface object.
+ * `wo`: World space.
+ * `re`: 2D coordinates within the region.
  */
 
 namespace blender::ed::sculpt_paint {
 
 using blender::bke::CurvesGeometry;
-using threading::EnumerableThreadSpecific;
 
 /**
  * Moves individual points under the brush and does a length preservation step afterwards.
@@ -92,14 +89,12 @@ struct CombOperationExecutor {
   float brush_radius_factor_;
   float brush_strength_;
 
-  eBrushFalloffShape falloff_shape_;
-
   Object *curves_ob_orig_ = nullptr;
   Curves *curves_id_orig_ = nullptr;
   CurvesGeometry *curves_orig_ = nullptr;
 
   VArray<float> point_factors_;
-  Vector<int64_t> selected_curve_indices_;
+  IndexMaskMemory selected_curve_memory_;
   IndexMask curve_selection_;
 
   float2 brush_pos_prev_re_;
@@ -108,9 +103,7 @@ struct CombOperationExecutor {
 
   CurvesSurfaceTransforms transforms_;
 
-  CombOperationExecutor(const bContext &C) : ctx_(C)
-  {
-  }
+  CombOperationExecutor(const bContext &C) : ctx_(C) {}
 
   void execute(CombOperation &self, const bContext &C, const StrokeExtension &stroke_extension)
   {
@@ -131,20 +124,20 @@ struct CombOperationExecutor {
     brush_radius_factor_ = brush_radius_factor(*brush_, stroke_extension);
     brush_strength_ = brush_strength_get(*ctx_.scene, *brush_, stroke_extension);
 
-    falloff_shape_ = static_cast<eBrushFalloffShape>(brush_->falloff_shape);
+    const eBrushFalloffShape falloff_shape = eBrushFalloffShape(brush_->falloff_shape);
 
     transforms_ = CurvesSurfaceTransforms(*curves_ob_orig_, curves_id_orig_->surface);
 
-    point_factors_ = curves_orig_->attributes().lookup_or_default<float>(
-        ".selection", ATTR_DOMAIN_POINT, 1.0f);
-    curve_selection_ = curves::retrieve_selected_curves(*curves_id_orig_, selected_curve_indices_);
+    point_factors_ = *curves_orig_->attributes().lookup_or_default<float>(
+        ".selection", bke::AttrDomain::Point, 1.0f);
+    curve_selection_ = curves::retrieve_selected_curves(*curves_id_orig_, selected_curve_memory_);
 
     brush_pos_prev_re_ = self_->brush_pos_last_re_;
     brush_pos_re_ = stroke_extension.mouse_position;
     brush_pos_diff_re_ = brush_pos_re_ - brush_pos_prev_re_;
 
     if (stroke_extension.is_first) {
-      if (falloff_shape_ == PAINT_FALLOFF_SHAPE_SPHERE) {
+      if (falloff_shape == PAINT_FALLOFF_SHAPE_SPHERE) {
         this->initialize_spherical_brush_reference_point();
       }
       self_->constraint_solver_.initialize(
@@ -153,8 +146,8 @@ struct CombOperationExecutor {
       self_->curve_lengths_.reinitialize(curves_orig_->curves_num());
       const Span<float> segment_lengths = self_->constraint_solver_.segment_lengths();
       const OffsetIndices points_by_curve = curves_orig_->points_by_curve();
-      threading::parallel_for(curve_selection_.index_range(), 512, [&](const IndexRange range) {
-        for (const int curve_i : curve_selection_.slice(range)) {
+      curve_selection_.foreach_segment(GrainSize(512), [&](const IndexMaskSegment segment) {
+        for (const int curve_i : segment) {
           const IndexRange points = points_by_curve[curve_i];
           const Span<float> lengths = segment_lengths.slice(points.drop_back(1));
           self_->curve_lengths_[curve_i] = std::accumulate(lengths.begin(), lengths.end(), 0.0f);
@@ -166,10 +159,10 @@ struct CombOperationExecutor {
 
     Array<bool> changed_curves(curves_orig_->curves_num(), false);
 
-    if (falloff_shape_ == PAINT_FALLOFF_SHAPE_TUBE) {
+    if (falloff_shape == PAINT_FALLOFF_SHAPE_TUBE) {
       this->comb_projected_with_symmetry(changed_curves);
     }
-    else if (falloff_shape_ == PAINT_FALLOFF_SHAPE_SPHERE) {
+    else if (falloff_shape == PAINT_FALLOFF_SHAPE_SPHERE) {
       this->comb_spherical_with_symmetry(changed_curves);
     }
     else {
@@ -180,9 +173,8 @@ struct CombOperationExecutor {
                               static_cast<Mesh *>(curves_id_orig_->surface->data) :
                               nullptr;
 
-    Vector<int64_t> indices;
-    const IndexMask changed_curves_mask = index_mask_ops::find_indices_from_array(changed_curves,
-                                                                                  indices);
+    IndexMaskMemory memory;
+    const IndexMask changed_curves_mask = IndexMask::from_bools(changed_curves, memory);
     self_->constraint_solver_.solve_step(*curves_orig_, changed_curves_mask, surface, transforms_);
 
     curves_orig_->tag_positions_changed();
@@ -212,8 +204,7 @@ struct CombOperationExecutor {
         bke::crazyspace::get_evaluated_curves_deformation(*ctx_.depsgraph, *curves_ob_orig_);
     const OffsetIndices points_by_curve = curves_orig_->points_by_curve();
 
-    float4x4 projection;
-    ED_view3d_ob_project_mat_get(ctx_.rv3d, curves_ob_orig_, projection.ptr());
+    const float4x4 projection = ED_view3d_ob_project_mat_get(ctx_.rv3d, curves_ob_orig_);
 
     const float brush_radius_re = brush_radius_base_re_ * brush_radius_factor_;
     const float brush_radius_sq_re = pow2f(brush_radius_re);
@@ -224,13 +215,13 @@ struct CombOperationExecutor {
 
     const Span<float> segment_lengths = self_->constraint_solver_.segment_lengths();
 
-    threading::parallel_for(curve_selection_.index_range(), 256, [&](const IndexRange range) {
-      for (const int curve_i : curve_selection_.slice(range)) {
+    curve_selection_.foreach_segment(GrainSize(256), [&](const IndexMaskSegment segment) {
+      for (const int curve_i : segment) {
         bool curve_changed = false;
         const IndexRange points = points_by_curve[curve_i];
 
         const float total_length = self_->curve_lengths_[curve_i];
-        const float total_length_inv = safe_divide(1.0f, total_length);
+        const float total_length_inv = math::safe_rcp(total_length);
         float current_length = 0.0f;
         for (const int point_i : points.drop_front(1)) {
           current_length += segment_lengths[point_i - 1];
@@ -239,9 +230,8 @@ struct CombOperationExecutor {
           const float3 old_symm_pos_cu = math::transform_point(brush_transform_inv, old_pos_cu);
 
           /* Find the position of the point in screen space. */
-          float2 old_symm_pos_re;
-          ED_view3d_project_float_v2_m4(
-              ctx_.region, old_symm_pos_cu, old_symm_pos_re, projection.ptr());
+          const float2 old_symm_pos_re = ED_view3d_project_float_v2_m4(
+              ctx_.region, old_symm_pos_cu, projection);
 
           const float distance_to_brush_sq_re = dist_squared_to_line_segment_v2(
               old_symm_pos_re, brush_pos_prev_re_, brush_pos_re_);
@@ -293,9 +283,6 @@ struct CombOperationExecutor {
    */
   void comb_spherical_with_symmetry(MutableSpan<bool> r_changed_curves)
   {
-    float4x4 projection;
-    ED_view3d_ob_project_mat_get(ctx_.rv3d, curves_ob_orig_, projection.ptr());
-
     float3 brush_start_wo, brush_end_wo;
     ED_view3d_win_to_3d(
         ctx_.v3d,
@@ -343,13 +330,13 @@ struct CombOperationExecutor {
     const OffsetIndices points_by_curve = curves_orig_->points_by_curve();
     const Span<float> segment_lengths = self_->constraint_solver_.segment_lengths();
 
-    threading::parallel_for(curve_selection_.index_range(), 256, [&](const IndexRange range) {
-      for (const int curve_i : curve_selection_.slice(range)) {
+    curve_selection_.foreach_segment(GrainSize(256), [&](const IndexMaskSegment segment) {
+      for (const int curve_i : segment) {
         bool curve_changed = false;
         const IndexRange points = points_by_curve[curve_i];
 
         const float total_length = self_->curve_lengths_[curve_i];
-        const float total_length_inv = safe_divide(1.0f, total_length);
+        const float total_length_inv = math::safe_rcp(total_length);
         float current_length = 0.0f;
         for (const int point_i : points.drop_front(1)) {
           current_length += segment_lengths[point_i - 1];

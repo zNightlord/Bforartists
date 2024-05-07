@@ -1,4 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* SPDX-FileCopyrightText: 2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #pragma once
 
@@ -37,20 +39,18 @@ class StyleModule {
     _inter = inter;
   }
 
-  virtual ~StyleModule()
-  {
-  }
+  virtual ~StyleModule() {}
 
   StrokeLayer *execute()
   {
     if (!_inter) {
       cerr << "Error: no interpreter was found to execute the script" << endl;
-      return NULL;
+      return nullptr;
     }
 
     if (!_drawable) {
       cerr << "Error: not drawable" << endl;
-      return NULL;
+      return nullptr;
     }
 
     Operators::reset();
@@ -58,19 +58,20 @@ class StyleModule {
     if (interpret()) {
       cerr << "Error: interpretation failed" << endl;
       Operators::reset();
-      return NULL;
+      return nullptr;
     }
 
     Operators::StrokesContainer *strokes_set = Operators::getStrokesSet();
     if (strokes_set->empty()) {
       cerr << "Error: strokes set empty" << endl;
       Operators::reset();
-      return NULL;
+      return nullptr;
     }
 
     StrokeLayer *sl = new StrokeLayer;
     for (Operators::StrokesContainer::iterator it = strokes_set->begin(); it != strokes_set->end();
-         ++it) {
+         ++it)
+    {
       sl->AddStroke(*it);
     }
 

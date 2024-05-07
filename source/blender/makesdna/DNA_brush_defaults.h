@@ -1,4 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* SPDX-FileCopyrightText: 2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup DNA
@@ -8,7 +10,6 @@
 
 #include "DNA_texture_defaults.h"
 
-/* Struct members on own line. */
 /* clang-format off */
 
 /* -------------------------------------------------------------------- */
@@ -64,6 +65,7 @@
  \
     .jitter = 0.0f, \
  \
+    .input_samples = 1, \
     /* Dash */ \
     .dash_ratio = 1.0f, \
     .dash_samples = 20, \
@@ -90,7 +92,12 @@
     .pose_smooth_iterations = 4, \
     .pose_ik_segments = 1, \
     .hardness = 0.0f, \
+ \
     .automasking_boundary_edges_propagation_steps = 1, \
+    .automasking_start_normal_limit = 0.34906585f, /* 20 degrees */ \
+    .automasking_start_normal_falloff = 0.25f, \
+    .automasking_view_normal_limit = 1.570796, /* 90 degrees */ \
+    .automasking_view_normal_falloff = 0.25f, \
     .automasking_cavity_blur_steps = 0,\
     .automasking_cavity_factor = 1.0f,\
  \
@@ -99,6 +106,9 @@
  \
     .mtex = _DNA_DEFAULT_MTex, \
     .mask_mtex = _DNA_DEFAULT_MTex, \
+    .falloff_shape = 0,\
+    .tip_scale_x = 1.0f,\
+    .tip_roundness = 1.0f,\
   }
 
 /** \} */

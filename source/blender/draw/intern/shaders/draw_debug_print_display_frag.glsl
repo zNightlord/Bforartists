@@ -1,9 +1,10 @@
+/* SPDX-FileCopyrightText: 2022 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /**
  * Display characters using an ascii table.
- **/
-
-#pragma BLENDER_REQUIRE(common_math_lib.glsl)
+ */
 
 bool char_intersect(uvec2 bitmap_position)
 {
@@ -105,10 +106,11 @@ bool char_intersect(uvec2 bitmap_position)
                                      uvec2(0x00000000u, 0x6e3b0000u),
                                      uvec2(0x00000000u, 0x00000000u));
 
-  if (!in_range_inclusive(bitmap_position, uvec2(0), uvec2(7))) {
+  if (any(lessThan(bitmap_position, uvec2(0))) || any(greaterThanEqual(bitmap_position, uvec2(8))))
+  {
     return false;
   }
-  uint char_bits = ascii_bitmap[char_index][bitmap_position.y >> 2u & 1u];
+  uint char_bits = ascii_bitmap[char_index % 96u][bitmap_position.y >> 2u & 1u];
   char_bits = (char_bits >> ((bitmap_position.y & 3u) * 8u + bitmap_position.x));
   return (char_bits & 1u) != 0u;
 }

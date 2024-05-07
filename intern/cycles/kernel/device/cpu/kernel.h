@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: Apache-2.0
- * Copyright 2011-2022 Blender Foundation */
+/* SPDX-FileCopyrightText: 2011-2022 Blender Foundation
+ *
+ * SPDX-License-Identifier: Apache-2.0 */
 
 #pragma once
 
@@ -32,10 +33,7 @@ void kernel_global_memory_copy(KernelGlobalsCPU *kg, const char *name, void *mem
 #define KERNEL_ARCH cpu
 #include "kernel/device/cpu/kernel_arch.h"
 
-#define KERNEL_ARCH cpu_sse2
-#include "kernel/device/cpu/kernel_arch.h"
-
-#define KERNEL_ARCH cpu_sse41
+#define KERNEL_ARCH cpu_sse42
 #include "kernel/device/cpu/kernel_arch.h"
 
 #define KERNEL_ARCH cpu_avx2

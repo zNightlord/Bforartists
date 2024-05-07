@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2005 Blender Foundation. */
+/* SPDX-FileCopyrightText: 2005 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup gpu
@@ -14,30 +15,31 @@
 #include "DNA_material_types.h"
 
 #include "BLI_ghash.h"
-#include "BLI_hash_mm2a.h"
+#include "BLI_hash_mm2a.hh"
 #include "BLI_link_utils.h"
+#include "BLI_listbase.h"
+#include "BLI_string.h"
 #include "BLI_threads.h"
+#include "BLI_time.h"
 #include "BLI_utildefines.h"
-
-#include "PIL_time.h"
 
 #include "BKE_cryptomatte.hh"
 #include "BKE_material.h"
 
-#include "GPU_capabilities.h"
-#include "GPU_context.h"
-#include "GPU_material.h"
-#include "GPU_shader.h"
-#include "GPU_uniform_buffer.h"
-#include "GPU_vertex_format.h"
+#include "GPU_capabilities.hh"
+#include "GPU_context.hh"
+#include "GPU_material.hh"
+#include "GPU_shader.hh"
+#include "GPU_uniform_buffer.hh"
+#include "GPU_vertex_format.hh"
 
 #include "BLI_sys_types.h" /* for intptr_t support */
 #include "BLI_vector.hh"
 
-#include "gpu_codegen.h"
-#include "gpu_node_graph.h"
+#include "gpu_codegen.hh"
+#include "gpu_node_graph.hh"
 #include "gpu_shader_create_info.hh"
-#include "gpu_shader_dependency_private.h"
+#include "gpu_shader_dependency_private.hh"
 
 #include <cstdarg>
 #include <cstring>
@@ -86,12 +88,16 @@ struct GPUCodegenCreateInfo : ShaderCreateInfo {
 };
 
 struct GPUPass {
-  struct GPUPass *next;
+  GPUPass *next;
 
   GPUShader *shader;
   GPUCodegenCreateInfo *create_info = nullptr;
   /** Orphaned GPUPasses gets freed by the garbage collector. */
   uint refcount;
+  /** The last time the refcount was greater than 0. */
+  int gc_timestamp;
+  /** The engine type this pass is compiled for. */
+  eGPUMaterialEngine engine;
   /** Identity hash generated from all GLSL code. */
   uint32_t hash;
   /** Did we already tried to compile the attached GPUShader. */
@@ -99,6 +105,8 @@ struct GPUPass {
   /** Hint that an optimized variant of this pass should be created based on a complexity heuristic
    * during pass code generation. */
   bool should_optimize;
+  /** Whether pass is in the GPUPass cache. */
+  bool cached;
 };
 
 /* -------------------------------------------------------------------- */
@@ -115,12 +123,12 @@ static SpinLock pass_cache_spin;
 
 /* Search by hash only. Return first pass with the same hash.
  * There is hash collision if (pass->next && pass->next->hash == hash) */
-static GPUPass *gpu_pass_cache_lookup(uint32_t hash)
+static GPUPass *gpu_pass_cache_lookup(eGPUMaterialEngine engine, uint32_t hash)
 {
   BLI_spin_lock(&pass_cache_spin);
   /* Could be optimized with a Lookup table. */
   for (GPUPass *pass = pass_cache; pass; pass = pass->next) {
-    if (pass->hash == hash) {
+    if (pass->hash == hash && pass->engine == engine) {
       BLI_spin_unlock(&pass_cache_spin);
       return pass;
     }
@@ -132,6 +140,7 @@ static GPUPass *gpu_pass_cache_lookup(uint32_t hash)
 static void gpu_pass_cache_insert_after(GPUPass *node, GPUPass *pass)
 {
   BLI_spin_lock(&pass_cache_spin);
+  pass->cached = true;
   if (node != nullptr) {
     /* Add after the first pass having the same hash. */
     pass->next = node->next;
@@ -149,10 +158,13 @@ static GPUPass *gpu_pass_cache_resolve_collision(GPUPass *pass,
                                                  GPUShaderCreateInfo *info,
                                                  uint32_t hash)
 {
+  eGPUMaterialEngine engine = pass->engine;
   BLI_spin_lock(&pass_cache_spin);
   for (; pass && (pass->hash == hash); pass = pass->next) {
     if (*reinterpret_cast<ShaderCreateInfo *>(info) ==
-        *reinterpret_cast<ShaderCreateInfo *>(pass->create_info)) {
+            *reinterpret_cast<ShaderCreateInfo *>(pass->create_info) &&
+        pass->engine == engine)
+    {
       BLI_spin_unlock(&pass_cache_spin);
       return pass;
     }
@@ -194,7 +206,7 @@ static std::ostream &operator<<(std::ostream &stream, const GPUInput *input)
     case GPU_SOURCE_ATTR:
       return stream << "var_attrs.v" << input->attr->id;
     case GPU_SOURCE_UNIFORM_ATTR:
-      return stream << "unf_attrs[resource_id].attr" << input->uniform_attr->id;
+      return stream << "UNI_ATTR(unf_attrs[resource_id].attr" << input->uniform_attr->id << ")";
     case GPU_SOURCE_LAYER_ATTR:
       return stream << "attr_load_layer(" << input->layer_attr->hash_code << ")";
     case GPU_SOURCE_STRUCT:
@@ -215,20 +227,19 @@ static std::ostream &operator<<(std::ostream &stream, const GPUOutput *output)
 }
 
 /* Trick type to change overload and keep a somewhat nice syntax. */
-struct GPUConstant : public GPUInput {
-};
+struct GPUConstant : public GPUInput {};
 
 /* Print data constructor (i.e: vec2(1.0f, 1.0f)). */
 static std::ostream &operator<<(std::ostream &stream, const GPUConstant *input)
 {
   stream << input->type << "(";
   for (int i = 0; i < input->type; i++) {
-    char formated_float[32];
+    char formatted_float[32];
     /* Use uint representation to allow exact same bit pattern even if NaN. This is because we can
      * pass UINTs as floats for constants. */
     const uint32_t *uint_vec = reinterpret_cast<const uint32_t *>(input->vec);
-    SNPRINTF(formated_float, "uintBitsToFloat(%uu)", uint_vec[i]);
-    stream << formated_float;
+    SNPRINTF(formatted_float, "uintBitsToFloat(%uu)", uint_vec[i]);
+    stream << formatted_float;
     if (i < input->type - 1) {
       stream << ", ";
     }
@@ -277,13 +288,6 @@ class GPUCodegen {
 
   ~GPUCodegen()
   {
-    MEM_SAFE_FREE(output.attr_load);
-    MEM_SAFE_FREE(output.surface);
-    MEM_SAFE_FREE(output.volume);
-    MEM_SAFE_FREE(output.thickness);
-    MEM_SAFE_FREE(output.displacement);
-    MEM_SAFE_FREE(output.composite);
-    MEM_SAFE_FREE(output.material_functions);
     MEM_SAFE_FREE(cryptomatte_input_);
     delete create_info;
     BLI_freelistN(&ubo_inputs_);
@@ -316,20 +320,16 @@ class GPUCodegen {
   void set_unique_ids();
 
   void node_serialize(std::stringstream &eval_ss, const GPUNode *node);
-  char *graph_serialize(eGPUNodeTag tree_tag, GPUNodeLink *output_link);
-  char *graph_serialize(eGPUNodeTag tree_tag);
-
-  static char *extract_c_str(std::stringstream &stream)
-  {
-    auto string = stream.str();
-    return BLI_strdup(string.c_str());
-  }
+  std::string graph_serialize(eGPUNodeTag tree_tag,
+                              GPUNodeLink *output_link,
+                              const char *output_default = nullptr);
+  std::string graph_serialize(eGPUNodeTag tree_tag);
 };
 
 void GPUCodegen::generate_attribs()
 {
   if (BLI_listbase_is_empty(&graph.attributes)) {
-    output.attr_load = nullptr;
+    output.attr_load.clear();
     return;
   }
 
@@ -357,32 +357,34 @@ void GPUCodegen::generate_attribs()
     eGPUType input_type, iface_type;
 
     load_ss << "var_attrs." << var_name;
-    switch (attr->type) {
-      case CD_ORCO:
-        /* Need vec4 to detect usage of default attribute. */
-        input_type = GPU_VEC4;
-        iface_type = GPU_VEC3;
-        load_ss << " = attr_load_orco(" << attr_name << ");\n";
-        break;
-      case CD_HAIRLENGTH:
-        iface_type = input_type = GPU_FLOAT;
-        load_ss << " = attr_load_" << input_type << "(" << attr_name << ");\n";
-        break;
-      case CD_TANGENT:
-        iface_type = input_type = GPU_VEC4;
-        load_ss << " = attr_load_tangent(" << attr_name << ");\n";
-        break;
-      default:
-        iface_type = input_type = GPU_VEC4;
-        load_ss << " = attr_load_" << input_type << "(" << attr_name << ");\n";
-        break;
+    if (attr->is_hair_length) {
+      iface_type = input_type = GPU_FLOAT;
+      load_ss << " = attr_load_" << input_type << "(" << attr_name << ");\n";
+    }
+    else {
+      switch (attr->type) {
+        case CD_ORCO:
+          /* Need vec4 to detect usage of default attribute. */
+          input_type = GPU_VEC4;
+          iface_type = GPU_VEC3;
+          load_ss << " = attr_load_orco(" << attr_name << ");\n";
+          break;
+        case CD_TANGENT:
+          iface_type = input_type = GPU_VEC4;
+          load_ss << " = attr_load_tangent(" << attr_name << ");\n";
+          break;
+        default:
+          iface_type = input_type = GPU_VEC4;
+          load_ss << " = attr_load_" << input_type << "(" << attr_name << ");\n";
+          break;
+      }
     }
 
     info.vertex_in(slot--, to_type(input_type), attr_name);
     iface.smooth(to_type(iface_type), var_name);
   }
 
-  output.attr_load = extract_c_str(load_ss);
+  output.attr_load = load_ss.str();
 }
 
 void GPUCodegen::generate_resources()
@@ -391,8 +393,8 @@ void GPUCodegen::generate_resources()
 
   /* Ref. #98190: Defines are optimizations for old compilers.
    * Might become unnecessary with EEVEE-Next. */
-  if (GPU_material_flag_get(&mat, GPU_MATFLAG_PRINCIPLED_CLEARCOAT)) {
-    info.define("PRINCIPLED_CLEARCOAT");
+  if (GPU_material_flag_get(&mat, GPU_MATFLAG_PRINCIPLED_COAT)) {
+    info.define("PRINCIPLED_COAT");
   }
   if (GPU_material_flag_get(&mat, GPU_MATFLAG_PRINCIPLED_METALLIC)) {
     info.define("PRINCIPLED_METALLIC");
@@ -450,7 +452,7 @@ void GPUCodegen::generate_resources()
     }
     ss << "};\n\n";
 
-    info.uniform_buf(1, "NodeTree", GPU_UBO_BLOCK_NAME, Frequency::BATCH);
+    info.uniform_buf(GPU_NODE_TREE_UBO_SLOT, "NodeTree", GPU_UBO_BLOCK_NAME, Frequency::BATCH);
   }
 
   if (!BLI_listbase_is_empty(&graph.uniform_attrs.list)) {
@@ -477,16 +479,26 @@ void GPUCodegen::generate_library()
   GPUCodegenCreateInfo &info = *create_info;
 
   void *value;
-  /* Iterate over libraries. We need to keep this struct intact in case
-   * it is required for the optimization pass. */
+  blender::Vector<std::string> source_files;
+
+  /* Iterate over libraries. We need to keep this struct intact in case it is required for the
+   * optimization pass. The first pass just collects the keys from the GSET, given items in a GSET
+   * are unordered this can cause order differences between invocations, so we collect the keys
+   * first, and sort them before doing actual work, to guarantee stable behavior while still
+   * having cheap insertions into the GSET */
   GHashIterator *ihash = BLI_ghashIterator_new((GHash *)graph.used_libraries);
   while (!BLI_ghashIterator_done(ihash)) {
     value = BLI_ghashIterator_getKey(ihash);
-    auto deps = gpu_shader_dependency_get_resolved_source((const char *)value);
-    info.dependencies_generated.extend_non_duplicates(deps);
+    source_files.append((const char *)value);
     BLI_ghashIterator_step(ihash);
   }
   BLI_ghashIterator_free(ihash);
+
+  std::sort(source_files.begin(), source_files.end());
+  for (auto &key : source_files) {
+    auto deps = gpu_shader_dependency_get_resolved_source(key.c_str());
+    info.dependencies_generated.extend_non_duplicates(deps);
+  }
 }
 
 void GPUCodegen::node_serialize(std::stringstream &eval_ss, const GPUNode *node)
@@ -559,13 +571,16 @@ void GPUCodegen::node_serialize(std::stringstream &eval_ss, const GPUNode *node)
   nodes_total_++;
 }
 
-char *GPUCodegen::graph_serialize(eGPUNodeTag tree_tag, GPUNodeLink *output_link)
+std::string GPUCodegen::graph_serialize(eGPUNodeTag tree_tag,
+                                        GPUNodeLink *output_link,
+                                        const char *output_default)
 {
-  if (output_link == nullptr) {
-    return nullptr;
+  if (output_link == nullptr && output_default == nullptr) {
+    return "";
   }
 
   std::stringstream eval_ss;
+  bool has_nodes = false;
   /* NOTE: The node order is already top to bottom (or left to right in node editor)
    * because of the evaluation order inside ntreeExecGPUNodes(). */
   LISTBASE_FOREACH (GPUNode *, node, &graph.nodes) {
@@ -573,15 +588,27 @@ char *GPUCodegen::graph_serialize(eGPUNodeTag tree_tag, GPUNodeLink *output_link
       continue;
     }
     node_serialize(eval_ss, node);
+    has_nodes = true;
   }
-  eval_ss << "return " << output_link->output << ";\n";
 
-  char *eval_c_str = extract_c_str(eval_ss);
-  BLI_hash_mm2a_add(&hm2a_, (uchar *)eval_c_str, eval_ss.str().size());
-  return eval_c_str;
+  if (!has_nodes) {
+    return "";
+  }
+
+  if (output_link) {
+    eval_ss << "return " << output_link->output << ";\n";
+  }
+  else {
+    /* Default output in case there are only AOVs. */
+    eval_ss << "return " << output_default << ";\n";
+  }
+
+  std::string str = eval_ss.str();
+  BLI_hash_mm2a_add(&hm2a_, reinterpret_cast<const uchar *>(str.c_str()), str.size());
+  return str;
 }
 
-char *GPUCodegen::graph_serialize(eGPUNodeTag tree_tag)
+std::string GPUCodegen::graph_serialize(eGPUNodeTag tree_tag)
 {
   std::stringstream eval_ss;
   LISTBASE_FOREACH (GPUNode *, node, &graph.nodes) {
@@ -589,9 +616,9 @@ char *GPUCodegen::graph_serialize(eGPUNodeTag tree_tag)
       node_serialize(eval_ss, node);
     }
   }
-  char *eval_c_str = extract_c_str(eval_ss);
-  BLI_hash_mm2a_add(&hm2a_, (uchar *)eval_c_str, eval_ss.str().size());
-  return eval_c_str;
+  std::string str = eval_ss.str();
+  BLI_hash_mm2a_add(&hm2a_, reinterpret_cast<const uchar *>(str.c_str()), str.size());
+  return str;
 }
 
 void GPUCodegen::generate_cryptomatte()
@@ -648,10 +675,12 @@ void GPUCodegen::generate_graphs()
 {
   set_unique_ids();
 
-  output.surface = graph_serialize(GPU_NODE_TAG_SURFACE | GPU_NODE_TAG_AOV, graph.outlink_surface);
-  output.volume = graph_serialize(GPU_NODE_TAG_VOLUME, graph.outlink_volume);
-  output.displacement = graph_serialize(GPU_NODE_TAG_DISPLACEMENT, graph.outlink_displacement);
-  output.thickness = graph_serialize(GPU_NODE_TAG_THICKNESS, graph.outlink_thickness);
+  output.surface = graph_serialize(
+      GPU_NODE_TAG_SURFACE | GPU_NODE_TAG_AOV, graph.outlink_surface, "CLOSURE_DEFAULT");
+  output.volume = graph_serialize(GPU_NODE_TAG_VOLUME, graph.outlink_volume, "CLOSURE_DEFAULT");
+  output.displacement = graph_serialize(
+      GPU_NODE_TAG_DISPLACEMENT, graph.outlink_displacement, nullptr);
+  output.thickness = graph_serialize(GPU_NODE_TAG_THICKNESS, graph.outlink_thickness, nullptr);
   if (!BLI_listbase_is_empty(&graph.outlink_compositor)) {
     output.composite = graph_serialize(GPU_NODE_TAG_COMPOSITOR);
   }
@@ -666,11 +695,10 @@ void GPUCodegen::generate_graphs()
       }
       /* Tag only the nodes needed for the current function */
       gpu_nodes_tag(func_link->outlink, GPU_NODE_TAG_FUNCTION);
-      char *fn = graph_serialize(GPU_NODE_TAG_FUNCTION, func_link->outlink);
+      const std::string fn = graph_serialize(GPU_NODE_TAG_FUNCTION, func_link->outlink);
       eval_ss << "float " << func_link->name << "() {\n" << fn << "}\n\n";
-      MEM_SAFE_FREE(fn);
     }
-    output.material_functions = extract_c_str(eval_ss);
+    output.material_functions = eval_ss.str();
     /* Leave the function tags as they were before serialization */
     LISTBASE_FOREACH (GPUNodeGraphFunctionLink *, funclink, &graph.material_functions) {
       gpu_nodes_tag(funclink->outlink, GPU_NODE_TAG_FUNCTION);
@@ -692,6 +720,7 @@ void GPUCodegen::generate_graphs()
 
 GPUPass *GPU_generate_pass(GPUMaterial *material,
                            GPUNodeGraph *graph,
+                           eGPUMaterialEngine engine,
                            GPUCodegenCallbackFn finalize_source_cb,
                            void *thunk,
                            bool optimize_graph)
@@ -723,7 +752,7 @@ GPUPass *GPU_generate_pass(GPUMaterial *material,
      * NOTE: We only perform cache look-up for non-optimized shader
      * graphs, as baked constant data among other optimizations will generate too many
      * shader source permutations, with minimal re-usability. */
-    pass_hash = gpu_pass_cache_lookup(codegen.hash_get());
+    pass_hash = gpu_pass_cache_lookup(engine, codegen.hash_get());
 
     /* FIXME(fclem): This is broken. Since we only check for the hash and not the full source
      * there is no way to have a collision currently. Some advocated to only use a bigger hash. */
@@ -773,8 +802,10 @@ GPUPass *GPU_generate_pass(GPUMaterial *material,
     pass->shader = nullptr;
     pass->refcount = 1;
     pass->create_info = codegen.create_info;
+    pass->engine = engine;
     pass->hash = codegen.hash_get();
     pass->compiled = false;
+    pass->cached = false;
     /* Only flag pass optimization hint if this is the first generated pass for a material.
      * Optimized passes cannot be optimized further, even if the heuristic is still not
      * favorable. */
@@ -836,7 +867,8 @@ static bool gpu_pass_shader_validate(GPUPass *pass, GPUShader *shader)
 
   /* Validate against opengl limit. */
   if ((active_samplers_len > GPU_max_textures_frag()) ||
-      (active_samplers_len > GPU_max_textures_vert())) {
+      (active_samplers_len > GPU_max_textures_vert()))
+  {
     return false;
   }
 
@@ -881,14 +913,6 @@ GPUShader *GPU_pass_shader_get(GPUPass *pass)
   return pass->shader;
 }
 
-void GPU_pass_release(GPUPass *pass)
-{
-  BLI_spin_lock(&pass_cache_spin);
-  BLI_assert(pass->refcount > 0);
-  pass->refcount--;
-  BLI_spin_unlock(&pass_cache_spin);
-}
-
 static void gpu_pass_free(GPUPass *pass)
 {
   BLI_assert(pass->refcount == 0);
@@ -899,40 +923,47 @@ static void gpu_pass_free(GPUPass *pass)
   MEM_freeN(pass);
 }
 
-void GPU_pass_cache_garbage_collect(void)
+void GPU_pass_release(GPUPass *pass)
 {
-  static int lasttime = 0;
-  const int shadercollectrate = 60; /* hardcoded for now. */
-  int ctime = int(PIL_check_seconds_timer());
-
-  if (ctime < shadercollectrate + lasttime) {
-    return;
+  BLI_spin_lock(&pass_cache_spin);
+  BLI_assert(pass->refcount > 0);
+  pass->refcount--;
+  /* Un-cached passes will not be filtered by garbage collection, so release here. */
+  if (pass->refcount == 0 && !pass->cached) {
+    gpu_pass_free(pass);
   }
+  BLI_spin_unlock(&pass_cache_spin);
+}
 
-  lasttime = ctime;
+void GPU_pass_cache_garbage_collect()
+{
+  const int shadercollectrate = 60; /* hardcoded for now. */
+  int ctime = int(BLI_time_now_seconds());
 
   BLI_spin_lock(&pass_cache_spin);
   GPUPass *next, **prev_pass = &pass_cache;
   for (GPUPass *pass = pass_cache; pass; pass = next) {
     next = pass->next;
-    if (pass->refcount == 0) {
+    if (pass->refcount > 0) {
+      pass->gc_timestamp = ctime;
+    }
+    else if (pass->gc_timestamp + shadercollectrate < ctime) {
       /* Remove from list */
       *prev_pass = next;
       gpu_pass_free(pass);
+      continue;
     }
-    else {
-      prev_pass = &pass->next;
-    }
+    prev_pass = &pass->next;
   }
   BLI_spin_unlock(&pass_cache_spin);
 }
 
-void GPU_pass_cache_init(void)
+void GPU_pass_cache_init()
 {
   BLI_spin_init(&pass_cache_spin);
 }
 
-void GPU_pass_cache_free(void)
+void GPU_pass_cache_free()
 {
   BLI_spin_lock(&pass_cache_spin);
   while (pass_cache) {
@@ -951,11 +982,9 @@ void GPU_pass_cache_free(void)
 /** \name Module
  * \{ */
 
-void gpu_codegen_init(void)
-{
-}
+void gpu_codegen_init() {}
 
-void gpu_codegen_exit(void)
+void gpu_codegen_exit()
 {
   BKE_material_defaults_free_gpu();
   GPU_shader_free_builtin_shaders();

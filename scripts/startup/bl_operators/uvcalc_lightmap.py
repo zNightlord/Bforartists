@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2011-2023 Blender Authors
+#
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 import bpy
@@ -111,9 +113,15 @@ class prettyface:
 
                 # ngons work different, we store projected result
                 # in UVs to avoid having to re-project later.
-                for i, co in enumerate(cos_2d):
-                    self.uv[i][:] = ((co.x - xmin) / xspan,
-                                     (co.y - ymin) / yspan)
+                if xspan < 0.0000001 or yspan < 0.0000001:
+                    for i in range(len(cos_2d)):
+                        self.uv[i][:] = (0.0, 0.0)
+                else:
+                    for i, co in enumerate(cos_2d):
+                        self.uv[i][:] = (
+                            (co.x - xmin) / xspan,
+                            (co.y - ymin) / yspan,
+                        )
 
             self.children = []
 
@@ -220,8 +228,6 @@ def lightmap_uvpack(
         PREF_SEL_ONLY=True,
         PREF_NEW_UVLAYER=False,
         PREF_PACK_IN_ONE=False,
-        PREF_APPLY_IMAGE=False,
-        PREF_IMG_PX_SIZE=512,
         PREF_BOX_DIV=8,
         PREF_MARGIN_DIV=512,
 ):
@@ -240,8 +246,6 @@ def lightmap_uvpack(
     t = time.time()
 
     if PREF_PACK_IN_ONE:
-        if PREF_APPLY_IMAGE:
-            image = bpy.data.images.new(name="lightmap", width=PREF_IMG_PX_SIZE, height=PREF_IMG_PX_SIZE, alpha=False)
         face_groups = [[]]
     else:
         face_groups = []
@@ -298,28 +302,52 @@ def lightmap_uvpack(
             tri_lengths = [trylens(f) for f in face_sel if f.loop_total == 3]
             del trylens
 
-            def trilensdiff(t1, t2):
-                return (abs(t1[1][t1[2][0]] - t2[1][t2[2][0]]) +
-                        abs(t1[1][t1[2][1]] - t2[1][t2[2][1]]) +
-                        abs(t1[1][t1[2][2]] - t2[1][t2[2][2]]))
+            # To add triangles into the light-map pack triangles are grouped in pairs to fill rectangular areas.
+            # In the following for each triangle we add the sorted triangle edge lengths (3d point) into a KD-Tree
+            # then iterate over all triangles and search for pairs of triangles by looking for the closest
+            # sorted triangle point.
+            # Additionally clusters of similar/equal triangles are parsed by searching for ranges in a second step.
+            kd = mathutils.kdtree.KDTree(len(tri_lengths))
+            for i, (f, lens, o) in enumerate(tri_lengths):
+                vector = (lens[o[0]], lens[o[1]], lens[o[2]])
+                kd.insert(vector, i)
+            kd.balance()
 
-            while tri_lengths:
-                tri1 = tri_lengths.pop()
+            added_ids = [False] * len(tri_lengths)
+            pairs_added = 0
+            tri_equality_threshold = 0.00001  # Add multiple pairs at once that are within this threshold.
+            for i in range(len(tri_lengths)):
+                if added_ids[i]:
+                    continue
+                tri1 = tri_lengths[i]
+                f1, lens1, lo1 = tri1
 
-                if not tri_lengths:
+                sorted_l = (lens1[lo1[0]], lens1[lo1[1]], lens1[lo1[2]])
+                added_ids[i] = True
+                vec, nearest, dist = kd.find(sorted_l, filter=lambda idx: not added_ids[idx])
+                if not nearest or nearest < 0:
                     pretty_faces.append(prettyface((tri1, None)))
                     break
+                tri2 = tri_lengths[nearest]
+                pretty_faces.append(prettyface((tri1, tri2)))
+                pairs_added = pairs_added + 1
+                added_ids[nearest] = True
 
-                best_tri_index = -1
-                best_tri_diff = 100000000.0
+                # Look in threshold proximity to add all similar/equal triangles in one go.
+                # This code is not necessary but acts as a shortcut (~9% performance improvement).
+                if dist < tri_equality_threshold:
+                    cluster_tri_ids = [
+                        idx for _, idx, _ in kd.find_range(sorted_l, tri_equality_threshold)
+                        if not added_ids[idx]
+                    ]
 
-                for i, tri2 in enumerate(tri_lengths):
-                    diff = trilensdiff(tri1, tri2)
-                    if diff < best_tri_diff:
-                        best_tri_index = i
-                        best_tri_diff = diff
-
-                pretty_faces.append(prettyface((tri1, tri_lengths.pop(best_tri_index))))
+                    if len(cluster_tri_ids) > 1:
+                        for ci in range(0, len(cluster_tri_ids) - (len(cluster_tri_ids) % 2), 2):
+                            pretty_faces.append(
+                                prettyface((tri_lengths[cluster_tri_ids[ci]], tri_lengths[cluster_tri_ids[ci + 1]]))
+                            )
+                            added_ids[cluster_tri_ids[ci]] = added_ids[cluster_tri_ids[ci + 1]] = True
+                            pairs_added = pairs_added + 1
 
         # Get the min, max and total areas
         max_area = 0.0
@@ -400,7 +428,7 @@ def lightmap_uvpack(
         # Since the boxes are sized in powers of 2, we can neatly group them into bigger squares
         # this is done hierarchically, so that we may avoid running the pack function
         # on many thousands of boxes, (under 1k is best) because it would get slow.
-        # Using an off and even dict us useful because they are packed differently
+        # Using an odd and even dict is useful because they are packed differently
         # where w/h are the same, their packed in groups of 4
         # where they are different they are packed in pairs
         #
@@ -520,35 +548,24 @@ def lightmap_uvpack(
             # pf.place(box[1][1], box[1][2], packWidth, packHeight, margin_w, margin_h)
         print("done")
 
-        if PREF_APPLY_IMAGE:
-            pass
-            # removed with texface
-            '''
-            if not PREF_PACK_IN_ONE:
-                image = bpy.data.images.new(name="lightmap",
-                                            width=PREF_IMG_PX_SIZE,
-                                            height=PREF_IMG_PX_SIZE,
-                                            )
-
-            for f in face_sel:
-                f.image = image
-            '''
-
     for me in meshes:
         me.update()
 
-    print("finished all %.2f " % (time.time() - t))
+    print("finished all {:.2f} ".format(time.time() - t))
 
 
 def unwrap(operator, context, **kwargs):
     # switch to object mode
     is_editmode = context.object and context.object.mode == 'EDIT'
     if is_editmode:
+        objects = context.objects_in_mode_unique_data
         bpy.ops.object.mode_set(mode='OBJECT', toggle=False)
+    else:
+        objects = context.selected_objects
 
     # define list of meshes
     meshes = list({
-        me for obj in context.selected_objects
+        me for obj in objects
         if obj.type == 'MESH'
         if (me := obj.data).polygons and me.library is None
     })
@@ -606,20 +623,6 @@ class LightMapPack(Operator):
         description="Create a new UV map for every mesh packed",
         default=False,
     )
-    PREF_APPLY_IMAGE: BoolProperty(
-        name="New Image",
-        description=(
-            "Assign new images for every mesh (only one if "
-            "Share Texture Space is enabled)"
-        ),
-        default=False,
-    )
-    PREF_IMG_PX_SIZE: IntProperty(
-        name="Image Size",
-        description="Width and height for the new image",
-        min=64, max=5000,
-        default=512,
-    )
     # UV Packing...
     PREF_BOX_DIV: IntProperty(
         name="Pack Quality",
@@ -648,8 +651,6 @@ class LightMapPack(Operator):
 
         layout.prop(self, "PREF_PACK_IN_ONE")
         layout.prop(self, "PREF_NEW_UVLAYER")
-        layout.prop(self, "PREF_APPLY_IMAGE")
-        layout.prop(self, "PREF_IMG_PX_SIZE")
         layout.prop(self, "PREF_BOX_DIV")
         layout.prop(self, "PREF_MARGIN_DIV")
 

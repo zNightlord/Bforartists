@@ -1,3 +1,6 @@
+/* SPDX-FileCopyrightText: 2022-2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /**
  * Shaders that down-sample velocity buffer into squared tile of MB_TILE_DIVISOR pixels wide.
@@ -11,7 +14,7 @@
  * Adapted from G3D Innovation Engine implementation.
  */
 
-#pragma BLENDER_REQUIRE(common_math_geom_lib.glsl)
+#pragma BLENDER_REQUIRE(draw_math_geom_lib.glsl)
 #pragma BLENDER_REQUIRE(eevee_velocity_lib.glsl)
 
 shared uint payload_prev;
@@ -34,7 +37,7 @@ uvec2 unpack_payload(uint payload)
 
 void main()
 {
-  if (all(equal(gl_LocalInvocationID.xy, uvec2(0)))) {
+  if (gl_LocalInvocationIndex == 0u) {
     payload_prev = 0u;
     payload_next = 0u;
   }
@@ -51,7 +54,7 @@ void main()
   vec2 uv = (vec2(texel) + 0.5) / render_size;
   float depth = texelFetch(depth_tx, texel, 0).r;
   vec4 motion = velocity_resolve(imageLoad(velocity_img, texel), uv, depth);
-#ifdef FLATTEN_VIEWPORT
+#ifdef FLATTEN_RG
   /* imageLoad does not perform the swizzling like sampler does. Do it manually. */
   motion = motion.xyxy;
 #endif
@@ -96,7 +99,7 @@ void main()
   }
   barrier();
 
-  if (all(equal(gl_LocalInvocationID.xy, uvec2(0)))) {
+  if (gl_LocalInvocationIndex == 0u) {
     ivec2 tile_co = ivec2(gl_WorkGroupID.xy);
     imageStore(out_tiles_img, tile_co, vec4(max_motion_prev, max_motion_next));
   }

@@ -1,4 +1,7 @@
+# SPDX-FileCopyrightText: 2009-2023 Blender Authors
+#
 # SPDX-License-Identifier: GPL-2.0-or-later
+
 import bpy
 from bpy.types import Menu, Panel
 from bpy.app.translations import contexts as i18n_contexts
@@ -121,31 +124,24 @@ class TIME_MT_view(Menu):
         st = context.space_data
 
         layout.prop(st, "show_region_hud")
-
-        layout.separator()
-
-        layout.prop(st, "show_seconds")
-        layout.prop(st, "show_locked_time")
-
-        layout.separator()
-
-        layout.prop(st, "show_markers")
-
-        layout.separator()
-
-        layout.prop(scene, "show_keys_from_selected_only")
-        layout.prop(st.dopesheet, "show_only_errors")
-
-        layout.separator()
-
-        layout.menu("TIME_MT_cache")
-
+        layout.prop(st, "show_region_channels")
         layout.separator()
 
         # NOTE: "action" now, since timeline is in the dopesheet editor, instead of as own editor
         layout.operator("action.view_all")
         layout.operator("action.view_frame")
+        layout.separator()
 
+        layout.prop(st, "show_markers")
+        layout.prop(st, "show_seconds")
+        layout.prop(st, "show_locked_time")
+        layout.separator()
+
+        layout.prop(scene, "show_keys_from_selected_only")
+        layout.prop(st.dopesheet, "show_only_errors")
+        layout.separator()
+
+        layout.menu("TIME_MT_cache")
         layout.separator()
 
         layout.menu("INFO_MT_area")
@@ -168,6 +164,7 @@ class TIME_MT_cache(Menu):
         col.prop(st, "cache_softbody")
         col.prop(st, "cache_particles")
         col.prop(st, "cache_cloth")
+        col.prop(st, "cache_simulation_nodes")
         col.prop(st, "cache_smoke")
         col.prop(st, "cache_dynamicpaint")
         col.prop(st, "cache_rigidbody")
@@ -178,27 +175,14 @@ def marker_menu_generic(layout, context):
     # layout.operator_context = 'EXEC_REGION_WIN'
 
     layout.column()
-    layout.operator("marker.add", text="Add Marker")
-    layout.operator("marker.duplicate", text="Duplicate Marker")
 
-    if len(bpy.data.scenes) > 10:
-        layout.operator_context = 'INVOKE_DEFAULT'
-        layout.operator("marker.make_links_scene", text="Duplicate Marker to Scene...", icon='OUTLINER_OB_EMPTY')
-    else:
-        layout.operator_menu_enum("marker.make_links_scene", "scene", text="Duplicate Marker to Scene")
-
-    layout.operator("marker.delete", text="Delete Marker")
+    tool_settings = context.tool_settings
+    layout.prop(tool_settings, "lock_markers")
 
     layout.separator()
 
-    props = layout.operator("wm.call_panel", text="Rename Marker")
-    props.name = "TOPBAR_PT_name_marker"
-    props.keep_open = False
-    layout.operator("marker.move", text="Move Marker")
-
-    layout.separator()
-
-    layout.menu('NLA_MT_marker_select')
+    layout.operator("screen.marker_jump", text="Jump to Previous Marker").next = False
+    layout.operator("screen.marker_jump", text="Jump to Next Marker").next = True
 
     layout.separator()
 
@@ -206,12 +190,28 @@ def marker_menu_generic(layout, context):
 
     layout.separator()
 
-    layout.operator("screen.marker_jump", text="Jump to Next Marker").next = True
-    layout.operator("screen.marker_jump", text="Jump to Previous Marker").next = False
+    layout.menu("NLA_MT_marker_select")
 
     layout.separator()
-    tool_settings = context.tool_settings
-    layout.prop(tool_settings, "lock_markers")
+
+    layout.operator("marker.move", text="Move Marker")
+    props = layout.operator("wm.call_panel", text="Rename Marker")
+    props.name = "TOPBAR_PT_name_marker"
+    props.keep_open = False
+
+    layout.separator()
+
+    layout.operator("marker.delete", text="Delete Marker")
+
+    if len(bpy.data.scenes) > 10:
+        layout.operator_context = 'INVOKE_DEFAULT'
+        layout.operator("marker.make_links_scene", text="Duplicate Marker to Scene...", icon='OUTLINER_OB_EMPTY')
+    else:
+        layout.operator_menu_enum("marker.make_links_scene", "scene", text="Duplicate Marker to Scene")
+
+    layout.operator("marker.duplicate", text="Duplicate Marker")
+    layout.operator("marker.add", text="Add Marker")
+
 
 ###################################
 
@@ -228,7 +228,7 @@ class TimelinePanelButtons:
 class TIME_PT_playback(TimelinePanelButtons, Panel):
     bl_label = "Playback"
     bl_region_type = 'HEADER'
-    bl_ui_units_x = 11
+    bl_ui_units_x = 13
 
     def draw(self, context):
         layout = self.layout
@@ -241,7 +241,7 @@ class TIME_PT_playback(TimelinePanelButtons, Panel):
         layout.prop(scene, "sync_mode", text="Sync")
         col = layout.column(heading="Audio")
         col.prop(scene, "use_audio_scrub", text="Scrubbing")
-        col.prop(scene, "use_audio", text="Mute")
+        col.prop(scene, "use_audio")
 
         col = layout.column(heading="Playback")
         col.prop(scene, "lock_frame_selection_to_range", text="Limit to Frame Range")
@@ -252,10 +252,11 @@ class TIME_PT_playback(TimelinePanelButtons, Panel):
         col.prop(screen, "use_play_3d_editors", text="3D Viewport")
         col.prop(screen, "use_play_animation_editors", text="Animation Editors")
         col.prop(screen, "use_play_image_editors", text="Image Editor")
-        col.prop(screen, "use_play_properties_editors", text="Properties Editor")
+        col.prop(screen, "use_play_properties_editors", text="Properties and Sidebars")
         col.prop(screen, "use_play_clip_editors", text="Movie Clip Editor")
         col.prop(screen, "use_play_node_editors", text="Node Editors")
         col.prop(screen, "use_play_sequence_editors", text="Video Sequencer")
+        col.prop(screen, "use_play_spreadsheet_editors", text="Spreadsheet")
 
         col = layout.column(heading="Show")
         col.prop(scene, "show_subframe", text="Subframes")

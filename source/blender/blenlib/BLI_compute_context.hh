@@ -1,4 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* SPDX-FileCopyrightText: 2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #pragma once
 
@@ -36,6 +38,7 @@
 #include "BLI_linear_allocator.hh"
 #include "BLI_stack.hh"
 #include "BLI_string_ref.hh"
+#include "BLI_struct_equality_utils.hh"
 
 namespace blender {
 
@@ -44,7 +47,6 @@ namespace blender {
  * have enough bits to make collisions practically impossible.
  */
 struct ComputeContextHash {
-  static constexpr int64_t HashSizeInBytes = 16;
   uint64_t v1 = 0;
   uint64_t v2 = 0;
 
@@ -53,17 +55,12 @@ struct ComputeContextHash {
     return v1;
   }
 
-  friend bool operator==(const ComputeContextHash &a, const ComputeContextHash &b)
-  {
-    return a.v1 == b.v1 && a.v2 == b.v2;
-  }
+  BLI_STRUCT_EQUALITY_OPERATORS_2(ComputeContextHash, v1, v2)
 
   void mix_in(const void *data, int64_t len);
 
   friend std::ostream &operator<<(std::ostream &stream, const ComputeContextHash &hash);
 };
-
-static_assert(sizeof(ComputeContextHash) == ComputeContextHash::HashSizeInBytes);
 
 /**
  * Identifies the context in which a computation happens. This context can be used to identify

@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2006 Blender Foundation. All rights reserved. */
+/* SPDX-FileCopyrightText: 2006 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup cmpnodes
@@ -8,13 +9,13 @@
 #include "BLI_math_base.h"
 #include "BLI_math_vector_types.hh"
 
-#include "UI_interface.h"
-#include "UI_resources.h"
+#include "UI_interface.hh"
+#include "UI_resources.hh"
 
-#include "GPU_shader.h"
+#include "GPU_shader.hh"
 
+#include "COM_bokeh_kernel.hh"
 #include "COM_node_operation.hh"
-#include "COM_utilities.hh"
 
 #include "node_composite_util.hh"
 
@@ -26,7 +27,7 @@ NODE_STORAGE_FUNCS(NodeBokehImage)
 
 static void cmp_node_bokehimage_declare(NodeDeclarationBuilder &b)
 {
-  b.add_output<decl::Color>(N_("Image"));
+  b.add_output<decl::Color>("Image");
 }
 
 static void node_composit_init_bokehimage(bNodeTree * /*ntree*/, bNode *node)
@@ -63,45 +64,24 @@ class BokehImageOperation : public NodeOperation {
 
   void execute() override
   {
-    GPUShader *shader = shader_manager().get("compositor_bokeh_image");
-    GPU_shader_bind(shader);
+    const Domain domain = compute_domain();
 
-    GPU_shader_uniform_1f(shader, "exterior_angle", get_exterior_angle());
-    GPU_shader_uniform_1f(shader, "rotation", get_rotation());
-    GPU_shader_uniform_1f(shader, "roundness", node_storage(bnode()).rounding);
-    GPU_shader_uniform_1f(shader, "catadioptric", node_storage(bnode()).catadioptric);
-    GPU_shader_uniform_1f(shader, "lens_shift", node_storage(bnode()).lensshift);
+    const BokehKernel &bokeh_kernel = context().cache_manager().bokeh_kernels.get(
+        context(),
+        domain.size,
+        node_storage(bnode()).flaps,
+        node_storage(bnode()).angle,
+        node_storage(bnode()).rounding,
+        node_storage(bnode()).catadioptric,
+        node_storage(bnode()).lensshift);
 
     Result &output = get_result("Image");
-    const Domain domain = compute_domain();
-    output.allocate_texture(domain);
-    output.bind_as_image(shader, "output_img");
-
-    compute_dispatch_threads_at_least(shader, domain.size);
-
-    output.unbind_as_image();
-    GPU_shader_unbind();
+    output.wrap_external(bokeh_kernel.texture());
   }
 
   Domain compute_domain() override
   {
     return Domain(int2(512));
-  }
-
-  /* The exterior angle is the angle between each two consecutive vertices of the regular polygon
-   * from its center. */
-  float get_exterior_angle()
-  {
-    return (M_PI * 2.0f) / node_storage(bnode()).flaps;
-  }
-
-  float get_rotation()
-  {
-    /* Offset the rotation such that the second vertex of the regular polygon lies on the positive
-     * y axis, which is 90 degrees minus the angle that it makes with the positive x axis assuming
-     * the first vertex lies on the positive x axis. */
-    const float offset = M_PI_2 - get_exterior_angle();
-    return node_storage(bnode()).angle - offset;
   }
 };
 

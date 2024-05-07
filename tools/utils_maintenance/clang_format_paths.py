@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2023 Blender Authors
+#
 # SPDX-License-Identifier: GPL-2.0-or-later
+
 """
 This script runs clang-format on multiple files/directories.
 
@@ -22,8 +25,8 @@ from typing import (
     Tuple,
 )
 
-VERSION_MIN = (8, 0, 0)
-VERSION_MAX_RECOMMENDED = (12, 0, 0)
+VERSION_MIN = (17, 0, 6)
+VERSION_MAX_RECOMMENDED = (17, 0, 6)
 CLANG_FORMAT_CMD = "clang-format"
 
 BASE_DIR = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -34,7 +37,8 @@ extensions = (
     ".c", ".cc", ".cpp", ".cxx",
     ".h", ".hh", ".hpp", ".hxx",
     ".m", ".mm",
-    ".osl", ".glsl",
+    ".osl", ".glsl", ".msl",
+    ".metal",
 )
 
 extensions_only_retab = (
@@ -129,7 +133,7 @@ def clang_format_ensure_version() -> Optional[Tuple[int, int, int]]:
     version_output = ""
     for i in range(2, -1, -1):
         clang_format_cmd = (
-            "clang-format-" + (".".join(["%d"] * i) % VERSION_MIN[:i])
+            "clang-format-" + (".".join(["{:d}"] * i).format(*VERSION_MIN[:i]))
             if i > 0 else
             "clang-format"
         )
@@ -146,7 +150,7 @@ def clang_format_ensure_version() -> Optional[Tuple[int, int, int]]:
     version = version.split("-")[0]
     # Ensure exactly 3 numbers.
     version_num: Tuple[int, int, int] = (tuple(int(n) for n in version.split(".")) + (0, 0, 0))[:3]  # type: ignore
-    print("Using %s (%d.%d.%d)..." % (CLANG_FORMAT_CMD, version_num[0], version_num[1], version_num[2]))
+    print("Using {:s} ({:d}.{:d}.{:d})...".format(CLANG_FORMAT_CMD, version_num[0], version_num[1], version_num[2]))
     return version_num
 
 
@@ -232,9 +236,10 @@ def main() -> None:
             version, ">", VERSION_MAX_RECOMMENDED,
         )
         print(
-            "You may want to install clang-format-%d.%d, "
-            "or use the precompiled libs repository." %
-            (VERSION_MAX_RECOMMENDED[0], VERSION_MAX_RECOMMENDED[1]),
+            "You may want to install clang-format-{:d}.{:d}, "
+            "or use the precompiled libs repository.".format(
+                VERSION_MAX_RECOMMENDED[0], VERSION_MAX_RECOMMENDED[1],
+            ),
         )
 
     args = argparse_create().parse_args()
@@ -242,7 +247,7 @@ def main() -> None:
     use_default_paths = not (bool(args.paths) or bool(args.changed_only))
 
     paths = compute_paths(args.paths, use_default_paths)
-    print("Operating on:" + (" (%d changed paths)" % len(paths) if args.changed_only else ""))
+    print("Operating on:" + (" ({:d} changed paths)".format(len(paths)) if args.changed_only else ""))
     for p in paths:
         print(" ", p)
 

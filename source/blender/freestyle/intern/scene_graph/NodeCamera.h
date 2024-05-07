@@ -1,4 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* SPDX-FileCopyrightText: 2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #pragma once
 
@@ -35,18 +37,16 @@ class NodeCamera : public Node {
   NodeCamera(const NodeCamera &iBrother);
 #endif
 
-  virtual ~NodeCamera()
-  {
-  }
+  virtual ~NodeCamera() {}
 
   /** Accept the corresponding visitor */
   virtual void accept(SceneVisitor &v);
 
   /** Matrix is copied */
-  void setModelViewMatrix(double modelview_matrix[16]);
+  void setModelViewMatrix(const double modelview_matrix[16]);
 
   /** Matrix is copied */
-  void setProjectionMatrix(double projection_matrix[16]);
+  void setProjectionMatrix(const double projection_matrix[16]);
 
   double *modelViewMatrix()
   {

@@ -1,7 +1,15 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* SPDX-FileCopyrightText: 2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "UI_interface.h"
-#include "UI_resources.h"
+#include "NOD_rna_define.hh"
+
+#include "UI_interface.hh"
+#include "UI_resources.hh"
+
+#include "RNA_enum_types.hh"
+
+#include "GEO_separate_geometry.hh"
 
 #include "node_geometry_util.hh"
 
@@ -11,30 +19,29 @@ NODE_STORAGE_FUNCS(NodeGeometrySeparateGeometry)
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Geometry>(N_("Geometry"));
-  b.add_input<decl::Bool>(N_("Selection"))
+  b.add_input<decl::Geometry>("Geometry");
+  b.add_input<decl::Bool>("Selection")
       .default_value(true)
       .hide_value()
       .field_on_all()
-      .description(N_("The parts of the geometry that go into the first output"));
-  b.add_output<decl::Geometry>(N_("Selection"))
+      .description("The parts of the geometry that go into the first output");
+  b.add_output<decl::Geometry>("Selection")
       .propagate_all()
-      .description(N_("The parts of the geometry in the selection"));
-  b.add_output<decl::Geometry>(N_("Inverted"))
+      .description("The parts of the geometry in the selection");
+  b.add_output<decl::Geometry>("Inverted")
       .propagate_all()
-      .description(N_("The parts of the geometry not in the selection"));
+      .description("The parts of the geometry not in the selection");
 }
 
 static void node_layout(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
 {
-  uiItemR(layout, ptr, "domain", 0, "", ICON_NONE);
+  uiItemR(layout, ptr, "domain", UI_ITEM_NONE, "", ICON_NONE);
 }
 
 static void node_init(bNodeTree * /*tree*/, bNode *node)
 {
   NodeGeometrySeparateGeometry *data = MEM_cnew<NodeGeometrySeparateGeometry>(__func__);
-  data->domain = ATTR_DOMAIN_POINT;
-
+  data->domain = int8_t(AttrDomain::Point);
   node->storage = data;
 }
 
@@ -45,30 +52,30 @@ static void node_geo_exec(GeoNodeExecParams params)
   const Field<bool> selection_field = params.extract_input<Field<bool>>("Selection");
 
   const NodeGeometrySeparateGeometry &storage = node_storage(params.node());
-  const eAttrDomain domain = eAttrDomain(storage.domain);
+  const AttrDomain domain = AttrDomain(storage.domain);
 
   auto separate_geometry_maybe_recursively =
       [&](GeometrySet &geometry_set,
           const Field<bool> &selection,
           const AnonymousAttributePropagationInfo &propagation_info) {
         bool is_error;
-        if (domain == ATTR_DOMAIN_INSTANCE) {
+        if (domain == AttrDomain::Instance) {
           /* Only delete top level instances. */
-          separate_geometry(geometry_set,
-                            domain,
-                            GEO_NODE_DELETE_GEOMETRY_MODE_ALL,
-                            selection,
-                            propagation_info,
-                            is_error);
+          geometry::separate_geometry(geometry_set,
+                                      domain,
+                                      GEO_NODE_DELETE_GEOMETRY_MODE_ALL,
+                                      selection,
+                                      propagation_info,
+                                      is_error);
         }
         else {
           geometry_set.modify_geometry_sets([&](GeometrySet &geometry_set) {
-            separate_geometry(geometry_set,
-                              domain,
-                              GEO_NODE_DELETE_GEOMETRY_MODE_ALL,
-                              selection,
-                              propagation_info,
-                              is_error);
+            geometry::separate_geometry(geometry_set,
+                                        domain,
+                                        GEO_NODE_DELETE_GEOMETRY_MODE_ALL,
+                                        selection,
+                                        propagation_info,
+                                        is_error);
           });
         }
       };
@@ -87,12 +94,20 @@ static void node_geo_exec(GeoNodeExecParams params)
   }
 }
 
-}  // namespace blender::nodes::node_geo_separate_geometry_cc
-
-void register_node_type_geo_separate_geometry()
+static void node_rna(StructRNA *srna)
 {
-  namespace file_ns = blender::nodes::node_geo_separate_geometry_cc;
+  RNA_def_node_enum(srna,
+                    "domain",
+                    "Domain",
+                    "Which domain to separate on",
+                    rna_enum_attribute_domain_without_corner_items,
+                    NOD_storage_enum_accessors(domain),
+                    int(AttrDomain::Point),
+                    enums::domain_without_corner_experimental_grease_pencil_version3_fn);
+}
 
+static void node_register()
+{
   static bNodeType ntype;
 
   geo_node_type_base(&ntype, GEO_NODE_SEPARATE_GEOMETRY, "Separate Geometry", NODE_CLASS_GEOMETRY);
@@ -102,10 +117,15 @@ void register_node_type_geo_separate_geometry()
                     node_free_standard_storage,
                     node_copy_standard_storage);
 
-  ntype.initfunc = file_ns::node_init;
+  ntype.initfunc = node_init;
 
-  ntype.declare = file_ns::node_declare;
-  ntype.geometry_node_execute = file_ns::node_geo_exec;
-  ntype.draw_buttons = file_ns::node_layout;
+  ntype.declare = node_declare;
+  ntype.geometry_node_execute = node_geo_exec;
+  ntype.draw_buttons = node_layout;
   nodeRegisterType(&ntype);
+
+  node_rna(ntype.rna_ext.srna);
 }
+NOD_REGISTER_NODE(node_register)
+
+}  // namespace blender::nodes::node_geo_separate_geometry_cc

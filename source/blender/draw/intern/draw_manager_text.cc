@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2016 Blender Foundation. */
+/* SPDX-FileCopyrightText: 2016 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup draw
@@ -7,16 +8,22 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_math.h"
+#include "BLI_math_geom.h"
+#include "BLI_math_matrix.h"
+#include "BLI_math_rotation.h"
+#include "BLI_math_vector.h"
 #include "BLI_memiter.h"
 #include "BLI_rect.h"
 #include "BLI_string.h"
 
-#include "BKE_editmesh.h"
-#include "BKE_editmesh_cache.h"
-#include "BKE_global.h"
-#include "BKE_mesh.h"
-#include "BKE_unit.h"
+#include "BKE_editmesh.hh"
+#include "BKE_editmesh_cache.hh"
+#include "BKE_global.hh"
+#include "BKE_mesh.hh"
+#include "BKE_mesh_types.hh"
+#include "BKE_mesh_wrapper.hh"
+#include "BKE_object.hh"
+#include "BKE_unit.hh"
 
 #include "DNA_mesh_types.h"
 #include "DNA_object_types.h"
@@ -24,20 +31,23 @@
 #include "DNA_screen_types.h"
 #include "DNA_view3d_types.h"
 
-#include "GPU_matrix.h"
-#include "GPU_state.h"
+#include "GPU_matrix.hh"
+#include "GPU_state.hh"
 
-#include "ED_screen.h"
-#include "ED_view3d.h"
+#include "ED_screen.hh"
+#include "ED_view3d.hh"
 
-#include "UI_interface.h"
-#include "UI_resources.h"
+#include "UI_interface.hh"
+#include "UI_resources.hh"
 
-#include "BLF_api.h"
-#include "WM_api.h"
+#include "BLF_api.hh"
+#include "WM_api.hh"
 
-#include "draw_manager_text.h"
-#include "intern/bmesh_polygon.h"
+#include "draw_manager_text.hh"
+#include "intern/bmesh_polygon.hh"
+
+using blender::float3;
+using blender::Span;
 
 struct ViewCachedString {
   float vec[3];
@@ -49,6 +59,8 @@ struct ViewCachedString {
   short xoffs, yoffs;
   short flag;
   int str_len;
+  bool shadow;
+  bool align_center;
 
   /* str is allocated past the end */
   char str[0];
@@ -58,7 +70,7 @@ struct DRWTextStore {
   BLI_memiter *cache_strings;
 };
 
-DRWTextStore *DRW_text_cache_create(void)
+DRWTextStore *DRW_text_cache_create()
 {
   DRWTextStore *dt = MEM_cnew<DRWTextStore>(__func__);
   dt->cache_strings = BLI_memiter_create(1 << 14); /* 16kb */
@@ -78,7 +90,9 @@ void DRW_text_cache_add(DRWTextStore *dt,
                         short xoffs,
                         short yoffs,
                         short flag,
-                        const uchar col[4])
+                        const uchar col[4],
+                        const bool shadow,
+                        const bool align_center)
 {
   int alloc_len;
   ViewCachedString *vos;
@@ -100,6 +114,8 @@ void DRW_text_cache_add(DRWTextStore *dt,
   vos->yoffs = yoffs;
   vos->flag = flag;
   vos->str_len = str_len;
+  vos->shadow = shadow;
+  vos->align_center = align_center;
 
   /* allocate past the end */
   if (flag & DRW_TEXT_CACHE_STRING_PTR) {
@@ -123,11 +139,8 @@ static void drw_text_cache_draw_ex(DRWTextStore *dt, ARegion *region)
   GPU_matrix_push();
   GPU_matrix_identity_set();
 
-  const int font_id = BLF_default();
-
-  const uiStyle *style = UI_style_get();
-
-  BLF_size(font_id, style->widget.points * U.dpi_fac);
+  BLF_default_size(UI_style_get()->widgetlabel.points);
+  const int font_id = BLF_set_default();
 
   BLI_memiter_iter_init(dt->cache_strings, &it);
   while ((vos = static_cast<ViewCachedString *>(BLI_memiter_iter_step(&it)))) {
@@ -137,11 +150,35 @@ static void drw_text_cache_draw_ex(DRWTextStore *dt, ARegion *region)
         col_pack_prev = vos->col.pack;
       }
 
-      BLF_position(
-          font_id, float(vos->sco[0] + vos->xoffs), float(vos->sco[1] + vos->yoffs), 2.0f);
-      BLF_draw(font_id,
-               (vos->flag & DRW_TEXT_CACHE_STRING_PTR) ? *((const char **)vos->str) : vos->str,
-               vos->str_len);
+      if (vos->align_center) {
+        /* Measure the size of the string, then offset to align to the vertex. */
+        float width, height;
+        BLF_width_and_height(font_id,
+                             (vos->flag & DRW_TEXT_CACHE_STRING_PTR) ? *((const char **)vos->str) :
+                                                                       vos->str,
+                             vos->str_len,
+                             &width,
+                             &height);
+        vos->xoffs -= short(width / 2.0f);
+        vos->yoffs -= short(height / 2.0f);
+      }
+
+      if (vos->shadow) {
+        BLF_draw_default_shadowed(
+            float(vos->sco[0] + vos->xoffs),
+            float(vos->sco[1] + vos->yoffs),
+            2.0f,
+            (vos->flag & DRW_TEXT_CACHE_STRING_PTR) ? *((const char **)vos->str) : vos->str,
+            vos->str_len);
+      }
+      else {
+        BLF_draw_default(float(vos->sco[0] + vos->xoffs),
+                         float(vos->sco[1] + vos->yoffs),
+                         2.0f,
+                         (vos->flag & DRW_TEXT_CACHE_STRING_PTR) ? *((const char **)vos->str) :
+                                                                   vos->str,
+                         vos->str_len);
+      }
     }
   }
 
@@ -166,7 +203,8 @@ void DRW_text_cache_draw(DRWTextStore *dt, ARegion *region, View3D *v3d)
               vos->vec,
               vos->sco,
               V3D_PROJ_TEST_CLIP_BB | V3D_PROJ_TEST_CLIP_WIN | V3D_PROJ_TEST_CLIP_NEAR) ==
-          V3D_PROJ_RET_OK) {
+          V3D_PROJ_RET_OK)
+      {
         tot++;
       }
       else {
@@ -220,8 +258,8 @@ void DRW_text_edit_mesh_measure_stats(ARegion *region,
    */
   DRWTextStore *dt = DRW_text_cache_ensure();
   const short txt_flag = DRW_TEXT_CACHE_GLOBALSPACE;
-  Mesh *me = static_cast<Mesh *>(ob->data);
-  BMEditMesh *em = me->edit_mesh;
+  const Mesh *mesh = BKE_object_get_editmesh_eval_cage(ob);
+  BMEditMesh *em = mesh->runtime->edit_mesh.get();
   float v1[3], v2[3], v3[3], vmid[3], fvec[3];
   char numstr[32]; /* Stores the measurement display text here */
   size_t numstr_len;
@@ -234,9 +272,8 @@ void DRW_text_edit_mesh_measure_stats(ARegion *region,
   float clip_planes[4][4];
   /* allow for displaying shape keys and deform mods */
   BMIter iter;
-  const float(*vert_coords)[3] = (me->runtime->edit_data ? me->runtime->edit_data->vertexCos :
-                                                           nullptr);
-  const bool use_coords = (vert_coords != nullptr);
+  const Span<float3> vert_positions = BKE_mesh_wrapper_vert_coords(mesh);
+  const bool use_coords = !vert_positions.is_empty();
 
   /* when 2 or more edge-info options are enabled, space apart */
   short edge_tex_count = 0;
@@ -249,7 +286,7 @@ void DRW_text_edit_mesh_measure_stats(ARegion *region,
   if ((v3d->overlay.edit_flag & V3D_OVERLAY_EDIT_INDICES) && (em->selectmode & SCE_SELECT_EDGE)) {
     edge_tex_count += 1;
   }
-  const short edge_tex_sep = short((edge_tex_count - 1) * 5.0f * U.dpi_fac);
+  const short edge_tex_sep = short((edge_tex_count - 1) * 5.0f * UI_SCALE_FAC);
 
   /* Make the precision of the display value proportionate to the grid-size. */
 
@@ -270,7 +307,8 @@ void DRW_text_edit_mesh_measure_stats(ARegion *region,
   }
 
   if (v3d->overlay.edit_flag &
-      (V3D_OVERLAY_EDIT_EDGE_LEN | V3D_OVERLAY_EDIT_EDGE_ANG | V3D_OVERLAY_EDIT_INDICES)) {
+      (V3D_OVERLAY_EDIT_EDGE_LEN | V3D_OVERLAY_EDIT_EDGE_ANG | V3D_OVERLAY_EDIT_INDICES))
+  {
     BoundBox bb;
     const rcti rect = {0, region->winx, 0, region->winy};
 
@@ -290,12 +328,13 @@ void DRW_text_edit_mesh_measure_stats(ARegion *region,
       /* draw selected edges, or edges next to selected verts while dragging */
       if (BM_elem_flag_test(eed, BM_ELEM_SELECT) ||
           (do_moving && (BM_elem_flag_test(eed->v1, BM_ELEM_SELECT) ||
-                         BM_elem_flag_test(eed->v2, BM_ELEM_SELECT)))) {
+                         BM_elem_flag_test(eed->v2, BM_ELEM_SELECT))))
+      {
         float v1_clip[3], v2_clip[3];
 
-        if (vert_coords) {
-          copy_v3_v3(v1, vert_coords[BM_elem_index_get(eed->v1)]);
-          copy_v3_v3(v2, vert_coords[BM_elem_index_get(eed->v2)]);
+        if (use_coords) {
+          copy_v3_v3(v1, vert_positions[BM_elem_index_get(eed->v1)]);
+          copy_v3_v3(v2, vert_positions[BM_elem_index_get(eed->v2)]);
         }
         else {
           copy_v3_v3(v1, eed->v1->co);
@@ -305,11 +344,11 @@ void DRW_text_edit_mesh_measure_stats(ARegion *region,
         if (clip_segment_v3_plane_n(v1, v2, clip_planes, 4, v1_clip, v2_clip)) {
 
           mid_v3_v3v3(vmid, v1_clip, v2_clip);
-          mul_m4_v3(ob->object_to_world, vmid);
+          mul_m4_v3(ob->object_to_world().ptr(), vmid);
 
           if (do_global) {
-            mul_mat3_m4_v3(ob->object_to_world, v1);
-            mul_mat3_m4_v3(ob->object_to_world, v2);
+            mul_mat3_m4_v3(ob->object_to_world().ptr(), v1);
+            mul_mat3_m4_v3(ob->object_to_world().ptr(), v2);
           }
 
           if (unit->system) {
@@ -322,7 +361,7 @@ void DRW_text_edit_mesh_measure_stats(ARegion *region,
                                                   false);
           }
           else {
-            numstr_len = BLI_snprintf_rlen(numstr, sizeof(numstr), conv_float, len_v3v3(v1, v2));
+            numstr_len = SNPRINTF_RLEN(numstr, conv_float, len_v3v3(v1, v2));
           }
 
           DRW_text_cache_add(dt, vmid, numstr, numstr_len, 0, edge_tex_sep, txt_flag, col);
@@ -337,11 +376,12 @@ void DRW_text_edit_mesh_measure_stats(ARegion *region,
 
     UI_GetThemeColor3ubv(TH_DRAWEXTRA_EDGEANG, col);
 
-    const float(*poly_normals)[3] = nullptr;
+    Span<float3> face_normals;
     if (use_coords) {
       BM_mesh_elem_index_ensure(em->bm, BM_VERT | BM_FACE);
-      BKE_editmesh_cache_ensure_poly_normals(em, me->runtime->edit_data);
-      poly_normals = me->runtime->edit_data->polyNos;
+      /* TODO: This is not const correct for wrapper meshes, but it should be okay because
+       * every evaluated object gets its own evaluated cage mesh (they are not shared). */
+      face_normals = BKE_mesh_wrapper_face_normals(const_cast<Mesh *>(mesh));
     }
 
     BM_ITER_MESH (eed, &iter, em->bm, BM_EDGES_OF_MESH) {
@@ -356,12 +396,13 @@ void DRW_text_edit_mesh_measure_stats(ARegion *region,
                            BM_elem_flag_test(l_a->next->next->v, BM_ELEM_SELECT) ||
                            BM_elem_flag_test(l_a->prev->v, BM_ELEM_SELECT) ||
                            BM_elem_flag_test(l_b->next->next->v, BM_ELEM_SELECT) ||
-                           BM_elem_flag_test(l_b->prev->v, BM_ELEM_SELECT)))) {
+                           BM_elem_flag_test(l_b->prev->v, BM_ELEM_SELECT))))
+        {
           float v1_clip[3], v2_clip[3];
 
-          if (vert_coords) {
-            copy_v3_v3(v1, vert_coords[BM_elem_index_get(eed->v1)]);
-            copy_v3_v3(v2, vert_coords[BM_elem_index_get(eed->v2)]);
+          if (use_coords) {
+            copy_v3_v3(v1, vert_positions[BM_elem_index_get(eed->v1)]);
+            copy_v3_v3(v2, vert_positions[BM_elem_index_get(eed->v2)]);
           }
           else {
             copy_v3_v3(v1, eed->v1->co);
@@ -373,11 +414,11 @@ void DRW_text_edit_mesh_measure_stats(ARegion *region,
             float angle;
 
             mid_v3_v3v3(vmid, v1_clip, v2_clip);
-            mul_m4_v3(ob->object_to_world, vmid);
+            mul_m4_v3(ob->object_to_world().ptr(), vmid);
 
             if (use_coords) {
-              copy_v3_v3(no_a, poly_normals[BM_elem_index_get(l_a->f)]);
-              copy_v3_v3(no_b, poly_normals[BM_elem_index_get(l_b->f)]);
+              copy_v3_v3(no_a, face_normals[BM_elem_index_get(l_a->f)]);
+              copy_v3_v3(no_b, face_normals[BM_elem_index_get(l_b->f)]);
             }
             else {
               copy_v3_v3(no_a, l_a->f->no);
@@ -385,19 +426,18 @@ void DRW_text_edit_mesh_measure_stats(ARegion *region,
             }
 
             if (do_global) {
-              mul_mat3_m4_v3(ob->world_to_object, no_a);
-              mul_mat3_m4_v3(ob->world_to_object, no_b);
+              mul_mat3_m4_v3(ob->world_to_object().ptr(), no_a);
+              mul_mat3_m4_v3(ob->world_to_object().ptr(), no_b);
               normalize_v3(no_a);
               normalize_v3(no_b);
             }
 
             angle = angle_normalized_v3v3(no_a, no_b);
 
-            numstr_len = BLI_snprintf_rlen(numstr,
-                                           sizeof(numstr),
-                                           "%.3f%s",
-                                           (is_rad) ? angle : RAD2DEGF(angle),
-                                           (is_rad) ? "r" : "°");
+            numstr_len = SNPRINTF_RLEN(numstr,
+                                       "%.3f%s",
+                                       (is_rad) ? angle : RAD2DEGF(angle),
+                                       (is_rad) ? "r" : BLI_STR_UTF8_DEGREE_SIGN);
 
             DRW_text_cache_add(dt, vmid, numstr, numstr_len, 0, -edge_tex_sep, txt_flag, col);
           }
@@ -416,25 +456,25 @@ void DRW_text_edit_mesh_measure_stats(ARegion *region,
     BMFace *f = nullptr;
     /* Alternative to using `poly_to_tri_count(i, BM_elem_index_get(f->l_first))`
      * without having to add an extra loop. */
-    int looptri_index = 0;
+    int tri_index = 0;
     BM_ITER_MESH_INDEX (f, &iter, em->bm, BM_FACES_OF_MESH, i) {
-      const int f_looptri_len = f->len - 2;
+      const int f_corner_tris_len = f->len - 2;
       if (BM_elem_flag_test(f, BM_ELEM_SELECT)) {
         n = 0;
         area = 0;
         zero_v3(vmid);
-        BMLoop *(*l)[3] = &em->looptris[looptri_index];
-        for (int j = 0; j < f_looptri_len; j++) {
+        const std::array<BMLoop *, 3> *ltri_array = &em->looptris[tri_index];
+        for (int j = 0; j < f_corner_tris_len; j++) {
 
           if (use_coords) {
-            copy_v3_v3(v1, vert_coords[BM_elem_index_get(l[j][0]->v)]);
-            copy_v3_v3(v2, vert_coords[BM_elem_index_get(l[j][1]->v)]);
-            copy_v3_v3(v3, vert_coords[BM_elem_index_get(l[j][2]->v)]);
+            copy_v3_v3(v1, vert_positions[BM_elem_index_get(ltri_array[j][0]->v)]);
+            copy_v3_v3(v2, vert_positions[BM_elem_index_get(ltri_array[j][1]->v)]);
+            copy_v3_v3(v3, vert_positions[BM_elem_index_get(ltri_array[j][2]->v)]);
           }
           else {
-            copy_v3_v3(v1, l[j][0]->v->co);
-            copy_v3_v3(v2, l[j][1]->v->co);
-            copy_v3_v3(v3, l[j][2]->v->co);
+            copy_v3_v3(v1, ltri_array[j][0]->v->co);
+            copy_v3_v3(v2, ltri_array[j][1]->v->co);
+            copy_v3_v3(v3, ltri_array[j][2]->v->co);
           }
 
           add_v3_v3(vmid, v1);
@@ -443,16 +483,16 @@ void DRW_text_edit_mesh_measure_stats(ARegion *region,
           n += 3;
 
           if (do_global) {
-            mul_mat3_m4_v3(ob->object_to_world, v1);
-            mul_mat3_m4_v3(ob->object_to_world, v2);
-            mul_mat3_m4_v3(ob->object_to_world, v3);
+            mul_mat3_m4_v3(ob->object_to_world().ptr(), v1);
+            mul_mat3_m4_v3(ob->object_to_world().ptr(), v2);
+            mul_mat3_m4_v3(ob->object_to_world().ptr(), v3);
           }
 
           area += area_tri_v3(v1, v2, v3);
         }
 
         mul_v3_fl(vmid, 1.0f / float(n));
-        mul_m4_v3(ob->object_to_world, vmid);
+        mul_m4_v3(ob->object_to_world().ptr(), vmid);
 
         if (unit->system) {
           numstr_len = BKE_unit_value_as_string(
@@ -465,12 +505,12 @@ void DRW_text_edit_mesh_measure_stats(ARegion *region,
               false);
         }
         else {
-          numstr_len = BLI_snprintf_rlen(numstr, sizeof(numstr), conv_float, area);
+          numstr_len = SNPRINTF_RLEN(numstr, conv_float, area);
         }
 
         DRW_text_cache_add(dt, vmid, numstr, numstr_len, 0, 0, txt_flag, col);
       }
-      looptri_index += f_looptri_len;
+      tri_index += f_corner_tris_len;
     }
   }
 
@@ -495,13 +535,14 @@ void DRW_text_edit_mesh_measure_stats(ARegion *region,
         BM_ITER_ELEM (loop, &liter, efa, BM_LOOPS_OF_FACE) {
           if (is_face_sel || (do_moving && (BM_elem_flag_test(loop->v, BM_ELEM_SELECT) ||
                                             BM_elem_flag_test(loop->prev->v, BM_ELEM_SELECT) ||
-                                            BM_elem_flag_test(loop->next->v, BM_ELEM_SELECT)))) {
+                                            BM_elem_flag_test(loop->next->v, BM_ELEM_SELECT))))
+          {
             float v2_local[3];
 
             /* lazy init center calc */
             if (is_first) {
               if (use_coords) {
-                BM_face_calc_center_bounds_vcos(em->bm, efa, vmid, vert_coords);
+                BM_face_calc_center_bounds_vcos(em->bm, efa, vmid, vert_positions);
               }
               else {
                 BM_face_calc_center_bounds(efa, vmid);
@@ -509,9 +550,9 @@ void DRW_text_edit_mesh_measure_stats(ARegion *region,
               is_first = false;
             }
             if (use_coords) {
-              copy_v3_v3(v1, vert_coords[BM_elem_index_get(loop->prev->v)]);
-              copy_v3_v3(v2, vert_coords[BM_elem_index_get(loop->v)]);
-              copy_v3_v3(v3, vert_coords[BM_elem_index_get(loop->next->v)]);
+              copy_v3_v3(v1, vert_positions[BM_elem_index_get(loop->prev->v)]);
+              copy_v3_v3(v2, vert_positions[BM_elem_index_get(loop->v)]);
+              copy_v3_v3(v3, vert_positions[BM_elem_index_get(loop->next->v)]);
             }
             else {
               copy_v3_v3(v1, loop->prev->v->co);
@@ -522,20 +563,19 @@ void DRW_text_edit_mesh_measure_stats(ARegion *region,
             copy_v3_v3(v2_local, v2);
 
             if (do_global) {
-              mul_mat3_m4_v3(ob->object_to_world, v1);
-              mul_mat3_m4_v3(ob->object_to_world, v2);
-              mul_mat3_m4_v3(ob->object_to_world, v3);
+              mul_mat3_m4_v3(ob->object_to_world().ptr(), v1);
+              mul_mat3_m4_v3(ob->object_to_world().ptr(), v2);
+              mul_mat3_m4_v3(ob->object_to_world().ptr(), v3);
             }
 
             float angle = angle_v3v3v3(v1, v2, v3);
 
-            numstr_len = BLI_snprintf_rlen(numstr,
-                                           sizeof(numstr),
-                                           "%.3f%s",
-                                           (is_rad) ? angle : RAD2DEGF(angle),
-                                           (is_rad) ? "r" : "°");
+            numstr_len = SNPRINTF_RLEN(numstr,
+                                       "%.3f%s",
+                                       (is_rad) ? angle : RAD2DEGF(angle),
+                                       (is_rad) ? "r" : BLI_STR_UTF8_DEGREE_SIGN);
             interp_v3_v3v3(fvec, vmid, v2_local, 0.8f);
-            mul_m4_v3(ob->object_to_world, fvec);
+            mul_m4_v3(ob->object_to_world().ptr(), fvec);
             DRW_text_cache_add(dt, fvec, numstr, numstr_len, 0, 0, txt_flag, col);
           }
         }
@@ -560,15 +600,15 @@ void DRW_text_edit_mesh_measure_stats(ARegion *region,
       BM_ITER_MESH_INDEX (v, &iter, em->bm, BM_VERTS_OF_MESH, i) {
         if (BM_elem_flag_test(v, BM_ELEM_SELECT)) {
           if (use_coords) {
-            copy_v3_v3(v1, vert_coords[BM_elem_index_get(v)]);
+            copy_v3_v3(v1, vert_positions[BM_elem_index_get(v)]);
           }
           else {
             copy_v3_v3(v1, v->co);
           }
 
-          mul_m4_v3(ob->object_to_world, v1);
+          mul_m4_v3(ob->object_to_world().ptr(), v1);
 
-          numstr_len = BLI_snprintf_rlen(numstr, sizeof(numstr), "%d", i);
+          numstr_len = SNPRINTF_RLEN(numstr, "%d", i);
           DRW_text_cache_add(dt, v1, numstr, numstr_len, 0, 0, txt_flag, col);
         }
       }
@@ -585,8 +625,8 @@ void DRW_text_edit_mesh_measure_stats(ARegion *region,
           float v1_clip[3], v2_clip[3];
 
           if (use_coords) {
-            copy_v3_v3(v1, vert_coords[BM_elem_index_get(eed->v1)]);
-            copy_v3_v3(v2, vert_coords[BM_elem_index_get(eed->v2)]);
+            copy_v3_v3(v1, vert_positions[BM_elem_index_get(eed->v1)]);
+            copy_v3_v3(v2, vert_positions[BM_elem_index_get(eed->v2)]);
           }
           else {
             copy_v3_v3(v1, eed->v1->co);
@@ -595,9 +635,9 @@ void DRW_text_edit_mesh_measure_stats(ARegion *region,
 
           if (clip_segment_v3_plane_n(v1, v2, clip_planes, 4, v1_clip, v2_clip)) {
             mid_v3_v3v3(vmid, v1_clip, v2_clip);
-            mul_m4_v3(ob->object_to_world, vmid);
+            mul_m4_v3(ob->object_to_world().ptr(), vmid);
 
-            numstr_len = BLI_snprintf_rlen(numstr, sizeof(numstr), "%d", i);
+            numstr_len = SNPRINTF_RLEN(numstr, "%d", i);
             DRW_text_cache_add(
                 dt,
                 vmid,
@@ -623,15 +663,15 @@ void DRW_text_edit_mesh_measure_stats(ARegion *region,
         if (BM_elem_flag_test(f, BM_ELEM_SELECT)) {
 
           if (use_coords) {
-            BM_face_calc_center_median_vcos(em->bm, f, v1, vert_coords);
+            BM_face_calc_center_median_vcos(em->bm, f, v1, vert_positions);
           }
           else {
             BM_face_calc_center_median(f, v1);
           }
 
-          mul_m4_v3(ob->object_to_world, v1);
+          mul_m4_v3(ob->object_to_world().ptr(), v1);
 
-          numstr_len = BLI_snprintf_rlen(numstr, sizeof(numstr), "%d", i);
+          numstr_len = SNPRINTF_RLEN(numstr, "%d", i);
           DRW_text_cache_add(dt, v1, numstr, numstr_len, 0, 0, txt_flag, col);
         }
       }

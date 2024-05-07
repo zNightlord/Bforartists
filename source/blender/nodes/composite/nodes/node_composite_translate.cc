@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2006 Blender Foundation. All rights reserved. */
+/* SPDX-FileCopyrightText: 2006 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup cmpnodes
@@ -7,9 +8,10 @@
 
 #include "BLI_math_matrix.hh"
 
-#include "UI_interface.h"
-#include "UI_resources.h"
+#include "UI_interface.hh"
+#include "UI_resources.hh"
 
+#include "COM_algorithm_transform.hh"
 #include "COM_node_operation.hh"
 
 #include "node_composite_util.hh"
@@ -22,20 +24,20 @@ NODE_STORAGE_FUNCS(NodeTranslateData)
 
 static void cmp_node_translate_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Color>(N_("Image"))
+  b.add_input<decl::Color>("Image")
       .default_value({1.0f, 1.0f, 1.0f, 1.0f})
       .compositor_domain_priority(0);
-  b.add_input<decl::Float>(N_("X"))
+  b.add_input<decl::Float>("X")
       .default_value(0.0f)
       .min(-10000.0f)
       .max(10000.0f)
       .compositor_expects_single_value();
-  b.add_input<decl::Float>(N_("Y"))
+  b.add_input<decl::Float>("Y")
       .default_value(0.0f)
       .min(-10000.0f)
       .max(10000.0f)
       .compositor_expects_single_value();
-  b.add_output<decl::Color>(N_("Image"));
+  b.add_output<decl::Color>("Image");
 }
 
 static void node_composit_init_translate(bNodeTree * /*ntree*/, bNode *node)
@@ -46,6 +48,7 @@ static void node_composit_init_translate(bNodeTree * /*ntree*/, bNode *node)
 
 static void node_composit_buts_translate(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
 {
+  uiItemR(layout, ptr, "interpolation", UI_ITEM_R_SPLIT_EMPTY_NAME, nullptr, ICON_NONE);
   uiItemR(layout, ptr, "use_relative", UI_ITEM_R_SPLIT_EMPTY_NAME, nullptr, ICON_NONE);
   uiItemR(layout, ptr, "wrap_axis", UI_ITEM_R_SPLIT_EMPTY_NAME, nullptr, ICON_NONE);
 }
@@ -72,9 +75,27 @@ class TranslateOperation : public NodeOperation {
     const float2 translation = float2(x, y);
     const float3x3 transformation = math::from_location<float3x3>(translation);
 
-    result.transform(transformation);
-    result.get_realization_options().repeat_x = get_repeat_x();
-    result.get_realization_options().repeat_y = get_repeat_y();
+    RealizationOptions realization_options = input.get_realization_options();
+    realization_options.wrap_x = get_wrap_x();
+    realization_options.wrap_y = get_wrap_y();
+    realization_options.interpolation = get_interpolation();
+
+    transform(context(), input, result, transformation, realization_options);
+  }
+
+  Interpolation get_interpolation()
+  {
+    switch (node_storage(bnode()).interpolation) {
+      case CMP_NODE_INTERPOLATION_NEAREST:
+        return Interpolation::Nearest;
+      case CMP_NODE_INTERPOLATION_BILINEAR:
+        return Interpolation::Bilinear;
+      case CMP_NODE_INTERPOLATION_BICUBIC:
+        return Interpolation::Bicubic;
+    }
+
+    BLI_assert_unreachable();
+    return Interpolation::Nearest;
   }
 
   bool get_use_relative()
@@ -82,12 +103,12 @@ class TranslateOperation : public NodeOperation {
     return node_storage(bnode()).relative;
   }
 
-  bool get_repeat_x()
+  bool get_wrap_x()
   {
     return ELEM(node_storage(bnode()).wrap_axis, CMP_NODE_WRAP_X, CMP_NODE_WRAP_XY);
   }
 
-  bool get_repeat_y()
+  bool get_wrap_y()
   {
     return ELEM(node_storage(bnode()).wrap_axis, CMP_NODE_WRAP_Y, CMP_NODE_WRAP_XY);
   }

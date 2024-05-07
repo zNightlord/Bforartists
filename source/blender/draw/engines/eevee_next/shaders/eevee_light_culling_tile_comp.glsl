@@ -1,3 +1,6 @@
+/* SPDX-FileCopyrightText: 2022-2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /**
  * 2D Culling pass for lights.
@@ -5,7 +8,7 @@
  * Dispatch one thread per word.
  */
 
-#pragma BLENDER_REQUIRE(common_view_lib.glsl)
+#pragma BLENDER_REQUIRE(draw_view_lib.glsl)
 #pragma BLENDER_REQUIRE(common_intersect_lib.glsl)
 #pragma BLENDER_REQUIRE(eevee_light_iter_lib.glsl)
 
@@ -18,7 +21,7 @@ struct CullingTile {
   vec4 bounds;
 };
 
-/* Corners are expected to be in viewspace so that the cone is starting from the origin.
+/* Corners are expected to be in view-space so that the cone is starting from the origin.
  * Corner order does not matter. */
 vec4 tile_bound_cone(vec3 v00, vec3 v01, vec3 v10, vec3 v11)
 {
@@ -34,7 +37,7 @@ vec4 tile_bound_cone(vec3 v00, vec3 v01, vec3 v10, vec3 v11)
   return vec4(center, angle_cosine);
 }
 
-/* Corners are expected to be in viewspace. Returns Z-aligned bounding cylinder.
+/* Corners are expected to be in view-space. Returns Z-aligned bounding cylinder.
  * Corner order does not matter. */
 vec4 tile_bound_cylinder(vec3 v00, vec3 v01, vec3 v10, vec3 v11)
 {
@@ -81,7 +84,7 @@ CullingTile tile_culling_get(uvec2 tile_co)
   tile.bounds = (is_persp) ? tile_bound_cone(corners[0], corners[4], corners[7], corners[3]) :
                              tile_bound_cylinder(corners[0], corners[4], corners[7], corners[3]);
 
-  tile.frustum = isect_data_setup(shape_frustum(corners));
+  tile.frustum = isect_frustum_setup(shape_frustum(corners));
   return tile;
 }
 
@@ -145,36 +148,41 @@ void main()
     LightData light = light_buf[l_idx];
 
     /* Culling in view space for precision and simplicity. */
-    vec3 vP = transform_point(ViewMatrix, light._position);
-    vec3 v_right = transform_direction(ViewMatrix, light._right);
-    vec3 v_up = transform_direction(ViewMatrix, light._up);
-    vec3 v_back = transform_direction(ViewMatrix, light._back);
-    float radius = light.influence_radius_max;
+    vec3 vP = drw_point_world_to_view(light_position_get(light));
+    vec3 v_right = drw_normal_world_to_view(light_x_axis(light));
+    vec3 v_up = drw_normal_world_to_view(light_y_axis(light));
+    vec3 v_back = drw_normal_world_to_view(light_z_axis(light));
+    float radius = light_local_data_get(light).influence_radius_max;
 
     Sphere sphere = shape_sphere(vP, radius);
     bool intersect_tile = intersect(tile, sphere);
 
     switch (light.type) {
-      case LIGHT_SPOT:
-        /* Only for < ~170° Cone due to plane extraction precision. */
-        if (light.spot_tan < 10.0) {
+      case LIGHT_SPOT_SPHERE:
+      case LIGHT_SPOT_DISK: {
+        LightSpotData spot = light_spot_data_get(light);
+        /* Only for < ~170 degree Cone due to plane extraction precision. */
+        if (spot.spot_tan < 10.0) {
           Pyramid pyramid = shape_pyramid_non_oblique(
               vP,
               vP - v_back * radius,
-              v_right * radius * light.spot_tan / light.spot_size_inv.x,
-              v_up * radius * light.spot_tan / light.spot_size_inv.y);
+              v_right * radius * spot.spot_tan / spot.spot_size_inv.x,
+              v_up * radius * spot.spot_tan / spot.spot_size_inv.y);
           intersect_tile = intersect_tile && intersect(tile, pyramid);
           break;
         }
-        /* Fallthrough to the hemispheric case. */
+        /* Fall-through to the hemispheric case. */
+      }
       case LIGHT_RECT:
-      case LIGHT_ELLIPSE:
+      case LIGHT_ELLIPSE: {
         vec3 v000 = vP - v_right * radius - v_up * radius;
         vec3 v100 = v000 + v_right * (radius * 2.0);
         vec3 v010 = v000 + v_up * (radius * 2.0);
         vec3 v001 = v000 - v_back * radius;
         Box bbox = shape_box(v000, v100, v010, v001);
         intersect_tile = intersect_tile && intersect(tile, bbox);
+        break;
+      }
       default:
         break;
     }

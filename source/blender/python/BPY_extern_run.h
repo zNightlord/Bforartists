@@ -1,4 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* SPDX-FileCopyrightText: 2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup python
@@ -32,7 +34,7 @@ struct ReportList;
 struct Text;
 struct bContext;
 
-/* bpy_interface_run.c */
+/* `bpy_interface_run.cc` */
 
 /* -------------------------------------------------------------------- */
 /** \name Run File/Text as a Script
@@ -88,10 +90,16 @@ bool BPY_run_text(struct bContext *C, struct Text *text, struct ReportList *repo
 
 /**
  * Run an entire script, matches: `exec(compile(..., "exec"))`
+ *
+ * \param C: Optional context (may be null),
+ *  used for `bpy.context` and reporting errors to `CTX_wm_reports(C)`.
  */
 bool BPY_run_string_exec(struct bContext *C, const char *imports[], const char *expr);
 /**
  * Run an expression, matches: `exec(compile(..., "eval"))`.
+ *
+ * \param C: Optional context (may be null),
+ *  used for `bpy.context` and reporting errors to `CTX_wm_reports(C)`.
  */
 bool BPY_run_string_eval(struct bContext *C, const char *imports[], const char *expr);
 
@@ -161,19 +169,44 @@ bool BPY_run_string_as_intptr(struct bContext *C,
  * \param r_value: The resulting value.
  * \return Success.
  */
-bool BPY_run_string_as_string_and_size(struct bContext *C,
-                                       const char *imports[],
-                                       const char *expr,
-                                       struct BPy_RunErrInfo *err_info,
-                                       char **r_value,
-                                       size_t *r_value_size) ATTR_NONNULL(1, 3, 5, 6);
+bool BPY_run_string_as_string_and_len(struct bContext *C,
+                                      const char *imports[],
+                                      const char *expr,
+                                      struct BPy_RunErrInfo *err_info,
+                                      char **r_value,
+                                      size_t *r_value_len) ATTR_NONNULL(1, 3, 5, 6);
 
-/** See #BPY_run_string_as_string_and_size */
+/** See #BPY_run_string_as_string_and_len */
 bool BPY_run_string_as_string(struct bContext *C,
                               const char *imports[],
                               const char *expr,
                               struct BPy_RunErrInfo *err_info,
                               char **r_value) ATTR_NONNULL(1, 3, 5);
+
+/**
+ * Evaluate `expr` as a string or None.
+ * Where a success return value with `*r_value == nullptr` indicates a value of None.
+ *
+ * \param C: See \ref common_args.
+ * \param imports: See \ref common_args.
+ * \param expr: The expression to evaluate.
+ * \param err_info: See \ref common_args.
+ * \param r_value: The resulting value.
+ * \return Success.
+ */
+bool BPY_run_string_as_string_and_len_or_none(struct bContext *C,
+                                              const char *imports[],
+                                              const char *expr,
+                                              struct BPy_RunErrInfo *err_info,
+                                              char **r_value,
+                                              size_t *r_value_len) ATTR_NONNULL(1, 3, 5, 6);
+
+/** See #BPY_run_string_as_string_and_len */
+bool BPY_run_string_as_string_or_none(struct bContext *C,
+                                      const char *imports[],
+                                      const char *expr,
+                                      struct BPy_RunErrInfo *err_info,
+                                      char **r_value) ATTR_NONNULL(1, 3, 5);
 
 /** \} */
 

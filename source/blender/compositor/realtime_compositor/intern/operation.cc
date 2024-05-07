@@ -1,4 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* SPDX-FileCopyrightText: 2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include <limits>
 #include <memory>
@@ -16,14 +18,11 @@
 #include "COM_reduce_to_single_value_operation.hh"
 #include "COM_result.hh"
 #include "COM_simple_operation.hh"
-#include "COM_static_shader_manager.hh"
 #include "COM_texture_pool.hh"
 
 namespace blender::realtime_compositor {
 
-Operation::Operation(Context &context) : context_(context)
-{
-}
+Operation::Operation(Context &context) : context_(context) {}
 
 Operation::~Operation() = default;
 
@@ -35,7 +34,13 @@ void Operation::evaluate()
 
   execute();
 
+  compute_preview();
+
   release_inputs();
+
+  release_unneeded_results();
+
+  context().evaluate_operation_post();
 }
 
 Result &Operation::get_result(StringRef identifier)
@@ -66,8 +71,8 @@ Domain Operation::compute_domain()
       continue;
     }
 
-    /* An input that skips realization can't be a domain input. */
-    if (descriptor.skip_realization) {
+    /* An input that skips operation domain realization can't be a domain input. */
+    if (!descriptor.realization_options.realize_on_operation_domain) {
       continue;
     }
 
@@ -134,6 +139,8 @@ void Operation::add_and_evaluate_input_processor(StringRef identifier, SimpleOpe
   processor->evaluate();
 }
 
+void Operation::compute_preview(){};
+
 Result &Operation::get_input(StringRef identifier) const
 {
   return *results_mapped_to_inputs_.lookup(identifier);
@@ -159,7 +166,7 @@ InputDescriptor &Operation::get_input_descriptor(StringRef identifier)
   return input_descriptors_.lookup(identifier);
 }
 
-Context &Operation::context()
+Context &Operation::context() const
 {
   return context_;
 }
@@ -167,11 +174,6 @@ Context &Operation::context()
 TexturePool &Operation::texture_pool() const
 {
   return context_.texture_pool();
-}
-
-StaticShaderManager &Operation::shader_manager() const
-{
-  return context_.shader_manager();
 }
 
 void Operation::evaluate_input_processors()
@@ -200,6 +202,15 @@ void Operation::release_inputs()
 {
   for (Result *result : results_mapped_to_inputs_.values()) {
     result->release();
+  }
+}
+
+void Operation::release_unneeded_results()
+{
+  for (Result &result : results_.values()) {
+    if (!result.should_compute() && result.is_allocated()) {
+      result.release();
+    }
   }
 }
 

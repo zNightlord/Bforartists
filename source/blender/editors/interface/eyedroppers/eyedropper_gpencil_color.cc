@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2009 Blender Foundation. All rights reserved. */
+/* SPDX-FileCopyrightText: 2009 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup edinterface
@@ -15,47 +16,43 @@
 #include "BLI_listbase.h"
 #include "BLI_string.h"
 
-#include "BLT_translation.h"
+#include "BLT_translation.hh"
 
-#include "DNA_gpencil_types.h"
+#include "DNA_gpencil_legacy_types.h"
 #include "DNA_material_types.h"
 #include "DNA_space_types.h"
 
-#include "BKE_context.h"
-#include "BKE_gpencil.h"
-#include "BKE_lib_id.h"
-#include "BKE_main.h"
+#include "BKE_context.hh"
+#include "BKE_gpencil_legacy.h"
+#include "BKE_lib_id.hh"
 #include "BKE_material.h"
-#include "BKE_paint.h"
-#include "BKE_report.h"
+#include "BKE_paint.hh"
 
-#include "UI_interface.h"
+#include "UI_interface.hh"
 
-#include "IMB_colormanagement.h"
+#include "IMB_colormanagement.hh"
 
-#include "WM_api.h"
-#include "WM_types.h"
+#include "WM_api.hh"
+#include "WM_types.hh"
 
-#include "RNA_access.h"
-#include "RNA_define.h"
+#include "RNA_access.hh"
+#include "RNA_define.hh"
 
-#include "ED_gpencil.h"
-#include "ED_screen.h"
-#include "ED_undo.h"
+#include "ED_screen.hh"
+#include "ED_undo.hh"
 
-#include "DEG_depsgraph.h"
-#include "DEG_depsgraph_build.h"
+#include "DEG_depsgraph_build.hh"
 
 #include "eyedropper_intern.hh"
 #include "interface_intern.hh"
 
-typedef enum eGP_EyeMode {
+enum eGP_EyeMode {
   GP_EYE_MATERIAL = 0,
   GP_EYE_PALETTE = 1,
-} eGP_EyeMode;
+};
 
 struct EyedropperGPencil {
-  struct ColorManagedDisplay *display;
+  ColorManagedDisplay *display;
   /** color under cursor RGB */
   float color[3];
   /** Mode */
@@ -66,8 +63,7 @@ struct EyedropperGPencil {
 static void eyedropper_gpencil_status_indicators(bContext *C)
 {
   char msg_str[UI_MAX_DRAW_STR];
-  BLI_strncpy(
-      msg_str, TIP_("LMB: Stroke - Shift: Fill - Shift+Ctrl: Stroke + Fill"), UI_MAX_DRAW_STR);
+  STRNCPY(msg_str, IFACE_("LMB: Stroke - Shift: Fill - Shift+Ctrl: Stroke + Fill"));
 
   ED_workspace_status_text(C, msg_str);
 }

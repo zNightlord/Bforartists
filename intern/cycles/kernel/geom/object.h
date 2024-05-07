@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: Apache-2.0
- * Copyright 2011-2022 Blender Foundation */
+/* SPDX-FileCopyrightText: 2011-2022 Blender Foundation
+ *
+ * SPDX-License-Identifier: Apache-2.0 */
 
 /* Object Primitive
  *
@@ -74,12 +75,14 @@ ccl_device_inline Transform object_fetch_transform_motion(KernelGlobals kg, int 
 
   return tfm;
 }
+#endif /* __OBJECT_MOTION__ */
 
 ccl_device_inline Transform object_fetch_transform_motion_test(KernelGlobals kg,
                                                                int object,
                                                                float time,
                                                                ccl_private Transform *itfm)
 {
+#ifdef __OBJECT_MOTION__
   int object_flag = kernel_data_fetch(object_flag, object);
   if (object_flag & SD_OBJECT_MOTION) {
     /* if we do motion blur */
@@ -90,7 +93,9 @@ ccl_device_inline Transform object_fetch_transform_motion_test(KernelGlobals kg,
 
     return tfm;
   }
-  else {
+  else
+#endif /* __OBJECT_MOTION__ */
+  {
     Transform tfm = object_fetch_transform(kg, object, OBJECT_TRANSFORM);
     if (itfm)
       *itfm = object_fetch_transform(kg, object, OBJECT_INVERSE_TRANSFORM);
@@ -98,7 +103,6 @@ ccl_device_inline Transform object_fetch_transform_motion_test(KernelGlobals kg,
     return tfm;
   }
 }
-#endif
 
 /* Get transform matrix for shading point. */
 
@@ -197,8 +201,14 @@ ccl_device_inline void object_normal_transform(KernelGlobals kg,
   }
 #endif
 
-  Transform tfm = object_fetch_transform(kg, sd->object, OBJECT_INVERSE_TRANSFORM);
-  *N = normalize(transform_direction_transposed(&tfm, *N));
+  if (sd->object != OBJECT_NONE) {
+    Transform tfm = object_fetch_transform(kg, sd->object, OBJECT_INVERSE_TRANSFORM);
+    *N = normalize(transform_direction_transposed(&tfm, *N));
+  }
+  else if (sd->type == PRIMITIVE_LAMP) {
+    Transform tfm = lamp_fetch_transform(kg, sd->lamp, true);
+    *N = normalize(transform_direction_transposed(&tfm, *N));
+  }
 }
 
 ccl_device_inline bool object_negative_scale_applied(const int object_flag)
@@ -288,7 +298,7 @@ ccl_device_inline float object_pass_id(KernelGlobals kg, int object)
   return kernel_data_fetch(objects, object).pass_id;
 }
 
-/* Lightgroup of lamp */
+/* Light-group of lamp. */
 
 ccl_device_inline int lamp_lightgroup(KernelGlobals kg, int lamp)
 {
@@ -298,7 +308,7 @@ ccl_device_inline int lamp_lightgroup(KernelGlobals kg, int lamp)
   return kernel_data_fetch(lights, lamp).lightgroup;
 }
 
-/* Lightgroup of object */
+/* Light-group of object. */
 
 ccl_device_inline int object_lightgroup(KernelGlobals kg, int object)
 {
@@ -359,24 +369,6 @@ ccl_device_inline float3 object_dupli_uv(KernelGlobals kg, int object)
 
   ccl_global const KernelObject *kobject = &kernel_data_fetch(objects, object);
   return make_float3(kobject->dupli_uv[0], kobject->dupli_uv[1], 0.0f);
-}
-
-/* Information about mesh for motion blurred triangles and curves */
-
-ccl_device_inline void object_motion_info(KernelGlobals kg,
-                                          int object,
-                                          ccl_private int *numsteps,
-                                          ccl_private int *numverts,
-                                          ccl_private int *numkeys)
-{
-  if (numkeys) {
-    *numkeys = kernel_data_fetch(objects, object).numkeys;
-  }
-
-  if (numsteps)
-    *numsteps = kernel_data_fetch(objects, object).numsteps;
-  if (numverts)
-    *numverts = kernel_data_fetch(objects, object).numverts;
 }
 
 /* Offset to an objects patch map */

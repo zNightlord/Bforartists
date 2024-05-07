@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2022 Blender Foundation. */
+/* SPDX-FileCopyrightText: 2022 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 #include "testing/testing.h"
 
 #include "BLI_utildefines.h"
@@ -11,32 +12,34 @@
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 
-#include "RNA_define.h"
+#include "RNA_define.hh"
 
-#include "BKE_appdir.h"
-#include "BKE_context.h"
-#include "BKE_global.h"
-#include "BKE_idtype.h"
-#include "BKE_lib_id.h"
-#include "BKE_lib_remap.h"
-#include "BKE_main.h"
-#include "BKE_mesh.h"
-#include "BKE_node.h"
-#include "BKE_object.h"
-#include "BKE_scene.h"
+#include "BKE_appdir.hh"
+#include "BKE_context.hh"
+#include "BKE_global.hh"
+#include "BKE_idtype.hh"
+#include "BKE_lib_id.hh"
+#include "BKE_lib_remap.hh"
+#include "BKE_main.hh"
+#include "BKE_mesh.hh"
+#include "BKE_node.hh"
+#include "BKE_object.hh"
+#include "BKE_scene.hh"
 
-#include "IMB_imbuf.h"
+#include "IMB_imbuf.hh"
 
-#include "ED_node.h"
+#include "ED_node.hh"
 
 #include "MEM_guardedalloc.h"
+
+using namespace blender::bke::id;
 
 namespace blender::bke::tests {
 
 class TestData {
  public:
   Main *bmain = nullptr;
-  struct bContext *C = nullptr;
+  bContext *C = nullptr;
 
   virtual void setup()
   {
@@ -297,7 +300,7 @@ TEST(lib_remap, never_null_usage_flag_not_requested_on_delete)
   EXPECT_EQ(context.test_data.object->id.tag & LIB_TAG_DOIT, 0);
 }
 
-TEST(lib_remap, never_null_usage_flag_requested_on_delete)
+TEST(lib_remap, never_null_usage_storage_requested_on_delete)
 {
   Context<MeshObjectTestData> context;
 
@@ -305,14 +308,19 @@ TEST(lib_remap, never_null_usage_flag_requested_on_delete)
   EXPECT_EQ(context.test_data.object->data, context.test_data.mesh);
   EXPECT_EQ(context.test_data.object->id.tag & LIB_TAG_DOIT, 0);
 
-  /* Never null usage is requested so the flag should be set. */
-  BKE_libblock_remap(context.test_data.bmain,
-                     context.test_data.mesh,
-                     nullptr,
-                     ID_REMAP_SKIP_NEVER_NULL_USAGE | ID_REMAP_FLAG_NEVER_NULL_USAGE);
+  /* Never null usage is requested so the owner ID (the Object) should be added to the set. */
+  IDRemapper remapper;
+  remapper.add(&context.test_data.mesh->id, nullptr);
+  BKE_libblock_remap_multiple_locked(
+      context.test_data.bmain,
+      remapper,
+      (ID_REMAP_SKIP_NEVER_NULL_USAGE | ID_REMAP_STORE_NEVER_NULL_USAGE));
+
+  /* Never null usages un-assignment is not enforced (no #ID_REMAP_FORCE_NEVER_NULL_USAGE),
+   * so the object-data should still use the original mesh. */
   EXPECT_EQ(context.test_data.object->data, context.test_data.mesh);
   EXPECT_NE(context.test_data.object->data, nullptr);
-  EXPECT_EQ(context.test_data.object->id.tag & LIB_TAG_DOIT, LIB_TAG_DOIT);
+  EXPECT_TRUE(remapper.never_null_users().contains(&context.test_data.object->id));
 }
 
 TEST(lib_remap, never_null_usage_flag_not_requested_on_remap)
@@ -331,7 +339,7 @@ TEST(lib_remap, never_null_usage_flag_not_requested_on_remap)
   EXPECT_EQ(context.test_data.object->id.tag & LIB_TAG_DOIT, 0);
 }
 
-TEST(lib_remap, never_null_usage_flag_requested_on_remap)
+TEST(lib_remap, never_null_usage_storage_requested_on_remap)
 {
   Context<MeshObjectTestData> context;
   Mesh *other_mesh = BKE_mesh_add(context.test_data.bmain, nullptr);
@@ -340,13 +348,16 @@ TEST(lib_remap, never_null_usage_flag_requested_on_remap)
   EXPECT_EQ(context.test_data.object->data, context.test_data.mesh);
   EXPECT_EQ(context.test_data.object->id.tag & LIB_TAG_DOIT, 0);
 
-  /* Never null usage is requested so the flag should be set. */
-  BKE_libblock_remap(context.test_data.bmain,
-                     context.test_data.mesh,
-                     other_mesh,
-                     ID_REMAP_SKIP_NEVER_NULL_USAGE | ID_REMAP_FLAG_NEVER_NULL_USAGE);
+  /* Never null usage is requested, but the obdata is remapped to another Mesh, not to `nullptr`,
+   * so the `never_null_users` set should remain empty. */
+  IDRemapper remapper;
+  remapper.add(&context.test_data.mesh->id, &other_mesh->id);
+  BKE_libblock_remap_multiple_locked(
+      context.test_data.bmain,
+      remapper,
+      (ID_REMAP_SKIP_NEVER_NULL_USAGE | ID_REMAP_STORE_NEVER_NULL_USAGE));
   EXPECT_EQ(context.test_data.object->data, other_mesh);
-  EXPECT_EQ(context.test_data.object->id.tag & LIB_TAG_DOIT, LIB_TAG_DOIT);
+  EXPECT_TRUE(remapper.never_null_users().is_empty());
 }
 
 /** \} */

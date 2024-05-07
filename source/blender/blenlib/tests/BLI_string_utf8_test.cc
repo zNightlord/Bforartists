@@ -1,4 +1,6 @@
-/* SPDX-License-Identifier: Apache-2.0 */
+/* SPDX-FileCopyrightText: 2023 Blender Authors
+ *
+ * SPDX-License-Identifier: Apache-2.0 */
 
 #include "testing/testing.h"
 
@@ -12,6 +14,46 @@
  * BLI_string_test.cc However, tests below are specific utf-8 conformance ones, and since they eat
  * quite their share of lines, they deserved their own file. */
 
+/**
+ * Multi byte defies, use when the exact character isn't important,
+ * and when proper handling of multi-byte sequences is needed.
+ *
+ * Define the first text character found in 1-4 bytes.
+ * We might want to generate other string tables too.
+ *
+ * \code{.py}
+ * unicode_max = 0x110000
+ * bytes_max = 4
+ * sample_chars = dict()
+ * for i in range(unicode_max):
+ *     ch = chr(i)
+ *     try:
+ *         byte = ch.encode('utf-8')
+ *         byte_len = len(byte)
+ *     except UnicodeEncodeError:
+ *         continue
+ *     if byte_len not in sample_chars:
+ *         # Not essential but useful if the character is printable.
+ *         if ch.isalpha():
+ *             sample_chars[byte_len] = byte
+ *         if byte_len == bytes_max:
+ *             break
+ *
+ * assert tuple(sorted(sample_chars.keys())) == tuple(range(1, bytes_max + 1))
+ * for i in range(1, bytes_max + 1):
+ *     byte = sample_chars[i]
+ *     print("#define STR_MB_ALPHA_%d \"" % i, end="")
+ *     for x in byte:
+ *         print("\\x%02x" % x, end="")
+ *     print("\"")
+ * \endcode
+ */
+
+#define STR_MB_ALPHA_1 "\x41"
+#define STR_MB_ALPHA_2 "\xc2\xaa"
+#define STR_MB_ALPHA_3 "\xe0\xa0\x80"
+#define STR_MB_ALPHA_4 "\xf0\x90\x80\x80"
+
 /* -------------------------------------------------------------------- */
 /** \name Test #BLI_str_utf8_invalid_strip
  * \{ */
@@ -19,7 +61,7 @@
 /* Breaking strings is confusing here, prefer over-long lines. */
 /* clang-format off */
 
-/* Each test is made of a 79 bytes (80 with NULL char) string to test, expected string result after
+/* Each test is made of a 79 bytes (80 with null char) string to test, expected string result after
  * stripping invalid utf8 bytes, and a single-byte string encoded with expected number of errors.
  *
  * Based on utf-8 decoder stress-test (https://www.cl.cam.ac.uk/~mgk25/ucs/examples/UTF-8-test.txt)
@@ -291,17 +333,45 @@ TEST(string, Utf8InvalidBytes)
 /** \} */
 
 /* -------------------------------------------------------------------- */
-/** \name Test #BLI_str_utf8_as_unicode_step
+/** \name Test #BLI_str_utf8_offset_from_index
+ * \{ */
+
+TEST(string, Utf8OffsetFromIndex_ClampedIndex)
+{
+  /* Ensure an index that exceeds the number of multi-byte characters in the
+   * string has the same behavior as an index which is clamped by the number of code-points. */
+  const char *test_strings[] = {
+      "",
+      "TEST",
+      STR_MB_ALPHA_1,
+      STR_MB_ALPHA_2,
+      STR_MB_ALPHA_3,
+      STR_MB_ALPHA_4,
+      STR_MB_ALPHA_1 STR_MB_ALPHA_2 STR_MB_ALPHA_3 STR_MB_ALPHA_4,
+      STR_MB_ALPHA_4 STR_MB_ALPHA_3 STR_MB_ALPHA_2 STR_MB_ALPHA_1,
+  };
+  for (int i = 0; i < ARRAY_SIZE(test_strings); i++) {
+    const char *str = test_strings[i];
+    const size_t str_len = strlen(str);
+    const int str_len_utf8 = BLI_strlen_utf8(str);
+
+    const int str_offset = BLI_str_utf8_offset_from_index(str, str_len, str_len_utf8);
+    EXPECT_EQ(BLI_str_utf8_offset_from_index(str, str_len, str_len_utf8 + 1), str_offset);
+    EXPECT_EQ(BLI_str_utf8_offset_from_index(str, str_len, str_len_utf8 + 10), str_offset);
+  }
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Test #BLI_str_utf8_as_unicode_step_safe
  * \{ */
 
 static size_t utf8_as_char32(const char *str, const char str_len, char32_t *r_result)
 {
   size_t i = 0, result_len = 0;
   while ((i < str_len) && (str[i] != '\0')) {
-    char32_t c = BLI_str_utf8_as_unicode_step(str, str_len, &i);
-    if (c != BLI_UTF8_ERR) {
-      r_result[result_len++] = c;
-    }
+    r_result[result_len++] = BLI_str_utf8_as_unicode_step_safe(str, str_len, &i);
   }
   return i;
 }
@@ -409,6 +479,8 @@ TEST(string, StrCursorStepNextUtf32Empty)
   EXPECT_FALSE(BLI_str_cursor_step_next_utf32(empty, len, &pos));
 }
 
+/** \} */
+
 /* -------------------------------------------------------------------- */
 /** \name Test #BLI_str_cursor_step_next_utf32_single
  * \{ */
@@ -422,6 +494,8 @@ TEST(string, StrCursorStepNextUtf32Single)
   EXPECT_TRUE(BLI_str_cursor_step_next_utf32(single, len, &pos) && pos == 1);
   EXPECT_FALSE(BLI_str_cursor_step_next_utf32(single, len, &pos));
 }
+
+/** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name Test #BLI_str_cursor_step_next_utf32_simple
@@ -438,6 +512,8 @@ TEST(string, StrCursorStepNextUtf32Simple)
   EXPECT_TRUE(BLI_str_cursor_step_next_utf32(simple, len, &pos) && pos == 3);
   EXPECT_FALSE(BLI_str_cursor_step_next_utf32(simple, len, &pos));
 }
+
+/** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name Test #BLI_str_cursor_step_next_utf32_allcombining
@@ -456,6 +532,8 @@ TEST(string, StrCursorStepNextUtf32AllCombining)
   pos = 3;
   EXPECT_FALSE(BLI_str_cursor_step_next_utf32(allcombining, len, &pos));
 }
+
+/** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name Test #BLI_str_cursor_step_next_utf32_complex
@@ -479,6 +557,8 @@ TEST(string, StrCursorStepNextUtf32Complex)
   pos = 5;
   EXPECT_FALSE(BLI_str_cursor_step_next_utf32(complex, len, &pos));
 }
+
+/** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name Test #BLI_str_cursor_step_next_utf32_invalid
@@ -509,6 +589,8 @@ TEST(string, StrCursorStepNextUtf32Invalid)
   EXPECT_FALSE(BLI_str_cursor_step_next_utf32(invalid, len, &pos));
 }
 
+/** \} */
+
 /* -------------------------------------------------------------------- */
 /** \name Test #BLI_str_cursor_step_prev_utf32_empty
  * \{ */
@@ -520,6 +602,8 @@ TEST(string, StrCursorStepPrevUtf32Empty)
   int pos = 0;
   EXPECT_FALSE(BLI_str_cursor_step_prev_utf32(emtpy, len, &pos));
 }
+
+/** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name Test #BLI_str_cursor_step_prev_utf32_single
@@ -533,6 +617,8 @@ TEST(string, StrCursorStepPrevUtf32Single)
   EXPECT_TRUE(BLI_str_cursor_step_prev_utf32(single, len, &pos) && pos == 0);
   EXPECT_FALSE(BLI_str_cursor_step_prev_utf32(single, len, &pos));
 }
+
+/** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name Test #BLI_str_cursor_step_prev_utf32_simple
@@ -548,6 +634,8 @@ TEST(string, StrCursorStepPrevUtf32Simple)
   EXPECT_TRUE(BLI_str_cursor_step_prev_utf32(simple, len, &pos) && pos == 0);
   EXPECT_FALSE(BLI_str_cursor_step_prev_utf32(simple, len, &pos));
 }
+
+/** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name Test #BLI_str_cursor_step_prev_utf32_allcombining
@@ -566,6 +654,8 @@ TEST(string, StrCursorStepPrevUtf32AllCombining)
   pos = 0;
   EXPECT_FALSE(BLI_str_cursor_step_prev_utf32(allcombining, len, &pos));
 }
+
+/** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name Test #BLI_str_cursor_step_prev_utf32_complex
@@ -589,6 +679,8 @@ TEST(string, StrCursorStepPrevUtf32Complex)
   pos = 0;
   EXPECT_FALSE(BLI_str_cursor_step_prev_utf32(complex, len, &pos));
 }
+
+/** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name Test #BLI_str_cursor_step_prev_utf32_invalid
@@ -619,6 +711,8 @@ TEST(string, StrCursorStepPrevUtf32Invalid)
   EXPECT_FALSE(BLI_str_cursor_step_prev_utf32(invalid, len, &pos));
 }
 
+/** \} */
+
 /* -------------------------------------------------------------------- */
 /** \name Test #BLI_str_cursor_step_next_utf8_empty
  * \{ */
@@ -632,6 +726,8 @@ TEST(string, StrCursorStepNextUtf8Empty)
   EXPECT_FALSE(BLI_str_cursor_step_next_utf8(empty, len, &pos));
 }
 
+/** \} */
+
 /* -------------------------------------------------------------------- */
 /** \name Test #BLI_str_cursor_step_next_utf8_single
  * \{ */
@@ -643,6 +739,8 @@ TEST(string, StrCursorStepNextUtf8Single)
   EXPECT_TRUE(BLI_str_cursor_step_next_utf8(single, len, &pos) && pos == 1);
   EXPECT_FALSE(BLI_str_cursor_step_next_utf8(single, len, &pos));
 }
+
+/** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name Test #BLI_str_cursor_step_next_utf8_simple
@@ -659,6 +757,8 @@ TEST(string, StrCursorStepNextUtf8Simple)
   EXPECT_TRUE(BLI_str_cursor_step_next_utf8(simple, len, &pos) && pos == 3);
   EXPECT_FALSE(BLI_str_cursor_step_next_utf8(simple, len, &pos));
 }
+
+/** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name Test #BLI_str_cursor_step_next_utf8_allcombining
@@ -683,6 +783,8 @@ TEST(string, StrCursorStepNextUtf8AllCombining)
   pos = 6;
   EXPECT_FALSE(BLI_str_cursor_step_next_utf8(allcombining, len, &pos));
 }
+
+/** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name Test #BLI_str_cursor_step_next_utf8_complex
@@ -717,6 +819,8 @@ TEST(string, StrCursorStepNextUtf8AllComplex)
   EXPECT_FALSE(BLI_str_cursor_step_next_utf8(complex, len, &pos));
 }
 
+/** \} */
+
 /* -------------------------------------------------------------------- */
 /** \name Test #BLI_str_cursor_step_next_utf8_invalid
  * \{ */
@@ -727,24 +831,26 @@ TEST(string, StrCursorStepNextUtf8Invalid)
   const char invalid[] = "\xC0\xCC\x80\x09\x0D\x0A\xCC\x80";
   const size_t len = 8;
   int pos = 0;
-  EXPECT_TRUE(BLI_str_cursor_step_next_utf8(invalid, len, &pos) && pos == 8);
+  EXPECT_EQ(BLI_str_cursor_step_next_utf8(invalid, len, &pos) ? pos : -1, 3);
   pos = 1;
-  EXPECT_TRUE(BLI_str_cursor_step_next_utf8(invalid, len, &pos) && pos == 8);
+  EXPECT_EQ(BLI_str_cursor_step_next_utf8(invalid, len, &pos) ? pos : -1, 3);
   pos = 2;
-  EXPECT_TRUE(BLI_str_cursor_step_next_utf8(invalid, len, &pos) && pos == 8);
+  EXPECT_EQ(BLI_str_cursor_step_next_utf8(invalid, len, &pos) ? pos : -1, 3);
   pos = 3;
-  EXPECT_TRUE(BLI_str_cursor_step_next_utf8(invalid, len, &pos) && pos == 8);
+  EXPECT_EQ(BLI_str_cursor_step_next_utf8(invalid, len, &pos) ? pos : -1, 4);
   pos = 4;
-  EXPECT_TRUE(BLI_str_cursor_step_next_utf8(invalid, len, &pos) && pos == 8);
+  EXPECT_EQ(BLI_str_cursor_step_next_utf8(invalid, len, &pos) ? pos : -1, 5);
   pos = 5;
-  EXPECT_TRUE(BLI_str_cursor_step_next_utf8(invalid, len, &pos) && pos == 8);
+  EXPECT_EQ(BLI_str_cursor_step_next_utf8(invalid, len, &pos) ? pos : -1, 8);
   pos = 6;
-  EXPECT_TRUE(BLI_str_cursor_step_next_utf8(invalid, len, &pos) && pos == 8);
+  EXPECT_EQ(BLI_str_cursor_step_next_utf8(invalid, len, &pos) ? pos : -1, 8);
   pos = 7;
-  EXPECT_TRUE(BLI_str_cursor_step_next_utf8(invalid, len, &pos) && pos == 8);
+  EXPECT_EQ(BLI_str_cursor_step_next_utf8(invalid, len, &pos) ? pos : -1, 8);
   pos = 8;
   EXPECT_FALSE(BLI_str_cursor_step_next_utf8(invalid, len, &pos));
 }
+
+/** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name Test #BLI_str_cursor_step_prev_utf8_empty
@@ -760,6 +866,8 @@ TEST(string, StrCursorStepPrevUtf8Empty)
   EXPECT_FALSE(BLI_str_cursor_step_prev_utf8(empty, len, &pos));
 }
 
+/** \} */
+
 /* -------------------------------------------------------------------- */
 /** \name Test #BLI_str_cursor_step_prev_utf8_single
  * \{ */
@@ -772,6 +880,8 @@ TEST(string, StrCursorStepPrevUtf8Single)
   EXPECT_TRUE(BLI_str_cursor_step_prev_utf8(single, len, &pos) && pos == 0);
   EXPECT_FALSE(BLI_str_cursor_step_prev_utf8(single, len, &pos));
 }
+
+/** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name Test #BLI_str_cursor_step_prev_utf8_single
@@ -787,6 +897,8 @@ TEST(string, StrCursorStepPrevUtf8Simple)
   EXPECT_TRUE(BLI_str_cursor_step_prev_utf8(simple, len, &pos) && pos == 0);
   EXPECT_FALSE(BLI_str_cursor_step_prev_utf8(simple, len, &pos));
 }
+
+/** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name Test #BLI_str_cursor_step_prev_utf8_allcombining
@@ -811,6 +923,8 @@ TEST(string, StrCursorStepPrevUtf8AllCombining)
   pos = 0;
   EXPECT_FALSE(BLI_str_cursor_step_prev_utf8(allcombining, len, &pos));
 }
+
+/** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name Test #BLI_str_cursor_step_prev_utf8_complex
@@ -844,6 +958,8 @@ TEST(string, StrCursorStepPrevUtf8Complex)
   pos = 0;
   EXPECT_FALSE(BLI_str_cursor_step_prev_utf8(complex, len, &pos));
 }
+
+/** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name Test #BLI_str_cursor_step_prev_utf8_invalid

@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: Apache-2.0
- * Copyright 2011-2022 Blender Foundation */
+/* SPDX-FileCopyrightText: 2011-2022 Blender Foundation
+ *
+ * SPDX-License-Identifier: Apache-2.0 */
 
 /* clang-format off */
 
@@ -12,7 +13,7 @@
 /* Bitness */
 
 #if defined(__ppc64__) || defined(__PPC64__) || defined(__x86_64__) || defined(__ia64__) || \
-    defined(_M_X64) || defined(__aarch64__)
+    defined(_M_X64) || defined(__aarch64__) || defined(_M_ARM64)
 #  define __KERNEL_64_BIT__
 #endif
 
@@ -60,8 +61,10 @@
 /* Address spaces for GPU. */
 #  define ccl_global
 #  define ccl_inline_constant inline constexpr
+#  define ccl_static_constexpr static constexpr
 #  define ccl_constant const
 #  define ccl_private
+#  define ccl_ray_data ccl_private
 
 #  define ccl_restrict __restrict
 #  define ccl_optional_struct_init

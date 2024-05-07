@@ -1,4 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* SPDX-FileCopyrightText: 2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #pragma once
 
@@ -26,9 +28,7 @@ template<typename LB, typename T> class ListBaseWrapperTemplate {
     BLI_assert(listbase);
   }
 
-  ListBaseWrapperTemplate(LB &listbase) : ListBaseWrapperTemplate(&listbase)
-  {
-  }
+  ListBaseWrapperTemplate(LB &listbase) : ListBaseWrapperTemplate(&listbase) {}
 
   class Iterator {
    private:
@@ -36,9 +36,7 @@ template<typename LB, typename T> class ListBaseWrapperTemplate {
     T *current_;
 
    public:
-    Iterator(LB *listbase, T *current) : listbase_(listbase), current_(current)
-    {
-    }
+    Iterator(LB *listbase, T *current) : listbase_(listbase), current_(current) {}
 
     Iterator &operator++()
     {

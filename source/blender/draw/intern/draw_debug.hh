@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2022 Blender Foundation. */
+/* SPDX-FileCopyrightText: 2022 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup draw
@@ -84,18 +85,18 @@ class DebugDraw {
    * Drawing functions that will draw wire-frames with the given color.
    */
   void draw_line(float3 v1, float3 v2, float4 color = {1, 0, 0, 1});
-  void draw_polygon(Span<float3> poly_verts, float4 color = {1, 0, 0, 1});
+  void draw_polygon(Span<float3> face_verts, float4 color = {1, 0, 0, 1});
   void draw_bbox(const BoundBox &bbox, const float4 color = {1, 0, 0, 1});
   void draw_sphere(const float3 center, float radius, const float4 color = {1, 0, 0, 1});
   void draw_point(const float3 center, float radius = 0.01f, const float4 color = {1, 0, 0, 1});
   /**
    * Draw a matrix transformation as 3 colored axes.
    */
-  void draw_matrix(const float4x4 m4);
+  void draw_matrix(const float4x4 &m4);
   /**
    * Draw a matrix as a 2 units length bounding box, centered on origin.
    */
-  void draw_matrix_as_bbox(float4x4 mat, const float4 color = {1, 0, 0, 1});
+  void draw_matrix_as_bbox(const float4x4 &mat, const float4 color = {1, 0, 0, 1});
 
   /**
    * Will draw all debug shapes and text cached up until now to the current view / frame-buffer.

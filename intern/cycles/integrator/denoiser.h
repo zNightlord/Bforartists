@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: Apache-2.0
- * Copyright 2011-2022 Blender Foundation */
+/* SPDX-FileCopyrightText: 2011-2022 Blender Foundation
+ *
+ * SPDX-License-Identifier: Apache-2.0 */
 
 #pragma once
 
@@ -38,6 +39,9 @@ class Denoiser {
 
   void set_params(const DenoiseParams &params);
   const DenoiseParams &get_params() const;
+
+  /* Recommended type for viewport denoising. */
+  static DenoiserType automatic_viewport_denoiser_type(const DeviceInfo &path_trace_device_info);
 
   /* Create devices and load kernels needed for denoising.
    * The progress is used to communicate state when kernels actually needs to be loaded.
@@ -94,6 +98,11 @@ class Denoiser {
       return false;
     }
     return is_cancelled_cb();
+  }
+
+  void set_error(const string &error)
+  {
+    path_trace_device_->set_error(error);
   }
 
  protected:

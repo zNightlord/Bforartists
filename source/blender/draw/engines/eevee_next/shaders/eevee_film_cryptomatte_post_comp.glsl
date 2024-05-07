@@ -1,4 +1,8 @@
-#pragma BLENDER_REQUIRE(common_math_lib.glsl)
+/* SPDX-FileCopyrightText: 2022-2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
+
+#pragma BLENDER_REQUIRE(gpu_shader_math_base_lib.glsl)
 
 #define CRYPTOMATTE_LEVELS_MAX 16
 
@@ -57,6 +61,8 @@ void cryptomatte_store_samples(ivec2 texel, int layer, vec2 samples[CRYPTOMATTE_
     pass_sample.zw = samples[p * 2 + 1];
     imageStore(cryptomatte_img, ivec3(texel, p + layer_id), pass_sample);
   }
+  /* Ensure stores are visible to later reads. */
+  imageFence(cryptomatte_img);
 }
 
 void main()

@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2020 Blender Foundation. */
+/* SPDX-FileCopyrightText: 2020 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup draw_engine
@@ -37,7 +38,7 @@ struct IMAGE_Data {
  *
  * The drawing mode decides how to draw the image on the screen. Each way how to draw would have
  * its own subclass. For now there is only a single drawing mode. #DefaultDrawingMode.
- **/
+ */
 class AbstractDrawingMode {
  public:
   virtual ~AbstractDrawingMode() = default;
@@ -47,7 +48,7 @@ class AbstractDrawingMode {
   virtual void draw_finish(IMAGE_Data *vedata) const = 0;
 };
 
-/* image_shader.c */
+/* `image_shader.cc` */
 
 GPUShader *IMAGE_shader_image_get();
 GPUShader *IMAGE_shader_depth_get();

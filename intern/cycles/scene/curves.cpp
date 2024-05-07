@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: Apache-2.0
- * Copyright 2011-2022 Blender Foundation */
+/* SPDX-FileCopyrightText: 2011-2022 Blender Foundation
+ *
+ * SPDX-License-Identifier: Apache-2.0 */
 
 #include "scene/curves.h"
 #include "device/device.h"
@@ -34,7 +35,7 @@ void curvebounds(float *lower, float *upper, float3 *p, int dim)
   float ta = -1.0f;
   float tb = -1.0f;
 
-  if (discroot >= 0) {
+  if (discroot >= 0 && curve_coef[3] != 0.0f) {
     discroot = sqrtf(discroot);
     ta = (-curve_coef[2] - discroot) / (3 * curve_coef[3]);
     tb = (-curve_coef[2] + discroot) / (3 * curve_coef[3]);

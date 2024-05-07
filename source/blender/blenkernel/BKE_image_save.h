@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2001-2002 NaN Holding BV. All rights reserved. */
+/* SPDX-FileCopyrightText: 2001-2002 NaN Holding BV. All rights reserved.
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 #pragma once
 
 #include "DNA_scene_types.h"
@@ -73,12 +74,15 @@ bool BKE_image_render_write_exr(struct ReportList *reports,
 
 /**
  * \param filepath_basis: May be used as-is, or used as a basis for multi-view images.
+ * \param format: The image format to use for saving, if null, the scene format will be used.
  */
 bool BKE_image_render_write(struct ReportList *reports,
                             struct RenderResult *rr,
                             const struct Scene *scene,
                             const bool stamp,
-                            const char *filepath_basis);
+                            const char *filepath_basis,
+                            const struct ImageFormatData *format = nullptr,
+                            bool save_as_render = true);
 
 #ifdef __cplusplus
 }

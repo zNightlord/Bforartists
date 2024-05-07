@@ -1,4 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* SPDX-FileCopyrightText: 2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup pymathutils
@@ -18,7 +20,7 @@ typedef unsigned short ushort;
 
 /* matrix[row][col] == MATRIX_ITEM_INDEX(matrix, row, col) */
 
-#ifdef DEBUG
+#ifndef NDEBUG
 #  define MATRIX_ITEM_ASSERT(_mat, _row, _col) \
     (BLI_assert(_row < (_mat)->row_num && _col < (_mat)->col_num))
 #else

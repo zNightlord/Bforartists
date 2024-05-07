@@ -1,10 +1,12 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2011 Blender Foundation. */
+/* SPDX-FileCopyrightText: 2011 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #pragma once
 
 #include "BKE_image.h"
 #include "BLI_listbase.h"
+#include "BLI_sys_types.h"
 #include "BLI_utildefines.h"
 #include "COM_MultiThreadedOperation.h"
 #include "MEM_guardedalloc.h"
@@ -22,12 +24,7 @@ class BaseImageOperation : public MultiThreadedOperation {
   ImBuf *buffer_;
   Image *image_;
   ImageUser *image_user_;
-  /* TODO: Remove raw buffers when removing Tiled implementation. */
-  float *image_float_buffer_;
-  unsigned int *image_byte_buffer_;
-  float *image_depth_buffer_;
 
-  MemoryBuffer *depth_buffer_;
   int imageheight_;
   int imagewidth_;
   int framenumber_;
@@ -73,7 +70,6 @@ class ImageOperation : public BaseImageOperation {
    * Constructor
    */
   ImageOperation();
-  void execute_pixel_sampled(float output[4], float x, float y, PixelSampler sampler) override;
 
   void update_memory_buffer_partial(MemoryBuffer *output,
                                     const rcti &area,
@@ -85,23 +81,9 @@ class ImageAlphaOperation : public BaseImageOperation {
    * Constructor
    */
   ImageAlphaOperation();
-  void execute_pixel_sampled(float output[4], float x, float y, PixelSampler sampler) override;
 
   void update_memory_buffer_partial(MemoryBuffer *output,
                                     const rcti &area,
                                     Span<MemoryBuffer *> inputs) override;
 };
-class ImageDepthOperation : public BaseImageOperation {
- public:
-  /**
-   * Constructor
-   */
-  ImageDepthOperation();
-  void execute_pixel_sampled(float output[4], float x, float y, PixelSampler sampler) override;
-
-  void update_memory_buffer_partial(MemoryBuffer *output,
-                                    const rcti &area,
-                                    Span<MemoryBuffer *> inputs) override;
-};
-
 }  // namespace blender::compositor

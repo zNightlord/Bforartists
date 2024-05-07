@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2006 Blender Foundation. All rights reserved. */
+/* SPDX-FileCopyrightText: 2006 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup cmpnodes
@@ -7,6 +8,7 @@
 
 #include <array>
 
+#include "BLI_array.hh"
 #include "BLI_assert.h"
 #include "BLI_index_range.hh"
 #include "BLI_math_base.h"
@@ -15,16 +17,16 @@
 
 #include "DNA_scene_types.h"
 
-#include "RNA_access.h"
+#include "RNA_access.hh"
 
-#include "UI_interface.h"
-#include "UI_resources.h"
+#include "UI_interface.hh"
+#include "UI_resources.hh"
 
-#include "IMB_colormanagement.h"
+#include "IMB_colormanagement.hh"
 
-#include "GPU_shader.h"
-#include "GPU_state.h"
-#include "GPU_texture.h"
+#include "GPU_shader.hh"
+#include "GPU_state.hh"
+#include "GPU_texture.hh"
 
 #include "COM_algorithm_symmetric_separable_blur.hh"
 #include "COM_node_operation.hh"
@@ -33,6 +35,7 @@
 #include "node_composite_util.hh"
 
 #define MAX_GLARE_ITERATIONS 5
+#define MAX_GLARE_SIZE 9
 
 namespace blender::nodes::node_composite_glare_cc {
 
@@ -40,17 +43,17 @@ NODE_STORAGE_FUNCS(NodeGlare)
 
 static void cmp_node_glare_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Color>(N_("Image"))
+  b.add_input<decl::Color>("Image")
       .default_value({1.0f, 1.0f, 1.0f, 1.0f})
       .compositor_domain_priority(0);
-  b.add_output<decl::Color>(N_("Image"));
+  b.add_output<decl::Color>("Image");
 }
 
 static void node_composit_init_glare(bNodeTree * /*ntree*/, bNode *node)
 {
   NodeGlare *ndg = MEM_cnew<NodeGlare>(__func__);
   ndg->quality = 1;
-  ndg->type = 2;
+  ndg->type = CMP_NODE_GLARE_STREAKS;
   ndg->iter = 3;
   ndg->colmod = 0.25;
   ndg->mix = 0;
@@ -68,35 +71,38 @@ static void node_composit_buts_glare(uiLayout *layout, bContext * /*C*/, Pointer
   uiItemR(layout, ptr, "glare_type", UI_ITEM_R_SPLIT_EMPTY_NAME, "", ICON_NONE);
   uiItemR(layout, ptr, "quality", UI_ITEM_R_SPLIT_EMPTY_NAME, "", ICON_NONE);
 
-  if (RNA_enum_get(ptr, "glare_type") != 1) {
+  const int glare_type = RNA_enum_get(ptr, "glare_type");
+  if (ELEM(glare_type, CMP_NODE_GLARE_SIMPLE_STAR, CMP_NODE_GLARE_GHOST, CMP_NODE_GLARE_STREAKS)) {
     uiItemR(layout, ptr, "iterations", UI_ITEM_R_SPLIT_EMPTY_NAME, nullptr, ICON_NONE);
+  }
 
-    if (RNA_enum_get(ptr, "glare_type") != 0) {
-      uiItemR(layout,
-              ptr,
-              "color_modulation",
-              UI_ITEM_R_SPLIT_EMPTY_NAME | UI_ITEM_R_SLIDER,
-              nullptr,
-              ICON_NONE);
-    }
+  if (ELEM(glare_type, CMP_NODE_GLARE_GHOST, CMP_NODE_GLARE_STREAKS)) {
+    uiItemR(layout,
+            ptr,
+            "color_modulation",
+            UI_ITEM_R_SPLIT_EMPTY_NAME | UI_ITEM_R_SLIDER,
+            nullptr,
+            ICON_NONE);
   }
 
   uiItemR(layout, ptr, "mix", UI_ITEM_R_SPLIT_EMPTY_NAME, nullptr, ICON_NONE);
   uiItemR(layout, ptr, "threshold", UI_ITEM_R_SPLIT_EMPTY_NAME, nullptr, ICON_NONE);
 
-  if (RNA_enum_get(ptr, "glare_type") == 2) {
+  if (glare_type == CMP_NODE_GLARE_STREAKS) {
     uiItemR(layout, ptr, "streaks", UI_ITEM_R_SPLIT_EMPTY_NAME, nullptr, ICON_NONE);
     uiItemR(layout, ptr, "angle_offset", UI_ITEM_R_SPLIT_EMPTY_NAME, nullptr, ICON_NONE);
   }
-  if (RNA_enum_get(ptr, "glare_type") == 0 || RNA_enum_get(ptr, "glare_type") == 2) {
+
+  if (ELEM(glare_type, CMP_NODE_GLARE_SIMPLE_STAR, CMP_NODE_GLARE_STREAKS)) {
     uiItemR(
         layout, ptr, "fade", UI_ITEM_R_SPLIT_EMPTY_NAME | UI_ITEM_R_SLIDER, nullptr, ICON_NONE);
-
-    if (RNA_enum_get(ptr, "glare_type") == 0) {
-      uiItemR(layout, ptr, "use_rotate_45", UI_ITEM_R_SPLIT_EMPTY_NAME, nullptr, ICON_NONE);
-    }
   }
-  if (RNA_enum_get(ptr, "glare_type") == 1) {
+
+  if (glare_type == CMP_NODE_GLARE_SIMPLE_STAR) {
+    uiItemR(layout, ptr, "use_rotate_45", UI_ITEM_R_SPLIT_EMPTY_NAME, nullptr, ICON_NONE);
+  }
+
+  if (ELEM(glare_type, CMP_NODE_GLARE_FOG_GLOW, CMP_NODE_GLARE_BLOOM)) {
     uiItemR(layout, ptr, "size", UI_ITEM_R_SPLIT_EMPTY_NAME, nullptr, ICON_NONE);
   }
 }
@@ -131,11 +137,6 @@ class GlareOperation : public NodeOperation {
       return true;
     }
 
-    /* The fog glow mode is currently unsupported. */
-    if (node_storage(bnode()).type == CMP_NODE_GLARE_FOG_GLOW) {
-      return true;
-    }
-
     return false;
   }
 
@@ -150,9 +151,11 @@ class GlareOperation : public NodeOperation {
         return execute_streaks(highlights_result);
       case CMP_NODE_GLARE_GHOST:
         return execute_ghost(highlights_result);
+      case CMP_NODE_GLARE_BLOOM:
+        return execute_bloom(highlights_result);
       default:
         BLI_assert_unreachable();
-        return Result(ResultType::Color, texture_pool());
+        return context().create_temporary_result(ResultType::Color);
     }
   }
 
@@ -162,7 +165,7 @@ class GlareOperation : public NodeOperation {
 
   Result execute_highlights()
   {
-    GPUShader *shader = shader_manager().get("compositor_glare_highlights");
+    GPUShader *shader = context().get_shader("compositor_glare_highlights");
     GPU_shader_bind(shader);
 
     float luminance_coefficients[3];
@@ -171,11 +174,11 @@ class GlareOperation : public NodeOperation {
     GPU_shader_uniform_1f(shader, "threshold", node_storage(bnode()).threshold);
 
     const Result &input_image = get_input("Image");
-    input_image.bind_as_texture(shader, "input_tx");
     GPU_texture_filter_mode(input_image.texture(), true);
+    input_image.bind_as_texture(shader, "input_tx");
 
     const int2 glare_size = get_glare_size();
-    Result highlights_result = Result::Temporary(ResultType::Color, texture_pool());
+    Result highlights_result = context().create_temporary_result(ResultType::Color);
     highlights_result.allocate_texture(glare_size);
     highlights_result.bind_as_image(shader, "output_img");
 
@@ -210,7 +213,7 @@ class GlareOperation : public NodeOperation {
      * so just use it as the pass result. */
     Result &vertical_pass_result = highlights_result;
 
-    GPUShader *shader = shader_manager().get("compositor_glare_simple_star_vertical_pass");
+    GPUShader *shader = context().get_shader("compositor_glare_simple_star_vertical_pass");
     GPU_shader_bind(shader);
 
     GPU_shader_uniform_1i(shader, "iterations", get_number_of_iterations());
@@ -238,12 +241,12 @@ class GlareOperation : public NodeOperation {
     /* The horizontal pass is applied in-plane, so copy the highlights to a new image since the
      * highlights result is still needed by the vertical pass. */
     const int2 glare_size = get_glare_size();
-    Result horizontal_pass_result = Result::Temporary(ResultType::Color, texture_pool());
+    Result horizontal_pass_result = context().create_temporary_result(ResultType::Color);
     horizontal_pass_result.allocate_texture(glare_size);
     GPU_memory_barrier(GPU_BARRIER_TEXTURE_UPDATE);
     GPU_texture_copy(horizontal_pass_result.texture(), highlights_result.texture());
 
-    GPUShader *shader = shader_manager().get("compositor_glare_simple_star_horizontal_pass");
+    GPUShader *shader = context().get_shader("compositor_glare_simple_star_horizontal_pass");
     GPU_shader_bind(shader);
 
     GPU_shader_uniform_1i(shader, "iterations", get_number_of_iterations());
@@ -268,7 +271,7 @@ class GlareOperation : public NodeOperation {
      * so just use it as the pass result. */
     Result &anti_diagonal_pass_result = highlights_result;
 
-    GPUShader *shader = shader_manager().get("compositor_glare_simple_star_anti_diagonal_pass");
+    GPUShader *shader = context().get_shader("compositor_glare_simple_star_anti_diagonal_pass");
     GPU_shader_bind(shader);
 
     GPU_shader_uniform_1i(shader, "iterations", get_number_of_iterations());
@@ -295,12 +298,12 @@ class GlareOperation : public NodeOperation {
     /* The diagonal pass is applied in-plane, so copy the highlights to a new image since the
      * highlights result is still needed by the anti-diagonal pass. */
     const int2 glare_size = get_glare_size();
-    Result diagonal_pass_result = Result::Temporary(ResultType::Color, texture_pool());
+    Result diagonal_pass_result = context().create_temporary_result(ResultType::Color);
     diagonal_pass_result.allocate_texture(glare_size);
     GPU_memory_barrier(GPU_BARRIER_TEXTURE_UPDATE);
     GPU_texture_copy(diagonal_pass_result.texture(), highlights_result.texture());
 
-    GPUShader *shader = shader_manager().get("compositor_glare_simple_star_diagonal_pass");
+    GPUShader *shader = context().get_shader("compositor_glare_simple_star_diagonal_pass");
     GPU_shader_bind(shader);
 
     GPU_shader_uniform_1i(shader, "iterations", get_number_of_iterations());
@@ -336,7 +339,7 @@ class GlareOperation : public NodeOperation {
     /* Create an initially zero image where streaks will be accumulated. */
     const float4 zero_color = float4(0.0f);
     const int2 glare_size = get_glare_size();
-    Result accumulated_streaks_result = Result::Temporary(ResultType::Color, texture_pool());
+    Result accumulated_streaks_result = context().create_temporary_result(ResultType::Color);
     accumulated_streaks_result.allocate_texture(glare_size);
     GPU_texture_clear(accumulated_streaks_result.texture(), GPU_DATA_FLOAT, zero_color);
 
@@ -346,7 +349,7 @@ class GlareOperation : public NodeOperation {
       const float2 streak_direction = compute_streak_direction(streak_index);
       Result streak_result = apply_streak_filter(highlights_result, streak_direction);
 
-      GPUShader *shader = shader_manager().get("compositor_glare_streaks_accumulate");
+      GPUShader *shader = context().get_shader("compositor_glare_streaks_accumulate");
       GPU_shader_bind(shader);
 
       const float attenuation_factor = compute_streak_attenuation_factor();
@@ -369,18 +372,18 @@ class GlareOperation : public NodeOperation {
 
   Result apply_streak_filter(Result &highlights_result, const float2 &streak_direction)
   {
-    GPUShader *shader = shader_manager().get("compositor_glare_streaks_filter");
+    GPUShader *shader = context().get_shader("compositor_glare_streaks_filter");
     GPU_shader_bind(shader);
 
     /* Copy the highlights result into a new image because the output will be copied to the input
      * after each iteration and the highlights result is still needed to compute other streaks. */
     const int2 glare_size = get_glare_size();
-    Result input_streak_result = Result::Temporary(ResultType::Color, texture_pool());
+    Result input_streak_result = context().create_temporary_result(ResultType::Color);
     input_streak_result.allocate_texture(glare_size);
     GPU_memory_barrier(GPU_BARRIER_TEXTURE_UPDATE);
     GPU_texture_copy(input_streak_result.texture(), highlights_result.texture());
 
-    Result output_streak_result = Result::Temporary(ResultType::Color, texture_pool());
+    Result output_streak_result = context().create_temporary_result(ResultType::Color);
     output_streak_result.allocate_texture(glare_size);
 
     /* For the given number of iterations, apply the streak filter in the given direction. The
@@ -396,9 +399,10 @@ class GlareOperation : public NodeOperation {
       GPU_shader_uniform_3fv(shader, "fade_factors", fade_factors);
       GPU_shader_uniform_2fv(shader, "streak_vector", streak_vector);
 
-      input_streak_result.bind_as_texture(shader, "input_streak_tx");
       GPU_texture_filter_mode(input_streak_result.texture(), true);
-      GPU_texture_wrap_mode(input_streak_result.texture(), false, false);
+      GPU_texture_extend_mode(input_streak_result.texture(),
+                              GPU_SAMPLER_EXTEND_MODE_CLAMP_TO_BORDER);
+      input_streak_result.bind_as_texture(shader, "input_streak_tx");
 
       output_streak_result.bind_as_image(shader, "output_streak_img");
 
@@ -505,7 +509,7 @@ class GlareOperation : public NodeOperation {
   {
     Result base_ghost_result = compute_base_ghost(highlights_result);
 
-    GPUShader *shader = shader_manager().get("compositor_glare_ghost_accumulate");
+    GPUShader *shader = context().get_shader("compositor_glare_ghost_accumulate");
     GPU_shader_bind(shader);
 
     /* Color modulators are constant across iterations. */
@@ -518,7 +522,7 @@ class GlareOperation : public NodeOperation {
     /* Create an initially zero image where ghosts will be accumulated. */
     const float4 zero_color = float4(0.0f);
     const int2 glare_size = get_glare_size();
-    Result accumulated_ghosts_result = Result::Temporary(ResultType::Color, texture_pool());
+    Result accumulated_ghosts_result = context().create_temporary_result(ResultType::Color);
     accumulated_ghosts_result.allocate_texture(glare_size);
     GPU_texture_clear(accumulated_ghosts_result.texture(), GPU_DATA_FLOAT, zero_color);
 
@@ -560,7 +564,7 @@ class GlareOperation : public NodeOperation {
    * the center of the image. */
   Result compute_base_ghost(Result &highlights_result)
   {
-    Result small_ghost_result = Result::Temporary(ResultType::Color, texture_pool());
+    Result small_ghost_result = context().create_temporary_result(ResultType::Color);
     symmetric_separable_blur(context(),
                              highlights_result,
                              small_ghost_result,
@@ -569,7 +573,7 @@ class GlareOperation : public NodeOperation {
                              false,
                              false);
 
-    Result big_ghost_result = Result::Temporary(ResultType::Color, texture_pool());
+    Result big_ghost_result = context().create_temporary_result(ResultType::Color);
     symmetric_separable_blur(context(),
                              highlights_result,
                              big_ghost_result,
@@ -580,19 +584,19 @@ class GlareOperation : public NodeOperation {
 
     highlights_result.release();
 
-    GPUShader *shader = shader_manager().get("compositor_glare_ghost_base");
+    GPUShader *shader = context().get_shader("compositor_glare_ghost_base");
     GPU_shader_bind(shader);
 
-    small_ghost_result.bind_as_texture(shader, "small_ghost_tx");
     GPU_texture_filter_mode(small_ghost_result.texture(), true);
-    GPU_texture_wrap_mode(small_ghost_result.texture(), false, false);
+    GPU_texture_extend_mode(small_ghost_result.texture(), GPU_SAMPLER_EXTEND_MODE_CLAMP_TO_BORDER);
+    small_ghost_result.bind_as_texture(shader, "small_ghost_tx");
 
-    big_ghost_result.bind_as_texture(shader, "big_ghost_tx");
     GPU_texture_filter_mode(big_ghost_result.texture(), true);
-    GPU_texture_wrap_mode(big_ghost_result.texture(), false, false);
+    GPU_texture_extend_mode(big_ghost_result.texture(), GPU_SAMPLER_EXTEND_MODE_CLAMP_TO_BORDER);
+    big_ghost_result.bind_as_texture(shader, "big_ghost_tx");
 
     const int2 glare_size = get_glare_size();
-    Result base_ghost_result = Result::Temporary(ResultType::Color, texture_pool());
+    Result base_ghost_result = context().create_temporary_result(ResultType::Color);
     base_ghost_result.allocate_texture(glare_size);
     base_ghost_result.bind_as_image(shader, "combined_ghost_img");
 
@@ -688,15 +692,150 @@ class GlareOperation : public NodeOperation {
     return 1.0f - get_color_modulation_factor();
   }
 
+  /* ------------
+   * Bloom Glare.
+   * ------------ */
+
+  /* Bloom is computed by first progressively half-down-sampling the highlights down to a certain
+   * size, then progressively double-up-sampling the last down-sampled result up to the original
+   * size of the highlights, adding the down-sampled result of the same size in each up-sampling
+   * step. This can be illustrated as follows:
+   *
+   *             Highlights   ---+--->  Bloom
+   *                  |                   |
+   *             Down-sampled ---+---> Up-sampled
+   *                  |                   |
+   *             Down-sampled ---+---> Up-sampled
+   *                  |                   |
+   *             Down-sampled ---+---> Up-sampled
+   *                  |                   ^
+   *                 ...                  |
+   *            Down-sampled  ------------'
+   *
+   * The smooth down-sampling followed by smooth up-sampling can be thought of as a cheap way to
+   * approximate a large radius blur, and adding the corresponding down-sampled result while
+   * up-sampling is done to counter the attenuation that happens during down-sampling.
+   *
+   * Smaller down-sampled results contribute to larger glare size, so controlling the size can be
+   * done by stopping down-sampling down to a certain size, where the maximum possible size is
+   * achieved when down-sampling happens down to the smallest size of 2. */
+  Result execute_bloom(Result &highlights_result)
+  {
+    /* The maximum possible glare size is achieved when we down-sampled down to the smallest size
+     * of 2, which would result in a down-sampling chain length of the binary logarithm of the
+     * smaller dimension of the size of the highlights.
+     *
+     * However, as users might want a smaller glare size, we reduce the chain length by the halving
+     * count supplied by the user. */
+    const int2 glare_size = get_glare_size();
+    const int smaller_glare_dimension = math::min(glare_size.x, glare_size.y);
+    const int chain_length = int(std::log2(smaller_glare_dimension)) -
+                             compute_bloom_size_halving_count();
+
+    Array<Result> downsample_chain = compute_bloom_downsample_chain(highlights_result,
+                                                                    chain_length);
+
+    /* Notice that for a chain length of n, we need (n - 1) up-sampling passes. */
+    const IndexRange upsample_passes_range(chain_length - 1);
+    GPUShader *shader = context().get_shader("compositor_glare_bloom_upsample");
+    GPU_shader_bind(shader);
+
+    for (const int i : upsample_passes_range) {
+      Result &input = downsample_chain[upsample_passes_range.last() - i + 1];
+      GPU_texture_filter_mode(input.texture(), true);
+      input.bind_as_texture(shader, "input_tx");
+
+      const Result &output = downsample_chain[upsample_passes_range.last() - i];
+      output.bind_as_image(shader, "output_img", true);
+
+      compute_dispatch_threads_at_least(shader, output.domain().size);
+
+      input.unbind_as_texture();
+      output.unbind_as_image();
+      input.release();
+    }
+
+    GPU_shader_unbind();
+
+    return downsample_chain[0];
+  }
+
+  /* Progressively down-sample the given result into a result with half the size for the given
+   * chain length, returning an array containing the chain of down-sampled results. The first
+   * result of the chain is the given result itself for easier handling. The chain length is
+   * expected not to exceed the binary logarithm of the smaller dimension of the given result,
+   * because that would result in down-sampling passes that produce useless textures with just
+   * one pixel. */
+  Array<Result> compute_bloom_downsample_chain(Result &highlights_result, int chain_length)
+  {
+    const Result downsampled_result = context().create_temporary_result(ResultType::Color);
+    Array<Result> downsample_chain(chain_length, downsampled_result);
+
+    /* We assign the original highlights result to the first result of the chain to make the code
+     * easier. In turn, the number of passes is one less than the chain length, because the first
+     * result needn't be computed. */
+    downsample_chain[0] = highlights_result;
+    const IndexRange downsample_passes_range(chain_length - 1);
+
+    GPUShader *shader;
+    for (const int i : downsample_passes_range) {
+      /* For the first down-sample pass, we use a special "Karis" down-sample pass that applies a
+       * form of local tone mapping to reduce the contributions of fireflies, see the shader for
+       * more information. Later passes use a simple average down-sampling filter because fireflies
+       * doesn't service the first pass. */
+      if (i == downsample_passes_range.first()) {
+        shader = context().get_shader("compositor_glare_bloom_downsample_karis_average");
+        GPU_shader_bind(shader);
+      }
+      else {
+        shader = context().get_shader("compositor_glare_bloom_downsample_simple_average");
+        GPU_shader_bind(shader);
+      }
+
+      const Result &input = downsample_chain[i];
+      GPU_texture_filter_mode(input.texture(), true);
+      input.bind_as_texture(shader, "input_tx");
+
+      Result &output = downsample_chain[i + 1];
+      output.allocate_texture(input.domain().size / 2);
+      output.bind_as_image(shader, "output_img");
+
+      compute_dispatch_threads_at_least(shader, output.domain().size);
+
+      input.unbind_as_texture();
+      output.unbind_as_image();
+      GPU_shader_unbind();
+    }
+
+    return downsample_chain;
+  }
+
+  /* The bloom has a maximum possible size when the bloom size is equal to MAX_GLARE_SIZE and
+   * halves for every unit decrement of the bloom size. This method computes the number of halving
+   * that should take place, which is simply the difference to MAX_GLARE_SIZE. */
+  int compute_bloom_size_halving_count()
+  {
+    return MAX_GLARE_SIZE - get_bloom_size();
+  }
+
+  /* The size of the bloom relative to its maximum possible size, see the
+   * compute_bloom_size_halving_count() method for more information. */
+  int get_bloom_size()
+  {
+    return node_storage(bnode()).size;
+  }
+
   /* ---------------
    * Fog Glow Glare.
    * --------------- */
 
-  /* Not yet implemented. Unreachable code due to the is_identity method. */
-  Result execute_fog_glow(Result & /*highlights_result*/)
+  Result execute_fog_glow(Result &highlights_result)
   {
-    BLI_assert_unreachable();
-    return Result(ResultType::Color, texture_pool());
+    context().set_info_message("Fog Glow Glare not supported in GPU compositor.");
+    Result fog_glow_result = context().create_temporary_result(ResultType::Color);
+    fog_glow_result.allocate_texture(highlights_result.domain());
+    GPU_texture_copy(fog_glow_result.texture(), highlights_result.texture());
+    return fog_glow_result;
   }
 
   /* ----------
@@ -705,7 +844,7 @@ class GlareOperation : public NodeOperation {
 
   void execute_mix(Result &glare_result)
   {
-    GPUShader *shader = shader_manager().get("compositor_glare_mix");
+    GPUShader *shader = context().get_shader("compositor_glare_mix");
     GPU_shader_bind(shader);
 
     GPU_shader_uniform_1f(shader, "mix_factor", node_storage(bnode()).mix);
@@ -713,8 +852,8 @@ class GlareOperation : public NodeOperation {
     const Result &input_image = get_input("Image");
     input_image.bind_as_texture(shader, "input_tx");
 
-    glare_result.bind_as_texture(shader, "glare_tx");
     GPU_texture_filter_mode(glare_result.texture(), true);
+    glare_result.bind_as_texture(shader, "glare_tx");
 
     const Domain domain = compute_domain();
     Result &output_image = get_result("Image");

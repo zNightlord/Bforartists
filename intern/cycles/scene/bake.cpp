@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: Apache-2.0
- * Copyright 2011-2022 Blender Foundation */
+/* SPDX-FileCopyrightText: 2011-2022 Blender Foundation
+ *
+ * SPDX-License-Identifier: Apache-2.0 */
 
 #include "scene/bake.h"
 #include "scene/integrator.h"
@@ -19,9 +20,7 @@ BakeManager::BakeManager()
   use_camera_ = false;
 }
 
-BakeManager::~BakeManager()
-{
-}
+BakeManager::~BakeManager() {}
 
 bool BakeManager::get_baking() const
 {
@@ -52,8 +51,9 @@ void BakeManager::device_update(Device * /*device*/,
                                 Scene *scene,
                                 Progress & /* progress */)
 {
-  if (!need_update())
+  if (!need_update()) {
     return;
+  }
 
   KernelBake *kbake = &dscene->data.bake;
   memset(kbake, 0, sizeof(*kbake));
@@ -85,9 +85,7 @@ void BakeManager::device_update(Device * /*device*/,
   need_update_ = false;
 }
 
-void BakeManager::device_free(Device * /*device*/, DeviceScene * /*dscene*/)
-{
-}
+void BakeManager::device_free(Device * /*device*/, DeviceScene * /*dscene*/) {}
 
 void BakeManager::tag_update()
 {

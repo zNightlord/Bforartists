@@ -1,4 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* SPDX-FileCopyrightText: 2004-2022 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup freestyle
@@ -165,13 +167,15 @@ int StrokeShader_Init(PyObject *module)
 
 //------------------------INSTANCE METHODS ----------------------------------
 
-static char StrokeShader___doc__[] =
-    "Base class for stroke shaders.  Any stroke shader must inherit from\n"
-    "this class and overload the shade() method.  A StrokeShader is\n"
+PyDoc_STRVAR(
+    /* Wrap. */
+    StrokeShader___doc__,
+    "Base class for stroke shaders. Any stroke shader must inherit from\n"
+    "this class and overload the shade() method. A StrokeShader is\n"
     "designed to modify stroke attributes such as thickness, color,\n"
-    "geometry, texture, blending mode, and so on.  The basic way for this\n"
+    "geometry, texture, blending mode, and so on. The basic way for this\n"
     "operation is to iterate over the stroke vertices of the :class:`Stroke`\n"
-    "and to modify the :class:`StrokeAttribute` of each vertex.  Here is a\n"
+    "and to modify the :class:`StrokeAttribute` of each vertex. Here is a\n"
     "code example of such an iteration::\n"
     "\n"
     "  it = ioStroke.strokeVerticesBegin()\n"
@@ -182,7 +186,7 @@ static char StrokeShader___doc__[] =
     "\n"
     ".. method:: __init__()\n"
     "\n"
-    "   Default constructor.\n";
+    "   Default constructor.\n");
 
 static int StrokeShader___init__(BPy_StrokeShader *self, PyObject *args, PyObject *kwds)
 {
@@ -207,13 +211,15 @@ static PyObject *StrokeShader___repr__(BPy_StrokeShader *self)
   return PyUnicode_FromFormat("type: %s - address: %p", Py_TYPE(self)->tp_name, self->ss);
 }
 
-static char StrokeShader_shade___doc__[] =
+PyDoc_STRVAR(
+    /* Wrap. */
+    StrokeShader_shade___doc__,
     ".. method:: shade(stroke)\n"
     "\n"
-    "   The shading method.  Must be overloaded by inherited classes.\n"
+    "   The shading method. Must be overloaded by inherited classes.\n"
     "\n"
     "   :arg stroke: A Stroke object.\n"
-    "   :type stroke: :class:`Stroke`\n";
+    "   :type stroke: :class:`Stroke`\n");
 
 static PyObject *StrokeShader_shade(BPy_StrokeShader *self, PyObject *args, PyObject *kwds)
 {
@@ -248,10 +254,12 @@ static PyMethodDef BPy_StrokeShader_methods[] = {
 
 /*----------------------StrokeShader get/setters ----------------------------*/
 
-PyDoc_STRVAR(StrokeShader_name_doc,
-             "The name of the stroke shader.\n"
-             "\n"
-             ":type: str");
+PyDoc_STRVAR(
+    /* Wrap. */
+    StrokeShader_name_doc,
+    "The name of the stroke shader.\n"
+    "\n"
+    ":type: str");
 
 static PyObject *StrokeShader_name_get(BPy_StrokeShader *self, void * /*closure*/)
 {
@@ -266,7 +274,7 @@ static PyGetSetDef BPy_StrokeShader_getseters[] = {
 /*-----------------------BPy_StrokeShader type definition ------------------------------*/
 
 PyTypeObject StrokeShader_Type = {
-    PyVarObject_HEAD_INIT(nullptr, 0)
+    /*ob_base*/ PyVarObject_HEAD_INIT(nullptr, 0)
     /*tp_name*/ "StrokeShader",
     /*tp_basicsize*/ sizeof(BPy_StrokeShader),
     /*tp_itemsize*/ 0,

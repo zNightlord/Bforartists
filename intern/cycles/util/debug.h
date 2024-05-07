@@ -1,11 +1,11 @@
-/* SPDX-License-Identifier: Apache-2.0
- * Copyright 2011-2022 Blender Foundation */
+/* SPDX-FileCopyrightText: 2011-2022 Blender Foundation
+ *
+ * SPDX-License-Identifier: Apache-2.0 */
 
 #ifndef __UTIL_DEBUG_H__
 #define __UTIL_DEBUG_H__
 
 #include <cassert>
-#include <iostream>
 
 #include "bvh/params.h"
 
@@ -26,23 +26,18 @@ class DebugFlags {
 
     /* Flags describing which instructions sets are allowed for use. */
     bool avx2 = true;
-    bool sse41 = true;
-    bool sse2 = true;
+    bool sse42 = true;
 
     /* Check functions to see whether instructions up to the given one
      * are allowed for use.
      */
     bool has_avx2()
     {
-      return has_sse41() && avx2;
+      return has_sse42() && avx2;
     }
-    bool has_sse41()
+    bool has_sse42()
     {
-      return has_sse2() && sse41;
-    }
-    bool has_sse2()
-    {
-      return sse2;
+      return sse42;
     }
 
     /* Requested BVH layout.
@@ -100,6 +95,12 @@ class DebugFlags {
 
     /* Whether local atomic sorting is enabled or not. */
     bool use_local_atomic_sort = true;
+
+    /* Whether nanovdb is enabled or not. */
+    bool use_nanovdb = true;
+
+    /* Whether async PSO creation is enabled or not. */
+    bool use_async_pso_creation = true;
   };
 
   /* Get instance of debug flags registry. */

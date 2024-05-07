@@ -1,19 +1,20 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2019 Blender Foundation. */
+/* SPDX-FileCopyrightText: 2019 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup draw_engine
  */
 
-#include "DRW_render.h"
+#include "DRW_render.hh"
 
-#include "DEG_depsgraph_query.h"
+#include "DEG_depsgraph_query.hh"
 
 #include "DNA_particle_types.h"
 
 #include "BKE_pointcache.h"
 
-#include "ED_particle.h"
+#include "ED_particle.hh"
 
 #include "overlay_private.hh"
 
@@ -45,6 +46,7 @@ void OVERLAY_edit_particle_cache_init(OVERLAY_Data *vedata)
   sh = OVERLAY_shader_edit_particle_point();
   pd->edit_particle_point_grp = grp = DRW_shgroup_create(sh, psl->edit_particle_ps);
   DRW_shgroup_uniform_block(grp, "globalsBlock", G_draw.block_ubo);
+  DRW_shgroup_uniform_bool_copy(grp, "useWeight", false);
 }
 
 void OVERLAY_edit_particle_cache_populate(OVERLAY_Data *vedata, Object *ob)
@@ -85,7 +87,7 @@ void OVERLAY_edit_particle_cache_populate(OVERLAY_Data *vedata, Object *ob)
     return;
   }
 
-  struct GPUBatch *geom;
+  blender::gpu::Batch *geom;
   {
     geom = DRW_cache_particles_get_edit_strands(ob, psys, edit, pd->edit_particle.use_weight);
     DRW_shgroup_call(pd->edit_particle_strand_grp, geom, nullptr);
@@ -164,8 +166,8 @@ void OVERLAY_particle_cache_populate(OVERLAY_Data *vedata, Object *ob)
     }
 
     if (!ELEM(draw_as, PART_DRAW_NOT, PART_DRAW_OB, PART_DRAW_GR)) {
-      struct GPUBatch *geom = DRW_cache_particles_get_dots(ob, psys);
-      struct GPUBatch *shape = nullptr;
+      blender::gpu::Batch *geom = DRW_cache_particles_get_dots(ob, psys);
+      blender::gpu::Batch *shape = nullptr;
       DRWShadingGroup *grp;
 
       /* TODO(fclem): Here would be a good place for preemptive culling. */

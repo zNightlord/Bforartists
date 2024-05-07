@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2020 Blender Foundation. All rights reserved. */
+/* SPDX-FileCopyrightText: 2020 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup bgpencil
@@ -9,17 +10,17 @@
 
 #include "BLI_listbase.h"
 
-#include "DNA_gpencil_types.h"
+#include "DNA_gpencil_legacy_types.h"
 #include "DNA_screen_types.h"
 #include "DNA_space_types.h"
 
-#include "BKE_context.h"
-#include "BKE_gpencil.h"
-#include "BKE_main.h"
-#include "BKE_scene.h"
+#include "BKE_context.hh"
+#include "BKE_gpencil_legacy.h"
+#include "BKE_main.hh"
+#include "BKE_scene.hh"
 
-#include "DEG_depsgraph.h"
-#include "DEG_depsgraph_query.h"
+#include "DEG_depsgraph.hh"
+#include "DEG_depsgraph_query.hh"
 
 #include "../gpencil_io.h"
 
@@ -108,7 +109,8 @@ static bool gpencil_io_export_pdf(Depsgraph *depsgraph,
     case GP_EXPORT_FRAME_SCENE: {
       for (int32_t i = iparams->frame_start; i < iparams->frame_end + 1; i++) {
         if ((iparams->frame_mode == GP_EXPORT_FRAME_SELECTED) &&
-            !is_keyframe_included(gpd_eval, i, true)) {
+            !is_keyframe_included(gpd_eval, i, true))
+        {
           continue;
         }
 
@@ -181,14 +183,12 @@ bool gpencil_io_export(const char *filepath, GpencilIOParams *iparams)
     case GP_EXPORT_TO_SVG: {
       GpencilExporterSVG exporter = GpencilExporterSVG(filepath, iparams);
       return gpencil_io_export_frame_svg(&exporter, scene_, iparams, true, true, true);
-      break;
     }
 #endif
 #ifdef WITH_HARU
     case GP_EXPORT_TO_PDF: {
       GpencilExporterPDF exporter = GpencilExporterPDF(filepath, iparams);
       return gpencil_io_export_pdf(depsgraph_, scene_, ob, &exporter, iparams);
-      break;
     }
 #endif
     /* Add new export formats here. */

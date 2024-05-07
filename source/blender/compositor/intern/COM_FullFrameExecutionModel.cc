@@ -1,13 +1,18 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2021 Blender Foundation. */
+/* SPDX-FileCopyrightText: 2021 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "COM_FullFrameExecutionModel.h"
 
-#include "BLT_translation.h"
+#include "BLI_string.h"
+
+#include "BLT_translation.hh"
 
 #include "COM_Debug.h"
 #include "COM_ViewerOperation.h"
 #include "COM_WorkScheduler.h"
+
+#include "BLI_timeit.hh"
 
 #ifdef WITH_CXX_GUARDEDALLOC
 #  include "MEM_guardedalloc.h"
@@ -33,12 +38,14 @@ void FullFrameExecutionModel::execute(ExecutionSystem &exec_system)
 {
   const bNodeTree *node_tree = this->context_.get_bnodetree();
   node_tree->runtime->stats_draw(node_tree->runtime->sdh,
-                                 TIP_("Compositing | Initializing execution"));
+                                 RPT_("Compositing | Initializing execution"));
 
   DebugInfo::graphviz(&exec_system, "compositor_prior_rendering");
 
   determine_areas_to_render_and_reads();
   render_operations();
+
+  profiler_.finalize(*node_tree);
 }
 
 void FullFrameExecutionModel::determine_areas_to_render_and_reads()
@@ -98,6 +105,8 @@ void FullFrameExecutionModel::render_operation(NodeOperation *op)
   constexpr int output_x = 0;
   constexpr int output_y = 0;
 
+  const timeit::TimePoint time_start = timeit::Clock::now();
+
   const bool has_outputs = op->get_number_of_output_sockets() > 0;
   MemoryBuffer *op_buf = has_outputs ? create_operation_buffer(op, output_x, output_y) : nullptr;
   if (op->get_width() > 0 && op->get_height() > 0) {
@@ -117,13 +126,15 @@ void FullFrameExecutionModel::render_operation(NodeOperation *op)
   active_buffers_.set_rendered_buffer(op, std::unique_ptr<MemoryBuffer>(op_buf));
 
   operation_finished(op);
+
+  profiler_.add_operation_execution_time(*op, time_start, timeit::Clock::now());
 }
 
 void FullFrameExecutionModel::render_operations()
 {
   const bool is_rendering = context_.is_rendering();
 
-  WorkScheduler::start(this->context_);
+  WorkScheduler::start();
   for (eCompositorPriority priority : priorities_) {
     for (NodeOperation *op : operations_) {
       const bool has_size = op->get_width() > 0 && op->get_height() > 0;
@@ -191,7 +202,8 @@ void FullFrameExecutionModel::determine_areas_to_render(NodeOperation *output_op
     NodeOperation *operation = pair.first;
     const rcti &render_area = pair.second;
     if (BLI_rcti_is_empty(&render_area) ||
-        active_buffers_.is_area_registered(operation, render_area)) {
+        active_buffers_.is_area_registered(operation, render_area))
+    {
       continue;
     }
 
@@ -246,7 +258,7 @@ void FullFrameExecutionModel::get_output_render_area(NodeOperation *output_op, r
     /* Get border with normalized coordinates. */
     const rctf *norm_border = has_viewer_border ? border_.viewer_border : border_.render_border;
 
-    /* Return de-normalized border within canvas. */
+    /* Return denormalized border within canvas. */
     const int w = output_op->get_width();
     const int h = output_op->get_height();
     r_area.xmin = canvas.xmin + norm_border->xmin * w;
@@ -276,11 +288,10 @@ void FullFrameExecutionModel::update_progress_bar()
     tree->runtime->progress(tree->runtime->prh, progress);
 
     char buf[128];
-    BLI_snprintf(buf,
-                 sizeof(buf),
-                 TIP_("Compositing | Operation %i-%li"),
-                 num_operations_finished_ + 1,
-                 operations_.size());
+    SNPRINTF(buf,
+             RPT_("Compositing | Operation %i-%li"),
+             num_operations_finished_ + 1,
+             operations_.size());
     tree->runtime->stats_draw(tree->runtime->sdh, buf);
   }
 }

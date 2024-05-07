@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2009 Blender Authors
+#
 # SPDX-License-Identifier: GPL-2.0-or-later
-# Copyright 2009 Blender Foundation. All rights reserved.
 
 import sys
 
@@ -20,31 +21,32 @@ filename = argv[1]
 try:
     fpin = open(filename, "r")
 except:
-    sys.stdout.write("Unable to open input %s\n" % argv[1])
+    sys.stdout.write("Unable to open input {:s}\n".format(argv[1]))
     sys.exit(1)
 
-data = fpin.read().rsplit("{")[-1].split("}")[0]
-data = data.replace(",", " ")
-data = data.split()
-data = [int(v) for v in data]
+data_as_str = fpin.read().rsplit("{")[-1].split("}")[0]
+data_as_str = data_as_str.replace(",", " ")
+data_as_list = [int(v) for v in data_as_str.split()]
+del data_as_str
 
 if strip_byte:
     # String data gets trailing byte.
-    last = data.pop()
+    last = data_as_list.pop()
     assert last == 0
 
-data = bytes(data)
+data = bytes(data_as_list)
+del data_as_list
 
 dname = filename + ".ctodata"
 
-sys.stdout.write("Making DATA file <%s>\n" % dname)
+sys.stdout.write("Making DATA file <{:s}>\n".format(dname))
 
 try:
     fpout = open(dname, "wb")
 except:
-    sys.stdout.write("Unable to open output %s\n" % dname)
+    sys.stdout.write("Unable to open output {:s}\n".format(dname))
     sys.exit(1)
 
 size = fpout.write(data)
 
-sys.stdout.write("%d\n" % size)
+sys.stdout.write("{:d}\n".format(size))

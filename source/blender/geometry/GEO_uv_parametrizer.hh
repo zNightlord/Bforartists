@@ -1,4 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* SPDX-FileCopyrightText: 2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #pragma once
 
@@ -8,16 +10,57 @@
  * \ingroup geo
  */
 
+struct GHash;
+struct Heap;
+struct MemArena;
+struct RNG;
+
 namespace blender::geometry {
 
-struct ParamHandle;         /* Handle to an array of charts. */
+struct PChart;
+struct PHash;
+
 using ParamKey = uintptr_t; /* Key (hash) for identifying verts and faces. */
 #define PARAM_KEY_MAX UINTPTR_MAX
+
+enum PHandleState {
+  PHANDLE_STATE_ALLOCATED,
+  PHANDLE_STATE_CONSTRUCTED,
+  PHANDLE_STATE_LSCM,
+  PHANDLE_STATE_STRETCH,
+};
+
+class ParamHandle {
+ public:
+  ParamHandle();
+  ~ParamHandle();
+
+  PHandleState state = PHANDLE_STATE_ALLOCATED;
+  MemArena *arena = nullptr;
+  MemArena *polyfill_arena = nullptr;
+  Heap *polyfill_heap = nullptr;
+
+  PChart *construction_chart = nullptr;
+  PHash *hash_verts = nullptr;
+  PHash *hash_edges = nullptr;
+  PHash *hash_faces = nullptr;
+
+  GHash *pin_hash = nullptr;
+  int unique_pin_count = 0;
+
+  PChart **charts = nullptr;
+  int ncharts = 0;
+
+  float aspect_y = 1.0f;
+
+  RNG *rng = nullptr;
+  float blend = 0.0f;
+};
 
 /* -------------------------------------------------------------------- */
 /** \name Chart Construction:
  *
- * Faces and seams may only be added between #geometry::uv_parametrizer_construct_begin and
+ * Faces and seams may only be added between #ParamHandle::ParamHandle() and
  * #geometry::uv_parametrizer_construct_end.
  *
  * The pointers to `co` and `uv` are stored, rather than being copied. Vertices are implicitly
@@ -29,9 +72,7 @@ using ParamKey = uintptr_t; /* Key (hash) for identifying verts and faces. */
  *
  * \{ */
 
-ParamHandle *uv_parametrizer_construct_begin();
-
-void uv_parametrizer_aspect_ratio(ParamHandle *handle, float aspx, float aspy);
+void uv_parametrizer_aspect_ratio(ParamHandle *handle, float aspect_y);
 
 void uv_prepare_pin_index(ParamHandle *handle, const int bmvertindex, const float uv[2]);
 
@@ -52,7 +93,6 @@ void uv_parametrizer_construct_end(ParamHandle *handle,
                                    bool fill_holes,
                                    bool topology_from_uvs,
                                    int *r_count_failed = nullptr);
-void uv_parametrizer_delete(ParamHandle *handle);
 
 /** \} */
 
@@ -99,14 +139,6 @@ void uv_parametrizer_pack(ParamHandle *handle, float margin, bool do_rotate, boo
  * \{ */
 
 void uv_parametrizer_average(ParamHandle *handle, bool ignore_pinned, bool scale_uv, bool shear);
-
-/** \} */
-
-/* -------------------------------------------------------------------- */
-/** \name Simple x,y scale
- * \{ */
-
-void uv_parametrizer_scale(ParamHandle *handle, float x, float y);
 
 /** \} */
 

@@ -1,53 +1,52 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2011 Blender Foundation. All rights reserved. */
+/* SPDX-FileCopyrightText: 2011 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup spclip
  */
 
-#include "DNA_gpencil_types.h"
+#include "DNA_gpencil_legacy_types.h"
 #include "DNA_movieclip_types.h"
 #include "DNA_scene_types.h"
 
 #include "MEM_guardedalloc.h"
 
-#include "IMB_colormanagement.h"
-#include "IMB_imbuf.h"
-#include "IMB_imbuf_types.h"
+#include "IMB_colormanagement.hh"
+#include "IMB_imbuf.hh"
+#include "IMB_imbuf_types.hh"
 
-#include "BLI_math.h"
 #include "BLI_math_base.h"
 #include "BLI_rect.h"
 #include "BLI_string.h"
 #include "BLI_utildefines.h"
 
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_image.h"
 #include "BKE_movieclip.h"
 #include "BKE_tracking.h"
 
-#include "ED_clip.h"
-#include "ED_gpencil.h"
-#include "ED_mask.h"
-#include "ED_screen.h"
-#include "ED_util.h"
+#include "ED_clip.hh"
+#include "ED_gpencil_legacy.hh"
+#include "ED_mask.hh"
+#include "ED_screen.hh"
+#include "ED_util.hh"
 
-#include "BIF_glutil.h"
+#include "BIF_glutil.hh"
 
-#include "GPU_immediate.h"
-#include "GPU_immediate_util.h"
-#include "GPU_matrix.h"
-#include "GPU_state.h"
+#include "GPU_immediate.hh"
+#include "GPU_immediate_util.hh"
+#include "GPU_matrix.hh"
+#include "GPU_state.hh"
 
-#include "WM_types.h"
+#include "WM_types.hh"
 
-#include "UI_interface.h"
-#include "UI_resources.h"
-#include "UI_view2d.h"
+#include "UI_resources.hh"
+#include "UI_view2d.hh"
 
-#include "BLF_api.h"
+#include "BLF_api.hh"
 
-#include "clip_intern.h" /* own include */
+#include "clip_intern.hh" /* own include */
 
 /*********************** main area drawing *************************/
 
@@ -59,11 +58,11 @@ static void draw_keyframe(int frame, int cfra, int sfra, float framelen, int wid
   if (width == 1) {
     immBegin(GPU_PRIM_LINES, 2);
     immVertex2i(pos, x, 0);
-    immVertex2i(pos, x, height * UI_DPI_FAC);
+    immVertex2i(pos, x, height * UI_SCALE_FAC);
     immEnd();
   }
   else {
-    immRecti(pos, x, 0, x + width, height * UI_DPI_FAC);
+    immRecti(pos, x, 0, x + width, height * UI_SCALE_FAC);
   }
 }
 
@@ -165,7 +164,8 @@ static void draw_movieclip_cache(SpaceClip *sc, ARegion *region, MovieClip *clip
         }
 
         if (a < markersnr - 1 &&
-            generic_track_get_marker_framenr(active_track, active_plane_track, a + 1) > i) {
+            generic_track_get_marker_framenr(active_track, active_plane_track, a + 1) > i)
+        {
           break;
         }
 
@@ -191,7 +191,7 @@ static void draw_movieclip_cache(SpaceClip *sc, ARegion *region, MovieClip *clip
                  (i - sfra + clip->start_frame - 1) * framelen,
                  0,
                  (i - sfra + clip->start_frame) * framelen,
-                 4 * UI_DPI_FAC);
+                 4 * UI_SCALE_FAC);
       }
     }
   }
@@ -223,7 +223,7 @@ static void draw_movieclip_cache(SpaceClip *sc, ARegion *region, MovieClip *clip
                  (i - sfra + clip->start_frame - 1) * framelen,
                  0,
                  (i - sfra + clip->start_frame) * framelen,
-                 8 * UI_DPI_FAC);
+                 8 * UI_SCALE_FAC);
       }
     }
   }
@@ -234,11 +234,11 @@ static void draw_movieclip_cache(SpaceClip *sc, ARegion *region, MovieClip *clip
   x = (sc->user.framenr - sfra) / (efra - sfra + 1) * region->winx;
 
   immUniformThemeColor(TH_CFRAME);
-  immRecti(pos, x, 0, x + ceilf(framelen), 8 * UI_DPI_FAC);
+  immRecti(pos, x, 0, x + ceilf(framelen), 8 * UI_SCALE_FAC);
 
   immUnbindProgram();
 
-  ED_region_cache_draw_curfra_label(sc->user.framenr, x, 8.0f * UI_DPI_FAC);
+  ED_region_cache_draw_curfra_label(sc->user.framenr, x, 8.0f * UI_SCALE_FAC);
 
   pos = GPU_vertformat_attr_add(immVertexFormat(), "pos", GPU_COMP_I32, 2, GPU_FETCH_INT_TO_FLOAT);
   immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
@@ -266,12 +266,12 @@ static void draw_movieclip_notes(SpaceClip *sc, ARegion *region)
   bool full_redraw = false;
 
   if (tracking->stats) {
-    BLI_strncpy(str, tracking->stats->message, sizeof(str));
+    STRNCPY(str, tracking->stats->message);
     full_redraw = true;
   }
   else {
     if (sc->flag & SC_LOCK_SELECTION) {
-      strcpy(str, "Locked");
+      STRNCPY(str, "Locked");
     }
   }
 
@@ -322,7 +322,8 @@ static void draw_movieclip_buffer(const bContext *C,
 
   /* non-scaled proxy shouldn't use filtering */
   if ((clip->flag & MCLIP_USE_PROXY) == 0 ||
-      ELEM(sc->user.render_size, MCLIP_PROXY_RENDER_SIZE_FULL, MCLIP_PROXY_RENDER_SIZE_100)) {
+      ELEM(sc->user.render_size, MCLIP_PROXY_RENDER_SIZE_FULL, MCLIP_PROXY_RENDER_SIZE_100))
+  {
     use_filter = false;
   }
 
@@ -368,7 +369,8 @@ static void draw_stabilization_border(
 
     float viewport_size[4];
     GPU_viewport_size_get_f(viewport_size);
-    immUniform2f("viewport_size", viewport_size[2] / UI_DPI_FAC, viewport_size[3] / UI_DPI_FAC);
+    immUniform2f(
+        "viewport_size", viewport_size[2] / UI_SCALE_FAC, viewport_size[3] / UI_SCALE_FAC);
 
     immUniform1i("colors_len", 0); /* "simple" mode */
     immUniformColor4f(1.0f, 1.0f, 1.0f, 0.0f);
@@ -389,10 +391,10 @@ enum {
   PATH_POINT_FLAG_KEYFRAME = (1 << 0),
 };
 
-typedef struct TrachPathPoint {
+struct TrackPathPoint {
   float co[2];
   uchar flag;
-} TrackPathPoint;
+};
 
 static void marker_to_path_point(SpaceClip *sc,
                                  const MovieTrackingTrack *track,
@@ -601,7 +603,8 @@ static void draw_marker_outline(SpaceClip *sc,
                             marker->pattern_corners[0],
                             marker->pattern_corners[1],
                             marker->pattern_corners[2],
-                            marker->pattern_corners[3])) {
+                            marker->pattern_corners[3]))
+    {
       GPU_point_size(tiny ? 3.0f : 4.0f);
 
       immBegin(GPU_PRIM_POINTS, 1);
@@ -743,7 +746,7 @@ static void draw_marker_areas(SpaceClip *sc,
 
   float viewport_size[4];
   GPU_viewport_size_get_f(viewport_size);
-  immUniform2f("viewport_size", viewport_size[2] / UI_DPI_FAC, viewport_size[3] / UI_DPI_FAC);
+  immUniform2f("viewport_size", viewport_size[2] / UI_SCALE_FAC, viewport_size[3] / UI_SCALE_FAC);
 
   immUniform1i("colors_len", 0); /* "simple" mode */
 
@@ -775,7 +778,8 @@ static void draw_marker_areas(SpaceClip *sc,
                             marker->pattern_corners[0],
                             marker->pattern_corners[1],
                             marker->pattern_corners[2],
-                            marker->pattern_corners[3])) {
+                            marker->pattern_corners[3]))
+    {
       GPU_point_size(tiny ? 1.0f : 2.0f);
 
       immUniform1f("udash_factor", 2.0f); /* Solid "line" */
@@ -954,11 +958,11 @@ static void draw_marker_slide_zones(SpaceClip *sc,
   dy = 6.0f / height / sc->zoom;
 
   side = get_shortest_pattern_side(marker);
-  patdx = min_ff(dx * 2.0f / 3.0f, side / 6.0f) * UI_DPI_FAC;
-  patdy = min_ff(dy * 2.0f / 3.0f, side * width / height / 6.0f) * UI_DPI_FAC;
+  patdx = min_ff(dx * 2.0f / 3.0f, side / 6.0f) * UI_SCALE_FAC;
+  patdy = min_ff(dy * 2.0f / 3.0f, side * width / height / 6.0f) * UI_SCALE_FAC;
 
-  searchdx = min_ff(dx, (marker->search_max[0] - marker->search_min[0]) / 6.0f) * UI_DPI_FAC;
-  searchdy = min_ff(dy, (marker->search_max[1] - marker->search_min[1]) / 6.0f) * UI_DPI_FAC;
+  searchdx = min_ff(dx, (marker->search_max[0] - marker->search_min[0]) / 6.0f) * UI_SCALE_FAC;
+  searchdy = min_ff(dy, (marker->search_max[1] - marker->search_min[1]) / 6.0f) * UI_SCALE_FAC;
 
   px[0] = 1.0f / sc->zoom / width / sc->scale;
   px[1] = 1.0f / sc->zoom / height / sc->scale;
@@ -1035,7 +1039,7 @@ static void draw_marker_texts(SpaceClip *sc,
     return;
   }
 
-  BLF_size(fontid, 11.0f * U.dpi_fac);
+  BLF_size(fontid, 11.0f * UI_SCALE_FAC);
   fontsize = BLF_height_max(fontid);
 
   if (marker->flag & MARKER_DISABLED) {
@@ -1053,7 +1057,8 @@ static void draw_marker_texts(SpaceClip *sc,
   }
 
   if ((sc->flag & SC_SHOW_MARKER_SEARCH) &&
-      ((marker->flag & MARKER_DISABLED) == 0 || (sc->flag & SC_SHOW_MARKER_PATTERN) == 0)) {
+      ((marker->flag & MARKER_DISABLED) == 0 || (sc->flag & SC_SHOW_MARKER_PATTERN) == 0))
+  {
     dx = marker->search_min[0];
     dy = marker->search_min[1];
   }
@@ -1075,23 +1080,23 @@ static void draw_marker_texts(SpaceClip *sc,
   pos[1] = pos[1] * zoomy - fontsize;
 
   if (marker->flag & MARKER_DISABLED) {
-    strcpy(state, "disabled");
+    STRNCPY(state, "disabled");
   }
   else if (marker->framenr != ED_space_clip_get_clip_frame_number(sc)) {
-    strcpy(state, "estimated");
+    STRNCPY(state, "estimated");
   }
   else if (marker->flag & MARKER_TRACKED) {
-    strcpy(state, "tracked");
+    STRNCPY(state, "tracked");
   }
   else {
-    strcpy(state, "keyframed");
+    STRNCPY(state, "keyframed");
   }
 
   if (state[0]) {
-    BLI_snprintf(str, sizeof(str), "%s: %s", track->name, state);
+    SNPRINTF(str, "%s: %s", track->name, state);
   }
   else {
-    BLI_strncpy(str, track->name, sizeof(str));
+    STRNCPY(str, track->name);
   }
 
   BLF_position(fontid, pos[0], pos[1], 0.0f);
@@ -1099,7 +1104,7 @@ static void draw_marker_texts(SpaceClip *sc,
   pos[1] -= fontsize;
 
   if (track->flag & TRACK_HAS_BUNDLE) {
-    BLI_snprintf(str, sizeof(str), "Average error: %.2f px", track->error);
+    SNPRINTF(str, "Average error: %.2f px", track->error);
     BLF_position(fontid, pos[0], pos[1], 0.0f);
     BLF_draw(fontid, str, sizeof(str));
     pos[1] -= fontsize;
@@ -1288,7 +1293,8 @@ static void draw_plane_marker_ex(SpaceClip *sc,
 
     float viewport_size[4];
     GPU_viewport_size_get_f(viewport_size);
-    immUniform2f("viewport_size", viewport_size[2] / UI_DPI_FAC, viewport_size[3] / UI_DPI_FAC);
+    immUniform2f(
+        "viewport_size", viewport_size[2] / UI_SCALE_FAC, viewport_size[3] / UI_SCALE_FAC);
 
     immUniform1i("colors_len", 0); /* "simple" mode */
 
@@ -1995,6 +2001,6 @@ void clip_draw_grease_pencil(bContext *C, int onlyv2d)
     }
   }
   else {
-    ED_annotation_draw_view2d(C, 0);
+    ED_annotation_draw_view2d(C, false);
   }
 }

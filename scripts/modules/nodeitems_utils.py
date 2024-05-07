@@ -1,4 +1,7 @@
+# SPDX-FileCopyrightText: 2013-2023 Blender Authors
+#
 # SPDX-License-Identifier: GPL-2.0-or-later
+
 import bpy
 
 
@@ -84,7 +87,7 @@ _node_categories = {}
 
 def register_node_categories(identifier, cat_list):
     if identifier in _node_categories:
-        raise KeyError("Node categories list '%s' already registered" % identifier)
+        raise KeyError("Node categories list '{:s}' already registered".format(identifier))
         return
 
     # works as draw function for menus
@@ -113,9 +116,9 @@ def register_node_categories(identifier, cat_list):
 
         for cat in cat_list:
             if cat.poll(context):
-                layout.menu("NODE_MT_category_%s" % cat.identifier)
+                layout.menu("NODE_MT_category_" + cat.identifier)
 
-    # stores: (categories list, menu draw function, submenu types)
+    # Stores: (categories list, menu draw function, sub-menu types).
     _node_categories[identifier] = (cat_list, draw_add_menu, menu_types)
 
 

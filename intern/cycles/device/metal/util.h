@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: Apache-2.0
- * Copyright 2021-2022 Blender Foundation */
+/* SPDX-FileCopyrightText: 2021-2022 Blender Foundation
+ *
+ * SPDX-License-Identifier: Apache-2.0 */
 
 #pragma once
 
@@ -26,10 +27,17 @@ enum MetalGPUVendor {
 };
 
 enum AppleGPUArchitecture {
-  APPLE_UNKNOWN,
+  /* NOT_APPLE_GPU represents AMD/Intel GPUs. This should remained at the start of this enum to
+   * ensure that AMD/Intel GPUs don't accidentally get Apple Silicon only features enabled when
+   * using comparison operators. */
+  NOT_APPLE_GPU,
   APPLE_M1,
   APPLE_M2,
   APPLE_M2_BIG,
+  APPLE_M3,
+  /* Keep APPLE_UNKNOWN at the end of this enum to ensure that unknown future architectures get
+   * the most recent defaults when using comparison operators. */
+  APPLE_UNKNOWN,
 };
 
 /* Contains static Metal helper functions. */

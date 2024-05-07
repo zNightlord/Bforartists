@@ -1,18 +1,24 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2015 Blender Foundation. All rights reserved. */
+/* SPDX-FileCopyrightText: 2015 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup bli
  */
 
+#include "BLI_math_base.h"
+#include "BLI_math_matrix.h"
+#include "BLI_math_solvers.h"
+#include "BLI_math_vector.h"
 #include "MEM_guardedalloc.h"
 
-#include "BLI_math.h"
 #include "BLI_utildefines.h"
 
-#include "BLI_strict_flags.h"
-
 #include "eigen_capi.h"
+
+#include <string.h>
+
+#include "BLI_strict_flags.h" /* Keep last. */
 
 /********************************** Eigen Solvers *********************************/
 
@@ -47,11 +53,10 @@ bool BLI_tridiagonal_solve(
 
   size_t bytes = sizeof(double) * (uint)count;
   double *c1 = (double *)MEM_mallocN(bytes * 2, "tridiagonal_c1d1");
-  double *d1 = c1 + count;
-
   if (!c1) {
     return false;
   }
+  double *d1 = c1 + count;
 
   int i;
   double c_prev, d_prev, x_prev;
@@ -114,11 +119,10 @@ bool BLI_tridiagonal_solve_cyclic(
 
   size_t bytes = sizeof(float) * (uint)count;
   float *tmp = (float *)MEM_mallocN(bytes * 2, "tridiagonal_ex");
-  float *b2 = tmp + count;
-
   if (!tmp) {
     return false;
   }
+  float *b2 = tmp + count;
 
   /* Prepare the non-cyclic system; relies on tridiagonal_solve ignoring values. */
   memcpy(b2, b, bytes);

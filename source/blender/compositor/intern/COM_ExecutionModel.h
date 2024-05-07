@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2021 Blender Foundation. */
+/* SPDX-FileCopyrightText: 2021 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #pragma once
 
@@ -11,11 +12,14 @@
 #  include "MEM_guardedalloc.h"
 #endif
 
+#include "COM_profile.hh"
+
 namespace blender::compositor {
 
 class CompositorContext;
 class ExecutionSystem;
 class NodeOperation;
+class ProfilerData;
 
 /**
  * Base class for execution models. Contains shared implementation.
@@ -42,14 +46,19 @@ class ExecutionModel {
    */
   Span<NodeOperation *> operations_;
 
+  Profiler profiler_;
+
  public:
   ExecutionModel(CompositorContext &context, Span<NodeOperation *> operations);
 
-  virtual ~ExecutionModel()
-  {
-  }
+  virtual ~ExecutionModel() {}
 
   virtual void execute(ExecutionSystem &exec_system) = 0;
+
+  const ProfilerData &get_profiler_data() const
+  {
+    return profiler_.get_data();
+  }
 
 #ifdef WITH_CXX_GUARDEDALLOC
   MEM_CXX_CLASS_ALLOC_FUNCS("COM:BaseExecutionModel")

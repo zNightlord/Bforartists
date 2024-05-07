@@ -1,4 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* SPDX-FileCopyrightText: 2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #pragma once
 
@@ -23,7 +25,7 @@ namespace Freestyle {
 using namespace Geometry;
 
 #if 0
-//symbolic constant to call the appropriate renderers and textures
+// symbolic constant to call the appropriate renderers and textures
 #  define NO_TEXTURE_WITH_BLEND_STROKE -2
 #  define NO_TEXTURE_STROKE -1
 #  define PSEUDO_CHARCOAL_STROKE 0
@@ -43,9 +45,7 @@ using namespace Geometry;
 
 class StrokeVertexRep {
  public:
-  StrokeVertexRep()
-  {
-  }
+  StrokeVertexRep() {}
 
   StrokeVertexRep(const Vec2r &iPoint2d)
   {
@@ -54,9 +54,7 @@ class StrokeVertexRep {
 
   StrokeVertexRep(const StrokeVertexRep &iBrother);
 
-  virtual ~StrokeVertexRep()
-  {
-  }
+  virtual ~StrokeVertexRep() {}
 
   inline Vec2r &point2d()
   {
@@ -168,7 +166,7 @@ class StrokeRep {
   Stroke *_stroke;
   vector<Strip *> _strips;
   Stroke::MediumType _strokeType;
-  unsigned int _textureId;
+  uint _textureId;
   float _textureStep;
   MTex *_mtex[MAX_MTEX];
   bNodeTree *_nodeTree;
@@ -195,7 +193,7 @@ class StrokeRep {
     return _strokeType;
   }
 
-  inline unsigned getTextureId() const
+  inline uint getTextureId() const
   {
     return _textureId;
   }
@@ -225,7 +223,7 @@ class StrokeRep {
     return _strips;
   }
 
-  inline unsigned int getNumberOfStrips() const
+  inline uint getNumberOfStrips() const
   {
     return _strips.size();
   }
@@ -241,7 +239,7 @@ class StrokeRep {
     _strokeType = itype;
   }
 
-  inline void setTextureId(unsigned textureId)
+  inline void setTextureId(uint textureId)
   {
     _textureId = textureId;
   }

@@ -1,8 +1,10 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* SPDX-FileCopyrightText: 2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #pragma once
 
-#include "GPU_shader.h"
+#include "GPU_shader.hh"
 
 #include "COM_context.hh"
 #include "COM_input_descriptor.hh"
@@ -47,8 +49,8 @@ class ConversionOperation : public SimpleOperation {
 /* -------------------------------------------------------------------- */
 /** \name Convert Float to Vector Operation
  *
- * Takes a float result and outputs a vector result. All three components of the output are filled
- * with the input float.
+ * Takes a float result and outputs a vector result. The first three components of the output are
+ * filled with the input float, while the fourth component is set to 1.
  * \{ */
 
 class ConvertFloatToVectorOperation : public ConversionOperation {
@@ -101,8 +103,8 @@ class ConvertColorToFloatOperation : public ConversionOperation {
 /* -------------------------------------------------------------------- */
 /** \name Convert Color to Vector Operation
  *
- * Takes a color result and outputs a vector result. The output is a copy of the three color
- * channels to the three vector components.
+ * Takes a color result and outputs a vector result. The output is an exact copy of the input since
+ * vectors are 4D.
  * \{ */
 
 class ConvertColorToVectorOperation : public ConversionOperation {
@@ -123,9 +125,6 @@ class ConvertColorToVectorOperation : public ConversionOperation {
  * components.
  * \{ */
 
-/*
- *
- * */
 class ConvertVectorToFloatOperation : public ConversionOperation {
  public:
   ConvertVectorToFloatOperation(Context &context);

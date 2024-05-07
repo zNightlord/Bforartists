@@ -1,9 +1,11 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* SPDX-FileCopyrightText: 2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup DNA
  *
- * Use API in BKE_workspace.h to edit these.
+ * Use API in BKE_workspace.hh to edit these.
  */
 
 #pragma once
@@ -13,7 +15,12 @@
 #include "DNA_viewer_path_types.h"
 
 #ifdef __cplusplus
-extern "C" {
+namespace blender::bke {
+struct WorkSpaceRuntime;
+}
+using WorkSpaceRuntimeHandle = blender::bke::WorkSpaceRuntime;
+#else
+typedef struct WorkSpaceRuntimeHandle WorkSpaceRuntimeHandle;
 #endif
 
 /** #bToolRef_Runtime.flag */
@@ -60,10 +67,10 @@ typedef struct bToolRef {
   /** Use to avoid initializing the same tool multiple times. */
   short tag;
 
-  /** #bToolKey (space-type, mode), used in 'WM_api.h' */
+  /** #bToolKey (space-type, mode), used in 'WM_api.hh' */
   short space_type;
   /**
-   * Value depends on the 'space_type', object mode for 3D view, image editor has own mode too.
+   * Value depends on the 'space_type', object mode for 3D view, image editor has its own mode too.
    * RNA needs to handle using item function.
    */
   int mode;
@@ -139,7 +146,7 @@ typedef struct WorkSpace {
   int order;
 
   /** Info text from modal operators (runtime). */
-  char *status_text;
+  WorkSpaceRuntimeHandle *runtime;
 
   /** Workspace-wide active asset library, for asset UIs to use (e.g. asset view UI template). The
    * Asset Browser has its own and doesn't use this. */
@@ -211,7 +218,3 @@ typedef enum eWorkSpaceFlags {
   WORKSPACE_USE_FILTER_BY_ORIGIN = (1 << 1),
   WORKSPACE_USE_PIN_SCENE = (1 << 2),
 } eWorkSpaceFlags;
-
-#ifdef __cplusplus
-}
-#endif

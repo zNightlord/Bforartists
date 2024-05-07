@@ -1,10 +1,12 @@
+# SPDX-FileCopyrightText: 2009-2023 Blender Authors
+#
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 # Originally written by Matt Ebb
 
 import bpy
 from bpy.types import Operator
-from bpy.app.translations import pgettext_tip as tip_
+from bpy.app.translations import pgettext_rpt as rpt_
 
 
 def guess_player_path(preset):
@@ -16,9 +18,30 @@ def guess_player_path(preset):
     elif preset == 'DJV':
         player_path = "djv"
         if sys.platform == "darwin":
+            import os
             test_path = "/Applications/DJV2.app/Contents/Resources/bin/djv"
             if os.path.exists(test_path):
                 player_path = test_path
+        elif sys.platform == "win32":
+            import winreg
+
+            # NOTE: This can be removed if/when DJV adds their executable to the PATH.
+            # See issue 449 on their GITHUB project page.
+            reg_path = r"SOFTWARE\Classes\djv\shell\open\command"
+            reg_value = None
+            try:
+                with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, reg_path, 0, winreg.KEY_READ) as regkey:
+                    reg_value = winreg.QueryValue(regkey, None)
+            except OSError:
+                pass
+
+            if reg_value:
+                # Remove trailing command line arguments from the path. The
+                # registry value looks like: `<full path>\djv.exe "%1"`.
+                binary = "djv.exe"
+                index = reg_value.find(binary)
+                if index > 0:
+                    player_path = reg_value[:index + len(binary)]
 
     elif preset == 'FRAMECYCLER':
         player_path = "framecycler"
@@ -96,7 +119,7 @@ class PlayRenderedAnim(Operator):
             file = rd.frame_path(frame=scene.frame_start, preview=scene.use_preview_range, view=view_suffix)
             file = bpy.path.abspath(file)  # expand '//'
             if not os.path.exists(file):
-                err_msg = tip_("File %r not found") % file
+                err_msg = rpt_("File {!r} not found").format(file)
                 self.report({'WARNING'}, err_msg)
                 path_valid = False
 
@@ -104,7 +127,7 @@ class PlayRenderedAnim(Operator):
             if scene.use_preview_range and not path_valid:
                 file = rd.frame_path(frame=scene.frame_start, preview=False, view=view_suffix)
                 file = bpy.path.abspath(file)  # expand '//'
-                err_msg = tip_("File %r not found") % file
+                err_msg = rpt_("File {!r} not found").format(file)
                 if not os.path.exists(file):
                     self.report({'WARNING'}, err_msg)
 
@@ -137,10 +160,18 @@ class PlayRenderedAnim(Operator):
             ]
             cmd.extend(opts)
         elif preset == 'FRAMECYCLER':
-            opts = [file, "%d-%d" % (scene.frame_start, scene.frame_end)]
+            opts = [file, "{:d}-{:d}".format(scene.frame_start, scene.frame_end)]
             cmd.extend(opts)
         elif preset == 'RV':
-            opts = ["-fps", str(rd.fps), "-play", "[ %s ]" % file]
+            opts = ["-fps", str(rd.fps), "-play"]
+            if scene.use_preview_range:
+                opts += [
+                    file.replace("#", "", file.count('#') - 1),
+                    "{:d}-{:d}".format(frame_start, frame_end),
+                ]
+            else:
+                opts.append(file)
+
             cmd.extend(opts)
         elif preset == 'MPLAYER':
             opts = []
@@ -150,7 +181,7 @@ class PlayRenderedAnim(Operator):
                 opts += [
                     ("mf://" + file.replace("#", "?")),
                     "-mf",
-                    "fps=%.4f" % fps_final,
+                    "fps={:.4f}".format(fps_final),
                 ]
 
             opts += ["-loop", "0", "-really-quiet", "-fs"]
@@ -163,8 +194,8 @@ class PlayRenderedAnim(Operator):
 
         try:
             subprocess.Popen(cmd)
-        except Exception as e:
-            err_msg = tip_("Couldn't run external animation player with command %r\n%s") % (cmd, e)
+        except BaseException as ex:
+            err_msg = rpt_("Couldn't run external animation player with command {!r}\n{:s}").format(cmd, str(ex))
             self.report(
                 {'ERROR'},
                 err_msg,

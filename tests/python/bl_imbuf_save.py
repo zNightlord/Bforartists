@@ -1,4 +1,7 @@
+# SPDX-FileCopyrightText: 2023 Blender Authors
+#
 # SPDX-License-Identifier: GPL-2.0-or-later
+
 import os
 import pathlib
 import sys
@@ -62,6 +65,10 @@ class ImBufTest(AbstractImBufTest):
 
         # Save the image in the desired format with the desired settings
         scene = bpy.data.scenes[0]
+
+        # The reference images were saved using Filmic view transform.
+        scene.view_settings.view_transform = "Filmic"
+
         ref_image_path = self.reference_dir.joinpath(img.name)
         out_image_path = self.output_dir.joinpath(img.name)
         img.save_render(str(out_image_path), scene=scene)
@@ -130,8 +137,6 @@ class ImBufSaveTest(ImBufTest):
         self.check(src="rgba32", ext="exr", settings={"file_format": "OPEN_EXR", "color_mode": "RGBA", "color_depth": "32", "exr_codec": "ZIP"})
 
     def test_save_hdr(self):
-        self.skip_if_format_missing("HDR")
-
         self.check(src="rgba08", ext="hdr", settings={"file_format": "HDR", "color_mode": "BW"})
         self.check(src="rgba08", ext="hdr", settings={"file_format": "HDR", "color_mode": "RGB"})
 
@@ -157,8 +162,6 @@ class ImBufSaveTest(ImBufTest):
         self.check(src="rgba32", ext="tga", settings={"file_format": "TARGA_RAW", "color_mode": "RGBA"})
 
     def test_save_tiff(self):
-        self.skip_if_format_missing("TIFF")
-
         self.check(src="rgba08", ext="tif", settings={"file_format": "TIFF", "color_mode": "BW", "color_depth": "8", "tiff_codec": "DEFLATE"})
         self.check(src="rgba08", ext="tif", settings={"file_format": "TIFF", "color_mode": "RGB", "color_depth": "8", "tiff_codec": "LZW"})
         self.check(src="rgba08", ext="tif", settings={"file_format": "TIFF", "color_mode": "RGBA", "color_depth": "8", "tiff_codec": "PACKBITS"})
@@ -216,8 +219,6 @@ class ImBufSaveTest(ImBufTest):
         self.check(src="rgba32", ext="jp2", settings={"file_format": "JPEG2000", "color_mode": "RGBA", "color_depth": "16", "jpeg2k_codec": "JP2", "use_jpeg2k_cinema_preset": False, "use_jpeg2k_cinema_48": False, "use_jpeg2k_ycc": True, "quality": 70})
 
     def test_save_dpx(self):
-        self.skip_if_format_missing("CINEON")
-
         self.check(src="rgba08", ext="dpx", settings={"file_format": "DPX", "color_mode": "RGB", "color_depth": "8", "use_cineon_log": False})
         self.check(src="rgba08", ext="dpx", settings={"file_format": "DPX", "color_mode": "RGB", "color_depth": "12", "use_cineon_log": False})
         self.check(src="rgba08", ext="dpx", settings={"file_format": "DPX", "color_mode": "RGB", "color_depth": "16", "use_cineon_log": False})
@@ -262,7 +263,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-test_dir', required=True, type=pathlib.Path)
     parser.add_argument('-output_dir', required=True, type=pathlib.Path)
-    parser.add_argument('-idiff', required=True, type=pathlib.Path)
+    parser.add_argument('-oiiotool', required=True, type=pathlib.Path)
     parser.add_argument('-optional_formats', required=True)
     args, remaining = parser.parse_known_args(argv)
 

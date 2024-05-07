@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2001-2002 NaN Holding BV. All rights reserved. */
+/* SPDX-FileCopyrightText: 2001-2002 NaN Holding BV. All rights reserved.
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 /** \file
  * \ingroup DNA
  *
@@ -17,12 +18,8 @@
 #include "DNA_color_types.h"
 #include "DNA_defs.h"
 #include "DNA_listBase.h"
-#include "DNA_session_uuid_types.h" /* for #SessionUUID */
-#include "DNA_vec_types.h"          /* for #rctf */
-
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include "DNA_session_uid_types.h" /* for #SessionUID */
+#include "DNA_vec_types.h"         /* for #rctf */
 
 struct Ipo;
 struct MovieClip;
@@ -30,6 +27,15 @@ struct Scene;
 struct SequenceLookup;
 struct VFont;
 struct bSound;
+
+#ifdef __cplusplus
+namespace blender::seq {
+struct MediaPresence;
+}  // namespace blender::seq
+using MediaPresence = blender::seq::MediaPresence;
+#else
+typedef struct MediaPresence MediaPresence;
+#endif
 
 /* -------------------------------------------------------------------- */
 /** \name Sequence & Editing Structs
@@ -39,11 +45,12 @@ struct bSound;
 
 typedef struct StripAnim {
   struct StripAnim *next, *prev;
-  struct anim *anim;
+  struct ImBufAnim *anim;
 } StripAnim;
 
 typedef struct StripElem {
-  char name[256];
+  /** File name concatenated onto #Strip::dirpath. */
+  char filename[256];
   /** Ignore when zeroed. */
   int orig_width, orig_height;
   float orig_fps;
@@ -77,16 +84,16 @@ typedef struct StripColorBalance {
   float power[3];
   int flag;
   char _pad[4];
-  /* float exposure; */
-  /* float saturation; */
+  // float exposure;
+  // float saturation;
 } StripColorBalance;
 
 typedef struct StripProxy {
-  char dir[768]; /* custom directory for index and proxy files */
-                 /* (defaults to BL_proxy) */
-
-  char file[256];    /* custom file */
-  struct anim *anim; /* custom proxy anim file */
+  /** Custom directory for index and proxy files (defaults to "BL_proxy"). */
+  char dirpath[768];
+  /** Custom file. */
+  char filename[256];
+  struct ImBufAnim *anim; /* custom proxy anim file */
 
   short tc; /* time code in use */
 
@@ -110,7 +117,7 @@ typedef struct Strip {
    * NULL for all other strip-types.
    */
   StripElem *stripdata;
-  char dir[768];
+  char dirpath[768];
   StripProxy *proxy;
   StripCrop *crop;
   StripTransform *transform;
@@ -120,14 +127,28 @@ typedef struct Strip {
   ColorManagedColorspaceSettings colorspace_settings;
 } Strip;
 
-typedef struct SeqRetimingHandle {
-  int strip_frame_index;
-  int _pad0[2];
+typedef enum eSeqRetimingKeyFlag {
+  SEQ_SPEED_TRANSITION_IN = (1 << 0),
+  SEQ_SPEED_TRANSITION_OUT = (1 << 1),
+  SEQ_FREEZE_FRAME_IN = (1 << 2),
+  SEQ_FREEZE_FRAME_OUT = (1 << 3),
+  SEQ_KEY_SELECTED = (1 << 4),
+} eSeqRetimingKeyFlag;
+
+typedef struct SeqRetimingKey {
+  double strip_frame_index;
+  int flag; /* eSeqRetimingKeyFlag */
+  int _pad0;
   float retiming_factor; /* Value between 0-1 mapped to original content range. */
-} SeqRetimingHandle;
+
+  char _pad1[4];
+  double original_strip_frame_index; /* Used for transition keys only. */
+  float original_retiming_factor;    /* Used for transition keys only. */
+  char _pad2[4];
+} SeqRetimingKey;
 
 typedef struct SequenceRuntime {
-  SessionUUID session_uuid;
+  SessionUID session_uid;
 } SequenceRuntime;
 
 /**
@@ -155,7 +176,7 @@ typedef struct Sequence {
   int len;
   /**
    * Start frame of contents of strip in absolute frame coordinates.
-   * For metastrips start of first strip startdisp.
+   * For meta-strips start of first strip startdisp.
    */
   float start;
   /**
@@ -178,9 +199,9 @@ typedef struct Sequence {
   float _pad1;
 
   short anim_preseek; /* UNUSED. */
-  /** Streamindex for movie or sound files with several streams. */
+  /** Stream-index for movie or sound files with several streams. */
   short streamindex;
-  /** For multicam source selection. */
+  /** For multi-camera source selection. */
   int multicam_source;
   /** MOVIECLIP render flags. */
   int clip_flag;
@@ -209,12 +230,13 @@ typedef struct Sequence {
   /* pointers for effects: */
   struct Sequence *seq1, *seq2, *seq3;
 
-  /** List of strips for metastrips. */
+  /** List of strips for meta-strips. */
   ListBase seqbase;
   ListBase channels; /* SeqTimelineChannel */
 
   /** The linked "bSound" object. */
   struct bSound *sound;
+  /** Handle to #AUD_SequenceEntry. */
   void *scene_sound;
   float volume;
 
@@ -259,9 +281,9 @@ typedef struct Sequence {
   float media_playback_rate;
   float speed_factor;
 
-  struct SeqRetimingHandle *retiming_handles;
+  struct SeqRetimingKey *retiming_keys;
   void *_pad5;
-  int retiming_handle_num;
+  int retiming_keys_num;
   char _pad6[4];
 
   SequenceRuntime runtime;
@@ -285,6 +307,7 @@ typedef struct SeqTimelineChannel {
 
 typedef struct EditingRuntime {
   struct SequenceLookup *sequence_lookup;
+  MediaPresence *media_presence;
 } EditingRuntime;
 
 typedef struct Editing {
@@ -312,6 +335,9 @@ typedef struct Editing {
   int overlay_frame_flag;
   rctf overlay_frame_rect;
 
+  int show_missing_media_flag;
+  int _pad1;
+
   struct SeqCache *cache;
 
   /* Cache control */
@@ -324,7 +350,6 @@ typedef struct Editing {
   int64_t disk_cache_timestamp;
 
   EditingRuntime runtime;
-  void *_pad1;
 } Editing;
 
 /** \} */
@@ -516,44 +541,54 @@ enum {
 
 /** \} */
 
-/* -------------------------------------------------------------------- */
-/** \name Scopes
+/** \name Sound Modifiers
  * \{ */
 
-typedef struct SequencerScopes {
-  struct ImBuf *reference_ibuf;
+typedef struct EQCurveMappingData {
+  struct EQCurveMappingData *next, *prev;
+  struct CurveMapping curve_mapping;
+} EQCurveMappingData;
 
-  struct ImBuf *zebra_ibuf;
-  struct ImBuf *waveform_ibuf;
-  struct ImBuf *sep_waveform_ibuf;
-  struct ImBuf *vector_ibuf;
-  struct ImBuf *histogram_ibuf;
-} SequencerScopes;
-
-#define MAXSEQ 128
-
-/** #Editor.overlay_frame_flag */
-#define SEQ_EDIT_OVERLAY_FRAME_SHOW 1
-#define SEQ_EDIT_OVERLAY_FRAME_ABS 2
-
-#define SEQ_STRIP_OFSBOTTOM 0.05f
-#define SEQ_STRIP_OFSTOP 0.95f
-
-/* Editor->proxy_storage */
-/* store proxies in project directory */
-#define SEQ_EDIT_PROXY_DIR_STORAGE 1
-
-/* SpeedControlVars->flags */
-#define SEQ_SPEED_UNUSED_2 (1 << 0) /* cleared */
-#define SEQ_SPEED_UNUSED_1 (1 << 1) /* cleared */
-#define SEQ_SPEED_UNUSED_3 (1 << 2) /* cleared */
-#define SEQ_SPEED_USE_INTERPOLATION (1 << 3)
-
+typedef struct SoundEqualizerModifierData {
+  SequenceModifierData modifier;
+  /* EQCurveMappingData */
+  ListBase graphics;
+} SoundEqualizerModifierData;
 /** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name Flags & Types
  * \{ */
+
+#define MAXSEQ 128
+
+/** #Editor::overlay_frame_flag */
+enum {
+  SEQ_EDIT_OVERLAY_FRAME_SHOW = 1,
+  SEQ_EDIT_OVERLAY_FRAME_ABS = 2,
+};
+
+/** #Editing::show_missing_media_flag */
+enum {
+  SEQ_EDIT_SHOW_MISSING_MEDIA = 1 << 0,
+};
+
+#define SEQ_STRIP_OFSBOTTOM 0.05f
+#define SEQ_STRIP_OFSTOP 0.95f
+
+/** #Editor::proxy_storage */
+enum {
+  /** Store proxies in project directory. */
+  SEQ_EDIT_PROXY_DIR_STORAGE = 1,
+};
+
+/** #SpeedControlVars::flags */
+enum {
+  SEQ_SPEED_UNUSED_2 = 1 << 0, /* cleared */
+  SEQ_SPEED_UNUSED_1 = 1 << 1, /* cleared */
+  SEQ_SPEED_UNUSED_3 = 1 << 2, /* cleared */
+  SEQ_SPEED_USE_INTERPOLATION = 1 << 3,
+};
 
 #define SEQ_NAME_MAXSTR 64
 
@@ -581,8 +616,8 @@ enum {
   SEQ_IGNORE_CHANNEL_LOCK = (1 << 16),
   SEQ_AUTO_PLAYBACK_RATE = (1 << 17),
   SEQ_SINGLE_FRAME_CONTENT = (1 << 18),
-  SEQ_FLAG_UNUSED_19 = (1 << 19), /* cleared */
-  SEQ_FLAG_UNUSED_21 = (1 << 21), /* cleared */
+  SEQ_SHOW_RETIMING = (1 << 19),
+  SEQ_MULTIPLY_ALPHA = (1 << 21),
 
   SEQ_USE_EFFECT_DEFAULT_FADE = (1 << 22),
   SEQ_USE_LINEAR_MODIFIERS = (1 << 23),
@@ -615,26 +650,33 @@ enum {
 /* Deprecated, don't use a flag anymore. */
 // #define SEQ_ACTIVE 1048576
 
-#define SEQ_COLOR_BALANCE_INVERSE_GAIN 1
-#define SEQ_COLOR_BALANCE_INVERSE_GAMMA 2
-#define SEQ_COLOR_BALANCE_INVERSE_LIFT 4
-#define SEQ_COLOR_BALANCE_INVERSE_SLOPE 8
-#define SEQ_COLOR_BALANCE_INVERSE_OFFSET 16
-#define SEQ_COLOR_BALANCE_INVERSE_POWER 32
+enum {
+  SEQ_COLOR_BALANCE_INVERSE_GAIN = 1 << 0,
+  SEQ_COLOR_BALANCE_INVERSE_GAMMA = 1 << 1,
+  SEQ_COLOR_BALANCE_INVERSE_LIFT = 1 << 2,
+  SEQ_COLOR_BALANCE_INVERSE_SLOPE = 1 << 3,
+  SEQ_COLOR_BALANCE_INVERSE_OFFSET = 1 << 4,
+  SEQ_COLOR_BALANCE_INVERSE_POWER = 1 << 5,
+};
 
-/* !!! has to be same as IMB_imbuf.h IMB_PROXY_... and IMB_TC_... */
+/**
+ * \warning has to be same as `IMB_imbuf.hh`: `IMB_PROXY_*` and `IMB_TC_*`.
+ */
+enum {
+  SEQ_PROXY_IMAGE_SIZE_25 = 1 << 0,
+  SEQ_PROXY_IMAGE_SIZE_50 = 1 << 1,
+  SEQ_PROXY_IMAGE_SIZE_75 = 1 << 2,
+  SEQ_PROXY_IMAGE_SIZE_100 = 1 << 3,
+};
 
-#define SEQ_PROXY_IMAGE_SIZE_25 1
-#define SEQ_PROXY_IMAGE_SIZE_50 2
-#define SEQ_PROXY_IMAGE_SIZE_75 4
-#define SEQ_PROXY_IMAGE_SIZE_100 8
-
-#define SEQ_PROXY_TC_NONE 0
-#define SEQ_PROXY_TC_RECORD_RUN 1
-#define SEQ_PROXY_TC_FREE_RUN 2
-#define SEQ_PROXY_TC_INTERP_REC_DATE_FREE_RUN 4
-#define SEQ_PROXY_TC_RECORD_RUN_NO_GAPS 8
-#define SEQ_PROXY_TC_ALL 15
+/**
+ * \warning has to be same as `IMB_imbuf.hh`: `IMB_TC_*`.
+ */
+enum {
+  SEQ_PROXY_TC_NONE = 0,
+  SEQ_PROXY_TC_RECORD_RUN = 1 << 0,
+  SEQ_PROXY_TC_RECORD_RUN_NO_GAPS = 1 << 1,
+};
 
 /** SeqProxy.build_flags */
 enum {
@@ -652,13 +694,13 @@ enum {
  *
  * \warning #SEQ_TYPE_EFFECT BIT is used to determine if this is an effect strip!
  */
-enum {
+typedef enum SequenceType {
   SEQ_TYPE_IMAGE = 0,
   SEQ_TYPE_META = 1,
   SEQ_TYPE_SCENE = 2,
   SEQ_TYPE_MOVIE = 3,
   SEQ_TYPE_SOUND_RAM = 4,
-  SEQ_TYPE_SOUND_HD = 5,
+  SEQ_TYPE_SOUND_HD = 5, /* DEPRECATED */
   SEQ_TYPE_MOVIECLIP = 6,
   SEQ_TYPE_MASK = 7,
 
@@ -704,12 +746,16 @@ enum {
   SEQ_TYPE_EXCLUSION = 60,
 
   SEQ_TYPE_MAX = 60,
+} SequenceType;
+
+enum {
+  SEQ_MOVIECLIP_RENDER_UNDISTORTED = 1 << 0,
+  SEQ_MOVIECLIP_RENDER_STABILIZED = 1 << 1,
 };
 
-#define SEQ_MOVIECLIP_RENDER_UNDISTORTED (1 << 0)
-#define SEQ_MOVIECLIP_RENDER_STABILIZED (1 << 1)
-
-#define SEQ_BLEND_REPLACE 0
+enum {
+  SEQ_BLEND_REPLACE = 0,
+};
 /* all other BLEND_MODEs are simple SEQ_TYPE_EFFECT ids and therefore identical
  * to the table above. (Only those effects that handle _exactly_ two inputs,
  * otherwise, you can't really blend, right :) !)
@@ -729,6 +775,7 @@ enum {
   seqModifierType_Mask = 5,
   seqModifierType_WhiteBalance = 6,
   seqModifierType_Tonemap = 7,
+  seqModifierType_SoundEqualizer = 8,
   /* Keep last. */
   NUM_SEQUENCE_MODIFIER_TYPES,
 };
@@ -773,12 +820,11 @@ enum {
 
   SEQ_CACHE_OVERRIDE = (1 << 4),
 
-  /* enable cache visualization overlay in timeline UI */
-  SEQ_CACHE_VIEW_ENABLE = (1 << 5),
-  SEQ_CACHE_VIEW_RAW = (1 << 6),
-  SEQ_CACHE_VIEW_PREPROCESSED = (1 << 7),
-  SEQ_CACHE_VIEW_COMPOSITE = (1 << 8),
-  SEQ_CACHE_VIEW_FINAL_OUT = (1 << 9),
+  SEQ_CACHE_UNUSED_5 = (1 << 5),
+  SEQ_CACHE_UNUSED_6 = (1 << 6),
+  SEQ_CACHE_UNUSED_7 = (1 << 7),
+  SEQ_CACHE_UNUSED_8 = (1 << 8),
+  SEQ_CACHE_UNUSED_9 = (1 << 9),
 
   SEQ_CACHE_PREFETCH_ENABLE = (1 << 10),
   SEQ_CACHE_DISK_CACHE_ENABLE = (1 << 11),
@@ -803,9 +849,12 @@ typedef enum SequenceColorTag {
 
 /* Sequence->StripTransform->filter */
 enum {
+  SEQ_TRANSFORM_FILTER_AUTO = -1,
   SEQ_TRANSFORM_FILTER_NEAREST = 0,
   SEQ_TRANSFORM_FILTER_BILINEAR = 1,
-  SEQ_TRANSFORM_FILTER_NEAREST_3x3 = 2,
+  SEQ_TRANSFORM_FILTER_BOX = 2,
+  SEQ_TRANSFORM_FILTER_CUBIC_BSPLINE = 3,
+  SEQ_TRANSFORM_FILTER_CUBIC_MITCHELL = 4,
 };
 
 typedef enum eSeqChannelFlag {
@@ -814,7 +863,3 @@ typedef enum eSeqChannelFlag {
 } eSeqChannelFlag;
 
 /** \} */
-
-#ifdef __cplusplus
-}
-#endif

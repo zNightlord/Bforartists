@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2001-2002 NaN Holding BV. All rights reserved. */
+/* SPDX-FileCopyrightText: 2001-2002 NaN Holding BV. All rights reserved.
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup blenloader
@@ -16,23 +17,22 @@
 
 #include "BLI_ghash.h"
 #include "BLI_linklist.h"
-#include "BLI_listbase.h"
+#include "BLI_path_util.h" /* Only for assertions. */
 #include "BLI_string.h"
 #include "BLI_utildefines.h"
 
 #include "DNA_genfile.h"
 #include "DNA_sdna_types.h"
 
-#include "BKE_asset.h"
-#include "BKE_icons.h"
-#include "BKE_idtype.h"
-#include "BKE_main.h"
+#include "BKE_asset.hh"
+#include "BKE_idtype.hh"
+#include "BKE_main.hh"
+#include "BKE_preview_image.hh"
 
-#include "BLO_blend_defs.h"
-#include "BLO_readfile.h"
-#include "BLO_undofile.h"
+#include "BLO_blend_defs.hh"
+#include "BLO_readfile.hh"
 
-#include "readfile.h"
+#include "readfile.hh"
 
 #include "BLI_sys_types.h" /* Needed for `intptr_t`. */
 
@@ -43,7 +43,7 @@
 /* local prototypes --------------------- */
 void BLO_blendhandle_print_sizes(BlendHandle *bh, void *fp);
 
-/* Access routines used by filesel. */
+/* Access routines used by file-selector. */
 
 void BLO_datablock_info_free(BLODataBlockInfo *datablock_info)
 {
@@ -89,7 +89,7 @@ void BLO_blendhandle_print_sizes(BlendHandle *bh, void *fp)
 
   fprintf(static_cast<FILE *>(fp), "[\n");
   for (bhead = blo_bhead_first(fd); bhead; bhead = blo_bhead_next(fd, bhead)) {
-    if (bhead->code == ENDB) {
+    if (bhead->code == BLO_CODE_ENDB) {
       break;
     }
 
@@ -137,7 +137,7 @@ LinkNode *BLO_blendhandle_get_datablock_names(BlendHandle *bh,
       BLI_linklist_prepend(&names, BLI_strdup(idname + 2));
       tot++;
     }
-    else if (bhead->code == ENDB) {
+    else if (bhead->code == BLO_CODE_ENDB) {
       break;
     }
   }
@@ -156,10 +156,10 @@ LinkNode *BLO_blendhandle_get_datablock_info(BlendHandle *bh,
   BHead *bhead;
   int tot = 0;
 
-  const int sdna_nr_preview_image = DNA_struct_find_nr(fd->filesdna, "PreviewImage");
+  const int sdna_nr_preview_image = DNA_struct_find_with_alias(fd->filesdna, "PreviewImage");
 
   for (bhead = blo_bhead_first(fd); bhead; bhead = blo_bhead_next(fd, bhead)) {
-    if (bhead->code == ENDB) {
+    if (bhead->code == BLO_CODE_ENDB) {
       break;
     }
     if (bhead->code == ofblocktype) {
@@ -173,7 +173,7 @@ LinkNode *BLO_blendhandle_get_datablock_info(BlendHandle *bh,
       if (skip_datablock) {
         continue;
       }
-      struct BLODataBlockInfo *info = static_cast<BLODataBlockInfo *>(
+      BLODataBlockInfo *info = static_cast<BLODataBlockInfo *>(
           MEM_mallocN(sizeof(*info), __func__));
 
       /* Lastly, read asset data from the following blocks. */
@@ -190,8 +190,9 @@ LinkNode *BLO_blendhandle_get_datablock_info(BlendHandle *bh,
 
       bool has_preview = false;
       /* See if we can find a preview in the data of this ID. */
-      for (BHead *data_bhead = blo_bhead_next(fd, id_bhead); data_bhead->code == DATA;
-           data_bhead = blo_bhead_next(fd, data_bhead)) {
+      for (BHead *data_bhead = blo_bhead_next(fd, id_bhead); data_bhead->code == BLO_CODE_DATA;
+           data_bhead = blo_bhead_next(fd, data_bhead))
+      {
         if (data_bhead->SDNAnr == sdna_nr_preview_image) {
           has_preview = true;
           break;
@@ -229,7 +230,8 @@ static BHead *blo_blendhandle_read_preview_rects(FileData *fd,
 {
   for (int preview_index = 0; preview_index < NUM_ICON_SIZES; preview_index++) {
     if (preview_from_file->rect[preview_index] && preview_from_file->w[preview_index] &&
-        preview_from_file->h[preview_index]) {
+        preview_from_file->h[preview_index])
+    {
       bhead = blo_bhead_next(fd, bhead);
       BLI_assert((preview_from_file->w[preview_index] * preview_from_file->h[preview_index] *
                   sizeof(uint)) == bhead->len);
@@ -257,10 +259,10 @@ PreviewImage *BLO_blendhandle_get_preview_for_id(BlendHandle *bh,
 {
   FileData *fd = (FileData *)bh;
   bool looking = false;
-  const int sdna_preview_image = DNA_struct_find_nr(fd->filesdna, "PreviewImage");
+  const int sdna_preview_image = DNA_struct_find_with_alias(fd->filesdna, "PreviewImage");
 
   for (BHead *bhead = blo_bhead_first(fd); bhead; bhead = blo_bhead_next(fd, bhead)) {
-    if (bhead->code == DATA) {
+    if (bhead->code == BLO_CODE_DATA) {
       if (looking && bhead->SDNAnr == sdna_preview_image) {
         PreviewImage *preview_from_file = static_cast<PreviewImage *>(
             BLO_library_read_struct(fd, bhead, "PreviewImage"));
@@ -268,6 +270,7 @@ PreviewImage *BLO_blendhandle_get_preview_for_id(BlendHandle *bh,
         if (preview_from_file == nullptr) {
           break;
         }
+        BKE_previewimg_runtime_data_clear(preview_from_file);
 
         PreviewImage *result = static_cast<PreviewImage *>(MEM_dupallocN(preview_from_file));
         bhead = blo_blendhandle_read_preview_rects(fd, bhead, result, preview_from_file);
@@ -275,7 +278,7 @@ PreviewImage *BLO_blendhandle_get_preview_for_id(BlendHandle *bh,
         return result;
       }
     }
-    else if (looking || bhead->code == ENDB) {
+    else if (looking || bhead->code == BLO_CODE_ENDB) {
       /* We were looking for a preview image, but didn't find any belonging to block. So it doesn't
        * exist. */
       break;
@@ -291,66 +294,6 @@ PreviewImage *BLO_blendhandle_get_preview_for_id(BlendHandle *bh,
   return nullptr;
 }
 
-LinkNode *BLO_blendhandle_get_previews(BlendHandle *bh, int ofblocktype, int *r_tot_prev)
-{
-  FileData *fd = (FileData *)bh;
-  LinkNode *previews = nullptr;
-  BHead *bhead;
-  int looking = 0;
-  PreviewImage *prv = nullptr;
-  PreviewImage *new_prv = nullptr;
-  int tot = 0;
-
-  for (bhead = blo_bhead_first(fd); bhead; bhead = blo_bhead_next(fd, bhead)) {
-    if (bhead->code == ofblocktype) {
-      const char *idname = blo_bhead_id_name(fd, bhead);
-      switch (GS(idname)) {
-        case ID_MA:  /* fall through */
-        case ID_TE:  /* fall through */
-        case ID_IM:  /* fall through */
-        case ID_WO:  /* fall through */
-        case ID_LA:  /* fall through */
-        case ID_OB:  /* fall through */
-        case ID_GR:  /* fall through */
-        case ID_SCE: /* fall through */
-        case ID_AC:  /* fall through */
-        case ID_NT:  /* fall through */
-          new_prv = static_cast<PreviewImage *>(MEM_callocN(sizeof(PreviewImage), "newpreview"));
-          BLI_linklist_prepend(&previews, new_prv);
-          tot++;
-          looking = 1;
-          break;
-        default:
-          break;
-      }
-    }
-    else if (bhead->code == DATA) {
-      if (looking) {
-        if (bhead->SDNAnr == DNA_struct_find_nr(fd->filesdna, "PreviewImage")) {
-          prv = static_cast<PreviewImage *>(BLO_library_read_struct(fd, bhead, "PreviewImage"));
-
-          if (prv) {
-            memcpy(new_prv, prv, sizeof(PreviewImage));
-            bhead = blo_blendhandle_read_preview_rects(fd, bhead, new_prv, prv);
-            MEM_freeN(prv);
-          }
-        }
-      }
-    }
-    else if (bhead->code == ENDB) {
-      break;
-    }
-    else {
-      looking = 0;
-      new_prv = nullptr;
-      prv = nullptr;
-    }
-  }
-
-  *r_tot_prev = tot;
-  return previews;
-}
-
 LinkNode *BLO_blendhandle_get_linkable_groups(BlendHandle *bh)
 {
   FileData *fd = (FileData *)bh;
@@ -359,7 +302,7 @@ LinkNode *BLO_blendhandle_get_linkable_groups(BlendHandle *bh)
   BHead *bhead;
 
   for (bhead = blo_bhead_first(fd); bhead; bhead = blo_bhead_next(fd, bhead)) {
-    if (bhead->code == ENDB) {
+    if (bhead->code == BLO_CODE_ENDB) {
       break;
     }
     if (BKE_idtype_idcode_is_valid(bhead->code)) {
@@ -398,6 +341,9 @@ BlendFileData *BLO_read_from_file(const char *filepath,
                                   eBLOReadSkip skip_flags,
                                   BlendFileReadReport *reports)
 {
+  BLI_assert(!BLI_path_is_rel(filepath));
+  BLI_assert(BLI_path_is_abs_from_cwd(filepath));
+
   BlendFileData *bfd = nullptr;
   FileData *fd;
 
@@ -434,7 +380,7 @@ BlendFileData *BLO_read_from_memory(const void *mem,
 BlendFileData *BLO_read_from_memfile(Main *oldmain,
                                      const char *filepath,
                                      MemFile *memfile,
-                                     const struct BlendFileReadParams *params,
+                                     const BlendFileReadParams *params,
                                      ReportList *reports)
 {
   BlendFileData *bfd = nullptr;
@@ -446,23 +392,22 @@ BlendFileData *BLO_read_from_memfile(Main *oldmain,
   fd = blo_filedata_from_memfile(memfile, params, &bf_reports);
   if (fd) {
     fd->skip_flags = eBLOReadSkip(params->skip_flags);
-    BLI_strncpy(fd->relabase, filepath, sizeof(fd->relabase));
+    STRNCPY(fd->relabase, filepath);
 
-    /* separate libraries from old main */
+    /* Build old ID map for all old IDs. */
+    blo_make_old_idmap_from_main(fd, oldmain);
+
+    /* Separate linked data from old main. */
     blo_split_main(&old_mainlist, oldmain);
-    /* add the library pointers in oldmap lookup */
-    blo_add_library_pointer_map(&old_mainlist, fd);
+    fd->old_mainlist = &old_mainlist;
 
-    if ((params->skip_flags & BLO_READ_SKIP_UNDO_OLD_MAIN) == 0) {
-      /* Build idmap of old main (we only care about local data here, so we can do that after
-       * split_main() call. */
-      blo_make_old_idmap_from_main(fd, static_cast<Main *>(old_mainlist.first));
-    }
-
-    /* removed packed data from this trick - it's internal data that needs saves */
+    /* Removed packed data from this trick - it's internal data that needs saves. */
 
     /* Store all existing ID caches pointers into a mapping, to allow restoring them into newly
-     * read IDs whenever possible. */
+     * read IDs whenever possible.
+     *
+     * Note that this is only required for local data, since linked data are always re-used
+     * 'as-is'. */
     blo_cache_storage_init(fd, oldmain);
 
     bfd = blo_read_file_internal(fd, filepath);
@@ -495,4 +440,9 @@ void BLO_blendfiledata_free(BlendFileData *bfd)
   }
 
   MEM_freeN(bfd);
+}
+
+void BLO_read_do_version_after_setup(Main *new_bmain, BlendFileReadReport *reports)
+{
+  do_versions_after_setup(new_bmain, reports);
 }

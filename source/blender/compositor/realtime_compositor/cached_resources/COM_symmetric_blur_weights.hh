@@ -1,17 +1,23 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* SPDX-FileCopyrightText: 2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #pragma once
 
 #include <cstdint>
+#include <memory>
 
+#include "BLI_map.hh"
 #include "BLI_math_vector_types.hh"
 
-#include "GPU_shader.h"
-#include "GPU_texture.h"
+#include "GPU_shader.hh"
+#include "GPU_texture.hh"
 
 #include "COM_cached_resource.hh"
 
 namespace blender::realtime_compositor {
+
+class Context;
 
 /* ------------------------------------------------------------------------------------------------
  * Symmetric Blur Weights Key.
@@ -40,13 +46,30 @@ class SymmetricBlurWeights : public CachedResource {
   GPUTexture *texture_ = nullptr;
 
  public:
-  SymmetricBlurWeights(int type, float2 radius);
+  SymmetricBlurWeights(Context &context, int type, float2 radius);
 
   ~SymmetricBlurWeights();
 
   void bind_as_texture(GPUShader *shader, const char *texture_name) const;
 
   void unbind_as_texture() const;
+};
+
+/* ------------------------------------------------------------------------------------------------
+ * Symmetric Blur Weights Container.
+ */
+class SymmetricBlurWeightsContainer : public CachedResourceContainer {
+ private:
+  Map<SymmetricBlurWeightsKey, std::unique_ptr<SymmetricBlurWeights>> map_;
+
+ public:
+  void reset() override;
+
+  /* Check if there is an available SymmetricBlurWeights cached resource with the given parameters
+   * in the container, if one exists, return it, otherwise, return a newly created one and add it
+   * to the container. In both cases, tag the cached resource as needed to keep it cached for the
+   * next evaluation. */
+  SymmetricBlurWeights &get(Context &context, int type, float2 radius);
 };
 
 }  // namespace blender::realtime_compositor

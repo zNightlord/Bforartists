@@ -1,4 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* SPDX-FileCopyrightText: 2004-2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup freestyle
@@ -35,6 +37,7 @@ int Id_Init(PyObject *module)
 //------------------------INSTANCE METHODS ----------------------------------
 
 PyDoc_STRVAR(
+    /* Wrap. */
     Id_doc,
     "Class for representing an object Id.\n"
     "\n"
@@ -61,7 +64,8 @@ static int Id_init(BPy_Id *self, PyObject *args, PyObject *kwds)
     self->id = new Id(*(((BPy_Id *)brother)->id));
   }
   else if ((void)PyErr_Clear(),
-           PyArg_ParseTupleAndKeywords(args, kwds, "|ii", (char **)kwlist_2, &first, &second)) {
+           PyArg_ParseTupleAndKeywords(args, kwds, "|ii", (char **)kwlist_2, &first, &second))
+  {
     self->id = new Id(first, second);
   }
   else {
@@ -104,10 +108,12 @@ static PyObject *Id_RichCompare(BPy_Id *o1, BPy_Id *o2, int opid)
 
 /*----------------------Id get/setters ----------------------------*/
 
-PyDoc_STRVAR(Id_first_doc,
-             "The first number constituting the Id.\n"
-             "\n"
-             ":type: int");
+PyDoc_STRVAR(
+    /* Wrap. */
+    Id_first_doc,
+    "The first number constituting the Id.\n"
+    "\n"
+    ":type: int");
 
 static PyObject *Id_first_get(BPy_Id *self, void * /*closure*/)
 {
@@ -125,10 +131,12 @@ static int Id_first_set(BPy_Id *self, PyObject *value, void * /*closure*/)
   return 0;
 }
 
-PyDoc_STRVAR(Id_second_doc,
-             "The second number constituting the Id.\n"
-             "\n"
-             ":type: int");
+PyDoc_STRVAR(
+    /* Wrap. */
+    Id_second_doc,
+    "The second number constituting the Id.\n"
+    "\n"
+    ":type: int");
 
 static PyObject *Id_second_get(BPy_Id *self, void * /*closure*/)
 {
@@ -155,7 +163,7 @@ static PyGetSetDef BPy_Id_getseters[] = {
 /*-----------------------BPy_Id type definition ------------------------------*/
 
 PyTypeObject Id_Type = {
-    PyVarObject_HEAD_INIT(nullptr, 0)
+    /*ob_base*/ PyVarObject_HEAD_INIT(nullptr, 0)
     /*tp_name*/ "Id",
     /*tp_basicsize*/ sizeof(BPy_Id),
     /*tp_itemsize*/ 0,

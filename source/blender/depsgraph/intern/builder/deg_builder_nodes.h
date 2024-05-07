@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2013 Blender Foundation. All rights reserved. */
+/* SPDX-FileCopyrightText: 2013 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup depsgraph
@@ -7,15 +8,18 @@
 
 #pragma once
 
+#include "BLI_span.hh"
+
 #include "intern/builder/deg_builder.h"
 #include "intern/builder/deg_builder_key.h"
 #include "intern/builder/deg_builder_map.h"
-#include "intern/depsgraph_type.h"
-#include "intern/node/deg_node_id.h"
-#include "intern/node/deg_node_operation.h"
+#include "intern/depsgraph_type.hh"
+#include "intern/node/deg_node_id.hh"
+#include "intern/node/deg_node_operation.hh"
 
-#include "DEG_depsgraph.h"
+#include "DEG_depsgraph.hh"
 
+struct Animation;
 struct CacheFile;
 struct Camera;
 struct Collection;
@@ -37,7 +41,6 @@ struct MovieClip;
 struct Object;
 struct ParticleSettings;
 struct Scene;
-struct Simulation;
 struct Speaker;
 struct Tex;
 struct VFont;
@@ -66,7 +69,7 @@ class DepsgraphNodeBuilder : public DepsgraphBuilder {
   DepsgraphNodeBuilder(Main *bmain, Depsgraph *graph, DepsgraphBuilderCache *cache);
   ~DepsgraphNodeBuilder();
 
-  /* For given original ID get ID which is created by CoW system. */
+  /* For given original ID get ID which is created by copy-on-evaluation system. */
   ID *get_cow_id(const ID *id_orig) const;
   /* Similar to above, but for the cases when there is no ID node we create
    * one. */
@@ -78,7 +81,7 @@ class DepsgraphNodeBuilder : public DepsgraphBuilder {
     return (T *)get_cow_id(&orig->id);
   }
 
-  /* For a given COW datablock get corresponding original one. */
+  /* For a given evaluated datablock get corresponding original one. */
   template<typename T> T *get_orig_datablock(const T *cow) const
   {
     return (T *)cow->id.orig_id;
@@ -139,6 +142,7 @@ class DepsgraphNodeBuilder : public DepsgraphBuilder {
                           OperationCode opcode,
                           const char *name = "",
                           int name_tag = -1);
+  bool has_operation_node(ID *id, NodeType comp_type, OperationCode opcode);
 
   OperationNode *find_operation_node(const ID *id,
                                      NodeType comp_type,
@@ -155,7 +159,7 @@ class DepsgraphNodeBuilder : public DepsgraphBuilder {
 
   OperationNode *find_operation_node(const OperationKey &key);
 
-  virtual void build_id(ID *id);
+  virtual void build_id(ID *id, bool force_be_visible = false);
 
   /* Build function for ID types that do not need their own build_xxx() function. */
   virtual void build_generic_id(ID *id);
@@ -163,6 +167,7 @@ class DepsgraphNodeBuilder : public DepsgraphBuilder {
   virtual void build_idproperties(IDProperty *id_property);
 
   virtual void build_scene_render(Scene *scene, ViewLayer *view_layer);
+  virtual void build_scene_camera(Scene *scene);
   virtual void build_scene_parameters(Scene *scene);
   virtual void build_scene_compositor(Scene *scene);
 
@@ -190,9 +195,15 @@ class DepsgraphNodeBuilder : public DepsgraphBuilder {
   virtual void build_object_data_light(Object *object);
   virtual void build_object_data_lightprobe(Object *object);
   virtual void build_object_data_speaker(Object *object);
+  virtual void build_object_data_grease_pencil(Object *object);
   virtual void build_object_transform(Object *object);
   virtual void build_object_constraints(Object *object);
   virtual void build_object_pointcache(Object *object);
+  virtual void build_object_shading(Object *object);
+
+  virtual void build_object_light_linking(Object *object);
+  virtual void build_light_linking_collection(Collection *collection);
+
   virtual void build_pose_constraints(Object *object, bPoseChannel *pchan, int pchan_index);
   virtual void build_rigidbody(Scene *scene);
   virtual void build_particle_systems(Object *object, bool is_object_visible);
@@ -208,6 +219,7 @@ class DepsgraphNodeBuilder : public DepsgraphBuilder {
    */
   virtual void build_animation_images(ID *id);
   virtual void build_action(bAction *action);
+  virtual void build_animation(Animation *animation);
 
   /**
    * Build graph node(s) for Driver
@@ -218,6 +230,7 @@ class DepsgraphNodeBuilder : public DepsgraphBuilder {
   virtual void build_driver(ID *id, FCurve *fcurve, int driver_index);
 
   virtual void build_driver_variables(ID *id, FCurve *fcurve);
+  virtual void build_driver_scene_camera_variable(Scene *scene, const char *camera_path);
 
   /* Build operations of a property value from which is read by a driver target.
    *
@@ -239,6 +252,7 @@ class DepsgraphNodeBuilder : public DepsgraphBuilder {
   virtual void build_rig(Object *object);
   virtual void build_armature(bArmature *armature);
   virtual void build_armature_bones(ListBase *bones);
+  virtual void build_armature_bone_collections(blender::Span<BoneCollection *> collections);
   virtual void build_shapekeys(Key *key);
   virtual void build_camera(Camera *camera);
   virtual void build_light(Light *lamp);
@@ -257,7 +271,6 @@ class DepsgraphNodeBuilder : public DepsgraphBuilder {
   virtual void build_lightprobe(LightProbe *probe);
   virtual void build_speaker(Speaker *speaker);
   virtual void build_sound(bSound *sound);
-  virtual void build_simulation(Simulation *simulation);
   virtual void build_scene_sequencer(Scene *scene);
   virtual void build_scene_audio(Scene *scene);
   virtual void build_scene_speakers(Scene *scene, ViewLayer *view_layer);
@@ -278,9 +291,14 @@ class DepsgraphNodeBuilder : public DepsgraphBuilder {
   };
 
  protected:
-  /* Entry tags from the previous state of the dependency graph.
+  /* Entry tags and non-updated operations from the previous state of the dependency graph.
+   * The entry tags are operations which were directly tagged, the matching operations from the
+   * new dependency graph will be tagged. The needs-update operations are possibly indirectly
+   * modified operations, whose complementary part from the new dependency graph will only be
+   * marked as needs-update.
    * Stored before the graph is re-created so that they can be transferred over. */
   Vector<PersistentOperationKey> saved_entry_tags_;
+  Vector<PersistentOperationKey> needs_update_operations_;
 
   struct BuilderWalkUserData {
     DepsgraphNodeBuilder *builder;
@@ -296,7 +314,7 @@ class DepsgraphNodeBuilder : public DepsgraphBuilder {
 
   void tag_previously_tagged_nodes();
   /**
-   * Check for IDs that need to be flushed (COW-updated)
+   * Check for IDs that need to be flushed (copy-on-eval-updated)
    * because the depsgraph itself created or removed some of their evaluated dependencies.
    */
   void update_invalid_cow_pointers();
@@ -307,13 +325,12 @@ class DepsgraphNodeBuilder : public DepsgraphBuilder {
   int view_layer_index_;
   /* NOTE: Collection are possibly built recursively, so be careful when
    * setting the current state. */
-  Collection *collection_;
   /* Accumulated flag over the hierarchy of currently building collections.
    * Denotes whether all the hierarchy from parent of `collection_` to the
    * very root is visible (aka not restricted.). */
   bool is_parent_collection_visible_;
 
-  /* Indexed by original ID.session_uuid, values are IDInfo. */
+  /* Indexed by original ID.session_uid, values are IDInfo. */
   Map<uint, IDInfo *> id_info_hash_;
 
   /* Set of IDs which were already build. Makes it easier to keep track of

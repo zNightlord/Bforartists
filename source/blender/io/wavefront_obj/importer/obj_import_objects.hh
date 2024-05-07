@@ -1,4 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* SPDX-FileCopyrightText: 2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup obj
@@ -6,15 +8,12 @@
 
 #pragma once
 
-#include "BKE_lib_id.h"
-
 #include "BLI_map.hh"
 #include "BLI_math_base.hh"
 #include "BLI_math_vector_types.hh"
 #include "BLI_set.hh"
 #include "BLI_vector.hh"
 
-#include "DNA_meshdata_types.h"
 #include "DNA_object_types.h"
 
 namespace blender::io::obj {
@@ -41,9 +40,9 @@ struct GlobalVertices {
 };
 
 /**
- * A face's corner in an OBJ file. In Blender, it translates to a mloop vertex.
+ * A face's corner in an OBJ file. In Blender, it translates to a corner vertex.
  */
-struct PolyCorner {
+struct FaceCorner {
   /* These indices range from zero to total vertices in the OBJ file. */
   int vert_index;
   /* -1 is to indicate absence of UV vertices. Only < 0 condition should be checked since
@@ -52,7 +51,7 @@ struct PolyCorner {
   int vertex_normal_index = -1;
 };
 
-struct PolyElem {
+struct FaceElem {
   int vertex_group_index = -1;
   int material_index = -1;
   bool shaded_smooth = false;
@@ -98,15 +97,15 @@ struct Geometry {
   /* Mapping from global vertex index to geometry-local vertex index. */
   Map<int, int> global_to_local_vertices_;
   /* Loose edges in the file. */
-  Vector<MEdge> edges_;
+  Vector<int2> edges_;
 
-  Vector<PolyCorner> face_corners_;
-  Vector<PolyElem> face_elements_;
+  Vector<FaceCorner> face_corners_;
+  Vector<FaceElem> face_elements_;
 
-  bool has_invalid_polys_ = false;
+  bool has_invalid_faces_ = false;
   bool has_vertex_groups_ = false;
   NurbsElement nurbs_element_;
-  int total_loops_ = 0;
+  int total_corner_ = 0;
 
   int get_vertex_count() const
   {

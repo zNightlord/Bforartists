@@ -1,4 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* SPDX-FileCopyrightText: 2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup gpu
@@ -8,7 +10,7 @@
 
 #pragma once
 
-#include "GPU_common_types.h"
+#include "GPU_common_types.hh"
 #include "MEM_guardedalloc.h"
 
 #include "gpu_framebuffer_private.hh"
@@ -104,6 +106,16 @@ class MTLFrameBuffer : public FrameBuffer {
   /** Whether the primary Frame-buffer attachment is an SRGB target or not. */
   bool srgb_;
 
+  /** Default width/height represent raw size of active framebuffer attachments.
+   * For consistency with OpenGL backend, as width_/height_ can affect viewport and scissor
+   * size, we need to track this differently to ensure viewport state does not get reset.
+   * This size is only used to reset viewport/scissor regions when viewports and scissor are
+   * disabled, as Metal does not provide a utility to fully disable either without manually
+   * specifying the size.
+   */
+  int default_width_ = 0;
+  int default_height_ = 0;
+
  public:
   /**
    * Create a conventional framebuffer to attach texture to.
@@ -125,9 +137,7 @@ class MTLFrameBuffer : public FrameBuffer {
                         eGPUDataFormat data_format,
                         const void *clear_value) override;
 
-  void attachment_set_loadstore_op(GPUAttachmentType type,
-                                   eGPULoadOp load_action,
-                                   eGPUStoreOp store_action) override;
+  void attachment_set_loadstore_op(GPUAttachmentType type, GPULoadStore ls) override;
 
   void read(eGPUFrameBufferBits planes,
             eGPUDataFormat format,
@@ -143,6 +153,11 @@ class MTLFrameBuffer : public FrameBuffer {
                int dst_offset_x,
                int dst_offset_y) override;
 
+ protected:
+  void subpass_transition_impl(const GPUAttachmentState /*depth_attachment_state*/,
+                               Span<GPUAttachmentState> color_attachment_states) override;
+
+ public:
   void apply_state();
 
   /* State. */
@@ -157,6 +172,7 @@ class MTLFrameBuffer : public FrameBuffer {
   /* Attachment management. */
   /* When dirty_attachments_ is true, we need to reprocess attachments to extract Metal
    * information. */
+  void ensure_attachments_and_viewport();
   void update_attachments(bool update_viewport);
   bool add_color_attachment(gpu::MTLTexture *texture, uint slot, int miplevel, int layer);
   bool add_depth_attachment(gpu::MTLTexture *texture, int miplevel, int layer);
@@ -211,6 +227,9 @@ class MTLFrameBuffer : public FrameBuffer {
 
   int get_width();
   int get_height();
+  int get_default_width();
+  int get_default_height();
+
   bool get_dirty()
   {
     return is_dirty_ || is_loadstore_dirty_;
@@ -229,6 +248,12 @@ class MTLFrameBuffer : public FrameBuffer {
   bool get_is_srgb()
   {
     return srgb_;
+  }
+
+  inline void default_size_set(int w, int h)
+  {
+    default_width_ = w;
+    default_height_ = h;
   }
 
  private:

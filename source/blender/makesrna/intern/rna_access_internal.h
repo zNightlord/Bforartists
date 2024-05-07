@@ -1,4 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* SPDX-FileCopyrightText: 2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup RNA
@@ -8,11 +10,7 @@
 
 #include "BLI_utildefines.h"
 
-#include "rna_internal_types.h"
-
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include "rna_internal_types.hh"
 
 struct IDProperty;
 struct PropertyRNAOrID;
@@ -28,11 +26,10 @@ void rna_property_rna_or_id_get(PropertyRNA *prop,
                                 PointerRNA *ptr,
                                 PropertyRNAOrID *r_prop_rna_or_id);
 
-void rna_idproperty_touch(struct IDProperty *idprop);
-struct IDProperty *rna_idproperty_find(PointerRNA *ptr, const char *name);
+void rna_idproperty_touch(IDProperty *idprop);
+IDProperty *rna_idproperty_find(PointerRNA *ptr, const char *name);
 
+/**
+ * Find the property which uses the given nested struct.
+ */
 PropertyRNA *rna_struct_find_nested(PointerRNA *ptr, StructRNA *srna);
-
-#ifdef __cplusplus
-}
-#endif

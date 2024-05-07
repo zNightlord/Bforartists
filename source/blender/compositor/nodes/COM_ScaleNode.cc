@@ -1,9 +1,10 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2011 Blender Foundation. */
+/* SPDX-FileCopyrightText: 2011 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "COM_ScaleNode.h"
 
-#include "BKE_node.h"
+#include "BKE_node.hh"
 #include "COM_ScaleOperation.h"
 #include "COM_SetValueOperation.h"
 
@@ -35,8 +36,6 @@ void ScaleNode::convert_to_operations(NodeConverter &converter,
       converter.map_output_socket(output_socket, operation->get_output_socket(0));
 
       operation->set_variable_size(input_xsocket->is_linked() || input_ysocket->is_linked());
-      operation->set_scale_canvas_max_size(context.get_render_size() * 1.5f);
-
       break;
     }
     case CMP_NODE_SCALE_RENDER_PERCENT: {
@@ -55,7 +54,6 @@ void ScaleNode::convert_to_operations(NodeConverter &converter,
       converter.map_output_socket(output_socket, operation->get_output_socket(0));
 
       operation->set_variable_size(input_xsocket->is_linked() || input_ysocket->is_linked());
-      operation->set_scale_canvas_max_size(context.get_render_size() * 1.5f);
 
       break;
     }
@@ -76,7 +74,6 @@ void ScaleNode::convert_to_operations(NodeConverter &converter,
       converter.map_output_socket(output_socket, operation->get_output_socket(0));
 
       operation->set_variable_size(input_xsocket->is_linked() || input_ysocket->is_linked());
-      operation->set_scale_canvas_max_size(context.get_render_size() * 3.0f);
 
       break;
     }
@@ -91,7 +88,6 @@ void ScaleNode::convert_to_operations(NodeConverter &converter,
       converter.map_output_socket(output_socket, operation->get_output_socket(0));
 
       operation->set_variable_size(input_xsocket->is_linked() || input_ysocket->is_linked());
-      operation->set_scale_canvas_max_size(context.get_render_size() * 1.5f);
 
       break;
     }

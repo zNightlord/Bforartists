@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: Apache-2.0
- * Copyright 2011-2022 Blender Foundation */
+/* SPDX-FileCopyrightText: 2011-2022 Blender Foundation
+ *
+ * SPDX-License-Identifier: Apache-2.0 */
 
 #pragma once
 
@@ -35,7 +36,7 @@ ccl_device_inline Spectrum integrate_transparent_surface_shadow(KernelGlobals kg
   integrator_state_read_shadow_isect(state, &isect, hit);
 
   Ray ray ccl_optional_struct_init;
-  integrator_state_read_shadow_ray(kg, state, &ray);
+  integrator_state_read_shadow_ray(state, &ray);
 
   shader_setup_from_ray(kg, shadow_sd, &ray, &isect);
 
@@ -49,6 +50,11 @@ ccl_device_inline Spectrum integrate_transparent_surface_shadow(KernelGlobals kg
   /* Exit/enter volume. */
   shadow_volume_stack_enter_exit(kg, state, shadow_sd);
 #  endif
+
+  /* Disable transparent shadows for ray portals */
+  if (shadow_sd->flag & SD_RAY_PORTAL) {
+    return zero_spectrum();
+  }
 
   /* Compute transparency from closures. */
   return surface_shader_transparency(kg, shadow_sd);
@@ -70,11 +76,12 @@ ccl_device_inline void integrate_transparent_volume_shadow(KernelGlobals kg,
 
   /* Setup shader data. */
   Ray ray ccl_optional_struct_init;
-  integrator_state_read_shadow_ray(kg, state, &ray);
+  integrator_state_read_shadow_ray(state, &ray);
   ray.self.object = OBJECT_NONE;
   ray.self.prim = PRIM_NONE;
   ray.self.light_object = OBJECT_NONE;
   ray.self.light_prim = PRIM_NONE;
+  ray.self.light = LAMP_NONE;
   /* Modify ray position and length to match current segment. */
   ray.tmin = (hit == 0) ? ray.tmin : INTEGRATOR_STATE_ARRAY(state, shadow_isect, hit - 1, t);
   ray.tmax = (hit < num_recorded_hits) ? INTEGRATOR_STATE_ARRAY(state, shadow_isect, hit, t) :

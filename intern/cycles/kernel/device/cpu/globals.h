@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: Apache-2.0
- * Copyright 2011-2022 Blender Foundation */
+/* SPDX-FileCopyrightText: 2011-2022 Blender Foundation
+ *
+ * SPDX-License-Identifier: Apache-2.0 */
 
 /* Constant Globals */
 
@@ -48,6 +49,7 @@ typedef struct KernelGlobalsCPU {
   OSLGlobals *osl = nullptr;
   OSLShadingSystem *osl_ss = nullptr;
   OSLThreadData *osl_tdata = nullptr;
+  int osl_thread_index = 0;
 #endif
 
 #ifdef __PATH_GUIDING__

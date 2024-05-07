@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2013-2023 Blender Authors
+#
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 import bpy
@@ -9,7 +11,7 @@ from bpy.props import (
 
 
 class CopyRigidbodySettings(Operator):
-    '''Copy Rigid Body settings from active object to selected'''
+    """Copy Rigid Body settings from active object to selected"""
     bl_idname = "rigidbody.object_settings_copy"
     bl_label = "Copy Rigid Body Settings"
     bl_options = {'REGISTER', 'UNDO'}
@@ -74,7 +76,7 @@ class CopyRigidbodySettings(Operator):
 
 
 class BakeToKeyframes(Operator):
-    '''Bake rigid body transformations of selected objects to keyframes'''
+    """Bake rigid body transformations of selected objects to keyframes"""
     bl_idname = "rigidbody.bake_to_keyframes"
     bl_label = "Bake to Keyframes"
     bl_options = {'REGISTER', 'UNDO'}
@@ -158,7 +160,7 @@ class BakeToKeyframes(Operator):
                         # NOTE: assume that on first frame, the starting rotation is appropriate
                         obj.rotation_euler = mat.to_euler(rot_mode, obj.rotation_euler)
 
-                bpy.ops.anim.keyframe_insert(type='BUILTIN_KSI_LocRot')
+                bpy.ops.anim.keyframe_insert_by_name(type='BUILTIN_KSI_LocRot')
 
             # remove baked objects from simulation
             bpy.ops.rigidbody.objects_remove()
@@ -198,7 +200,7 @@ class BakeToKeyframes(Operator):
 
 
 class ConnectRigidBodies(Operator):
-    '''Create rigid body constraints between selected rigid bodies'''
+    """Create rigid body constraints between selected rigid bodies"""
     bl_idname = "rigidbody.connect"
     bl_label = "Connect Rigid Bodies"
     bl_options = {'REGISTER', 'UNDO'}

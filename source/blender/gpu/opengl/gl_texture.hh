@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2020 Blender Foundation. All rights reserved. */
+/* SPDX-FileCopyrightText: 2020 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup gpu
@@ -13,8 +14,6 @@
 
 #include "gpu_texture_private.hh"
 
-struct GPUFrameBuffer;
-
 namespace blender {
 namespace gpu {
 
@@ -23,15 +22,30 @@ class GLTexture : public Texture {
   friend class GLFrameBuffer;
 
  private:
-  /** All samplers states. */
-  static GLuint samplers_[GPU_SAMPLER_MAX];
+  /**
+   * A cache of all possible sampler configurations stored along each of the three axis of
+   * variation. The first and second variation axis are the wrap mode along x and y axis
+   * respectively, and the third variation axis is the filtering type. See the samplers_init()
+   * method for more information.
+   */
+  static GLuint samplers_state_cache_[GPU_SAMPLER_EXTEND_MODES_COUNT]
+                                     [GPU_SAMPLER_EXTEND_MODES_COUNT]
+                                     [GPU_SAMPLER_FILTERING_TYPES_COUNT];
+  static const int samplers_state_cache_count_ = GPU_SAMPLER_EXTEND_MODES_COUNT *
+                                                 GPU_SAMPLER_EXTEND_MODES_COUNT *
+                                                 GPU_SAMPLER_FILTERING_TYPES_COUNT;
+  /**
+   * A cache of all custom sampler configurations described in GPUSamplerCustomType. See the
+   * samplers_init() method for more information.
+   */
+  static GLuint custom_samplers_state_cache_[GPU_SAMPLER_CUSTOM_TYPES_COUNT];
 
   /** Target to bind the texture to (#GL_TEXTURE_1D, #GL_TEXTURE_2D, etc...). */
   GLenum target_ = -1;
   /** opengl identifier for texture. */
   GLuint tex_id_ = 0;
   /** Legacy workaround for texture copy. Created when using framebuffer_get(). */
-  struct GPUFrameBuffer *framebuffer_ = nullptr;
+  FrameBuffer *framebuffer_ = nullptr;
   /** True if this texture is bound to at least one texture unit. */
   /* TODO(fclem): How do we ensure thread safety here? */
   bool is_bound_ = false;
@@ -61,7 +75,6 @@ class GLTexture : public Texture {
   void copy_to(Texture *dst) override;
   void clear(eGPUDataFormat format, const void *data) override;
   void swizzle_set(const char swizzle_mask[4]) override;
-  void stencil_texture_mode_set(bool use_stencil) override;
   void mip_range_set(int min, int max) override;
   void *read(int mip, eGPUDataFormat type) override;
 
@@ -70,23 +83,46 @@ class GLTexture : public Texture {
   /* TODO(fclem): Legacy. Should be removed at some point. */
   uint gl_bindcode_get() const override;
 
+  /**
+   * Pre-generate, setup all possible samplers and cache them in the samplers_state_cache_ and
+   * custom_samplers_state_cache_ arrays. This is done to avoid the runtime cost associated with
+   * setting up a sampler at draw time.
+   */
   static void samplers_init();
+
+  /**
+   * Free the samplers cache generated in samplers_init() method.
+   */
   static void samplers_free();
+
+  /**
+   * Updates the anisotropic filter parameters of samplers that enables anisotropic filtering. This
+   * is not done as a one time initialization in samplers_init() method because the user might
+   * change the anisotropic filtering samples in the user preferences. So it is called in
+   * samplers_init() method as well as every time the user preferences change.
+   */
   static void samplers_update();
+
+  /**
+   * Get the handle of the OpenGL sampler that corresponds to the given sampler state.
+   * The sampler is retrieved from the cached samplers computed in the samplers_init() method.
+   */
+  static GLuint get_sampler(const GPUSamplerState &sampler_state);
 
  protected:
   /** Return true on success. */
   bool init_internal() override;
   /** Return true on success. */
-  bool init_internal(GPUVertBuf *vbo) override;
+  bool init_internal(VertBuf *vbo) override;
   /** Return true on success. */
-  bool init_internal(const GPUTexture *src, int mip_offset, int layer_offset) override;
+  bool init_internal(GPUTexture *src, int mip_offset, int layer_offset, bool use_stencil) override;
 
  private:
   bool proxy_check(int mip);
+  void stencil_texture_mode_set(bool use_stencil);
   void update_sub_direct_state_access(
       int mip, int offset[3], int extent[3], GLenum gl_format, GLenum gl_type, const void *data);
-  GPUFrameBuffer *framebuffer_get();
+  FrameBuffer *framebuffer_get();
 
   MEM_CXX_CLASS_ALLOC_FUNCS("GLTexture")
 };
@@ -102,7 +138,7 @@ class GLPixelBuffer : public PixelBuffer {
   void *map() override;
   void unmap() override;
   int64_t get_native_handle() override;
-  uint get_size() override;
+  size_t get_size() override;
 
   MEM_CXX_CLASS_ALLOC_FUNCS("GLPixelBuffer")
 };
@@ -171,7 +207,7 @@ inline GLenum to_gl_internal_format(eGPUTextureFormat format)
       return GL_R16F;
     case GPU_R16:
       return GL_R16;
-    /* Special formats texture & renderbuffer */
+    /* Special formats texture & render-buffer. */
     case GPU_RGB10_A2:
       return GL_RGB10_A2;
     case GPU_RGB10_A2UI:
@@ -387,7 +423,7 @@ inline GLenum to_gl_data_format(eGPUTextureFormat format)
     case GPU_R16UI:
     case GPU_R16I:
       return GL_RED_INTEGER;
-    /* Special formats texture & renderbuffer */
+    /* Special formats texture & render-buffer. */
     case GPU_RGB10_A2UI:
     case GPU_RGB10_A2:
     case GPU_SRGB8_A8:

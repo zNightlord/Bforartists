@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2008 Blender Foundation. All rights reserved. */
+/* SPDX-FileCopyrightText: 2008 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup edutil
@@ -15,45 +16,46 @@
 #include "BLI_path_util.h"
 #include "BLI_string.h"
 
-#include "BLT_translation.h"
+#include "BLT_translation.hh"
 
-#include "BKE_collection.h"
-#include "BKE_global.h"
-#include "BKE_layer.h"
-#include "BKE_lib_id.h"
-#include "BKE_lib_remap.h"
-#include "BKE_main.h"
+#include "BKE_collection.hh"
+#include "BKE_global.hh"
+#include "BKE_layer.hh"
+#include "BKE_lib_id.hh"
+#include "BKE_lib_remap.hh"
+#include "BKE_main.hh"
 #include "BKE_material.h"
-#include "BKE_multires.h"
-#include "BKE_object.h"
+#include "BKE_multires.hh"
+#include "BKE_object.hh"
 #include "BKE_packedFile.h"
-#include "BKE_paint.h"
-#include "BKE_screen.h"
-#include "BKE_undo_system.h"
+#include "BKE_paint.hh"
+#include "BKE_screen.hh"
+#include "BKE_undo_system.hh"
 
-#include "DEG_depsgraph.h"
+#include "DEG_depsgraph.hh"
 
-#include "DNA_gpencil_types.h"
+#include "DNA_gpencil_legacy_types.h"
 
-#include "ED_armature.h"
-#include "ED_asset.h"
-#include "ED_gpencil.h"
-#include "ED_image.h"
-#include "ED_mesh.h"
-#include "ED_object.h"
-#include "ED_paint.h"
-#include "ED_screen.h"
-#include "ED_space_api.h"
-#include "ED_util.h"
+#include "ED_armature.hh"
+#include "ED_asset.hh"
+#include "ED_gpencil_legacy.hh"
+#include "ED_image.hh"
+#include "ED_mesh.hh"
+#include "ED_object.hh"
+#include "ED_paint.hh"
+#include "ED_screen.hh"
+#include "ED_sculpt.hh"
+#include "ED_space_api.hh"
+#include "ED_util.hh"
 
-#include "GPU_immediate.h"
+#include "GPU_immediate.hh"
 
-#include "UI_interface.h"
-#include "UI_resources.h"
+#include "UI_interface.hh"
+#include "UI_resources.hh"
 
-#include "RNA_access.h"
-#include "WM_api.h"
-#include "WM_types.h"
+#include "RNA_access.hh"
+#include "WM_api.hh"
+#include "WM_types.hh"
 
 /* ********* general editor util functions, not BKE stuff please! ********* */
 
@@ -74,6 +76,7 @@ void ED_editors_init_for_undo(Main *bmain)
 
 void ED_editors_init(bContext *C)
 {
+  using namespace blender::ed;
   Depsgraph *depsgraph = CTX_data_expect_evaluated_depsgraph(C);
   Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
@@ -83,7 +86,7 @@ void ED_editors_init(bContext *C)
   ReportList *reports = CTX_wm_reports(C);
   int reports_flag_prev = reports->flag & ~RPT_STORE;
 
-  SWAP(int, reports->flag, reports_flag_prev);
+  std::swap(reports->flag, reports_flag_prev);
 
   /* Don't do undo pushes when calling an operator. */
   wm->op_undo_depth++;
@@ -110,7 +113,7 @@ void ED_editors_init(bContext *C)
                        GP_DATA_STROKE_SCULPTMODE | GP_DATA_STROKE_WEIGHTMODE |
                        GP_DATA_STROKE_VERTEXMODE);
         ob->mode = OB_MODE_OBJECT;
-        DEG_id_tag_update(&ob->id, ID_RECALC_COPY_ON_WRITE);
+        DEG_id_tag_update(&ob->id, ID_RECALC_SYNC_TO_EVAL);
       }
       else if (mode & OB_MODE_ALL_PAINT_GPENCIL) {
         ED_gpencil_toggle_brush_cursor(C, true, nullptr);
@@ -122,7 +125,7 @@ void ED_editors_init(bContext *C)
      * previous mode if possible, re-creating its mode data, etc. */
     ID *ob_data = static_cast<ID *>(ob->data);
     ob->mode = OB_MODE_OBJECT;
-    DEG_id_tag_update(&ob->id, ID_RECALC_COPY_ON_WRITE);
+    DEG_id_tag_update(&ob->id, ID_RECALC_SYNC_TO_EVAL);
 
     /* Object mode is enforced if there is no active object, or if the active object's type is
      * different. */
@@ -131,7 +134,8 @@ void ED_editors_init(bContext *C)
     }
     /* Object mode is enforced for non-editable data (or their obdata). */
     if (!BKE_id_is_editable(bmain, &ob->id) ||
-        (ob_data != nullptr && !BKE_id_is_editable(bmain, ob_data))) {
+        (ob_data != nullptr && !BKE_id_is_editable(bmain, ob_data)))
+    {
       continue;
     }
 
@@ -146,12 +150,13 @@ void ED_editors_init(bContext *C)
      * modes like Sculpt.
      * Ref. #98225. */
     if (!BKE_collection_has_object_recursive(scene->master_collection, ob) ||
-        !BKE_scene_has_object(scene, ob) || (ob->visibility_flag & OB_HIDE_VIEWPORT) != 0) {
+        !BKE_scene_has_object(scene, ob) || (ob->visibility_flag & OB_HIDE_VIEWPORT) != 0)
+    {
       continue;
     }
 
     if (mode == OB_MODE_EDIT) {
-      ED_object_editmode_enter_ex(bmain, scene, ob, 0);
+      object::editmode_enter_ex(bmain, scene, ob, 0);
     }
     else if (mode & OB_MODE_ALL_SCULPT) {
       if (obact == ob) {
@@ -180,7 +185,7 @@ void ED_editors_init(bContext *C)
     else {
       /* TODO(@ideasman42): avoid operator calls. */
       if (obact == ob) {
-        ED_object_mode_set(C, eObjectMode(mode));
+        object::mode_set(C, eObjectMode(mode));
       }
     }
   }
@@ -202,14 +207,15 @@ void ED_editors_init(bContext *C)
     }
   }
 
-  ED_assetlist_storage_tag_main_data_dirty();
+  asset::list::storage_tag_main_data_dirty();
 
-  SWAP(int, reports->flag, reports_flag_prev);
+  std::swap(reports->flag, reports_flag_prev);
   wm->op_undo_depth--;
 }
 
 void ED_editors_exit(Main *bmain, bool do_undo_system)
 {
+  using namespace blender::ed;
   if (!bmain) {
     return;
   }
@@ -232,12 +238,12 @@ void ED_editors_exit(Main *bmain, bool do_undo_system)
    * since exiting edit-mode will tag the objects too.
    *
    * However there is no guarantee the active object _never_ changes while in edit-mode.
-   * Python for example can do this, some callers to #ED_object_base_activate
+   * Python for example can do this, some callers to #object::base_activate
    * don't handle modes either (doing so isn't always practical).
    *
    * To reproduce the problem where stale data is used, see: #84920. */
   LISTBASE_FOREACH (Object *, ob, &bmain->objects) {
-    if (ED_object_editmode_free_ex(bmain, ob)) {
+    if (object::editmode_free_ex(bmain, ob)) {
       if (do_undo_system == false) {
         DEG_id_tag_update(&ob->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY);
       }
@@ -254,6 +260,7 @@ bool ED_editors_flush_edits_for_object_ex(Main *bmain,
                                           bool for_render,
                                           bool check_needs_flush)
 {
+  using namespace blender::ed;
   bool has_edited = false;
   if (ob->mode & OB_MODE_SCULPT) {
     /* Don't allow flushing while in the middle of a stroke (frees data in use).
@@ -293,7 +300,7 @@ bool ED_editors_flush_edits_for_object_ex(Main *bmain,
 
     /* get editmode results */
     has_edited = true;
-    ED_object_editmode_load(bmain, ob);
+    object::editmode_load(bmain, ob);
   }
   return has_edited;
 }
@@ -369,43 +376,53 @@ void unpack_menu(bContext *C,
   pup = UI_popup_menu_begin(C, IFACE_("Unpack File"), ICON_NONE);
   layout = UI_popup_menu_layout(pup);
 
-  uiItemFullO_ptr(
-      layout, ot, IFACE_("Remove Pack"), ICON_NONE, nullptr, WM_OP_EXEC_DEFAULT, 0, &props_ptr);
+  uiItemFullO_ptr(layout,
+                  ot,
+                  IFACE_("Remove Pack"),
+                  ICON_NONE,
+                  nullptr,
+                  WM_OP_EXEC_DEFAULT,
+                  UI_ITEM_NONE,
+                  &props_ptr);
   RNA_enum_set(&props_ptr, "method", PF_REMOVE);
   RNA_string_set(&props_ptr, "id", id_name);
 
   if (blendfile_path[0] != '\0') {
     char local_name[FILE_MAXDIR + FILE_MAX], fi[FILE_MAX];
 
-    BLI_split_file_part(abs_name, fi, sizeof(fi));
+    BLI_path_split_file_part(abs_name, fi, sizeof(fi));
     BLI_path_join(local_name, sizeof(local_name), "//", folder, fi);
     if (!STREQ(abs_name, local_name)) {
       switch (BKE_packedfile_compare_to_file(blendfile_path, local_name, pf)) {
         case PF_CMP_NOFILE:
-          BLI_snprintf(line, sizeof(line), TIP_("Create %s"), local_name);
-          uiItemFullO_ptr(layout, ot, line, ICON_NONE, nullptr, WM_OP_EXEC_DEFAULT, 0, &props_ptr);
+          SNPRINTF(line, IFACE_("Create %s"), local_name);
+          uiItemFullO_ptr(
+              layout, ot, line, ICON_NONE, nullptr, WM_OP_EXEC_DEFAULT, UI_ITEM_NONE, &props_ptr);
           RNA_enum_set(&props_ptr, "method", PF_WRITE_LOCAL);
           RNA_string_set(&props_ptr, "id", id_name);
 
           break;
         case PF_CMP_EQUAL:
-          BLI_snprintf(line, sizeof(line), TIP_("Use %s (identical)"), local_name);
-          // uiItemEnumO_ptr(layout, ot, line, 0, "method", PF_USE_LOCAL);
-          uiItemFullO_ptr(layout, ot, line, ICON_NONE, nullptr, WM_OP_EXEC_DEFAULT, 0, &props_ptr);
+          SNPRINTF(line, IFACE_("Use %s (identical)"), local_name);
+          // uiItemEnumO_ptr(layout, ot, line, ICON_NONE, "method", PF_USE_LOCAL);
+          uiItemFullO_ptr(
+              layout, ot, line, ICON_NONE, nullptr, WM_OP_EXEC_DEFAULT, UI_ITEM_NONE, &props_ptr);
           RNA_enum_set(&props_ptr, "method", PF_USE_LOCAL);
           RNA_string_set(&props_ptr, "id", id_name);
 
           break;
         case PF_CMP_DIFFERS:
-          BLI_snprintf(line, sizeof(line), TIP_("Use %s (differs)"), local_name);
-          // uiItemEnumO_ptr(layout, ot, line, 0, "method", PF_USE_LOCAL);
-          uiItemFullO_ptr(layout, ot, line, ICON_NONE, nullptr, WM_OP_EXEC_DEFAULT, 0, &props_ptr);
+          SNPRINTF(line, IFACE_("Use %s (differs)"), local_name);
+          // uiItemEnumO_ptr(layout, ot, line, ICON_NONE, "method", PF_USE_LOCAL);
+          uiItemFullO_ptr(
+              layout, ot, line, ICON_NONE, nullptr, WM_OP_EXEC_DEFAULT, UI_ITEM_NONE, &props_ptr);
           RNA_enum_set(&props_ptr, "method", PF_USE_LOCAL);
           RNA_string_set(&props_ptr, "id", id_name);
 
-          BLI_snprintf(line, sizeof(line), TIP_("Overwrite %s"), local_name);
-          // uiItemEnumO_ptr(layout, ot, line, 0, "method", PF_WRITE_LOCAL);
-          uiItemFullO_ptr(layout, ot, line, ICON_NONE, nullptr, WM_OP_EXEC_DEFAULT, 0, &props_ptr);
+          SNPRINTF(line, IFACE_("Overwrite %s"), local_name);
+          // uiItemEnumO_ptr(layout, ot, line, ICON_NONE, "method", PF_WRITE_LOCAL);
+          uiItemFullO_ptr(
+              layout, ot, line, ICON_NONE, nullptr, WM_OP_EXEC_DEFAULT, UI_ITEM_NONE, &props_ptr);
           RNA_enum_set(&props_ptr, "method", PF_WRITE_LOCAL);
           RNA_string_set(&props_ptr, "id", id_name);
           break;
@@ -415,29 +432,33 @@ void unpack_menu(bContext *C,
 
   switch (BKE_packedfile_compare_to_file(blendfile_path, abs_name, pf)) {
     case PF_CMP_NOFILE:
-      BLI_snprintf(line, sizeof(line), TIP_("Create %s"), abs_name);
-      // uiItemEnumO_ptr(layout, ot, line, 0, "method", PF_WRITE_ORIGINAL);
-      uiItemFullO_ptr(layout, ot, line, ICON_NONE, nullptr, WM_OP_EXEC_DEFAULT, 0, &props_ptr);
+      SNPRINTF(line, IFACE_("Create %s"), abs_name);
+      // uiItemEnumO_ptr(layout, ot, line, ICON_NONE, "method", PF_WRITE_ORIGINAL);
+      uiItemFullO_ptr(
+          layout, ot, line, ICON_NONE, nullptr, WM_OP_EXEC_DEFAULT, UI_ITEM_NONE, &props_ptr);
       RNA_enum_set(&props_ptr, "method", PF_WRITE_ORIGINAL);
       RNA_string_set(&props_ptr, "id", id_name);
       break;
     case PF_CMP_EQUAL:
-      BLI_snprintf(line, sizeof(line), TIP_("Use %s (identical)"), abs_name);
-      // uiItemEnumO_ptr(layout, ot, line, 0, "method", PF_USE_ORIGINAL);
-      uiItemFullO_ptr(layout, ot, line, ICON_NONE, nullptr, WM_OP_EXEC_DEFAULT, 0, &props_ptr);
+      SNPRINTF(line, IFACE_("Use %s (identical)"), abs_name);
+      // uiItemEnumO_ptr(layout, ot, line, ICON_NONE, "method", PF_USE_ORIGINAL);
+      uiItemFullO_ptr(
+          layout, ot, line, ICON_NONE, nullptr, WM_OP_EXEC_DEFAULT, UI_ITEM_NONE, &props_ptr);
       RNA_enum_set(&props_ptr, "method", PF_USE_ORIGINAL);
       RNA_string_set(&props_ptr, "id", id_name);
       break;
     case PF_CMP_DIFFERS:
-      BLI_snprintf(line, sizeof(line), TIP_("Use %s (differs)"), abs_name);
-      // uiItemEnumO_ptr(layout, ot, line, 0, "method", PF_USE_ORIGINAL);
-      uiItemFullO_ptr(layout, ot, line, ICON_NONE, nullptr, WM_OP_EXEC_DEFAULT, 0, &props_ptr);
+      SNPRINTF(line, IFACE_("Use %s (differs)"), abs_name);
+      // uiItemEnumO_ptr(layout, ot, line, ICON_NONE, "method", PF_USE_ORIGINAL);
+      uiItemFullO_ptr(
+          layout, ot, line, ICON_NONE, nullptr, WM_OP_EXEC_DEFAULT, UI_ITEM_NONE, &props_ptr);
       RNA_enum_set(&props_ptr, "method", PF_USE_ORIGINAL);
       RNA_string_set(&props_ptr, "id", id_name);
 
-      BLI_snprintf(line, sizeof(line), TIP_("Overwrite %s"), abs_name);
-      // uiItemEnumO_ptr(layout, ot, line, 0, "method", PF_WRITE_ORIGINAL);
-      uiItemFullO_ptr(layout, ot, line, ICON_NONE, nullptr, WM_OP_EXEC_DEFAULT, 0, &props_ptr);
+      SNPRINTF(line, IFACE_("Overwrite %s"), abs_name);
+      // uiItemEnumO_ptr(layout, ot, line, ICON_NONE, "method", PF_WRITE_ORIGINAL);
+      uiItemFullO_ptr(
+          layout, ot, line, ICON_NONE, nullptr, WM_OP_EXEC_DEFAULT, UI_ITEM_NONE, &props_ptr);
       RNA_enum_set(&props_ptr, "method", PF_WRITE_ORIGINAL);
       RNA_string_set(&props_ptr, "id", id_name);
       break;
@@ -446,7 +467,9 @@ void unpack_menu(bContext *C,
   UI_popup_menu_end(C, pup);
 }
 
-void ED_spacedata_id_remap(ScrArea *area, SpaceLink *sl, const IDRemapper *mappings)
+void ED_spacedata_id_remap(ScrArea *area,
+                           SpaceLink *sl,
+                           const blender::bke::id::IDRemapper &mappings)
 {
   SpaceType *st = BKE_spacetype_from_id(sl->spacetype);
   if (st && st->id_remap) {
@@ -459,9 +482,8 @@ void ED_spacedata_id_remap_single(ScrArea *area, SpaceLink *sl, ID *old_id, ID *
   SpaceType *st = BKE_spacetype_from_id(sl->spacetype);
 
   if (st && st->id_remap) {
-    IDRemapper *mappings = BKE_id_remapper_create();
-    BKE_id_remapper_add(mappings, old_id, new_id);
+    blender::bke::id::IDRemapper mappings;
+    mappings.add(old_id, new_id);
     st->id_remap(area, sl, mappings);
-    BKE_id_remapper_free(mappings);
   }
 }

@@ -1,7 +1,10 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2001-2002 NaN Holding BV. All rights reserved. */
+/* SPDX-FileCopyrightText: 2001-2002 NaN Holding BV. All rights reserved.
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #pragma once
+
+#include "BLI_rect.h"
 
 /** \file
  * \ingroup bke
@@ -19,7 +22,6 @@ struct RegionView3D;
 struct RenderData;
 struct Scene;
 struct View3D;
-struct rctf;
 
 /* Camera Data-block */
 
@@ -169,10 +171,10 @@ struct CameraBGImage *BKE_camera_background_image_new(struct Camera *cam);
  * Duplicate a background image, in a ID management compatible way.
  *
  * \param copy_flag: The usual ID copying flags, see `LIB_ID_CREATE_`/`LIB_ID_COPY_` enums in
- * `BKE_lib_id.h`.
+ * `BKE_lib_id.hh`.
  */
-struct CameraBGImage *BKE_camera_background_image_copy(struct CameraBGImage *bgpic_src,
-                                                       const int copy_flag);
+struct CameraBGImage *BKE_camera_background_image_copy(const struct CameraBGImage *bgpic_src,
+                                                       int copy_flag);
 void BKE_camera_background_image_remove(struct Camera *cam, struct CameraBGImage *bgpic);
 void BKE_camera_background_image_clear(struct Camera *cam);
 

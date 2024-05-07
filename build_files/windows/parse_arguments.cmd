@@ -17,8 +17,8 @@ if NOT "%1" == "" (
 		shift /1
 	) else if "%1" == "with_tests" (
 		set TESTS_CMAKE_ARGS=%TESTS_CMAKE_ARGS% -DWITH_GTESTS=On
-	) else if "%1" == "with_opengl_tests" (
-		set TESTS_CMAKE_ARGS=%TESTS_CMAKE_ARGS% -DWITH_OPENGL_DRAW_TESTS=On -DWITH_OPENGL_RENDER_TESTS=On
+	) else if "%1" == "with_gpu_tests" (
+		set TESTS_CMAKE_ARGS=%TESTS_CMAKE_ARGS% -DWITH_GPU_DRAW_TESTS=On -DWITH_GPU_RENDER_TESTS=On -DWITH_GPU_RENDER_TESTS_SILENT=Off
 	) else if "%1" == "full" (
 		set TARGET=Full
 		set BUILD_CMAKE_ARGS=%BUILD_CMAKE_ARGS% ^
@@ -50,6 +50,8 @@ if NOT "%1" == "" (
 		goto ERR
 	) else if "%1" == "x64" (
 		set BUILD_ARCH=x64
+	) else if "%1" == "arm64" (
+		set BUILD_ARCH=arm64
 	) else if "%1" == "2019" (
 		set BUILD_VS_YEAR=2019
 	) else if "%1" == "2019pre" (
@@ -109,9 +111,6 @@ if NOT "%1" == "" (
 		goto EOF
 	) else if "%1" == "doc_py" (
 		set DOC_PY=1
-		goto EOF
-	) else if "%1" == "svnfix" (
-		set SVN_FIX=1
 		goto EOF
 	) else (
 		echo Command "%1" unknown, aborting!

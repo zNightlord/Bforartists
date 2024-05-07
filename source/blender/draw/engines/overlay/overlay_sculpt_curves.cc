@@ -1,20 +1,21 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2022 Blender Foundation. */
+/* SPDX-FileCopyrightText: 2022 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup draw_engine
  */
 
-#include "DRW_render.h"
+#include "DRW_render.hh"
 
-#include "draw_cache_impl.h"
+#include "draw_cache_impl.hh"
 #include "overlay_private.hh"
 
 #include "BKE_attribute.hh"
 #include "BKE_crazyspace.hh"
 #include "BKE_curves.hh"
 
-#include "DEG_depsgraph_query.h"
+#include "DEG_depsgraph_query.hh"
 
 void OVERLAY_sculpt_curves_cache_init(OVERLAY_Data *vedata)
 {
@@ -52,13 +53,14 @@ static bool everything_selected(const Curves &curves_id)
 {
   using namespace blender;
   const bke::CurvesGeometry &curves = curves_id.geometry.wrap();
-  const VArray<bool> selection = curves.attributes().lookup_or_default<bool>(
-      ".selection", ATTR_DOMAIN_POINT, true);
+  const VArray<bool> selection = *curves.attributes().lookup_or_default<bool>(
+      ".selection", bke::AttrDomain::Point, true);
   return selection.is_single() && selection.get_internal_single();
 }
 
 static void populate_selection_overlay(OVERLAY_Data *vedata, Object *object)
 {
+  using namespace blender::draw;
   OVERLAY_PrivateData *pd = vedata->stl->pd;
   Curves *curves = static_cast<Curves *>(object->data);
 
@@ -69,7 +71,7 @@ static void populate_selection_overlay(OVERLAY_Data *vedata, Object *object)
 
   /* Retrieve the location of the texture. */
   bool is_point_domain;
-  GPUVertBuf **texture = DRW_curves_texture_for_evaluated_attribute(
+  blender::gpu::VertBuf **texture = DRW_curves_texture_for_evaluated_attribute(
       curves, ".selection", &is_point_domain);
   if (texture == nullptr) {
     return;
@@ -88,10 +90,11 @@ static void populate_selection_overlay(OVERLAY_Data *vedata, Object *object)
 
 static void populate_edit_overlay(OVERLAY_Data *vedata, Object *object)
 {
+  using namespace blender::draw;
   OVERLAY_PrivateData *pd = vedata->stl->pd;
   Curves *curves = static_cast<Curves *>(object->data);
 
-  GPUBatch *geom_lines = DRW_curves_batch_cache_get_edit_lines(curves);
+  blender::gpu::Batch *geom_lines = DRW_curves_batch_cache_get_sculpt_curves_cage(curves);
   DRW_shgroup_call_no_cull(pd->sculpt_curves_cage_lines_grp, geom_lines, object);
 }
 
@@ -99,8 +102,8 @@ void OVERLAY_sculpt_curves_cache_populate(OVERLAY_Data *vedata, Object *object)
 {
   populate_selection_overlay(vedata, object);
   const View3DOverlay &overlay = vedata->stl->pd->overlay;
-  if ((overlay.flag & V3D_OVERLAY_SCULPT_CURVES_CAGE) &&
-      overlay.sculpt_curves_cage_opacity > 0.0f) {
+  if ((overlay.flag & V3D_OVERLAY_SCULPT_CURVES_CAGE) && overlay.sculpt_curves_cage_opacity > 0.0f)
+  {
     populate_edit_overlay(vedata, object);
   }
 }

@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2023 Blender Authors
+#
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 # This script dumps ui definitions as XML.
@@ -98,7 +100,7 @@ class AttributeBuilder:
         return attr_obj
 
     # def __setattr__(self, attr, value):
-    #     setatte
+    #     pass
 
     def __getitem__(self, item):
         item_obj = NewAttr(self._attr + "[" + repr(item) + "]", item)
@@ -320,6 +322,7 @@ def fake_main():
     bpy.app.translations = module_add("bpy.app.translations")
     bpy.app.translations.pgettext_iface = lambda s, context="": s
     bpy.app.translations.pgettext_data = lambda s: s
+    bpy.app.translations.pgettext_report = lambda s: s
     bpy.app.translations.pgettext_tip = lambda s: s
     # id's are chosen at random here...
     bpy.app.translations.contexts = module_add("bpy.app.translations.contexts")

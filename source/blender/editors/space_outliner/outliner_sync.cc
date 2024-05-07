@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2004 Blender Foundation. All rights reserved. */
+/* SPDX-FileCopyrightText: 2004 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup spoutliner
@@ -18,21 +19,25 @@
 #include "BLI_ghash.h"
 #include "BLI_listbase.h"
 
-#include "BKE_armature.h"
-#include "BKE_context.h"
-#include "BKE_layer.h"
-#include "BKE_main.h"
+#include "BKE_armature.hh"
+#include "BKE_context.hh"
+#include "BKE_layer.hh"
+#include "BKE_main.hh"
 
-#include "DEG_depsgraph.h"
+#include "DEG_depsgraph.hh"
 
-#include "ED_armature.h"
-#include "ED_object.h"
-#include "ED_outliner.h"
+#include "ED_armature.hh"
+#include "ED_object.hh"
+#include "ED_outliner.hh"
 
-#include "SEQ_select.h"
+#include "SEQ_select.hh"
 
-#include "WM_api.h"
-#include "WM_types.h"
+#include "WM_api.hh"
+#include "WM_types.hh"
+
+#include "ANIM_bone_collections.hh"
+
+#include "tree/tree_element_seq.hh"
 
 #include "outliner_intern.hh"
 
@@ -78,7 +83,8 @@ void ED_outliner_select_sync_flag_outliners(const bContext *C)
   wmWindowManager *wm = CTX_wm_manager(C);
 
   for (bScreen *screen = static_cast<bScreen *>(bmain->screens.first); screen;
-       screen = static_cast<bScreen *>(screen->id.next)) {
+       screen = static_cast<bScreen *>(screen->id.next))
+  {
     LISTBASE_FOREACH (ScrArea *, area, &screen->areabase) {
       LISTBASE_FOREACH (SpaceLink *, sl, &area->spacedata) {
         if (sl->spacetype == SPACE_OUTLINER) {
@@ -215,12 +221,12 @@ static void outliner_select_sync_to_object(ViewLayer *view_layer,
 
   if (base && (base->flag & BASE_SELECTABLE)) {
     if (tselem->flag & TSE_SELECTED) {
-      ED_object_base_select(base, BA_SELECT);
+      object::base_select(base, object::BA_SELECT);
 
       add_selected_item(selected_objects, base);
     }
     else if (!is_object_selected(selected_objects, base)) {
-      ED_object_base_select(base, BA_DESELECT);
+      object::base_select(base, object::BA_DESELECT);
     }
   }
 }
@@ -244,7 +250,7 @@ static void outliner_select_sync_to_edit_bone(const Scene *scene,
     else if (!is_edit_bone_selected(selected_ebones, ebone)) {
       /* Don't flush to parent bone tip, synced selection is iterating the whole tree so
        * deselecting potential children with `ED_armature_ebone_select_set(ebone, false)`
-       * would leave own tip deselected. */
+       * would leave its own tip deselected. */
       ebone->flag &= ~(BONE_SELECTED | BONE_TIPSEL | BONE_ROOTSEL);
     }
   }
@@ -286,9 +292,12 @@ static void outliner_select_sync_to_pose_bone(TreeElement *te,
   }
 }
 
-static void outliner_select_sync_to_sequence(Scene *scene, TreeStoreElem *tselem)
+static void outliner_select_sync_to_sequence(Scene *scene, const TreeElement *te)
 {
-  Sequence *seq = (Sequence *)tselem->id;
+  const TreeStoreElem *tselem = TREESTORE(te);
+
+  const TreeElementSequence *te_sequence = tree_element_cast<TreeElementSequence>(te);
+  Sequence *seq = &te_sequence->get_sequence();
 
   if (tselem->flag & TSE_ACTIVE) {
     SEQ_select_active_set(scene, seq);
@@ -331,7 +340,7 @@ static void outliner_sync_selection_from_outliner(Scene *scene,
     }
     else if (tselem->type == TSE_SEQUENCE) {
       if (sync_types->sequence) {
-        outliner_select_sync_to_sequence(scene, tselem);
+        outliner_select_sync_to_sequence(scene, te);
       }
     }
 
@@ -351,7 +360,8 @@ void ED_outliner_select_sync_from_outliner(bContext *C, SpaceOutliner *space_out
                                                        SO_LIBRARIES,
                                                        SO_OVERRIDES_LIBRARY,
                                                        SO_DATA_API,
-                                                       SO_ID_ORPHANS)) {
+                                                       SO_ID_ORPHANS))
+  {
     return;
   }
 
@@ -461,9 +471,12 @@ static void outliner_select_sync_from_pose_bone(bPoseChannel *pchan_active,
   }
 }
 
-static void outliner_select_sync_from_sequence(Sequence *sequence_active, TreeStoreElem *tselem)
+static void outliner_select_sync_from_sequence(Sequence *sequence_active, const TreeElement *te)
 {
-  Sequence *seq = (Sequence *)tselem->id;
+  TreeStoreElem *tselem = TREESTORE(te);
+
+  const TreeElementSequence *te_sequence = tree_element_cast<TreeElementSequence>(te);
+  const Sequence *seq = &te_sequence->get_sequence();
 
   if (seq == sequence_active) {
     tselem->flag |= TSE_ACTIVE;
@@ -519,7 +532,7 @@ static void outliner_sync_selection_to_outliner(const Scene *scene,
     }
     else if (tselem->type == TSE_SEQUENCE) {
       if (sync_types->sequence) {
-        outliner_select_sync_from_sequence(active_data->sequence, tselem);
+        outliner_select_sync_from_sequence(active_data->sequence, te);
       }
     }
     else {

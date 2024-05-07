@@ -1,10 +1,14 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* SPDX-FileCopyrightText: 2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup ply
  */
 
 #include "ply_file_buffer_binary.hh"
+
+#include "BLI_math_vector_types.hh"
 
 namespace blender::io::ply {
 void FileBufferBinary::write_vertex(float x, float y, float z)
@@ -21,6 +25,14 @@ void FileBufferBinary::write_UV(float u, float v)
   float2 vector(u, v);
   char *bits = reinterpret_cast<char *>(&vector);
   Span<char> span(bits, sizeof(float2));
+
+  write_bytes(span);
+}
+
+void FileBufferBinary::write_data(float v)
+{
+  char *bits = reinterpret_cast<char *>(&v);
+  Span<char> span(bits, sizeof(float));
 
   write_bytes(span);
 }

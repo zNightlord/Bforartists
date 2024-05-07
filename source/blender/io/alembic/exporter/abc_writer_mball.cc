@@ -1,4 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* SPDX-FileCopyrightText: 2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup balembic
@@ -7,16 +9,14 @@
 #include "abc_writer_mball.h"
 #include "abc_hierarchy_iterator.h"
 
-#include "BLI_assert.h"
+#include "BKE_lib_id.hh"
+#include "BKE_mball.hh"
+#include "BKE_mesh.hh"
+#include "BKE_object.hh"
 
-#include "BKE_displist.h"
-#include "BKE_lib_id.h"
-#include "BKE_mball.h"
-#include "BKE_mesh.h"
-#include "BKE_object.h"
+#include "DEG_depsgraph_query.hh"
 
 #include "DNA_mesh_types.h"
-#include "DNA_meta_types.h"
 
 namespace blender::io::alembic {
 

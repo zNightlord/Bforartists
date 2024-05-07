@@ -1,14 +1,19 @@
+# SPDX-FileCopyrightText: 2010-2023 Blender Authors
+#
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 import bpy
-from bpy.types import Operator
+from bpy.types import (
+    FileHandler,
+    Operator,
+)
 
 from bpy.props import (
     EnumProperty,
     FloatProperty,
     IntProperty,
 )
-from bpy.app.translations import pgettext_tip as tip_
+from bpy.app.translations import pgettext_rpt as rpt_
 
 
 class SequencerCrossfadeSounds(Operator):
@@ -27,7 +32,7 @@ class SequencerCrossfadeSounds(Operator):
         scene = context.scene
         seq1 = None
         seq2 = None
-        for strip in scene.sequence_editor.sequences:
+        for strip in scene.sequence_editor.sequences_all:
             if strip.select and strip.type == 'SOUND':
                 if seq1 is None:
                     seq1 = strip
@@ -166,20 +171,22 @@ class SequencerFadesAdd(Operator):
         name="Fade Duration",
         description="Duration of the fade in seconds",
         default=1.0,
-        min=0.01)
+        min=0.01,
+    )
     type: EnumProperty(
         items=(
-            ('IN_OUT', 'Fade In and Out', 'Fade selected strips in and out'),
-            ('IN', 'Fade In', 'Fade in selected strips'),
-            ('OUT', 'Fade Out', 'Fade out selected strips'),
-            ('CURSOR_FROM', 'From Current Frame',
-             'Fade from the time cursor to the end of overlapping sequences'),
-            ('CURSOR_TO', 'To Current Frame',
-             'Fade from the start of sequences under the time cursor to the current frame'),
+            ('IN_OUT', "Fade In and Out", "Fade selected strips in and out"),
+            ('IN', "Fade In", "Fade in selected strips"),
+            ('OUT', "Fade Out", "Fade out selected strips"),
+            ('CURSOR_FROM', "From Current Frame",
+             "Fade from the time cursor to the end of overlapping sequences"),
+            ('CURSOR_TO', "To Current Frame",
+             "Fade from the start of sequences under the time cursor to the current frame"),
         ),
         name="Fade Type",
         description="Fade in, out, both in and out, to, or from the current frame. Default is both in and out",
-        default='IN_OUT')
+        default='IN_OUT',
+    )
 
     @classmethod
     def poll(cls, context):
@@ -232,7 +239,7 @@ class SequencerFadesAdd(Operator):
             sequence.invalidate_cache('COMPOSITE')
 
         sequence_string = "sequence" if len(faded_sequences) == 1 else "sequences"
-        self.report({'INFO'}, tip_("Added fade animation to %d %s") % (len(faded_sequences), sequence_string))
+        self.report({'INFO'}, rpt_("Added fade animation to {:d} {:s}").format(len(faded_sequences), sequence_string))
         return {'FINISHED'}
 
     def calculate_fade_duration(self, context, sequence):
@@ -295,7 +302,7 @@ class SequencerFadesAdd(Operator):
                 try:
                     if fade.start.x < keyframe.co[0] <= fade.end.x:
                         keyframe_points.remove(keyframe, fast=True)
-                except Exception:
+                except BaseException:
                     pass
             fade_fcurve.update()
 
@@ -309,7 +316,7 @@ class SequencerFadesAdd(Operator):
             for point in (fade.start, fade.end):
                 keyframe_points.insert(frame=point.x, value=point.y, options={'FAST'})
         fade_fcurve.update()
-        # The graph editor and the audio waveforms only redraw upon "moving" a keyframe
+        # The graph editor and the audio wave-forms only redraw upon "moving" a keyframe.
         keyframe_points[-1].co = keyframe_points[-1].co
 
 
@@ -362,11 +369,43 @@ class Fade:
         return max_value if max_value > 0.0 else 1.0
 
     def __repr__(self):
-        return "Fade %r: %r to %r" % (self.type, self.start, self.end)
+        return "Fade {!r}: {!r} to {!r}".format(self.type, self.start, self.end)
 
 
 def calculate_duration_frames(scene, duration_seconds):
     return round(duration_seconds * scene.render.fps / scene.render.fps_base)
+
+
+class SequencerFileHandlerBase:
+    @classmethod
+    def poll_drop(cls, context):
+        return (
+            (context.region is not None) and
+            (context.region.type == 'WINDOW') and
+            (context.area is not None) and
+            (context.area.ui_type == 'SEQUENCE_EDITOR')
+        )
+
+
+class SEQUENCER_FH_image_strip(FileHandler, SequencerFileHandlerBase):
+    bl_idname = "SEQUENCER_FH_image_strip"
+    bl_label = "Image strip"
+    bl_import_operator = "SEQUENCER_OT_image_strip_add"
+    bl_file_extensions = ";".join(bpy.path.extensions_image)
+
+
+class SEQUENCER_FH_movie_strip(FileHandler, SequencerFileHandlerBase):
+    bl_idname = "SEQUENCER_FH_movie_strip"
+    bl_label = "Movie strip"
+    bl_import_operator = "SEQUENCER_OT_movie_strip_add"
+    bl_file_extensions = ";".join(bpy.path.extensions_movie)
+
+
+class SEQUENCER_FH_sound_strip(FileHandler, SequencerFileHandlerBase):
+    bl_idname = "SEQUENCER_FH_sound_strip"
+    bl_label = "Sound strip"
+    bl_import_operator = "SEQUENCER_OT_sound_strip_add"
+    bl_file_extensions = ";".join(bpy.path.extensions_audio)
 
 
 classes = (
@@ -375,4 +414,8 @@ classes = (
     SequencerDeinterlaceSelectedMovies,
     SequencerFadesClear,
     SequencerFadesAdd,
+
+    SEQUENCER_FH_image_strip,
+    SEQUENCER_FH_movie_strip,
+    SEQUENCER_FH_sound_strip,
 )

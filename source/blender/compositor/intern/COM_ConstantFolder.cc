@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2021 Blender Foundation. */
+/* SPDX-FileCopyrightText: 2021 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "BLI_map.hh"
 #include "BLI_set.hh"
@@ -26,7 +27,8 @@ static bool is_constant_foldable(NodeOperation *operation)
     for (int i = 0; i < operation->get_number_of_input_sockets(); i++) {
       NodeOperation *input = operation->get_input_operation(i);
       if (!input->get_flags().is_constant_operation ||
-          !static_cast<ConstantOperation *>(input)->can_get_constant_elem()) {
+          !static_cast<ConstantOperation *>(input)->can_get_constant_elem())
+      {
         return false;
       }
     }
@@ -117,7 +119,7 @@ Vector<MemoryBuffer *> ConstantFolder::get_constant_input_buffers(NodeOperation 
 Vector<ConstantOperation *> ConstantFolder::try_fold_operations(Span<NodeOperation *> operations)
 {
   Set<NodeOperation *> foldable_ops = find_constant_foldable_operations(operations);
-  if (foldable_ops.size() == 0) {
+  if (foldable_ops.is_empty()) {
     return Vector<ConstantOperation *>();
   }
 
@@ -131,7 +133,7 @@ Vector<ConstantOperation *> ConstantFolder::try_fold_operations(Span<NodeOperati
 
 int ConstantFolder::fold_operations()
 {
-  WorkScheduler::start(operations_builder_.context());
+  WorkScheduler::start();
   Vector<ConstantOperation *> last_folds = try_fold_operations(
       operations_builder_.get_operations());
   int folds_count = last_folds.size();

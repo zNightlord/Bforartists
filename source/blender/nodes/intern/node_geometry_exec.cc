@@ -1,46 +1,25 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* SPDX-FileCopyrightText: 2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "DNA_modifier_types.h"
 
-#include "DEG_depsgraph_query.h"
+#include "DEG_depsgraph_query.hh"
 
 #include "BKE_curves.hh"
 #include "BKE_type_conversions.hh"
 
-#include "NOD_geometry_exec.hh"
+#include "BLT_translation.hh"
 
-#include "BLI_hash_md5.h"
+#include "NOD_geometry_exec.hh"
 
 #include "node_geometry_util.hh"
 
 namespace blender::nodes {
 
-NodeAnonymousAttributeID::NodeAnonymousAttributeID(const Object &object,
-                                                   const ComputeContext &compute_context,
-                                                   const bNode &bnode,
-                                                   const StringRef identifier,
-                                                   const StringRef name)
-    : socket_name_(name)
+Main *GeoNodeExecParams::bmain() const
 {
-  const ComputeContextHash &hash = compute_context.hash();
-  {
-    std::stringstream ss;
-    ss << hash << "_" << object.id.name << "_" << bnode.identifier << "_" << identifier;
-    long_name_ = ss.str();
-  }
-  {
-    uint64_t hash_result[2];
-    BLI_hash_md5_buffer(long_name_.data(), long_name_.size(), hash_result);
-    std::stringstream ss;
-    ss << ".a_" << std::hex << hash_result[0] << hash_result[1];
-    name_ = ss.str();
-    BLI_assert(name_.size() < MAX_CUSTOMDATA_LAYER_NAME);
-  }
-}
-
-std::string NodeAnonymousAttributeID::user_name() const
-{
-  return socket_name_;
+  return DEG_get_bmain(this->depsgraph());
 }
 
 void GeoNodeExecParams::error_message_add(const NodeWarningType type,
@@ -48,6 +27,7 @@ void GeoNodeExecParams::error_message_add(const NodeWarningType type,
 {
   if (geo_eval_log::GeoTreeLogger *tree_logger = this->get_local_tree_logger()) {
     tree_logger->node_warnings.append(
+        *tree_logger->allocator,
         {node_.identifier, {type, tree_logger->allocator->copy_string(message)}});
   }
 }
@@ -57,6 +37,7 @@ void GeoNodeExecParams::used_named_attribute(const StringRef attribute_name,
 {
   if (geo_eval_log::GeoTreeLogger *tree_logger = this->get_local_tree_logger()) {
     tree_logger->used_named_attributes.append(
+        *tree_logger->allocator,
         {node_.identifier, tree_logger->allocator->copy_string(attribute_name), usage});
   }
 }
@@ -72,7 +53,7 @@ void GeoNodeExecParams::check_input_geometry_set(StringRef identifier,
 
   const bool only_realized_data = geo_decl->only_realized_data();
   const bool only_instances = geo_decl->only_instances();
-  const Span<GeometryComponentType> supported_types = geo_decl->supported_types();
+  const Span<GeometryComponent::Type> supported_types = geo_decl->supported_types();
 
   if (only_realized_data) {
     if (geometry_set.has_instances()) {
@@ -90,39 +71,43 @@ void GeoNodeExecParams::check_input_geometry_set(StringRef identifier,
     /* Assume all types are supported. */
     return;
   }
-  const Vector<GeometryComponentType> types_in_geometry = geometry_set.gather_component_types(
+  const Vector<GeometryComponent::Type> types_in_geometry = geometry_set.gather_component_types(
       true, true);
-  for (const GeometryComponentType type : types_in_geometry) {
-    if (type == GEO_COMPONENT_TYPE_INSTANCES) {
+  for (const GeometryComponent::Type type : types_in_geometry) {
+    if (type == GeometryComponent::Type::Instance) {
       continue;
     }
     if (supported_types.contains(type)) {
       continue;
     }
-    std::string message = TIP_("Input geometry has unsupported type: ");
+    std::string message = RPT_("Input geometry has unsupported type: ");
     switch (type) {
-      case GEO_COMPONENT_TYPE_MESH: {
-        message += TIP_("Mesh");
+      case GeometryComponent::Type::Mesh: {
+        message += RPT_("Mesh");
         break;
       }
-      case GEO_COMPONENT_TYPE_POINT_CLOUD: {
-        message += TIP_("Point Cloud");
+      case GeometryComponent::Type::PointCloud: {
+        message += RPT_("Point Cloud");
         break;
       }
-      case GEO_COMPONENT_TYPE_INSTANCES: {
+      case GeometryComponent::Type::Instance: {
         BLI_assert_unreachable();
         break;
       }
-      case GEO_COMPONENT_TYPE_VOLUME: {
-        message += TIP_("Volume");
+      case GeometryComponent::Type::Volume: {
+        message += CTX_RPT_(BLT_I18NCONTEXT_ID_ID, "Volume");
         break;
       }
-      case GEO_COMPONENT_TYPE_CURVE: {
-        message += TIP_("Curve");
+      case GeometryComponent::Type::Curve: {
+        message += RPT_("Curve");
         break;
       }
-      case GEO_COMPONENT_TYPE_EDIT: {
+      case GeometryComponent::Type::Edit: {
         continue;
+      }
+      case GeometryComponent::Type::GreasePencil: {
+        message += RPT_("Grease Pencil");
+        break;
       }
     }
     this->error_message_add(NodeWarningType::Info, std::move(message));
@@ -132,9 +117,8 @@ void GeoNodeExecParams::check_input_geometry_set(StringRef identifier,
 void GeoNodeExecParams::check_output_geometry_set(const GeometrySet &geometry_set) const
 {
   UNUSED_VARS_NDEBUG(geometry_set);
-#ifdef DEBUG
-  if (const bke::CurvesEditHints *curve_edit_hints =
-          geometry_set.get_curve_edit_hints_for_read()) {
+#ifndef NDEBUG
+  if (const bke::CurvesEditHints *curve_edit_hints = geometry_set.get_curve_edit_hints()) {
     /* If this is not valid, it's likely that the number of stored deformed points does not match
      * the number of points in the original data. */
     BLI_assert(curve_edit_hints->is_valid());
@@ -153,14 +137,9 @@ const bNodeSocket *GeoNodeExecParams::find_available_socket(const StringRef name
   return nullptr;
 }
 
-std::string GeoNodeExecParams::attribute_producer_name() const
-{
-  return node_.label_or_name() + TIP_(" node");
-}
-
 void GeoNodeExecParams::set_default_remaining_outputs()
 {
-  params_.set_default_remaining_outputs();
+  set_default_remaining_node_outputs(params_, node_);
 }
 
 void GeoNodeExecParams::check_input_access(StringRef identifier,

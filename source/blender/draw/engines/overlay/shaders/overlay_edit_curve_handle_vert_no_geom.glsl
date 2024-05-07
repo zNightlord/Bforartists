@@ -1,14 +1,17 @@
+/* SPDX-FileCopyrightText: 2017-2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #pragma BLENDER_REQUIRE(common_view_clipping_lib.glsl)
 #pragma BLENDER_REQUIRE(common_view_lib.glsl)
-#pragma USE_SSBO_VERTEX_FETCH(TriangleStrip, 10)
+#pragma USE_SSBO_VERTEX_FETCH(TriangleList, 24)
 
 #define DISCARD_VERTEX \
   gl_Position = vec4(0.0); \
   finalColor = vec4(0.0); \
   return;
 
-void output_line(vec2 offset, vec4 color, vec3 out_world_pos, vec4 out_ndc_pos)
+void output_vert(vec2 offset, vec4 color, vec3 out_world_pos, vec4 out_ndc_pos)
 {
   finalColor = color;
   gl_Position = out_ndc_pos;
@@ -28,12 +31,12 @@ void main()
 
   /* Input prim is LineList. */
   /* Index of the input line primitive. */
-  int input_line_id = gl_VertexID / 10;
+  int input_line_id = gl_VertexID / 24;
   /* Index of output vertex set. Grouped into pairs as outputted by original "output_line" function
    * in overlay_edit_curve_handle_geom.glsl. */
-  int output_prim_id = (gl_VertexID / 2) % 5;
-  /* ID of vertex within line primitive (0 or 1) for current vertex. */
-  int output_prim_vert_id = gl_VertexID % 2;
+  int output_quad_id = (gl_VertexID / 6) % 4;
+  /* ID of vertex within generated line segment geometry. */
+  int output_prim_vert_id = gl_VertexID % 24;
 
   for (int i = 0; i < 2; i++) {
     in_pos[i] = vertex_fetch_attribute((input_line_id * 2) + i, pos, vec3).xyz;
@@ -47,7 +50,8 @@ void main()
   uint color_id = (vert_flag[1] >> COLOR_SHIFT);
 
   /* Don't output any edges if we don't show handles */
-  if (!showCurveHandles && (color_id < 5)) {
+  if (!showCurveHandles && (color_id < 5u)) {
+    DISCARD_VERTEX
     return;
   }
 
@@ -58,10 +62,10 @@ void main()
   bool is_gpencil = ((vert_flag[1] & VERT_GPENCIL_BEZT_HANDLE) != 0u);
 
   /* If handle type is only selected and the edge is not selected, don't show. */
-  if ((curveHandleDisplay != CURVE_HANDLE_ALL) && (!handle_selected)) {
+  if ((uint(curveHandleDisplay) != CURVE_HANDLE_ALL) && (!handle_selected)) {
     /* Nurbs must show the handles always. */
     bool is_u_segment = (((vert_flag[1] ^ vert_flag[0]) & EVEN_U_BIT) != 0u);
-    if ((!is_u_segment) && (color_id <= 4)) {
+    if ((!is_u_segment) && (color_id <= 4u)) {
       return;
     }
     if (is_gpencil) {
@@ -70,24 +74,24 @@ void main()
   }
 
   vec4 inner_color;
-  if (color_id == 0) {
+  if (color_id == 0u) {
     inner_color = (edge_selected) ? colorHandleSelFree : colorHandleFree;
   }
-  else if (color_id == 1) {
+  else if (color_id == 1u) {
     inner_color = (edge_selected) ? colorHandleSelAuto : colorHandleAuto;
   }
-  else if (color_id == 2) {
+  else if (color_id == 2u) {
     inner_color = (edge_selected) ? colorHandleSelVect : colorHandleVect;
   }
-  else if (color_id == 3) {
+  else if (color_id == 3u) {
     inner_color = (edge_selected) ? colorHandleSelAlign : colorHandleAlign;
   }
-  else if (color_id == 4) {
+  else if (color_id == 4u) {
     inner_color = (edge_selected) ? colorHandleSelAutoclamp : colorHandleAutoclamp;
   }
   else {
-    bool is_selected = (((vert_flag[1] & vert_flag[0]) & VERT_SELECTED) != 0);
-    bool is_u_segment = (((vert_flag[1] ^ vert_flag[0]) & EVEN_U_BIT) != 0);
+    bool is_selected = (((vert_flag[1] & vert_flag[0]) & VERT_SELECTED) != 0u);
+    bool is_u_segment = (((vert_flag[1] ^ vert_flag[0]) & EVEN_U_BIT) != 0u);
     if (is_u_segment) {
       inner_color = (is_selected) ? colorNurbSelUline : colorNurbUline;
     }
@@ -96,7 +100,7 @@ void main()
     }
   }
 
-  vec4 outer_color = (is_active_nurb != 0) ?
+  vec4 outer_color = (is_active_nurb != 0u) ?
                          mix(colorActiveSpline,
                              inner_color,
                              0.25) /* Minimize active color bleeding on inner_color. */
@@ -113,51 +117,81 @@ void main()
     offset.x = 0.0;
   }
 
-  /* Output geometry based on output line ID. */
-  switch (output_prim_id) {
-    case 0: {
-      /* draw the transparent border (AA). */
-      if (is_active_nurb != 0u) {
-        offset *= 0.75; /* Don't make the active "halo" appear very thick. */
-        output_line(offset * 2.0,
-                    vec4(colorActiveSpline.rgb, 0.0),
-                    world_pos[output_prim_vert_id],
-                    ndc_pos[output_prim_vert_id]);
-      }
-      else {
-        DISCARD_VERTEX
-      }
-      break;
+  /* Each output vertex falls into 10 possible positions to generate 8 output triangles between 5
+   * lines. */
+  /* Discard transparent border quads up-front. */
+  if (!(is_active_nurb != 0u)) {
+    if (output_quad_id == 0 || output_quad_id == 3) {
+      DISCARD_VERTEX
+      return;
     }
-    case 1: {
-      /* draw the outline. */
-      output_line(
-          offset, outer_color, world_pos[output_prim_vert_id], ndc_pos[output_prim_vert_id]);
-      break;
-    }
-    case 2: {
-      /* draw the core of the line. */
-      output_line(
-          vec2(0.0), inner_color, world_pos[output_prim_vert_id], ndc_pos[output_prim_vert_id]);
-      break;
-    }
-    case 3: {
-      /* draw the outline. */
-      output_line(
-          -offset, outer_color, world_pos[output_prim_vert_id], ndc_pos[output_prim_vert_id]);
-      break;
-    }
-    case 4: {
-      /* draw the transparent border (AA). */
-      if (is_active_nurb != 0u) {
-        output_line(offset * -2.0,
-                    vec4(colorActiveSpline.rgb, 0.0),
-                    world_pos[output_prim_vert_id],
-                    ndc_pos[output_prim_vert_id]);
-      }
-      break;
-    }
+  }
 
+  switch (output_prim_vert_id) {
+    /* Top transparent border left (AA). */
+    case 0: {
+      offset *= 0.75; /* Don't make the active "halo" appear very thick. */
+      output_vert(offset * 2.0, vec4(colorActiveSpline.rgb, 0.0), world_pos[0], ndc_pos[0]);
+      break;
+    }
+    /* Top transparent border right (AA). */
+    case 1:
+    case 4: {
+      offset *= 0.75; /* Don't make the active "halo" appear very thick. */
+      output_vert(offset * 2.0, vec4(colorActiveSpline.rgb, 0.0), world_pos[1], ndc_pos[1]);
+      break;
+    }
+    /* Top Outline row left point. */
+    case 2:
+    case 3:
+    case 6: {
+      output_vert(offset, outer_color, world_pos[0], ndc_pos[0]);
+      break;
+    }
+    /* Top Outline row right point. */
+    case 5:
+    case 7:
+    case 10: {
+      output_vert(offset, outer_color, world_pos[1], ndc_pos[1]);
+      break;
+    }
+    /* Core line left point. */
+    case 8:
+    case 9:
+    case 12: {
+      output_vert(vec2(0.0), inner_color, world_pos[0], ndc_pos[0]);
+      break;
+    }
+    /* Core line right point. */
+    case 11:
+    case 13:
+    case 16: {
+      output_vert(vec2(0.0), inner_color, world_pos[1], ndc_pos[1]);
+      break;
+    }
+    /* Bottom outline left point. */
+    case 14:
+    case 15:
+    case 18: {
+      output_vert(-offset, outer_color, world_pos[0], ndc_pos[0]);
+      break;
+    }
+    /* Bottom outline right point. */
+    case 17:
+    case 19:
+    case 22: {
+      output_vert(-offset, outer_color, world_pos[1], ndc_pos[1]);
+      break;
+    }
+    /* Bottom transparent border left. */
+    case 20:
+    case 21: {
+      output_vert(offset * -2.0, vec4(colorActiveSpline.rgb, 0.0), world_pos[0], ndc_pos[0]);
+    }
+    /* Bottom transparent border right. */
+    case 23: {
+      output_vert(offset * -2.0, vec4(colorActiveSpline.rgb, 0.0), world_pos[1], ndc_pos[1]);
+    }
     default: {
       DISCARD_VERTEX
       break;

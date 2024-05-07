@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2011 Blender Foundation. */
+/* SPDX-FileCopyrightText: 2011 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #pragma once
 
@@ -14,8 +15,6 @@ namespace blender::compositor {
 class ColorSpillOperation : public MultiThreadedOperation {
  protected:
   NodeColorspill *settings_;
-  SocketReader *input_image_reader_;
-  SocketReader *input_fac_reader_;
   int spill_channel_;
   int spill_method_;
   int channel2_;
@@ -23,18 +22,9 @@ class ColorSpillOperation : public MultiThreadedOperation {
   float rmut_, gmut_, bmut_;
 
  public:
-  /**
-   * Default constructor
-   */
   ColorSpillOperation();
 
-  /**
-   * The inner loop of this operation.
-   */
-  void execute_pixel_sampled(float output[4], float x, float y, PixelSampler sampler) override;
-
   void init_execution() override;
-  void deinit_execution() override;
 
   void set_settings(NodeColorspill *node_color_spill)
   {

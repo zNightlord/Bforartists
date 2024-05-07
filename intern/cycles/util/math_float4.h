@@ -1,6 +1,7 @@
-/* SPDX-License-Identifier: Apache-2.0
- * Copyright 2011-2013 Intel Corporation
- * Copyright 2011-2022 Blender Foundation */
+/* SPDX-FileCopyrightText: 2011-2013 Intel Corporation
+ * SPDX-FileCopyrightText: 2011-2022 Blender Foundation
+ *
+ * SPDX-License-Identifier: Apache-2.0 */
 
 #ifndef __UTIL_MATH_FLOAT4_H__
 #define __UTIL_MATH_FLOAT4_H__
@@ -363,7 +364,7 @@ ccl_device_inline float reduce_max(const float4 a)
 #if !defined(__KERNEL_METAL__)
 ccl_device_inline float dot(const float4 a, const float4 b)
 {
-#  if defined(__KERNEL_SSE41__) && defined(__KERNEL_SSE__)
+#  if defined(__KERNEL_SSE42__) && defined(__KERNEL_SSE__)
 #    if defined(__KERNEL_NEON__)
   __m128 t = vmulq_f32(a, b);
   return vaddvq_f32(t);
@@ -464,6 +465,11 @@ ccl_device_inline float4 fabs(const float4 a)
 #  endif
 }
 
+ccl_device_inline float4 fmod(const float4 a, const float b)
+{
+  return make_float4(fmodf(a.x, b), fmodf(a.y, b), fmodf(a.z, b), fmodf(a.w, b));
+}
+
 ccl_device_inline float4 floor(const float4 a)
 {
 #  ifdef __KERNEL_SSE__
@@ -533,7 +539,7 @@ ccl_device_inline bool isequal(const float4 a, const float4 b)
 ccl_device_inline float4 select(const int4 mask, const float4 a, const float4 b)
 {
 #  ifdef __KERNEL_SSE__
-#    ifdef __KERNEL_SSE41__
+#    ifdef __KERNEL_SSE42__
   return float4(_mm_blendv_ps(b.m128, a.m128, _mm_castsi128_ps(mask.m128)));
 #    else
   return float4(
@@ -593,9 +599,10 @@ ccl_device_inline float4 ensure_finite(float4 v)
   return v;
 }
 
-ccl_device_inline float4 pow(float4 v, float e)
+/* Consistent name for this would be pow, but HIP compiler crashes in name mangling. */
+ccl_device_inline float4 power(float4 v, float e)
 {
-  return make_float4(powf(v.x, e), powf(v.y, e), powf(v.z, e), powf(v.z, e));
+  return make_float4(powf(v.x, e), powf(v.y, e), powf(v.z, e), powf(v.w, e));
 }
 
 CCL_NAMESPACE_END

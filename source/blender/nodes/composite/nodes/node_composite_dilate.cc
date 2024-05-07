@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2006 Blender Foundation. All rights reserved. */
+/* SPDX-FileCopyrightText: 2006 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup cmpnodes
@@ -9,16 +10,18 @@
 #include "BLI_math_base.hh"
 #include "BLI_math_vector_types.hh"
 
-#include "RNA_access.h"
+#include "RNA_access.hh"
 
-#include "UI_interface.h"
-#include "UI_resources.h"
+#include "UI_interface.hh"
+#include "UI_resources.hh"
 
-#include "GPU_shader.h"
-#include "GPU_state.h"
-#include "GPU_texture.h"
+#include "GPU_shader.hh"
+#include "GPU_state.hh"
+#include "GPU_texture.hh"
 
-#include "COM_morphological_distance_feather_weights.hh"
+#include "COM_algorithm_morphological_distance.hh"
+#include "COM_algorithm_morphological_distance_feather.hh"
+#include "COM_algorithm_smaa.hh"
 #include "COM_node_operation.hh"
 #include "COM_utilities.hh"
 
@@ -32,8 +35,8 @@ NODE_STORAGE_FUNCS(NodeDilateErode)
 
 static void cmp_node_dilate_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Float>(N_("Mask")).default_value(0.0f).min(0.0f).max(1.0f);
-  b.add_output<decl::Float>(N_("Mask"));
+  b.add_input<decl::Float>("Mask").default_value(0.0f).min(0.0f).max(1.0f);
+  b.add_output<decl::Float>("Mask");
 }
 
 static void node_composit_init_dilateerode(bNodeTree * /*ntree*/, bNode *node)
@@ -95,13 +98,14 @@ class DilateErodeOperation : public NodeOperation {
 
   void execute_step()
   {
-    GPUTexture *horizontal_pass_result = execute_step_horizontal_pass();
+    Result horizontal_pass_result = execute_step_horizontal_pass();
     execute_step_vertical_pass(horizontal_pass_result);
+    horizontal_pass_result.release();
   }
 
-  GPUTexture *execute_step_horizontal_pass()
+  Result execute_step_horizontal_pass()
   {
-    GPUShader *shader = shader_manager().get(get_morphological_step_shader_name());
+    GPUShader *shader = context().get_shader(get_morphological_step_shader_name());
     GPU_shader_bind(shader);
 
     /* Pass the absolute value of the distance. We have specialized shaders for each sign. */
@@ -121,30 +125,28 @@ class DilateErodeOperation : public NodeOperation {
     const Domain domain = compute_domain();
     const int2 transposed_domain = int2(domain.size.y, domain.size.x);
 
-    GPUTexture *horizontal_pass_result = texture_pool().acquire_color(transposed_domain);
-    const int image_unit = GPU_shader_get_sampler_binding(shader, "output_img");
-    GPU_texture_image_bind(horizontal_pass_result, image_unit);
+    Result horizontal_pass_result = context().create_temporary_result(ResultType::Color);
+    horizontal_pass_result.allocate_texture(transposed_domain);
+    horizontal_pass_result.bind_as_image(shader, "output_img");
 
     compute_dispatch_threads_at_least(shader, domain.size);
 
     GPU_shader_unbind();
     input_mask.unbind_as_texture();
-    GPU_texture_image_unbind(horizontal_pass_result);
+    horizontal_pass_result.unbind_as_image();
 
     return horizontal_pass_result;
   }
 
-  void execute_step_vertical_pass(GPUTexture *horizontal_pass_result)
+  void execute_step_vertical_pass(Result &horizontal_pass_result)
   {
-    GPUShader *shader = shader_manager().get(get_morphological_step_shader_name());
+    GPUShader *shader = context().get_shader(get_morphological_step_shader_name());
     GPU_shader_bind(shader);
 
     /* Pass the absolute value of the distance. We have specialized shaders for each sign. */
     GPU_shader_uniform_1i(shader, "radius", math::abs(get_distance()));
 
-    GPU_memory_barrier(GPU_BARRIER_TEXTURE_FETCH);
-    const int texture_image_unit = GPU_shader_get_sampler_binding(shader, "input_tx");
-    GPU_texture_bind(horizontal_pass_result, texture_image_unit);
+    horizontal_pass_result.bind_as_texture(shader, "input_tx");
 
     const Domain domain = compute_domain();
     Result &output_mask = get_result("Mask");
@@ -156,8 +158,8 @@ class DilateErodeOperation : public NodeOperation {
     compute_dispatch_threads_at_least(shader, int2(domain.size.y, domain.size.x));
 
     GPU_shader_unbind();
+    horizontal_pass_result.unbind_as_texture();
     output_mask.unbind_as_image();
-    GPU_texture_unbind(horizontal_pass_result);
   }
 
   const char *get_morphological_step_shader_name()
@@ -174,33 +176,7 @@ class DilateErodeOperation : public NodeOperation {
 
   void execute_distance()
   {
-    GPUShader *shader = shader_manager().get(get_morphological_distance_shader_name());
-    GPU_shader_bind(shader);
-
-    /* Pass the absolute value of the distance. We have specialized shaders for each sign. */
-    GPU_shader_uniform_1i(shader, "radius", math::abs(get_distance()));
-
-    const Result &input_mask = get_input("Mask");
-    input_mask.bind_as_texture(shader, "input_tx");
-
-    const Domain domain = compute_domain();
-    Result &output_mask = get_result("Mask");
-    output_mask.allocate_texture(domain);
-    output_mask.bind_as_image(shader, "output_img");
-
-    compute_dispatch_threads_at_least(shader, domain.size);
-
-    GPU_shader_unbind();
-    output_mask.unbind_as_image();
-    input_mask.unbind_as_texture();
-  }
-
-  const char *get_morphological_distance_shader_name()
-  {
-    if (get_distance() > 0) {
-      return "compositor_morphological_distance_dilate";
-    }
-    return "compositor_morphological_distance_erode";
+    morphological_distance(context(), get_input("Mask"), get_result("Mask"), get_distance());
   }
 
   /* ------------------------------------------
@@ -209,7 +185,7 @@ class DilateErodeOperation : public NodeOperation {
 
   void execute_distance_threshold()
   {
-    GPUShader *shader = shader_manager().get("compositor_morphological_distance_threshold");
+    GPUShader *shader = context().get_shader("compositor_morphological_distance_threshold");
     GPU_shader_bind(shader);
 
     GPU_shader_uniform_1f(shader, "inset", get_inset());
@@ -220,7 +196,7 @@ class DilateErodeOperation : public NodeOperation {
     input_mask.bind_as_texture(shader, "input_tx");
 
     const Domain domain = compute_domain();
-    Result &output_mask = get_result("Mask");
+    Result output_mask = context().create_temporary_result(ResultType::Float);
     output_mask.allocate_texture(domain);
     output_mask.bind_as_image(shader, "output_img");
 
@@ -229,6 +205,17 @@ class DilateErodeOperation : public NodeOperation {
     GPU_shader_unbind();
     output_mask.unbind_as_image();
     input_mask.unbind_as_texture();
+
+    /* For configurations where there is little user-specified inset, anti-alias the result for
+     * smoother edges. */
+    Result &output = get_result("Mask");
+    if (get_inset() < 2.0f) {
+      smaa(context(), output_mask, output);
+      output_mask.release();
+    }
+    else {
+      output.steal_data(output_mask);
+    }
   }
 
   /* See the discussion in the implementation for more information. */
@@ -243,87 +230,11 @@ class DilateErodeOperation : public NodeOperation {
 
   void execute_distance_feather()
   {
-    GPUTexture *horizontal_pass_result = execute_distance_feather_horizontal_pass();
-    execute_distance_feather_vertical_pass(horizontal_pass_result);
-  }
-
-  GPUTexture *execute_distance_feather_horizontal_pass()
-  {
-    GPUShader *shader = shader_manager().get(get_morphological_distance_feather_shader_name());
-    GPU_shader_bind(shader);
-
-    const Result &input_image = get_input("Mask");
-    input_image.bind_as_texture(shader, "input_tx");
-
-    const MorphologicalDistanceFeatherWeights &weights =
-        context().cache_manager().get_morphological_distance_feather_weights(
-            node_storage(bnode()).falloff, math::abs(get_distance()));
-    weights.bind_weights_as_texture(shader, "weights_tx");
-    weights.bind_distance_falloffs_as_texture(shader, "falloffs_tx");
-
-    /* We allocate an output image of a transposed size, that is, with a height equivalent to the
-     * width of the input and vice versa. This is done as a performance optimization. The shader
-     * will process the image horizontally and write it to the intermediate output transposed. Then
-     * the vertical pass will execute the same horizontal pass shader, but since its input is
-     * transposed, it will effectively do a vertical pass and write to the output transposed,
-     * effectively undoing the transposition in the horizontal pass. This is done to improve
-     * spatial cache locality in the shader and to avoid having two separate shaders for each of
-     * the passes. */
-    const Domain domain = compute_domain();
-    const int2 transposed_domain = int2(domain.size.y, domain.size.x);
-
-    GPUTexture *horizontal_pass_result = texture_pool().acquire_color(transposed_domain);
-    const int image_unit = GPU_shader_get_sampler_binding(shader, "output_img");
-    GPU_texture_image_bind(horizontal_pass_result, image_unit);
-
-    compute_dispatch_threads_at_least(shader, domain.size);
-
-    GPU_shader_unbind();
-    input_image.unbind_as_texture();
-    weights.unbind_weights_as_texture();
-    weights.unbind_distance_falloffs_as_texture();
-    GPU_texture_image_unbind(horizontal_pass_result);
-
-    return horizontal_pass_result;
-  }
-
-  void execute_distance_feather_vertical_pass(GPUTexture *horizontal_pass_result)
-  {
-    GPUShader *shader = shader_manager().get(get_morphological_distance_feather_shader_name());
-    GPU_shader_bind(shader);
-
-    GPU_memory_barrier(GPU_BARRIER_TEXTURE_FETCH);
-    const int texture_image_unit = GPU_shader_get_sampler_binding(shader, "input_tx");
-    GPU_texture_bind(horizontal_pass_result, texture_image_unit);
-
-    const MorphologicalDistanceFeatherWeights &weights =
-        context().cache_manager().get_morphological_distance_feather_weights(
-            node_storage(bnode()).falloff, math::abs(get_distance()));
-    weights.bind_weights_as_texture(shader, "weights_tx");
-    weights.bind_distance_falloffs_as_texture(shader, "falloffs_tx");
-
-    const Domain domain = compute_domain();
-    Result &output_image = get_result("Mask");
-    output_image.allocate_texture(domain);
-    output_image.bind_as_image(shader, "output_img");
-
-    /* Notice that the domain is transposed, see the note on the horizontal pass method for more
-     * information on the reasoning behind this. */
-    compute_dispatch_threads_at_least(shader, int2(domain.size.y, domain.size.x));
-
-    GPU_shader_unbind();
-    output_image.unbind_as_image();
-    weights.unbind_weights_as_texture();
-    weights.unbind_distance_falloffs_as_texture();
-    GPU_texture_unbind(horizontal_pass_result);
-  }
-
-  const char *get_morphological_distance_feather_shader_name()
-  {
-    if (get_distance() > 0) {
-      return "compositor_morphological_distance_feather_dilate";
-    }
-    return "compositor_morphological_distance_feather_erode";
+    morphological_distance_feather(context(),
+                                   get_input("Mask"),
+                                   get_result("Mask"),
+                                   get_distance(),
+                                   node_storage(bnode()).falloff);
   }
 
   /* ---------------

@@ -1,29 +1,33 @@
+# SPDX-FileCopyrightText: 2023 Blender Authors
+#
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 set(INC
   ../include
   ../../blenkernel
-  ../../blenlib
   ../../blentranslation
-  ../../depsgraph
+  ../../bmesh
   ../../functions
   ../../geometry
   ../../gpu
-  ../../makesdna
   ../../makesrna
   ../../windowmanager
-  ../../../../intern/clog
-  ../../../../intern/guardedalloc
-  ../../bmesh
 
   # RNA_prototypes.h
   ${CMAKE_BINARY_DIR}/source/blender/makesrna
 )
 
+set(INC_SYS
+)
+
 set(SRC
   intern/curves_add.cc
+  intern/curves_attribute_set.cc
   intern/curves_data.cc
+  intern/curves_draw.cc
   intern/curves_edit.cc
+  intern/curves_extrude.cc
+  intern/curves_masks.cc
   intern/curves_ops.cc
   intern/curves_selection.cc
   intern/curves_undo.cc
@@ -31,7 +35,12 @@ set(SRC
 
 set(LIB
   bf_blenkernel
-  bf_blenlib
+  PRIVATE bf::blenlib
+  PRIVATE bf::depsgraph
+  PRIVATE bf::dna
+  PRIVATE bf::extern::curve_fit_nd
+  PRIVATE bf::intern::clog
+  PRIVATE bf::intern::guardedalloc
 )
 
 if(WITH_TBB)

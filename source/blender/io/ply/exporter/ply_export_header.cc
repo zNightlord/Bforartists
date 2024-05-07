@@ -1,13 +1,14 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* SPDX-FileCopyrightText: 2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup ply
  */
 
 #include "BKE_blender_version.h"
-#include "BKE_customdata.h"
 
-#include "IO_ply.h"
+#include "IO_ply.hh"
 #include "ply_data.hh"
 #include "ply_export_header.hh"
 #include "ply_file_buffer.hh"
@@ -49,13 +50,17 @@ void write_header(FileBuffer &buffer,
     buffer.write_header_scalar_property("float", "t");
   }
 
-  if (!ply_data.faces.is_empty()) {
-    buffer.write_header_element("face", int32_t(ply_data.faces.size()));
+  for (const PlyCustomAttribute &attr : ply_data.vertex_custom_attr) {
+    buffer.write_header_scalar_property("float", attr.name);
+  }
+
+  if (!ply_data.face_sizes.is_empty()) {
+    buffer.write_header_element("face", int(ply_data.face_sizes.size()));
     buffer.write_header_list_property("uchar", "uint", "vertex_indices");
   }
 
   if (!ply_data.edges.is_empty()) {
-    buffer.write_header_element("edge", int32_t(ply_data.edges.size()));
+    buffer.write_header_element("edge", int(ply_data.edges.size()));
     buffer.write_header_scalar_property("int", "vertex1");
     buffer.write_header_scalar_property("int", "vertex2");
   }

@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2009 Blender Foundation, Joshua Leung. All rights reserved. */
+/* SPDX-FileCopyrightText: 2009 Blender Authors, Joshua Leung. All rights reserved.
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #pragma once
 
@@ -17,6 +18,7 @@ extern "C" {
 #endif
 
 struct AnimData;
+struct ID;
 struct LibraryForeachIDData;
 struct Main;
 struct NlaStrip;
@@ -26,8 +28,6 @@ struct Speaker;
 struct bAction;
 
 struct BlendDataReader;
-struct BlendExpander;
-struct BlendLibReader;
 struct BlendWriter;
 struct PointerRNA;
 struct PropertyRNA;
@@ -62,7 +62,7 @@ void BKE_nla_tracks_free(ListBase *tracks, bool do_id_user);
  *
  * \param use_same_action: When true, the existing action is used (instead of being duplicated)
  * \param flag: Control ID pointers management, see LIB_ID_CREATE_.../LIB_ID_COPY_...
- * flags in BKE_lib_id.h
+ * flags in BKE_lib_id.hh
  */
 struct NlaStrip *BKE_nlastrip_copy(struct Main *bmain,
                                    struct NlaStrip *strip,
@@ -71,7 +71,7 @@ struct NlaStrip *BKE_nlastrip_copy(struct Main *bmain,
 /**
  * Copy a single NLA Track.
  * \param flag: Control ID pointers management, see LIB_ID_CREATE_.../LIB_ID_COPY_...
- * flags in BKE_lib_id.h
+ * flags in BKE_lib_id.hh
  */
 struct NlaTrack *BKE_nlatrack_copy(struct Main *bmain,
                                    struct NlaTrack *nlt,
@@ -80,7 +80,7 @@ struct NlaTrack *BKE_nlatrack_copy(struct Main *bmain,
 /**
  * Copy all NLA data.
  * \param flag: Control ID pointers management, see LIB_ID_CREATE_.../LIB_ID_COPY_...
- * flags in BKE_lib_id.h
+ * flags in BKE_lib_id.hh
  */
 void BKE_nla_tracks_copy(struct Main *bmain, ListBase *dst, const ListBase *src, int flag);
 
@@ -149,6 +149,38 @@ void BKE_nlatrack_remove(ListBase *tracks, struct NlaTrack *nlt);
  * and the track itself.
  */
 void BKE_nlatrack_remove_and_free(ListBase *tracks, struct NlaTrack *nlt, bool do_id_user);
+
+/**
+ * Compute the length of the passed strip's clip, unless the clip length
+ * is zero in which case a non-zero value is returned.
+ *
+ * WARNING: this function is *very narrow* and special-cased in its
+ * application.  It was introduced as part of the fix for issue #107030,
+ * as a way to collect a bunch of whack-a-mole inline applications of this
+ * logic in one place.  The logic itself isn't principled in any way,
+ * and should almost certainly not be used anywhere that it isn't already,
+ * short of one of those whack-a-mole inline places being overlooked.
+ *
+ * The underlying purpose of this function is to ensure that the computed
+ * clip length for an NLA strip is (in certain places) never zero, in order to
+ * avoid the strip's scale having to be infinity.  In other words, it's a
+ * hack.  But at least now it's a hack collected in one place.
+ *
+ */
+float BKE_nla_clip_length_get_nonzero(const NlaStrip *strip);
+
+/**
+ * Ensure the passed range has non-zero length, using the same logic as
+ * `BKE_nla_clip_length_get_nonzero` to determine the new non-zero length.
+ *
+ * See the documentation for `BKE_nla_clip_length_get_nonzero` for the
+ * reason this function exists and the issues around its use.
+ *
+ * Usage: both `actstart` and `r_actend` should already be set to the
+ * start/end values of a strip's clip.  `r_actend` will be modified
+ * if necessary to ensure the range is non-zero in length.
+ */
+void BKE_nla_clip_length_ensure_nonzero(const float *actstart, float *r_actend);
 
 /**
  * Create a NLA Strip referencing the given Action.
@@ -271,6 +303,12 @@ void BKE_nlatrack_solo_toggle(struct AnimData *adt, struct NlaTrack *nlt);
  * Check if there is any space in the given track to add a strip of the given length.
  */
 bool BKE_nlatrack_has_space(struct NlaTrack *nlt, float start, float end);
+
+/**
+ * Check to see if there are any NLA strips in the NLA tracks.
+ */
+bool BKE_nlatrack_has_strips(ListBase *tracks);
+
 /**
  * Rearrange the strips in the track so that they are always in order
  * (usually only needed after a strip has been moved).
@@ -356,6 +394,12 @@ struct NlaStrip *BKE_nlastrip_find_active(struct NlaTrack *nlt);
  * Make the given NLA-Strip the active one within the given block.
  */
 void BKE_nlastrip_set_active(struct AnimData *adt, struct NlaStrip *strip);
+/**
+ * Find the NLA-strip with the given name within the given track.
+ *
+ * \return pointer to the strip, or nullptr when not found.
+ */
+struct NlaStrip *BKE_nlastrip_find_by_name(struct NlaTrack *nlt, const char *name);
 
 /**
  * Does the given NLA-strip fall within the given bounds (times)?.
@@ -393,11 +437,11 @@ void BKE_nlastrip_validate_name(struct AnimData *adt, struct NlaStrip *strip);
 /* ............ */
 
 /**
- * Check if the given NLA-Track has any strips with own F-Curves.
+ * Check if the given NLA-Track has any strips with their own F-Curves.
  */
 bool BKE_nlatrack_has_animated_strips(struct NlaTrack *nlt);
 /**
- * Check if given NLA-Tracks have any strips with own F-Curves.
+ * Check if given NLA-Tracks have any strips with their own F-Curves.
  */
 bool BKE_nlatracks_have_animated_strips(ListBase *tracks);
 /**
@@ -455,6 +499,23 @@ bool BKE_nla_tweakmode_enter(struct AnimData *adt);
  */
 void BKE_nla_tweakmode_exit(struct AnimData *adt);
 
+/**
+ * Clear all NLA Tweak Mode related flags on the ADT, tracks, and strips.
+ */
+void BKE_nla_tweakmode_clear_flags(struct AnimData *adt);
+
+/**
+ * Partially exit NLA tweak-mode for this AnimData block, without following any
+ * pointers to other data-blocks. This means no strip length syncing (as that
+ * needs to know info about the strip's Action), and no reference counting on
+ * the Action.
+ *
+ * This function just writes to the AnimData-owned data. It is intended to be
+ * used in blend-file reading code, which performs a reference count later
+ * anyway.
+ */
+void BKE_nla_tweakmode_exit_nofollowptr(AnimData *adt);
+
 /* ----------------------------- */
 /* Time Mapping */
 
@@ -483,9 +544,28 @@ float BKE_nla_tweakedit_remap(struct AnimData *adt, float cframe, short mode);
 /* .blend file API */
 
 void BKE_nla_blend_write(struct BlendWriter *writer, struct ListBase *tracks);
-void BKE_nla_blend_read_data(struct BlendDataReader *reader, struct ListBase *tracks);
-void BKE_nla_blend_read_lib(struct BlendLibReader *reader, struct ID *id, struct ListBase *tracks);
-void BKE_nla_blend_read_expand(struct BlendExpander *expander, struct ListBase *tracks);
+void BKE_nla_blend_read_data(struct BlendDataReader *reader,
+                             struct ID *id_owner,
+                             struct ListBase *tracks);
+
+/**
+ * Ensure NLA Tweak Mode related flags & pointers are consistent.
+ *
+ * This may mean that tweak mode is exited, if not all relevant pointers can be
+ * set correctly.
+ */
+void BKE_nla_liboverride_post_process(ID *id, struct AnimData *adt);
+
+/**
+ * Print the ADT flags, NLA tracks, strips, their flags, and other info, to the console.
+ *
+ * \param adt: the ADT to show. If NULL, it will be determined from owner_id.
+ * \param owner_id: the ID that owns this ADT. If given, its name will be printed in the console
+ * output. If NULL, that won't happen.
+ *
+ * Either of the parameters can be NULL, but not both.
+ */
+void BKE_nla_debug_print_flags(AnimData *adt, ID *owner_id);
 
 #ifdef __cplusplus
 }

@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: Apache-2.0
- * Copyright 2011-2022 Blender Foundation */
+/* SPDX-FileCopyrightText: 2011-2022 Blender Foundation
+ *
+ * SPDX-License-Identifier: Apache-2.0 */
 
 #ifndef __DEVICE_H__
 #define __DEVICE_H__
@@ -40,6 +41,7 @@ enum DeviceType {
   DEVICE_MULTI,
   DEVICE_OPTIX,
   DEVICE_HIP,
+  DEVICE_HIPRT,
   DEVICE_METAL,
   DEVICE_ONEAPI,
   DEVICE_DUMMY,
@@ -65,21 +67,31 @@ enum KernelOptimizationLevel {
   KERNEL_OPTIMIZATION_NUM_LEVELS
 };
 
+enum MetalRTSetting {
+  METALRT_OFF = 0,
+  METALRT_ON = 1,
+  METALRT_AUTO = 2,
+
+  METALRT_NUM_SETTINGS
+};
+
 class DeviceInfo {
  public:
   DeviceType type;
   string description;
   string id; /* used for user preferences, should stay fixed with changing hardware config */
   int num;
-  bool display_device;  /* GPU is used as a display device. */
-  bool has_nanovdb;     /* Support NanoVDB volumes. */
-  bool has_light_tree;  /* Support light tree. */
-  bool has_osl;         /* Support Open Shading Language. */
-  bool has_guiding;     /* Support path guiding. */
-  bool has_profiling;   /* Supports runtime collection of profiling info. */
-  bool has_peer_memory; /* GPU has P2P access to memory of another GPU. */
-  bool has_gpu_queue;   /* Device supports GPU queue. */
-  bool use_metalrt;     /* Use MetalRT to accelerate ray queries (Metal only). */
+  bool display_device;          /* GPU is used as a display device. */
+  bool has_nanovdb;             /* Support NanoVDB volumes. */
+  bool has_light_tree;          /* Support light tree. */
+  bool has_mnee;                /* Support MNEE. */
+  bool has_osl;                 /* Support Open Shading Language. */
+  bool has_guiding;             /* Support path guiding. */
+  bool has_profiling;           /* Supports runtime collection of profiling info. */
+  bool has_peer_memory;         /* GPU has P2P access to memory of another GPU. */
+  bool has_gpu_queue;           /* Device supports GPU queue. */
+  bool use_hardware_raytracing; /* Use hardware instructions to accelerate ray tracing. */
+  bool use_metalrt_by_default;  /* Use MetalRT by default. */
   KernelOptimizationLevel kernel_optimization_level; /* Optimization level applied to path tracing
                                                       * kernels (Metal only). */
   DenoiserTypeMask denoisers;                        /* Supported denoiser types. */
@@ -96,12 +108,14 @@ class DeviceInfo {
     display_device = false;
     has_nanovdb = false;
     has_light_tree = true;
+    has_mnee = true;
     has_osl = false;
     has_guiding = false;
     has_profiling = false;
     has_peer_memory = false;
     has_gpu_queue = false;
-    use_metalrt = false;
+    use_hardware_raytracing = false;
+    use_metalrt_by_default = false;
     denoisers = DENOISER_NONE;
   }
 
@@ -110,7 +124,8 @@ class DeviceInfo {
     /* Multiple Devices with the same ID would be very bad. */
     assert(id != info.id ||
            (type == info.type && num == info.num && description == info.description));
-    return id == info.id;
+    return id == info.id && use_hardware_raytracing == info.use_hardware_raytracing &&
+           kernel_optimization_level == info.kernel_optimization_level;
   }
 };
 
@@ -157,7 +172,7 @@ class Device {
     fprintf(stderr, "%s\n", error.c_str());
     fflush(stderr);
   }
-  virtual BVHLayoutMask get_bvh_layout_mask() const = 0;
+  virtual BVHLayoutMask get_bvh_layout_mask(uint kernel_features) const = 0;
 
   /* statistics */
   Stats &stats;
@@ -178,9 +193,7 @@ class Device {
   }
 
   /* Request cancellation of any long-running work. */
-  virtual void cancel()
-  {
-  }
+  virtual void cancel() {}
 
   /* Report status and return true if device is ready for rendering. */
   virtual bool is_ready(string & /*status*/) const
@@ -205,11 +218,10 @@ class Device {
   /* Get OpenShadingLanguage memory buffer. */
   virtual void *get_cpu_osl_memory();
 
-  /* acceleration structure building */
+  /* Acceleration structure building. */
   virtual void build_bvh(BVH *bvh, Progress &progress, bool refit);
-
-  /* OptiX specific destructor. */
-  virtual void release_optix_bvh(BVH * /*bvh*/){};
+  /* Used by Metal and OptiX. */
+  virtual void release_bvh(BVH * /*bvh*/) {}
 
   /* multi device */
   virtual int device_number(Device * /*sub_device*/)
@@ -218,9 +230,7 @@ class Device {
   }
 
   /* Called after kernel texture setup, and prior to integrator state setup. */
-  virtual void optimize_for_scene(Scene * /*scene*/)
-  {
-  }
+  virtual void optimize_for_scene(Scene * /*scene*/) {}
 
   virtual bool is_resident(device_ptr /*key*/, Device *sub_device)
   {
@@ -245,6 +255,12 @@ class Device {
   virtual bool should_use_graphics_interop()
   {
     return false;
+  }
+
+  /* Returns native buffer handle for device pointer. */
+  virtual void *get_native_buffer(device_ptr /*ptr*/)
+  {
+    return nullptr;
   }
 
   /* Guiding */
@@ -309,7 +325,7 @@ class Device {
   static uint devices_initialized_mask;
 };
 
-/* Device, which is GPU, with some common functionality for GPU backends */
+/* Device, which is GPU, with some common functionality for GPU back-ends. */
 class GPUDevice : public Device {
  protected:
   GPUDevice(const DeviceInfo &info_, Stats &stats_, Profiler &profiler_)
@@ -350,9 +366,7 @@ class GPUDevice : public Device {
   typedef unsigned long long texMemObject;
   typedef unsigned long long arrayMemObject;
   struct Mem {
-    Mem() : texobject(0), array(0), use_mapped_host(false)
-    {
-    }
+    Mem() : texobject(0), array(0), use_mapped_host(false) {}
 
     texMemObject texobject;
     arrayMemObject array;
@@ -391,7 +405,7 @@ class GPUDevice : public Device {
   /* This function should return device pointer corresponding to shared pointer, which
    * is host buffer, allocated in `alloc_host`. The function should `true`, if such
    * address transformation is possible and `false` otherwise. */
-  virtual bool transform_host_pointer(void *&device_pointer, void *&shared_pointer) = 0;
+  virtual void transform_host_pointer(void *&device_pointer, void *&shared_pointer) = 0;
 
   virtual void copy_host_to_device(void *device_pointer, void *host_pointer, size_t size) = 0;
 };

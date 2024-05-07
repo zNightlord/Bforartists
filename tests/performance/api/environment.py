@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2021-2023 Blender Authors
+#
 # SPDX-License-Identifier: Apache-2.0
 
 import base64
@@ -22,8 +24,9 @@ class TestEnvironment:
         self.base_dir = base_dir
         self.blender_dir = base_dir / 'blender'
         self.build_dir = base_dir / 'build'
+        self.install_dir = self.build_dir / "bin"
         self.lib_dir = base_dir / 'lib'
-        self.benchmarks_dir = self.blender_git_dir.parent / 'lib' / 'benchmarks'
+        self.benchmarks_dir = self.blender_git_dir / 'tests' / 'benchmarks'
         self.git_executable = 'git'
         self.cmake_executable = 'cmake'
         self.cmake_options = ['-DWITH_INTERNATIONAL=OFF', '-DWITH_BUILDINFO=OFF']
@@ -79,7 +82,7 @@ class TestEnvironment:
 
         print('Done')
 
-    def checkout(self, git_hash) -> None:
+    def checkout(self, git_hash: str) -> None:
         # Checkout Blender revision
         if not self.blender_dir.exists():
             sys.stderr.write('\n\nError: no build set up, run `./benchmark init --build` first\n')
@@ -89,16 +92,34 @@ class TestEnvironment:
         self.call([self.git_executable, 'reset', '--hard', 'HEAD'], self.blender_dir)
         self.call([self.git_executable, 'checkout', '--detach', git_hash], self.blender_dir)
 
-    def build(self) -> bool:
+    def build(self, git_hash: str, install_dir: pathlib.Path) -> bool:
         # Build Blender revision
         if not self.build_dir.exists():
             sys.stderr.write('\n\nError: no build set up, run `./benchmark init --build` first\n')
             sys.exit(1)
 
+        # Skip if build with same hash is already done.
+        if install_dir.resolve() != self.install_dir.resolve():
+            complete_txt = pathlib.Path(install_dir) / "complete.txt"
+            if complete_txt.is_file():
+                if complete_txt.read_text().strip() == git_hash:
+                    self._init_default_blender_executable()
+                    return True
+                # Different hash, build again.
+                complete_txt.unlink()
+        else:
+            complete_txt = None
+
+        self.checkout(git_hash)
+
         jobs = str(multiprocessing.cpu_count())
+        cmake_options = list(self.cmake_options)
+        cmake_options += [f"-DCMAKE_INSTALL_PREFIX={install_dir}"]
         try:
-            self.call([self.cmake_executable, '.'] + self.cmake_options, self.build_dir)
+            self.call([self.cmake_executable, '.'] + cmake_options, self.build_dir)
             self.call([self.cmake_executable, '--build', '.', '-j', jobs, '--target', 'install'], self.build_dir)
+            if complete_txt:
+                complete_txt.write_text(git_hash)
         except KeyboardInterrupt as e:
             raise e
         except:
@@ -108,6 +129,9 @@ class TestEnvironment:
         return True
 
     def set_blender_executable(self, executable_path: pathlib.Path, environment: Dict = {}) -> None:
+        if executable_path.is_dir():
+            executable_path = self._blender_executable_from_path(executable_path)
+
         # Run all Blender commands with this executable.
         self.blender_executable = executable_path
         self.blender_executable_environment = environment
@@ -136,7 +160,7 @@ class TestEnvironment:
     def _init_default_blender_executable(self) -> None:
         # Find a default executable to run commands independent of testing a specific build.
         # Try own built executable.
-        built_executable = self._blender_executable_from_path(self.build_dir / 'bin')
+        built_executable = self._blender_executable_from_path(self.install_dir)
         if built_executable:
             self.default_blender_executable = built_executable
             return
@@ -175,7 +199,7 @@ class TestEnvironment:
         if self.log_file:
             if not self.log_file.exists():
                 self.log_file.parent.mkdir(parents=True, exist_ok=True)
-            f = open(self.log_file, 'a')
+            f = open(self.log_file, 'a', encoding='utf-8', errors='ignore')
             f.write('\n' + ' '.join([str(arg) for arg in args]) + '\n\n')
 
         env = os.environ
@@ -235,13 +259,13 @@ class TestEnvironment:
         args = base64.b64encode(pickle.dumps(args))
         output_prefix = 'TEST_OUTPUT: '
 
-        expression = (f'import sys, pickle, base64\n'
-                      f'sys.path.append(r"{package_path}")\n'
-                      f'import {modulename}\n'
-                      f'args = pickle.loads(base64.b64decode({args}))\n'
-                      f'result = {modulename}.{functionname}(args)\n'
-                      f'result = base64.b64encode(pickle.dumps(result))\n'
-                      f'print("\\n{output_prefix}" + result.decode() + "\\n")\n')
+        expression = (f'import sys, pickle, base64;'
+                      f'sys.path.append(r"{package_path}");'
+                      f'import {modulename};'
+                      f'args = pickle.loads(base64.b64decode({args}));'
+                      f'result = {modulename}.{functionname}(args);'
+                      f'result = base64.b64encode(pickle.dumps(result));'
+                      f'print("\\n{output_prefix}" + result.decode() + "\\n")')
 
         expr_args = blender_args + ['--python-expr', expression]
         lines = self.call_blender(expr_args, foreground=foreground)

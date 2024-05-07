@@ -1,4 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* SPDX-FileCopyrightText: 2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #pragma once
 
@@ -41,13 +43,11 @@ class UnaryPredicate1D {
   /** Default constructor. */
   UnaryPredicate1D()
   {
-    py_up1D = NULL;
+    py_up1D = nullptr;
   }
 
   /** Destructor. */
-  virtual ~UnaryPredicate1D()
-  {
-  }
+  virtual ~UnaryPredicate1D() {}
 
   /** Returns the string of the name of the UnaryPredicate1D. */
   virtual string getName() const
@@ -85,13 +85,11 @@ class BinaryPredicate1D {
   /** Default constructor. */
   BinaryPredicate1D()
   {
-    py_bp1D = NULL;
+    py_bp1D = nullptr;
   }
 
   /** Destructor. */
-  virtual ~BinaryPredicate1D()
-  {
-  }
+  virtual ~BinaryPredicate1D() {}
 
   /** Returns the string of the name of the binary predicate. */
   virtual string getName() const
@@ -126,9 +124,7 @@ namespace Predicates1D {
 class TrueUP1D : public UnaryPredicate1D {
  public:
   /** Constructor */
-  TrueUP1D()
-  {
-  }
+  TrueUP1D() {}
 
   /** Returns the string "TrueUP1D". */
   string getName() const
@@ -149,9 +145,7 @@ class TrueUP1D : public UnaryPredicate1D {
 class FalseUP1D : public UnaryPredicate1D {
  public:
   /** Constructor */
-  FalseUP1D()
-  {
-  }
+  FalseUP1D() {}
 
   /** Returns the string "FalseUP1D". */
   string getName() const
@@ -177,9 +171,7 @@ class QuantitativeInvisibilityUP1D : public UnaryPredicate1D {
    *  \param qi:
    *    The Quantitative Invisibility you want the Interface1D to have
    */
-  QuantitativeInvisibilityUP1D(unsigned qi = 0) : _qi(qi)
-  {
-  }
+  QuantitativeInvisibilityUP1D(uint qi = 0) : _qi(qi) {}
 
   /** Returns the string "QuantitativeInvisibilityUP1D" */
   string getName() const
@@ -199,7 +191,7 @@ class QuantitativeInvisibilityUP1D : public UnaryPredicate1D {
   }
 
  private:
-  unsigned _qi;
+  uint _qi;
 };
 
 // ContourUP1D
@@ -262,7 +254,8 @@ class ExternalContourUP1D : public UnaryPredicate1D {
       set<ViewShape *> occluded;
       Functions1D::getOccludeeF1D(inter, occluded);
       for (set<ViewShape *>::iterator os = occluded.begin(), osend = occluded.end(); os != osend;
-           ++os) {
+           ++os)
+      {
         if ((*os) == 0) {
           result = true;
           return 0;
@@ -278,10 +271,10 @@ class ExternalContourUP1D : public UnaryPredicate1D {
 /** Returns true if the Interface1D's time stamp is equal to a certain user-defined value. */
 class EqualToTimeStampUP1D : public UnaryPredicate1D {
  protected:
-  unsigned _timeStamp;
+  uint _timeStamp;
 
  public:
-  EqualToTimeStampUP1D(unsigned ts) : UnaryPredicate1D()
+  EqualToTimeStampUP1D(uint ts) : UnaryPredicate1D()
   {
     _timeStamp = ts;
   }
@@ -304,10 +297,10 @@ class EqualToTimeStampUP1D : public UnaryPredicate1D {
 /** Returns true if the Interface1D's time stamp is equal to a certain user-defined value. */
 class EqualToChainingTimeStampUP1D : public UnaryPredicate1D {
  protected:
-  unsigned _timeStamp;
+  uint _timeStamp;
 
  public:
-  EqualToChainingTimeStampUP1D(unsigned ts) : UnaryPredicate1D()
+  EqualToChainingTimeStampUP1D(uint ts) : UnaryPredicate1D()
   {
     _timeStamp = ts;
   }
@@ -345,7 +338,7 @@ class ShapeUP1D : public UnaryPredicate1D {
    *  \param idSecond:
    *    The second Id component.
    */
-  ShapeUP1D(unsigned idFirst, unsigned idSecond = 0) : UnaryPredicate1D()
+  ShapeUP1D(uint idFirst, uint idSecond = 0) : UnaryPredicate1D()
   {
     _id = Id(idFirst, idSecond);
   }
@@ -515,7 +508,8 @@ class SameShapeIdBP1D : public BinaryPredicate1D {
     for (set<ViewShape *>::iterator s = shapes1.begin(), send = shapes1.end(); s != send; ++s) {
       Id current = (*s)->getId();
       for (set<ViewShape *>::iterator s2 = shapes2.begin(), s2end = shapes2.end(); s2 != s2end;
-           ++s2) {
+           ++s2)
+      {
         if ((*s2)->getId() == current) {
           result = true;
           return 0;

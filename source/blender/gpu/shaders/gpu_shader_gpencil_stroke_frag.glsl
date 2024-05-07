@@ -1,4 +1,8 @@
-#ifdef USE_GEOMETRY_SHADER
+/* SPDX-FileCopyrightText: 2018-2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
+
+#if defined(USE_GEOMETRY_SHADER) || defined(USE_GEOMETRY_IFACE_COLOR)
 vec4 fragment_in_color()
 {
   return geometry_out.mColor;

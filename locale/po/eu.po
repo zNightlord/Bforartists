@@ -1,16 +1,18 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 3.5.0 Beta (b'4e3286478670')\n"
+"Project-Id-Version: Blender 4.2.0 Alpha (b'9a3c7290a9c1')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2023-03-06 08:08:35\n"
-"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
-"Last-Translator: Ainhize & Miriam <agoenaga006@ikasle.ehu.eus>\n"
-"Language-Team: Euskara <agoenaga006@ikasle.ehu.eus>\n"
+"POT-Creation-Date: 2024-05-06 10:38+0000\n"
+"PO-Revision-Date: 2024-04-29 13:54+0000\n"
+"Last-Translator: Anonymous <noreply@weblate.org>\n"
+"Language-Team: Basque <https://translate.blender.org/projects/blender-ui/ui/eu/>\n"
 "Language: eu\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
-"Content-Transfer-Encoding: 8bit"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=n != 1;\n"
+"X-Generator: Weblate 5.0.1"
 
 
 msgid "Name"
@@ -185,6 +187,14 @@ msgid "Multiply"
 msgstr "Biderkatu"
 
 
+msgid "Animation"
+msgstr "Animazioa"
+
+
+msgid "New"
+msgstr "Berria"
+
+
 msgid "Heads"
 msgstr "Buruak"
 
@@ -239,6 +249,10 @@ msgstr "ektorea"
 
 msgid "Point"
 msgstr "Puntu"
+
+
+msgid "Layer"
+msgstr "Geruza"
 
 
 msgid "+X"
@@ -305,12 +319,12 @@ msgid "Direction"
 msgstr "Norabidea"
 
 
-msgid "Stroke"
-msgstr "Trazua"
-
-
 msgid "Normal"
 msgstr "Normala"
+
+
+msgid "Stroke"
+msgstr "Trazua"
 
 
 msgid "Curve"
@@ -417,10 +431,6 @@ msgid "Onion Skinning"
 msgstr "Tipula-azapa"
 
 
-msgid "Layer"
-msgstr "Geruza"
-
-
 msgid "Grid"
 msgstr "Sarea"
 
@@ -447,12 +457,24 @@ msgid "Sphere"
 msgstr "Esfera"
 
 
+msgid "Sound"
+msgstr "Soinua"
+
+
+msgid "Speaker"
+msgstr "Bozgorailua"
+
+
+msgid "Text"
+msgstr "Testua"
+
+
+msgid "World"
+msgstr "Mundua"
+
+
 msgid "Groups"
 msgstr "Taldeak"
-
-
-msgid "Visible Layers"
-msgstr "Ikusgai Dauden Geruzak"
 
 
 msgid "Local"
@@ -479,6 +501,10 @@ msgid "Cube"
 msgstr "Kuboa"
 
 
+msgid "Edit"
+msgstr "Editatu"
+
+
 msgid "Cylinder"
 msgstr "Zilindroa"
 
@@ -489,10 +515,6 @@ msgstr "Zirkulua"
 
 msgid "Angular Velocity"
 msgstr "Abiadura-angeluarra"
-
-
-msgid "Sound"
-msgstr "Soinua"
 
 
 msgid "Image Texture"
@@ -535,10 +557,6 @@ msgid "Mist"
 msgstr "Laino"
 
 
-msgid "Animation"
-msgstr "Animazioa"
-
-
 msgid "Owner"
 msgstr "Jabea"
 
@@ -572,12 +590,8 @@ msgid "Show/Hide Faces"
 msgstr "Aurpegiak erakutsi/ezkutatu"
 
 
-msgid "Edit"
-msgstr "Editatu"
-
-
-msgid "Text"
-msgstr "Testua"
+msgid "Physics"
+msgstr "Fisikak"
 
 
 msgid "File"
@@ -602,14 +616,6 @@ msgstr "Laguntza"
 
 msgid "Relations"
 msgstr "Loturak"
-
-
-msgid "New"
-msgstr "Berria"
-
-
-msgid "World"
-msgstr "Mundua"
 
 
 msgctxt "Curve"
@@ -639,6 +645,10 @@ msgstr "Y Ardatza"
 
 msgid "Original"
 msgstr "Jatorrizkoa"
+
+
+msgid "Selection"
+msgstr "Hautaketa"
 
 
 msgid "Reflection"
@@ -785,10 +795,6 @@ msgstr "Txertatu"
 msgctxt "Operator"
 msgid "Console Language"
 msgstr "Kontsolaren Hizkuntza"
-
-
-msgid "Language"
-msgstr "Hizkuntza"
 
 
 msgctxt "Operator"
@@ -943,15 +949,6 @@ msgid "Use Metadata"
 msgstr "Metadata erabili"
 
 
-msgctxt "Operator"
-msgid "Export OBJ"
-msgstr "Esportatu OBJ"
-
-
-msgid "Include UVs"
-msgstr "Gehitu UVs"
-
-
 msgid "Hierarchy"
 msgstr "Hierarkia"
 
@@ -1004,6 +1001,10 @@ msgid "Execute selected file"
 msgstr "Hautatutako fitxategia exekutatu"
 
 
+msgid "Play"
+msgstr "Erreproduzitu"
+
+
 msgctxt "Operator"
 msgid "Increment Number in Filename"
 msgstr "Fitxategi-izenean Zenbakia Inkrementatu"
@@ -1042,11 +1043,6 @@ msgstr "Hurrengo karpeta"
 
 msgid "Move to next folder"
 msgstr "Hurrengo karpetara mugitu"
-
-
-msgctxt "Operator"
-msgid "Parent File"
-msgstr "Erro Fitxategia"
 
 
 msgid "Move to parent directory"
@@ -1162,10 +1158,6 @@ msgstr "Tartea aldatu"
 
 msgid "Change font spacing"
 msgstr "Letra-tipo tartea aldatu"
-
-
-msgid "Selection"
-msgstr "Hautaketa"
 
 
 msgctxt "Operator"
@@ -1614,6 +1606,36 @@ msgid "Save Screenshot"
 msgstr "Pantaila-irudia Gorde"
 
 
+msgctxt "Sequence"
+msgid "Type"
+msgstr "Mota"
+
+
+msgctxt "Sequence"
+msgid "Add"
+msgstr "Gehitu"
+
+
+msgctxt "Sequence"
+msgid "Subtract"
+msgstr "Kendu"
+
+
+msgctxt "Sequence"
+msgid "Color"
+msgstr "Kolorea"
+
+
+msgctxt "Sequence"
+msgid "Speed"
+msgstr "Abiadura"
+
+
+msgctxt "Sequence"
+msgid "Text"
+msgstr "Testua"
+
+
 msgid "Property"
 msgstr "Ezaugarria"
 
@@ -1671,10 +1693,6 @@ msgid "Prev"
 msgstr "Aurrekoa"
 
 
-msgid "Play"
-msgstr "Erreproduzitu"
-
-
 msgctxt "Operator"
 msgid "Load Factory Settings"
 msgstr "Lehenetsitako ezarpenak kargatu"
@@ -1693,10 +1711,6 @@ msgstr "Sistemaren Informazioa Gorde"
 msgctxt "Operator"
 msgid "Scale"
 msgstr "Eskalatu"
-
-
-msgid "Physics"
-msgstr "Fisikak"
 
 
 msgid "Dynamics"
@@ -1724,9 +1738,12 @@ msgid "Continue"
 msgstr "Jarraitu"
 
 
-msgctxt "Sequence"
-msgid "Type"
-msgstr "Mota"
+msgid "Language"
+msgstr "Hizkuntza"
+
+
+msgid "Temperature"
+msgstr "Tenperatura"
 
 
 msgctxt "Sequence"
@@ -1759,31 +1776,6 @@ msgid "Cross"
 msgstr "Gurutzatu"
 
 
-msgctxt "Sequence"
-msgid "Add"
-msgstr "Gehitu"
-
-
-msgctxt "Sequence"
-msgid "Subtract"
-msgstr "Kendu"
-
-
-msgctxt "Sequence"
-msgid "Color"
-msgstr "Kolorea"
-
-
-msgctxt "Sequence"
-msgid "Speed"
-msgstr "Abiadura"
-
-
-msgctxt "Sequence"
-msgid "Text"
-msgstr "Testua"
-
-
 msgid "Gray Scale"
 msgstr "Gris-eskala"
 
@@ -1798,10 +1790,6 @@ msgstr "Blender Fitxategia"
 
 msgid "Sort Alphabetically"
 msgstr "Alfabetikoki Ordenatu"
-
-
-msgid "Speaker"
-msgstr "Bozgorailua"
 
 
 msgid "3D"
@@ -1922,10 +1910,6 @@ msgid "Refraction"
 msgstr "Errefrakzioa"
 
 
-msgid "Temperature"
-msgstr "Tenperatura"
-
-
 msgctxt "Image"
 msgid "New"
 msgstr "Berria"
@@ -1995,13 +1979,13 @@ msgstr "Irudia Renderizatu"
 
 
 msgctxt "Operator"
-msgid "Developer Community"
-msgstr "Garatzaileen Komunitatea"
+msgid "Report a Bug"
+msgstr "Akats baten berri eman"
 
 
 msgctxt "Operator"
-msgid "Report a Bug"
-msgstr "Akats baten berri eman"
+msgid "Developer Community"
+msgstr "Garatzaileen Komunitatea"
 
 
 msgctxt "Operator"
@@ -2157,6 +2141,10 @@ msgid "New"
 msgstr "Berria"
 
 
+msgid "Rigging"
+msgstr "Rigging"
+
+
 msgctxt "Mesh"
 msgid "Plane"
 msgstr "Planoa"
@@ -2196,11 +2184,6 @@ msgid "normal"
 msgstr "Normala"
 
 
-msgctxt "Armature"
-msgid "Group"
-msgstr "Taldea"
-
-
 msgid "Sound not packed"
 msgstr "Soinua paketatu gabe"
 
@@ -2221,12 +2204,12 @@ msgid "AO"
 msgstr "Inguruneko Oklusioa"
 
 
-msgid "Anisotropy"
-msgstr "Anisotropia"
-
-
 msgid "BSDF"
 msgstr "BSDF"
+
+
+msgid "Anisotropy"
+msgstr "Anisotropia"
 
 
 msgid "View Vector"
@@ -2361,22 +2344,6 @@ msgid "unable to open the file"
 msgstr "Ezin izan da fitxategia ireki"
 
 
-msgid "File format is not supported in file '%s'"
-msgstr "Fitxategi formatuak ez dauka euskarririk '%s' fitxategian"
-
-
-msgid "File path '%s' invalid"
-msgstr "'%s' fitxategi-helbidea baliogabea"
-
-
-msgid "Unknown error loading '%s'"
-msgstr "Errore ezezaguna '%s' kargatzean"
-
-
-msgid "Could not read '%s'"
-msgstr "Ezin izan da '%s' irakurri"
-
-
 msgid "'%s': nothing indicated"
 msgstr "'%s': ez da ezer adierazi"
 
@@ -2409,20 +2376,12 @@ msgid "Import-Export"
 msgstr "Inportatu-Esportatu"
 
 
-msgid "Rigging"
-msgstr "Rigging"
-
-
 msgid "English (English)"
 msgstr "Ingelesa (English)"
 
 
 msgid "Japanese (日本語)"
 msgstr "Japoniera (日本語)"
-
-
-msgid "Dutch (Nederlandse taal)"
-msgstr "Nederlandera (Nederlandse taal)"
 
 
 msgid "Italian (Italiano)"
@@ -2451,10 +2410,6 @@ msgstr "Gaztelania (Español)"
 
 msgid "Catalan (Català)"
 msgstr "Katalana (Català)"
-
-
-msgid "Czech (Český)"
-msgstr "Txekiarra (Český)"
 
 
 msgid "Portuguese (Português)"
@@ -2533,16 +2488,8 @@ msgid "Hebrew (תירִבְעִ)"
 msgstr "Hebreera (תירִבְעִ)"
 
 
-msgid "Estonian (Eestlane)"
-msgstr "Estoniera (Eestlane)"
-
-
 msgid "Esperanto (Esperanto)"
 msgstr "Esperantoa (Esperanto)"
-
-
-msgid "Spanish from Spain (Español de España)"
-msgstr "Espainiako gaztelera (Español de España)"
 
 
 msgid "Amharic (አማርኛ)"
@@ -2555,14 +2502,6 @@ msgstr "Uzbekera (Oʻzbek)"
 
 msgid "Uzbek Cyrillic (Ўзбек)"
 msgstr "Uzbekera Zirilikoa (Ўзбек)"
-
-
-msgid "Hindi (मानक हिन्दी)"
-msgstr "Hindi (मानक हिन्दी)"
-
-
-msgid "Vietnamese (tiếng Việt)"
-msgstr "Vietnamera (tiếng Việt)"
 
 
 msgid "Complete"

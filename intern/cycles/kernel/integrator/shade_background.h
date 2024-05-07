@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: Apache-2.0
- * Copyright 2011-2022 Blender Foundation */
+/* SPDX-FileCopyrightText: 2011-2022 Blender Foundation
+ *
+ * SPDX-License-Identifier: Apache-2.0 */
 
 #pragma once
 
@@ -22,14 +23,8 @@ ccl_device Spectrum integrator_eval_background_shader(KernelGlobals kg,
   const uint32_t path_flag = INTEGRATOR_STATE(state, path, flag);
 
   /* Use visibility flag to skip lights. */
-  if (shader & SHADER_EXCLUDE_ANY) {
-    if (((shader & SHADER_EXCLUDE_DIFFUSE) && (path_flag & PATH_RAY_DIFFUSE)) ||
-        ((shader & SHADER_EXCLUDE_GLOSSY) && ((path_flag & (PATH_RAY_GLOSSY | PATH_RAY_REFLECT)) ==
-                                              (PATH_RAY_GLOSSY | PATH_RAY_REFLECT))) ||
-        ((shader & SHADER_EXCLUDE_TRANSMIT) && (path_flag & PATH_RAY_TRANSMIT)) ||
-        ((shader & SHADER_EXCLUDE_CAMERA) && (path_flag & PATH_RAY_CAMERA)) ||
-        ((shader & SHADER_EXCLUDE_SCATTER) && (path_flag & PATH_RAY_VOLUME_SCATTER)))
-      return zero_spectrum();
+  if (!is_light_shader_visible_to_path(shader, path_flag)) {
+    return zero_spectrum();
   }
 
   /* Use fast constant background color if available. */
@@ -112,12 +107,7 @@ ccl_device_inline void integrate_background(KernelGlobals kg,
     }
 
     /* Background MIS weights. */
-    float mis_weight = 1.0f;
-    /* Check if background light exists or if we should skip PDF. */
-    if (!(INTEGRATOR_STATE(state, path, flag) & PATH_RAY_MIS_SKIP) &&
-        kernel_data.background.use_mis) {
-      mis_weight = light_sample_mis_weight_forward_background(kg, state, path_flag);
-    }
+    const float mis_weight = light_sample_mis_weight_forward_background(kg, state, path_flag);
 
     guiding_record_background(kg, state, L, mis_weight);
     L *= mis_weight;
@@ -140,16 +130,21 @@ ccl_device_inline void integrate_distant_lights(KernelGlobals kg,
       /* Use visibility flag to skip lights. */
 #ifdef __PASSES__
       const uint32_t path_flag = INTEGRATOR_STATE(state, path, flag);
+      if (!is_light_shader_visible_to_path(ls.shader, path_flag)) {
+        continue;
+      }
+#endif
 
-      if (ls.shader & SHADER_EXCLUDE_ANY) {
-        if (((ls.shader & SHADER_EXCLUDE_DIFFUSE) && (path_flag & PATH_RAY_DIFFUSE)) ||
-            ((ls.shader & SHADER_EXCLUDE_GLOSSY) &&
-             ((path_flag & (PATH_RAY_GLOSSY | PATH_RAY_REFLECT)) ==
-              (PATH_RAY_GLOSSY | PATH_RAY_REFLECT))) ||
-            ((ls.shader & SHADER_EXCLUDE_TRANSMIT) && (path_flag & PATH_RAY_TRANSMIT)) ||
-            ((ls.shader & SHADER_EXCLUDE_CAMERA) && (path_flag & PATH_RAY_CAMERA)) ||
-            ((ls.shader & SHADER_EXCLUDE_SCATTER) && (path_flag & PATH_RAY_VOLUME_SCATTER)))
-          return;
+#ifdef __LIGHT_LINKING__
+      if (!light_link_light_match(kg, light_link_receiver_forward(kg, state), lamp) &&
+          !(path_flag & PATH_RAY_CAMERA))
+      {
+        continue;
+      }
+#endif
+#ifdef __SHADOW_LINKING__
+      if (kernel_data_fetch(lights, lamp).shadow_set_membership != LIGHT_LINK_MASK_ALL) {
+        continue;
       }
 #endif
 
@@ -159,7 +154,7 @@ ccl_device_inline void integrate_distant_lights(KernelGlobals kg,
          * generate a firefly for small lights since it is improbable. */
         const ccl_global KernelLight *klight = &kernel_data_fetch(lights, lamp);
         if (klight->use_caustics)
-          return;
+          continue;
       }
 #endif /* __MNEE__ */
 
@@ -169,14 +164,11 @@ ccl_device_inline void integrate_distant_lights(KernelGlobals kg,
       ccl_private ShaderData *emission_sd = AS_SHADER_DATA(&emission_sd_storage);
       Spectrum light_eval = light_sample_shader_eval(kg, state, emission_sd, &ls, ray_time);
       if (is_zero(light_eval)) {
-        return;
+        continue;
       }
 
       /* MIS weighting. */
-      float mis_weight = 1.0f;
-      if (!(path_flag & PATH_RAY_MIS_SKIP)) {
-        mis_weight = light_sample_mis_weight_forward_distant(kg, state, path_flag, &ls);
-      }
+      const float mis_weight = light_sample_mis_weight_forward_distant(kg, state, path_flag, &ls);
 
       /* Write to render buffer. */
       guiding_record_background(kg, state, light_eval, mis_weight);

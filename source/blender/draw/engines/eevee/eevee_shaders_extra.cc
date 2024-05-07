@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2022 Blender Foundation. */
+/* SPDX-FileCopyrightText: 2022 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup EEVEE
@@ -7,13 +8,15 @@
  * This file is only there to handle ShaderCreateInfos.
  */
 
-#include "GPU_shader.h"
+#include "GPU_shader.hh"
 
 #include "BLI_string_ref.hh"
 
 #include "gpu_shader_create_info.hh"
 
-#include "eevee_private.h"
+#include "eevee_private.hh"
+
+#include <sstream>
 
 using blender::gpu::shader::StageInterfaceInfo;
 
@@ -52,6 +55,8 @@ void eevee_shader_material_create_info_amend(GPUMaterial *gpumat,
 
   info.auto_resource_location(true);
 
+  info.define("UNI_ATTR(a)", "a");
+
   if (GPU_material_flag_get(gpumat, GPU_MATFLAG_SUBSURFACE)) {
     info.define("USE_SSS");
   }
@@ -59,7 +64,8 @@ void eevee_shader_material_create_info_amend(GPUMaterial *gpumat,
     info.define("USE_SHADER_TO_RGBA");
   }
   if (GPU_material_flag_get(gpumat, GPU_MATFLAG_BARYCENTRIC) && !is_volume && !is_hair &&
-      !is_point_cloud && !is_background) {
+      !is_point_cloud && !is_background)
+  {
     info.define("USE_BARYCENTRICS");
     info.builtins(BuiltinBits::BARYCENTRIC_COORD);
   }
@@ -85,7 +91,7 @@ void eevee_shader_material_create_info_amend(GPUMaterial *gpumat,
     info.vertex_inputs_.clear();
   }
   else if (do_fragment_attrib_load && !info.vertex_out_interfaces_.is_empty()) {
-    /* Codegen outputs only one interface. */
+    /* Code-generation outputs only one interface. */
     const StageInterfaceInfo &iface = *info.vertex_out_interfaces_.first();
     /* Globals the attrib_load() can write to when it is in the fragment shader. */
     attr_load << "struct " << iface.name << " {\n";
@@ -125,7 +131,7 @@ void eevee_shader_material_create_info_amend(GPUMaterial *gpumat,
 
   attr_load << "void attrib_load()\n";
   attr_load << "{\n";
-  attr_load << ((codegen.attr_load) ? codegen.attr_load : "");
+  attr_load << (!codegen.attr_load.empty() ? codegen.attr_load : "");
   attr_load << "}\n\n";
 
   std::stringstream vert_gen, frag_gen, geom_gen;
@@ -146,20 +152,18 @@ void eevee_shader_material_create_info_amend(GPUMaterial *gpumat,
 
   {
     frag_gen << frag;
-    if (codegen.material_functions) {
-      frag_gen << codegen.material_functions;
-    }
+    frag_gen << codegen.material_functions;
     frag_gen << "Closure nodetree_exec()\n";
     frag_gen << "{\n";
     if (is_volume) {
-      frag_gen << ((codegen.volume) ? codegen.volume : "return CLOSURE_DEFAULT;\n");
+      frag_gen << (!codegen.volume.empty() ? codegen.volume : "return CLOSURE_DEFAULT;\n");
     }
     else {
-      frag_gen << ((codegen.surface) ? codegen.surface : "return CLOSURE_DEFAULT;\n");
+      frag_gen << (!codegen.surface.empty() ? codegen.surface : "return CLOSURE_DEFAULT;\n");
     }
     frag_gen << "}\n\n";
 
-    if (codegen.displacement && (is_hair || is_mesh)) {
+    if (!codegen.displacement.empty() && (is_hair || is_mesh)) {
       info.define("EEVEE_DISPLACEMENT_BUMP");
 
       frag_gen << "vec3 displacement_exec()\n";

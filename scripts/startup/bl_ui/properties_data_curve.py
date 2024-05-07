@@ -1,4 +1,7 @@
+# SPDX-FileCopyrightText: 2009-2023 Blender Authors
+#
 # SPDX-License-Identifier: GPL-2.0-or-later
+
 import bpy
 from bpy.types import Panel
 from rna_prop_ui import PropertyPanel
@@ -121,7 +124,7 @@ class DATA_PT_curve_texture_space(CurveButtonsPanel, Panel):
         'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
-        'BLENDER_WORKBENCH_NEXT'}
+    }
 
     def draw(self, context):
         layout = self.layout
@@ -286,7 +289,7 @@ class DATA_PT_active_spline(CurveButtonsPanelActive, Panel):
                 sub.prop(act_spline, "use_cyclic_v", text="V")
 
             if act_spline.type == 'NURBS':
-                sub = col.column(heading="Bezier", align=True)
+                sub = col.column(heading="Bézier", align=True)
                 # sub.active = (not act_spline.use_cyclic_u)
                 sub.prop(act_spline, "use_bezier_u", text="U")
 
@@ -363,11 +366,26 @@ class DATA_PT_font(CurveButtonsPanelText, Panel):
         if mode == 'EDIT_TEXT':
             layout.separator()
 
-            row = layout.row(align=True)
-            row.prop(char, "use_bold", toggle=True)
-            row.prop(char, "use_italic", toggle=True)
-            row.prop(char, "use_underline", toggle=True)
-            row.prop(char, "use_small_caps", toggle=True)
+            if not text.has_selection:
+                row = layout.row(align=True)
+                row.prop(char, "use_bold", toggle=True)
+                row.prop(char, "use_italic", toggle=True)
+                row.prop(char, "use_underline", toggle=True)
+                row.prop(char, "use_small_caps", toggle=True)
+            else:
+                row = layout.row(align=True)
+                row.operator(
+                    "font.style_toggle", text="Bold", icon='BOLD', depress=text.is_select_bold,
+                ).style = 'BOLD'
+                row.operator(
+                    "font.style_toggle", text="Italic", icon='ITALIC', depress=text.is_select_italic,
+                ).style = 'ITALIC'
+                row.operator(
+                    "font.style_toggle", text="Underline", icon='UNDERLINE', depress=text.is_select_underline,
+                ).style = 'UNDERLINE'
+                row.operator(
+                    "font.style_toggle", text="Small Caps", icon='SMALL_CAPS', depress=text.is_select_smallcaps,
+                ).style = 'SMALL_CAPS'
 
 
 class DATA_PT_font_transform(CurveButtonsPanelText, Panel):
@@ -485,7 +503,7 @@ class DATA_PT_custom_props_curve(CurveButtonsPanel, PropertyPanel, Panel):
         'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
-        'BLENDER_WORKBENCH_NEXT'}
+    }
     _context_path = "object.data"
     _property_type = bpy.types.Curve
 

@@ -1,3 +1,7 @@
+/* SPDX-FileCopyrightText: 2020-2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
+
 /** This describe the entire interface of the shader. */
 
 #pragma BLENDER_REQUIRE(common_math_lib.glsl)
@@ -76,16 +80,16 @@ IN_OUT ShaderPointCloudInterface
 #  endif
 
 #else
-/** Checks to ensure create-info is setup correctly. **/
+/* Checks to ensure create-info is setup correctly. */
 #  ifdef HAIR_SHADER
 #    ifndef USE_SURFACE_LIB_HAIR
-#error Ensure CreateInfo eevee_legacy_surface_lib_hair is included if using surface library with a hair shader.
+#      error Ensure CreateInfo eevee_legacy_surface_lib_hair is included if using surface library with a hair shader.
 #    endif
 #  endif
 
 #  ifdef POINTCLOUD_SHADER
 #    ifndef USE_SURFACE_LIB_POINTCLOUD
-#error Ensure CreateInfo eevee_legacy_surface_lib_pointcloud is included if using surface library with a hair shader.
+#      error Ensure CreateInfo eevee_legacy_surface_lib_pointcloud is included if using surface library with a hair shader.
 #    endif
 #  endif
 
@@ -101,6 +105,7 @@ SSR_INTERFACE
 #  if defined(USE_BARYCENTRICS) && !defined(HAIR_SHADER)
 vec3 barycentric_distances_get()
 {
+#    if defined(GPU_OPENGL)
   /* NOTE: No need to undo perspective divide since it is not applied yet. */
   vec3 pos0 = (ProjectionMatrixInverse * gpu_position_at_vertex(0)).xyz;
   vec3 pos1 = (ProjectionMatrixInverse * gpu_position_at_vertex(1)).xyz;
@@ -119,6 +124,17 @@ vec3 barycentric_distances_get()
   d = dot(d10, edge21);
   dists.z = sqrt(dot(edge21, edge21) - d * d);
   return dists.xyz;
+#    elif defined(GPU_METAL)
+  /* Calculate Barycentric distances from available parameters in Metal. */
+  float3 wp_delta = (length(dfdx(worldPosition.xyz)) + length(dfdy(worldPosition.xyz)));
+  float3 bc_delta = (length(dfdx(gpu_BaryCoord)) + length(dfdy(gpu_BaryCoord)));
+  float3 rate_of_change = wp_delta / bc_delta;
+  vec3 dists;
+  dists.x = length(rate_of_change * (1.0 - gpu_BaryCoord.x));
+  dists.y = length(rate_of_change * (1.0 - gpu_BaryCoord.y));
+  dists.z = length(rate_of_change * (1.0 - gpu_BaryCoord.z));
+  return dists.xyz;
+#    endif
 }
 #  endif
 
@@ -233,4 +249,9 @@ vec3 coordinate_incoming(vec3 P)
 #else
   return cameraVec(P);
 #endif
+}
+
+float film_scaling_factor_get()
+{
+  return 1.0;
 }

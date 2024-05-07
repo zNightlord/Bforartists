@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2011 Blender Foundation. All rights reserved. */
+/* SPDX-FileCopyrightText: 2011 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup cmpnodes
@@ -7,20 +8,20 @@
 
 #include "BLI_math_vector_types.hh"
 
-#include "BKE_context.h"
-#include "BKE_lib_id.h"
+#include "BKE_context.hh"
+#include "BKE_lib_id.hh"
 #include "BKE_movieclip.h"
 #include "BKE_tracking.h"
 
 #include "DNA_defaults.h"
 
-#include "RNA_access.h"
+#include "RNA_access.hh"
 
-#include "UI_interface.h"
-#include "UI_resources.h"
+#include "UI_interface.hh"
+#include "UI_resources.hh"
 
-#include "GPU_shader.h"
-#include "GPU_texture.h"
+#include "GPU_shader.hh"
+#include "GPU_texture.hh"
 
 #include "COM_node_operation.hh"
 #include "COM_utilities.hh"
@@ -31,12 +32,12 @@ namespace blender::nodes::node_composite_movieclip_cc {
 
 static void cmp_node_movieclip_declare(NodeDeclarationBuilder &b)
 {
-  b.add_output<decl::Color>(N_("Image"));
-  b.add_output<decl::Float>(N_("Alpha"));
-  b.add_output<decl::Float>(N_("Offset X"));
-  b.add_output<decl::Float>(N_("Offset Y"));
-  b.add_output<decl::Float>(N_("Scale"));
-  b.add_output<decl::Float>(N_("Angle"));
+  b.add_output<decl::Color>("Image");
+  b.add_output<decl::Float>("Alpha");
+  b.add_output<decl::Float>("Offset X");
+  b.add_output<decl::Float>("Offset Y");
+  b.add_output<decl::Float>("Scale");
+  b.add_output<decl::Float>("Angle");
 }
 
 static void init(const bContext *C, PointerRNA *ptr)
@@ -125,8 +126,11 @@ class MovieClipOperation : public NodeOperation {
                            GPU_texture_height(movie_clip_texture));
     result.allocate_texture(Domain(size));
 
-    GPUShader *shader = shader_manager().get("compositor_convert_color_to_half_color");
+    GPUShader *shader = context().get_shader("compositor_read_input_color");
     GPU_shader_bind(shader);
+
+    const int2 lower_bound = int2(0);
+    GPU_shader_uniform_2iv(shader, "lower_bound", lower_bound);
 
     const int input_unit = GPU_shader_get_sampler_binding(shader, "input_tx");
     GPU_texture_bind(movie_clip_texture, input_unit);
@@ -159,8 +163,11 @@ class MovieClipOperation : public NodeOperation {
                            GPU_texture_height(movie_clip_texture));
     result.allocate_texture(Domain(size));
 
-    GPUShader *shader = shader_manager().get("compositor_extract_alpha_from_color");
+    GPUShader *shader = context().get_shader("compositor_read_input_alpha");
     GPU_shader_bind(shader);
+
+    const int2 lower_bound = int2(0);
+    GPU_shader_uniform_2iv(shader, "lower_bound", lower_bound);
 
     const int input_unit = GPU_shader_get_sampler_binding(shader, "input_tx");
     GPU_texture_bind(movie_clip_texture, input_unit);

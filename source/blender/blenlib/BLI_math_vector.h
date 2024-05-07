@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2001-2002 NaN Holding BV. All rights reserved. */
+/* SPDX-FileCopyrightText: 2001-2002 NaN Holding BV. All rights reserved.
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #pragma once
 
@@ -39,10 +40,6 @@ MINLINE void copy_v4_fl(float r[4], float f);
 MINLINE void swap_v2_v2(float a[2], float b[2]);
 MINLINE void swap_v3_v3(float a[3], float b[3]);
 MINLINE void swap_v4_v4(float a[4], float b[4]);
-
-MINLINE void swap_v2_v2_db(double a[2], double b[2]);
-MINLINE void swap_v3_v3_db(double a[3], double b[3]);
-MINLINE void swap_v4_v4_db(double a[4], double b[4]);
 
 /* unsigned char */
 
@@ -131,6 +128,8 @@ MINLINE void add_v4_v4(float r[4], const float a[4]);
 MINLINE void add_v4_v4v4(float r[4], const float a[4], const float b[4]);
 
 MINLINE void add_v3fl_v3fl_v3i(float r[3], const float a[3], const int b[3]);
+
+MINLINE void add_v3_uchar_clamped(uchar r[3], int i);
 
 MINLINE void sub_v2_v2(float r[2], const float a[2]);
 MINLINE void sub_v2_v2_db(double r[2], const double a[2]);
@@ -371,6 +370,7 @@ bool interp_v2_v2v2_slerp(float target[2], const float a[2], const float b[2], f
 void interp_v3_v3v3_slerp_safe(float target[3], const float a[3], const float b[3], float t);
 void interp_v2_v2v2_slerp_safe(float target[2], const float a[2], const float b[2], float t);
 
+/** Cubic curve interpolation (bezier spline). */
 void interp_v2_v2v2v2v2_cubic(float p[2],
                               const float v1[2],
                               const float v2[2],
@@ -629,7 +629,7 @@ void ortho_basis_v3v3_v3(float r_n1[3], float r_n2[3], const float n[3]);
  */
 void ortho_v3_v3(float out[3], const float v[3]);
 /**
- * no brainer compared to v3, just have for consistency.
+ * Trivial compared to v3, include for consistency.
  */
 void ortho_v2_v2(float out[2], const float v[2]);
 /**
@@ -689,11 +689,9 @@ MINLINE void clamp_v4_v4v4(float vec[4], const float min[4], const float max[4])
 
 /* -------------------------------------------------------------------- */
 /** \name Array Functions
- * \{ */
-
-/**
+ *
  * Follow fixed length vector function conventions.
- */
+ * \{ */
 
 double dot_vn_vn(const float *array_src_a,
                  const float *array_src_b,

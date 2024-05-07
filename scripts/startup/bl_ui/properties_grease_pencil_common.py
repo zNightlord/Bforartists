@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2009-2023 Blender Authors
+#
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 import bpy
@@ -68,7 +70,7 @@ class GreasePencilDisplayPanel:
     def poll(cls, context):
         ob = context.active_object
         brush = context.tool_settings.gpencil_paint.brush
-        if ob and ob.type == 'GPENCIL' and brush:
+        if ob and ob.type in {'GPENCIL', 'GREASEPENCIL'} and brush:
             return True
 
         return False
@@ -82,7 +84,7 @@ class GreasePencilDisplayPanel:
             settings = tool_settings.gpencil_paint
         elif context.mode == 'SCULPT_GPENCIL':
             settings = tool_settings.gpencil_sculpt_paint
-        elif context.mode == 'WEIGHT_GPENCIL':
+        elif context.mode == 'WEIGHT_GPENCIL' or context.mode == 'WEIGHT_GREASE_PENCIL':
             settings = tool_settings.gpencil_weight_paint
         elif context.mode == 'VERTEX_GPENCIL':
             settings = tool_settings.gpencil_vertex_paint
@@ -100,16 +102,20 @@ class GreasePencilDisplayPanel:
             settings = tool_settings.gpencil_paint
         elif context.mode == 'SCULPT_GPENCIL':
             settings = tool_settings.gpencil_sculpt_paint
-        elif context.mode == 'WEIGHT_GPENCIL':
+        elif context.mode == 'WEIGHT_GPENCIL' or context.mode == 'WEIGHT_GREASE_PENCIL':
             settings = tool_settings.gpencil_weight_paint
         elif context.mode == 'VERTEX_GPENCIL':
             settings = tool_settings.gpencil_vertex_paint
         brush = settings.brush
         gp_settings = brush.gpencil_settings
-
         ob = context.active_object
-        if ob.mode == 'PAINT_GPENCIL':
 
+        if self.is_popover and ob.mode not in {'PAINT_GPENCIL', 'VERTEX_GPENCIL'}:
+            row = layout.row(align=True)
+            row.use_property_split = False
+            row.prop(settings, "show_brush", text="Display Cursor")
+
+        if ob.mode == 'PAINT_GPENCIL':
             if self.is_popover:
                 row = layout.row(align=True)
                 row.prop(settings, "show_brush", text="Display Cursor")
@@ -135,8 +141,7 @@ class GreasePencilDisplayPanel:
 
         elif ob.mode == 'VERTEX_GPENCIL':
             row = layout.row(align=True)
-            row.prop(settings, "show_brush", text="")
-            row.label(text="Display Cursor")
+            row.prop(settings, "show_brush", text="Display Cursor")
 
 
 class GreasePencilBrushFalloff:
@@ -145,16 +150,16 @@ class GreasePencilBrushFalloff:
 
     def draw(self, context):
         layout = self.layout
-        ts = context.tool_settings
+        tool_settings = context.tool_settings
         settings = None
         if context.mode == 'PAINT_GPENCIL':
-            settings = ts.gpencil_paint
+            settings = tool_settings.gpencil_paint
         if context.mode == 'SCULPT_GPENCIL':
-            settings = ts.gpencil_sculpt_paint
-        elif context.mode == 'WEIGHT_GPENCIL':
-            settings = ts.gpencil_weight_paint
+            settings = tool_settings.gpencil_sculpt_paint
+        elif context.mode == 'WEIGHT_GPENCIL' or context.mode == 'WEIGHT_GREASE_PENCIL':
+            settings = tool_settings.gpencil_weight_paint
         elif context.mode == 'VERTEX_GPENCIL':
-            settings = ts.gpencil_vertex_paint
+            settings = tool_settings.gpencil_vertex_paint
 
         if settings:
             brush = settings.brush
@@ -269,6 +274,55 @@ class GPENCIL_MT_layer_active(Menu):
                 i -= 1
 
 
+class GREASE_PENCIL_MT_move_to_layer(Menu):
+    bl_label = "Move to Layer"
+
+    def draw(self, context):
+        layout = self.layout
+        layout.operator_context = 'INVOKE_REGION_WIN'
+        grease_pencil = context.active_object.data
+
+        layout.operator("grease_pencil.move_to_layer", text="New Layer", icon='ADD').add_new_layer = True
+
+        if not grease_pencil.layers:
+            return
+
+        layout.separator()
+
+        for i in range(len(grease_pencil.layers) - 1, -1, -1):
+            layer = grease_pencil.layers[i]
+            if layer == grease_pencil.layers.active:
+                icon = 'GREASEPENCIL'
+            else:
+                icon = 'NONE'
+            layout.operator("grease_pencil.move_to_layer", text=layer.name, icon=icon).target_layer_name = layer.name
+
+
+class GREASE_PENCIL_MT_layer_active(Menu):
+    bl_label = "Change Active Layer"
+
+    def draw(self, context):
+        layout = self.layout
+        layout.operator_context = 'INVOKE_REGION_WIN'
+        obd = context.active_object.data
+
+        nlop = layout.operator("grease_pencil.layer_add", text="New Layer", icon='ADD')
+        nlop.new_layer_name = "Layer"
+
+        if not obd.layers:
+            return
+
+        layout.separator()
+
+        for i in range(len(obd.layers) - 1, -1, -1):
+            layer = obd.layers[i]
+            if layer == obd.layers.active:
+                icon = 'GREASEPENCIL'
+            else:
+                icon = 'NONE'
+            layout.operator("grease_pencil.layer_active", text=layer.name, icon=icon).layer = i
+
+
 class GPENCIL_MT_material_active(Menu):
     bl_label = "Change Active Material"
 
@@ -287,6 +341,8 @@ class GPENCIL_MT_material_active(Menu):
 
         for slot in ob.material_slots:
             mat = slot.material
+            if not mat:
+                continue
             mat.id_data.preview_ensure()
             if mat and mat.id_data and mat.id_data.preview:
                 icon = mat.id_data.preview.icon_id
@@ -361,14 +417,23 @@ class AnnotationDataPanel:
     bl_options = {'DEFAULT_CLOSED'}
 
     def draw_header(self, context):
-        if context.space_data.type not in {'VIEW_3D', 'TOPBAR', 'SEQUENCE_EDITOR'}:
-            self.layout.prop(context.space_data, "show_annotation", text="")
+        space = context.space_data
+        if space.type not in {
+            'VIEW_3D',
+            'TOPBAR',
+            'SEQUENCE_EDITOR',
+            'IMAGE_EDITOR',
+            'NODE_EDITOR',
+            'PROPERTIES',
+        }:
+            self.layout.prop(space, "show_annotation", text="")
 
     def draw(self, context):
         layout = self.layout
         layout.use_property_decorate = False
+        space = context.space_data
 
-        is_clip_editor = context.space_data.type == 'CLIP_EDITOR'
+        is_clip_editor = space.type == 'CLIP_EDITOR'
 
         # Grease Pencil owner.
         gpd_owner = context.annotation_data_owner
@@ -379,7 +444,7 @@ class AnnotationDataPanel:
             col = layout.column()
             col.label(text="Data Source:")
             row = col.row()
-            row.prop(context.space_data, "annotation_source", expand=True)
+            row.prop(space, "annotation_source", expand=True)
 
         # Only allow adding annotation ID if its owner exist
         if context.annotation_data_owner is None:
@@ -403,8 +468,10 @@ class AnnotationDataPanel:
             layer_rows = 5
         else:
             layer_rows = 3
-        col.template_list("GPENCIL_UL_annotation_layer", "", gpd, "layers", gpd.layers, "active_index",
-                          rows=layer_rows, sort_reverse=True, sort_lock=True)
+        col.template_list(
+            "GPENCIL_UL_annotation_layer", "", gpd, "layers", gpd.layers, "active_index",
+            rows=layer_rows, sort_reverse=True, sort_lock=True,
+        )
 
         col = row.column()
 
@@ -435,7 +502,7 @@ class AnnotationDataPanel:
 
             if gpl.active_frame:
                 lock_status = iface_("Locked") if gpl.lock_frame else iface_("Unlocked")
-                lock_label = iface_("Frame: %d (%s)") % (gpl.active_frame.frame_number, lock_status)
+                lock_label = iface_("Frame: {:d} ({:s})").format(gpl.active_frame.frame_number, lock_status)
             else:
                 lock_label = iface_("Lock Frame")
             row.prop(gpl, "lock_frame", text=lock_label, icon='UNLOCKED')
@@ -495,6 +562,8 @@ class GreasePencilMaterialsPanel:
         show_full_ui = (self.bl_space_type == 'PROPERTIES')
 
         is_view3d = (self.bl_space_type == 'VIEW_3D')
+        is_grease_pencil_version3 = context.preferences.experimental.use_grease_pencil_version3
+
         tool_settings = context.scene.tool_settings
         gpencil_paint = tool_settings.gpencil_paint
         brush = gpencil_paint.brush if gpencil_paint else None
@@ -508,7 +577,7 @@ class GreasePencilMaterialsPanel:
 
             row.template_list("GPENCIL_UL_matslots", "", ob, "material_slots", ob, "active_material_index", rows=rows)
 
-            # if topbar popover and brush pinned, disable
+            # if top-bar popover and brush pinned, disable.
             if is_view3d and brush is not None:
                 gp_settings = brush.gpencil_settings
                 if gp_settings.use_material_pin:
@@ -545,7 +614,12 @@ class GreasePencilMaterialsPanel:
                     icon_link = 'MESH_DATA' if slot.link == 'DATA' else 'OBJECT_DATA'
                     row.prop(slot, "link", icon=icon_link, icon_only=True)
 
-                if ob.data.use_stroke_edit_mode:
+                if is_grease_pencil_version3 and ob.mode == 'EDIT':
+                    row = layout.row(align=True)
+                    row.operator("grease_pencil.stroke_material_set", text="Assign")
+                    row.operator("grease_pencil.material_select", text="Select").deselect = False
+                    row.operator("grease_pencil.material_select", text="Deselect").deselect = True
+                elif not is_grease_pencil_version3 and ob.data.use_stroke_edit_mode:
                     row = layout.row(align=True)
                     row.operator("gpencil.stroke_change_color", text="Assign")
                     row.operator("gpencil.material_select", text="Select").deselect = False
@@ -583,9 +657,9 @@ class GreasePencilVertexcolorPanel:
         layout.use_property_split = True
         layout.use_property_decorate = False
 
-        ts = context.scene.tool_settings
+        tool_settings = context.scene.tool_settings
         is_vertex = context.mode == 'VERTEX_GPENCIL'
-        gpencil_paint = ts.gpencil_vertex_paint if is_vertex else ts.gpencil_paint
+        gpencil_paint = tool_settings.gpencil_vertex_paint if is_vertex else tool_settings.gpencil_paint
         brush = gpencil_paint.brush
         gp_settings = brush.gpencil_settings
         tool = brush.gpencil_vertex_tool if is_vertex else brush.gpencil_tool
@@ -632,7 +706,7 @@ class GPENCIL_UL_layer(UIList):
 
             row = layout.row(align=True)
 
-            icon_mask = 'MOD_MASK' if gpl.use_mask_layer else 'LAYER_ACTIVE'
+            icon_mask = 'CLIPUV_DEHLT' if gpl.use_mask_layer else 'CLIPUV_HLT'
 
             row.prop(gpl, "use_mask_layer", text="", icon=icon_mask, emboss=False)
 
@@ -847,36 +921,36 @@ class GreasePencilLayerDisplayPanel:
 
 
 class GreasePencilFlipTintColors(Operator):
+    """Switch tint colors"""
     bl_label = "Flip Colors"
     bl_idname = "gpencil.tint_flip"
-    bl_description = "Switch tint colors"
 
     @classmethod
     def poll(cls, context):
-        ts = context.tool_settings
+        tool_settings = context.tool_settings
         settings = None
         if context.mode == 'PAINT_GPENCIL':
-            settings = ts.gpencil_paint
+            settings = tool_settings.gpencil_paint
         if context.mode == 'SCULPT_GPENCIL':
-            settings = ts.gpencil_sculpt_paint
-        elif context.mode == 'WEIGHT_GPENCIL':
-            settings = ts.gpencil_weight_paint
+            settings = tool_settings.gpencil_sculpt_paint
+        elif context.mode == 'WEIGHT_GPENCIL' or context.mode == 'WEIGHT_GREASE_PENCIL':
+            settings = tool_settings.gpencil_weight_paint
         elif context.mode == 'VERTEX_GPENCIL':
-            settings = ts.gpencil_vertex_paint
+            settings = tool_settings.gpencil_vertex_paint
 
         return settings and settings.brush
 
     def execute(self, context):
-        ts = context.tool_settings
+        tool_settings = context.tool_settings
         settings = None
         if context.mode == 'PAINT_GPENCIL':
-            settings = ts.gpencil_paint
+            settings = tool_settings.gpencil_paint
         if context.mode == 'SCULPT_GPENCIL':
-            settings = ts.gpencil_sculpt_paint
-        elif context.mode == 'WEIGHT_GPENCIL':
-            settings = ts.gpencil_weight_paint
+            settings = tool_settings.gpencil_sculpt_paint
+        elif context.mode == 'WEIGHT_GPENCIL' or context.mode == 'WEIGHT_GREASE_PENCIL':
+            settings = tool_settings.gpencil_weight_paint
         elif context.mode == 'VERTEX_GPENCIL':
-            settings = ts.gpencil_vertex_paint
+            settings = tool_settings.gpencil_vertex_paint
 
         brush = settings.brush
         color = brush.color
@@ -904,6 +978,9 @@ classes = (
     GPENCIL_UL_annotation_layer,
     GPENCIL_UL_layer,
     GPENCIL_UL_masks,
+
+    GREASE_PENCIL_MT_move_to_layer,
+    GREASE_PENCIL_MT_layer_active,
 
     GreasePencilFlipTintColors,
 )

@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2001-2002 NaN Holding BV. All rights reserved. */
+/* SPDX-FileCopyrightText: 2001-2002 NaN Holding BV. All rights reserved.
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup intern_mem
@@ -36,6 +37,8 @@
 /* Needed for uintptr_t and attributes, exception, don't use BLI anywhere else in `MEM_*` */
 #include "../../source/blender/blenlib/BLI_compiler_attrs.h"
 #include "../../source/blender/blenlib/BLI_sys_types.h"
+
+#include <string.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -99,7 +102,7 @@ extern void *(*MEM_callocN)(size_t len, const char *str) /* ATTR_MALLOC */ ATTR_
  * Allocate a block of memory of size (len * size), with tag name
  * str, aborting in case of integer overflows to prevent vulnerabilities.
  * The memory is cleared. The name must be static, because only a
- * pointer to it is stored ! */
+ * pointer to it is stored! */
 extern void *(*MEM_calloc_arrayN)(size_t len,
                                   size_t size,
                                   const char *str) /* ATTR_MALLOC */ ATTR_WARN_UNUSED_RESULT
@@ -107,7 +110,7 @@ extern void *(*MEM_calloc_arrayN)(size_t len,
 
 /**
  * Allocate a block of memory of size len, with tag name str. The
- * name must be a static, because only a pointer to it is stored !
+ * name must be a static, because only a pointer to it is stored!
  */
 extern void *(*MEM_mallocN)(size_t len, const char *str) /* ATTR_MALLOC */ ATTR_WARN_UNUSED_RESULT
     ATTR_ALLOC_SIZE(1) ATTR_NONNULL(2);
@@ -115,7 +118,7 @@ extern void *(*MEM_mallocN)(size_t len, const char *str) /* ATTR_MALLOC */ ATTR_
 /**
  * Allocate a block of memory of size (len * size), with tag name str,
  * aborting in case of integer overflow to prevent vulnerabilities. The
- * name must be a static, because only a pointer to it is stored !
+ * name must be a static, because only a pointer to it is stored!
  */
 extern void *(*MEM_malloc_arrayN)(size_t len,
                                   size_t size,
@@ -124,12 +127,22 @@ extern void *(*MEM_malloc_arrayN)(size_t len,
 
 /**
  * Allocate an aligned block of memory of size len, with tag name str. The
- * name must be a static, because only a pointer to it is stored !
+ * name must be a static, because only a pointer to it is stored!
  */
 extern void *(*MEM_mallocN_aligned)(size_t len,
                                     size_t alignment,
                                     const char *str) /* ATTR_MALLOC */ ATTR_WARN_UNUSED_RESULT
     ATTR_ALLOC_SIZE(1) ATTR_NONNULL(3);
+
+/**
+ * Allocate an aligned block of memory that is initialized with zeros.
+ */
+extern void *(*MEM_calloc_arrayN_aligned)(
+    size_t len,
+    size_t size,
+    size_t alignment,
+    const char *str) /* ATTR_MALLOC */ ATTR_WARN_UNUSED_RESULT ATTR_ALLOC_SIZE(1, 2)
+    ATTR_NONNULL(4);
 
 /**
  * Print a list of the names and sizes of all allocated memory
@@ -172,13 +185,13 @@ extern void (*MEM_reset_peak_memory)(void);
 /** Get the peak memory usage in bytes, including `mmap` allocations. */
 extern size_t (*MEM_get_peak_memory)(void) ATTR_WARN_UNUSED_RESULT;
 
-#ifdef __GNUC__
+#ifdef __cplusplus
 #  define MEM_SAFE_FREE(v) \
     do { \
-      typeof(&(v)) _v = &(v); \
+      static_assert(std::is_pointer_v<std::decay_t<decltype(v)>>); \
+      void **_v = (void **)&(v); \
       if (*_v) { \
-        /* Cast so we can free constant arrays. */ \
-        MEM_freeN((void *)*_v); \
+        MEM_freeN(*_v); \
         *_v = NULL; \
       } \
     } while (0)
@@ -193,7 +206,7 @@ extern size_t (*MEM_get_peak_memory)(void) ATTR_WARN_UNUSED_RESULT;
     } while (0)
 #endif
 
-/* overhead for lockfree allocator (use to avoid slop-space) */
+/** Overhead for lockfree allocator (use to avoid slop-space). */
 #define MEM_SIZE_OVERHEAD sizeof(size_t)
 #define MEM_SIZE_OPTIMAL(size) ((size)-MEM_SIZE_OVERHEAD)
 
@@ -229,22 +242,26 @@ void MEM_use_memleak_detection(bool enabled);
  */
 void MEM_enable_fail_on_memleak(void);
 
-/* Switch allocator to fast mode, with less tracking.
+/**
+ * Switch allocator to fast mode, with less tracking.
  *
  * Use in the production code where performance is the priority, and exact details about allocation
  * is not. This allocator keeps track of number of allocation and amount of allocated bytes, but it
  * does not track of names of allocated blocks.
  *
- * NOTE: The switch between allocator types can only happen before any allocation did happen. */
+ * \note The switch between allocator types can only happen before any allocation did happen.
+ */
 void MEM_use_lockfree_allocator(void);
 
-/* Switch allocator to slow fully guarded mode.
+/**
+ * Switch allocator to slow fully guarded mode.
  *
  * Use for debug purposes. This allocator contains lock section around every allocator call, which
  * makes it slow. What is gained with this is the ability to have list of allocated blocks (in an
  * addition to the tracking of number of allocations and amount of allocated bytes).
  *
- * NOTE: The switch between allocator types can only happen before any allocation did happen. */
+ * \note The switch between allocator types can only happen before any allocation did happen.
+ */
 void MEM_use_guarded_allocator(void);
 
 #ifdef __cplusplus
@@ -256,6 +273,15 @@ void MEM_use_guarded_allocator(void);
 #  include <new>
 #  include <type_traits>
 #  include <utility>
+
+/**
+ * Conservative value of memory alignment returned by non-aligned OS-level memory allocation
+ * functions. For alignments smaller than this value, using non-aligned versions of allocator API
+ * functions is okay, allowing use of `calloc`, for example.
+ */
+#  define MEM_MIN_CPP_ALIGNMENT \
+    (__STDCPP_DEFAULT_NEW_ALIGNMENT__ < alignof(void *) ? __STDCPP_DEFAULT_NEW_ALIGNMENT__ : \
+                                                          alignof(void *))
 
 /**
  * Allocate new memory for and constructs an object of type #T.
@@ -287,7 +313,7 @@ template<typename T> inline void MEM_delete(const T *ptr)
     /* Support #ptr being null, because C++ `delete` supports that as well. */
     return;
   }
-  /* C++ allows destruction of const objects, so the pointer is allowed to be const. */
+  /* C++ allows destruction of `const` objects, so the pointer is allowed to be `const`. */
   ptr->~T();
   MEM_freeN(const_cast<T *>(ptr));
 }
@@ -301,7 +327,7 @@ template<typename T> inline void MEM_delete(const T *ptr)
 template<typename T> inline T *MEM_cnew(const char *allocation_name)
 {
   static_assert(std::is_trivial_v<T>, "For non-trivial types, MEM_new should be used.");
-  return static_cast<T *>(MEM_callocN(sizeof(T), allocation_name));
+  return static_cast<T *>(MEM_calloc_arrayN_aligned(1, sizeof(T), alignof(T), allocation_name));
 }
 
 /**
@@ -310,7 +336,8 @@ template<typename T> inline T *MEM_cnew(const char *allocation_name)
 template<typename T> inline T *MEM_cnew_array(const size_t length, const char *allocation_name)
 {
   static_assert(std::is_trivial_v<T>, "For non-trivial types, MEM_new should be used.");
-  return static_cast<T *>(MEM_calloc_arrayN(length, sizeof(T), allocation_name));
+  return static_cast<T *>(
+      MEM_calloc_arrayN_aligned(length, sizeof(T), alignof(T), allocation_name));
 }
 
 /**
@@ -333,12 +360,16 @@ template<typename T> inline T *MEM_cnew(const char *allocation_name, const T &ot
   return new_object;
 }
 
-/* Allocation functions (for C++ only). */
+/** Allocation functions (for C++ only). */
 #  define MEM_CXX_CLASS_ALLOC_FUNCS(_id) \
    public: \
     void *operator new(size_t num_bytes) \
     { \
-      return MEM_mallocN(num_bytes, _id); \
+      return MEM_mallocN_aligned(num_bytes, __STDCPP_DEFAULT_NEW_ALIGNMENT__, _id); \
+    } \
+    void *operator new(size_t num_bytes, std::align_val_t alignment) \
+    { \
+      return MEM_mallocN_aligned(num_bytes, size_t(alignment), _id); \
     } \
     void operator delete(void *mem) \
     { \
@@ -348,7 +379,11 @@ template<typename T> inline T *MEM_cnew(const char *allocation_name, const T &ot
     } \
     void *operator new[](size_t num_bytes) \
     { \
-      return MEM_mallocN(num_bytes, _id "[]"); \
+      return MEM_mallocN_aligned(num_bytes, __STDCPP_DEFAULT_NEW_ALIGNMENT__, _id "[]"); \
+    } \
+    void *operator new[](size_t num_bytes, std::align_val_t alignment) \
+    { \
+      return MEM_mallocN_aligned(num_bytes, size_t(alignment), _id "[]"); \
     } \
     void operator delete[](void *mem) \
     { \
@@ -360,11 +395,12 @@ template<typename T> inline T *MEM_cnew(const char *allocation_name, const T &ot
     { \
       return ptr; \
     } \
-    /* This is the matching delete operator to the placement-new operator above. Both parameters \
-     * will have the same value. Without this, we get the warning C4291 on windows. */ \
-    void operator delete(void * /*ptr_to_free*/, void * /*ptr*/) \
-    { \
-    }
+    /** \
+     * This is the matching delete operator to the placement-new operator above. \
+     * Both parameters \
+     * will have the same value. Without this, we get the warning C4291 on windows. \
+     */ \
+    void operator delete(void * /*ptr_to_free*/, void * /*ptr*/) {}
 
 #endif /* __cplusplus */
 

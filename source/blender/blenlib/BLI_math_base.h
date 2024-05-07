@@ -1,10 +1,48 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2001-2002 NaN Holding BV. All rights reserved. */
+/* SPDX-FileCopyrightText: 2001-2002 NaN Holding BV. All rights reserved.
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #pragma once
 
 /** \file
  * \ingroup bli
+ *
+ * \section mathabbrev Abbreviations
+ *
+ * - `fl` = `float`.
+ * - `db` = `double`.
+ * - `v2` = `vec2` = vector 2.
+ * - `v3` = `vec3` = vector 3.
+ * - `v4` = `vec4` = vector 4.
+ * - `vn` = `vec4q = vector N dimensions, *passed as an arg, after the vector*..
+ * - `qt` = `quat` = quaternion.
+ * - `dq` = `dquat` = dual quaternion.
+ * - `m2` = `mat2` = matrix 2x2.
+ * - `m3` = `mat3` = matrix 3x3.
+ * - `m4` = `mat4` = matrix 4x4.
+ * - `eul` = `euler` rotation.
+ * - `eulO` = `euler` with order.
+ * - `plane` = `plane 4`, (vec3, distance).
+ * - `plane3` = `plane 3`, (same as a `plane` with a zero 4th component).
+ *
+ * \subsection mathabbrev_all Function Type Abbreviations
+ *
+ * For non float versions of functions (which typically operate on floats),
+ * use single suffix abbreviations.
+ *
+ * - `_d` = double
+ * - `_i` = int
+ * - `_u` = unsigned int
+ * - `_char` = char
+ * - `_uchar` = unsigned char
+ *
+ * \section mathvarnames Variable Names
+ *
+ * - f = single value
+ * - a, b, c = vectors
+ * - r = result vector
+ * - A, B, C = matrices
+ * - R = result matrix
  */
 
 #if defined(_MSC_VER) && !defined(_USE_MATH_DEFINES)
@@ -90,13 +128,6 @@ MINLINE double sqrt3d(double d);
 
 MINLINE float sqrtf_signed(float f);
 
-MINLINE float saacosf(float f);
-MINLINE float saasinf(float f);
-MINLINE float sasqrtf(float f);
-MINLINE float saacos(float fac);
-MINLINE float saasin(float fac);
-MINLINE float sasqrt(float fac);
-
 /* Compute linear interpolation (lerp) between origin and target. */
 MINLINE float interpf(float target, float origin, float t);
 MINLINE double interpd(double target, double origin, double t);
@@ -113,7 +144,7 @@ MINLINE float scalenorm(float a, float b, float x);
  */
 MINLINE double scalenormd(double a, double b, double x);
 
-/* NOTE: Compilers will upcast all types smaller than int to int when performing arithmetic
+/* NOTE: Compilers will up-cast all types smaller than int to int when performing arithmetic
  * operation. */
 
 MINLINE int square_s(short a);
@@ -140,6 +171,8 @@ MINLINE float max_ffff(float a, float b, float c, float d);
 
 MINLINE double min_dd(double a, double b);
 MINLINE double max_dd(double a, double b);
+MINLINE double min_ddd(double a, double b, double c);
+MINLINE double max_ddd(double a, double b, double c);
 
 MINLINE int min_ii(int a, int b);
 MINLINE int max_ii(int a, int b);
@@ -167,6 +200,26 @@ MINLINE size_t clamp_z(size_t value, size_t min, size_t max);
  * \param max_diff: the maximum absolute difference.
  */
 MINLINE int compare_ff(float a, float b, float max_diff);
+/**
+ * Computes the distance between two floats in ulps.
+ *
+ * In other words, returns zero if the floats are exactly equal, and
+ * otherwise returns 1 plus the number of (unique) representable floats
+ * between `a` and `b` on the number line.
+ *
+ * Notes:
+ * - The order of `a` and `b` doesn't matter.  The returned value is the
+ *   absolute difference.
+ * - Unlike many ulp difference functions, this function handles the
+ *   difference between positive and negative floats in a meaningful way.
+ *   It returns the number (plus 1) of representable floats between those
+ *   two values as they would be arranged on a number line.
+ * - Zero and negative zero are *not* considered unique from each other.
+ *   They are counted together as a single float in the difference.
+ * - NaNs are not handled meaningfully.  If either number is NaN, this
+ *   function returns uint max (0xffffffff).
+ */
+MINLINE uint ulp_diff_ff(float a, float b);
 /**
  * Almost-equal for IEEE floats, using their integer representation
  * (mixing ULP and absolute difference methods).
@@ -230,15 +283,30 @@ MINLINE uint divide_ceil_u(uint a, uint b);
 MINLINE uint64_t divide_ceil_ul(uint64_t a, uint64_t b);
 
 /**
- * Returns \a a if it is a multiple of \a b or the next multiple or \a b after \b a .
+ * Returns \a a if it is a multiple of \a b or the next multiple or \a b after \b a.
  */
 MINLINE uint ceil_to_multiple_u(uint a, uint b);
 MINLINE uint64_t ceil_to_multiple_ul(uint64_t a, uint64_t b);
 
 /**
- * modulo that handles negative numbers, works the same as Python's.
+ * Floored modulo that is useful for wrapping numbers over \a n,
+ * including when \a i is negative.
+ *
+ * This is the same as Python % or GLSL mod(): `mod_i(-5, 3) = 1`.
+ *
+ * \return an integer in the interval [0, n), same sign as n.
  */
 MINLINE int mod_i(int i, int n);
+
+/**
+ * Floored modulo that is useful for wrapping numbers over \a n,
+ * including when \a f is negative.
+ *
+ * This is the same as Python % or GLSL mod(): `floored_fmod(-0.2, 1.0) = 0.8`.
+ *
+ * \return a float in the interval [0, n), same sign as n.
+ */
+MINLINE float floored_fmod(float f, float n);
 
 /**
  * Round to closest even number, halfway cases are rounded away from zero.

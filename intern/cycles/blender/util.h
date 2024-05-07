@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: Apache-2.0
- * Copyright 2011-2022 Blender Foundation */
+/* SPDX-FileCopyrightText: 2011-2022 Blender Foundation
+ *
+ * SPDX-License-Identifier: Apache-2.0 */
 
 #ifndef __BLENDER_UTIL_H__
 #define __BLENDER_UTIL_H__
@@ -16,13 +17,19 @@
 #include "util/types.h"
 #include "util/vector.h"
 
+#include "BKE_mesh.hh"
+
 /* Hacks to hook into Blender API
  * todo: clean this up ... */
 
 extern "C" {
 void BKE_image_user_frame_calc(void *ima, void *iuser, int cfra);
-void BKE_image_user_file_path_ex(
-    void *bmain, void *iuser, void *ima, char *path, bool resolve_udim, bool resolve_multiview);
+void BKE_image_user_file_path_ex(void *bmain,
+                                 void *iuser,
+                                 void *ima,
+                                 char *filepath,
+                                 bool resolve_udim,
+                                 bool resolve_multiview);
 unsigned char *BKE_image_get_pixels_for_frame(void *image, int frame, int tile);
 float *BKE_image_get_float_pixels_for_frame(void *image, int frame, int tile);
 }
@@ -57,13 +64,20 @@ BlenderAttributeType blender_attribute_name_split_type(ustring name, string *r_r
 void python_thread_state_save(void **python_thread_state);
 void python_thread_state_restore(void **python_thread_state);
 
+static bool mesh_use_corner_normals(BL::Mesh &mesh, Mesh::SubdivisionType subdivision_type)
+{
+  return mesh && (subdivision_type == Mesh::SUBDIVISION_NONE) &&
+         (static_cast<const ::Mesh *>(mesh.ptr.data)->normals_domain(true) ==
+          blender::bke::MeshNormalDomain::Corner);
+}
+
 static inline BL::Mesh object_to_mesh(BL::BlendData & /*data*/,
                                       BObjectInfo &b_ob_info,
                                       BL::Depsgraph & /*depsgraph*/,
                                       bool /*calc_undeformed*/,
                                       Mesh::SubdivisionType subdivision_type)
 {
-  /* TODO: make this work with copy-on-write, modifiers are already evaluated. */
+  /* TODO: make this work with copy-on-evaluation, modifiers are already evaluated. */
 #if 0
   bool subsurf_mod_show_render = false;
   bool subsurf_mod_show_viewport = false;
@@ -82,24 +96,32 @@ static inline BL::Mesh object_to_mesh(BL::BlendData & /*data*/,
   BL::Mesh mesh = (b_ob_info.object_data.is_a(&RNA_Mesh)) ? BL::Mesh(b_ob_info.object_data) :
                                                             BL::Mesh(PointerRNA_NULL);
 
+  bool use_corner_normals = false;
+
   if (b_ob_info.is_real_object_data()) {
     if (mesh) {
-      /* Make a copy to split faces if we use autosmooth, otherwise not needed.
-       * Also in edit mode do we need to make a copy, to ensure data layers like
-       * UV are not empty. */
-      if (mesh.is_editmode() ||
-          (mesh.use_auto_smooth() && subdivision_type == Mesh::SUBDIVISION_NONE)) {
+      if (mesh.is_editmode()) {
+        /* Flush edit-mesh to mesh, including all data layers. */
         BL::Depsgraph depsgraph(PointerRNA_NULL);
         mesh = b_ob_info.real_object.to_mesh(false, depsgraph);
+        use_corner_normals = mesh_use_corner_normals(mesh, subdivision_type);
+      }
+      else if (mesh_use_corner_normals(mesh, subdivision_type)) {
+        /* Make a copy to split faces. */
+        BL::Depsgraph depsgraph(PointerRNA_NULL);
+        mesh = b_ob_info.real_object.to_mesh(false, depsgraph);
+        use_corner_normals = true;
       }
     }
     else {
       BL::Depsgraph depsgraph(PointerRNA_NULL);
       mesh = b_ob_info.real_object.to_mesh(false, depsgraph);
+      use_corner_normals = mesh_use_corner_normals(mesh, subdivision_type);
     }
   }
   else {
     /* TODO: what to do about non-mesh geometry instances? */
+    use_corner_normals = mesh_use_corner_normals(mesh, subdivision_type);
   }
 
 #if 0
@@ -111,13 +133,14 @@ static inline BL::Mesh object_to_mesh(BL::BlendData & /*data*/,
   }
 #endif
 
-  if ((bool)mesh && subdivision_type == Mesh::SUBDIVISION_NONE) {
-    if (mesh.use_auto_smooth()) {
-      mesh.calc_normals_split();
-      mesh.split_faces(false);
+  if (mesh) {
+    if (use_corner_normals) {
+      mesh.split_faces();
     }
 
-    mesh.calc_loop_triangles();
+    if (subdivision_type == Mesh::SUBDIVISION_NONE) {
+      mesh.calc_loop_triangles();
+    }
   }
 
   return mesh;
@@ -142,13 +165,14 @@ static inline void colorramp_to_array(BL::ColorRamp &ramp,
                                       array<float> &ramp_alpha,
                                       int size)
 {
-  ramp_color.resize(size);
-  ramp_alpha.resize(size);
+  const int full_size = size + 1;
+  ramp_color.resize(full_size);
+  ramp_alpha.resize(full_size);
 
-  for (int i = 0; i < size; i++) {
+  for (int i = 0; i < full_size; i++) {
     float color[4];
 
-    ramp.evaluate((float)i / (float)(size - 1), color);
+    ramp.evaluate(float(i) / float(size), color);
     ramp_color[i] = make_float3(color[0], color[1], color[2]);
     ramp_alpha[i] = color[3];
   }
@@ -178,9 +202,10 @@ static inline void curvemapping_to_array(BL::CurveMapping &cumap, array<float> &
 {
   cumap.update();
   BL::CurveMap curve = cumap.curves[0];
-  data.resize(size);
-  for (int i = 0; i < size; i++) {
-    float t = (float)i / (float)(size - 1);
+  const int full_size = size + 1;
+  data.resize(full_size);
+  for (int i = 0; i < full_size; i++) {
+    float t = float(i) / float(size);
     data[i] = cumap.evaluate(curve, t);
   }
 }
@@ -199,10 +224,11 @@ static inline void curvemapping_float_to_array(BL::CurveMapping &cumap,
 
   BL::CurveMap map = cumap.curves[0];
 
-  data.resize(size);
+  const int full_size = size + 1;
+  data.resize(full_size);
 
-  for (int i = 0; i < size; i++) {
-    float t = min + (float)i / (float)(size - 1) * range;
+  for (int i = 0; i < full_size; i++) {
+    float t = min + float(i) / float(size) * range;
     data[i] = cumap.evaluate(map, t);
   }
 }
@@ -236,20 +262,21 @@ static inline void curvemapping_color_to_array(BL::CurveMapping &cumap,
   BL::CurveMap mapG = cumap.curves[1];
   BL::CurveMap mapB = cumap.curves[2];
 
-  data.resize(size);
+  const int full_size = size + 1;
+  data.resize(full_size);
 
   if (rgb_curve) {
     BL::CurveMap mapI = cumap.curves[3];
-    for (int i = 0; i < size; i++) {
-      const float t = min_x + (float)i / (float)(size - 1) * range_x;
+    for (int i = 0; i < full_size; i++) {
+      const float t = min_x + float(i) / float(size) * range_x;
       data[i] = make_float3(cumap.evaluate(mapR, cumap.evaluate(mapI, t)),
                             cumap.evaluate(mapG, cumap.evaluate(mapI, t)),
                             cumap.evaluate(mapB, cumap.evaluate(mapI, t)));
     }
   }
   else {
-    for (int i = 0; i < size; i++) {
-      float t = min_x + (float)i / (float)(size - 1) * range_x;
+    for (int i = 0; i < full_size; i++) {
+      float t = min_x + float(i) / float(size) * range_x;
       data[i] = make_float3(
           cumap.evaluate(mapR, t), cumap.evaluate(mapG, t), cumap.evaluate(mapB, t));
     }
@@ -467,8 +494,9 @@ static inline string get_string(PointerRNA &ptr, const char *name)
   char cstrbuf[1024];
   char *cstr = RNA_string_get_alloc(&ptr, name, cstrbuf, sizeof(cstrbuf), NULL);
   string str(cstr);
-  if (cstr != cstrbuf)
+  if (cstr != cstrbuf) {
     MEM_freeN(cstr);
+  }
 
   return str;
 }
@@ -489,8 +517,9 @@ static inline string blender_absolute_path(BL::BlendData &b_data, BL::ID &b_id, 
       BL::ID b_library_id(b_id.library());
       dirname = blender_absolute_path(b_data, b_library_id, b_id.library().filepath());
     }
-    else
+    else {
       dirname = b_data.filepath();
+    }
 
     return path_join(path_dirname(dirname), path.substr(2));
   }
@@ -515,17 +544,23 @@ static inline string get_text_datablock_content(const PointerRNA &ptr)
 
 /* Texture Space */
 
-static inline void mesh_texture_space(BL::Mesh &b_mesh, float3 &loc, float3 &size)
+static inline void mesh_texture_space(const ::Mesh &b_mesh, float3 &loc, float3 &size)
 {
-  loc = get_float3(b_mesh.texspace_location());
-  size = get_float3(b_mesh.texspace_size());
+  float texspace_location[3], texspace_size[3];
+  BKE_mesh_texspace_get(const_cast<::Mesh *>(&b_mesh), texspace_location, texspace_size);
 
-  if (size.x != 0.0f)
+  loc = make_float3(texspace_location[0], texspace_location[1], texspace_location[2]);
+  size = make_float3(texspace_size[0], texspace_size[1], texspace_size[2]);
+
+  if (size.x != 0.0f) {
     size.x = 0.5f / size.x;
-  if (size.y != 0.0f)
+  }
+  if (size.y != 0.0f) {
     size.y = 0.5f / size.y;
-  if (size.z != 0.0f)
+  }
+  if (size.z != 0.0f) {
     size.z = 0.5f / size.z;
+  }
 
   loc = loc * size - make_float3(0.5f, 0.5f, 0.5f);
 }
@@ -545,7 +580,7 @@ static inline uint object_motion_steps(BL::Object &b_parent,
   int steps = max(1, get_int(cobject, "motion_steps"));
 
   /* Also check parent object, so motion blur and steps can be
-   * controlled by dupligroup duplicator for linked groups. */
+   * controlled by dupli-group duplicator for linked groups. */
   if (b_parent.ptr.data != b_ob.ptr.data) {
     PointerRNA parent_cobject = RNA_pointer_get(&b_parent.ptr, "cycles");
     use_motion &= get_boolean(parent_cobject, "use_motion_blur");
@@ -571,9 +606,8 @@ static inline bool object_use_deform_motion(BL::Object &b_parent, BL::Object &b_
   /* If motion blur is enabled for the object we also check
    * whether it's enabled for the parent object as well.
    *
-   * This way we can control motion blur from the dupligroup
-   * duplicator much easier.
-   */
+   * This way we can control motion blur from the dupli-group
+   * duplicator much easier. */
   if (use_deform_motion && b_parent.ptr.data != b_ob.ptr.data) {
     PointerRNA parent_cobject = RNA_pointer_get(&b_parent.ptr, "cycles");
     use_deform_motion &= get_boolean(parent_cobject, "use_deform_motion");
@@ -588,7 +622,8 @@ static inline BL::FluidDomainSettings object_fluid_gas_domain_find(BL::Object &b
       BL::FluidModifier b_mmd(b_mod);
 
       if (b_mmd.fluid_type() == BL::FluidModifier::fluid_type_DOMAIN &&
-          b_mmd.domain_settings().domain_type() == BL::FluidDomainSettings::domain_type_GAS) {
+          b_mmd.domain_settings().domain_type() == BL::FluidDomainSettings::domain_type_GAS)
+      {
         return b_mmd.domain_settings();
       }
     }
@@ -637,7 +672,8 @@ static inline Mesh::SubdivisionType object_subdivision_type(BL::Object &b_ob,
     bool enabled = preview ? mod.show_viewport() : mod.show_render();
 
     if (enabled && mod.type() == BL::Modifier::type_SUBSURF &&
-        RNA_boolean_get(&cobj, "use_adaptive_subdivision")) {
+        RNA_boolean_get(&cobj, "use_adaptive_subdivision"))
+    {
       BL::SubsurfModifier subsurf(mod);
 
       if (subsurf.subdivision_type() == BL::SubsurfModifier::subdivision_type_CATMULL_CLARK) {
@@ -702,9 +738,7 @@ static inline bool object_need_motion_attribute(BObjectInfo &b_ob_info, Scene *s
 
 class EdgeMap {
  public:
-  EdgeMap()
-  {
-  }
+  EdgeMap() {}
 
   void clear()
   {

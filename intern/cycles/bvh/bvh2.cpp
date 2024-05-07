@@ -1,6 +1,9 @@
-/* SPDX-License-Identifier: Apache-2.0
- * Adapted from code copyright 2009-2010 NVIDIA Corporation
- * Modifications Copyright 2011-2022 Blender Foundation. */
+/* SPDX-FileCopyrightText: 2009-2010 NVIDIA Corporation
+ * SPDX-FileCopyrightText: 2011-2022 Blender Foundation
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Adapted code from NVIDIA Corporation. */
 
 #include "bvh/bvh2.h"
 
@@ -18,9 +21,7 @@
 
 CCL_NAMESPACE_BEGIN
 
-BVHStackEntry::BVHStackEntry(const BVHNode *n, int i) : node(n), idx(i)
-{
-}
+BVHStackEntry::BVHStackEntry(const BVHNode *n, int i) : node(n), idx(i) {}
 
 int BVHStackEntry::encodeIdx() const
 {
@@ -91,8 +92,9 @@ void BVH2::refit(Progress &progress)
   progress.set_substatus("Packing BVH primitives");
   pack_primitives();
 
-  if (progress.get_cancel())
+  if (progress.get_cancel()) {
     return;
+  }
 
   progress.set_substatus("Refitting BVH nodes");
   refit_nodes();
@@ -392,8 +394,9 @@ void BVH2::refit_primitives(int start, int end, BoundBox &bbox, uint &visibility
             size_t steps = hair->get_motion_steps() - 1;
             float3 *key_steps = attr->data_float3();
 
-            for (size_t i = 0; i < steps; i++)
+            for (size_t i = 0; i < steps; i++) {
               curve.bounds_grow(k, key_steps + i * hair_size, &hair->get_curve_radius()[0], bbox);
+            }
           }
         }
       }
@@ -416,8 +419,9 @@ void BVH2::refit_primitives(int start, int end, BoundBox &bbox, uint &visibility
             size_t steps = pointcloud->get_motion_steps() - 1;
             float3 *point_steps = attr->data_float3();
 
-            for (size_t i = 0; i < steps; i++)
+            for (size_t i = 0; i < steps; i++) {
               point.bounds_grow(point_steps + i * pointcloud_size, radius, bbox);
+            }
           }
         }
       }
@@ -439,8 +443,9 @@ void BVH2::refit_primitives(int start, int end, BoundBox &bbox, uint &visibility
             size_t steps = mesh->motion_steps - 1;
             float3 *vert_steps = attr->data_float3();
 
-            for (size_t i = 0; i < steps; i++)
+            for (size_t i = 0; i < steps; i++) {
               triangle.bounds_grow(vert_steps + i * mesh_size, bbox);
+            }
           }
         }
       }
@@ -518,7 +523,8 @@ void BVH2::pack_instances(size_t nodes_size, size_t leaf_nodes_size)
   pack.object_node.resize(objects.size());
 
   if (params.num_motion_curve_steps > 0 || params.num_motion_triangle_steps > 0 ||
-      params.num_motion_point_steps > 0) {
+      params.num_motion_point_steps > 0)
+  {
     pack.prim_time.resize(prim_index_size);
   }
 
@@ -561,10 +567,12 @@ void BVH2::pack_instances(size_t nodes_size, size_t leaf_nodes_size)
     int geom_prim_offset = geom->prim_offset;
 
     /* fill in node indexes for instances */
-    if (bvh->pack.root_index == -1)
+    if (bvh->pack.root_index == -1) {
       pack.object_node[object_offset++] = -noffset_leaf - 1;
-    else
+    }
+    else {
       pack.object_node[object_offset++] = noffset;
+    }
 
     geometry_map[geom] = pack.object_node[object_offset - 1];
 
@@ -608,7 +616,7 @@ void BVH2::pack_instances(size_t nodes_size, size_t leaf_nodes_size)
       int4 *bvh_nodes = &bvh->pack.nodes[0];
       size_t bvh_nodes_size = bvh->pack.nodes.size();
 
-      for (size_t i = 0, j = 0; i < bvh_nodes_size; j++) {
+      for (size_t i = 0; i < bvh_nodes_size;) {
         size_t nsize, nsize_bbox;
         if (bvh_nodes[i].x & PATH_RAY_NODE_UNALIGNED) {
           nsize = BVH_UNALIGNED_NODE_SIZE;

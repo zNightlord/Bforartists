@@ -1,5 +1,8 @@
-/* SPDX-License-Identifier: Apache-2.0
- * Copyright 2011-2022 Blender Foundation */
+/* SPDX-FileCopyrightText: 2011-2022 Blender Foundation
+ *
+ * SPDX-License-Identifier: Apache-2.0 */
+
+#pragma once
 
 #ifdef WITH_HIP
 
@@ -29,13 +32,14 @@ class HIPDevice : public GPUDevice {
   int pitch_alignment;
   int hipDevId;
   int hipDevArchitecture;
+  int hipRuntimeVersion;
   bool first_error;
 
   HIPDeviceKernels kernels;
 
   static bool have_precompiled_kernels();
 
-  virtual BVHLayoutMask get_bvh_layout_mask() const override;
+  virtual BVHLayoutMask get_bvh_layout_mask(uint /*kernel_features*/) const override;
 
   void set_error(const string &error) override;
 
@@ -49,9 +53,11 @@ class HIPDevice : public GPUDevice {
 
   bool use_adaptive_compilation();
 
-  string compile_kernel_get_common_cflags(const uint kernel_features);
+  virtual string compile_kernel_get_common_cflags(const uint kernel_features);
 
-  string compile_kernel(const uint kernel_features, const char *name, const char *base = "hip");
+  virtual string compile_kernel(const uint kernel_features,
+                                const char *name,
+                                const char *base = "hip");
 
   virtual bool load_kernels(const uint kernel_features) override;
   void reserve_local_memory(const uint kernel_features);
@@ -61,7 +67,7 @@ class HIPDevice : public GPUDevice {
   virtual void free_device(void *device_pointer) override;
   virtual bool alloc_host(void *&shared_pointer, size_t size) override;
   virtual void free_host(void *shared_pointer) override;
-  virtual bool transform_host_pointer(void *&device_pointer, void *&shared_pointer) override;
+  virtual void transform_host_pointer(void *&device_pointer, void *&shared_pointer) override;
   virtual void copy_host_to_device(void *device_pointer, void *host_pointer, size_t size) override;
 
   void mem_alloc(device_memory &mem) override;
@@ -97,6 +103,7 @@ class HIPDevice : public GPUDevice {
  protected:
   bool get_device_attribute(hipDeviceAttribute_t attribute, int *value);
   int get_device_default_attribute(hipDeviceAttribute_t attribute, int default_value);
+  hipMemoryType get_memory_type(hipMemoryType mem_type);
 };
 
 CCL_NAMESPACE_END

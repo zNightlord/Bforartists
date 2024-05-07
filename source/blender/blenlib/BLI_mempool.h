@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2008 Blender Foundation. All rights reserved. */
+/* SPDX-FileCopyrightText: 2008 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #pragma once
 
@@ -38,9 +39,9 @@ void BLI_mempool_free(BLI_mempool *pool, void *addr) ATTR_NONNULL(1, 2);
  * Empty the pool, as if it were just created.
  *
  * \param pool: The pool to clear.
- * \param totelem_reserve: Optionally reserve how many items should be kept from clearing.
+ * \param elem_num_reserve: Optionally reserve how many items should be kept from clearing.
  */
-void BLI_mempool_clear_ex(BLI_mempool *pool, int totelem_reserve) ATTR_NONNULL(1);
+void BLI_mempool_clear_ex(BLI_mempool *pool, int elem_num_reserve) ATTR_NONNULL(1);
 /**
  * Wrap #BLI_mempool_clear_ex with no reserve set.
  */
@@ -97,7 +98,8 @@ typedef struct BLI_mempool_iter {
 /** #BLI_mempool.flag */
 enum {
   BLI_MEMPOOL_NOP = 0,
-  /** allow iterating on this mempool.
+  /**
+   * Allow iterating on this mempool.
    *
    * \note this requires that the first four bytes of the elements
    * never begin with 'free' (#FREEWORD).

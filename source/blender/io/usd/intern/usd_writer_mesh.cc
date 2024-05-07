@@ -1,40 +1,48 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2019 Blender Foundation. All rights reserved. */
-#include "usd_writer_mesh.h"
-#include "usd_hierarchy_iterator.h"
+/* SPDX-FileCopyrightText: 2019 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
+#include "usd_writer_mesh.hh"
 
-#include <pxr/usd/usdGeom/bboxCache.h>
+#include "usd_armature_utils.hh"
+#include "usd_blend_shape_utils.hh"
+#include "usd_skel_convert.hh"
+
 #include <pxr/usd/usdGeom/mesh.h>
 #include <pxr/usd/usdGeom/primvarsAPI.h>
 #include <pxr/usd/usdShade/material.h>
 #include <pxr/usd/usdShade/materialBindingAPI.h>
+#include <pxr/usd/usdSkel/bindingAPI.h>
 
+#include "BLI_array_utils.hh"
 #include "BLI_assert.h"
-#include "BLI_math_vector.h"
+#include "BLI_color.hh"
+#include "BLI_math_quaternion_types.hh"
 #include "BLI_math_vector_types.hh"
 
-#include "BKE_attribute.h"
 #include "BKE_attribute.hh"
-#include "BKE_customdata.h"
-#include "BKE_lib_id.h"
+#include "BKE_customdata.hh"
+#include "BKE_lib_id.hh"
 #include "BKE_material.h"
-#include "BKE_mesh.h"
-#include "BKE_mesh_wrapper.h"
-#include "BKE_modifier.h"
-#include "BKE_object.h"
+#include "BKE_mesh.hh"
+#include "BKE_mesh_wrapper.hh"
+#include "BKE_object.hh"
+#include "BKE_report.hh"
 
-#include "DEG_depsgraph.h"
+#include "DEG_depsgraph.hh"
 
-#include "DNA_layer_types.h"
-#include "DNA_mesh_types.h"
-#include "DNA_meshdata_types.h"
+#include "DNA_key_types.h"
 #include "DNA_modifier_types.h"
-#include "DNA_object_fluidsim_types.h"
-#include "DNA_particle_types.h"
 
-#include <iostream>
+#include "CLG_log.h"
+static CLG_LogRef LOG = {"io.usd"};
+
+namespace usdtokens {
+static const pxr::TfToken Anim("Anim", pxr::TfToken::Immortal);
+}  // namespace usdtokens
 
 namespace blender::io::usd {
+
+const pxr::UsdTimeCode defaultTime = pxr::UsdTimeCode::Default();
 
 USDGenericMeshWriter::USDGenericMeshWriter(const USDExporterContext &ctx) : USDAbstractWriter(ctx)
 {
@@ -48,6 +56,35 @@ bool USDGenericMeshWriter::is_supported(const HierarchyContext *context) const
   return true;
 }
 
+/* Get the last subdiv modifier, regardless of enable/disable status */
+static const SubsurfModifierData *get_last_subdiv_modifier(eEvaluationMode eval_mode, Object *obj)
+{
+  BLI_assert(obj);
+
+  /* Return the subdiv modifier if it is the last modifier and has
+   * the required mode enabled. */
+
+  ModifierData *md = (ModifierData *)(obj->modifiers.last);
+
+  if (!md) {
+    return nullptr;
+  }
+
+  /* Determine if the modifier is enabled for the current evaluation mode. */
+  ModifierMode mod_mode = (eval_mode == DAG_EVAL_RENDER) ? eModifierMode_Render :
+                                                           eModifierMode_Realtime;
+
+  if ((md->mode & mod_mode) != mod_mode) {
+    return nullptr;
+  }
+
+  if (md->type == eModifierType_Subsurf) {
+    return reinterpret_cast<SubsurfModifierData *>(md);
+  }
+
+  return nullptr;
+}
+
 void USDGenericMeshWriter::do_write(HierarchyContext &context)
 {
   Object *object_eval = context.object;
@@ -59,7 +96,11 @@ void USDGenericMeshWriter::do_write(HierarchyContext &context)
   }
 
   try {
-    write_mesh(context, mesh);
+    /* Fetch the subdiv modifier, if one exists and it is the last modifier. */
+    const SubsurfModifierData *subsurfData = get_last_subdiv_modifier(
+        usd_export_context_.export_params.evaluation_mode, object_eval);
+
+    write_mesh(context, mesh, subsurfData);
 
     if (needsfree) {
       free_export_mesh(mesh);
@@ -70,6 +111,295 @@ void USDGenericMeshWriter::do_write(HierarchyContext &context)
       free_export_mesh(mesh);
     }
     throw;
+  }
+
+  auto prim = usd_export_context_.stage->GetPrimAtPath(usd_export_context_.usd_path);
+  if (prim.IsValid() && object_eval) {
+    prim.SetActive((object_eval->duplicator_visibility_flag & OB_DUPLI_FLAG_RENDER) != 0);
+    write_id_properties(prim, mesh->id, get_export_time_code());
+  }
+}
+
+void USDGenericMeshWriter::write_custom_data(const Object *obj,
+                                             const Mesh *mesh,
+                                             pxr::UsdGeomMesh usd_mesh)
+{
+  const bke::AttributeAccessor attributes = mesh->attributes();
+
+  char *active_set_name = nullptr;
+  const int active_uv_set_index = CustomData_get_render_layer_index(&mesh->corner_data,
+                                                                    CD_PROP_FLOAT2);
+  if (active_uv_set_index != -1) {
+    active_set_name = mesh->corner_data.layers[active_uv_set_index].name;
+  }
+
+  attributes.for_all(
+      [&](const bke::AttributeIDRef &attribute_id, const bke::AttributeMetaData &meta_data) {
+        /* Skip "internal" Blender properties and attributes processed elsewhere.
+         * Skip edge domain because USD doesn't have a good conversion for them. */
+        if (attribute_id.name()[0] == '.' || attribute_id.is_anonymous() ||
+            meta_data.domain == bke::AttrDomain::Edge ||
+            ELEM(attribute_id.name(), "position", "material_index", "velocity"))
+        {
+          return true;
+        }
+
+        if ((usd_export_context_.export_params.export_armatures ||
+             usd_export_context_.export_params.export_shapekeys) &&
+            attribute_id.name().rfind("skel:") == 0)
+        {
+          /* If we're exporting armatures or shape keys to UsdSkel, we skip any
+           * attributes that have names with the "skel:" namespace, to avoid possible
+           * conflicts. Such attribute might have been previously imported into Blender
+           * from USD, but can no longer be considered valid. */
+          return true;
+        }
+
+        if (usd_export_context_.export_params.export_armatures &&
+            is_armature_modifier_bone_name(
+                *obj, attribute_id.name().data(), usd_export_context_.depsgraph))
+        {
+          /* This attribute is likely a vertex group for the armature modifier,
+           * and it may conflict with skinning data that will be written to
+           * the USD mesh, so we skip it.  Such vertex groups will instead be
+           * handled in #export_deform_verts(). */
+          return true;
+        }
+
+        /* UV Data. */
+        if (meta_data.domain == bke::AttrDomain::Corner && meta_data.data_type == CD_PROP_FLOAT2) {
+          if (usd_export_context_.export_params.export_uvmaps) {
+            write_uv_data(mesh, usd_mesh, attribute_id, active_set_name);
+          }
+        }
+
+        /* Color data. */
+        else if (ELEM(meta_data.domain, bke::AttrDomain::Corner, bke::AttrDomain::Point) &&
+                 ELEM(meta_data.data_type, CD_PROP_BYTE_COLOR, CD_PROP_COLOR))
+        {
+          if (usd_export_context_.export_params.export_mesh_colors) {
+            write_color_data(mesh, usd_mesh, attribute_id, meta_data);
+          }
+        }
+
+        else {
+          write_generic_data(mesh, usd_mesh, attribute_id, meta_data);
+        }
+
+        return true;
+      });
+}
+
+static std::optional<pxr::SdfValueTypeName> convert_blender_type_to_usd(
+    const eCustomDataType blender_type, ReportList *reports)
+{
+  switch (blender_type) {
+    case CD_PROP_FLOAT:
+      return pxr::SdfValueTypeNames->FloatArray;
+    case CD_PROP_INT8:
+    case CD_PROP_INT32:
+      return pxr::SdfValueTypeNames->IntArray;
+    case CD_PROP_FLOAT2:
+      return pxr::SdfValueTypeNames->Float2Array;
+    case CD_PROP_FLOAT3:
+      return pxr::SdfValueTypeNames->Float3Array;
+    case CD_PROP_STRING:
+      return pxr::SdfValueTypeNames->StringArray;
+    case CD_PROP_BOOL:
+      return pxr::SdfValueTypeNames->BoolArray;
+    case CD_PROP_QUATERNION:
+      return pxr::SdfValueTypeNames->QuatfArray;
+    default:
+      BKE_reportf(reports, RPT_WARNING, "Unsupported type for mesh data");
+      return std::nullopt;
+  }
+}
+
+static const std::optional<pxr::TfToken> convert_blender_domain_to_usd(
+    const bke::AttrDomain blender_domain, ReportList *reports)
+{
+  switch (blender_domain) {
+    case bke::AttrDomain::Corner:
+      return pxr::UsdGeomTokens->faceVarying;
+    case bke::AttrDomain::Point:
+      return pxr::UsdGeomTokens->vertex;
+    case bke::AttrDomain::Face:
+      return pxr::UsdGeomTokens->uniform;
+
+    /* Notice: Edge types are not supported in USD! */
+    default:
+      BKE_reportf(reports, RPT_WARNING, "Unsupported type for mesh data");
+      return std::nullopt;
+  }
+}
+
+template<typename BlenderT, typename USDT> inline USDT convert_value(const BlenderT &value);
+
+template<> inline int32_t convert_value(const int8_t &value)
+{
+  return int32_t(value);
+}
+template<> inline pxr::GfVec2f convert_value(const float2 &value)
+{
+  return pxr::GfVec2f(value[0], value[1]);
+}
+template<> inline pxr::GfVec3f convert_value(const float3 &value)
+{
+  return pxr::GfVec3f(value[0], value[1], value[2]);
+}
+template<> inline pxr::GfVec3f convert_value(const ColorGeometry4f &value)
+{
+  return pxr::GfVec3f(value.r, value.g, value.b);
+}
+template<> inline pxr::GfQuatf convert_value(const math::Quaternion &value)
+{
+  return pxr::GfQuatf(value.x, value.y, value.z, value.w);
+}
+
+template<typename BlenderT, typename USDT>
+void USDGenericMeshWriter::copy_blender_buffer_to_prim(const Span<BlenderT> buffer,
+                                                       const pxr::UsdTimeCode timecode,
+                                                       pxr::UsdGeomPrimvar attribute_pv)
+{
+  pxr::VtArray<USDT> data;
+  if constexpr (std::is_same_v<BlenderT, USDT>) {
+    data.assign(buffer.begin(), buffer.end());
+  }
+  else {
+    data.resize(buffer.size());
+    for (const int64_t i : buffer.index_range()) {
+      data[i] = convert_value<BlenderT, USDT>(buffer[i]);
+    }
+  }
+
+  if (!attribute_pv.HasValue() && timecode != pxr::UsdTimeCode::Default()) {
+    attribute_pv.Set(data, pxr::UsdTimeCode::Default());
+  }
+  else {
+    attribute_pv.Set(data, timecode);
+  }
+
+  const pxr::UsdAttribute &prim_attr = attribute_pv.GetAttr();
+  usd_value_writer_.SetAttribute(prim_attr, pxr::VtValue(data), timecode);
+}
+
+void USDGenericMeshWriter::write_generic_data(const Mesh *mesh,
+                                              pxr::UsdGeomMesh usd_mesh,
+                                              const bke::AttributeIDRef &attribute_id,
+                                              const bke::AttributeMetaData &meta_data)
+{
+  pxr::UsdTimeCode timecode = get_export_time_code();
+  const std::string name = attribute_id.name();
+  pxr::TfToken primvar_name(pxr::TfMakeValidIdentifier(name));
+  const pxr::UsdGeomPrimvarsAPI pvApi = pxr::UsdGeomPrimvarsAPI(usd_mesh);
+
+  /* Varying type depends on original domain. */
+  const std::optional<pxr::TfToken> prim_varying = convert_blender_domain_to_usd(meta_data.domain,
+                                                                                 reports());
+  const std::optional<pxr::SdfValueTypeName> prim_attr_type = convert_blender_type_to_usd(
+      meta_data.data_type, reports());
+
+  const GVArraySpan attribute = *mesh->attributes().lookup(
+      attribute_id, meta_data.domain, meta_data.data_type);
+  if (attribute.is_empty()) {
+    return;
+  }
+
+  if (!prim_varying || !prim_attr_type) {
+    BKE_reportf(reports(),
+                RPT_WARNING,
+                "Mesh %s, Attribute %s cannot be converted to USD",
+                &mesh->id.name[2],
+                attribute_id.name().data());
+    return;
+  }
+
+  pxr::UsdGeomPrimvar attribute_pv = pvApi.CreatePrimvar(
+      primvar_name, *prim_attr_type, *prim_varying);
+
+  switch (meta_data.data_type) {
+    case CD_PROP_FLOAT:
+      copy_blender_buffer_to_prim<float, float>(attribute.typed<float>(), timecode, attribute_pv);
+      break;
+    case CD_PROP_INT8:
+      copy_blender_buffer_to_prim<int8_t, int32_t>(
+          attribute.typed<int8_t>(), timecode, attribute_pv);
+      break;
+    case CD_PROP_INT32:
+      copy_blender_buffer_to_prim<int, int32_t>(attribute.typed<int>(), timecode, attribute_pv);
+      break;
+    case CD_PROP_FLOAT2:
+      copy_blender_buffer_to_prim<float2, pxr::GfVec2f>(
+          attribute.typed<float2>(), timecode, attribute_pv);
+      break;
+    case CD_PROP_FLOAT3:
+      copy_blender_buffer_to_prim<float3, pxr::GfVec3f>(
+          attribute.typed<float3>(), timecode, attribute_pv);
+      break;
+    case CD_PROP_BOOL:
+      copy_blender_buffer_to_prim<bool, bool>(attribute.typed<bool>(), timecode, attribute_pv);
+      break;
+    case CD_PROP_QUATERNION:
+      copy_blender_buffer_to_prim<math::Quaternion, pxr::GfQuatf>(
+          attribute.typed<math::Quaternion>(), timecode, attribute_pv);
+      break;
+    default:
+      BLI_assert_msg(0, "Unsupported type for mesh data.");
+  }
+}
+
+void USDGenericMeshWriter::write_uv_data(const Mesh *mesh,
+                                         pxr::UsdGeomMesh usd_mesh,
+                                         const bke::AttributeIDRef &attribute_id,
+                                         const char * /*active_set_name*/)
+{
+  pxr::UsdTimeCode timecode = get_export_time_code();
+  const pxr::UsdGeomPrimvarsAPI pvApi = pxr::UsdGeomPrimvarsAPI(usd_mesh);
+
+  pxr::TfToken primvar_name(pxr::TfMakeValidIdentifier(attribute_id.name()));
+
+  pxr::UsdGeomPrimvar uv_pv = pvApi.CreatePrimvar(
+      primvar_name, pxr::SdfValueTypeNames->TexCoord2fArray, pxr::UsdGeomTokens->faceVarying);
+
+  const VArraySpan<float2> buffer = *mesh->attributes().lookup<float2>(attribute_id,
+                                                                       bke::AttrDomain::Corner);
+  if (buffer.is_empty()) {
+    return;
+  }
+  copy_blender_buffer_to_prim<float2, pxr::GfVec2f>(buffer, timecode, uv_pv);
+}
+
+void USDGenericMeshWriter::write_color_data(const Mesh *mesh,
+                                            pxr::UsdGeomMesh usd_mesh,
+                                            const bke::AttributeIDRef &attribute_id,
+                                            const bke::AttributeMetaData &meta_data)
+{
+  pxr::UsdTimeCode timecode = get_export_time_code();
+  const std::string name = attribute_id.name();
+  pxr::TfToken primvar_name(pxr::TfMakeValidIdentifier(name));
+  const pxr::UsdGeomPrimvarsAPI pvApi = pxr::UsdGeomPrimvarsAPI(usd_mesh);
+
+  /* Varying type depends on original domain. */
+  const pxr::TfToken prim_varying = meta_data.domain == bke::AttrDomain::Corner ?
+                                        pxr::UsdGeomTokens->faceVarying :
+                                        pxr::UsdGeomTokens->vertex;
+
+  pxr::UsdGeomPrimvar colors_pv = pvApi.CreatePrimvar(
+      primvar_name, pxr::SdfValueTypeNames->Color3fArray, prim_varying);
+
+  const VArraySpan<ColorGeometry4f> buffer = *mesh->attributes().lookup<ColorGeometry4f>(
+      attribute_id, meta_data.domain);
+  if (buffer.is_empty()) {
+    return;
+  }
+
+  switch (meta_data.domain) {
+    case bke::AttrDomain::Corner:
+    case bke::AttrDomain::Point:
+      copy_blender_buffer_to_prim<ColorGeometry4f, pxr::GfVec3f>(buffer, timecode, colors_pv);
+      break;
+    default:
+      BLI_assert_msg(0, "Invalid type for mesh color data.");
   }
 }
 
@@ -82,7 +412,7 @@ struct USDMeshData {
   pxr::VtArray<pxr::GfVec3f> points;
   pxr::VtIntArray face_vertex_counts;
   pxr::VtIntArray face_indices;
-  std::map<short, pxr::VtIntArray> face_groups;
+  Map<short, pxr::VtIntArray> face_groups;
 
   /* The length of this array specifies the number of creases on the surface. Each element gives
    * the number of (must be adjacent) vertices in each crease, whose indices are linearly laid out
@@ -107,45 +437,11 @@ struct USDMeshData {
   pxr::VtFloatArray corner_sharpnesses;
 };
 
-void USDGenericMeshWriter::write_uv_maps(const Mesh *mesh, pxr::UsdGeomMesh usd_mesh)
+void USDGenericMeshWriter::write_mesh(HierarchyContext &context,
+                                      Mesh *mesh,
+                                      const SubsurfModifierData *subsurfData)
 {
   pxr::UsdTimeCode timecode = get_export_time_code();
-
-  pxr::UsdGeomPrimvarsAPI primvarsAPI(usd_mesh.GetPrim());
-
-  const CustomData *ldata = &mesh->ldata;
-  for (int layer_idx = 0; layer_idx < ldata->totlayer; layer_idx++) {
-    const CustomDataLayer *layer = &ldata->layers[layer_idx];
-    if (layer->type != CD_PROP_FLOAT2) {
-      continue;
-    }
-
-    /* UV coordinates are stored in a Primvar on the Mesh, and can be referenced from materials.
-     * The primvar name is the same as the UV Map name. This is to allow the standard name "st"
-     * for texture coordinates by naming the UV Map as such, without having to guess which UV Map
-     * is the "standard" one. */
-    pxr::TfToken primvar_name(pxr::TfMakeValidIdentifier(layer->name));
-    pxr::UsdGeomPrimvar uv_coords_primvar = primvarsAPI.CreatePrimvar(
-        primvar_name, pxr::SdfValueTypeNames->TexCoord2fArray, pxr::UsdGeomTokens->faceVarying);
-
-    const float2 *mloopuv = static_cast<const float2 *>(layer->data);
-    pxr::VtArray<pxr::GfVec2f> uv_coords;
-    for (int loop_idx = 0; loop_idx < mesh->totloop; loop_idx++) {
-      uv_coords.push_back(pxr::GfVec2f(mloopuv[loop_idx].x, mloopuv[loop_idx].y));
-    }
-
-    if (!uv_coords_primvar.HasValue()) {
-      uv_coords_primvar.Set(uv_coords, pxr::UsdTimeCode::Default());
-    }
-    const pxr::UsdAttribute &uv_coords_attr = uv_coords_primvar.GetAttr();
-    usd_value_writer_.SetAttribute(uv_coords_attr, pxr::VtValue(uv_coords), timecode);
-  }
-}
-
-void USDGenericMeshWriter::write_mesh(HierarchyContext &context, Mesh *mesh)
-{
-  pxr::UsdTimeCode timecode = get_export_time_code();
-  pxr::UsdTimeCode defaultTime = pxr::UsdTimeCode::Default();
   pxr::UsdStageRefPtr stage = usd_export_context_.stage;
   const pxr::SdfPath &usd_path = usd_export_context_.usd_path;
 
@@ -214,7 +510,8 @@ void USDGenericMeshWriter::write_mesh(HierarchyContext &context, Mesh *mesh)
   }
 
   if (!usd_mesh_data.corner_indices.empty() &&
-      usd_mesh_data.corner_indices.size() == usd_mesh_data.corner_sharpnesses.size()) {
+      usd_mesh_data.corner_indices.size() == usd_mesh_data.corner_sharpnesses.size())
+  {
     pxr::UsdAttribute attr_corner_indices = usd_mesh.CreateCornerIndicesAttr(pxr::VtValue(), true);
     pxr::UsdAttribute attr_corner_sharpnesses = usd_mesh.CreateCornerSharpnessesAttr(
         pxr::VtValue(), true);
@@ -230,44 +527,120 @@ void USDGenericMeshWriter::write_mesh(HierarchyContext &context, Mesh *mesh)
         attr_corner_sharpnesses, pxr::VtValue(usd_mesh_data.crease_sharpnesses), timecode);
   }
 
-  if (usd_export_context_.export_params.export_uvmaps) {
-    write_uv_maps(mesh, usd_mesh);
-  }
-  if (usd_export_context_.export_params.export_normals) {
+  write_custom_data(context.object, mesh, usd_mesh);
+  write_surface_velocity(mesh, usd_mesh);
+
+  const pxr::TfToken subdiv_scheme = get_subdiv_scheme(subsurfData);
+
+  /* Normals can be animated, so ensure these are written for each frame,
+   * unless a subdiv modifier is used, in which case normals are computed,
+   * not stored with the mesh. */
+  if (usd_export_context_.export_params.export_normals &&
+      subdiv_scheme == pxr::UsdGeomTokens->none)
+  {
     write_normals(mesh, usd_mesh);
   }
-  write_surface_velocity(mesh, usd_mesh);
 
   /* TODO(Sybren): figure out what happens when the face groups change. */
   if (frame_has_been_written_) {
     return;
   }
 
-  usd_mesh.CreateSubdivisionSchemeAttr().Set(pxr::UsdGeomTokens->none);
+  /* The subdivision scheme is a uniform according to spec,
+   * so this value cannot be animated. */
+  write_subdiv(subdiv_scheme, usd_mesh, subsurfData);
 
   if (usd_export_context_.export_params.export_materials) {
     assign_materials(context, usd_mesh, usd_mesh_data.face_groups);
   }
 
   /* Blender grows its bounds cache to cover animated meshes, so only author once. */
-  float bound_min[3];
-  float bound_max[3];
-  INIT_MINMAX(bound_min, bound_max);
-  BKE_mesh_minmax(mesh, bound_min, bound_max);
-  pxr::VtArray<pxr::GfVec3f> extent{pxr::GfVec3f{bound_min[0], bound_min[1], bound_min[2]},
-                                    pxr::GfVec3f{bound_max[0], bound_max[1], bound_max[2]}};
-  usd_mesh.CreateExtentAttr().Set(extent);
+  if (const std::optional<Bounds<float3>> bounds = mesh->bounds_min_max()) {
+    pxr::VtArray<pxr::GfVec3f> extent{
+        pxr::GfVec3f{bounds->min[0], bounds->min[1], bounds->min[2]},
+        pxr::GfVec3f{bounds->max[0], bounds->max[1], bounds->max[2]}};
+    usd_mesh.CreateExtentAttr().Set(extent);
+  }
 }
 
-static void get_vertices(const Mesh *mesh, USDMeshData &usd_mesh_data)
+pxr::TfToken USDGenericMeshWriter::get_subdiv_scheme(const SubsurfModifierData *subsurfData)
 {
-  usd_mesh_data.points.reserve(mesh->totvert);
+  /* Default to setting the subdivision scheme to None. */
+  pxr::TfToken subdiv_scheme = pxr::UsdGeomTokens->none;
 
-  const Span<float3> positions = mesh->vert_positions();
-  for (const int i : positions.index_range()) {
-    const float3 &position = positions[i];
-    usd_mesh_data.points.push_back(pxr::GfVec3f(position.x, position.y, position.z));
+  if (subsurfData) {
+    if (subsurfData->subdivType == SUBSURF_TYPE_CATMULL_CLARK) {
+      if (usd_export_context_.export_params.export_subdiv == USD_SUBDIV_BEST_MATCH) {
+        /* If a subdivision modifier exists, and it uses Catmull-Clark, then apply Catmull-Clark
+         * SubD scheme. */
+        subdiv_scheme = pxr::UsdGeomTokens->catmullClark;
+      }
+    }
+    else {
+      /* "Simple" is currently the only other subdivision type provided by Blender, */
+      /* and we do not yet provide a corresponding representation for USD export. */
+      BKE_reportf(reports(),
+                  RPT_WARNING,
+                  "USD export: Simple subdivision not supported, exporting subdivided mesh");
+    }
   }
+
+  return subdiv_scheme;
+}
+
+void USDGenericMeshWriter::write_subdiv(const pxr::TfToken &subdiv_scheme,
+                                        pxr::UsdGeomMesh &usd_mesh,
+                                        const SubsurfModifierData *subsurfData)
+{
+  usd_mesh.CreateSubdivisionSchemeAttr().Set(subdiv_scheme);
+  if (subdiv_scheme == pxr::UsdGeomTokens->catmullClark) {
+    /* For Catmull-Clark, also consider the various interpolation modes. */
+    /* For reference, see
+     * https://graphics.pixar.com/opensubdiv/docs/subdivision_surfaces.html#face-varying-interpolation-rules
+     */
+    switch (subsurfData->uv_smooth) {
+      case SUBSURF_UV_SMOOTH_NONE:
+        usd_mesh.CreateFaceVaryingLinearInterpolationAttr().Set(pxr::UsdGeomTokens->all);
+        break;
+      case SUBSURF_UV_SMOOTH_PRESERVE_CORNERS:
+        usd_mesh.CreateFaceVaryingLinearInterpolationAttr().Set(pxr::UsdGeomTokens->cornersOnly);
+        break;
+      case SUBSURF_UV_SMOOTH_PRESERVE_CORNERS_AND_JUNCTIONS:
+        usd_mesh.CreateFaceVaryingLinearInterpolationAttr().Set(pxr::UsdGeomTokens->cornersPlus1);
+        break;
+      case SUBSURF_UV_SMOOTH_PRESERVE_CORNERS_JUNCTIONS_AND_CONCAVE:
+        usd_mesh.CreateFaceVaryingLinearInterpolationAttr().Set(pxr::UsdGeomTokens->cornersPlus2);
+        break;
+      case SUBSURF_UV_SMOOTH_PRESERVE_BOUNDARIES:
+        usd_mesh.CreateFaceVaryingLinearInterpolationAttr().Set(pxr::UsdGeomTokens->boundaries);
+        break;
+      case SUBSURF_UV_SMOOTH_ALL:
+        usd_mesh.CreateFaceVaryingLinearInterpolationAttr().Set(pxr::UsdGeomTokens->none);
+        break;
+      default:
+        BLI_assert_msg(0, "Unsupported UV smoothing mode.");
+    }
+
+    /* For reference, see
+     * https://graphics.pixar.com/opensubdiv/docs/subdivision_surfaces.html#boundary-interpolation-rules
+     */
+    switch (subsurfData->boundary_smooth) {
+      case SUBSURF_BOUNDARY_SMOOTH_ALL:
+        usd_mesh.CreateInterpolateBoundaryAttr().Set(pxr::UsdGeomTokens->edgeOnly);
+        break;
+      case SUBSURF_BOUNDARY_SMOOTH_PRESERVE_CORNERS:
+        usd_mesh.CreateInterpolateBoundaryAttr().Set(pxr::UsdGeomTokens->edgeAndCorner);
+        break;
+      default:
+        BLI_assert_msg(0, "Unsupported boundary smoothing mode.");
+    }
+  }
+}
+
+static void get_positions(const Mesh *mesh, USDMeshData &usd_mesh_data)
+{
+  const Span<pxr::GfVec3f> positions = mesh->vert_positions().cast<pxr::GfVec3f>();
+  usd_mesh_data.points = pxr::VtArray<pxr::GfVec3f>(positions.begin(), positions.end());
 }
 
 static void get_loops_polys(const Mesh *mesh, USDMeshData &usd_mesh_data)
@@ -275,38 +648,36 @@ static void get_loops_polys(const Mesh *mesh, USDMeshData &usd_mesh_data)
   /* Only construct face groups (a.k.a. geometry subsets) when we need them for material
    * assignments. */
   const bke::AttributeAccessor attributes = mesh->attributes();
-  const VArray<int> material_indices = attributes.lookup_or_default<int>(
-      "material_index", ATTR_DOMAIN_FACE, 0);
+  const VArray<int> material_indices = *attributes.lookup_or_default<int>(
+      "material_index", bke::AttrDomain::Face, 0);
   if (!material_indices.is_single() && mesh->totcol > 1) {
     const VArraySpan<int> indices_span(material_indices);
     for (const int i : indices_span.index_range()) {
-      usd_mesh_data.face_groups[indices_span[i]].push_back(i);
+      usd_mesh_data.face_groups.lookup_or_add_default(indices_span[i]).push_back(i);
     }
   }
 
-  usd_mesh_data.face_vertex_counts.reserve(mesh->totpoly);
-  usd_mesh_data.face_indices.reserve(mesh->totloop);
+  usd_mesh_data.face_vertex_counts.resize(mesh->faces_num);
+  const OffsetIndices faces = mesh->faces();
+  offset_indices::copy_group_sizes(
+      faces,
+      faces.index_range(),
+      MutableSpan(usd_mesh_data.face_vertex_counts.data(), mesh->faces_num));
 
-  const Span<MPoly> polys = mesh->polys();
-  const Span<MLoop> loops = mesh->loops();
-
-  for (const int i : polys.index_range()) {
-    const MPoly &poly = polys[i];
-    usd_mesh_data.face_vertex_counts.push_back(poly.totloop);
-    for (const MLoop &loop : loops.slice(poly.loopstart, poly.totloop)) {
-      usd_mesh_data.face_indices.push_back(loop.v);
-    }
-  }
+  const Span<int> corner_verts = mesh->corner_verts();
+  usd_mesh_data.face_indices = pxr::VtIntArray(corner_verts.begin(), corner_verts.end());
 }
 
 static void get_edge_creases(const Mesh *mesh, USDMeshData &usd_mesh_data)
 {
-  const float *creases = static_cast<const float *>(CustomData_get_layer(&mesh->edata, CD_CREASE));
-  if (!creases) {
+  const bke::AttributeAccessor attributes = mesh->attributes();
+  const bke::AttributeReader attribute = attributes.lookup<float>("crease_edge",
+                                                                  bke::AttrDomain::Edge);
+  if (!attribute) {
     return;
   }
-
-  const Span<MEdge> edges = mesh->edges();
+  const VArraySpan creases(*attribute);
+  const Span<int2> edges = mesh->edges();
   for (const int i : edges.index_range()) {
     const float crease = creases[i];
     if (crease == 0.0f) {
@@ -315,8 +686,8 @@ static void get_edge_creases(const Mesh *mesh, USDMeshData &usd_mesh_data)
 
     const float sharpness = crease >= 1.0f ? pxr::UsdGeomMesh::SHARPNESS_INFINITE : crease;
 
-    usd_mesh_data.crease_vertex_indices.push_back(edges[i].v1);
-    usd_mesh_data.crease_vertex_indices.push_back(edges[i].v2);
+    usd_mesh_data.crease_vertex_indices.push_back(edges[i][0]);
+    usd_mesh_data.crease_vertex_indices.push_back(edges[i][1]);
     usd_mesh_data.crease_lengths.push_back(2);
     usd_mesh_data.crease_sharpnesses.push_back(sharpness);
   }
@@ -324,13 +695,14 @@ static void get_edge_creases(const Mesh *mesh, USDMeshData &usd_mesh_data)
 
 static void get_vert_creases(const Mesh *mesh, USDMeshData &usd_mesh_data)
 {
-  const float *creases = static_cast<const float *>(CustomData_get_layer(&mesh->vdata, CD_CREASE));
-
-  if (!creases) {
+  const bke::AttributeAccessor attributes = mesh->attributes();
+  const bke::AttributeReader attribute = attributes.lookup<float>("crease_vert",
+                                                                  bke::AttrDomain::Point);
+  if (!attribute) {
     return;
   }
-
-  for (int i = 0, v = mesh->totvert; i < v; i++) {
+  const VArraySpan creases(*attribute);
+  for (const int i : creases.index_range()) {
     const float sharpness = creases[i];
 
     if (sharpness != 0.0f) {
@@ -342,7 +714,7 @@ static void get_vert_creases(const Mesh *mesh, USDMeshData &usd_mesh_data)
 
 void USDGenericMeshWriter::get_geometry_data(const Mesh *mesh, USDMeshData &usd_mesh_data)
 {
-  get_vertices(mesh, usd_mesh_data);
+  get_positions(mesh, usd_mesh_data);
   get_loops_polys(mesh, usd_mesh_data);
   get_edge_creases(mesh, usd_mesh_data);
   get_vert_creases(mesh, usd_mesh_data);
@@ -399,9 +771,9 @@ void USDGenericMeshWriter::assign_materials(const HierarchyContext &context,
   }
 
   /* Define a geometry subset per material. */
-  for (const MaterialFaceGroups::value_type &face_group : usd_face_groups) {
-    short material_number = face_group.first;
-    const pxr::VtIntArray &face_indices = face_group.second;
+  for (const MaterialFaceGroups::Item &face_group : usd_face_groups.items()) {
+    short material_number = face_group.key;
+    const pxr::VtIntArray &face_indices = face_group.value;
 
     Material *material = BKE_object_material_get(context.object, material_number + 1);
     if (material == nullptr) {
@@ -424,43 +796,28 @@ void USDGenericMeshWriter::assign_materials(const HierarchyContext &context,
 void USDGenericMeshWriter::write_normals(const Mesh *mesh, pxr::UsdGeomMesh usd_mesh)
 {
   pxr::UsdTimeCode timecode = get_export_time_code();
-  const float(*lnors)[3] = static_cast<const float(*)[3]>(
-      CustomData_get_layer(&mesh->ldata, CD_NORMAL));
-  const Span<MPoly> polys = mesh->polys();
-  const Span<MLoop> loops = mesh->loops();
 
   pxr::VtVec3fArray loop_normals;
-  loop_normals.reserve(mesh->totloop);
+  loop_normals.resize(mesh->corners_num);
 
-  if (lnors != nullptr) {
-    /* Export custom loop normals. */
-    for (int loop_idx = 0, totloop = mesh->totloop; loop_idx < totloop; ++loop_idx) {
-      loop_normals.push_back(pxr::GfVec3f(lnors[loop_idx]));
+  MutableSpan dst_normals(reinterpret_cast<float3 *>(loop_normals.data()), loop_normals.size());
+
+  switch (mesh->normals_domain()) {
+    case bke::MeshNormalDomain::Point: {
+      array_utils::gather(mesh->vert_normals(), mesh->corner_verts(), dst_normals);
+      break;
     }
-  }
-  else {
-    /* Compute the loop normals based on the 'smooth' flag. */
-    bke::AttributeAccessor attributes = mesh->attributes();
-    const float(*vert_normals)[3] = BKE_mesh_vert_normals_ensure(mesh);
-    const float(*face_normals)[3] = BKE_mesh_poly_normals_ensure(mesh);
-    const VArray<bool> sharp_faces = attributes.lookup_or_default<bool>(
-        "sharp_face", ATTR_DOMAIN_FACE, false);
-    for (const int i : polys.index_range()) {
-      const MPoly &poly = polys[i];
-
-      if (sharp_faces[i]) {
-        /* Flat shaded, use common normal for all verts. */
-        pxr::GfVec3f pxr_normal(face_normals[i]);
-        for (int loop_idx = 0; loop_idx < poly.totloop; ++loop_idx) {
-          loop_normals.push_back(pxr_normal);
-        }
+    case bke::MeshNormalDomain::Face: {
+      const OffsetIndices faces = mesh->faces();
+      const Span<float3> face_normals = mesh->face_normals();
+      for (const int i : faces.index_range()) {
+        dst_normals.slice(faces[i]).fill(face_normals[i]);
       }
-      else {
-        /* Smooth shaded, use individual vert normals. */
-        for (const MLoop &loop : loops.slice(poly.loopstart, poly.totloop)) {
-          loop_normals.push_back(pxr::GfVec3f(vert_normals[loop.v]));
-        }
-      }
+      break;
+    }
+    case bke::MeshNormalDomain::Corner: {
+      array_utils::copy(mesh->corner_normals(), dst_normals);
+      break;
     }
   }
 
@@ -477,7 +834,7 @@ void USDGenericMeshWriter::write_surface_velocity(const Mesh *mesh, pxr::UsdGeom
   /* Export velocity attribute output by fluid sim, sequence cache modifier
    * and geometry nodes. */
   CustomDataLayer *velocity_layer = BKE_id_attribute_find(
-      &mesh->id, "velocity", CD_PROP_FLOAT3, ATTR_DOMAIN_POINT);
+      &mesh->id, "velocity", CD_PROP_FLOAT3, bke::AttrDomain::Point);
 
   if (velocity_layer == nullptr) {
     return;
@@ -487,9 +844,9 @@ void USDGenericMeshWriter::write_surface_velocity(const Mesh *mesh, pxr::UsdGeom
 
   /* Export per-vertex velocity vectors. */
   pxr::VtVec3fArray usd_velocities;
-  usd_velocities.reserve(mesh->totvert);
+  usd_velocities.reserve(mesh->verts_num);
 
-  for (int vertex_idx = 0, totvert = mesh->totvert; vertex_idx < totvert; ++vertex_idx) {
+  for (int vertex_idx = 0, totvert = mesh->verts_num; vertex_idx < totvert; ++vertex_idx) {
     usd_velocities.push_back(pxr::GfVec3f(velocities[vertex_idx]));
   }
 
@@ -497,13 +854,196 @@ void USDGenericMeshWriter::write_surface_velocity(const Mesh *mesh, pxr::UsdGeom
   usd_mesh.CreateVelocitiesAttr().Set(usd_velocities, timecode);
 }
 
-USDMeshWriter::USDMeshWriter(const USDExporterContext &ctx) : USDGenericMeshWriter(ctx)
+USDMeshWriter::USDMeshWriter(const USDExporterContext &ctx)
+    : USDGenericMeshWriter(ctx), write_skinned_mesh_(false), write_blend_shapes_(false)
 {
 }
 
-Mesh *USDMeshWriter::get_export_mesh(Object *object_eval, bool & /*r_needsfree*/)
+void USDMeshWriter::set_skel_export_flags(const HierarchyContext &context)
 {
+  write_skinned_mesh_ = false;
+  write_blend_shapes_ = false;
+
+  const USDExportParams &params = usd_export_context_.export_params;
+
+  /* We can write a skinned mesh if exporting armatures is enabled and the object has an armature
+   * modifier. */
+  write_skinned_mesh_ = params.export_armatures &&
+                        can_export_skinned_mesh(*context.object, usd_export_context_.depsgraph);
+
+  /* We can write blend shapes if exporting shape keys is enabled and the object has shape keys. */
+  write_blend_shapes_ = params.export_shapekeys && is_mesh_with_shape_keys(context.object);
+}
+
+void USDMeshWriter::init_skinned_mesh(const HierarchyContext &context)
+{
+  pxr::UsdStageRefPtr stage = usd_export_context_.stage;
+
+  pxr::UsdPrim mesh_prim = stage->GetPrimAtPath(usd_export_context_.usd_path);
+
+  if (!mesh_prim.IsValid()) {
+    CLOG_WARN(&LOG,
+              "%s: couldn't get valid mesh prim for mesh %s",
+              __func__,
+              usd_export_context_.usd_path.GetAsString().c_str());
+    return;
+  }
+
+  pxr::UsdSkelBindingAPI skel_api = pxr::UsdSkelBindingAPI::Apply(mesh_prim);
+
+  if (!skel_api) {
+    CLOG_WARN(&LOG,
+              "Couldn't apply UsdSkelBindingAPI to mesh prim %s",
+              usd_export_context_.usd_path.GetAsString().c_str());
+    return;
+  }
+
+  const Object *arm_obj = get_armature_modifier_obj(*context.object,
+                                                    usd_export_context_.depsgraph);
+
+  if (!arm_obj) {
+    CLOG_WARN(&LOG,
+              "Couldn't get armature modifier object for skinned mesh %s",
+              usd_export_context_.usd_path.GetAsString().c_str());
+    return;
+  }
+
+  Vector<std::string> bone_names;
+  get_armature_bone_names(
+      arm_obj, usd_export_context_.export_params.only_deform_bones, bone_names);
+
+  if (bone_names.is_empty()) {
+    CLOG_WARN(&LOG,
+              "No armature bones for skinned mesh %s",
+              usd_export_context_.usd_path.GetAsString().c_str());
+    return;
+  }
+
+  bool needsfree = false;
+  Mesh *mesh = get_export_mesh(context.object, needsfree);
+
+  if (mesh == nullptr) {
+    return;
+  }
+
+  try {
+    export_deform_verts(mesh, skel_api, bone_names);
+
+    if (needsfree) {
+      free_export_mesh(mesh);
+    }
+  }
+  catch (...) {
+    if (needsfree) {
+      free_export_mesh(mesh);
+    }
+    throw;
+  }
+}
+
+void USDMeshWriter::init_blend_shapes(const HierarchyContext &context)
+{
+  pxr::UsdStageRefPtr stage = usd_export_context_.stage;
+
+  pxr::UsdPrim mesh_prim = stage->GetPrimAtPath(usd_export_context_.usd_path);
+
+  if (!mesh_prim.IsValid()) {
+    CLOG_WARN(&LOG,
+              "Couldn't get valid mesh prim for mesh %s",
+              mesh_prim.GetPath().GetAsString().c_str());
+    return;
+  }
+
+  create_blend_shapes(this->usd_export_context_.stage, context.object, mesh_prim);
+}
+
+void USDMeshWriter::do_write(HierarchyContext &context)
+{
+  set_skel_export_flags(context);
+
+  if (frame_has_been_written_ && (write_skinned_mesh_ || write_blend_shapes_)) {
+    /* When writing skinned meshes or blend shapes, we only write the rest mesh once,
+     * so we return early after the first frame has been written. However, we still
+     * update blend shape weights if needed. */
+    if (write_blend_shapes_) {
+      add_shape_key_weights_sample(context.object);
+    }
+    return;
+  }
+
+  USDGenericMeshWriter::do_write(context);
+
+  if (write_skinned_mesh_) {
+    init_skinned_mesh(context);
+  }
+
+  if (write_blend_shapes_) {
+    init_blend_shapes(context);
+    add_shape_key_weights_sample(context.object);
+  }
+}
+
+Mesh *USDMeshWriter::get_export_mesh(Object *object_eval, bool &r_needsfree)
+{
+  if (write_blend_shapes_) {
+    r_needsfree = true;
+    /* We return the pre-modified mesh with the verts in the shape key
+     * basis positions. */
+    return get_shape_key_basis_mesh(object_eval);
+  }
+
+  if (write_skinned_mesh_) {
+    r_needsfree = false;
+    /* We must export the skinned mesh in its rest pose.  We therefore
+     * return the pre-modified mesh, so that the armature modifier isn't
+     * applied. */
+    return BKE_object_get_pre_modified_mesh(object_eval);
+  }
+
+  /* Return the fully evaluated mesh. */
+  r_needsfree = false;
   return BKE_object_get_evaluated_mesh(object_eval);
+}
+
+void USDMeshWriter::add_shape_key_weights_sample(const Object *obj)
+{
+  if (!obj) {
+    return;
+  }
+
+  const Key *key = get_mesh_shape_key(obj);
+  if (!key) {
+    return;
+  }
+
+  pxr::UsdStageRefPtr stage = usd_export_context_.stage;
+
+  pxr::UsdPrim mesh_prim = stage->GetPrimAtPath(usd_export_context_.usd_path);
+
+  if (!mesh_prim.IsValid()) {
+    CLOG_WARN(&LOG,
+              "Couldn't get valid mesh prim for mesh %s",
+              usd_export_context_.usd_path.GetAsString().c_str());
+    return;
+  }
+
+  pxr::VtFloatArray weights = get_blendshape_weights(key);
+  pxr::UsdTimeCode timecode = get_export_time_code();
+
+  /* Save the weights samples to a temporary privar which will be copied to
+   * a skeleton animation later. */
+  pxr::UsdAttribute temp_weights_attr = pxr::UsdGeomPrimvarsAPI(mesh_prim).CreatePrimvar(
+      TempBlendShapeWeightsPrimvarName, pxr::SdfValueTypeNames->FloatArray);
+
+  if (!temp_weights_attr) {
+    CLOG_WARN(&LOG,
+              "Couldn't create primvar %s on prim %s",
+              TempBlendShapeWeightsPrimvarName.GetText(),
+              mesh_prim.GetPath().GetAsString().c_str());
+    return;
+  }
+
+  temp_weights_attr.Set(weights, timecode);
 }
 
 }  // namespace blender::io::usd

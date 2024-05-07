@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: Apache-2.0
- * Copyright 2011-2022 Blender Foundation */
+/* SPDX-FileCopyrightText: 2011-2022 Blender Foundation
+ *
+ * SPDX-License-Identifier: Apache-2.0 */
 
 #pragma once
 
@@ -89,6 +90,12 @@ ccl_device_inline void path_state_init_integrator(KernelGlobals kg,
     INTEGRATOR_STATE_WRITE(state, path, denoising_feature_throughput) = one_spectrum();
   }
 #endif
+
+#ifdef __LIGHT_LINKING__
+  if (kernel_data.kernel_features & KERNEL_FEATURE_LIGHT_LINKING) {
+    INTEGRATOR_STATE_WRITE(state, path, mis_ray_object) = OBJECT_NONE;
+  }
+#endif
 }
 
 ccl_device_inline void path_state_next(KernelGlobals kg,
@@ -100,7 +107,7 @@ ccl_device_inline void path_state_next(KernelGlobals kg,
 
   /* ray through transparent keeps same flags from previous ray and is
    * not counted as a regular bounce, transparent has separate max */
-  if (label & LABEL_TRANSPARENT) {
+  if (label & (LABEL_TRANSPARENT | LABEL_RAY_PORTAL)) {
     uint32_t transparent_bounce = INTEGRATOR_STATE(state, path, transparent_bounce) + 1;
 
     flag |= PATH_RAY_TRANSPARENT;
@@ -108,8 +115,9 @@ ccl_device_inline void path_state_next(KernelGlobals kg,
       flag |= PATH_RAY_TERMINATE_ON_NEXT_SURFACE;
     }
 
-    if (!kernel_data.integrator.transparent_shadows)
+    if (shader_flag & SD_RAY_PORTAL) {
       flag |= PATH_RAY_MIS_SKIP;
+    }
 
     INTEGRATOR_STATE_WRITE(state, path, flag) = flag;
     INTEGRATOR_STATE_WRITE(state, path, transparent_bounce) = transparent_bounce;

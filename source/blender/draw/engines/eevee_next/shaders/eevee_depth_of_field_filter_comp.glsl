@@ -1,3 +1,6 @@
+/* SPDX-FileCopyrightText: 2022-2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /**
  * Gather Filter pass: Filter the gather pass result to reduce noise.
@@ -12,9 +15,7 @@ struct FilterSample {
 
 #ifdef GPU_METAL
   inline FilterSample() = default;
-  inline FilterSample(vec4 in_color, float in_weight) : color(in_color), weight(in_weight)
-  {
-  }
+  inline FilterSample(vec4 in_color, float in_weight) : color(in_color), weight(in_weight) {}
 #endif
 };
 

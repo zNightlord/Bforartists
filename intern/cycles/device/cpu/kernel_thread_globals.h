@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: Apache-2.0
- * Copyright 2011-2022 Blender Foundation */
+/* SPDX-FileCopyrightText: 2011-2022 Blender Foundation
+ *
+ * SPDX-License-Identifier: Apache-2.0 */
 
 #pragma once
 
@@ -22,7 +23,8 @@ class CPUKernelThreadGlobals : public KernelGlobalsCPU {
    * without OSL support. Will avoid need to those unnamed pointers and casts. */
   CPUKernelThreadGlobals(const KernelGlobalsCPU &kernel_globals,
                          void *osl_globals_memory,
-                         Profiler &cpu_profiler);
+                         Profiler &cpu_profiler,
+                         const int thread_index);
 
   ~CPUKernelThreadGlobals();
 

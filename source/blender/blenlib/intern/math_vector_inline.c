@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2001-2002 NaN Holding BV. All rights reserved. */
+/* SPDX-FileCopyrightText: 2001-2002 NaN Holding BV. All rights reserved.
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup bli
@@ -8,7 +9,7 @@
 #ifndef __MATH_VECTOR_INLINE_C__
 #define __MATH_VECTOR_INLINE_C__
 
-#include "BLI_math.h"
+#include "BLI_math_base.h"
 
 /********************************** Init *************************************/
 
@@ -316,27 +317,6 @@ MINLINE void swap_v4_v4(float a[4], float b[4])
   SWAP(float, a[3], b[3]);
 }
 
-MINLINE void swap_v2_v2_db(double a[2], double b[2])
-{
-  SWAP(double, a[0], b[0]);
-  SWAP(double, a[1], b[1]);
-}
-
-MINLINE void swap_v3_v3_db(double a[3], double b[3])
-{
-  SWAP(double, a[0], b[0]);
-  SWAP(double, a[1], b[1]);
-  SWAP(double, a[2], b[2]);
-}
-
-MINLINE void swap_v4_v4_db(double a[4], double b[4])
-{
-  SWAP(double, a[0], b[0]);
-  SWAP(double, a[1], b[1]);
-  SWAP(double, a[2], b[2]);
-  SWAP(double, a[3], b[3]);
-}
-
 /* float args -> vec */
 
 MINLINE void copy_v2_fl2(float v[2], float x, float y)
@@ -455,6 +435,13 @@ MINLINE void add_v4_v4v4(float r[4], const float a[4], const float b[4])
   r[1] = a[1] + b[1];
   r[2] = a[2] + b[2];
   r[3] = a[3] + b[3];
+}
+
+MINLINE void add_v3_uchar_clamped(uchar r[3], int i)
+{
+  r[0] = (uchar)clamp_i(r[0] + i, 0, 255);
+  r[1] = (uchar)clamp_i(r[1] + i, 0, 255);
+  r[2] = (uchar)clamp_i(r[2] + i, 0, 255);
 }
 
 MINLINE void sub_v2_v2(float r[2], const float a[2])

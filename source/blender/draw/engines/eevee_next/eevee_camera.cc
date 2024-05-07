@@ -1,6 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2021 Blender Foundation.
- */
+/* SPDX-FileCopyrightText: 2021 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup eevee
@@ -8,14 +8,19 @@
 
 #include <array>
 
-#include "DRW_render.h"
+#include "DRW_render.hh"
 
 #include "DNA_camera_types.h"
 #include "DNA_view3d_types.h"
 
 #include "BKE_camera.h"
-#include "DEG_depsgraph_query.h"
+
+#include "DEG_depsgraph_query.hh"
+
+#include "ED_view3d.hh"
+
 #include "RE_pipeline.h"
+#include "render_types.h"
 
 #include "eevee_camera.hh"
 #include "eevee_instance.hh"
@@ -70,6 +75,12 @@ void Camera::init()
     /* Light-probe baking. */
     data.type = CAMERA_PERSP;
   }
+
+  float overscan = 0.0f;
+  if ((inst_.scene->eevee.flag & SCE_EEVEE_OVERSCAN) && (inst_.drw_view || inst_.render)) {
+    overscan = inst_.scene->eevee.overscan / 100.0f;
+  }
+  overscan_changed_ = assign_if_different(overscan_, overscan);
 }
 
 void Camera::sync()
@@ -78,40 +89,84 @@ void Camera::sync()
 
   CameraData &data = data_;
 
+  float2 resolution = float2(inst_.film.display_extent_get());
+  float2 overscan_margin = float2(overscan_ * math::max(UNPACK2(resolution)));
+  float2 overscan_resolution = resolution + overscan_margin * 2.0f;
+  float2 camera_min = overscan_margin;
+  float2 camera_max = camera_min + resolution;
+
   if (inst_.drw_view) {
-    DRW_view_viewmat_get(inst_.drw_view, data.viewmat.ptr(), false);
-    DRW_view_viewmat_get(inst_.drw_view, data.viewinv.ptr(), true);
-    DRW_view_winmat_get(inst_.drw_view, data.winmat.ptr(), false);
-    DRW_view_winmat_get(inst_.drw_view, data.wininv.ptr(), true);
-    DRW_view_persmat_get(inst_.drw_view, data.persmat.ptr(), false);
-    DRW_view_persmat_get(inst_.drw_view, data.persinv.ptr(), true);
-    /* TODO(fclem): Derive from rv3d instead. */
+    /* Viewport camera view. */
+    float2 camera_uv_scale = float2(inst_.rv3d->viewcamtexcofac);
+    float2 camera_uv_bias = float2(inst_.rv3d->viewcamtexcofac + 2);
+    float2 camera_region_min = (-camera_uv_bias * resolution) / camera_uv_scale;
+    float2 camera_region_size = resolution / camera_uv_scale;
+    camera_min = overscan_margin + camera_region_min;
+    camera_max = camera_min + camera_region_size;
+  }
+
+  data.uv_scale = overscan_resolution / (camera_max - camera_min);
+  data.uv_bias = -camera_min / (camera_max - camera_min);
+
+  if (inst_.is_baking()) {
+    /* Any view so that shadows and light culling works during irradiance bake. */
+    draw::View &view = inst_.volume_probes.bake.view_z_;
+    data.viewmat = view.viewmat();
+    data.viewinv = view.viewinv();
+    data.winmat = view.winmat();
+    data.type = CAMERA_ORTHO;
+
+    /* \note Follow camera parameters where distances are positive in front of the camera. */
+    data.clip_near = -view.far_clip();
+    data.clip_far = -view.near_clip();
+    data.fisheye_fov = data.fisheye_lens = -1.0f;
+    data.equirect_bias = float2(0.0f);
+    data.equirect_scale = float2(0.0f);
     data.uv_scale = float2(1.0f);
     data.uv_bias = float2(0.0f);
   }
+  else if (inst_.drw_view) {
+    DRW_view_viewmat_get(inst_.drw_view, data.viewmat.ptr(), false);
+    DRW_view_viewmat_get(inst_.drw_view, data.viewinv.ptr(), true);
+    if (overscan_ == 0.0f) {
+      DRW_view_winmat_get(inst_.drw_view, data.winmat.ptr(), false);
+    }
+    else {
+      rctf viewplane;
+      float clip_start;
+      float clip_end;
+      bool is_ortho = ED_view3d_viewplane_get(inst_.depsgraph,
+                                              inst_.v3d,
+                                              inst_.rv3d,
+                                              UNPACK2(inst_.film.display_extent_get()),
+                                              &viewplane,
+                                              &clip_start,
+                                              &clip_end,
+                                              nullptr);
+
+      RE_GetWindowMatrixWithOverscan(
+          is_ortho, clip_start, clip_end, viewplane, overscan_, data.winmat.ptr());
+    }
+  }
   else if (inst_.render) {
-    /* TODO(@fclem): Over-scan. */
-    // RE_GetCameraWindowWithOverscan(inst_.render->re, g_data->overscan, data.winmat);
-    RE_GetCameraWindow(inst_.render->re, camera_eval, data.winmat.ptr());
     RE_GetCameraModelMatrix(inst_.render->re, camera_eval, data.viewinv.ptr());
-    invert_m4_m4(data.viewmat.ptr(), data.viewinv.ptr());
-    invert_m4_m4(data.wininv.ptr(), data.winmat.ptr());
-    mul_m4_m4m4(data.persmat.ptr(), data.winmat.ptr(), data.viewmat.ptr());
-    invert_m4_m4(data.persinv.ptr(), data.persmat.ptr());
-    data.uv_scale = float2(1.0f);
-    data.uv_bias = float2(0.0f);
+    data.viewmat = math::invert(data.viewinv);
+    RE_GetCameraWindow(inst_.render->re, camera_eval, data.winmat.ptr());
+    if (overscan_ != 0.0f) {
+      RE_GetCameraWindowWithOverscan(inst_.render->re, overscan_, data.winmat.ptr());
+    }
   }
   else {
     data.viewmat = float4x4::identity();
     data.viewinv = float4x4::identity();
     data.winmat = math::projection::perspective(-0.1f, 0.1f, -0.1f, 0.1f, 0.1f, 1.0f);
-    data.wininv = math::invert(data.winmat);
-    data.persmat = data.winmat * data.viewmat;
-    data.persinv = math::invert(data.persmat);
-    data.uv_scale = float2(1.0f);
-    data.uv_bias = float2(0.0f);
   }
 
+  data.wininv = math::invert(data.winmat);
+  data.persmat = data.winmat * data.viewmat;
+  data.persinv = math::invert(data.persmat);
+
+  is_camera_object_ = false;
   if (camera_eval && camera_eval->type == OB_CAMERA) {
     const ::Camera *cam = reinterpret_cast<const ::Camera *>(camera_eval->data);
     data.clip_near = cam->clip_start;
@@ -133,9 +188,10 @@ void Camera::sync()
     data.equirect_bias = float2(0.0f);
     data.equirect_scale = float2(0.0f);
 #endif
+    is_camera_object_ = true;
   }
   else if (inst_.drw_view) {
-    /* \note: Follow camera parameters where distances are positive in front of the camera. */
+    /* \note Follow camera parameters where distances are positive in front of the camera. */
     data.clip_near = -DRW_view_near_distance_get(inst_.drw_view);
     data.clip_far = -DRW_view_far_distance_get(inst_.drw_view);
     data.fisheye_fov = data.fisheye_lens = -1.0f;
@@ -144,7 +200,6 @@ void Camera::sync()
   }
 
   data_.initialized = true;
-  data_.push_update();
 
   update_bounds();
 }

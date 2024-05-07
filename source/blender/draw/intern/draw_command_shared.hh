@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2022 Blender Foundation. */
+/* SPDX-FileCopyrightText: 2022 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup draw
@@ -7,7 +8,7 @@
 
 #ifndef GPU_SHADER
 #  include "BLI_span.hh"
-#  include "GPU_shader_shared_utils.h"
+#  include "GPU_shader_shared_utils.hh"
 
 namespace blender::draw::command {
 
@@ -32,7 +33,7 @@ struct DrawGroup {
   /** Number of non inverted scaling instances in this Group. */
   uint front_facing_len;
 
-  /** #GPUBatch values to be copied to #DrawCommand after sorting (if not overridden). */
+  /** #gpu::Batch values to be copied to #DrawCommand after sorting (if not overridden). */
   int vertex_len;
   int vertex_first;
   int base_index;
@@ -41,6 +42,7 @@ struct DrawGroup {
   uint total_counter;
 
 #ifndef GPU_SHADER
+
   /* NOTE: Union just to make sure the struct has always the same size on all platform. */
   union {
     struct {
@@ -48,13 +50,19 @@ struct DrawGroup {
       uint front_proto_len;
       uint back_proto_len;
       /** Needed to create the correct draw call. */
-      GPUBatch *gpu_batch;
+      gpu::Batch *gpu_batch;
+#  ifdef WITH_METAL_BACKEND
+      GPUShader *gpu_shader;
+#  endif
     };
     struct {
 #endif
       uint front_facing_counter;
       uint back_facing_counter;
       uint _pad0, _pad1;
+#if defined(WITH_METAL_BACKEND) || defined(GPU_METAL)
+      uint _pad2, _pad3, _pad4, _pad5;
+#endif
 #ifndef GPU_SHADER
     };
   };
@@ -68,7 +76,7 @@ BLI_STATIC_ASSERT_ALIGN(DrawGroup, 16)
  * #DrawPrototype might get merged into the same final #DrawCommand.
  */
 struct DrawPrototype {
-  /* Reference to parent DrawGroup to get the GPUBatch vertex / instance count. */
+  /* Reference to parent DrawGroup to get the gpu::Batch vertex / instance count. */
   uint group_id;
   /* Resource handle associated with this call. Also reference visibility. */
   uint resource_handle;

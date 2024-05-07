@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: Apache-2.0
- * Copyright 2011-2022 Blender Foundation */
+/* SPDX-FileCopyrightText: 2011-2022 Blender Foundation
+ *
+ * SPDX-License-Identifier: Apache-2.0 */
 
 /* Primitive Utilities
  *
@@ -205,7 +206,7 @@ ccl_device_forceinline float3 primitive_uv(KernelGlobals kg, ccl_private const S
   return make_float3(uv.x, uv.y, 1.0f);
 }
 
-/* Ptex coordinates */
+/* PTEX coordinates. */
 
 ccl_device bool primitive_ptex(KernelGlobals kg,
                                ccl_private ShaderData *sd,
@@ -301,14 +302,13 @@ ccl_device_forceinline float4 primitive_motion_vector(KernelGlobals kg,
 
   if (desc.offset != ATTR_STD_NOT_FOUND) {
     /* get motion info */
-    int numverts, numkeys;
-    object_motion_info(kg, sd->object, NULL, &numverts, &numkeys);
+    const int numverts = kernel_data_fetch(objects, sd->object).numverts;
 
 #if defined(__HAIR__) || defined(__POINTCLOUD__)
     if (is_curve_or_point) {
-      motion_pre = float4_to_float3(curve_attribute_float4(kg, sd, desc, NULL, NULL));
-      desc.offset += numkeys;
-      motion_post = float4_to_float3(curve_attribute_float4(kg, sd, desc, NULL, NULL));
+      motion_pre = float4_to_float3(primitive_surface_attribute_float4(kg, sd, desc, NULL, NULL));
+      desc.offset += numverts;
+      motion_post = float4_to_float3(primitive_surface_attribute_float4(kg, sd, desc, NULL, NULL));
 
       /* Curve */
       if ((sd->object_flag & SD_OBJECT_HAS_VERTEX_MOTION) == 0) {
@@ -318,7 +318,8 @@ ccl_device_forceinline float4 primitive_motion_vector(KernelGlobals kg,
     }
     else
 #endif
-        if (sd->type & PRIMITIVE_TRIANGLE) {
+        if (sd->type & PRIMITIVE_TRIANGLE)
+    {
       /* Triangle */
       if (subd_triangle_patch(kg, sd->prim) == ~0) {
         motion_pre = triangle_attribute_float3(kg, sd, desc, NULL, NULL);

@@ -1,4 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* SPDX-FileCopyrightText: 2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #pragma once
 
@@ -8,8 +10,6 @@
 
 #include "BLI_index_mask.hh"
 #include "BLI_math_base.hh"
-#include "BLI_math_color.hh"
-#include "BLI_math_vector.hh"
 
 namespace blender::length_parameterize {
 
@@ -30,13 +30,15 @@ inline int segments_num(const int points_num, const bool cyclic)
 template<typename T>
 void accumulate_lengths(const Span<T> values, const bool cyclic, MutableSpan<float> lengths)
 {
-  BLI_assert(lengths.size() == segments_num(values.size(), cyclic));
+  /* For cyclic curves with a single point the lengths array is empty. */
+  BLI_assert(lengths.size() ==
+             (cyclic && values.size() <= 1 ? 0 : segments_num(values.size(), cyclic)));
   float length = 0.0f;
   for (const int i : IndexRange(values.size() - 1)) {
     length += math::distance(values[i], values[i + 1]);
     lengths[i] = length;
   }
-  if (cyclic) {
+  if (cyclic && values.size() > 1) {
     lengths.last() = length + math::distance(values.last(), values.first());
   }
 }
@@ -45,23 +47,23 @@ template<typename T>
 inline void interpolate_to_masked(const Span<T> src,
                                   const Span<int> indices,
                                   const Span<float> factors,
-                                  const IndexMask dst_mask,
+                                  const IndexMask &dst_mask,
                                   MutableSpan<T> dst)
 {
   BLI_assert(indices.size() == factors.size());
   BLI_assert(indices.size() == dst_mask.size());
   const int last_src_index = src.size() - 1;
 
-  dst_mask.to_best_mask_type([&](auto dst_mask) {
-    for (const int i : IndexRange(dst_mask.size())) {
-      const int prev_index = indices[i];
-      const float factor = factors[i];
+  dst_mask.foreach_segment_optimized([&](const auto dst_segment, const int64_t dst_segment_pos) {
+    for (const int i : dst_segment.index_range()) {
+      const int prev_index = indices[dst_segment_pos + i];
+      const float factor = factors[dst_segment_pos + i];
       const bool is_cyclic_case = prev_index == last_src_index;
       if (is_cyclic_case) {
-        dst[dst_mask[i]] = math::interpolate(src.last(), src.first(), factor);
+        dst[dst_segment[i]] = math::interpolate(src.last(), src.first(), factor);
       }
       else {
-        dst[dst_mask[i]] = math::interpolate(src[prev_index], src[prev_index + 1], factor);
+        dst[dst_segment[i]] = math::interpolate(src[prev_index], src[prev_index + 1], factor);
       }
     }
   });

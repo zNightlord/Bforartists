@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: Apache-2.0
- * Copyright 2011-2022 Blender Foundation */
+/* SPDX-FileCopyrightText: 2011-2022 Blender Foundation
+ *
+ * SPDX-License-Identifier: Apache-2.0 */
 
 #include <optional>
 
@@ -7,39 +8,32 @@
 #include "scene/pointcloud.h"
 #include "scene/scene.h"
 
+#include "blender/attribute_convert.h"
 #include "blender/sync.h"
 #include "blender/util.h"
 
+#include "util/color.h"
 #include "util/foreach.h"
 #include "util/hash.h"
 
+#include "BKE_attribute.hh"
+#include "BKE_attribute_math.hh"
+#include "BKE_pointcloud.hh"
+
 CCL_NAMESPACE_BEGIN
 
-template<typename TypeInCycles, typename GetValueAtIndex>
-static void fill_generic_attribute(BL::PointCloud &b_pointcloud,
-                                   TypeInCycles *data,
-                                   const GetValueAtIndex &get_value_at_index)
+static void attr_create_motion_from_velocity(PointCloud *pointcloud,
+                                             const blender::Span<blender::float3> b_attribute,
+                                             const float motion_scale)
 {
-  const int num_points = b_pointcloud.points.length();
-  for (int i = 0; i < num_points; i++) {
-    data[i] = get_value_at_index(i);
-  }
-}
-
-static void attr_create_motion(PointCloud *pointcloud,
-                               BL::Attribute &b_attribute,
-                               const float motion_scale)
-{
-  if (!(b_attribute.domain() == BL::Attribute::domain_POINT) &&
-      (b_attribute.data_type() == BL::Attribute::data_type_FLOAT_VECTOR)) {
-    return;
-  }
-
-  BL::FloatVectorAttribute b_vector_attribute(b_attribute);
   const int num_points = pointcloud->get_points().size();
 
+  /* Override motion steps to fixed number. */
+  pointcloud->set_motion_steps(3);
+
   /* Find or add attribute */
-  float3 *P = &pointcloud->get_points()[0];
+  float3 *P = pointcloud->get_points().data();
+  float *radius = pointcloud->get_radius().data();
   Attribute *attr_mP = pointcloud->attributes.find(ATTR_STD_MOTION_VERTEX_POSITION);
 
   if (!attr_mP) {
@@ -50,165 +44,103 @@ static void attr_create_motion(PointCloud *pointcloud,
   float motion_times[2] = {-1.0f, 1.0f};
   for (int step = 0; step < 2; step++) {
     const float relative_time = motion_times[step] * 0.5f * motion_scale;
-    float3 *mP = attr_mP->data_float3() + step * num_points;
+    float4 *mP = attr_mP->data_float4() + step * num_points;
 
     for (int i = 0; i < num_points; i++) {
-      mP[i] = P[i] + get_float3(b_vector_attribute.data[i].vector()) * relative_time;
+      float3 Pi = P[i] + make_float3(b_attribute[i][0], b_attribute[i][1], b_attribute[i][2]) *
+                             relative_time;
+      mP[i] = make_float4(Pi.x, Pi.y, Pi.z, radius[i]);
     }
   }
 }
 
 static void copy_attributes(PointCloud *pointcloud,
-                            BL::PointCloud b_pointcloud,
+                            const ::PointCloud &b_pointcloud,
                             const bool need_motion,
                             const float motion_scale)
 {
+  const blender::bke::AttributeAccessor b_attributes = b_pointcloud.attributes();
+  if (b_attributes.domain_size(blender::bke::AttrDomain::Point) == 0) {
+    return;
+  }
+
   AttributeSet &attributes = pointcloud->attributes;
   static const ustring u_velocity("velocity");
-  for (BL::Attribute &b_attribute : b_pointcloud.attributes) {
-    const ustring name{b_attribute.name().c_str()};
+  b_attributes.for_all([&](const blender::bke::AttributeIDRef &id,
+                           const blender::bke::AttributeMetaData /*meta_data*/) {
+    const ustring name{std::string_view(id.name())};
 
     if (need_motion && name == u_velocity) {
-      attr_create_motion(pointcloud, b_attribute, motion_scale);
+      const blender::VArraySpan b_attr = *b_attributes.lookup<blender::float3>(id);
+      attr_create_motion_from_velocity(pointcloud, b_attr, motion_scale);
     }
 
     if (attributes.find(name)) {
-      continue;
+      return true;
     }
 
-    const AttributeElement element = ATTR_ELEMENT_VERTEX;
-    const BL::Attribute::data_type_enum b_data_type = b_attribute.data_type();
-    switch (b_data_type) {
-      case BL::Attribute::data_type_FLOAT: {
-        BL::FloatAttribute b_float_attribute{b_attribute};
-        Attribute *attr = attributes.add(name, TypeFloat, element);
-        float *data = attr->data_float();
-        fill_generic_attribute(
-            b_pointcloud, data, [&](int i) { return b_float_attribute.data[i].value(); });
-        break;
-      }
-      case BL::Attribute::data_type_BOOLEAN: {
-        BL::BoolAttribute b_bool_attribute{b_attribute};
-        Attribute *attr = attributes.add(name, TypeFloat, element);
-        float *data = attr->data_float();
-        fill_generic_attribute(
-            b_pointcloud, data, [&](int i) { return (float)b_bool_attribute.data[i].value(); });
-        break;
-      }
-      case BL::Attribute::data_type_INT: {
-        BL::IntAttribute b_int_attribute{b_attribute};
-        Attribute *attr = attributes.add(name, TypeFloat, element);
-        float *data = attr->data_float();
-        fill_generic_attribute(
-            b_pointcloud, data, [&](int i) { return (float)b_int_attribute.data[i].value(); });
-        break;
-      }
-      case BL::Attribute::data_type_FLOAT_VECTOR: {
-        BL::FloatVectorAttribute b_vector_attribute{b_attribute};
-        Attribute *attr = attributes.add(name, TypeVector, element);
-        float3 *data = attr->data_float3();
-        fill_generic_attribute(b_pointcloud, data, [&](int i) {
-          BL::Array<float, 3> v = b_vector_attribute.data[i].vector();
-          return make_float3(v[0], v[1], v[2]);
-        });
-        break;
-      }
-      case BL::Attribute::data_type_FLOAT_COLOR: {
-        BL::FloatColorAttribute b_color_attribute{b_attribute};
-        Attribute *attr = attributes.add(name, TypeRGBA, element);
-        float4 *data = attr->data_float4();
-        fill_generic_attribute(b_pointcloud, data, [&](int i) {
-          BL::Array<float, 4> v = b_color_attribute.data[i].color();
-          return make_float4(v[0], v[1], v[2], v[3]);
-        });
-        break;
-      }
-      case BL::Attribute::data_type_FLOAT2: {
-        BL::Float2Attribute b_float2_attribute{b_attribute};
-        Attribute *attr = attributes.add(name, TypeFloat2, element);
-        float2 *data = attr->data_float2();
-        fill_generic_attribute(b_pointcloud, data, [&](int i) {
-          BL::Array<float, 2> v = b_float2_attribute.data[i].vector();
-          return make_float2(v[0], v[1]);
-        });
-        break;
-      }
-      default:
-        /* Not supported. */
-        break;
-    }
-  }
-}
+    const blender::bke::GAttributeReader b_attr = b_attributes.lookup(id);
+    blender::bke::attribute_math::convert_to_static_type(b_attr.varray.type(), [&](auto dummy) {
+      using BlenderT = decltype(dummy);
+      using Converter = typename ccl::AttributeConverter<BlenderT>;
+      using CyclesT = typename Converter::CyclesT;
+      if constexpr (!std::is_void_v<CyclesT>) {
+        Attribute *attr = attributes.add(name, Converter::type_desc, ATTR_ELEMENT_VERTEX);
+        CyclesT *data = reinterpret_cast<CyclesT *>(attr->data());
 
-static std::optional<BL::FloatAttribute> find_radius_attribute(BL::PointCloud b_pointcloud)
-{
-  for (BL::Attribute &b_attribute : b_pointcloud.attributes) {
-    if (b_attribute.name() != "radius") {
-      continue;
-    }
-    if (b_attribute.data_type() != BL::Attribute::data_type_FLOAT) {
-      continue;
-    }
-    return BL::FloatAttribute{b_attribute};
-  }
-  return std::nullopt;
-}
+        const blender::VArraySpan src = b_attr.varray.typed<BlenderT>();
+        for (const int i : src.index_range()) {
+          data[i] = Converter::convert(src[i]);
+        }
+      }
+    });
 
-static BL::FloatVectorAttribute find_position_attribute(BL::PointCloud b_pointcloud)
-{
-  for (BL::Attribute &b_attribute : b_pointcloud.attributes) {
-    if (b_attribute.name() != "position") {
-      continue;
-    }
-    if (b_attribute.data_type() != BL::Attribute::data_type_FLOAT_VECTOR) {
-      continue;
-    }
-    return BL::FloatVectorAttribute{b_attribute};
-  }
-  /* The position attribute must exist. */
-  assert(false);
-  return BL::FloatVectorAttribute{b_pointcloud.attributes[0]};
+    return true;
+  });
 }
 
 static void export_pointcloud(Scene *scene,
                               PointCloud *pointcloud,
-                              BL::PointCloud b_pointcloud,
+                              const ::PointCloud &b_pointcloud,
                               const bool need_motion,
                               const float motion_scale)
 {
-  /* TODO: optimize so we can straight memcpy arrays from Blender? */
+  const blender::Span<blender::float3> b_positions = b_pointcloud.positions();
+  const blender::VArraySpan b_radius = *b_pointcloud.attributes().lookup<float>(
+      "radius", blender::bke::AttrDomain::Point);
 
-  /* Add requested attributes. */
-  Attribute *attr_random = NULL;
-  if (pointcloud->need_attribute(scene, ATTR_STD_POINT_RANDOM)) {
-    attr_random = pointcloud->attributes.add(ATTR_STD_POINT_RANDOM);
+  pointcloud->resize(b_positions.size());
+
+  float3 *points = pointcloud->get_points().data();
+
+  for (const int i : b_positions.index_range()) {
+    points[i] = make_float3(b_positions[i][0], b_positions[i][1], b_positions[i][2]);
   }
 
-  /* Reserve memory. */
-  const int num_points = b_pointcloud.points.length();
-  pointcloud->reserve(num_points);
+  float *radius = pointcloud->get_radius().data();
+  if (!b_radius.is_empty()) {
+    std::copy(b_radius.data(), b_radius.data() + b_positions.size(), radius);
+  }
+  else {
+    std::fill(radius, radius + b_positions.size(), 0.01f);
+  }
 
-  BL::FloatVectorAttribute b_attr_position = find_position_attribute(b_pointcloud);
-  std::optional<BL::FloatAttribute> b_attr_radius = find_radius_attribute(b_pointcloud);
+  int *shader = pointcloud->get_shader().data();
+  std::fill(shader, shader + b_positions.size(), 0);
 
-  /* Export points. */
-  for (int i = 0; i < num_points; i++) {
-    const float3 co = get_float3(b_attr_position.data[i].vector());
-    const float radius = b_attr_radius ? b_attr_radius->data[i].value() : 0.01f;
-    pointcloud->add_point(co, radius);
-
-    /* Random number per point. */
-    if (attr_random != NULL) {
-      attr_random->add(hash_uint2_to_float(i, 0));
+  if (pointcloud->need_attribute(scene, ATTR_STD_POINT_RANDOM)) {
+    Attribute *attr_random = pointcloud->attributes.add(ATTR_STD_POINT_RANDOM);
+    float *data = attr_random->data_float();
+    for (const int i : b_positions.index_range()) {
+      data[i] = hash_uint2_to_float(i, 0);
     }
   }
 
-  /* Export attributes */
   copy_attributes(pointcloud, b_pointcloud, need_motion, motion_scale);
 }
 
 static void export_pointcloud_motion(PointCloud *pointcloud,
-                                     BL::PointCloud b_pointcloud,
+                                     const ::PointCloud &b_pointcloud,
                                      int motion_step)
 {
   /* Find or add attribute. */
@@ -220,29 +152,28 @@ static void export_pointcloud_motion(PointCloud *pointcloud,
     new_attribute = true;
   }
 
-  /* Export motion points. */
   const int num_points = pointcloud->num_points();
-  // Point cloud attributes are stored as float4 with the radius
-  // in the w element. This is explict now as float3 is no longer
-  // interchangeable with float4 as it is packed now.
+  /* Point cloud attributes are stored as float4 with the radius in the w element.
+   * This is explicit now as float3 is no longer interchangeable with float4 as it
+   * is packed now. */
   float4 *mP = attr_mP->data_float4() + motion_step * num_points;
   bool have_motion = false;
   const array<float3> &pointcloud_points = pointcloud->get_points();
 
-  const int b_points_num = b_pointcloud.points.length();
-  BL::FloatVectorAttribute b_attr_position = find_position_attribute(b_pointcloud);
-  std::optional<BL::FloatAttribute> b_attr_radius = find_radius_attribute(b_pointcloud);
+  const blender::Span<blender::float3> b_positions = b_pointcloud.positions();
+  const blender::VArraySpan b_radius = *b_pointcloud.attributes().lookup<float>(
+      "radius", blender::bke::AttrDomain::Point);
 
-  for (int i = 0; i < std::min(num_points, b_points_num); i++) {
-    const float3 P = get_float3(b_attr_position.data[i].vector());
-    const float radius = b_attr_radius ? b_attr_radius->data[i].value() : 0.01f;
+  for (int i = 0; i < std::min<int>(num_points, b_positions.size()); i++) {
+    const float3 P = make_float3(b_positions[i][0], b_positions[i][1], b_positions[i][2]);
+    const float radius = b_radius.is_empty() ? 0.01f : b_radius[i];
     mP[i] = make_float4(P.x, P.y, P.z, radius);
     have_motion = have_motion || (P != pointcloud_points[i]);
   }
 
   /* In case of new attribute, we verify if there really was any motion. */
   if (new_attribute) {
-    if (b_points_num != num_points || !have_motion) {
+    if (b_positions.size() != num_points || !have_motion) {
       pointcloud->attributes.remove(ATTR_STD_MOTION_VERTEX_POSITION);
     }
     else if (motion_step > 0) {
@@ -275,13 +206,18 @@ void BlenderSync::sync_pointcloud(PointCloud *pointcloud, BObjectInfo &b_ob_info
                                  scene->motion_shutter_time() /
                                      (b_scene.render().fps() / b_scene.render().fps_base()) :
                                  0.0f;
-  export_pointcloud(scene, &new_pointcloud, b_pointcloud, need_motion, motion_scale);
+  export_pointcloud(scene,
+                    &new_pointcloud,
+                    *static_cast<const ::PointCloud *>(b_pointcloud.ptr.data),
+                    need_motion,
+                    motion_scale);
 
-  /* update original sockets */
+  /* Update original sockets. */
   for (const SocketType &socket : new_pointcloud.type->inputs) {
     /* Those sockets are updated in sync_object, so do not modify them. */
     if (socket.name == "use_motion_blur" || socket.name == "motion_steps" ||
-        socket.name == "used_shaders") {
+        socket.name == "used_shaders")
+    {
       continue;
     }
     pointcloud->set_value(socket, new_pointcloud, socket);
@@ -292,7 +228,7 @@ void BlenderSync::sync_pointcloud(PointCloud *pointcloud, BObjectInfo &b_ob_info
     pointcloud->attributes.attributes.push_back(std::move(attr));
   }
 
-  /* tag update */
+  /* Tag update. */
   const bool rebuild = (pointcloud && old_numpoints != pointcloud->num_points());
   pointcloud->tag_update(scene, rebuild);
 }
@@ -310,7 +246,8 @@ void BlenderSync::sync_pointcloud_motion(PointCloud *pointcloud,
   if (ccl::BKE_object_is_deform_modified(b_ob_info, b_scene, preview)) {
     /* PointCloud object. */
     BL::PointCloud b_pointcloud(b_ob_info.object_data);
-    export_pointcloud_motion(pointcloud, b_pointcloud, motion_step);
+    export_pointcloud_motion(
+        pointcloud, *static_cast<const ::PointCloud *>(b_pointcloud.ptr.data), motion_step);
   }
   else {
     /* No deformation on this frame, copy coordinates if other frames did have it. */

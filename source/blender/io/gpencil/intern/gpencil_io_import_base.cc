@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2020 Blender Foundation. All rights reserved. */
+/* SPDX-FileCopyrightText: 2020 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup bgpencil
@@ -10,11 +11,11 @@
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 
-#include "BKE_gpencil.h"
+#include "BKE_gpencil_legacy.h"
 #include "BKE_material.h"
 
-#include "ED_gpencil.h"
-#include "ED_object.h"
+#include "ED_gpencil_legacy.hh"
+#include "ED_object.hh"
 
 #include "gpencil_io_import_base.hh"
 
@@ -30,17 +31,17 @@ Object *GpencilImporter::create_object()
 {
   const float *cur_loc = scene_->cursor.location;
   const float rot[3] = {0.0f};
-  ushort local_view_bits = (params_.v3d && params_.v3d->localvd) ? params_.v3d->local_view_uuid :
+  ushort local_view_bits = (params_.v3d && params_.v3d->localvd) ? params_.v3d->local_view_uid :
                                                                    ushort(0);
 
-  Object *ob_gpencil = ED_object_add_type(params_.C,
-                                          OB_GPENCIL_LEGACY,
-                                          (params_.filename[0] != '\0') ? params_.filename :
-                                                                          nullptr,
-                                          cur_loc,
-                                          rot,
-                                          false,
-                                          local_view_bits);
+  Object *ob_gpencil = ed::object::add_type(params_.C,
+                                            OB_GPENCIL_LEGACY,
+                                            (params_.filename[0] != '\0') ? params_.filename :
+                                                                            nullptr,
+                                            cur_loc,
+                                            rot,
+                                            false,
+                                            local_view_bits);
 
   /* Set object defaults. */
   ED_gpencil_add_defaults(params_.C, ob_gpencil);

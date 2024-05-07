@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2021 Blender Foundation. All rights reserved. */
+/* SPDX-FileCopyrightText: 2021 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup draw
@@ -18,12 +19,12 @@ struct MeshExtract_Orco_Data {
   const float (*orco)[3];
 };
 
-static void extract_orco_init(const MeshRenderData *mr,
-                              MeshBatchCache * /*cache*/,
+static void extract_orco_init(const MeshRenderData &mr,
+                              MeshBatchCache & /*cache*/,
                               void *buf,
                               void *tls_data)
 {
-  GPUVertBuf *vbo = static_cast<GPUVertBuf *>(buf);
+  gpu::VertBuf *vbo = static_cast<gpu::VertBuf *>(buf);
   static GPUVertFormat format = {0};
   if (format.attr_len == 0) {
     /* FIXME(fclem): We use the last component as a way to differentiate from generic vertex
@@ -34,9 +35,9 @@ static void extract_orco_init(const MeshRenderData *mr,
   }
 
   GPU_vertbuf_init_with_format(vbo, &format);
-  GPU_vertbuf_data_alloc(vbo, mr->loop_len);
+  GPU_vertbuf_data_alloc(vbo, mr.corners_num);
 
-  CustomData *cd_vdata = &mr->me->vdata;
+  const CustomData *cd_vdata = &mr.mesh->vert_data;
 
   MeshExtract_Orco_Data *data = static_cast<MeshExtract_Orco_Data *>(tls_data);
   data->vbo_data = (float(*)[4])GPU_vertbuf_get_data(vbo);
@@ -45,7 +46,7 @@ static void extract_orco_init(const MeshRenderData *mr,
   BLI_assert(data->orco);
 }
 
-static void extract_orco_iter_poly_bm(const MeshRenderData * /*mr*/,
+static void extract_orco_iter_face_bm(const MeshRenderData & /*mr*/,
                                       const BMFace *f,
                                       const int /*f_index*/,
                                       void *data)
@@ -61,17 +62,13 @@ static void extract_orco_iter_poly_bm(const MeshRenderData * /*mr*/,
   } while ((l_iter = l_iter->next) != l_first);
 }
 
-static void extract_orco_iter_poly_mesh(const MeshRenderData *mr,
-                                        const MPoly *poly,
-                                        const int /*poly_index*/,
-                                        void *data)
+static void extract_orco_iter_face_mesh(const MeshRenderData &mr, const int face_index, void *data)
 {
-  const int ml_index_end = poly->loopstart + poly->totloop;
-  for (int ml_index = poly->loopstart; ml_index < ml_index_end; ml_index += 1) {
-    const MLoop *ml = &mr->loops[ml_index];
+  for (const int corner : mr.faces[face_index]) {
+    const int vert = mr.corner_verts[corner];
     MeshExtract_Orco_Data *orco_data = (MeshExtract_Orco_Data *)data;
-    float *loop_orco = orco_data->vbo_data[ml_index];
-    copy_v3_v3(loop_orco, orco_data->orco[ml->v]);
+    float *loop_orco = orco_data->vbo_data[corner];
+    copy_v3_v3(loop_orco, orco_data->orco[vert]);
     loop_orco[3] = 0.0; /* Tag as not a generic attribute. */
   }
 }
@@ -80,8 +77,8 @@ constexpr MeshExtract create_extractor_orco()
 {
   MeshExtract extractor = {nullptr};
   extractor.init = extract_orco_init;
-  extractor.iter_poly_bm = extract_orco_iter_poly_bm;
-  extractor.iter_poly_mesh = extract_orco_iter_poly_mesh;
+  extractor.iter_face_bm = extract_orco_iter_face_bm;
+  extractor.iter_face_mesh = extract_orco_iter_face_mesh;
   extractor.data_type = MR_DATA_NONE;
   extractor.data_size = sizeof(MeshExtract_Orco_Data);
   extractor.use_threading = true;
@@ -91,6 +88,6 @@ constexpr MeshExtract create_extractor_orco()
 
 /** \} */
 
-}  // namespace blender::draw
+const MeshExtract extract_orco = create_extractor_orco();
 
-const MeshExtract extract_orco = blender::draw::create_extractor_orco();
+}  // namespace blender::draw

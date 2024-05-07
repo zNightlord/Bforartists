@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: Apache-2.0
- * Copyright 2011-2022 Blender Foundation */
+/* SPDX-FileCopyrightText: 2011-2022 Blender Foundation
+ *
+ * SPDX-License-Identifier: Apache-2.0 */
 
 #include "device/device.h"
 
@@ -60,10 +61,17 @@ NODE_DEFINE(Integrator)
   SOCKET_INT(volume_max_steps, "Volume Max Steps", 1024);
   SOCKET_FLOAT(volume_step_rate, "Volume Step Rate", 1.0f);
 
-  static NodeEnum guiding_ditribution_enum;
-  guiding_ditribution_enum.insert("PARALLAX_AWARE_VMM", GUIDING_TYPE_PARALLAX_AWARE_VMM);
-  guiding_ditribution_enum.insert("DIRECTIONAL_QUAD_TREE", GUIDING_TYPE_DIRECTIONAL_QUAD_TREE);
-  guiding_ditribution_enum.insert("VMM", GUIDING_TYPE_VMM);
+  static NodeEnum guiding_distribution_enum;
+  guiding_distribution_enum.insert("PARALLAX_AWARE_VMM", GUIDING_TYPE_PARALLAX_AWARE_VMM);
+  guiding_distribution_enum.insert("DIRECTIONAL_QUAD_TREE", GUIDING_TYPE_DIRECTIONAL_QUAD_TREE);
+  guiding_distribution_enum.insert("VMM", GUIDING_TYPE_VMM);
+
+  static NodeEnum guiding_directional_sampling_type_enum;
+  guiding_directional_sampling_type_enum.insert("MIS",
+                                                GUIDING_DIRECTIONAL_SAMPLING_TYPE_PRODUCT_MIS);
+  guiding_directional_sampling_type_enum.insert("RIS", GUIDING_DIRECTIONAL_SAMPLING_TYPE_RIS);
+  guiding_directional_sampling_type_enum.insert("ROUGHNESS",
+                                                GUIDING_DIRECTIONAL_SAMPLING_TYPE_ROUGHNESS);
 
   SOCKET_BOOLEAN(use_guiding, "Guiding", false);
   SOCKET_BOOLEAN(deterministic_guiding, "Deterministic Guiding", true);
@@ -76,8 +84,13 @@ NODE_DEFINE(Integrator)
   SOCKET_BOOLEAN(use_guiding_mis_weights, "Use MIS Weights", true);
   SOCKET_ENUM(guiding_distribution_type,
               "Guiding Distribution Type",
-              guiding_ditribution_enum,
+              guiding_distribution_enum,
               GUIDING_TYPE_PARALLAX_AWARE_VMM);
+  SOCKET_ENUM(guiding_directional_sampling_type,
+              "Guiding Directional Sampling Type",
+              guiding_directional_sampling_type_enum,
+              GUIDING_DIRECTIONAL_SAMPLING_TYPE_RIS);
+  SOCKET_FLOAT(guiding_roughness_threshold, "Guiding Roughness Threshold", 0.05f);
 
   SOCKET_BOOLEAN(caustics_reflective, "Reflective Caustics", true);
   SOCKET_BOOLEAN(caustics_refractive, "Refractive Caustics", true);
@@ -123,6 +136,11 @@ NODE_DEFINE(Integrator)
   denoiser_prefilter_enum.insert("fast", DENOISER_PREFILTER_FAST);
   denoiser_prefilter_enum.insert("accurate", DENOISER_PREFILTER_ACCURATE);
 
+  static NodeEnum denoiser_quality_enum;
+  denoiser_quality_enum.insert("high", DENOISER_QUALITY_HIGH);
+  denoiser_quality_enum.insert("balanced", DENOISER_QUALITY_BALANCED);
+  denoiser_quality_enum.insert("fast", DENOISER_QUALITY_FAST);
+
   /* Default to accurate denoising with OpenImageDenoise. For interactive viewport
    * it's best use OptiX and disable the normal pass since it does not always have
    * the desired effect for that denoiser. */
@@ -135,22 +153,21 @@ NODE_DEFINE(Integrator)
               "Denoiser Prefilter",
               denoiser_prefilter_enum,
               DENOISER_PREFILTER_ACCURATE);
+  SOCKET_BOOLEAN(denoise_use_gpu, "Denoise on GPU", true);
+  SOCKET_ENUM(denoiser_quality, "Denoiser Quality", denoiser_quality_enum, DENOISER_QUALITY_HIGH);
 
   return type;
 }
 
-Integrator::Integrator() : Node(get_node_type())
-{
-}
+Integrator::Integrator() : Node(get_node_type()) {}
 
-Integrator::~Integrator()
-{
-}
+Integrator::~Integrator() {}
 
 void Integrator::device_update(Device *device, DeviceScene *dscene, Scene *scene)
 {
-  if (!is_modified())
+  if (!is_modified()) {
     return;
+  }
 
   scoped_callback_timer timer([scene](double time) {
     if (scene->update_stats) {
@@ -193,7 +210,8 @@ void Integrator::device_update(Device *device, DeviceScene *dscene, Scene *scene
   foreach (Shader *shader, scene->shaders) {
     /* keep this in sync with SD_HAS_TRANSPARENT_SHADOW in shader.cpp */
     if ((shader->has_surface_transparent && shader->get_use_transparent_shadow()) ||
-        shader->has_volume) {
+        shader->has_volume)
+    {
       kintegrator->transparent_shadows = true;
       break;
     }
@@ -242,6 +260,8 @@ void Integrator::device_update(Device *device, DeviceScene *dscene, Scene *scene
   kintegrator->use_guiding_direct_light = use_guiding_direct_light;
   kintegrator->use_guiding_mis_weights = use_guiding_mis_weights;
   kintegrator->guiding_distribution_type = guiding_params.type;
+  kintegrator->guiding_directional_sampling_type = guiding_params.sampling_type;
+  kintegrator->guiding_roughness_threshold = guiding_params.roughness_threshold;
 
   kintegrator->seed = seed;
 
@@ -270,7 +290,8 @@ void Integrator::device_update(Device *device, DeviceScene *dscene, Scene *scene
       next_power_of_two(aa_samples - 1), MIN_TAB_SOBOL_SAMPLES, MAX_TAB_SOBOL_SAMPLES);
   if (kintegrator->sampling_pattern == SAMPLING_PATTERN_TABULATED_SOBOL &&
       dscene->sample_pattern_lut.size() !=
-          (sequence_size * NUM_TAB_SOBOL_PATTERNS * NUM_TAB_SOBOL_DIMENSIONS)) {
+          (sequence_size * NUM_TAB_SOBOL_PATTERNS * NUM_TAB_SOBOL_DIMENSIONS))
+  {
     kintegrator->tabulated_sobol_sequence_size = sequence_size;
 
     if (dscene->sample_pattern_lut.size() != 0) {
@@ -311,15 +332,6 @@ void Integrator::tag_update(Scene *scene, uint32_t flag)
     tag_ao_bounces_modified();
   }
 
-  if (filter_glossy_is_modified()) {
-    foreach (Shader *shader, scene->shaders) {
-      if (shader->has_integrator_dependency) {
-        scene->shader_manager->tag_update(scene, ShaderManager::INTEGRATOR_MODIFIED);
-        break;
-      }
-    }
-  }
-
   if (motion_blur_is_modified()) {
     scene->object_manager->tag_update(scene, ObjectManager::MOTION_BLUR_MODIFIED);
     scene->camera->tag_modified();
@@ -332,6 +344,10 @@ uint Integrator::get_kernel_features() const
 
   if (ao_additive_factor != 0.0f) {
     kernel_features |= KERNEL_FEATURE_AO_ADDITIVE;
+  }
+
+  if (get_use_light_tree()) {
+    kernel_features |= KERNEL_FEATURE_LIGHT_TREE;
   }
 
   return kernel_features;
@@ -388,12 +404,15 @@ DenoiseParams Integrator::get_denoise_params() const
 
   denoise_params.type = denoiser_type;
 
+  denoise_params.use_gpu = denoise_use_gpu;
+
   denoise_params.start_sample = denoise_start_sample;
 
   denoise_params.use_pass_albedo = use_denoise_pass_albedo;
   denoise_params.use_pass_normal = use_denoise_pass_normal;
 
   denoise_params.prefilter = denoiser_prefilter;
+  denoise_params.quality = denoiser_quality;
 
   return denoise_params;
 }
@@ -411,7 +430,9 @@ GuidingParams Integrator::get_guiding_params(const Device *device) const
   guiding_params.type = guiding_distribution_type;
   guiding_params.training_samples = guiding_training_samples;
   guiding_params.deterministic = deterministic_guiding;
-
+  guiding_params.sampling_type = guiding_directional_sampling_type;
+  // In Blender/Cycles the user set roughness is squared to behave more linear.
+  guiding_params.roughness_threshold = guiding_roughness_threshold * guiding_roughness_threshold;
   return guiding_params;
 }
 CCL_NAMESPACE_END

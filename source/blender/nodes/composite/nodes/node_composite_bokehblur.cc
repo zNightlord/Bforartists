@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2006 Blender Foundation. All rights reserved. */
+/* SPDX-FileCopyrightText: 2006 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup cmpnodes
@@ -8,11 +9,12 @@
 #include "BLI_math_base.hh"
 #include "BLI_math_vector_types.hh"
 
-#include "UI_interface.h"
-#include "UI_resources.h"
+#include "UI_interface.hh"
+#include "UI_resources.hh"
 
-#include "GPU_texture.h"
+#include "GPU_texture.hh"
 
+#include "COM_algorithm_parallel_reduction.hh"
 #include "COM_node_operation.hh"
 #include "COM_utilities.hh"
 
@@ -24,23 +26,23 @@ namespace blender::nodes::node_composite_bokehblur_cc {
 
 static void cmp_node_bokehblur_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Color>(N_("Image"))
+  b.add_input<decl::Color>("Image")
       .default_value({0.8f, 0.8f, 0.8f, 1.0f})
       .compositor_domain_priority(0);
-  b.add_input<decl::Color>(N_("Bokeh"))
+  b.add_input<decl::Color>("Bokeh")
       .default_value({1.0f, 1.0f, 1.0f, 1.0f})
-      .compositor_skip_realization();
-  b.add_input<decl::Float>(N_("Size"))
+      .compositor_realization_options(CompositorInputRealizationOptions::None);
+  b.add_input<decl::Float>("Size")
       .default_value(1.0f)
       .min(0.0f)
       .max(10.0f)
       .compositor_domain_priority(1);
-  b.add_input<decl::Float>(N_("Bounding box"))
+  b.add_input<decl::Float>("Bounding box")
       .default_value(1.0f)
       .min(0.0f)
       .max(1.0f)
       .compositor_domain_priority(2);
-  b.add_output<decl::Color>(N_("Image"));
+  b.add_output<decl::Color>("Image");
 }
 
 static void node_composit_init_bokehblur(bNodeTree * /*ntree*/, bNode *node)
@@ -80,7 +82,7 @@ class BokehBlurOperation : public NodeOperation {
 
   void execute_constant_size()
   {
-    GPUShader *shader = shader_manager().get("compositor_blur");
+    GPUShader *shader = context().get_shader("compositor_bokeh_blur");
     GPU_shader_bind(shader);
 
     GPU_shader_uniform_1i(shader, "radius", int(compute_blur_radius()));
@@ -116,11 +118,13 @@ class BokehBlurOperation : public NodeOperation {
 
   void execute_variable_size()
   {
-    GPUShader *shader = shader_manager().get("compositor_blur_variable_size");
+    const int search_radius = compute_variable_size_search_radius();
+
+    GPUShader *shader = context().get_shader("compositor_bokeh_blur_variable_size");
     GPU_shader_bind(shader);
 
     GPU_shader_uniform_1f(shader, "base_size", compute_blur_radius());
-    GPU_shader_uniform_1i(shader, "search_radius", get_max_size());
+    GPU_shader_uniform_1i(shader, "search_radius", search_radius);
 
     const Result &input_image = get_input("Image");
     input_image.bind_as_texture(shader, "input_tx");
@@ -147,6 +151,15 @@ class BokehBlurOperation : public NodeOperation {
     input_weights.unbind_as_texture();
     input_size.unbind_as_texture();
     input_mask.unbind_as_texture();
+  }
+
+  int compute_variable_size_search_radius()
+  {
+    const Result &input_size = get_input("Size");
+    const float maximum_size = maximum_float(context(), input_size.texture());
+
+    const float base_size = compute_blur_radius();
+    return math::clamp(int(maximum_size * base_size), 0, get_max_size());
   }
 
   float compute_blur_radius()

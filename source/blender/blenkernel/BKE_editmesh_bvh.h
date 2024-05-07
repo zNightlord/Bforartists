@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2001-2002 NaN Holding BV. All rights reserved. */
+/* SPDX-FileCopyrightText: 2001-2002 NaN Holding BV. All rights reserved.
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup bke
@@ -7,9 +8,7 @@
 
 #pragma once
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include "BLI_span.hh"
 
 struct BMBVHTree;
 struct BMEditMesh;
@@ -28,16 +27,14 @@ BMBVHTree *BKE_bmbvh_new_from_editmesh(struct BMEditMesh *em,
                                        const float (*cos_cage)[3],
                                        bool cos_cage_free);
 BMBVHTree *BKE_bmbvh_new_ex(struct BMesh *bm,
-                            struct BMLoop *(*looptris)[3],
-                            int looptris_tot,
+                            blender::Span<std::array<BMLoop *, 3>> looptris,
                             int flag,
                             const float (*cos_cage)[3],
                             bool cos_cage_free,
                             bool (*test_fn)(struct BMFace *, void *user_data),
                             void *user_data);
 BMBVHTree *BKE_bmbvh_new(struct BMesh *bm,
-                         struct BMLoop *(*looptris)[3],
-                         int looptris_tot,
+                         blender::Span<std::array<BMLoop *, 3>> looptris,
                          int flag,
                          const float (*cos_cage)[3],
                          bool cos_cage_free);
@@ -69,14 +66,14 @@ struct BMVert *BKE_bmbvh_find_vert_closest(BMBVHTree *tree, const float co[3], f
 struct BMFace *BKE_bmbvh_find_face_closest(BMBVHTree *tree, const float co[3], float dist_max);
 
 /**
- * Overlap indices reference the looptri's.
+ * Overlap indices reference the looptris.
  */
 struct BVHTreeOverlap *BKE_bmbvh_overlap(const BMBVHTree *bmtree_a,
                                          const BMBVHTree *bmtree_b,
                                          unsigned int *r_overlap_tot);
 
 /**
- * Overlap indices reference the looptri's.
+ * Overlap indices reference the looptris.
  */
 struct BVHTreeOverlap *BKE_bmbvh_overlap_self(const BMBVHTree *bmtree,
                                               unsigned int *r_overlap_tot);
@@ -90,7 +87,3 @@ enum {
   /** Omit hidden geometry. */
   BMBVH_RESPECT_HIDDEN = (1 << 2),
 };
-
-#ifdef __cplusplus
-}
-#endif

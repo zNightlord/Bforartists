@@ -1,4 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* SPDX-FileCopyrightText: 2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #pragma once
 
@@ -17,6 +19,8 @@
  * converted to other rotation types for that. Converting to `blender::math::QuaternionBase<T>` is
  * the fastest and more correct option.
  */
+
+#include <ostream>
 
 #include "BLI_math_angle_types.hh"
 #include "BLI_math_base.hh"
@@ -75,15 +79,7 @@ template<typename T, typename AngleT> struct AxisAngleBase {
 
   /** Operators. */
 
-  friend bool operator==(const AxisAngleBase &a, const AxisAngleBase &b)
-  {
-    return (a.axis() == b.axis()) && (a.angle() == b.angle());
-  }
-
-  friend bool operator!=(const AxisAngleBase &a, const AxisAngleBase &b)
-  {
-    return (a != b);
-  }
+  BLI_STRUCT_EQUALITY_OPERATORS_2(AxisAngleBase, axis_, angle_)
 
   friend std::ostream &operator<<(std::ostream &stream, const AxisAngleBase &rot)
   {
@@ -95,5 +91,3 @@ using AxisAngle = AxisAngleBase<float, AngleRadianBase<float>>;
 using AxisAngleCartesian = AxisAngleBase<float, AngleCartesianBase<float>>;
 
 }  // namespace blender::math
-
-/** \} */

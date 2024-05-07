@@ -1,10 +1,14 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* SPDX-FileCopyrightText: 2022-2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup gpu
  */
 
-#include "BKE_global.h"
+#include "BLI_string.h"
+
+#include "BKE_global.hh"
 
 #include "mtl_context.hh"
 #include "mtl_debug.hh"
@@ -74,7 +78,7 @@ MTLFrameBuffer::~MTLFrameBuffer()
     }
   }
 
-  /* Free colour attachment descriptors. */
+  /* Free color attachment descriptors. */
   for (int i = 0; i < GPU_FB_MAX_COLOR_ATTACHMENT; i++) {
     if (colour_attachment_descriptors_[i] != nil) {
       [colour_attachment_descriptors_[i] release];
@@ -90,6 +94,18 @@ MTLFrameBuffer::~MTLFrameBuffer()
   }
 }
 
+void MTLFrameBuffer::ensure_attachments_and_viewport()
+{
+  /* Ensure local MTLAttachment data is up to date.
+   * NOTE: We only refresh viewport/scissor region when attachments are updated during bind.
+   * This is to ensure state is consistent with the OpenGL backend. */
+  if (dirty_attachments_) {
+    this->update_attachments(true);
+    this->viewport_reset();
+    this->scissor_reset();
+  }
+}
+
 void MTLFrameBuffer::bind(bool enabled_srgb)
 {
 
@@ -99,8 +115,10 @@ void MTLFrameBuffer::bind(bool enabled_srgb)
     return;
   }
 
-  /* Ensure local MTLAttachment data is up to date. */
-  this->update_attachments(true);
+  /* Ensure local MTLAttachment data is up to date.
+   * NOTE: We only refresh viewport/scissor region when attachments are updated during bind.
+   * This is to ensure state is consistent with the OpenGL backend. */
+  this->ensure_attachments_and_viewport();
 
   /* Ensure SRGB state is up-to-date and valid. */
   bool srgb_state_changed = enabled_srgb_ != enabled_srgb;
@@ -122,18 +140,20 @@ void MTLFrameBuffer::bind(bool enabled_srgb)
     dirty_state_ = true;
   }
   else {
-    MTL_LOG_WARNING("Attempting to bind FrameBuffer, but no context is active\n");
+    MTL_LOG_WARNING("Attempting to bind FrameBuffer, but no context is active");
   }
 }
 
 bool MTLFrameBuffer::check(char err_out[256])
 {
-  /* Ensure local MTLAttachment data is up to date. */
-  this->update_attachments(true);
+  /* Ensure local MTLAttachment data is up to date.
+   * NOTE: We only refresh viewport/scissor region when attachments are updated during bind.
+   * This is to ensure state is consistent with the OpenGL backend. */
+  this->ensure_attachments_and_viewport();
 
   /* Ensure there is at least one attachment. */
-  bool valid = (this->get_attachment_count() > 0 ||
-                this->has_depth_attachment() | this->has_stencil_attachment());
+  bool valid = (this->get_attachment_count() > 0 || this->has_depth_attachment() ||
+                this->has_stencil_attachment());
   if (!valid) {
     const char *format = "Framebuffer %s does not have any attachments.\n";
     if (err_out) {
@@ -250,8 +270,8 @@ bool MTLFrameBuffer::check(char err_out[256])
       }
     }
     else {
-      if (dim_x != stencil_att.texture->width_get() ||
-          dim_y != stencil_att.texture->height_get()) {
+      if (dim_x != stencil_att.texture->width_get() || dim_y != stencil_att.texture->height_get())
+      {
         const char *format =
             "Framebuffer %s: Stencil attachment dimensions do not match that of previous "
             "attachment";
@@ -452,6 +472,27 @@ void MTLFrameBuffer::clear_attachment(GPUAttachmentType type,
     this->force_clear();
   }
 }
+void MTLFrameBuffer::subpass_transition_impl(const GPUAttachmentState /*depth_attachment_state*/,
+                                             Span<GPUAttachmentState> color_attachment_states)
+{
+  const bool is_tile_based_arch = (GPU_platform_architecture() == GPU_ARCHITECTURE_TBDR);
+  if (!is_tile_based_arch) {
+    /* Break render-pass if tile memory is unsupported to ensure current frame-buffer results are
+     * stored. */
+    context_->main_command_buffer.end_active_command_encoder();
+
+    /* Bind frame-buffer attachments as textures.
+     * NOTE: Follows behavior of gl_framebuffer. However, shaders utilizing subpass_in will
+     * need to avoid bind-point collisions for image/texture resources. */
+    for (int i : color_attachment_states.index_range()) {
+      GPUAttachmentType type = GPU_FB_COLOR_ATTACHMENT0 + i;
+      GPUTexture *attach_tex = this->attachments_[type].tex;
+      if (color_attachment_states[i] == GPU_ATTACHEMENT_READ) {
+        GPU_texture_image_bind(attach_tex, i);
+      }
+    }
+  }
+}
 
 void MTLFrameBuffer::read(eGPUFrameBufferBits planes,
                           eGPUDataFormat format,
@@ -465,6 +506,11 @@ void MTLFrameBuffer::read(eGPUFrameBufferBits planes,
   BLI_assert(area[2] > 0);
   BLI_assert(area[3] > 0);
 
+  /* Early exit if requested read region area is zero. */
+  if (area[2] <= 0 || area[3] <= 0) {
+    return;
+  }
+
   switch (planes) {
     case GPU_DEPTH_BIT: {
       if (this->has_depth_attachment()) {
@@ -473,7 +519,7 @@ void MTLFrameBuffer::read(eGPUFrameBufferBits planes,
         if (tex) {
           size_t sample_len = area[2] * area[3];
           size_t sample_size = to_bytesize(tex->format_, format);
-          int debug_data_size = sample_len * sample_size;
+          size_t debug_data_size = sample_len * sample_size;
           tex->read_internal(0,
                              area[0],
                              area[1],
@@ -490,7 +536,7 @@ void MTLFrameBuffer::read(eGPUFrameBufferBits planes,
       else {
         MTL_LOG_ERROR(
             "Attempting to read depth from a framebuffer which does not have a depth "
-            "attachment!\n");
+            "attachment!");
       }
     }
       return;
@@ -502,7 +548,7 @@ void MTLFrameBuffer::read(eGPUFrameBufferBits planes,
         if (tex) {
           size_t sample_len = area[2] * area[3];
           size_t sample_size = to_bytesize(tex->format_, format);
-          int debug_data_size = sample_len * sample_size * channel_len;
+          size_t debug_data_size = sample_len * sample_size * channel_len;
           tex->read_internal(0,
                              area[0],
                              area[1],
@@ -520,7 +566,7 @@ void MTLFrameBuffer::read(eGPUFrameBufferBits planes,
       return;
 
     case GPU_STENCIL_BIT:
-      MTL_LOG_ERROR("GPUFramebuffer: Error: Trying to read stencil bit. Unsupported.\n");
+      MTL_LOG_ERROR("Framebuffer: Trying to read stencil bit. Unsupported.");
       return;
   }
 }
@@ -532,8 +578,8 @@ void MTLFrameBuffer::blit_to(eGPUFrameBufferBits planes,
                              int dst_offset_x,
                              int dst_offset_y)
 {
-  this->update_attachments(true);
-  static_cast<MTLFrameBuffer *>(dst)->update_attachments(true);
+  this->ensure_attachments_and_viewport();
+  static_cast<MTLFrameBuffer *>(dst)->ensure_attachments_and_viewport();
 
   BLI_assert(planes != 0);
 
@@ -601,7 +647,7 @@ void MTLFrameBuffer::mark_do_clear()
   has_pending_clear_ = true;
 }
 
-void MTLFrameBuffer::update_attachments(bool update_viewport)
+void MTLFrameBuffer::update_attachments(bool /*update_viewport*/)
 {
   if (!dirty_attachments_) {
     return;
@@ -689,10 +735,12 @@ void MTLFrameBuffer::update_attachments(bool update_viewport)
       case GPU_FB_COLOR_ATTACHMENT2:
       case GPU_FB_COLOR_ATTACHMENT3:
       case GPU_FB_COLOR_ATTACHMENT4:
-      case GPU_FB_COLOR_ATTACHMENT5: {
+      case GPU_FB_COLOR_ATTACHMENT5:
+      case GPU_FB_COLOR_ATTACHMENT6:
+      case GPU_FB_COLOR_ATTACHMENT7: {
         int color_slot_ind = type - GPU_FB_COLOR_ATTACHMENT0;
         if (attach.tex) {
-          /* If we already had a colour attachment, preserve load/clear-state parameters,
+          /* If we already had a color attachment, preserve load/clear-state parameters,
            * but remove existing and add new attachment. */
           if (this->has_attachment_at_slot(color_slot_ind)) {
             MTLAttachment color_attachment_prev = this->get_color_attachment(color_slot_ind);
@@ -736,15 +784,6 @@ void MTLFrameBuffer::update_attachments(bool update_viewport)
     this->size_set(size[0], size[1]);
     srgb_ = (GPU_texture_format(attach.tex) == GPU_SRGB8_A8);
   }
-  else {
-    /* Empty frame-buffer. */
-    width_ = 0;
-    height_ = 0;
-  }
-
-  /* Reset viewport and Scissor. */
-  this->viewport_reset();
-  this->scissor_reset();
 
   /* We have now updated our internal structures. */
   dirty_attachments_ = false;
@@ -760,15 +799,22 @@ void MTLFrameBuffer::apply_state()
     }
 
     /* Ensure viewport has been set. NOTE: This should no longer happen, but kept for safety to
-     * track bugs. */
-    if (viewport_[2] == 0 || viewport_[3] == 0) {
-      MTL_LOG_WARNING(
-          "Viewport had width and height of (0,0) -- Updating -- DEBUG Safety check\n");
-      viewport_reset();
+     * track bugs. If viewport size is zero, use framebuffer size. */
+    int viewport_w = viewport_[0][2];
+    int viewport_h = viewport_[0][3];
+    if (viewport_w == 0 || viewport_h == 0) {
+      MTL_LOG_WARNING("Viewport had width and height of (0,0) -- Updating -- DEBUG Safety check");
+      viewport_w = default_width_;
+      viewport_h = default_height_;
     }
 
     /* Update Context State. */
-    mtl_ctx->set_viewport(viewport_[0], viewport_[1], viewport_[2], viewport_[3]);
+    if (multi_viewport_) {
+      mtl_ctx->set_viewports(GPU_MAX_VIEWPORTS, viewport_);
+    }
+    else {
+      mtl_ctx->set_viewport(viewport_[0][0], viewport_[0][1], viewport_w, viewport_h);
+    }
     mtl_ctx->set_scissor(scissor_[0], scissor_[1], scissor_[2], scissor_[3]);
     mtl_ctx->set_scissor_enabled(scissor_test_);
 
@@ -778,7 +824,7 @@ void MTLFrameBuffer::apply_state()
   else {
     MTL_LOG_ERROR(
         "Attempting to set FrameBuffer State (VIEWPORT, SCISSOR), But FrameBuffer is not bound to "
-        "current Context.\n");
+        "current Context.");
   }
 }
 
@@ -798,7 +844,7 @@ bool MTLFrameBuffer::add_color_attachment(gpu::MTLTexture *texture,
 
   if (texture) {
     if (miplevel < 0 || miplevel >= MTL_MAX_MIPMAP_COUNT) {
-      MTL_LOG_WARNING("Attachment specified with invalid mip level %u\n", miplevel);
+      MTL_LOG_WARNING("Attachment specified with invalid mip level %u", miplevel);
       miplevel = 0;
     }
 
@@ -823,7 +869,7 @@ bool MTLFrameBuffer::add_color_attachment(gpu::MTLTexture *texture,
       case GPU_TEXTURE_1D_ARRAY:
         if (layer < 0) {
           layer = 0;
-          MTL_LOG_WARNING("TODO: Support layered rendering for 1D array textures, if needed.\n");
+          MTL_LOG_WARNING("TODO: Support layered rendering for 1D array textures, if needed.");
         }
         BLI_assert(layer < texture->h_);
         mtl_color_attachments_[slot].slice = layer;
@@ -877,12 +923,12 @@ bool MTLFrameBuffer::add_color_attachment(gpu::MTLTexture *texture,
         mtl_color_attachments_[slot].depth_plane = 0;
         break;
       default:
-        MTL_LOG_ERROR("MTLFrameBuffer::add_color_attachment Unrecognized texture type %u\n",
+        MTL_LOG_ERROR("MTLFrameBuffer::add_color_attachment Unrecognized texture type %u",
                       texture->type_);
         break;
     }
 
-    /* Update Frame-buffer Resolution. */
+    /* Update default attachment size and ensure future attachments match the same size. */
     int width_of_miplayer, height_of_miplayer;
     if (miplevel <= 0) {
       width_of_miplayer = texture->width_get();
@@ -893,16 +939,14 @@ bool MTLFrameBuffer::add_color_attachment(gpu::MTLTexture *texture,
       height_of_miplayer = max_ii(texture->height_get() >> miplevel, 1);
     }
 
-    if (width_ == 0 || height_ == 0) {
-      this->size_set(width_of_miplayer, height_of_miplayer);
-      this->scissor_reset();
-      this->viewport_reset();
-      BLI_assert(width_ > 0);
-      BLI_assert(height_ > 0);
+    if (default_width_ == 0 || default_height_ == 0) {
+      this->default_size_set(width_of_miplayer, height_of_miplayer);
+      BLI_assert(default_width_ > 0);
+      BLI_assert(default_height_ > 0);
     }
     else {
-      BLI_assert(width_ == width_of_miplayer);
-      BLI_assert(height_ == height_of_miplayer);
+      BLI_assert(default_width_ == width_of_miplayer);
+      BLI_assert(default_height_ == height_of_miplayer);
     }
 
     /* Flag as dirty. */
@@ -910,8 +954,8 @@ bool MTLFrameBuffer::add_color_attachment(gpu::MTLTexture *texture,
   }
   else {
     MTL_LOG_ERROR(
-        "Passing in null texture to MTLFrameBuffer::addColourAttachment (This could be due to not "
-        "all texture types being supported).\n");
+        "Passing in null texture to MTLFrameBuffer::add_color_attachment (This could be due to "
+        "not all texture types being supported).");
   }
   return true;
 }
@@ -922,7 +966,7 @@ bool MTLFrameBuffer::add_depth_attachment(gpu::MTLTexture *texture, int miplevel
 
   if (texture) {
     if (miplevel < 0 || miplevel >= MTL_MAX_MIPMAP_COUNT) {
-      MTL_LOG_WARNING("Attachment specified with invalid mip level %u\n", miplevel);
+      MTL_LOG_WARNING("Attachment specified with invalid mip level %u", miplevel);
       miplevel = 0;
     }
 
@@ -945,7 +989,7 @@ bool MTLFrameBuffer::add_depth_attachment(gpu::MTLTexture *texture, int miplevel
       case GPU_TEXTURE_1D_ARRAY:
         if (layer < 0) {
           layer = 0;
-          MTL_LOG_WARNING("TODO: Support layered rendering for 1D array textures, if needed\n");
+          MTL_LOG_WARNING("TODO: Support layered rendering for 1D array textures, if needed");
         }
         BLI_assert(layer < texture->h_);
         mtl_depth_attachment_.slice = layer;
@@ -1003,7 +1047,7 @@ bool MTLFrameBuffer::add_depth_attachment(gpu::MTLTexture *texture, int miplevel
         break;
     }
 
-    /* Update Frame-buffer Resolution. */
+    /* Update default attachment size and ensure future attachments match the same size. */
     int width_of_miplayer, height_of_miplayer;
     if (miplevel <= 0) {
       width_of_miplayer = texture->width_get();
@@ -1014,17 +1058,14 @@ bool MTLFrameBuffer::add_depth_attachment(gpu::MTLTexture *texture, int miplevel
       height_of_miplayer = max_ii(texture->height_get() >> miplevel, 1);
     }
 
-    /* Update Frame-buffer Resolution. */
-    if (width_ == 0 || height_ == 0) {
-      this->size_set(width_of_miplayer, height_of_miplayer);
-      this->scissor_reset();
-      this->viewport_reset();
-      BLI_assert(width_ > 0);
-      BLI_assert(height_ > 0);
+    if (default_width_ == 0 || default_height_ == 0) {
+      this->default_size_set(width_of_miplayer, height_of_miplayer);
+      BLI_assert(default_width_ > 0);
+      BLI_assert(default_height_ > 0);
     }
     else {
-      BLI_assert(width_ == texture->width_get());
-      BLI_assert(height_ == texture->height_get());
+      BLI_assert(default_width_ == width_of_miplayer);
+      BLI_assert(default_height_ == height_of_miplayer);
     }
 
     /* Flag as dirty after attachments changed. */
@@ -1044,7 +1085,7 @@ bool MTLFrameBuffer::add_stencil_attachment(gpu::MTLTexture *texture, int miplev
 
   if (texture) {
     if (miplevel < 0 || miplevel >= MTL_MAX_MIPMAP_COUNT) {
-      MTL_LOG_WARNING("Attachment specified with invalid mip level %u\n", miplevel);
+      MTL_LOG_WARNING("Attachment specified with invalid mip level %u", miplevel);
       miplevel = 0;
     }
 
@@ -1067,7 +1108,7 @@ bool MTLFrameBuffer::add_stencil_attachment(gpu::MTLTexture *texture, int miplev
       case GPU_TEXTURE_1D_ARRAY:
         if (layer < 0) {
           layer = 0;
-          MTL_LOG_WARNING("TODO: Support layered rendering for 1D array textures, if needed\n");
+          MTL_LOG_WARNING("TODO: Support layered rendering for 1D array textures, if needed");
         }
         BLI_assert(layer < texture->h_);
         mtl_stencil_attachment_.slice = layer;
@@ -1125,7 +1166,7 @@ bool MTLFrameBuffer::add_stencil_attachment(gpu::MTLTexture *texture, int miplev
         break;
     }
 
-    /* Update Frame-buffer Resolution. */
+    /* Update default attachment size and ensure future attachments match the same size. */
     int width_of_miplayer, height_of_miplayer;
     if (miplevel <= 0) {
       width_of_miplayer = texture->width_get();
@@ -1136,17 +1177,14 @@ bool MTLFrameBuffer::add_stencil_attachment(gpu::MTLTexture *texture, int miplev
       height_of_miplayer = max_ii(texture->height_get() >> miplevel, 1);
     }
 
-    /* Update Frame-buffer Resolution. */
-    if (width_ == 0 || height_ == 0) {
-      this->size_set(width_of_miplayer, height_of_miplayer);
-      this->scissor_reset();
-      this->viewport_reset();
-      BLI_assert(width_ > 0);
-      BLI_assert(height_ > 0);
+    if (default_width_ == 0 || default_height_ == 0) {
+      this->default_size_set(width_of_miplayer, height_of_miplayer);
+      BLI_assert(default_width_ > 0);
+      BLI_assert(default_height_ > 0);
     }
     else {
-      BLI_assert(width_ == texture->width_get());
-      BLI_assert(height_ == texture->height_get());
+      BLI_assert(default_width_ == width_of_miplayer);
+      BLI_assert(default_height_ == height_of_miplayer);
     }
 
     /* Flag as dirty after attachments changed. */
@@ -1223,12 +1261,10 @@ void MTLFrameBuffer::ensure_render_target_size()
 {
   /* If we have no attachments, reset width and height to zero. */
   if (colour_attachment_count_ == 0 && !this->has_depth_attachment() &&
-      !this->has_stencil_attachment()) {
-
-    /* Reset Viewport and Scissor for NULL framebuffer. */
-    this->size_set(0, 0);
-    this->scissor_reset();
-    this->viewport_reset();
+      !this->has_stencil_attachment())
+  {
+    /* Reset default size for empty framebuffer. */
+    this->default_size_set(0, 0);
   }
 }
 
@@ -1238,20 +1274,27 @@ void MTLFrameBuffer::ensure_render_target_size()
 /** \ Clear values and Load-store actions
  * \{ */
 
-void MTLFrameBuffer::attachment_set_loadstore_op(GPUAttachmentType type,
-                                                 eGPULoadOp load_action,
-                                                 eGPUStoreOp store_action)
+void MTLFrameBuffer::attachment_set_loadstore_op(GPUAttachmentType type, GPULoadStore ls)
 {
   if (type >= GPU_FB_COLOR_ATTACHMENT0) {
     int slot = type - GPU_FB_COLOR_ATTACHMENT0;
-    this->set_color_loadstore_op(slot, load_action, store_action);
+    if (ls.load_action == GPU_LOADACTION_CLEAR) {
+      this->set_color_attachment_clear_color(slot, ls.clear_value);
+    }
+    this->set_color_loadstore_op(slot, ls.load_action, ls.store_action);
   }
   else if (type == GPU_FB_DEPTH_STENCIL_ATTACHMENT) {
-    this->set_depth_loadstore_op(load_action, store_action);
-    this->set_stencil_loadstore_op(load_action, store_action);
+    if (ls.load_action == GPU_LOADACTION_CLEAR) {
+      this->set_depth_attachment_clear_value(ls.clear_value[0]);
+    }
+    this->set_depth_loadstore_op(ls.load_action, ls.store_action);
+    this->set_stencil_loadstore_op(ls.load_action, ls.store_action);
   }
   else if (type == GPU_FB_DEPTH_ATTACHMENT) {
-    this->set_depth_loadstore_op(load_action, store_action);
+    if (ls.load_action == GPU_LOADACTION_CLEAR) {
+      this->set_depth_attachment_clear_value(ls.clear_value[0]);
+    }
+    this->set_depth_loadstore_op(ls.load_action, ls.store_action);
   }
 }
 
@@ -1281,7 +1324,8 @@ bool MTLFrameBuffer::set_depth_attachment_clear_value(float depth_clear)
   BLI_assert(this);
 
   if (mtl_depth_attachment_.clear_value.depth != depth_clear ||
-      mtl_depth_attachment_.load_action != GPU_LOADACTION_CLEAR) {
+      mtl_depth_attachment_.load_action != GPU_LOADACTION_CLEAR)
+  {
     mtl_depth_attachment_.clear_value.depth = depth_clear;
     mtl_depth_attachment_.load_action = GPU_LOADACTION_CLEAR;
     this->mark_loadstore_dirty();
@@ -1294,7 +1338,8 @@ bool MTLFrameBuffer::set_stencil_attachment_clear_value(uint stencil_clear)
   BLI_assert(this);
 
   if (mtl_stencil_attachment_.clear_value.stencil != stencil_clear ||
-      mtl_stencil_attachment_.load_action != GPU_LOADACTION_CLEAR) {
+      mtl_stencil_attachment_.load_action != GPU_LOADACTION_CLEAR)
+  {
     mtl_stencil_attachment_.clear_value.stencil = stencil_clear;
     mtl_stencil_attachment_.load_action = GPU_LOADACTION_CLEAR;
     this->mark_loadstore_dirty();
@@ -1387,7 +1432,8 @@ bool MTLFrameBuffer::has_color_attachment_with_texture(gpu::MTLTexture *texture)
 
   for (int attachment = 0; attachment < this->get_attachment_limit(); attachment++) {
     if (mtl_color_attachments_[attachment].used &&
-        mtl_color_attachments_[attachment].texture == texture) {
+        mtl_color_attachments_[attachment].texture == texture)
+    {
       return true;
     }
   }
@@ -1413,7 +1459,8 @@ int MTLFrameBuffer::get_color_attachment_slot_from_texture(gpu::MTLTexture *text
 
   for (int attachment = 0; attachment < this->get_attachment_limit(); attachment++) {
     if (mtl_color_attachments_[attachment].used &&
-        (mtl_color_attachments_[attachment].texture == texture)) {
+        (mtl_color_attachments_[attachment].texture == texture))
+    {
       return attachment;
     }
   }
@@ -1459,18 +1506,13 @@ bool MTLFrameBuffer::validate_render_pass()
   BLI_assert(this);
 
   /* First update attachments if dirty. */
-  this->update_attachments(true);
-
-  /* Verify attachment count. */
-  int used_attachments = 0;
-  for (int attachment = 0; attachment < GPU_FB_MAX_COLOR_ATTACHMENT; attachment++) {
-    if (mtl_color_attachments_[attachment].used) {
-      used_attachments++;
-    }
+  if (dirty_attachments_) {
+    this->update_attachments(true);
   }
-  used_attachments += (mtl_depth_attachment_.used) ? 1 : 0;
-  used_attachments += (mtl_stencil_attachment_.used) ? 1 : 0;
-  return (used_attachments > 0);
+
+  /* NOTE: Attachment-less render targets now supported so we do not need to validate attachment
+   * counts. Keeping this function in place if other parameters need to be validate. */
+  return true;
 }
 
 MTLLoadAction mtl_load_action_from_gpu(eGPULoadOp action)
@@ -1523,6 +1565,15 @@ MTLRenderPassDescriptor *MTLFrameBuffer::bake_render_pass_descriptor(bool load_c
   uint descriptor_config = (load_contents) ? MTL_FB_CONFIG_LOAD :
                                              ((this->get_pending_clear()) ? MTL_FB_CONFIG_CLEAR :
                                                                             MTL_FB_CONFIG_CUSTOM);
+
+  /* NOTE: If `GPU_framebuffer_bind_loadstore` is used, the `use_explicit_load_store_` flag will be
+   * set in which case, we should always use the custom configuration. Calls with this flag will
+   * only happen for the first render pass after binding. */
+  if (use_explicit_load_store_) {
+    descriptor_config = MTL_FB_CONFIG_CUSTOM;
+    descriptor_dirty_[descriptor_config] = true;
+  }
+
   if (descriptor_dirty_[descriptor_config] || framebuffer_descriptor_[descriptor_config] == nil) {
 
     /* Create descriptor if it does not exist. */
@@ -1530,30 +1581,14 @@ MTLRenderPassDescriptor *MTLFrameBuffer::bake_render_pass_descriptor(bool load_c
       framebuffer_descriptor_[descriptor_config] = [[MTLRenderPassDescriptor alloc] init];
     }
 
-#if defined(MAC_OS_X_VERSION_11_0) && __MAC_OS_X_VERSION_MAX_ALLOWED > MAC_OS_X_VERSION_11_0
-    if (@available(macOS 11.00, *)) {
-      /* Optimization: Use smaller tile size on Apple Silicon if exceeding a certain bpp limit. */
-      bool is_tile_based_gpu = [metal_ctx->device hasUnifiedMemory];
-      if (is_tile_based_gpu) {
-        uint framebuffer_bpp = this->get_bits_per_pixel();
-        bool use_small_tiles = (framebuffer_bpp > 64);
-
-        if (use_small_tiles) {
-          framebuffer_descriptor_[descriptor_config].tileWidth = 16;
-          framebuffer_descriptor_[descriptor_config].tileHeight = 16;
-        }
-      }
-    }
-#endif
-
     /* Configure multilayered rendering. */
     if (use_multilayered_rendering_) {
       /* Ensure all targets have the same length. */
       int len = 0;
       bool valid = true;
 
-      for (int attachment_ind = 0; attachment_ind < GPU_FB_MAX_COLOR_ATTACHMENT;
-           attachment_ind++) {
+      for (int attachment_ind = 0; attachment_ind < GPU_FB_MAX_COLOR_ATTACHMENT; attachment_ind++)
+      {
         if (mtl_color_attachments_[attachment_ind].used) {
           if (len == 0) {
             len = mtl_color_attachments_[attachment_ind].render_target_array_length;
@@ -1594,56 +1629,68 @@ MTLRenderPassDescriptor *MTLFrameBuffer::bake_render_pass_descriptor(bool load_c
     /* Color attachments. */
     int colour_attachments = 0;
     for (int attachment_ind = 0; attachment_ind < GPU_FB_MAX_COLOR_ATTACHMENT; attachment_ind++) {
+      MTLAttachment &attachment_config = mtl_color_attachments_[attachment_ind];
 
-      if (mtl_color_attachments_[attachment_ind].used) {
+      if (attachment_config.used) {
+        id<MTLTexture> texture = attachment_config.texture->get_metal_handle_base();
+        if (texture == nil) {
+          MTL_LOG_ERROR("Attempting to assign invalid texture as attachment");
+        }
+
+        bool texture_is_memoryless = (attachment_config.texture->usage_get() &
+                                      GPU_TEXTURE_USAGE_MEMORYLESS);
+
+        /* IF SRGB is enabled, but we are rendering with SRGB disabled, sample texture view. */
+        id<MTLTexture> source_color_texture = texture;
+        if (this->get_is_srgb() && attachment_config.texture->is_format_srgb() &&
+            !this->get_srgb_enabled())
+        {
+          source_color_texture = attachment_config.texture->get_non_srgb_handle();
+          BLI_assert(source_color_texture != nil);
+        }
+
+        /* Resolve appropriate load action -- IF force load, perform load.
+         * If clear but framebuffer has no pending clear, also load. */
+        eGPULoadOp load_action = attachment_config.load_action;
+        if (descriptor_config == MTL_FB_CONFIG_LOAD) {
+          /* MTL_FB_CONFIG_LOAD must always load. */
+          load_action = GPU_LOADACTION_LOAD;
+        }
+        else if (descriptor_config == MTL_FB_CONFIG_CUSTOM && load_action == GPU_LOADACTION_CLEAR)
+        {
+          /* If Custom load config is used, fallback to loading if explicit bind state flag is
+           * unset. This is to ensure attachments are loaded by default in the case a framebuffer
+           * is unbound and rebound, or, if a render pass breaks mid-pass for compute or blit
+           * operations. */
+          if (!use_explicit_load_store_ && !texture_is_memoryless) {
+            load_action = GPU_LOADACTION_LOAD;
+          }
+        }
+
+        /* Ensure memoryless attachment cannot load or store results. */
+        eGPUStoreOp store_action = attachment_config.store_action;
+        if (texture_is_memoryless && load_action == GPU_LOADACTION_LOAD) {
+          load_action = GPU_LOADACTION_DONT_CARE;
+        }
+        if (texture_is_memoryless && store_action == GPU_STOREACTION_STORE) {
+          store_action = GPU_STOREACTION_DONT_CARE;
+        }
 
         /* Create attachment descriptor. */
         MTLRenderPassColorAttachmentDescriptor *attachment =
             colour_attachment_descriptors_[attachment_ind];
         BLI_assert(attachment != nil);
 
-        id<MTLTexture> texture =
-            mtl_color_attachments_[attachment_ind].texture->get_metal_handle_base();
-        if (texture == nil) {
-          MTL_LOG_ERROR("Attempting to assign invalid texture as attachment\n");
-        }
-
-        /* IF SRGB is enabled, but we are rendering with SRGB disabled, sample texture view. */
-        id<MTLTexture> source_color_texture = texture;
-        if (this->get_is_srgb() &&
-            mtl_color_attachments_[attachment_ind].texture->is_format_srgb() &&
-            !this->get_srgb_enabled()) {
-          source_color_texture =
-              mtl_color_attachments_[attachment_ind].texture->get_non_srgb_handle();
-          BLI_assert(source_color_texture != nil);
-        }
-
-        /* Resolve appropriate load action -- IF force load, perform load.
-         * If clear but framebuffer has no pending clear, also load. */
-        eGPULoadOp load_action = mtl_color_attachments_[attachment_ind].load_action;
-        if (descriptor_config == MTL_FB_CONFIG_LOAD) {
-          /* MTL_FB_CONFIG_LOAD must always load. */
-          load_action = GPU_LOADACTION_LOAD;
-        }
-        else if (descriptor_config == MTL_FB_CONFIG_CUSTOM &&
-                 load_action == GPU_LOADACTION_CLEAR) {
-          /* Custom config should be LOAD or DONT_CARE only. */
-          load_action = GPU_LOADACTION_LOAD;
-        }
         attachment.texture = source_color_texture;
         attachment.loadAction = mtl_load_action_from_gpu(load_action);
-        attachment.clearColor =
-            (load_action == GPU_LOADACTION_CLEAR) ?
-                MTLClearColorMake(mtl_color_attachments_[attachment_ind].clear_value.color[0],
-                                  mtl_color_attachments_[attachment_ind].clear_value.color[1],
-                                  mtl_color_attachments_[attachment_ind].clear_value.color[2],
-                                  mtl_color_attachments_[attachment_ind].clear_value.color[3]) :
-                MTLClearColorMake(0.0, 0.0, 0.0, 0.0);
-        attachment.storeAction = mtl_store_action_from_gpu(
-            mtl_color_attachments_[attachment_ind].store_action);
-        attachment.level = mtl_color_attachments_[attachment_ind].mip;
-        attachment.slice = mtl_color_attachments_[attachment_ind].slice;
-        attachment.depthPlane = mtl_color_attachments_[attachment_ind].depth_plane;
+        attachment.clearColor = (load_action == GPU_LOADACTION_CLEAR) ?
+                                    MTLClearColorMake(
+                                        UNPACK4(attachment_config.clear_value.color)) :
+                                    MTLClearColorMake(0.0, 0.0, 0.0, 0.0);
+        attachment.storeAction = mtl_store_action_from_gpu(store_action);
+        attachment.level = attachment_config.mip;
+        attachment.slice = attachment_config.slice;
+        attachment.depthPlane = attachment_config.depth_plane;
         colour_attachments++;
 
         /* Copy attachment info back in. */
@@ -1651,17 +1698,21 @@ MTLRenderPassDescriptor *MTLFrameBuffer::bake_render_pass_descriptor(bool load_c
                                                             atIndexedSubscript:attachment_ind];
       }
       else {
-        /* Disable colour attachment. */
+        /* Disable color attachment. */
         [framebuffer_descriptor_[descriptor_config].colorAttachments setObject:nil
                                                             atIndexedSubscript:attachment_ind];
       }
     }
     BLI_assert(colour_attachments == colour_attachment_count_);
+    UNUSED_VARS_NDEBUG(colour_attachments);
 
     /* Depth attachment. */
     if (mtl_depth_attachment_.used) {
       framebuffer_descriptor_[descriptor_config].depthAttachment.texture =
           (id<MTLTexture>)mtl_depth_attachment_.texture->get_metal_handle_base();
+
+      bool texture_is_memoryless = (mtl_depth_attachment_.texture->usage_get() &
+                                    GPU_TEXTURE_USAGE_MEMORYLESS);
 
       /* Resolve appropriate load action -- IF force load, perform load.
        * If clear but framebuffer has no pending clear, also load. */
@@ -1671,15 +1722,29 @@ MTLRenderPassDescriptor *MTLFrameBuffer::bake_render_pass_descriptor(bool load_c
         load_action = GPU_LOADACTION_LOAD;
       }
       else if (descriptor_config == MTL_FB_CONFIG_CUSTOM && load_action == GPU_LOADACTION_CLEAR) {
-        /* Custom config should be LOAD or DONT_CARE only. */
-        load_action = GPU_LOADACTION_LOAD;
+        /* If Custom load config is used, fallback to loading if explicit bind state flag is unset.
+         * This is to ensure attachments are loaded by default in the case a framebuffer is unbound
+         * and rebound, or, if a render pass breaks mid-pass for compute or blit operations. */
+        if (!use_explicit_load_store_ && !texture_is_memoryless) {
+          load_action = GPU_LOADACTION_LOAD;
+        }
       }
+
+      /* Ensure memoryless attachment cannot load or store results. */
+      eGPUStoreOp store_action = mtl_depth_attachment_.store_action;
+      if (texture_is_memoryless && load_action == GPU_LOADACTION_LOAD) {
+        load_action = GPU_LOADACTION_DONT_CARE;
+      }
+      if (texture_is_memoryless && store_action == GPU_STOREACTION_STORE) {
+        store_action = GPU_STOREACTION_DONT_CARE;
+      }
+
       framebuffer_descriptor_[descriptor_config].depthAttachment.loadAction =
           mtl_load_action_from_gpu(load_action);
       framebuffer_descriptor_[descriptor_config].depthAttachment.clearDepth =
           (load_action == GPU_LOADACTION_CLEAR) ? mtl_depth_attachment_.clear_value.depth : 0;
       framebuffer_descriptor_[descriptor_config].depthAttachment.storeAction =
-          mtl_store_action_from_gpu(mtl_depth_attachment_.store_action);
+          mtl_store_action_from_gpu(store_action);
       framebuffer_descriptor_[descriptor_config].depthAttachment.level = mtl_depth_attachment_.mip;
       framebuffer_descriptor_[descriptor_config].depthAttachment.slice =
           mtl_depth_attachment_.slice;
@@ -1695,6 +1760,9 @@ MTLRenderPassDescriptor *MTLFrameBuffer::bake_render_pass_descriptor(bool load_c
       framebuffer_descriptor_[descriptor_config].stencilAttachment.texture =
           (id<MTLTexture>)mtl_stencil_attachment_.texture->get_metal_handle_base();
 
+      bool texture_is_memoryless = (mtl_stencil_attachment_.texture->usage_get() &
+                                    GPU_TEXTURE_USAGE_MEMORYLESS);
+
       /* Resolve appropriate load action -- IF force load, perform load.
        * If clear but framebuffer has no pending clear, also load. */
       eGPULoadOp load_action = mtl_stencil_attachment_.load_action;
@@ -1703,15 +1771,29 @@ MTLRenderPassDescriptor *MTLFrameBuffer::bake_render_pass_descriptor(bool load_c
         load_action = GPU_LOADACTION_LOAD;
       }
       else if (descriptor_config == MTL_FB_CONFIG_CUSTOM && load_action == GPU_LOADACTION_CLEAR) {
-        /* Custom config should be LOAD or DONT_CARE only. */
-        load_action = GPU_LOADACTION_LOAD;
+        /* If Custom load config is used, fallback to loading if explicit bind state flag is unset.
+         * This is to ensure attachments are loaded by default in the case a framebuffer is unbound
+         * and rebound, or, if a render pass breaks mid-pass for compute or blit operations. */
+        if (!use_explicit_load_store_ && !texture_is_memoryless) {
+          load_action = GPU_LOADACTION_LOAD;
+        }
       }
+
+      /* Ensure memoryless attachment cannot load or store results. */
+      eGPUStoreOp store_action = mtl_stencil_attachment_.store_action;
+      if (texture_is_memoryless && load_action == GPU_LOADACTION_LOAD) {
+        load_action = GPU_LOADACTION_DONT_CARE;
+      }
+      if (texture_is_memoryless && store_action == GPU_STOREACTION_STORE) {
+        store_action = GPU_STOREACTION_DONT_CARE;
+      }
+
       framebuffer_descriptor_[descriptor_config].stencilAttachment.loadAction =
           mtl_load_action_from_gpu(load_action);
       framebuffer_descriptor_[descriptor_config].stencilAttachment.clearStencil =
           (load_action == GPU_LOADACTION_CLEAR) ? mtl_stencil_attachment_.clear_value.stencil : 0;
       framebuffer_descriptor_[descriptor_config].stencilAttachment.storeAction =
-          mtl_store_action_from_gpu(mtl_stencil_attachment_.store_action);
+          mtl_store_action_from_gpu(store_action);
       framebuffer_descriptor_[descriptor_config].stencilAttachment.level =
           mtl_stencil_attachment_.mip;
       framebuffer_descriptor_[descriptor_config].stencilAttachment.slice =
@@ -1722,10 +1804,26 @@ MTLRenderPassDescriptor *MTLFrameBuffer::bake_render_pass_descriptor(bool load_c
     else {
       framebuffer_descriptor_[descriptor_config].stencilAttachment.texture = nil;
     }
+
+    /* Attachmentless render support. */
+    int total_num_attachments = colour_attachment_count_ + (mtl_depth_attachment_.used ? 1 : 0) +
+                                (mtl_stencil_attachment_.used ? 1 : 0);
+    if (total_num_attachments == 0) {
+      BLI_assert(width_ > 0 && height_ > 0);
+      framebuffer_descriptor_[descriptor_config].renderTargetWidth = width_;
+      framebuffer_descriptor_[descriptor_config].renderTargetHeight = height_;
+      framebuffer_descriptor_[descriptor_config].defaultRasterSampleCount = 1;
+    }
+
     descriptor_dirty_[descriptor_config] = false;
   }
+  /* Clear dirty state flags. */
   is_dirty_ = false;
   is_loadstore_dirty_ = false;
+
+  /* Clear explicit bind flag. */
+  use_explicit_load_store_ = false;
+
   return framebuffer_descriptor_[descriptor_config];
 }
 
@@ -1758,8 +1856,7 @@ void MTLFrameBuffer::blit(uint read_slot,
 
   /* Early exit if there is no blit to do. */
   if (!(do_color || do_depth || do_stencil)) {
-    MTL_LOG_WARNING(
-        " MTLFrameBuffer: requested blit but no color, depth or stencil flag was set\n");
+    MTL_LOG_WARNING("FrameBuffer: requested blit but no color, depth or stencil flag was set");
     return;
   }
 
@@ -1768,7 +1865,8 @@ void MTLFrameBuffer::blit(uint read_slot,
   /* If the color format is not the same, we cannot use the BlitCommandEncoder, and instead use
    * a Graphics-based blit. */
   if (do_color && (this->get_color_attachment(read_slot).texture->format_get() !=
-                   metal_fb_write->get_color_attachment(read_slot).texture->format_get())) {
+                   metal_fb_write->get_color_attachment(read_slot).texture->format_get()))
+  {
 
     MTLAttachment src_attachment = this->get_color_attachment(read_slot);
     MTLAttachment dst_attachment = metal_fb_write->get_color_attachment(write_slot);
@@ -1815,7 +1913,7 @@ void MTLFrameBuffer::blit(uint read_slot,
                                      1);
       }
       else {
-        MTL_LOG_ERROR("Failed performing colour blit\n");
+        MTL_LOG_ERROR("Failed performing colour blit");
       }
     }
   }
@@ -1847,7 +1945,7 @@ void MTLFrameBuffer::blit(uint read_slot,
                                    1);
     }
     else {
-      MTL_LOG_ERROR("Failed performing depth blit\n");
+      MTL_LOG_ERROR("Failed performing depth blit");
     }
   }
 
@@ -1876,7 +1974,7 @@ void MTLFrameBuffer::blit(uint read_slot,
                                    1);
     }
     else {
-      MTL_LOG_ERROR("Failed performing Stencil blit\n");
+      MTL_LOG_ERROR("Failed performing Stencil blit");
     }
   }
 }
@@ -1888,6 +1986,15 @@ int MTLFrameBuffer::get_width()
 int MTLFrameBuffer::get_height()
 {
   return height_;
+}
+
+int MTLFrameBuffer::get_default_width()
+{
+  return default_width_;
+}
+int MTLFrameBuffer::get_default_height()
+{
+  return default_height_;
 }
 
 }  // namespace blender::gpu

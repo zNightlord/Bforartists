@@ -1,4 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* SPDX-FileCopyrightText: 2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup bli
@@ -142,15 +144,27 @@ static bool BLI_windows_system_backtrace_run_trace(FILE *fp, HANDLE hThread, PCO
   symbolinfo->SizeOfStruct = sizeof(SYMBOL_INFO);
 
   STACKFRAME frame = {0};
+  DWORD machineType = 0;
+#if defined(_M_AMD64)
   frame.AddrPC.Offset = context->Rip;
   frame.AddrPC.Mode = AddrModeFlat;
   frame.AddrFrame.Offset = context->Rsp;
   frame.AddrFrame.Mode = AddrModeFlat;
   frame.AddrStack.Offset = context->Rsp;
   frame.AddrStack.Mode = AddrModeFlat;
+  machineType = IMAGE_FILE_MACHINE_AMD64;
+#elif defined(_M_ARM64)
+  frame.AddrPC.Offset = context->Pc;
+  frame.AddrPC.Mode = AddrModeFlat;
+  frame.AddrFrame.Offset = context->Fp;
+  frame.AddrFrame.Mode = AddrModeFlat;
+  frame.AddrStack.Offset = context->Sp;
+  frame.AddrStack.Mode = AddrModeFlat;
+  machineType = IMAGE_FILE_MACHINE_ARM64;
+#endif
 
   while (true) {
-    if (StackWalk64(IMAGE_FILE_MACHINE_AMD64,
+    if (StackWalk64(machineType,
                     GetCurrentProcess(),
                     hThread,
                     &frame,
@@ -158,7 +172,8 @@ static bool BLI_windows_system_backtrace_run_trace(FILE *fp, HANDLE hThread, PCO
                     NULL,
                     SymFunctionTableAccess64,
                     SymGetModuleBase64,
-                    0)) {
+                    0))
+    {
       if (frame.AddrPC.Offset) {
         char module[MAX_PATH];
 
@@ -170,7 +185,8 @@ static bool BLI_windows_system_backtrace_run_trace(FILE *fp, HANDLE hThread, PCO
           lineinfo.SizeOfStruct = sizeof(lineinfo);
           DWORD displacement = 0;
           if (SymGetLineFromAddr(
-                  GetCurrentProcess(), (DWORD64)(frame.AddrPC.Offset), &displacement, &lineinfo)) {
+                  GetCurrentProcess(), (DWORD64)(frame.AddrPC.Offset), &displacement, &lineinfo))
+          {
             fprintf(fp, " %s:%d", lineinfo.FileName, lineinfo.LineNumber);
           }
           fprintf(fp, "\n");
@@ -223,8 +239,9 @@ static void bli_windows_system_backtrace_modules(FILE *fp)
 {
   fprintf(fp, "Loaded Modules :\n");
   HANDLE hModuleSnap = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, 0);
-  if (hModuleSnap == INVALID_HANDLE_VALUE)
+  if (hModuleSnap == INVALID_HANDLE_VALUE) {
     return;
+  }
 
   MODULEENTRY32 me32;
   me32.dwSize = sizeof(MODULEENTRY32);

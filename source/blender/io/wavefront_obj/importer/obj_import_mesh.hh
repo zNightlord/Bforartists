@@ -1,4 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* SPDX-FileCopyrightText: 2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup obj
@@ -6,14 +8,14 @@
 
 #pragma once
 
-#include "BKE_lib_id.h"
-
 #include "BLI_utility_mixins.hh"
 
 #include "obj_import_mtl.hh"
 #include "obj_import_objects.hh"
 
+struct Main;
 struct Material;
+struct Object;
 
 namespace blender::io::obj {
 
@@ -40,14 +42,14 @@ class MeshFromGeometry : NonMovable, NonCopyable {
   /**
    * OBJ files coming from the wild might have faces that are invalid in Blender
    * (mostly with duplicate vertex indices, used by some software to indicate
-   * polygons with holes). This method tries to fix them up.
+   * faces with holes). This method tries to fix them up.
    */
   void fixup_invalid_faces();
   void create_vertices(Mesh *mesh);
   /**
-   * Create polygons for the Mesh, set smooth shading flags, Materials.
+   * Create faces for the Mesh, set smooth shading flags, Materials.
    */
-  void create_polys_loops(Mesh *mesh, bool use_vertex_groups);
+  void create_faces(Mesh *mesh, bool use_vertex_groups);
   /**
    * Add explicitly imported OBJ edges to the mesh.
    */

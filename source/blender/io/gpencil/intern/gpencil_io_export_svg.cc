@@ -1,36 +1,41 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2020 Blender Foundation. All rights reserved. */
+/* SPDX-FileCopyrightText: 2020 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup bgpencil
  */
 
+#include <algorithm>
+
+#include "BLI_math_color.h"
+#include "BLI_math_matrix.h"
 #include "BLI_math_vector.h"
 #include "BLI_string.h"
 #include "BLI_utildefines.h"
 
-#include "DNA_gpencil_types.h"
+#include "DNA_gpencil_legacy_types.h"
 #include "DNA_material_types.h"
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 #include "DNA_screen_types.h"
 
-#include "BKE_gpencil.h"
-#include "BKE_gpencil_geom.h"
-#include "BKE_main.h"
+#include "BKE_gpencil_geom_legacy.h"
+#include "BKE_gpencil_legacy.h"
+#include "BKE_main.hh"
 #include "BKE_material.h"
 
-#include "DEG_depsgraph.h"
-#include "DEG_depsgraph_query.h"
+#include "DEG_depsgraph.hh"
+#include "DEG_depsgraph_query.hh"
 
-#include "ED_gpencil.h"
-#include "ED_view3d.h"
+#include "ED_gpencil_legacy.hh"
+#include "ED_view3d.hh"
 
 #ifdef WIN32
-#  include "utfconv.h"
+#  include "utfconv.hh"
 #endif
 
-#include "UI_view2d.h"
+#include "UI_view2d.hh"
 
 #include "gpencil_io.h"
 #include "gpencil_io_export_svg.hh"
@@ -90,8 +95,7 @@ void GpencilExporterSVG::create_document_header()
 
   pugi::xml_node comment = main_doc_.append_child(pugi::node_comment);
   char txt[128];
-  BLI_snprintf(
-      txt, sizeof(txt), " Generator: Blender, %s - %s ", SVG_EXPORTER_NAME, SVG_EXPORTER_VERSION);
+  SNPRINTF(txt, " Generator: Blender, %s - %s ", SVG_EXPORTER_NAME, SVG_EXPORTER_VERSION);
   comment.set_value(txt);
 
   pugi::xml_node doctype = main_doc_.append_child(pugi::node_doctype);
@@ -148,7 +152,7 @@ void GpencilExporterSVG::export_gpencil_layers()
     pugi::xml_node ob_node = frame_node_.append_child("g");
 
     char obtxt[96];
-    BLI_snprintf(obtxt, sizeof(obtxt), "blender_object_%s", ob->id.name + 2);
+    SNPRINTF(obtxt, "blender_object_%s", ob->id.name + 2);
     ob_node.append_attribute("id").set_value(obtxt);
 
     /* Use evaluated version to get strokes with modifiers. */
@@ -198,7 +202,7 @@ void GpencilExporterSVG::export_gpencil_layers()
         /* Apply layer thickness change. */
         gps_duplicate->thickness += gpl->line_change;
         /* Apply object scale to thickness. */
-        const float scalef = mat4_to_scale(ob->object_to_world);
+        const float scalef = mat4_to_scale(ob->object_to_world().ptr());
         gps_duplicate->thickness = ceilf(float(gps_duplicate->thickness) * scalef);
         CLAMP_MIN(gps_duplicate->thickness, 1.0f);
 
@@ -309,9 +313,11 @@ void GpencilExporterSVG::export_stroke_to_polyline(bGPDlayer *gpl,
   color_string_set(gpl, gps, node_gps, do_fill);
 
   if (is_stroke && !do_fill) {
-    const float width = MAX2(
-        MAX2(gps->thickness + gpl->line_change, (radius * 2.0f) + gpl->line_change), 1.0f);
-    node_gps.append_attribute("stroke-width").set_value(width);
+    const float defined_width = (gps->thickness * avg_pressure) + gpl->line_change;
+    const float estimated_width = (radius * 2.0f) + gpl->line_change;
+    const float final_width = (avg_pressure == 1.0f) ? std::max(defined_width, estimated_width) :
+                                                       estimated_width;
+    node_gps.append_attribute("stroke-width").set_value(std::max(final_width, 1.0f));
   }
 
   std::string txt;
@@ -369,7 +375,7 @@ void GpencilExporterSVG::add_rect(pugi::xml_node node,
                                   float width,
                                   float height,
                                   float thickness,
-                                  std::string hexcolor)
+                                  const std::string &hexcolor)
 {
   pugi::xml_node rect_node = node.append_child("rect");
   rect_node.append_attribute("x").set_value(x);
@@ -386,9 +392,9 @@ void GpencilExporterSVG::add_rect(pugi::xml_node node,
 void GpencilExporterSVG::add_text(pugi::xml_node node,
                                   float x,
                                   float y,
-                                  std::string text,
+                                  const std::string &text,
                                   const float size,
-                                  std::string hexcolor)
+                                  const std::string &hexcolor)
 {
   pugi::xml_node nodetxt = node.append_child("text");
 
@@ -406,7 +412,7 @@ std::string GpencilExporterSVG::rgb_to_hexstr(const float color[3])
   uint8_t g = color[1] * 255.0f;
   uint8_t b = color[2] * 255.0f;
   char hex_string[20];
-  BLI_snprintf(hex_string, sizeof(hex_string), "#%02X%02X%02X", r, g, b);
+  SNPRINTF(hex_string, "#%02X%02X%02X", r, g, b);
 
   std::string hexstr = hex_string;
 

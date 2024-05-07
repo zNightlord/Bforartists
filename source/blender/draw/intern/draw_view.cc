@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2022 Blender Foundation. */
+/* SPDX-FileCopyrightText: 2022 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup draw
@@ -7,11 +8,11 @@
 
 #include "BLI_math_geom.h"
 #include "BLI_math_matrix.hh"
-#include "GPU_compute.h"
-#include "GPU_debug.h"
+#include "GPU_compute.hh"
+#include "GPU_debug.hh"
 
 #include "draw_debug.hh"
-#include "draw_shader.h"
+#include "draw_shader.hh"
 #include "draw_view.hh"
 
 namespace blender::draw {
@@ -44,13 +45,14 @@ void View::frustum_boundbox_calc(int view_id)
 {
   /* Extract the 8 corners from a Projection Matrix. */
 #if 0 /* Equivalent to this but it has accuracy problems. */
-  BKE_boundbox_init_from_minmax(&bbox, float3(-1.0f),float3(1.0f));
+  BKE_boundbox_init_from_minmax(&bbox, float3(-1.0f), float3(1.0f));
   for (int i = 0; i < 8; i++) {
     mul_project_m4_v3(data_.wininv.ptr(), bbox.vec[i]);
   }
 #endif
 
-  MutableSpan<float4> corners = {culling_[view_id].corners, ARRAY_SIZE(culling_[view_id].corners)};
+  MutableSpan<float4> corners = {culling_[view_id].frustum_corners.corners,
+                                 int64_t(ARRAY_SIZE(culling_[view_id].frustum_corners.corners))};
 
   float left, right, bottom, top, near, far;
   bool is_persp = data_[view_id].winmat[3][3] == 0.0f;
@@ -82,6 +84,10 @@ void View::frustum_boundbox_calc(int view_id)
   for (float4 &corner : corners) {
     mul_m4_v3(data_[view_id].viewinv.ptr(), corner);
     corner.w = 1.0;
+    /* Special case for planar reflection. */
+    if (is_inverted_) {
+      corner.z = -corner.z;
+    }
   }
 }
 
@@ -89,23 +95,29 @@ void View::frustum_culling_planes_calc(int view_id)
 {
   float4x4 persmat = data_[view_id].winmat * data_[view_id].viewmat;
   planes_from_projmat(persmat.ptr(),
-                      culling_[view_id].planes[0],
-                      culling_[view_id].planes[5],
-                      culling_[view_id].planes[1],
-                      culling_[view_id].planes[3],
-                      culling_[view_id].planes[4],
-                      culling_[view_id].planes[2]);
+                      culling_[view_id].frustum_planes.planes[0],
+                      culling_[view_id].frustum_planes.planes[5],
+                      culling_[view_id].frustum_planes.planes[1],
+                      culling_[view_id].frustum_planes.planes[3],
+                      culling_[view_id].frustum_planes.planes[4],
+                      culling_[view_id].frustum_planes.planes[2]);
 
   /* Normalize. */
-  for (float4 &plane : culling_[view_id].planes) {
+  for (float4 &plane : culling_[view_id].frustum_planes.planes) {
     plane.w /= normalize_v3(plane);
+
+    /* Special case for planar reflection. */
+    if (is_inverted_) {
+      plane.z = -plane.z;
+    }
   }
 }
 
 void View::frustum_culling_sphere_calc(int view_id)
 {
   BoundSphere &bsphere = *reinterpret_cast<BoundSphere *>(&culling_[view_id].bound_sphere);
-  Span<float4> corners = {culling_[view_id].corners, ARRAY_SIZE(culling_[view_id].corners)};
+  Span<float4> corners = {culling_[view_id].frustum_corners.corners,
+                          int64_t(ARRAY_SIZE(culling_[view_id].frustum_corners.corners))};
 
   /* Extract Bounding Sphere */
   if (data_[view_id].winmat[3][3] != 0.0f) {
@@ -216,16 +228,6 @@ void View::frustum_culling_sphere_calc(int view_id)
   }
 }
 
-void View::disable(IndexRange range)
-{
-  /* Set bounding sphere to -1.0f radius will bypass the culling test and treat every instance as
-   * invisible. */
-  range = IndexRange(view_len_).intersect(range);
-  for (auto view_id : range) {
-    reinterpret_cast<BoundSphere *>(&culling_[view_id].bound_sphere)->radius = -1.0f;
-  }
-}
-
 void View::bind()
 {
   if (dirty_ && !procedural_) {
@@ -260,7 +262,7 @@ void View::compute_visibility(ObjectBoundsBuf &bounds, uint resource_len, bool d
     culling_freeze_[0] = static_cast<ViewCullingData>(culling_[0]);
     culling_freeze_.push_update();
   }
-#ifdef DEBUG
+#ifdef _DEBUG
   if (debug_freeze) {
     float4x4 persmat = data_freeze_[0].winmat * data_freeze_[0].viewmat;
     drw_debug_matrix_as_bbox(math::invert(persmat), float4(0, 1, 0, 1));

@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: Apache-2.0
- * Copyright 2011-2022 Blender Foundation */
+/* SPDX-FileCopyrightText: 2011-2022 Blender Foundation
+ *
+ * SPDX-License-Identifier: Apache-2.0 */
 
 #include "blender/device.h"
 #include "blender/session.h"
@@ -24,10 +25,40 @@ int blender_device_threads(BL::Scene &b_scene)
 {
   BL::RenderSettings b_r = b_scene.render();
 
-  if (b_r.threads_mode() == BL::RenderSettings::threads_mode_FIXED)
+  if (b_r.threads_mode() == BL::RenderSettings::threads_mode_FIXED) {
     return b_r.threads();
-  else
+  }
+  else {
     return 0;
+  }
+}
+
+void static adjust_device_info_from_preferences(DeviceInfo &info, PointerRNA cpreferences)
+{
+  if (!get_boolean(cpreferences, "peer_memory")) {
+    info.has_peer_memory = false;
+  }
+
+  if (info.type == DEVICE_METAL) {
+    MetalRTSetting use_metalrt = (MetalRTSetting)get_enum(
+        cpreferences, "metalrt", METALRT_NUM_SETTINGS, METALRT_AUTO);
+
+    info.use_hardware_raytracing = info.use_metalrt_by_default;
+    if (use_metalrt == METALRT_OFF) {
+      info.use_hardware_raytracing = false;
+    }
+    else if (use_metalrt == METALRT_ON) {
+      info.use_hardware_raytracing = true;
+    }
+  }
+
+  if (info.type == DEVICE_ONEAPI && !get_boolean(cpreferences, "use_oneapirt")) {
+    info.use_hardware_raytracing = false;
+  }
+
+  if (info.type == DEVICE_HIP && !get_boolean(cpreferences, "use_hiprt")) {
+    info.use_hardware_raytracing = false;
+  }
 }
 
 DeviceInfo blender_device_info(BL::Preferences &b_preferences,
@@ -108,12 +139,16 @@ DeviceInfo blender_device_info(BL::Preferences &b_preferences,
     }
   }
 
-  if (!get_boolean(cpreferences, "peer_memory")) {
-    device.has_peer_memory = false;
-  }
+  adjust_device_info_from_preferences(device, cpreferences);
+  foreach (DeviceInfo &info, device.multi_devices) {
+    adjust_device_info_from_preferences(info, cpreferences);
 
-  if (get_boolean(cpreferences, "use_metalrt")) {
-    device.use_metalrt = true;
+    /* There is an accumulative logic here, because Multi-devices are supported only for
+     * the same backend + CPU in Blender right now, and both oneAPI and Metal have a
+     * global boolean backend setting for enabling/disabling Hardware Ray Tracing,
+     * so all sub-devices in the multi-device should enable (or disable) Hardware Ray Tracing
+     * simultaneously (and CPU device is expected to ignore `use_hardware_raytracing` setting). */
+    device.use_hardware_raytracing |= info.use_hardware_raytracing;
   }
 
   if (preview) {

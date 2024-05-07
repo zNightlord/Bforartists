@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: Apache-2.0
- * Copyright 2021-2022 Intel Corporation */
+/* SPDX-FileCopyrightText: 2021-2022 Intel Corporation
+ *
+ * SPDX-License-Identifier: Apache-2.0 */
 
 #pragma once
 
@@ -27,6 +28,8 @@ class OneapiDeviceQueue : public DeviceQueue {
 
   virtual int num_concurrent_busy_states(const size_t state_size) const override;
 
+  virtual int num_sort_partition_elements() const override;
+
   virtual void init_execution() override;
 
   virtual bool enqueue(DeviceKernel kernel,
@@ -38,6 +41,11 @@ class OneapiDeviceQueue : public DeviceQueue {
   virtual void zero_to_device(device_memory &mem) override;
   virtual void copy_to_device(device_memory &mem) override;
   virtual void copy_from_device(device_memory &mem) override;
+
+  virtual bool supports_local_atomic_sort() const override
+  {
+    return true;
+  }
 
  protected:
   OneapiDevice *oneapi_device_;

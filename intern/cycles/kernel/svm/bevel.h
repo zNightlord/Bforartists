@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: Apache-2.0
- * Copyright 2011-2022 Blender Foundation */
+/* SPDX-FileCopyrightText: 2011-2022 Blender Foundation
+ *
+ * SPDX-License-Identifier: Apache-2.0 */
 
 #pragma once
 
@@ -22,8 +23,9 @@ ccl_device float svm_bevel_cubic_eval(const float radius, float r)
 {
   const float Rm = radius;
 
-  if (r >= Rm)
+  if (r >= Rm) {
     return 0.0f;
+  }
 
   /* integrate (2*pi*r * 10*(R - r)^3)/(pi * R^5) from 0 to R = 1 */
   const float Rm5 = (Rm * Rm) * (Rm * Rm) * Rm;
@@ -57,8 +59,9 @@ ccl_device_forceinline float svm_bevel_cubic_quintic_root_find(float xi)
     float f = 10.0f * x2 - 20.0f * x3 + 15.0f * x2 * x2 - 4.0f * x2 * x3 - xi;
     float f_ = 20.0f * (x * nx) * (nx * nx);
 
-    if (fabsf(f) < tolerance || f_ == 0.0f)
+    if (fabsf(f) < tolerance || f_ == 0.0f) {
       break;
+    }
 
     x = saturatef(x - f / f_);
   }
@@ -188,6 +191,7 @@ ccl_device float3 svm_bevel(
     ray.self.prim = PRIM_NONE;
     ray.self.light_object = OBJECT_NONE;
     ray.self.light_prim = PRIM_NONE;
+    ray.self.light = LAMP_NONE;
 
     /* Intersect with the same object. if multiple intersections are found it
      * will use at most LOCAL_MAX_HITS hits, a random subset of all hits. */
@@ -199,24 +203,14 @@ ccl_device float3 svm_bevel(
       /* Quickly retrieve P and Ng without setting up ShaderData. */
       float3 hit_P;
       if (sd->type == PRIMITIVE_TRIANGLE) {
-        hit_P = triangle_point_from_uv(kg,
-                                       sd,
-                                       isect.hits[hit].object,
-                                       isect.hits[hit].prim,
-                                       isect.hits[hit].u,
-                                       isect.hits[hit].v);
+        hit_P = triangle_point_from_uv(
+            kg, sd, isect.hits[hit].prim, isect.hits[hit].u, isect.hits[hit].v);
       }
 #  ifdef __OBJECT_MOTION__
       else if (sd->type == PRIMITIVE_MOTION_TRIANGLE) {
         float3 verts[3];
         motion_triangle_vertices(kg, sd->object, isect.hits[hit].prim, sd->time, verts);
-        hit_P = motion_triangle_point_from_uv(kg,
-                                              sd,
-                                              isect.hits[hit].object,
-                                              isect.hits[hit].prim,
-                                              isect.hits[hit].u,
-                                              isect.hits[hit].v,
-                                              verts);
+        hit_P = motion_triangle_point_from_uv(kg, sd, isect.hits[hit].u, isect.hits[hit].v, verts);
       }
 #  endif /* __OBJECT_MOTION__ */
 

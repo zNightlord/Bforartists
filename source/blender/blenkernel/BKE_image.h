@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2001-2002 NaN Holding BV. All rights reserved. */
+/* SPDX-FileCopyrightText: 2001-2002 NaN Holding BV. All rights reserved.
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 #pragma once
 
 /** \file
@@ -18,6 +19,7 @@ extern "C" {
 struct Depsgraph;
 struct ID;
 struct ImBuf;
+struct ImBufAnim;
 struct Image;
 struct ImageFormatData;
 struct ImagePool;
@@ -30,7 +32,6 @@ struct RenderResult;
 struct ReportList;
 struct Scene;
 struct StampData;
-struct anim;
 
 #define IMA_MAX_SPACE 64
 #define IMA_UDIM_MAX 2000
@@ -50,7 +51,10 @@ void BKE_image_free_gputextures(struct Image *ima);
  */
 void BKE_image_free_data(struct Image *image);
 
-typedef void(StampCallback)(void *data, const char *propname, char *propvalue, int len);
+typedef void(StampCallback)(void *data,
+                            const char *propname,
+                            char *propvalue,
+                            int propvalue_maxncpy);
 
 void BKE_render_result_stamp_info(struct Scene *scene,
                                   struct Object *camera,
@@ -86,32 +90,32 @@ bool BKE_imbuf_alpha_test(struct ImBuf *ibuf);
 int BKE_imbuf_write_stamp(const struct Scene *scene,
                           const struct RenderResult *rr,
                           struct ImBuf *ibuf,
-                          const char *name,
+                          const char *filepath,
                           const struct ImageFormatData *imf);
 /**
  * \note imf->planes is ignored here, its assumed the image channels are already set.
  */
-int BKE_imbuf_write(struct ImBuf *ibuf, const char *name, const struct ImageFormatData *imf);
+int BKE_imbuf_write(struct ImBuf *ibuf, const char *filepath, const struct ImageFormatData *imf);
 /**
  * Same as #BKE_imbuf_write() but crappy workaround not to permanently modify _some_,
  * values in the imbuf.
  */
 int BKE_imbuf_write_as(struct ImBuf *ibuf,
-                       const char *name,
+                       const char *filepath,
                        const struct ImageFormatData *imf,
                        bool save_copy);
 
 /**
  * Used by sequencer too.
  */
-struct anim *openanim(const char *name,
-                      int flags,
-                      int streamindex,
-                      char colorspace[IMA_MAX_SPACE]);
-struct anim *openanim_noload(const char *name,
-                             int flags,
-                             int streamindex,
-                             char colorspace[IMA_MAX_SPACE]);
+struct ImBufAnim *openanim(const char *filepath,
+                           int flags,
+                           int streamindex,
+                           char colorspace[IMA_MAX_SPACE]);
+struct ImBufAnim *openanim_noload(const char *filepath,
+                                  int flags,
+                                  int streamindex,
+                                  char colorspace[IMA_MAX_SPACE]);
 
 void BKE_image_tag_time(struct Image *ima);
 
@@ -237,11 +241,13 @@ void BKE_image_ensure_viewer_views(const struct RenderData *rd,
  */
 void BKE_image_user_frame_calc(struct Image *ima, struct ImageUser *iuser, int cfra);
 int BKE_image_user_frame_get(const struct ImageUser *iuser, int cfra, bool *r_is_in_range);
-void BKE_image_user_file_path(const struct ImageUser *iuser, const struct Image *ima, char *path);
+void BKE_image_user_file_path(const struct ImageUser *iuser,
+                              const struct Image *ima,
+                              char *filepath);
 void BKE_image_user_file_path_ex(const struct Main *bmain,
                                  const struct ImageUser *iuser,
                                  const struct Image *ima,
-                                 char *path,
+                                 char *filepath,
                                  const bool resolve_udim,
                                  const bool resolve_multiview);
 void BKE_image_editors_update_frame(const struct Main *bmain, int cfra);
@@ -329,7 +335,7 @@ void BKE_image_merge(struct Main *bmain, struct Image *dest, struct Image *sourc
 /**
  * Scale the image.
  */
-bool BKE_image_scale(struct Image *image, int width, int height);
+bool BKE_image_scale(struct Image *image, int width, int height, struct ImageUser *iuser);
 
 /**
  * Check if texture has alpha `planes == 32 || planes == 16`.
@@ -343,11 +349,12 @@ bool BKE_image_has_opengl_texture(struct Image *ima);
 
 /**
  * Get tile index for tiled images.
+ * \return The string length.
  */
-void BKE_image_get_tile_label(struct Image *ima,
-                              struct ImageTile *tile,
-                              char *label,
-                              int len_label);
+int BKE_image_get_tile_label(const struct Image *ima,
+                             const struct ImageTile *tile,
+                             char *label,
+                             int label_maxncpy);
 
 /**
  * Checks whether the given filepath refers to a UDIM tiled texture.
@@ -383,7 +390,8 @@ bool BKE_image_is_filename_tokenized(char *filepath);
  * Ensures that `filename` contains a UDIM token if we find a supported format pattern.
  * \note This must only be the name component (without slashes).
  */
-void BKE_image_ensure_tile_token(char *filename);
+void BKE_image_ensure_tile_token(char *filepath, size_t filepath_maxncpy);
+void BKE_image_ensure_tile_token_filename_only(char *filename, size_t filename_maxncpy);
 
 /**
  * When provided with an absolute virtual `filepath`, check to see if at least
@@ -430,7 +438,7 @@ void BKE_image_get_size(struct Image *image, struct ImageUser *iuser, int *r_wid
 void BKE_image_get_size_fl(struct Image *image, struct ImageUser *iuser, float r_size[2]);
 void BKE_image_get_aspect(struct Image *image, float *r_aspx, float *r_aspy);
 
-/* image_gen.c */
+/* `image_gen.cc` */
 
 void BKE_image_buf_fill_color(
     unsigned char *rect, float *rect_float, int width, int height, const float color[4]);
@@ -476,7 +484,7 @@ bool BKE_image_has_loaded_ibuf(struct Image *image);
  * References the result, #BKE_image_release_ibuf is to be called to de-reference.
  * Use lock=NULL when calling #BKE_image_release_ibuf().
  */
-struct ImBuf *BKE_image_get_ibuf_with_name(struct Image *image, const char *name);
+struct ImBuf *BKE_image_get_ibuf_with_name(struct Image *image, const char *filepath);
 /**
  * References the result, #BKE_image_release_ibuf is to be called to de-reference.
  * Use lock=NULL when calling #BKE_image_release_ibuf().
@@ -494,20 +502,53 @@ struct ImBuf *BKE_image_get_first_ibuf(struct Image *image);
 struct GPUTexture *BKE_image_create_gpu_texture_from_ibuf(struct Image *image, struct ImBuf *ibuf);
 
 /**
+ * Ensure that the cached GPU texture inside the image matches the pass, layer, and view of the
+ * given image user, if not, invalidate the cache such that the next call to the GPU texture
+ * retrieval functions such as BKE_image_get_gpu_texture updates the cache with an image that
+ * matches the give image user.
+ *
+ * This is provided as a separate function and not implemented as part of the GPU texture retrieval
+ * functions because the current cache system only allows a single pass, layer, and stereo view to
+ * be cached, so possible frequent cache invalidation can have performance implications,
+ * and making invalidation explicit by calling this function will help make that clear and pave the
+ * way for a more complete cache system in the future.
+ */
+void BKE_image_ensure_gpu_texture(struct Image *image, struct ImageUser *iuser);
+
+/**
  * Get the #GPUTexture for a given `Image`.
  *
- * `iuser` and `ibuf` are mutual exclusive parameters. The caller can pass the `ibuf` when already
- * available. It is also required when requesting the #GPUTexture for a render result.
+ *
+ *
+ * The requested GPU texture will be cached for subsequent calls, but only a single layer, pass,
+ * and view can be cached at a time, so the cache should be invalidated in operators and RNA
+ * callbacks that change the layer, pass, or view of the image to maintain a correct cache state.
+ * However, in some cases, multiple layers, passes, or views might be needed at the same time, like
+ * is the case for the realtime compositor. This is currently not supported, so the caller should
+ * ensure that the requested layer is indeed the cached one and invalidated the cached otherwise by
+ * calling BKE_image_ensure_gpu_texture. This is a workaround until image can support a more
+ * complete caching system.
  */
-struct GPUTexture *BKE_image_get_gpu_texture(struct Image *image,
-                                             struct ImageUser *iuser,
-                                             struct ImBuf *ibuf);
-struct GPUTexture *BKE_image_get_gpu_tiles(struct Image *image,
-                                           struct ImageUser *iuser,
-                                           struct ImBuf *ibuf);
-struct GPUTexture *BKE_image_get_gpu_tilemap(struct Image *image,
-                                             struct ImageUser *iuser,
-                                             struct ImBuf *ibuf);
+struct GPUTexture *BKE_image_get_gpu_texture(struct Image *image, struct ImageUser *iuser);
+
+/*
+ * Like BKE_image_get_gpu_texture, but can also get render or compositing result.
+ */
+struct GPUTexture *BKE_image_get_gpu_viewer_texture(struct Image *image, struct ImageUser *iuser);
+
+/*
+ * Like BKE_image_get_gpu_texture, but can also return array and tile mapping texture for UDIM
+ * tiles as used in material shaders.
+ */
+typedef struct ImageGPUTextures {
+  struct GPUTexture *texture;
+  struct GPUTexture *tile_mapping;
+} ImageGPUTextures;
+
+ImageGPUTextures BKE_image_get_gpu_material_texture(struct Image *image,
+                                                    struct ImageUser *iuser,
+                                                    const bool use_tile_mapping);
+
 /**
  * Is the alpha of the `GPUTexture` for a given image/ibuf premultiplied.
  */

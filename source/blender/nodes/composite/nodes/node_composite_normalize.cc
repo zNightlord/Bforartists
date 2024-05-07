@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2006 Blender Foundation. All rights reserved. */
+/* SPDX-FileCopyrightText: 2006 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup cmpnodes
@@ -17,12 +18,12 @@ namespace blender::nodes::node_composite_normalize_cc {
 
 static void cmp_node_normalize_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Float>(N_("Value"))
+  b.add_input<decl::Float>("Value")
       .default_value(1.0f)
       .min(0.0f)
       .max(1.0f)
       .compositor_domain_priority(0);
-  b.add_output<decl::Float>(N_("Value"));
+  b.add_output<decl::Float>("Value");
 }
 
 using namespace blender::realtime_compositor;
@@ -54,7 +55,7 @@ class NormalizeOperation : public NodeOperation {
         context(), input_image.texture(), -range_, range_);
     const float scale = (maximum != minimum) ? (1.0f / (maximum - minimum)) : 0.0f;
 
-    GPUShader *shader = shader_manager().get("compositor_normalize");
+    GPUShader *shader = context().get_shader("compositor_normalize");
     GPU_shader_bind(shader);
 
     GPU_shader_uniform_1f(shader, "minimum", minimum);

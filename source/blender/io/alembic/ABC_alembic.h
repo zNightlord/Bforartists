@@ -1,11 +1,13 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* SPDX-FileCopyrightText: 2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 #pragma once
 
 /** \file
  * \ingroup balembic
  */
 
-#include "DEG_depsgraph.h"
+#include "DEG_depsgraph.hh"
 
 #ifdef __cplusplus
 extern "C" {
@@ -58,6 +60,8 @@ struct AlembicExportParams {
   int ngon_method;
 
   float global_scale;
+
+  char collection[MAX_IDPROP_NAME] = "";
 };
 
 struct AlembicImportParams {
@@ -103,8 +107,8 @@ bool ABC_import(struct bContext *C,
                 const struct AlembicImportParams *params,
                 bool as_background_job);
 
-struct CacheArchiveHandle *ABC_create_handle(struct Main *bmain,
-                                             const char *filename,
+struct CacheArchiveHandle *ABC_create_handle(const struct Main *bmain,
+                                             const char *filepath,
                                              const struct CacheFileLayer *layers,
                                              struct ListBase *object_paths);
 
@@ -122,12 +126,18 @@ typedef struct ABCReadParams {
   float velocity_scale;
 } ABCReadParams;
 
-/* Either modifies existing_mesh in-place or constructs a new mesh. */
-struct Mesh *ABC_read_mesh(struct CacheReader *reader,
-                           struct Object *ob,
-                           struct Mesh *existing_mesh,
-                           const ABCReadParams *params,
-                           const char **err_str);
+#ifdef __cplusplus
+namespace blender::bke {
+struct GeometrySet;
+}
+
+/* Either modifies the existing geometry component, or create a new one. */
+void ABC_read_geometry(CacheReader *reader,
+                       Object *ob,
+                       blender::bke::GeometrySet &geometry_set,
+                       const ABCReadParams *params,
+                       const char **err_str);
+#endif
 
 bool ABC_mesh_topology_changed(struct CacheReader *reader,
                                struct Object *ob,
@@ -141,7 +151,8 @@ void ABC_CacheReader_free(struct CacheReader *reader);
 struct CacheReader *CacheReader_open_alembic_object(struct CacheArchiveHandle *handle,
                                                     struct CacheReader *reader,
                                                     struct Object *object,
-                                                    const char *object_path);
+                                                    const char *object_path,
+                                                    bool is_sequence);
 
 #ifdef __cplusplus
 }

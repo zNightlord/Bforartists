@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2022 Blender Foundation. All rights reserved. */
+/* SPDX-FileCopyrightText: 2022 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup gpu
@@ -13,9 +14,11 @@ GPU_SHADER_INTERFACE_INFO(nodelink_iface, "")
     .smooth(Type::FLOAT, "lineU")
     .flat(Type::FLOAT, "lineLength")
     .flat(Type::FLOAT, "lineThickness")
+    .flat(Type::FLOAT, "dashLength")
     .flat(Type::FLOAT, "dashFactor")
     .flat(Type::FLOAT, "dashAlpha")
-    .flat(Type::INT, "isMainLine");
+    .flat(Type::INT, "isMainLine")
+    .flat(Type::FLOAT, "aspect");
 
 GPU_SHADER_CREATE_INFO(gpu_shader_2D_nodelink)
     .vertex_in(0, Type::VEC2, "uv")
@@ -27,7 +30,7 @@ GPU_SHADER_CREATE_INFO(gpu_shader_2D_nodelink)
     .push_constant(Type::MAT4, "ModelViewProjectionMatrix")
     .vertex_source("gpu_shader_2D_nodelink_vert.glsl")
     .fragment_source("gpu_shader_2D_nodelink_frag.glsl")
-    .typedef_source("GPU_shader_shared.h")
+    .typedef_source("GPU_shader_shared.hh")
     .do_static_compilation(true);
 
 GPU_SHADER_CREATE_INFO(gpu_shader_2D_nodelink_inst)
@@ -44,14 +47,13 @@ GPU_SHADER_CREATE_INFO(gpu_shader_2D_nodelink_inst)
     .vertex_in(10, Type::UVEC2, "domuted")
     .vertex_in(11, Type::FLOAT, "dim_factor")
     .vertex_in(12, Type::FLOAT, "thickness")
-    .vertex_in(13, Type::FLOAT, "dash_factor")
-    .vertex_in(14, Type::FLOAT, "dash_alpha")
+    .vertex_in(13, Type::VEC3, "dash_params")
     .vertex_out(nodelink_iface)
     .fragment_out(0, Type::VEC4, "fragColor")
     .uniform_buf(0, "NodeLinkInstanceData", "node_link_data", Frequency::PASS)
     .push_constant(Type::MAT4, "ModelViewProjectionMatrix")
     .vertex_source("gpu_shader_2D_nodelink_vert.glsl")
     .fragment_source("gpu_shader_2D_nodelink_frag.glsl")
-    .typedef_source("GPU_shader_shared.h")
+    .typedef_source("GPU_shader_shared.hh")
     .define("USE_INSTANCE")
     .do_static_compilation(true);

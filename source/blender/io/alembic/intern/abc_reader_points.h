@@ -1,13 +1,15 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2016 Kévin Dietrich. All rights reserved. */
+/* SPDX-FileCopyrightText: 2016 Kévin Dietrich. All rights reserved.
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 #pragma once
 
 /** \file
  * \ingroup balembic
  */
 
-#include "abc_customdata.h"
 #include "abc_reader_object.h"
+
+#include <Alembic/AbcGeom/IPoints.h>
 
 namespace blender::io::alembic {
 
@@ -25,16 +27,12 @@ class AbcPointsReader final : public AbcObjectReader {
 
   void readObjectData(Main *bmain, const Alembic::Abc::ISampleSelector &sample_sel) override;
 
-  struct Mesh *read_mesh(struct Mesh *existing_mesh,
-                         const Alembic::Abc::ISampleSelector &sample_sel,
-                         int read_flag,
-                         const char *velocity_name,
-                         float velocity_scale,
-                         const char **err_str) override;
+  void read_geometry(bke::GeometrySet &geometry_set,
+                     const Alembic::Abc::ISampleSelector &sample_sel,
+                     int read_flag,
+                     const char *velocity_name,
+                     float velocity_scale,
+                     const char **err_str) override;
 };
-
-void read_points_sample(const Alembic::AbcGeom::IPointsSchema &schema,
-                        const Alembic::AbcGeom::ISampleSelector &selector,
-                        CDStreamConfig &config);
 
 }  // namespace blender::io::alembic

@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2019 Blender Foundation. All rights reserved. */
+/* SPDX-FileCopyrightText: 2019 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup depsgraph
@@ -9,7 +10,7 @@
 
 struct MovieClip;
 struct MovieClipCache;
-struct anim;
+struct ImBufAnim;
 
 namespace blender::deg {
 
@@ -25,7 +26,7 @@ class MovieClipBackup {
   void init_from_movieclip(MovieClip *movieclip);
   void restore_to_movieclip(MovieClip *movieclip);
 
-  struct anim *anim;
+  struct ImBufAnim *anim;
   struct MovieClipCache *cache;
 };
 

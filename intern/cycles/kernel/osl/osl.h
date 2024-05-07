@@ -1,10 +1,9 @@
-/* SPDX-License-Identifier: BSD-3-Clause
+/* SPDX-FileCopyrightText: 2009-2010 Sony Pictures Imageworks Inc., et al. All Rights Reserved.
+ * SPDX-FileCopyrightText: 2011-2022 Blender Foundation
  *
- * Adapted from Open Shading Language
- * Copyright (c) 2009-2010 Sony Pictures Imageworks Inc., et al.
- * All Rights Reserved.
+ * SPDX-License-Identifier: BSD-3-Clause
  *
- * Modifications Copyright 2011-2022 Blender Foundation. */
+ * Adapted code from Open Shading Language. */
 
 #pragma once
 
@@ -53,6 +52,11 @@ ccl_device_inline void shaderdata_to_shaderglobals(KernelGlobals kg,
 
   /* shader data to be used in services callbacks */
   globals->renderstate = sd;
+#if OSL_LIBRARY_VERSION_CODE >= 11304
+  globals->shadingStateUniform = nullptr;
+  globals->thread_index = 0;
+  globals->shade_index = 0;
+#endif
 
   /* hacky, we leave it to services to fetch actual object matrix */
   globals->shader2common = sd;
@@ -71,8 +75,10 @@ ccl_device void flatten_closure_tree(KernelGlobals kg,
   float3 weight = one_float3();
   float3 weight_stack[16];
   ccl_private const OSLClosure *closure_stack[16];
+  int layer_stack_level = -1;
+  float3 layer_albedo = zero_float3();
 
-  while (closure) {
+  while (true) {
     switch (closure->id) {
       case OSL_CLOSURE_MUL_ID: {
         ccl_private const OSLClosureMul *mul = static_cast<ccl_private const OSLClosureMul *>(
@@ -93,15 +99,45 @@ ccl_device void flatten_closure_tree(KernelGlobals kg,
         closure_stack[stack_size++] = add->closureB;
         continue;
       }
+      case OSL_CLOSURE_LAYER_ID: {
+        ccl_private const OSLClosureComponent *comp =
+            static_cast<ccl_private const OSLClosureComponent *>(closure);
+        ccl_private const LayerClosure *layer = reinterpret_cast<ccl_private const LayerClosure *>(
+            comp + 1);
+
+        /* Layer closures may not appear in the top layer subtree of another layer closure. */
+        kernel_assert(layer_stack_level == -1);
+
+        if (layer->top != nullptr) {
+          /* Push base layer onto the stack, will be handled after the top layers */
+          weight_stack[stack_size] = weight;
+          closure_stack[stack_size] = layer->base;
+          /* Start accumulating albedo of the top layers */
+          layer_stack_level = stack_size++;
+          layer_albedo = zero_float3();
+          /* Continue with the top layers */
+          closure = layer->top;
+        }
+        else {
+          /* No top layer, just continue with base. */
+          closure = layer->base;
+        }
+        continue;
+      }
 #define OSL_CLOSURE_STRUCT_BEGIN(Upper, lower) \
   case OSL_CLOSURE_##Upper##_ID: { \
     ccl_private const OSLClosureComponent *comp = \
         static_cast<ccl_private const OSLClosureComponent *>(closure); \
+    float3 albedo = one_float3(); \
     osl_closure_##lower##_setup(kg, \
                                 sd, \
                                 path_flag, \
                                 weight * comp->weight, \
-                                reinterpret_cast<ccl_private const Upper##Closure *>(comp + 1)); \
+                                reinterpret_cast<ccl_private const Upper##Closure *>(comp + 1), \
+                                (layer_stack_level >= 0) ? &albedo : NULL); \
+    if (layer_stack_level >= 0) { \
+      layer_albedo += albedo; \
+    } \
     break; \
   }
 #include "closures_template.h"
@@ -109,13 +145,26 @@ ccl_device void flatten_closure_tree(KernelGlobals kg,
         break;
     }
 
-    if (stack_size > 0) {
+    /* Pop the next closure from the stack (or return if we're done). */
+    do {
+      if (stack_size == 0) {
+        return;
+      }
+
       weight = weight_stack[--stack_size];
       closure = closure_stack[stack_size];
-    }
-    else {
-      closure = nullptr;
-    }
+      if (stack_size == layer_stack_level) {
+        /* We just finished processing the top layers of a Layer closure, so adjust the weight to
+         * account for the layering. */
+        weight = closure_layering_weight(layer_albedo, weight);
+        layer_stack_level = -1;
+        /* If it's fully occluded, skip the base layer we just popped from the stack and grab
+         * the next entry instead. */
+        if (is_zero(weight)) {
+          continue;
+        }
+      }
+    } while (closure == nullptr);
   }
 }
 
@@ -161,7 +210,11 @@ ccl_device_inline void osl_eval_nodes(KernelGlobals kg,
                         /* shadeindex = */ 0);
 #  endif
 
+#  if __cplusplus < 201703L
+  if (type == SHADER_TYPE_DISPLACEMENT) {
+#  else
   if constexpr (type == SHADER_TYPE_DISPLACEMENT) {
+#  endif
     sd->P = globals.P;
   }
   else if (globals.Ci) {

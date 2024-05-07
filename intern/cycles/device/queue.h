@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: Apache-2.0
- * Copyright 2011-2022 Blender Foundation */
+/* SPDX-FileCopyrightText: 2011-2022 Blender Foundation
+ *
+ * SPDX-License-Identifier: Apache-2.0 */
 
 #pragma once
 
@@ -26,7 +27,6 @@ struct DeviceKernelArguments {
     POINTER,
     INT32,
     FLOAT32,
-    BOOLEAN,
     KERNEL_FILM_CONVERT,
   };
 
@@ -36,9 +36,7 @@ struct DeviceKernelArguments {
   size_t sizes[MAX_ARGS];
   size_t count = 0;
 
-  DeviceKernelArguments()
-  {
-  }
+  DeviceKernelArguments() {}
 
   template<class T> DeviceKernelArguments(const T *arg)
   {
@@ -66,10 +64,6 @@ struct DeviceKernelArguments {
   void add(const float *value)
   {
     add(FLOAT32, value, sizeof(float));
-  }
-  void add(const bool *value)
-  {
-    add(BOOLEAN, value, 4);
   }
   void add(const Type type, const void *value, size_t size)
   {
@@ -162,6 +156,11 @@ class DeviceQueue {
 
   /* Device this queue has been created for. */
   Device *device;
+
+  virtual void *native_queue()
+  {
+    return nullptr;
+  }
 
  protected:
   /* Hide construction so that allocation via `Device` API is enforced. */

@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2011 Blender Foundation. */
+/* SPDX-FileCopyrightText: 2011 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #pragma once
 
@@ -10,6 +11,10 @@
 #include "DNA_scene_types.h"
 
 struct bNodeInstanceHash;
+
+namespace blender::realtime_compositor {
+class RenderContext;
+}
 
 namespace blender::compositor {
 
@@ -55,11 +60,6 @@ class CompositorContext {
   bNodeInstanceHash *previews_;
 
   /**
-   * \brief does this system have active opencl devices?
-   */
-  bool hasActiveOpenCLDevices_;
-
-  /**
    * \brief Skip slow nodes
    */
   bool fast_calculation_;
@@ -68,6 +68,12 @@ class CompositorContext {
    * \brief active rendering view name
    */
   const char *view_name_;
+
+  /**
+   * \brief Render context that contains information about active render. Can be null if the
+   * compositor is not executing as part of the render pipeline.
+   */
+  realtime_compositor::RenderContext *render_context_;
 
  public:
   /**
@@ -169,26 +175,26 @@ class CompositorContext {
    */
   int get_framenumber() const;
 
-  /**
-   * \brief has this system active opencl_devices?
-   */
-  bool get_has_active_opencl_devices() const
-  {
-    return hasActiveOpenCLDevices_;
-  }
-
-  /**
-   * \brief set has this system active opencl_devices?
-   */
-  void setHasActiveOpenCLDevices(bool hasAvtiveOpenCLDevices)
-  {
-    hasActiveOpenCLDevices_ = hasAvtiveOpenCLDevices;
-  }
-
   /** Whether it has a view with a specific name and not the default one. */
   bool has_explicit_view() const
   {
     return view_name_ && view_name_[0] != '\0';
+  }
+
+  /**
+   * \brief get the render context
+   */
+  realtime_compositor::RenderContext *get_render_context() const
+  {
+    return render_context_;
+  }
+
+  /**
+   * \brief set the render context
+   */
+  void set_render_context(realtime_compositor::RenderContext *render_context)
+  {
+    render_context_ = render_context;
   }
 
   /**
@@ -207,11 +213,6 @@ class CompositorContext {
     view_name_ = view_name;
   }
 
-  int get_chunksize() const
-  {
-    return this->get_bnodetree()->chunksize;
-  }
-
   void set_fast_calculation(bool fast_calculation)
   {
     fast_calculation_ = fast_calculation;
@@ -219,10 +220,6 @@ class CompositorContext {
   bool is_fast_calculation() const
   {
     return fast_calculation_;
-  }
-  bool is_groupnode_buffer_enabled() const
-  {
-    return (this->get_bnodetree()->flag & NTREE_COM_GROUPNODE_BUFFER) != 0;
   }
 
   /**
@@ -235,11 +232,6 @@ class CompositorContext {
   }
 
   Size2f get_render_size() const;
-
-  /**
-   * Get active execution model.
-   */
-  eExecutionModel get_execution_model() const;
 };
 
 }  // namespace blender::compositor

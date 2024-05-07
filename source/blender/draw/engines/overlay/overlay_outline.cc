@@ -1,26 +1,34 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2019 Blender Foundation. */
+/* SPDX-FileCopyrightText: 2019 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup draw_engine
  */
 
-#include "DRW_render.h"
+#include "BLI_math_vector.hh"
 
-#include "BKE_global.h"
-#include "BKE_gpencil.h"
+#include "DRW_render.hh"
 
-#include "BKE_object.h"
+#include "BKE_curves.hh"
+#include "BKE_global.hh"
+#include "BKE_gpencil_legacy.h"
+#include "BKE_grease_pencil.hh"
 
-#include "DNA_gpencil_types.h"
+#include "BKE_object.hh"
 
-#include "UI_resources.h"
+#include "DNA_gpencil_legacy_types.h"
+
+#include "ED_grease_pencil.hh"
+
+#include "UI_resources.hh"
 
 #include "overlay_private.hh"
 
 /* Returns the normal plane in NDC space. */
 static void gpencil_depth_plane(Object *ob, float r_plane[4])
 {
+  using namespace blender;
   /* TODO: put that into private data. */
   float viewinv[4][4];
   DRW_view_viewmat_get(nullptr, viewinv, true);
@@ -32,18 +40,19 @@ static void gpencil_depth_plane(Object *ob, float r_plane[4])
    * strokes not aligned with the object axes. Maybe we could try to
    * compute the minimum axis of all strokes. But this would be more
    * computationally heavy and should go into the GPData evaluation. */
-  const BoundBox *bbox = BKE_object_boundbox_get(ob);
+  const std::optional<Bounds<float3>> bounds = BKE_object_boundbox_get(ob).value_or(
+      Bounds(float3(0)));
+  float3 size = (bounds->max - bounds->min) * 0.5f;
+  float3 center = math::midpoint(bounds->min, bounds->max);
   /* Convert bbox to matrix */
-  float mat[4][4], size[3], center[3];
-  BKE_boundbox_calc_size_aabb(bbox, size);
-  BKE_boundbox_calc_center_aabb(bbox, center);
+  float mat[4][4];
   unit_m4(mat);
   copy_v3_v3(mat[3], center);
   /* Avoid division by 0.0 later. */
   add_v3_fl(size, 1e-8f);
   rescale_m4(mat, size);
   /* BBox space to World. */
-  mul_m4_m4m4(mat, ob->object_to_world, mat);
+  mul_m4_m4m4(mat, ob->object_to_world().ptr(), mat);
   /* BBox center in world space. */
   copy_v3_v3(center, mat[3]);
   /* View Vector. */
@@ -170,31 +179,32 @@ void OVERLAY_outline_cache_init(OVERLAY_Data *vedata)
   }
 }
 
-typedef struct iterData {
+struct iterData {
   Object *ob;
   DRWShadingGroup *stroke_grp;
   int cfra;
   float plane[4];
-} iterData;
+};
 
 static void gpencil_layer_cache_populate(bGPDlayer *gpl,
                                          bGPDframe * /*gpf*/,
                                          bGPDstroke * /*gps*/,
                                          void *thunk)
 {
+  using namespace blender::draw;
   iterData *iter = (iterData *)thunk;
   bGPdata *gpd = (bGPdata *)iter->ob->data;
 
   const bool is_screenspace = (gpd->flag & GP_DATA_STROKE_KEEPTHICKNESS) != 0;
   const bool is_stroke_order_3d = (gpd->draw_mode == GP_DRAWMODE_3D);
 
-  float object_scale = mat4_to_scale(iter->ob->object_to_world);
+  float object_scale = mat4_to_scale(iter->ob->object_to_world().ptr());
   /* Negate thickness sign to tag that strokes are in screen space.
    * Convert to world units (by default, 1 meter = 2000 pixels). */
   float thickness_scale = (is_screenspace) ? -1.0f : (gpd->pixfactor / 2000.0f);
 
-  GPUVertBuf *position_tx = DRW_cache_gpencil_position_buffer_get(iter->ob, iter->cfra);
-  GPUVertBuf *color_tx = DRW_cache_gpencil_color_buffer_get(iter->ob, iter->cfra);
+  blender::gpu::VertBuf *position_tx = DRW_cache_gpencil_position_buffer_get(iter->ob, iter->cfra);
+  blender::gpu::VertBuf *color_tx = DRW_cache_gpencil_color_buffer_get(iter->ob, iter->cfra);
 
   DRWShadingGroup *grp = iter->stroke_grp = DRW_shgroup_create_sub(iter->stroke_grp);
   DRW_shgroup_uniform_bool_copy(grp, "gpStrokeOrder3d", is_stroke_order_3d);
@@ -211,20 +221,21 @@ static void gpencil_stroke_cache_populate(bGPDlayer * /*gpl*/,
                                           bGPDstroke *gps,
                                           void *thunk)
 {
+  using namespace blender::draw;
   iterData *iter = (iterData *)thunk;
 
   MaterialGPencilStyle *gp_style = BKE_gpencil_material_settings(iter->ob, gps->mat_nr + 1);
 
   bool hide_material = (gp_style->flag & GP_MATERIAL_HIDE) != 0;
   bool show_stroke = (gp_style->flag & GP_MATERIAL_STROKE_SHOW) != 0;
-  // TODO: What about simplify Fill?
+  /* TODO: What about simplify Fill? */
   bool show_fill = (gps->tot_triangles > 0) && (gp_style->flag & GP_MATERIAL_FILL_SHOW) != 0;
 
   if (hide_material) {
     return;
   }
 
-  struct GPUBatch *geom = DRW_cache_gpencil_get(iter->ob, iter->cfra);
+  blender::gpu::Batch *geom = DRW_cache_gpencil_get(iter->ob, iter->cfra);
 
   if (show_fill) {
     int vfirst = gps->runtime.fill_start * 3;
@@ -266,9 +277,98 @@ static void OVERLAY_outline_gpencil(OVERLAY_PrivateData *pd, Object *ob)
                                            pd->cfra);
 }
 
+static void OVERLAY_outline_grease_pencil(OVERLAY_PrivateData *pd, Scene *scene, Object *ob)
+{
+  using namespace blender;
+  using namespace blender::ed::greasepencil;
+  GreasePencil &grease_pencil = *static_cast<GreasePencil *>(ob->data);
+  /* Outlines only in object mode. */
+  if (ob->mode != OB_MODE_OBJECT) {
+    return;
+  }
+
+  float plane[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+  if ((grease_pencil.flag & GREASE_PENCIL_STROKE_ORDER_3D) == 0) {
+    gpencil_depth_plane(ob, plane);
+  }
+
+  int t_offset = 0;
+  const Vector<DrawingInfo> drawings = retrieve_visible_drawings(*scene, grease_pencil, true);
+  for (const DrawingInfo info : drawings) {
+    const bool is_stroke_order_3d = (grease_pencil.flag & GREASE_PENCIL_STROKE_ORDER_3D) != 0;
+
+    const float object_scale = mat4_to_scale(ob->object_to_world().ptr());
+    const float thickness_scale = bke::greasepencil::LEGACY_RADIUS_CONVERSION_FACTOR;
+
+    gpu::VertBuf *position_tx = draw::DRW_cache_grease_pencil_position_buffer_get(scene, ob);
+    gpu::VertBuf *color_tx = draw::DRW_cache_grease_pencil_color_buffer_get(scene, ob);
+
+    DRWShadingGroup *grp = DRW_shgroup_create_sub(pd->outlines_gpencil_grp);
+    DRW_shgroup_uniform_bool_copy(grp, "gpStrokeOrder3d", is_stroke_order_3d);
+    DRW_shgroup_uniform_float_copy(grp, "gpThicknessScale", object_scale);
+    DRW_shgroup_uniform_float_copy(grp, "gpThicknessOffset", 0.0f);
+    DRW_shgroup_uniform_float_copy(grp, "gpThicknessWorldScale", thickness_scale);
+    DRW_shgroup_uniform_vec4_copy(grp, "gpDepthPlane", plane);
+    DRW_shgroup_buffer_texture(grp, "gp_pos_tx", position_tx);
+    DRW_shgroup_buffer_texture(grp, "gp_col_tx", color_tx);
+
+    const bke::CurvesGeometry &curves = info.drawing.strokes();
+    const OffsetIndices<int> points_by_curve = curves.points_by_curve();
+    const bke::AttributeAccessor attributes = curves.attributes();
+    const VArray<int> stroke_materials = *attributes.lookup_or_default<int>(
+        "material_index", bke::AttrDomain::Curve, 0);
+    const VArray<bool> cyclic = *attributes.lookup_or_default<bool>(
+        "cyclic", bke::AttrDomain::Curve, false);
+
+    IndexMaskMemory memory;
+    const IndexMask visible_strokes = ed::greasepencil::retrieve_visible_strokes(
+        *ob, info.drawing, memory);
+
+    visible_strokes.foreach_index([&](const int stroke_i) {
+      const IndexRange points = points_by_curve[stroke_i];
+      const int material_index = stroke_materials[stroke_i];
+      MaterialGPencilStyle *gp_style = BKE_gpencil_material_settings(ob, material_index + 1);
+
+      const bool hide_onion = info.onion_id != 0;
+      const bool hide_material = (gp_style->flag & GP_MATERIAL_HIDE) != 0;
+
+      const int num_stroke_triangles = (points.size() >= 3) ? (points.size() - 2) : 0;
+      const int num_stroke_vertices = (points.size() +
+                                       int(cyclic[stroke_i] && (points.size() >= 3)));
+
+      if (hide_material || hide_onion) {
+        t_offset += num_stroke_triangles;
+        t_offset += num_stroke_vertices * 2;
+        return;
+      }
+
+      blender::gpu::Batch *geom = draw::DRW_cache_grease_pencil_get(scene, ob);
+
+      const bool show_stroke = (gp_style->flag & GP_MATERIAL_STROKE_SHOW) != 0;
+      const bool show_fill = (points.size() >= 3) && (gp_style->flag & GP_MATERIAL_FILL_SHOW) != 0;
+
+      if (show_fill) {
+        int v_first = t_offset * 3;
+        int v_count = num_stroke_triangles * 3;
+        DRW_shgroup_call_range(grp, ob, geom, v_first, v_count);
+      }
+
+      t_offset += num_stroke_triangles;
+
+      if (show_stroke) {
+        int v_first = t_offset * 3;
+        int v_count = num_stroke_vertices * 2 * 3;
+        DRW_shgroup_call_range(grp, ob, geom, v_first, v_count);
+      }
+      t_offset += num_stroke_vertices * 2;
+    });
+  }
+}
+
 static void OVERLAY_outline_volume(OVERLAY_PrivateData *pd, Object *ob)
 {
-  struct GPUBatch *geom = DRW_cache_volume_selection_surface_get(ob);
+  using namespace blender::draw;
+  blender::gpu::Batch *geom = DRW_cache_volume_selection_surface_get(ob);
   if (geom == nullptr) {
     return;
   }
@@ -279,12 +379,14 @@ static void OVERLAY_outline_volume(OVERLAY_PrivateData *pd, Object *ob)
 
 static void OVERLAY_outline_curves(OVERLAY_PrivateData *pd, Object *ob)
 {
+  using namespace blender::draw;
   DRWShadingGroup *shgroup = pd->outlines_curves_grp;
   DRW_shgroup_curves_create_sub(ob, shgroup, nullptr);
 }
 
 static void OVERLAY_outline_pointcloud(OVERLAY_PrivateData *pd, Object *ob)
 {
+  using namespace blender::draw;
   if (pd->wireframe_mode) {
     /* Looks bad in this case. Could be relaxed if we draw a
      * wireframe of some sort in the future. */
@@ -302,7 +404,7 @@ void OVERLAY_outline_cache_populate(OVERLAY_Data *vedata,
 {
   OVERLAY_PrivateData *pd = vedata->stl->pd;
   const DRWContextState *draw_ctx = DRW_context_state_get();
-  struct GPUBatch *geom;
+  blender::gpu::Batch *geom;
   DRWShadingGroup *shgroup = nullptr;
   const bool draw_outline = ob->dt > OB_BOUNDBOX;
 
@@ -313,6 +415,11 @@ void OVERLAY_outline_cache_populate(OVERLAY_Data *vedata,
 
   if (ob->type == OB_GPENCIL_LEGACY) {
     OVERLAY_outline_gpencil(pd, ob);
+    return;
+  }
+
+  if (ob->type == OB_GREASE_PENCIL) {
+    OVERLAY_outline_grease_pencil(pd, draw_ctx->scene, ob);
     return;
   }
 

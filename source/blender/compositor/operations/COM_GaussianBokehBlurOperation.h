@@ -1,7 +1,10 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2011 Blender Foundation. */
+/* SPDX-FileCopyrightText: 2011 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #pragma once
+
+#include <memory>
 
 #include "COM_BlurBaseOperation.h"
 #include "COM_NodeOperation.h"
@@ -21,20 +24,7 @@ class GaussianBokehBlurOperation : public BlurBaseOperation {
   GaussianBokehBlurOperation();
   void init_data() override;
   void init_execution() override;
-  void *initialize_tile_data(rcti *rect) override;
-  /**
-   * The inner loop of this operation.
-   */
-  void execute_pixel(float output[4], int x, int y, void *data) override;
-
-  /**
-   * Deinitialize the execution
-   */
   void deinit_execution() override;
-
-  bool determine_depending_area_of_interest(rcti *input,
-                                            ReadBufferOperation *read_operation,
-                                            rcti *output) override;
 
   void get_area_of_interest(int input_idx, const rcti &output_area, rcti &r_input_area) override;
   void update_memory_buffer_partial(MemoryBuffer *output,
@@ -44,7 +34,7 @@ class GaussianBokehBlurOperation : public BlurBaseOperation {
 
 class GaussianBlurReferenceOperation : public BlurBaseOperation {
  private:
-  float **maintabs_;
+  std::unique_ptr<MemoryBuffer> weights_;
 
   void update_gauss();
   int filtersizex_;
@@ -56,20 +46,6 @@ class GaussianBlurReferenceOperation : public BlurBaseOperation {
   GaussianBlurReferenceOperation();
   void init_data() override;
   void init_execution() override;
-  void *initialize_tile_data(rcti *rect) override;
-  /**
-   * The inner loop of this operation.
-   */
-  void execute_pixel(float output[4], int x, int y, void *data) override;
-
-  /**
-   * Deinitialize the execution
-   */
-  void deinit_execution() override;
-
-  bool determine_depending_area_of_interest(rcti *input,
-                                            ReadBufferOperation *read_operation,
-                                            rcti *output) override;
 
   void get_area_of_interest(int input_idx, const rcti &output_area, rcti &r_input_area) override;
   void update_memory_buffer_partial(MemoryBuffer *output,

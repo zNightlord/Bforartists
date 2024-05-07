@@ -1,4 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* SPDX-FileCopyrightText: 2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup DNA
@@ -8,7 +10,6 @@
 
 #include "DNA_view3d_defaults.h"
 
-/* Struct members on own line. */
 /* clang-format off */
 
 /* -------------------------------------------------------------------- */
@@ -74,7 +75,6 @@
     .framapto = 100, \
     .images = 100, \
     .framelen = 1.0, \
-    .blurfac = 0.5, \
     .frs_sec = 24, \
     .frs_sec_base = 1, \
  \
@@ -127,6 +127,8 @@
     .unit_line_thickness = 1.0f, \
  \
     .ffcodecdata = _DNA_DEFAULT_FFMpegCodecData, \
+ \
+    .motion_blur_shutter = 0.5f, \
   }
 
 #define _DNA_DEFAULT_AudioData \
@@ -154,6 +156,18 @@
     .viewport_aa = SCE_DISPLAY_AA_FXAA, \
   }
 
+#define _DNA_DEFAULT_RaytraceEEVEE \
+  { \
+    .flag = RAYTRACE_EEVEE_USE_DENOISE, \
+    .denoise_stages = RAYTRACE_EEVEE_DENOISE_SPATIAL | \
+                    RAYTRACE_EEVEE_DENOISE_TEMPORAL | \
+                    RAYTRACE_EEVEE_DENOISE_BILATERAL, \
+    .screen_trace_quality = 0.25f, \
+    .screen_trace_thickness = 0.2f, \
+    .trace_max_roughness = 0.5f, \
+    .resolution_scale = 2, \
+  }
+
 #define _DNA_DEFAULT_PhysicsSettings \
   { \
     .gravity = {0.0f, 0.0f, -9.81f}, \
@@ -169,6 +183,7 @@
     .gi_irradiance_draw_size = 0.1f, \
     .gi_irradiance_smoothing = 0.1f, \
     .gi_filter_quality = 3.0f, \
+    .gi_irradiance_pool_size = 16, \
  \
     .taa_samples = 16, \
     .taa_render_samples = 64, \
@@ -187,12 +202,16 @@
     .volumetric_tile_size = 8, \
     .volumetric_samples = 64, \
     .volumetric_sample_distribution = 0.8f, \
+    .volumetric_ray_depth = 16, \
     .volumetric_light_clamp = 0.0f, \
     .volumetric_shadow_samples = 16, \
  \
     .gtao_distance = 0.2f, \
     .gtao_factor = 1.0f, \
     .gtao_quality = 0.25f, \
+    .gtao_thickness = 0.5f, \
+    .gtao_focus = 0.05f, \
+    .gtao_resolution = 2, \
  \
     .bokeh_overblur = 5.0f, \
     .bokeh_max_size = 100.0f, \
@@ -207,13 +226,22 @@
     .bloom_radius = 6.5f, \
     .bloom_clamp = 0.0f, \
  \
-    .motion_blur_shutter = 0.5f, \
     .motion_blur_depth_scale = 100.0f, \
     .motion_blur_max = 32, \
     .motion_blur_steps = 1, \
  \
+    .clamp_world = 10.0f, \
+    .clamp_surface_indirect = 10.0f, \
+\
     .shadow_cube_size = 512, \
     .shadow_cascade_size = 1024, \
+    .shadow_ray_count = 1, \
+    .shadow_step_count = 6, \
+    .shadow_resolution_scale = 1.0f, \
+ \
+    .ray_tracing_method = RAYTRACE_EEVEE_METHOD_SCREEN, \
+ \
+    .ray_tracing_options = _DNA_DEFAULT_RaytraceEEVEE, \
  \
     .light_cache_data = NULL, \
     .light_threshold = 0.01f, \
@@ -267,6 +295,10 @@
     .safe_areas = _DNA_DEFAULT_DisplaySafeAreas, \
  \
     .eevee = _DNA_DEFAULT_SceneEEVEE, \
+ \
+    .hydra = _DNA_DEFAULT_SceneHydra, \
+    .simulation_frame_start = 1, \
+    .simulation_frame_end = 250, \
   }
 
 /** \} */
@@ -302,6 +334,7 @@
 #define _DNA_DEFAULTS_UnifiedPaintSettings \
   { \
     .size = 50, \
+    .input_samples = 1, \
     .unprojected_radius = 0.29, \
     .alpha = 0.5f, \
     .weight = 0.5f, \
@@ -363,12 +396,18 @@
     .autokey_mode = AUTOKEY_MODE_NORMAL, \
  \
     .transform_pivot_point = V3D_AROUND_CENTER_MEDIAN, \
-    .snap_mode = SCE_SNAP_MODE_INCREMENT, \
-    .snap_node_mode = SCE_SNAP_MODE_GRID, \
-    .snap_uv_mode = SCE_SNAP_MODE_INCREMENT, \
+    .snap_mode = SCE_SNAP_TO_INCREMENT, \
+    .snap_node_mode = SCE_SNAP_TO_GRID, \
+    .snap_uv_mode = SCE_SNAP_TO_INCREMENT, \
+    .snap_anim_mode = SCE_SNAP_TO_FRAME, \
     .snap_flag = SCE_SNAP_TO_INCLUDE_EDITED | SCE_SNAP_TO_INCLUDE_NONEDITED, \
+    .snap_flag_anim = SCE_SNAP, \
     .snap_transform_mode_flag = SCE_SNAP_TRANSFORM_MODE_TRANSLATE, \
     .snap_face_nearest_steps = 1, \
+    .snap_angle_increment_3d = DEG2RADF(5.0f), \
+    .snap_angle_increment_2d = DEG2RADF(5.0f), \
+    .snap_angle_increment_3d_precision = DEG2RADF(1.0f), \
+    .snap_angle_increment_2d_precision = DEG2RADF(1.0f), \
  \
     .curve_paint_settings = _DNA_DEFAULTS_CurvePaintSettings, \
  \
@@ -394,9 +433,28 @@
  \
     /* UV painting */ \
     .uv_sculpt_settings = 0, \
-    .uv_relax_method = UV_SCULPT_TOOL_RELAX_LAPLACIAN, \
+ \
+    /* Placement */ \
+    .snap_mode_tools = SCE_SNAP_TO_GEOM,\
+    .plane_axis = 2,\
   }
 
+#define _DNA_DEFAULT_Sculpt \
+  { \
+    .detail_size = 12,\
+    .detail_percent = 25,\
+    .constant_detail = 3.0f,\
+    .automasking_start_normal_limit = 0.34906585f, /* 20 / 180 * pi. */ \
+    .automasking_start_normal_falloff = 0.25f, \
+    .automasking_view_normal_limit = 1.570796, /* 0.5 * pi. */ \
+    .automasking_view_normal_falloff = 0.25f, \
+    .automasking_boundary_edges_propagation_steps = 1, \
+    .flags = SCULPT_DYNTOPO_SUBDIVIDE | SCULPT_DYNTOPO_COLLAPSE,\
+    .paint = {\
+      .symmetry_flags = PAINT_SYMMETRY_FEATHER,\
+      .tile_offset = {1.0f, 1.0f, 1.0f},\
+    }\
+  }
 /* clang-format off */
 
 /** \} */

@@ -1,5 +1,6 @@
+# SPDX-FileCopyrightText: 2020 Blender Authors
+#
 # SPDX-License-Identifier: GPL-2.0-or-later
-# Copyright 2020 Blender Foundation. All rights reserved.
 
 if(WITH_GTESTS)
   set(TEST_SRC
@@ -21,6 +22,5 @@ if(WITH_GTESTS)
   if(WITH_IMAGE_OPENJPEG)
     set(TEST_LIB ${TEST_LIB} ${OPENJPEG_LIBRARIES})
   endif()
-  include(GTestTesting)
-  blender_add_test_lib(ffmpeg_codecs "${TEST_SRC}" "${TEST_INC}" "${TEST_INC_SYS}" "${TEST_LIB}")
+  blender_add_test_suite_lib(ffmpeg_codecs "${TEST_SRC}" "${TEST_INC}" "${TEST_INC_SYS}" "${TEST_LIB}")
 endif()

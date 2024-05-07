@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2011 Blender Foundation. */
+/* SPDX-FileCopyrightText: 2011 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #pragma once
 
@@ -9,11 +10,6 @@ namespace blender::compositor {
 
 class ColorCorrectionOperation : public MultiThreadedRowOperation {
  private:
-  /**
-   * Cached reference to the input_program
-   */
-  SocketReader *input_image_;
-  SocketReader *input_mask_;
   NodeColorCorrection *data_;
 
   bool red_channel_enabled_;
@@ -22,21 +18,6 @@ class ColorCorrectionOperation : public MultiThreadedRowOperation {
 
  public:
   ColorCorrectionOperation();
-
-  /**
-   * The inner loop of this operation.
-   */
-  void execute_pixel_sampled(float output[4], float x, float y, PixelSampler sampler) override;
-
-  /**
-   * Initialize the execution
-   */
-  void init_execution() override;
-
-  /**
-   * Deinitialize the execution
-   */
-  void deinit_execution() override;
 
   void set_data(NodeColorCorrection *data)
   {

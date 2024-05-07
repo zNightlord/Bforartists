@@ -1,20 +1,20 @@
+# SPDX-FileCopyrightText: 2011 Blender Authors
+#
 # SPDX-License-Identifier: GPL-2.0-or-later
-# Copyright 2011 Blender Foundation. All rights reserved.
 
 add_subdirectory(realtime_compositor)
 
 if(WITH_COMPOSITOR_CPU)
   set(INC
     .
+    algorithms
     intern
     nodes
     operations
+    realtime_compositor
     ../blenkernel
-    ../blenlib
     ../blentranslation
-    ../depsgraph
     ../imbuf
-    ../makesdna
     ../makesrna
     ../nodes
     ../windowmanager
@@ -22,13 +22,7 @@ if(WITH_COMPOSITOR_CPU)
     ../nodes/intern
     ../render
     ../render/intern
-    ../../../extern/clew/include
-    ../../../intern/atomic
-    ../../../intern/clog
-    ../../../intern/guardedalloc
 
-    # dna_type_offsets.h
-    ${CMAKE_CURRENT_BINARY_DIR}/../makesdna/intern
     # RNA_prototypes.h
     ${CMAKE_BINARY_DIR}/source/blender/makesrna
   )
@@ -38,20 +32,15 @@ if(WITH_COMPOSITOR_CPU)
   )
 
   set(SRC
-    COM_compositor.h
+    COM_compositor.hh
     COM_defines.h
+    COM_profile.hh
 
     intern/COM_BufferArea.h
-    intern/COM_BufferOperation.cc
-    intern/COM_BufferOperation.h
     intern/COM_BufferRange.h
     intern/COM_BuffersIterator.h
     intern/COM_CPUDevice.cc
     intern/COM_CPUDevice.h
-    intern/COM_ChunkOrder.cc
-    intern/COM_ChunkOrder.h
-    intern/COM_ChunkOrderHotspot.cc
-    intern/COM_ChunkOrderHotspot.h
     intern/COM_CompositorContext.cc
     intern/COM_CompositorContext.h
     intern/COM_ConstantFolder.cc
@@ -64,8 +53,6 @@ if(WITH_COMPOSITOR_CPU)
     intern/COM_Device.h
     intern/COM_Enums.cc
     intern/COM_Enums.h
-    intern/COM_ExecutionGroup.cc
-    intern/COM_ExecutionGroup.h
     intern/COM_ExecutionModel.cc
     intern/COM_ExecutionModel.h
     intern/COM_ExecutionSystem.cc
@@ -74,8 +61,6 @@ if(WITH_COMPOSITOR_CPU)
     intern/COM_FullFrameExecutionModel.h
     intern/COM_MemoryBuffer.cc
     intern/COM_MemoryBuffer.h
-    intern/COM_MemoryProxy.cc
-    intern/COM_MemoryProxy.h
     intern/COM_MetaData.cc
     intern/COM_MetaData.h
     intern/COM_MultiThreadedOperation.cc
@@ -92,19 +77,13 @@ if(WITH_COMPOSITOR_CPU)
     intern/COM_NodeOperation.h
     intern/COM_NodeOperationBuilder.cc
     intern/COM_NodeOperationBuilder.h
-    intern/COM_OpenCLDevice.cc
-    intern/COM_OpenCLDevice.h
     intern/COM_SharedOperationBuffers.cc
     intern/COM_SharedOperationBuffers.h
-    intern/COM_SingleThreadedOperation.cc
-    intern/COM_SingleThreadedOperation.h
-    intern/COM_TiledExecutionModel.cc
-    intern/COM_TiledExecutionModel.h
-    intern/COM_WorkPackage.cc
     intern/COM_WorkPackage.h
     intern/COM_WorkScheduler.cc
     intern/COM_WorkScheduler.h
     intern/COM_compositor.cc
+    intern/COM_profile.cc
 
     operations/COM_QualityStepHelper.cc
     operations/COM_QualityStepHelper.h
@@ -124,12 +103,12 @@ if(WITH_COMPOSITOR_CPU)
     nodes/COM_MaskNode.h
     nodes/COM_MovieClipNode.cc
     nodes/COM_MovieClipNode.h
-    nodes/COM_OutputFileNode.cc
-    nodes/COM_OutputFileNode.h
     nodes/COM_RenderLayersNode.cc
     nodes/COM_RenderLayersNode.h
     nodes/COM_SceneTimeNode.cc
     nodes/COM_SceneTimeNode.h
+    nodes/COM_SplitNode.cc
+    nodes/COM_SplitNode.h
     nodes/COM_SwitchNode.cc
     nodes/COM_SwitchNode.h
     nodes/COM_SwitchViewNode.cc
@@ -144,8 +123,8 @@ if(WITH_COMPOSITOR_CPU)
     # output nodes
     nodes/COM_CompositorNode.cc
     nodes/COM_CompositorNode.h
-    nodes/COM_SplitViewerNode.cc
-    nodes/COM_SplitViewerNode.h
+    nodes/COM_FileOutputNode.cc
+    nodes/COM_FileOutputNode.h
     nodes/COM_ViewLevelsNode.cc
     nodes/COM_ViewLevelsNode.h
     nodes/COM_ViewerNode.cc
@@ -321,6 +300,8 @@ if(WITH_COMPOSITOR_CPU)
     nodes/COM_FilterNode.h
     nodes/COM_InpaintNode.cc
     nodes/COM_InpaintNode.h
+    nodes/COM_KuwaharaNode.cc
+    nodes/COM_KuwaharaNode.h
     nodes/COM_PosterizeNode.cc
     nodes/COM_PosterizeNode.h
 
@@ -336,18 +317,16 @@ if(WITH_COMPOSITOR_CPU)
     operations/COM_GammaCorrectOperation.h
     operations/COM_GaussianAlphaBlurBaseOperation.cc
     operations/COM_GaussianAlphaBlurBaseOperation.h
-    operations/COM_GaussianAlphaXBlurOperation.cc
-    operations/COM_GaussianAlphaXBlurOperation.h
-    operations/COM_GaussianAlphaYBlurOperation.cc
-    operations/COM_GaussianAlphaYBlurOperation.h
     operations/COM_GaussianBlurBaseOperation.cc
     operations/COM_GaussianBlurBaseOperation.h
     operations/COM_GaussianBokehBlurOperation.cc
     operations/COM_GaussianBokehBlurOperation.h
-    operations/COM_GaussianXBlurOperation.cc
-    operations/COM_GaussianXBlurOperation.h
-    operations/COM_GaussianYBlurOperation.cc
-    operations/COM_GaussianYBlurOperation.h
+    operations/COM_KuwaharaAnisotropicOperation.cc
+    operations/COM_KuwaharaAnisotropicOperation.h
+    operations/COM_KuwaharaAnisotropicStructureTensorOperation.cc
+    operations/COM_KuwaharaAnisotropicStructureTensorOperation.h
+    operations/COM_KuwaharaClassicOperation.cc
+    operations/COM_KuwaharaClassicOperation.h
     operations/COM_MovieClipAttributeOperation.cc
     operations/COM_MovieClipAttributeOperation.h
     operations/COM_MovieDistortionOperation.cc
@@ -356,6 +335,8 @@ if(WITH_COMPOSITOR_CPU)
     operations/COM_PosterizeOperation.h
     operations/COM_SMAAOperation.cc
     operations/COM_SMAAOperation.h
+    operations/COM_SummedAreaTableOperation.cc
+    operations/COM_SummedAreaTableOperation.h
     operations/COM_VariableSizeBokehBlurOperation.cc
     operations/COM_VariableSizeBokehBlurOperation.h
 
@@ -416,10 +397,8 @@ if(WITH_COMPOSITOR_CPU)
     operations/COM_CompositorOperation.h
     operations/COM_ConvertDepthToRadiusOperation.cc
     operations/COM_ConvertDepthToRadiusOperation.h
-    operations/COM_OutputFileMultiViewOperation.cc
-    operations/COM_OutputFileMultiViewOperation.h
-    operations/COM_OutputFileOperation.cc
-    operations/COM_OutputFileOperation.h
+    operations/COM_FileOutputOperation.cc
+    operations/COM_FileOutputOperation.h
     operations/COM_PreviewOperation.cc
     operations/COM_PreviewOperation.h
     operations/COM_SplitOperation.cc
@@ -468,16 +447,12 @@ if(WITH_COMPOSITOR_CPU)
     operations/COM_GammaOperation.h
     operations/COM_MixOperation.cc
     operations/COM_MixOperation.h
-    operations/COM_ReadBufferOperation.cc
-    operations/COM_ReadBufferOperation.h
     operations/COM_SetColorOperation.cc
     operations/COM_SetColorOperation.h
     operations/COM_SetValueOperation.cc
     operations/COM_SetValueOperation.h
     operations/COM_SetVectorOperation.cc
     operations/COM_SetVectorOperation.h
-    operations/COM_WriteBufferOperation.cc
-    operations/COM_WriteBufferOperation.h
 
     operations/COM_MathBaseOperation.cc
     operations/COM_MathBaseOperation.h
@@ -531,8 +506,6 @@ if(WITH_COMPOSITOR_CPU)
     operations/COM_TransformOperation.h
     operations/COM_TranslateOperation.cc
     operations/COM_TranslateOperation.h
-    operations/COM_WrapOperation.cc
-    operations/COM_WrapOperation.h
 
     # Filter operations
     operations/COM_ConvolutionEdgeFilterOperation.cc
@@ -547,6 +520,8 @@ if(WITH_COMPOSITOR_CPU)
     operations/COM_DilateErodeOperation.h
     operations/COM_GlareBaseOperation.cc
     operations/COM_GlareBaseOperation.h
+    operations/COM_GlareBloomOperation.cc
+    operations/COM_GlareBloomOperation.h
     operations/COM_GlareFogGlowOperation.cc
     operations/COM_GlareFogGlowOperation.h
     operations/COM_GlareGhostOperation.cc
@@ -585,47 +560,25 @@ if(WITH_COMPOSITOR_CPU)
     operations/COM_MovieClipOperation.cc
     operations/COM_MovieClipOperation.h
 
-    operations/COM_AntiAliasOperation.cc
-    operations/COM_AntiAliasOperation.h
-
     operations/COM_MaskOperation.cc
     operations/COM_MaskOperation.h
+
+    algorithms/COM_JumpFloodingAlgorithm.cc
+    algorithms/COM_JumpFloodingAlgorithm.h
+    algorithms/COM_SymmetricSeparableBlurVariableSizeAlgorithm.cc
+    algorithms/COM_SymmetricSeparableBlurVariableSizeAlgorithm.h
   )
 
   set(LIB
     bf_blenkernel
-    bf_blenlib
-    extern_clew
+    PRIVATE bf::blenlib
+    PRIVATE bf::depsgraph
+    PRIVATE bf::dna
+    PRIVATE bf::intern::clog
+    PRIVATE bf::intern::guardedalloc
+    bf_realtime_compositor
+    PRIVATE bf::intern::atomic
   )
-
-  list(APPEND INC
-    ${CMAKE_CURRENT_BINARY_DIR}/operations
-  )
-
-  data_to_c(
-    ${CMAKE_CURRENT_SOURCE_DIR}/operations/COM_OpenCLKernels.cl
-    ${CMAKE_CURRENT_BINARY_DIR}/operations/COM_OpenCLKernels.cl.h
-    SRC
-  )
-
-  add_definitions(-DCL_USE_DEPRECATED_OPENCL_1_1_APIS)
-
-  set(GENSRC_DIR ${CMAKE_CURRENT_BINARY_DIR}/operations)
-  set(GENSRC ${GENSRC_DIR}/COM_SMAAAreaTexture.h)
-  add_custom_command(
-    OUTPUT ${GENSRC}
-    COMMAND ${CMAKE_COMMAND} -E make_directory ${GENSRC_DIR}
-    COMMAND "$<TARGET_FILE:smaa_areatex>" ${GENSRC}
-    DEPENDS smaa_areatex
-  )
-  add_custom_target(smaa_areatex_header
-    SOURCES ${GENSRC}
-  )
-  list(APPEND SRC
-    ${GENSRC}
-  )
-  unset(GENSRC)
-  unset(GENSRC_DIR)
 
   if(WITH_OPENIMAGEDENOISE)
     add_definitions(-DWITH_OPENIMAGEDENOISE)
@@ -642,10 +595,7 @@ if(WITH_COMPOSITOR_CPU)
 
   blender_add_lib(bf_compositor "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
 
-  if(WITH_UNITY_BUILD)
-    set_target_properties(bf_compositor PROPERTIES UNITY_BUILD ON)
-    set_target_properties(bf_compositor PROPERTIES UNITY_BUILD_BATCH_SIZE 10)
-  endif()
+  blender_set_target_unity_build(bf_compositor 10)
 
   if(COMMAND target_precompile_headers)
     target_precompile_headers(bf_compositor PRIVATE COM_precomp.h)
@@ -655,13 +605,12 @@ if(WITH_COMPOSITOR_CPU)
     target_compile_options(bf_compositor PRIVATE "-Wsuggest-override")
   endif()
 
-  add_dependencies(bf_compositor smaa_areatex_header)
-
   if(WITH_GTESTS)
     set(TEST_SRC
       tests/COM_BufferArea_test.cc
       tests/COM_BufferRange_test.cc
       tests/COM_BuffersIterator_test.cc
+      tests/COM_ComputeSummedAreaTableOperation_test.cc
       tests/COM_NodeOperation_test.cc
     )
     set(TEST_INC
@@ -669,12 +618,9 @@ if(WITH_COMPOSITOR_CPU)
     set(TEST_LIB
       bf_compositor
     )
-    include(GTestTesting)
-    blender_add_test_lib(bf_compositor_tests "${TEST_SRC}" "${INC};${TEST_INC}" "${INC_SYS}" "${LIB};${TEST_LIB}")
+    blender_add_test_suite_lib(compositor "${TEST_SRC}" "${INC};${TEST_INC}" "${INC_SYS}" "${LIB};${TEST_LIB}")
   endif()
 
-  # Needed so we can use dna_type_offsets.h for defaults initialization.
-  add_dependencies(bf_compositor bf_dna)
   # RNA_prototypes.h
   add_dependencies(bf_compositor bf_rna)
 

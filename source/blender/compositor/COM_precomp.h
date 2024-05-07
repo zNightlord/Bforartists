@@ -1,4 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* SPDX-FileCopyrightText: 2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /* Pre-compiled headers, see: D13797. */
 
@@ -21,12 +23,10 @@
 #include "COM_ConvertOperation.h"
 #include "COM_Debug.h"
 #include "COM_Enums.h"
-#include "COM_ExecutionGroup.h"
 #include "COM_ExecutionSystem.h"
 #include "COM_MultiThreadedOperation.h"
 #include "COM_Node.h"
 #include "COM_NodeOperation.h"
-#include "COM_OpenCLDevice.h"
 #include "COM_SetAlphaMultiplyOperation.h"
 #include "COM_SetColorOperation.h"
 #include "COM_SetSamplerOperation.h"

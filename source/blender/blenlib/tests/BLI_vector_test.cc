@@ -1,10 +1,13 @@
-/* SPDX-License-Identifier: Apache-2.0 */
+/* SPDX-FileCopyrightText: 2023 Blender Authors
+ *
+ * SPDX-License-Identifier: Apache-2.0 */
 
 #include "BLI_exception_safety_test_utils.hh"
-#include "BLI_strict_flags.h"
 #include "BLI_vector.hh"
 #include "testing/testing.h"
 #include <forward_list>
+
+#include "BLI_strict_flags.h" /* Keep last. */
 
 namespace blender::tests {
 
@@ -77,27 +80,27 @@ struct TestListValue {
   int value;
 };
 
-TEST(vector, ListBaseConstructor)
-{
-  TestListValue *value1 = new TestListValue{nullptr, nullptr, 4};
-  TestListValue *value2 = new TestListValue{nullptr, nullptr, 5};
-  TestListValue *value3 = new TestListValue{nullptr, nullptr, 6};
+// TEST(vector, ListBaseConstructor)
+// {
+//   TestListValue *value1 = new TestListValue{nullptr, nullptr, 4};
+//   TestListValue *value2 = new TestListValue{nullptr, nullptr, 5};
+//   TestListValue *value3 = new TestListValue{nullptr, nullptr, 6};
 
-  ListBase list = {nullptr, nullptr};
-  BLI_addtail(&list, value1);
-  BLI_addtail(&list, value2);
-  BLI_addtail(&list, value3);
-  Vector<TestListValue *> vec(list);
+//   ListBase list = {nullptr, nullptr};
+//   BLI_addtail(&list, value1);
+//   BLI_addtail(&list, value2);
+//   BLI_addtail(&list, value3);
+//   Vector<TestListValue *> vec(list);
 
-  EXPECT_EQ(vec.size(), 3);
-  EXPECT_EQ(vec[0]->value, 4);
-  EXPECT_EQ(vec[1]->value, 5);
-  EXPECT_EQ(vec[2]->value, 6);
+//   EXPECT_EQ(vec.size(), 3);
+//   EXPECT_EQ(vec[0]->value, 4);
+//   EXPECT_EQ(vec[1]->value, 5);
+//   EXPECT_EQ(vec[2]->value, 6);
 
-  delete value1;
-  delete value2;
-  delete value3;
-}
+//   delete value1;
+//   delete value2;
+//   delete value3;
+// }
 
 TEST(vector, IteratorConstructor)
 {
@@ -422,10 +425,22 @@ TEST(vector, Remove)
 TEST(vector, RemoveIf)
 {
   Vector<int> vec = {1, 2, 3, 4, 5, 6, 7, 8};
-  vec.remove_if([](const int x) { return x % 2 == 0; });
+  const int64_t removed = vec.remove_if([](const int x) { return x % 2 == 0; });
+  EXPECT_EQ(vec.size() + removed, 8);
   const Vector<int> expected_vec = {1, 3, 5, 7};
   EXPECT_EQ(vec.size(), expected_vec.size());
   EXPECT_EQ_ARRAY(vec.data(), expected_vec.data(), size_t(vec.size()));
+}
+
+TEST(vector, RemoveIfNonTrivialDestructible)
+{
+  Vector<Vector<int, 0, GuardedAllocator>> vec;
+  for ([[maybe_unused]] const int64_t i : IndexRange(10)) {
+    /* This test relies on leak detection to run after tests. */
+    vec.append(Vector<int, 0, GuardedAllocator>(100));
+  }
+  vec.remove_if([&](const auto & /*value*/) { return true; });
+  EXPECT_TRUE(vec.is_empty());
 }
 
 TEST(vector, ExtendSmallVector)
@@ -502,17 +517,11 @@ class TypeConstructMock {
   bool copy_assigned = false;
   bool move_assigned = false;
 
-  TypeConstructMock() : default_constructed(true)
-  {
-  }
+  TypeConstructMock() : default_constructed(true) {}
 
-  TypeConstructMock(const TypeConstructMock & /*other*/) : copy_constructed(true)
-  {
-  }
+  TypeConstructMock(const TypeConstructMock & /*other*/) : copy_constructed(true) {}
 
-  TypeConstructMock(TypeConstructMock && /*other*/) noexcept : move_constructed(true)
-  {
-  }
+  TypeConstructMock(TypeConstructMock && /*other*/) noexcept : move_constructed(true) {}
 
   TypeConstructMock &operator=(const TypeConstructMock &other)
   {
@@ -857,6 +866,16 @@ TEST(vector, RemoveChunkExceptions)
   vec[5].throw_during_move = true;
   EXPECT_ANY_THROW({ vec.remove(2, 3); });
   EXPECT_EQ(vec.size(), 7);
+}
+
+struct RecursiveType {
+  Vector<RecursiveType, 0> my_vector;
+};
+
+TEST(vector, RecursiveStructure)
+{
+  RecursiveType my_recursive_type;
+  my_recursive_type.my_vector.append({});
 }
 
 }  // namespace blender::tests

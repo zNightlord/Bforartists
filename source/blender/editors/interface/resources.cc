@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2001-2002 NaN Holding BV. All rights reserved. */
+/* SPDX-FileCopyrightText: 2001-2002 NaN Holding BV. All rights reserved.
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup edinterface
@@ -16,24 +17,24 @@
 #include "DNA_userdef_types.h"
 
 #include "BLI_blenlib.h"
-#include "BLI_math.h"
+#include "BLI_math_vector.h"
 #include "BLI_utildefines.h"
 
 #include "BKE_addon.h"
-#include "BKE_appdir.h"
-#include "BKE_main.h"
-#include "BKE_mesh_runtime.h"
+#include "BKE_appdir.hh"
+#include "BKE_main.hh"
+#include "BKE_mesh_runtime.hh"
 
-#include "BLO_readfile.h" /* for UserDef version patching. */
+#include "BLO_userdef_default.h"
 
-#include "BLF_api.h"
+#include "BLF_api.hh"
 
-#include "ED_screen.h"
+#include "ED_screen.hh"
 
-#include "UI_interface.h"
-#include "UI_interface_icons.h"
+#include "UI_interface.hh"
+#include "UI_interface_icons.hh"
 
-#include "GPU_framebuffer.h"
+#include "GPU_framebuffer.hh"
 #include "interface_intern.hh"
 
 /* be sure to keep 'bThemeState' in sync */
@@ -162,6 +163,12 @@ const uchar *UI_ThemeGetColorPtr(bTheme *btheme, int spacetype, int colorid)
           else if (g_theme_state.regionid == RGN_TYPE_EXECUTE) {
             cp = ts->execution_buts;
           }
+          else if (g_theme_state.regionid == RGN_TYPE_ASSET_SHELF) {
+            cp = ts->asset_shelf.back;
+          }
+          else if (g_theme_state.regionid == RGN_TYPE_ASSET_SHELF_HEADER) {
+            cp = ts->asset_shelf.header_back;
+          }
           else {
             cp = ts->button;
           }
@@ -187,7 +194,11 @@ const uchar *UI_ThemeGetColorPtr(bTheme *btheme, int spacetype, int colorid)
           else if (g_theme_state.regionid == RGN_TYPE_CHANNELS) {
             cp = ts->list_text;
           }
-          else if (ELEM(g_theme_state.regionid, RGN_TYPE_HEADER, RGN_TYPE_FOOTER)) {
+          else if (ELEM(g_theme_state.regionid,
+                        RGN_TYPE_HEADER,
+                        RGN_TYPE_FOOTER,
+                        RGN_TYPE_ASSET_SHELF_HEADER))
+          {
             cp = ts->header_text;
           }
           else {
@@ -201,7 +212,11 @@ const uchar *UI_ThemeGetColorPtr(bTheme *btheme, int spacetype, int colorid)
           else if (g_theme_state.regionid == RGN_TYPE_CHANNELS) {
             cp = ts->list_text_hi;
           }
-          else if (ELEM(g_theme_state.regionid, RGN_TYPE_HEADER, RGN_TYPE_FOOTER)) {
+          else if (ELEM(g_theme_state.regionid,
+                        RGN_TYPE_HEADER,
+                        RGN_TYPE_FOOTER,
+                        RGN_TYPE_ASSET_SHELF_HEADER))
+          {
             cp = ts->header_text_hi;
           }
           else {
@@ -215,7 +230,11 @@ const uchar *UI_ThemeGetColorPtr(bTheme *btheme, int spacetype, int colorid)
           else if (g_theme_state.regionid == RGN_TYPE_CHANNELS) {
             cp = ts->list_title;
           }
-          else if (ELEM(g_theme_state.regionid, RGN_TYPE_HEADER, RGN_TYPE_FOOTER)) {
+          else if (ELEM(g_theme_state.regionid,
+                        RGN_TYPE_HEADER,
+                        RGN_TYPE_FOOTER,
+                        RGN_TYPE_ASSET_SHELF_HEADER))
+          {
             cp = ts->header_title;
           }
           else {
@@ -372,6 +391,9 @@ const uchar *UI_ThemeGetColorPtr(bTheme *btheme, int spacetype, int colorid)
         case TH_EDGE_SELECT:
           cp = ts->edge_select;
           break;
+        case TH_EDGE_MODE_SELECT:
+          cp = ts->edge_mode_select;
+          break;
         case TH_EDGE_SEAM:
           cp = ts->edge_seam;
           break;
@@ -395,6 +417,9 @@ const uchar *UI_ThemeGetColorPtr(bTheme *btheme, int spacetype, int colorid)
           break;
         case TH_FACE_SELECT:
           cp = ts->face_select;
+          break;
+        case TH_FACE_MODE_SELECT:
+          cp = ts->face_mode_select;
           break;
         case TH_FACE_RETOPOLOGY:
           cp = ts->face_retopology;
@@ -479,6 +504,12 @@ const uchar *UI_ThemeGetColorPtr(bTheme *btheme, int spacetype, int colorid)
           break;
         case TH_KEYTYPE_MOVEHOLD_SELECT:
           cp = ts->keytype_movehold_select;
+          break;
+        case TH_KEYTYPE_GENERATED:
+          cp = ts->keytype_generated;
+          break;
+        case TH_KEYTYPE_GENERATED_SELECT:
+          cp = ts->keytype_generated_select;
           break;
         case TH_KEYBORDER:
           cp = ts->keyborder;
@@ -641,6 +672,15 @@ const uchar *UI_ThemeGetColorPtr(bTheme *btheme, int spacetype, int colorid)
         case TH_NODE_GRID_LEVELS:
           cp = &ts->grid_levels;
           break;
+        case TH_NODE_ZONE_SIMULATION:
+          cp = ts->node_zone_simulation;
+          break;
+        case TH_NODE_ZONE_REPEAT:
+          cp = ts->node_zone_repeat;
+          break;
+        case TH_SIMULATED_FRAMES:
+          cp = ts->simulated_frames;
+          break;
 
         case TH_SEQ_MOVIE:
           cp = ts->movie;
@@ -662,6 +702,9 @@ const uchar *UI_ThemeGetColorPtr(bTheme *btheme, int spacetype, int colorid)
           break;
         case TH_SEQ_EFFECT:
           cp = ts->effect;
+          break;
+        case TH_SEQ_TRANSITION:
+          cp = ts->transition;
           break;
         case TH_SEQ_META:
           cp = ts->meta;
@@ -1029,18 +1072,22 @@ const uchar *UI_ThemeGetColorPtr(bTheme *btheme, int spacetype, int colorid)
 
 void UI_theme_init_default()
 {
-  /* we search for the theme with name Default */
+  /* We search for the theme with the default name. */
   bTheme *btheme = static_cast<bTheme *>(
-      BLI_findstring(&U.themes, "Default", offsetof(bTheme, name)));
+      BLI_findstring(&U.themes, U_theme_default.name, offsetof(bTheme, name)));
   if (btheme == nullptr) {
     btheme = MEM_cnew<bTheme>(__func__);
-    BLI_addtail(&U.themes, btheme);
+    STRNCPY(btheme->name, U_theme_default.name);
+    BLI_addhead(&U.themes, btheme);
   }
+
+  /* Must be first, see `U.themes` doc-string. */
+  BLI_listbase_rotate_first(&U.themes, btheme);
 
   UI_SetTheme(0, 0); /* make sure the global used in this file is set */
 
   const int active_theme_area = btheme->active_theme_area;
-  memcpy(btheme, &U_theme_default, sizeof(*btheme));
+  MEMCPY_STRUCT_AFTER(btheme, &U_theme_default, name);
   btheme->active_theme_area = active_theme_area;
 }
 
@@ -1082,7 +1129,7 @@ void UI_Theme_Store(bThemeState *theme_state)
 {
   *theme_state = g_theme_state;
 }
-void UI_Theme_Restore(bThemeState *theme_state)
+void UI_Theme_Restore(const bThemeState *theme_state)
 {
   g_theme_state = *theme_state;
 }
@@ -1404,8 +1451,8 @@ bool UI_GetIconThemeColor4ubv(int colorid, uchar col[4])
               g_theme_state.regionid == RGN_TYPE_WINDOW) ||
              (g_theme_state.spacetype == SPACE_PROPERTIES &&
               g_theme_state.regionid == RGN_TYPE_NAV_BAR) ||
-             (g_theme_state.spacetype == SPACE_FILE &&
-              g_theme_state.regionid == RGN_TYPE_WINDOW))) {
+             (g_theme_state.spacetype == SPACE_FILE && g_theme_state.regionid == RGN_TYPE_WINDOW)))
+  {
     /* Only colored icons in specific places, overall UI is intended
      * to stay monochrome and out of the way except a few places where it
      * is important to communicate different data types. */
@@ -1467,8 +1514,8 @@ void UI_ThemeClearColor(int colorid)
 
 int UI_ThemeMenuShadowWidth()
 {
-  bTheme *btheme = UI_GetTheme();
-  return int(btheme->tui.menu_shadow_width * UI_DPI_FAC);
+  const bTheme *btheme = UI_GetTheme();
+  return int(btheme->tui.menu_shadow_width * UI_SCALE_FAC);
 }
 
 void UI_make_axis_color(const uchar src_col[3], uchar dst_col[3], const char axis)

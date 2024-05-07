@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2006 Blender Foundation. All rights reserved. */
+/* SPDX-FileCopyrightText: 2006 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup cmpnodes
@@ -7,12 +8,11 @@
 
 #include "BLI_math_vector_types.hh"
 
-#include "UI_interface.h"
-#include "UI_resources.h"
+#include "UI_interface.hh"
+#include "UI_resources.hh"
 
-#include "GPU_shader.h"
-#include "GPU_state.h"
-#include "GPU_texture.h"
+#include "GPU_shader.hh"
+#include "GPU_texture.hh"
 
 #include "COM_node_operation.hh"
 #include "COM_utilities.hh"
@@ -25,9 +25,8 @@ namespace blender::nodes::node_composite_composite_cc {
 
 static void cmp_node_composite_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Color>(N_("Image")).default_value({0.0f, 0.0f, 0.0f, 1.0f});
-  b.add_input<decl::Float>(N_("Alpha")).default_value(1.0f).min(0.0f).max(1.0f);
-  b.add_input<decl::Float>(N_("Z")).default_value(1.0f).min(0.0f).max(1.0f);
+  b.add_input<decl::Color>("Image").default_value({0.0f, 0.0f, 0.0f, 1.0f});
+  b.add_input<decl::Float>("Alpha").default_value(1.0f).min(0.0f).max(1.0f);
 }
 
 static void node_composit_buts_composite(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
@@ -43,9 +42,12 @@ class CompositeOperation : public NodeOperation {
 
   void execute() override
   {
+    if (!context().is_valid_compositing_region()) {
+      return;
+    }
+
     const Result &image = get_input("Image");
     const Result &alpha = get_input("Alpha");
-
     if (image.is_single_value() && alpha.is_single_value()) {
       execute_clear();
     }
@@ -81,14 +83,17 @@ class CompositeOperation : public NodeOperation {
   /* Executes when the alpha channel of the image is ignored. */
   void execute_ignore_alpha()
   {
-    GPUShader *shader = shader_manager().get("compositor_write_output_opaque");
+    GPUShader *shader = context().get_shader("compositor_write_output_opaque",
+                                             ResultPrecision::Half);
     GPU_shader_bind(shader);
 
     /* The compositing space might be limited to a subset of the output texture, so only write into
      * that compositing region. */
     const rcti compositing_region = context().get_compositing_region();
     const int2 lower_bound = int2(compositing_region.xmin, compositing_region.ymin);
-    GPU_shader_uniform_2iv(shader, "compositing_region_lower_bound", lower_bound);
+    const int2 upper_bound = int2(compositing_region.xmax, compositing_region.ymax);
+    GPU_shader_uniform_2iv(shader, "lower_bound", lower_bound);
+    GPU_shader_uniform_2iv(shader, "upper_bound", upper_bound);
 
     const Result &image = get_input("Image");
     image.bind_as_texture(shader, "input_tx");
@@ -109,14 +114,16 @@ class CompositeOperation : public NodeOperation {
    * to the output texture. */
   void execute_copy()
   {
-    GPUShader *shader = shader_manager().get("compositor_write_output");
+    GPUShader *shader = context().get_shader("compositor_write_output", ResultPrecision::Half);
     GPU_shader_bind(shader);
 
     /* The compositing space might be limited to a subset of the output texture, so only write into
      * that compositing region. */
     const rcti compositing_region = context().get_compositing_region();
     const int2 lower_bound = int2(compositing_region.xmin, compositing_region.ymin);
-    GPU_shader_uniform_2iv(shader, "compositing_region_lower_bound", lower_bound);
+    const int2 upper_bound = int2(compositing_region.xmax, compositing_region.ymax);
+    GPU_shader_uniform_2iv(shader, "lower_bound", lower_bound);
+    GPU_shader_uniform_2iv(shader, "upper_bound", upper_bound);
 
     const Result &image = get_input("Image");
     image.bind_as_texture(shader, "input_tx");
@@ -136,14 +143,17 @@ class CompositeOperation : public NodeOperation {
   /* Executes when the alpha channel of the image is set as the value of the input alpha. */
   void execute_set_alpha()
   {
-    GPUShader *shader = shader_manager().get("compositor_write_output_alpha");
+    GPUShader *shader = context().get_shader("compositor_write_output_alpha",
+                                             ResultPrecision::Half);
     GPU_shader_bind(shader);
 
     /* The compositing space might be limited to a subset of the output texture, so only write into
      * that compositing region. */
     const rcti compositing_region = context().get_compositing_region();
     const int2 lower_bound = int2(compositing_region.xmin, compositing_region.ymin);
-    GPU_shader_uniform_2iv(shader, "compositing_region_lower_bound", lower_bound);
+    const int2 upper_bound = int2(compositing_region.xmax, compositing_region.ymax);
+    GPU_shader_uniform_2iv(shader, "lower_bound", lower_bound);
+    GPU_shader_uniform_2iv(shader, "upper_bound", upper_bound);
 
     const Result &image = get_input("Image");
     image.bind_as_texture(shader, "input_tx");

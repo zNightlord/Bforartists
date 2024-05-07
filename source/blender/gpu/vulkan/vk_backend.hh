@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2022 Blender Foundation. All rights reserved. */
+/* SPDX-FileCopyrightText: 2022 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup gpu
@@ -9,22 +10,34 @@
 
 #include "gpu_backend.hh"
 
+#ifdef WITH_RENDERDOC
+#  include "renderdoc_api.hh"
+#endif
+
 #include "vk_common.hh"
+#include "vk_device.hh"
 
 #include "shaderc/shaderc.hpp"
 
 namespace blender::gpu {
 
 class VKContext;
+class VKDescriptorSet;
+class VKDescriptorSetTracker;
 
 class VKBackend : public GPUBackend {
  private:
   shaderc::Compiler shaderc_compiler_;
+#ifdef WITH_RENDERDOC
+  renderdoc::api::Renderdoc renderdoc_api_;
+#endif
+  /* Global instance to device handles. */
+  VKDevice device_;
 
  public:
   VKBackend()
   {
-    VKBackend::init_platform();
+    platform_init();
   }
 
   virtual ~VKBackend()
@@ -59,13 +72,38 @@ class VKBackend : public GPUBackend {
   void render_end() override;
   void render_step() override;
 
+  bool debug_capture_begin(const char *title);
+  void debug_capture_end();
+
   shaderc::Compiler &get_shaderc_compiler();
 
-  static void capabilities_init(VKContext &context);
+  static VKBackend &get()
+  {
+    return *static_cast<VKBackend *>(GPUBackend::get());
+  }
+
+  const VKDevice &device_get() const
+  {
+    return device_;
+  }
+
+  VKDevice &device_get()
+  {
+    return device_;
+  }
+
+  static void platform_init(const VKDevice &device);
+  static void capabilities_init(VKDevice &device);
 
  private:
-  static void init_platform();
+  static void detect_workarounds(VKDevice &device);
+  static void platform_init();
   static void platform_exit();
+
+  /* These classes are allowed to modify the global device. */
+  friend class VKContext;
+  friend class VKDescriptorSet;
+  friend class VKDescriptorSetTracker;
 };
 
 }  // namespace blender::gpu

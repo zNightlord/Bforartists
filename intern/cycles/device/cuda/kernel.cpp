@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: Apache-2.0
- * Copyright 2011-2022 Blender Foundation */
+/* SPDX-FileCopyrightText: 2011-2022 Blender Foundation
+ *
+ * SPDX-License-Identifier: Apache-2.0 */
 
 #ifdef WITH_CUDA
 
@@ -53,4 +54,4 @@ bool CUDADeviceKernels::available(DeviceKernel kernel) const
 
 CCL_NAMESPACE_END
 
-#endif /* WITH_CUDA*/
+#endif /* WITH_CUDA */

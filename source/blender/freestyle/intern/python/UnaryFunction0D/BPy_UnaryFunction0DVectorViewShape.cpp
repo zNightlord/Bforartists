@@ -1,4 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* SPDX-FileCopyrightText: 2008-2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup freestyle
@@ -47,7 +49,9 @@ int UnaryFunction0DVectorViewShape_Init(PyObject *module)
 
 //------------------------INSTANCE METHODS ----------------------------------
 
-static char UnaryFunction0DVectorViewShape___doc__[] =
+PyDoc_STRVAR(
+    /* Wrap. */
+    UnaryFunction0DVectorViewShape___doc__,
     "Class hierarchy: :class:`UnaryFunction0D` > :class:`UnaryFunction0DVectorViewShape`\n"
     "\n"
     "Base class for unary functions (functors) that work on\n"
@@ -56,7 +60,7 @@ static char UnaryFunction0DVectorViewShape___doc__[] =
     "\n"
     ".. method:: __init__()\n"
     "\n"
-    "   Default constructor.\n";
+    "   Default constructor.\n");
 
 static int UnaryFunction0DVectorViewShape___init__(BPy_UnaryFunction0DVectorViewShape *self,
                                                    PyObject *args,
@@ -92,7 +96,8 @@ static PyObject *UnaryFunction0DVectorViewShape___call__(BPy_UnaryFunction0DVect
   PyObject *obj;
 
   if (!PyArg_ParseTupleAndKeywords(
-          args, kwds, "O!", (char **)kwlist, &Interface0DIterator_Type, &obj)) {
+          args, kwds, "O!", (char **)kwlist, &Interface0DIterator_Type, &obj))
+  {
     return nullptr;
   }
 
@@ -121,7 +126,7 @@ static PyObject *UnaryFunction0DVectorViewShape___call__(BPy_UnaryFunction0DVect
 /*-----------------------BPy_UnaryFunction0DVectorViewShape type definition ---------------------*/
 
 PyTypeObject UnaryFunction0DVectorViewShape_Type = {
-    PyVarObject_HEAD_INIT(nullptr, 0)
+    /*ob_base*/ PyVarObject_HEAD_INIT(nullptr, 0)
     /*tp_name*/ "UnaryFunction0DVectorViewShape",
     /*tp_basicsize*/ sizeof(BPy_UnaryFunction0DVectorViewShape),
     /*tp_itemsize*/ 0,

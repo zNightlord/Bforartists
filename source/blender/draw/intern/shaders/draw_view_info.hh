@@ -1,6 +1,8 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* SPDX-FileCopyrightText: 2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "draw_defines.h"
+#include "draw_defines.hh"
 #include "gpu_shader_create_info.hh"
 
 /* -------------------------------------------------------------------- */
@@ -46,16 +48,21 @@ GPU_SHADER_CREATE_INFO(draw_resource_handle)
 
 GPU_SHADER_CREATE_INFO(draw_view)
     .uniform_buf(DRW_VIEW_UBO_SLOT, "ViewMatrices", "drw_view_[DRW_VIEW_LEN]", Frequency::PASS)
+    .define("DRAW_VIEW_CREATE_INFO")
     .define("drw_view", "drw_view_[drw_view_id]")
-    .typedef_source("draw_shader_shared.h");
+    .typedef_source("draw_shader_shared.hh");
 
 GPU_SHADER_CREATE_INFO(draw_view_culling)
     .uniform_buf(DRW_VIEW_CULLING_UBO_SLOT, "ViewCullingData", "drw_view_culling_[DRW_VIEW_LEN]")
+    .define("DRW_VIEW_CULLING_INFO")
     .define("drw_view_culling", "drw_view_culling_[drw_view_id]")
-    .typedef_source("draw_shader_shared.h");
+    .typedef_source("draw_shader_shared.hh");
 
 GPU_SHADER_CREATE_INFO(draw_modelmat)
-    .uniform_buf(8, "ObjectMatrices", "drw_matrices[DRW_RESOURCE_CHUNK_LEN]", Frequency::BATCH)
+    .uniform_buf(DRW_OBJ_MAT_UBO_SLOT,
+                 "ObjectMatrices",
+                 "drw_matrices[DRW_RESOURCE_CHUNK_LEN]",
+                 Frequency::BATCH)
     .define("ModelMatrix", "(drw_matrices[resource_id].model)")
     .define("ModelMatrixInverse", "(drw_matrices[resource_id].model_inverse)")
     .additional_info("draw_view");
@@ -89,7 +96,7 @@ GPU_SHADER_CREATE_INFO(drw_clipped)
  * \{ */
 
 GPU_SHADER_CREATE_INFO(draw_globals)
-    .typedef_source("draw_common_shader_shared.h")
+    .typedef_source("draw_common_shader_shared.hh")
     .uniform_buf(7, "GlobalsUboStorage", "globalsBlock", Frequency::PASS);
 
 /** \} */
@@ -115,16 +122,35 @@ GPU_SHADER_CREATE_INFO(draw_hair)
     .push_constant(Type::MAT4, "hairDupliMatrix")
     .additional_info("draw_modelmat", "draw_resource_id");
 
+GPU_SHADER_CREATE_INFO(draw_hair_new)
+    .define("HAIR_SHADER")
+    .define("DRW_HAIR_INFO")
+    .sampler(0, ImageType::FLOAT_BUFFER, "hairPointBuffer")
+    /* TODO(@fclem): Pack these into one UBO. */
+    .push_constant(Type::INT, "hairStrandsRes")
+    .push_constant(Type::INT, "hairThicknessRes")
+    .push_constant(Type::FLOAT, "hairRadRoot")
+    .push_constant(Type::FLOAT, "hairRadTip")
+    .push_constant(Type::FLOAT, "hairRadShape")
+    .push_constant(Type::BOOL, "hairCloseTip")
+    .push_constant(Type::INT, "hairStrandOffset")
+    .push_constant(Type::MAT4, "hairDupliMatrix");
+
 GPU_SHADER_CREATE_INFO(draw_pointcloud)
     .sampler(0, ImageType::FLOAT_BUFFER, "ptcloud_pos_rad_tx", Frequency::BATCH)
     .define("POINTCLOUD_SHADER")
     .define("DRW_POINTCLOUD_INFO")
-    .vertex_in(0, Type::VEC4, "pos")
-    .vertex_in(1, Type::VEC3, "pos_inst")
-    .vertex_in(2, Type::VEC3, "nor")
     .additional_info("draw_modelmat_instanced_attr", "draw_resource_id_uniform");
 
+GPU_SHADER_CREATE_INFO(draw_pointcloud_new)
+    .sampler(0, ImageType::FLOAT_BUFFER, "ptcloud_pos_rad_tx", Frequency::BATCH)
+    .define("POINTCLOUD_SHADER")
+    .define("DRW_POINTCLOUD_INFO");
+
 GPU_SHADER_CREATE_INFO(draw_volume).additional_info("draw_modelmat", "draw_resource_id_uniform");
+
+GPU_SHADER_CREATE_INFO(draw_volume_new)
+    .additional_info("draw_modelmat_new", "draw_resource_handle_new");
 
 GPU_SHADER_CREATE_INFO(draw_gpencil)
     .typedef_source("gpencil_shader_shared.h")
@@ -139,6 +165,19 @@ GPU_SHADER_CREATE_INFO(draw_gpencil)
     .push_constant(Type::FLOAT, "gpThicknessOffset")
     .additional_info("draw_modelmat", "draw_object_infos");
 
+GPU_SHADER_CREATE_INFO(draw_gpencil_new)
+    .typedef_source("gpencil_shader_shared.h")
+    .define("DRW_GPENCIL_INFO")
+    .sampler(0, ImageType::FLOAT_BUFFER, "gp_pos_tx")
+    .sampler(1, ImageType::FLOAT_BUFFER, "gp_col_tx")
+    /* Per Object */
+    .define("gpThicknessScale", "1.0") /* TODO(fclem): Replace with object info. */
+    /* Per Layer */
+    .additional_info("draw_modelmat_new",
+                     "draw_resource_id_varying",
+                     "draw_view",
+                     "draw_object_infos_new");
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -147,7 +186,7 @@ GPU_SHADER_CREATE_INFO(draw_gpencil)
 
 GPU_SHADER_CREATE_INFO(draw_resource_finalize)
     .do_static_compilation(true)
-    .typedef_source("draw_shader_shared.h")
+    .typedef_source("draw_shader_shared.hh")
     .define("DRAW_FINALIZE_SHADER")
     .local_group_size(DRW_FINALIZE_GROUP_SIZE)
     .storage_buf(0, Qualifier::READ, "ObjectMatrices", "matrix_buf[]")
@@ -158,8 +197,8 @@ GPU_SHADER_CREATE_INFO(draw_resource_finalize)
 
 GPU_SHADER_CREATE_INFO(draw_view_finalize)
     .do_static_compilation(true)
-    .local_group_size(64) /* DRW_VIEW_MAX */
-    .define("DRW_VIEW_LEN", "64")
+    .local_group_size(DRW_VIEW_MAX)
+    .define("DRW_VIEW_LEN", STRINGIFY(DRW_VIEW_MAX))
     .storage_buf(0, Qualifier::READ_WRITE, "ViewCullingData", "view_culling_buf[DRW_VIEW_LEN]")
     .compute_source("draw_view_finalize_comp.glsl")
     .additional_info("draw_view");
@@ -167,7 +206,7 @@ GPU_SHADER_CREATE_INFO(draw_view_finalize)
 GPU_SHADER_CREATE_INFO(draw_visibility_compute)
     .do_static_compilation(true)
     .local_group_size(DRW_VISIBILITY_GROUP_SIZE)
-    .define("DRW_VIEW_LEN", "64")
+    .define("DRW_VIEW_LEN", STRINGIFY(DRW_VIEW_MAX))
     .storage_buf(0, Qualifier::READ, "ObjectBounds", "bounds_buf[]")
     .storage_buf(1, Qualifier::READ_WRITE, "uint", "visibility_buf[]")
     .push_constant(Type::INT, "resource_len")
@@ -178,7 +217,7 @@ GPU_SHADER_CREATE_INFO(draw_visibility_compute)
 
 GPU_SHADER_CREATE_INFO(draw_command_generate)
     .do_static_compilation(true)
-    .typedef_source("draw_shader_shared.h")
+    .typedef_source("draw_shader_shared.hh")
     .typedef_source("draw_command_shared.hh")
     .local_group_size(DRW_COMMAND_GROUP_SIZE)
     .storage_buf(0, Qualifier::READ_WRITE, "DrawGroup", "group_buf[]")
@@ -237,8 +276,9 @@ GPU_SHADER_CREATE_INFO(draw_resource_handle_new).define("resource_handle", "drw_
  * \{ */
 
 GPU_SHADER_CREATE_INFO(draw_modelmat_new_common)
-    .typedef_source("draw_shader_shared.h")
+    .typedef_source("draw_shader_shared.hh")
     .storage_buf(DRW_OBJ_MAT_SLOT, Qualifier::READ, "ObjectMatrices", "drw_matrix_buf[]")
+    .define("DRAW_MODELMAT_CREATE_INFO")
     .define("drw_ModelMatrixInverse", "drw_matrix_buf[resource_id].model_inverse")
     .define("drw_ModelMatrix", "drw_matrix_buf[resource_id].model")
     /* TODO For compatibility with old shaders. To be removed. */

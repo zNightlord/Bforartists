@@ -1,4 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* SPDX-FileCopyrightText: 2022-2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup gpu
@@ -9,7 +11,7 @@
 
 #include "BLI_assert.h"
 
-#include "GPU_batch.h"
+#include "GPU_batch.hh"
 #include "mtl_common.hh"
 #include "mtl_drawlist.hh"
 #include "mtl_primitive.hh"
@@ -66,7 +68,7 @@ MTLDrawList::~MTLDrawList()
 
 void MTLDrawList::init()
 {
-  MTLContext *ctx = reinterpret_cast<MTLContext *>(GPU_context_active_get());
+  MTLContext *ctx = static_cast<MTLContext *>(unwrap(GPU_context_active_get()));
   BLI_assert(ctx);
   BLI_assert(MDI_ENABLED);
   BLI_assert(data_ == nullptr);
@@ -79,7 +81,7 @@ void MTLDrawList::init()
   command_offset_ = 0;
 }
 
-void MTLDrawList::append(GPUBatch *gpu_batch, int i_first, int i_count)
+void MTLDrawList::append(Batch *gpu_batch, int i_first, int i_count)
 {
   /* Fallback when MultiDrawIndirect is not supported/enabled. */
   MTLShader *shader = static_cast<MTLShader *>(unwrap(gpu_batch->shader));
@@ -186,9 +188,12 @@ void MTLDrawList::submit()
 
   /* Bind Batch to setup render pipeline state. */
   BLI_assert(batch_ != nullptr);
-  id<MTLRenderCommandEncoder> rec = batch_->bind(0, 0, 0, 0);
+  id<MTLRenderCommandEncoder> rec = batch_->bind(0);
   if (rec == nil) {
     BLI_assert_msg(false, "A RenderCommandEncoder should always be available!\n");
+
+    /* Unbind batch. */
+    batch_->unbind(rec);
     return;
   }
 
@@ -272,7 +277,7 @@ void MTLDrawList::submit()
   }
 
   /* Unbind batch. */
-  batch_->unbind();
+  batch_->unbind(rec);
 
   /* Reset command offsets. */
   command_len_ = 0;

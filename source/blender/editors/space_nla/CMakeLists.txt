@@ -1,20 +1,16 @@
+# SPDX-FileCopyrightText: 2023 Blender Authors
+#
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 set(INC
   ../include
   ../../blenkernel
-  ../../blenlib
   ../../blenloader
   ../../blentranslation
-  ../../depsgraph
   ../../gpu
-  ../../makesdna
   ../../makesrna
   ../../windowmanager
-  ../../../../intern/guardedalloc
 
-  # dna_type_offsets.h
-  ${CMAKE_CURRENT_BINARY_DIR}/../../makesdna/intern
   # RNA_prototypes.h
   ${CMAKE_BINARY_DIR}/source/blender/makesrna
 )
@@ -23,22 +19,24 @@ set(INC_SYS
 )
 
 set(SRC
-  nla_buttons.c
-  nla_channels.c
-  nla_draw.c
-  nla_edit.c
-  nla_ops.c
-  nla_select.c
-  space_nla.c
+  nla_buttons.cc
+  nla_draw.cc
+  nla_edit.cc
+  nla_ops.cc
+  nla_select.cc
+  nla_tracks.cc
+  space_nla.cc
 
-  nla_intern.h
+  nla_intern.hh
 )
 
 set(LIB
   bf_blenkernel
-  bf_blenlib
+  PRIVATE bf::blenlib
+  PRIVATE bf::depsgraph
+  PRIVATE bf::dna
+  PRIVATE bf::intern::guardedalloc
 )
-
 
 blender_add_lib(bf_editor_space_nla "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
 

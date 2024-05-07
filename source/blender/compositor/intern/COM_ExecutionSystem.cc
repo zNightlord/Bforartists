@@ -1,14 +1,13 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2011 Blender Foundation. */
+/* SPDX-FileCopyrightText: 2011 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "COM_ExecutionSystem.h"
 
 #include "COM_Debug.h"
-#include "COM_ExecutionGroup.h"
 #include "COM_FullFrameExecutionModel.h"
 #include "COM_NodeOperation.h"
 #include "COM_NodeOperationBuilder.h"
-#include "COM_TiledExecutionModel.h"
 #include "COM_WorkPackage.h"
 #include "COM_WorkScheduler.h"
 
@@ -23,9 +22,13 @@ ExecutionSystem::ExecutionSystem(RenderData *rd,
                                  bNodeTree *editingtree,
                                  bool rendering,
                                  bool fastcalculation,
-                                 const char *view_name)
+                                 const char *view_name,
+                                 realtime_compositor::RenderContext *render_context,
+                                 ProfilerData &profiler_data)
+    : profiler_data_(profiler_data)
 {
   num_work_threads_ = WorkScheduler::get_num_cpu_threads();
+  context_.set_render_context(render_context);
   context_.set_view_name(view_name);
   context_.set_scene(scene);
   context_.set_bnodetree(editingtree);
@@ -39,8 +42,6 @@ ExecutionSystem::ExecutionSystem(RenderData *rd,
     context_.set_quality((eCompositorQuality)editingtree->edit_quality);
   }
   context_.set_rendering(rendering);
-  context_.setHasActiveOpenCLDevices(WorkScheduler::has_gpu_devices() &&
-                                     (editingtree->flag & NTREE_COM_OPENCL));
 
   context_.set_render_data(rd);
 
@@ -52,17 +53,7 @@ ExecutionSystem::ExecutionSystem(RenderData *rd,
     builder.convert_to_operations(this);
   }
 
-  switch (context_.get_execution_model()) {
-    case eExecutionModel::Tiled:
-      execution_model_ = new TiledExecutionModel(context_, operations_, groups_);
-      break;
-    case eExecutionModel::FullFrame:
-      execution_model_ = new FullFrameExecutionModel(context_, active_buffers_, operations_);
-      break;
-    default:
-      BLI_assert_msg(0, "Non implemented execution model");
-      break;
-  }
+  execution_model_ = new FullFrameExecutionModel(context_, active_buffers_, operations_);
 }
 
 ExecutionSystem::~ExecutionSystem()
@@ -76,27 +67,22 @@ ExecutionSystem::~ExecutionSystem()
     delete operation;
   }
   operations_.clear();
-
-  for (ExecutionGroup *group : groups_) {
-    delete group;
-  }
-  groups_.clear();
 }
 
-void ExecutionSystem::set_operations(const Vector<NodeOperation *> &operations,
-                                     const Vector<ExecutionGroup *> &groups)
+void ExecutionSystem::set_operations(const Span<NodeOperation *> operations)
 {
   operations_ = operations;
-  groups_ = groups;
 }
 
 void ExecutionSystem::execute()
 {
-  DebugInfo::execute_started(this);
+  DebugInfo::execute_started();
   for (NodeOperation *op : operations_) {
     op->init_data();
   }
   execution_model_->execute(*this);
+
+  profiler_data_ = execution_model_->get_profiler_data();
 }
 
 void ExecutionSystem::execute_work(const rcti &work_rect,
@@ -108,7 +94,7 @@ void ExecutionSystem::execute_work(const rcti &work_rect,
 
   /* Split work vertically to maximize continuous memory. */
   const int work_height = BLI_rcti_size_y(&work_rect);
-  const int num_sub_works = MIN2(num_work_threads_, work_height);
+  const int num_sub_works = std::min(num_work_threads_, work_height);
   const int split_height = num_sub_works == 0 ? 0 : work_height / num_sub_works;
   int remaining_height = work_height - split_height * num_sub_works;
 
@@ -125,7 +111,6 @@ void ExecutionSystem::execute_work(const rcti &work_rect,
     }
 
     WorkPackage &sub_work = sub_works[i];
-    sub_work.type = eWorkPackageType::CustomFunction;
     sub_work.execute_fn = [=, &work_func, &work_rect]() {
       if (is_breaked()) {
         return;

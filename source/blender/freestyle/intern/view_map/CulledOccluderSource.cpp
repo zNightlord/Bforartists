@@ -1,4 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* SPDX-FileCopyrightText: 2011-2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup freestyle
@@ -11,7 +13,7 @@
 
 #include "BLI_sys_types.h"
 
-#include "BKE_global.h"
+#include "BKE_global.hh"
 
 namespace Freestyle {
 
@@ -51,7 +53,7 @@ bool CulledOccluderSource::next()
     }
   }
   if (G.debug & G_DEBUG_FREESTYLE) {
-    std::cout << "Finished generating occluders.  Rejected " << rejected << " faces." << std::endl;
+    std::cout << "Finished generating occluders. Rejected " << rejected << " faces." << std::endl;
   }
   return false;
 }

@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: Apache-2.0
- * Copyright 2021-2022 Blender Foundation */
+/* SPDX-FileCopyrightText: 2021-2022 Blender Foundation
+ *
+ * SPDX-License-Identifier: Apache-2.0 */
 
 #pragma once
 
@@ -38,6 +39,8 @@ class MetalDeviceQueue : public DeviceQueue {
   virtual void zero_to_device(device_memory &mem) override;
   virtual void copy_to_device(device_memory &mem) override;
   virtual void copy_from_device(device_memory &mem) override;
+
+  virtual void *native_queue() override;
 
  protected:
   void setup_capture();
@@ -93,10 +96,13 @@ class MetalDeviceQueue : public DeviceQueue {
     uint64_t timing_id;
   };
   std::vector<TimingData> command_encoder_labels_;
-  API_AVAILABLE(macos(10.14), ios(14.0))
-  id<MTLSharedEvent> timing_shared_event_ = nil;
-  uint64_t timing_shared_event_id_;
-  uint64_t command_buffer_start_timing_id_;
+  bool profiling_enabled_ = false;
+  uint64_t current_encoder_idx_ = 0;
+
+  id<MTLCounterSampleBuffer> counter_sample_buffer_ = nil;
+  std::atomic<uint64_t> counter_sample_buffer_curr_idx_ = 0;
+
+  void flush_timing_stats();
 
   struct TimingStats {
     double total_time = 0.0;

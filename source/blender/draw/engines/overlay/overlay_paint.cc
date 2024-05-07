@@ -1,17 +1,18 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2019 Blender Foundation. */
+/* SPDX-FileCopyrightText: 2019 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup draw_engine
  */
 
-#include "DRW_render.h"
+#include "DRW_render.hh"
 
 #include "BKE_image.h"
 
 #include "DNA_mesh_types.h"
 
-#include "DEG_depsgraph_query.h"
+#include "DEG_depsgraph_query.hh"
 
 #include "overlay_private.hh"
 
@@ -30,9 +31,10 @@ static bool paint_object_is_rendered_transparent(View3D *v3d, Object *ob)
       return ob->color[3] < 1.0f;
     }
     if (ob && ob->type == OB_MESH && ob->data &&
-        v3d->shading.color_type == V3D_SHADING_MATERIAL_COLOR) {
-      Mesh *me = static_cast<Mesh *>(ob->data);
-      for (int i = 0; i < me->totcol; i++) {
+        v3d->shading.color_type == V3D_SHADING_MATERIAL_COLOR)
+    {
+      Mesh *mesh = static_cast<Mesh *>(ob->data);
+      for (int i = 0; i < mesh->totcol; i++) {
         Material *mat = BKE_object_material_get_eval(ob, i + 1);
         if (mat && mat->a < 1.0f) {
           return true;
@@ -66,7 +68,7 @@ void OVERLAY_paint_cache_init(OVERLAY_Data *vedata)
   const DRWContextState *draw_ctx = DRW_context_state_get();
   OVERLAY_PassList *psl = vedata->psl;
   OVERLAY_PrivateData *pd = vedata->stl->pd;
-  struct GPUShader *sh;
+  GPUShader *sh;
   DRWShadingGroup *grp;
   DRWState state;
 
@@ -137,7 +139,7 @@ void OVERLAY_paint_cache_init(OVERLAY_Data *vedata)
         state = DRW_STATE_WRITE_COLOR | DRW_STATE_DEPTH_EQUAL | DRW_STATE_BLEND_ALPHA;
         DRW_PASS_CREATE(psl->paint_color_ps, state | pd->clipping_state);
 
-        GPUTexture *tex = BKE_image_get_gpu_texture(imapaint->stencil, nullptr, nullptr);
+        GPUTexture *tex = BKE_image_get_gpu_texture(imapaint->stencil, nullptr);
 
         const bool mask_premult = (imapaint->stencil->alpha_mode == IMA_ALPHA_PREMUL);
         const bool mask_inverted = (imapaint->flag & IMAGEPAINT_PROJECT_LAYER_STENCIL_INV) != 0;
@@ -191,7 +193,7 @@ void OVERLAY_paint_cache_init(OVERLAY_Data *vedata)
 void OVERLAY_paint_texture_cache_populate(OVERLAY_Data *vedata, Object *ob)
 {
   OVERLAY_PrivateData *pd = vedata->stl->pd;
-  struct GPUBatch *geom = nullptr;
+  blender::gpu::Batch *geom = nullptr;
 
   const Mesh *me_orig = static_cast<Mesh *>(DEG_get_original_object(ob)->data);
   const bool use_face_sel = (me_orig->editflag & ME_EDIT_PAINT_FACE_SEL) != 0;
@@ -210,7 +212,7 @@ void OVERLAY_paint_texture_cache_populate(OVERLAY_Data *vedata, Object *ob)
 void OVERLAY_paint_vertex_cache_populate(OVERLAY_Data *vedata, Object *ob)
 {
   OVERLAY_PrivateData *pd = vedata->stl->pd;
-  struct GPUBatch *geom = nullptr;
+  blender::gpu::Batch *geom = nullptr;
 
   const Mesh *me_orig = static_cast<Mesh *>(DEG_get_original_object(ob)->data);
   const bool is_edit_mode = (pd->ctx_mode == CTX_MODE_EDIT_MESH);

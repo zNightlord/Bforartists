@@ -1,19 +1,20 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2022 Blender Foundation. */
+/* SPDX-FileCopyrightText: 2022 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup draw
  */
 
-#include "BKE_global.h"
-#include "GPU_compute.h"
+#include "BKE_global.hh"
+#include "GPU_compute.hh"
 
 #include "draw_debug.hh"
-#include "draw_defines.h"
-#include "draw_manager.h"
+#include "draw_defines.hh"
 #include "draw_manager.hh"
+#include "draw_manager_c.hh"
 #include "draw_pass.hh"
-#include "draw_shader.h"
+#include "draw_shader.hh"
 
 namespace blender::draw {
 
@@ -31,6 +32,11 @@ void Manager::begin_sync()
   bounds_buf.swap();
   infos_buf.swap();
 
+  matrix_buf.current().trim_to_next_power_of_2(resource_len_);
+  bounds_buf.current().trim_to_next_power_of_2(resource_len_);
+  infos_buf.current().trim_to_next_power_of_2(resource_len_);
+  attributes_buf.trim_to_next_power_of_2(attribute_len_);
+
   /* TODO: This means the reference is kept until further redraw or manager tear-down. Instead,
    * they should be released after each draw loop. But for now, mimics old DRW behavior. */
   for (GPUTexture *texture : acquired_textures) {
@@ -41,7 +47,9 @@ void Manager::begin_sync()
   acquired_textures.clear();
   layer_attributes.clear();
 
-#ifdef DEBUG
+/* For some reason, if this uninitialized data pattern was enabled (ie release asserts enabled),
+ * The viewport just gives up rendering objects on ARM64 devices. Possibly Mesa GLOn12-related. */
+#if !defined(NDEBUG) && !defined(_M_ARM64)
   /* Detect uninitialized data. */
   memset(matrix_buf.current().data(),
          0xF0,
@@ -81,7 +89,8 @@ void Manager::sync_layer_attributes()
 
   for (uint32_t id : id_list) {
     if (layer_attributes_buf[count].sync(
-            DST.draw_ctx.scene, DST.draw_ctx.view_layer, layer_attributes.lookup(id))) {
+            DST.draw_ctx.scene, DST.draw_ctx.view_layer, layer_attributes.lookup(id)))
+    {
       /* Check if the buffer is full. */
       if (++count == size) {
         break;
@@ -125,7 +134,7 @@ void Manager::end_sync()
 
 void Manager::debug_bind()
 {
-#ifdef DEBUG
+#ifdef _DEBUG
   if (DST.debug == nullptr) {
     return;
   }

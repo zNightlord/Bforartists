@@ -1,7 +1,8 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2019 Blender Foundation. All rights reserved. */
-#include "usd_writer_hair.h"
-#include "usd_hierarchy_iterator.h"
+/* SPDX-FileCopyrightText: 2019 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
+#include "usd_writer_hair.hh"
+#include "usd_hierarchy_iterator.hh"
 
 #include <pxr/usd/usdGeom/basisCurves.h>
 #include <pxr/usd/usdGeom/tokens.h>
@@ -12,9 +13,7 @@
 
 namespace blender::io::usd {
 
-USDHairWriter::USDHairWriter(const USDExporterContext &ctx) : USDAbstractWriter(ctx)
-{
-}
+USDHairWriter::USDHairWriter(const USDExporterContext &ctx) : USDAbstractWriter(ctx) {}
 
 void USDHairWriter::do_write(HierarchyContext &context)
 {
@@ -61,6 +60,11 @@ void USDHairWriter::do_write(HierarchyContext &context)
     pxr::VtArray<pxr::GfVec3f> colors;
     colors.push_back(pxr::GfVec3f(cache[0]->col));
     curves.CreateDisplayColorAttr(pxr::VtValue(colors));
+  }
+
+  if (psys->part) {
+    auto prim = curves.GetPrim();
+    write_id_properties(prim, psys->part->id, timecode);
   }
 
   this->author_extent(timecode, curves);

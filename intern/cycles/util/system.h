@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: Apache-2.0
- * Copyright 2011-2022 Blender Foundation */
+/* SPDX-FileCopyrightText: 2011-2022 Blender Foundation
+ *
+ * SPDX-License-Identifier: Apache-2.0 */
 
 #ifndef __UTIL_SYSTEM_H__
 #define __UTIL_SYSTEM_H__
@@ -16,8 +17,7 @@ int system_console_width();
 
 std::string system_cpu_brand_string();
 int system_cpu_bits();
-bool system_cpu_support_sse2();
-bool system_cpu_support_sse41();
+bool system_cpu_support_sse42();
 bool system_cpu_support_avx2();
 
 size_t system_physical_ram();

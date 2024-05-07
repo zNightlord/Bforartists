@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2019-2023 Blender Authors
+#
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 import bpy
@@ -14,7 +16,7 @@ from bpy.props import (
 )
 from bpy.app.translations import (
     pgettext_iface as iface_,
-    pgettext_tip as tip_,
+    pgettext_tip as rpt_,
 )
 
 
@@ -78,29 +80,30 @@ class PREFERENCES_OT_copy_prev(Operator):
 
     @classmethod
     def previous_version(cls):
-        # Find config folder from previous version.
         import os
-        version = bpy.app.version
-        version_new = ((version[0] * 100) + version[1])
-        version_old = ((version[0] * 100) + version[1]) - 1
+        # Find config folder from previous version.
+        #
+        # Always allow to load startup data from any release from current major release cycle, and the previous one.
 
-        # Ensure we only try to copy files from a point release.
-        # The check below ensures the second numbers match.
-        while (version_new % 100) // 10 == (version_old % 100) // 10:
-            version_split = version_old // 100, version_old % 100
-            if os.path.isdir(cls._old_version_path(version_split)):
-                return version_split
-            version_old = version_old - 1
+        # NOTE: This value may need to be updated when the release cycle system is modified.
+        # Here could be `6` in theory (Blender 3.6 LTS), just give it a bit of extra room, such that it does not have to
+        # be updated if there ever exist a 3.7 release e.g.
+        MAX_MINOR_VERSION_FOR_PREVIOUS_MAJOR_LOOKUP = 10
 
-        # Support loading 2.8x..2.9x startup (any older isn't so useful to load).
-        # NOTE: remove this block for Blender 4.0 and later.
-        if version_old == 299:
-            version_old = 294
-            while version_old >= 280:
-                version_split = version_old // 100, version_old % 100
-                if os.path.isdir(cls._old_version_path(version_split)):
-                    return version_split
-                version_old = version_old - 1
+        version_new = bpy.app.version[:2]
+        version_old = [version_new[0], version_new[1] - 1]
+
+        while True:
+            while version_old[1] >= 0:
+                if os.path.isdir(cls._old_version_path(version_old)):
+                    return tuple(version_old)
+                version_old[1] -= 1
+            if version_new[0] == version_old[0]:
+                # Retry with older major version.
+                version_old[0] -= 1
+                version_old[1] = MAX_MINOR_VERSION_FOR_PREVIOUS_MAJOR_LOOKUP
+            else:
+                break
 
         return None
 
@@ -142,9 +145,11 @@ class PREFERENCES_OT_copy_prev(Operator):
         import shutil
         shutil.copytree(self._old_path(), self._new_path(), dirs_exist_ok=True, symlinks=True)
 
-        # reload preferences and recent-files.txt
+        # Reload preferences and `recent-files.txt`.
         bpy.ops.wm.read_userpref()
         bpy.ops.wm.read_history()
+        # Fix operator presets that have unwanted filepath properties
+        bpy.ops.wm.operator_presets_cleanup()
 
         # don't loose users work if they open the splash later.
         if bpy.data.is_saved is bpy.data.is_dirty is False:
@@ -173,7 +178,7 @@ class PREFERENCES_OT_keyconfig_test(Operator):
 
 
 class PREFERENCES_OT_keyconfig_import(Operator):
-    """Import key configuration from a python script"""
+    """Import key configuration from a Python script"""
     bl_idname = "preferences.keyconfig_import"
     bl_label = "Import Key Configuration..."
 
@@ -192,7 +197,7 @@ class PREFERENCES_OT_keyconfig_import(Operator):
         options={'HIDDEN'},
     )
     filter_python: BoolProperty(
-        name="Filter python",
+        name="Filter Python",
         default=True,
         options={'HIDDEN'},
     )
@@ -225,8 +230,8 @@ class PREFERENCES_OT_keyconfig_import(Operator):
                 shutil.copy(self.filepath, path)
             else:
                 shutil.move(self.filepath, path)
-        except Exception as ex:
-            self.report({'ERROR'}, tip_("Installing keymap failed: %s") % ex)
+        except BaseException as ex:
+            self.report({'ERROR'}, rpt_("Installing keymap failed: {:s}").format(str(ex)))
             return {'CANCELLED'}
 
         # sneaky way to check we're actually running the code.
@@ -244,7 +249,7 @@ class PREFERENCES_OT_keyconfig_import(Operator):
 
 
 class PREFERENCES_OT_keyconfig_export(Operator):
-    """Export key configuration to a python script"""
+    """Export key configuration to a Python script"""
     bl_idname = "preferences.keyconfig_export"
     bl_label = "Export Key Configuration..."
 
@@ -268,7 +273,7 @@ class PREFERENCES_OT_keyconfig_export(Operator):
         options={'HIDDEN'},
     )
     filter_python: BoolProperty(
-        name="Filter python",
+        name="Filter Python",
         default=True,
         options={'HIDDEN'},
     )
@@ -422,9 +427,9 @@ class PREFERENCES_OT_keyconfig_remove(Operator):
 # Add-on Operators
 
 class PREFERENCES_OT_addon_enable(Operator):
-    """Enable an add-on"""
+    """Turn on this extension"""
     bl_idname = "preferences.addon_enable"
-    bl_label = "Enable Add-on"
+    bl_label = "Enable Extension"
 
     module: StringProperty(
         name="Module",
@@ -438,25 +443,30 @@ class PREFERENCES_OT_addon_enable(Operator):
 
         def err_cb(ex):
             import traceback
+            traceback.print_exc()
+
+            # The full trace-back in the UI is unwieldy and associated with unhandled exceptions.
+            # Only show a single exception instead of the full trace-back,
+            # developers can debug using information printed in the console.
             nonlocal err_str
-            err_str = traceback.format_exc()
-            print(err_str)
+            err_str = str(ex)
 
         mod = addon_utils.enable(self.module, default_set=True, handle_error=err_cb)
 
         if mod:
-            info = addon_utils.module_bl_info(mod)
+            bl_info = addon_utils.module_bl_info(mod)
 
-            info_ver = info.get("blender", (0, 0, 0))
+            info_ver = bl_info.get("blender", (0, 0, 0))
 
             if info_ver > bpy.app.version:
                 self.report(
                     {'WARNING'},
-                    tip_("This script was written Blender "
-                         "version %d.%d.%d and might not "
-                         "function (correctly), "
-                         "though it is enabled")
-                    % info_ver
+                    rpt_(
+                        "This script was written Blender "
+                        "version {:d}.{:d}.{:d} and might not "
+                        "function (correctly), "
+                        "though it is enabled"
+                    ).format(info_ver)
                 )
             return {'FINISHED'}
         else:
@@ -468,9 +478,9 @@ class PREFERENCES_OT_addon_enable(Operator):
 
 
 class PREFERENCES_OT_addon_disable(Operator):
-    """Disable an add-on"""
+    """Turn off this extension"""
     bl_idname = "preferences.addon_disable"
-    bl_label = "Disable Add-on"
+    bl_label = "Disable Extension"
 
     module: StringProperty(
         name="Module",
@@ -540,7 +550,7 @@ class PREFERENCES_OT_theme_install(Operator):
 
         if not self.overwrite:
             if os.path.exists(path_dest):
-                self.report({'WARNING'}, tip_("File already installed to %r\n") % path_dest)
+                self.report({'WARNING'}, rpt_("File already installed to {!r}").format(path_dest))
                 return {'CANCELLED'}
 
         try:
@@ -549,8 +559,7 @@ class PREFERENCES_OT_theme_install(Operator):
                 filepath=path_dest,
                 menu_idname="USERPREF_MT_interface_theme_presets",
             )
-
-        except:
+        except BaseException:
             traceback.print_exc()
             return {'CANCELLED'}
 
@@ -587,12 +596,24 @@ class PREFERENCES_OT_addon_install(Operator):
         description="Remove existing add-ons with the same ID",
         default=True,
     )
+
+    def _target_path_items(_self, context):
+        default_item = ('DEFAULT', "Default", "")
+        if context is None:
+            return (
+                default_item,
+            )
+
+        paths = context.preferences.filepaths
+        return (
+            default_item,
+            None,
+            *[(item.name, item.name, "") for index, item in enumerate(paths.script_directories) if item.directory],
+        )
+
     target: EnumProperty(
         name="Target Path",
-        items=(
-            ('DEFAULT', "Default", ""),
-            ('PREFS', "Preferences", ""),
-        ),
+        items=_target_path_items,
     )
 
     filepath: StringProperty(
@@ -604,7 +625,7 @@ class PREFERENCES_OT_addon_install(Operator):
         options={'HIDDEN'},
     )
     filter_python: BoolProperty(
-        name="Filter python",
+        name="Filter Python",
         default=True,
         options={'HIDDEN'},
     )
@@ -626,9 +647,11 @@ class PREFERENCES_OT_addon_install(Operator):
             # Don't use `bpy.utils.script_paths(path="addons")` because we may not be able to write to it.
             path_addons = bpy.utils.user_resource('SCRIPTS', path="addons", create=True)
         else:
-            path_addons = context.preferences.filepaths.script_directory
-            if path_addons:
-                path_addons = os.path.join(path_addons, "addons")
+            paths = context.preferences.filepaths
+            for script_directory in paths.script_directories:
+                if script_directory.name == self.target:
+                    path_addons = os.path.join(script_directory.directory, "addons")
+                    break
 
         if not path_addons:
             self.report({'ERROR'}, "Failed to get add-ons path")
@@ -637,7 +660,7 @@ class PREFERENCES_OT_addon_install(Operator):
         if not os.path.isdir(path_addons):
             try:
                 os.makedirs(path_addons, exist_ok=True)
-            except:
+            except BaseException:
                 traceback.print_exc()
 
         # Check if we are installing from a target path,
@@ -647,7 +670,7 @@ class PREFERENCES_OT_addon_install(Operator):
         pyfile_dir = os.path.dirname(pyfile)
         for addon_path in addon_utils.paths():
             if os.path.samefile(pyfile_dir, addon_path):
-                self.report({'ERROR'}, tip_("Source file is in the add-on search path: %r") % addon_path)
+                self.report({'ERROR'}, rpt_("Source file is in the add-on search path: {!r}").format(addon_path))
                 return {'CANCELLED'}
         del addon_path
         del pyfile_dir
@@ -658,12 +681,19 @@ class PREFERENCES_OT_addon_install(Operator):
         # check to see if the file is in compressed format (.zip)
         if zipfile.is_zipfile(pyfile):
             try:
-                file_to_extract = zipfile.ZipFile(pyfile, 'r')
-            except:
+                file_to_extract = zipfile.ZipFile(pyfile, "r")
+            except BaseException:
                 traceback.print_exc()
                 return {'CANCELLED'}
 
             file_to_extract_root = _zipfile_root_namelist(file_to_extract)
+
+            if "__init__.py" in file_to_extract_root:
+                self.report({'ERROR'}, rpt_(
+                    "ZIP packaged incorrectly; __init__.py should be in a directory, not at top-level"
+                ))
+                return {'CANCELLED'}
+
             if self.overwrite:
                 for f in file_to_extract_root:
                     _module_filesystem_remove(path_addons, f)
@@ -671,12 +701,12 @@ class PREFERENCES_OT_addon_install(Operator):
                 for f in file_to_extract_root:
                     path_dest = os.path.join(path_addons, os.path.basename(f))
                     if os.path.exists(path_dest):
-                        self.report({'WARNING'}, tip_("File already installed to %r\n") % path_dest)
+                        self.report({'WARNING'}, rpt_("File already installed to {!r}").format(path_dest))
                         return {'CANCELLED'}
 
             try:  # extract the file to "addons"
                 file_to_extract.extractall(path_addons)
-            except:
+            except BaseException:
                 traceback.print_exc()
                 return {'CANCELLED'}
 
@@ -686,13 +716,13 @@ class PREFERENCES_OT_addon_install(Operator):
             if self.overwrite:
                 _module_filesystem_remove(path_addons, os.path.basename(pyfile))
             elif os.path.exists(path_dest):
-                self.report({'WARNING'}, tip_("File already installed to %r\n") % path_dest)
+                self.report({'WARNING'}, rpt_("File already installed to {!r}").format(path_dest))
                 return {'CANCELLED'}
 
             # if not compressed file just copy into the addon path
             try:
                 shutil.copyfile(pyfile, path_dest)
-            except:
+            except BaseException:
                 traceback.print_exc()
                 return {'CANCELLED'}
 
@@ -708,22 +738,22 @@ class PREFERENCES_OT_addon_install(Operator):
         # but for now just use the first
         for mod in addon_utils.modules(refresh=False):
             if mod.__name__ in addons_new:
-                info = addon_utils.module_bl_info(mod)
+                bl_info = addon_utils.module_bl_info(mod)
 
                 # show the newly installed addon.
                 context.preferences.view.show_addons_enabled_only = False
                 context.window_manager.addon_filter = 'All'
-                context.window_manager.addon_search = info["name"]
+                context.window_manager.addon_search = bl_info["name"]
                 break
 
         # in case a new module path was created to install this addon.
         bpy.utils.refresh_script_paths()
 
         # print message
-        msg = (
-            tip_("Modules Installed (%s) from %r into %r") %
-            (", ".join(sorted(addons_new)), pyfile, path_addons)
+        msg = rpt_("Modules Installed ({:s}) from {!r} into {!r}").format(
+            ", ".join(sorted(addons_new)), pyfile, path_addons,
         )
+
         print(msg)
         self.report({'INFO'}, msg)
 
@@ -766,7 +796,7 @@ class PREFERENCES_OT_addon_remove(Operator):
 
         path, isdir = PREFERENCES_OT_addon_remove.path_from_addon(self.module)
         if path is None:
-            self.report({'WARNING'}, tip_("Add-on path %r could not be found") % path)
+            self.report({'WARNING'}, rpt_("Add-on path {!r} could not be found").format(path))
             return {'CANCELLED'}
 
         # in case its enabled
@@ -785,9 +815,9 @@ class PREFERENCES_OT_addon_remove(Operator):
 
     # lame confirmation check
     def draw(self, _context):
-        self.layout.label(text=iface_("Remove Add-on: %r?") % self.module, translate=False)
+        self.layout.label(text=iface_("Remove Add-on: {!r}?").format(self.module), translate=False)
         path, _isdir = PREFERENCES_OT_addon_remove.path_from_addon(self.module)
-        self.layout.label(text=iface_("Path: %r") % path, translate=False)
+        self.layout.label(text=iface_("Path: {!r}").format(path), translate=False)
 
     def invoke(self, context, _event):
         wm = context.window_manager
@@ -808,12 +838,12 @@ class PREFERENCES_OT_addon_expand(Operator):
     def execute(self, _context):
         import addon_utils
 
-        module_name = self.module
+        addon_module_name = self.module
 
-        mod = addon_utils.addons_fake_modules.get(module_name)
+        mod = addon_utils.addons_fake_modules.get(addon_module_name)
         if mod is not None:
-            info = addon_utils.module_bl_info(mod)
-            info["show_expanded"] = not info["show_expanded"]
+            bl_info = addon_utils.module_bl_info(mod)
+            bl_info["show_expanded"] = not bl_info["show_expanded"]
 
         return {'FINISHED'}
 
@@ -832,18 +862,18 @@ class PREFERENCES_OT_addon_show(Operator):
     def execute(self, context):
         import addon_utils
 
-        module_name = self.module
+        addon_module_name = self.module
 
         _modules = addon_utils.modules(refresh=False)
-        mod = addon_utils.addons_fake_modules.get(module_name)
+        mod = addon_utils.addons_fake_modules.get(addon_module_name)
         if mod is not None:
-            info = addon_utils.module_bl_info(mod)
-            info["show_expanded"] = True
+            bl_info = addon_utils.module_bl_info(mod)
+            bl_info["show_expanded"] = True
 
             context.preferences.active_section = 'ADDONS'
             context.preferences.view.show_addons_enabled_only = False
             context.window_manager.addon_filter = 'All'
-            context.window_manager.addon_search = info["name"]
+            context.window_manager.addon_search = bl_info["name"]
             bpy.ops.screen.userpref_show('INVOKE_DEFAULT')
 
         return {'FINISHED'}
@@ -895,7 +925,7 @@ class PREFERENCES_OT_app_template_install(Operator):
         if not os.path.isdir(path_app_templates):
             try:
                 os.makedirs(path_app_templates, exist_ok=True)
-            except:
+            except BaseException:
                 traceback.print_exc()
 
         app_templates_old = set(os.listdir(path_app_templates))
@@ -903,8 +933,8 @@ class PREFERENCES_OT_app_template_install(Operator):
         # check to see if the file is in compressed format (.zip)
         if zipfile.is_zipfile(filepath):
             try:
-                file_to_extract = zipfile.ZipFile(filepath, 'r')
-            except:
+                file_to_extract = zipfile.ZipFile(filepath, "r")
+            except BaseException:
                 traceback.print_exc()
                 return {'CANCELLED'}
 
@@ -916,18 +946,18 @@ class PREFERENCES_OT_app_template_install(Operator):
                 for f in file_to_extract_root:
                     path_dest = os.path.join(path_app_templates, os.path.basename(f))
                     if os.path.exists(path_dest):
-                        self.report({'WARNING'}, tip_("File already installed to %r\n") % path_dest)
+                        self.report({'WARNING'}, rpt_("File already installed to {!r}").format(path_dest))
                         return {'CANCELLED'}
 
             try:  # extract the file to "bl_app_templates_user"
                 file_to_extract.extractall(path_app_templates)
-            except:
+            except BaseException:
                 traceback.print_exc()
                 return {'CANCELLED'}
 
         else:
-            # Only support installing zipfiles
-            self.report({'WARNING'}, tip_("Expected a zip-file %r\n") % filepath)
+            # Only support installing zip-files.
+            self.report({'WARNING'}, rpt_("Expected a zip-file {!r}").format(filepath))
             return {'CANCELLED'}
 
         app_templates_new = set(os.listdir(path_app_templates)) - app_templates_old
@@ -936,10 +966,12 @@ class PREFERENCES_OT_app_template_install(Operator):
         bpy.utils.refresh_script_paths()
 
         # print message
-        msg = (
-            tip_("Template Installed (%s) from %r into %r") %
-            (", ".join(sorted(app_templates_new)), filepath, path_app_templates)
+        msg = rpt_("Template Installed ({:s}) from {!r} into {!r}").format(
+            ", ".join(sorted(app_templates_new)),
+            filepath,
+            path_app_templates,
         )
+
         print(msg)
         self.report({'INFO'}, msg)
 
@@ -1000,9 +1032,9 @@ class PREFERENCES_OT_studiolight_install(Operator):
             prefs.studio_lights.load(os.path.join(path_studiolights, e.name), self.type)
 
         # print message
-        msg = (
-            tip_("StudioLight Installed %r into %r") %
-            (", ".join(e.name for e in self.files), path_studiolights)
+        msg = rpt_("StudioLight Installed {!r} into {!r}").format(
+            ", ".join(e.name for e in self.files),
+            path_studiolights
         )
         print(msg)
         self.report({'INFO'}, msg)
@@ -1058,10 +1090,7 @@ class PREFERENCES_OT_studiolight_new(Operator):
         prefs.studio_lights.new(path=filepath_final)
 
         # print message
-        msg = (
-            tip_("StudioLight Installed %r into %r") %
-            (self.filename, str(path_studiolights))
-        )
+        msg = rpt_("StudioLight Installed {!r} into {!r}").format(self.filename, str(path_studiolights))
         print(msg)
         self.report({'INFO'}, msg)
         return {'FINISHED'}
@@ -1089,13 +1118,9 @@ class PREFERENCES_OT_studiolight_uninstall(Operator):
         prefs = context.preferences
         for studio_light in prefs.studio_lights:
             if studio_light.index == self.index:
-                for filepath in (
-                        studio_light.path,
-                        studio_light.path_irr_cache,
-                        studio_light.path_sh_cache,
-                ):
-                    if filepath and os.path.exists(filepath):
-                        os.unlink(filepath)
+                filepath = studio_light.path
+                if filepath and os.path.exists(filepath):
+                    os.unlink(filepath)
                 prefs.studio_lights.remove(studio_light)
                 return {'FINISHED'}
         return {'CANCELLED'}
@@ -1139,6 +1164,61 @@ class PREFERENCES_OT_studiolight_show(Operator):
         return {'FINISHED'}
 
 
+class PREFERENCES_OT_script_directory_new(Operator):
+    bl_idname = "preferences.script_directory_add"
+    bl_label = "Add Python Script Directory"
+
+    directory: StringProperty(
+        subtype='DIR_PATH',
+    )
+    filter_folder: BoolProperty(
+        name="Filter Folders",
+        default=True,
+        options={'HIDDEN'},
+    )
+
+    def execute(self, context):
+        import os
+
+        script_directories = context.preferences.filepaths.script_directories
+
+        new_dir = script_directories.new()
+        # Assign path selected via file browser.
+        new_dir.directory = self.directory
+        new_dir.name = os.path.basename(self.directory.rstrip(os.sep))
+
+        assert context.preferences.is_dirty is True
+
+        return {'FINISHED'}
+
+    def invoke(self, context, _event):
+        wm = context.window_manager
+
+        wm.fileselect_add(self)
+        return {'RUNNING_MODAL'}
+
+
+class PREFERENCES_OT_script_directory_remove(Operator):
+    bl_idname = "preferences.script_directory_remove"
+    bl_label = "Remove Python Script Directory"
+
+    index: IntProperty(
+        name="Index",
+        description="Index of the script directory to remove",
+    )
+
+    def execute(self, context):
+        script_directories = context.preferences.filepaths.script_directories
+        for search_index, script_directory in enumerate(script_directories):
+            if search_index == self.index:
+                script_directories.remove(script_directory)
+                break
+
+        assert context.preferences.is_dirty is True
+
+        return {'FINISHED'}
+
+
 classes = (
     PREFERENCES_OT_addon_disable,
     PREFERENCES_OT_addon_enable,
@@ -1164,4 +1244,6 @@ classes = (
     PREFERENCES_OT_studiolight_uninstall,
     PREFERENCES_OT_studiolight_copy_settings,
     PREFERENCES_OT_studiolight_show,
+    PREFERENCES_OT_script_directory_new,
+    PREFERENCES_OT_script_directory_remove,
 )

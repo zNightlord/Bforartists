@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2022 Blender Foundation. All rights reserved. */
+/* SPDX-FileCopyrightText: 2022 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup gpu
@@ -9,32 +10,40 @@
 
 #include "gpu_context_private.hh"
 
-#include "vk_command_buffer.hh"
+#include "GHOST_Types.h"
+
+#include "render_graph/vk_render_graph.hh"
+#include "vk_command_buffers.hh"
+#include "vk_common.hh"
+#include "vk_debug.hh"
 #include "vk_descriptor_pools.hh"
 
 namespace blender::gpu {
+class VKFrameBuffer;
+class VKVertexAttributeObject;
+class VKBatch;
+class VKStateManager;
 
-class VKContext : public Context {
+class VKContext : public Context, NonCopyable {
  private:
-  /** Copies of the handles owned by the GHOST context. */
-  VkInstance vk_instance_ = VK_NULL_HANDLE;
-  VkPhysicalDevice vk_physical_device_ = VK_NULL_HANDLE;
-  VkDevice vk_device_ = VK_NULL_HANDLE;
-  VKCommandBuffer command_buffer_;
-  uint32_t vk_queue_family_ = 0;
-  VkQueue vk_queue_ = VK_NULL_HANDLE;
-
-  /** Allocator used for texture and buffers and other resources. */
-  VmaAllocator mem_allocator_ = VK_NULL_HANDLE;
+  VKCommandBuffers command_buffers_;
   VKDescriptorPools descriptor_pools_;
+  VKDescriptorSetTracker descriptor_set_;
 
-  /** Limits of the device linked to this context. */
-  VkPhysicalDeviceLimits vk_physical_device_limits_;
-
+  VkExtent2D vk_extent_ = {};
+  VkFormat swap_chain_format_ = {};
+  GPUTexture *surface_texture_ = nullptr;
   void *ghost_context_;
 
+  /* Reusable data. Stored inside context to limit reallocations. */
+  render_graph::VKResourceAccessInfo access_info_ = {};
+
  public:
-  VKContext(void *ghost_window, void *ghost_context);
+  render_graph::VKRenderGraph render_graph;
+
+  VKContext(void *ghost_window,
+            void *ghost_context,
+            render_graph::VKResourceStateTracker &resources);
   virtual ~VKContext();
 
   void activate() override;
@@ -45,44 +54,44 @@ class VKContext : public Context {
   void flush() override;
   void finish() override;
 
-  void memory_statistics_get(int *total_mem, int *free_mem) override;
+  void memory_statistics_get(int *r_total_mem_kb, int *r_free_mem_kb) override;
 
   void debug_group_begin(const char *, int) override;
   void debug_group_end() override;
+  bool debug_capture_begin(const char *title) override;
+  void debug_capture_end() override;
+  void *debug_capture_scope_create(const char *name) override;
+  bool debug_capture_scope_begin(void *scope) override;
+  void debug_capture_scope_end(void *scope) override;
 
-  static VKContext *get(void)
+  void debug_unbind_all_ubo() override;
+  void debug_unbind_all_ssbo() override;
+
+  bool has_active_framebuffer() const;
+  void activate_framebuffer(VKFrameBuffer &framebuffer);
+  void deactivate_framebuffer();
+  VKFrameBuffer *active_framebuffer_get() const;
+
+  void bind_compute_pipeline();
+  render_graph::VKResourceAccessInfo &update_and_get_access_info();
+
+  /**
+   * Update the give shader data with the current state of the context.
+   */
+  void update_pipeline_data(render_graph::VKPipelineData &pipeline_data);
+
+  void bind_graphics_pipeline(const GPUPrimType prim_type,
+                              const VKVertexAttributeObject &vertex_attribute_object);
+  void sync_backbuffer();
+
+  static VKContext *get()
   {
     return static_cast<VKContext *>(Context::get());
   }
 
-  VkPhysicalDevice physical_device_get() const
+  VKCommandBuffers &command_buffers_get()
   {
-    return vk_physical_device_;
-  }
-
-  const VkPhysicalDeviceLimits &physical_device_limits_get() const
-  {
-    return vk_physical_device_limits_;
-  }
-
-  VkDevice device_get() const
-  {
-    return vk_device_;
-  }
-
-  VKCommandBuffer &command_buffer_get()
-  {
-    return command_buffer_;
-  }
-
-  VkQueue queue_get() const
-  {
-    return vk_queue_;
-  }
-
-  const uint32_t *queue_family_ptr_get() const
-  {
-    return &vk_queue_family_;
+    return command_buffers_;
   }
 
   VKDescriptorPools &descriptor_pools_get()
@@ -90,13 +99,24 @@ class VKContext : public Context {
     return descriptor_pools_;
   }
 
-  VmaAllocator mem_allocator_get() const
+  VKDescriptorSetTracker &descriptor_set_get()
   {
-    return mem_allocator_;
+    return descriptor_set_;
   }
 
+  VKStateManager &state_manager_get() const;
+
+  static void swap_buffers_pre_callback(const GHOST_VulkanSwapChainData *data);
+  static void swap_buffers_post_callback();
+
  private:
-  void init_physical_device_limits();
+  void swap_buffers_pre_handler(const GHOST_VulkanSwapChainData &data);
+  void swap_buffers_post_handler();
 };
+
+BLI_INLINE bool operator==(const VKContext &a, const VKContext &b)
+{
+  return static_cast<const void *>(&a) == static_cast<const void *>(&b);
+}
 
 }  // namespace blender::gpu

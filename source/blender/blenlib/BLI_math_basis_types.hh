@@ -1,4 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* SPDX-FileCopyrightText: 2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #pragma once
 
@@ -20,6 +22,8 @@
  * - Armature Bone: X-right, Y-forward, Z-up (with forward being the root to tip direction)
  * - Curve Tangent-Space: X-left, Y-up, Z-forward
  */
+
+#include <iosfwd>
 
 #include "BLI_math_base.hh"
 #include "BLI_math_vector_types.hh"
@@ -57,9 +61,11 @@ class Axis {
   constexpr Axis(const Value axis) : axis_(axis){};
 
   /** Convert an uppercase axis character 'X', 'Y' or 'Z' to an enum value. */
-  constexpr explicit Axis(char axis_char) : axis_(static_cast<Value>(axis_char - 'X'))
+  constexpr static Axis from_char(char axis_char)
   {
-    BLI_assert(Value::X <= axis_ && axis_ <= Value::Z);
+    const Axis axis = static_cast<Value>(axis_char - 'X');
+    BLI_assert(int(Value::X) <= axis.as_int() && axis.as_int() <= int(Value::Z));
+    return axis;
   }
 
   /** Allow casting from DNA enums stored as short / int. */
@@ -84,20 +90,7 @@ class Axis {
   /** Avoid hell. */
   explicit operator bool() const = delete;
 
-  friend std::ostream &operator<<(std::ostream &stream, const Axis axis)
-  {
-    switch (axis.axis_) {
-      default:
-        BLI_assert_unreachable();
-        return stream << "Invalid Axis";
-      case Value::X:
-        return stream << 'X';
-      case Value::Y:
-        return stream << 'Y';
-      case Value::Z:
-        return stream << 'Z';
-    }
-  }
+  friend std::ostream &operator<<(std::ostream &stream, const Axis axis);
 };
 
 /**
@@ -186,29 +179,15 @@ class AxisSigned {
   /** Avoid hell. */
   explicit operator bool() const = delete;
 
-  friend std::ostream &operator<<(std::ostream &stream, const AxisSigned axis)
-  {
-    switch (axis.axis_) {
-      default:
-        BLI_assert_unreachable();
-        return stream << "Invalid AxisSigned";
-      case Value::X_POS:
-      case Value::Y_POS:
-      case Value::Z_POS:
-      case Value::X_NEG:
-      case Value::Y_NEG:
-      case Value::Z_NEG:
-        return stream << axis.axis() << (axis.sign() == -1 ? '-' : '+');
-    }
-  }
+  friend std::ostream &operator<<(std::ostream &stream, const AxisSigned axis);
 };
 
-constexpr static bool operator<=(const Axis::Value a, const Axis::Value b)
+constexpr bool operator<=(const Axis::Value a, const Axis::Value b)
 {
   return int(a) <= int(b);
 }
 
-constexpr static bool operator<=(const AxisSigned::Value a, const AxisSigned::Value b)
+constexpr bool operator<=(const AxisSigned::Value a, const AxisSigned::Value b)
 {
   return int(a) <= int(b);
 }
@@ -216,7 +195,7 @@ constexpr static bool operator<=(const AxisSigned::Value a, const AxisSigned::Va
 /** \} */
 
 /* -------------------------------------------------------------------- */
-/** \name Axes utilities.
+/** \name Axes Utilities
  * \{ */
 
 template<> inline AxisSigned abs(const AxisSigned &axis)
@@ -413,14 +392,11 @@ struct CartesianBasis {
     return axes.z;
   }
 
-  friend std::ostream &operator<<(std::ostream &stream, const CartesianBasis &rot)
-  {
-    return stream << "CartesianBasis" << rot.axes;
-  }
+  friend std::ostream &operator<<(std::ostream &stream, const CartesianBasis &rot);
 };
 
 /**
- * Create an CartesianBasis for converting from \a a orientation to \a b orientation.
+ * Create an CartesianBasis using two orthogonal axes.
  * The third axis is chosen by right hand rule to follow blender coordinate system.
  * \a forward is Y axis in blender coordinate system.
  * \a up is Z axis in blender coordinate system.
@@ -466,8 +442,40 @@ struct CartesianBasis {
                           from_orthonormal_axes(b_forward, b_up));
 }
 
+template<typename T>
+[[nodiscard]] inline VecBase<T, 3> transform_point(const CartesianBasis &basis,
+                                                   const VecBase<T, 3> &v)
+{
+  VecBase<T, 3> result;
+  result[basis.x().axis().as_int()] = basis.x().is_negative() ? -v[0] : v[0];
+  result[basis.y().axis().as_int()] = basis.y().is_negative() ? -v[1] : v[1];
+  result[basis.z().axis().as_int()] = basis.z().is_negative() ? -v[2] : v[2];
+  return result;
+}
+
+/**
+ * Return the inverse transformation represented by the given basis.
+ * This is conceptually the equivalent to a rotation matrix transpose, but much faster.
+ */
+[[nodiscard]] inline CartesianBasis invert(const CartesianBasis &basis)
+{
+  /* Returns the column where the `axis` is found in. The sign is taken from the axis value. */
+  auto search_axis = [](const CartesianBasis &basis, const Axis axis) {
+    if (basis.x().axis() == axis) {
+      return basis.x().is_negative() ? AxisSigned::X_NEG : AxisSigned::X_POS;
+    }
+    if (basis.y().axis() == axis) {
+      return basis.y().is_negative() ? AxisSigned::Y_NEG : AxisSigned::Y_POS;
+    }
+    return basis.z().is_negative() ? AxisSigned::Z_NEG : AxisSigned::Z_POS;
+  };
+  CartesianBasis result;
+  result.x() = search_axis(basis, Axis::X);
+  result.y() = search_axis(basis, Axis::Y);
+  result.z() = search_axis(basis, Axis::Z);
+  return result;
+}
+
 /** \} */
 
 }  // namespace blender::math
-
-/** \} */

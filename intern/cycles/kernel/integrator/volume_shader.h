@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: Apache-2.0
- * Copyright 2011-2022 Blender Foundation */
+/* SPDX-FileCopyrightText: 2011-2022 Blender Foundation
+ *
+ * SPDX-License-Identifier: Apache-2.0 */
 
 /* Volume shader evaluation and sampling. */
 
@@ -217,7 +218,7 @@ ccl_device_inline float _volume_shader_phase_eval_mis(ccl_private const ShaderDa
     Spectrum eval = volume_phase_eval(sd, svc, wo, &phase_pdf);
 
     if (phase_pdf != 0.0f) {
-      bsdf_eval_accum(result_eval, CLOSURE_VOLUME_HENYEY_GREENSTEIN_ID, eval);
+      bsdf_eval_accum(result_eval, eval);
       sum_pdf += phase_pdf * svc->sample_weight;
     }
 
@@ -237,7 +238,7 @@ ccl_device float volume_shader_phase_eval(KernelGlobals kg,
   Spectrum eval = volume_phase_eval(sd, svc, wo, &phase_pdf);
 
   if (phase_pdf != 0.0f) {
-    bsdf_eval_accum(phase_eval, CLOSURE_VOLUME_HENYEY_GREENSTEIN_ID, eval);
+    bsdf_eval_accum(phase_eval, eval);
   }
 
   return phase_pdf;
@@ -248,9 +249,10 @@ ccl_device float volume_shader_phase_eval(KernelGlobals kg,
                                           ccl_private const ShaderData *sd,
                                           ccl_private const ShaderVolumePhases *phases,
                                           const float3 wo,
-                                          ccl_private BsdfEval *phase_eval)
+                                          ccl_private BsdfEval *phase_eval,
+                                          const uint light_shader_flags)
 {
-  bsdf_eval_init(phase_eval, CLOSURE_VOLUME_HENYEY_GREENSTEIN_ID, zero_spectrum());
+  bsdf_eval_init(phase_eval, zero_spectrum());
 
   float pdf = _volume_shader_phase_eval_mis(sd, phases, wo, -1, phase_eval, 0.0f, 0.0f);
 
@@ -261,6 +263,12 @@ ccl_device float volume_shader_phase_eval(KernelGlobals kg,
     pdf = (guiding_sampling_prob * guide_pdf) + (1.0f - guiding_sampling_prob) * pdf;
   }
 #  endif
+
+  /* If the light does not use MIS, then it is only sampled via NEE, so the probability of hitting
+   * the light using BSDF sampling is zero. */
+  if (!(light_shader_flags & SHADER_USE_MIS)) {
+    pdf = 0.0f;
+  }
 
   return pdf;
 }
@@ -300,7 +308,7 @@ ccl_device int volume_shader_phase_guided_sample(KernelGlobals kg,
   float guide_pdf = 0.0f;
   *sampled_roughness = 1.0f - fabsf(svc->g);
 
-  bsdf_eval_init(phase_eval, CLOSURE_VOLUME_HENYEY_GREENSTEIN_ID, zero_spectrum());
+  bsdf_eval_init(phase_eval, zero_spectrum());
 
   if (sample_guiding) {
     /* Sample guiding distribution. */
@@ -317,11 +325,10 @@ ccl_device int volume_shader_phase_guided_sample(KernelGlobals kg,
   else {
     /* Sample phase. */
     *phase_pdf = 0.0f;
-    label = volume_phase_sample(
-        sd, svc, rand_phase.x, rand_phase.y, &eval, wo, unguided_phase_pdf);
+    label = volume_phase_sample(sd, svc, rand_phase, &eval, wo, unguided_phase_pdf);
 
     if (*unguided_phase_pdf != 0.0f) {
-      bsdf_eval_init(phase_eval, CLOSURE_VOLUME_HENYEY_GREENSTEIN_ID, eval);
+      bsdf_eval_init(phase_eval, eval);
 
       *phase_pdf = *unguided_phase_pdf;
       if (use_volume_guiding) {
@@ -333,7 +340,7 @@ ccl_device int volume_shader_phase_guided_sample(KernelGlobals kg,
       kernel_assert(reduce_min(bsdf_eval_sum(phase_eval)) >= 0.0f);
     }
     else {
-      bsdf_eval_init(phase_eval, CLOSURE_VOLUME_HENYEY_GREENSTEIN_ID, zero_spectrum());
+      bsdf_eval_init(phase_eval, zero_spectrum());
     }
 
     kernel_assert(reduce_min(bsdf_eval_sum(phase_eval)) >= 0.0f);
@@ -357,10 +364,10 @@ ccl_device int volume_shader_phase_sample(KernelGlobals kg,
   Spectrum eval = zero_spectrum();
 
   *pdf = 0.0f;
-  int label = volume_phase_sample(sd, svc, rand_phase.x, rand_phase.y, &eval, wo, pdf);
+  int label = volume_phase_sample(sd, svc, rand_phase, &eval, wo, pdf);
 
   if (*pdf != 0.0f) {
-    bsdf_eval_init(phase_eval, CLOSURE_VOLUME_HENYEY_GREENSTEIN_ID, eval);
+    bsdf_eval_init(phase_eval, eval);
   }
 
   return label;

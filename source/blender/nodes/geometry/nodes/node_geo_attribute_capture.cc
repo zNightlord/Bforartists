@@ -1,11 +1,15 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* SPDX-FileCopyrightText: 2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "UI_interface.h"
-#include "UI_resources.h"
+#include "NOD_rna_define.hh"
 
-#include "BKE_attribute_math.hh"
+#include "UI_interface.hh"
+#include "UI_resources.hh"
 
 #include "NOD_socket_search_link.hh"
+
+#include "RNA_enum_types.hh"
 
 #include "node_geometry_util.hh"
 
@@ -15,79 +19,47 @@ NODE_STORAGE_FUNCS(NodeGeometryAttributeCapture)
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Geometry>(N_("Geometry"));
-  b.add_input<decl::Vector>(N_("Value")).field_on_all();
-  b.add_input<decl::Float>(N_("Value"), "Value_001").field_on_all();
-  b.add_input<decl::Color>(N_("Value"), "Value_002").field_on_all();
-  b.add_input<decl::Bool>(N_("Value"), "Value_003").field_on_all();
-  b.add_input<decl::Int>(N_("Value"), "Value_004").field_on_all();
+  const bNode *node = b.node_or_null();
 
-  b.add_output<decl::Geometry>(N_("Geometry")).propagate_all();
-  b.add_output<decl::Vector>(N_("Attribute")).field_on_all();
-  b.add_output<decl::Float>(N_("Attribute"), "Attribute_001").field_on_all();
-  b.add_output<decl::Color>(N_("Attribute"), "Attribute_002").field_on_all();
-  b.add_output<decl::Bool>(N_("Attribute"), "Attribute_003").field_on_all();
-  b.add_output<decl::Int>(N_("Attribute"), "Attribute_004").field_on_all();
+  b.add_input<decl::Geometry>("Geometry");
+  if (node != nullptr) {
+    const eCustomDataType data_type = eCustomDataType(node_storage(*node).data_type);
+    b.add_input(data_type, "Value").field_on_all();
+  }
+
+  b.add_output<decl::Geometry>("Geometry").propagate_all();
+  if (node != nullptr) {
+    const eCustomDataType data_type = eCustomDataType(node_storage(*node).data_type);
+    b.add_output(data_type, "Attribute").field_on_all();
+  }
 }
 
 static void node_layout(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
 {
   uiLayoutSetPropSep(layout, true);
   uiLayoutSetPropDecorate(layout, false);
-  uiItemR(layout, ptr, "data_type", 0, "", ICON_NONE);
-  uiItemR(layout, ptr, "domain", 0, "", ICON_NONE);
+  uiItemR(layout, ptr, "data_type", UI_ITEM_NONE, "", ICON_NONE);
+  uiItemR(layout, ptr, "domain", UI_ITEM_NONE, "", ICON_NONE);
 }
 
 static void node_init(bNodeTree * /*tree*/, bNode *node)
 {
   NodeGeometryAttributeCapture *data = MEM_cnew<NodeGeometryAttributeCapture>(__func__);
   data->data_type = CD_PROP_FLOAT;
-  data->domain = ATTR_DOMAIN_POINT;
+  data->domain = int8_t(AttrDomain::Point);
 
   node->storage = data;
 }
 
-static void node_update(bNodeTree *ntree, bNode *node)
-{
-  const NodeGeometryAttributeCapture &storage = node_storage(*node);
-  const eCustomDataType data_type = eCustomDataType(storage.data_type);
-
-  bNodeSocket *socket_value_geometry = static_cast<bNodeSocket *>(node->inputs.first);
-  bNodeSocket *socket_value_vector = socket_value_geometry->next;
-  bNodeSocket *socket_value_float = socket_value_vector->next;
-  bNodeSocket *socket_value_color4f = socket_value_float->next;
-  bNodeSocket *socket_value_boolean = socket_value_color4f->next;
-  bNodeSocket *socket_value_int32 = socket_value_boolean->next;
-
-  nodeSetSocketAvailability(ntree, socket_value_vector, data_type == CD_PROP_FLOAT3);
-  nodeSetSocketAvailability(ntree, socket_value_float, data_type == CD_PROP_FLOAT);
-  nodeSetSocketAvailability(ntree, socket_value_color4f, data_type == CD_PROP_COLOR);
-  nodeSetSocketAvailability(ntree, socket_value_boolean, data_type == CD_PROP_BOOL);
-  nodeSetSocketAvailability(ntree, socket_value_int32, data_type == CD_PROP_INT32);
-
-  bNodeSocket *out_socket_value_geometry = static_cast<bNodeSocket *>(node->outputs.first);
-  bNodeSocket *out_socket_value_vector = out_socket_value_geometry->next;
-  bNodeSocket *out_socket_value_float = out_socket_value_vector->next;
-  bNodeSocket *out_socket_value_color4f = out_socket_value_float->next;
-  bNodeSocket *out_socket_value_boolean = out_socket_value_color4f->next;
-  bNodeSocket *out_socket_value_int32 = out_socket_value_boolean->next;
-
-  nodeSetSocketAvailability(ntree, out_socket_value_vector, data_type == CD_PROP_FLOAT3);
-  nodeSetSocketAvailability(ntree, out_socket_value_float, data_type == CD_PROP_FLOAT);
-  nodeSetSocketAvailability(ntree, out_socket_value_color4f, data_type == CD_PROP_COLOR);
-  nodeSetSocketAvailability(ntree, out_socket_value_boolean, data_type == CD_PROP_BOOL);
-  nodeSetSocketAvailability(ntree, out_socket_value_int32, data_type == CD_PROP_INT32);
-}
-
 static void node_gather_link_searches(GatherLinkSearchOpParams &params)
 {
-  const NodeDeclaration &declaration = *params.node_type().fixed_declaration;
-  search_link_ops_for_declarations(params, declaration.inputs.as_span().take_front(1));
-  search_link_ops_for_declarations(params, declaration.outputs.as_span().take_front(1));
+  const NodeDeclaration &declaration = *params.node_type().static_declaration;
+  search_link_ops_for_declarations(params, declaration.inputs);
+  search_link_ops_for_declarations(params, declaration.outputs);
 
   const bNodeType &node_type = params.node_type();
-  const std::optional<eCustomDataType> type = node_data_type_to_custom_data_type(
-      (eNodeSocketDatatype)params.other_socket().type);
+  const std::optional<eCustomDataType> type = bke::socket_type_to_custom_data_type(
+      eNodeSocketDatatype(params.other_socket().type));
   if (type && *type != CD_PROP_STRING) {
     if (params.in_out() == SOCK_OUT) {
       params.add_item(IFACE_("Attribute"), [node_type, type](LinkSearchOpParams &params) {
@@ -106,22 +78,32 @@ static void node_gather_link_searches(GatherLinkSearchOpParams &params)
   }
 }
 
-static StringRefNull identifier_suffix(eCustomDataType data_type)
+static void clean_unused_attributes(const AnonymousAttributePropagationInfo &propagation_info,
+                                    const Set<AttributeIDRef> &skip,
+                                    GeometryComponent &component)
 {
-  switch (data_type) {
-    case CD_PROP_FLOAT:
-      return "_001";
-    case CD_PROP_INT32:
-      return "_004";
-    case CD_PROP_COLOR:
-      return "_002";
-    case CD_PROP_BOOL:
-      return "_003";
-    case CD_PROP_FLOAT3:
-      return "";
-    default:
-      BLI_assert_unreachable();
-      return "";
+  std::optional<MutableAttributeAccessor> attributes = component.attributes_for_write();
+  if (!attributes.has_value()) {
+    return;
+  }
+
+  Vector<std::string> unused_ids;
+  attributes->for_all([&](const AttributeIDRef &id, const AttributeMetaData /*meta_data*/) {
+    if (!id.is_anonymous()) {
+      return true;
+    }
+    if (skip.contains(id)) {
+      return true;
+    }
+    if (propagation_info.propagate(id.anonymous_id())) {
+      return true;
+    }
+    unused_ids.append(id.name());
+    return true;
+  });
+
+  for (const std::string &unused_id : unused_ids) {
+    attributes->remove(unused_id);
   }
 }
 
@@ -132,109 +114,80 @@ static void node_geo_exec(GeoNodeExecParams params)
   if (!params.output_is_required("Geometry")) {
     params.error_message_add(
         NodeWarningType::Info,
-        TIP_("The attribute output can not be used without the geometry output"));
+        TIP_("The attribute output cannot be used without the geometry output"));
     params.set_default_remaining_outputs();
     return;
   }
 
   const NodeGeometryAttributeCapture &storage = node_storage(params.node());
-  const eCustomDataType data_type = eCustomDataType(storage.data_type);
-  const eAttrDomain domain = eAttrDomain(storage.domain);
+  const AttrDomain domain = AttrDomain(storage.domain);
 
-  const std::string output_identifier = "Attribute" + identifier_suffix(data_type);
-  AutoAnonymousAttributeID attribute_id = params.get_output_anonymous_attribute_id_if_needed(
-      output_identifier);
-
+  AnonymousAttributeIDPtr attribute_id = params.get_output_anonymous_attribute_id_if_needed(
+      "Attribute");
   if (!attribute_id) {
     params.set_output("Geometry", geometry_set);
     params.set_default_remaining_outputs();
     return;
   }
 
-  const std::string input_identifier = "Value" + identifier_suffix(data_type);
-  GField field;
+  const GField field = params.extract_input<GField>("Value");
 
-  switch (data_type) {
-    case CD_PROP_FLOAT:
-      field = params.get_input<Field<float>>(input_identifier);
-      break;
-    case CD_PROP_FLOAT3:
-      field = params.get_input<Field<float3>>(input_identifier);
-      break;
-    case CD_PROP_COLOR:
-      field = params.get_input<Field<ColorGeometry4f>>(input_identifier);
-      break;
-    case CD_PROP_BOOL:
-      field = params.get_input<Field<bool>>(input_identifier);
-      break;
-    case CD_PROP_INT32:
-      field = params.get_input<Field<int>>(input_identifier);
-      break;
-    default:
-      break;
-  }
-
-  const CPPType &type = field.cpp_type();
+  const auto capture_on = [&](GeometryComponent &component) {
+    bke::try_capture_field_on_geometry(component, *attribute_id, domain, field);
+    /* Changing of the anonymous attributes may require removing attributes that are no longer
+     * needed. */
+    clean_unused_attributes(
+        params.get_output_propagation_info("Geometry"), {*attribute_id}, component);
+  };
 
   /* Run on the instances component separately to only affect the top level of instances. */
-  if (domain == ATTR_DOMAIN_INSTANCE) {
+  if (domain == AttrDomain::Instance) {
     if (geometry_set.has_instances()) {
-      GeometryComponent &component = geometry_set.get_component_for_write(
-          GEO_COMPONENT_TYPE_INSTANCES);
-      bke::try_capture_field_on_geometry(component, *attribute_id, domain, field);
+      capture_on(geometry_set.get_component_for_write(GeometryComponent::Type::Instance));
     }
   }
   else {
-    static const Array<GeometryComponentType> types = {
-        GEO_COMPONENT_TYPE_MESH, GEO_COMPONENT_TYPE_POINT_CLOUD, GEO_COMPONENT_TYPE_CURVE};
+    static const Array<GeometryComponent::Type> types = {GeometryComponent::Type::Mesh,
+                                                         GeometryComponent::Type::PointCloud,
+                                                         GeometryComponent::Type::Curve,
+                                                         GeometryComponent::Type::GreasePencil};
 
     geometry_set.modify_geometry_sets([&](GeometrySet &geometry_set) {
-      for (const GeometryComponentType type : types) {
+      for (const GeometryComponent::Type type : types) {
         if (geometry_set.has(type)) {
-          GeometryComponent &component = geometry_set.get_component_for_write(type);
-          bke::try_capture_field_on_geometry(component, *attribute_id, domain, field);
+          capture_on(geometry_set.get_component_for_write(type));
         }
       }
     });
   }
 
-  GField output_field{std::make_shared<bke::AnonymousAttributeFieldInput>(
-      std::move(attribute_id), type, params.attribute_producer_name())};
-
-  switch (data_type) {
-    case CD_PROP_FLOAT: {
-      params.set_output(output_identifier, Field<float>(output_field));
-      break;
-    }
-    case CD_PROP_FLOAT3: {
-      params.set_output(output_identifier, Field<float3>(output_field));
-      break;
-    }
-    case CD_PROP_COLOR: {
-      params.set_output(output_identifier, Field<ColorGeometry4f>(output_field));
-      break;
-    }
-    case CD_PROP_BOOL: {
-      params.set_output(output_identifier, Field<bool>(output_field));
-      break;
-    }
-    case CD_PROP_INT32: {
-      params.set_output(output_identifier, Field<int>(output_field));
-      break;
-    }
-    default:
-      break;
-  }
-
   params.set_output("Geometry", geometry_set);
 }
 
-}  // namespace blender::nodes::node_geo_attribute_capture_cc
-
-void register_node_type_geo_attribute_capture()
+static void node_rna(StructRNA *srna)
 {
-  namespace file_ns = blender::nodes::node_geo_attribute_capture_cc;
+  RNA_def_node_enum(srna,
+                    "data_type",
+                    "Data Type",
+                    "Type of data stored in attribute",
+                    rna_enum_attribute_type_items,
+                    NOD_storage_enum_accessors(data_type),
+                    CD_PROP_FLOAT,
+                    enums::attribute_type_type_with_socket_fn);
 
+  RNA_def_node_enum(srna,
+                    "domain",
+                    "Domain",
+                    "Which domain to store the data in",
+                    rna_enum_attribute_domain_items,
+                    NOD_storage_enum_accessors(domain),
+                    int8_t(AttrDomain::Point),
+                    enums::domain_experimental_grease_pencil_version3_fn,
+                    true);
+}
+
+static void node_register()
+{
   static bNodeType ntype;
 
   geo_node_type_base(
@@ -243,11 +196,15 @@ void register_node_type_geo_attribute_capture()
                     "NodeGeometryAttributeCapture",
                     node_free_standard_storage,
                     node_copy_standard_storage);
-  ntype.initfunc = file_ns::node_init;
-  ntype.updatefunc = file_ns::node_update;
-  ntype.declare = file_ns::node_declare;
-  ntype.geometry_node_execute = file_ns::node_geo_exec;
-  ntype.draw_buttons = file_ns::node_layout;
-  ntype.gather_link_search_ops = file_ns::node_gather_link_searches;
+  ntype.initfunc = node_init;
+  ntype.declare = node_declare;
+  ntype.geometry_node_execute = node_geo_exec;
+  ntype.draw_buttons = node_layout;
+  ntype.gather_link_search_ops = node_gather_link_searches;
   nodeRegisterType(&ntype);
+
+  node_rna(ntype.rna_ext.srna);
 }
+NOD_REGISTER_NODE(node_register)
+
+}  // namespace blender::nodes::node_geo_attribute_capture_cc

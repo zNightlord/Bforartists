@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: Apache-2.0
- * Copyright 2019-2022 Blender Foundation */
+/* SPDX-FileCopyrightText: 2019-2022 Blender Foundation
+ *
+ * SPDX-License-Identifier: Apache-2.0 */
 
 #pragma once
 
@@ -17,10 +18,7 @@ ccl_device_forceinline bool film_need_sample_pixel(KernelGlobals kg,
     return true;
   }
 
-  const uint32_t render_pixel_index = INTEGRATOR_STATE(state, path, render_pixel_index);
-  const uint64_t render_buffer_offset = (uint64_t)render_pixel_index *
-                                        kernel_data.film.pass_stride;
-  ccl_global float *buffer = render_buffer + render_buffer_offset;
+  ccl_global float *buffer = film_pass_pixel_render_buffer(kg, state, render_buffer);
 
   const uint aux_w_offset = kernel_data.film.pass_adaptive_aux_buffer + 3;
   return buffer[aux_w_offset] == 0.0f;
@@ -33,7 +31,7 @@ ccl_device bool film_adaptive_sampling_convergence_check(KernelGlobals kg,
                                                          int x,
                                                          int y,
                                                          float threshold,
-                                                         bool reset,
+                                                         int reset,
                                                          int offset,
                                                          int stride)
 {

@@ -1,3 +1,6 @@
+/* SPDX-FileCopyrightText: 2019-2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #pragma BLENDER_REQUIRE(common_view_clipping_lib.glsl)
 #pragma BLENDER_REQUIRE(common_view_lib.glsl)
@@ -37,8 +40,8 @@ void main()
   ls_cell_location.y = float((gl_VertexID / grid_resolution.z) % grid_resolution.y);
   ls_cell_location.x = float(gl_VertexID / (grid_resolution.z * grid_resolution.y));
 
-  ls_cell_location += 0.5;
-  ls_cell_location /= vec3(grid_resolution);
+  ls_cell_location += 1.0;
+  ls_cell_location /= vec3(grid_resolution + 1);
   ls_cell_location = ls_cell_location * 2.0 - 1.0;
 
   vec3 ws_cell_location = (model_mat * vec4(ls_cell_location, 1.0)).xyz;
@@ -54,7 +57,7 @@ void main()
   if (z_delta > 0.0) {
     float fac = 1.0 - z_delta * 10000.0;
     /* Smooth blend to avoid flickering. */
-    finalColor = mix(colorBackground, finalColor, clamp(fac, 0.5, 1.0));
+    finalColor = mix(colorBackground, finalColor, clamp(fac, 0.2, 1.0));
   }
 
   view_clipping_distances(ws_cell_location);

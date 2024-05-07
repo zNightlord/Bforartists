@@ -1,4 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* SPDX-FileCopyrightText: 2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup ply
@@ -16,6 +18,11 @@ void FileBufferAscii::write_vertex(float x, float y, float z)
 void FileBufferAscii::write_UV(float u, float v)
 {
   write_fstring(" {} {}", u, v);
+}
+
+void FileBufferAscii::write_data(float v)
+{
+  write_fstring(" {}", v);
 }
 
 void FileBufferAscii::write_vertex_normal(float nx, float ny, float nz)

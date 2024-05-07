@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: Apache-2.0
- * Copyright 2011-2022 Blender Foundation */
+/* SPDX-FileCopyrightText: 2011-2022 Blender Foundation
+ *
+ * SPDX-License-Identifier: Apache-2.0 */
 
 #pragma once
 
@@ -17,6 +18,17 @@ ccl_device_forceinline ccl_global float *film_pass_pixel_render_buffer(
     KernelGlobals kg, ConstIntegratorState state, ccl_global float *ccl_restrict render_buffer)
 {
   const uint32_t render_pixel_index = INTEGRATOR_STATE(state, path, render_pixel_index);
+  const uint64_t render_buffer_offset = (uint64_t)render_pixel_index *
+                                        kernel_data.film.pass_stride;
+  return render_buffer + render_buffer_offset;
+}
+
+ccl_device_forceinline ccl_global float *film_pass_pixel_render_buffer_shadow(
+    KernelGlobals kg,
+    ConstIntegratorShadowState state,
+    ccl_global float *ccl_restrict render_buffer)
+{
+  const uint32_t render_pixel_index = INTEGRATOR_STATE(state, shadow_path, render_pixel_index);
   const uint64_t render_buffer_offset = (uint64_t)render_pixel_index *
                                         kernel_data.film.pass_stride;
   return render_buffer + render_buffer_offset;

@@ -1,10 +1,9 @@
-/* SPDX-License-Identifier: BSD-3-Clause
+/* SPDX-FileCopyrightText: 2009-2010 Sony Pictures Imageworks Inc., et al. All Rights Reserved.
+ * SPDX-FileCopyrightText: 2011-2022 Blender Foundation
  *
- * Adapted from Open Shading Language
- * Copyright (c) 2009-2010 Sony Pictures Imageworks Inc., et al.
- * All Rights Reserved.
+ * SPDX-License-Identifier: BSD-3-Clause
  *
- * Modifications Copyright 2011-2022 Blender Foundation. */
+ * Adapted code from Open Shading Language. */
 
 #pragma once
 
@@ -685,7 +684,12 @@ ccl_device_inline float noise_scale4(float result)
 
 ccl_device_inline float snoise_1d(float p)
 {
-  return noise_scale1(ensure_finite(perlin_1d(p)));
+  /* Repeat Perlin noise texture every 100000.0 on each axis to prevent floating point
+   * representation issues. */
+  /* The 1D variant of fmod is called fmodf. */
+  p = fmodf(p, 100000.0f);
+
+  return noise_scale1(perlin_1d(p));
 }
 
 ccl_device_inline float noise_1d(float p)
@@ -695,7 +699,12 @@ ccl_device_inline float noise_1d(float p)
 
 ccl_device_inline float snoise_2d(float2 p)
 {
-  return noise_scale2(ensure_finite(perlin_2d(p.x, p.y)));
+  /* Repeat Perlin noise texture every 100000.0f on each axis to prevent floating point
+   * representation issues. This causes discontinuities every 100000.0f, however at such scales
+   * this usually shouldn't be noticeable. */
+  p = fmod(p, 100000.0f);
+
+  return noise_scale2(perlin_2d(p.x, p.y));
 }
 
 ccl_device_inline float noise_2d(float2 p)
@@ -705,7 +714,12 @@ ccl_device_inline float noise_2d(float2 p)
 
 ccl_device_inline float snoise_3d(float3 p)
 {
-  return noise_scale3(ensure_finite(perlin_3d(p.x, p.y, p.z)));
+  /* Repeat Perlin noise texture every 100000.0f on each axis to prevent floating point
+   * representation issues. This causes discontinuities every 100000.0f, however at such scales
+   * this usually shouldn't be noticeable. */
+  p = fmod(p, 100000.0f);
+
+  return noise_scale3(perlin_3d(p.x, p.y, p.z));
 }
 
 ccl_device_inline float noise_3d(float3 p)
@@ -715,7 +729,12 @@ ccl_device_inline float noise_3d(float3 p)
 
 ccl_device_inline float snoise_4d(float4 p)
 {
-  return noise_scale4(ensure_finite(perlin_4d(p.x, p.y, p.z, p.w)));
+  /* Repeat Perlin noise texture every 100000.0f on each axis to prevent floating point
+   * representation issues. This causes discontinuities every 100000.0f, however at such scales
+   * this usually shouldn't be noticeable. */
+  p = fmod(p, 100000.0f);
+
+  return noise_scale4(perlin_4d(p.x, p.y, p.z, p.w));
 }
 
 ccl_device_inline float noise_4d(float4 p)

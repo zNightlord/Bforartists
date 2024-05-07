@@ -1,4 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* SPDX-FileCopyrightText: 2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup edasset
@@ -15,13 +17,16 @@
 
 #include "DNA_userdef_types.h"
 
-#include "UI_resources.h"
+#include "UI_resources.hh"
 
-#include "RNA_define.h"
+#include "RNA_define.hh"
+#include "RNA_enum_types.hh"
 
-#include "ED_asset_library.h"
+#include "ED_asset_library.hh"
 
-int ED_asset_library_reference_to_enum_value(const AssetLibraryReference *library)
+namespace blender::ed::asset {
+
+int library_reference_to_enum_value(const AssetLibraryReference *library)
 {
   /* Simple case: Predefined repository, just set the value. */
   if (library->type < ASSET_LIBRARY_CUSTOM) {
@@ -30,7 +35,7 @@ int ED_asset_library_reference_to_enum_value(const AssetLibraryReference *librar
 
   /* Note that the path isn't checked for validity here. If an invalid library path is used, the
    * Asset Browser can give a nice hint on what's wrong. */
-  const bUserAssetLibrary *user_library = BKE_preferences_asset_library_find_from_index(
+  const bUserAssetLibrary *user_library = BKE_preferences_asset_library_find_index(
       &U, library->custom_library_index);
   if (user_library) {
     return ASSET_LIBRARY_CUSTOM + library->custom_library_index;
@@ -39,7 +44,7 @@ int ED_asset_library_reference_to_enum_value(const AssetLibraryReference *librar
   return ASSET_LIBRARY_LOCAL;
 }
 
-AssetLibraryReference ED_asset_library_reference_from_enum_value(int value)
+AssetLibraryReference library_reference_from_enum_value(int value)
 {
   AssetLibraryReference library;
 
@@ -51,7 +56,7 @@ AssetLibraryReference ED_asset_library_reference_from_enum_value(int value)
     return library;
   }
 
-  const bUserAssetLibrary *user_library = BKE_preferences_asset_library_find_from_index(
+  const bUserAssetLibrary *user_library = BKE_preferences_asset_library_find_index(
       &U, value - ASSET_LIBRARY_CUSTOM);
 
   /* Note that there is no check if the path exists here. If an invalid library path is used, the
@@ -61,7 +66,7 @@ AssetLibraryReference ED_asset_library_reference_from_enum_value(int value)
     library.custom_library_index = -1;
   }
   else {
-    const bool is_valid = (user_library->name[0] && user_library->path[0]);
+    const bool is_valid = (user_library->name[0] && user_library->dirpath[0]);
     if (is_valid) {
       library.custom_library_index = value - ASSET_LIBRARY_CUSTOM;
       library.type = ASSET_LIBRARY_CUSTOM;
@@ -70,31 +75,22 @@ AssetLibraryReference ED_asset_library_reference_from_enum_value(int value)
   return library;
 }
 
-const EnumPropertyItem *ED_asset_library_reference_to_rna_enum_itemf(const bool include_generated)
+const EnumPropertyItem *library_reference_to_rna_enum_itemf(const bool include_generated)
 {
   EnumPropertyItem *item = nullptr;
   int totitem = 0;
 
   if (include_generated) {
-    const EnumPropertyItem generated_items[] = {
-        {ASSET_LIBRARY_ALL, "ALL", 0, "All", "Show assets from all of the listed asset libraries"},
-        RNA_ENUM_ITEM_SEPR,
-        {ASSET_LIBRARY_LOCAL,
-         "LOCAL",
-         ICON_CURRENT_FILE,
-         "Current File",
-         "Show the assets currently available in this Blender session"},
-        {ASSET_LIBRARY_ESSENTIALS,
-         "ESSENTIALS",
-         0,
-         "Essentials",
-         "Show the basic building blocks and utilities coming with Blender"},
-        {0, nullptr, 0, nullptr, nullptr},
-    };
-
     /* Add predefined libraries that are generated and not simple directories that can be written
      * to. */
-    RNA_enum_items_add(&item, &totitem, generated_items);
+    BLI_assert(rna_enum_asset_library_type_items[0].value == ASSET_LIBRARY_ALL);
+    RNA_enum_item_add(&item, &totitem, &rna_enum_asset_library_type_items[0]);
+    RNA_enum_item_add_separator(&item, &totitem);
+
+    BLI_assert(rna_enum_asset_library_type_items[1].value == ASSET_LIBRARY_LOCAL);
+    RNA_enum_item_add(&item, &totitem, &rna_enum_asset_library_type_items[1]);
+    BLI_assert(rna_enum_asset_library_type_items[2].value == ASSET_LIBRARY_ESSENTIALS);
+    RNA_enum_item_add(&item, &totitem, &rna_enum_asset_library_type_items[2]);
   }
 
   /* Add separator if needed. */
@@ -106,7 +102,7 @@ const EnumPropertyItem *ED_asset_library_reference_to_rna_enum_itemf(const bool 
   LISTBASE_FOREACH_INDEX (bUserAssetLibrary *, user_library, &U.asset_libraries, i) {
     /* Note that the path itself isn't checked for validity here. If an invalid library path is
      * used, the Asset Browser can give a nice hint on what's wrong. */
-    const bool is_valid = (user_library->name[0] && user_library->path[0]);
+    const bool is_valid = (user_library->name[0] && user_library->dirpath[0]);
     if (!is_valid) {
       continue;
     }
@@ -115,13 +111,15 @@ const EnumPropertyItem *ED_asset_library_reference_to_rna_enum_itemf(const bool 
     library_reference.type = ASSET_LIBRARY_CUSTOM;
     library_reference.custom_library_index = i;
 
-    const int enum_value = ED_asset_library_reference_to_enum_value(&library_reference);
+    const int enum_value = library_reference_to_enum_value(&library_reference);
     /* Use library path as description, it's a nice hint for users. */
     EnumPropertyItem tmp = {
-        enum_value, user_library->name, ICON_NONE, user_library->name, user_library->path};
+        enum_value, user_library->name, ICON_NONE, user_library->name, user_library->dirpath};
     RNA_enum_item_add(&item, &totitem, &tmp);
   }
 
   RNA_enum_item_end(&item, &totitem);
   return item;
 }
+
+}  // namespace blender::ed::asset

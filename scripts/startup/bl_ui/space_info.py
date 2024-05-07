@@ -1,4 +1,7 @@
+# SPDX-FileCopyrightText: 2009-2023 Blender Authors
+#
 # SPDX-License-Identifier: GPL-2.0-or-later
+
 from bpy.types import Header, Menu
 
 from bpy.app.translations import contexts as i18n_contexts
@@ -72,15 +75,13 @@ class INFO_MT_area(Menu):
             layout.operator("screen.region_quadview")
             layout.separator()
 
-        layout.operator("screen.area_split", text="Horizontal Split").direction = 'HORIZONTAL'
-        layout.operator("screen.area_split", text="Vertical Split").direction = 'VERTICAL'
+        layout.operator("screen.area_split", icon='SPLIT_HORIZONTAL', text="Horizontal Split").direction = 'HORIZONTAL'
+        layout.operator("screen.area_split", icon='SPLIT_VERTICAL', text="Vertical Split").direction = 'VERTICAL'
 
         layout.separator()
 
         layout.operator("screen.screen_full_area")
-        layout.operator(
-            "screen.screen_full_area",
-            text="Toggle Fullscreen Area").use_hide_panels = True
+        layout.operator("screen.screen_full_area", text="Toggle Fullscreen Area").use_hide_panels = True
         layout.operator("screen.area_dupli")
 
         layout.separator()
@@ -89,7 +90,7 @@ class INFO_MT_area(Menu):
 
 
 class INFO_MT_context_menu(Menu):
-    bl_label = "Info Context Menu"
+    bl_label = "Info"
 
     def draw(self, _context):
         layout = self.layout

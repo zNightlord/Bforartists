@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2006 Blender Foundation. All rights reserved. */
+/* SPDX-FileCopyrightText: 2006 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup cmpnodes
@@ -12,12 +13,12 @@
 #include "BLI_math_vector.hh"
 #include "BLI_math_vector_types.hh"
 
-#include "RNA_access.h"
+#include "RNA_access.hh"
 
-#include "UI_interface.h"
-#include "UI_resources.h"
+#include "UI_interface.hh"
+#include "UI_resources.hh"
 
-#include "IMB_colormanagement.h"
+#include "IMB_colormanagement.hh"
 
 #include "COM_algorithm_parallel_reduction.hh"
 #include "COM_node_operation.hh"
@@ -31,10 +32,10 @@ NODE_STORAGE_FUNCS(NodeTonemap)
 
 static void cmp_node_tonemap_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Color>(N_("Image"))
+  b.add_input<decl::Color>("Image")
       .default_value({1.0f, 1.0f, 1.0f, 1.0f})
       .compositor_domain_priority(0);
-  b.add_output<decl::Color>(N_("Image"));
+  b.add_output<decl::Color>("Image");
 }
 
 static void node_composit_init_tonemap(bNodeTree * /*ntree*/, bNode *node)
@@ -113,7 +114,7 @@ class ToneMapOperation : public NodeOperation {
     const float gamma = node_storage(bnode()).gamma;
     const float inverse_gamma = gamma != 0.0f ? 1.0f / gamma : 0.0f;
 
-    GPUShader *shader = shader_manager().get("compositor_tone_map_simple");
+    GPUShader *shader = context().get_shader("compositor_tone_map_simple");
     GPU_shader_bind(shader);
 
     GPU_shader_uniform_1f(shader, "luminance_scale", luminance_scale);
@@ -174,7 +175,7 @@ class ToneMapOperation : public NodeOperation {
     const float chromatic_adaptation = get_chromatic_adaptation();
     const float light_adaptation = get_light_adaptation();
 
-    GPUShader *shader = shader_manager().get("compositor_tone_map_photoreceptor");
+    GPUShader *shader = context().get_shader("compositor_tone_map_photoreceptor");
     GPU_shader_bind(shader);
 
     GPU_shader_uniform_4fv(shader, "global_adaptation_level", global_adaptation_level);

@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2005 Blender Foundation. All rights reserved. */
+/* SPDX-FileCopyrightText: 2005 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup gpu
@@ -7,8 +8,8 @@
 
 #include "BLI_utildefines.h"
 
-#include "GPU_capabilities.h"
-#include "GPU_shader.h"
+#include "GPU_capabilities.hh"
+#include "GPU_shader.hh"
 
 /* Cache of built-in shaders (each is created on first use). */
 static GPUShader *builtin_shaders[GPU_SHADER_CFG_LEN][GPU_SHADER_BUILTIN_LEN] = {{nullptr}};
@@ -86,6 +87,12 @@ static const char *builtin_shader_create_info_name(eGPUBuiltinShader shader)
       return "gpu_shader_2D_nodelink_inst";
     case GPU_SHADER_GPENCIL_STROKE:
       return "gpu_shader_gpencil_stroke";
+    case GPU_SHADER_INDEXBUF_POINTS:
+      return "gpu_shader_index_2d_array_points";
+    case GPU_SHADER_INDEXBUF_LINES:
+      return "gpu_shader_index_2d_array_lines";
+    case GPU_SHADER_INDEXBUF_TRIS:
+      return "gpu_shader_index_2d_array_tris";
     default:
       BLI_assert_unreachable();
       return "";
@@ -128,7 +135,8 @@ GPUShader *GPU_shader_get_builtin_shader_with_config(eGPUBuiltinShader shader,
                GPU_SHADER_3D_POLYLINE_CLIPPED_UNIFORM_COLOR,
                GPU_SHADER_3D_POLYLINE_UNIFORM_COLOR,
                GPU_SHADER_3D_POLYLINE_FLAT_COLOR,
-               GPU_SHADER_3D_POLYLINE_SMOOTH_COLOR)) {
+               GPU_SHADER_3D_POLYLINE_SMOOTH_COLOR))
+      {
         /* Set a default value for `lineSmooth`.
          * Ideally this value should be set by the caller. */
         GPU_shader_bind(*sh_p);
@@ -152,7 +160,7 @@ GPUShader *GPU_shader_get_builtin_shader(eGPUBuiltinShader shader)
   return GPU_shader_get_builtin_shader_with_config(shader, GPU_SHADER_CFG_DEFAULT);
 }
 
-void GPU_shader_free_builtin_shaders(void)
+void GPU_shader_free_builtin_shaders()
 {
   for (int i = 0; i < GPU_SHADER_CFG_LEN; i++) {
     for (int j = 0; j < GPU_SHADER_BUILTIN_LEN; j++) {

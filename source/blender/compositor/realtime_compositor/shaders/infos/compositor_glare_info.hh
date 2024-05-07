@@ -1,4 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* SPDX-FileCopyrightText: 2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "gpu_shader_create_info.hh"
 
@@ -103,4 +105,31 @@ GPU_SHADER_CREATE_INFO(compositor_glare_streaks_accumulate)
     .sampler(0, ImageType::FLOAT_2D, "streak_tx")
     .image(0, GPU_RGBA16F, Qualifier::READ_WRITE, ImageType::FLOAT_2D, "accumulated_streaks_img")
     .compute_source("compositor_glare_streaks_accumulate.glsl")
+    .do_static_compilation(true);
+
+/* -----
+ * Bloom
+ * ----- */
+
+GPU_SHADER_CREATE_INFO(compositor_glare_bloom_downsample_shared)
+    .local_group_size(16, 16)
+    .sampler(0, ImageType::FLOAT_2D, "input_tx")
+    .image(0, GPU_RGBA16F, Qualifier::WRITE, ImageType::FLOAT_2D, "output_img")
+    .compute_source("compositor_glare_bloom_downsample.glsl");
+
+GPU_SHADER_CREATE_INFO(compositor_glare_bloom_downsample_simple_average)
+    .define("SIMPLE_AVERAGE")
+    .additional_info("compositor_glare_bloom_downsample_shared")
+    .do_static_compilation(true);
+
+GPU_SHADER_CREATE_INFO(compositor_glare_bloom_downsample_karis_average)
+    .define("KARIS_AVERAGE")
+    .additional_info("compositor_glare_bloom_downsample_shared")
+    .do_static_compilation(true);
+
+GPU_SHADER_CREATE_INFO(compositor_glare_bloom_upsample)
+    .local_group_size(16, 16)
+    .sampler(0, ImageType::FLOAT_2D, "input_tx")
+    .image(0, GPU_RGBA16F, Qualifier::READ_WRITE, ImageType::FLOAT_2D, "output_img")
+    .compute_source("compositor_glare_bloom_upsample.glsl")
     .do_static_compilation(true);

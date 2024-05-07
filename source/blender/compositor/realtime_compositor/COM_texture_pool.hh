@@ -1,4 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* SPDX-FileCopyrightText: 2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #pragma once
 
@@ -8,7 +10,7 @@
 #include "BLI_math_vector_types.hh"
 #include "BLI_vector.hh"
 
-#include "GPU_texture.h"
+#include "GPU_texture.hh"
 
 namespace blender::realtime_compositor {
 
@@ -56,16 +58,6 @@ class TexturePool {
    * texture exists, return it, otherwise, return a newly allocated texture. Expect the texture to
    * be uncleared and possibly contains garbage data. */
   GPUTexture *acquire(int2 size, eGPUTextureFormat format);
-
-  /* Shorthand for acquire with GPU_RGBA16F format. */
-  GPUTexture *acquire_color(int2 size);
-
-  /* Shorthand for acquire with GPU_RGBA16F format. Identical to acquire_color because vectors are
-   * 4D, and are thus stored in RGBA textures. */
-  GPUTexture *acquire_vector(int2 size);
-
-  /* Shorthand for acquire with GPU_R16F format. */
-  GPUTexture *acquire_float(int2 size);
 
   /* Put the texture back into the pool, potentially to be acquired later by another user. Expects
    * the texture to be one that was acquired using the same texture pool. */

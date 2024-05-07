@@ -1,4 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* SPDX-FileCopyrightText: 2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #pragma once
 
@@ -110,5 +112,3 @@ AxisAngleBase<T, AngleT> to_axis_angle(const Euler3Base<T> &euler)
 /** \} */
 
 }  // namespace blender::math
-
-/** \} */

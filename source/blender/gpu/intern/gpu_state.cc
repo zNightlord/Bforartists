@@ -1,4 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* SPDX-FileCopyrightText: 2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup gpu
@@ -14,7 +16,7 @@
 #include "BLI_math_vector.h"
 #include "BLI_utildefines.h"
 
-#include "GPU_state.h"
+#include "GPU_state.hh"
 
 #include "gpu_backend.hh"
 #include "gpu_context_private.hh"

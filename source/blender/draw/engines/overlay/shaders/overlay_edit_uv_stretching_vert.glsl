@@ -1,3 +1,7 @@
+/* SPDX-FileCopyrightText: 2018-2022 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
+
 #pragma BLENDER_REQUIRE(common_view_lib.glsl)
 
 vec3 weight_to_rgb(float weight)
@@ -78,5 +82,5 @@ void main()
 
 #endif
 
-  finalColor = vec4(weight_to_rgb(stretch), 1.0);
+  finalColor = vec4(weight_to_rgb(stretch), stretch_opacity);
 }

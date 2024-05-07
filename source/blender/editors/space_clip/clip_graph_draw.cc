@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2011 Blender Foundation. All rights reserved. */
+/* SPDX-FileCopyrightText: 2011 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup spclip
@@ -8,36 +9,33 @@
 #include "DNA_movieclip_types.h"
 #include "DNA_scene_types.h"
 
-#include "BLI_math.h"
 #include "BLI_utildefines.h"
 
-#include "BKE_context.h"
 #include "BKE_movieclip.h"
 #include "BKE_tracking.h"
 
-#include "ED_clip.h"
-#include "ED_screen.h"
+#include "ED_clip.hh"
+#include "ED_screen.hh"
 
-#include "GPU_immediate.h"
-#include "GPU_immediate_util.h"
-#include "GPU_matrix.h"
-#include "GPU_state.h"
+#include "GPU_immediate.hh"
+#include "GPU_immediate_util.hh"
+#include "GPU_matrix.hh"
+#include "GPU_state.hh"
 
-#include "WM_types.h"
+#include "WM_types.hh"
 
-#include "UI_interface.h"
-#include "UI_resources.h"
-#include "UI_view2d.h"
+#include "UI_resources.hh"
+#include "UI_view2d.hh"
 
-#include "clip_intern.h" /* own include */
+#include "clip_intern.hh" /* own include */
 
-typedef struct TrackMotionCurveUserData {
+struct TrackMotionCurveUserData {
   SpaceClip *sc;
   MovieTrackingTrack *act_track;
   bool sel;
   float xscale, yscale, hsize;
   uint pos;
-} TrackMotionCurveUserData;
+};
 
 static void tracking_segment_point_cb(void *userdata,
                                       MovieTrackingTrack * /*track*/,
@@ -118,7 +116,6 @@ static void tracking_segment_knot_cb(void *userdata,
                                      float val)
 {
   TrackMotionCurveUserData *data = (TrackMotionCurveUserData *)userdata;
-  int sel = 0, sel_flag;
 
   if (track != data->act_track) {
     return;
@@ -127,8 +124,9 @@ static void tracking_segment_knot_cb(void *userdata,
     return;
   }
 
-  sel_flag = value_source == CLIP_VALUE_SOURCE_SPEED_X ? MARKER_GRAPH_SEL_X : MARKER_GRAPH_SEL_Y;
-  sel = (marker->flag & sel_flag) ? 1 : 0;
+  const int sel_flag = value_source == CLIP_VALUE_SOURCE_SPEED_X ? MARKER_GRAPH_SEL_X :
+                                                                   MARKER_GRAPH_SEL_Y;
+  const bool sel = (marker->flag & sel_flag) != 0;
 
   if (sel == data->sel) {
     immUniformThemeColor(sel ? TH_HANDLE_VERTEX_SELECT : TH_HANDLE_VERTEX);

@@ -1,4 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* SPDX-FileCopyrightText: 2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include <limits>
 
@@ -21,9 +23,7 @@ namespace blender::realtime_compositor {
 
 using namespace nodes::derived_node_tree_types;
 
-CompileState::CompileState(const Schedule &schedule) : schedule_(schedule)
-{
-}
+CompileState::CompileState(const Schedule &schedule) : schedule_(schedule) {}
 
 const Schedule &CompileState::get_schedule()
 {
@@ -74,7 +74,8 @@ ShaderCompileUnit &CompileState::get_shader_compile_unit()
 
 void CompileState::reset_shader_compile_unit()
 {
-  return shader_compile_unit_.clear();
+  shader_compile_unit_.clear();
+  shader_compile_unit_domain_ = Domain::identity();
 }
 
 bool CompileState::should_compile_shader_compile_unit(DNode node)
@@ -95,13 +96,40 @@ bool CompileState::should_compile_shader_compile_unit(DNode node)
    * complete and should be compiled. Identity domains are an exception as they are always
    * compatible because they represents single values. */
   if (shader_compile_unit_domain_ != Domain::identity() &&
-      shader_compile_unit_domain_ != compute_shader_node_domain(node)) {
+      shader_compile_unit_domain_ != compute_shader_node_domain(node))
+  {
     return true;
   }
 
   /* Otherwise, the node is compatible and can be added to the compile unit and it shouldn't be
    * compiled just yet. */
   return false;
+}
+
+int CompileState::compute_shader_node_operation_outputs_count(DNode node)
+{
+  const DOutputSocket preview_output = find_preview_output_socket(node);
+
+  int outputs_count = 0;
+  for (const bNodeSocket *output : node->output_sockets()) {
+    const DOutputSocket doutput{node.context(), output};
+
+    /* If the output is used as the node preview, then an operation output will exist for it. */
+    const bool is_preview_output = doutput == preview_output;
+
+    /* If any of the nodes linked to the output are not part of the shader compile unit but are
+     * part of the execution schedule, then an operation output will exist for it. */
+    const bool is_operation_output = is_output_linked_to_node_conditioned(
+        doutput, [&](DNode node) {
+          return schedule_.contains(node) && !shader_compile_unit_.contains(node);
+        });
+
+    if (is_operation_output || is_preview_output) {
+      outputs_count += 1;
+    }
+  }
+
+  return outputs_count;
 }
 
 Domain CompileState::compute_shader_node_domain(DNode node)
@@ -149,8 +177,8 @@ Domain CompileState::compute_shader_node_domain(DNode node)
       continue;
     }
 
-    /* An input that skips realization can't be a domain input. */
-    if (input_descriptor.skip_realization) {
+    /* An input that skips operation domain realization can't be a domain input. */
+    if (!input_descriptor.realization_options.realize_on_operation_domain) {
       continue;
     }
 

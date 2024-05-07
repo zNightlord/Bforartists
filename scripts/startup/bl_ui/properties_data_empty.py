@@ -1,5 +1,9 @@
+# SPDX-FileCopyrightText: 2009-2023 Blender Authors
+#
 # SPDX-License-Identifier: GPL-2.0-or-later
+
 from bpy.types import Panel
+from bpy.app.translations import contexts as i18n_contexts
 
 
 class DataButtonsPanel:
@@ -15,6 +19,7 @@ class DataButtonsPanel:
 
 class DATA_PT_empty(DataButtonsPanel, Panel):
     bl_label = "Empty"
+    bl_translation_context = i18n_contexts.id_id
 
     def draw(self, context):
         layout = self.layout

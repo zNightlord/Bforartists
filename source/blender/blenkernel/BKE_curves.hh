@@ -1,4 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* SPDX-FileCopyrightText: 2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #pragma once
 
@@ -9,18 +11,31 @@
 
 #include "BLI_bounds_types.hh"
 #include "BLI_generic_virtual_array.hh"
-#include "BLI_index_mask.hh"
+#include "BLI_implicit_sharing_ptr.hh"
+#include "BLI_index_mask_fwd.hh"
 #include "BLI_math_matrix_types.hh"
 #include "BLI_math_vector_types.hh"
 #include "BLI_offset_indices.hh"
 #include "BLI_shared_cache.hh"
 #include "BLI_span.hh"
 #include "BLI_vector.hh"
-#include "BLI_virtual_array.hh"
+#include "BLI_virtual_array_fwd.hh"
 
-#include "BKE_attribute.hh"
 #include "BKE_attribute_math.hh"
 #include "BKE_curves.h"
+
+struct BlendDataReader;
+struct BlendWriter;
+struct MDeformVert;
+namespace blender::bke {
+class AnonymousAttributePropagationInfo;
+class AttributeAccessor;
+class MutableAttributeAccessor;
+enum class AttrDomain : int8_t;
+}  // namespace blender::bke
+namespace blender::bke::bake {
+struct BakeMaterialsList;
+}
 
 namespace blender::bke {
 
@@ -53,6 +68,9 @@ struct BasisCache {
  */
 class CurvesGeometryRuntime {
  public:
+  /** Implicit sharing user count for #CurvesGeometry::curve_offsets. */
+  const ImplicitSharingInfo *curve_offsets_sharing_info = nullptr;
+
   /**
    * The cached number of curves with each type. Unlike other caches here, this is not computed
    * lazily, since it is needed so often and types are not adjusted much anyway.
@@ -78,7 +96,7 @@ class CurvesGeometryRuntime {
   mutable SharedCache<Vector<float3>> evaluated_position_cache;
 
   /**
-   * A cache of bounds shared between data-blocks with unchanged positions and radii.
+   * A cache of bounds shared between data-blocks with unchanged positions.
    * When data changes affect the bounds, the cache is "un-shared" with other geometries.
    * See #SharedCache comments.
    */
@@ -96,6 +114,9 @@ class CurvesGeometryRuntime {
 
   /** Normal direction vectors for each evaluated point. */
   mutable SharedCache<Vector<float3>> evaluated_normal_cache;
+
+  /** Stores weak references to material data blocks. */
+  std::unique_ptr<bake::BakeMaterialsList> bake_materials;
 };
 
 /**
@@ -134,7 +155,9 @@ class CurvesGeometry : public ::CurvesGeometry {
 
   /**
    * The index of the first point in every curve. The size of this span is one larger than the
-   * number of curves. Consider using #points_by_curve rather than using the offsets directly.
+   * number of curves, but the spans will be empty if there are no curves/points.
+   *
+   * Consider using #points_by_curve rather than these offsets directly.
    */
   Span<int> offsets() const;
   MutableSpan<int> offsets_for_write();
@@ -149,12 +172,12 @@ class CurvesGeometry : public ::CurvesGeometry {
   /**
    * Mutable access to curve types. Call #tag_topology_changed and #update_curve_types after
    * changing any type. Consider using the other methods to change types below.
-   * */
+   */
   MutableSpan<int8_t> curve_types_for_write();
   /** Set all curve types to the value and call #update_curve_types. */
   void fill_curve_types(CurveType type);
   /** Set the types for the curves in the selection and call #update_curve_types. */
-  void fill_curve_types(IndexMask selection, CurveType type);
+  void fill_curve_types(const IndexMask &selection, CurveType type);
   /** Update the cached count of curves of each type, necessary after #curve_types_for_write. */
   void update_curve_types();
 
@@ -167,10 +190,10 @@ class CurvesGeometry : public ::CurvesGeometry {
   /**
    * All of the curve indices for curves with a specific type.
    */
-  IndexMask indices_for_curve_type(CurveType type, Vector<int64_t> &r_indices) const;
+  IndexMask indices_for_curve_type(CurveType type, IndexMaskMemory &memory) const;
   IndexMask indices_for_curve_type(CurveType type,
-                                   IndexMask selection,
-                                   Vector<int64_t> &r_indices) const;
+                                   const IndexMask &selection,
+                                   IndexMaskMemory &memory) const;
 
   Array<int> point_to_curve_map() const;
 
@@ -250,12 +273,16 @@ class CurvesGeometry : public ::CurvesGeometry {
   MutableSpan<float2> surface_uv_coords_for_write();
 
   /**
-   * Calculate the largest and smallest position values, only including control points
-   * (rather than evaluated points). The existing values of `min` and `max` are taken into account.
-   *
-   * \return Whether there are any points. If the curve is empty, the inputs will be unaffected.
+   * Vertex group data, encoded as an array of indices and weights for every vertex.
+   * \warning: May be empty.
    */
-  bool bounds_min_max(float3 &min, float3 &max) const;
+  Span<MDeformVert> deform_verts() const;
+  MutableSpan<MDeformVert> deform_verts_for_write();
+
+  /**
+   * The largest and smallest position values of evaluated points.
+   */
+  std::optional<Bounds<float3>> bounds_min_max() const;
 
  private:
   /* --------------------------------------------------------------------
@@ -330,8 +357,10 @@ class CurvesGeometry : public ::CurvesGeometry {
 
  public:
   /**
-   * Change the number of elements. New values for existing attributes should be properly
-   * initialized afterwards.
+   * Change the number of curves and/or points.
+   *
+   * \warning To avoid redundant writes, newly created attribute values are not initialized.
+   * They must be initialized by the caller afterwards.
    */
   void resize(int points_num, int curves_num);
 
@@ -355,16 +384,16 @@ class CurvesGeometry : public ::CurvesGeometry {
 
   void calculate_bezier_auto_handles();
 
-  void remove_points(IndexMask points_to_delete,
-                     const AnonymousAttributePropagationInfo &propagation_info = {});
-  void remove_curves(IndexMask curves_to_delete,
-                     const AnonymousAttributePropagationInfo &propagation_info = {});
+  void remove_points(const IndexMask &points_to_delete,
+                     const AnonymousAttributePropagationInfo &propagation_info);
+  void remove_curves(const IndexMask &curves_to_delete,
+                     const AnonymousAttributePropagationInfo &propagation_info);
 
   /**
    * Change the direction of selected curves (switch the start and end) without changing their
    * shape.
    */
-  void reverse_curves(IndexMask curves_to_reverse);
+  void reverse_curves(const IndexMask &curves_to_reverse);
 
   /**
    * Remove any attributes that are unused based on the types in the curves.
@@ -378,12 +407,32 @@ class CurvesGeometry : public ::CurvesGeometry {
    * Attributes.
    */
 
-  GVArray adapt_domain(const GVArray &varray, eAttrDomain from, eAttrDomain to) const;
+  GVArray adapt_domain(const GVArray &varray, AttrDomain from, AttrDomain to) const;
   template<typename T>
-  VArray<T> adapt_domain(const VArray<T> &varray, eAttrDomain from, eAttrDomain to) const
+  VArray<T> adapt_domain(const VArray<T> &varray, AttrDomain from, AttrDomain to) const
   {
     return this->adapt_domain(GVArray(varray), from, to).typed<T>();
   }
+
+  /* --------------------------------------------------------------------
+   * File Read/Write.
+   */
+  void blend_read(BlendDataReader &reader);
+  /**
+   * Helper struct for `CurvesGeometry::blend_write_*` functions.
+   */
+  struct BlendWriteData {
+    /* The point custom data layers to be written. */
+    Vector<CustomDataLayer, 16> point_layers;
+    /* The curve custom data layers to be written. */
+    Vector<CustomDataLayer, 16> curve_layers;
+  };
+  /**
+   * This function needs to be called before `blend_write` and before the `CurvesGeometry` struct
+   * is written because it can mutate the `CustomData` struct.
+   */
+  BlendWriteData blend_write_prepare();
+  void blend_write(BlendWriter &writer, ID &id, const BlendWriteData &write_data);
 };
 
 static_assert(sizeof(blender::bke::CurvesGeometry) == sizeof(::CurvesGeometry));
@@ -402,16 +451,17 @@ class CurvesEditHints {
    * Evaluated positions for the points in #curves_orig. If this is empty, the positions from the
    * evaluated #Curves should be used if possible.
    */
-  std::optional<Array<float3>> positions;
+  ImplicitSharingPtrAndData positions_data;
   /**
    * Matrices which transform point movement vectors from original data to corresponding movements
    * of evaluated data.
    */
   std::optional<Array<float3x3>> deform_mats;
 
-  CurvesEditHints(const Curves &curves_id_orig) : curves_id_orig(curves_id_orig)
-  {
-  }
+  CurvesEditHints(const Curves &curves_id_orig) : curves_id_orig(curves_id_orig) {}
+
+  std::optional<Span<float3>> positions() const;
+  std::optional<MutableSpan<float3>> positions_for_write();
 
   /**
    * The edit hints have to correspond to the original curves, i.e. the number of deformed points
@@ -419,6 +469,8 @@ class CurvesEditHints {
    */
   bool is_valid() const;
 };
+
+void curves_normals_point_domain_calc(const CurvesGeometry &curves, MutableSpan<float3> normals);
 
 namespace curves {
 
@@ -620,11 +672,9 @@ void set_handle_position(const float3 &position,
  * points are referred to as the control points, and the middle points are the corresponding
  * handles.
  */
-void evaluate_segment(const float3 &point_0,
-                      const float3 &point_1,
-                      const float3 &point_2,
-                      const float3 &point_3,
-                      MutableSpan<float3> result);
+template<typename T>
+void evaluate_segment(
+    const T &point_0, const T &point_1, const T &point_2, const T &point_3, MutableSpan<T> result);
 
 /**
  * Calculate all evaluated points for the Bezier curve.
@@ -680,7 +730,7 @@ void interpolate_to_evaluated(const GSpan src,
                               const OffsetIndices<int> evaluated_offsets,
                               GMutableSpan dst);
 
-void calculate_basis(const float parameter, float4 &r_weights);
+float4 calculate_basis(const float parameter);
 
 /**
  * Interpolate the control point values for the given parameter on the piecewise segment.
@@ -692,14 +742,13 @@ template<typename T>
 T interpolate(const T &a, const T &b, const T &c, const T &d, const float parameter)
 {
   BLI_assert(0.0f <= parameter && parameter <= 1.0f);
-  float4 n;
-  calculate_basis(parameter, n);
+  const float4 weights = calculate_basis(parameter);
   if constexpr (is_same_any_v<T, float, float2, float3>) {
     /* Save multiplications by adjusting weights after mix. */
-    return 0.5f * attribute_math::mix4<T>(n, a, b, c, d);
+    return 0.5f * attribute_math::mix4<T>(weights, a, b, c, d);
   }
   else {
-    return attribute_math::mix4<T>(n * 0.5f, a, b, c, d);
+    return attribute_math::mix4<T>(weights * 0.5f, a, b, c, d);
   }
 }
 
@@ -793,6 +842,16 @@ Curves *curves_new_nomain_single(int points_num, CurveType type);
  * copy high-level parameters when a geometry-altering operation creates a new curves data-block.
  */
 void curves_copy_parameters(const Curves &src, Curves &dst);
+
+CurvesGeometry curves_copy_point_selection(
+    const CurvesGeometry &curves,
+    const IndexMask &points_to_copy,
+    const AnonymousAttributePropagationInfo &propagation_info);
+
+CurvesGeometry curves_copy_curve_selection(
+    const CurvesGeometry &curves,
+    const IndexMask &curves_to_copy,
+    const AnonymousAttributePropagationInfo &propagation_info);
 
 std::array<int, CURVE_TYPES_NUM> calculate_type_counts(const VArray<int8_t> &types);
 

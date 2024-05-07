@@ -1,4 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* SPDX-FileCopyrightText: 2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup eduv
@@ -9,12 +11,13 @@
 #include "BLI_array.hh"
 #include "BLI_convexhull_2d.h"
 #include "BLI_ghash.h"
-#include "BLI_heap.h"
-#include "BLI_memarena.h"
+#include "BLI_math_geom.h"
+#include "BLI_math_matrix.h"
+#include "BLI_math_rotation.h"
+#include "BLI_math_vector.h"
 #include "BLI_polyfill_2d.h"
 #include "BLI_polyfill_2d_beautify.h"
 #include "BLI_rand.h"
-#include "BLI_vector.hh"
 
 #include "GEO_uv_pack.hh"
 
@@ -24,10 +27,6 @@
 
 namespace blender::geometry {
 
-#define param_assert(condition) \
-  if (!(condition)) { /* `printf("Assertion %s:%d\n", __FILE__, __LINE__); abort();` */ \
-  } \
-  (void)0
 #define param_warning(message) \
   {/* `printf("Warning %s:%d: %s\n", __FILE__, __LINE__, message);` */}(void)0
 
@@ -36,7 +35,7 @@ namespace blender::geometry {
 using PHashKey = uintptr_t;
 
 struct PHashLink {
-  struct PHashLink *next;
+  PHashLink *next;
   PHashKey key;
 };
 
@@ -49,7 +48,7 @@ struct PHash {
 /* Simplices */
 
 struct PVert {
-  struct PVert *nextlink;
+  PVert *nextlink;
 
   union PVertUnion {
     PHashKey key;       /* Construct. */
@@ -64,25 +63,25 @@ struct PVert {
 };
 
 struct PEdge {
-  struct PEdge *nextlink;
+  PEdge *nextlink;
 
   union PEdgeUnion {
-    PHashKey key;               /* Construct. */
-    int id;                     /* ABF matrix index. */
-    HeapNode *heaplink;         /* Fill holes. */
-    struct PEdge *nextcollapse; /* Simplification. */
+    PHashKey key;        /* Construct. */
+    int id;              /* ABF matrix index. */
+    HeapNode *heaplink;  /* Fill holes. */
+    PEdge *nextcollapse; /* Simplification. */
   } u;
 
-  struct PVert *vert;
-  struct PEdge *pair;
-  struct PEdge *next;
+  PVert *vert;
+  PEdge *pair;
+  PEdge *next;
   struct PFace *face;
   float *orig_uv, old_uv[2];
   uint flag;
 };
 
 struct PFace {
-  struct PFace *nextlink;
+  PFace *nextlink;
 
   union PFaceUnion {
     PHashKey key; /* Construct. */
@@ -91,7 +90,7 @@ struct PFace {
     int id;       /* ABF matrix index. */
   } u;
 
-  struct PEdge *edge;
+  PEdge *edge;
   uint flag;
 };
 
@@ -142,46 +141,14 @@ struct PChart {
 
   float origin[2];
 
-  union PChartUnion {
-    struct PChartLscm {
-      LinearSolver *context;
-      float *abf_alpha;
-      PVert *pin1, *pin2;
-      PVert *single_pin;
-    } lscm;
-  } u;
+  LinearSolver *context;
+  float *abf_alpha;
+  PVert *pin1;
+  PVert *pin2;
+  PVert *single_pin;
 
   bool has_pins;
-};
-
-enum PHandleState {
-  PHANDLE_STATE_ALLOCATED,
-  PHANDLE_STATE_CONSTRUCTED,
-  PHANDLE_STATE_LSCM,
-  PHANDLE_STATE_STRETCH,
-};
-
-struct ParamHandle {
-  enum PHandleState state;
-  MemArena *arena;
-  MemArena *polyfill_arena;
-  Heap *polyfill_heap;
-
-  PChart *construction_chart;
-  PHash *hash_verts;
-  PHash *hash_edges;
-  PHash *hash_faces;
-
-  GHash *pin_hash;
-  int unique_pin_count;
-
-  PChart **charts;
-  int ncharts;
-
-  float aspx, aspy;
-
-  RNG *rng;
-  float blend;
+  bool skip_flush;
 };
 
 /* PHash
@@ -197,7 +164,7 @@ static int PHashSizes[] = {
 };
 
 #define PHASH_hash(ph, item) (uintptr_t(item) % uint((ph)->cursize))
-#define PHASH_edge(v1, v2) (((v1) < (v2)) ? ((v1)*39) ^ ((v2)*31) : ((v1)*31) ^ ((v2)*39))
+#define PHASH_edge(v1, v2) (((v1) < (v2)) ? ((v1) * 39) ^ ((v2) * 31) : ((v1) * 31) ^ ((v2) * 39))
 
 static PHash *phash_new(PHashLink **list, int sizehint)
 {
@@ -216,12 +183,14 @@ static PHash *phash_new(PHashLink **list, int sizehint)
   return ph;
 }
 
-static void phash_delete(PHash *ph)
+static void phash_safe_delete(PHash **pph)
 {
-  if (ph) {
-    MEM_SAFE_FREE(ph->buckets);
-    MEM_freeN(ph);
+  if (!*pph) {
+    return;
   }
+  MEM_SAFE_FREE((*pph)->buckets);
+  MEM_freeN(*pph);
+  *pph = nullptr;
 }
 
 static int phash_size(PHash *ph)
@@ -305,12 +274,12 @@ static PHashLink *phash_next(PHash *ph, PHashKey key, PHashLink *link)
 static void fix_large_angle(const float v_fix[3],
                             const float v1[3],
                             const float v2[3],
-                            float *r_fix,
-                            float *r_a1,
-                            float *r_a2)
+                            double *r_fix,
+                            double *r_a1,
+                            double *r_a2)
 {
-  const float max_angle = float(M_PI) * (179.0f / 180.0f);
-  const float fix_amount = *r_fix - max_angle;
+  const double max_angle = M_PI * 179.0f / 180.0f;
+  const double fix_amount = *r_fix - max_angle;
   if (fix_amount < 0.0f) {
     return; /* angle is reasonable, i.e. less than 179 degrees. */
   }
@@ -327,17 +296,17 @@ static void fix_large_angle(const float v_fix[3],
    *  tan(*r_a1) = s / x1
    *  tan(*r_a2) = s / x2
    *
-   * Remember that `tan = sin / cos`, `sin(s) ~= s` and `cos(s) = 1`
+   * Remember that `tan(angle) ~= angle`
    *
    * Rearrange to obtain:
    *  *r_a1 = fix_amount * x2 / (x1 + x2)
    *  *r_a2 = fix_amount * x1 / (x1 + x2)
    */
 
-  const float dist_v1 = len_v3v3(v_fix, v1);
-  const float dist_v2 = len_v3v3(v_fix, v2);
-  const float sum = dist_v1 + dist_v2;
-  const float weight = (sum > 1e-20f) ? dist_v2 / sum : 0.5f;
+  const double dist_v1 = len_v3v3(v_fix, v1);
+  const double dist_v2 = len_v3v3(v_fix, v2);
+  const double sum = dist_v1 + dist_v2;
+  const double weight = (sum > 1e-20f) ? dist_v2 / sum : 0.5f;
 
   /* Ensure sum of angles in triangle is unchanged. */
   *r_fix -= fix_amount;
@@ -345,8 +314,12 @@ static void fix_large_angle(const float v_fix[3],
   *r_a2 += fix_amount * (1.0f - weight);
 }
 
-static void p_triangle_angles(
-    const float v1[3], const float v2[3], const float v3[3], float *r_a1, float *r_a2, float *r_a3)
+static void p_triangle_angles(const float v1[3],
+                              const float v2[3],
+                              const float v3[3],
+                              double *r_a1,
+                              double *r_a2,
+                              double *r_a3)
 {
   *r_a1 = angle_v3v3v3(v3, v1, v2);
   *r_a2 = angle_v3v3v3(v1, v2, v3);
@@ -358,12 +331,12 @@ static void p_triangle_angles(
   fix_large_angle(v3, v1, v2, r_a3, r_a1, r_a2);
 
   /* Workaround for degenerate geometry, e.g. v1 == v2 == v3. */
-  *r_a1 = max_ff(*r_a1, 0.001f);
-  *r_a2 = max_ff(*r_a2, 0.001f);
-  *r_a3 = max_ff(*r_a3, 0.001f);
+  *r_a1 = max_dd(*r_a1, 0.001f);
+  *r_a2 = max_dd(*r_a2, 0.001f);
+  *r_a3 = max_dd(*r_a3, 0.001f);
 }
 
-static void p_face_angles(PFace *f, float *r_a1, float *r_a2, float *r_a3)
+static void p_face_angles(PFace *f, double *r_a1, double *r_a2, double *r_a3)
 {
   PEdge *e1 = f->edge, *e2 = e1->next, *e3 = e2->next;
   PVert *v1 = e1->vert, *v2 = e2->vert, *v3 = e3->vert;
@@ -425,19 +398,30 @@ static float p_chart_uv_area(PChart *chart)
   return area;
 }
 
-static void p_chart_uv_scale(PChart *chart, float scale)
+static void p_chart_uv_scale(PChart *chart, const float scale)
 {
+  if (scale == 1.0f) {
+    return; /* Identity transform. */
+  }
+
   for (PVert *v = chart->verts; v; v = v->nextlink) {
     v->uv[0] *= scale;
     v->uv[1] *= scale;
   }
 }
 
-static void p_chart_uv_scale_xy(PChart *chart, float x, float y)
+static void uv_parametrizer_scale_x(ParamHandle *phandle, const float scale_x)
 {
-  for (PVert *v = chart->verts; v; v = v->nextlink) {
-    v->uv[0] *= x;
-    v->uv[1] *= y;
+  if (scale_x == 1.0f) {
+    return; /* Identity transform. */
+  }
+
+  /* Scale every chart. */
+  for (int i = 0; i < phandle->ncharts; i++) {
+    PChart *chart = phandle->charts[i];
+    for (PVert *v = chart->verts; v; v = v->nextlink) {
+      v->uv[0] *= scale_x; /* Only scale x axis. */
+    }
   }
 }
 
@@ -582,13 +566,13 @@ static void p_vert_load_pin_select_uvs(ParamHandle *handle, PVert *v)
       }
 
       if (e->flag & PEDGE_PIN) {
-        pinuv[0] += e->orig_uv[0] * handle->aspx;
-        pinuv[1] += e->orig_uv[1] * handle->aspy;
+        pinuv[0] += e->orig_uv[0] * handle->aspect_y;
+        pinuv[1] += e->orig_uv[1];
         npins++;
       }
       else {
-        v->uv[0] += e->orig_uv[0] * handle->aspx;
-        v->uv[1] += e->orig_uv[1] * handle->aspy;
+        v->uv[0] += e->orig_uv[0] * handle->aspect_y;
+        v->uv[1] += e->orig_uv[1];
       }
 
       nedges++;
@@ -612,16 +596,11 @@ static void p_flush_uvs(ParamHandle *handle, PChart *chart)
 {
   const float blend = handle->blend;
   const float invblend = 1.0f - blend;
+  const float invblend_x = invblend / handle->aspect_y;
   for (PEdge *e = chart->edges; e; e = e->nextlink) {
     if (e->orig_uv) {
-      if (blend) {
-        e->orig_uv[0] = blend * e->old_uv[0] + invblend * e->vert->uv[0] / handle->aspx;
-        e->orig_uv[1] = blend * e->old_uv[1] + invblend * e->vert->uv[1] / handle->aspy;
-      }
-      else {
-        e->orig_uv[0] = e->vert->uv[0] / handle->aspx;
-        e->orig_uv[1] = e->vert->uv[1] / handle->aspy;
-      }
+      e->orig_uv[0] = blend * e->old_uv[0] + invblend_x * e->vert->uv[0];
+      e->orig_uv[1] = blend * e->old_uv[1] + invblend * e->vert->uv[1];
     }
   }
 }
@@ -756,7 +735,7 @@ static int p_face_exists(ParamHandle *handle, const ParamKey *pvkeys, int i1, in
 
 static bool p_edge_implicit_seam(PEdge *e, PEdge *ep)
 {
-  float *uv1, *uv2, *uvp1, *uvp2;
+  const float *uv1, *uv2, *uvp1, *uvp2;
   float limit[2];
 
   limit[0] = 0.00001;
@@ -792,7 +771,7 @@ static bool p_edge_has_pair(ParamHandle *handle, PEdge *e, bool topology_from_uv
 {
   PHashKey key;
   PEdge *pe;
-  PVert *v1, *v2;
+  const PVert *v1, *v2;
   PHashKey key1 = e->vert->u.key;
   PHashKey key2 = e->next->vert->u.key;
 
@@ -810,11 +789,13 @@ static bool p_edge_has_pair(ParamHandle *handle, PEdge *e, bool topology_from_uv
       v2 = pe->next->vert;
 
       if (((v1->u.key == key1) && (v2->u.key == key2)) ||
-          ((v1->u.key == key2) && (v2->u.key == key1))) {
+          ((v1->u.key == key2) && (v2->u.key == key1)))
+      {
 
         /* don't connect seams and t-junctions */
         if ((pe->flag & PEDGE_SEAM) || *r_pair ||
-            (topology_from_uvs && p_edge_implicit_seam(e, pe))) {
+            (topology_from_uvs && p_edge_implicit_seam(e, pe)))
+        {
           *r_pair = nullptr;
           return false;
         }
@@ -1008,15 +989,14 @@ static PChart **p_split_charts(ParamHandle *handle, PChart *chart, int ncharts)
 static PFace *p_face_add(ParamHandle *handle)
 {
   PFace *f;
-  PEdge *e1, *e2, *e3;
 
   /* allocate */
   f = (PFace *)BLI_memarena_alloc(handle->arena, sizeof(*f));
-  f->flag = 0; /* init ! */
+  f->flag = 0;
 
-  e1 = (PEdge *)BLI_memarena_alloc(handle->arena, sizeof(*e1));
-  e2 = (PEdge *)BLI_memarena_alloc(handle->arena, sizeof(*e2));
-  e3 = (PEdge *)BLI_memarena_alloc(handle->arena, sizeof(*e3));
+  PEdge *e1 = (PEdge *)BLI_memarena_calloc(handle->arena, sizeof(*e1));
+  PEdge *e2 = (PEdge *)BLI_memarena_calloc(handle->arena, sizeof(*e2));
+  PEdge *e3 = (PEdge *)BLI_memarena_calloc(handle->arena, sizeof(*e3));
 
   /* set up edges */
   f->edge = e1;
@@ -1025,14 +1005,6 @@ static PFace *p_face_add(ParamHandle *handle)
   e1->next = e2;
   e2->next = e3;
   e3->next = e1;
-
-  e1->pair = nullptr;
-  e2->pair = nullptr;
-  e3->pair = nullptr;
-
-  e1->flag = 0;
-  e2->flag = 0;
-  e3->flag = 0;
 
   return f;
 }
@@ -1262,7 +1234,7 @@ static void p_chart_fill_boundary(ParamHandle *handle, PChart *chart, PEdge *be,
   BLI_heap_free(heap, nullptr);
 }
 
-static void p_chart_fill_boundaries(ParamHandle *handle, PChart *chart, PEdge *outer)
+static void p_chart_fill_boundaries(ParamHandle *handle, PChart *chart, const PEdge *outer)
 {
   PEdge *e, *be; /* *enext - as yet unused */
   int nedges;
@@ -1368,7 +1340,7 @@ static void p_polygon_kernel_center(float (*points)[2], int npoints, float *cent
     p_polygon_kernel_clip(oldpoints, nnewpoints, newpoints, &nnewpoints, p1, p2);
 
     if (nnewpoints == 0) {
-      /* degenerate case, use center of original polygon */
+      /* degenerate case, use center of original face */
       memcpy(oldpoints, points, sizeof(float[2]) * npoints);
       nnewpoints = npoints;
       break;
@@ -1414,11 +1386,13 @@ static void p_polygon_kernel_center(float (*points)[2], int npoints, float *cent
 }
 #endif
 
-#if 0
-/* Edge Collapser */
+/* Simplify/Complexity
+ *
+ * This is currently used for eliminating degenerate vertex coordinates.
+ * In the future this can be used for efficient unwrapping of high resolution
+ * charts at lower resolution. */
 
-int NCOLLAPSE = 1;
-int NCOLLAPSEX = 0;
+#if 0
 
 static float p_vert_cotan(const float v1[3], const float v2[3], const float v3[3])
 {
@@ -1529,7 +1503,7 @@ static void p_vert_harmonic_insert(PVert *v)
   PEdge *e;
 
   if (!p_vert_map_harmonic_weights(v)) {
-    /* do polygon kernel center insertion: this is quite slow, but should
+    /* do face kernel center insertion: this is quite slow, but should
      * only be needed for 0.01 % of verts or so, when insert with harmonic
      * weights fails */
 
@@ -1971,7 +1945,12 @@ static float p_collapse_cost(PEdge *edge, PEdge *pair)
   return cost;
 }
 
-static void p_collapse_cost_vertex(PVert *vert, float *r_mincost, PEdge **r_mine)
+static void p_collapse_cost_vertex(
+    PVert *vert,
+    float *r_mincost,
+    PEdge **r_mine,
+    const std::function<float(PEdge *, PEdge *)> &collapse_cost_fn,
+    const std::function<float(PEdge *, PEdge *)> &collapse_allowed_fn)
 {
   PEdge *e, *enext, *pair;
 
@@ -1979,8 +1958,8 @@ static void p_collapse_cost_vertex(PVert *vert, float *r_mincost, PEdge **r_mine
   *r_mincost = 0.0f;
   e = vert->edge;
   do {
-    if (p_collapse_allowed(e, e->pair)) {
-      float cost = p_collapse_cost(e, e->pair);
+    if (collapse_allowed_fn(e, e->pair)) {
+      float cost = collapse_cost_fn(e, e->pair);
 
       if ((*r_mine == nullptr) || (cost < *r_mincost)) {
         *r_mincost = cost;
@@ -1994,8 +1973,8 @@ static void p_collapse_cost_vertex(PVert *vert, float *r_mincost, PEdge **r_mine
       /* The other boundary edge, where we only have the pair half-edge. */
       pair = e->next->next;
 
-      if (p_collapse_allowed(nullptr, pair)) {
-        float cost = p_collapse_cost(nullptr, pair);
+      if (collapse_allowed_fn(nullptr, pair)) {
+        float cost = collapse_cost_fn(nullptr, pair);
 
         if ((*r_mine == nullptr) || (cost < *r_mincost)) {
           *r_mincost = cost;
@@ -2080,9 +2059,12 @@ static void p_chart_post_collapse_flush(PChart *chart, PEdge *collapsed)
   }
 }
 
-static void p_chart_post_split_flush(PChart *chart)
+static void p_chart_simplify_compute(PChart *chart,
+                                     std::function<float(PEdge *, PEdge *)> collapse_cost_fn,
+                                     std::function<float(PEdge *, PEdge *)> collapse_allowed_fn)
 {
-  /* Move from `collapsed_*`. */
+  /* For debugging. */
+  static const int MAX_SIMPLIFY = INT_MAX;
 
   PVert *v, *nextv = nullptr;
   PEdge *e, *nexte = nullptr;
@@ -2122,18 +2104,18 @@ static void p_chart_simplify_compute(PChart *chart)
    * is at the top of the respective lists. */
 
   Heap *heap = BLI_heap_new();
-  PVert *v, **wheelverts;
+  PVert *v;
   PEdge *collapsededges = nullptr, *e;
-  int nwheelverts, i, ncollapsed = 0;
-
-  wheelverts = MEM_mallocN(sizeof(PVert *) * chart->nverts, "PChartWheelVerts");
+  int ncollapsed = 0;
+  Vector<PVert *> wheelverts;
+  wheelverts.reserve(16);
 
   /* insert all potential collapses into heap */
   for (v = chart->verts; v; v = v->nextlink) {
     float cost;
     PEdge *e = nullptr;
 
-    p_collapse_cost_vertex(v, &cost, &e);
+    p_collapse_cost_vertex(v, &cost, &e, collapse_cost_fn, collapse_allowed_fn);
 
     if (e) {
       v->u.heaplink = BLI_heap_insert(heap, cost, e);
@@ -2149,7 +2131,7 @@ static void p_chart_simplify_compute(PChart *chart)
 
   /* pop edge collapse out of heap one by one */
   while (!BLI_heap_is_empty(heap)) {
-    if (ncollapsed == NCOLLAPSE) {
+    if (ncollapsed == MAX_SIMPLIFY) {
       break;
     }
 
@@ -2165,7 +2147,7 @@ static void p_chart_simplify_compute(PChart *chart)
     if (edge->vert->u.heaplink != link) {
       edge->flag |= (PEDGE_COLLAPSE_EDGE | PEDGE_COLLAPSE_PAIR);
       edge->next->vert->u.heaplink = nullptr;
-     std::swap( edge, pair);
+      std::swap(edge, pair);
     }
     else {
       edge->flag |= PEDGE_COLLAPSE_EDGE;
@@ -2175,15 +2157,15 @@ static void p_chart_simplify_compute(PChart *chart)
     p_collapsing_verts(edge, pair, &oldv, &keepv);
 
     /* gather all wheel verts and remember them before collapse */
-    nwheelverts = 0;
+    wheelverts.clear();
     wheele = oldv->edge;
 
     do {
-      wheelverts[nwheelverts++] = wheele->next->vert;
+      wheelverts.append(wheele->next->vert);
       nexte = p_wheel_edge_next(wheele);
 
       if (nexte == nullptr) {
-        wheelverts[nwheelverts++] = wheele->next->next->vert;
+        wheelverts.append(wheele->next->next->vert);
       }
 
       wheele = nexte;
@@ -2192,18 +2174,16 @@ static void p_chart_simplify_compute(PChart *chart)
     /* collapse */
     p_collapse_edge(edge, pair);
 
-    for (i = 0; i < nwheelverts; i++) {
+    for (PVert *v : wheelverts) {
       float cost;
       PEdge *collapse = nullptr;
-
-      v = wheelverts[i];
 
       if (v->u.heaplink) {
         BLI_heap_remove(heap, v->u.heaplink);
         v->u.heaplink = nullptr;
       }
 
-      p_collapse_cost_vertex(v, &cost, &collapse);
+      p_collapse_cost_vertex(v, &cost, &collapse, collapse_cost_fn, collapse_allowed_fn);
 
       if (collapse) {
         v->u.heaplink = BLI_heap_insert(heap, cost, collapse);
@@ -2213,7 +2193,6 @@ static void p_chart_simplify_compute(PChart *chart)
     ncollapsed++;
   }
 
-  MEM_freeN(wheelverts);
   BLI_heap_free(heap, nullptr);
 
   p_chart_post_collapse_flush(chart, collapsededges);
@@ -2221,6 +2200,9 @@ static void p_chart_simplify_compute(PChart *chart)
 
 static void p_chart_complexify(PChart *chart)
 {
+  /* For debugging. */
+  static const int MAX_COMPLEXIFY = INT_MAX;
+
   PEdge *e, *pair, *edge;
   PVert *newv, *keepv;
   int x = 0;
@@ -2234,13 +2216,13 @@ static void p_chart_complexify(PChart *chart)
     pair = e->pair;
 
     if (edge->flag & PEDGE_COLLAPSE_PAIR) {
-     std::swap( edge, pair);
+      std::swap(edge, pair);
     }
 
     p_split_vertex(edge, pair);
     p_collapsing_verts(edge, pair, &newv, &keepv);
 
-    if (x >= NCOLLAPSEX) {
+    if (x >= MAX_COMPLEXIFY) {
       newv->uv[0] = keepv->uv[0];
       newv->uv[1] = keepv->uv[1];
     }
@@ -2320,12 +2302,14 @@ static void p_abf_free_system(PAbfSystem *sys)
 
 static void p_abf_compute_sines(PAbfSystem *sys)
 {
-  int i;
-  float *sine = sys->sine, *cosine = sys->cosine, *alpha = sys->alpha;
+  float *sine = sys->sine;
+  float *cosine = sys->cosine;
+  const float *alpha = sys->alpha;
 
-  for (i = 0; i < sys->nangles; i++, sine++, cosine++, alpha++) {
-    *sine = sinf(*alpha);
-    *cosine = cosf(*alpha);
+  for (int i = 0; i < sys->nangles; i++) {
+    const double angle = alpha[i];
+    sine[i] = sin(angle);
+    cosine[i] = cos(angle);
   }
 }
 
@@ -2437,6 +2421,17 @@ static float p_abf_compute_gradient(PAbfSystem *sys, PChart *chart)
   }
 
   return norm;
+}
+
+static void p_abf_adjust_alpha(PAbfSystem *sys,
+                               const int id,
+                               const float dlambda1,
+                               const float pre)
+{
+  float alpha = sys->alpha[id];
+  const float dalpha = (sys->bAlpha[id] - dlambda1);
+  alpha += dalpha / sys->weight[id] - pre;
+  sys->alpha[id] = clamp_f(alpha, 0.0f, float(M_PI));
 }
 
 static bool p_abf_matrix_invert(PAbfSystem *sys, PChart *chart)
@@ -2596,11 +2591,11 @@ static bool p_abf_matrix_invert(PAbfSystem *sys, PChart *chart)
 
   if (success) {
     for (PFace *f = chart->faces; f; f = f->nextlink) {
-      float dlambda1, pre[3], dalpha;
+      float pre[3];
       PEdge *e1 = f->edge, *e2 = e1->next, *e3 = e2->next;
       PVert *v1 = e1->vert, *v2 = e2->vert, *v3 = e3->vert;
 
-      pre[0] = pre[1] = pre[2] = 0.0;
+      pre[0] = pre[1] = pre[2] = 0.0f;
 
       if (v1->flag & PVERT_INTERIOR) {
         float x = EIG_linear_solver_variable_get(context, 0, v1->u.id);
@@ -2626,30 +2621,14 @@ static bool p_abf_matrix_invert(PAbfSystem *sys, PChart *chart)
         pre[2] += sys->J2dt[e3->u.id][2] * x;
       }
 
-      dlambda1 = pre[0] + pre[1] + pre[2];
+      float dlambda1 = pre[0] + pre[1] + pre[2];
       dlambda1 = sys->dstar[f->u.id] * (sys->bstar[f->u.id] - dlambda1);
 
       sys->lambdaTriangle[f->u.id] += dlambda1;
 
-      dalpha = (sys->bAlpha[e1->u.id] - dlambda1);
-      sys->alpha[e1->u.id] += dalpha / sys->weight[e1->u.id] - pre[0];
-
-      dalpha = (sys->bAlpha[e2->u.id] - dlambda1);
-      sys->alpha[e2->u.id] += dalpha / sys->weight[e2->u.id] - pre[1];
-
-      dalpha = (sys->bAlpha[e3->u.id] - dlambda1);
-      sys->alpha[e3->u.id] += dalpha / sys->weight[e3->u.id] - pre[2];
-
-      /* clamp */
-      PEdge *e = f->edge;
-      do {
-        if (sys->alpha[e->u.id] > float(M_PI)) {
-          sys->alpha[e->u.id] = float(M_PI);
-        }
-        else if (sys->alpha[e->u.id] < 0.0f) {
-          sys->alpha[e->u.id] = 0.0f;
-        }
-      } while (e != f->edge);
+      p_abf_adjust_alpha(sys, e1->u.id, dlambda1, pre[0]);
+      p_abf_adjust_alpha(sys, e2->u.id, dlambda1, pre[1]);
+      p_abf_adjust_alpha(sys, e3->u.id, dlambda1, pre[2]);
     }
 
     for (int i = 0; i < ninterior; i++) {
@@ -2701,7 +2680,7 @@ static bool p_chart_abf_solve(PChart *chart)
 
   /* compute initial angles */
   for (f = chart->faces; f; f = f->nextlink) {
-    float a1, a2, a3;
+    double a1, a2, a3;
 
     e1 = f->edge;
     e2 = e1->next;
@@ -2741,12 +2720,12 @@ static bool p_chart_abf_solve(PChart *chart)
     p_abf_compute_sines(&sys);
 
     /* iteration */
-    /* lastnorm = 1e10; */ /* UNUSED */
+    // lastnorm = 1e10; /* UNUSED. */
 
     for (i = 0; i < ABF_MAX_ITER; i++) {
       float norm = p_abf_compute_gradient(&sys, chart);
 
-      /* lastnorm = norm; */ /* UNUSED */
+      // lastnorm = norm; /* UNUSED. */
 
       if (norm < limit) {
         break;
@@ -2768,7 +2747,7 @@ static bool p_chart_abf_solve(PChart *chart)
     }
   }
 
-  chart->u.lscm.abf_alpha = (float *)MEM_dupallocN(sys.alpha);
+  chart->abf_alpha = (float *)MEM_dupallocN(sys.alpha);
   p_abf_free_system(&sys);
 
   return true;
@@ -2844,8 +2823,8 @@ static bool p_chart_symmetry_pins(PChart *chart, PEdge *outer, PVert **pin1, PVe
 
     nextbe = p_boundary_edge_next(be);
 
-    if ((be->vert->flag & PVERT_SPLIT) ||
-        (lastbe->vert->flag & nextbe->vert->flag & PVERT_SPLIT)) {
+    if ((be->vert->flag & PVERT_SPLIT) || (lastbe->vert->flag & nextbe->vert->flag & PVERT_SPLIT))
+    {
       if (!cure) {
         if (be == outer) {
           firste1 = be;
@@ -2977,25 +2956,16 @@ static void p_chart_extrema_verts(PChart *chart, PVert **pin1, PVert **pin2)
   p_chart_pin_positions(chart, pin1, pin2);
 }
 
-static void p_chart_lscm_load_solution(PChart *chart)
-{
-  LinearSolver *context = chart->u.lscm.context;
-  PVert *v;
-
-  for (v = chart->verts; v; v = v->nextlink) {
-    v->uv[0] = EIG_linear_solver_variable_get(context, 0, 2 * v->u.id);
-    v->uv[1] = EIG_linear_solver_variable_get(context, 0, 2 * v->u.id + 1);
-  }
-}
-
 static void p_chart_lscm_begin(PChart *chart, bool live, bool abf)
 {
-  PVert *v, *pin1, *pin2;
-  bool select = false, deselect = false;
-  int npins = 0, id = 0;
+  BLI_assert(chart->context == nullptr);
 
-  /* give vertices matrix indices and count pins */
-  for (v = chart->verts; v; v = v->nextlink) {
+  bool select = false;
+  bool deselect = false;
+  int npins = 0;
+
+  /* Give vertices matrix indices, count pins and check selections. */
+  for (PVert *v = chart->verts; v; v = v->nextlink) {
     if (v->flag & PVERT_PIN) {
       npins++;
       if (v->flag & PVERT_SELECT) {
@@ -3009,57 +2979,58 @@ static void p_chart_lscm_begin(PChart *chart, bool live, bool abf)
   }
 
   if (live && (!select || !deselect)) {
-    chart->u.lscm.context = nullptr;
+    chart->skip_flush = true;
+    return;
   }
-  else {
 #if 0
-    p_chart_simplify_compute(chart);
-    p_chart_topological_sanity_check(chart);
+  p_chart_simplify_compute(chart, p_collapse_cost, p_collapse_allowed);
+  p_chart_topological_sanity_check(chart);
 #endif
 
-    if (npins == 1) {
-      chart->area_uv = p_chart_uv_area(chart);
-      for (v = chart->verts; v; v = v->nextlink) {
-        if (v->flag & PVERT_PIN) {
-          chart->u.lscm.single_pin = v;
-          break;
-        }
+  if (npins == 1) {
+    chart->area_uv = p_chart_uv_area(chart);
+    for (PVert *v = chart->verts; v; v = v->nextlink) {
+      if (v->flag & PVERT_PIN) {
+        chart->single_pin = v;
+        break;
       }
     }
-
-    if (abf) {
-      if (!p_chart_abf_solve(chart)) {
-        param_warning("ABF solving failed: falling back to LSCM.\n");
-      }
-    }
-
-    if (npins <= 1) {
-      /* No pins, let's find some ourself. */
-      PEdge *outer;
-
-      p_chart_boundaries(chart, &outer);
-
-      /* Outer can be NULL with non-finite coords. */
-      if (!(outer && p_chart_symmetry_pins(chart, outer, &pin1, &pin2))) {
-        p_chart_extrema_verts(chart, &pin1, &pin2);
-      }
-
-      chart->u.lscm.pin1 = pin1;
-      chart->u.lscm.pin2 = pin2;
-    }
-
-    for (v = chart->verts; v; v = v->nextlink) {
-      v->u.id = id++;
-    }
-
-    chart->u.lscm.context = EIG_linear_least_squares_solver_new(
-        2 * chart->nfaces, 2 * chart->nverts, 1);
   }
+
+  if (abf) {
+    if (!p_chart_abf_solve(chart)) {
+      param_warning("ABF solving failed: falling back to LSCM.\n");
+    }
+  }
+
+  /* ABF uses these indices for it's internal references.
+   * Set the indices afterwards. */
+  int id = 0;
+  for (PVert *v = chart->verts; v; v = v->nextlink) {
+    v->u.id = id++;
+  }
+
+  if (npins <= 1) {
+    /* No pins, let's find some ourself. */
+    PEdge *outer;
+    p_chart_boundaries(chart, &outer);
+
+    PVert *pin1, *pin2;
+    /* Outer can be null with non-finite coordinates. */
+    if (!(outer && p_chart_symmetry_pins(chart, outer, &pin1, &pin2))) {
+      p_chart_extrema_verts(chart, &pin1, &pin2);
+    }
+
+    chart->pin1 = pin1;
+    chart->pin2 = pin2;
+  }
+
+  chart->context = EIG_linear_least_squares_solver_new(2 * chart->nfaces, 2 * chart->nverts, 1);
 }
 
 static bool p_chart_lscm_solve(ParamHandle *handle, PChart *chart)
 {
-  LinearSolver *context = chart->u.lscm.context;
+  LinearSolver *context = chart->context;
 
   for (PVert *v = chart->verts; v; v = v->nextlink) {
     if (v->flag & PVERT_PIN) {
@@ -3067,14 +3038,14 @@ static bool p_chart_lscm_solve(ParamHandle *handle, PChart *chart)
     }
   }
 
-  if (chart->u.lscm.single_pin) {
+  if (chart->single_pin) {
     /* If only one pin, save location as origin. */
-    copy_v2_v2(chart->origin, chart->u.lscm.single_pin->uv);
+    copy_v2_v2(chart->origin, chart->single_pin->uv);
   }
 
-  if (chart->u.lscm.pin1) {
-    PVert *pin1 = chart->u.lscm.pin1;
-    PVert *pin2 = chart->u.lscm.pin2;
+  if (chart->pin1) {
+    PVert *pin1 = chart->pin1;
+    PVert *pin2 = chart->pin2;
     EIG_linear_solver_variable_lock(context, 2 * pin1->u.id);
     EIG_linear_solver_variable_lock(context, 2 * pin1->u.id + 1);
     EIG_linear_solver_variable_lock(context, 2 * pin2->u.id);
@@ -3121,12 +3092,12 @@ static bool p_chart_lscm_solve(ParamHandle *handle, PChart *chart)
   const bool flip_faces = (area_pinned_down > area_pinned_up);
 
   /* Construct matrix. */
-  const float *alpha = chart->u.lscm.abf_alpha;
+  const float *alpha = chart->abf_alpha;
   int row = 0;
   for (PFace *f = chart->faces; f; f = f->nextlink) {
     PEdge *e1 = f->edge, *e2 = e1->next, *e3 = e2->next;
     PVert *v1 = e1->vert, *v2 = e2->vert, *v3 = e3->vert;
-    float a1, a2, a3;
+    double a1, a2, a3;
 
     if (alpha) {
       /* Use abf angles if present. */
@@ -3144,29 +3115,29 @@ static bool p_chart_lscm_solve(ParamHandle *handle, PChart *chart)
       std::swap(v2, v3);
     }
 
-    float sina1 = sinf(a1);
-    float sina2 = sinf(a2);
-    float sina3 = sinf(a3);
+    double sina1 = sin(a1);
+    double sina2 = sin(a2);
+    double sina3 = sin(a3);
 
-    const float sinmax = max_fff(sina1, sina2, sina3);
+    const double sinmax = max_ddd(sina1, sina2, sina3);
 
     /* Shift vertices to find most stable order. */
     if (sina3 != sinmax) {
       SHIFT3(PVert *, v1, v2, v3);
-      SHIFT3(float, a1, a2, a3);
-      SHIFT3(float, sina1, sina2, sina3);
+      SHIFT3(double, a1, a2, a3);
+      SHIFT3(double, sina1, sina2, sina3);
 
       if (sina2 == sinmax) {
         SHIFT3(PVert *, v1, v2, v3);
-        SHIFT3(float, a1, a2, a3);
-        SHIFT3(float, sina1, sina2, sina3);
+        SHIFT3(double, a1, a2, a3);
+        SHIFT3(double, sina1, sina2, sina3);
       }
     }
 
     /* Angle based lscm formulation. */
-    const float ratio = (sina3 == 0.0f) ? 1.0f : sina2 / sina3;
-    const float cosine = cosf(a1) * ratio;
-    const float sine = sina1 * ratio;
+    const double ratio = (sina3 == 0.0f) ? 1.0f : sina2 / sina3;
+    const double cosine = cos(a1) * ratio;
+    const double sine = sina1 * ratio;
 
     EIG_linear_solver_matrix_add(context, row, 2 * v1->u.id, cosine - 1.0f);
     EIG_linear_solver_matrix_add(context, row, 2 * v1->u.id + 1, -sine);
@@ -3184,7 +3155,10 @@ static bool p_chart_lscm_solve(ParamHandle *handle, PChart *chart)
   }
 
   if (EIG_linear_solver_solve(context)) {
-    p_chart_lscm_load_solution(chart);
+    for (PVert *v = chart->verts; v; v = v->nextlink) {
+      v->uv[0] = EIG_linear_solver_variable_get(context, 0, 2 * v->u.id);
+      v->uv[1] = EIG_linear_solver_variable_get(context, 0, 2 * v->u.id + 1);
+    }
     return true;
   }
 
@@ -3198,7 +3172,7 @@ static bool p_chart_lscm_solve(ParamHandle *handle, PChart *chart)
 
 static void p_chart_lscm_transform_single_pin(PChart *chart)
 {
-  PVert *pin = chart->u.lscm.single_pin;
+  PVert *pin = chart->single_pin;
 
   /* If only one pin, keep UV area the same. */
   const float new_area = p_chart_uv_area(chart);
@@ -3217,14 +3191,14 @@ static void p_chart_lscm_transform_single_pin(PChart *chart)
 
 static void p_chart_lscm_end(PChart *chart)
 {
-  EIG_linear_solver_delete(chart->u.lscm.context);
-  chart->u.lscm.context = nullptr;
+  EIG_linear_solver_delete(chart->context);
+  chart->context = nullptr;
 
-  MEM_SAFE_FREE(chart->u.lscm.abf_alpha);
+  MEM_SAFE_FREE(chart->abf_alpha);
 
-  chart->u.lscm.pin1 = nullptr;
-  chart->u.lscm.pin2 = nullptr;
-  chart->u.lscm.single_pin = nullptr;
+  chart->pin1 = nullptr;
+  chart->pin2 = nullptr;
+  chart->single_pin = nullptr;
 }
 
 /* Stretch */
@@ -3654,83 +3628,62 @@ static void p_chart_rotate_fit_aabb(PChart *chart)
   }
 }
 
-/* Exported */
-
-ParamHandle *uv_parametrizer_construct_begin()
+ParamHandle::ParamHandle()
 {
-  ParamHandle *handle = new ParamHandle();
-  handle->construction_chart = (PChart *)MEM_callocN(sizeof(PChart), "PChart");
-  handle->state = PHANDLE_STATE_ALLOCATED;
-  handle->arena = BLI_memarena_new(MEM_SIZE_OPTIMAL(1 << 16), "param construct arena");
-  handle->polyfill_arena = BLI_memarena_new(BLI_MEMARENA_STD_BUFSIZE, "param polyfill arena");
-  handle->polyfill_heap = BLI_heap_new_ex(BLI_POLYFILL_ALLOC_NGON_RESERVE);
-  handle->aspx = 1.0f;
-  handle->aspy = 1.0f;
+  arena = BLI_memarena_new(MEM_SIZE_OPTIMAL(1 << 16), "param construct arena");
+  polyfill_arena = BLI_memarena_new(BLI_MEMARENA_STD_BUFSIZE, "param polyfill arena");
+  polyfill_heap = BLI_heap_new_ex(BLI_POLYFILL_ALLOC_NGON_RESERVE);
 
-  handle->hash_verts = phash_new((PHashLink **)&handle->construction_chart->verts, 1);
-  handle->hash_edges = phash_new((PHashLink **)&handle->construction_chart->edges, 1);
-  handle->hash_faces = phash_new((PHashLink **)&handle->construction_chart->faces, 1);
+  construction_chart = (PChart *)MEM_callocN(sizeof(PChart), "PChart");
 
-  return handle;
+  hash_verts = phash_new((PHashLink **)&construction_chart->verts, 1);
+  hash_edges = phash_new((PHashLink **)&construction_chart->edges, 1);
+  hash_faces = phash_new((PHashLink **)&construction_chart->faces, 1);
 }
 
-void uv_parametrizer_aspect_ratio(ParamHandle *phandle, float aspx, float aspy)
+ParamHandle::~ParamHandle()
 {
-  phandle->aspx = aspx;
-  phandle->aspy = aspy;
+  BLI_memarena_free(arena);
+  arena = nullptr;
+  BLI_memarena_free(polyfill_arena);
+  polyfill_arena = nullptr;
+  BLI_heap_free(polyfill_heap, nullptr);
+  polyfill_heap = nullptr;
+
+  MEM_SAFE_FREE(construction_chart);
+
+  phash_safe_delete(&hash_verts);
+  phash_safe_delete(&hash_edges);
+  phash_safe_delete(&hash_faces);
+
+  if (pin_hash) {
+    BLI_ghash_free(pin_hash, nullptr, nullptr);
+    pin_hash = nullptr;
+  }
+
+  for (int i = 0; i < ncharts; i++) {
+    MEM_SAFE_FREE(charts[i]);
+  }
+  MEM_SAFE_FREE(charts);
+
+  if (rng) {
+    BLI_rng_free(rng);
+    rng = nullptr;
+  }
 }
 
-void uv_parametrizer_delete(ParamHandle *phandle)
+void uv_parametrizer_aspect_ratio(ParamHandle *phandle, const float aspect_y)
 {
-  if (!phandle) {
-    return;
-  }
-  param_assert(ELEM(phandle->state, PHANDLE_STATE_ALLOCATED, PHANDLE_STATE_CONSTRUCTED));
-
-  for (int i = 0; i < phandle->ncharts; i++) {
-    MEM_SAFE_FREE(phandle->charts[i]);
-  }
-
-  MEM_SAFE_FREE(phandle->charts);
-
-  if (phandle->pin_hash) {
-    BLI_ghash_free(phandle->pin_hash, nullptr, nullptr);
-    phandle->pin_hash = nullptr;
-  }
-
-  MEM_SAFE_FREE(phandle->construction_chart);
-
-  phash_delete(phandle->hash_verts);
-  phash_delete(phandle->hash_edges);
-  phash_delete(phandle->hash_faces);
-
-  BLI_memarena_free(phandle->arena);
-  BLI_memarena_free(phandle->polyfill_arena);
-  BLI_heap_free(phandle->polyfill_heap, nullptr);
-
-  if (phandle->rng) {
-    BLI_rng_free(phandle->rng);
-    phandle->rng = nullptr;
-  }
-
-  delete phandle;
+  BLI_assert(aspect_y > 0.0f);
+  phandle->aspect_y = aspect_y;
 }
 
 struct GeoUVPinIndex {
-  struct GeoUVPinIndex *next;
+  GeoUVPinIndex *next;
   float uv[2];
   ParamKey reindex;
 };
 
-/**
- * Find a (mostly) unique #ParamKey given a #BMVert index and UV co-ordinates.
- * For each unique pinned UVs, return a unique #ParamKey, starting with
- * a very large number, and decreasing steadily from there.
- * For non-pinned UVs which share a #BMVert with a pinned UV,
- * return the index corresponding to the closest pinned UV.
- * For everything else, just return the #BMVert index.
- * Note that #ParamKeys will eventually be hashed, so they don't need to be contiguous.
- */
 ParamKey uv_find_pin_index(ParamHandle *handle, const int bmvertindex, const float uv[2])
 {
   if (!handle->pin_hash) {
@@ -3847,8 +3800,8 @@ static void p_add_ngon(ParamHandle *handle,
     const ParamKey tri_vkeys[3] = {vkeys[v0], vkeys[v1], vkeys[v2]};
     const float *tri_co[3] = {co[v0], co[v1], co[v2]};
     float *tri_uv[3] = {uv[v0], uv[v1], uv[v2]};
-    bool tri_pin[3] = {pin[v0], pin[v1], pin[v2]};
-    bool tri_select[3] = {select[v0], select[v1], select[v2]};
+    const bool tri_pin[3] = {pin[v0], pin[v1], pin[v2]};
+    const bool tri_select[3] = {select[v0], select[v1], select[v2]};
 
     uv_parametrizer_face_add(handle, key, 3, tri_vkeys, tri_co, tri_uv, tri_pin, tri_select);
   }
@@ -3866,7 +3819,7 @@ void uv_parametrizer_face_add(ParamHandle *phandle,
                               const bool *select)
 {
   BLI_assert(nverts >= 3);
-  param_assert(phandle->state == PHANDLE_STATE_ALLOCATED);
+  BLI_assert(phandle->state == PHANDLE_STATE_ALLOCATED);
 
   if (nverts > 3) {
     /* Protect against (manifold) geometry which has a non-manifold triangulation.
@@ -3884,7 +3837,7 @@ void uv_parametrizer_face_add(ParamHandle *phandle,
        * For quads, this is sufficient.
        * For pentagons and higher, we might miss internal duplicate triangles, but note
        * that such cases are rare if the source geometry is manifold and non-intersecting. */
-      int pm = permute.size();
+      const int pm = int(permute.size());
       BLI_assert(pm > 3);
       int i0 = permute[i];
       int i1 = permute[(i + 1) % pm];
@@ -3907,8 +3860,8 @@ void uv_parametrizer_face_add(ParamHandle *phandle,
       }
     }
     if (permute.size() != nverts) {
-      int pm = permute.size();
-      /* Add the remaining pm-gon. */
+      const int pm = int(permute.size());
+      /* Add the remaining `pm-gon` data. */
       Array<ParamKey> vkeys_sub(pm);
       Array<const float *> co_sub(pm);
       Array<float *> uv_sub(pm);
@@ -3946,11 +3899,9 @@ void uv_parametrizer_face_add(ParamHandle *phandle,
 
 void uv_parametrizer_edge_set_seam(ParamHandle *phandle, ParamKey *vkeys)
 {
-  PEdge *e;
+  BLI_assert(phandle->state == PHANDLE_STATE_ALLOCATED);
 
-  param_assert(phandle->state == PHANDLE_STATE_ALLOCATED);
-
-  e = p_edge_lookup(phandle, vkeys);
+  PEdge *e = p_edge_lookup(phandle, vkeys);
   if (e) {
     e->flag |= PEDGE_SEAM;
   }
@@ -3963,7 +3914,7 @@ void uv_parametrizer_construct_end(ParamHandle *phandle,
 {
   int i, j;
 
-  param_assert(phandle->state == PHANDLE_STATE_ALLOCATED);
+  BLI_assert(phandle->state == PHANDLE_STATE_ALLOCATED);
 
   phandle->ncharts = p_connect_pairs(phandle, topology_from_uvs);
   phandle->charts = p_split_charts(phandle, phandle->construction_chart, phandle->ncharts);
@@ -3971,12 +3922,9 @@ void uv_parametrizer_construct_end(ParamHandle *phandle,
   MEM_freeN(phandle->construction_chart);
   phandle->construction_chart = nullptr;
 
-  phash_delete(phandle->hash_verts);
-  phandle->hash_verts = nullptr;
-  phash_delete(phandle->hash_edges);
-  phandle->hash_edges = nullptr;
-  phash_delete(phandle->hash_faces);
-  phandle->hash_faces = nullptr;
+  phash_safe_delete(&phandle->hash_verts);
+  phash_safe_delete(&phandle->hash_edges);
+  phash_safe_delete(&phandle->hash_faces);
 
   for (i = j = 0; i < phandle->ncharts; i++) {
     PChart *chart = phandle->charts[i];
@@ -4010,7 +3958,7 @@ void uv_parametrizer_construct_end(ParamHandle *phandle,
 
 void uv_parametrizer_lscm_begin(ParamHandle *phandle, bool live, bool abf)
 {
-  param_assert(phandle->state == PHANDLE_STATE_CONSTRUCTED);
+  BLI_assert(phandle->state == PHANDLE_STATE_CONSTRUCTED);
   phandle->state = PHANDLE_STATE_LSCM;
 
   for (int i = 0; i < phandle->ncharts; i++) {
@@ -4023,35 +3971,37 @@ void uv_parametrizer_lscm_begin(ParamHandle *phandle, bool live, bool abf)
 
 void uv_parametrizer_lscm_solve(ParamHandle *phandle, int *count_changed, int *count_failed)
 {
-  param_assert(phandle->state == PHANDLE_STATE_LSCM);
+  BLI_assert(phandle->state == PHANDLE_STATE_LSCM);
 
   for (int i = 0; i < phandle->ncharts; i++) {
     PChart *chart = phandle->charts[i];
 
-    if (chart->u.lscm.context) {
-      const bool result = p_chart_lscm_solve(phandle, chart);
+    if (!chart->context) {
+      continue;
+    }
+    const bool result = p_chart_lscm_solve(phandle, chart);
 
-      if (result && !chart->has_pins) {
-        p_chart_rotate_minimum_area(chart);
-      }
-      else if (result && chart->u.lscm.single_pin) {
-        p_chart_rotate_fit_aabb(chart);
-        p_chart_lscm_transform_single_pin(chart);
-      }
+    if (result && !chart->has_pins) {
+      /* Every call to LSCM will eventually call uv_pack, so rotating here might be redundant. */
+      p_chart_rotate_minimum_area(chart);
+    }
+    else if (result && chart->single_pin) {
+      p_chart_rotate_fit_aabb(chart);
+      p_chart_lscm_transform_single_pin(chart);
+    }
 
-      if (!result || !chart->has_pins) {
-        p_chart_lscm_end(chart);
-      }
+    if (!result || !chart->has_pins) {
+      p_chart_lscm_end(chart);
+    }
 
-      if (result) {
-        if (count_changed != nullptr) {
-          *count_changed += 1;
-        }
+    if (result) {
+      if (count_changed != nullptr) {
+        *count_changed += 1;
       }
-      else {
-        if (count_failed != nullptr) {
-          *count_failed += 1;
-        }
+    }
+    else {
+      if (count_failed != nullptr) {
+        *count_failed += 1;
       }
     }
   }
@@ -4073,27 +4023,22 @@ void uv_parametrizer_lscm_end(ParamHandle *phandle)
 
 void uv_parametrizer_stretch_begin(ParamHandle *phandle)
 {
-  PChart *chart;
-  PVert *v;
-  PFace *f;
-  int i;
-
-  param_assert(phandle->state == PHANDLE_STATE_CONSTRUCTED);
+  BLI_assert(phandle->state == PHANDLE_STATE_CONSTRUCTED);
   phandle->state = PHANDLE_STATE_STRETCH;
 
   phandle->rng = BLI_rng_new(31415926);
   phandle->blend = 0.0f;
 
-  for (i = 0; i < phandle->ncharts; i++) {
-    chart = phandle->charts[i];
+  for (int i = 0; i < phandle->ncharts; i++) {
+    PChart *chart = phandle->charts[i];
 
-    for (v = chart->verts; v; v = v->nextlink) {
+    for (PVert *v = chart->verts; v; v = v->nextlink) {
       v->flag &= ~PVERT_PIN; /* don't use user-defined pins */
     }
 
     p_stretch_pin_boundary(chart);
 
-    for (f = chart->faces; f; f = f->nextlink) {
+    for (PFace *f = chart->faces; f; f = f->nextlink) {
       p_face_backup_uvs(f);
       f->u.area3d = p_face_area(f);
     }
@@ -4102,44 +4047,22 @@ void uv_parametrizer_stretch_begin(ParamHandle *phandle)
 
 void uv_parametrizer_stretch_blend(ParamHandle *phandle, float blend)
 {
-  param_assert(phandle->state == PHANDLE_STATE_STRETCH);
+  BLI_assert(phandle->state == PHANDLE_STATE_STRETCH);
   phandle->blend = blend;
 }
 
 void uv_parametrizer_stretch_iter(ParamHandle *phandle)
 {
-  PChart *chart;
-  int i;
-
-  param_assert(phandle->state == PHANDLE_STATE_STRETCH);
-
-  for (i = 0; i < phandle->ncharts; i++) {
-    chart = phandle->charts[i];
-    p_chart_stretch_minimize(chart, phandle->rng);
+  BLI_assert(phandle->state == PHANDLE_STATE_STRETCH);
+  for (int i = 0; i < phandle->ncharts; i++) {
+    p_chart_stretch_minimize(phandle->charts[i], phandle->rng);
   }
 }
 
 void uv_parametrizer_stretch_end(ParamHandle *phandle)
 {
-  param_assert(phandle->state == PHANDLE_STATE_STRETCH);
+  BLI_assert(phandle->state == PHANDLE_STATE_STRETCH);
   phandle->state = PHANDLE_STATE_CONSTRUCTED;
-}
-
-/* don't pack, just rotate (used for better packing) */
-static void GEO_uv_parametrizer_pack_rotate(ParamHandle *phandle, bool ignore_pinned)
-{
-  PChart *chart;
-  int i;
-
-  for (i = 0; i < phandle->ncharts; i++) {
-    chart = phandle->charts[i];
-
-    if (ignore_pinned && chart->has_pins) {
-      continue;
-    }
-
-    p_chart_rotate_fit_aabb(chart);
-  }
 }
 
 void uv_parametrizer_pack(ParamHandle *handle, float margin, bool do_rotate, bool ignore_pinned)
@@ -4148,77 +4071,54 @@ void uv_parametrizer_pack(ParamHandle *handle, float margin, bool do_rotate, boo
     return;
   }
 
-  /* this could be its own function */
-  if (do_rotate) {
-    GEO_uv_parametrizer_pack_rotate(handle, ignore_pinned);
-  }
+  uv_parametrizer_scale_x(handle, 1.0f / handle->aspect_y);
 
-  if (handle->aspx != handle->aspy) {
-    uv_parametrizer_scale(handle, 1.0f / handle->aspx, 1.0f / handle->aspy);
-  }
   Vector<PackIsland *> pack_island_vector;
-  int unpacked = 0;
+
+  UVPackIsland_Params params;
+  params.rotate_method = do_rotate ? ED_UVPACK_ROTATION_ANY : ED_UVPACK_ROTATION_NONE;
+  params.margin = margin;
+  params.margin_method = ED_UVPACK_MARGIN_SCALED;
+
   for (int i = 0; i < handle->ncharts; i++) {
     PChart *chart = handle->charts[i];
-
     if (ignore_pinned && chart->has_pins) {
-      unpacked++;
       continue;
     }
 
     geometry::PackIsland *pack_island = new geometry::PackIsland();
     pack_island->caller_index = i;
-    pack_island_vector.append(pack_island);
+    pack_island->aspect_y = handle->aspect_y;
+    pack_island->pinned = chart->has_pins;
 
-    float minv[2];
-    float maxv[2];
-    p_chart_uv_bbox(chart, minv, maxv);
-    pack_island->bounds_rect.xmin = minv[0];
-    pack_island->bounds_rect.ymin = minv[1];
-    pack_island->bounds_rect.xmax = maxv[0];
-    pack_island->bounds_rect.ymax = maxv[1];
+    for (PFace *f = chart->faces; f; f = f->nextlink) {
+      PVert *v0 = f->edge->vert;
+      PVert *v1 = f->edge->next->vert;
+      PVert *v2 = f->edge->next->next->vert;
+      pack_island->add_triangle(v0->uv, v1->uv, v2->uv);
+    }
+
+    pack_island_vector.append(pack_island);
   }
 
-  UVPackIsland_Params params{};
-  params.rotate = do_rotate;
-  params.only_selected_uvs = false;
-  params.only_selected_faces = false;
-  params.use_seams = false;
-  params.correct_aspect = false;
-  params.ignore_pinned = false;
-  params.pin_unselected = false;
-  params.margin = margin;
-  params.margin_method = ED_UVPACK_MARGIN_SCALED;
-  params.udim_base_offset[0] = 0.0f;
-  params.udim_base_offset[1] = 0.0f;
+  const float scale = pack_islands(pack_island_vector, params);
 
-  float scale[2] = {1.0f, 1.0f};
-  pack_islands(pack_island_vector, params, scale);
-
-  for (int64_t i : pack_island_vector.index_range()) {
+  for (const int64_t i : pack_island_vector.index_range()) {
     PackIsland *pack_island = pack_island_vector[i];
+    const float island_scale = pack_island->can_scale_(params) ? scale : 1.0f;
     PChart *chart = handle->charts[pack_island->caller_index];
 
-    /* TODO: Replace with #mul_v2_m2_add_v2v2 here soon. */
-    float m[2];
-    float b[2];
-    m[0] = scale[0];
-    m[1] = scale[1];
-    b[0] = pack_island->pre_translate.x;
-    b[1] = pack_island->pre_translate.y;
+    float matrix[2][2];
+    pack_island->build_transformation(island_scale, pack_island->angle, matrix);
     for (PVert *v = chart->verts; v; v = v->nextlink) {
-      /* Unusual accumulate-and-multiply here (will) reduce round-off error. */
-      v->uv[0] = m[0] * (v->uv[0] + b[0]);
-      v->uv[1] = m[1] * (v->uv[1] + b[1]);
+      geometry::mul_v2_m2_add_v2v2(v->uv, matrix, v->uv, pack_island->pre_translate);
     }
 
     pack_island_vector[i] = nullptr;
     delete pack_island;
   }
 
-  if (handle->aspx != handle->aspy) {
-    uv_parametrizer_scale(handle, handle->aspx, handle->aspy);
-  }
+  uv_parametrizer_scale_x(handle, handle->aspect_y);
 }
 
 void uv_parametrizer_average(ParamHandle *phandle, bool ignore_pinned, bool scale_uv, bool shear)
@@ -4361,26 +4261,11 @@ void uv_parametrizer_average(ParamHandle *phandle, bool ignore_pinned, bool scal
   }
 }
 
-void uv_parametrizer_scale(ParamHandle *phandle, float x, float y)
-{
-  PChart *chart;
-  int i;
-
-  for (i = 0; i < phandle->ncharts; i++) {
-    chart = phandle->charts[i];
-    p_chart_uv_scale_xy(chart, x, y);
-  }
-}
-
 void uv_parametrizer_flush(ParamHandle *phandle)
 {
-  PChart *chart;
-  int i;
-
-  for (i = 0; i < phandle->ncharts; i++) {
-    chart = phandle->charts[i];
-
-    if ((phandle->state == PHANDLE_STATE_LSCM) && !chart->u.lscm.context) {
+  for (int i = 0; i < phandle->ncharts; i++) {
+    PChart *chart = phandle->charts[i];
+    if (chart->skip_flush) {
       continue;
     }
 
@@ -4390,14 +4275,9 @@ void uv_parametrizer_flush(ParamHandle *phandle)
 
 void uv_parametrizer_flush_restore(ParamHandle *phandle)
 {
-  PChart *chart;
-  PFace *f;
-  int i;
-
-  for (i = 0; i < phandle->ncharts; i++) {
-    chart = phandle->charts[i];
-
-    for (f = chart->faces; f; f = f->nextlink) {
+  for (int i = 0; i < phandle->ncharts; i++) {
+    PChart *chart = phandle->charts[i];
+    for (PFace *f = chart->faces; f; f = f->nextlink) {
       p_face_restore_uvs(f);
     }
   }

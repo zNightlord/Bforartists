@@ -1,7 +1,6 @@
+# SPDX-FileCopyrightText: 2016 Blender Foundation
+#
 # SPDX-License-Identifier: GPL-2.0-or-later
-# Copyright 2016 Blender Foundation. All rights reserved.
-# The Original Code is: all of this file.
-# Contributor(s): Sebastian Barschkis (sebbas).
 
 # Mantaflow triggers a clang-cl compiler error with versions before 9.0.1
 # Since mantaflow does not appear to be using OpenMP at this point in time,
@@ -9,17 +8,6 @@
 
 if(MSVC_CLANG AND WITH_OPENMP AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS "9.0.1")
   remove_cc_flag("-fopenmp")
-endif()
-
-# Exporting functions from the blender binary gives linker warnings on Apple arm64 systems.
-# Silence them here.
-if(APPLE)
-  if("${CMAKE_OSX_ARCHITECTURES}" STREQUAL "arm64")
-    if(CMAKE_COMPILER_IS_GNUCXX OR "${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
-      string(APPEND CMAKE_C_FLAGS " -fvisibility=hidden")
-      string(APPEND CMAKE_CXX_FLAGS " -fvisibility=hidden")
-    endif()
-  endif()
 endif()
 
 set(MANTAVERSION "0.13")

@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: Apache-2.0
- * Copyright 2011-2022 Blender Foundation */
+/* SPDX-FileCopyrightText: 2011-2022 Blender Foundation
+ *
+ * SPDX-License-Identifier: Apache-2.0 */
 
 #pragma once
 
@@ -65,9 +66,7 @@ struct packed_int3 {
   ccl_device_inline_method packed_int3(const int px, const int py, const int pz)
       : x(px), y(py), z(pz){};
 
-  ccl_device_inline_method packed_int3(const int3 &a) : x(a.x), y(a.y), z(a.z)
-  {
-  }
+  ccl_device_inline_method packed_int3(const int3 &a) : x(a.x), y(a.y), z(a.z) {}
 
   ccl_device_inline_method operator int3() const
   {

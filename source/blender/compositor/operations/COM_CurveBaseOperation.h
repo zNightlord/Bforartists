@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2011 Blender Foundation. */
+/* SPDX-FileCopyrightText: 2011 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #pragma once
 
@@ -11,18 +12,12 @@ namespace blender::compositor {
 
 class CurveBaseOperation : public MultiThreadedOperation {
  protected:
-  /**
-   * Cached reference to the input_program
-   */
   CurveMapping *curve_mapping_;
 
  public:
   CurveBaseOperation();
   ~CurveBaseOperation();
 
-  /**
-   * Initialize the execution
-   */
   void init_execution() override;
   void deinit_execution() override;
 

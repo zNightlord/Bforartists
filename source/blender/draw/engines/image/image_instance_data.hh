@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2021 Blender Foundation. */
+/* SPDX-FileCopyrightText: 2021 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup draw_engine
@@ -17,18 +18,18 @@
 #include "image_texture_info.hh"
 #include "image_usage.hh"
 
-#include "DRW_render.h"
+#include "DRW_render.hh"
 
 namespace blender::draw::image_engine {
 
 struct IMAGE_InstanceData {
-  struct Image *image;
+  Image *image;
   /** Usage data of the previous time, to identify changes that require a full update. */
   ImageUsage last_usage;
 
   PartialImageUpdater partial_update;
 
-  struct DRWView *view;
+  DRWView *view;
   ShaderParameters sh_params;
   struct {
     /**

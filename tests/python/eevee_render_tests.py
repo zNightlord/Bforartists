@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2015-2022 Blender Authors
+#
 # SPDX-License-Identifier: Apache-2.0
 
 import argparse
 import os
 import pathlib
-import shlex
-import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -43,13 +43,13 @@ def setup():
     # Does not work in edit mode
     try:
         # Simple probe setup
-        bpy.ops.object.lightprobe_add(type='CUBEMAP', location=(0.5, 0, 1.5))
+        bpy.ops.object.lightprobe_add(type='SPHERE', location=(0.5, 0, 1.5))
         cubemap = bpy.context.selected_objects[0]
         cubemap.scale = (2.5, 2.5, 1.0)
         cubemap.data.falloff = 0
         cubemap.data.clip_start = 2.4
 
-        bpy.ops.object.lightprobe_add(type='GRID', location=(0, 0, 0.25))
+        bpy.ops.object.lightprobe_add(type='VOLUME', location=(0, 0, 0.25))
         grid = bpy.context.selected_objects[0]
         grid.scale = (1.735, 1.735, 1.735)
         grid.data.grid_resolution_x = 3
@@ -103,8 +103,7 @@ if inside_blender:
 def get_gpu_device_type(blender):
     command = [
         blender,
-        "-noaudio",
-        "--background"
+        "--background",
         "--factory-startup",
         "--python",
         str(pathlib.Path(__file__).parent / "gpu_info.py")
@@ -115,7 +114,7 @@ def get_gpu_device_type(blender):
             if line.startswith("GPU_DEVICE_TYPE:"):
                 vendor = line.split(':')[1]
                 return vendor
-    except BaseException as e:
+    except BaseException:
         return None
     return None
 
@@ -123,7 +122,6 @@ def get_gpu_device_type(blender):
 def get_arguments(filepath, output_filepath):
     return [
         "--background",
-        "-noaudio",
         "--factory-startup",
         "--enable-autoexec",
         "--debug-memory",
@@ -142,7 +140,9 @@ def create_argparse():
     parser.add_argument("-blender", nargs="+")
     parser.add_argument("-testdir", nargs=1)
     parser.add_argument("-outdir", nargs=1)
-    parser.add_argument("-idiff", nargs=1)
+    parser.add_argument("-oiiotool", nargs=1)
+    parser.add_argument('--batch', default=False, action='store_true')
+    parser.add_argument('--fail-silently', default=False, action='store_true')
     return parser
 
 
@@ -152,7 +152,7 @@ def main():
 
     blender = args.blender[0]
     test_dir = args.testdir[0]
-    idiff = args.idiff[0]
+    oiiotool = args.oiiotool[0]
     output_dir = args.outdir[0]
 
     gpu_device_type = get_gpu_device_type(blender)
@@ -161,7 +161,7 @@ def main():
         reference_override_dir = "eevee_renders/amd"
 
     from modules import render_report
-    report = render_report.Report("Eevee", output_dir, idiff)
+    report = render_report.Report("Eevee", output_dir, oiiotool)
     report.set_pixelated(True)
     report.set_reference_dir("eevee_renders")
     report.set_reference_override_dir(reference_override_dir)
@@ -171,7 +171,7 @@ def main():
     if test_dir_name.startswith('image'):
         report.set_fail_threshold(0.051)
 
-    ok = report.run(test_dir, blender, get_arguments, batch=True)
+    ok = report.run(test_dir, blender, get_arguments, batch=args.batch, fail_silently=args.fail_silently)
 
     sys.exit(not ok)
 

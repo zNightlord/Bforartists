@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2011 Blender Foundation. */
+/* SPDX-FileCopyrightText: 2011 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "COM_MovieClipAttributeOperation.h"
 
@@ -72,14 +73,6 @@ void MovieClipAttributeOperation::calc_value()
       value_ = 1.0f / value_;
     }
   }
-}
-
-void MovieClipAttributeOperation::execute_pixel_sampled(float output[4],
-                                                        float /*x*/,
-                                                        float /*y*/,
-                                                        PixelSampler /*sampler*/)
-{
-  output[0] = value_;
 }
 
 void MovieClipAttributeOperation::determine_canvas(const rcti &preferred_area, rcti &r_area)

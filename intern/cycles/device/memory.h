@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: Apache-2.0
- * Copyright 2011-2022 Blender Foundation */
+/* SPDX-FileCopyrightText: 2011-2022 Blender Foundation
+ *
+ * SPDX-License-Identifier: Apache-2.0 */
 
 #ifndef __DEVICE_MEMORY_H__
 #define __DEVICE_MEMORY_H__
@@ -305,9 +306,7 @@ template<typename T> class device_only_memory : public device_memory {
     data_elements = max(device_type_traits<T>::num_elements, size_t(1));
   }
 
-  device_only_memory(device_only_memory &&other) noexcept : device_memory(std::move(other))
-  {
-  }
+  device_only_memory(device_only_memory &&other) noexcept : device_memory(std::move(other)) {}
 
   virtual ~device_only_memory()
   {

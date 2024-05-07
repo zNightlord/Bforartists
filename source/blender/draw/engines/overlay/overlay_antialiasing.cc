@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2019 Blender Foundation. */
+/* SPDX-FileCopyrightText: 2019 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup draw_engine
@@ -39,9 +40,9 @@
  *  - No convergence time (compared to TAA).
  */
 
-#include "DRW_render.h"
+#include "DRW_render.hh"
 
-#include "ED_screen.h"
+#include "ED_screen.hh"
 
 #include "overlay_private.hh"
 

@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: Apache-2.0
- * Copyright 2011-2022 Blender Foundation */
+/* SPDX-FileCopyrightText: 2011-2022 Blender Foundation
+ *
+ * SPDX-License-Identifier: Apache-2.0 */
 
 #include "integrator/denoiser_oidn.h"
 
@@ -150,7 +151,7 @@ class OIDNDenoiseContext {
 
     OIDNPass oidn_color_access_pass = read_input_pass(oidn_color_pass, oidn_output_pass);
 
-    oidn::DeviceRef oidn_device = oidn::newDevice();
+    oidn::DeviceRef oidn_device = oidn::newDevice(oidn::DeviceType::CPU);
     oidn_device.set("setAffinity", false);
     oidn_device.commit();
 
@@ -163,8 +164,11 @@ class OIDNDenoiseContext {
     oidn_filter.setProgressMonitorFunction(oidn_progress_monitor_function, denoiser_);
     oidn_filter.set("hdr", true);
     oidn_filter.set("srgb", false);
+    set_quality(oidn_filter);
+
     if (denoise_params_.prefilter == DENOISER_PREFILTER_NONE ||
-        denoise_params_.prefilter == DENOISER_PREFILTER_ACCURATE) {
+        denoise_params_.prefilter == DENOISER_PREFILTER_ACCURATE)
+    {
       oidn_filter.set("cleanAux", true);
     }
     oidn_filter.commit();
@@ -179,7 +183,7 @@ class OIDNDenoiseContext {
     const char *error_message;
     const oidn::Error error = oidn_device.getError(error_message);
     if (error != oidn::Error::None && error != oidn::Error::Cancelled) {
-      LOG(ERROR) << "OpenImageDenoise error: " << error_message;
+      denoiser_->set_error("OpenImageDenoise error: " + string(error_message));
     }
 
     postprocess_output(oidn_color_pass, oidn_output_pass);
@@ -189,13 +193,15 @@ class OIDNDenoiseContext {
   void filter_guiding_pass_if_needed(oidn::DeviceRef &oidn_device, OIDNPass &oidn_pass)
   {
     if (denoise_params_.prefilter != DENOISER_PREFILTER_ACCURATE || !oidn_pass ||
-        oidn_pass.is_filtered) {
+        oidn_pass.is_filtered)
+    {
       return;
     }
 
     oidn::FilterRef oidn_filter = oidn_device.newFilter("RT");
     set_pass(oidn_filter, oidn_pass);
     set_output_pass(oidn_filter, oidn_pass);
+    set_quality(oidn_filter);
     oidn_filter.commit();
     oidn_filter.execute();
 
@@ -212,7 +218,8 @@ class OIDNDenoiseContext {
     DCHECK(!oidn_pass.use_compositing);
 
     if (denoise_params_.prefilter != DENOISER_PREFILTER_ACCURATE &&
-        !is_pass_scale_needed(oidn_pass)) {
+        !is_pass_scale_needed(oidn_pass))
+    {
       /* Pass data is available as-is from the render buffers. */
       return;
     }
@@ -395,6 +402,25 @@ class OIDNDenoiseContext {
   void set_output_pass(oidn::FilterRef &oidn_filter, OIDNPass &oidn_pass)
   {
     set_pass(oidn_filter, "output", oidn_pass);
+  }
+
+  void set_quality(oidn::FilterRef &oidn_filter)
+  {
+#  if OIDN_VERSION_MAJOR >= 2
+    switch (denoise_params_.quality) {
+      case DENOISER_QUALITY_FAST:
+#    if OIDN_VERSION >= 20300
+        oidn_filter.set("quality", OIDN_QUALITY_FAST);
+        break;
+#    endif
+      case DENOISER_QUALITY_BALANCED:
+        oidn_filter.set("quality", OIDN_QUALITY_BALANCED);
+        break;
+      case DENOISER_QUALITY_HIGH:
+      default:
+        oidn_filter.set("quality", OIDN_QUALITY_HIGH);
+    }
+#  endif
   }
 
   /* Scale output pass to match adaptive sampling per-pixel scale, as well as bring alpha channel
@@ -627,7 +653,7 @@ Device *OIDNDenoiser::ensure_denoiser_device(Progress *progress)
 {
 #ifndef WITH_OPENIMAGEDENOISE
   (void)progress;
-  path_trace_device_->set_error("Build without OpenImageDenoiser");
+  path_trace_device_->set_error("Failed to denoise, build has no OpenImageDenoise support");
   return nullptr;
 #else
   if (!openimagedenoise_supported()) {

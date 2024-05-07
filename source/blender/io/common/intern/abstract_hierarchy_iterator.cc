@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2019 Blender Foundation. All rights reserved. */
+/* SPDX-FileCopyrightText: 2019 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 #include "IO_abstract_hierarchy_iterator.h"
 #include "dupli_parent_finder.hh"
 
@@ -9,10 +10,10 @@
 #include <sstream>
 #include <string>
 
-#include "BKE_anim_data.h"
-#include "BKE_duplilist.h"
-#include "BKE_key.h"
-#include "BKE_object.h"
+#include "BKE_anim_data.hh"
+#include "BKE_duplilist.hh"
+#include "BKE_key.hh"
+#include "BKE_object.hh"
 #include "BKE_particle.h"
 
 #include "BLI_assert.h"
@@ -26,7 +27,7 @@
 #include "DNA_particle_types.h"
 #include "DNA_rigidbody_types.h"
 
-#include "DEG_depsgraph_query.h"
+#include "DEG_depsgraph_query.hh"
 
 namespace blender::io {
 
@@ -84,9 +85,7 @@ bool HierarchyContext::is_object_visible(const enum eEvaluationMode evaluation_m
   return (visibility & OB_VISIBLE_SELF) != 0;
 }
 
-EnsuredWriter::EnsuredWriter() : writer_(nullptr), newly_created_(false)
-{
-}
+EnsuredWriter::EnsuredWriter() : writer_(nullptr), newly_created_(false) {}
 
 EnsuredWriter::EnsuredWriter(AbstractHierarchyWriter *writer, bool newly_created)
     : writer_(writer), newly_created_(newly_created)
@@ -171,9 +170,9 @@ AbstractHierarchyIterator::~AbstractHierarchyIterator()
   /* release_writers() cannot be called here directly, as it calls into the pure-virtual
    * release_writer() function. By the time this destructor is called, the subclass that implements
    * that pure-virtual function is already destructed. */
-  BLI_assert(
-      writers_.empty() ||
-      !"release_writers() should be called before the AbstractHierarchyIterator goes out of scope");
+  BLI_assert_msg(
+      writers_.empty(),
+      "release_writers() should be called before the AbstractHierarchyIterator goes out of scope");
 }
 
 void AbstractHierarchyIterator::iterate_and_write()
@@ -416,7 +415,7 @@ void AbstractHierarchyIterator::visit_object(Object *object,
   context->original_export_path = "";
   context->higher_up_export_path = "";
 
-  copy_m4_m4(context->matrix_world, object->object_to_world);
+  copy_m4_m4(context->matrix_world, object->object_to_world().ptr());
 
   ExportGraph::key_type graph_index = determine_graph_index_object(context);
   context_update_for_graph_index(context, graph_index);
@@ -487,6 +486,12 @@ void AbstractHierarchyIterator::context_update_for_graph_index(
 {
   /* Update the HierarchyContext so that it is consistent with the graph index. */
   context->export_parent = graph_index.object;
+
+  /* If the parent type is such that it cannot be exported (at least not currently to USD or
+   * Alembic), always check the parent for animation. */
+  const short partype = context->object->partype & PARTYPE;
+  context->animation_check_include_parent |= ELEM(partype, PARBONE, PARVERT1, PARVERT3, PARSKEL);
+
   if (context->export_parent != context->object->parent) {
     /* The parent object in Blender is NOT used as the export parent. This means
      * that the world transform of this object can be influenced by objects that
@@ -525,7 +530,7 @@ void AbstractHierarchyIterator::determine_export_paths(const HierarchyContext *p
 }
 
 void AbstractHierarchyIterator::determine_duplication_references(
-    const HierarchyContext *parent_context, std::string indent)
+    const HierarchyContext *parent_context, const std::string &indent)
 {
   ExportChildren children = graph_children(parent_context);
 

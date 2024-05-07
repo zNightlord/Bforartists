@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2001-2002 NaN Holding BV. All rights reserved. */
+/* SPDX-FileCopyrightText: 2001-2002 NaN Holding BV. All rights reserved.
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup GHOST
@@ -8,6 +9,17 @@
 #pragma once
 
 #include <stdint.h>
+
+#ifdef WITH_VULKAN_BACKEND
+#  ifdef __APPLE__
+#    include <MoltenVK/vk_mvk_moltenvk.h>
+#  else
+#    include <vulkan/vulkan.h>
+#  endif
+#endif
+
+/* This is used by `GHOST_C-api.h` too, cannot use C++ conventions. */
+// NOLINTBEGIN: modernize-use-using
 
 #ifdef WITH_CXX_GUARDEDALLOC
 #  include "MEM_guardedalloc.h"
@@ -24,12 +36,12 @@ typedef unsigned char uchar;
     typedef struct name##__ { \
       int unused; \
       MEM_CXX_CLASS_ALLOC_FUNCS(#name) \
-    } * name
+    } *name
 #else
 #  define GHOST_DECLARE_HANDLE(name) \
     typedef struct name##__ { \
       int unused; \
-    } * name
+    } *name
 #endif
 
 /**
@@ -61,9 +73,9 @@ typedef struct {
 } GHOST_CursorBitmapRef;
 
 typedef enum {
-  GHOST_glStereoVisual = (1 << 0),
-  GHOST_glDebugContext = (1 << 1),
-} GHOST_GLFlags;
+  GHOST_gpuStereoVisual = (1 << 0),
+  GHOST_gpuDebugContext = (1 << 1),
+} GHOST_GPUFlags;
 
 typedef enum GHOST_DialogOptions {
   GHOST_DialogWarning = (1 << 0),
@@ -73,6 +85,59 @@ typedef enum GHOST_DialogOptions {
 typedef void *GHOST_TUserDataPtr;
 
 typedef enum { GHOST_kFailure = 0, GHOST_kSuccess } GHOST_TSuccess;
+
+/**
+ * Static flag (relating to the back-ends support for features).
+ *
+ * \note When adding new capabilities, add to #GHOST_CAPABILITY_FLAG_ALL,
+ * then mask out of from the `getCapabilities(..)` callback with an explanation for why
+ * the feature is not supported.
+ */
+typedef enum {
+  /**
+   * Set when warping the cursor is supported (re-positioning the users cursor).
+   */
+  GHOST_kCapabilityCursorWarp = (1 << 0),
+  /**
+   * Set when getting/setting the window position is supported.
+   */
+  GHOST_kCapabilityWindowPosition = (1 << 1),
+  /**
+   * Set when a separate primary clipboard is supported.
+   * This is a convention for X11/WAYLAND, select text & MMB to paste (without an explicit copy).
+   */
+  GHOST_kCapabilityPrimaryClipboard = (1 << 2),
+  /**
+   * Support for reading the front-buffer.
+   */
+  GHOST_kCapabilityGPUReadFrontBuffer = (1 << 3),
+  /**
+   * Set when there is support for system clipboard copy/paste.
+   */
+  GHOST_kCapabilityClipboardImages = (1 << 4),
+  /**
+   * Support for sampling a color outside of the Blender windows.
+   */
+  GHOST_kCapabilityDesktopSample = (1 << 5),
+  /**
+   * Supports IME text input methods (when `WITH_INPUT_IME` is defined).
+   */
+  GHOST_kCapabilityInputIME = (1 << 6),
+  /**
+   * Support detecting the physical trackpad direction.
+   */
+  GHOST_kCapabilityTrackpadPhysicalDirection = (1 << 7),
+} GHOST_TCapabilityFlag;
+
+/**
+ * Back-ends should use this, masking out features which are not supported
+ * with notes as to why those features cannot be supported.
+ */
+#define GHOST_CAPABILITY_FLAG_ALL \
+  (GHOST_kCapabilityCursorWarp | GHOST_kCapabilityWindowPosition | \
+   GHOST_kCapabilityPrimaryClipboard | GHOST_kCapabilityGPUReadFrontBuffer | \
+   GHOST_kCapabilityClipboardImages | GHOST_kCapabilityDesktopSample | \
+   GHOST_kCapabilityInputIME | GHOST_kCapabilityTrackpadPhysicalDirection)
 
 /* Xtilt and Ytilt represent how much the pen is tilted away from
  * vertically upright in either the X or Y direction, with X and Y the
@@ -128,14 +193,15 @@ typedef enum {
   GHOST_kModifierKeyNum
 } GHOST_TModifierKey;
 
+/**
+ * \note these values are stored in #wmWindow::windowstate,
+ * don't change, only add new values.
+ */
 typedef enum {
   GHOST_kWindowStateNormal = 0,
-  GHOST_kWindowStateMaximized,
-  GHOST_kWindowStateMinimized,
-  GHOST_kWindowStateFullScreen,
-  GHOST_kWindowStateEmbedded,
-  // GHOST_kWindowStateModified,
-  // GHOST_kWindowStateUnModified,
+  GHOST_kWindowStateMaximized = 1,
+  GHOST_kWindowStateMinimized = 2,
+  GHOST_kWindowStateFullScreen = 3,
 } GHOST_TWindowState;
 
 typedef enum {
@@ -149,11 +215,13 @@ typedef enum { GHOST_kWindowOrderTop = 0, GHOST_kWindowOrderBottom } GHOST_TWind
 
 typedef enum {
   GHOST_kDrawingContextTypeNone = 0,
+#if defined(WITH_OPENGL_BACKEND)
   GHOST_kDrawingContextTypeOpenGL,
+#endif
 #ifdef WIN32
   GHOST_kDrawingContextTypeD3D,
 #endif
-#ifdef __APPLE__
+#if defined(__APPLE__) && defined(WITH_METAL_BACKEND)
   GHOST_kDrawingContextTypeMetal,
 #endif
 #ifdef WITH_VULKAN_BACKEND
@@ -245,17 +313,15 @@ typedef enum {
   GHOST_kEventOpenMainFile, /* Needed for Cocoa to open double-clicked .blend file at startup. */
   GHOST_kEventNativeResolutionChange, /* Needed for Cocoa when window moves to other display. */
 
-  GHOST_kEventTimer,
-
   GHOST_kEventImeCompositionStart,
   GHOST_kEventImeComposition,
   GHOST_kEventImeCompositionEnd,
 
-  GHOST_kNumEventTypes
+#define GHOST_kNumEventTypes (GHOST_kEventImeCompositionEnd + 1)
 } GHOST_TEventType;
 
 typedef enum {
-  GHOST_kStandardCursorFirstCursor = 0,
+#define GHOST_kStandardCursorFirstCursor int(GHOST_kStandardCursorDefault)
   GHOST_kStandardCursorDefault = 0,
   GHOST_kStandardCursorRightArrow,
   GHOST_kStandardCursorLeftArrow,
@@ -296,7 +362,7 @@ typedef enum {
   GHOST_kStandardCursorCopy,
   GHOST_kStandardCursorCustom,
 
-  GHOST_kStandardCursorNumCursors
+#define GHOST_kStandardCursorNumCursors (int(GHOST_kStandardCursorCustom) + 1)
 } GHOST_TStandardCursor;
 
 typedef enum {
@@ -478,7 +544,7 @@ typedef enum {
   GHOST_kAxisY = (1 << 1),
 } GHOST_TAxisFlag;
 
-typedef void *GHOST_TEventDataPtr;
+typedef const void *GHOST_TEventDataPtr;
 
 typedef struct {
   /** The x-coordinate of the cursor position. */
@@ -532,6 +598,8 @@ typedef enum {
   GHOST_kDragnDropTypeBitmap     /* Bitmap image data. */
 } GHOST_TDragnDropTypes;
 
+typedef void *GHOST_TDragnDropDataPtr;
+
 typedef struct {
   /** The x-coordinate of the cursor position. */
   int32_t x;
@@ -540,10 +608,13 @@ typedef struct {
   /** The dropped item type */
   GHOST_TDragnDropTypes dataType;
   /** The "dropped content" */
-  GHOST_TEventDataPtr data;
+  GHOST_TDragnDropDataPtr data;
 } GHOST_TEventDragnDropData;
 
-/** similar to wmImeData */
+/**
+ * \warning this is a duplicate of #wmImeData.
+ * All members must remain aligned and the struct size match!
+ */
 typedef struct {
   /** size_t */
   GHOST_TUserDataPtr result_len, composite_len;
@@ -601,7 +672,7 @@ typedef struct {
   /** The key code. */
   GHOST_TKey key;
 
-  /** The unicode character. if the length is 6, not NULL terminated if all 6 are set. */
+  /** The unicode character. if the length is 6, not nullptr terminated if all 6 are set. */
   char utf8_buf[6];
 
   /**
@@ -638,7 +709,18 @@ typedef struct {
 typedef struct {
   int flags;
   GHOST_TDrawingContextType context_type;
-} GHOST_GLSettings;
+} GHOST_GPUSettings;
+
+#ifdef WITH_VULKAN_BACKEND
+typedef struct {
+  /** Image handle to the image that will be presented to the user. */
+  VkImage image;
+  /** Format of the image. */
+  VkFormat format;
+  /** Resolution of the image. */
+  VkExtent2D extent;
+} GHOST_VulkanSwapChainData;
+#endif
 
 typedef enum {
   /** Axis that cursor grab will wrap. */
@@ -711,6 +793,7 @@ typedef void (*GHOST_XrDrawViewFn)(const struct GHOST_XrDrawViewInfo *draw_view,
 typedef const GHOST_TXrGraphicsBinding *GHOST_XrGraphicsBindingCandidates;
 
 typedef struct {
+  bool is_active;
   float position[3];
   /* Blender convention (w, x, y, z) */
   float orientation_quat[4];
@@ -848,3 +931,5 @@ typedef struct GHOST_XrControllerModelData {
 } GHOST_XrControllerModelData;
 
 #endif /* WITH_XR_OPENXR */
+
+// NOLINTEND: modernize-use-using

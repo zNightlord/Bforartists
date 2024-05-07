@@ -1,9 +1,10 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2012 Blender Foundation. */
+/* SPDX-FileCopyrightText: 2012 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "COM_MaskOperation.h"
 
-#include "BKE_lib_id.h"
+#include "BKE_lib_id.hh"
 #include "BKE_mask.h"
 
 namespace blender::compositor {
@@ -42,12 +43,9 @@ void MaskOperation::init_execution()
 
       /* trick so we can get unkeyed edits to display */
       {
-        MaskLayer *masklay;
-        MaskLayerShape *masklay_shape;
-
-        for (masklay = (MaskLayer *)mask_temp->masklayers.first; masklay;
-             masklay = masklay->next) {
-          masklay_shape = BKE_mask_layer_shape_verify_frame(masklay, frame_number_);
+        LISTBASE_FOREACH (MaskLayer *, masklay, &mask_temp->masklayers) {
+          MaskLayerShape *masklay_shape = BKE_mask_layer_shape_verify_frame(masklay,
+                                                                            frame_number_);
           BKE_mask_layer_shape_from_mask(masklay, masklay_shape);
         }
       }
@@ -86,7 +84,7 @@ void MaskOperation::deinit_execution()
 
 void MaskOperation::determine_canvas(const rcti &preferred_area, rcti &r_area)
 {
-  if (mask_width_ == 0 || mask_height_ == 0) {
+  if (!mask_ || mask_width_ == 0 || mask_height_ == 0) {
     r_area = COM_AREA_NONE;
   }
   else {
@@ -96,45 +94,12 @@ void MaskOperation::determine_canvas(const rcti &preferred_area, rcti &r_area)
   }
 }
 
-void MaskOperation::execute_pixel_sampled(float output[4],
-                                          float x,
-                                          float y,
-                                          PixelSampler /*sampler*/)
-{
-  const float xy[2] = {
-      (x * mask_width_inv_) + mask_px_ofs_[0],
-      (y * mask_height_inv_) + mask_px_ofs_[1],
-  };
-
-  if (raster_mask_handle_tot_ == 1) {
-    if (raster_mask_handles_[0]) {
-      output[0] = BKE_maskrasterize_handle_sample(raster_mask_handles_[0], xy);
-    }
-    else {
-      output[0] = 0.0f;
-    }
-  }
-  else {
-    /* In case loop below fails. */
-    output[0] = 0.0f;
-
-    for (uint i = 0; i < raster_mask_handle_tot_; i++) {
-      if (raster_mask_handles_[i]) {
-        output[0] += BKE_maskrasterize_handle_sample(raster_mask_handles_[i], xy);
-      }
-    }
-
-    /* until we get better falloff */
-    output[0] /= raster_mask_handle_tot_;
-  }
-}
-
 void MaskOperation::update_memory_buffer_partial(MemoryBuffer *output,
                                                  const rcti &area,
                                                  Span<MemoryBuffer *> /*inputs*/)
 {
   Vector<MaskRasterHandle *> handles = get_non_null_handles();
-  if (handles.size() == 0) {
+  if (handles.is_empty()) {
     output->fill(area, COM_VALUE_ZERO);
     return;
   }

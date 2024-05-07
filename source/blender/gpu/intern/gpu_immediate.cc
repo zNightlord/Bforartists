@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2016 by Mike Erwin. All rights reserved. */
+/* SPDX-FileCopyrightText: 2016 by Mike Erwin. All rights reserved.
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup gpu
@@ -8,17 +9,17 @@
  */
 
 #ifndef GPU_STANDALONE
-#  include "UI_resources.h"
+#  include "UI_resources.hh"
 #endif
 
-#include "GPU_immediate.h"
-#include "GPU_matrix.h"
-#include "GPU_texture.h"
+#include "GPU_immediate.hh"
+#include "GPU_matrix.hh"
+#include "GPU_texture.hh"
 
 #include "gpu_context_private.hh"
 #include "gpu_immediate_private.hh"
 #include "gpu_shader_private.hh"
-#include "gpu_vertex_format_private.h"
+#include "gpu_vertex_format_private.hh"
 
 using namespace blender::gpu;
 
@@ -169,7 +170,8 @@ static void wide_line_workaround_start(GPUPrimType prim_type)
 
   if (ELEM(polyline_sh,
            GPU_SHADER_3D_POLYLINE_CLIPPED_UNIFORM_COLOR,
-           GPU_SHADER_3D_POLYLINE_UNIFORM_COLOR)) {
+           GPU_SHADER_3D_POLYLINE_UNIFORM_COLOR))
+  {
     immUniformColor4fv(imm->uniform_color);
   }
 }
@@ -212,7 +214,7 @@ void immBeginAtMost(GPUPrimType prim_type, uint vertex_len)
   immBegin(prim_type, vertex_len);
 }
 
-GPUBatch *immBeginBatch(GPUPrimType prim_type, uint vertex_len)
+blender::gpu::Batch *immBeginBatch(GPUPrimType prim_type, uint vertex_len)
 {
   BLI_assert(imm->prim_type == GPU_PRIM_NONE); /* Make sure we haven't already begun. */
   BLI_assert(vertex_count_makes_sense_for_primitive(vertex_len, prim_type));
@@ -222,7 +224,7 @@ GPUBatch *immBeginBatch(GPUPrimType prim_type, uint vertex_len)
   imm->vertex_idx = 0;
   imm->unassigned_attr_bits = imm->enabled_attr_bits;
 
-  GPUVertBuf *verts = GPU_vertbuf_create_with_format(&imm->vertex_format);
+  VertBuf *verts = GPU_vertbuf_create_with_format(&imm->vertex_format);
   GPU_vertbuf_data_alloc(verts, vertex_len);
 
   imm->vertex_data = (uchar *)GPU_vertbuf_get_data(verts);
@@ -233,7 +235,7 @@ GPUBatch *immBeginBatch(GPUPrimType prim_type, uint vertex_len)
   return imm->batch;
 }
 
-GPUBatch *immBeginBatchAtMost(GPUPrimType prim_type, uint vertex_len)
+blender::gpu::Batch *immBeginBatchAtMost(GPUPrimType prim_type, uint vertex_len)
 {
   BLI_assert(vertex_len > 0);
   imm->strict_vertex_len = false;
@@ -606,7 +608,7 @@ void immBindTexture(const char *name, GPUTexture *tex)
   GPU_texture_bind(tex, binding);
 }
 
-void immBindTextureSampler(const char *name, GPUTexture *tex, eGPUSamplerState state)
+void immBindTextureSampler(const char *name, GPUTexture *tex, GPUSamplerState state)
 {
   int binding = GPU_shader_get_sampler_binding(imm->shader, name);
   GPU_texture_bind_ex(tex, state, binding);
@@ -736,4 +738,4 @@ void immThemeColorShadeAlpha(int colorid, int coloffset, int alphaoffset)
   immUniformColor4ub(col[0], col[1], col[2], col[3]);
 }
 
-#endif /* GPU_STANDALONE */
+#endif /* !GPU_STANDALONE */

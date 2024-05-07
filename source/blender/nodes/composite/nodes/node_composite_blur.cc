@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2006 Blender Foundation. All rights reserved. */
+/* SPDX-FileCopyrightText: 2006 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup cmpnodes
@@ -10,15 +11,15 @@
 #include "BLI_math_vector.hh"
 #include "BLI_math_vector_types.hh"
 
-#include "RNA_access.h"
+#include "RNA_access.hh"
 
-#include "UI_interface.h"
-#include "UI_resources.h"
+#include "UI_interface.hh"
+#include "UI_resources.hh"
 
-#include "GPU_shader.h"
-#include "GPU_state.h"
-#include "GPU_texture.h"
+#include "GPU_shader.hh"
+#include "GPU_texture.hh"
 
+#include "COM_algorithm_recursive_gaussian_blur.hh"
 #include "COM_algorithm_symmetric_separable_blur.hh"
 #include "COM_node_operation.hh"
 #include "COM_symmetric_blur_weights.hh"
@@ -34,15 +35,15 @@ NODE_STORAGE_FUNCS(NodeBlurData)
 
 static void cmp_node_blur_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Color>(N_("Image"))
+  b.add_input<decl::Color>("Image")
       .default_value({1.0f, 1.0f, 1.0f, 1.0f})
       .compositor_domain_priority(0);
-  b.add_input<decl::Float>(N_("Size"))
+  b.add_input<decl::Float>("Size")
       .default_value(1.0f)
       .min(0.0f)
       .max(1.0f)
       .compositor_domain_priority(1);
-  b.add_output<decl::Color>(N_("Image"));
+  b.add_output<decl::Color>("Image");
 }
 
 static void node_composit_init_blur(bNodeTree * /*ntree*/, bNode *node)
@@ -106,7 +107,11 @@ class BlurOperation : public NodeOperation {
       return;
     }
 
-    if (!get_input("Size").is_single_value() && get_variable_size()) {
+    if (node_storage(bnode()).filtertype == R_FILTER_FAST_GAUSS) {
+      recursive_gaussian_blur(
+          context(), get_input("Image"), get_result("Image"), compute_blur_radius());
+    }
+    else if (use_variable_size()) {
       execute_variable_size();
     }
     else if (use_separable_filter()) {
@@ -125,7 +130,7 @@ class BlurOperation : public NodeOperation {
 
   void execute_constant_size()
   {
-    GPUShader *shader = shader_manager().get("compositor_symmetric_blur");
+    GPUShader *shader = context().get_shader("compositor_symmetric_blur");
     GPU_shader_bind(shader);
 
     GPU_shader_uniform_1b(shader, "extend_bounds", get_extend_bounds());
@@ -136,8 +141,8 @@ class BlurOperation : public NodeOperation {
 
     const float2 blur_radius = compute_blur_radius();
 
-    const SymmetricBlurWeights &weights = context().cache_manager().get_symmetric_blur_weights(
-        node_storage(bnode()).filtertype, blur_radius);
+    const SymmetricBlurWeights &weights = context().cache_manager().symmetric_blur_weights.get(
+        context(), node_storage(bnode()).filtertype, blur_radius);
     weights.bind_as_texture(shader, "weights_tx");
 
     Domain domain = compute_domain();
@@ -160,7 +165,7 @@ class BlurOperation : public NodeOperation {
 
   void execute_variable_size()
   {
-    GPUShader *shader = shader_manager().get("compositor_symmetric_blur_variable_size");
+    GPUShader *shader = context().get_shader("compositor_symmetric_blur_variable_size");
     GPU_shader_bind(shader);
 
     GPU_shader_uniform_1b(shader, "extend_bounds", get_extend_bounds());
@@ -171,8 +176,8 @@ class BlurOperation : public NodeOperation {
 
     const float2 blur_radius = compute_blur_radius();
 
-    const SymmetricBlurWeights &weights = context().cache_manager().get_symmetric_blur_weights(
-        node_storage(bnode()).filtertype, blur_radius);
+    const SymmetricBlurWeights &weights = context().cache_manager().symmetric_blur_weights.get(
+        context(), node_storage(bnode()).filtertype, blur_radius);
     weights.bind_as_texture(shader, "weights_tx");
 
     const Result &input_size = get_input("Size");
@@ -250,15 +255,20 @@ class BlurOperation : public NodeOperation {
       return true;
     }
 
-    /* Both Box and Gaussian filters are separable. The rest is not. */
+    /* Only Gaussian filters are separable. The rest is not. */
     switch (node_storage(bnode()).filtertype) {
-      case R_FILTER_BOX:
       case R_FILTER_GAUSS:
       case R_FILTER_FAST_GAUSS:
         return true;
       default:
         return false;
     }
+  }
+
+  bool use_variable_size()
+  {
+    return get_variable_size() && !get_input("Size").is_single_value() &&
+           node_storage(bnode()).filtertype != R_FILTER_FAST_GAUSS;
   }
 
   float2 get_size_factor()

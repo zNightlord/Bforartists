@@ -1,3 +1,6 @@
+/* SPDX-FileCopyrightText: 2017-2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #pragma BLENDER_REQUIRE(common_math_lib.glsl)
 
@@ -14,14 +17,8 @@ vec3 specular_dominant_dir(vec3 N, vec3 V, float roughness)
   return normalize(mix(N, R, fac));
 }
 
-float ior_from_f0(float f0)
-{
-  float f = sqrt(f0);
-  return (-f - 1.0) / (f - 1.0);
-}
-
 /* Simplified form of F_eta(eta, 1.0). */
-float f0_from_ior(float eta)
+float F0_from_ior(float eta)
 {
   float A = (eta - 1.0) / (eta + 1.0);
   return A * A;
@@ -64,54 +61,68 @@ float F_eta(float eta, float cos_theta)
 }
 
 /* Fresnel color blend base on fresnel factor */
-vec3 F_color_blend(float eta, float fresnel, vec3 f0_color)
+vec3 F_color_blend(float eta, float fresnel, vec3 F0_color)
 {
-  float f0 = f0_from_ior(eta);
-  float fac = saturate((fresnel - f0) / (1.0 - f0));
-  return mix(f0_color, vec3(1.0), fac);
+  float F0 = F0_from_ior(eta);
+  float fac = saturate((fresnel - F0) / (1.0 - F0));
+  return mix(F0_color, vec3(1.0), fac);
 }
 
 /* Fresnel split-sum approximation. */
-vec3 F_brdf_single_scatter(vec3 f0, vec3 f90, vec2 lut)
+vec3 F_brdf_single_scatter(vec3 F0, vec3 F90, vec2 lut)
 {
-  /* Unreal specular matching : if specular color is below 2% intensity,
-   * treat as shadowning */
-  return lut.y * f90 + lut.x * f0;
+  return F0 * lut.x + F90 * lut.y;
 }
 
-/* Multi-scattering brdf approximation from :
+/* Multi-scattering brdf approximation from
  * "A Multiple-Scattering Microfacet Model for Real-Time Image-based Lighting"
- * by Carmelo J. Fdez-Agüera. */
-vec3 F_brdf_multi_scatter(vec3 f0, vec3 f90, vec2 lut)
+ * https://jcgt.org/published/0008/01/03/paper.pdf by Carmelo J. Fdez-Agüera. */
+vec3 F_brdf_multi_scatter(vec3 F0, vec3 F90, vec2 lut)
 {
-  vec3 FssEss = lut.y * f90 + lut.x * f0;
+  vec3 FssEss = F_brdf_single_scatter(F0, F90, lut);
 
   float Ess = lut.x + lut.y;
   float Ems = 1.0 - Ess;
-  vec3 Favg = f0 + (1.0 - f0) / 21.0;
-  vec3 Fms = FssEss * Favg / (1.0 - (1.0 - Ess) * Favg);
-  /* We don't do anything special for diffuse surfaces because the principle bsdf
-   * does not care about energy conservation of the specular layer for dielectrics. */
-  return FssEss + Fms * Ems;
+  vec3 Favg = F0 + (F90 - F0) / 21.0;
+
+  /* The original paper uses `FssEss * radiance + Fms*Ems * irradiance`, but
+   * "A Journey Through Implementing Multi-scattering BRDFs and Area Lights" by Steve McAuley
+   * suggests to use `FssEss * radiance + Fms*Ems * radiance` which results in comparable quality.
+   * We handle `radiance` outside of this function, so the result simplifies to:
+   * `FssEss + Fms*Ems = FssEss * (1 + Ems*Favg / (1 - Ems*Favg)) = FssEss / (1 - Ems*Favg)`.
+   * This is a simple albedo scaling very similar to the approach used by Cycles:
+   * "Practical multiple scattering compensation for microfacet model". */
+  return FssEss / (1.0 - Ems * Favg);
 }
 
 /* GGX */
+float bxdf_ggx_D(float NH, float a2)
+{
+  return a2 / (M_PI * sqr((a2 - 1.0) * (NH * NH) + 1.0));
+}
+
 float D_ggx_opti(float NH, float a2)
 {
   float tmp = (NH * a2 - NH) * NH + 1.0;
-  return M_PI * tmp * tmp; /* Doing RCP and mul a2 at the end */
+  return M_PI * tmp * tmp; /* Doing RCP and multiply a2 at the end. */
+}
+
+float bxdf_ggx_smith_G1(float NX, float a2)
+{
+  return 2.0 / (1.0 + sqrt(1.0 + a2 * (1.0 / (NX * NX) - 1.0)));
 }
 
 float G1_Smith_GGX_opti(float NX, float a2)
 {
   /* Using Brian Karis approach and refactoring by NX/NX
    * this way the (2*NL)*(2*NV) in G = G1(V) * G1(L) gets canceled by the brdf denominator 4*NL*NV
-   * Rcp is done on the whole G later
+   * RCP is done on the whole G later
    * Note that this is not convenient for the transmission formula */
   return NX + sqrt(NX * (NX - NX * a2) + a2);
-  /* return 2 / (1 + sqrt(1 + a2 * (1 - NX*NX) / (NX*NX) ) ); /* Reference function */
+  // return 2 / (1 + sqrt(1 + a2 * (1 - NX*NX) / (NX*NX) ) ); /* Reference function. */
 }
 
+/* Compute the GGX BRDF without the Fresnel term, multiplied by the cosine foreshortening term. */
 float bsdf_ggx(vec3 N, vec3 L, vec3 V, float roughness)
 {
   float a = roughness;
@@ -122,12 +133,11 @@ float bsdf_ggx(vec3 N, vec3 L, vec3 V, float roughness)
   float NL = max(dot(N, L), 1e-8);
   float NV = max(dot(N, V), 1e-8);
 
-  float G = G1_Smith_GGX_opti(NV, a2) * G1_Smith_GGX_opti(NL, a2); /* Doing RCP at the end */
-  float D = D_ggx_opti(NH, a2);
+  float G = bxdf_ggx_smith_G1(NV, a2) * bxdf_ggx_smith_G1(NL, a2);
+  float D = bxdf_ggx_D(NH, a2);
 
-  /* Denominator is canceled by G1_Smith */
-  /* bsdf = D * G / (4.0 * NL * NV); /* Reference function */
-  return NL * a2 / (D * G); /* NL to Fit cycles Equation : line. 345 in bsdf_microfacet.h */
+  /* brdf * NL =  `((D * G) / (4 * NV * NL)) * NL`. */
+  return (0.25 * D * G) / NV;
 }
 
 void accumulate_light(vec3 light, float fac, inout vec4 accum)
@@ -136,57 +146,35 @@ void accumulate_light(vec3 light, float fac, inout vec4 accum)
 }
 
 /* Same thing as Cycles without the comments to make it shorter. */
-vec3 ensure_valid_reflection(vec3 Ng, vec3 I, vec3 N)
+vec3 ensure_valid_specular_reflection(vec3 Ng, vec3 I, vec3 N)
 {
   vec3 R = -reflect(I, N);
 
+  float Iz = dot(I, Ng);
+
   /* Reflection rays may always be at least as shallow as the incoming ray. */
-  float threshold = min(0.9 * dot(Ng, I), 0.025);
+  float threshold = min(0.9 * Iz, 0.025);
   if (dot(Ng, R) >= threshold) {
     return N;
   }
 
-  float NdotNg = dot(N, Ng);
-  vec3 X = normalize(N - NdotNg * Ng);
-
-  float Ix = dot(I, X), Iz = dot(I, Ng);
-  float Ix2 = sqr(Ix), Iz2 = sqr(Iz);
-  float a = Ix2 + Iz2;
-
-  float b = sqrt(Ix2 * (a - sqr(threshold)));
-  float c = Iz * threshold + a;
-
-  float fac = 0.5 / a;
-  float N1_z2 = fac * (b + c), N2_z2 = fac * (-b + c);
-  bool valid1 = (N1_z2 > 1e-5) && (N1_z2 <= (1.0 + 1e-5));
-  bool valid2 = (N2_z2 > 1e-5) && (N2_z2 <= (1.0 + 1e-5));
-
-  vec2 N_new;
-  if (valid1 && valid2) {
-    /* If both are possible, do the expensive reflection-based check. */
-    vec2 N1 = vec2(safe_sqrt(1.0 - N1_z2), safe_sqrt(N1_z2));
-    vec2 N2 = vec2(safe_sqrt(1.0 - N2_z2), safe_sqrt(N2_z2));
-
-    float R1 = 2.0 * (N1.x * Ix + N1.y * Iz) * N1.y - Iz;
-    float R2 = 2.0 * (N2.x * Ix + N2.y * Iz) * N2.y - Iz;
-
-    valid1 = (R1 >= 1e-5);
-    valid2 = (R2 >= 1e-5);
-    if (valid1 && valid2) {
-      N_new = (R1 < R2) ? N1 : N2;
-    }
-    else {
-      N_new = (R1 > R2) ? N1 : N2;
-    }
+  vec3 X = normalize(N - dot(N, Ng) * Ng);
+  if (any(isnan(X))) {
+    X = N;
   }
-  else if (valid1 || valid2) {
-    float Nz2 = valid1 ? N1_z2 : N2_z2;
-    N_new = vec2(safe_sqrt(1.0 - Nz2), safe_sqrt(Nz2));
-  }
-  else {
-    return Ng;
-  }
-  return N_new.x * X + N_new.y * Ng;
+  float Ix = dot(I, X);
+
+  float a = sqr(Ix) + sqr(Iz);
+  float b = 2.0 * (a + Iz * threshold);
+  float c = sqr(threshold + Iz);
+
+  float Nz2 = (Ix < 0.0) ? 0.25 * (b + safe_sqrt(sqr(b) - 4.0 * a * c)) / a :
+                           0.25 * (b - safe_sqrt(sqr(b) - 4.0 * a * c)) / a;
+
+  float Nx = safe_sqrt(1.0 - Nz2);
+  float Nz = safe_sqrt(Nz2);
+
+  return Nx * X + Nz * Ng;
 }
 
 /* ----------- Cone angle Approximation --------- */

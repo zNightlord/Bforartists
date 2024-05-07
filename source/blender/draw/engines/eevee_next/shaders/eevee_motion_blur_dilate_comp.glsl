@@ -1,10 +1,13 @@
+/* SPDX-FileCopyrightText: 2022-2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /**
  * Dilate motion vector tiles until we covered maximum velocity.
  * Outputs the largest intersecting motion vector in the neighborhood.
  */
 
-#pragma BLENDER_REQUIRE(common_math_geom_lib.glsl)
+#pragma BLENDER_REQUIRE(draw_math_geom_lib.glsl)
 #pragma BLENDER_REQUIRE(eevee_motion_blur_lib.glsl)
 
 #define DEBUG_BYPASS_DILATION 0
@@ -19,7 +22,7 @@ MotionRect compute_motion_rect(ivec2 tile, vec2 motion)
 #if DEBUG_BYPASS_DILATION
   return MotionRect(tile, ivec2(1));
 #endif
-  /* Ceil to number of tile touched. */
+  /* `ceil()` to number of tile touched. */
   ivec2 point1 = tile + ivec2(sign(motion) * ceil(abs(motion) / float(MOTION_BLUR_TILE_SIZE)));
   ivec2 point2 = tile;
 
@@ -48,7 +51,7 @@ MotionLine compute_motion_line(ivec2 tile, vec2 motion)
 
   MotionLine line;
   line.origin = vec2(tile);
-  /* Rotate 90° Counter-Clockwise. */
+  /* Rotate 90 degrees counter-clockwise. */
   line.normal = vec2(-dir.y, dir.x);
   return line;
 }
@@ -74,8 +77,10 @@ void main()
 
   vec4 max_motion = imageLoad(in_tiles_img, src_tile);
 
-  MotionPayload payload_prv = motion_blur_tile_indirection_pack_payload(max_motion.xy, src_tile);
-  MotionPayload payload_nxt = motion_blur_tile_indirection_pack_payload(max_motion.zw, src_tile);
+  MotionPayload payload_prv = motion_blur_tile_indirection_pack_payload(max_motion.xy,
+                                                                        uvec2(src_tile));
+  MotionPayload payload_nxt = motion_blur_tile_indirection_pack_payload(max_motion.zw,
+                                                                        uvec2(src_tile));
   if (true) {
     /* Rectangular area (in tiles) where the motion vector spreads. */
     MotionRect motion_rect = compute_motion_rect(src_tile, max_motion.xy);
@@ -85,17 +90,20 @@ void main()
       for (int y = 0; y < motion_rect.extent.y; y++) {
         ivec2 tile = motion_rect.bottom_left + ivec2(x, y);
         if (is_inside_motion_line(tile, motion_line)) {
-          motion_blur_tile_indirection_store(tile_indirection_buf, MOTION_PREV, tile, payload_prv);
+          motion_blur_tile_indirection_store(
+              tile_indirection_buf, MOTION_PREV, uvec2(tile), payload_prv);
           /* FIXME: This is a bit weird, but for some reason, we need the store the same vector in
            * the motion next so that weighting in gather pass is better. */
-          motion_blur_tile_indirection_store(tile_indirection_buf, MOTION_NEXT, tile, payload_nxt);
+          motion_blur_tile_indirection_store(
+              tile_indirection_buf, MOTION_NEXT, uvec2(tile), payload_nxt);
         }
       }
     }
   }
 
   if (true) {
-    MotionPayload payload = motion_blur_tile_indirection_pack_payload(max_motion.zw, src_tile);
+    MotionPayload payload = motion_blur_tile_indirection_pack_payload(max_motion.zw,
+                                                                      uvec2(src_tile));
     /* Rectangular area (in tiles) where the motion vector spreads. */
     MotionRect motion_rect = compute_motion_rect(src_tile, max_motion.zw);
     MotionLine motion_line = compute_motion_line(src_tile, max_motion.zw);
@@ -104,10 +112,12 @@ void main()
       for (int y = 0; y < motion_rect.extent.y; y++) {
         ivec2 tile = motion_rect.bottom_left + ivec2(x, y);
         if (is_inside_motion_line(tile, motion_line)) {
-          motion_blur_tile_indirection_store(tile_indirection_buf, MOTION_NEXT, tile, payload_nxt);
+          motion_blur_tile_indirection_store(
+              tile_indirection_buf, MOTION_NEXT, uvec2(tile), payload_nxt);
           /* FIXME: This is a bit weird, but for some reason, we need the store the same vector in
            * the motion next so that weighting in gather pass is better. */
-          motion_blur_tile_indirection_store(tile_indirection_buf, MOTION_PREV, tile, payload_prv);
+          motion_blur_tile_indirection_store(
+              tile_indirection_buf, MOTION_PREV, uvec2(tile), payload_prv);
         }
       }
     }

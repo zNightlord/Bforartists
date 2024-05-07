@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2018-2023 Blender Authors
+#
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 __all__ = (
@@ -16,7 +18,7 @@ def batch_for_shader(shader, type, content, *, indices=None):
     :arg content: Maps the name of the shader attribute with the data to fill the vertex buffer.
     :type content: dict
     :return: compatible batch
-    :rtype: :class:`gpu.types.Batch`
+    :rtype: :class:`gpu.types.GPUBatch`
     """
     from gpu.types import (
         GPUBatch,

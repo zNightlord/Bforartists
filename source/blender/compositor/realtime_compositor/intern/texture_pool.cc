@@ -1,4 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* SPDX-FileCopyrightText: 2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include <cstdint>
 
@@ -7,7 +9,7 @@
 #include "BLI_math_vector_types.hh"
 #include "BLI_vector.hh"
 
-#include "GPU_texture.h"
+#include "GPU_texture.hh"
 
 #include "COM_texture_pool.hh"
 
@@ -17,9 +19,7 @@ namespace blender::realtime_compositor {
 /** \name Texture Pool Key
  * \{ */
 
-TexturePoolKey::TexturePoolKey(int2 size, eGPUTextureFormat format) : size(size), format(format)
-{
-}
+TexturePoolKey::TexturePoolKey(int2 size, eGPUTextureFormat format) : size(size), format(format) {}
 
 TexturePoolKey::TexturePoolKey(const GPUTexture *texture)
 {
@@ -29,7 +29,7 @@ TexturePoolKey::TexturePoolKey(const GPUTexture *texture)
 
 uint64_t TexturePoolKey::hash() const
 {
-  return get_default_hash_3(size.x, size.y, format);
+  return get_default_hash(size.x, size.y, format);
 }
 
 bool operator==(const TexturePoolKey &a, const TexturePoolKey &b)
@@ -55,22 +55,6 @@ GPUTexture *TexturePool::acquire(int2 size, eGPUTextureFormat format)
 
   /* Otherwise, allocate a new texture. */
   return allocate_texture(size, format);
-}
-
-GPUTexture *TexturePool::acquire_color(int2 size)
-{
-  return acquire(size, GPU_RGBA16F);
-}
-
-GPUTexture *TexturePool::acquire_vector(int2 size)
-{
-  /* Vectors are 4D, and are thus stored in RGBA textures. */
-  return acquire(size, GPU_RGBA16F);
-}
-
-GPUTexture *TexturePool::acquire_float(int2 size)
-{
-  return acquire(size, GPU_R16F);
 }
 
 void TexturePool::release(GPUTexture *texture)

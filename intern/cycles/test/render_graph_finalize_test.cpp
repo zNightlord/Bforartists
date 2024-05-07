@@ -1,11 +1,13 @@
-/* SPDX-License-Identifier: Apache-2.0
- * Copyright 2011-2022 Blender Foundation */
+/* SPDX-FileCopyrightText: 2011-2022 Blender Foundation
+ *
+ * SPDX-License-Identifier: Apache-2.0 */
 
 #include "testing/mock_log.h"
 #include "testing/testing.h"
 
 #include "device/device.h"
 
+#include "scene/colorspace.h"
 #include "scene/scene.h"
 #include "scene/shader_graph.h"
 #include "scene/shader_nodes.h"
@@ -159,21 +161,33 @@ class RenderGraph : public testing::Test {
   ShaderGraph graph;
   ShaderGraphBuilder builder;
 
-  RenderGraph() : testing::Test(), builder(&graph)
-  {
-  }
+  RenderGraph() : testing::Test(), builder(&graph) {}
 
   virtual void SetUp()
   {
-    util_logging_start();
-    util_logging_verbosity_set(5);
+    /* The test is running outside of the typical application configuration when the OCIO is
+     * initialized prior to Cycles. Explicitly create the raw configuration to avoid the warning
+     * printed by the OCIO when accessing non-figured environment.
+     * Functionally it is the same as not doing this explicit call: the OCIO will warn and then do
+     * the same raw configuration. */
+    ColorSpaceManager::init_fallback_config();
 
     device_cpu = Device::create(device_info, stats, profiler);
     scene = new Scene(scene_params, device_cpu);
+
+    /* Initialize logging after the creation of the essential resources. This way the logging
+     * mock sink does not warn about uninteresting messages which happens prior to the setup of
+     * the actual mock sinks. */
+    util_logging_start();
+    util_logging_verbosity_set(5);
   }
 
   virtual void TearDown()
   {
+    /* Effectively disable logging, so that the next test suit starts in an environment which is
+     * not logging by default. */
+    util_logging_verbosity_set(0);
+
     delete scene;
     delete device_cpu;
   }
@@ -569,7 +583,7 @@ TEST_F(RenderGraph, constant_fold_part_mix_blend)
 
 /*
  * Tests:
- *  - NOT folding of MixRGB Sub with the same inputs and fac NOT 1.
+ *  - NOT folding of MixRGB Subtract with the same inputs and fac NOT 1.
  */
 TEST_F(RenderGraph, constant_fold_part_mix_sub_same_fac_bad)
 {
@@ -590,7 +604,7 @@ TEST_F(RenderGraph, constant_fold_part_mix_sub_same_fac_bad)
 
 /*
  * Tests:
- *  - Folding of MixRGB Sub with the same inputs and fac 1.
+ *  - Folding of MixRGB Subtract with the same inputs and fac 1.
  */
 TEST_F(RenderGraph, constant_fold_part_mix_sub_same_fac_1)
 {
@@ -686,7 +700,7 @@ TEST_F(RenderGraph, constant_fold_part_mix_add_0)
 }
 
 /*
- * Tests: partial folding for RGB Sub with known 0.
+ * Tests: partial folding for RGB Subtract with known 0.
  */
 TEST_F(RenderGraph, constant_fold_part_mix_sub_0)
 {
@@ -703,7 +717,7 @@ TEST_F(RenderGraph, constant_fold_part_mix_sub_0)
 }
 
 /*
- * Tests: partial folding for RGB Mul with known 1.
+ * Tests: partial folding for RGB Multiply with known 1.
  */
 TEST_F(RenderGraph, constant_fold_part_mix_mul_1)
 {
@@ -721,7 +735,7 @@ TEST_F(RenderGraph, constant_fold_part_mix_mul_1)
 }
 
 /*
- * Tests: partial folding for RGB Div with known 1.
+ * Tests: partial folding for RGB Divide with known 1.
  */
 TEST_F(RenderGraph, constant_fold_part_mix_div_1)
 {
@@ -738,7 +752,7 @@ TEST_F(RenderGraph, constant_fold_part_mix_div_1)
 }
 
 /*
- * Tests: partial folding for RGB Mul with known 0.
+ * Tests: partial folding for RGB Multiply with known 0.
  */
 TEST_F(RenderGraph, constant_fold_part_mix_mul_0)
 {
@@ -758,7 +772,7 @@ TEST_F(RenderGraph, constant_fold_part_mix_mul_0)
 }
 
 /*
- * Tests: partial folding for RGB Div with known 0.
+ * Tests: partial folding for RGB Divide with known 0.
  */
 TEST_F(RenderGraph, constant_fold_part_mix_div_0)
 {
@@ -1047,7 +1061,7 @@ TEST_F(RenderGraph, constant_fold_part_math_add_0)
 }
 
 /*
- * Tests: partial folding for Math Sub with known 0.
+ * Tests: partial folding for Math Subtract with known 0.
  */
 TEST_F(RenderGraph, constant_fold_part_math_sub_0)
 {
@@ -1062,7 +1076,7 @@ TEST_F(RenderGraph, constant_fold_part_math_sub_0)
 }
 
 /*
- * Tests: partial folding for Math Mul with known 1.
+ * Tests: partial folding for Math Multiply with known 1.
  */
 TEST_F(RenderGraph, constant_fold_part_math_mul_1)
 {
@@ -1077,7 +1091,7 @@ TEST_F(RenderGraph, constant_fold_part_math_mul_1)
 }
 
 /*
- * Tests: partial folding for Math Div with known 1.
+ * Tests: partial folding for Math Divide with known 1.
  */
 TEST_F(RenderGraph, constant_fold_part_math_div_1)
 {
@@ -1092,7 +1106,7 @@ TEST_F(RenderGraph, constant_fold_part_math_div_1)
 }
 
 /*
- * Tests: partial folding for Math Mul with known 0.
+ * Tests: partial folding for Math Multiply with known 0.
  */
 TEST_F(RenderGraph, constant_fold_part_math_mul_0)
 {
@@ -1108,7 +1122,7 @@ TEST_F(RenderGraph, constant_fold_part_math_mul_0)
 }
 
 /*
- * Tests: partial folding for Math Div with known 0.
+ * Tests: partial folding for Math Divide with known 0.
  */
 TEST_F(RenderGraph, constant_fold_part_math_div_0)
 {
@@ -1214,7 +1228,7 @@ TEST_F(RenderGraph, constant_fold_part_vecmath_add_0)
 }
 
 /*
- * Tests: partial folding for Vector Math Sub with known 0.
+ * Tests: partial folding for Vector Math Subtract with known 0.
  */
 TEST_F(RenderGraph, constant_fold_part_vecmath_sub_0)
 {
@@ -1278,7 +1292,7 @@ template<class T> void init_test_curve(array<T> &buffer, T start, T end, int ste
   buffer.resize(steps);
 
   for (int i = 0; i < steps; i++) {
-    buffer[i] = lerp(start, end, float(i) / (steps - 1));
+    buffer[i] = mix(start, end, float(i) / (steps - 1));
   }
 }
 

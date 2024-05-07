@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2011 Blender Foundation. */
+/* SPDX-FileCopyrightText: 2011 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "COM_ViewerNode.h"
 
@@ -22,16 +23,12 @@ void ViewerNode::convert_to_operations(NodeConverter &converter,
 
   NodeInput *image_socket = this->get_input_socket(0);
   NodeInput *alpha_socket = this->get_input_socket(1);
-  NodeInput *depth_socket = this->get_input_socket(2);
   Image *image = (Image *)this->get_bnode()->id;
   ImageUser *image_user = (ImageUser *)this->get_bnode()->storage;
   ViewerOperation *viewer_operation = new ViewerOperation();
   viewer_operation->set_bnodetree(context.get_bnodetree());
   viewer_operation->set_image(image);
   viewer_operation->set_image_user(image_user);
-  viewer_operation->set_chunk_order((ChunkOrdering)editor_node->custom1);
-  viewer_operation->setCenterX(editor_node->custom3);
-  viewer_operation->setCenterY(editor_node->custom4);
   /* alpha socket gives either 1 or a custom alpha value if "use alpha" is enabled */
   viewer_operation->set_use_alpha_input(ignore_alpha || alpha_socket->is_linked());
   viewer_operation->set_render_data(context.get_render_data());
@@ -57,7 +54,6 @@ void ViewerNode::convert_to_operations(NodeConverter &converter,
   else {
     converter.map_input_socket(alpha_socket, viewer_operation->get_input_socket(1));
   }
-  converter.map_input_socket(depth_socket, viewer_operation->get_input_socket(2));
 
   converter.add_node_input_preview(image_socket);
 

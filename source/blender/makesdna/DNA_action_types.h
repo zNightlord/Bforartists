@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2001-2002 NaN Holding BV. All rights reserved. */
+/* SPDX-FileCopyrightText: 2001-2002 NaN Holding BV. All rights reserved.
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup DNA
@@ -12,20 +13,28 @@
 #pragma once
 
 #include "DNA_ID.h"
+#include "DNA_armature_types.h"
 #include "DNA_listBase.h"
-#include "DNA_session_uuid_types.h"
+#include "DNA_session_uid_types.h"
 #include "DNA_userdef_types.h" /* ThemeWireColor */
 #include "DNA_vec_types.h"
 #include "DNA_view2d_types.h"
-
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 struct Collection;
 struct GHash;
 struct Object;
 struct SpaceLink;
+#ifdef __cplusplus
+namespace blender::gpu {
+class VertBuf;
+class Batch;
+}  // namespace blender::gpu
+using GPUBatchHandle = blender::gpu::Batch;
+using GPUVertBufHandle = blender::gpu::VertBuf;
+#else
+typedef struct GPUBatchHandle GPUBatchHandle;
+typedef struct GPUVertBufHandle GPUVertBufHandle;
+#endif
 
 /* ************************************************ */
 /* Visualization */
@@ -33,7 +42,7 @@ struct SpaceLink;
 /* Motion Paths ------------------------------------ */
 /* (used for Pose Channels and Objects) */
 
-/* Data point for motion path (mpv) */
+/** Data point for motion path (`mpv`). */
 typedef struct bMotionPathVert {
   /** Coordinates of point in 3D-space. */
   float co[3];
@@ -41,7 +50,7 @@ typedef struct bMotionPathVert {
   int flag;
 } bMotionPathVert;
 
-/* bMotionPathVert->flag */
+/** #bMotionPathVert::flag */
 typedef enum eMotionPathVert_Flag {
   /* vert is selected */
   MOTIONPATH_VERT_SEL = (1 << 0),
@@ -59,22 +68,24 @@ typedef struct bMotionPath {
   /** The number of cached verts. */
   int length;
 
-  /** For drawing paths, the start frame number. */
+  /** For drawing paths, the start frame number. Inclusive. */
   int start_frame;
-  /** For drawing paths, the end frame number. */
+  /** For drawing paths, the end frame number. Exclusive. */
   int end_frame;
 
   /** Optional custom color. */
   float color[3];
+  float color_post[3];
   /** Line thickness. */
   int line_thickness;
   /** Baking settings - eMotionPath_Flag. */
   int flag;
 
+  char _pad2[4];
   /* Used for drawing. */
-  struct GPUVertBuf *points_vbo;
-  struct GPUBatch *batch_line;
-  struct GPUBatch *batch_points;
+  GPUVertBufHandle *points_vbo;
+  GPUBatchHandle *batch_line;
+  GPUBatchHandle *batch_points;
   void *_pad;
 } bMotionPath;
 
@@ -88,6 +99,8 @@ typedef enum eMotionPath_Flag {
   MOTIONPATH_FLAG_CUSTOM = (1 << 2),
   /* Draw lines or only points */
   MOTIONPATH_FLAG_LINES = (1 << 3),
+  /* Bake to scene camera. */
+  MOTIONPATH_FLAG_BAKE_CAMERA = (1 << 4),
 } eMotionPath_Flag;
 
 /* Visualization General --------------------------- */
@@ -113,7 +126,7 @@ typedef struct bAnimVizSettings {
   short path_bakeflag;
   char _pad[4];
 
-  /** Start and end frames of path-calculation range. */
+  /** Start and end frames of path-calculation range. Both are inclusive. */
   int path_sf, path_ef;
   /** Number of frames before/after current frame to show. */
   int path_bc, path_ac;
@@ -165,6 +178,8 @@ typedef enum eMotionPaths_BakeFlag {
   /** motion paths exist for AnimVizSettings instance - set when calc for first time,
    * and unset when clearing */
   MOTIONPATH_BAKE_HAS_PATHS = (1 << 2),
+  /* Bake the path in camera space. */
+  MOTIONPATH_BAKE_CAMERA_SPACE = (1 << 3),
 } eMotionPath_BakeFlag;
 
 /* runtime */
@@ -182,14 +197,34 @@ typedef struct bPoseChannelDrawData {
 struct DualQuat;
 struct Mat4;
 
+/* Describes a plane in pose space that delimits B-Bone segments. */
+typedef struct bPoseChannel_BBoneSegmentBoundary {
+  /* Boundary data in pose space. */
+  float point[3];
+  float plane_normal[3];
+  /* Dot product of point and plane_normal to speed up distance computation. */
+  float plane_offset;
+
+  /**
+   * Inverse width of the smoothing at this level in head-tail space.
+   * Optimization: this value is actually indexed by BSP depth (0 to `bsp_depth - 1`), not joint
+   * index. It's put here to avoid allocating a separate array by utilizing the padding space.
+   */
+  float depth_scale;
+} bPoseChannel_BBoneSegmentBoundary;
+
 typedef struct bPoseChannel_Runtime {
-  SessionUUID session_uuid;
+  SessionUID session_uid;
 
   /* Cached dual quaternion for deformation. */
   struct DualQuat deform_dual_quat;
 
   /* B-Bone shape data: copy of the segment count for validation. */
   int bbone_segments;
+
+  /* Inverse of the total length of the segment polyline. */
+  float bbone_arc_length_reciprocal;
+  char _pad1[4];
 
   /* Rest and posed matrices for segments. */
   struct Mat4 *bbone_rest_mats;
@@ -198,6 +233,10 @@ typedef struct bPoseChannel_Runtime {
   /* Delta from rest to pose in matrix and DualQuat form. */
   struct Mat4 *bbone_deform_mats;
   struct DualQuat *bbone_dual_quats;
+
+  /* Segment boundaries for curved mode. */
+  struct bPoseChannel_BBoneSegmentBoundary *bbone_segment_boundaries;
+  void *_pad;
 } bPoseChannel_Runtime;
 
 /* ************************************************ */
@@ -212,6 +251,8 @@ typedef struct bPoseChannel_Runtime {
  * with respect to the rest-position of #bArmature bones.
  */
 typedef struct bPoseChannel {
+  DNA_DEFINE_CXX_METHODS(bPoseChannel)
+
   struct bPoseChannel *next, *prev;
 
   /** User-Defined Properties on this PoseChannel. */
@@ -290,13 +331,14 @@ typedef struct bPoseChannel {
   char _pad[2];
 
   /**
-   * Matrix result of location/rotation/scale components & constraints.
+   * Matrix result of location/rotation/scale components, and evaluation of
+   * animation data and constraints.
+   *
    * This is the dynamic component of `pose_mat` (without #Bone.arm_mat).
    */
   float chan_mat[4][4];
   /**
-   * Constraints accumulate here. in the end, `pose_mat = bone->arm_mat * chan_mat`
-   * this matrix is object space.
+   * Channel matrix in the armature object space, i.e. `pose_mat = bone->arm_mat * chan_mat`.
    */
   float pose_mat[4][4];
   /** For display, pose_mat with bone length applied. */
@@ -348,6 +390,8 @@ typedef struct bPoseChannel {
   /** Points to an original pose channel. */
   struct bPoseChannel *orig_pchan;
 
+  BoneColor color; /* MUST be named the same as in Bone and EditBone structs. */
+
   /** Runtime data (keep last). */
   struct bPoseChannel_Runtime runtime;
 } bPoseChannel;
@@ -386,16 +430,15 @@ typedef enum ePchan_Flag {
 
 /* PoseChannel constflag (constraint detection) */
 typedef enum ePchan_ConstFlag {
-  PCHAN_HAS_IK = (1 << 0),
-  PCHAN_HAS_CONST = (1 << 1),
-  /* only used for drawing Posemode, not stored in channel */
+  PCHAN_HAS_IK = (1 << 0),           /* Has IK constraint. */
+  PCHAN_HAS_CONST = (1 << 1),        /* Has any constraint. */
   /* PCHAN_HAS_ACTION = (1 << 2), */ /* UNUSED */
-  PCHAN_HAS_TARGET = (1 << 3),
-  /* only for drawing Posemode too */
+  PCHAN_HAS_NO_TARGET = (1 << 3),    /* Has (spline) IK constraint but no target is set. */
   /* PCHAN_HAS_STRIDE = (1 << 4), */ /* UNUSED */
-  /* spline IK */
-  PCHAN_HAS_SPLINEIK = (1 << 5),
+  PCHAN_HAS_SPLINEIK = (1 << 5),     /* Has Spline IK constraint. */
+  PCHAN_INFLUENCED_BY_IK = (1 << 6), /* Is part of a (non-spline) IK chain. */
 } ePchan_ConstFlag;
+ENUM_OPERATORS(ePchan_ConstFlag, PCHAN_INFLUENCED_BY_IK);
 
 /* PoseChannel->ikflag */
 typedef enum ePchan_IkFlag {
@@ -440,7 +483,7 @@ typedef enum ePchan_BBoneFlag {
 typedef enum eRotationModes {
   /* quaternion rotations (default, and for older Blender versions) */
   ROT_MODE_QUAT = 0,
-  /* euler rotations - keep in sync with enum in BLI_math.h */
+  /* euler rotations - keep in sync with enum in BLI_math_rotation.h */
   /** Blender 'default' (classic) - must be as 1 to sync with BLI_math_rotation.h defines */
   ROT_MODE_EUL = 1,
   ROT_MODE_XYZ = 1,
@@ -566,6 +609,11 @@ typedef enum eItasc_Flags {
   ITASC_INITIAL_REITERATION = (1 << 1),
   ITASC_REITERATION = (1 << 2),
   ITASC_SIMULATION = (1 << 3),
+  /**
+   * Set this flag to always translate root bones (i.e. bones without a parent) to (0, 0, 0).
+   * This was the pre-3.6 behavior, and this flag was introduced for backward compatibility.
+   */
+  ITASC_TRANSLATE_ROOT_BONES = (1 << 4),
 } eItasc_Flags;
 
 /* bItasc->solver */
@@ -579,7 +627,8 @@ typedef enum eItasc_Solver {
 
 /* Groups -------------------------------------- */
 
-/* Action-Channel Group (agrp)
+/**
+ * Action-Channel Group (agrp)
  *
  * These are stored as a list per-Action, and are only used to
  * group that Action's channels in an Animation Editor.
@@ -643,12 +692,13 @@ typedef enum eActionGroup_Flag {
 
 /* Actions -------------------------------------- */
 
-/* Action - reusable F-Curve 'bag'  (act)
+/**
+ * Action - reusable F-Curve 'bag'  (act)
  *
- * This contains F-Curves that may affect settings from more than one ID blocktype and/or datablock
- * (i.e. sub-data linked/used directly to the ID block that the animation data is linked to),
- * but with the restriction that the other unrelated data (i.e. data that is not directly used or
- * linked to by the source ID block).
+ * This contains F-Curves that may affect settings from more than one ID block-type and/or
+ * data-block (i.e. sub-data linked/used directly to the ID block that the animation data is linked
+ * to), but with the restriction that the other unrelated data (i.e. data that is not directly used
+ * or linked to by the source ID block).
  *
  * It serves as a 'unit' of reusable animation information (i.e. keyframes/motion data),
  * that affects a group of related settings (as defined by the user).
@@ -687,7 +737,7 @@ typedef struct bAction {
   PreviewImage *preview;
 } bAction;
 
-/* Flags for the action */
+/** Flags for the action. */
 typedef enum eAction_Flags {
   /* flags for displaying in UI */
   ACT_COLLAPSED = (1 << 0),
@@ -706,7 +756,7 @@ typedef enum eAction_Flags {
 /* ************************************************ */
 /* Action/Dopesheet Editor */
 
-/* Storage for Dopesheet/Grease-Pencil Editor data */
+/** Storage for Dopesheet/Grease-Pencil Editor data. */
 typedef struct bDopeSheet {
   /** Currently ID_SCE (for Dopesheet), and ID_SC (for Grease Pencil). */
   ID *source;
@@ -729,7 +779,7 @@ typedef struct bDopeSheet {
   int renameIndex;
 } bDopeSheet;
 
-/* DopeSheet filter-flag */
+/** DopeSheet filter-flag. */
 typedef enum eDopeSheet_FilterFlag {
   /* general filtering */
   /** only include channels relating to selected data */
@@ -795,6 +845,9 @@ typedef enum eDopeSheet_FilterFlag2 {
   ADS_FILTER_NOHAIR = (1 << 3),
   ADS_FILTER_NOPOINTCLOUD = (1 << 4),
   ADS_FILTER_NOVOLUME = (1 << 5),
+
+  /** Include working drivers with variables using their fallback values into Only Show Errors. */
+  ADS_FILTER_DRIVER_FALLBACK_AS_ERROR = (1 << 6),
 } eDopeSheet_FilterFlag2;
 
 /* DopeSheet general flags */
@@ -844,8 +897,8 @@ typedef struct SpaceAction {
   char mode;
   /* Storage for sub-space types. */
   char mode_prev;
-  /** Automatic keyframe snapping mode. */
-  char autosnap;
+  /* Snapping now lives on the Scene. */
+  char autosnap DNA_DEPRECATED;
   /** (eTimeline_Cache_Flag). */
   char cache_display;
   char _pad1[6];
@@ -908,10 +961,8 @@ typedef enum eAnimEdit_Context {
   SACTCONT_TIMELINE = 6,
 } eAnimEdit_Context;
 
-/* SpaceAction AutoSnap Settings (also used by other Animation Editors) */
+/* Old snapping enum that is only needed because of the versioning code. */
 typedef enum eAnimEdit_AutoSnap {
-  /* no auto-snap */
-  SACTSNAP_OFF = 0,
   /* snap to 1.0 frame/second intervals */
   SACTSNAP_STEP = 1,
   /* snap to actual frames/seconds (nla-action time) */
@@ -922,7 +973,7 @@ typedef enum eAnimEdit_AutoSnap {
   SACTSNAP_SECOND = 4,
   /* snap to 1.0 second increments */
   SACTSNAP_TSTEP = 5,
-} eAnimEdit_AutoSnap;
+} eAnimEdit_AutoSnap DNA_DEPRECATED;
 
 /* SAction->cache_display */
 typedef enum eTimeline_Cache_Flag {
@@ -933,6 +984,7 @@ typedef enum eTimeline_Cache_Flag {
   TIME_CACHE_SMOKE = (1 << 4),
   TIME_CACHE_DYNAMICPAINT = (1 << 5),
   TIME_CACHE_RIGIDBODY = (1 << 6),
+  TIME_CACHE_SIMULATION_NODES = (1 << 7),
 } eTimeline_Cache_Flag;
 
 /* ************************************************ */
@@ -966,7 +1018,3 @@ typedef struct bActionChannel {
   /** Temporary setting - may be used to indicate group that channel belongs to during syncing. */
   int temp;
 } bActionChannel;
-
-#ifdef __cplusplus
-}
-#endif

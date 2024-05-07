@@ -1,11 +1,14 @@
+/* SPDX-FileCopyrightText: 2022-2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /**
  * Debug print implementation for shaders.
  *
- * `print()`:
+ * `drw_print()`:
  *   Log variable or strings inside the viewport.
  *   Using a unique non string argument will print the variable name with it.
- *   Concatenate by using multiple arguments. i.e: `print("Looped ", n, "times.")`.
+ *   Concatenate by using multiple arguments. i.e: `drw_print("Looped ", n, "times.")`.
  * `drw_print_no_endl()`:
  *   Same as `print()` but does not finish the line.
  * `drw_print_value()`:
@@ -26,9 +29,11 @@
  * behavior. Uncomment DISABLE_DEBUG_SHADER_drw_print_BARRIER to remove the barriers if that
  * happens. But then you are limited to a single invocation output.
  *
- * IMPORTANT: All of these are copied to the CPU debug libs (draw_debug.cc). They need to be kept
- * in sync to write the same data.
+ * IMPORTANT: All of these are copied to the CPU debug libraries (draw_debug.cc).
+ * They need to be kept in sync to write the same data.
  */
+
+#ifdef DRW_DEBUG_PRINT
 
 /** Global switch option when you want to silence all prints from all shaders at once. */
 bool drw_debug_print_enable = true;
@@ -95,22 +100,22 @@ void drw_print_char4(uint data)
  * was observed on both MESA & AMDGPU-PRO.
  */
 /* Using ascii char code. Expect char1 to be less or equal to 0xFF. Appends chars to the right. */
-void drw_print_append_char(uint char1, inout uint char4)
+void drw_print_append_char(uint char_1, inout uint char_4)
 {
-  char4 = (char4 << 8u) | char1;
+  char_4 = (char_4 << 8u) | char_1;
 }
 
-void drw_print_append_digit(uint digit, inout uint char4)
+void drw_print_append_digit(uint digit, inout uint char_4)
 {
   const uint char_A = 0x41u;
   const uint char_0 = 0x30u;
   bool is_hexadecimal = digit > 9u;
-  char4 = (char4 << 8u) | (is_hexadecimal ? (char_A + digit - 10u) : (char_0 + digit));
+  char_4 = (char_4 << 8u) | (is_hexadecimal ? (char_A + digit - 10u) : (char_0 + digit));
 }
 
-void drw_print_append_space(inout uint char4)
+void drw_print_append_space(inout uint char_4)
 {
-  char4 = (char4 << 8u) | 0x20u;
+  char_4 = (char_4 << 8u) | 0x20u;
 }
 
 void drw_print_value_binary(uint value)
@@ -202,6 +207,8 @@ void drw_print_value(int value)
   drw_print_value_uint(uint(abs(value)), false, (value < 0), false);
 }
 
+#  ifndef GPU_METAL
+
 void drw_print_value(bool value)
 {
   if (value) {
@@ -212,7 +219,9 @@ void drw_print_value(bool value)
   }
 }
 
-/* NOTE(@fclem): This is homebrew and might not be 100% accurate (accuracy has
+#  endif
+
+/* NOTE(@fclem): This is home-brew and might not be 100% accurate (accuracy has
  * not been tested and might dependent on compiler implementation). If unsure,
  * use drw_print_value_hex and transcribe the value manually with another tool. */
 void drw_print_value(float val)
@@ -241,6 +250,12 @@ void drw_print_value(float val)
   float exponent = floor(log(abs(val)) / log(10.0));
   bool display_exponent = exponent >= (significant_digits) ||
                           exponent <= (-significant_digits + 1.0);
+
+  if (exponent < -1.0) {
+    /* FIXME(fclem): Display of values with exponent from -1 to -5 is broken. Force scientific
+     * notation in these cases. */
+    display_exponent = true;
+  }
 
   float int_significant_digits = min(exponent + 1.0, significant_digits);
   float dec_significant_digits = max(0.0, significant_digits - int_significant_digits);
@@ -286,8 +301,7 @@ void drw_print_value(float val)
   }
   /* Decimal part. */
   value = uint(abs(dec_part));
-#if 0 /* We don't do that because it makes unstable values really hard to \
-         read. */
+#  if 0 /* We don't do that because it makes unstable values really hard to read. */
   /* Trim trailing zeros. */
   while ((value % base) == 0u) {
     value /= base;
@@ -295,7 +309,7 @@ void drw_print_value(float val)
       break;
     }
   }
-#endif
+#  endif
   if (value != 0u) {
     for (int i = 0; value != 0u || i == 0; i++, value /= base) {
       drw_print_append_digit(value % base, digits[digit / 4u]);
@@ -396,3 +410,14 @@ void drw_print_value(mat4 value)
   drw_print("  ", value[3]);
   drw_print(")");
 }
+
+void drw_print_value(mat3 value)
+{
+  drw_print("mat3x3(");
+  drw_print("  ", value[0]);
+  drw_print("  ", value[1]);
+  drw_print("  ", value[2]);
+  drw_print(")");
+}
+
+#endif

@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2009-2023 Blender Authors
+#
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 from bpy.types import Operator
@@ -10,46 +12,58 @@ STATUS_OK = (1 << 0)
 STATUS_ERR_ACTIVE_FACE = (1 << 1)
 STATUS_ERR_NOT_SELECTED = (1 << 2)
 STATUS_ERR_NOT_QUAD = (1 << 3)
+STATUS_ERR_MISSING_UV_LAYER = (1 << 4)
+STATUS_ERR_NO_FACES_SELECTED = (1 << 5)
 
 
-def extend(obj, EXTEND_MODE):
+def extend(obj, EXTEND_MODE, use_uv_selection):
     import bmesh
+    from .uvcalc_transform import is_face_uv_selected
+
     me = obj.data
 
     bm = bmesh.from_edit_mesh(me)
 
-    faces = [f for f in bm.faces if f.select and len(f.verts) == 4]
-    if not faces:
-        return 0
-
     f_act = bm.faces.active
 
     if f_act is None:
-        return STATUS_ERR_ACTIVE_FACE
+        return STATUS_ERR_ACTIVE_FACE  # Active face cannot be none.
     if not f_act.select:
-        return STATUS_ERR_NOT_SELECTED
-    elif len(f_act.verts) != 4:
-        return STATUS_ERR_NOT_QUAD
+        return STATUS_ERR_NOT_SELECTED  # Active face is not selected.
+    if len(f_act.verts) != 4:
+        return STATUS_ERR_NOT_QUAD  # Active face is not a quad
+    uv_act = bm.loops.layers.uv.active  # Always use the active UV layer.
+    if uv_act is None:
+        return STATUS_ERR_MISSING_UV_LAYER  # Object's mesh doesn't have any UV layers.
 
-    # Script will fail without UVs.
-    if not me.uv_layers:
-        me.uv_layers.new()
+    if use_uv_selection:
+        faces = [
+            f for f in bm.faces
+            if f.select and len(f.verts) == 4 and is_face_uv_selected(f, uv_act, False)
+        ]
+    else:
+        faces = [
+            f for f in bm.faces
+            if f.select and len(f.verts) == 4
+        ]
 
-    uv_act = bm.loops.layers.uv.active
+    if not faces:
+        return STATUS_ERR_NO_FACES_SELECTED
 
-    # our own local walker
+    # Our own local walker.
+
     def walk_face_init(faces, f_act):
-        # first tag all faces True (so we don't uvmap them)
+        # First tag all faces True (so we don't UV-map them).
         for f in bm.faces:
             f.tag = True
-        # then tag faces arg False
+        # Then tag faces argument False.
         for f in faces:
             f.tag = False
-        # tag the active face True since we begin there
+        # Tag the active face True since we begin there.
         f_act.tag = True
 
     def walk_face(f):
-        # all faces in this list must be tagged
+        # All faces in this list must be tagged.
         f.tag = True
         faces_a = [f]
         faces_b = []
@@ -65,7 +79,7 @@ def extend(obj, EXTEND_MODE):
                             yield (f, l, f_other)
                             f_other.tag = True
                             faces_b.append(f_other)
-            # swap
+            # Swap.
             faces_a, faces_b = faces_b, faces_a
             faces_b.clear()
 
@@ -79,9 +93,9 @@ def extend(obj, EXTEND_MODE):
             e = l.edge
             yield e
 
-            # don't step past non-manifold edges
+            # Don't step past non-manifold edges.
             if e.is_manifold:
-                # welk around the quad and then onto the next face
+                # Walk around the quad and then onto the next face.
                 l = l.link_loop_radial_next
                 if len(l.face.verts) == 4:
                     l = l.link_loop_next.link_loop_next
@@ -122,9 +136,9 @@ def extend(obj, EXTEND_MODE):
         #  |    (f)    |
         #  |(3)        |(2)
         #  +-----------+
-        #  copy from this face to the one above.
+        #  Copy from this face to the one above.
 
-        # get the other loops
+        # Get the other loops.
         l_next = l_prev.link_loop_radial_next
         if l_next.vert != l_prev.vert:
             l_b[1] = l_next
@@ -160,23 +174,27 @@ def extend(obj, EXTEND_MODE):
         else:
             fac = 1.0
 
-        extrapolate_uv(fac,
-                       l_a_uv[3], l_a_uv[0],
-                       l_b_uv[3], l_b_uv[0])
+        extrapolate_uv(
+            fac,
+            l_a_uv[3], l_a_uv[0],
+            l_b_uv[3], l_b_uv[0],
+        )
 
-        extrapolate_uv(fac,
-                       l_a_uv[2], l_a_uv[1],
-                       l_b_uv[2], l_b_uv[1])
+        extrapolate_uv(
+            fac,
+            l_a_uv[2], l_a_uv[1],
+            l_b_uv[2], l_b_uv[1],
+        )
 
     # -------------------------------------------
-    # Calculate average length per loop if needed
+    # Calculate average length per loop if needed.
 
     if EXTEND_MODE == 'LENGTH_AVERAGE':
         bm.edges.index_update()
         edge_lengths = [None] * len(bm.edges)
 
         for f in faces:
-            # we know its a quad
+            # We know it's a quad.
             l_quad = f.loops[:]
             l_pair_a = (l_quad[0], l_quad[2])
             l_pair_b = (l_quad[1], l_quad[3])
@@ -210,6 +228,10 @@ def extend(obj, EXTEND_MODE):
 
 
 def main(context, operator):
+    use_uv_selection = True
+    if context.space_data and context.space_data.type == 'VIEW_3D':
+        use_uv_selection = False  # When called from the 3D editor, UV selection is ignored.
+
     num_meshes = 0
     num_errors = 0
     status = 0
@@ -218,7 +240,7 @@ def main(context, operator):
     for ob in ob_list:
         num_meshes += 1
 
-        ret = extend(ob, operator.properties.mode)
+        ret = extend(ob, operator.properties.mode, use_uv_selection)
         if ret != STATUS_OK:
             num_errors += 1
             status |= ret
@@ -228,6 +250,10 @@ def main(context, operator):
             operator.report({'ERROR'}, "Active face must be a quad")
         elif status & STATUS_ERR_NOT_SELECTED:
             operator.report({'ERROR'}, "Active face not selected")
+        elif status & STATUS_ERR_NO_FACES_SELECTED:
+            operator.report({'ERROR'}, "No selected faces")
+        elif status & STATUS_ERR_MISSING_UV_LAYER:
+            operator.report({'ERROR'}, "No UV layers")
         else:
             assert status & STATUS_ERR_ACTIVE_FACE != 0
             operator.report({'ERROR'}, "No active face")

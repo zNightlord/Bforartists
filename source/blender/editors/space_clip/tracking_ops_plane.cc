@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2011 Blender Foundation. All rights reserved. */
+/* SPDX-FileCopyrightText: 2011 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup spclip
@@ -10,22 +11,23 @@
 #include "DNA_screen_types.h"
 #include "DNA_space_types.h"
 
-#include "BLI_math.h"
+#include "BLI_math_geom.h"
+#include "BLI_math_vector.h"
 #include "BLI_utildefines.h"
 
-#include "BKE_context.h"
-#include "BKE_report.h"
+#include "BKE_context.hh"
+#include "BKE_report.hh"
 #include "BKE_tracking.h"
 
-#include "DEG_depsgraph.h"
+#include "DEG_depsgraph.hh"
 
-#include "WM_api.h"
-#include "WM_types.h"
+#include "WM_api.hh"
+#include "WM_types.hh"
 
-#include "ED_clip.h"
+#include "ED_clip.hh"
 
-#include "clip_intern.h"
-#include "tracking_ops_intern.h"
+#include "clip_intern.hh"
+#include "tracking_ops_intern.hh"
 
 /********************** Create plane track operator *********************/
 
@@ -57,7 +59,7 @@ static int create_plane_track_tracks_exec(bContext *C, wmOperator *op)
    */
   BKE_tracking_track_plane_from_existing_motion(plane_track, framenr);
 
-  DEG_id_tag_update(&clip->id, ID_RECALC_COPY_ON_WRITE);
+  DEG_id_tag_update(&clip->id, ID_RECALC_SYNC_TO_EVAL);
   WM_event_add_notifier(C, NC_MOVIECLIP | NA_EDITED, clip);
 
   return OPERATOR_FINISHED;
@@ -80,7 +82,7 @@ void CLIP_OT_create_plane_track(wmOperatorType *ot)
 
 /********************** Slide plane marker corner operator *********************/
 
-typedef struct SlidePlaneMarkerData {
+struct SlidePlaneMarkerData {
   int launch_event;
   MovieTrackingPlaneTrack *plane_track;
   MovieTrackingPlaneMarker *plane_marker;
@@ -91,7 +93,7 @@ typedef struct SlidePlaneMarkerData {
   float previous_corner[2];
   float old_corner[2];
   bool accurate;
-} SlidePlaneMarkerData;
+};
 
 static MovieTrackingPlaneTrack *tracking_plane_marker_check_slide(bContext *C,
                                                                   const wmEvent *event,
@@ -110,7 +112,8 @@ static MovieTrackingPlaneTrack *tracking_plane_marker_check_slide(bContext *C,
   const PlaneTrackPick track_pick = ed_tracking_pick_plane_track(&options, C, co);
 
   if (ed_tracking_plane_track_pick_empty(&track_pick) ||
-      !ed_tracking_plane_track_pick_can_slide(&track_pick)) {
+      !ed_tracking_plane_track_pick_can_slide(&track_pick))
+  {
     return nullptr;
   }
 
@@ -289,7 +292,7 @@ static int slide_plane_marker_modal(bContext *C, wmOperator *op, const wmEvent *
       data->previous_mval[1] = event->mval[1];
       copy_v2_v2(data->previous_corner, data->corner);
 
-      DEG_id_tag_update(&clip->id, ID_RECALC_COPY_ON_WRITE);
+      DEG_id_tag_update(&clip->id, ID_RECALC_SYNC_TO_EVAL);
       WM_event_add_notifier(C, NC_MOVIECLIP | NA_EDITED, nullptr);
 
       break;
@@ -306,7 +309,7 @@ static int slide_plane_marker_modal(bContext *C, wmOperator *op, const wmEvent *
 
         clip_tracking_show_cursor(C);
 
-        DEG_id_tag_update(&clip->id, ID_RECALC_COPY_ON_WRITE);
+        DEG_id_tag_update(&clip->id, ID_RECALC_SYNC_TO_EVAL);
         WM_event_add_notifier(C, NC_MOVIECLIP | NA_EDITED, clip);
 
         return OPERATOR_FINISHED;

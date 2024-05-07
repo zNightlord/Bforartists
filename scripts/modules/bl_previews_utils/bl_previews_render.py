@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2015-2023 Blender Authors
+#
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 # Populate a template file (POT format currently) from Blender RNA/py/C data.
@@ -28,7 +30,7 @@ def rna_backup_gen(data, include_props=None, exclude_props=None, root=()):
     # only writable properties...
     for p in data.bl_rna.properties:
         pid = p.identifier
-        if pid == "rna_type" or pid == "original":
+        if pid in {"rna_type", "original"}:
             continue
         path = root + (pid,)
         if include_props is not None and path not in include_props:
@@ -68,7 +70,7 @@ def do_previews(do_objects, do_collections, do_scenes, do_data_intern):
         if engine == '__SCENE':
             backup_scene, backup_world, backup_camera, backup_light, backup_camera_data, backup_light_data = [()] * 6
             scene = bpy.context.window.scene
-            exclude_props = {('world',), ('camera',), ('tool_settings',), ('preview',)}
+            exclude_props = {("world",), ("camera",), ("tool_settings",), ("preview",)}
             backup_scene = tuple(rna_backup_gen(scene, exclude_props=exclude_props))
             world = scene.world
             camera = scene.camera
@@ -103,7 +105,6 @@ def do_previews(do_objects, do_collections, do_scenes, do_data_intern):
             scene.collection.objects.link(camera)
 
             light.rotation_euler = Euler((0.7853981852531433, 0.0, 1.7453292608261108), 'XYZ')  # (45, 0, 100)
-            light_data.falloff_type = 'CONSTANT'
             light_data.spot_size = 1.0471975803375244  # 60
             scene.collection.objects.link(light)
 
@@ -151,8 +152,8 @@ def do_previews(do_objects, do_collections, do_scenes, do_data_intern):
                 scene = None
             else:
                 rna_backup_restore(scene, render_context.backup_scene)
-        except Exception as e:
-            print("ERROR:", e)
+        except BaseException as ex:
+            print("ERROR:", ex)
             success = False
 
         if render_context.world is not None:
@@ -165,8 +166,8 @@ def do_previews(do_objects, do_collections, do_scenes, do_data_intern):
                     bpy.data.worlds.remove(world)
                 else:
                     rna_backup_restore(world, render_context.backup_world)
-            except Exception as e:
-                print("ERROR:", e)
+            except BaseException as ex:
+                print("ERROR:", ex)
                 success = False
 
         if render_context.camera:
@@ -183,8 +184,8 @@ def do_previews(do_objects, do_collections, do_scenes, do_data_intern):
                     rna_backup_restore(camera, render_context.backup_camera)
                     rna_backup_restore(bpy.data.cameras[render_context.camera_data, None],
                                        render_context.backup_camera_data)
-            except Exception as e:
-                print("ERROR:", e)
+            except BaseException as ex:
+                print("ERROR:", ex)
                 success = False
 
         if render_context.light:
@@ -200,16 +201,16 @@ def do_previews(do_objects, do_collections, do_scenes, do_data_intern):
                     rna_backup_restore(light, render_context.backup_light)
                     rna_backup_restore(bpy.data.lights[render_context.light_data,
                                                        None], render_context.backup_light_data)
-            except Exception as e:
-                print("ERROR:", e)
+            except BaseException as ex:
+                print("ERROR:", ex)
                 success = False
 
         try:
             image = bpy.data.images[render_context.image, None]
             image.user_clear()
             bpy.data.images.remove(image)
-        except Exception as e:
-            print("ERROR:", e)
+        except BaseException as ex:
+            print("ERROR:", ex)
             success = False
 
         return success
@@ -343,7 +344,7 @@ def do_previews(do_objects, do_collections, do_scenes, do_data_intern):
                 ob.hide_render = False
             bpy.context.view_layer.update()
 
-            preview_render_do(render_context, 'objects', root.name, objects)
+            preview_render_do(render_context, "objects", root.name, objects)
 
             # XXX Hyper Super Uber Suspicious Hack!
             #     Without this, on windows build, script excepts with following message:
@@ -390,7 +391,7 @@ def do_previews(do_objects, do_collections, do_scenes, do_data_intern):
 
             offset_matrix = Matrix.Translation(grp.instance_offset).inverted()
 
-            preview_render_do(render_context, 'collections', grp.name, objects, offset_matrix)
+            preview_render_do(render_context, "collections", grp.name, objects, offset_matrix)
 
             scene = bpy.data.scenes[render_context.scene, None]
             scene.collection.objects.unlink(bpy.data.objects[grp_obname, None])
@@ -413,22 +414,26 @@ def do_previews(do_objects, do_collections, do_scenes, do_data_intern):
                 objects = tuple((ob.name, ob.library.filepath if ob.library else None) for ob in scene.objects
                                 if (not ob.hide_render) and (ob.type in OBJECT_TYPES_RENDER))
 
-            preview_render_do(render_context, 'scenes', scene.name, objects)
+            preview_render_do(render_context, "scenes", scene.name, objects)
 
             if not render_context_delete(render_context):
                 do_save = False
 
     bpy.context.window.scene = bpy.data.scenes[prev_scenename, None]
     if do_save:
-        print("Saving %s..." % bpy.data.filepath)
+        print("Saving {:s}...".format(bpy.data.filepath))
         try:
             bpy.ops.wm.save_mainfile()
-        except Exception as e:
-            # Might fail in some odd cases, like e.g. in regression files we have glsl/ram_glsl.blend which
-            # references an inexistent texture... Better not break in this case, just spit error to console.
-            print("ERROR:", e)
+        except BaseException as ex:
+            # Might fail in some odd cases, like e.g. in regression files we have `glsl/ram_glsl.blend` which
+            # references an nonexistent texture. Better not break in this case, just spit error to console.
+            print("ERROR:", ex)
     else:
-        print("*NOT* Saving %s, because some error(s) happened while deleting temp render data..." % bpy.data.filepath)
+        print(
+            "*NOT* Saving {:s}, because some error(s) happened while deleting temp render data...".format(
+                bpy.data.filepath,
+            )
+        )
 
 
 def do_clear_previews(do_objects, do_collections, do_scenes, do_data_intern):
@@ -447,7 +452,7 @@ def do_clear_previews(do_objects, do_collections, do_scenes, do_data_intern):
         for scene in ids_nolib_with_preview(bpy.data.scenes):
             scene.preview.image_size = (0, 0)
 
-    print("Saving %s..." % bpy.data.filepath)
+    print("Saving {:s}...".format(bpy.data.filepath))
     bpy.ops.wm.save_mainfile()
 
 
@@ -525,7 +530,7 @@ def main():
 
 
 if __name__ == "__main__":
-    print("\n\n *** Running %s *** \n" % __file__)
-    print(" *** Blend file %s *** \n" % bpy.data.filepath)
+    print("\n\n *** Running {:s} *** \n".format(__file__))
+    print(" *** Blend file {:s} *** \n".format(bpy.data.filepath))
     main()
     bpy.ops.wm.quit_blender()

@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2010-2023 Blender Authors
+#
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 # This file defines a set of methods that are useful for various
@@ -93,7 +95,7 @@ def RKS_ITER_selected_bones(ksi, context, ks):
 # Generate Callbacks
 
 
-# 'Available' F-Curves
+# "Available" F-Curves.
 def RKS_GEN_available(_ksi, _context, ks, data):
     # try to get the animation data associated with the closest
     # ID-block to the data (neither of which may exist/be easy to find)
@@ -219,7 +221,7 @@ def RKS_GEN_custom_props(_ksi, _context, ks, data):
         if cprop_name == "_RNA_UI":
             continue
 
-        prop_path = '["%s"]' % bpy.utils.escape_identifier(cprop_name)
+        prop_path = '["{:s}"]'.format(bpy.utils.escape_identifier(cprop_name))
 
         try:
             rna_property = data.path_resolve(prop_path, False)
@@ -233,7 +235,7 @@ def RKS_GEN_custom_props(_ksi, _context, ks, data):
         if rna_property.rna_type not in prop_type_compat:
             continue
 
-        path = "%s%s" % (base_path, prop_path)
+        path = "{:s}{:s}".format(base_path, prop_path)
         if grouping:
             ks.paths.add(id_block, path, group_method='NAMED', group_name=grouping)
         else:

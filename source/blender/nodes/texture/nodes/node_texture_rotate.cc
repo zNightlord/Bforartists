@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2005 Blender Foundation. All rights reserved. */
+/* SPDX-FileCopyrightText: 2005 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup texnodes
@@ -7,7 +8,8 @@
 
 #include <cmath>
 
-#include "NOD_texture.h"
+#include "BLI_math_vector.h"
+
 #include "node_texture_util.hh"
 
 static bNodeSocketTemplate inputs[] = {
@@ -80,7 +82,7 @@ void register_node_type_tex_rotate()
   static bNodeType ntype;
 
   tex_node_type_base(&ntype, TEX_NODE_ROTATE, "Rotate", NODE_CLASS_DISTORT);
-  node_type_socket_templates(&ntype, inputs, outputs);
+  blender::bke::node_type_socket_templates(&ntype, inputs, outputs);
   ntype.exec_fn = exec;
 
   nodeRegisterType(&ntype);

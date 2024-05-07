@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: Apache-2.0
- * Copyright 2011-2022 Blender Foundation */
+/* SPDX-FileCopyrightText: 2011-2022 Blender Foundation
+ *
+ * SPDX-License-Identifier: Apache-2.0 */
 
 #ifndef __UTIL_TRANSFORM_H__
 #define __UTIL_TRANSFORM_H__
@@ -156,6 +157,17 @@ ccl_device_inline Transform make_transform(float a,
   t.z.y = j;
   t.z.z = k;
   t.z.w = l;
+
+  return t;
+}
+
+ccl_device_inline Transform make_transform(const float3 x, const float3 y, const float3 z)
+{
+  Transform t;
+
+  t.x = float3_to_float4(x, 0.0f);
+  t.y = float3_to_float4(y, 0.0f);
+  t.z = float3_to_float4(z, 0.0f);
 
   return t;
 }
@@ -339,7 +351,8 @@ ccl_device_inline bool transform_uniform_scale(const Transform &tfm, float &scal
   float stz = len_squared(transform_get_column(&tfm, 2));
 
   if (fabsf(sx - sy) < eps && fabsf(sx - sz) < eps && fabsf(sx - stx) < eps &&
-      fabsf(sx - sty) < eps && fabsf(sx - stz) < eps) {
+      fabsf(sx - sty) < eps && fabsf(sx - stz) < eps)
+  {
     scale = sx;
     return true;
   }
@@ -378,7 +391,7 @@ ccl_device_inline Transform transform_empty()
 
 ccl_device_inline float4 quat_interpolate(float4 q1, float4 q2, float t)
 {
-  /* Optix and MetalRT are using lerp to interpolate motion transformations. */
+  /* Optix and MetalRT are using linear interpolation to interpolate motion transformations. */
 #if defined(__KERNEL_GPU_RAYTRACING__)
   return normalize((1.0f - t) * q1 + t * q2);
 #else  /* defined(__KERNEL_GPU_RAYTRACING__) */
@@ -403,7 +416,7 @@ ccl_device_inline float4 quat_interpolate(float4 q1, float4 q2, float t)
 }
 
 #ifndef __KERNEL_GPU__
-void transform_inverse_cpu_sse41(const Transform &tfm, Transform &itfm);
+void transform_inverse_cpu_sse42(const Transform &tfm, Transform &itfm);
 void transform_inverse_cpu_avx2(const Transform &tfm, Transform &itfm);
 #endif
 
@@ -416,9 +429,9 @@ ccl_device_inline Transform transform_inverse(const Transform tfm)
     transform_inverse_cpu_avx2(tfm, itfm);
     return itfm;
   }
-  else if (system_cpu_support_sse41()) {
+  else if (system_cpu_support_sse42()) {
     Transform itfm;
-    transform_inverse_cpu_sse41(tfm, itfm);
+    transform_inverse_cpu_sse42(tfm, itfm);
     return itfm;
   }
 #endif

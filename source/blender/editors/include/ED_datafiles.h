@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2008 Blender Foundation. All rights reserved. */
+/* SPDX-FileCopyrightText: 2008 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup editors
@@ -21,6 +22,9 @@ extern const char datatoc_preview_blend[];
 
 extern int datatoc_preview_grease_pencil_blend_size;
 extern const char datatoc_preview_grease_pencil_blend[];
+
+extern int datatoc_preview_grease_pencil_legacy_blend_size;
+extern const char datatoc_preview_grease_pencil_legacy_blend[];
 
 extern int datatoc_blender_icons16_png_size;
 extern const char datatoc_blender_icons16_png[];

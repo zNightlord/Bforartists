@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2011 Blender Foundation. */
+/* SPDX-FileCopyrightText: 2011 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "COM_Stabilize2dNode.h"
 #include "COM_MovieClipAttributeOperation.h"
@@ -21,7 +22,7 @@ void Stabilize2dNode::convert_to_operations(NodeConverter &converter,
   const bNode *editor_node = this->get_bnode();
   NodeInput *image_input = this->get_input_socket(0);
   MovieClip *clip = (MovieClip *)editor_node->id;
-  bool invert = (editor_node->custom2 & CMP_NODEFLAG_STABILIZE_INVERSE) != 0;
+  bool invert = (editor_node->custom2 & CMP_NODE_STABILIZE_FLAG_INVERSE) != 0;
   const PixelSampler sampler = (PixelSampler)editor_node->custom1;
 
   MovieClipAttributeOperation *scale_attribute = new MovieClipAttributeOperation();
@@ -54,119 +55,56 @@ void Stabilize2dNode::convert_to_operations(NodeConverter &converter,
   converter.add_operation(x_attribute);
   converter.add_operation(y_attribute);
 
-  switch (context.get_execution_model()) {
-    case eExecutionModel::Tiled: {
-      ScaleRelativeOperation *scale_operation = new ScaleRelativeOperation();
-      scale_operation->set_sampler(sampler);
-      RotateOperation *rotate_operation = new RotateOperation();
-      rotate_operation->set_do_degree2_rad_conversion(false);
-      TranslateOperation *translate_operation = new TranslateOperation();
-      SetSamplerOperation *psoperation = new SetSamplerOperation();
-      psoperation->set_sampler(sampler);
+  ScaleRelativeOperation *scale_operation = new ScaleRelativeOperation();
+  scale_operation->set_sampler(sampler);
+  RotateOperation *rotate_operation = new RotateOperation();
+  rotate_operation->set_do_degree2_rad_conversion(false);
+  rotate_operation->set_sampler(sampler);
+  TranslateOperation *translate_operation = new TranslateCanvasOperation();
+  translate_operation->set_sampler(sampler);
 
-      converter.add_operation(scale_operation);
-      converter.add_operation(translate_operation);
-      converter.add_operation(rotate_operation);
-      converter.add_operation(psoperation);
+  converter.add_operation(scale_operation);
+  converter.add_operation(translate_operation);
+  converter.add_operation(rotate_operation);
 
-      converter.add_link(scale_attribute->get_output_socket(),
-                         scale_operation->get_input_socket(1));
-      converter.add_link(scale_attribute->get_output_socket(),
-                         scale_operation->get_input_socket(2));
+  converter.add_link(scale_attribute->get_output_socket(), scale_operation->get_input_socket(1));
+  converter.add_link(scale_attribute->get_output_socket(), scale_operation->get_input_socket(2));
 
-      converter.add_link(angle_attribute->get_output_socket(),
-                         rotate_operation->get_input_socket(1));
+  converter.add_link(angle_attribute->get_output_socket(), rotate_operation->get_input_socket(1));
 
-      converter.add_link(x_attribute->get_output_socket(),
-                         translate_operation->get_input_socket(1));
-      converter.add_link(y_attribute->get_output_socket(),
-                         translate_operation->get_input_socket(2));
+  converter.add_link(x_attribute->get_output_socket(), translate_operation->get_input_socket(1));
+  converter.add_link(y_attribute->get_output_socket(), translate_operation->get_input_socket(2));
 
-      converter.map_output_socket(get_output_socket(), psoperation->get_output_socket());
+  NodeOperationInput *stabilization_socket = nullptr;
+  if (invert) {
+    /* Translate -> Rotate -> Scale. */
+    stabilization_socket = translate_operation->get_input_socket(0);
+    converter.map_input_socket(image_input, translate_operation->get_input_socket(0));
 
-      if (invert) {
-        /* Translate -> Rotate -> Scale. */
-        converter.map_input_socket(image_input, translate_operation->get_input_socket(0));
+    converter.add_link(translate_operation->get_output_socket(),
+                       rotate_operation->get_input_socket(0));
+    converter.add_link(rotate_operation->get_output_socket(),
+                       scale_operation->get_input_socket(0));
 
-        converter.add_link(translate_operation->get_output_socket(),
-                           rotate_operation->get_input_socket(0));
-        converter.add_link(rotate_operation->get_output_socket(),
-                           scale_operation->get_input_socket(0));
-
-        converter.add_link(scale_operation->get_output_socket(), psoperation->get_input_socket(0));
-      }
-      else {
-        /* Scale  -> Rotate -> Translate. */
-        converter.map_input_socket(image_input, scale_operation->get_input_socket(0));
-
-        converter.add_link(scale_operation->get_output_socket(),
-                           rotate_operation->get_input_socket(0));
-        converter.add_link(rotate_operation->get_output_socket(),
-                           translate_operation->get_input_socket(0));
-
-        converter.add_link(translate_operation->get_output_socket(),
-                           psoperation->get_input_socket(0));
-      }
-      break;
-    }
-    case eExecutionModel::FullFrame: {
-      ScaleRelativeOperation *scale_operation = new ScaleRelativeOperation();
-      scale_operation->set_sampler(sampler);
-      RotateOperation *rotate_operation = new RotateOperation();
-      rotate_operation->set_do_degree2_rad_conversion(false);
-      rotate_operation->set_sampler(sampler);
-      TranslateOperation *translate_operation = new TranslateCanvasOperation();
-
-      converter.add_operation(scale_operation);
-      converter.add_operation(translate_operation);
-      converter.add_operation(rotate_operation);
-
-      converter.add_link(scale_attribute->get_output_socket(),
-                         scale_operation->get_input_socket(1));
-      converter.add_link(scale_attribute->get_output_socket(),
-                         scale_operation->get_input_socket(2));
-
-      converter.add_link(angle_attribute->get_output_socket(),
-                         rotate_operation->get_input_socket(1));
-
-      converter.add_link(x_attribute->get_output_socket(),
-                         translate_operation->get_input_socket(1));
-      converter.add_link(y_attribute->get_output_socket(),
-                         translate_operation->get_input_socket(2));
-
-      NodeOperationInput *stabilization_socket = nullptr;
-      if (invert) {
-        /* Translate -> Rotate -> Scale. */
-        stabilization_socket = translate_operation->get_input_socket(0);
-        converter.map_input_socket(image_input, translate_operation->get_input_socket(0));
-
-        converter.add_link(translate_operation->get_output_socket(),
-                           rotate_operation->get_input_socket(0));
-        converter.add_link(rotate_operation->get_output_socket(),
-                           scale_operation->get_input_socket(0));
-
-        converter.map_output_socket(get_output_socket(), scale_operation->get_output_socket());
-      }
-      else {
-        /* Scale  -> Rotate -> Translate. */
-        stabilization_socket = scale_operation->get_input_socket(0);
-        converter.map_input_socket(image_input, scale_operation->get_input_socket(0));
-
-        converter.add_link(scale_operation->get_output_socket(),
-                           rotate_operation->get_input_socket(0));
-        converter.add_link(rotate_operation->get_output_socket(),
-                           translate_operation->get_input_socket(0));
-
-        converter.map_output_socket(get_output_socket(), translate_operation->get_output_socket());
-      }
-
-      x_attribute->set_socket_input_resolution_for_stabilization(stabilization_socket);
-      y_attribute->set_socket_input_resolution_for_stabilization(stabilization_socket);
-      scale_attribute->set_socket_input_resolution_for_stabilization(stabilization_socket);
-      angle_attribute->set_socket_input_resolution_for_stabilization(stabilization_socket);
-      break;
-    }
+    converter.map_output_socket(get_output_socket(), scale_operation->get_output_socket());
   }
+  else {
+    /* Scale  -> Rotate -> Translate. */
+    stabilization_socket = scale_operation->get_input_socket(0);
+    converter.map_input_socket(image_input, scale_operation->get_input_socket(0));
+
+    converter.add_link(scale_operation->get_output_socket(),
+                       rotate_operation->get_input_socket(0));
+    converter.add_link(rotate_operation->get_output_socket(),
+                       translate_operation->get_input_socket(0));
+
+    converter.map_output_socket(get_output_socket(), translate_operation->get_output_socket());
+  }
+
+  x_attribute->set_socket_input_resolution_for_stabilization(stabilization_socket);
+  y_attribute->set_socket_input_resolution_for_stabilization(stabilization_socket);
+  scale_attribute->set_socket_input_resolution_for_stabilization(stabilization_socket);
+  angle_attribute->set_socket_input_resolution_for_stabilization(stabilization_socket);
 }
 
 }  // namespace blender::compositor

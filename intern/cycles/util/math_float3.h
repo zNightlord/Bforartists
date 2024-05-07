@@ -1,6 +1,7 @@
-/* SPDX-License-Identifier: Apache-2.0
- * Copyright 2011-2013 Intel Corporation
- * Copyright 2011-2022 Blender Foundation */
+/* SPDX-FileCopyrightText: 2011-2013 Intel Corporation
+ * SPDX-FileCopyrightText: 2011-2022 Blender Foundation
+ *
+ * SPDX-License-Identifier: Apache-2.0 */
 
 #ifndef __UTIL_MATH_FLOAT3_H__
 #define __UTIL_MATH_FLOAT3_H__
@@ -157,7 +158,7 @@ ccl_device_inline float3 operator/=(float3 &a, float f)
   return a = a * invf;
 }
 
-#  if !(defined(__KERNEL_METAL__) || defined(__KERNEL_CUDA__))
+#  if !(defined(__KERNEL_METAL__) || defined(__KERNEL_CUDA__) || defined(__KERNEL_HIP__))
 ccl_device_inline packed_float3 operator*=(packed_float3 &a, const float3 b)
 {
   a = float3(a) * b;
@@ -199,7 +200,7 @@ ccl_device_inline bool operator!=(const float3 a, const float3 b)
 
 ccl_device_inline float dot(const float3 a, const float3 b)
 {
-#  if defined(__KERNEL_SSE41__) && defined(__KERNEL_SSE__)
+#  if defined(__KERNEL_SSE42__) && defined(__KERNEL_SSE__)
   return _mm_cvtss_f32(_mm_dp_ps(a, b, 0x7F));
 #  else
   return a.x * b.x + a.y * b.y + a.z * b.z;
@@ -210,7 +211,7 @@ ccl_device_inline float dot(const float3 a, const float3 b)
 
 ccl_device_inline float dot_xy(const float3 a, const float3 b)
 {
-#if defined(__KERNEL_SSE41__) && defined(__KERNEL_SSE__)
+#if defined(__KERNEL_SSE42__) && defined(__KERNEL_SSE__)
   return _mm_cvtss_f32(_mm_hadd_ps(_mm_mul_ps(a, b), b));
 #else
   return a.x * b.x + a.y * b.y;
@@ -219,7 +220,7 @@ ccl_device_inline float dot_xy(const float3 a, const float3 b)
 
 ccl_device_inline float len(const float3 a)
 {
-#if defined(__KERNEL_SSE41__) && defined(__KERNEL_SSE__)
+#if defined(__KERNEL_SSE42__) && defined(__KERNEL_SSE__)
   return _mm_cvtss_f32(_mm_sqrt_ss(_mm_dp_ps(a.m128, a.m128, 0x7F)));
 #else
   return sqrtf(dot(a, a));
@@ -263,7 +264,7 @@ ccl_device_inline float3 cross(const float3 a, const float3 b)
 
 ccl_device_inline float3 normalize(const float3 a)
 {
-#  if defined(__KERNEL_SSE41__) && defined(__KERNEL_SSE__)
+#  if defined(__KERNEL_SSE42__) && defined(__KERNEL_SSE__)
   __m128 norm = _mm_sqrt_ps(_mm_dp_ps(a.m128, a.m128, 0x7F));
   return float3(_mm_div_ps(a.m128, norm));
 #  else
@@ -306,6 +307,11 @@ ccl_device_inline float3 fabs(const float3 a)
 #  else
   return make_float3(fabsf(a.x), fabsf(a.y), fabsf(a.z));
 #  endif
+}
+
+ccl_device_inline float3 fmod(const float3 a, const float b)
+{
+  return make_float3(fmodf(a.x, b), fmodf(a.y, b), fmodf(a.z, b));
 }
 
 ccl_device_inline float3 sqrt(const float3 a)
@@ -365,6 +371,11 @@ ccl_device_inline float3 log(float3 v)
   return make_float3(logf(v.x), logf(v.y), logf(v.z));
 }
 
+ccl_device_inline float3 cos(float3 v)
+{
+  return make_float3(cosf(v.x), cosf(v.y), cosf(v.z));
+}
+
 ccl_device_inline float3 reflect(const float3 incident, const float3 normal)
 {
   float3 unit_normal = normalize(normal);
@@ -405,6 +416,12 @@ ccl_device_inline float3 safe_normalize(const float3 a)
 {
   float t = len(a);
   return (t != 0.0f) ? a * (1.0f / t) : a;
+}
+
+ccl_device_inline float3 safe_normalize_fallback(const float3 a, const float3 fallback)
+{
+  float t = len(a);
+  return (t != 0.0f) ? a * (1.0f / t) : fallback;
 }
 
 ccl_device_inline float3 safe_normalize_len(const float3 a, ccl_private float *t)
@@ -448,7 +465,7 @@ ccl_device_inline float reduce_add(const float3 a)
 {
 #if defined(__KERNEL_SSE__) && defined(__KERNEL_NEON__)
   __m128 t = a.m128;
-  t[3] = 0.0f;
+  t = vsetq_lane_f32(0.0f, t, 3);
   return vaddvq_f32(t);
 #else
   return (a.x + a.y + a.z);
@@ -469,7 +486,8 @@ ccl_device_inline bool isequal(const float3 a, const float3 b)
 #endif
 }
 
-ccl_device_inline float3 pow(float3 v, float e)
+/* Consistent name for this would be pow, but HIP compiler crashes in name mangling. */
+ccl_device_inline float3 power(float3 v, float e)
 {
   return make_float3(powf(v.x, e), powf(v.y, e), powf(v.z, e));
 }

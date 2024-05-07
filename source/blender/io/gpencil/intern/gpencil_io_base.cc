@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2020 Blender Foundation. All rights reserved. */
+/* SPDX-FileCopyrightText: 2020 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup bgpencil
@@ -8,28 +9,29 @@
 #include "BLI_math_matrix.hh"
 #include "BLI_path_util.h"
 #include "BLI_span.hh"
+#include "BLI_string.h"
 
-#include "DNA_gpencil_types.h"
+#include "DNA_gpencil_legacy_types.h"
 #include "DNA_layer_types.h"
 #include "DNA_material_types.h"
 #include "DNA_scene_types.h"
 #include "DNA_screen_types.h"
 
 #include "BKE_camera.h"
-#include "BKE_context.h"
-#include "BKE_gpencil.h"
-#include "BKE_gpencil_geom.h"
-#include "BKE_layer.h"
-#include "BKE_main.h"
+#include "BKE_context.hh"
+#include "BKE_gpencil_geom_legacy.h"
+#include "BKE_gpencil_legacy.h"
+#include "BKE_layer.hh"
+#include "BKE_main.hh"
 #include "BKE_material.h"
-#include "BKE_scene.h"
+#include "BKE_scene.hh"
 
-#include "UI_view2d.h"
+#include "UI_view2d.hh"
 
-#include "ED_view3d.h"
+#include "ED_view3d.hh"
 
-#include "DEG_depsgraph.h"
-#include "DEG_depsgraph_query.h"
+#include "DEG_depsgraph.hh"
+#include "DEG_depsgraph_query.hh"
 
 #include "gpencil_io_base.hh"
 
@@ -77,7 +79,7 @@ void GpencilIO::prepare_camera_params(Scene *scene, const GpencilIOParams *ipara
     BKE_camera_params_compute_viewplane(&params, rd->xsch, rd->ysch, rd->xasp, rd->yasp);
     BKE_camera_params_compute_matrix(&params);
 
-    float4x4 viewmat = math::invert(float4x4(cam_ob->object_to_world));
+    float4x4 viewmat = math::invert(cam_ob->object_to_world());
 
     persmat_ = float4x4(params.winmat) * viewmat;
   }
@@ -147,7 +149,7 @@ void GpencilIO::create_object_list()
       continue;
     }
 
-    float3 object_position = float3(object->object_to_world[3]);
+    float3 object_position = float3(object->object_to_world().location());
 
     /* Save z-depth from view to sort from back to front. */
     if (is_camera_) {
@@ -157,16 +159,14 @@ void GpencilIO::create_object_list()
     }
     else {
       float zdepth = 0;
-      if (rv3d_) {
-        if (rv3d_->is_persp) {
-          zdepth = ED_view3d_calc_zfac(rv3d_, object_position);
-        }
-        else {
-          zdepth = -math::dot(camera_z_axis, object_position);
-        }
-        ObjectZ obz = {zdepth * -1.0f, object};
-        ob_list_.append(obz);
+      if (rv3d_->is_persp) {
+        zdepth = ED_view3d_calc_zfac(rv3d_, object_position);
       }
+      else {
+        zdepth = -math::dot(camera_z_axis, object_position);
+      }
+      ObjectZ obz = {zdepth * -1.0f, object};
+      ob_list_.append(obz);
     }
   }
   /* Sort list of objects from point of view. */
@@ -177,7 +177,7 @@ void GpencilIO::create_object_list()
 
 void GpencilIO::filepath_set(const char *filepath)
 {
-  BLI_strncpy(filepath_, filepath, FILE_MAX);
+  STRNCPY(filepath_, filepath);
   BLI_path_abs(filepath_, BKE_main_blendfile_path(bmain_));
 }
 
@@ -187,7 +187,8 @@ bool GpencilIO::gpencil_3D_point_to_screen_space(const float3 co, float2 &r_co)
   float2 screen_co;
   eV3DProjTest test = (eV3DProjTest)(V3D_PROJ_RET_OK);
   if (ED_view3d_project_float_global(params_.region, parent_co, screen_co, test) ==
-      V3D_PROJ_RET_OK) {
+      V3D_PROJ_RET_OK)
+  {
     if (!ELEM(V2D_IS_CLIPPED, screen_co[0], screen_co[1])) {
       r_co = screen_co;
       /* Invert X axis. */
@@ -266,7 +267,7 @@ float GpencilIO::stroke_point_radius_get(bGPDlayer *gpl, bGPDstroke *gps)
   float radius = math::length(v1);
   BKE_gpencil_free_stroke(gps_perimeter);
 
-  return MAX2(radius, 1.0f);
+  return std::max(radius, 1.0f);
 }
 
 void GpencilIO::prepare_layer_export_matrix(Object *ob, bGPDlayer *gpl)

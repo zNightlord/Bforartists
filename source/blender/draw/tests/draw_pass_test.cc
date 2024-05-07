@@ -1,4 +1,6 @@
-/* SPDX-License-Identifier: Apache-2.0 */
+/* SPDX-FileCopyrightText: 2023 Blender Authors
+ *
+ * SPDX-License-Identifier: Apache-2.0 */
 
 #include "testing/testing.h"
 
@@ -6,7 +8,7 @@
 
 #include "draw_manager.hh"
 #include "draw_pass.hh"
-#include "draw_shader.h"
+#include "draw_shader.hh"
 #include "draw_testing.hh"
 
 #include <bitset>
@@ -25,8 +27,9 @@ static void test_draw_pass_all_commands()
   ssbo.push_update();
 
   /* Won't be dereferenced. */
-  GPUVertBuf *vbo = (GPUVertBuf *)1;
-  GPUIndexBuf *ibo = (GPUIndexBuf *)1;
+  gpu::VertBuf *vbo = (gpu::VertBuf *)1;
+  gpu::IndexBuf *ibo = (gpu::IndexBuf *)1;
+  GPUFrameBuffer *fb = nullptr;
 
   float4 color(1.0f, 1.0f, 1.0f, 0.0f);
   int3 dispatch_size(1);
@@ -36,7 +39,12 @@ static void test_draw_pass_all_commands()
   pass.state_set(DRW_STATE_WRITE_COLOR | DRW_STATE_WRITE_STENCIL);
   pass.clear_color_depth_stencil(float4(0.25f, 0.5f, 100.0f, -2000.0f), 0.5f, 0xF0);
   pass.state_stencil(0x80, 0x0F, 0x8F);
-  pass.shader_set(GPU_shader_get_builtin_shader(GPU_SHADER_3D_IMAGE_COLOR));
+  GPUShader *sh = GPU_shader_get_builtin_shader(GPU_SHADER_3D_IMAGE_COLOR);
+  const int color_location = GPU_shader_get_uniform(sh, "color");
+  const int mvp_location = GPU_shader_get_uniform(sh, "ModelViewProjectionMatrix");
+  pass.shader_set(sh);
+  pass.framebuffer_set(&fb);
+  pass.subpass_transition(GPU_ATTACHEMENT_IGNORE, {GPU_ATTACHEMENT_WRITE, GPU_ATTACHEMENT_READ});
   pass.bind_texture("image", tex);
   pass.bind_texture("image", &tex);
   pass.bind_image("missing_image", tex);       /* Should not crash. */
@@ -75,8 +83,20 @@ static void test_draw_pass_all_commands()
       << "  .stencil_set(write_mask=0b10000000, reference=0b00001111, compare_mask=0b10001111)"
       << std::endl;
   expected << "  .shader_bind(gpu_shader_3D_image_color)" << std::endl;
-  expected << "  .bind_texture(0)" << std::endl;
-  expected << "  .bind_texture_ref(0)" << std::endl;
+  expected << "  .framebuffer_bind(nullptr)" << std::endl;
+  expected << "  .subpass_transition(" << std::endl;
+  expected << "depth=ignore," << std::endl;
+  expected << "color0=write," << std::endl;
+  expected << "color1=read," << std::endl;
+  expected << "color2=ignore," << std::endl;
+  expected << "color3=ignore," << std::endl;
+  expected << "color4=ignore," << std::endl;
+  expected << "color5=ignore," << std::endl;
+  expected << "color6=ignore," << std::endl;
+  expected << "color7=ignore" << std::endl;
+  expected << ")" << std::endl;
+  expected << "  .bind_texture(0, sampler=internal)" << std::endl;
+  expected << "  .bind_texture_ref(0, sampler=internal)" << std::endl;
   expected << "  .bind_image(-1)" << std::endl;
   expected << "  .bind_image_ref(-1)" << std::endl;
   expected << "  .bind_uniform_buf(-1)" << std::endl;
@@ -87,20 +107,20 @@ static void test_draw_pass_all_commands()
   expected << "  .bind_vertbuf_as_ssbo_ref(-1)" << std::endl;
   expected << "  .bind_indexbuf_as_ssbo(-1)" << std::endl;
   expected << "  .bind_indexbuf_as_ssbo_ref(-1)" << std::endl;
-  expected << "  .push_constant(2, data=(1, 1, 1, 0))" << std::endl;
-  expected << "  .push_constant(2, data=(1, 1, 1, 1))" << std::endl;
-  expected << "  .push_constant(0, data=(" << std::endl;
-  expected << "(   1.000000,    0.000000,    0.000000,    0.000000)" << std::endl;
-  expected << "(   0.000000,    1.000000,    0.000000,    0.000000)" << std::endl;
-  expected << "(   0.000000,    0.000000,    1.000000,    0.000000)" << std::endl;
-  expected << "(   0.000000,    0.000000,    0.000000,    1.000000)" << std::endl;
+  expected << "  .push_constant(" << color_location << ", data=(1, 1, 1, 0))" << std::endl;
+  expected << "  .push_constant(" << color_location << ", data=(1, 1, 1, 1))" << std::endl;
+  expected << "  .push_constant(" << mvp_location << ", data=(" << std::endl;
+  expected << "(1, 0, 0, 0)," << std::endl;
+  expected << "(0, 1, 0, 0)," << std::endl;
+  expected << "(0, 0, 1, 0)," << std::endl;
+  expected << "(0, 0, 0, 1)" << std::endl;
   expected << ")" << std::endl;
   expected << ")" << std::endl;
   expected << "  .draw(inst_len=1, vert_len=3, vert_first=0, res_id=0)" << std::endl;
   expected << "  .shader_bind(gpu_shader_3D_image_color)" << std::endl;
   expected << "  .dispatch(1, 1, 1)" << std::endl;
   expected << "  .dispatch_ref(2, 2, 2)" << std::endl;
-  expected << "  .barrier(4)" << std::endl;
+  expected << "  .barrier(2)" << std::endl;
 
   EXPECT_EQ(result, expected.str());
 
@@ -209,7 +229,7 @@ static void test_draw_pass_multi_draw()
   std::stringstream expected;
   expected << ".test.multi_draw" << std::endl;
   expected << "  .shader_bind(gpu_shader_3D_image_color)" << std::endl;
-  expected << "  .draw_multi(3)" << std::endl;
+  expected << "  .draw_multi(5)" << std::endl;
   expected << "    .group(id=4, len=2)" << std::endl;
   expected << "      .proto(instance_len=2, resource_id=8, front_face)" << std::endl;
   expected << "    .group(id=3, len=2)" << std::endl;
@@ -259,6 +279,13 @@ DRAW_TEST(draw_pass_sortable)
 
 static void test_draw_resource_id_gen()
 {
+  GPU_render_begin();
+  Texture color_attachment;
+  Framebuffer framebuffer;
+  color_attachment.ensure_2d(GPU_RGBA32F, int2(1));
+  framebuffer.ensure(GPU_ATTACHMENT_NONE, GPU_ATTACHMENT_TEXTURE(color_attachment));
+  framebuffer.bind();
+
   float4x4 win_mat;
   orthographic_m4(win_mat.ptr(), -1, 1, -1, 1, -1, 1);
 
@@ -277,13 +304,12 @@ static void test_draw_resource_id_gen()
   drw.resource_handle(obmat_2, float3(2), float3(1));
   drw.end_sync();
 
-  StringRefNull expected = "2 1 1 1 1 3 3 1 1 1 1 1 3 2 2 2 2 2 2 1 1 1 ";
-
   {
     /* Computed on CPU. */
     PassSimple pass = {"test.resource_id"};
     pass.init();
-    pass.shader_set(GPU_shader_get_builtin_shader(GPU_SHADER_3D_IMAGE_COLOR));
+    pass.shader_set(
+        GPU_shader_get_builtin_shader(GPU_SHADER_3D_POINT_UNIFORM_SIZE_UNIFORM_COLOR_AA));
     pass.draw_procedural(GPU_PRIM_TRIS, 1, -1, -1, handle2);
     pass.draw_procedural(GPU_PRIM_POINTS, 4, -1, -1, handle1);
     pass.draw_procedural(GPU_PRIM_TRIS, 2, -1, -1, handle3);
@@ -299,13 +325,16 @@ static void test_draw_resource_id_gen()
       result << val << " ";
     }
 
-    EXPECT_EQ(result.str(), expected);
+    StringRefNull expected_simple = "2 1 1 1 1 3 3 1 1 1 1 1 3 2 2 2 2 2 2 1 1 1 ";
+    EXPECT_EQ(result.str(), expected_simple);
   }
+
   {
     /* Same thing with PassMain (computed on GPU) */
-    PassSimple pass = {"test.resource_id"};
+    PassMain pass = {"test.resource_id"};
     pass.init();
-    pass.shader_set(GPU_shader_get_builtin_shader(GPU_SHADER_3D_IMAGE_COLOR));
+    pass.shader_set(
+        GPU_shader_get_builtin_shader(GPU_SHADER_3D_POINT_UNIFORM_SIZE_UNIFORM_COLOR_AA));
     pass.draw_procedural(GPU_PRIM_TRIS, 1, -1, -1, handle2);
     pass.draw_procedural(GPU_PRIM_POINTS, 4, -1, -1, handle1);
     pass.draw_procedural(GPU_PRIM_TRIS, 2, -1, -1, handle3);
@@ -321,8 +350,14 @@ static void test_draw_resource_id_gen()
       result << val << " ";
     }
 
-    EXPECT_EQ(result.str(), expected);
+    /* When using PassMain the handles are sorted based on their handles and GPUBatches. Different
+     * primitives use different batches.
+     */
+    StringRefNull expected_main = "2 3 3 1 1 1 1 1 1 1 1 1 1 1 1 2 2 2 2 2 2 3 ";
+    EXPECT_EQ(result.str(), expected_main);
   }
+
+  GPU_render_end();
 
   DRW_shape_cache_free();
   DRW_shaders_free();
@@ -331,6 +366,13 @@ DRAW_TEST(draw_resource_id_gen)
 
 static void test_draw_visibility()
 {
+  GPU_render_begin();
+  Texture color_attachment;
+  Framebuffer framebuffer;
+  color_attachment.ensure_2d(GPU_RGBA32F, int2(1));
+  framebuffer.ensure(GPU_ATTACHMENT_NONE, GPU_ATTACHMENT_TEXTURE(color_attachment));
+  framebuffer.bind();
+
   float4x4 win_mat;
   orthographic_m4(win_mat.ptr(), -1, 1, -1, 1, -1, 1);
 
@@ -362,6 +404,8 @@ static void test_draw_visibility()
   }
 
   EXPECT_EQ(result.str(), "11111111111111111111111111111011");
+
+  GPU_render_end();
 
   DRW_shape_cache_free();
   DRW_shaders_free();
@@ -397,47 +441,47 @@ static void test_draw_manager_sync()
   std::stringstream expected;
   expected << "ObjectMatrices(" << std::endl;
   expected << "model=(" << std::endl;
-  expected << "(   1.000000,    0.000000,    0.000000,    0.000000)" << std::endl;
-  expected << "(   0.000000,    1.000000,    0.000000,    0.000000)" << std::endl;
-  expected << "(   0.000000,    0.000000,    1.000000,    0.000000)" << std::endl;
-  expected << "(   0.000000,    0.000000,    0.000000,    1.000000)" << std::endl;
+  expected << "(1, 0, 0, 0)," << std::endl;
+  expected << "(0, 1, 0, 0)," << std::endl;
+  expected << "(0, 0, 1, 0)," << std::endl;
+  expected << "(0, 0, 0, 1)" << std::endl;
   expected << ")" << std::endl;
   expected << ", " << std::endl;
   expected << "model_inverse=(" << std::endl;
-  expected << "(   1.000000,   -0.000000,    0.000000,   -0.000000)" << std::endl;
-  expected << "(  -0.000000,    1.000000,   -0.000000,    0.000000)" << std::endl;
-  expected << "(   0.000000,   -0.000000,    1.000000,   -0.000000)" << std::endl;
-  expected << "(  -0.000000,    0.000000,   -0.000000,    1.000000)" << std::endl;
+  expected << "(1, -0, 0, -0)," << std::endl;
+  expected << "(-0, 1, -0, 0)," << std::endl;
+  expected << "(0, -0, 1, -0)," << std::endl;
+  expected << "(-0, 0, -0, 1)" << std::endl;
   expected << ")" << std::endl;
   expected << ")" << std::endl;
   expected << "ObjectMatrices(" << std::endl;
   expected << "model=(" << std::endl;
-  expected << "(  -0.500000,   -0.000000,   -0.000000,    0.000000)" << std::endl;
-  expected << "(  -0.000000,   -0.500000,   -0.000000,    0.000000)" << std::endl;
-  expected << "(  -0.000000,   -0.000000,   -0.500000,    0.000000)" << std::endl;
-  expected << "(   0.000000,    0.000000,    0.000000,    1.000000)" << std::endl;
+  expected << "(-0.5, 0, 0, 0)," << std::endl;
+  expected << "(0, -0.5, 0, 0)," << std::endl;
+  expected << "(0, 0, -0.5, 0)," << std::endl;
+  expected << "(0, 0, 0, 1)" << std::endl;
   expected << ")" << std::endl;
   expected << ", " << std::endl;
   expected << "model_inverse=(" << std::endl;
-  expected << "(  -2.000000,    0.000000,   -0.000000,   -0.000000)" << std::endl;
-  expected << "(   0.000000,   -2.000000,    0.000000,    0.000000)" << std::endl;
-  expected << "(  -0.000000,    0.000000,   -2.000000,    0.000000)" << std::endl;
-  expected << "(  -0.000000,   -0.000000,    0.000000,    1.000000)" << std::endl;
+  expected << "(-2, -0, -0, 0)," << std::endl;
+  expected << "(-0, -2, 0, -0)," << std::endl;
+  expected << "(-0, 0, -2, 0)," << std::endl;
+  expected << "(0, -0, 0, 1)" << std::endl;
   expected << ")" << std::endl;
   expected << ")" << std::endl;
   expected << "ObjectMatrices(" << std::endl;
   expected << "model=(" << std::endl;
-  expected << "(   0.500000,    0.000000,    0.000000,    0.000000)" << std::endl;
-  expected << "(   0.000000,    0.500000,    0.000000,    0.000000)" << std::endl;
-  expected << "(   0.000000,    0.000000,    0.500000,    0.000000)" << std::endl;
-  expected << "(   0.000000,    0.000000,    0.000000,    1.000000)" << std::endl;
+  expected << "(0.5, 0, 0, 0)," << std::endl;
+  expected << "(0, 0.5, 0, 0)," << std::endl;
+  expected << "(0, 0, 0.5, 0)," << std::endl;
+  expected << "(0, 0, 0, 1)" << std::endl;
   expected << ")" << std::endl;
   expected << ", " << std::endl;
   expected << "model_inverse=(" << std::endl;
-  expected << "(   2.000000,   -0.000000,    0.000000,   -0.000000)" << std::endl;
-  expected << "(  -0.000000,    2.000000,   -0.000000,    0.000000)" << std::endl;
-  expected << "(   0.000000,   -0.000000,    2.000000,   -0.000000)" << std::endl;
-  expected << "(  -0.000000,    0.000000,   -0.000000,    1.000000)" << std::endl;
+  expected << "(2, -0, 0, -0)," << std::endl;
+  expected << "(-0, 2, -0, 0)," << std::endl;
+  expected << "(0, -0, 2, -0)," << std::endl;
+  expected << "(-0, 0, -0, 1)" << std::endl;
   expected << ")" << std::endl;
   expected << ")" << std::endl;
   expected << "ObjectBounds(skipped)" << std::endl;

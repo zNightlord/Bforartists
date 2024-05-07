@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: Apache-2.0
- * Copyright 2011-2022 Blender Foundation */
+/* SPDX-FileCopyrightText: 2011-2022 Blender Foundation
+ *
+ * SPDX-License-Identifier: Apache-2.0 */
 
 #ifndef __UTIL_MATH_FLOAT2_H__
 #define __UTIL_MATH_FLOAT2_H__
@@ -118,20 +119,44 @@ ccl_device_inline bool is_zero(const float2 a)
   return (a.x == 0.0f && a.y == 0.0f);
 }
 
-ccl_device_inline float average(const float2 a)
-{
-  return (a.x + a.y) * (1.0f / 2.0f);
-}
-
 ccl_device_inline float dot(const float2 a, const float2 b)
 {
   return a.x * b.x + a.y * b.y;
 }
 #endif
 
+ccl_device_inline float average(const float2 a)
+{
+  return (a.x + a.y) * (1.0f / 2.0f);
+}
+
+ccl_device_inline bool isequal(const float2 a, const float2 b)
+{
+#if defined(__KERNEL_METAL__)
+  return all(a == b);
+#else
+  return a == b;
+#endif
+}
+
 ccl_device_inline float len(const float2 a)
 {
   return sqrtf(dot(a, a));
+}
+
+ccl_device_inline float reduce_min(const float2 a)
+{
+  return min(a.x, a.y);
+}
+
+ccl_device_inline float reduce_max(const float2 a)
+{
+  return max(a.x, a.y);
+}
+
+ccl_device_inline float reduce_add(const float2 a)
+{
+  return a.x + a.y;
 }
 
 ccl_device_inline float len_squared(const float2 a)
@@ -182,6 +207,11 @@ ccl_device_inline float2 clamp(const float2 a, const float2 mn, const float2 mx)
   return min(max(a, mn), mx);
 }
 
+ccl_device_inline float2 fmod(const float2 a, const float b)
+{
+  return make_float2(fmodf(a.x, b), fmodf(a.y, b));
+}
+
 ccl_device_inline float2 fabs(const float2 a)
 {
   return make_float2(fabsf(a.x), fabsf(a.y));
@@ -208,6 +238,12 @@ ccl_device_inline float2 floor(const float2 a)
 }
 
 #endif /* !__KERNEL_METAL__ */
+
+/* Consistent name for this would be pow, but HIP compiler crashes in name mangling. */
+ccl_device_inline float2 power(float2 v, float e)
+{
+  return make_float2(powf(v.x, e), powf(v.y, e));
+}
 
 ccl_device_inline float2 safe_divide_float2_float(const float2 a, const float b)
 {

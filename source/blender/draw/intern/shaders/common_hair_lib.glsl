@@ -1,3 +1,7 @@
+/* SPDX-FileCopyrightText: 2018-2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
+
 /**
  * Library to create hairs dynamically from control points.
  * This is less bandwidth intensive than fetching the vertex attributes
@@ -23,9 +27,9 @@
 uniform int hairStrandsRes = 8;
 
 /**
- * hairThicknessRes : Subdiv around the hair.
+ * hairThicknessRes : Subdivide around the hair.
  * 1 - Wire Hair: Only one pixel thick, independent of view distance.
- * 2 - Polystrip Hair: Correct width, flat if camera is parallel.
+ * 2 - Poly-strip Hair: Correct width, flat if camera is parallel.
  * 3+ - Cylinder Hair: Massive calculation but potentially perfect. Still need proper support.
  */
 uniform int hairThicknessRes = 1;
@@ -53,7 +57,7 @@ uniform usamplerBuffer hairStrandSegBuffer; /* R16UI */
 // uniform samplerBuffer hairColBuffer; /* RGBA16 linear color */
 #  else
 #    ifndef DRW_HAIR_INFO
-#      error Ensure createInfo includes `draw_hair` for general use or `eevee_legacy_hair_lib` for EEVEE.
+#      error Ensure createInfo includes draw_hair for general use or eevee_legacy_hair_lib for EEVEE.
 #    endif
 #  endif /* !USE_GPU_SHADER_CREATE_INFO */
 

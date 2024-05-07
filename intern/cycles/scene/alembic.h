@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: Apache-2.0
- * Copyright 2011-2022 Blender Foundation */
+/* SPDX-FileCopyrightText: 2011-2022 Blender Foundation
+ *
+ * SPDX-License-Identifier: Apache-2.0 */
 
 #pragma once
 
@@ -31,11 +32,9 @@ struct MatrixSamplesData {
 };
 
 /* Helpers to detect if some type is a `ccl::array`. */
-template<typename> struct is_array : public std::false_type {
-};
+template<typename> struct is_array : public std::false_type {};
 
-template<typename T> struct is_array<array<T>> : public std::true_type {
-};
+template<typename T> struct is_array<array<T>> : public std::true_type {};
 
 /* Holds the data for a cache lookup at a given time, as well as information to
  * help disambiguate successes or failures to get data from the cache. */
@@ -397,6 +396,10 @@ class AlembicObject : public Node {
   void load_data_in_cache(CachedData &cached_data,
                           AlembicProcedural *proc,
                           const Alembic::AbcGeom::ICurvesSchema &schema,
+                          Progress &progress);
+  void load_data_in_cache(CachedData &cached_data,
+                          AlembicProcedural *proc,
+                          const Alembic::AbcGeom::IPointsSchema &schema,
                           Progress &progress);
 
   bool has_data_loaded() const;

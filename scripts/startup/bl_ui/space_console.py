@@ -1,4 +1,7 @@
+# SPDX-FileCopyrightText: 2009-2023 Blender Authors
+#
 # SPDX-License-Identifier: GPL-2.0-or-later
+
 import bpy
 from bpy.types import Header, Menu
 
@@ -7,8 +10,7 @@ class CONSOLE_HT_header(Header):
     bl_space_type = 'CONSOLE'
 
     def draw(self, context):
-        layout = self.layout.row()
-
+        layout = self.layout
         layout.template_header()
 
         CONSOLE_MT_editor_menus.draw_collapsible(context, layout)
@@ -71,9 +73,7 @@ class CONSOLE_MT_language(Menu):
         languages.sort()
 
         for language in languages:
-            layout.operator("console.language",
-                            text=language.title(),
-                            translate=False).language = language
+            layout.operator("console.language", text=language.title(), translate=False).language = language
 
 
 class CONSOLE_MT_console(Menu):
@@ -90,6 +90,7 @@ class CONSOLE_MT_console(Menu):
         layout.separator()
 
         layout.operator("console.copy_as_script", text="Copy as Script")
+        layout.operator("console.copy", text="Cut").delete = True
         layout.operator("console.copy", text="Copy")
         layout.operator("console.paste", text="Paste")
 
@@ -109,7 +110,7 @@ class CONSOLE_MT_console(Menu):
 
 
 class CONSOLE_MT_context_menu(Menu):
-    bl_label = "Console Context Menu"
+    bl_label = "Console"
 
     def draw(self, _context):
         layout = self.layout
@@ -122,6 +123,7 @@ class CONSOLE_MT_context_menu(Menu):
         layout.separator()
 
         layout.operator("console.copy_as_script", text="Copy as Script")
+        layout.operator("console.copy", text="Cut").delete = True
         layout.operator("console.copy", text="Copy")
         layout.operator("console.paste", text="Paste")
 

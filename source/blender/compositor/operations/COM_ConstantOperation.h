@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2021 Blender Foundation. */
+/* SPDX-FileCopyrightText: 2021 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #pragma once
 
@@ -27,7 +28,7 @@ class ConstantOperation : public NodeOperation {
 
   void update_memory_buffer(MemoryBuffer *output,
                             const rcti &area,
-                            Span<MemoryBuffer *> inputs) final;
+                            Span<MemoryBuffer *> inputs) override;
 };
 
 }  // namespace blender::compositor

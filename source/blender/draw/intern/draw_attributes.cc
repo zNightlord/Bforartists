@@ -1,7 +1,15 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2022 Blender Foundation. All rights reserved. */
+/* SPDX-FileCopyrightText: 2022 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
+
+#include "BLI_string.h"
+
+#include "BKE_attribute.hh"
+#include "BKE_customdata.hh"
 
 #include "draw_attributes.hh"
+
+namespace blender::draw {
 
 /* Return true if the given DRW_AttributeRequest is already in the requests. */
 static bool drw_attributes_has_request(const DRW_Attributes *requests,
@@ -10,7 +18,8 @@ static bool drw_attributes_has_request(const DRW_Attributes *requests,
   for (int i = 0; i < requests->num_requests; i++) {
     const DRW_AttributeRequest &src_req = requests->requests[i];
     if (src_req.domain == req.domain && src_req.layer_index == req.layer_index &&
-        src_req.cd_type == req.cd_type) {
+        src_req.cd_type == req.cd_type)
+    {
       return true;
     }
   }
@@ -36,7 +45,7 @@ static void drw_attributes_merge_requests(const DRW_Attributes *src_requests,
 
 void drw_attributes_clear(DRW_Attributes *attributes)
 {
-  memset(attributes, 0, sizeof(DRW_Attributes));
+  *attributes = {};
 }
 
 void drw_attributes_merge(DRW_Attributes *dst, const DRW_Attributes *src, std::mutex &render_mutex)
@@ -60,16 +69,17 @@ void drw_attributes_add_request(DRW_Attributes *attrs,
                                 const char *name,
                                 const eCustomDataType type,
                                 const int layer_index,
-                                const eAttrDomain domain)
+                                const blender::bke::AttrDomain domain)
 {
   if (attrs->num_requests >= GPU_MAX_ATTR ||
-      drw_attributes_has_request(attrs, {type, layer_index, domain})) {
+      drw_attributes_has_request(attrs, {type, layer_index, domain}))
+  {
     return;
   }
 
   DRW_AttributeRequest *req = &attrs->requests[attrs->num_requests];
   req->cd_type = type;
-  BLI_strncpy(req->attribute_name, name, sizeof(req->attribute_name));
+  STRNCPY(req->attribute_name, name);
   req->layer_index = layer_index;
   req->domain = domain;
   attrs->num_requests += 1;
@@ -80,14 +90,16 @@ bool drw_custom_data_match_attribute(const CustomData *custom_data,
                                      int *r_layer_index,
                                      eCustomDataType *r_type)
 {
-  const eCustomDataType possible_attribute_types[8] = {
+  const eCustomDataType possible_attribute_types[10] = {
       CD_PROP_BOOL,
       CD_PROP_INT8,
+      CD_PROP_INT32_2D,
       CD_PROP_INT32,
       CD_PROP_FLOAT,
       CD_PROP_FLOAT2,
       CD_PROP_FLOAT3,
       CD_PROP_COLOR,
+      CD_PROP_QUATERNION,
       CD_PROP_BYTE_COLOR,
   };
 
@@ -105,3 +117,5 @@ bool drw_custom_data_match_attribute(const CustomData *custom_data,
 
   return false;
 }
+
+}  // namespace blender::draw

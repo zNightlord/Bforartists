@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2011 Blender Foundation. */
+/* SPDX-FileCopyrightText: 2011 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #pragma once
 
@@ -22,8 +23,6 @@ class TextureBaseOperation : public MultiThreadedOperation {
  private:
   Tex *texture_;
   const RenderData *rd_;
-  SocketReader *input_size_;
-  SocketReader *input_offset_;
   struct ImagePool *pool_;
   bool scene_color_manage_;
 
@@ -39,8 +38,6 @@ class TextureBaseOperation : public MultiThreadedOperation {
   TextureBaseOperation();
 
  public:
-  void execute_pixel_sampled(float output[4], float x, float y, PixelSampler sampler) override;
-
   void set_texture(Tex *texture)
   {
     texture_ = texture;
@@ -68,7 +65,6 @@ class TextureOperation : public TextureBaseOperation {
 class TextureAlphaOperation : public TextureBaseOperation {
  public:
   TextureAlphaOperation();
-  void execute_pixel_sampled(float output[4], float x, float y, PixelSampler sampler) override;
 
   void update_memory_buffer_partial(MemoryBuffer *output,
                                     const rcti &area,

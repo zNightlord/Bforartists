@@ -1,4 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* SPDX-FileCopyrightText: 2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "COM_MultiThreadedOperation.h"
 #include "COM_ExecutionSystem.h"
@@ -9,7 +11,6 @@ MultiThreadedOperation::MultiThreadedOperation()
 {
   num_passes_ = 1;
   current_pass_ = 0;
-  flags_.is_fullframe_operation = true;
 }
 
 void MultiThreadedOperation::update_memory_buffer(MemoryBuffer *output,

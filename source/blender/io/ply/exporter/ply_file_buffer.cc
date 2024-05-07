@@ -1,10 +1,17 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* SPDX-FileCopyrightText: 2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup ply
  */
 
 #include "ply_file_buffer.hh"
+
+#include "BLI_fileops.hh"
+
+#include <iostream>
+#include <system_error>
 
 namespace blender::io::ply {
 
@@ -62,14 +69,6 @@ void FileBuffer::write_string(StringRef s)
 void FileBuffer::write_newline()
 {
   write_fstring("\n");
-}
-
-void FileBuffer::ensure_space(size_t at_least)
-{
-  if (blocks_.is_empty() || (blocks_.last().capacity() - blocks_.last().size() < at_least)) {
-    blocks_.append(VectorChar());
-    blocks_.reserve(std::max(at_least, buffer_chunk_size_));
-  }
 }
 
 void FileBuffer::write_bytes(Span<char> bytes)

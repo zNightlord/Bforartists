@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: Apache-2.0
- * Copyright 2011-2022 Blender Foundation */
+/* SPDX-FileCopyrightText: 2011-2022 Blender Foundation
+ *
+ * SPDX-License-Identifier: Apache-2.0 */
 
 #pragma once
 
@@ -98,8 +99,9 @@ class RenderScheduler {
   bool is_background() const;
 
   void set_denoiser_params(const DenoiseParams &params);
-  void set_adaptive_sampling(const AdaptiveSampling &adaptive_sampling);
+  bool is_denoiser_gpu_used() const;
 
+  void set_adaptive_sampling(const AdaptiveSampling &adaptive_sampling);
   bool is_adaptive_sampling_used() const;
 
   /* Start sample for path tracing.
@@ -332,6 +334,8 @@ class RenderScheduler {
   };
 
   struct {
+    bool user_is_navigating = false;
+
     int resolution_divider = 1;
 
     /* Number of rendered samples on top of the start sample. */

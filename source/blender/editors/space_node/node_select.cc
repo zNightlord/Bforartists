@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2008 Blender Foundation. All rights reserved. */
+/* SPDX-FileCopyrightText: 2008 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup spnode
@@ -7,43 +8,43 @@
 
 #include <array>
 #include <cstdlib>
+#include <iostream>
 
 #include "DNA_node_types.h"
 #include "DNA_windowmanager_types.h"
 
-#include "BLI_lasso_2d.h"
+#include "BLI_lasso_2d.hh"
 #include "BLI_listbase.h"
 #include "BLI_rect.h"
 #include "BLI_string.h"
-#include "BLI_string_search.h"
 #include "BLI_string_utf8.h"
 #include "BLI_utildefines.h"
 
-#include "BKE_context.h"
-#include "BKE_main.h"
-#include "BKE_node.h"
+#include "BKE_context.hh"
+#include "BKE_main.hh"
+#include "BKE_node.hh"
 #include "BKE_node_runtime.hh"
-#include "BKE_node_tree_update.h"
-#include "BKE_workspace.h"
+#include "BKE_node_tree_update.hh"
+#include "BKE_workspace.hh"
 
-#include "ED_node.h"  /* own include */
 #include "ED_node.hh" /* own include */
-#include "ED_screen.h"
-#include "ED_select_utils.h"
-#include "ED_view3d.h"
+#include "ED_screen.hh"
+#include "ED_select_utils.hh"
+#include "ED_view3d.hh"
 #include "ED_viewer_path.hh"
 
-#include "RNA_access.h"
-#include "RNA_define.h"
+#include "RNA_access.hh"
+#include "RNA_define.hh"
 
-#include "WM_api.h"
-#include "WM_types.h"
+#include "WM_api.hh"
+#include "WM_types.hh"
 
-#include "UI_interface.h"
-#include "UI_resources.h"
-#include "UI_view2d.h"
+#include "UI_interface.hh"
+#include "UI_resources.hh"
+#include "UI_string_search.hh"
+#include "UI_view2d.hh"
 
-#include "DEG_depsgraph.h"
+#include "DEG_depsgraph.hh"
 
 #include "MEM_guardedalloc.h"
 
@@ -88,9 +89,9 @@ static bool has_workbench_in_texture_color(const wmWindowManager *wm,
 /** \name Public Node Selection API
  * \{ */
 
-rctf node_frame_rect_inside(const bNode &node)
+rctf node_frame_rect_inside(const SpaceNode &snode, const bNode &node)
 {
-  const float margin = 1.5f * U.widget_unit;
+  const float margin = 4.0f * NODE_RESIZE_MARGIN * math::max(snode.runtime->aspect, 1.0f);
   rctf frame_inside = {
       node.runtime->totr.xmin,
       node.runtime->totr.xmax,
@@ -108,25 +109,28 @@ bool node_or_socket_isect_event(const bContext &C, const wmEvent &event)
   return is_event_over_node_or_socket(C, event);
 }
 
-static bool node_frame_select_isect_mouse(const bNode &node, const float2 &mouse)
+static bool node_frame_select_isect_mouse(const SpaceNode &snode,
+                                          const bNode &node,
+                                          const float2 &mouse)
 {
   /* Frame nodes are selectable by their borders (including their whole rect - as for other nodes -
    * would prevent e.g. box selection of nodes inside that frame). */
-  const rctf frame_inside = node_frame_rect_inside(node);
+  const rctf frame_inside = node_frame_rect_inside(snode, node);
   if (BLI_rctf_isect_pt(&node.runtime->totr, mouse.x, mouse.y) &&
-      !BLI_rctf_isect_pt(&frame_inside, mouse.x, mouse.y)) {
+      !BLI_rctf_isect_pt(&frame_inside, mouse.x, mouse.y))
+  {
     return true;
   }
 
   return false;
 }
 
-static bNode *node_under_mouse_select(bNodeTree &ntree, const float2 mouse)
+static bNode *node_under_mouse_select(const SpaceNode &snode, const float2 mouse)
 {
-  LISTBASE_FOREACH_BACKWARD (bNode *, node, &ntree.nodes) {
+  for (bNode *node : tree_draw_order_calc_nodes_reversed(*snode.edittree)) {
     switch (node->type) {
       case NODE_FRAME: {
-        if (node_frame_select_isect_mouse(*node, mouse)) {
+        if (node_frame_select_isect_mouse(snode, *node, mouse)) {
           return node;
         }
         break;
@@ -142,9 +146,9 @@ static bNode *node_under_mouse_select(bNodeTree &ntree, const float2 mouse)
   return nullptr;
 }
 
-static bool node_under_mouse_tweak(const bNodeTree &ntree, const float2 &mouse)
+static bool node_under_mouse_tweak(const SpaceNode &snode, const float2 &mouse)
 {
-  LISTBASE_FOREACH_BACKWARD (const bNode *, node, &ntree.nodes) {
+  for (bNode *node : tree_draw_order_calc_nodes_reversed(*snode.edittree)) {
     switch (node->type) {
       case NODE_REROUTE: {
         const float2 location = node_to_view(*node, {node->locx, node->locy});
@@ -154,7 +158,7 @@ static bool node_under_mouse_tweak(const bNodeTree &ntree, const float2 &mouse)
         break;
       }
       case NODE_FRAME: {
-        if (node_frame_select_isect_mouse(*node, mouse)) {
+        if (node_frame_select_isect_mouse(snode, *node, mouse)) {
           return true;
         }
         break;
@@ -170,12 +174,12 @@ static bool node_under_mouse_tweak(const bNodeTree &ntree, const float2 &mouse)
   return false;
 }
 
-static bool is_position_over_node_or_socket(SpaceNode &snode, const float2 &mouse)
+static bool is_position_over_node_or_socket(SpaceNode &snode, ARegion &region, const float2 &mouse)
 {
-  if (node_under_mouse_tweak(*snode.edittree, mouse)) {
+  if (node_under_mouse_tweak(snode, mouse)) {
     return true;
   }
-  if (node_find_indicated_socket(snode, mouse, SOCK_IN | SOCK_OUT)) {
+  if (node_find_indicated_socket(snode, region, mouse, SOCK_IN | SOCK_OUT)) {
     return true;
   }
   return false;
@@ -191,7 +195,7 @@ static bool is_event_over_node_or_socket(const bContext &C, const wmEvent &event
 
   float2 mouse;
   UI_view2d_region_to_view(&region.v2d, mval.x, mval.y, &mouse.x, &mouse.y);
-  return is_position_over_node_or_socket(snode, mouse);
+  return is_position_over_node_or_socket(snode, region, mouse);
 }
 
 void node_socket_select(bNode *node, bNodeSocket &sock)
@@ -241,11 +245,13 @@ static void node_socket_toggle(bNode *node, bNodeSocket &sock, bool deselect_nod
   }
 }
 
-void node_deselect_all(bNodeTree &node_tree)
+bool node_deselect_all(bNodeTree &node_tree)
 {
+  bool changed = false;
   for (bNode *node : node_tree.all_nodes()) {
-    nodeSetSelected(node, false);
+    changed |= nodeSetSelected(node, false);
   }
+  return changed;
 }
 
 void node_deselect_all_input_sockets(bNodeTree &node_tree, const bool deselect_nodes)
@@ -303,6 +309,22 @@ void node_deselect_all_output_sockets(bNodeTree &node_tree, const bool deselect_
 
       if (!sel) {
         node->flag &= ~SELECT;
+      }
+    }
+  }
+}
+
+void node_select_paired(bNodeTree &node_tree)
+{
+  for (const bke::bNodeZoneType *zone_type : bke::all_zone_types()) {
+    for (bNode *input_node : node_tree.nodes_by_type(zone_type->input_idname)) {
+      if (bNode *output_node = zone_type->get_corresponding_output(node_tree, *input_node)) {
+        if (input_node->flag & NODE_SELECT) {
+          output_node->flag |= NODE_SELECT;
+        }
+        if (output_node->flag & NODE_SELECT) {
+          input_node->flag |= NODE_SELECT;
+        }
       }
     }
   }
@@ -386,7 +408,8 @@ static bool node_select_grouped_name(bNodeTree &node_tree, bNode &node_act, cons
 
     if ((from_right && STREQ(suf_act, suf_curr)) ||
         (!from_right && (pref_len_act == pref_len_curr) &&
-         STREQLEN(node_act.name, node->name, pref_len_act))) {
+         STREQLEN(node_act.name, node->name, pref_len_act)))
+    {
       nodeSetSelected(node, true);
       changed = true;
     }
@@ -439,7 +462,7 @@ static int node_select_grouped_exec(bContext *C, wmOperator *op)
   }
 
   if (changed) {
-    node_sort(node_tree);
+    tree_draw_order_update(node_tree);
     WM_event_add_notifier(C, NC_NODE | NA_SELECTED, nullptr);
     return OPERATOR_FINISHED;
   }
@@ -507,9 +530,9 @@ void node_select_single(bContext &C, bNode &node)
   ED_node_set_active(bmain, &snode, &node_tree, &node, &active_texture_changed);
   ED_node_set_active_viewer_key(&snode);
 
-  node_sort(node_tree);
+  tree_draw_order_update(node_tree);
   if (active_texture_changed && has_workbench_in_texture_color(wm, scene, ob)) {
-    DEG_id_tag_update(&node_tree.id, ID_RECALC_COPY_ON_WRITE);
+    DEG_id_tag_update(&node_tree.id, ID_RECALC_SYNC_TO_EVAL);
   }
 
   WM_event_add_notifier(&C, NC_NODE | NA_SELECTED, nullptr);
@@ -545,7 +568,7 @@ static bool node_mouse_select(bContext *C,
   if (socket_select) {
     /* NOTE: unlike nodes #SelectPick_Params isn't fully supported. */
     const bool extend = (params->sel_op == SEL_OP_XOR);
-    sock = node_find_indicated_socket(snode, cursor, SOCK_IN);
+    sock = node_find_indicated_socket(snode, region, cursor, SOCK_IN);
     if (sock) {
       node = &sock->owner_node();
       found = true;
@@ -557,7 +580,7 @@ static bool node_mouse_select(bContext *C,
       changed = true;
     }
     if (!changed) {
-      sock = node_find_indicated_socket(snode, cursor, SOCK_OUT);
+      sock = node_find_indicated_socket(snode, region, cursor, SOCK_OUT);
       if (sock) {
         node = &sock->owner_node();
         found = true;
@@ -600,7 +623,7 @@ static bool node_mouse_select(bContext *C,
   if (!sock) {
 
     /* Find the closest visible node. */
-    node = node_under_mouse_select(node_tree, cursor);
+    node = node_under_mouse_select(snode, cursor);
     found = (node != nullptr);
     node_was_selected = node && (node->flag & SELECT);
 
@@ -610,8 +633,7 @@ static bool node_mouse_select(bContext *C,
       }
       else if (found || params->deselect_all) {
         /* Deselect everything. */
-        node_deselect_all(node_tree);
-        changed = true;
+        changed = node_deselect_all(node_tree);
       }
     }
 
@@ -665,10 +687,11 @@ static bool node_mouse_select(bContext *C,
     viewer_path::activate_geometry_node(bmain, snode, *node);
   }
   ED_node_set_active_viewer_key(&snode);
-  node_sort(node_tree);
+  tree_draw_order_update(node_tree);
   if ((active_texture_changed && has_workbench_in_texture_color(wm, scene, ob)) ||
-      viewer_node_changed) {
-    DEG_id_tag_update(&snode.edittree->id, ID_RECALC_COPY_ON_WRITE);
+      viewer_node_changed)
+  {
+    DEG_id_tag_update(&snode.edittree->id, ID_RECALC_SYNC_TO_EVAL);
   }
 
   WM_event_add_notifier(C, NC_NODE | NA_SELECTED, nullptr);
@@ -775,9 +798,10 @@ static int node_box_select_exec(bContext *C, wmOperator *op)
       case NODE_FRAME: {
         /* Frame nodes are selectable by their borders (including their whole rect - as for other
          * nodes - would prevent selection of other nodes inside that frame. */
-        const rctf frame_inside = node_frame_rect_inside(*node);
+        const rctf frame_inside = node_frame_rect_inside(snode, *node);
         if (BLI_rctf_isect(&rectf, &node->runtime->totr, nullptr) &&
-            !BLI_rctf_inside_rctf(&frame_inside, &rectf)) {
+            !BLI_rctf_inside_rctf(&frame_inside, &rectf))
+        {
           nodeSetSelected(node, select);
           is_inside = true;
         }
@@ -794,7 +818,7 @@ static int node_box_select_exec(bContext *C, wmOperator *op)
     }
   }
 
-  node_sort(node_tree);
+  tree_draw_order_update(node_tree);
 
   WM_event_add_notifier(C, NC_NODE | NA_SELECTED, nullptr);
 
@@ -878,11 +902,12 @@ static int node_circleselect_exec(bContext *C, wmOperator *op)
       case NODE_FRAME: {
         /* Frame nodes are selectable by their borders (including their whole rect - as for other
          * nodes - would prevent selection of _only_ other nodes inside that frame. */
-        rctf frame_inside = node_frame_rect_inside(*node);
+        rctf frame_inside = node_frame_rect_inside(*snode, *node);
         const float radius_adjusted = float(radius) / zoom;
         BLI_rctf_pad(&frame_inside, -2.0f * radius_adjusted, -2.0f * radius_adjusted);
         if (BLI_rctf_isect_circle(&node->runtime->totr, offset, radius_adjusted) &&
-            !BLI_rctf_isect_circle(&frame_inside, offset, radius_adjusted)) {
+            !BLI_rctf_isect_circle(&frame_inside, offset, radius_adjusted))
+        {
           nodeSetSelected(node, select);
         }
         break;
@@ -940,10 +965,7 @@ static int node_lasso_select_invoke(bContext *C, wmOperator *op, const wmEvent *
   return WM_gesture_lasso_invoke(C, op, event);
 }
 
-static bool do_lasso_select_node(bContext *C,
-                                 const int mcoords[][2],
-                                 const int mcoords_len,
-                                 eSelectOp sel_op)
+static bool do_lasso_select_node(bContext *C, const Span<int2> mcoords, eSelectOp sel_op)
 {
   SpaceNode *snode = CTX_wm_space_node(C);
   bNodeTree &node_tree = *snode->edittree;
@@ -960,7 +982,7 @@ static bool do_lasso_select_node(bContext *C,
   }
 
   /* Get rectangle from operator. */
-  BLI_lasso_boundbox(&rect, mcoords, mcoords_len);
+  BLI_lasso_boundbox(&rect, mcoords);
 
   for (bNode *node : node_tree.all_nodes()) {
     if (select && (node->flag & NODE_SELECT)) {
@@ -974,9 +996,10 @@ static bool do_lasso_select_node(bContext *C,
         rctf rectf;
         BLI_rctf_rcti_copy(&rectf, &rect);
         UI_view2d_region_to_view_rctf(&region->v2d, &rectf, &rectf);
-        const rctf frame_inside = node_frame_rect_inside(*node);
+        const rctf frame_inside = node_frame_rect_inside(*snode, *node);
         if (BLI_rctf_isect(&rectf, &node->runtime->totr, nullptr) &&
-            !BLI_rctf_inside_rctf(&frame_inside, &rectf)) {
+            !BLI_rctf_inside_rctf(&frame_inside, &rectf))
+        {
           nodeSetSelected(node, select);
           changed = true;
         }
@@ -991,7 +1014,8 @@ static bool do_lasso_select_node(bContext *C,
         if (UI_view2d_view_to_region_clip(
                 &region->v2d, center.x, center.y, &screen_co.x, &screen_co.y) &&
             BLI_rcti_isect_pt(&rect, screen_co.x, screen_co.y) &&
-            BLI_lasso_is_point_inside(mcoords, mcoords_len, screen_co.x, screen_co.y, INT_MAX)) {
+            BLI_lasso_is_point_inside(mcoords, screen_co.x, screen_co.y, INT_MAX))
+        {
           nodeSetSelected(node, select);
           changed = true;
         }
@@ -1009,19 +1033,17 @@ static bool do_lasso_select_node(bContext *C,
 
 static int node_lasso_select_exec(bContext *C, wmOperator *op)
 {
-  int mcoords_len;
-  const int(*mcoords)[2] = WM_gesture_lasso_path_to_array(C, op, &mcoords_len);
+  const Array<int2> mcoords = WM_gesture_lasso_path_to_array(C, op);
 
-  if (mcoords) {
-    const eSelectOp sel_op = (eSelectOp)RNA_enum_get(op->ptr, "mode");
-
-    do_lasso_select_node(C, mcoords, mcoords_len, sel_op);
-
-    MEM_freeN((void *)mcoords);
-
-    return OPERATOR_FINISHED;
+  if (mcoords.is_empty()) {
+    return OPERATOR_PASS_THROUGH;
   }
-  return OPERATOR_PASS_THROUGH;
+
+  const eSelectOp sel_op = (eSelectOp)RNA_enum_get(op->ptr, "mode");
+
+  do_lasso_select_node(C, mcoords, sel_op);
+
+  return OPERATOR_FINISHED;
 }
 
 void NODE_OT_select_lasso(wmOperatorType *ot)
@@ -1101,7 +1123,7 @@ static int node_select_all_exec(bContext *C, wmOperator *op)
       break;
   }
 
-  node_sort(node_tree);
+  tree_draw_order_update(node_tree);
 
   WM_event_add_notifier(C, NC_NODE | NA_SELECTED, nullptr);
   return OPERATOR_FINISHED;
@@ -1153,7 +1175,7 @@ static int node_select_linked_to_exec(bContext *C, wmOperator * /*op*/)
     }
   }
 
-  node_sort(node_tree);
+  tree_draw_order_update(node_tree);
 
   WM_event_add_notifier(C, NC_NODE | NA_SELECTED, nullptr);
   return OPERATOR_FINISHED;
@@ -1203,7 +1225,7 @@ static int node_select_linked_from_exec(bContext *C, wmOperator * /*op*/)
     }
   }
 
-  node_sort(node_tree);
+  tree_draw_order_update(node_tree);
 
   WM_event_add_notifier(C, NC_NODE | NA_SELECTED, nullptr);
   return OPERATOR_FINISHED;
@@ -1240,7 +1262,11 @@ static int node_select_same_type_step_exec(bContext *C, wmOperator *op)
   SpaceNode *snode = CTX_wm_space_node(C);
   ARegion *region = CTX_wm_region(C);
   const bool prev = RNA_boolean_get(op->ptr, "prev");
-  bNode &active_node = *nodeGetActive(snode->edittree);
+  bNode *active_node = nodeGetActive(snode->edittree);
+
+  if (active_node == nullptr) {
+    return OPERATOR_CANCELLED;
+  }
 
   bNodeTree &node_tree = *snode->edittree;
   node_tree.ensure_topology_cache();
@@ -1249,7 +1275,7 @@ static int node_select_same_type_step_exec(bContext *C, wmOperator *op)
   }
 
   const Span<const bNode *> toposort = node_tree.toposort_left_to_right();
-  const int index = toposort.first_index(&active_node);
+  const int index = toposort.first_index(active_node);
 
   int new_index = index;
   while (true) {
@@ -1257,13 +1283,13 @@ static int node_select_same_type_step_exec(bContext *C, wmOperator *op)
     if (!toposort.index_range().contains(new_index)) {
       return OPERATOR_CANCELLED;
     }
-    if (nodes_are_same_type_for_select(*toposort[new_index], active_node)) {
+    if (nodes_are_same_type_for_select(*toposort[new_index], *active_node)) {
       break;
     }
   }
 
   bNode *new_active_node = node_tree.all_nodes()[toposort[new_index]->index()];
-  if (new_active_node == &active_node) {
+  if (new_active_node == active_node) {
     return OPERATOR_CANCELLED;
   }
 
@@ -1300,13 +1326,13 @@ void NODE_OT_select_same_type_step(wmOperatorType *ot)
 /** \name Find Node by Name Operator
  * \{ */
 
-static void node_find_create_label(const bNode *node, char *str, int maxlen)
+static void node_find_create_label(const bNode *node, char *str, int str_maxncpy)
 {
   if (node->label[0]) {
-    BLI_snprintf(str, maxlen, "%s (%s)", node->name, node->label);
+    BLI_snprintf(str, str_maxncpy, "%s (%s)", node->name, node->label);
   }
   else {
-    BLI_strncpy(str, node->name, maxlen);
+    BLI_strncpy(str, node->name, str_maxncpy);
   }
 }
 
@@ -1319,28 +1345,23 @@ static void node_find_update_fn(const bContext *C,
 {
   SpaceNode *snode = CTX_wm_space_node(C);
 
-  StringSearch *search = BLI_string_search_new();
+  ui::string_search::StringSearch<bNode> search;
 
   for (bNode *node : snode->edittree->all_nodes()) {
     char name[256];
     node_find_create_label(node, name, ARRAY_SIZE(name));
-    BLI_string_search_add(search, name, node, 0);
+    search.add(name, node);
   }
 
-  bNode **filtered_nodes;
-  int filtered_amount = BLI_string_search_query(search, str, (void ***)&filtered_nodes);
+  const Vector<bNode *> filtered_nodes = search.query(str);
 
-  for (int i = 0; i < filtered_amount; i++) {
-    bNode *node = filtered_nodes[i];
+  for (bNode *node : filtered_nodes) {
     char name[256];
     node_find_create_label(node, name, ARRAY_SIZE(name));
     if (!UI_search_item_add(items, name, node, ICON_NONE, 0, 0)) {
       break;
     }
   }
-
-  MEM_freeN(filtered_nodes);
-  BLI_string_search_free(search);
 }
 
 static void node_find_exec_fn(bContext *C, void * /*arg1*/, void *arg2)
@@ -1378,8 +1399,6 @@ static uiBlock *node_find_menu(bContext *C, ARegion *region, void *arg_op)
                        10,
                        UI_searchbox_size_x(),
                        UI_UNIT_Y,
-                       0,
-                       0,
                        "");
   UI_but_func_search_set(
       but, nullptr, node_find_update_fn, op->type, false, nullptr, node_find_exec_fn, nullptr);
@@ -1395,8 +1414,6 @@ static uiBlock *node_find_menu(bContext *C, ARegion *region, void *arg_op)
            UI_searchbox_size_x(),
            UI_searchbox_size_y(),
            nullptr,
-           0,
-           0,
            0,
            0,
            nullptr);

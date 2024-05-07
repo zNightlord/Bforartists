@@ -1,8 +1,10 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* SPDX-FileCopyrightText: 2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #pragma once
 
-#include "GPU_shader.h"
+#include "GPU_shader.hh"
 
 #include "COM_context.hh"
 #include "COM_domain.hh"
@@ -40,10 +42,6 @@ class RealizeOnDomainOperation : public SimpleOperation {
  protected:
   /* The operation domain is just the target domain. */
   Domain compute_domain() override;
-
- private:
-  /* Get the realization shader of the appropriate type. */
-  GPUShader *get_realization_shader();
 };
 
 }  // namespace blender::realtime_compositor

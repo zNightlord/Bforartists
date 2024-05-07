@@ -1,4 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* SPDX-FileCopyrightText: 2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup gpu
@@ -8,10 +10,10 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "GPU_batch.h"
-#include "GPU_capabilities.h"
-#include "GPU_shader.h"
-#include "GPU_vertex_format.h"
+#include "GPU_batch.hh"
+#include "GPU_capabilities.hh"
+#include "GPU_shader.hh"
+#include "GPU_vertex_format.hh"
 
 #include <Metal/Metal.h>
 #include <QuartzCore/QuartzCore.h>
@@ -46,6 +48,13 @@ class MTLContext;
 #  define shader_debug_printf(...) /* Null print. */
 #endif
 
+/* Offset base specialization constant ID for function constants declared in CreateInfo. */
+#define MTL_SHADER_SPECIALIZATION_CONSTANT_BASE_ID 30
+/* Maximum threshold for specialized shader variant count.
+ * This is a catch-all to prevent excessive PSO permutations from being created and also catch
+ * parameters which should ideally not be used for specialization. */
+#define MTL_SHADER_MAX_SPECIALIZED_PSOS 5
+
 /* Desired reflection data for a buffer binding. */
 struct MTLBufferArgumentData {
   uint32_t index;
@@ -71,7 +80,7 @@ struct MTLRenderPipelineStateInstance {
    * bound buffers such as vertex buffers, as the count can vary. */
   int base_uniform_buffer_index;
   /* Base bind index for binding storage buffers. */
-  int base_ssbo_buffer_index;
+  int base_storage_buffer_index;
   /* buffer bind slot used for null attributes (-1 if not needed). */
   int null_attribute_buffer_index;
   /* buffer bind used for transform feedback output buffer. */
@@ -90,19 +99,10 @@ struct MTLRenderPipelineStateInstance {
   blender::Vector<MTLBufferArgumentData> buffer_bindings_reflection_data_frag;
 };
 
-/* Metal COmpute Pipeline State instance. */
-struct MTLComputePipelineStateInstance {
-  /* Function instances with specialization.
-   * Required for argument encoder construction. */
-  id<MTLFunction> compute = nil;
-  /* PSO handle. */
-  id<MTLComputePipelineState> pso = nil;
-  /* Base bind index for binding uniform buffers, offset based on other
-   * bound buffers such as vertex buffers, as the count can vary. */
-  int base_uniform_buffer_index = -1;
-  /* Base bind index for binding storage buffers. */
-  int base_ssbo_buffer_index = -1;
+/* Common compute pipeline state. */
+struct MTLComputePipelineStateCommon {
 
+  /* Thread-group information is common for all PSO variants. */
   int threadgroup_x_len = 1;
   int threadgroup_y_len = 1;
   int threadgroup_z_len = 1;
@@ -115,6 +115,25 @@ struct MTLComputePipelineStateInstance {
     this->threadgroup_y_len = workgroup_size_y;
     this->threadgroup_z_len = workgroup_size_z;
   }
+};
+
+/* Metal Compute Pipeline State instance per PSO. */
+struct MTLComputePipelineStateInstance {
+
+  /** Derived information. */
+  /* Unique index for PSO variant. */
+  uint32_t shader_pso_index;
+  /* Base bind index for binding uniform buffers, offset based on other
+   * bound buffers such as vertex buffers, as the count can vary. */
+  int base_uniform_buffer_index = -1;
+  /* Base bind index for binding storage buffers. */
+  int base_storage_buffer_index = -1;
+
+  /* Function instances with specialization.
+   * Required for argument encoder construction. */
+  id<MTLFunction> compute = nil;
+  /* PSO handle. */
+  id<MTLComputePipelineState> pso = nil;
 };
 
 /* #MTLShaderBuilder source wrapper used during initial compilation. */
@@ -144,7 +163,7 @@ struct MTLShaderBuilder {
  * - set MSL source.
  * - set Vertex/Fragment function names.
  * - Create and populate #MTLShaderInterface.
- **/
+ */
 class MTLShader : public Shader {
   friend shader::ShaderCreateInfo;
   friend shader::StageInterfaceInfo;
@@ -168,7 +187,7 @@ class MTLShader : public Shader {
   /* Whether transform feedback is currently active. */
   bool transform_feedback_active_ = false;
   /* Vertex buffer to write transform feedback data into. */
-  GPUVertBuf *transform_feedback_vertbuf_ = nullptr;
+  VertBuf *transform_feedback_vertbuf_ = nullptr;
 
   /** Shader source code. */
   MTLShaderBuilder *shd_builder_ = nullptr;
@@ -193,10 +212,15 @@ class MTLShader : public Shader {
   std::mutex pso_cache_lock_;
 
   /** Compute pipeline state and Compute PSO caching. */
-  MTLComputePipelineStateInstance compute_pso_instance_;
+  MTLComputePipelineStateCommon compute_pso_common_state_;
+  blender::Map<MTLComputePipelineStateDescriptor, MTLComputePipelineStateInstance *>
+      compute_pso_cache_;
 
   /* True to enable multi-layered rendering support. */
-  bool uses_mtl_array_index_ = false;
+  bool uses_gpu_layer = false;
+
+  /* True to enable multi-viewport rendering support. */
+  bool uses_gpu_viewport_index = false;
 
   /** SSBO Vertex fetch pragma options. */
   /* Indicates whether to pass in VertexBuffer's as regular buffer bindings
@@ -239,6 +263,9 @@ class MTLShader : public Shader {
   void *push_constant_data_ = nullptr;
   bool push_constant_modified_ = false;
 
+  /** Special definition for Max TotalThreadsPerThreadgroup tuning. */
+  uint maxTotalThreadsPerThreadgroup_Tuning_ = 0;
+
  public:
   MTLShader(MTLContext *ctx, const char *name);
   MTLShader(MTLContext *ctx,
@@ -249,6 +276,8 @@ class MTLShader : public Shader {
             NSString *vertex_function_name_,
             NSString *fragment_function_name_);
   ~MTLShader();
+
+  void init(const shader::ShaderCreateInfo & /*info*/) override {}
 
   /* Assign GLSL source. */
   void vertex_shader_from_glsl(MutableSpan<const char *> sources) override;
@@ -291,7 +320,7 @@ class MTLShader : public Shader {
 
   void transform_feedback_names_set(Span<const char *> name_list,
                                     const eGPUShaderTFBType geom_type) override;
-  bool transform_feedback_enable(GPUVertBuf *buf) override;
+  bool transform_feedback_enable(VertBuf *buf) override;
   void transform_feedback_disable() override;
 
   void bind() override;
@@ -302,23 +331,25 @@ class MTLShader : public Shader {
   bool get_push_constant_is_dirty();
   void push_constant_bindstate_mark_dirty(bool is_dirty);
 
+  /* SSBO vertex fetch draw parameters. */
+  bool get_uses_ssbo_vertex_fetch() const override
+  {
+    return use_ssbo_vertex_fetch_mode_;
+  }
+  int get_ssbo_vertex_fetch_output_num_verts() const override
+  {
+    return ssbo_vertex_fetch_output_num_verts_;
+  }
+
   /* DEPRECATED: Kept only because of BGL API. (Returning -1 in METAL). */
   int program_handle_get() const override
   {
     return -1;
   }
 
-  bool get_uses_ssbo_vertex_fetch()
-  {
-    return use_ssbo_vertex_fetch_mode_;
-  }
   MTLPrimitiveType get_ssbo_vertex_fetch_output_prim_type()
   {
     return ssbo_vertex_fetch_output_prim_type_;
-  }
-  uint32_t get_ssbo_vertex_fetch_output_num_verts()
-  {
-    return ssbo_vertex_fetch_output_num_verts_;
   }
   static int ssbo_vertex_type_to_attr_type(MTLVertexFormat attribute_type);
   void prepare_ssbo_vertex_fetch_metadata();
@@ -343,11 +374,13 @@ class MTLShader : public Shader {
       MTLPrimitiveTopologyClass prim_type,
       const MTLRenderPipelineStateDescriptor &pipeline_descriptor);
 
-  bool bake_compute_pipeline_state(MTLContext *ctx);
-  const MTLComputePipelineStateInstance &get_compute_pipeline_state();
-
+  MTLComputePipelineStateInstance *bake_compute_pipeline_state(MTLContext *ctx);
+  const MTLComputePipelineStateCommon &get_compute_common_state()
+  {
+    return compute_pso_common_state_;
+  }
   /* Transform Feedback. */
-  GPUVertBuf *get_transform_feedback_active_buffer();
+  VertBuf *get_transform_feedback_active_buffer();
   bool has_transform_feedback_varying(std::string str);
 
  private:
@@ -672,7 +705,8 @@ inline bool mtl_convert_vertex_format(MTLVertexFormat shader_attrib_format,
           if (shader_attrib_format == MTLVertexFormatChar ||
               shader_attrib_format == MTLVertexFormatChar2 ||
               shader_attrib_format == MTLVertexFormatChar3 ||
-              shader_attrib_format == MTLVertexFormatChar4) {
+              shader_attrib_format == MTLVertexFormatChar4)
+          {
 
             /* No conversion Needed (as type matches) - Just a vector resize if needed. */
             bool can_convert = mtl_vertex_format_resize(
@@ -752,7 +786,8 @@ inline bool mtl_convert_vertex_format(MTLVertexFormat shader_attrib_format,
           if (shader_attrib_format == MTLVertexFormatUChar ||
               shader_attrib_format == MTLVertexFormatUChar2 ||
               shader_attrib_format == MTLVertexFormatUChar3 ||
-              shader_attrib_format == MTLVertexFormatUChar4) {
+              shader_attrib_format == MTLVertexFormatUChar4)
+          {
 
             /* No conversion Needed (as type matches) - Just a vector resize if needed. */
             bool can_convert = mtl_vertex_format_resize(
@@ -837,7 +872,8 @@ inline bool mtl_convert_vertex_format(MTLVertexFormat shader_attrib_format,
           if (shader_attrib_format == MTLVertexFormatShort ||
               shader_attrib_format == MTLVertexFormatShort2 ||
               shader_attrib_format == MTLVertexFormatShort3 ||
-              shader_attrib_format == MTLVertexFormatShort4) {
+              shader_attrib_format == MTLVertexFormatShort4)
+          {
             /* No conversion Needed (as type matches) - Just a vector resize if needed. */
             bool can_convert = mtl_vertex_format_resize(
                 shader_attrib_format, component_length, &out_vert_format);
@@ -892,7 +928,8 @@ inline bool mtl_convert_vertex_format(MTLVertexFormat shader_attrib_format,
           if (shader_attrib_format == MTLVertexFormatUShort ||
               shader_attrib_format == MTLVertexFormatUShort2 ||
               shader_attrib_format == MTLVertexFormatUShort3 ||
-              shader_attrib_format == MTLVertexFormatUShort4) {
+              shader_attrib_format == MTLVertexFormatUShort4)
+          {
             /* No conversion Needed (as type matches) - Just a vector resize if needed. */
             bool can_convert = mtl_vertex_format_resize(
                 shader_attrib_format, component_length, &out_vert_format);
@@ -947,7 +984,8 @@ inline bool mtl_convert_vertex_format(MTLVertexFormat shader_attrib_format,
           if (shader_attrib_format == MTLVertexFormatInt ||
               shader_attrib_format == MTLVertexFormatInt2 ||
               shader_attrib_format == MTLVertexFormatInt3 ||
-              shader_attrib_format == MTLVertexFormatInt4) {
+              shader_attrib_format == MTLVertexFormatInt4)
+          {
             /* No conversion Needed (as type matches) - Just a vector resize if needed. */
             bool can_convert = mtl_vertex_format_resize(
                 shader_attrib_format, component_length, &out_vert_format);
@@ -978,7 +1016,8 @@ inline bool mtl_convert_vertex_format(MTLVertexFormat shader_attrib_format,
           if (shader_attrib_format == MTLVertexFormatUInt ||
               shader_attrib_format == MTLVertexFormatUInt2 ||
               shader_attrib_format == MTLVertexFormatUInt3 ||
-              shader_attrib_format == MTLVertexFormatUInt4) {
+              shader_attrib_format == MTLVertexFormatUInt4)
+          {
             /* No conversion Needed (as type matches) - Just a vector resize if needed. */
             bool can_convert = mtl_vertex_format_resize(
                 shader_attrib_format, component_length, &out_vert_format);
@@ -1014,7 +1053,8 @@ inline bool mtl_convert_vertex_format(MTLVertexFormat shader_attrib_format,
           if (shader_attrib_format == MTLVertexFormatFloat ||
               shader_attrib_format == MTLVertexFormatFloat2 ||
               shader_attrib_format == MTLVertexFormatFloat3 ||
-              shader_attrib_format == MTLVertexFormatFloat4) {
+              shader_attrib_format == MTLVertexFormatFloat4)
+          {
             /* No conversion Needed (as type matches) - Just a vector resize, if needed. */
             bool can_convert = mtl_vertex_format_resize(
                 shader_attrib_format, component_length, &out_vert_format);

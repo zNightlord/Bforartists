@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2021-2023 Blender Authors
+#
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 import argparse
 import make_utils
 import os
-import re
 import subprocess
+import sys
 from pathlib import Path
 from typing import Iterable, TextIO, Optional, Any, Union
 
@@ -30,7 +32,7 @@ def main() -> None:
     blender_srcdir = Path(__file__).absolute().parent.parent.parent
 
     cli_parser = argparse.ArgumentParser(
-        description=f"Create a tarball of the Blender sources, optionally including sources of dependencies.",
+        description="Create a tarball of the Blender sources, optionally including sources of dependencies.",
         epilog="This script is intended to be run by `make source_archive_complete`.",
     )
     cli_parser.add_argument(
@@ -112,6 +114,7 @@ def create_manifest(
     print(f'Building manifest of files:  "{outpath}"...', end="", flush=True)
     with outpath.open("w", encoding="utf-8") as outfile:
         main_files_to_manifest(blender_srcdir, outfile)
+        assets_to_manifest(blender_srcdir, outfile)
         submodules_to_manifest(blender_srcdir, version, outfile)
 
         if packages_dir:
@@ -131,15 +134,25 @@ def submodules_to_manifest(
     skip_addon_contrib = version.is_release()
     assert not blender_srcdir.is_absolute()
 
-    for line in git_command("-C", blender_srcdir, "submodule"):
-        submodule = line.split()[1]
-
+    for submodule in ("scripts/addons", "scripts/addons_contrib"):
         # Don't use native slashes as GIT for MS-Windows outputs forward slashes.
         if skip_addon_contrib and submodule == "scripts/addons_contrib":
             continue
 
         for path in git_ls_files(blender_srcdir / submodule):
             print(path, file=outfile)
+
+
+def assets_to_manifest(blender_srcdir: Path, outfile: TextIO) -> None:
+    assert not blender_srcdir.is_absolute()
+
+    assets_dir = blender_srcdir.parent / "lib" / "assets"
+    for path in assets_dir.glob("*"):
+        if path.name == "working":
+            continue
+        if path.name in SKIP_NAMES:
+            continue
+        print(path, file=outfile)
 
 
 def packages_to_manifest(outfile: TextIO, packages_dir: Path) -> None:
@@ -163,16 +176,23 @@ def create_tarball(
     packages_dir: Optional[Path],
 ) -> None:
     print(f'Creating archive:            "{tarball}" ...', end="", flush=True)
-    command = ["tar"]
 
     # Requires GNU `tar`, since `--transform` is used.
+    if sys.platform == "darwin":
+        # Provided by `brew install gnu-tar`.
+        command = ["gtar"]
+    else:
+        command = ["tar"]
+
     if packages_dir:
         command += ["--transform", f"s,{packages_dir}/,packages/,g"]
 
     command += [
         "--transform",
         f"s,^{blender_srcdir.name}/,blender-{version}/,g",
-        "--use-compress-program=xz -9",
+        "--transform",
+        f"s,^lib/assets/,blender-{version}/release/datafiles/assets/,g",
+        "--use-compress-program=xz -1",
         "--create",
         f"--file={tarball}",
         f"--files-from={manifest}",

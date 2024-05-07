@@ -1,7 +1,12 @@
-/* SPDX-License-Identifier: Apache-2.0
- * Copyright 2011-2022 Blender Foundation */
+/* SPDX-FileCopyrightText: 2011-2022 Blender Foundation
+ *
+ * SPDX-License-Identifier: Apache-2.0 */
 
 #pragma once
+
+#if !defined(__KERNEL_GPU__)
+#  include <OSL/oslversion.h>
+#endif
 
 CCL_NAMESPACE_BEGIN
 
@@ -38,6 +43,7 @@ enum OSLClosureType {
 
 #define OSL_CLOSURE_STRUCT_BEGIN(Upper, lower) OSL_CLOSURE_##Upper##_ID,
 #include "closures_template.h"
+  OSL_CLOSURE_LAYER_ID,
 };
 
 struct OSLClosure {
@@ -80,6 +86,11 @@ struct ShaderGlobals {
   ccl_private void *tracedata;
   ccl_private void *objdata;
   void *context;
+#if OSL_LIBRARY_VERSION_CODE >= 11304
+  void *shadingStateUniform;
+  int thread_index;
+  int shade_index;
+#endif
   void *renderer;
   ccl_private void *object2common;
   ccl_private void *shader2common;
@@ -90,11 +101,9 @@ struct ShaderGlobals {
   int backfacing;
 };
 
-struct OSLNoiseOptions {
-};
+struct OSLNoiseOptions {};
 
-struct OSLTextureOptions {
-};
+struct OSLTextureOptions {};
 
 #define OSL_TEXTURE_HANDLE_TYPE_IES ((uintptr_t)0x2 << 30)
 #define OSL_TEXTURE_HANDLE_TYPE_SVM ((uintptr_t)0x1 << 30)

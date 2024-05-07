@@ -1,11 +1,12 @@
+# SPDX-FileCopyrightText: 2010-2023 Blender Authors
+#
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 from bpy.types import Operator
 from mathutils import Vector
 
 
-def randomize_selected(context, seed, delta,
-                       loc, rot, scale, scale_even, _scale_min):
+def randomize_selected(context, seed, delta, loc, rot, scale, scale_even, _scale_min):
 
     import random
     from random import uniform
@@ -22,8 +23,11 @@ def randomize_selected(context, seed, delta,
                 obj.delta_location += rand_vec(loc)
             else:
                 obj.location += rand_vec(loc)
-        else:  # otherwise the values change under us
-            uniform(0.0, 0.0), uniform(0.0, 0.0), uniform(0.0, 0.0)
+        else:
+            # Otherwise the values change under us.
+            uniform(0.0, 0.0)
+            uniform(0.0, 0.0)
+            uniform(0.0, 0.0)
 
         if rot:
             vec = rand_vec(rot)
@@ -68,7 +72,9 @@ def randomize_selected(context, seed, delta,
             else:
                 obj.scale = aX, aY, aZ
         else:
-            uniform(0.0, 0.0), uniform(0.0, 0.0), uniform(0.0, 0.0)
+            uniform(0.0, 0.0)
+            uniform(0.0, 0.0)
+            uniform(0.0, 0.0)
 
 
 from bpy.props import (
@@ -93,8 +99,7 @@ class RandomizeLocRotSize(Operator):
     )
     use_delta: BoolProperty(
         name="Transform Delta",
-        description=("Randomize delta transform values "
-                     "instead of regular transform"),
+        description="Randomize delta transform values instead of regular transform",
         default=False,
     )
     use_loc: BoolProperty(
@@ -104,8 +109,7 @@ class RandomizeLocRotSize(Operator):
     )
     loc: FloatVectorProperty(
         name="Location",
-        description=("Maximum distance the objects "
-                     "can spread over each axis"),
+        description="Maximum distance the objects can spread over each axis",
         min=-100.0,
         max=100.0,
         default=(0.0, 0.0, 0.0),
@@ -167,8 +171,7 @@ class RandomizeLocRotSize(Operator):
         # scale_min = self.scale_min
         scale_min = 0
 
-        randomize_selected(context, seed, delta,
-                           loc, rot, scale, scale_even, scale_min)
+        randomize_selected(context, seed, delta, loc, rot, scale, scale_even, scale_min)
 
         return {'FINISHED'}
 

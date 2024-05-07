@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: Apache-2.0
- * Copyright 2018-2022 Blender Foundation. */
+/* SPDX-FileCopyrightText: 2018-2022 Blender Foundation
+ *
+ * SPDX-License-Identifier: Apache-2.0 */
 
 /* This class implements a ray accelerator for Cycles using Intel's Embree library.
  * It supports triangles, curves, object and deformation blur and instancing.
@@ -17,7 +18,11 @@
 
 #ifdef WITH_EMBREE
 
-#  include <embree3/rtcore_geometry.h>
+#  if EMBREE_MAJOR_VERSION >= 4
+#    include <embree4/rtcore_geometry.h>
+#  else
+#    include <embree3/rtcore_geometry.h>
+#  endif
 
 #  include "bvh/embree.h"
 
@@ -107,9 +112,13 @@ BVHEmbree::~BVHEmbree()
   }
 }
 
-void BVHEmbree::build(Progress &progress, Stats *stats, RTCDevice rtc_device_)
+void BVHEmbree::build(Progress &progress,
+                      Stats *stats,
+                      RTCDevice rtc_device_,
+                      const bool rtc_device_is_sycl_)
 {
   rtc_device = rtc_device_;
+  rtc_device_is_sycl = rtc_device_is_sycl_;
   assert(rtc_device);
 
   rtcSetDeviceErrorFunction(rtc_device, rtc_error_func, NULL);
@@ -128,7 +137,11 @@ void BVHEmbree::build(Progress &progress, Stats *stats, RTCDevice rtc_device_)
   scene = rtcNewScene(rtc_device);
   const RTCSceneFlags scene_flags = (dynamic ? RTC_SCENE_FLAG_DYNAMIC : RTC_SCENE_FLAG_NONE) |
                                     (compact ? RTC_SCENE_FLAG_COMPACT : RTC_SCENE_FLAG_NONE) |
-                                    RTC_SCENE_FLAG_ROBUST;
+                                    RTC_SCENE_FLAG_ROBUST
+#  if EMBREE_MAJOR_VERSION >= 4
+                                    | RTC_SCENE_FLAG_FILTER_FUNCTION_IN_ARGUMENTS
+#  endif
+      ;
   rtcSetSceneFlags(scene, scene_flags);
   build_quality = dynamic ? RTC_BUILD_QUALITY_LOW :
                             (params.use_spatial_split ? RTC_BUILD_QUALITY_HIGH :
@@ -226,6 +239,9 @@ void BVHEmbree::add_instance(Object *ob, int i)
 
   rtcSetGeometryUserData(geom_id, (void *)instance_bvh->scene);
   rtcSetGeometryMask(geom_id, ob->visibility_for_tracing());
+#  if EMBREE_MAJOR_VERSION >= 4
+  rtcSetGeometryEnableFilterFunctionFromArguments(geom_id, true);
+#  endif
 
   rtcCommitGeometry(geom_id);
   rtcAttachGeometryByID(scene, geom_id, i * 2);
@@ -255,21 +271,39 @@ void BVHEmbree::add_triangles(const Object *ob, const Mesh *mesh, int i)
   rtcSetGeometryTimeStepCount(geom_id, num_motion_steps);
 
   const int *triangles = mesh->get_triangles().data();
-  rtcSetSharedGeometryBuffer(geom_id,
-                             RTC_BUFFER_TYPE_INDEX,
-                             0,
-                             RTC_FORMAT_UINT3,
-                             triangles,
-                             0,
-                             sizeof(int) * 3,
-                             num_triangles);
-
+  if (!rtc_device_is_sycl) {
+    rtcSetSharedGeometryBuffer(geom_id,
+                               RTC_BUFFER_TYPE_INDEX,
+                               0,
+                               RTC_FORMAT_UINT3,
+                               triangles,
+                               0,
+                               sizeof(int) * 3,
+                               num_triangles);
+  }
+  else {
+    /* NOTE(sirgienko): If the Embree device is a SYCL device, then Embree execution will
+     * happen on GPU, and we cannot use standard host pointers at this point. So instead
+     * of making a shared geometry buffer - a new Embree buffer will be created and data
+     * will be copied. */
+    int *triangles_buffer = (int *)rtcSetNewGeometryBuffer(
+        geom_id, RTC_BUFFER_TYPE_INDEX, 0, RTC_FORMAT_UINT3, sizeof(int) * 3, num_triangles);
+    assert(triangles_buffer);
+    if (triangles_buffer) {
+      static_assert(sizeof(int) == sizeof(uint));
+      std::memcpy(triangles_buffer, triangles, sizeof(int) * 3 * (num_triangles));
+    }
+  }
   set_tri_vertex_buffer(geom_id, mesh, false);
 
   rtcSetGeometryUserData(geom_id, (void *)prim_offset);
+  rtcSetGeometryMask(geom_id, ob->visibility_for_tracing());
+#  if EMBREE_MAJOR_VERSION >= 4
+  rtcSetGeometryEnableFilterFunctionFromArguments(geom_id, true);
+#  else
   rtcSetGeometryOccludedFilterFunction(geom_id, kernel_embree_filter_occluded_func);
   rtcSetGeometryIntersectFilterFunction(geom_id, kernel_embree_filter_intersection_func);
-  rtcSetGeometryMask(geom_id, ob->visibility_for_tracing());
+#  endif
 
   rtcCommitGeometry(geom_id);
   rtcAttachGeometryByID(scene, geom_id, i * 2);
@@ -308,14 +342,45 @@ void BVHEmbree::set_tri_vertex_buffer(RTCGeometry geom_id, const Mesh *mesh, con
       rtcUpdateGeometryBuffer(geom_id, RTC_BUFFER_TYPE_VERTEX, t);
     }
     else {
-      rtcSetSharedGeometryBuffer(geom_id,
-                                 RTC_BUFFER_TYPE_VERTEX,
-                                 t,
-                                 RTC_FORMAT_FLOAT3,
-                                 verts,
-                                 0,
-                                 sizeof(float3),
-                                 num_verts + 1);
+      if (!rtc_device_is_sycl) {
+        /* NOTE(sirgienko) Embree requires padding for VERTEX layout as last buffer element
+         * must be readable using 16-byte SSE load instructions. Because of this, we are
+         * artificially increasing shared buffer size by 1 - it shouldn't cause any memory
+         * access violation as this last element is not accessed directly since no triangle
+         * can reference it. */
+        rtcSetSharedGeometryBuffer(geom_id,
+                                   RTC_BUFFER_TYPE_VERTEX,
+                                   t,
+                                   RTC_FORMAT_FLOAT3,
+                                   verts,
+                                   0,
+                                   sizeof(float3),
+                                   num_verts + 1);
+      }
+      else {
+        /* NOTE(sirgienko): If the Embree device is a SYCL device, then Embree execution will
+         * happen on GPU, and we cannot use standard host pointers at this point. So instead
+         * of making a shared geometry buffer - a new Embree buffer will be created and data
+         * will be copied. */
+        /* As float3 is packed on GPU side, we map it to packed_float3. */
+        /* There is no need for additional padding in rtcSetNewGeometryBuffer since Embree 3.6:
+         * "Fixed automatic vertex buffer padding when using rtcSetNewGeometry API function". */
+        packed_float3 *verts_buffer = (packed_float3 *)rtcSetNewGeometryBuffer(
+            geom_id,
+            RTC_BUFFER_TYPE_VERTEX,
+            t,
+            RTC_FORMAT_FLOAT3,
+            sizeof(packed_float3),
+            num_verts);
+        assert(verts_buffer);
+        if (verts_buffer) {
+          for (size_t i = (size_t)0; i < num_verts; ++i) {
+            verts_buffer[i].x = verts[i].x;
+            verts_buffer[i].y = verts[i].y;
+            verts_buffer[i].z = verts[i].z;
+          }
+        }
+      }
     }
   }
 }
@@ -406,20 +471,6 @@ void BVHEmbree::set_curve_vertex_buffer(RTCGeometry geom_id, const Hair *hair, c
   }
 }
 
-/**
- * Pack the motion points into a float4 as [x y z radius]
- */
-template<typename T>
-void pack_motion_points(size_t num_points, const T *verts, const float *radius, float4 *rtc_verts)
-{
-  for (size_t j = 0; j < num_points; ++j) {
-    rtc_verts[j].x = verts[j].x;
-    rtc_verts[j].y = verts[j].y;
-    rtc_verts[j].z = verts[j].z;
-    rtc_verts[j].w = radius[j];
-  }
-}
-
 void BVHEmbree::set_point_vertex_buffer(RTCGeometry geom_id,
                                         const PointCloud *pointcloud,
                                         const bool update)
@@ -455,13 +506,20 @@ void BVHEmbree::set_point_vertex_buffer(RTCGeometry geom_id,
     assert(rtc_verts);
     if (rtc_verts) {
       if (t == t_mid || attr_mP == NULL) {
+        /* Pack the motion points into a float4 as [x y z radius]. */
         const float3 *verts = pointcloud->get_points().data();
-        pack_motion_points<float3>(num_points, verts, radius, rtc_verts);
+        for (size_t j = 0; j < num_points; ++j) {
+          rtc_verts[j].x = verts[j].x;
+          rtc_verts[j].y = verts[j].y;
+          rtc_verts[j].z = verts[j].z;
+          rtc_verts[j].w = radius[j];
+        }
       }
       else {
+        /* Motion blur is already packed as [x y z radius]. */
         int t_ = (t > t_mid) ? (t - 1) : t;
         const float4 *verts = &attr_mP->data_float4()[t_ * num_points];
-        pack_motion_points<float4>(num_points, verts, radius, rtc_verts);
+        memcpy(rtc_verts, verts, sizeof(float4) * num_points);
       }
     }
 
@@ -494,9 +552,13 @@ void BVHEmbree::add_points(const Object *ob, const PointCloud *pointcloud, int i
   set_point_vertex_buffer(geom_id, pointcloud, false);
 
   rtcSetGeometryUserData(geom_id, (void *)prim_offset);
+  rtcSetGeometryMask(geom_id, ob->visibility_for_tracing());
+#  if EMBREE_MAJOR_VERSION >= 4
+  rtcSetGeometryEnableFilterFunctionFromArguments(geom_id, true);
+#  else
   rtcSetGeometryIntersectFilterFunction(geom_id, kernel_embree_filter_func_backface_cull);
   rtcSetGeometryOccludedFilterFunction(geom_id, kernel_embree_filter_occluded_func_backface_cull);
-  rtcSetGeometryMask(geom_id, ob->visibility_for_tracing());
+#  endif
 
   rtcCommitGeometry(geom_id);
   rtcAttachGeometryByID(scene, geom_id, i * 2);
@@ -553,6 +615,10 @@ void BVHEmbree::add_curves(const Object *ob, const Hair *hair, int i)
   set_curve_vertex_buffer(geom_id, hair, false);
 
   rtcSetGeometryUserData(geom_id, (void *)prim_offset);
+  rtcSetGeometryMask(geom_id, ob->visibility_for_tracing());
+#  if EMBREE_MAJOR_VERSION >= 4
+  rtcSetGeometryEnableFilterFunctionFromArguments(geom_id, true);
+#  else
   if (hair->curve_shape == CURVE_RIBBON) {
     rtcSetGeometryIntersectFilterFunction(geom_id, kernel_embree_filter_intersection_func);
     rtcSetGeometryOccludedFilterFunction(geom_id, kernel_embree_filter_occluded_func);
@@ -562,7 +628,7 @@ void BVHEmbree::add_curves(const Object *ob, const Hair *hair, int i)
     rtcSetGeometryOccludedFilterFunction(geom_id,
                                          kernel_embree_filter_occluded_func_backface_cull);
   }
-  rtcSetGeometryMask(geom_id, ob->visibility_for_tracing());
+#  endif
 
   rtcCommitGeometry(geom_id);
   rtcAttachGeometryByID(scene, geom_id, i * 2 + 1);

@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2009-2023 Blender Authors
+#
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 from _bpy import types as bpy_types
@@ -9,7 +11,7 @@ StructMetaPropGroup = bpy_types.bpy_struct_meta_idprop
 # Private dummy object use for comparison only.
 _sentinel = object()
 
-# Note that methods extended in C are defined in: 'bpy_rna_types_capi.c'
+# Note that methods extended in C are defined in: `bpy_rna_types_capi.cc`.
 
 
 class Context(StructRNA):
@@ -25,7 +27,7 @@ class Context(StructRNA):
         :type coerce: boolean
         """
         # This is a convenience wrapper around `StructRNA.path_resolve` which doesn't support accessing context members.
-        # Without this wrapper many users were writing `exec("context.%s" % data_path)` which is a security
+        # Without this wrapper many users were writing `exec("context.{:s}".format(data_path))` which is a security
         # concern if the `data_path` comes from an unknown source.
         # This function performs the initial lookup, after that the regular `path_resolve` function is used.
 
@@ -51,7 +53,7 @@ class Context(StructRNA):
         # to simplify exception handling for the caller.
         value = getattr(self, attr, _sentinel)
         if value is _sentinel:
-            raise ValueError("Path could not be resolved: %r" % attr)
+            raise ValueError("Path could not be resolved: {!r}".format(attr))
 
         if value is None:
             return value
@@ -60,22 +62,22 @@ class Context(StructRNA):
         if isinstance(value, list) and path_rest.startswith("["):
             index_str, div, index_tail = path_rest[1:].partition("]")
             if not div:
-                raise ValueError("Path index is not terminated: %s%s" % (attr, path_rest))
+                raise ValueError("Path index is not terminated: {:s}{:s}".format(attr, path_rest))
             try:
                 index = int(index_str)
             except ValueError:
-                raise ValueError("Path index is invalid: %s[%s]" % (attr, index_str))
+                raise ValueError("Path index is invalid: {:s}[{:s}]".format(attr, index_str))
             if 0 <= index < len(value):
                 path_rest = index_tail
                 value = value[index]
             else:
-                raise IndexError("Path index out of range: %s[%s]" % (attr, index_str))
+                raise IndexError("Path index out of range: {:s}[{:s}]".format(attr, index_str))
 
         # Resolve the rest of the path if necessary.
         if path_rest:
             path_resolve_fn = getattr(value, "path_resolve", None)
             if path_resolve_fn is None:
-                raise ValueError("Path %s resolves to a non RNA value" % attr)
+                raise ValueError("Path {:s} resolves to a non RNA value".format(attr))
             return path_resolve_fn(path_rest, coerce)
 
         return value
@@ -85,13 +87,21 @@ class Context(StructRNA):
         new_context = {}
         generic_attrs = (
             *StructRNA.__dict__.keys(),
-            "bl_rna", "rna_type", "copy",
+            "bl_rna",
+            "rna_type",
+            "copy",
         )
+        function_types = {BuiltinMethodType, bpy_types.bpy_func}
         for attr in dir(self):
-            if not (attr.startswith("_") or attr in generic_attrs):
-                value = getattr(self, attr)
-                if type(value) != BuiltinMethodType:
-                    new_context[attr] = value
+            if attr.startswith("_"):
+                continue
+            if attr in generic_attrs:
+                continue
+            value = getattr(self, attr)
+            if type(value) in function_types:
+                continue
+
+            new_context[attr] = value
 
         return new_context
 
@@ -104,7 +114,7 @@ class Library(bpy_types.ID):
         """ID data blocks which use this library"""
         import bpy
 
-        # See: readblenentry.c, IDTYPE_FLAGS_ISLINKABLE,
+        # See: `readblenentry.cc`, IDTYPE_FLAGS_ISLINKABLE,
         # we could make this an attribute in rna.
         attr_links = (
             "actions", "armatures", "brushes", "cameras",
@@ -176,7 +186,10 @@ class Object(bpy_types.ID):
 
     @property
     def children(self):
-        """All the children of this object.
+        """
+        All the children of this object.
+
+        :type: tuple of :class:`Object`
 
         .. note:: Takes ``O(len(bpy.data.objects))`` time."""
         import bpy
@@ -185,7 +198,10 @@ class Object(bpy_types.ID):
 
     @property
     def children_recursive(self):
-        """A list of all children from this object.
+        """
+        A list of all children from this object.
+
+        :type: tuple of :class:`Object`
 
         .. note:: Takes ``O(len(bpy.data.objects))`` time."""
         import bpy
@@ -209,6 +225,8 @@ class Object(bpy_types.ID):
         """
         The collections this object is in.
 
+        :type: tuple of :class:`Collection`
+
         .. note:: Takes ``O(len(bpy.data.collections) + len(bpy.data.scenes))`` time."""
         import bpy
         return (
@@ -223,7 +241,10 @@ class Object(bpy_types.ID):
 
     @property
     def users_scene(self):
-        """The scenes this object is in.
+        """
+        The scenes this object is in.
+
+        :type: tuple of :class:`Scene`
 
         .. note:: Takes ``O(len(bpy.data.scenes) * len(bpy.data.objects))`` time."""
         import bpy
@@ -440,14 +461,14 @@ class _GenericBone:
     def _other_bones(self):
         id_data = self.id_data
 
-        # `id_data` is an 'Object' for `PosePone`, otherwise it's an `Armature`.
+        # `id_data` is an `Object` for `PosePone`, otherwise it's an `Armature`.
         if isinstance(self, PoseBone):
             return id_data.pose.bones
         if isinstance(self, EditBone):
             return id_data.edit_bones
         if isinstance(self, Bone):
             return id_data.bones
-        raise RuntimeError("Invalid type %r" % self)
+        raise RuntimeError("Invalid type {!r}".format(self))
 
 
 class PoseBone(StructRNA, _GenericBone, metaclass=StructMetaPropGroup):
@@ -517,16 +538,62 @@ class EditBone(StructRNA, _GenericBone, metaclass=StructMetaPropGroup):
             self.align_roll(matrix @ z_vec)
 
 
+class BoneCollection(StructRNA, metaclass=StructMetaPropGroup):
+    __slots__ = ()
+
+    @property
+    def bones_recursive(self):
+        """A set of all bones assigned to this bone collection and its child collections."""
+        bones = set()
+        collections = [self]
+
+        while collections:
+            visit = collections.pop()
+            bones.update(visit.bones)
+            collections.extend(visit.children)
+        return bones
+
+
 def ord_ind(i1, i2):
     if i1 < i2:
         return i1, i2
     return i2, i1
 
 
+def _name_convention_attribute_get(attributes, name, domain, data_type):
+    try:
+        attribute = attributes[name]
+    except KeyError:
+        return None
+    if attribute.domain != domain:
+        return None
+    if attribute.data_type != data_type:
+        return None
+    return attribute
+
+
+def _name_convention_attribute_ensure(attributes, name, domain, data_type):
+    try:
+        attribute = attributes[name]
+    except KeyError:
+        return attributes.new(name, data_type, domain)
+    if attribute.domain == domain and attribute.data_type == data_type:
+        return attribute
+    attributes.remove(attribute)
+    return attributes.new(name, data_type, domain)
+
+
+def _name_convention_attribute_remove(attributes, name):
+    try:
+        attributes.remove(attributes[name])
+    except KeyError:
+        pass
+
+
 class Mesh(bpy_types.ID):
     __slots__ = ()
 
-    def from_pydata(self, vertices, edges, faces):
+    def from_pydata(self, vertices, edges, faces, shade_flat=True):
         """
         Make a mesh from a list of vertices/edges/faces
         Until we have a nicer way to make geometry, use this.
@@ -580,9 +647,11 @@ class Mesh(bpy_types.ID):
         vertex_indices = tuple(chain.from_iterable(faces))
         loop_starts = tuple(islice(chain([0], accumulate(face_lengths)), faces_len))
 
-        self.polygons.foreach_set("loop_total", face_lengths)
         self.polygons.foreach_set("loop_start", loop_starts)
         self.polygons.foreach_set("vertices", vertex_indices)
+
+        if shade_flat:
+            self.shade_flat()
 
         if edges_len or faces_len:
             self.update(
@@ -597,6 +666,61 @@ class Mesh(bpy_types.ID):
     @property
     def edge_keys(self):
         return [ed.key for ed in self.edges]
+
+    @property
+    def vertex_creases(self):
+        """
+        Vertex crease values for subdivision surface, corresponding to the "crease_vert" attribute.
+        """
+        return _name_convention_attribute_get(self.attributes, "crease_vert", 'POINT', 'FLOAT')
+
+    def vertex_creases_ensure(self):
+        return _name_convention_attribute_ensure(self.attributes, "crease_vert", 'POINT', 'FLOAT')
+
+    def vertex_creases_remove(self):
+        _name_convention_attribute_remove(self.attributes, "crease_vert")
+
+    @property
+    def edge_creases(self):
+        """
+        Edge crease values for subdivision surface, corresponding to the "crease_edge" attribute.
+        """
+        return _name_convention_attribute_get(self.attributes, "crease_edge", 'EDGE', 'FLOAT')
+
+    def edge_creases_ensure(self):
+        return _name_convention_attribute_ensure(self.attributes, "crease_edge", 'EDGE', 'FLOAT')
+
+    def edge_creases_remove(self):
+        _name_convention_attribute_remove(self.attributes, "crease_edge")
+
+    @property
+    def vertex_paint_mask(self):
+        """
+        Mask values for sculpting and painting, corresponding to the ".sculpt_mask" attribute.
+        """
+        return _name_convention_attribute_get(self.attributes, ".sculpt_mask", 'POINT', 'FLOAT')
+
+    def vertex_paint_mask_ensure(self):
+        return _name_convention_attribute_ensure(self.attributes, ".sculpt_mask", 'POINT', 'FLOAT')
+
+    def vertex_paint_mask_remove(self):
+        _name_convention_attribute_remove(self.attributes, ".sculpt_mask")
+
+    def shade_flat(self):
+        """
+        Render and display faces uniform, using face normals,
+        setting the "sharp_face" attribute true for every face
+        """
+        sharp_faces = _name_convention_attribute_ensure(self.attributes, "sharp_face", 'FACE', 'BOOLEAN')
+        for value in sharp_faces.data:
+            value.value = True
+
+    def shade_smooth(self):
+        """
+        Render and display faces smooth, using interpolated vertex normals,
+        removing the "sharp_face" attribute
+        """
+        _name_convention_attribute_remove(self.attributes, "sharp_face")
 
 
 class MeshEdge(StructRNA):
@@ -689,7 +813,7 @@ class RNAMetaPropGroup(StructMetaPropGroup, RNAMeta):
     pass
 
 
-# Same as 'Operator'
+# Same as `Operator`.
 # only without 'as_keywords'
 class Gizmo(StructRNA):
     __slots__ = ()
@@ -725,15 +849,14 @@ class Gizmo(StructRNA):
     # Convenience wrappers around private `_gpu` module.
     def draw_custom_shape(self, shape, *, matrix=None, select_id=None):
         """
-        Draw a shape created form :class:`bpy.types.Gizmo.draw_custom_shape`.
+        Draw a shape created form :class:`Gizmo.draw_custom_shape`.
 
         :arg shape: The cached shape to draw.
         :type shape: Undefined.
-        :arg matrix: 4x4 matrix, when not given
-           :class:`bpy.types.Gizmo.matrix_world` is used.
+        :arg matrix: 4x4 matrix, when not given :class:`Gizmo.matrix_world` is used.
         :type matrix: :class:`mathutils.Matrix`
         :arg select_id: The selection id.
-           Only use when drawing within :class:`bpy.types.Gizmo.draw_select`.
+           Only use when drawing within :class:`Gizmo.draw_select`.
         :type select_it: int
         """
         import gpu
@@ -767,7 +890,7 @@ class Gizmo(StructRNA):
     @staticmethod
     def new_custom_shape(type, verts):
         """
-        Create a new shape that can be passed to :class:`bpy.types.Gizmo.draw_custom_shape`.
+        Create a new shape that can be passed to :class:`Gizmo.draw_custom_shape`.
 
         :arg type: The type of shape to create in (POINTS, LINES, TRIS, LINE_STRIP).
         :type type: string
@@ -852,11 +975,11 @@ class PropertyGroup(StructRNA, metaclass=RNAMetaPropGroup):
     __slots__ = ()
 
 
-class RenderEngine(StructRNA, metaclass=RNAMeta):
+class KeyingSetInfo(StructRNA, metaclass=RNAMeta):
     __slots__ = ()
 
 
-class KeyingSetInfo(StructRNA, metaclass=RNAMeta):
+class USDHook(StructRNA, metaclass=RNAMeta):
     __slots__ = ()
 
 
@@ -887,7 +1010,7 @@ class _GenericUI:
                 for func in draw_ls._draw_funcs:
 
                     # Begin 'owner_id' filter.
-                    # Exclude Import/Export menus from this filtering (io addons should always show there)
+                    # Exclude Import/Export menus from this filtering (IO add-ons should always show there).
                     if not getattr(self, "bl_owner_use_filter", True):
                         pass
                     elif owner_names is not None:
@@ -921,7 +1044,12 @@ class _GenericUI:
 
     @classmethod
     def is_extended(cls):
-        return bool(getattr(cls.draw, "_draw_funcs", None))
+        draw_funcs = getattr(cls.draw, "_draw_funcs", None)
+        if draw_funcs is None:
+            return False
+        # Ignore the first item (the original draw function).
+        # This can happen when enabling then disabling add-ons.
+        return len(draw_funcs) > 1
 
     @classmethod
     def append(cls, draw_func):
@@ -971,7 +1099,7 @@ class Menu(StructRNA, _GenericUI, metaclass=RNAMeta):
     def path_menu(self, searchpaths, operator, *,
                   props_default=None, prop_filepath="filepath",
                   filter_ext=None, filter_path=None, display_name=None,
-                  add_operator=None):
+                  add_operator=None, add_operator_props=None):
         """
         Populate a menu from a list of paths.
 
@@ -1048,6 +1176,9 @@ class Menu(StructRNA, _GenericUI, metaclass=RNAMeta):
                 props = row.operator(add_operator, text="", icon='REMOVE')
                 props.name = name
                 props.remove_name = True
+                if add_operator_props is not None:
+                    for attr, value in add_operator_props.items():
+                        setattr(props, attr, value)
 
         if add_operator:
             wm = bpy.data.window_managers[0]
@@ -1061,6 +1192,9 @@ class Menu(StructRNA, _GenericUI, metaclass=RNAMeta):
 
             props = row.operator(add_operator, text="", icon='ADD')
             props.name = wm.preset_name
+            if add_operator_props is not None:
+                for attr, value in add_operator_props.items():
+                    setattr(props, attr, value)
 
     def draw_preset(self, _context):
         """
@@ -1077,12 +1211,14 @@ class Menu(StructRNA, _GenericUI, metaclass=RNAMeta):
         ext_valid = getattr(self, "preset_extensions", {".py", ".xml"})
         props_default = getattr(self, "preset_operator_defaults", None)
         add_operator = getattr(self, "preset_add_operator", None)
+        add_operator_props = getattr(self, "preset_add_operator_properties", None)
         self.path_menu(
             bpy.utils.preset_paths(self.preset_subdir),
             self.preset_operator,
             props_default=props_default,
             filter_ext=lambda ext: ext.lower() in ext_valid,
             add_operator=add_operator,
+            add_operator_props=add_operator_props,
             display_name=lambda name: bpy.path.display_name(name, title_case=False)
         )
 
@@ -1095,6 +1231,14 @@ class Menu(StructRNA, _GenericUI, metaclass=RNAMeta):
             layout.row(align=True).menu_contents(cls.__name__)
         else:
             layout.menu(cls.__name__, icon='COLLAPSEMENU')
+
+
+class AssetShelf(StructRNA, metaclass=RNAMeta):
+    __slots__ = ()
+
+
+class FileHandler(StructRNA, metaclass=RNAMeta):
+    __slots__ = ()
 
 
 class NodeTree(bpy_types.ID, metaclass=RNAMetaPropGroup):
@@ -1122,13 +1266,22 @@ class NodeSocket(StructRNA, metaclass=RNAMetaPropGroup):
         List of node links from or to this socket.
 
         .. note:: Takes ``O(len(nodetree.links))`` time."""
-        return tuple(
-            link for link in self.id_data.links
-            if (link.from_socket == self or
-                link.to_socket == self))
+        links = (link for link in self.id_data.links
+                 if self in (link.from_socket, link.to_socket))
+
+        if not self.is_output:
+            links = sorted(links,
+                           key=lambda link: link.multi_input_sort_id,
+                           reverse=True)
+
+        return tuple(links)
 
 
-class NodeSocketInterface(StructRNA, metaclass=RNAMetaPropGroup):
+class NodeTreeInterfaceItem(StructRNA):
+    __slots__ = ()
+
+
+class NodeTreeInterfaceSocket(NodeTreeInterfaceItem, metaclass=RNAMetaPropGroup):
     __slots__ = ()
 
 
@@ -1166,3 +1319,71 @@ class GeometryNode(NodeInternal):
     @classmethod
     def poll(cls, ntree):
         return ntree.bl_idname == 'GeometryNodeTree'
+
+
+class RenderEngine(StructRNA, metaclass=RNAMeta):
+    __slots__ = ()
+
+
+class HydraRenderEngine(RenderEngine):
+    __slots__ = ()
+
+    bl_use_shading_nodes_custom = False
+    bl_delegate_id = 'HdStormRendererPlugin'
+
+    def __init__(self):
+        self.engine_ptr = None
+
+    def __del__(self):
+        if hasattr(self, 'engine_ptr'):
+            if self.engine_ptr:
+                import _bpy_hydra
+                _bpy_hydra.engine_free(self.engine_ptr)
+
+    def get_render_settings(self, engine_type: str):
+        """
+        Provide render settings for `HdRenderDelegate`.
+        """
+        return {}
+
+    # Final render.
+    def update(self, data, depsgraph):
+        import _bpy_hydra
+
+        engine_type = 'PREVIEW' if self.is_preview else 'FINAL'
+        if not self.engine_ptr:
+            self.engine_ptr = _bpy_hydra.engine_create(self, engine_type, self.bl_delegate_id)
+        if not self.engine_ptr:
+            return
+
+        _bpy_hydra.engine_update(self.engine_ptr, depsgraph, None)
+
+        for key, val in self.get_render_settings('PREVIEW' if self.is_preview else 'FINAL').items():
+            _bpy_hydra.engine_set_render_setting(self.engine_ptr, key, val)
+
+    def render(self, depsgraph):
+        if not self.engine_ptr:
+            return
+
+        import _bpy_hydra
+        _bpy_hydra.engine_render(self.engine_ptr)
+
+    # Viewport render.
+    def view_update(self, context, depsgraph):
+        import _bpy_hydra
+        if not self.engine_ptr:
+            self.engine_ptr = _bpy_hydra.engine_create(self, 'VIEWPORT', self.bl_delegate_id)
+        if not self.engine_ptr:
+            return
+
+        _bpy_hydra.engine_update(self.engine_ptr, depsgraph, context)
+
+        for key, val in self.get_render_settings('VIEWPORT').items():
+            _bpy_hydra.engine_set_render_setting(self.engine_ptr, key, val)
+
+    def view_draw(self, context, depsgraph):
+        if not self.engine_ptr:
+            return
+
+        import _bpy_hydra
+        _bpy_hydra.engine_view_draw(self.engine_ptr, context)

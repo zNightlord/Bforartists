@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2011-2023 Blender Authors
+#
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 __all__ = (
@@ -24,6 +26,13 @@ def _km_hierarchy_iter_recursive(items):
 
 
 def generate():
+    import bpy
+
+    if bpy.app.background:
+        from bl_ui.space_toolsystem_common import ToolSelectPanelHelper
+        for cls in ToolSelectPanelHelper.__subclasses__():
+            cls.register_ensure()
+
     return list(_km_hierarchy_iter_recursive(_km_hierarchy))
 
 
@@ -68,7 +77,7 @@ _km_hierarchy = [
         ('Font', 'EMPTY', 'WINDOW', [
             _km_expand_from_toolsystem('VIEW_3D', 'EDIT_TEXT'),
         ]),
-
+        ('Grease Pencil', 'EMPTY', 'WINDOW', []),
         ('Pose', 'EMPTY', 'WINDOW', [
             _km_expand_from_toolsystem('VIEW_3D', 'POSE'),
         ]),
@@ -97,6 +106,7 @@ _km_hierarchy = [
             _km_expand_from_toolsystem('VIEW_3D', 'PARTICLE'),
         ]),
 
+        ('Primitive Tool Modal Map', 'EMPTY', 'WINDOW', []),
         ('Knife Tool Modal Map', 'EMPTY', 'WINDOW', []),
         ('Custom Normals Modal Map', 'EMPTY', 'WINDOW', []),
         ('Bevel Modal Map', 'EMPTY', 'WINDOW', []),
@@ -128,7 +138,7 @@ _km_hierarchy = [
         ('Dopesheet Generic', 'DOPESHEET_EDITOR', 'WINDOW', []),
     ]),
     ('NLA Editor', 'NLA_EDITOR', 'WINDOW', [
-        ('NLA Channels', 'NLA_EDITOR', 'WINDOW', []),
+        ('NLA Tracks', 'NLA_EDITOR', 'WINDOW', []),
         ('NLA Generic', 'NLA_EDITOR', 'WINDOW', []),
     ]),
     ('Timeline', 'TIMELINE', 'WINDOW', []),
@@ -204,6 +214,9 @@ _km_hierarchy = [
         ('Grease Pencil Stroke Sculpt (Clone)', 'EMPTY', 'WINDOW', []),
         ('Grease Pencil Stroke Weight Mode', 'EMPTY', 'WINDOW', []),
         ('Grease Pencil Stroke Weight (Draw)', 'EMPTY', 'WINDOW', []),
+        ('Grease Pencil Stroke Weight (Blur)', 'EMPTY', 'WINDOW', []),
+        ('Grease Pencil Stroke Weight (Average)', 'EMPTY', 'WINDOW', []),
+        ('Grease Pencil Stroke Weight (Smear)', 'EMPTY', 'WINDOW', []),
         ('Grease Pencil Stroke Vertex Mode', 'EMPTY', 'WINDOW', []),
         ('Grease Pencil Stroke Vertex (Draw)', 'EMPTY', 'WINDOW', []),
         ('Grease Pencil Stroke Vertex (Blur)', 'EMPTY', 'WINDOW', []),

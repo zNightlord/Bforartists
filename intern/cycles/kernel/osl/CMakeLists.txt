@@ -1,5 +1,6 @@
+# SPDX-FileCopyrightText: 2011-2022 Blender Foundation
+#
 # SPDX-License-Identifier: Apache-2.0
-# Copyright 2011-2022 Blender Foundation
 
 set(INC
   ../..
@@ -18,6 +19,7 @@ set(SRC
 set(HEADER_SRC
   closures_setup.h
   closures_template.h
+  compat.h
   globals.h
   osl.h
   services.h
@@ -30,12 +32,7 @@ set(LIB
   ${OSL_LIBRARIES}
   ${OPENIMAGEIO_LIBRARIES}
   ${PUGIXML_LIBRARIES}
-  ${CLANG_LIBRARIES}
-  ${LLVM_LIBRARY}
 )
-
-# OSL and LLVM are built without RTTI
-string(APPEND CMAKE_CXX_FLAGS " ${RTTI_DISABLE_FLAGS}")
 
 if(APPLE)
   # Disable allocation warning on macOS prior to 10.14: the OSLRenderServices

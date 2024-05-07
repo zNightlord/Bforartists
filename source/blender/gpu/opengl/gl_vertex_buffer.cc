@@ -1,11 +1,12 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2016 by Mike Erwin. All rights reserved. */
+/* SPDX-FileCopyrightText: 2016 by Mike Erwin. All rights reserved.
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup gpu
  */
 
-#include "GPU_texture.h"
+#include "GPU_texture.hh"
 
 #include "gl_context.hh"
 
@@ -113,6 +114,11 @@ void GLVertBuf::bind_as_ssbo(uint binding)
   bind();
   BLI_assert(vbo_id_ != 0);
   glBindBufferBase(GL_SHADER_STORAGE_BUFFER, binding, vbo_id_);
+
+#ifndef NDEBUG
+  BLI_assert(binding < 16);
+  GLContext::get()->bound_ssbo_slots |= 1 << binding;
+#endif
 }
 
 void GLVertBuf::bind_as_texture(uint binding)
@@ -120,7 +126,7 @@ void GLVertBuf::bind_as_texture(uint binding)
   bind();
   BLI_assert(vbo_id_ != 0);
   if (buffer_texture_ == nullptr) {
-    buffer_texture_ = GPU_texture_create_from_vertbuf("vertbuf_as_texture", wrap(this));
+    buffer_texture_ = GPU_texture_create_from_vertbuf("vertbuf_as_texture", this);
   }
   GPU_texture_bind(buffer_texture_, binding);
 }

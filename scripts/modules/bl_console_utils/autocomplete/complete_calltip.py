@@ -1,14 +1,16 @@
+# SPDX-FileCopyrightText: 2009-2023 Blender Authors
+#
 # SPDX-License-Identifier: GPL-2.0-or-later
 
-# Copyright (c) 2009 www.stani.be
+# Copyright (c) 2009 https://www.stani.be
 
 import inspect
 import re
 
 
 # regular expression constants
-DEF_DOC = r'%s\s*(\(.*?\))'
-DEF_SOURCE = r'def\s+%s\s*(\(.*?\)):'
+DEF_DOC = r'{:s}\s*(\(.*?\))'
+DEF_SOURCE = r'def\s+{:s}\s*(\(.*?\)):'
 RE_EMPTY_LINE = re.compile(r'^\s*\n')
 RE_FLAG = re.MULTILINE | re.DOTALL
 RE_NEWLINE = re.compile('\n+')
@@ -41,7 +43,7 @@ def reduce_newlines(text):
 
 
 def reduce_spaces(text):
-    """Reduces multiple whitespaces to a single space.
+    """Reduces multiple white-spaces to a single space.
 
     :arg text: text with multiple spaces
     :type text: str
@@ -98,10 +100,10 @@ def get_argspec(func, *, strip_self=True, doc=None, source=None):
         func_name = func.__name__
     except AttributeError:
         return ''
-    # from docstring
+    # From doc-string.
     if doc is None:
         doc = get_doc(func)
-    match = re.search(DEF_DOC % func_name, doc, RE_FLAG)
+    match = re.search(DEF_DOC.format(func_name), doc, RE_FLAG)
     # from source code
     if not match:
         if source is None:
@@ -110,7 +112,7 @@ def get_argspec(func, *, strip_self=True, doc=None, source=None):
             except (TypeError, IOError):
                 source = ''
         if source:
-            match = re.search(DEF_SOURCE % func_name, source, RE_FLAG)
+            match = re.search(DEF_SOURCE.format(func_name), source, RE_FLAG)
     if match:
         argspec = reduce_spaces(match.group(1))
     else:
@@ -129,7 +131,7 @@ def get_argspec(func, *, strip_self=True, doc=None, source=None):
 
 
 def complete(line, cursor, namespace):
-    """Complete callable with calltip.
+    """Complete callable with call-tip.
 
     :arg line: incomplete text line
     :type line: str
@@ -156,7 +158,7 @@ def complete(line, cursor, namespace):
         func_word = match.group(2)
         try:
             func = eval(func_word, namespace)
-        except Exception:
+        except BaseException:
             func = None
 
         if func:

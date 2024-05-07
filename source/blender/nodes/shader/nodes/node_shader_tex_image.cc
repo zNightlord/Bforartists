@@ -1,18 +1,26 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2005 Blender Foundation. All rights reserved. */
+/* SPDX-FileCopyrightText: 2005 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "node_shader_util.hh"
+#include "node_util.hh"
 
+#include "BKE_image.h"
 #include "BKE_node_runtime.hh"
+#include "BKE_texture.h"
+
+#include "IMB_colormanagement.hh"
+
+#include "DEG_depsgraph_query.hh"
 
 namespace blender::nodes::node_shader_tex_image_cc {
 
 static void sh_node_tex_image_declare(NodeDeclarationBuilder &b)
 {
   b.is_function_node();
-  b.add_input<decl::Vector>(N_("Vector")).implicit_field(implicit_field_inputs::position);
-  b.add_output<decl::Color>(N_("Color")).no_muted_links();
-  b.add_output<decl::Float>(N_("Alpha")).no_muted_links();
+  b.add_input<decl::Vector>("Vector").implicit_field(implicit_field_inputs::position);
+  b.add_output<decl::Color>("Color").no_muted_links();
+  b.add_output<decl::Float>("Alpha").no_muted_links();
 }
 
 static void node_shader_init_tex_image(bNodeTree * /*ntree*/, bNode *node)
@@ -52,33 +60,40 @@ static int node_shader_gpu_tex_image(GPUMaterial *mat,
 
   node_shader_gpu_tex_mapping(mat, node, in, out);
 
-  eGPUSamplerState sampler_state = GPU_SAMPLER_DEFAULT;
+  GPUSamplerState sampler_state = GPUSamplerState::default_sampler();
 
   switch (tex->extension) {
+    case SHD_IMAGE_EXTENSION_EXTEND:
+      sampler_state.extend_x = GPU_SAMPLER_EXTEND_MODE_EXTEND;
+      sampler_state.extend_yz = GPU_SAMPLER_EXTEND_MODE_EXTEND;
+      break;
     case SHD_IMAGE_EXTENSION_REPEAT:
-      sampler_state |= GPU_SAMPLER_REPEAT;
+      sampler_state.extend_x = GPU_SAMPLER_EXTEND_MODE_REPEAT;
+      sampler_state.extend_yz = GPU_SAMPLER_EXTEND_MODE_REPEAT;
       break;
     case SHD_IMAGE_EXTENSION_CLIP:
-      sampler_state |= GPU_SAMPLER_CLAMP_BORDER;
+      sampler_state.extend_x = GPU_SAMPLER_EXTEND_MODE_CLAMP_TO_BORDER;
+      sampler_state.extend_yz = GPU_SAMPLER_EXTEND_MODE_CLAMP_TO_BORDER;
       break;
     case SHD_IMAGE_EXTENSION_MIRROR:
-      sampler_state |= GPU_SAMPLER_REPEAT | GPU_SAMPLER_MIRROR_REPEAT;
+      sampler_state.extend_x = GPU_SAMPLER_EXTEND_MODE_MIRRORED_REPEAT;
+      sampler_state.extend_yz = GPU_SAMPLER_EXTEND_MODE_MIRRORED_REPEAT;
       break;
     default:
       break;
   }
 
   if (tex->interpolation != SHD_INTERP_CLOSEST) {
-    sampler_state |= GPU_SAMPLER_ANISO | GPU_SAMPLER_FILTER;
     /* TODO(fclem): For now assume mipmap is always enabled. */
-    sampler_state |= GPU_SAMPLER_MIPMAP;
+    sampler_state.filtering = GPU_SAMPLER_FILTERING_ANISOTROPIC | GPU_SAMPLER_FILTERING_LINEAR |
+                              GPU_SAMPLER_FILTERING_MIPMAP;
   }
   const bool use_cubic = ELEM(tex->interpolation, SHD_INTERP_CUBIC, SHD_INTERP_SMART);
 
   if (ima->source == IMA_SRC_TILED) {
     const char *gpu_node_name = use_cubic ? "node_tex_tile_cubic" : "node_tex_tile_linear";
-    GPUNodeLink *gpu_image = GPU_image_tiled(mat, ima, iuser, sampler_state);
-    GPUNodeLink *gpu_image_tile_mapping = GPU_image_tiled_mapping(mat, ima, iuser);
+    GPUNodeLink *gpu_image, *gpu_image_tile_mapping;
+    GPU_image_tiled(mat, ima, iuser, sampler_state, &gpu_image, &gpu_image_tile_mapping);
     /* UDIM tiles needs a `sampler2DArray` and `sampler1DArray` for tile mapping. */
     GPU_stack_link(mat, node, gpu_node_name, in, out, gpu_image, gpu_image_tile_mapping);
   }
@@ -105,7 +120,7 @@ static int node_shader_gpu_tex_image(GPUMaterial *mat,
       case SHD_PROJ_SPHERE: {
         /* This projection is known to have a derivative discontinuity.
          * Hide it by turning off mipmapping. */
-        sampler_state &= ~GPU_SAMPLER_MIPMAP;
+        sampler_state.disable_filtering_flag(GPU_SAMPLER_FILTERING_MIPMAP);
         GPUNodeLink *gpu_image = GPU_image(mat, ima, iuser, sampler_state);
         GPU_link(mat, "point_texco_remap_square", *texco, texco);
         GPU_link(mat, "point_map_to_sphere", *texco, texco);
@@ -115,7 +130,7 @@ static int node_shader_gpu_tex_image(GPUMaterial *mat,
       case SHD_PROJ_TUBE: {
         /* This projection is known to have a derivative discontinuity.
          * Hide it by turning off mipmapping. */
-        sampler_state &= ~GPU_SAMPLER_MIPMAP;
+        sampler_state.disable_filtering_flag(GPU_SAMPLER_FILTERING_MIPMAP);
         GPUNodeLink *gpu_image = GPU_image(mat, ima, iuser, sampler_state);
         GPU_link(mat, "point_texco_remap_square", *texco, texco);
         GPU_link(mat, "point_map_to_tube", *texco, texco);
@@ -127,7 +142,8 @@ static int node_shader_gpu_tex_image(GPUMaterial *mat,
 
   if (out[0].hasoutput) {
     if (ELEM(ima->alpha_mode, IMA_ALPHA_IGNORE, IMA_ALPHA_CHANNEL_PACKED) ||
-        IMB_colormanagement_space_name_is_data(ima->colorspace_settings.name)) {
+        IMB_colormanagement_space_name_is_data(ima->colorspace_settings.name))
+    {
       /* Don't let alpha affect color output in these cases. */
       GPU_link(mat, "color_alpha_clear", out[0].link, &out[0].link);
     }
@@ -158,6 +174,86 @@ static int node_shader_gpu_tex_image(GPUMaterial *mat,
   return true;
 }
 
+NODE_SHADER_MATERIALX_BEGIN
+#ifdef WITH_MATERIALX
+{
+  /* Getting node name for Color output. This name will be used for <image> node. */
+  std::string image_node_name = node_name(false) + "_Color";
+
+  NodeItem res = empty();
+  res.node = graph_->getNode(image_node_name);
+  if (!res.node) {
+    res = val(MaterialX::Color4(1.0f, 0.0f, 1.0f, 1.0f));
+
+    Image *image = (Image *)node_->id;
+    if (image) {
+      NodeTexImage *tex_image = static_cast<NodeTexImage *>(node_->storage);
+
+      std::string image_path = image->id.name;
+      if (export_image_fn_) {
+        Scene *scene = DEG_get_input_scene(depsgraph_);
+        Main *bmain = DEG_get_bmain(depsgraph_);
+        image_path = export_image_fn_(bmain, scene, image, &tex_image->iuser);
+      }
+
+      NodeItem vector = get_input_link("Vector", NodeItem::Type::Vector2);
+      if (!vector) {
+        vector = texcoord_node();
+      }
+      /* TODO: add math to vector depending of tex_image->projection */
+
+      std::string filtertype;
+      switch (tex_image->interpolation) {
+        case SHD_INTERP_LINEAR:
+          filtertype = "linear";
+          break;
+        case SHD_INTERP_CLOSEST:
+          filtertype = "closest";
+          break;
+        case SHD_INTERP_CUBIC:
+        case SHD_INTERP_SMART:
+          filtertype = "cubic";
+          break;
+        default:
+          BLI_assert_unreachable();
+      }
+      std::string addressmode;
+      switch (tex_image->extension) {
+        case SHD_IMAGE_EXTENSION_REPEAT:
+          addressmode = "periodic";
+          break;
+        case SHD_IMAGE_EXTENSION_EXTEND:
+          addressmode = "clamp";
+          break;
+        case SHD_IMAGE_EXTENSION_CLIP:
+          addressmode = "constant";
+          break;
+        case SHD_IMAGE_EXTENSION_MIRROR:
+          addressmode = "mirror";
+          break;
+        default:
+          BLI_assert_unreachable();
+      }
+
+      res = create_node("image",
+                        NodeItem::Type::Color4,
+                        {{"texcoord", vector},
+                         {"filtertype", val(filtertype)},
+                         {"uaddressmode", val(addressmode)},
+                         {"vaddressmode", val(addressmode)}});
+      res.set_input("file", image_path, NodeItem::Type::Filename);
+      res.node->setName(image_node_name);
+    }
+  }
+
+  if (STREQ(socket_out_->name, "Alpha")) {
+    res = res[3];
+  }
+  return res;
+}
+#endif
+NODE_SHADER_MATERIALX_END
+
 }  // namespace blender::nodes::node_shader_tex_image_cc
 
 void register_node_type_sh_tex_image()
@@ -173,7 +269,8 @@ void register_node_type_sh_tex_image()
       &ntype, "NodeTexImage", node_free_standard_storage, node_copy_standard_storage);
   ntype.gpu_fn = file_ns::node_shader_gpu_tex_image;
   ntype.labelfunc = node_image_label;
-  node_type_size_preset(&ntype, NODE_SIZE_LARGE);
+  blender::bke::node_type_size_preset(&ntype, blender::bke::eNodeSizePreset::Large);
+  ntype.materialx_fn = file_ns::node_shader_materialx;
 
   nodeRegisterType(&ntype);
 }

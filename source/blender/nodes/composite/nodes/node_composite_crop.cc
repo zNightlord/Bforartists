@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2006 Blender Foundation. All rights reserved. */
+/* SPDX-FileCopyrightText: 2006 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup cmpnodes
@@ -10,13 +11,13 @@
 
 #include "DNA_node_types.h"
 
-#include "RNA_access.h"
+#include "RNA_access.hh"
 
-#include "UI_interface.h"
-#include "UI_resources.h"
+#include "UI_interface.hh"
+#include "UI_resources.hh"
 
-#include "GPU_shader.h"
-#include "GPU_texture.h"
+#include "GPU_shader.hh"
+#include "GPU_texture.hh"
 
 #include "COM_node_operation.hh"
 #include "COM_utilities.hh"
@@ -31,10 +32,10 @@ NODE_STORAGE_FUNCS(NodeTwoXYs)
 
 static void cmp_node_crop_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Color>(N_("Image"))
+  b.add_input<decl::Color>("Image")
       .default_value({1.0f, 1.0f, 1.0f, 1.0f})
       .compositor_domain_priority(0);
-  b.add_output<decl::Color>(N_("Image"));
+  b.add_output<decl::Color>("Image");
 }
 
 static void node_composit_init_crop(bNodeTree * /*ntree*/, bNode *node)
@@ -95,7 +96,7 @@ class CropOperation : public NodeOperation {
    * same domain as the input image. */
   void execute_alpha_crop()
   {
-    GPUShader *shader = shader_manager().get("compositor_alpha_crop");
+    GPUShader *shader = context().get_shader("compositor_alpha_crop");
     GPU_shader_bind(shader);
 
     int2 lower_bound, upper_bound;
@@ -132,7 +133,7 @@ class CropOperation : public NodeOperation {
       return;
     }
 
-    GPUShader *shader = shader_manager().get("compositor_image_crop");
+    GPUShader *shader = context().get_shader("compositor_image_crop");
     GPU_shader_bind(shader);
 
     GPU_shader_uniform_2iv(shader, "lower_bound", lower_bound);

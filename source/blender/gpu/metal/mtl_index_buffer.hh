@@ -1,4 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* SPDX-FileCopyrightText: 2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup gpu
@@ -6,8 +8,8 @@
 
 #pragma once
 
+#include "GPU_index_buffer.hh"
 #include "MEM_guardedalloc.h"
-#include "gpu_index_buffer_private.hh"
 #include "mtl_context.hh"
 #include <Cocoa/Cocoa.h>
 #include <Metal/Metal.h>
@@ -18,11 +20,15 @@ namespace blender::gpu {
 class MTLIndexBuf : public IndexBuf {
   friend class MTLBatch;
   friend class MTLDrawList;
+  friend class MTLStorageBuf; /* For bind as SSBO resource access. */
 
  private:
   /* Metal buffer resource. */
   gpu::MTLBuffer *ibo_ = nullptr;
   uint64_t alloc_size_ = 0;
+
+  /* SSBO wrapper for bind_as_ssbo support. */
+  MTLStorageBuf *ssbo_wrapper_ = nullptr;
 
 #ifndef NDEBUG
   /* Flags whether point index buffer has been compacted

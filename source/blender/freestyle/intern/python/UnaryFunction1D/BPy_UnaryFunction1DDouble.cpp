@@ -1,4 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* SPDX-FileCopyrightText: 2008-2022 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup freestyle
@@ -141,7 +143,9 @@ int UnaryFunction1DDouble_Init(PyObject *module)
 
 //------------------------INSTANCE METHODS ----------------------------------
 
-static char UnaryFunction1DDouble___doc__[] =
+PyDoc_STRVAR(
+    /* Wrap. */
+    UnaryFunction1DDouble___doc__,
     "Class hierarchy: :class:`UnaryFunction1D` > :class:`UnaryFunction1DDouble`\n"
     "\n"
     "Base class for unary functions (functors) that work on\n"
@@ -154,7 +158,7 @@ static char UnaryFunction1DDouble___doc__[] =
     "   or the integration method given as an argument.\n"
     "\n"
     "   :arg integration_type: An integration method.\n"
-    "   :type integration_type: :class:`IntegrationType`\n";
+    "   :type integration_type: :class:`IntegrationType`\n");
 
 static int UnaryFunction1DDouble___init__(BPy_UnaryFunction1DDouble *self,
                                           PyObject *args,
@@ -164,7 +168,8 @@ static int UnaryFunction1DDouble___init__(BPy_UnaryFunction1DDouble *self,
   PyObject *obj = nullptr;
 
   if (!PyArg_ParseTupleAndKeywords(
-          args, kwds, "|O!", (char **)kwlist, &IntegrationType_Type, &obj)) {
+          args, kwds, "|O!", (char **)kwlist, &IntegrationType_Type, &obj))
+  {
     return -1;
   }
 
@@ -218,10 +223,12 @@ static PyObject *UnaryFunction1DDouble___call__(BPy_UnaryFunction1DDouble *self,
 
 /*----------------------UnaryFunction1DDouble get/setters ----------------------------*/
 
-PyDoc_STRVAR(integration_type_doc,
-             "The integration method.\n"
-             "\n"
-             ":type: :class:`IntegrationType`");
+PyDoc_STRVAR(
+    /* Wrap. */
+    integration_type_doc,
+    "The integration method.\n"
+    "\n"
+    ":type: :class:`IntegrationType`");
 
 static PyObject *integration_type_get(BPy_UnaryFunction1DDouble *self, void * /*closure*/)
 {
@@ -252,7 +259,7 @@ static PyGetSetDef BPy_UnaryFunction1DDouble_getseters[] = {
 /*-----------------------BPy_UnaryFunction1DDouble type definition ------------------------------*/
 
 PyTypeObject UnaryFunction1DDouble_Type = {
-    PyVarObject_HEAD_INIT(nullptr, 0)
+    /*ob_base*/ PyVarObject_HEAD_INIT(nullptr, 0)
     /*tp_name*/ "UnaryFunction1DDouble",
     /*tp_basicsize*/ sizeof(BPy_UnaryFunction1DDouble),
     /*tp_itemsize*/ 0,

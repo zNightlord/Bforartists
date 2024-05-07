@@ -1,4 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* SPDX-FileCopyrightText: 2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup ply
@@ -6,20 +8,14 @@
 
 #pragma once
 
-#include <string>
 #include <type_traits>
-#include <vector>
 
-#include "BLI_array.hh"
-#include "BLI_compiler_attrs.h"
-#include "BLI_fileops.h"
 #include "BLI_string_ref.hh"
 #include "BLI_utility_mixins.hh"
 #include "BLI_vector.hh"
 
 /* SEP macro from BLI path utils clashes with SEP symbol in fmt headers. */
 #undef SEP
-#define FMT_HEADER_ONLY
 #include <fmt/format.h>
 
 namespace blender::io::ply {
@@ -52,6 +48,8 @@ class FileBuffer : private NonMovable {
 
   virtual void write_UV(float u, float v) = 0;
 
+  virtual void write_data(float v) = 0;
+
   virtual void write_vertex_normal(float nx, float ny, float nz) = 0;
 
   virtual void write_vertex_color(uchar r, uchar g, uchar b, uchar a) = 0;
@@ -75,7 +73,13 @@ class FileBuffer : private NonMovable {
  protected:
   /* Ensure the last block contains at least this amount of free space.
    * If not, add a new block with max of block size & the amount of space needed. */
-  void ensure_space(size_t at_least);
+  void ensure_space(size_t at_least)
+  {
+    if (blocks_.is_empty() || (blocks_.last().capacity() - blocks_.last().size() < at_least)) {
+      blocks_.append(VectorChar());
+      blocks_.last().reserve(std::max(at_least, buffer_chunk_size_));
+    }
+  }
 
   template<typename... T> void write_fstring(const char *fmt, T &&...args)
   {

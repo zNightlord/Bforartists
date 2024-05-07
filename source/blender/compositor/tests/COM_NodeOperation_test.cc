@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2021 Blender Foundation. */
+/* SPDX-FileCopyrightText: 2021 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "testing/testing.h"
 
@@ -13,8 +14,7 @@ class NonHashedOperation : public NodeOperation {
   {
     set_id(id);
     add_output_socket(DataType::Value);
-    set_width(2);
-    set_height(3);
+    set_canvas({0, 2, 0, 3});
   }
 };
 
@@ -26,8 +26,7 @@ class NonHashedConstantOperation : public ConstantOperation {
   {
     set_id(id);
     add_output_socket(DataType::Value);
-    set_width(2);
-    set_height(3);
+    set_canvas({0, 2, 0, 3});
     constant_ = 1.0f;
   }
 
@@ -52,8 +51,7 @@ class HashedOperation : public NodeOperation {
   {
     add_input_socket(DataType::Value);
     add_output_socket(DataType::Color);
-    set_width(width);
-    set_height(height);
+    set_canvas({0, width, 0, height});
     param1 = 2;
     param2 = 7.0f;
 

@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2021 Blender Foundation. */
+/* SPDX-FileCopyrightText: 2021 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #pragma once
 
@@ -58,7 +59,7 @@ inline float4x4 cubeface_mat(int face)
 
 inline void cubeface_winmat_get(float4x4 &winmat, float near, float far)
 {
-  /* Simple 90° FOV projection. */
+  /* Simple 90 degree FOV projection. */
   perspective_m4(winmat.ptr(), -near, near, -near, near, near, far);
 }
 
@@ -92,15 +93,20 @@ class Camera {
  private:
   Instance &inst_;
 
-  CameraDataBuf data_;
+  CameraData &data_;
 
   struct {
     float3 center;
     float radius;
   } bound_sphere;
 
+  float overscan_;
+  bool overscan_changed_;
+  /** Whether or not the camera was synced from a camera object. */
+  bool is_camera_object_ = false;
+
  public:
-  Camera(Instance &inst) : inst_(inst){};
+  Camera(Instance &inst, CameraData &data) : inst_(inst), data_(data){};
   ~Camera(){};
 
   void init();
@@ -108,14 +114,10 @@ class Camera {
 
   /**
    * Getters
-   **/
+   */
   const CameraData &data_get() const
   {
     BLI_assert(data_.initialized);
-    return data_;
-  }
-  GPUUniformBuf *ubo_get() const
-  {
     return data_;
   }
   bool is_panoramic() const
@@ -129,6 +131,10 @@ class Camera {
   bool is_perspective() const
   {
     return data_.type == CAMERA_PERSP;
+  }
+  bool is_camera_object() const
+  {
+    return is_camera_object_;
   }
   const float3 &position() const
   {
@@ -145,6 +151,14 @@ class Camera {
   const float &bound_radius() const
   {
     return bound_sphere.radius;
+  }
+  float overscan() const
+  {
+    return overscan_;
+  }
+  bool overscan_changed() const
+  {
+    return overscan_changed_;
   }
 
  private:

@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2022 Blender Foundation. */
+/* SPDX-FileCopyrightText: 2022 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #pragma once
 
@@ -18,7 +19,7 @@
  * the origin.
  */
 
-#include "draw_shader_shared.h"
+#include "draw_shader_shared.hh"
 
 struct Object;
 struct DupliObject;

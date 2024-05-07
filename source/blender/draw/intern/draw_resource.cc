@@ -1,18 +1,19 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2022 Blender Foundation. */
+/* SPDX-FileCopyrightText: 2022 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup draw
  */
 
 #include "DNA_particle_types.h"
-#include "RNA_access.h"
-#include "RNA_path.h"
-#include "RNA_types.h"
+#include "RNA_access.hh"
+#include "RNA_path.hh"
+#include "RNA_types.hh"
 
 #include "draw_handle.hh"
 #include "draw_manager.hh"
-#include "draw_shader_shared.h"
+#include "draw_shader_shared.hh"
 
 /* -------------------------------------------------------------------- */
 /** \name ObjectAttributes
@@ -41,7 +42,7 @@ bool ObjectAttribute::sync(const blender::draw::ObjectRef &ref, const GPUUniform
 /** \name LayerAttributes
  * \{ */
 
-bool LayerAttribute::sync(Scene *scene, ViewLayer *layer, const GPULayerAttr &attr)
+bool LayerAttribute::sync(const Scene *scene, const ViewLayer *layer, const GPULayerAttr &attr)
 {
   hash_code = attr.hash_code;
 

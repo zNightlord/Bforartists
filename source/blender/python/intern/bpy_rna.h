@@ -1,4 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* SPDX-FileCopyrightText: 2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup pythonintern
@@ -30,7 +32,7 @@
 
 #endif /* !WITH_PYTHON_SAFETY */
 
-/* sanity checks on above defs */
+/* Sanity checks on above defines. */
 #if defined(USE_PYRNA_INVALIDATE_WEAKREF) && !defined(USE_WEAKREFS)
 #  define USE_WEAKREFS
 #endif
@@ -56,6 +58,10 @@ struct ID;
 extern "C" {
 #endif
 
+/**
+ * Sub-classes of #pyrna_struct_Type which support idprop definitions use this as a meta-class.
+ * \note tp_base member is set to `&PyType_Type` on initialization.
+ */
 extern PyTypeObject pyrna_struct_meta_idprop_Type;
 extern PyTypeObject pyrna_struct_Type;
 extern PyTypeObject pyrna_prop_Type;
@@ -90,6 +96,16 @@ extern PyTypeObject pyrna_func_Type;
   } \
   (void)0
 
+#define PYRNA_STRUCT_CHECK_OBJ_UNLESS(obj, unless) \
+  { \
+    const BPy_StructRNA *_obj = obj; \
+    if (UNLIKELY(pyrna_struct_validity_check_only(_obj) == -1) && !(unless)) { \
+      pyrna_struct_validity_exception_only(_obj); \
+      return NULL; \
+    } \
+  } \
+  (void)0
+
 #define PYRNA_STRUCT_IS_VALID(pysrna) (LIKELY(((BPy_StructRNA *)(pysrna))->ptr.type != NULL))
 #define PYRNA_PROP_IS_VALID(pysrna) (LIKELY(((BPy_PropertyRNA *)(pysrna))->ptr.type != NULL))
 
@@ -103,7 +119,7 @@ typedef struct {
   PointerRNA ptr;
 } BPy_DummyPointerRNA;
 
-typedef struct {
+typedef struct BPy_StructRNA {
   PyObject_HEAD /* Required Python macro. */
 #ifdef USE_WEAKREFS
   PyObject *in_weakreflist;
@@ -116,8 +132,9 @@ typedef struct {
 #endif /* !USE_PYRNA_STRUCT_REFERENCE */
 
 #ifdef PYRNA_FREE_SUPPORT
-  bool freeptr; /* needed in some cases if ptr.data is created on the fly, free when deallocing */
-#endif          /* PYRNA_FREE_SUPPORT */
+  /** Needed in some cases if ptr.data is created on the fly, free when deallocating. */
+  bool freeptr;
+#endif /* PYRNA_FREE_SUPPORT */
 } BPy_StructRNA;
 
 typedef struct {
@@ -249,8 +266,12 @@ bool pyrna_write_check(void);
 void pyrna_write_set(bool val);
 
 void pyrna_invalidate(BPy_DummyPointerRNA *self);
-int pyrna_struct_validity_check(BPy_StructRNA *pysrna);
-int pyrna_prop_validity_check(BPy_PropertyRNA *self);
+
+int pyrna_struct_validity_check_only(const BPy_StructRNA *pysrna);
+void pyrna_struct_validity_exception_only(const BPy_StructRNA *pysrna);
+int pyrna_struct_validity_check(const BPy_StructRNA *pysrna);
+
+int pyrna_prop_validity_check(const BPy_PropertyRNA *self);
 
 /* bpy.utils.(un)register_class */
 extern PyMethodDef meth_bpy_register_class;

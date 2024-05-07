@@ -1,11 +1,13 @@
+# SPDX-FileCopyrightText: 2009-2023 Blender Authors
+#
 # SPDX-License-Identifier: GPL-2.0-or-later
+
 from __future__ import annotations
 
 import bpy
 from bpy.types import (
     Menu,
     Operator,
-    bpy_prop_array,
 )
 from bpy.props import (
     BoolProperty,
@@ -21,6 +23,7 @@ from bpy.props import (
 from bpy.app.translations import (
     pgettext_iface as iface_,
     pgettext_tip as tip_,
+    pgettext_rpt as rpt_,
     contexts as i18n_contexts,
 )
 
@@ -32,7 +35,7 @@ def _rna_path_prop_search_for_context_impl(context, edit_text, unique_attrs):
     line = context_prefix + edit_text
     cursor = len(line)
     namespace = {"context": context}
-    comp_prefix, _, comp_options = intellisense.expand(line=line, cursor=len(line), namespace=namespace, private=False)
+    comp_prefix, _, comp_options = intellisense.expand(line=line, cursor=cursor, namespace=namespace, private=False)
     prefix = comp_prefix[len(context_prefix):]  # Strip "context."
     for attr in comp_options.split("\n"):
         if attr.endswith((
@@ -63,7 +66,6 @@ def rna_path_prop_search_for_context(self, context, edit_text):
             # Users are very unlikely to be setting shortcuts in the preferences, skip this.
             if area.type == 'PREFERENCES':
                 continue
-            space = area.spaces.active
             # Ignore the same region type multiple times in an area.
             # Prevents the 3D-viewport quad-view from attempting to expand 3 extra times for e.g.
             region_type_unique = set()
@@ -129,7 +131,7 @@ rna_module_prop = StringProperty(
 
 def context_path_validate(context, data_path):
     try:
-        value = eval("context.%s" % data_path) if data_path else Ellipsis
+        value = eval("context.{:s}".format(data_path)) if data_path else Ellipsis
     except AttributeError as ex:
         if str(ex).startswith("'NoneType'"):
             # One of the items in the rna path is None, just ignore this
@@ -137,7 +139,7 @@ def context_path_validate(context, data_path):
         else:
             # Print invalid path, but don't show error to the users and fully
             # break the UI if the operator is bound to an event like left click.
-            print("context_path_validate error: context.%s not found (invalid keymap entry?)" % data_path)
+            print("context_path_validate error: context.{:s} not found (invalid keymap entry?)".format(data_path))
             value = Ellipsis
 
     return value
@@ -206,9 +208,9 @@ def description_from_data_path(base, data_path, *, prefix, value=Ellipsis):
             (rna_prop := context_path_to_rna_property(base, data_path)) and
             (description := iface_(rna_prop.description))
     ):
-        description = iface_("%s: %s") % (prefix, description)
+        description = iface_("{:s}: {:s}").format(prefix, description)
         if value != Ellipsis:
-            description = "%s\n%s: %s" % (description, iface_("Value"), str(value))
+            description = "{:s}\n{:s}: {:s}".format(description, iface_("Value"), str(value))
         return description
     return None
 
@@ -263,9 +265,9 @@ def execute_context_assign(self, context):
         return {'PASS_THROUGH'}
 
     if getattr(self, "relative", False):
-        exec("context.%s += self.value" % data_path)
+        exec("context.{:s} += self.value".format(data_path))
     else:
-        exec("context.%s = self.value" % data_path)
+        exec("context.{:s} = self.value".format(data_path))
 
     return operator_path_undo_return(context, data_path)
 
@@ -338,7 +340,7 @@ class WM_OT_context_scale_float(Operator):
         if value == 1.0:  # nothing to do
             return {'CANCELLED'}
 
-        exec("context.%s *= value" % data_path)
+        exec("context.{:s} *= value".format(data_path))
 
         return operator_path_undo_return(context, data_path)
 
@@ -383,10 +385,11 @@ class WM_OT_context_scale_int(Operator):
             else:
                 add = "-1"
                 func = "min"
-            exec("context.%s = %s(round(context.%s * value), context.%s + %s)" %
-                 (data_path, func, data_path, data_path, add))
+            exec("context.{:s} = {:s}(round(context.{:s} * value), context.{:s} + {:s})".format(
+                data_path, func, data_path, data_path, add,
+            ))
         else:
-            exec("context.%s *= value" % data_path)
+            exec("context.{:s} *= value".format(data_path))
 
         return operator_path_undo_return(context, data_path)
 
@@ -473,7 +476,7 @@ class WM_OT_context_set_value(Operator):
         data_path = self.data_path
         if context_path_validate(context, data_path) is Ellipsis:
             return {'PASS_THROUGH'}
-        exec("context.%s = %s" % (data_path, self.value))
+        exec("context.{:s} = {:s}".format(data_path, self.value))
         return operator_path_undo_return(context, data_path)
 
 
@@ -506,7 +509,7 @@ class WM_OT_context_toggle(Operator):
         if context_path_validate(base, data_path) is Ellipsis:
             return {'PASS_THROUGH'}
 
-        exec("base.%s = not (base.%s)" % (data_path, data_path))
+        exec("base.{:s} = not (base.{:s})".format(data_path, data_path))
 
         return operator_path_undo_return(base, data_path)
 
@@ -531,7 +534,7 @@ class WM_OT_context_toggle_enum(Operator):
 
     @classmethod
     def description(cls, context, props):
-        value = "(%r, %r)" % (props.value_1, props.value_2)
+        value = "({!r}, {!r})".format(props.value_1, props.value_2)
         return description_from_data_path(context, props.data_path, prefix=iface_("Toggle"), value=value)
 
     def execute(self, context):
@@ -543,12 +546,16 @@ class WM_OT_context_toggle_enum(Operator):
         # failing silently is not ideal, but we don't want errors for shortcut
         # keys that some values that are only available in a particular context
         try:
-            exec("context.%s = ('%s', '%s')[context.%s != '%s']" %
-                 (data_path, self.value_1,
-                  self.value_2, data_path,
-                  self.value_2,
-                  ))
-        except:
+            exec(
+                "context.{:s} = {!r} if (context.{:s} != {!r}) else {!r}".format(
+                    data_path,
+                    self.value_2,
+                    data_path,
+                    self.value_2,
+                    self.value_1,
+                )
+            )
+        except BaseException:
             return {'PASS_THROUGH'}
 
         return operator_path_undo_return(context, data_path)
@@ -580,17 +587,17 @@ class WM_OT_context_cycle_int(Operator):
         else:
             value += 1
 
-        exec("context.%s = value" % data_path)
+        exec("context.{:s} = value".format(data_path))
 
         if self.wrap:
-            if value != eval("context.%s" % data_path):
+            if value != eval("context.{:s}".format(data_path)):
                 # relies on rna clamping integers out of the range
                 if self.reverse:
                     value = (1 << 31) - 1
                 else:
                     value = -1 << 31
 
-                exec("context.%s = value" % data_path)
+                exec("context.{:s} = value".format(data_path))
 
         return operator_path_undo_return(context, data_path)
 
@@ -640,7 +647,7 @@ class WM_OT_context_cycle_enum(Operator):
                 advance_enum = enums[orig_index + 1]
 
         # set the new value
-        exec("context.%s = advance_enum" % data_path)
+        exec("context.{:s} = advance_enum".format(data_path))
         return operator_path_undo_return(context, data_path)
 
 
@@ -671,7 +678,7 @@ class WM_OT_context_cycle_array(Operator):
                 array.append(array.pop(0))
             return array
 
-        exec("context.%s = cycle(context.%s[:])" % (data_path, data_path))
+        exec("context.{:s} = cycle(context.{:s}[:])".format(data_path, data_path))
 
         return operator_path_undo_return(context, data_path)
 
@@ -746,7 +753,7 @@ class WM_OT_operator_pie_enum(Operator):
 
     data_path: StringProperty(
         name="Operator",
-        description="Operator name (in python as string)",
+        description="Operator name (in Python as string)",
         maxlen=1024,
     )
     prop_string: StringProperty(
@@ -773,7 +780,7 @@ class WM_OT_operator_pie_enum(Operator):
         try:
             op_rna = op.get_rna_type()
         except KeyError:
-            self.report({'ERROR'}, tip_("Operator not found: bpy.ops.%s") % data_path)
+            self.report({'ERROR'}, rpt_("Operator not found: bpy.ops.{:s}").format(data_path))
             return {'CANCELLED'}
 
         def draw_cb(self, context):
@@ -819,7 +826,7 @@ class WM_OT_context_set_id(Operator):
 
         if id_iter:
             value_id = getattr(bpy.data, id_iter).get(value)
-            exec("context.%s = value_id" % data_path)
+            exec("context.{:s} = value_id".format(data_path))
 
         return operator_path_undo_return(context, data_path)
 
@@ -865,7 +872,7 @@ class WM_OT_context_collection_boolean_set(Operator):
         for item in items:
             try:
                 value_orig = eval("item." + data_path_item)
-            except:
+            except BaseException:
                 continue
 
             if value_orig is True:
@@ -873,8 +880,10 @@ class WM_OT_context_collection_boolean_set(Operator):
             elif value_orig is False:
                 pass
             else:
-                self.report({'WARNING'}, tip_("Non boolean value found: %s[ ].%s") %
-                            (data_path_iter, data_path_item))
+                self.report(
+                    {'WARNING'},
+                    rpt_("Non boolean value found: {:s}[ ].{:s}").format(data_path_iter, data_path_item),
+                )
                 return {'CANCELLED'}
 
             items_ok.append(item)
@@ -890,7 +899,7 @@ class WM_OT_context_collection_boolean_set(Operator):
         else:
             is_set = not is_set
 
-        exec_str = "item.%s = %s" % (data_path_item, is_set)
+        exec_str = "item.{:s} = {:s}".format(data_path_item, str(is_set))
         for item in items_ok:
             exec(exec_str)
 
@@ -931,13 +940,13 @@ class WM_OT_context_modal_mouse(Operator):
         for item in getattr(context, data_path_iter):
             try:
                 value_orig = eval("item." + data_path_item)
-            except:
+            except BaseException:
                 continue
 
             # check this can be set, maybe this is library data.
             try:
-                exec("item.%s = %s" % (data_path_item, value_orig))
-            except:
+                exec("item.{:s} = {:s}".format(data_path_item, str(value_orig)))
+            except BaseException:
                 continue
 
             values[item] = value_orig
@@ -950,14 +959,14 @@ class WM_OT_context_modal_mouse(Operator):
         data_path_item = self.data_path_item
         for item, value_orig in self._values.items():
             if type(value_orig) == int:
-                exec("item.%s = int(%d)" % (data_path_item, round(value_orig + delta)))
+                exec("item.{:s} = int({:d})".format(data_path_item, round(value_orig + delta)))
             else:
-                exec("item.%s = %f" % (data_path_item, value_orig + delta))
+                exec("item.{:s} = {:f}".format(data_path_item, value_orig + delta))
 
     def _values_restore(self):
         data_path_item = self.data_path_item
         for item, value_orig in self._values.items():
-            exec("item.%s = %s" % (data_path_item, value_orig))
+            exec("item.{:s} = {:s}".format(data_path_item, str(value_orig)))
 
         self._values.clear()
 
@@ -974,9 +983,9 @@ class WM_OT_context_modal_mouse(Operator):
             if header_text:
                 if len(self._values) == 1:
                     (item, ) = self._values.keys()
-                    header_text = header_text % eval("item.%s" % self.data_path_item)
+                    header_text = header_text % eval("item.{:s}".format(self.data_path_item))
                 else:
-                    header_text = (self.header_text % delta) + tip_(" (delta)")
+                    header_text = (self.header_text % delta) + rpt_(" (delta)")
                 context.area.header_text_set(header_text)
 
         elif 'LEFTMOUSE' == event_type:
@@ -996,9 +1005,12 @@ class WM_OT_context_modal_mouse(Operator):
         self._values_store(context)
 
         if not self._values:
-            self.report({'WARNING'}, tip_("Nothing to operate on: %s[ ].%s") %
-                        (self.data_path_iter, self.data_path_item))
-
+            self.report(
+                {'WARNING'},
+                rpt_("Nothing to operate on: {:s}[ ].{:s}").format(
+                    self.data_path_iter, self.data_path_item,
+                ),
+            )
             return {'CANCELLED'}
         else:
             self.initial_x = event.mouse_x
@@ -1018,9 +1030,41 @@ class WM_OT_url_open(Operator):
         description="URL to open",
     )
 
+    @staticmethod
+    def _add_utm_param_to_url(url, utm_source):
+        import urllib.parse
+
+        # Parse the URL to get its domain and query parameters.
+        if not urllib.parse.urlparse(url).scheme:
+            url = "https://" + url
+        parsed_url = urllib.parse.urlparse(url)
+
+        # Only add a utm source if it points to a blender.org domain.
+        domain = parsed_url.netloc
+        if not (domain.endswith(".blender.org") or domain == "blender.org"):
+            return url
+
+        # Parse the query parameters and add or update the utm_source parameter.
+        query_params = urllib.parse.parse_qs(parsed_url.query)
+        query_params["utm_source"] = utm_source
+        new_query = urllib.parse.urlencode(query_params, doseq=True)
+
+        # Create a new URL with the updated query parameters.
+        new_url_parts = list(parsed_url)
+        new_url_parts[4] = new_query
+        new_url = urllib.parse.urlunparse(new_url_parts)
+
+        return new_url
+
+    @staticmethod
+    def _get_utm_source():
+        version = bpy.app.version_string
+        return "blender-" + version.replace(" ", "-").lower()
+
     def execute(self, _context):
         import webbrowser
-        webbrowser.open(self.url)
+        complete_url = self._add_utm_param_to_url(self.url, self._get_utm_source())
+        webbrowser.open(complete_url)
         return {'FINISHED'}
 
 
@@ -1053,13 +1097,15 @@ class WM_OT_url_open_preset(Operator):
         return url_prefill_from_blender(addon_info=self.id)
 
     def _url_from_release_notes(self, _context):
-        return "https://www.blender.org/download/releases/%d-%d/" % bpy.app.version[:2]
+        return "https://www.blender.org/download/releases/{:d}-{:d}/".format(*bpy.app.version[:2])
 
     def _url_from_manual(self, _context):
-        return "https://docs.blender.org/manual/%s/%d.%d/" % (bpy.utils.manual_language_code(), *bpy.app.version[:2])
+        return "https://docs.blender.org/manual/{:s}/{:d}.{:d}/".format(
+            bpy.utils.manual_language_code(), *bpy.app.version[:2],
+        )
 
     def _url_from_api(self, _context):
-        return "https://docs.blender.org/api/%d.%d/" % bpy.app.version[:2]
+        return "https://docs.blender.org/api/{:d}.{:d}/".format(*bpy.app.version[:2])
 
     # This list is: (enum_item, url) pairs.
     # Allow dynamically extending.
@@ -1102,10 +1148,7 @@ class WM_OT_url_open_preset(Operator):
                     url = url(self, context)
                 break
 
-        import webbrowser
-        webbrowser.open(url)
-
-        return {'FINISHED'}
+        return bpy.ops.wm.url_open(url=url)
 
 
 class WM_OT_path_open(Operator):
@@ -1134,7 +1177,7 @@ class WM_OT_path_open(Operator):
         filepath = os.path.normpath(filepath)
 
         if not os.path.exists(filepath):
-            self.report({'ERROR'}, tip_("File '%s' not found") % filepath)
+            self.report({'ERROR'}, rpt_("File '{:s}' not found").format(filepath))
             return {'CANCELLED'}
 
         if sys.platform[:3] == "win":
@@ -1144,8 +1187,8 @@ class WM_OT_path_open(Operator):
         else:
             try:
                 subprocess.check_call(["xdg-open", filepath])
-            except:
-                # xdg-open *should* be supported by recent Gnome, KDE, Xfce
+            except BaseException:
+                # `xdg-open` *should* be supported by recent Gnome, KDE, XFCE.
                 import traceback
                 traceback.print_exc()
 
@@ -1167,9 +1210,9 @@ def _wm_doc_get_id(doc_id, *, do_url=True, url_prefix="", report=None):
 
     if len(id_split) == 1:  # rna, class
         if do_url:
-            url = "%s/bpy.types.%s.html" % (url_prefix, id_split[0])
+            url = "{:s}/bpy.types.{:s}.html".format(url_prefix, id_split[0])
         else:
-            rna = "bpy.types.%s" % id_split[0]
+            rna = "bpy.types.{:s}".format(id_split[0])
 
     elif len(id_split) == 2:  # rna, class.prop
         class_name, class_prop = id_split
@@ -1177,23 +1220,17 @@ def _wm_doc_get_id(doc_id, *, do_url=True, url_prefix="", report=None):
         # an operator (common case - just button referencing an op)
         if operator_exists_pair(class_name, class_prop):
             if do_url:
-                url = (
-                    "%s/bpy.ops.%s.html#bpy.ops.%s.%s" %
-                    (url_prefix, class_name, class_name, class_prop)
-                )
+                url = "{:s}/bpy.ops.{:s}.html#bpy.ops.{:s}.{:s}".format(url_prefix, class_name, class_name, class_prop)
             else:
-                rna = "bpy.ops.%s.%s" % (class_name, class_prop)
+                rna = "bpy.ops.{:s}.{:s}".format(class_name, class_prop)
         elif operator_exists_single(class_name):
             # note: ignore the prop name since we don't have a way to link into it
             class_name, class_prop = class_name.split("_OT_", 1)
             class_name = class_name.lower()
             if do_url:
-                url = (
-                    "%s/bpy.ops.%s.html#bpy.ops.%s.%s" %
-                    (url_prefix, class_name, class_name, class_prop)
-                )
+                url = "{:s}/bpy.ops.{:s}.html#bpy.ops.{:s}.{:s}".format(url_prefix, class_name, class_name, class_prop)
             else:
-                rna = "bpy.ops.%s.%s" % (class_name, class_prop)
+                rna = "bpy.ops.{:s}.{:s}".format(class_name, class_prop)
         else:
             # An RNA setting, common case.
 
@@ -1205,7 +1242,7 @@ def _wm_doc_get_id(doc_id, *, do_url=True, url_prefix="", report=None):
 
             if rna_class is None:
                 if report is not None:
-                    report({'ERROR'}, tip_("Type \"%s\" can not be found") % class_name)
+                    report({'ERROR'}, rpt_("Type \"{:s}\" cannot be found").format(class_name))
                 return None
 
             # Detect if this is a inherited member and use that name instead.
@@ -1218,16 +1255,15 @@ def _wm_doc_get_id(doc_id, *, do_url=True, url_prefix="", report=None):
                     rna_parent = rna_parent.base
 
                 if do_url:
-                    url = (
-                        "%s/bpy.types.%s.html#bpy.types.%s.%s" %
-                        (url_prefix, class_name, class_name, class_prop)
+                    url = "{:s}/bpy.types.{:s}.html#bpy.types.{:s}.{:s}".format(
+                        url_prefix, class_name, class_name, class_prop,
                     )
                 else:
-                    rna = "bpy.types.%s.%s" % (class_name, class_prop)
+                    rna = "bpy.types.{:s}.{:s}".format(class_name, class_prop)
             else:
                 # We assume this is custom property, only try to generate generic url/rna_id...
                 if do_url:
-                    url = ("%s/bpy.types.bpy_struct.html#bpy.types.bpy_struct.items" % (url_prefix,))
+                    url = ("{:s}/bpy.types.bpy_struct.html#bpy.types.bpy_struct.items".format(url_prefix))
                 else:
                     rna = "bpy.types.bpy_struct"
 
@@ -1244,7 +1280,7 @@ class WM_OT_doc_view_manual(Operator):
     @staticmethod
     def _find_reference(rna_id, url_mapping, *, verbose=True):
         if verbose:
-            print("online manual check for: '%s'... " % rna_id)
+            print("online manual check for: '{:s}'... ".format(rna_id))
         from fnmatch import fnmatchcase
         # XXX, for some reason all RNA ID's are stored lowercase
         # Adding case into all ID's isn't worth the hassle so force lowercase.
@@ -1276,7 +1312,7 @@ class WM_OT_doc_view_manual(Operator):
 
             if fnmatchcase(rna_id, pattern):
                 if verbose:
-                    print("            match found: '%s' --> '%s'" % (pattern, url_suffix))
+                    print("            match found: '{:s}' --> '{:s}'".format(pattern, url_suffix))
                 return url_suffix
         if verbose:
             print("match not found")
@@ -1300,16 +1336,13 @@ class WM_OT_doc_view_manual(Operator):
         if url is None:
             self.report(
                 {'WARNING'},
-                tip_("No reference available %r, "
+                rpt_("No reference available {!r}, "
                      "Update info in 'rna_manual_reference.py' "
-                     "or callback to bpy.utils.manual_map()") %
-                self.doc_id
+                     "or callback to bpy.utils.manual_map()").format(self.doc_id)
             )
             return {'CANCELLED'}
         else:
-            import webbrowser
-            webbrowser.open(url)
-            return {'FINISHED'}
+            return bpy.ops.wm.url_open(url=url)
 
 
 class WM_OT_doc_view(Operator):
@@ -1318,17 +1351,14 @@ class WM_OT_doc_view(Operator):
     bl_label = "View Documentation"
 
     doc_id: doc_id
-    _prefix = "https://docs.blender.org/api/%d.%d" % bpy.app.version[:2]
+    _prefix = "https://docs.blender.org/api/{:d}.{:d}".format(*bpy.app.version[:2])
 
     def execute(self, _context):
         url = _wm_doc_get_id(self.doc_id, do_url=True, url_prefix=self._prefix, report=self.report)
         if url is None:
             return {'CANCELLED'}
 
-        import webbrowser
-        webbrowser.open(url)
-
-        return {'FINISHED'}
+        return bpy.ops.wm.url_open(url=url)
 
 
 rna_path = StringProperty(
@@ -1345,6 +1375,7 @@ rna_custom_property_name = StringProperty(
     maxlen=63,
 )
 
+# Most useful entries of rna_enum_property_subtype_items:
 rna_custom_property_type_items = (
     ('FLOAT', "Float", "A single floating-point value"),
     ('FLOAT_ARRAY', "Float Array", "An array of floating-point values"),
@@ -1353,17 +1384,40 @@ rna_custom_property_type_items = (
     ('BOOL', "Boolean", "A true or false value"),
     ('BOOL_ARRAY', "Boolean Array", "An array of true or false values"),
     ('STRING', "String", "A string value"),
-    ('PYTHON', "Python", "Edit a python value directly, for unsupported property types"),
+    ('DATA_BLOCK', "Data-Block", "A data-block value"),
+    ('PYTHON', "Python", "Edit a Python value directly, for unsupported property types"),
 )
 
-# Most useful entries of rna_enum_property_subtype_items for number arrays:
-rna_vector_subtype_items = (
-    ('NONE', "Plain Data", "Data values without special behavior"),
+rna_custom_property_subtype_none_item = ('NONE', "Plain Data", "Data values without special behavior")
+
+rna_custom_property_subtype_number_items = (
+    rna_custom_property_subtype_none_item,
+    ('PIXEL', "Pixel", ""),
+    ('PERCENTAGE', "Percentage", ""),
+    ('FACTOR', "Factor", ""),
+    ('ANGLE', "Angle", ""),
+    ('TIME_ABSOLUTE', "Time", "Time specified in seconds"),
+    ('DISTANCE', "Distance", ""),
+    ('POWER', "Power", ""),
+    ('TEMPERATURE', "Temperature", ""),
+)
+
+rna_custom_property_subtype_vector_items = (
+    rna_custom_property_subtype_none_item,
     ('COLOR', "Linear Color", "Color in the linear space"),
     ('COLOR_GAMMA', "Gamma-Corrected Color", "Color in the gamma corrected space"),
+    ('TRANSLATION', "Translation", ""),
+    ('DIRECTION', "Direction", ""),
+    ('VELOCITY', "Velocity", ""),
+    ('ACCELERATION', "Acceleration", ""),
     ('EULER', "Euler Angles", "Euler rotation angles in radians"),
     ('QUATERNION', "Quaternion Rotation", "Quaternion rotation (affects NLA blending)"),
+    ('AXISANGLE', "Axis-Angle", "Angle and axis to rotate around"),
+    ('XYZ', "XYZ", ""),
 )
+
+rna_id_type_items = tuple((item.identifier, item.name, item.description, item.icon, item.value)
+                          for item in bpy.types.Action.bl_rna.properties["id_root"].enum_items)
 
 
 class WM_OT_properties_edit(Operator):
@@ -1373,6 +1427,21 @@ class WM_OT_properties_edit(Operator):
     # register only because invoke_props_popup requires.
     bl_options = {'REGISTER', 'INTERNAL'}
 
+    def subtype_items_cb(self, context):
+        match self.property_type:
+            case 'FLOAT':
+                return rna_custom_property_subtype_number_items
+            case 'FLOAT_ARRAY':
+                return rna_custom_property_subtype_vector_items
+            case _:
+                # Needed so 'NONE' can always be assigned.
+                return (
+                    rna_custom_property_subtype_none_item,
+                )
+
+    def property_type_update_cb(self, context):
+        self.subtype = 'NONE'
+
     # Common settings used for all property types. Generally, separate properties are used for each
     # type to improve the experience when choosing UI data values.
 
@@ -1381,6 +1450,7 @@ class WM_OT_properties_edit(Operator):
     property_type: EnumProperty(
         name="Type",
         items=rna_custom_property_type_items,
+        update=property_type_update_cb
     )
     is_overridable_library: BoolProperty(
         name="Library Overridable",
@@ -1481,7 +1551,7 @@ class WM_OT_properties_edit(Operator):
     )
     subtype: EnumProperty(
         name="Subtype",
-        items=WM_OT_properties_edit.subtype_items,
+        items=subtype_items_cb,
     )
 
     # String properties.
@@ -1491,14 +1561,19 @@ class WM_OT_properties_edit(Operator):
         maxlen=1024,
     )
 
+    # Data-block properties.
+
+    id_type: EnumProperty(
+        name="ID Type",
+        items=rna_id_type_items,
+        default='OBJECT',
+    )
+
     # Store the value converted to a string as a fallback for otherwise unsupported types.
     eval_string: StringProperty(
         name="Value",
         description="Python value for unsupported custom property types",
     )
-
-    type_items = rna_custom_property_type_items
-    subtype_items = rna_vector_subtype_items
 
     # Helper method to avoid repetitive code to retrieve a single value from sequences and non-sequences.
     @staticmethod
@@ -1563,19 +1638,23 @@ class WM_OT_properties_edit(Operator):
             if is_array:
                 return 'PYTHON'
             return 'STRING'
+        elif prop_type == type(None) or issubclass(prop_type, bpy.types.ID):
+            if is_array:
+                return 'PYTHON'
+            return 'DATA_BLOCK'
 
         return 'PYTHON'
 
+    # For `DATA_BLOCK` types, return the `id_type` or an empty string for non data-block types.
+    @staticmethod
+    def get_property_id_type(item, property_name):
+        ui_data = item.id_properties_ui(property_name)
+        rna_data = ui_data.as_dict()
+        # For non `DATA_BLOCK` types, the `id_type` wont exist.
+        return rna_data.get("id_type", "")
+
     def _init_subtype(self, subtype):
-        subtype = subtype or 'NONE'
-        subtype_items = rna_vector_subtype_items
-
-        # Add a temporary enum entry to preserve unknown subtypes
-        if not any(subtype == item[0] for item in subtype_items):
-            subtype_items += ((subtype, subtype, ""),)
-
-        WM_OT_properties_edit.subtype_items = subtype_items
-        self.subtype = subtype
+        self.subtype = subtype or 'NONE'
 
     # Fill the operator's properties with the UI data properties from the existing custom property.
     # Note that if the UI data doesn't exist yet, the access will create it and use those default values.
@@ -1590,7 +1669,8 @@ class WM_OT_properties_edit(Operator):
             self.soft_max_float = rna_data["soft_max"]
             self.precision = rna_data["precision"]
             self.step_float = rna_data["step"]
-            self.subtype = rna_data["subtype"]
+            if rna_data["subtype"] in [item[0] for item in self.subtype_items_cb(None)]:
+                self.subtype = rna_data["subtype"]
             self.use_soft_limits = (
                 self.min_float != self.soft_min_float or
                 self.max_float != self.soft_max_float
@@ -1612,6 +1692,8 @@ class WM_OT_properties_edit(Operator):
             self.default_string = rna_data["default"]
         elif self.property_type in {'BOOL', 'BOOL_ARRAY'}:
             self.default_bool = self._convert_new_value_array(rna_data["default"], bool, 32)
+        elif self.property_type == 'DATA_BLOCK':
+            self.id_type = rna_data["id_type"]
 
         if self.property_type in {'FLOAT_ARRAY', 'INT_ARRAY', 'BOOL_ARRAY'}:
             self.array_length = len(item[name])
@@ -1621,11 +1703,11 @@ class WM_OT_properties_edit(Operator):
 
         self._init_subtype(self.subtype)
         escaped_name = bpy.utils.escape_identifier(name)
-        self.is_overridable_library = bool(item.is_property_overridable_library('["%s"]' % escaped_name))
+        self.is_overridable_library = bool(item.is_property_overridable_library('["{:s}"]'.format(escaped_name)))
 
     # When the operator chooses a different type than the original property,
     # attempt to convert the old value to the new type for continuity and speed.
-    def _get_converted_value(self, item, name_old, prop_type_new):
+    def _get_converted_value(self, item, name_old, prop_type_new, id_type_old, id_type_new):
         if prop_type_new == 'INT':
             return self._convert_new_value_single(item[name_old], int)
         elif prop_type_new == 'FLOAT':
@@ -1648,6 +1730,14 @@ class WM_OT_properties_edit(Operator):
                 return [False] * self.array_length
         elif prop_type_new == 'STRING':
             return self.convert_custom_property_to_string(item, name_old)
+        elif prop_type_new == 'DATA_BLOCK':
+            if id_type_old != id_type_new:
+                return None
+            old_value = item[name_old]
+            if not isinstance(old_value, bpy.types.ID):
+                return None
+            return old_value
+
         # If all else fails, create an empty string property. That should avoid errors later on anyway.
         return ""
 
@@ -1709,9 +1799,15 @@ class WM_OT_properties_edit(Operator):
                 default=self.default_string,
                 description=self.description,
             )
+        elif prop_type_new == 'DATA_BLOCK':
+            ui_data = item.id_properties_ui(name)
+            ui_data.update(
+                description=self.description,
+                id_type=self.id_type,
+            )
 
         escaped_name = bpy.utils.escape_identifier(name)
-        item.property_overridable_library_set('["%s"]' % escaped_name, self.is_overridable_library)
+        item.property_overridable_library_set('["{:s}"]'.format(escaped_name), self.is_overridable_library)
 
     def _update_blender_for_prop_change(self, context, item, name, prop_type_old, prop_type_new):
         from rna_prop_ui import (
@@ -1723,7 +1819,7 @@ class WM_OT_properties_edit(Operator):
         # If we have changed the type of the property, update its potential anim curves!
         if prop_type_old != prop_type_new:
             escaped_name = bpy.utils.escape_identifier(name)
-            data_path = '["%s"]' % escaped_name
+            data_path = '["{:s}"]'.format(escaped_name)
             done = set()
 
             def _update(fcurves):
@@ -1763,7 +1859,7 @@ class WM_OT_properties_edit(Operator):
         data_path = self.data_path
         name = self.property_name
 
-        item = eval("context.%s" % data_path)
+        item = eval("context.{:s}".format(data_path))
         if (item.id_data and item.id_data.override_library and item.id_data.override_library.reference):
             self.report({'ERROR'}, "Cannot edit properties from override data")
             return {'CANCELLED'}
@@ -1772,21 +1868,24 @@ class WM_OT_properties_edit(Operator):
         prop_type_new = self.property_type
         self._old_prop_name[:] = [name]
 
+        id_type_old = self.get_property_id_type(item, name_old)
+        id_type_new = self.id_type
+
         if prop_type_new == 'PYTHON':
             try:
                 new_value = eval(self.eval_string)
-            except Exception as ex:
+            except BaseException as ex:
                 self.report({'WARNING'}, "Python evaluation failed: " + str(ex))
                 return {'CANCELLED'}
             try:
                 item[name] = new_value
-            except Exception as ex:
+            except BaseException as ex:
                 self.report({'ERROR'}, "Failed to assign value: " + str(ex))
                 return {'CANCELLED'}
             if name_old != name:
                 del item[name_old]
         else:
-            new_value = self._get_converted_value(item, name_old, prop_type_new)
+            new_value = self._get_converted_value(item, name_old, prop_type_new, id_type_old, id_type_new)
             del item[name_old]
             item[name] = new_value
 
@@ -1806,9 +1905,9 @@ class WM_OT_properties_edit(Operator):
 
         self._old_prop_name = [name]
 
-        item = eval("context.%s" % data_path)
+        item = eval("context.{:s}".format(data_path))
         if (item.id_data and item.id_data.override_library and item.id_data.override_library.reference):
-            self.report({'ERROR'}, "Properties from override data can not be edited")
+            self.report({'ERROR'}, "Properties from override data cannot be edited")
             return {'CANCELLED'}
 
         # Set operator's property type with the type of the existing property, to display the right settings.
@@ -1904,9 +2003,7 @@ class WM_OT_properties_edit(Operator):
             layout.prop(self, "step_float")
             layout.prop(self, "precision")
 
-            # Subtype is only supported for float properties currently.
-            if self.property_type != 'FLOAT':
-                layout.prop(self, "subtype")
+            layout.prop(self, "subtype")
         elif self.property_type in {'INT', 'INT_ARRAY'}:
             if self.property_type == 'INT_ARRAY':
                 layout.prop(self, "array_length")
@@ -1941,6 +2038,8 @@ class WM_OT_properties_edit(Operator):
                 layout.prop(self, "default_bool", index=0)
         elif self.property_type == 'STRING':
             layout.prop(self, "default_string")
+        elif self.property_type == 'DATA_BLOCK':
+            layout.prop(self, "id_type")
 
         if self.property_type == 'PYTHON':
             layout.prop(self, "eval_string")
@@ -1972,21 +2071,20 @@ class WM_OT_properties_edit_value(Operator):
 
     def execute(self, context):
         if self.eval_string:
-            rna_item = eval("context.%s" % self.data_path)
+            rna_item = eval("context.{:s}".format(self.data_path))
             try:
                 new_value = eval(self.eval_string)
-            except Exception as ex:
+            except BaseException as ex:
                 self.report({'WARNING'}, "Python evaluation failed: " + str(ex))
                 return {'CANCELLED'}
             rna_item[self.property_name] = new_value
         return {'FINISHED'}
 
     def invoke(self, context, _event):
-        rna_item = eval("context.%s" % self.data_path)
+        rna_item = eval("context.{:s}".format(self.data_path))
 
         if WM_OT_properties_edit.get_property_type(rna_item, self.property_name) == 'PYTHON':
-            self.eval_string = WM_OT_properties_edit.convert_custom_property_to_string(rna_item,
-                                                                                       self.property_name)
+            self.eval_string = WM_OT_properties_edit.convert_custom_property_to_string(rna_item, self.property_name)
         else:
             self.eval_string = ""
 
@@ -1996,14 +2094,14 @@ class WM_OT_properties_edit_value(Operator):
     def draw(self, context):
         from bpy.utils import escape_identifier
 
-        rna_item = eval("context.%s" % self.data_path)
+        rna_item = eval("context.{:s}".format(self.data_path))
 
         layout = self.layout
         if WM_OT_properties_edit.get_property_type(rna_item, self.property_name) == 'PYTHON':
             layout.prop(self, "eval_string")
         else:
             col = layout.column(align=True)
-            col.prop(rna_item, '["%s"]' % escape_identifier(self.property_name), text="")
+            col.prop(rna_item, '["{:s}"]'.format(escape_identifier(self.property_name)), text="")
 
 
 class WM_OT_properties_add(Operator):
@@ -2020,7 +2118,7 @@ class WM_OT_properties_add(Operator):
         )
 
         data_path = self.data_path
-        item = eval("context.%s" % data_path)
+        item = eval("context.{:s}".format(data_path))
 
         if (item.id_data and item.id_data.override_library and item.id_data.override_library.reference):
             self.report({'ERROR'}, "Cannot add properties to override data")
@@ -2076,7 +2174,7 @@ class WM_OT_properties_remove(Operator):
             rna_idprop_ui_prop_update,
         )
         data_path = self.data_path
-        item = eval("context.%s" % data_path)
+        item = eval("context.{:s}".format(data_path))
 
         if (item.id_data and item.id_data.override_library and item.id_data.override_library.reference):
             self.report({'ERROR'}, "Cannot remove properties from override data")
@@ -2137,8 +2235,8 @@ class WM_OT_operator_cheat_sheet(Operator):
             op_strings.append('')
 
         textblock = bpy.data.texts.new("OperatorList.txt")
-        textblock.write('# %d Operators\n\n' % tot)
-        textblock.write('\n'.join(op_strings))
+        textblock.write("# {:d} Operators\n\n".format(tot))
+        textblock.write("\n".join(op_strings))
         self.report({'INFO'}, "See OperatorList.txt text block")
         return {'FINISHED'}
 
@@ -2178,7 +2276,7 @@ class WM_OT_owner_disable(Operator):
 
 
 class WM_OT_tool_set_by_id(Operator):
-    """Set the tool by name (for keymaps)"""
+    """Set the tool by name (for key-maps)"""
     bl_idname = "wm.tool_set_by_id"
     bl_label = "Set Tool by Name"
 
@@ -2219,12 +2317,12 @@ class WM_OT_tool_set_by_id(Operator):
                 tool_settings.workspace_tool_type = 'FALLBACK'
             return {'FINISHED'}
         else:
-            self.report({'WARNING'}, tip_("Tool %r not found for space %r") % (self.name, space_type))
+            self.report({'WARNING'}, rpt_("Tool {!r} not found for space {!r}").format(self.name, space_type))
             return {'CANCELLED'}
 
 
 class WM_OT_tool_set_by_index(Operator):
-    """Set the tool by index (for keymaps)"""
+    """Set the tool by index (for key-maps)"""
     bl_idname = "wm.tool_set_by_index"
     bl_label = "Set Tool by Index"
     index: IntProperty(
@@ -2556,10 +2654,11 @@ class BatchRenameAction(bpy.types.PropertyGroup):
 
 
 class WM_OT_batch_rename(Operator):
+    """Rename multiple items at once"""
+
     bl_idname = "wm.batch_rename"
     bl_label = "Batch Rename"
 
-    bl_description = "Rename multiple items at once"
     bl_options = {'UNDO'}
 
     data_type: EnumProperty(
@@ -2587,6 +2686,9 @@ class WM_OT_batch_rename(Operator):
             ('NODE', "Nodes", ""),
             ('SEQUENCE_STRIP', "Sequence Strips", ""),
             ('ACTION_CLIP', "Action Clips", ""),
+            None,
+            ('SCENE', "Scenes", ""),
+            ('BRUSH', "Brushes", ""),
         ),
         description="Type of data to rename",
     )
@@ -2619,6 +2721,25 @@ class WM_OT_batch_rename(Operator):
             if isinstance(id := id_base.data if isinstance(id_base, Object) else id_base, ty)
             if id.library is None
         ]))
+
+    @staticmethod
+    def _selected_actions_from_outliner(context):
+        # Actions are a special case because they can be accessed directly or via animation-data.
+        from bpy.types import Action
+
+        def action_from_any_id(id_data):
+            if isinstance(id_data, Action):
+                return id_data
+            # Not all ID's have animation data.
+            if (animation_data := getattr(id_data, "animation_data", None)) is not None:
+                return animation_data.action
+            return None
+
+        return tuple(set(
+            action for id in context.selected_ids
+            if (action := action_from_any_id(id)) is not None
+            if action.library is None
+        ))
 
     @classmethod
     def _data_from_context(cls, context, data_type, only_selected, *, check_context=False):
@@ -2703,7 +2824,7 @@ class WM_OT_batch_rename(Operator):
             'ARMATURE': ("armatures", iface_("Armature(s)"), bpy.types.Armature),
             'LATTICE': ("lattices", iface_("Lattice(s)"), bpy.types.Lattice),
             'LIGHT': ("lights", iface_("Light(s)"), bpy.types.Light),
-            'LIGHT_PROBE': ("light_probes", iface_("Light Probe(s)"), bpy.types.LightProbe),
+            'LIGHT_PROBE': ("lightprobes", iface_("Light Probe(s)"), bpy.types.LightProbe),
             'CAMERA': ("cameras", iface_("Camera(s)"), bpy.types.Camera),
             'SPEAKER': ("speakers", iface_("Speaker(s)"), bpy.types.Speaker),
         }
@@ -2759,16 +2880,11 @@ class WM_OT_batch_rename(Operator):
                     "name",
                     iface_("Material(s)"),
                 )
-            elif data_type == "ACTION_CLIP":
+            elif data_type == 'ACTION_CLIP':
                 data = (
                     (
                         # Outliner.
-                        tuple(set(
-                            action for id in context.selected_ids
-                            if (((animation_data := id.animation_data) is not None) and
-                                ((action := animation_data.action) is not None) and
-                                (action.library is None))
-                        ))
+                        cls._selected_actions_from_outliner(context)
                         if space_type == 'OUTLINER' else
                         # 3D View (default).
                         tuple(set(
@@ -2782,6 +2898,26 @@ class WM_OT_batch_rename(Operator):
                     [id for id in bpy.data.actions if id.library is None],
                     "name",
                     iface_("Action(s)"),
+                )
+            elif data_type == 'SCENE':
+                data = (
+                    (
+                        # Outliner.
+                        cls._selected_ids_from_outliner_by_type(context, bpy.types.Scene)
+                        if ((space_type == 'OUTLINER') and only_selected) else [id for id in bpy.data.scenes if id.library is None]
+                    ),
+                    "name",
+                    iface_("Scene(s)"),
+                )
+            elif data_type == 'BRUSH':
+                data = (
+                    (
+                        # Outliner.
+                        cls._selected_ids_from_outliner_by_type(context, bpy.types.Brush)
+                        if ((space_type == 'OUTLINER') and only_selected) else [id for id in bpy.data.brushes if id.library is None]
+                    ),
+                    "name",
+                    iface_("Brush(es)"),
                 )
             elif data_type in object_data_type_attrs_map.keys():
                 attr, descr, ty = object_data_type_attrs_map[data_type]
@@ -2823,13 +2959,13 @@ class WM_OT_batch_rename(Operator):
                 elif method == 'SUFFIX':
                     name = name + text
                 else:
-                    assert 0
+                    assert False, "unreachable"
 
             elif ty == 'STRIP':
                 chars = action.strip_chars
                 chars_strip = (
-                    "%s%s%s"
-                ) % (
+                    "{:s}{:s}{:s}"
+                ).format(
                     string.punctuation if 'PUNCT' in chars else "",
                     string.digits if 'DIGIT' in chars else "",
                     " " if 'SPACE' in chars else "",
@@ -2868,9 +3004,9 @@ class WM_OT_batch_rename(Operator):
                 elif method == 'TITLE':
                     name = name.title()
                 else:
-                    assert 0
+                    assert False, "unreachable"
             else:
-                assert 0
+                assert False, "unreachable"
         return name
 
     def _data_update(self, context):
@@ -2944,7 +3080,7 @@ class WM_OT_batch_rename(Operator):
                 if action.use_replace_regex_src:
                     try:
                         re.compile(action.replace_src)
-                    except Exception as ex:
+                    except BaseException as ex:
                         re_error_src = str(ex)
                         row.alert = True
 
@@ -2970,7 +3106,7 @@ class WM_OT_batch_rename(Operator):
                         if re_error_src is None:
                             try:
                                 re.sub(action.replace_src, action.replace_dst, "")
-                            except Exception as ex:
+                            except BaseException as ex:
                                 re_error_dst = str(ex)
                                 row.alert = True
 
@@ -3006,7 +3142,7 @@ class WM_OT_batch_rename(Operator):
             row.prop(action, "op_remove", text="", icon='REMOVE')
             row.prop(action, "op_add", text="", icon='ADD')
 
-        layout.label(text=iface_("Rename %d %s") % (len(self._data[0]), self._data[2]), translate=False)
+        layout.label(text=iface_("Rename {:d} {:s}").format(len(self._data[0]), self._data[2]), translate=False)
 
     def check(self, context):
         changed = False
@@ -3046,14 +3182,14 @@ class WM_OT_batch_rename(Operator):
             if action.use_replace_regex_src:
                 try:
                     re.compile(action.replace_src)
-                except Exception as ex:
+                except BaseException as ex:
                     self.report({'ERROR'}, "Invalid regular expression (find): " + str(ex))
                     return {'CANCELLED'}
 
                 if action.use_replace_regex_dst:
                     try:
                         re.sub(action.replace_src, action.replace_dst, "")
-                    except Exception as ex:
+                    except BaseException as ex:
                         self.report({'ERROR'}, "Invalid regular expression (replace): " + str(ex))
                         return {'CANCELLED'}
 
@@ -3067,7 +3203,7 @@ class WM_OT_batch_rename(Operator):
                 change_len += 1
             total_len += 1
 
-        self.report({'INFO'}, tip_("Renamed %d of %d %s") % (change_len, total_len, descr))
+        self.report({'INFO'}, rpt_("Renamed {:d} of {:d} {:s}").format(change_len, total_len, descr))
 
         return {'FINISHED'}
 
@@ -3088,14 +3224,34 @@ class WM_MT_splash_quick_setup(Menu):
         layout = self.layout
         layout.operator_context = 'EXEC_DEFAULT'
 
-        layout.label(text="Quick Setup")
+        old_version = bpy.types.PREFERENCES_OT_copy_prev.previous_version()
+        can_import = bpy.types.PREFERENCES_OT_copy_prev.poll(context) and old_version
 
-        split = layout.split(factor=0.14)  # Left margin.
+        if can_import:
+            layout.label(text="Import Preferences From Previous Version")
+            split = layout.split(factor=0.20)  # Left margin.
+            split.label()
+
+            split = split.split(factor=0.73)  # Content width.
+            col = split.column()
+            col.operator(
+                "preferences.copy_prev",
+                text=iface_("Import Blender {:d}.{:d} Preferences", "Operator").format(*old_version),
+                icon='NONE',
+                translate=False,
+            )
+            layout.separator()
+            layout.separator(type='LINE')
+
+        if can_import:
+            layout.label(text="Create New Preferences")
+        else:
+            layout.label(text="Quick Setup")
+
+        split = layout.split(factor=0.20)  # Left margin.
         split.label()
         split = split.split(factor=0.73)  # Content width.
-
         col = split.column()
-
         col.use_property_split = True
         col.use_property_decorate = False
 
@@ -3103,28 +3259,6 @@ class WM_MT_splash_quick_setup(Menu):
         if bpy.app.build_options.international:
             prefs = context.preferences
             col.prop(prefs.view, "language")
-            col.separator()
-
-        # Shortcuts.
-        wm = context.window_manager
-        kc = wm.keyconfigs.active
-        kc_prefs = kc.preferences
-
-        sub = col.column(heading="Shortcuts")
-        text = bpy.path.display_name(kc.name)
-        if not text:
-            text = "Blender"
-        sub.menu("USERPREF_MT_keyconfigs", text=text)
-
-        has_select_mouse = hasattr(kc_prefs, "select_mouse")
-        if has_select_mouse:
-            col.row().prop(kc_prefs, "select_mouse", text="Select With", expand=True)
-
-        has_spacebar_action = hasattr(kc_prefs, "spacebar_action")
-        if has_spacebar_action:
-            col.row().prop(kc_prefs, "spacebar_action", text="Spacebar")
-
-        col.separator()
 
         # Themes.
         sub = col.column(heading="Theme")
@@ -3133,33 +3267,37 @@ class WM_MT_splash_quick_setup(Menu):
             label = "Blender Dark"
         sub.menu("USERPREF_MT_interface_theme_presets", text=label)
 
-        # Keep height constant.
-        if not has_select_mouse:
-            col.label()
-        if not has_spacebar_action:
-            col.label()
+        col.separator()
+
+        # Shortcuts.
+        wm = context.window_manager
+        kc = wm.keyconfigs.active
+        kc_prefs = kc.preferences
+
+        sub = col.column(heading="Keymap")
+        text = bpy.path.display_name(kc.name)
+        if not text:
+            text = "Blender"
+        sub.menu("USERPREF_MT_keyconfigs", text=text)
+
+        has_select_mouse = hasattr(kc_prefs, "select_mouse")
+        if has_select_mouse:
+            col.row().prop(kc_prefs, "select_mouse", text="Mouse Select", expand=True)
+
+        has_spacebar_action = hasattr(kc_prefs, "spacebar_action")
+        if has_spacebar_action:
+            col.row().prop(kc_prefs, "spacebar_action", text="Spacebar Action")
+
+        # Themes.
+        sub = col.column()
+        sub.separator(factor=2)
+
+        if can_import:
+            sub.operator("wm.save_userpref", text="Save New Preferences", icon='NONE')
+        else:
+            sub.operator("wm.save_userpref", text="Continue")
 
         layout.separator(factor=2.0)
-
-        # Save settings buttons.
-        sub = layout.row()
-
-        old_version = bpy.types.PREFERENCES_OT_copy_prev.previous_version()
-        if bpy.types.PREFERENCES_OT_copy_prev.poll(context) and old_version:
-            sub.operator(
-                "preferences.copy_prev",
-                text=iface_(
-                    "Load %d.%d Settings",
-                    "Operator") %
-                old_version,
-                translate=False)
-            sub.operator("wm.save_userpref", text="Save New Settings")
-        else:
-            sub.label()
-            sub.label()
-            sub.operator("wm.save_userpref", text="Next")
-
-        layout.separator(factor=2.4)
 
 
 class WM_MT_splash(Menu):
@@ -3187,13 +3325,14 @@ class WM_MT_splash(Menu):
         if found_recent:
             col2_title.label(text="Recent Files")
         else:
-
-            # Links if no recent files
+            # Links if no recent files.
             col2_title.label(text="Getting Started")
 
             col2.operator("wm.url_open_preset", text="Manual", icon='URL').type = 'MANUAL'
+            col2.operator("wm.url_open", text="Tutorials", icon='URL').url = "https://www.blender.org/tutorials/"
+            col2.operator("wm.url_open", text="Support", icon='URL').url = "https://www.blender.org/support/"
+            col2.operator("wm.url_open", text="User Communities", icon='URL').url = "https://www.blender.org/community/"
             col2.operator("wm.url_open_preset", text="Blender Website", icon='URL').type = 'BLENDER'
-            col2.operator("wm.url_open_preset", text="Credits", icon='URL').type = 'CREDITS'
 
         layout.separator()
 
@@ -3207,8 +3346,8 @@ class WM_MT_splash(Menu):
 
         col2 = split.column()
 
-        col2.operator("wm.url_open_preset", text="Release Notes", icon='URL').type = 'RELEASE_NOTES'
-        col2.operator("wm.url_open_preset", text="Development Fund", icon='FUND').type = 'FUND'
+        col2.operator("wm.url_open_preset", text="Donate", icon='FUND').type = 'FUND'
+        col2.operator("wm.url_open_preset", text="What's New", icon='URL').type = 'RELEASE_NOTES'
 
         layout.separator()
         layout.separator()
@@ -3226,19 +3365,22 @@ class WM_MT_splash_about(Menu):
 
         col = split.column(align=True)
         col.scale_y = 0.8
-        col.label(text=bpy.app.version_string, translate=False)
+        col.label(text=iface_("Version: {:s}").format(bpy.app.version_string), translate=False)
         col.separator(factor=2.5)
-        col.label(text=iface_("Date: %s %s") % (bpy.app.build_commit_date.decode('utf-8', 'replace'),
-                                                bpy.app.build_commit_time.decode('utf-8', 'replace')), translate=False)
-        col.label(text=iface_("Hash: %s") % bpy.app.build_hash.decode('ascii'), translate=False)
-        col.label(text=iface_("Branch: %s") % bpy.app.build_branch.decode('utf-8', 'replace'), translate=False)
+        col.label(text=iface_("Date: {:s} {:s}").format(
+            bpy.app.build_commit_date.decode("utf-8", "replace"),
+            bpy.app.build_commit_time.decode("utf-8", "replace")),
+            translate=False
+        )
+        col.label(text=iface_("Hash: {:s}").format(bpy.app.build_hash.decode("ascii")), translate=False)
+        col.label(text=iface_("Branch: {:s}").format(bpy.app.build_branch.decode("utf-8", "replace")), translate=False)
 
         # This isn't useful information on MS-Windows or Apple systems as dynamically switching
         # between windowing systems is only supported between X11/WAYLAND.
         from _bpy import _ghost_backend
         ghost_backend = _ghost_backend()
         if ghost_backend not in {'NONE', 'DEFAULT'}:
-            col.label(text=iface_("Windowing Environment: %s") % _ghost_backend(), translate=False)
+            col.label(text=iface_("Windowing Environment: {:s}").format(_ghost_backend()), translate=False)
         del _ghost_backend, ghost_backend
 
         col.separator(factor=2.0)
@@ -3247,12 +3389,128 @@ class WM_MT_splash_about(Menu):
 
         col = split.column(align=True)
         col.emboss = 'PULLDOWN_MENU'
-        col.operator("wm.url_open_preset", text="Release Notes", icon='URL').type = 'RELEASE_NOTES'
+        col.operator("wm.url_open_preset", text="Donate", icon='FUND').type = 'FUND'
+        col.operator("wm.url_open_preset", text="What's New", icon='URL').type = 'RELEASE_NOTES'
+        col.separator(factor=2.0)
         col.operator("wm.url_open_preset", text="Credits", icon='URL').type = 'CREDITS'
         col.operator("wm.url_open", text="License", icon='URL').url = "https://www.blender.org/about/license/"
-        col.operator("wm.url_open_preset", text="Blender Website", icon='URL').type = 'BLENDER'
         col.operator("wm.url_open", text="Blender Store", icon='URL').url = "https://store.blender.org"
-        col.operator("wm.url_open_preset", text="Development Fund", icon='FUND').type = 'FUND'
+        col.operator("wm.url_open_preset", text="Blender Website", icon='URL').type = 'BLENDER'
+
+
+class WM_MT_region_toggle_pie(Menu):
+    bl_label = "Region Toggle"
+
+    # Map the `region.type` to the `space_data` attribute & text label.
+    # The order of items defines priority, so in the sequencer for e.g.
+    # when there is both a toolbar and channels, the toolbar gets the
+    # axis-aligned pie, and the channels don't.
+    _region_info = {
+        'TOOLS': "show_region_toolbar",
+        'UI': "show_region_ui",
+        # Note that the tool header is enabled/disabled along with the header,
+        # no need to include both in this list.
+        'HEADER': "show_region_header",
+        'FOOTER': "show_region_footer",
+        'ASSET_SHELF': "show_region_asset_shelf",
+        'CHANNELS': "show_region_channels",
+    }
+    # Map the `region.alignment` to the axis-aligned pie position.
+    _region_align_pie = {
+        'LEFT': 0,
+        'RIGHT': 1,
+        'BOTTOM': 2,
+        'TOP': 3,
+    }
+    # Map the axis-aligned pie to alternative directions, see `ui_radial_dir_order` in C++ source.
+    # The value is the preferred direction in order of priority, two diagonals, then the flipped direction.
+    _region_dir_pie_alternatives = {
+        0: (4, 6, 1),
+        1: (5, 7, 0),
+        2: (6, 7, 3),
+        3: (4, 5, 2),
+    }
+
+    @classmethod
+    def poll(cls, context):
+        return context.space_data is not None
+
+    @classmethod
+    def _draw_pie_regions_from_alignment(cls, context, pie):
+        space_data = context.space_data
+        # Store each region by it's type.
+        region_by_type = {}
+
+        for region in context.area.regions:
+            region_type = region.type
+            attr = cls._region_info.get(region_type, None)
+            if attr is None:
+                continue
+            # In some cases channels exists but can't be toggled.
+            assert hasattr(space_data, attr)
+            # Technically possible these double-up, in practice this should never happen.
+            if region_type in region_by_type:
+                print("{:s}: Unexpected double-up of region types {!r}".format(cls.__name__, region_type))
+            region_by_type[region_type] = region
+
+        # Axis aligned pie menu items to populate.
+        items = [[], [], [], [], [], [], [], []]
+
+        # Use predictable ordering.
+        for region_type in cls._region_info.keys():
+            region = region_by_type.get(region_type)
+            if region is None:
+                continue
+            index = cls._region_align_pie[region.alignment]
+            items[index].append(region_type)
+
+        # Handle any overflow (two or more regions with the same alignment).
+        # This happens in the sequencer (channels + toolbar),
+        # otherwise it should not be that common.
+        items_overflow = []
+        for index in range(4):
+            if len(items[index]) <= 1:
+                continue
+            for index_other in cls._region_dir_pie_alternatives[index]:
+                if not items[index_other]:
+                    items[index_other].append(items[index].pop(1))
+                    if len(items[index]) <= 1:
+                        break
+            del index_other
+
+        for index in range(4):
+            if len(items[index]) <= 1:
+                continue
+            for index_other in range(4, 8):
+                if not items[index_other]:
+                    items[index_other].append(items[index].pop(1))
+                    if len(items[index]) <= 1:
+                        break
+        # Only happens when there are more than 8 regions - practically never!
+        for index in range(4):
+            while len(items[index]) > 1:
+                items_overflow.append([items[index].pop(1)])
+
+        # Use to access the labels.
+        enum_items = bpy.types.Region.bl_rna.properties["type"].enum_items_static_ui
+
+        for region_type_list in (items + items_overflow):
+            if not region_type_list:
+                pie.separator()
+                continue
+            assert len(region_type_list) == 1
+            region_type = region_type_list[0]
+            text = enum_items[region_type].name
+            attr = cls._region_info[region_type]
+            value = getattr(space_data, attr)
+            props = pie.operator("wm.context_toggle", text=text, text_ctxt=i18n_contexts.default,
+                                 icon='CHECKBOX_HLT' if value else 'CHECKBOX_DEHLT')
+            props.data_path = "space_data." + attr
+
+    def draw(self, context):
+        layout = self.layout
+        pie = layout.menu_pie()
+        self._draw_pie_regions_from_alignment(context, pie)
 
 
 class WM_OT_drop_blend_file(Operator):
@@ -3330,4 +3588,5 @@ classes = (
     WM_MT_splash_quick_setup,
     WM_MT_splash,
     WM_MT_splash_about,
+    WM_MT_region_toggle_pie
 )

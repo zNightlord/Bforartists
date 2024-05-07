@@ -1,4 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* SPDX-FileCopyrightText: 2008-2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup freestyle
@@ -45,7 +47,9 @@ int UnaryFunction0DEdgeNature_Init(PyObject *module)
 
 //------------------------INSTANCE METHODS ----------------------------------
 
-static char UnaryFunction0DEdgeNature___doc__[] =
+PyDoc_STRVAR(
+    /* Wrap. */
+    UnaryFunction0DEdgeNature___doc__,
     "Class hierarchy: :class:`UnaryFunction0D` > :class:`UnaryFunction0DEdgeNature`\n"
     "\n"
     "Base class for unary functions (functors) that work on\n"
@@ -53,7 +57,7 @@ static char UnaryFunction0DEdgeNature___doc__[] =
     "\n"
     ".. method:: __init__()\n"
     "\n"
-    "   Default constructor.\n";
+    "   Default constructor.\n");
 
 static int UnaryFunction0DEdgeNature___init__(BPy_UnaryFunction0DEdgeNature *self,
                                               PyObject *args,
@@ -89,7 +93,8 @@ static PyObject *UnaryFunction0DEdgeNature___call__(BPy_UnaryFunction0DEdgeNatur
   PyObject *obj;
 
   if (!PyArg_ParseTupleAndKeywords(
-          args, kwds, "O!", (char **)kwlist, &Interface0DIterator_Type, &obj)) {
+          args, kwds, "O!", (char **)kwlist, &Interface0DIterator_Type, &obj))
+  {
     return nullptr;
   }
 
@@ -110,7 +115,7 @@ static PyObject *UnaryFunction0DEdgeNature___call__(BPy_UnaryFunction0DEdgeNatur
 /*-----------------------BPy_UnaryFunction0DEdgeNature type definition --------------------------*/
 
 PyTypeObject UnaryFunction0DEdgeNature_Type = {
-    PyVarObject_HEAD_INIT(nullptr, 0)
+    /*ob_base*/ PyVarObject_HEAD_INIT(nullptr, 0)
     /*tp_name*/ "UnaryFunction0DEdgeNature",
     /*tp_basicsize*/ sizeof(BPy_UnaryFunction0DEdgeNature),
     /*tp_itemsize*/ 0,

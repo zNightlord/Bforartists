@@ -1,15 +1,22 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* SPDX-FileCopyrightText: 2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #pragma once
 
 #include <cstdint>
+#include <memory>
 
-#include "GPU_shader.h"
-#include "GPU_texture.h"
+#include "BLI_map.hh"
+
+#include "GPU_shader.hh"
+#include "GPU_texture.hh"
 
 #include "COM_cached_resource.hh"
 
 namespace blender::realtime_compositor {
+
+class Context;
 
 /* ------------------------------------------------------------------------------------------------
  * Morphological Distance Feather Key.
@@ -41,13 +48,13 @@ class MorphologicalDistanceFeatherWeights : public CachedResource {
   GPUTexture *distance_falloffs_texture_ = nullptr;
 
  public:
-  MorphologicalDistanceFeatherWeights(int type, int radius);
+  MorphologicalDistanceFeatherWeights(Context &context, int type, int radius);
 
   ~MorphologicalDistanceFeatherWeights();
 
-  void compute_weights(int radius);
+  void compute_weights(Context &context, int radius);
 
-  void compute_distance_falloffs(int type, int radius);
+  void compute_distance_falloffs(Context &context, int type, int radius);
 
   void bind_weights_as_texture(GPUShader *shader, const char *texture_name) const;
 
@@ -56,6 +63,24 @@ class MorphologicalDistanceFeatherWeights : public CachedResource {
   void bind_distance_falloffs_as_texture(GPUShader *shader, const char *texture_name) const;
 
   void unbind_distance_falloffs_as_texture() const;
+};
+
+/* ------------------------------------------------------------------------------------------------
+ * Morphological Distance Feather Key.
+ */
+class MorphologicalDistanceFeatherWeightsContainer : CachedResourceContainer {
+ private:
+  Map<MorphologicalDistanceFeatherWeightsKey, std::unique_ptr<MorphologicalDistanceFeatherWeights>>
+      map_;
+
+ public:
+  void reset() override;
+
+  /* Check if there is an available MorphologicalDistanceFeatherWeights cached resource with the
+   * given parameters in the container, if one exists, return it, otherwise, return a newly created
+   * one and add it to the container. In both cases, tag the cached resource as needed to keep it
+   * cached for the next evaluation. */
+  MorphologicalDistanceFeatherWeights &get(Context &context, int type, int radius);
 };
 
 }  // namespace blender::realtime_compositor

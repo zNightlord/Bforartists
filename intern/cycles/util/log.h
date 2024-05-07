@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: Apache-2.0
- * Copyright 2011-2022 Blender Foundation */
+/* SPDX-FileCopyrightText: 2011-2022 Blender Foundation
+ *
+ * SPDX-License-Identifier: Apache-2.0 */
 
 #ifndef __UTIL_LOGGING_H__
 #define __UTIL_LOGGING_H__
@@ -9,7 +10,7 @@
 #  include <glog/logging.h>
 #endif
 
-#include <iostream>
+#include <iosfwd>
 
 CCL_NAMESPACE_BEGIN
 
@@ -24,12 +25,8 @@ class StubStream {
 
 class LogMessageVoidify {
  public:
-  LogMessageVoidify()
-  {
-  }
-  void operator&(const StubStream &)
-  {
-  }
+  LogMessageVoidify() {}
+  void operator&(const StubStream &) {}
 };
 
 #  define LOG_SUPPRESS() (true) ? ((void)0) : LogMessageVoidify() & StubStream()
@@ -40,8 +37,7 @@ class LogMessageVoidify {
 
 #  define CHECK(expression) LOG_SUPPRESS()
 
-#  define CHECK_NOTNULL(expression) LOG_SUPPRESS()
-#  define CHECK_NULL(expression) LOG_SUPPRESS()
+#  define CHECK_NOTNULL(expression) (expression)
 
 #  define CHECK_NEAR(actual, expected, eps) LOG_SUPPRESS()
 
@@ -54,8 +50,7 @@ class LogMessageVoidify {
 
 #  define DCHECK(expression) LOG_SUPPRESS()
 
-#  define DCHECK_NOTNULL(expression) LOG_SUPPRESS()
-#  define DCHECK_NULL(expression) LOG_SUPPRESS()
+#  define DCHECK_NOTNULL(expression) (expression)
 
 #  define DCHECK_NEAR(actual, expected, eps) LOG_SUPPRESS()
 

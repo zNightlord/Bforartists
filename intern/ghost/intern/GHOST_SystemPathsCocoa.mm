@@ -1,20 +1,18 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2010 Blender Foundation. All rights reserved. */
+/* SPDX-FileCopyrightText: 2010 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
+#import <AppKit/NSDocumentController.h>
 #import <Foundation/Foundation.h>
 
-#include "GHOST_Debug.h"
-#include "GHOST_SystemPathsCocoa.h"
+#include "GHOST_Debug.hh"
+#include "GHOST_SystemPathsCocoa.hh"
 
 #pragma mark initialization/finalization
 
-GHOST_SystemPathsCocoa::GHOST_SystemPathsCocoa()
-{
-}
+GHOST_SystemPathsCocoa::GHOST_SystemPathsCocoa() {}
 
-GHOST_SystemPathsCocoa::~GHOST_SystemPathsCocoa()
-{
-}
+GHOST_SystemPathsCocoa::~GHOST_SystemPathsCocoa() {}
 
 #pragma mark Base directories retrieval
 
@@ -28,7 +26,7 @@ static const char *GetApplicationSupportDir(const char *versionstr,
         NSApplicationSupportDirectory, mask, YES);
 
     if ([paths count] == 0) {
-      return NULL;
+      return nullptr;
     }
     const NSString *const basePath = [paths objectAtIndex:0];
 
@@ -85,17 +83,22 @@ const char *GHOST_SystemPathsCocoa::getUserSpecialDir(GHOST_TUserSpecialDirTypes
         GHOST_ASSERT(
             false,
             "GHOST_SystemPathsCocoa::getUserSpecialDir(): Invalid enum value for type parameter");
-        return NULL;
+        return nullptr;
     }
 
     const NSArray *const paths = NSSearchPathForDirectoriesInDomains(
         ns_directory, NSUserDomainMask, YES);
     if ([paths count] == 0) {
-      return NULL;
+      return nullptr;
     }
     const NSString *const basePath = [paths objectAtIndex:0];
 
-    strncpy(tempPath, [basePath cStringUsingEncoding:NSASCIIStringEncoding], sizeof(tempPath));
+    const char *basePath_cstr = [basePath cStringUsingEncoding:NSASCIIStringEncoding];
+    int basePath_len = strlen(basePath_cstr);
+
+    basePath_len = MIN(basePath_len, sizeof(tempPath) - 1);
+    memcpy(tempPath, basePath_cstr, basePath_len);
+    tempPath[basePath_len] = '\0';
   }
   return tempPath;
 }
@@ -108,15 +111,23 @@ const char *GHOST_SystemPathsCocoa::getBinaryDir() const
     const NSString *const basePath = [[NSBundle mainBundle] bundlePath];
 
     if (basePath == nil) {
-      return NULL;
+      return nullptr;
     }
 
-    strcpy(tempPath, [basePath cStringUsingEncoding:NSASCIIStringEncoding]);
+    const char *basePath_cstr = [basePath cStringUsingEncoding:NSASCIIStringEncoding];
+    int basePath_len = strlen(basePath_cstr);
+
+    basePath_len = MIN(basePath_len, sizeof(tempPath) - 1);
+    memcpy(tempPath, basePath_cstr, basePath_len);
+    tempPath[basePath_len] = '\0';
   }
   return tempPath;
 }
 
-void GHOST_SystemPathsCocoa::addToSystemRecentFiles(const char *filename) const
+void GHOST_SystemPathsCocoa::addToSystemRecentFiles(const char *filepath) const
 {
-  /* TODO: implement for macOS */
+  @autoreleasepool {
+    NSURL *const file_url = [NSURL fileURLWithPath:[NSString stringWithUTF8String:filepath]];
+    [[NSDocumentController sharedDocumentController] noteNewRecentDocumentURL:file_url];
+  }
 }

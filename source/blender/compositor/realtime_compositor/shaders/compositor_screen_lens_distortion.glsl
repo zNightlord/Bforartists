@@ -1,3 +1,7 @@
+/* SPDX-FileCopyrightText: 2022-2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
+
 #pragma BLENDER_REQUIRE(gpu_shader_common_hash.glsl)
 #pragma BLENDER_REQUIRE(gpu_shader_compositor_texture_utilities.glsl)
 
@@ -22,7 +26,7 @@ vec3 compute_chromatic_distortion_scale(float distance_squared)
  * coordinates but outputs non-centered image coordinates. */
 vec2 compute_distorted_uv(vec2 uv, float uv_scale)
 {
-  return (uv * uv_scale + 0.5) * vec2(texture_size(input_tx)) - 0.5;
+  return (uv * uv_scale + 0.5) * vec2(texture_size(input_tx));
 }
 
 /* Compute the number of integration steps that should be used to approximate the distorted pixel

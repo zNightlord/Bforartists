@@ -1,18 +1,17 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2019 Blender Foundation. */
+/* SPDX-FileCopyrightText: 2019 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup draw_engine
  */
 
-#include "BKE_paint.h"
-#include "DRW_render.h"
+#include "BKE_paint.hh"
+#include "DRW_render.hh"
 
 #include "overlay_private.hh"
 
-void OVERLAY_facing_init(OVERLAY_Data * /*vedata*/)
-{
-}
+void OVERLAY_facing_init(OVERLAY_Data * /*vedata*/) {}
 
 void OVERLAY_facing_cache_init(OVERLAY_Data *vedata)
 {
@@ -21,7 +20,7 @@ void OVERLAY_facing_cache_init(OVERLAY_Data *vedata)
 
   for (int i = 0; i < 2; i++) {
     /* Non Meshes Pass (Camera, empties, lights ...) */
-    DRWState state = DRW_STATE_WRITE_COLOR | DRW_STATE_DEPTH_EQUAL | DRW_STATE_BLEND_ALPHA;
+    DRWState state = DRW_STATE_WRITE_COLOR | DRW_STATE_DEPTH_LESS_EQUAL | DRW_STATE_BLEND_ALPHA;
     DRW_PASS_CREATE(psl->facing_ps[i], state | pd->clipping_state);
 
     GPUShader *sh = OVERLAY_shader_facing();
@@ -51,7 +50,7 @@ void OVERLAY_facing_cache_populate(OVERLAY_Data *vedata, Object *ob)
     DRW_shgroup_call_sculpt(pd->facing_grp[is_xray], ob, false, false, false, false, false);
   }
   else {
-    struct GPUBatch *geom = DRW_cache_object_surface_get(ob);
+    blender::gpu::Batch *geom = DRW_cache_object_surface_get(ob);
     if (geom) {
       DRW_shgroup_call(pd->facing_grp[is_xray], geom, ob);
     }

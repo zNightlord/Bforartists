@@ -1,12 +1,15 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* SPDX-FileCopyrightText: 2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #pragma once
 
 #include "NOD_node_declaration.hh"
 
-#include "RNA_types.h"
+#include "RNA_types.hh"
 
 #include "BLI_color.hh"
+#include "BLI_math_euler_types.hh"
 #include "BLI_math_vector_types.hh"
 
 namespace blender::nodes::decl {
@@ -15,6 +18,8 @@ class FloatBuilder;
 
 class Float : public SocketDeclaration {
  public:
+  static constexpr eNodeSocketDatatype static_socket_type = SOCK_FLOAT;
+
   float default_value = 0.0f;
   float soft_min_value = -FLT_MAX;
   float soft_max_value = FLT_MAX;
@@ -42,6 +47,8 @@ class IntBuilder;
 
 class Int : public SocketDeclaration {
  public:
+  static constexpr eNodeSocketDatatype static_socket_type = SOCK_INT;
+
   int default_value = 0;
   int soft_min_value = INT32_MIN;
   int soft_max_value = INT32_MAX;
@@ -69,6 +76,8 @@ class VectorBuilder;
 
 class Vector : public SocketDeclaration {
  public:
+  static constexpr eNodeSocketDatatype static_socket_type = SOCK_VECTOR;
+
   float3 default_value = {0, 0, 0};
   float soft_min_value = -FLT_MAX;
   float soft_max_value = FLT_MAX;
@@ -97,6 +106,8 @@ class BoolBuilder;
 
 class Bool : public SocketDeclaration {
  public:
+  static constexpr eNodeSocketDatatype static_socket_type = SOCK_BOOLEAN;
+
   bool default_value = false;
   friend BoolBuilder;
 
@@ -117,7 +128,9 @@ class ColorBuilder;
 
 class Color : public SocketDeclaration {
  public:
-  ColorGeometry4f default_value;
+  static constexpr eNodeSocketDatatype static_socket_type = SOCK_RGBA;
+
+  ColorGeometry4f default_value{0.8f, 0.8f, 0.8f, 1.0f};
 
   friend ColorBuilder;
 
@@ -134,10 +147,53 @@ class ColorBuilder : public SocketDeclarationBuilder<Color> {
   ColorBuilder &default_value(const ColorGeometry4f value);
 };
 
+class RotationBuilder;
+
+class Rotation : public SocketDeclaration {
+ public:
+  static constexpr eNodeSocketDatatype static_socket_type = SOCK_ROTATION;
+
+  math::EulerXYZ default_value;
+
+  friend RotationBuilder;
+
+  using Builder = RotationBuilder;
+
+  bNodeSocket &build(bNodeTree &ntree, bNode &node) const override;
+  bool matches(const bNodeSocket &socket) const override;
+  bNodeSocket &update_or_build(bNodeTree &ntree, bNode &node, bNodeSocket &socket) const override;
+  bool can_connect(const bNodeSocket &socket) const override;
+};
+
+class RotationBuilder : public SocketDeclarationBuilder<Rotation> {
+ public:
+  RotationBuilder &default_value(const math::EulerXYZ &value);
+};
+
+class MatrixBuilder;
+
+class Matrix : public SocketDeclaration {
+ public:
+  static constexpr eNodeSocketDatatype static_socket_type = SOCK_MATRIX;
+
+  friend MatrixBuilder;
+
+  using Builder = MatrixBuilder;
+
+  bNodeSocket &build(bNodeTree &ntree, bNode &node) const override;
+  bool matches(const bNodeSocket &socket) const override;
+  bNodeSocket &update_or_build(bNodeTree &ntree, bNode &node, bNodeSocket &socket) const override;
+  bool can_connect(const bNodeSocket &socket) const override;
+};
+
+class MatrixBuilder : public SocketDeclarationBuilder<Matrix> {};
+
 class StringBuilder;
 
 class String : public SocketDeclaration {
  public:
+  static constexpr eNodeSocketDatatype static_socket_type = SOCK_STRING;
+
   std::string default_value;
 
   friend StringBuilder;
@@ -155,9 +211,38 @@ class StringBuilder : public SocketDeclarationBuilder<String> {
   StringBuilder &default_value(const std::string value);
 };
 
+class MenuBuilder;
+
+class Menu : public SocketDeclaration {
+ public:
+  static constexpr eNodeSocketDatatype static_socket_type = SOCK_MENU;
+
+  int32_t default_value;
+
+  friend MenuBuilder;
+
+  using Builder = MenuBuilder;
+
+  bNodeSocket &build(bNodeTree &ntree, bNode &node) const override;
+  bool matches(const bNodeSocket &socket) const override;
+  bNodeSocket &update_or_build(bNodeTree &ntree, bNode &node, bNodeSocket &socket) const override;
+  bool can_connect(const bNodeSocket &socket) const override;
+};
+
+class MenuBuilder : public SocketDeclarationBuilder<Menu> {
+ public:
+  MenuBuilder &default_value(int32_t value);
+};
+
 class IDSocketDeclaration : public SocketDeclaration {
  public:
   const char *idname;
+  /**
+   * Get the default ID pointer for this socket. This is a function to avoid dangling pointers,
+   * since bNode::id pointers are remapped as ID pointers change, but pointers in socket
+   * declarations are not managed the same way.
+   */
+  std::function<ID *(const bNode &node)> default_value_fn;
 
  public:
   IDSocketDeclaration(const char *idname);
@@ -170,6 +255,8 @@ class IDSocketDeclaration : public SocketDeclaration {
 
 class Object : public IDSocketDeclaration {
  public:
+  static constexpr eNodeSocketDatatype static_socket_type = SOCK_OBJECT;
+
   using Builder = SocketDeclarationBuilder<Object>;
 
   Object();
@@ -177,6 +264,8 @@ class Object : public IDSocketDeclaration {
 
 class Material : public IDSocketDeclaration {
  public:
+  static constexpr eNodeSocketDatatype static_socket_type = SOCK_MATERIAL;
+
   using Builder = SocketDeclarationBuilder<Material>;
 
   Material();
@@ -184,6 +273,8 @@ class Material : public IDSocketDeclaration {
 
 class Collection : public IDSocketDeclaration {
  public:
+  static constexpr eNodeSocketDatatype static_socket_type = SOCK_COLLECTION;
+
   using Builder = SocketDeclarationBuilder<Collection>;
 
   Collection();
@@ -191,6 +282,8 @@ class Collection : public IDSocketDeclaration {
 
 class Texture : public IDSocketDeclaration {
  public:
+  static constexpr eNodeSocketDatatype static_socket_type = SOCK_TEXTURE;
+
   using Builder = SocketDeclarationBuilder<Texture>;
 
   Texture();
@@ -198,6 +291,8 @@ class Texture : public IDSocketDeclaration {
 
 class Image : public IDSocketDeclaration {
  public:
+  static constexpr eNodeSocketDatatype static_socket_type = SOCK_IMAGE;
+
   using Builder = SocketDeclarationBuilder<Image>;
 
   Image();
@@ -207,6 +302,8 @@ class ShaderBuilder;
 
 class Shader : public SocketDeclaration {
  public:
+  static constexpr eNodeSocketDatatype static_socket_type = SOCK_SHADER;
+
   friend ShaderBuilder;
 
   using Builder = ShaderBuilder;
@@ -216,8 +313,7 @@ class Shader : public SocketDeclaration {
   bool can_connect(const bNodeSocket &socket) const override;
 };
 
-class ShaderBuilder : public SocketDeclarationBuilder<Shader> {
-};
+class ShaderBuilder : public SocketDeclarationBuilder<Shader> {};
 
 class ExtendBuilder;
 
@@ -226,6 +322,8 @@ class Extend : public SocketDeclaration {
   friend ExtendBuilder;
 
  public:
+  static constexpr eNodeSocketDatatype static_socket_type = SOCK_CUSTOM;
+
   using Builder = ExtendBuilder;
 
   bNodeSocket &build(bNodeTree &ntree, bNode &node) const override;
@@ -234,12 +332,14 @@ class Extend : public SocketDeclaration {
   bool can_connect(const bNodeSocket &socket) const override;
 };
 
-class ExtendBuilder : public SocketDeclarationBuilder<Extend> {
-};
+class ExtendBuilder : public SocketDeclarationBuilder<Extend> {};
 
 class Custom : public SocketDeclaration {
  public:
+  static constexpr eNodeSocketDatatype static_socket_type = SOCK_CUSTOM;
+
   const char *idname_;
+  std::function<void(bNode &node, bNodeSocket &socket, const char *data_path)> init_socket_fn;
 
   bNodeSocket &build(bNodeTree &ntree, bNode &node) const override;
   bool matches(const bNodeSocket &socket) const override;
@@ -380,33 +480,47 @@ inline StringBuilder &StringBuilder::default_value(std::string value)
 /** \} */
 
 /* -------------------------------------------------------------------- */
-/** \name #IDSocketDeclaration and Children Inline Methods
+/** \name #MenuBuilder Inline Methods
  * \{ */
 
-inline IDSocketDeclaration::IDSocketDeclaration(const char *idname) : idname(idname)
+inline MenuBuilder &MenuBuilder::default_value(const int32_t value)
 {
-}
-
-inline Object::Object() : IDSocketDeclaration("NodeSocketObject")
-{
-}
-
-inline Material::Material() : IDSocketDeclaration("NodeSocketMaterial")
-{
-}
-
-inline Collection::Collection() : IDSocketDeclaration("NodeSocketCollection")
-{
-}
-
-inline Texture::Texture() : IDSocketDeclaration("NodeSocketTexture")
-{
-}
-
-inline Image::Image() : IDSocketDeclaration("NodeSocketImage")
-{
+  decl_->default_value = value;
+  return *this;
 }
 
 /** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name #RotationBuilder Inline Methods
+ * \{ */
+
+inline RotationBuilder &RotationBuilder::default_value(const math::EulerXYZ &value)
+{
+  decl_->default_value = value;
+  return *this;
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name #IDSocketDeclaration and Children Inline Methods
+ * \{ */
+
+inline IDSocketDeclaration::IDSocketDeclaration(const char *idname) : idname(idname) {}
+
+inline Object::Object() : IDSocketDeclaration("NodeSocketObject") {}
+
+inline Material::Material() : IDSocketDeclaration("NodeSocketMaterial") {}
+
+inline Collection::Collection() : IDSocketDeclaration("NodeSocketCollection") {}
+
+inline Texture::Texture() : IDSocketDeclaration("NodeSocketTexture") {}
+
+inline Image::Image() : IDSocketDeclaration("NodeSocketImage") {}
+
+/** \} */
+
+SocketDeclarationPtr create_extend_declaration(const eNodeSocketInOut in_out);
 
 }  // namespace blender::nodes::decl

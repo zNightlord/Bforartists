@@ -1,12 +1,11 @@
-/* SPDX-License-Identifier: Apache-2.0
- * Copyright 2011-2022 Blender Foundation */
+/* SPDX-FileCopyrightText: 2011-2022 Blender Foundation
+ *
+ * SPDX-License-Identifier: Apache-2.0 */
 
 #pragma once
 
 #ifdef WITH_NANOVDB
-#  define NANOVDB_USE_INTRINSICS
-#  include <nanovdb/NanoVDB.h>
-#  include <nanovdb/util/SampleFromVoxels.h>
+#  include "kernel/util/nanovdb.h"
 #endif
 
 CCL_NAMESPACE_BEGIN
@@ -257,6 +256,7 @@ template<typename TexT, typename OutT = float4> struct TextureInterpolator {
     int nix, niy;
     const float tx = frac(x * (float)width - 0.5f, &ix);
     const float ty = frac(y * (float)height - 0.5f, &iy);
+    const TexT *data = (const TexT *)info.data;
 
     switch (info.extension) {
       case EXTENSION_REPEAT:
@@ -273,7 +273,10 @@ template<typename TexT, typename OutT = float4> struct TextureInterpolator {
         }
         nix = ix + 1;
         niy = iy + 1;
-        break;
+        return (1.0f - ty) * (1.0f - tx) * read_clip(data, ix, iy, width, height) +
+               (1.0f - ty) * tx * read_clip(data, nix, iy, width, height) +
+               ty * (1.0f - tx) * read_clip(data, ix, niy, width, height) +
+               ty * tx * read_clip(data, nix, niy, width, height);
       case EXTENSION_EXTEND:
         nix = wrap_clamp(ix + 1, width);
         ix = wrap_clamp(ix, width);
@@ -291,11 +294,10 @@ template<typename TexT, typename OutT = float4> struct TextureInterpolator {
         return zero();
     }
 
-    const TexT *data = (const TexT *)info.data;
-    return (1.0f - ty) * (1.0f - tx) * read_clip(data, ix, iy, width, height) +
-           (1.0f - ty) * tx * read_clip(data, nix, iy, width, height) +
-           ty * (1.0f - tx) * read_clip(data, ix, niy, width, height) +
-           ty * tx * read_clip(data, nix, niy, width, height);
+    return (1.0f - ty) * (1.0f - tx) * read(data, ix, iy, width, height) +
+           (1.0f - ty) * tx * read(data, nix, iy, width, height) +
+           ty * (1.0f - tx) * read(data, ix, niy, width, height) +
+           ty * tx * read(data, nix, niy, width, height);
   }
 
   static ccl_always_inline OutT interp_cubic(const TextureInfo &info, float x, float y)
@@ -681,46 +683,59 @@ template<typename TexT, typename OutT = float4> struct TextureInterpolator {
 };
 
 #ifdef WITH_NANOVDB
-template<typename TexT, typename OutT = float4> struct NanoVDBInterpolator {
-
-  typedef typename nanovdb::NanoGrid<TexT>::AccessorType AccessorType;
+template<typename TexT, typename OutT> struct NanoVDBInterpolator {
 
   static ccl_always_inline float read(float r)
   {
     return r;
   }
 
-  static ccl_always_inline float4 read(nanovdb::Vec3f r)
+  static ccl_always_inline float4 read(const packed_float3 r)
   {
-    return make_float4(r[0], r[1], r[2], 1.0f);
+    return make_float4(r.x, r.y, r.z, 1.0f);
   }
 
-  static ccl_always_inline OutT interp_3d_closest(const AccessorType &acc,
-                                                  float x,
-                                                  float y,
-                                                  float z)
+  template<typename Acc>
+  static ccl_always_inline OutT interp_3d_closest(const Acc &acc, float x, float y, float z)
   {
-    const nanovdb::Vec3f xyz(x, y, z);
-    return read(nanovdb::SampleFromVoxels<AccessorType, 0, false>(acc)(xyz));
+    const nanovdb::Coord coord((int32_t)floorf(x), (int32_t)floorf(y), (int32_t)floorf(z));
+    return read(acc.getValue(coord));
   }
 
-  static ccl_always_inline OutT interp_3d_linear(const AccessorType &acc,
-                                                 float x,
-                                                 float y,
-                                                 float z)
+  template<typename Acc>
+  static ccl_always_inline OutT interp_3d_linear(const Acc &acc, float x, float y, float z)
   {
-    const nanovdb::Vec3f xyz(x - 0.5f, y - 0.5f, z - 0.5f);
-    return read(nanovdb::SampleFromVoxels<AccessorType, 1, false>(acc)(xyz));
+    int ix, iy, iz;
+    const float tx = frac(x - 0.5f, &ix);
+    const float ty = frac(y - 0.5f, &iy);
+    const float tz = frac(z - 0.5f, &iz);
+
+    return mix(mix(mix(read(acc.getValue(nanovdb::Coord(ix, iy, iz))),
+                       read(acc.getValue(nanovdb::Coord(ix, iy, iz + 1))),
+                       tz),
+                   mix(read(acc.getValue(nanovdb::Coord(ix, iy + 1, iz + 1))),
+                       read(acc.getValue(nanovdb::Coord(ix, iy + 1, iz))),
+                       1.0f - tz),
+                   ty),
+               mix(mix(read(acc.getValue(nanovdb::Coord(ix + 1, iy + 1, iz))),
+                       read(acc.getValue(nanovdb::Coord(ix + 1, iy + 1, iz + 1))),
+                       tz),
+                   mix(read(acc.getValue(nanovdb::Coord(ix + 1, iy, iz + 1))),
+                       read(acc.getValue(nanovdb::Coord(ix + 1, iy, iz))),
+                       1.0f - tz),
+                   1.0f - ty),
+               tx);
   }
 
   /* Tricubic b-spline interpolation. */
+  template<typename Acc>
 #  if defined(__GNUC__) || defined(__clang__)
   static ccl_always_inline
 #  else
   static ccl_never_inline
 #  endif
       OutT
-      interp_3d_cubic(const AccessorType &acc, float x, float y, float z)
+      interp_3d_cubic(const Acc &acc, float x, float y, float z)
   {
     int ix, iy, iz;
     int nix, niy, niz;
@@ -775,15 +790,20 @@ template<typename TexT, typename OutT = float4> struct NanoVDBInterpolator {
     using namespace nanovdb;
 
     NanoGrid<TexT> *const grid = (NanoGrid<TexT> *)info.data;
-    AccessorType acc = grid->getAccessor();
 
     switch ((interp == INTERPOLATION_NONE) ? info.interpolation : interp) {
-      case INTERPOLATION_CLOSEST:
+      case INTERPOLATION_CLOSEST: {
+        ReadAccessor<TexT> acc(grid->tree().root());
         return interp_3d_closest(acc, x, y, z);
-      case INTERPOLATION_LINEAR:
+      }
+      case INTERPOLATION_LINEAR: {
+        CachedReadAccessor<TexT> acc(grid->tree().root());
         return interp_3d_linear(acc, x, y, z);
-      default:
+      }
+      default: {
+        CachedReadAccessor<TexT> acc(grid->tree().root());
         return interp_3d_cubic(acc, x, y, z);
+      }
     }
   }
 };
@@ -876,7 +896,7 @@ ccl_device float4 kernel_tex_image_interp_3d(KernelGlobals kg,
       return make_float4(f, f, f, 1.0f);
     }
     case IMAGE_DATA_TYPE_NANOVDB_FLOAT3:
-      return NanoVDBInterpolator<nanovdb::Vec3f>::interp_3d(info, P.x, P.y, P.z, interp);
+      return NanoVDBInterpolator<packed_float3, float4>::interp_3d(info, P.x, P.y, P.z, interp);
     case IMAGE_DATA_TYPE_NANOVDB_FPN: {
       const float f = NanoVDBInterpolator<nanovdb::FpN, float>::interp_3d(
           info, P.x, P.y, P.z, interp);

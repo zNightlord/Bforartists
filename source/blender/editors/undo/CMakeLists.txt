@@ -1,18 +1,16 @@
+# SPDX-FileCopyrightText: 2023 Blender Authors
+#
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 set(INC
   ../include
   ../../asset_system
   ../../blenkernel
-  ../../blenlib
   ../../blenloader
   ../../blentranslation
-  ../../makesdna
+  ../../bmesh
   ../../makesrna
   ../../windowmanager
-  ../../../../intern/clog
-  ../../../../intern/guardedalloc
-  ../../bmesh
 )
 
 set(INC_SYS
@@ -28,13 +26,16 @@ set(SRC
 
 set(LIB
   bf_blenkernel
-  bf_blenlib
+  PRIVATE bf::blenlib
+  PRIVATE bf::dna
   bf_editor_curve
   bf_editor_curves
   bf_editor_lattice
   bf_editor_mesh
   bf_editor_metaball
   bf_editor_physics
+  PRIVATE bf::intern::clog
+  PRIVATE bf::intern::guardedalloc
 )
 
 blender_add_lib(bf_editor_undo "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")

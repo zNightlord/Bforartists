@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: Apache-2.0
- * Copyright 2011-2022 Blender Foundation */
+/* SPDX-FileCopyrightText: 2011-2022 Blender Foundation
+ *
+ * SPDX-License-Identifier: Apache-2.0 */
 
 #include "device/device.h"
 
@@ -44,9 +45,7 @@ PathTraceWork::PathTraceWork(Device *device,
 {
 }
 
-PathTraceWork::~PathTraceWork()
-{
-}
+PathTraceWork::~PathTraceWork() {}
 
 RenderBuffers *PathTraceWork::get_render_buffers()
 {
@@ -155,6 +154,11 @@ PassAccessor::PassAccessInfo PathTraceWork::get_display_pass_access_info(PassMod
   const BufferParams &params = buffers_->params;
 
   const BufferPass *display_pass = params.get_actual_display_pass(film_->get_display_pass());
+  if (display_pass == nullptr) {
+    /* Happens when interactive session changes display pass but render
+     * buffer does not contain it yet. */
+    return PassAccessor::PassAccessInfo();
+  }
 
   PassAccessor::PassAccessInfo pass_access_info;
   pass_access_info.type = display_pass->type;

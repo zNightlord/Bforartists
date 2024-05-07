@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2012 Blender Foundation. All rights reserved. */
+/* SPDX-FileCopyrightText: 2012 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup pybmesh
@@ -168,7 +169,7 @@ PyObject *BPy_BMElem_Array_As_Tuple(BMesh *bm, BMHeader **elem, Py_ssize_t elem_
 PyObject *BPy_BMVert_Array_As_Tuple(BMesh *bm, BMVert **elem, Py_ssize_t elem_len);
 PyObject *BPy_BMEdge_Array_As_Tuple(BMesh *bm, BMEdge **elem, Py_ssize_t elem_len);
 PyObject *BPy_BMFace_Array_As_Tuple(BMesh *bm, BMFace **elem, Py_ssize_t elem_len);
-PyObject *BPy_BMLoop_Array_As_Tuple(BMesh *bm, BMLoop **elem, Py_ssize_t elem_len);
+PyObject *BPy_BMLoop_Array_As_Tuple(BMesh *bm, BMLoop *const *elem, Py_ssize_t elem_len);
 
 int BPy_BMElem_CheckHType(PyTypeObject *type, char htype);
 /**
@@ -203,8 +204,8 @@ int bpy_bm_generic_valid_check_source(BMesh *bm_source,
 #define BPY_BM_CHECK_SOURCE_OBJ(bm, errmsg, ...) \
   { \
     void *_args[] = {__VA_ARGS__}; \
-    if (UNLIKELY(bpy_bm_generic_valid_check_source(bm, errmsg, _args, ARRAY_SIZE(_args)) == \
-                 -1)) { \
+    if (UNLIKELY(bpy_bm_generic_valid_check_source(bm, errmsg, _args, ARRAY_SIZE(_args)) == -1)) \
+    { \
       return NULL; \
     } \
   } \
@@ -212,8 +213,8 @@ int bpy_bm_generic_valid_check_source(BMesh *bm_source,
 #define BPY_BM_CHECK_SOURCE_INT(bm, errmsg, ...) \
   { \
     void *_args[] = {__VA_ARGS__}; \
-    if (UNLIKELY(bpy_bm_generic_valid_check_source(bm, errmsg, _args, ARRAY_SIZE(_args)) == \
-                 -1)) { \
+    if (UNLIKELY(bpy_bm_generic_valid_check_source(bm, errmsg, _args, ARRAY_SIZE(_args)) == -1)) \
+    { \
       return -1; \
     } \
   } \

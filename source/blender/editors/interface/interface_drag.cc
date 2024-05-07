@@ -1,12 +1,14 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* SPDX-FileCopyrightText: 2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup edinterface
  */
 
-#include "UI_interface.h"
+#include "UI_interface.hh"
 
-#include "WM_api.h"
+#include "WM_api.hh"
 
 #include "interface_intern.hh"
 
@@ -20,7 +22,7 @@ void UI_but_drag_set_id(uiBut *but, ID *id)
   but->dragpoin = (void *)id;
 }
 
-void UI_but_drag_attach_image(uiBut *but, struct ImBuf *imb, const float scale)
+void UI_but_drag_attach_image(uiBut *but, const ImBuf *imb, const float scale)
 {
   but->imb = imb;
   but->imb_scale = scale;
@@ -28,21 +30,13 @@ void UI_but_drag_attach_image(uiBut *but, struct ImBuf *imb, const float scale)
 }
 
 void UI_but_drag_set_asset(uiBut *but,
-                           const AssetHandle *asset_handle,
-                           const char *path,
-                           int import_type,
+                           const blender::asset_system::AssetRepresentation *asset,
+                           int import_method,
                            int icon,
-                           struct ImBuf *imb,
+                           const ImBuf *imb,
                            float scale)
 {
-  wmDragAsset *asset_drag = WM_drag_create_asset_data(asset_handle, path, import_type);
-
-  /* FIXME: This is temporary evil solution to get scene/view-layer/etc in the copy callback of the
-   * #wmDropBox.
-   * TODO: Handle link/append in operator called at the end of the drop process, and NOT in its
-   * copy callback.
-   * */
-  asset_drag->evil_C = static_cast<bContext *>(but->block->evil_C);
+  wmDragAsset *asset_drag = WM_drag_create_asset_data(asset, import_method);
 
   but->dragtype = WM_DRAG_ASSET;
   ui_def_but_icon(but, icon, 0); /* no flag UI_HAS_ICON, so icon doesn't draw in button */
@@ -70,7 +64,7 @@ void UI_but_drag_set_path(uiBut *but, const char *path)
   if (but->dragflag & UI_BUT_DRAGPOIN_FREE) {
     WM_drag_data_free(but->dragtype, but->dragpoin);
   }
-  but->dragpoin = WM_drag_create_path_data(path);
+  but->dragpoin = WM_drag_create_path_data(blender::Span(&path, 1));
   but->dragflag |= UI_BUT_DRAGPOIN_FREE;
 }
 
@@ -84,12 +78,7 @@ void UI_but_drag_set_name(uiBut *but, const char *name)
   but->dragpoin = (void *)name;
 }
 
-void UI_but_drag_set_value(uiBut *but)
-{
-  but->dragtype = WM_DRAG_VALUE;
-}
-
-void UI_but_drag_set_image(uiBut *but, const char *path, int icon, struct ImBuf *imb, float scale)
+void UI_but_drag_set_image(uiBut *but, const char *path, int icon, const ImBuf *imb, float scale)
 {
   ui_def_but_icon(but, icon, 0); /* no flag UI_HAS_ICON, so icon doesn't draw in button */
   UI_but_drag_set_path(but, path);
@@ -114,7 +103,6 @@ void ui_but_drag_start(bContext *C, uiBut *but)
                                      but->icon,
                                      but->dragtype,
                                      but->dragpoin,
-                                     ui_but_value_get(but),
                                      (but->dragflag & UI_BUT_DRAGPOIN_FREE) ? WM_DRAG_FREE_DATA :
                                                                               WM_DRAG_NOP);
   /* wmDrag has ownership over dragpoin now, stop messing with it. */
@@ -129,6 +117,6 @@ void ui_but_drag_start(bContext *C, uiBut *but)
   /* Special feature for assets: We add another drag item that supports multiple assets. It
    * gets the assets from context. */
   if (ELEM(but->dragtype, WM_DRAG_ASSET, WM_DRAG_ID)) {
-    WM_event_start_drag(C, ICON_NONE, WM_DRAG_ASSET_LIST, nullptr, 0, WM_DRAG_NOP);
+    WM_event_start_drag(C, ICON_NONE, WM_DRAG_ASSET_LIST, nullptr, WM_DRAG_NOP);
   }
 }

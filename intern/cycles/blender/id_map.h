@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: Apache-2.0
- * Copyright 2011-2022 Blender Foundation */
+/* SPDX-FileCopyrightText: 2011-2022 Blender Foundation
+ *
+ * SPDX-License-Identifier: Apache-2.0 */
 
 #ifndef __BLENDER_ID_MAP_H__
 #define __BLENDER_ID_MAP_H__
@@ -11,7 +12,6 @@
 
 #include "util/map.h"
 #include "util/set.h"
-#include "util/vector.h"
 
 CCL_NAMESPACE_BEGIN
 
@@ -22,9 +22,7 @@ CCL_NAMESPACE_BEGIN
 
 template<typename K, typename T, typename Flags = uint> class id_map {
  public:
-  id_map(Scene *scene_) : scene(scene_)
-  {
-  }
+  id_map(Scene *scene_) : scene(scene_) {}
 
   ~id_map()
   {
@@ -224,10 +222,12 @@ struct ObjectKey {
   ObjectKey(void *parent_, int id_[OBJECT_PERSISTENT_ID_SIZE], void *ob_, bool use_particle_hair_)
       : parent(parent_), ob(ob_), use_particle_hair(use_particle_hair_)
   {
-    if (id_)
+    if (id_) {
       memcpy(id, id_, sizeof(id));
-    else
+    }
+    else {
       memset(id, 0, sizeof(id));
+    }
   }
 
   bool operator<(const ObjectKey &k) const
@@ -262,9 +262,7 @@ struct GeometryKey {
   void *id;
   Geometry::Type geometry_type;
 
-  GeometryKey(void *id, Geometry::Type geometry_type) : id(id), geometry_type(geometry_type)
-  {
-  }
+  GeometryKey(void *id, Geometry::Type geometry_type) : id(id), geometry_type(geometry_type) {}
 
   bool operator<(const GeometryKey &k) const
   {
@@ -289,19 +287,23 @@ struct ParticleSystemKey {
 
   ParticleSystemKey(void *ob_, int id_[OBJECT_PERSISTENT_ID_SIZE]) : ob(ob_)
   {
-    if (id_)
+    if (id_) {
       memcpy(id, id_, sizeof(id));
-    else
+    }
+    else {
       memset(id, 0, sizeof(id));
+    }
   }
 
   bool operator<(const ParticleSystemKey &k) const
   {
     /* first id is particle index, we don't compare that */
-    if (ob < k.ob)
+    if (ob < k.ob) {
       return true;
-    else if (ob == k.ob)
+    }
+    else if (ob == k.ob) {
       return memcmp(id + 1, k.id + 1, sizeof(int) * (OBJECT_PERSISTENT_ID_SIZE - 1)) < 0;
+    }
 
     return false;
   }

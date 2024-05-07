@@ -1,13 +1,15 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
-
-#include "BLI_index_mask.hh"
-
-#include "BKE_attribute.hh"
+/* SPDX-FileCopyrightText: 2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #pragma once
 
+#include "BLI_index_mask.hh"
+
 struct PointCloud;
-class PointCloudComponent;
+namespace blender::bke {
+class AnonymousAttributePropagationInfo;
+}
 
 /** \file
  * \ingroup geo
@@ -22,7 +24,7 @@ namespace blender::geometry {
 PointCloud *point_merge_by_distance(
     const PointCloud &src_points,
     const float merge_distance,
-    const IndexMask selection,
+    const IndexMask &selection,
     const bke::AnonymousAttributePropagationInfo &propagation_info);
 
 }  // namespace blender::geometry

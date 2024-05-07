@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2011 Blender Foundation. */
+/* SPDX-FileCopyrightText: 2011 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "COM_InpaintNode.h"
 #include "COM_InpaintOperation.h"
@@ -20,7 +21,7 @@ void InpaintNode::convert_to_operations(NodeConverter &converter,
   /* if (editor_node->custom1 == CMP_NODE_INPAINT_SIMPLE) { */
   if (true) {
     InpaintSimpleOperation *operation = new InpaintSimpleOperation();
-    operation->set_iterations(editor_node->custom2);
+    operation->set_max_distance(editor_node->custom2);
     converter.add_operation(operation);
 
     converter.map_input_socket(get_input_socket(0), operation->get_input_socket(0));

@@ -1,4 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* SPDX-FileCopyrightText: 2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #pragma once
 
@@ -6,11 +8,14 @@
  * \ingroup bli
  */
 
+#include <ostream>
+
 #include "BLI_math_angle_types.hh"
 #include "BLI_math_base.hh"
 #include "BLI_math_basis_types.hh"
 #include "BLI_math_matrix_types.hh"
 #include "BLI_math_vector_types.hh"
+#include "BLI_struct_equality_utils.hh"
 
 namespace blender::math {
 
@@ -153,9 +158,11 @@ template<typename T> struct QuaternionBase {
     return {-a.w, -a.x, -a.y, -a.z};
   }
 
-  friend bool operator==(const QuaternionBase &a, const QuaternionBase &b)
+  BLI_STRUCT_EQUALITY_OPERATORS_4(QuaternionBase, w, x, y, z)
+
+  uint64_t hash() const
   {
-    return (a.w == b.w) && (a.x == b.x) && (a.y == b.y) && (a.z == b.z);
+    return VecBase<T, 4>(*this).hash();
   }
 
   friend std::ostream &operator<<(std::ostream &stream, const QuaternionBase &rot)
@@ -255,11 +262,8 @@ template<typename T> struct DualQuaternionBase {
     return dq;
   }
 
-  friend bool operator==(const DualQuaternionBase &a, const DualQuaternionBase &b)
-  {
-    return (a.quat == b.quat) && (a.trans == b.trans) && (a.quat_weight == b.quat_weight) &&
-           (a.scale_weight == b.scale_weight) && (a.scale == b.scale);
-  }
+  BLI_STRUCT_EQUALITY_OPERATORS_5(
+      DualQuaternionBase, quat, trans, quat_weight, scale_weight, scale)
 
   friend std::ostream &operator<<(std::ostream &stream, const DualQuaternionBase &rot)
   {
@@ -286,15 +290,22 @@ template<typename T> [[nodiscard]] inline bool is_normalized(const DualQuaternio
 
 /** \} */
 
+/* -------------------------------------------------------------------- */
+/** \name Assertions
+ * \{ */
+
 template<typename U> struct AssertUnitEpsilon<QuaternionBase<U>> {
   static constexpr U value = AssertUnitEpsilon<U>::value * 10;
 };
 
-/**
- * Intermediate Types.
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Intermediate Types
  *
  * Some functions need to have higher precision than standard floats for some operations.
- */
+ * \{ */
+
 template<typename T> struct TypeTraits {
   using DoublePrecision = T;
 };
@@ -305,6 +316,6 @@ template<> struct TypeTraits<float> {
 using Quaternion = QuaternionBase<float>;
 using DualQuaternion = DualQuaternionBase<float>;
 
-}  // namespace blender::math
-
 /** \} */
+
+}  // namespace blender::math

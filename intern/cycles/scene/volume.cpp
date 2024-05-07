@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: Apache-2.0
- * Copyright 2020-2022 Blender Foundation */
+/* SPDX-FileCopyrightText: 2020-2022 Blender Foundation
+ *
+ * SPDX-License-Identifier: Apache-2.0 */
 
 #include "scene/volume.h"
 #include "scene/attribute.h"
@@ -428,7 +429,8 @@ void VolumeMeshBuilder::convert_quads_to_tris(const vector<QuadData> &quads,
 bool VolumeMeshBuilder::empty_grid() const
 {
 #ifdef WITH_OPENVDB
-  return !topology_grid || topology_grid->tree().leafCount() == 0;
+  return !topology_grid ||
+         (!topology_grid->tree().hasActiveTiles() && topology_grid->tree().leafCount() == 0);
 #else
   return true;
 #endif
@@ -504,7 +506,8 @@ static int estimate_required_velocity_padding(openvdb::GridBase::ConstPtr grid,
   openvdb::math::Extrema extrema;
   openvdb::Vec3d voxel_size;
 
-  /* External .vdb files have a vec3 type for velocity, but the Blender exporter creates a vec4. */
+  /* External `.vdb` files have a vec3 type for velocity,
+   * but the Blender exporter creates a vec4. */
   if (grid->isType<openvdb::Vec3fGrid>()) {
     openvdb::Vec3fGrid::ConstPtr vel_grid = openvdb::gridConstPtrCast<openvdb::Vec3fGrid>(grid);
     extrema = openvdb::tools::extrema(vel_grid->cbeginValueOn());

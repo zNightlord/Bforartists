@@ -1,22 +1,19 @@
+# SPDX-FileCopyrightText: 2006 Blender Authors
+#
 # SPDX-License-Identifier: GPL-2.0-or-later
-# Copyright 2006 Blender Foundation. All rights reserved.
 
 set(INC
   .
   ../common
   ../../blenkernel
-  ../../blenlib
   ../../blenloader
   ../../bmesh
-  ../../depsgraph
   ../../editors/include
   ../../makesdna
   ../../makesrna
   ../../windowmanager
-  ../../../../intern/clog
   ../../../../intern/guardedalloc
   ../../../../intern/utfconv
-  ../../../../extern/nanosvg
 )
 
 set(INC_SYS
@@ -33,14 +30,16 @@ set(SRC
   intern/gpencil_io_export_base.hh
   intern/gpencil_io_import_base.hh
   intern/gpencil_io_import_svg.hh
-
-  # Only so this file is known by CMake.
-  ../../../../extern/nanosvg/nanosvg.h
 )
 
 set(LIB
   bf_blenkernel
-  bf_blenlib
+  PRIVATE bf::blenlib
+  PRIVATE bf::depsgraph
+  PRIVATE bf::dna
+  PRIVATE bf::extern::nanosvg
+  PRIVATE bf::intern::clog
+  PRIVATE bf::intern::guardedalloc
   bf_io_common
 )
 
@@ -70,6 +69,11 @@ if(WITH_HARU)
   )
   list(APPEND LIB
     ${HARU_LIBRARIES}
+
+    # Haru needs `TIFFFaxBlackCodes` & `TIFFFaxWhiteCodes` symbols from TIFF.
+    # Can be removed with Haru 2.4.0. They should be shipping with their own
+    # Fax codes defined by default from that version onwards.
+    ${TIFF_LIBRARY}
   )
   add_definitions(-DWITH_HARU)
 endif()

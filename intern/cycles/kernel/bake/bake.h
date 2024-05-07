@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: Apache-2.0
- * Copyright 2011-2022 Blender Foundation */
+/* SPDX-FileCopyrightText: 2011-2022 Blender Foundation
+ *
+ * SPDX-License-Identifier: Apache-2.0 */
 
 #pragma once
 
@@ -94,6 +95,7 @@ ccl_device void kernel_curve_shadow_transparency_evaluate(
     ccl_global float *output,
     const int offset)
 {
+#ifdef __HAIR__
   /* Setup shader data. */
   const KernelShaderEvalInput in = input[offset];
 
@@ -107,6 +109,7 @@ ccl_device void kernel_curve_shadow_transparency_evaluate(
 
   /* Write output. */
   output[offset] = clamp(average(surface_shader_transparency(kg, &sd)), 0.0f, 1.0f);
+#endif
 }
 
 CCL_NAMESPACE_END

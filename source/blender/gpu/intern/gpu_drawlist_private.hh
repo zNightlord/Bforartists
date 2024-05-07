@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2020 Blender Foundation. All rights reserved. */
+/* SPDX-FileCopyrightText: 2020 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup gpu
@@ -9,7 +10,7 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "GPU_drawlist.h"
+#include "GPU_drawlist.hh"
 
 namespace blender {
 namespace gpu {
@@ -22,7 +23,7 @@ class DrawList {
  public:
   virtual ~DrawList(){};
 
-  virtual void append(GPUBatch *batch, int i_first, int i_count) = 0;
+  virtual void append(Batch *batch, int i_first, int i_count) = 0;
   virtual void submit() = 0;
 };
 

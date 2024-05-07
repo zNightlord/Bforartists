@@ -1,4 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* SPDX-FileCopyrightText: 2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup spoutliner
@@ -13,28 +15,27 @@
 #include "DNA_collection_types.h"
 #include "DNA_object_types.h"
 
-#include "BKE_collection.h"
-#include "BKE_context.h"
-#include "BKE_idtype.h"
-#include "BKE_layer.h"
-#include "BKE_lib_id.h"
-#include "BKE_main.h"
-#include "BKE_report.h"
+#include "BKE_collection.hh"
+#include "BKE_context.hh"
+#include "BKE_layer.hh"
+#include "BKE_lib_id.hh"
+#include "BKE_main.hh"
+#include "BKE_report.hh"
 
-#include "DEG_depsgraph.h"
-#include "DEG_depsgraph_build.h"
+#include "DEG_depsgraph.hh"
+#include "DEG_depsgraph_build.hh"
 
-#include "ED_object.h"
-#include "ED_outliner.h"
-#include "ED_screen.h"
+#include "ED_object.hh"
+#include "ED_outliner.hh"
+#include "ED_screen.hh"
 
-#include "WM_api.h"
-#include "WM_message.h"
-#include "WM_types.h"
+#include "WM_api.hh"
+#include "WM_message.hh"
+#include "WM_types.hh"
 
-#include "RNA_access.h"
-#include "RNA_define.h"
-#include "RNA_enum_types.h"
+#include "RNA_access.hh"
+#include "RNA_define.hh"
+#include "RNA_enum_types.hh"
 
 #include "outliner_intern.hh" /* own include */
 
@@ -52,10 +53,9 @@ bool outliner_is_collection_tree_element(const TreeElement *te)
     return false;
   }
 
-  if (ELEM(tselem->type,
-           TSE_LAYER_COLLECTION,
-           TSE_SCENE_COLLECTION_BASE,
-           TSE_VIEW_COLLECTION_BASE)) {
+  if (ELEM(
+          tselem->type, TSE_LAYER_COLLECTION, TSE_SCENE_COLLECTION_BASE, TSE_VIEW_COLLECTION_BASE))
+  {
     return true;
   }
   if ((tselem->type == TSE_SOME_ID) && te->idcode == ID_GR) {
@@ -90,7 +90,7 @@ Collection *outliner_collection_from_tree_element(const TreeElement *te)
 
 TreeTraversalAction outliner_collect_selected_collections(TreeElement *te, void *customdata)
 {
-  struct IDsSelectedData *data = static_cast<IDsSelectedData *>(customdata);
+  IDsSelectedData *data = static_cast<IDsSelectedData *>(customdata);
   TreeStoreElem *tselem = TREESTORE(te);
 
   if (outliner_is_collection_tree_element(te)) {
@@ -107,15 +107,15 @@ TreeTraversalAction outliner_collect_selected_collections(TreeElement *te, void 
 
 TreeTraversalAction outliner_collect_selected_objects(TreeElement *te, void *customdata)
 {
-  struct IDsSelectedData *data = static_cast<IDsSelectedData *>(customdata);
+  IDsSelectedData *data = static_cast<IDsSelectedData *>(customdata);
   TreeStoreElem *tselem = TREESTORE(te);
 
   if (outliner_is_collection_tree_element(te)) {
     return TRAVERSE_CONTINUE;
   }
 
-  if ((tselem->type != TSE_SOME_ID) || (tselem->id == nullptr) ||
-      (GS(tselem->id->name) != ID_OB)) {
+  if ((tselem->type != TSE_SOME_ID) || (tselem->id == nullptr) || (GS(tselem->id->name) != ID_OB))
+  {
     return TRAVERSE_SKIP_CHILDS;
   }
 
@@ -131,7 +131,7 @@ void ED_outliner_selected_objects_get(const bContext *C, ListBase *objects)
   using namespace blender::ed::outliner;
 
   SpaceOutliner *space_outliner = CTX_wm_space_outliner(C);
-  struct IDsSelectedData data = {{nullptr}};
+  IDsSelectedData data = {{nullptr}};
   outliner_tree_traverse(space_outliner,
                          &space_outliner->tree,
                          0,
@@ -183,6 +183,17 @@ static bool collection_edit_in_active_scene_poll(bContext *C)
   return true;
 }
 
+static bool collection_new_poll(bContext *C)
+{
+  if (!ED_operator_region_outliner_active(C)) {
+    return false;
+  }
+  if (!collection_edit_in_active_scene_poll(C)) {
+    return false;
+  }
+  return true;
+}
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -196,7 +207,7 @@ struct CollectionNewData {
 
 static TreeTraversalAction collection_find_selected_to_add(TreeElement *te, void *customdata)
 {
-  struct CollectionNewData *data = static_cast<CollectionNewData *>(customdata);
+  CollectionNewData *data = static_cast<CollectionNewData *>(customdata);
   Collection *collection = outliner_collection_from_tree_element(te);
 
   if (!collection) {
@@ -239,7 +250,8 @@ static int collection_new_exec(bContext *C, wmOperator *op)
   }
 
   if (data.collection == nullptr || ID_IS_LINKED(data.collection) ||
-      ID_IS_OVERRIDE_LIBRARY(data.collection)) {
+      ID_IS_OVERRIDE_LIBRARY(data.collection))
+  {
     data.collection = scene->master_collection;
   }
 
@@ -250,7 +262,7 @@ static int collection_new_exec(bContext *C, wmOperator *op)
 
   BKE_collection_add(bmain, data.collection, nullptr);
 
-  DEG_id_tag_update(&data.collection->id, ID_RECALC_COPY_ON_WRITE);
+  DEG_id_tag_update(&data.collection->id, ID_RECALC_SYNC_TO_EVAL);
   DEG_relations_tag_update(bmain);
 
   outliner_cleanup_tree(space_outliner);
@@ -267,7 +279,7 @@ void OUTLINER_OT_collection_new(wmOperatorType *ot)
 
   /* api callbacks */
   ot->exec = collection_new_exec;
-  ot->poll = collection_edit_in_active_scene_poll;
+  ot->poll = collection_new_poll;
 
   /* flags */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
@@ -410,13 +422,13 @@ static int collection_hierarchy_delete_exec(bContext *C, wmOperator *op)
   Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  struct wmMsgBus *mbus = CTX_wm_message_bus(C);
+  wmMsgBus *mbus = CTX_wm_message_bus(C);
   BKE_view_layer_synced_ensure(scene, view_layer);
   const Base *basact_prev = BKE_view_layer_active_base_get(view_layer);
 
   outliner_collection_delete(C, bmain, scene, op->reports, true);
 
-  DEG_id_tag_update(&scene->id, ID_RECALC_COPY_ON_WRITE);
+  DEG_id_tag_update(&scene->id, ID_RECALC_SYNC_TO_EVAL);
   DEG_relations_tag_update(bmain);
 
   WM_main_add_notifier(NC_SCENE | ND_LAYER, nullptr);
@@ -495,15 +507,30 @@ static int collection_objects_select_exec(bContext *C, wmOperator *op)
 {
   Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  LayerCollection *layer_collection = outliner_active_layer_collection(C);
+  SpaceOutliner *space_outliner = CTX_wm_space_outliner(C);
   bool deselect = STREQ(op->idname, "OUTLINER_OT_collection_objects_deselect");
 
-  if (layer_collection == nullptr) {
+  IDsSelectedData selected_collections{};
+  outliner_tree_traverse(space_outliner,
+                         &space_outliner->tree,
+                         0,
+                         TSE_SELECTED,
+                         outliner_collect_selected_collections,
+                         &selected_collections);
+
+  if (selected_collections.selected_array.first == nullptr) {
     return OPERATOR_CANCELLED;
   }
 
-  BKE_layer_collection_objects_select(scene, view_layer, layer_collection, deselect);
+  LISTBASE_FOREACH (LinkData *, link, &selected_collections.selected_array) {
+    TreeElement *te = static_cast<TreeElement *>(link->data);
+    if (te->store_elem->type == TSE_LAYER_COLLECTION) {
+      LayerCollection *layer_collection = static_cast<LayerCollection *>(te->directdata);
+      BKE_layer_collection_objects_select(scene, view_layer, layer_collection, deselect);
+    }
+  }
 
+  BLI_freelistN(&selected_collections.selected_array);
   DEG_id_tag_update(&scene->id, ID_RECALC_SELECT);
   WM_main_add_notifier(NC_SCENE | ND_OB_SELECT, scene);
   ED_outliner_select_sync_from_object_tag(C);
@@ -699,7 +726,8 @@ static int collection_link_exec(bContext *C, wmOperator *op)
 
   if ((ID_IS_LINKED(active_collection) || ID_IS_OVERRIDE_LIBRARY(active_collection)) ||
       ((active_collection->flag & COLLECTION_IS_MASTER) &&
-       (ID_IS_LINKED(scene) || ID_IS_OVERRIDE_LIBRARY(scene)))) {
+       (ID_IS_LINKED(scene) || ID_IS_OVERRIDE_LIBRARY(scene))))
+  {
     BKE_report(
         op->reports, RPT_ERROR, "Cannot add a collection to a linked/override collection/scene");
     return OPERATOR_CANCELLED;
@@ -726,7 +754,7 @@ static int collection_link_exec(bContext *C, wmOperator *op)
 
   BLI_gset_free(data.collections_to_edit, nullptr);
 
-  DEG_id_tag_update(&active_collection->id, ID_RECALC_COPY_ON_WRITE);
+  DEG_id_tag_update(&active_collection->id, ID_RECALC_SYNC_TO_EVAL);
   DEG_relations_tag_update(bmain);
 
   WM_main_add_notifier(NC_SCENE | ND_LAYER, nullptr);
@@ -795,7 +823,7 @@ static int collection_instance_exec(bContext *C, wmOperator * /*op*/)
   GSET_ITER (collections_to_edit_iter, data.collections_to_edit) {
     Collection *collection = static_cast<Collection *>(
         BLI_gsetIterator_getKey(&collections_to_edit_iter));
-    Object *ob = ED_object_add_type(
+    Object *ob = object::add_type(
         C, OB_EMPTY, collection->id.name + 2, scene->cursor.location, nullptr, false, 0);
     ob->instance_collection = collection;
     ob->transflag |= OB_DUPLICOLLECTION;
@@ -1095,9 +1123,8 @@ static int collection_isolate_exec(bContext *C, wmOperator *op)
       BKE_layer_collection_isolate_global(scene, view_layer, layer_collection, true);
     }
     else {
-      PointerRNA ptr;
       PropertyRNA *prop = RNA_struct_type_find_property(&RNA_LayerCollection, "hide_viewport");
-      RNA_pointer_create(&scene->id, &RNA_LayerCollection, layer_collection, &ptr);
+      PointerRNA ptr = RNA_pointer_create(&scene->id, &RNA_LayerCollection, layer_collection);
 
       /* We need to flip the value because the isolate flag routine was designed to work from the
        * outliner as a callback. That means the collection visibility was set before the callback

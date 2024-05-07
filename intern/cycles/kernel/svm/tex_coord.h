@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: Apache-2.0
- * Copyright 2011-2022 Blender Foundation */
+/* SPDX-FileCopyrightText: 2011-2022 Blender Foundation
+ *
+ * SPDX-License-Identifier: Apache-2.0 */
 
 #pragma once
 
@@ -18,7 +19,7 @@ ccl_device_noinline int svm_node_tex_coord(KernelGlobals kg,
                                            uint4 node,
                                            int offset)
 {
-  float3 data;
+  float3 data = zero_float3();
   uint type = node.y;
   uint out_offset = node.z;
 
@@ -100,7 +101,7 @@ ccl_device_noinline int svm_node_tex_coord_bump_dx(KernelGlobals kg,
                                                    int offset)
 {
 #ifdef __RAY_DIFFERENTIALS__
-  float3 data;
+  float3 data = zero_float3();
   uint type = node.y;
   uint out_offset = node.z;
 
@@ -185,7 +186,7 @@ ccl_device_noinline int svm_node_tex_coord_bump_dy(KernelGlobals kg,
                                                    int offset)
 {
 #ifdef __RAY_DIFFERENTIALS__
-  float3 data;
+  float3 data = zero_float3();
   uint type = node.y;
   uint out_offset = node.z;
 
@@ -275,7 +276,7 @@ ccl_device_noinline void svm_node_normal_map(KernelGlobals kg,
 
   bool is_backfacing = (sd->flag & SD_BACKFACING) != 0;
   float3 N;
-
+  float strength = stack_load_float(stack, strength_offset);
   if (space == NODE_NORMAL_MAP_TANGENT) {
     /* tangent space */
     if (sd->object == OBJECT_NONE || (sd->type & PRIMITIVE_TRIANGLE) == 0) {
@@ -312,6 +313,10 @@ ccl_device_noinline void svm_node_normal_map(KernelGlobals kg,
 
       object_inverse_normal_transform(kg, sd, &normal);
     }
+    /* Apply strength in the tangent case. */
+    color.x *= strength;
+    color.y *= strength;
+    color.z = mix(1.0f, color.z, saturatef(strength));
 
     /* apply normal map */
     float3 B = sign * cross(normal, tangent);
@@ -319,6 +324,11 @@ ccl_device_noinline void svm_node_normal_map(KernelGlobals kg,
 
     /* transform to world space */
     object_normal_transform(kg, sd, &N);
+
+    /* invert normal for backfacing polygons */
+    if (is_backfacing) {
+      N = -N;
+    }
   }
   else {
     /* strange blender convention */
@@ -330,22 +340,23 @@ ccl_device_noinline void svm_node_normal_map(KernelGlobals kg,
     /* object, world space */
     N = color;
 
-    if (space == NODE_NORMAL_MAP_OBJECT || space == NODE_NORMAL_MAP_BLENDER_OBJECT)
+    if (space == NODE_NORMAL_MAP_OBJECT || space == NODE_NORMAL_MAP_BLENDER_OBJECT) {
       object_normal_transform(kg, sd, &N);
-    else
+    }
+    else {
       N = safe_normalize(N);
-  }
+    }
 
-  /* invert normal for backfacing polygons */
-  if (is_backfacing) {
-    N = -N;
-  }
+    /* invert normal for backfacing polygons */
+    if (is_backfacing) {
+      N = -N;
+    }
 
-  float strength = stack_load_float(stack, strength_offset);
-
-  if (strength != 1.0f) {
-    strength = max(strength, 0.0f);
-    N = safe_normalize(sd->N + (N - sd->N) * strength);
+    /* Apply strength in all but tangent space. */
+    if (strength != 1.0f) {
+      strength = max(strength, 0.0f);
+      N = safe_normalize(sd->N + (N - sd->N) * strength);
+    }
   }
 
   if (is_zero(N)) {

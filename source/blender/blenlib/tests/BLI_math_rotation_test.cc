@@ -1,4 +1,6 @@
-/* SPDX-License-Identifier: Apache-2.0 */
+/* SPDX-FileCopyrightText: 2023 Blender Authors
+ *
+ * SPDX-License-Identifier: Apache-2.0 */
 
 #include "testing/testing.h"
 
@@ -23,7 +25,7 @@ static void test_quat_to_mat_to_quat(float w, float x, float y, float z)
   quat_to_mat3(matrix, norm_quat);
   mat3_normalized_to_quat(out_quat, matrix);
 
-  /* The expected result is flipped (each orientation corresponds to 2 quats) */
+  /* The expected result is flipped (each orientation corresponds to 2 quaternions). */
   if (w < 0) {
     mul_qt_fl(norm_quat, -1);
   }
@@ -167,6 +169,32 @@ TEST(math_rotation, quat_split_swing_and_twist_negative)
   EXPECT_NEAR(twist_angle, -M_PI * 2 / 3, FLT_EPSILON);
   EXPECT_V4_NEAR(swing, expected_swing, FLT_EPSILON);
   EXPECT_V4_NEAR(twist, expected_twist, FLT_EPSILON);
+}
+
+TEST(math_rotation, mat3_normalized_to_quat_fast_degenerate)
+{
+  /* This input will cause floating point issues, which would produce a non-unit
+   * quaternion if the call to `normalize_qt` were to be removed. This
+   * particular matrix was taken from a production file of Pet Projects that
+   * caused problems. */
+  const float input[3][3] = {
+      {1.0000000000, -0.0000006315, -0.0000000027},
+      {0.0000009365, 1.0000000000, -0.0000000307},
+      {0.0000001964, 0.2103530765, 0.9776254892},
+  };
+  const float expect_quat[4] = {
+      0.99860459566116333,
+      -0.052810292690992355,
+      4.9985139582986449e-08,
+      -3.93654971730939e-07,
+  };
+  ASSERT_FLOAT_EQ(1.0f, dot_qtqt(expect_quat, expect_quat))
+      << "expected quaternion should be normal";
+
+  float actual_quat[4];
+  mat3_normalized_to_quat_fast(actual_quat, input);
+  EXPECT_FLOAT_EQ(1.0f, dot_qtqt(actual_quat, actual_quat));
+  EXPECT_V4_NEAR(expect_quat, actual_quat, FLT_EPSILON);
 }
 
 /* -------------------------------------------------------------------- */
@@ -641,10 +669,9 @@ TEST(math_rotation, CartesianBasis)
                                       expect.ptr());
           }
 
-          EXPECT_EQ(from_rotation<float3x3>(
-                        rotation_between(from_orthonormal_axes(src_forward, src_up),
-                                         from_orthonormal_axes(dst_forward, dst_up))),
-                    expect);
+          CartesianBasis rotation = rotation_between(from_orthonormal_axes(src_forward, src_up),
+                                                     from_orthonormal_axes(dst_forward, dst_up));
+          EXPECT_EQ(from_rotation<float3x3>(rotation), expect);
 
           if (src_forward == dst_forward) {
             expect = float3x3::identity();
@@ -656,6 +683,11 @@ TEST(math_rotation, CartesianBasis)
           }
 
           EXPECT_EQ(from_rotation<float3x3>(rotation_between(src_forward, dst_forward)), expect);
+
+          float3 point(1.0f, 2.0f, 3.0f);
+          CartesianBasis rotation_inv = invert(rotation);
+          /* Test inversion identity. */
+          EXPECT_EQ(transform_point(rotation_inv, transform_point(rotation, point)), point);
         }
       }
     }
@@ -667,8 +699,23 @@ TEST(math_rotation, Transform)
   Quaternion q(0.927091f, 0.211322f, -0.124857f, 0.283295f);
 
   float3 p(0.576f, -0.6546f, 46.354f);
-  p = transform_point(q, p);
-  EXPECT_V3_NEAR(p, float3(-4.33722f, -21.661f, 40.7608f), 1e-4f);
+  float3 result = transform_point(q, p);
+  EXPECT_V3_NEAR(result, float3(-4.33722f, -21.661f, 40.7608f), 1e-4f);
+
+  /* Validated using `to_quaternion` before doing the transform. */
+  float3 p2(1.0f, 2.0f, 3.0f);
+  result = transform_point(CartesianBasis(AxisSigned::X_POS, AxisSigned::Y_POS, AxisSigned::Z_POS),
+                           p2);
+  EXPECT_EQ(result, float3(1.0f, 2.0f, 3.0f));
+  result = transform_point(
+      rotation_between(from_orthonormal_axes(AxisSigned::Y_POS, AxisSigned::Z_POS),
+                       from_orthonormal_axes(AxisSigned::X_POS, AxisSigned::Z_POS)),
+      p2);
+  EXPECT_EQ(result, float3(-2.0f, 1.0f, 3.0f));
+  result = transform_point(from_orthonormal_axes(AxisSigned::Z_POS, AxisSigned::X_POS), p2);
+  EXPECT_EQ(result, float3(3.0f, 1.0f, 2.0f));
+  result = transform_point(from_orthonormal_axes(AxisSigned::X_NEG, AxisSigned::Y_POS), p2);
+  EXPECT_EQ(result, float3(-2.0f, 3.0f, -1.0f));
 }
 
 TEST(math_rotation, DualQuaternionNormalize)

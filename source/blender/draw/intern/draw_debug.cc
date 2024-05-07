@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2018 Blender Foundation. */
+/* SPDX-FileCopyrightText: 2018 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup draw
@@ -7,26 +8,27 @@
  * \brief Simple API to draw debug shapes in the viewport.
  */
 
-#include "BKE_object.h"
+#include "BKE_object.hh"
 #include "BLI_link_utils.h"
 #include "BLI_math_matrix.hh"
-#include "GPU_batch.h"
-#include "GPU_capabilities.h"
-#include "GPU_debug.h"
+#include "GPU_batch.hh"
+#include "GPU_capabilities.hh"
+#include "GPU_debug.hh"
 
-#include "draw_debug.h"
 #include "draw_debug.hh"
-#include "draw_manager.h"
-#include "draw_shader.h"
-#include "draw_shader_shared.h"
+#include "draw_debug_c.hh"
+#include "draw_manager_c.hh"
+#include "draw_shader.hh"
+#include "draw_shader_shared.hh"
 
 #include <iomanip>
+#include <sstream>
 
-#if defined(DEBUG) || defined(WITH_DRAW_DEBUG)
+#if defined(_DEBUG) || defined(WITH_DRAW_DEBUG)
 #  define DRAW_DEBUG
 #else
 /* Uncomment to forcibly enable debug draw in release mode. */
-//#define DRAW_DEBUG
+// #define DRAW_DEBUG
 #endif
 
 namespace blender::draw {
@@ -42,7 +44,7 @@ DebugDraw::DebugDraw()
     for (auto edge : IndexRange(circle_resolution)) {
       for (auto vert : IndexRange(2)) {
         const float angle = (2 * M_PI) * (edge + vert) / float(circle_resolution);
-        float point[3] = {cosf(angle), sinf(angle), 0.0f};
+        const float point[3] = {cosf(angle), sinf(angle), 0.0f};
         sphere_verts_.append(
             float3(point[(0 + axis) % 3], point[(1 + axis) % 3], point[(2 + axis) % 3]));
       }
@@ -54,7 +56,7 @@ DebugDraw::DebugDraw()
     for (auto edge : IndexRange(point_resolution)) {
       for (auto vert : IndexRange(2)) {
         const float angle = (2 * M_PI) * (edge + vert) / float(point_resolution);
-        float point[3] = {cosf(angle), sinf(angle), 0.0f};
+        const float point[3] = {cosf(angle), sinf(angle), 0.0f};
         point_verts_.append(
             float3(point[(0 + axis) % 3], point[(1 + axis) % 3], point[(2 + axis) % 3]));
       }
@@ -104,7 +106,6 @@ void DebugDraw::modelmat_set(const float modelmat[4][4])
 
 GPUStorageBuf *DebugDraw::gpu_draw_buf_get()
 {
-  BLI_assert(GPU_shader_storage_buffer_objects_support());
   if (!gpu_draw_buf_used) {
     gpu_draw_buf_used = true;
     gpu_draw_buf_.push_update();
@@ -114,7 +115,6 @@ GPUStorageBuf *DebugDraw::gpu_draw_buf_get()
 
 GPUStorageBuf *DebugDraw::gpu_print_buf_get()
 {
-  BLI_assert(GPU_shader_storage_buffer_objects_support());
   if (!gpu_print_buf_used) {
     gpu_print_buf_used = true;
     gpu_print_buf_.push_update();
@@ -133,20 +133,20 @@ void DebugDraw::draw_line(float3 v1, float3 v2, float4 color)
   draw_line(v1, v2, color_pack(color));
 }
 
-void DebugDraw::draw_polygon(Span<float3> poly_verts, float4 color)
+void DebugDraw::draw_polygon(Span<float3> face_verts, float4 color)
 {
-  BLI_assert(!poly_verts.is_empty());
+  BLI_assert(!face_verts.is_empty());
 
   uint col = color_pack(color);
-  float3 v0 = math::transform_point(model_mat_, poly_verts.last());
-  for (auto vert : poly_verts) {
+  float3 v0 = math::transform_point(model_mat_, face_verts.last());
+  for (auto vert : face_verts) {
     float3 v1 = math::transform_point(model_mat_, vert);
     draw_line(v0, v1, col);
     v0 = v1;
   }
 }
 
-void DebugDraw::draw_matrix(const float4x4 m4)
+void DebugDraw::draw_matrix(const float4x4 &m4)
 {
   float3 v0 = float3(0.0f, 0.0f, 0.0f);
   float3 v1 = float3(1.0f, 0.0f, 0.0f);
@@ -182,7 +182,7 @@ void DebugDraw::draw_bbox(const BoundBox &bbox, const float4 color)
   draw_line(bbox.vec[3], bbox.vec[7], col);
 }
 
-void DebugDraw::draw_matrix_as_bbox(float4x4 mat, const float4 color)
+void DebugDraw::draw_matrix_as_bbox(const float4x4 &mat, const float4 color)
 {
   BoundBox bb;
   const float min[3] = {-1.0f, -1.0f, -1.0f}, max[3] = {1.0f, 1.0f, 1.0f};
@@ -520,7 +520,7 @@ void DebugDraw::display_lines()
 
   drw_state_set(DRW_STATE_WRITE_COLOR | DRW_STATE_WRITE_DEPTH | DRW_STATE_DEPTH_LESS);
 
-  GPUBatch *batch = drw_cache_procedural_lines_get();
+  gpu::Batch *batch = drw_cache_procedural_lines_get();
   GPUShader *shader = DRW_shader_debug_draw_display_get();
   GPU_batch_set_shader(batch, shader);
   GPU_shader_uniform_mat4(shader, "persmat", persmat.ptr());
@@ -552,7 +552,7 @@ void DebugDraw::display_prints()
 
   drw_state_set(DRW_STATE_WRITE_COLOR | DRW_STATE_PROGRAM_POINT_SIZE);
 
-  GPUBatch *batch = drw_cache_procedural_points_get();
+  gpu::Batch *batch = drw_cache_procedural_points_get();
   GPUShader *shader = DRW_shader_debug_print_display_get();
   GPU_batch_set_shader(batch, shader);
   float f_viewport[4];
@@ -589,13 +589,16 @@ void DebugDraw::display_to_view()
   GPU_debug_group_end();
 }
 
+/** \} */
+
 }  // namespace blender::draw
+
+/* -------------------------------------------------------------------- */
+/** \name DebugDraw Access
+ * \{ */
 
 blender::draw::DebugDraw *DRW_debug_get()
 {
-  if (!GPU_shader_storage_buffer_objects_support()) {
-    return nullptr;
-  }
   return reinterpret_cast<blender::draw::DebugDraw *>(DST.debug);
 }
 
@@ -608,7 +611,7 @@ blender::draw::DebugDraw *DRW_debug_get()
 void drw_debug_draw()
 {
 #ifdef DRAW_DEBUG
-  if (!GPU_shader_storage_buffer_objects_support() || DST.debug == nullptr) {
+  if (DST.debug == nullptr) {
     return;
   }
   /* TODO(@fclem): Convenience for now. Will have to move to #DRWManager. */
@@ -624,9 +627,6 @@ void drw_debug_init()
   /* Module should not be used in release builds. */
   /* TODO(@fclem): Hide the functions declarations without using `ifdefs` everywhere. */
 #ifdef DRAW_DEBUG
-  if (!GPU_shader_storage_buffer_objects_support()) {
-    return;
-  }
   /* TODO(@fclem): Convenience for now. Will have to move to #DRWManager. */
   if (DST.debug == nullptr) {
     DST.debug = reinterpret_cast<DRWDebugModule *>(new blender::draw::DebugDraw());
@@ -637,9 +637,6 @@ void drw_debug_init()
 
 void drw_debug_module_free(DRWDebugModule *module)
 {
-  if (!GPU_shader_storage_buffer_objects_support()) {
-    return;
-  }
   if (module != nullptr) {
     delete reinterpret_cast<blender::draw::DebugDraw *>(module);
   }
@@ -663,18 +660,12 @@ GPUStorageBuf *drw_debug_gpu_print_buf_get()
 
 void DRW_debug_modelmat_reset()
 {
-  if (!GPU_shader_storage_buffer_objects_support()) {
-    return;
-  }
   reinterpret_cast<blender::draw::DebugDraw *>(DST.debug)->modelmat_reset();
 }
 
 void DRW_debug_modelmat(const float modelmat[4][4])
 {
 #ifdef DRAW_DEBUG
-  if (!GPU_shader_storage_buffer_objects_support()) {
-    return;
-  }
   reinterpret_cast<blender::draw::DebugDraw *>(DST.debug)->modelmat_set(modelmat);
 #else
   UNUSED_VARS(modelmat);
@@ -683,34 +674,22 @@ void DRW_debug_modelmat(const float modelmat[4][4])
 
 void DRW_debug_line_v3v3(const float v1[3], const float v2[3], const float color[4])
 {
-  if (!GPU_shader_storage_buffer_objects_support()) {
-    return;
-  }
   reinterpret_cast<blender::draw::DebugDraw *>(DST.debug)->draw_line(v1, v2, color);
 }
 
 void DRW_debug_polygon_v3(const float (*v)[3], int vert_len, const float color[4])
 {
-  if (!GPU_shader_storage_buffer_objects_support()) {
-    return;
-  }
   reinterpret_cast<blender::draw::DebugDraw *>(DST.debug)->draw_polygon(
       blender::Span<float3>((float3 *)v, vert_len), color);
 }
 
 void DRW_debug_m4(const float m[4][4])
 {
-  if (!GPU_shader_storage_buffer_objects_support()) {
-    return;
-  }
   reinterpret_cast<blender::draw::DebugDraw *>(DST.debug)->draw_matrix(float4x4(m));
 }
 
 void DRW_debug_m4_as_bbox(const float m[4][4], bool invert, const float color[4])
 {
-  if (!GPU_shader_storage_buffer_objects_support()) {
-    return;
-  }
   blender::float4x4 m4(m);
   if (invert) {
     m4 = blender::math::invert(m4);
@@ -721,9 +700,6 @@ void DRW_debug_m4_as_bbox(const float m[4][4], bool invert, const float color[4]
 void DRW_debug_bbox(const BoundBox *bbox, const float color[4])
 {
 #ifdef DRAW_DEBUG
-  if (!GPU_shader_storage_buffer_objects_support()) {
-    return;
-  }
   reinterpret_cast<blender::draw::DebugDraw *>(DST.debug)->draw_bbox(*bbox, color);
 #else
   UNUSED_VARS(bbox, color);
@@ -732,9 +708,6 @@ void DRW_debug_bbox(const BoundBox *bbox, const float color[4])
 
 void DRW_debug_sphere(const float center[3], float radius, const float color[4])
 {
-  if (!GPU_shader_storage_buffer_objects_support()) {
-    return;
-  }
   reinterpret_cast<blender::draw::DebugDraw *>(DST.debug)->draw_sphere(center, radius, color);
 }
 

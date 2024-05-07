@@ -1,17 +1,20 @@
-/* SPDX-License-Identifier: Apache-2.0
- * Copyright 2011-2022 Blender Foundation */
+/* SPDX-FileCopyrightText: 2011-2022 Blender Foundation
+ *
+ * SPDX-License-Identifier: Apache-2.0 */
 
 #pragma once
 
 CCL_NAMESPACE_BEGIN
 
+#ifdef __VOLUME__
+
 /* Volumetric read/write lambda functions - default implementations */
-#ifndef VOLUME_READ_LAMBDA
-#  define VOLUME_READ_LAMBDA(function_call) \
-    auto volume_read_lambda_pass = [=](const int i) { return function_call; };
-#  define VOLUME_WRITE_LAMBDA(function_call) \
-    auto volume_write_lambda_pass = [=](const int i, VolumeStack entry) { function_call; };
-#endif
+#  ifndef VOLUME_READ_LAMBDA
+#    define VOLUME_READ_LAMBDA(function_call) \
+      auto volume_read_lambda_pass = [=](const int i) { return function_call; };
+#    define VOLUME_WRITE_LAMBDA(function_call) \
+      auto volume_write_lambda_pass = [=](const int i, VolumeStack entry) { function_call; };
+#  endif
 
 /* Volume Stack
  *
@@ -208,5 +211,7 @@ ccl_device VolumeSampleMethod volume_stack_sample_method(KernelGlobals kg, Integ
 
   return method;
 }
+
+#endif /* __VOLUME__*/
 
 CCL_NAMESPACE_END

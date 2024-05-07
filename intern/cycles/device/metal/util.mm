@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: Apache-2.0
- * Copyright 2021-2022 Blender Foundation */
+/* SPDX-FileCopyrightText: 2021-2022 Blender Foundation
+ *
+ * SPDX-License-Identifier: Apache-2.0 */
 
 #ifdef WITH_METAL
 
@@ -35,7 +36,8 @@ int MetalInfo::get_apple_gpu_core_count(id<MTLDevice> device)
     io_service_t gpu_service = IOServiceGetMatchingService(
         kIOMainPortDefault, IORegistryEntryIDMatching(device.registryID));
     if (CFNumberRef numberRef = (CFNumberRef)IORegistryEntryCreateCFProperty(
-            gpu_service, CFSTR("gpu-core-count"), 0, 0)) {
+            gpu_service, CFSTR("gpu-core-count"), 0, 0))
+    {
       if (CFGetTypeID(numberRef) == CFNumberGetTypeID()) {
         CFNumberGetValue(numberRef, kCFNumberSInt32Type, &core_count);
       }
@@ -47,12 +49,19 @@ int MetalInfo::get_apple_gpu_core_count(id<MTLDevice> device)
 
 AppleGPUArchitecture MetalInfo::get_apple_gpu_architecture(id<MTLDevice> device)
 {
+  if (MetalInfo::get_device_vendor(device) != METAL_GPU_APPLE) {
+    return NOT_APPLE_GPU;
+  }
+
   const char *device_name = [device.name UTF8String];
   if (strstr(device_name, "M1")) {
     return APPLE_M1;
   }
   else if (strstr(device_name, "M2")) {
     return get_apple_gpu_core_count(device) <= 10 ? APPLE_M2 : APPLE_M2_BIG;
+  }
+  else if (strstr(device_name, "M3")) {
+    return APPLE_M3;
   }
   return APPLE_UNKNOWN;
 }
@@ -170,7 +179,8 @@ id<MTLBuffer> MetalBufferPool::get_buffer(id<MTLDevice> device,
 
     /* Check if buffer matches size and storage mode and is old enough to reuse */
     if (bufferEntry.buffer.length == length && storageMode == bufferEntry.buffer.storageMode &&
-        cpuCacheMode == bufferEntry.buffer.cpuCacheMode) {
+        cpuCacheMode == bufferEntry.buffer.cpuCacheMode)
+    {
       buffer = bufferEntry.buffer;
       buffer_free_list.erase(entry);
       bufferEntry.command_buffer = command_buffer;

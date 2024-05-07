@@ -1,20 +1,8 @@
-// Copyright 2018 Blender Foundation. All rights reserved.
-//
-// This program is free software; you can redistribute it and/or
-// modify it under the terms of the GNU General Public License
-// as published by the Free Software Foundation; either version 2
-// of the License, or (at your option) any later version.
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU General Public License
-// along with this program; if not, write to the Free Software Foundation,
-// Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
-//
-// Author: Sergey Sharybin
+/* SPDX-FileCopyrightText: 2018 Blender Foundation
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later
+ *
+ * Author: Sergey Sharybin. */
 
 #include "internal/evaluator/evaluator_impl.h"
 
@@ -34,14 +22,13 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "internal/base/type.h"
 #include "internal/evaluator/eval_output_cpu.h"
 #include "internal/evaluator/eval_output_gpu.h"
 #include "internal/evaluator/evaluator_cache_impl.h"
 #include "internal/evaluator/patch_map.h"
 #include "internal/topology/topology_refiner_impl.h"
-#include "opensubdiv_evaluator_capi.h"
-#include "opensubdiv_topology_refiner_capi.h"
+#include "opensubdiv_evaluator_capi.hh"
+#include "opensubdiv_topology_refiner_capi.hh"
 
 using OpenSubdiv::Far::PatchTable;
 using OpenSubdiv::Far::PatchTableFactory;
@@ -51,10 +38,7 @@ using OpenSubdiv::Far::TopologyRefiner;
 using OpenSubdiv::Osd::PatchArray;
 using OpenSubdiv::Osd::PatchCoord;
 
-namespace blender {
-namespace opensubdiv {
-
-namespace {
+namespace blender::opensubdiv {
 
 // Array implementation which stores small data on stack (or, rather, in the class itself).
 template<typename T, int kNumMaxElementsOnStack> class StackOrHeapArray {
@@ -102,7 +86,8 @@ template<typename T, int kNumMaxElementsOnStack> class StackOrHeapArray {
     T *old_buffer = effective_elements_;
     effective_elements_ = allocate(num_elements);
     if (old_buffer != effective_elements_) {
-      memcpy(effective_elements_, old_buffer, sizeof(T) * min(old_num_elements, num_elements));
+      memcpy(
+          effective_elements_, old_buffer, sizeof(T) * std::min(old_num_elements, num_elements));
     }
     if (old_buffer != stack_elements_) {
       delete[] old_buffer;
@@ -138,10 +123,10 @@ template<typename T, int kNumMaxElementsOnStack> class StackOrHeapArray {
 // 32 is a number of inner vertices along the patch size at subdivision level 6.
 typedef StackOrHeapArray<PatchCoord, 32 * 32> StackOrHeapPatchCoordArray;
 
-void convertPatchCoordsToArray(const OpenSubdiv_PatchCoord *patch_coords,
-                               const int num_patch_coords,
-                               const PatchMap *patch_map,
-                               StackOrHeapPatchCoordArray *array)
+static void convertPatchCoordsToArray(const OpenSubdiv_PatchCoord *patch_coords,
+                                      const int num_patch_coords,
+                                      const PatchMap *patch_map,
+                                      StackOrHeapPatchCoordArray *array)
 {
   array->resize(num_patch_coords);
   for (int i = 0; i < num_patch_coords; ++i) {
@@ -150,8 +135,6 @@ void convertPatchCoordsToArray(const OpenSubdiv_PatchCoord *patch_coords,
     (array->data())[i] = PatchCoord(*handle, patch_coords[i].u, patch_coords[i].v);
   }
 }
-
-}  // namespace
 
 ////////////////////////////////////////////////////////////////////////////////
 // Evaluator wrapper for anonymous API.
@@ -422,8 +405,7 @@ bool EvalOutputAPI::hasVertexData() const
   return implementation_->hasVertexData();
 }
 
-}  // namespace opensubdiv
-}  // namespace blender
+}  // namespace blender::opensubdiv
 
 OpenSubdiv_EvaluatorImpl::OpenSubdiv_EvaluatorImpl()
     : eval_output(NULL), patch_map(NULL), patch_table(NULL)
@@ -442,7 +424,6 @@ OpenSubdiv_EvaluatorImpl *openSubdiv_createEvaluatorInternal(
     eOpenSubdivEvaluator evaluator_type,
     OpenSubdiv_EvaluatorCacheImpl *evaluator_cache_descr)
 {
-  using blender::opensubdiv::vector;
   TopologyRefiner *refiner = topology_refiner->impl->topology_refiner;
   if (refiner == NULL) {
     // Happens on bad topology.
@@ -452,8 +433,8 @@ OpenSubdiv_EvaluatorImpl *openSubdiv_createEvaluatorInternal(
   const bool has_varying_data = false;
   const int num_face_varying_channels = refiner->GetNumFVarChannels();
   const bool has_face_varying_data = (num_face_varying_channels != 0);
-  const int level = topology_refiner->getSubdivisionLevel(topology_refiner);
-  const bool is_adaptive = topology_refiner->getIsAdaptive(topology_refiner);
+  const int level = topology_refiner->getSubdivisionLevel();
+  const bool is_adaptive = topology_refiner->getIsAdaptive();
   // Common settings for stencils and patches.
   const bool stencil_generate_intermediate_levels = is_adaptive;
   const bool stencil_generate_offsets = true;
@@ -492,10 +473,11 @@ OpenSubdiv_EvaluatorImpl *openSubdiv_createEvaluatorInternal(
     varying_stencils = StencilTableFactory::Create(*refiner, varying_stencil_options);
   }
   // Face warying stencil.
-  vector<const StencilTable *> all_face_varying_stencils;
+  std::vector<const StencilTable *> all_face_varying_stencils;
   all_face_varying_stencils.reserve(num_face_varying_channels);
   for (int face_varying_channel = 0; face_varying_channel < num_face_varying_channels;
-       ++face_varying_channel) {
+       ++face_varying_channel)
+  {
     StencilTableFactory::Options face_varying_stencil_options;
     face_varying_stencil_options.generateOffsets = stencil_generate_offsets;
     face_varying_stencil_options.generateIntermediateLevels = stencil_generate_intermediate_levels;
@@ -532,7 +514,8 @@ OpenSubdiv_EvaluatorImpl *openSubdiv_createEvaluatorInternal(
     }
   }
   for (int face_varying_channel = 0; face_varying_channel < num_face_varying_channels;
-       ++face_varying_channel) {
+       ++face_varying_channel)
+  {
     const StencilTable *table = StencilTableFactory::AppendLocalPointStencilTableFaceVarying(
         *refiner,
         all_face_varying_stencils[face_varying_channel],

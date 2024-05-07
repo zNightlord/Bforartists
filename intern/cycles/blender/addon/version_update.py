@@ -1,5 +1,7 @@
+# SPDX-FileCopyrightText: 2011-2022 Blender Foundation
+#
 # SPDX-License-Identifier: Apache-2.0
-# Copyright 2011-2022 Blender Foundation
+
 from __future__ import annotations
 
 import bpy
@@ -241,11 +243,15 @@ def do_versions(self):
                         layer.samples *= layer.samples
                     cscene["use_square_samples"] = False
 
-            # Disable light tree for existing scenes.
             if version <= (3, 5, 3):
                 cscene = scene.cycles
+                # Disable light tree for existing scenes.
                 if not cscene.is_property_set("use_light_tree"):
                     cscene.use_light_tree = False
+                # Sampling pattern settings are hidden behind a debug menu. Switch to the
+                # default faster and fully featured (Supports Scrambling Distance)
+                # Tabulated Sobol.
+                cscene.sampling_pattern = 'TABULATED_SOBOL'
 
         # Lamps
         for light in bpy.data.lights:
@@ -294,15 +300,15 @@ def do_versions(self):
 
             if version <= (2, 79, 2):
                 cmat = mat.cycles
-                if not cmat.is_property_set("displacement_method"):
-                    cmat.displacement_method = 'BUMP'
+                if cmat.get("displacement_method", -1) == -1:
+                    cmat['displacement_method'] = 0
 
             # Change default to bump again.
             if version <= (2, 79, 6) or \
                (version >= (2, 80, 0) and version <= (2, 80, 41)):
                 cmat = mat.cycles
-                if not cmat.is_property_set("displacement_method"):
-                    cmat.displacement_method = 'DISPLACEMENT'
+                if cmat.get("displacement_method", -1) == -1:
+                    cmat['displacement_method'] = 1
 
             if version <= (3, 5, 3):
                 cmat = mat.cycles

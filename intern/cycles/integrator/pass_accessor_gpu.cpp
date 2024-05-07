@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: Apache-2.0
- * Copyright 2011-2022 Blender Foundation */
+/* SPDX-FileCopyrightText: 2011-2022 Blender Foundation
+ *
+ * SPDX-License-Identifier: Apache-2.0 */
 
 #include "integrator/pass_accessor_gpu.h"
 
@@ -14,7 +15,6 @@ PassAccessorGPU::PassAccessorGPU(DeviceQueue *queue,
                                  float exposure,
                                  int num_samples)
     : PassAccessor(pass_access_info, exposure, num_samples), queue_(queue)
-
 {
 }
 
@@ -48,6 +48,7 @@ void PassAccessorGPU::run_film_convert_kernels(DeviceKernel kernel,
                                &buffer_params.window_width,
                                &offset,
                                &buffer_params.stride,
+                               &destination.pixel_offset,
                                &destination.offset,
                                &destination_stride);
 

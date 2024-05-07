@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2001-2002 NaN Holding BV. All rights reserved. */
+/* SPDX-FileCopyrightText: 2001-2002 NaN Holding BV. All rights reserved.
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup edobj
@@ -13,7 +14,7 @@
 #include "DNA_anim_types.h"
 #include "DNA_armature_types.h"
 #include "DNA_collection_types.h"
-#include "DNA_gpencil_types.h"
+#include "DNA_gpencil_legacy_types.h"
 #include "DNA_lattice_types.h"
 #include "DNA_light_types.h"
 #include "DNA_mesh_types.h"
@@ -24,58 +25,62 @@
 
 #include "BLI_array.hh"
 #include "BLI_listbase.h"
-#include "BLI_math.h"
+#include "BLI_math_geom.h"
+#include "BLI_math_matrix.h"
 #include "BLI_math_matrix.hh"
+#include "BLI_math_rotation.h"
 #include "BLI_task.hh"
 #include "BLI_utildefines.h"
 #include "BLI_vector.hh"
 
-#include "BKE_armature.h"
-#include "BKE_context.h"
-#include "BKE_curve.h"
+#include "BKE_armature.hh"
+#include "BKE_context.hh"
+#include "BKE_curve.hh"
 #include "BKE_curves.hh"
-#include "BKE_editmesh.h"
-#include "BKE_gpencil.h"
-#include "BKE_gpencil_geom.h"
-#include "BKE_idtype.h"
-#include "BKE_lattice.h"
-#include "BKE_layer.h"
-#include "BKE_lib_id.h"
-#include "BKE_main.h"
-#include "BKE_mball.h"
-#include "BKE_mesh.h"
-#include "BKE_multires.h"
-#include "BKE_object.h"
-#include "BKE_pointcloud.h"
-#include "BKE_report.h"
-#include "BKE_scene.h"
+#include "BKE_editmesh.hh"
+#include "BKE_gpencil_geom_legacy.h"
+#include "BKE_gpencil_legacy.h"
+#include "BKE_idtype.hh"
+#include "BKE_lattice.hh"
+#include "BKE_layer.hh"
+#include "BKE_lib_id.hh"
+#include "BKE_main.hh"
+#include "BKE_mball.hh"
+#include "BKE_mesh.hh"
+#include "BKE_multires.hh"
+#include "BKE_object.hh"
+#include "BKE_object_types.hh"
+#include "BKE_report.hh"
+#include "BKE_scene.hh"
 #include "BKE_tracking.h"
 
-#include "DEG_depsgraph.h"
-#include "DEG_depsgraph_query.h"
+#include "BLT_translation.hh"
 
-#include "RNA_access.h"
-#include "RNA_define.h"
+#include "DEG_depsgraph.hh"
+#include "DEG_depsgraph_query.hh"
 
-#include "WM_api.h"
-#include "WM_types.h"
+#include "RNA_access.hh"
+#include "RNA_define.hh"
 
-#include "ED_armature.h"
-#include "ED_gpencil.h"
-#include "ED_keyframing.h"
-#include "ED_mesh.h"
-#include "ED_object.h"
-#include "ED_screen.h"
-#include "ED_view3d.h"
+#include "UI_interface.hh"
+
+#include "WM_api.hh"
+#include "WM_types.hh"
+
+#include "ANIM_keyframing.hh"
+
+#include "ED_armature.hh"
+#include "ED_keyframing.hh"
+#include "ED_mesh.hh"
+#include "ED_object.hh"
+#include "ED_screen.hh"
+#include "ED_view3d.hh"
 
 #include "MEM_guardedalloc.h"
 
-#include "object_intern.h"
+#include "object_intern.hh"
 
-using blender::Array;
-using blender::float2;
-using blender::float3;
-using blender::Vector;
+namespace blender::ed::object {
 
 /* -------------------------------------------------------------------- */
 /** \name Clear Transformation Utilities
@@ -144,7 +149,8 @@ static void object_clear_rot(Object *ob, const bool clear_delta)
           ob->rotAxis[1] = 1.0f;
         }
         if (IS_EQF(ob->drotAxis[0], ob->drotAxis[1]) && IS_EQF(ob->drotAxis[1], ob->drotAxis[2]) &&
-            clear_delta) {
+            clear_delta)
+        {
           ob->drotAxis[1] = 1.0f;
         }
       }
@@ -318,18 +324,18 @@ static int object_clear_transform_generic_exec(bContext *C,
                                             SCE_XFORM_SKIP_CHILDREN);
   const bool use_transform_data_origin = (scene->toolsettings->transform_flag &
                                           SCE_XFORM_DATA_ORIGIN);
-  struct XFormObjectSkipChild_Container *xcs = nullptr;
-  struct XFormObjectData_Container *xds = nullptr;
+  XFormObjectSkipChild_Container *xcs = nullptr;
+  XFormObjectData_Container *xds = nullptr;
 
   if (use_transform_skip_children) {
     BKE_scene_graph_evaluated_ensure(depsgraph, bmain);
-    xcs = ED_object_xform_skip_child_container_create();
-    ED_object_xform_skip_child_container_item_ensure_from_array(
+    xcs = xform_skip_child_container_create();
+    xform_skip_child_container_item_ensure_from_array(
         xcs, scene, view_layer, objects.data(), objects.size());
   }
   if (use_transform_data_origin) {
     BKE_scene_graph_evaluated_ensure(depsgraph, bmain);
-    xds = ED_object_data_xform_container_create();
+    xds = data_xform_container_create();
   }
 
   /* get KeyingSet to use */
@@ -337,26 +343,26 @@ static int object_clear_transform_generic_exec(bContext *C,
 
   for (Object *ob : objects) {
     if (use_transform_data_origin) {
-      ED_object_data_xform_container_item_ensure(xds, ob);
+      data_xform_container_item_ensure(xds, ob);
     }
 
     /* run provided clearing function */
     clear_func(ob, clear_delta);
 
-    ED_autokeyframe_object(C, scene, ob, ks);
+    animrig::autokeyframe_object(C, scene, ob, ks);
 
     /* tag for updates */
     DEG_id_tag_update(&ob->id, ID_RECALC_TRANSFORM);
   }
 
   if (use_transform_skip_children) {
-    ED_object_xform_skip_child_container_update_all(xcs, bmain, depsgraph);
-    ED_object_xform_skip_child_container_destroy(xcs);
+    object_xform_skip_child_container_update_all(xcs, bmain, depsgraph);
+    object_xform_skip_child_container_destroy(xcs);
   }
 
   if (use_transform_data_origin) {
-    ED_object_data_xform_container_update_all(xds, bmain, depsgraph);
-    ED_object_data_xform_container_destroy(xds);
+    data_xform_container_update_all(xds, bmain, depsgraph);
+    data_xform_container_destroy(xds);
   }
 
   /* this is needed so children are also updated */
@@ -523,17 +529,15 @@ void OBJECT_OT_origin_clear(wmOperatorType *ot)
  * should stay in the same place, e.g. for apply-size-rot or object center */
 static void ignore_parent_tx(Main *bmain, Depsgraph *depsgraph, Scene *scene, Object *ob)
 {
-  Object workob;
-
   Scene *scene_eval = DEG_get_evaluated_scene(depsgraph);
 
   /* a change was made, adjust the children to compensate */
   LISTBASE_FOREACH (Object *, ob_child, &bmain->objects) {
     if (ob_child->parent == ob) {
       Object *ob_child_eval = DEG_get_evaluated_object(depsgraph, ob_child);
-      BKE_object_apply_mat4(ob_child_eval, ob_child_eval->object_to_world, true, false);
-      BKE_object_workob_calc_parent(depsgraph, scene, ob_child_eval, &workob);
-      invert_m4_m4(ob_child->parentinv, workob.object_to_world);
+      BKE_object_apply_mat4(ob_child_eval, ob_child_eval->object_to_world().ptr(), true, false);
+      invert_m4_m4(ob_child->parentinv,
+                   BKE_object_calc_parent(depsgraph, scene, ob_child_eval).ptr());
       /* Copy result of BKE_object_apply_mat4(). */
       BKE_object_transform_copy(ob_child, ob_child_eval);
       /* Make sure evaluated object is in a consistent state with the original one.
@@ -642,10 +646,8 @@ static bool apply_objects_internal_need_single_user(bContext *C)
   return (ID_REAL_USERS(ob->data) > CTX_DATA_COUNT(C, selected_editable_objects));
 }
 
-static void transform_positions(blender::MutableSpan<blender::float3> positions,
-                                const blender::float4x4 &matrix)
+static void transform_positions(MutableSpan<float3> positions, const float4x4 &matrix)
 {
-  using namespace blender;
   threading::parallel_for(positions.index_range(), 1024, [&](const IndexRange range) {
     for (float3 &position : positions.slice(range)) {
       position = math::transform_point(matrix, position);
@@ -661,7 +663,6 @@ static int apply_objects_internal(bContext *C,
                                   bool do_props,
                                   bool do_single_user)
 {
-  using namespace blender;
   Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
@@ -676,11 +677,9 @@ static int apply_objects_internal(bContext *C,
 
   if (do_multi_user) {
     obact = CTX_data_active_object(C);
-    invert_m4_m4(obact_invmat, obact->object_to_world);
+    invert_m4_m4(obact_invmat, obact->object_to_world().ptr());
 
-    Object workob;
-    BKE_object_workob_calc_parent(depsgraph, scene, obact, &workob);
-    copy_m4_m4(obact_parent, workob.object_to_world);
+    copy_m4_m4(obact_parent, BKE_object_calc_parent(depsgraph, scene, obact).ptr());
     copy_m4_m4(obact_parentinv, obact->parentinv);
 
     if (apply_objects_internal_need_single_user(C)) {
@@ -712,7 +711,8 @@ static int apply_objects_internal(bContext *C,
              OB_FONT,
              OB_GPENCIL_LEGACY,
              OB_CURVES,
-             OB_POINTCLOUD)) {
+             OB_POINTCLOUD))
+    {
       ID *obdata = static_cast<ID *>(ob->data);
       if (!do_multi_user && ID_REAL_USERS(obdata) > 1) {
         BKE_reportf(reports,
@@ -835,7 +835,7 @@ static int apply_objects_internal(bContext *C,
 
   if (make_single_user) {
     /* Make single user. */
-    ED_object_single_obdata_user(bmain, scene, obact);
+    single_obdata_user_make(bmain, scene, obact);
     BKE_main_id_newptr_and_tag_clear(bmain);
     WM_event_add_notifier(C, NC_WINDOW, nullptr);
     DEG_relations_tag_update(bmain);
@@ -895,14 +895,14 @@ static int apply_objects_internal(bContext *C,
       id_us_plus((ID *)ob->data);
     }
     else if (ob->type == OB_MESH) {
-      Mesh *me = static_cast<Mesh *>(ob->data);
+      Mesh *mesh = static_cast<Mesh *>(ob->data);
 
       if (apply_scale) {
         multiresModifier_scale_disp(depsgraph, scene, ob);
       }
 
       /* adjust data */
-      BKE_mesh_transform(me, mat, true);
+      BKE_mesh_transform(mesh, mat, true);
     }
     else if (ob->type == OB_ARMATURE) {
       bArmature *arm = static_cast<bArmature *>(ob->data);
@@ -950,11 +950,8 @@ static int apply_objects_internal(bContext *C,
     }
     else if (ob->type == OB_POINTCLOUD) {
       PointCloud &pointcloud = *static_cast<PointCloud *>(ob->data);
-      bke::MutableAttributeAccessor attributes = pointcloud.attributes_for_write();
-      bke::SpanAttributeWriter position = attributes.lookup_or_add_for_write_span<float3>(
-          "position", ATTR_DOMAIN_POINT);
-      transform_positions(position.span, float4x4(mat));
-      position.finish();
+      transform_positions(pointcloud.positions_for_write(), float4x4(mat));
+      pointcloud.tag_positions_changed();
     }
     else if (ob->type == OB_CAMERA) {
       MovieClip *clip = BKE_object_movieclip_get(scene, ob, false);
@@ -1016,7 +1013,7 @@ static int apply_objects_internal(bContext *C,
       float _obmat[4][4], _iobmat[4][4];
       float _mat[4][4];
 
-      copy_m4_m4(_obmat, ob->object_to_world);
+      copy_m4_m4(_obmat, ob->object_to_world().ptr());
       invert_m4_m4(_iobmat, _obmat);
 
       copy_m4_m4(_mat, _obmat);
@@ -1028,7 +1025,7 @@ static int apply_objects_internal(bContext *C,
         BKE_object_apply_mat4(ob, _mat, false, true);
       }
       else {
-        Object ob_temp = blender::dna::shallow_copy(*ob);
+        Object ob_temp = dna::shallow_copy(*ob);
         BKE_object_apply_mat4(&ob_temp, _mat, false, true);
 
         if (apply_loc) {
@@ -1102,7 +1099,7 @@ static int visual_transform_apply_exec(bContext *C, wmOperator * /*op*/)
   CTX_DATA_BEGIN (C, Object *, ob, selected_editable_objects) {
     Object *ob_eval = DEG_get_evaluated_object(depsgraph, ob);
     BKE_object_where_is_calc(depsgraph, scene, ob_eval);
-    BKE_object_apply_mat4(ob_eval, ob_eval->object_to_world, true, true);
+    BKE_object_apply_mat4(ob_eval, ob_eval->object_to_world().ptr(), true, true);
     BKE_object_transform_copy(ob, ob_eval);
 
     /* update for any children that may get moved */
@@ -1152,7 +1149,7 @@ static int object_transform_apply_exec(bContext *C, wmOperator *op)
 
 static int object_transform_apply_invoke(bContext *C, wmOperator *op, const wmEvent * /*event*/)
 {
-  Object *ob = ED_object_active_context(C);
+  Object *ob = context_active_object(C);
 
   bool can_handle_multiuser = apply_objects_internal_can_multiuser(C);
   bool need_single_user = can_handle_multiuser && apply_objects_internal_need_single_user(C);
@@ -1163,8 +1160,14 @@ static int object_transform_apply_invoke(bContext *C, wmOperator *op, const wmEv
       RNA_property_boolean_set(op->ptr, prop, true);
     }
     if (RNA_property_boolean_get(op->ptr, prop)) {
-      return WM_operator_confirm_message(
-          C, op, "Create new object-data users and apply transformation");
+      return WM_operator_confirm_ex(C,
+                                    op,
+                                    IFACE_("Apply Object Transformations"),
+                                    IFACE_("Warning: Multiple objects share the same data.\nMake "
+                                           "single user and then apply transformations?"),
+                                    IFACE_("Apply"),
+                                    ALERT_ICON_WARNING,
+                                    false);
     }
   }
   return object_transform_apply_exec(C, op);
@@ -1254,7 +1257,7 @@ enum {
   ORIGIN_TO_CENTER_OF_MASS_VOLUME,
 };
 
-static float3 calculate_mean(const blender::Span<blender::float3> values)
+static float3 arithmetic_mean(const Span<float3> values)
 {
   if (values.is_empty()) {
     return float3(0);
@@ -1263,10 +1266,8 @@ static float3 calculate_mean(const blender::Span<blender::float3> values)
   return std::accumulate(values.begin(), values.end(), float3(0)) / values.size();
 }
 
-static void translate_positions(blender::MutableSpan<blender::float3> positions,
-                                const blender::float3 &translation)
+static void translate_positions(MutableSpan<float3> positions, const float3 &translation)
 {
-  using namespace blender;
   threading::parallel_for(positions.index_range(), 2048, [&](const IndexRange range) {
     for (float3 &position : positions.slice(range)) {
       position += translation;
@@ -1276,7 +1277,6 @@ static void translate_positions(blender::MutableSpan<blender::float3> positions,
 
 static int object_origin_set_exec(bContext *C, wmOperator *op)
 {
-  using namespace blender;
   Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
   Object *obact = CTX_data_active_object(C);
@@ -1315,15 +1315,15 @@ static int object_origin_set_exec(bContext *C, wmOperator *op)
 
   if (obedit) {
     if (obedit->type == OB_MESH) {
-      Mesh *me = static_cast<Mesh *>(obedit->data);
-      BMEditMesh *em = me->edit_mesh;
+      Mesh *mesh = static_cast<Mesh *>(obedit->data);
+      BMEditMesh *em = mesh->runtime->edit_mesh.get();
       BMVert *eve;
       BMIter iter;
 
       if (centermode == ORIGIN_TO_CURSOR) {
         copy_v3_v3(cent, cursor);
-        invert_m4_m4(obedit->world_to_object, obedit->object_to_world);
-        mul_m4_v3(obedit->world_to_object, cent);
+        invert_m4_m4(obedit->runtime->world_to_object.ptr(), obedit->object_to_world().ptr());
+        mul_m4_v3(obedit->world_to_object().ptr(), cent);
       }
       else {
         if (around == V3D_AROUND_CENTER_BOUNDS) {
@@ -1390,14 +1390,15 @@ static int object_origin_set_exec(bContext *C, wmOperator *op)
 
     if (centermode == ORIGIN_TO_CURSOR) {
       copy_v3_v3(cent, cursor);
-      invert_m4_m4(ob->world_to_object, ob->object_to_world);
-      mul_m4_v3(ob->world_to_object, cent);
+      invert_m4_m4(ob->runtime->world_to_object.ptr(), ob->object_to_world().ptr());
+      mul_m4_v3(ob->world_to_object().ptr(), cent);
     }
 
     if (ob->data == nullptr) {
       /* Special support for instanced collections. */
       if ((ob->transflag & OB_DUPLICOLLECTION) && ob->instance_collection &&
-          (ob->instance_collection->id.tag & LIB_TAG_DOIT) == 0) {
+          (ob->instance_collection->id.tag & LIB_TAG_DOIT) == 0)
+      {
         if (!BKE_id_is_editable(bmain, &ob->instance_collection->id)) {
           tot_lib_error++;
         }
@@ -1411,8 +1412,8 @@ static int object_origin_set_exec(bContext *C, wmOperator *op)
             INIT_MINMAX(min, max);
             BKE_object_minmax_dupli(depsgraph, scene, ob, min, max, true);
             mid_v3_v3v3(cent, min, max);
-            invert_m4_m4(ob->world_to_object, ob->object_to_world);
-            mul_m4_v3(ob->world_to_object, cent);
+            invert_m4_m4(ob->runtime->world_to_object.ptr(), ob->object_to_world().ptr());
+            mul_m4_v3(ob->world_to_object().ptr(), cent);
           }
 
           add_v3_v3(ob->instance_collection->instance_offset, cent);
@@ -1428,29 +1429,31 @@ static int object_origin_set_exec(bContext *C, wmOperator *op)
     }
     else if (ob->type == OB_MESH) {
       if (obedit == nullptr) {
-        Mesh *me = static_cast<Mesh *>(ob->data);
+        Mesh *mesh = static_cast<Mesh *>(ob->data);
 
         if (centermode == ORIGIN_TO_CURSOR) {
           /* done */
         }
         else if (centermode == ORIGIN_TO_CENTER_OF_MASS_SURFACE) {
-          BKE_mesh_center_of_surface(me, cent);
+          BKE_mesh_center_of_surface(mesh, cent);
         }
         else if (centermode == ORIGIN_TO_CENTER_OF_MASS_VOLUME) {
-          BKE_mesh_center_of_volume(me, cent);
+          BKE_mesh_center_of_volume(mesh, cent);
         }
         else if (around == V3D_AROUND_CENTER_BOUNDS) {
-          BKE_mesh_center_bounds(me, cent);
+          if (const std::optional<Bounds<float3>> bounds = mesh->bounds_min_max()) {
+            cent = math::midpoint(bounds->min, bounds->max);
+          }
         }
         else { /* #V3D_AROUND_CENTER_MEDIAN. */
-          BKE_mesh_center_median(me, cent);
+          BKE_mesh_center_median(mesh, cent);
         }
 
         negate_v3_v3(cent_neg, cent);
-        BKE_mesh_translate(me, cent_neg, true);
+        BKE_mesh_translate(mesh, cent_neg, true);
 
         tot_change++;
-        me->id.tag |= LIB_TAG_DOIT;
+        mesh->id.tag |= LIB_TAG_DOIT;
         do_inverse_offset = true;
       }
     }
@@ -1461,7 +1464,9 @@ static int object_origin_set_exec(bContext *C, wmOperator *op)
         /* done */
       }
       else if (around == V3D_AROUND_CENTER_BOUNDS) {
-        BKE_curve_center_bounds(cu, cent);
+        if (std::optional<Bounds<float3>> bounds = BKE_curve_minmax(cu, true)) {
+          cent = math::midpoint(bounds->min, bounds->max);
+        }
       }
       else { /* #V3D_AROUND_CENTER_MEDIAN. */
         BKE_curve_center_median(cu, cent);
@@ -1490,8 +1495,9 @@ static int object_origin_set_exec(bContext *C, wmOperator *op)
       /* Get from bounding-box. */
 
       Curve *cu = static_cast<Curve *>(ob->data);
+      std::optional<Bounds<float3>> bounds = BKE_curve_minmax(cu, true);
 
-      if (ob->runtime.bb == nullptr && (centermode != ORIGIN_TO_CURSOR)) {
+      if (!bounds && (centermode != ORIGIN_TO_CURSOR)) {
         /* Do nothing. */
       }
       else {
@@ -1500,8 +1506,7 @@ static int object_origin_set_exec(bContext *C, wmOperator *op)
         }
         else {
           /* extra 0.5 is the height o above line */
-          cent[0] = 0.5f * (ob->runtime.bb->vec[4][0] + ob->runtime.bb->vec[0][0]);
-          cent[1] = 0.5f * (ob->runtime.bb->vec[0][1] + ob->runtime.bb->vec[2][1]);
+          cent = math::midpoint(bounds->min, bounds->max);
         }
 
         cent[2] = 0.0f;
@@ -1519,8 +1524,8 @@ static int object_origin_set_exec(bContext *C, wmOperator *op)
 
       if (ID_REAL_USERS(arm) > 1) {
 #if 0
-          BKE_report(op->reports, RPT_ERROR, "Cannot apply to a multi user armature");
-          return;
+        BKE_report(op->reports, RPT_ERROR, "Cannot apply to a multi user armature");
+        return;
 #endif
         tot_multiuser_arm_error++;
       }
@@ -1532,7 +1537,7 @@ static int object_origin_set_exec(bContext *C, wmOperator *op)
 
         tot_change++;
         arm->id.tag |= LIB_TAG_DOIT;
-        /* do_inverse_offset = true; */ /* docenter_armature() handles this */
+        // do_inverse_offset = true; /* docenter_armature() handles this. */
 
         Object *ob_eval = DEG_get_evaluated_object(depsgraph, ob);
         BKE_object_transform_copy(ob_eval, ob);
@@ -1582,7 +1587,9 @@ static int object_origin_set_exec(bContext *C, wmOperator *op)
         /* done */
       }
       else if (around == V3D_AROUND_CENTER_BOUNDS) {
-        BKE_lattice_center_bounds(lt, cent);
+        if (std::optional<Bounds<float3>> bounds = BKE_lattice_minmax(lt)) {
+          cent = math::midpoint(bounds->min, bounds->max);
+        }
       }
       else { /* #V3D_AROUND_CENTER_MEDIAN. */
         BKE_lattice_center_median(lt, cent);
@@ -1602,7 +1609,7 @@ static int object_origin_set_exec(bContext *C, wmOperator *op)
         if (centermode == ORIGIN_TO_GEOMETRY) {
           zero_v3(gpcenter);
           BKE_gpencil_centroid_3d(gpd, gpcenter);
-          add_v3_v3(gpcenter, ob->object_to_world[3]);
+          add_v3_v3(gpcenter, ob->object_to_world().location());
         }
         if (centermode == ORIGIN_TO_CURSOR) {
           copy_v3_v3(gpcenter, cursor);
@@ -1614,8 +1621,8 @@ static int object_origin_set_exec(bContext *C, wmOperator *op)
           float offset_local[3];
           int i;
 
-          sub_v3_v3v3(offset_global, gpcenter, ob->object_to_world[3]);
-          copy_m3_m4(bmat, obact->object_to_world);
+          sub_v3_v3v3(offset_global, gpcenter, ob->object_to_world().location());
+          copy_m3_m4(bmat, obact->object_to_world().ptr());
           invert_m3_m3(imat, bmat);
           mul_m3_v3(imat, offset_global);
           mul_v3_m3v3(offset_local, imat, offset_global);
@@ -1673,11 +1680,11 @@ static int object_origin_set_exec(bContext *C, wmOperator *op)
       }
     }
     else if (ob->type == OB_CURVES) {
-      using namespace blender;
       Curves &curves_id = *static_cast<Curves *>(ob->data);
       bke::CurvesGeometry &curves = curves_id.geometry.wrap();
       if (ELEM(centermode, ORIGIN_TO_CENTER_OF_MASS_SURFACE, ORIGIN_TO_CENTER_OF_MASS_VOLUME) ||
-          !ELEM(around, V3D_AROUND_CENTER_BOUNDS, V3D_AROUND_CENTER_MEDIAN)) {
+          !ELEM(around, V3D_AROUND_CENTER_BOUNDS, V3D_AROUND_CENTER_MEDIAN))
+      {
         BKE_report(
             op->reports, RPT_WARNING, "Curves Object does not support this set origin operation");
         continue;
@@ -1691,14 +1698,11 @@ static int object_origin_set_exec(bContext *C, wmOperator *op)
         /* done */
       }
       else if (around == V3D_AROUND_CENTER_BOUNDS) {
-        float3 min(std::numeric_limits<float>::max());
-        float3 max(-std::numeric_limits<float>::max());
-        if (curves.bounds_min_max(min, max)) {
-          cent = math::midpoint(min, max);
-        }
+        const Bounds<float3> bounds = *curves.bounds_min_max();
+        cent = math::midpoint(bounds.min, bounds.max);
       }
       else if (around == V3D_AROUND_CENTER_MEDIAN) {
-        cent = calculate_mean(curves.positions());
+        cent = arithmetic_mean(curves.positions());
       }
 
       tot_change++;
@@ -1708,11 +1712,10 @@ static int object_origin_set_exec(bContext *C, wmOperator *op)
     }
     else if (ob->type == OB_POINTCLOUD) {
       PointCloud &pointcloud = *static_cast<PointCloud *>(ob->data);
-      bke::MutableAttributeAccessor attributes = pointcloud.attributes_for_write();
-      bke::SpanAttributeWriter positions = attributes.lookup_or_add_for_write_span<float3>(
-          "position", ATTR_DOMAIN_POINT);
+      MutableSpan<float3> positions = pointcloud.positions_for_write();
       if (ELEM(centermode, ORIGIN_TO_CENTER_OF_MASS_SURFACE, ORIGIN_TO_CENTER_OF_MASS_VOLUME) ||
-          !ELEM(around, V3D_AROUND_CENTER_BOUNDS, V3D_AROUND_CENTER_MEDIAN)) {
+          !ELEM(around, V3D_AROUND_CENTER_BOUNDS, V3D_AROUND_CENTER_MEDIAN))
+      {
         BKE_report(op->reports,
                    RPT_WARNING,
                    "Point cloud object does not support this set origin operation");
@@ -1723,19 +1726,17 @@ static int object_origin_set_exec(bContext *C, wmOperator *op)
         /* Done. */
       }
       else if (around == V3D_AROUND_CENTER_BOUNDS) {
-        float3 min(std::numeric_limits<float>::max());
-        float3 max(-std::numeric_limits<float>::max());
-        if (pointcloud.bounds_min_max(min, max)) {
-          cent = math::midpoint(min, max);
+        if (const std::optional<Bounds<float3>> bounds = pointcloud.bounds_min_max()) {
+          cent = math::midpoint(bounds->min, bounds->max);
         }
       }
       else if (around == V3D_AROUND_CENTER_MEDIAN) {
-        cent = calculate_mean(positions.span);
+        cent = arithmetic_mean(positions);
       }
 
       tot_change++;
-      translate_positions(positions.span, -cent);
-      positions.finish();
+      translate_positions(positions, -cent);
+      pointcloud.tag_positions_changed();
       pointcloud.id.tag |= LIB_TAG_DOIT;
       do_inverse_offset = true;
     }
@@ -1774,11 +1775,13 @@ static int object_origin_set_exec(bContext *C, wmOperator *op)
         if ((ob_other->flag & OB_DONE) == 0 &&
             ((ob->data && (ob->data == ob_other->data)) ||
              (ob->instance_collection == ob_other->instance_collection &&
-              (ob->transflag | ob_other->transflag) & OB_DUPLICOLLECTION))) {
+              (ob->transflag | ob_other->transflag) & OB_DUPLICOLLECTION)))
+        {
           ob_other->flag |= OB_DONE;
           DEG_id_tag_update(&ob_other->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY);
 
-          mul_v3_mat3_m4v3(centn, ob_other->object_to_world, cent); /* omit translation part */
+          mul_v3_mat3_m4v3(
+              centn, ob_other->object_to_world().ptr(), cent); /* omit translation part */
           add_v3_v3(ob_other->loc, centn);
 
           Object *ob_other_eval = DEG_get_evaluated_object(depsgraph, ob_other);
@@ -1805,7 +1808,7 @@ static int object_origin_set_exec(bContext *C, wmOperator *op)
     /* Special support for dupli-groups. */
     else if (tob->instance_collection && tob->instance_collection->id.tag & LIB_TAG_DOIT) {
       DEG_id_tag_update(&tob->id, ID_RECALC_TRANSFORM);
-      DEG_id_tag_update(&tob->instance_collection->id, ID_RECALC_COPY_ON_WRITE);
+      DEG_id_tag_update(&tob->instance_collection->id, ID_RECALC_SYNC_TO_EVAL);
     }
   }
 
@@ -1952,9 +1955,9 @@ static void object_transform_axis_target_calc_depth_init(XFormAxisData *xfd, con
   int center_tot = 0;
   for (XFormAxisItem &item : xfd->object_data) {
     const Object *ob = item.ob;
-    const float *ob_co_a = ob->object_to_world[3];
+    const float *ob_co_a = ob->object_to_world().location();
     float ob_co_b[3];
-    add_v3_v3v3(ob_co_b, ob->object_to_world[3], ob->object_to_world[2]);
+    add_v3_v3v3(ob_co_b, ob->object_to_world().location(), ob->object_to_world().ptr()[2]);
     float view_isect[3], ob_isect[3];
     if (isect_line_line_v3(view_co_a, view_co_b, ob_co_a, ob_co_b, view_isect, ob_isect)) {
       add_v3_v3(center, view_isect);
@@ -2023,13 +2026,13 @@ static void object_apply_rotation(Object *ob, const float rmat[3][3])
 static void object_apply_location(Object *ob, const float loc[3])
 {
   /* quick but weak */
-  Object ob_prev = blender::dna::shallow_copy(*ob);
+  Object ob_prev = dna::shallow_copy(*ob);
   float mat[4][4];
-  copy_m4_m4(mat, ob->object_to_world);
+  copy_m4_m4(mat, ob->object_to_world().ptr());
   copy_v3_v3(mat[3], loc);
   BKE_object_apply_mat4(ob, mat, true, true);
   copy_v3_v3(mat[3], ob->loc);
-  *ob = blender::dna::shallow_copy(ob_prev);
+  *ob = dna::shallow_copy(ob_prev);
   copy_v3_v3(ob->loc, mat[3]);
 }
 
@@ -2040,7 +2043,7 @@ static bool object_orient_to_location(Object *ob,
                                       const bool z_flip)
 {
   float delta[3];
-  sub_v3_v3v3(delta, ob->object_to_world[3], location);
+  sub_v3_v3v3(delta, ob->object_to_world().location(), location);
   if (normalize_v3(delta) != 0.0f) {
     if (z_flip) {
       negate_v3(delta);
@@ -2076,8 +2079,7 @@ static void object_transform_axis_target_cancel(bContext *C, wmOperator *op)
 static int object_transform_axis_target_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
-  ViewContext vc;
-  ED_view3d_viewcontext_init(C, &vc, depsgraph);
+  ViewContext vc = ED_view3d_viewcontext_init(C, depsgraph);
 
   if (vc.obact == nullptr || !object_is_target_compat(vc.obact)) {
     /* Falls back to texture space transform. */
@@ -2218,7 +2220,7 @@ static int object_transform_axis_target_modal(bContext *C, wmOperator *op, const
                 float xform_rot_offset_inv_first[3][3];
                 for (const int i : xfd->object_data.index_range()) {
                   XFormAxisItem &item = xfd->object_data[i];
-                  copy_m3_m4(item.xform_rot_offset, item.ob->object_to_world);
+                  copy_m3_m4(item.xform_rot_offset, item.ob->object_to_world().ptr());
                   normalize_m3(item.xform_rot_offset);
 
                   if (i == 0) {
@@ -2237,8 +2239,9 @@ static int object_transform_axis_target_modal(bContext *C, wmOperator *op, const
                 XFormAxisItem &item = xfd->object_data[i];
                 if (is_translate_init) {
                   float ob_axis[3];
-                  item.xform_dist = len_v3v3(item.ob->object_to_world[3], location_world);
-                  normalize_v3_v3(ob_axis, item.ob->object_to_world[2]);
+                  item.xform_dist = len_v3v3(item.ob->object_to_world().location(),
+                                             location_world);
+                  normalize_v3_v3(ob_axis, item.ob->object_to_world().ptr()[2]);
                   /* Scale to avoid adding distance when moving between surfaces. */
                   if (normal_found) {
                     float scale = fabsf(dot_v3v3(ob_axis, normal));
@@ -2252,7 +2255,7 @@ static int object_transform_axis_target_modal(bContext *C, wmOperator *op, const
                   copy_v3_v3(target_normal, normal);
                 }
                 else {
-                  normalize_v3_v3(target_normal, item.ob->object_to_world[2]);
+                  normalize_v3_v3(target_normal, item.ob->object_to_world().ptr()[2]);
                 }
 
 #ifdef USE_RELATIVE_ROTATION
@@ -2269,7 +2272,7 @@ static int object_transform_axis_target_modal(bContext *C, wmOperator *op, const
                   madd_v3_v3fl(loc, target_normal, item.xform_dist);
                   object_apply_location(item.ob, loc);
                   /* so orient behaves as expected */
-                  copy_v3_v3(item.ob->object_to_world[3], loc);
+                  copy_v3_v3(item.ob->runtime->object_to_world.location(), loc);
                 }
 
                 object_orient_to_location(
@@ -2287,7 +2290,8 @@ static int object_transform_axis_target_modal(bContext *C, wmOperator *op, const
           else {
             for (XFormAxisItem &item : xfd->object_data) {
               if (object_orient_to_location(
-                      item.ob, item.rot_mat, item.rot_mat[2], location_world, item.is_z_flip)) {
+                      item.ob, item.rot_mat, item.rot_mat[2], location_world, item.is_z_flip))
+              {
                 DEG_id_tag_update(&item.ob->id, ID_RECALC_TRANSFORM);
                 WM_event_add_notifier(C, NC_OBJECT | ND_TRANSFORM, item.ob);
               }
@@ -2347,3 +2351,5 @@ void OBJECT_OT_transform_axis_target(wmOperatorType *ot)
 #undef USE_RELATIVE_ROTATION
 
 /** \} */
+
+}  // namespace blender::ed::object

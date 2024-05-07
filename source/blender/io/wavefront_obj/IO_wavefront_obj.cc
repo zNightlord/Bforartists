@@ -1,13 +1,17 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* SPDX-FileCopyrightText: 2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup obj
  */
 
+#include <iostream>
+
 #include "BLI_path_util.h"
 #include "BLI_timeit.hh"
 
-#include "IO_wavefront_obj.h"
+#include "IO_wavefront_obj.hh"
 
 #include "obj_exporter.hh"
 #include "obj_importer.hh"

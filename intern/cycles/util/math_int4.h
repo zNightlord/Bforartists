@@ -1,6 +1,7 @@
-/* SPDX-License-Identifier: Apache-2.0
- * Copyright 2011-2013 Intel Corporation
- * Copyright 2011-2022 Blender Foundation */
+/* SPDX-FileCopyrightText: 2011-2013 Intel Corporation
+ * SPDX-FileCopyrightText: 2011-2022 Blender Foundation
+ *
+ * SPDX-License-Identifier: Apache-2.0 */
 
 #ifndef __UTIL_MATH_INT4_H__
 #define __UTIL_MATH_INT4_H__
@@ -202,7 +203,7 @@ ccl_device_forceinline const int4 srl(const int4 a, const int32_t b)
 
 ccl_device_inline int4 min(int4 a, int4 b)
 {
-#  if defined(__KERNEL_SSE__) && defined(__KERNEL_SSE41__)
+#  if defined(__KERNEL_SSE__) && defined(__KERNEL_SSE42__)
   return int4(_mm_min_epi32(a.m128, b.m128));
 #  else
   return make_int4(min(a.x, b.x), min(a.y, b.y), min(a.z, b.z), min(a.w, b.w));
@@ -211,7 +212,7 @@ ccl_device_inline int4 min(int4 a, int4 b)
 
 ccl_device_inline int4 max(int4 a, int4 b)
 {
-#  if defined(__KERNEL_SSE__) && defined(__KERNEL_SSE41__)
+#  if defined(__KERNEL_SSE__) && defined(__KERNEL_SSE42__)
   return int4(_mm_max_epi32(a.m128, b.m128));
 #  else
   return make_int4(max(a.x, b.x), max(a.y, b.y), max(a.z, b.z), max(a.w, b.w));

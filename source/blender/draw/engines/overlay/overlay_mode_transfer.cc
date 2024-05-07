@@ -1,17 +1,22 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2021 Blender Foundation. */
+/* SPDX-FileCopyrightText: 2021 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup draw_engine
  */
 
-#include "BKE_paint.h"
-#include "DRW_render.h"
+#include "BKE_object_types.hh"
+#include "BKE_paint.hh"
 
-#include "ED_view3d.h"
+#include "BLI_math_color.h"
+#include "BLI_time.h"
 
-#include "PIL_time.h"
-#include "UI_resources.h"
+#include "DRW_render.hh"
+
+#include "ED_view3d.hh"
+
+#include "UI_resources.hh"
 
 #include "overlay_private.hh"
 
@@ -20,7 +25,7 @@ void OVERLAY_mode_transfer_cache_init(OVERLAY_Data *vedata)
   OVERLAY_PassList *psl = vedata->psl;
   OVERLAY_PrivateData *pd = vedata->stl->pd;
 
-  pd->mode_transfer.time = PIL_check_seconds_timer();
+  pd->mode_transfer.time = BLI_time_now_seconds();
 
   for (int i = 0; i < 2; i++) {
     /* Non Meshes Pass (Camera, empties, lights ...) */
@@ -78,7 +83,7 @@ void OVERLAY_mode_transfer_cache_populate(OVERLAY_Data *vedata, Object *ob)
   }
 
   const float animation_time = pd->mode_transfer.time -
-                               ob->runtime.overlay_mode_transfer_start_time;
+                               ob->runtime->overlay_mode_transfer_start_time;
 
   if (!mode_transfer_is_animation_running(animation_time)) {
     return;
@@ -113,7 +118,7 @@ void OVERLAY_mode_transfer_cache_populate(OVERLAY_Data *vedata, Object *ob)
     DRW_shgroup_call_sculpt(mode_transfer_grp[is_xray], ob, false, false, false, false, false);
   }
   else {
-    struct GPUBatch *geom = DRW_cache_object_surface_get(ob);
+    blender::gpu::Batch *geom = DRW_cache_object_surface_get(ob);
     if (geom) {
       DRW_shgroup_call(mode_transfer_grp[is_xray], geom, ob);
     }

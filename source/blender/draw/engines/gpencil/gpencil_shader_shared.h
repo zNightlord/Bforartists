@@ -1,7 +1,11 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* SPDX-FileCopyrightText: 2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #ifndef GPU_SHADER
-#  include "GPU_shader_shared_utils.h"
+#  pragma once
+
+#  include "GPU_shader_shared_utils.hh"
 
 #  ifndef __cplusplus
 typedef struct gpMaterial gpMaterial;
@@ -14,6 +18,7 @@ typedef enum gpLightType gpLightType;
 #endif
 
 enum gpMaterialFlag {
+  GP_FLAG_NONE = 0u,
   GP_STROKE_ALIGNMENT_STROKE = 1u,
   GP_STROKE_ALIGNMENT_OBJECT = 2u,
   GP_STROKE_ALIGNMENT_FIXED = 3u,

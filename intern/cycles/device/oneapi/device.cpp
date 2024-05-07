@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: Apache-2.0
- * Copyright 2021-2022 Intel Corporation */
+/* SPDX-FileCopyrightText: 2021-2022 Intel Corporation
+ *
+ * SPDX-License-Identifier: Apache-2.0 */
 
 #include "device/oneapi/device.h"
 
@@ -8,6 +9,7 @@
 #ifdef WITH_ONEAPI
 #  include "device/device.h"
 #  include "device/oneapi/device_impl.h"
+#  include "integrator/denoiser_oidn_gpu.h"
 
 #  include "util/path.h"
 #  include "util/string.h"
@@ -40,12 +42,12 @@ bool device_oneapi_init()
   if (getenv("SYCL_CACHE_TRESHOLD") == nullptr) {
     _putenv_s("SYCL_CACHE_THRESHOLD", "0");
   }
-  if (getenv("SYCL_DEVICE_FILTER") == nullptr) {
+  if (getenv("ONEAPI_DEVICE_SELECTOR") == nullptr) {
     if (getenv("CYCLES_ONEAPI_ALL_DEVICES") == nullptr) {
-      _putenv_s("SYCL_DEVICE_FILTER", "level_zero");
+      _putenv_s("ONEAPI_DEVICE_SELECTOR", "level_zero:*");
     }
     else {
-      _putenv_s("SYCL_DEVICE_FILTER", "level_zero,cuda,hip");
+      _putenv_s("ONEAPI_DEVICE_SELECTOR", "!opencl:*");
     }
   }
   if (getenv("SYCL_ENABLE_PCI") == nullptr) {
@@ -54,17 +56,21 @@ bool device_oneapi_init()
   if (getenv("SYCL_PI_LEVEL_ZERO_USE_COPY_ENGINE_FOR_IN_ORDER_QUEUE") == nullptr) {
     _putenv_s("SYCL_PI_LEVEL_ZERO_USE_COPY_ENGINE_FOR_IN_ORDER_QUEUE", "0");
   }
+  if (getenv("SYCL_PI_LEVEL_ZERO_USE_COPY_ENGINE") == nullptr) {
+    _putenv_s("SYCL_PI_LEVEL_ZERO_USE_COPY_ENGINE", "0");
+  }
 #  elif __linux__
   setenv("SYCL_CACHE_PERSISTENT", "1", false);
   setenv("SYCL_CACHE_THRESHOLD", "0", false);
   if (getenv("CYCLES_ONEAPI_ALL_DEVICES") == nullptr) {
-    setenv("SYCL_DEVICE_FILTER", "level_zero", false);
+    setenv("ONEAPI_DEVICE_SELECTOR", "level_zero:*", false);
   }
   else {
-    setenv("SYCL_DEVICE_FILTER", "level_zero,cuda,hip", false);
+    setenv("ONEAPI_DEVICE_SELECTOR", "!opencl:*", false);
   }
   setenv("SYCL_ENABLE_PCI", "1", false);
   setenv("SYCL_PI_LEVEL_ZERO_USE_COPY_ENGINE_FOR_IN_ORDER_QUEUE", "0", false);
+  setenv("SYCL_PI_LEVEL_ZERO_USE_COPY_ENGINE", "0", false);
 #  endif
 
   return true;
@@ -87,7 +93,12 @@ Device *device_oneapi_create(const DeviceInfo &info, Stats &stats, Profiler &pro
 }
 
 #ifdef WITH_ONEAPI
-static void device_iterator_cb(const char *id, const char *name, int num, void *user_ptr)
+static void device_iterator_cb(const char *id,
+                               const char *name,
+                               int num,
+                               bool hwrt_support,
+                               bool oidn_support,
+                               void *user_ptr)
 {
   vector<DeviceInfo> *devices = (vector<DeviceInfo> *)user_ptr;
 
@@ -101,7 +112,16 @@ static void device_iterator_cb(const char *id, const char *name, int num, void *
   info.id = id;
 
   info.has_nanovdb = true;
-  info.denoisers = 0;
+#  if defined(WITH_OPENIMAGEDENOISE)
+#    if OIDN_VERSION >= 20300
+  if (oidn_support) {
+#    else
+  if (OIDNDenoiserGPU::is_device_supported(info)) {
+#    endif
+    info.denoisers |= DENOISER_OPENIMAGEDENOISE;
+  }
+#  endif
+  (void)oidn_support;
 
   info.has_gpu_queue = true;
 
@@ -112,8 +132,19 @@ static void device_iterator_cb(const char *id, const char *name, int num, void *
   /* NOTE(@nsirgien): Seems not possible to know from SYCL/oneAPI or Level0. */
   info.display_device = false;
 
+#  ifdef WITH_EMBREE_GPU
+  info.use_hardware_raytracing = hwrt_support;
+#  else
+  info.use_hardware_raytracing = false;
+  (void)hwrt_support;
+#  endif
+
   devices->push_back(info);
-  VLOG_INFO << "Added device \"" << name << "\" with id \"" << info.id << "\".";
+  VLOG_INFO << "Added device \"" << info.description << "\" with id \"" << info.id << "\".";
+
+  if (info.denoisers & DENOISER_OPENIMAGEDENOISE)
+    VLOG_INFO << "Device with id \"" << info.id << "\" supports "
+              << denoiserTypeToHumanReadable(DENOISER_OPENIMAGEDENOISE) << ".";
 }
 #endif
 

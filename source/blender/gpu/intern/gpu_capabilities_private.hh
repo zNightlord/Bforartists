@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
- * Copyright 2020 Blender Foundation. All rights reserved. */
+/* SPDX-FileCopyrightText: 2020 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup gpu
@@ -7,7 +8,7 @@
 
 #pragma once
 
-#include "GPU_platform.h"
+#include "GPU_platform.hh"
 
 namespace blender::gpu {
 
@@ -27,6 +28,7 @@ struct GPUCapabilities {
   int max_textures_geom = 0;
   int max_textures_frag = 0;
   int max_samplers = 0;
+  int max_images = 0;
   int max_work_group_count[3] = {0, 0, 0};
   int max_work_group_size[3] = {0, 0, 0};
   int max_uniforms_vert = 0;
@@ -37,16 +39,17 @@ struct GPUCapabilities {
   int max_varying_floats = 0;
   int max_shader_storage_buffer_bindings = 0;
   int max_compute_shader_storage_blocks = 0;
+  size_t max_storage_buffer_size = 0;
   int extensions_len = 0;
   const char *(*extension_get)(int);
 
   bool mem_stats_support = false;
-  bool compute_shader_support = false;
   bool geometry_shader_support = false;
-  bool shader_storage_buffer_objects_support = false;
-  bool shader_image_load_store_support = false;
   bool shader_draw_parameters_support = false;
   bool transform_feedback_support = false;
+  bool hdr_viewport_support = false;
+  bool texture_view_support = true;
+  bool stencil_export_support = false;
 
   /* OpenGL related workarounds. */
   bool mip_render_workaround = false;
