@@ -253,6 +253,11 @@
                     SCE_EEVEE_SSR_HALF_RESOLUTION | SCE_EEVEE_SHADOW_SOFT, \
   }
 
+#define _DNA_DEFAULT_SceneHydra \
+  { \
+    .export_method = SCE_HYDRA_EXPORT_HYDRA, \
+  }
+
 #define _DNA_DEFAULT_SceneNPR \
   { \
     .npr_test_val_0 = 0, \
@@ -296,10 +301,10 @@
  \
     .eevee = _DNA_DEFAULT_SceneEEVEE, \
  \
+    .hydra = _DNA_DEFAULT_SceneHydra, \
     .simulation_frame_start = 1, \
     .simulation_frame_end = 250, \
   }
-// .hydra = _DNA_DEFAULT_SceneHydra, \ // jwzw: idk this is not defined
 
 /** \} */
 
