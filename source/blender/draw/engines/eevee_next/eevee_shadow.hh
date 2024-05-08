@@ -286,7 +286,7 @@ class ShadowModule {
   int3 scan_dispatch_size_;
   int rendering_tilemap_;
   int rendering_lod_;
-  bool do_full_update = true;
+  bool do_full_update_ = true;
 
   /** \} */
 
@@ -373,6 +373,12 @@ class ShadowModule {
     return lod_bias_;
   }
 
+  /* Set all shadows to update. To be called before `end_sync`. */
+  void reset()
+  {
+    do_full_update_ = true;
+  }
+
  private:
   void remove_unused();
   void debug_page_map_call(DRWPass *pass);
@@ -408,6 +414,8 @@ class ShadowPunctual : public NonCopyable, NonMovable {
   float max_distance_, light_radius_;
   /** Number of tile-maps needed to cover the light angular extents. */
   int tilemaps_needed_;
+  /** Shadow LOD bias calculated based on global and light shadow resolution scale. */
+  float lod_bias_;
 
  public:
   ShadowPunctual(ShadowModule &module) : shadows_(module){};
@@ -426,7 +434,8 @@ class ShadowPunctual : public NonCopyable, NonMovable {
             const float4x4 &object_mat,
             float cone_aperture,
             float light_shape_radius,
-            float max_distance);
+            float max_distance,
+            float shadow_resolution_scale);
 
   /**
    * Release the tile-maps that will not be used in the current frame.
@@ -436,7 +445,7 @@ class ShadowPunctual : public NonCopyable, NonMovable {
   /**
    * Allocate shadow tile-maps and setup views for rendering.
    */
-  void end_sync(Light &light, float lod_bias);
+  void end_sync(Light &light);
 
  private:
   /**
@@ -463,6 +472,8 @@ class ShadowDirectional : public NonCopyable, NonMovable {
   float disk_shape_angle_;
   /** Maximum distance a shadow map ray can be travel. */
   float trace_distance_;
+  /** Shadow LOD bias calculated based on global and light shadow resolution scale. */
+  float lod_bias_;
 
  public:
   ShadowDirectional(ShadowModule &module) : shadows_(module){};
@@ -480,17 +491,18 @@ class ShadowDirectional : public NonCopyable, NonMovable {
   void sync(const float4x4 &object_mat,
             float min_resolution,
             float shadow_disk_angle,
-            float trace_distance);
+            float trace_distance,
+            float shadow_resolution_scale);
 
   /**
    * Release the tile-maps that will not be used in the current frame.
    */
-  void release_excess_tilemaps(const Camera &camera, float lod_bias);
+  void release_excess_tilemaps(const Camera &camera);
 
   /**
    * Allocate shadow tile-maps and setup views for rendering.
    */
-  void end_sync(Light &light, const Camera &camera, float lod_bias);
+  void end_sync(Light &light, const Camera &camera);
 
   /* Return coverage of the whole tile-map in world unit. */
   static float coverage_get(int lvl)
@@ -508,10 +520,10 @@ class ShadowDirectional : public NonCopyable, NonMovable {
 
  private:
   IndexRange clipmap_level_range(const Camera &camera);
-  IndexRange cascade_level_range(const Camera &camera, float lod_bias);
+  IndexRange cascade_level_range(const Camera &camera);
 
   void cascade_tilemaps_distribution(Light &light, const Camera &camera);
-  void clipmap_tilemaps_distribution(Light &light, const Camera &camera, float lod_bias);
+  void clipmap_tilemaps_distribution(Light &light, const Camera &camera);
 
   void cascade_tilemaps_distribution_near_far_points(const Camera &camera,
                                                      float3 &near_point,
