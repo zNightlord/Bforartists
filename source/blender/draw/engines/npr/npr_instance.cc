@@ -88,7 +88,7 @@ void Instance::object_sync(Manager &manager, ObjectRef &ob_ref)
     // it will create a new resource every time gets called
     // so we need to cache the resource handle here
     ResourceHandle handle = manager.resource_handle(ob_ref);
-    GPUBatch *batch = DRW_cache_object_surface_get(ob_ref.object);
+    gpu::Batch *batch = DRW_cache_object_surface_get(ob_ref.object);
 
     strokegen_inst_->mesh_sync(manager, ob_ref, handle, &batch);
 

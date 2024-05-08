@@ -1,4 +1,4 @@
-#pragma BLENDER_REQUIRE(npr_strokegen_segloopconv1d_lib.glsl)
+#pragma BLENDER_REQUIRE(npr_strokegen_segloopconv1D_lib.glsl)
 
 
  

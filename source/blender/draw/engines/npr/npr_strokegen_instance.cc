@@ -10,10 +10,10 @@
 
 #include <sstream>
 
-#include "BKE_global.h"
-#include "BKE_object.h"
+#include "BKE_global.hh"
+#include "BKE_object.hh"
 #include "BLI_rect.h"
-#include "DEG_depsgraph_query.h"
+#include "DEG_depsgraph_query.hh"
 #include "DNA_ID.h"
 
 #include "npr_strokegen_instance.hh"
@@ -103,7 +103,7 @@ namespace blender::npr::strokegen
   }
 
   void Instance::mesh_sync(
-    Manager& manager, ObjectRef& object_ref, ResourceHandle& rsc_handle, GPUBatch** gpu_batch_surf)
+    Manager& manager, ObjectRef& object_ref, ResourceHandle& rsc_handle, gpu::Batch** gpu_batch_surf)
   { /* Add object draw calls to passes. (Populate render graph) */
     Object *ob = object_ref.object;
 

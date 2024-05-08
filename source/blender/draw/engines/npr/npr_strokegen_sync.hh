@@ -10,12 +10,12 @@
 
 #pragma once
 
-#include "BKE_duplilist.h"
+#include "BKE_duplilist.hh"
 #include "BLI_ghash.h"
 #include "BLI_map.hh"
 #include "DNA_object_types.h"
-#include "DRW_render.h"
-#include "GPU_material.h"
+#include "DRW_render.hh"
+#include "GPU_material.hh"
 
 #include "bnpr_shader_shared.hh"
 #include "npr_sync_handles.hh"

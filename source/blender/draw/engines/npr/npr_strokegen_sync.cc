@@ -10,7 +10,7 @@
 
 #include "bnpr_engine.h"
 
-#include "DEG_depsgraph_query.h"
+#include "DEG_depsgraph_query.hh"
 #include "DNA_curves_types.h"
 
 #include "npr_strokegen_sync.hh"
@@ -57,8 +57,8 @@ static void draw_data_init_cb(struct DrawData *dd)
       )
   {
     bool mesh_is_manifold;
-    GPUBatch *gpu_batch_line_adj = DRW_cache_object_edge_detection_get(ob, &mesh_is_manifold);
-    GPUBatch *gpu_batch_surf = DRW_cache_object_surface_get(ob_ref.object);
+    gpu::Batch *gpu_batch_line_adj = DRW_cache_object_edge_detection_get(ob, &mesh_is_manifold);
+    gpu::Batch *gpu_batch_surf = DRW_cache_object_surface_get(ob_ref.object);
 
     if (gpu_batch_line_adj == nullptr)
       return;
@@ -97,7 +97,7 @@ static void draw_data_init_cb(struct DrawData *dd)
         gpu_batch_surf /**gpu_batch_surf*/,
         rsc_handle,
         drw_view
-      );
+        );
     inst_.strokegen_passes.append_pass_remeshed_surface_depth_drawcall(); 
 
   }

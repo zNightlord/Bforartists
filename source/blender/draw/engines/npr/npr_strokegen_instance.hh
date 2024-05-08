@@ -10,9 +10,9 @@
 
 #pragma once
 
-#include "DRW_engine.h"
-#include "DRW_render.h"
-#include "ED_view3d.h"
+#include "DRW_engine.hh"
+#include "DRW_render.hh"
+#include "ED_view3d.hh"
 
 #include "npr_strokegen_shader.hh"
 #include "npr_strokegen_buffer_pool.hh"
@@ -77,7 +77,7 @@ namespace blender::npr::strokegen
     void begin_sync(Manager& manager, Texture& tex_prepass_depth);
     void end_sync(Manager& manager);
 
-    void mesh_sync(Manager& manager, ObjectRef& object_ref, ResourceHandle& rsc_handle, GPUBatch** gpu_batch_surf);
+    void mesh_sync(Manager& manager, ObjectRef& object_ref, ResourceHandle& rsc_handle, gpu::Batch** gpu_batch_surf);
 
     void draw_viewport(Manager& manager, View& view, GPUTexture* pre_depth);
     void end_draw_viewport(); 

@@ -1,4 +1,4 @@
-﻿#pragma BLENDER_REQUIRE(npr_strokegen_segloopconv1d_inputs_lib.glsl)
+﻿#pragma BLENDER_REQUIRE(npr_strokegen_segloopconv1D_inputs_lib.glsl)
 
 
 #ifndef BNPR_SEGLOOPCONV1D_LIB_INCLUDED

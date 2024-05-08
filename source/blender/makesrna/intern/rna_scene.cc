@@ -1203,9 +1203,9 @@ static std::optional<std::string> rna_SceneEEVEE_path(const PointerRNA * /*ptr*/
   return "eevee";
 }
 
-static char *rna_SceneNPR_path(const PointerRNA * /*ptr*/)
+static std::optional<std::string> rna_SceneNPR_path(const PointerRNA * /*ptr*/)
 {
-  return BLI_strdup("npr");
+  return "npr";
 }
 
 static std::optional<std::string> rna_RaytraceEEVEE_path(const PointerRNA * /*ptr*/)
@@ -7705,7 +7705,6 @@ static void rna_def_scene_display(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Shading Settings", "Shading settings for OpenGL render engine");
 }
 
-<<<<<<< HEAD:source/blender/makesrna/intern/rna_scene.c
 static void append_npr_render_debug_param_int(StructRNA *srna, PropertyRNA **prop, const char *name)
 {
   *prop = RNA_def_property(srna, name, PROP_INT, PROP_NONE);
@@ -7742,14 +7741,10 @@ static void append_npr_render_debug_param_float_default(
 }
 
 static void rna_def_scene_npr(BlenderRNA *brna)
-=======
-static void rna_def_raytrace_eevee(BlenderRNA *brna)
->>>>>>> blender-main/main:source/blender/makesrna/intern/rna_scene.cc
 {
   StructRNA *srna;
   PropertyRNA *prop;
 
-<<<<<<< HEAD:source/blender/makesrna/intern/rna_scene.c
   srna = RNA_def_struct(brna, "SceneNPR", NULL);
   RNA_def_struct_path_func(srna, "rna_SceneNPR_path");
   RNA_def_struct_ui_text(srna, "NPR", "NPR Renderer settings");
@@ -7778,7 +7773,13 @@ static void rna_def_raytrace_eevee(BlenderRNA *brna)
   append_npr_render_debug_param_float_default(srna, &prop, "npr_test_val_21");
   append_npr_render_debug_param_float_default(srna, &prop, "npr_test_val_22");
   append_npr_render_debug_param_float_default(srna, &prop, "npr_test_val_23");
-=======
+}
+
+static void rna_def_raytrace_eevee(BlenderRNA * brna)
+{
+  StructRNA *srna;
+  PropertyRNA *prop;
+
   srna = RNA_def_struct(brna, "RaytraceEEVEE", nullptr);
   RNA_def_struct_path_func(srna, "rna_RaytraceEEVEE_path");
   RNA_def_struct_ui_text(
@@ -7846,7 +7847,6 @@ static void rna_def_raytrace_eevee(BlenderRNA *brna)
   RNA_def_property_range(prop, 0.0f, 1.0f);
   RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
   RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, nullptr);
->>>>>>> blender-main/main:source/blender/makesrna/intern/rna_scene.cc
 }
 
 static void rna_def_scene_eevee(BlenderRNA *brna)

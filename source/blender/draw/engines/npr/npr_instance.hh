@@ -1,10 +1,10 @@
 ﻿#pragma once
 
-#include "BKE_object.h"
-#include "BKE_report.h"
-#include "DEG_depsgraph_query.h"
+#include "BKE_object.hh"
+#include "BKE_report.hh"
+#include "DEG_depsgraph_query.hh"
 #include "DNA_camera_types.h"
-#include "DRW_render.h"
+#include "DRW_render.hh"
 #include "draw_manager.hh"
 #include "draw_pass.hh"
 

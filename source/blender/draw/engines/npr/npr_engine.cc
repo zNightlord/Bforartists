@@ -1,16 +1,18 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BKE_object.h"
-#include "BKE_report.h"
-#include "DEG_depsgraph_query.h"
+#include "BKE_object.hh"
+#include "BKE_report.hh"
+#include "DEG_depsgraph_query.hh"
 #include "DNA_camera_types.h"
-#include "DRW_render.h"
-#include "ED_view3d.h"
-#include "GPU_capabilities.h"
+#include "DRW_render.hh"
+#include "ED_view3d.hh"
+#include "GPU_capabilities.hh"
 #include "draw_manager.hh"
 #include "draw_pass.hh"
 
 #include "npr_engine.h" /* Own include. */
+
+#include "IMB_imbuf_types.hh"
 #include "npr_instance.hh"
 
 
@@ -34,9 +36,6 @@ struct NPR_Data {
 static void npr_engine_init(void *vedata)
 {
   /* TODO(fclem): Remove once it is minimum required. */
-  if (!GPU_shader_storage_buffer_objects_support()) {
-    return;
-  }
 
   NPR_Data *ved = reinterpret_cast<NPR_Data *>(vedata);
   if (ved->instance == nullptr) {
@@ -48,17 +47,11 @@ static void npr_engine_init(void *vedata)
 
 static void npr_cache_init(void *vedata)
 {
-  if (!GPU_shader_storage_buffer_objects_support()) {
-    return;
-  }
   reinterpret_cast<NPR_Data *>(vedata)->instance->begin_sync();
 }
 
 static void npr_cache_populate(void *vedata, Object *object)
 {
-  if (!GPU_shader_storage_buffer_objects_support()) {
-    return;
-  }
   draw::Manager *manager = DRW_manager_get();
 
   draw::ObjectRef ref;
@@ -71,19 +64,13 @@ static void npr_cache_populate(void *vedata, Object *object)
 
 static void npr_cache_finish(void *vedata)
 {
-  if (!GPU_shader_storage_buffer_objects_support()) {
-    return;
-  }
   reinterpret_cast<NPR_Data *>(vedata)->instance->end_sync();
 }
 
 static void npr_draw_scene(void *vedata)
 {
   NPR_Data *ved = reinterpret_cast<NPR_Data *>(vedata);
-  if (!GPU_shader_storage_buffer_objects_support()) {
-    STRNCPY(ved->info, "Error: No shader storage buffer support");
-    return;
-  }
+
   DefaultTextureList *dtxl = DRW_viewport_texture_list_get();
   draw::Manager *manager = DRW_manager_get();
 
@@ -95,9 +82,7 @@ static void npr_draw_scene(void *vedata)
 
 static void npr_instance_free(void *instance)
 {
-  if (!GPU_shader_storage_buffer_objects_support()) {
-    return;
-  }
+
   delete reinterpret_cast<npr::Instance *>(instance);
 }
 
@@ -106,7 +91,7 @@ static void npr_view_update(void *vedata)
   NPR_Data *ved = reinterpret_cast<NPR_Data *>(vedata);
 }
 
-static void npr_id_update(void *vedata, struct ID *id)
+static void npr_id_update(void *vedata, ID *id)
 {
   UNUSED_VARS(vedata, id);
 }
@@ -160,10 +145,10 @@ static bool npr_render_framebuffers_init(void)
 #  define GPU_FINISH_DELIMITER()
 #endif
 
-static void write_render_color_output(struct RenderLayer *layer,
+static void write_render_color_output(RenderLayer *layer,
                                       const char *viewname,
                                       GPUFrameBuffer *fb,
-                                      const struct rcti *rect)
+                                      const rcti *rect)
 {
   RenderPass *rp = RE_pass_find_by_name(layer, RE_PASSNAME_COMBINED, viewname);
   if (rp) {
@@ -176,14 +161,14 @@ static void write_render_color_output(struct RenderLayer *layer,
                                4,
                                0,
                                GPU_DATA_FLOAT,
-                               rp->rect);
+                               rp->ibuf->float_buffer.data);
   }
 }
 
-static void write_render_z_output(struct RenderLayer *layer,
+static void write_render_z_output(RenderLayer *layer,
                                   const char *viewname,
                                   GPUFrameBuffer *fb,
-                                  const struct rcti *rect,
+                                  const rcti *rect,
                                   float4x4 winmat)
 {
   RenderPass *rp = RE_pass_find_by_name(layer, RE_PASSNAME_Z, viewname);
@@ -195,13 +180,13 @@ static void write_render_z_output(struct RenderLayer *layer,
                                BLI_rcti_size_x(rect),
                                BLI_rcti_size_y(rect),
                                GPU_DATA_FLOAT,
-                               rp->rect);
+                               rp->ibuf->float_buffer.data);
 
     int pix_num = BLI_rcti_size_x(rect) * BLI_rcti_size_y(rect);
 
     /* Convert GPU depth [0..1] to view Z [near..far] */
     if (DRW_view_is_persp_get(nullptr)) {
-      for (float &z : MutableSpan(rp->rect, pix_num)) {
+      for (float &z : MutableSpan(rp->ibuf->float_buffer.data, pix_num)) {
         if (z == 1.0f) {
           z = 1e10f; /* Background */
         }
@@ -217,7 +202,7 @@ static void write_render_z_output(struct RenderLayer *layer,
       float far = DRW_view_far_distance_get(nullptr);
       float range = fabsf(far - near);
 
-      for (float &z : MutableSpan(rp->rect, pix_num)) {
+      for (float &z : MutableSpan(rp->ibuf->float_buffer.data, pix_num)) {
         if (z == 1.0f) {
           z = 1e10f; /* Background */
         }
@@ -230,15 +215,10 @@ static void write_render_z_output(struct RenderLayer *layer,
 }
 
 static void npr_render_to_image(void *vedata,
-                                struct RenderEngine *engine,
-                                struct RenderLayer *layer,
-                                const struct rcti *rect)
+                                RenderEngine *engine,
+                                RenderLayer *layer,
+                                const rcti *rect)
 {
-  /* TODO(fclem): Remove once it is minimum required. */
-  if (!GPU_shader_storage_buffer_objects_support()) {
-    return;
-  }
-
   if (!npr_render_framebuffers_init()) {
     RE_engine_report(engine, RPT_ERROR, "Failed to allocate GPU buffers");
     return;

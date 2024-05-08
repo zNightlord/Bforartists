@@ -1,4 +1,4 @@
-﻿#include "npr_strokegen_geom_extract.hh"
+#include "npr_strokegen_geom_extract.hh"
 
 
 
@@ -16,7 +16,7 @@
  * \param batch_inst_len #instances in current batch
  */
 void blender::npr::strokegen::GeomExtractCommand::gpu_batch_draw_parameter_get(
-    GPUBatch* gpu_batch,
+    gpu::Batch* gpu_batch,
     int* batch_vert_len,
     int* batch_vert_first,
     int* batch_base_index,

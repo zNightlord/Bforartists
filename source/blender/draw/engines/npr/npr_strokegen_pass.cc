@@ -9,8 +9,7 @@
 
 #include "npr_strokegen_pass.hh"
 
-#include "DEG_depsgraph_query.h"
-#include "gpu_batch_private.hh"
+#include "DEG_depsgraph_query.hh"
 #include "gpu_storage_buffer_private.hh"
 #include "NOD_geometry_exec.hh"
 
@@ -367,8 +366,8 @@ namespace blender::npr::strokegen
    */
   void StrokeGenPassModule::append_per_mesh_pass(
       Object* ob,
-      GPUBatch* gpu_batch_line_adj,
-      GPUBatch* gpu_batch_surf,
+      gpu::Batch* gpu_batch_line_adj,
+      gpu::Batch* gpu_batch_surf,
       ResourceHandle& rsc_handle,
       const DRWView* drw_view
   ){
@@ -418,7 +417,7 @@ namespace blender::npr::strokegen
      * "extract_mesh_vbo_pos_nor.cc"
      */
     gpu::VertBuf *vbo_surf_posnor = batch_surf->verts_(1);
-    GPUVertBuf *vbo_surf_posnor_gpuverbuf = gpu_batch_surf->verts[1];
+    gpu::VertBuf *vbo_surf_posnor_gpuverbuf = gpu_batch_surf->verts[1];
     int num_tris = ibo_surf->index_len_get() / 3;
     int num_verts = vbo_surf_posnor->vertex_len;
 
@@ -596,7 +595,7 @@ namespace blender::npr::strokegen
         ib_type,
         meshing_params.edge_visualize_mode,
         meshing_params.contour_mode
-    );
+        );
 
     append_subpass_fill_dispatch_args_contour_edges(pass_extract_geom(), false);
     append_subpass_setup_contour_edge_data();
@@ -877,7 +876,7 @@ namespace blender::npr::strokegen
     }
   }
 
-  void StrokeGenPassModule::append_subpass_merge_vbo(GPUBatch *gpu_batch_surf, int batch_resource_index, int num_verts)
+  void StrokeGenPassModule::append_subpass_merge_vbo(gpu::Batch *gpu_batch_surf, int batch_resource_index, int num_verts)
   {
     auto &sub = pass_extract_geom().sub("merge batch vbo");
       
@@ -900,7 +899,7 @@ namespace blender::npr::strokegen
   }
 
   void StrokeGenPassModule::append_subpass_merge_line_adj_ibo(
-      GPUBatch *gpu_batch_line_adj,
+      gpu::Batch *gpu_batch_line_adj,
       gpu::GPUIndexBufType ib_type,
       int num_added_edges)
   {
@@ -1658,7 +1657,7 @@ namespace blender::npr::strokegen
 
 
   void StrokeGenPassModule::append_subpass_extract_contour_edges(
-      GPUBatch* gpu_batch_line_adj,
+      gpu::Batch* gpu_batch_line_adj,
       ResourceHandle& rsc_handle,
       gpu::Batch* edge_batch,
       int num_edges,
@@ -1941,6 +1940,10 @@ namespace blender::npr::strokegen
 
   void StrokeGenPassModule::append_subpass_contour_edges_soft_rasterization()
   {
+    GPUSamplerState depthSamplerState;
+    depthSamplerState.filtering = GPU_SAMPLER_FILTERING_DEFAULT;
+    depthSamplerState.extend_x = depthSamplerState.extend_yz = GPU_SAMPLER_EXTEND_MODE_CLAMP_TO_BORDER; 
+
     auto bind_rsc = [&](draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub)
     {
       sub.bind_ssbo(0, buffers_.ssbo_bnpr_mesh_pool_counters_);
@@ -1950,8 +1953,8 @@ namespace blender::npr::strokegen
       sub.bind_ssbo(4, buffers_.reused_ssbo_tree_scan_infos_contour_fragment_idmapping_()); 
       sub.bind_ssbo(5, buffers_.reused_ssbo_tree_scan_input_contour_fragment_idmapping_());
       sub.bind_ubo(0, buffers_.ubo_view_matrices_cache_); 
-      sub.bind_image(0, textures_.tex2d_contour_dbg_); 
-      sub.bind_texture(0, textures_.tex_remeshed_surf_depth_, eGPUSamplerState::GPU_SAMPLER_CLAMP_BORDER); 
+      sub.bind_image(0, textures_.tex2d_contour_dbg_);
+      sub.bind_texture(0, textures_.tex_remeshed_surf_depth_, depthSamplerState); 
 
       sub.push_constant("pcs_screen_size_", textures_.get_contour_raster_screen_res());
     };

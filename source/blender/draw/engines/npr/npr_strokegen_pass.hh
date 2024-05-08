@@ -13,7 +13,6 @@
 
 #include "npr_strokegen_shader.hh"
 #include "bnpr_shader_shared.hh"
-#include "gpu_batch_private.hh"
 #include "npr_strokegen_buffer_pool.hh"
 #include "npr_strokegen_texture_pool.hh"
 #include "strokegen_mesh_raster_pass.hh"
@@ -148,16 +147,16 @@ public:
   void init_mesh_extraction_passes();
   void append_per_mesh_pass(
       Object* ob,
-      GPUBatch* gpu_batch_line_adj,
-      GPUBatch* gpu_batch_surf,
+      gpu::Batch* gpu_batch_line_adj,
+      gpu::Batch* gpu_batch_surf,
       ResourceHandle& rsc_handle,
       const DRWView* drw_view
-    );
+      );
 
 
   // ---------------------------------------------------------------------------
-  void append_subpass_merge_vbo(GPUBatch *gpu_batch_surf, int batch_resource_index, int num_verts);
-  void append_subpass_merge_line_adj_ibo(GPUBatch *gpu_batch_line_adj,
+  void append_subpass_merge_vbo(gpu::Batch* gpu_batch_surf, int batch_resource_index, int num_verts);
+  void append_subpass_merge_line_adj_ibo(gpu::Batch* gpu_batch_line_adj,
                                          gpu::GPUIndexBufType ib_type,
                                          int num_added_edges);
 
@@ -395,9 +394,9 @@ public:
 
 
   // ---------------------------------------------------------------------------
-  void append_subpass_extract_contour_edges(GPUBatch *gpu_batch_line_adj,
-                                            ResourceHandle &rsc_handle,
-                                            gpu::Batch *edge_batch,
+  void append_subpass_extract_contour_edges(gpu::Batch* gpu_batch_line_adj,
+                                            ResourceHandle& rsc_handle,
+                                            gpu::Batch* edge_batch,
                                             int num_edges,
                                             gpu::GPUIndexBufType ib_type,
                                             int edge_visualize_mode,

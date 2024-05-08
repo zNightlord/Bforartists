@@ -1,14 +1,13 @@
-﻿#pragma once
+#pragma once
 #include "draw_command.hh"
-#include "GPU_batch.h"
-#include "gpu_batch_private.hh"
+#include "GPU_batch.hh"
 
 
 namespace blender::npr::strokegen
 {
     struct GeomExtractionData
     {
-        GPUBatch *batch;
+        gpu::Batch *batch;
         uint instance_len;
         uint vertex_len;
         uint vertex_first;
@@ -21,7 +20,7 @@ namespace blender::npr::strokegen
          * \brief see GPU_batch_draw_parameter_get and DrawCommandBuf::bind
          */
         static void gpu_batch_draw_parameter_get(
-            GPUBatch *gpu_batch,
+            gpu::Batch *gpu_batch,
             int *batch_vert_len, int *batch_vert_first,
             int *batch_base_index,
             int *batch_inst_len

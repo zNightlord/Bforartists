@@ -8,18 +8,19 @@
  * When we only need simple flat shaders.
  */
 
-#include "DRW_render.h"
+#include "DRW_render.hh"
 
-#include "BKE_object.h"
-#include "BKE_paint.h"
+#include "BKE_object.hh"
+#include "BKE_paint.hh"
 
 #include "BLI_alloca.h"
 
-#include "GPU_shader.h"
+#include "GPU_shader.hh"
 
 #include "bnpr_engine.h"
 
-#include "GPU_capabilities.h"
+#include "BKE_object_types.hh"
+#include "GPU_capabilities.hh"
 #include "intern/mallocn_intern.h"
 #include "npr_strokegen_instance.hh"
 #include "npr_strokegen_shader.hh"
@@ -73,7 +74,7 @@ typedef struct bnpr_PrivateData {
 
 static bool check_bnpr_support()
 {
-  return GPU_shader_storage_buffer_objects_support();
+  return true; 
 }
 
 
@@ -221,7 +222,7 @@ static void bnpr_cache_init(void *vedata)
 
 /* TODO(fclem): DRW_cache_object_surface_material_get needs a refactor to allow passing NULL
  * instead of gpumat_array. Avoiding all this boilerplate code. */
-static struct GPUBatch **bnpr_object_surface_material_get(Object *ob)
+static gpu::Batch **bnpr_object_surface_material_get(Object *ob)
 {
   const int materials_len = DRW_cache_object_material_count_get(ob);
   struct GPUMaterial **gpumat_array =
@@ -253,7 +254,7 @@ static void bnpr_cache_populate_legacy(void *vedata, Object *ob)
 
   const bool do_in_front = (ob->dtx & OB_DRAW_IN_FRONT) != 0;
   if (ob->type == OB_CURVES) {
-    DRW_shgroup_curves_create_sub(ob, stl->g_data->depth_curves_shgrp[do_in_front], NULL);
+    draw::DRW_shgroup_curves_create_sub(ob, stl->g_data->depth_curves_shgrp[do_in_front], NULL);
   }
 
   /* Make flat object selectable in ortho view if wireframe is enabled. */
@@ -266,7 +267,7 @@ static void bnpr_cache_populate_legacy(void *vedata, Object *ob)
 
     if (is_flat_object_viewed_from_side) {
       /* Avoid losing flat objects when in ortho views (see T56549) */
-      struct GPUBatch *geom = DRW_cache_object_all_edges_get(ob);
+      gpu::Batch *geom = DRW_cache_object_all_edges_get(ob);
       if (geom) {
         DRW_shgroup_call(stl->g_data->depth_shgrp[do_in_front], geom, ob);
       }
@@ -294,7 +295,7 @@ static void bnpr_cache_populate_legacy(void *vedata, Object *ob)
   }
   else {
     if (stl->g_data->use_material_slot_selection && BKE_object_supports_material_slots(ob)) {
-      struct GPUBatch **geoms = bnpr_object_surface_material_get(ob);
+      gpu::Batch **geoms = bnpr_object_surface_material_get(ob);
       if (geoms) {
         const int materials_len = DRW_cache_object_material_count_get(ob);
         for (int i = 0; i < materials_len; i++) {
@@ -302,13 +303,13 @@ static void bnpr_cache_populate_legacy(void *vedata, Object *ob)
             continue;
           }
           const short material_slot_select_id = i + 1;
-          DRW_select_load_id(ob->runtime.select_id | (material_slot_select_id << 16));
+          DRW_select_load_id(ob->runtime->select_id | (material_slot_select_id << 16));
           DRW_shgroup_call(shgrp, geoms[i], ob);
         }
       }
     }
     else {
-      struct GPUBatch *geom = DRW_cache_object_surface_get(ob);
+      gpu::Batch *geom = DRW_cache_object_surface_get(ob);
       if (geom) {
         DRW_shgroup_call(shgrp, geom, ob);
       }
@@ -357,9 +358,9 @@ static void bnpr_cache_finish(void *vedata)
 }
 
 static void bnpr_instance_free(void *instance) {
-  if (!GPU_shader_storage_buffer_objects_support()) {
-    return;
-  }
+  // if (!GPU_shader_storage_buffer_objects_support()) {
+  //   return;
+  // }
   delete reinterpret_cast<npr::strokegen::Instance *>(instance);
 }
 

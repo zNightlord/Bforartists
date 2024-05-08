@@ -16,7 +16,7 @@
 
 #  include "bnpr_defines.hh"
 
-#  include "GPU_shader_shared.h"
+#  include "GPU_shader_shared.hh"
 
 namespace blender::npr::strokegen {
 

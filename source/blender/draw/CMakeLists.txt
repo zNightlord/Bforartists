@@ -693,10 +693,10 @@ set(GLSL_SRC
   engines/npr/shaders/npr_strokegen_scan_no_subgroup_codegen_lib.glsl
   engines/npr/shaders/npr_strokegen_scan_test_comp.glsl
 
-  engines/npr/shaders/npr_strokegen_segloopconv1d_inputs_lib.glsl
-  engines/npr/shaders/npr_strokegen_segloopconv1d_lib.glsl
-  engines/npr/shaders/npr_strokegen_segloopconv1d_codegen_lib.glsl
-  engines/npr/shaders/npr_strokegen_segloopconv1d_test_comp.glsl
+  engines/npr/shaders/npr_strokegen_segloopconv1D_inputs_lib.glsl
+  engines/npr/shaders/npr_strokegen_segloopconv1D_lib.glsl
+  engines/npr/shaders/npr_strokegen_segloopconv1D_codegen_lib.glsl
+  engines/npr/shaders/npr_strokegen_segloopconv1D_test_comp.glsl
 
   engines/npr/shaders/npr_strokegen_list_ranking_inputs_lib.glsl
   engines/npr/shaders/npr_strokegen_list_ranking_lib.glsl

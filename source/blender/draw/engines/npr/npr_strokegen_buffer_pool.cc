@@ -13,6 +13,8 @@
 #include "npr_strokegen_instance.hh"
 #include "bnpr_defines.hh"
 
+#include <iostream>
+
 namespace blender::npr::strokegen
 {
   void GPUBufferPoolModule::on_begin_sync(const DRWView* drw_view, bool upload_list_ranking_test_data, bool update_view_matrices_for_contour_extraction)

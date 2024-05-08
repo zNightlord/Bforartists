@@ -1890,7 +1890,7 @@ GPU_SHADER_CREATE_INFO(strokegen_segloopconv1D_##name##_build_patch)            
     .uniform_buf(0, "UBData_SegLoopConv1D", "ubo_segloopconv1d_")                        \
                                                                                          \
     .local_group_size(GROUP_SIZE_SEGLOOPCONV1D_TEST)                                     \
-    .compute_source("npr_strokegen_segloopconv1d_test_comp.glsl");                       \
+    .compute_source("npr_strokegen_segloopconv1D_test_comp.glsl");                       \
 
 GPU_SHADER_CREATE_INFO__SEGLOOPCONV1D_BUILD_PATCH(test, npr_segloopconv1D_test_build_patch)
 GPU_SHADER_CREATE_INFO__SEGLOOPCONV1D_BUILD_PATCH(seg_denoising, npr_segloopconv1D_seg_denoising_build_patch)
@@ -1908,7 +1908,7 @@ GPU_SHADER_CREATE_INFO(strokegen_segloopconv1D_##name##_convolution)            
     .uniform_buf(0, "UBData_SegLoopConv1D", "ubo_segloopconv1d_")                        \
                                                                                          \
     .local_group_size(GROUP_SIZE_SEGLOOPCONV1D_TEST)                                     \
-    .compute_source("npr_strokegen_segloopconv1d_test_comp.glsl");                       \
+    .compute_source("npr_strokegen_segloopconv1D_test_comp.glsl");                       \
 
 GPU_SHADER_CREATE_INFO__SEGLOOPCONV1D_CONV(test, npr_segloopconv1D_test_convolution)
 GPU_SHADER_CREATE_INFO__SEGLOOPCONV1D_CONV(seg_denoising, npr_segloopconv1D_seg_denoising_convolution)
