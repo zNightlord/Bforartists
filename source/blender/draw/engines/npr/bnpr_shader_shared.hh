@@ -417,18 +417,6 @@ using namespace draw;
     return (is_ibo_fmt_u16 ? (prim_vert_beg / 2u) : (prim_vert_beg));
   }
 
-  /* The posnor vbo of a Surface GPUBatch
-   * See "PosNorLoop" in mesh_extractors\extract_mesh_vbo_pos_nor.cc
-   */
-  struct SSBO_Data_PosNor {
-    float x;
-    float y;
-    float z;
-    uint packedNormal; 
-  };
-  BLI_STATIC_ASSERT_ALIGN(SSBO_Data_PosNor, 16)
-
-
   struct SSBOData_StrokeGenEdgeSplitCounters {
     uint num_split_edges_pass_1;
     uint num_split_edges;

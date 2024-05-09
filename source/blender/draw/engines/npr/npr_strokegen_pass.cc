@@ -413,13 +413,12 @@ namespace blender::npr::strokegen
      * "DRW_batch_requested(cache->batch.surface, GPU_PRIM_TRIS)" in
      * "DRW_mesh_batch_cache_create_requested"
      *
-     * For the data layout of "posnor" vbo, see
-     * "extract_mesh_vbo_pos_nor.cc"
-     */
-    gpu::VertBuf *vbo_surf_posnor = batch_surf->verts_(1);
-    gpu::VertBuf *vbo_surf_posnor_gpuverbuf = gpu_batch_surf->verts[1];
+     * For the pos vbo of a Surface GPUBatch
+     * See mesh_extractors\extract_mesh_vbo_pos.cc
+    */
+    gpu::VertBuf *vbo_surf_pos = batch_surf->verts_(1);
     int num_tris = ibo_surf->index_len_get() / 3;
-    int num_verts = vbo_surf_posnor->vertex_len;
+    int num_verts = vbo_surf_pos->vertex_len;
 
 
 

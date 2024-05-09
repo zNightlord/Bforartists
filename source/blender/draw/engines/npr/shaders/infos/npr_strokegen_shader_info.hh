@@ -67,7 +67,7 @@
 GPU_SHADER_CREATE_INFO(bnpr_geom_extract_boostrap)
     .do_static_compilation(true)
     .typedef_source("bnpr_shader_shared.hh")
-    .typedef_source("draw_shader_shared.h")
+    .typedef_source("draw_shader_shared.hh")
     .define("_KERNEL_MULTICOMPILE_BOOSTRAP_GEOM_EXTRACT", "1")
     .define("DECODE_IBO_EXCLUDE",       "1") /* exclude ibo decode shader */
     .additional_info("npr_compaction_off")
@@ -80,7 +80,7 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_extract_boostrap)
 GPU_SHADER_CREATE_INFO(bnpr_geom_extract)
     .do_static_compilation(true)
     .typedef_source("bnpr_shader_shared.hh")
-    .typedef_source("draw_shader_shared.h")
+    .typedef_source("draw_shader_shared.hh")
     .define("_KERNEL_MULTICOMPILE__GEOM_EXTRACT", "1")
     .define("DECODE_IBO_EXCLUDE",       "1") /* exclude ibo decode shader */
     .define("WINGED_EDGE_TOPO_INCLUDE", "1")
@@ -128,7 +128,7 @@ GPU_SHADER_CREATE_INFO(strokegen_fill_dispatch_args_per_contour_edge)
     .do_static_compilation(true)
     .typedef_source("bnpr_defines.hh")
     .typedef_source("bnpr_shader_shared.hh")
-    .typedef_source("draw_shader_shared.h") /* Always needed for indirect args */
+    .typedef_source("draw_shader_shared.hh") /* Always needed for indirect args */
     .define("_KERNEL_MULTICOMPILE__FILL_DISPATCH_ARGS", "1")
     .define("_KERNEL_MULTICOMPILE__FILL_DISPATCH_ARGS__PER_CONTOUR_EDGE", "1")
     .storage_buf(0, Qualifier::READ_WRITE, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
@@ -143,7 +143,7 @@ GPU_SHADER_CREATE_INFO(strokegen_fill_dispatch_args_per_contour_vert)
     .do_static_compilation(true)
     .typedef_source("bnpr_defines.hh")
     .typedef_source("bnpr_shader_shared.hh")
-    .typedef_source("draw_shader_shared.h") /* Always needed for indirect args */
+    .typedef_source("draw_shader_shared.hh") /* Always needed for indirect args */
     .define("_KERNEL_MULTICOMPILE__FILL_DISPATCH_ARGS", "1")
     .define("_KERNEL_MULTICOMPILE__FILL_DISPATCH_ARGS__PER_CONTOUR_VERT", "1")
     .storage_buf(0, Qualifier::READ_WRITE, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
@@ -156,7 +156,7 @@ GPU_SHADER_CREATE_INFO(strokegen_fill_dispatch_args_per_contour_fragment)
     .do_static_compilation(true)
     .typedef_source("bnpr_defines.hh")
     .typedef_source("bnpr_shader_shared.hh")
-    .typedef_source("draw_shader_shared.h") /* Always needed for indirect args */
+    .typedef_source("draw_shader_shared.hh") /* Always needed for indirect args */
     .define("_KERNEL_MULTICOMPILE__FILL_DISPATCH_ARGS", "1")
     .define("_KERNEL_MULTICOMPILE__FILL_DISPATCH_ARGS__PER_CONTOUR_FRAG", "1")
     .storage_buf(0, Qualifier::READ_WRITE, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
@@ -170,7 +170,7 @@ GPU_SHADER_CREATE_INFO(strokegen_fill_dispatch_args_per_contour_fragment)
 GPU_SHADER_CREATE_INFO(bnpr_geom_extract_mesh_contour_data)
     .do_static_compilation(true)
     .typedef_source("bnpr_shader_shared.hh")
-    .typedef_source("draw_shader_shared.h")
+    .typedef_source("draw_shader_shared.hh")
     .additional_info("npr_compaction_off") /* Remove compaction code */
     .define("DECODE_IBO_EXCLUDE", "1") /* Remove ibo code */
     .define("WINGED_EDGE_TOPO_INCLUDE", "1")
@@ -202,7 +202,7 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_extract_mesh_contour_data)
 GPU_SHADER_CREATE_INFO(strokegen_build_contour_fragments)
     .do_static_compilation(true)
     .typedef_source("bnpr_shader_shared.hh")
-    .typedef_source("draw_shader_shared.h")
+    .typedef_source("draw_shader_shared.hh")
     .define("_KERNEL_MULTICOMPILE__PROCESS_CONTOUR_FRAGMENTS", "1")
     .define("COMPACTION_LIB_EXCLUDE_DEFAULT_CODEGEN", "1")
     
@@ -243,7 +243,7 @@ GPU_SHADER_CREATE_INFO(strokegen_contour_frag_visibility_test)
 GPU_SHADER_CREATE_INFO(strokegen_visibility_split_contour_edges)
     .do_static_compilation(true)
     .typedef_source("bnpr_shader_shared.hh")
-    .typedef_source("draw_shader_shared.h")
+    .typedef_source("draw_shader_shared.hh")
     .define("_KERNEL_MULTICOMPILE__PROCESS_CONTOUR_FRAGMENTS", "1")
     .define("COMPACTION_LIB_EXCLUDE_DEFAULT_CODEGEN", "1")
     
@@ -334,7 +334,7 @@ GPU_SHADER_CREATE_INFO(strokegen_fill_cotour_edge_ranking_inputs)
 GPU_SHADER_CREATE_INFO(strokegen_serialize_contour_edges)
     .do_static_compilation(true)
     .typedef_source("bnpr_shader_shared.hh")
-    .typedef_source("draw_shader_shared.h")
+    .typedef_source("draw_shader_shared.hh")
     .define("_KERNEL_MULTICOMPILE__CONTOUR_SERIALIZATION", "1")
     .define("INCLUDE_CONTOUR_FLAGS_LOAD_STORE", "1")
     .define("USE_CONTOUR_TRANSFER_DATA_BUFFER", "1")
@@ -365,7 +365,7 @@ GPU_SHADER_CREATE_INFO(strokegen_serialize_contour_edges_pass_0)
 GPU_SHADER_CREATE_INFO(strokegen_contour_segmentation)
     .do_static_compilation(true)
     .typedef_source("bnpr_shader_shared.hh")
-    .typedef_source("draw_shader_shared.h")
+    .typedef_source("draw_shader_shared.hh")
     .define("_KERNEL_MULTICOMPILE__CONTOUR_SEGMENTATION", "1")
     .define("INCLUDE_CONTOUR_FLAGS_LOAD_STORE", "1")
     .define("INCLUDE_CONTOUR_CURVE_TOPOLOGY_LOAD", "1")
@@ -399,7 +399,7 @@ GPU_SHADER_CREATE_INFO(strokegen_finish_contour_segmentation)
 GPU_SHADER_CREATE_INFO(strokegen_calc_contour_edges_render_data)
     .do_static_compilation(true)
     .typedef_source("bnpr_shader_shared.hh")
-    .typedef_source("draw_shader_shared.h")
+    .typedef_source("draw_shader_shared.hh")
     .define("_KERNEL_MULTICOMPILE__CALC_CONTOUR_EDGES_RENDER_DATA", "1")
     .define("INCLUDE_CONTOUR_FLAGS_LOAD_STORE", "1")
     .define("INCLUDE_CONTOUR_CURVE_TOPOLOGY_LOAD", "1")
@@ -429,13 +429,13 @@ GPU_SHADER_CREATE_INFO(strokegen_calc_contour_edges_draw_data)
 GPU_SHADER_CREATE_INFO(bnpr_geom_extract_collect_verts)
     .do_static_compilation(true)
     .typedef_source("bnpr_shader_shared.hh")
-    .typedef_source("draw_shader_shared.h")
+    .typedef_source("draw_shader_shared.hh")
     .additional_info("npr_compaction_off") /* Remove compaction code */
     .define("DECODE_IBO_EXCLUDE", "1") /* Remove ibo code */
     .define("_KERNEL_MULTICOMPILE__COMPACT_VBO", "1")
 
     .storage_buf(0, Qualifier::READ, "uint", "ssbo_meshbatch_ibo_[]")
-    .storage_buf(1, Qualifier::READ, "SSBO_Data_PosNor", "ssbo_meshbatch_vbo_[]") /* encoded posnor vbo */
+    .storage_buf(1, Qualifier::READ, "float", "ssbo_meshbatch_vbo_[]") /* encoded posnor vbo */
     .storage_buf(2, Qualifier::WRITE, "float", "ssbo_vbo_full_[]")
     .storage_buf(3, Qualifier::READ, "ObjectMatrices", "drw_matrix_buf[]")
     .storage_buf(4, Qualifier::WRITE, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_prev_")
@@ -451,7 +451,7 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_extract_collect_verts)
 GPU_SHADER_CREATE_INFO(bnpr_geom_extract_collect_edges)
     .do_static_compilation(true)
     .typedef_source("bnpr_shader_shared.hh")
-    .typedef_source("draw_shader_shared.h")
+    .typedef_source("draw_shader_shared.hh")
     .additional_info("npr_compaction_off") /* Remove compaction code */
     .define("_KERNEL_MULTICOMPILE__COMPACT_EDGE_ADJ_IBO", "1")
     .define("DECODE_IBO_INCLUDE", "1")
@@ -472,7 +472,7 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_extract_collect_edges_16bits)
 GPU_SHADER_CREATE_INFO(bnpr_geom_fill_draw_args_contour_edges)
     .do_static_compilation(true)
     .typedef_source("bnpr_shader_shared.hh")
-    .typedef_source("draw_shader_shared.h") /*DrawCommand*/
+    .typedef_source("draw_shader_shared.hh") /*DrawCommand*/
     .additional_info("npr_compaction_off") /* Remove compaction code */
     .define("DECODE_IBO_EXCLUDE",                   "1") /* Remove ibo code */
     .define("_KERNEL_MULTICOMPILE_FILL_DRAW_ARGS",  "1")
@@ -521,7 +521,7 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_draw_contour_edges)
 GPU_SHADER_CREATE_INFO(bnpr_geom_fill_draw_args_remeshed_surface)
     .do_static_compilation(true)
     .typedef_source("bnpr_shader_shared.hh")
-    .typedef_source("draw_shader_shared.h") /*DrawCommand*/
+    .typedef_source("draw_shader_shared.hh") /*DrawCommand*/
     .additional_info("npr_compaction_off") /* Remove compaction code */
     .define("DECODE_IBO_EXCLUDE", "1") /* Remove ibo code */
     .define("_KERNEL_MULTICOMPILE_FILL_DRAW_ARGS",  "1")
@@ -632,7 +632,7 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_merge_verts_deduplicate)
 GPU_SHADER_CREATE_INFO(bnpr_meshing_edge_adjecency)
     .do_static_compilation(true)
     .typedef_source("bnpr_shader_shared.hh")
-    .typedef_source("draw_shader_shared.h")
+    .typedef_source("draw_shader_shared.hh")
     .define("_KERNEL_MULTICOMPILE__EDGE_ADJACENCY", "1")
     .define("DECODE_IBO_EXCLUDE", "1") /* Remove ibo code */
     .define("WINGED_EDGE_TOPO_INCLUDE", "1")
@@ -683,7 +683,7 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_merge_edges_fill)
 GPU_SHADER_CREATE_INFO(bnpr_meshing_wedge_flooding)
     .do_static_compilation(true)
     .typedef_source("bnpr_shader_shared.hh")
-    .typedef_source("draw_shader_shared.h")
+    .typedef_source("draw_shader_shared.hh")
     .define("_KERNEL_MULTICOMPILE__WEDGE_FLOODING", "1")
     .define("DECODE_IBO_EXCLUDE", "1") /* Remove ibo code */
     .define("WINGED_EDGE_TOPO_INCLUDE", "1")
@@ -739,7 +739,7 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_wedge_flooding_last_iter_compaction)
 GPU_SHADER_CREATE_INFO(bnpr_meshing_edge_selection)
     .do_static_compilation(true)
     .typedef_source("bnpr_shader_shared.hh")
-    .typedef_source("draw_shader_shared.h")
+    .typedef_source("draw_shader_shared.hh")
     .define("_KERNEL_MULTICOMPILE__SELECT_EDGES", "1")
     .define("USE_DYNAMESH_EDGE_SELECTION_INDEXING", "1")
     .define("WINGED_EDGE_TOPO_INCLUDE", "1")
@@ -771,7 +771,7 @@ GPU_SHADER_CREATE_INFO(strokegen_meshing_fill_dispatch_args)
     .do_static_compilation(true)
     .typedef_source("bnpr_defines.hh")
     .typedef_source("bnpr_shader_shared.hh")
-    .typedef_source("draw_shader_shared.h") /* Always needed for indirect args */
+    .typedef_source("draw_shader_shared.hh") /* Always needed for indirect args */
     .define("_KERNEL_MULTICOMPILE__FILL_DISPATCH_ARGS__MESHING", "1")
     
     .storage_buf(0, Qualifier::READ, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
@@ -799,7 +799,7 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_fill_dispatch_args_per_filtered_vert)
 GPU_SHADER_CREATE_INFO(bnpr_meshing_surf_filtering_)
     .do_static_compilation(true)
     .typedef_source("bnpr_shader_shared.hh")
-    .typedef_source("draw_shader_shared.h")
+    .typedef_source("draw_shader_shared.hh")
     .define("WINGED_EDGE_TOPO_INCLUDE", "1")
     .define("VERT_WEDGE_LIST_TOPO_INCLUDE", "1")
     .define("VE_CIRCULATOR_INCLUDE", "1")
@@ -938,7 +938,7 @@ GPU_SHADER_CREATE_INFO(strokegen_select_verts)
     .do_static_compilation(true)
     .typedef_source("bnpr_defines.hh")
     .typedef_source("bnpr_shader_shared.hh")
-    .typedef_source("draw_shader_shared.h") /* Always needed for indirect args */
+    .typedef_source("draw_shader_shared.hh") /* Always needed for indirect args */
     .define("WINGED_EDGE_TOPO_INCLUDE", "1")
     .define("VERT_WEDGE_LIST_TOPO_INCLUDE", "1")
     .define("DECODE_IBO_EXCLUDE", "1") /* Remove ibo code */
@@ -1001,7 +1001,7 @@ GPU_SHADER_CREATE_INFO(strokegen_remeshing_fill_dispatch_args)
     .do_static_compilation(true)
     .typedef_source("bnpr_defines.hh")
     .typedef_source("bnpr_shader_shared.hh")
-    .typedef_source("draw_shader_shared.h") /* Always needed for indirect args */
+    .typedef_source("draw_shader_shared.hh") /* Always needed for indirect args */
     .define("_KERNEL_MULTICOMPILE__FILL_DISPATCH_ARGS__REMESHING", "1")
     .local_group_size(32)
     .compute_source("npr_strokegen_fill_indirect_args_comp.glsl");
@@ -1080,7 +1080,7 @@ GPU_SHADER_CREATE_INFO(strokegen_remeshing_fill_draw_args)
     .do_static_compilation(true)
     .typedef_source("bnpr_defines.hh")
     .typedef_source("bnpr_shader_shared.hh")
-    .typedef_source("draw_shader_shared.h") /* Always needed for indirect args */
+    .typedef_source("draw_shader_shared.hh") /* Always needed for indirect args */
     .define("_KERNEL_MULTICOMPILE__FILL_DRAW_ARGS__REMESHING", "1")
     .local_group_size(32)
     .compute_source("npr_strokegen_fill_indirect_args_comp.glsl");
@@ -1104,7 +1104,7 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_edge_split)
     .do_static_compilation(true)
     .typedef_source("bnpr_defines.hh")
     .typedef_source("bnpr_shader_shared.hh")
-    .typedef_source("draw_shader_shared.h")
+    .typedef_source("draw_shader_shared.hh")
     /* topo lib multicompile macros */
     .define("DECODE_IBO_EXCLUDE", "1") /* Remove ibo code */
     .define("WINGED_EDGE_TOPO_INCLUDE", "1")
@@ -1191,7 +1191,7 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_edge_collapse)
     .do_static_compilation(true)
     .typedef_source("bnpr_defines.hh")
     .typedef_source("bnpr_shader_shared.hh")
-    .typedef_source("draw_shader_shared.h")
+    .typedef_source("draw_shader_shared.hh")
     /* topo lib multicompile macros */
     .define("DECODE_IBO_EXCLUDE", "1") /* Remove ibo code */
     .define("WINGED_EDGE_TOPO_INCLUDE", "1")
@@ -1275,7 +1275,7 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_edge_flip)
     .do_static_compilation(true)
     .typedef_source("bnpr_defines.hh")
     .typedef_source("bnpr_shader_shared.hh")
-    .typedef_source("draw_shader_shared.h")
+    .typedef_source("draw_shader_shared.hh")
     /* topo lib multicompile macros */
     .define("DECODE_IBO_EXCLUDE", "1") /* Remove ibo code */
     .define("WINGED_EDGE_TOPO_INCLUDE", "1")
@@ -1352,7 +1352,7 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_face_split)
     .do_static_compilation(true)
     .typedef_source("bnpr_defines.hh")
     .typedef_source("bnpr_shader_shared.hh")
-    .typedef_source("draw_shader_shared.h")
+    .typedef_source("draw_shader_shared.hh")
     /* topo lib multicompile macros */
     .define("DECODE_IBO_EXCLUDE", "1") /* Remove ibo code */
     .define("WINGED_EDGE_TOPO_INCLUDE", "1")
@@ -1406,7 +1406,7 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_analysis)
     .do_static_compilation(true)
     .typedef_source("bnpr_defines.hh")
     .typedef_source("bnpr_shader_shared.hh")
-    .typedef_source("draw_shader_shared.h")
+    .typedef_source("draw_shader_shared.hh")
     /* topo lib multicompile macros */
     .define("WINGED_EDGE_TOPO_INCLUDE", "1")
     .define("VERT_WEDGE_LIST_TOPO_INCLUDE", "1")
@@ -1731,7 +1731,7 @@ GPU_SHADER_CREATE_INFO(strokegen_scan_fill_dispatch_args)
     .do_static_compilation(true)
     .typedef_source("bnpr_defines.hh")
     .typedef_source("bnpr_shader_shared.hh")
-    .typedef_source("draw_shader_shared.h") /* Always needed for indirect args */
+    .typedef_source("draw_shader_shared.hh") /* Always needed for indirect args */
     .define("_KERNEL_MULTICOMPILE__FILL_DISPATCH_ARGS", "1")
     .define("_KERNEL_MULTICOMPILE__FILL_DISPATCH_ARGS__SCAN", "1")
 
@@ -1838,7 +1838,7 @@ GPU_SHADER_CREATE_INFO(strokegen_segloopconv1d_fill_dispatch_args)
     .do_static_compilation(true)
     .typedef_source("bnpr_defines.hh")
     .typedef_source("bnpr_shader_shared.hh")
-    .typedef_source("draw_shader_shared.h") /* Always needed for indirect args */
+    .typedef_source("draw_shader_shared.hh") /* Always needed for indirect args */
     .define("_KERNEL_MULTICOMPILE__FILL_DISPATCH_ARGS", "1")
     .define("_KERNEL_MULTICOMPILE__FILL_DISPATCH_ARGS__SEGLOOPCONV1D", "1")
 
@@ -1937,7 +1937,7 @@ GPU_SHADER_CREATE_INFO(strokegen_list_ranking_test_fill_dispatch_args)
     .do_static_compilation(true)
     .typedef_source("bnpr_defines.hh")
     .typedef_source("bnpr_shader_shared.hh")
-    .typedef_source("draw_shader_shared.h") /* Always needed for indirect args */
+    .typedef_source("draw_shader_shared.hh") /* Always needed for indirect args */
     .define("_KERNEL_MULTICOMPILE__FILL_DISPATCH_ARGS", "1")
     .define("_KERNEL_MULTICOMPILE__FILL_DISPATCH_ARGS__LIST_RANKING_ANCHORS", "1")
 
@@ -1980,7 +1980,7 @@ GPU_SHADER_CREATE_INFO(strokegen_list_ranking_test_tagging)
 
 GPU_SHADER_CREATE_INFO(strokegen_list_ranking_test_compact_anchors)
     .do_static_compilation(true)
-    .typedef_source("draw_shader_shared.h")
+    .typedef_source("draw_shader_shared.hh")
     .typedef_source("bnpr_shader_shared.hh")
     .define("_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_COMPACT_ANCHORS", "1")
 
@@ -2004,7 +2004,7 @@ GPU_SHADER_CREATE_INFO(strokegen_list_ranking_test_compact_anchors)
 
 GPU_SHADER_CREATE_INFO(strokegen_list_ranking_test_splice_out_nodes)
     .do_static_compilation(true)
-    .typedef_source("draw_shader_shared.h")
+    .typedef_source("draw_shader_shared.hh")
     .typedef_source("bnpr_shader_shared.hh")
     .define("_KERNEL_MULTICOMPILE__TEST_LIST_RANKING_SPLICE_NODES", "1")
     

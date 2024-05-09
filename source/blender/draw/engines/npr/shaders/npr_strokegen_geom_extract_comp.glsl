@@ -74,11 +74,10 @@ void main()
 
 	vec3 vpos_ls, vpos_ws; 
 
-	uint ld_base_addr = VertID; /* TODO: posnor buf, verify this */ 
-	SSBO_Data_PosNor posnor_packed = ssbo_meshbatch_vbo_[ld_base_addr]; 
-	vpos_ls.x = posnor_packed.x;
-	vpos_ls.y = posnor_packed.y; 
-	vpos_ls.z = posnor_packed.z;
+	uint ld_base_addr = VertID * 3u; 
+	vpos_ls.x = ssbo_meshbatch_vbo_[ld_base_addr + 0];
+	vpos_ls.y = ssbo_meshbatch_vbo_[ld_base_addr + 1]; 
+	vpos_ls.z = ssbo_meshbatch_vbo_[ld_base_addr + 2];
 
 	vpos_ws = (model_to_world * vec4(vpos_ls, 1.0f)).xyz; 
 
