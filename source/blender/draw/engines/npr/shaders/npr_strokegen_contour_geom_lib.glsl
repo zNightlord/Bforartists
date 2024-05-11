@@ -45,22 +45,15 @@ uniform vec4 g_homogenous_clip_planes[6] =
 
 vec3 hclip_to_ndc(vec4 pos_cs)
 {
-// #if UNITY_UV_STARTS_AT_TOP
-// 	// Our world space, view space, screen space and NDC space are Y-up.
-// 	// Our clip space is flipped upside-down due to poor legacy Unity design.
-// 	// The flip is baked into the projection matrix, so we only have to flip
-//         // manually when going from CS to NDC and back.
-//         pos_cs.y = -pos_cs.y;
-// #endif
-
 	pos_cs /= (pos_cs.w);
 	pos_cs.xy = pos_cs.xy * 0.5 + 0.5;
 
 	return pos_cs.xyz;
 }
 
+/* Line clipping in 3D homogeneous space ----------------------------- */
 vec2 frustum_clip_line_segment(
-	vec4 vpos_hcs_0, vec4 vpos_hcs_1, // honogenous clip space positions
+	vec4 vpos_hcs_0, vec4 vpos_hcs_1, // homogenous clip space positions
 	out bool reject, out bool inside)
 {
 	float alpha0 = 0; // v0 = lerp(v0, v1, alpha0)
@@ -135,6 +128,7 @@ vec2 viewport_to_ndc(vec2 coord_ss, vec2 raster_resolution)
 }
 
 
+
 struct LineRasterResult
 {
     uint num_frags; 
@@ -146,6 +140,7 @@ struct LineRasterResult
     bool is_x_major_line; 
     bool beg_from_p0; // raster begins at the first vert on the original line 
 }; 
+
 void encode_line_raster_result(LineRasterResult res, out uvec4 d0123, out uint d4)
 {
     uint d0 = res.num_frags; // 28 bits for num_frags should be sufficient
@@ -171,6 +166,7 @@ void encode_line_raster_result(LineRasterResult res, out uvec4 d0123, out uint d
 	d0123 = uvec4(d0, d12, d34.x);
 	d4 = d34.y;
 }
+
 LineRasterResult decode_line_raster_result(uvec4 d0123, uint d4)
 {
 	LineRasterResult res; 
@@ -196,6 +192,54 @@ LineRasterResult decode_line_raster_result(uvec4 d0123, uint d4)
 
 	return res; 
 }
+
+
+
+#if defined(INCLUDE_LOAD_STORE_CONTOUR_RASTER_DATA)
+
+#define LINE_FRAGS_OFFSET_NONE 0xffffffffu // no fragments are allocated for this line
+
+void store_contour_edge_raster_data(uint contour_edge_id, LineRasterResult line_raster_data, uint frag_alloc_offset)
+{
+	uvec4 data_enc_0123; 
+	uint data_enc_4; 
+	encode_line_raster_result(line_raster_data, /*out*/data_enc_0123, data_enc_4); 
+
+	ssbo_contour_raster_data_[contour_edge_id * 6 + 0u] = data_enc_0123[0];
+	ssbo_contour_raster_data_[contour_edge_id * 6 + 1u] = data_enc_0123[1];
+	ssbo_contour_raster_data_[contour_edge_id * 6 + 2u] = data_enc_0123[2];
+	ssbo_contour_raster_data_[contour_edge_id * 6 + 3u] = data_enc_0123[3];
+	ssbo_contour_raster_data_[contour_edge_id * 6 + 4u] = data_enc_4; 
+
+	ssbo_contour_raster_data_[contour_edge_id * 6 + 5u] = 
+			0 < line_raster_data.num_frags ? frag_alloc_offset : LINE_FRAGS_OFFSET_NONE; 
+}
+
+LineRasterResult load_contour_edge_raster_data(uint contour_edge_id)
+{
+	LineRasterResult line_raster_data = decode_line_raster_result(
+		uvec4(
+			ssbo_contour_raster_data_[contour_edge_id * 6u + 0u],
+			ssbo_contour_raster_data_[contour_edge_id * 6u + 1u],
+			ssbo_contour_raster_data_[contour_edge_id * 6u + 2u],
+			ssbo_contour_raster_data_[contour_edge_id * 6u + 3u]
+		), 
+		ssbo_contour_raster_data_[contour_edge_id * 6u + 4u]
+	);
+	
+	return line_raster_data; 
+}
+
+LineRasterResult load_contour_edge_raster_data(uint contour_edge_id, out uint head_frag_id)
+{
+	LineRasterResult line_raster_data = load_contour_edge_raster_data(contour_edge_id);
+	
+	head_frag_id = ssbo_contour_raster_data_[contour_edge_id * 6u + 5u]; 
+	
+	return line_raster_data; 
+}
+
+#endif
 
 LineRasterResult raster_line_segment(
     vec4 vpos_0, vec4 vpos_1, 
@@ -277,7 +321,6 @@ LineRasterResult raster_line_segment(
 	return res; 
 }
 
-    
 
 vec2 calc_frag_screen_pos(
 	vec4 line_beg_end_coords, 

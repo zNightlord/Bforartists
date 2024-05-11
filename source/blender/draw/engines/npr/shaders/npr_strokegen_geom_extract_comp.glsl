@@ -561,6 +561,7 @@ void main()
 
 
 	/* Prepare Soft Raster Data ------------------------------------------------------------- */
+	LineRasterResult line_raster_data; 
 	uint num_raster_frags = 0u;
 	if (valid_thread)
 	{
@@ -568,29 +569,19 @@ void main()
 		mat4 world_to_view = ubo_view_matrices_.viewmat;
 		mat4 mat_camera_proj = ubo_view_matrices_.winmat; 
 
-		LineRasterResult line_raster_data = raster_line_segment(
+		line_raster_data = raster_line_segment(
 			vpos_ws[0], vpos_ws[1], pcs_screen_size_.xy, 
 			world_to_view, mat_camera_proj
 		);
 		num_raster_frags = line_raster_data.num_frags; 
-
-		uvec4 data_enc_0123; 
-		uint data_enc_4; 
-		encode_line_raster_result(line_raster_data, /*out*/data_enc_0123, data_enc_4); 
-
-		ssbo_contour_raster_data_[contour_id_global * 6 + 0u] = data_enc_0123[0];
-		ssbo_contour_raster_data_[contour_id_global * 6 + 1u] = data_enc_0123[1];
-		ssbo_contour_raster_data_[contour_id_global * 6 + 2u] = data_enc_0123[2];
-		ssbo_contour_raster_data_[contour_id_global * 6 + 3u] = data_enc_0123[3];
-		ssbo_contour_raster_data_[contour_id_global * 6 + 4u] = data_enc_4;
 	}
-
+	
 	uint frag_offset = alloc_raster_frags(groupId, num_raster_frags);
 	barrier(); 
 
 	if (valid_thread)
 	{ /* store header fragment */
-		ssbo_contour_raster_data_[contour_id_global * 6 + 5u] = 0 < num_raster_frags ? frag_offset : 0xffffffffu;
+		store_contour_edge_raster_data(contour_id_global, line_raster_data, frag_offset); 
 	}
 }
 #endif
@@ -655,29 +646,7 @@ float frag_depth_test(mat3 z_vs_3x3, float z_frag, float z_tolerance)
 }
 #endif
 
-LineRasterResult load_contour_edge_raster_data(uint contour_edge_id)
-{
-	LineRasterResult line_raster_data = decode_line_raster_result(
-		uvec4(
-			ssbo_contour_raster_data_[contour_edge_id * 6u + 0u],
-			ssbo_contour_raster_data_[contour_edge_id * 6u + 1u],
-			ssbo_contour_raster_data_[contour_edge_id * 6u + 2u],
-			ssbo_contour_raster_data_[contour_edge_id * 6u + 3u]
-		), 
-		ssbo_contour_raster_data_[contour_edge_id * 6u + 4u]
-	);
-	
-	return line_raster_data; 
-}
 
-LineRasterResult load_contour_edge_raster_data(uint contour_edge_id, out uint head_frag_id)
-{
-	LineRasterResult line_raster_data = load_contour_edge_raster_data(contour_edge_id);
-	
-	head_frag_id = ssbo_contour_raster_data_[contour_edge_id * 6u + 5u]; 
-	
-	return line_raster_data; 
-}
 
 #if defined(_KERNEL_MULTICOMPILE__PROCESS_CONTOUR_FRAGMENTS__SPLIT_VISIBILITY__GENERATE_NEW_CONTOURS_STEP_2) || defined(_KERNEL_MULTICOMPILE__PROCESS_CONTOUR_FRAGMENTS__SPLIT_VISIBILITY__GENERATE_NEW_CONTOURS_STEP_3)
 
