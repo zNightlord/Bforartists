@@ -509,27 +509,27 @@ struct Contour2DResampleData
 	vec4 begend_uvs; // the same as LineRasterResult.begend_uvs
 };
 
-uvec2 encode_contour_2d_resample_data(Contour2DResampleData data)
+uvec3 encode_contour_2d_resample_data(Contour2DResampleData data)
 {
-	uvec2 d = uvec3(0u); 
+	uvec3 d = uvec3(0u); 
 	d.x = (data.has_samples ? 1u : 0u); 
 	
 	data.begend_uvs = clamp(data.begend_uvs, vec4(.0f), vec4(1.0f)); 
 	float fixed_factor = float((1u << 16u) - 1u); 
 	uvec4 uv_fixed = uvec4(round(data.begend_uvs * fixed_factor)) & 0xffffu; 
-	d.y = uv_fixed.xy | (uv_fixed.zw << 16u); 
+	d.yz = (uv_fixed.zw << 16u) | uv_fixed.xy; 
 	
 	return d; 
 }
 
-Contour2DResampleData decode_contour_2d_resample_data(uvec2 d)
+Contour2DResampleData decode_contour_2d_resample_data(uvec3 d)
 {
 	Contour2DResampleData data; 
 	data.has_samples = (d.x != 0u); 
 	
 	uvec4 uv_fixed = uvec4(
-		d.y & 0xffffu, 
-		d.y >> 16u
+		d.yz & 0xffffu, 
+		d.yz >> 16u
 	); 
 	float fixed_factor = float((1u << 16u) - 1u); 
 	data.begend_uvs = clamp(vec4(uv_fixed) / fixed_factor, vec4(.0f), vec4(1.0f)); 

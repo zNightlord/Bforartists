@@ -376,9 +376,8 @@ void main()
 		uvec2 segscan_input_enc = segscan_float_hf_encode(SSBOData_SegScanType_float(scan_val, hf)); 
 		Store2(ssbo_tree_scan_input_2d_resampler_accumulate_curvlen_, contour_id, segscan_input_enc);
 
-		c2ed.len_2d = len_2d;
-		uvec2 resample_data = encode_contour_2d_resample_data(c2rd);
-		Store2(ssbo_contour_2d_resample_data_, contour_id, resample_data);
+		uvec3 resample_data = encode_contour_2d_resample_data(c2rd);
+		Store3(ssbo_contour_2d_resample_data_, contour_id, resample_data);
 	}
 
 	if (idx.x == 0) 

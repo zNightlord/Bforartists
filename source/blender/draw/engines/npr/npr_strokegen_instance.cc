@@ -82,7 +82,7 @@ namespace blender::npr::strokegen
   {
     /* Init draw passes and manager related stuff. (Begin render graph) */
     strokegen_passes.test_list_ranking = false;
-    strokegen_passes.test_scan = false;
+    strokegen_passes.test_scan = true;
     strokegen_passes.test_segloopconv = false; 
 
     /* First setup resources */
@@ -213,7 +213,7 @@ namespace blender::npr::strokegen
 
 
     /* GPU (Seg-)Scan Test ------------------------------------------------------------------------- */
-    const bool dbg_segscan = true; 
+    const bool dbg_segscan = false; 
     manager.submit(strokegen_passes.get_compute_pass(dbg_segscan ? PType::SEGSCAN_TEST : PType::SCAN_TEST), view);
 
     if (strokegen_passes.test_scan && frame_counter % 32 == 0)
