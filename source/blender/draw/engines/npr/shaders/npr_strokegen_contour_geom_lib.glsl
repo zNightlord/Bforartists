@@ -26,9 +26,9 @@ uvec4 unpack_u24_x4(uvec3 p)
 }
 
 
-// ----------------------------------------------------------
+// ---------------------------------------------------------------------------------------------------
 // Functions for Rasterization
-// ----------------------------------------------------------
+// ---------------------------------------------------------------------------------------------------
 // uniform vec2 pcs_line_raster_resolution_;
 
 // Note: Some drivers do not implement uniform initializers correctly.
@@ -132,7 +132,7 @@ vec2 viewport_to_ndc(vec2 coord_ss, vec2 raster_resolution)
 struct LineRasterResult
 {
     uint num_frags; 
-    vec4 begend_uvs; // note: must be range of 0-1
+    vec4 begend_uvs; // clipped beg/end uvs. within range of 0-1
     vec2 begend_wclips; 
     
     bool is_line_clip_rejected; // totally outside frustum
@@ -494,4 +494,46 @@ ContourVisibilitySplitInfo decode_contour_visibility_split_info(uvec4 d0123)
 
 #endif
 
+
+
+
+
+
+
+// ----------------------------------------------------------------------------------------------
+// 2D resampling of 3D contour curves 
+// ----------------------------------------------------------------------------------------------
+struct Contour2DResampleData
+{
+	bool has_samples; 
+	vec4 begend_uvs; // the same as LineRasterResult.begend_uvs
+};
+
+uvec2 encode_contour_2d_resample_data(Contour2DResampleData data)
+{
+	uvec2 d = uvec3(0u); 
+	d.x = (data.has_samples ? 1u : 0u); 
+	
+	data.begend_uvs = clamp(data.begend_uvs, vec4(.0f), vec4(1.0f)); 
+	float fixed_factor = float((1u << 16u) - 1u); 
+	uvec4 uv_fixed = uvec4(round(data.begend_uvs * fixed_factor)) & 0xffffu; 
+	d.y = uv_fixed.xy | (uv_fixed.zw << 16u); 
+	
+	return d; 
+}
+
+Contour2DResampleData decode_contour_2d_resample_data(uvec2 d)
+{
+	Contour2DResampleData data; 
+	data.has_samples = (d.x != 0u); 
+	
+	uvec4 uv_fixed = uvec4(
+		d.y & 0xffffu, 
+		d.y >> 16u
+	); 
+	float fixed_factor = float((1u << 16u) - 1u); 
+	data.begend_uvs = clamp(vec4(uv_fixed) / fixed_factor, vec4(.0f), vec4(1.0f)); 
+	
+	return data; 
+}
 

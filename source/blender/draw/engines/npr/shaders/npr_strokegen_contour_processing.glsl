@@ -97,7 +97,7 @@ void main()
 	ContourFlags cf = load_contour_flags(contour_id);
 	ContourCurveTopo cct = load_contour_curve_topo(contour_id, cf);
 	bool is_curve_head = cct.head_contour_id == contour_id; 
-	bool is_curve_tail = cct.tail_contour_id == contour_id;
+	bool is_curve_tail = cct.tail_contour_id == contour_id; 
 
 #if defined(_KERNEL_MULTICOMPILE__CONTOUR_SEGMENTATION__SETUP)
 
@@ -297,6 +297,133 @@ void main()
 		buf_strokegen_mesh_pool[addr_st+1] = floatBitsToUint(vpos_uv[0].y); 
 		buf_strokegen_mesh_pool[addr_st+2] = floatBitsToUint(vpos_uv[1].x);
 		buf_strokegen_mesh_pool[addr_st+3] = floatBitsToUint(vpos_uv[1].y);
+	}
+#endif
+}
+#endif
+
+
+
+
+
+
+#if defined(_KERNEL_MULTICOMPILE__2D_RESAMPLE_CONTOUR_EDGES)
+/*
+	ssbo_bnpr_mesh_pool_counters_
+	ssbo_tree_scan_infos_2d_resampler_
+	
+	// segscan
+ 	uint ssbo_tree_scan_input_2d_resampler_accumulate_curvlen_[]
+	uint ssbo_tree_scan_output_2d_resampler_accumulate_curvlen_[]
+	// scan
+	uint ssbo_tree_scan_input_2d_resampler_alloc_samples_[] (overlapped with above 2 ssbos)
+	uint ssbo_tree_scan_output_2d_resampler_alloc_samples_[]
+
+	uint ssbo_contour_2d_resample_data_[]
+	vec2 pcs_screen_size_
+	float sample_rate
+*/
+
+vec2 get_raster_resolution()
+{
+	return pcs_screen_size_.xy / sample_rate; 
+}
+
+void main()
+{
+	const uint idx = gl_GlobalInvocationID.x; 
+
+#if defined(_KERNEL_MULTICOMPILE__2D_RESAMPLE_CONTOUR_EDGES__RASTER)
+	const uint num_contours = ssbo_bnpr_mesh_pool_counters_.num_contour_verts; 
+	const uint contour_id = idx; 
+	bool valid_thread = contour_id < num_contours; 
+
+	/* transform matrices, see "common_view_lib.glsl" */ 
+	mat4 world_to_view = ubo_view_matrices_.viewmat;
+	mat4 mat_camera_proj = ubo_view_matrices_.winmat; 
+
+	ContourFlags cf = load_contour_flags(contour_id); 
+	ContourCurveTopo cct = load_contour_curve_topo(contour_id, cf); 
+	uint next_contour_id = move_contour_id_along_loop(cct, contour_id, 1.0f); 
+	bool non_looped_curve_tail = (cct.tail_contour_id == contour_id) && (!cf.looped_curve); 
+	
+	vec3 vpos_0, vpos_1;
+	{ // read vertex pos
+		uvec3 vpos_0_enc, vpos_1_enc;
+		Load3(ssbo_contour_snake_vpos_, contour_id,    	vpos_0_enc);
+		Load3(ssbo_contour_snake_vpos_, next_contour_id, vpos_1_enc);
+		vpos_0 = uintBitsToFloat(vpos_0_enc);
+		vpos_1 = uintBitsToFloat(vpos_1_enc);
+	}
+
+	const vec2 raster_resolution = get_raster_resolution(); 
+	LineRasterResult raster_result = raster_line_segment(
+		vpos_0.xy, vpos_1.xy, 
+		raster_resolution, world_to_view, mat_camera_proj
+	);
+
+	Contour2DResampleData c2rd; 
+	c2rd.begend_uvs 	= raster_result.begend_uvs; 
+	c2rd.has_samples 	= !(raster_result.is_line_clip_rejected || non_looped_curve_tail) && valid_thread; 
+	if (!c2rd.has_samples)
+		c2rd.begend_uvs.zw = c2rd.begend_uvs.xy;
+
+
+	if (valid_thread)
+	{
+		bool hf = cct.head_contour_id == contour_id; // accumulate 2d-curve-len for each curve
+		float scan_val = length(raster_resolution * (c2rd.begend_uvs.zw - c2rd.begend_uvs.xy)); 
+		uvec2 segscan_input_enc = segscan_float_hf_encode(SSBOData_SegScanType_float(scan_val, hf)); 
+		Store2(ssbo_tree_scan_input_2d_resampler_accumulate_curvlen_, contour_id, segscan_input_enc);
+
+		c2ed.len_2d = len_2d;
+		uvec2 resample_data = encode_contour_2d_resample_data(c2rd);
+		Store2(ssbo_contour_2d_resample_data_, contour_id, resample_data);
+	}
+
+	if (idx.x == 0) 
+	{
+		ssbo_tree_scan_infos_2d_resampler_.num_scan_items = num_contours; 
+		ssbo_tree_scan_infos_2d_resampler_.num_valid_scan_threads = compute_num_threads(
+			num_contours, 2u
+		);
+		ssbo_tree_scan_infos_2d_resampler_.num_thread_groups = compute_num_groups(
+			num_contours, GROUP_SIZE_BNPR_SCAN_SWEEP, 2u
+		);
+	}
+#endif
+
+#if defined(_KERNEL_MULTICOMPILE__2D_RESAMPLE_CONTOUR_EDGES__ALLOC_SAMPLES)
+	const uint num_contours = ssbo_bnpr_mesh_pool_counters_.num_contour_verts; 
+	const uint contour_id = idx; 
+	bool valid_thread = contour_id < num_contours;
+	
+	float len_2d, arc_len_param; {
+		SSBOData_SegScanType_float scan_input = segscan_float_hf_decode(
+			ssbo_tree_scan_input_2d_resampler_accumulate_curvlen_[contour_id]
+		);
+		len_2d = scan_input.val; 
+
+		SSBOData_SegScanType_float scan_output = segscan_float_hf_decode(
+			ssbo_tree_scan_output_2d_resampler_accumulate_curvlen_[contour_id]
+		);
+		arc_len_param = scan_output.val; 
+	}
+
+	uint num_samples = 0; {
+		const vec2 raster_resolution = get_raster_resolution(); 
+		vec2 arc_len_range = vec2(arc_len_param, arc_len_param + len_2d); 
+		arc_len_range.x = ceil(arc_len_range.x);
+		arc_len_range.y = floor(arc_len_range.y);
+		if (arc_len_range.x < arc_len_range.y) 
+			num_samples = uint(arc_len_range.y - arc_len_range.x + 1.0f + 1e-10f);
+	}
+
+	if (valid_thread)
+	{
+		// allocate samples for each curve, scan to preserve orders
+		uint scan_val = num_samples; 
+		ssbo_tree_scan_input_2d_resampler_alloc_samples_[contour_id] = scan_val;
 	}
 #endif
 }

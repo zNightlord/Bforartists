@@ -729,6 +729,7 @@ vec3 rand_col_rgb(uint seed0, uint seed1)
 
 void main()
 {
+/* Use min-segscan to broadcast contour id ---------------------------------------- */
 #if defined(_KERNEL_MULTICOMPILE__PROCESS_CONTOUR_FRAGMENTS__IDMAPPING__CLEAR_BUFFER)
 	uint frag_id_global = gl_GlobalInvocationID.x;
 	uint num_frags = ssbo_bnpr_mesh_pool_counters_.num_frags;
@@ -795,6 +796,7 @@ void main()
 	}
 #endif
 
+/* Visibility Test ---------------------------------------------------------------- */
 #if defined(_KERNEL_MULTICOMPILE__PROCESS_CONTOUR_FRAGMENTS__VISIBILITY_TEST)
 	uint frag_id = gl_GlobalInvocationID.x;
 	uint num_frags = ssbo_bnpr_mesh_pool_counters_.num_frags;
@@ -846,6 +848,7 @@ void main()
 
 #endif
 
+/* Segment fragments based on visibility --------------------------------------------------------- */
 #if defined(_KERNEL_MULTICOMPILE__PROCESS_CONTOUR_FRAGMENTS__SPLIT_VISIBILITY__SETUP_SEGSCAN)
 	uint frag_id = gl_GlobalInvocationID.x;
 	uint num_frags = ssbo_bnpr_mesh_pool_counters_.num_frags;
@@ -951,9 +954,10 @@ void main()
 	 * frag_seg_head->prev/next_frag_seg_head at each RASTERIZED contour,  
 	 * frag_seg_head->contour_id			  at each fragment 
 	 * 
-	 * so that mapping contour_id->prev/next_contour_id can be inferred, 
+	 * so that mapping contour_id->prev/next_contour_id can be inferred using contour_id->frag_seg_head, 
 	 * as long as the contour is rasterized. */
-	uint prev_seg_head, next_seg_head; 
+	
+	uint prev_seg_head, next_seg_head; // frag_seg_head->prev/next_frag_seg_head (link between segment heads)
 	/* However, 
 	 * prev/next contours can be clipped away and have NO fragment mapped to it */
 	bool prev_contour_not_rastered = false; 
@@ -972,7 +976,6 @@ void main()
 			prev_seg_tail_rank = segscan_output_0_prev_seg_tail.val;
 		}else
 		{ /* Link to previous contour */
-
 			if (prev_contour_id == contour_edge_id)
 			{ /* point to self if there is nothing ahead */
 				prev_seg_tail = seg_head; 
@@ -1002,13 +1005,13 @@ void main()
 			((seg_tail == num_frags - 1u) || (fvtr_next_seg.head_frag_id == (seg_tail + 1u)));
 
 		bool has_next_seg = valid_thread && !is_last_seg_at_contour; 
-		if (has_next_seg)
+		if (has_next_seg) 
+		  /* Find next segment within the SAME contour */
 			next_seg_head = seg_tail + 1u;
 		else
 		{ /* Link to next contour */
-
 			if (next_contour_id == contour_edge_id)
-			{ /* point to self if there is nothing ahead */
+			{ /* point to self if there is nothing after */
 				next_seg_head = seg_head; 
 			}
 			else
@@ -1025,7 +1028,7 @@ void main()
 	
 	
 	/* Analyse contour edge */	
-	bool zero_rastered_frags = 0u == line_raster_data.num_frags/* totally clipped */; 
+	bool zero_rastered_frags = 0u == line_raster_data.num_frags /* totally clipped */; 
 	bool is_contour_segmented = seg_len != line_raster_data.num_frags; 
 	
 	bool is_frag_contour_header = fvtr.head_frag_id == frag_id; 
@@ -1040,7 +1043,7 @@ void main()
 	barrier(); 
 
 	if (is_seg_head && valid_thread)
-	{ /* This should be ran for EVERY contour edge EXACTLY once */
+	{ /* This should be ran for EVERY rasterized contour edge EXACTLY once */
 		ContourVisibilitySplitInfo cvsi;
 		cvsi.parent_contour_id = contour_edge_id;
 		cvsi.is_visible = fvtr.visible;
@@ -1132,7 +1135,8 @@ void main()
 		uint next_contour_id; 
 		if (false == cvsi.no_rastered_next_contour)
 			next_contour_id = ssbo_frag_seg_head_to_visibility_split_contour_[cvsi.next_frag_seg_head_id]; 
-		else /* ssbo_contour_to_contour_ is specially prepared for the last segments */
+		else /* ssbo_contour_to_contour_ has been cached  
+			  * for new contour generated fromt the last segment in its old contour */
 			next_contour_id = ssbo_contour_to_contour_[2u * contour_id + 1u];
 		ssbo_contour_to_contour_[2u * contour_id + 1u] = next_contour_id;
 
