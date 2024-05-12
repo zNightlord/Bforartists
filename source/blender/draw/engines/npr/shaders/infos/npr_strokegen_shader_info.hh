@@ -1696,7 +1696,8 @@ GPU_SHADER_CREATE_INFO(bnpr_segscan_vec3_storage)
 
 
 GPU_SHADER_CREATE_INFO(bnpr_scan_test_inputs)
-    .additional_info("bnpr_scan_uvec4_add");
+    .additional_info("bnpr_scan_float_add")
+    .define("_KERNEL_MULTI_COMPILE__TREE_SCAN_TEST", "1");
 
 GPU_SHADER_CREATE_INFO(bnpr_segscan_test_inputs)
     .additional_info("bnpr_scan_uvec4_add")

@@ -31,6 +31,7 @@ void main()
 	TreeScanIndices scan_ids = GetTreeScanIndices(groupId, gl_WorkGroupID.x);
 
 	T scanval_A, scanval_B;
+#if defined(_KERNEL_MULTI_COMPILE__TREE_SCAN_TEST)
 	{ /* init & store random scan input vals */
 		scanval_A = T(
 			wang_hash(scan_ids.global_x2.y + scan_ids.lds_x2.x) % 12u
@@ -46,10 +47,21 @@ void main()
 		);
 		/* ------------------------------------------------------------------------ */
 
-		bnpr_in_scan_data_buf_[scan_ids.global_x2.x] = /**floatBitsToUint*/(scanval_A);
-		bnpr_in_scan_data_buf_[scan_ids.global_x2.y] = /**floatBitsToUint*/(scanval_B);
+		bnpr_in_scan_data_buf_[scan_ids.global_x2.x] = SCAN_ENCODE(scanval_A);
+		bnpr_in_scan_data_buf_[scan_ids.global_x2.y] = SCAN_ENCODE(scanval_B);
 	}
-
+#else
+	{
+		scanval_A = SCAN_DECODE(bnpr_in_scan_data_buf_[scan_ids.global_x2.x]);
+		scanval_B = SCAN_DECODE(bnpr_in_scan_data_buf_[scan_ids.global_x2.y]);
+		/* ------------------------------------------------------------------------ */
+		/* avoid invalid loads */
+		_FUNC_CLEAN_SCAN_DATA(
+			scan_ids, get_num_scan_items(),
+			scanval_A, scanval_B /* <- inout */
+		);
+	}
+#endif
 
 
 	/* execute block-wise exlusive scan */
@@ -65,13 +77,13 @@ void main()
 	);
 
 	/* store scan results */
-	bnpr_out_scan_data_buf_[scan_ids.global_x2.x] = /**floatBitsToUint*/(scanRes_ai);
-	bnpr_out_scan_data_buf_[scan_ids.global_x2.y] = /**floatBitsToUint*/(scanRes_bi);
+	bnpr_out_scan_data_buf_[scan_ids.global_x2.x] = SCAN_ENCODE(scanRes_ai);
+	bnpr_out_scan_data_buf_[scan_ids.global_x2.y] = SCAN_ENCODE(scanRes_bi);
 
 	/* store block aggregate */
 	if (groupId == gl_WorkGroupSize.x - 1)
 	{
-		bnpr_scan_block_sum_buf_[gl_WorkGroupID.x] = /**floatBitsToUint*/(SCAN_OP(scanRes_bi, scanval_B));
+		bnpr_scan_block_sum_buf_[gl_WorkGroupID.x] = SCAN_ENCODE(SCAN_OP(scanRes_bi, scanval_B));
 	}
 }
 #endif
@@ -88,8 +100,8 @@ void main()
 	const uint gIdx =     gl_WorkGroupID.x;
 
 	TreeScanIndices scanAddrs = GetTreeScanIndices(groupId, 0);
-	T aggregate_A = /**uintBitsToFloat*/(bnpr_scan_block_sum_buf_[scanAddrs.global_x2.x]);
-	T aggregate_B = /**uintBitsToFloat*/(bnpr_scan_block_sum_buf_[scanAddrs.global_x2.y]);
+	T aggregate_A = SCAN_DECODE(bnpr_scan_block_sum_buf_[scanAddrs.global_x2.x]);
+	T aggregate_B = SCAN_DECODE(bnpr_scan_block_sum_buf_[scanAddrs.global_x2.y]);
 
 	T aggregateSum_A, aggregateSum_B;
 	_FUNC_TREE_SCAN_AGGREGATE(
@@ -101,8 +113,8 @@ void main()
 		aggregateSum_B
 	);
 
-	bnpr_scan_block_sum_buf_[scanAddrs.global_x2.x] = /**floatBitsToUint*/(aggregateSum_A);
-	bnpr_scan_block_sum_buf_[scanAddrs.global_x2.y] = /**floatBitsToUint*/(aggregateSum_B);
+	bnpr_scan_block_sum_buf_[scanAddrs.global_x2.x] = SCAN_ENCODE(aggregateSum_A);
+	bnpr_scan_block_sum_buf_[scanAddrs.global_x2.y] = SCAN_ENCODE(aggregateSum_B);
 }
 #endif
 
@@ -120,13 +132,13 @@ void main()
 	TreeScanIndices scan_ids = GetTreeScanIndices(groupId, gl_WorkGroupID.x);
 
 	T block_scan_res_A, block_scan_res_B;
-	block_scan_res_A = /**uintBitsToFloat*/(bnpr_out_scan_data_buf_[scan_ids.global_x2[0]]);
-	block_scan_res_B = /**uintBitsToFloat*/(bnpr_out_scan_data_buf_[scan_ids.global_x2[1]]);
+	block_scan_res_A = SCAN_DECODE(bnpr_out_scan_data_buf_[scan_ids.global_x2[0]]);
+	block_scan_res_B = SCAN_DECODE(bnpr_out_scan_data_buf_[scan_ids.global_x2[1]]);
 
-	T aggregate_sum = /**uintBitsToFloat*/(bnpr_scan_block_sum_buf_[gIdx]);
+	T aggregate_sum = SCAN_DECODE(bnpr_scan_block_sum_buf_[gIdx]);
 
-	bnpr_out_scan_data_buf_[scan_ids.global_x2[0]] = /**floatBitsToUint*/(SCAN_OP(aggregate_sum, block_scan_res_A));
-	bnpr_out_scan_data_buf_[scan_ids.global_x2[1]] = /**floatBitsToUint*/(SCAN_OP(aggregate_sum, block_scan_res_B));
+	bnpr_out_scan_data_buf_[scan_ids.global_x2[0]] = SCAN_ENCODE(SCAN_OP(aggregate_sum, block_scan_res_A));
+	bnpr_out_scan_data_buf_[scan_ids.global_x2[1]] = SCAN_ENCODE(SCAN_OP(aggregate_sum, block_scan_res_B));
 }
 #endif
 

@@ -55,16 +55,20 @@ namespace blender::npr::strokegen
   }
 
 
-  void StrokeGenPassModule::on_begin_sync(int frame_counter)
+  void StrokeGenPassModule::prepare_validation_passes(int frame_counter)
   {
-    init_mesh_extraction_passes();
-    pass_draw_contour_edges.init_pass(shaders_, textures_, StrokegenMeshRasterPass::DRAW_CONTOUR_EDGES);
-
-    init_surface_depth_passes();
-
-    pass_draw_debug_lines_.init_pass(shaders_, textures_, StrokegenMeshRasterPass::DBG_LINES); 
-
-    rebuild_pass_scan_test();
+    ScanSettings scan_test_settings;
+    scan_test_settings.is_validation_shader = true;
+    scan_test_settings.frame_counter = frame_counter;
+    scan_test_settings.use_indirect_dispatch = false;
+    scan_test_settings.ssbo_scan_infos_ = nullptr;
+    scan_test_settings.ssbo_in_scan_data_ = buffers_.ssbo_in_scan_data_;
+    scan_test_settings.ssbo_out_scan_data_ = buffers_.ssbo_out_scan_data_;
+    scan_test_settings.ssbo_scan_block_sum_ = buffers_.ssbo_scan_block_sum_;
+    scan_test_settings.shader_upsweep = eShaderType::SCAN_TEST_UPSWEEP;
+    scan_test_settings.shader_aggregate = eShaderType::SCAN_TEST_AGGREGATE;
+    scan_test_settings.shader_dwsweep = eShaderType::SCAN_TEST_DWSWEEP; 
+    append_subpass_scan(scan_test_settings, pass_scan_test);
 
     ScanSettings segscan_test_settings;
     segscan_test_settings.is_validation_shader = true; 
@@ -92,6 +96,18 @@ namespace blender::npr::strokegen
     append_subpass_segloopconv1d(segloopconv1d_test_settings, pass_conv1d_test);
 
     append_subpass_list_ranking(ListRankingPassUsage::TestListRanking, pass_listranking_test, true);
+  }
+
+  void StrokeGenPassModule::on_begin_sync(int frame_counter)
+  {
+    init_mesh_extraction_passes();
+    pass_draw_contour_edges.init_pass(shaders_, textures_, StrokegenMeshRasterPass::DRAW_CONTOUR_EDGES);
+
+    init_surface_depth_passes();
+
+    pass_draw_debug_lines_.init_pass(shaders_, textures_, StrokegenMeshRasterPass::DBG_LINES); 
+
+    prepare_validation_passes(frame_counter);
 
     num_total_mesh_tris = num_total_mesh_verts = num_total_mesh_edges = 0; // TODO: these should go to the UBO
 
@@ -2189,43 +2205,65 @@ namespace blender::npr::strokegen
   }
 
 
-  void StrokeGenPassModule::rebuild_pass_scan_test()
+  void StrokeGenPassModule::append_subpass_scan(StrokeGenPassModule::ScanSettings scan_settings, PassSimple& pass)
   {
-    pass_scan_test.init();
+    if (scan_settings.is_validation_shader) pass.init();
+
+    // prep tree-scan args
+    if (scan_settings.use_indirect_dispatch) {
+      auto &sub = pass.sub("strokegen_scan_fill_dispatch_args");
+      sub.shader_set(shaders_.static_shader_get(SCAN_FILL_DISPTACH_ARGS));
+
+      sub.bind_ssbo(0, scan_settings.ssbo_scan_infos_);
+      sub.bind_ssbo(1, buffers_.ssbo_scan_dispatch_args_);
+
+      sub.dispatch(int3(1, 1, 1));
+      sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_COMMAND);
+    }
+
     { // upsweep for tree-scan
-      auto& sub = pass_scan_test.sub("strokegen_scan_test_upsweep");
-      sub.shader_set(shaders_.static_shader_get(eShaderType::SCAN_TEST_UPSWEEP));
+      auto &sub = pass.sub("strokegen_scan_test_upsweep");
+      sub.shader_set(shaders_.static_shader_get(scan_settings.shader_upsweep));
 
       // Note: keep the same slot binding as in shader_create_info
-      sub.bind_ssbo(0, buffers_.ssbo_in_scan_data_);
-      sub.bind_ssbo(1, buffers_.ssbo_out_scan_data_);
-      sub.bind_ssbo(2, buffers_.ssbo_scan_block_sum_);
-      sub.bind_ssbo(3, buffers_.ssbo_tree_scan_infos_[0]); // TODO: switch based on scan usage
+      sub.bind_ssbo(0, scan_settings.ssbo_in_scan_data_);
+      sub.bind_ssbo(1, scan_settings.ssbo_out_scan_data_);
+      sub.bind_ssbo(2, scan_settings.ssbo_scan_block_sum_);
+      if (scan_settings.use_indirect_dispatch)
+        sub.bind_ssbo(3, scan_settings.ssbo_scan_infos_);
       sub.bind_ubo(0, buffers_.ubo_bnpr_tree_scan_infos_);
 
-      sub.dispatch(int3(buffers_.ubo_bnpr_tree_scan_infos_.num_thread_groups, 1, 1));
-      sub.barrier(GPU_BARRIER_SHADER_STORAGE);
+      if (scan_settings.use_indirect_dispatch)
+        sub.dispatch(buffers_.ssbo_scan_dispatch_args_);
+      else
+        sub.dispatch(int3(buffers_.ubo_bnpr_tree_scan_infos_.num_thread_groups, 1, 1));
+
+      sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_COMMAND);
     }
-    { // reduction for tree-scan
-      auto& sub = pass_scan_test.sub("strokegen_scan_test_aggregate");
-      sub.shader_set(shaders_.static_shader_get(eShaderType::SCAN_TEST_AGGREGATE));
+    {  // reduction for tree-scan
+      auto &sub = pass.sub("strokegen_scan_test_aggregate");
+      sub.shader_set(shaders_.static_shader_get(scan_settings.shader_aggregate));
 
       // Note: keep the same slot binding as in shader_create_info
-      sub.bind_ssbo(0, buffers_.ssbo_scan_block_sum_);
+      sub.bind_ssbo(0, scan_settings.ssbo_scan_block_sum_);
 
       sub.dispatch(int3(1, 1, 1));
       sub.barrier(GPU_BARRIER_SHADER_STORAGE);
     }
-    { // down sweep for tree-scan
-      auto& sub = pass_scan_test.sub("strokegen_scan_test_dwsweep");
-      sub.shader_set(shaders_.static_shader_get(eShaderType::SCAN_TEST_DWSWEEP));
+    {  // down sweep for tree-scan
+      auto &sub = pass.sub("strokegen_scan_test_dwsweep");
+      sub.shader_set(shaders_.static_shader_get(scan_settings.shader_dwsweep));
 
       // Note: keep the same slot binding as in shader_create_info
-      sub.bind_ssbo(0, buffers_.ssbo_out_scan_data_);
-      sub.bind_ssbo(1, buffers_.ssbo_scan_block_sum_);
+      sub.bind_ssbo(0, scan_settings.ssbo_out_scan_data_);
+      sub.bind_ssbo(1, scan_settings.ssbo_scan_block_sum_);
       sub.bind_ubo(0, buffers_.ubo_bnpr_tree_scan_infos_);
 
-      sub.dispatch(int3(buffers_.ubo_bnpr_tree_scan_infos_.num_thread_groups, 1, 1));
+      if (scan_settings.use_indirect_dispatch)
+        sub.dispatch(buffers_.ssbo_scan_dispatch_args_);
+      else
+        sub.dispatch(int3(buffers_.ubo_bnpr_tree_scan_infos_.num_thread_groups, 1, 1));
+
       sub.barrier(GPU_BARRIER_SHADER_STORAGE);
     }
   }

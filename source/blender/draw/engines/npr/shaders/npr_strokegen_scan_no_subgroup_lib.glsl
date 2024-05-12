@@ -67,6 +67,9 @@ vec3 vec3_add(vec3 a, vec3 b)
 #define tag SCAN_FUNCTION_TAG
 #define OP SCAN_OP
 
+/* Scan don't need anything special for now. */
+#define SCAN_ENCODE(x) x
+#define SCAN_DECODE(x) x
 
 /* thread group size provided in glsl
 /* --------------------------------------- */

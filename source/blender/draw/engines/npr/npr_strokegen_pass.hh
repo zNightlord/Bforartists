@@ -117,6 +117,7 @@ public:
 
   PassSimple& get_compute_pass(eType passType, int pass_id = 0);
   PassMain &get_render_pass(eType passType, int pass_id = 0);
+  void prepare_validation_passes(int frame_counter);
   void init_surface_depth_passes();
   /** \} */
 
@@ -431,22 +432,22 @@ public:
 
   // ---------------------------------------------------------------------------
   bool test_scan;
-  void rebuild_pass_scan_test();
   struct ScanSettings {
     bool is_validation_shader;
-    int frame_counter; 
+    int frame_counter;
 
     bool use_indirect_dispatch;
     GPUStorageBuf *ssbo_scan_infos_;
 
     GPUStorageBuf *ssbo_in_scan_data_;
-    GPUStorageBuf *ssbo_out_scan_data_; 
+    GPUStorageBuf *ssbo_out_scan_data_;
     GPUStorageBuf *ssbo_scan_block_sum_;
 
     eShaderType shader_upsweep;
     eShaderType shader_aggregate;
     eShaderType shader_dwsweep;
   };
+  void append_subpass_scan(ScanSettings scan_settings, PassSimple& pass);
   void append_subpass_segscan(ScanSettings scan_settings,
                                  PassSimple& pass);
   struct SegLoopConv1DSettings {
