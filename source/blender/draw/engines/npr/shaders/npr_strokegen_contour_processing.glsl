@@ -410,12 +410,17 @@ void main()
 	}
 
 	uint num_samples = 0; {
-		const vec2 raster_resolution = get_raster_resolution(); 
 		vec2 arc_len_range = vec2(arc_len_param, arc_len_param + len_2d); 
-		arc_len_range.x = ceil(arc_len_range.x);
-		arc_len_range.y = floor(arc_len_range.y);
-		if (arc_len_range.x < arc_len_range.y) 
-			num_samples = uint(arc_len_range.y - arc_len_range.x + 1.0f + 1e-10f);
+		float arc_len_x_ceil  = ceil(arc_len_range.x); 
+		float arc_len_y_floor = floor(arc_len_range.y); 
+
+		if (arc_len_x_ceil < arc_len_y_floor)
+			num_samples = uint(arc_len_y_floor - arc_len_x_ceil + 1.0f + 1e-10f);
+		else if (arc_len_x_ceil == arc_len_y_floor)
+			if (arc_len_x_ceil == arc_len_range.x)
+				num_samples = 1u; 
+			else
+				num_samples = arc_len_y_floor == arc_len_range.y ? 0u : 1u;
 	}
 
 	if (valid_thread)
@@ -424,6 +429,18 @@ void main()
 		uint scan_val = num_samples; 
 		ssbo_tree_scan_input_2d_resampler_alloc_samples_[contour_id] = scan_val;
 	}
+#endif
+
+#if defined(_KERNEL_MULTICOMPILE__2D_RESAMPLE_CONTOUR_EDGES__BUILD_ID_MAPPING)
+	const uint num_contours = ssbo_bnpr_mesh_pool_counters_.num_contour_verts; 
+	const uint contour_id = idx; 
+	bool valid_thread = contour_id < num_contours;
+
+	uint num_samples = ssbo_tree_scan_input_2d_resampler_alloc_samples_[contour_id];
+	uint alloc_sample_offset = ssbo_tree_scan_output_2d_resampler_alloc_samples_[contour_id]; 
+
+	if (valid_thread && 0 < num_samples)
+
 #endif
 }
 #endif
