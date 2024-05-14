@@ -22,9 +22,10 @@ uint calc_global_contour_edge_id(uint local_contour_edge_id)
 
 struct ContourFlags
 {
-    bool seg_head; 
-    bool seg_tail; 
-    bool looped_curve; 
+    bool seg_head; /* dynamically set for segmentation */
+    bool seg_tail; /* dynamically set for segmentation */
+    
+	bool looped_curve; 
     bool cusp_func_pstv; /*has positive cusp function*/
 	bool occluded; /* valid when visibility test activated */
 }; 

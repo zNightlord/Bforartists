@@ -401,13 +401,16 @@ using namespace draw;
     uint num_contour_edges; // 4
     uint num_contour_verts;
     uint num_filtered_edges;
-
     uint num_filtered_verts;
     uint num_dbg_vnor_lines;  // 4
     uint num_dbg_vpdir_lines;  
     uint num_dbg_edge_lines;  
     uint num_draw_faces;  
     uint num_frags;  // 4
+    uint num_2d_samples;
+    uint dummy0;
+    uint dummy1;
+    uint dummy2; // 4 
   };
   BLI_STATIC_ASSERT_ALIGN(SSBOData_StrokeGenMeshPoolCounters, 16)
 

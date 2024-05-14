@@ -316,8 +316,11 @@ void main()
  	uint ssbo_tree_scan_input_2d_resampler_accumulate_curvlen_[]
 	uint ssbo_tree_scan_output_2d_resampler_accumulate_curvlen_[]
 	// scan
-	uint ssbo_tree_scan_input_2d_resampler_alloc_samples_[] (overlapped with above 2 ssbos)
+	uint ssbo_tree_scan_input_2d_resampler_alloc_samples_[] (<- exclusive to above 2 ssbos)
 	uint ssbo_tree_scan_output_2d_resampler_alloc_samples_[]
+	// segscan
+	uint ssbo_tree_scan_input_2d_resample_contour_idmapping_[] (<- exclusive to above 2 ssbos)
+	uint ssbo_tree_scan_output_2d_resample_contour_idmapping_[]
 
 	uint ssbo_contour_2d_resample_data_[]
 	vec2 pcs_screen_size_
@@ -389,6 +392,8 @@ void main()
 		ssbo_tree_scan_infos_2d_resampler_.num_thread_groups = compute_num_groups(
 			num_contours, GROUP_SIZE_BNPR_SCAN_SWEEP, 2u
 		);
+
+		ssbo_bnpr_mesh_pool_counters_.num_2d_samples = 0u; 
 	}
 #endif
 
@@ -431,16 +436,73 @@ void main()
 	}
 #endif
 
-#if defined(_KERNEL_MULTICOMPILE__2D_RESAMPLE_CONTOUR_EDGES__BUILD_ID_MAPPING)
+#if defined(_KERNEL_MULTICOMPILE__2D_RESAMPLE_CONTOUR_EDGES__ALLOC_SAMPLES_FINISH)
 	const uint num_contours = ssbo_bnpr_mesh_pool_counters_.num_contour_verts; 
 	const uint contour_id = idx; 
 	bool valid_thread = contour_id < num_contours;
 
-	uint num_samples = ssbo_tree_scan_input_2d_resampler_alloc_samples_[contour_id];
+	if (contour_id = num_contours - 1u)
+	{
+		uint alloc_sample_offset = ssbo_tree_scan_output_2d_resampler_alloc_samples_[contour_id]; 
+		ssbo_bnpr_mesh_pool_counters_.num_2d_samples = alloc_sample_offset;
+		/* fill dispatch args after this */
+	}
+#endif
+
+#if defined(_KERNEL_MULTICOMPILE__2D_RESAMPLE_CONTOUR_EDGES__IDMAPPING__CLEAR_BUFFER)
+	const uint num_samples = ssbo_bnpr_mesh_pool_counters_.num_2d_samples; 
+	const uint sample_id = idx; 
+	bool valid_thread = sample_id < num_samples;
+
+	if (valid_thread)
+		ssbo_tree_scan_input_2d_resample_contour_idmapping_[sample_id] = 
+			segscan_uint_hf_encode(SSBOData_SegScanType_uint(0x3fffffffu, 0u));
+#endif
+
+#if defined(_KERNEL_MULTICOMPILE__2D_RESAMPLE_CONTOUR_EDGES__IDMAPPING__SETUP_SEGSCAN)
+	const uint num_contours = ssbo_bnpr_mesh_pool_counters_.num_contour_verts; 
+	const uint contour_id = idx; 
+	bool valid_thread = contour_id < num_contours;
+
+	uint num_2d_samples = ssbo_tree_scan_input_2d_resampler_alloc_samples_[contour_id];
 	uint alloc_sample_offset = ssbo_tree_scan_output_2d_resampler_alloc_samples_[contour_id]; 
 
-	if (valid_thread && 0 < num_samples)
+	if (valid_thread && 0 < num_2d_samples)
+	{ // Seed at segment heads
+		ssbo_tree_scan_input_2d_resample_contour_idmapping_[alloc_sample_offset] = 
+			segscan_uint_hf_encode(SSBOData_SegScanType_uint(contour_id, 1u));
+	}
 
+	if (idx == 0u)
+	{
+		uint num_samples = ssbo_bnpr_mesh_pool_counters_.num_2d_samples;
+		ssbo_tree_scan_infos_2d_resampler_.num_scan_items = num_samples; 
+		ssbo_tree_scan_infos_2d_resampler_.num_valid_scan_threads = compute_num_threads(
+			num_samples, 2u
+		);
+		ssbo_tree_scan_infos_2d_resampler_.num_thread_groups = compute_num_groups(
+			num_samples, GROUP_SIZE_BNPR_SCAN_SWEEP, 2u
+		);
+	}
 #endif
+
+#if defined(_KERNEL_MULTICOMPILE__2D_RESAMPLE_CONTOUR_EDGES__IDMAPPING__FINISH)
+	const uint num_samples = ssbo_bnpr_mesh_pool_counters_.num_2d_samples; 
+	const uint sample_id = idx; 
+	bool valid_thread = sample_id < num_samples;
+
+	if (valid_thread)
+	{
+		SSBOData_SegScanType_uint segscan_input = 
+			segscan_uint_hf_decode(ssbo_tree_scan_input_2d_resample_contour_idmapping_[sample_id]);
+		SSBOData_SegScanType_uint segscan_output = 
+			segscan_uint_hf_decode(ssbo_2d_sample_to_contour_[sample_id]); 
+		
+		// transform exclusive scan into inclusive
+		segscan_output.val = min(segscan_output.val, segscan_input.val); 
+		ssbo_2d_sample_to_contour_[sample_id] = (segscan_output.val);
+	}
+#endif
+
 }
 #endif
