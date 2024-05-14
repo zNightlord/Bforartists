@@ -325,6 +325,26 @@ void FillDispatchArgsBuffer(uvec3 args)
 #endif
 
 
+#if defined (_KERNEL_MULTICOMPILE__FILL_DISPATCH_ARGS__PER_CONTOUR_2D_SAMPLE)
+void GetDispatchArgs(out uvec3 dispatch_args)
+{
+    uint num_work_items;
+    num_work_items = ssbo_bnpr_mesh_pool_counters_.num_2d_samples;
+    
+    dispatch_args.x = compute_num_groups(num_work_items, pc_per_contour_2d_sample_dispatch_group_size_);
+    dispatch_args.y = 1;
+    dispatch_args.z = 1;
+}
+
+void FillDispatchArgsBuffer(uvec3 args)
+{
+    ssbo_bnpr_mesh_contour_frag_dispatch_args_.num_groups_x = args.x;
+    ssbo_bnpr_mesh_contour_frag_dispatch_args_.num_groups_y = args.y;
+    ssbo_bnpr_mesh_contour_frag_dispatch_args_.num_groups_z = args.z;
+    ssbo_bnpr_mesh_contour_frag_dispatch_args_._pad0 = 0;
+}
+#endif
+
 
 
 #endif

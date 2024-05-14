@@ -503,37 +503,62 @@ ContourVisibilitySplitInfo decode_contour_visibility_split_info(uvec4 d0123)
 // ----------------------------------------------------------------------------------------------
 // 2D resampling of 3D contour curves 
 // ----------------------------------------------------------------------------------------------
-struct Contour2DResampleData
+struct Contour2DResampleRasterData
 {
 	bool has_samples; 
 	vec4 begend_uvs; // the same as LineRasterResult.begend_uvs
 };
 
-uvec3 encode_contour_2d_resample_data(Contour2DResampleData data)
+uint pack_2d_uv(vec2 uv)
+{
+	float fixed_factor = float((1u << 16u) - 1u); 
+	uvec2 uv_fixed = uvec2(round(uv * fixed_factor)); 
+	return ((uv_fixed.y << 16u) | uv_fixed.x);
+}
+
+vec2 unpack_2d_uv(uint uv_packed)
+{
+	float fixed_factor = float((1u << 16u) - 1u); 
+	uvec2 uv_fixed = uvec2(uv_packed & 0xffffu, uv_packed >> 16u); 
+	return clamp(vec2(uv_fixed) / fixed_factor, vec2(.0f), vec2(1.0f));
+}
+
+uvec2 pack_2d_uv_x2(vec4 begend_uvs)
+{
+	float fixed_factor = float((1u << 16u) - 1u); 
+	uvec4 uv_fixed = uvec4(round(begend_uvs * fixed_factor)) & 0xffffu; 
+	return ((uv_fixed.zw << 16u) | uv_fixed.xy); 
+}
+
+vec4 unpack_2d_uv_x2(uvec2 uv_packed)
+{
+	uvec4 uv_fixed = uvec4(
+		uv_packed & 0xffffu, 
+		uv_packed >> 16u
+	); 
+	float fixed_factor = float((1u << 16u) - 1u); 
+	return clamp(vec4(uv_fixed) / fixed_factor, vec4(.0f), vec4(1.0f)); 
+}
+
+uvec3 encode_contour_2d_resample_data(Contour2DResampleRasterData data)
 {
 	uvec3 d = uvec3(0u); 
 	d.x = (data.has_samples ? 1u : 0u); 
 	
 	data.begend_uvs = clamp(data.begend_uvs, vec4(.0f), vec4(1.0f)); 
 	float fixed_factor = float((1u << 16u) - 1u); 
-	uvec4 uv_fixed = uvec4(round(data.begend_uvs * fixed_factor)) & 0xffffu; 
-	d.yz = (uv_fixed.zw << 16u) | uv_fixed.xy; 
+	d.yz = pack_2d_uv_x2(data.begend_uvs); 
 	
 	return d; 
 }
 
-Contour2DResampleData decode_contour_2d_resample_data(uvec3 d)
+Contour2DResampleRasterData decode_contour_2d_resample_data(uvec3 d)
 {
-	Contour2DResampleData data; 
+	Contour2DResampleRasterData data; 
 	data.has_samples = (d.x != 0u); 
-	
-	uvec4 uv_fixed = uvec4(
-		d.yz & 0xffffu, 
-		d.yz >> 16u
-	); 
-	float fixed_factor = float((1u << 16u) - 1u); 
-	data.begend_uvs = clamp(vec4(uv_fixed) / fixed_factor, vec4(.0f), vec4(1.0f)); 
+	data.begend_uvs = unpack_2d_uv_x2(d.yz); 
 	
 	return data; 
 }
 
+#define CONTOUR_2D_SAMPLES_OFFSET_NONE 0xffffffffu // no samples are allocated for this contour

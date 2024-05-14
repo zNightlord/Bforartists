@@ -324,27 +324,37 @@ class GPUBufferPoolModule {
   }
 
   // lifetime (append_subpass_contour_segmentation, append_subpass_calc_contour_edges_draw_data)
-  // lifetime within segscan
-  inline GPUStorageBuf *reused_ssbo_tree_scan_input_2d_resampler_accumulate_curvlen_()
+  inline GPUStorageBuf *reused_ssbo_contour_2d_resample_raster_data_()
   {
+    return ssbo_mesh_buffer_reuse_0_; 
+  }
+
+  inline GPUStorageBuf *reused_ssbo_tree_scan_input_2d_resampler_accumulate_curvlen_()
+  { // lifetime within segscan
     return ssbo_mesh_buffer_reuse_1_; 
   }
-  inline GPUStorageBuf *reused_ssbo_tree_scan_output_2d_resampler_accumulate_curvlen_()
+  inline GPUStorageBuf *reused_ssbo_contour_arc_len_param_()
   {
     return ssbo_mesh_buffer_reuse_2_;
   }
-  // lifetime within scan
-  inline GPUStorageBuf *reused_ssbo_tree_scan_input_2d_resampler_alloc_samples_()
+  inline GPUStorageBuf *reused_ssbo_tree_scan_output_2d_resampler_accumulate_curvlen_()
   {
+    return reused_ssbo_contour_arc_len_param_(); 
+  }
+  inline GPUStorageBuf *reused_ssbo_tree_scan_input_2d_resampler_alloc_samples_()
+  { // lifetime within scan, racing with above 2 buffers
     return ssbo_mesh_buffer_reuse_7_; 
+  }
+  inline GPUStorageBuf *reused_ssbo_contour_to_start_sample_()
+  {
+    return ssbo_mesh_buffer_reuse_8_;
   }
   inline GPUStorageBuf *reused_ssbo_tree_scan_output_2d_resampler_alloc_samples_()
   {
-    return ssbo_mesh_buffer_reuse_1_;
+    return reused_ssbo_contour_to_start_sample_();
   }
-  // lifetime within segscan
   inline GPUStorageBuf *reused_ssbo_tree_scan_input_2d_resample_contour_idmapping_()
-  {
+  { // lifetime within scan, racing with above 2 buffers
     return ssbo_mesh_buffer_reuse_3_; 
   }
   inline GPUStorageBuf *reused_ssbo_2d_sample_to_contour_()
@@ -354,6 +364,11 @@ class GPUBufferPoolModule {
   inline GPUStorageBuf *reused_ssbo_tree_scan_output_2d_resample_contour_idmapping_()
   {
     return reused_ssbo_2d_sample_to_contour_();
+  }
+
+  inline GPUStorageBuf *reused_ssbo_contour_2d_sample_positions_()
+  {
+    return ssbo_mesh_buffer_reuse_3_; 
   }
 
 

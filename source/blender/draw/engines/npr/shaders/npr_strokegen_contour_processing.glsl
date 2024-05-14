@@ -314,15 +314,16 @@ void main()
 	
 	// segscan
  	uint ssbo_tree_scan_input_2d_resampler_accumulate_curvlen_[]
-	uint ssbo_tree_scan_output_2d_resampler_accumulate_curvlen_[]
+	uint ssbo_tree_scan_output_2d_resampler_accumulate_curvlen_[] ( == ssbo_contour_arc_len_param_[])
 	// scan
 	uint ssbo_tree_scan_input_2d_resampler_alloc_samples_[] (<- exclusive to above 2 ssbos)
-	uint ssbo_tree_scan_output_2d_resampler_alloc_samples_[]
+	uint ssbo_tree_scan_output_2d_resampler_alloc_samples_[] ( == ssbo_contour_to_start_sample_[])
 	// segscan
 	uint ssbo_tree_scan_input_2d_resample_contour_idmapping_[] (<- exclusive to above 2 ssbos)
-	uint ssbo_tree_scan_output_2d_resample_contour_idmapping_[]
+	uint ssbo_tree_scan_output_2d_resample_contour_idmapping_[] (== ssbo_2d_sample_to_contour_[])
 
-	uint ssbo_contour_2d_resample_data_[]
+	uint ssbo_contour_2d_resample_raster_data_[] 
+	uint ssbo_contour_2d_sample_positions_[]
 	vec2 pcs_screen_size_
 	float sample_rate
 */
@@ -361,11 +362,11 @@ void main()
 
 	const vec2 raster_resolution = get_raster_resolution(); 
 	LineRasterResult raster_result = raster_line_segment(
-		vpos_0.xy, vpos_1.xy, 
+		vec4(vpos_0.xyz, 1.0f), vec4(vpos_1.xyz, 1.0f), 
 		raster_resolution, world_to_view, mat_camera_proj
 	);
 
-	Contour2DResampleData c2rd; 
+	Contour2DResampleRasterData c2rd; 
 	c2rd.begend_uvs 	= raster_result.begend_uvs; 
 	c2rd.has_samples 	= !(raster_result.is_line_clip_rejected || non_looped_curve_tail) && valid_thread; 
 	if (!c2rd.has_samples)
@@ -376,11 +377,12 @@ void main()
 	{
 		bool hf = cct.head_contour_id == contour_id; // accumulate 2d-curve-len for each curve
 		float scan_val = length(raster_resolution * (c2rd.begend_uvs.zw - c2rd.begend_uvs.xy)); 
+		if (!c2rd.has_samples) scan_val = 0.0f; // play safe
 		uvec2 segscan_input_enc = segscan_float_hf_encode(SSBOData_SegScanType_float(scan_val, hf)); 
 		Store2(ssbo_tree_scan_input_2d_resampler_accumulate_curvlen_, contour_id, segscan_input_enc);
 
 		uvec3 resample_data = encode_contour_2d_resample_data(c2rd);
-		Store3(ssbo_contour_2d_resample_data_, contour_id, resample_data);
+		Store3(ssbo_contour_2d_resample_raster_data_, contour_id, resample_data);
 	}
 
 	if (idx.x == 0) 
@@ -402,6 +404,7 @@ void main()
 	const uint contour_id = idx; 
 	bool valid_thread = contour_id < num_contours;
 	
+	// Each contour polyline is now parameterized by arc length
 	float len_2d, arc_len_param; {
 		SSBOData_SegScanType_float scan_input = segscan_float_hf_decode(
 			ssbo_tree_scan_input_2d_resampler_accumulate_curvlen_[contour_id]
@@ -409,11 +412,13 @@ void main()
 		len_2d = scan_input.val; 
 
 		SSBOData_SegScanType_float scan_output = segscan_float_hf_decode(
-			ssbo_tree_scan_output_2d_resampler_accumulate_curvlen_[contour_id]
+			/* == ssbo_tree_scan_output_2d_resampler_accumulate_curvlen_ */
+			ssbo_contour_arc_len_param_[contour_id]
 		);
 		arc_len_param = scan_output.val; 
 	}
 
+	// We generate samples at integer arc length points
 	uint num_samples = 0; {
 		vec2 arc_len_range = vec2(arc_len_param, arc_len_param + len_2d); 
 		float arc_len_x_ceil  = ceil(arc_len_range.x); 
@@ -426,13 +431,16 @@ void main()
 				num_samples = 1u; 
 			else
 				num_samples = arc_len_y_floor == arc_len_range.y ? 0u : 1u;
+
+		if (len_2d == 0.0f) num_samples = 0u; 
 	}
 
 	if (valid_thread)
-	{
-		// allocate samples for each curve, scan to preserve orders
+	{ // allocate samples for each curve, scan to preserve orders
 		uint scan_val = num_samples; 
 		ssbo_tree_scan_input_2d_resampler_alloc_samples_[contour_id] = scan_val;
+
+		ssbo_contour_arc_len_param_[contour_id] = arc_len_param;
 	}
 #endif
 
@@ -441,10 +449,14 @@ void main()
 	const uint contour_id = idx; 
 	bool valid_thread = contour_id < num_contours;
 
+	uint num_samples = ssbo_tree_scan_input_2d_resampler_alloc_samples_[contour_id]; 
+
 	if (contour_id = num_contours - 1u)
 	{
-		uint alloc_sample_offset = ssbo_tree_scan_output_2d_resampler_alloc_samples_[contour_id]; 
-		ssbo_bnpr_mesh_pool_counters_.num_2d_samples = alloc_sample_offset;
+		uint alloc_sample_offset = /* == ssbo_tree_scan_output_2d_resampler_alloc_samples_ */
+			ssbo_contour_to_start_sample_[contour_id]; 
+
+		ssbo_bnpr_mesh_pool_counters_.num_2d_samples = alloc_sample_offset + num_samples;
 		/* fill dispatch args after this */
 	}
 #endif
@@ -496,12 +508,46 @@ void main()
 		SSBOData_SegScanType_uint segscan_input = 
 			segscan_uint_hf_decode(ssbo_tree_scan_input_2d_resample_contour_idmapping_[sample_id]);
 		SSBOData_SegScanType_uint segscan_output = 
+			// == ssbo_tree_scan_output_2d_resample_contour_idmapping_[]
 			segscan_uint_hf_decode(ssbo_2d_sample_to_contour_[sample_id]); 
 		
 		// transform exclusive scan into inclusive
 		segscan_output.val = min(segscan_output.val, segscan_input.val); 
 		ssbo_2d_sample_to_contour_[sample_id] = (segscan_output.val);
 	}
+#endif
+
+#if defined(_KERNEL_MULTICOMPILE__2D_RESAMPLE_CONTOUR_EDGES__EVALUATE_POSITION)
+	const uint num_samples = ssbo_bnpr_mesh_pool_counters_.num_2d_samples; 
+	const uint sample_id = idx; 
+	bool valid_thread = sample_id < num_samples;
+	vec2 raster_resolution = get_raster_resolution(); 
+
+	uint contour_id 			= ssbo_2d_sample_to_contour_[sample_id]; 
+	uint beg_sample_id 			= ssbo_contour_to_start_sample_[contour_id]; 
+	float contour_arc_len_param = ssbo_contour_arc_len_param_[contour_id]; 
+	Contour2DResampleRasterData c2rd; 
+	{
+		uvec3 resample_data; 
+		Load3(ssbo_contour_2d_resample_raster_data_, contour_id, resample_data);
+		c2rd = decode_contour_2d_resample_data(resample_data);
+	}
+
+	// contour edge is parameterized as P = C + (s + k) * V, 
+	// C: contour snake 2d pos, 
+	vec2 C = c2rd.begend_uvs.xy * raster_resolution;
+	// V: normalized screen dir, 
+	vec2 V = normalize(c2rd.begend_uvs.zw - c2rd.begend_uvs.xy);
+	// s: offset parameter because we sample at integer arc-lens
+	float s = ceil(contour_arc_len_param) - contour_arc_len_param; 
+	// k: this is the kth sample from the contour edge
+	float k = float(sample_id - beg_sample_id);
+
+	vec2 P = C + (s + k) * V;
+
+	if (valid_thread)
+		ssbo_contour_2d_sample_positions_[sample_id] = pack_2d_uv_x2(P); 
+
 #endif
 
 }
