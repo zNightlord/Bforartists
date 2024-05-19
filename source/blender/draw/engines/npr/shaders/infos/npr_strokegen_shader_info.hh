@@ -107,7 +107,7 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_extract)
     .storage_buf(13, Qualifier::WRITE, "uint", "ssbo_dbg_lines_[]")
     .storage_buf(14, Qualifier::READ_WRITE, "uint", "ssbo_vert_flags_[]")
     /* ---------------- */
-    .uniform_buf(0, "ViewMatrices", "ubo_view_matrices_")
+    .uniform_buf(0, "ViewMatrices", "ubo_view_matrices_") 
     .push_constant(Type::INT, "pcs_ib_fmt_u16")
     .push_constant(Type::INT, "pcs_num_edges")
     .push_constant(Type::INT, "pcs_num_ib_offset")
@@ -164,6 +164,19 @@ GPU_SHADER_CREATE_INFO(strokegen_fill_dispatch_args_per_contour_fragment)
     .storage_buf(2, Qualifier::READ_WRITE, "DispatchCommand", "ssbo_bnpr_mesh_contour_frag_dispatch_args_")
     .push_constant(Type::INT, "pc_dispatch_for_all_frags_") 
     .push_constant(Type::INT, "pc_per_contour_frag_dispatch_group_size_") /* group size of dispatched kernel */
+    .local_group_size(32)
+    .compute_source("npr_strokegen_fill_indirect_args_comp.glsl");
+
+GPU_SHADER_CREATE_INFO(strokegen_fill_dispatch_args_per_contour_2d_sample)
+    .do_static_compilation(true)
+    .typedef_source("bnpr_defines.hh")
+    .typedef_source("bnpr_shader_shared.hh")
+    .typedef_source("draw_shader_shared.hh") /* Always needed for indirect args */
+    .define("_KERNEL_MULTICOMPILE__FILL_DISPATCH_ARGS", "1")
+    .define("_KERNEL_MULTICOMPILE__FILL_DISPATCH_ARGS__PER_CONTOUR_2D_SAMPLE", "1")
+    .storage_buf(0, Qualifier::READ_WRITE, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
+    .storage_buf(1, Qualifier::READ_WRITE, "DispatchCommand", "ssbo_bnpr_mesh_contour_2d_sample_dispatch_args_")
+    .push_constant(Type::INT, "pc_per_contour_2d_sample_dispatch_group_size_") /* group size of dispatched kernel */
     .local_group_size(32)
     .compute_source("npr_strokegen_fill_indirect_args_comp.glsl");
 
@@ -398,6 +411,81 @@ GPU_SHADER_CREATE_INFO(strokegen_finish_contour_segmentation)
     .do_static_compilation(true)
     .additional_info("strokegen_contour_segmentation")
     .define("_KERNEL_MULTICOMPILE__CONTOUR_SEGMENTATION__FINISH", "1");
+
+
+GPU_SHADER_CREATE_INFO(strokegen_contour_2d_resample)
+    .do_static_compilation(true)
+    .typedef_source("bnpr_shader_shared.hh")
+    .typedef_source("draw_shader_shared.hh")
+    .define("_KERNEL_MULTICOMPILE__CONTOUR_EDGES_2D_RESAMPLE", "1")
+    .define("INCLUDE_CONTOUR_FLAGS_LOAD_STORE", "1")
+    .define("INCLUDE_CONTOUR_CURVE_TOPOLOGY_LOAD", "1")
+
+    .storage_buf(0, Qualifier::READ_WRITE, "uint", "ssbo_contour_2d_resample_raster_data_[]")
+    .storage_buf(1, Qualifier::READ_WRITE, "uint", "ssbo_contour_2d_sample_positions_[]")
+    .storage_buf(2, Qualifier::READ_WRITE, "uint", "ssbo_tree_scan_input_2d_resampler_accumulate_curvlen_[]")
+    .storage_buf(3, Qualifier::READ_WRITE, "uint", "ssbo_contour_arc_len_param_[]")
+    .storage_buf(4, Qualifier::READ_WRITE, "uint", "ssbo_tree_scan_input_2d_resampler_alloc_samples_[]")
+    .storage_buf(5, Qualifier::READ_WRITE, "uint", "ssbo_contour_to_start_sample_[]")
+    .storage_buf(6, Qualifier::READ_WRITE, "uint", "ssbo_tree_scan_input_2d_resample_contour_idmapping_[]")
+    .storage_buf(7, Qualifier::READ_WRITE, "uint", "ssbo_2d_sample_to_contour_[]")
+    .storage_buf(8, Qualifier::READ, "uint", "ssbo_contour_snake_rank_[]")
+    .storage_buf(9, Qualifier::READ, "uint", "ssbo_contour_snake_list_len_[]")
+    .storage_buf(10, Qualifier::READ, "uint", "ssbo_contour_snake_list_head_[]")
+    .storage_buf(11, Qualifier::READ_WRITE, "uint", "ssbo_contour_snake_flags_[]")
+    .storage_buf(12, Qualifier::READ, "uint", "ssbo_contour_snake_vpos_[]")
+    .storage_buf(13, Qualifier::READ_WRITE, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
+    .storage_buf(14, Qualifier::READ_WRITE, "UBData_TreeScan", "ssbo_tree_scan_infos_2d_resampler_")
+#define NUM_SSBO_strokegen_contour_2d_resample 15
+
+    .uniform_buf(0, "ViewMatrices", "ubo_view_matrices_")
+
+    .push_constant(Type::VEC2, "pcs_screen_size_")
+    .push_constant(Type::FLOAT, "pcs_sample_rate_")
+
+    .local_group_size(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT) 
+    .compute_source("npr_strokegen_contour_processing.glsl");
+
+GPU_SHADER_CREATE_INFO(strokegen_contour_2d_resample_arclen_parameterization)
+    .do_static_compilation(true)
+    .additional_info("strokegen_contour_2d_resample")
+    .define("_KERNEL_MULTICOMPILE__CONTOUR_EDGES_2D_RESAMPLE__PREP_ARCLEN_PARAM", "1")
+    .image(0, GPU_RGBA32F, Qualifier::WRITE, ImageType::FLOAT_2D, "tex2d_contour_dbg_")
+    ; 
+    
+GPU_SHADER_CREATE_INFO(strokegen_contour_2d_resample_alloc_samples)
+    .do_static_compilation(true)
+    .additional_info("strokegen_contour_2d_resample")
+    .define("_KERNEL_MULTICOMPILE__CONTOUR_EDGES_2D_RESAMPLE__ALLOC_SAMPLES", "1"); 
+
+GPU_SHADER_CREATE_INFO(strokegen_contour_2d_resample_alloc_samples_finish)
+    .do_static_compilation(true)
+    .additional_info("strokegen_contour_2d_resample")
+    .define("_KERNEL_MULTICOMPILE__CONTOUR_EDGES_2D_RESAMPLE__ALLOC_SAMPLES_FINISH", "1");
+
+GPU_SHADER_CREATE_INFO(strokegen_contour_2d_resample_idmapping_clear_buffer)
+    .do_static_compilation(true)
+    .additional_info("strokegen_contour_2d_resample")
+    .define("_KERNEL_MULTICOMPILE__CONTOUR_EDGES_2D_RESAMPLE__IDMAPPING__CLEAR_BUFFER", "1");
+
+GPU_SHADER_CREATE_INFO(strokegen_contour_2d_resample_idmapping_setup_segscan)
+    .do_static_compilation(true)
+    .additional_info("strokegen_contour_2d_resample")
+    .define("_KERNEL_MULTICOMPILE__CONTOUR_EDGES_2D_RESAMPLE__IDMAPPING__SETUP_SEGSCAN", "1");
+
+GPU_SHADER_CREATE_INFO(strokegen_contour_2d_resample_idmapping_finish)
+    .do_static_compilation(true)
+    .additional_info("strokegen_contour_2d_resample")
+    .define("_KERNEL_MULTICOMPILE__CONTOUR_EDGES_2D_RESAMPLE__IDMAPPING__FINISH", "1");
+
+GPU_SHADER_CREATE_INFO(strokegen_contour_2d_resample_eval_position)
+    .do_static_compilation(true)
+    .additional_info("strokegen_contour_2d_resample")
+    .define("_KERNEL_MULTICOMPILE__CONTOUR_EDGES_2D_RESAMPLE__EVALUATE_POSITION", "1")
+    .image(0, GPU_RGBA32F, Qualifier::WRITE, ImageType::FLOAT_2D, "tex2d_contour_dbg_")
+    ;
+
+
 
 GPU_SHADER_CREATE_INFO(strokegen_calc_contour_edges_render_data)
     .do_static_compilation(true)
@@ -1699,6 +1787,11 @@ GPU_SHADER_CREATE_INFO(bnpr_scan_test_inputs)
     .additional_info("bnpr_scan_float_add")
     .define("_KERNEL_MULTI_COMPILE__TREE_SCAN_TEST", "1");
 
+GPU_SHADER_CREATE_INFO(bnpr_scan_uint_add_inputs)
+    .additional_info("bnpr_scan_uint_add")
+    .define("_KERNEL_MULTI_COMPILE__TREE_SCAN_INFO_SSBO", "1");
+
+
 GPU_SHADER_CREATE_INFO(bnpr_segscan_test_inputs)
     .additional_info("bnpr_scan_uvec4_add")
     .additional_info("bnpr_segscan_uvec4_storage")
@@ -1715,6 +1808,11 @@ GPU_SHADER_CREATE_INFO(bnpr_segscan_uint_add_inputs)
 GPU_SHADER_CREATE_INFO(bnpr_segscan_uint_min_inputs)
     .additional_info("bnpr_scan_uint_min")
     .additional_info("bnpr_segscan_uint_storage")
+    .define("_KERNEL_MULTI_COMPILE__TREE_SCAN_INFO_SSBO", "1"); 
+
+GPU_SHADER_CREATE_INFO(bnpr_segscan_float_add_inputs)
+    .additional_info("bnpr_scan_float_add")
+    .additional_info("bnpr_segscan_float_storage")
     .define("_KERNEL_MULTI_COMPILE__TREE_SCAN_INFO_SSBO", "1"); 
 
 
@@ -1754,7 +1852,7 @@ GPU_SHADER_CREATE_INFO(name##_upsweep)                                          
     .storage_buf(0, Qualifier::READ_WRITE, #scan_data_type, "bnpr_in_scan_data_buf_[]")                \
     .storage_buf(1, Qualifier::READ_WRITE, #scan_data_type, "bnpr_out_scan_data_buf_[]")               \
     .storage_buf(2, Qualifier::WRITE, #scan_data_type, "bnpr_scan_block_sum_buf_[]")                   \
-    .storage_buf(3, Qualifier::READ_WRITE, "UBData_TreeScan", "ssbo_tree_scan_infos_[]")               \
+    .storage_buf(3, Qualifier::READ_WRITE, "UBData_TreeScan", "ssbo_tree_scan_infos_")               \
     .uniform_buf(0, "UBData_TreeScan", "ubo_bnpr_tree_scan_infos_")                                    \
                                                                                                        \
     .local_group_size(GROUP_SIZE_BNPR_SCAN_SWEEP)                                                      \
@@ -1783,6 +1881,8 @@ GPU_SHADER_CREATE_INFO(name##_dwsweep)                                          
 
 
 GPU_SHADER_CREATE_INFO__TREE_SCAN(bnpr_scan_test, bnpr_scan_test_inputs, SCAN_DATA_TYPE)
+
+GPU_SHADER_CREATE_INFO__TREE_SCAN(bnpr_scan_uint_add, bnpr_scan_uint_add_inputs, SCAN_DATA_TYPE)
 
 
 #define GPU_SHADER_CREATE_INFO__TREE_SEGSCAN(name, input_shader_info, scan_data_type_str)     \
@@ -1832,6 +1932,7 @@ GPU_SHADER_CREATE_INFO__TREE_SEGSCAN(bnpr_segscan_uint_add, bnpr_segscan_uint_ad
 
 GPU_SHADER_CREATE_INFO__TREE_SEGSCAN(bnpr_segscan_uint_min, bnpr_segscan_uint_min_inputs, SEGSCAN_STRUCT_TYPE_ENCODED)
 
+GPU_SHADER_CREATE_INFO__TREE_SEGSCAN(bnpr_segscan_float_add, bnpr_segscan_float_add_inputs, SEGSCAN_STRUCT_TYPE_ENCODED)
 /** \} */
 
 

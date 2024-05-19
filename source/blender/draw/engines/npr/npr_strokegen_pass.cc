@@ -1518,6 +1518,20 @@ namespace blender::npr::strokegen
     sub.barrier(GPU_BARRIER_SHADER_STORAGE);
   }
 
+  void StrokeGenPassModule::append_subpass_fill_dispatch_args_contour_2d_samples(PassSimple &pass)
+  {
+    auto &sub = pass.sub("strokegen_fill_dispatch_args_per_contour_2d_sample");
+    sub.shader_set(shaders_.static_shader_get(FILL_DISPATCH_ARGS_CONTOUR_2D_SAMPLES));
+
+    sub.bind_ssbo(0, buffers_.ssbo_bnpr_mesh_pool_counters_);
+    sub.bind_ssbo(1, buffers_.ssbo_bnpr_mesh_contour_2d_sample_dispatch_args_);
+    int kernel_size = GROUP_SIZE_STROKEGEN_GEOM_EXTRACT;
+    sub.push_constant("pc_per_contour_2d_sample_dispatch_group_size_", kernel_size);
+
+    sub.dispatch(int3(1, 1, 1));
+    sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_COMMAND); 
+  }
+
   void StrokeGenPassModule::append_subpass_surf_geom_analysis(
       ResourceHandle& rsc_handle, int num_verts, int num_edges, const SurfaceAnalysisContext & ctx,
       const SurfaceDebugContext & dbg_options
@@ -1695,7 +1709,7 @@ namespace blender::npr::strokegen
       sub.bind_ssbo(6, buffers_.reused_ssbo_edge_to_contour_());
       sub.bind_ssbo(7, buffers_.ssbo_dyn_mesh_counters_out_());
       sub.bind_ssbo(8, buffers_.ssbo_edge_flags_);
-      sub.bind_ssbo(9, buffers_.ssbo_edge_to_edges_);
+      sub.bind_ssbo(9, buffers_.ssbo_edge_to_edges_); 
       sub.bind_ssbo(10, buffers_.reused_ssbo_face_to_vert_draw_depth_());
       // for debugging
       sub.bind_ssbo(11, buffers_.ssbo_edge_to_vert_);
@@ -1858,6 +1872,161 @@ namespace blender::npr::strokegen
     }
   }
 
+  void StrokeGenPassModule::bind_rsc_for_contour_2d_resample_(
+      draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub,
+    float2 screen_res, float pcs_sample_rate, int& out_ssbo_offset
+  ){
+    sub.bind_ssbo(0, buffers_.reused_ssbo_contour_2d_resample_raster_data_());
+    sub.bind_ssbo(1, buffers_.reused_ssbo_contour_2d_sample_positions_());
+    sub.bind_ssbo(2, buffers_.reused_ssbo_tree_scan_input_2d_resampler_accumulate_curvlen_());
+    sub.bind_ssbo(3, buffers_.reused_ssbo_contour_arc_len_param_());
+    sub.bind_ssbo(4, buffers_.reused_ssbo_tree_scan_input_2d_resampler_alloc_samples_());
+    sub.bind_ssbo(5, buffers_.reused_ssbo_contour_to_start_sample_());
+    sub.bind_ssbo(6, buffers_.reused_ssbo_tree_scan_input_2d_resample_contour_idmapping_());
+    sub.bind_ssbo(7, buffers_.reused_ssbo_2d_sample_to_contour_());
+    sub.bind_ssbo(8, buffers_.ssbo_contour_snake_rank_);
+    sub.bind_ssbo(9, buffers_.ssbo_contour_snake_list_len_);
+    sub.bind_ssbo(10, buffers_.ssbo_contour_snake_list_head_);
+    sub.bind_ssbo(11, buffers_.ssbo_contour_snake_flags_);
+    sub.bind_ssbo(12, buffers_.ssbo_contour_snake_vpos_);
+    sub.bind_ssbo(13, buffers_.ssbo_bnpr_mesh_pool_counters_);
+    sub.bind_ssbo(14, buffers_.reused_ssbo_tree_scan_infos_2d_resampler_());
+    out_ssbo_offset = 15;
+
+    sub.bind_ubo(0, buffers_.ubo_view_matrices_cache_);
+
+    sub.push_constant("pcs_screen_size_", screen_res);
+    sub.push_constant("pcs_sample_rate_", pcs_sample_rate); 
+  }
+
+  void StrokeGenPassModule::append_subpass_contour_arclen_parameterization(float2 screen_res, float sample_rate)
+  {
+    int ssbo_offset = 0; 
+    {
+      auto &sub = pass_process_contours.sub("strokegen_contour_2d_resample_arclen_parameterization");
+      sub.shader_set(shaders_.static_shader_get(CONTOUR_ARCLEN_PARAMETERIZATION)); 
+
+      bind_rsc_for_contour_2d_resample_(sub, screen_res, sample_rate, ssbo_offset);
+      sub.bind_image(0, textures_.tex2d_contour_dbg_); 
+
+      sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_edge_dispatch_args_);
+      sub.barrier(GPU_BARRIER_SHADER_STORAGE); 
+    }
+    {
+      ScanSettings settings;
+      settings.use_indirect_dispatch = true;
+      settings.ssbo_scan_infos_ = buffers_.reused_ssbo_tree_scan_infos_2d_resampler_();
+      settings.ssbo_in_scan_data_ = buffers_.reused_ssbo_tree_scan_input_2d_resampler_accumulate_curvlen_();
+      settings.ssbo_out_scan_data_ = buffers_.reused_ssbo_tree_scan_output_2d_resampler_accumulate_curvlen_();
+      settings.ssbo_scan_block_sum_ = buffers_.ssbo_scan_block_sum_;
+      settings.shader_upsweep = SEGSCAN_FLOAT_ADD_UPSWEEP;
+      settings.shader_aggregate = SEGSCAN_FLOAT_ADD_AGGREGATE;
+      settings.shader_dwsweep = SEGSCAN_FLOAT_ADD_DWSWEEP; 
+      settings.is_validation_shader = false;
+      settings.frame_counter = 0;
+
+      append_subpass_segscan(settings, pass_process_contours); 
+    }
+  }
+
+  void StrokeGenPassModule::append_subpass_contour_generate_2d_samples(float2 screen_res, float sample_rate)
+  {
+    int ssbo_offset = 0; 
+    {
+      auto &sub = pass_process_contours.sub(
+          "strokegen_contour_2d_resample_alloc_samples");
+      sub.shader_set(shaders_.static_shader_get(CONTOUR_ALLOC_2D_SAMPLES));
+
+      bind_rsc_for_contour_2d_resample_(sub, screen_res, sample_rate, ssbo_offset);
+
+      sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_edge_dispatch_args_);
+      sub.barrier(GPU_BARRIER_SHADER_STORAGE);
+    }
+    {
+      ScanSettings settings;
+      settings.use_indirect_dispatch = true;
+      settings.ssbo_scan_infos_ = buffers_.reused_ssbo_tree_scan_infos_2d_resampler_();
+      settings.ssbo_in_scan_data_ = buffers_.reused_ssbo_tree_scan_input_2d_resampler_alloc_samples_();
+      settings.ssbo_out_scan_data_ = buffers_.reused_ssbo_tree_scan_output_2d_resampler_alloc_samples_();
+      settings.ssbo_scan_block_sum_ = buffers_.ssbo_scan_block_sum_;
+      settings.shader_upsweep = SCAN_UINT_ADD_UPSWEEP;
+      settings.shader_aggregate = SCAN_UINT_ADD_AGGREGATE;
+      settings.shader_dwsweep = SCAN_UINT_ADD_DWSWEEP; 
+      settings.is_validation_shader = false;
+      settings.frame_counter = 0;
+
+      append_subpass_scan(settings, pass_process_contours);
+    }
+    {
+      auto &sub = pass_process_contours.sub("strokegen_contour_2d_resample_alloc_samples_finish");
+      sub.shader_set(shaders_.static_shader_get(CONTOUR_ALLOC_2D_SAMPLES_FINISH));
+
+      bind_rsc_for_contour_2d_resample_(sub, screen_res, sample_rate, ssbo_offset);
+
+      sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_edge_dispatch_args_);
+      sub.barrier(GPU_BARRIER_SHADER_STORAGE);
+    }
+
+    append_subpass_fill_dispatch_args_contour_2d_samples(pass_process_contours);
+    {
+      auto &sub = pass_process_contours.sub(
+          "strokegen_contour_2d_resample_idmapping_clear_buffer");
+      sub.shader_set(shaders_.static_shader_get(CLEAR_2D_SAMPLE_TO_CONTOUR_IDMAPPING));
+
+      bind_rsc_for_contour_2d_resample_(sub, screen_res, sample_rate, ssbo_offset);
+
+      sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_2d_sample_dispatch_args_);
+      sub.barrier(GPU_BARRIER_SHADER_STORAGE);
+    }
+    {
+      auto &sub = pass_process_contours.sub(
+          "strokegen_contour_2d_resample_idmapping_setup_segscan");
+      sub.shader_set(shaders_.static_shader_get(PREP_2D_SAMPLE_TO_CONTOUR_IDMAPPING));
+
+      bind_rsc_for_contour_2d_resample_(sub, screen_res, sample_rate, ssbo_offset);
+
+      sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_2d_sample_dispatch_args_);
+      sub.barrier(GPU_BARRIER_SHADER_STORAGE);
+    }
+    {
+      ScanSettings settings;
+      settings.use_indirect_dispatch = true;
+      settings.ssbo_scan_infos_ = buffers_.reused_ssbo_tree_scan_infos_2d_resampler_();
+      settings.ssbo_in_scan_data_ =
+          buffers_.reused_ssbo_tree_scan_input_2d_resample_contour_idmapping_();
+      settings.ssbo_scan_block_sum_ = buffers_.ssbo_scan_block_sum_;
+      settings.ssbo_out_scan_data_ =
+          buffers_.reused_ssbo_tree_scan_output_2d_resample_contour_idmapping_();
+      settings.shader_upsweep = SEGSCAN_UINT_MIN_UPSWEEP;
+      settings.shader_aggregate = SEGSCAN_UINT_MIN_AGGREGATE;
+      settings.shader_dwsweep = SEGSCAN_UINT_MIN_DWSWEEP;
+      settings.is_validation_shader = false;
+      settings.frame_counter = 0;
+
+      append_subpass_segscan(settings, pass_process_contours);
+    }
+    {
+      auto &sub = pass_process_contours.sub("strokegen_contour_2d_resample_idmapping_finish");
+      sub.shader_set(shaders_.static_shader_get(FINISH_2D_SAMPLE_TO_CONTOUR_IDMAPPING));
+
+      bind_rsc_for_contour_2d_resample_(sub, screen_res, sample_rate, ssbo_offset);
+
+      sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_2d_sample_dispatch_args_);
+      sub.barrier(GPU_BARRIER_SHADER_STORAGE);
+    }
+    {
+      auto &sub = pass_process_contours.sub("strokegen_contour_2d_resample_eval_position");
+      sub.shader_set(shaders_.static_shader_get(CONTOUR_2D_SAMPLES_EVAL_POSITION));
+
+      bind_rsc_for_contour_2d_resample_(sub, screen_res, sample_rate, ssbo_offset);
+      sub.bind_image(0, textures_.tex2d_contour_dbg_); 
+
+      sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_2d_sample_dispatch_args_);
+      sub.barrier(GPU_BARRIER_SHADER_STORAGE);
+    }
+
+  }
+
   void StrokeGenPassModule::append_subpass_calc_contour_edges_draw_data()
   {
     int ssbo_offset = 0; 
@@ -1890,16 +2059,19 @@ namespace blender::npr::strokegen
   {
     pass_process_contours.init();
 
-
+    // Split contour edges based on rasterized visibility
     append_subpass_contour_edges_soft_rasterization();
     append_subpass_visibility_split_contour_edges(); 
 
+    // List ranking to generate curves
     append_subpass_fill_contour_list_ranking_inputs(); 
     append_subpass_fill_dispatch_args_contour_edges(pass_process_contours, true); 
     append_subpass_list_ranking(ContourEdgeLinking, pass_process_contours, true);
-
+    // Reorder contour verts & generate curves
     append_subpass_fill_dispatch_args_contour_edges(pass_process_contours, true);
     append_subpass_serialize_contour_edges();
+
+    // Segmentation based on cusp/(TODO: visibility)
     append_subpass_fill_dispatch_args_contour_verts(pass_process_contours); 
     if (meshing_params.denoise_cusp_segmentation){
       SegLoopConv1DSettings conv1d_settings;
@@ -1915,7 +2087,13 @@ namespace blender::npr::strokegen
     
       append_subpass_segloopconv1d(conv1d_settings, pass_process_contours); 
     }
-    append_subpass_contour_segmentation(); 
+    append_subpass_contour_segmentation();
+
+    // 2D resampling
+    float sample_rate = 4.0f; 
+    append_subpass_contour_arclen_parameterization(textures_.get_contour_raster_screen_res(), sample_rate); 
+    append_subpass_contour_generate_2d_samples(textures_.get_contour_raster_screen_res(), sample_rate);
+
     append_subpass_calc_contour_edges_draw_data();
   }
 

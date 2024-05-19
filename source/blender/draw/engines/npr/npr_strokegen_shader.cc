@@ -106,7 +106,9 @@ const char *StrokeGenShaderModule::static_shader_create_info_name_get(eShaderTyp
     case FILL_DISPATCH_ARGS_CONTOUR_VERTS:
       return "strokegen_fill_dispatch_args_per_contour_vert";
     case FILL_DISPATCH_ARGS_CONTOUR_FRAGS:
-      return "strokegen_fill_dispatch_args_per_contour_fragment"; 
+      return "strokegen_fill_dispatch_args_per_contour_fragment";
+    case FILL_DISPATCH_ARGS_CONTOUR_2D_SAMPLES:
+      return "strokegen_fill_dispatch_args_per_contour_2d_sample"; 
     case EXTRACT_CURRENT_MESH_CONTOUR_DATA:
       return "bnpr_geom_extract_mesh_contour_data";
 
@@ -146,6 +148,20 @@ const char *StrokeGenShaderModule::static_shader_create_info_name_get(eShaderTyp
     case INDIRECT_DRAW_CONTOUR_EDGES:
       return "bnpr_geom_draw_contour_edges";
 
+    case CONTOUR_ARCLEN_PARAMETERIZATION:
+      return "strokegen_contour_2d_resample_arclen_parameterization";
+    case CONTOUR_ALLOC_2D_SAMPLES:
+      return "strokegen_contour_2d_resample_alloc_samples";
+    case CONTOUR_ALLOC_2D_SAMPLES_FINISH:
+      return "strokegen_contour_2d_resample_alloc_samples_finish";
+    case CLEAR_2D_SAMPLE_TO_CONTOUR_IDMAPPING:
+        return "strokegen_contour_2d_resample_idmapping_clear_buffer"; 
+    case PREP_2D_SAMPLE_TO_CONTOUR_IDMAPPING:
+      return "strokegen_contour_2d_resample_idmapping_setup_segscan";
+    case FINISH_2D_SAMPLE_TO_CONTOUR_IDMAPPING:
+      return "strokegen_contour_2d_resample_idmapping_finish";
+    case CONTOUR_2D_SAMPLES_EVAL_POSITION:
+      return "strokegen_contour_2d_resample_eval_position"; 
 
     case CONTOUR_PIXEL_COMPRESS:
       return "bnpr_compress_contour_pixels";
@@ -301,6 +317,13 @@ const char *StrokeGenShaderModule::static_shader_create_info_name_get(eShaderTyp
     case SCAN_TEST_DWSWEEP:
       return "bnpr_scan_test_dwsweep";
 
+    case SCAN_UINT_ADD_UPSWEEP:
+      return "bnpr_scan_uint_add_upsweep"; 
+    case SCAN_UINT_ADD_AGGREGATE:
+        return "bnpr_scan_uint_add_aggregate";
+    case SCAN_UINT_ADD_DWSWEEP:
+        return "bnpr_scan_uint_add_dwsweep";
+
     case SEGSCAN_TEST_UPSWEEP:
       return "bnpr_segscan_test_upsweep";
     case SEGSCAN_TEST_AGGREGATE:
@@ -314,6 +337,13 @@ const char *StrokeGenShaderModule::static_shader_create_info_name_get(eShaderTyp
       return "bnpr_segscan_uint_add_aggregate";
     case SEGSCAN_UINT_ADD_DWSWEEP:
       return "bnpr_segscan_uint_add_dwsweep";
+
+    case SEGSCAN_FLOAT_ADD_UPSWEEP:
+      return "bnpr_segscan_float_add_upsweep";
+    case SEGSCAN_FLOAT_ADD_AGGREGATE:
+      return "bnpr_segscan_float_add_aggregate";
+    case SEGSCAN_FLOAT_ADD_DWSWEEP:
+      return "bnpr_segscan_float_add_dwsweep";
 
     case SEGSCAN_UINT_MIN_UPSWEEP:
       return "bnpr_segscan_uint_min_upsweep";

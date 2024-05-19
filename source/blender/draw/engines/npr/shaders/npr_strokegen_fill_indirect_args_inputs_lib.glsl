@@ -338,10 +338,10 @@ void GetDispatchArgs(out uvec3 dispatch_args)
 
 void FillDispatchArgsBuffer(uvec3 args)
 {
-    ssbo_bnpr_mesh_contour_frag_dispatch_args_.num_groups_x = args.x;
-    ssbo_bnpr_mesh_contour_frag_dispatch_args_.num_groups_y = args.y;
-    ssbo_bnpr_mesh_contour_frag_dispatch_args_.num_groups_z = args.z;
-    ssbo_bnpr_mesh_contour_frag_dispatch_args_._pad0 = 0;
+    ssbo_bnpr_mesh_contour_2d_sample_dispatch_args_.num_groups_x = args.x;
+    ssbo_bnpr_mesh_contour_2d_sample_dispatch_args_.num_groups_y = args.y;
+    ssbo_bnpr_mesh_contour_2d_sample_dispatch_args_.num_groups_z = args.z;
+    ssbo_bnpr_mesh_contour_2d_sample_dispatch_args_._pad0 = 0;
 }
 #endif
 

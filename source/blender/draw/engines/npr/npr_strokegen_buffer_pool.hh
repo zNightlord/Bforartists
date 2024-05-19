@@ -64,6 +64,7 @@ class GPUBufferPoolModule {
   SSBO_IndirectDispatchArgs ssbo_bnpr_mesh_contour_edge_dispatch_args_;
   SSBO_IndirectDispatchArgs ssbo_bnpr_mesh_contour_vert_dispatch_args_;
   SSBO_IndirectDispatchArgs ssbo_bnpr_mesh_contour_frag_dispatch_args_;
+  SSBO_IndirectDispatchArgs ssbo_bnpr_mesh_contour_2d_sample_dispatch_args_;
 
 
 
@@ -402,7 +403,6 @@ class GPUBufferPoolModule {
     return ssbo_tree_scan_infos_[0];
   }
 
-
   inline GPUStorageBuf *reused_ssbo_tree_scan_infos_contour_segmentation_()
   {
     return ssbo_tree_scan_infos_[0];
@@ -423,6 +423,12 @@ class GPUBufferPoolModule {
   {
     return ssbo_mesh_buffer_reuse_8_;
   }
+
+  inline GPUStorageBuf *reused_ssbo_tree_scan_infos_2d_resampler_()
+  {
+    return ssbo_tree_scan_infos_[0];
+  }
+
 
   // Segmented Loop Convolution Working Buffers -----------------------------------
   SSBO_SegLoopConv1DData     ssbo_in_segloopconv1d_data_;

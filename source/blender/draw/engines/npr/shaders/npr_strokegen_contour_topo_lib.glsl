@@ -22,6 +22,10 @@ uint calc_global_contour_edge_id(uint local_contour_edge_id)
 
 struct ContourFlags
 {
+	/* the start/end snake(i.e. vertex) of the contour curve? */ 
+	bool curve_head; 
+	bool curve_tail; 
+
     bool seg_head; /* dynamically set for segmentation */
     bool seg_tail; /* dynamically set for segmentation */
     
@@ -32,7 +36,11 @@ struct ContourFlags
 
 uint encode_contour_flags(ContourFlags cf)
 {
-    uint cf_enc = 0u; 
+    uint cf_enc = 0u;
+	cf_enc |= uint(cf.curve_head);
+	cf_enc <<= 1u;
+	cf_enc |= uint(cf.curve_tail);
+	cf_enc <<= 1u; 
     cf_enc |= uint(cf.seg_head); 
     cf_enc <<= 1u; 
     cf_enc |= uint(cf.seg_tail); 
@@ -58,6 +66,10 @@ ContourFlags decode_contour_flags(uint cf_enc)
     cf.seg_tail = (1u == (cf_enc & 1u)); 
     cf_enc >>= 1u; 
     cf.seg_head = (1u == (cf_enc & 1u)); 
+	cf_enc >>= 1u;
+	cf.curve_tail = (1u == (cf_enc & 1u));
+	cf_enc >>= 1u;
+	cf.curve_head = (1u == (cf_enc & 1u));
 
     return cf; 
 }
@@ -65,12 +77,24 @@ ContourFlags decode_contour_flags(uint cf_enc)
 ContourFlags init_contour_flags(bool seg_head)
 {
     ContourFlags cf;
+	cf.curve_head = true; // needs further setup
+	cf.curve_tail = true; // needs further setup
     cf.seg_head = seg_head;
     cf.seg_tail = false;       // needs further setup
     cf.looped_curve = true;    // needs further setup
     cf.cusp_func_pstv = false; // needs further setup
 	cf.occluded = false;       // needs further setup
     return cf; 
+}
+
+void init_contour_curve_head(bool curve_head, inout ContourFlags cf)
+{ /* should happen only once for all contour snakes */
+	cf.curve_head = curve_head; 
+}
+
+void init_contour_curve_tail(bool curve_tail, inout ContourFlags cf)
+{ /* should happen only once for all contour snakes */
+	cf.curve_tail = curve_tail; 
 }
 
 void set_contour_seg_head(bool seg_head, inout ContourFlags cf)
@@ -84,11 +108,11 @@ void set_contour_seg_tail(bool seg_tail, inout ContourFlags cf)
 }
 
 void init_contour_looped_curve(bool looped, inout ContourFlags cf)
-{
+{ /* should happen only once for all contour snakes */
     cf.looped_curve = looped; 
 }
 
-void init_contour_cusp_flags(bool cusp_func_pstv, inout ContourFlags cf)
+void set_contour_cusp_flags(bool cusp_func_pstv, inout ContourFlags cf)
 {
     cf.cusp_func_pstv = cusp_func_pstv; 
 }

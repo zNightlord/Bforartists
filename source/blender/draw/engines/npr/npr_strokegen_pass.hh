@@ -17,7 +17,7 @@
 #include "npr_strokegen_texture_pool.hh"
 #include "strokegen_mesh_raster_pass.hh"
 
-#include <random>
+#include <random> 
 
 
 namespace blender::npr::strokegen {
@@ -407,6 +407,7 @@ public:
   void append_subpass_fill_dispatch_args_contour_edges(PassSimple& pass, bool all_contour_edges);
   void append_subpass_fill_dispatch_args_contour_verts(PassSimple &pass);
   void append_subpass_fill_dispatch_args_contour_frags(PassSimple &pass, bool all_contour_frags);
+  void append_subpass_fill_dispatch_args_contour_2d_samples(PassSimple &pass);
   void append_subpass_setup_contour_edge_data();
 
   // ---------------------------------------------------------------------------
@@ -421,7 +422,13 @@ public:
   
   // ---------------------------------------------------------------------------
   void append_subpass_serialize_contour_edges();
-  void append_subpass_contour_segmentation(); 
+  void append_subpass_contour_segmentation();
+
+  void bind_rsc_for_contour_2d_resample_(
+      draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf>& sub, float2 screen_res, float pcs_sample_rate, int& out_ssbo_offset); 
+  void append_subpass_contour_arclen_parameterization(float2 screen_res, float sample_rate);
+  void append_subpass_contour_generate_2d_samples(float2 screen_res, float sample_rate); 
+
   void append_subpass_calc_contour_edges_draw_data(); 
 
   // ---------------------------------------------------------------------------

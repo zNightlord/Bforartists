@@ -132,8 +132,10 @@ vec2 viewport_to_ndc(vec2 coord_ss, vec2 raster_resolution)
 struct LineRasterResult
 {
     uint num_frags; 
-    vec4 begend_uvs; // clipped beg/end uvs. within range of 0-1
-    vec2 begend_wclips; 
+	// note that the vertex order can be flipped ----------------
+    vec4 begend_uvs; // clipped beg/end uvs. within range of 0-1, 
+    vec2 begend_wclips; // homogeneous w
+	// ----------------------------------------------------------
     
     bool is_line_clip_rejected; // totally outside frustum
 	bool is_line_clipped; 		// partially within frustum 
@@ -525,6 +527,8 @@ vec2 unpack_2d_uv(uint uv_packed)
 
 uvec2 pack_2d_uv_x2(vec4 begend_uvs)
 {
+	begend_uvs = clamp(begend_uvs, vec4(.0f), vec4(1.0f)); 
+
 	float fixed_factor = float((1u << 16u) - 1u); 
 	uvec4 uv_fixed = uvec4(round(begend_uvs * fixed_factor)) & 0xffffu; 
 	return ((uv_fixed.zw << 16u) | uv_fixed.xy); 
@@ -546,7 +550,6 @@ uvec3 encode_contour_2d_resample_data(Contour2DResampleRasterData data)
 	d.x = (data.has_samples ? 1u : 0u); 
 	
 	data.begend_uvs = clamp(data.begend_uvs, vec4(.0f), vec4(1.0f)); 
-	float fixed_factor = float((1u << 16u) - 1u); 
 	d.yz = pack_2d_uv_x2(data.begend_uvs); 
 	
 	return d; 

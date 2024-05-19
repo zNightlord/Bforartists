@@ -27,7 +27,7 @@ void main()
     uint head_vtx_addr; bool looped_curve; 
 	uint encoded_info = ssbo_list_ranking_list_head_info_[contour_id*2u + 1u];
 	head_vtx_addr = (encoded_info >> 1u); 
-	looped_curve  = ((encoded_info & 1u) == 1u);
+	looped_curve  = ((encoded_info & 1u) == 1u); 
 
 	uint num_edges_in_curve = ssbo_contour_edge_list_len_in_[contour_id]; 
 	uint num_verts_in_curve = looped_curve ? num_edges_in_curve : num_edges_in_curve + 1u; 
@@ -40,6 +40,7 @@ void main()
     
     uint vtx_addr = head_vtx_addr + edge_rank_in_curve; 
 	bool additional_output_tail_vtx = is_tail_edge && !looped_curve; 
+	additional_output_tail_vtx = additional_output_tail_vtx && (1 < num_edges_in_curve);
     if (valid_thread)
     {
 		// transfer topology data from list ranking
@@ -58,25 +59,29 @@ void main()
 
 		ContourFlags cf = cetd.cf; 
 		init_contour_looped_curve(looped_curve, cf);
+		init_contour_curve_head(is_head_edge, cf);
+		init_contour_curve_tail(is_tail_edge, cf);
 
 		vec2 cusp_func_v = cetd.cusp_funcs; 
-		init_contour_cusp_flags(.0f < cusp_func_v[0], cf); 
-		
+		set_contour_cusp_flags(.0f < cusp_func_v[0], cf); 
 
 		Store3(ssbo_contour_snake_vpos_, vtx_addr, floatBitsToUint(cetd.vpos_ws[0]));
 		store_contour_flags(vtx_addr, cf); 
+		
+		ssbo_in_segloopconv1d_data_[vtx_addr] = encode_contour_flags(cf); // copy to segloopconv1d input buffer
+		
+		
 		if (additional_output_tail_vtx)
 		{
         	Store3(ssbo_contour_snake_vpos_, vtx_addr+1u, floatBitsToUint(cetd.vpos_ws[1]));
 			cf.seg_head = false; 
-			init_contour_cusp_flags(.0f < cusp_func_v[1], cf); 
+			init_contour_curve_head(false, cf);
+			init_contour_curve_tail(true, cf);
+			set_contour_cusp_flags(.0f < cusp_func_v[1], cf); 
 			store_contour_flags(vtx_addr+1u, cf);
-		}
 
-		/* copy to segloopconv1d input buffer */
-		ssbo_in_segloopconv1d_data_[vtx_addr] = encode_contour_flags(cf); 
-		if (additional_output_tail_vtx)
-			ssbo_in_segloopconv1d_data_[vtx_addr+1u] = encode_contour_flags(cf); 
+			ssbo_in_segloopconv1d_data_[vtx_addr+1u] = encode_contour_flags(cf); // copy to segloopconv1d input buffer
+		}
     }
 #endif
 
@@ -307,7 +312,7 @@ void main()
 
 
 
-#if defined(_KERNEL_MULTICOMPILE__2D_RESAMPLE_CONTOUR_EDGES)
+#if defined(_KERNEL_MULTICOMPILE__CONTOUR_EDGES_2D_RESAMPLE)
 /*
 	ssbo_bnpr_mesh_pool_counters_
 	ssbo_tree_scan_infos_2d_resampler_
@@ -325,19 +330,19 @@ void main()
 	uint ssbo_contour_2d_resample_raster_data_[] 
 	uint ssbo_contour_2d_sample_positions_[]
 	vec2 pcs_screen_size_
-	float sample_rate
+	float pcs_sample_rate_
 */
 
 vec2 get_raster_resolution()
 {
-	return pcs_screen_size_.xy / sample_rate; 
+	return pcs_screen_size_.xy / pcs_sample_rate_; 
 }
 
 void main()
 {
 	const uint idx = gl_GlobalInvocationID.x; 
 
-#if defined(_KERNEL_MULTICOMPILE__2D_RESAMPLE_CONTOUR_EDGES__RASTER)
+#if defined(_KERNEL_MULTICOMPILE__CONTOUR_EDGES_2D_RESAMPLE__PREP_ARCLEN_PARAM)
 	const uint num_contours = ssbo_bnpr_mesh_pool_counters_.num_contour_verts; 
 	const uint contour_id = idx; 
 	bool valid_thread = contour_id < num_contours; 
@@ -367,20 +372,30 @@ void main()
 	);
 
 	Contour2DResampleRasterData c2rd; 
-	c2rd.begend_uvs 	= raster_result.begend_uvs; 
+	c2rd.begend_uvs 	= raster_result.beg_from_p0 ? raster_result.begend_uvs : raster_result.begend_uvs.zwxy; 
 	c2rd.has_samples 	= !(raster_result.is_line_clip_rejected || non_looped_curve_tail) && valid_thread; 
 	if (!c2rd.has_samples)
 		c2rd.begend_uvs.zw = c2rd.begend_uvs.xy;
 
+	if (valid_thread)
+	{
+		vec4 dbg_col = vec4(1.0f); 
+		ivec2 dbg_pos = ivec2(c2rd.begend_uvs.xy * pcs_sample_rate_ * pcs_screen_size_.xy);
+		imageStore(tex2d_contour_dbg_, dbg_pos, dbg_col);
+	}
 
 	if (valid_thread)
 	{
-		bool hf = cct.head_contour_id == contour_id; // accumulate 2d-curve-len for each curve
+		// accumulate 2d-curve-len for each curve
+		uint hf = cct.head_contour_id == contour_id ? 1 : 0; 
+		
 		float scan_val = length(raster_resolution * (c2rd.begend_uvs.zw - c2rd.begend_uvs.xy)); 
-		if (!c2rd.has_samples) scan_val = 0.0f; // play safe
+		if (!c2rd.has_samples) scan_val = 0.0f; // play it safe
+		
 		uvec2 segscan_input_enc = segscan_float_hf_encode(SSBOData_SegScanType_float(scan_val, hf)); 
 		Store2(ssbo_tree_scan_input_2d_resampler_accumulate_curvlen_, contour_id, segscan_input_enc);
 
+		// Cache raster result of each contour edge
 		uvec3 resample_data = encode_contour_2d_resample_data(c2rd);
 		Store3(ssbo_contour_2d_resample_raster_data_, contour_id, resample_data);
 	}
@@ -399,39 +414,43 @@ void main()
 	}
 #endif
 
-#if defined(_KERNEL_MULTICOMPILE__2D_RESAMPLE_CONTOUR_EDGES__ALLOC_SAMPLES)
+#if defined(_KERNEL_MULTICOMPILE__CONTOUR_EDGES_2D_RESAMPLE__ALLOC_SAMPLES)
 	const uint num_contours = ssbo_bnpr_mesh_pool_counters_.num_contour_verts; 
 	const uint contour_id = idx; 
 	bool valid_thread = contour_id < num_contours;
 	
-	// Each contour polyline is now parameterized by arc length
+	ContourFlags cf = load_contour_flags(contour_id); 
+	ContourCurveTopo cct = load_contour_curve_topo(contour_id, cf); 
+
+	// Arc-length parameterized 3d contours
 	float len_2d, arc_len_param; {
-		SSBOData_SegScanType_float scan_input = segscan_float_hf_decode(
-			ssbo_tree_scan_input_2d_resampler_accumulate_curvlen_[contour_id]
-		);
+		SSBOData_SegScanType_float scan_input = segscan_float_hf_decode(uvec2(
+			ssbo_tree_scan_input_2d_resampler_accumulate_curvlen_[contour_id * 2u], 
+			ssbo_tree_scan_input_2d_resampler_accumulate_curvlen_[contour_id * 2u + 1u]
+		));
 		len_2d = scan_input.val; 
 
-		SSBOData_SegScanType_float scan_output = segscan_float_hf_decode(
+		SSBOData_SegScanType_float scan_output = segscan_float_hf_decode(uvec2(
 			/* == ssbo_tree_scan_output_2d_resampler_accumulate_curvlen_ */
-			ssbo_contour_arc_len_param_[contour_id]
-		);
+			ssbo_contour_arc_len_param_[2u * contour_id], 
+			ssbo_contour_arc_len_param_[2u * contour_id + 1u]
+		));
 		arc_len_param = scan_output.val; 
 	}
 
-	// We generate samples at integer arc length points
+	// Generate 2d sample at integer arc-len 
 	uint num_samples = 0; {
 		vec2 arc_len_range = vec2(arc_len_param, arc_len_param + len_2d); 
-		float arc_len_x_ceil  = ceil(arc_len_range.x); 
-		float arc_len_y_floor = floor(arc_len_range.y); 
-
-		if (arc_len_x_ceil < arc_len_y_floor)
-			num_samples = uint(arc_len_y_floor - arc_len_x_ceil + 1.0f + 1e-10f);
-		else if (arc_len_x_ceil == arc_len_y_floor)
-			if (arc_len_x_ceil == arc_len_range.x)
-				num_samples = 1u; 
-			else
-				num_samples = arc_len_y_floor == arc_len_range.y ? 0u : 1u;
-
+		
+		const float range_low  = ceil(arc_len_range.x); 
+		const float range_high = floor(arc_len_range.y); 
+		float inside_count = max(.0f, range_high - range_low + 1.0f);
+		// don't count the last sample if it is at the range boundary
+		bool range_high_touch_sample = arc_len_range.y == range_high;
+		bool last_edge_in_curve = (!cct.looped_curve) && ((contour_id + 1u) == cct.tail_contour_id);  
+		if (range_high_touch_sample && (!last_edge_in_curve)) inside_count -= 1.0f; 
+		
+		num_samples = uint(inside_count + 1e-10f);
 		if (len_2d == 0.0f) num_samples = 0u; 
 	}
 
@@ -440,18 +459,19 @@ void main()
 		uint scan_val = num_samples; 
 		ssbo_tree_scan_input_2d_resampler_alloc_samples_[contour_id] = scan_val;
 
-		ssbo_contour_arc_len_param_[contour_id] = arc_len_param;
+		ssbo_contour_arc_len_param_[2u * contour_id] = floatBitsToUint(arc_len_param);
+		ssbo_contour_arc_len_param_[2u * contour_id + 1u] = floatBitsToUint(len_2d);
 	}
 #endif
 
-#if defined(_KERNEL_MULTICOMPILE__2D_RESAMPLE_CONTOUR_EDGES__ALLOC_SAMPLES_FINISH)
+#if defined(_KERNEL_MULTICOMPILE__CONTOUR_EDGES_2D_RESAMPLE__ALLOC_SAMPLES_FINISH)
 	const uint num_contours = ssbo_bnpr_mesh_pool_counters_.num_contour_verts; 
 	const uint contour_id = idx; 
 	bool valid_thread = contour_id < num_contours;
 
 	uint num_samples = ssbo_tree_scan_input_2d_resampler_alloc_samples_[contour_id]; 
 
-	if (contour_id = num_contours - 1u)
+	if (contour_id == num_contours - 1u)
 	{
 		uint alloc_sample_offset = /* == ssbo_tree_scan_output_2d_resampler_alloc_samples_ */
 			ssbo_contour_to_start_sample_[contour_id]; 
@@ -461,7 +481,7 @@ void main()
 	}
 #endif
 
-#if defined(_KERNEL_MULTICOMPILE__2D_RESAMPLE_CONTOUR_EDGES__IDMAPPING__CLEAR_BUFFER)
+#if defined(_KERNEL_MULTICOMPILE__CONTOUR_EDGES_2D_RESAMPLE__IDMAPPING__CLEAR_BUFFER)
 	const uint num_samples = ssbo_bnpr_mesh_pool_counters_.num_2d_samples; 
 	const uint sample_id = idx; 
 	bool valid_thread = sample_id < num_samples;
@@ -471,13 +491,13 @@ void main()
 			segscan_uint_hf_encode(SSBOData_SegScanType_uint(0x3fffffffu, 0u));
 #endif
 
-#if defined(_KERNEL_MULTICOMPILE__2D_RESAMPLE_CONTOUR_EDGES__IDMAPPING__SETUP_SEGSCAN)
+#if defined(_KERNEL_MULTICOMPILE__CONTOUR_EDGES_2D_RESAMPLE__IDMAPPING__SETUP_SEGSCAN)
 	const uint num_contours = ssbo_bnpr_mesh_pool_counters_.num_contour_verts; 
 	const uint contour_id = idx; 
 	bool valid_thread = contour_id < num_contours;
 
 	uint num_2d_samples = ssbo_tree_scan_input_2d_resampler_alloc_samples_[contour_id];
-	uint alloc_sample_offset = ssbo_tree_scan_output_2d_resampler_alloc_samples_[contour_id]; 
+	uint alloc_sample_offset = ssbo_contour_to_start_sample_[contour_id]; // == ssbo_tree_scan_output_2d_resampler_alloc_samples_
 
 	if (valid_thread && 0 < num_2d_samples)
 	{ // Seed at segment heads
@@ -498,7 +518,7 @@ void main()
 	}
 #endif
 
-#if defined(_KERNEL_MULTICOMPILE__2D_RESAMPLE_CONTOUR_EDGES__IDMAPPING__FINISH)
+#if defined(_KERNEL_MULTICOMPILE__CONTOUR_EDGES_2D_RESAMPLE__IDMAPPING__FINISH)
 	const uint num_samples = ssbo_bnpr_mesh_pool_counters_.num_2d_samples; 
 	const uint sample_id = idx; 
 	bool valid_thread = sample_id < num_samples;
@@ -511,13 +531,12 @@ void main()
 			// == ssbo_tree_scan_output_2d_resample_contour_idmapping_[]
 			segscan_uint_hf_decode(ssbo_2d_sample_to_contour_[sample_id]); 
 		
-		// transform exclusive scan into inclusive
-		segscan_output.val = min(segscan_output.val, segscan_input.val); 
+		segscan_output.val = min(segscan_output.val, segscan_input.val); // exclusive scan into inclusive
 		ssbo_2d_sample_to_contour_[sample_id] = (segscan_output.val);
 	}
 #endif
 
-#if defined(_KERNEL_MULTICOMPILE__2D_RESAMPLE_CONTOUR_EDGES__EVALUATE_POSITION)
+#if defined(_KERNEL_MULTICOMPILE__CONTOUR_EDGES_2D_RESAMPLE__EVALUATE_POSITION)
 	const uint num_samples = ssbo_bnpr_mesh_pool_counters_.num_2d_samples; 
 	const uint sample_id = idx; 
 	bool valid_thread = sample_id < num_samples;
@@ -525,7 +544,7 @@ void main()
 
 	uint contour_id 			= ssbo_2d_sample_to_contour_[sample_id]; 
 	uint beg_sample_id 			= ssbo_contour_to_start_sample_[contour_id]; 
-	float contour_arc_len_param = ssbo_contour_arc_len_param_[contour_id]; 
+	float contour_arc_len_param = ssbo_contour_arc_len_param_[contour_id * 2u]; 
 	Contour2DResampleRasterData c2rd; 
 	{
 		uvec3 resample_data; 
@@ -537,7 +556,7 @@ void main()
 	// C: contour snake 2d pos, 
 	vec2 C = c2rd.begend_uvs.xy * raster_resolution;
 	// V: normalized screen dir, 
-	vec2 V = normalize(c2rd.begend_uvs.zw - c2rd.begend_uvs.xy);
+	vec2 V = normalize(c2rd.begend_uvs.zw * raster_resolution - c2rd.begend_uvs.xy * raster_resolution);
 	// s: offset parameter because we sample at integer arc-lens
 	float s = ceil(contour_arc_len_param) - contour_arc_len_param; 
 	// k: this is the kth sample from the contour edge
@@ -546,8 +565,13 @@ void main()
 	vec2 P = C + (s + k) * V;
 
 	if (valid_thread)
-		ssbo_contour_2d_sample_positions_[sample_id] = pack_2d_uv_x2(P); 
+		ssbo_contour_2d_sample_positions_[sample_id] = pack_2d_uv(P); 
 
+	if (valid_thread)
+	{
+		vec4 dbg_col = vec4(1.0f); 
+		imageStore(tex2d_contour_dbg_, ivec2(P * pcs_sample_rate_), dbg_col);
+	}
 #endif
 
 }

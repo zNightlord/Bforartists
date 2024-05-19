@@ -68,9 +68,6 @@ void main()
 
 	/* transform matrices, see "common_view_lib.glsl" */ 
 	mat4 model_to_world = drw_matrix_buf[ResourceID].model;  
-	mat4 world_to_model = drw_matrix_buf[ResourceID].model_inverse; 
-	mat4 view_to_world = ubo_view_matrices_.viewinv;
-	mat4 world_to_view = ubo_view_matrices_.viewmat;
 
 	vec3 vpos_ls, vpos_ws; 
 
@@ -832,7 +829,7 @@ void main()
 
 	
 	if (valid_thread && visible)
-		imageStore(tex2d_contour_dbg_, ivec2(sampleTexel), vec4(-z_frag, -z_vs_3x3[1][1], visible, 1.0f)); 
+		imageStore(tex2d_contour_dbg_, ivec2(sampleTexel), vec4(-z_frag, -z_vs_3x3[1][1], visible, .0f)); 
 
 	if (valid_thread)
 	{
@@ -1085,7 +1082,7 @@ void main()
 	{
 		vec2 frag_coord = load_frag_coord(frag_id, num_frags);	
 		imageStore(tex2d_contour_dbg_, ivec2(frag_coord), 
-			fvtr.visible ? vec4(.0, 1.0, .0, 1.0) : vec4(1.0, .0, 1.0, 1.0));
+			fvtr.visible ? vec4(.0, 1.0, .0, .0) : vec4(1.0, .0, 1.0, .0));
 	}
 	#endif
 
