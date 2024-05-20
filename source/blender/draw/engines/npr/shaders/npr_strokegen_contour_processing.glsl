@@ -40,7 +40,7 @@ void main()
     
     uint vtx_addr = head_vtx_addr + edge_rank_in_curve; 
 	bool additional_output_tail_vtx = is_tail_edge && !looped_curve; 
-	additional_output_tail_vtx = additional_output_tail_vtx && (1 < num_edges_in_curve);
+	additional_output_tail_vtx = additional_output_tail_vtx;
     if (valid_thread)
     {
 		// transfer topology data from list ranking
