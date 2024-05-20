@@ -1,6 +1,10 @@
 #ifndef BNPR_CONTOUR_GEOM__INCLUDED
 #define BNPR_CONTOUR_GEOM__INCLUDED
 
+#ifndef USE_GPU_SHADER_CREATE_INFO
+#	define USE_GPU_SHADER_CREATE_INFO 1
+#endif // fix the fucking error in Renderdoc
+
 uvec3 pack_u24_x4(uvec4 u)
 {
     uvec3 p = uvec3(0u);

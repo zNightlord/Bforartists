@@ -450,18 +450,19 @@ GPU_SHADER_CREATE_INFO(strokegen_contour_2d_resample_arclen_parameterization)
     .do_static_compilation(true)
     .additional_info("strokegen_contour_2d_resample")
     .define("_KERNEL_MULTICOMPILE__CONTOUR_EDGES_2D_RESAMPLE__PREP_ARCLEN_PARAM", "1")
-    .image(0, GPU_RGBA32F, Qualifier::WRITE, ImageType::FLOAT_2D, "tex2d_contour_dbg_")
-    ; 
+    .image(0, GPU_RGBA32F, Qualifier::WRITE, ImageType::FLOAT_2D, "tex2d_contour_dbg_"); 
     
 GPU_SHADER_CREATE_INFO(strokegen_contour_2d_resample_alloc_samples)
     .do_static_compilation(true)
     .additional_info("strokegen_contour_2d_resample")
-    .define("_KERNEL_MULTICOMPILE__CONTOUR_EDGES_2D_RESAMPLE__ALLOC_SAMPLES", "1"); 
+    .define("_KERNEL_MULTICOMPILE__CONTOUR_EDGES_2D_RESAMPLE__ALLOC_SAMPLES", "1")
+    .image(0, GPU_RGBA32F, Qualifier::WRITE, ImageType::FLOAT_2D, "tex2d_contour_dbg_"); 
 
 GPU_SHADER_CREATE_INFO(strokegen_contour_2d_resample_alloc_samples_finish)
     .do_static_compilation(true)
     .additional_info("strokegen_contour_2d_resample")
-    .define("_KERNEL_MULTICOMPILE__CONTOUR_EDGES_2D_RESAMPLE__ALLOC_SAMPLES_FINISH", "1");
+    .define("_KERNEL_MULTICOMPILE__CONTOUR_EDGES_2D_RESAMPLE__ALLOC_SAMPLES_FINISH", "1")
+    .image(0, GPU_RGBA32F, Qualifier::WRITE, ImageType::FLOAT_2D, "tex2d_contour_dbg_"); 
 
 GPU_SHADER_CREATE_INFO(strokegen_contour_2d_resample_idmapping_clear_buffer)
     .do_static_compilation(true)

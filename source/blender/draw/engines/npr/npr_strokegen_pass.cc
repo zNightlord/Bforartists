@@ -1938,6 +1938,7 @@ namespace blender::npr::strokegen
       sub.shader_set(shaders_.static_shader_get(CONTOUR_ALLOC_2D_SAMPLES));
 
       bind_rsc_for_contour_2d_resample_(sub, screen_res, sample_rate, ssbo_offset);
+      sub.bind_image(0, textures_.tex2d_contour_dbg_);
 
       sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_edge_dispatch_args_);
       sub.barrier(GPU_BARRIER_SHADER_STORAGE);
@@ -1962,6 +1963,7 @@ namespace blender::npr::strokegen
       sub.shader_set(shaders_.static_shader_get(CONTOUR_ALLOC_2D_SAMPLES_FINISH));
 
       bind_rsc_for_contour_2d_resample_(sub, screen_res, sample_rate, ssbo_offset);
+      sub.bind_image(0, textures_.tex2d_contour_dbg_);
 
       sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_edge_dispatch_args_);
       sub.barrier(GPU_BARRIER_SHADER_STORAGE);
@@ -1985,7 +1987,7 @@ namespace blender::npr::strokegen
 
       bind_rsc_for_contour_2d_resample_(sub, screen_res, sample_rate, ssbo_offset);
 
-      sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_2d_sample_dispatch_args_);
+      sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_edge_dispatch_args_);
       sub.barrier(GPU_BARRIER_SHADER_STORAGE);
     }
     {

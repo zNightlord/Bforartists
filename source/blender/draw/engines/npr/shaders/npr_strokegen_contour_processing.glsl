@@ -379,13 +379,6 @@ void main()
 
 	if (valid_thread)
 	{
-		vec4 dbg_col = vec4(1.0f); 
-		ivec2 dbg_pos = ivec2(c2rd.begend_uvs.xy * pcs_sample_rate_ * pcs_screen_size_.xy);
-		imageStore(tex2d_contour_dbg_, dbg_pos, dbg_col);
-	}
-
-	if (valid_thread)
-	{
 		// accumulate 2d-curve-len for each curve
 		uint hf = cct.head_contour_id == contour_id ? 1 : 0; 
 		
@@ -411,6 +404,13 @@ void main()
 		);
 
 		ssbo_bnpr_mesh_pool_counters_.num_2d_samples = 0u; 
+	}
+
+	if (valid_thread)
+	{
+		vec4 dbg_col = vec4(.0f); 
+		ivec2 dbg_pos = ivec2(c2rd.begend_uvs.xy * pcs_screen_size_.xy);
+		// imageStore(tex2d_contour_dbg_, dbg_pos, dbg_col);
 	}
 #endif
 
@@ -462,6 +462,20 @@ void main()
 		ssbo_contour_arc_len_param_[2u * contour_id] = floatBitsToUint(arc_len_param);
 		ssbo_contour_arc_len_param_[2u * contour_id + 1u] = floatBitsToUint(len_2d);
 	}
+
+	if (valid_thread)
+	{
+		Contour2DResampleRasterData c2rd; 
+		{
+			uvec3 resample_data; 
+			Load3(ssbo_contour_2d_resample_raster_data_, contour_id, resample_data);
+			c2rd = decode_contour_2d_resample_data(resample_data);
+		}
+
+		vec4 dbg_col = vec4(float(num_samples), .0f, .0f, 1.0f); 
+		ivec2 dbg_pos = ivec2(c2rd.begend_uvs.xy * pcs_screen_size_.xy);
+		// imageStore(tex2d_contour_dbg_, dbg_pos, dbg_col);
+	}
 #endif
 
 #if defined(_KERNEL_MULTICOMPILE__CONTOUR_EDGES_2D_RESAMPLE__ALLOC_SAMPLES_FINISH)
@@ -478,6 +492,22 @@ void main()
 
 		ssbo_bnpr_mesh_pool_counters_.num_2d_samples = alloc_sample_offset + num_samples;
 		/* fill dispatch args after this */
+	}
+
+	if (valid_thread)
+	{
+		Contour2DResampleRasterData c2rd; 
+		{
+			uvec3 resample_data; 
+			Load3(ssbo_contour_2d_resample_raster_data_, contour_id, resample_data);
+			c2rd = decode_contour_2d_resample_data(resample_data);
+		}
+
+		uint alloc_sample_offset = /* == ssbo_tree_scan_output_2d_resampler_alloc_samples_ */
+			ssbo_contour_to_start_sample_[contour_id]; 
+		vec4 dbg_col = vec4(float(alloc_sample_offset), .0f, .0f, 1.0f); 
+		ivec2 dbg_pos = ivec2(c2rd.begend_uvs.xy * pcs_screen_size_.xy);
+		// imageStore(tex2d_contour_dbg_, dbg_pos, dbg_col);
 	}
 #endif
 
