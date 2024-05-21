@@ -1877,7 +1877,7 @@ namespace blender::npr::strokegen
     float2 screen_res, float pcs_sample_rate, int& out_ssbo_offset
   ){
     sub.bind_ssbo(0, buffers_.reused_ssbo_contour_2d_resample_raster_data_());
-    sub.bind_ssbo(1, buffers_.reused_ssbo_contour_2d_sample_positions_());
+    sub.bind_ssbo(1, buffers_.reused_ssbo_contour_2d_sample_geometry_());
     sub.bind_ssbo(2, buffers_.reused_ssbo_tree_scan_input_2d_resampler_accumulate_curvlen_());
     sub.bind_ssbo(3, buffers_.reused_ssbo_contour_arc_len_param_());
     sub.bind_ssbo(4, buffers_.reused_ssbo_tree_scan_input_2d_resampler_alloc_samples_());
@@ -1897,6 +1897,32 @@ namespace blender::npr::strokegen
 
     sub.push_constant("pcs_screen_size_", screen_res);
     sub.push_constant("pcs_sample_rate_", pcs_sample_rate); 
+  }
+
+  void StrokeGenPassModule::bind_rsc_for_contour_2d_sample_evaluation_(
+      draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub,
+      float2 screen_res, float pcs_sample_rate, int &out_ssbo_offset)
+  {
+    sub.bind_ssbo(0, buffers_.reused_ssbo_contour_2d_sample_geometry_());
+    sub.bind_ssbo(1, buffers_.reused_ssbo_contour_2d_sample_topology_());
+    sub.bind_ssbo(2, buffers_.reused_ssbo_contour_arc_len_param_());
+    sub.bind_ssbo(3, buffers_.reused_ssbo_contour_to_start_sample_());
+    sub.bind_ssbo(4, buffers_.reused_ssbo_2d_sample_to_contour_());
+    sub.bind_ssbo(5, buffers_.ssbo_contour_snake_flags_); 
+    sub.bind_ssbo(6, buffers_.ssbo_contour_snake_rank_); 
+    sub.bind_ssbo(7, buffers_.ssbo_contour_snake_list_head_); 
+    sub.bind_ssbo(8, buffers_.ssbo_contour_snake_list_len_); 
+    sub.bind_ssbo(9, buffers_.ssbo_contour_snake_seg_rank_); 
+    sub.bind_ssbo(10, buffers_.ssbo_contour_snake_seg_len_); 
+    sub.bind_ssbo(11, buffers_.ssbo_bnpr_mesh_pool_counters_); 
+    out_ssbo_offset = 12;
+
+    sub.bind_image(0, textures_.tex2d_contour_dbg_); 
+
+    sub.bind_ubo(0, buffers_.ubo_view_matrices_cache_);
+
+    sub.push_constant("pcs_screen_size_", screen_res);
+    sub.push_constant("pcs_sample_rate_", pcs_sample_rate);
   }
 
   void StrokeGenPassModule::append_subpass_contour_arclen_parameterization(float2 screen_res, float sample_rate)
@@ -2020,8 +2046,8 @@ namespace blender::npr::strokegen
       auto &sub = pass_process_contours.sub("strokegen_contour_2d_resample_eval_position");
       sub.shader_set(shaders_.static_shader_get(CONTOUR_2D_SAMPLES_EVAL_POSITION));
 
-      bind_rsc_for_contour_2d_resample_(sub, screen_res, sample_rate, ssbo_offset);
-      sub.bind_image(0, textures_.tex2d_contour_dbg_); 
+      bind_rsc_for_contour_2d_sample_evaluation_(sub, screen_res, sample_rate, ssbo_offset);
+      sub.bind_ssbo(ssbo_offset + 0, buffers_.reused_ssbo_contour_2d_resample_raster_data_()); 
 
       sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_2d_sample_dispatch_args_);
       sub.barrier(GPU_BARRIER_SHADER_STORAGE);

@@ -425,7 +425,9 @@ public:
   void append_subpass_contour_segmentation();
 
   void bind_rsc_for_contour_2d_resample_(
-      draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf>& sub, float2 screen_res, float pcs_sample_rate, int& out_ssbo_offset); 
+      draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf>& sub, float2 screen_res, float pcs_sample_rate, int& out_ssbo_offset);
+  void bind_rsc_for_contour_2d_sample_evaluation_(
+      draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub, float2 screen_res, float pcs_sample_rate, int &out_ssbo_offset); 
   void append_subpass_contour_arclen_parameterization(float2 screen_res, float sample_rate);
   void append_subpass_contour_generate_2d_samples(float2 screen_res, float sample_rate); 
 

@@ -328,7 +328,7 @@ void main()
 	uint ssbo_tree_scan_output_2d_resample_contour_idmapping_[] (== ssbo_2d_sample_to_contour_[])
 
 	uint ssbo_contour_2d_resample_raster_data_[] 
-	uint ssbo_contour_2d_sample_positions_[]
+	uint ssbo_contour_2d_sample_geometry_[]
 	vec2 pcs_screen_size_
 	float pcs_sample_rate_
 */
@@ -337,6 +337,33 @@ vec2 get_raster_resolution()
 {
 	return pcs_screen_size_.xy / pcs_sample_rate_; 
 }
+
+#if defined(_KERNEL_MULTICOMPILE__CONTOUR_EDGES_2D_RESAMPLE__EVALUATE_TOPOLOGY)
+struct Contour2DSampleSegmentationInfo
+{ // 2d samples are segmented if
+	// (at different contour curves)
+	uint contour_curve_head_id; 
+	// || (at different contour segments)
+	uint contour_seg_head; 
+	// || (arclen is not consecutive) <= due to partially clipped contour curve(s)
+	float sample_arc_len_param; 
+}
+Contour2DSampleSegmentationInfo load_2d_sample_seg_key(uint sample_id, uint contour_id)
+{
+	Contour2DSampleSegmentationInfo info; 
+	
+	uint contour_id = ssbo_2d_sample_to_contour_[sample_id]; 
+	ContourFlags cf = load_contour_flags(contour_id); 
+	ContourCurveTopo cct = load_contour_curve_topo(contour_id, cf);
+
+	info.contour_curve_head_id = ssbo_contour_snake_list_head_[contour_id]; 
+
+	uint contour_seg_rank = ssbo_contour_snake_seg_rank_[contour_id];
+	info.contour_seg_head = move_contour_id_along_loop(cct, contour_id, -float(contour_seg_rank)); 
+
+	info.sample_arc_len_param  = load_ssbo_contour_2d_sample_geometry__curv_arclen_param(sample_id, num_samples);
+}
+#endif
 
 void main()
 {
@@ -574,7 +601,7 @@ void main()
 
 	uint contour_id 			= ssbo_2d_sample_to_contour_[sample_id]; 
 	uint beg_sample_id 			= ssbo_contour_to_start_sample_[contour_id]; 
-	float contour_arc_len_param = ssbo_contour_arc_len_param_[contour_id * 2u]; 
+	float contour_arc_len_param = uintBitsToFloat(ssbo_contour_arc_len_param_[contour_id * 2u]); 
 	Contour2DResampleRasterData c2rd; 
 	{
 		uvec3 resample_data; 
@@ -582,6 +609,8 @@ void main()
 		c2rd = decode_contour_2d_resample_data(resample_data);
 	}
 
+
+	// Evaluate Position ---
 	// contour edge is parameterized as P = C + (s + k) * V, 
 	// C: contour snake 2d pos, 
 	vec2 C = c2rd.begend_uvs.xy * raster_resolution;
@@ -593,15 +622,35 @@ void main()
 	float k = float(sample_id - beg_sample_id);
 
 	vec2 P = C + (s + k) * V;
+	float sample_arc_len_param = ceil(contour_arc_len_param) + k;
 
 	if (valid_thread)
-		ssbo_contour_2d_sample_positions_[sample_id] = pack_2d_uv(P); 
+	{
+		store_ssbo_contour_2d_sample_geometry__position(sample_id, P); 
+		store_ssbo_contour_2d_sample_geometry__curv_arclen_param(sample_id, sample_arc_len_param, num_samples);
+	}	
 
 	if (valid_thread)
 	{
 		vec4 dbg_col = vec4(1.0f); 
 		imageStore(tex2d_contour_dbg_, ivec2(P * pcs_sample_rate_), dbg_col);
 	}
+#endif
+
+#if defined(_KERNEL_MULTICOMPILE__CONTOUR_EDGES_2D_RESAMPLE__EVALUATE_TOPOLOGY)
+
+	#if defined(_KERNEL_MULTICOMPILE__CONTOUR_EDGES_2D_RESAMPLE__EVALUATE_TOPOLOGY__STEP_0)
+	// Prep for evaluating topo
+	const uint num_samples = ssbo_bnpr_mesh_pool_counters_.num_2d_samples; 
+	const uint sample_id = idx; 
+	bool valid_thread = sample_id < num_samples;
+	vec2 raster_resolution = get_raster_resolution(); 
+
+	Contour2DSampleSegmentationInfo sample_si = load_2d_sample_seg_key(sample_id, contour_id); 
+	Contour2DSampleSegmentationInfo next_sample_si = load_2d_sample_seg_key(sample_id + 1u, contour_id);
+	#endif
+
+
 #endif
 
 }

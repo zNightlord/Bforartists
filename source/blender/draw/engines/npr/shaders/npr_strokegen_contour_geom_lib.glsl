@@ -569,3 +569,29 @@ Contour2DResampleRasterData decode_contour_2d_resample_data(uvec3 d)
 }
 
 #define CONTOUR_2D_SAMPLES_OFFSET_NONE 0xffffffffu // no samples are allocated for this contour
+
+
+
+
+
+#if defined(USE_CONTOUR_2D_SAMPLE_GEOMETRY_BUFFER)
+void store_ssbo_contour_2d_sample_geometry__position(uint sample_id, vec2 P)
+{
+	ssbo_contour_2d_sample_geometry_[sample_id] = pack_2d_uv(P); 
+}
+vec2 load_ssbo_contour_2d_sample_geometry__position(uint sample_id)
+{
+	return unpack_2d_uv(ssbo_contour_2d_sample_geometry_[sample_id]); 
+}
+void store_ssbo_contour_2d_sample_geometry__curv_arclen_param(uint sample_id, float arclen_param, uint num_samples)
+{
+	uint subbuff_offset = (((num_samples + 3u) >> 2u) << 2u); 
+	ssbo_contour_2d_sample_geometry_[subbuff_offset + sample_id] = floatBitsToUint(arclen_param); 
+}
+float load_ssbo_contour_2d_sample_geometry__curv_arclen_param(uint sample_id, uint num_samples)
+{
+	uint subbuff_offset = (((num_samples + 3u) >> 2u) << 2u); 
+	return uintBitsToFloat(ssbo_contour_2d_sample_geometry_[subbuff_offset + sample_id]); 
+}
+// void store_ssbo_contour_2d_sample_geometry__normal
+#endif

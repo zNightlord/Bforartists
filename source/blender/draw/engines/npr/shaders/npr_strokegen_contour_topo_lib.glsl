@@ -178,10 +178,6 @@ ContourCurveTopo load_contour_curve_topo(uint contour_id, ContourFlags cf)
 #endif
 
 
-
-
-
-
 #if defined(USE_CONTOUR_TRANSFER_DATA_BUFFER)
 // Packed per-contour-edge data.
 // Used as minimum cache as we iterate through meshes. 
@@ -230,12 +226,6 @@ ContourEdgeTransferData load_contour_edge_transfer_data(uint contour_edge_id)
     return cetd;  
 }
 #endif
-
-
-
-
-
-
 
 
 

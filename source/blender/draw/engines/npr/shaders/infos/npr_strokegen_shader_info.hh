@@ -422,7 +422,7 @@ GPU_SHADER_CREATE_INFO(strokegen_contour_2d_resample)
     .define("INCLUDE_CONTOUR_CURVE_TOPOLOGY_LOAD", "1")
 
     .storage_buf(0, Qualifier::READ_WRITE, "uint", "ssbo_contour_2d_resample_raster_data_[]")
-    .storage_buf(1, Qualifier::READ_WRITE, "uint", "ssbo_contour_2d_sample_positions_[]")
+    .storage_buf(1, Qualifier::READ_WRITE, "uint", "ssbo_contour_2d_sample_geometry_[]")
     .storage_buf(2, Qualifier::READ_WRITE, "uint", "ssbo_tree_scan_input_2d_resampler_accumulate_curvlen_[]")
     .storage_buf(3, Qualifier::READ_WRITE, "uint", "ssbo_contour_arc_len_param_[]")
     .storage_buf(4, Qualifier::READ_WRITE, "uint", "ssbo_tree_scan_input_2d_resampler_alloc_samples_[]")
@@ -479,11 +479,46 @@ GPU_SHADER_CREATE_INFO(strokegen_contour_2d_resample_idmapping_finish)
     .additional_info("strokegen_contour_2d_resample")
     .define("_KERNEL_MULTICOMPILE__CONTOUR_EDGES_2D_RESAMPLE__IDMAPPING__FINISH", "1");
 
+GPU_SHADER_CREATE_INFO(strokegen_contour_2d_sample_eval)
+    .do_static_compilation(true)
+    .typedef_source("bnpr_shader_shared.hh")
+    .typedef_source("draw_shader_shared.hh")
+    .define("_KERNEL_MULTICOMPILE__CONTOUR_EDGES_2D_RESAMPLE", "1")
+    .define("INCLUDE_CONTOUR_FLAGS_LOAD_STORE", "1")
+    .define("INCLUDE_CONTOUR_CURVE_TOPOLOGY_LOAD", "1")
+
+    .storage_buf(0, Qualifier::READ_WRITE, "uint", "ssbo_contour_2d_sample_geometry_[]")
+    .storage_buf(1, Qualifier::READ_WRITE, "uint", "ssbo_contour_2d_sample_topology_[]")
+    .storage_buf(2, Qualifier::READ_WRITE, "uint", "ssbo_contour_arc_len_param_[]")
+    .storage_buf(3, Qualifier::READ_WRITE, "uint", "ssbo_contour_to_start_sample_[]")
+    .storage_buf(4, Qualifier::READ_WRITE, "uint", "ssbo_2d_sample_to_contour_[]")
+    .storage_buf(5, Qualifier::READ_WRITE, "uint", "ssbo_contour_snake_flags_[]")
+    .storage_buf(6, Qualifier::READ, "uint", "ssbo_contour_snake_rank_[]")
+    .storage_buf(7, Qualifier::READ, "uint", "ssbo_contour_snake_list_head_[]")
+    .storage_buf(8, Qualifier::READ, "uint", "ssbo_contour_snake_list_len_[]")
+    .storage_buf(9, Qualifier::READ, "uint", "ssbo_contour_snake_seg_rank_[]")
+    .storage_buf(10, Qualifier::READ, "uint", "ssbo_contour_snake_seg_len_[]")
+    .storage_buf(11, Qualifier::READ_WRITE, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
+#define NUM_SSBO_strokegen_contour_2d_sample_eval 12
+
+    .image(0, GPU_RGBA32F, Qualifier::WRITE, ImageType::FLOAT_2D, "tex2d_contour_dbg_")
+
+    .uniform_buf(0, "ViewMatrices", "ubo_view_matrices_")
+
+    .push_constant(Type::VEC2, "pcs_screen_size_")
+    .push_constant(Type::FLOAT, "pcs_sample_rate_")
+
+    .local_group_size(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT) 
+    .compute_source("npr_strokegen_contour_processing.glsl");
+
 GPU_SHADER_CREATE_INFO(strokegen_contour_2d_resample_eval_position)
     .do_static_compilation(true)
-    .additional_info("strokegen_contour_2d_resample")
+    .additional_info("strokegen_contour_2d_sample_eval")
     .define("_KERNEL_MULTICOMPILE__CONTOUR_EDGES_2D_RESAMPLE__EVALUATE_POSITION", "1")
-    .image(0, GPU_RGBA32F, Qualifier::WRITE, ImageType::FLOAT_2D, "tex2d_contour_dbg_")
+    .define("USE_CONTOUR_2D_SAMPLE_GEOMETRY_BUFFER", "1")
+#define SSBO_OFFSET NUM_SSBO_strokegen_contour_2d_sample_eval
+    .storage_buf(SSBO_OFFSET + 0, Qualifier::READ_WRITE, "uint", "ssbo_contour_2d_resample_raster_data_[]")
+#undef SSBO_OFFSET
     ;
 
 
