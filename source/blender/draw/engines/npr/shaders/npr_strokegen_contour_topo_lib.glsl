@@ -229,7 +229,16 @@ ContourEdgeTransferData load_contour_edge_transfer_data(uint contour_edge_id)
 
 
 
-
+#if defined(USE_CONTOUR_2D_SAMPLE_TOPOLOGY_BUFFER)
+void store_ssbo_contour_2d_sample_topology__flags(uint sample_id, ContourFlags flags)
+{
+	ssbo_contour_2d_sample_topology_[sample_id] = encode_contour_flags(flags);  
+}
+vec2 load_ssbo_contour_2d_sample_topology__position(uint sample_id)
+{
+	return decode_contour_flags(ssbo_contour_2d_sample_topology_[sample_id]); 
+}
+#endif
 
 
 

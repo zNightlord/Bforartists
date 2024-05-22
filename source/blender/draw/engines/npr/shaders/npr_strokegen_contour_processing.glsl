@@ -348,7 +348,7 @@ struct Contour2DSampleSegmentationInfo
 	// || (arclen is not consecutive) <= due to partially clipped contour curve(s)
 	float sample_arc_len_param; 
 }
-Contour2DSampleSegmentationInfo load_2d_sample_seg_key(uint sample_id, uint contour_id)
+Contour2DSampleSegmentationInfo load_2d_sample_seg_key(uint sample_idd)
 {
 	Contour2DSampleSegmentationInfo info; 
 	
@@ -362,6 +362,23 @@ Contour2DSampleSegmentationInfo load_2d_sample_seg_key(uint sample_id, uint cont
 	info.contour_seg_head = move_contour_id_along_loop(cct, contour_id, -float(contour_seg_rank)); 
 
 	info.sample_arc_len_param  = load_ssbo_contour_2d_sample_geometry__curv_arclen_param(sample_id, num_samples);
+}
+
+bool is_2d_sample_curve_head(Contour2DSampleSegmentationInfo si, Contour2DSampleSegmentationInfo si_prev)
+{
+	return si.contour_curve_head_id != si_prev.contour_curve_head_id; 
+}
+bool is_2d_sample_seg_head(Contour2DSampleSegmentationInfo si, Contour2DSampleSegmentationInfo si_prev)
+{
+	bool break_curve = is_2d_sample_curve_head(si, si_prev); 
+	bool break_contour_seg = si.contour_seg_head != si_prev.contour_seg_head; 
+
+	float arc_len_diff = si.sample_arc_len_param - si_prev.sample_arc_len_param; 
+	float arc_len_diff_tol = 2.0f; // tolerate breaks within 2.0f
+	bool break_arc_len = .0f < arc_len_diff &&  arc_len_diff <= (1.0f + arc_len_diff_tol); 
+	break_arc_len = break_arc_len && (si.contour_curve_head_id == si_prev.contour_curve_head_id);
+
+	return (break_curve || break_contour_seg || break_arc_len);  
 }
 #endif
 
@@ -628,6 +645,13 @@ void main()
 	{
 		store_ssbo_contour_2d_sample_geometry__position(sample_id, P); 
 		store_ssbo_contour_2d_sample_geometry__curv_arclen_param(sample_id, sample_arc_len_param, num_samples);
+
+		ContourFlags cf = load_contour_flags(contour_id); // init sample flags
+		cf.curve_head = false;
+		cf.curve_tail = false;
+		cf.seg_head = false;
+		cf.seg_tail = false;
+		store_ssbo_contour_2d_sample_topology__flags(sample_id, cf); 
 	}	
 
 	if (valid_thread)
@@ -638,17 +662,73 @@ void main()
 #endif
 
 #if defined(_KERNEL_MULTICOMPILE__CONTOUR_EDGES_2D_RESAMPLE__EVALUATE_TOPOLOGY)
-
-	#if defined(_KERNEL_MULTICOMPILE__CONTOUR_EDGES_2D_RESAMPLE__EVALUATE_TOPOLOGY__STEP_0)
-	// Prep for evaluating topo
 	const uint num_samples = ssbo_bnpr_mesh_pool_counters_.num_2d_samples; 
 	const uint sample_id = idx; 
 	bool valid_thread = sample_id < num_samples;
 	vec2 raster_resolution = get_raster_resolution(); 
 
-	Contour2DSampleSegmentationInfo sample_si = load_2d_sample_seg_key(sample_id, contour_id); 
-	Contour2DSampleSegmentationInfo next_sample_si = load_2d_sample_seg_key(sample_id + 1u, contour_id);
+	#if defined(_KERNEL_MULTICOMPILE__CONTOUR_EDGES_2D_RESAMPLE__EVALUATE_TOPOLOGY__STEP_0)
+	// Detect curve head and seg head
+	// Let's say we have a contour curve starting at address H,
+	// with 2 segments A and B, and B is partially clipped.(from the view frustum)
+	// B is split into B1, BX and B2. 
+	//                                                
+	//             ___b5b6______b4________b3              
+	//            b7         BX            \              
+	//           /                          b2            
+	//          b8                           |            
+	//          |                            | 
+	// +======= b9 ======================== b1 =======+                                 
+	// |         \                        b0/         |                                 
+	// |      B1  b10        A         a5/  B2        |                                 
+	// |           \a0_a1_a2||a3___a4_/               |                                 
+	// |                  a3:=curve head              |                                 
+	// |                                              |                                 
+	// +================== Viewport ==================+
+	//                                                        
+	// After 2d resampling, 
+	// contour edges in BX do not have 2d samples.                                                   
+	// Hence the 2d samples are laied out as follows:
+	// [samples from edge a3-5, b0-b1, b9- b10, a0-a2] 
+	// curve & seg head sample in a3, detected by comparing the contour-curve-head-id with prev sample in memory
+	// seg head samples in a0,b0, 	  detected by comparing the contour-seg-head-id with prev sample in memory
+	// seg head sample  in b9,    	  detected by comparing the arc-len-param with prev sample(b1) in memory
+	// tails in a2, a5, b10, b1 can be inferred from heads in a3, b0, a0, b9
+	uint prev_sample_id = sample_id == 0u ? 0u : sample_id - 1u; 
+
+	Contour2DSampleSegmentationInfo sample_si 	   = load_2d_sample_seg_key(sample_id); 
+	Contour2DSampleSegmentationInfo prev_sample_si = load_2d_sample_seg_key(prev_sample_id);
+
+	bool is_curve_head = sample_id == 0 || is_2d_sample_curve_head(sample_si, prev_sample_si); 
+	bool is_seg_head   = sample_id == 0 || is_2d_sample_seg_head(sample_si, prev_sample_si);
+
+	if (valid_thread)
+	{
+		ContourFlags cf = load_ssbo_contour_2d_sample_topology__flags(sample_id); 
+		cf.curve_head = is_curve_head; 
+		cf.seg_head = is_seg_head; 
+		store_ssbo_contour_2d_sample_topology__flags(sample_id, cf); 
+	}
 	#endif
+
+	#if defined(_KERNEL_MULTICOMPILE__CONTOUR_EDGES_2D_RESAMPLE__EVALUATE_TOPOLOGY__STEP_1)
+	// Detect curve tail and seg tail
+	uint next_sample_id = sample_id == num_samples - 1u ? num_samples - 1u : sample_id + 1u;
+	
+	ContourFlags cf = load_ssbo_contour_2d_sample_topology__flags(sample_id);
+	ContourFlags cf_next = load_ssbo_contour_2d_sample_topology__flags(next_sample_id); 
+
+	bool is_curve_tail = cf_next.curve_head || (sample_id == num_samples - 1u);
+	bool is_seg_tail   = cf_next.seg_head || (sample_id == num_samples - 1u);  
+
+	if (valid_thread)
+	{
+		cf.curve_tail = is_curve_tail; 
+		cf.seg_tail = is_seg_tail; 
+		store_ssbo_contour_2d_sample_topology__flags(sample_id, cf); 
+	}
+	#endif
+
 
 
 #endif

@@ -486,7 +486,9 @@ GPU_SHADER_CREATE_INFO(strokegen_contour_2d_sample_eval)
     .define("_KERNEL_MULTICOMPILE__CONTOUR_EDGES_2D_RESAMPLE", "1")
     .define("INCLUDE_CONTOUR_FLAGS_LOAD_STORE", "1")
     .define("INCLUDE_CONTOUR_CURVE_TOPOLOGY_LOAD", "1")
-
+    .define("USE_CONTOUR_2D_SAMPLE_GEOMETRY_BUFFER", "1")
+    .define("USE_CONTOUR_2D_SAMPLE_TOPOLOGY_BUFFER", "1")
+    
     .storage_buf(0, Qualifier::READ_WRITE, "uint", "ssbo_contour_2d_sample_geometry_[]")
     .storage_buf(1, Qualifier::READ_WRITE, "uint", "ssbo_contour_2d_sample_topology_[]")
     .storage_buf(2, Qualifier::READ_WRITE, "uint", "ssbo_contour_arc_len_param_[]")
@@ -515,7 +517,6 @@ GPU_SHADER_CREATE_INFO(strokegen_contour_2d_resample_eval_position)
     .do_static_compilation(true)
     .additional_info("strokegen_contour_2d_sample_eval")
     .define("_KERNEL_MULTICOMPILE__CONTOUR_EDGES_2D_RESAMPLE__EVALUATE_POSITION", "1")
-    .define("USE_CONTOUR_2D_SAMPLE_GEOMETRY_BUFFER", "1")
 #define SSBO_OFFSET NUM_SSBO_strokegen_contour_2d_sample_eval
     .storage_buf(SSBO_OFFSET + 0, Qualifier::READ_WRITE, "uint", "ssbo_contour_2d_resample_raster_data_[]")
 #undef SSBO_OFFSET
