@@ -161,7 +161,13 @@ const char *StrokeGenShaderModule::static_shader_create_info_name_get(eShaderTyp
     case FINISH_2D_SAMPLE_TO_CONTOUR_IDMAPPING:
       return "strokegen_contour_2d_resample_idmapping_finish";
     case CONTOUR_2D_SAMPLES_EVAL_POSITION:
-      return "strokegen_contour_2d_resample_eval_position"; 
+      return "strokegen_contour_2d_resample_eval_position";
+    case CONTOUR_2D_SAMPLES_EVAL_TOPO_STEP_0:
+        return "strokegen_contour_2d_resample_eval_topo_step_0"; 
+    case CONTOUR_2D_SAMPLES_EVAL_TOPO_STEP_1:
+      return "strokegen_contour_2d_resample_eval_topo_step_1";
+    case CONTOUR_2D_SAMPLES_EVAL_TOPO_SETUP_SEGSCAN:
+      return "strokegen_contour_2d_resample_eval_topo_setup_segmentation";
 
     case CONTOUR_PIXEL_COMPRESS:
       return "bnpr_compress_contour_pixels";

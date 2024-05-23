@@ -2052,7 +2052,69 @@ namespace blender::npr::strokegen
       sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_2d_sample_dispatch_args_);
       sub.barrier(GPU_BARRIER_SHADER_STORAGE);
     }
+    {
+      auto &sub = pass_process_contours.sub("strokegen_contour_2d_resample_eval_topo_step_0");
+      sub.shader_set(shaders_.static_shader_get(CONTOUR_2D_SAMPLES_EVAL_TOPO_STEP_0));
 
+      bind_rsc_for_contour_2d_sample_evaluation_(sub, screen_res, sample_rate, ssbo_offset);
+
+      sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_2d_sample_dispatch_args_);
+      sub.barrier(GPU_BARRIER_SHADER_STORAGE);
+    }
+    {
+      auto &sub = pass_process_contours.sub("strokegen_contour_2d_resample_eval_topo_step_1");
+      sub.shader_set(shaders_.static_shader_get(CONTOUR_2D_SAMPLES_EVAL_TOPO_STEP_1));
+
+      bind_rsc_for_contour_2d_sample_evaluation_(sub, screen_res, sample_rate, ssbo_offset);
+
+      sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_2d_sample_dispatch_args_);
+      sub.barrier(GPU_BARRIER_SHADER_STORAGE);
+    }
+
+    for (int i = 0; i < 2; ++i)
+    {
+      {
+        auto &sub = pass_process_contours.sub(
+         "strokegen_contour_2d_resample_eval_topo_setup_segmentation"
+        );
+        sub.shader_set(shaders_.static_shader_get(CONTOUR_2D_SAMPLES_EVAL_TOPO_SETUP_SEGSCAN));
+
+        bind_rsc_for_contour_2d_sample_evaluation_(sub, screen_res, sample_rate, ssbo_offset);
+        sub.bind_ssbo(ssbo_offset + 0,
+                      buffers_.reused_ssbo_tree_scan_input_2d_sample_segmentation_0_());
+        sub.bind_ssbo(ssbo_offset + 1,
+                      buffers_.reused_ssbo_tree_scan_input_2d_sample_segmentation_1_());
+        sub.bind_ssbo(ssbo_offset + 2, buffers_.reused_ssbo_tree_scan_infos_2d_resampler_()); 
+        sub.push_constant("pcs_segment_by_seg_", i == 0 ? 0 : 1); 
+
+        sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_2d_sample_dispatch_args_);
+        sub.barrier(GPU_BARRIER_SHADER_STORAGE);
+      }
+
+
+      ScanSettings settings;
+      settings.use_indirect_dispatch = true;
+      settings.ssbo_scan_infos_ = buffers_.reused_ssbo_tree_scan_infos_2d_resampler_();
+      settings.ssbo_scan_block_sum_ = buffers_.ssbo_scan_block_sum_;
+      settings.shader_upsweep = SEGSCAN_UINT_ADD_UPSWEEP;
+      settings.shader_aggregate = SEGSCAN_UINT_ADD_AGGREGATE;
+      settings.shader_dwsweep = SEGSCAN_UINT_ADD_DWSWEEP;
+
+      settings.is_validation_shader = false;
+      settings.frame_counter = 0;
+      {
+        settings.ssbo_in_scan_data_ = buffers_.reused_ssbo_tree_scan_input_2d_sample_segmentation_0_();
+        settings.ssbo_out_scan_data_ = buffers_.reused_ssbo_tree_scan_output_2d_sample_segmentation_0_();
+        append_subpass_segscan(settings, pass_process_contours); 
+      }
+      {
+        settings.ssbo_in_scan_data_ = buffers_.reused_ssbo_tree_scan_input_2d_sample_segmentation_1_();
+        settings.ssbo_out_scan_data_ = buffers_.reused_ssbo_tree_scan_output_2d_sample_segmentation_1_();
+        append_subpass_segscan(settings, pass_process_contours); 
+      }
+
+
+    }
   }
 
   void StrokeGenPassModule::append_subpass_calc_contour_edges_draw_data()

@@ -327,10 +327,6 @@ class GPUBufferPoolModule {
   }
 
   // lifetime (append_subpass_contour_segmentation, append_subpass_calc_contour_edges_draw_data)
-  inline GPUStorageBuf *reused_ssbo_contour_2d_resample_raster_data_()
-  {
-    return ssbo_mesh_buffer_reuse_0_; 
-  }
   inline GPUStorageBuf *reused_ssbo_contour_to_start_sample_()
   {
     return ssbo_mesh_buffer_reuse_8_;
@@ -342,6 +338,12 @@ class GPUBufferPoolModule {
   inline GPUStorageBuf *reused_ssbo_contour_arc_len_param_()
   {
     return ssbo_mesh_buffer_reuse_2_;
+  }
+
+  // life time (append_subpass_contour_segmentation, strokegen_contour_2d_resample_eval_position]
+  inline GPUStorageBuf *reused_ssbo_contour_2d_resample_raster_data_()
+  {
+    return ssbo_mesh_buffer_reuse_0_;
   }
 
   // shorter-lifetime buffers
@@ -378,7 +380,22 @@ class GPUBufferPoolModule {
   {
     return ssbo_contour_raster_data_; 
   }
-
+  inline GPUStorageBuf *reused_ssbo_tree_scan_input_2d_sample_segmentation_0_()
+  {
+    return ssbo_mesh_buffer_reuse_0_; 
+  }
+  inline GPUStorageBuf *reused_ssbo_tree_scan_input_2d_sample_segmentation_1_()
+  {
+    return ssbo_mesh_buffer_reuse_3_;
+  }
+  inline GPUStorageBuf *reused_ssbo_tree_scan_output_2d_sample_segmentation_0_()
+  {
+    return ssbo_mesh_buffer_reuse_7_;
+  }
+  inline GPUStorageBuf *reused_ssbo_tree_scan_output_2d_sample_segmentation_1_()
+  {
+    return ssbo_mesh_buffer_reuse_1_;
+  }
 
   // lifetime [append_subpass_calc_contour_edges_draw_data, append_draw_contour_subpass]
   inline GPUStorageBuf *reused_ssbo_bnpr_mesh_pool_()

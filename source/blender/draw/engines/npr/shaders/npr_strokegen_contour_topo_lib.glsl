@@ -234,9 +234,49 @@ void store_ssbo_contour_2d_sample_topology__flags(uint sample_id, ContourFlags f
 {
 	ssbo_contour_2d_sample_topology_[sample_id] = encode_contour_flags(flags);  
 }
-vec2 load_ssbo_contour_2d_sample_topology__position(uint sample_id)
+vec2 load_ssbo_contour_2d_sample_topology__flags(uint sample_id)
 {
 	return decode_contour_flags(ssbo_contour_2d_sample_topology_[sample_id]); 
+}
+void store_ssbo_contour_2d_sample_topology__curve_rank(uint sample_id, uint rank, uint num_samples)
+{
+	uint subbuff_offset = num_samples; 
+	ssbo_contour_2d_sample_topology_[subbuff_offset + sample_id] = rank; 
+}
+uint load_ssbo_contour_2d_sample_topology__curve_rank(uint sample_id, uint num_samples)
+{
+	uint subbuff_offset = num_samples; 
+	return ssbo_contour_2d_sample_topology_[subbuff_offset + sample_id]; 
+}
+void store_ssbo_contour_2d_sample_topology__curve_len(uint sample_id, uint len, uint num_samples)
+{
+	uint subbuff_offset = num_samples * 2u; 
+	ssbo_contour_2d_sample_topology_[subbuff_offset + sample_id] = len; 
+}
+uint load_ssbo_contour_2d_sample_topology__curve_len(uint sample_id, uint num_samples)
+{
+	uint subbuff_offset = num_samples * 2u; 
+	return ssbo_contour_2d_sample_topology_[subbuff_offset + sample_id]; 
+}
+void store_ssbo_contour_2d_sample_topology__seg_rank(uint sample_id, uint rank, uint num_samples)
+{
+	uint subbuff_offset = num_samples * 3u; 
+	ssbo_contour_2d_sample_topology_[subbuff_offset + sample_id] = rank; 
+}
+uint load_ssbo_contour_2d_sample_topology__seg_rank(uint sample_id, uint num_samples)
+{
+	uint subbuff_offset = num_samples * 3u; 
+	return ssbo_contour_2d_sample_topology_[subbuff_offset + sample_id]; 
+}
+void store_ssbo_contour_2d_sample_topology__seg_len(uint sample_id, uint len, uint num_samples)
+{
+	uint subbuff_offset = num_samples * 4u; 
+	ssbo_contour_2d_sample_topology_[subbuff_offset + sample_id] = len; 
+}
+uint load_ssbo_contour_2d_sample_topology__seg_len(uint sample_id, uint num_samples)
+{
+	uint subbuff_offset = num_samples * 4u; 
+	return ssbo_contour_2d_sample_topology_[subbuff_offset + sample_id]; 
 }
 #endif
 
