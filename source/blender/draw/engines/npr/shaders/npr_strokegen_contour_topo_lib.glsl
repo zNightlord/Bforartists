@@ -139,8 +139,8 @@ ContourFlags load_contour_flags(uint contour_id)
 struct ContourCurveTopo
 {
     bool looped_curve; 
-	uint head_contour_id;
-	uint tail_contour_id;
+	uint head_id;
+	uint tail_id;
 	uint len;
 };
 
@@ -158,11 +158,11 @@ uint move_elem_along_loop(uint curr_elem_id, int offset, uint loop_head_elem_id,
 
 	return curr_elem_id;
 }
-uint move_contour_id_along_loop(ContourCurveTopo curve_topo, uint start_contour_id, float offset)
+uint move_contour_id_along_loop(ContourCurveTopo cct, uint start_contour_id, float offset)
 {
 	return move_elem_along_loop(
 		start_contour_id, (int(offset + 1e-10f)), 
-		curve_topo.head_contour_id, curve_topo.len
+		cct.head_id, cct.len
 	);
 }
 #if defined(INCLUDE_CONTOUR_CURVE_TOPOLOGY_LOAD)
@@ -170,12 +170,59 @@ ContourCurveTopo load_contour_curve_topo(uint contour_id, ContourFlags cf)
 {
     ContourCurveTopo cct; 
     cct.looped_curve    = cf.looped_curve; 
-    cct.head_contour_id = ssbo_contour_snake_list_head_[contour_id]; 
+    cct.head_id = ssbo_contour_snake_list_head_[contour_id]; 
     cct.len             = ssbo_contour_snake_list_len_[contour_id]; 
-    cct.tail_contour_id = cct.head_contour_id + cct.len - 1u;  
+    cct.tail_id = cct.head_id + cct.len - 1u;  
     return cct; 
 }
 #endif
+
+
+
+void FixLoopedJumps(
+	inout uint seg_rank, inout uint seg_len, 
+    ContourCurveTopo cct,
+    uint scanseg_head, uint scanseg_tail, 
+    ContourFlags cf_curv_head, ContourFlags cf_curv_tail,
+    SSBOData_SegScanType_uint scan_res_step_0_tailseg, // segscan_uint_hf_decode(scan_output_buf_0_[cct.tail_id]);
+    SSBOData_SegScanType_uint scan_res_step_1_headseg  // segscan_uint_hf_decode(scan_output_buf_1_[REVERSE_ID(cct.head_id)]);       
+)
+{
+  // Fix seg rank & seg len for looped curve
+  if (cct.looped_curve) {
+    bool first_seg_in_loop = scanseg_head == cct.head_id;
+    bool last_seg_in_loop = scanseg_tail == cct.tail_id;
+    bool is_self_loop = seg_len == cct.len;
+
+    if (first_seg_in_loop && !is_self_loop) {
+      bool downflow = !(cf_curv_head.seg_head);
+
+      if (downflow) {
+        // prev half segment, at the end of loop
+        // SSBOData_SegScanType_uint scan_res_step_1_tailseg =
+        // 	segscan_uint_hf_decode(scan_output_buf_1_[REVERSE_ID(cct.tail_id)]); // should
+        // equal to 0
+        uint tail_seg_len = scan_res_step_0_tailseg.val + 1u;
+        seg_rank += tail_seg_len; // fix seg rank
+        seg_len += tail_seg_len;  // fix seg len
+      }
+    }
+    if (last_seg_in_loop && !is_self_loop) {
+      bool overflow = !(cf_curv_tail.seg_tail);
+
+      if (overflow) {
+        // next half segment, at the head of loop
+        // SSBOData_SegScanType_uint scan_res_step_0_headseg =
+        // 	segscan_uint_hf_decode(scan_output_buf_0_[cct.head_id]); // should equal to 0
+        uint head_seg_len = scan_res_step_1_headseg.val + 1u;
+        seg_len += head_seg_len; // fix seg len
+      }
+    }
+  }
+}
+
+
+
 
 
 #if defined(USE_CONTOUR_TRANSFER_DATA_BUFFER)
@@ -234,7 +281,7 @@ void store_ssbo_contour_2d_sample_topology__flags(uint sample_id, ContourFlags f
 {
 	ssbo_contour_2d_sample_topology_[sample_id] = encode_contour_flags(flags);  
 }
-vec2 load_ssbo_contour_2d_sample_topology__flags(uint sample_id)
+ContourFlags load_ssbo_contour_2d_sample_topology__flags(uint sample_id)
 {
 	return decode_contour_flags(ssbo_contour_2d_sample_topology_[sample_id]); 
 }
@@ -277,6 +324,17 @@ uint load_ssbo_contour_2d_sample_topology__seg_len(uint sample_id, uint num_samp
 {
 	uint subbuff_offset = num_samples * 4u; 
 	return ssbo_contour_2d_sample_topology_[subbuff_offset + sample_id]; 
+}
+ContourCurveTopo load_contour_2d_sample_curve_topo(uint contour_id, ContourFlags cf, uint num_samples)
+{
+	uint curve_rank = load_ssbo_contour_2d_sample_topology__curve_rank(contour_id, num_samples); 
+
+    ContourCurveTopo cct; 
+    cct.looped_curve    = cf.looped_curve; 
+    cct.head_id = contour_id - curve_rank; 
+    cct.len             = load_ssbo_contour_2d_sample_topology__curve_len(contour_id, num_samples); 
+    cct.tail_id = cct.head_id + cct.len - 1u;  
+    return cct; 
 }
 #endif
 

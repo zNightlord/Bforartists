@@ -2073,9 +2073,10 @@ namespace blender::npr::strokegen
 
     for (int i = 0; i < 2; ++i)
     {
+      bool is_segmentation_by_curve_pass = (i == 0); 
       {
         auto &sub = pass_process_contours.sub(
-         "strokegen_contour_2d_resample_eval_topo_setup_segmentation"
+          "strokegen_contour_2d_resample_eval_topo_setup_segmentation"
         );
         sub.shader_set(shaders_.static_shader_get(CONTOUR_2D_SAMPLES_EVAL_TOPO_SETUP_SEGSCAN));
 
@@ -2085,7 +2086,7 @@ namespace blender::npr::strokegen
         sub.bind_ssbo(ssbo_offset + 1,
                       buffers_.reused_ssbo_tree_scan_input_2d_sample_segmentation_1_());
         sub.bind_ssbo(ssbo_offset + 2, buffers_.reused_ssbo_tree_scan_infos_2d_resampler_()); 
-        sub.push_constant("pcs_segment_by_seg_", i == 0 ? 0 : 1); 
+        sub.push_constant("pcs_segment_by_seg_", is_segmentation_by_curve_pass ? 0 : 1); 
 
         sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_2d_sample_dispatch_args_);
         sub.barrier(GPU_BARRIER_SHADER_STORAGE);
@@ -2113,9 +2114,32 @@ namespace blender::npr::strokegen
         append_subpass_segscan(settings, pass_process_contours); 
       }
 
+      {
+        auto &sub = pass_process_contours.sub("strokegen_contour_2d_resample_eval_topo_finish");
+        sub.shader_set(shaders_.static_shader_get(CONTOUR_2D_SAMPLES_EVAL_TOPO_FINISH_SEGSCAN));
 
+        sub.bind_ssbo(0, buffers_.reused_ssbo_contour_2d_sample_geometry_()); 
+        sub.bind_ssbo(1, buffers_.reused_ssbo_contour_2d_sample_topology_()); 
+        sub.bind_ssbo(2, buffers_.ssbo_bnpr_mesh_pool_counters_); 
+        sub.bind_ssbo(3, buffers_.reused_ssbo_tree_scan_input_2d_sample_segmentation_0_()); 
+        sub.bind_ssbo(4, buffers_.reused_ssbo_tree_scan_output_2d_sample_segmentation_0_()); 
+        sub.bind_ssbo(5, buffers_.reused_ssbo_tree_scan_input_2d_sample_segmentation_1_()); 
+        sub.bind_ssbo(6, buffers_.reused_ssbo_tree_scan_output_2d_sample_segmentation_1_()); 
+
+        sub.bind_image(0, textures_.tex2d_contour_dbg_); 
+
+        sub.push_constant("pcs_segment_by_seg_", is_segmentation_by_curve_pass ? 0 : 1);
+        sub.push_constant("pcs_screen_size_", screen_res);
+        sub.push_constant("pcs_sample_rate_", sample_rate);
+
+        sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_2d_sample_dispatch_args_);
+        sub.barrier(GPU_BARRIER_SHADER_STORAGE);
+      }
     }
   }
+
+
+
 
   void StrokeGenPassModule::append_subpass_calc_contour_edges_draw_data()
   {

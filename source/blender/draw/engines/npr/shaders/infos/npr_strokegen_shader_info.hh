@@ -546,6 +546,35 @@ GPU_SHADER_CREATE_INFO(strokegen_contour_2d_resample_eval_topo_setup_segmentatio
 #undef SSBO_OFFSET
     .push_constant(Type::INT, "pcs_segment_by_seg_");
 
+GPU_SHADER_CREATE_INFO(strokegen_contour_2d_resample_eval_topo_finish)
+    .do_static_compilation(true)
+
+    .typedef_source("bnpr_shader_shared.hh")
+    .typedef_source("draw_shader_shared.hh")
+    .define("_KERNEL_MULTICOMPILE__CONTOUR_EDGES_2D_RESAMPLE", "1")
+    .define("_KERNEL_MULTICOMPILE__CONTOUR_EDGES_2D_RESAMPLE__EVALUATE_TOPOLOGY", "1")
+    .define("_KERNEL_MULTICOMPILE__CONTOUR_EDGES_2D_RESAMPLE__EVALUATE_TOPOLOGY__FINISH_SEGSCAN", "1")
+
+    .define("USE_CONTOUR_2D_SAMPLE_GEOMETRY_BUFFER", "1")
+    .define("USE_CONTOUR_2D_SAMPLE_TOPOLOGY_BUFFER", "1")
+    
+    .storage_buf(0, Qualifier::READ_WRITE, "uint", "ssbo_contour_2d_sample_geometry_[]")
+    .storage_buf(1, Qualifier::READ_WRITE, "uint", "ssbo_contour_2d_sample_topology_[]")
+    .storage_buf(2, Qualifier::READ_WRITE, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
+    .storage_buf(3, Qualifier::READ, "uint", "ssbo_tree_scan_input_2d_sample_segmentation_0_[]")
+    .storage_buf(4, Qualifier::READ, "uint", "ssbo_tree_scan_output_2d_sample_segmentation_0_[]")
+    .storage_buf(5, Qualifier::READ, "uint", "ssbo_tree_scan_input_2d_sample_segmentation_1_[]")
+    .storage_buf(6, Qualifier::READ, "uint", "ssbo_tree_scan_output_2d_sample_segmentation_1_[]")
+    
+    .image(0, GPU_RGBA32F, Qualifier::WRITE, ImageType::FLOAT_2D, "tex2d_contour_dbg_")
+
+    .push_constant(Type::INT, "pcs_segment_by_seg_")
+    .push_constant(Type::VEC2, "pcs_screen_size_")
+    .push_constant(Type::FLOAT, "pcs_sample_rate_")
+    
+    .local_group_size(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT) 
+    .compute_source("npr_strokegen_contour_processing.glsl");
+
 
 GPU_SHADER_CREATE_INFO(strokegen_calc_contour_edges_render_data)
     .do_static_compilation(true)
