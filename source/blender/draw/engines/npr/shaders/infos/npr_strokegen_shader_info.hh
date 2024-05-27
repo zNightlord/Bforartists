@@ -2045,6 +2045,7 @@ GPU_SHADER_CREATE_INFO(strokegen_segloopconv1d_fill_dispatch_args)
 
 GPU_SHADER_CREATE_INFO(npr_segloopconv1D_test)
     .typedef_source("bnpr_shader_shared.hh")
+    .define("SEGLOOPCONV1D_USE_ADVANCED_INPUT", "1")
     .define("LOOPCONV1D_TAG", "build_patch")
     .define("LOOPCONV1D_MAX_RADIUS", NPR_TEST_SEGLOOPCONV1D_CONV_RADIUS_STR)
     .define("DATA_TYPE_LOOPCONV1D", "float")
@@ -2093,8 +2094,8 @@ GPU_SHADER_CREATE_INFO__SEGLOOPCONV1D_BUILD_PATCH(seg_denoising, npr_segloopconv
 #define GPU_SHADER_CREATE_INFO__SEGLOOPCONV1D_CONV(name, input_shader_info_conv) \
 GPU_SHADER_CREATE_INFO(strokegen_segloopconv1D_##name##_convolution)                     \
     .do_static_compilation(true)                                                         \
-    .additional_info(#input_shader_info_conv)                                            \
     .define("_KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION", "1")                          \
+    .additional_info(#input_shader_info_conv)                                            \
     .storage_buf(0, Qualifier::READ, "uint", "ssbo_segloopconv1d_patch_table_[]")        \
     .storage_buf(1, Qualifier::READ_WRITE, "uint", "ssbo_in_segloopconv1d_data_[]")      \
     .storage_buf(2, Qualifier::READ_WRITE, "uint", "ssbo_out_segloopconv1d_data_[]")     \

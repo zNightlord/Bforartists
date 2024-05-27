@@ -1,4 +1,4 @@
-#pragma BLENDER_REQUIRE(npr_strokegen_segloopconv1D_lib.glsl)
+#pragma BLENDER_REQUIRE(npr_strokegen_segloopconv1D_inputs_advanced_lib.glsl)
 
 
  
@@ -39,16 +39,20 @@ void main()
 
 
 #if defined(_KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION)
-
 void main()
 {
     const uint groupIdx = gl_LocalInvocationID.x;
     const uint idx = gl_GlobalInvocationID.x;
     const uint blockIdx = gl_WorkGroupID.x;
 
+
+    /* Customizable ---------------------------------------------------------- 
+     * Use this function to fetch the segment topology */
     bool seg_is_loop; 
     uint seg_head_id, seg_tail_id, seg_len;
     FUNC_GET_LOOP_TOPOLOGY(idx, seg_is_loop, seg_head_id, seg_tail_id, seg_len);
+
+
 
     DATA_TYPE_LOOPCONV1D orig_data; 
     _FUNC_SETUP_SEGLOOP1DCONV(
@@ -59,7 +63,12 @@ void main()
     ssbo_in_segloopconv1d_data_[idx] = floatBitsToUint(orig_data); // input is natively calculated rather than loaded from buffer
 #endif
 
+
+
     T_CONV_TEMP_DATA conv_temp_data; 
+    /* Default style of convolution. Visits each neighbor once. 
+     * Sufficient for most cases  */
+#if !defined(SEGLOOPCONV1D_USE_ADVANCED_INPUT)
     for (uint d = 1; d <= MAX_CONV_RADIUS; ++d)
     {
         DATA_TYPE_LOOPCONV1D neigh_data = _FUNC_LOAD_CONV_DATA_LDS_LEFT(
@@ -67,6 +76,7 @@ void main()
             seg_len, seg_head_id
         );
 
+        /* Customizable ------------------------------------------------------------- */
         FUNC_CONVOLUTION(
             /*mov_left*/true, d, seg_is_loop, seg_head_id, seg_tail_id, idx/*item_id*/, 
             neigh_data, orig_data, /*inout*/conv_temp_data
@@ -79,12 +89,21 @@ void main()
             d, blockIdx, groupIdx,
             seg_len, seg_head_id
         );
- 
+
+        /* Customizable ------------------------------------------------------------- */
         FUNC_CONVOLUTION(
             /*mov_left*/false, d, seg_is_loop, seg_head_id, seg_tail_id, idx, 
             neigh_data, orig_data, /*inout*/conv_temp_data); 
     }
+#else
+    /* Advanced convolution. Use this when sophisticated logic is involved  */
+    /* Customizable --------- */
+    FUNC_CONVOLUTION_ADVANCED(idx, blockIdx, groupIdx, seg_is_loop, seg_head_id, seg_tail_id, seg_len, /*out*/conv_temp_data); 
+#endif
 
+
+    /* Post-process && Output convolution results. */
+    /* Customizable ------------------------------------------------------------- */
     #if defined(_KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__TEST)
         ssbo_out_segloopconv1d_data_[idx] = floatBitsToUint(conv_temp_data.val);
     #endif
@@ -115,8 +134,8 @@ void main()
 
         if (idx < get_num_items())
             ssbo_out_segloopconv1d_data_[idx] = encode_contour_flags(efs_ori);
-
     #endif
+    /* -------------------------------------------------------------------------- */
 }
 
 #endif
