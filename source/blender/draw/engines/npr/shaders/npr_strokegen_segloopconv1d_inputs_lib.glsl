@@ -71,6 +71,20 @@ uint get_num_items()
         seg_is_loop = cfs.looped_curve; 
     }
 #endif
+#if defined(_KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__2DSAMPLE_CORNER_DETECTION)
+    void FUNC_GET_LOOP_TOPOLOGY(uint elem_id, out bool seg_is_loop, out uint seg_head_id, out uint seg_tail_id, out uint seg_len)
+    {
+    	uint num_samples = ssbo_bnpr_mesh_pool_counters_.num_2d_samples; 
+
+        ContourFlags cf = load_ssbo_contour_2d_sample_topology__flags(elem_id);
+        ContourCurveTopo cct = load_contour_2d_sample_curve_topo(elem_id, cf, num_samples);
+
+        seg_is_loop = cct.looped_curve;
+        seg_head_id = cct.head_id;
+        seg_tail_id = cct.tail_id;
+        seg_len     = cct.len;
+    }
+#endif
 
 
 
@@ -149,6 +163,18 @@ bool should_init_conv_data(bool mov_left, uint mov_step) { return mov_left && (m
                 conv_data.num_pstv_cusps_left += efs_neigh.cusp_func_pstv ? 1 : 0; 
             else
                 conv_data.num_pstv_cusps_right += efs_neigh.cusp_func_pstv ? 1 : 0; 
+        }
+    #endif
+
+    #if defined(_KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__2DSAMPLE_CORNER_DETECTION)
+        struct T_CONV_TEMP_DATA
+        {
+            vec2 pix_coord; 
+        }; 
+        T_CV FUNC_DEVICE_LOAD_LOOPCONV1D_DATA(uint elemId) 
+        {
+			vec2 pix_coord = pcs_screen_size_.xy * load_ssbo_contour_2d_sample_geometry__position(sample_id); 
+            return pix_coord;
         }
     #endif
 #undef T_CV
