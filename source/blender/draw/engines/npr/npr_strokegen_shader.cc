@@ -373,6 +373,10 @@ const char *StrokeGenShaderModule::static_shader_create_info_name_get(eShaderTyp
       return "strokegen_segloopconv1D_seg_denoising_build_patch";
     case CONV1D_SEG_DENOISE_CONVOLUTION:
       return "strokegen_segloopconv1D_seg_denoising_convolution";
+    case CONV1D_2D_SAMPLE_BUILD_PATCH:
+        return "strokegen_segloopconv1D_corner_detection_build_patch"; 
+    case CONV1D_2D_SAMPLE_CORNER_CONVOLUTION:
+      return "strokegen_segloopconv1D_corner_detection_convolution";
     case LISTRANKING_INIT_ANCHORS:
       return "strokegen_list_ranking_test_tagging";
     case LISTRANKING_COMPACT_ANCHORS:

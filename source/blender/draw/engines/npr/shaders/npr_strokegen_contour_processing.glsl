@@ -695,11 +695,16 @@ void main()
 			store_ssbo_contour_2d_sample_topology__flags(sample_id, cf); 
 		}
 
+		if (sample_id == 0)
+		{
+			ssbo_segloopconv1d_info_.num_conv_items = num_samples; 
+		}
+
 		if (valid_thread)
 		{
 			vec2 dbg_pix = pcs_screen_size_.xy * load_ssbo_contour_2d_sample_geometry__position(sample_id); 
 			vec4 dbg_col = vec4(1.0f); 
-			imageStore(tex2d_contour_dbg_, ivec2(dbg_pix), dbg_col);
+			// imageStore(tex2d_contour_dbg_, ivec2(dbg_pix), dbg_col);
 		}
 	#endif
 
@@ -724,7 +729,7 @@ void main()
 		{
 			vec2 dbg_pix = pcs_screen_size_.xy * load_ssbo_contour_2d_sample_geometry__position(sample_id); 
 			vec4 dbg_col = vec4(1.0f); 
-			imageStore(tex2d_contour_dbg_, ivec2(dbg_pix), dbg_col);
+			// imageStore(tex2d_contour_dbg_, ivec2(dbg_pix), dbg_col);
 		}
 	#endif
 
@@ -763,7 +768,7 @@ void main()
 		{
 			vec2 dbg_pix = pcs_screen_size_.xy * load_ssbo_contour_2d_sample_geometry__position(sample_id); 
 			vec4 dbg_col = vec4(1.0f); 
-			imageStore(tex2d_contour_dbg_, ivec2(dbg_pix), dbg_col);
+			// imageStore(tex2d_contour_dbg_, ivec2(dbg_pix), dbg_col);
 		}
 	#endif
 
@@ -826,7 +831,7 @@ void main()
 			vec2 dbg_pix = pcs_screen_size_.xy * load_ssbo_contour_2d_sample_geometry__position(sample_id); 
 			vec4 dbg_col = vec4(1.0f); 
 			dbg_col.rgb = rand_col_rgb(scanseg_len, scanseg_len); 
-			imageStore(tex2d_contour_dbg_, ivec2(dbg_pix), dbg_col);
+			// imageStore(tex2d_contour_dbg_, ivec2(dbg_pix), dbg_col);
 		}
 	#endif
 

@@ -135,6 +135,8 @@ void main()
         if (idx < get_num_items())
             ssbo_out_segloopconv1d_data_[idx] = encode_contour_flags(efs_ori);
     #endif
+    #if defined(_KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__2DSAMPLE_CORNER_DETECTION)
+    #endif
     /* -------------------------------------------------------------------------- */
 }
 

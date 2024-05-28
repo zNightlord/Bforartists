@@ -1958,6 +1958,8 @@ namespace blender::npr::strokegen
   void StrokeGenPassModule::append_subpass_contour_generate_2d_samples(float2 screen_res, float sample_rate)
   {
     int ssbo_offset = 0; 
+
+    // Convert 3D Contour to 2D Samples
     {
       auto &sub = pass_process_contours.sub(
           "strokegen_contour_2d_resample_alloc_samples");
@@ -2042,6 +2044,8 @@ namespace blender::npr::strokegen
       sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_2d_sample_dispatch_args_);
       sub.barrier(GPU_BARRIER_SHADER_STORAGE);
     }
+
+    // Evaluate Geom & Topo
     {
       auto &sub = pass_process_contours.sub("strokegen_contour_2d_resample_eval_position");
       sub.shader_set(shaders_.static_shader_get(CONTOUR_2D_SAMPLES_EVAL_POSITION));
@@ -2057,6 +2061,7 @@ namespace blender::npr::strokegen
       sub.shader_set(shaders_.static_shader_get(CONTOUR_2D_SAMPLES_EVAL_TOPO_STEP_0));
 
       bind_rsc_for_contour_2d_sample_evaluation_(sub, screen_res, sample_rate, ssbo_offset);
+      sub.bind_ssbo(ssbo_offset + 0, buffers_.ssbo_segloopconv1d_info_); 
 
       sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_2d_sample_dispatch_args_);
       sub.barrier(GPU_BARRIER_SHADER_STORAGE);
@@ -2071,6 +2076,7 @@ namespace blender::npr::strokegen
       sub.barrier(GPU_BARRIER_SHADER_STORAGE);
     }
 
+    // Segmentation
     for (int i = 0; i < 2; ++i)
     {
       bool is_segmentation_by_curve_pass = (i == 0); 
@@ -2135,6 +2141,21 @@ namespace blender::npr::strokegen
         sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_2d_sample_dispatch_args_);
         sub.barrier(GPU_BARRIER_SHADER_STORAGE);
       }
+    }
+
+    {
+      SegLoopConv1DSettings settings;
+      settings.use_indirect_dispatch = true;
+      settings.ssbo_segloopconv1d_info_ = buffers_.ssbo_segloopconv1d_info_;
+      settings.ssbo_in_segloopconv1d_data_ = buffers_.reused_ssbo_contour_2d_sample_geometry_();
+      settings.ssbo_segloopconv1d_patch_table_ = buffers_.ssbo_segloopconv1d_patch_table_;
+      settings.ssbo_out_segloopconv1d_data_ = buffers_.reused_ssbo_contour_2d_sample_topology_();
+      settings.shader_build_patch_table = CONV1D_2D_SAMPLE_BUILD_PATCH;
+      settings.shader_convolution = CONV1D_2D_SAMPLE_CORNER_CONVOLUTION;
+      settings.lazy_dispatch = false;
+      settings.is_validation_shader = false;
+
+      append_subpass_segloopconv1d(settings, pass_process_contours); 
     }
   }
 
@@ -2662,6 +2683,12 @@ namespace blender::npr::strokegen
         sub.bind_ssbo(3, buffers_.ssbo_contour_snake_list_len_);
         sub.bind_ssbo(4, buffers_.ssbo_contour_snake_flags_);
       }
+      else if (settings.shader_build_patch_table == CONV1D_2D_SAMPLE_BUILD_PATCH) {
+        sub.bind_ssbo(2, buffers_.reused_ssbo_contour_2d_sample_topology_());
+        sub.bind_ssbo(3, buffers_.reused_ssbo_contour_2d_sample_geometry_());
+        sub.bind_image(0, textures_.tex2d_contour_dbg_); 
+        sub.push_constant("pcs_screen_size_", textures_.get_contour_raster_screen_res()); 
+      }
       sub.bind_ubo(0, buffers_.ubo_segloopconv1d_);
 
       if (settings.use_indirect_dispatch)
@@ -2685,6 +2712,12 @@ namespace blender::npr::strokegen
       else if (settings.shader_convolution == CONV1D_SEG_DENOISE_CONVOLUTION) {
         sub.bind_ssbo(4, buffers_.ssbo_contour_snake_rank_);
         sub.bind_ssbo(5, buffers_.ssbo_contour_snake_list_len_);
+      }
+      else if (settings.shader_convolution == CONV1D_2D_SAMPLE_CORNER_CONVOLUTION) {
+        sub.bind_ssbo(4, buffers_.reused_ssbo_contour_2d_sample_topology_());
+        sub.bind_ssbo(5, buffers_.reused_ssbo_contour_2d_sample_geometry_());
+        sub.bind_image(0, textures_.tex2d_contour_dbg_); 
+        sub.push_constant("pcs_screen_size_", textures_.get_contour_raster_screen_res()); 
       }
       sub.bind_ubo(0, buffers_.ubo_segloopconv1d_);
 

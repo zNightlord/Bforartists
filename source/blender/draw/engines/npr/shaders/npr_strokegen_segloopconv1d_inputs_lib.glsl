@@ -2,6 +2,7 @@
 #pragma BLENDER_REQUIRE(npr_strokegen_topo_lib.glsl)
 #pragma BLENDER_REQUIRE(npr_strokegen_geom_lib.glsl)
 #pragma BLENDER_REQUIRE(npr_strokegen_contour_topo_lib.glsl)
+#pragma BLENDER_REQUIRE(npr_strokegen_contour_geom_lib.glsl)
 
 
 #ifndef BNPR_SEGLOOPCONV1D_LIB_INPUTS_INCLUDED
@@ -14,7 +15,7 @@ uint get_num_items()
 #if (_KERNEL_MULTI_COMPILE__SEGLOOPCONV1D_INFO_SSBO == 1)
     return uint(ssbo_segloopconv1d_info_.num_conv_items); 
 #else
-    return uint(ubo_segloopconv1d_.num_conv_items);
+    return uint(ubo_segloopconv1d_.num_conv_items); 
 #endif
 }
 
@@ -74,7 +75,7 @@ uint get_num_items()
 #if defined(_KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__2DSAMPLE_CORNER_DETECTION)
     void FUNC_GET_LOOP_TOPOLOGY(uint elem_id, out bool seg_is_loop, out uint seg_head_id, out uint seg_tail_id, out uint seg_len)
     {
-    	uint num_samples = ssbo_bnpr_mesh_pool_counters_.num_2d_samples; 
+    	uint num_samples = ssbo_segloopconv1d_info_.num_conv_items; 
 
         ContourFlags cf = load_ssbo_contour_2d_sample_topology__flags(elem_id);
         ContourCurveTopo cct = load_contour_2d_sample_curve_topo(elem_id, cf, num_samples);
@@ -169,11 +170,11 @@ bool should_init_conv_data(bool mov_left, uint mov_step) { return mov_left && (m
     #if defined(_KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__2DSAMPLE_CORNER_DETECTION)
         struct T_CONV_TEMP_DATA
         {
-            vec2 pix_coord; 
+            vec3 corner_scores; 
         }; 
         T_CV FUNC_DEVICE_LOAD_LOOPCONV1D_DATA(uint elemId) 
         {
-			vec2 pix_coord = pcs_screen_size_.xy * load_ssbo_contour_2d_sample_geometry__position(sample_id); 
+			vec2 pix_coord = pcs_screen_size_.xy * load_ssbo_contour_2d_sample_geometry__position(elemId); 
             return pix_coord;
         }
     #endif

@@ -526,7 +526,11 @@ GPU_SHADER_CREATE_INFO(strokegen_contour_2d_resample_eval_topo_step_0)
     .do_static_compilation(true)
     .additional_info("strokegen_contour_2d_sample_eval")
     .define("_KERNEL_MULTICOMPILE__CONTOUR_EDGES_2D_RESAMPLE__EVALUATE_TOPOLOGY", "1")
-    .define("_KERNEL_MULTICOMPILE__CONTOUR_EDGES_2D_RESAMPLE__EVALUATE_TOPOLOGY__STEP_0", "1");
+    .define("_KERNEL_MULTICOMPILE__CONTOUR_EDGES_2D_RESAMPLE__EVALUATE_TOPOLOGY__STEP_0", "1")
+#define SSBO_OFFSET NUM_SSBO_strokegen_contour_2d_sample_eval
+    .storage_buf(SSBO_OFFSET + 0, Qualifier::READ_WRITE, "UBData_SegLoopConv1D", "ssbo_segloopconv1d_info_")
+#undef SSBO_OFFSET
+    ;
 
 GPU_SHADER_CREATE_INFO(strokegen_contour_2d_resample_eval_topo_step_1)
     .do_static_compilation(true)
@@ -2075,6 +2079,27 @@ GPU_SHADER_CREATE_INFO(npr_segloopconv1D_seg_denoising_convolution)
     .storage_buf(4, Qualifier::READ_WRITE, "uint", "ssbo_contour_snake_rank_[]")
     .storage_buf(5, Qualifier::READ_WRITE, "uint", "ssbo_contour_snake_list_len_[]");
 
+GPU_SHADER_CREATE_INFO(npr_segloopconv1D_corner_detection)
+    .typedef_source("bnpr_shader_shared.hh")
+    .define("SEGLOOPCONV1D_USE_ADVANCED_INPUT", "1")
+    .define("LOOPCONV1D_TAG", "corner_detection")
+    .define("LOOPCONV1D_MAX_RADIUS", "32")
+    .define("DATA_TYPE_LOOPCONV1D", "vec2")
+    .define("_KERNEL_MULTI_COMPILE__SEGLOOPCONV1D_INFO_SSBO", "1")
+    .define("_KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__2DSAMPLE_CORNER_DETECTION", "1")
+    .define("USE_CONTOUR_2D_SAMPLE_TOPOLOGY_BUFFER", "1")
+    .define("USE_CONTOUR_2D_SAMPLE_GEOMETRY_BUFFER", "1")
+    .push_constant(Type::VEC2, "pcs_screen_size_")
+    .image(0, GPU_RGBA32F, Qualifier::WRITE, ImageType::FLOAT_2D, "tex2d_contour_dbg_");
+GPU_SHADER_CREATE_INFO(npr_segloopconv1D_corner_detection_build_patch)
+    .additional_info("npr_segloopconv1D_corner_detection")
+    .storage_buf(2, Qualifier::READ_WRITE, "uint", "ssbo_contour_2d_sample_topology_[]")
+    .storage_buf(3, Qualifier::READ_WRITE, "uint", "ssbo_contour_2d_sample_geometry_[]");
+GPU_SHADER_CREATE_INFO(npr_segloopconv1D_corner_detection_convolution)
+    .additional_info("npr_segloopconv1D_corner_detection")
+    .storage_buf(4, Qualifier::READ_WRITE, "uint", "ssbo_contour_2d_sample_topology_[]")
+    .storage_buf(5, Qualifier::READ_WRITE, "uint", "ssbo_contour_2d_sample_geometry_[]");
+
 #define GPU_SHADER_CREATE_INFO__SEGLOOPCONV1D_BUILD_PATCH(name, input_shader_info_build_patch) \
 GPU_SHADER_CREATE_INFO(strokegen_segloopconv1D_##name##_build_patch)                     \
     .do_static_compilation(true)                                                         \
@@ -2089,6 +2114,7 @@ GPU_SHADER_CREATE_INFO(strokegen_segloopconv1D_##name##_build_patch)            
 
 GPU_SHADER_CREATE_INFO__SEGLOOPCONV1D_BUILD_PATCH(test, npr_segloopconv1D_test_build_patch)
 GPU_SHADER_CREATE_INFO__SEGLOOPCONV1D_BUILD_PATCH(seg_denoising, npr_segloopconv1D_seg_denoising_build_patch)
+GPU_SHADER_CREATE_INFO__SEGLOOPCONV1D_BUILD_PATCH(corner_detection, npr_segloopconv1D_corner_detection_build_patch)
 
 
 #define GPU_SHADER_CREATE_INFO__SEGLOOPCONV1D_CONV(name, input_shader_info_conv) \
@@ -2107,6 +2133,7 @@ GPU_SHADER_CREATE_INFO(strokegen_segloopconv1D_##name##_convolution)            
 
 GPU_SHADER_CREATE_INFO__SEGLOOPCONV1D_CONV(test, npr_segloopconv1D_test_convolution)
 GPU_SHADER_CREATE_INFO__SEGLOOPCONV1D_CONV(seg_denoising, npr_segloopconv1D_seg_denoising_convolution)
+GPU_SHADER_CREATE_INFO__SEGLOOPCONV1D_CONV(corner_detection, npr_segloopconv1D_corner_detection_convolution)
 /** \} */
 
 

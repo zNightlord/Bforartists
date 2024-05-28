@@ -50,26 +50,79 @@
         #endif // _KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__TEST
 
         
-        #if defined(_KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__TEST)
-            vec2 orig_data = _FUNC_LOAD_CONV_DATA_LDS_LEFT(
+        #if defined(_KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__2DSAMPLE_CORNER_DETECTION)
+            uint sample_id = idx; 
+            uint num_samples = ssbo_segloopconv1d_info_.num_conv_items; 
+
+            conv_temp_data.corner_scores = vec3(.0f); 
+            vec2 pt = _FUNC_LOAD_CONV_DATA_LDS_LEFT(
                 0, blockIdx, groupIdx,
                 seg_len, seg_head_id
             ); 
 
-            for (uint d = 0; d < MAX_CONV_RADIUS; ++d)
-            {
-                vec2 arc_beg_pos = _FUNC_LOAD_CONV_DATA_LDS_LEFT(
-                    MAX_CONV_RADIUS - d, blockIdx, groupIdx,
-                    seg_len, seg_head_id 
-                );
+            const uvec3 chord_lens = uvec3(10u, 20u, 30u); 
+            vec3 C = vec3(.0f, .0f, .0f); 
 
-                vec2 arc_end_pos = _FUNC_LOAD_CONV_DATA_LDS_RIGHT(
-                    d + 1, blockIdx, groupIdx,
-                    seg_len, seg_head_id
-                ); 
-                 
+            for (uint ic = 0u; ic < 3u; ++ic)
+            {
+                C[ic] = .0f; 
+                
+                uint chord_len = chord_lens[ic]; 
+                uint filter_radius = chord_len - 1u;
+                if (seg_len < chord_len) return; // no corner for short segs
+
+                // TODO: we might need to avoid cusp-based contour segmentation for 2d samples
+                uint sub_seg_rank = load_ssbo_contour_2d_sample_topology__seg_rank(sample_id, num_samples); 
+                uint sub_seg_len = load_ssbo_contour_2d_sample_topology__seg_len(sample_id, num_samples); 
+                if (sub_seg_len < chord_len) return; // no corner for short segs
+
+                for (uint d = 0; d < filter_radius; ++d)
+                {
+                    bool valid_pt = true; 
+                    { 
+                        uint step_left = (filter_radius - d); 
+                        if (sub_seg_rank < step_left) valid_pt = false; 
+                        else
+                        {
+                            uint rank_chord_end = sub_seg_rank - step_left + chord_len - 1u; 
+                            if (sub_seg_len <= rank_chord_end) valid_pt = false; 
+                        }
+                    }
+                    if (valid_pt)
+                    {
+                        vec2 pt_chord_beg = _FUNC_LOAD_CONV_DATA_LDS_LEFT(
+                            filter_radius - d, blockIdx, groupIdx,
+                            seg_len, seg_head_id 
+                        );
+
+                        vec2 pt_chord_end = _FUNC_LOAD_CONV_DATA_LDS_RIGHT(
+                            d + 1, blockIdx, groupIdx,
+                            seg_len, seg_head_id
+                        ); 
+                        
+                        vec2 chord = pt_chord_end - pt_chord_beg; 
+                        float chord_len = length(chord); 
+                        
+                        vec2 a = pt - pt_chord_beg; 
+                        vec2 a_proj = chord * (dot(a, chord) / chord_len); 
+                        float dist = sqrt(max(.0f, dot(a, a) - dot(a_proj, a_proj))); 
+                        
+                        C[ic] += dist; 
+                    }
+                }
             }
-        #endif // _KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__TEST
+            
+            float c_max = max(C[0], max(C[1], C[2])); 
+            C /= max(c_max, 1e-10f); 
+            conv_temp_data.corner_scores = C; 
+
+            if (sample_id < num_samples)
+            {
+                vec4 dbg_col = vec4(1.0f); 
+                vec2 dbg_pix = pt; 
+                imageStore(tex2d_contour_dbg_, ivec2(dbg_pix), dbg_col);
+            }
+        #endif // _KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__2DSAMPLE_CORNER_DETECTION
         }
 
 
