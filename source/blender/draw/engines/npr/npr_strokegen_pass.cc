@@ -2696,7 +2696,7 @@ namespace blender::npr::strokegen
       else
         sub.dispatch(int3(buffers_.ubo_segloopconv1d_.num_thread_groups, 1, 1));
 
-      sub.barrier(GPU_BARRIER_SHADER_STORAGE);
+      sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_SHADER_IMAGE_ACCESS/*for dbg texture*/);
     }
     {
       auto &sub = pass.sub("strokegen_segloopconv1D_convolution");
@@ -2726,7 +2726,7 @@ namespace blender::npr::strokegen
       else
         sub.dispatch(int3(buffers_.ubo_segloopconv1d_.num_thread_groups, 1, 1));
 
-      sub.barrier(GPU_BARRIER_SHADER_STORAGE);
+      sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_SHADER_IMAGE_ACCESS /*for dbg texture*/);
     }
   }
 

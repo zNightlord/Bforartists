@@ -337,6 +337,8 @@ struct Contour2DSampleSegmentationInfo
 	uint contour_seg_head; 
 	// || (arclen is not consecutive) <= due to partially clipped contour curve(s)
 	float sample_arc_len_param; 
+
+	vec2 uv; 
 }; 
 Contour2DSampleSegmentationInfo load_2d_sample_seg_key(uint sample_id, uint num_samples)
 {
@@ -352,6 +354,8 @@ Contour2DSampleSegmentationInfo load_2d_sample_seg_key(uint sample_id, uint num_
 	info.contour_seg_head = move_contour_id_along_loop(cct, contour_id, -float(contour_seg_rank)); 
 
 	info.sample_arc_len_param  = load_ssbo_contour_2d_sample_geometry__curv_arclen_param(sample_id, num_samples);
+
+	info.uv = load_ssbo_contour_2d_sample_geometry__position(sample_id);
 
 	return info; 
 }
@@ -400,6 +404,7 @@ void main()
 		vpos_1 = uintBitsToFloat(vpos_1_enc);
 	}
 
+
 	const vec2 raster_resolution = get_raster_resolution(); 
 	LineRasterResult raster_result = raster_line_segment(
 		vec4(vpos_0.xyz, 1.0f), vec4(vpos_1.xyz, 1.0f), 
@@ -411,6 +416,14 @@ void main()
 	c2rd.has_samples 	= !(raster_result.is_line_clip_rejected || non_looped_curve_tail) && valid_thread; 
 	if (!c2rd.has_samples)
 		c2rd.begend_uvs.zw = c2rd.begend_uvs.xy;
+	
+	bool contour_edge_clipped = raster_result.is_line_clip_rejected || raster_result.is_line_clipped; 
+	if (valid_thread && contour_edge_clipped)
+	{ // Mark at curve head. race cond' wont hurt here
+		ContourFlags cf_curve_head = load_contour_flags(cct.head_id); 
+		set_contour_flags_curve_clipped(true, cf_curve_head); 
+		store_contour_flags(cct.head_id, cf_curve_head); 
+	}
 
 	if (valid_thread)
 	{
@@ -496,6 +509,13 @@ void main()
 
 		ssbo_contour_arc_len_param_[2u * contour_id] = floatBitsToUint(arc_len_param);
 		ssbo_contour_arc_len_param_[2u * contour_id + 1u] = floatBitsToUint(len_2d);
+	}
+
+	if (valid_thread)
+	{ // do a little extra here, broadcast curve-clipped flag from the header contour snake
+		ContourFlags cf_curve_head = load_contour_flags(cct.head_id); 
+		set_contour_flags_curve_clipped(cf_curve_head.curve_clipped, cf); 
+		store_contour_flags(contour_id, cf); 
 	}
 
 	if (valid_thread)
@@ -642,6 +662,7 @@ void main()
 		cf.curve_tail = false;
 		cf.seg_head = false;
 		cf.seg_tail = false;
+		// other fields keep the same as the parent contour snake
 		store_ssbo_contour_2d_sample_topology__flags(sample_id, cf); 
 	}	
 #endif
@@ -663,14 +684,14 @@ void main()
 		//           /                          b2            
 		//          b8                           |            
 		//          |                            | 
-		// +======= b9 ======================== b1 =======+                                 
-		// |         \                        b0/         |                                 
-		// |      B1  b10        A         a5/  B2        |                                 
-		// |           \a0_a1_a2||a3___a4_/               |                                 
-		// |                  a3:=curve head              |                                 
-		// |                                              |                                 
-		// +================== Viewport ==================+
-		//                                                        
+		// +======= b9 ======================== b1 =======+           b9                          b1                                          
+		// |         \                        b0/         |            \                        b0/                                           
+		// |      B1  b10        A         a5/  B2        |             b10        A         a5/                                              
+		// |           \a0_a1_a2||a3___a4_/               |  ==>         \a0_a1_a2||a3___a4_/                                                 
+		// |                  a3:=curve head              |                     a3:=curve head                                                
+		// |                                              |          
+		// +================== Viewport ==================+    Mem Layout:a3 a4 a5 b0 b1 b9 b10 a0 a1 a2                                         
+		//                                                                        |     |      |        
 		// After 2d resampling, 
 		// contour edges in BX do not have 2d samples.                                                   
 		// Hence the 2d samples are laied out as follows:
@@ -679,6 +700,9 @@ void main()
 		// seg head samples in a0,b0, detected by comparing the contour-seg-head-id with prev sample in memory
 		// seg head sample  in b9,    detected by comparing the arc-len-param with prev sample(b1) in memory
 		// tails in a2, a5, b10, b1 can be inferred from heads in a3, b0, a0, b9
+		//
+		// The clipping complicated the topology of resampled curves:  
+		// - The 0th stored elem of a curve, may not be the head of the curve (see a3 above)
 		uint prev_sample_id = sample_id == 0u ? 0u : sample_id - 1u; 
 
 		Contour2DSampleSegmentationInfo sample_si 	   = load_2d_sample_seg_key(sample_id, num_samples); 
@@ -824,14 +848,16 @@ void main()
 				store_ssbo_contour_2d_sample_topology__seg_rank(sample_id, scanseg_rank, num_samples);
 				store_ssbo_contour_2d_sample_topology__seg_len(sample_id,  scanseg_len,  num_samples);
 			}
-		}
 
-		if (valid_thread)
-		{
-			vec2 dbg_pix = pcs_screen_size_.xy * load_ssbo_contour_2d_sample_geometry__position(sample_id); 
-			vec4 dbg_col = vec4(1.0f); 
-			dbg_col.rgb = rand_col_rgb(scanseg_len, scanseg_len); 
-			// imageStore(tex2d_contour_dbg_, ivec2(dbg_pix), dbg_col);
+			if (valid_thread)
+			{
+				ContourFlags cf = load_ssbo_contour_2d_sample_topology__flags(sample_id);
+
+				vec2 dbg_pix = pcs_screen_size_.xy * load_ssbo_contour_2d_sample_geometry__position(sample_id); 
+				vec4 dbg_col = cf.curve_clipped ? vec4(1, 0, 0, 1) : vec4(1.0f); 
+				dbg_col.rgb = rand_col_rgb(scanseg_len, scanseg_len); 
+				imageStore(tex2d_contour_dbg_, ivec2(dbg_pix), dbg_col);
+			}
 		}
 	#endif
 
