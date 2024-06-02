@@ -135,7 +135,25 @@ void main()
         if (idx < get_num_items())
             ssbo_out_segloopconv1d_data_[idx] = encode_contour_flags(efs_ori);
     #endif
-    #if defined(_KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__2DSAMPLE_CORNER_DETECTION)
+    #if defined(_KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__2DSAMPLE_CORNER_DETECTION__STEP_0)
+        float curvature = conv_temp_data.corner_curv; 
+        if (idx < get_num_items())
+            store_ssbo_contour_2d_sample_geometry__corner_curvature(idx, curvature, get_num_items()); 
+    #endif
+    #if defined(_KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__2DSAMPLE_CORNER_DETECTION__STEP_1)
+        ContourFlags cf = load_ssbo_contour_2d_sample_topology__flags(idx); 
+        if (idx < get_num_items() && conv_temp_data.is_local_maxima)
+        {
+            set_contour_flags_is_corner(cf);
+            store_ssbo_contour_2d_sample_topology__flags(idx, cf); 
+        }
+
+        if (idx < get_num_items())
+        {
+            vec4 dbg_col = vec4(1.0f); 
+            vec2 dbg_pix = pcs_screen_size_ * load_ssbo_contour_2d_sample_geometry__position(idx); 
+            imageStore(tex2d_contour_dbg_, ivec2(dbg_pix), dbg_col); 
+        }
     #endif
     /* -------------------------------------------------------------------------- */
 }

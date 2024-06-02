@@ -576,7 +576,7 @@ Contour2DResampleRasterData decode_contour_2d_resample_data(uvec3 d)
 
 #if defined(USE_CONTOUR_2D_SAMPLE_GEOMETRY_BUFFER)
 void store_ssbo_contour_2d_sample_geometry__position(uint sample_id, vec2 P)
-{
+{ // stride : 1
 	ssbo_contour_2d_sample_geometry_[sample_id] = pack_2d_uv(P); 
 }
 vec2 load_ssbo_contour_2d_sample_geometry__position(uint sample_id)
@@ -584,14 +584,23 @@ vec2 load_ssbo_contour_2d_sample_geometry__position(uint sample_id)
 	return unpack_2d_uv(ssbo_contour_2d_sample_geometry_[sample_id]); 
 }
 void store_ssbo_contour_2d_sample_geometry__curv_arclen_param(uint sample_id, float arclen_param, uint num_samples)
-{
-	uint subbuff_offset = (((num_samples + 3u) >> 2u) << 2u); 
+{ // stride : 1
+	uint subbuff_offset = num_samples; 
 	ssbo_contour_2d_sample_geometry_[subbuff_offset + sample_id] = floatBitsToUint(arclen_param); 
 }
 float load_ssbo_contour_2d_sample_geometry__curv_arclen_param(uint sample_id, uint num_samples)
 {
-	uint subbuff_offset = (((num_samples + 3u) >> 2u) << 2u); 
+	uint subbuff_offset = num_samples; 
 	return uintBitsToFloat(ssbo_contour_2d_sample_geometry_[subbuff_offset + sample_id]); 
 }
-// void store_ssbo_contour_2d_sample_geometry__normal
+void store_ssbo_contour_2d_sample_geometry__corner_curvature(uint sample_id, float corner_curvature, uint num_samples)
+{ // stride : 1
+	uint subbuff_offset = num_samples * 2u; 
+	ssbo_contour_2d_sample_geometry_[subbuff_offset + sample_id] = floatBitsToUint(corner_curvature); 
+}
+float load_ssbo_contour_2d_sample_geometry__corner_curvature(uint sample_id, uint num_samples)
+{
+	uint subbuff_offset = num_samples * 2u; 
+	return uintBitsToFloat(ssbo_contour_2d_sample_geometry_[subbuff_offset + sample_id]); 
+}
 #endif

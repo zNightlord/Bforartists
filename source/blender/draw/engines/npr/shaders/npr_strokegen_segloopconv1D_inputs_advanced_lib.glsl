@@ -50,7 +50,7 @@
         #endif // _KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__TEST
 
         
-        #if defined(_KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__2DSAMPLE_CORNER_DETECTION)
+        #if defined(_KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__2DSAMPLE_CORNER_DETECTION__STEP_0)
             uint sample_id = idx; 
             uint num_samples = ssbo_segloopconv1d_info_.num_conv_items; 
 
@@ -60,7 +60,7 @@
             ContourFlags cf = load_ssbo_contour_2d_sample_topology__flags(sample_id); 
             bool is_sub_seg_loop = cf.looped_curve && (!cf.curve_clipped) && (sub_seg_len == seg_len); 
 
-            conv_temp_data.corner_scores = vec3(.0f); 
+            conv_temp_data.corner_curv = .0f; 
             vec2 pt = _FUNC_LOAD_CONV_DATA_LDS_LEFT(
                 0, blockIdx, groupIdx,
                 seg_len, seg_head_id
@@ -112,17 +112,22 @@
                 }
             }
             
-            float c_max = max(C[0], max(C[1], C[2])); 
-            C /= max(c_max, 1e-10f); 
-            conv_temp_data.corner_scores = C; 
+            float c_max = max(max(C.x, C.y), C.z);
+            bool c_degenerate = c_max < 1e-10f; 
+            
+            c_max = max(c_max, 1e-10f); 
+            vec3 H = c_degenerate ? vec3(0.0f) : C / c_max; 
+            float h = H.x * H.y * H.z; 
+
+            conv_temp_data.corner_curv = h; 
 
             if (sample_id < num_samples)
             {
-                vec4 dbg_col = vec4(1.0f); 
+                vec4 dbg_col = vec4(C, 1.0f); 
                 vec2 dbg_pix = pt; 
-                imageStore(tex2d_contour_dbg_, ivec2(dbg_pix), dbg_col);
+                imageStore(tex2d_contour_dbg_, ivec2(dbg_pix), dbg_col); 
             }
-        #endif // _KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__2DSAMPLE_CORNER_DETECTION
+        #endif // _KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__2DSAMPLE_CORNER_DETECTION__STEP_0
         }
 
 

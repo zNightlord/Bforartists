@@ -33,7 +33,9 @@ struct ContourFlags
     bool cusp_func_pstv; /*has positive cusp function*/
 	bool occluded; /* valid when visibility test activated */
 
-	bool curve_clipped; /* used in 2d-resampling */
+	/* flags used in 2d-resampled curves -------------------------- */
+	bool curve_clipped;  // TODO: may be buggy, needs further testing
+	bool is_corner; 
 }; 
 
 uint encode_contour_flags(ContourFlags cf)
@@ -52,8 +54,10 @@ uint encode_contour_flags(ContourFlags cf)
     cf_enc |= uint(cf.cusp_func_pstv);
 	cf_enc <<= 1u;
 	cf_enc |= uint(cf.occluded);
-	cf_enc <<= 1u; 
-	cf_enc |= uint(cf.curve_clipped); 
+	cf_enc <<= 1u;
+	cf_enc |= uint(cf.curve_clipped);
+	cf_enc <<= 1u;
+	cf_enc |= uint(cf.is_corner);
 
     return cf_enc; 
 }
@@ -61,6 +65,8 @@ uint encode_contour_flags(ContourFlags cf)
 ContourFlags decode_contour_flags(uint cf_enc)
 {
     ContourFlags cf; 
+	cf.is_corner = (1u == (cf_enc & 1u));
+	cf_enc >>= 1u;
 	cf.curve_clipped = (1u == (cf_enc & 1u));
 	cf_enc >>= 1u;
 	cf.occluded = (1u == (cf_enc & 1u));
@@ -91,6 +97,7 @@ ContourFlags init_contour_flags(bool seg_head)
     cf.cusp_func_pstv = false; // needs further setup
 	cf.occluded = false;       // needs further setup
 	cf.curve_clipped = false;  // needs further setup 
+	cf.is_corner = false;      // needs further setup 
     return cf; 
 }
 
@@ -132,6 +139,11 @@ void set_contour_flags_occluded(inout ContourFlags cf)
 void set_contour_flags_curve_clipped(bool clipped, inout ContourFlags cf)
 {
 	cf.curve_clipped = clipped; 
+}
+
+void set_contour_flags_is_corner(inout ContourFlags cf)
+{
+	cf.is_corner = true; 
 }
 
 #if defined(INCLUDE_CONTOUR_FLAGS_LOAD_STORE)

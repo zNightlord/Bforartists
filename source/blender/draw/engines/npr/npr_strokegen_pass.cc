@@ -2146,7 +2146,7 @@ namespace blender::npr::strokegen
       }
     }
 
-    {
+    { // Find 2D Corners
       SegLoopConv1DSettings settings;
       settings.use_indirect_dispatch = true;
       settings.ssbo_segloopconv1d_info_ = buffers_.ssbo_segloopconv1d_info_;
@@ -2154,11 +2154,15 @@ namespace blender::npr::strokegen
       settings.ssbo_segloopconv1d_patch_table_ = buffers_.ssbo_segloopconv1d_patch_table_;
       settings.ssbo_out_segloopconv1d_data_ = buffers_.reused_ssbo_contour_2d_sample_topology_();
       settings.shader_build_patch_table = CONV1D_2D_SAMPLE_BUILD_PATCH;
-      settings.shader_convolution = CONV1D_2D_SAMPLE_CORNER_CONVOLUTION;
+      settings.shader_convolution = CONV1D_2D_SAMPLE_CORNER_CONVOLUTION_STEP_0;
       settings.lazy_dispatch = false;
       settings.is_validation_shader = false;
+      append_subpass_segloopconv1d(settings, pass_process_contours);
 
-      append_subpass_segloopconv1d(settings, pass_process_contours); 
+      settings.shader_convolution = CONV1D_2D_SAMPLE_CORNER_CONVOLUTION_STEP_1;
+      settings.lazy_dispatch = true;
+      settings.is_validation_shader = false;
+      append_subpass_segloopconv1d(settings, pass_process_contours);
     }
   }
 
@@ -2716,7 +2720,8 @@ namespace blender::npr::strokegen
         sub.bind_ssbo(4, buffers_.ssbo_contour_snake_rank_);
         sub.bind_ssbo(5, buffers_.ssbo_contour_snake_list_len_);
       }
-      else if (settings.shader_convolution == CONV1D_2D_SAMPLE_CORNER_CONVOLUTION) {
+      else if (settings.shader_convolution == CONV1D_2D_SAMPLE_CORNER_CONVOLUTION_STEP_0
+                || settings.shader_convolution == CONV1D_2D_SAMPLE_CORNER_CONVOLUTION_STEP_1) {
         sub.bind_ssbo(4, buffers_.reused_ssbo_contour_2d_sample_topology_());
         sub.bind_ssbo(5, buffers_.reused_ssbo_contour_2d_sample_geometry_());
         sub.bind_image(0, textures_.tex2d_contour_dbg_); 
