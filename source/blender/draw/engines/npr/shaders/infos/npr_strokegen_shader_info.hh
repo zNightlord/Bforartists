@@ -530,13 +530,14 @@ GPU_SHADER_CREATE_INFO(strokegen_contour_2d_resample_eval_topo_step_0)
 #define SSBO_OFFSET NUM_SSBO_strokegen_contour_2d_sample_eval
     .storage_buf(SSBO_OFFSET + 0, Qualifier::READ_WRITE, "UBData_SegLoopConv1D", "ssbo_segloopconv1d_info_")
 #undef SSBO_OFFSET
-    ;
+    .push_constant(Type::INT, "pcs_segment_by_seg_");
 
 GPU_SHADER_CREATE_INFO(strokegen_contour_2d_resample_eval_topo_step_1)
     .do_static_compilation(true)
     .additional_info("strokegen_contour_2d_sample_eval")
     .define("_KERNEL_MULTICOMPILE__CONTOUR_EDGES_2D_RESAMPLE__EVALUATE_TOPOLOGY", "1")
-    .define("_KERNEL_MULTICOMPILE__CONTOUR_EDGES_2D_RESAMPLE__EVALUATE_TOPOLOGY__STEP_1", "1");
+    .define("_KERNEL_MULTICOMPILE__CONTOUR_EDGES_2D_RESAMPLE__EVALUATE_TOPOLOGY__STEP_1", "1")
+    .push_constant(Type::INT, "pcs_segment_by_seg_");
 
 GPU_SHADER_CREATE_INFO(strokegen_contour_2d_resample_eval_topo_setup_segmentation)
     .do_static_compilation(true)

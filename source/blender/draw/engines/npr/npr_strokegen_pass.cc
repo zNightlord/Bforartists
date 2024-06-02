@@ -2056,31 +2056,34 @@ namespace blender::npr::strokegen
       sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_2d_sample_dispatch_args_);
       sub.barrier(GPU_BARRIER_SHADER_STORAGE);
     }
-    {
-      auto &sub = pass_process_contours.sub("strokegen_contour_2d_resample_eval_topo_step_0");
-      sub.shader_set(shaders_.static_shader_get(CONTOUR_2D_SAMPLES_EVAL_TOPO_STEP_0));
 
-      bind_rsc_for_contour_2d_sample_evaluation_(sub, screen_res, sample_rate, ssbo_offset);
-      sub.bind_ssbo(ssbo_offset + 0, buffers_.ssbo_segloopconv1d_info_); 
-
-      sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_2d_sample_dispatch_args_);
-      sub.barrier(GPU_BARRIER_SHADER_STORAGE);
-    }
-    {
-      auto &sub = pass_process_contours.sub("strokegen_contour_2d_resample_eval_topo_step_1");
-      sub.shader_set(shaders_.static_shader_get(CONTOUR_2D_SAMPLES_EVAL_TOPO_STEP_1));
-
-      bind_rsc_for_contour_2d_sample_evaluation_(sub, screen_res, sample_rate, ssbo_offset);
-
-      sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_2d_sample_dispatch_args_);
-      sub.barrier(GPU_BARRIER_SHADER_STORAGE);
-    }
 
     // Segmentation
     for (int i = 0; i < 2; ++i)
     {
-      bool is_segmentation_by_curve_pass = (i == 0); 
-      {
+      bool is_segmentation_by_curve_pass = (i == 0);
+      { // Find seg heads
+        auto &sub = pass_process_contours.sub("strokegen_contour_2d_resample_eval_topo_step_0");
+        sub.shader_set(shaders_.static_shader_get(CONTOUR_2D_SAMPLES_EVAL_TOPO_STEP_0));
+
+        bind_rsc_for_contour_2d_sample_evaluation_(sub, screen_res, sample_rate, ssbo_offset);
+        sub.bind_ssbo(ssbo_offset + 0, buffers_.ssbo_segloopconv1d_info_);
+        sub.push_constant("pcs_segment_by_seg_", is_segmentation_by_curve_pass ? 0 : 1);
+
+        sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_2d_sample_dispatch_args_);
+        sub.barrier(GPU_BARRIER_SHADER_STORAGE);
+      }
+      { // Mark seg tails
+        auto &sub = pass_process_contours.sub("strokegen_contour_2d_resample_eval_topo_step_1");
+        sub.shader_set(shaders_.static_shader_get(CONTOUR_2D_SAMPLES_EVAL_TOPO_STEP_1));
+
+        bind_rsc_for_contour_2d_sample_evaluation_(sub, screen_res, sample_rate, ssbo_offset);
+        sub.push_constant("pcs_segment_by_seg_", is_segmentation_by_curve_pass ? 0 : 1);
+
+        sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_2d_sample_dispatch_args_);
+        sub.barrier(GPU_BARRIER_SHADER_STORAGE);
+      }
+      { // Setup Segmentation
         auto &sub = pass_process_contours.sub(
           "strokegen_contour_2d_resample_eval_topo_setup_segmentation"
         );
@@ -2120,7 +2123,7 @@ namespace blender::npr::strokegen
         append_subpass_segscan(settings, pass_process_contours); 
       }
 
-      {
+      { // Finish Segmentation
         auto &sub = pass_process_contours.sub("strokegen_contour_2d_resample_eval_topo_finish");
         sub.shader_set(shaders_.static_shader_get(CONTOUR_2D_SAMPLES_EVAL_TOPO_FINISH_SEGSCAN));
 
