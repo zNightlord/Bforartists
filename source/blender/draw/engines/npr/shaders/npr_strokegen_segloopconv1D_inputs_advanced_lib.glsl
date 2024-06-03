@@ -109,8 +109,7 @@
                             
                             vec2 chord = pt_chord_end - pt_chord_beg; 
                             vec2 a = pt - pt_chord_beg; 
-                            vec2 a_proj = chord * (dot(a, chord) / dot(chord, chord)); 
-                            float dist = sqrt(max(.0f, dot(a, a) - dot(a_proj, a_proj))); 
+                            float dist = abs(chord.x * a.y - chord.y * a.x) / max(1e-10f, length(chord)); 
                             
                             C[ic] += dist; 
                         }
@@ -143,7 +142,7 @@
                     seg_len, seg_head_id
                 );
 
-                #define LOCAL_MAXIMA_RADIUS MAX_CONV_RADIUS
+                #define LOCAL_MAXIMA_RADIUS 2
                 uint steps_left = is_sub_seg_loop ? LOCAL_MAXIMA_RADIUS : min(LOCAL_MAXIMA_RADIUS, sub_seg_rank);
                 uint steps_right = is_sub_seg_loop ? LOCAL_MAXIMA_RADIUS : min(LOCAL_MAXIMA_RADIUS, sub_seg_len - sub_seg_rank - 1u);
 
