@@ -360,6 +360,11 @@ ContourCurveTopo load_contour_2d_sample_curve_topo(uint contour_id, ContourFlags
     cct.tail_id = cct.head_id + cct.len - 1u;  
     return cct; 
 }
+bool is_2d_sample_curve_looped(bool contour_looped, bool contour_crve_clipped, bool single_sub_seg)
+{
+	bool is_sub_seg_loop = contour_looped && (!contour_crve_clipped) && single_sub_seg; 
+	return is_sub_seg_loop; 
+}
 #endif
 
 

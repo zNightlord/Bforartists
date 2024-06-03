@@ -190,16 +190,6 @@ bool should_init_conv_data(bool mov_left, uint mov_step) { return mov_left && (m
 			float corner_curv = load_ssbo_contour_2d_sample_geometry__corner_curvature(elemId, num_samples); 
             return corner_curv;
         }
-        void FUNC_CONVOLUTION_LOOPCONV1D(
-            bool mov_left, uint mov_step, bool seg_is_loop, uint seg_head_id, uint seg_tail_id, uint item_id, 
-            T_CV neighbor_data, T_CV orig_data, inout T_CONV_TEMP_DATA conv_data)
-        {
-            if (should_init_conv_data(mov_left, mov_step))
-                conv_data.is_local_maxima = true; 
-
-            if (orig_data < neighbor_data)
-                conv_data.is_local_maxima = false;
-        }
     #endif
 #undef T_CV
 #endif

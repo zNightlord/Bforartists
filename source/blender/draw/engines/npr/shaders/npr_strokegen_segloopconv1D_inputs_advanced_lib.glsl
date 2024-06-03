@@ -50,7 +50,8 @@
         #endif // _KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__TEST
 
         
-        #if defined(_KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__2DSAMPLE_CORNER_DETECTION__STEP_0)
+        #if defined(_KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__2DSAMPLE_CORNER_DETECTION__STEP_0) || defined(_KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__2DSAMPLE_CORNER_DETECTION__STEP_1)
+            // "Robust Image Corner Detection Based on the Chord-to-Point Distance Accumulation Technique"
             uint sample_id = idx; 
             uint num_samples = ssbo_segloopconv1d_info_.num_conv_items; 
 
@@ -58,76 +59,120 @@
             uint sub_seg_rank = load_ssbo_contour_2d_sample_topology__seg_rank(sample_id, num_samples); 
             uint sub_seg_len = load_ssbo_contour_2d_sample_topology__seg_len(sample_id, num_samples); 
             ContourFlags cf = load_ssbo_contour_2d_sample_topology__flags(sample_id); 
-            bool is_sub_seg_loop = cf.looped_curve && (!cf.curve_clipped) && (sub_seg_len == seg_len); 
+            bool is_sub_seg_loop = is_2d_sample_curve_looped(cf.looped_curve, cf.curve_clipped, sub_seg_len == seg_len); 
 
-            conv_temp_data.corner_curv = .0f; 
-            vec2 pt = _FUNC_LOAD_CONV_DATA_LDS_LEFT(
-                0, blockIdx, groupIdx,
-                seg_len, seg_head_id
-            ); 
+            bool short_seg = sub_seg_len < 42u; // (see the paper)
 
-            const uvec3 chord_lens = uvec3(10u, 20u, 30u); 
-            vec3 C = vec3(.0f, .0f, .0f); 
+            #if defined(_KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__2DSAMPLE_CORNER_DETECTION__STEP_0)
+                conv_temp_data.corner_curv = .0f; 
+                vec2 pt = _FUNC_LOAD_CONV_DATA_LDS_LEFT(
+                    0, blockIdx, groupIdx,
+                    seg_len, seg_head_id
+                ); 
 
-            for (uint ic = 0u; ic < 3u; ++ic)
-            {
-                C[ic] = .0f; 
-                
-                uint chord_len = chord_lens[ic]; 
-                uint filter_radius = chord_len - 1u;
-                // if (seg_len < chord_len) continue; // no corner for short curves
-                if (sub_seg_len < chord_len) continue; // no corner for short sub-segs
+                const uvec3 chord_lens = uvec3(10u, 20u, 30u); // (see the paper)
+                vec3 C = vec3(.0f, .0f, .0f); 
 
-                for (uint d = 0; d < filter_radius; ++d)
+                for (uint ic = 0u; ic < 3u; ++ic)
                 {
-                    bool valid_pt = true; 
-                    { 
-                        uint step_left = (filter_radius - d); 
-                        if (sub_seg_rank < step_left && !is_sub_seg_loop) valid_pt = false; 
-                        else
+                    C[ic] = .0f; 
+                    
+                    uint chord_len = chord_lens[ic]; 
+                    uint filter_radius = chord_len - 1u;
+                    // if (seg_len < chord_len) continue; // no corner for short curves
+                    if (sub_seg_len < chord_len) continue; // no corner for short sub-segs
+                    if (short_seg) continue; // no corner for short sub-segs 
+
+                    for (uint d = 0; d < filter_radius; ++d)
+                    {
+                        bool valid_pt = true; 
+                        { 
+                            uint step_left = (filter_radius - d); 
+                            if (sub_seg_rank < step_left && !is_sub_seg_loop) valid_pt = false; 
+                            else
+                            {
+                                uint rank_chord_end = sub_seg_rank - step_left + chord_len - 1u; 
+                                if (sub_seg_len <= rank_chord_end && !is_sub_seg_loop) valid_pt = false; 
+                            }
+                        }
+                        if (valid_pt)
                         {
-                            uint rank_chord_end = sub_seg_rank - step_left + chord_len - 1u; 
-                            if (sub_seg_len <= rank_chord_end && !is_sub_seg_loop) valid_pt = false; 
+                            vec2 pt_chord_beg = _FUNC_LOAD_CONV_DATA_LDS_LEFT(
+                                filter_radius - d, blockIdx, groupIdx,
+                                seg_len, seg_head_id 
+                            );
+
+                            vec2 pt_chord_end = _FUNC_LOAD_CONV_DATA_LDS_RIGHT(
+                                d + 1, blockIdx, groupIdx,
+                                seg_len, seg_head_id
+                            ); 
+                            
+                            vec2 chord = pt_chord_end - pt_chord_beg; 
+                            vec2 a = pt - pt_chord_beg; 
+                            vec2 a_proj = chord * (dot(a, chord) / dot(chord, chord)); 
+                            float dist = sqrt(max(.0f, dot(a, a) - dot(a_proj, a_proj))); 
+                            
+                            C[ic] += dist; 
                         }
                     }
-                    if (valid_pt)
-                    {
-                        vec2 pt_chord_beg = _FUNC_LOAD_CONV_DATA_LDS_LEFT(
-                            filter_radius - d, blockIdx, groupIdx,
-                            seg_len, seg_head_id 
-                        );
+                }
+                
+                float c_max = max(max(C.x, C.y), C.z);
+                bool c_degenerate = c_max < 1e-10f; 
+                
+                c_max = max(c_max, 1e-10f); 
+                vec3 H = c_degenerate ? vec3(0.0f) : C / c_max; 
+                float h = H.x * H.y * H.z; 
 
-                        vec2 pt_chord_end = _FUNC_LOAD_CONV_DATA_LDS_RIGHT(
-                            d + 1, blockIdx, groupIdx,
-                            seg_len, seg_head_id
-                        ); 
-                        
-                        vec2 chord = pt_chord_end - pt_chord_beg; 
-                        vec2 a = pt - pt_chord_beg; 
-                        vec2 a_proj = chord * (dot(a, chord) / dot(chord, chord)); 
-                        float dist = sqrt(max(.0f, dot(a, a) - dot(a_proj, a_proj))); 
-                        
-                        C[ic] += dist; 
+                conv_temp_data.corner_curv = h; 
+
+                if (sample_id < num_samples)
+                {
+                    vec4 dbg_col = vec4(C, max(1.0f, c_max)); 
+                    vec2 dbg_pix = pt; 
+                    imageStore(tex2d_contour_dbg_, ivec2(dbg_pix), dbg_col); 
+                }
+            #endif // _KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__2DSAMPLE_CORNER_DETECTION__STEP_0
+            #if defined(_KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__2DSAMPLE_CORNER_DETECTION__STEP_1)
+                conv_temp_data.is_local_maxima = false;
+                if (short_seg) return; // no corner for short sub-segs
+                conv_temp_data.is_local_maxima = true;
+
+                float orig_curv = _FUNC_LOAD_CONV_DATA_LDS_LEFT(
+                    0, blockIdx, groupIdx,
+                    seg_len, seg_head_id
+                );
+
+                #define LOCAL_MAXIMA_RADIUS MAX_CONV_RADIUS
+                uint steps_left = is_sub_seg_loop ? LOCAL_MAXIMA_RADIUS : min(LOCAL_MAXIMA_RADIUS, sub_seg_rank);
+                uint steps_right = is_sub_seg_loop ? LOCAL_MAXIMA_RADIUS : min(LOCAL_MAXIMA_RADIUS, sub_seg_len - sub_seg_rank - 1u);
+
+                for (uint d = 1; d < steps_left; ++d)
+                {
+                    float neigh_curv = _FUNC_LOAD_CONV_DATA_LDS_LEFT(
+                        d, blockIdx, groupIdx,
+                        seg_len, seg_head_id
+                    );
+
+                    if (orig_curv < neigh_curv){
+                        conv_temp_data.is_local_maxima = false;
+                        break; 
                     }
                 }
-            }
-            
-            float c_max = max(max(C.x, C.y), C.z);
-            bool c_degenerate = c_max < 1e-10f; 
-            
-            c_max = max(c_max, 1e-10f); 
-            vec3 H = c_degenerate ? vec3(0.0f) : C / c_max; 
-            float h = H.x * H.y * H.z; 
+                for (uint d = 1; d < steps_right; ++d)
+                {
+                    float neigh_curv = _FUNC_LOAD_CONV_DATA_LDS_RIGHT(
+                        d, blockIdx, groupIdx,
+                        seg_len, seg_head_id
+                    );
 
-            conv_temp_data.corner_curv = h; 
-
-            if (sample_id < num_samples)
-            {
-                vec4 dbg_col = vec4(C, 1.0f); 
-                vec2 dbg_pix = pt; 
-                imageStore(tex2d_contour_dbg_, ivec2(dbg_pix), dbg_col); 
-            }
-        #endif // _KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__2DSAMPLE_CORNER_DETECTION__STEP_0
+                    if (orig_curv < neigh_curv){
+                        conv_temp_data.is_local_maxima = false;
+                        break; 
+                    }
+                }
+            #endif // _KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__2DSAMPLE_CORNER_DETECTION__STEP_1
+        #endif // _KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__2DSAMPLE_CORNER_DETECTION__STEP_0/1
         }
 
 
