@@ -51,7 +51,7 @@
 
         
         #if defined(_KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__2DSAMPLE_CORNER_DETECTION__STEP_0) || defined(_KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__2DSAMPLE_CORNER_DETECTION__STEP_1)
-            // "Robust Image Corner Detection Based on the Chord-to-Point Distance Accumulation Technique"
+            // "Robust corner detection using altitude to chord ratio accumulation"
             uint sample_id = idx; 
             uint num_samples = ssbo_segloopconv1d_info_.num_conv_items; 
 
@@ -70,19 +70,12 @@
                     seg_len, seg_head_id
                 ); 
 
-                const uvec3 chord_lens = uvec3(10u, 20u, 30u); // (see the paper)
-                vec3 C = vec3(.0f, .0f, .0f); 
-
-                for (uint ic = 0u; ic < 3u; ++ic)
-                {
-                    C[ic] = .0f; 
+                const uint L = 16u; // (see the paper)
+                float C = .0f; 
                     
-                    uint chord_len = chord_lens[ic]; 
-                    uint filter_radius = chord_len - 1u;
-                    // if (seg_len < chord_len) continue; // no corner for short curves
-                    if (sub_seg_len < chord_len) continue; // no corner for short sub-segs
-                    if (short_seg) continue; // no corner for short sub-segs 
-
+                uint filter_radius = L - 1u;
+                // if (seg_len < L) continue; // no corner for short curves
+                if (L <= sub_seg_len && (!short_seg)) 
                     for (uint d = 0; d < filter_radius; ++d)
                     {
                         bool valid_pt = true; 
@@ -91,7 +84,7 @@
                             if (sub_seg_rank < step_left && !is_sub_seg_loop) valid_pt = false; 
                             else
                             {
-                                uint rank_chord_end = sub_seg_rank - step_left + chord_len - 1u; 
+                                uint rank_chord_end = sub_seg_rank - step_left + L - 1u; 
                                 if (sub_seg_len <= rank_chord_end && !is_sub_seg_loop) valid_pt = false; 
                             }
                         }
@@ -110,24 +103,18 @@
                             vec2 chord = pt_chord_end - pt_chord_beg; 
                             vec2 a = pt - pt_chord_beg; 
                             float dist = abs(chord.x * a.y - chord.y * a.x) / max(1e-10f, length(chord)); 
+                            dist /= length(chord); 
                             
-                            C[ic] += dist; 
+                            C += dist; 
                         }
                     }
-                }
                 
-                float c_max = max(max(C.x, C.y), C.z);
-                bool c_degenerate = c_max < 1e-10f; 
-                
-                c_max = max(c_max, 1e-10f); 
-                vec3 H = c_degenerate ? vec3(0.0f) : C / c_max; 
-                float h = H.x * H.y * H.z; 
-
-                conv_temp_data.corner_curv = h; 
+                conv_temp_data.corner_curv = C; 
 
                 if (sample_id < num_samples)
                 {
-                    vec4 dbg_col = vec4(C, max(1.0f, c_max)); 
+                    // vec4 dbg_col = vec4(C, max(1.0f, c_max)); 
+                    vec4 dbg_col = vec4(C, C, C, 1.0f); 
                     vec2 dbg_pix = pt; 
                     imageStore(tex2d_contour_dbg_, ivec2(dbg_pix), dbg_col); 
                 }
@@ -169,6 +156,14 @@
                         conv_temp_data.is_local_maxima = false;
                         break; 
                     }
+                }
+                
+                if (sample_id < num_samples)
+                {
+                    vec4 dbg_col = vec4(1.0f); 
+                    if (conv_temp_data.is_local_maxima) dbg_col = vec4(1, 0, 0, 1); 
+                    vec2 dbg_pix = pcs_screen_size_ * load_ssbo_contour_2d_sample_geometry__position(sample_id); 
+                    imageStore(tex2d_contour_dbg_, ivec2(dbg_pix), dbg_col); 
                 }
             #endif // _KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__2DSAMPLE_CORNER_DETECTION__STEP_1
         #endif // _KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__2DSAMPLE_CORNER_DETECTION__STEP_0/1

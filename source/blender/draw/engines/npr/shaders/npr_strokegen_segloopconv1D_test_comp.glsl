@@ -147,13 +147,6 @@ void main()
             set_contour_flags_is_corner(cf);
             store_ssbo_contour_2d_sample_topology__flags(idx, cf); 
         }
-
-        if (idx < get_num_items())
-        {
-            vec4 dbg_col = vec4(1.0f); 
-            vec2 dbg_pix = pcs_screen_size_ * load_ssbo_contour_2d_sample_geometry__position(idx); 
-            imageStore(tex2d_contour_dbg_, ivec2(dbg_pix), dbg_col); 
-        }
     #endif
     /* -------------------------------------------------------------------------- */
 }
