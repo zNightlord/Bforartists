@@ -532,24 +532,30 @@ GPU_SHADER_CREATE_INFO(strokegen_contour_2d_resample_eval_topo_step_0)
 #undef SSBO_OFFSET
     .push_constant(Type::INT, "pcs_segment_by_seg_");
 
-GPU_SHADER_CREATE_INFO(strokegen_contour_2d_resample_eval_topo_step_1)
+GPU_SHADER_CREATE_INFO(strokegen_contour_2d_resample_segmentation_prep_seg_tails)
     .do_static_compilation(true)
     .additional_info("strokegen_contour_2d_sample_eval")
     .define("_KERNEL_MULTICOMPILE__CONTOUR_EDGES_2D_RESAMPLE__EVALUATE_TOPOLOGY", "1")
-    .define("_KERNEL_MULTICOMPILE__CONTOUR_EDGES_2D_RESAMPLE__EVALUATE_TOPOLOGY__STEP_1", "1")
+    .define("_KERNEL_MULTICOMPILE__CONTOUR_EDGES_2D_RESAMPLE__EVALUATE_TOPOLOGY__SETMENTATION__PREP_SEGTAILS", "1")
     .push_constant(Type::INT, "pcs_segment_by_seg_");
 
-GPU_SHADER_CREATE_INFO(strokegen_contour_2d_resample_eval_topo_setup_segmentation)
+GPU_SHADER_CREATE_INFO(strokegen_contour_2d_resample_segmentation_setup_segscan)
     .do_static_compilation(true)
     .additional_info("strokegen_contour_2d_sample_eval")
     .define("_KERNEL_MULTICOMPILE__CONTOUR_EDGES_2D_RESAMPLE__EVALUATE_TOPOLOGY", "1")
-    .define("_KERNEL_MULTICOMPILE__CONTOUR_EDGES_2D_RESAMPLE__EVALUATE_TOPOLOGY__SETUP_SEGSCAN", "1")
+    .define("_KERNEL_MULTICOMPILE__CONTOUR_EDGES_2D_RESAMPLE__EVALUATE_TOPOLOGY__SEGMENTATION__SETUP_SEGSCAN", "1")
 #define SSBO_OFFSET NUM_SSBO_strokegen_contour_2d_sample_eval
     .storage_buf(SSBO_OFFSET + 0, Qualifier::WRITE, "uint", "ssbo_tree_scan_input_2d_sample_segmentation_0_[]")
     .storage_buf(SSBO_OFFSET + 1, Qualifier::WRITE, "uint", "ssbo_tree_scan_input_2d_sample_segmentation_1_[]")
     .storage_buf(SSBO_OFFSET + 2, Qualifier::READ_WRITE, "UBData_TreeScan", "ssbo_tree_scan_infos_2d_resampler_")
 #undef SSBO_OFFSET
     .push_constant(Type::INT, "pcs_segment_by_seg_");
+
+GPU_SHADER_CREATE_INFO(strokegen_contour_2d_resample_eval_topo_remove_fake_corners)
+    .do_static_compilation(true)
+    .additional_info("strokegen_contour_2d_sample_eval")
+    .define("_KERNEL_MULTICOMPILE__CONTOUR_EDGES_2D_RESAMPLE__EVALUATE_TOPOLOGY", "1")
+    .define("_KERNEL_MULTICOMPILE__CONTOUR_EDGES_2D_RESAMPLE__EVALUATE_TOPOLOGY__REMOVE_FAKE_CORNERS", "1");
 
 GPU_SHADER_CREATE_INFO(strokegen_contour_2d_resample_eval_topo_finish)
     .do_static_compilation(true)
@@ -558,7 +564,7 @@ GPU_SHADER_CREATE_INFO(strokegen_contour_2d_resample_eval_topo_finish)
     .typedef_source("draw_shader_shared.hh")
     .define("_KERNEL_MULTICOMPILE__CONTOUR_EDGES_2D_RESAMPLE", "1")
     .define("_KERNEL_MULTICOMPILE__CONTOUR_EDGES_2D_RESAMPLE__EVALUATE_TOPOLOGY", "1")
-    .define("_KERNEL_MULTICOMPILE__CONTOUR_EDGES_2D_RESAMPLE__EVALUATE_TOPOLOGY__FINISH_SEGSCAN", "1")
+    .define("_KERNEL_MULTICOMPILE__CONTOUR_EDGES_2D_RESAMPLE__EVALUATE_TOPOLOGY__SEGMENTATION__FINISH_SEGSCAN", "1")
 
     .define("USE_CONTOUR_2D_SAMPLE_GEOMETRY_BUFFER", "1")
     .define("USE_CONTOUR_2D_SAMPLE_TOPOLOGY_BUFFER", "1")

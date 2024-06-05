@@ -121,8 +121,10 @@
             #endif // _KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__2DSAMPLE_CORNER_DETECTION__STEP_0
             #if defined(_KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__2DSAMPLE_CORNER_DETECTION__STEP_1)
                 conv_temp_data.is_local_maxima = false;
+                conv_temp_data.is_local_minima = false; 
                 if (short_seg) return; // no corner for short sub-segs
                 conv_temp_data.is_local_maxima = true;
+                conv_temp_data.is_local_minima = true; 
 
                 float orig_curv = _FUNC_LOAD_CONV_DATA_LDS_LEFT(
                     0, blockIdx, groupIdx,
@@ -140,10 +142,10 @@
                         seg_len, seg_head_id
                     );
 
-                    if (orig_curv < neigh_curv){
-                        conv_temp_data.is_local_maxima = false;
-                        break; 
-                    }
+                    if (orig_curv < neigh_curv)
+                        conv_temp_data.is_local_maxima = false; 
+                    else
+                        conv_temp_data.is_local_minima = false; 
                 }
                 for (uint d = 1; d < steps_right; ++d)
                 {
@@ -152,16 +154,24 @@
                         seg_len, seg_head_id
                     );
 
-                    if (orig_curv < neigh_curv){
+                    if (orig_curv < neigh_curv)
                         conv_temp_data.is_local_maxima = false;
-                        break; 
-                    }
+                    else
+                        conv_temp_data.is_local_minima = false; 
                 }
-                
+
+                if (orig_curv < 7.2f) // planar sections of the curve
+                    conv_temp_data.is_local_maxima = false; 
+                if (7.2f <= orig_curv) // sharp point of the curve
+                   conv_temp_data.is_local_minima = false; 
+				if (orig_curv < 4.0f)
+					conv_temp_data.is_local_minima = true; 
+
                 if (sample_id < num_samples)
                 {
                     vec4 dbg_col = vec4(1.0f); 
                     if (conv_temp_data.is_local_maxima) dbg_col = vec4(1, 0, 0, 1); 
+                    if (conv_temp_data.is_local_minima) dbg_col = vec4(0, 1, 0, 1); 
                     vec2 dbg_pix = pcs_screen_size_ * load_ssbo_contour_2d_sample_geometry__position(sample_id); 
                     imageStore(tex2d_contour_dbg_, ivec2(dbg_pix), dbg_col); 
                 }

@@ -142,9 +142,11 @@ void main()
     #endif
     #if defined(_KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__2DSAMPLE_CORNER_DETECTION__STEP_1)
         ContourFlags cf = load_ssbo_contour_2d_sample_topology__flags(idx); 
-        if (idx < get_num_items() && conv_temp_data.is_local_maxima)
+        if (idx < get_num_items())
         {
-            set_contour_flags_is_corner(cf);
+            cf.is_curv_minima = conv_temp_data.is_local_minima; 
+            cf.seg_head = conv_temp_data.is_local_minima; // TODO: add contour seg head if this doesn't work
+            cf.is_corner = conv_temp_data.is_local_maxima;
             store_ssbo_contour_2d_sample_topology__flags(idx, cf); 
         }
     #endif

@@ -202,11 +202,11 @@ float comp_edge_flip_delaunay_score(
     /* Delaunay edge flip condition: two opposite angles sum larger than Pi */
     vec3 v21 = p2 - p1; 
     vec3 v23 = p2 - p3; 
-    float angle_123 = acos(dot(v21, v23)); 
+    float angle_123 = acos(dot(normalize(v21), normalize(v23))); 
 
     vec3 v01 = p0 - p1; 
     vec3 v03 = p0 - p3; 
-    float angle_103 = acos(dot(v01, v03)); 
+    float angle_103 = acos(dot(normalize(v01), normalize(v03))); 
     return (angle_123 + angle_103) - PI; 
 }
 float comp_edge_flip_sqrt3_subdiv_score(

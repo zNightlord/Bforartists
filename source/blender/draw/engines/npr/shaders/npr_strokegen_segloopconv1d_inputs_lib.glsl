@@ -182,7 +182,8 @@ bool should_init_conv_data(bool mov_left, uint mov_step) { return mov_left && (m
     #if defined(_KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__2DSAMPLE_CORNER_DETECTION__STEP_1)
         struct T_CONV_TEMP_DATA
         {
-            bool is_local_maxima;  
+            bool is_local_maxima; 
+            bool is_local_minima; 
         };
         T_CV FUNC_DEVICE_LOAD_LOOPCONV1D_DATA(uint elemId) 
         {

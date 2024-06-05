@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
+﻿/* SPDX-License-Identifier: GPL-2.0-or-later
  * Copyright 2021 Blender Foundation.
  */
 
@@ -164,12 +164,14 @@ const char *StrokeGenShaderModule::static_shader_create_info_name_get(eShaderTyp
       return "strokegen_contour_2d_resample_eval_position";
     case CONTOUR_2D_SAMPLES_EVAL_TOPO_STEP_0:
         return "strokegen_contour_2d_resample_eval_topo_step_0"; 
-    case CONTOUR_2D_SAMPLES_EVAL_TOPO_STEP_1:
-      return "strokegen_contour_2d_resample_eval_topo_step_1";
+    case CONTOUR_2D_SAMPLES_SEGMENTATION_PREP_SEGTAILS:
+      return "strokegen_contour_2d_resample_segmentation_prep_seg_tails";
     case CONTOUR_2D_SAMPLES_EVAL_TOPO_SETUP_SEGSCAN:
-      return "strokegen_contour_2d_resample_eval_topo_setup_segmentation";
+      return "strokegen_contour_2d_resample_segmentation_setup_segscan";
     case CONTOUR_2D_SAMPLES_EVAL_TOPO_FINISH_SEGSCAN:
-      return "strokegen_contour_2d_resample_eval_topo_finish"; 
+      return "strokegen_contour_2d_resample_eval_topo_finish";
+    case CONTOUR_2D_SAMPLES_REJECT_FAKE_CORNERS:
+      return "strokegen_contour_2d_resample_eval_topo_remove_fake_corners";
 
     case CONTOUR_PIXEL_COMPRESS:
       return "bnpr_compress_contour_pixels";

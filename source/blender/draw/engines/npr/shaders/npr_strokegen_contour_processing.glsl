@@ -678,13 +678,15 @@ void main()
 #endif
 
 #if defined(_KERNEL_MULTICOMPILE__CONTOUR_EDGES_2D_RESAMPLE__EVALUATE_TOPOLOGY)
-	// Detect curve topo first, then build sub-segments
-	bool segment_by_seg = (0 < pcs_segment_by_seg_); 
-
 	const uint num_samples = ssbo_bnpr_mesh_pool_counters_.num_2d_samples; 
 	const uint sample_id = idx; 
 	bool valid_thread = sample_id < num_samples;
 	vec2 raster_resolution = get_raster_resolution(); 
+
+	#if defined(_KERNEL_MULTICOMPILE__CONTOUR_EDGES_2D_RESAMPLE__EVALUATE_TOPOLOGY__STEP_0) || defined(_KERNEL_MULTICOMPILE__CONTOUR_EDGES_2D_RESAMPLE__EVALUATE_TOPOLOGY__SETMENTATION__PREP_SEGTAILS) || defined(_KERNEL_MULTICOMPILE__CONTOUR_EDGES_2D_RESAMPLE__EVALUATE_TOPOLOGY__SEGMENTATION__SETUP_SEGSCAN) || defined(_KERNEL_MULTICOMPILE__CONTOUR_EDGES_2D_RESAMPLE__EVALUATE_TOPOLOGY__SEGMENTATION__FINISH_SEGSCAN)
+		// Detect curve topo first, then build sub-segments
+		bool segment_by_seg = (0 < pcs_segment_by_seg_); 
+	#endif
 
 	#if defined(_KERNEL_MULTICOMPILE__CONTOUR_EDGES_2D_RESAMPLE__EVALUATE_TOPOLOGY__STEP_0)
 		// Detect curve head and seg head
@@ -715,7 +717,7 @@ void main()
 		// tails in a2, a5, b10, b1 can be inferred from heads in a3, b0, a0, b9
 		//
 		// The clipping complicated the topology of resampled curves:  
-		// - The 0th stored elem of a curve, may not be the head of the curve (see a3 above)
+		// - Breaks can happen within adjacent segments (gap from b1 to b9)
 		Contour2DSampleSegmentationInfo sample_si 	   = load_2d_sample_seg_key(sample_id, num_samples); 
 		ContourFlags cf = load_ssbo_contour_2d_sample_topology__flags(sample_id); 
 
@@ -741,6 +743,7 @@ void main()
 			if (valid_thread)
 			{
 				cf.seg_head = is_seg_head; 
+				init_seg_head_contour(is_seg_head, cf); 
 				store_ssbo_contour_2d_sample_topology__flags(sample_id, cf); 
 			}
 		}
@@ -756,9 +759,8 @@ void main()
 		}
 	#endif
 
-	#if defined(_KERNEL_MULTICOMPILE__CONTOUR_EDGES_2D_RESAMPLE__EVALUATE_TOPOLOGY__STEP_1)
-		// Detect curve tail and seg tail
-		
+	#if defined(_KERNEL_MULTICOMPILE__CONTOUR_EDGES_2D_RESAMPLE__EVALUATE_TOPOLOGY__SETMENTATION__PREP_SEGTAILS)
+		// Given cf.seg_head, detect curve tail and seg tail
 		ContourFlags cf = load_ssbo_contour_2d_sample_topology__flags(sample_id);
 		
 		if (!segment_by_seg)
@@ -774,7 +776,7 @@ void main()
 			}
 		}
 		else
-		{
+		{ // Default path unless we are initializing the 2d curve topo
 			ContourCurveTopo cct = load_contour_2d_sample_curve_topo(sample_id, cf, num_samples); 
 			uint next_sample_id = move_contour_id_along_loop(cct, sample_id, +1.0f);
 			ContourFlags cf_next = load_ssbo_contour_2d_sample_topology__flags(next_sample_id);
@@ -795,7 +797,7 @@ void main()
 		}
 	#endif
 
-	#if defined(_KERNEL_MULTICOMPILE__CONTOUR_EDGES_2D_RESAMPLE__EVALUATE_TOPOLOGY__SETUP_SEGSCAN)
+	#if defined(_KERNEL_MULTICOMPILE__CONTOUR_EDGES_2D_RESAMPLE__EVALUATE_TOPOLOGY__SEGMENTATION__SETUP_SEGSCAN)
 		// Setup segscan inputs
 		if (valid_thread)
 		{
@@ -834,7 +836,7 @@ void main()
 		}
 	#endif
 
-	#if defined(_KERNEL_MULTICOMPILE__CONTOUR_EDGES_2D_RESAMPLE__EVALUATE_TOPOLOGY__FINISH_SEGSCAN)
+	#if defined(_KERNEL_MULTICOMPILE__CONTOUR_EDGES_2D_RESAMPLE__EVALUATE_TOPOLOGY__SEGMENTATION__FINISH_SEGSCAN)
 		#define REVERSE_ID(id) ((num_samples - 1u - id))
 		bool segment_by_seg_ = (0 < pcs_segment_by_seg_); 
 
@@ -899,6 +901,50 @@ void main()
 		}
 	#endif
 
+	#if defined(_KERNEL_MULTICOMPILE__CONTOUR_EDGES_2D_RESAMPLE__EVALUATE_TOPOLOGY__REMOVE_FAKE_CORNERS)
+		#define PI 3.1415926535614f
+		ContourFlags cf = load_ssbo_contour_2d_sample_topology__flags(sample_id); 
+
+		if (cf.is_corner) 
+		{ // Detect fake corners
+			ContourCurveTopo cct = load_contour_2d_sample_curve_topo(sample_id, cf, num_samples); 
+			uint corner_seg_rank = load_ssbo_contour_2d_sample_topology__seg_rank(sample_id, num_samples); 
+			uint corner_seg_len  = load_ssbo_contour_2d_sample_topology__seg_len(sample_id, num_samples); 
+
+			uint seg_tail_id = move_contour_id_along_loop(cct, sample_id, +float(corner_seg_len - 1u - corner_seg_rank)); 
+			uint seg_head_id = move_contour_id_along_loop(cct, sample_id, -float(corner_seg_rank));
+			// Note: need to consider clipped gaps between adjacent segments!!!
+			// uint prev_seg_tail_id = move_contour_id_along_loop(cct, sample_id, -float(corner_seg_rank + 1u)); 
+			// uint prev_seg_tail_rank = load_ssbo_contour_2d_sample_topology__seg_rank(prev_seg_tail_id, num_samples); 
+			// uint prev_seg_head_id = move_contour_id_along_loop(cct, prev_seg_tail_id, -float(prev_seg_tail_rank)); 
+
+			vec2 p = load_ssbo_contour_2d_sample_geometry__position(sample_id); 
+			vec2 pp = load_ssbo_contour_2d_sample_geometry__position(seg_head_id/* prev_seg_head_id */); 
+			vec2 pn = load_ssbo_contour_2d_sample_geometry__position(seg_tail_id); 
+
+			vec2 vp = pcs_screen_size_.xy * (pp - p); 
+			vec2 vpdir = normalize(vp); 
+			vec2 vn = pcs_screen_size_.xy * (pn - p); 
+			vec2 vndir = normalize(vn); 
+
+			float angle = acos(dot(vpdir, vndir));
+			bool fake_corner = (angle > PI * .5f); 
+
+			if (valid_thread)
+			{
+				float angle_degree = angle * 180.0f / PI; 
+				vec2 dbg_pix = pcs_screen_size_.xy * load_ssbo_contour_2d_sample_geometry__position(sample_id); 
+				vec4 dbg_col = fake_corner ? vec4(0, 1, 1, 1.0f) : vec4(1, 0, 0, 1.0f);  
+				imageStore(tex2d_contour_dbg_, ivec2(dbg_pix), dbg_col);
+			}
+			if (fake_corner)
+				cf.is_corner = false; 
+		}
+
+		cf.seg_head = cf.is_corner; 
+		if (valid_thread)
+			store_ssbo_contour_2d_sample_topology__flags(sample_id, cf); 
+	#endif
 
 #endif
 

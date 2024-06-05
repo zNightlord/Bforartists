@@ -430,7 +430,7 @@ public:
       draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub, float2 screen_res, float pcs_sample_rate, int &out_ssbo_offset); 
   void append_subpass_contour_arclen_parameterization(float2 screen_res, float sample_rate);
   void append_subpass_contour_generate_2d_samples(float2 screen_res, float sample_rate); 
-
+  void append_subpass_2d_sample_segmentation(float2 screen_res, float sample_rate, bool is_segmentation_by_curve_pass);
   void append_subpass_calc_contour_edges_draw_data(); 
 
   // ---------------------------------------------------------------------------

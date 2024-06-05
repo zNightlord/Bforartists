@@ -35,7 +35,9 @@ struct ContourFlags
 
 	/* flags used in 2d-resampled curves -------------------------- */
 	bool curve_clipped;  // TODO: may be buggy, needs further testing
-	bool is_corner; 
+	bool is_corner;
+	bool seg_head_contour; // seg-head based on contour segmentation 
+	bool is_curv_minima;  
 }; 
 
 uint encode_contour_flags(ContourFlags cf)
@@ -58,6 +60,10 @@ uint encode_contour_flags(ContourFlags cf)
 	cf_enc |= uint(cf.curve_clipped);
 	cf_enc <<= 1u;
 	cf_enc |= uint(cf.is_corner);
+	cf_enc <<= 1u; 
+	cf_enc |= uint(cf.seg_head_contour); 
+	cf_enc <<= 1u;
+	cf_enc |= uint(cf.is_curv_minima); 
 
     return cf_enc; 
 }
@@ -65,6 +71,10 @@ uint encode_contour_flags(ContourFlags cf)
 ContourFlags decode_contour_flags(uint cf_enc)
 {
     ContourFlags cf; 
+	cf.is_curv_minima = (1u == (cf_enc & 1u));
+	cf_enc >>= 1u;
+	cf.seg_head_contour = (1u == (cf_enc & 1u)); 
+	cf_enc >>= 1u; 
 	cf.is_corner = (1u == (cf_enc & 1u));
 	cf_enc >>= 1u;
 	cf.curve_clipped = (1u == (cf_enc & 1u));
@@ -98,6 +108,8 @@ ContourFlags init_contour_flags(bool seg_head)
 	cf.occluded = false;       // needs further setup
 	cf.curve_clipped = false;  // needs further setup 
 	cf.is_corner = false;      // needs further setup 
+	cf.seg_head_contour = false;  // needs further setup 
+	cf.is_curv_minima = false;  // needs further setup
     return cf; 
 }
 
@@ -109,6 +121,11 @@ void init_contour_curve_head(bool curve_head, inout ContourFlags cf)
 void init_contour_curve_tail(bool curve_tail, inout ContourFlags cf)
 { /* should happen only once for all contour snakes */
 	cf.curve_tail = curve_tail; 
+}
+
+void init_seg_head_contour(bool sample_2d_is_seg_head, inout ContourFlags cf)
+{ /* should happen only once for all 2d samples */
+	cf.seg_head_contour = sample_2d_is_seg_head; 
 }
 
 void set_contour_seg_head(bool seg_head, inout ContourFlags cf)

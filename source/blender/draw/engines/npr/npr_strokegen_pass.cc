@@ -1955,6 +1955,85 @@ namespace blender::npr::strokegen
     }
   }
 
+
+  void StrokeGenPassModule::append_subpass_2d_sample_segmentation(
+      float2 screen_res, float sample_rate, bool is_segmentation_by_curve_pass
+  ) {
+    int ssbo_offset_ = 0;
+    { // Mark seg tails
+      auto &sub = pass_process_contours.sub("strokegen_contour_2d_resample_segmentation_prep_seg_tails");
+      sub.shader_set(shaders_.static_shader_get(CONTOUR_2D_SAMPLES_SEGMENTATION_PREP_SEGTAILS));
+
+      bind_rsc_for_contour_2d_sample_evaluation_(sub, screen_res, sample_rate, ssbo_offset_);
+      sub.push_constant("pcs_segment_by_seg_", is_segmentation_by_curve_pass ? 0 : 1);
+
+      sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_2d_sample_dispatch_args_);
+      sub.barrier(GPU_BARRIER_SHADER_STORAGE);
+    }
+    { // Setup Segmentation
+      auto &sub = pass_process_contours.sub(
+          "strokegen_contour_2d_resample_segmentation_setup_segscan"
+          );
+      sub.shader_set(shaders_.static_shader_get(CONTOUR_2D_SAMPLES_EVAL_TOPO_SETUP_SEGSCAN));
+
+      bind_rsc_for_contour_2d_sample_evaluation_(sub, screen_res, sample_rate, ssbo_offset_);
+      sub.bind_ssbo(ssbo_offset_ + 0,
+                    buffers_.reused_ssbo_tree_scan_input_2d_sample_segmentation_0_());
+      sub.bind_ssbo(ssbo_offset_ + 1,
+                    buffers_.reused_ssbo_tree_scan_input_2d_sample_segmentation_1_());
+      sub.bind_ssbo(ssbo_offset_ + 2, buffers_.reused_ssbo_tree_scan_infos_2d_resampler_()); 
+      sub.push_constant("pcs_segment_by_seg_", is_segmentation_by_curve_pass ? 0 : 1); 
+
+      sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_2d_sample_dispatch_args_);
+      sub.barrier(GPU_BARRIER_SHADER_STORAGE);
+    }
+
+
+    ScanSettings settings;
+    settings.use_indirect_dispatch = true;
+    settings.ssbo_scan_infos_ = buffers_.reused_ssbo_tree_scan_infos_2d_resampler_();
+    settings.ssbo_scan_block_sum_ = buffers_.ssbo_scan_block_sum_;
+    settings.shader_upsweep = SEGSCAN_UINT_ADD_UPSWEEP;
+    settings.shader_aggregate = SEGSCAN_UINT_ADD_AGGREGATE;
+    settings.shader_dwsweep = SEGSCAN_UINT_ADD_DWSWEEP;
+
+    settings.is_validation_shader = false;
+    settings.frame_counter = 0;
+    {
+      settings.ssbo_in_scan_data_ = buffers_.reused_ssbo_tree_scan_input_2d_sample_segmentation_0_();
+      settings.ssbo_out_scan_data_ = buffers_.reused_ssbo_tree_scan_output_2d_sample_segmentation_0_();
+      append_subpass_segscan(settings, pass_process_contours); 
+    }
+    {
+      settings.ssbo_in_scan_data_ = buffers_.reused_ssbo_tree_scan_input_2d_sample_segmentation_1_();
+      settings.ssbo_out_scan_data_ = buffers_.reused_ssbo_tree_scan_output_2d_sample_segmentation_1_();
+      append_subpass_segscan(settings, pass_process_contours); 
+    }
+
+    { // Finish Segmentation
+      auto &sub = pass_process_contours.sub("strokegen_contour_2d_resample_eval_topo_finish");
+      sub.shader_set(shaders_.static_shader_get(CONTOUR_2D_SAMPLES_EVAL_TOPO_FINISH_SEGSCAN));
+
+      sub.bind_ssbo(0, buffers_.reused_ssbo_contour_2d_sample_geometry_()); 
+      sub.bind_ssbo(1, buffers_.reused_ssbo_contour_2d_sample_topology_()); 
+      sub.bind_ssbo(2, buffers_.ssbo_bnpr_mesh_pool_counters_); 
+      sub.bind_ssbo(3, buffers_.reused_ssbo_tree_scan_input_2d_sample_segmentation_0_()); 
+      sub.bind_ssbo(4, buffers_.reused_ssbo_tree_scan_output_2d_sample_segmentation_0_()); 
+      sub.bind_ssbo(5, buffers_.reused_ssbo_tree_scan_input_2d_sample_segmentation_1_()); 
+      sub.bind_ssbo(6, buffers_.reused_ssbo_tree_scan_output_2d_sample_segmentation_1_()); 
+
+      sub.bind_image(0, textures_.tex2d_contour_dbg_); 
+
+      sub.push_constant("pcs_segment_by_seg_", is_segmentation_by_curve_pass ? 0 : 1);
+      sub.push_constant("pcs_screen_size_", screen_res);
+      sub.push_constant("pcs_sample_rate_", sample_rate);
+
+      sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_2d_sample_dispatch_args_);
+      sub.barrier(GPU_BARRIER_SHADER_STORAGE);
+    }
+  }
+
+
   void StrokeGenPassModule::append_subpass_contour_generate_2d_samples(float2 screen_res, float sample_rate)
   {
     int ssbo_offset = 0; 
@@ -2061,89 +2140,21 @@ namespace blender::npr::strokegen
     // Segmentation
     for (int i = 0; i < 2; ++i)
     {
+      int ssbo_offset_ = 0; 
       bool is_segmentation_by_curve_pass = (i == 0);
       { // Find seg heads
         auto &sub = pass_process_contours.sub("strokegen_contour_2d_resample_eval_topo_step_0");
         sub.shader_set(shaders_.static_shader_get(CONTOUR_2D_SAMPLES_EVAL_TOPO_STEP_0));
 
-        bind_rsc_for_contour_2d_sample_evaluation_(sub, screen_res, sample_rate, ssbo_offset);
-        sub.bind_ssbo(ssbo_offset + 0, buffers_.ssbo_segloopconv1d_info_);
+        bind_rsc_for_contour_2d_sample_evaluation_(sub, screen_res, sample_rate, ssbo_offset_);
+        sub.bind_ssbo(ssbo_offset_ + 0, buffers_.ssbo_segloopconv1d_info_);
         sub.push_constant("pcs_segment_by_seg_", is_segmentation_by_curve_pass ? 0 : 1);
 
         sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_2d_sample_dispatch_args_);
         sub.barrier(GPU_BARRIER_SHADER_STORAGE);
       }
-      { // Mark seg tails
-        auto &sub = pass_process_contours.sub("strokegen_contour_2d_resample_eval_topo_step_1");
-        sub.shader_set(shaders_.static_shader_get(CONTOUR_2D_SAMPLES_EVAL_TOPO_STEP_1));
 
-        bind_rsc_for_contour_2d_sample_evaluation_(sub, screen_res, sample_rate, ssbo_offset);
-        sub.push_constant("pcs_segment_by_seg_", is_segmentation_by_curve_pass ? 0 : 1);
-
-        sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_2d_sample_dispatch_args_);
-        sub.barrier(GPU_BARRIER_SHADER_STORAGE);
-      }
-      { // Setup Segmentation
-        auto &sub = pass_process_contours.sub(
-          "strokegen_contour_2d_resample_eval_topo_setup_segmentation"
-        );
-        sub.shader_set(shaders_.static_shader_get(CONTOUR_2D_SAMPLES_EVAL_TOPO_SETUP_SEGSCAN));
-
-        bind_rsc_for_contour_2d_sample_evaluation_(sub, screen_res, sample_rate, ssbo_offset);
-        sub.bind_ssbo(ssbo_offset + 0,
-                      buffers_.reused_ssbo_tree_scan_input_2d_sample_segmentation_0_());
-        sub.bind_ssbo(ssbo_offset + 1,
-                      buffers_.reused_ssbo_tree_scan_input_2d_sample_segmentation_1_());
-        sub.bind_ssbo(ssbo_offset + 2, buffers_.reused_ssbo_tree_scan_infos_2d_resampler_()); 
-        sub.push_constant("pcs_segment_by_seg_", is_segmentation_by_curve_pass ? 0 : 1); 
-
-        sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_2d_sample_dispatch_args_);
-        sub.barrier(GPU_BARRIER_SHADER_STORAGE);
-      }
-
-
-      ScanSettings settings;
-      settings.use_indirect_dispatch = true;
-      settings.ssbo_scan_infos_ = buffers_.reused_ssbo_tree_scan_infos_2d_resampler_();
-      settings.ssbo_scan_block_sum_ = buffers_.ssbo_scan_block_sum_;
-      settings.shader_upsweep = SEGSCAN_UINT_ADD_UPSWEEP;
-      settings.shader_aggregate = SEGSCAN_UINT_ADD_AGGREGATE;
-      settings.shader_dwsweep = SEGSCAN_UINT_ADD_DWSWEEP;
-
-      settings.is_validation_shader = false;
-      settings.frame_counter = 0;
-      {
-        settings.ssbo_in_scan_data_ = buffers_.reused_ssbo_tree_scan_input_2d_sample_segmentation_0_();
-        settings.ssbo_out_scan_data_ = buffers_.reused_ssbo_tree_scan_output_2d_sample_segmentation_0_();
-        append_subpass_segscan(settings, pass_process_contours); 
-      }
-      {
-        settings.ssbo_in_scan_data_ = buffers_.reused_ssbo_tree_scan_input_2d_sample_segmentation_1_();
-        settings.ssbo_out_scan_data_ = buffers_.reused_ssbo_tree_scan_output_2d_sample_segmentation_1_();
-        append_subpass_segscan(settings, pass_process_contours); 
-      }
-
-      { // Finish Segmentation
-        auto &sub = pass_process_contours.sub("strokegen_contour_2d_resample_eval_topo_finish");
-        sub.shader_set(shaders_.static_shader_get(CONTOUR_2D_SAMPLES_EVAL_TOPO_FINISH_SEGSCAN));
-
-        sub.bind_ssbo(0, buffers_.reused_ssbo_contour_2d_sample_geometry_()); 
-        sub.bind_ssbo(1, buffers_.reused_ssbo_contour_2d_sample_topology_()); 
-        sub.bind_ssbo(2, buffers_.ssbo_bnpr_mesh_pool_counters_); 
-        sub.bind_ssbo(3, buffers_.reused_ssbo_tree_scan_input_2d_sample_segmentation_0_()); 
-        sub.bind_ssbo(4, buffers_.reused_ssbo_tree_scan_output_2d_sample_segmentation_0_()); 
-        sub.bind_ssbo(5, buffers_.reused_ssbo_tree_scan_input_2d_sample_segmentation_1_()); 
-        sub.bind_ssbo(6, buffers_.reused_ssbo_tree_scan_output_2d_sample_segmentation_1_()); 
-
-        sub.bind_image(0, textures_.tex2d_contour_dbg_); 
-
-        sub.push_constant("pcs_segment_by_seg_", is_segmentation_by_curve_pass ? 0 : 1);
-        sub.push_constant("pcs_screen_size_", screen_res);
-        sub.push_constant("pcs_sample_rate_", sample_rate);
-
-        sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_2d_sample_dispatch_args_);
-        sub.barrier(GPU_BARRIER_SHADER_STORAGE);
-      }
+      append_subpass_2d_sample_segmentation(screen_res, sample_rate, is_segmentation_by_curve_pass);
     }
 
     { // Find 2D Corners
@@ -2163,6 +2174,20 @@ namespace blender::npr::strokegen
       settings.lazy_dispatch = true;
       settings.is_validation_shader = false;
       append_subpass_segloopconv1d(settings, pass_process_contours);
+
+      append_subpass_2d_sample_segmentation(screen_res, sample_rate, false);
+
+      { 
+        auto& sub = pass_process_contours.sub("strokegen_contour_2d_resample_eval_topo_remove_fake_corners");
+        sub.shader_set(shaders_.static_shader_get(CONTOUR_2D_SAMPLES_REJECT_FAKE_CORNERS));
+
+        bind_rsc_for_contour_2d_sample_evaluation_(sub, screen_res, sample_rate, ssbo_offset);
+
+        sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_2d_sample_dispatch_args_);
+        sub.barrier(GPU_BARRIER_SHADER_STORAGE);
+      }
+
+      append_subpass_2d_sample_segmentation(screen_res, sample_rate, false);
     }
   }
 
