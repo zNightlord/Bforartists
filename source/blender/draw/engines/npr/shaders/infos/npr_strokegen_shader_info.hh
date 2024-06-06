@@ -2086,7 +2086,7 @@ GPU_SHADER_CREATE_INFO(npr_segloopconv1D_seg_denoising_convolution)
     .storage_buf(4, Qualifier::READ_WRITE, "uint", "ssbo_contour_snake_rank_[]")
     .storage_buf(5, Qualifier::READ_WRITE, "uint", "ssbo_contour_snake_list_len_[]");
 
-GPU_SHADER_CREATE_INFO(npr_segloopconv1D_corner_detection)
+GPU_SHADER_CREATE_INFO(npr_segloopconv1D_2d_sample_processing)
     .typedef_source("bnpr_shader_shared.hh")
     .define("SEGLOOPCONV1D_USE_ADVANCED_INPUT", "1")
     .define("_KERNEL_MULTI_COMPILE__SEGLOOPCONV1D_INFO_SSBO", "1")
@@ -2096,21 +2096,27 @@ GPU_SHADER_CREATE_INFO(npr_segloopconv1D_corner_detection)
     .define("USE_CONTOUR_2D_SAMPLE_GEOMETRY_BUFFER", "1")
     .push_constant(Type::VEC2, "pcs_screen_size_")
     .image(0, GPU_RGBA32F, Qualifier::WRITE, ImageType::FLOAT_2D, "tex2d_contour_dbg_");
-GPU_SHADER_CREATE_INFO(npr_segloopconv1D_corner_detection_build_patch)
-    .additional_info("npr_segloopconv1D_corner_detection")
+GPU_SHADER_CREATE_INFO(npr_segloopconv1D_2d_samples_build_patch)
+    .additional_info("npr_segloopconv1D_2d_sample_processing")
     .define("_KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__2DSAMPLE_CORNER_DETECTION__STEP_0", "1")
     .define("DATA_TYPE_LOOPCONV1D", "vec2")
     .storage_buf(2, Qualifier::READ_WRITE, "uint", "ssbo_contour_2d_sample_topology_[]")
     .storage_buf(3, Qualifier::READ_WRITE, "uint", "ssbo_contour_2d_sample_geometry_[]");
 GPU_SHADER_CREATE_INFO(npr_segloopconv1D_corner_detection_convolution_step_0)
-    .additional_info("npr_segloopconv1D_corner_detection")
+    .additional_info("npr_segloopconv1D_2d_sample_processing")
     .define("_KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__2DSAMPLE_CORNER_DETECTION__STEP_0", "1")
     .define("DATA_TYPE_LOOPCONV1D", "vec2")
     .storage_buf(4, Qualifier::READ_WRITE, "uint", "ssbo_contour_2d_sample_topology_[]")
     .storage_buf(5, Qualifier::READ_WRITE, "uint", "ssbo_contour_2d_sample_geometry_[]");
 GPU_SHADER_CREATE_INFO(npr_segloopconv1D_corner_detection_convolution_step_1)
-    .additional_info("npr_segloopconv1D_corner_detection")
+    .additional_info("npr_segloopconv1D_2d_sample_processing")
     .define("_KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__2DSAMPLE_CORNER_DETECTION__STEP_1", "1")
+    .define("DATA_TYPE_LOOPCONV1D", "float")
+    .storage_buf(4, Qualifier::READ_WRITE, "uint", "ssbo_contour_2d_sample_topology_[]")
+    .storage_buf(5, Qualifier::READ_WRITE, "uint", "ssbo_contour_2d_sample_geometry_[]");
+GPU_SHADER_CREATE_INFO(npr_segloopconv1D_2d_sample_calc_tangent_curvature_convolution)
+    .additional_info("npr_segloopconv1D_2d_sample_processing")
+    .define("_KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__2DSAMPLE_CALC_TANGENT_CURVATURE", "1")
     .define("DATA_TYPE_LOOPCONV1D", "float")
     .storage_buf(4, Qualifier::READ_WRITE, "uint", "ssbo_contour_2d_sample_topology_[]")
     .storage_buf(5, Qualifier::READ_WRITE, "uint", "ssbo_contour_2d_sample_geometry_[]");
@@ -2129,7 +2135,7 @@ GPU_SHADER_CREATE_INFO(strokegen_segloopconv1D_##name##_build_patch)            
 
 GPU_SHADER_CREATE_INFO__SEGLOOPCONV1D_BUILD_PATCH(test, npr_segloopconv1D_test_build_patch)
 GPU_SHADER_CREATE_INFO__SEGLOOPCONV1D_BUILD_PATCH(seg_denoising, npr_segloopconv1D_seg_denoising_build_patch)
-GPU_SHADER_CREATE_INFO__SEGLOOPCONV1D_BUILD_PATCH(corner_detection, npr_segloopconv1D_corner_detection_build_patch)
+GPU_SHADER_CREATE_INFO__SEGLOOPCONV1D_BUILD_PATCH(samples_2d, npr_segloopconv1D_2d_samples_build_patch)
 
 
 #define GPU_SHADER_CREATE_INFO__SEGLOOPCONV1D_CONV(name, input_shader_info_conv) \
@@ -2150,6 +2156,7 @@ GPU_SHADER_CREATE_INFO__SEGLOOPCONV1D_CONV(test, npr_segloopconv1D_test_convolut
 GPU_SHADER_CREATE_INFO__SEGLOOPCONV1D_CONV(seg_denoising, npr_segloopconv1D_seg_denoising_convolution)
 GPU_SHADER_CREATE_INFO__SEGLOOPCONV1D_CONV(corner_detection_step_0, npr_segloopconv1D_corner_detection_convolution_step_0)
 GPU_SHADER_CREATE_INFO__SEGLOOPCONV1D_CONV(corner_detection_step_1, npr_segloopconv1D_corner_detection_convolution_step_1)
+GPU_SHADER_CREATE_INFO__SEGLOOPCONV1D_CONV(calc_2d_sample_tangent_curv, npr_segloopconv1D_2d_sample_calc_tangent_curvature_convolution)
 /** \} */
 
 

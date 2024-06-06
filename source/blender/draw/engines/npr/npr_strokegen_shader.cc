@@ -1,4 +1,4 @@
-﻿/* SPDX-License-Identifier: GPL-2.0-or-later
+/* SPDX-License-Identifier: GPL-2.0-or-later
  * Copyright 2021 Blender Foundation.
  */
 
@@ -376,11 +376,14 @@ const char *StrokeGenShaderModule::static_shader_create_info_name_get(eShaderTyp
     case CONV1D_SEG_DENOISE_CONVOLUTION:
       return "strokegen_segloopconv1D_seg_denoising_convolution";
     case CONV1D_2D_SAMPLE_BUILD_PATCH:
-        return "strokegen_segloopconv1D_corner_detection_build_patch"; 
+        return "strokegen_segloopconv1D_samples_2d_build_patch"; 
     case CONV1D_2D_SAMPLE_CORNER_CONVOLUTION_STEP_0:
       return "strokegen_segloopconv1D_corner_detection_step_0_convolution";
     case CONV1D_2D_SAMPLE_CORNER_CONVOLUTION_STEP_1:
       return "strokegen_segloopconv1D_corner_detection_step_1_convolution";
+    case CONV1D_2D_SAMPLE_CALC_TANGENT_CURVATURE:
+      return "strokegen_segloopconv1D_calc_2d_sample_tangent_curv_convolution"; 
+
     case LISTRANKING_INIT_ANCHORS:
       return "strokegen_list_ranking_test_tagging";
     case LISTRANKING_COMPACT_ANCHORS:

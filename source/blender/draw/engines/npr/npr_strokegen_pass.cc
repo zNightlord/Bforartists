@@ -2170,13 +2170,15 @@ namespace blender::npr::strokegen
       settings.is_validation_shader = false;
       append_subpass_segloopconv1d(settings, pass_process_contours);
 
+      settings.shader_convolution = CONV1D_2D_SAMPLE_CALC_TANGENT_CURVATURE;
+      settings.lazy_dispatch = true;
+      append_subpass_segloopconv1d(settings, pass_process_contours);
+
       settings.shader_convolution = CONV1D_2D_SAMPLE_CORNER_CONVOLUTION_STEP_1;
       settings.lazy_dispatch = true;
-      settings.is_validation_shader = false;
       append_subpass_segloopconv1d(settings, pass_process_contours);
 
       append_subpass_2d_sample_segmentation(screen_res, sample_rate, false);
-
       { 
         auto& sub = pass_process_contours.sub("strokegen_contour_2d_resample_eval_topo_remove_fake_corners");
         sub.shader_set(shaders_.static_shader_get(CONTOUR_2D_SAMPLES_REJECT_FAKE_CORNERS));
@@ -2186,7 +2188,6 @@ namespace blender::npr::strokegen
         sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_2d_sample_dispatch_args_);
         sub.barrier(GPU_BARRIER_SHADER_STORAGE);
       }
-
       append_subpass_2d_sample_segmentation(screen_res, sample_rate, false);
     }
   }
