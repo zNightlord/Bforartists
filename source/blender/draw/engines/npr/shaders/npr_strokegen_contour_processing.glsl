@@ -919,7 +919,7 @@ void main()
 			// uint prev_seg_head_id = move_contour_id_along_loop(cct, prev_seg_tail_id, -float(prev_seg_tail_rank)); 
 
 			vec2 p = load_ssbo_contour_2d_sample_geometry__position(sample_id); 
-			vec2 pp = load_ssbo_contour_2d_sample_geometry__position(seg_head_id/* prev_seg_head_id */); 
+			vec2 pp = load_ssbo_contour_2d_sample_geometry__position(seg_head_id); 
 			vec2 pn = load_ssbo_contour_2d_sample_geometry__position(seg_tail_id); 
 
 			vec2 vp = pcs_screen_size_.xy * (pp - p); 
@@ -941,7 +941,7 @@ void main()
 				cf.is_corner = false; 
 		}
 
-		cf.seg_head = cf.is_corner; 
+		cf.seg_head = cf.is_corner || cf.seg_head_contour; 
 		if (valid_thread)
 			store_ssbo_contour_2d_sample_topology__flags(sample_id, cf); 
 	#endif

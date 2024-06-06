@@ -572,6 +572,128 @@ Contour2DResampleRasterData decode_contour_2d_resample_data(uvec3 d)
 
 
 
+// Tangent Estimation ------------------------------------------------
+// Visit each neighboring sample in the local window 
+// and accumulate weighted least squares parameters 
+struct Curve2DWLSFitParams
+{
+	vec3 a_123; 
+	vec4 b_x1y1_x2y2; 
+}; 
+
+Curve2DWLSFitParams curve_2d_wls_fit_init_params()
+{
+	Curve2DWLSFitParams wls; 
+	wls.a_123 = vec3(.0f, .0f, .0f); 
+	wls.b_x1y1_x2y2 = vec4(.0f, .0f, .0f, .0f); 
+	return wls; 
+}
+void curve_2d_wls_fit_acc_params(
+	uint windowSize, float l, vec2 dl,
+	inout Curve2DWLSFitParams wls_params
+){
+	float wi = abs(l) / float(windowSize);
+	
+	float val = wi * l * l;
+	wls_params.a_123[0] += val; // a1 <- a1 + wi * li^2
+	val *= (0.5 * l);
+	wls_params.a_123[1] += val; // a2 <- a2 + wi/2 * li^3
+	val *= (0.5 * l);
+	wls_params.a_123[2] += val; // a3 <- a3 + wi/4 * li^4
+	
+	dl = (wi * l) * dl;
+	wls_params.b_x1y1_x2y2.xyzw += vec4(dl.xy, 0.5 * l * dl.xy); // bx1, by1, bx2, by2 
+}
+
+void curve_2d_wls_fit_iter(
+	uint windowSize/* radius*2+1 */, bool left_samples, 
+	vec2 coord_center_sample, vec2 coord_neigh_sample, 
+	inout float l/*init as 0*/, inout Curve2DWLSFitParams fit_params
+)
+{
+	vec2 dl = coord_neigh_sample - coord_center_sample;
+	if (left_samples) l -= length(dl); // negative arc-length
+	else l += length(dl);
+	
+	curve_2d_wls_fit_acc_params(windowSize, l, dl, /*inout*/fit_params);
+}
+
+void curve_2d_wls_fit_solve(Curve2DWLSFitParams fit_params, out vec2 tangent, out float curv)
+{
+#define A1  ((fit_params.a_123[0]))
+#define A2  ((fit_params.a_123[1]))
+#define A3  ((fit_params.a_123[2]))
+#define BX1 ((fit_params.b_x1y1_x2y2.x))
+#define BY1 ((fit_params.b_x1y1_x2y2.y))
+#define BX2 ((fit_params.b_x1y1_x2y2.z))
+#define BY2 ((fit_params.b_x1y1_x2y2.w))
+	float dInv = 1.0f / ((A1 * A3) - (A2 * A2));
+	vec2 dr = vec2(		// (dr/dx, dr/dy)
+		(A3 * BX1) - (A2 * BX2),
+		(A3 * BY1) - (A2 * BY2)
+	);
+	dr *= dInv;
+	float dr_len = length(dr); 
+	tangent = dr / dr_len;
+	// Note: we can also output the curvature. 
+
+	float ddInv = 1.0f / ((A2 * A2) - (A1 * A3)); 
+	vec2 ddr = vec2(
+		(A2 * BX1) - (A1 * BX2), 
+		(A2 * BY1) - (A1 * BY2)
+	); 
+	ddr *= ddInv;
+	curv = (dr.y * ddr.x - dr.x * ddr.y) / (dr_len * dr_len * dr_len);
+}
+
+// // Fit locally to a quadratic curve
+// void curve_fit_2d(vec2 ptclCoord, ContourCurveTopo cct, out vec2 tangent){
+// 	// WLS Params ------------------------------------------
+// 	vec3 a_123 = 0;		// .xyz:	[a1, a2, a3]
+// 	vec4 b_x1y1_x2y2 = 0; // .xyzw:	[bx1, by1, bx2, by2]
+	
+// 	float l_l = .0f; // current arc len (left)
+// 	float l_r = .0f; // current arc len (right)
+	
+// 	// Accumulate Params -----------------------------------
+// 	const uint FITTING_RADIUS = 8u; 
+// 	uint windowSize = FITTING_RADIUS * 2u + 1u;
+// 	for (uint d = 1; d <= FITTING_RADIUS; ++d)
+// 	{ // Traverse backward
+// 		vec2 neighCoord = FUNC_SEGLOOPCONV1D_LOAD_ELEM_LEFT(d, cct); 
+// 		vec2 dl = neighCoord - ptclCoord;
+// 		l_l -= length(dl); // negative arc-length
+		
+// 		curve_fit_acc_2d_wls_params(windowSize, l_l, dl, a_123, b_x1y1_x2y2);
+// 	}
+// 	for (uint d = 1; d <= FITTING_RADIUS; ++d)
+// 	{ // Traverse forward
+// 		vec2 neighCoord = FUNC_SEGLOOPCONV1D_LOAD_ELEM_EIGHT(d, cct);
+		
+// 		vec2 dl = neighCoord - ptclCoord;
+// 		l_r += length(dl);
+// 		curve_fit_acc_2d_wls_params(windowSize, l_r, dl, a_123, b_x1y1_x2y2);
+// 	}
+	
+// #define A1 a_123[0]
+// #define A2 a_123[1]
+// #define A3 a_123[2]
+// #define BX1 b_x1y1_x2y2.x
+// #define BY1 b_x1y1_x2y2.y
+// #define BX2 b_x1y1_x2y2.z
+// #define BY2 b_x1y1_x2y2.w
+// 	float dInv = rcp((A1 * A3) - (A2 * A2));
+// 	vec2 dr = vec2(		// (dr/dx, dr/dy)
+// 		(A3 * BX1) - (A2 * BX2),
+// 		(A3 * BY1) - (A2 * BY2)
+// 	);
+// 	dr *= dInv;
+// 	tangent = normalize(dr);
+// }
+
+
+
+
 
 
 #if defined(USE_CONTOUR_2D_SAMPLE_GEOMETRY_BUFFER)
