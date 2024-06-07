@@ -4,7 +4,7 @@
 #pragma BLENDER_REQUIRE(npr_strokegen_load_store_lib.glsl)
 #pragma BLENDER_REQUIRE(npr_strokegen_contour_topo_lib.glsl)
 #pragma BLENDER_REQUIRE(npr_strokegen_contour_geom_lib.glsl)
-
+#pragma BLENDER_REQUIRE(npr_strokegen_brush_toolbox_lib.glsl)
 
 
 #if defined(_KERNEL_MULTICOMPILE__CONTOUR_SERIALIZATION)
@@ -913,11 +913,7 @@ void main()
 
 			uint seg_tail_id = move_contour_id_along_loop(cct, sample_id, +float(corner_seg_len - 1u - corner_seg_rank)); 
 			uint seg_head_id = move_contour_id_along_loop(cct, sample_id, -float(corner_seg_rank));
-			// Note: need to consider clipped gaps between adjacent segments!!!
-			// uint prev_seg_tail_id = move_contour_id_along_loop(cct, sample_id, -float(corner_seg_rank + 1u)); 
-			// uint prev_seg_tail_rank = load_ssbo_contour_2d_sample_topology__seg_rank(prev_seg_tail_id, num_samples); 
-			// uint prev_seg_head_id = move_contour_id_along_loop(cct, prev_seg_tail_id, -float(prev_seg_tail_rank)); 
-
+			// Note: need to consider clipped gaps between adjacent segments!!! 
 			vec2 p = load_ssbo_contour_2d_sample_geometry__position(sample_id); 
 			vec2 pp = load_ssbo_contour_2d_sample_geometry__position(seg_head_id); 
 			vec2 pn = load_ssbo_contour_2d_sample_geometry__position(seg_tail_id); 
@@ -945,8 +941,47 @@ void main()
 		if (valid_thread)
 			store_ssbo_contour_2d_sample_topology__flags(sample_id, cf); 
 	#endif
-
 #endif
 
 }
 #endif
+
+
+
+
+
+#if defined(_KERNEL_MULTICOMPILE__CALC_CONTOUR_2D_STROKE_RENDER_DATA)
+/*
+vec2 pcs_screen_size_
+float pcs_stroke_width_
+ssbo_contour_2d_sample_geometry
+ssbo_contour_2d_sample_topology
+*/
+void main()
+{
+	const uint sample_id = gl_GlobalInvocationID.x; 
+	const uint num_samples = ssbo_bnpr_mesh_pool_counters_.num_2d_samples; 
+	bool valid_thread = sample_id < num_samples; 
+
+	vec2 pos = vec2(pcs_screen_size_.xy) * load_ssbo_contour_2d_sample_geometry__position(sample_id); 
+	vec2 tangent = load_ssbo_contour_2d_sample_geometry__tangent(sample_id, num_samples); 
+
+	mat3x2 verts = compute_wing_quad_verts(
+		pos, /*TODO: winding might be wrong*/vec2(tangent.y, -tangent.x), pcs_stroke_width_
+	);
+
+	ContourFlags cf = load_ssbo_contour_2d_sample_topology__flags(sample_id); 
+	uint seg_len = load_ssbo_contour_2d_sample_topology__seg_len(sample_id, num_samples); 
+	uint curve_len = load_ssbo_contour_2d_sample_topology__curve_len(sample_id, num_samples); 
+	bool is_looped_samples = is_2d_sample_curve_looped(cf.looped_curve, cf.curve_clipped, seg_len == curve_len); 
+
+	vec4 col = vec4(1.0f); 
+	if (cf.seg_tail && !is_looped_samples) col.a = .0f; 
+	if (valid_thread) store_ssbo_stroke_mesh_pool__skeletal_color(sample_id, col, num_samples); 
+}
+#endif
+
+
+
+
+

@@ -396,6 +396,11 @@ class GPUBufferPoolModule {
   {
     return ssbo_mesh_buffer_reuse_1_;
   }
+  inline GPUStorageBuf *reused_ssbo_stroke_mesh_pool_()
+  {
+    return ssbo_mesh_buffer_reuse_0_; 
+  }
+
 
   // lifetime [append_subpass_calc_contour_edges_draw_data, append_draw_contour_subpass]
   inline GPUStorageBuf *reused_ssbo_bnpr_mesh_pool_()

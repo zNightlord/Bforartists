@@ -2170,13 +2170,10 @@ namespace blender::npr::strokegen
       settings.is_validation_shader = false;
       append_subpass_segloopconv1d(settings, pass_process_contours);
 
-      settings.shader_convolution = CONV1D_2D_SAMPLE_CALC_TANGENT_CURVATURE;
-      settings.lazy_dispatch = true;
-      append_subpass_segloopconv1d(settings, pass_process_contours);
-
       settings.shader_convolution = CONV1D_2D_SAMPLE_CORNER_CONVOLUTION_STEP_1;
       settings.lazy_dispatch = true;
       append_subpass_segloopconv1d(settings, pass_process_contours);
+
 
       append_subpass_2d_sample_segmentation(screen_res, sample_rate, false);
       { 
@@ -2189,6 +2186,11 @@ namespace blender::npr::strokegen
         sub.barrier(GPU_BARRIER_SHADER_STORAGE);
       }
       append_subpass_2d_sample_segmentation(screen_res, sample_rate, false);
+
+
+      settings.shader_convolution = CONV1D_2D_SAMPLE_CALC_TANGENT_CURVATURE;
+      settings.lazy_dispatch = true;
+      append_subpass_segloopconv1d(settings, pass_process_contours);
     }
   }
 
@@ -2747,7 +2749,8 @@ namespace blender::npr::strokegen
         sub.bind_ssbo(5, buffers_.ssbo_contour_snake_list_len_);
       }
       else if (settings.shader_convolution == CONV1D_2D_SAMPLE_CORNER_CONVOLUTION_STEP_0
-                || settings.shader_convolution == CONV1D_2D_SAMPLE_CORNER_CONVOLUTION_STEP_1) {
+                || settings.shader_convolution == CONV1D_2D_SAMPLE_CORNER_CONVOLUTION_STEP_1
+                || settings.shader_convolution == CONV1D_2D_SAMPLE_CALC_TANGENT_CURVATURE) {
         sub.bind_ssbo(4, buffers_.reused_ssbo_contour_2d_sample_topology_());
         sub.bind_ssbo(5, buffers_.reused_ssbo_contour_2d_sample_geometry_());
         sub.bind_image(0, textures_.tex2d_contour_dbg_); 

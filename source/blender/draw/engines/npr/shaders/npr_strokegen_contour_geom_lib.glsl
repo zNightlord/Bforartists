@@ -1,3 +1,6 @@
+
+#pragma BLENDER_REQUIRE(npr_strokegen_encode_lib.glsl)
+
 #ifndef BNPR_CONTOUR_GEOM__INCLUDED
 #define BNPR_CONTOUR_GEOM__INCLUDED
 
@@ -5,29 +8,7 @@
 #	define USE_GPU_SHADER_CREATE_INFO 1
 #endif // fix the fucking error in Renderdoc
 
-uvec3 pack_u24_x4(uvec4 u)
-{
-    uvec3 p = uvec3(0u);
-    p.xyz = (u.xyz << 8);
 
-    p.x |= (u.w & 0x000000ff);
-    u.w >>= 8;
-    p.y |= (u.w & 0x000000ff);
-    u.w >>= 8;
-    p.z |= (u.w & 0x000000ff);
-
-    return p;
-}
-
-uvec4 unpack_u24_x4(uvec3 p)
-{
-    uvec4 u = uvec4(0u);
-    u.xyz = (p.xyz >> 8);
-    p.xyz &= 0x000000ff;
-    u.w = ((p.z << 16) | (p.y << 8) | p.x);
-
-    return u;
-}
 
 
 // ---------------------------------------------------------------------------------------------------
@@ -515,38 +496,6 @@ struct Contour2DResampleRasterData
 	vec4 begend_uvs; // the same as LineRasterResult.begend_uvs
 };
 
-uint pack_2d_uv(vec2 uv)
-{
-	float fixed_factor = float((1u << 16u) - 1u); 
-	uvec2 uv_fixed = uvec2(round(uv * fixed_factor)); 
-	return ((uv_fixed.y << 16u) | uv_fixed.x);
-}
-
-vec2 unpack_2d_uv(uint uv_packed)
-{
-	float fixed_factor = float((1u << 16u) - 1u); 
-	uvec2 uv_fixed = uvec2(uv_packed & 0xffffu, uv_packed >> 16u); 
-	return clamp(vec2(uv_fixed) / fixed_factor, vec2(.0f), vec2(1.0f));
-}
-
-uvec2 pack_2d_uv_x2(vec4 begend_uvs)
-{
-	begend_uvs = clamp(begend_uvs, vec4(.0f), vec4(1.0f)); 
-
-	float fixed_factor = float((1u << 16u) - 1u); 
-	uvec4 uv_fixed = uvec4(round(begend_uvs * fixed_factor)) & 0xffffu; 
-	return ((uv_fixed.zw << 16u) | uv_fixed.xy); 
-}
-
-vec4 unpack_2d_uv_x2(uvec2 uv_packed)
-{
-	uvec4 uv_fixed = uvec4(
-		uv_packed & 0xffffu, 
-		uv_packed >> 16u
-	); 
-	float fixed_factor = float((1u << 16u) - 1u); 
-	return clamp(vec4(uv_fixed) / fixed_factor, vec4(.0f), vec4(1.0f)); 
-}
 
 uvec3 encode_contour_2d_resample_data(Contour2DResampleRasterData data)
 {
@@ -644,53 +593,14 @@ void curve_2d_wls_fit_solve(Curve2DWLSFitParams fit_params, out vec2 tangent, ou
 	); 
 	ddr *= ddInv;
 	curv = (dr.y * ddr.x - dr.x * ddr.y) / (dr_len * dr_len * dr_len);
+#undef A1
+#undef A2
+#undef A3
+#undef BX1
+#undef BY1
+#undef BX2
+#undef BY2
 }
-
-// // Fit locally to a quadratic curve
-// void curve_fit_2d(vec2 ptclCoord, ContourCurveTopo cct, out vec2 tangent){
-// 	// WLS Params ------------------------------------------
-// 	vec3 a_123 = 0;		// .xyz:	[a1, a2, a3]
-// 	vec4 b_x1y1_x2y2 = 0; // .xyzw:	[bx1, by1, bx2, by2]
-	
-// 	float l_l = .0f; // current arc len (left)
-// 	float l_r = .0f; // current arc len (right)
-	
-// 	// Accumulate Params -----------------------------------
-// 	const uint FITTING_RADIUS = 8u; 
-// 	uint windowSize = FITTING_RADIUS * 2u + 1u;
-// 	for (uint d = 1; d <= FITTING_RADIUS; ++d)
-// 	{ // Traverse backward
-// 		vec2 neighCoord = FUNC_SEGLOOPCONV1D_LOAD_ELEM_LEFT(d, cct); 
-// 		vec2 dl = neighCoord - ptclCoord;
-// 		l_l -= length(dl); // negative arc-length
-		
-// 		curve_fit_acc_2d_wls_params(windowSize, l_l, dl, a_123, b_x1y1_x2y2);
-// 	}
-// 	for (uint d = 1; d <= FITTING_RADIUS; ++d)
-// 	{ // Traverse forward
-// 		vec2 neighCoord = FUNC_SEGLOOPCONV1D_LOAD_ELEM_EIGHT(d, cct);
-		
-// 		vec2 dl = neighCoord - ptclCoord;
-// 		l_r += length(dl);
-// 		curve_fit_acc_2d_wls_params(windowSize, l_r, dl, a_123, b_x1y1_x2y2);
-// 	}
-	
-// #define A1 a_123[0]
-// #define A2 a_123[1]
-// #define A3 a_123[2]
-// #define BX1 b_x1y1_x2y2.x
-// #define BY1 b_x1y1_x2y2.y
-// #define BX2 b_x1y1_x2y2.z
-// #define BY2 b_x1y1_x2y2.w
-// 	float dInv = rcp((A1 * A3) - (A2 * A2));
-// 	vec2 dr = vec2(		// (dr/dx, dr/dy)
-// 		(A3 * BX1) - (A2 * BX2),
-// 		(A3 * BY1) - (A2 * BY2)
-// 	);
-// 	dr *= dInv;
-// 	tangent = normalize(dr);
-// }
-
 
 
 
@@ -705,24 +615,42 @@ vec2 load_ssbo_contour_2d_sample_geometry__position(uint sample_id)
 {
 	return unpack_2d_uv(ssbo_contour_2d_sample_geometry_[sample_id]); 
 }
-void store_ssbo_contour_2d_sample_geometry__curv_arclen_param(uint sample_id, float arclen_param, uint num_samples)
-{ // stride : 1
+void store_ssbo_contour_2d_sample_geometry__tangent(uint sample_id, vec2 tangent, uint num_samples)
+{
 	uint subbuff_offset = num_samples; 
+	tangent = tangent * .5f + .5f; 
+	ssbo_contour_2d_sample_geometry_[subbuff_offset + sample_id] = pack_2d_uv(tangent.xy); 
+}
+vec2 load_ssbo_contour_2d_sample_geometry__tangent(uint sample_id, uint num_samples)
+{
+	uint subbuff_offset = num_samples; 
+	vec2 tangent = unpack_2d_uv(ssbo_contour_2d_sample_geometry_[subbuff_offset + sample_id]); 
+	tangent = tangent * 2.0f - 1.0f; 
+	return tangent; 
+}
+// subbuff 2, can be reused ----------------------------------
+void store_ssbo_contour_2d_sample_geometry__curv_arclen_param(uint sample_id, float arclen_param, uint num_samples)
+{ 
+	uint subbuff_offset = 2u * num_samples; 
 	ssbo_contour_2d_sample_geometry_[subbuff_offset + sample_id] = floatBitsToUint(arclen_param); 
 }
 float load_ssbo_contour_2d_sample_geometry__curv_arclen_param(uint sample_id, uint num_samples)
 {
-	uint subbuff_offset = num_samples; 
+	uint subbuff_offset = 2u * num_samples; 
 	return uintBitsToFloat(ssbo_contour_2d_sample_geometry_[subbuff_offset + sample_id]); 
 }
+// subbuff 3, can be reused ----------------------------------
 void store_ssbo_contour_2d_sample_geometry__corner_curvature(uint sample_id, float corner_curvature, uint num_samples)
 { // stride : 1
-	uint subbuff_offset = num_samples * 2u; 
+	uint subbuff_offset = 3u * num_samples; 
 	ssbo_contour_2d_sample_geometry_[subbuff_offset + sample_id] = floatBitsToUint(corner_curvature); 
 }
 float load_ssbo_contour_2d_sample_geometry__corner_curvature(uint sample_id, uint num_samples)
 {
-	uint subbuff_offset = num_samples * 2u; 
+	uint subbuff_offset = 3u * num_samples; 
 	return uintBitsToFloat(ssbo_contour_2d_sample_geometry_[subbuff_offset + sample_id]); 
 }
+
+
 #endif
+

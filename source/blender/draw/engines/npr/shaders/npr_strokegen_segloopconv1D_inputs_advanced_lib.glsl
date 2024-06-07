@@ -50,7 +50,7 @@
         #endif // _KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__TEST
 
 
-        #if defined(_KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__2DSAMPLE_CORNER_DETECTION__STEP_0) || defined(_KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__2DSAMPLE_CORNER_DETECTION__STEP_1) || defined(_KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__2DSAMPLE_CALC_TANGENT)
+        #if defined(_KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__2DSAMPLE_PROCESSING)
             // "Robust corner detection using altitude to chord ratio accumulation"
             uint sample_id = idx;
             uint num_samples = ssbo_segloopconv1d_info_.num_conv_items;
@@ -174,42 +174,50 @@
                     imageStore(tex2d_contour_dbg_, ivec2(dbg_pix), dbg_col);
                 }
             #endif // _KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__2DSAMPLE_CORNER_DETECTION__STEP_1
-        #endif // _KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__2DSAMPLE_CORNER_DETECTION__STEP_0/1
-
-        #if defined(_KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__2DSAMPLE_CALC_TANGENT_CURVATURE)
-            const uint fit_radius = 8u;
-            uint wls_window_sz = 2u * fit_radius + 1u;
-
-            Curve2DWLSFitParams wls_params = curve_2d_wls_fit_init_params(); 
-            float wls_l_l = .0f;
-            float wls_l_r = .0f;
-            for (uint d = 1; d <= fit_radius; ++d)
-            {
-                vec2 pt_lt = _FUNC_LOAD_CONV_DATA_LDS_LEFT(
-                    d, 
-                    blockIdx, groupIdx, seg_len, seg_head_id
+            #if defined(_KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__2DSAMPLE_CALC_TANGENT_CURVATURE)
+                vec2 pt = _FUNC_LOAD_CONV_DATA_LDS_LEFT(
+                    0, blockIdx, groupIdx, seg_len, seg_head_id
                 );
-                if (false == (sub_seg_rank < d && !is_sub_seg_loop))
+
+                const uint fit_radius = 8u;
+                uint wls_window_sz = 2u * fit_radius + 1u;
+
+                Curve2DWLSFitParams wls_params = curve_2d_wls_fit_init_params(); 
+                float wls_l_l = .0f;
+                float wls_l_r = .0f;
+                for (uint d = 1; d <= fit_radius; ++d)
+                {
+                    vec2 pt_lt = _FUNC_LOAD_CONV_DATA_LDS_LEFT(
+                        d, 
+                        blockIdx, groupIdx, seg_len, seg_head_id
+                    );
+                    bool reach_left_seg_end = (sub_seg_rank < d && !is_sub_seg_loop); 
+
+                    vec2 pt_rt = _FUNC_LOAD_CONV_DATA_LDS_RIGHT(
+                        d, 
+                        blockIdx, groupIdx, seg_len, seg_head_id
+                    );
+                    bool reach_right_seg_end = (sub_seg_len <= sub_seg_rank + d && !is_sub_seg_loop); 
+
+                    if (reach_left_seg_end || reach_right_seg_end) break; 
+
                     curve_2d_wls_fit_iter(wls_window_sz, true,  pt, pt_lt, /*inout*/wls_l_l, wls_params);
-
-                vec2 pt_rt = _FUNC_LOAD_CONV_DATA_LDS_RIGHT(
-                    d, 
-                    blockIdx, groupIdx, seg_len, seg_head_id
-                );
-                if (false == (sub_seg_len <= sub_seg_rank + d && !is_sub_seg_loop))
                     curve_2d_wls_fit_iter(wls_window_sz, false, pt, pt_rt, /*inout*/wls_l_r, wls_params);
-            }
+                }
 
-            vec2 tangent; float curv; 
-            curve_2d_wls_fit_solve(wls_params, /*out*/tangent, curv);
+                vec2 tangent; float curv; 
+                curve_2d_wls_fit_solve(wls_params, /*out*/tangent, curv);
 
-            if (sample_id < num_samples)
-            {
-                vec4 dbg_col = vec4(tangent.xy * .5f + .5f, abs(curv), 1.0f);
-                vec2 dbg_pix = pt;
-                imageStore(tex2d_contour_dbg_, ivec2(dbg_pix), dbg_col);
-            }
-        #endif
+                conv_temp_data.tangent = tangent; 
+
+                if (sample_id < num_samples)
+                {
+                    vec4 dbg_col = vec4(tangent.xy * .5f + .5f, abs(curv), 1.0f);
+                    vec2 dbg_pix = pt;
+                    imageStore(tex2d_contour_dbg_, ivec2(dbg_pix), dbg_col);
+                }
+            #endif
+        #endif // _KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__2DSAMPLE_PROCESSING
         }
 
 

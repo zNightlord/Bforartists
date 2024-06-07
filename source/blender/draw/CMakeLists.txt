@@ -731,6 +731,8 @@ set(GLSL_SRC
   engines/npr/shaders/npr_strokegen_contour_geom_lib.glsl 
   engines/npr/shaders/npr_strokegen_remeshed_surface_vert.glsl
   engines/npr/shaders/npr_strokegen_remeshed_surface_frag.glsl
+  engines/npr/shaders/npr_strokegen_brush_toolbox_lib.glsl
+  engines/npr/shaders/npr_strokegen_encode_lib.glsl
 
   engines/npr/bnpr_defines.hh
   engines/npr/bnpr_shader_shared.hh

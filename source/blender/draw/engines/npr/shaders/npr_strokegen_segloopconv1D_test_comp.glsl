@@ -150,6 +150,11 @@ void main()
             store_ssbo_contour_2d_sample_topology__flags(idx, cf); 
         }
     #endif
+    #if defined(_KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__2DSAMPLE_CALC_TANGENT_CURVATURE)
+        if (idx < get_num_items())
+            store_ssbo_contour_2d_sample_geometry__tangent(idx, conv_temp_data.tangent, get_num_items());             
+    #endif
+
     /* -------------------------------------------------------------------------- */
 }
 
