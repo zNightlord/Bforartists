@@ -65,6 +65,7 @@ public:
 
   /** Draw Passes */
   StrokegenMeshRasterPass pass_draw_contour_edges = {"Draw Contour Edges"}; // Inherited from draw::PassMain
+  StrokegenMeshRasterPass pass_draw_contour_2d_samples = {"Draw 2D Contour Curves"}; // Inherited from draw::PassMain
   int curr_mesh_id_surf_depth; 
   std::array<StrokegenMeshRasterPass, 1024> pass_draw_remeshed_surface_depth_;  
   StrokegenMeshRasterPass pass_draw_debug_lines_ = {"Draw Normal Lines"}; // Inherited from draw::PassMain 
@@ -108,6 +109,7 @@ public:
     GEOM_EXTRACTION,
     CONTOUR_PROCESS, 
     INDIRECT_DRAW_CONTOUR_EDGES,
+    INDIRECT_DRAW_CONTOUR_2D_SAMPLES,
     INDIRECT_DRAW_REMESHED_DEPTH,
     COMPRESS_CONTOUR_PIXELS,
 
@@ -435,6 +437,7 @@ public:
 
   // ---------------------------------------------------------------------------
   void rebuild_pass_contour_edge_drawcall();
+  void rebuild_pass_contour_2d_samples_drawcall();
   void rebuild_pass_compress_contour_pixels(bool debug = false);
 
 

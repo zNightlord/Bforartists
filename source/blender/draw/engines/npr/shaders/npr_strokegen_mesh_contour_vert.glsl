@@ -1,6 +1,7 @@
 
 #pragma BLENDER_REQUIRE(common_view_lib.glsl)
 #pragma BLENDER_REQUIRE(npr_strokegen_contour_topo_lib.glsl)
+#pragma BLENDER_REQUIRE(npr_strokegen_brush_toolbox_lib.glsl)
 
 /* https://www.shadertoy.com/view/7tlXR4 */
 vec3 hash32(vec2 p)
@@ -27,6 +28,7 @@ vec3 rand_col_rgb(uint seed0, uint seed1)
 }
 
 
+#if defined(_KERNEL_MULTICOMPILE_DRAW_CONTOUR__EDGES)
 void main()
 {
     uint vid = gl_VertexID;
@@ -124,3 +126,25 @@ void main()
 	vec2 edge_dir_ext = (vid % 2u == 1u) ? edgedir_uv : -edgedir_uv;
 	gl_Position.xy += edge_dir_ext * whclip * pcs_screen_size_inv_ * 1.5f;
 }
+#endif
+
+
+#if defined(_KERNEL_MULTICOMPILE_DRAW_CONTOUR__2D_SAMPLES)
+void main()
+{
+    uint vid = gl_VertexID;
+    uint spine_id = vid / POINTS_PER_WING_QUAD; // == sample_id
+    uint num_2d_samples = ssbo_bnpr_mesh_pool_counters_.num_2d_samples; 
+
+    SpineTopoInfo sti = load_ssbo_stroke_mesh_pool__skeletal_topo_info(vid, num_2d_samples);
+    vec2 coord = load_ssbo_stroke_mesh_pool__skeletal_VB(vid, sti); 
+    vec4 col = load_ssbo_stroke_mesh_pool__skeletal_color(vid, num_2d_samples);
+
+    vec4 pos_hclip = vec4(coord * 2.0f - 1.0f, 0.0f, 1.0f); 
+    gl_Position.xyzw = pos_hclip;
+
+    color = vec4(1.0f, 0.0f, 0.0f, 1.0f); 
+    normal = vec3(0, 0, 1);
+    tangent.xyz = vec3(0, 0, 1);
+}
+#endif

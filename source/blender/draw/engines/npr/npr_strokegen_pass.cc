@@ -46,6 +46,8 @@ namespace blender::npr::strokegen
     switch (passType) {
       case INDIRECT_DRAW_CONTOUR_EDGES:
         return pass_draw_contour_edges;
+      case INDIRECT_DRAW_CONTOUR_2D_SAMPLES:
+        return pass_draw_contour_2d_samples; 
       case INDIRECT_DRAW_REMESHED_DEPTH:
         return pass_draw_remeshed_surface_depth_[pass_id]; 
       case INDIRECT_DRAW_DBG_VNOR:
@@ -102,6 +104,7 @@ namespace blender::npr::strokegen
   {
     init_mesh_extraction_passes();
     pass_draw_contour_edges.init_pass(shaders_, textures_, StrokegenMeshRasterPass::DRAW_CONTOUR_EDGES);
+    pass_draw_contour_2d_samples.init_pass(shaders_, textures_, StrokegenMeshRasterPass::DRAW_CONTOUR_2D_SAMPLES);
 
     init_surface_depth_passes();
 
@@ -140,6 +143,7 @@ namespace blender::npr::strokegen
     meshing_params.iters_test_sqrt_subdiv = (int)(scene_eval->npr.npr_test_val_6 + 1e-10f); 
 
     pass_draw_contour_edges.draw_settings.draw_hidden_lines = scene_eval->npr.npr_test_val_7 > .5f;
+    pass_draw_contour_2d_samples.draw_settings.draw_hidden_lines = scene_eval->npr.npr_test_val_7 > .5f; 
     pass_draw_debug_lines_.draw_settings.draw_hidden_lines = scene_eval->npr.npr_test_val_7 > .5f;
 
     meshing_params.num_quadric_diffusion_iters = scene_eval->npr.npr_test_val_8;
@@ -172,6 +176,7 @@ namespace blender::npr::strokegen
     rebuild_pass_process_contours();
     if (meshing_params.visualize_contour_edges) { // I need to hide contour edges for better debug visuals, for now
       rebuild_pass_contour_edge_drawcall();
+      rebuild_pass_contour_2d_samples_drawcall(); 
       rebuild_pass_compress_contour_pixels();  
     }
   }
@@ -1935,7 +1940,7 @@ namespace blender::npr::strokegen
       bind_rsc_for_contour_2d_resample_(sub, screen_res, sample_rate, ssbo_offset);
       sub.bind_image(0, textures_.tex2d_contour_dbg_); 
 
-      sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_edge_dispatch_args_);
+      sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_vert_dispatch_args_);
       sub.barrier(GPU_BARRIER_SHADER_STORAGE); 
     }
     {
@@ -2047,7 +2052,7 @@ namespace blender::npr::strokegen
       bind_rsc_for_contour_2d_resample_(sub, screen_res, sample_rate, ssbo_offset);
       sub.bind_image(0, textures_.tex2d_contour_dbg_);
 
-      sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_edge_dispatch_args_);
+      sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_vert_dispatch_args_);
       sub.barrier(GPU_BARRIER_SHADER_STORAGE);
     }
     {
@@ -2072,7 +2077,7 @@ namespace blender::npr::strokegen
       bind_rsc_for_contour_2d_resample_(sub, screen_res, sample_rate, ssbo_offset);
       sub.bind_image(0, textures_.tex2d_contour_dbg_);
 
-      sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_edge_dispatch_args_);
+      sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_vert_dispatch_args_);
       sub.barrier(GPU_BARRIER_SHADER_STORAGE);
     }
 
@@ -2094,7 +2099,7 @@ namespace blender::npr::strokegen
 
       bind_rsc_for_contour_2d_resample_(sub, screen_res, sample_rate, ssbo_offset);
 
-      sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_edge_dispatch_args_);
+      sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_vert_dispatch_args_);
       sub.barrier(GPU_BARRIER_SHADER_STORAGE);
     }
     {
@@ -2191,6 +2196,22 @@ namespace blender::npr::strokegen
       settings.shader_convolution = CONV1D_2D_SAMPLE_CALC_TANGENT_CURVATURE;
       settings.lazy_dispatch = true;
       append_subpass_segloopconv1d(settings, pass_process_contours);
+
+      {
+        auto &sub = pass_process_contours.sub("strokegen_calc_contour_2d_curve_render_data");
+        sub.shader_set(shaders_.static_shader_get(CONTOUR_2D_SAMPLES_CALC_RENDER_DATA));
+
+        sub.bind_ssbo(0, buffers_.reused_ssbo_contour_2d_sample_geometry_());
+        sub.bind_ssbo(1, buffers_.reused_ssbo_contour_2d_sample_topology_());
+        sub.bind_ssbo(2, buffers_.ssbo_bnpr_mesh_pool_counters_);
+        sub.bind_ssbo(3, buffers_.reused_ssbo_stroke_mesh_pool_());
+        sub.bind_image(0, textures_.tex2d_contour_dbg_); 
+        sub.push_constant("pcs_screen_size_", screen_res);
+        sub.push_constant("pcs_stroke_width_", 5.0f); 
+
+        sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_2d_sample_dispatch_args_);
+        sub.barrier(GPU_BARRIER_SHADER_STORAGE);
+      }
     }
   }
 
@@ -2274,12 +2295,29 @@ namespace blender::npr::strokegen
     sub.shader_set(shaders_.static_shader_get(eShaderType::FILL_DRAW_ARGS_CONTOUR_EDGES));
 
     sub.bind_ssbo(0, buffers_.ssbo_bnpr_mesh_pool_counters_);
-    sub.bind_ssbo(1, buffers_.ssbo_bnpr_mesh_pool_draw_args_);
+    sub.bind_ssbo(1, buffers_.ssbo_bnpr_contour_mesh_draw_args_);
 
     sub.dispatch(int3(1, 1, 1));
     sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_COMMAND);
 
     pass_draw_contour_edges.append_draw_contour_subpass(shaders_, buffers_, textures_);
+  }
+
+  void StrokeGenPassModule::rebuild_pass_contour_2d_samples_drawcall()
+  {
+    StrokegenMeshRasterPass &pass = pass_draw_contour_2d_samples;
+
+    {
+      auto &sub = pass.sub("bnpr_geom_fill_draw_args_contour_2d_samples");
+      sub.shader_set(shaders_.static_shader_get(eShaderType::FILL_DRAW_ARGS_CONTOUR_2D_SAMPLES)); 
+      sub.bind_ssbo(0, buffers_.ssbo_bnpr_mesh_pool_counters_);
+      sub.bind_ssbo(1, buffers_.ssbo_bnpr_2d_sample_draw_args_);
+
+      sub.dispatch(int3(1, 1, 1));
+      sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_COMMAND);
+    }
+
+    pass_draw_contour_2d_samples.append_draw_contour_2d_subpass(shaders_, buffers_, textures_); 
   }
 
   void StrokeGenPassModule::append_pass_remeshed_surface_depth_drawcall()
@@ -2292,7 +2330,7 @@ namespace blender::npr::strokegen
       sub.shader_set(shaders_.static_shader_get(eShaderType::FILL_DRAW_ARGS_REMESHED_SURFACE_DEPTH));
 
       sub.bind_ssbo(0, buffers_.ssbo_bnpr_mesh_pool_counters_);
-      sub.bind_ssbo(1, buffers_.ssbo_bnpr_mesh_pool_draw_args_);
+      sub.bind_ssbo(1, buffers_.ssbo_bnpr_contour_mesh_draw_args_);
 
       sub.dispatch(int3(1, 1, 1));
       sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_COMMAND);

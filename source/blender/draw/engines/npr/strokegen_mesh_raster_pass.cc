@@ -38,6 +38,14 @@ void npr::strokegen::StrokegenMeshRasterPass::init_pass(
     drw_state |= (DRW_STATE_STENCIL_ALWAYS);
     state_set(drw_state, clip_planes.size());  
   }
+  if (usage == Usage::DRAW_CONTOUR_2D_SAMPLES) {
+    drw_state |= (DRW_STATE_WRITE_COLOR);
+    drw_state |= ((draw_settings.draw_hidden_lines ? DRW_STATE_DEPTH_ALWAYS :
+                                                     DRW_STATE_DEPTH_LESS_EQUAL) |
+                  DRW_STATE_WRITE_DEPTH);  // z-write, lequal
+    drw_state |= (DRW_STATE_STENCIL_ALWAYS);
+    state_set(drw_state, clip_planes.size());
+  }
   if (usage == Usage::REMESHED_SURFACE_DEPTH) {
     drw_state |= (DRW_STATE_WRITE_COLOR);
     drw_state |= (DRW_STATE_DEPTH_LESS_EQUAL | DRW_STATE_WRITE_DEPTH);  // z-write, lequal
@@ -67,7 +75,22 @@ void npr::strokegen::StrokegenMeshRasterPass::append_draw_contour_subpass(
 
 
   subpass->barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE); 
-  subpass->draw_procedural_indirect(GPUPrimType::GPU_PRIM_LINES, buffers.ssbo_bnpr_mesh_pool_draw_args_); 
+  subpass->draw_procedural_indirect(GPUPrimType::GPU_PRIM_LINES, buffers.ssbo_bnpr_contour_mesh_draw_args_); 
+}
+
+void npr::strokegen::StrokegenMeshRasterPass::append_draw_contour_2d_subpass(
+    StrokeGenShaderModule &shaders, GPUBufferPoolModule &buffers, GPUTexturePoolModule &textures
+)
+{
+  draw::PassMain::Sub *subpass = &sub("bnpr_geom_draw_contour_edges_2d");
+  subpass->shader_set(shaders.static_shader_get(INDIRECT_DRAW_CONTOUR_2D_SAMPLES));
+
+  subpass->bind_ssbo(0, buffers.ssbo_bnpr_mesh_pool_counters_);
+  subpass->bind_ssbo(1, buffers.reused_ssbo_stroke_mesh_pool_());
+  subpass->push_constant("pcs_screen_size_", textures.get_contour_raster_screen_res()); 
+
+  subpass->barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
+  subpass->draw_procedural_indirect(GPUPrimType::GPU_PRIM_TRIS, buffers.ssbo_bnpr_2d_sample_draw_args_);
 }
 
 void npr::strokegen::StrokegenMeshRasterPass::append_draw_dbg_lines_subpass(
@@ -101,5 +124,5 @@ void npr::strokegen::StrokegenMeshRasterPass::append_draw_remeshed_surface_depth
   subpass->bind_ubo(0, buffers.ubo_view_matrices_cache_);
 
   subpass->barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
-  subpass->draw_procedural_indirect(GPUPrimType::GPU_PRIM_TRIS, buffers.ssbo_bnpr_mesh_pool_draw_args_); 
+  subpass->draw_procedural_indirect(GPUPrimType::GPU_PRIM_TRIS, buffers.ssbo_bnpr_contour_mesh_draw_args_); 
 }

@@ -48,7 +48,8 @@ class GPUBufferPoolModule {
   SSBO_StrokeGenFaceSplitCounters ssbo_face_split_counters_; 
 
   // Dispatch Args --------------------------------------------------------
-  SSBO_IndirectDrawArgs ssbo_bnpr_mesh_pool_draw_args_;
+  SSBO_IndirectDrawArgs ssbo_bnpr_contour_mesh_draw_args_;
+  SSBO_IndirectDrawArgs ssbo_bnpr_2d_sample_draw_args_;
   SSBO_IndirectDrawArgs ssbo_bnpr_vert_debug_draw_args_;
 
   SSBO_IndirectDispatchArgs ssbo_indirect_dispatch_args_per_filtered_edge_; 

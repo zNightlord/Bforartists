@@ -539,7 +539,7 @@ void main()
 
 		vec4 dbg_col = vec4(float(num_samples), .0f, .0f, 1.0f); 
 		ivec2 dbg_pos = ivec2(c2rd.begend_uvs.xy * pcs_screen_size_.xy);
-		// imageStore(tex2d_contour_dbg_, dbg_pos, dbg_col);
+		// imageStore(tex2d_contour_dbg_, dbg_pos, dbg_col); 
 	}
 #endif
 
@@ -969,15 +969,44 @@ void main()
 	mat3x2 verts = compute_wing_quad_verts(
 		pos, /*TODO: winding might be wrong*/vec2(tangent.y, -tangent.x), pcs_stroke_width_
 	);
+	
+	for (uint i = 0; i < 3; i++)
+		verts[i] /= vec2(pcs_screen_size_.xy); // back to 01-uv space
 
+	
 	ContourFlags cf = load_ssbo_contour_2d_sample_topology__flags(sample_id); 
+	ContourCurveTopo cct = load_contour_2d_sample_curve_topo(sample_id, cf, num_samples); 
 	uint seg_len = load_ssbo_contour_2d_sample_topology__seg_len(sample_id, num_samples); 
-	uint curve_len = load_ssbo_contour_2d_sample_topology__curve_len(sample_id, num_samples); 
-	bool is_looped_samples = is_2d_sample_curve_looped(cf.looped_curve, cf.curve_clipped, seg_len == curve_len); 
+	bool is_looped_samples = is_2d_sample_curve_looped(cf.looped_curve, cf.curve_clipped, seg_len == cct.len); 
 
 	vec4 col = vec4(1.0f); 
-	if (cf.seg_tail && !is_looped_samples) col.a = .0f; 
-	if (valid_thread) store_ssbo_stroke_mesh_pool__skeletal_color(sample_id, col, num_samples); 
+	if (cf.curve_tail && !is_looped_samples) col.a = .0f; // TODO: breaks between clipped curve portions
+	
+	if (valid_thread) 
+	{
+		store_ssbo_stroke_mesh_pool__skeletal_VB(sample_id, verts);
+		store_ssbo_stroke_mesh_pool__skeletal_color(sample_id, col, num_samples);
+		SpineTopoInfo sti; 
+		sti.looped = is_looped_samples; 
+		sti.is_tail_spine = cf.curve_tail;
+		sti.head_sample_id = cct.head_id; 
+		store_ssbo_stroke_mesh_pool__skeletal_topo_info(sample_id, sti, num_samples);
+	} 
+
+	if (valid_thread)
+	{
+		vec2 dbg_pix = pcs_screen_size_.xy * verts[0]; 
+		vec4 dbg_col = vec4(1.0f, 1.0f, 1.0f, 1.0f);  
+		imageStore(tex2d_contour_dbg_, ivec2(dbg_pix), dbg_col);
+		
+		dbg_pix = pcs_screen_size_.xy * verts[1]; 
+		dbg_col = vec4(.0f, 1.0f, .0f, 1.0f);  
+		imageStore(tex2d_contour_dbg_, ivec2(dbg_pix), dbg_col);
+
+		dbg_pix = pcs_screen_size_.xy * verts[2]; 
+		dbg_col = vec4(1.0f, 0.0f, 1.0f, 1.0f);  
+		imageStore(tex2d_contour_dbg_, ivec2(dbg_pix), dbg_col);
+	}
 }
 #endif
 

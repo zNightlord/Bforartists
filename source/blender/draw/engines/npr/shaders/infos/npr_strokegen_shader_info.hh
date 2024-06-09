@@ -586,6 +586,28 @@ GPU_SHADER_CREATE_INFO(strokegen_contour_2d_resample_eval_topo_finish)
     .local_group_size(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT) 
     .compute_source("npr_strokegen_contour_processing.glsl");
 
+GPU_SHADER_CREATE_INFO(strokegen_calc_contour_2d_curve_render_data)
+    .do_static_compilation(true)
+    .typedef_source("bnpr_shader_shared.hh")
+    .typedef_source("draw_shader_shared.hh")
+    .define("_KERNEL_MULTICOMPILE__CALC_CONTOUR_2D_STROKE_RENDER_DATA", "1")
+    .define("USE_CONTOUR_2D_SAMPLE_GEOMETRY_BUFFER", "1")
+    .define("USE_CONTOUR_2D_SAMPLE_TOPOLOGY_BUFFER", "1")
+    .define("USE_CONTOUR_2D_STROKE_MESH_BUFFER", "1")
+
+    .storage_buf(0, Qualifier::READ_WRITE, "uint", "ssbo_contour_2d_sample_geometry_[]")
+    .storage_buf(1, Qualifier::READ_WRITE, "uint", "ssbo_contour_2d_sample_topology_[]")
+    .storage_buf(2, Qualifier::READ_WRITE, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
+    .storage_buf(3, Qualifier::READ_WRITE, "uint", "ssbo_stroke_mesh_pool_[]")
+
+    .image(0, GPU_RGBA32F, Qualifier::WRITE, ImageType::FLOAT_2D, "tex2d_contour_dbg_")
+
+    .push_constant(Type::VEC2, "pcs_screen_size_")
+    .push_constant(Type::FLOAT, "pcs_stroke_width_")
+    
+    .local_group_size(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT) 
+    .compute_source("npr_strokegen_contour_processing.glsl");
+
 
 GPU_SHADER_CREATE_INFO(strokegen_calc_contour_edges_render_data)
     .do_static_compilation(true)
@@ -669,7 +691,7 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_fill_draw_args_contour_edges)
     .define("_KERNEL_MULTICOMPILE_FILL_DRAW_ARGS",  "1")
     .define("_KERNEL_MULTICOMPILE_FILL_DRAW_ARGS__CONTOUR_EDGES",  "1")
     .storage_buf(0, Qualifier::READ, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
-    .storage_buf(1, Qualifier::WRITE, "DrawCommand", "ssbo_bnpr_mesh_pool_draw_args_")
+    .storage_buf(1, Qualifier::WRITE, "DrawCommand", "ssbo_bnpr_contour_mesh_draw_args_")
     .local_group_size(GROUP_SIZE_FILL_ARGS)
     .compute_source("npr_strokegen_geom_extract_comp.glsl");
 
@@ -683,6 +705,7 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_draw_contour_edges)
     .do_static_compilation(true)
     .typedef_source("bnpr_shader_shared.hh")
     .additional_info("draw_modelmat_new", "draw_view", "draw_resource_handle_new")
+    .define("_KERNEL_MULTICOMPILE_DRAW_CONTOUR__EDGES", "1")
     .define("INCLUDE_CONTOUR_FLAGS_LOAD_STORE", "1")
     
     .storage_buf(0, Qualifier::READ, "uint", "buf_strokegen_mesh_pool[]")
@@ -706,7 +729,45 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_draw_contour_edges)
     .fragment_out(1, Type::VEC3, "out_normal")
     .fragment_out(2, Type::VEC4, "out_tangent");
 
+/* Draw Mesh 2D-Resampled Contour  Curves */
+GPU_SHADER_CREATE_INFO(bnpr_geom_fill_draw_args_contour_2d_samples)
+    .do_static_compilation(true)
+    .typedef_source("bnpr_shader_shared.hh")
+    .typedef_source("draw_shader_shared.hh") /*DrawCommand*/
+    .additional_info("npr_compaction_off") /* Remove compaction code */
+    .define("DECODE_IBO_EXCLUDE",                   "1") /* Remove ibo code */
+    .define("_KERNEL_MULTICOMPILE_FILL_DRAW_ARGS",  "1")
+    .define("_KERNEL_MULTICOMPILE_FILL_DRAW_ARGS__CONTOUR_SAMPLES",  "1")
+    .storage_buf(0, Qualifier::READ, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
+    .storage_buf(1, Qualifier::WRITE, "DrawCommand", "ssbo_bnpr_2d_sample_draw_args_")
+    .local_group_size(GROUP_SIZE_FILL_ARGS)
+    .compute_source("npr_strokegen_geom_extract_comp.glsl"); 
 
+GPU_SHADER_INTERFACE_INFO(bnpr_v2f_geom_draw_contour_2d_samples, "")
+    .smooth(Type::VEC4, "color") 
+    .smooth(Type::VEC3, "normal")
+    .smooth(Type::VEC4, "tangent");
+
+GPU_SHADER_CREATE_INFO(bnpr_geom_draw_contour_2d_samples)
+    .do_static_compilation(true)
+    .typedef_source("bnpr_shader_shared.hh")
+    .additional_info("draw_modelmat_new", "draw_view", "draw_resource_handle_new")
+    .define("_KERNEL_MULTICOMPILE_DRAW_CONTOUR__2D_SAMPLES", "1")
+    .define("USE_CONTOUR_2D_STROKE_MESH_BUFFER", "1")
+
+    .storage_buf(0, Qualifier::READ_WRITE, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
+    .storage_buf(1, Qualifier::READ_WRITE, "uint", "ssbo_stroke_mesh_pool_[]")
+    .push_constant(Type::VEC2, "pcs_screen_size_") 
+
+    .vertex_source("npr_strokegen_mesh_contour_vert.glsl")
+    .vertex_in(0, Type::VEC3, "pos")
+    .vertex_in(1, Type::VEC3, "nor")
+    .vertex_in(2, Type::VEC4, "tan")
+    .vertex_out(bnpr_v2f_geom_draw_contour_edges)
+    .fragment_source("npr_strokegen_mesh_contour_frag.glsl")
+    .fragment_out(0, Type::VEC4, "out_col")
+    .fragment_out(1, Type::VEC3, "out_normal")
+    .fragment_out(2, Type::VEC4, "out_tangent");
 
 /* Draw remeshed surface ----------------------------------------- */
 GPU_SHADER_CREATE_INFO(bnpr_geom_fill_draw_args_remeshed_surface)
@@ -717,7 +778,7 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_fill_draw_args_remeshed_surface)
     .define("DECODE_IBO_EXCLUDE", "1") /* Remove ibo code */
     .define("_KERNEL_MULTICOMPILE_FILL_DRAW_ARGS",  "1")
     .storage_buf(0, Qualifier::READ, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
-    .storage_buf(1, Qualifier::WRITE, "DrawCommand", "ssbo_bnpr_mesh_pool_draw_args_")
+    .storage_buf(1, Qualifier::WRITE, "DrawCommand", "ssbo_bnpr_contour_mesh_draw_args_")
     .local_group_size(GROUP_SIZE_FILL_ARGS)
     .compute_source("npr_strokegen_geom_extract_comp.glsl");
 
