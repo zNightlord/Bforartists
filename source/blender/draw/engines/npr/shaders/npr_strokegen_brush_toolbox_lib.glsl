@@ -89,14 +89,14 @@ vec2 get_wing_quad_vertex_uv(uint vert_id)
 }
 
 mat3x2 compute_wing_quad_verts(
-	vec2 center_coord,
+	vec2 center_coord, vec2 screen_res, 
 	vec2 normal, float width
 )
 {
 	mat3x2 verts;
-	verts[0] = center_coord - width * normal;
-	verts[1] = center_coord;
-	verts[2] = center_coord + width * normal;
+	verts[0] = clamp(center_coord - width * normal, vec2(.0f), screen_res.xy - 1);
+	verts[1] = clamp(center_coord, 					vec2(.0f), screen_res.xy - 1);
+	verts[2] = clamp(center_coord + width * normal, vec2(.0f), screen_res.xy - 1);
 
 	return verts;
 }

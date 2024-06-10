@@ -189,8 +189,7 @@ namespace blender::npr::strokegen
 
 
     /* Draw Contour Edges */
-    PassMain &render_pass_contour_raster =
-      strokegen_passes.get_render_pass(PType::INDIRECT_DRAW_CONTOUR_EDGES);
+    PassMain &render_pass_contour_raster = strokegen_passes.get_render_pass(PType::INDIRECT_DRAW_CONTOUR_EDGES);
     render_pass_contour_raster.framebuffer_set(&strokegen_textures.fb_contour_raster); 
     strokegen_textures.fb_contour_raster.bind();
     float fb_clear_col_1[4] = {0, 0, 0, 0};

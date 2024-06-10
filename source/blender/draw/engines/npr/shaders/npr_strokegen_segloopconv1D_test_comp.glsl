@@ -145,7 +145,7 @@ void main()
         if (idx < get_num_items())
         {
             cf.is_curv_minima = conv_temp_data.is_local_minima; 
-            cf.seg_head = conv_temp_data.is_local_minima || cf.seg_head_contour; 
+            cf.seg_head = conv_temp_data.is_local_minima || cf.seg_head_contour || cf.seg_head_clipped; 
             cf.is_corner = conv_temp_data.is_local_maxima;
             store_ssbo_contour_2d_sample_topology__flags(idx, cf); 
         }

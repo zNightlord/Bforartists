@@ -37,6 +37,9 @@ struct ContourFlags
 	bool curve_clipped;  // TODO: may be buggy, needs further testing
 	bool is_corner;
 	bool seg_head_contour; // seg-head based on contour segmentation 
+	bool seg_head_clipped; // seg-head based on clipping
+	bool seg_tail_clipped; // seg-tail based on clipping 
+
 	bool is_curv_minima;  
 }; 
 
@@ -62,6 +65,10 @@ uint encode_contour_flags(ContourFlags cf)
 	cf_enc |= uint(cf.is_corner);
 	cf_enc <<= 1u; 
 	cf_enc |= uint(cf.seg_head_contour); 
+	cf_enc <<= 1u; 
+	cf_enc |= uint(cf.seg_head_clipped); 
+	cf_enc <<= 1u;
+	cf_enc |= uint(cf.seg_tail_clipped);
 	cf_enc <<= 1u;
 	cf_enc |= uint(cf.is_curv_minima); 
 
@@ -72,6 +79,10 @@ ContourFlags decode_contour_flags(uint cf_enc)
 {
     ContourFlags cf; 
 	cf.is_curv_minima = (1u == (cf_enc & 1u));
+	cf_enc >>= 1u;
+	cf.seg_tail_clipped = (1u == (cf_enc & 1u));
+	cf_enc >>= 1u;
+	cf.seg_head_clipped = (1u == (cf_enc & 1u));
 	cf_enc >>= 1u;
 	cf.seg_head_contour = (1u == (cf_enc & 1u)); 
 	cf_enc >>= 1u; 
@@ -109,6 +120,8 @@ ContourFlags init_contour_flags(bool seg_head)
 	cf.curve_clipped = false;  // needs further setup 
 	cf.is_corner = false;      // needs further setup 
 	cf.seg_head_contour = false;  // needs further setup 
+	cf.seg_head_clipped = false;  // needs further setup
+	cf.seg_tail_clipped = false;  // needs further setup 
 	cf.is_curv_minima = false;  // needs further setup
     return cf; 
 }
@@ -126,6 +139,16 @@ void init_contour_curve_tail(bool curve_tail, inout ContourFlags cf)
 void init_seg_head_contour(bool sample_2d_is_seg_head, inout ContourFlags cf)
 { /* should happen only once for all 2d samples */
 	cf.seg_head_contour = sample_2d_is_seg_head; 
+}
+
+void init_seg_head_clipped(bool sample_2d_is_seg_head, inout ContourFlags cf)
+{ /* should happen only once for all 2d samples */
+	cf.seg_head_clipped = sample_2d_is_seg_head; 
+}
+
+void set_seg_tail_clipped(bool sample_2d_is_seg_tail, inout ContourFlags cf)
+{ 
+	cf.seg_tail_clipped = sample_2d_is_seg_tail; 
 }
 
 void set_contour_seg_head(bool seg_head, inout ContourFlags cf)

@@ -837,7 +837,7 @@ void main()
 		line_raster_data.begend_wclips.y, 
 		linear_interp
 	);
-	bool visible = 1.0f < frag_depth_test(z_vs_3x3, z_frag, 0.001f);
+	bool visible = 1.0f < frag_depth_test(z_vs_3x3, z_frag, 0.01f);
 	
 
 	

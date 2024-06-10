@@ -199,7 +199,7 @@
                     );
                     bool reach_right_seg_end = (sub_seg_len <= sub_seg_rank + d && !is_sub_seg_loop); 
 
-                    if (reach_left_seg_end || reach_right_seg_end) break; 
+                    // if (reach_left_seg_end || reach_right_seg_end) break; 
 
                     curve_2d_wls_fit_iter(wls_window_sz, true,  pt, pt_lt, /*inout*/wls_l_l, wls_params);
                     curve_2d_wls_fit_iter(wls_window_sz, false, pt, pt_rt, /*inout*/wls_l_r, wls_params);

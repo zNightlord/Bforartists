@@ -108,7 +108,7 @@ void main()
     vec2 edgenor_uv = vec2(edgedir_uv.y, -edgedir_uv.x);
 
 
-    color = /* cf.occluded ? vec4(.5f, .5f, .5f, 0.0f) :  */
+    color = cf.occluded ? vec4(.5f, .5f, .5f, 0.0f) : 
         vec4(rand_col_rgb(contour_seg_len / 8, contour_seg_len / 8), contour_edge_id);
         // (contour_edge_list_len < contour_edge_rank || contour_edge_rank == 0) ?
         // vec4(prev_contour_id, contour_edge_rank, contour_edge_list_len, contour_edge_list_head) : vec4(.0f);
@@ -143,7 +143,7 @@ void main()
     vec4 pos_hclip = vec4(coord * 2.0f - 1.0f, 0.0f, 1.0f); 
     gl_Position.xyzw = pos_hclip;
 
-    color = vec4(1.0f, 0.0f, 0.0f, 1.0f); 
+    color = col; // vec4(1.0f, 0.0f, 0.0f, 1.0f); 
     normal = vec3(0, 0, 1);
     tangent.xyz = vec3(0, 0, 1);
 }
