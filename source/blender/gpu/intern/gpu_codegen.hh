@@ -27,8 +27,14 @@ GPUPass *GPU_generate_pass(GPUMaterial *material,
                            bool optimize_graph);
 GPUShader *GPU_pass_shader_get(GPUPass *pass);
 bool GPU_pass_compile(GPUPass *pass, const char *shname);
+void GPU_pass_acquire(GPUPass *pass);
 void GPU_pass_release(GPUPass *pass);
 bool GPU_pass_should_optimize(GPUPass *pass);
+
+/* Custom pass compilation. */
+
+GPUShaderCreateInfo *GPU_pass_begin_compilation(GPUPass *pass, const char *shname);
+bool GPU_pass_finalize_compilation(GPUPass *pass, GPUShader *shader);
 
 /* Module */
 

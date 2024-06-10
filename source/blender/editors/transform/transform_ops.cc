@@ -419,7 +419,7 @@ static int transform_modal(bContext *C, wmOperator *op, const wmEvent *event)
 
   /* XXX insert keys are called here, and require context. */
   t->context = C;
-  exit_code = transformEvent(t, event);
+  exit_code = transformEvent(t, op, event);
   t->context = nullptr;
 
   /* Allow navigation while transforming. */
@@ -1348,6 +1348,13 @@ static void TRANSFORM_OT_seq_slide(wmOperatorType *ot)
   prop = RNA_def_float_vector(
       ot->srna, "value", 2, nullptr, -FLT_MAX, FLT_MAX, "Offset", "", -FLT_MAX, FLT_MAX);
   RNA_def_property_ui_range(prop, -FLT_MAX, FLT_MAX, 1, 0);
+
+  prop = RNA_def_boolean(ot->srna,
+                         "use_restore_handle_selection",
+                         false,
+                         "Restore Handle Selection",
+                         "Restore handle selection after tweaking");
+  RNA_def_property_flag(prop, PROP_HIDDEN | PROP_SKIP_SAVE);
 
   WM_operatortype_props_advanced_begin(ot);
 

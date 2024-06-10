@@ -154,20 +154,21 @@ class IMAGE_MT_select(Menu):
         layout.operator("uv.select_box").pinned = False
         layout.operator("uv.select_box", text="Box Select Pinned").pinned = True
         layout.operator("uv.select_circle")
+        layout.operator_menu_enum("uv.select_lasso", "mode", text="Lasso Select")
 
         layout.separator()
 
-        layout.operator("uv.select_less", text="Less")
         layout.operator("uv.select_more", text="More")
+        layout.operator("uv.select_less", text="Less")
 
         layout.separator()
 
-        layout.operator("uv.select_pinned")
+        layout.operator_menu_enum("uv.select_similar", "type", text="Select Similar")
         layout.menu("IMAGE_MT_select_linked")
-        layout.operator("uv.select_similar")
 
         layout.separator()
 
+        layout.operator("uv.select_pinned", text="Select Pinned")
         layout.operator("uv.select_split")
         layout.operator("uv.select_overlap")
 
@@ -1022,9 +1023,14 @@ class IMAGE_PT_snapping(Panel):
 
         col.label(text="Affect")
         row = col.row(align=True)
-        row.prop(tool_settings, "use_snap_translate", text="Move", toggle=True)
-        row.prop(tool_settings, "use_snap_rotate", text="Rotate", toggle=True)
-        row.prop(tool_settings, "use_snap_scale", text="Scale", toggle=True)
+        row.prop(
+            tool_settings,
+            "use_snap_translate",
+            text="Move",
+            text_ctxt=i18n_contexts.operator_default,
+            toggle=True)
+        row.prop(tool_settings, "use_snap_rotate", text="Rotate", text_ctxt=i18n_contexts.operator_default, toggle=True)
+        row.prop(tool_settings, "use_snap_scale", text="Scale", text_ctxt=i18n_contexts.operator_default, toggle=True)
         col.label(text="Rotation Increment")
         row = col.row(align=True)
         row.prop(tool_settings, "snap_angle_increment_2d", text="")

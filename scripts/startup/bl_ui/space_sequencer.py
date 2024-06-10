@@ -258,7 +258,7 @@ class SEQUENCER_PT_overlay(Panel):
     bl_space_type = 'SEQUENCE_EDITOR'
     bl_region_type = 'HEADER'
     bl_label = "Overlays"
-    bl_ui_units_x = 7
+    bl_ui_units_x = 13
 
     def draw(self, _context):
         pass
@@ -273,7 +273,7 @@ class SEQUENCER_PT_preview_overlay(Panel):
     @classmethod
     def poll(cls, context):
         st = context.space_data
-        return st.view_type in {'PREVIEW', 'SEQUENCER_PREVIEW'} and st.display_mode == 'IMAGE'
+        return st.view_type in {'PREVIEW', 'SEQUENCER_PREVIEW'}
 
     def draw(self, context):
         ed = context.scene.sequence_editor
@@ -281,13 +281,18 @@ class SEQUENCER_PT_preview_overlay(Panel):
         overlay_settings = st.preview_overlay
         layout = self.layout
 
-        layout.active = st.show_overlays
-        layout.prop(overlay_settings, "show_image_outline")
-        layout.prop(overlay_settings, "show_cursor")
-        layout.prop(ed, "show_overlay_frame", text="Frame Overlay")
-        layout.prop(overlay_settings, "show_safe_areas", text="Safe Areas")
-        layout.prop(overlay_settings, "show_metadata", text="Metadata")
-        layout.prop(overlay_settings, "show_annotation", text="Annotations")
+        layout.active = st.show_overlays and st.display_mode == 'IMAGE'
+
+        split = layout.column().split()
+        col = split.column()
+        col.prop(overlay_settings, "show_image_outline")
+        col.prop(ed, "show_overlay_frame", text="Frame Overlay")
+        col.prop(overlay_settings, "show_metadata", text="Metadata")
+
+        col = split.column()
+        col.prop(overlay_settings, "show_cursor")
+        col.prop(overlay_settings, "show_safe_areas", text="Safe Areas")
+        col.prop(overlay_settings, "show_annotation", text="Annotations")
 
 
 class SEQUENCER_PT_sequencer_overlay(Panel):
@@ -307,27 +312,70 @@ class SEQUENCER_PT_sequencer_overlay(Panel):
         layout = self.layout
 
         layout.active = st.show_overlays
+        split = layout.column().split()
 
-        layout.prop(overlay_settings, "show_strip_name", text="Name")
-        layout.prop(overlay_settings, "show_strip_source", text="Source")
-        layout.prop(overlay_settings, "show_strip_duration", text="Duration")
-        layout.prop(overlay_settings, "show_strip_tag_color", text="Color Tags")
+        col = split.column()
+        col.prop(overlay_settings, "show_grid", text="Grid")
 
-        layout.separator()
+        col = split.column()
+        col.prop(st.cache_overlay, "show_cache", text="Cache")
 
-        layout.prop(overlay_settings, "show_strip_offset", text="Offsets")
-        layout.prop(overlay_settings, "show_fcurves", text="F-Curves")
-        layout.prop(overlay_settings, "show_strip_retiming", text="Retiming")
-        layout.prop(overlay_settings, "show_thumbnails", text="Thumbnails")
-        layout.prop(overlay_settings, "show_grid", text="Grid")
-        layout.prop(st.cache_overlay, "show_cache", text="Cache")
 
-        layout.separator()
+class SEQUENCER_PT_sequencer_overlay_strips(Panel):
+    bl_space_type = 'SEQUENCE_EDITOR'
+    bl_region_type = 'HEADER'
+    bl_parent_id = "SEQUENCER_PT_overlay"
+    bl_label = "Strips"
 
-        layout.label(text="Waveforms")
+    @classmethod
+    def poll(cls, context):
+        st = context.space_data
+        return st.view_type in {'SEQUENCER', 'SEQUENCER_PREVIEW'}
+
+    def draw(self, context):
+        st = context.space_data
+        overlay_settings = st.timeline_overlay
+        layout = self.layout
+
+        layout.active = st.show_overlays
+        split = layout.column().split()
+
+        col = split.column()
+        col.prop(overlay_settings, "show_strip_name", text="Name")
+        col.prop(overlay_settings, "show_strip_source", text="Source")
+        col.prop(overlay_settings, "show_strip_duration", text="Duration")
+        col.prop(overlay_settings, "show_fcurves", text="Animation Curves")
+
+        col = split.column()
+        col.prop(overlay_settings, "show_thumbnails", text="Thumbnails")
+        col.prop(overlay_settings, "show_strip_tag_color", text="Color Tags")
+        col.prop(overlay_settings, "show_strip_offset", text="Offsets")
+        col.prop(overlay_settings, "show_strip_retiming", text="Retiming")
+
+
+class SEQUENCER_PT_sequencer_overlay_waveforms(Panel):
+    bl_space_type = 'SEQUENCE_EDITOR'
+    bl_region_type = 'HEADER'
+    bl_parent_id = "SEQUENCER_PT_overlay"
+    bl_label = "Waveforms"
+
+    @classmethod
+    def poll(cls, context):
+        st = context.space_data
+        return st.view_type in {'SEQUENCER', 'SEQUENCER_PREVIEW'}
+
+    def draw(self, context):
+        st = context.space_data
+        overlay_settings = st.timeline_overlay
+        layout = self.layout
+
+        layout.active = st.show_overlays
+
         layout.row().prop(overlay_settings, "waveform_display_type", expand=True)
-        layout.label(text="Waveform Style")
-        layout.row().prop(overlay_settings, "waveform_display_style", expand=True)
+
+        row = layout.row()
+        row.prop(overlay_settings, "waveform_display_style", expand=True)
+        row.active = overlay_settings.waveform_display_type != 'NO_WAVEFORMS'
 
 
 class SEQUENCER_MT_range(Menu):
@@ -432,6 +480,8 @@ class SEQUENCER_MT_view(Menu):
         if is_sequencer_view:
             layout.operator_context = 'INVOKE_REGION_WIN'
             layout.operator("sequencer.view_all")
+            layout.operator("anim.scene_range_frame",
+                            text="Frame Preview Range" if context.scene.use_preview_range else "Frame Scene Range")
             layout.operator("sequencer.view_frame")
             layout.prop(st, "use_clamp_view")
 
@@ -517,17 +567,6 @@ class SEQUENCER_MT_select_channel(Menu):
         layout.operator("sequencer.select_side", text="Both Sides").side = 'BOTH'
 
 
-class SEQUENCER_MT_select_linked(Menu):
-    bl_label = "Select Linked"
-
-    def draw(self, _context):
-        layout = self.layout
-
-        layout.operator("sequencer.select_linked", text="All")
-        layout.operator("sequencer.select_less", text="Less")
-        layout.operator("sequencer.select_more", text="More")
-
-
 class SEQUENCER_MT_select(Menu):
     bl_label = "Select"
 
@@ -553,15 +592,20 @@ class SEQUENCER_MT_select(Menu):
         col.separator()
 
         if has_sequencer:
+            col.operator("sequencer.select_more", text="More")
+            col.operator("sequencer.select_less", text="Less")
+            col.separator()
+
+        col.operator_menu_enum("sequencer.select_grouped", "type", text="Select Grouped")
+        col.enabled = not is_retiming
+        if has_sequencer:
+            col.operator("sequencer.select_linked", text="Select Linked")
+            col.separator()
+
+        if has_sequencer:
             col.operator_menu_enum("sequencer.select_side_of_frame", "side", text="Side of Frame...")
             col.menu("SEQUENCER_MT_select_handle", text="Handle")
             col.menu("SEQUENCER_MT_select_channel", text="Channel")
-            col.menu("SEQUENCER_MT_select_linked", text="Linked")
-
-            col.separator()
-
-        col.operator_menu_enum("sequencer.select_grouped", "type", text="Grouped")
-        col.enabled = not is_retiming
 
 
 class SEQUENCER_MT_marker(Menu):
@@ -1053,9 +1097,12 @@ class SEQUENCER_MT_image_clear(Menu):
     def draw(self, _context):
         layout = self.layout
 
-        layout.operator("sequencer.strip_transform_clear", text="Position").property = 'POSITION'
-        layout.operator("sequencer.strip_transform_clear", text="Scale").property = 'SCALE'
-        layout.operator("sequencer.strip_transform_clear", text="Rotation").property = 'ROTATION'
+        layout.operator("sequencer.strip_transform_clear", text="Position",
+                        text_ctxt=i18n_contexts.default).property = 'POSITION'
+        layout.operator("sequencer.strip_transform_clear", text="Scale",
+                        text_ctxt=i18n_contexts.default).property = 'SCALE'
+        layout.operator("sequencer.strip_transform_clear", text="Rotation",
+                        text_ctxt=i18n_contexts.default).property = 'ROTATION'
         layout.operator("sequencer.strip_transform_clear", text="All Transforms").property = 'ALL'
 
 
@@ -1239,12 +1286,17 @@ class SEQUENCER_MT_pivot_pie(Menu):
 class SEQUENCER_MT_view_pie(Menu):
     bl_label = "View"
 
-    def draw(self, _context):
+    def draw(self, context):
         layout = self.layout
 
         pie = layout.menu_pie()
         pie.operator("sequencer.view_all")
         pie.operator("sequencer.view_selected", text="Frame Selected", icon='ZOOM_SELECTED')
+        pie.separator()
+        if context.scene.use_preview_range:
+            pie.operator("anim.scene_range_frame", text="Frame Preview Range")
+        else:
+            pie.operator("anim.scene_range_frame", text="Frame Scene Range")
 
 
 class SEQUENCER_MT_preview_view_pie(Menu):
@@ -1539,11 +1591,11 @@ class SEQUENCER_PT_effect(SequencerButtonsPanel, Panel):
                     if i == strip.multicam_source:
                         sub = row.row(align=True)
                         sub.enabled = False
-                        sub.operator("sequencer.split_multicam", text="{:d}".format(i)).camera = i
+                        sub.operator("sequencer.split_multicam", text="{:d}".format(i), translate=False).camera = i
                     else:
                         sub_1 = row.row(align=True)
                         sub_1.enabled = True
-                        sub_1.operator("sequencer.split_multicam", text="{:d}".format(i)).camera = i
+                        sub_1.operator("sequencer.split_multicam", text="{:d}".format(i), translate=False).camera = i
 
                 if strip.channel > BT_ROW and (strip_channel - 1) % BT_ROW:
                     for i in range(strip.channel, strip_channel + ((BT_ROW + 1 - strip_channel) % BT_ROW)):
@@ -1994,7 +2046,7 @@ class SEQUENCER_PT_time(SequencerButtonsPanel, Panel):
         split.alignment = 'RIGHT'
         split.label(text="End")
         split = split.split(factor=factor + 0.3 + max_factor, align=True)
-        split.label(text="{:>14s}".format(smpte_from_frame(frame_final_end)))
+        split.label(text="{:>14s}".format(smpte_from_frame(frame_final_end)), translate=False)
         split.alignment = 'RIGHT'
         split.label(text=str(frame_final_end) + " ")
 
@@ -2038,7 +2090,7 @@ class SEQUENCER_PT_time(SequencerButtonsPanel, Panel):
         split.label(text="Current Frame")
         split = split.split(factor=factor + 0.3 + max_factor, align=True)
         frame_display = frame_current - frame_final_start
-        split.label(text="{:>14s}".format(smpte_from_frame(frame_display)))
+        split.label(text="{:>14s}".format(smpte_from_frame(frame_display)), translate=False)
         split.alignment = 'RIGHT'
         split.label(text=str(frame_display) + " ")
 
@@ -2715,10 +2767,10 @@ class SEQUENCER_PT_modifiers(SequencerButtonsPanel, Panel):
                             col = flow.column()
                             box = col.box()
                             split = box.split(factor=0.4)
-                            split.label(text="{.2f}".format(sound_eq.curve_mapping.clip_min_x))
+                            split.label(text="{:.2f}".format(sound_eq.curve_mapping.clip_min_x), translate=False)
                             split.label(text="Hz")
                             split.alignment = 'RIGHT'
-                            split.label(text="{.2f}".format(sound_eq.curve_mapping.clip_max_x))
+                            split.label(text="{:.2f}".format(sound_eq.curve_mapping.clip_max_x), translate=False)
                             box.template_curve_mapping(
                                 sound_eq,
                                 "curve_mapping",
@@ -2824,7 +2876,6 @@ classes = (
     SEQUENCER_MT_proxy,
     SEQUENCER_MT_select_handle,
     SEQUENCER_MT_select_channel,
-    SEQUENCER_MT_select_linked,
     SEQUENCER_MT_select,
     SEQUENCER_MT_marker,
     SEQUENCER_MT_navigation,
@@ -2861,6 +2912,8 @@ classes = (
     SEQUENCER_PT_overlay,
     SEQUENCER_PT_preview_overlay,
     SEQUENCER_PT_sequencer_overlay,
+    SEQUENCER_PT_sequencer_overlay_strips,
+    SEQUENCER_PT_sequencer_overlay_waveforms,
 
     SEQUENCER_PT_effect,
     SEQUENCER_PT_scene,

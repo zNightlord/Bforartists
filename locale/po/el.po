@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.2.0 Alpha (b'9a3c7290a9c1')\n"
+"Project-Id-Version: Blender 4.2.0 Beta (b'a2795852cd29')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-05-06 10:38+0000\n"
+"POT-Creation-Date: 2024-06-10 10:16+0000\n"
 "PO-Revision-Date: 2024-04-29 13:44+0000\n"
 "Last-Translator: Anonymous <noreply@weblate.org>\n"
 "Language-Team: Greek <https://translate.blender.org/projects/blender-ui/ui/el/>\n"
@@ -35,10 +35,6 @@ msgid "Select"
 msgstr "Επιλογή"
 
 
-msgid "Message"
-msgstr "Μήνυμα"
-
-
 msgid "On"
 msgstr "Ενεργό"
 
@@ -57,10 +53,6 @@ msgstr "Αφαίρεση"
 
 msgid "Hold"
 msgstr "Κράτα"
-
-
-msgid "New"
-msgstr "Νέο"
 
 
 msgid "End Frame"
@@ -551,6 +543,10 @@ msgid "Sharp"
 msgstr "Απότομο"
 
 
+msgid "Themes"
+msgstr "Θέματα"
+
+
 msgid "Mist"
 msgstr "Ομίχλη"
 
@@ -645,6 +641,10 @@ msgstr "Δίνη"
 
 msgid "Wave"
 msgstr "Κύμα"
+
+
+msgid "New"
+msgstr "Νέο"
 
 
 msgid "Lines"
@@ -756,6 +756,11 @@ msgid "Open"
 msgstr "Άνοιγμα"
 
 
+msgctxt "Operator"
+msgid "Rotate"
+msgstr "Rotate"
+
+
 msgid "Both"
 msgstr "Both"
 
@@ -835,10 +840,6 @@ msgid "Bake"
 msgstr "Φτιάξε"
 
 
-msgid "Monkey"
-msgstr "Μαϊμού"
-
-
 msgctxt "Operator"
 msgid "Join"
 msgstr "Ένωσε"
@@ -895,10 +896,6 @@ msgid "Sync"
 msgstr "Συγχρον"
 
 
-msgid "Themes"
-msgstr "Θέματα"
-
-
 msgctxt "Operator"
 msgid "Save"
 msgstr "Αποθήκευση"
@@ -907,11 +904,6 @@ msgstr "Αποθήκευση"
 msgctxt "Operator"
 msgid "Save As"
 msgstr "Αποθήκευση ως"
-
-
-msgctxt "Operator"
-msgid "Rotate"
-msgstr "Rotate"
 
 
 msgctxt "Operator"
@@ -944,10 +936,6 @@ msgstr "Polar ZY"
 
 msgid "Pan"
 msgstr "Ολίσθηση προβολής"
-
-
-msgid "Pause"
-msgstr "Παύση"
 
 
 msgctxt "Operator"
@@ -1042,12 +1030,12 @@ msgid "Layer:"
 msgstr "Στρώμα"
 
 
-msgid "Fields"
-msgstr "Πεδία"
-
-
 msgid "Cancel"
 msgstr "Ακύρωση"
+
+
+msgid "Fields"
+msgstr "Πεδία"
 
 
 msgid "Life"

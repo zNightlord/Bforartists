@@ -91,14 +91,12 @@ static bool grease_pencil_layer_initialize_trans_data(blender::bke::greasepencil
   trans_data.frames_destination.clear();
 
   for (const auto [frame_number, frame] : layer.frames().items()) {
-    if (frame.is_null()) {
+    if (frame.is_end()) {
       continue;
     }
 
     /* Store frames' duration to keep them visually correct while moving the frames. */
-    if (!frame.is_implicit_hold()) {
-      trans_data.frames_duration.add(frame_number, layer.get_frame_duration_at(frame_number));
-    }
+    trans_data.frames_duration.add(frame_number, layer.get_frame_duration_at(frame_number));
   }
 
   trans_data.status = LayerTransformData::TRANS_INIT;
@@ -653,25 +651,69 @@ static void createTransActionData(bContext *C, TransInfo *t)
       cfra = float(scene->r.cfra);
     }
 
-    if (ELEM(ale->type, ANIMTYPE_FCURVE, ANIMTYPE_NLACURVE)) {
-      adt_count = count_fcurve_keys(
-          static_cast<FCurve *>(ale->key_data), t->frame_side, cfra, is_prop_edit);
-    }
-    else if (ale->type == ANIMTYPE_GPLAYER) {
-      adt_count = count_gplayer_frames(
-          static_cast<bGPDlayer *>(ale->data), t->frame_side, cfra, is_prop_edit);
-    }
-    else if (ale->type == ANIMTYPE_GREASE_PENCIL_LAYER) {
-      using namespace blender::bke::greasepencil;
-      adt_count = count_grease_pencil_frames(
-          static_cast<Layer *>(ale->data), t->frame_side, cfra, is_prop_edit, use_duplicated);
-    }
-    else if (ale->type == ANIMTYPE_MASKLAYER) {
-      adt_count = count_masklayer_frames(
-          static_cast<MaskLayer *>(ale->data), t->frame_side, cfra, is_prop_edit);
-    }
-    else {
-      BLI_assert(0);
+    switch (ale->type) {
+      case ANIMTYPE_FCURVE:
+      case ANIMTYPE_NLACURVE:
+        adt_count = count_fcurve_keys(
+            static_cast<FCurve *>(ale->key_data), t->frame_side, cfra, is_prop_edit);
+        break;
+      case ANIMTYPE_GPLAYER:
+        adt_count = count_gplayer_frames(
+            static_cast<bGPDlayer *>(ale->data), t->frame_side, cfra, is_prop_edit);
+        break;
+      case ANIMTYPE_GREASE_PENCIL_LAYER: {
+        using namespace blender::bke::greasepencil;
+        adt_count = count_grease_pencil_frames(
+            static_cast<Layer *>(ale->data), t->frame_side, cfra, is_prop_edit, use_duplicated);
+        break;
+      }
+      case ANIMTYPE_MASKLAYER:
+        adt_count = count_masklayer_frames(
+            static_cast<MaskLayer *>(ale->data), t->frame_side, cfra, is_prop_edit);
+        break;
+      case ANIMTYPE_NONE:
+      case ANIMTYPE_ANIMDATA:
+      case ANIMTYPE_SPECIALDATA__UNUSED:
+      case ANIMTYPE_SUMMARY:
+      case ANIMTYPE_SCENE:
+      case ANIMTYPE_OBJECT:
+      case ANIMTYPE_GROUP:
+      case ANIMTYPE_NLACONTROLS:
+      case ANIMTYPE_FILLACT_LAYERED:
+      case ANIMTYPE_FILLACTD:
+      case ANIMTYPE_FILLDRIVERS:
+      case ANIMTYPE_DSMAT:
+      case ANIMTYPE_DSLAM:
+      case ANIMTYPE_DSCAM:
+      case ANIMTYPE_DSCACHEFILE:
+      case ANIMTYPE_DSCUR:
+      case ANIMTYPE_DSSKEY:
+      case ANIMTYPE_DSWOR:
+      case ANIMTYPE_DSNTREE:
+      case ANIMTYPE_DSPART:
+      case ANIMTYPE_DSMBALL:
+      case ANIMTYPE_DSARM:
+      case ANIMTYPE_DSMESH:
+      case ANIMTYPE_DSTEX:
+      case ANIMTYPE_DSLAT:
+      case ANIMTYPE_DSLINESTYLE:
+      case ANIMTYPE_DSSPK:
+      case ANIMTYPE_DSGPENCIL:
+      case ANIMTYPE_DSMCLIP:
+      case ANIMTYPE_DSHAIR:
+      case ANIMTYPE_DSPOINTCLOUD:
+      case ANIMTYPE_DSVOLUME:
+      case ANIMTYPE_SHAPEKEY:
+      case ANIMTYPE_GPDATABLOCK:
+      case ANIMTYPE_GREASE_PENCIL_DATABLOCK:
+      case ANIMTYPE_GREASE_PENCIL_LAYER_GROUP:
+      case ANIMTYPE_MASKDATABLOCK:
+      case ANIMTYPE_NLATRACK:
+      case ANIMTYPE_NLAACTION:
+      case ANIMTYPE_PALETTE:
+      case ANIMTYPE_NUM_TYPES:
+        BLI_assert_unreachable();
+        break;
     }
 
     if (adt_count > 0) {
@@ -997,7 +1039,7 @@ static void recalcData_actedit(TransInfo *t)
       ANIM_animdata_freelist(&anim_data);
     }
 
-    if (ac.datatype == ANIMCONT_GPENCIL) {
+    {
       filter = ANIMFILTER_DATA_VISIBLE;
       ANIM_animdata_filter(
           &ac, &anim_data, eAnimFilter_Flags(filter), ac.data, eAnimCont_Types(ac.datatype));
@@ -1199,7 +1241,15 @@ static void special_aftertrans_update__actedit(bContext *C, TransInfo *t)
           }
           break;
         }
-
+        case ALE_GREASE_PENCIL_CEL: {
+          GreasePencil *grease_pencil = reinterpret_cast<GreasePencil *>(ale->id);
+          grease_pencil_layer_apply_trans_data(
+              *grease_pencil,
+              *static_cast<blender::bke::greasepencil::Layer *>(ale->data),
+              canceled,
+              duplicate);
+          break;
+        }
         default:
           BLI_assert_msg(false, "Keys cannot be transformed into this animation type.");
       }

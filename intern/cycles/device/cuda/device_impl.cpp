@@ -53,8 +53,8 @@ void CUDADevice::set_error(const string &error)
   }
 }
 
-CUDADevice::CUDADevice(const DeviceInfo &info, Stats &stats, Profiler &profiler)
-    : GPUDevice(info, stats, profiler)
+CUDADevice::CUDADevice(const DeviceInfo &info, Stats &stats, Profiler &profiler, bool headless)
+    : GPUDevice(info, stats, profiler, headless)
 {
   /* Verify that base class types can be used with specific backend types */
   static_assert(sizeof(texMemObject) == sizeof(CUtexObject));
@@ -347,12 +347,10 @@ string CUDADevice::compile_kernel(const string &common_cflags,
         nvcc_cuda_version % 10);
     return string();
   }
-  else if (!(nvcc_cuda_version == 101 || nvcc_cuda_version == 102 || nvcc_cuda_version == 111 ||
-             nvcc_cuda_version == 112 || nvcc_cuda_version == 113 || nvcc_cuda_version == 114))
-  {
+  else if (!(nvcc_cuda_version >= 102 && nvcc_cuda_version < 130)) {
     printf(
         "CUDA version %d.%d detected, build may succeed but only "
-        "CUDA 10.1 to 11.4 are officially supported.\n",
+        "CUDA 10.1 to 12 are officially supported.\n",
         nvcc_cuda_version / 10,
         nvcc_cuda_version % 10);
   }
@@ -966,6 +964,13 @@ bool CUDADevice::should_use_graphics_interop()
    * Using CUDA device for graphics interoperability which is not part of the OpenGL context is
    * possible, but from the empiric measurements it can be considerably slower than using naive
    * pixels copy. */
+
+  if (headless) {
+    /* Avoid any call which might involve interaction with a graphics backend when we know that
+     * we don't have active graphics context. This avoid crash on certain platforms when calling
+     * cuGLGetDevices(). */
+    return false;
+  }
 
   CUDAContextScope scope(this);
 

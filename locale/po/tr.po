@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.2.0 Alpha (b'9a3c7290a9c1')\n"
+"Project-Id-Version: Blender 4.2.0 Beta (b'a2795852cd29')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-05-06 10:38+0000\n"
+"POT-Creation-Date: 2024-06-10 10:16+0000\n"
 "PO-Revision-Date: 2024-01-18 08:08+0000\n"
 "Last-Translator: Emre İnan <emre4321a@gmail.com>\n"
 "Language-Team: Turkish <https://translate.blender.org/projects/blender-ui/ui/tr/>\n"
@@ -287,22 +287,6 @@ msgid "Add-on Preferences"
 msgstr "Eklenti Tercihleri"
 
 
-msgid "Password"
-msgstr "Parola"
-
-
-msgid "E-mail address"
-msgstr "E-posta adresi"
-
-
-msgid "Error Message"
-msgstr "Hata İletisi"
-
-
-msgid "Message"
-msgstr "İleti"
-
-
 msgid "Compute Device Type"
 msgstr "Hesaplama Aygıtı Türü"
 
@@ -583,14 +567,6 @@ msgid "Slot to temporarily hold the main action while in tweak mode"
 msgstr "İnce ayar kipindeyken ana eylemin geçici olarak tutulacağı yuva"
 
 
-msgid "Animation"
-msgstr "Canlandırma"
-
-
-msgid "New"
-msgstr "Yeni"
-
-
 msgid "Drivers"
 msgstr "Sürücüler"
 
@@ -801,14 +777,6 @@ msgstr "Erim İçinde"
 
 msgid "Display Paths of poses within specified range"
 msgstr "Pozların yollarını belirtilen erimde görüntüle"
-
-
-msgid "Offset"
-msgstr "Ofset"
-
-
-msgid "Keyframe"
-msgstr "Anahtar Kare"
 
 
 msgid "Any Type"
@@ -2355,10 +2323,6 @@ msgstr "Gres Kalemi"
 
 msgid "Grease Pencil data-blocks"
 msgstr "Gres Kalemi veri blokları"
-
-
-msgid "Grease Pencil v3"
-msgstr "Gres Kalemi 3.0"
 
 
 msgid "Hair Curves"
@@ -5166,6 +5130,10 @@ msgid "In a local override camera, whether this background image comes from the 
 msgstr "Yerel bir geçersiz kılma kamerasında, bu arka plan görselinin bağlantılı başvuru kamerasından mı geldiği veya geçersiz kılmaya yerel mi olduğu"
 
 
+msgid "Offset"
+msgstr "Ofset"
+
+
 msgid "Rotation"
 msgstr "Döndürme"
 
@@ -6702,6 +6670,10 @@ msgid "Python Scripting"
 msgstr "Python Betiği Yazımı"
 
 
+msgid "Keyframe"
+msgstr "Anahtar Kare"
+
+
 msgid "Frame is selected for editing in the Dope Sheet"
 msgstr "Kare, Döküm Kağıdı'nda düzenleme için seçili"
 
@@ -6791,10 +6763,6 @@ msgid "Space"
 msgstr "Boşluk"
 
 
-msgid "Translation"
-msgstr "Taşıma"
-
-
 msgid "Red"
 msgstr "Kırmızı"
 
@@ -6809,6 +6777,10 @@ msgstr "Mavi"
 
 msgid "Font"
 msgstr "Yazıtipi"
+
+
+msgid "Grease Pencil v3"
+msgstr "Gres Kalemi 3.0"
 
 
 msgid "Key"
@@ -6865,10 +6837,6 @@ msgstr "Dünya"
 
 msgid "Save this data-block even if it has no users"
 msgstr "Kullanıcısı olmasa bile bu veri blokunu kaydet"
-
-
-msgid "Layers"
-msgstr "Katmanlar"
 
 
 msgid "Box"
@@ -7243,6 +7211,10 @@ msgid "Stroke Sculpt Mode"
 msgstr "Vuruş Yontma Kipi"
 
 
+msgid "Layers"
+msgstr "Katmanlar"
+
+
 msgid "2D Layers"
 msgstr "2B Katmanlar"
 
@@ -7352,6 +7324,18 @@ msgid "Viewport Size"
 msgstr "Görüş Alanı Boyutu"
 
 
+msgid "Distort"
+msgstr "Çarpıt"
+
+
+msgid "Filter"
+msgstr "Filtre"
+
+
+msgid "Shader"
+msgstr "Gölgeleme"
+
+
 msgid "Interface"
 msgstr "Arayüz"
 
@@ -7364,20 +7348,12 @@ msgid "Nodes"
 msgstr "Düğümler"
 
 
-msgid "Shader"
-msgstr "Gölgeleme"
-
-
 msgid "Compositing nodes"
 msgstr "Kompozisyon düğümleri"
 
 
 msgid "Geometry nodes"
 msgstr "Geometri düğümleri"
-
-
-msgid "Edit Quality"
-msgstr "Kaliteyi Düzenle"
 
 
 msgid "Edit"
@@ -7686,10 +7662,6 @@ msgid "Lines"
 msgstr "Çizgiler"
 
 
-msgid "Filter"
-msgstr "Filtre"
-
-
 msgid "Area"
 msgstr "Alan"
 
@@ -7704,6 +7676,10 @@ msgstr "Destek"
 
 msgid "Maintained by community developers"
 msgstr "Topluluk geliştiricileri tarafından bakımı yapılır"
+
+
+msgid "Themes"
+msgstr "Temalar"
 
 
 msgid "XR Session Settings"
@@ -7744,6 +7720,10 @@ msgstr "Çalışma alanı için en son kullanılan sahneyi anımsa ve bu çalı�
 
 msgid "Mist"
 msgstr "Sis"
+
+
+msgid "Animation"
+msgstr "Canlandırma"
 
 
 msgid "Translate Roots"
@@ -7931,10 +7911,6 @@ msgid "Layout"
 msgstr "Yerleşim"
 
 
-msgid "Distort"
-msgstr "Çarpıt"
-
-
 msgid "Instances"
 msgstr "Örnekler"
 
@@ -8058,6 +8034,10 @@ msgstr "Geometri Düğümleri"
 
 msgid "Deform using the shape of a lattice object"
 msgstr "Bir dış kafes nesnesinin şeklini kullanarak deforme et"
+
+
+msgid "New"
+msgstr "Yeni"
 
 
 msgid "Material Mode"
@@ -8633,6 +8613,10 @@ msgid "Curve Falloff Preset"
 msgstr "Eğri Düşüş Önayarı"
 
 
+msgid "Translation"
+msgstr "Taşıma"
+
+
 msgctxt "Operator"
 msgid "Context Menu"
 msgstr "Bağlam Menüsü"
@@ -8773,14 +8757,6 @@ msgid "Undo"
 msgstr "Geri Al"
 
 
-msgid "Global Space"
-msgstr "Küresel Etki Alanı"
-
-
-msgid "Scene Unit"
-msgstr "Sahne Birimi"
-
-
 msgid "Scene Collections"
 msgstr "Sahne Koleksiyonları"
 
@@ -8819,6 +8795,11 @@ msgstr "Kaydır"
 
 msgid "General"
 msgstr "Genel"
+
+
+msgctxt "Operator"
+msgid "Refresh All"
+msgstr "Tümünü Yenile"
 
 
 msgctxt "Operator"
@@ -8972,6 +8953,11 @@ msgstr "Katmanı Yeni Nesne Olarak Çoğalt"
 msgctxt "Operator"
 msgid "Add New Mask Layer"
 msgstr "Yeni Maske Katmanı Ekle"
+
+
+msgctxt "Operator"
+msgid "Rotate"
+msgstr "Çevir"
 
 
 msgid "Both"
@@ -9130,15 +9116,6 @@ msgid "Convert rotations to quaternions"
 msgstr "Döndürmeleri dördeylere dönüştür"
 
 
-msgid "Force Reload"
-msgstr "Yeniden Yüklemeyi Zorla"
-
-
-msgctxt "Material"
-msgid "None"
-msgstr "Yok"
-
-
 msgid "Animation Offset"
 msgstr "Canlandırma Ofseti"
 
@@ -9258,8 +9235,9 @@ msgid "Move to Nodes"
 msgstr "Düğümlere Taşı"
 
 
-msgid "Scene Line Art"
-msgstr "Sahne Çizgi Sanatı"
+msgctxt "Operator"
+msgid "Stroke"
+msgstr "Vuruş"
 
 
 msgid "Object Data"
@@ -9627,10 +9605,6 @@ msgid "Open Preferences..."
 msgstr "Tercihleri Aç..."
 
 
-msgid "Themes"
-msgstr "Temalar"
-
-
 msgid "Editing"
 msgstr "Düzenleme"
 
@@ -9657,8 +9631,9 @@ msgid "Reload scripts"
 msgstr "Betikleri yeniden yükle"
 
 
-msgid "Sharpen"
-msgstr "Keskinlik"
+msgctxt "Operator"
+msgid "Sphere"
+msgstr "Küre"
 
 
 msgctxt "Sequence"
@@ -9785,11 +9760,6 @@ msgstr "Sarma Çubuğu"
 msgctxt "Operator"
 msgid "Find"
 msgstr "Bul"
-
-
-msgctxt "Operator"
-msgid "Rotate"
-msgstr "Çevir"
 
 
 msgctxt "Operator"
@@ -10033,6 +10003,10 @@ msgstr "Bir dosya tarayıcısında bir yol aç"
 
 msgid "Export Vertex Colors"
 msgstr "Tepecik Renklerini Dışa Aktar"
+
+
+msgid "Scene Unit"
+msgstr "Sahne Birimi"
 
 
 msgctxt "Operator"
@@ -10349,10 +10323,6 @@ msgid "UV Sculpting"
 msgstr "UV Yontması"
 
 
-msgid "Viewport Sampling Presets"
-msgstr "Görüş Alanı Örnekleme Önayarları"
-
-
 msgid "Bone Constraints"
 msgstr "Kemik Kısıtlamaları"
 
@@ -10367,6 +10337,10 @@ msgstr "2B İmleç"
 
 msgid "Aperture"
 msgstr "Açıklık"
+
+
+msgid "Viewport Sampling Presets"
+msgstr "Görüş Alanı Örnekleme Önayarları"
 
 
 msgid "OpenVDB File"
@@ -10778,6 +10752,10 @@ msgstr "Bir RNA işlevi uygulayan bir Python işlevinde özellik isteğe bağlı
 
 msgid "Skip Save"
 msgstr "Kaydetmeyi Atla"
+
+
+msgid "Password"
+msgstr "Parola"
 
 
 msgid "XYZ Length"
@@ -11362,6 +11340,10 @@ msgid "Mask"
 msgstr "Maske"
 
 
+msgid "Error Message"
+msgstr "Hata İletisi"
+
+
 msgid "Active workspace and scene follow this window"
 msgstr "Etkin çalışma alanı ve sahne bu pencereyi izler"
 
@@ -11451,6 +11433,16 @@ msgstr "Ekle"
 
 
 msgctxt "Operator"
+msgid "Documentation"
+msgstr "Belgelendirme"
+
+
+msgctxt "Operator"
+msgid "Report a Bug"
+msgstr "Bir Hata Bildir"
+
+
+msgctxt "Operator"
 msgid "Mirrored"
 msgstr "Yansıtılmış"
 
@@ -11463,28 +11455,12 @@ msgid "Module Debug"
 msgstr "Modül Hata Ayıklaması"
 
 
-msgid "Compositing Nodes:"
-msgstr "Bileşikleştirme Düğümleri:"
-
-
 msgid "Notes"
 msgstr "Notlar"
 
 
 msgid "Animation UI"
 msgstr "Canlandırma Arayüzü"
-
-
-msgid "Statistics"
-msgstr "İstatistikler"
-
-
-msgid "Animate Settings:"
-msgstr "Canlandırma Ayarları:"
-
-
-msgid "Render Settings:"
-msgstr "Sunum Ayarları:"
 
 
 msgid "Save to PO File"
@@ -11909,11 +11885,6 @@ msgstr "Etkin Araçlar"
 
 
 msgctxt "Operator"
-msgid "Refresh All"
-msgstr "Tümünü Yenile"
-
-
-msgctxt "Operator"
 msgid "Sequence Render Animation"
 msgstr "Sekans Sunumu Canlandırması"
 
@@ -12067,11 +12038,6 @@ msgstr "Sürüm Notları"
 
 
 msgctxt "Operator"
-msgid "Report a Bug"
-msgstr "Bir Hata Bildir"
-
-
-msgctxt "Operator"
 msgid "Developer Documentation"
 msgstr "Geliştirici Belgelendirmesi"
 
@@ -12172,10 +12138,6 @@ msgid "Default To"
 msgstr "Saptanmışlara Dön"
 
 
-msgid "Preferences:"
-msgstr "Tercihler:"
-
-
 msgctxt "Operator"
 msgid "Load Factory Blender Preferences"
 msgstr "Blender Fabrika Tercihlerini Yükle"
@@ -12222,11 +12184,6 @@ msgstr "Kullanıcı:"
 
 
 msgctxt "Operator"
-msgid "Documentation"
-msgstr "Belgelendirme"
-
-
-msgctxt "Operator"
 msgid "Interactive Mirror"
 msgstr "Etkileşimli Ayna"
 
@@ -12234,11 +12191,6 @@ msgstr "Etkileşimli Ayna"
 msgctxt "Operator"
 msgid "Viewport Render Image"
 msgstr "Görüş Alanı Görseli Sun"
-
-
-msgctxt "Operator"
-msgid "Similar"
-msgstr "Benzer"
 
 
 msgctxt "Operator"
@@ -12276,11 +12228,6 @@ msgstr "Yeni Grup Ekle"
 
 
 msgctxt "Operator"
-msgid "Sphere"
-msgstr "Küre"
-
-
-msgctxt "Operator"
 msgid "Fair Positions"
 msgstr "Eşit Konumlar"
 
@@ -12304,6 +12251,10 @@ msgid "Join"
 msgstr "Birleştir"
 
 
+msgid "Statistics"
+msgstr "İstatistikler"
+
+
 msgctxt "Operator"
 msgid "Viewport Render Animation"
 msgstr "Görüş Alanı Sunumu Canlandırması"
@@ -12312,11 +12263,6 @@ msgstr "Görüş Alanı Sunumu Canlandırması"
 msgctxt "Operator"
 msgid "Empty"
 msgstr "Boş"
-
-
-msgctxt "Operator"
-msgid "Stroke"
-msgstr "Vuruş"
 
 
 msgctxt "Operator"
@@ -12336,6 +12282,10 @@ msgstr "Nesneleri Sahneye Bağlantıla..."
 
 msgid "Developer"
 msgstr "Geliştirici"
+
+
+msgid "Sharpen"
+msgstr "Keskinlik"
 
 
 msgid "Draw Grease Pencil"
@@ -12672,12 +12622,27 @@ msgid "Browse ID data to be linked"
 msgstr "Bağlantılanacak kimlik verisine göz at"
 
 
-msgctxt "Object"
+msgctxt "Action"
 msgid "New"
 msgstr "Yeni"
 
 
-msgctxt "Mesh"
+msgctxt "Armature"
+msgid "New"
+msgstr "Yeni"
+
+
+msgctxt "Brush"
+msgid "New"
+msgstr "Yeni"
+
+
+msgctxt "Camera"
+msgid "New"
+msgstr "Yeni"
+
+
+msgctxt "Curves"
 msgid "New"
 msgstr "Yeni"
 
@@ -12687,17 +12652,12 @@ msgid "New"
 msgstr "Yeni"
 
 
-msgctxt "Metaball"
+msgctxt "FreestyleLineStyle"
 msgid "New"
 msgstr "Yeni"
 
 
-msgctxt "Material"
-msgid "New"
-msgstr "Yeni"
-
-
-msgctxt "Texture"
+msgctxt "GPencil"
 msgid "New"
 msgstr "Yeni"
 
@@ -12712,37 +12672,22 @@ msgid "New"
 msgstr "Yeni"
 
 
-msgctxt "Camera"
+msgctxt "LightProbe"
 msgid "New"
 msgstr "Yeni"
 
 
-msgctxt "World"
+msgctxt "Material"
 msgid "New"
 msgstr "Yeni"
 
 
-msgctxt "Screen"
+msgctxt "Mesh"
 msgid "New"
 msgstr "Yeni"
 
 
-msgctxt "Speaker"
-msgid "New"
-msgstr "Yeni"
-
-
-msgctxt "Sound"
-msgid "New"
-msgstr "Yeni"
-
-
-msgctxt "Armature"
-msgid "New"
-msgstr "Yeni"
-
-
-msgctxt "Action"
+msgctxt "Metaball"
 msgid "New"
 msgstr "Yeni"
 
@@ -12752,7 +12697,7 @@ msgid "New"
 msgstr "Yeni"
 
 
-msgctxt "Brush"
+msgctxt "Object"
 msgid "New"
 msgstr "Yeni"
 
@@ -12762,12 +12707,32 @@ msgid "New"
 msgstr "Yeni"
 
 
-msgctxt "GPencil"
+msgctxt "PointCloud"
 msgid "New"
 msgstr "Yeni"
 
 
-msgctxt "FreestyleLineStyle"
+msgctxt "Screen"
+msgid "New"
+msgstr "Yeni"
+
+
+msgctxt "Sound"
+msgid "New"
+msgstr "Yeni"
+
+
+msgctxt "Speaker"
+msgid "New"
+msgstr "Yeni"
+
+
+msgctxt "Texture"
+msgid "New"
+msgstr "Yeni"
+
+
+msgctxt "Volume"
 msgid "New"
 msgstr "Yeni"
 
@@ -12777,22 +12742,7 @@ msgid "New"
 msgstr "Yeni"
 
 
-msgctxt "LightProbe"
-msgid "New"
-msgstr "Yeni"
-
-
-msgctxt "Curves"
-msgid "New"
-msgstr "Yeni"
-
-
-msgctxt "PointCloud"
-msgid "New"
-msgstr "Yeni"
-
-
-msgctxt "Volume"
+msgctxt "World"
 msgid "New"
 msgstr "Yeni"
 
@@ -12809,6 +12759,10 @@ msgstr "Doku Seçenekleri"
 msgctxt "Mesh"
 msgid "Cube"
 msgstr "Küp"
+
+
+msgid "Cancel"
+msgstr "İptal"
 
 
 msgctxt "Object"
@@ -12865,10 +12819,6 @@ msgid "File path"
 msgstr "Dosya yolu"
 
 
-msgid "Cancel"
-msgstr "İptal"
-
-
 msgid "File name"
 msgstr "Dosya adı"
 
@@ -12911,10 +12861,6 @@ msgstr "{} (Boole)"
 
 msgid "Geometry:"
 msgstr "Geometri:"
-
-
-msgid "• Point Cloud: %s points"
-msgstr "• Nokta Bulutu: %s nokta"
 
 
 msgid " Named Attribute"
@@ -13286,20 +13232,12 @@ msgid "UV Layout"
 msgstr "UV Yerleşimi"
 
 
-msgid "UV Editor > UV > Export UV Layout"
-msgstr "UV Düzenleyicisi > UV > UV Yerleşimi Dışa Aktar"
-
-
 msgid "Cycles Render Engine"
 msgstr "Çevrimler Sunum İşletkesi"
 
 
 msgid "All Add-ons Installed by User"
 msgstr "Kullanıcı Tarafından Kurulan Tüm Eklentiler"
-
-
-msgid "Baking"
-msgstr "Pişirme"
 
 
 msgid "English (English)"

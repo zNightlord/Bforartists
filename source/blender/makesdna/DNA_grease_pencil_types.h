@@ -157,8 +157,8 @@ typedef struct GreasePencilFrame {
   int8_t type;
   char _pad[3];
 #ifdef __cplusplus
-  static GreasePencilFrame null();
-  bool is_null() const;
+  static GreasePencilFrame end();
+  bool is_end() const;
   bool is_implicit_hold() const;
   bool is_selected() const;
 #endif
@@ -242,6 +242,7 @@ typedef enum GreasePencilLayerTreeNodeFlag {
   GP_LAYER_TREE_NODE_EXPANDED = (1 << 6),
   GP_LAYER_TREE_NODE_HIDE_MASKS = (1 << 7),
   GP_LAYER_TREE_NODE_DISABLE_MASKS_IN_VIEWLAYER = (1 << 8),
+  GP_LAYER_TREE_NODE_USE_LOCKED_MATERIAL = (1 << 9),
 } GreasePencilLayerTreeNodeFlag;
 
 struct GreasePencilLayerTreeGroup;
@@ -508,9 +509,19 @@ typedef struct GreasePencil {
   bool has_active_layer() const;
   const blender::bke::greasepencil::Layer *get_active_layer() const;
   blender::bke::greasepencil::Layer *get_active_layer();
-  void set_active_layer(const blender::bke::greasepencil::Layer *layer);
+  void set_active_layer(blender::bke::greasepencil::Layer *layer);
   bool is_layer_active(const blender::bke::greasepencil::Layer *layer) const;
   void autolock_inactive_layers();
+
+  /* Active group functions. */
+  bool has_active_group() const;
+  const blender::bke::greasepencil::LayerGroup *get_active_group() const;
+  blender::bke::greasepencil::LayerGroup *get_active_group();
+
+  /* Active node functions. */
+  const blender::bke::greasepencil::TreeNode *get_active_node() const;
+  blender::bke::greasepencil::TreeNode *get_active_node();
+  void set_active_node(blender::bke::greasepencil::TreeNode *node);
 
   /* Adding layers and layer groups. */
   /** Adds a new layer with the given name to the top of root group. */
@@ -519,10 +530,10 @@ typedef struct GreasePencil {
   blender::bke::greasepencil::Layer &add_layer(
       blender::bke::greasepencil::LayerGroup &parent_group, blender::StringRefNull name);
   /** Duplicates the given layer to the top of the root group. */
-  blender::bke::greasepencil::Layer &add_layer(
+  blender::bke::greasepencil::Layer &duplicate_layer(
       const blender::bke::greasepencil::Layer &duplicate_layer);
   /** Duplicates the given layer to the top of the given group. */
-  blender::bke::greasepencil::Layer &add_layer(
+  blender::bke::greasepencil::Layer &duplicate_layer(
       blender::bke::greasepencil::LayerGroup &parent_group,
       const blender::bke::greasepencil::Layer &duplicate_layer);
   blender::bke::greasepencil::LayerGroup &add_layer_group(
@@ -550,8 +561,30 @@ typedef struct GreasePencil {
   void rename_node(blender::bke::greasepencil::TreeNode &node, blender::StringRefNull new_name);
 
   void remove_layer(blender::bke::greasepencil::Layer &layer);
+  void remove_group(blender::bke::greasepencil::LayerGroup &group, bool keep_children = false);
 
-  /* Drawing API functions. */
+  /* Frames API functions. */
+
+  /**
+   * Insert a new keyframe in \a layer. If successful, this will also create a new drawing.
+   *
+   * \param frame_number: The frame number at which the keyframe is inserted (the start frame).
+   * \param duration: Duration of the keyframe. If set to 0, then the keyframe is implicitly held
+   * (until the next keyframe).
+   * \param keytype: The keyframe type (used to render different colored keys).
+   *
+   * \returns A pointer to a drawing if the keyframe was inserted, otherwise nullptr.
+   */
+  blender::bke::greasepencil::Drawing *insert_frame(
+      blender::bke::greasepencil::Layer &layer,
+      int frame_number,
+      int duration = 0,
+      eBezTriple_KeyframeType keytype = BEZT_KEYTYPE_KEYFRAME);
+  /**
+   * Removes all the frames with \a frame_numbers in the \a layer.
+   * \returns true if any frame was removed.
+   */
+  bool remove_frames(blender::bke::greasepencil::Layer &layer, blender::Span<int> frame_numbers);
 
   /**
    * Low-level resizing of drawings array. Only allocates new entries in the array, no drawings are
@@ -562,10 +595,6 @@ typedef struct GreasePencil {
   void add_empty_drawings(int add_num);
   void add_duplicate_drawings(int duplicate_num,
                               const blender::bke::greasepencil::Drawing &drawing);
-  bool insert_blank_frame(blender::bke::greasepencil::Layer &layer,
-                          int frame_number,
-                          int duration,
-                          eBezTriple_KeyframeType keytype);
   bool insert_duplicate_frame(blender::bke::greasepencil::Layer &layer,
                               const int src_frame_number,
                               const int dst_frame_number,
@@ -599,11 +628,6 @@ typedef struct GreasePencil {
                              const blender::Map<int, int> &frame_number_destinations,
                              const blender::Map<int, GreasePencilFrame> &duplicate_frames);
 
-  /**
-   * Removes all the frames with \a frame_numbers in the \a layer.
-   * \returns true if any frame was removed.
-   */
-  bool remove_frames(blender::bke::greasepencil::Layer &layer, blender::Span<int> frame_numbers);
   /**
    * Removes all the drawings that have no users. Will free the drawing data and shrink the
    * drawings array.

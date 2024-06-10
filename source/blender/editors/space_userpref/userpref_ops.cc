@@ -23,6 +23,7 @@
 
 #include "BKE_callbacks.hh"
 #include "BKE_context.hh"
+#include "BKE_global.hh"
 #include "BKE_main.hh"
 #include "BKE_preferences.h"
 
@@ -274,17 +275,26 @@ static int preferences_extension_repo_add_exec(bContext *C, wmOperator *op)
   BKE_callback_exec_null(bmain, BKE_CB_EVT_EXTENSION_REPOS_UPDATE_PRE);
 
   char name[sizeof(bUserExtensionRepo::name)] = "";
-  char remote_path[sizeof(bUserExtensionRepo::remote_path)] = "";
+  char remote_url[sizeof(bUserExtensionRepo::remote_url)] = "";
+  char *access_token = nullptr;
   char custom_directory[sizeof(bUserExtensionRepo::custom_dirpath)] = "";
 
   const bool use_custom_directory = RNA_boolean_get(op->ptr, "use_custom_directory");
+  const bool use_access_token = RNA_boolean_get(op->ptr, "use_access_token");
+  const bool use_sync_on_startup = RNA_boolean_get(op->ptr, "use_sync_on_startup");
   if (use_custom_directory) {
     RNA_string_get(op->ptr, "custom_directory", custom_directory);
     BLI_path_slash_rstrip(custom_directory);
   }
 
   if (repo_type == bUserExtensionRepoAddType::Remote) {
-    RNA_string_get(op->ptr, "remote_path", remote_path);
+    RNA_string_get(op->ptr, "remote_url", remote_url);
+
+    if (use_access_token) {
+      if (RNA_string_length(op->ptr, "access_token")) {
+        access_token = RNA_string_get_alloc(op->ptr, "access_token", nullptr, 0, nullptr);
+      }
+    }
   }
 
   /* Setup the name using the following logic:
@@ -302,7 +312,7 @@ static int preferences_extension_repo_add_exec(bContext *C, wmOperator *op)
     if (name[0] == '\0') {
       switch (repo_type) {
         case bUserExtensionRepoAddType::Remote: {
-          BKE_preferences_extension_remote_to_name(remote_path, name);
+          BKE_preferences_extension_remote_to_name(remote_url, name);
           break;
         }
         case bUserExtensionRepoAddType::Local: {
@@ -342,13 +352,23 @@ static int preferences_extension_repo_add_exec(bContext *C, wmOperator *op)
   bUserExtensionRepo *new_repo = BKE_preferences_extension_repo_add(
       &U, name, module, custom_directory);
 
+  if (use_sync_on_startup) {
+    new_repo->flag |= USER_EXTENSION_REPO_FLAG_SYNC_ON_STARTUP;
+  }
   if (use_custom_directory) {
     new_repo->flag |= USER_EXTENSION_REPO_FLAG_USE_CUSTOM_DIRECTORY;
   }
 
   if (repo_type == bUserExtensionRepoAddType::Remote) {
-    STRNCPY(new_repo->remote_path, remote_path);
-    new_repo->flag |= USER_EXTENSION_REPO_FLAG_USE_REMOTE_PATH;
+    STRNCPY(new_repo->remote_url, remote_url);
+    new_repo->flag |= USER_EXTENSION_REPO_FLAG_USE_REMOTE_URL;
+
+    if (use_access_token) {
+      new_repo->flag |= USER_EXTENSION_REPO_FLAG_USE_ACCESS_TOKEN;
+    }
+    if (access_token) {
+      new_repo->access_token = access_token;
+    }
   }
 
   /* Activate new repository in the UI for further setup. */
@@ -395,7 +415,25 @@ static void preferences_extension_repo_add_ui(bContext * /*C*/, wmOperator *op)
 
   switch (repo_type) {
     case bUserExtensionRepoAddType::Remote: {
-      uiItemR(layout, op->ptr, "remote_path", UI_ITEM_R_IMMEDIATE, nullptr, ICON_NONE);
+      uiItemR(layout, op->ptr, "remote_url", UI_ITEM_R_IMMEDIATE, nullptr, ICON_NONE);
+      uiItemR(layout, op->ptr, "use_sync_on_startup", UI_ITEM_NONE, nullptr, ICON_NONE);
+
+      uiItemS_ex(layout, 0.2f, LayoutSeparatorType::Line);
+
+      const bool use_access_token = RNA_boolean_get(ptr, "use_access_token");
+      const int token_icon = (use_access_token && RNA_string_length(op->ptr, "access_token")) ?
+                                 ICON_LOCKED :
+                                 ICON_UNLOCKED;
+
+      uiLayout *row = uiLayoutRowWithHeading(layout, true, IFACE_("Authentication"));
+      uiItemR(row, op->ptr, "use_access_token", UI_ITEM_NONE, nullptr, ICON_NONE);
+      uiLayout *col = uiLayoutRow(layout, false);
+      uiLayoutSetActive(col, use_access_token);
+      /* Use "immediate" flag to refresh the icon. */
+      uiItemR(col, op->ptr, "access_token", UI_ITEM_R_IMMEDIATE, nullptr, token_icon);
+
+      uiItemS_ex(layout, 0.2f, LayoutSeparatorType::Line);
+
       break;
     }
     case bUserExtensionRepoAddType::Local: {
@@ -452,7 +490,7 @@ static void PREFERENCES_OT_extension_repo_add(wmOperatorType *ot)
 
   { /* Name. */
     const char *prop_id = "name";
-    PropertyRNA *prop_ref = RNA_struct_type_find_property(type_ref, prop_id);
+    const PropertyRNA *prop_ref = RNA_struct_type_find_property(type_ref, prop_id);
     PropertyRNA *prop = RNA_def_string(ot->srna,
                                        prop_id,
                                        nullptr,
@@ -463,20 +501,55 @@ static void PREFERENCES_OT_extension_repo_add(wmOperatorType *ot)
   }
 
   { /* Remote Path. */
-    const char *prop_id = "remote_path";
-    PropertyRNA *prop_ref = RNA_struct_type_find_property(type_ref, prop_id);
+    const char *prop_id = "remote_url";
+    const PropertyRNA *prop_ref = RNA_struct_type_find_property(type_ref, prop_id);
     PropertyRNA *prop = RNA_def_string(ot->srna,
                                        prop_id,
                                        nullptr,
-                                       sizeof(bUserExtensionRepo::remote_path),
+                                       sizeof(bUserExtensionRepo::remote_url),
                                        RNA_property_ui_name_raw(prop_ref),
                                        RNA_property_ui_description_raw(prop_ref));
     RNA_def_property_flag(prop, PROP_SKIP_SAVE);
   }
 
+  { /* Use Access Token. */
+    const char *prop_id = "use_access_token";
+    const PropertyRNA *prop_ref = RNA_struct_type_find_property(type_ref, prop_id);
+    PropertyRNA *prop = RNA_def_boolean(ot->srna,
+                                        prop_id,
+                                        false,
+                                        RNA_property_ui_name_raw(prop_ref),
+                                        RNA_property_ui_description_raw(prop_ref));
+    RNA_def_property_flag(prop, PROP_SKIP_SAVE);
+  }
+
+  { /* Access Token (dynamic length). */
+    const char *prop_id = "access_token";
+    const PropertyRNA *prop_ref = RNA_struct_type_find_property(type_ref, prop_id);
+    PropertyRNA *prop = RNA_def_string(ot->srna,
+                                       prop_id,
+                                       nullptr,
+                                       0,
+                                       RNA_property_ui_name_raw(prop_ref),
+                                       RNA_property_ui_description_raw(prop_ref));
+    RNA_def_property_flag(prop, PROP_SKIP_SAVE);
+    RNA_def_property_subtype(prop, PROP_PASSWORD);
+  }
+
+  { /* Check for Updated on Startup. */
+    const char *prop_id = "use_sync_on_startup";
+    const PropertyRNA *prop_ref = RNA_struct_type_find_property(type_ref, prop_id);
+    PropertyRNA *prop = RNA_def_boolean(ot->srna,
+                                        prop_id,
+                                        false,
+                                        RNA_property_ui_name_raw(prop_ref),
+                                        RNA_property_ui_description_raw(prop_ref));
+    RNA_def_property_flag(prop, PROP_SKIP_SAVE);
+  }
+
   { /* Use Custom Directory. */
     const char *prop_id = "use_custom_directory";
-    PropertyRNA *prop_ref = RNA_struct_type_find_property(type_ref, prop_id);
+    const PropertyRNA *prop_ref = RNA_struct_type_find_property(type_ref, prop_id);
     PropertyRNA *prop = RNA_def_boolean(ot->srna,
                                         prop_id,
                                         false,
@@ -487,11 +560,11 @@ static void PREFERENCES_OT_extension_repo_add(wmOperatorType *ot)
 
   { /* Custom Directory. */
     const char *prop_id = "custom_directory";
-    PropertyRNA *prop_ref = RNA_struct_type_find_property(type_ref, prop_id);
+    const PropertyRNA *prop_ref = RNA_struct_type_find_property(type_ref, prop_id);
     PropertyRNA *prop = RNA_def_string_dir_path(ot->srna,
                                                 prop_id,
                                                 nullptr,
-                                                sizeof(bUserExtensionRepo::remote_path),
+                                                sizeof(bUserExtensionRepo::custom_dirpath),
                                                 RNA_property_ui_name_raw(prop_ref),
                                                 RNA_property_ui_description_raw(prop_ref));
     RNA_def_property_flag(prop, PROP_SKIP_SAVE);
@@ -505,32 +578,8 @@ static void PREFERENCES_OT_extension_repo_add(wmOperatorType *ot)
 /** \} */
 
 /* -------------------------------------------------------------------- */
-/** \name Generic Extension Repository Utilities
- * \{ */
-
-static bool preferences_extension_repo_remote_active_enabled_poll(bContext *C)
-{
-  const bUserExtensionRepo *repo = BKE_preferences_extension_repo_find_index(
-      &U, U.active_extension_repo);
-  if (repo == nullptr || (repo->flag & USER_EXTENSION_REPO_FLAG_DISABLED) ||
-      !(repo->flag & USER_EXTENSION_REPO_FLAG_USE_REMOTE_PATH))
-  {
-    CTX_wm_operator_poll_msg_set(C, "An enabled remote repository must be selected");
-    return false;
-  }
-  return true;
-}
-
-/** \} */
-
-/* -------------------------------------------------------------------- */
 /** \name Remove Extension Repository Operator
  * \{ */
-
-enum class bUserExtensionRepoRemoveType {
-  RepoOnly = 0,
-  RepoWithDirectory = 1,
-};
 
 static bool preferences_extension_repo_remove_poll(bContext *C)
 {
@@ -546,16 +595,24 @@ static int preferences_extension_repo_remove_invoke(bContext *C,
                                                     const wmEvent * /*event*/)
 {
   const int index = RNA_int_get(op->ptr, "index");
-  bUserExtensionRepoRemoveType repo_type = bUserExtensionRepoRemoveType(
-      RNA_enum_get(op->ptr, "type"));
-  bUserExtensionRepo *repo = static_cast<bUserExtensionRepo *>(
+  bool remove_files = RNA_boolean_get(op->ptr, "remove_files");
+  const bUserExtensionRepo *repo = static_cast<bUserExtensionRepo *>(
       BLI_findlink(&U.extension_repos, index));
 
   if (!repo) {
     return OPERATOR_CANCELLED;
   }
+
+  if (remove_files) {
+    if ((repo->flag & USER_EXTENSION_REPO_FLAG_USE_REMOTE_URL) == 0) {
+      if (repo->source == USER_EXTENSION_REPO_SOURCE_SYSTEM) {
+        remove_files = false;
+      }
+    }
+  }
+
   std::string message;
-  if (repo_type == bUserExtensionRepoRemoveType::RepoWithDirectory) {
+  if (remove_files) {
     char dirpath[FILE_MAX];
     BKE_preferences_extension_repo_dirpath_get(repo, dirpath, sizeof(dirpath));
 
@@ -564,16 +621,15 @@ static int preferences_extension_repo_remove_invoke(bContext *C,
     }
     else {
       message = IFACE_("Remove, local files not found.");
-      repo_type = bUserExtensionRepoRemoveType::RepoOnly;
+      remove_files = false;
     }
   }
   else {
     message = IFACE_("Remove, keeping local files.");
   }
 
-  const char *confirm_text = (repo_type == bUserExtensionRepoRemoveType::RepoWithDirectory) ?
-                                 IFACE_("Remove Repository & Files") :
-                                 IFACE_("Remove Repository");
+  const char *confirm_text = remove_files ? IFACE_("Remove Repository & Files") :
+                                            IFACE_("Remove Repository");
 
   return WM_operator_confirm_ex(
       C, op, nullptr, message.c_str(), confirm_text, ALERT_ICON_WARNING, true);
@@ -582,8 +638,7 @@ static int preferences_extension_repo_remove_invoke(bContext *C,
 static int preferences_extension_repo_remove_exec(bContext *C, wmOperator *op)
 {
   const int index = RNA_int_get(op->ptr, "index");
-  const bUserExtensionRepoRemoveType repo_type = bUserExtensionRepoRemoveType(
-      RNA_enum_get(op->ptr, "type"));
+  bool remove_files = RNA_boolean_get(op->ptr, "remove_files");
   bUserExtensionRepo *repo = static_cast<bUserExtensionRepo *>(
       BLI_findlink(&U.extension_repos, index));
   if (!repo) {
@@ -593,7 +648,17 @@ static int preferences_extension_repo_remove_exec(bContext *C, wmOperator *op)
   Main *bmain = CTX_data_main(C);
   BKE_callback_exec_null(bmain, BKE_CB_EVT_EXTENSION_REPOS_UPDATE_PRE);
 
-  if (repo_type == bUserExtensionRepoRemoveType::RepoWithDirectory) {
+  if (remove_files) {
+    if ((repo->flag & USER_EXTENSION_REPO_FLAG_USE_REMOTE_URL) == 0) {
+      if (repo->source == USER_EXTENSION_REPO_SOURCE_SYSTEM) {
+        /* The UI doesn't show this option, if it's accessed disallow it. */
+        BKE_report(op->reports, RPT_WARNING, "Unable to remove files for \"System\" repositories");
+        remove_files = false;
+      }
+    }
+  }
+
+  if (remove_files) {
     char dirpath[FILE_MAX];
     BKE_preferences_extension_repo_dirpath_get(repo, dirpath, sizeof(dirpath));
     if (dirpath[0] && BLI_is_dir(dirpath)) {
@@ -648,73 +713,15 @@ static void PREFERENCES_OT_extension_repo_remove(wmOperatorType *ot)
 
   ot->flag = OPTYPE_INTERNAL;
 
-  static const EnumPropertyItem repo_type_items[] = {
-      {int(bUserExtensionRepoRemoveType::RepoOnly), "REPO_ONLY", 0, "Remove Repository"},
-      {int(bUserExtensionRepoRemoveType::RepoWithDirectory),
-       "REPO_AND_DIRECTORY",
-       0,
-       "Remove Repository & Files",
-       "Delete all associated local files when removing"},
-      {0, nullptr, 0, nullptr, nullptr},
-  };
-
-  RNA_def_int(ot->srna, "index", 0, 0, INT_MAX, "Index", "", 0, 1000);
-
-  ot->prop = RNA_def_enum(
-      ot->srna, "type", repo_type_items, 0, "Type", "Method for removing the repository");
-  RNA_def_property_flag(ot->prop, PROP_SKIP_SAVE | PROP_HIDDEN);
-}
-
-/** \} */
-
-/* -------------------------------------------------------------------- */
-/** \name Check for Extension Repository Updates Operator
- * \{ */
-
-static int preferences_extension_repo_sync_exec(bContext *C, wmOperator * /*op*/)
-{
-  Main *bmain = CTX_data_main(C);
-  BKE_callback_exec_null(bmain, BKE_CB_EVT_EXTENSION_REPOS_SYNC);
-  WM_event_add_notifier(C, NC_WINDOW, nullptr);
-  return OPERATOR_FINISHED;
-}
-
-static void PREFERENCES_OT_extension_repo_sync(wmOperatorType *ot)
-{
-  ot->name = "Check for Updates";
-  ot->idname = "PREFERENCES_OT_extension_repo_sync";
-  ot->description = "Synchronize the active extension repository with its remote URL";
-
-  ot->exec = preferences_extension_repo_sync_exec;
-  ot->poll = preferences_extension_repo_remote_active_enabled_poll;
-
-  ot->flag = OPTYPE_INTERNAL;
-}
-
-/** \} */
-
-/* -------------------------------------------------------------------- */
-/** \name Update Extension Repository Operator
- * \{ */
-
-static int preferences_extension_repo_upgrade_exec(bContext *C, wmOperator * /*op*/)
-{
-  Main *bmain = CTX_data_main(C);
-  BKE_callback_exec_null(bmain, BKE_CB_EVT_EXTENSION_REPOS_UPGRADE);
-  WM_event_add_notifier(C, NC_WINDOW, nullptr);
-  return OPERATOR_FINISHED;
-}
-
-static void PREFERENCES_OT_extension_repo_upgrade(wmOperatorType *ot)
-{
-  ot->name = "Install Available Updates for Repository";
-  ot->idname = "PREFERENCES_OT_extension_repo_upgrade";
-  ot->description = "Update any outdated extensions for the active extension repository";
-
-  ot->exec = preferences_extension_repo_upgrade_exec;
-  ot->poll = preferences_extension_repo_remote_active_enabled_poll;
-
-  ot->flag = OPTYPE_INTERNAL;
+  PropertyRNA *prop;
+  prop = RNA_def_int(ot->srna, "index", 0, 0, INT_MAX, "Index", "", 0, 1000);
+  RNA_def_property_flag(prop, PROP_SKIP_SAVE);
+  prop = RNA_def_boolean(ot->srna,
+                         "remove_files",
+                         false,
+                         "Remove Files",
+                         "Remove extension files when removing the repository");
+  RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 }
 
 /** \} */
@@ -726,18 +733,29 @@ static void PREFERENCES_OT_extension_repo_upgrade(wmOperatorType *ot)
 static int preferences_extension_url_drop_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
   char *url = RNA_string_get_alloc(op->ptr, "url", nullptr, 0, nullptr);
-  const bool url_is_remote = STRPREFIX(url, "http://") || STRPREFIX(url, "https://") ||
-                             STRPREFIX(url, "file://");
+  const bool url_is_file = STRPREFIX(url, "file://");
+  const bool url_is_online = STRPREFIX(url, "http://") || STRPREFIX(url, "https://");
+  const bool url_is_remote = url_is_file | url_is_online;
 
   /* NOTE: searching for hard-coded add-on name isn't great.
    * Needed since #WM_dropbox_add expects the operator to exist on startup. */
-  const char *idname_external = url_is_remote ? "bl_pkg.pkg_install" : "bl_pkg.pkg_install_files";
+  const char *idname_external = url_is_remote ? "extensions.package_install" :
+                                                "extensions.package_install_files";
+  bool use_url = true;
+
+  if (url_is_online && (G.f & G_FLAG_INTERNET_ALLOW) == 0) {
+    idname_external = "extensions.userpref_allow_online_popup";
+    use_url = false;
+  }
+
   wmOperatorType *ot = WM_operatortype_find(idname_external, true);
   int retval;
   if (ot) {
     PointerRNA props_ptr;
     WM_operator_properties_create_ptr(&props_ptr, ot);
-    RNA_string_set(&props_ptr, "url", url);
+    if (use_url) {
+      RNA_string_set(&props_ptr, "url", url);
+    }
     WM_operator_name_call_ptr(C, ot, WM_OP_INVOKE_DEFAULT, &props_ptr, event);
     WM_operator_properties_free(&props_ptr);
     retval = OPERATOR_FINISHED;
@@ -787,9 +805,9 @@ static bool associate_blend_poll(bContext *C)
 }
 
 #if !defined(__APPLE__)
-static bool assosiate_blend(bool do_register, bool all_users, char **error_msg)
+static bool associate_blend(bool do_register, bool all_users, char **error_msg)
 {
-  const bool result = WM_platform_assosiate_set(do_register, all_users, error_msg);
+  const bool result = WM_platform_associate_set(do_register, all_users, error_msg);
 #  ifdef WIN32
   if ((result == false) &&
       /* For some reason the message box isn't shown in this case. */
@@ -824,7 +842,7 @@ static int associate_blend_exec(bContext * /*C*/, wmOperator *op)
   char *error_msg = nullptr;
 
   WM_cursor_wait(true);
-  const bool success = assosiate_blend(true, all_users, &error_msg);
+  const bool success = associate_blend(true, all_users, &error_msg);
   WM_cursor_wait(false);
 
   if (!success) {
@@ -872,7 +890,7 @@ static int unassociate_blend_exec(bContext * /*C*/, wmOperator *op)
   char *error_msg = nullptr;
 
   WM_cursor_wait(true);
-  bool success = assosiate_blend(false, all_users, &error_msg);
+  bool success = associate_blend(false, all_users, &error_msg);
   WM_cursor_wait(false);
 
   if (!success) {
@@ -909,9 +927,6 @@ static void PREFERENCES_OT_unassociate_blend(wmOperatorType *ot)
 
 static bool drop_extension_url_poll(bContext * /*C*/, wmDrag *drag, const wmEvent * /*event*/)
 {
-  if (!U.experimental.use_extension_repos) {
-    return false;
-  }
   if (drag->type != WM_DRAG_STRING) {
     return false;
   }
@@ -934,11 +949,29 @@ static bool drop_extension_url_poll(bContext * /*C*/, wmDrag *drag, const wmEven
     return false;
   }
 
-  const char *cstr_ext = BLI_path_extension(cstr);
+  bool has_known_extension = false;
+  {
+    /* Strip parameters from the URL (if they exist) before the file extension is checked.
+     * This allows for `https://example.org/api/v1/file.zip?repository=/api/v1/`.
+     * This allows draggable links to specify their repository, see: #120665. */
+    std::string str_strip;
+    const char *cstr_maybe_copy = cstr;
+    size_t param_char = str.find('?');
+    if (param_char != std::string::npos) {
+      str_strip = str.substr(0, param_char);
+      cstr_maybe_copy = str_strip.c_str();
+    }
+
+    const char *cstr_ext = BLI_path_extension(cstr_maybe_copy);
+    if (cstr_ext && STRCASEEQ(cstr_ext, ".zip")) {
+      has_known_extension = true;
+    }
+  }
+
   /* Check the URL has a `.zip` suffix OR has a known repository as a prefix.
    * This is needed to support redirects which don't contain an extension. */
-  if (!(cstr_ext && STRCASEEQ(cstr_ext, ".zip")) &&
-      !BKE_preferences_extension_repo_find_by_remote_path_prefix(&U, cstr, true))
+  if (!has_known_extension &&
+      !BKE_preferences_extension_repo_find_by_remote_url_prefix(&U, cstr, true))
   {
     return false;
   }
@@ -961,9 +994,6 @@ static void drop_extension_url_copy(bContext * /*C*/, wmDrag *drag, wmDropBox *d
 
 static bool drop_extension_path_poll(bContext * /*C*/, wmDrag *drag, const wmEvent * /*event*/)
 {
-  if (!U.experimental.use_extension_repos) {
-    return false;
-  }
   if (drag->type != WM_DRAG_PATH) {
     return false;
   }
@@ -1015,8 +1045,6 @@ void ED_operatortypes_userpref()
 
   WM_operatortype_append(PREFERENCES_OT_extension_repo_add);
   WM_operatortype_append(PREFERENCES_OT_extension_repo_remove);
-  WM_operatortype_append(PREFERENCES_OT_extension_repo_sync);
-  WM_operatortype_append(PREFERENCES_OT_extension_repo_upgrade);
   WM_operatortype_append(PREFERENCES_OT_extension_url_drop);
 
   WM_operatortype_append(PREFERENCES_OT_associate_blend);

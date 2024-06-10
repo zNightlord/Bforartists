@@ -227,8 +227,7 @@ bool BKE_paint_always_hide_test(const Object *ob);
 /* Partial visibility. */
 
 /**
- * Returns non-zero if any of the corners of the grid
- * face whose inner corner is at (x, y) are hidden, zero otherwise.
+ * Returns whether any of the corners of the grid face whose inner corner is at (x, y) are hidden.
  */
 bool paint_is_grid_face_hidden(blender::BoundedBitSpan grid_hidden, int gridsize, int x, int y);
 /**
@@ -244,12 +243,14 @@ void BKE_paint_face_set_overlay_color_get(int face_set, int seed, uchar r_color[
 
 /* Stroke related. */
 
-bool paint_calculate_rake_rotation(UnifiedPaintSettings *ups,
-                                   Brush *brush,
+bool paint_calculate_rake_rotation(UnifiedPaintSettings &ups,
+                                   const Brush &brush,
                                    const float mouse_pos[2],
                                    PaintMode paint_mode,
                                    bool stroke_has_started);
-void paint_update_brush_rake_rotation(UnifiedPaintSettings *ups, Brush *brush, float rotation);
+void paint_update_brush_rake_rotation(UnifiedPaintSettings &ups,
+                                      const Brush &brush,
+                                      float rotation);
 
 void BKE_paint_stroke_get_average(const Scene *scene, const Object *ob, float stroke[3]);
 
@@ -272,12 +273,6 @@ void BKE_paint_blend_write(BlendWriter *writer, Paint *paint);
 void BKE_paint_blend_read_data(BlendDataReader *reader, const Scene *scene, Paint *paint);
 
 #define SCULPT_FACE_SET_NONE 0
-
-/** Used for both vertex color and weight paint. */
-struct SculptVertexPaintGeomMap {
-  blender::GroupedSpan<int> vert_to_loop;
-  blender::GroupedSpan<int> vert_to_face;
-};
 
 /** Pose Brush IK Chain. */
 struct SculptPoseIKChainSegment {
@@ -327,26 +322,22 @@ struct SculptBoundaryPreviewEdge {
 
 struct SculptBoundary {
   /* Vertex indices of the active boundary. */
-  PBVHVertRef *verts;
-  int verts_capacity;
-  int verts_num;
+  blender::Vector<PBVHVertRef> verts;
 
   /* Distance from a vertex in the boundary to initial vertex indexed by vertex index, taking into
    * account the length of all edges between them. Any vertex that is not in the boundary will have
    * a distance of 0. */
-  float *distance;
+  blender::Array<float> distance;
 
   /* Data for drawing the preview. */
-  SculptBoundaryPreviewEdge *edges;
-  int edges_capacity;
-  int edges_num;
+  blender::Vector<SculptBoundaryPreviewEdge> edges;
 
   /* True if the boundary loops into itself. */
   bool forms_loop;
 
   /* Initial vertex in the boundary which is closest to the current sculpt active vertex. */
-  PBVHVertRef initial_vertex;
-  int initial_vertex_i;
+  PBVHVertRef initial_vert;
+  int initial_vert_i;
 
   /* Vertex that at max_propagation_steps from the boundary and closest to the original active
    * vertex that was used to initialize the boundary. This is used as a reference to check how much
@@ -356,7 +347,7 @@ struct SculptBoundary {
   /* Stores the initial positions of the pivot and boundary initial vertex as they may be deformed
    * during the brush action. This allows to use them as a reference positions and vectors for some
    * brush effects. */
-  blender::float3 initial_vertex_position;
+  blender::float3 initial_vert_position;
   blender::float3 initial_pivot_position;
 
   /* Maximum number of topology steps that were calculated from the boundary. */
@@ -364,17 +355,17 @@ struct SculptBoundary {
 
   /* Indexed by vertex index, contains the topology information needed for boundary deformations.
    */
-  SculptBoundaryEditInfo *edit_info;
+  blender::Array<SculptBoundaryEditInfo> edit_info;
 
   /* Bend Deform type. */
   struct {
-    float (*pivot_rotation_axis)[3];
-    float (*pivot_positions)[3];
+    blender::Array<blender::float3> pivot_rotation_axis;
+    blender::Array<blender::float3> pivot_positions;
   } bend;
 
   /* Slide Deform type. */
   struct {
-    float (*directions)[3];
+    blender::Array<blender::float3> directions;
   } slide;
 
   /* Twist Deform type. */
@@ -589,31 +580,26 @@ struct SculptSession : blender::NonCopyable, blender::NonMovable {
   std::unique_ptr<SculptPoseIKChain> pose_ik_chain_preview;
 
   /* Boundary Brush Preview */
-  SculptBoundary *boundary_preview = nullptr;
+  std::unique_ptr<SculptBoundary> boundary_preview;
 
   SculptVertexInfo vertex_info = {};
   SculptFakeNeighbors fake_neighbors = {};
 
   /* Transform operator */
-  blender::float3 pivot_pos;
-  float pivot_rot[4];
-  blender::float3 pivot_scale;
+  blender::float3 pivot_pos = {};
+  blender::float4 pivot_rot = {};
+  blender::float3 pivot_scale = {};
 
-  blender::float3 init_pivot_pos;
-  float init_pivot_rot[4];
-  blender::float3 init_pivot_scale;
+  blender::float3 init_pivot_pos = {};
+  blender::float4 init_pivot_rot = {};
+  blender::float3 init_pivot_scale = {};
 
-  blender::float3 prev_pivot_pos;
-  float prev_pivot_rot[4];
-  blender::float3 prev_pivot_scale;
+  blender::float3 prev_pivot_pos = {};
+  blender::float4 prev_pivot_rot = {};
+  blender::float3 prev_pivot_scale = {};
 
   struct {
     struct {
-      SculptVertexPaintGeomMap gmap;
-    } vpaint;
-
-    struct {
-      SculptVertexPaintGeomMap gmap;
       /* Keep track of how much each vertex has been painted (non-airbrush only). */
       float *alpha_weight;
 
@@ -745,19 +731,6 @@ void BKE_sculpt_sync_face_visibility_to_grids(Mesh *mesh, SubdivCCG *subdiv_ccg)
  * drawing the mesh and all updates that come with it.
  */
 bool BKE_sculptsession_use_pbvh_draw(const Object *ob, const RegionView3D *rv3d);
-
-/* paint_vertex.cc */
-
-/**
- * Fills the object's active color attribute layer with the fill color.
- *
- * \param only_selected: Limit the fill to selected faces or vertices.
- *
- * \return #true if successful.
- */
-bool BKE_object_attributes_active_color_fill(Object *ob,
-                                             const float fill_color[4],
-                                             bool only_selected);
 
 /** C accessor for #Object::sculpt::pbvh. */
 PBVH *BKE_object_sculpt_pbvh_get(Object *object);

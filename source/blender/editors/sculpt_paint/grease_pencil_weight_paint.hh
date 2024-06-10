@@ -13,11 +13,13 @@
 #include "BKE_grease_pencil_vertex_groups.hh"
 #include "BKE_modifier.hh"
 #include "BKE_object_deform.h"
+#include "BKE_paint.hh"
 #include "BKE_scene.hh"
 
 #include "DEG_depsgraph_query.hh"
 
 #include "BLI_kdtree.h"
+#include "BLI_rect.h"
 
 #include "DNA_meshdata_types.h"
 
@@ -80,7 +82,7 @@ class WeightPaintOperation : public GreasePencilStrokeOperation {
   /* Flag for Auto-normalize weights of bone deformed vertex groups. */
   bool auto_normalize;
   /* Brush mode: normal, invert or smooth. */
-  BrushStrokeMode brush_mode;
+  BrushStrokeMode stroke_mode;
   /* Add or subtract weight? */
   bool invert_brush_weight;
   /* Active vertex group in GP object. */

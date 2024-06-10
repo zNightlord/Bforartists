@@ -170,7 +170,8 @@ static void find_socket_log_contexts(const Main &bmain,
  * we need to create evaluated copies of geometry before passing it to geometry nodes. Implicit
  * sharing lets us avoid copying attribute data though.
  */
-static bke::GeometrySet get_original_geometry_eval_copy(Object &object)
+static bke::GeometrySet get_original_geometry_eval_copy(Object &object,
+                                                        nodes::GeoNodesOperatorData &operator_data)
 {
   switch (object.type) {
     case OB_CURVES: {
@@ -185,13 +186,16 @@ static bke::GeometrySet get_original_geometry_eval_copy(Object &object)
     case OB_MESH: {
       const Mesh *mesh = static_cast<const Mesh *>(object.data);
       if (std::shared_ptr<BMEditMesh> &em = mesh->runtime->edit_mesh) {
+        operator_data.active_point_index = BM_mesh_active_vert_index_get(em->bm);
+        operator_data.active_edge_index = BM_mesh_active_edge_index_get(em->bm);
+        operator_data.active_face_index = BM_mesh_active_face_index_get(em->bm, false, true);
         Mesh *mesh_copy = BKE_mesh_wrapper_from_editmesh(em, nullptr, mesh);
         BKE_mesh_wrapper_ensure_mdata(mesh_copy);
-        Mesh *final_copy = BKE_mesh_copy_for_eval(mesh_copy);
+        Mesh *final_copy = BKE_mesh_copy_for_eval(*mesh_copy);
         BKE_id_free(nullptr, mesh_copy);
         return bke::GeometrySet::from_mesh(final_copy);
       }
-      return bke::GeometrySet::from_mesh(BKE_mesh_copy_for_eval(mesh));
+      return bke::GeometrySet::from_mesh(BKE_mesh_copy_for_eval(*mesh));
     }
     default:
       return {};
@@ -241,7 +245,7 @@ static void store_result_geometry(
       const bool has_shape_keys = mesh.key != nullptr;
 
       if (object.mode == OB_MODE_SCULPT) {
-        sculpt_paint::undo::geometry_begin(&object, &op);
+        sculpt_paint::undo::geometry_begin(object, &op);
       }
 
       Mesh *new_mesh = geometry.get_component_for_write<bke::MeshComponent>().release();
@@ -268,7 +272,7 @@ static void store_result_geometry(
       }
 
       if (object.mode == OB_MODE_SCULPT) {
-        sculpt_paint::undo::geometry_end(&object);
+        sculpt_paint::undo::geometry_end(object);
       }
       break;
     }
@@ -556,7 +560,7 @@ static int run_node_group_exec(bContext *C, wmOperator *op)
       call_data.socket_log_contexts = &socket_log_contexts;
     }
 
-    bke::GeometrySet geometry_orig = get_original_geometry_eval_copy(*object);
+    bke::GeometrySet geometry_orig = get_original_geometry_eval_copy(*object, operator_eval_data);
 
     bke::GeometrySet new_geometry = nodes::execute_geometry_nodes_on_geometry(
         *node_tree, properties, compute_context, call_data, std::move(geometry_orig));
@@ -615,7 +619,7 @@ static void add_attribute_search_or_value_buttons(uiLayout *layout,
                                                   PointerRNA *md_ptr,
                                                   const bNodeTreeInterfaceSocket &socket)
 {
-  bNodeSocketType *typeinfo = nodeSocketTypeFind(socket.socket_type);
+  bke::bNodeSocketType *typeinfo = bke::nodeSocketTypeFind(socket.socket_type);
   const eNodeSocketDatatype socket_type = eNodeSocketDatatype(typeinfo->type);
 
   char socket_id_esc[MAX_NAME * 2];
@@ -668,7 +672,7 @@ static void draw_property_for_socket(const bNodeTree &node_tree,
                                      const bNodeTreeInterfaceSocket &socket,
                                      const int socket_index)
 {
-  bNodeSocketType *typeinfo = nodeSocketTypeFind(socket.socket_type);
+  bke::bNodeSocketType *typeinfo = bke::nodeSocketTypeFind(socket.socket_type);
   const eNodeSocketDatatype socket_type = eNodeSocketDatatype(typeinfo->type);
 
   /* The property should be created in #MOD_nodes_update_interface with the correct type. */
@@ -1071,7 +1075,6 @@ static Set<std::string> get_builtin_menus(const ObjectType object_type, const eO
 
 static void catalog_assets_draw(const bContext *C, Menu *menu)
 {
-  bScreen &screen = *CTX_wm_screen(C);
   const Object *active_object = CTX_data_active_object(C);
   if (!active_object) {
     return;
@@ -1080,13 +1083,14 @@ static void catalog_assets_draw(const bContext *C, Menu *menu)
   if (!tree) {
     return;
   }
-  const PointerRNA menu_path_ptr = CTX_data_pointer_get(C, "asset_catalog_path");
-  if (RNA_pointer_is_null(&menu_path_ptr)) {
+  const std::optional<StringRefNull> menu_path = CTX_data_string_get(C, "asset_catalog_path");
+  if (!menu_path) {
     return;
   }
-  const auto &menu_path = *static_cast<const asset_system::AssetCatalogPath *>(menu_path_ptr.data);
-  const Span<asset_system::AssetRepresentation *> assets = tree->assets_per_path.lookup(menu_path);
-  const asset_system::AssetCatalogTreeItem *catalog_item = tree->catalogs.find_item(menu_path);
+  const Span<asset_system::AssetRepresentation *> assets = tree->assets_per_path.lookup(
+      menu_path->data());
+  const asset_system::AssetCatalogTreeItem *catalog_item = tree->catalogs.find_item(
+      menu_path->data());
   BLI_assert(catalog_item != nullptr);
 
   uiLayout *layout = menu->layout;
@@ -1127,8 +1131,7 @@ static void catalog_assets_draw(const bContext *C, Menu *menu)
       uiItemS(layout);
       add_separator = false;
     }
-    asset::draw_menu_for_catalog(
-        screen, *all_library, item, "GEO_MT_node_operator_catalog_assets", *layout);
+    asset::draw_menu_for_catalog(item, "GEO_MT_node_operator_catalog_assets", *layout);
   });
 }
 
@@ -1249,7 +1252,6 @@ void ui_template_node_operator_asset_menu_items(uiLayout &layout,
                                                 const bContext &C,
                                                 const StringRef catalog_path)
 {
-  bScreen &screen = *CTX_wm_screen(&C);
   const Object *active_object = CTX_data_active_object(&C);
   if (!active_object) {
     return;
@@ -1267,18 +1269,13 @@ void ui_template_node_operator_asset_menu_items(uiLayout &layout,
   if (!all_library) {
     return;
   }
-  PointerRNA path_ptr = asset::persistent_catalog_path_rna_pointer(screen, *all_library, *item);
-  if (path_ptr.data == nullptr) {
-    return;
-  }
   uiLayout *col = uiLayoutColumn(&layout, false);
-  uiLayoutSetContextPointer(col, "asset_catalog_path", &path_ptr);
+  uiLayoutSetContextString(col, "asset_catalog_path", item->catalog_path().str());
   uiItemMContents(col, "GEO_MT_node_operator_catalog_assets");
 }
 
 void ui_template_node_operator_asset_root_items(uiLayout &layout, const bContext &C)
 {
-  bScreen &screen = *CTX_wm_screen(&C);
   const Object *active_object = CTX_data_active_object(&C);
   if (!active_object) {
     return;
@@ -1291,19 +1288,14 @@ void ui_template_node_operator_asset_root_items(uiLayout &layout, const bContext
     *tree = build_catalog_tree(C, *active_object);
   }
 
-  if (asset_system::AssetLibrary *all_library = asset::list::library_get_once_available(
-          asset_system::all_library_reference()))
-  {
-    const Set<std::string> builtin_menus = get_builtin_menus(ObjectType(active_object->type),
-                                                             eObjectMode(active_object->mode));
+  const Set<std::string> builtin_menus = get_builtin_menus(ObjectType(active_object->type),
+                                                           eObjectMode(active_object->mode));
 
-    tree->catalogs.foreach_root_item([&](const asset_system::AssetCatalogTreeItem &item) {
-      if (!builtin_menus.contains_as(item.catalog_path().str())) {
-        asset::draw_menu_for_catalog(
-            screen, *all_library, item, "GEO_MT_node_operator_catalog_assets", layout);
-      }
-    });
-  }
+  tree->catalogs.foreach_root_item([&](const asset_system::AssetCatalogTreeItem &item) {
+    if (!builtin_menus.contains_as(item.catalog_path().str())) {
+      asset::draw_menu_for_catalog(item, "GEO_MT_node_operator_catalog_assets", layout);
+    }
+  });
 
   if (!tree->unassigned_assets.is_empty() || unassigned_local_poll(C)) {
     uiItemM(&layout, "GEO_MT_node_operator_unassigned", "", ICON_FILE_HIDDEN);

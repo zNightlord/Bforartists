@@ -1015,10 +1015,21 @@ static void childof_evaluate(bConstraint *con, bConstraintOb *cob, ListBase *tar
   bChildOfConstraint *data = static_cast<bChildOfConstraint *>(con->data);
   bConstraintTarget *ct = static_cast<bConstraintTarget *>(targets->first);
 
-  /* only evaluate if there is a target */
+  /* Only evaluate if there is a target.
+   *
+   * NOTE: we're setting/unsetting the CONSTRAINT_SPACEONCE flag here because:
+   *
+   * 1. It's only used by the Child Of constraint anyway.
+   * 2. It's only used to affect the steps taken immediately after this function
+   *    returns, and this way we ensure it's always set correctly for that.
+   *
+   * It was previously set in other places which resulted in bugs like #116567.
+   * In the future we should ideally move to a different approach entirely. */
   if (!VALID_CONS_TARGET(ct)) {
+    con->flag &= ~CONSTRAINT_SPACEONCE;
     return;
   }
+  con->flag |= CONSTRAINT_SPACEONCE;
 
   float parmat[4][4];
   float inverse_matrix[4][4];
@@ -5691,7 +5702,7 @@ bool BKE_constraint_apply_for_object(Depsgraph *depsgraph,
   Object *ob_eval = DEG_get_evaluated_object(depsgraph, ob);
   bConstraint *con_eval = BKE_constraints_find_name(&ob_eval->constraints, con->name);
 
-  bConstraint *new_con = BKE_constraint_duplicate_ex(con_eval, 0, !ID_IS_LINKED(ob));
+  bConstraint *new_con = BKE_constraint_duplicate_ex(con_eval, 0, ID_IS_EDITABLE(ob));
   ListBase single_con = {new_con, new_con};
 
   bConstraintOb *cob = BKE_constraints_make_evalob(
@@ -5744,7 +5755,7 @@ bool BKE_constraint_apply_for_pose(
   bPoseChannel *pchan_eval = BKE_pose_channel_find_name(ob_eval->pose, pchan->name);
   bConstraint *con_eval = BKE_constraints_find_name(&pchan_eval->constraints, con->name);
 
-  bConstraint *new_con = BKE_constraint_duplicate_ex(con_eval, 0, !ID_IS_LINKED(ob));
+  bConstraint *new_con = BKE_constraint_duplicate_ex(con_eval, 0, ID_IS_EDITABLE(ob));
   ListBase single_con;
   single_con.first = new_con;
   single_con.last = new_con;
@@ -5884,7 +5895,6 @@ static bConstraint *add_new_constraint(Object *ob,
        * the constraint gets evaluated in pose-space */
       if (pchan) {
         con->ownspace = CONSTRAINT_SPACE_POSE;
-        con->flag |= CONSTRAINT_SPACEONCE;
       }
       break;
     }
@@ -6021,14 +6031,14 @@ bConstraint *BKE_constraint_copy_for_pose(Object *ob, bPoseChannel *pchan, bCons
     return nullptr;
   }
 
-  bConstraint *new_con = BKE_constraint_duplicate_ex(src, 0, !ID_IS_LINKED(ob));
+  bConstraint *new_con = BKE_constraint_duplicate_ex(src, 0, ID_IS_EDITABLE(ob));
   add_new_constraint_to_list(ob, pchan, new_con);
   return new_con;
 }
 
 bConstraint *BKE_constraint_copy_for_object(Object *ob, bConstraint *src)
 {
-  bConstraint *new_con = BKE_constraint_duplicate_ex(src, 0, !ID_IS_LINKED(ob));
+  bConstraint *new_con = BKE_constraint_duplicate_ex(src, 0, ID_IS_EDITABLE(ob));
   add_new_constraint_to_list(ob, nullptr, new_con);
   return new_con;
 }
@@ -6596,13 +6606,6 @@ void BKE_constraint_blend_read_data(BlendDataReader *reader, ID *id_owner, ListB
 
         /* version patch for runtime flag, was not cleared in some case */
         data->flag &= ~CONSTRAINT_IK_AUTO;
-        break;
-      }
-      case CONSTRAINT_TYPE_CHILDOF: {
-        /* XXX version patch, in older code this flag wasn't always set, and is inherent to type */
-        if (con->ownspace == CONSTRAINT_SPACE_POSE) {
-          con->flag |= CONSTRAINT_SPACEONCE;
-        }
         break;
       }
       case CONSTRAINT_TYPE_TRANSFORM_CACHE: {

@@ -48,6 +48,7 @@ dict_custom = {
     "atomicity",
     "attachmentless",
     "attenuations",
+    "backends",
     "backlit",
     "bindless",
     "bitwise",
@@ -345,6 +346,7 @@ dict_custom = {
     "resyncing",
     "retarget",
     "retiming",
+    "reupload",
     "reusability",
     "rotationally",
     "saveable",
@@ -372,6 +374,8 @@ dict_custom = {
     "submenu",
     "submenus",
     "suboptimally",
+    "subprocess",
+    "subprocesses",
     "subrange",
     "subtractive",
     "subtype",
@@ -873,5 +877,5 @@ files_ignore = {
 
 directories_ignore = {
     "scripts/addons",
-    "scripts/addons_contrib",
+    "scripts/addons_core",
 }

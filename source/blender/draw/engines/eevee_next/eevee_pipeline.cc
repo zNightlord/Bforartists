@@ -112,10 +112,12 @@ void WorldPipeline::sync(GPUMaterial *gpumat)
 void WorldPipeline::render(View &view)
 {
   /* TODO(Miguel Pozo): All world probes are rendered as RAY_TYPE_GLOSSY. */
-  inst_.pipelines.data.is_probe_reflection = true;
+  inst_.pipelines.data.is_sphere_probe = true;
   inst_.uniform_data.push_update();
+
   inst_.manager->submit(cubemap_face_ps_, view);
-  inst_.pipelines.data.is_probe_reflection = false;
+
+  inst_.pipelines.data.is_sphere_probe = false;
   inst_.uniform_data.push_update();
 }
 
@@ -186,7 +188,7 @@ void ShadowPipeline::sync()
   bool shadow_update_tbdr = (ShadowModule::shadow_technique == ShadowTechnique::TILE_COPY);
   if (shadow_update_tbdr) {
     draw::PassMain::Sub &pass = render_ps_.sub("Shadow.TilePageClear");
-    pass.subpass_transition(GPU_ATTACHEMENT_WRITE, {GPU_ATTACHEMENT_WRITE});
+    pass.subpass_transition(GPU_ATTACHMENT_WRITE, {GPU_ATTACHMENT_WRITE});
     pass.shader_set(inst_.shaders.static_shader_get(SHADOW_PAGE_TILE_CLEAR));
     /* Only manually clear depth of the updated tiles.
      * This is because the depth is initialized to near depth using attachments for fast clear and
@@ -230,7 +232,7 @@ void ShadowPipeline::sync()
     pass.state_set(DRW_STATE_DEPTH_ALWAYS);
     /* Metal have implicit sync with Raster Order Groups. Other backend need to have manual
      * sub-pass transition to allow reading the frame-buffer. This is a no-op on Metal. */
-    pass.subpass_transition(GPU_ATTACHEMENT_WRITE, {GPU_ATTACHEMENT_READ});
+    pass.subpass_transition(GPU_ATTACHMENT_WRITE, {GPU_ATTACHMENT_READ});
     pass.bind_image(SHADOW_ATLAS_IMG_SLOT, inst_.shadows.atlas_tx_);
     pass.bind_ssbo("dst_coord_buf", inst_.shadows.dst_coord_buf_);
     pass.bind_ssbo("src_coord_buf", inst_.shadows.src_coord_buf_);
@@ -448,12 +450,12 @@ void ForwardPipeline::render(View &view,
 void DeferredLayerBase::gbuffer_pass_sync(Instance &inst)
 {
   gbuffer_ps_.init();
-  gbuffer_ps_.subpass_transition(GPU_ATTACHEMENT_WRITE,
-                                 {GPU_ATTACHEMENT_WRITE,
-                                  GPU_ATTACHEMENT_WRITE,
-                                  GPU_ATTACHEMENT_WRITE,
-                                  GPU_ATTACHEMENT_WRITE,
-                                  GPU_ATTACHEMENT_WRITE});
+  gbuffer_ps_.subpass_transition(GPU_ATTACHMENT_WRITE,
+                                 {GPU_ATTACHMENT_WRITE,
+                                  GPU_ATTACHMENT_WRITE,
+                                  GPU_ATTACHMENT_WRITE,
+                                  GPU_ATTACHMENT_WRITE,
+                                  GPU_ATTACHMENT_WRITE});
   /* G-buffer. */
   gbuffer_ps_.bind_image(GBUF_NORMAL_SLOT, &inst.gbuffer.normal_img_tx);
   gbuffer_ps_.bind_image(GBUF_CLOSURE_SLOT, &inst.gbuffer.closure_img_tx);
@@ -499,6 +501,30 @@ void DeferredLayerBase::gbuffer_pass_sync(Instance &inst)
 
 void DeferredLayer::begin_sync()
 {
+  if (GPU_use_parallel_compilation()) {
+    /* Pre-compile specialization constants in parallel. */
+    Vector<ShaderSpecialization> specializations;
+    for (int i = 0; i < 3; i++) {
+      GPUShader *sh = inst_.shaders.static_shader_get(eShaderType(DEFERRED_LIGHT_SINGLE + i));
+      for (bool use_split_indirect : {false, true}) {
+        for (bool use_lightprobe_eval : {false, true}) {
+          for (bool use_transmission : {false, true}) {
+            specializations.append(
+                {sh,
+                 {{"render_pass_shadow_id", inst_.render_buffers.data.shadow_id},
+                  {"use_split_indirect", use_split_indirect},
+                  {"use_lightprobe_eval", use_lightprobe_eval},
+                  {"use_transmission", use_transmission},
+                  {"shadow_ray_count", inst_.shadows.get_data().ray_count},
+                  {"shadow_ray_step_count", inst_.shadows.get_data().step_count}}});
+          }
+        }
+      }
+    }
+
+    GPU_shaders_precompile_specializations(specializations);
+  }
+
   {
     prepass_ps_.init();
     /* Textures. */
@@ -559,12 +585,12 @@ void DeferredLayer::end_sync(bool is_first_pass, bool is_last_pass)
     {
       GPUShader *sh = inst_.shaders.static_shader_get(DEFERRED_TILE_CLASSIFY);
       PassMain::Sub &sub = gbuffer_ps_.sub("StencilClassify");
-      sub.subpass_transition(GPU_ATTACHEMENT_WRITE, /* Needed for depth test. */
-                             {GPU_ATTACHEMENT_IGNORE,
-                              GPU_ATTACHEMENT_READ, /* Header. */
-                              GPU_ATTACHEMENT_IGNORE,
-                              GPU_ATTACHEMENT_IGNORE,
-                              GPU_ATTACHEMENT_IGNORE});
+      sub.subpass_transition(GPU_ATTACHMENT_WRITE, /* Needed for depth test. */
+                             {GPU_ATTACHMENT_IGNORE,
+                              GPU_ATTACHMENT_READ, /* Header. */
+                              GPU_ATTACHMENT_IGNORE,
+                              GPU_ATTACHMENT_IGNORE,
+                              GPU_ATTACHMENT_IGNORE});
       sub.shader_set(sh);
       sub.state_set(DRW_STATE_WRITE_STENCIL | DRW_STATE_STENCIL_ALWAYS);
       if (GPU_stencil_export_support()) {
@@ -617,6 +643,7 @@ void DeferredLayer::end_sync(bool is_first_pass, bool is_last_pass)
         sub.barrier(GPU_BARRIER_SHADER_IMAGE_ACCESS);
       }
       {
+        const bool use_transmission = (closure_bits_ & CLOSURE_TRANSMISSION) != 0;
         const bool use_split_indirect = !use_raytracing_ && use_split_radiance_;
         PassSimple::Sub &sub = pass.sub("Eval.Light");
         /* Use depth test to reject background pixels which have not been stencil cleared. */
@@ -633,9 +660,10 @@ void DeferredLayer::end_sync(bool is_first_pass, bool is_last_pass)
           /* TODO(fclem): Could specialize directly with the pass index but this would break it for
            * OpenGL and Vulkan implementation which aren't fully supporting the specialize
            * constant. */
-          sub.specialize_constant(sh, "render_pass_shadow_enabled", rbuf_data.shadow_id != -1);
+          sub.specialize_constant(sh, "render_pass_shadow_id", rbuf_data.shadow_id);
           sub.specialize_constant(sh, "use_split_indirect", use_split_indirect);
           sub.specialize_constant(sh, "use_lightprobe_eval", !use_raytracing_);
+          sub.specialize_constant(sh, "use_transmission", false);
           const ShadowSceneData &shadow_scene = inst_.shadows.get_data();
           sub.specialize_constant(sh, "shadow_ray_count", &shadow_scene.ray_count);
           sub.specialize_constant(sh, "shadow_ray_step_count", &shadow_scene.step_count);
@@ -654,11 +682,18 @@ void DeferredLayer::end_sync(bool is_first_pass, bool is_last_pass)
           sub.bind_resources(inst_.hiz_buffer.front);
           sub.bind_resources(inst_.sphere_probes);
           sub.bind_resources(inst_.volume_probes);
-          /* TODO(fclem): Transmission evaluation specialization. */
           uint8_t compare_mask = uint8_t(StencilBits::CLOSURE_COUNT_0) |
-                                 uint8_t(StencilBits::CLOSURE_COUNT_1);
+                                 uint8_t(StencilBits::CLOSURE_COUNT_1) |
+                                 uint8_t(StencilBits::TRANSMISSION);
           sub.state_stencil(0x0u, i + 1, compare_mask);
           sub.draw_procedural(GPU_PRIM_TRIS, 1, 3);
+          if (use_transmission) {
+            /* Separate pass for transmission BSDF as their evaluation is quite costly. */
+            sub.specialize_constant(sh, "use_transmission", true);
+            sub.shader_set(sh);
+            sub.state_stencil(0x0u, (i + 1) | uint8_t(StencilBits::TRANSMISSION), compare_mask);
+            sub.draw_procedural(GPU_PRIM_TRIS, 1, 3);
+          }
         }
       }
     }
@@ -1374,7 +1409,7 @@ void PlanarProbePipeline::render(View &view,
 {
   GPU_debug_group_begin("Planar.Capture");
 
-  inst_.pipelines.data.is_probe_reflection = true;
+  inst_.pipelines.data.is_sphere_probe = true;
   inst_.uniform_data.push_update();
 
   GPU_framebuffer_bind(gbuffer_fb);
@@ -1397,7 +1432,7 @@ void PlanarProbePipeline::render(View &view,
   GPU_framebuffer_bind(combined_fb);
   inst_.manager->submit(eval_light_ps_, view);
 
-  inst_.pipelines.data.is_probe_reflection = false;
+  inst_.pipelines.data.is_sphere_probe = false;
   inst_.uniform_data.push_update();
 
   GPU_debug_group_end();

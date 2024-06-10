@@ -116,7 +116,6 @@ enum eGPUMaterialStatus {
   GPU_MAT_CREATED,
   GPU_MAT_QUEUED,
   GPU_MAT_SUCCESS,
-  GPU_MAT_USE_DEFAULT,
 };
 
 /* GPU_MAT_OPTIMIZATION_SKIP for cases where we do not
@@ -147,8 +146,11 @@ struct GPUCodegenOutput {
 };
 
 using GPUCodegenCallbackFn = void (*)(void *thunk, GPUMaterial *mat, GPUCodegenOutput *codegen);
-/* Should return true if the pass is functionally equivalent to the default Material one. */
-using GPUMaterialCanUseDefaultCallbackFn = bool (*)(GPUMaterial *mat);
+/**
+ * Should return an already compiled pass if it's functionally equivalent to the one being
+ * compiled.
+ */
+using GPUMaterialPassReplacementCallbackFn = GPUPass *(*)(void *thunk, GPUMaterial *mat);
 
 GPUNodeLink *GPU_constant(const float *num);
 GPUNodeLink *GPU_uniform(const float *num);
@@ -252,11 +254,35 @@ GPUMaterial *GPU_material_from_nodetree(
     bool is_lookdev,
     GPUCodegenCallbackFn callback,
     void *thunk,
-    GPUMaterialCanUseDefaultCallbackFn can_use_default_cb = nullptr);
+    GPUMaterialPassReplacementCallbackFn pass_replacement_cb = nullptr);
 
 void GPU_material_compile(GPUMaterial *mat);
 void GPU_material_free_single(GPUMaterial *material);
 void GPU_material_free(ListBase *gpumaterial);
+
+/**
+ * Request the creation of multiple `GPUMaterial`s at once, allowing the backend to use
+ * multithreaded compilation.
+ * Returns a handle that can be used to poll if all materials have been
+ * compiled, and to retrieve the compiled result.
+ * NOTE: This function is asynchronous on OpenGL, but it's blocking on Vulkan and Metal.
+ * WARNING: The material pointers and their pass->create_info should be valid until
+ * `GPU_material_batch_finalize` has returned.
+ */
+BatchHandle GPU_material_batch_compile(blender::Span<GPUMaterial *> mats);
+/**
+ * Returns true if all the materials from the batch have finished their compilation.
+ */
+bool GPU_material_batch_is_ready(BatchHandle handle);
+/**
+ * Asign the compiled shaders to their respective materials and flag their status.
+ * The materials list should have the same length and order as in the `GPU_material_batch_compile`
+ * call.
+ * If the compilation has not finished yet, this call will block the thread until all the
+ * shaders are ready.
+ * WARNING: The handle will be invalidated by this call, you can't process the same batch twice.
+ */
+void GPU_material_batch_finalize(BatchHandle &handle, blender::Span<GPUMaterial *> mats);
 
 void GPU_material_acquire(GPUMaterial *mat);
 void GPU_material_release(GPUMaterial *mat);

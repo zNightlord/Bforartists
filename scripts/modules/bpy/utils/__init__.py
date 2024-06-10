@@ -378,7 +378,14 @@ def script_paths_pref():
     return paths
 
 
-def script_paths(*, subdir=None, user_pref=True, check_all=False, use_user=True):
+def script_paths_system_environment():
+    """Returns a list of system script directories from environment variables."""
+    if env_system_path := _os.environ.get("BLENDER_SYSTEM_SCRIPTS"):
+        return [_os.path.normpath(env_system_path)]
+    return []
+
+
+def script_paths(*, subdir=None, user_pref=True, check_all=False, use_user=True, use_system_environment=True):
     """
     Returns a list of valid script paths.
 
@@ -388,6 +395,10 @@ def script_paths(*, subdir=None, user_pref=True, check_all=False, use_user=True)
     :type user_pref: bool
     :arg check_all: Include local, user and system paths rather just the paths Blender uses.
     :type check_all: bool
+    :arg use_user: Include user paths
+    :type use_user: bool
+    :arg use_system_environment: Include BLENDER_SYSTEM_SCRIPTS variable path
+    :type use_system_environment: bool
     :return: script paths.
     :rtype: list
     """
@@ -418,6 +429,9 @@ def script_paths(*, subdir=None, user_pref=True, check_all=False, use_user=True)
 
     if user_pref:
         base_paths.extend(script_paths_pref())
+
+    if use_system_environment:
+        base_paths.extend(script_paths_system_environment())
 
     scripts = []
     for path in base_paths:
@@ -473,15 +487,21 @@ def app_template_paths(*, path=None):
     """
     subdir_args = (path,) if path is not None else ()
     # Note: keep in sync with: Blender's 'BKE_appdir_app_template_any'.
-    # Uses 'BLENDER_USER_SCRIPTS', 'BLENDER_SYSTEM_SCRIPTS'
-    # ... in this case 'system' accounts for 'local' too.
-    for resource_fn, module_name in (
-            (_user_resource, "bl_app_templates_user"),
-            (system_resource, "bl_app_templates_system"),
-    ):
-        path_test = resource_fn('SCRIPTS', path=_os.path.join("startup", module_name, *subdir_args))
-        if path_test and _os.path.isdir(path_test):
+    # Uses BLENDER_USER_SCRIPTS
+    path_test = _user_resource('SCRIPTS', path=_os.path.join("startup", "bl_app_templates_user", *subdir_args))
+    if path_test and _os.path.isdir(path_test):
+        yield path_test
+
+    # Uses BLENDER_SYSTTEM_SCRIPTS
+    for path in script_paths_system_environment():
+        path_test = _os.path.join(path, "startup", "bl_app_templates_system", *subdir_args)
+        if _os.path.isdir(path_test):
             yield path_test
+
+    # Uses default local or system location.
+    path_test = system_resource('SCRIPTS', path=_os.path.join("startup", "bl_app_templates_system", *subdir_args))
+    if path_test and _os.path.isdir(path_test):
+        yield path_test
 
 
 def preset_paths(subdir):
@@ -494,7 +514,7 @@ def preset_paths(subdir):
     :rtype: list
     """
     dirs = []
-    for path in script_paths(subdir="presets", check_all=True):
+    for path in script_paths(subdir="presets"):
         directory = _os.path.join(path, subdir)
         if not directory.startswith(path):
             raise Exception("invalid subdir given {!r}".format(subdir))
@@ -564,7 +584,7 @@ def smpte_from_seconds(time, *, fps=None, fps_base=None):
     return smpte_from_frame(
         time_to_frame(time, fps=fps, fps_base=fps_base),
         fps=fps,
-        fps_base=fps_base
+        fps_base=fps_base,
     )
 
 
@@ -809,17 +829,16 @@ def register_submodule_factory(module_name, submodule_names):
     def register():
         nonlocal module
         module = __import__(name=module_name, fromlist=submodule_names)
-        submodules[:] = [getattr(module, name) for name in submodule_names]
-        for mod in submodules:
+        submodules[:] = [(getattr(module, mod_name), mod_name) for mod_name in submodule_names]
+        for mod, _mod_name in submodules:
             mod.register()
 
     def unregister():
         from sys import modules
-        for mod in reversed(submodules):
+        for mod, mod_name in reversed(submodules):
             mod.unregister()
-            name = mod.__name__
-            delattr(module, name.partition(".")[2])
-            del modules[name]
+            delattr(module, mod_name)
+            del modules[mod.__name__]
         submodules.clear()
 
     return register, unregister
@@ -1077,35 +1096,58 @@ def manual_map():
 
 # Languages which are supported by the user manual (commented when there is no translation).
 _manual_language_codes = {
+    # "ab": "ab",  #Abkhaz
+    # "am_ET": "am",  # Amharic
     "ar_EG": "ar",  # Arabic
+    # "be": "be",  # Belarusian
     # "bg_BG": "bg",  # Bulgarian
-    # "ca_AD": "ca",  # Catalan
+    "ca_AD": "ca",  # Catalan
     # "cs_CZ": "cz",  # Czech
+    # "da": "da",  # Danish
     "de_DE": "de",  # German
-    # "el_GR": "el",  # Greek
+    "el_GR": "el",  # Greek
+    # "eo": "eo",  # Esperanto
     "es": "es",  # Spanish
+    # "et_EE": "et",  # Estonian
+    # "eu_EU": "eu",  # Basque
+    # "fa_IR": "fa",  # Persian
     "fi_FI": "fi",  # Finnish
     "fr_FR": "fr",  # French
+    # "ha": "ha",  # Hausa
+    # "he_IL": "he",  # Hebrew
+    # "hi_IN": "hi",  # Hindi
+    # "hr_HR": "hr",  # Croatian
+    # "hu_HU": "hu",  # Hungarian
     "id_ID": "id",  # Indonesian
     "it_IT": "it",  # Italian
     "ja_JP": "ja",  # Japanese
+    # "ka": "ka",  # Georgian
+    # "kk_KZ": "kk",  # kazakh
+    # "km": "km",  # Khmer
     "ko_KR": "ko",  # Korean
+    # "ky_KG": "ky",  # Kyrgyz
     # "nb": "nb",  # Norwegian
-    # "nl_NL": "nl",  # Dutch
+    # "ne_NP": "ne",  # Nepali
+    "nl_NL": "nl",  # Dutch
     # "pl_PL": "pl",  # Polish
     "pt_PT": "pt",  # Portuguese
     # Portuguese - Brazil, for until we have a pt_BR version.
     "pt_BR": "pt",
+    # "ro_RO": "ro",  # Romanian
     "ru_RU": "ru",  # Russian
     "sk_SK": "sk",  # Slovak
     # "sl": "sl",  # Slovenian
     "sr_RS": "sr",  # Serbian
     # "sv_SE": "sv",  # Swedish
-    # "tr_TR": "th",  # Thai
+    # "sw": "sw",  # Swahili
+    # "ta": "ta",  # Tamil
+    "th_TH": "th",  # Thai
+    # "tr_TR": "tr",  # Turkish
     "uk_UA": "uk",  # Ukrainian
+    # "uz_UZ": "uz",  # Uzbek
     "vi_VN": "vi",  # Vietnamese
-    "zh_CN": "zh-hans",  # Simplified Chinese
-    "zh_TW": "zh-hant",  # Traditional Chinese
+    "zh_HANS": "zh-hans",  # Simplified Chinese
+    "zh_HANT": "zh-hant",  # Traditional Chinese
 }
 
 

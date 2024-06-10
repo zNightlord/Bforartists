@@ -22,6 +22,7 @@ struct RepeatItemsAccessor {
   static constexpr const char *node_idname = "GeometryNodeRepeatOutput";
   static constexpr bool has_type = true;
   static constexpr bool has_name = true;
+  static constexpr bool has_single_identifier_str = true;
 
   static socket_items::SocketItemsRef<NodeRepeatItem> get_items_from_node(bNode &node)
   {
@@ -39,9 +40,9 @@ struct RepeatItemsAccessor {
   }
   static void blend_write(BlendWriter *writer, const bNode &node);
   static void blend_read_data(BlendDataReader *reader, bNode &node);
-  static short *get_socket_type(NodeRepeatItem &item)
+  static eNodeSocketDatatype get_socket_type(const NodeRepeatItem &item)
   {
-    return &item.socket_type;
+    return eNodeSocketDatatype(item.socket_type);
   }
   static char **get_name(NodeRepeatItem &item)
   {

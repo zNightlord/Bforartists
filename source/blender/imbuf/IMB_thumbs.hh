@@ -22,7 +22,7 @@ enum ThumbSize {
   THB_FAIL,
 };
 
-enum ThumbSource {
+enum ThumbSource : int8_t {
   THB_SOURCE_IMAGE,
   THB_SOURCE_MOVIE,
   THB_SOURCE_BLEND,
@@ -90,6 +90,8 @@ ImBuf *IMB_thumb_load_blend(const char *blen_path, const char *blen_group, const
  */
 ImBuf *IMB_thumb_load_font(const char *filename, unsigned int x, unsigned int y);
 bool IMB_thumb_load_font_get_hash(char *r_hash);
+
+ImBuf *IMB_font_preview(const char *filename, unsigned int width, float color[4]);
 
 /* Threading */
 

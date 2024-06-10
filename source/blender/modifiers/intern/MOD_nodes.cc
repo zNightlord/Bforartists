@@ -803,7 +803,7 @@ static void check_property_socket_sync(const Object *ob, ModifierData *md)
   nmd->node_group->ensure_interface_cache();
   for (const int i : nmd->node_group->interface_inputs().index_range()) {
     const bNodeTreeInterfaceSocket *socket = nmd->node_group->interface_inputs()[i];
-    const bNodeSocketType *typeinfo = socket->socket_typeinfo();
+    const bke::bNodeSocketType *typeinfo = socket->socket_typeinfo();
     const eNodeSocketDatatype type = typeinfo ? eNodeSocketDatatype(typeinfo->type) : SOCK_CUSTOM;
     /* The first socket is the special geometry socket for the modifier object. */
     if (i == 0 && type == SOCK_GEOMETRY) {
@@ -834,7 +834,7 @@ static void check_property_socket_sync(const Object *ob, ModifierData *md)
 
   if (geometry_socket_count == 1) {
     const bNodeTreeInterfaceSocket *first_socket = nmd->node_group->interface_inputs()[0];
-    const bNodeSocketType *typeinfo = first_socket->socket_typeinfo();
+    const bke::bNodeSocketType *typeinfo = first_socket->socket_typeinfo();
     const eNodeSocketDatatype type = typeinfo ? eNodeSocketDatatype(typeinfo->type) : SOCK_CUSTOM;
     if (type != SOCK_GEOMETRY) {
       BKE_modifier_set_error(ob, md, "Node group's geometry input must be the first");
@@ -1021,6 +1021,13 @@ class NodesModifierSimulationParams : public nodes::GeoNodesSimulationParams {
         {
           if (node_cache->cache_status != bake::CacheStatus::Baked) {
             node_cache->cache_status = bake::CacheStatus::Invalid;
+            if (!node_cache->bake.frames.is_empty()) {
+              if (node_cache->bake.frames.last()->frame == current_frame_) {
+                /* Remove the last (which is the current) cached frame so that it is simulated
+                 * again. */
+                node_cache->bake.frames.pop_last();
+              }
+            }
           }
         }
       }
@@ -1093,14 +1100,16 @@ class NodesModifierSimulationParams : public nodes::GeoNodesSimulationParams {
     const SubFrame sim_start_frame{int(sim_frame_range.first())};
     const SubFrame sim_end_frame{int(sim_frame_range.last())};
 
-    /* Try load baked data. */
-    if (!node_cache.bake.failed_finding_bake) {
-      if (node_cache.cache_status != bake::CacheStatus::Baked) {
-        if (try_find_baked_data(node_cache.bake, *bmain_, *ctx_.object, nmd_, zone_id)) {
-          node_cache.cache_status = bake::CacheStatus::Baked;
-        }
-        else {
-          node_cache.bake.failed_finding_bake = true;
+    if (!modifier_cache_->requested_bakes.contains(zone_id)) {
+      /* Try load baked data. */
+      if (!node_cache.bake.failed_finding_bake) {
+        if (node_cache.cache_status != bake::CacheStatus::Baked) {
+          if (try_find_baked_data(node_cache.bake, *bmain_, *ctx_.object, nmd_, zone_id)) {
+            node_cache.cache_status = bake::CacheStatus::Baked;
+          }
+          else {
+            node_cache.bake.failed_finding_bake = true;
+          }
         }
       }
     }
@@ -1949,7 +1958,7 @@ static void add_attribute_search_or_value_buttons(const bContext &C,
                                                   const bNodeTreeInterfaceSocket &socket)
 {
   const StringRefNull identifier = socket.identifier;
-  const bNodeSocketType *typeinfo = socket.socket_typeinfo();
+  const bke::bNodeSocketType *typeinfo = socket.socket_typeinfo();
   const eNodeSocketDatatype type = typeinfo ? eNodeSocketDatatype(typeinfo->type) : SOCK_CUSTOM;
   char socket_id_esc[MAX_NAME * 2];
   BLI_str_escape(socket_id_esc, identifier.c_str(), sizeof(socket_id_esc));
@@ -2037,7 +2046,7 @@ static void draw_property_for_socket(const bContext &C,
   /* Use #uiItemPointerR to draw pointer properties because #uiItemR would not have enough
    * information about what type of ID to select for editing the values. This is because
    * pointer IDProperties contain no information about their type. */
-  const bNodeSocketType *typeinfo = socket.socket_typeinfo();
+  const bke::bNodeSocketType *typeinfo = socket.socket_typeinfo();
   const eNodeSocketDatatype type = typeinfo ? eNodeSocketDatatype(typeinfo->type) : SOCK_CUSTOM;
   const char *name = socket.name ? IFACE_(socket.name) : "";
   switch (type) {
@@ -2152,7 +2161,7 @@ static bool has_output_attribute(const NodesModifierData &nmd)
     return false;
   }
   for (const bNodeTreeInterfaceSocket *interface_socket : nmd.node_group->interface_outputs()) {
-    const bNodeSocketType *typeinfo = interface_socket->socket_typeinfo();
+    const bke::bNodeSocketType *typeinfo = interface_socket->socket_typeinfo();
     const eNodeSocketDatatype type = typeinfo ? eNodeSocketDatatype(typeinfo->type) : SOCK_CUSTOM;
     if (nodes::socket_type_has_attribute_toggle(type)) {
       return true;
@@ -2168,7 +2177,7 @@ static void draw_output_attributes_panel(const bContext *C,
 {
   if (nmd.node_group != nullptr && nmd.settings.properties != nullptr) {
     for (const bNodeTreeInterfaceSocket *socket : nmd.node_group->interface_outputs()) {
-      const bNodeSocketType *typeinfo = socket->socket_typeinfo();
+      const bke::bNodeSocketType *typeinfo = socket->socket_typeinfo();
       const eNodeSocketDatatype type = typeinfo ? eNodeSocketDatatype(typeinfo->type) :
                                                   SOCK_CUSTOM;
       if (nodes::socket_type_has_attribute_toggle(type)) {

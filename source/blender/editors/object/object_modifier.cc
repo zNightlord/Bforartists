@@ -38,7 +38,6 @@
 #include "BLI_string_utils.hh"
 #include "BLI_utildefines.h"
 
-#include "BKE_DerivedMesh.hh"
 #include "BKE_animsys.h"
 #include "BKE_armature.hh"
 #include "BKE_context.hh"
@@ -121,7 +120,8 @@ static void object_force_modifier_update_for_bind(Depsgraph *depsgraph, Object *
   Object *ob_eval = DEG_get_evaluated_object(depsgraph, ob);
   BKE_object_eval_reset(ob_eval);
   if (ob->type == OB_MESH) {
-    Mesh *mesh_eval = mesh_create_eval_final(depsgraph, scene_eval, ob_eval, &CD_MASK_DERIVEDMESH);
+    Mesh *mesh_eval = blender::bke::mesh_create_eval_final(
+        depsgraph, scene_eval, ob_eval, &CD_MASK_DERIVEDMESH);
     BKE_id_free(nullptr, mesh_eval);
   }
   else if (ob->type == OB_LATTICE) {
@@ -161,7 +161,7 @@ static void object_force_modifier_bind_simple_options(Depsgraph *depsgraph,
 ModifierData *modifier_add(
     ReportList *reports, Main *bmain, Scene *scene, Object *ob, const char *name, int type)
 {
-  ModifierData *md = nullptr, *new_md = nullptr;
+  ModifierData *new_md = nullptr;
   const ModifierTypeInfo *mti = BKE_modifier_get_info((ModifierType)type);
 
   /* Check compatibility of modifier [#25291, #50373]. */
@@ -187,20 +187,28 @@ ModifierData *modifier_add(
     /* get new modifier data to add */
     new_md = BKE_modifier_new(type);
 
-    if (mti->flags & eModifierTypeFlag_RequiresOriginalData) {
-      md = static_cast<ModifierData *>(ob->modifiers.first);
-
-      while (md &&
-             BKE_modifier_get_info((ModifierType)md->type)->type == ModifierTypeType::OnlyDeform)
-      {
-        md = md->next;
+    ModifierData *next_md = nullptr;
+    LISTBASE_FOREACH_BACKWARD (ModifierData *, md, &ob->modifiers) {
+      if (md->flag & eModifierFlag_PinLast) {
+        next_md = md;
       }
+      else {
+        break;
+      }
+    }
+    if (mti->flags & eModifierTypeFlag_RequiresOriginalData) {
+      next_md = static_cast<ModifierData *>(ob->modifiers.first);
 
-      BLI_insertlinkbefore(&ob->modifiers, md, new_md);
+      while (next_md && BKE_modifier_get_info((ModifierType)next_md->type)->type ==
+                            ModifierTypeType::OnlyDeform)
+      {
+        if (next_md->next && (next_md->next->flag & eModifierFlag_PinLast) != 0) {
+          break;
+        }
+        next_md = next_md->next;
+      }
     }
-    else {
-      BLI_addtail(&ob->modifiers, new_md);
-    }
+    BLI_insertlinkbefore(&ob->modifiers, next_md, new_md);
     BKE_modifiers_persistent_uid_init(*ob, *new_md);
 
     if (name) {
@@ -433,6 +441,9 @@ static bool object_modifier_check_move_before(ReportList *reports,
                                               ModifierData *md_prev)
 {
   if (md_prev) {
+    if (md->flag & eModifierFlag_PinLast && !(md_prev->flag & eModifierFlag_PinLast)) {
+      return false;
+    }
     const ModifierTypeInfo *mti = BKE_modifier_get_info((ModifierType)md->type);
 
     if (mti->type != ModifierTypeType::OnlyDeform) {
@@ -468,6 +479,9 @@ static bool object_modifier_check_move_after(ReportList *reports,
                                              ModifierData *md_next)
 {
   if (md_next) {
+    if (md_next->flag & eModifierFlag_PinLast && !(md->flag & eModifierFlag_PinLast)) {
+      return false;
+    }
     const ModifierTypeInfo *mti = BKE_modifier_get_info((ModifierType)md->type);
 
     if (mti->flags & eModifierTypeFlag_RequiresOriginalData) {
@@ -2025,9 +2039,9 @@ static int modifier_apply_as_shapekey_invoke(bContext *C, wmOperator *op, const 
 
 static std::string modifier_apply_as_shapekey_get_description(bContext * /*C*/,
                                                               wmOperatorType * /*ot*/,
-                                                              PointerRNA *values)
+                                                              PointerRNA *ptr)
 {
-  bool keep = RNA_boolean_get(values, "keep_modifier");
+  bool keep = RNA_boolean_get(ptr, "keep_modifier");
   if (keep) {
     return TIP_("Apply modifier as a new shapekey and keep it in the stack");
   }
@@ -3128,7 +3142,7 @@ static Object *modifier_skin_armature_create(Depsgraph *depsgraph, Main *bmain, 
   Scene *scene_eval = DEG_get_evaluated_scene(depsgraph);
   Object *ob_eval = DEG_get_evaluated_object(depsgraph, skin_ob);
 
-  const Mesh *me_eval_deform = mesh_get_eval_deform(
+  const Mesh *me_eval_deform = blender::bke::mesh_get_eval_deform(
       depsgraph, scene_eval, ob_eval, &CD_MASK_BAREMESH);
   const Span<float3> positions_eval = me_eval_deform->vert_positions();
 

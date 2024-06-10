@@ -80,6 +80,45 @@ void node_group_label(const bNodeTree * /*ntree*/,
       label, (node->id) ? node->id->name + 2 : IFACE_("Missing Data-Block"), label_maxncpy);
 }
 
+int node_group_ui_class(const bNode *node)
+{
+  const bNodeTree *group = reinterpret_cast<const bNodeTree *>(node->id);
+  if (!group) {
+    return NODE_CLASS_GROUP;
+  }
+  switch (blender::bke::NodeGroupColorTag(group->color_tag)) {
+    case blender::bke::NodeGroupColorTag::None:
+      return NODE_CLASS_GROUP;
+    case blender::bke::NodeGroupColorTag::Attribute:
+      return NODE_CLASS_ATTRIBUTE;
+    case blender::bke::NodeGroupColorTag::Color:
+      return NODE_CLASS_OP_COLOR;
+    case blender::bke::NodeGroupColorTag::Converter:
+      return NODE_CLASS_CONVERTER;
+    case blender::bke::NodeGroupColorTag::Distort:
+      return NODE_CLASS_DISTORT;
+    case blender::bke::NodeGroupColorTag::Filter:
+      return NODE_CLASS_OP_FILTER;
+    case blender::bke::NodeGroupColorTag::Geometry:
+      return NODE_CLASS_GEOMETRY;
+    case blender::bke::NodeGroupColorTag::Input:
+      return NODE_CLASS_INPUT;
+    case blender::bke::NodeGroupColorTag::Matte:
+      return NODE_CLASS_MATTE;
+    case blender::bke::NodeGroupColorTag::Output:
+      return NODE_CLASS_OUTPUT;
+    case blender::bke::NodeGroupColorTag::Script:
+      return NODE_CLASS_SCRIPT;
+    case blender::bke::NodeGroupColorTag::Shader:
+      return NODE_CLASS_SHADER;
+    case blender::bke::NodeGroupColorTag::Texture:
+      return NODE_CLASS_TEXTURE;
+    case blender::bke::NodeGroupColorTag::Vector:
+      return NODE_CLASS_OP_VECTOR;
+  }
+  return NODE_CLASS_GROUP;
+}
+
 bool node_group_poll_instance(const bNode *node,
                               const bNodeTree *nodetree,
                               const char **disabled_hint)
@@ -91,7 +130,7 @@ bool node_group_poll_instance(const bNode *node,
   if (!grouptree) {
     return true;
   }
-  return nodeGroupPoll(nodetree, grouptree, disabled_hint);
+  return blender::bke::nodeGroupPoll(nodetree, grouptree, disabled_hint);
 }
 
 std::string node_group_ui_description(const bNode &node)
@@ -111,9 +150,9 @@ std::string node_group_ui_description(const bNode &node)
   return group->description;
 }
 
-bool nodeGroupPoll(const bNodeTree *nodetree,
-                   const bNodeTree *grouptree,
-                   const char **r_disabled_hint)
+bool blender::bke::nodeGroupPoll(const bNodeTree *nodetree,
+                                 const bNodeTree *grouptree,
+                                 const char **r_disabled_hint)
 {
   /* unspecified node group, generally allowed
    * (if anything, should be avoided on operator level)
@@ -193,7 +232,7 @@ get_init_socket_fn(const bNodeTreeInterface &interface, const bNodeTreeInterface
     }
     const bNodeTreeInterfaceSocket &io_socket =
         node_interface::get_item_as<bNodeTreeInterfaceSocket>(*io_item);
-    bNodeSocketType *typeinfo = io_socket.socket_typeinfo();
+    blender::bke::bNodeSocketType *typeinfo = io_socket.socket_typeinfo();
     if (typeinfo && typeinfo->interface_init_socket) {
       typeinfo->interface_init_socket(&ntree.id, &io_socket, &node, &socket, data_path);
     }
@@ -209,7 +248,8 @@ static SocketDeclarationPtr declaration_for_interface_socket(
 {
   SocketDeclarationPtr dst;
 
-  bNodeSocketType *base_typeinfo = nodeSocketTypeFind(io_socket.socket_type);
+  blender::bke::bNodeSocketType *base_typeinfo = blender::bke::nodeSocketTypeFind(
+      io_socket.socket_type);
   if (base_typeinfo == nullptr) {
     return dst;
   }
@@ -411,6 +451,11 @@ static void set_default_input_field(const bNodeTreeInterfaceSocket &input, Socke
       decl.hide_value = true;
     }
   }
+  else if (decl.socket_type == SOCK_MATRIX) {
+    decl.implicit_input_fn = std::make_unique<ImplicitInputValueFn>(
+        implicit_field_inputs::instance_transform);
+    decl.hide_value = true;
+  }
 }
 
 void node_group_declare(NodeDeclarationBuilder &b)
@@ -507,16 +552,17 @@ static void node_frame_init(bNodeTree * /*ntree*/, bNode *node)
 void register_node_type_frame()
 {
   /* frame type is used for all tree types, needs dynamic allocation */
-  bNodeType *ntype = MEM_cnew<bNodeType>("frame node type");
-  ntype->free_self = (void (*)(bNodeType *))MEM_freeN;
+  blender::bke::bNodeType *ntype = MEM_cnew<blender::bke::bNodeType>("frame node type");
+  ntype->free_self = (void (*)(blender::bke::bNodeType *))MEM_freeN;
 
   blender::bke::node_type_base(ntype, NODE_FRAME, "Frame", NODE_CLASS_LAYOUT);
   ntype->initfunc = node_frame_init;
-  node_type_storage(ntype, "NodeFrame", node_free_standard_storage, node_copy_standard_storage);
+  blender::bke::node_type_storage(
+      ntype, "NodeFrame", node_free_standard_storage, node_copy_standard_storage);
   blender::bke::node_type_size(ntype, 150, 100, 0);
   ntype->flag |= NODE_BACKGROUND;
 
-  nodeRegisterType(ntype);
+  blender::bke::nodeRegisterType(ntype);
 }
 
 /** \} */
@@ -530,26 +576,27 @@ static void node_reroute_init(bNodeTree *ntree, bNode *node)
   /* NOTE: Cannot use socket templates for this, since it would reset the socket type
    * on each file read via the template verification procedure.
    */
-  nodeAddStaticSocket(ntree, node, SOCK_IN, SOCK_RGBA, PROP_NONE, "Input", "Input");
-  nodeAddStaticSocket(ntree, node, SOCK_OUT, SOCK_RGBA, PROP_NONE, "Output", "Output");
+  blender::bke::nodeAddStaticSocket(ntree, node, SOCK_IN, SOCK_RGBA, PROP_NONE, "Input", "Input");
+  blender::bke::nodeAddStaticSocket(
+      ntree, node, SOCK_OUT, SOCK_RGBA, PROP_NONE, "Output", "Output");
 }
 
 void register_node_type_reroute()
 {
   /* frame type is used for all tree types, needs dynamic allocation */
-  bNodeType *ntype = MEM_cnew<bNodeType>("frame node type");
-  ntype->free_self = (void (*)(bNodeType *))MEM_freeN;
+  blender::bke::bNodeType *ntype = MEM_cnew<blender::bke::bNodeType>("frame node type");
+  ntype->free_self = (void (*)(blender::bke::bNodeType *))MEM_freeN;
 
   blender::bke::node_type_base(ntype, NODE_REROUTE, "Reroute", NODE_CLASS_LAYOUT);
   ntype->initfunc = node_reroute_init;
 
-  nodeRegisterType(ntype);
+  blender::bke::nodeRegisterType(ntype);
 }
 
 static void propagate_reroute_type_from_start_socket(
     bNodeSocket *start_socket,
     const MultiValueMap<bNodeSocket *, bNodeLink *> &links_map,
-    Map<bNode *, const bNodeSocketType *> &r_reroute_types)
+    Map<bNode *, const blender::bke::bNodeSocketType *> &r_reroute_types)
 {
   Stack<bNode *> nodes_to_check;
   for (bNodeLink *link : links_map.lookup(start_socket)) {
@@ -560,7 +607,7 @@ static void propagate_reroute_type_from_start_socket(
       nodes_to_check.push(link->fromnode);
     }
   }
-  const bNodeSocketType *current_type = start_socket->typeinfo;
+  const blender::bke::bNodeSocketType *current_type = start_socket->typeinfo;
   while (!nodes_to_check.is_empty()) {
     bNode *reroute_node = nodes_to_check.pop();
     BLI_assert(reroute_node->type == NODE_REROUTE);
@@ -604,7 +651,7 @@ void ntree_update_reroute_nodes(bNodeTree *ntree)
   }
 
   /* Will contain the socket type for every linked reroute node. */
-  Map<bNode *, const bNodeSocketType *> reroute_types;
+  Map<bNode *, const blender::bke::bNodeSocketType *> reroute_types;
 
   /* Propagate socket types from left to right. */
   for (bNode *start_node : nodes_linked_with_reroutes) {
@@ -624,7 +671,7 @@ void ntree_update_reroute_nodes(bNodeTree *ntree)
   /* Actually update reroute nodes with changed types. */
   for (const auto item : reroute_types.items()) {
     bNode *reroute_node = item.key;
-    const bNodeSocketType *socket_type = item.value;
+    const blender::bke::bNodeSocketType *socket_type = item.value;
     bNodeSocket *input_socket = (bNodeSocket *)reroute_node->inputs.first;
     bNodeSocket *output_socket = (bNodeSocket *)reroute_node->outputs.first;
 
@@ -784,15 +831,15 @@ static bool group_output_insert_link(bNodeTree *ntree, bNode *node, bNodeLink *l
 void register_node_type_group_input()
 {
   /* used for all tree types, needs dynamic allocation */
-  bNodeType *ntype = MEM_cnew<bNodeType>("node type");
-  ntype->free_self = (void (*)(bNodeType *))MEM_freeN;
+  blender::bke::bNodeType *ntype = MEM_cnew<blender::bke::bNodeType>("node type");
+  ntype->free_self = (void (*)(blender::bke::bNodeType *))MEM_freeN;
 
   blender::bke::node_type_base(ntype, NODE_GROUP_INPUT, "Group Input", NODE_CLASS_INTERFACE);
   blender::bke::node_type_size(ntype, 140, 80, 400);
   ntype->declare = blender::nodes::group_input_declare;
   ntype->insert_link = blender::nodes::group_input_insert_link;
 
-  nodeRegisterType(ntype);
+  blender::bke::nodeRegisterType(ntype);
 }
 
 bNodeSocket *node_group_output_find_socket(bNode *node, const char *identifier)
@@ -808,8 +855,8 @@ bNodeSocket *node_group_output_find_socket(bNode *node, const char *identifier)
 void register_node_type_group_output()
 {
   /* used for all tree types, needs dynamic allocation */
-  bNodeType *ntype = MEM_cnew<bNodeType>("node type");
-  ntype->free_self = (void (*)(bNodeType *))MEM_freeN;
+  blender::bke::bNodeType *ntype = MEM_cnew<blender::bke::bNodeType>("node type");
+  ntype->free_self = (void (*)(blender::bke::bNodeType *))MEM_freeN;
 
   blender::bke::node_type_base(ntype, NODE_GROUP_OUTPUT, "Group Output", NODE_CLASS_INTERFACE);
   blender::bke::node_type_size(ntype, 140, 80, 400);
@@ -818,7 +865,7 @@ void register_node_type_group_output()
 
   ntype->no_muting = true;
 
-  nodeRegisterType(ntype);
+  blender::bke::nodeRegisterType(ntype);
 }
 
 /** \} */

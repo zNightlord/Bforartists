@@ -111,7 +111,7 @@ void init_globals()
 #elif defined(MAT_CAPTURE)
   g_data.ray_type = RAY_TYPE_DIFFUSE;
 #else
-  if (uniform_buf.pipeline.is_probe_reflection) {
+  if (uniform_buf.pipeline.is_sphere_probe) {
     g_data.ray_type = RAY_TYPE_GLOSSY;
   }
   else {
@@ -179,13 +179,7 @@ vec3 shadow_clip_vector_get(vec3 view_position, float clip_distance_inv)
     /* No clipping. */
     return vec3(2.0);
   }
-
-  if (clip_distance_inv < 0.0) {
-    /* Area light side projections. Clip using the up axis (which maps to light -Z). */
-    /* NOTE: clip_distance_inv should already be scaled by M_SQRT3. */
-    return vec3(view_position.y * clip_distance_inv);
-  }
-  /* Sphere light case. */
+  /* Punctual shadow case. */
   return view_position * clip_distance_inv;
 }
 #endif

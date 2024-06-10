@@ -41,7 +41,7 @@
 
 #include "BKE_attribute.hh"
 #include "BKE_brush.hh"
-#include "BKE_ccg.h"
+#include "BKE_ccg.hh"
 #include "BKE_colortools.hh"
 #include "BKE_context.hh"
 #include "BKE_crazyspace.hh"
@@ -1267,13 +1267,14 @@ void BKE_paint_blend_read_data(BlendDataReader *reader, const Scene *scene, Pain
 }
 
 bool paint_is_grid_face_hidden(const blender::BoundedBitSpan grid_hidden,
-                               int gridsize,
-                               int x,
-                               int y)
+                               const int gridsize,
+                               const int x,
+                               const int y)
 {
-  /* Skip face if any of its corners are hidden. */
-  return grid_hidden[y * gridsize + x] || grid_hidden[y * gridsize + x + 1] ||
-         grid_hidden[(y + 1) * gridsize + x + 1] || grid_hidden[(y + 1) * gridsize + x];
+  return grid_hidden[CCG_grid_xy_to_index(gridsize, x, y)] ||
+         grid_hidden[CCG_grid_xy_to_index(gridsize, x + 1, y)] ||
+         grid_hidden[CCG_grid_xy_to_index(gridsize, x + 1, y + 1)] ||
+         grid_hidden[CCG_grid_xy_to_index(gridsize, x, y + 1)];
 }
 
 bool paint_is_bmesh_face_hidden(const BMFace *f)
@@ -1300,20 +1301,22 @@ float paint_grid_paint_mask(const GridPaintMask *gpm, uint level, uint x, uint y
 }
 
 /* Threshold to move before updating the brush rotation, reduces jitter. */
-static float paint_rake_rotation_spacing(const UnifiedPaintSettings * /*ups*/, const Brush *brush)
+static float paint_rake_rotation_spacing(const UnifiedPaintSettings & /*ups*/, const Brush &brush)
 {
-  return brush->sculpt_tool == SCULPT_TOOL_CLAY_STRIPS ? 1.0f : 20.0f;
+  return brush.sculpt_tool == SCULPT_TOOL_CLAY_STRIPS ? 1.0f : 20.0f;
 }
 
-void paint_update_brush_rake_rotation(UnifiedPaintSettings *ups, Brush *brush, float rotation)
+void paint_update_brush_rake_rotation(UnifiedPaintSettings &ups,
+                                      const Brush &brush,
+                                      float rotation)
 {
-  ups->brush_rotation = rotation;
+  ups.brush_rotation = rotation;
 
-  if (brush->mask_mtex.brush_angle_mode & MTEX_ANGLE_RAKE) {
-    ups->brush_rotation_sec = rotation;
+  if (brush.mask_mtex.brush_angle_mode & MTEX_ANGLE_RAKE) {
+    ups.brush_rotation_sec = rotation;
   }
   else {
-    ups->brush_rotation_sec = 0.0f;
+    ups.brush_rotation_sec = 0.0f;
   }
 }
 
@@ -1328,14 +1331,14 @@ static const bool paint_rake_rotation_active(const Brush &brush, PaintMode paint
          BKE_brush_has_cube_tip(&brush, paint_mode);
 }
 
-bool paint_calculate_rake_rotation(UnifiedPaintSettings *ups,
-                                   Brush *brush,
+bool paint_calculate_rake_rotation(UnifiedPaintSettings &ups,
+                                   const Brush &brush,
                                    const float mouse_pos[2],
-                                   PaintMode paint_mode,
+                                   const PaintMode paint_mode,
                                    bool stroke_has_started)
 {
   bool ok = false;
-  if (paint_rake_rotation_active(*brush, paint_mode)) {
+  if (paint_rake_rotation_active(brush, paint_mode)) {
     float r = paint_rake_rotation_spacing(ups, brush);
     float rotation;
 
@@ -1345,15 +1348,15 @@ bool paint_calculate_rake_rotation(UnifiedPaintSettings *ups,
     }
 
     float dpos[2];
-    sub_v2_v2v2(dpos, mouse_pos, ups->last_rake);
+    sub_v2_v2v2(dpos, mouse_pos, ups.last_rake);
 
     /* Limit how often we update the angle to prevent jitter. */
     if (len_squared_v2(dpos) >= r * r) {
       rotation = atan2f(dpos[1], dpos[0]) + float(0.5f * M_PI);
 
-      copy_v2_v2(ups->last_rake, mouse_pos);
+      copy_v2_v2(ups.last_rake, mouse_pos);
 
-      ups->last_rake_angle = rotation;
+      ups.last_rake_angle = rotation;
 
       paint_update_brush_rake_rotation(ups, brush, rotation);
       ok = true;
@@ -1361,12 +1364,12 @@ bool paint_calculate_rake_rotation(UnifiedPaintSettings *ups,
     /* Make sure we reset here to the last rotation to avoid accumulating
      * values in case a random rotation is also added. */
     else {
-      paint_update_brush_rake_rotation(ups, brush, ups->last_rake_angle);
+      paint_update_brush_rake_rotation(ups, brush, ups.last_rake_angle);
       ok = false;
     }
   }
   else {
-    ups->brush_rotation = ups->brush_rotation_sec = 0.0f;
+    ups.brush_rotation = ups.brush_rotation_sec = 0.0f;
     ok = true;
   }
   return ok;
@@ -1506,14 +1509,6 @@ SculptSession::~SculptSession()
 
   if (this->tex_pool) {
     BKE_image_pool_free(this->tex_pool);
-  }
-
-  if (this->boundary_preview) {
-    MEM_SAFE_FREE(this->boundary_preview->verts);
-    MEM_SAFE_FREE(this->boundary_preview->edges);
-    MEM_SAFE_FREE(this->boundary_preview->distance);
-    MEM_SAFE_FREE(this->boundary_preview->edit_info);
-    MEM_SAFE_FREE(this->boundary_preview);
   }
 
   BKE_sculptsession_free_vwpaint_data(this);
@@ -1897,7 +1892,8 @@ void BKE_sculpt_color_layer_create_if_needed(Object *object)
     return;
   }
 
-  const std::string unique_name = BKE_id_attribute_calc_unique_name(orig_me->id, "Color");
+  AttributeOwner owner = AttributeOwner::from_id(&orig_me->id);
+  const std::string unique_name = BKE_attribute_calc_unique_name(owner, "Color");
   if (!orig_me->attributes_for_write().add(
           unique_name, AttrDomain::Point, CD_PROP_COLOR, AttributeInitDefaultValue()))
   {

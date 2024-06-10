@@ -46,6 +46,9 @@ enum {
    *
    * E.g. usages of linked collections or objects by ViewLayerCollections or Bases in scenes.
    *
+   * Also used for most Editors ID usages (active node tree in the Node editor, shown image in the
+   * Image editor, and so on).
+   *
    * See also #LIB_INDIRECT_WEAK_LINK in DNA_ID.h
    */
   IDWALK_CB_DIRECT_WEAK_LINK = (1 << 3),
@@ -284,12 +287,12 @@ void BKE_lib_query_idpropertiesForeachIDLink_callback(IDProperty *id_prop, void 
 /**
  * Loop over all of the ID's this data-block links to.
  *
- * \param bmain The Main data-base containing `owner_id`, may be null.
- * \param id The ID to process. Note that currently, embedded IDs may also be passed here.
- * \param callback The callback processing a given ID usage (i.e. a given ID pointer within the
+ * \param bmain: The Main data-base containing `owner_id`, may be null.
+ * \param id: The ID to process. Note that currently, embedded IDs may also be passed here.
+ * \param callback: The callback processing a given ID usage (i.e. a given ID pointer within the
  * given \a id data).
- * \param user_data Opaque user data for the callback processing a given ID usage.
- * \param flag Flags controlling how/which ID pointers are processed.
+ * \param user_data: Opaque user data for the callback processing a given ID usage.
+ * \param flag: Flags controlling how/which ID pointers are processed.
  */
 void BKE_library_foreach_ID_link(Main *bmain,
                                  ID *id,
@@ -312,17 +315,17 @@ void BKE_library_foreach_ID_link(Main *bmain,
  * initializes a #LibraryForeachIDData object with given parameters, and wraps a call to given
  * `subdata_foreach_id`.
  *
- * \param bmain The Main data-base containing `owner_id`, may be null.
- * \param owner_id The owner ID, i.e. the data-block owning the given sub-data (may differ from
+ * \param bmain: The Main data-base containing `owner_id`, may be null.
+ * \param owner_id: The owner ID, i.e. the data-block owning the given sub-data (may differ from
  * `self_id` in case the later is an embedded ID).
- * \param self_id Typically the same as `owner_id`, unless it is an embedded ID.
- * \param subdata_foreach_id The callback handling which data to process, and iterating over all ID
- * usages of this subdata. Typically a lambda capturing that subdata, see comments above for
+ * \param self_id: Typically the same as `owner_id`, unless it is an embedded ID.
+ * \param subdata_foreach_id: The callback handling which data to process, and iterating over all
+ * ID usages of this subdata. Typically a lambda capturing that subdata, see comments above for
  * details.
- * \param callback The callback processing a given ID usage, see #BKE_library_foreach_ID_link.
- * \param user_data Opaque user data for the callback processing a given ID usage, see
+ * \param callback: The callback processing a given ID usage, see #BKE_library_foreach_ID_link.
+ * \param user_data: Opaque user data for the callback processing a given ID usage, see
  * #BKE_library_foreach_ID_link.
- * \param flag Flags controlling the process, see #BKE_library_foreach_ID_link. Note that some
+ * \param flag: Flags controlling the process, see #BKE_library_foreach_ID_link. Note that some
  * flags are not accepted here (#IDWALK_RECURSE, #IDWALK_DO_INTERNAL_RUNTIME_POINTERS,
  * #IDWALK_DO_LIBRARY_POINTER, #IDWALK_INCLUDE_UI).
  */

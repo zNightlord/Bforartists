@@ -199,12 +199,14 @@ class _defs_annotate:
         tool_settings = context.tool_settings
 
         if space_type == 'VIEW_3D':
-            row = layout.row(align=True)
+            if region_type == 'TOOL_HEADER':
+                row = layout.row(align=True)
+            else:
+                row = layout.row().column(align=True)
             row.prop(tool_settings, "annotation_stroke_placement_view3d", text="Placement")
-            if tool_settings.gpencil_stroke_placement_view3d == 'CURSOR':
-                row.prop(tool_settings.gpencil_sculpt, "lockaxis")
-            elif tool_settings.gpencil_stroke_placement_view3d in {'SURFACE', 'STROKE'}:
-                row.prop(tool_settings, "use_gpencil_stroke_endpoints")
+            if tool_settings.annotation_stroke_placement_view3d in {'SURFACE', 'STROKE'}:
+                row.prop(tool_settings, "use_annotation_stroke_endpoints")
+                row.prop(tool_settings, "use_annotation_project_only_selected")
 
         elif space_type in {'IMAGE_EDITOR', 'NODE_EDITOR', 'SEQUENCE_EDITOR', 'CLIP_EDITOR'}:
             row = layout.row(align=True)
@@ -1209,6 +1211,7 @@ def curve_draw_settings(context, layout, tool, *, extra=False):
         row.prop(cps, "depth_mode", expand=True)
     if cps.depth_mode == 'SURFACE':
         col = layout.column()
+        col.prop(cps, "use_project_only_selected")
         col.prop(cps, "surface_offset")
         col.prop(cps, "use_offset_absolute")
         col.prop(cps, "use_stroke_endpoints")
@@ -1514,6 +1517,21 @@ class _defs_sculpt:
         )
 
     @ToolDef.from_fn
+    def mask_polyline():
+        def draw_settings(_context, layout, tool):
+            props = tool.operator_properties("paint.mask_polyline_gesture")
+            layout.prop(props, "use_front_faces_only", expand=False)
+
+        return dict(
+            idname="builtin.polyline_mask",
+            label="Polyline Mask",
+            icon="ops.sculpt.polyline_mask",
+            widget=None,
+            keymap=(),
+            draw_settings=draw_settings,
+        )
+
+    @ToolDef.from_fn
     def face_set_box():
         def draw_settings(_context, layout, tool):
             props = tool.operator_properties("sculpt.face_set_box_gesture")
@@ -1538,6 +1556,37 @@ class _defs_sculpt:
             idname="builtin.lasso_face_set",
             label="Lasso Face Set",
             icon="ops.sculpt.lasso_face_set",
+            widget=None,
+            keymap=(),
+            draw_settings=draw_settings,
+        )
+
+    @ToolDef.from_fn
+    def face_set_line():
+        def draw_settings(_context, layout, tool):
+            props = tool.operator_properties("sculpt.face_set_line_gesture")
+            layout.prop(props, "use_front_faces_only", expand=False)
+            layout.prop(props, "use_limit_to_segment", expand=False)
+
+        return dict(
+            idname="builtin.line_face_set",
+            label="Line Face Set",
+            icon="ops.sculpt.line_face_set",
+            widget=None,
+            keymap=(),
+            draw_settings=draw_settings,
+        )
+
+    @ToolDef.from_fn
+    def face_set_polyline():
+        def draw_settings(_context, layout, tool):
+            props = tool.operator_properties("sculpt.face_set_polyline_gesture")
+            layout.prop(props, "use_front_faces_only", expand=False)
+
+        return dict(
+            idname="builtin.polyline_face_set",
+            label="Polyline Face Set",
+            icon="ops.sculpt.polyline_face_set",
             widget=None,
             keymap=(),
             draw_settings=draw_settings,
@@ -1585,12 +1634,32 @@ class _defs_sculpt:
             props = tool.operator_properties("sculpt.trim_line_gesture")
             layout.prop(props, "trim_solver", expand=False)
             layout.prop(props, "trim_orientation", expand=False)
+            layout.prop(props, "trim_extrude_mode", expand=False)
             layout.prop(props, "use_cursor_depth", expand=False)
             layout.prop(props, "use_limit_to_segment", expand=False)
         return dict(
             idname="builtin.line_trim",
             label="Line Trim",
             icon="ops.sculpt.line_trim",
+            widget=None,
+            keymap=(),
+            draw_settings=draw_settings,
+        )
+
+    @ToolDef.from_fn
+    def trim_polyline():
+        def draw_settings(_context, layout, tool):
+            props = tool.operator_properties("sculpt.trim_polyline_gesture")
+            layout.prop(props, "trim_solver", expand=False)
+            layout.prop(props, "trim_mode", expand=False)
+            layout.prop(props, "trim_orientation", expand=False)
+            layout.prop(props, "trim_extrude_mode", expand=False)
+            layout.prop(props, "use_cursor_depth", expand=False)
+
+        return dict(
+            idname="builtin.polyline_trim",
+            label="Polyline Trim",
+            icon="ops.sculpt.polyline_trim",
             widget=None,
             keymap=(),
             draw_settings=draw_settings,
@@ -1851,7 +1920,7 @@ class _defs_weight_paint:
         )
 
 
-class _defs_paint_grease_pencil:
+class _defs_grease_pencil_paint:
 
     # FIXME: Replace brush tools with code below once they are all implemented:
     #
@@ -1873,6 +1942,15 @@ class _defs_paint_grease_pencil:
             label="Draw",
             icon="brush.gpencil_draw.draw",
             data_block='DRAW',
+        )
+
+    @ToolDef.from_fn
+    def fill():
+        return dict(
+            idname="builtin_brush.Fill",
+            label="Fill",
+            icon="brush.gpencil_draw.fill",
+            data_block='FILL',
         )
 
     @ToolDef.from_fn
@@ -1940,7 +2018,7 @@ class _defs_paint_grease_pencil:
     def line():
         def draw_settings(context, layout, tool):
             props = tool.operator_properties("grease_pencil.primitive_line")
-            _defs_paint_grease_pencil.grease_pencil_primitive_toolbar(context, layout, tool, props)
+            _defs_grease_pencil_paint.grease_pencil_primitive_toolbar(context, layout, tool, props)
 
         return dict(
             idname="builtin.line",
@@ -1956,7 +2034,7 @@ class _defs_paint_grease_pencil:
     def polyline():
         def draw_settings(context, layout, tool):
             props = tool.operator_properties("grease_pencil.primitive_polyline")
-            _defs_paint_grease_pencil.grease_pencil_primitive_toolbar(context, layout, tool, props)
+            _defs_grease_pencil_paint.grease_pencil_primitive_toolbar(context, layout, tool, props)
 
         return dict(
             idname="builtin.polyline",
@@ -1972,7 +2050,7 @@ class _defs_paint_grease_pencil:
     def arc():
         def draw_settings(context, layout, tool):
             props = tool.operator_properties("grease_pencil.primitive_arc")
-            _defs_paint_grease_pencil.grease_pencil_primitive_toolbar(context, layout, tool, props)
+            _defs_grease_pencil_paint.grease_pencil_primitive_toolbar(context, layout, tool, props)
 
         return dict(
             idname="builtin.arc",
@@ -1988,7 +2066,7 @@ class _defs_paint_grease_pencil:
     def curve():
         def draw_settings(context, layout, tool):
             props = tool.operator_properties("grease_pencil.primitive_curve")
-            _defs_paint_grease_pencil.grease_pencil_primitive_toolbar(context, layout, tool, props)
+            _defs_grease_pencil_paint.grease_pencil_primitive_toolbar(context, layout, tool, props)
 
         return dict(
             idname="builtin.curve",
@@ -2004,7 +2082,7 @@ class _defs_paint_grease_pencil:
     def box():
         def draw_settings(context, layout, tool):
             props = tool.operator_properties("grease_pencil.primitive_box")
-            _defs_paint_grease_pencil.grease_pencil_primitive_toolbar(context, layout, tool, props)
+            _defs_grease_pencil_paint.grease_pencil_primitive_toolbar(context, layout, tool, props)
 
         return dict(
             idname="builtin.box",
@@ -2020,7 +2098,7 @@ class _defs_paint_grease_pencil:
     def circle():
         def draw_settings(context, layout, tool):
             props = tool.operator_properties("grease_pencil.primitive_circle")
-            _defs_paint_grease_pencil.grease_pencil_primitive_toolbar(context, layout, tool, props)
+            _defs_grease_pencil_paint.grease_pencil_primitive_toolbar(context, layout, tool, props)
 
         return dict(
             idname="builtin.circle",
@@ -2988,17 +3066,17 @@ class _defs_sequencer_generic:
 
 class _defs_sequencer_select:
     @ToolDef.from_fn
-    def select():
+    def select_timeline():
         return dict(
             idname="builtin.select",
             label="Tweak",
             icon="ops.generic.select",
             widget=None,
-            keymap="Sequencer Tool: Tweak",
+            keymap="Sequencer Timeline Tool: Tweak",
         )
 
     @ToolDef.from_fn
-    def box():
+    def box_timeline():
         def draw_settings(_context, layout, tool):
             props = tool.operator_properties("sequencer.select_box")
             row = layout.row()
@@ -3009,7 +3087,33 @@ class _defs_sequencer_select:
             label="Select Box",
             icon="ops.generic.select_box",
             widget=None,
-            keymap="Sequencer Tool: Select Box",
+            keymap="Sequencer Timeline Tool: Select Box",
+            draw_settings=draw_settings,
+        )
+
+    @ToolDef.from_fn
+    def select_preview():
+        return dict(
+            idname="builtin.select",
+            label="Tweak",
+            icon="ops.generic.select",
+            widget=None,
+            keymap="Sequencer Preview Tool: Tweak",
+        )
+
+    @ToolDef.from_fn
+    def box_preview():
+        def draw_settings(_context, layout, tool):
+            props = tool.operator_properties("sequencer.select_box")
+            row = layout.row()
+            row.use_property_split = False
+            row.prop(props, "mode", text="", expand=True, icon_only=True)
+        return dict(
+            idname="builtin.select_box",
+            label="Select Box",
+            icon="ops.generic.select_box",
+            widget=None,
+            keymap="Sequencer Preview Tool: Select Box",
             draw_settings=draw_settings,
         )
 
@@ -3413,6 +3517,7 @@ class VIEW3D_PT_tools_active(ToolSelectPanelHelper, Panel):
                 _defs_sculpt.mask_border,
                 _defs_sculpt.mask_lasso,
                 _defs_sculpt.mask_line,
+                _defs_sculpt.mask_polyline,
             ),
             (
                 _defs_sculpt.hide_border,
@@ -3423,11 +3528,14 @@ class VIEW3D_PT_tools_active(ToolSelectPanelHelper, Panel):
             (
                 _defs_sculpt.face_set_box,
                 _defs_sculpt.face_set_lasso,
+                _defs_sculpt.face_set_line,
+                _defs_sculpt.face_set_polyline,
             ),
             (
                 _defs_sculpt.trim_box,
                 _defs_sculpt.trim_lasso,
                 _defs_sculpt.trim_line,
+                _defs_sculpt.trim_polyline,
             ),
             _defs_sculpt.project_line,
             None,
@@ -3500,17 +3608,18 @@ class VIEW3D_PT_tools_active(ToolSelectPanelHelper, Panel):
         'PAINT_GREASE_PENCIL': [
             _defs_view3d_generic.cursor,
             None,
-            _defs_paint_grease_pencil.draw,
-            _defs_paint_grease_pencil.erase,
-            _defs_paint_grease_pencil.cutter,
-            _defs_paint_grease_pencil.tint,
+            _defs_grease_pencil_paint.draw,
+            _defs_grease_pencil_paint.fill,
+            _defs_grease_pencil_paint.erase,
+            _defs_grease_pencil_paint.cutter,
+            _defs_grease_pencil_paint.tint,
             None,
-            _defs_paint_grease_pencil.line,
-            _defs_paint_grease_pencil.polyline,
-            _defs_paint_grease_pencil.arc,
-            _defs_paint_grease_pencil.curve,
-            _defs_paint_grease_pencil.box,
-            _defs_paint_grease_pencil.circle,
+            _defs_grease_pencil_paint.line,
+            _defs_grease_pencil_paint.polyline,
+            _defs_grease_pencil_paint.arc,
+            _defs_grease_pencil_paint.curve,
+            _defs_grease_pencil_paint.box,
+            _defs_grease_pencil_paint.circle,
         ],
         'PAINT_GPENCIL': [
             _defs_view3d_generic.cursor,
@@ -3618,13 +3727,6 @@ class SEQUENCER_PT_tools_active(ToolSelectPanelHelper, Panel):
         yield from cls._tools.items()
 
     # Private tool lists for convenient reuse in `_tools`.
-
-    _tools_select = (
-        (
-            _defs_sequencer_select.select,
-            _defs_sequencer_select.box,
-        ),
-    )
     _tools_annotate = (
         (
             _defs_annotate.scribble,
@@ -3641,7 +3743,10 @@ class SEQUENCER_PT_tools_active(ToolSelectPanelHelper, Panel):
         None: [
         ],
         'PREVIEW': [
-            *_tools_select,
+            (
+                _defs_sequencer_select.select_preview,
+                _defs_sequencer_select.box_preview,
+            ),
             _defs_sequencer_generic.cursor,
             None,
             _defs_sequencer_generic.translate,
@@ -3653,12 +3758,17 @@ class SEQUENCER_PT_tools_active(ToolSelectPanelHelper, Panel):
             *_tools_annotate,
         ],
         'SEQUENCER': [
-            *_tools_select,
+            (
+                _defs_sequencer_select.select_timeline,
+                _defs_sequencer_select.box_timeline,
+            ),
             _defs_sequencer_generic.blade,
         ],
         'SEQUENCER_PREVIEW': [
-            *_tools_select,
-            None,
+            (
+                _defs_sequencer_select.select_timeline,
+                _defs_sequencer_select.box_timeline,
+            ),
             *_tools_annotate,
             None,
             _defs_sequencer_generic.blade,

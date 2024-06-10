@@ -40,6 +40,7 @@ set(SRC
   intern/BLI_memiter.c
   intern/BLI_mempool.c
   intern/BLI_mmap.c
+  intern/BLI_subprocess.cc
   intern/BLI_timer.c
   intern/DLRB_tree.c
   intern/array_store.cc
@@ -65,6 +66,7 @@ set(SRC
   intern/easing.c
   intern/endian_switch.c
   intern/expr_pylike_eval.c
+  intern/fftw.cc
   intern/fileops.cc
   intern/fileops_c.cc
   intern/filereader_file.c
@@ -225,6 +227,7 @@ set(SRC
   BLI_endian_switch_inline.h
   BLI_enumerable_thread_specific.hh
   BLI_expr_pylike_eval.h
+  BLI_fftw.hh
   BLI_fileops.h
   BLI_fileops.hh
   BLI_fileops_types.h
@@ -363,6 +366,7 @@ set(SRC
   BLI_string_utils.hh
   BLI_struct_equality_utils.hh
   BLI_sub_frame.hh
+  BLI_subprocess.hh
   BLI_sys_types.h
   BLI_system.h
   BLI_task.h
@@ -446,6 +450,19 @@ if(WITH_GMP)
   list(APPEND LIB
     ${GMP_LIBRARIES}
   )
+endif()
+
+if(WITH_FFTW3)
+  list(APPEND INC_SYS
+    ${FFTW3_INCLUDE_DIRS}
+  )
+  list(APPEND LIB
+    ${FFTW3_LIBRARIES}
+  )
+  add_definitions(-DWITH_FFTW3)
+  if (WITH_FFTW3_THREADS_F_SUPPORT)
+    add_definitions(-DWITH_FFTW3_THREADS_F_SUPPORT)
+  endif()
 endif()
 
 if(WIN32)

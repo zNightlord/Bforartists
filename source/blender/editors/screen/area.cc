@@ -876,8 +876,7 @@ WorkspaceStatus::WorkspaceStatus(bContext *C)
 
 static constexpr float STATUS_AFTER_TEXT = 0.7f;
 static constexpr float STATUS_BEFORE_TEXT = 0.3f;
-static constexpr float STATUS_MOUSE_ICON_BEFORE = -0.5f;
-static constexpr float STATUS_MOUSE_ICON_AFTER = -0.7f;
+static constexpr float STATUS_MOUSE_ICON_PAD = -0.5f;
 
 static void ed_workspace_status_text_item(WorkSpace *workspace, std::string text)
 {
@@ -895,12 +894,12 @@ static void ed_workspace_status_mouse_item(WorkSpace *workspace,
   if (icon) {
     if (icon >= ICON_MOUSE_LMB && icon <= ICON_MOUSE_RMB_DRAG) {
       /* Negative space before all narrow mice icons. */
-      ed_workspace_status_space(workspace, STATUS_MOUSE_ICON_BEFORE);
+      ed_workspace_status_space(workspace, STATUS_MOUSE_ICON_PAD);
     }
     ed_workspace_status_item(workspace, {}, icon, 0.0f, inverted);
     if (icon >= ICON_MOUSE_LMB && icon <= ICON_MOUSE_RMB) {
       /* Negative space after non-drag mice icons. */
-      ed_workspace_status_space(workspace, STATUS_MOUSE_ICON_AFTER);
+      ed_workspace_status_space(workspace, STATUS_MOUSE_ICON_PAD);
     }
   }
 }
@@ -928,12 +927,12 @@ void WorkspaceStatus::range(std::string text, const int icon1, const int icon2)
 }
 
 void WorkspaceStatus::item_bool(std::string text,
-                                const bool interted,
+                                const bool inverted,
                                 const int icon1,
                                 const int icon2)
 {
-  ed_workspace_status_mouse_item(workspace_, icon1, interted);
-  ed_workspace_status_mouse_item(workspace_, icon2, interted);
+  ed_workspace_status_mouse_item(workspace_, icon1, inverted);
+  ed_workspace_status_mouse_item(workspace_, icon2, inverted);
   ed_workspace_status_text_item(workspace_, std::move(text));
 }
 
@@ -946,7 +945,11 @@ void WorkspaceStatus::opmodal(std::string text,
   if (keymap) {
     const wmKeyMapItem *kmi = WM_modalkeymap_find_propvalue(keymap, propvalue);
     if (kmi) {
+#ifdef WITH_HEADLESS
+      int icon = 0;
+#else
       int icon = UI_icon_from_event_type(kmi->type, kmi->val);
+#endif
       if (!ELEM(kmi->shift, KM_NOTHING, KM_ANY)) {
         ed_workspace_status_item(workspace_, {}, ICON_EVENT_SHIFT, 0.0f, inverted);
       }

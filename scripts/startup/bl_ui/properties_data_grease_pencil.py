@@ -174,6 +174,7 @@ class GREASE_PENCIL_MT_grease_pencil_add_layer_extra(Menu):
         layout = self.layout
         ob = context.object
         grease_pencil = ob.data
+        layer = grease_pencil.layers.active_layer
         space = context.space_data
 
         if space.type == 'PROPERTIES':
@@ -193,6 +194,18 @@ class GREASE_PENCIL_MT_grease_pencil_add_layer_extra(Menu):
 
         layout.separator()
         layout.prop(grease_pencil, "use_autolock_layers", text="Autolock Inactive Layers")
+
+        if layer:
+            layout.prop(layer, "use_locked_material")
+
+
+class GREASE_PENCIL_MT_group_context_menu(Menu):
+    bl_label = "Layer Group"
+
+    def draw(self, context):
+        layout = self.layout
+        layout.operator("grease_pencil.layer_group_remove", text="Delete Group").keep_children = False
+        layout.operator("grease_pencil.layer_group_remove", text="Ungroup").keep_children = True
 
 
 class DATA_PT_grease_pencil_layers(DataButtonsPanel, Panel):
@@ -349,6 +362,7 @@ classes = (
     DATA_PT_grease_pencil_onion_skinning_display,
     DATA_PT_grease_pencil_settings,
     GREASE_PENCIL_MT_grease_pencil_add_layer_extra,
+    GREASE_PENCIL_MT_group_context_menu,
 )
 
 if _has_gpv3:

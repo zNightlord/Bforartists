@@ -22,16 +22,16 @@
 #include "eevee_film.hh"
 #include "eevee_gbuffer.hh"
 #include "eevee_hizbuffer.hh"
-#include "eevee_irradiance_cache.hh"
 #include "eevee_light.hh"
 #include "eevee_lightprobe.hh"
+#include "eevee_lightprobe_planar.hh"
+#include "eevee_lightprobe_sphere.hh"
+#include "eevee_lightprobe_volume.hh"
 #include "eevee_lookdev.hh"
 #include "eevee_material.hh"
 #include "eevee_motion_blur.hh"
 #include "eevee_pipeline.hh"
-#include "eevee_planar_probes.hh"
 #include "eevee_raytrace.hh"
-#include "eevee_reflection_probes.hh"
 #include "eevee_renderbuffers.hh"
 #include "eevee_sampling.hh"
 #include "eevee_shader.hh"
@@ -73,7 +73,9 @@ class Instance {
   static void *debug_scope_irradiance_sample;
 
   uint64_t depsgraph_last_update_ = 0;
-  bool overlays_enabled_;
+  bool overlays_enabled_ = false;
+
+  bool shaders_are_ready_ = true;
 
  public:
   ShaderModule &shaders;
@@ -192,8 +194,15 @@ class Instance {
   /**
    * Return true when probe pipeline is used during this sample.
    */
-  bool do_reflection_probe_sync() const;
+  bool do_lightprobe_sphere_sync() const;
   bool do_planar_probe_sync() const;
+
+  /**
+   * Return true when probe passes should be loaded.
+   * It can be true even if do_<type>_probe_sync() is false due to shaders still being compiled.
+   */
+  bool needs_lightprobe_sphere_passes() const;
+  bool needs_planar_probe_passes() const;
 
   /* Render. */
 

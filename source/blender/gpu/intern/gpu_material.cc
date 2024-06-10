@@ -143,6 +143,8 @@ struct GPUMaterial {
 
   uint32_t refcount;
 
+  bool do_batch_compilation;
+
 #ifndef NDEBUG
   char name[64];
 #else
@@ -269,6 +271,9 @@ void GPU_material_free_single(GPUMaterial *material)
   }
   if (material->ubo != nullptr) {
     GPU_uniformbuf_free(material->ubo);
+  }
+  if (material->coba_builder != nullptr) {
+    MEM_freeN(material->coba_builder);
   }
   if (material->coba_tex != nullptr) {
     GPU_texture_free(material->coba_tex);
@@ -832,7 +837,7 @@ GPUMaterial *GPU_material_from_nodetree(Scene *scene,
                                         bool is_lookdev,
                                         GPUCodegenCallbackFn callback,
                                         void *thunk,
-                                        GPUMaterialCanUseDefaultCallbackFn can_use_default_cb)
+                                        GPUMaterialPassReplacementCallbackFn pass_replacement_cb)
 {
   /* Search if this material is not already compiled. */
   LISTBASE_FOREACH (LinkData *, link, gpumaterials) {
@@ -860,69 +865,71 @@ GPUMaterial *GPU_material_from_nodetree(Scene *scene,
   }
 
   /* Localize tree to create links for reroute and mute. */
-  bNodeTree *localtree = ntreeLocalize(ntree, nullptr);
+  bNodeTree *localtree = blender::bke::ntreeLocalize(ntree, nullptr);
   ntreeGPUMaterialNodes(localtree, mat);
 
-  if (can_use_default_cb && can_use_default_cb(mat)) {
-    mat->status = GPU_MAT_USE_DEFAULT;
+  gpu_material_ramp_texture_build(mat);
+  gpu_material_sky_texture_build(mat);
+
+  /* Use default material pass when possible. */
+  if (GPUPass *default_pass = pass_replacement_cb ? pass_replacement_cb(thunk, mat) : nullptr) {
+    mat->pass = default_pass;
+    GPU_pass_acquire(mat->pass);
   }
   else {
-    gpu_material_ramp_texture_build(mat);
-    gpu_material_sky_texture_build(mat);
-
     /* Create source code and search pass cache for an already compiled version. */
     mat->pass = GPU_generate_pass(mat, &mat->graph, engine, callback, thunk, false);
+  }
 
-    if (mat->pass == nullptr) {
-      /* We had a cache hit and the shader has already failed to compile. */
-      mat->status = GPU_MAT_FAILED;
-      gpu_node_graph_free(&mat->graph);
+  if (mat->pass == nullptr) {
+    /* We had a cache hit and the shader has already failed to compile. */
+    mat->status = GPU_MAT_FAILED;
+    gpu_node_graph_free(&mat->graph);
+  }
+  else {
+    /* Determine whether we should generate an optimized variant of the graph.
+     * Heuristic is based on complexity of default material pass and shader node graph. */
+    if (GPU_pass_should_optimize(mat->pass)) {
+      GPU_material_optimization_status_set(mat, GPU_MAT_OPTIMIZATION_READY);
     }
-    else {
-      /* Determine whether we should generate an optimized variant of the graph.
-       * Heuristic is based on complexity of default material pass and shader node graph. */
-      if (GPU_pass_should_optimize(mat->pass)) {
-        GPU_material_optimization_status_set(mat, GPU_MAT_OPTIMIZATION_READY);
+
+    GPUShader *sh = GPU_pass_shader_get(mat->pass);
+    if (sh != nullptr) {
+      /* We had a cache hit and the shader is already compiled. */
+      mat->status = GPU_MAT_SUCCESS;
+
+      if (mat->optimization_status == GPU_MAT_OPTIMIZATION_SKIP) {
+        gpu_node_graph_free_nodes(&mat->graph);
       }
+    }
 
-      GPUShader *sh = GPU_pass_shader_get(mat->pass);
-      if (sh != nullptr) {
-        /* We had a cache hit and the shader is already compiled. */
-        mat->status = GPU_MAT_SUCCESS;
-
-        if (mat->optimization_status == GPU_MAT_OPTIMIZATION_SKIP) {
-          gpu_node_graph_free_nodes(&mat->graph);
-        }
-      }
-
-      /* Generate optimized pass. */
-      if (mat->optimization_status == GPU_MAT_OPTIMIZATION_READY) {
+    /* Generate optimized pass. */
+    if (mat->optimization_status == GPU_MAT_OPTIMIZATION_READY) {
 #if ASYNC_OPTIMIZED_PASS_CREATION == 1
-        mat->optimized_pass = nullptr;
-        mat->optimize_pass_info.callback = callback;
-        mat->optimize_pass_info.thunk = thunk;
+      mat->optimized_pass = nullptr;
+      mat->optimize_pass_info.callback = callback;
+      mat->optimize_pass_info.thunk = thunk;
 #else
-        mat->optimized_pass = GPU_generate_pass(mat, &mat->graph, engine, callback, thunk, true);
-        if (mat->optimized_pass == nullptr) {
-          /* Failed to create optimized pass. */
-          gpu_node_graph_free_nodes(&mat->graph);
-          GPU_material_optimization_status_set(mat, GPU_MAT_OPTIMIZATION_SKIP);
-        }
-        else {
-          GPUShader *optimized_sh = GPU_pass_shader_get(mat->optimized_pass);
-          if (optimized_sh != nullptr) {
-            /* Optimized shader already available. */
-            gpu_node_graph_free_nodes(&mat->graph);
-            GPU_material_optimization_status_set(mat, GPU_MAT_OPTIMIZATION_SUCCESS);
-          }
-        }
-#endif
+      mat->optimized_pass = GPU_generate_pass(mat, &mat->graph, engine, callback, thunk, true);
+      if (mat->optimized_pass == nullptr) {
+        /* Failed to create optimized pass. */
+        gpu_node_graph_free_nodes(&mat->graph);
+        GPU_material_optimization_status_set(mat, GPU_MAT_OPTIMIZATION_SKIP);
       }
+      else {
+        GPUShader *optimized_sh = GPU_pass_shader_get(mat->optimized_pass);
+        if (optimized_sh != nullptr) {
+          /* Optimized shader already available. */
+          gpu_node_graph_free_nodes(&mat->graph);
+          GPU_material_optimization_status_set(mat, GPU_MAT_OPTIMIZATION_SUCCESS);
+        }
+      }
+#endif
     }
   }
 
   /* Only free after GPU_pass_shader_get where GPUUniformBuf read data from the local tree. */
-  ntreeFreeLocalTree(localtree);
+  blender::bke::ntreeFreeLocalTree(localtree);
   BLI_assert(!localtree->id.py_instance); /* Or call #BKE_libblock_free_data_py. */
   MEM_freeN(localtree);
 
@@ -946,21 +953,8 @@ void GPU_material_release(GPUMaterial *mat)
   GPU_material_free_single(mat);
 }
 
-void GPU_material_compile(GPUMaterial *mat)
+static void gpu_material_finalize(GPUMaterial *mat, bool success)
 {
-  bool success;
-
-  BLI_assert(ELEM(mat->status, GPU_MAT_QUEUED, GPU_MAT_CREATED));
-  BLI_assert(mat->pass);
-
-/* NOTE: The shader may have already been compiled here since we are
- * sharing GPUShader across GPUMaterials. In this case it's a no-op. */
-#ifndef NDEBUG
-  success = GPU_pass_compile(mat->pass, mat->name);
-#else
-  success = GPU_pass_compile(mat->pass, __func__);
-#endif
-
   mat->flag |= GPU_MATFLAG_UPDATED;
 
   if (success) {
@@ -1009,6 +1003,64 @@ void GPU_material_compile(GPUMaterial *mat)
     GPU_pass_release(mat->pass);
     mat->pass = nullptr;
     gpu_node_graph_free(&mat->graph);
+  }
+}
+
+void GPU_material_compile(GPUMaterial *mat)
+{
+  bool success;
+  BLI_assert(ELEM(mat->status, GPU_MAT_QUEUED, GPU_MAT_CREATED));
+  BLI_assert(mat->pass);
+
+/* NOTE: The shader may have already been compiled here since we are
+ * sharing GPUShader across GPUMaterials. In this case it's a no-op. */
+#ifndef NDEBUG
+  success = GPU_pass_compile(mat->pass, mat->name);
+#else
+  success = GPU_pass_compile(mat->pass, __func__);
+#endif
+
+  gpu_material_finalize(mat, success);
+}
+
+BatchHandle GPU_material_batch_compile(blender::Span<GPUMaterial *> mats)
+{
+  blender::Vector<GPUShaderCreateInfo *> infos;
+  infos.reserve(mats.size());
+
+  for (GPUMaterial *mat : mats) {
+    BLI_assert(ELEM(mat->status, GPU_MAT_QUEUED, GPU_MAT_CREATED));
+    BLI_assert(mat->pass);
+#ifndef NDEBUG
+    const char *name = mat->name;
+#else
+    const char *name = __func__;
+#endif
+    mat->do_batch_compilation = false;
+    if (GPUShaderCreateInfo *info = GPU_pass_begin_compilation(mat->pass, name)) {
+      infos.append(info);
+      mat->do_batch_compilation = true;
+    }
+  }
+
+  return GPU_shader_batch_create_from_infos(infos);
+}
+
+bool GPU_material_batch_is_ready(BatchHandle handle)
+{
+  return GPU_shader_batch_is_ready(handle);
+}
+
+void GPU_material_batch_finalize(BatchHandle &handle, blender::Span<GPUMaterial *> mats)
+{
+  blender::Vector<GPUShader *> shaders = GPU_shader_batch_finalize(handle);
+  int i = 0;
+  for (GPUMaterial *mat : mats) {
+    bool success = true;
+    if (mat->do_batch_compilation) {
+      success = GPU_pass_finalize_compilation(mat->pass, shaders[i++]);
+    }
+    gpu_material_finalize(mat, success);
   }
 }
 

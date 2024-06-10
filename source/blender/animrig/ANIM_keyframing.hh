@@ -15,8 +15,10 @@
 
 #include "BLI_array.hh"
 #include "BLI_bit_span.hh"
+#include "BLI_string_ref.hh"
 #include "BLI_vector.hh"
 #include "DNA_anim_types.h"
+#include "RNA_path.hh"
 #include "RNA_types.hh"
 
 struct ID;
@@ -30,6 +32,14 @@ struct NlaKeyframingContext;
 
 namespace blender::animrig {
 
+/**
+ * Represents a single success/failure in the keyframing process.
+ *
+ * What is considered "single" depends on the level at which the failure
+ * happens. For example, it can be at the level of a single key on a single
+ * fcurve, all the way up to the level of an entire ID not being animatable.
+ * Both are considered "single" events.
+ */
 enum class SingleKeyingResult {
   SUCCESS = 0,
   /* TODO: remove `UNKNOWN_FAILURE` and replace all usages with proper, specific
@@ -42,6 +52,9 @@ enum class SingleKeyingResult {
   UNABLE_TO_INSERT_TO_NLA_STACK,
   ID_NOT_EDITABLE,
   ID_NOT_ANIMATABLE,
+  NO_VALID_LAYER,
+  NO_VALID_STRIP,
+  NO_VALID_BINDING,
   CANNOT_RESOLVE_PATH,
   /* Make sure to always keep this at the end of the enum. */
   _KEYING_RESULT_MAX,
@@ -60,7 +73,10 @@ class CombinedKeyingResult {
  public:
   CombinedKeyingResult();
 
-  void add(const SingleKeyingResult result);
+  /**
+   * Increase the count of the given `SingleKeyingResult` by `count`.
+   */
+  void add(SingleKeyingResult result, int count = 1);
 
   /* Add values of the given result to this result. */
   void merge(const CombinedKeyingResult &combined_result);
@@ -71,6 +87,27 @@ class CombinedKeyingResult {
 
   void generate_reports(ReportList *reports);
 };
+
+/**
+ * Return the default channel group name for the given RNA pointer and property
+ * path, or nullptr if it has no default.
+ *
+ * For example, for object location/rotation/scale this returns the standard
+ * "Object Transforms" channel group name.
+ */
+const char *default_channel_group_for_path(const PointerRNA *animated_struct,
+                                           const StringRef prop_rna_path);
+
+/* -------------------------------------------------------------------- */
+
+/**
+ * Return whether key insertion functions are allowed to create new fcurves,
+ * according to the given flags.
+ *
+ * Specifically, both `INSERTKEY_REPLACE` and `INSERTKEY_AVAILABLE` prohibit the
+ * creation of new F-Curves.
+ */
+bool key_insertion_may_create_fcurve(eInsertKeyFlags insert_key_flags);
 
 /* -------------------------------------------------------------------- */
 /** \name Key-Framing Management
@@ -194,7 +231,7 @@ bool autokeyframe_cfra_can_key(const Scene *scene, ID *id);
  *
  * \param rna_paths: Only inserts keys on those RNA paths.
  */
-void autokeyframe_object(bContext *C, Scene *scene, Object *ob, Span<std::string> rna_paths);
+void autokeyframe_object(bContext *C, Scene *scene, Object *ob, Span<RNAPath> rna_paths);
 /**
  * Auto-keyframing feature - for objects
  *
@@ -216,7 +253,7 @@ void autokeyframe_pose_channel(bContext *C,
                                Scene *scene,
                                Object *ob,
                                bPoseChannel *pose_channel,
-                               Span<std::string> rna_paths,
+                               Span<RNAPath> rna_paths,
                                short targetless_ik);
 /**
  * Use for auto-key-framing.
@@ -261,7 +298,7 @@ CombinedKeyingResult insert_key_action(Main *bmain,
  * \returns How often keyframe insertion was successful and how often it failed / for which reason.
  */
 CombinedKeyingResult insert_key_rna(PointerRNA *rna_pointer,
-                                    const blender::Span<std::string> rna_paths,
+                                    const blender::Span<RNAPath> rna_paths,
                                     float scene_frame,
                                     eInsertKeyFlags insert_key_flags,
                                     eBezTriple_KeyframeType key_type,

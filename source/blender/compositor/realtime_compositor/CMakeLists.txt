@@ -30,6 +30,7 @@ set(SRC
   intern/input_single_value_operation.cc
   intern/node_operation.cc
   intern/operation.cc
+  intern/profiler.cc
   intern/realize_on_domain_operation.cc
   intern/reduce_to_single_value_operation.cc
   intern/render_context.cc
@@ -51,6 +52,7 @@ set(SRC
   COM_input_single_value_operation.hh
   COM_node_operation.hh
   COM_operation.hh
+  COM_profiler.hh
   COM_realize_on_domain_operation.hh
   COM_reduce_to_single_value_operation.hh
   COM_render_context.hh
@@ -100,6 +102,7 @@ set(SRC
   cached_resources/intern/cached_texture.cc
   cached_resources/intern/deriche_gaussian_coefficients.cc
   cached_resources/intern/distortion_grid.cc
+  cached_resources/intern/fog_glow_kernel.cc
   cached_resources/intern/keying_screen.cc
   cached_resources/intern/morphological_distance_feather_weights.cc
   cached_resources/intern/ocio_color_space_conversion_shader.cc
@@ -116,6 +119,7 @@ set(SRC
   cached_resources/COM_cached_texture.hh
   cached_resources/COM_deriche_gaussian_coefficients.hh
   cached_resources/COM_distortion_grid.hh
+  cached_resources/COM_fog_glow_kernel.hh
   cached_resources/COM_keying_screen.hh
   cached_resources/COM_morphological_distance_feather_weights.hh
   cached_resources/COM_ocio_color_space_conversion_shader.hh
@@ -386,6 +390,16 @@ if(WITH_OPENCOLORIO)
   list(APPEND LIB
     ${OPENCOLORIO_LIBRARIES}
   )
+endif()
+
+if(WITH_FFTW3)
+  list(APPEND INC_SYS
+    ${FFTW3_INCLUDE_DIRS}
+  )
+  list(APPEND LIB
+    ${FFTW3_LIBRARIES}
+  )
+  add_definitions(-DWITH_FFTW3)
 endif()
 
 blender_add_lib(bf_realtime_compositor "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
