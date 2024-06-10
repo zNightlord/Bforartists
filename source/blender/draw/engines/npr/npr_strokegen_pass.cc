@@ -164,7 +164,7 @@ namespace blender::npr::strokegen
     meshing_params.subdiv_use_crease = .0f < scene_eval->npr.npr_test_val_20; 
 
     meshing_params.denoise_cusp_segmentation = .0f < scene_eval->npr.npr_test_val_21; 
-
+    meshing_params.visibility_thresh = scene_eval->npr.npr_test_val_22; 
   }
 
   void StrokeGenPassModule::on_end_sync()
@@ -2417,6 +2417,7 @@ namespace blender::npr::strokegen
       sub.shader_set(shaders_.static_shader_get(eShaderType::CONTOUR_FRAG_VISIBILITY_TEST));
 
       bind_rsc(sub);
+      sub.push_constant("pcs_visibility_thresh_", meshing_params.visibility_thresh); 
 
       sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_frag_dispatch_args_);
       sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_COMMAND |

@@ -218,7 +218,7 @@ public:
     bool subdiv_use_crease;
 
     bool denoise_cusp_segmentation; 
-
+    float visibility_thresh; 
   } meshing_params;
   void append_subpass_fill_selected_mesh_elems_indirect_dispatch_args_();
 

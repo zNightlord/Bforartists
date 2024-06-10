@@ -253,7 +253,8 @@ GPU_SHADER_CREATE_INFO(strokegen_finish_segscan_frag_to_contour_idmapping)
 GPU_SHADER_CREATE_INFO(strokegen_contour_frag_visibility_test)
     .do_static_compilation(true)
     .additional_info("strokegen_build_contour_fragments")
-    .define("_KERNEL_MULTICOMPILE__PROCESS_CONTOUR_FRAGMENTS__VISIBILITY_TEST", "1");
+    .define("_KERNEL_MULTICOMPILE__PROCESS_CONTOUR_FRAGMENTS__VISIBILITY_TEST", "1")
+    .push_constant(Type::FLOAT, "pcs_visibility_thresh_");
 
 GPU_SHADER_CREATE_INFO(strokegen_visibility_split_contour_edges)
     .do_static_compilation(true)
