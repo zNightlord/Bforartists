@@ -158,9 +158,9 @@
                         conv_temp_data.is_local_minima = false;
                 }
 
-                if (orig_curv < 7.0f) // planar sections of the curve
+                if (orig_curv < 6.0f) // planar sections of the curve
                     conv_temp_data.is_local_maxima = false;
-                if (7.0f <= orig_curv) // sharp point of the curve
+                if (6.0f <= orig_curv) // sharp point of the curve
                    conv_temp_data.is_local_minima = false;
 				if (orig_curv < 4.0f)
 					conv_temp_data.is_local_minima = true;
@@ -214,6 +214,48 @@
                 {
                     vec4 dbg_col = vec4(tangent.xy * .5f + .5f, abs(curv), 1.0f);
                     vec2 dbg_pix = pt;
+                    imageStore(tex2d_contour_dbg_, ivec2(dbg_pix), dbg_col);
+                }
+            #endif
+            #if defined(_KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__2D_SAMPLE_VISIBILITY_DENOISING)
+                conv_temp_data.num_occ_samples_left = 0u; 
+                conv_temp_data.num_occ_samples_right = 0u; 
+                uint occ = _FUNC_LOAD_CONV_DATA_LDS_LEFT(
+                    0, blockIdx, groupIdx, seg_len, seg_head_id
+                ); // == cf.occluded
+
+                const uint filter_radius = 8u;
+                bool lt_reach_clipped_seg_end = false;
+                float num_lt_samples = 0; 
+                bool rt_reach_clipped_seg_end = false;  
+                float num_rt_samples = 0; 
+                for (uint d = 1; d <= filter_radius; ++d)
+                {
+                    uint occ_lt = _FUNC_LOAD_CONV_DATA_LDS_LEFT(
+                        d, blockIdx, groupIdx, seg_len, seg_head_id
+                    );
+                    convolution_iteration(true,  occ_lt, /*inout*/conv_temp_data, lt_reach_clipped_seg_end, num_lt_samples); 
+
+                    uint occ_rt = _FUNC_LOAD_CONV_DATA_LDS_RIGHT(
+                        d, blockIdx, groupIdx, seg_len, seg_head_id
+                    );
+                    convolution_iteration(false, occ_rt, /*inout*/conv_temp_data, rt_reach_clipped_seg_end, num_rt_samples); 
+                }
+
+                float num_occ_samples_left = float(conv_temp_data.num_occ_samples_left);
+                float num_occ_samples_right = float(conv_temp_data.num_occ_samples_right);
+                conv_temp_data.filtered_occlusion = 
+                    (num_occ_samples_left + num_occ_samples_right) > .3f * (num_lt_samples + num_rt_samples); 
+
+                if (sample_id < num_samples)
+                {
+                    vec4 dbg_col = vec4(
+                        conv_temp_data.num_occ_samples_left, 
+                        conv_temp_data.num_occ_samples_right, 
+                        !conv_temp_data.filtered_occlusion, 
+                        1.0f
+                    );
+                    vec2 dbg_pix = pcs_screen_size_ * load_ssbo_contour_2d_sample_geometry__position(sample_id);
                     imageStore(tex2d_contour_dbg_, ivec2(dbg_pix), dbg_col);
                 }
             #endif

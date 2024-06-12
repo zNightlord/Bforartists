@@ -39,8 +39,8 @@ struct ContourFlags
 	bool seg_head_contour; // seg-head based on contour segmentation 
 	bool seg_head_clipped; // seg-head based on clipping
 	bool seg_tail_clipped; // seg-tail based on clipping 
-
-	bool is_curv_minima;  
+	bool is_curv_minima; // local curvature minima during corner detection
+	bool occluded_filtered; 
 }; 
 
 uint encode_contour_flags(ContourFlags cf)
@@ -71,6 +71,8 @@ uint encode_contour_flags(ContourFlags cf)
 	cf_enc |= uint(cf.seg_tail_clipped);
 	cf_enc <<= 1u;
 	cf_enc |= uint(cf.is_curv_minima); 
+	cf_enc <<= 1u;
+	cf_enc |= uint(cf.occluded_filtered);
 
     return cf_enc; 
 }
@@ -78,6 +80,8 @@ uint encode_contour_flags(ContourFlags cf)
 ContourFlags decode_contour_flags(uint cf_enc)
 {
     ContourFlags cf; 
+	cf.occluded_filtered = (1u == (cf_enc & 1u));
+	cf_enc >>= 1u;
 	cf.is_curv_minima = (1u == (cf_enc & 1u));
 	cf_enc >>= 1u;
 	cf.seg_tail_clipped = (1u == (cf_enc & 1u));
@@ -123,6 +127,7 @@ ContourFlags init_contour_flags(bool seg_head)
 	cf.seg_head_clipped = false;  // needs further setup
 	cf.seg_tail_clipped = false;  // needs further setup 
 	cf.is_curv_minima = false;  // needs further setup
+	cf.occluded_filtered = false;  // needs further setup 
     return cf; 
 }
 

@@ -2045,8 +2045,7 @@ namespace blender::npr::strokegen
 
     // Convert 3D Contour to 2D Samples
     {
-      auto &sub = pass_process_contours.sub(
-          "strokegen_contour_2d_resample_alloc_samples");
+      auto &sub = pass_process_contours.sub("strokegen_contour_2d_resample_alloc_samples");
       sub.shader_set(shaders_.static_shader_get(CONTOUR_ALLOC_2D_SAMPLES));
 
       bind_rsc_for_contour_2d_resample_(sub, screen_res, sample_rate, ssbo_offset);
@@ -2083,8 +2082,7 @@ namespace blender::npr::strokegen
 
     append_subpass_fill_dispatch_args_contour_2d_samples(pass_process_contours);
     {
-      auto &sub = pass_process_contours.sub(
-          "strokegen_contour_2d_resample_idmapping_clear_buffer");
+      auto &sub = pass_process_contours.sub("strokegen_contour_2d_resample_idmapping_clear_buffer");
       sub.shader_set(shaders_.static_shader_get(CLEAR_2D_SAMPLE_TO_CONTOUR_IDMAPPING));
 
       bind_rsc_for_contour_2d_resample_(sub, screen_res, sample_rate, ssbo_offset);
@@ -2093,8 +2091,7 @@ namespace blender::npr::strokegen
       sub.barrier(GPU_BARRIER_SHADER_STORAGE);
     }
     {
-      auto &sub = pass_process_contours.sub(
-          "strokegen_contour_2d_resample_idmapping_setup_segscan");
+      auto &sub = pass_process_contours.sub("strokegen_contour_2d_resample_idmapping_setup_segscan");
       sub.shader_set(shaders_.static_shader_get(PREP_2D_SAMPLE_TO_CONTOUR_IDMAPPING));
 
       bind_rsc_for_contour_2d_resample_(sub, screen_res, sample_rate, ssbo_offset);
@@ -2162,7 +2159,7 @@ namespace blender::npr::strokegen
       append_subpass_2d_sample_segmentation(screen_res, sample_rate, is_segmentation_by_curve_pass);
     }
 
-    { // Find 2D Corners
+    { // Find 2D Corners & Eval tangent and curvature
       SegLoopConv1DSettings settings;
       settings.use_indirect_dispatch = true;
       settings.ssbo_segloopconv1d_info_ = buffers_.ssbo_segloopconv1d_info_;
@@ -2197,21 +2194,26 @@ namespace blender::npr::strokegen
       settings.lazy_dispatch = true;
       append_subpass_segloopconv1d(settings, pass_process_contours);
 
-      {
-        auto &sub = pass_process_contours.sub("strokegen_calc_contour_2d_curve_render_data");
-        sub.shader_set(shaders_.static_shader_get(CONTOUR_2D_SAMPLES_CALC_RENDER_DATA));
+      settings.shader_convolution = CONV1D_2D_SAMPLE_DENOISE_VISIBILITY;
+      settings.lazy_dispatch = true;
+      append_subpass_segloopconv1d(settings, pass_process_contours);
+    }
 
-        sub.bind_ssbo(0, buffers_.reused_ssbo_contour_2d_sample_geometry_());
-        sub.bind_ssbo(1, buffers_.reused_ssbo_contour_2d_sample_topology_());
-        sub.bind_ssbo(2, buffers_.ssbo_bnpr_mesh_pool_counters_);
-        sub.bind_ssbo(3, buffers_.reused_ssbo_stroke_mesh_pool_());
-        sub.bind_image(0, textures_.tex2d_contour_dbg_); 
-        sub.push_constant("pcs_screen_size_", screen_res);
-        sub.push_constant("pcs_stroke_width_", 5.0f); 
 
-        sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_2d_sample_dispatch_args_);
-        sub.barrier(GPU_BARRIER_SHADER_STORAGE);
-      }
+    { // Output 2D stroke mesh
+      auto &sub = pass_process_contours.sub("strokegen_calc_contour_2d_curve_render_data");
+      sub.shader_set(shaders_.static_shader_get(CONTOUR_2D_SAMPLES_CALC_RENDER_DATA));
+
+      sub.bind_ssbo(0, buffers_.reused_ssbo_contour_2d_sample_geometry_());
+      sub.bind_ssbo(1, buffers_.reused_ssbo_contour_2d_sample_topology_());
+      sub.bind_ssbo(2, buffers_.ssbo_bnpr_mesh_pool_counters_);
+      sub.bind_ssbo(3, buffers_.reused_ssbo_stroke_mesh_pool_());
+      sub.bind_image(0, textures_.tex2d_contour_dbg_);
+      sub.push_constant("pcs_screen_size_", screen_res);
+      sub.push_constant("pcs_stroke_width_", 5.0f);
+
+      sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_2d_sample_dispatch_args_);
+      sub.barrier(GPU_BARRIER_SHADER_STORAGE);
     }
   }
 
@@ -2789,7 +2791,8 @@ namespace blender::npr::strokegen
       }
       else if (settings.shader_convolution == CONV1D_2D_SAMPLE_CORNER_CONVOLUTION_STEP_0
                 || settings.shader_convolution == CONV1D_2D_SAMPLE_CORNER_CONVOLUTION_STEP_1
-                || settings.shader_convolution == CONV1D_2D_SAMPLE_CALC_TANGENT_CURVATURE) {
+                || settings.shader_convolution == CONV1D_2D_SAMPLE_CALC_TANGENT_CURVATURE
+                || settings.shader_convolution == CONV1D_2D_SAMPLE_DENOISE_VISIBILITY) {
         sub.bind_ssbo(4, buffers_.reused_ssbo_contour_2d_sample_topology_());
         sub.bind_ssbo(5, buffers_.reused_ssbo_contour_2d_sample_geometry_());
         sub.bind_image(0, textures_.tex2d_contour_dbg_); 

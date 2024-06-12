@@ -2183,6 +2183,12 @@ GPU_SHADER_CREATE_INFO(npr_segloopconv1D_2d_sample_calc_tangent_curvature_convol
     .define("DATA_TYPE_LOOPCONV1D", "vec2")
     .storage_buf(4, Qualifier::READ_WRITE, "uint", "ssbo_contour_2d_sample_topology_[]")
     .storage_buf(5, Qualifier::READ_WRITE, "uint", "ssbo_contour_2d_sample_geometry_[]");
+GPU_SHADER_CREATE_INFO(npr_segloopconv1D_2d_sample_visibility_denoising)
+    .additional_info("npr_segloopconv1D_2d_sample_processing")
+    .define("_KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__2D_SAMPLE_VISIBILITY_DENOISING", "1")
+    .define("DATA_TYPE_LOOPCONV1D", "uint")
+    .storage_buf(4, Qualifier::READ_WRITE, "uint", "ssbo_contour_2d_sample_topology_[]")
+    .storage_buf(5, Qualifier::READ_WRITE, "uint", "ssbo_contour_2d_sample_geometry_[]");
 
 #define GPU_SHADER_CREATE_INFO__SEGLOOPCONV1D_BUILD_PATCH(name, input_shader_info_build_patch) \
 GPU_SHADER_CREATE_INFO(strokegen_segloopconv1D_##name##_build_patch)                     \
@@ -2220,6 +2226,7 @@ GPU_SHADER_CREATE_INFO__SEGLOOPCONV1D_CONV(seg_denoising, npr_segloopconv1D_seg_
 GPU_SHADER_CREATE_INFO__SEGLOOPCONV1D_CONV(corner_detection_step_0, npr_segloopconv1D_corner_detection_convolution_step_0)
 GPU_SHADER_CREATE_INFO__SEGLOOPCONV1D_CONV(corner_detection_step_1, npr_segloopconv1D_corner_detection_convolution_step_1)
 GPU_SHADER_CREATE_INFO__SEGLOOPCONV1D_CONV(calc_2d_sample_tangent_curv, npr_segloopconv1D_2d_sample_calc_tangent_curvature_convolution)
+GPU_SHADER_CREATE_INFO__SEGLOOPCONV1D_CONV(denoise_2d_sample_visibility, npr_segloopconv1D_2d_sample_visibility_denoising)
 /** \} */
 
 

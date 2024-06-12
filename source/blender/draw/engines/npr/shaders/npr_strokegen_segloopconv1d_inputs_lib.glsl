@@ -204,6 +204,38 @@ bool should_init_conv_data(bool mov_left, uint mov_step) { return mov_left && (m
             return pix_coord;
         }
     #endif
+
+    #if defined(_KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__2D_SAMPLE_VISIBILITY_DENOISING)
+        struct T_CONV_TEMP_DATA
+        {
+            uint num_occ_samples_left;
+            uint num_occ_samples_right;  
+            bool filtered_occlusion; 
+        };
+        T_CV FUNC_DEVICE_LOAD_LOOPCONV1D_DATA(uint elemId) 
+        {
+			ContourFlags cf = load_ssbo_contour_2d_sample_topology__flags(elemId); 
+            uint seg_key = (cf.occluded ? 1u : 0u); 
+        #define SEG_KEY_AT_2D_SAMPLE_CLIPPED_END 0xffffffffu 
+            if (cf.seg_head_clipped || cf.seg_tail_clipped) seg_key = SEG_KEY_AT_2D_SAMPLE_CLIPPED_END;
+            return seg_key; 
+        }
+        void convolution_iteration(bool traverse_lt, T_CV seg_key, 
+            inout T_CONV_TEMP_DATA conv_temp_data, 
+			inout bool reach_clipped_seg_end, inout float conv_counter
+        ){
+            if (seg_key == SEG_KEY_AT_2D_SAMPLE_CLIPPED_END || reach_clipped_seg_end) 
+            { // reached clipped point, do nothing & return
+                reach_clipped_seg_end = true; 
+                return; 
+            }
+            conv_counter++; 
+
+            if (seg_key == 1u)
+                if (traverse_lt) conv_temp_data.num_occ_samples_left++; 
+			    else conv_temp_data.num_occ_samples_right++; 
+        }
+    #endif
 #undef T_CV
 #endif
 

@@ -388,7 +388,9 @@ const char *StrokeGenShaderModule::static_shader_create_info_name_get(eShaderTyp
     case CONV1D_2D_SAMPLE_CORNER_CONVOLUTION_STEP_1:
       return "strokegen_segloopconv1D_corner_detection_step_1_convolution";
     case CONV1D_2D_SAMPLE_CALC_TANGENT_CURVATURE:
-      return "strokegen_segloopconv1D_calc_2d_sample_tangent_curv_convolution"; 
+      return "strokegen_segloopconv1D_calc_2d_sample_tangent_curv_convolution";
+    case CONV1D_2D_SAMPLE_DENOISE_VISIBILITY:
+      return "strokegen_segloopconv1D_denoise_2d_sample_visibility_convolution";
 
     case LISTRANKING_INIT_ANCHORS:
       return "strokegen_list_ranking_test_tagging";

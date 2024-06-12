@@ -154,7 +154,14 @@ void main()
         if (idx < get_num_items())
             store_ssbo_contour_2d_sample_geometry__tangent(idx, conv_temp_data.tangent, get_num_items());             
     #endif
-
+    #if defined(_KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__2D_SAMPLE_VISIBILITY_DENOISING)
+        if (idx < get_num_items())
+        {
+            ContourFlags cf = load_ssbo_contour_2d_sample_topology__flags(idx); 
+            cf.occluded_filtered = conv_temp_data.filtered_occlusion; 
+            store_ssbo_contour_2d_sample_topology__flags(idx, cf); 
+        }
+    #endif
     /* -------------------------------------------------------------------------- */
 }
 

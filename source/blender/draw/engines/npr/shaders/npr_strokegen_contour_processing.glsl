@@ -997,7 +997,7 @@ void main()
 
 
 	vec4 col = vec4(.0f, .0f, .0f, 1.0f); 
-	if (cf.occluded) col.a = .0f; 
+	if (cf.occluded_filtered) col.a = .0f; 
 	
 	if (valid_thread) 
 	{
