@@ -987,10 +987,12 @@ void main()
 	vec2 tangent = load_ssbo_contour_2d_sample_geometry__tangent(sample_id, num_samples); 
 
 	// Calc stroke mesh
-	float stylized_width = 1.0f - abs(arc_len_param - .5f) * 2.0f; 
+	float stylized_width_arc_len = 1.0f - abs(arc_len_param - .5f) * 2.0f; 
+	float stylized_width_stk_len = 1.0f; 
+	if (seg_len < 24u) stylized_width_stk_len = float(seg_len) / 24.0f; 
 	mat3x2 verts = compute_wing_quad_verts(
 		pos, pcs_screen_size_.xy, 
-		vec2(tangent.y, -tangent.x), pcs_stroke_width_ * stylized_width
+		vec2(tangent.y, -tangent.x), pcs_stroke_width_ * stylized_width_arc_len * stylized_width_stk_len
 	);
 	for (uint i = 0; i < 3; i++)
 		verts[i] /= vec2(pcs_screen_size_.xy); // back to 01-uv space
