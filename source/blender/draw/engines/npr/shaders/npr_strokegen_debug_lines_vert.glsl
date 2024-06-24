@@ -54,9 +54,9 @@ void main()
     else if (pcs_line_type_ == DBG_LINE_TYPE__VCURV)
     {
         if ((line_id_local % 3u) == 0u) 
-            color = vec4(0, 0, 1, 1);
+            color = vec4(0, 1, 0, 1);
         else if ((line_id_local % 3u) == 1u)
-            color = vec4(1, 0, 0, 1); 
+            color = vec4(1, 0, 1, 1); 
         else
             color = vec4(0, 1, 0, 1); 
     } else if (pcs_line_type_ == DBG_LINE_TYPE__EDGES)

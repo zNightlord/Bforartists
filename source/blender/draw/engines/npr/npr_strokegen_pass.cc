@@ -128,7 +128,9 @@ namespace blender::npr::strokegen
     if (val_1 == 4)
       surf_dbg_ctx.dbg_vert_normal = surf_dbg_ctx.dbg_vert_curv = true;
     if (val_1 == 5)
-      surf_dbg_ctx.dbg_vert_normal = surf_dbg_ctx.dbg_edges = true; 
+      surf_dbg_ctx.dbg_vert_normal = surf_dbg_ctx.dbg_edges = true;
+    if (val_1 = 6)
+      surf_dbg_ctx.dbg_vert_curv = surf_dbg_ctx.dbg_edges = true; 
 
     meshing_params.edge_visualize_mode = -1;
     if (surf_dbg_ctx.dbg_edges) {
@@ -596,7 +598,7 @@ namespace blender::npr::strokegen
       SurfaceAnalysisContext surf_analysis_ctx_contour;
       GetSurfaceAnalysisContext_CuspDetectionPass(surf_analysis_ctx_contour);
       auto surf_dbg_ctx_cpy = surf_dbg_ctx;
-      surf_dbg_ctx_cpy.dbg_vert_normal = false;
+      surf_dbg_ctx_cpy.dbg_vert_normal = surf_dbg_ctx.dbg_vert_normal;
       surf_dbg_ctx_cpy.dbg_vert_curv = surf_dbg_ctx.dbg_vert_curv;
       append_subpass_surf_geom_analysis(
           rsc_handle, num_verts, num_edges, surf_analysis_ctx_contour, surf_dbg_ctx_cpy);

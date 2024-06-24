@@ -1039,13 +1039,13 @@ bool calc_vert_attr_order_1(
     {
         vec3 cam_pos_ws = ubo_view_matrices_.viewinv[3].xyz; /* see "#define cameraPos ViewMatrixInverse[3].xyz" */
         vec3 vdir_c = normalize(ctx.vpos_c - cam_pos_ws);
-        float ndv_c = dot(vdir_c, ctx.vnor_c); 
+        float abs_ndv_c = abs(dot(vdir_c, ctx.vnor_c)); 
 
         vec3 vdir_i = normalize(ctx.vpos_i - cam_pos_ws);
-        float ndv_i = dot(vdir_i, ctx.vnor_i);
+        float abs_ndv_i = abs(dot(vdir_i, ctx.vnor_i));
 
         vec3 vdir_n = normalize(vpos_n - cam_pos_ws);
-        float ndv_n = dot(vdir_n, vnor_n); 
+        float abs_ndv_n = abs(dot(vdir_n, vnor_n)); 
 
         vec3 eic = ctx.vpos_c - ctx.vpos_i; float eic_len = length(eic); 
         vec3 ecn = vpos_n - ctx.vpos_c;     float ecn_len = length(ecn);
@@ -1053,7 +1053,7 @@ bool calc_vert_attr_order_1(
         float fi_area = length(cross(-eni, eic)) * .5f; 
         vec3 fi_nor = normalize(cross(-eni, eic));
 
-        vec3 grad_fi = cross(fi_nor, (ndv_c * eni + ndv_i * ecn + ndv_n * eic)) / (-2.0f*fi_area);
+        vec3 grad_fi = cross(fi_nor, (abs_ndv_c * eni + abs_ndv_i * ecn + abs_ndv_n * eic)) / (-2.0f*fi_area);
 
         float weight_gradvdn = acos(dot(-eni/eni_len, eic/eic_len)); 
         ctx.grad_vdotn          += weight_gradvdn * grad_fi;
@@ -1094,8 +1094,6 @@ void main()
         valid_thread = vert_id < num_verts; 
     }
     
-    uint dbg_line_offset = ssbo_bnpr_mesh_pool_counters_.num_dbg_vnor_lines; // after normal lines
-
     vec3 vpos = ld_vpos(vert_id); 
     vec3 vnor = LOAD_VNOR(vert_id, vpos);
     VertWedgeListHeader vwlh = decode_vert_wedge_list_header(ssbo_vert_to_edge_list_header_[vert_id]); 
@@ -1303,107 +1301,118 @@ void main()
         
         if (0 < pcs_output_dbg_geom_)
         {
-            // debug lines
-            VertFlags vf = decode_vert_flags(ssbo_vert_flags_[vert_id]); 
-            bool dbg_vtx_curv = (!vf.dupli) && (!vf.del_by_collapse) && valid_thread;
+//             // debug lines
+//             VertFlags vf = decode_vert_flags(ssbo_vert_flags_[vert_id]); 
+//             bool dbg_vtx_curv = (!vf.dupli) && (!vf.del_by_collapse) && valid_thread;
 
-            uint dbg_line_id = compact_pdir_lines(dbg_vtx_curv, groupIdx, 3u); /* must run for every thread */
-            dbg_line_id += get_debug_line_offset(DBG_LINE_TYPE__VCURV); 
+//             uint dbg_line_id = compact_pdir_lines(dbg_vtx_curv, groupIdx, 3u); /* must run for every thread */
+//             dbg_line_id += get_debug_line_offset(DBG_LINE_TYPE__VCURV); 
 
-            if (dbg_vtx_curv)
-            {
-                float dbg_line_len = min(ctx.ave_edge_len * .4f, pcs_dbg_geom_scale_ * .12f);
-                dbg_line_len = .0f; 
+//             if (dbg_vtx_curv)
+//             {
+//                 float dbg_line_len = min(ctx.ave_edge_len * .4f, pcs_dbg_geom_scale_ * .12f);
+//                 dbg_line_len = .0f; 
 
-                vec4 vpos_ws_00 = vec4(vpos - normalize(pdir0) * dbg_line_len, 1.0f);
-                vec4 vpos_ws_01 = vec4(vpos + normalize(pdir0) * dbg_line_len, 1.0f);
-                uvec3 vpos_enc = floatBitsToUint(vpos_ws_00.xyz); 
-                Store3(ssbo_dbg_lines_, dbg_line_id*2u,      vpos_enc);
-                vpos_enc = floatBitsToUint(vpos_ws_01.xyz); 
-                Store3(ssbo_dbg_lines_, dbg_line_id*2u+1u, vpos_enc); 
-                dbg_line_id++; 
+//                 vec4 vpos_ws_00 = vec4(vpos - normalize(pdir0) * dbg_line_len, 1.0f);
+//                 vec4 vpos_ws_01 = vec4(vpos + normalize(pdir0) * dbg_line_len, 1.0f);
+//                 uvec3 vpos_enc = floatBitsToUint(vpos_ws_00.xyz); 
+//                 Store3(ssbo_dbg_lines_, dbg_line_id*2u,      vpos_enc);
+//                 vpos_enc = floatBitsToUint(vpos_ws_01.xyz); 
+//                 Store3(ssbo_dbg_lines_, dbg_line_id*2u+1u, vpos_enc); 
+//                 dbg_line_id++; 
 
-                // vec4 vpos_ws_10 = vec4(vpos - normalize(pdir1) * dbg_line_len, 1.0f);
-                // vec4 vpos_ws_11 = vec4(vpos + normalize(pdir1) * dbg_line_len, 1.0f);
-                // vpos_enc = floatBitsToUint(vpos_ws_10.xyz); 
-                // Store3(ssbo_dbg_lines_, dbg_line_id*2u, vpos_enc);
-                // vpos_enc = floatBitsToUint(vpos_ws_11.xyz); 
-                // Store3(ssbo_dbg_lines_, dbg_line_id*2u+1u, vpos_enc); 
-                // dbg_line_id++; 
+//                 // vec4 vpos_ws_10 = vec4(vpos - normalize(pdir1) * dbg_line_len, 1.0f);
+//                 // vec4 vpos_ws_11 = vec4(vpos + normalize(pdir1) * dbg_line_len, 1.0f);
+//                 // vpos_enc = floatBitsToUint(vpos_ws_10.xyz); 
+//                 // Store3(ssbo_dbg_lines_, dbg_line_id*2u, vpos_enc);
+//                 // vpos_enc = floatBitsToUint(vpos_ws_11.xyz); 
+//                 // Store3(ssbo_dbg_lines_, dbg_line_id*2u+1u, vpos_enc); 
+//                 // dbg_line_id++; 
                 
-                dbg_line_len = pcs_dbg_geom_scale_; 
-                // if (!vf.crease) dbg_line_len = .0f; 
-                // dbg_line_len = max_curv > pcs_dbg_geom_scale_ ? .05f : .0f; 
-                dbg_line_len = (near_contour && cusp_func.x < .0f) ? pcs_dbg_geom_scale_/*  * cusp_func.x */ : .0f; 
-                // dbg_line_len = (vf.front_facing) ? pcs_dbg_geom_scale_/*  * cusp_func.x */ : .0f; 
-                vec4 vpos_ws_10 = vec4(vpos, 1.0f);
-                vec4 vpos_ws_11 = vec4(vpos + normalize(vnor) * dbg_line_len, 1.0f);
-                vpos_enc = floatBitsToUint(vpos_ws_10.xyz); 
-                Store3(ssbo_dbg_lines_, dbg_line_id*2u, vpos_enc);
-                vpos_enc = floatBitsToUint(vpos_ws_11.xyz); 
-                Store3(ssbo_dbg_lines_, dbg_line_id*2u+1u, vpos_enc); 
-                dbg_line_id++; 
+//                 dbg_line_len = pcs_dbg_geom_scale_; 
+//                 // if (!vf.crease) dbg_line_len = .0f; 
+//                 // dbg_line_len = max_curv > pcs_dbg_geom_scale_ ? .05f : .0f; 
+//                 dbg_line_len = (near_contour && cusp_func.x < .0f) ? pcs_dbg_geom_scale_/*  * cusp_func.x */ : .0f; 
+//                 // dbg_line_len = (vf.front_facing) ? pcs_dbg_geom_scale_/*  * cusp_func.x */ : .0f; 
+//                 vec4 vpos_ws_10 = vec4(vpos, 1.0f);
+//                 vec4 vpos_ws_11 = vec4(vpos + normalize(vnor) * dbg_line_len, 1.0f);
+//                 vpos_enc = floatBitsToUint(vpos_ws_10.xyz); 
+//                 Store3(ssbo_dbg_lines_, dbg_line_id*2u, vpos_enc);
+//                 vpos_enc = floatBitsToUint(vpos_ws_11.xyz); 
+//                 Store3(ssbo_dbg_lines_, dbg_line_id*2u+1u, vpos_enc); 
+//                 dbg_line_id++; 
 
-                dbg_line_len = pcs_dbg_geom_scale_; 
-                if (!vf.corner) dbg_line_len = .0f; 
-                // dbg_line_len = .0f; 
-#define ssbo_vtx_remesh_len_ ssbo_vcurv_pdirs_k1k2_
-                float remesh_edge_len = uintBitsToFloat(ssbo_vtx_remesh_len_[vert_id]); 
-                // dbg_line_len = pcs_dbg_geom_scale_ * remesh_edge_len;
-#undef ssbo_vtx_remesh_len_
-                // dbg_line_len = pcs_dbg_geom_scale_;
-                // dbg_line_len = pcs_dbg_geom_scale_ * max_curv;
-                // dbg_line_len = valid_curv ? .0f : pcs_dbg_geom_scale_;                
-                dbg_line_len = (near_contour && cusp_func.x >= .0f) ? pcs_dbg_geom_scale_/*  * cusp_func.x */ : .0f; 
-                // dbg_line_len = (vf.back_facing) ? pcs_dbg_geom_scale_/*  * cusp_func.x */ : .0f; 
-                vec4 vpos_ws_20 = vec4(vpos, 1.0f);
-                vec4 vpos_ws_21 = vec4(vpos + normalize(vnor) * dbg_line_len, 1.0f);
-                vpos_enc = floatBitsToUint(vpos_ws_20.xyz);
-                Store3(ssbo_dbg_lines_, dbg_line_id*2u, vpos_enc);
-                vpos_enc = floatBitsToUint(vpos_ws_21.xyz);
-                Store3(ssbo_dbg_lines_, dbg_line_id*2u+1u, vpos_enc);
-                dbg_line_id++; 
-            }
+//                 dbg_line_len = pcs_dbg_geom_scale_; 
+//                 if (!vf.corner) dbg_line_len = .0f; 
+//                 // dbg_line_len = .0f; 
+// #define ssbo_vtx_remesh_len_ ssbo_vcurv_pdirs_k1k2_
+//                 float remesh_edge_len = uintBitsToFloat(ssbo_vtx_remesh_len_[vert_id]); 
+//                 // dbg_line_len = pcs_dbg_geom_scale_ * remesh_edge_len;
+// #undef ssbo_vtx_remesh_len_
+//                 // dbg_line_len = pcs_dbg_geom_scale_;
+//                 // dbg_line_len = pcs_dbg_geom_scale_ * max_curv;
+//                 // dbg_line_len = valid_curv ? .0f : pcs_dbg_geom_scale_;                
+//                 dbg_line_len = (near_contour && cusp_func.x >= .0f) ? pcs_dbg_geom_scale_/*  * cusp_func.x */ : .0f; 
+//                 // dbg_line_len = (vf.back_facing) ? pcs_dbg_geom_scale_/*  * cusp_func.x */ : .0f; 
+//                 vec4 vpos_ws_20 = vec4(vpos, 1.0f);
+//                 vec4 vpos_ws_21 = vec4(vpos + normalize(vnor) * dbg_line_len, 1.0f);
+//                 vpos_enc = floatBitsToUint(vpos_ws_20.xyz);
+//                 Store3(ssbo_dbg_lines_, dbg_line_id*2u, vpos_enc);
+//                 vpos_enc = floatBitsToUint(vpos_ws_21.xyz);
+//                 Store3(ssbo_dbg_lines_, dbg_line_id*2u+1u, vpos_enc);
+//                 dbg_line_id++; 
+//             }
         }
     #endif
 
 
 
     #if defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1_GRAD_VDOTN)
-        ctx.grad_vdotn /= ctx.sum_weight_gradvdn;
+        ctx.grad_vdotn /= ctx.sum_weight_gradvdn; 
+        
         float grad_vdotn_len = length(ctx.grad_vdotn);
-        vec3 bigrad = cross(ctx.grad_vdotn, vnor); 
+        vec3 bigrad = cross(ctx.grad_vdotn / grad_vdotn_len, vnor); 
         
         if (0 < pcs_output_dbg_geom_)
         {
-            // VertFlags vf = decode_vert_flags(ssbo_vert_flags_[vert_id]); 
-            // bool dbg_vtx_curv = (!vf.dupli) && (!vf.del_by_collapse) && valid_thread; 
-            // uint dbg_line_id = compact_pdir_lines(dbg_vtx_curv, groupIdx, 2u);
-            // dbg_line_id += dbg_line_offset; 
+            VertFlags vf = decode_vert_flags(ssbo_vert_flags_[vert_id]); 
+            bool dbg_vtx_grad = (!vf.dupli) && (!vf.del_by_collapse) && valid_thread; 
+            
+            uint dbg_line_id = compact_pdir_lines(dbg_vtx_grad, groupIdx, 3u);
+            dbg_line_id += get_debug_line_offset(DBG_LINE_TYPE__VCURV); 
         
-            // if (dbg_vtx_curv)
-            // {
-            //     float dbg_line_len = min(ctx.ave_edge_len * .4f, pcs_dbg_geom_scale_ * .12f);
+            float dbg_line_len = pcs_dbg_geom_scale_ * min(ctx.ave_edge_len * .4f, grad_vdotn_len);
 
-            //     vec4 vpos_ws_00 = vec4(vpos - (ctx.grad_vdotn / grad_vdotn_len) * dbg_line_len, 1.0f);
-            //     vec4 vpos_ws_01 = vec4(vpos + (ctx.grad_vdotn / grad_vdotn_len) * dbg_line_len, 1.0f);
-            //     uvec3 vpos_enc = floatBitsToUint(vpos_ws_00.xyz); 
-            //     Store3(ssbo_dbg_lines_, dbg_line_id*2u,      vpos_enc);
-            //     vpos_enc = floatBitsToUint(vpos_ws_01.xyz); 
-            //     Store3(ssbo_dbg_lines_, dbg_line_id*2u + 1u, vpos_enc); 
-            //     dbg_line_id++; 
+            if (dbg_vtx_grad)
+            {
+                vec3 grad_vdotn_dir = grad_vdotn_len < 1e-10f ? vec3(.0f) : ctx.grad_vdotn / grad_vdotn_len;
+
+                vec4 vpos_ws_00 = vec4(vpos, 1.0f);
+                vec4 vpos_ws_01 = vec4(vpos + (ctx.grad_vdotn / grad_vdotn_len) * dbg_line_len, 1.0f);
+                if (cusp_func < .0f) vpos_ws_01 = vpos_ws_00; // eliminate neg cusp points
+                uvec3 vpos_enc = floatBitsToUint(vpos_ws_00.xyz); 
+                Store3(ssbo_dbg_lines_, dbg_line_id*2u,      vpos_enc);
+                vpos_enc = floatBitsToUint(vpos_ws_01.xyz); 
+                Store3(ssbo_dbg_lines_, dbg_line_id*2u + 1u, vpos_enc); 
+                dbg_line_id++; 
                 
-            //     // vec4 vpos_ws_10 = vec4(vpos - normalize(vnor) * dbg_line_len, 1.0f);
-            //     // vec4 vpos_ws_11 = vec4(vpos - normalize(vnor) * dbg_line_len, 1.0f);
-            //     // // if (any(isnan(ctx.grad_vdotn.xyz)))
-            //     // //     vpos_ws_11 = vec4(vpos + normalize(vnor) * dbg_line_len, 1.0f);
-            //     // vpos_enc = floatBitsToUint(vpos_ws_10.xyz); 
-            //     // Store3(ssbo_dbg_lines_, dbg_line_id*2u,      vpos_enc);
-            //     // vpos_enc = floatBitsToUint(vpos_ws_11.xyz); 
-            //     // Store3(ssbo_dbg_lines_, dbg_line_id*2u + 1u, vpos_enc); 
-            //     // dbg_line_id++; 
+                vec4 vpos_ws_10 = vec4(vpos, 1.0f);
+                vec4 vpos_ws_11 = vec4(vpos + (ctx.grad_vdotn / grad_vdotn_len) * dbg_line_len, 1.0f);
+                if (cusp_func > .0f) vpos_ws_11 = vpos_ws_10; // eliminate neg cusp points
+                vpos_enc = floatBitsToUint(vpos_ws_10.xyz); 
+                Store3(ssbo_dbg_lines_, dbg_line_id*2u,      vpos_enc);
+                vpos_enc = floatBitsToUint(vpos_ws_11.xyz); 
+                Store3(ssbo_dbg_lines_, dbg_line_id*2u + 1u, vpos_enc); 
+                dbg_line_id++; 
 
-            // }
+                vec4 vpos_ws_20 = vec4(vpos, 1.0f); // dummy
+                vec4 vpos_ws_21 = vec4(vpos, 1.0f);
+                vpos_enc = floatBitsToUint(vpos_ws_20.xyz); 
+                Store3(ssbo_dbg_lines_, dbg_line_id*2u,      vpos_enc);
+                vpos_enc = floatBitsToUint(vpos_ws_21.xyz); 
+                Store3(ssbo_dbg_lines_, dbg_line_id*2u + 1u, vpos_enc); 
+                dbg_line_id++; 
+            }
         }
     #endif
     
