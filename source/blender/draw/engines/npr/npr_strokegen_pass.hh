@@ -158,8 +158,8 @@ public:
 
 
   // ---------------------------------------------------------------------------
-  void append_subpass_merge_vbo(gpu::Batch* gpu_batch_surf, int batch_resource_index, int num_verts);
-  void append_subpass_merge_line_adj_ibo(gpu::Batch* gpu_batch_line_adj,
+  void append_subpass_cpy_vbo(gpu::Batch* gpu_batch_surf, int batch_resource_index, int num_verts);
+  void append_subpass_cpy_line_adj_ibo(gpu::Batch* gpu_batch_line_adj,
                                          gpu::GPUIndexBufType ib_type,
                                          int num_added_edges);
 
@@ -174,7 +174,7 @@ public:
    bool output_selected_to_edge; // has effect only when .compact_edges==true
    bool output_edge_to_selected; // has effect only when .compact_edges==true
   };
-  void append_subpass_diffuse_edge_selection(int num_edges, int num_verts, EdgeFloodingOptions options);
+  void append_subpass_select_remeshed_edges(int num_edges, int num_verts, EdgeFloodingOptions options);
   void append_subpass_mark_selection_border_edges(int num_edges, int num_verts);
 
 
@@ -220,7 +220,6 @@ public:
     bool denoise_cusp_segmentation; 
     float visibility_thresh; 
   } meshing_params;
-  void append_subpass_fill_selected_mesh_elems_indirect_dispatch_args_();
 
 
   // ---------------------------------------------------------------------------
@@ -263,8 +262,8 @@ public:
   void append_subpass_collapse_edges(int iter_remesh, int iter_collapse, int num_edges, int num_verts);
   void append_subpass_flip_edges(EdgeFlipOptiGoal opti_goal, int iter_flip, int num_edges, int num_verts);
   void append_subpass_split_faces(int iter_split, int num_edges, int num_verts); 
-  void append_subpass_fill_dispatched_args_remeshed_edges_(int num_static_edges, bool only_selected_edges);
-  void append_subpass_fill_dispatched_args_remeshed_verts_(int num_static_verts, bool only_selected_elems_);
+  void append_subpass_fill_dispatch_args_remeshed_edges_(int num_static_edges, bool only_selected_edges);
+  void append_subpass_fill_dispatch_args_remeshed_verts_(int num_static_verts, bool only_selected_elems_);
 
 
   // ---------------------------------------------------------------------------

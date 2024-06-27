@@ -351,8 +351,8 @@ namespace blender::npr::strokegen
 
       append_subpass_split_faces(0, num_edges, num_verts);
       // update elem counters after face split
-      append_subpass_fill_dispatched_args_remeshed_edges_(num_edges, true);
-      append_subpass_fill_dispatched_args_remeshed_verts_(num_verts, false);
+      append_subpass_fill_dispatch_args_remeshed_edges_(num_edges, true);
+      append_subpass_fill_dispatch_args_remeshed_verts_(num_verts, false);
       
       append_subpass_flip_edges(SqrtSubdiv, 0, num_edges, num_verts);
 
@@ -372,8 +372,8 @@ namespace blender::npr::strokegen
       {
         append_subpass_split_edges(LoopSubdivSplit, iter_split, num_edges, num_verts);
         // update elem counters after split
-        append_subpass_fill_dispatched_args_remeshed_edges_(num_edges, true);
-        append_subpass_fill_dispatched_args_remeshed_verts_(num_verts, false);
+        append_subpass_fill_dispatch_args_remeshed_edges_(num_edges, true);
+        append_subpass_fill_dispatch_args_remeshed_verts_(num_verts, false);
       }  
 
       append_subpass_flip_edges(LoopSubdivFlip, 0, num_edges, num_verts);
@@ -450,8 +450,8 @@ namespace blender::npr::strokegen
     /* GPU_storagebuf_copy_sub_from_vertbuf(
      *  buffers_.ssbo_vbo_full_, gpu_batch_surf->verts[0], 4 * num_total_mesh_verts, 0, 4 * num_verts
      * ); */
-    append_subpass_merge_vbo(gpu_batch_surf, batch_resource_index, num_verts);
-    append_subpass_merge_line_adj_ibo(gpu_batch_line_adj, ib_type, num_edges);
+    append_subpass_cpy_vbo(gpu_batch_surf, batch_resource_index, num_verts);
+    append_subpass_cpy_line_adj_ibo(gpu_batch_line_adj, ib_type, num_edges);
 
     // Basic Meshing -----------------------------------------------------------
     append_subpass_meshing_merge_verts(num_verts);
@@ -463,9 +463,9 @@ namespace blender::npr::strokegen
     flooding_options.compact_edges = true;
     flooding_options.output_selected_to_edge = true;
     flooding_options.output_edge_to_selected = false;
-    append_subpass_diffuse_edge_selection(num_edges, num_verts, flooding_options);
-    append_subpass_fill_selected_mesh_elems_indirect_dispatch_args_(); 
-    append_subpass_fill_dispatched_args_remeshed_edges_(num_edges, true);
+    append_subpass_select_remeshed_edges(num_edges, num_verts, flooding_options);
+    append_subpass_fill_dispatch_args_remeshed_edges_(num_edges, true);
+
     append_subpass_mark_selection_border_edges(num_edges, num_verts); 
 
     SelectVertsFromEdgesContext vtx_sel_ctx_flooding;
@@ -503,14 +503,14 @@ namespace blender::npr::strokegen
       int num_edge_split_iters = meshing_params.remeshing_split_iters;
         for (int iter_edge_split = 0; iter_edge_split < num_edge_split_iters; ++iter_edge_split) {
           if (should_remesh_when_dbg()) {
-            append_subpass_fill_dispatched_args_remeshed_edges_(num_edges, true);
+            append_subpass_fill_dispatch_args_remeshed_edges_(num_edges, true);
             append_subpass_split_edges(LongEdge, iter_edge_split, num_edges, num_verts);
             dbg_step++;   
           }
         }
       // update elem counters after split
-      append_subpass_fill_dispatched_args_remeshed_edges_(num_edges, true); 
-      append_subpass_fill_dispatched_args_remeshed_verts_(num_verts, false);
+      append_subpass_fill_dispatch_args_remeshed_edges_(num_edges, true); 
+      append_subpass_fill_dispatch_args_remeshed_verts_(num_verts, false);
 
 
       EdgeFlipOptiGoal opti_goal = Delaunay;
@@ -585,11 +585,11 @@ namespace blender::npr::strokegen
           rsc_handle, num_verts, num_edges, surf_analysis_ctx_contour, surf_dbg_ctx_cpy);
       
       for (int iter_contour_insertion = 0; iter_contour_insertion < 6; ++iter_contour_insertion) {
-        append_subpass_fill_dispatched_args_remeshed_edges_(num_edges, true);
+        append_subpass_fill_dispatch_args_remeshed_edges_(num_edges, true);
         append_subpass_split_edges(InterpContour, iter_contour_insertion, num_edges, num_verts);
         // update elem counters after split
-        append_subpass_fill_dispatched_args_remeshed_edges_(num_edges, true);
-        append_subpass_fill_dispatched_args_remeshed_verts_(num_verts, false);
+        append_subpass_fill_dispatch_args_remeshed_edges_(num_edges, true);
+        append_subpass_fill_dispatch_args_remeshed_verts_(num_verts, false);
       }
     }
     
@@ -600,15 +600,14 @@ namespace blender::npr::strokegen
       auto surf_dbg_ctx_cpy = surf_dbg_ctx;
       surf_dbg_ctx_cpy.dbg_vert_normal = surf_dbg_ctx.dbg_vert_normal;
       surf_dbg_ctx_cpy.dbg_vert_curv = surf_dbg_ctx.dbg_vert_curv;
-      append_subpass_surf_geom_analysis(
-          rsc_handle, num_verts, num_edges, surf_analysis_ctx_contour, surf_dbg_ctx_cpy);
+      append_subpass_surf_geom_analysis(rsc_handle, num_verts, num_edges, surf_analysis_ctx_contour, surf_dbg_ctx_cpy);
     }
 
 
 
     // Contour Processing --------------------------------------------------------
-    append_subpass_fill_dispatched_args_remeshed_edges_(num_edges, false);
-    append_subpass_fill_dispatched_args_remeshed_verts_(num_verts, false);
+    append_subpass_fill_dispatch_args_remeshed_edges_(num_edges, false);
+    append_subpass_fill_dispatch_args_remeshed_verts_(num_verts, false);
     append_subpass_extract_contour_edges(
         gpu_batch_line_adj,
         rsc_handle,
@@ -617,7 +616,7 @@ namespace blender::npr::strokegen
         ib_type,
         meshing_params.edge_visualize_mode,
         meshing_params.contour_mode
-        );
+      );
 
     append_subpass_fill_dispatch_args_contour_edges(pass_extract_geom(), false);
     append_subpass_setup_contour_edge_data();
@@ -667,7 +666,7 @@ namespace blender::npr::strokegen
           sub, num_verts, num_edges, ssbo_offset); 
     };
 
-    append_subpass_fill_dispatched_args_remeshed_verts_(num_verts, only_selected_verts);
+    append_subpass_fill_dispatch_args_remeshed_verts_(num_verts, only_selected_verts);
 
 
     if (mode == TangentialSmoothing) {
@@ -779,7 +778,7 @@ namespace blender::npr::strokegen
     /* For loop subd, we also need to cache new points on old edges */
     if (mode == LoopSubdivSmoothCache)
     {
-      append_subpass_fill_dispatched_args_remeshed_edges_(num_edges, true); 
+      append_subpass_fill_dispatch_args_remeshed_edges_(num_edges, true); 
 
       {
         auto &sub = pass_extract_geom().sub(
@@ -799,7 +798,7 @@ namespace blender::npr::strokegen
   void StrokeGenPassModule::append_subpass_vertex_curv_smoothing(
     int iter_smooth, int num_verts, int num_edges, bool only_selected_verts, bool output_remesh_len)
   {
-    append_subpass_fill_dispatched_args_remeshed_verts_(num_verts, only_selected_verts);
+    append_subpass_fill_dispatch_args_remeshed_verts_(num_verts, only_selected_verts);
 
     {
       auto &sub = pass_extract_geom().sub("bnpr_meshing_surf_filtering_vcurv_smoothing");
@@ -834,7 +833,7 @@ namespace blender::npr::strokegen
       sub.push_constant("pcs_edge_count_", num_edges);
     };
 
-    append_subpass_fill_dispatched_args_remeshed_edges_(num_edges, true); 
+    append_subpass_fill_dispatch_args_remeshed_edges_(num_edges, true); 
     {
       auto &sub = pass_extract_geom().sub("bnpr_meshing_edge_selection_mark_selection_border");
       sub.shader_set(shaders_.static_shader_get(MESH_WEDGE_MARK_EDGES_ON_SELECTION_BORDER)); 
@@ -865,7 +864,7 @@ namespace blender::npr::strokegen
       sub.push_constant("pcs_vertex_selection_slots_", active_sel_slots); 
     }; 
 
-    append_subpass_fill_dispatched_args_remeshed_edges_(num_edges, true);
+    append_subpass_fill_dispatch_args_remeshed_edges_(num_edges, true);
     {
       auto &sub = pass_extract_geom().sub("strokegen_select_verts_from_selected_edges");
       sub.shader_set(shaders_.static_shader_get(MESH_SELECT_VERTS_FROM_SELECTED_EDGES));
@@ -874,7 +873,7 @@ namespace blender::npr::strokegen
       sub.barrier(GPU_BARRIER_SHADER_STORAGE); 
     }
 
-    append_subpass_fill_dispatched_args_remeshed_edges_(num_edges, false);
+    append_subpass_fill_dispatch_args_remeshed_edges_(num_edges, false);
     if (ctx.expand_selection) {
       auto &sub = pass_extract_geom().sub("strokegen_expand_verts_from_selected_edges");
       sub.shader_set(shaders_.static_shader_get(MESH_EXPAND_VERTS_FROM_SELECTED_EDGES));
@@ -885,7 +884,7 @@ namespace blender::npr::strokegen
       sub.barrier(GPU_BARRIER_SHADER_STORAGE); 
     }
     
-    append_subpass_fill_dispatched_args_remeshed_verts_(num_verts, false);
+    append_subpass_fill_dispatch_args_remeshed_verts_(num_verts, false);
     if (ctx.compact_verts) {
       auto &sub = pass_extract_geom().sub("strokegen_compact_selected_verts");
       sub.shader_set(shaders_.static_shader_get(MESH_COMPACT_SELECTED_VERTS));
@@ -898,9 +897,9 @@ namespace blender::npr::strokegen
     }
   }
 
-  void StrokeGenPassModule::append_subpass_merge_vbo(gpu::Batch *gpu_batch_surf, int batch_resource_index, int num_verts)
+  void StrokeGenPassModule::append_subpass_cpy_vbo(gpu::Batch *gpu_batch_surf, int batch_resource_index, int num_verts)
   {
-    auto &sub = pass_extract_geom().sub("merge batch vbo");
+    auto &sub = pass_extract_geom().sub("bnpr_geom_extract_collect_verts");
       
     sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_COLLECT_VBO)); 
       
@@ -920,12 +919,12 @@ namespace blender::npr::strokegen
     sub.barrier(GPU_BARRIER_SHADER_STORAGE);
   }
 
-  void StrokeGenPassModule::append_subpass_merge_line_adj_ibo(
+  void StrokeGenPassModule::append_subpass_cpy_line_adj_ibo(
       gpu::Batch *gpu_batch_line_adj,
       gpu::GPUIndexBufType ib_type,
       int num_added_edges)
   {
-    auto &sub = pass_extract_geom().sub("merge batch edge adj ibo");
+    auto &sub = pass_extract_geom().sub("bnpr_geom_extract_collect_edges");
 
     if (ib_type == gpu::GPU_INDEX_U16)
       sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_COLLECT_EDGE_ADJ_IBO_16BIT));
@@ -1055,7 +1054,7 @@ namespace blender::npr::strokegen
     }
   }
 
-  void StrokeGenPassModule::append_subpass_diffuse_edge_selection(int num_edges, int num_verts, EdgeFloodingOptions options)
+  void StrokeGenPassModule::append_subpass_select_remeshed_edges(int num_edges, int num_verts, EdgeFloodingOptions options)
   {
     auto bind_flooding_rsc = [&](
         draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub,
@@ -1113,30 +1112,6 @@ namespace blender::npr::strokegen
       int num_groups = compute_num_groups(num_edges, GROUP_SIZE_STROKEGEN_GEOM_EXTRACT);
       sub.dispatch(int3(num_groups, 1, 1));
       sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_SHADER_IMAGE_ACCESS);
-    }
-  }
-
-  void StrokeGenPassModule::append_subpass_fill_selected_mesh_elems_indirect_dispatch_args_()
-  {
-    auto bind_src = [&](draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub) {
-      sub.bind_ssbo(0, buffers_.ssbo_bnpr_mesh_pool_counters_);
-      sub.bind_ssbo(1, buffers_.ssbo_indirect_dispatch_args_per_filtered_edge_);
-      sub.bind_ssbo(2, buffers_.ssbo_indirect_dispatch_args_per_filtered_vert_);
-      sub.push_constant("pc_meshing_dispatch_group_size_", (int)GROUP_SIZE_STROKEGEN_GEOM_EXTRACT); 
-    }; 
-    {
-      auto &sub = pass_extract_geom().sub("bnpr_meshing_fill_dispatch_args_per_filtered_edge");
-      sub.shader_set(shaders_.static_shader_get(FILL_DISPATCH_ARGS_FILTERED_EDGES));
-      bind_src(sub);
-      sub.dispatch(int3(1, 1, 1));  
-      sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
-    }
-    {
-      auto &sub = pass_extract_geom().sub("bnpr_meshing_fill_dispatch_args_per_filtered_vert");
-      sub.shader_set(shaders_.static_shader_get(FILL_DISPATCH_ARGS_FILTERED_VERTS));
-      bind_src(sub);
-      sub.dispatch(int3(1, 1, 1));
-      sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
     }
   }
 
@@ -1447,7 +1422,7 @@ namespace blender::npr::strokegen
     }
   }
 
-  void StrokeGenPassModule::append_subpass_fill_dispatched_args_remeshed_edges_(int num_static_edges, bool only_selected_edges)
+  void StrokeGenPassModule::append_subpass_fill_dispatch_args_remeshed_edges_(int num_static_edges, bool only_selected_edges)
   {
     auto &sub = pass_extract_geom().sub("strokegen_remeshing_fill_dispatch_args_per_remeshed_edge");
     sub.shader_set(shaders_.static_shader_get(FILL_DISPATCH_ARGS_REMESHED_EDGES));
@@ -1464,7 +1439,7 @@ namespace blender::npr::strokegen
     sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE); 
   }
 
-  void StrokeGenPassModule::append_subpass_fill_dispatched_args_remeshed_verts_(
+  void StrokeGenPassModule::append_subpass_fill_dispatch_args_remeshed_verts_(
       int num_static_verts, bool only_selected_elems_)
   {
     auto &sub = pass_extract_geom().sub("strokegen_remeshing_fill_dispatch_args_per_remeshed_vert");
@@ -1570,7 +1545,7 @@ namespace blender::npr::strokegen
 
     // Calculate Feature Edges
     if (ctx.calc_feature_edges) {
-      append_subpass_fill_dispatched_args_remeshed_edges_(num_edges, ctx.only_selected_edges);
+      append_subpass_fill_dispatch_args_remeshed_edges_(num_edges, ctx.only_selected_edges);
       {
         auto &sub = pass_extract_geom().sub("bnpr_geom_analysis_feature_edges");
         sub.shader_set(shaders_.static_shader_get(MESH_ANALYSE_EDGE_FEATURES));
@@ -1586,7 +1561,7 @@ namespace blender::npr::strokegen
 
 
     // Calculate Order-0 Vertex Attributes
-    append_subpass_fill_dispatched_args_remeshed_verts_(num_verts, ctx.order_0_only_selected); 
+    append_subpass_fill_dispatch_args_remeshed_verts_(num_verts, ctx.order_0_only_selected); 
     if (ctx.calc_vert_normal)
     {
       auto &sub = pass_extract_geom().sub("bnpr_geom_analysis_order_0_vert_normal");
@@ -1619,8 +1594,8 @@ namespace blender::npr::strokegen
     }
 
     // Calculate Order-1 Vertex Attributes
-    append_subpass_fill_dispatched_args_remeshed_edges_(num_edges, ctx.order_1_only_selected); 
-    append_subpass_fill_dispatched_args_remeshed_verts_(num_verts, ctx.order_1_only_selected); 
+    append_subpass_fill_dispatch_args_remeshed_edges_(num_edges, ctx.order_1_only_selected); 
+    append_subpass_fill_dispatch_args_remeshed_verts_(num_verts, ctx.order_1_only_selected); 
     int ssbo_offset_base_1 = 0; 
     auto bind_src_order_1 = [&](draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub,
                                 bool output_dbg_lines = false) {

@@ -646,7 +646,7 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_extract_collect_verts)
     .typedef_source("draw_shader_shared.hh")
     .additional_info("npr_compaction_off") /* Remove compaction code */
     .define("DECODE_IBO_EXCLUDE", "1") /* Remove ibo code */
-    .define("_KERNEL_MULTICOMPILE__COMPACT_VBO", "1")
+    .define("_KERNEL_MULTICOMPILE__COPY_VBO", "1")
 
     .storage_buf(0, Qualifier::READ, "uint", "ssbo_meshbatch_ibo_[]")
     .storage_buf(1, Qualifier::READ, "float", "ssbo_meshbatch_vbo_[]") /* encoded posnor vbo */
@@ -667,7 +667,7 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_extract_collect_edges)
     .typedef_source("bnpr_shader_shared.hh")
     .typedef_source("draw_shader_shared.hh")
     .additional_info("npr_compaction_off") /* Remove compaction code */
-    .define("_KERNEL_MULTICOMPILE__COMPACT_EDGE_ADJ_IBO", "1")
+    .define("_KERNEL_MULTICOMPILE__COPY_EDGE_ADJ_IBO", "1")
     .define("DECODE_IBO_INCLUDE", "1")
 
     .storage_buf(0, Qualifier::READ, "uint", "IBO_BUF[]")

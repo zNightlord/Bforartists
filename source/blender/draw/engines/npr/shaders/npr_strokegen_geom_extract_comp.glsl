@@ -54,7 +54,7 @@ void main()
 #endif
 
 
-#if defined(_KERNEL_MULTICOMPILE__COMPACT_VBO)
+#if defined(_KERNEL_MULTICOMPILE__COPY_VBO)
  void main()
  {
 	const uint groupId = gl_LocalInvocationID.x; 
@@ -106,7 +106,7 @@ void main()
 #endif
 
 
-#if defined(_KERNEL_MULTICOMPILE__COMPACT_EDGE_ADJ_IBO)
+#if defined(_KERNEL_MULTICOMPILE__COPY_EDGE_ADJ_IBO)
  void main()
  {
 	const uint groupId = gl_LocalInvocationID.x; 
