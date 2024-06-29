@@ -923,6 +923,10 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_merge_edges_hashing)
     .do_static_compilation(true)
     .additional_info("bnpr_meshing_edge_adjecency")
     .define("_KERNEL_MULTICOMPILE__EDGE_ADJACENCY_HASHING", "1");
+GPU_SHADER_CREATE_INFO(bnpr_meshing_merge_edges_hashing_finish)
+    .do_static_compilation(true)
+    .additional_info("bnpr_meshing_edge_adjecency")
+    .define("_KERNEL_MULTICOMPILE__EDGE_ADJACENCY_HASHING_FINISH", "1");
 GPU_SHADER_CREATE_INFO(bnpr_meshing_merge_edges_fill)
     .do_static_compilation(true)
     .additional_info("bnpr_meshing_edge_adjecency")

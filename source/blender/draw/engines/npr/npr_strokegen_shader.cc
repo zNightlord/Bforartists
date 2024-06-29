@@ -200,7 +200,9 @@ const char *StrokeGenShaderModule::static_shader_create_info_name_get(eShaderTyp
     case MESH_EDGE_ADJACENCY_INIT:
       return "bnpr_meshing_merge_edges_bootstrap"; 
     case MESH_EDGE_ADJACENCY_HASH:
-      return "bnpr_meshing_merge_edges_hashing"; 
+      return "bnpr_meshing_merge_edges_hashing";
+    case MESH_EDGE_ADJACENCY_HASH_FINISH:
+      return "bnpr_meshing_merge_edges_hashing_finish"; 
     case MESH_EDGE_ADJACENCY_FILL:
       return "bnpr_meshing_merge_edges_fill";
 

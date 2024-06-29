@@ -568,10 +568,10 @@ namespace blender::npr::strokegen
     }
 
     if (meshing_params.contour_mode != ContourType::Raw) {
-      if (meshing_params.subdiv_type == 0)
+      if (meshing_params.subdiv_type == 1)
         append_subpasses_sqrt_subdiv(num_edges, num_verts);
       else
-        append_subpasses_loop_subdiv(num_edges, num_verts);
+        append_subpasses_loop_subdiv(num_edges, num_verts); // default path
     }
 
     // test interpolated contour tessellation
@@ -1027,7 +1027,6 @@ namespace blender::npr::strokegen
       sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_EDGE_ADJACENCY_INIT));
 
       bind_rsc(sub);
-      /* TODO: use GL buffer copy function rather than this */
       int num_groups = compute_num_groups(hashmap_size, GROUP_SIZE_STROKEGEN_GEOM_EXTRACT);
       sub.dispatch(int3(num_groups, 1, 1));
       sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_SHADER_IMAGE_ACCESS);
@@ -1035,6 +1034,16 @@ namespace blender::npr::strokegen
     {
       auto &sub = pass_extract_geom().sub("bnpr_meshing_edge_adj_hashing");
       sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_EDGE_ADJACENCY_HASH));
+
+      bind_rsc(sub);
+
+      int num_groups = compute_num_groups(num_edges_in, GROUP_SIZE_STROKEGEN_GEOM_EXTRACT);
+      sub.dispatch(int3(num_groups, 1, 1));
+      sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_SHADER_IMAGE_ACCESS);
+    }
+    {
+      auto &sub = pass_extract_geom().sub("bnpr_meshing_edge_adj_hashing_finish");
+      sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_EDGE_ADJACENCY_HASH_FINISH));
 
       bind_rsc(sub);
 

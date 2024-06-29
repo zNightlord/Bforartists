@@ -299,7 +299,10 @@ void main()
 
 #if defined(_KERNEL_MULTICOMPILE__EDGE_ADJACENCY_BOOTSTRAP)
     const uint st_hash_addr = idx.x; /* TODO: use GL buffer copy function rather than this */
+    /* Init hash map */
     SSBO_HASH_MAP_HEADERS[st_hash_addr] = CHECKSUM_EMPTY;
+    /* Prep for atomic min op on hash payloads */
+    ssbo_edge_spatial_map_payloads_[st_hash_addr] = 0xffffffffu; 
 #endif
 
 
@@ -312,7 +315,7 @@ void main()
     vid[3] = ssbo_edge_to_vert_[base_addr+3];
     bool is_border = line_adj_is_border_edge(vid);
    
-    /* fetch merged id */
+    /* fetch merged vtx id */
     for (uint i = 0u; i < 4u; i++) {
         uint vert_id = vid[i]; 
         uint merged_id = ssbo_vert_merged_id_[vert_id]; 
@@ -320,7 +323,7 @@ void main()
     }
     uvec2 edge_verts = uvec2(vid[1], vid[2]); /*v1, 2 is on the edge*/
 
-    /* store merged id, also transform to wedge index order */
+    /* Store e-v linkage, also transform to wedge index order */
     uvec4 wing_verts = line_adj_to_wing_verts(vid); 
     if (valid_thread) {
         ssbo_edge_to_vert_[base_addr+0] = wing_verts[0];
@@ -337,12 +340,30 @@ void main()
 
     barrier(); /* must be outside of any dynamic control divergence */
 
-    if (inserted) 
-    { /* store edge id. safe since we ensure <=1 vert doing this */
-        ssbo_edge_spatial_map_payloads_[hash_id] = EdgeID; 
-        /*atomicAdd(GLOBAL_COMPACTION_COUNTER__NUM_EDGES, 1);*/ /*debug only*/
+    if (valid_thread && (hash_id != NOT_FOUND)) 
+    { /* Use the minimum edge id as merged id, so that it's deterministic.
+       * This is required for temporal coherency.
+      */
+        atomicMin(ssbo_edge_spatial_map_payloads_[hash_id], EdgeID); 
+        /* Cache temporary data */
+        ssbo_edge_to_edges_[EdgeID*4u + 0u] = hash_id;
+        ssbo_edge_to_edges_[EdgeID*4u + 1u] = (is_border ? 1u : 0u);
     }
+#endif
 
+#if defined(_KERNEL_MULTICOMPILE__EDGE_ADJACENCY_HASHING_FINISH)
+    /* Load temp data */
+    uvec2 temp_data = uvec2(
+        ssbo_edge_to_edges_[EdgeID*4u + 0u], 
+        ssbo_edge_to_edges_[EdgeID*4u + 1u]
+    );
+    const uint hash_id   = temp_data.x;
+    const bool valid_hash = (NOT_FOUND != hash_id); 
+    const bool is_border = ((temp_data.y & 1u) == 1u);
+
+    /* Select minimum id among edges with the same hash */
+    uint deduplicated_edge_id = ssbo_edge_spatial_map_payloads_[hash_id]; 
+    bool inserted = valid_hash && (deduplicated_edge_id == EdgeID); 
     if (valid_thread)
     { 
         /* temp cache inserted flag here to avoid hash search for deduplication */
@@ -352,7 +373,13 @@ void main()
         EdgeFlags ef = init_edge_flags(!inserted, is_border);
         store_edge_flags(EdgeID, ef); 
         
-        /* Setup Vert-to-Wedge link */
+        /* Setup v-e link */
+        uvec4 wing_verts; 
+        uint base_addr = EdgeID * 4u; 
+        wing_verts[0] = ssbo_edge_to_vert_[base_addr+0];
+        wing_verts[1] = ssbo_edge_to_vert_[base_addr+1]; 
+        wing_verts[2] = ssbo_edge_to_vert_[base_addr+2];
+        wing_verts[3] = ssbo_edge_to_vert_[base_addr+3];
         uvec2 iverts_cwedge = mark__wedge_to_verts(4u); 
         if (inserted)
             for (uint iiverts = 0u; iiverts < 2u; iiverts++)
@@ -402,7 +429,7 @@ void main()
     if (valid_thread)
         for (uint iwedge = 0u; iwedge < 4u; iwedge++)
         {
-            /* load wedge id */
+            /* load deduplicated id of adjacent wedges  */
             if (valid_edge && (hashmap_index[iwedge] != NOT_FOUND))
                 wedge_id[iwedge] = ssbo_edge_spatial_map_payloads_[hashmap_index[iwedge]]; 
             else
@@ -411,7 +438,7 @@ void main()
             /* find non-overlapping iface in adj. wedge */
             uint iface_adj_non_overlapping = 0u; 
             if (wedge_id[iwedge] != NULL_EDGE)
-            { 
+            { /* one opposite vert of the adj. wedge is inside curr edge, while another vert is outside */
                 uint oppo_vert_id = vids_wedge[mark__border_wedge_to_oppo_vert(iwedge)];
                 
                 uint ld_addr_adj_wedge_data = wedge_id[iwedge] * 4u; 
