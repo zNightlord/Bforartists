@@ -31,27 +31,24 @@ static void draw_data_init_cb(struct DrawData *dd)
   }
 
 
-  BnprDrawData& StrokegenSyncModule::sync_object(Object* ob)
+  ObjectHandle StrokegenSyncModule::sync_object(const ObjectRef& ob_ref)
   {
-    DrawEngineType* owner = (DrawEngineType*)&DRW_engine_viewport_bnpr_type;
-    struct DrawData* dd = DRW_drawdata_ensure(
-      (ID*)ob, owner, sizeof(BnprDrawData), draw_data_init_cb, nullptr);
+    ObjectKey key(ob_ref.object);
 
-    BnprDrawData &dd_bnpr = *reinterpret_cast<BnprDrawData*>(dd); // draw-engine specific draw data.
+    ObjectHandle &handle = ob_handles.lookup_or_add_cb(key, [&]() {
+      ObjectHandle new_handle;
+      new_handle.object_key = key;
+      return new_handle;
+    });
 
-    if (dd_bnpr.object_key.ob == nullptr)
-    {
-      dd_bnpr.object_key = ObjectKey(ob);
-    }
+    handle.recalc = inst_.get_recalc_flags(ob_ref);
 
-
-    return dd_bnpr;
+    return handle;
   }
 
   void StrokegenSyncModule::sync_mesh(
       Object* ob,
       const draw::ObjectRef& ob_ref,
-      BnprDrawData& ob_draw_data,
       draw::ResourceHandle& rsc_handle,
       const DRWView* drw_view
       )

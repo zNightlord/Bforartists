@@ -30,17 +30,20 @@ namespace blender::npr::strokegen
   private:
     Instance &inst_;
 
+
   public:
     StrokegenSyncModule(Instance &inst) : inst_(inst) {};
     ~StrokegenSyncModule(){};
 
-    BnprDrawData &sync_object(Object *ob);
+
+    Map<ObjectKey, ObjectHandle> ob_handles = {};
+
+    ObjectHandle sync_object(const ObjectRef& ob_ref);
     WorldHandle &sync_world(::World *world) {};
     SceneHandle &sync_scene(::Scene *scene) {};
 
     void sync_mesh(Object* ob,
                    const draw::ObjectRef& ob_ref,
-                   BnprDrawData& ob_draw_data,
                    draw::ResourceHandle& rsc_handle, const DRWView* drw_view);
   };
 

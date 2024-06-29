@@ -80,7 +80,11 @@ namespace blender::npr::strokegen
     void mesh_sync(Manager& manager, ObjectRef& object_ref, ResourceHandle& rsc_handle, gpu::Batch** gpu_batch_surf);
 
     void draw_viewport(Manager& manager, View& view, GPUTexture* pre_depth);
-    void end_draw_viewport(); 
+    void end_draw_viewport();
+
+    /* Sync Object */
+    uint64_t depsgraph_last_update_ = 0; 
+    int get_recalc_flags(const ObjectRef &ob_ref) const;
 
   };
 }

@@ -104,6 +104,8 @@ namespace blender::npr::strokegen
   {
     /* Post processing after all object. (Finish recording the commands) */
     strokegen_passes.on_end_sync();
+
+    depsgraph_last_update_ = DEG_get_update_count(depsgraph);
   }
 
   void Instance::mesh_sync(
@@ -124,19 +126,17 @@ namespace blender::npr::strokegen
 
     /* fclem: TODO cleanup. */
     ObjectRef ob_ref = DRW_object_ref_get(ob);
-    BnprDrawData &bnpr_draw_data = sync.sync_object(ob);
 
     if (object_is_visible) {
       switch (ob->type) {
       case OB_MESH:
-        sync.sync_mesh(ob, ob_ref, bnpr_draw_data, rsc_handle, drw_view);
+        sync.sync_mesh(ob, ob_ref, rsc_handle, drw_view);
         break;
       default:
         break;
       }
     }
 
-    bnpr_draw_data.reset_recalc_flag();
   }
 
 
@@ -277,6 +277,27 @@ namespace blender::npr::strokegen
   void Instance::end_draw_viewport()
   {
     strokegen_textures.on_finished_draw_viewport(); 
+  }
+
+  int Instance::get_recalc_flags(const ObjectRef &ob_ref) const
+  {
+    auto get_flags = [&](const ObjectRuntimeHandle &runtime) {
+      int flags = 0;
+      SET_FLAG_FROM_TEST(
+          flags, runtime.last_update_transform > depsgraph_last_update_, ID_RECALC_TRANSFORM);
+      SET_FLAG_FROM_TEST(
+          flags, runtime.last_update_geometry > depsgraph_last_update_, ID_RECALC_GEOMETRY);
+      SET_FLAG_FROM_TEST(
+          flags, runtime.last_update_shading > depsgraph_last_update_, ID_RECALC_SHADING);
+      return flags;
+    };
+
+    int flags = get_flags(*ob_ref.object->runtime);
+    if (ob_ref.dupli_parent) {
+      flags |= get_flags(*ob_ref.dupli_parent->runtime);
+    }
+
+    return flags;
   }
 
   /** \} */
