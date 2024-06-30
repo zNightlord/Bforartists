@@ -4,7 +4,7 @@
 
 
 #if defined(_KERNEL_MULTICOMPILE__GEOM_EXTRACT) || defined(_KERNEL_MULTICOMPILE__EXTRACT_MESH_CONTOUR_DATA)
-/* Rambling between global and local id when extracting contours from curren mesh */
+/* Rambling between global and local id when extracting contours from current mesh */
 uint calc_local_contour_edge_id(uint global_contour_edge_id)
 {
 	uint num_contour_edges_prev = ssbo_bnpr_mesh_pool_counters_prev_.num_contour_edges;

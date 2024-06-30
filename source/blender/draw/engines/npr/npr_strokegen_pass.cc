@@ -379,6 +379,25 @@ namespace blender::npr::strokegen
       append_subpass_flip_edges(LoopSubdivFlip, 0, num_edges, num_verts);
 
       append_subpass_vertex_relocation(LoopSubdivSmoothApply, num_edges, num_verts, 0, true);
+
+      {
+        append_subpass_fill_dispatch_args_remeshed_edges_(num_edges, true); 
+
+        auto &sub = pass_extract_geom().sub("strokegen_loop_subdiv_tree_build_nodes_from_new_edges");
+        sub.shader_set(shaders_.static_shader_get(MESH_LOOP_SUBD_TREE_BUILD_NODES_FROM_NEW_EDGES));
+
+        sub.bind_ssbo(0, buffers_.ssbo_dyn_mesh_counters_out_());
+        sub.bind_ssbo(1, buffers_.ssbo_bnpr_mesh_pool_counters_);
+        sub.bind_ssbo(2, buffers_.ssbo_selected_edge_to_edge_);
+        sub.bind_ssbo(3, buffers_.ssbo_edge_to_vert_);
+        sub.bind_ssbo(4, buffers_.ssbo_vert_flags_);
+        sub.bind_ssbo(5, buffers_.ssbo_subd_edge_tree_node_);
+        sub.bind_ssbo(6, buffers_.reused_ssbo_subd_edge_vert_to_old_edge_()); 
+        sub.push_constant("pcs_edge_count_", num_edges);
+
+        sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_edges_);
+        sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
+      }
     }
   }
 
@@ -1012,10 +1031,11 @@ namespace blender::npr::strokegen
       sub.bind_ssbo(6, buffers_.ssbo_vbo_full_);
       sub.bind_ssbo(7, buffers_.ssbo_bnpr_mesh_pool_counters_);
       sub.bind_ssbo(8, buffers_.ssbo_edge_flags_);
-      sub.bind_ssbo(9, buffers_.ssbo_dyn_mesh_counters_in_());
-      sub.bind_ssbo(10, buffers_.ssbo_dyn_mesh_counters_out_());
-      sub.bind_ssbo(11, buffers_.ssbo_edge_split_counters_);
-      sub.bind_ssbo(12, buffers_.ssbo_bnpr_vert_debug_draw_args_); 
+      sub.bind_ssbo(9, buffers_.ssbo_subd_edge_tree_node_);
+      sub.bind_ssbo(10, buffers_.ssbo_dyn_mesh_counters_in_());
+      sub.bind_ssbo(11, buffers_.ssbo_dyn_mesh_counters_out_());
+      sub.bind_ssbo(12, buffers_.ssbo_edge_split_counters_);
+      sub.bind_ssbo(13, buffers_.ssbo_bnpr_vert_debug_draw_args_); 
       sub.bind_ubo(0, buffers_.ubo_view_matrices_cache_); 
       sub.push_constant("pcs_hash_map_size_", hashmap_size);
       sub.push_constant("pcs_edge_count_", num_edges_in);
@@ -1128,7 +1148,7 @@ namespace blender::npr::strokegen
   {
     auto bind_src = [&](
       draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub, float remesh_edge_len,
-        GPUStorageBuf* ssbo_14_override = nullptr
+        bool is_execute_pass = false
       ) {
         sub.bind_ssbo(0, buffers_.ssbo_dyn_mesh_counters_in_()); // in
         sub.bind_ssbo(1, buffers_.ssbo_dyn_mesh_counters_out_()); // out
@@ -1141,14 +1161,17 @@ namespace blender::npr::strokegen
         sub.bind_ssbo(8, buffers_.ssbo_edge_flags_);
         sub.bind_ssbo(9, buffers_.reused_ssbo_per_edge_split_info_()); 
         sub.bind_ssbo(10, buffers_.reused_ssbo_per_split_edge_info_());
-        sub.bind_ssbo(11, buffers_.ssbo_selected_edge_to_edge_);
+        if (is_execute_pass)
+          sub.bind_ssbo(11, buffers_.ssbo_subd_edge_tree_node_);
+        else
+          sub.bind_ssbo(11, buffers_.ssbo_selected_edge_to_edge_);
         sub.bind_ssbo(12, buffers_.ssbo_bnpr_mesh_pool_counters_);
         sub.bind_ssbo(13, buffers_.reused_ssbo_vtx_remesh_len_());
-        if (ssbo_14_override == nullptr)
-          sub.bind_ssbo(14, buffers_.reused_ssbo_epos_subd_());
+        sub.bind_ssbo(14, buffers_.reused_ssbo_epos_subd_());
+        if (is_execute_pass && mode == EdgeSplitMode::LoopSubdivSplit)
+          sub.bind_ssbo(15, buffers_.reused_ssbo_subd_edge_vert_to_old_edge_());
         else
-          sub.bind_ssbo(14, ssbo_14_override /*override the name ssbo_epos_subd_ in shader using macro*/); 
-        sub.bind_ssbo(15, buffers_.ssbo_vnor_);
+          sub.bind_ssbo(15, buffers_.ssbo_vnor_);
 
         sub.push_constant("pcs_split_iter_", iter_split); 
         sub.push_constant("pcs_remesh_edge_len_", remesh_edge_len); 
@@ -1204,7 +1227,7 @@ namespace blender::npr::strokegen
     {
       auto &sub = pass_extract_geom().sub("bnpr_meshing_edge_split_execute");
       sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_OP_SPLIT_EDGE_EXECUTE));
-      bind_src(sub, meshing_params.remeshing_targ_edge_len);
+      bind_src(sub, meshing_params.remeshing_targ_edge_len, true);
       sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_split_edge_);
       sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
     }
@@ -1707,6 +1730,7 @@ namespace blender::npr::strokegen
       sub.bind_ssbo(12, buffers_.ssbo_vert_to_edge_list_header_);
       sub.bind_ssbo(13, buffers_.ssbo_dbg_lines_);
       sub.bind_ssbo(14, buffers_.ssbo_vert_flags_);
+      sub.bind_ssbo(15, buffers_.ssbo_subd_edge_tree_node_);
       // --------------
       sub.bind_ubo(0, buffers_.ubo_view_matrices_cache_);
       sub.push_constant("pcs_ib_fmt_u16", ib_type == gpu::GPU_INDEX_U16 ? 1 : 0);

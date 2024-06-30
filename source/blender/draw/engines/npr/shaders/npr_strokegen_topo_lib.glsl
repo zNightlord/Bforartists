@@ -441,27 +441,27 @@ VertSelectionInfo decode_vert_selection_info(uint data)
 
 /* Indexing for selection for dynaremesh */
 #if defined(USE_DYNAMESH_EDGE_SELECTION_INDEXING)
-/* Note: DO NOT use wedge_id==0 to do any that must be done by one thread! like initialization or counter-zero-out */
-void get_wedge_id_from_selected_edge(uint sel_edge_id, out uint wedge_id, out bool valid_thread)
-{
-    uint num_dyn_edges = ssbo_dyn_mesh_counters_out_.num_edges; 
-    uint num_static_edges = pcs_edge_count_;
-    
-    uint num_presel_edges  = ssbo_bnpr_mesh_pool_counters_.num_filtered_edges;
-    uint num_all_sel_edges = num_presel_edges + num_dyn_edges; /* all dyn edges are selected */
-    valid_thread = (sel_edge_id < num_all_sel_edges); 
-
-    bool is_dyn_edge = (num_presel_edges <= sel_edge_id) && valid_thread; 
-    if (is_dyn_edge)
+    /* Note: DO NOT use wedge_id==0 to do any that must be done by one thread! like initialization or counter-zero-out */
+    void get_wedge_id_from_selected_edge(uint sel_edge_id, out uint wedge_id, out bool valid_thread)
     {
-        wedge_id = num_static_edges + (sel_edge_id - num_presel_edges); 
-    }else{
-        EdgeSelectionInfo eseli = decode_edge_selection_info(
-            ssbo_selected_edge_to_edge_[sel_edge_id]
-        ); 
-        wedge_id = eseli.edge_id;
+        uint num_dyn_edges = ssbo_dyn_mesh_counters_out_.num_edges; 
+        uint num_static_edges = pcs_edge_count_;
+        
+        uint num_presel_edges  = ssbo_bnpr_mesh_pool_counters_.num_filtered_edges;
+        uint num_all_sel_edges = num_presel_edges + num_dyn_edges; /* all dyn edges are selected */
+        valid_thread = (sel_edge_id < num_all_sel_edges); 
+
+        bool is_dyn_edge = (num_presel_edges <= sel_edge_id) && valid_thread; 
+        if (is_dyn_edge)
+        {
+            wedge_id = num_static_edges + (sel_edge_id - num_presel_edges); 
+        }else{
+            EdgeSelectionInfo eseli = decode_edge_selection_info(
+                ssbo_selected_edge_to_edge_[sel_edge_id]
+            ); 
+            wedge_id = eseli.edge_id;
+        }
     }
-}
 #endif
 
 
@@ -1467,13 +1467,6 @@ float average_adaptive_remesh_len_to_vcurv(float l)
     float k = epsi * (6.0f / (l*l + 3.0f*epsi*epsi));  
     return k;  
 }
-
-
-
-
-
-
-
 
 #endif
 

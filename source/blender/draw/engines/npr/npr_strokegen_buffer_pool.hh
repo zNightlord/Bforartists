@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later
+﻿/* SPDX-License-Identifier: GPL-2.0-or-later
  * Copyright 2021 Blender Foundation.
  */
 
@@ -81,6 +81,7 @@ class GPUBufferPoolModule {
   SSBO_StrokeGenMeshBufPerEdge<uint, 1> ssbo_edge_flags_;                       // 64MB
   SSBO_StrokeGenMeshBufPerVert<float, 3> ssbo_vnor_;                            // 96MB
   SSBO_StrokeGenMeshBufPerVert<uint, 2> ssbo_vcurv_max_;                        // 32MB
+  SSBO_StrokeGenMeshBufPerEdge<uint, 1> ssbo_subd_edge_tree_node_; 
 
   SSBO_StrokeGenMeshBufPerSelectedEdge<uint, 1> ssbo_selected_edge_to_edge_;    // 32MB    
   SSBO_StrokeGenMeshBufPerSelectedVert<uint, 1> ssbo_selected_vert_to_vert_;    // 16MB    
@@ -161,6 +162,10 @@ class GPUBufferPoolModule {
   inline GPUStorageBuf *reused_ssbo_epos_subd_()
   {
     return ssbo_mesh_buffer_reuse_7_; 
+  }
+  inline GPUStorageBuf *reused_ssbo_subd_edge_vert_to_old_edge_()
+  {
+    return ssbo_mesh_buffer_reuse_1_; 
   }
 
 

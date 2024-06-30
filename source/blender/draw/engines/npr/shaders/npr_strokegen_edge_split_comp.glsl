@@ -4,6 +4,7 @@
 #pragma BLENDER_REQUIRE(npr_strokegen_load_store_lib.glsl)
 
 #pragma BLENDER_REQUIRE(npr_strokegen_geom_lib.glsl)
+#pragma BLENDER_REQUIRE(npr_strokegen_loop_subdiv_edge_tree_lib.glsl)
 
 
 /* Inputs: 
@@ -477,6 +478,10 @@ void main()
 
 
 #if defined(_KERNEL_MULTICOMPILE__EDGE_SPLIT_EXECUTE)
+    /* replace ssbo binding since we could not squeeze any new slots */
+    #define ssbo_subd_edge_tree_node_ ssbo_selected_edge_to_edge_ 
+    #define ssbo_subd_edge_vert_to_old_edge_ ssbo_vnor_ // swapped when split for loop subdiv
+
     /* Update dynamic mesh counters */
     if (gl_GlobalInvocationID.x == 0u) 
     {
@@ -664,6 +669,20 @@ void main()
     /* Store adaptive remesh length */
     float edge_len = estimate_split_vert_remesh_edge_len(v1, v3);
     st_vtx_remesh_len(v4, edge_len);
+
+    /* Build subd edge tree */
+    if (is_loop_subdiv_pass())
+    { 
+        /* Calc tree node for E1, E3 by linking to old edge */
+        LoopSubdEdgeTreeNode node_e1 = setup_loop_subd_tree_node__edge_split_at_parent(psei_curr.id, 1);
+        ssbo_subd_edge_tree_node_[e1] = encode_loop_subd_tree_ptr(node_e1); 
+        LoopSubdEdgeTreeNode node_e3 = setup_loop_subd_tree_node__edge_split_at_parent(psei_curr.id, 3);
+        ssbo_subd_edge_tree_node_[e3] = encode_loop_subd_tree_ptr(node_e3); 
+
+        /* In order to eval node for new edge,
+         * we cache link from each split vert to its old edge */
+        ssbo_subd_edge_vert_to_old_edge_[v4] = psei_curr.id; 
+    }
 
 #undef e0
 #undef e1

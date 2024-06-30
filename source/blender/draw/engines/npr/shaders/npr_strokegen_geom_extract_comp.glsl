@@ -6,6 +6,7 @@
 #pragma BLENDER_REQUIRE(npr_strokegen_contour_topo_lib.glsl)
 #pragma BLENDER_REQUIRE(npr_strokegen_contour_geom_lib.glsl)
 #pragma BLENDER_REQUIRE(npr_strokegen_brush_toolbox_lib.glsl)
+#pragma BLENDER_REQUIRE(npr_strokegen_loop_subdiv_edge_tree_lib.glsl)
 
  
 /* all counters are cleared in _KERNEL_MULTICOMPILE__GEOM_EXTRACT kernel ------------------- */
@@ -374,6 +375,15 @@ void main()
 		if (pcs_edge_visualize_mode_ == 9)
 		{
 			dbg_line = dbg_line && (0 < ef.crease_level); 
+		}
+
+		if (10 <= pcs_edge_visualize_mode_ && pcs_edge_visualize_mode_ < 14)
+		{
+			dbg_line = valid_thread && (!ef.dupli) && (!ef.del_by_split) && (ef.selected); 
+
+			LoopSubdEdgeTreeNode node = decode_loop_subd_tree_ptr_edge_id(ssbo_subd_edge_tree_node_[wedge_id]); 
+			uint match_code = pcs_edge_visualize_mode_ - 10; // 0, 1, 2, 3
+			dbg_line = dbg_line && (match_code == node.code); 
 		}
 
 
