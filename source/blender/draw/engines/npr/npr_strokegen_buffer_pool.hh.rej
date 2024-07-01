@@ -1,0 +1,46 @@
+diff a/source/blender/draw/engines/npr/npr_strokegen_buffer_pool.hh b/source/blender/draw/engines/npr/npr_strokegen_buffer_pool.hh	(rejected hunks)
+@@ -29,7 +29,9 @@ class GPUBufferPoolModule {
+ 
+   /** GPU Buffers */
+   UBO_ViewMatrices ubo_view_matrices_;
++  float rot_angle_ubo_view_matrices_cache_;
+   UBO_ViewMatrices ubo_view_matrices_cache_; // for visualizing contour curves in different view
++  UBO_ViewMatrices ubo_view_matrices_cache_2_; // for visualizing contour curves in different view
+ 
+ 
+   SSBO_StrokeGenMeshPoolCounters ssbo_bnpr_mesh_pool_counters_;
+@@ -549,13 +551,19 @@ class GPUBufferPoolModule {
+     instance(inst)
+     , listranking_test_data_uploaded(false)
+     , listranking_test_data_validated(false)
++    , rot_angle_ubo_view_matrices_cache_(.0f)
+   {
+   }
+   ~GPUBufferPoolModule()
+   {
+   }
+ 
+-  void on_begin_sync(const DRWView* drw_view, bool upload_list_ranking_test_data, bool update_view_matrices_for_contour_extraction = true);
++
++  void on_begin_sync(
++    const DRWView* drw_view, bool upload_list_ranking_test_data,
++    bool update_view_matrices_for_contour_extraction = true,
++    bool update_view_matrices_for_dbg_view_rotation = false
++  );
+   void sync_object(Object *ob);
+   void end_sync();
+ 
+@@ -565,5 +573,13 @@ class GPUBufferPoolModule {
+    * \{ */
+   void build_list_ranking_testing_data(bool test_loop_lists = false);
+   /** \} */
++
++
++  /* -------------------------------------------------------------------- */
++  /** \name View Debugging
++   * \{ */
++  static void get_dbg_view_rot_angle(float& rot_ang);
++  void should_dbg_rotate_view_matrices_cache(float& rot_ang, bool& dbg_rotate_view_matrix);
++  /** \} */
+ };
+ }  // namespace blender::npr::strokegen

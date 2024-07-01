@@ -1,0 +1,80 @@
+diff a/source/blender/draw/engines/npr/npr_strokegen_buffer_pool.cc b/source/blender/draw/engines/npr/npr_strokegen_buffer_pool.cc	(rejected hunks)
+@@ -8,16 +8,24 @@
+ 
+ #include "npr_strokegen_buffer_pool.hh"
+ 
++#include "BLI_math_quaternion.hh"
++#include "BLI_math_rotation.h"
++
+ #include <set>
+ 
+ #include "npr_strokegen_instance.hh"
+ #include "bnpr_defines.hh"
++#include "DEG_depsgraph_query.hh"
+ 
+ #include <iostream>
+ 
+ namespace blender::npr::strokegen
+ {
+-  void GPUBufferPoolModule::on_begin_sync(const DRWView* drw_view, bool upload_list_ranking_test_data, bool update_view_matrices_for_contour_extraction)
++
++  void GPUBufferPoolModule::on_begin_sync(
++    const DRWView* drw_view, bool upload_list_ranking_test_data,
++    bool update_view_matrices_for_contour_extraction, 
++    bool update_view_matrices_for_dbg_view_rotation)
+   {
+     UBO_BnprTreeScan& ubo_tree_scan = ubo_bnpr_tree_scan_infos_;
+     {
+@@ -75,8 +83,33 @@ namespace blender::npr::strokegen
+       ubo_view_matrices_cache__.viewinv = drw_view->storage.viewinv;
+       ubo_view_matrices_cache__.winmat = drw_view->storage.winmat;
+       ubo_view_matrices_cache__.wininv = drw_view->storage.wininv;
+-
+-      ubo_view_matrices_cache__.push_update();  
++      ubo_view_matrices_cache__.push_update();
++
++      ubo_view_matrices_cache_2_.viewmat = drw_view->storage.viewmat;
++      ubo_view_matrices_cache_2_.viewinv = drw_view->storage.viewinv;
++      ubo_view_matrices_cache_2_.winmat = drw_view->storage.winmat;
++      ubo_view_matrices_cache_2_.wininv = drw_view->storage.wininv;
++      ubo_view_matrices_cache_2_.push_update();
++    }else if (update_view_matrices_for_dbg_view_rotation){
++      // Fixed view, or with custom rotations
++      // fetch ui inputs
++      float rot_ang;
++      get_dbg_view_rot_angle(rot_ang);
++      float4x4 v = ubo_view_matrices_cache_2_.viewmat;
++
++      float r[4][4];
++      float rot_axis[3] = { .0f, .0f, 1.0f };
++      axis_angle_to_mat4(r, rot_axis, rot_ang);
++      v = v * float4x4(r);
++
++      float4x4 inv_v; // = math::invert(v); // invert_m4(v.ptr);
++      invert_m4_m4(inv_v.ptr(), v.ptr());
++
++      ubo_view_matrices_cache_.viewmat = v; // drw_view->storage.viewmat;
++      ubo_view_matrices_cache_.viewinv = inv_v; // drw_view->storage.viewinv;
++      ubo_view_matrices_cache_.winmat = ubo_view_matrices_cache_2_.winmat;
++      ubo_view_matrices_cache_.wininv = ubo_view_matrices_cache_2_.wininv;
++      ubo_view_matrices_cache_.push_update();
+     }
+ 
+ 
+@@ -290,4 +323,16 @@ namespace blender::npr::strokegen
+       }
+     }
+   }
++
++  void GPUBufferPoolModule::get_dbg_view_rot_angle(float& rot_ang) {
++    const DRWContextState* draw_ctx = DRW_context_state_get();
++    const Scene* scene_eval = DEG_get_evaluated_scene(draw_ctx->depsgraph);
++    rot_ang = .002f * scene_eval->npr.npr_test_val_23;
++  }
++
++void GPUBufferPoolModule::should_dbg_rotate_view_matrices_cache(float& rot_ang, bool& dbg_rotate_view_matrix) {
++    get_dbg_view_rot_angle(rot_ang);
++    dbg_rotate_view_matrix = 1e-10f < math::abs(rot_angle_ubo_view_matrices_cache_ - rot_ang);
++    rot_angle_ubo_view_matrices_cache_ = rot_ang;
++  }
+ }

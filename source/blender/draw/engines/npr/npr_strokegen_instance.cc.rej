@@ -1,0 +1,33 @@
+diff a/source/blender/draw/engines/npr/npr_strokegen_instance.cc b/source/blender/draw/engines/npr/npr_strokegen_instance.cc	(rejected hunks)
+@@ -86,9 +86,13 @@ namespace blender::npr::strokegen
+     strokegen_passes.test_segloopconv = false; 
+ 
+     /* First setup resources */
+-    int refresh_rate = std::max(1, strokegen_passes.meshing_params.seconds_sync_view_mat * 24); 
++    int refresh_rate = std::max(1, strokegen_passes.meshing_params.seconds_sync_view_mat * 24000); 
++    float rot_ang; bool dbg_rotate_view_matrix;
++    strokegen_buffers.should_dbg_rotate_view_matrices_cache(rot_ang, dbg_rotate_view_matrix);
+     strokegen_buffers.on_begin_sync(
+-      drw_view, strokegen_passes.test_list_ranking, (frame_counter % refresh_rate) == 0u/*true*/
++      drw_view, strokegen_passes.test_list_ranking,
++      (frame_counter % refresh_rate) == 0u,
++      dbg_rotate_view_matrix/*true*/
+     );
+     strokegen_textures.on_begin_sync(tex_prepass_depth); 
+ 
+@@ -194,10 +198,11 @@ namespace blender::npr::strokegen
+     strokegen_textures.fb_contour_raster.bind();
+     float fb_clear_col_1[4] = {0, 0, 0, 0};
+     GPU_framebuffer_clear_color(strokegen_textures.fb_contour_raster, fb_clear_col_1);
+-    GPU_line_width(4.0f); // always snap to integer, see the opengl spec on line rasterization
+-    // manager.submit(strokegen_passes.get_render_pass(StrokeGenPassModule::INDIRECT_DRAW_CONTOUR_EDGES), view);
+-    manager.submit(strokegen_passes.get_render_pass(StrokeGenPassModule::INDIRECT_DRAW_CONTOUR_2D_SAMPLES), view);
+-    manager.submit(strokegen_passes.get_render_pass(StrokeGenPassModule::INDIRECT_DRAW_DBG_VNOR), view); 
++    GPU_line_width(2.0f); // always snap to integer, see the opengl spec on line rasterization
++    manager.submit(strokegen_passes.get_render_pass(StrokeGenPassModule::INDIRECT_DRAW_DBG_VNOR), view);
++    GPU_line_width(4.0f); 
++    manager.submit(strokegen_passes.get_render_pass(StrokeGenPassModule::INDIRECT_DRAW_CONTOUR_EDGES), view);
++    // manager.submit(strokegen_passes.get_render_pass(StrokeGenPassModule::INDIRECT_DRAW_CONTOUR_2D_SAMPLES), view);
+     GPU_line_width(1.0f);
+     
+     /* Pixel Extraction */
