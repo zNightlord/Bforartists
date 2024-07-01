@@ -610,7 +610,7 @@ set(GLSL_SRC
   engines/npr/shaders/npr_strokegen_encode_lib.glsl
   engines/npr/shaders/npr_strokegen_loop_subdiv_edge_tree_comp.glsl
   engines/npr/shaders/npr_strokegen_loop_subdiv_edge_tree_lib.glsl
- 
+  
   engines/npr/bnpr_defines.hh
   engines/npr/bnpr_shader_shared.hh
 

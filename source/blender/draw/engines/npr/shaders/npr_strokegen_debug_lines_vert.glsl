@@ -35,9 +35,8 @@ void main()
     uint line_id_local = vid / 2u; 
     uint line_id = line_id_local + get_debug_line_offset(pcs_line_type_); 
 
-    uvec3 vpos_enc; /* load world space vert pos */
-    Load3(ssbo_dbg_lines_, line_id*2u + (vid % 2u), vpos_enc); 
-    vec4 vpos = vec4(uintBitsToFloat(vpos_enc).xyz, 1.0f);
+    DebugVertData vtx_data = load_debug_vtx_data(line_id, vid); 
+    vec4 vpos = vec4(vtx_data.pos.xyz, 1.0f);
 
 	mat4 world_to_view = ubo_view_matrices_.viewmat;
     mat4 proj = ubo_view_matrices_.winmat;
@@ -47,24 +46,10 @@ void main()
     gl_Position = pos_hclip;
     gl_Position.z -= 8.0e-5 * pos_hclip.w;
 
-
-
-    if (pcs_line_type_ == DBG_LINE_TYPE__VNOR)
-        color = vec4(1, 1, 0, 1);
-    else if (pcs_line_type_ == DBG_LINE_TYPE__VCURV)
-    {
-        if ((line_id_local % 3u) == 0u) 
-            color = vec4(0, 1, 0, 1);
-        else if ((line_id_local % 3u) == 1u)
-            color = vec4(1, 0, 1, 1); 
-        else
-            color = vec4(0, 1, 0, 1); 
-    } else if (pcs_line_type_ == DBG_LINE_TYPE__EDGES)
-    {
-        color.rgb = vec3(.3f); // .5f * rand_col_rgb(line_id, line_id * 7u);
-        color.a = 1.0f; 
-    }
-
+    
+    color.a = 1.0f; 
+    
+    color.rgb = vtx_data.col; 
 
     // color = vec4(0, 1, 0, 1);
     color *= .6f; 

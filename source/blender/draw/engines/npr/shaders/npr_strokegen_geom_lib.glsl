@@ -174,42 +174,116 @@ bool valid_vcurv_max(float vcurv_max)
 
 
 #if defined(INCLUDE_DEBUG_LINE_CONFIG)
+    /* Definitions for Debugging Lines */
+    #define DBG_LINE_TYPE__VNOR  0u
+    #define DBG_LINE_TYPE__VCURV 1u
+    #define DBG_LINE_TYPE__EDGES 2u
 
-/* Definitions for Debugging Lines */
-#define DBG_LINE_TYPE__VNOR  0u
-#define DBG_LINE_TYPE__VCURV 1u
-#define DBG_LINE_TYPE__EDGES 2u
+    uint get_debug_line_counter(uint line_type)
+    {
+        if (line_type == DBG_LINE_TYPE__VNOR)
+            return ssbo_bnpr_mesh_pool_counters_.num_dbg_vnor_lines;
+        else if (line_type == DBG_LINE_TYPE__VCURV)
+            return ssbo_bnpr_mesh_pool_counters_.num_dbg_vpdir_lines;
+        else if (line_type == DBG_LINE_TYPE__EDGES)
+            return ssbo_bnpr_mesh_pool_counters_.num_dbg_edge_lines; 
+        return 0u; 
+    }
 
-uint get_debug_line_counter(uint line_type)
-{
-    if (line_type == DBG_LINE_TYPE__VNOR)
-        return ssbo_bnpr_mesh_pool_counters_.num_dbg_vnor_lines;
-    else if (line_type == DBG_LINE_TYPE__VCURV)
-        return ssbo_bnpr_mesh_pool_counters_.num_dbg_vpdir_lines;
-    else if (line_type == DBG_LINE_TYPE__EDGES)
-        return ssbo_bnpr_mesh_pool_counters_.num_dbg_edge_lines; 
-    return 0u; 
-}
+    uint get_debug_line_offset(uint line_type)
+    {
+        /* memory offset line_id based on line type */
+        uint line_offset = 0u; 
+        if (line_type == DBG_LINE_TYPE__VNOR)
+            return line_offset; 
+        line_offset += get_debug_line_counter(DBG_LINE_TYPE__VNOR); 
 
-uint get_debug_line_offset(uint line_type)
-{
-    /* memory offset line_id based on line type */
-    uint line_offset = 0u; 
-    if (line_type == DBG_LINE_TYPE__VNOR)
+        if (line_type == DBG_LINE_TYPE__VCURV)
+            return line_offset; 
+        line_offset += get_debug_line_counter(DBG_LINE_TYPE__VCURV); 
+
+        if (line_type == DBG_LINE_TYPE__EDGES)
+            return line_offset;
+        line_offset += get_debug_line_counter(DBG_LINE_TYPE__EDGES);
+        
         return line_offset; 
-    line_offset += get_debug_line_counter(DBG_LINE_TYPE__VNOR); 
+    }
 
-    if (line_type == DBG_LINE_TYPE__VCURV)
-        return line_offset; 
-    line_offset += get_debug_line_counter(DBG_LINE_TYPE__VCURV); 
+    uint pack_r11_g11_b10(vec3 x)
+    {
+        const vec3 normalization = vec3(
+            float(1u << 11u) - 1.0f, 
+            float(1u << 11u) - 1.0f, 
+            float(1u << 10u) - 1.0f
+        ); 
+        x = clamp(x, vec3(.0f), vec3(1.0f)); 
+        x = round(x * normalization); 
+        
+        uvec3 x_u = uvec3(x.rgb);
+    #define PACK_X_MASK 0x000007ffu
+    #define PACK_Y_MASK 0x000007ffu 
+    #define PACK_Z_MASK 0x000003ffu 
+        uint enc = x_u.r & PACK_X_MASK;
+        enc <<= 11u;
+        enc |= (x_u.g & PACK_Y_MASK); 
+        enc <<= 10u; 
+        enc |= (x_u.b & PACK_Z_MASK); 
 
-    if (line_type == DBG_LINE_TYPE__EDGES)
-        return line_offset;
-    line_offset += get_debug_line_counter(DBG_LINE_TYPE__EDGES);
-    
-    return line_offset; 
-}
+        return enc; 
+    }
+    vec3 unpack_r11_g11_b10(uint enc)
+    {
+        uvec3 x_u; 
+        x_u.b = enc & PACK_Z_MASK; 
+        enc >>= 10u; 
+        x_u.g = enc & PACK_Y_MASK; 
+        enc >>= 11u; 
+        x_u.r = enc & PACK_X_MASK; 
+    #undef PACK_Z_MASK
+    #undef PACK_Y_MASK
+    #undef PACK_X_MASK
 
+        const vec3 normalization = vec3(
+            float(1u << 11u) - 1.0f, 
+            float(1u << 11u) - 1.0f, 
+            float(1u << 10u) - 1.0f
+        ); 
+        vec3 x = vec3(x_u) / normalization; 
+        return clamp(x, vec3(.0f), vec3(1.0f)); 
+    }
+
+    struct DebugVertData
+    {
+        vec3 pos; /* world space vertex pos */
+        vec3 col;
+    }; 
+    uvec4 encode_debug_vert_data(DebugVertData vtx)
+    {
+        return uvec4(floatBitsToUint(vtx.pos), pack_r11_g11_b10(vtx.col)); 
+    }
+    DebugVertData decode_debug_vert_data(uvec4 enc)
+    {
+        DebugVertData vtx; 
+        vtx.pos = uintBitsToFloat(enc.xyz); 
+        vtx.col = unpack_r11_g11_b10(enc.w); 
+        return vtx; 
+    }
+
+    #if defined(INCLUDE_DEBUG_LINE_CONFIG_LOAD_STORE)
+        void store_debug_line_data(uint dbg_line_id, DebugVertData v0, DebugVertData v1)
+        {
+            uvec4 enc_v0 = encode_debug_vert_data(v0); 
+            Store4(ssbo_dbg_lines_, dbg_line_id*2u,    enc_v0); 
+            uvec4 enc_v1 = encode_debug_vert_data(v1); 
+            Store4(ssbo_dbg_lines_, dbg_line_id*2u+1u, enc_v1); 
+        }
+        DebugVertData load_debug_vtx_data(uint dbg_line_id, uint drw_vtx_id)
+        {
+            uvec4 enc; 
+            Load4(ssbo_dbg_lines_, (dbg_line_id*2u + (drw_vtx_id%2u)), enc); 
+            return decode_debug_vert_data(enc); 
+        }
+    #endif
 #endif
 
 

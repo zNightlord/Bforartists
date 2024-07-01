@@ -129,7 +129,7 @@ namespace blender::npr::strokegen
       surf_dbg_ctx.dbg_vert_normal = surf_dbg_ctx.dbg_vert_curv = true;
     if (val_1 == 5)
       surf_dbg_ctx.dbg_vert_normal = surf_dbg_ctx.dbg_edges = true;
-    if (val_1 = 6)
+    if (val_1 == 6)
       surf_dbg_ctx.dbg_vert_curv = surf_dbg_ctx.dbg_edges = true; 
 
     meshing_params.edge_visualize_mode = -1;
@@ -378,12 +378,10 @@ namespace blender::npr::strokegen
 
       append_subpass_flip_edges(LoopSubdivFlip, 0, num_edges, num_verts);
 
-      append_subpass_vertex_relocation(LoopSubdivSmoothApply, num_edges, num_verts, 0, true);
-
       {
-        append_subpass_fill_dispatch_args_remeshed_edges_(num_edges, true); 
+        append_subpass_fill_dispatch_args_remeshed_edges_(num_edges, true);
 
-        auto &sub = pass_extract_geom().sub("strokegen_loop_subdiv_tree_build_nodes_from_new_edges");
+        auto& sub = pass_extract_geom().sub("strokegen_loop_subdiv_tree_build_nodes_from_new_edges");
         sub.shader_set(shaders_.static_shader_get(MESH_LOOP_SUBD_TREE_BUILD_NODES_FROM_NEW_EDGES));
 
         sub.bind_ssbo(0, buffers_.ssbo_dyn_mesh_counters_out_());
@@ -392,12 +390,14 @@ namespace blender::npr::strokegen
         sub.bind_ssbo(3, buffers_.ssbo_edge_to_vert_);
         sub.bind_ssbo(4, buffers_.ssbo_vert_flags_);
         sub.bind_ssbo(5, buffers_.ssbo_subd_edge_tree_node_);
-        sub.bind_ssbo(6, buffers_.reused_ssbo_subd_edge_vert_to_old_edge_()); 
+        sub.bind_ssbo(6, buffers_.reused_ssbo_subd_edge_vert_to_old_edge_());
         sub.push_constant("pcs_edge_count_", num_edges);
 
         sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_edges_);
         sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
-      }
+      } 
+
+      append_subpass_vertex_relocation(LoopSubdivSmoothApply, num_edges, num_verts, 0, true);
     }
   }
 

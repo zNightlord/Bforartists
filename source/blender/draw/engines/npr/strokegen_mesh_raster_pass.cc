@@ -98,11 +98,11 @@ void npr::strokegen::StrokegenMeshRasterPass::append_draw_dbg_lines_subpass(
     GPUBufferPoolModule & buffers,
     int line_type)
 {
-  draw::PassMain::Sub *subpass = &sub("draw debug lines");
+  draw::PassMain::Sub *subpass = &sub("bnpr_geom_draw_debug_lines");
   subpass->shader_set(shaders.static_shader_get(INDIRECT_DRAW_DBG_LINES));
 
   subpass->bind_ssbo(0, buffers.ssbo_dbg_lines_);
-  subpass->bind_ssbo(1, buffers.ssbo_bnpr_mesh_pool_counters_); 
+  subpass->bind_ssbo(1, buffers.ssbo_bnpr_mesh_pool_counters_);
   subpass->bind_ubo(0, buffers.ubo_view_matrices_);
   subpass->push_constant("pcs_line_type_", line_type); 
 

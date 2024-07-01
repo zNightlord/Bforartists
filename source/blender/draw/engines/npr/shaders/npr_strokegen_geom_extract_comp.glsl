@@ -330,6 +330,8 @@ void main()
 		validate_wedge_topo(wedge_id, /*out*/ valid_ee, valid_ev, valid_ve);  
 		
 		bool dbg_line = valid_thread && (!ef.del_by_collapse) && (!ef.dupli) && (!ef.del_by_split); 
+		vec3 dbg_col = vec3(1.0f); 
+
 		/* visualize edges with invalid topology */
 		if (pcs_edge_visualize_mode_ == 1) 
 		{
@@ -379,11 +381,18 @@ void main()
 
 		if (10 <= pcs_edge_visualize_mode_ && pcs_edge_visualize_mode_ < 14)
 		{
-			dbg_line = valid_thread && (!ef.dupli) && (!ef.del_by_split) && (ef.selected); 
 
 			LoopSubdEdgeTreeNode node = decode_loop_subd_tree_ptr_edge_id(ssbo_subd_edge_tree_node_[wedge_id]); 
+
 			uint match_code = pcs_edge_visualize_mode_ - 10; // 0, 1, 2, 3
-			dbg_line = dbg_line && (match_code == node.code); 
+			dbg_line = valid_thread && (!ef.dupli) && (!ef.del_by_split) && (ef.selected); 
+			// dbg_line = dbg_line && (match_code == node.code); 
+			dbg_line = dbg_line && ((match_code % 2u) == (node.code % 2u)); 
+
+			dbg_col = node.code == 0 ? vec3(1.0f, 0.0f, 0.0f) : 
+				node.code == 1 ? vec3(0.0f, 1.0f, 0.0f) : 
+				node.code == 2 ? vec3(0.0f, .5f, 1.0f) : 
+				node.code == 3 ? vec3(1.0f, 1.0f, 0.0f) : vec3(0.0f);
 		}
 
 
@@ -393,14 +402,10 @@ void main()
 		{
 			vec3 dbg_vpos_0 = v[1]; 
 			vec3 dbg_vpos_1 = v[3]; 
-			
-			uint base_addr = dbg_line_idx * 6; 
-			ssbo_dbg_lines_[base_addr+0] = floatBitsToUint(dbg_vpos_0.x); 
-			ssbo_dbg_lines_[base_addr+1] = floatBitsToUint(dbg_vpos_0.y); 
-			ssbo_dbg_lines_[base_addr+2] = floatBitsToUint(dbg_vpos_0.z); 
-			ssbo_dbg_lines_[base_addr+3] = floatBitsToUint(dbg_vpos_1.x); 
-			ssbo_dbg_lines_[base_addr+4] = floatBitsToUint(dbg_vpos_1.y); 
-			ssbo_dbg_lines_[base_addr+5] = floatBitsToUint(dbg_vpos_1.z); 
+		 
+			DebugVertData dvd_0 = DebugVertData(v[1], dbg_col); 
+			DebugVertData dvd_1 = DebugVertData(v[3], dbg_col);
+			store_debug_line_data(dbg_line_idx, dvd_0, dvd_1); 
 		}
 	}
 
