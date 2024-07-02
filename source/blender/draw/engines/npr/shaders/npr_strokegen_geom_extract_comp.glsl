@@ -381,18 +381,18 @@ void main()
 
 		if (10 <= pcs_edge_visualize_mode_ && pcs_edge_visualize_mode_ < 14)
 		{
-
-			LoopSubdEdgeTreeNode node = decode_loop_subd_tree_ptr_edge_id(ssbo_subd_edge_tree_node_[wedge_id]); 
+			LoopSubdEdgeTreeNode node = decode_loop_subd_tree_node(ssbo_subd_edge_tree_node_[wedge_id]); 
 
 			uint match_code = pcs_edge_visualize_mode_ - 10; // 0, 1, 2, 3
 			dbg_line = valid_thread && (!ef.dupli) && (!ef.del_by_split) && (ef.selected); 
 			// dbg_line = dbg_line && (match_code == node.code); 
-			dbg_line = dbg_line && ((match_code % 2u) == (node.code % 2u)); 
+			// dbg_line = dbg_line && ((match_code / 2u) == (node.code / 2u)); 
 
 			dbg_col = node.code == 0 ? vec3(1.0f, 0.0f, 0.0f) : 
 				node.code == 1 ? vec3(0.0f, 1.0f, 0.0f) : 
 				node.code == 2 ? vec3(0.0f, .5f, 1.0f) : 
 				node.code == 3 ? vec3(1.0f, 1.0f, 0.0f) : vec3(0.0f);
+			dbg_col *= .5f; 
 		}
 
 

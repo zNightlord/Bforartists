@@ -467,11 +467,11 @@ void main()
         ssbo_vert_to_edge_list_header_[vtxid_end] = encode_vert_wedge_list_header(VertWedgeListHeader(EdgeID, ivert_end)); 
     }
 
-    /* Initialize subdiv tree code */
+    /* Initialize subdiv tree roots */
     if (valid_thread)
-    {
-        LoopSubdEdgeTreeNode edge_tree_ptr = init_loop_subd_tree_root(EdgeID); 
-        ssbo_subd_edge_tree_node_[EdgeID] = encode_loop_subd_tree_ptr(edge_tree_ptr);  
+    { 
+        LoopSubdEdgeTreeNode edge_tree_ptr = init_loop_subd_tree_root(EdgeID, wedge_id); 
+        ssbo_subd_edge_tree_node_[EdgeID] = encode_loop_subd_tree_node(edge_tree_ptr);  
     }
 
     /* initialze dynamic topology counters */

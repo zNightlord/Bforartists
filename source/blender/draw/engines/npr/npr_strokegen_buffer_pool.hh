@@ -154,7 +154,9 @@ class GPUBufferPoolModule {
     return ssbo_mesh_buffer_reuse_4_; 
   }
 
+
   // Reused Buffer Scheme throughout Sqrt-3/Loop Subdiv ------
+  // Don't reuse buffers reused by edge split/flip
   inline GPUStorageBuf *reused_ssbo_vpos_subd_()
   {
     return ssbo_mesh_buffer_reuse_8_;
@@ -163,10 +165,14 @@ class GPUBufferPoolModule {
   {
     return ssbo_mesh_buffer_reuse_7_; 
   }
-  inline GPUStorageBuf *reused_ssbo_subd_edge_vert_to_old_edge_()
+
+  // Reused Buffer Scheme throughout Loop Subdiv ------
+  // Don't reuse buffers reused by edge split
+  inline GPUStorageBuf* reused_ssbo_subd_edge_vert_to_old_edge_()
   {
-    return ssbo_mesh_buffer_reuse_1_; 
+    return ssbo_mesh_buffer_reuse_0_;
   }
+
 
 
   // Reused Buffer Scheme for Edge Split --------------------------------------------

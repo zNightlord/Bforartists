@@ -673,11 +673,13 @@ void main()
     /* Build subd edge tree */
     if (is_loop_subdiv_pass())
     { 
-        /* Calc tree node for E1, E3 by linking to old edge */
-        LoopSubdEdgeTreeNode node_e1 = setup_loop_subd_tree_node__edge_split_at_parent(psei_curr.id, 1);
-        ssbo_subd_edge_tree_node_[e1] = encode_loop_subd_tree_ptr(node_e1); 
-        LoopSubdEdgeTreeNode node_e3 = setup_loop_subd_tree_node__edge_split_at_parent(psei_curr.id, 3);
-        ssbo_subd_edge_tree_node_[e3] = encode_loop_subd_tree_ptr(node_e3); 
+        LoopSubdEdgeTreeNode par_node = decode_loop_subd_tree_node(ssbo_subd_edge_tree_node_[psei_curr.id]); 
+
+        /* Calc tree nodes for E1, E3 */
+        LoopSubdEdgeTreeNode node_e1 = setup_loop_subd_tree_leaf__split_edge(psei_curr.id, par_node, 1u);
+        ssbo_subd_edge_tree_node_[e1] = encode_loop_subd_tree_node(node_e1); 
+        LoopSubdEdgeTreeNode node_e3 = setup_loop_subd_tree_leaf__split_edge(psei_curr.id, par_node, 3u);
+        ssbo_subd_edge_tree_node_[e3] = encode_loop_subd_tree_node(node_e3); 
 
         /* In order to eval node for new edge,
          * we cache link from each split vert to its old edge */

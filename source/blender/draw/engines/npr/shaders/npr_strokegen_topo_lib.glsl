@@ -206,6 +206,10 @@ uint mark__bwedge_to_face(uint wedge)
 {
     return (wedge == 1u || wedge == 2u) ? 0u : 1u; /* 1,2->0, 0,3->1 */
 }
+uvec2 mark__face_to_bwedges(uint face)
+{
+    return (face == 0u) ? uvec2(1u, 2u) : uvec2(3u, 0u); 
+}  
 uint mark__bwedge_to_prev_bwedge(uint wedge)
 { /* Walk along the quad border */
     return ((wedge + 3u) % 4u); 
