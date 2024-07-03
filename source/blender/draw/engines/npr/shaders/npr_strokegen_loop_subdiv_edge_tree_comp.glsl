@@ -64,7 +64,12 @@ void main()
             ssbo_edge_to_vert_[node.parent_edge_id*4u + mark__center_wedge_to_oppo_vert__at_face(1u)]
         ); 
         // try to locate new edge at which iface of the parent edge 
-        uint iface_new_edge = (oppo_vert_old == par_oppo_verts_at_iface[0]) ? 0u : 1u; 
+        uint iface_new_edge = (
+                (oppo_vert_old == par_oppo_verts_at_iface[0])
+                // note: the opposite vert of the parent edge could change to v1/v3 due to edge split
+                || (v1 == par_oppo_verts_at_iface[0])
+                || (v3 == par_oppo_verts_at_iface[0])
+            ) ? 0u : 1u; 
         uint par_subd_face_id = (iface_new_edge == par_node.iface_subd_f0) ? 0u : 1u; 
         if (par_subd_face_id == 0u) 
         { // at parent edge's subd-face#0
