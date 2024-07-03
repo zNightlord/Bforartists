@@ -328,8 +328,12 @@ const char *StrokeGenShaderModule::static_shader_create_info_name_get(eShaderTyp
     case MESH_ANALYSE_VERT_CURV_PASS_1_JACQUES:
       return "bnpr_geom_analysis_order_1_main_curvature_jacques";
 
-    case MESH_LOOP_SUBD_TREE_BUILD_NODES_FROM_NEW_EDGES:
-      return "strokegen_loop_subdiv_tree_build_nodes_from_new_edges"; 
+    case MESH_LOOP_SUBD_TREE_BUILD_NODES_UPWARDS_FOR_FACE_EDGES:
+      return "strokegen_loop_subdiv_tree_build_nodes_upwards_for_face_edges"; 
+    case MESH_LOOP_SUBD_TREE_INIT_NODES_DOWNWARDS:
+      return "strokegen_loop_subdiv_tree_build_nodes_downwards_init_"; 
+    case MESH_LOOP_SUBD_TREE_BUILD_NODES_DOWNWARDS:
+      return "strokegen_loop_subdiv_tree_build_nodes_downwards_calc_"; 
 
     case SCAN_TEST_AGGREGATE:
       return "bnpr_scan_test_aggregate";

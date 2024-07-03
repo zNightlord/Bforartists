@@ -54,19 +54,20 @@
  *           D                     I                                                              
  *                                                                 
 */
-struct LoopSubdEdgeTreeNode
+struct LoopSubdEdgeTreeUpNode
 {
     uint parent_edge_id; // 29 bits
+#define LOOP_SUBD_TREE_INVALID_PARENT_EDGE_ID 0x1fffffffu
     uint code; // 2 bits
     uint iface_subd_f0; // 1bit, iface of face tagged as f0 (see explanation above) 
 };
-uint encode_loop_subd_tree_node(LoopSubdEdgeTreeNode edge_tree_ptr)
+uint encode_loop_subd_tree_node(LoopSubdEdgeTreeUpNode edge_tree_ptr)
 {
     return ((edge_tree_ptr.parent_edge_id << 3u) | (edge_tree_ptr.code << 1u) | (edge_tree_ptr.iface_subd_f0 & 1u));  
 }
-LoopSubdEdgeTreeNode decode_loop_subd_tree_node(uint enc)
+LoopSubdEdgeTreeUpNode decode_loop_subd_tree_node(uint enc)
 {
-    LoopSubdEdgeTreeNode ptr; 
+    LoopSubdEdgeTreeUpNode ptr; 
     ptr.iface_subd_f0 = enc & 0x01u; 
     enc >>= 1u; 
     ptr.code = enc & 0x03u;
@@ -76,9 +77,9 @@ LoopSubdEdgeTreeNode decode_loop_subd_tree_node(uint enc)
 }
 
 #if defined(WINGED_EDGE_TOPO_INCLUDE)
-LoopSubdEdgeTreeNode init_loop_subd_tree_root(uint wedge_id, uvec4 bwedges)
+LoopSubdEdgeTreeUpNode init_loop_subd_tree_root(uint wedge_id, uvec4 bwedges)
 {
-    LoopSubdEdgeTreeNode node; 
+    LoopSubdEdgeTreeUpNode node; 
     node.parent_edge_id = wedge_id;
     node.code = 0u;
     uvec2 ibwedges_at_iface[2];
@@ -98,10 +99,9 @@ LoopSubdEdgeTreeNode init_loop_subd_tree_root(uint wedge_id, uvec4 bwedges)
 }
 #endif
 
-LoopSubdEdgeTreeNode init_loop_subd_tree_leaf__face_edge()
+LoopSubdEdgeTreeUpNode init_loop_subd_tree_leaf__face_edge()
 {
-#define LOOP_SUBD_TREE_INVALID_PARENT_EDGE_ID 0x1fffffffu
-    LoopSubdEdgeTreeNode node; 
+    LoopSubdEdgeTreeUpNode node; 
     node.parent_edge_id = LOOP_SUBD_TREE_INVALID_PARENT_EDGE_ID;
     node.code = 0u;
     node.iface_subd_f0 = 0u; 
@@ -113,11 +113,11 @@ uint get_loop_subd_tree_leaf_code__face_edge(uint subd_face_id)
 }
 
 
-LoopSubdEdgeTreeNode setup_loop_subd_tree_leaf__split_edge(
-    uint par_edge_id, LoopSubdEdgeTreeNode par_node, 
+LoopSubdEdgeTreeUpNode setup_loop_subd_tree_leaf__split_edge(
+    uint par_edge_id, LoopSubdEdgeTreeUpNode par_node, 
     uint split_edge_mark/* "E1 or E3", defined in edge-split diagram*/
 ){
-    LoopSubdEdgeTreeNode node; 
+    LoopSubdEdgeTreeUpNode node; 
     node.parent_edge_id = par_edge_id; 
     node.iface_subd_f0 = par_node.iface_subd_f0;  
     if (par_node.iface_subd_f0 == 0u)
@@ -127,6 +127,24 @@ LoopSubdEdgeTreeNode setup_loop_subd_tree_leaf__split_edge(
 
     return node; 
 }
+
+
+struct LoopSubdEdgeTreeDwNode
+{
+    uint wedge_id; // 32 bits
+};
+uint encode_loop_subd_tree_node_dw(LoopSubdEdgeTreeDwNode edge_tree_ptr)
+{
+    return edge_tree_ptr.wedge_id; 
+}
+LoopSubdEdgeTreeDwNode decode_loop_subd_tree_node_dw(uint enc)
+{
+    LoopSubdEdgeTreeDwNode ptr; 
+    ptr.wedge_id = enc; 
+    return ptr; 
+}
+
+
 
 #endif
 

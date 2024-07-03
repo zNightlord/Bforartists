@@ -479,8 +479,11 @@ void main()
 
 #if defined(_KERNEL_MULTICOMPILE__EDGE_SPLIT_EXECUTE)
     /* replace ssbo binding since we could not squeeze any new slots */
-    #define ssbo_subd_edge_tree_node_ ssbo_selected_edge_to_edge_ 
+    // if (is_loop_subdiv_pass())
+    #define ssbo_subd_edge_tree_node_up_ ssbo_selected_edge_to_edge_ 
     #define ssbo_subd_edge_vert_to_old_edge_ ssbo_vnor_ // swapped when split for loop subdiv
+    // if (is_contour_split_pass())
+    #define ssbo_subd_contour_vert_to_old_edge_ ssbo_selected_edge_to_edge_ // swapped when split for loop subdiv
 
     /* Update dynamic mesh counters */
     if (gl_GlobalInvocationID.x == 0u) 
@@ -673,17 +676,22 @@ void main()
     /* Build subd edge tree */
     if (is_loop_subdiv_pass())
     { 
-        LoopSubdEdgeTreeNode par_node = decode_loop_subd_tree_node(ssbo_subd_edge_tree_node_[psei_curr.id]); 
+        LoopSubdEdgeTreeUpNode par_node = decode_loop_subd_tree_node(ssbo_subd_edge_tree_node_up_[psei_curr.id]); 
 
         /* Calc tree nodes for E1, E3 */
-        LoopSubdEdgeTreeNode node_e1 = setup_loop_subd_tree_leaf__split_edge(psei_curr.id, par_node, 1u);
-        ssbo_subd_edge_tree_node_[e1] = encode_loop_subd_tree_node(node_e1); 
-        LoopSubdEdgeTreeNode node_e3 = setup_loop_subd_tree_leaf__split_edge(psei_curr.id, par_node, 3u);
-        ssbo_subd_edge_tree_node_[e3] = encode_loop_subd_tree_node(node_e3); 
+        LoopSubdEdgeTreeUpNode node_e1 = setup_loop_subd_tree_leaf__split_edge(psei_curr.id, par_node, 1u);
+        ssbo_subd_edge_tree_node_up_[e1] = encode_loop_subd_tree_node(node_e1); 
+        LoopSubdEdgeTreeUpNode node_e3 = setup_loop_subd_tree_leaf__split_edge(psei_curr.id, par_node, 3u);
+        ssbo_subd_edge_tree_node_up_[e3] = encode_loop_subd_tree_node(node_e3); 
 
         /* In order to eval node for new edge,
          * we cache link from each split vert to its old edge */
         ssbo_subd_edge_vert_to_old_edge_[v4] = psei_curr.id; 
+    }
+    if (is_contour_split_pass())
+    {   /* In order to eval node for contour edge,
+         * we cache link from each contour vert to its old edge */
+        ssbo_subd_contour_vert_to_old_edge_[v4] = psei_curr.id; 
     }
 
 #undef e0

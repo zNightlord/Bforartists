@@ -343,63 +343,6 @@ namespace blender::npr::strokegen
     }
   }
 
-  void StrokeGenPassModule::append_subpasses_sqrt_subdiv(int num_edges, int num_verts)
-  {
-    for (int iter_subdiv = 0; iter_subdiv < meshing_params.iters_test_sqrt_subdiv; ++iter_subdiv)
-    {
-      append_subpass_vertex_relocation(Sqrt3SubdivSmoothCache, num_edges, num_verts, 0, true);
-
-      append_subpass_split_faces(0, num_edges, num_verts);
-      // update elem counters after face split
-      append_subpass_fill_dispatch_args_remeshed_edges_(num_edges, true);
-      append_subpass_fill_dispatch_args_remeshed_verts_(num_verts, false);
-      
-      append_subpass_flip_edges(SqrtSubdiv, 0, num_edges, num_verts);
-
-      append_subpass_vertex_relocation(Sqrt3SubdivSmoothApply, num_edges, num_verts, 0, true);
-    }
-  }
-
-  void StrokeGenPassModule::append_subpasses_loop_subdiv(int num_edges, int num_verts)
-  {
-    for (int iter_subdiv = 0; iter_subdiv < meshing_params.iters_test_sqrt_subdiv; ++iter_subdiv)
-    {
-      append_subpass_vertex_relocation(LoopSubdivSmoothCache, num_edges, num_verts, 0, true);
-
-      /* try to split each edge once, but not theoretically guaranteed,
-       * some edge may not be split and hence fuck up the local subdivision */
-      for (int iter_split = 0; iter_split < 6; ++iter_split)
-      {
-        append_subpass_split_edges(LoopSubdivSplit, iter_split, num_edges, num_verts);
-        // update elem counters after split
-        append_subpass_fill_dispatch_args_remeshed_edges_(num_edges, true);
-        append_subpass_fill_dispatch_args_remeshed_verts_(num_verts, false);
-      }  
-
-      append_subpass_flip_edges(LoopSubdivFlip, 0, num_edges, num_verts);
-
-      {
-        append_subpass_fill_dispatch_args_remeshed_edges_(num_edges, true);
-
-        auto& sub = pass_extract_geom().sub("strokegen_loop_subdiv_tree_build_nodes_from_new_edges");
-        sub.shader_set(shaders_.static_shader_get(MESH_LOOP_SUBD_TREE_BUILD_NODES_FROM_NEW_EDGES));
-
-        sub.bind_ssbo(0, buffers_.ssbo_dyn_mesh_counters_out_());
-        sub.bind_ssbo(1, buffers_.ssbo_bnpr_mesh_pool_counters_);
-        sub.bind_ssbo(2, buffers_.ssbo_selected_edge_to_edge_);
-        sub.bind_ssbo(3, buffers_.ssbo_edge_to_vert_);
-        sub.bind_ssbo(4, buffers_.ssbo_vert_flags_);
-        sub.bind_ssbo(5, buffers_.ssbo_subd_edge_tree_node_);
-        sub.bind_ssbo(6, buffers_.reused_ssbo_subd_edge_vert_to_old_edge_());
-        sub.push_constant("pcs_edge_count_", num_edges);
-
-        sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_edges_);
-        sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
-      } 
-
-      append_subpass_vertex_relocation(LoopSubdivSmoothApply, num_edges, num_verts, 0, true);
-    }
-  }
 
   /**
    * \brief Add a subpass for extracting geometry from given GPUBatch.
@@ -1031,7 +974,7 @@ namespace blender::npr::strokegen
       sub.bind_ssbo(6, buffers_.ssbo_vbo_full_);
       sub.bind_ssbo(7, buffers_.ssbo_bnpr_mesh_pool_counters_);
       sub.bind_ssbo(8, buffers_.ssbo_edge_flags_);
-      sub.bind_ssbo(9, buffers_.ssbo_subd_edge_tree_node_);
+      sub.bind_ssbo(9, buffers_.ssbo_subd_edge_tree_node_up_);
       sub.bind_ssbo(10, buffers_.ssbo_dyn_mesh_counters_in_());
       sub.bind_ssbo(11, buffers_.ssbo_dyn_mesh_counters_out_());
       sub.bind_ssbo(12, buffers_.ssbo_edge_split_counters_);
@@ -1161,8 +1104,12 @@ namespace blender::npr::strokegen
         sub.bind_ssbo(8, buffers_.ssbo_edge_flags_);
         sub.bind_ssbo(9, buffers_.reused_ssbo_per_edge_split_info_()); 
         sub.bind_ssbo(10, buffers_.reused_ssbo_per_split_edge_info_());
-        if (is_execute_pass)
-          sub.bind_ssbo(11, buffers_.ssbo_subd_edge_tree_node_);
+        // Yes I know this is desperately shitty.
+        // Go blame GLSL for only supporting 16 ssbo bindings. 
+        if (is_execute_pass && mode == EdgeSplitMode::LoopSubdivSplit)
+          sub.bind_ssbo(11, buffers_.ssbo_subd_edge_tree_node_up_);
+        else if (is_execute_pass && mode == EdgeSplitMode::InterpContour)
+          sub.bind_ssbo(11, buffers_.reused_ssbo_subd_contour_vert_to_old_edge_());
         else
           sub.bind_ssbo(11, buffers_.ssbo_selected_edge_to_edge_);
         sub.bind_ssbo(12, buffers_.ssbo_bnpr_mesh_pool_counters_);
@@ -1670,6 +1617,106 @@ namespace blender::npr::strokegen
 
   }
 
+  void StrokeGenPassModule::append_subpasses_sqrt_subdiv(int num_edges, int num_verts)
+  {
+    for (int iter_subdiv = 0; iter_subdiv < meshing_params.iters_test_sqrt_subdiv; ++iter_subdiv) {
+      append_subpass_vertex_relocation(Sqrt3SubdivSmoothCache, num_edges, num_verts, 0, true);
+
+      append_subpass_split_faces(0, num_edges, num_verts);
+      // update elem counters after face split
+      append_subpass_fill_dispatch_args_remeshed_edges_(num_edges, true);
+      append_subpass_fill_dispatch_args_remeshed_verts_(num_verts, false);
+
+      append_subpass_flip_edges(SqrtSubdiv, 0, num_edges, num_verts);
+
+      append_subpass_vertex_relocation(Sqrt3SubdivSmoothApply, num_edges, num_verts, 0, true);
+    }
+  }
+
+  void StrokeGenPassModule::bind_rsc_for_loop_subd_tree_processing(StrokegenMeshComputePass::PassBase<DrawCommandBuf> &sub, int num_edges)
+  {
+    sub.bind_ssbo(0, buffers_.ssbo_dyn_mesh_counters_out_());
+    sub.bind_ssbo(1, buffers_.ssbo_bnpr_mesh_pool_counters_);
+    sub.bind_ssbo(2, buffers_.ssbo_selected_edge_to_edge_);
+    sub.bind_ssbo(3, buffers_.ssbo_edge_to_vert_);
+    sub.bind_ssbo(4, buffers_.ssbo_vert_flags_);
+    sub.bind_ssbo(5, buffers_.ssbo_subd_edge_tree_node_up_);
+    sub.bind_ssbo(6, buffers_.reused_ssbo_subd_edge_tree_dw_());
+    sub.bind_ssbo(7, buffers_.reused_ssbo_subd_edge_vert_to_old_edge_());
+
+    sub.push_constant("pcs_edge_count_", num_edges);
+  }
+
+  void StrokeGenPassModule::append_subpass_build_loop_subd_tree_upwards_for_face_edges(int num_edges)
+  {
+    append_subpass_fill_dispatch_args_remeshed_edges_(num_edges, true);
+
+    auto &sub = pass_extract_geom().sub("strokegen_loop_subdiv_tree_build_nodes_upwards_for_face_edges");
+    sub.shader_set(shaders_.static_shader_get(MESH_LOOP_SUBD_TREE_BUILD_NODES_UPWARDS_FOR_FACE_EDGES));
+
+    bind_rsc_for_loop_subd_tree_processing(sub, num_edges);
+
+    sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_edges_);
+    sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
+  }
+
+  void StrokeGenPassModule::append_subpass_build_loop_subd_tree_downwards_init(int num_edges)
+  {
+    append_subpass_fill_dispatch_args_remeshed_edges_(num_edges, true);
+    {
+      auto &sub = pass_extract_geom().sub(
+          "strokegen_loop_subdiv_tree_build_nodes_downwards_init_");
+      sub.shader_set(shaders_.static_shader_get(MESH_LOOP_SUBD_TREE_INIT_NODES_DOWNWARDS));
+
+      bind_rsc_for_loop_subd_tree_processing(sub, num_edges);
+
+      sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_edges_);
+      sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
+    }
+  }
+
+  void StrokeGenPassModule::append_subpass_build_loop_subd_tree_downwards_(int num_edges)
+  {
+    append_subpass_fill_dispatch_args_remeshed_edges_(num_edges, true);
+    {
+      auto &sub = pass_extract_geom().sub("strokegen_loop_subdiv_tree_build_nodes_downwards_calc_");
+      sub.shader_set(shaders_.static_shader_get(MESH_LOOP_SUBD_TREE_BUILD_NODES_DOWNWARDS));
+
+      bind_rsc_for_loop_subd_tree_processing(sub, num_edges);
+
+      sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_edges_);
+      sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
+    }
+  }
+
+  void StrokeGenPassModule::append_subpasses_loop_subdiv(int num_edges, int num_verts)
+  {
+    append_subpass_build_loop_subd_tree_downwards_init(num_edges);
+
+    /* Subdivision */
+    for (int iter_subdiv = 0; iter_subdiv < meshing_params.iters_test_sqrt_subdiv; ++iter_subdiv)
+    {
+      append_subpass_vertex_relocation(LoopSubdivSmoothCache, num_edges, num_verts, 0, true);
+
+      /* try to split each edge once, but not theoretically guaranteed,
+       * some edge may not be split and hence fuck up the local subdivision */
+      for (int iter_split = 0; iter_split < 6; ++iter_split) {
+        append_subpass_split_edges(LoopSubdivSplit, iter_split, num_edges, num_verts);
+        // update elem counters after split
+        append_subpass_fill_dispatch_args_remeshed_edges_(num_edges, true);
+        append_subpass_fill_dispatch_args_remeshed_verts_(num_verts, false);
+      }
+
+      append_subpass_flip_edges(LoopSubdivFlip, 0, num_edges, num_verts);
+
+      append_subpass_build_loop_subd_tree_upwards_for_face_edges(num_edges); /* Build tree from bottom-up */
+
+      append_subpass_vertex_relocation(LoopSubdivSmoothApply, num_edges, num_verts, 0, true);
+    }
+
+    append_subpass_build_loop_subd_tree_downwards_(num_edges);
+  }
+
   void StrokeGenPassModule::rebuild_pass_dbg_geom_drawcall(SurfaceDebugContext dbg_ctx)
   {
     Vector<int> dbgLineTypes;
@@ -1730,7 +1777,7 @@ namespace blender::npr::strokegen
       sub.bind_ssbo(12, buffers_.ssbo_vert_to_edge_list_header_);
       sub.bind_ssbo(13, buffers_.ssbo_dbg_lines_);
       sub.bind_ssbo(14, buffers_.ssbo_vert_flags_);
-      sub.bind_ssbo(15, buffers_.ssbo_subd_edge_tree_node_);
+      sub.bind_ssbo(15, buffers_.ssbo_subd_edge_tree_node_up_);
       // --------------
       sub.bind_ubo(0, buffers_.ubo_view_matrices_cache_);
       sub.push_constant("pcs_ib_fmt_u16", ib_type == gpu::GPU_INDEX_U16 ? 1 : 0);

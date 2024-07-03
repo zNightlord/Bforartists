@@ -381,7 +381,7 @@ void main()
 
 		if (10 <= pcs_edge_visualize_mode_ && pcs_edge_visualize_mode_ < 14)
 		{
-			LoopSubdEdgeTreeNode node = decode_loop_subd_tree_node(ssbo_subd_edge_tree_node_[wedge_id]); 
+			LoopSubdEdgeTreeUpNode node = decode_loop_subd_tree_node(ssbo_subd_edge_tree_node_up_[wedge_id]); 
 
 			uint match_code = pcs_edge_visualize_mode_ - 10; // 0, 1, 2, 3
 			dbg_line = valid_thread && (!ef.dupli) && (!ef.del_by_split) && (ef.selected); 

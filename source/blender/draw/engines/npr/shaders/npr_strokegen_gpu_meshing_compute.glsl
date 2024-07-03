@@ -470,8 +470,8 @@ void main()
     /* Initialize subdiv tree roots */
     if (valid_thread)
     { 
-        LoopSubdEdgeTreeNode edge_tree_ptr = init_loop_subd_tree_root(EdgeID, wedge_id); 
-        ssbo_subd_edge_tree_node_[EdgeID] = encode_loop_subd_tree_node(edge_tree_ptr);  
+        LoopSubdEdgeTreeUpNode edge_tree_ptr = init_loop_subd_tree_root(EdgeID, wedge_id); 
+        ssbo_subd_edge_tree_node_up_[EdgeID] = encode_loop_subd_tree_node(edge_tree_ptr);  
     }
 
     /* initialze dynamic topology counters */

@@ -107,7 +107,7 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_extract)
     .storage_buf(12, Qualifier::READ_WRITE, "uint", "ssbo_vert_to_edge_list_header_[]")
     .storage_buf(13, Qualifier::READ_WRITE, "uint", "ssbo_dbg_lines_[]")
     .storage_buf(14, Qualifier::READ_WRITE, "uint", "ssbo_vert_flags_[]")
-    .storage_buf(15, Qualifier::READ_WRITE, "uint", "ssbo_subd_edge_tree_node_[]")
+    .storage_buf(15, Qualifier::READ_WRITE, "uint", "ssbo_subd_edge_tree_node_up_[]")
     /* ---------------- */
     .uniform_buf(0, "ViewMatrices", "ubo_view_matrices_") 
     .push_constant(Type::INT, "pcs_ib_fmt_u16")
@@ -903,7 +903,7 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_edge_adjecency)
     .storage_buf(6, Qualifier::READ, "float", "ssbo_vbo_full_[]")
     .storage_buf(7, Qualifier::READ_WRITE, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
     .storage_buf(8, Qualifier::READ_WRITE, "uint", "ssbo_edge_flags_[]")
-    .storage_buf(9, Qualifier::WRITE, "uint", "ssbo_subd_edge_tree_node_[]")
+    .storage_buf(9, Qualifier::WRITE, "uint", "ssbo_subd_edge_tree_node_up_[]")
     /* Clear args */
     .storage_buf(10, Qualifier::WRITE, "SSBOData_StrokeGenDynamicMeshCounters", "ssbo_dyn_mesh_counters_in_")
     .storage_buf(11, Qualifier::WRITE, "SSBOData_StrokeGenDynamicMeshCounters", "ssbo_dyn_mesh_counters_out_")
@@ -1831,10 +1831,9 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_analysis_feature_edges)
 /* -------------------------------------------------------------------- */
 /** \Temporal Coherence
  * \{ */
-GPU_SHADER_CREATE_INFO(strokegen_loop_subdiv_tree_build_nodes_from_new_edges)
+GPU_SHADER_CREATE_INFO(strokegen_loop_subdiv_tree)
     .do_static_compilation(true)
     .typedef_source("bnpr_shader_shared.hh")
-    .define("_KERNEL_MULTICOMPILE__CALC_SUBD_TREE_NODE_FOR_NEW_EDGES", "1")
     .define("VERT_FLAGS_INCLUDED", "1")
     .define("USE_DYNAMESH_EDGE_SELECTION_INDEXING", "1")
     .define("WINGED_EDGE_TOPO_INCLUDE", "1")
@@ -1844,12 +1843,36 @@ GPU_SHADER_CREATE_INFO(strokegen_loop_subdiv_tree_build_nodes_from_new_edges)
     .storage_buf(2, Qualifier::READ_WRITE, "uint", "ssbo_selected_edge_to_edge_[]")
     .storage_buf(3, Qualifier::READ_WRITE, "uint", "ssbo_edge_to_vert_[]")
     .storage_buf(4, Qualifier::READ_WRITE, "uint", "ssbo_vert_flags_[]")
-    .storage_buf(5, Qualifier::READ_WRITE, "uint", "ssbo_subd_edge_tree_node_[]")
-    .storage_buf(6, Qualifier::READ, "uint", "ssbo_subd_edge_vert_to_old_edge_[]")
+    .storage_buf(5, Qualifier::READ_WRITE, "uint", "ssbo_subd_edge_tree_node_up_[]")
+    .storage_buf(6, Qualifier::READ_WRITE, "uint", "ssbo_subd_edge_tree_node_dw_[]")
+    .storage_buf(7, Qualifier::READ, "uint", "ssbo_subd_edge_vert_to_old_edge_[]")
     .push_constant(Type::INT, "pcs_edge_count_")
+    ; 
 
+GPU_SHADER_CREATE_INFO(strokegen_loop_subdiv_tree_build_nodes_upwards_for_face_edges)
+    .do_static_compilation(true)
+    .additional_info("strokegen_loop_subdiv_tree")
+    .define("_KERNEL_MULTICOMPILE__CALC_SUBD_TREE_NODES__PER_EDGE", "1")
+    .define("_KERNEL_MULTICOMPILE__CALC_SUBD_TREE_NODE_FOR_NEW_EDGES", "1")
     .local_group_size(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT)
     .compute_source("npr_strokegen_loop_subdiv_edge_tree_comp.glsl"); 
+
+GPU_SHADER_CREATE_INFO(strokegen_loop_subdiv_tree_build_nodes_downwards_init_)
+    .do_static_compilation(true)
+    .additional_info("strokegen_loop_subdiv_tree")
+    .define("_KERNEL_MULTICOMPILE__CALC_SUBD_TREE_NODES__PER_EDGE", "1")
+    .define("_KERNEL_MULTICOMPILE__BUILD_SUBD_TREE_DOWNWARD__INIT", "1")
+    .local_group_size(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT)
+    .compute_source("npr_strokegen_loop_subdiv_edge_tree_comp.glsl"); 
+
+GPU_SHADER_CREATE_INFO(strokegen_loop_subdiv_tree_build_nodes_downwards_calc_)
+    .do_static_compilation(true)
+    .additional_info("strokegen_loop_subdiv_tree")
+    .define("_KERNEL_MULTICOMPILE__CALC_SUBD_TREE_NODES__PER_EDGE", "1")
+    .define("_KERNEL_MULTICOMPILE__BUILD_SUBD_TREE_DOWNWARD__TRANSFER_FROM_UPWARD", "1")
+    .local_group_size(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT)
+    .compute_source("npr_strokegen_loop_subdiv_edge_tree_comp.glsl"); 
+
 /** \} */
 
 

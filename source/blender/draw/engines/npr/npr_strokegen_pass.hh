@@ -357,6 +357,10 @@ public:
                                           int num_edges,
                                           int num_verts, bool output_dbg_lines = false);
   void append_subpasses_sqrt_subdiv(int num_edges, int num_verts);
+  void bind_rsc_for_loop_subd_tree_processing(StrokegenMeshComputePass::PassBase<DrawCommandBuf>& sub, int num_edges);
+  void append_subpass_build_loop_subd_tree_upwards_for_face_edges(int num_edges);
+  void append_subpass_build_loop_subd_tree_downwards_init(int num_edges);
+  void append_subpass_build_loop_subd_tree_downwards_(int num_edges);
   void append_subpasses_loop_subdiv(int num_edges, int num_verts);
 
   void append_subpass_surf_geom_analysis(
