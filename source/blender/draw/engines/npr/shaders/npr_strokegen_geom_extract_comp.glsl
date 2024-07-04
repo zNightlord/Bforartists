@@ -130,52 +130,20 @@ void main()
 
 
 
-bool is_back_face(float ndv)
-{
-	return ndv <= .0f; 
-}
+
 
 #if defined(_KERNEL_MULTICOMPILE__GEOM_EXTRACT)
-/*     v0
- *    /  \
- *   / f1 \ 
- *  v1 -- v3 Winding:CCW
- *   \ f0 / 
- *    \  /    
- *     v2                   
-*/
-bool is_contour_edge(
-	vec3 v0, vec3 v1, vec3 v2, vec3 v3, vec3 cam_pos, 
-	out float face_orient_123, out float face_orient_013
-)
-{ /* impl based on overlay_outline_prepass_vert_no_geom.glsl */
-	vec3 v10 = v0 - v1;
-   	vec3 v12 = v2 - v1;
-	vec3 v13 = v3 - v1;
+// bool is_interp_contour_edge__after_tessellation(
+// 	VertFlags vf_0, VertFlags vf_1, VertFlags vf_2, VertFlags vf_3, 
+// 	out float face_orient_123, out float face_orient_013
+// )
+// {
+// 	bool is_contour = vf_1.contour && vf_3.contour;  
+// 	face_orient_123 = vf_2.front_facing ? 1.0f : -1.0f; 
+// 	face_orient_013 = vf_0.front_facing ? 1.0f : -1.0f; 
 
-	vec3 n0 = cross(v12, v13);
-	vec3 n3 = cross(v13, v10);
-
-	vec3 view_dir = cam_pos - v1; 
-
-	face_orient_123 = dot(view_dir, n0);
-  	face_orient_013 = dot(view_dir, n3);
-	bool is_contour = is_back_face(face_orient_123) != is_back_face(face_orient_013); 
-	
-	return is_contour; 
-}
-
-bool is_interp_contour_edge(
-	VertFlags vf_0, VertFlags vf_1, VertFlags vf_2, VertFlags vf_3, 
-	out float face_orient_123, out float face_orient_013
-)
-{
-	bool is_contour = vf_1.contour && vf_3.contour;  
-	face_orient_123 = vf_2.front_facing ? 1.0f : -1.0f; 
-	face_orient_013 = vf_0.front_facing ? 1.0f : -1.0f; 
-
-	return is_contour; 
-}
+// 	return is_contour; 
+// }
 
 vec3 ld_vbo(uint vert)
 {
@@ -240,14 +208,14 @@ void main()
 	
 	bool is_contour = false; 
 	float face_orient_123, face_orient_013; 
-	if (0 == pcs_chain_interpo_contour_)
+	if (0 == pcs_extract_interpo_contour_)
 	{
 		is_contour = is_contour_edge(
 			v[0], v[1], v[2], v[3], cam_pos_ws
 			, /*out*/face_orient_123, face_orient_013
 		);
 	}else
-		is_contour = is_interp_contour_edge(
+		is_contour = is_interp_contour_edge__after_tessellation(
 			vf[0], vf[1], vf[2], vf[3]
 			, /*out*/ face_orient_123, face_orient_013
 		);
@@ -517,70 +485,73 @@ void main()
 		vpos_ws[1].w = 1.0f; 
 	}
 
-	/* Store Contour Data ------------------------------------------------------------- */
-	/* use local id to load temp data, use global id to store */
+	/* Generate Contour Data ------------------------------------------------------------- */
+	/* use local id to load temp data from prev pass, use global id to store */
 	if (valid_thread)
-	{ /* read vertex pos transformed to world space */
-	  /* Note: wpos_and_edgeid will be overwrite, for saving space */
-		/* write to intermediate buffer, will be shuffled after list ranking */
-		vec2 maxcurv; vec2 cusp_func; 
-		ld_vcurv_max_with_cusp(v0, /*out*/maxcurv[0], cusp_func[0]);
-		ld_vcurv_max_with_cusp(v1, /*out*/maxcurv[1], cusp_func[1]);
-		bool seg_head = sign(cusp_func[0]) != sign(cusp_func[1]); 
-		ContourFlags cf = init_contour_flags(seg_head);
+	{ /* Note: wpos_and_edgeid will be overwrite, for saving space */
+		{ /* Generate Geometry */ 
+			vec2 maxcurv; vec2 cusp_func; 
+			ld_vcurv_max_with_cusp(v0, /*out*/maxcurv[0], cusp_func[0]);
+			ld_vcurv_max_with_cusp(v1, /*out*/maxcurv[1], cusp_func[1]);
+			bool seg_head = sign(cusp_func[0]) != sign(cusp_func[1]); 
+			ContourFlags cf = init_contour_flags(seg_head);
 
-		ContourEdgeTransferData cetd; 
-		cetd.vpos_ws[0] = vpos_ws[0].xyz;
-		cetd.vpos_ws[1] = vpos_ws[1].xyz;
-		cetd.cf = cf;
-		cetd.cusp_funcs = cusp_func;
+			ContourEdgeTransferData cetd; 
+			cetd.vpos_ws[0] = vpos_ws[0].xyz;
+			cetd.vpos_ws[1] = vpos_ws[1].xyz;
+			cetd.cf = cf;
+			cetd.cusp_funcs = cusp_func;
 
-		store_contour_edge_transfer_data_(contour_id_global, cetd); 
+			/* write to intermediate buffer, will be shuffled after list ranking */
+			store_contour_edge_transfer_data_(contour_id_global, cetd); 
+		}
 
+		{ /* Generate Topology */
+			/* build contour edge adjacency */
+			bool is_border = pcwi.is_border; 
+			bool backface_border = is_border && !is_border_edge_front_facing(pcwi.ifrontface); 
 
+			VertWedgeListHeader vwlh_beg_vtx, vwlh_end_vtx; 
+			vwlh_beg_vtx.wedge_id = pcwi.wedge_id; 
+			vwlh_beg_vtx.ivert = mark__cwedge_to_beg_vert(pcwi.ifrontface); 
+			vwlh_end_vtx.wedge_id = pcwi.wedge_id;
+			vwlh_end_vtx.ivert = mark__cwedge_to_end_vert(pcwi.ifrontface);
 
-		/* build contour edge adjacency */
-		bool is_border = pcwi.is_border; 
-		bool backface_border = is_border && !is_border_edge_front_facing(pcwi.ifrontface); 
+			VECircContext_ContourLinking ctx; 
 
-		VertWedgeListHeader vwlh_beg_vtx, vwlh_end_vtx; 
-		vwlh_beg_vtx.wedge_id = pcwi.wedge_id; 
-		vwlh_beg_vtx.ivert = mark__cwedge_to_beg_vert(pcwi.ifrontface); 
-		vwlh_end_vtx.wedge_id = pcwi.wedge_id;
-		vwlh_end_vtx.ivert = mark__cwedge_to_end_vert(pcwi.ifrontface);
-
-		VECircContext_ContourLinking ctx; 
-
-		/* Rotate backwards around beg vert of this edge */
-		ctx.pwci.is_contour = true;
-		ctx.pwci.contour_id = contour_id_local; 
-		bool rot_fwd = false; 
-
-		VE_CIRCULATOR(vwlh_beg_vtx, func_ve_circulator, ctx, rot_fwd)
-
-		if (ctx.pwci.contour_id == 0x1fffffffu) // hitting bad border edges (e0==e3,e1==e2) this is bad and should not happen
+			/* Rotate backwards around beg vert of this edge */
+			ctx.pwci.is_contour = true;
 			ctx.pwci.contour_id = contour_id_local; 
+			bool rot_fwd = false; 
 
-		bool back_face_T_junction = (backface_border && !ctx.pwci.is_border); 
-		ssbo_contour_to_contour_[contour_id_global*2] = calc_global_contour_edge_id(
-			(!back_face_T_junction) ? ctx.pwci.contour_id : /*break backface border chain at T-junction*/contour_id_local
-		); 
+			VE_CIRCULATOR(vwlh_beg_vtx, func_ve_circulator, ctx, rot_fwd)
 
+			if (ctx.pwci.contour_id == 0x1fffffffu) // hitting bad border edges (e0==e3,e1==e2) this is bad and should not happen
+				ctx.pwci.contour_id = contour_id_local; 
 
-		/* Rotate fowards around end vert of this edge */
-		ctx.pwci.is_contour = true; 
-		ctx.pwci.contour_id = contour_id_local; 
-		rot_fwd = true; 
+			bool back_face_T_junction = (backface_border && !ctx.pwci.is_border); 
+			ssbo_contour_to_contour_[contour_id_global*2] = calc_global_contour_edge_id(
+				(!back_face_T_junction) ? ctx.pwci.contour_id : /*break backface border chain at T-junction*/contour_id_local
+			); 
 
-		VE_CIRCULATOR(vwlh_end_vtx, func_ve_circulator, ctx, rot_fwd)
-
-		if (ctx.pwci.contour_id == 0x1fffffffu) // hitting bad border edges (e0==e3,e1==e2)
+			/* Rotate fowards around end vert of this edge */
+			ctx.pwci.is_contour = true; 
 			ctx.pwci.contour_id = contour_id_local; 
+			rot_fwd = true; 
 
-		back_face_T_junction = (backface_border && !ctx.pwci.is_border); 
-		ssbo_contour_to_contour_[contour_id_global*2+1] = calc_global_contour_edge_id(
-			(!back_face_T_junction) ? ctx.pwci.contour_id : /*break backface border chain at T-junction*/contour_id_local
-		); 
+			VE_CIRCULATOR(vwlh_end_vtx, func_ve_circulator, ctx, rot_fwd)
+
+			if (ctx.pwci.contour_id == 0x1fffffffu) // hitting bad border edges (e0==e3,e1==e2)
+				ctx.pwci.contour_id = contour_id_local; 
+
+			back_face_T_junction = (backface_border && !ctx.pwci.is_border); 
+			ssbo_contour_to_contour_[contour_id_global*2+1] = calc_global_contour_edge_id(
+				(!back_face_T_junction) ? ctx.pwci.contour_id : /*break backface border chain at T-junction*/contour_id_local
+			); 
+		}
+
+		{ /* Contract loop subdiv tree path & Temporal back-tracking */
+		}
 	}
 
 
@@ -623,6 +594,9 @@ void main()
 
 
 
+
+
+// Visibility Test. This happens after the extraction loop (collecting contour edges from each object)
 #if defined(_KERNEL_MULTICOMPILE__PROCESS_CONTOUR_FRAGMENTS)
 
 #if defined(_KERNEL_MULTICOMPILE__PROCESS_CONTOUR_FRAGMENTS__VISIBILITY_TEST)

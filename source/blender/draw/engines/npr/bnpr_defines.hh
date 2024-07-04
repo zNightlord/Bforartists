@@ -54,6 +54,8 @@
 #define MAX_REMESHING_OPS (((MAX_REMESHING_ITERS) * (MAX_REMESH_OPS_PER_ITER)))
 /** \} */
 
+#define MAX_TEMPORAL_RECOREDED_FRAMES 2u
+
 
 
 /* -------------------------------------------------------------------- */

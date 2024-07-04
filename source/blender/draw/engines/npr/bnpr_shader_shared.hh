@@ -452,7 +452,6 @@ using namespace draw;
   };
   BLI_STATIC_ASSERT_ALIGN(SSBOData_StrokeGenFaceSplitCounters, 16)
 
-
   struct SSBOData_StrokeGenDynamicMeshCounters {
     uint num_verts;
     uint num_edges;
@@ -558,6 +557,8 @@ using SSBO_StrokeGenEdgeCollapseCounters = StorageArrayBuffer<SSBOData_StrokeGen
 using SSBO_StrokeGenEdgeFlipCounters = StorageArrayBuffer<SSBOData_StrokeGenEdgeFlipCounters, MAX_CONSEQ_EDGE_FLIPS + 1, true>;
 using SSBO_StrokeGenFaceSplitCounters = StorageArrayBuffer<SSBOData_StrokeGenFaceSplitCounters, MAX_CONSEQ_FACE_SPLITS + 1, true>;
 using SSBO_StrokeGenDynamicMeshCounters = StorageBuffer<SSBOData_StrokeGenDynamicMeshCounters>; 
+using SSBO_StrokeGenTemporalRecordCounters =
+  StorageArrayBuffer<uint, 4u * ((MAX_TEMPORAL_RECOREDED_FRAMES + 3u) / 4u), true>; 
 
 // Buffers for testing parallel primitives --------------------
 using SSBO_BnprScanData = StorageArrayBuffer<uint, 2048 * 2048 * 2, true>;

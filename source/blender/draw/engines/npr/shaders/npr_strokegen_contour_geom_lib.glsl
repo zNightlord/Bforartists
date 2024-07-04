@@ -1,13 +1,66 @@
 
 #pragma BLENDER_REQUIRE(npr_strokegen_encode_lib.glsl)
+#pragma BLENDER_REQUIRE(npr_strokegen_topo_lib.glsl)
 
 #ifndef BNPR_CONTOUR_GEOM__INCLUDED
 #define BNPR_CONTOUR_GEOM__INCLUDED
 
-#ifndef USE_GPU_SHADER_CREATE_INFO
-#	define USE_GPU_SHADER_CREATE_INFO 1
-#endif // fix the fucking error in Renderdoc
 
+
+// Contour Definition
+// ---------------------------------------------------------------------------------------------------
+bool is_back_face(float ndv)
+{
+	return ndv <= .0f; 
+}
+/*     v0
+ *    /  \
+ *   / f1 \ 
+ *  v1 -- v3 Winding:CCW
+ *   \ f0 / 
+ *    \  /    
+ *     v2                   
+*/
+bool is_contour_edge(
+	vec3 v0, vec3 v1, vec3 v2, vec3 v3, vec3 cam_pos, 
+	out float face_orient_123, out float face_orient_013
+)
+{ /* impl based on overlay_outline_prepass_vert_no_geom.glsl */
+	vec3 v10 = v0 - v1;
+   	vec3 v12 = v2 - v1;
+	vec3 v13 = v3 - v1;
+
+	vec3 n0 = cross(v12, v13);
+	vec3 n3 = cross(v13, v10);
+
+	vec3 view_dir = cam_pos - v1; 
+
+	face_orient_123 = dot(view_dir, n0);
+  	face_orient_013 = dot(view_dir, n3);
+	bool is_contour = is_back_face(face_orient_123) != is_back_face(face_orient_013); 
+	
+	return is_contour; 
+}
+
+bool is_interp_contour_edge__before_tessellation(VertFlags vf_0, VertFlags vf_1)
+{
+    return (
+        (vf_0.front_facing && vf_1.back_facing)
+        || (vf_0.back_facing && vf_1.front_facing)
+    ); 
+}
+
+bool is_interp_contour_edge__after_tessellation(
+	VertFlags vf_0, VertFlags vf_1, VertFlags vf_2, VertFlags vf_3, 
+	out float face_orient_123, out float face_orient_013
+)
+{
+	bool is_contour = vf_1.contour && vf_3.contour;  
+	face_orient_123 = vf_2.front_facing ? 1.0f : -1.0f; 
+	face_orient_013 = vf_0.front_facing ? 1.0f : -1.0f; 
+
+	return is_contour; 
+}
 
 
 

@@ -145,7 +145,6 @@ LoopSubdEdgeTreeDwNode decode_loop_subd_tree_node_dw(uint enc)
 }
 
 
-
 #endif
 
 

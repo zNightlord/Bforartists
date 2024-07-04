@@ -536,7 +536,7 @@ namespace blender::npr::strokegen
         append_subpasses_loop_subdiv(num_edges, num_verts); // default path
     }
 
-    // test interpolated contour tessellation
+    // Interpolated contour tessellation
     if (meshing_params.contour_mode != ContourType::Raw) {
       SurfaceAnalysisContext surf_analysis_ctx_contour;
       GetSurfaceAnalysisContext_ContourInsertionPass(surf_analysis_ctx_contour); 
@@ -1109,7 +1109,7 @@ namespace blender::npr::strokegen
         if (is_execute_pass && mode == EdgeSplitMode::LoopSubdivSplit)
           sub.bind_ssbo(11, buffers_.ssbo_subd_edge_tree_node_up_);
         else if (is_execute_pass && mode == EdgeSplitMode::InterpContour)
-          sub.bind_ssbo(11, buffers_.reused_ssbo_subd_contour_vert_to_old_edge_());
+          sub.bind_ssbo(11, buffers_.reused_ssbo_contour_vert_to_old_edge_());
         else
           sub.bind_ssbo(11, buffers_.ssbo_selected_edge_to_edge_);
         sub.bind_ssbo(12, buffers_.ssbo_bnpr_mesh_pool_counters_);
@@ -1641,7 +1641,7 @@ namespace blender::npr::strokegen
     sub.bind_ssbo(3, buffers_.ssbo_edge_to_vert_);
     sub.bind_ssbo(4, buffers_.ssbo_vert_flags_);
     sub.bind_ssbo(5, buffers_.ssbo_subd_edge_tree_node_up_);
-    sub.bind_ssbo(6, buffers_.reused_ssbo_subd_edge_tree_dw_());
+    sub.bind_ssbo(6, buffers_.reused_ssbo_subd_edge_tree_node_dw_());
     sub.bind_ssbo(7, buffers_.reused_ssbo_subd_edge_vert_to_old_edge_());
 
     sub.push_constant("pcs_edge_count_", num_edges);
@@ -1789,7 +1789,7 @@ namespace blender::npr::strokegen
               (int)edge_batch->elem_()->index_base_get());
       sub.push_constant("pcs_rsc_handle", (int)rsc_handle.resource_index());
       sub.push_constant("pcs_edge_visualize_mode_", edge_visualize_mode);
-      sub.push_constant("pcs_chain_interpo_contour_", contour_visualize_mode == 2 ? 0 : 1);
+      sub.push_constant("pcs_extract_interpo_contour_", contour_visualize_mode == 2 ? 0 : 1);
       float2 fb_res = textures_.get_contour_raster_screen_res();
       sub.push_constant("pcs_screen_size_", fb_res);
       sub.push_constant("pcs_dbg_geom_scale_", surf_dbg_ctx.dbg_line_length); 
@@ -1825,7 +1825,8 @@ namespace blender::npr::strokegen
       sub.bind_ssbo(9, buffers_.ssbo_list_ranking_inputs_);
       sub.bind_ssbo(10, buffers_.ssbo_contour_edge_transfer_data_);
       sub.bind_ssbo(11, buffers_.ssbo_vcurv_max_);
-      sub.bind_ssbo(12, buffers_.ssbo_contour_raster_data_); 
+      sub.bind_ssbo(12, buffers_.ssbo_contour_raster_data_);
+      sub.bind_ssbo(13, buffers_.reused_ssbo_contour_vert_to_old_edge_()); 
       sub.bind_ubo(0, buffers_.ubo_view_matrices_cache_); 
       float2 fb_res = textures_.get_contour_raster_screen_res(); 
       sub.push_constant("pcs_screen_size_", fb_res); 

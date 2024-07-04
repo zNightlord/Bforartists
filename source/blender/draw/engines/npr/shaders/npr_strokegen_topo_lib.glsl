@@ -527,7 +527,6 @@ void try_update_ve_link(uint vtx, uint edge_old, VertWedgeListHeader vwlh_new)
 
 
 /* Mesh Element Flags ------------------------------------------------------------------------- */
-#if defined(VERT_FLAGS_INCLUDED)
 struct VertFlags
 {
     bool dupli; // duplicated vertex, should be ignored, TODO: consider removing in hashing pass
@@ -680,14 +679,15 @@ VertFlags decode_vert_flags(uint vf_enc)
 
     return vf; 
 }
-VertFlags load_vert_flags(uint vid)
-{
-    return decode_vert_flags(ssbo_vert_flags_[vid]); 
-}
-void store_vert_flags(uint vid, VertFlags vf)
-{
-    ssbo_vert_flags_[vid] = encode_vert_flags(vf); 
-}
+#if defined(VERT_FLAGS_INCLUDED)
+    VertFlags load_vert_flags(uint vid)
+    {
+        return decode_vert_flags(ssbo_vert_flags_[vid]); 
+    }
+    void store_vert_flags(uint vid, VertFlags vf)
+    {
+        ssbo_vert_flags_[vid] = encode_vert_flags(vf); 
+    }
 
 void update_vert_flags_selected(uint vid, uint selection_slot)
 {
@@ -744,7 +744,8 @@ void update_vert_flags__corner(bool corner, inout VertFlags vf_update)
 }
 #endif
 
-#if defined(EDGE_FLAGS_INCLUDED)
+
+
 struct EdgeFlags
 {
     // Persistent Flags ----------------------------------
@@ -822,6 +823,8 @@ EdgeFlags decode_edge_flags(uint ef_enc)
 
     return ef; 
 }
+
+#if defined(EDGE_FLAGS_INCLUDED)
 EdgeFlags load_edge_flags(uint wedge_id)
 {
     return decode_edge_flags(ssbo_edge_flags_[wedge_id]); 
@@ -830,7 +833,6 @@ void store_edge_flags(uint wedge_id, EdgeFlags ef)
 {
     ssbo_edge_flags_[wedge_id] = encode_edge_flags(ef); 
 }
-
 
 EdgeFlags init_edge_flags(bool dupli, bool border)
 {

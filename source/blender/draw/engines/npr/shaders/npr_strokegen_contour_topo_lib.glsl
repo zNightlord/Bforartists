@@ -416,6 +416,70 @@ bool is_2d_sample_curve_looped(bool contour_looped, bool contour_crve_clipped, b
 
 
 
+/* Temporal contour record, generated per contour edge. */
+struct TemporalRecordFlags
+{
+	uint subd_tree_code_chain; // 9 bits = 3 bits x 3 subd levels 
+}; 
+uint encode_temporal_record_flags(TemporalRecordFlags trf)
+{
+	uint enc = 0u; 
+	enc <<= 9u; 
+	enc |= (trf.subd_tree_code_chain & 0x01ffu); 
+	return enc; 
+}
+TemporalRecordFlags decode_temporal_record_flags(uint enc)
+{
+	TemporalRecordFlags trf; 
+	trf.subd_tree_code_chain = enc & 0x01ffu; 
+	enc >>= 9u; 
+	return trf; 
+}
+TemporalRecordFlags init_temporal_record_flags(uint subd_code_chain)
+{
+	TemporalRecordFlags trf; 
+	trf.subd_tree_code_chain = subd_code_chain; 
+	return trf; 
+}
+
+#if defined(USE_CONTOUR_TEMPORAL_RECORD_BUFFER)
+void store_ssbo_contour_temporal_new_records__flags(uint enc_id, TemporalRecordFlags flags)
+{
+	ssbo_contour_new_temporal_records_[enc_id] = encode_temporal_record_flags(flags);  
+}
+TemporalRecordFlags load_ssbo_contour_temporal_new_records__flags(uint enc_id)
+{
+	return decode_temporal_record_flags(ssbo_contour_new_temporal_records_[enc_id]); 
+}
+void store_ssbo_contour_temporal_new_records__subd_root_edge_id(uint enc_id, uint root_edge_id, uint num_recs)
+{
+	uint subbuff_offset = num_recs * 1u; 
+	ssbo_contour_new_temporal_records_[subbuff_offset + enc_id] = root_edge_id; 
+}
+uint load_ssbo_contour_temporal_new_records__subd_root_edge_id(uint enc_id, uint num_recs)
+{
+	uint subbuff_offset = num_recs * 1u; 
+	return ssbo_contour_new_temporal_records_[subbuff_offset + enc_id]; 
+}
+#endif
+
+
+
+/* Each edge holds a pointer to its records, 
+ * the ptr is null if it wasn't a contour */
+#define TEMPORAL_REC_ID_NULL 0xffffffffu
+#if defined(USE_EDGE_TO_TEMPORAL_RECORD_BUFFER)
+void store_ssbo_edge_to_new_temporal_record_(uint wedge_id, uint rec_id)
+{ // not using interleaved here for easier debugging
+	ssbo_edge_to_temporal_record_[wedge_id * 2u] = rec_id; 
+}
+void store_ssbo_edge_to_old_temporal_record_(uint wedge_id, uint rec_id)
+{
+	ssbo_edge_to_temporal_record_[wedge_id * 2u + 1u] = rec_id; 
+}
+#endif
+
+
 
 #endif
 

@@ -115,7 +115,7 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_extract)
     .push_constant(Type::INT, "pcs_num_ib_offset")
     .push_constant(Type::INT, "pcs_rsc_handle")
     .push_constant(Type::INT, "pcs_edge_visualize_mode_")
-    .push_constant(Type::INT, "pcs_chain_interpo_contour_")
+    .push_constant(Type::INT, "pcs_extract_interpo_contour_")
     .push_constant(Type::VEC2, "pcs_screen_size_")
     .push_constant(Type::FLOAT, "pcs_dbg_geom_scale_")
     .local_group_size(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT) /* <== from "bnpr_defines.hh" */
@@ -208,6 +208,7 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_extract_mesh_contour_data)
     .storage_buf(10, Qualifier::READ_WRITE, "uint", "ssbo_contour_edge_transfer_data_[]")
     .storage_buf(11, Qualifier::READ_WRITE, "uint", "ssbo_vcurv_max_[]")
     .storage_buf(12, Qualifier::READ_WRITE, "uint", "ssbo_contour_raster_data_[]")
+    .storage_buf(13, Qualifier::READ_WRITE, "uint", "ssbo_contour_vert_to_old_edge_[]")
     .uniform_buf(0, "ViewMatrices", "ubo_view_matrices_")
     .push_constant(Type::VEC2, "pcs_screen_size_")
     
@@ -1872,6 +1873,60 @@ GPU_SHADER_CREATE_INFO(strokegen_loop_subdiv_tree_build_nodes_downwards_calc_)
     .define("_KERNEL_MULTICOMPILE__BUILD_SUBD_TREE_DOWNWARD__TRANSFER_FROM_UPWARD", "1")
     .local_group_size(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT)
     .compute_source("npr_strokegen_loop_subdiv_edge_tree_comp.glsl"); 
+
+
+GPU_SHADER_CREATE_INFO(strokegen_calc_temporal_contour_records)
+    .do_static_compilation(true)
+    .typedef_source("bnpr_shader_shared.hh")
+    .define("_KERNEL_MULTICOMPILE__CALC_TEMPORAL_CONTOUR_RECORDS", "1")
+    .define("INCLUDE_VERTEX_POSITION", "1")
+    .define("VERT_FLAGS_INCLUDED", "1")
+    .define("USE_DYNAMESH_EDGE_SELECTION_INDEXING", "1")
+    .define("WINGED_EDGE_TOPO_INCLUDE", "1")
+
+    .storage_buf(0, Qualifier::READ_WRITE, "SSBOData_StrokeGenDynamicMeshCounters", "ssbo_dyn_mesh_counters_out_")
+    .storage_buf(1, Qualifier::READ_WRITE, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
+    .storage_buf(2, Qualifier::READ_WRITE, "uint", "ssbo_selected_edge_to_edge_[]")
+    .storage_buf(3, Qualifier::READ_WRITE, "uint", "ssbo_edge_to_vert_[]")
+    .storage_buf(4, Qualifier::READ_WRITE, "uint", "ssbo_vert_flags_[]")
+    .storage_buf(5, Qualifier::READ_WRITE, "uint", "ssbo_subd_edge_tree_node_up_[]")
+    .storage_buf(6, Qualifier::READ_WRITE, "uint", "ssbo_subd_edge_tree_node_dw_[]")
+    .storage_buf(7, Qualifier::READ_WRITE, "uint", "ssbo_vbo_full_[]")
+    .storage_buf(8, Qualifier::READ_WRITE, "uint", "ssbo_contour_new_temporal_records_[]")
+    .storage_buf(9, Qualifier::READ_WRITE, "uint", "ssbo_edge_to_temporal_record_[]")
+    .uniform_buf(0, "ViewMatrices", "ubo_view_matrices_")
+    .push_constant(Type::INT, "pcs_edge_count_")
+    ; 
+
+GPU_SHADER_CREATE_INFO(strokegen_compact_temporal_contour_records)
+    .do_static_compilation(true)
+    .additional_info("strokegen_calc_temporal_contour_records")
+    .define("_KERNEL_MULTICOMPILE__CALC_TEMPORAL_CONTOUR_RECORDS__COMPACT", "1")
+    .local_group_size(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT)
+    .compute_source("npr_strokegen_loop_subdiv_edge_tree_comp.glsl"); 
+
+GPU_SHADER_CREATE_INFO(strokegen_calculate_temporal_contour_records)
+    .do_static_compilation(true)
+    .additional_info("strokegen_calc_temporal_contour_records")
+    .define("_KERNEL_MULTICOMPILE__CALC_TEMPORAL_CONTOUR_RECORDS__MAIN", "1")
+    .local_group_size(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT)
+    .compute_source("npr_strokegen_loop_subdiv_edge_tree_comp.glsl"); 
+
+
+GPU_SHADER_CREATE_INFO(strokegen_fill_dispatch_args_per_temporal_record)
+    .do_static_compilation(true)
+    .typedef_source("bnpr_defines.hh")
+    .typedef_source("bnpr_shader_shared.hh")
+    .typedef_source("draw_shader_shared.hh") /* Always needed for indirect args */
+    .define("_KERNEL_MULTICOMPILE__FILL_DISPATCH_ARGS__PER_TEMPORAL_RECORD", "1")
+    
+    .storage_buf(0, Qualifier::READ, "uint", "ssbo_temporal_record_counters_[]")
+    .storage_buf(1, Qualifier::WRITE, "DispatchCommand", "ssbo_bnpr_temporal_record_dispatch_args_")
+    .push_constant(Type::INT, "pc_fill_args_frame_id_")
+    .push_constant(Type::INT, "pc_temporal_records_dispatch_group_size_") 
+
+    .local_group_size(32)
+    .compute_source("npr_strokegen_fill_indirect_args_comp.glsl");
 
 /** \} */
 

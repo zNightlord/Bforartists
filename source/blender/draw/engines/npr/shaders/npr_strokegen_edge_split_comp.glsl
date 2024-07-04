@@ -4,42 +4,10 @@
 #pragma BLENDER_REQUIRE(npr_strokegen_load_store_lib.glsl)
 
 #pragma BLENDER_REQUIRE(npr_strokegen_geom_lib.glsl)
+#pragma BLENDER_REQUIRE(npr_strokegen_contour_geom_lib.glsl)
 #pragma BLENDER_REQUIRE(npr_strokegen_loop_subdiv_edge_tree_lib.glsl)
 
 
-/* Inputs: 
-uint pcs_split_iter_; 
-float pcs_remesh_edge_len_; // TODO: this will be a ssbo in the future
-int pcs_edge_count_; 
-int pcs_vert_count_; 
-
-!!! Remember to zero out these counters !!!
-* SSBO_StrokeGenEdgeSplitCounters   ssbo_edge_split_counters_[]
-* SSBO_StrokeGenDynamicMeshCounters ssbo_dyn_mesh_counters_in_
-
-#ifdef _KERNEL_MULTICOMPILE__EDGE_SPLIT_COMPACT
-.define("GLOBAL_COUNTER", "ssbo_edge_split_counters_[pcs_split_iter_].num_split_edges_pass_1")
-.define("CP_TAG", "split_select_long_edges")
-#endif
-
-#ifdef _KERNEL_MULTICOMPILE__EDGE_SPLIT_RESOLVE_CONFLICT
-.define("GLOBAL_COUNTER", "ssbo_edge_split_counters_[pcs_split_iter_].num_split_edges")
-.define("CP_TAG", "split_resolve_conflict")
-#endif
-
-* float ssbo_vbo_full_[]
-* uint ssbo_edge_to_vert_[]
-* uint ssbo_edge_to_edges_[]
-* uint ssbo_vert_to_edge_list_header_[]
-
-* .define("EDGE_FLAGS_INCLUDED", "1")
-* .define("EDGE_FLAGS_INCLUDED", "1")
-* uint ssbo_vert_flags_[]
-* uint ssbo_edge_flags_[]
-
-* uint ssbo_per_edge_split_info_[]
-* uint ssbo_per_split_edge_info_[]
-*/
 
 vec3 ld_vpos(uint vtx_id)
 {
@@ -164,19 +132,7 @@ bool is_contour_edge_havent_split(vec3 vpos_0, vec3 vnor_0, VertFlags vf_0, vec3
     if (vf_0.contour || vf_1.contour)
         return false;
 
-    // return (
-    //     (vf_0.front_facing && vf_1.back_facing)
-    //     || (vf_0.back_facing && vf_1.front_facing)
-    // ); 
-
-    mat4 view_to_world = ubo_view_matrices_.viewinv;
-    vec3 cam_pos_ws = view_to_world[3].xyz; /* see "#define cameraPos ViewMatrixInverse[3].xyz" */
-    vec2 ndv = vec2(
-        dot(vnor_0, cam_pos_ws - vpos_0),  
-        dot(vnor_1, cam_pos_ws - vpos_1) 
-    ); 
-    
-    return sign(ndv[0]) != sign(ndv[1]);
+    return is_interp_contour_edge__before_tessellation(vf_0, vf_1); 
 }
 
 bool is_loop_subdiv_havent_split(EdgeFlags ef, VertFlags vf_0, VertFlags vf_1)
@@ -483,7 +439,7 @@ void main()
     #define ssbo_subd_edge_tree_node_up_ ssbo_selected_edge_to_edge_ 
     #define ssbo_subd_edge_vert_to_old_edge_ ssbo_vnor_ // swapped when split for loop subdiv
     // if (is_contour_split_pass())
-    #define ssbo_subd_contour_vert_to_old_edge_ ssbo_selected_edge_to_edge_ // swapped when split for loop subdiv
+    #define ssbo_contour_vert_to_old_edge_ ssbo_selected_edge_to_edge_ // swapped when split for loop subdiv
 
     /* Update dynamic mesh counters */
     if (gl_GlobalInvocationID.x == 0u) 
@@ -691,7 +647,7 @@ void main()
     if (is_contour_split_pass())
     {   /* In order to eval node for contour edge,
          * we cache link from each contour vert to its old edge */
-        ssbo_subd_contour_vert_to_old_edge_[v4] = psei_curr.id; 
+        ssbo_contour_vert_to_old_edge_[v4] = psei_curr.id; 
     }
 
 #undef e0

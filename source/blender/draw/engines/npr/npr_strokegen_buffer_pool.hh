@@ -47,7 +47,10 @@ class GPUBufferPoolModule {
   SSBO_StrokeGenEdgeSplitCounters ssbo_edge_split_counters_;
   SSBO_StrokeGenEdgeCollapseCounters ssbo_edge_collapse_counters_;
   SSBO_StrokeGenEdgeFlipCounters ssbo_edge_flip_counters_;
-  SSBO_StrokeGenFaceSplitCounters ssbo_face_split_counters_; 
+  SSBO_StrokeGenFaceSplitCounters ssbo_face_split_counters_;
+
+  SSBO_StrokeGenTemporalRecordCounters ssbo_temporal_record_counters_; 
+
 
   // Dispatch Args --------------------------------------------------------
   SSBO_IndirectDrawArgs ssbo_bnpr_contour_mesh_draw_args_;
@@ -68,6 +71,8 @@ class GPUBufferPoolModule {
   SSBO_IndirectDispatchArgs ssbo_bnpr_mesh_contour_vert_dispatch_args_;
   SSBO_IndirectDispatchArgs ssbo_bnpr_mesh_contour_frag_dispatch_args_;
   SSBO_IndirectDispatchArgs ssbo_bnpr_mesh_contour_2d_sample_dispatch_args_;
+
+  SSBO_IndirectDispatchArgs ssbo_bnpr_temporal_record_dispatch_args_; 
 
 
 
@@ -96,24 +101,42 @@ class GPUBufferPoolModule {
   SSBO_StrokeGenMeshBufPerContour<uint, 6> ssbo_contour_snake_vpos_;       //
   SSBO_StrokeGenMeshBufPerContour<uint, 1> ssbo_contour_snake_flags_;      //
 
-  SSBO_StrokeGenMeshBufPerContour<uint, 4 * 16> ssbo_contour_temporal_cache_;
+  SSBO_StrokeGenMeshBufPerContour<uint, 32> ssbo_contour_temporal_records_[MAX_TEMPORAL_RECOREDED_FRAMES];
 
   // Reusable Large Buffers -------------------------------------------------------------
+  // note: don't ssbo_mesh_buffer_reuse_0_
+  // from interpo contour tessellation till the end of append_subpass_setup_contour_edge_data
   SSBO_StrokeGenReusedLarge ssbo_mesh_buffer_reuse_0_;                    // 256MB  Total  
   SSBO_StrokeGenReusedMedium ssbo_mesh_buffer_reuse_1_;                   // 128MB  384MB
   SSBO_StrokeGenReusedMedium ssbo_mesh_buffer_reuse_2_;                   // 128MB  512MB
-  // contains extracted geom, contour edges
   SSBO_StrokeGenReusedLarge ssbo_mesh_buffer_reuse_3_;                    // 256MB  768MB
   SSBO_StrokeGenReusedLarge ssbo_mesh_buffer_reuse_4_;                    // 256MB 1024MB
   SSBO_StrokeGenReusedSmall ssbo_mesh_buffer_reuse_5_;                    // 64MB  1088MB
   SSBO_StrokeGenReusedSmall ssbo_mesh_buffer_reuse_6_;                    // 64MB  1152MB
   SSBO_StrokeGenReusedMedium ssbo_mesh_buffer_reuse_7_;                   // 128MB 1280MB
+  // note: don't ssbo_mesh_buffer_reuse_8_
+  // from interpo contour tessellation till the end of append_subpass_setup_contour_edge_data
   SSBO_StrokeGenReusedMedium ssbo_mesh_buffer_reuse_8_;                   // 128MB 1280MB
   // Free after subpass_serialize_contour_edges 
   SSBO_StrokeGenMeshBufPerContour<uint, 8> ssbo_contour_edge_transfer_data_;  // 64MB
   // Free after subpass_visibility_split_contour_edges
   SSBO_StrokeGenMeshBufPerContour<uint, 5> ssbo_contour_raster_data_;         // 40MB
   // Notes: DO NOT use reuse_4 when remeshing, it holds per-vertex remesh len
+
+
+  // Long life-time buffers  -------------------------------
+  inline GPUStorageBuf *reused_ssbo_subd_edge_tree_node_dw_()
+  { // [append_subpasses_loop_subdiv, interpolated contour tessellation)
+    return ssbo_mesh_buffer_reuse_3_;
+  }
+  inline GPUStorageBuf *reused_ssbo_contour_vert_to_old_edge_()
+  { // [interpolated contour tessellation, append_subpass_setup_contour_edge_data]
+    return ssbo_mesh_buffer_reuse_0_;
+  }
+  inline GPUStorageBuf *reused_ssbo_edge_to_temporal_record_()
+  { // [interpolated contour tessellation, append_subpass_setup_contour_edge_data]
+    return ssbo_mesh_buffer_reuse_8_;
+  }
 
 
   // Reused Buffer Scheme for Basic Meshing ------------------------------------------------
@@ -169,17 +192,6 @@ class GPUBufferPoolModule {
   // Reused Buffer Scheme throughout Loop Subdiv ------
   // Don't reuse buffers reused by edge split
   inline GPUStorageBuf* reused_ssbo_subd_edge_vert_to_old_edge_()
-  {
-    return ssbo_mesh_buffer_reuse_0_;
-  }
-  inline GPUStorageBuf *reused_ssbo_subd_edge_tree_dw_()
-  {
-    return ssbo_mesh_buffer_reuse_3_; 
-  }
-
-  // Reused Buffer Scheme throughout Interpolated Contour Tessellation ------
-  // Don't reuse buffers reused by edge split
-  inline GPUStorageBuf *reused_ssbo_subd_contour_vert_to_old_edge_()
   {
     return ssbo_mesh_buffer_reuse_0_;
   }
@@ -245,15 +257,6 @@ class GPUBufferPoolModule {
     return ssbo_mesh_buffer_reuse_0_; 
   }
 
-  // Reused Buffer Scheme for Vertex Normal Filtering -----------------------------------------------
-  inline GPUStorageBuf *reused_ssbo_vnor_temp_in_(int step)
-  {
-    return step % 2u == 0u ? ssbo_mesh_buffer_reuse_3_ : ssbo_mesh_buffer_reuse_0_;
-  }
-  inline GPUStorageBuf *reused_ssbo_vnor_temp_out_(int step)
-  {
-    return step % 2u == 0u ? ssbo_mesh_buffer_reuse_0_ : ssbo_mesh_buffer_reuse_3_; 
-  }
 
   // Reused Buffer Scheme for Quadric-based Filtering -----------------------------------------------
   inline GPUStorageBuf *reused_ssbo_vert_quadric_data_in_(int step)
