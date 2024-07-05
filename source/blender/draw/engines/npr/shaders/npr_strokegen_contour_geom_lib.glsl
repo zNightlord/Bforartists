@@ -13,16 +13,23 @@ bool is_back_face(float ndv)
 {
 	return ndv <= .0f; 
 }
+bool is_contour_edge_common(EdgeFlags ef)
+{
+	bool is_contour = true; 
+	is_contour = is_contour && (!ef.del_by_split) && (!ef.del_by_collapse) && (!ef.dupli); 
+	is_contour = is_contour && (!ef.border); // TODO: support for border edges
+	return is_contour; 
+}
 /*     v0
  *    /  \
  *   / f1 \ 
  *  v1 -- v3 Winding:CCW
- *   \ f0 / 
+ *   \ f0 /  
  *    \  /    
  *     v2                   
 */
 bool is_contour_edge(
-	vec3 v0, vec3 v1, vec3 v2, vec3 v3, vec3 cam_pos, 
+	vec3 v0, vec3 v1, vec3 v2, vec3 v3, vec3 cam_pos, EdgeFlags ef, 
 	out float face_orient_123, out float face_orient_013
 )
 { /* impl based on overlay_outline_prepass_vert_no_geom.glsl */
@@ -39,25 +46,33 @@ bool is_contour_edge(
   	face_orient_013 = dot(view_dir, n3);
 	bool is_contour = is_back_face(face_orient_123) != is_back_face(face_orient_013); 
 	
+	is_contour = is_contour && is_contour_edge_common(ef); 
+
 	return is_contour; 
 }
 
-bool is_interp_contour_edge__before_tessellation(VertFlags vf_0, VertFlags vf_1)
+bool is_interp_contour_edge__before_tessellation(VertFlags vf_0, VertFlags vf_1, EdgeFlags ef)
 {
-    return (
+    bool is_contour = (
         (vf_0.front_facing && vf_1.back_facing)
         || (vf_0.back_facing && vf_1.front_facing)
     ); 
+	
+	is_contour = is_contour && is_contour_edge_common(ef); 
+
+	return is_contour; 
 }
 
 bool is_interp_contour_edge__after_tessellation(
-	VertFlags vf_0, VertFlags vf_1, VertFlags vf_2, VertFlags vf_3, 
+	VertFlags vf_0, VertFlags vf_1, VertFlags vf_2, VertFlags vf_3, EdgeFlags ef, 
 	out float face_orient_123, out float face_orient_013
 )
 {
 	bool is_contour = vf_1.contour && vf_3.contour;  
 	face_orient_123 = vf_2.front_facing ? 1.0f : -1.0f; 
 	face_orient_013 = vf_0.front_facing ? 1.0f : -1.0f; 
+
+	is_contour = is_contour && is_contour_edge_common(ef); 
 
 	return is_contour; 
 }

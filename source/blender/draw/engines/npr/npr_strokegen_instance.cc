@@ -245,7 +245,7 @@ namespace blender::npr::strokegen
       }
       
     }
-    frame_counter = (frame_counter + 1) % 100000000;
+    frame_counter = (frame_counter + 1) % 100000000/* must be even number */;
 
 
 

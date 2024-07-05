@@ -164,16 +164,16 @@ DECL_LDS_DIGIT_PER_LANE(CP_TAG)
 
 #if defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1)
 #define CP_TAG pdir_lines
-DECL_LDS_DIGIT_PER_LANE(CP_TAG)
-#define LDS_DIGIT_PER_LANE CAT(LDS_digit_per_lane_, CP_TAG)
-DECL_LDS_OFFSET_PER_LANE_SLOT(CP_TAG)
-#define LDS_OFFSET_PER_LANE_SLOT CAT(LDS_digit_per_lane_, CP_TAG)
-DECL_LDS_HIST_BLK(CP_TAG)
-#define LDS_HIST_BLK CAT(LDS_hist_blk_, CP_TAG)
-DECL_LDS_SCAN_BLOCK_OFFSET(CP_TAG)
-#define LDS_SCAN_BLOCK_OFFSET CAT(LDS_scan_block_offset_, CP_TAG) 
+    DECL_LDS_DIGIT_PER_LANE(CP_TAG)
+    #define LDS_DIGIT_PER_LANE CAT(LDS_digit_per_lane_, CP_TAG)
+    DECL_LDS_OFFSET_PER_LANE_SLOT(CP_TAG)
+    #define LDS_OFFSET_PER_LANE_SLOT CAT(LDS_digit_per_lane_, CP_TAG)
+    DECL_LDS_HIST_BLK(CP_TAG)
+    #define LDS_HIST_BLK CAT(LDS_hist_blk_, CP_TAG)
+    DECL_LDS_SCAN_BLOCK_OFFSET(CP_TAG)
+    #define LDS_SCAN_BLOCK_OFFSET CAT(LDS_scan_block_offset_, CP_TAG) 
 
-DECL_COMPACTION_FUNC(CP_TAG, ssbo_bnpr_mesh_pool_counters_.num_dbg_vpdir_lines)
+    DECL_COMPACTION_FUNC(CP_TAG, ssbo_bnpr_mesh_pool_counters_.num_dbg_vpdir_lines)
 #undef CP_TAG
 #endif
 
@@ -248,6 +248,22 @@ DECL_COMPACTION_FUNC(CP_TAG, ssbo_bnpr_mesh_pool_counters_.num_dbg_vpdir_lines)
 #undef CP_TAG
 #endif
 
+
+
+#if defined(_KERNEL_MULTICOMPILE__CALC_TEMPORAL_CONTOUR_RECORDS__COMPACT)
+#define CP_TAG temporal_contour_record
+    DECL_LDS_DIGIT_PER_LANE(CP_TAG)
+    #define LDS_DIGIT_PER_LANE CAT(LDS_digit_per_lane_, CP_TAG)
+    DECL_LDS_OFFSET_PER_LANE_SLOT(CP_TAG)
+    #define LDS_OFFSET_PER_LANE_SLOT CAT(LDS_digit_per_lane_, CP_TAG)
+    DECL_LDS_HIST_BLK(CP_TAG)
+    #define LDS_HIST_BLK CAT(LDS_hist_blk_, CP_TAG)
+    DECL_LDS_SCAN_BLOCK_OFFSET(CP_TAG)
+    #define LDS_SCAN_BLOCK_OFFSET CAT(LDS_scan_block_offset_, CP_TAG) 
+
+    DECL_COMPACTION_FUNC(CP_TAG, (ssbo_temporal_record_counters_[(pc_obj_id_ * MAX_TEMPORAL_FRAMES) + (pc_frame_id_ % MAX_TEMPORAL_FRAMES)]))
+#undef CP_TAG
+#endif
 
 
 

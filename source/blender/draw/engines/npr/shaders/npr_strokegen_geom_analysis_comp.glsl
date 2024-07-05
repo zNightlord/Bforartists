@@ -793,7 +793,7 @@ struct CalcVertAttrContext_Order1
      * https://dgtal-team.github.io/doc-nightly/moduleCurvatureMeasures.html 
      * https://github.com/CGAL/cgal/issues/7063
     */
-    #if defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__INTERPO_CURVATURE) || defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__INTERPO_CURVTENSOR)
+    #if defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__INTERPO_CURVATURE) || defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__INTERPO_CURVTENSOR) || defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1_GRAD_VDOTN)
         float sum_area; 
         vec3 vnor_c; 
         vec3 vpos_i; 
@@ -830,14 +830,14 @@ struct CalcVertAttrContext_Order1
 
 CalcVertAttrContext_Order1 init_vert_attr_context_order_1(
     vec3 vpos
-#if defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__INTERPO_CURVATURE) || defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__INTERPO_CURVTENSOR)
+#if defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__INTERPO_CURVATURE) || defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__INTERPO_CURVTENSOR) || defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1_GRAD_VDOTN)
     , vec3 vnor, vec3 vpos_i, vec3 vnor_i
 #endif
 ){
     CalcVertAttrContext_Order1 ctx; 
     ctx.vpos_c = vpos;  
 
-    #if defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__INTERPO_CURVATURE) || defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__INTERPO_CURVTENSOR)
+    #if defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__INTERPO_CURVATURE) || defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__INTERPO_CURVTENSOR) || defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1_GRAD_VDOTN)
         ctx.sum_area = .0f; 
         ctx.vnor_c = vnor; 
         ctx.vpos_i = vpos_i; 
@@ -1103,7 +1103,7 @@ void main()
     #if defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__CURVTENSOR)
         ctx = init_vert_attr_context_order_1(vpos); 
     #endif
-    #if defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__INTERPO_CURVATURE) || defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__INTERPO_CURVTENSOR)
+    #if defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__INTERPO_CURVATURE) || defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__INTERPO_CURVTENSOR) || defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1_GRAD_VDOTN)
         uint ivert_vi = vwlh_rot.ivert == 1u ? 3u : 1u;
         uint vi = ssbo_edge_to_vert_[vwlh_rot.wedge_id*4u + ivert_vi]; 
         vec3 vpos_vi = ld_vpos(vi);
@@ -1177,9 +1177,9 @@ void main()
                 store_debug_line_data(dbg_line_id, dvd_20, dvd_21); 
                 dbg_line_id++; 
                 
-#define ssbo_vtx_remesh_len_ ssbo_vcurv_pdirs_k1k2_
+                #define ssbo_vtx_remesh_len_ ssbo_vcurv_pdirs_k1k2_
                 float remesh_edge_len = uintBitsToFloat(ssbo_vtx_remesh_len_[vert_id]); 
-#undef ssbo_vtx_remesh_len_
+                #undef ssbo_vtx_remesh_len_
                 dbg_line_len = valid_curv ? max_curv * pcs_dbg_geom_scale_ : .0f;
                 // dbg_line_len = valid_curv ? remesh_edge_len * pcs_dbg_geom_scale_ : .0f;
 
@@ -1300,63 +1300,61 @@ void main()
         
         if (0 < pcs_output_dbg_geom_)
         {
-//             // debug lines
-//             VertFlags vf = decode_vert_flags(ssbo_vert_flags_[vert_id]); 
-//             bool dbg_vtx_curv = (!vf.dupli) && (!vf.del_by_collapse) && valid_thread;
+            // debug lines
+            VertFlags vf = decode_vert_flags(ssbo_vert_flags_[vert_id]); 
+            bool dbg_vtx_curv = (!vf.dupli) && (!vf.del_by_collapse) && valid_thread;
 
-//             uint dbg_line_id = compact_pdir_lines(dbg_vtx_curv, groupIdx, 3u); /* must run for every thread */
-//             dbg_line_id += get_debug_line_offset(DBG_LINE_TYPE__VCURV); 
+            uint dbg_line_id = compact_pdir_lines(dbg_vtx_curv, groupIdx, 3u); /* must run for every thread */
+            dbg_line_id += get_debug_line_offset(DBG_LINE_TYPE__VCURV); 
 
-//             if (dbg_vtx_curv)
-//             {
-//                 float dbg_line_len = min(ctx.ave_edge_len * .4f, pcs_dbg_geom_scale_ * .12f);
-//                 // dbg_line_len = .0f; 
+            if (dbg_vtx_curv)
+            {
+                float dbg_line_len = min(ctx.ave_edge_len * .4f, pcs_dbg_geom_scale_ * .12f);
+                // dbg_line_len = .0f; 
 
-//                 vec4 vpos_ws_00 = vec4(vpos - normalize(pdir0) * dbg_line_len, 1.0f);
-//                 vec4 vpos_ws_01 = vec4(vpos + normalize(pdir0) * dbg_line_len, 1.0f);
-//                 vec3 dbg_col = vec3(1.0, .0, .0); 
-//                 DebugVertData dvd_00 = DebugVertData(vpos_ws_00.xyz, dbg_col); 
-//                 DebugVertData dvd_01 = DebugVertData(vpos_ws_01.xyz, dbg_col); 
-//                 store_debug_line_data(dbg_line_id, dvd_00, dvd_01); 
-//                 dbg_line_id++; 
+                vec4 vpos_ws_00 = vec4(vpos - normalize(pdir0) * dbg_line_len, 1.0f);
+                vec4 vpos_ws_01 = vec4(vpos + normalize(pdir0) * dbg_line_len, 1.0f);
+                vec3 dbg_col = vec3(1.0, .0, .0); 
+                DebugVertData dvd_00 = DebugVertData(vpos_ws_00.xyz, dbg_col); 
+                DebugVertData dvd_01 = DebugVertData(vpos_ws_01.xyz, dbg_col); 
+                store_debug_line_data(dbg_line_id, dvd_00, dvd_01); 
+                dbg_line_id++; 
 
 
-//                 // if (!vf.crease) dbg_line_len = .0f; 
-//                 // dbg_line_len = max_curv > pcs_dbg_geom_scale_ ? .05f : .0f; 
-//                 // dbg_line_len = (near_contour && cusp_func.x < .0f) ? pcs_dbg_geom_scale_/*  * cusp_func.x */ : .0f; 
-//                 // dbg_line_len = (vf.front_facing) ? pcs_dbg_geom_scale_/*  * cusp_func.x */ : .0f; 
-//                 // vec4 vpos_ws_10 = vec4(vpos, 1.0f);
-//                 // vec4 vpos_ws_11 = vec4(vpos + normalize(vnor) * dbg_line_len, 1.0f);
-//                 vec4 vpos_ws_10 = vec4(vpos - normalize(pdir1) * dbg_line_len, 1.0f);
-//                 vec4 vpos_ws_11 = vec4(vpos + normalize(pdir1) * dbg_line_len, 1.0f);
-//                 dbg_col = vec3(.0, 1.0, .0); 
-//                 DebugVertData dvd_10 = DebugVertData(vpos_ws_10.xyz, dbg_col); 
-//                 DebugVertData dvd_11 = DebugVertData(vpos_ws_11.xyz, dbg_col); 
-//                 store_debug_line_data(dbg_line_id, dvd_10, dvd_11); 
-//                 dbg_line_id++; 
+                // if (!vf.crease) dbg_line_len = .0f; 
+                // dbg_line_len = max_curv > pcs_dbg_geom_scale_ ? .05f : .0f; 
+                // dbg_line_len = (near_contour && cusp_func.x < .0f) ? pcs_dbg_geom_scale_/*  * cusp_func.x */ : .0f; 
+                // dbg_line_len = (vf.front_facing) ? pcs_dbg_geom_scale_/*  * cusp_func.x */ : .0f; 
+                // vec4 vpos_ws_10 = vec4(vpos, 1.0f);
+                // vec4 vpos_ws_11 = vec4(vpos + normalize(vnor) * dbg_line_len, 1.0f);
+                vec4 vpos_ws_10 = vec4(vpos - normalize(pdir1) * dbg_line_len, 1.0f);
+                vec4 vpos_ws_11 = vec4(vpos + normalize(pdir1) * dbg_line_len, 1.0f);
+                dbg_col = vec3(.0, 1.0, .0); 
+                DebugVertData dvd_10 = DebugVertData(vpos_ws_10.xyz, dbg_col); 
+                DebugVertData dvd_11 = DebugVertData(vpos_ws_11.xyz, dbg_col); 
+                store_debug_line_data(dbg_line_id, dvd_10, dvd_11); 
+                dbg_line_id++; 
 
-//                 // dbg_line_len = pcs_dbg_geom_scale_; 
-//                 // if (!vf.corner) dbg_line_len = .0f; 
-//                 // dbg_line_len = .0f; 
-// #define ssbo_vtx_remesh_len_ ssbo_vcurv_pdirs_k1k2_
-//                 float remesh_edge_len = uintBitsToFloat(ssbo_vtx_remesh_len_[vert_id]); 
-//                 // dbg_line_len = pcs_dbg_geom_scale_ * remesh_edge_len;
-// #undef ssbo_vtx_remesh_len_
-//                 // dbg_line_len = valid_curv ? .0f : pcs_dbg_geom_scale_;                
-//                 // dbg_line_len = (near_contour && cusp_func.x >= .0f) ? pcs_dbg_geom_scale_/*  * cusp_func.x */ : .0f; 
-//                 // dbg_line_len = (vf.back_facing) ? pcs_dbg_geom_scale_/*  * cusp_func.x */ : .0f; 
-//                 vec4 vpos_ws_20 = vec4(vpos, 1.0f);
-//                 vec4 vpos_ws_21 = vec4(vpos + normalize(vnor) * dbg_line_len, 1.0f);
-//                 dbg_col = vec3(1.0, .0, 1.0); 
-//                 DebugVertData dvd_20 = DebugVertData(vpos_ws_20.xyz, dbg_col); 
-//                 DebugVertData dvd_21 = DebugVertData(vpos_ws_21.xyz, dbg_col); 
-//                 store_debug_line_data(dbg_line_id, dvd_20, dvd_21); 
-//                 dbg_line_id++; 
-//             }
+                // dbg_line_len = pcs_dbg_geom_scale_; 
+                // if (!vf.corner) dbg_line_len = .0f; 
+                // dbg_line_len = .0f; 
+                #define ssbo_vtx_remesh_len_ ssbo_vcurv_pdirs_k1k2_
+                float remesh_edge_len = uintBitsToFloat(ssbo_vtx_remesh_len_[vert_id]); 
+                // dbg_line_len = pcs_dbg_geom_scale_ * remesh_edge_len;
+                #undef ssbo_vtx_remesh_len_
+                // dbg_line_len = valid_curv ? .0f : pcs_dbg_geom_scale_;                
+                // dbg_line_len = (near_contour && cusp_func.x >= .0f) ? pcs_dbg_geom_scale_/*  * cusp_func.x */ : .0f; 
+                // dbg_line_len = (vf.back_facing) ? pcs_dbg_geom_scale_/*  * cusp_func.x */ : .0f; 
+                vec4 vpos_ws_20 = vec4(vpos, 1.0f);
+                vec4 vpos_ws_21 = vec4(vpos + normalize(vnor) * dbg_line_len, 1.0f);
+                dbg_col = vec3(1.0, .0, 1.0); 
+                DebugVertData dvd_20 = DebugVertData(vpos_ws_20.xyz, dbg_col); 
+                DebugVertData dvd_21 = DebugVertData(vpos_ws_21.xyz, dbg_col); 
+                store_debug_line_data(dbg_line_id, dvd_20, dvd_21); 
+                dbg_line_id++; 
+            }
         }
     #endif
-
-
 
     #if defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1_GRAD_VDOTN)
         ctx.grad_vdotn /= ctx.sum_weight_gradvdn; 
@@ -1380,7 +1378,6 @@ void main()
 
                 vec4 vpos_ws_00 = vec4(vpos, 1.0f);
                 vec4 vpos_ws_01 = vec4(vpos + (ctx.grad_vdotn / grad_vdotn_len) * dbg_line_len, 1.0f);
-                if (cusp_func < .0f) vpos_ws_01 = vpos_ws_00; // eliminate neg cusp points
                 vec3 dbg_col = vec3(1.0, .0, .0); 
                 DebugVertData dvd_00 = DebugVertData(vpos_ws_00.xyz, dbg_col); 
                 DebugVertData dvd_01 = DebugVertData(vpos_ws_01.xyz, dbg_col); 
@@ -1389,7 +1386,6 @@ void main()
                 
                 vec4 vpos_ws_10 = vec4(vpos, 1.0f);
                 vec4 vpos_ws_11 = vec4(vpos + (ctx.grad_vdotn / grad_vdotn_len) * dbg_line_len, 1.0f);
-                if (cusp_func > .0f) vpos_ws_11 = vpos_ws_10; // eliminate neg cusp points
                 dbg_col = vec3(.0, 1.0, .0); 
                 DebugVertData dvd_10 = DebugVertData(vpos_ws_10.xyz, dbg_col); 
                 DebugVertData dvd_11 = DebugVertData(vpos_ws_11.xyz, dbg_col); 

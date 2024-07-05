@@ -1,4 +1,5 @@
 #pragma BLENDER_REQUIRE(npr_strokegen_geom_lib.glsl)
+#pragma BLENDER_REQUIRE(npr_strokegen_contour_topo_lib.glsl)
 
 
 #ifndef NPR_STROKEGEN_FILL_INDIRECT_ARGS_INPUTS_LIB_H
@@ -350,7 +351,7 @@ void FillDispatchArgsBuffer(uvec3 args)
 void GetDispatchArgs(out uvec3 dispatch_args)
 {
     uint num_work_items;
-    num_work_items = ssbo_temporal_record_counters_[pc_fill_args_frame_id_];
+    num_work_items = temporal_record_counter(pc_obj_id_, pc_frame_id_);
     
     dispatch_args.x = compute_num_groups(num_work_items, pc_temporal_records_dispatch_group_size_);
     dispatch_args.y = 1;

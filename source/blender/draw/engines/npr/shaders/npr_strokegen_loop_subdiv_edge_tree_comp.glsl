@@ -4,6 +4,7 @@
 #pragma BLENDER_REQUIRE(npr_strokegen_contour_topo_lib.glsl)
 #pragma BLENDER_REQUIRE(npr_strokegen_contour_geom_lib.glsl)
 #pragma BLENDER_REQUIRE(npr_strokegen_loop_subdiv_edge_tree_lib.glsl)
+#pragma BLENDER_REQUIRE(npr_strokegen_compaction_lib.glsl)
 
 
 #if defined(_KERNEL_MULTICOMPILE__CALC_SUBD_TREE_NODES__PER_EDGE)
@@ -75,6 +76,9 @@ void main()
 #endif
 
 #if defined(_KERNEL_MULTICOMPILE__BUILD_SUBD_TREE_DOWNWARD__INIT)
+    if (gl_GlobalInvocationID.x == 0u)
+        temporal_record_counter(pc_obj_id_, pc_frame_id_) = 0u; 
+
     if (!valid_thread) return; 
     // Point every mesh-edge to itself
     uvec4 init_nodes_enc = uvec4(encode_loop_subd_tree_node_dw(LoopSubdEdgeTreeDwNode(wedge_id)));
@@ -118,15 +122,18 @@ void main()
     uint wedge_id; bool valid_thread; 
     get_wedge_id_from_selected_edge(sel_edge_id, /*out*/wedge_id, /*out*/valid_thread); 
 
+    EdgeFlags ef = load_edge_flags(wedge_id); 
+
     uint v1 = ssbo_edge_to_vert_[wedge_id*4u + 1u]; 
     VertFlags vf_1 = load_vert_flags(v1); 
     uint v3 = ssbo_edge_to_vert_[wedge_id*4u + 3u]; 
     VertFlags vf_3 = load_vert_flags(v3); 
 
+
     // TODO: also support for cotour edges. 
     bool is_contour = false; 
     if (0 < pcs_extract_interpo_contour_)
-        is_contour = valid_thread && is_interp_contour_edge__before_tessellation(vf_1, vf_3); 
+        is_contour = valid_thread && is_interp_contour_edge__before_tessellation(vf_1, vf_3, ef); 
     else
     {
         mat4 view_to_world = ubo_view_matrices_.viewinv; // transform matrices, see "common_view_lib.glsl"
@@ -136,11 +143,14 @@ void main()
         uint v2 = ssbo_edge_to_vert_[wedge_id*4u + 2u];
         vec3 vpos[4] = { ld_vpos(v0), ld_vpos(v1), ld_vpos(v2), ld_vpos(v3) }; // yes it is bad but fuck this I dont care
 
-        is_contour = valid_thread && is_contour_edge(
-			vpos[0], vpos[1], vpos[2], vpos[3], cam_pos_ws
-			, /*out*/face_orient_123, face_orient_013
-		);
+        float face_orient_123, face_orient_013; 
+        is_contour = valid_thread
+            && is_contour_edge(
+                vpos[0], vpos[1], vpos[2], vpos[3], cam_pos_ws, ef, 
+                /*out*/face_orient_123, face_orient_013
+            );
     }
+
 
 	const uint groupId = gl_LocalInvocationID.x;
     uint rec_id = compact_temporal_contour_record(is_contour, groupId); 
@@ -155,11 +165,12 @@ void main()
 
 #if defined(_KERNEL_MULTICOMPILE__CALC_TEMPORAL_CONTOUR_RECORDS__MAIN)
     uint rec_id = gl_GlobalInvocationID.x; 
-    bool valid_thread = rec_id < ssbo_bnpr_mesh_pool_counters_.num_temporal_recs; 
+    uint num_recs = temporal_record_counter(pc_obj_id_, pc_frame_id_); 
+    bool valid_thread = rec_id < num_recs; 
     
     uint rec_wedge_id = ssbo_contour_new_temporal_records_[rec_id]; // load temp data 
 
-    uint curr_edge_id = pcewi.wedge_id; 
+    uint curr_edge_id = rec_wedge_id; 
     uint code_combine = 0u; 
     for (uint tree_depth = 0; tree_depth < pcs_loop_subd_iters_; tree_depth++)
     {
@@ -176,8 +187,8 @@ void main()
     TemporalRecordFlags trf = init_temporal_record_flags(code_combine);
     if (valid_thread)
     {
-        store_ssbo_contour_temporal_new_records__flags(enc_id, trf); 
-        store_ssbo_contour_temporal_new_records__subd_root_edge_id(enc_id, curr_edge_id); 
+        store_ssbo_contour_temporal_new_records__flags(rec_id, trf); 
+        store_ssbo_contour_temporal_new_records__subd_root_edge_id(rec_id, curr_edge_id, num_recs); 
     }
 
     // TODO: walking on the triangulation. 

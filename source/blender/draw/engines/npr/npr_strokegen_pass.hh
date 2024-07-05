@@ -32,6 +32,7 @@ struct SurfaceDebugContext {
   bool dbg_lines; 
   bool dbg_vert_normal;
   bool dbg_vert_curv;
+  bool dbg_vert_contour_grad; 
   bool dbg_edges; 
 
   float dbg_line_length;
@@ -75,8 +76,8 @@ public:
   GPUBufferPoolModule   &buffers_;
   GPUTexturePoolModule  &textures_;
 
-  /** Geometry  */
-
+  int frame_id; 
+  int strokegen_obj_id; 
 
 
 public:
@@ -87,7 +88,8 @@ public:
       )
     : shaders_(strokegen_shaders),
       buffers_(strokegen_buffers),
-      textures_(strokegen_textures)
+      textures_(strokegen_textures),
+      frame_id(0)
   {
     ;
   }
@@ -281,7 +283,8 @@ public:
     // note: due to shader variant issues (I'm lazy to generate all the variants),
     // calc_vert_topo_flags conflicts against calc_vert_voronoi_area
 
-    bool order_1_only_selected; 
+    bool order_1_only_selected;
+    bool calc_vert_contour_grad; 
     bool calc_vert_curvature;
     enum CurvatureEstimator { Rusinkiewicz = 0, Jacques } curvature_estimator;
     bool output_curvature_tensors;
@@ -306,6 +309,7 @@ public:
         calc_vert_topo_flags(false), 
         order_1_only_selected(false),
         calc_vert_curvature(false),
+        calc_vert_contour_grad(false), 
         curvature_estimator(Jacques), 
         output_curvature_tensors(false),
         output_maxcurv_with_cusp_function(false), 
@@ -325,6 +329,10 @@ public:
     void set_calc_vert_voronoi_area(bool val) { calc_vert_voronoi_area = val; }
     void set_calc_vert_topo_flags(bool val) { calc_vert_topo_flags = val; }
 
+    void set_calc_vert_contour_grad(bool val)
+    {
+      calc_vert_contour_grad = val; 
+    }
 
     void set_calc_vert_curvature(bool val, CurvatureEstimator algo, bool output_tensors, bool output_cusp_and_maxcurv) 
     { 
@@ -345,14 +353,11 @@ public:
     }
   };
   void GetSurfaceAnalysisContext_InitPass(SurfaceAnalysisContext &surf_analysis_ctx) const;
-  void GetSurfaceAnalysisContext_VertexRelocationPass(
-      SurfaceAnalysisContext &surf_analysis_ctx) const;
-  void GetSurfaceAnalysisContext_ContourInsertionPass(
-      SurfaceAnalysisContext &surf_analysis_ctx) const;
-  void GetSurfaceAnalysisContext_CuspDetectionPass(
-      SurfaceAnalysisContext &surf_analysis_ctx) const;
-  void GetSurfaceAnalysisContext_CurvatureForAdaptiveRemeshing(
-      SurfaceAnalysisContext &surf_analysis_ctx) const;
+  void GetSurfaceAnalysisContext_VertexRelocationPass(SurfaceAnalysisContext &surf_analysis_ctx) const;
+  void GetSurfaceAnalysisContext_ContourInsertionPass(SurfaceAnalysisContext &surf_analysis_ctx) const;
+  void GetSurfaceAnalysisContext_CuspDetectionPass(SurfaceAnalysisContext &surf_analysis_ctx) const;
+  void GetSurfaceAnalysisContext_CurvatureForAdaptiveRemeshing(SurfaceAnalysisContext &surf_analysis_ctx) const;
+
   void append_subpasses_estimate_curvature_for_adaptive_remeshing(ResourceHandle& rsc_handle,
                                           int num_edges,
                                           int num_verts, bool output_dbg_lines = false);

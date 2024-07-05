@@ -133,17 +133,6 @@ void main()
 
 
 #if defined(_KERNEL_MULTICOMPILE__GEOM_EXTRACT)
-// bool is_interp_contour_edge__after_tessellation(
-// 	VertFlags vf_0, VertFlags vf_1, VertFlags vf_2, VertFlags vf_3, 
-// 	out float face_orient_123, out float face_orient_013
-// )
-// {
-// 	bool is_contour = vf_1.contour && vf_3.contour;  
-// 	face_orient_123 = vf_2.front_facing ? 1.0f : -1.0f; 
-// 	face_orient_013 = vf_0.front_facing ? 1.0f : -1.0f; 
-
-// 	return is_contour; 
-// }
 
 vec3 ld_vbo(uint vert)
 {
@@ -211,16 +200,15 @@ void main()
 	if (0 == pcs_extract_interpo_contour_)
 	{
 		is_contour = is_contour_edge(
-			v[0], v[1], v[2], v[3], cam_pos_ws
-			, /*out*/face_orient_123, face_orient_013
+			v[0], v[1], v[2], v[3], cam_pos_ws, ef, 
+			/*out*/face_orient_123, face_orient_013
 		);
 	}else
 		is_contour = is_interp_contour_edge__after_tessellation(
-			vf[0], vf[1], vf[2], vf[3]
-			, /*out*/ face_orient_123, face_orient_013
+			vf[0], vf[1], vf[2], vf[3], ef, 
+			/*out*/ face_orient_123, face_orient_013
 		);
-	is_contour = is_contour && (!ef.del_by_split) && (!ef.del_by_collapse) && (!ef.dupli); 
-	is_contour = is_contour && (!ef.border); // TODO: support for border edges
+
 	if (false == valid_thread) is_contour = false; 
 
 	uint compacted_idx = compact_contour_edge(is_contour, groupId); 

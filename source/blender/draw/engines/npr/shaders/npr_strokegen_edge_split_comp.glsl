@@ -7,6 +7,7 @@
 #pragma BLENDER_REQUIRE(npr_strokegen_contour_geom_lib.glsl)
 #pragma BLENDER_REQUIRE(npr_strokegen_loop_subdiv_edge_tree_lib.glsl)
 
+#pragma BLENDER_REQUIRE(npr_strokegen_contour_geom_lib.glsl)
 
 
 vec3 ld_vpos(uint vtx_id)
@@ -127,12 +128,12 @@ uint pcg(uint v) /* pcg hash */
 bool is_contour_split_pass() { return (pcs_split_mode_ == EDGE_SPLIT_CONTOUR_EDGES); }
 bool is_loop_subdiv_pass() { return (pcs_split_mode_ == EDGE_SPLIT_LOOP_SUBDIV); } 
 
-bool is_contour_edge_havent_split(vec3 vpos_0, vec3 vnor_0, VertFlags vf_0, vec3 vpos_1, vec3 vnor_1, VertFlags vf_1)
+bool is_contour_edge_havent_split(vec3 vpos_0, vec3 vnor_0, VertFlags vf_0, vec3 vpos_1, vec3 vnor_1, VertFlags vf_1, EdgeFlags ef)
 {
     if (vf_0.contour || vf_1.contour)
         return false;
 
-    return is_interp_contour_edge__before_tessellation(vf_0, vf_1); 
+    return is_interp_contour_edge__before_tessellation(vf_0, vf_1, ef); 
 }
 
 bool is_loop_subdiv_havent_split(EdgeFlags ef, VertFlags vf_0, VertFlags vf_1)
@@ -270,7 +271,8 @@ void main()
     if (is_contour_split_pass())
         is_contour_edge = is_contour_edge_havent_split(
             vpos_cwedge[0], ld_vnor(verts_cwedge.x), load_vert_flags(verts_cwedge.x), 
-            vpos_cwedge[1], ld_vnor(verts_cwedge.y), load_vert_flags(verts_cwedge.y) 
+            vpos_cwedge[1], ld_vnor(verts_cwedge.y), load_vert_flags(verts_cwedge.y), 
+            ef
         );
 
     bool is_loop_subd_edge = false;

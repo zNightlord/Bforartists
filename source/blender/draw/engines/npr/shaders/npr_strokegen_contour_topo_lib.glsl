@@ -416,6 +416,13 @@ bool is_2d_sample_curve_looped(bool contour_looped, bool contour_crve_clipped, b
 
 
 
+
+#define MAX_TEMPORAL_FRAMES 2u 			 // Match to MAX_TEMPORAL_FRAMES 		  in bnpr_defines.hh
+#define MAX_TEMPORAL_TRACKED_OBJECTS 64u // Match to MAX_TEMPORAL_TRACKED_OBJECTS in bnpr_defines.hh
+// note: in the furture, we could try to match against multiple history frames 
+#define temporal_record_counter(obj_id, frame_id) ssbo_temporal_record_counters_[(obj_id * MAX_TEMPORAL_FRAMES) + (frame_id % MAX_TEMPORAL_FRAMES)] 
+
+
 /* Temporal contour record, generated per contour edge. */
 struct TemporalRecordFlags
 {

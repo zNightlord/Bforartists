@@ -54,9 +54,8 @@
 #define MAX_REMESHING_OPS (((MAX_REMESHING_ITERS) * (MAX_REMESH_OPS_PER_ITER)))
 /** \} */
 
-#define MAX_TEMPORAL_RECOREDED_FRAMES 2u
-
-
+#define MAX_TEMPORAL_FRAMES 2u // Match against define in shader
+#define MAX_TEMPORAL_TRACKED_OBJECTS 64u // Match against define in shader
 
 /* -------------------------------------------------------------------- */
 /** \Scan Test

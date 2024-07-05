@@ -316,6 +316,9 @@ const char *StrokeGenShaderModule::static_shader_create_info_name_get(eShaderTyp
     case MESH_ANALYSE_EDGE_FEATURES:
       return "bnpr_geom_analysis_feature_edges"; 
 
+    case MESH_ANALYSE_VERT_CONTOUR_GRADIENT:
+      return "bnpr_geom_analysis_order_1_contour_grad_"; 
+
     case FILL_DRAW_ARGS_DBG_LINES:
       return "strokegen_remeshing_fill_draw_args_dbg_lines"; 
     case INDIRECT_DRAW_DBG_LINES:
@@ -333,7 +336,14 @@ const char *StrokeGenShaderModule::static_shader_create_info_name_get(eShaderTyp
     case MESH_LOOP_SUBD_TREE_INIT_NODES_DOWNWARDS:
       return "strokegen_loop_subdiv_tree_build_nodes_downwards_init_"; 
     case MESH_LOOP_SUBD_TREE_BUILD_NODES_DOWNWARDS:
-      return "strokegen_loop_subdiv_tree_build_nodes_downwards_calc_"; 
+      return "strokegen_loop_subdiv_tree_build_nodes_downwards_calc_";
+
+    case MESH_COMPACT_NEW_TEMPORAL_RECORDS:
+      return "strokegen_compact_new_temporal_contour_records"; 
+    case MESH_CALCULATE_NEW_TEMPORAL_RECORDS:
+      return "strokegen_calculate_new_temporal_contour_records"; 
+    case FILL_DISPATCH_ARGS_TEMPORAL_RECORDS:
+      return "strokegen_fill_dispatch_args_per_temporal_record"; 
 
     case SCAN_TEST_AGGREGATE:
       return "bnpr_scan_test_aggregate";

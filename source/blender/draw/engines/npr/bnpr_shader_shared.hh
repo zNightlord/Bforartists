@@ -558,7 +558,7 @@ using SSBO_StrokeGenEdgeFlipCounters = StorageArrayBuffer<SSBOData_StrokeGenEdge
 using SSBO_StrokeGenFaceSplitCounters = StorageArrayBuffer<SSBOData_StrokeGenFaceSplitCounters, MAX_CONSEQ_FACE_SPLITS + 1, true>;
 using SSBO_StrokeGenDynamicMeshCounters = StorageBuffer<SSBOData_StrokeGenDynamicMeshCounters>; 
 using SSBO_StrokeGenTemporalRecordCounters =
-  StorageArrayBuffer<uint, 4u * ((MAX_TEMPORAL_RECOREDED_FRAMES + 3u) / 4u), true>; 
+    StorageArrayBuffer<uint, MAX_TEMPORAL_TRACKED_OBJECTS * MAX_TEMPORAL_FRAMES, true>; 
 
 // Buffers for testing parallel primitives --------------------
 using SSBO_BnprScanData = StorageArrayBuffer<uint, 2048 * 2048 * 2, true>;
