@@ -616,6 +616,8 @@ namespace blender::npr::strokegen
       
         bind_src(sub);
         sub.bind_ssbo(ssbo_offset_calc_temporal_rec + 0, surf_analysis_ctx_contour.ssbo_vgrad_contour_); 
+        sub.bind_ssbo(ssbo_offset_calc_temporal_rec + 1, buffers_.ssbo_vnor_);
+        sub.bind_ssbo(ssbo_offset_calc_temporal_rec + 2, buffers_.ssbo_edge_to_edges_); 
       
         sub.dispatch(buffers_.ssbo_bnpr_temporal_record_dispatch_args_);
         sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);

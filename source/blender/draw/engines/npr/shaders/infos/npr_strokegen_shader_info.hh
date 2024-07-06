@@ -1934,9 +1934,12 @@ GPU_SHADER_CREATE_INFO(strokegen_calculate_new_temporal_contour_records)
     .do_static_compilation(true)
     .additional_info("strokegen_calc_temporal_contour_records")
     .define("_KERNEL_MULTICOMPILE__CALC_TEMPORAL_CONTOUR_RECORDS__MAIN", "1")
+    .define("INCLUDE_VERTEX_NORMAL", "1")
 
 #define SSBO_OFFSET NUM_SSBO_strokegen_calc_temporal_contour_records
     .storage_buf(SSBO_OFFSET + 0u, Qualifier::READ_WRITE, "uint", "ssbo_vgrad_contour_[]")
+    .storage_buf(SSBO_OFFSET + 1u, Qualifier::READ_WRITE, "uint", "ssbo_vnor_[]")
+    .storage_buf(SSBO_OFFSET + 2u, Qualifier::READ_WRITE, "uint", "ssbo_edge_to_edges_[]")
 #undef SSBO_OFFSET
     .push_constant(Type::INT, "pcs_loop_subd_iters_")
 

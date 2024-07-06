@@ -226,7 +226,7 @@ uint mark__vert_to_next_vert(uint face, uint vert)
     return (vert == 1u) ? 3u : ((vert + 1u) % 4u); /* 1->3, 3->0, 0->1 */ 
 }
 uvec3 mark__face_to_winded_verts(uint face)
-{
+{ // note: last vert (v2/v0) always the opposite vert to center wedge
     if (face == 0u) return uvec3(3u, 1u, 2u);
     return uvec3(1u, 3u, 0u); // face == 1u
 }

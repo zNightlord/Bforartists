@@ -170,6 +170,9 @@ void main()
     
     uint rec_wedge_id = ssbo_contour_new_temporal_records_[rec_id]; // load temp data 
 
+
+    // Contract subd tree nodes on the path to root, compress the path to form a code
+    // ----------------------------------------------------------------------------------------------
     uint curr_edge_id = rec_wedge_id; 
     uint code_combine = 0u; 
     for (uint tree_depth = 0; tree_depth < pcs_loop_subd_iters_; tree_depth++)
@@ -191,10 +194,102 @@ void main()
         store_ssbo_contour_temporal_new_records__subd_root_edge_id(rec_id, curr_edge_id, num_recs); 
     }
 
-    // Walking on the triangulation. 
+
+    // Walking on the triangulation
+    // ----------------------------------------------------------------------------------------------
+    mat4 view_to_world = ubo_view_matrices_.viewinv; // transform matrices, see "common_view_lib.glsl"
+    vec3 cam_pos_ws = view_to_world[3].xyz; // see "#define cameraPos ViewMatrixInverse[3].xyz" 
     if (valid_thread)
     {
+        // TODO: classify 2 probing paths(fwd/bck) from contour curve orientation
+        AdjWedgeInfo wlk_awi = AdjWedgeInfo(rec_wedge_id, 0u/*1u for opposite path*/); 
+        //  q0     
+        //  | \__  
+        //  X    \_
+        //  |\     \__
+        // Q1 \       Q2 
+        //  |  \  CCW    \__  
+        //  |   D           \_    
+        //  |    \            \__      
+        //  q1 -- p ------------ q2
+        //
+        vec3 p; { // Init as interpolated contour point
+            uint v1 = ssbo_edge_to_vert_[rec_wedge_id*4u + 1u]; 
+            uint v3 = ssbo_edge_to_vert_[rec_wedge_id*4u + 3u]; 
+            
+            vec3 vnor_v1v3[2] = { ld_vnor(v1), ld_vnor(v3) };
+            vec3 vpos_v1v3[2] = { ld_vpos(v1), ld_vpos(v3) };  
+            
+            vec3 p = calc_interp_contour_vert_pos(vnor_v1v3, vpos_v1v3, cam_pos_ws); 
+        }
         
+        for (uint trace_iter = 0u; trace_iter < 4u; ++trace_iter)
+        {
+            uvec3 wlk_ivert = mark__face_to_winded_verts(wlk_awi.iface_adj);  
+
+            uvec2 ibwedges_Q1Q2 = uvec2(
+                mark__cwedge_rotate_back(wlk_awi.iface_adj), 
+                mark__cwedge_rotate_next(wlk_awi.iface_adj)
+            ); 
+
+            uvec3 q = uvec3( // winding: CCW
+                ssbo_edge_to_vert_[wlk_awi.wedge_id*4u + wlk_ivert.z], // q0: oppo vert
+                ssbo_edge_to_vert_[wlk_awi.wedge_id*4u + wlk_ivert.x], // q1: edge vert
+                ssbo_edge_to_vert_[wlk_awi.wedge_id*4u + wlk_ivert.y]  // q2: edge vert
+            );                                 
+            vec3 qpos[3]; 
+            for (uint k = 0; k < 3; ++k) qpos[k] = ld_vpos(q[k]); 
+
+            uvec3 D1_enc, D2_enc; 
+            Load3(ssbo_vgrad_contour_, q[1], D1_enc); 
+            Load3(ssbo_vgrad_contour_, q[2], D2_enc); 
+            vec3 D = mix(uintBitsToFloat(D1_enc), uintBitsToFloat(D2_enc), 0.5f); 
+
+            // Project p, D onto the plane of the triangle q012
+            vec2 uvD; 
+            { // Solve for underdetermined system 
+            // D = [Q1 Q2] * [u v]^T
+                vec3 Q1 = qpos[1] - qpos[0];
+                vec3 Q2 = qpos[2] - qpos[0];
+                float Q1dotQ2 = dot(Q1, Q2);
+                vec2 MT_mul_D = vec2(
+                    dot(Q1, D), dot(Q2, D)
+                );
+                mat2 MT_mul_M = mat2(
+                    dot(Q1, Q1), Q1dotQ2,
+                    Q1dotQ2, dot(Q2, Q2)
+                );
+                // [uD vD] = (M^T * M)^-1 * M^T * D
+                vec2 uvD = inverse(MT_mul_M) * MT_mul_D;
+            }
+            #define u_D ((uvD.x))
+            #define v_D ((uvD.y))
+            
+            vec2 uvP; 
+            { // Easy to solve since p is on the Q1Q2 edge
+                float factor = length(p - qpos[1]) / length(qpos[2] - qpos[1]); 
+                uvP = vec2(1.0f - factor, factor);
+            }
+            #define u_p ((uvP.x))
+            #define v_p ((uvP.y))
+
+            // Intersect ray p + tD with two edges q01, q02
+            float t1 = -v_p / v_D; 
+            float t2 = -u_p / u_D;
+            bool walk_to_Q1 = t1 < t2; 
+            vec3 p_next = p + min(t1, t2) * D; 
+            #undef u_D
+            #undef v_D
+            #undef u_p
+            #undef v_p
+            
+            // Find the next iface & edges
+            uint wlk_next_iwedge = walk_to_Q1 ? ibwedges_Q1Q2.x : ibwedges_Q1Q2.y; 
+            AdjWedgeInfo wlk_next_wedge = decode_adj_wedge_info(
+                ssbo_edge_to_edges_[wlk_awi.wedge_id*4u + wlk_next_iwedge]
+            ); 
+            wlk_awi = wlk_next_wedge;
+        }
     }
 #endif
 
