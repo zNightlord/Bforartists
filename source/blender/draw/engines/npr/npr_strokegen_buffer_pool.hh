@@ -124,6 +124,7 @@ class GPUBufferPoolModule {
   // Notes: DO NOT use reuse_4 when remeshing, it holds per-vertex remesh len
 
 
+  // Reused Buffer Scheme for Temporal Coherence   -----------------------------------------------
   // Long life-time buffers  -------------------------------
   inline GPUStorageBuf *reused_ssbo_subd_edge_tree_node_dw_()
   { // [append_subpasses_loop_subdiv, interpolated contour tessellation)
@@ -137,6 +138,7 @@ class GPUBufferPoolModule {
   { // [interpolated contour tessellation, append_subpass_setup_contour_edge_data]
     return ssbo_mesh_buffer_reuse_8_;
   }
+
 
 
   // Reused Buffer Scheme for Basic Meshing ------------------------------------------------
@@ -273,6 +275,7 @@ class GPUBufferPoolModule {
   {
     return ssbo_mesh_buffer_reuse_1_;
   }
+
 
 
 

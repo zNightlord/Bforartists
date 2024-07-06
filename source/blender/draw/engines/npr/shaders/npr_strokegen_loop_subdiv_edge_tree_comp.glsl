@@ -191,7 +191,11 @@ void main()
         store_ssbo_contour_temporal_new_records__subd_root_edge_id(rec_id, curr_edge_id, num_recs); 
     }
 
-    // TODO: walking on the triangulation. 
+    // Walking on the triangulation. 
+    if (valid_thread)
+    {
+        
+    }
 #endif
 
 }

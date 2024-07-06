@@ -1767,13 +1767,15 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_analysis_order_1_contour_grad_)
     .do_static_compilation(true)
     .additional_info("bnpr_geom_analysis_order_1")
     .define("_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__MAIN", "1")
-    .define("_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1_GRAD_VDOTN", "1"); 
+    .define("_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1_GRAD_VDOTN", "1")
+    .storage_buf(NUM_SSBO_1 + 0u, Qualifier::READ_WRITE, "uint", "ssbo_vgrad_contour_[]");
 
 GPU_SHADER_CREATE_INFO(bnpr_geom_analysis_order_1_vert_curv_pass_0)
     .do_static_compilation(true)
     .additional_info("bnpr_geom_analysis_order_1")
     .define("_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__CURV_PER_FACE", "1")
-    .storage_buf(NUM_SSBO_1 + 0, Qualifier::READ_WRITE, "uint", "ssbo_edge_vtensors_[]");
+    .storage_buf(NUM_SSBO_1 + 0, Qualifier::READ_WRITE, "uint", "ssbo_edge_vtensors_[]")
+    ;
 
 GPU_SHADER_CREATE_INFO(bnpr_geom_analysis_order_1_main_curvature)
     .do_static_compilation(true)
@@ -1806,7 +1808,7 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_analysis_order_1_main_curvature_jacques)
     .additional_info("bnpr_geom_analysis_order_1_main_curvature")
     .define("_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__INTERPO_2RING", "1")
     .define("_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__INTERPO_CURVTENSOR", "1")
-    .define("_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1_GRAD_VDOTN", "1")
+    // .define("_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1_GRAD_VDOTN", "1")
     // .define("INCLUDE_VERTEX_RADIAL_NORMAL", "1")
     
     /* Only for solving Gaussian & Mean curvatures, but seems not correct, 
@@ -1911,8 +1913,10 @@ GPU_SHADER_CREATE_INFO(strokegen_calc_temporal_contour_records)
     .storage_buf(9, Qualifier::READ_WRITE, "uint", "ssbo_contour_new_temporal_records_[]")
     .storage_buf(10, Qualifier::READ_WRITE, "uint", "ssbo_edge_to_temporal_record_[]")
     .storage_buf(11, Qualifier::READ_WRITE, "uint", "ssbo_temporal_record_counters_[]")
+#define NUM_SSBO_strokegen_calc_temporal_contour_records 12
 
     .uniform_buf(0, "ViewMatrices", "ubo_view_matrices_")
+
     .push_constant(Type::INT, "pcs_extract_interpo_contour_")
     .push_constant(Type::INT, "pc_obj_id_")
     .push_constant(Type::INT, "pc_frame_id_")
@@ -1931,6 +1935,9 @@ GPU_SHADER_CREATE_INFO(strokegen_calculate_new_temporal_contour_records)
     .additional_info("strokegen_calc_temporal_contour_records")
     .define("_KERNEL_MULTICOMPILE__CALC_TEMPORAL_CONTOUR_RECORDS__MAIN", "1")
 
+#define SSBO_OFFSET NUM_SSBO_strokegen_calc_temporal_contour_records
+    .storage_buf(SSBO_OFFSET + 0u, Qualifier::READ_WRITE, "uint", "ssbo_vgrad_contour_[]")
+#undef SSBO_OFFSET
     .push_constant(Type::INT, "pcs_loop_subd_iters_")
 
     .local_group_size(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT)

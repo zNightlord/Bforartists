@@ -288,7 +288,8 @@ namespace blender::npr::strokegen
     surf_analysis_ctx.order_1_only_selected = false;
     surf_analysis_ctx.set_calc_vert_curvature(false, SurfaceAnalysisContext::CurvatureEstimator::Jacques, false, false);
     surf_analysis_ctx.set_calc_vert_contour_grad(true); 
-    surf_analysis_ctx.ssbo_edge_vtensors_ = buffers_.ssbo_mesh_buffer_reuse_7_;
+    surf_analysis_ctx.ssbo_edge_vtensors_ = nullptr;
+    surf_analysis_ctx.ssbo_vgrad_contour_ = buffers_.ssbo_mesh_buffer_reuse_7_;
     surf_analysis_ctx.ssbo_vcurv_tensor_ = buffers_.ssbo_mesh_buffer_reuse_1_;
     surf_analysis_ctx.ssbo_vcurv_pdirs_k1k2_ = buffers_.ssbo_mesh_buffer_reuse_2_;
   }
@@ -546,19 +547,20 @@ namespace blender::npr::strokegen
     }
 
     // Interpolated contour tessellation
+    SurfaceAnalysisContext surf_analysis_ctx_contour;
+    GetSurfaceAnalysisContext_ContourInsertionPass(surf_analysis_ctx_contour);
     if (meshing_params.contour_mode != ContourType::Raw) {
-      SurfaceAnalysisContext surf_analysis_ctx_contour;
-      GetSurfaceAnalysisContext_ContourInsertionPass(surf_analysis_ctx_contour);
-      auto surf_dbg_ctx_cpy = surf_dbg_ctx;
-      surf_dbg_ctx_cpy.dbg_vert_normal = surf_dbg_ctx.dbg_vert_normal;// false;
-      surf_dbg_ctx_cpy.dbg_vert_curv   = surf_dbg_ctx.dbg_vert_curv;  // false;
-      surf_dbg_ctx_cpy.dbg_vert_contour_grad = surf_dbg_ctx.dbg_vert_curv; 
+      auto surf_dbg_ctx_contour_insertion = surf_dbg_ctx;
+      surf_dbg_ctx_contour_insertion.dbg_vert_normal = false;
+      surf_dbg_ctx_contour_insertion.dbg_vert_curv   = false;
+      surf_dbg_ctx_contour_insertion.dbg_vert_contour_grad = surf_dbg_ctx.dbg_vert_contour_grad; 
       append_subpass_surf_geom_analysis(
-        rsc_handle, num_verts, num_edges, surf_analysis_ctx_contour, surf_dbg_ctx_cpy);
+        rsc_handle, num_verts, num_edges, surf_analysis_ctx_contour, surf_dbg_ctx_contour_insertion);
     }
 
     {
       // Initialize temporal records
+      int ssbo_offset_calc_temporal_rec = 0; 
       auto bind_src = [&](
           draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub
           ) {
@@ -573,7 +575,8 @@ namespace blender::npr::strokegen
         sub.bind_ssbo(8, buffers_.ssbo_vbo_full_);
         sub.bind_ssbo(9, buffers_.ssbo_contour_temporal_records_[frame_id % MAX_TEMPORAL_FRAMES]);
         sub.bind_ssbo(10, buffers_.reused_ssbo_edge_to_temporal_record_());
-        sub.bind_ssbo(11, buffers_.ssbo_temporal_record_counters_); 
+        sub.bind_ssbo(11, buffers_.ssbo_temporal_record_counters_);
+        ssbo_offset_calc_temporal_rec = 12; 
 
         sub.bind_ubo(0, buffers_.ubo_view_matrices_cache_);
 
@@ -612,6 +615,7 @@ namespace blender::npr::strokegen
         sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_CALCULATE_NEW_TEMPORAL_RECORDS));
       
         bind_src(sub);
+        sub.bind_ssbo(ssbo_offset_calc_temporal_rec + 0, surf_analysis_ctx_contour.ssbo_vgrad_contour_); 
       
         sub.dispatch(buffers_.ssbo_bnpr_temporal_record_dispatch_args_);
         sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
@@ -634,8 +638,9 @@ namespace blender::npr::strokegen
       SurfaceAnalysisContext surf_analysis_ctx_contour;
       GetSurfaceAnalysisContext_CuspDetectionPass(surf_analysis_ctx_contour);
       auto surf_dbg_ctx_cpy = surf_dbg_ctx;
-      surf_dbg_ctx_cpy.dbg_vert_normal = false; // surf_dbg_ctx.dbg_vert_normal;
-      surf_dbg_ctx_cpy.dbg_vert_curv   = false; // surf_dbg_ctx.dbg_vert_curv;
+      surf_dbg_ctx_cpy.dbg_vert_normal = surf_dbg_ctx.dbg_vert_normal;
+      surf_dbg_ctx_cpy.dbg_vert_curv   = surf_dbg_ctx.dbg_vert_curv;
+      surf_dbg_ctx_cpy.dbg_vert_contour_grad = false; 
       append_subpass_surf_geom_analysis(rsc_handle, num_verts, num_edges, surf_analysis_ctx_contour, surf_dbg_ctx_cpy);
     }
 
@@ -1698,6 +1703,7 @@ namespace blender::npr::strokegen
       sub.shader_set(shaders_.static_shader_get(MESH_ANALYSE_VERT_CONTOUR_GRADIENT));
 
       bind_src_order_1(sub, dbg_options.dbg_vert_contour_grad);
+      sub.bind_ssbo(ssbo_offset_base_1 + 0, ctx.ssbo_vgrad_contour_); 
 
       sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_edges_);
       sub.barrier(GPU_BARRIER_SHADER_STORAGE);
@@ -1812,7 +1818,7 @@ namespace blender::npr::strokegen
     Vector<int> dbgLineTypes;
     if (dbg_ctx.dbg_vert_normal)
       dbgLineTypes.append(SurfaceDebugContext::DbgLineType::vnor); 
-    if (dbg_ctx.dbg_vert_curv)
+    if (dbg_ctx.dbg_vert_curv || dbg_ctx.dbg_vert_contour_grad)
       dbgLineTypes.append(SurfaceDebugContext::DbgLineType::vcurv);
     if (dbg_ctx.dbg_edges)
       dbgLineTypes.append(SurfaceDebugContext::DbgLineType::edges);

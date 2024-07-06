@@ -284,7 +284,6 @@ public:
     // calc_vert_topo_flags conflicts against calc_vert_voronoi_area
 
     bool order_1_only_selected;
-    bool calc_vert_contour_grad; 
     bool calc_vert_curvature;
     enum CurvatureEstimator { Rusinkiewicz = 0, Jacques } curvature_estimator;
     bool output_curvature_tensors;
@@ -293,6 +292,8 @@ public:
     GPUStorageBuf *ssbo_vcurv_pdirs_k1k2_; 
     GPUStorageBuf *ssbo_edge_vtensors_; // temp buffer holding partial tensors
 
+    bool calc_vert_contour_grad; 
+    GPUStorageBuf *ssbo_vgrad_contour_; 
 
     // Edge attrs
     bool calc_feature_edges; 
@@ -309,13 +310,14 @@ public:
         calc_vert_topo_flags(false), 
         order_1_only_selected(false),
         calc_vert_curvature(false),
-        calc_vert_contour_grad(false), 
-        curvature_estimator(Jacques), 
+        curvature_estimator(Jacques),
         output_curvature_tensors(false),
-        output_maxcurv_with_cusp_function(false), 
+        output_maxcurv_with_cusp_function(false),
         ssbo_vcurv_tensor_(nullptr),
         ssbo_vcurv_pdirs_k1k2_(nullptr),
         ssbo_edge_vtensors_(nullptr),
+        calc_vert_contour_grad(false),
+        ssbo_vgrad_contour_(nullptr), 
         calc_feature_edges(false),
         only_selected_edges(false)
     {

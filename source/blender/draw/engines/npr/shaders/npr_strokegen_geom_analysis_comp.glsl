@@ -1362,6 +1362,12 @@ void main()
         float grad_vdotn_len = length(ctx.grad_vdotn);
         vec3 bigrad = cross(ctx.grad_vdotn / grad_vdotn_len, vnor); 
         
+        if (valid_thread)
+        {
+            uvec3 grad_enc = floatBitsToUint(ctx.grad_vdotn); 
+            Store3(ssbo_vgrad_contour_, vert_id, grad_enc); 
+        }
+
         if (0 < pcs_output_dbg_geom_)
         {
             VertFlags vf = decode_vert_flags(ssbo_vert_flags_[vert_id]); 
