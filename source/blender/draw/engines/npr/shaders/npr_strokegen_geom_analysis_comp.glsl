@@ -1092,6 +1092,11 @@ void main()
         uint num_verts = get_vert_count(); 
         valid_thread = vert_id < num_verts; 
     }
+    if (0 < pcs_order_1_eval_only_contour_verts_)
+    {
+        VertFlags vf = load_vert_flags(vert_id); 
+        if (!vf.contour) valid_thread = false; 
+    }
     
     vec3 vpos = ld_vpos(vert_id); 
     vec3 vnor = LOAD_VNOR(vert_id, vpos);
@@ -1258,7 +1263,8 @@ void main()
         vec3 vnor_gt = ld_vnor(vert_id); // NOTE: This must be the geometrically correct normal
         mat3 pdirs; 
         vec3 evals; 
-        curvDirFromTensor(vtx_curv_measure, ctx.sum_area, vnor_gt, /*out*/pdirs, evals);
+        if (valid_thread) // expensive, so only do it for valid threads
+            curvDirFromTensor(vtx_curv_measure, ctx.sum_area, vnor_gt, /*out*/pdirs, evals);
 
         vec3 pdir0 = vec3(pdirs[0][0], pdirs[1][0], pdirs[2][0]); 
         vec3 pdir1 = vec3(pdirs[0][1], pdirs[1][1], pdirs[2][1]); 
@@ -1274,7 +1280,7 @@ void main()
 
         float cusp_func = .0f; 
         bool near_contour = false; 
-        if (0 < pcs_output_maxcurv_with_cusp_function_)
+        if (0 < pcs_output_maxcurv_with_cusp_function_ && valid_thread)
         { // Cusp detection from "Illustrating smooth surface" by Hertzmann et al.
             mat4 view_to_world = ubo_view_matrices_.viewinv;
             bool is_persp = (ubo_view_matrices_.winmat[3][3] == 0.0);

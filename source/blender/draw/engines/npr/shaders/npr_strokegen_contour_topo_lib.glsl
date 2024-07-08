@@ -480,9 +480,17 @@ void store_ssbo_edge_to_new_temporal_record_(uint wedge_id, uint rec_id)
 { // not using interleaved here for easier debugging
 	ssbo_edge_to_temporal_record_[wedge_id * 2u] = rec_id; 
 }
+uint load_ssbo_edge_to_new_temporal_record_(uint wedge_id)
+{
+	return ssbo_edge_to_temporal_record_[wedge_id * 2u]; 
+}
 void store_ssbo_edge_to_old_temporal_record_(uint wedge_id, uint rec_id)
 {
 	ssbo_edge_to_temporal_record_[wedge_id * 2u + 1u] = rec_id; 
+}
+uint load_ssbo_edge_to_old_temporal_record_(uint wedge_id)
+{
+	return ssbo_edge_to_temporal_record_[wedge_id * 2u + 1u]; 
 }
 #endif
 

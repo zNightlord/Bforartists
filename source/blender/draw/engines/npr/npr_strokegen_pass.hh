@@ -26,8 +26,10 @@ class Instance;
 struct SurfaceDebugContext {
   enum DbgLineType {
     vnor = 0,
-    general = 1,
-    edges = 2
+    // general = 1,
+    // edges = 2
+    general = 2,
+    edges = 1 // debug only! for a better view of general lines
   }; // match to shader defines
   bool dbg_lines; 
   bool dbg_vert_normal;
@@ -219,7 +221,8 @@ public:
     int subdiv_type;
     bool subdiv_use_crease;
 
-    bool denoise_cusp_segmentation; 
+    bool denoise_cusp_segmentation;
+    bool cusp_eval_opti; 
     float visibility_thresh; 
   } meshing_params;
 
@@ -284,6 +287,7 @@ public:
     // calc_vert_topo_flags conflicts against calc_vert_voronoi_area
 
     bool order_1_only_selected;
+    bool order_1_only_contour; // make sure order-0 attrs for neighboring verts are properly computed
     bool calc_vert_curvature;
     enum CurvatureEstimator { Rusinkiewicz = 0, Jacques } curvature_estimator;
     bool output_curvature_tensors;
@@ -309,6 +313,7 @@ public:
         ssbo_varea_(nullptr),
         calc_vert_topo_flags(false), 
         order_1_only_selected(false),
+        order_1_only_contour(false), 
         calc_vert_curvature(false),
         curvature_estimator(Jacques),
         output_curvature_tensors(false),
@@ -363,6 +368,8 @@ public:
   void append_subpasses_estimate_curvature_for_adaptive_remeshing(ResourceHandle& rsc_handle,
                                           int num_edges,
                                           int num_verts, bool output_dbg_lines = false);
+  void append_subpass_init_temporal_records(int num_edges,
+                                            SurfaceAnalysisContext surf_analysis_ctx_contour);
   void append_subpasses_sqrt_subdiv(int num_edges, int num_verts);
   void bind_rsc_for_loop_subd_tree_processing(StrokegenMeshComputePass::PassBase<DrawCommandBuf>& sub, int num_edges);
   void append_subpass_build_loop_subd_tree_upwards_for_face_edges(int num_edges);

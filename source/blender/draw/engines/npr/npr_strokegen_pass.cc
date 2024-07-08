@@ -171,8 +171,9 @@ namespace blender::npr::strokegen
     meshing_params.subdiv_type = (int)(scene_eval->npr.npr_test_val_19 + 1e-10f);
     meshing_params.subdiv_use_crease = .0f < scene_eval->npr.npr_test_val_20; 
 
-    meshing_params.denoise_cusp_segmentation = .0f < scene_eval->npr.npr_test_val_21; 
-    meshing_params.visibility_thresh = scene_eval->npr.npr_test_val_22; 
+    meshing_params.denoise_cusp_segmentation = .0f < scene_eval->npr.npr_test_val_21;
+    meshing_params.visibility_thresh = scene_eval->npr.npr_test_val_22;
+    meshing_params.cusp_eval_opti = true; 
   }
 
   void StrokeGenPassModule::on_end_sync()
@@ -307,6 +308,7 @@ namespace blender::npr::strokegen
     surf_analysis_ctx.set_calc_vert_topo_flags(false); 
 
     surf_analysis_ctx.order_1_only_selected = true;
+    surf_analysis_ctx.order_1_only_contour = meshing_params.cusp_eval_opti; // true; I'm still not sure about this. 
     surf_analysis_ctx.set_calc_vert_curvature(true,
                                               SurfaceAnalysisContext::CurvatureEstimator::Jacques,
                                               false,
@@ -355,6 +357,75 @@ namespace blender::npr::strokegen
     }
   }
 
+
+  void StrokeGenPassModule::append_subpass_init_temporal_records(int num_edges, StrokeGenPassModule::SurfaceAnalysisContext surf_analysis_ctx_contour)
+  {
+    // Initialize temporal records
+    int ssbo_offset_calc_temporal_rec = 0; 
+    auto bind_src = [&](
+        draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub
+        ) {
+      sub.bind_ssbo(0, buffers_.ssbo_dyn_mesh_counters_out_());
+      sub.bind_ssbo(1, buffers_.ssbo_bnpr_mesh_pool_counters_);
+      sub.bind_ssbo(2, buffers_.ssbo_selected_edge_to_edge_);
+      sub.bind_ssbo(3, buffers_.ssbo_edge_to_vert_);
+      sub.bind_ssbo(4, buffers_.ssbo_vert_flags_);
+      sub.bind_ssbo(5, buffers_.ssbo_edge_flags_);
+      sub.bind_ssbo(6, buffers_.ssbo_subd_edge_tree_node_up_);
+      sub.bind_ssbo(7, buffers_.reused_ssbo_subd_edge_tree_node_dw_());
+      sub.bind_ssbo(8, buffers_.ssbo_vbo_full_);
+      sub.bind_ssbo(9, buffers_.ssbo_contour_temporal_records_[frame_id % MAX_TEMPORAL_FRAMES]);
+      sub.bind_ssbo(10, buffers_.reused_ssbo_edge_to_temporal_record_());
+      sub.bind_ssbo(11, buffers_.ssbo_temporal_record_counters_);
+      ssbo_offset_calc_temporal_rec = 12; 
+
+      sub.bind_ubo(0, buffers_.ubo_view_matrices_cache_);
+
+      sub.push_constant("pcs_extract_interpo_contour_",
+                        meshing_params.contour_mode == ContourType::Interpolated ? 1 : 0); 
+      sub.push_constant("pc_obj_id_", strokegen_obj_id);
+      sub.push_constant("pc_frame_id_", frame_id);
+      sub.push_constant("pcs_edge_count_", num_edges);
+    };
+
+    append_subpass_fill_dispatch_args_remeshed_edges_(num_edges, true); 
+
+    {
+      auto &sub = pass_extract_geom().sub("strokegen_compact_new_temporal_contour_records");
+      sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_COMPACT_NEW_TEMPORAL_RECORDS));
+
+      bind_src(sub);
+
+      sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_edges_);
+      sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
+    }
+    {
+      auto& sub = pass_extract_geom().sub("strokegen_fill_dispatch_args_per_temporal_record");
+      sub.shader_set(shaders_.static_shader_get(eShaderType::FILL_DISPATCH_ARGS_TEMPORAL_RECORDS));
+      sub.bind_ssbo(0, buffers_.ssbo_temporal_record_counters_); 
+      sub.bind_ssbo(1, buffers_.ssbo_bnpr_temporal_record_dispatch_args_);
+
+      sub.push_constant("pc_obj_id_", strokegen_obj_id);
+      sub.push_constant("pc_frame_id_", frame_id); 
+      sub.push_constant("pc_temporal_records_dispatch_group_size_", (int)GROUP_SIZE_STROKEGEN_GEOM_EXTRACT); 
+      sub.dispatch(int3(1, 1, 1));
+      sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
+    }
+    {
+      auto& sub = pass_extract_geom().sub("strokegen_calculate_new_temporal_contour_records");
+      sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_CALCULATE_NEW_TEMPORAL_RECORDS));
+      
+      bind_src(sub);
+      sub.bind_ssbo(ssbo_offset_calc_temporal_rec + 0, surf_analysis_ctx_contour.ssbo_vgrad_contour_); 
+      sub.bind_ssbo(ssbo_offset_calc_temporal_rec + 1, buffers_.ssbo_vnor_);
+      sub.bind_ssbo(ssbo_offset_calc_temporal_rec + 2, buffers_.ssbo_edge_to_edges_);
+      sub.bind_ssbo(ssbo_offset_calc_temporal_rec + 3, buffers_.ssbo_dbg_lines_);
+      sub.push_constant("pcs_loop_subd_iters_", meshing_params.iters_test_subdiv); 
+      
+      sub.dispatch(buffers_.ssbo_bnpr_temporal_record_dispatch_args_);
+      sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
+    }
+  }
 
   /**
    * \brief Add a subpass for extracting geometry from given GPUBatch.
@@ -560,72 +631,8 @@ namespace blender::npr::strokegen
         rsc_handle, num_verts, num_edges, surf_analysis_ctx_contour, surf_dbg_ctx_contour_insertion);
     }
 
-    {
-      // Initialize temporal records
-      int ssbo_offset_calc_temporal_rec = 0; 
-      auto bind_src = [&](
-          draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub
-          ) {
-        sub.bind_ssbo(0, buffers_.ssbo_dyn_mesh_counters_out_());
-        sub.bind_ssbo(1, buffers_.ssbo_bnpr_mesh_pool_counters_);
-        sub.bind_ssbo(2, buffers_.ssbo_selected_edge_to_edge_);
-        sub.bind_ssbo(3, buffers_.ssbo_edge_to_vert_);
-        sub.bind_ssbo(4, buffers_.ssbo_vert_flags_);
-        sub.bind_ssbo(5, buffers_.ssbo_edge_flags_);
-        sub.bind_ssbo(6, buffers_.ssbo_subd_edge_tree_node_up_);
-        sub.bind_ssbo(7, buffers_.reused_ssbo_subd_edge_tree_node_dw_());
-        sub.bind_ssbo(8, buffers_.ssbo_vbo_full_);
-        sub.bind_ssbo(9, buffers_.ssbo_contour_temporal_records_[frame_id % MAX_TEMPORAL_FRAMES]);
-        sub.bind_ssbo(10, buffers_.reused_ssbo_edge_to_temporal_record_());
-        sub.bind_ssbo(11, buffers_.ssbo_temporal_record_counters_);
-        ssbo_offset_calc_temporal_rec = 12; 
-
-        sub.bind_ubo(0, buffers_.ubo_view_matrices_cache_);
-
-        sub.push_constant("pcs_extract_interpo_contour_",
-          meshing_params.contour_mode == ContourType::Interpolated ? 1 : 0); 
-        sub.push_constant("pc_obj_id_", strokegen_obj_id);
-        sub.push_constant("pc_frame_id_", frame_id);
-        sub.push_constant("pcs_edge_count_", num_edges);
-      };
-
-      append_subpass_fill_dispatch_args_remeshed_edges_(num_edges, true); 
-
-      {
-        auto &sub = pass_extract_geom().sub("strokegen_compact_new_temporal_contour_records");
-        sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_COMPACT_NEW_TEMPORAL_RECORDS));
-
-        bind_src(sub);
-
-        sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_edges_);
-        sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
-      }
-      {
-        auto& sub = pass_extract_geom().sub("strokegen_fill_dispatch_args_per_temporal_record");
-        sub.shader_set(shaders_.static_shader_get(eShaderType::FILL_DISPATCH_ARGS_TEMPORAL_RECORDS));
-        sub.bind_ssbo(0, buffers_.ssbo_temporal_record_counters_); 
-        sub.bind_ssbo(1, buffers_.ssbo_bnpr_temporal_record_dispatch_args_);
-
-        sub.push_constant("pc_obj_id_", strokegen_obj_id);
-        sub.push_constant("pc_frame_id_", frame_id); 
-        sub.push_constant("pc_temporal_records_dispatch_group_size_", (int)GROUP_SIZE_STROKEGEN_GEOM_EXTRACT); 
-        sub.dispatch(int3(1, 1, 1));
-        sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
-      }
-      {
-        auto& sub = pass_extract_geom().sub("strokegen_calculate_new_temporal_contour_records");
-        sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_CALCULATE_NEW_TEMPORAL_RECORDS));
-      
-        bind_src(sub);
-        sub.bind_ssbo(ssbo_offset_calc_temporal_rec + 0, surf_analysis_ctx_contour.ssbo_vgrad_contour_); 
-        sub.bind_ssbo(ssbo_offset_calc_temporal_rec + 1, buffers_.ssbo_vnor_);
-        sub.bind_ssbo(ssbo_offset_calc_temporal_rec + 2, buffers_.ssbo_edge_to_edges_);
-        sub.bind_ssbo(ssbo_offset_calc_temporal_rec + 3, buffers_.ssbo_dbg_lines_);
-        sub.push_constant("pcs_loop_subd_iters_", meshing_params.iters_test_subdiv); 
-      
-        sub.dispatch(buffers_.ssbo_bnpr_temporal_record_dispatch_args_);
-        sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
-      }
+    { // Init temporal records after per-contour gradient being evaluated from surf_analysis_ctx_contour
+      append_subpass_init_temporal_records(num_edges, surf_analysis_ctx_contour);
     }
 
     // Interpolated contour tessellation
@@ -1585,7 +1592,7 @@ namespace blender::npr::strokegen
       const SurfaceDebugContext & dbg_options
   ){
     int ssbo_offset_base = 0;
-    auto bind_src = [&](draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub, bool only_selected_verts, bool output_dbg_lines) {
+    auto bind_src = [&](draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub, bool only_selected_verts, bool order_1_eval_only_contour_verts, bool output_dbg_lines) {
       sub.bind_ssbo(0,  buffers_.ssbo_dyn_mesh_counters_out_()); 
       sub.bind_ssbo(1,  buffers_.ssbo_bnpr_mesh_pool_counters_); 
       sub.bind_ssbo(2,  buffers_.ssbo_selected_edge_to_edge_); 
@@ -1606,7 +1613,8 @@ namespace blender::npr::strokegen
       int dbg_lines = output_dbg_lines ? 1 : 0; 
       sub.push_constant("pcs_output_dbg_geom_", dbg_lines);
       sub.push_constant("pcs_dbg_geom_scale_", dbg_options.dbg_line_length);
-      sub.push_constant("pcs_only_selected_verts_", only_selected_verts ? 1 : 0); 
+      sub.push_constant("pcs_only_selected_verts_", only_selected_verts ? 1 : 0);
+      sub.push_constant("pcs_order_1_eval_only_contour_verts_", order_1_eval_only_contour_verts ? 1 : 0); 
     };
 
     // Calculate Feature Edges
@@ -1616,7 +1624,7 @@ namespace blender::npr::strokegen
         auto &sub = pass_extract_geom().sub("bnpr_geom_analysis_feature_edges");
         sub.shader_set(shaders_.static_shader_get(MESH_ANALYSE_EDGE_FEATURES));
 
-        bind_src(sub, false, false);
+        bind_src(sub, false, false, false);
         sub.bind_ssbo(ssbo_offset_base, buffers_.ssbo_edge_flags_);
         sub.push_constant("pcs_only_selected_edges_", ctx.only_selected_edges);
 
@@ -1642,7 +1650,7 @@ namespace blender::npr::strokegen
       sub.shader_set(shaders_.static_shader_get(shaderType));
 
 
-      bind_src(sub, ctx.order_0_only_selected, dbg_options.dbg_vert_normal);
+      bind_src(sub, ctx.order_0_only_selected, false, dbg_options.dbg_vert_normal);
       sub.bind_ssbo(ssbo_offset_base, ctx.ssbo_vnor_);
       if (shaderType == MESH_ANALYSE_VERT_NORMAL_VORONOIAREA_TOPOFLAGS) {
         sub.bind_ssbo(ssbo_offset_base + 1, ctx.ssbo_varea_);
@@ -1665,7 +1673,7 @@ namespace blender::npr::strokegen
     int ssbo_offset_base_1 = 0; 
     auto bind_src_order_1 = [&](draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub,
                                 bool output_dbg_lines = false) {
-          bind_src(sub, ctx.order_1_only_selected, output_dbg_lines); 
+          bind_src(sub, ctx.order_1_only_selected, ctx.order_1_only_contour, output_dbg_lines); 
           sub.bind_ssbo(ssbo_offset_base + 0, ctx.ssbo_vnor_);
           sub.bind_ssbo(ssbo_offset_base + 1, ctx.ssbo_varea_);
           sub.bind_ssbo(ssbo_offset_base + 2, buffers_.ssbo_edge_flags_);
@@ -1928,7 +1936,8 @@ namespace blender::npr::strokegen
       sub.bind_ssbo(10, buffers_.ssbo_contour_edge_transfer_data_);
       sub.bind_ssbo(11, buffers_.ssbo_vcurv_max_);
       sub.bind_ssbo(12, buffers_.ssbo_contour_raster_data_);
-      sub.bind_ssbo(13, buffers_.reused_ssbo_contour_vert_to_old_edge_()); 
+      sub.bind_ssbo(13, buffers_.reused_ssbo_contour_vert_to_old_edge_());
+      sub.bind_ssbo(14, buffers_.reused_ssbo_edge_to_temporal_record_()); 
       sub.bind_ubo(0, buffers_.ubo_view_matrices_cache_); 
       float2 fb_res = textures_.get_contour_raster_screen_res(); 
       sub.push_constant("pcs_screen_size_", fb_res); 

@@ -194,6 +194,7 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_extract_mesh_contour_data)
     .define("INCLUDE_VERTEX_CURV_MAX", "1")
     .define("USE_CONTOUR_TRANSFER_DATA_BUFFER", "1")
     .define("INCLUDE_LOAD_STORE_CONTOUR_RASTER_DATA", "1")
+    .define("USE_EDGE_TO_TEMPORAL_RECORD_BUFFER", "1")
     
     .storage_buf(0, Qualifier::READ_WRITE, "uint", "ssbo_contour_temp_data_[]")
     .storage_buf(1, Qualifier::READ, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
@@ -209,6 +210,7 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_extract_mesh_contour_data)
     .storage_buf(11, Qualifier::READ_WRITE, "uint", "ssbo_vcurv_max_[]")
     .storage_buf(12, Qualifier::READ_WRITE, "uint", "ssbo_contour_raster_data_[]")
     .storage_buf(13, Qualifier::READ_WRITE, "uint", "ssbo_contour_vert_to_old_edge_[]")
+    .storage_buf(14, Qualifier::READ_WRITE, "uint", "ssbo_edge_to_temporal_record_[]")
     .uniform_buf(0, "ViewMatrices", "ubo_view_matrices_")
     .push_constant(Type::VEC2, "pcs_screen_size_")
     
@@ -1699,6 +1701,7 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_analysis)
     .push_constant(Type::INT, "pcs_output_dbg_geom_")
     .push_constant(Type::FLOAT, "pcs_dbg_geom_scale_")
     .push_constant(Type::INT, "pcs_only_selected_verts_")
+    .push_constant(Type::INT, "pcs_order_1_eval_only_contour_verts_")
 
     .local_group_size(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT)
     .compute_source("npr_strokegen_geom_analysis_comp.glsl"); 

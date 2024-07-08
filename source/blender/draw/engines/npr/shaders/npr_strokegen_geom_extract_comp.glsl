@@ -490,6 +490,14 @@ void main()
 			cetd.cf = cf;
 			cetd.cusp_funcs = cusp_func;
 
+			{ /* Link contour edge to temporal record */
+				uint old_edge_0 = ssbo_contour_vert_to_old_edge_[v0]; 
+				uint rec_id_0 = load_ssbo_edge_to_new_temporal_record_(old_edge_0); 
+
+				uint old_edge_1 = ssbo_contour_vert_to_old_edge_[v1];
+				uint rec_id_1 = load_ssbo_edge_to_new_temporal_record_(old_edge_1);
+			}
+
 			/* write to intermediate buffer, will be shuffled after list ranking */
 			store_contour_edge_transfer_data_(contour_id_global, cetd); 
 		}
@@ -536,9 +544,6 @@ void main()
 			ssbo_contour_to_contour_[contour_id_global*2+1] = calc_global_contour_edge_id(
 				(!back_face_T_junction) ? ctx.pwci.contour_id : /*break backface border chain at T-junction*/contour_id_local
 			); 
-		}
-
-		{ /* Contract loop subdiv tree path & Temporal back-tracking */
 		}
 	}
 

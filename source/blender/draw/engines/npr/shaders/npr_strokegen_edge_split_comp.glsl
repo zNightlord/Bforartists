@@ -444,7 +444,7 @@ void main()
     #define ssbo_subd_edge_tree_node_up_ ssbo_selected_edge_to_edge_ 
     #define ssbo_subd_edge_vert_to_old_edge_ ssbo_vnor_ // swapped when split for loop subdiv
     // if (is_contour_split_pass())
-    #define ssbo_contour_vert_to_old_edge_ ssbo_selected_edge_to_edge_ // swapped when split for loop subdiv
+    #define ssbo_contour_vert_to_old_edge_ ssbo_selected_edge_to_edge_ // swapped when split for interpolated contour
 
     /* Update dynamic mesh counters */
     if (gl_GlobalInvocationID.x == 0u) 
