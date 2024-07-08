@@ -496,6 +496,8 @@ void main()
 
 				uint old_edge_1 = ssbo_contour_vert_to_old_edge_[v1];
 				uint rec_id_1 = load_ssbo_edge_to_new_temporal_record_(old_edge_1);
+
+				cetd.temporal_rec_id = rec_id_0; 
 			}
 
 			/* write to intermediate buffer, will be shuffled after list ranking */
@@ -656,7 +658,8 @@ void interpo_contour_edge_transfer_data(
 	if (!seg_visible) set_contour_flags_occluded(cetd.cf);
 	cetd.cusp_funcs[0] = mix(cetd_parent.cusp_funcs[0], cetd_parent.cusp_funcs[1], beg_ratio);
 	cetd.cusp_funcs[1] = mix(cetd_parent.cusp_funcs[0], cetd_parent.cusp_funcs[1], end_ratio); 
-
+	cetd.temporal_rec_id = cetd_parent.temporal_rec_id;
+	
 	store_contour_edge_transfer_data_(contour_id, cetd); 
 }
 
