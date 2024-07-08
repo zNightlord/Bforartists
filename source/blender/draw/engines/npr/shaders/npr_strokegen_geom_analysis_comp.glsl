@@ -1154,8 +1154,8 @@ void main()
             VertFlags vf = decode_vert_flags(ssbo_vert_flags_[vert_id]); 
         
             bool dbg_vtx_curv = (!vf.dupli) && (!vf.del_by_collapse) && valid_thread;
-            uint dbg_line_id = compact_pdir_lines(dbg_vtx_curv, groupIdx, 3u);
-            dbg_line_id += get_debug_line_offset(DBG_LINE_TYPE__VCURV); 
+            uint dbg_line_id = compact_general_dbg_lines(dbg_vtx_curv, groupIdx, 3u);
+            dbg_line_id += get_debug_line_offset(DBG_LINE_TYPE__GENERAL); 
 
             if (dbg_vtx_curv)
             {
@@ -1217,8 +1217,8 @@ void main()
         {
             VertFlags vf = decode_vert_flags(ssbo_vert_flags_[vert_id]); 
             bool dbg_vtx_curv = (!vf.dupli) && (!vf.del_by_collapse) && valid_thread; 
-            uint dbg_line_id = compact_pdir_lines(dbg_vtx_curv, groupIdx, 3u);
-            dbg_line_id += get_debug_line_offset(DBG_LINE_TYPE__VCURV); 
+            uint dbg_line_id = compact_general_dbg_lines(dbg_vtx_curv, groupIdx, 3u);
+            dbg_line_id += get_debug_line_offset(DBG_LINE_TYPE__GENERAL); 
 
             if (dbg_vtx_curv)
             {
@@ -1304,8 +1304,8 @@ void main()
             VertFlags vf = decode_vert_flags(ssbo_vert_flags_[vert_id]); 
             bool dbg_vtx_curv = (!vf.dupli) && (!vf.del_by_collapse) && valid_thread;
 
-            uint dbg_line_id = compact_pdir_lines(dbg_vtx_curv, groupIdx, 3u); /* must run for every thread */
-            dbg_line_id += get_debug_line_offset(DBG_LINE_TYPE__VCURV); 
+            uint dbg_line_id = compact_general_dbg_lines(dbg_vtx_curv, groupIdx, 3u); /* must run for every thread */
+            dbg_line_id += get_debug_line_offset(DBG_LINE_TYPE__GENERAL); 
 
             if (dbg_vtx_curv)
             {
@@ -1373,8 +1373,8 @@ void main()
             VertFlags vf = decode_vert_flags(ssbo_vert_flags_[vert_id]); 
             bool dbg_vtx_grad = (!vf.dupli) && (!vf.del_by_collapse) && valid_thread; 
             
-            uint dbg_line_id = compact_pdir_lines(dbg_vtx_grad, groupIdx, 3u);
-            dbg_line_id += get_debug_line_offset(DBG_LINE_TYPE__VCURV); 
+            uint dbg_line_id = compact_general_dbg_lines(dbg_vtx_grad, groupIdx, 3u);
+            dbg_line_id += get_debug_line_offset(DBG_LINE_TYPE__GENERAL); 
         
             float dbg_line_len = pcs_dbg_geom_scale_ * min(ctx.ave_edge_len * .4f, grad_vdotn_len);
 

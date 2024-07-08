@@ -165,6 +165,7 @@ void main()
 
 #if defined(_KERNEL_MULTICOMPILE__CALC_TEMPORAL_CONTOUR_RECORDS__MAIN)
     uint rec_id = gl_GlobalInvocationID.x; 
+    uint groupIdx = gl_LocalInvocationID.x; 
     uint num_recs = temporal_record_counter(pc_obj_id_, pc_frame_id_); 
     bool valid_thread = rec_id < num_recs; 
     
@@ -199,6 +200,12 @@ void main()
     // ----------------------------------------------------------------------------------------------
     mat4 view_to_world = ubo_view_matrices_.viewinv; // transform matrices, see "common_view_lib.glsl"
     vec3 cam_pos_ws = view_to_world[3].xyz; // see "#define cameraPos ViewMatrixInverse[3].xyz" 
+    
+#define TRACE_STEPS 8u
+
+    uint dbg_line_id = compact_general_dbg_lines(valid_thread, groupIdx, TRACE_STEPS);
+    dbg_line_id += get_debug_line_offset(DBG_LINE_TYPE__GENERAL); 
+
     if (valid_thread)
     {
         // TODO: classify 2 probing paths(fwd/bck) from contour curve orientation
@@ -220,37 +227,57 @@ void main()
             vec3 vnor_v1v3[2] = { ld_vnor(v1), ld_vnor(v3) };
             vec3 vpos_v1v3[2] = { ld_vpos(v1), ld_vpos(v3) };  
             
-            vec3 p = calc_interp_contour_vert_pos(vnor_v1v3, vpos_v1v3, cam_pos_ws); 
+            p = calc_interp_contour_vert_pos(vnor_v1v3, vpos_v1v3, cam_pos_ws); 
         }
-        
-        for (uint trace_iter = 0u; trace_iter < 4u; ++trace_iter)
-        {
-            uvec3 wlk_ivert = mark__face_to_winded_verts(wlk_awi.iface_adj);  
 
+        uint curr_dbg_line_id = dbg_line_id; 
+        for (uint trace_iter = 0u; trace_iter < TRACE_STEPS; ++trace_iter)
+        {
             uvec2 ibwedges_Q1Q2 = uvec2(
                 mark__cwedge_rotate_back(wlk_awi.iface_adj), 
                 mark__cwedge_rotate_next(wlk_awi.iface_adj)
             ); 
 
             uvec3 q = uvec3( // winding: CCW
-                ssbo_edge_to_vert_[wlk_awi.wedge_id*4u + wlk_ivert.z], // q0: oppo vert
-                ssbo_edge_to_vert_[wlk_awi.wedge_id*4u + wlk_ivert.x], // q1: edge vert
-                ssbo_edge_to_vert_[wlk_awi.wedge_id*4u + wlk_ivert.y]  // q2: edge vert
+                ssbo_edge_to_vert_[wlk_awi.wedge_id*4u + mark__center_wedge_to_oppo_vert__at_face(wlk_awi.iface_adj)], // q0: oppo vert
+                ssbo_edge_to_vert_[wlk_awi.wedge_id*4u + mark__cwedge_to_beg_vert(wlk_awi.iface_adj)], // q1: edge vert
+                ssbo_edge_to_vert_[wlk_awi.wedge_id*4u + mark__cwedge_to_end_vert(wlk_awi.iface_adj)]  // q2: edge vert
             );                                 
             vec3 qpos[3]; 
             for (uint k = 0; k < 3; ++k) qpos[k] = ld_vpos(q[k]); 
 
-            uvec3 D1_enc, D2_enc; 
-            Load3(ssbo_vgrad_contour_, q[1], D1_enc); 
-            Load3(ssbo_vgrad_contour_, q[2], D2_enc); 
-            vec3 D = mix(uintBitsToFloat(D1_enc), uintBitsToFloat(D2_enc), 0.5f); 
+            vec3 D; 
+            if (0u < trace_iter)
+            {
+                uvec3 D1_enc, D2_enc; 
+                Load3(ssbo_vgrad_contour_, q[1], D1_enc); 
+                Load3(ssbo_vgrad_contour_, q[2], D2_enc); 
+                D = mix(
+                    normalize(uintBitsToFloat(D1_enc)), 
+                    normalize(uintBitsToFloat(D2_enc)), 0.5f
+                );
+            }else
+            {
+                uvec3 D_enc; 
+                Load3(ssbo_vgrad_contour_, q[0], D_enc);   
+				D = uintBitsToFloat(D_enc); 
+            }
+			D = normalize(D); 
+
 
             // Project p, D onto the plane of the triangle q012
             vec2 uvD; 
-            { // Solve for underdetermined system 
-            // D = [Q1 Q2] * [u v]^T
+            { 
                 vec3 Q1 = qpos[1] - qpos[0];
                 vec3 Q2 = qpos[2] - qpos[0];
+
+                // Proj. vector to plane
+                vec3 N = cross(Q1, Q2); 
+                N = normalize(N); 
+                D = D - dot(D, N)*N; 
+                D = normalize(D); 
+                // Solve for underdetermined system 
+                // D = [Q1 Q2] * [u v]^T
                 float Q1dotQ2 = dot(Q1, Q2);
                 vec2 MT_mul_D = vec2(
                     dot(Q1, D), dot(Q2, D)
@@ -260,7 +287,7 @@ void main()
                     Q1dotQ2, dot(Q2, Q2)
                 );
                 // [uD vD] = (M^T * M)^-1 * M^T * D
-                vec2 uvD = inverse(MT_mul_M) * MT_mul_D;
+                uvD = inverse(MT_mul_M) * MT_mul_D;
             }
             #define u_D ((uvD.x))
             #define v_D ((uvD.y))
@@ -275,9 +302,13 @@ void main()
 
             // Intersect ray p + tD with two edges q01, q02
             float t1 = -v_p / v_D; 
+float s1 = u_p + t1 * u_D; 
             float t2 = -u_p / u_D;
-            bool walk_to_Q1 = t1 < t2; 
-            vec3 p_next = p + min(t1, t2) * D; 
+float s2 = v_p + t2 * v_D; 
+            bool walk_to_Q1 = (abs(t1) < abs(t2)) && -0.0001f < t1 && t1 < 1.0001f;
+            bool walk_to_Q2 = (abs(t2) < abs(t1)) && -0.0001f < t2 && t2 < 1.0001f; 
+            float min_t = walk_to_Q1 ? t1 : walk_to_Q2 ? t2 : .0f;
+            vec3 p_next = p + min_t * D; 
             #undef u_D
             #undef v_D
             #undef u_p
@@ -288,7 +319,19 @@ void main()
             AdjWedgeInfo wlk_next_wedge = decode_adj_wedge_info(
                 ssbo_edge_to_edges_[wlk_awi.wedge_id*4u + wlk_next_iwedge]
             ); 
+            
+            // Output debug lines            
+            vec4 vpos_ws_10 = vec4(p, 1.0f);
+            vec4 vpos_ws_11 = vec4(p_next, 1.0f);
+            vec3 dvd_col = vec3(1.0, 1.0, 1.0); 
+            DebugVertData dvd_10 = DebugVertData(vpos_ws_10.xyz, dvd_col); 
+            DebugVertData dvd_11 = DebugVertData(vpos_ws_11.xyz, dvd_col); 
+            store_debug_line_data(curr_dbg_line_id, dvd_10, dvd_11); 
+            curr_dbg_line_id++; 
+
+            // Update contexts for next iteration
             wlk_awi = wlk_next_wedge;
+            p = p_next; 
         }
     }
 #endif

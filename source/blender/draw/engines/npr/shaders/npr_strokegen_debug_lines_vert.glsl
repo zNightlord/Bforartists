@@ -52,6 +52,6 @@ void main()
     color.rgb = vtx_data.col; 
 
     // color = vec4(0, 1, 0, 1);
-    color *= .6f; 
+    // color *= .6f; 
 
 }

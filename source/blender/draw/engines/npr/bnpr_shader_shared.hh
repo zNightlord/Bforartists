@@ -403,7 +403,7 @@ using namespace draw;
     uint num_filtered_edges;
     uint num_filtered_verts;
     uint num_dbg_vnor_lines;  // 4
-    uint num_dbg_vpdir_lines;  
+    uint num_dbg_general_lines;  
     uint num_dbg_edge_lines;  
     uint num_draw_faces;  
     uint num_frags;  // 4

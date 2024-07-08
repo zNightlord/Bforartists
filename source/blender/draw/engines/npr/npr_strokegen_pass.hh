@@ -26,7 +26,7 @@ class Instance;
 struct SurfaceDebugContext {
   enum DbgLineType {
     vnor = 0,
-    vcurv = 1,
+    general = 1,
     edges = 2
   }; // match to shader defines
   bool dbg_lines; 
@@ -207,7 +207,7 @@ public:
     int edge_visualize_mode;
     int contour_mode; // 0: no visuals, 1: interpo contour, 2: raw contour
     bool visualize_contour_edges;
-    int iters_test_sqrt_subdiv; 
+    int iters_test_subdiv; 
 
     float remeshing_targ_edge_len;
     int remeshing_split_iters; 

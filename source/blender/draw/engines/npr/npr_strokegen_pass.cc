@@ -134,7 +134,9 @@ namespace blender::npr::strokegen
     if (val_1 == 6)
       surf_dbg_ctx.dbg_vert_normal = surf_dbg_ctx.dbg_edges = true;
     if (val_1 == 7)
-      surf_dbg_ctx.dbg_vert_curv = surf_dbg_ctx.dbg_edges = true; 
+      surf_dbg_ctx.dbg_vert_curv = surf_dbg_ctx.dbg_edges = true;
+    if (val_1 == 8)
+      surf_dbg_ctx.dbg_vert_contour_grad = surf_dbg_ctx.dbg_edges = true; 
 
     meshing_params.edge_visualize_mode = -1;
     if (surf_dbg_ctx.dbg_edges) {
@@ -146,7 +148,7 @@ namespace blender::npr::strokegen
 
     meshing_params.contour_mode = (int)(scene_eval->npr.npr_test_val_5 + 1e-10f);
     meshing_params.visualize_contour_edges = 0 < meshing_params.contour_mode;
-    meshing_params.iters_test_sqrt_subdiv = (int)(scene_eval->npr.npr_test_val_6 + 1e-10f); 
+    meshing_params.iters_test_subdiv = (int)(scene_eval->npr.npr_test_val_6 + 1e-10f); 
 
     pass_draw_contour_edges.draw_settings.draw_hidden_lines = scene_eval->npr.npr_test_val_7 > .5f;
     pass_draw_contour_2d_samples.draw_settings.draw_hidden_lines = scene_eval->npr.npr_test_val_7 > .5f; 
@@ -617,7 +619,9 @@ namespace blender::npr::strokegen
         bind_src(sub);
         sub.bind_ssbo(ssbo_offset_calc_temporal_rec + 0, surf_analysis_ctx_contour.ssbo_vgrad_contour_); 
         sub.bind_ssbo(ssbo_offset_calc_temporal_rec + 1, buffers_.ssbo_vnor_);
-        sub.bind_ssbo(ssbo_offset_calc_temporal_rec + 2, buffers_.ssbo_edge_to_edges_); 
+        sub.bind_ssbo(ssbo_offset_calc_temporal_rec + 2, buffers_.ssbo_edge_to_edges_);
+        sub.bind_ssbo(ssbo_offset_calc_temporal_rec + 3, buffers_.ssbo_dbg_lines_);
+        sub.push_constant("pcs_loop_subd_iters_", meshing_params.iters_test_subdiv); 
       
         sub.dispatch(buffers_.ssbo_bnpr_temporal_record_dispatch_args_);
         sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
@@ -1714,7 +1718,7 @@ namespace blender::npr::strokegen
 
   void StrokeGenPassModule::append_subpasses_sqrt_subdiv(int num_edges, int num_verts)
   {
-    for (int iter_subdiv = 0; iter_subdiv < meshing_params.iters_test_sqrt_subdiv; ++iter_subdiv) {
+    for (int iter_subdiv = 0; iter_subdiv < meshing_params.iters_test_subdiv; ++iter_subdiv) {
       append_subpass_vertex_relocation(Sqrt3SubdivSmoothCache, num_edges, num_verts, 0, true);
 
       append_subpass_split_faces(0, num_edges, num_verts);
@@ -1792,7 +1796,7 @@ namespace blender::npr::strokegen
     append_subpass_build_loop_subd_tree_downwards_init(num_edges);
 
     /* Subdivision */
-    for (int iter_subdiv = 0; iter_subdiv < meshing_params.iters_test_sqrt_subdiv; ++iter_subdiv)
+    for (int iter_subdiv = 0; iter_subdiv < meshing_params.iters_test_subdiv; ++iter_subdiv)
     {
       append_subpass_vertex_relocation(LoopSubdivSmoothCache, num_edges, num_verts, 0, true);
 
@@ -1821,7 +1825,7 @@ namespace blender::npr::strokegen
     if (dbg_ctx.dbg_vert_normal)
       dbgLineTypes.append(SurfaceDebugContext::DbgLineType::vnor); 
     if (dbg_ctx.dbg_vert_curv || dbg_ctx.dbg_vert_contour_grad)
-      dbgLineTypes.append(SurfaceDebugContext::DbgLineType::vcurv);
+      dbgLineTypes.append(SurfaceDebugContext::DbgLineType::general);
     if (dbg_ctx.dbg_edges)
       dbgLineTypes.append(SurfaceDebugContext::DbgLineType::edges);
 
