@@ -360,10 +360,10 @@ void main()
                 // Update contexts for next iteration
                 if (walk_to_Q1 || walk_to_Q2 || walk_to_adj_face) { 
                     wlk_awi = wlk_next_wedge;
+                    D_prev  = D;
                 } 
                 if (walk_to_Q1 || walk_to_Q2) {
                     p       = p_next; 
-                    D_prev  = D;
                 }
             }
         }
