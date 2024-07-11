@@ -303,7 +303,4 @@ namespace blender::npr::strokegen
   /** \} */
 
 
-
-
-
 }
