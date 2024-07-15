@@ -310,8 +310,8 @@ void main()
             vec4 vpos_ws_0 = vec4(ctx.vpos, 1.0f);
             vec4 vpos_ws_1 = vec4(ctx.vpos + vnormal * dbg_line_len * .05f, 1.0f);
 
-            DebugVertData dvd_0 = DebugVertData(vpos_ws_0.xyz, vec3(1.0f)); 
-            DebugVertData dvd_1 = DebugVertData(vpos_ws_1.xyz, vec3(1.0f)); 
+            DebugVertData dvd_0 = DebugVertData(vpos_ws_0.xyz, vec3(1.0f), uvec4(0u)); 
+            DebugVertData dvd_1 = DebugVertData(vpos_ws_1.xyz, vec3(1.0f), uvec4(0u)); 
             store_debug_line_data(dbg_line_id, dvd_0, dvd_1); 
             dbg_line_id++; 
         }
@@ -1169,16 +1169,16 @@ void main()
                 vec4 vpos_ws_10 = vec4(vpos /* - curv_1_fin * normalize(pdir1) * dbg_line_len */, 1.0f);
                 vec4 vpos_ws_11 = vec4(vpos /* + curv_1_fin * normalize(pdir1) * dbg_line_len */, 1.0f);
                 vec3 dvd_col = vec3(1.0, .0, .0); 
-                DebugVertData dvd_10 = DebugVertData(vpos_ws_10.xyz, dvd_col); 
-                DebugVertData dvd_11 = DebugVertData(vpos_ws_11.xyz, dvd_col); 
+                DebugVertData dvd_10 = DebugVertData(vpos_ws_10.xyz, dvd_col, uvec4(0u)); 
+                DebugVertData dvd_11 = DebugVertData(vpos_ws_11.xyz, dvd_col, uvec4(0u)); 
                 store_debug_line_data(dbg_line_id, dvd_10, dvd_11); 
                 dbg_line_id++; 
 
                 vec4 vpos_ws_20 = vec4(vpos /* - curv_2_fin * normalize(pdir2) * dbg_line_len */, 1.0f);
                 vec4 vpos_ws_21 = vec4(vpos /* + curv_2_fin * normalize(pdir2) * dbg_line_len */, 1.0f);
                 dvd_col = vec3(.0, 1.0, .0); 
-                DebugVertData dvd_20 = DebugVertData(vpos_ws_20.xyz, dvd_col); 
-                DebugVertData dvd_21 = DebugVertData(vpos_ws_21.xyz, dvd_col); 
+                DebugVertData dvd_20 = DebugVertData(vpos_ws_20.xyz, dvd_col, uvec4(0u)); 
+                DebugVertData dvd_21 = DebugVertData(vpos_ws_21.xyz, dvd_col, uvec4(0u)); 
                 store_debug_line_data(dbg_line_id, dvd_20, dvd_21); 
                 dbg_line_id++; 
                 
@@ -1191,8 +1191,8 @@ void main()
                 vec4 vpos_ws_30 = vec4(vpos, 1.0f);
                 vec4 vpos_ws_31 = vec4(vpos + vnor * dbg_line_len, 1.0f);
                 dvd_col = vec3(.0, 1.0, 1.0); 
-                DebugVertData dvd_30 = DebugVertData(vpos_ws_30.xyz, dvd_col); 
-                DebugVertData dvd_31 = DebugVertData(vpos_ws_31.xyz, dvd_col); 
+                DebugVertData dvd_30 = DebugVertData(vpos_ws_30.xyz, dvd_col, uvec4(0u)); 
+                DebugVertData dvd_31 = DebugVertData(vpos_ws_31.xyz, dvd_col, uvec4(0u)); 
                 store_debug_line_data(dbg_line_id, dvd_30, dvd_31); 
                 dbg_line_id++; 
             }
@@ -1232,16 +1232,16 @@ void main()
                 vec4 vpos_ws_00 = vec4(vpos, 1.0f);
                 vec4 vpos_ws_01 = vec4(vpos/*  + vnor * ctx.mu1 * dbg_line_len */, 1.0f);
                 vec3 dbg_col = vec3(1.0, .0, .0); 
-                DebugVertData dvd_00 = DebugVertData(vpos_ws_00.xyz, dbg_col); 
-                DebugVertData dvd_01 = DebugVertData(vpos_ws_01.xyz, dbg_col); 
+                DebugVertData dvd_00 = DebugVertData(vpos_ws_00.xyz, dbg_col, uvec4(0u)); 
+                DebugVertData dvd_01 = DebugVertData(vpos_ws_01.xyz, dbg_col, uvec4(0u)); 
                 store_debug_line_data(dbg_line_id, dvd_00, dvd_01); 
                 dbg_line_id++; 
 
                 vec4 vpos_ws_10 = vec4(vpos, 1.0f);
                 vec4 vpos_ws_11 = vec4(vpos/*  + vnor * ctx.mu2 * dbg_line_len */, 1.0f);
                 dbg_col = vec3(.0, 1.0, .0); 
-                DebugVertData dvd_10 = DebugVertData(vpos_ws_10.xyz, dbg_col); 
-                DebugVertData dvd_11 = DebugVertData(vpos_ws_11.xyz, dbg_col); 
+                DebugVertData dvd_10 = DebugVertData(vpos_ws_10.xyz, dbg_col, uvec4(0u)); 
+                DebugVertData dvd_11 = DebugVertData(vpos_ws_11.xyz, dbg_col, uvec4(0u)); 
                 store_debug_line_data(dbg_line_id, dvd_10, dvd_11); 
                 dbg_line_id++; 
 
@@ -1249,8 +1249,8 @@ void main()
                 vec4 vpos_ws_20 = vec4(vpos, 1.0f);
                 vec4 vpos_ws_21 = vec4(vpos + vnor * max_curv * dbg_line_len, 1.0f);
                 dbg_col = vec3(1.0, .0, 1.0); 
-                DebugVertData dvd_20 = DebugVertData(vpos_ws_20.xyz, dbg_col); 
-                DebugVertData dvd_21 = DebugVertData(vpos_ws_21.xyz, dbg_col); 
+                DebugVertData dvd_20 = DebugVertData(vpos_ws_20.xyz, dbg_col, uvec4(0u)); 
+                DebugVertData dvd_21 = DebugVertData(vpos_ws_21.xyz, dbg_col, uvec4(0u)); 
                 store_debug_line_data(dbg_line_id, dvd_20, dvd_21); 
                 dbg_line_id++; 
             }
@@ -1321,8 +1321,8 @@ void main()
                 vec4 vpos_ws_00 = vec4(vpos - normalize(pdir0) * dbg_line_len, 1.0f);
                 vec4 vpos_ws_01 = vec4(vpos + normalize(pdir0) * dbg_line_len, 1.0f);
                 vec3 dbg_col = vec3(1.0, .0, .0); 
-                DebugVertData dvd_00 = DebugVertData(vpos_ws_00.xyz, dbg_col); 
-                DebugVertData dvd_01 = DebugVertData(vpos_ws_01.xyz, dbg_col); 
+                DebugVertData dvd_00 = DebugVertData(vpos_ws_00.xyz, dbg_col, uvec4(0u)); 
+                DebugVertData dvd_01 = DebugVertData(vpos_ws_01.xyz, dbg_col, uvec4(0u)); 
                 store_debug_line_data(dbg_line_id, dvd_00, dvd_01); 
                 dbg_line_id++; 
 
@@ -1336,8 +1336,8 @@ void main()
                 vec4 vpos_ws_10 = vec4(vpos - normalize(pdir1) * dbg_line_len, 1.0f);
                 vec4 vpos_ws_11 = vec4(vpos + normalize(pdir1) * dbg_line_len, 1.0f);
                 dbg_col = vec3(.0, 1.0, .0); 
-                DebugVertData dvd_10 = DebugVertData(vpos_ws_10.xyz, dbg_col); 
-                DebugVertData dvd_11 = DebugVertData(vpos_ws_11.xyz, dbg_col); 
+                DebugVertData dvd_10 = DebugVertData(vpos_ws_10.xyz, dbg_col, uvec4(0u)); 
+                DebugVertData dvd_11 = DebugVertData(vpos_ws_11.xyz, dbg_col, uvec4(0u)); 
                 store_debug_line_data(dbg_line_id, dvd_10, dvd_11); 
                 dbg_line_id++; 
 
@@ -1354,8 +1354,8 @@ void main()
                 vec4 vpos_ws_20 = vec4(vpos, 1.0f);
                 vec4 vpos_ws_21 = vec4(vpos + normalize(vnor) * dbg_line_len, 1.0f);
                 dbg_col = vec3(1.0, .0, 1.0); 
-                DebugVertData dvd_20 = DebugVertData(vpos_ws_20.xyz, dbg_col); 
-                DebugVertData dvd_21 = DebugVertData(vpos_ws_21.xyz, dbg_col); 
+                DebugVertData dvd_20 = DebugVertData(vpos_ws_20.xyz, dbg_col, uvec4(0u)); 
+                DebugVertData dvd_21 = DebugVertData(vpos_ws_21.xyz, dbg_col, uvec4(0u)); 
                 store_debug_line_data(dbg_line_id, dvd_20, dvd_21); 
                 dbg_line_id++; 
             }
@@ -1391,24 +1391,24 @@ void main()
                 vec4 vpos_ws_00 = vec4(vpos, 1.0f);
                 vec4 vpos_ws_01 = vec4(vpos + (ctx.grad_vdotn / grad_vdotn_len) * dbg_line_len, 1.0f);
                 vec3 dbg_col = vec3(1.0, .0, .0); 
-                DebugVertData dvd_00 = DebugVertData(vpos_ws_00.xyz, dbg_col); 
-                DebugVertData dvd_01 = DebugVertData(vpos_ws_01.xyz, dbg_col); 
+                DebugVertData dvd_00 = DebugVertData(vpos_ws_00.xyz, dbg_col, uvec4(0u)); 
+                DebugVertData dvd_01 = DebugVertData(vpos_ws_01.xyz, dbg_col, uvec4(0u)); 
                 store_debug_line_data(dbg_line_id, dvd_00, dvd_01); 
                 dbg_line_id++; 
                 
                 vec4 vpos_ws_10 = vec4(vpos, 1.0f);
                 vec4 vpos_ws_11 = vec4(vpos + (ctx.grad_vdotn / grad_vdotn_len) * dbg_line_len, 1.0f);
                 dbg_col = vec3(.0, 1.0, .0); 
-                DebugVertData dvd_10 = DebugVertData(vpos_ws_10.xyz, dbg_col); 
-                DebugVertData dvd_11 = DebugVertData(vpos_ws_11.xyz, dbg_col); 
+                DebugVertData dvd_10 = DebugVertData(vpos_ws_10.xyz, dbg_col, uvec4(0u)); 
+                DebugVertData dvd_11 = DebugVertData(vpos_ws_11.xyz, dbg_col, uvec4(0u)); 
                 store_debug_line_data(dbg_line_id, dvd_10, dvd_11); 
                 dbg_line_id++; 
 
                 vec4 vpos_ws_20 = vec4(vpos, 1.0f); // dummy
                 vec4 vpos_ws_21 = vec4(vpos, 1.0f);
                 dbg_col = vec3(1.0, .0, 1.0); 
-                DebugVertData dvd_20 = DebugVertData(vpos_ws_20.xyz, dbg_col); 
-                DebugVertData dvd_21 = DebugVertData(vpos_ws_21.xyz, dbg_col); 
+                DebugVertData dvd_20 = DebugVertData(vpos_ws_20.xyz, dbg_col, uvec4(0u)); 
+                DebugVertData dvd_21 = DebugVertData(vpos_ws_21.xyz, dbg_col, uvec4(0u)); 
                 store_debug_line_data(dbg_line_id, dvd_20, dvd_21); 
                 dbg_line_id++; 
             }

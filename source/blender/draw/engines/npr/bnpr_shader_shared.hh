@@ -39,6 +39,18 @@ using namespace draw;
   }
   /** \} */
 
+  /* ----------------------------------------------------- */
+  /** \name Frame ID Indexing
+   * \{ */
+#if !defined(GPU_SHADER)
+  inline int strokegen_frame_id_prev(int strokegen_frame_id) {
+    return (strokegen_frame_id - 1 + FRAME_COUNTER_CLAMP) % FRAME_COUNTER_CLAMP;
+  }
+  inline int strokegen_frame_id_next(int strokegen_frame_id) {
+    return (strokegen_frame_id + 1) % FRAME_COUNTER_CLAMP;
+  }
+#endif
+  /** \} */
 
   /* ----------------------------------------------------- */
   /** \name Thread Group Counting

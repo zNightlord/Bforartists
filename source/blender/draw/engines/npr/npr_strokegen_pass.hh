@@ -78,7 +78,9 @@ public:
   GPUBufferPoolModule   &buffers_;
   GPUTexturePoolModule  &textures_;
 
-  int frame_id; 
+  /** Sync states */
+  bool first_frame; 
+  int strokegen_frame_id;
   int strokegen_obj_id; 
 
 
@@ -91,7 +93,8 @@ public:
     : shaders_(strokegen_shaders),
       buffers_(strokegen_buffers),
       textures_(strokegen_textures),
-      frame_id(0)
+      first_frame(true), 
+      strokegen_frame_id(0)
   {
     ;
   }
@@ -370,6 +373,7 @@ public:
                                           int num_verts, bool output_dbg_lines = false);
   void append_subpass_init_temporal_records(int num_edges,
                                             SurfaceAnalysisContext surf_analysis_ctx_contour);
+  void appen_subpass_reconstruct_last_frame_temporal_records();
   void append_subpasses_sqrt_subdiv(int num_edges, int num_verts);
   void bind_rsc_for_loop_subd_tree_processing(StrokegenMeshComputePass::PassBase<DrawCommandBuf>& sub, int num_edges);
   void append_subpass_build_loop_subd_tree_upwards_for_face_edges(int num_edges);
@@ -427,6 +431,7 @@ public:
   void append_subpass_fill_dispatch_args_contour_verts(PassSimple &pass);
   void append_subpass_fill_dispatch_args_contour_frags(PassSimple &pass, bool all_contour_frags);
   void append_subpass_fill_dispatch_args_contour_2d_samples(PassSimple &pass);
+  void append_subpass_fill_dispatch_args_temporal_records_(int obj_id, int rec_frame_id);
   void append_subpass_setup_contour_edge_data();
 
   // ---------------------------------------------------------------------------

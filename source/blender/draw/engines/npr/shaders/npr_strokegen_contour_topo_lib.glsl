@@ -303,7 +303,7 @@ struct ContourEdgeTransferData
 	vec3 vpos_ws[2]; 
 	ContourFlags cf; 
 	vec2 cusp_funcs; // cusp function at 2 verts
-	uint temporal_rec_id; 
+	uint temporal_rec_id;  
 };
 
 void store_contour_edge_transfer_data_(uint contour_edge_id, ContourEdgeTransferData cetd)
@@ -339,18 +339,6 @@ ContourEdgeTransferData load_contour_edge_transfer_data(uint contour_edge_id)
 	cetd.cf = decode_contour_flags(ssbo_contour_edge_transfer_data_[contour_edge_id*9u+6u]);
 	cetd.cusp_funcs = unpackHalf2x16(ssbo_contour_edge_transfer_data_[contour_edge_id*9u+7u]);
 	cetd.temporal_rec_id = ssbo_contour_edge_transfer_data_[contour_edge_id*9u+8u];
-
-	// Load4(ssbo_contour_edge_transfer_data_, contour_edge_id*2u,    enc_data[0]); 
-	// Load4(ssbo_contour_edge_transfer_data_, contour_edge_id*2u+1u, enc_data[1]);
-
-	// uvec3 vpos_0_enc, vpos_1_enc; 
-	// vpos_0_enc = enc_data[0].xyz;
-	// vpos_1_enc = uvec3(enc_data[0].w, enc_data[1].xy);
-	// cetd.vpos_ws[0] = uintBitsToFloat(vpos_0_enc); 
-	// cetd.vpos_ws[1] = uintBitsToFloat(vpos_1_enc); 
-
-	// cetd.cf = decode_contour_flags(enc_data[1].z); 
-	// cetd.cusp_funcs = unpackHalf2x16(enc_data[1].w);
 
     return cetd;  
 }
@@ -461,8 +449,21 @@ TemporalRecordFlags init_temporal_record_flags(uint subd_code_chain)
 	trf.subd_tree_code_chain = subd_code_chain; 
 	return trf; 
 }
+void append_subd_tree_node_to_code(uint tree_code, inout uint subd_tree_code_chain)
+{ // Traverse tree upwards and concatenate node code, 3 bits each level
+	subd_tree_code_chain <<= 3u; 
+	subd_tree_code_chain |= ((tree_code << 1u) | 1u/*valid code*/); 
+}
+void pop_subd_tree_code_chain(inout uint subd_tree_code_chain, out uint tree_code, out bool null_node)
+{
+	tree_code = (subd_tree_code_chain >> 1u) & 0x03u;
+	null_node = (0u == (subd_tree_code_chain & 0x01u)); 
+	subd_tree_code_chain >>= 3u; 
+}
 
-#if defined(USE_CONTOUR_TEMPORAL_RECORD_BUFFER)
+
+// Temporal Recode - Flags
+#if defined(USE_CONTOUR_TEMPORAL_RECORD_BUFFER_NEW)
 void store_ssbo_contour_temporal_new_records__flags(uint enc_id, TemporalRecordFlags flags)
 {
 	ssbo_contour_new_temporal_records_[enc_id] = encode_temporal_record_flags(flags);  
@@ -471,6 +472,16 @@ TemporalRecordFlags load_ssbo_contour_temporal_new_records__flags(uint enc_id)
 {
 	return decode_temporal_record_flags(ssbo_contour_new_temporal_records_[enc_id]); 
 }
+#endif
+#if defined(USE_CONTOUR_TEMPORAL_RECORD_BUFFER_OLD)
+TemporalRecordFlags load_ssbo_contour_temporal_old_records__flags(uint enc_id)
+{
+	return decode_temporal_record_flags(ssbo_contour_temporal_records_old_[enc_id]); 
+}
+#endif
+
+// Temporal Record - Base Edge Id
+#if defined(USE_CONTOUR_TEMPORAL_RECORD_BUFFER_NEW)
 void store_ssbo_contour_temporal_new_records__subd_root_edge_id(uint enc_id, uint root_edge_id, uint num_recs)
 {
 	uint subbuff_offset = num_recs * 1u; 
@@ -480,6 +491,13 @@ uint load_ssbo_contour_temporal_new_records__subd_root_edge_id(uint enc_id, uint
 {
 	uint subbuff_offset = num_recs * 1u; 
 	return ssbo_contour_new_temporal_records_[subbuff_offset + enc_id]; 
+}
+#endif
+#if defined(USE_CONTOUR_TEMPORAL_RECORD_BUFFER_OLD)
+uint load_ssbo_contour_temporal_old_records__subd_root_edge_id(uint enc_id, uint num_recs)
+{
+	uint subbuff_offset = num_recs * 1u; 
+	return ssbo_contour_temporal_records_old_[subbuff_offset + enc_id]; 
 }
 #endif
 

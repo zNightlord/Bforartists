@@ -359,8 +359,8 @@ void main()
 			vec3 dbg_vpos_0 = v[1]; 
 			vec3 dbg_vpos_1 = v[3]; 
 		 
-			DebugVertData dvd_0 = DebugVertData(v[1], dbg_col); 
-			DebugVertData dvd_1 = DebugVertData(v[3], dbg_col);
+			DebugVertData dvd_0 = DebugVertData(v[1], dbg_col, uvec4(0u)); 
+			DebugVertData dvd_1 = DebugVertData(v[3], dbg_col, uvec4(0u));
 			store_debug_line_data(dbg_line_idx, dvd_0, dvd_1); 
 		}
 	}
@@ -491,9 +491,15 @@ void main()
 			cetd.cusp_funcs = cusp_func;
 
 			{ /* Link contour edge to temporal record */
+				// For now we only implement for interpolated contours.
+				// *) Before inserting contour verts by edge splits,
+				// each contour edge calculates its temporal record (store_ssbo_edge_to_new_temporal_record_); 
+				// *) Then contour edges are split to insert contour verts, 
+				// each contour vert saves its split edge id (ssbo_contour_vert_to_old_edge_)
 				uint old_edge_0 = ssbo_contour_vert_to_old_edge_[v0]; 
 				uint rec_id_0 = load_ssbo_edge_to_new_temporal_record_(old_edge_0); 
 
+				// TODO: this is required for non-looped curves. 
 				uint old_edge_1 = ssbo_contour_vert_to_old_edge_[v1];
 				uint rec_id_1 = load_ssbo_edge_to_new_temporal_record_(old_edge_1);
 

@@ -92,7 +92,10 @@ void main()
     if (node.parent_edge_id == LOOP_SUBD_TREE_INVALID_PARENT_EDGE_ID) return;
     if (node.parent_edge_id == wedge_id) return; // root node
 
-    LoopSubdEdgeTreeDwNode par_node_dw;
+    EdgeFlags ef = load_edge_flags(wedge_id);
+    if (ef.dupli || ef.sel_border) return; 
+
+    LoopSubdEdgeTreeDwNode par_node_dw; 
     par_node_dw.wedge_id = wedge_id; 
     ssbo_subd_edge_tree_node_dw_[node.parent_edge_id * 4u + node.code] = encode_loop_subd_tree_node_dw(par_node_dw); 
 #endif
@@ -102,18 +105,6 @@ void main()
 
 
 #if defined(_KERNEL_MULTICOMPILE__CALC_TEMPORAL_CONTOUR_RECORDS)
-
-/* Inputs: 
- * _KERNEL_MULTICOMPILE__CALC_TEMPORAL_CONTOUR_RECORDS
- * INCLUDE_VERTEX_POSITION
- * int pcs_contour_detect_type_
- * int pcs_loop_subd_iters_
- * ubo_view_matrices_
- * + ssbo_bnpr_mesh_pool_counters_.num_temporal_recs
- * ssbo_contour_new_temporal_records_[]
- * ssbo_edge_to_temporal_record_[]
- * ssbo_vbo_full_[]
-*/
 
 void main()
 {
@@ -151,6 +142,26 @@ void main()
             );
     }
 
+    
+#define DRW_DEBUG_LINES 13u
+#if defined(DRW_DEBUG_LINES)
+    uint dbg_line_id = compact_general_dbg_lines(is_contour, gl_LocalInvocationID.x, 1u);
+    dbg_line_id += get_debug_line_offset(DBG_LINE_TYPE__GENERAL);
+    if (is_contour) {
+        // Generate debug lines ---
+        vec3 vpos_1 = ld_vpos(v1); 
+        vec3 vpos_3 = ld_vpos(v3); 
+
+        vec3 vpos_ws_0 = vpos_1;
+        vec3 vpos_ws_1 = vpos_3;
+        vec3 dvd_col = vec3(1.0f, .0f, 1.0f); 
+        DebugVertData dvd_0 = DebugVertData(vpos_ws_0.xyz, dvd_col, uvec4(0u)); 
+        DebugVertData dvd_1 = DebugVertData(vpos_ws_1.xyz, dvd_col, uvec4(0u)); 
+        store_debug_line_data(dbg_line_id, dvd_0, dvd_1); 
+        dbg_line_id++; 
+    }
+#endif
+
 
 	const uint groupId = gl_LocalInvocationID.x;
     uint rec_id = compact_temporal_contour_record(is_contour, groupId); 
@@ -161,7 +172,10 @@ void main()
         store_ssbo_edge_to_new_temporal_record_(wedge_id, is_contour ? rec_id : TEMPORAL_REC_ID_NULL); 
 #endif
 
-// note: fill indirect dispatch args from ssbo_bnpr_mesh_pool_counters_.num_temporal_recs
+
+
+
+
 
 #if defined(_KERNEL_MULTICOMPILE__CALC_TEMPORAL_CONTOUR_RECORDS__MAIN)
     uint rec_id = gl_GlobalInvocationID.x; 
@@ -183,9 +197,9 @@ void main()
         ); 
         if (node.parent_edge_id == curr_edge_id) break; // root node at curr_edge_id  
 
-        // Traverse tree upwards and concatenate node code, 3 bits each level
-        code_combine <<= 3u; 
-        code_combine |= ((node.code << 1u) | 1u/*valid code*/); 
+        append_subd_tree_node_to_code(node.code, /*inout*/code_combine); 
+        
+        curr_edge_id = node.parent_edge_id; 
     }
 
     TemporalRecordFlags trf = init_temporal_record_flags(code_combine);
@@ -311,8 +325,8 @@ void main()
                 float s1 = u_p + t1 * u_D; 
                 float t2 = -u_p / u_D;
                 float s2 = v_p + t2 * v_D; 
-                bool walk_to_Q1 = -0.0000001f < s1 && s1 < 1.0000001f && .0f <= t1;
-                bool walk_to_Q2 = -0.0000001f < s2 && s2 < 1.0000001f && .0f <= t2; 
+                bool walk_to_Q1 = -0.000000f < s1 && s1 < 1.000000f && .0f <= t1;
+                bool walk_to_Q2 = -0.000000f < s2 && s2 < 1.000000f && .0f <= t2; 
 				if (walk_to_Q1 && walk_to_Q2) { // pick further one
 					if (t1 < t2) walk_to_Q2 = false;
 					else walk_to_Q1 = false; 
@@ -320,15 +334,17 @@ void main()
                 float min_t = walk_to_Q1 ? t1 : walk_to_Q2 ? t2 : .0f;
                 vec3 p_next = p + min_t * D; 
 
-                // the ray p+tD is leaving current triangle, we can try flip to another iface
-                //    *          *                        
+                // the ray p+tD is leaving face q012, we can try flip to another iface
+                //    q0         q0                       
                 //   / \        / \                      
                 //  /  iface0  /   \                      
-                // *==p==*    *==p==*                     
+                //q1==p==q2  q1==p==q2                    
                 //     \       \ iface1                   
                 //      D       \ /                       
                 //               *                        
-                bool walk_to_adj_face = (t1 < .0f && 1.0f < s2) || (t2 < .0f && 1.0f < s1); 
+                bool walk_to_adj_face = 
+                    (t1 < .0f && (1.0f <= s2 || s2 <= .0f)) 
+                    || (t2 < .0f && (1.0f <= s1 || s1 <= .0f)); 
                 #undef u_D
                 #undef v_D
                 #undef u_p
@@ -351,9 +367,12 @@ void main()
                 // Output debug lines            
                 vec4 vpos_ws_10 = vec4(p, 1.0f);
                 vec4 vpos_ws_11 = vec4(p_next, 1.0f);
+                bool dead_end = !(walk_to_Q1 || walk_to_Q2 || walk_to_adj_face); 
                 vec3 dvd_col = vec3(float(trace_iter) / float(TRACE_STEPS).xx, 1.0); 
-                DebugVertData dvd_10 = DebugVertData(vpos_ws_10.xyz, dvd_col); 
-                DebugVertData dvd_11 = DebugVertData(vpos_ws_11.xyz, dvd_col); 
+                // if (dead_end) dvd_col = vec3(1.0f, .0f, .0f); 
+                DebugVertData dvd_10 = DebugVertData(vpos_ws_10.xyz, dvd_col, uvec4(0u)); 
+                DebugVertData dvd_11 = DebugVertData(vpos_ws_11.xyz, dvd_col, uvec4(0u)); 
+dvd_11 = dvd_10; 
                 store_debug_line_data(curr_dbg_line_id, dvd_10, dvd_11); 
                 curr_dbg_line_id++; 
 
@@ -369,14 +388,97 @@ void main()
         }
     }
 #endif
-
 }
-
-
 
 #endif
 
 
+
+// Note: fill dispatch args for old records
+#if defined(_KERNEL_MULTICOMPILE__RECONSTRUCT_HISTORY_TEMPORAL_RECORDS)
+/* Inputs: 
+ * int pc_frame_id_history_
+ * int pc_obj_id_
+ * int pc_loop_subd_iters_
+ * uint ssbo_contour_temporal_records_old_[]
+ * uint ssbo_subd_edge_tree_node_dw_[]
+ * uint ssbo_edge_flags_[]
+ * 
+ * ssbo_dbg_lines
+ * ssbo_vbo
+ * ssbo_edge_to_vert_
+*/
+void ld_edge_vpos(uint edge_id, out vec3 vpos_1, out vec3 vpos_3)
+{
+    // Generate debug lines ---
+    uint v1 = ssbo_edge_to_vert_[edge_id * 4u + 1u]; 
+    vpos_1 = ld_vpos(v1); 
+    uint v3 = ssbo_edge_to_vert_[edge_id * 4u + 3u]; 
+    vpos_3 = ld_vpos(v3); 
+}
+void main()
+{
+    uint rec_id = gl_GlobalInvocationID.x; 
+    uint groupIdx = gl_LocalInvocationID.x; 
+    uint num_recs = temporal_record_counter(pc_obj_id_, pc_frame_id_history_); 
+    bool valid_thread = rec_id < num_recs;
+
+    TemporalRecordFlags trf = load_ssbo_contour_temporal_old_records__flags(rec_id); 
+    uint base_edge_id = load_ssbo_contour_temporal_old_records__subd_root_edge_id(rec_id, num_recs); 
+    
+#define DRW_DEBUG_LINES 13u
+#if defined(DRW_DEBUG_LINES)
+    uint dbg_line_id = compact_general_dbg_lines(valid_thread, groupIdx, 1u);
+    dbg_line_id += get_debug_line_offset(DBG_LINE_TYPE__GENERAL); 
+#endif
+
+    uint tree_code_chain = trf.subd_tree_code_chain; 
+    uint par_edge_id = base_edge_id; 
+    bool hit_leaf_node = false; 
+    for (uint subd_level = 0; subd_level < pc_loop_subd_iters_; ++subd_level)
+    {
+        uint tree_code; bool null_node;
+        pop_subd_tree_code_chain(tree_code_chain, /*out*/tree_code, null_node); 
+        if (null_node) break; 
+
+        LoopSubdEdgeTreeDwNode sub_node = decode_loop_subd_tree_node_dw(
+            ssbo_subd_edge_tree_node_dw_[4u * par_edge_id + tree_code]
+        ); 
+        hit_leaf_node = (sub_node.wedge_id == par_edge_id) || (subd_level + 1 == pc_loop_subd_iters_); 
+        par_edge_id = sub_node.wedge_id;
+        if (hit_leaf_node) break; /* arrived at a leaf node */
+    }
+
+    EdgeFlags ef = load_edge_flags(par_edge_id); 
+    hit_leaf_node = hit_leaf_node && valid_thread && !(/* ef.del_by_split ||  */ef.dupli); 
+ 
+
+    if (hit_leaf_node)
+    {
+#if defined(DRW_DEBUG_LINES)
+        uint dbg_edge_id = par_edge_id; 
+        uint dbg_line_id = dbg_line_id; 
+        // for (uint i = 0; i < 4; ++i)
+        {
+            uint v1 = ssbo_edge_to_vert_[dbg_edge_id * 4u + 1u]; 
+            vec3 vpos_1 = ld_vpos(v1); 
+            uint v3 = ssbo_edge_to_vert_[dbg_edge_id * 4u + 3u]; 
+            vec3 vpos_3 = ld_vpos(v3); 
+
+            vec3 vpos_ws_0 = vpos_1;
+            vec3 vpos_ws_1 = vpos_3;
+            vec3 dvd_col = vec3(1.0f, 1.0f, 1.0f); 
+            DebugVertData dvd_0 = DebugVertData(vpos_ws_0.xyz, dvd_col, uvec4(0u)); 
+            DebugVertData dvd_1 = DebugVertData(vpos_ws_1.xyz, dvd_col, uvec4(0u)); 
+            store_debug_line_data(dbg_line_id, dvd_0, dvd_1); 
+            dbg_line_id++; 
+        }
+#endif
+    }
+
+}
+    
+#endif
 
 
 

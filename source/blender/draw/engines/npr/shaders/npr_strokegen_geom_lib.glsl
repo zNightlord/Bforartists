@@ -256,32 +256,41 @@ bool valid_vcurv_max(float vcurv_max)
     {
         vec3 pos; /* world space vertex pos */
         vec3 col;
+        uvec4 dbg_data; 
     }; 
-    uvec4 encode_debug_vert_data(DebugVertData vtx)
+    void encode_debug_vert_data(DebugVertData vtx, out uvec4 enc_0, out uvec4 enc_1)
     {
-        return uvec4(floatBitsToUint(vtx.pos), pack_r11_g11_b10(vtx.col)); 
+        enc_0 = uvec4(floatBitsToUint(vtx.pos), pack_r11_g11_b10(vtx.col)); 
+        enc_1 = vtx.dbg_data; 
     }
-    DebugVertData decode_debug_vert_data(uvec4 enc)
+    DebugVertData decode_debug_vert_data(uvec4 enc_0, uvec4 enc_1)
     {
         DebugVertData vtx; 
-        vtx.pos = uintBitsToFloat(enc.xyz); 
-        vtx.col = unpack_r11_g11_b10(enc.w); 
+        vtx.pos = uintBitsToFloat(enc_0.xyz); 
+        vtx.col = unpack_r11_g11_b10(enc_0.w); 
+        vtx.dbg_data = enc_1; 
         return vtx; 
     }
 
     #if defined(INCLUDE_DEBUG_LINE_CONFIG_LOAD_STORE)
         void store_debug_line_data(uint dbg_line_id, DebugVertData v0, DebugVertData v1)
         {
-            uvec4 enc_v0 = encode_debug_vert_data(v0); 
-            Store4(ssbo_dbg_lines_, dbg_line_id*2u,    enc_v0); 
-            uvec4 enc_v1 = encode_debug_vert_data(v1); 
-            Store4(ssbo_dbg_lines_, dbg_line_id*2u+1u, enc_v1); 
+            uvec4 enc_0, enc_1;
+            encode_debug_vert_data(v0, /*out*/enc_0, enc_1); 
+            Store4(ssbo_dbg_lines_, dbg_line_id*4u,      enc_0); 
+            Store4(ssbo_dbg_lines_, dbg_line_id*4u + 1u, enc_1); 
+
+            encode_debug_vert_data(v1, /*out*/enc_0, enc_1); 
+            Store4(ssbo_dbg_lines_, dbg_line_id*4u + 2u, enc_0); 
+            Store4(ssbo_dbg_lines_, dbg_line_id*4u + 3u, enc_1); 
         }
         DebugVertData load_debug_vtx_data(uint dbg_line_id, uint drw_vtx_id)
         {
-            uvec4 enc; 
-            Load4(ssbo_dbg_lines_, (dbg_line_id*2u + (drw_vtx_id%2u)), enc); 
-            return decode_debug_vert_data(enc); 
+            uint vtx_offset = dbg_line_id * 4u + (drw_vtx_id % 2u) * 2u;
+            uvec4 enc_0, enc_1; 
+            Load4(ssbo_dbg_lines_, vtx_offset + 0u, enc_0); 
+            Load4(ssbo_dbg_lines_, vtx_offset + 1u, enc_1); 
+            return decode_debug_vert_data(enc_0, enc_1); 
         }
     #endif
 #endif

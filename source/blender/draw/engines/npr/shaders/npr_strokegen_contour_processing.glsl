@@ -67,6 +67,8 @@ void main()
 
 		Store3(ssbo_contour_snake_vpos_, vtx_addr, floatBitsToUint(cetd.vpos_ws[0]));
 		store_contour_flags(vtx_addr, cf); 
+
+		ssbo_contour_snake_to_temporal_record_[vtx_addr] = cetd.temporal_rec_id; 
 		
 		ssbo_in_segloopconv1d_data_[vtx_addr] = encode_contour_flags(cf); // copy to segloopconv1d input buffer
 		
@@ -74,11 +76,16 @@ void main()
 		if (additional_output_tail_vtx)
 		{
         	Store3(ssbo_contour_snake_vpos_, vtx_addr+1u, floatBitsToUint(cetd.vpos_ws[1]));
+			
 			cf.seg_head = false; 
 			init_contour_curve_head(false, cf);
 			init_contour_curve_tail(true, cf);
 			set_contour_cusp_flags(.0f < cusp_func_v[1], cf); 
 			store_contour_flags(vtx_addr+1u, cf);
+		
+			// TODO: fix this for non-looped curves, for now we're just copying...
+			// but this requires 2 rec_ids for both verts in the ContourEdgeTransferData
+			ssbo_contour_snake_to_temporal_record_[vtx_addr+1u] = cetd.temporal_rec_id; 
 
 			ssbo_in_segloopconv1d_data_[vtx_addr+1u] = encode_contour_flags(cf); // copy to segloopconv1d input buffer
 		}
@@ -369,19 +376,6 @@ void is_2d_sample_seg_head(
 	out bool seg_head_contour, out bool seg_head_clipped)
 {
 	bool break_contour_seg = si.contour_seg_head != si_prev.contour_seg_head; 
-
-	// float congour_rank_diff = float(si.contour_seg_rank) - float(si_prev.contour_seg_rank); 
-	// float contour_rank_diff_tol = 2.0f; // tolerate breaks within 2.0f
-	// bool break_arc_len = !(.0f < congour_rank_diff &&  congour_rank_diff <= (1.0f + contour_rank_diff_tol)); 
-	// break_arc_len = break_arc_len && (si.contour_curve_head_id == si_prev.contour_curve_head_id);
-
-	// if ((si.contour_seg_head == si_prev.contour_seg_head) 
-	// 	&& si.cf.looped_curve && si.cf.curve_head
-	// 	&& congour_rank_diff < .0f)
-	// { // We are at a looped curve, and the arc-len is wrapped around
-	// 	float dist_to_prev = length(get_raster_resolution() * (si.uv - si_prev.uv)); 
-	// 	if (dist_to_prev < 3.0f) break_arc_len = false;
-	// }
 
 	float dist = length(get_raster_resolution() * (si.uv - si_prev.uv)); 
 	bool break_arc_len = 1.1f < dist && (si.contour_curve_head_id == si_prev.contour_curve_head_id); 

@@ -341,7 +341,9 @@ const char *StrokeGenShaderModule::static_shader_create_info_name_get(eShaderTyp
     case MESH_COMPACT_NEW_TEMPORAL_RECORDS:
       return "strokegen_compact_new_temporal_contour_records"; 
     case MESH_CALCULATE_NEW_TEMPORAL_RECORDS:
-      return "strokegen_calculate_new_temporal_contour_records"; 
+      return "strokegen_calculate_new_temporal_contour_records";
+    case MESH_RECONSTRUCT_OLD_TEMPORAL_RECORDS:
+      return "strokegen_reconstruct_temporal_contour_records"; 
     case FILL_DISPATCH_ARGS_TEMPORAL_RECORDS:
       return "strokegen_fill_dispatch_args_per_temporal_record"; 
 

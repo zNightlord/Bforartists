@@ -44,7 +44,7 @@ void main()
     pos_hclip = proj * vec4(pos_hclip.xyz, 1.0f); 
 
     gl_Position = pos_hclip;
-    gl_Position.z -= 1.0e-4 * pos_hclip.w;
+    gl_Position.z -= 4.0e-4 * pos_hclip.w;
 
     
     color.a = 1.0f; 

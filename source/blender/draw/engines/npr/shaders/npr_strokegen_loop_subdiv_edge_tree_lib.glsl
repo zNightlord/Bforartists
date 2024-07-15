@@ -29,7 +29,7 @@
  *         \  /            \  /           note: base edges are consistent, except for subdivided ones.      
  *          v12= FaceEdge = v23                  
  *            \            /              "subdive face id" is used to determine the code for the two new edges.      
- *             \          /          sf0 <- The face with highest edge id among (v1,v3) and its four adj. edges.       
+ *             \          /          sf0 <- The face with highest edge id among four adj. edges around (v1,v3).       
  *              \        /           sf1 <- Another face, if there were any.       
  *               \      /                       
  *                \    /                  Use the tag and vertex winding we can number the 4 sub-edges      
