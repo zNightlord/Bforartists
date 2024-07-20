@@ -1863,6 +1863,8 @@ GPU_SHADER_CREATE_INFO(strokegen_loop_subdiv_tree)
     .storage_buf(7, Qualifier::READ, "uint", "ssbo_subd_edge_vert_to_old_edge_[]")
     .storage_buf(8, Qualifier::READ_WRITE, "uint", "ssbo_temporal_record_counters_[]")
     .storage_buf(9, Qualifier::READ_WRITE, "uint", "ssbo_edge_flags_[]")
+#define NUM_SSBO_strokegen_strokegen_loop_subdiv_tree 10
+
     .push_constant(Type::INT, "pc_obj_id_")
     .push_constant(Type::INT, "pc_frame_id_")
     .push_constant(Type::INT, "pcs_edge_count_")
@@ -1881,6 +1883,10 @@ GPU_SHADER_CREATE_INFO(strokegen_loop_subdiv_tree_build_nodes_downwards_init_)
     .additional_info("strokegen_loop_subdiv_tree")
     .define("_KERNEL_MULTICOMPILE__CALC_SUBD_TREE_NODES__PER_EDGE", "1")
     .define("_KERNEL_MULTICOMPILE__BUILD_SUBD_TREE_DOWNWARD__INIT", "1")
+    .define("USE_EDGE_TO_TEMPORAL_RECORD_BUFFER", "1")
+#define SSBO_OFFSET NUM_SSBO_strokegen_strokegen_loop_subdiv_tree
+    .storage_buf(SSBO_OFFSET + 0u, Qualifier::READ_WRITE, "uint", "ssbo_edge_to_temporal_record_[]")
+#undef SSBO_OFFSET
     .local_group_size(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT)
     .compute_source("npr_strokegen_loop_subdiv_edge_tree_comp.glsl"); 
 
@@ -1916,7 +1922,7 @@ GPU_SHADER_CREATE_INFO(strokegen_calc_temporal_contour_records)
     .storage_buf(6, Qualifier::READ_WRITE, "uint", "ssbo_subd_edge_tree_node_up_[]")
     .storage_buf(7, Qualifier::READ_WRITE, "uint", "ssbo_subd_edge_tree_node_dw_[]")
     .storage_buf(8, Qualifier::READ_WRITE, "float", "ssbo_vbo_full_[]")
-    .storage_buf(9, Qualifier::READ_WRITE, "uint", "ssbo_contour_new_temporal_records_[]")
+    .storage_buf(9, Qualifier::READ_WRITE, "uint", "ssbo_contour_temporal_records_new_[]")
     .storage_buf(10, Qualifier::READ_WRITE, "uint", "ssbo_edge_to_temporal_record_[]")
     .storage_buf(11, Qualifier::READ_WRITE, "uint", "ssbo_temporal_record_counters_[]")
 #define NUM_SSBO_strokegen_calc_temporal_contour_records 12
@@ -1927,6 +1933,7 @@ GPU_SHADER_CREATE_INFO(strokegen_calc_temporal_contour_records)
     .push_constant(Type::INT, "pc_obj_id_")
     .push_constant(Type::INT, "pc_frame_id_")
     .push_constant(Type::INT, "pcs_edge_count_")
+    .push_constant(Type::INT, "pc_frame_id_history_")
     ; 
 
 GPU_SHADER_CREATE_INFO(strokegen_compact_new_temporal_contour_records)
@@ -1947,6 +1954,7 @@ GPU_SHADER_CREATE_INFO(strokegen_calculate_new_temporal_contour_records)
     .do_static_compilation(true)
     .additional_info("strokegen_calc_temporal_contour_records")
     .define("_KERNEL_MULTICOMPILE__CALC_TEMPORAL_CONTOUR_RECORDS__MAIN", "1")
+    .define("USE_CONTOUR_TEMPORAL_RECORD_BUFFER_OLD", "1")
     .define("INCLUDE_VERTEX_NORMAL", "1")
     .define("INCLUDE_DEBUG_LINE_CONFIG", "1")
     .define("INCLUDE_DEBUG_LINE_CONFIG_LOAD_STORE", "1")
@@ -1989,6 +1997,7 @@ GPU_SHADER_CREATE_INFO(strokegen_reconstruct_temporal_contour_records)
     .define("WINGED_EDGE_TOPO_INCLUDE", "1")
     .define("COMPACTION_LIB_EXCLUDE_DEFAULT_CODEGEN", "1")
     .define("USE_CONTOUR_TEMPORAL_RECORD_BUFFER_OLD", "1")
+    .define("USE_EDGE_TO_TEMPORAL_RECORD_BUFFER")
 
     .define("INCLUDE_DEBUG_LINE_CONFIG", "1")
     .define("INCLUDE_DEBUG_LINE_CONFIG_LOAD_STORE", "1")
@@ -1997,11 +2006,12 @@ GPU_SHADER_CREATE_INFO(strokegen_reconstruct_temporal_contour_records)
     .storage_buf(0, Qualifier::READ_WRITE, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
     .storage_buf(1, Qualifier::READ_WRITE, "uint", "ssbo_temporal_record_counters_[]")
     .storage_buf(2, Qualifier::READ_WRITE, "uint", "ssbo_contour_temporal_records_old_[]")
-    .storage_buf(3, Qualifier::READ_WRITE, "uint", "ssbo_subd_edge_tree_node_dw_[]")
-    .storage_buf(4, Qualifier::READ_WRITE, "uint", "ssbo_edge_flags_[]")
-    .storage_buf(5, Qualifier::READ_WRITE, "float", "ssbo_vbo_full_[]")
-    .storage_buf(6, Qualifier::READ_WRITE, "uint", "ssbo_edge_to_vert_[]")
-    .storage_buf(7, Qualifier::READ_WRITE, "uint", "ssbo_dbg_lines_[]")
+    .storage_buf(3, Qualifier::READ_WRITE, "uint", "ssbo_edge_to_temporal_record_[]")
+    .storage_buf(4, Qualifier::READ_WRITE, "uint", "ssbo_subd_edge_tree_node_dw_[]")
+    .storage_buf(5, Qualifier::READ_WRITE, "uint", "ssbo_edge_flags_[]")
+    .storage_buf(6, Qualifier::READ_WRITE, "float", "ssbo_vbo_full_[]")
+    .storage_buf(7, Qualifier::READ_WRITE, "uint", "ssbo_edge_to_vert_[]")
+    .storage_buf(8, Qualifier::READ_WRITE, "uint", "ssbo_dbg_lines_[]")
 
     .push_constant(Type::INT, "pc_loop_subd_iters_")
     .push_constant(Type::INT, "pc_obj_id_")
@@ -2009,6 +2019,42 @@ GPU_SHADER_CREATE_INFO(strokegen_reconstruct_temporal_contour_records)
 
     .local_group_size(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT)
     .compute_source("npr_strokegen_loop_subdiv_edge_tree_comp.glsl"); 
+
+
+GPU_SHADER_CREATE_INFO(strokegen_record_temporal_contour_data)
+    .do_static_compilation(true)
+    .typedef_source("bnpr_shader_shared.hh")
+    .typedef_source("draw_shader_shared.hh")
+    .define("_KERNEL_MULTICOMPILE__RECORD_TEMPORAL_CONTOUR_DATA", "1")
+    .define("WINGED_EDGE_TOPO_INCLUDE", "1")
+    .define("COMPACTION_LIB_EXCLUDE_DEFAULT_CODEGEN", "1")
+    .define("INCLUDE_CONTOUR_CURVE_TOPOLOGY_LOAD", "1")
+    .define("INCLUDE_CONTOUR_FLAGS_LOAD_STORE", "1")
+    .define("USE_CONTOUR_TEMPORAL_RECORD_BUFFER_NEW", "1")
+
+    .define("INCLUDE_DEBUG_LINE_CONFIG", "1")
+    .define("INCLUDE_DEBUG_LINE_CONFIG_LOAD_STORE", "1")
+
+    .storage_buf(0, Qualifier::READ_WRITE, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
+    .storage_buf(1, Qualifier::READ_WRITE, "uint", "ssbo_temporal_record_counters_[]")
+    .storage_buf(2, Qualifier::READ_WRITE, "uint", "ssbo_contour_temporal_records_new_[]")
+    .storage_buf(3, Qualifier::READ_WRITE, "uint", "ssbo_contour_snake_to_temporal_record_[]")
+    .storage_buf(4, Qualifier::READ, "uint", "ssbo_contour_snake_rank_[]")
+    .storage_buf(5, Qualifier::READ, "uint", "ssbo_contour_snake_list_len_[]")
+    .storage_buf(6, Qualifier::READ, "uint", "ssbo_contour_snake_list_head_[]")
+    .storage_buf(7, Qualifier::READ_WRITE, "uint", "ssbo_contour_snake_flags_[]")
+    .storage_buf(8, Qualifier::READ, "uint", "ssbo_contour_snake_seg_rank_[]")
+    .storage_buf(9, Qualifier::READ, "uint", "ssbo_contour_snake_seg_len_[]")
+    .storage_buf(10, Qualifier::READ, "uint", "ssbo_contour_snake_vpos_[]")
+    .storage_buf(11, Qualifier::READ_WRITE, "uint", "ssbo_dbg_lines_[]")
+
+    .push_constant(Type::INT, "pc_obj_id_")
+    .push_constant(Type::INT, "pc_frame_id_")
+
+    .local_group_size(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT)
+    .compute_source("npr_strokegen_loop_subdiv_edge_tree_comp.glsl"); 
+
+
 
 /** \} */
 

@@ -17,9 +17,12 @@
 
 namespace blender::npr::strokegen
 {
-  using namespace blender;
 
-  PassSimple& StrokeGenPassModule::get_compute_pass(eType passType, int pass_id)
+
+using namespace blender;
+
+
+PassSimple& StrokeGenPassModule::get_compute_pass(eType passType, int pass_id)
   {
     switch (passType) {
       case SCAN_TEST:
@@ -41,7 +44,8 @@ namespace blender::npr::strokegen
     return pass_comp_test;
   }
 
-  PassMain &StrokeGenPassModule::get_render_pass(eType passType, int pass_id)
+
+PassMain &StrokeGenPassModule::get_render_pass(eType passType, int pass_id)
   {
     switch (passType) {
       case INDIRECT_DRAW_CONTOUR_EDGES:
@@ -57,7 +61,7 @@ namespace blender::npr::strokegen
   }
 
 
-  void StrokeGenPassModule::prepare_validation_passes(int frame_counter)
+void StrokeGenPassModule::prepare_validation_passes(int frame_counter)
   {
     ScanSettings scan_test_settings;
     scan_test_settings.is_validation_shader = true;
@@ -100,7 +104,8 @@ namespace blender::npr::strokegen
     append_subpass_list_ranking(ListRankingPassUsage::TestListRanking, pass_listranking_test, true);
   }
 
-  void StrokeGenPassModule::on_begin_sync(int frame_counter)
+
+void StrokeGenPassModule::on_begin_sync(int frame_counter)
   {
     strokegen_frame_id = frame_counter;
     if (0 < strokegen_frame_id) first_frame = false;
@@ -148,8 +153,8 @@ namespace blender::npr::strokegen
     meshing_params.seconds_sync_view_mat = (int)(scene_eval->npr.npr_test_val_3 + 1e-10f);
     meshing_params.num_vtx_smooth_iters = (int)(scene_eval->npr.npr_test_val_4 + 1e-10f);
 
-    meshing_params.contour_mode = (int)(scene_eval->npr.npr_test_val_5 + 1e-10f);
-    meshing_params.visualize_contour_edges = 0 < meshing_params.contour_mode;
+    meshing_params.contour_mode = ContourType::Interpolated; // (int)(scene_eval->npr.npr_test_val_5 + 1e-10f);
+    meshing_params.visualize_contour_edges = 0 < (int)(scene_eval->npr.npr_test_val_5 + 1e-10f);
     meshing_params.iters_test_subdiv = (int)(scene_eval->npr.npr_test_val_6 + 1e-10f); 
 
     pass_draw_contour_edges.draw_settings.draw_hidden_lines = scene_eval->npr.npr_test_val_7 > .5f;
@@ -178,7 +183,8 @@ namespace blender::npr::strokegen
     meshing_params.cusp_eval_opti = true; 
   }
 
-  void StrokeGenPassModule::on_end_sync()
+
+void StrokeGenPassModule::on_end_sync()
   {
     /* Debug draw */
     rebuild_pass_dbg_geom_drawcall(surf_dbg_ctx);
@@ -193,7 +199,7 @@ namespace blender::npr::strokegen
   }
 
 
-  /**
+/**
    * \brief In each render loop, re-initialize the compute pass for geometry extraction.
    */
   void StrokeGenPassModule::init_mesh_extraction_passes()
@@ -208,6 +214,7 @@ namespace blender::npr::strokegen
     surf_dbg_ctx.dbg_line_length = 1.0f;
   }
 
+
   void StrokeGenPassModule::init_surface_depth_passes()
   {
     curr_mesh_id_surf_depth = -1;
@@ -216,6 +223,7 @@ namespace blender::npr::strokegen
           shaders_, textures_, StrokegenMeshRasterPass::REMESHED_SURFACE_DEPTH);
     }
   }
+
 
   void StrokeGenPassModule::GetSurfaceAnalysisContext_InitPass(SurfaceAnalysisContext &surf_analysis_ctx) const
   {
@@ -239,6 +247,7 @@ namespace blender::npr::strokegen
 
   }
 
+
   void StrokeGenPassModule::GetSurfaceAnalysisContext_CurvatureForAdaptiveRemeshing(
       SurfaceAnalysisContext &surf_analysis_ctx) const
   {
@@ -261,6 +270,7 @@ namespace blender::npr::strokegen
     surf_analysis_ctx.ssbo_vcurv_pdirs_k1k2_ = buffers_.ssbo_mesh_buffer_reuse_2_;
   }
 
+
   void StrokeGenPassModule::GetSurfaceAnalysisContext_VertexRelocationPass(
       SurfaceAnalysisContext &surf_analysis_ctx) const
   {
@@ -281,6 +291,7 @@ namespace blender::npr::strokegen
     surf_analysis_ctx.ssbo_vcurv_pdirs_k1k2_ = buffers_.ssbo_mesh_buffer_reuse_2_;
   }
 
+
   void StrokeGenPassModule::GetSurfaceAnalysisContext_ContourInsertionPass(SurfaceAnalysisContext &surf_analysis_ctx) const
   {
     surf_analysis_ctx.order_0_only_selected = false;
@@ -298,6 +309,7 @@ namespace blender::npr::strokegen
     surf_analysis_ctx.ssbo_vcurv_tensor_ = buffers_.ssbo_mesh_buffer_reuse_1_;
     surf_analysis_ctx.ssbo_vcurv_pdirs_k1k2_ = buffers_.ssbo_mesh_buffer_reuse_2_;
   }
+
 
   void StrokeGenPassModule::GetSurfaceAnalysisContext_CuspDetectionPass(
       SurfaceAnalysisContext &surf_analysis_ctx) const
@@ -320,6 +332,7 @@ namespace blender::npr::strokegen
     surf_analysis_ctx.ssbo_vcurv_tensor_ = buffers_.ssbo_mesh_buffer_reuse_1_;
     surf_analysis_ctx.ssbo_vcurv_pdirs_k1k2_ = buffers_.ssbo_mesh_buffer_reuse_2_;
   }
+
 
   void StrokeGenPassModule::append_subpasses_estimate_curvature_for_adaptive_remeshing(
     ResourceHandle &rsc_handle, int num_edges, int num_verts, bool output_dbg_lines)
@@ -360,18 +373,19 @@ namespace blender::npr::strokegen
   }
 
 
-
-
   void StrokeGenPassModule::append_subpass_init_temporal_records(int num_edges, StrokeGenPassModule::SurfaceAnalysisContext surf_analysis_ctx_contour)
   {
     // Initialize temporal records
     int ssbo_offset_calc_temporal_rec = 0; 
     auto bind_src = [&](
-        draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub
-        ) {
+      draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf>& sub
+      , bool is_pass_calculate_new_temporal_contour_records = false) {
       sub.bind_ssbo(0, buffers_.ssbo_dyn_mesh_counters_out_());
       sub.bind_ssbo(1, buffers_.ssbo_bnpr_mesh_pool_counters_);
-      sub.bind_ssbo(2, buffers_.ssbo_selected_edge_to_edge_);
+      if (!is_pass_calculate_new_temporal_contour_records)
+        sub.bind_ssbo(2, buffers_.ssbo_selected_edge_to_edge_);
+      else
+        sub.bind_ssbo(2, buffers_.ssbo_contour_temporal_records_old_(strokegen_frame_id));
       sub.bind_ssbo(3, buffers_.ssbo_edge_to_vert_);
       sub.bind_ssbo(4, buffers_.ssbo_vert_flags_);
       sub.bind_ssbo(5, buffers_.ssbo_edge_flags_);
@@ -411,19 +425,21 @@ namespace blender::npr::strokegen
       auto& sub = pass_extract_geom().sub("strokegen_calculate_new_temporal_contour_records");
       sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_CALCULATE_NEW_TEMPORAL_RECORDS));
       
-      bind_src(sub);
+      bind_src(sub, true); // reuse ssbo slot(s)
       sub.bind_ssbo(ssbo_offset_calc_temporal_rec + 0, surf_analysis_ctx_contour.ssbo_vgrad_contour_); 
       sub.bind_ssbo(ssbo_offset_calc_temporal_rec + 1, buffers_.ssbo_vnor_);
       sub.bind_ssbo(ssbo_offset_calc_temporal_rec + 2, buffers_.ssbo_edge_to_edges_);
       sub.bind_ssbo(ssbo_offset_calc_temporal_rec + 3, buffers_.ssbo_dbg_lines_);
-      sub.push_constant("pcs_loop_subd_iters_", meshing_params.iters_test_subdiv); 
+      sub.push_constant("pcs_loop_subd_iters_", meshing_params.iters_test_subdiv);
+      sub.push_constant("pc_frame_id_history_", strokegen_frame_id_prev(strokegen_frame_id)); 
       
       sub.dispatch(buffers_.ssbo_bnpr_temporal_record_dispatch_args_);
       sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
     }
   }
 
-  void StrokeGenPassModule::appen_subpass_reconstruct_last_frame_temporal_records()
+
+  void StrokeGenPassModule::append_subpass_reconstruct_last_frame_temporal_records()
   {
     auto bind_src = [&](
         draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf>& sub
@@ -431,23 +447,26 @@ namespace blender::npr::strokegen
       sub.bind_ssbo(0, buffers_.ssbo_bnpr_mesh_pool_counters_); 
       sub.bind_ssbo(1, buffers_.ssbo_temporal_record_counters_); 
       sub.bind_ssbo(2,
-        buffers_.ssbo_contour_temporal_records_new_(strokegen_frame_id));
-        // buffers_.ssbo_contour_temporal_records_old_(strokegen_frame_id));
-      sub.bind_ssbo(3, buffers_.reused_ssbo_subd_edge_tree_node_dw_()); 
-      sub.bind_ssbo(4, buffers_.ssbo_edge_flags_); 
-      sub.bind_ssbo(5, buffers_.ssbo_vbo_full_); 
-      sub.bind_ssbo(6, buffers_.ssbo_edge_to_vert_); 
-      sub.bind_ssbo(7, buffers_.ssbo_dbg_lines_); 
+        // buffers_.ssbo_contour_temporal_records_new_(strokegen_frame_id));
+        buffers_.ssbo_contour_temporal_records_old_(strokegen_frame_id));
+      sub.bind_ssbo(3, buffers_.reused_ssbo_edge_to_temporal_record_());
+      sub.bind_ssbo(4, buffers_.reused_ssbo_subd_edge_tree_node_dw_());
+      sub.bind_ssbo(5, buffers_.ssbo_edge_flags_); 
+      sub.bind_ssbo(6, buffers_.ssbo_vbo_full_); 
+      sub.bind_ssbo(7, buffers_.ssbo_edge_to_vert_); 
+      sub.bind_ssbo(8, buffers_.ssbo_dbg_lines_); 
 
       sub.push_constant("pc_loop_subd_iters_", meshing_params.iters_test_subdiv);
       sub.push_constant("pc_obj_id_", strokegen_obj_id);
       sub.push_constant("pc_frame_id_history_",
-                        strokegen_frame_id); // strokegen_frame_id_prev(strokegen_frame_id));
+                        // strokegen_frame_id);
+                        strokegen_frame_id_prev(strokegen_frame_id));
     };
 
     append_subpass_fill_dispatch_args_temporal_records_(
-      strokegen_obj_id, strokegen_frame_id);
-      // strokegen_frame_id_prev(strokegen_frame_id));
+      strokegen_obj_id,
+      // strokegen_frame_id);
+      strokegen_frame_id_prev(strokegen_frame_id));
 
     {
       auto& sub = pass_extract_geom().sub("strokegen_reconstruct_temporal_contour_records");
@@ -459,6 +478,7 @@ namespace blender::npr::strokegen
       sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
     }
   }
+
 
   /**
    * \brief Add a subpass for extracting geometry from given GPUBatch.
@@ -652,12 +672,12 @@ namespace blender::npr::strokegen
         append_subpasses_loop_subdiv(num_edges, num_verts); // default path
     }
 
-    // if (!first_frame)
-    // {
-    //   appen_subpass_reconstruct_last_frame_temporal_records();
-    // }
+    if (!first_frame)
+    {
+      append_subpass_reconstruct_last_frame_temporal_records();
+    }
 
-    // Calc attributes for interpolated contours
+    // Calc attributes for detecting interpolated contours
     SurfaceAnalysisContext surf_analysis_ctx_contour;
     GetSurfaceAnalysisContext_ContourInsertionPass(surf_analysis_ctx_contour);
     if (meshing_params.contour_mode != ContourType::Raw) {
@@ -672,10 +692,6 @@ namespace blender::npr::strokegen
     { // Init temporal records after per-contour gradient being evaluated from surf_analysis_ctx_contour
       append_subpass_init_temporal_records(num_edges, surf_analysis_ctx_contour);
     }
-    if (!first_frame)
-    { // TODO: Debug only! should before append_subpass_init_temporal_records
-      appen_subpass_reconstruct_last_frame_temporal_records();
-    }
 
     // Interpolated contour tessellation
     if (meshing_params.contour_mode != ContourType::Raw) {
@@ -688,8 +704,7 @@ namespace blender::npr::strokegen
       }
     }
     
-    // test cusp detection
-    {
+    { // Calc cusp function for contour vertices
       SurfaceAnalysisContext surf_analysis_ctx_contour;
       GetSurfaceAnalysisContext_CuspDetectionPass(surf_analysis_ctx_contour);
       auto surf_dbg_ctx_cpy = surf_dbg_ctx;
@@ -725,6 +740,74 @@ namespace blender::npr::strokegen
     strokegen_obj_id += 1; 
   }
 
+  // After iterating each mesh, contour data is collected & processed once here
+  void StrokeGenPassModule::rebuild_pass_process_contours()
+  {
+    pass_process_contours.init();
+
+    // Split contour edges based on rasterized visibility
+    append_subpass_contour_edges_soft_rasterization();
+    append_subpass_visibility_split_contour_edges(); 
+
+    // List ranking to generate curves
+    append_subpass_fill_contour_list_ranking_inputs(); 
+    append_subpass_fill_dispatch_args_contour_edges(pass_process_contours, true); 
+    append_subpass_list_ranking(ContourEdgeLinking, pass_process_contours, true);
+    // Reorder contour verts & generate curves
+    append_subpass_fill_dispatch_args_contour_edges(pass_process_contours, true);
+    append_subpass_serialize_contour_edges();
+
+    // Segmentation based on cusp/(TODO: visibility)
+    append_subpass_fill_dispatch_args_contour_verts(pass_process_contours); 
+    if (meshing_params.denoise_cusp_segmentation){
+      SegLoopConv1DSettings conv1d_settings;
+      conv1d_settings.is_validation_shader = false;
+      conv1d_settings.use_indirect_dispatch = true;
+      conv1d_settings.lazy_dispatch = false;
+      conv1d_settings.ssbo_segloopconv1d_info_ = buffers_.ssbo_segloopconv1d_info_;
+      conv1d_settings.ssbo_segloopconv1d_patch_table_ = buffers_.ssbo_segloopconv1d_patch_table_;
+      conv1d_settings.ssbo_in_segloopconv1d_data_ = buffers_.reused_ssbo_in_segloopconv1d_data_contour_seg_denoise();
+      conv1d_settings.ssbo_out_segloopconv1d_data_ = buffers_.ssbo_contour_snake_flags_;
+      conv1d_settings.shader_build_patch_table = CONV1D_SEG_DENOISE_BUILD_PATCH;
+      conv1d_settings.shader_convolution = CONV1D_SEG_DENOISE_CONVOLUTION;
+    
+      append_subpass_segloopconv1d(conv1d_settings, pass_process_contours); 
+    }
+    append_subpass_contour_segmentation();
+
+    
+    // { // Record contour data to temporal buffer
+    //     auto& sub = pass_process_contours.sub("strokegen_record_temporal_contour_data");
+    //     sub.shader_set(shaders_.static_shader_get(RECORD_TEMPORAL_CONTOUR_DATA));
+    //
+    //     sub.bind_ssbo(0, buffers_.ssbo_bnpr_mesh_pool_counters_); 
+    //     sub.bind_ssbo(1, buffers_.ssbo_temporal_record_counters_); 
+    //     sub.bind_ssbo(2, buffers_.ssbo_contour_temporal_records_new_(strokegen_frame_id)); 
+    //     sub.bind_ssbo(3, buffers_.ssbo_contour_snake_to_temporal_record_); 
+    //     sub.bind_ssbo(4, buffers_.ssbo_contour_snake_rank_); 
+    //     sub.bind_ssbo(5, buffers_.ssbo_contour_snake_list_len_); 
+    //     sub.bind_ssbo(6, buffers_.ssbo_contour_snake_list_head_); 
+    //     sub.bind_ssbo(7, buffers_.ssbo_contour_snake_flags_); 
+    //     sub.bind_ssbo(8, buffers_.ssbo_contour_snake_seg_rank_); 
+    //     sub.bind_ssbo(9, buffers_.ssbo_contour_snake_seg_len_); 
+    //     sub.bind_ssbo(10, buffers_.ssbo_contour_snake_vpos_); 
+    //     sub.bind_ssbo(11, buffers_.ssbo_dbg_lines_); 
+    //
+    //     sub.push_constant("pc_obj_id_", strokegen_obj_id); 
+    //     sub.push_constant("pc_frame_id_", strokegen_frame_id); 
+    //
+    //     sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_vert_dispatch_args_);
+    //     sub.barrier(GPU_BARRIER_SHADER_STORAGE);
+    // }
+
+    // 2D resampling
+    float sample_rate = 4.0f; 
+    append_subpass_contour_arclen_parameterization(textures_.get_contour_raster_screen_res(), sample_rate); 
+    append_subpass_contour_generate_2d_samples(textures_.get_contour_raster_screen_res(), sample_rate);
+
+    append_subpass_calc_contour_edges_draw_data();
+  }
+
 
   void StrokeGenPassModule::bind_rsc_for_bnpr_meshing_surf_filtering_(
       draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf>& sub,
@@ -750,7 +833,10 @@ namespace blender::npr::strokegen
     sub.push_constant("pcs_vert_count_", num_verts);
   }
 
+
   // TODO: Store quadrics for selected verts in a compacted manner. 
+
+
   void StrokeGenPassModule::append_subpass_vertex_relocation(
       VertexRelocationMode mode,
       int num_edges,
@@ -893,6 +979,7 @@ namespace blender::npr::strokegen
     }
   }
 
+
   void StrokeGenPassModule::append_subpass_vertex_curv_smoothing(
     int iter_smooth, int num_verts, int num_edges, bool only_selected_verts, bool output_remesh_len)
   {
@@ -916,6 +1003,7 @@ namespace blender::npr::strokegen
       sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
     }
   }
+
 
   void StrokeGenPassModule::append_subpass_mark_selection_border_edges(int num_edges, int num_verts)
   {
@@ -995,6 +1083,7 @@ namespace blender::npr::strokegen
     }
   }
 
+
   void StrokeGenPassModule::append_subpass_cpy_vbo(gpu::Batch *gpu_batch_surf, int batch_resource_index, int num_verts)
   {
     auto &sub = pass_extract_geom().sub("bnpr_geom_extract_collect_verts");
@@ -1017,6 +1106,7 @@ namespace blender::npr::strokegen
     sub.barrier(GPU_BARRIER_SHADER_STORAGE);
   }
 
+
   void StrokeGenPassModule::append_subpass_cpy_line_adj_ibo(
       gpu::Batch *gpu_batch_line_adj,
       gpu::GPUIndexBufType ib_type,
@@ -1038,6 +1128,7 @@ namespace blender::npr::strokegen
     sub.dispatch(int3(num_groups, 1, 1));
     sub.barrier(GPU_BARRIER_SHADER_STORAGE);
   }
+
 
   void StrokeGenPassModule::append_subpass_meshing_merge_verts(int num_verts_in, bool debug)
   {
@@ -1086,6 +1177,7 @@ namespace blender::npr::strokegen
       sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_SHADER_IMAGE_ACCESS);
     }
   }
+
 
   void StrokeGenPassModule::append_subpass_meshing_wedge_adjacency(
     int num_edges_in, int num_verts_in, bool debug
@@ -1162,6 +1254,7 @@ namespace blender::npr::strokegen
     }
   }
 
+
   void StrokeGenPassModule::append_subpass_select_remeshed_edges(int num_edges, int num_verts, EdgeFloodingOptions options)
   {
     auto bind_flooding_rsc = [&](
@@ -1222,6 +1315,7 @@ namespace blender::npr::strokegen
       sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_SHADER_IMAGE_ACCESS);
     }
   }
+
 
   void StrokeGenPassModule::append_subpass_split_edges(EdgeSplitMode mode, int iter_split, int num_edges, int num_verts)
   {
@@ -1316,6 +1410,7 @@ namespace blender::npr::strokegen
     }
   }
 
+
   void StrokeGenPassModule::append_subpass_collapse_edges(int iter_remesh, int iter_collapse, int num_edges, int num_verts)
   {
     auto bind_src = [&](draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub,
@@ -1404,6 +1499,7 @@ namespace blender::npr::strokegen
     }
   }
 
+
   void StrokeGenPassModule::append_subpass_flip_edges(StrokeGenPassModule::EdgeFlipOptiGoal opti_goal,
                                                       int iter_flip,
                                                       int num_edges,
@@ -1482,6 +1578,7 @@ namespace blender::npr::strokegen
     }
   }
 
+
   void StrokeGenPassModule::append_subpass_split_faces(int iter_split, int num_edges, int num_verts)
   {
     auto bind_src = [&](draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub) {
@@ -1537,6 +1634,7 @@ namespace blender::npr::strokegen
     }
   }
 
+
   void StrokeGenPassModule::append_subpass_fill_dispatch_args_remeshed_edges_(int num_static_edges, bool only_selected_edges)
   {
     auto &sub = pass_extract_geom().sub("strokegen_remeshing_fill_dispatch_args_per_remeshed_edge");
@@ -1554,6 +1652,7 @@ namespace blender::npr::strokegen
     sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE); 
   }
 
+
   void StrokeGenPassModule::append_subpass_fill_dispatch_args_remeshed_verts_(
       int num_static_verts, bool only_selected_elems_)
   {
@@ -1568,6 +1667,7 @@ namespace blender::npr::strokegen
     sub.dispatch(int3(1, 1, 1));
     sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE); 
   }
+
 
   void StrokeGenPassModule::append_subpass_fill_dispatch_args_contour_edges(PassSimple& pass, bool all_contour_edges)
   { // fill dispatch args for contour edges
@@ -1585,6 +1685,7 @@ namespace blender::npr::strokegen
     sub.barrier(GPU_BARRIER_SHADER_STORAGE);
   }
 
+
   void StrokeGenPassModule::append_subpass_fill_dispatch_args_contour_verts(PassSimple &pass)
   {  // fill dispatch args for contour edges
     auto &sub = pass.sub("strokegen_fill_dispatch_args_per_contour_vert");
@@ -1598,6 +1699,7 @@ namespace blender::npr::strokegen
     sub.dispatch(int3(1, 1, 1));
     sub.barrier(GPU_BARRIER_SHADER_STORAGE);
   }
+
 
   void StrokeGenPassModule::append_subpass_fill_dispatch_args_contour_frags(PassSimple& pass, bool all_contour_frags)
   {
@@ -1615,6 +1717,7 @@ namespace blender::npr::strokegen
     sub.barrier(GPU_BARRIER_SHADER_STORAGE);
   }
 
+
   void StrokeGenPassModule::append_subpass_fill_dispatch_args_contour_2d_samples(PassSimple &pass)
   {
     auto &sub = pass.sub("strokegen_fill_dispatch_args_per_contour_2d_sample");
@@ -1628,6 +1731,7 @@ namespace blender::npr::strokegen
     sub.dispatch(int3(1, 1, 1));
     sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_COMMAND); 
   }
+
 
   void StrokeGenPassModule::append_subpass_fill_dispatch_args_temporal_records_(int obj_id, int rec_frame_id)
   {
@@ -1643,6 +1747,7 @@ namespace blender::npr::strokegen
     sub.dispatch(int3(1, 1, 1));
     sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
   }
+
 
   void StrokeGenPassModule::append_subpass_surf_geom_analysis(
       ResourceHandle& rsc_handle, int num_verts, int num_edges, const SurfaceAnalysisContext & ctx,
@@ -1781,6 +1886,7 @@ namespace blender::npr::strokegen
     }
   }
 
+
   void StrokeGenPassModule::append_subpasses_sqrt_subdiv(int num_edges, int num_verts)
   {
     for (int iter_subdiv = 0; iter_subdiv < meshing_params.iters_test_subdiv; ++iter_subdiv) {
@@ -1797,7 +1903,8 @@ namespace blender::npr::strokegen
     }
   }
 
-  void StrokeGenPassModule::bind_rsc_for_loop_subd_tree_processing(StrokegenMeshComputePass::PassBase<DrawCommandBuf> &sub, int num_edges)
+
+  void StrokeGenPassModule::bind_rsc_for_loop_subd_tree_processing(StrokegenMeshComputePass::PassBase<DrawCommandBuf> &sub, int num_edges, int& out_ssbo_offset)
   {
     sub.bind_ssbo(0, buffers_.ssbo_dyn_mesh_counters_out_());
     sub.bind_ssbo(1, buffers_.ssbo_bnpr_mesh_pool_counters_);
@@ -1809,11 +1916,13 @@ namespace blender::npr::strokegen
     sub.bind_ssbo(7, buffers_.reused_ssbo_subd_edge_vert_to_old_edge_());
     sub.bind_ssbo(8, buffers_.ssbo_temporal_record_counters_);
     sub.bind_ssbo(9, buffers_.ssbo_edge_flags_);
+    out_ssbo_offset = 10; 
 
     sub.push_constant("pc_obj_id_", strokegen_obj_id); 
     sub.push_constant("pc_frame_id_", strokegen_frame_id); 
     sub.push_constant("pcs_edge_count_", num_edges);
   }
+
 
   void StrokeGenPassModule::append_subpass_build_loop_subd_tree_upwards_for_face_edges(int num_edges)
   {
@@ -1822,26 +1931,35 @@ namespace blender::npr::strokegen
     auto &sub = pass_extract_geom().sub("strokegen_loop_subdiv_tree_build_nodes_upwards_for_face_edges");
     sub.shader_set(shaders_.static_shader_get(MESH_LOOP_SUBD_TREE_BUILD_NODES_UPWARDS_FOR_FACE_EDGES));
 
-    bind_rsc_for_loop_subd_tree_processing(sub, num_edges);
+    int ssbo_offset = 0; 
+    bind_rsc_for_loop_subd_tree_processing(sub, num_edges, ssbo_offset);
 
     sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_edges_);
     sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
   }
 
+
   void StrokeGenPassModule::append_subpass_build_loop_subd_tree_downwards_init(int num_edges)
   {
-    append_subpass_fill_dispatch_args_remeshed_edges_(num_edges, true);
+    // Different from append_subpass_build_loop_subd_tree_downwards_,
+    // this pass is called for all edges, not just the selected ones
+    // to ensure that even non-subdivided edges have a valid tree node(pointing to itself)
+    // and temporal record pointers (pointing to null)
+    append_subpass_fill_dispatch_args_remeshed_edges_(num_edges, false);
     {
       auto &sub = pass_extract_geom().sub(
           "strokegen_loop_subdiv_tree_build_nodes_downwards_init_");
       sub.shader_set(shaders_.static_shader_get(MESH_LOOP_SUBD_TREE_INIT_NODES_DOWNWARDS));
 
-      bind_rsc_for_loop_subd_tree_processing(sub, num_edges);
+      int ssbo_offset = 0;
+      bind_rsc_for_loop_subd_tree_processing(sub, num_edges, ssbo_offset);
+      sub.bind_ssbo(ssbo_offset + 0, buffers_.reused_ssbo_edge_to_temporal_record_()); 
 
       sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_edges_);
       sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
     }
   }
+
 
   void StrokeGenPassModule::append_subpass_build_loop_subd_tree_downwards_(int num_edges)
   {
@@ -1850,12 +1968,14 @@ namespace blender::npr::strokegen
       auto &sub = pass_extract_geom().sub("strokegen_loop_subdiv_tree_build_nodes_downwards_calc_");
       sub.shader_set(shaders_.static_shader_get(MESH_LOOP_SUBD_TREE_BUILD_NODES_DOWNWARDS));
 
-      bind_rsc_for_loop_subd_tree_processing(sub, num_edges);
+      int ssbo_offset = 0;
+      bind_rsc_for_loop_subd_tree_processing(sub, num_edges, ssbo_offset);
 
       sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_edges_);
       sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
     }
   }
+
 
   void StrokeGenPassModule::append_subpasses_loop_subdiv(int num_edges, int num_verts)
   {
@@ -1880,9 +2000,11 @@ namespace blender::npr::strokegen
       append_subpass_vertex_relocation(LoopSubdivSmoothApply, num_edges, num_verts, 0, true);
     }
 
+    // Build subdivision tree using upward pointers in each newly subdivided edge
     append_subpass_build_loop_subd_tree_downwards_init(num_edges);
     append_subpass_build_loop_subd_tree_downwards_(num_edges);
   }
+
 
   void StrokeGenPassModule::rebuild_pass_dbg_geom_drawcall(SurfaceDebugContext dbg_ctx)
   {
@@ -1974,6 +2096,7 @@ namespace blender::npr::strokegen
     }
   }
 
+
   void StrokeGenPassModule::append_subpass_setup_contour_edge_data()
   {
     {
@@ -2003,6 +2126,7 @@ namespace blender::npr::strokegen
       sub.barrier(GPU_BARRIER_SHADER_STORAGE);
     }
   }
+
 
   void StrokeGenPassModule::append_subpass_serialize_contour_edges()
   {
@@ -2034,6 +2158,7 @@ namespace blender::npr::strokegen
       sub.barrier(GPU_BARRIER_SHADER_STORAGE); 
     }
   }
+
 
   void StrokeGenPassModule::append_subpass_contour_segmentation()
   {
@@ -2104,6 +2229,7 @@ namespace blender::npr::strokegen
     }
   }
 
+
   void StrokeGenPassModule::bind_rsc_for_contour_2d_resample_(
       draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub,
     float2 screen_res, float pcs_sample_rate, int& out_ssbo_offset
@@ -2131,6 +2257,7 @@ namespace blender::npr::strokegen
     sub.push_constant("pcs_sample_rate_", pcs_sample_rate); 
   }
 
+
   void StrokeGenPassModule::bind_rsc_for_contour_2d_sample_evaluation_(
       draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub,
       float2 screen_res, float pcs_sample_rate, int &out_ssbo_offset)
@@ -2156,6 +2283,7 @@ namespace blender::npr::strokegen
     sub.push_constant("pcs_screen_size_", screen_res);
     sub.push_constant("pcs_sample_rate_", pcs_sample_rate);
   }
+
 
   void StrokeGenPassModule::append_subpass_contour_arclen_parameterization(float2 screen_res, float sample_rate)
   {
@@ -2445,8 +2573,6 @@ namespace blender::npr::strokegen
   }
 
 
-
-
   void StrokeGenPassModule::append_subpass_calc_contour_edges_draw_data()
   {
     int ssbo_offset = 0; 
@@ -2474,48 +2600,6 @@ namespace blender::npr::strokegen
     }
   }
 
-
-  void StrokeGenPassModule::rebuild_pass_process_contours()
-  {
-    pass_process_contours.init();
-
-    // Split contour edges based on rasterized visibility
-    append_subpass_contour_edges_soft_rasterization();
-    append_subpass_visibility_split_contour_edges(); 
-
-    // List ranking to generate curves
-    append_subpass_fill_contour_list_ranking_inputs(); 
-    append_subpass_fill_dispatch_args_contour_edges(pass_process_contours, true); 
-    append_subpass_list_ranking(ContourEdgeLinking, pass_process_contours, true);
-    // Reorder contour verts & generate curves
-    append_subpass_fill_dispatch_args_contour_edges(pass_process_contours, true);
-    append_subpass_serialize_contour_edges();
-
-    // Segmentation based on cusp/(TODO: visibility)
-    append_subpass_fill_dispatch_args_contour_verts(pass_process_contours); 
-    if (meshing_params.denoise_cusp_segmentation){
-      SegLoopConv1DSettings conv1d_settings;
-      conv1d_settings.is_validation_shader = false;
-      conv1d_settings.use_indirect_dispatch = true;
-      conv1d_settings.lazy_dispatch = false;
-      conv1d_settings.ssbo_segloopconv1d_info_ = buffers_.ssbo_segloopconv1d_info_;
-      conv1d_settings.ssbo_segloopconv1d_patch_table_ = buffers_.ssbo_segloopconv1d_patch_table_;
-      conv1d_settings.ssbo_in_segloopconv1d_data_ = buffers_.reused_ssbo_in_segloopconv1d_data_contour_seg_denoise();
-      conv1d_settings.ssbo_out_segloopconv1d_data_ = buffers_.ssbo_contour_snake_flags_;
-      conv1d_settings.shader_build_patch_table = CONV1D_SEG_DENOISE_BUILD_PATCH;
-      conv1d_settings.shader_convolution = CONV1D_SEG_DENOISE_CONVOLUTION;
-    
-      append_subpass_segloopconv1d(conv1d_settings, pass_process_contours); 
-    }
-    append_subpass_contour_segmentation();
-
-    // 2D resampling
-    float sample_rate = 4.0f; 
-    append_subpass_contour_arclen_parameterization(textures_.get_contour_raster_screen_res(), sample_rate); 
-    append_subpass_contour_generate_2d_samples(textures_.get_contour_raster_screen_res(), sample_rate);
-
-    append_subpass_calc_contour_edges_draw_data();
-  }
 
   void StrokeGenPassModule::rebuild_pass_contour_edge_drawcall()
   {

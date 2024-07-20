@@ -87,11 +87,11 @@ class GPUBufferPoolModule {
   SSBO_StrokeGenMeshBufPerVert<float, 3> ssbo_vnor_;                            // 96MB
   SSBO_StrokeGenMeshBufPerVert<uint, 2> ssbo_vcurv_max_;                        // 32MB
   SSBO_StrokeGenMeshBufPerEdge<uint, 1> ssbo_subd_edge_tree_node_up_;
-  SSBO_StrokeGenMeshBufPerContour<uint, 1> ssbo_subd_edge_tree_node_dw_dbg_; 
+  /* SSBO_StrokeGenReusedLarge ssbo_subd_edge_tree_node_dw_dbg_; */
 
   SSBO_StrokeGenMeshBufPerSelectedEdge<uint, 1> ssbo_selected_edge_to_edge_;    // 32MB    
   SSBO_StrokeGenMeshBufPerSelectedVert<uint, 1> ssbo_selected_vert_to_vert_;    // 16MB    
-  SSBO_StrokeGenMeshBufPerEdge<uint, 6> ssbo_dbg_lines_;                        // 256MB
+  SSBO_StrokeGenMeshBufPerEdge<uint, 8> ssbo_dbg_lines_;                        // 256MB
 
   SSBO_StrokeGenMeshBufPerContour<uint, 2> ssbo_contour_to_contour_;       //
   SSBO_StrokeGenMeshBufPerContour<uint, 1> ssbo_contour_snake_rank_;       // 
@@ -137,7 +137,8 @@ class GPUBufferPoolModule {
   // Long life-time buffers  -------------------------------
   inline GPUStorageBuf *reused_ssbo_subd_edge_tree_node_dw_()
   { // [append_subpasses_loop_subdiv, interpolated contour tessellation)
-    return /*ssbo_mesh_buffer_reuse_3_*/ ssbo_subd_edge_tree_node_dw_dbg_;
+    // note: must reuse, requires a 4_x_uint32-per-edge buffer, it's large
+    return ssbo_mesh_buffer_reuse_3_ /*ssbo_subd_edge_tree_node_dw_dbg_*/;
   }
   inline GPUStorageBuf *reused_ssbo_contour_vert_to_old_edge_()
   { // [interpolated contour tessellation, append_subpass_setup_contour_edge_data]

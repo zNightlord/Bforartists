@@ -33,8 +33,8 @@ void npr::strokegen::StrokegenMeshRasterPass::init_pass(
   if (usage == Usage::DRAW_CONTOUR_EDGES || usage == Usage::DBG_LINES) {
     drw_state |= (DRW_STATE_WRITE_COLOR);
     drw_state |= ((draw_settings.draw_hidden_lines ? DRW_STATE_DEPTH_ALWAYS :
-                                                     DRW_STATE_DEPTH_LESS_EQUAL)
-                  /*| DRW_STATE_WRITE_DEPTH*/);  // lequal
+                                                     DRW_STATE_DEPTH_LESS_EQUAL) 
+                  | DRW_STATE_WRITE_DEPTH);  // lequal
     drw_state |= (DRW_STATE_STENCIL_ALWAYS);
     state_set(drw_state, clip_planes.size());  
   }

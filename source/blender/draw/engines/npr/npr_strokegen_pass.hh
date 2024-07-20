@@ -25,11 +25,9 @@ class Instance;
 
 struct SurfaceDebugContext {
   enum DbgLineType {
-    vnor = 0,
-    // general = 1,
-    // edges = 2
+    vnor = 0, // to be deprecated
     general = 2,
-    edges = 1 // debug only! for a better view of general lines
+    edges = 1 // to be deprecated
   }; // match to shader defines
   bool dbg_lines; 
   bool dbg_vert_normal;
@@ -71,7 +69,7 @@ public:
   StrokegenMeshRasterPass pass_draw_contour_2d_samples = {"Draw 2D Contour Curves"}; // Inherited from draw::PassMain
   int curr_mesh_id_surf_depth; 
   std::array<StrokegenMeshRasterPass, 1024> pass_draw_remeshed_surface_depth_;  
-  StrokegenMeshRasterPass pass_draw_debug_lines_ = {"Draw Normal Lines"}; // Inherited from draw::PassMain 
+  StrokegenMeshRasterPass pass_draw_debug_lines_ = {"Draw Debug Lines"}; // Inherited from draw::PassMain 
 
   /** Dependent Modules */
   StrokeGenShaderModule &shaders_;
@@ -373,9 +371,9 @@ public:
                                           int num_verts, bool output_dbg_lines = false);
   void append_subpass_init_temporal_records(int num_edges,
                                             SurfaceAnalysisContext surf_analysis_ctx_contour);
-  void appen_subpass_reconstruct_last_frame_temporal_records();
+  void append_subpass_reconstruct_last_frame_temporal_records();
   void append_subpasses_sqrt_subdiv(int num_edges, int num_verts);
-  void bind_rsc_for_loop_subd_tree_processing(StrokegenMeshComputePass::PassBase<DrawCommandBuf>& sub, int num_edges);
+  void bind_rsc_for_loop_subd_tree_processing(StrokegenMeshComputePass::PassBase<DrawCommandBuf>& sub, int num_edges, int& out_ssbo_offset);
   void append_subpass_build_loop_subd_tree_upwards_for_face_edges(int num_edges);
   void append_subpass_build_loop_subd_tree_downwards_init(int num_edges);
   void append_subpass_build_loop_subd_tree_downwards_(int num_edges);

@@ -287,6 +287,7 @@ void main()
 		
 		bool dbg_line = valid_thread && (!ef.del_by_collapse) && (!ef.dupli) && (!ef.del_by_split); 
 		vec3 dbg_col = vec3(1.0f); 
+		uvec4 dbg_data = uvec4(0u); 
 
 		/* visualize edges with invalid topology */
 		if (pcs_edge_visualize_mode_ == 1) 
@@ -341,26 +342,29 @@ void main()
 
 			uint match_code = pcs_edge_visualize_mode_ - 10; // 0, 1, 2, 3
 			dbg_line = valid_thread && (!ef.dupli) && (!ef.del_by_split) && (ef.selected); 
-			// dbg_line = dbg_line && (match_code == node.code); 
-			// dbg_line = dbg_line && ((match_code / 2u) == (node.code / 2u)); 
+			
+			// tree is built before interpolated contour tessellation 
+			dbg_line = dbg_line && !(vf[1].contour != vf[3].contour); 
 
 			dbg_col = node.code == 0 ? vec3(1.0f, 0.0f, 0.0f) : 
 				node.code == 1 ? vec3(0.0f, 1.0f, 0.0f) : 
 				node.code == 2 ? vec3(0.0f, .5f, 1.0f) : 
 				node.code == 3 ? vec3(1.0f, 1.0f, 0.0f) : vec3(0.0f);
 			dbg_col *= .5f; 
+
+			dbg_data.x = DBG_LINE_SPEC_DATA_X__BOTTOM_LAYER; 
 		}
 
 
-		uint dbg_line_idx = compact_dbg_edge(dbg_line, groupId); 
-		dbg_line_idx += get_debug_line_offset(DBG_LINE_TYPE__EDGES); 
+		uint dbg_line_idx = compact_general_dbg_lines(dbg_line, groupId); 
+		dbg_line_idx += get_debug_line_offset(DBG_LINE_TYPE__GENERAL); 
 		if (dbg_line)
 		{
 			vec3 dbg_vpos_0 = v[1]; 
 			vec3 dbg_vpos_1 = v[3]; 
 		 
-			DebugVertData dvd_0 = DebugVertData(v[1], dbg_col, uvec4(0u)); 
-			DebugVertData dvd_1 = DebugVertData(v[3], dbg_col, uvec4(0u));
+			DebugVertData dvd_0 = DebugVertData(v[1], dbg_col, dbg_data); 
+			DebugVertData dvd_1 = DebugVertData(v[3], dbg_col, dbg_data);
 			store_debug_line_data(dbg_line_idx, dvd_0, dvd_1); 
 		}
 	}
@@ -498,12 +502,16 @@ void main()
 				// each contour vert saves its split edge id (ssbo_contour_vert_to_old_edge_)
 				uint old_edge_0 = ssbo_contour_vert_to_old_edge_[v0]; 
 				uint rec_id_0 = load_ssbo_edge_to_new_temporal_record_(old_edge_0); 
+				// Note: it you want to compress the pointers, change the bits of PER_CONTOUR_TEMPORAL_REC_ID_NULL. 
+				// - remember invalid pointers are marked PER_EDGE_TEMPORAL_REC_ID_NULL(0xffffffff)
+				bool valid_rec_id_0 = rec_id_0 != PER_EDGE_TEMPORAL_REC_ID_NULL; 
 
 				// TODO: this is required for non-looped curves. 
+
 				uint old_edge_1 = ssbo_contour_vert_to_old_edge_[v1];
 				uint rec_id_1 = load_ssbo_edge_to_new_temporal_record_(old_edge_1);
 
-				cetd.temporal_rec_id = rec_id_0; 
+				cetd.temporal_rec_id = valid_rec_id_0 ? rec_id_0 : PER_CONTOUR_TEMPORAL_REC_ID_NULL; 
 			}
 
 			/* write to intermediate buffer, will be shuffled after list ranking */

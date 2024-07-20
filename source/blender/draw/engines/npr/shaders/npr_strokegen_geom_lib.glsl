@@ -257,6 +257,10 @@ bool valid_vcurv_max(float vcurv_max)
         vec3 pos; /* world space vertex pos */
         vec3 col;
         uvec4 dbg_data; 
+// Special flag values for dbg_data ---
+// handle overlapped line with different layers of depth bias
+#define DBG_LINE_SPEC_DATA_X__BOTTOM_LAYER 0xfefefefeu 
+// ------------------------------------
     }; 
     void encode_debug_vert_data(DebugVertData vtx, out uvec4 enc_0, out uvec4 enc_1)
     {

@@ -201,10 +201,6 @@ void main()
 
 
 #if defined(_KERNEL_MULTICOMPILE__CALC_CONTOUR_EDGES_RENDER_DATA)
-/*
- * ubo_view_matrices_
- * pcs_screen_size_
-*/
 
 vec2 ndc_to_screen_uv(vec4 pos_ndc)
 {
@@ -229,7 +225,7 @@ void main()
 	ContourCurveTopo cct = load_contour_curve_topo(contour_id, cf); // TODO: encode tail flag
 	uint next_contour_id = move_contour_id_along_loop(cct, contour_id, 1.0f); 
 	bool curve_tail = cct.tail_id == contour_id; 
-	
+	// TODO: encapsulate vpos load
 	vec3 vpos_0, vpos_1;
 	{ // read vertex pos
 		uvec3 vpos_0_enc, vpos_1_enc;
@@ -310,25 +306,6 @@ vec3 rand_col_rgb(uint seed0, uint seed1)
 
 
 #if defined(_KERNEL_MULTICOMPILE__CONTOUR_EDGES_2D_RESAMPLE)
-/*
-	ssbo_bnpr_mesh_pool_counters_
-	ssbo_tree_scan_infos_2d_resampler_
-	
-	// segscan
- 	uint ssbo_tree_scan_input_2d_resampler_accumulate_curvlen_[]
-	uint ssbo_tree_scan_output_2d_resampler_accumulate_curvlen_[] ( == ssbo_contour_arc_len_param_[])
-	// scan
-	uint ssbo_tree_scan_input_2d_resampler_alloc_samples_[] (<- exclusive to above 2 ssbos)
-	uint ssbo_tree_scan_output_2d_resampler_alloc_samples_[] ( == ssbo_contour_to_start_sample_[])
-	// segscan
-	uint ssbo_tree_scan_input_2d_resample_contour_idmapping_[] (<- exclusive to above 2 ssbos)
-	uint ssbo_tree_scan_output_2d_resample_contour_idmapping_[] (== ssbo_2d_sample_to_contour_[])
-
-	uint ssbo_contour_2d_resample_raster_data_[] 
-	uint ssbo_contour_2d_sample_geometry_[]
-	vec2 pcs_screen_size_
-	float pcs_sample_rate_
-*/
 
 vec2 get_raster_resolution()
 {
@@ -1025,8 +1002,5 @@ void main()
 	}
 }
 #endif
-
-
-
 
 

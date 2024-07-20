@@ -141,8 +141,13 @@ const char *StrokeGenShaderModule::static_shader_create_info_name_get(eShaderTyp
       return "strokegen_setup_contour_segmentation";
     case FINISH_CONTOUR_SEGMENTATION:
       return "strokegen_finish_contour_segmentation";
+
+    case RECORD_TEMPORAL_CONTOUR_DATA:
+      return "strokegen_record_temporal_contour_data"; 
+
     case CALC_CONTOUR_EDGES_DRAW_DATA:
       return "strokegen_calc_contour_edges_draw_data";
+
     case INDIRECT_DRAW_CONTOUR_MESH_DEPTH:
       return "bnpr_geom_draw_remeshed_surface_depth"; 
     case INDIRECT_DRAW_CONTOUR_EDGES:

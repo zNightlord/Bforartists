@@ -23,6 +23,16 @@ void main()
     uint v3 = ssbo_edge_to_vert_[wedge_id*4u + iverts_cwedge[1]];
     VertFlags vf_3 = load_vert_flags(v3);
 
+    EdgeFlags ef = load_edge_flags(wedge_id); 
+
+    if ((vf_1.new_by_split != vf_3.new_by_split) && ef.new_by_split && !ef.new_by_split_on_old_edge) 
+    { // an new edge that is neither an face-edge nor a split-edge, 
+      // usually happens at incomplete subdived faces, around the border of subdivided region
+      // invalidate the link to prevent writing into the same position of another face/split-edge
+      // when we are building the tree. 
+        LoopSubdEdgeTreeUpNode node = init_loop_subd_tree_leaf__face_edge(); // point to nothing 
+        ssbo_subd_edge_tree_node_up_[wedge_id] = encode_loop_subd_tree_node(node);
+    }
     if (!(vf_1.new_by_split && vf_3.new_by_split)) return; // only do this for new edges
     
 
@@ -75,14 +85,23 @@ void main()
         ssbo_subd_edge_tree_node_up_[wedge_id] = encode_loop_subd_tree_node(node);
 #endif
 
+// Note: this kernel is specially called for all edges, including the old edges. 
 #if defined(_KERNEL_MULTICOMPILE__BUILD_SUBD_TREE_DOWNWARD__INIT)
     if (gl_GlobalInvocationID.x == 0u)
         temporal_record_counter(pc_obj_id_, pc_frame_id_) = 0u; 
 
+    wedge_id = gl_GlobalInvocationID.x; 
+    uint num_edges = pcs_edge_count_ + ssbo_dyn_mesh_counters_out_.num_edges; 
+    valid_thread = wedge_id < num_edges; 
+
     if (!valid_thread) return; 
-    // Point every mesh-edge to itself
+    // Point every edge to itself as 4 sub-nodes in the subd-tree
     uvec4 init_nodes_enc = uvec4(encode_loop_subd_tree_node_dw(LoopSubdEdgeTreeDwNode(wedge_id)));
     Store4(ssbo_subd_edge_tree_node_dw_, wedge_id, init_nodes_enc); 
+
+    // Point each edge to a null record
+    store_ssbo_edge_to_new_temporal_record_(wedge_id, PER_EDGE_TEMPORAL_REC_ID_NULL); 
+    store_ssbo_edge_to_old_temporal_record_(wedge_id, PER_EDGE_TEMPORAL_REC_ID_NULL); 
 #endif
 
 #if defined(_KERNEL_MULTICOMPILE__BUILD_SUBD_TREE_DOWNWARD__TRANSFER_FROM_UPWARD)
@@ -142,34 +161,13 @@ void main()
             );
     }
 
-    
-#define DRW_DEBUG_LINES 13u
-#if defined(DRW_DEBUG_LINES)
-    uint dbg_line_id = compact_general_dbg_lines(is_contour, gl_LocalInvocationID.x, 1u);
-    dbg_line_id += get_debug_line_offset(DBG_LINE_TYPE__GENERAL);
-    if (is_contour) {
-        // Generate debug lines ---
-        vec3 vpos_1 = ld_vpos(v1); 
-        vec3 vpos_3 = ld_vpos(v3); 
-
-        vec3 vpos_ws_0 = vpos_1;
-        vec3 vpos_ws_1 = vpos_3;
-        vec3 dvd_col = vec3(1.0f, .0f, 1.0f); 
-        DebugVertData dvd_0 = DebugVertData(vpos_ws_0.xyz, dvd_col, uvec4(0u)); 
-        DebugVertData dvd_1 = DebugVertData(vpos_ws_1.xyz, dvd_col, uvec4(0u)); 
-        store_debug_line_data(dbg_line_id, dvd_0, dvd_1); 
-        dbg_line_id++; 
-    }
-#endif
-
-
 	const uint groupId = gl_LocalInvocationID.x;
     uint rec_id = compact_temporal_contour_record(is_contour, groupId); 
     
     if (valid_thread && is_contour)
-        ssbo_contour_new_temporal_records_[rec_id] = wedge_id; // store temp data, will be replaced by final output
-    if (valid_thread)
-        store_ssbo_edge_to_new_temporal_record_(wedge_id, is_contour ? rec_id : TEMPORAL_REC_ID_NULL); 
+        ssbo_contour_temporal_records_new_[rec_id] = wedge_id; // store temp data, will be replaced by final output
+    if (valid_thread && is_contour)
+        store_ssbo_edge_to_new_temporal_record_(wedge_id, rec_id); 
 #endif
 
 
@@ -181,9 +179,10 @@ void main()
     uint rec_id = gl_GlobalInvocationID.x; 
     uint groupIdx = gl_LocalInvocationID.x; 
     uint num_recs = temporal_record_counter(pc_obj_id_, pc_frame_id_); 
+    uint num_history_recs = temporal_record_counter(pc_obj_id_, pc_frame_id_history_); 
     bool valid_thread = rec_id < num_recs; 
     
-    uint rec_wedge_id = ssbo_contour_new_temporal_records_[rec_id]; // load temp data 
+    uint rec_wedge_id = ssbo_contour_temporal_records_new_[rec_id]; // load temp data 
 
 
     // Contract subd tree nodes on the path to root, compress the path to form a code
@@ -205,8 +204,8 @@ void main()
     TemporalRecordFlags trf = init_temporal_record_flags(code_combine);
     if (valid_thread)
     {
-        store_ssbo_contour_temporal_new_records__flags(rec_id, trf); 
-        store_ssbo_contour_temporal_new_records__subd_root_edge_id(rec_id, curr_edge_id, num_recs); 
+        store_ssbo_contour_temporal_records_new__flags(rec_id, trf); 
+        store_ssbo_contour_temporal_records_new__subd_root_edge_id(rec_id, curr_edge_id, num_recs); 
     }
 
 
@@ -215,10 +214,14 @@ void main()
     mat4 view_to_world = ubo_view_matrices_.viewinv; // transform matrices, see "common_view_lib.glsl"
     vec3 cam_pos_ws = view_to_world[3].xyz; // see "#define cameraPos ViewMatrixInverse[3].xyz" 
     
-#define TRACE_STEPS 8u
+#define TRACE_STEPS 32u
 
     uint dbg_line_id = compact_general_dbg_lines(valid_thread, groupIdx, 2u * TRACE_STEPS);
     dbg_line_id += get_debug_line_offset(DBG_LINE_TYPE__GENERAL); 
+    uvec2 dbg_line_id_beg = uvec2(0u); 
+
+    bvec2 found_matched_history = bvec2(false); 
+    uvec2 num_steps_til_match = uvec2(0u); 
 
     if (valid_thread)
     {
@@ -231,19 +234,18 @@ void main()
                 vec3 vnor_v1v3[2] = { ld_vnor(v1), ld_vnor(v3) };
                 p_beg = calc_interp_contour_vert_pos(vnor_v1v3, vpos_v1v3, cam_pos_ws); 
             }
-            else p_beg = (vpos_v1v3[0] + vpos_v1v3[1]) * .5f; 
+            else p_beg = (vpos_v1v3[0] + vpos_v1v3[1]) * .5f;  
         }
-
 
         for (uint path = 0; path < 2; ++path)
         {
             uint beg_iface = path; // TODO: classify 2 probing paths(fwd/bck) from contour curve orientation
-            uint dbg_line_id_beg = dbg_line_id + TRACE_STEPS * path; 
+            dbg_line_id_beg[path] = dbg_line_id + TRACE_STEPS * path; 
             
             // inputs: rec_wedge_id, beg_iface, p_beg, dbg_line_id_beg, cam_pos_ws    
             AdjWedgeInfo wlk_awi = AdjWedgeInfo(rec_wedge_id, beg_iface); 
             vec3 p = p_beg;
-            uint curr_dbg_line_id = dbg_line_id_beg; 
+            uint curr_dbg_line_id = dbg_line_id_beg[path]; 
             //  q0     
             //  | \__  
             //  X    \_
@@ -257,6 +259,19 @@ void main()
             vec3 D_init; vec3 D_prev; 
             for (uint trace_iter = 0u; trace_iter < TRACE_STEPS; ++trace_iter)
             {
+                uint old_rec_id = load_ssbo_edge_to_old_temporal_record_(wlk_awi.wedge_id); 
+                if (old_rec_id != PER_EDGE_TEMPORAL_REC_ID_NULL)
+                { // try match to this edge
+                    TemporalRecordFlags trf = 
+                        load_ssbo_contour_temporal_records_old__flags(old_rec_id); 
+                    TemporalRecordContourData trcd = 
+                        load_ssbo_contour_temporal_records_old__contour_data(old_rec_id, num_history_recs); 
+                    bool matched = true; // match_history_rec(trf, trcd); 
+                    found_matched_history[path] = found_matched_history[path] || matched; 
+                    if (matched) num_steps_til_match[path] = trace_iter + 1; 
+                }
+
+
                 uvec3 q = uvec3( // winding: CCW
                     ssbo_edge_to_vert_[
                         wlk_awi.wedge_id*4u + mark__center_wedge_to_oppo_vert__at_face(wlk_awi.iface_adj)], // q0: oppo vert
@@ -369,10 +384,9 @@ void main()
                 vec4 vpos_ws_11 = vec4(p_next, 1.0f);
                 bool dead_end = !(walk_to_Q1 || walk_to_Q2 || walk_to_adj_face); 
                 vec3 dvd_col = vec3(float(trace_iter) / float(TRACE_STEPS).xx, 1.0); 
-                // if (dead_end) dvd_col = vec3(1.0f, .0f, .0f); 
                 DebugVertData dvd_10 = DebugVertData(vpos_ws_10.xyz, dvd_col, uvec4(0u)); 
-                DebugVertData dvd_11 = DebugVertData(vpos_ws_11.xyz, dvd_col, uvec4(0u)); 
-dvd_11 = dvd_10; 
+                DebugVertData dvd_11 = DebugVertData(vpos_ws_11.xyz, dvd_col, uvec4(0u));
+                if (found_matched_history[path]) dvd_11 = dvd_10; 
                 store_debug_line_data(curr_dbg_line_id, dvd_10, dvd_11); 
                 curr_dbg_line_id++; 
 
@@ -386,6 +400,34 @@ dvd_11 = dvd_10;
                 }
             }
         }
+    } /* if (valid_thread) */
+
+    if (valid_thread) {
+        for (uint path = 0; path < 2; ++path) 
+        {
+            bool rmv_curr_path = (false == found_matched_history[path]); 
+            if (all(found_matched_history))
+                rmv_curr_path = rmv_curr_path || (num_steps_til_match[path] > num_steps_til_match[path == 0u ? 1u : 0u]); 
+            
+            uint rmv_dbg_line_id = dbg_line_id_beg[path]; 
+            for (uint trace_iter = 0u; trace_iter < TRACE_STEPS; ++trace_iter)
+            {
+                bool rmv_curr_line = rmv_curr_path; 
+                if (rmv_curr_line) {
+                    DebugVertData dvd_rmv = DebugVertData(vec3(.0f), vec3(.0f), uvec4(0u)); 
+                    store_debug_line_data(rmv_dbg_line_id, dvd_rmv, dvd_rmv); 
+                }
+                
+                rmv_dbg_line_id++; 
+            }
+        }
+    }
+    
+    // Initialize temporal contour data 
+    // --------------------------------------------------------------------------
+    if (valid_thread) {
+        TemporalRecordContourData trcd = init_temporal_record_contour_data(); 
+        store_ssbo_contour_temporal_records_new__contour_data(rec_id, trcd, num_recs); 
     }
 #endif
 }
@@ -394,20 +436,8 @@ dvd_11 = dvd_10;
 
 
 
-// Note: fill dispatch args for old records
+
 #if defined(_KERNEL_MULTICOMPILE__RECONSTRUCT_HISTORY_TEMPORAL_RECORDS)
-/* Inputs: 
- * int pc_frame_id_history_
- * int pc_obj_id_
- * int pc_loop_subd_iters_
- * uint ssbo_contour_temporal_records_old_[]
- * uint ssbo_subd_edge_tree_node_dw_[]
- * uint ssbo_edge_flags_[]
- * 
- * ssbo_dbg_lines
- * ssbo_vbo
- * ssbo_edge_to_vert_
-*/
 void ld_edge_vpos(uint edge_id, out vec3 vpos_1, out vec3 vpos_3)
 {
     // Generate debug lines ---
@@ -418,19 +448,13 @@ void ld_edge_vpos(uint edge_id, out vec3 vpos_1, out vec3 vpos_3)
 }
 void main()
 {
-    uint rec_id = gl_GlobalInvocationID.x; 
+    uint rec_id = gl_GlobalInvocationID.x;  // history record index
     uint groupIdx = gl_LocalInvocationID.x; 
     uint num_recs = temporal_record_counter(pc_obj_id_, pc_frame_id_history_); 
     bool valid_thread = rec_id < num_recs;
 
-    TemporalRecordFlags trf = load_ssbo_contour_temporal_old_records__flags(rec_id); 
-    uint base_edge_id = load_ssbo_contour_temporal_old_records__subd_root_edge_id(rec_id, num_recs); 
-    
-#define DRW_DEBUG_LINES 13u
-#if defined(DRW_DEBUG_LINES)
-    uint dbg_line_id = compact_general_dbg_lines(valid_thread, groupIdx, 1u);
-    dbg_line_id += get_debug_line_offset(DBG_LINE_TYPE__GENERAL); 
-#endif
+    TemporalRecordFlags trf = load_ssbo_contour_temporal_records_old__flags(rec_id); 
+    uint base_edge_id = load_ssbo_contour_temporal_records_old__subd_root_edge_id(rec_id, num_recs); 
 
     uint tree_code_chain = trf.subd_tree_code_chain; 
     uint par_edge_id = base_edge_id; 
@@ -450,15 +474,22 @@ void main()
     }
 
     EdgeFlags ef = load_edge_flags(par_edge_id); 
-    hit_leaf_node = hit_leaf_node && valid_thread && !(/* ef.del_by_split ||  */ef.dupli); 
+    hit_leaf_node = hit_leaf_node && valid_thread && !(ef.del_by_split || ef.dupli); 
  
+
+#define DRW_DEBUG_LINES 1u
+#if defined(DRW_DEBUG_LINES)
+    uint dbg_line_id = compact_general_dbg_lines(hit_leaf_node, groupIdx, 1u);
+    dbg_line_id += get_debug_line_offset(DBG_LINE_TYPE__GENERAL); 
+#endif
 
     if (hit_leaf_node)
     {
+        store_ssbo_edge_to_old_temporal_record_(par_edge_id, rec_id); 
+
 #if defined(DRW_DEBUG_LINES)
         uint dbg_edge_id = par_edge_id; 
         uint dbg_line_id = dbg_line_id; 
-        // for (uint i = 0; i < 4; ++i)
         {
             uint v1 = ssbo_edge_to_vert_[dbg_edge_id * 4u + 1u]; 
             vec3 vpos_1 = ld_vpos(v1); 
@@ -469,7 +500,8 @@ void main()
             vec3 vpos_ws_1 = vpos_3;
             vec3 dvd_col = vec3(1.0f, 1.0f, 1.0f); 
             DebugVertData dvd_0 = DebugVertData(vpos_ws_0.xyz, dvd_col, uvec4(0u)); 
-            DebugVertData dvd_1 = DebugVertData(vpos_ws_1.xyz, dvd_col, uvec4(0u)); 
+            DebugVertData dvd_1 = DebugVertData(vpos_ws_1.xyz, dvd_col, uvec4(0u));
+
             store_debug_line_data(dbg_line_id, dvd_0, dvd_1); 
             dbg_line_id++; 
         }
@@ -484,3 +516,75 @@ void main()
 
 
 
+
+
+
+#if defined(_KERNEL_MULTICOMPILE__RECORD_TEMPORAL_CONTOUR_DATA)
+void main()
+{
+    const uint idx = gl_GlobalInvocationID.x; 
+    uint groupIdx = gl_LocalInvocationID.x; 
+	
+    const uint contour_id = idx; 
+	const uint num_contours = ssbo_bnpr_mesh_pool_counters_.num_contour_verts; 
+	bool valid_thread = contour_id < num_contours; 
+
+    uint rec_id = ssbo_contour_snake_to_temporal_record_[contour_id]; 
+    if (rec_id == PER_CONTOUR_TEMPORAL_REC_ID_NULL) valid_thread = false; 
+    
+    ContourFlags cf = load_contour_flags(contour_id);
+    ContourCurveTopo cct = load_contour_curve_topo(contour_id, cf);
+    uint curve_rank = ssbo_contour_snake_rank_[contour_id]; 
+    uint seg_rank = ssbo_contour_snake_seg_rank_[contour_id]; 
+    uint seg_len = ssbo_contour_snake_seg_len_[contour_id]; 
+    uint seg_head_id = move_contour_id_along_loop(cct, contour_id, -float(seg_len)); 
+
+    TemporalRecordContourData trcd; 
+    trcd.curve_key  = cct.head_id & 0x00ffffffu; // 24 bits  
+    trcd.seg_key    = seg_head_id & 0x00ffffffu;
+    trcd.curve_rank = curve_rank & 0x00ffffffu;
+    trcd.seg_rank   = seg_rank & 0x00ffffffu;
+    trcd.cf         = cf;
+    
+    if (valid_thread) {
+        // Inject contour data to record
+        uint num_recs = temporal_record_counter(pc_obj_id_, pc_frame_id_); 
+        store_ssbo_contour_temporal_records_new__contour_data(rec_id, trcd, num_recs); 
+        // // and mark it as valid
+        TemporalRecordFlags trf = load_ssbo_contour_temporal_records_new__flags(rec_id); 
+        trf.valid_contour_data = true; 
+        store_ssbo_contour_temporal_records_new__flags(rec_id, trf); 
+    }
+
+#if defined(DRW_DEBUG_LINES)
+#undef DRW_DEBUG_LINES
+#endif
+// #define DRW_DEBUG_LINES 1u
+#if defined(DRW_DEBUG_LINES)
+    uint dbg_line_id = compact_general_dbg_lines(valid_thread, groupIdx, 1u);
+    dbg_line_id += get_debug_line_offset(DBG_LINE_TYPE__GENERAL); 
+    
+    // TODO: encapsulate this
+	uint next_contour_id = move_contour_id_along_loop(cct, contour_id, 1.0f); 
+	bool non_looped_curve_tail = (cct.tail_id == contour_id) && (!cf.looped_curve); 
+	vec3 vpos_0, vpos_1;
+	{ // read vertex pos
+		uvec3 vpos_0_enc, vpos_1_enc;
+		Load3(ssbo_contour_snake_vpos_, contour_id,    	vpos_0_enc);
+		Load3(ssbo_contour_snake_vpos_, next_contour_id, vpos_1_enc);
+		vpos_0 = uintBitsToFloat(vpos_0_enc);
+		vpos_1 = uintBitsToFloat(vpos_1_enc);
+	}
+
+    if (valid_thread) {
+        vec3 vpos_ws_0 = vpos_0;
+        vec3 vpos_ws_1 = vpos_1;
+        vec3 dvd_col = vec3(1.0f, 1.0f, 1.0f); 
+        DebugVertData dvd_0 = DebugVertData(vpos_ws_0.xyz, dvd_col, uvec4(0u)); 
+        DebugVertData dvd_1 = DebugVertData(vpos_ws_1.xyz, dvd_col, uvec4(0u));
+        store_debug_line_data(dbg_line_id, dvd_0, dvd_1); 
+        dbg_line_id++; 
+    }
+#endif
+}
+#endif

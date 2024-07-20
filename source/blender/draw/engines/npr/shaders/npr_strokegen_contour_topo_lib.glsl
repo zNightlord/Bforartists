@@ -1,3 +1,8 @@
+
+
+#pragma BLENDER_REQUIRE(npr_strokegen_encode_lib.glsl)
+
+
 #ifndef BNPR_CONTOUR_TOPO__INCLUDED
 #define BNPR_CONTOUR_TOPO__INCLUDED
 
@@ -415,8 +420,10 @@ bool is_2d_sample_curve_looped(bool contour_looped, bool contour_crve_clipped, b
 
 
 
-
-
+#if defined(_KERNEL_MULTICOMPILE__CALC_TEMPORAL_CONTOUR_RECORDS__MAIN)
+ // reuse ssbo slots
+#define ssbo_contour_temporal_records_old_ ssbo_selected_edge_to_edge_
+#endif
 
 #define MAX_TEMPORAL_FRAMES 2u 			 // Match to MAX_TEMPORAL_FRAMES 		  in bnpr_defines.hh
 #define MAX_TEMPORAL_TRACKED_OBJECTS 64u // Match to MAX_TEMPORAL_TRACKED_OBJECTS in bnpr_defines.hh
@@ -428,27 +435,37 @@ bool is_2d_sample_curve_looped(bool contour_looped, bool contour_crve_clipped, b
 struct TemporalRecordFlags
 {
 	uint subd_tree_code_chain; // 9 bits = 3 bits x 3 subd levels 
+	bool valid_contour_data; 
 }; 
 uint encode_temporal_record_flags(TemporalRecordFlags trf)
 {
 	uint enc = 0u; 
 	enc <<= 9u; 
 	enc |= (trf.subd_tree_code_chain & 0x01ffu); 
+	enc <<= 1u; 
+	enc |= uint(trf.valid_contour_data); 
+
 	return enc; 
 }
 TemporalRecordFlags decode_temporal_record_flags(uint enc)
 {
 	TemporalRecordFlags trf; 
+	
+	trf.valid_contour_data = (1u == (enc & 1u)); 
+	enc >>= 1u; 
 	trf.subd_tree_code_chain = enc & 0x01ffu; 
 	enc >>= 9u; 
+
 	return trf; 
 }
 TemporalRecordFlags init_temporal_record_flags(uint subd_code_chain)
 {
 	TemporalRecordFlags trf; 
 	trf.subd_tree_code_chain = subd_code_chain; 
+	trf.valid_contour_data = false; 
 	return trf; 
 }
+
 void append_subd_tree_node_to_code(uint tree_code, inout uint subd_tree_code_chain)
 { // Traverse tree upwards and concatenate node code, 3 bits each level
 	subd_tree_code_chain <<= 3u; 
@@ -462,39 +479,41 @@ void pop_subd_tree_code_chain(inout uint subd_tree_code_chain, out uint tree_cod
 }
 
 
-// Temporal Recode - Flags
+// Temporal Record - Flags | offset stride 0 
+// ------------------------------------------------
 #if defined(USE_CONTOUR_TEMPORAL_RECORD_BUFFER_NEW)
-void store_ssbo_contour_temporal_new_records__flags(uint enc_id, TemporalRecordFlags flags)
+void store_ssbo_contour_temporal_records_new__flags(uint enc_id, TemporalRecordFlags flags)
 {
-	ssbo_contour_new_temporal_records_[enc_id] = encode_temporal_record_flags(flags);  
+	ssbo_contour_temporal_records_new_[enc_id] = encode_temporal_record_flags(flags);  
 }
-TemporalRecordFlags load_ssbo_contour_temporal_new_records__flags(uint enc_id)
+TemporalRecordFlags load_ssbo_contour_temporal_records_new__flags(uint enc_id)
 {
-	return decode_temporal_record_flags(ssbo_contour_new_temporal_records_[enc_id]); 
+	return decode_temporal_record_flags(ssbo_contour_temporal_records_new_[enc_id]); 
 }
 #endif
 #if defined(USE_CONTOUR_TEMPORAL_RECORD_BUFFER_OLD)
-TemporalRecordFlags load_ssbo_contour_temporal_old_records__flags(uint enc_id)
+TemporalRecordFlags load_ssbo_contour_temporal_records_old__flags(uint enc_id)
 {
 	return decode_temporal_record_flags(ssbo_contour_temporal_records_old_[enc_id]); 
 }
 #endif
 
-// Temporal Record - Base Edge Id
+// Temporal Record - Base Edge Id | offset stride 1
+// ------------------------------------------------
 #if defined(USE_CONTOUR_TEMPORAL_RECORD_BUFFER_NEW)
-void store_ssbo_contour_temporal_new_records__subd_root_edge_id(uint enc_id, uint root_edge_id, uint num_recs)
+void store_ssbo_contour_temporal_records_new__subd_root_edge_id(uint enc_id, uint root_edge_id, uint num_recs)
 {
 	uint subbuff_offset = num_recs * 1u; 
-	ssbo_contour_new_temporal_records_[subbuff_offset + enc_id] = root_edge_id; 
+	ssbo_contour_temporal_records_new_[subbuff_offset + enc_id] = root_edge_id; 
 }
-uint load_ssbo_contour_temporal_new_records__subd_root_edge_id(uint enc_id, uint num_recs)
+uint load_ssbo_contour_temporal_records_new__subd_root_edge_id(uint enc_id, uint num_recs)
 {
 	uint subbuff_offset = num_recs * 1u; 
-	return ssbo_contour_new_temporal_records_[subbuff_offset + enc_id]; 
+	return ssbo_contour_temporal_records_new_[subbuff_offset + enc_id]; 
 }
 #endif
 #if defined(USE_CONTOUR_TEMPORAL_RECORD_BUFFER_OLD)
-uint load_ssbo_contour_temporal_old_records__subd_root_edge_id(uint enc_id, uint num_recs)
+uint load_ssbo_contour_temporal_records_old__subd_root_edge_id(uint enc_id, uint num_recs)
 {
 	uint subbuff_offset = num_recs * 1u; 
 	return ssbo_contour_temporal_records_old_[subbuff_offset + enc_id]; 
@@ -502,10 +521,94 @@ uint load_ssbo_contour_temporal_old_records__subd_root_edge_id(uint enc_id, uint
 #endif
 
 
+// Temporal Record - Contour Data | offset stride 2
+struct TemporalRecordContourData
+{
+	uint curve_key; 	 // 24 bits
+	uint seg_key; 		 // 24 bits 
+	uint curve_rank; 	 // 24 bits
+	uint seg_rank; 		 // 24 bits
+
+	ContourFlags cf; 	 // 32 bits
+}; 
+TemporalRecordContourData init_temporal_record_contour_data()
+{
+	TemporalRecordContourData trcd; 
+	trcd.curve_key = trcd.seg_key = trcd.curve_rank = trcd.seg_rank = 0u; 
+	trcd.cf = init_contour_flags(false); 
+	return trcd; 
+}
+void encode_temporal_record_contour_data(TemporalRecordContourData trcd, out uvec4 enc_0)
+{
+	enc_0.xyz = pack_u24_x4(
+		uvec4(trcd.curve_key, trcd.seg_key, trcd.curve_rank, trcd.seg_rank)
+	); 
+	enc_0.w = encode_contour_flags(trcd.cf); 
+} 
+TemporalRecordContourData decode_temporal_record_contour_data(uvec4 enc_0)
+{
+	TemporalRecordContourData trcd; 
+
+	uvec4 dec_0_xyz = unpack_u24_x4(enc_0.xyz); 
+	trcd.curve_key = dec_0_xyz.x; 
+	trcd.seg_key = dec_0_xyz.y; 
+	trcd.curve_rank = dec_0_xyz.z; 
+	trcd.seg_rank = dec_0_xyz.w; 
+
+	trcd.cf = decode_contour_flags(enc_0.w); 
+
+	return trcd; 
+}
+
+#if defined(USE_CONTOUR_TEMPORAL_RECORD_BUFFER_NEW)
+void store_ssbo_contour_temporal_records_new__contour_data(uint rec_id, TemporalRecordContourData trcd, uint num_recs)
+{
+	uint subbuff_offset = num_recs * 2u; 
+	uvec4 enc;
+	encode_temporal_record_contour_data(trcd, /*out*/enc); 
+	ssbo_contour_temporal_records_new_[subbuff_offset + rec_id * 4u + 0u] = enc[0]; 
+	ssbo_contour_temporal_records_new_[subbuff_offset + rec_id * 4u + 1u] = enc[1]; 
+	ssbo_contour_temporal_records_new_[subbuff_offset + rec_id * 4u + 2u] = enc[2]; 
+	ssbo_contour_temporal_records_new_[subbuff_offset + rec_id * 4u + 3u] = enc[3]; 
+}
+TemporalRecordContourData load_ssbo_contour_temporal_records_new__contour_data(uint rec_id, uint num_recs)
+{
+	uint subbuff_offset = num_recs * 2u; 
+	uvec4 enc; 
+	enc[0] = ssbo_contour_temporal_records_new_[subbuff_offset + rec_id * 4u + 0u]; 
+	enc[1] = ssbo_contour_temporal_records_new_[subbuff_offset + rec_id * 4u + 1u]; 
+	enc[2] = ssbo_contour_temporal_records_new_[subbuff_offset + rec_id * 4u + 2u]; 
+	enc[3] = ssbo_contour_temporal_records_new_[subbuff_offset + rec_id * 4u + 3u]; 
+	return decode_temporal_record_contour_data(enc); 
+}
+#endif
+#if defined(USE_CONTOUR_TEMPORAL_RECORD_BUFFER_OLD)
+TemporalRecordContourData load_ssbo_contour_temporal_records_old__contour_data(uint rec_id, uint num_recs)
+{
+	uint subbuff_offset = num_recs * 2u; 
+	uvec4 enc; 
+	enc[0] = ssbo_contour_temporal_records_old_[subbuff_offset + rec_id * 4u + 0u]; 
+	enc[1] = ssbo_contour_temporal_records_old_[subbuff_offset + rec_id * 4u + 1u]; 
+	enc[2] = ssbo_contour_temporal_records_old_[subbuff_offset + rec_id * 4u + 2u]; 
+	enc[3] = ssbo_contour_temporal_records_old_[subbuff_offset + rec_id * 4u + 3u]; 
+	return decode_temporal_record_contour_data(enc); 
+}
+#endif
+
+
+// TODO: put the actual logic here, for now only for debug purposes
+bool match_history_rec(
+	TemporalRecordFlags rec_flags, TemporalRecordContourData rec_contour_data
+	/* float curr_cusp_func */)
+{
+	return rec_flags.valid_contour_data; 
+}
+
+
 
 /* Each edge holds a pointer to its records, 
  * the ptr is null if it wasn't a contour */
-#define TEMPORAL_REC_ID_NULL 0xffffffffu
+#define PER_EDGE_TEMPORAL_REC_ID_NULL 0xffffffffu
 #if defined(USE_EDGE_TO_TEMPORAL_RECORD_BUFFER)
 void store_ssbo_edge_to_new_temporal_record_(uint wedge_id, uint rec_id)
 { // not using interleaved here for easier debugging
@@ -525,6 +628,7 @@ uint load_ssbo_edge_to_old_temporal_record_(uint wedge_id)
 }
 #endif
 
+#define PER_CONTOUR_TEMPORAL_REC_ID_NULL 0xffffffffu
 
 
 #endif
