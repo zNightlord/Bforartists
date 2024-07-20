@@ -42,4 +42,5 @@ jobs:
       uses: actions/upload-artifact@v4
       if: ${{ failure() && steps.upload.conclusion == 'failure' }}
       with:
-        name: D:/a/Bforartists/Bforartists/bfa_build_windows_x64_vc*/bin
+        name: Bforartists-Release-${{ runner.os }}
+        path: D:/a/Bforartists/Bforartists/bfa_build_windows_x64_vc*/bin
