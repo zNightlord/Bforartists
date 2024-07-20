@@ -35,6 +35,7 @@ jobs:
       id: upload
       uses: actions/upload-artifact@v4
       with:
+        if-no-files-found: error
         name: Bforartists-Release-${{ runner.os }}
         path: C:/Users/runneradmin/bforartistsrepo/bfa_build_windows_*_x64_vc*/bin
     
