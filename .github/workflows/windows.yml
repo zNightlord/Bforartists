@@ -1,8 +1,8 @@
 name: Windows
 
 on:
-  #push:
-    #branches: [ master ]
+  push:
+    branches: [ workflow-fix ] # ignore this for testing purposes
   schedule:
     - cron: 0 0 * * 1
   pull_request:
