@@ -3,10 +3,10 @@ name: Windows
 on:
   push:
     branches: [ workflow-fix ] # ignore this for testing purposes
-  schedule:
-    - cron: 0 0 * * 1
-  pull_request:
-    branches: [ master ]
+  # schedule:
+  #   - cron: 0 0 * * 1
+  # pull_request:
+  #   branches: [ master ]
   workflow_dispatch:
 
 permissions: {}
@@ -24,14 +24,22 @@ jobs:
         git clone https://github.com/Bforartists/Bforartists
         cd Bforartists
         python ./build_files/utils/make_update.py
-        make
+        make lite
         dir
         cd ..
         dir
+        
 
 
     - name: Upload Build
+      id: upload
       uses: actions/upload-artifact@v4
       with:
         name: Bforartists-Release-${{ runner.os }}
-        path: ~/*/bforartistsrepo/bfa_build_windows_Release_x64_vc*_Release/bin
+        path: C:/Users/runneradmin/bforartistsrepo/bfa_build_windows_*_x64_vc*/bin
+    
+    - name: Retry Upload Build
+      uses: actions/upload-artifact@v4
+      if: ${{ failure() && steps.upload.conclusion == 'failure' }}
+      with:
+        name: D:/a/Bforartists/Bforartists/bfa_build_windows_x64_vc*/bin
