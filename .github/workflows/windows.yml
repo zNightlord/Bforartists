@@ -27,6 +27,7 @@ jobs:
         make lite
         dir
         cd ..
+        dir
 
 
     - name: Upload Build
@@ -35,5 +36,5 @@ jobs:
         name: Bforartists-Release-${{ runner.os }}
         path: |
           C:/Users/runneradmin/bforartistsrepo/bfa_build_windows_*_x64_vc*/bin
-          D:/a/Bforartists/Bforartists/bfa_build_windows_*_x64_vc*/bin/
+          D:/a/Bforartists/Bforartists/bfa_build_windows_*_x64_vc*/bin
         
