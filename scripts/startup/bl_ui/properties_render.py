@@ -1374,7 +1374,10 @@ class RENDER_PT_npr_test(RenderButtonsPanel, Panel):
         col.prop(props, "npr_test_val_21", text="Enable Cusp Denoise")
         col.prop(props, "npr_test_val_22", text="Visibility Threshold")
         col.prop(props, "npr_test_val_23", text="Camera Rotation")
-
+        col.prop(props, "npr_test_val_24", text="Dbg Trace Line Type")
+        col.prop(props, "npr_test_val_25", text="")
+        col.prop(props, "npr_test_val_26", text="")
+        col.prop(props, "npr_test_val_27", text="")
 
 
 classes = (

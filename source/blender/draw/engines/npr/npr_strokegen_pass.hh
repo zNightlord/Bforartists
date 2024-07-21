@@ -223,8 +223,10 @@ public:
     bool subdiv_use_crease;
 
     bool denoise_cusp_segmentation;
-    bool cusp_eval_opti; 
-    float visibility_thresh; 
+    bool cusp_eval_opti;
+    float visibility_thresh;
+
+    int dbg_matching_line_mode; 
   } meshing_params;
 
 

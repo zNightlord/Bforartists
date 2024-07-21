@@ -1937,7 +1937,11 @@ typedef struct SceneNPR {
   float npr_test_val_20; 
   float npr_test_val_21; 
   float npr_test_val_22; 
-  float npr_test_val_23; 
+  float npr_test_val_23;
+  float npr_test_val_24;
+  float npr_test_val_25;
+  float npr_test_val_26;
+  float npr_test_val_27;
 } SceneNPR;
 
 typedef struct SceneGpencil {

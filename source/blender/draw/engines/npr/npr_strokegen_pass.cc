@@ -180,7 +180,10 @@ void StrokeGenPassModule::on_begin_sync(int frame_counter)
 
     meshing_params.denoise_cusp_segmentation = .0f < scene_eval->npr.npr_test_val_21;
     meshing_params.visibility_thresh = scene_eval->npr.npr_test_val_22;
-    meshing_params.cusp_eval_opti = true; 
+    meshing_params.cusp_eval_opti = true;
+    // npr_test_val_23 is used for camera rotation
+
+    meshing_params.dbg_matching_line_mode = scene_eval->npr.npr_test_val_24; 
   }
 
 
@@ -431,7 +434,8 @@ void StrokeGenPassModule::on_end_sync()
       sub.bind_ssbo(ssbo_offset_calc_temporal_rec + 2, buffers_.ssbo_edge_to_edges_);
       sub.bind_ssbo(ssbo_offset_calc_temporal_rec + 3, buffers_.ssbo_dbg_lines_);
       sub.push_constant("pcs_loop_subd_iters_", meshing_params.iters_test_subdiv);
-      sub.push_constant("pc_frame_id_history_", strokegen_frame_id_prev(strokegen_frame_id)); 
+      sub.push_constant("pc_frame_id_history_", strokegen_frame_id_prev(strokegen_frame_id));
+      sub.push_constant("pc_dbg_matching_line_mode_", meshing_params.dbg_matching_line_mode); 
       
       sub.dispatch(buffers_.ssbo_bnpr_temporal_record_dispatch_args_);
       sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);

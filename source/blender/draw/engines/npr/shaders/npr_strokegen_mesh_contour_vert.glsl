@@ -100,7 +100,7 @@ void main()
     /* Apply depth bias to curve breaks,
      * which can happen due to Z-fighting artifacts. */
     /* TODO: Further imporve this */
-    gl_Position.z -= 1.0e-4 * whclip;
+    gl_Position.z -= 4.0e-4 * whclip;
     gl_Position.xy += edgenor_uv * whclip * pcs_screen_size_inv_ * 1.0f;
 	vec2 edge_dir_ext = (vid % 2u == 1u) ? edgedir_uv : -edgedir_uv;
 	gl_Position.xy += edge_dir_ext * whclip * pcs_screen_size_inv_ * 1.5f;

@@ -289,6 +289,10 @@
     .npr_test_val_21 = .0f, \
     .npr_test_val_22 = .0f, \
     .npr_test_val_23 = .0f, \
+    .npr_test_val_24 = .0f, \
+    .npr_test_val_25 = .0f, \
+    .npr_test_val_26 = .0f, \
+    .npr_test_val_27 = .0f, \
   }
 /* Remember aligning to 16 bytes*/
 

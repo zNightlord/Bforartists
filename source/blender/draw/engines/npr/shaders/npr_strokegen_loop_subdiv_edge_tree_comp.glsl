@@ -215,12 +215,13 @@ void main()
     mat4 view_to_world = ubo_view_matrices_.viewinv; // transform matrices, see "common_view_lib.glsl"
     vec3 cam_pos_ws = view_to_world[3].xyz; // see "#define cameraPos ViewMatrixInverse[3].xyz" 
     
-#define TRACE_STEPS 0u // 16u
-#define NUM_EXTRA_DBG_LINES 1u
+#define TRACE_STEPS 32u
 
-    uint dbg_line_id = compact_general_dbg_lines(valid_thread, groupIdx, NUM_EXTRA_DBG_LINES + 2u * TRACE_STEPS);
+    uint dbg_line_id = compact_general_dbg_lines(valid_thread, groupIdx, 2u * TRACE_STEPS);
     dbg_line_id += get_debug_line_offset(DBG_LINE_TYPE__GENERAL); 
     uvec2 dbg_line_id_beg = uvec2(0u); 
+    bool dbg_show_both_paths_if_matched = (pc_dbg_matching_line_mode_ & 1u) != 0u;
+    bool dbg_show_full_path = (pc_dbg_matching_line_mode_ & 2u) != 0u;
 
     TemporalRecordContourData matched_trcd[2]; 
     bvec2 found_matched_history = bvec2(false); 
@@ -238,27 +239,12 @@ void main()
                 p_beg = calc_interp_contour_vert_pos(vnor_v1v3, vpos_v1v3, cam_pos_ws); 
             }
             else p_beg = (vpos_v1v3[0] + vpos_v1v3[1]) * .5f;  
-
-            uint ex_dbg_line_id = dbg_line_id; 
-            {
-                v1 = ssbo_edge_to_vert_[curr_edge_id*4u + 1u]; 
-                v3 = ssbo_edge_to_vert_[curr_edge_id*4u + 3u]; 
-                vpos_v1v3[0] = ld_vpos(v1); 
-                vpos_v1v3[1] = ld_vpos(v3); 
-
-                vec3 dvd_col = vec3(1, 0, 1); 
-                DebugVertData dvd_00 = DebugVertData(vpos_v1v3[0], dvd_col, uvec4(0u)); 
-                DebugVertData dvd_01 = DebugVertData(vpos_v1v3[1], dvd_col, uvec4(0u)); 
-dvd_01 = dvd_00; 
-                store_debug_line_data(ex_dbg_line_id, dvd_00, dvd_01); 
-                ex_dbg_line_id++;
-            }
         }
 
         for (uint path = 0; path < 2; ++path)
         {
             uint beg_iface = path; // TODO: classify 2 probing paths(fwd/bck) from contour curve orientation
-            dbg_line_id_beg[path] = dbg_line_id + NUM_EXTRA_DBG_LINES + TRACE_STEPS * path; 
+            dbg_line_id_beg[path] = dbg_line_id + TRACE_STEPS * path; 
             
             // inputs: rec_wedge_id, beg_iface, p_beg, dbg_line_id_beg, cam_pos_ws    
             AdjWedgeInfo wlk_awi = AdjWedgeInfo(rec_wedge_id, beg_iface); 
@@ -390,10 +376,10 @@ dvd_01 = dvd_00;
                 #undef u_p
                 #undef v_p
                 
-                // Find the next iface & edges
+                // Determine the next iface & edge
                 AdjWedgeInfo wlk_next_wedge = wlk_awi; 
                 if (walk_to_Q1 || walk_to_Q2)
-                { // walk to new edges Q1 or Q2
+                { // walk to new edge - either Q1 or Q2
                     uint wlk_next_iwedge = walk_to_Q1 ? ibwedges_Q1Q2.x : ibwedges_Q1Q2.y; 
                     wlk_next_wedge = decode_adj_wedge_info(
                         ssbo_edge_to_edges_[wlk_awi.wedge_id*4u + wlk_next_iwedge]
@@ -411,7 +397,7 @@ dvd_01 = dvd_00;
                 vec3 dvd_col = vec3(float(trace_iter) / float(TRACE_STEPS).xx, 1.0); 
                 DebugVertData dvd_10 = DebugVertData(vpos_ws_10.xyz, dvd_col, uvec4(0u)); 
                 DebugVertData dvd_11 = DebugVertData(vpos_ws_11.xyz, dvd_col, uvec4(0u));
-                if (found_matched_history[path]) dvd_11 = dvd_10; 
+                if (found_matched_history[path] && !dbg_show_full_path) dvd_11 = dvd_10; 
                 store_debug_line_data(curr_dbg_line_id, dvd_10, dvd_11); 
                 curr_dbg_line_id++; 
 
@@ -438,7 +424,7 @@ dvd_01 = dvd_00;
         for (uint path = 0; path < 2; ++path) 
         {
             bool rmv_curr_path = (false == found_matched_history[path]); 
-            if (all(found_matched_history))
+            if (all(found_matched_history) && !dbg_show_both_paths_if_matched)
                 rmv_curr_path = rmv_curr_path || (num_steps_til_match[path] > num_steps_til_match[path == 0u ? 1u : 0u]); 
             
             uint update_line_id = dbg_line_id_beg[path]; 
@@ -450,7 +436,7 @@ dvd_01 = dvd_00;
                     store_debug_line_data(update_line_id, dvd_rmv, dvd_rmv); 
                 }else{
                     // update the color of the line
-                    uint seg_key = matched_trcd[best_matched_path].seg_key; 
+                    uint seg_key = matched_trcd[path].seg_key; 
                     vec3 dvd_col = rand_col_rgb(seg_key / 8, seg_key / 8); 
                     store_debug_line_color(update_line_id, dvd_col);
                 }
