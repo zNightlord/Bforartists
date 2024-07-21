@@ -2,6 +2,7 @@
 #pragma BLENDER_REQUIRE(npr_strokegen_compaction_lib.glsl)
 #pragma BLENDER_REQUIRE(npr_strokegen_topo_lib.glsl)
 #pragma BLENDER_REQUIRE(npr_strokegen_geom_lib.glsl)
+#pragma BLENDER_REQUIRE(npr_strokegen_debug_view_lib.glsl)
 
 
 

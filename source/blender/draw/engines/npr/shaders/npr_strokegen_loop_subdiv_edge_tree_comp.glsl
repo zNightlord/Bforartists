@@ -5,6 +5,7 @@
 #pragma BLENDER_REQUIRE(npr_strokegen_contour_geom_lib.glsl)
 #pragma BLENDER_REQUIRE(npr_strokegen_loop_subdiv_edge_tree_lib.glsl)
 #pragma BLENDER_REQUIRE(npr_strokegen_compaction_lib.glsl)
+#pragma BLENDER_REQUIRE(npr_strokegen_debug_view_lib.glsl)
 
 
 #if defined(_KERNEL_MULTICOMPILE__CALC_SUBD_TREE_NODES__PER_EDGE)
@@ -222,7 +223,8 @@ void main()
 
     bvec2 found_matched_history = bvec2(false); 
     uvec2 num_steps_til_match = uvec2(0u); 
-
+    uvec2 matched_rec_id = uvec2(PER_EDGE_TEMPORAL_REC_ID_NULL); 
+    TemporalRecordContourData matched_trcd[2]; 
     if (valid_thread)
     {
         vec3 p_beg; { // Init as interpolated contour point
@@ -266,9 +268,16 @@ void main()
                         load_ssbo_contour_temporal_records_old__flags(old_rec_id); 
                     TemporalRecordContourData trcd = 
                         load_ssbo_contour_temporal_records_old__contour_data(old_rec_id, num_history_recs); 
+                    
                     bool matched = true; // match_history_rec(trf, trcd); 
+                    if (matched) 
+                    { // for now we only use the first match
+                      // in the future we want to find the best match
+                        num_steps_til_match[path] = trace_iter + 1; 
+                        matched_rec_id[path] = old_rec_id;
+                        matched_trcd[path] = trcd; 
+                    }
                     found_matched_history[path] = found_matched_history[path] || matched; 
-                    if (matched) num_steps_til_match[path] = trace_iter + 1; 
                 }
 
 
@@ -403,22 +412,34 @@ void main()
     } /* if (valid_thread) */
 
     if (valid_thread) {
+        // find the best matched history record from both search paths 
+        uint best_matched_path = 0u; 
+        if (found_matched_history[0] != found_matched_history[1]) 
+            best_matched_path = found_matched_history[0] ? 0 : 1;
+        else if (found_matched_history[0] && found_matched_history[1]) 
+            best_matched_path = num_steps_til_match[0] < num_steps_til_match[1] ? 0 : 1;
+
         for (uint path = 0; path < 2; ++path) 
         {
             bool rmv_curr_path = (false == found_matched_history[path]); 
             if (all(found_matched_history))
                 rmv_curr_path = rmv_curr_path || (num_steps_til_match[path] > num_steps_til_match[path == 0u ? 1u : 0u]); 
             
-            uint rmv_dbg_line_id = dbg_line_id_beg[path]; 
+            uint update_line_id = dbg_line_id_beg[path]; 
             for (uint trace_iter = 0u; trace_iter < TRACE_STEPS; ++trace_iter)
             {
                 bool rmv_curr_line = rmv_curr_path; 
                 if (rmv_curr_line) {
                     DebugVertData dvd_rmv = DebugVertData(vec3(.0f), vec3(.0f), uvec4(0u)); 
-                    store_debug_line_data(rmv_dbg_line_id, dvd_rmv, dvd_rmv); 
+                    store_debug_line_data(update_line_id, dvd_rmv, dvd_rmv); 
+                }else{
+                    // update the color of the line
+                    uint seg_key = matched_trcd[best_matched_path].seg_key; 
+                    vec3 dvd_col = rand_col_rgb(seg_key / 8, seg_key / 8); 
+                    store_debug_line_color(update_line_id, dvd_col);
                 }
                 
-                rmv_dbg_line_id++; 
+                update_line_id++; 
             }
         }
     }
@@ -489,16 +510,20 @@ void main()
 
 #if defined(DRW_DEBUG_LINES)
         uint dbg_edge_id = par_edge_id; 
+        uint v1 = ssbo_edge_to_vert_[dbg_edge_id * 4u + 1u]; 
+        vec3 vpos_1 = ld_vpos(v1); 
+        uint v3 = ssbo_edge_to_vert_[dbg_edge_id * 4u + 3u]; 
+        vec3 vpos_3 = ld_vpos(v3);
+
+        TemporalRecordContourData trcd = load_ssbo_contour_temporal_records_old__contour_data(rec_id, num_recs);
+
         uint dbg_line_id = dbg_line_id; 
         {
-            uint v1 = ssbo_edge_to_vert_[dbg_edge_id * 4u + 1u]; 
-            vec3 vpos_1 = ld_vpos(v1); 
-            uint v3 = ssbo_edge_to_vert_[dbg_edge_id * 4u + 3u]; 
-            vec3 vpos_3 = ld_vpos(v3); 
-
             vec3 vpos_ws_0 = vpos_1;
             vec3 vpos_ws_1 = vpos_3;
             vec3 dvd_col = vec3(1.0f, 1.0f, 1.0f); 
+            if (trf.valid_contour_data)
+                dvd_col = rand_col_rgb(trcd.seg_key / 8, trcd.seg_key / 8); 
             DebugVertData dvd_0 = DebugVertData(vpos_ws_0.xyz, dvd_col, uvec4(0u)); 
             DebugVertData dvd_1 = DebugVertData(vpos_ws_1.xyz, dvd_col, uvec4(0u));
 
@@ -541,16 +566,17 @@ void main()
 
     TemporalRecordContourData trcd; 
     trcd.curve_key  = cct.head_id & 0x00ffffffu; // 24 bits  
-    trcd.seg_key    = seg_head_id & 0x00ffffffu;
+    trcd.seg_key    = seg_len/* seg_head_id */ & 0x00ffffffu;
     trcd.curve_rank = curve_rank & 0x00ffffffu;
     trcd.seg_rank   = seg_rank & 0x00ffffffu;
     trcd.cf         = cf;
     
     if (valid_thread) {
         // Inject contour data to record
-        uint num_recs = temporal_record_counter(pc_obj_id_, pc_frame_id_); 
+        // TODO: use total count of records from all objects
+        uint num_recs = temporal_record_counter(/* pc_obj_id_ */0u, pc_frame_id_); 
         store_ssbo_contour_temporal_records_new__contour_data(rec_id, trcd, num_recs); 
-        // // and mark it as valid
+        // and mark it as valid
         TemporalRecordFlags trf = load_ssbo_contour_temporal_records_new__flags(rec_id); 
         trf.valid_contour_data = true; 
         store_ssbo_contour_temporal_records_new__flags(rec_id, trf); 
@@ -574,12 +600,15 @@ void main()
 		Load3(ssbo_contour_snake_vpos_, next_contour_id, vpos_1_enc);
 		vpos_0 = uintBitsToFloat(vpos_0_enc);
 		vpos_1 = uintBitsToFloat(vpos_1_enc);
+        if (cct.tail_id == contour_id && !cct.looped_curve) vpos_1 = vpos_0;
 	}
 
     if (valid_thread) {
         vec3 vpos_ws_0 = vpos_0;
         vec3 vpos_ws_1 = vpos_1;
-        vec3 dvd_col = vec3(1.0f, 1.0f, 1.0f); 
+        vec3 dvd_col = vec3(1.0f, .0f, .0f); 
+        uvec4 dvd_data = uvec4(0u);
+        dvd_data.a = rec_id; 
         DebugVertData dvd_0 = DebugVertData(vpos_ws_0.xyz, dvd_col, uvec4(0u)); 
         DebugVertData dvd_1 = DebugVertData(vpos_ws_1.xyz, dvd_col, uvec4(0u));
         store_debug_line_data(dbg_line_id, dvd_0, dvd_1); 

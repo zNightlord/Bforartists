@@ -1,6 +1,6 @@
 #pragma BLENDER_REQUIRE(npr_strokegen_geom_lib.glsl)
 #pragma BLENDER_REQUIRE(npr_strokegen_contour_topo_lib.glsl)
-
+#pragma BLENDER_REQUIRE(npr_strokegen_debug_view_lib.glsl)
 
 #ifndef NPR_STROKEGEN_FILL_INDIRECT_ARGS_INPUTS_LIB_H
 #define NPR_STROKEGEN_FILL_INDIRECT_ARGS_INPUTS_LIB_H

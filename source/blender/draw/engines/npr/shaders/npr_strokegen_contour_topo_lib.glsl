@@ -421,7 +421,7 @@ bool is_2d_sample_curve_looped(bool contour_looped, bool contour_crve_clipped, b
 
 
 #if defined(_KERNEL_MULTICOMPILE__CALC_TEMPORAL_CONTOUR_RECORDS__MAIN)
- // reuse ssbo slots
+// reuse ssbo slots
 #define ssbo_contour_temporal_records_old_ ssbo_selected_edge_to_edge_
 #endif
 

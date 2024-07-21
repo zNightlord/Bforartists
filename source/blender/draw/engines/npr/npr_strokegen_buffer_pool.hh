@@ -87,7 +87,7 @@ class GPUBufferPoolModule {
   SSBO_StrokeGenMeshBufPerVert<float, 3> ssbo_vnor_;                            // 96MB
   SSBO_StrokeGenMeshBufPerVert<uint, 2> ssbo_vcurv_max_;                        // 32MB
   SSBO_StrokeGenMeshBufPerEdge<uint, 1> ssbo_subd_edge_tree_node_up_;
-  /* SSBO_StrokeGenReusedLarge ssbo_subd_edge_tree_node_dw_dbg_; */
+  // SSBO_StrokeGenReusedLarge ssbo_subd_edge_tree_node_dw_dbg_; 
 
   SSBO_StrokeGenMeshBufPerSelectedEdge<uint, 1> ssbo_selected_edge_to_edge_;    // 32MB    
   SSBO_StrokeGenMeshBufPerSelectedVert<uint, 1> ssbo_selected_vert_to_vert_;    // 16MB    
@@ -110,7 +110,7 @@ class GPUBufferPoolModule {
   GPUStorageBuf* ssbo_contour_temporal_records_old_(int strokegen_frame_id) {
     return ssbo_contour_temporal_records_[strokegen_frame_id_prev(strokegen_frame_id) % MAX_TEMPORAL_FRAMES];
   }
-  SSBO_StrokeGenMeshBufPerContour<uint, 1> ssbo_contour_snake_to_temporal_record_;  
+  SSBO_StrokeGenMeshBufPerContour<uint, 1> ssbo_contour_snake_to_temporal_record_;
 
   // Reusable Large Buffers -------------------------------------------------------------
   // note: don't ssbo_mesh_buffer_reuse_0_

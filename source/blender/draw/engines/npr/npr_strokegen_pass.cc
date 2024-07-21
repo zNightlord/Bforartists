@@ -775,30 +775,30 @@ void StrokeGenPassModule::on_end_sync()
     }
     append_subpass_contour_segmentation();
 
+    int obj_beg = 0; // TODO: complete the logic for processing records for all objects
+    { // Record contour data to temporal buffer
+        auto& sub = pass_process_contours.sub("strokegen_record_temporal_contour_data");
+        sub.shader_set(shaders_.static_shader_get(RECORD_TEMPORAL_CONTOUR_DATA));
     
-    // { // Record contour data to temporal buffer
-    //     auto& sub = pass_process_contours.sub("strokegen_record_temporal_contour_data");
-    //     sub.shader_set(shaders_.static_shader_get(RECORD_TEMPORAL_CONTOUR_DATA));
-    //
-    //     sub.bind_ssbo(0, buffers_.ssbo_bnpr_mesh_pool_counters_); 
-    //     sub.bind_ssbo(1, buffers_.ssbo_temporal_record_counters_); 
-    //     sub.bind_ssbo(2, buffers_.ssbo_contour_temporal_records_new_(strokegen_frame_id)); 
-    //     sub.bind_ssbo(3, buffers_.ssbo_contour_snake_to_temporal_record_); 
-    //     sub.bind_ssbo(4, buffers_.ssbo_contour_snake_rank_); 
-    //     sub.bind_ssbo(5, buffers_.ssbo_contour_snake_list_len_); 
-    //     sub.bind_ssbo(6, buffers_.ssbo_contour_snake_list_head_); 
-    //     sub.bind_ssbo(7, buffers_.ssbo_contour_snake_flags_); 
-    //     sub.bind_ssbo(8, buffers_.ssbo_contour_snake_seg_rank_); 
-    //     sub.bind_ssbo(9, buffers_.ssbo_contour_snake_seg_len_); 
-    //     sub.bind_ssbo(10, buffers_.ssbo_contour_snake_vpos_); 
-    //     sub.bind_ssbo(11, buffers_.ssbo_dbg_lines_); 
-    //
-    //     sub.push_constant("pc_obj_id_", strokegen_obj_id); 
-    //     sub.push_constant("pc_frame_id_", strokegen_frame_id); 
-    //
-    //     sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_vert_dispatch_args_);
-    //     sub.barrier(GPU_BARRIER_SHADER_STORAGE);
-    // }
+        sub.bind_ssbo(0, buffers_.ssbo_bnpr_mesh_pool_counters_); 
+        sub.bind_ssbo(1, buffers_.ssbo_temporal_record_counters_); 
+        sub.bind_ssbo(2, buffers_.ssbo_contour_temporal_records_new_(strokegen_frame_id)); 
+        sub.bind_ssbo(3, buffers_.ssbo_contour_snake_to_temporal_record_); 
+        sub.bind_ssbo(4, buffers_.ssbo_contour_snake_rank_); 
+        sub.bind_ssbo(5, buffers_.ssbo_contour_snake_list_len_); 
+        sub.bind_ssbo(6, buffers_.ssbo_contour_snake_list_head_); 
+        sub.bind_ssbo(7, buffers_.ssbo_contour_snake_flags_); 
+        sub.bind_ssbo(8, buffers_.ssbo_contour_snake_seg_rank_); 
+        sub.bind_ssbo(9, buffers_.ssbo_contour_snake_seg_len_); 
+        sub.bind_ssbo(10, buffers_.ssbo_contour_snake_vpos_); 
+        sub.bind_ssbo(11, buffers_.ssbo_dbg_lines_); 
+    
+        sub.push_constant("pc_obj_id_", obj_beg); 
+        sub.push_constant("pc_frame_id_", strokegen_frame_id); 
+    
+        sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_vert_dispatch_args_);
+        sub.barrier(GPU_BARRIER_SHADER_STORAGE);
+    }
 
     // 2D resampling
     float sample_rate = 4.0f; 

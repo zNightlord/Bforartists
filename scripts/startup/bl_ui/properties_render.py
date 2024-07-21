@@ -1371,9 +1371,9 @@ class RENDER_PT_npr_test(RenderButtonsPanel, Panel):
         col.prop(props, "npr_test_val_19", text="Subdiv Type")
 
         col.prop(props, "npr_test_val_20", text="Subdiv Crease")
-        col.prop(props, "npr_test_val_21", text="")
-        col.prop(props, "npr_test_val_22", text="")
-        col.prop(props, "npr_test_val_23", text="")
+        col.prop(props, "npr_test_val_21", text="Enable Cusp Denoise")
+        col.prop(props, "npr_test_val_22", text="Visibility Threshold")
+        col.prop(props, "npr_test_val_23", text="Camera Rotation")
 
 
 

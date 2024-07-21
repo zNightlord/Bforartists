@@ -2,30 +2,9 @@
 #pragma BLENDER_REQUIRE(common_view_lib.glsl)
 #pragma BLENDER_REQUIRE(npr_strokegen_contour_topo_lib.glsl)
 #pragma BLENDER_REQUIRE(npr_strokegen_brush_toolbox_lib.glsl)
+#pragma BLENDER_REQUIRE(npr_strokegen_debug_view_lib.glsl)
 
-/* https://www.shadertoy.com/view/7tlXR4 */
-vec3 hash32(vec2 p)
-{
-	vec3 p3 = fract(vec3(p.xyx) * vec3(.1031, .1030, .0973));
-    p3 += dot(p3, p3.yxz+33.33);
-    return fract((p3.xxy+p3.yzz)*p3.zyx);
-}
-vec3 hsl2rgb(vec3 c)
-{
-    vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
-    vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
-    return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
-}
-vec3 rand_col_rgb(uint seed0, uint seed1)
-{
-    vec3 rnd = hash32(vec2(float(seed0 * 17), float(seed1 * 33)));
 
-    float hue = rnd.x;
-    float saturation = 0.6 + rnd.z*0.4;
-    float luminosity  = 0.6 + rnd.y*0.4;
-
-    return hsl2rgb(vec3(hue, saturation, luminosity));
-}
 
 
 #if defined(_KERNEL_MULTICOMPILE_DRAW_CONTOUR__EDGES)
@@ -121,7 +100,7 @@ void main()
     /* Apply depth bias to curve breaks,
      * which can happen due to Z-fighting artifacts. */
     /* TODO: Further imporve this */
-    gl_Position.z -= 3.0e-5 * whclip;
+    gl_Position.z -= 6.0e-5 * whclip;
     gl_Position.xy += edgenor_uv * whclip * pcs_screen_size_inv_ * 1.0f;
 	vec2 edge_dir_ext = (vid % 2u == 1u) ? edgedir_uv : -edgedir_uv;
 	gl_Position.xy += edge_dir_ext * whclip * pcs_screen_size_inv_ * 1.5f;
