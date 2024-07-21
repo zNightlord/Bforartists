@@ -27,21 +27,13 @@ jobs:
         make lite
         dir
         cd ..
-        dir
-        
 
 
     - name: Upload Build
-      id: upload
       uses: actions/upload-artifact@v4
       with:
-        if-no-files-found: error
         name: Bforartists-Release-${{ runner.os }}
-        path: C:/Users/runneradmin/bforartistsrepo/bfa_build_windows_*_x64_vc*/bin
-    
-    - name: Retry Upload Build
-      uses: actions/upload-artifact@v4
-      if: ${{ failure() && steps.upload.conclusion == 'failure' }}
-      with:
-        name: Bforartists-Release-${{ runner.os }}
-        path: D:/a/Bforartists/Bforartists/bfa_build_windows_x64_vc*/bin
+        path: |
+          C:/Users/runneradmin/bforartistsrepo/bfa_build_windows_*_x64_vc*/bin
+          D:/a/Bforartists/Bforartists/bfa_build_windows_*_x64_vc*/bin/
+        
