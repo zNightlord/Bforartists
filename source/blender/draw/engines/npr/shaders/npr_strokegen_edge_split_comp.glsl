@@ -645,6 +645,11 @@ void main()
         LoopSubdEdgeTreeUpNode node_e3 = setup_loop_subd_tree_leaf__split_edge(psei_curr.id, par_node, 3u);
         ssbo_subd_edge_tree_node_up_[e3] = encode_loop_subd_tree_node(node_e3); 
 
+        /* Init tree nodes for E0, E2, the actual calculation is carried later */
+        LoopSubdEdgeTreeUpNode node = init_loop_subd_tree_leaf__face_edge(); // point to nothing 
+        ssbo_subd_edge_tree_node_up_[e0] = encode_loop_subd_tree_node(node);
+        ssbo_subd_edge_tree_node_up_[e2] = encode_loop_subd_tree_node(node);
+
         /* In order to eval node for new edge,
          * we cache link from each split vert to its old edge */
         ssbo_subd_edge_vert_to_old_edge_[v4] = psei_curr.id; 

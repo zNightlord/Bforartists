@@ -215,16 +215,17 @@ void main()
     mat4 view_to_world = ubo_view_matrices_.viewinv; // transform matrices, see "common_view_lib.glsl"
     vec3 cam_pos_ws = view_to_world[3].xyz; // see "#define cameraPos ViewMatrixInverse[3].xyz" 
     
-#define TRACE_STEPS 32u
+#define TRACE_STEPS 0u // 16u
+#define NUM_EXTRA_DBG_LINES 1u
 
-    uint dbg_line_id = compact_general_dbg_lines(valid_thread, groupIdx, 2u * TRACE_STEPS);
+    uint dbg_line_id = compact_general_dbg_lines(valid_thread, groupIdx, NUM_EXTRA_DBG_LINES + 2u * TRACE_STEPS);
     dbg_line_id += get_debug_line_offset(DBG_LINE_TYPE__GENERAL); 
     uvec2 dbg_line_id_beg = uvec2(0u); 
 
-    bvec2 found_matched_history = bvec2(false); 
-    uvec2 num_steps_til_match = uvec2(0u); 
-    uvec2 matched_rec_id = uvec2(PER_EDGE_TEMPORAL_REC_ID_NULL); 
     TemporalRecordContourData matched_trcd[2]; 
+    bvec2 found_matched_history = bvec2(false); 
+    uvec2 num_steps_til_match   = uvec2(0u); 
+    uvec2 matched_rec_id        = uvec2(PER_EDGE_TEMPORAL_REC_ID_NULL); 
     if (valid_thread)
     {
         vec3 p_beg; { // Init as interpolated contour point
@@ -237,12 +238,27 @@ void main()
                 p_beg = calc_interp_contour_vert_pos(vnor_v1v3, vpos_v1v3, cam_pos_ws); 
             }
             else p_beg = (vpos_v1v3[0] + vpos_v1v3[1]) * .5f;  
+
+            uint ex_dbg_line_id = dbg_line_id; 
+            {
+                v1 = ssbo_edge_to_vert_[curr_edge_id*4u + 1u]; 
+                v3 = ssbo_edge_to_vert_[curr_edge_id*4u + 3u]; 
+                vpos_v1v3[0] = ld_vpos(v1); 
+                vpos_v1v3[1] = ld_vpos(v3); 
+
+                vec3 dvd_col = vec3(1, 0, 1); 
+                DebugVertData dvd_00 = DebugVertData(vpos_v1v3[0], dvd_col, uvec4(0u)); 
+                DebugVertData dvd_01 = DebugVertData(vpos_v1v3[1], dvd_col, uvec4(0u)); 
+dvd_01 = dvd_00; 
+                store_debug_line_data(ex_dbg_line_id, dvd_00, dvd_01); 
+                ex_dbg_line_id++;
+            }
         }
 
         for (uint path = 0; path < 2; ++path)
         {
             uint beg_iface = path; // TODO: classify 2 probing paths(fwd/bck) from contour curve orientation
-            dbg_line_id_beg[path] = dbg_line_id + TRACE_STEPS * path; 
+            dbg_line_id_beg[path] = dbg_line_id + NUM_EXTRA_DBG_LINES + TRACE_STEPS * path; 
             
             // inputs: rec_wedge_id, beg_iface, p_beg, dbg_line_id_beg, cam_pos_ws    
             AdjWedgeInfo wlk_awi = AdjWedgeInfo(rec_wedge_id, beg_iface); 
@@ -269,7 +285,7 @@ void main()
                     TemporalRecordContourData trcd = 
                         load_ssbo_contour_temporal_records_old__contour_data(old_rec_id, num_history_recs); 
                     
-                    bool matched = true; // match_history_rec(trf, trcd); 
+                    bool matched = match_history_rec(trf, trcd); 
                     if (matched) 
                     { // for now we only use the first match
                       // in the future we want to find the best match
@@ -479,6 +495,7 @@ void main()
 
     uint tree_code_chain = trf.subd_tree_code_chain; 
     uint par_edge_id = base_edge_id; 
+uvec2 dbg_par_edge_ids = uvec2(0u); 
     bool hit_leaf_node = false; 
     for (uint subd_level = 0; subd_level < pc_loop_subd_iters_; ++subd_level)
     {
@@ -486,11 +503,16 @@ void main()
         pop_subd_tree_code_chain(tree_code_chain, /*out*/tree_code, null_node); 
         if (null_node) break; 
 
+
+
         LoopSubdEdgeTreeDwNode sub_node = decode_loop_subd_tree_node_dw(
             ssbo_subd_edge_tree_node_dw_[4u * par_edge_id + tree_code]
         ); 
         hit_leaf_node = (sub_node.wedge_id == par_edge_id) || (subd_level + 1 == pc_loop_subd_iters_); 
         par_edge_id = sub_node.wedge_id;
+
+dbg_par_edge_ids[subd_level] = par_edge_id;
+
         if (hit_leaf_node) break; /* arrived at a leaf node */
     }
 
@@ -524,8 +546,9 @@ void main()
             vec3 dvd_col = vec3(1.0f, 1.0f, 1.0f); 
             if (trf.valid_contour_data)
                 dvd_col = rand_col_rgb(trcd.seg_key / 8, trcd.seg_key / 8); 
-            DebugVertData dvd_0 = DebugVertData(vpos_ws_0.xyz, dvd_col, uvec4(0u)); 
-            DebugVertData dvd_1 = DebugVertData(vpos_ws_1.xyz, dvd_col, uvec4(0u));
+			uvec4 dvd_data = uvec4(base_edge_id, dbg_par_edge_ids[0], dbg_par_edge_ids[1], 0); 
+            DebugVertData dvd_0 = DebugVertData(vpos_ws_0.xyz, dvd_col, dvd_data); 
+            DebugVertData dvd_1 = DebugVertData(vpos_ws_1.xyz, dvd_col, dvd_data);
 
             store_debug_line_data(dbg_line_id, dvd_0, dvd_1); 
             dbg_line_id++; 

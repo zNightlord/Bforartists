@@ -293,14 +293,14 @@ void main()
 		/* visualize edges with invalid topology */
 		if (pcs_edge_visualize_mode_ == 1) 
 		{
-			uint w0 = ((w[0].wedge_id)); 
-			uint w1 = ((w[1].wedge_id)); 
-			uint w2 = ((w[2].wedge_id)); 
-			uint w3 = ((w[3].wedge_id)); 
+			// uint w0 = ((w[0].wedge_id)); 
+			// uint w1 = ((w[1].wedge_id)); 
+			// uint w2 = ((w[2].wedge_id)); 
+			// uint w3 = ((w[3].wedge_id)); 
 		
-			if (/* w0 == w2 || w1 == w3 ||  */w0 == w3 || w1 == w2) 
-				valid_ee = false; 
-			else valid_ee = true; 
+			// if (/* w0 == w2 || w1 == w3 ||  */w0 == w3 || w1 == w2) 
+			// 	valid_ee = false; 
+			// else valid_ee = true; 
 
 			dbg_line = dbg_line && (!valid_ee); 
 		}
