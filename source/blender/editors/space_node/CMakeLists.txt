@@ -5,6 +5,7 @@
 set(INC
   ../include
   ../io
+  ../asset # bfa
   ../../asset_system
   ../../blenkernel
   ../../blenloader
