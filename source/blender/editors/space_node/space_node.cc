@@ -408,6 +408,22 @@ static SpaceLink *node_create(const ScrArea * /*area*/, const Scene * /*scene*/)
   region->regiontype = RGN_TYPE_HEADER;
   region->alignment = (U.uiflag & USER_HEADER_BOTTOM) ? RGN_ALIGN_BOTTOM : RGN_ALIGN_TOP;
 
+  /* bfa - asset shelf */
+  region = MEM_cnew<ARegion>("asset shelf for node");
+
+  BLI_addtail(&snode->regionbase, region);
+  region->regiontype = RGN_TYPE_ASSET_SHELF;
+  region->alignment = RGN_ALIGN_BOTTOM;
+
+  /* asset shelf header */
+  region = MEM_cnew<ARegion>("asset shelf header for node");
+
+  BLI_addtail(&snode->regionbase, region);
+  region->regiontype = RGN_TYPE_ASSET_SHELF_HEADER;
+  region->alignment = RGN_ALIGN_BOTTOM | RGN_SPLIT_PREV;
+  /* bfa end */
+
+
   /* buttons/list view */
   region = MEM_cnew<ARegion>("buttons for node");
 
