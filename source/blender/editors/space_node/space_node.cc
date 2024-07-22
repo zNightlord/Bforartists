@@ -36,6 +36,7 @@
 #include "BKE_node_tree_zones.hh"
 #include "BKE_screen.hh"
 
+#include "ED_asset_shelf.hh" // bfa
 #include "ED_image.hh"
 #include "ED_node.hh"
 #include "ED_node_preview.hh"
