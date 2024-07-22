@@ -1,12 +1,12 @@
 name: Windows
 
 on:
-  #push:
-    #branches: [ master ]
-  schedule:
-    - cron: 0 0 * * 1
+  # push:
+  #  branches: [ workflow-fix ] # ignore this for testing purposes
+  # schedule:
+  #   - cron: 0 0 * * 1
   pull_request:
-    branches: [ master ]
+     branches: [ workflow-fix ]
   workflow_dispatch:
 
 permissions: {}
@@ -24,7 +24,7 @@ jobs:
         git clone https://github.com/Bforartists/Bforartists
         cd Bforartists
         python ./build_files/utils/make_update.py
-        make
+        make lite
         dir
         cd ..
         dir
@@ -34,4 +34,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: Bforartists-Release-${{ runner.os }}
-        path: C:/Users/runneradmin/bforartistsrepo/bfa_build_windows_Release_x64_vc17_Release/bin
+        path: |
+          C:/Users/runneradmin/bforartistsrepo/bfa_build_windows_*_x64_vc*/bin
+          D:/a/Bforartists/Bforartists/bfa_build_windows_*_x64_vc*/bin
+        
