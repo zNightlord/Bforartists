@@ -1454,28 +1454,31 @@ void ED_spacetype_node()
   art = MEM_cnew<ARegionType>("spacetype node asset shelf region");
   art->regionid = RGN_TYPE_ASSET_SHELF;
   art->keymapflag = ED_KEYMAP_UI | ED_KEYMAP_ASSET_SHELF | ED_KEYMAP_FRAMES;
-  art->duplicate = ED_asset_shelf_region_duplicate;
-  art->free = ED_asset_shelf_region_free;
-  art->listener = ED_asset_shelf_region_listen;
-  art->poll = ED_asset_shelf_regions_poll;
-  art->snap_size = ED_asset_shelf_region_snap;
-  art->context = ED_asset_shelf_context;
-  art->init = ED_asset_shelf_region_init;
-  art->layout = ED_asset_shelf_region_layout;
-  art->draw = ED_asset_shelf_region_draw;
+  art->duplicate = asset::shelf::region_duplicate;
+  art->free = asset::shelf::region_free;
+  art->on_poll_success = asset::shelf::region_on_poll_success;
+  art->listener = asset::shelf::region_listen;
+  art->message_subscribe = asset::shelf::region_message_subscribe;
+  art->poll = asset::shelf::regions_poll;
+  art->snap_size = asset::shelf::region_snap;
+  art->on_user_resize = asset::shelf::region_on_user_resize;
+  art->context = asset::shelf::context;
+  art->init = view3d_asset_shelf_region_init;
+  art->layout = asset::shelf::region_layout;
+  art->draw = asset::shelf::region_draw;
   BLI_addhead(&st->regiontypes, art);
 
   /* regions: asset shelf header */
   art = MEM_cnew<ARegionType>("spacetype node asset shelf header region");
   art->regionid = RGN_TYPE_ASSET_SHELF_HEADER;
   art->keymapflag = ED_KEYMAP_UI | ED_KEYMAP_ASSET_SHELF | ED_KEYMAP_VIEW2D | ED_KEYMAP_FOOTER;
-  art->init = ED_asset_shelf_header_region_init;
-  art->poll = ED_asset_shelf_regions_poll;
-  art->draw = ED_asset_shelf_header_region;
-  art->listener = ED_asset_shelf_header_region_listen;
-  art->context = ED_asset_shelf_context;
+  art->init = asset::shelf::header_region_init;
+  art->poll = asset::shelf::regions_poll;
+  art->draw = asset::shelf::header_region;
+  art->listener = asset::shelf::header_region_listen;
+  art->context = asset::shelf::context;
   BLI_addhead(&st->regiontypes, art);
-  ED_asset_shelf_header_regiontype_register(art, SPACE_NODE);
+  asset::shelf::types_register(art, SPACE_NODE);
   /* end bfa */
   
   /* regions: list-view/buttons */
