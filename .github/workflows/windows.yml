@@ -24,7 +24,7 @@ jobs:
         git clone -b assetshelf-extras-build https://github.com/zNightlord/Bforartists
         cd Bforartists
         python ./build_files/utils/make_update.py
-        make lite
+        make
         dir
         cd ..
         dir
