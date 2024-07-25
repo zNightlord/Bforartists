@@ -1049,6 +1049,18 @@ static void node_region_listener(const wmRegionListenerParams *params)
   }
 }
 
+/* bfa - add handlers, stuff you only do once or on area/region changes */
+static void node_asset_shelf_region_init(wmWindowManager *wm, ARegion *region)
+{
+  using namespace blender::ed;
+  wmKeyMap *keymap = WM_keymap_ensure(
+      wm->defaultconf, "Image Generic", SPACE_IMAGE, RGN_TYPE_WINDOW);
+  WM_event_add_keymap_handler(&region->handlers, keymap);
+
+  asset::shelf::region_init(wm, region);
+}
+/* end bfa */
+
 }  // namespace blender::ed::space_node
 
 /* Outside of blender namespace to avoid Python documentation build error with `ctypes`. */
@@ -1466,7 +1478,7 @@ void ED_spacetype_node()
   art->snap_size = asset::shelf::region_snap;
   art->on_user_resize = asset::shelf::region_on_user_resize;
   art->context = asset::shelf::context;
-  art->init = view3d_asset_shelf_region_init;
+  art->init = node_asset_shelf_region_init;
   art->layout = asset::shelf::region_layout;
   art->draw = asset::shelf::region_draw;
   BLI_addhead(&st->regiontypes, art);
