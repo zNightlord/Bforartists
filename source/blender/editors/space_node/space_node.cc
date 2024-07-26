@@ -1408,6 +1408,7 @@ static void node_space_blend_write(BlendWriter *writer, SpaceLink *sl)
 void ED_spacetype_node()
 {
   using namespace blender::ed::space_node;
+  using namespace blender::ed::asset;
 
   std::unique_ptr<SpaceType> st = std::make_unique<SpaceType>();
   ARegionType *art;
@@ -1465,8 +1466,6 @@ void ED_spacetype_node()
   BLI_addhead(&st->regiontypes, art);
 
   /* bfa - regions: asset shelf */
-  {
-  using namespace blender::ed::asset;
   art = MEM_cnew<ARegionType>("spacetype node asset shelf region");
   art->regionid = RGN_TYPE_ASSET_SHELF;
   art->keymapflag = ED_KEYMAP_UI | ED_KEYMAP_ASSET_SHELF | ED_KEYMAP_FRAMES;
@@ -1496,7 +1495,7 @@ void ED_spacetype_node()
   BLI_addhead(&st->regiontypes, art);
   shelf::types_register(art, SPACE_NODE);
   /* end bfa */
-  }
+  
   
   /* regions: list-view/buttons */
   art = MEM_cnew<ARegionType>("spacetype node region");
