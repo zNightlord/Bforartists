@@ -1408,7 +1408,7 @@ static void node_space_blend_write(BlendWriter *writer, SpaceLink *sl)
 void ED_spacetype_node()
 {
   using namespace blender::ed::space_node;
-  using blender::ed::asset;
+  using namespace blender::ed::asset;
 
   std::unique_ptr<SpaceType> st = std::make_unique<SpaceType>();
   ARegionType *art;
