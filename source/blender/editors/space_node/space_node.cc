@@ -1408,7 +1408,6 @@ static void node_space_blend_write(BlendWriter *writer, SpaceLink *sl)
 void ED_spacetype_node()
 {
   using namespace blender::ed::space_node;
-  using namespace blender::ed::asset;
 
   std::unique_ptr<SpaceType> st = std::make_unique<SpaceType>();
   ARegionType *art;
@@ -1466,35 +1465,38 @@ void ED_spacetype_node()
   BLI_addhead(&st->regiontypes, art);
 
   /* bfa - regions: asset shelf */
+  {
+  using namespace blender::ed::asset;
   art = MEM_cnew<ARegionType>("spacetype node asset shelf region");
   art->regionid = RGN_TYPE_ASSET_SHELF;
   art->keymapflag = ED_KEYMAP_UI | ED_KEYMAP_ASSET_SHELF | ED_KEYMAP_FRAMES;
-  art->duplicate = asset::shelf::region_duplicate;
-  art->free = asset::shelf::region_free;
-  art->on_poll_success = asset::shelf::region_on_poll_success;
-  art->listener = asset::shelf::region_listen;
-  art->message_subscribe = asset::shelf::region_message_subscribe;
-  art->poll = asset::shelf::regions_poll;
-  art->snap_size = asset::shelf::region_snap;
-  art->on_user_resize = asset::shelf::region_on_user_resize;
-  art->context = asset::shelf::context;
+  art->duplicate = shelf::region_duplicate;
+  art->free = shelf::region_free;
+  art->on_poll_success = shelf::region_on_poll_success;
+  art->listener = shelf::region_listen;
+  art->message_subscribe = shelf::region_message_subscribe;
+  art->poll = shelf::regions_poll;
+  art->snap_size = shelf::region_snap;
+  art->on_user_resize = shelf::region_on_user_resize;
+  art->context = shelf::context;
   art->init = node_asset_shelf_region_init;
-  art->layout = asset::shelf::region_layout;
-  art->draw = asset::shelf::region_draw;
+  art->layout = shelf::region_layout;
+  art->draw = shelf::region_draw;
   BLI_addhead(&st->regiontypes, art);
 
   /* regions: asset shelf header */
   art = MEM_cnew<ARegionType>("spacetype node asset shelf header region");
   art->regionid = RGN_TYPE_ASSET_SHELF_HEADER;
   art->keymapflag = ED_KEYMAP_UI | ED_KEYMAP_ASSET_SHELF | ED_KEYMAP_VIEW2D | ED_KEYMAP_FOOTER;
-  art->init = asset::shelf::header_region_init;
-  art->poll = asset::shelf::regions_poll;
-  art->draw = asset::shelf::header_region;
-  art->listener = asset::shelf::header_region_listen;
-  art->context = asset::shelf::context;
+  art->init = shelf::header_region_init;
+  art->poll = shelf::regions_poll;
+  art->draw = shelf::header_region;
+  art->listener = shelf::header_region_listen;
+  art->context = shelf::context;
   BLI_addhead(&st->regiontypes, art);
-  asset::shelf::types_register(art, SPACE_NODE);
+  shelf::types_register(art, SPACE_NODE);
   /* end bfa */
+  }
   
   /* regions: list-view/buttons */
   art = MEM_cnew<ARegionType>("spacetype node region");
