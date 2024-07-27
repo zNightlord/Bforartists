@@ -239,7 +239,7 @@ void ED_node_cursor_location_set(SpaceNode *snode, const float value[2])
   copy_v2_v2(snode->runtime->cursor, value);
 }
 
-namespace blender::ed {
+namespace blender::ed::space_node  {
 
 float2 space_node_group_offset(const SpaceNode &snode)
 {
@@ -1049,7 +1049,7 @@ static void node_region_listener(const wmRegionListenerParams *params)
   }
 }
 
-}  // namespace blender::ed
+}  // namespace blender::ed::space_node 
 
 /* bfa - add handlers, stuff you only do once or on area/region changes */
 static void node_asset_shelf_region_init(wmWindowManager *wm, ARegion *region)
@@ -1069,7 +1069,7 @@ const char *node_context_dir[] = {
     "selected_nodes", "active_node", "light", "material", "world", nullptr};
 };
 
-namespace blender::ed {
+namespace blender::ed::space_node  {
 
 static int /*eContextResult*/ node_context(const bContext *C,
                                            const char *member,
@@ -1403,11 +1403,12 @@ static void node_space_blend_write(BlendWriter *writer, SpaceLink *sl)
   }
 }
 
-}  // namespace blender::ed
+}  // namespace blender::ed::space_node 
 
 void ED_spacetype_node()
 {
   using namespace blender::ed;
+  using namespace blender::ed::space_node ;
 
   std::unique_ptr<SpaceType> st = std::make_unique<SpaceType>();
   ARegionType *art;
@@ -1496,12 +1497,12 @@ void ED_spacetype_node()
   art->duplicate = asset::shelf::region_duplicate;
   art->free = asset::shelf::region_free;
   art->on_poll_success = asset::shelf::region_on_poll_success;
-  art->listener = shelf::region_listen;
+  art->listener = asset::shelf::region_listen;
   art->message_subscribe = asset::shelf::region_message_subscribe;
   art->poll = asset::shelf::regions_poll;
   art->snap_size = asset::shelf::region_snap;
-  art->on_user_resize = shelf::region_on_user_resize;
-  art->context = shelf::context;
+  art->on_user_resize = asset::shelf::region_on_user_resize;
+  art->context = asset::shelf::context;
   art->init = node_asset_shelf_region_init;
   art->layout = asset::shelf::region_layout;
   art->draw = asset::shelf::region_draw;
@@ -1517,7 +1518,7 @@ void ED_spacetype_node()
   art->listener = asset::shelf::header_region_listen;
   art->context = asset::shelf::context;
   BLI_addhead(&st->regiontypes, art);
-  shelf::types_register(art, SPACE_NODE);
+  asset::shelf::types_register(art, SPACE_NODE);
   /* end bfa */
 
   WM_menutype_add(MEM_cnew<MenuType>(__func__, add_catalog_assets_menu_type()));
