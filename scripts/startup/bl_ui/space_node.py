@@ -388,6 +388,14 @@ class ALL_MT_editormenu_node(Menu):
         row = layout.row(align=True)
         row.template_header() # editor type menus
 
+# BFA - asset shelf
+class NODE_AST_node_groups(bpy.types.AssetShelf):
+    bl_space_type = 'NODE_EDITOR'
+
+    @classmethod
+    def asset_poll_temp_api(cls, asset):
+        return asset.file_data.id_type == 'NODETREE'
+
 class NODE_MT_editor_menus(Menu):
     bl_idname = "NODE_MT_editor_menus"
     bl_label = ""
@@ -1395,6 +1403,8 @@ classes = (
     NODE_OT_switch_editors_in_compositor,
     NODE_OT_switch_editors_in_geometry,
     NODE_OT_switch_editors_in_shadereditor,
+    #bfa - asset browser
+    NODE_AST_node_groups,
 )
 
 
