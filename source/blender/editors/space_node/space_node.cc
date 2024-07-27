@@ -416,13 +416,14 @@ static SpaceLink *node_create(const ScrArea * /*area*/, const Scene * /*scene*/)
   BLI_addtail(&snode->regionbase, region);
   region->regiontype = RGN_TYPE_ASSET_SHELF;
   region->alignment = RGN_ALIGN_BOTTOM;
+  region->flag |= RGN_FLAG_HIDDEN;
 
   /* asset shelf header */
   region = MEM_cnew<ARegion>("asset shelf header for node");
 
   BLI_addtail(&snode->regionbase, region);
   region->regiontype = RGN_TYPE_ASSET_SHELF_HEADER;
-  region->alignment = RGN_ALIGN_BOTTOM | RGN_SPLIT_PREV;
+  region->alignment = RGN_ALIGN_BOTTOM | RGN_ALIGN_HIDE_WITH_PREV;
   /* bfa end */
 
 
