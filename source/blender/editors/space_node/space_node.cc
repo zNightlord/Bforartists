@@ -239,7 +239,7 @@ void ED_node_cursor_location_set(SpaceNode *snode, const float value[2])
   copy_v2_v2(snode->runtime->cursor, value);
 }
 
-namespace blender::ed::space_node {
+namespace blender::ed {
 
 float2 space_node_group_offset(const SpaceNode &snode)
 {
@@ -1049,7 +1049,7 @@ static void node_region_listener(const wmRegionListenerParams *params)
   }
 }
 
-}  // namespace blender::ed::space_node
+}  // namespace blender::ed
 
 /* bfa - add handlers, stuff you only do once or on area/region changes */
 static void node_asset_shelf_region_init(wmWindowManager *wm, ARegion *region)
@@ -1069,7 +1069,7 @@ const char *node_context_dir[] = {
     "selected_nodes", "active_node", "light", "material", "world", nullptr};
 };
 
-namespace blender::ed::space_node {
+namespace blender::ed {
 
 static int /*eContextResult*/ node_context(const bContext *C,
                                            const char *member,
@@ -1403,12 +1403,11 @@ static void node_space_blend_write(BlendWriter *writer, SpaceLink *sl)
   }
 }
 
-}  // namespace blender::ed::space_node
+}  // namespace blender::ed
 
 void ED_spacetype_node()
 {
-  using namespace blender::ed::space_node;
-  using namespace blender::ed::asset;
+  using namespace blender::ed;
 
   std::unique_ptr<SpaceType> st = std::make_unique<SpaceType>();
   ARegionType *art;
@@ -1465,38 +1464,7 @@ void ED_spacetype_node()
 
   BLI_addhead(&st->regiontypes, art);
 
-  /* bfa - regions: asset shelf */
-  art = MEM_cnew<ARegionType>("spacetype node asset shelf region");
-  art->regionid = RGN_TYPE_ASSET_SHELF;
-  art->keymapflag = ED_KEYMAP_UI | ED_KEYMAP_ASSET_SHELF | ED_KEYMAP_FRAMES;
-  art->duplicate = shelf::region_duplicate;
-  art->free = shelf::region_free;
-  art->on_poll_success = shelf::region_on_poll_success;
-  art->listener = shelf::region_listen;
-  art->message_subscribe = shelf::region_message_subscribe;
-  art->poll = shelf::regions_poll;
-  art->snap_size = shelf::region_snap;
-  art->on_user_resize = shelf::region_on_user_resize;
-  art->context = shelf::context;
-  art->init = node_asset_shelf_region_init;
-  art->layout = shelf::region_layout;
-  art->draw = shelf::region_draw;
-  BLI_addhead(&st->regiontypes, art);
 
-  /* regions: asset shelf header */
-  art = MEM_cnew<ARegionType>("spacetype node asset shelf header region");
-  art->regionid = RGN_TYPE_ASSET_SHELF_HEADER;
-  art->keymapflag = ED_KEYMAP_UI | ED_KEYMAP_ASSET_SHELF | ED_KEYMAP_VIEW2D | ED_KEYMAP_FOOTER;
-  art->init = shelf::header_region_init;
-  art->poll = shelf::regions_poll;
-  art->draw = shelf::header_region;
-  art->listener = shelf::header_region_listen;
-  art->context = shelf::context;
-  BLI_addhead(&st->regiontypes, art);
-  shelf::types_register(art, SPACE_NODE);
-  /* end bfa */
-  
-  
   /* regions: list-view/buttons */
   art = MEM_cnew<ARegionType>("spacetype node region");
   art->regionid = RGN_TYPE_UI;
@@ -1520,6 +1488,37 @@ void ED_spacetype_node()
   art->init = node_toolbar_region_init;
   art->draw = node_toolbar_region_draw;
   BLI_addhead(&st->regiontypes, art);
+
+  /* bfa - regions: asset shelf */
+  art = MEM_cnew<ARegionType>("spacetype node asset shelf region");
+  art->regionid = RGN_TYPE_ASSET_SHELF;
+  art->keymapflag = ED_KEYMAP_UI | ED_KEYMAP_ASSET_SHELF | ED_KEYMAP_FRAMES;
+  art->duplicate = asset::shelf::region_duplicate;
+  art->free = asset::shelf::region_free;
+  art->on_poll_success = asset::shelf::region_on_poll_success;
+  art->listener = shelf::region_listen;
+  art->message_subscribe = asset::shelf::region_message_subscribe;
+  art->poll = asset::shelf::regions_poll;
+  art->snap_size = asset::shelf::region_snap;
+  art->on_user_resize = shelf::region_on_user_resize;
+  art->context = shelf::context;
+  art->init = node_asset_shelf_region_init;
+  art->layout = asset::shelf::region_layout;
+  art->draw = asset::shelf::region_draw;
+  BLI_addhead(&st->regiontypes, art);
+
+  /* regions: asset shelf header */
+  art = MEM_cnew<ARegionType>("spacetype node asset shelf header region");
+  art->regionid = RGN_TYPE_ASSET_SHELF_HEADER;
+  art->keymapflag = ED_KEYMAP_UI | ED_KEYMAP_ASSET_SHELF | ED_KEYMAP_VIEW2D | ED_KEYMAP_FOOTER;
+  art->init = asset::shelf::header_region_init;
+  art->poll = asset::shelf::regions_poll;
+  art->draw = asset::shelf::header_region;
+  art->listener = asset::shelf::header_region_listen;
+  art->context = asset::shelf::context;
+  BLI_addhead(&st->regiontypes, art);
+  shelf::types_register(art, SPACE_NODE);
+  /* end bfa */
 
   WM_menutype_add(MEM_cnew<MenuType>(__func__, add_catalog_assets_menu_type()));
   WM_menutype_add(MEM_cnew<MenuType>(__func__, add_unassigned_assets_menu_type()));
