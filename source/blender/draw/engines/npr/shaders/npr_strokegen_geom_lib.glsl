@@ -709,12 +709,14 @@ float calc_dihedral_angle(vec3 v0, vec3 v1, vec3 v2, vec3 v3)
 /* Simple 3D Math ----------------------- */
 // Project D onto the plane of the triangle q012(q0-q1-q2 has CCW winding), 
 // parameterized with D_proj = u*Q1 + v*Q2, where Q1 = q1 - q0, Q2 = q2 - q0
-vec2 proj_vec_to_triangle_plane(vec3 D, vec3 Q1, vec3 Q2)
+void proj_vec_to_triangle_plane(vec3 D, vec3 Q1, vec3 Q2, out vec3 D_proj, out vec2 uvD)
 {
     vec3 N = cross(Q1, Q2); 
     N = normalize(N); 
     D = D - dot(D, N)*N; 
     D = normalize(D); 
+    D_proj = D; 
+    
     // Solve for underdetermined system 
     // D = [Q1 Q2] * [u v]^T
     float Q1dotQ2 = dot(Q1, Q2);
@@ -726,9 +728,7 @@ vec2 proj_vec_to_triangle_plane(vec3 D, vec3 Q1, vec3 Q2)
         Q1dotQ2, dot(Q2, Q2)
     );
     // [uD vD] = (M^T * M)^-1 * M^T * D
-    vec2 uvD = inverse(MT_mul_M) * MT_mul_D;
-
-    return uvD; 
+    uvD = inverse(MT_mul_M) * MT_mul_D;
 }
 
 

@@ -1968,6 +1968,7 @@ GPU_SHADER_CREATE_INFO(strokegen_calculate_new_temporal_contour_records)
     .push_constant(Type::INT, "pcs_loop_subd_iters_")
     .push_constant(Type::INT, "pc_frame_id_history_")
     .push_constant(Type::INT, "pc_dbg_matching_line_mode_")
+    .push_constant(Type::INT, "pc_dbg_history_trace_steps_")
 
     .local_group_size(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT)
     .compute_source("npr_strokegen_loop_subdiv_edge_tree_comp.glsl"); 
