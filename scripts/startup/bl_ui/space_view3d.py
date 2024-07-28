@@ -11166,6 +11166,7 @@ class VIEW3D_AST_brush_gpencil_weight(View3DAssetShelf, bpy.types.AssetShelf):
 
 # bfa - material object collection asset shelf
 class VIEW3D_AST_object(View3DAssetShelf, bpy.types.AssetShelf):
+    bl_options = {'STORE_ENABLED_CATALOGS_IN_PREFERENCES'}
     mode = 'OBJECT'
 
     @classmethod
