@@ -1350,7 +1350,10 @@ void StrokeGenPassModule::on_end_sync()
           sub.bind_ssbo(11, buffers_.ssbo_selected_edge_to_edge_);
         sub.bind_ssbo(12, buffers_.ssbo_bnpr_mesh_pool_counters_);
         sub.bind_ssbo(13, buffers_.reused_ssbo_vtx_remesh_len_());
-        sub.bind_ssbo(14, buffers_.reused_ssbo_epos_subd_());
+        if (is_execute_pass && mode == EdgeSplitMode::InterpContour)
+          sub.bind_ssbo(14, buffers_.ssbo_vcurv_max_);
+        else
+            sub.bind_ssbo(14, buffers_.reused_ssbo_epos_subd_());
         if (is_execute_pass && mode == EdgeSplitMode::LoopSubdivSplit)
           sub.bind_ssbo(15, buffers_.reused_ssbo_subd_edge_vert_to_old_edge_());
         else

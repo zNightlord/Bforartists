@@ -151,19 +151,6 @@ vec3 calc_split_vpos(uint v1, uint v3, uint wedge_id)
         mat4 view_to_world = ubo_view_matrices_.viewinv;
         vec3 cam_pos_ws = view_to_world[3].xyz; /* see "#define cameraPos ViewMatrixInverse[3].xyz" */
         return calc_interp_contour_vert_pos(vnor, edge_vpos, cam_pos_ws); 
-        // float contour_interpo_factor = .5f; 
-        // {        
-        //     mat4 view_to_world = ubo_view_matrices_.viewinv;
-        //     vec3 cam_pos_ws = view_to_world[3].xyz; /* see "#define cameraPos ViewMatrixInverse[3].xyz" */
-
-        //     vec2 ndv = vec2(
-        //         dot(vnor[0], cam_pos_ws - edge_vpos[0]),  
-        //         dot(vnor[1], cam_pos_ws - edge_vpos[1]) 
-        //     ); 
-        //     contour_interpo_factor = ndv[0] / (ndv[0] - ndv[1]); /* split pos = vpos_0 + interpo * (vpos_1 - vpos_0); */
-        // }
-
-        // return edge_vpos[0] + contour_interpo_factor * (edge_vpos[1] - edge_vpos[0]); 
     }
     if (is_loop_subdiv_pass())
     { /* loop subdiv for new verts */
@@ -175,6 +162,30 @@ vec3 calc_split_vpos(uint v1, uint v3, uint wedge_id)
     // Return mid point by default
     return (edge_vpos[0] + edge_vpos[1]) / 2.0f;
 }
+#if defined(_KERNEL_MULTICOMPILE__EDGE_SPLIT_EXECUTE)
+    void calc_split_vcurv_and_cusp(uint v1, uint v3, uint wedge_id, out float vcurv_interp, out float cusp_interp)
+    {
+        vcurv_interp = cusp_interp = .0f; 
+
+        if (is_contour_split_pass())
+        {
+            vec3 edge_vpos[2] = { ld_vpos(v1), ld_vpos(v3) };
+            vec3 vnor[2] = { ld_vnor(v1), ld_vnor(v3) }; 
+            mat4 view_to_world = ubo_view_matrices_.viewinv;
+            vec3 cam_pos_ws = view_to_world[3].xyz; /* see "#define cameraPos ViewMatrixInverse[3].xyz" */
+
+            vec2 vcurv_max; vec2 cusp_func; 
+            ld_vcurv_max_with_cusp(v1, /*out*/vcurv_max[0], cusp_func[0]);
+            ld_vcurv_max_with_cusp(v3, /*out*/vcurv_max[1], cusp_func[1]);
+
+            calc_interp_contour_vert_curv_and_cusp(
+                vcurv_max, cusp_func, 
+                edge_vpos, vnor, cam_pos_ws, 
+                /*out*/vcurv_interp, cusp_interp
+            ); 
+        }
+    }
+#endif
 
 
 
@@ -445,6 +456,7 @@ void main()
     #define ssbo_subd_edge_vert_to_old_edge_ ssbo_vnor_ // swapped when split for loop subdiv
     // if (is_contour_split_pass())
     #define ssbo_contour_vert_to_old_edge_ ssbo_selected_edge_to_edge_ // swapped when split for interpolated contour
+    // #define ssbo_vcurv_max_ ssbo_epos_subd_ // (moved to npr_strokegen_geom_lib.glsl)
 
     /* Update dynamic mesh counters */
     if (gl_GlobalInvocationID.x == 0u) 
@@ -634,6 +646,9 @@ void main()
     float edge_len = estimate_split_vert_remesh_edge_len(v1, v3);
     st_vtx_remesh_len(v4, edge_len);
 
+
+
+    /* Store specific attribute(s) ----------------------------------------- */
     /* Build subd edge tree */
     if (is_loop_subdiv_pass())
     { 
@@ -658,6 +673,13 @@ void main()
     {   /* In order to eval node for contour edge,
          * we cache link from each contour vert to its old edge */
         ssbo_contour_vert_to_old_edge_[v4] = psei_curr.id; 
+
+        /* We don't want to add another cusp&curvature eval pass
+         * after contour split, since it would be too expensive.
+         * Instead we just interpolate the curvature/cusp functions here */
+        float vcurv_interp; float cusp_interp; 
+        calc_split_vcurv_and_cusp(v1, v3, psei_curr.id, /*out*/vcurv_interp, cusp_interp); 
+        st_vcurv_max_with_cusp(v4, vcurv_interp, cusp_interp); 
     }
 
 #undef e0
