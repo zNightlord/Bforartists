@@ -1344,8 +1344,11 @@ class NODE_PT_view(bpy.types.Panel):
 
 # BFA - asset shelf
 # TODO: Finalize the node asset shelf poll, for now use the current "S_" Shader asset name 
-class NODE_AST_composite_node_groups(bpy.types.AssetShelf):
+class NodeAssetShelf:
     bl_space_type = 'NODE_EDITOR'
+    bl_options = {'STORE_ENABLED_CATALOGS_IN_PREFERENCES'}
+
+class NODE_AST_composite_node_groups(NodeAssetShelf, bpy.types.AssetShelf):
 
     @classmethod
     def poll(cls, context):
@@ -1356,8 +1359,7 @@ class NODE_AST_composite_node_groups(bpy.types.AssetShelf):
         return asset.id_type == 'NODETREE' and not asset.name.startswith("S_")
 
 
-class NODE_AST_geometry_node_groups(bpy.types.AssetShelf):
-    bl_space_type = 'NODE_EDITOR'
+class NODE_AST_geometry_node_groups(NodeAssetShelf, bpy.types.AssetShelf):
 
     @classmethod
     def poll(cls, context):
@@ -1367,8 +1369,7 @@ class NODE_AST_geometry_node_groups(bpy.types.AssetShelf):
     def asset_poll(cls, asset):
         return asset.id_type == 'NODETREE'
 
-class NODE_AST_shader_node_groups(bpy.types.AssetShelf):
-    bl_space_type = 'NODE_EDITOR'
+class NODE_AST_shader_node_groups(NodeAssetShelf, bpy.types.AssetShelf):
 
     @classmethod
     def poll(cls, context):
