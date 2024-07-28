@@ -19,6 +19,15 @@
 
 #include <iostream>
 
+
+#include "BLI_assert.h"
+#include "BLI_utildefines.h"
+
+#include "BKE_global.hh"
+
+#include "GPU_framebuffer.hh"
+
+
 namespace blender::npr::strokegen
 {
 
@@ -167,6 +176,7 @@ namespace blender::npr::strokegen
         }
       }
     }
+
   }
 
   void GPUBufferPoolModule::sync_object(Object* ob)

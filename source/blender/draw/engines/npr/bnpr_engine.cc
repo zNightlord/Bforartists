@@ -21,7 +21,6 @@
 
 #include "BKE_object_types.hh"
 #include "GPU_capabilities.hh"
-#include "intern/mallocn_intern.h"
 #include "npr_strokegen_instance.hh"
 #include "npr_strokegen_shader.hh"
 

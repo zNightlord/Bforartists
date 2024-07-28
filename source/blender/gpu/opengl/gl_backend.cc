@@ -595,6 +595,10 @@ void GLBackend::capabilities_init()
   /* Disabled until it is proven to work. */
   GLContext::framebuffer_fetch_support = false;
 
+  GLint size;
+  glGetIntegerv(GL_MAX_SHADER_STORAGE_BLOCK_SIZE, &size);
+  std::cout << "GL_MAX_SHADER_STORAGE_BLOCK_SIZE is " << size << " bytes." << std::endl;
+
   detect_workarounds();
 
 #if BLI_SUBPROCESS_SUPPORT
