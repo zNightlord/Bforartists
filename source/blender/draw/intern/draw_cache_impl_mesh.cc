@@ -556,7 +556,7 @@ static bool mesh_batch_cache_valid(Object &object, Mesh &mesh)
     return false;
   }
 
-  /* NOTE: PBVH draw data should not be checked here. */
+  /* NOTE: bke::pbvh::Tree draw data should not be checked here. */
 
   if (cache->is_editmode != (mesh.runtime->edit_mesh != nullptr)) {
     return false;
@@ -584,10 +584,6 @@ static void mesh_batch_cache_init(Object &object, Mesh &mesh)
   MeshBatchCache *cache = static_cast<MeshBatchCache *>(mesh.runtime->batch_cache);
 
   cache->is_editmode = mesh.runtime->edit_mesh != nullptr;
-
-  if (object.sculpt && object.sculpt->pbvh) {
-    cache->pbvh_is_drawing = BKE_pbvh_is_drawing(*object.sculpt->pbvh);
-  }
 
   if (cache->is_editmode == false) {
     // cache->edge_len = mesh_render_edges_len_get(mesh);
@@ -1494,7 +1490,7 @@ void DRW_mesh_batch_cache_create_requested(TaskGraph &task_graph,
     return;
   }
 
-  /* TODO(pablodp606): This always updates the sculpt normals for regular drawing (non-PBVH).
+  /* TODO(pablodp606): This always updates the sculpt normals for regular drawing (non-pbvh::Tree).
    * This makes tools that sample the surface per step get wrong normals until a redraw happens.
    * Normal updates should be part of the brush loop and only run during the stroke when the
    * brush needs to sample the surface. The drawing code should only update the normals

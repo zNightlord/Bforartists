@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.2.0 Beta (b'a2795852cd29')\n"
+"Project-Id-Version: Blender 4.3.0 Alpha (b'de443e038c4e')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-06-10 10:16+0000\n"
+"POT-Creation-Date: 2024-07-22 07:23+0000\n"
 "PO-Revision-Date: 2024-05-23 14:56+0000\n"
 "Last-Translator: leif larsen <linuxdk1978@gmail.com>\n"
 "Language-Team: Danish <https://translate.blender.org/projects/blender-ui/ui/da/>\n"
@@ -53,6 +53,10 @@ msgstr "Liste over AOVs"
 
 msgid "Collection of AOVs"
 msgstr "Samling af AOVs"
+
+
+msgid "F-Curves"
+msgstr "F-curves"
 
 
 msgid "Action F-Curves"
@@ -239,6 +243,34 @@ msgid "Collection of action groups"
 msgstr "Samling af handlingsgrupper"
 
 
+msgid "Influence"
+msgstr "Indflydelse"
+
+
+msgid "Mix Mode"
+msgstr "Blandingstilstand"
+
+
+msgid "Replace"
+msgstr "Udskift"
+
+
+msgid "Add"
+msgstr "Tilføj"
+
+
+msgid "Subtract"
+msgstr "Fratrække"
+
+
+msgid "Multiply"
+msgstr "Gange"
+
+
+msgid "Strips"
+msgstr "stimmel"
+
+
 msgid "Action Pose Markers"
 msgstr "Handling poserings markøre"
 
@@ -263,6 +295,18 @@ msgid "Index of active pose marker"
 msgstr "Indeks for aktive poséringsmarkører"
 
 
+msgid "Active"
+msgstr "Aktiv"
+
+
+msgid "Show Expanded"
+msgstr "Vis udvidet"
+
+
+msgid "Keyframe"
+msgstr "Nøglebillede"
+
+
 msgid "Add-on"
 msgstr "Tilføjelse"
 
@@ -281,18 +325,6 @@ msgstr "modul navn"
 
 msgid "Add-on Preferences"
 msgstr "tilføjelses præference"
-
-
-msgid "Show Development Reports"
-msgstr "Vis udviklingsrapporter"
-
-
-msgid "Show the result of running commands in the main interface this has the advantage that multiple processes that run at once have their errors properly grouped which is not the case for reports which are mixed together"
-msgstr "Vis resultatet af at køre kommandoer i hovedgrænsefladen, dette har den fordel, at flere processer, der kører på én gang, har deres fejl korrekt grupperet, hvilket ikke er tilfældet for rapporter, der er blandet sammen"
-
-
-msgid "Time Out"
-msgstr "Tiden er gået"
 
 
 msgid "Compute Device Type"
@@ -411,6 +443,14 @@ msgid "Displays glTF Material Output node in Shader Editor (Menu Add > Output)"
 msgstr "Viser glTF Material Output node i Shader Editor (Menu Tilføj > Output)"
 
 
+msgid "Center"
+msgstr "Centrum"
+
+
+msgid "Bottom"
+msgstr "Bund"
+
+
 msgid "Fribidi Library"
 msgstr "Fribidi bibliotek"
 
@@ -495,10 +535,6 @@ msgid "Method used for combining Active Action's result with result of NLA stack
 msgstr "Metode brugt til at kombinere Active Actions resultat med resultat af NLA stak"
 
 
-msgid "Replace"
-msgstr "Udskift"
-
-
 msgid "The strip values replace the accumulated results by amount specified by influence"
 msgstr "Stripværdierne erstatter de akkumulerede resultater med mængde specificeret ved indflydelse"
 
@@ -511,24 +547,12 @@ msgid "The strip values are combined with accumulated results by appropriately u
 msgstr "Stripværdierne kombineres med akkumulerede resultater ved passende at bruge addition, multiplikation eller quaternion matematik baseret på kanaltype"
 
 
-msgid "Add"
-msgstr "Tilføj"
-
-
 msgid "Weighted result of strip is added to the accumulated results"
 msgstr "Det vægtede resultat af strimlen føjes til de akkumulerede resultater"
 
 
-msgid "Subtract"
-msgstr "Fratrække"
-
-
 msgid "Weighted result of strip is removed from the accumulated results"
 msgstr "Det vægtede resultat af strimlen fjernes fra de akkumulerede resultater"
-
-
-msgid "Multiply"
-msgstr "Gange"
 
 
 msgid "Weighted result of strip is multiplied with the accumulated results"
@@ -573,6 +597,10 @@ msgstr "Handlings påvirkning"
 
 msgid "Amount the Active Action contributes to the result of the NLA stack"
 msgstr "mængde, som den aktive handling bidrager til resultatet af NLA-stakken"
+
+
+msgid "None"
+msgstr "Ingen"
 
 
 msgid "Slot to temporarily hold the main action while in tweak mode"
@@ -1674,6 +1702,14 @@ msgid "Active attribute"
 msgstr "Arktive atributer"
 
 
+msgid "Active Attribute Index"
+msgstr "Aktivt attributindeks"
+
+
+msgid "Active attribute index"
+msgstr "Aktivt attributindeks"
+
+
 msgid "Active Color"
 msgstr "Aktiv farve"
 
@@ -1696,14 +1732,6 @@ msgstr "Aktiv farveegenskab"
 
 msgid "The name of the active color attribute for display and editing"
 msgstr "Navnet på den aktive farveattribut til visning og redigering"
-
-
-msgid "Active Attribute Index"
-msgstr "Aktivt attributindeks"
-
-
-msgid "Active attribute index"
-msgstr "Aktivt attributindeks"
 
 
 msgid "Default Color Attribute"
@@ -1848,10 +1876,6 @@ msgstr "Pass filter"
 
 msgid "Passes to include in the active baking pass"
 msgstr "Passer til at inkludere i det aktive bagepas"
-
-
-msgid "None"
-msgstr "Ingen"
 
 
 msgid "Emit"
@@ -2038,10 +2062,6 @@ msgid "Mode"
 msgstr "tilstand"
 
 
-msgid "Active"
-msgstr "Aktiv"
-
-
 msgid "Material"
 msgstr "Materiale"
 
@@ -2052,10 +2072,6 @@ msgstr "Retning"
 
 msgid "Threshold"
 msgstr "Tærskel"
-
-
-msgid "Blur"
-msgstr "Sløring"
 
 
 msgid "Object Path"
@@ -2162,10 +2178,6 @@ msgid "Show this image as background"
 msgstr "Vis dette billede som baggrund"
 
 
-msgid "Show Expanded"
-msgstr "Vis udvidet"
-
-
 msgid "Show On Foreground"
 msgstr "Vis på forgrunden"
 
@@ -2238,10 +2250,6 @@ msgid "Right"
 msgstr "Højre"
 
 
-msgid "Center"
-msgstr "Centrum"
-
-
 msgid "Angular"
 msgstr "angular"
 
@@ -2254,8 +2262,8 @@ msgid "Look"
 msgstr "udseende"
 
 
-msgid "Influence"
-msgstr "Indflydelse"
+msgid "Temperature"
+msgstr "Temperatur"
 
 
 msgid "Disable"
@@ -2304,10 +2312,6 @@ msgstr "Låst spor"
 
 msgid "Armature"
 msgstr "Armatur"
-
-
-msgid "Mix Mode"
-msgstr "Blandingstilstand"
 
 
 msgid "Target object"
@@ -2403,20 +2407,12 @@ msgid "Compression"
 msgstr "Kompression"
 
 
-msgid "Bottom"
-msgstr "Bund"
-
-
 msgid "Top"
 msgstr "Top"
 
 
 msgid "Visibility"
 msgstr "Synlighed"
-
-
-msgid "Keyframe"
-msgstr "Nøglebillede"
 
 
 msgid "Blend Mode"
@@ -2451,16 +2447,16 @@ msgid "Text"
 msgstr "Tekst"
 
 
-msgid "F-Curves"
-msgstr "F-curves"
-
-
 msgid "B-Bone"
 msgstr "B-Knogle"
 
 
 msgid "Local"
 msgstr "Lokal"
+
+
+msgid "Blur"
+msgstr "Sløring"
 
 
 msgid "Occlusion"
@@ -2740,6 +2736,10 @@ msgid "Reset"
 msgstr "Nulstil"
 
 
+msgid "Property Name"
+msgstr "Egenskabens navn"
+
+
 msgid "Property"
 msgstr "Egenskab"
 
@@ -2752,20 +2752,12 @@ msgid "State"
 msgstr "Tilstand"
 
 
-msgid "Property Name"
-msgstr "Egenskabens navn"
-
-
 msgid "Sensitivity"
 msgstr "Følsomhed"
 
 
 msgid "Dynamics"
 msgstr "dynamik"
-
-
-msgid "Strips"
-msgstr "stimmel"
 
 
 msgid "Timeline"
@@ -2798,10 +2790,6 @@ msgstr "Forældere beregningstyrper"
 
 msgid "Password"
 msgstr "Kodeord"
-
-
-msgid "Temperature"
-msgstr "Temperatur"
 
 
 msgid "Gray Scale"
@@ -2872,8 +2860,20 @@ msgid "Priority"
 msgstr "Prioritet"
 
 
+msgid "Time Out"
+msgstr "Tiden er gået"
+
+
 msgid "Sharpen"
 msgstr "Skarpere"
+
+
+msgid "ON"
+msgstr "Til"
+
+
+msgid "OFF"
+msgstr "Fra"
 
 
 msgid "Keyframe not in F-Curve"
@@ -2978,14 +2978,6 @@ msgstr "W3"
 
 msgid "W4"
 msgstr "W4"
-
-
-msgid "ON"
-msgstr "Til"
-
-
-msgid "OFF"
-msgstr "Fra"
 
 
 msgid "unsupported format"

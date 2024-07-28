@@ -47,6 +47,7 @@ typedef struct GreasePencilLayerRuntimeHandle GreasePencilLayerRuntimeHandle;
 typedef struct GreasePencilLayerGroupRuntimeHandle GreasePencilLayerGroupRuntimeHandle;
 #endif
 
+struct Main;
 struct GreasePencil;
 struct BlendDataReader;
 struct BlendWriter;
@@ -325,12 +326,29 @@ typedef struct GreasePencilLayer {
 #endif
 } GreasePencilLayer;
 
+typedef enum GroupColorTag {
+  LAYERGROUP_COLOR_NONE = -1,
+  LAYERGROUP_COLOR_01,
+  LAYERGROUP_COLOR_02,
+  LAYERGROUP_COLOR_03,
+  LAYERGROUP_COLOR_04,
+  LAYERGROUP_COLOR_05,
+  LAYERGROUP_COLOR_06,
+  LAYERGROUP_COLOR_07,
+  LAYERGROUP_COLOR_08,
+} GroupColorTag;
+
 typedef struct GreasePencilLayerTreeGroup {
   GreasePencilLayerTreeNode base;
   /**
    * List of `GreasePencilLayerTreeNode`.
    */
   ListBase children;
+  /**
+   * Icon color tag.
+   */
+  int8_t color_tag;
+  char _pad[7];
   /**
    * Runtime struct pointer.
    */
@@ -558,7 +576,9 @@ typedef struct GreasePencil {
   blender::IndexMask layer_selection_by_name(const blender::StringRefNull name,
                                              blender::IndexMaskMemory &memory) const;
 
-  void rename_node(blender::bke::greasepencil::TreeNode &node, blender::StringRefNull new_name);
+  void rename_node(Main &bmain,
+                   blender::bke::greasepencil::TreeNode &node,
+                   blender::StringRefNull new_name);
 
   void remove_layer(blender::bke::greasepencil::Layer &layer);
   void remove_group(blender::bke::greasepencil::LayerGroup &group, bool keep_children = false);
@@ -585,6 +605,12 @@ typedef struct GreasePencil {
    * \returns true if any frame was removed.
    */
   bool remove_frames(blender::bke::greasepencil::Layer &layer, blender::Span<int> frame_numbers);
+
+  /**
+   * Adds multiple layers each with its own empty drawing. This can be more efficient than adding
+   * every layer and drawing one by one.
+   */
+  void add_layers_with_empty_drawings_for_eval(int num);
 
   /**
    * Low-level resizing of drawings array. Only allocates new entries in the array, no drawings are

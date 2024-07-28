@@ -66,6 +66,7 @@ void Instance::init()
   /* TODO(fclem): Remove DRW global usage. */
   resources.globals_buf = G_draw.block_ubo;
   resources.theme_settings = G_draw.block;
+  resources.weight_ramp_tx.wrap(G_draw.weight_ramp);
 }
 
 void Instance::begin_sync()
@@ -78,7 +79,9 @@ void Instance::begin_sync()
   background.begin_sync(resources, state);
   prepass.begin_sync(resources, state);
   empties.begin_sync();
+  lattices.begin_sync(resources, state);
   metaballs.begin_sync();
+  speakers.begin_sync();
   grid.begin_sync(resources, state, view);
 }
 
@@ -110,6 +113,7 @@ void Instance::object_sync(ObjectRef &ob_ref, Manager &manager)
       case OB_SURF:
         break;
       case OB_LATTICE:
+        lattices.edit_object_sync(manager, ob_ref, resources);
         break;
       case OB_MBALL:
         metaballs.edit_object_sync(ob_ref, resources);
@@ -128,12 +132,20 @@ void Instance::object_sync(ObjectRef &ob_ref, Manager &manager)
         break;
       case OB_ARMATURE:
         break;
+      case OB_LATTICE:
+        if (!in_edit_mode) {
+          lattices.object_sync(manager, ob_ref, resources, state);
+        }
+        break;
       case OB_MBALL:
         if (!in_edit_mode) {
           metaballs.object_sync(ob_ref, resources, state);
         }
         break;
       case OB_GPENCIL_LEGACY:
+        break;
+      case OB_SPEAKER:
+        speakers.object_sync(ob_ref, resources, state);
         break;
     }
   }
@@ -145,6 +157,7 @@ void Instance::end_sync()
 
   metaballs.end_sync(resources, shapes, state);
   empties.end_sync(resources, shapes, state);
+  speakers.end_sync(resources, shapes, state);
 }
 
 void Instance::draw(Manager &manager)
@@ -210,12 +223,16 @@ void Instance::draw(Manager &manager)
   background.draw(resources, manager);
 
   empties.draw(resources, manager, view);
+  lattices.draw(resources, manager, view);
   metaballs.draw(resources, manager, view);
+  speakers.draw(resources, manager, view);
 
   grid.draw(resources, manager, view);
 
   empties.draw_in_front(resources, manager, view);
+  lattices.draw_in_front(resources, manager, view);
   metaballs.draw_in_front(resources, manager, view);
+  speakers.draw_in_front(resources, manager, view);
 
   // anti_aliasing.draw(resources, manager, view);
 

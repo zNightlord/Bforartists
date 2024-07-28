@@ -246,7 +246,6 @@ void *BLO_read_get_new_data_address(BlendDataReader *reader, const void *old_add
 void *BLO_read_get_new_data_address_no_us(BlendDataReader *reader,
                                           const void *old_address,
                                           size_t expected_size);
-void *BLO_read_get_new_packed_address(BlendDataReader *reader, const void *old_address);
 void *BLO_read_struct_array_with_size(BlendDataReader *reader,
                                       const void *old_address,
                                       size_t expected_size);
@@ -259,15 +258,15 @@ void *BLO_read_struct_array_with_size(BlendDataReader *reader,
 #define BLO_read_struct_array(reader, struct_name, array_size, ptr_p) \
   *((void **)ptr_p) = BLO_read_struct_array_with_size( \
       reader, *((void **)ptr_p), sizeof(struct_name) * (array_size))
-#define BLO_read_packed_address(reader, ptr_p) \
-  *((void **)ptr_p) = BLO_read_get_new_packed_address((reader), *(ptr_p))
 
 /* Read all elements in list
  *
  * Updates all `->prev` and `->next` pointers of the list elements.
  * Updates the `list->first` and `list->last` pointers.
  */
-void BLO_read_struct_list_with_size(BlendDataReader *reader, size_t elem_size, ListBase *list);
+void BLO_read_struct_list_with_size(BlendDataReader *reader,
+                                    size_t expected_elem_size,
+                                    ListBase *list);
 
 #define BLO_read_struct_list(reader, struct_name, list) \
   BLO_read_struct_list_with_size(reader, sizeof(struct_name), list)
@@ -337,13 +336,13 @@ struct Library *BLO_read_data_current_library(BlendDataReader *reader);
  * during library linking part of blend-file reading process.
  *
  * \param self_id: the ID owner of the given `id` pointer. Note that it may be an embedded ID.
- * \param do_linked_only: If `true`, only return found pointer if it is a linked ID. Used to
+ * \param is_linked_only: If `true`, only return found pointer if it is a linked ID. Used to
  * prevent linked data to point to local IDs.
  * \return the new address of the given ID pointer, or null if not found.
  */
 ID *BLO_read_get_new_id_address(BlendLibReader *reader,
                                 ID *self_id,
-                                const bool do_linked_only,
+                                const bool is_linked_only,
                                 ID *id) ATTR_NONNULL(2);
 
 /**

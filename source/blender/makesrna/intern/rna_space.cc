@@ -462,9 +462,6 @@ static const EnumPropertyItem rna_enum_view3dshading_render_pass_type_items[] = 
     {EEVEE_RENDER_PASS_SPECULAR_COLOR, "SPECULAR_COLOR", 0, "Specular Color", ""},
     {EEVEE_RENDER_PASS_VOLUME_LIGHT, "VOLUME_LIGHT", 0, "Volume Light", ""},
 
-    RNA_ENUM_ITEM_HEADING(N_("Effects"), nullptr),
-    {EEVEE_RENDER_PASS_BLOOM, "BLOOM", 0, "Bloom", ""},
-
     RNA_ENUM_ITEM_HEADING(N_("Data"), nullptr),
     {EEVEE_RENDER_PASS_NORMAL, "NORMAL", 0, "Normal", ""},
     {EEVEE_RENDER_PASS_MIST, "MIST", 0, "Mist", ""},
@@ -1068,7 +1065,7 @@ static void rna_RegionView3D_quadview_update(Main * /*main*/, Scene * /*scene*/,
   }
 }
 
-/* same as above but call clip==true */
+/** Same as #rna_RegionView3D_quadview_update but call `clip == true`. */
 static void rna_RegionView3D_quadview_clip_update(Main * /*main*/,
                                                   Scene * /*scene*/,
                                                   PointerRNA *ptr)
@@ -1438,7 +1435,6 @@ static const EnumPropertyItem *rna_3DViewShading_render_pass_itemf(bContext *C,
   Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
 
-  const bool bloom_enabled = scene->eevee.flag & SCE_EEVEE_BLOOM_ENABLED;
   const bool aov_available = BKE_view_layer_has_valid_aov(view_layer);
   const bool eevee_next_active = STREQ(scene->r.engine, "BLENDER_EEVEE_NEXT");
 
@@ -1468,10 +1464,10 @@ static const EnumPropertyItem *rna_3DViewShading_render_pass_itemf(bContext *C,
              !eevee_next_active)
     {
     }
-    else if (!((!bloom_enabled &&
-                (item->value == EEVEE_RENDER_PASS_BLOOM || STREQ(item->name, "Effects"))) ||
-               (!aov_available && STREQ(item->name, "Shader AOV"))))
-    {
+    else if (!aov_available && STREQ(item->name, "Shader AOV")) {
+      /* Don't add Shader AOV submenu when there are no AOVs defined. */
+    }
+    else {
       RNA_enum_item_add(&result, &totitem, item);
     }
   }
@@ -1484,13 +1480,9 @@ static int rna_3DViewShading_render_pass_get(PointerRNA *ptr)
 {
   View3DShading *shading = (View3DShading *)ptr->data;
   eViewLayerEEVEEPassType result = eViewLayerEEVEEPassType(shading->render_pass);
-  Scene *scene = rna_3DViewShading_scene(ptr);
   ViewLayer *view_layer = rna_3DViewShading_view_layer(ptr);
 
-  if (result == EEVEE_RENDER_PASS_BLOOM && ((scene->eevee.flag & SCE_EEVEE_BLOOM_ENABLED) == 0)) {
-    return EEVEE_RENDER_PASS_COMBINED;
-  }
-  else if (result == EEVEE_RENDER_PASS_AOV) {
+  if (result == EEVEE_RENDER_PASS_AOV) {
     if (!view_layer) {
       return EEVEE_RENDER_PASS_COMBINED;
     }
@@ -1508,7 +1500,6 @@ static int rna_3DViewShading_render_pass_get(PointerRNA *ptr)
 static void rna_3DViewShading_render_pass_set(PointerRNA *ptr, int value)
 {
   View3DShading *shading = (View3DShading *)ptr->data;
-  Scene *scene = rna_3DViewShading_scene(ptr);
   ViewLayer *view_layer = rna_3DViewShading_view_layer(ptr);
   shading->aov_name[0] = 0;
 
@@ -1527,11 +1518,6 @@ static void rna_3DViewShading_render_pass_set(PointerRNA *ptr, int value)
 
     shading->render_pass = EEVEE_RENDER_PASS_AOV;
     STRNCPY(shading->aov_name, aov->name);
-  }
-  else if (value == EEVEE_RENDER_PASS_BLOOM &&
-           ((scene->eevee.flag & SCE_EEVEE_BLOOM_ENABLED) == 0))
-  {
-    shading->render_pass = EEVEE_RENDER_PASS_COMBINED;
   }
   else {
     shading->render_pass = value;
@@ -3420,11 +3406,6 @@ const EnumPropertyItem *rna_SpaceSpreadsheet_attribute_domain_itemf(bContext * /
         continue;
       }
     }
-    if (!U.experimental.use_grease_pencil_version3 &&
-        bke::AttrDomain(item->value) == bke::AttrDomain::Layer)
-    {
-      continue;
-    }
     if (bke::AttrDomain(item->value) == bke::AttrDomain::Point &&
         component_type == bke::GeometryComponent::Type::Mesh)
     {
@@ -4057,7 +4038,7 @@ static void rna_def_space_outliner(BlenderRNA *brna)
   RNA_def_property_update(prop, NC_SPACE | ND_SPACE_OUTLINER, nullptr);
 
   prop = RNA_def_property(srna, "use_filter_object_grease_pencil", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_negative_sdna(prop, nullptr, "filter", SO_FILTER_NO_OB_GPENCIL_LEGACY);
+  RNA_def_property_boolean_negative_sdna(prop, nullptr, "filter", SO_FILTER_NO_OB_GREASE_PENCIL);
   RNA_def_property_ui_text(prop, "Show Grease Pencil", "Show grease pencil objects");
   RNA_def_property_update(prop, NC_SPACE | ND_SPACE_OUTLINER, nullptr);
 
@@ -5173,6 +5154,11 @@ static void rna_def_space_view3d(BlenderRNA *brna)
   prop = RNA_def_property(srna, "show_gizmo_context", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_negative_sdna(prop, nullptr, "gizmo_flag", V3D_GIZMO_HIDE_CONTEXT);
   RNA_def_property_ui_text(prop, "Context Gizmo", "Context sensitive gizmos for the active item");
+  RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, nullptr);
+
+  prop = RNA_def_property(srna, "show_gizmo_modifier", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_negative_sdna(prop, nullptr, "gizmo_flag", V3D_GIZMO_HIDE_MODIFIER);
+  RNA_def_property_ui_text(prop, "Modifier Gizmo", "Gizmos for the active modifier");
   RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, nullptr);
 
   prop = RNA_def_property(srna, "show_gizmo_tool", PROP_BOOLEAN, PROP_NONE);
@@ -7786,12 +7772,6 @@ static void rna_def_space_node(BlenderRNA *brna)
   prop = RNA_def_property(srna, "show_annotation", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "flag", SNODE_SHOW_GPENCIL);
   RNA_def_property_ui_text(prop, "Show Annotation", "Show annotations for this view");
-  RNA_def_property_update(prop, NC_SPACE | ND_SPACE_NODE_VIEW, nullptr);
-
-  prop = RNA_def_property(srna, "use_auto_render", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, nullptr, "flag", SNODE_AUTO_RENDER);
-  RNA_def_property_ui_text(
-      prop, "Auto Render", "Re-render and composite changed layers on 3D edits");
   RNA_def_property_update(prop, NC_SPACE | ND_SPACE_NODE_VIEW, nullptr);
 
   prop = RNA_def_property(srna, "backdrop_zoom", PROP_FLOAT, PROP_NONE);

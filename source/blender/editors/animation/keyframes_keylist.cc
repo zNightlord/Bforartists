@@ -38,6 +38,8 @@
 
 #include "ANIM_action.hh"
 
+using namespace blender;
+
 /* *************************** Keyframe Processing *************************** */
 
 /* ActKeyColumns (Keyframe Columns) ------------------------------------------ */
@@ -1111,22 +1113,14 @@ void fcurve_to_keylist(AnimData *adt,
 
   BezTripleChain chain = {nullptr};
 
-  int start_index = 0;
-  /* Used in an exclusive way. */
-  int end_index = fcu->totvert;
-
-  bool replace;
-  start_index = BKE_fcurve_bezt_binarysearch_index(fcu->bezt, range[0], fcu->totvert, &replace);
-  if (start_index > 0) {
-    start_index--;
-  }
-  end_index = BKE_fcurve_bezt_binarysearch_index(fcu->bezt, range[1], fcu->totvert, &replace);
-  if (end_index < fcu->totvert) {
-    end_index++;
-  }
-
   /* Loop through beztriples, making ActKeysColumns. */
-  for (int v = start_index; v < end_index; v++) {
+  for (int v = 0; v < fcu->totvert; v++) {
+    /* Not using binary search to limit the range because the FCurve might not be sorted e.g. when
+     * transforming in the Dope Sheet. */
+    const float x = fcu->bezt[v].vec[1][0];
+    if (x < range[0] || x > range[1]) {
+      continue;
+    }
     chain.cur = &fcu->bezt[v];
 
     /* Neighbor columns, accounting for being cyclic. */
@@ -1142,7 +1136,7 @@ void fcurve_to_keylist(AnimData *adt,
     add_bezt_to_keycolumns_list(keylist, &chain);
   }
 
-  update_keyblocks(keylist, &fcu->bezt[start_index], end_index - start_index);
+  update_keyblocks(keylist, &fcu->bezt[0], fcu->totvert);
 
   if (adt) {
     ANIM_nla_mapping_apply_fcurve(adt, fcu, true, false);
@@ -1167,6 +1161,19 @@ void action_group_to_keylist(AnimData *adt,
   }
 }
 
+void action_slot_to_keylist(AnimData *adt,
+                            animrig::Action &action,
+                            const animrig::slot_handle_t slot_handle,
+                            AnimKeylist *keylist,
+                            const int saction_flag,
+                            blender::float2 range)
+{
+  BLI_assert(GS(action.id.name) == ID_AC);
+  for (FCurve *fcurve : fcurves_for_action_slot(action, slot_handle)) {
+    fcurve_to_keylist(adt, fcurve, keylist, saction_flag, range);
+  }
+}
+
 void action_to_keylist(AnimData *adt,
                        bAction *dna_action,
                        AnimKeylist *keylist,
@@ -1179,7 +1186,7 @@ void action_to_keylist(AnimData *adt,
 
   blender::animrig::Action &action = dna_action->wrap();
 
-  /* TODO: move this into fcurves_for_animation(). */
+  /* TODO: move this into fcurves_for_action_slot(). */
   if (action.is_action_legacy()) {
     LISTBASE_FOREACH (FCurve *, fcu, &action.curves) {
       fcurve_to_keylist(adt, fcu, keylist, saction_flag, range);
@@ -1188,12 +1195,10 @@ void action_to_keylist(AnimData *adt,
   }
 
   /**
-   * Assumption: the animation is bound to adt->binding_handle. This assumption will break when we
-   * have things like reference strips, where the strip can reference another binding handle.
+   * Assumption: the animation is bound to adt->slot_handle. This assumption will break when we
+   * have things like reference strips, where the strip can reference another slot handle.
    */
-  for (FCurve *fcurve : fcurves_for_animation(action, adt->binding_handle)) {
-    fcurve_to_keylist(adt, fcurve, keylist, saction_flag, range);
-  }
+  action_slot_to_keylist(adt, action, adt->slot_handle, keylist, saction_flag, range);
 }
 
 void gpencil_to_keylist(bDopeSheet *ads, bGPdata *gpd, AnimKeylist *keylist, const bool active)

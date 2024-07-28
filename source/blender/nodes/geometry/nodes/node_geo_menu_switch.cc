@@ -24,7 +24,7 @@
 #include "BLO_read_write.hh"
 
 #include "RNA_enum_types.hh"
-#include "RNA_prototypes.h"
+#include "RNA_prototypes.hh"
 
 #include "BKE_screen.hh"
 
@@ -119,7 +119,7 @@ static void node_free_storage(bNode *node)
 static void node_copy_storage(bNodeTree * /*dst_tree*/, bNode *dst_node, const bNode *src_node)
 {
   const NodeMenuSwitch &src_storage = node_storage(*src_node);
-  NodeMenuSwitch *dst_storage = MEM_new<NodeMenuSwitch>(__func__, src_storage);
+  NodeMenuSwitch *dst_storage = MEM_cnew<NodeMenuSwitch>(__func__, src_storage);
   dst_node->storage = dst_storage;
 
   socket_items::copy_array<MenuSwitchItemsAccessor>(*src_node, *dst_node);
@@ -377,7 +377,7 @@ static void node_layout_ex(uiLayout *layout, bContext *C, PointerRNA *ptr)
   bNode &node = *static_cast<bNode *>(ptr->data);
 
   static const uiListType *menu_items_list = []() {
-    uiListType *list = MEM_new<uiListType>(__func__);
+    uiListType *list = MEM_cnew<uiListType>(__func__);
     STRNCPY(list->idname, "NODE_UL_enum_definition_items");
     list->draw_item = draw_menu_switch_item;
     WM_uilisttype_add(list);

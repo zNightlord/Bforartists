@@ -24,6 +24,7 @@ namespace blender {
 namespace gpu {
 
 class GPULogParser;
+class Context;
 
 /* Set to 1 to log the full source of shaders that fail to compile. */
 #define DEBUG_LOG_SHADER_SRC_ON_ERROR 0
@@ -181,7 +182,18 @@ class ShaderCompiler {
   virtual bool batch_is_ready(BatchHandle handle) = 0;
   virtual Vector<Shader *> batch_finalize(BatchHandle &handle) = 0;
 
-  virtual void precompile_specializations(Span<ShaderSpecialization> /*specializations*/){};
+  virtual SpecializationBatchHandle precompile_specializations(
+      Span<ShaderSpecialization> /*specializations*/)
+  {
+    /* No-op.*/
+    return 0;
+  };
+
+  virtual bool specialization_batch_is_ready(SpecializationBatchHandle &handle)
+  {
+    handle = 0;
+    return true;
+  };
 };
 
 /* Generic (fully synchronous) implementation for backends that don't implement their own
@@ -244,6 +256,9 @@ class GPULogParser {
 
   MEM_CXX_CLASS_ALLOC_FUNCS("GPULogParser");
 };
+
+void printf_begin(Context *ctx);
+void printf_end(Context *ctx);
 
 }  // namespace gpu
 }  // namespace blender

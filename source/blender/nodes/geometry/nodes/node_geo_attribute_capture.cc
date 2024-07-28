@@ -88,7 +88,7 @@ static void draw_item(uiList * /*ui_list*/,
 static void node_layout_ex(uiLayout *layout, bContext *C, PointerRNA *ptr)
 {
   static const uiListType *items_list = []() {
-    uiListType *list = MEM_new<uiListType>(__func__);
+    uiListType *list = MEM_cnew<uiListType>(__func__);
     STRNCPY(list->idname, "NODE_UL_capture_items_list");
     list->draw_item = draw_item;
     WM_uilisttype_add(list);
@@ -293,8 +293,8 @@ static void node_free_storage(bNode *node)
 static void node_copy_storage(bNodeTree * /*dst_tree*/, bNode *dst_node, const bNode *src_node)
 {
   const NodeGeometryAttributeCapture &src_storage = node_storage(*src_node);
-  NodeGeometryAttributeCapture *dst_storage = MEM_new<NodeGeometryAttributeCapture>(__func__,
-                                                                                    src_storage);
+  NodeGeometryAttributeCapture *dst_storage = MEM_cnew<NodeGeometryAttributeCapture>(__func__,
+                                                                                     src_storage);
   dst_node->storage = dst_storage;
 
   socket_items::copy_array<CaptureAttributeItemsAccessor>(*src_node, *dst_node);

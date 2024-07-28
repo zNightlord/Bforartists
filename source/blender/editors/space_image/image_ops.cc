@@ -59,7 +59,7 @@
 #include "RNA_access.hh"
 #include "RNA_define.hh"
 #include "RNA_enum_types.hh"
-#include "RNA_prototypes.h"
+#include "RNA_prototypes.hh"
 
 #include "ED_image.hh"
 #include "ED_mask.hh"
@@ -4257,7 +4257,11 @@ static int tile_add_invoke(bContext *C, wmOperator *op, const wmEvent * /*event*
   RNA_int_set(op->ptr, "count", 1);
   RNA_string_set(op->ptr, "label", "");
 
-  return WM_operator_props_dialog_popup(C, op, 300, IFACE_("Add Tile to Image"), IFACE_("Add"));
+  return WM_operator_props_dialog_popup(C,
+                                        op,
+                                        300,
+                                        IFACE_("Add Tile to Image"),
+                                        CTX_IFACE_(BLT_I18NCONTEXT_OPERATOR_DEFAULT, "Add"));
 }
 
 static void tile_add_draw(bContext * /*C*/, wmOperator *op)

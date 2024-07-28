@@ -37,7 +37,7 @@
 #include "BKE_node_tree_update.hh"
 #include "BKE_scene.hh"
 
-#include "RNA_prototypes.h"
+#include "RNA_prototypes.hh"
 
 #include "UI_resources.hh"
 
@@ -1038,6 +1038,11 @@ static void iter_shader_to_rgba_depth_count(bNode *node,
   if (node->type == SH_NODE_SHADERTORGB) {
     depth_level++;
     max_depth = std::max(max_depth, depth_level);
+  }
+
+  if (node->runtime->tmp_flag >= depth_level) {
+    /* We already iterated this branch at this or a greater depth. */
+    return;
   }
   node->runtime->tmp_flag = std::max(node->runtime->tmp_flag, depth_level);
 

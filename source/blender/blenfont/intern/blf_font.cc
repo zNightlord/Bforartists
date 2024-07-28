@@ -524,6 +524,80 @@ int blf_font_draw_mono(
   return columns;
 }
 
+#ifndef WITH_HEADLESS
+void blf_draw_svg_icon(
+    FontBLF *font, uint icon_id, float x, float y, float size, float color[4], float outline_alpha)
+{
+  blf_font_size(font, size);
+  font->pos[0] = int(x);
+  font->pos[1] = int(y);
+  font->pos[2] = 0;
+
+  if (color != nullptr) {
+    rgba_float_to_uchar(font->color, color);
+  }
+
+  if (outline_alpha > 0.0f) {
+    font->flags |= BLF_SHADOW;
+    font->shadow = FontShadowType::Outline;
+    font->shadow_x = 0;
+    font->shadow_y = 0;
+    font->shadow_color[0] = 0;
+    font->shadow_color[1] = 0;
+    font->shadow_color[2] = 0;
+    font->shadow_color[3] = char(outline_alpha * 255.0f);
+  }
+
+  GlyphCacheBLF *gc = blf_glyph_cache_acquire(font);
+  blf_batch_draw_begin(font);
+
+  GlyphBLF *g = blf_glyph_ensure_icon(gc, icon_id, color == nullptr);
+  if (g) {
+    blf_glyph_draw(font, gc, g, 0, 0);
+  }
+
+  if (outline_alpha > 0) {
+    font->flags &= ~BLF_SHADOW;
+  }
+
+  blf_batch_draw_end();
+  blf_glyph_cache_release(font);
+}
+
+blender::Array<uchar> blf_svg_icon_bitmap(
+    FontBLF *font, uint icon_id, float size, int *r_width, int *r_height)
+{
+  blf_font_size(font, size);
+  GlyphCacheBLF *gc = blf_glyph_cache_acquire(font);
+  GlyphBLF *g = blf_glyph_ensure_icon(gc, icon_id, false);
+
+  if (!g) {
+    blf_glyph_cache_release(font);
+    *r_width = 0;
+    *r_height = 0;
+    return {};
+  }
+
+  *r_width = g->dims[0];
+  *r_height = g->dims[1];
+  blender::Array<uchar> bitmap(g->dims[0] * g->dims[1] * 4, 255);
+
+  if (g->num_channels == 4) {
+    memcpy(bitmap.data(), g->bitmap, size_t(bitmap.size()));
+  }
+  else if (g->num_channels == 1) {
+    for (int64_t y = 0; y < int64_t(g->dims[1]); y++) {
+      for (int64_t x = 0; x < int64_t(g->dims[0]); x++) {
+        int64_t offs_in = (y * int64_t(g->pitch)) + x;
+        bitmap[int64_t(offs_in * 4 + 3)] = g->bitmap[offs_in];
+      }
+    }
+  }
+  blf_glyph_cache_release(font);
+  return bitmap;
+}
+#endif /* WITH_HEADLESS */
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -827,8 +901,8 @@ static void blf_font_boundbox_ex(FontBLF *font,
     }
     const ft_pix pen_x_next = pen_x + g->advance_x;
 
-    const ft_pix gbox_xmin = pen_x;
-    const ft_pix gbox_xmax = pen_x_next;
+    const ft_pix gbox_xmin = std::min(pen_x, pen_x + g->box_xmin);
+    const ft_pix gbox_xmax = std::max(pen_x_next, pen_x + g->box_xmax);
     const ft_pix gbox_ymin = g->box_ymin + pen_y;
     const ft_pix gbox_ymax = g->box_ymax + pen_y;
 

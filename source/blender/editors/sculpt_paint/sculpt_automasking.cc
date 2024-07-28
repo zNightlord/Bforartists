@@ -11,6 +11,7 @@
 #include "BLI_array.hh"
 #include "BLI_hash.h"
 #include "BLI_index_range.hh"
+#include "BLI_math_base.hh"
 #include "BLI_math_base_safe.h"
 #include "BLI_math_vector.h"
 #include "BLI_math_vector_types.hh"
@@ -22,6 +23,7 @@
 #include "BKE_colortools.hh"
 #include "BKE_paint.hh"
 #include "BKE_pbvh_api.hh"
+#include "BKE_subdiv_ccg.hh"
 
 #include "mesh_brush_common.hh"
 #include "paint_intern.hh"
@@ -560,7 +562,7 @@ float factor_get(const Cache *automasking,
   }
 
   if (automasking->settings.flags & BRUSH_AUTOMASKING_BOUNDARY_EDGES) {
-    if (SCULPT_vertex_is_boundary(ss, vert)) {
+    if (boundary::vert_is_boundary(ss, vert)) {
       return 0.0f;
     }
   }
@@ -588,15 +590,15 @@ float factor_get(const Cache *automasking,
   return automasking_factor_end(ss, automasking, vert, mask);
 }
 
-static void mesh_orig_vert_data_update(SculptOrigVertData &orig_data, const int vert)
+static void mesh_orig_vert_data_update(SculptOrigVertData &orig_data, const int i)
 {
-  orig_data.co = orig_data.coords[vert];
-  orig_data.no = orig_data.normals[vert];
+  orig_data.co = orig_data.coords[i];
+  orig_data.no = orig_data.normals[i];
 }
 
 void calc_vert_factors(const Object &object,
                        const Cache &cache,
-                       const PBVHNode &node,
+                       const bke::pbvh::Node &node,
                        const Span<int> verts,
                        const MutableSpan<float> factors)
 {
@@ -612,7 +614,80 @@ void calc_vert_factors(const Object &object,
   }
 }
 
-NodeData node_begin(const Object &object, const Cache *automasking, const PBVHNode &node)
+void calc_face_factors(const Object &object,
+                       const OffsetIndices<int> faces,
+                       const Span<int> corner_verts,
+                       const Cache &cache,
+                       const bke::pbvh::Node &node,
+                       const Span<int> face_indices,
+                       const MutableSpan<float> factors)
+{
+  SculptSession &ss = *object.sculpt;
+
+  NodeData data = node_begin(object, &cache, node);
+  /* NOTE: We explicitly nullify data.orig_data here as we currently cannot go from mesh vert index
+   * to the undo node array index. The only brush this method is currently used for is the Draw
+   * Face Set brush, which never modifies the position of the vertices in a brush stroke. This
+   * needs to be implemented in the future if brushes that iterate over faces need original
+   * position and normal data. */
+  data.orig_data = std::nullopt;
+
+  for (const int i : face_indices.index_range()) {
+    const Span<int> face_verts = corner_verts.slice(faces[face_indices[i]]);
+    float sum = 0.0f;
+    for (const int vert : face_verts) {
+      sum += factor_get(&cache, ss, BKE_pbvh_make_vref(vert), &data);
+    }
+    factors[i] *= sum * math::rcp(float(face_verts.size()));
+  }
+}
+
+void calc_grids_factors(const Object &object,
+                        const Cache &cache,
+                        const bke::pbvh::Node &node,
+                        const Span<int> grids,
+                        const MutableSpan<float> factors)
+{
+  SculptSession &ss = *object.sculpt;
+  const SubdivCCG &subdiv_ccg = *ss.subdiv_ccg;
+  const CCGKey key = BKE_subdiv_ccg_key_top_level(subdiv_ccg);
+  NodeData data = node_begin(object, &cache, node);
+
+  for (const int i : grids.index_range()) {
+    const int node_start = i * key.grid_area;
+    const int grids_start = grids[i] * key.grid_area;
+    for (const int offset : IndexRange(key.grid_area)) {
+      if (data.orig_data) {
+        mesh_orig_vert_data_update(*data.orig_data, node_start + offset);
+      }
+      factors[node_start + offset] *= factor_get(
+          &cache, ss, BKE_pbvh_make_vref(grids_start + offset), &data);
+    }
+  }
+}
+
+void calc_vert_factors(const Object &object,
+                       const Cache &cache,
+                       const bke::pbvh::Node &node,
+                       const Set<BMVert *, 0> &verts,
+                       const MutableSpan<float> factors)
+{
+  SculptSession &ss = *object.sculpt;
+
+  NodeData data = node_begin(object, &cache, node);
+
+  int i = 0;
+  for (BMVert *vert : verts) {
+    if (data.orig_data) {
+      BM_log_original_vert_data(
+          data.orig_data->bm_log, vert, &data.orig_data->co, &data.orig_data->no);
+    }
+    factors[i] *= factor_get(&cache, ss, BKE_pbvh_make_vref(intptr_t(vert)), &data);
+    i++;
+  }
+}
+
+NodeData node_begin(const Object &object, const Cache *automasking, const bke::pbvh::Node &node)
 {
   if (!automasking) {
     return {};
@@ -622,7 +697,7 @@ NodeData node_begin(const Object &object, const Cache *automasking, const PBVHNo
   if (automasking->settings.flags &
       (BRUSH_AUTOMASKING_BRUSH_NORMAL | BRUSH_AUTOMASKING_VIEW_NORMAL))
   {
-    SCULPT_orig_vert_data_init(*automask_data.orig_data, object, node, undo::Type::Position);
+    automask_data.orig_data = SCULPT_orig_vert_data_init(object, node, undo::Type::Position);
   }
   return automask_data;
 }
@@ -719,6 +794,11 @@ static void init_face_sets_masking(const Sculpt &sd, Object &ob)
 
 #define EDGE_DISTANCE_INF -1
 
+enum eBoundaryAutomaskMode {
+  AUTOMASK_INIT_BOUNDARY_EDGES = 1,
+  AUTOMASK_INIT_BOUNDARY_FACE_SETS = 2,
+};
+
 static void init_boundary_masking(Object &ob, eBoundaryAutomaskMode mode, int propagation_steps)
 {
   SculptSession &ss = *ob.sculpt;
@@ -732,7 +812,7 @@ static void init_boundary_masking(Object &ob, eBoundaryAutomaskMode mode, int pr
     edge_distance[i] = EDGE_DISTANCE_INF;
     switch (mode) {
       case AUTOMASK_INIT_BOUNDARY_EDGES:
-        if (SCULPT_vertex_is_boundary(ss, vertex)) {
+        if (boundary::vert_is_boundary(ss, vertex)) {
           edge_distance[i] = 0;
         }
         break;
@@ -869,7 +949,7 @@ std::unique_ptr<Cache> cache_init(const Sculpt &sd, const Brush *brush, Object &
 
   std::unique_ptr<Cache> automasking = std::make_unique<Cache>();
   cache_settings_update(*automasking, ss, sd, brush);
-  SCULPT_boundary_info_ensure(ob);
+  boundary::ensure_boundary_info(ob);
 
   automasking->current_stroke_id = ss.stroke_id;
 

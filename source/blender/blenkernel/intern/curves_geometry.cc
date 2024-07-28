@@ -105,6 +105,8 @@ CurvesGeometry::CurvesGeometry(const CurvesGeometry &other)
   BKE_defgroup_copy_list(&this->vertex_group_names, &other.vertex_group_names);
   this->vertex_group_active_index = other.vertex_group_active_index;
 
+  this->attributes_active_index = other.attributes_active_index;
+
   this->runtime = MEM_new<CurvesGeometryRuntime>(
       __func__,
       CurvesGeometryRuntime{other.runtime->curve_offsets_sharing_info,
@@ -116,7 +118,8 @@ CurvesGeometry::CurvesGeometry(const CurvesGeometry &other)
                             other.runtime->evaluated_length_cache,
                             other.runtime->evaluated_tangent_cache,
                             other.runtime->evaluated_normal_cache,
-                            {}});
+                            {},
+                            true});
 
   if (other.runtime->bake_materials) {
     this->runtime->bake_materials = std::make_unique<bake::BakeMaterialsList>(
@@ -156,6 +159,9 @@ CurvesGeometry::CurvesGeometry(CurvesGeometry &&other)
 
   this->vertex_group_active_index = other.vertex_group_active_index;
   other.vertex_group_active_index = 0;
+
+  this->attributes_active_index = other.attributes_active_index;
+  other.attributes_active_index = 0;
 
   this->runtime = other.runtime;
   other.runtime = nullptr;
@@ -354,6 +360,9 @@ MutableSpan<float3> CurvesGeometry::positions_for_write()
 
 Span<int> CurvesGeometry::offsets() const
 {
+  if (this->curve_num == 0) {
+    return {};
+  }
   return {this->curve_offsets, this->curve_num + 1};
 }
 MutableSpan<int> CurvesGeometry::offsets_for_write()
@@ -1065,6 +1074,7 @@ void CurvesGeometry::tag_topology_changed()
   this->tag_positions_changed();
   this->runtime->evaluated_offsets_cache.tag_dirty();
   this->runtime->nurbs_basis_cache.tag_dirty();
+  this->runtime->check_type_counts = true;
 }
 void CurvesGeometry::tag_normals_changed()
 {

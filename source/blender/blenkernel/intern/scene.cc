@@ -107,7 +107,15 @@
 
 #include "bmesh.hh"
 
+using blender::bke::CompositorRuntime;
 using blender::bke::SceneRuntime;
+
+CompositorRuntime::~CompositorRuntime()
+{
+  if (preview_depsgraph) {
+    DEG_graph_free(preview_depsgraph);
+  }
+}
 
 CurveMapping *BKE_sculpt_default_cavity_curve()
 
@@ -200,7 +208,7 @@ static void scene_init_data(ID *id)
     pset->brush[PE_BRUSH_CUT].strength = 1.0f;
   }
 
-  STRNCPY(scene->r.engine, RE_engine_id_BLENDER_EEVEE);
+  STRNCPY(scene->r.engine, RE_engine_id_BLENDER_EEVEE_NEXT);
 
   STRNCPY(scene->r.pic, U.renderdir);
 
@@ -588,27 +596,17 @@ static void scene_foreach_paint(LibraryForeachIDData *data,
                                                     SCENE_FOREACH_UNDO_RESTORE,
                                                     reader,
                                                     &paint_old->brush,
-                                                    IDWALK_CB_USER);
+                                                    IDWALK_CB_NOP);
 
-  for (int i = 0; i < paint_old->tool_slots_len; i++) {
-    /* This is a bit tricky.
-     *  - In case we do not do `undo_restore`, `paint` and `paint_old` pointers are the same, so
-     *    this is equivalent to simply looping over slots from `paint`.
-     *  - In case we do `undo_restore`, we only want to consider the slots from the old one, since
-     *    those are the one we keep in the end.
-     *    + In case the new data has less valid slots, we feed in a dummy null pointer.
-     *    + In case the new data has more valid slots, the extra ones are ignored.
-     */
-    brush_tmp = nullptr;
-    brush_p = (paint && i < paint->tool_slots_len) ? &paint->tool_slots[i].brush : &brush_tmp;
-    BKE_LIB_FOREACHID_UNDO_PRESERVE_PROCESS_IDSUPER_P(data,
-                                                      brush_p,
-                                                      do_undo_restore,
-                                                      SCENE_FOREACH_UNDO_RESTORE,
-                                                      reader,
-                                                      &paint_old->tool_slots[i].brush,
-                                                      IDWALK_CB_USER);
-  }
+  Brush *eraser_brush_tmp = nullptr;
+  Brush **eraser_brush_p = paint ? &paint->eraser_brush : &eraser_brush_tmp;
+  BKE_LIB_FOREACHID_UNDO_PRESERVE_PROCESS_IDSUPER_P(data,
+                                                    eraser_brush_p,
+                                                    do_undo_restore,
+                                                    SCENE_FOREACH_UNDO_RESTORE,
+                                                    reader,
+                                                    &paint_old->eraser_brush,
+                                                    IDWALK_CB_NOP);
 
   Palette *palette_tmp = nullptr;
   Palette **palette_p = paint ? &paint->palette : &palette_tmp;
@@ -3292,7 +3290,7 @@ static Depsgraph **scene_get_depsgraph_p(Scene *scene,
   }
 
   /* Depsgraph was not found in the ghash, but the key still needs allocating. */
-  *key_ptr = MEM_new<DepsgraphKey>(__func__);
+  *key_ptr = MEM_cnew<DepsgraphKey>(__func__);
   **key_ptr = key;
 
   *depsgraph_ptr = nullptr;
@@ -3472,116 +3470,117 @@ int BKE_scene_transform_orientation_get_index(const Scene *scene,
  * Matches #BKE_object_rot_to_mat3 and #BKE_object_mat3_to_rot.
  * \{ */
 
-void BKE_scene_cursor_rot_to_mat3(const View3DCursor *cursor, float mat[3][3])
+template<> blender::float3x3 View3DCursor::matrix<blender::float3x3>() const
 {
-  if (cursor->rotation_mode > 0) {
-    eulO_to_mat3(mat, cursor->rotation_euler, cursor->rotation_mode);
+  blender::float3x3 mat;
+  if (this->rotation_mode > 0) {
+    eulO_to_mat3(mat.ptr(), this->rotation_euler, this->rotation_mode);
   }
-  else if (cursor->rotation_mode == ROT_MODE_AXISANGLE) {
-    axis_angle_to_mat3(mat, cursor->rotation_axis, cursor->rotation_angle);
+  else if (this->rotation_mode == ROT_MODE_AXISANGLE) {
+    axis_angle_to_mat3(mat.ptr(), this->rotation_axis, this->rotation_angle);
   }
   else {
     float tquat[4];
-    normalize_qt_qt(tquat, cursor->rotation_quaternion);
-    quat_to_mat3(mat, tquat);
+    normalize_qt_qt(tquat, this->rotation_quaternion);
+    quat_to_mat3(mat.ptr(), tquat);
   }
+  return mat;
 }
 
-void BKE_scene_cursor_rot_to_quat(const View3DCursor *cursor, float quat[4])
+blender::math::Quaternion View3DCursor::rotation() const
 {
-  if (cursor->rotation_mode > 0) {
-    eulO_to_quat(quat, cursor->rotation_euler, cursor->rotation_mode);
+  blender::math::Quaternion quat;
+  if (this->rotation_mode > 0) {
+    eulO_to_quat(&quat.w, this->rotation_euler, this->rotation_mode);
   }
-  else if (cursor->rotation_mode == ROT_MODE_AXISANGLE) {
-    axis_angle_to_quat(quat, cursor->rotation_axis, cursor->rotation_angle);
+  else if (this->rotation_mode == ROT_MODE_AXISANGLE) {
+    axis_angle_to_quat(&quat.w, this->rotation_axis, this->rotation_angle);
   }
   else {
-    normalize_qt_qt(quat, cursor->rotation_quaternion);
+    normalize_qt_qt(&quat.w, this->rotation_quaternion);
   }
+  return quat;
 }
 
-void BKE_scene_cursor_mat3_to_rot(View3DCursor *cursor, const float mat[3][3], bool use_compat)
+void View3DCursor::set_matrix(const blender::float3x3 &mat, const bool use_compat)
 {
-  BLI_ASSERT_UNIT_M3(mat);
+  BLI_ASSERT_UNIT_M3(mat.ptr());
 
-  switch (cursor->rotation_mode) {
+  switch (this->rotation_mode) {
     case ROT_MODE_QUAT: {
       float quat[4];
-      mat3_normalized_to_quat(quat, mat);
+      mat3_normalized_to_quat(quat, mat.ptr());
       if (use_compat) {
         float quat_orig[4];
-        copy_v4_v4(quat_orig, cursor->rotation_quaternion);
-        quat_to_compatible_quat(cursor->rotation_quaternion, quat, quat_orig);
+        copy_v4_v4(quat_orig, this->rotation_quaternion);
+        quat_to_compatible_quat(this->rotation_quaternion, quat, quat_orig);
       }
       else {
-        copy_v4_v4(cursor->rotation_quaternion, quat);
+        copy_v4_v4(this->rotation_quaternion, quat);
       }
       break;
     }
     case ROT_MODE_AXISANGLE: {
-      mat3_to_axis_angle(cursor->rotation_axis, &cursor->rotation_angle, mat);
+      mat3_to_axis_angle(this->rotation_axis, &this->rotation_angle, mat.ptr());
       break;
     }
     default: {
       if (use_compat) {
         mat3_to_compatible_eulO(
-            cursor->rotation_euler, cursor->rotation_euler, cursor->rotation_mode, mat);
+            this->rotation_euler, this->rotation_euler, this->rotation_mode, mat.ptr());
       }
       else {
-        mat3_to_eulO(cursor->rotation_euler, cursor->rotation_mode, mat);
+        mat3_to_eulO(this->rotation_euler, this->rotation_mode, mat.ptr());
       }
       break;
     }
   }
 }
 
-void BKE_scene_cursor_quat_to_rot(View3DCursor *cursor, const float quat[4], bool use_compat)
+void View3DCursor::set_rotation(const blender::math::Quaternion &quat, bool use_compat)
 {
-  BLI_ASSERT_UNIT_QUAT(quat);
+  BLI_ASSERT_UNIT_QUAT(&quat.w);
 
-  switch (cursor->rotation_mode) {
+  switch (this->rotation_mode) {
     case ROT_MODE_QUAT: {
       if (use_compat) {
         float quat_orig[4];
-        copy_v4_v4(quat_orig, cursor->rotation_quaternion);
-        quat_to_compatible_quat(cursor->rotation_quaternion, quat, quat_orig);
+        copy_v4_v4(quat_orig, this->rotation_quaternion);
+        quat_to_compatible_quat(this->rotation_quaternion, &quat.w, quat_orig);
       }
       else {
-        copy_qt_qt(cursor->rotation_quaternion, quat);
+        copy_qt_qt(this->rotation_quaternion, &quat.w);
       }
       break;
     }
     case ROT_MODE_AXISANGLE: {
-      quat_to_axis_angle(cursor->rotation_axis, &cursor->rotation_angle, quat);
+      quat_to_axis_angle(this->rotation_axis, &this->rotation_angle, &quat.w);
       break;
     }
     default: {
       if (use_compat) {
         quat_to_compatible_eulO(
-            cursor->rotation_euler, cursor->rotation_euler, cursor->rotation_mode, quat);
+            this->rotation_euler, this->rotation_euler, this->rotation_mode, &quat.w);
       }
       else {
-        quat_to_eulO(cursor->rotation_euler, cursor->rotation_mode, quat);
+        quat_to_eulO(this->rotation_euler, this->rotation_mode, &quat.w);
       }
       break;
     }
   }
 }
 
-void BKE_scene_cursor_to_mat4(const View3DCursor *cursor, float mat[4][4])
+template<> blender::float4x4 View3DCursor::matrix<blender::float4x4>() const
 {
-  float mat3[3][3];
-  BKE_scene_cursor_rot_to_mat3(cursor, mat3);
-  copy_m4_m3(mat, mat3);
-  copy_v3_v3(mat[3], cursor->location);
+  blender::float4x4 mat(this->matrix<blender::float3x3>());
+  mat.location() = blender::float3(this->location);
+  return mat;
 }
 
-void BKE_scene_cursor_from_mat4(View3DCursor *cursor, const float mat[4][4], bool use_compat)
+void View3DCursor::set_matrix(const blender::float4x4 &mat, const bool use_compat)
 {
-  float mat3[3][3];
-  copy_m3_m4(mat3, mat);
-  BKE_scene_cursor_mat3_to_rot(cursor, mat3, use_compat);
-  copy_v3_v3(cursor->location, mat[3]);
+  this->set_matrix(blender::float3x3(mat), use_compat);
+  copy_v3_v3(this->location, mat.location());
 }
 
 /** \} */

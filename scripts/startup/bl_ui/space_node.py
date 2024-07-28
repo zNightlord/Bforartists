@@ -7,7 +7,6 @@ from bpy.types import (
     Header,
     Menu,
     Panel,
-    UIList,
 )
 from bpy.app.translations import (
     pgettext_iface as iface_,
@@ -848,9 +847,6 @@ class NODE_PT_quality(bpy.types.Panel):
 
         col = layout.column()
         col.prop(tree, "use_viewer_border")
-
-        col = layout.column()
-        col.prop(snode, "use_auto_render")
 
 
 class NODE_PT_overlay(Panel):

@@ -46,6 +46,7 @@ struct NestedTreePreviews;
 struct bNodeLinkDrag {
   /** Links dragged by the operator. */
   Vector<bNodeLink> links;
+  /** Which side of the links is fixed. */
   eNodeSocketInOut in_out;
 
   /** Draw handler for the tooltip icon when dragging a link in empty space. */
@@ -87,13 +88,6 @@ struct SpaceNode_Runtime {
 
   /** Mouse position for drawing socket-less links and adding nodes. */
   float2 cursor;
-
-  /**
-   * Indicates that the compositing tree in the space needs to be re-evaluated using the
-   * auto-compositing pipeline.
-   * Takes priority over the regular compositing.
-   */
-  bool recalc_auto_compositing;
 
   /**
    * Indicates that the compositing int the space tree needs to be re-evaluated using

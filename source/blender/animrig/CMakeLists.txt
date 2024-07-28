@@ -12,7 +12,7 @@ set(INC
   ../makesrna
   ../windowmanager
   ../../../extern/fmtlib/include
-  # RNA_prototypes.h
+  # RNA_prototypes.hh
   ${CMAKE_BINARY_DIR}/source/blender/makesrna
 )
 
@@ -21,6 +21,9 @@ set(INC_SYS
 
 set(SRC
   intern/action.cc
+  intern/action_legacy.cc
+  intern/action_runtime.cc
+  intern/action_selection.cc
   intern/anim_rna.cc
   intern/animdata.cc
   intern/bone_collections.cc
@@ -33,6 +36,7 @@ set(SRC
   intern/visualkey.cc
 
   ANIM_action.hh
+  ANIM_action_legacy.hh
   ANIM_animdata.hh
   ANIM_armature_iter.hh
   ANIM_bone_collections.hh
@@ -44,6 +48,7 @@ set(SRC
   ANIM_keyingsets.hh
   ANIM_rna.hh
   ANIM_visualkey.hh
+  intern/action_runtime.hh
   intern/bone_collections_internal.hh
   intern/evaluation_internal.hh
 )
@@ -59,6 +64,9 @@ set(LIB
   PRIVATE bf::intern::clog
 )
 
+if(WITH_EXPERIMENTAL_FEATURES)
+  add_definitions(-DWITH_ANIM_BAKLAVA)
+endif()
 
 blender_add_lib(bf_animrig "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
 add_library(bf::animrig ALIAS bf_animrig)

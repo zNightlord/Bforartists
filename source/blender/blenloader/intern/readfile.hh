@@ -43,10 +43,8 @@ enum eFileDataFlag {
   FD_FLAGS_POINTSIZE_DIFFERS = 1 << 2,
   FD_FLAGS_FILE_OK = 1 << 3,
   FD_FLAGS_IS_MEMFILE = 1 << 4,
-  /* XXX Unused in practice (checked once but never set). */
-  FD_FLAGS_NOT_MY_LIBMAP = 1 << 5,
 };
-ENUM_OPERATORS(eFileDataFlag, FD_FLAGS_NOT_MY_LIBMAP)
+ENUM_OPERATORS(eFileDataFlag, FD_FLAGS_IS_MEMFILE)
 
 /* Disallow since it's 32bit on ms-windows. */
 #ifdef __GNUC__
@@ -111,7 +109,6 @@ struct FileData {
    */
   OldNewMap *libmap;
 
-  OldNewMap *packedmap;
   BLOCacheStorage *cache_storage;
 
   BHeadSort *bheadmap;
@@ -160,12 +157,6 @@ FileData *blo_filedata_from_memfile(MemFile *memfile,
                                     const BlendFileReadParams *params,
                                     BlendFileReadReport *reports);
 
-void blo_make_packed_pointer_map(FileData *fd, Main *oldmain) ATTR_NONNULL(1, 2);
-/**
- * Set old main packed data to zero if it has been restored
- * this works because freeing old main only happens after this call.
- */
-void blo_end_packed_pointer_map(FileData *fd, Main *oldmain) ATTR_NONNULL(1, 2);
 /**
  * Build a #GSet of old main (we only care about local data here,
  * so we can do that after #blo_split_main() call.

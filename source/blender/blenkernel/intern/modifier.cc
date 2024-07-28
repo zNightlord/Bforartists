@@ -850,7 +850,7 @@ const char *BKE_modifier_path_relbase(Main *bmain, Object *ob)
 {
   /* - If the ID is from a library, return library path.
    * - Else if the file has been saved return the blend file path.
-   * - Else if the file isn't saved and the ID isn't from a library, return the temp dir.
+   * - Else if the file isn't saved and the ID isn't from a library, return the temp directory.
    */
   if ((bmain->filepath[0] != '\0') || ID_IS_LINKED(ob)) {
     return ID_BLEND_PATH(bmain, &ob->id);
@@ -944,6 +944,10 @@ void BKE_modifier_deform_vertsEM(ModifierData *md,
 
 Mesh *BKE_modifier_get_evaluated_mesh_from_evaluated_object(Object *ob_eval)
 {
+  if (!DEG_object_geometry_is_evaluated(*ob_eval)) {
+    return nullptr;
+  }
+
   Mesh *mesh = nullptr;
 
   if ((ob_eval->type == OB_MESH) && (ob_eval->mode & OB_MODE_EDIT)) {

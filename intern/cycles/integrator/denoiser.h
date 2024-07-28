@@ -34,7 +34,7 @@ class Denoiser {
    *   This is checked in debug builds.
    * - The device might be MultiDevice.
    * - If Denoiser from params is not supported by provided denoise device, then Blender will
-       fallback on the OIDN CPU denoising and use provided cpu_fallback_device. */
+   *   fallback on the OIDN CPU denoising and use provided cpu_fallback_device. */
   static unique_ptr<Denoiser> create(Device *denoise_device,
                                      Device *cpu_fallback_device,
                                      const DenoiseParams &params);
@@ -45,7 +45,7 @@ class Denoiser {
   const DenoiseParams &get_params() const;
 
   /* Recommended type for viewport denoising. */
-  static DenoiserType automatic_viewport_denoiser_type(const DeviceInfo &path_trace_device_info);
+  static DenoiserType automatic_viewport_denoiser_type(const DeviceInfo &denoise_device_info);
 
   /* Create devices and load kernels needed for denoising.
    * The progress is used to communicate state when kernels actually needs to be loaded.

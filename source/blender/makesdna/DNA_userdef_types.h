@@ -93,8 +93,8 @@ typedef struct uiStyle {
 
   uiFontStyle paneltitle;
   uiFontStyle grouplabel;
-  uiFontStyle widgetlabel;
   uiFontStyle widget;
+  uiFontStyle tooltip;
 
   float panelzoom;
 
@@ -299,6 +299,7 @@ typedef struct ThemeSpace {
   unsigned char bone_solid[4], bone_pose[4], bone_pose_active[4], bone_locked_weight[4];
   unsigned char strip[4], strip_select[4];
   unsigned char cframe[4];
+  unsigned char before_current_frame[4], after_current_frame[4];
   unsigned char time_keyframe[4], time_gp_keyframe[4];
   unsigned char freestyle_edge_mark[4], freestyle_face_mark[4];
   unsigned char time_scrub_background[4];
@@ -741,6 +742,7 @@ typedef struct UserDef_Experimental {
   char use_viewport_debug;
   char use_all_linked_data_direct;
   char use_extensions_debug;
+  char use_recompute_usercount_on_save_debug;
   char SANITIZE_AFTER_HERE;
   /* The following options are automatically sanitized (set to 0)
    * when the release cycle is not alpha. */
@@ -749,13 +751,13 @@ typedef struct UserDef_Experimental {
   char use_sculpt_tools_tilt;
   char use_extended_asset_browser;
   char use_sculpt_texture_paint;
-  char use_grease_pencil_version3;
   char enable_overlay_next;
   char use_new_volume_nodes;
+  char use_new_file_import_nodes;
   char use_shader_node_previews;
-  char use_grease_pencil_version3_convert_on_load;
   char use_animation_baklava;
-  char _pad[3];
+  char use_docking;
+  char _pad[2];
   /** `makesdna` does not allow empty structs. */
 } UserDef_Experimental;
 
@@ -936,7 +938,14 @@ typedef struct UserDef {
   /** Flag for all extensions (#eUserPref_ExtensionFlag).  */
   char extension_flag;
 
-  char _pad14[5];
+  /* Network settings, used by extensions but not specific to extensions. */
+
+  /** Time in seconds to wait before timing out online operation (0 uses the systems default). */
+  uint8_t network_timeout;
+  /** Maximum number of simulations connection limit for online operations. */
+  uint8_t network_connection_limit;
+
+  char _pad14[3];
 
   short undosteps;
   int undomemory;
@@ -1135,7 +1144,7 @@ typedef enum eUserPref_Section {
   USER_SECTION_SYSTEM = 3,
   USER_SECTION_THEME = 4,
   USER_SECTION_INPUT = 5,
-  USER_SECTION_EXTENSIONS = 6,
+  USER_SECTION_ADDONS = 6,
   USER_SECTION_LIGHT = 7,
   USER_SECTION_KEYMAP = 8,
 #ifdef WITH_USERDEF_WORKSPACES
@@ -1148,6 +1157,7 @@ typedef enum eUserPref_Section {
   USER_SECTION_NAVIGATION = 14,
   USER_SECTION_FILE_PATHS = 15,
   USER_SECTION_EXPERIMENTAL = 16,
+  USER_SECTION_EXTENSIONS = 17,
 } eUserPref_Section;
 
 /** #UserDef_SpaceData.flag (State of the user preferences UI). */

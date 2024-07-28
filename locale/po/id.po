@@ -1,10 +1,10 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.2.0 Beta (b'a2795852cd29')\n"
+"Project-Id-Version: Blender 4.3.0 Alpha (b'de443e038c4e')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-06-10 10:16+0000\n"
-"PO-Revision-Date: 2024-06-08 04:55+0000\n"
+"POT-Creation-Date: 2024-07-22 07:23+0000\n"
+"PO-Revision-Date: 2024-07-19 00:56+0000\n"
 "Last-Translator: \"Adriel Y.\" <mixnblend@users.noreply.translate.blender.org>\n"
 "Language-Team: Indonesian <https://translate.blender.org/projects/blender-ui/ui/id/>\n"
 "Language: id\n"
@@ -59,6 +59,10 @@ msgstr "Daftar AOVs"
 
 msgid "Collection of AOVs"
 msgstr "Koleksi AOVs"
+
+
+msgid "F-Curves"
+msgstr "Kurva-F"
 
 
 msgid "Action F-Curves"
@@ -245,6 +249,38 @@ msgid "Collection of action groups"
 msgstr "Koleksi kelompok aksi"
 
 
+msgid "Influence"
+msgstr "Pengaruh"
+
+
+msgid "Mix Mode"
+msgstr "Mode Campur"
+
+
+msgid "Replace"
+msgstr "Menggantikan"
+
+
+msgid "Offset"
+msgstr "Offset"
+
+
+msgid "Add"
+msgstr "Baru"
+
+
+msgid "Subtract"
+msgstr "Mengurangi"
+
+
+msgid "Multiply"
+msgstr "Mengalikan/kalikan"
+
+
+msgid "Strips"
+msgstr "Strip"
+
+
 msgid "Action Pose Markers"
 msgstr "Penanda Pose Aksi"
 
@@ -269,6 +305,18 @@ msgid "Index of active pose marker"
 msgstr "Indeks penanda pose aktif"
 
 
+msgid "Active"
+msgstr "Aktif"
+
+
+msgid "Show Expanded"
+msgstr "Tampilkan yang Diekspansi"
+
+
+msgid "Keyframe"
+msgstr "Frame Kunci"
+
+
 msgid "Add-on"
 msgstr "Tambahan"
 
@@ -287,18 +335,6 @@ msgstr "Nama modul"
 
 msgid "Add-on Preferences"
 msgstr "Pengaturan Tambahan"
-
-
-msgid "Show Development Reports"
-msgstr "Menampilkan Laporan Pengembangan"
-
-
-msgid "Show the result of running commands in the main interface this has the advantage that multiple processes that run at once have their errors properly grouped which is not the case for reports which are mixed together"
-msgstr "Menampilkan hasil perintah yang berjalan di antarmuka utama ini mempunyai keuntungan bahwa beberapa proses yang berjalan sekaligus memiliki kesalahan yang dikelompokkan dengan benar yang tidak terjadi pada laporan yang dicampur bersama"
-
-
-msgid "Time Out"
-msgstr "Waktu Habis"
 
 
 msgid "Compute Device Type"
@@ -421,6 +457,30 @@ msgid "Displays glTF Material Output node in Shader Editor (Menu Add > Output)"
 msgstr "Menampilkan simpul Keluaran Bahan glTF di Editor Peneduh (Menu Tambah > Keluaran)"
 
 
+msgid "        Filter by Name"
+msgstr "        Filter berdasarkan Nama"
+
+
+msgid "Show only hotkeys that have this text in their name"
+msgstr "Hanya menampilkan tombol pintas yang memiliki teks ini di namanya"
+
+
+msgid "Hide Mix nodes"
+msgstr "Menyembunyikan simpul Campur"
+
+
+msgid "Always"
+msgstr "Selalu"
+
+
+msgid "Center"
+msgstr "Tengah"
+
+
+msgid "Bottom"
+msgstr "Bawah"
+
+
 msgid "Fribidi Library"
 msgstr "Perpustakaan Fribidi"
 
@@ -505,10 +565,6 @@ msgid "Method used for combining Active Action's result with result of NLA stack
 msgstr "Metode yang digunakan untuk menggabungkan hasil Aksi Aktif dengan hasil stack NLA"
 
 
-msgid "Replace"
-msgstr "Menggantikan"
-
-
 msgid "The strip values replace the accumulated results by amount specified by influence"
 msgstr "Nilai strip menggantikan hasil akumulasi dengan jumlah yang ditentukan oleh pengaruh"
 
@@ -521,24 +577,12 @@ msgid "The strip values are combined with accumulated results by appropriately u
 msgstr "Nilai strip digabungkan dengan hasil akumulasi dengan tepat menggunakan pertambahan, perkalian, atau matematika kuaternion, berdasarkan tipe saluran"
 
 
-msgid "Add"
-msgstr "Baru"
-
-
 msgid "Weighted result of strip is added to the accumulated results"
 msgstr "Hasil tertimbang strip ditambahkan ke hasil akumulasi"
 
 
-msgid "Subtract"
-msgstr "Mengurangi"
-
-
 msgid "Weighted result of strip is removed from the accumulated results"
 msgstr "Hasil tertimbang strip dihapus dari hasil akumulasi"
-
-
-msgid "Multiply"
-msgstr "Mengalikan/kalikan"
 
 
 msgid "Weighted result of strip is multiplied with the accumulated results"
@@ -583,6 +627,10 @@ msgstr "Pengaruh Aksi"
 
 msgid "Amount the Active Action contributes to the result of the NLA stack"
 msgstr "Jumlah Aksi Aktif berkontribusi ke hasil stack NLA"
+
+
+msgid "None"
+msgstr "Kosong"
 
 
 msgid "Tweak Mode Action Storage"
@@ -1905,6 +1953,14 @@ msgid "Active attribute"
 msgstr "Atribut aktif"
 
 
+msgid "Active Attribute Index"
+msgstr "Indeks Atribut Aktif"
+
+
+msgid "Active attribute index"
+msgstr "Indeks atribut aktif"
+
+
 msgid "Active Color"
 msgstr "Warna Aktif"
 
@@ -1927,14 +1983,6 @@ msgstr "Atribut Warna Aktif"
 
 msgid "The name of the active color attribute for display and editing"
 msgstr "Nama atribut warna aktif untuk penampilan dan pengeditan"
-
-
-msgid "Active Attribute Index"
-msgstr "Indeks Atribut Aktif"
-
-
-msgid "Active attribute index"
-msgstr "Indeks atribut aktif"
 
 
 msgid "Default Color Attribute"
@@ -2099,10 +2147,6 @@ msgstr "Filter Pass"
 
 msgid "Passes to include in the active baking pass"
 msgstr "Pass yang akan disertakan dalam pemanggangan pass aktif"
-
-
-msgid "None"
-msgstr "Kosong"
 
 
 msgid "Emit"
@@ -4221,10 +4265,16 @@ msgid "Either add or remove curves depending on the minimum distance of the curv
 msgstr "Menambah atau menghapus kurva, tergantung pada jarak minimum kurva di bawah kursor"
 
 
+msgctxt "Operator"
+msgid "Add"
+msgstr "Tambahkan"
+
+
 msgid "Add new curves between existing curves, taking the minimum distance into account"
 msgstr "Menambah kurva baru di antara kurva yang ada, memperhitungkan jarak minimum"
 
 
+msgctxt "Operator"
 msgid "Remove"
 msgstr "Hapus"
 
@@ -4339,10 +4389,6 @@ msgstr "Mode"
 
 msgid "Preselected mode when using this brush"
 msgstr "Mode yang telah dipilih sebelumnya saat menggunakan kuas ini"
-
-
-msgid "Active"
-msgstr "Aktif"
 
 
 msgid "Use current mode"
@@ -4579,82 +4625,6 @@ msgid "Threshold to consider color transparent for filling"
 msgstr "Ambang untuk mempertimbangkan warna transparan untuk pengisian"
 
 
-msgid "Grease Pencil Icon"
-msgstr "Ikon Pensil Grease"
-
-
-msgid "Pencil"
-msgstr "Pensil"
-
-
-msgid "Pen"
-msgstr "Pulpen"
-
-
-msgid "Ink"
-msgstr "Tinta"
-
-
-msgid "Ink Noise"
-msgstr "Kebisingan Tinta"
-
-
-msgid "Block"
-msgstr "Blok"
-
-
-msgid "Airbrush"
-msgstr "Kuasudara"
-
-
-msgid "Chisel"
-msgstr "Pahat"
-
-
-msgid "Fill"
-msgstr "Isi"
-
-
-msgid "Eraser Soft"
-msgstr "Penghapus Halus"
-
-
-msgid "Eraser Hard"
-msgstr "Penghapus Keras"
-
-
-msgid "Eraser Stroke"
-msgstr "Penghapus Garis Luar"
-
-
-msgctxt "GPencil"
-msgid "Grease Pencil Icon"
-msgstr "Ikon Pensil Grease"
-
-
-msgctxt "GPencil"
-msgid "Smooth"
-msgstr "Halus"
-
-
-msgctxt "GPencil"
-msgid "Thickness"
-msgstr "Ketebalan"
-
-
-msgctxt "GPencil"
-msgid "Clone"
-msgstr "Duplikasi"
-
-
-msgid "Draw"
-msgstr "Gambar"
-
-
-msgid "Blur"
-msgstr "Buram"
-
-
 msgid "Hardness"
 msgstr "Kekerasan"
 
@@ -4674,10 +4644,6 @@ msgstr "Ketebalan"
 msgctxt "Brush"
 msgid "Jitter"
 msgstr "Getaran"
-
-
-msgid "Jitter factor for new strokes"
-msgstr "Faktor jitter untuk garis luar baru"
 
 
 msgid "Iterations"
@@ -4742,10 +4708,6 @@ msgstr "Tampilkan Lasso"
 
 msgid "Active Layer"
 msgstr "Layer Aktif"
-
-
-msgid "Default Eraser"
-msgstr "Penghapus Default"
 
 
 msgid "Affect Position"
@@ -4838,6 +4800,10 @@ msgstr "Tipe Mode"
 
 msgid "Stroke"
 msgstr "Goresan"
+
+
+msgid "Fill"
+msgstr "Isi"
 
 
 msgid "Byte Color Attribute Value"
@@ -4968,10 +4934,6 @@ msgid "Parameters defining which layer, pass and frame of the image is displayed
 msgstr "Parameter mendefinisikan layer mana, lewati dan frame gambar ditampilkan"
 
 
-msgid "Offset"
-msgstr "Offset"
-
-
 msgid "Rotation"
 msgstr "Rotasi"
 
@@ -4994,10 +4956,6 @@ msgstr "Tampilkan Gambar Latar Belakang"
 
 msgid "Show this image as background"
 msgstr "Tampilkan gambar ini sebagai latar belakang"
-
-
-msgid "Show Expanded"
-msgstr "Tampilkan yang Diekspansi"
 
 
 msgid "Show the details in the user interface"
@@ -5146,10 +5104,6 @@ msgstr "Kiri"
 
 msgid "Right"
 msgstr "Kanan"
-
-
-msgid "Center"
-msgstr "Tengah"
 
 
 msgid "Angle at which interocular distance starts to fade to 0"
@@ -5776,6 +5730,14 @@ msgid "View used when converting image to a display space"
 msgstr "Lihat yang digunakan saat konversi gambar ke spasi tampilan"
 
 
+msgid "Temperature"
+msgstr "Temperatur"
+
+
+msgid "Tint"
+msgstr "Menghaluskan"
+
+
 msgid "Color Mapping"
 msgstr "Pemetaan Warna"
 
@@ -5967,10 +5929,6 @@ msgstr "Lin kesalahan"
 
 msgid "Rotation error"
 msgstr "Rotasi error"
-
-
-msgid "Influence"
-msgstr "Pengaruh"
 
 
 msgid "Disable"
@@ -6167,10 +6125,6 @@ msgstr "Minimum"
 
 msgid "Minimum value for target channel range"
 msgstr "Nilai minimum untuk jarak saluran target"
-
-
-msgid "Mix Mode"
-msgstr "Mode Campur"
 
 
 msgid "Before Original (Full)"
@@ -6944,10 +6898,6 @@ msgstr "Objek pelacak film untuk diikuti"
 
 msgid "Enabled Rotation Range"
 msgstr "Aktifkan Jarak Rotasi"
-
-
-msgid "Always"
-msgstr "Selalu"
 
 
 msgid "Use the pivot point in every rotation"
@@ -7729,6 +7679,10 @@ msgid "Persistent ID"
 msgstr "Induk"
 
 
+msgid "Persistent identifier for inter-frame matching of objects with motion blur"
+msgstr "Pengenal yang konsisten untuk pencocokan antar-bingkai benda dengan buram gerakan"
+
+
 msgid "Instance Random ID"
 msgstr "ID Acak Instance"
 
@@ -8441,6 +8395,14 @@ msgid "Edit Bone"
 msgstr "Edit Tulang"
 
 
+msgid "Effector Collection"
+msgstr "Koleksi Efektor"
+
+
+msgid "Limit effectors to this collection"
+msgstr "Membatasi efektor ke koleksi ini"
+
+
 msgid "Curve Guide"
 msgstr "Panduan Kurva"
 
@@ -8891,10 +8853,6 @@ msgid "Show Armature data-blocks"
 msgstr "Tampilkan Armatur data-blok"
 
 
-msgid "Show Brushes data-blocks"
-msgstr "Tampilkan Kuas data-blok"
-
-
 msgid "Show Cache File data-blocks"
 msgstr "Tampilkan Dokumen Cache data-blok"
 
@@ -8989,6 +8947,10 @@ msgstr "Tampilkan ruang kerja data-blok"
 
 msgid "Show Action data-blocks"
 msgstr "Tampilkan Aksi data-blok"
+
+
+msgid "Show Brushes data-blocks"
+msgstr "Tampilkan Kuas data-blok"
 
 
 msgid "Show Collection data-blocks"
@@ -9439,10 +9401,6 @@ msgid "Enable collisions with back domain border"
 msgstr "Aktifkan tabrakan dengan border domain belakang"
 
 
-msgid "Bottom"
-msgstr "Bawah"
-
-
 msgid "Enable collisions with bottom domain border"
 msgstr "Aktifkan tabrakan dengan border domain bawah"
 
@@ -9480,7 +9438,7 @@ msgstr "Mengiris"
 
 
 msgid "Caches velocities of mesh vertices. These will be used (automatically) when rendering with motion blur enabled"
-msgstr "Kecepatan cache sudut mesh. Ini akan digunakan (secara otomatis) saat render dengan blur gerakan diaktifkan"
+msgstr "Kecepatan cache sudut jala. Ini akan digunakan (secara otomatis) saat render dengan buram gerakan diaktifkan"
 
 
 msgid "Spray"
@@ -9497,6 +9455,10 @@ msgstr "Jarum"
 
 msgid "Velocity Grid"
 msgstr "Grid Kecepatan"
+
+
+msgid "Factor to control the amount of motion blur"
+msgstr "Faktor untuk mengontrol jumlah buram gerakan"
 
 
 msgid "Effector Settings"
@@ -9607,24 +9569,12 @@ msgid "Surface Emission"
 msgstr "Emisi Permukaan"
 
 
-msgid "Mapping"
-msgstr "Pemetaan"
-
-
 msgid "Texture mapping type"
 msgstr "Tipe pemetaan tekstur"
 
 
-msgid "Generated"
-msgstr "Dihasilkan"
-
-
 msgid "Generated coordinates centered to flow object"
 msgstr "Partikel"
-
-
-msgid "UV"
-msgstr "UV"
 
 
 msgid "Absolute Density"
@@ -9879,16 +9829,16 @@ msgid "Type of keyframe"
 msgstr "Tipe keyframe"
 
 
-msgid "Keyframe"
-msgstr "Frame Kunci"
-
-
 msgid "Extreme"
 msgstr "Ekstrim"
 
 
 msgid "Jitter"
 msgstr "Getaran"
+
+
+msgid "Generated"
+msgstr "Dihasilkan"
 
 
 msgid "Grease Pencil Frames"
@@ -10328,10 +10278,6 @@ msgid "Smooth"
 msgstr "Halus"
 
 
-msgid "Tint"
-msgstr "Menghaluskan"
-
-
 msgid "Tint strokes with new color"
 msgstr "Menghaluskan garis luar dengan warna baru"
 
@@ -10596,6 +10542,18 @@ msgid "Grid scale"
 msgstr "Skala grid"
 
 
+msgid "Translation"
+msgstr "Terjemahan"
+
+
+msgid "Active Layer Mask Index"
+msgstr "Indeks Masker Layer Aktif"
+
+
+msgid "Active index in layer mask array"
+msgstr "Aktif indeks di larik masker layer"
+
+
 msgid "Grease Pencil Layers"
 msgstr "Layer Pensil Grease"
 
@@ -10618,14 +10576,6 @@ msgstr "Indeks layer pensil grease aktif"
 
 msgid "Active Note"
 msgstr "Catatan Aktif"
-
-
-msgid "Active Layer Mask Index"
-msgstr "Indeks Masker Layer Aktif"
-
-
-msgid "Active index in layer mask array"
-msgstr "Aktif indeks di larik masker layer"
 
 
 msgid "Repeat"
@@ -10798,10 +10748,6 @@ msgid "Users"
 msgstr "Pengguna"
 
 
-msgid "F-Curves"
-msgstr "Kurva-F"
-
-
 msgid "Frame Range"
 msgstr "Dalam Jarak"
 
@@ -10809,6 +10755,14 @@ msgstr "Dalam Jarak"
 msgctxt "ID"
 msgid "ID Root Type"
 msgstr "Tipe Akar ID"
+
+
+msgid "Layers"
+msgstr "Layer"
+
+
+msgid "Feature Set"
+msgstr "Warna Standar"
 
 
 msgid "Stick"
@@ -10843,6 +10797,14 @@ msgid "Show Armature in binding pose state (no posing possible)"
 msgstr "Menampilkan Kerangka di keadaan pose pengikat (tidak ada pose jika bisa)"
 
 
+msgid "Blur Steps"
+msgstr "Langkah Buram"
+
+
+msgid "The number of times the cavity mask is blurred"
+msgstr "Berapa kali masker rongga diburamkan"
+
+
 msgid "Blending Mode"
 msgstr "Mode Campuran"
 
@@ -10864,7 +10826,7 @@ msgstr "Tambah alpha saat melukis"
 
 
 msgid "Blur Mode"
-msgstr "Mode Blur"
+msgstr "Mode Buram"
 
 
 msgid "Box"
@@ -11016,11 +10978,6 @@ msgstr "Konstan"
 
 
 msgctxt "Curves"
-msgid "Curves Sculpt Tool"
-msgstr "Alat Memahat Kurva"
-
-
-msgctxt "Curves"
 msgid "Paint Selection"
 msgstr "Pilihan Cat"
 
@@ -11081,17 +11038,22 @@ msgstr "Terproyeksi"
 
 
 msgctxt "GPencil"
-msgid "Grease Pencil Sculpt Paint Tool"
-msgstr "Alat Cat Memahat Pensil Grease"
+msgid "Smooth"
+msgstr "Halus"
+
+
+msgctxt "GPencil"
+msgid "Thickness"
+msgstr "Ketebalan"
+
+
+msgctxt "GPencil"
+msgid "Clone"
+msgstr "Duplikasi"
 
 
 msgid "Gpencil Settings"
 msgstr "Pengaturan PensilG"
-
-
-msgctxt "Brush"
-msgid "Grease Pencil Draw Tool"
-msgstr "Alat Menggambar Pensil Grease"
 
 
 msgctxt "Brush"
@@ -11111,6 +11073,18 @@ msgstr "Hapus"
 
 msgid "The brush is used for erasing strokes"
 msgstr "Kusa digunakan untuk menghapus stroke"
+
+
+msgid "Draw"
+msgstr "Gambar"
+
+
+msgid "Blur"
+msgstr "Buram"
+
+
+msgid "Blur weight in active vertex group"
+msgstr "Buramkan berat di kelompok verteks aktif"
 
 
 msgid "Gradient Spacing"
@@ -11167,6 +11141,10 @@ msgid "Pinch"
 msgstr "Cubit"
 
 
+msgid "Airbrush"
+msgstr "Kuasudara"
+
+
 msgid "Show cursor in viewport"
 msgstr "Tampilkan kursor di viewport"
 
@@ -11195,14 +11173,6 @@ msgid "Show texture in viewport"
 msgstr "Tampilkan tekstur di viewport"
 
 
-msgid "Vertex Paint Tool"
-msgstr "Penyunting Gambar"
-
-
-msgid "Weight Paint Tool"
-msgstr "Penyunting Gambar"
-
-
 msgid "Up"
 msgstr "Atas"
 
@@ -11212,7 +11182,7 @@ msgstr "Atribut Kecepatan"
 
 
 msgid "Name of the Alembic attribute used for generating motion blur data"
-msgstr "Nama atribut Alembic digunakan untuk generasi data blur gerakan"
+msgstr "Nama atribut Alembic yang digunakan untuk generasi data keburaman gerakan"
 
 
 msgctxt "Unit"
@@ -11580,10 +11550,6 @@ msgid "Annotation"
 msgstr "Anotasi"
 
 
-msgid "Layers"
-msgstr "Layer"
-
-
 msgid "Selected"
 msgstr "Terseleksi"
 
@@ -11597,7 +11563,7 @@ msgstr "Resolusi Adaptif"
 
 
 msgid "Ghosts are shown in renders and animation playback. Useful for special effects (e.g. motion blur)"
-msgstr "Hantu ditampilkan di render dan playback animasi. Berguna untuk efek spesial (e.g blur gerakan)"
+msgstr "Hantu ditampilkan di render dan pemutaran animasi. Berguna untuk efek spesial (e.g buram gerakan)"
 
 
 msgid "Stroke Edit Mode"
@@ -11636,20 +11602,12 @@ msgid "Pixels"
 msgstr "Pixel"
 
 
-msgid "Movie"
-msgstr "Film"
-
-
 msgid "Movie file"
 msgstr "Dokumen film"
 
 
 msgid "Generated image"
 msgstr "Gambar yang dihasilkan"
-
-
-msgid "Viewer"
-msgstr "Tampilan 3D"
 
 
 msgid "Generate floating-point buffer"
@@ -11705,12 +11663,20 @@ msgid "Shadow Color"
 msgstr "Warna"
 
 
+msgid "Blur shadow aliasing using Percentage Closer Filtering"
+msgstr "Buramkan aliasing bayangan menggunakan Persentase Pemfilteran Lebih Dekat"
+
+
 msgid "Show Cone"
 msgstr "Konsol Python"
 
 
 msgid "Visibility Blur"
-msgstr "Blur Visibilitas"
+msgstr "Buram Visibilitas"
+
+
+msgid "Filter size of the visibility blur (Deprecated)"
+msgstr "Filter ukuran buram visibilitas (sudah tidak digunakan)"
 
 
 msgid "Visibility Bias"
@@ -13731,6 +13697,10 @@ msgid "Modifier Name"
 msgstr "Nama Pengubah"
 
 
+msgid "Mapping"
+msgstr "Pemetaan"
+
+
 msgid "Modifier Type"
 msgstr "Jenis Pengubah"
 
@@ -14173,9 +14143,8 @@ msgid "Select Linked"
 msgstr "Seleksi yang Terhubung"
 
 
-msgctxt "Operator"
-msgid "Add"
-msgstr "Tambahkan"
+msgid "UV"
+msgstr "UV"
 
 
 msgid "Shape Key Specials"
@@ -14196,6 +14165,10 @@ msgstr "Utilitas"
 
 msgid "Math"
 msgstr "Matematika"
+
+
+msgid "Import"
+msgstr "Impor"
 
 
 msgid "Layout"
@@ -14303,10 +14276,6 @@ msgid "External Data"
 msgstr "Data Eksternal"
 
 
-msgid "Import"
-msgstr "Impor"
-
-
 msgid "New File"
 msgstr "Dokumen Baru"
 
@@ -14339,12 +14308,13 @@ msgid "Assign Material"
 msgstr "Tugaskan Bahan"
 
 
-msgid "Enabled Modes"
-msgstr "Modus Sunting"
-
-
 msgid "Names"
 msgstr "Nama"
+
+
+msgctxt "Operator"
+msgid "Parent"
+msgstr "Induk"
 
 
 msgid "Hooks"
@@ -15651,6 +15621,39 @@ msgid "Animated Strip Time"
 msgstr "Waktu Strip Teranimasi"
 
 
+msgid "NLA Track is evaluated itself (i.e. active Action and all other NLA Tracks in the same AnimData block are disabled)"
+msgstr "Lintasan NLA dievaluasi sendiri (misalnya saat Aksi aktif dan semua Lintasan NLA lain dalam blok AnimData yang sama dinonaktifkan)"
+
+
+msgid "NLA Track is locked"
+msgstr "Lintasan NLA terkunci"
+
+
+msgid "Disable NLA Track evaluation"
+msgstr "Nonaktifkan evaluasi Lintasan NLA"
+
+
+msgid "NLA Track is selected"
+msgstr "Lintasan NLA terseleksi"
+
+
+msgid "NLA Strips on this NLA-track"
+msgstr "Strip NLA di Lintasan-NLA ini"
+
+
+msgid "Collection of NLA Tracks"
+msgstr "Koleksi Lintasan NLA"
+
+
+msgctxt "Action"
+msgid "Active Track"
+msgstr "Lintasan Aktif"
+
+
+msgid "Active NLA Track"
+msgstr "Lintasan NLA Aktif"
+
+
 msgid "Node in a node tree"
 msgstr "Node di pohon node"
 
@@ -15663,16 +15666,52 @@ msgid "Static Type"
 msgstr "Jenis Statik"
 
 
+msgid "Node type (deprecated, use with care)"
+msgstr "Tipe simpul (sudah tidak digunakan lagi, gunakan dengan hati-hati)"
+
+
 msgid "Custom Node"
 msgstr "Node Kustom"
+
+
+msgid "Custom color of the node body"
+msgstr "Warna kustom badan simpul"
+
+
+msgid "Absolute bounding box dimensions of the node"
+msgstr "Dimensi box terbatas absolut simpul"
 
 
 msgid "Height of the node"
 msgstr "Tinggi node"
 
 
+msgid "Internal Links"
+msgstr "Tautan Internal"
+
+
+msgid "Internal input-to-output connections for muting"
+msgstr "Koneksi masukan-ke-keluaran internal untuk membisukan"
+
+
+msgid "Optional custom node label"
+msgstr "Label simpul kustom yang opsional"
+
+
+msgid "Unique node identifier"
+msgstr "Pengenal simpul unik"
+
+
 msgid "Outputs"
 msgstr "Keluaran"
+
+
+msgid "Parent this node is attached to"
+msgstr "Induk simpul ini terikat ke"
+
+
+msgid "Node selection state"
+msgstr "Keadaan seleksi simpul"
 
 
 msgid "Show Options"
@@ -15687,6 +15726,14 @@ msgid "Show Texture"
 msgstr "Tampilkan Tekstur"
 
 
+msgid "Display node in viewport textured shading mode"
+msgstr "Menampilkan simpul di mode bayangan bertekstur tampilan"
+
+
+msgid "Node type (deprecated, use bl_static_type or bl_idname for the actual identifier string)"
+msgstr "Tipe simpul (tidak digunakan lagi, gunakan bl_static_type atau bl_idname untuk string pengenal sebenarnya)"
+
+
 msgid "Use custom color for the node"
 msgstr "Gunakan warna kustom untuk node"
 
@@ -15699,8 +15746,56 @@ msgid "Custom Group"
 msgstr "Kelompok Kustom"
 
 
+msgid "Base node type for custom registered node group types"
+msgstr "Tipe simpul dasar untuk tipe kelompok simpul yang terdaftar secara kustom"
+
+
+msgid "Compositor Node"
+msgstr "Simpul Penyusun"
+
+
+msgid "Alpha Over"
+msgstr "Alpha Over"
+
+
+msgid "Overlay a foreground image onto a background image"
+msgstr "Melapisi gambar latar depan ke gambar latar belakang"
+
+
+msgid "Convert Premultiplied"
+msgstr "Mengonversi Premultiplikasi"
+
+
+msgid "Smooth away jagged edges"
+msgstr "Menghaluskan tepi yang bergerigi"
+
+
+msgid "Contrast Limit"
+msgstr "Batas Kontras"
+
+
+msgid "How much to eliminate spurious edges to avoid artifacts (the larger value makes less active; the value 2.0, for example, means discard a detected edge if there is a neighboring edge that has 2.0 times bigger contrast than the current one)"
+msgstr "Seberapa banyak untuk menghilangkan tepi palsu untuk menghindari artefak (nilai yang lebih besar membuat kurang aktif; nilai 2.0, misalnya, berarti membuang tepi yang terdeteksi jika ada tepi tetangga yang memiliki kontras 2.0 kali lebih besar dari yang sekarang)"
+
+
+msgid "Corner Rounding"
+msgstr "Pembulatan Pojok"
+
+
+msgid "How much sharp corners will be rounded"
+msgstr "Seberapa besar pojok tajam akan dibulatkan"
+
+
+msgid "Threshold to detect edges (smaller threshold makes more sensitive detection)"
+msgstr "Ambang batas untuk mendeteksi tepi (ambang batas yang lebih kecil membuat deteksi lebih sensitif)"
+
+
 msgid "Bilateral Blur"
 msgstr "Blur Bilateral"
+
+
+msgid "Adaptively blur image, while retaining sharp edges"
+msgstr "Memburamkan gambar secara adaptif, sekaligus mempertahankan tepi tajam"
 
 
 msgid "Color Sigma"
@@ -15711,16 +15806,66 @@ msgid "Space Sigma"
 msgstr "Sigma Spasi"
 
 
+msgid "Blur an image, using several blur modes"
+msgstr "Memburamkan gambar, menggunakan beberapa mode buram"
+
+
 msgid "Aspect Correction"
 msgstr "Aspek Koreksi"
 
 
+msgctxt "NodeTree"
+msgid "Quadratic"
+msgstr "Kuadratik"
+
+
+msgctxt "NodeTree"
+msgid "Cubic"
+msgstr "Kubik"
+
+
+msgctxt "NodeTree"
+msgid "Gaussian"
+msgstr "Gaussian"
+
+
+msgctxt "NodeTree"
+msgid "Fast Gaussian"
+msgstr "Gaussian Cepat"
+
+
+msgctxt "NodeTree"
+msgid "Catrom"
+msgstr "Catrom"
+
+
+msgctxt "NodeTree"
+msgid "Mitch"
+msgstr "Mitch"
+
+
+msgid "Bokeh"
+msgstr "Bokeh"
+
+
+msgid "Use circular filter (slower)"
+msgstr "Menggunakan filter yang melingkar (lebih lambat)"
+
+
+msgid "Extend Bounds"
+msgstr "Perpanjang Batas"
+
+
 msgid "Extend bounds of the input image to fully fit blurred image"
-msgstr "Memperpanjang batas gambar masukan ke gambar blur yang cukup secara penuh"
+msgstr "Memperpanjang batas gambar masukan ke gambar buram yang cukup secara penuh"
+
+
+msgid "Apply filter on gamma corrected values"
+msgstr "Menerapkan filter pada nilai yang dikoreksi gamma"
 
 
 msgid "Use relative (percent) values to define blur radius"
-msgstr "Gunakan nilai relatif (persen) ke definisi radius blur"
+msgstr "Gunakan nilai relatif (persen) ke definisi radius buram"
 
 
 msgid "Variable Size"
@@ -15728,23 +15873,31 @@ msgstr "Ukurang"
 
 
 msgid "Support variable blur per pixel when using an image for size input"
-msgstr "Mendukung variabel blur per pixel saat menggunakan gambar untuk masukan ukuran"
+msgstr "Mendukung variabel buram per pixel saat menggunakan gambar untuk masukan ukuran"
 
 
 msgid "Bokeh Blur"
-msgstr "Blur Bokeh"
+msgstr "Buram Bokeh"
+
+
+msgid "Generate a bokeh type blur similar to Defocus. Unlike defocus an in-focus region is defined in the compositor"
+msgstr "Mengenerasi buram tipe bokeh yang mirip ke Defokus. Tidak seperti defokus sebuah bagian dalam-fokus yang didefinisikan di penyusun"
 
 
 msgid "Max Blur"
-msgstr "Blur Max"
+msgstr "Buram Maks"
 
 
 msgid "Blur limit, maximum CoC radius"
-msgstr "Batas blur, maksimum radius CoC"
+msgstr "Batas buram, maksimum radius CoC"
 
 
 msgid "Bokeh Image"
 msgstr "Gambar Bokeh"
+
+
+msgid "Generate image with bokeh shape for use with the Bokeh Blur filter node"
+msgstr "Mengenerasi gambar dengan bentuk bokeh untuk digunakan dengan simpul filter Buram Bokeh"
 
 
 msgid "Box Mask"
@@ -16087,6 +16240,34 @@ msgid "Combine YCbCrA"
 msgstr "Gabungkan YCbCrA"
 
 
+msgid "Mode of color processing"
+msgstr "Mode pemrosesan warna"
+
+
+msgid "Use RGB color processing"
+msgstr "Menggunakan pemrosesan warna RGB"
+
+
+msgid "Use HSV color processing"
+msgstr "Menggunakan pemrosesan warna HSV"
+
+
+msgid "Use HSL color processing"
+msgstr "Menggunakan pemrosesan warna HSL"
+
+
+msgid "Use YCbCr color processing"
+msgstr "Menggunakan pemrosesan warna YCbCr"
+
+
+msgid "Use YUV color processing"
+msgstr "Menggunakan pemrosesan warna YUV"
+
+
+msgid "Color space used for YCbCrA processing"
+msgstr "Ruang warna yang digunakan untuk pemrosesan YCbCrA"
+
+
 msgid "To"
 msgstr "Ke"
 
@@ -16208,11 +16389,11 @@ msgstr "Simpul Kelompok Komposer Kustom untuk simpul Python"
 
 
 msgid "Directional Blur"
-msgstr "Blur Terarah"
+msgstr "Buram Terarah"
 
 
 msgid "Blur an image along a direction"
-msgstr "Mengabutkan gambar dalam sebuah arah"
+msgstr "Memburamkan gambar dalam sebuah arah"
 
 
 msgid "Center X"
@@ -16288,7 +16469,7 @@ msgstr "3 sisi"
 
 
 msgid "Amount of focal blur, 128 (infinity) is perfect focus, half the value doubles the blur radius"
-msgstr "Jumlah kabut fokal, 128 (tak terhingga) adalah fokus sempurna, setengah nilai menggandakan radius kabut"
+msgstr "Jumlah buram fokal, 128 (tak terhingga) adalah fokus sempurna, setengah nilai menggandakan radius buram"
 
 
 msgid "Scene from which to select the active camera (render scene if undefined)"
@@ -16324,7 +16505,7 @@ msgstr "Skala-Z"
 
 
 msgid "Scale the Z input when not using a z-buffer, controls maximum blur designated by the color white or input value 1"
-msgstr "Skala input Z saat tidak menggunakan penyangga-z, mengkontrol blur maksimum ditunjuk oleh warna putih atau nilai masukan 1"
+msgstr "Skala input Z saat tidak menggunakan penyangga-z, mengkontrol buram maksimum ditunjuk oleh warna putih atau nilai masukan 1"
 
 
 msgid "Neighbor"
@@ -16397,6 +16578,22 @@ msgstr "Hantu"
 
 msgid "ID Mask"
 msgstr "Masker ID"
+
+
+msgid "Post Blur"
+msgstr "Setelah Buram"
+
+
+msgid "Matte blur size which applies after clipping and dilate/eroding"
+msgstr "Ukuran buram matte yang diaplikasikan setelah memotong dan melebarkan/mengikis"
+
+
+msgid "Pre Blur"
+msgstr "Sebelum Buram"
+
+
+msgid "Chroma pre-blur size which applies before running keyer"
+msgstr "Ukuran sebelum-buram chroma yang diaplikasikan sebelum menjalani pengunci"
 
 
 msgid "Clip Black"
@@ -16477,11 +16674,15 @@ msgstr "Gunakan Minimum"
 
 
 msgid "Number of motion blur samples"
-msgstr "Partikel"
+msgstr "Jumlah sampel buram gerakan"
 
 
 msgid "Shutter"
 msgstr "Shutter"
+
+
+msgid "Exposure for motion blur as a factor of FPS"
+msgstr "Pencahayaan untuk buram gerakan sebagai faktor FPS"
 
 
 msgid "Size Source"
@@ -16501,7 +16702,11 @@ msgstr "Gunakan informasi bulu dari masker"
 
 
 msgid "Motion Blur"
-msgstr "Blur Gerakan"
+msgstr "Buram Gerakan"
+
+
+msgid "Use multi-sampled motion blur of the mask"
+msgstr "Menggunakan buram gerakan multi-sampel pada masker"
 
 
 msgid "A + B"
@@ -16726,11 +16931,15 @@ msgstr "Axis Y"
 
 
 msgid "Vector Blur"
-msgstr "Blur Vektor"
+msgstr "Buram Vektor"
+
+
+msgid "Uses the vector speed render pass to blur the image pixels in 2D"
+msgstr "Menggunakan vektor kecepatan render pass untuk memburamkan pixel gambar dalam 2D"
 
 
 msgid "Blur Factor"
-msgstr "Faktor Blur"
+msgstr "Faktor Buram"
 
 
 msgid "Max Speed"
@@ -16743,6 +16952,14 @@ msgstr "Kecepatan maksimum, atau nol untuk kosong"
 
 msgid "Min Speed"
 msgstr "Kecepatan Min"
+
+
+msgid "Minimum speed for a pixel to be blurred (used to separate background from foreground)"
+msgstr "Kecepatan minimum untuk sebuah pixel diburamkan (digunakan untuk memisahkan latar belakang dari latar depan)"
+
+
+msgid "Viewer"
+msgstr "Tampilan 3D"
 
 
 msgid "And"
@@ -16779,6 +16996,10 @@ msgstr "Lebih Besar Dari"
 
 msgid "Component"
 msgstr "Komponen"
+
+
+msgid "Blur Attribute"
+msgstr "Atribut Buram"
 
 
 msgid "Collection Info"
@@ -16819,6 +17040,14 @@ msgstr "Isi Kurva"
 
 msgid "Flip Faces"
 msgstr "Membalikkan Wajah"
+
+
+msgid "Primary"
+msgstr "Primer"
+
+
+msgid "Secondary"
+msgstr "Sekunder"
 
 
 msgid "Image Info"
@@ -17186,6 +17415,10 @@ msgid "Lasso Select"
 msgstr "Seleksi"
 
 
+msgid "Stabilize Stroke"
+msgstr "Stabilisasi Garis Luar"
+
+
 msgctxt "Operator"
 msgid "Select Left/Right"
 msgstr "Seleksi"
@@ -17236,11 +17469,6 @@ msgstr "Ke Frame Sekarang"
 msgctxt "Operator"
 msgid "Frame Selected"
 msgstr "Frame Terseleksi"
-
-
-msgctxt "Operator"
-msgid "Unassign Binding"
-msgstr "Batalkan Pengikat"
 
 
 msgctxt "Operator"
@@ -17451,24 +17679,6 @@ msgstr "Setelah Ini"
 
 
 msgctxt "Operator"
-msgid "Add Brush"
-msgstr "Tambahkan Kuas"
-
-
-msgid "Add brush by mode type"
-msgstr "Tambahkan kuas dari tipe mode"
-
-
-msgctxt "Operator"
-msgid "Add Drawing Brush"
-msgstr "Tambahkan Kuas Menggambar"
-
-
-msgid "Add brush for Grease Pencil"
-msgstr "Tambahkan kuas untuk Pensil Grease"
-
-
-msgctxt "Operator"
 msgid "Preset"
 msgstr "Setel Ulang"
 
@@ -17497,29 +17707,12 @@ msgid "Round"
 msgstr "Bulat"
 
 
-msgctxt "Operator"
-msgid "Reset Brush"
-msgstr "Setel Ulang"
-
-
 msgid "Change brush size by a scalar"
 msgstr "Ganti ukuran kuas oleh skalar"
 
 
 msgid "Scalar"
 msgstr "Skalar"
-
-
-msgid "Translation"
-msgstr "Terjemahan"
-
-
-msgid "Primary"
-msgstr "Primer"
-
-
-msgid "Secondary"
-msgstr "Sekunder"
 
 
 msgctxt "Operator"
@@ -18287,10 +18480,6 @@ msgid "Stabilizer Stroke Radius"
 msgstr "Stabilisasi Radius Garis Luar"
 
 
-msgid "Stabilize Stroke"
-msgstr "Stabilisasi Garis Luar"
-
-
 msgid "Target Frame"
 msgstr "Frame Target"
 
@@ -18478,6 +18667,10 @@ msgid "Set Cursor"
 msgstr "Set Kursor"
 
 
+msgid "Remove"
+msgstr "Hapus"
+
+
 msgid "Replace Existing"
 msgstr "Menggantikan yang Ada"
 
@@ -18555,6 +18748,11 @@ msgstr "Gantikan kuas ke mode halus untuk durasi garis luar"
 
 msgid "Flat"
 msgstr "Datar"
+
+
+msgctxt "Operator"
+msgid "Delete Duplicate Frames"
+msgstr "Hapus Frame Duplikat"
 
 
 msgid "Reorder the active Grease Pencil mask layer up/down in the list"
@@ -19506,6 +19704,22 @@ msgid "Copy color to all selected nodes"
 msgstr "Modus Sunting"
 
 
+msgid "Option"
+msgstr "Opsi"
+
+
+msgid "Burn Mode"
+msgstr "Mode Bakar"
+
+
+msgid "Current"
+msgstr "Setelah Ini"
+
+
+msgid "Wrap"
+msgstr "Bungkus"
+
+
 msgctxt "Operator"
 msgid "Move File Node Socket"
 msgstr "Induk"
@@ -20005,6 +20219,11 @@ msgstr "Orientasi Transformasi"
 
 
 msgctxt "Operator"
+msgid "New"
+msgstr "Baru"
+
+
+msgctxt "Operator"
 msgid "Clear Rotation"
 msgstr "Kosongkan Rotasi"
 
@@ -20030,7 +20249,11 @@ msgstr "Tambah Efek"
 
 msgctxt "ID"
 msgid "Blur"
-msgstr "Kabut"
+msgstr "Buram"
+
+
+msgid "Apply Gaussian Blur to object"
+msgstr "Mengaplikasikan Buram Gaussian ke benda"
 
 
 msgctxt "ID"
@@ -20359,19 +20582,6 @@ msgstr "Nama"
 
 
 msgctxt "Operator"
-msgid "Brush Select"
-msgstr "Seleksi"
-
-
-msgid "Create Missing"
-msgstr "Buat"
-
-
-msgid "Clone"
-msgstr "Duplikasi"
-
-
-msgctxt "Operator"
 msgid "Face Select Hide"
 msgstr "Modus Sunting"
 
@@ -20461,6 +20671,22 @@ msgid "Dirty Vertex Colors"
 msgstr "Warna Standar"
 
 
+msgid "Blur Iterations"
+msgstr "Iterasi Buram"
+
+
+msgid "Number of times to blur the colors (higher blurs more)"
+msgstr "Berapa kali untuk memburamkan warna (lebih besar akan lebih memburamkan)"
+
+
+msgid "Blur Strength"
+msgstr "Kekuatan Buram"
+
+
+msgid "Blur strength per iteration"
+msgstr "Kekuatan buram tiap iterasi"
+
+
 msgctxt "Operator"
 msgid "Set Vertex Colors"
 msgstr "Warna Standar"
@@ -20474,6 +20700,11 @@ msgstr "Warna Standar"
 msgctxt "Operator"
 msgid "Vertex Paint Mode"
 msgstr "Warna Standar"
+
+
+msgctxt "Operator"
+msgid "Visibility Filter"
+msgstr "Filter Visibilitas"
 
 
 msgctxt "Operator"
@@ -20613,6 +20844,10 @@ msgstr "Kamera"
 msgctxt "Operator"
 msgid "Update Bone Paths"
 msgstr "Kamera"
+
+
+msgid "Property Name"
+msgstr "Nama Properti"
 
 
 msgctxt "Operator"
@@ -20897,6 +21132,10 @@ msgid "Change blue channel"
 msgstr "Ganti saluran biru"
 
 
+msgid "Blurring steps for normal falloff"
+msgstr "Langkah-langkah pemburaman untuk kejatuhan normal"
+
+
 msgid "Data Target"
 msgstr "Target Data"
 
@@ -20990,6 +21229,11 @@ msgstr "Kecepatan"
 
 
 msgctxt "Sequence"
+msgid "Gaussian Blur"
+msgstr "Buram Gaussian"
+
+
+msgctxt "Sequence"
 msgid "Text"
 msgstr "Teks"
 
@@ -21011,10 +21255,6 @@ msgstr "Modus Sunting"
 
 msgid "Duplicate selected strips and move them"
 msgstr "Tekstur"
-
-
-msgid "Replace the current selection"
-msgstr "Data Objek"
 
 
 msgid "Fade Duration"
@@ -21109,10 +21349,6 @@ msgstr "Pilih pegangan dekat strip aktif"
 
 msgid "Linked Time"
 msgstr "Waktu yang Terhubung"
-
-
-msgid "Select other strips at the same time"
-msgstr "Pilih strip lainnya dalam waktu yang sama"
 
 
 msgid "Side of Frame"
@@ -21613,22 +21849,8 @@ msgid "Edit Source"
 msgstr "Gambar Latar"
 
 
-msgctxt "Operator"
-msgid "Edit Translation"
-msgstr "Orientasi Transformasi"
-
-
-msgid "Path to the matching po file"
-msgstr "Tidak dapat membuka dokumen"
-
-
 msgid "Operator Name"
 msgstr "Nama Operator"
-
-
-msgctxt "Operator"
-msgid "Edit Translation Update Mo"
-msgstr "Orientasi Transformasi"
 
 
 msgid "Invert Selection"
@@ -22447,10 +22669,6 @@ msgid "Context Attributes"
 msgstr "Atribut Konteks"
 
 
-msgid "Wrap"
-msgstr "Bungkus"
-
-
 msgid "Header Text"
 msgstr "Teks Header"
 
@@ -22598,10 +22816,6 @@ msgstr "Nama Properti"
 msgctxt "Operator"
 msgid "Edit Property"
 msgstr "Modus Sunting"
-
-
-msgid "Property Name"
-msgstr "Nama Properti"
 
 
 msgctxt "Operator"
@@ -23018,11 +23232,6 @@ msgid "Grab"
 msgstr "Ambil"
 
 
-msgctxt "Operator"
-msgid "Mask"
-msgstr "Masker"
-
-
 msgid "Type 1"
 msgstr "Tipe 1"
 
@@ -23043,16 +23252,16 @@ msgid "Dynamics"
 msgstr "Dinamika"
 
 
+msgid "White Balance"
+msgstr "Keseimbangan Putih"
+
+
 msgid "Audio"
 msgstr "Audio"
 
 
 msgid "Video"
 msgstr "Video"
-
-
-msgid "Strips"
-msgstr "Strip"
 
 
 msgid "Extra Options"
@@ -23159,10 +23368,6 @@ msgid "Menu Item"
 msgstr "Item Menu"
 
 
-msgid "Option"
-msgstr "Opsi"
-
-
 msgid "Progress Bar"
 msgstr "Bar Progres"
 
@@ -23216,6 +23421,11 @@ msgstr "Radius"
 
 
 msgctxt "Operator"
+msgid "Interpolate"
+msgstr "Terinterpolasi"
+
+
+msgctxt "Operator"
 msgid "Length"
 msgstr "Panjang"
 
@@ -23226,28 +23436,8 @@ msgstr "Berat"
 
 
 msgctxt "Operator"
-msgid "Flatten"
-msgstr "Meratakan"
-
-
-msgctxt "Operator"
-msgid "Thumb"
-msgstr "Ibu Jari"
-
-
-msgctxt "Operator"
-msgid "Blur"
-msgstr "Kabut"
-
-
-msgctxt "Operator"
 msgid "Gradient"
 msgstr "Gradien"
-
-
-msgctxt "Operator"
-msgid "Erase"
-msgstr "Hapus"
 
 
 msgctxt "Operator"
@@ -23265,22 +23455,8 @@ msgid "Curve"
 msgstr "Kurva"
 
 
-msgctxt "Operator"
-msgid "Interpolate"
-msgstr "Terinterpolasi"
-
-
-msgctxt "Operator"
-msgid "Slide"
-msgstr "Slide/Menggeser"
-
-
 msgid "Auto IK"
 msgstr "Otomatis"
-
-
-msgid "Active section of the preferences shown in the user interface"
-msgstr "Bagian aktif preferensi ditapilkan di antarmuka pengguna"
 
 
 msgid "Duplicate Camera"
@@ -23347,8 +23523,20 @@ msgid "Password"
 msgstr "Kata Sandi"
 
 
-msgid "Temperature"
-msgstr "Temperatur"
+msgid "Control accuracy of motion blur, more steps gives more memory usage (actual number of steps is 2^(steps - 1))"
+msgstr "Akurasi kontrol buram gerakan, lebih banyak langkah akan menghasilkan lebih banyak penggunaan memori (jumlah langkah yang sesungguhnya adalah 2^(langkah - 1))"
+
+
+msgid "Use deformation motion blur for this object"
+msgstr "Mengguanakan deformasi buram gerakan untuk benda ini"
+
+
+msgid "Use Motion Blur"
+msgstr "Menggunakan Buram Gerakan"
+
+
+msgid "Use motion blur for this object"
+msgstr "Menggunakan buram gerakan untuk benda ini"
 
 
 msgid "AO Bounces"
@@ -23371,8 +23559,8 @@ msgid "GPU Compute"
 msgstr "Tipe"
 
 
-msgid "Feature Set"
-msgstr "Warna Standar"
+msgid "Directional Quad Tree"
+msgstr "Pohon Empat Arah"
 
 
 msgid "No Limit"
@@ -23451,6 +23639,14 @@ msgid "Face Index"
 msgstr "Tekstur"
 
 
+msgid "Bilateral Filter"
+msgstr "Filter Bilateral"
+
+
+msgid "Blur the resolved radiance using a bilateral filter"
+msgstr "Buramkan cahaya yang terselesaikan dengan menggunakan filter bilateral"
+
+
 msgid "Vertical Split"
 msgstr "Pisah Vertikal"
 
@@ -23461,6 +23657,10 @@ msgstr "Kamera"
 
 msgid "Camera Zoom"
 msgstr "Kamera"
+
+
+msgid "Render motion blur in this Layer, if enabled in the scene"
+msgstr "Render buram gerakan di Lapisan ini, jika diaktifkan di adegan ini"
 
 
 msgid "Deliver transmission color pass"
@@ -23478,6 +23678,10 @@ msgstr "Strip"
 
 msgid "Movie Format"
 msgstr "Format Film"
+
+
+msgid "Motion Blur Position"
+msgstr "Posisi Buram Gerakan"
 
 
 msgid "Automatic pixel size, depends on the user interface scale"
@@ -23510,6 +23714,10 @@ msgstr "Skala Pengguna"
 
 msgid "Render Region"
 msgstr "Wilayah Render"
+
+
+msgid "Use multi-sampled 3D scene motion blur"
+msgstr "Menggunakan buram gerakan adegan 3D multi-sampel"
 
 
 msgid "Persistent Data"
@@ -23560,8 +23768,12 @@ msgid "Max Size"
 msgstr "Ukuran Maks"
 
 
-msgid "64 px"
-msgstr "64 px"
+msgid "Over-blur"
+msgstr "Terlalu-Buram"
+
+
+msgid "Apply blur to each jittered sample to reduce under-sampling artifacts"
+msgstr "Mengapliasikan buram pada setiap sampel yang bergejolak untuk mengurangi artefak yang kurang dalam pengambilan sampel"
 
 
 msgid "128 px"
@@ -23604,8 +23816,20 @@ msgid "32 px"
 msgstr "32 px"
 
 
+msgid "64 px"
+msgstr "64 px"
+
+
+msgid "Maximum blur distance a pixel can spread over"
+msgstr "Jarak buram maksimal dimana pixel dapat menyebar"
+
+
 msgid "Motion steps"
 msgstr "Langkah gerakan"
+
+
+msgid "Controls accuracy of motion blur, more steps means longer render time"
+msgstr "Mengendali akurasi buram gerakan, lebih banyak langkah berarti waktu render lebih lama"
 
 
 msgid "Render Samples"
@@ -23618,6 +23842,10 @@ msgstr "Render Pensil Grease"
 
 msgid "Render settings"
 msgstr "Pengaturan render"
+
+
+msgid "Threshold for edge detection algorithm (higher values might over-blur some part of the image)"
+msgstr "Ambang batas untuk algoritma pendeteksian tepi (nilai yang lebih tinggi dapat terlalu memburamkan sebagian gambar)"
 
 
 msgid "Scene Objects"
@@ -23724,8 +23952,28 @@ msgid "Gamma Cross Sequence"
 msgstr "Orientasi Transformasi"
 
 
+msgid "Gaussian Blur Sequence"
+msgstr "Urutan Buram Gaussian"
+
+
+msgid "Sequence strip creating a gaussian blur"
+msgstr "Strip pengurut membuat buram gaussian"
+
+
+msgid "Size of the blur along X axis"
+msgstr "Ukuran buram sepanjang sumbu X"
+
+
+msgid "Size of the blur along Y axis"
+msgstr "Ukuran buram sepanjang sumbu Y"
+
+
 msgid "Blur Distance"
-msgstr "Jarak Blur"
+msgstr "Jarak Buram"
+
+
+msgid "Accuracy of the blur effect"
+msgstr "Akurasi efek buram"
 
 
 msgid "Frame Interpolation"
@@ -23748,8 +23996,16 @@ msgid "Location of the text"
 msgstr "Lokasi teks"
 
 
+msgid "Shadow Blur"
+msgstr "Bayangan Buram"
+
+
 msgid "Blur Width"
 msgstr "Lebar Blur"
+
+
+msgid "Width of the blur for the transition, in percentage relative to the image size"
+msgstr "Lebar keburaman untuk transisi, dalam persentase relatif terhadap ukuran gambar"
 
 
 msgctxt "Sequence"
@@ -23780,8 +24036,8 @@ msgid "Mute this modifier"
 msgstr "Modus Pahat"
 
 
-msgid "White Balance"
-msgstr "Keseimbangan Putih"
+msgid "Cubic B-Spline filter (blurry but no ringing) on 4×4 samples"
+msgstr "Filter Kubik Spline-B (buram tetapi tidak berdering) pada sampel 4×4"
 
 
 msgid "Show Cache"
@@ -23810,6 +24066,14 @@ msgstr "Set ekspansi efek di antarmuka pengguna"
 
 msgid "Use effect during render"
 msgstr "Gunakan efek saat render"
+
+
+msgid "Gaussian Blur Effect"
+msgstr "Efek Buram Gaussian"
+
+
+msgid "Gaussian Blur effect"
+msgstr "Efek Buram Gaussian"
 
 
 msgid "Rotation of the effect"
@@ -23944,6 +24208,10 @@ msgid "Pixel size"
 msgstr "Ukuran pixel"
 
 
+msgid "Number of pixels for blurring rim (set to 0 to disable)"
+msgstr "Jumlah pixel untuk memburamkan pelek (set ke 0 untuk menonaktifkan)"
+
+
 msgid "Mask Color"
 msgstr "Warna Masker"
 
@@ -23958,6 +24226,10 @@ msgstr "Efek bayangan"
 
 msgid "Amplitude of Wave"
 msgstr "Amplitudo Gelombang"
+
+
+msgid "Number of pixels for blurring shadow (set to 0 to disable)"
+msgstr "Jumlah pixel untuk memburamkan bayangan (set ke 0 untuk menonaktifkan)"
 
 
 msgid "Handle 1 Location"
@@ -24116,10 +24388,6 @@ msgid "Show reference frame only"
 msgstr "Saluran"
 
 
-msgid "Current"
-msgstr "Setelah Ini"
-
-
 msgid "Columns"
 msgstr "Kolum"
 
@@ -24132,6 +24400,10 @@ msgid "3D"
 msgstr "3D"
 
 
+msgid "Vector Value"
+msgstr "Nilai Vektor"
+
+
 msgid "Brush Texture Slot"
 msgstr "Tekstur"
 
@@ -24142,10 +24414,6 @@ msgstr "Tekstur"
 
 msgid "Has Texture Angle Source"
 msgstr "Tekstur"
-
-
-msgid "Strand / Particle"
-msgstr "Partikel"
 
 
 msgid "User interface styling and color settings"
@@ -24162,6 +24430,10 @@ msgstr "Penyunting Teks"
 
 msgid "Interpolation Line"
 msgstr "Garis Interpolasi"
+
+
+msgid "Shadow type (0 none, 3, 5 blur, 6 outline)"
+msgstr "Tipe bayangan (0 kosong, 3, 5 buram, 6 garis luar)"
 
 
 msgid "Theme Background Color"
@@ -24427,6 +24699,10 @@ msgstr "Tunjukkan Kabel"
 msgctxt "View3D"
 msgid "Viewport"
 msgstr "Ruang Tampilan"
+
+
+msgid "Blur the studiolight in the background"
+msgstr "Memburamkan cahaya studio di latar belakang"
 
 
 msgid "Scene Lights"
@@ -24851,6 +25127,11 @@ msgstr "Berat Garis Luar Pensil Grease (Gambar)"
 
 
 msgctxt "WindowManager"
+msgid "Grease Pencil Stroke Weight (Blur)"
+msgstr "Berat Garis Luar Pensil Grease (Buram)"
+
+
+msgctxt "WindowManager"
 msgid "Grease Pencil Stroke Vertex Mode"
 msgstr "Mode Vertex Garis Luar Pensil Grease"
 
@@ -24862,7 +25143,7 @@ msgstr "Vertex Garis Luar Pensil Grease (Gambar)"
 
 msgctxt "WindowManager"
 msgid "Grease Pencil Stroke Vertex (Blur)"
-msgstr "Vertex Garis Luar Pensil Grease (Blur)"
+msgstr "Vertex Garis Luar Pensil Grease (Buram)"
 
 
 msgctxt "WindowManager"
@@ -24920,13 +25201,21 @@ msgid "Gesture Box"
 msgstr "Kotak Gestur"
 
 
+msgid "Multiple add-ons with the same name found!"
+msgstr "Ditemukan banyak add-on dengan nama yang sama!"
+
+
+msgctxt "Operator"
+msgid "None"
+msgstr "Kosong"
+
+
 msgid "Warning"
 msgstr "Peringatan"
 
 
-msgctxt "Operator"
-msgid "Documentation"
-msgstr "Dokumentasi"
+msgid ":"
+msgstr ":"
 
 
 msgid "Start Sample"
@@ -24955,6 +25244,10 @@ msgstr "Permukaan"
 
 msgid "Indexes"
 msgstr "Indeks"
+
+
+msgid "Focus on Object"
+msgstr "Fokus ke Objek"
 
 
 msgid "Renders"
@@ -25009,6 +25302,44 @@ msgstr "Catatan"
 msgctxt "Operator"
 msgid "Add a new Variant Slot"
 msgstr "Buat Slot Variasi baru"
+
+
+msgid "Description:"
+msgstr "Deskripsi:"
+
+
+msgid "Internet:"
+msgstr "Internet:"
+
+
+msgid "Author:"
+msgstr "Pembuat:"
+
+
+msgid "Version:"
+msgstr "Versi:"
+
+
+msgid "Warning:"
+msgstr "Bahaya:"
+
+
+msgctxt "Operator"
+msgid "Documentation"
+msgstr "Dokumentasi"
+
+
+msgid "File:"
+msgstr "Dokumen:"
+
+
+msgctxt "Operator"
+msgid "Apply"
+msgstr "Setujui"
+
+
+msgid "Options:"
+msgstr "Opsi:"
 
 
 msgid "    RNA Context: "
@@ -25087,11 +25418,6 @@ msgstr "Impor..."
 msgctxt "Operator"
 msgid "Export..."
 msgstr "Expor..."
-
-
-msgctxt "Operator"
-msgid "New"
-msgstr "Baru"
 
 
 msgid "API Defined"
@@ -25288,17 +25614,8 @@ msgid "Shapes"
 msgstr "Bentuk"
 
 
-msgctxt "Operator"
-msgid "Remove"
-msgstr "Hapus"
-
-
 msgid "Display Size X"
 msgstr "Tampilkan Ukuran X"
-
-
-msgid "Focus on Object"
-msgstr "Fokus ke Objek"
 
 
 msgctxt "Operator"
@@ -25440,6 +25757,10 @@ msgid "Interpolation U"
 msgstr "Interpolasi U"
 
 
+msgid "Overblur"
+msgstr "Terlalu buram"
+
+
 msgid "Arrow Size"
 msgstr "Ukuran Panah"
 
@@ -25568,13 +25889,13 @@ msgstr "Hapus Titik Longgar"
 
 
 msgctxt "Operator"
-msgid "Delete Duplicate Frames"
-msgstr "Hapus Frame Duplikat"
+msgid "Recalculate Geometry"
+msgstr "Kalkuasi Ulang Geometri"
 
 
 msgctxt "Operator"
-msgid "Recalculate Geometry"
-msgstr "Kalkuasi Ulang Geometri"
+msgid "Erase"
+msgstr "Hapus"
 
 
 msgctxt "Operator"
@@ -25652,11 +25973,6 @@ msgstr "Pengindukan:"
 
 
 msgctxt "Operator"
-msgid "Parent"
-msgstr "Induk"
-
-
-msgctxt "Operator"
 msgid "Clear"
 msgstr "Kosongkan"
 
@@ -25695,11 +26011,6 @@ msgstr "Modus Sunting"
 
 
 msgctxt "Operator"
-msgid "None"
-msgstr "Kosong"
-
-
-msgctxt "Operator"
 msgid "Invert"
 msgstr "Balikkan"
 
@@ -25716,11 +26027,6 @@ msgstr "Kunci yang Tidak Terseleksi"
 msgctxt "Operator"
 msgid "Lock Unused"
 msgstr "Kunci yang Tidak Terpakai"
-
-
-msgctxt "Operator"
-msgid "Merge Similar"
-msgstr "Gabungkan yang Mirip"
 
 
 msgctxt "Operator"
@@ -25927,6 +26233,11 @@ msgstr "Setel Ulang"
 
 msgid "Color Layer"
 msgstr "Layer Warna"
+
+
+msgctxt "Operator"
+msgid "Add Brush"
+msgstr "Tambahkan Kuas"
 
 
 msgid "Use Min Angle"
@@ -26254,10 +26565,6 @@ msgid "Filter by Type:"
 msgstr "Saring sesuai Tipe:"
 
 
-msgid "Options:"
-msgstr "Opsi:"
-
-
 msgctxt "Operator"
 msgid "Before Current Frame"
 msgstr "Sebelum Frame Sekarang"
@@ -26345,6 +26652,11 @@ msgstr "Tempel yang Terbalik"
 msgctxt "Operator"
 msgid "Extend"
 msgstr "Memperluas"
+
+
+msgctxt "Operator"
+msgid "Slide"
+msgstr "Slide/Menggeser"
 
 
 msgctxt "Operator"
@@ -26892,6 +27204,11 @@ msgstr "Adegan..."
 
 
 msgctxt "Operator"
+msgid "Gaussian Blur"
+msgstr "Buram Gaussian"
+
+
+msgctxt "Operator"
 msgid "Scale To Fit"
 msgstr "Skala ke Cukup"
 
@@ -26906,10 +27223,6 @@ msgid "Stretch To Fill"
 msgstr "Regang ke Isi"
 
 
-msgid "Tracker"
-msgstr "Pelacak"
-
-
 msgid "Resolutions"
 msgstr "Resolusi"
 
@@ -26917,6 +27230,11 @@ msgstr "Resolusi"
 msgctxt "Operator"
 msgid "Clip"
 msgstr "Klip"
+
+
+msgctxt "Operator"
+msgid "Mask"
+msgstr "Masker"
 
 
 msgid "Source Channel"
@@ -26950,10 +27268,6 @@ msgstr "Hapus"
 
 msgid "    Operator"
 msgstr "    Operator"
-
-
-msgid "Orientation:"
-msgstr "Orientasi:"
 
 
 msgid "Intersections"
@@ -27065,6 +27379,10 @@ msgid "Show Warning"
 msgstr "Tampilkan Peringatan"
 
 
+msgid "Time Out"
+msgstr "Waktu Habis"
+
+
 msgid "B"
 msgstr "B"
 
@@ -27098,48 +27416,16 @@ msgid "Fly/Walk"
 msgstr "Terbang/Jalan"
 
 
-msgid "Multiple add-ons with the same name found!"
-msgstr "Ditemukan banyak add-on dengan nama yang sama!"
-
-
 msgid "Error (see console)"
 msgstr "Error (lihat konsol)"
-
-
-msgid ":"
-msgstr ":"
 
 
 msgid "Missing script files"
 msgstr "Dokumen skrip yang hilang"
 
 
-msgid "Description:"
-msgstr "Deskripsi:"
-
-
 msgid "Location:"
 msgstr "Lokasi:"
-
-
-msgid "File:"
-msgstr "Dokumen:"
-
-
-msgid "Author:"
-msgstr "Pembuat:"
-
-
-msgid "Version:"
-msgstr "Versi:"
-
-
-msgid "Warning:"
-msgstr "Bahaya:"
-
-
-msgid "Internet:"
-msgstr "Internet:"
 
 
 msgid "User:"
@@ -27429,11 +27715,6 @@ msgstr "Seleksi"
 
 
 msgctxt "Operator"
-msgid "Grease Pencil"
-msgstr "Pensil Grease"
-
-
-msgctxt "Operator"
 msgid "Link Objects to Scene..."
 msgstr "Tautkan Objek ke Adegan..."
 
@@ -27493,9 +27774,8 @@ msgid "Quick Edit"
 msgstr "Sunting Cepat"
 
 
-msgctxt "Operator"
-msgid "Apply"
-msgstr "Setujui"
+msgid "Saved \"%s\""
+msgstr "Tersimpan \"%s\""
 
 
 msgid "Int"
@@ -27722,6 +28002,10 @@ msgid "No image empty selected"
 msgstr "Tidak ada gambar kosong yang terseleksi"
 
 
+msgid "GPencil Weight Blur: LMB to blur | RMB/Escape to Exit"
+msgstr "Keburaman Berat GPensil: Klik Kiri untuk memburamkan | Klik Kanan/[Esc] untuk Keluar"
+
+
 msgid "%s: %s"
 msgstr "%s: %s"
 
@@ -27823,8 +28107,20 @@ msgid "Alpha:"
 msgstr "Alpha:"
 
 
+msgid "OK"
+msgstr "OK"
+
+
+msgid "Cancel"
+msgstr "Batal"
+
+
 msgid "Value: {}"
 msgstr "Nilai: {}"
+
+
+msgid "Movie"
+msgstr "Film"
 
 
 msgid "Anim Player"
@@ -28142,10 +28438,6 @@ msgstr "Bola"
 msgctxt "Mesh"
 msgid "Icosphere"
 msgstr "Icosphere"
-
-
-msgid "Cancel"
-msgstr "Batal"
 
 
 msgid "Outer"
@@ -28477,6 +28769,14 @@ msgid "Blender Info Log"
 msgstr "Info Log Blender"
 
 
+msgid "ON"
+msgstr "ON"
+
+
+msgid "OFF"
+msgstr "OFF"
+
+
 msgid " Materials,"
 msgstr " Material,"
 
@@ -28487,10 +28787,6 @@ msgstr "Hapus"
 
 msgid "Warning!"
 msgstr "Bahaya!"
-
-
-msgid "OK"
-msgstr "OK"
 
 
 msgid "vertex data"
@@ -28647,6 +28943,10 @@ msgstr " Atribut Bernama"
 
 msgid "Operation requires an active keying set"
 msgstr "Tekstur"
+
+
+msgid "Add a gaussian blur effect strip to the sequencer"
+msgstr "Menambahkan strip efek buram gaussian ke pengurut"
 
 
 msgid "Movie clip not found"
@@ -29112,6 +29412,10 @@ msgid "Result"
 msgstr "Hasil"
 
 
+msgid "How many times to blur the values for all elements"
+msgstr "Berapa kali untuk memburamkan nilai untuk semua elemen"
+
+
 msgid "Intersecting Edges"
 msgstr "Tepi Persimpangan"
 
@@ -29288,7 +29592,7 @@ msgstr "Partikel"
 
 
 msgid "Blur X"
-msgstr "X Blur"
+msgstr "X Buram"
 
 
 msgid "Object Pivot"
@@ -29325,10 +29629,6 @@ msgstr "Memperbolehkan eksekusi skrip secara permanen"
 
 msgid "Context window not set"
 msgstr "Warna Standar"
-
-
-msgid "Saved \"%s\""
-msgstr "Tersimpan \"%s\""
 
 
 msgid "Not a library"
@@ -29397,14 +29697,6 @@ msgstr "Esc"
 
 msgid "dbl-"
 msgstr "dbl-"
-
-
-msgid "ON"
-msgstr "ON"
-
-
-msgid "OFF"
-msgstr "OFF"
 
 
 msgid "Set Debug Value"
@@ -29494,6 +29786,10 @@ msgstr "(Belum Tersimpan)"
 
 msgid "Failed to create window"
 msgstr "Gagal membuat jendela"
+
+
+msgid "Blurry Footage"
+msgstr "Rekaman yang Buram"
 
 
 msgctxt "WorkSpace"

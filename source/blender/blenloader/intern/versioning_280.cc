@@ -2583,7 +2583,6 @@ void do_versions_after_linking_280(FileData *fd, Main *bmain)
         brush->gpencil_tool = brush->gpencil_settings->brush_type;
       }
     }
-    BKE_paint_toolslots_init_from_main(bmain);
   }
 
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 280, 38)) {
@@ -2862,13 +2861,9 @@ void do_versions_after_linking_280(FileData *fd, Main *bmain)
 
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 282, 2)) {
     /* Init all Vertex/Sculpt and Weight Paint brushes. */
-    Brush *brush;
     Material *ma;
     /* Pen Soft brush. */
-    brush = (Brush *)do_versions_rename_id(bmain, ID_BR, "Draw Soft", "Pencil Soft");
-    if (brush) {
-      brush->gpencil_settings->icon_id = GP_BRUSH_ICON_PEN;
-    }
+    do_versions_rename_id(bmain, ID_BR, "Draw Soft", "Pencil Soft");
     do_versions_rename_id(bmain, ID_BR, "Draw Pencil", "Pencil");
     do_versions_rename_id(bmain, ID_BR, "Draw Pen", "Pen");
     do_versions_rename_id(bmain, ID_BR, "Draw Ink", "Ink Pen");
@@ -2896,9 +2891,6 @@ void do_versions_after_linking_280(FileData *fd, Main *bmain)
       do_versions_rename_id(bmain, ID_MA, "Black Dots", "Dots Stroke");
     }
 
-    brush = static_cast<Brush *>(
-        BLI_findstring(&bmain->brushes, "Pencil", offsetof(ID, name) + 2));
-
     LISTBASE_FOREACH (Scene *, scene, &bmain->scenes) {
       ToolSettings *ts = scene->toolsettings;
 
@@ -2908,13 +2900,9 @@ void do_versions_after_linking_280(FileData *fd, Main *bmain)
       BKE_paint_ensure_from_paintmode(bmain, scene, PaintMode::SculptGPencil);
       BKE_paint_ensure_from_paintmode(bmain, scene, PaintMode::WeightGPencil);
 
-      /* Set default Draw brush. */
-      if (brush != nullptr) {
-        Paint *paint = &ts->gp_paint->paint;
-        BKE_paint_brush_set(paint, brush);
-        /* Enable cursor by default. */
-        paint->flags |= PAINT_SHOW_BRUSH;
-      }
+      /* Enable cursor by default. */
+      Paint *paint = &ts->gp_paint->paint;
+      paint->flags |= PAINT_SHOW_BRUSH;
     }
   }
 
@@ -3554,7 +3542,7 @@ void blo_do_versions_280(FileData *fd, Library * /*lib*/, Main *bmain)
         EEVEE_GET_BOOL(props, gtao_use_bent_normals, SCE_EEVEE_GTAO_BENT_NORMALS);
         EEVEE_GET_BOOL(props, gtao_bounce, SCE_EEVEE_GTAO_BOUNCE);
         EEVEE_GET_BOOL(props, dof_enable, SCE_EEVEE_DOF_ENABLED);
-        EEVEE_GET_BOOL(props, bloom_enable, SCE_EEVEE_BLOOM_ENABLED);
+        // EEVEE_GET_BOOL(props, bloom_enable, SCE_EEVEE_BLOOM_ENABLED);
         EEVEE_GET_BOOL(props, motion_blur_enable, SCE_EEVEE_MOTION_BLUR_ENABLED_DEPRECATED);
         EEVEE_GET_BOOL(props, shadow_high_bitdepth, SCE_EEVEE_SHADOW_HIGH_BITDEPTH);
         EEVEE_GET_BOOL(props, taa_reprojection, SCE_EEVEE_TAA_REPROJECTION);

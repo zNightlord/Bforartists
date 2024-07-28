@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.2.0 Beta (b'a2795852cd29')\n"
+"Project-Id-Version: Blender 4.3.0 Alpha (b'de443e038c4e')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-06-10 10:16+0000\n"
+"POT-Creation-Date: 2024-07-22 07:23+0000\n"
 "PO-Revision-Date: 2024-05-03 12:13+0000\n"
 "Last-Translator: Nooby Noober <iamanoobynoober@gmail.com>\n"
 "Language-Team: Persian <https://translate.blender.org/projects/blender-ui/ui/fa/>\n"
@@ -246,6 +246,34 @@ msgid "Collection of action groups"
 msgstr "ﻡﺍﺪﻗﺍ ﯼﺎﻫ‌ﻩﻭﺮﮔ ﻪﻋﻮﻤﺠﻣ"
 
 
+msgid "Influence"
+msgstr "ﺫﻮﻔﻧ"
+
+
+msgid "Mix Mode"
+msgstr "ﯽﺒﯿﮐﺮﺗ ﺖﻟﺎﺣ"
+
+
+msgid "Replace"
+msgstr "ﻦﯾﺰﮕﯾﺎﺟ"
+
+
+msgid "Offset"
+msgstr "ﺖﺴﻓﺍ"
+
+
+msgid "Add"
+msgstr "ﻥﺩﺮﮐ‌ﻪﻓﺎﺿﺍ"
+
+
+msgid "Subtract"
+msgstr "ﻥﺩﺮﮐ‌ﻖﯾﺮﻔﺗ"
+
+
+msgid "Multiply"
+msgstr "ﺏﺮﺿ"
+
+
 msgid "Action Pose Markers"
 msgstr "ﻞﻤﻋ ﺖﺳﮊ ﯼﺎﻫﺮﮕﻧﺎﺸﻧ"
 
@@ -268,6 +296,14 @@ msgstr "ﻝﺎﻌﻓ ﺖﺳﮊ ﺮﮕﻧﺎﺸﻧ ﺺﺧﺎﺷ"
 
 msgid "Index of active pose marker"
 msgstr "ﺖﺳﺍ ﻝﺎﻌﻓ ﻪﮐ ﯽﺘﺳﮊ ﺮﮕﻧﺎﺸﻧ ﺺﺧﺎﺷ"
+
+
+msgid "Active"
+msgstr "ﻝﺎﻌﻓ"
+
+
+msgid "Show Expanded"
+msgstr "ﻩﺩﺮﺘﺴﮔ ﺶﯾﺎﻤﻧ"
 
 
 msgid "Add-on"
@@ -398,6 +434,18 @@ msgid "Displays glTF Material Output node in Shader Editor (Menu Add > Output)"
 msgstr "ﺪﻫﺩ ﯽﻣ ﻥﺎﺸﻧ (ﯽﺟﻭﺮﺧ <ﻥﺩﻭﺰﻓﺍ ﯼﻮﻨﻣ)ﻥﺯ‌ﻪﯾﺎﺳ ﺮﮕﺸﯾﺍﺮﯾﻭ ﺭﺩ ﺍﺭ glTF ﯼﺎﻫ‌ﺲﻨﺟ ﯽﺟﻭﺮﺧ ﻩﺮﮔ"
 
 
+msgid "Always"
+msgstr "ﻪﺸﯿﻤﻫ"
+
+
+msgid "Center"
+msgstr "ﺰﮐﺮﻣ"
+
+
+msgid "Bottom"
+msgstr "ﻦﯿﯾﺎﭘ"
+
+
 msgid "Fribidi Library"
 msgstr "FriBidi ﻪﻧﺎﺨﺑﺎﺘﮐ"
 
@@ -486,10 +534,6 @@ msgid "Method used for combining Active Action's result with result of NLA stack
 msgstr "NLA ﻪﺘﺳﺩ ﻪﺠﯿﺘﻧ ﺎﺑ ﻝﺎﻌﻓ ﻡﺍﺪﻗﺍ ﻪﺠﯿﺘﻧ ﺐﯿﮐﺮﺗ ﯼﺍﺮﺑ ﻩﺩﺎﻔﺘﺳﺍ ﺩﺭﻮﻣ ﺵﻭﺭ"
 
 
-msgid "Replace"
-msgstr "ﻦﯾﺰﮕﯾﺎﺟ"
-
-
 msgid "The strip values replace the accumulated results by amount specified by influence"
 msgstr "ﺩﻮﺷ ﯽﻣ ﺮﯿﺛﺄﺗ ﻂﺳﻮﺗ ﻩﺪﺷ ﺺﺨﺸﻣ ﺭﺍﺪﻘﻣ ﺎﺑ ﻩﺪﺷ ﯼﺭﻭﺁ ﻊﻤﺟ ﺞﯾﺎﺘﻧ ﻦﯾﺰﮕﯾﺎﺟ ﺭﺍﻮﻧ ﺮﯾﺩﺎﻘﻣ"
 
@@ -502,24 +546,12 @@ msgid "The strip values are combined with accumulated results by appropriately u
 msgstr "ﺪﻧﻮﺷ ﯽﻣ ﺐﯿﮐﺮﺗ ﻝﺎﻧﺎﮐ ﻉﻮﻧ ﺱﺎﺳﺍ ﺮﺑ ﻂﻠﺘﺨﻣ ﺩﺍﺪﻋﺍ ﺎﯾ ﺏﺮﺿ ،ﻊﻤﺟ ﺕﺎﯿﺿﺎﯾﺭ ﺯﺍ ﺐﺳﺎﻨﻣ ﻩﺩﺎﻔﺘﺳﺍ ﺎﺑ ﻩﺪﺷ ﯼﺭﻭﺁ ﻊﻤﺟ ﺞﯾﺎﺘﻧ ﺎﺑ ﺭﺍﻮﻧ ﺮﯾﺩﺎﻘﻣ"
 
 
-msgid "Add"
-msgstr "ﻥﺩﺮﮐ‌ﻪﻓﺎﺿﺍ"
-
-
 msgid "Weighted result of strip is added to the accumulated results"
 msgstr "ﺩﻮﺷ‌ﯽﻣ ﻪﻓﺎﺿﺍ ﻩﺪﺷ ﯼﺭﻭﺁ ﻊﻤﺟ ﺞﯾﺎﺘﻧ ﻪﺑ ﺭﺍﻮﻧ ﯽﻧﺯﻭ ﻪﺠﯿﺘﻧ"
 
 
-msgid "Subtract"
-msgstr "ﻥﺩﺮﮐ‌ﻖﯾﺮﻔﺗ"
-
-
 msgid "Weighted result of strip is removed from the accumulated results"
 msgstr "ﺩﻮﺷ ﯽﻣ ﻑﺬﺣ ﻩﺪﺷ ﯼﺭﻭﺁ ﻊﻤﺟ ﺞﯾﺎﺘﻧ ﺯﺍ ﺭﺍﻮﻧ ﯽﻧﺯﻭ ﻪﺠﯿﺘﻧ"
-
-
-msgid "Multiply"
-msgstr "ﺏﺮﺿ"
 
 
 msgid "Weighted result of strip is multiplied with the accumulated results"
@@ -564,6 +596,10 @@ msgstr "ﻡﺍﺪﻗﺍ ﺮﯿﺛﺎﺗ"
 
 msgid "Amount the Active Action contributes to the result of the NLA stack"
 msgstr "ﺪﻨﮐ‌ﯽﻣ ﺖﮐﺭﺎﺸﻣ NLA ﻪﺘﺴﺑ ﻪﺠﯿﺘﻧ ﺭﺩ ﻝﺎﻌﻓ ﻡﺍﺪﻗﺍ ﻪﮐ ﯼﺭﺍﺪﻘﻣ"
+
+
+msgid "None"
+msgstr "ﻡﺍﺪﮐ ﭻﯿﻫ"
 
 
 msgid "Tweak Mode Action Storage"
@@ -1019,10 +1055,6 @@ msgid "Object"
 msgstr "ءﯽﺷ"
 
 
-msgid "None"
-msgstr "ﻡﺍﺪﮐ ﭻﯿﻫ"
-
-
 msgid "Indirect"
 msgstr "ﻢﯿﻘﺘﺴﻣ ﺮﯿﻏ"
 
@@ -1235,16 +1267,8 @@ msgid "Use Custom Color"
 msgstr "ﻩﺍﻮﺨﻟﺩ ﮓﻧﺭ ﺯﺍ ﻩﺩﺎﻔﺘﺳﺍ"
 
 
-msgid "Remove"
-msgstr "ﻑﺬﺣ"
-
-
 msgid "Mode"
 msgstr "ﺖﻟﺎﺣ"
-
-
-msgid "Active"
-msgstr "ﻝﺎﻌﻓ"
 
 
 msgid "Material"
@@ -1263,48 +1287,6 @@ msgstr "ﺖﺨﺗ"
 
 msgid "Direction"
 msgstr "ﺎﺘﺳﺍﺭ"
-
-
-msgid "Marker"
-msgstr "ﺮﮕﻧﺎﺸﻧ"
-
-
-msgctxt "GPencil"
-msgid "Grease Pencil Icon"
-msgstr "ﯽﻨﻏﻭﺭ ﺩﺍﺪﻣ ﻥﻮﮑﯾﺁ"
-
-
-msgctxt "GPencil"
-msgid "Smooth"
-msgstr "ﻑﺎﺻ"
-
-
-msgctxt "GPencil"
-msgid "Thickness"
-msgstr "ﺖﻣﺎﺨﺿ"
-
-
-msgctxt "GPencil"
-msgid "Strength"
-msgstr "ﻡ‌ﺎﮑﺤﺘﺳﺍ"
-
-
-msgctxt "GPencil"
-msgid "Randomize"
-msgstr "ﻥﺩﺮﮐ ﯽﻓﺩﺎﺼﺗ"
-
-
-msgctxt "GPencil"
-msgid "Clone"
-msgstr "ﻥﺎﺴﻤﻫ ﻦﺘﺧﺎﺳ"
-
-
-msgid "Draw"
-msgstr "ﺩﺍﺯﺁ ﯽﺷﺎﻘﻧ"
-
-
-msgid "Blur"
-msgstr "ﯽﮔﺮﯿﺗ"
 
 
 msgctxt "Amount"
@@ -1345,10 +1327,6 @@ msgid "Image"
 msgstr "ﺮﯾﻮﺼﺗ"
 
 
-msgid "Offset"
-msgstr "ﺖﺴﻓﺍ"
-
-
 msgid "Rotation"
 msgstr "ﻥﺍﺭﻭﺩ"
 
@@ -1357,20 +1335,12 @@ msgid "Scale"
 msgstr "ﺲﻧﺎﺠﺗ"
 
 
-msgid "Show Expanded"
-msgstr "ﻩﺩﺮﺘﺴﮔ ﺶﯾﺎﻤﻧ"
-
-
 msgid "Left"
 msgstr "ﭗﭼ"
 
 
 msgid "Right"
 msgstr "ﺖﺳﺍﺭ"
-
-
-msgid "Center"
-msgstr "ﺰﮐﺮﻣ"
 
 
 msgid "Child Particle"
@@ -1713,10 +1683,6 @@ msgid "Input"
 msgstr "ﯼﺩﻭﺭﻭ"
 
 
-msgid "Influence"
-msgstr "ﺫﻮﻔﻧ"
-
-
 msgid "Disable"
 msgstr "ﻝﺎﻌﻓﺮﯿﻏ"
 
@@ -1771,10 +1737,6 @@ msgstr "ﺮﭽﯿﻣﺭﺁ"
 
 msgid "Follow Path"
 msgstr "ﺮﯿﺴﻣ ﻩﺪﻨﻨﮐ ﻝﺎﺒﻧﺩ"
-
-
-msgid "Mix Mode"
-msgstr "ﯽﺒﯿﮐﺮﺗ ﺖﻟﺎﺣ"
 
 
 msgid "X Location"
@@ -1939,10 +1901,6 @@ msgstr "Z ﻪﻨﯿﻤﮐ"
 
 msgid "Uniform"
 msgstr "ﻥﺎﺴﮑﯾ"
-
-
-msgid "Always"
-msgstr "ﻪﺸﯿﻤﻫ"
 
 
 msgid "Script"
@@ -2297,16 +2255,8 @@ msgid "Delete"
 msgstr "ﻑﺬﺣ"
 
 
-msgid "Bottom"
-msgstr "ﻦﯿﯾﺎﭘ"
-
-
 msgid "Top"
 msgstr "ﻻ﻿ﺎﺑ"
-
-
-msgid "UV"
-msgstr "UV"
 
 
 msgid "Visibility"
@@ -2392,6 +2342,10 @@ msgid "Space"
 msgstr "ﺎﻀﻓ"
 
 
+msgid "Local Matrix"
+msgstr "ﯽﻠﺤﻣ ﺲﮑﯾﺮﺗﺎﻣ"
+
+
 msgid "Red"
 msgstr "ﺰﻣﺮﻗ"
 
@@ -2450,6 +2404,14 @@ msgstr "ﻩﺮﺠﻨﭘ ﺖﯾﺮﯾﺪﻣ"
 
 msgid "World"
 msgstr "ﻥﺎﻬﺟ"
+
+
+msgid "Layers"
+msgstr "ﺎﻫ‌ﻪﯾﻻ﻿"
+
+
+msgid "Feature Set"
+msgstr "ﯽﮔﮋﯾﻭ ﻪﻋﻮﻤﺠﻣ"
 
 
 msgid "B-Bone"
@@ -2526,11 +2488,6 @@ msgstr "ﺖﺑ‌‌ﺎﺛ"
 
 
 msgctxt "Curves"
-msgid "Curves Sculpt Tool"
-msgstr "ﯽﻨﺤﻨﻣ ‎ﯼﺭﺎﺠﺣ ﺭﺍﺰﺑﺍ"
-
-
-msgctxt "Curves"
 msgid "Add"
 msgstr "ﻥﺩﺮﮐ‌ﻪﻓﺎﺿﺍ"
 
@@ -2550,6 +2507,31 @@ msgid "Scale"
 msgstr "ﺱﺎﯿﻘﻣ"
 
 
+msgctxt "GPencil"
+msgid "Smooth"
+msgstr "ﻑﺎﺻ"
+
+
+msgctxt "GPencil"
+msgid "Thickness"
+msgstr "ﺖﻣﺎﺨﺿ"
+
+
+msgctxt "GPencil"
+msgid "Strength"
+msgstr "ﻡ‌ﺎﮑﺤﺘﺳﺍ"
+
+
+msgctxt "GPencil"
+msgid "Randomize"
+msgstr "ﻥﺩﺮﮐ ﯽﻓﺩﺎﺼﺗ"
+
+
+msgctxt "GPencil"
+msgid "Clone"
+msgstr "ﻥﺎﺴﻤﻫ ﻦﺘﺧﺎﺳ"
+
+
 msgctxt "Brush"
 msgid "Draw"
 msgstr "ﯽﺷﺎﻘﻧ"
@@ -2563,6 +2545,14 @@ msgstr "ﻥﺩﺮﮐ ﺮﭘ"
 msgctxt "Brush"
 msgid "Erase"
 msgstr "ﻥﺩﺮﮐ‌ﮎﺎﭘ"
+
+
+msgid "Draw"
+msgstr "ﺩﺍﺯﺁ ﯽﺷﺎﻘﻧ"
+
+
+msgid "Blur"
+msgstr "ﯽﮔﺮﯿﺗ"
 
 
 msgctxt "Brush"
@@ -2583,11 +2573,6 @@ msgstr "ﯽﺷﺎﻘﻧ"
 msgctxt "Mask"
 msgid "Smooth"
 msgstr "ﻑﺎﺻ"
-
-
-msgctxt "Brush"
-msgid "Sculpt Tool"
-msgstr "ﯼﺭﺎﺠﺣ ﺭﺍﺰﺑﺍ"
 
 
 msgctxt "Brush"
@@ -2673,10 +2658,6 @@ msgstr "ﻪﻨﯿﻤﮐ"
 
 msgid "Max"
 msgstr "ﻪﻨﯿﺸﯿﺑ"
-
-
-msgid "Layers"
-msgstr "ﺎﻫ‌ﻪﯾﻻ﻿"
 
 
 msgid "U"
@@ -2790,10 +2771,6 @@ msgstr "ﺲﻧﺎﺠﺗ ﻞﻔﻗ"
 
 msgid "Input Matrix"
 msgstr "ﺲﯾﺮﺗﺎﻣ ﯼﺩﻭﺭﻭ"
-
-
-msgid "Local Matrix"
-msgstr "ﯽﻠﺤﻣ ﺲﮑﯾﺮﺗﺎﻣ"
 
 
 msgid "Object Mode"
@@ -3051,8 +3028,20 @@ msgid "Pivot Point"
 msgstr "ﺶﺧﺮﭼ ﻪﻄﻘﻧ"
 
 
+msgid "Marker"
+msgstr "ﺮﮕﻧﺎﺸﻧ"
+
+
+msgid "UV"
+msgstr "UV"
+
+
 msgid "Math"
 msgstr "ﯽﺿﺎﯾﺭ"
+
+
+msgid "Import"
+msgstr "ﻥﺩﺮﮐ ﺩﺭﺍﻭ"
 
 
 msgid "Layout"
@@ -3094,10 +3083,6 @@ msgstr "ﻥﺩﺮﮐ ﺭﺩﺎﺻ"
 
 msgid "External Data"
 msgstr "ﯽﺟﺭﺎﺧ ﻩٔﺩﺍﺩ"
-
-
-msgid "Import"
-msgstr "ﻥﺩﺮﮐ ﺩﺭﺍﻭ"
 
 
 msgid "Help"
@@ -3693,6 +3678,10 @@ msgid "Flip Names"
 msgstr "ﺎﻫ‌ﻢﺳﺍ ﯼﺯﺎﺳ‌ﻪﻨﯾﺮﻗ"
 
 
+msgid "(undocumented operator)"
+msgstr "(ﻩﺪﺸﻧ ﺪﻨﺘﺴﻣ ﺭﻮﺗﺍﺮﭘﺍ)"
+
+
 msgctxt "Operator"
 msgid "Select Similar"
 msgstr "ﻪﺑﺎﺸﻣ ﺏﺎﺨﺘﻧﺍ"
@@ -3800,10 +3789,6 @@ msgstr "ﻝﺎﻌﻓ ﺮﯿﻏ ﯼﺎﻫ ﮎﺮﺗِ"
 
 msgid "Failed Tracks"
 msgstr "ﻖﻓﻮﻣﺎﻧ ﯼﺎﻫ ﮎﺮﺗِ"
-
-
-msgid "(undocumented operator)"
-msgstr "(ﻩﺪﺸﻧ ﺪﻨﺘﺴﻣ ﺭﻮﺗﺍﺮﭘﺍ)"
 
 
 msgctxt "Operator"
@@ -3940,6 +3925,10 @@ msgstr "ﻭﺩ ﺮﻫ"
 
 msgid "Join"
 msgstr "ﻦﺘﺳﻮﯿﭘ"
+
+
+msgid "Remove"
+msgstr "ﻑﺬﺣ"
 
 
 msgid "Flat"
@@ -4145,6 +4134,10 @@ msgid "Copy Pose"
 msgstr "ﺖﺳﮊ ﯽﭙﮐ"
 
 
+msgid "Property Name"
+msgstr "ﯽﮔﮋﯾﻭ ﻡﺎﻧ"
+
+
 msgctxt "Operator"
 msgid "Render"
 msgstr "ﺭﺪﻧﺭ"
@@ -4274,10 +4267,6 @@ msgstr "ﺖﯿﻌﺿﻭ"
 msgctxt "Operator"
 msgid "Operator Cheat Sheet"
 msgstr "ﺮﺑﺭﺎﮐ ﺐﻠﻘﺗ ﻪﮔﺮﺑ"
-
-
-msgid "Property Name"
-msgstr "ﯽﮔﮋﯾﻭ ﻡﺎﻧ"
 
 
 msgid "Primary Data Path"
@@ -4432,11 +4421,6 @@ msgid "Motion Tracking"
 msgstr "ﺖﮐﺮﺣ ﯽﺑﺎﯾﺩﺭ"
 
 
-msgctxt "Operator"
-msgid "Strength"
-msgstr "ﻡﺎﮑﺤﺘﺳﺍ"
-
-
 msgid "Pose Options"
 msgstr "ﺖﺳﮊ ﯼﺎﻫ‌ﻪﻨﯾﺰﮔ"
 
@@ -4507,10 +4491,6 @@ msgstr "ﺭﺪﻧﺭ ﯼﺍﺮﺑ CPU ﺯﺍ ﻩﺩﺎﻔﺘﺳﺍ"
 
 msgid "GPU Compute"
 msgstr "GPU ﺎﺑ ﻪﺒﺳﺎﺤﻣ"
-
-
-msgid "Feature Set"
-msgstr "ﯽﮔﮋﯾﻭ ﻪﻋﻮﻤﺠﻣ"
 
 
 msgid "Supported"
@@ -4654,10 +4634,6 @@ msgid "Length Factor"
 msgstr "ﻝﻮﻃ ﺭﻮﺘﮐﺎﻓ"
 
 
-msgid "Strand / Particle"
-msgstr "ﻩﺭﺫ/ﻪﺘﺷﺭ"
-
-
 msgid "Theme Clip Editor"
 msgstr "ﻢﺗ ﭗﯿﻠﮐ ﺮﮕﺸﯾﺍﺮﯾﻭ"
 
@@ -4754,6 +4730,30 @@ msgstr "ﻮﺠﺘﺴﺟ"
 msgctxt "WindowManager"
 msgid "Rotate"
 msgstr "ﺶﺧﺮﭼ"
+
+
+msgid "Description:"
+msgstr ":ﺢﯿﺿﻮﺗ"
+
+
+msgid "Internet:"
+msgstr ":ﺖﻧﺮﺘﻨﯾﺍ"
+
+
+msgid "Author:"
+msgstr ":ﻩﺪﻨﺴﯾﻮﻧ"
+
+
+msgid "Version:"
+msgstr ":ﻪﺨﺴﻧ"
+
+
+msgid "Warning:"
+msgstr ":ﺭﺍﺪﺸﻫ"
+
+
+msgid "File:"
+msgstr ":ﻩﺪﻧﻭﺮﭘ"
 
 
 msgid "Tracking"
@@ -4896,32 +4896,8 @@ msgid "B"
 msgstr "B"
 
 
-msgid "Description:"
-msgstr ":ﺢﯿﺿﻮﺗ"
-
-
 msgid "Location:"
 msgstr ":ﻥﺎﮑﻣ"
-
-
-msgid "File:"
-msgstr ":ﻩﺪﻧﻭﺮﭘ"
-
-
-msgid "Author:"
-msgstr ":ﻩﺪﻨﺴﯾﻮﻧ"
-
-
-msgid "Version:"
-msgstr ":ﻪﺨﺴﻧ"
-
-
-msgid "Warning:"
-msgstr ":ﺭﺍﺪﺸﻫ"
-
-
-msgid "Internet:"
-msgstr ":ﺖﻧﺮﺘﻨﯾﺍ"
 
 
 msgctxt "Operator"
@@ -5039,6 +5015,14 @@ msgstr "(#RRGGBB) ﮓﻧﺭ ﯼﺍﺮﺑ ﻪﻧﺎﮔ ﻪﺳ ﺰﮕﻫ"
 msgctxt "Color"
 msgid "Value:"
 msgstr ":ﺭﺍﺪﻘﻣ"
+
+
+msgid "OK"
+msgstr "ﺪﯿﯾﺄﺗ"
+
+
+msgid "Cancel"
+msgstr "ﻑﺍﺮﺼﻧﺍ"
 
 
 msgid "No Properties"
@@ -5181,10 +5165,6 @@ msgid "Browse ID data to be linked"
 msgstr "ﻥﺩﺮﮐ‌ﮏﻨﯿﻟ ﯼﺍﺮﺑ ﯼﺩ−ﯼﺁ ﻩٔﺩﺍﺩ ﺶﻨﯾﺰﮔ"
 
 
-msgid "Cancel"
-msgstr "ﻑﺍﺮﺼﻧﺍ"
-
-
 msgid "3D View "
 msgstr " .ﯼﺪﻌﺑ ﻪﺳ ﺪﯾﺩ"
 
@@ -5207,10 +5187,6 @@ msgstr "ﮒﺮﺑﺮﺳ ﺶﯾﺎﻤﻧ"
 
 msgid " Materials,"
 msgstr "ﻩﺩﺎﻣ "
-
-
-msgid "OK"
-msgstr "ﺪﯿﯾﺄﺗ"
 
 
 msgid "Compiled without sound support"

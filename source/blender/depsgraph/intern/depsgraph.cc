@@ -67,6 +67,7 @@ Depsgraph::Depsgraph(Main *bmain, Scene *scene, ViewLayer *view_layer, eEvaluati
 {
   BLI_spin_init(&lock);
   memset(id_type_updated, 0, sizeof(id_type_updated));
+  memset(id_type_updated_backup, 0, sizeof(id_type_updated_backup));
   memset(id_type_exist, 0, sizeof(id_type_exist));
   memset(physics_relations, 0, sizeof(physics_relations));
 
@@ -113,7 +114,7 @@ IDNode *Depsgraph::add_id_node(ID *id, ID *id_cow_hint)
   if (!id_node) {
     DepsNodeFactory *factory = type_get_factory(NodeType::ID_REF);
     id_node = (IDNode *)factory->create_node(id, "", id->name);
-    id_node->init_copy_on_write(id_cow_hint);
+    id_node->init_copy_on_write(*this, id_cow_hint);
     /* Register node in ID hash.
      *
      * NOTE: We address ID nodes by the original ID pointer they are

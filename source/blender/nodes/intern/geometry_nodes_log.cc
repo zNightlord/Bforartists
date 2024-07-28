@@ -7,11 +7,14 @@
 
 #include "BKE_compute_contexts.hh"
 #include "BKE_curves.hh"
+#include "BKE_geometry_nodes_gizmos_transforms.hh"
 #include "BKE_node_runtime.hh"
 #include "BKE_node_socket_value.hh"
+#include "BKE_type_conversions.hh"
 #include "BKE_volume.hh"
 #include "BKE_volume_openvdb.hh"
 
+#include "DNA_grease_pencil_types.h"
 #include "DNA_modifier_types.h"
 #include "DNA_space_types.h"
 
@@ -61,6 +64,8 @@ FieldInfoLog::FieldInfoLog(const GField &field) : type(field.cpp_type())
 
 GeometryInfoLog::GeometryInfoLog(const bke::GeometrySet &geometry_set)
 {
+  this->name = geometry_set.name;
+
   static std::array all_component_types = {bke::GeometryComponent::Type::Curve,
                                            bke::GeometryComponent::Type::Instance,
                                            bke::GeometryComponent::Type::Mesh,
@@ -118,11 +123,17 @@ GeometryInfoLog::GeometryInfoLog(const bke::GeometrySet &geometry_set)
       case bke::GeometryComponent::Type::Edit: {
         const auto &edit_component = *static_cast<const bke::GeometryComponentEditData *>(
             component);
+        if (!this->edit_data_info) {
+          this->edit_data_info.emplace(EditDataInfo());
+        }
+        EditDataInfo &info = *this->edit_data_info;
         if (const bke::CurvesEditHints *curve_edit_hints = edit_component.curves_edit_hints_.get())
         {
-          EditDataInfo &info = this->edit_data_info.emplace();
           info.has_deform_matrices = curve_edit_hints->deform_mats.has_value();
           info.has_deformed_positions = curve_edit_hints->positions().has_value();
+        }
+        if (const bke::GizmoEditHints *gizmo_edit_hints = edit_component.gizmo_edit_hints_.get()) {
+          info.gizmo_transforms_num = gizmo_edit_hints->gizmo_transforms.size();
         }
         break;
       }
@@ -135,6 +146,12 @@ GeometryInfoLog::GeometryInfoLog(const bke::GeometrySet &geometry_set)
         break;
       }
       case bke::GeometryComponent::Type::GreasePencil: {
+        const auto &grease_pencil_component = *static_cast<const bke::GreasePencilComponent *>(
+            component);
+        if (const GreasePencil *grease_pencil = grease_pencil_component.get()) {
+          GreasePencilInfo &info = this->grease_pencil_info.emplace(GreasePencilInfo());
+          info.layers_num = grease_pencil->layers().size();
+        }
         break;
       }
     }
@@ -410,6 +427,20 @@ void GeoTreeLog::ensure_debug_messages()
   reduced_debug_messages_ = true;
 }
 
+void GeoTreeLog::ensure_evaluated_gizmo_nodes()
+{
+  if (reduced_evaluated_gizmo_nodes_) {
+    return;
+  }
+  for (const GeoTreeLogger *tree_logger : tree_loggers_) {
+    for (const GeoTreeLogger::EvaluatedGizmoNode &evaluated_gizmo :
+         tree_logger->evaluated_gizmo_nodes)
+    {
+      this->evaluated_gizmo_nodes.add(evaluated_gizmo.node_id);
+    }
+  }
+}
+
 ValueLog *GeoTreeLog::find_socket_value_log(const bNodeSocket &query_socket)
 {
   /**
@@ -482,6 +513,24 @@ ValueLog *GeoTreeLog::find_socket_value_log(const bNodeSocket &query_socket)
   }
 
   return nullptr;
+}
+
+bool GeoTreeLog::try_convert_primitive_socket_value(const GenericValueLog &value_log,
+                                                    const CPPType &dst_type,
+                                                    void *dst)
+{
+  const void *src_value = value_log.value.get();
+  if (!src_value) {
+    return false;
+  }
+  const bke::DataTypeConversions &conversions = bke::get_implicit_type_conversions();
+  const CPPType &src_type = *value_log.value.type();
+  if (!conversions.is_convertible(src_type, dst_type) && src_type != dst_type) {
+    return false;
+  }
+  dst_type.destruct(dst);
+  conversions.convert_to_uninitialized(src_type, dst_type, src_value, dst);
+  return true;
 }
 
 GeoTreeLogger &GeoModifierLog::get_local_tree_logger(const ComputeContext &compute_context)

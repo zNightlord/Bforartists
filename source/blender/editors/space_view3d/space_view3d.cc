@@ -167,7 +167,7 @@ void ED_view3d_stop_render_preview(wmWindowManager *wm, ARegion *region)
     BPy_BEGIN_ALLOW_THREADS;
 #endif
 
-    WM_jobs_kill_type(wm, region, WM_JOB_TYPE_RENDER_PREVIEW);
+    WM_jobs_kill_type(wm, nullptr, WM_JOB_TYPE_RENDER_PREVIEW);
 
 #ifdef WITH_PYTHON
     BPy_END_ALLOW_THREADS;
@@ -988,6 +988,7 @@ static void view3d_widgets()
   WM_gizmogrouptype_append_and_link(gzmap_type, VIEW3D_GGT_camera);
   WM_gizmogrouptype_append_and_link(gzmap_type, VIEW3D_GGT_camera_view);
   WM_gizmogrouptype_append_and_link(gzmap_type, VIEW3D_GGT_empty_image);
+  WM_gizmogrouptype_append_and_link(gzmap_type, VIEW3D_GGT_geometry_nodes);
   /* TODO(@ideasman42): Not working well enough, disable for now. */
 #if 0
   WM_gizmogrouptype_append_and_link(gzmap_type, VIEW3D_GGT_armature_spline);
@@ -1111,6 +1112,9 @@ static void view3d_main_region_listener(const wmRegionListenerParams *params)
         case ND_LAYER_CONTENT:
           ED_region_tag_redraw(region);
           WM_gizmomap_tag_refresh(gzmap);
+          if (v3d->localvd && v3d->localvd->runtime.flag & V3D_RUNTIME_LOCAL_MAYBE_EMPTY) {
+            ED_area_tag_refresh(area);
+          }
           break;
         case ND_LAYER:
           if (wmn->reference) {
@@ -1241,6 +1245,12 @@ static void view3d_main_region_listener(const wmRegionListenerParams *params)
       }
       break;
     case NC_NODE:
+      switch (wmn->data) {
+        case ND_NODE_GIZMO: {
+          WM_gizmomap_tag_refresh(gzmap);
+          break;
+        }
+      }
       ED_region_tag_redraw(region);
       break;
     case NC_WORLD:
@@ -1277,7 +1287,7 @@ static void view3d_main_region_listener(const wmRegionListenerParams *params)
       ED_region_tag_redraw(region);
       break;
     case NC_TEXTURE:
-      /* same as above */
+      /* Same as #NC_IMAGE. */
       ED_region_tag_redraw(region);
       break;
     case NC_MOVIECLIP:
@@ -1308,7 +1318,13 @@ static void view3d_main_region_listener(const wmRegionListenerParams *params)
       break;
     case NC_ID:
       if (ELEM(wmn->action, NA_RENAME, NA_EDITED, NA_ADDED, NA_REMOVED)) {
+        if (ELEM(wmn->action, NA_EDITED, NA_REMOVED) && v3d->localvd &&
+            v3d->localvd->runtime.flag & V3D_RUNTIME_LOCAL_MAYBE_EMPTY)
+        {
+          ED_area_tag_refresh(area);
+        }
         ED_region_tag_redraw(region);
+        WM_gizmomap_tag_refresh(gzmap);
       }
       break;
     case NC_SCREEN:
@@ -1968,9 +1984,20 @@ static void space_view3d_listener(const wmSpaceTypeListenerParams *params)
 
 static void space_view3d_refresh(const bContext *C, ScrArea *area)
 {
-  UNUSED_VARS(C);
   View3D *v3d = (View3D *)area->spacedata.first;
   MEM_SAFE_FREE(v3d->runtime.local_stats);
+
+  if (v3d->localvd && v3d->localvd->runtime.flag & V3D_RUNTIME_LOCAL_MAYBE_EMPTY) {
+    ED_localview_exit_if_empty(CTX_data_ensure_evaluated_depsgraph(C),
+                               CTX_data_scene(C),
+                               CTX_data_view_layer(C),
+                               CTX_wm_manager(C),
+                               CTX_wm_window(C),
+                               v3d,
+                               CTX_wm_area(C),
+                               true,
+                               300);
+  }
 }
 
 static void view3d_id_remap_v3d_ob_centers(View3D *v3d,
@@ -2025,6 +2052,9 @@ static void view3d_id_remap(ScrArea *area,
   if (view3d->localvd != nullptr) {
     /* Object centers in local-view aren't used, see: #52663 */
     view3d_id_remap_v3d(area, slink, view3d->localvd, mappings, true);
+    /* Remapping is potentially modifying ID pointers, and there is a local View3D, mark it for a
+     * check for emptiness. */
+    view3d->localvd->runtime.flag |= V3D_RUNTIME_LOCAL_MAYBE_EMPTY;
   }
   BKE_viewer_path_id_remap(&view3d->viewer_path, mappings);
 }
@@ -2037,6 +2067,13 @@ static void view3d_foreach_id(SpaceLink *space_link, LibraryForeachIDData *data)
   BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, v3d->ob_center, IDWALK_CB_DIRECT_WEAK_LINK);
   if (v3d->localvd) {
     BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, v3d->localvd->camera, IDWALK_CB_DIRECT_WEAK_LINK);
+
+    /* If potentially modifying ID pointers, and there is a local View3D, mark it for a check for
+     * emptiness. */
+    const int flags = BKE_lib_query_foreachid_process_flags_get(data);
+    if ((flags & IDWALK_READONLY) == 0) {
+      v3d->localvd->runtime.flag |= V3D_RUNTIME_LOCAL_MAYBE_EMPTY;
+    }
   }
   BKE_viewer_path_foreach_id(data, &v3d->viewer_path);
 }
@@ -2179,6 +2216,7 @@ void ED_spacetype_view3d()
   art->free = asset::shelf::region_free;
   art->on_poll_success = asset::shelf::region_on_poll_success;
   art->listener = asset::shelf::region_listen;
+  art->message_subscribe = asset::shelf::region_message_subscribe;
   art->poll = asset::shelf::regions_poll;
   art->snap_size = asset::shelf::region_snap;
   art->on_user_resize = asset::shelf::region_on_user_resize;
@@ -2198,7 +2236,7 @@ void ED_spacetype_view3d()
   art->listener = asset::shelf::header_region_listen;
   art->context = asset::shelf::context;
   BLI_addhead(&st->regiontypes, art);
-  asset::shelf::header_regiontype_register(art, SPACE_VIEW3D);
+  asset::shelf::types_register(art, SPACE_VIEW3D);
 
   /* regions: hud */
   art = ED_area_type_hud(st->spaceid);
@@ -2210,8 +2248,8 @@ void ED_spacetype_view3d()
   BLI_addhead(&st->regiontypes, art);
 
   WM_menutype_add(
-      MEM_new<MenuType>(__func__, blender::ed::geometry::node_group_operator_assets_menu()));
-  WM_menutype_add(MEM_new<MenuType>(
+      MEM_cnew<MenuType>(__func__, blender::ed::geometry::node_group_operator_assets_menu()));
+  WM_menutype_add(MEM_cnew<MenuType>(
       __func__, blender::ed::geometry::node_group_operator_assets_menu_unassigned()));
 
   BKE_spacetype_register(std::move(st));

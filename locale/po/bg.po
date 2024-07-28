@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.2.0 Beta (b'a2795852cd29')\n"
+"Project-Id-Version: Blender 4.3.0 Alpha (b'de443e038c4e')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-06-10 10:16+0000\n"
+"POT-Creation-Date: 2024-07-22 07:23+0000\n"
 "PO-Revision-Date: 2024-04-29 13:31+0000\n"
 "Last-Translator: Gilberto Rodrigues <gilbertorodrigues@outlook.com>\n"
 "Language-Team: Bulgarian <https://translate.blender.org/projects/blender-ui/ui/bg/>\n"
@@ -36,18 +36,6 @@ msgid "Select"
 msgstr "Избор"
 
 
-msgid "Module"
-msgstr "Модул"
-
-
-msgid "On"
-msgstr "Върху"
-
-
-msgid "Action"
-msgstr "Действие"
-
-
 msgid "Replace"
 msgstr "Замени"
 
@@ -62,6 +50,30 @@ msgstr "Основа"
 
 msgid "Multiply"
 msgstr "Умножение"
+
+
+msgid "Module"
+msgstr "Модул"
+
+
+msgid "On"
+msgstr "Върху"
+
+
+msgid "Always"
+msgstr "Винаги"
+
+
+msgid "Center"
+msgstr "Център"
+
+
+msgid "Bottom"
+msgstr "Дъно"
+
+
+msgid "Action"
+msgstr "Действие"
 
 
 msgid "Nothing"
@@ -148,22 +160,6 @@ msgid "Index"
 msgstr "Индекс"
 
 
-msgid "Remove"
-msgstr "Премахване"
-
-
-msgid "Fill"
-msgstr "Запълни"
-
-
-msgid "Draw"
-msgstr "Изчертаване"
-
-
-msgid "Smear"
-msgstr "Мажа"
-
-
 msgid "Thickness"
 msgstr "Дебелина"
 
@@ -172,16 +168,16 @@ msgid "Active Layer"
 msgstr "Активен Слой"
 
 
+msgid "Fill"
+msgstr "Запълни"
+
+
 msgid "Crop"
 msgstr "Отрязване"
 
 
 msgid "Left"
 msgstr "Ляво"
-
-
-msgid "Center"
-msgstr "Център"
 
 
 msgid "Default Goal (vertex target position) value, when no Vertex Group used"
@@ -274,10 +270,6 @@ msgstr "Натрупващо се"
 
 msgid "Camera"
 msgstr "Камера"
-
-
-msgid "Always"
-msgstr "Винаги"
 
 
 msgid "Front"
@@ -428,10 +420,6 @@ msgid "Delete"
 msgstr "Изтриване"
 
 
-msgid "Bottom"
-msgstr "Дъно"
-
-
 msgid "Collision"
 msgstr "Противоречия"
 
@@ -508,6 +496,10 @@ msgid "World"
 msgstr "Свят"
 
 
+msgid "Layers"
+msgstr "Слоеве"
+
+
 msgid "Wire"
 msgstr "Мрежа"
 
@@ -518,6 +510,14 @@ msgstr "Кутия"
 
 msgid "Dynamic"
 msgstr "Динамика"
+
+
+msgid "Draw"
+msgstr "Изчертаване"
+
+
+msgid "Smear"
+msgstr "Мажа"
 
 
 msgid "Perspective"
@@ -546,14 +546,6 @@ msgstr "Мин"
 
 msgid "Max"
 msgstr "Макс"
-
-
-msgid "Layers"
-msgstr "Слоеве"
-
-
-msgid "Movie"
-msgstr "Преместване"
 
 
 msgid "Render polygon transparent, depending on alpha channel of the texture"
@@ -732,6 +724,10 @@ msgid "Languages..."
 msgstr "Езици..."
 
 
+msgid "Import"
+msgstr "Внеси"
+
+
 msgid "Apply"
 msgstr "Прилагане"
 
@@ -750,10 +746,6 @@ msgstr "Файл"
 
 msgid "External Data"
 msgstr "Външни Данни"
-
-
-msgid "Import"
-msgstr "Внеси"
 
 
 msgid "Help"
@@ -949,10 +941,6 @@ msgid "Filter text files"
 msgstr "Филтрирай текстовите файлове"
 
 
-msgid "Add brush by mode type"
-msgstr "Добави честка според вид на режима"
-
-
 msgid "Set brush shape"
 msgstr "Задай форма на четка"
 
@@ -1104,6 +1092,10 @@ msgid "Join"
 msgstr "Събери"
 
 
+msgid "Remove"
+msgstr "Премахване"
+
+
 msgid "Next Keyframe"
 msgstr "Следващ Ключов Кадър"
 
@@ -1222,6 +1214,10 @@ msgstr "Направи с Единствен Потребител"
 msgctxt "Operator"
 msgid "Hide"
 msgstr "Скриване"
+
+
+msgid "Wrap"
+msgstr "Обвив"
 
 
 msgctxt "Operator"
@@ -1530,10 +1526,6 @@ msgid "Zoom Camera 1:1"
 msgstr "Увеличи Камера 1:1"
 
 
-msgid "Wrap"
-msgstr "Обвив"
-
-
 msgid "Doc ID"
 msgstr "Doc ID"
 
@@ -1763,6 +1755,10 @@ msgid "Animated"
 msgstr "Анимирани"
 
 
+msgid "Author:"
+msgstr "Автор"
+
+
 msgid "Torus"
 msgstr "Тороид"
 
@@ -1812,10 +1808,6 @@ msgid "Missing script files"
 msgstr "Липсват скриптови файлове"
 
 
-msgid "Author:"
-msgstr "Автор"
-
-
 msgid "Layer:"
 msgstr "Слой"
 
@@ -1824,16 +1816,20 @@ msgid "%d items"
 msgstr "%d артикули"
 
 
-msgid "Stop this job"
-msgstr "Спри тази задача"
+msgid "OK"
+msgstr "ОК"
 
 
 msgid "Cancel"
 msgstr "Отказ"
 
 
-msgid "OK"
-msgstr "ОК"
+msgid "Movie"
+msgstr "Преместване"
+
+
+msgid "Stop this job"
+msgstr "Спри тази задача"
 
 
 msgid "Fields"

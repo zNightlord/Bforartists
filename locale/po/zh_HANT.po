@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.2.0 Beta (b'a2795852cd29')\n"
+"Project-Id-Version: Blender 4.3.0 Alpha (b'de443e038c4e')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-06-10 10:16+0000\n"
+"POT-Creation-Date: 2024-07-22 07:23+0000\n"
 "PO-Revision-Date: 2024-03-05 22:56+0000\n"
 "Last-Translator: 居樂行 <oscilloscope9705@gmail.com>\n"
 "Language-Team: Chinese (Traditional) <https://translate.blender.org/projects/blender-ui/ui/zh_Hant/>\n"
@@ -57,6 +57,10 @@ msgstr "AOV 列表"
 
 msgid "Collection of AOVs"
 msgstr "AOV 集盒"
+
+
+msgid "F-Curves"
+msgstr "F 曲線"
 
 
 msgid "Action F-Curves"
@@ -243,6 +247,38 @@ msgid "Collection of action groups"
 msgstr "動作群組的集盒"
 
 
+msgid "Influence"
+msgstr "影響"
+
+
+msgid "Mix Mode"
+msgstr "混合模式"
+
+
+msgid "Replace"
+msgstr "替換"
+
+
+msgid "Offset"
+msgstr "偏移"
+
+
+msgid "Add"
+msgstr "加"
+
+
+msgid "Subtract"
+msgstr "減"
+
+
+msgid "Multiply"
+msgstr "相乘"
+
+
+msgid "Strips"
+msgstr "片段"
+
+
 msgid "Action Pose Markers"
 msgstr "動作姿態標記"
 
@@ -265,6 +301,18 @@ msgstr "作用中姿勢標記索引"
 
 msgid "Index of active pose marker"
 msgstr "作用中姿勢標記的索引"
+
+
+msgid "Active"
+msgstr "作用中"
+
+
+msgid "Show Expanded"
+msgstr "擴展顯示"
+
+
+msgid "Keyframe"
+msgstr "鍵幀"
 
 
 msgid "Add-on"
@@ -379,6 +427,22 @@ msgid "Displays glTF Material Output node in Shader Editor (Menu Add > Output)"
 msgstr "在著色器編輯器中顯示 glTF 設定節點 (選單 添加 > 輸出)"
 
 
+msgid "Always"
+msgstr "總是"
+
+
+msgid "Never"
+msgstr "永不"
+
+
+msgid "Center"
+msgstr "中心"
+
+
+msgid "Bottom"
+msgstr "底"
+
+
 msgid "Fribidi Library"
 msgstr "Fribidi 函式庫"
 
@@ -467,10 +531,6 @@ msgid "Method used for combining Active Action's result with result of NLA stack
 msgstr "用於合成作用中動作的結果和 NLA 堆疊結果的方法"
 
 
-msgid "Replace"
-msgstr "替換"
-
-
 msgid "The strip values replace the accumulated results by amount specified by influence"
 msgstr "根據影響所指定的量來替換累積結果的片段值"
 
@@ -483,24 +543,12 @@ msgid "The strip values are combined with accumulated results by appropriately u
 msgstr "根據頻道類型，妥善以加法、乘法或四元數等數學方法來結合累積貨運算出結果的片段值"
 
 
-msgid "Add"
-msgstr "加"
-
-
 msgid "Weighted result of strip is added to the accumulated results"
 msgstr "片段的權重結果被添加到累積的結果"
 
 
-msgid "Subtract"
-msgstr "減"
-
-
 msgid "Weighted result of strip is removed from the accumulated results"
 msgstr "從累積的結果移除片段的權重結果"
-
-
-msgid "Multiply"
-msgstr "相乘"
 
 
 msgid "Weighted result of strip is multiplied with the accumulated results"
@@ -545,6 +593,10 @@ msgstr "動作影響"
 
 msgid "Amount the Active Action contributes to the result of the NLA stack"
 msgstr "作用中動作對 NLA 堆疊結果造成影響的量"
+
+
+msgid "None"
+msgstr "無"
 
 
 msgid "Tweak Mode Action Storage"
@@ -1777,10 +1829,6 @@ msgstr "通遞過濾器"
 
 msgid "Passes to include in the active baking pass"
 msgstr "通遞以含入作用中烘焙通遞內"
-
-
-msgid "None"
-msgstr "無"
 
 
 msgid "Emit"
@@ -3713,10 +3761,12 @@ msgid "Curve Radius"
 msgstr "曲線半徑"
 
 
-msgid "Density Mode"
-msgstr "密度模式"
+msgctxt "Operator"
+msgid "Add"
+msgstr "添加"
 
 
+msgctxt "Operator"
 msgid "Remove"
 msgstr "移除"
 
@@ -3775,10 +3825,6 @@ msgstr "寬長比"
 
 msgid "Mode"
 msgstr "模式"
-
-
-msgid "Active"
-msgstr "作用中"
 
 
 msgid "Use current mode"
@@ -3964,111 +4010,6 @@ msgid "Threshold to consider color transparent for filling"
 msgstr "填充時色彩透明度的判斷閥值"
 
 
-msgid "Pencil"
-msgstr "鉛筆"
-
-
-msgid "Pen"
-msgstr "筆"
-
-
-msgid "Ink"
-msgstr "墨水"
-
-
-msgid "Ink Noise"
-msgstr "墨水噪訊"
-
-
-msgid "Block"
-msgstr "區塊"
-
-
-msgid "Marker"
-msgstr "標記"
-
-
-msgid "Airbrush"
-msgstr "噴槍"
-
-
-msgid "Chisel"
-msgstr "鑿刻"
-
-
-msgid "Fill"
-msgstr "填入"
-
-
-msgid "Eraser Soft"
-msgstr "橡皮擦軟"
-
-
-msgid "Eraser Hard"
-msgstr "橡皮擦硬"
-
-
-msgid "Eraser Stroke"
-msgstr "橡皮擦筆觸"
-
-
-msgctxt "GPencil"
-msgid "Grease Pencil Icon"
-msgstr "蠟筆圖示"
-
-
-msgctxt "GPencil"
-msgid "Smooth"
-msgstr "平滑"
-
-
-msgctxt "GPencil"
-msgid "Thickness"
-msgstr "粗細"
-
-
-msgctxt "GPencil"
-msgid "Strength"
-msgstr "力量"
-
-
-msgctxt "GPencil"
-msgid "Randomize"
-msgstr "隨機變化"
-
-
-msgctxt "GPencil"
-msgid "Grab"
-msgstr "抓取"
-
-
-msgctxt "GPencil"
-msgid "Push"
-msgstr "推送"
-
-
-msgctxt "GPencil"
-msgid "Pinch"
-msgstr "擠捏"
-
-
-msgctxt "GPencil"
-msgid "Clone"
-msgstr "拓製"
-
-
-msgid "Draw"
-msgstr "描繪"
-
-
-msgid "Blur"
-msgstr "模糊"
-
-
-msgid "Smear"
-msgstr "擦抹"
-
-
 msgid "Hardness"
 msgstr "硬度"
 
@@ -4096,10 +4037,6 @@ msgstr "厚度"
 msgctxt "Brush"
 msgid "Jitter"
 msgstr "抖動"
-
-
-msgid "Jitter factor for new strokes"
-msgstr "新筆觸的抖動係數"
 
 
 msgctxt "Amount"
@@ -4201,14 +4138,6 @@ msgstr "作用分層"
 
 msgid "Strokes Collision"
 msgstr "筆觸碰撞"
-
-
-msgid "Default Eraser"
-msgstr "預設橡皮擦"
-
-
-msgid "Use this brush when enable eraser with fast switch key"
-msgstr "當啟用橡皮擦快速切換鍵時使用此筆刷"
 
 
 msgid "Affect Position"
@@ -4359,6 +4288,10 @@ msgid "Vertex Color affects to Stroke only"
 msgstr "頂點色彩僅影響筆觸"
 
 
+msgid "Fill"
+msgstr "填入"
+
+
 msgid "Vertex Color affects to Fill only"
 msgstr "頂點色彩僅影響填充"
 
@@ -4491,10 +4424,6 @@ msgid "Parameters defining which layer, pass and frame of the image is displayed
 msgstr "定義要顯示影像的哪一層、通遞和框幀的參數"
 
 
-msgid "Offset"
-msgstr "偏移"
-
-
 msgid "Rotation"
 msgstr "旋轉"
 
@@ -4517,10 +4446,6 @@ msgstr "顯示背景影像"
 
 msgid "Show this image as background"
 msgstr "將此影像顯示為背景"
-
-
-msgid "Show Expanded"
-msgstr "擴展顯示"
 
 
 msgid "Show On Foreground"
@@ -4669,10 +4594,6 @@ msgstr "左"
 
 msgid "Right"
 msgstr "右"
-
-
-msgid "Center"
-msgstr "中心"
 
 
 msgid "Pole Merge Start Angle"
@@ -5539,6 +5460,18 @@ msgid "Do not perform any color transform on display, use old non-color managed 
 msgstr "不要對顯示器執行任何色彩轉換，使用舊的顯示器無色彩管理技術"
 
 
+msgid "Temperature"
+msgstr "溫度"
+
+
+msgid "Tint"
+msgstr "染色"
+
+
+msgid "White Point"
+msgstr "白點"
+
+
 msgid "Color Mapping"
 msgstr "色彩映射"
 
@@ -5786,10 +5719,6 @@ msgstr "旋轉錯誤"
 
 msgid "Amount of residual error in radians for constraints that work on orientation"
 msgstr "約束作用於方向的殘餘弧度錯誤"
-
-
-msgid "Influence"
-msgstr "影響"
 
 
 msgid "Amount of influence constraint will have on the final solution"
@@ -6118,10 +6047,6 @@ msgstr "最小值"
 
 msgid "Minimum value for target channel range"
 msgstr "目標通道範圍的最小值"
-
-
-msgid "Mix Mode"
-msgstr "混合模式"
 
 
 msgid "Target object"
@@ -7043,10 +6968,6 @@ msgstr "啟用的旋轉範圍"
 
 msgid "Rotation range on which pivoting should occur"
 msgstr "樞紐應該發生的旋轉範圍"
-
-
-msgid "Always"
-msgstr "總是"
 
 
 msgid "Use the pivot point in every rotation"
@@ -9988,14 +9909,6 @@ msgid "Amplitude of the noise - the amount that it modifies the underlying curve
 msgstr "噪訊的振幅 - 它修改底下曲線的量"
 
 
-msgid "Python F-Modifier"
-msgstr "Python F 修改器"
-
-
-msgid "Perform user-defined operation on the modified F-Curve"
-msgstr "在修改的 F 曲線上執行使用者定義的操作"
-
-
 msgid "Stepped Interpolation F-Modifier"
 msgstr "步進插補 F 修改器"
 
@@ -11105,10 +11018,6 @@ msgid "Bubble"
 msgstr "氣泡"
 
 
-msgid "Bottom"
-msgstr "底"
-
-
 msgid "Top"
 msgstr "頂"
 
@@ -11281,24 +11190,12 @@ msgid "Temperature difference to ambient temperature"
 msgstr "與週遭溫度之間的溫度差異"
 
 
-msgid "Mapping"
-msgstr "映射方法"
-
-
 msgid "Texture mapping type"
 msgstr "紋理映射類型"
 
 
-msgid "Generated"
-msgstr "生成的"
-
-
 msgid "Generated coordinates centered to flow object"
 msgstr "將生成的座標系對流動物體置中"
-
-
-msgid "UV"
-msgstr "UV"
 
 
 msgid "Use UV layer for texture coordinates"
@@ -11813,10 +11710,6 @@ msgid "Frame is being edited (painted on)"
 msgstr "正被編輯的框幀 (繪於其上)"
 
 
-msgid "Keyframe"
-msgstr "鍵幀"
-
-
 msgid "Breakdown"
 msgstr "分解"
 
@@ -11827,6 +11720,10 @@ msgstr "極限"
 
 msgid "Jitter"
 msgstr "抖動"
+
+
+msgid "Generated"
+msgstr "生成的"
 
 
 msgid "Frame is selected for editing in the Dope Sheet"
@@ -12340,10 +12237,6 @@ msgid "Hue/Saturation"
 msgstr "色調/飽和度"
 
 
-msgid "Tint"
-msgstr "染色"
-
-
 msgid "Armature Modifier"
 msgstr "骨架修改器"
 
@@ -12818,6 +12711,14 @@ msgid "Grid Scale"
 msgstr "格線縮放"
 
 
+msgid "Local Matrix"
+msgstr "區域矩陣矩陣"
+
+
+msgid "Translation"
+msgstr "平移"
+
+
 msgid "Repeat"
 msgstr "重復"
 
@@ -12974,10 +12875,6 @@ msgid "A collection of F-Curves for animation"
 msgstr "動畫的 F 曲線集盒"
 
 
-msgid "F-Curves"
-msgstr "F 曲線"
-
-
 msgid "The individual F-Curves that make up the action"
 msgstr "構成動作的個別 F 曲線"
 
@@ -13003,12 +12900,20 @@ msgid "Type of ID block that action can be used on - DO NOT CHANGE UNLESS YOU KN
 msgstr "動作可使用的 ID 塊類型 -「不要更動，除非您知道您在做什麼」"
 
 
+msgid "Layers"
+msgstr "層"
+
+
 msgid "Pose Markers"
 msgstr "姿態標記"
 
 
 msgid "Markers specific to this action, for labeling poses"
 msgstr "此動作的特定標註，用來為姿勢加上標籤"
+
+
+msgid "Feature Set"
+msgstr "功能設定"
 
 
 msgid "Octahedral"
@@ -13077,6 +12982,10 @@ msgstr "靜止位置"
 
 msgid "Show Armature in binding pose state (no posing possible)"
 msgstr "於綁定姿勢狀態顯示骨架 (不可能姿勢處理)"
+
+
+msgid "Theme"
+msgstr "主題"
 
 
 msgid "X-Axis Mirror"
@@ -13344,6 +13253,58 @@ msgid "Threshold above which filling is not propagated"
 msgstr "高於閾值則不會傳導填充"
 
 
+msgctxt "GPencil"
+msgid "Smooth"
+msgstr "平滑"
+
+
+msgctxt "GPencil"
+msgid "Thickness"
+msgstr "粗細"
+
+
+msgctxt "GPencil"
+msgid "Strength"
+msgstr "力量"
+
+
+msgctxt "GPencil"
+msgid "Randomize"
+msgstr "隨機變化"
+
+
+msgctxt "GPencil"
+msgid "Grab"
+msgstr "抓取"
+
+
+msgctxt "GPencil"
+msgid "Push"
+msgstr "推送"
+
+
+msgctxt "GPencil"
+msgid "Pinch"
+msgstr "擠捏"
+
+
+msgctxt "GPencil"
+msgid "Clone"
+msgstr "拓製"
+
+
+msgid "Draw"
+msgstr "描繪"
+
+
+msgid "Blur"
+msgstr "模糊"
+
+
+msgid "Smear"
+msgstr "擦抹"
+
+
 msgid "Gradient Spacing"
 msgstr "漸層間隔"
 
@@ -13574,6 +13535,10 @@ msgstr "允許仔細放置單一點"
 
 msgid "Limit brush application to the distance specified by spacing"
 msgstr "限制筆刷應用至間隔指定的距離"
+
+
+msgid "Airbrush"
+msgstr "噴槍"
 
 
 msgid "Keep applying paint effect while holding mouse (spray)"
@@ -13844,16 +13809,8 @@ msgid "Automatically adjust strength to give consistent results for different sp
 msgstr "自動調整強度以給予不同間隔一致的結果"
 
 
-msgid "Vertex Paint Tool"
-msgstr "頂點繪畫工具"
-
-
 msgid "Vertex weight when brush is applied"
 msgstr "當套用筆刷效果時的頂點權重"
-
-
-msgid "Weight Paint Tool"
-msgstr "權重繪畫工具"
 
 
 msgid "Wet Paint Radius"
@@ -15112,10 +15069,6 @@ msgid "Freehand annotation sketchbook"
 msgstr "隨手畫註記草圖簿"
 
 
-msgid "Layers"
-msgstr "層"
-
-
 msgid "Filter by Type"
 msgstr "依類型過濾"
 
@@ -15364,10 +15317,6 @@ msgid "Where the image comes from"
 msgstr "影像來自的地方"
 
 
-msgid "Single Image"
-msgstr "單一影像"
-
-
 msgid "Single image file"
 msgstr "單一影像檔"
 
@@ -15376,20 +15325,12 @@ msgid "Multiple image files, as a sequence"
 msgstr "多個影像檔，為一序段"
 
 
-msgid "Movie"
-msgstr "影片"
-
-
 msgid "Movie file"
 msgstr "影片檔"
 
 
 msgid "Generated image"
 msgstr "生成的影像"
-
-
-msgid "Viewer"
-msgstr "檢視器"
 
 
 msgid "Compositing node viewer"
@@ -16084,10 +16025,6 @@ msgid "While editing, update metaball without polygonization"
 msgstr "當編輯時，更新變幻球不使用多角形化"
 
 
-msgid "Never"
-msgstr "永不"
-
-
 msgid "While editing, don't update metaball at all"
 msgstr "當編輯時，都不要更新變幻球"
 
@@ -16493,10 +16430,6 @@ msgstr "旋轉矩陣"
 
 msgid "Matrix access to location, rotation and scale (including deltas), before constraints and parenting are applied"
 msgstr "存取位置、旋轉、縮放 (包括增減) 的矩陣，在套用約束與親子關係處理之前"
-
-
-msgid "Local Matrix"
-msgstr "區域矩陣矩陣"
 
 
 msgid "Inverse of object's parent matrix at time of parenting"
@@ -20952,6 +20885,10 @@ msgid "Influence factor by which the modifier changes the property"
 msgstr "修改器變更屬性的影響係數"
 
 
+msgid "Mapping"
+msgstr "映射方法"
+
+
 msgid "Select the mapping type"
 msgstr "選取映射類型"
 
@@ -21665,6 +21602,10 @@ msgid "Material slot name"
 msgstr "材質槽名稱"
 
 
+msgid "Basic"
+msgstr "基本"
+
+
 msgctxt "MovieClip"
 msgid "Clip"
 msgstr "剪輯"
@@ -21718,6 +21659,10 @@ msgid "Channel"
 msgstr "通道"
 
 
+msgid "Marker"
+msgstr "標記"
+
+
 msgid "Snap"
 msgstr "吸附"
 
@@ -21738,6 +21683,10 @@ msgid "Select Linked"
 msgstr "選取連結項"
 
 
+msgid "UV"
+msgstr "UV"
+
+
 msgid "Align"
 msgstr "對齊"
 
@@ -21748,11 +21697,6 @@ msgstr "UV 選取模式"
 
 msgid "Show/Hide Faces"
 msgstr "顯示/隱藏面"
-
-
-msgctxt "Operator"
-msgid "Add"
-msgstr "添加"
 
 
 msgid "Shape Key Specials"
@@ -21781,6 +21725,10 @@ msgstr "原形"
 
 msgid "Keying"
 msgstr "鍵處理"
+
+
+msgid "Import"
+msgstr "匯入"
 
 
 msgid "Layout"
@@ -21887,10 +21835,6 @@ msgid "External Data"
 msgstr "外部資料"
 
 
-msgid "Import"
-msgstr "匯入"
-
-
 msgid "Data Previews"
 msgstr "資料預覽"
 
@@ -21931,12 +21875,13 @@ msgid "Toggle Bone Options"
 msgstr "開關骨骼選項"
 
 
-msgid "Enabled Modes"
-msgstr "已啟用模式"
-
-
 msgid "Names"
 msgstr "名稱"
+
+
+msgctxt "Operator"
+msgid "Parent"
+msgstr "親子"
 
 
 msgid "Bone Roll"
@@ -27646,6 +27591,10 @@ msgid "Minimum speed for a pixel to be blurred (used to separate background from
 msgstr "像素轉為模糊的最小速度 (用來將背景從前景分離出來)"
 
 
+msgid "Viewer"
+msgstr "檢視器"
+
+
 msgid "Z Combine"
 msgstr "Z 合成"
 
@@ -27794,6 +27743,14 @@ msgstr "在索引處求取值"
 
 msgid "N-gons"
 msgstr "多邊形"
+
+
+msgid "Primary"
+msgstr "主要"
+
+
+msgid "Secondary"
+msgstr "次要"
 
 
 msgctxt "Image"
@@ -29255,6 +29212,10 @@ msgid "Lasso Select"
 msgstr "套索選取"
 
 
+msgid "Stabilize Stroke"
+msgstr "穩定筆觸"
+
+
 msgctxt "Operator"
 msgid "Select Left/Right"
 msgstr "選取左/右"
@@ -29963,6 +29924,10 @@ msgid "Reveal Hidden"
 msgstr "揭開隱藏項"
 
 
+msgid "(undocumented operator)"
+msgstr "(未紀錄的操作器)"
+
+
 msgctxt "Operator"
 msgid "(De)select All"
 msgstr "(取消)全選"
@@ -30234,18 +30199,12 @@ msgid "Move boid state up in the list"
 msgstr "在清單中上移群集個體狀態"
 
 
-msgctxt "Operator"
-msgid "Add Brush"
-msgstr "添加筆刷"
+msgid "Asset Library Identifier"
+msgstr "素材藏庫識別碼"
 
 
-msgid "Add brush by mode type"
-msgstr "依模式類型添加筆刷"
-
-
-msgctxt "Operator"
-msgid "Add Drawing Brush"
-msgstr "添加描繪筆刷"
+msgid "Enable Multi-View"
+msgstr "啟用多重視圖"
 
 
 msgctxt "Operator"
@@ -30275,15 +30234,6 @@ msgstr "直線"
 msgctxt "Curve"
 msgid "Round"
 msgstr "圓形"
-
-
-msgctxt "Operator"
-msgid "Reset Brush"
-msgstr "重設筆刷"
-
-
-msgid "Return brush to defaults based on current tool"
-msgstr "根據目前工具將筆刷還原至預設值"
 
 
 msgctxt "Operator"
@@ -30319,18 +30269,6 @@ msgstr "油印蠟紙筆刷控制"
 
 msgid "Control the stencil brush"
 msgstr "控制油印蠟紙筆刷"
-
-
-msgid "Translation"
-msgstr "平移"
-
-
-msgid "Primary"
-msgstr "主要"
-
-
-msgid "Secondary"
-msgstr "次要"
 
 
 msgctxt "Operator"
@@ -30863,10 +30801,6 @@ msgid "Load a sequence of frames or a movie file"
 msgstr "載入框幀序段或影片檔"
 
 
-msgid "Enable Multi-View"
-msgstr "啟用多重視圖"
-
-
 msgctxt "Operator"
 msgid "Paste Tracks"
 msgstr "貼上軌道"
@@ -30976,10 +30910,6 @@ msgstr "使用套索選取標記"
 msgctxt "Operator"
 msgid "Set Active Clip"
 msgstr "設定作用中剪輯"
-
-
-msgid "(undocumented operator)"
-msgstr "(未紀錄的操作器)"
 
 
 msgctxt "Operator"
@@ -33186,10 +33116,6 @@ msgid "Default fill color"
 msgstr "預設填入色彩"
 
 
-msgid "Asset Library Identifier"
-msgstr "素材藏庫識別碼"
-
-
 msgctxt "Operator"
 msgid "Delete Active Frame"
 msgstr "刪除作用中框幀"
@@ -33244,10 +33170,6 @@ msgid "Stabilizer Stroke Radius"
 msgstr "穩定筆觸半徑"
 
 
-msgid "Stabilize Stroke"
-msgstr "穩定筆觸"
-
-
 msgid "Side"
 msgstr "側"
 
@@ -33255,11 +33177,6 @@ msgstr "側"
 msgctxt "Operator"
 msgid "Insert Blank Frame"
 msgstr "插入空白框幀"
-
-
-msgctxt "Operator"
-msgid "Reset All Brushes"
-msgstr "重設所有筆刷"
 
 
 msgctxt "Operator"
@@ -33688,6 +33605,10 @@ msgid "Decimate F-Curves by removing keyframes that influence the curve shape th
 msgstr "使用對曲線形狀影響最小的關鍵幀來削減函數曲線"
 
 
+msgid "Remove"
+msgstr "移除"
+
+
 msgid "How much the new decimated curve is allowed to deviate from the original"
 msgstr "新的削減曲線允許偏離原本曲線的數值"
 
@@ -33878,10 +33799,6 @@ msgid "Select Mode"
 msgstr "選取模式"
 
 
-msgid "Blend Mode for Transparent Faces"
-msgstr "透明面的混合模式"
-
-
 msgid "Emission Strength"
 msgstr "發光強度"
 
@@ -33901,10 +33818,6 @@ msgstr "為曲線設定黑點或白點"
 
 msgid "Black Point"
 msgstr "黑點"
-
-
-msgid "White Point"
-msgstr "白點"
 
 
 msgctxt "Operator"
@@ -37021,6 +36934,30 @@ msgid "Copy color to all selected nodes"
 msgstr "複製色彩至所有選取的節點"
 
 
+msgid "Option"
+msgstr "選項"
+
+
+msgid "Overlay Mode"
+msgstr "疊層模式"
+
+
+msgid "Current"
+msgstr "目前"
+
+
+msgid "Exponent"
+msgstr "指數"
+
+
+msgid "Fraction"
+msgstr "分數( 小數點後數值 )"
+
+
+msgid "Wrap"
+msgstr "包覆"
+
+
 msgctxt "Operator"
 msgid "Toggle Node Options"
 msgstr "開啟節點選項"
@@ -38111,6 +38048,11 @@ msgstr "讓縮放值隨機化"
 
 
 msgctxt "Operator"
+msgid "New"
+msgstr "新增"
+
+
+msgctxt "Operator"
 msgid "Clear Rotation"
 msgstr "清除旋轉"
 
@@ -38257,10 +38199,6 @@ msgstr "從既有的鍵建立新的外形鍵"
 msgctxt "Operator"
 msgid "Clear Shape Keys"
 msgstr "清除外形鍵"
-
-
-msgid "Clear weights for all shape keys"
-msgstr "清除所有外形鍵的權重"
 
 
 msgid "Lock action to execute on vertex groups"
@@ -39014,39 +38952,6 @@ msgstr "描繪曲線"
 
 msgid "Base Color"
 msgstr "基礎色彩"
-
-
-msgctxt "Operator"
-msgid "Brush Select"
-msgstr "筆刷選取"
-
-
-msgid "Select a paint mode's brush by tool type"
-msgstr "依工具類型選取筆刷模式的筆刷"
-
-
-msgid "Create Missing"
-msgstr "建立遺失"
-
-
-msgid "If the requested brush type does not exist, create a new brush"
-msgstr "如果請求的筆刷類型不存在，便建立新的筆刷"
-
-
-msgid "Comb"
-msgstr "合成"
-
-
-msgid "Puff"
-msgstr "噴發"
-
-
-msgid "Clone"
-msgstr "拓製"
-
-
-msgid "Toggle between two brushes rather than cycling"
-msgstr "在兩個筆刷之間切換，而不是循環"
 
 
 msgid "Change selection for all faces"
@@ -39885,6 +39790,10 @@ msgstr "揭開所選項"
 
 msgid "Reveal all bones hidden in Pose Mode"
 msgstr "揭開所有姿勢模式中隱藏的骨骼"
+
+
+msgid "Property Name"
+msgstr "屬性名稱"
 
 
 msgctxt "Operator"
@@ -41650,10 +41559,6 @@ msgid "Replace Selection"
 msgstr "替換選取項"
 
 
-msgid "Replace the current selection"
-msgstr "替換目前的選取內容"
-
-
 msgctxt "Operator"
 msgid "Set Selected Strip Proxies"
 msgstr "設定選取的片段代理"
@@ -41856,10 +41761,6 @@ msgstr "選取作用中片段旁邊的控制桿"
 
 msgid "Linked Time"
 msgstr "連結的時間"
-
-
-msgid "Select other strips at the same time"
-msgstr "選取相同時間的其他片段"
 
 
 msgid "Select or deselect all strips"
@@ -42121,36 +42022,8 @@ msgid "File format"
 msgstr "檔案格式"
 
 
-msgid "ac3"
-msgstr "ac3"
-
-
-msgid "flac"
-msgstr "flac"
-
-
-msgid "mkv"
-msgstr "mkv"
-
-
-msgid "mp2"
-msgstr "mp2"
-
-
-msgid "mp3"
-msgstr "mp3"
-
-
-msgid "ogg"
-msgstr "ogg"
-
-
 msgid "Xiph.Org Ogg Container"
 msgstr "Xiph.Org Ogg 容器"
-
-
-msgid "wav"
-msgstr "wav"
 
 
 msgid "Waveform Audio File Format"
@@ -42906,123 +42779,6 @@ msgstr "編輯作用中按鈕的使用者介面源碼"
 
 
 msgctxt "Operator"
-msgid "Edit Translation"
-msgstr "編輯翻譯"
-
-
-msgid "Label of the control"
-msgstr "控制項的標籤"
-
-
-msgid "Flags about the label of the button"
-msgstr "關於按鈕標籤的旗幟"
-
-
-msgid "Message is marked as fuzzy in po file"
-msgstr "訊息在 po 檔中被標記為模糊"
-
-
-msgid "Some error occurred with this message"
-msgstr "此訊息遭遇一些錯誤"
-
-
-msgid "Tip of the control"
-msgstr "控制項的提示"
-
-
-msgid "Flags about the tip of the button"
-msgstr "有關按鈕的提示旗幟"
-
-
-msgid "Label of the enum item of the control, if any"
-msgstr "控制項的枚舉項目標籤，如果有的話"
-
-
-msgid "Flags about the RNA enum item label of the button"
-msgstr "有關按鈕的 RNA 枚舉項目旗幟"
-
-
-msgid "Tip of the enum item of the control, if any"
-msgstr "控制項的枚舉項目提示，如果有的話"
-
-
-msgid "Flags about the RNA enum item tip of the button"
-msgstr "有關按鈕的 RNA 枚舉項目提示旗幟"
-
-
-msgid "Current (translated) language"
-msgstr "目前 (翻譯) 的語言"
-
-
-msgid "Original label of the control"
-msgstr "控制項的原始標籤"
-
-
-msgid "Original tip of the control"
-msgstr "控制項的原始提示"
-
-
-msgid "Original label of the enum item of the control, if any"
-msgstr "控制項枚舉項目的原始標籤，如果有的話"
-
-
-msgid "Original tip of the enum item of the control, if any"
-msgstr "控制樣的枚舉項目原始提示，如果有的話"
-
-
-msgid "Original RNA-defined label of the control, if any"
-msgstr "控制項的原始 RNA 定義標籤，如果有的話"
-
-
-msgid "Original RNA-defined tip of the control, if any"
-msgstr "控制項的原始 RNA 定義提示，如果有的話"
-
-
-msgid "Path to the matching po file"
-msgstr "配對 po 檔的路徑"
-
-
-msgid "RNA context for label"
-msgstr "標籤的 RNA 情境"
-
-
-msgid "Identifier of the RNA enum item, if any"
-msgstr "RNA 枚舉項目的辨識碼，如果有的話"
-
-
-msgid "RNA-defined label of the control, if any"
-msgstr "控制項的 RNA 定義標籤，如果有的話"
-
-
-msgid "Flags about the RNA-defined label of the button"
-msgstr "有關按鈕的 RNA 定義標籤旗幟"
-
-
-msgid "Identifier of the RNA property, if any"
-msgstr "RNA 屬性的辨識碼，如果有的話"
-
-
-msgid "Identifier of the RNA struct, if any"
-msgstr "RNA 結構的辨識碼，如果有的話"
-
-
-msgid "RNA-defined tip of the control, if any"
-msgstr "控制項的 RNA 定義提示，如果有的話"
-
-
-msgid "Flags about the RNA-defined tip of the button"
-msgstr "有關按鈕的 RNA 定義提示旗幟"
-
-
-msgid "Stats from opened po"
-msgstr "來自開啟的 po 的統計資訊"
-
-
-msgid "Edit i18n in current language for the active button"
-msgstr "為作用中按鈕編輯目前語言的 i18n"
-
-
-msgctxt "Operator"
 msgid "Eyedropper"
 msgstr "汲吸器"
 
@@ -43053,11 +42809,6 @@ msgstr "操作器名稱"
 
 msgid "Name (id) of the operator to invoke"
 msgstr "要喚起的操作器名稱 (id)"
-
-
-msgctxt "Operator"
-msgid "Edit Translation Update Mo"
-msgstr "編輯翻譯更新 Mo"
 
 
 msgctxt "Operator"
@@ -43438,10 +43189,6 @@ msgstr "打包島塊"
 
 msgid "Space between islands"
 msgstr "島塊間的空間"
-
-
-msgid "Fraction"
-msgstr "分數( 小數點後數值 )"
 
 
 msgctxt "Operator"
@@ -44406,10 +44153,6 @@ msgid "Toggle a context value"
 msgstr "切換情境值"
 
 
-msgid "Wrap"
-msgstr "包覆"
-
-
 msgctxt "Operator"
 msgid "Context Int Cycle"
 msgstr "情境整數循環"
@@ -44722,10 +44465,6 @@ msgstr "情境"
 msgctxt "Operator"
 msgid "Edit Property"
 msgstr "編輯屬性"
-
-
-msgid "Property Name"
-msgstr "屬性名稱"
 
 
 msgid "Property name edit"
@@ -45088,10 +44827,6 @@ msgid "Size of packed file in bytes"
 msgstr "打包的檔案大小，單位為 bytes"
 
 
-msgid "Active Brush"
-msgstr "作用中筆刷"
-
-
 msgid "Editable cavity curve"
 msgstr "可編輯坑腔曲線"
 
@@ -45182,6 +44917,10 @@ msgstr "搖晃"
 
 msgid "Invert the stencil layer"
 msgstr "反轉油印蠟紙分層"
+
+
+msgid "Single Image"
+msgstr "單一影像"
 
 
 msgid "Size to capture the image for re-projecting"
@@ -45524,6 +45263,10 @@ msgid "Text Boxes"
 msgstr "文字方塊"
 
 
+msgid "Slot"
+msgstr "槽"
+
+
 msgid "Filters"
 msgstr "過濾器"
 
@@ -45592,11 +45335,6 @@ msgid "Select Lasso"
 msgstr "套索選取"
 
 
-msgctxt "Operator"
-msgid "Draw"
-msgstr "描繪"
-
-
 msgid "Tiling"
 msgstr "鋪排"
 
@@ -45623,10 +45361,6 @@ msgstr "Freestyle 線條"
 
 msgid "Backdrop"
 msgstr "背景幕"
-
-
-msgid "Slot"
-msgstr "槽"
 
 
 msgid "Predefined node color"
@@ -45793,10 +45527,6 @@ msgid "Keyframing Settings"
 msgstr "鍵幀處理設定"
 
 
-msgid "Strips"
-msgstr "片段"
-
-
 msgid "Feature Weights"
 msgstr "特徵權重"
 
@@ -45881,10 +45611,6 @@ msgid "Value Slider"
 msgstr "數值滑桿"
 
 
-msgid "Option"
-msgstr "選項"
-
-
 msgid "Pie Menu"
 msgstr "圓派選單"
 
@@ -45945,6 +45671,16 @@ msgid "Stencil Mask"
 msgstr "遮罩蠟紙"
 
 
+msgctxt "Operator"
+msgid "Draw"
+msgstr "描繪"
+
+
+msgctxt "Operator"
+msgid "Interpolate"
+msgstr "插補"
+
+
 msgid "Comb hairs"
 msgstr "合成毛髮"
 
@@ -45974,11 +45710,6 @@ msgstr "權重毛髮粒子"
 
 
 msgctxt "Operator"
-msgid "Draw Face Sets"
-msgstr "繪製面集"
-
-
-msgctxt "Operator"
 msgid "Box Mask"
 msgstr "方塊遮罩"
 
@@ -45989,43 +45720,13 @@ msgstr "套索遮罩"
 
 
 msgctxt "Operator"
-msgid "Thickness"
-msgstr "厚度"
-
-
-msgctxt "Operator"
-msgid "Strength"
-msgstr "力量"
-
-
-msgctxt "Operator"
-msgid "Blur"
-msgstr "模糊"
-
-
-msgctxt "Operator"
-msgid "Average"
-msgstr "平均"
-
-
-msgctxt "Operator"
 msgid "Gradient"
 msgstr "漸層"
 
 
 msgctxt "Operator"
-msgid "Erase"
-msgstr "擦除"
-
-
-msgctxt "Operator"
 msgid "Cutter"
 msgstr "裁剪"
-
-
-msgctxt "Operator"
-msgid "Tint"
-msgstr "染色"
 
 
 msgctxt "Operator"
@@ -46051,21 +45752,6 @@ msgstr "方框"
 msgctxt "Operator"
 msgid "Circle"
 msgstr "圓"
-
-
-msgctxt "Operator"
-msgid "Interpolate"
-msgstr "插補"
-
-
-msgctxt "Operator"
-msgid "Density"
-msgstr "密度"
-
-
-msgctxt "Operator"
-msgid "Slide"
-msgstr "滑動"
 
 
 msgid "Post-Processing"
@@ -46274,6 +45960,14 @@ msgstr "末梢"
 
 msgid "Tip select mode"
 msgstr "末梢選取模式"
+
+
+msgid "Comb"
+msgstr "合成"
+
+
+msgid "Puff"
+msgstr "噴發"
 
 
 msgid "Auto Velocity"
@@ -47054,10 +46748,6 @@ msgstr "全域偏好設定"
 
 msgid "Active Section"
 msgstr "作用中區段"
-
-
-msgid "Active section of the preferences shown in the user interface"
-msgstr "在使用者介面中顯示的偏好設定的作用中區段"
 
 
 msgid "Apps"
@@ -48288,10 +47978,6 @@ msgid "Password"
 msgstr "密碼"
 
 
-msgid "Temperature"
-msgstr "溫度"
-
-
 msgid "Axis-Angle"
 msgstr "軸角"
 
@@ -48522,10 +48208,6 @@ msgstr "漫射反射反彈的最大次數，以總最大數為界"
 
 msgid "Multiple Importance Sampling"
 msgstr "多重重要性取樣"
-
-
-msgid "Feature Set"
-msgstr "功能設定"
 
 
 msgid "Feature set to use for rendering"
@@ -48790,6 +48472,10 @@ msgstr "繪圖板壓力"
 
 msgid "Brush Size"
 msgstr "筆刷大小"
+
+
+msgid "Widget"
+msgstr "元件"
 
 
 msgid "Selected UV Element"
@@ -49964,10 +49650,6 @@ msgstr "取樣數"
 
 msgid "Shadow factor hardness"
 msgstr "陰影硬度係數"
-
-
-msgid "Blend factor"
-msgstr "混合係數"
 
 
 msgid "Over-blur"
@@ -51260,10 +50942,6 @@ msgid "Mask displayed and edited in this space"
 msgstr "遮罩此空間中顯示的與編輯的物體"
 
 
-msgid "Overlay Mode"
-msgstr "疊層模式"
-
-
 msgid "Overlay mode of rasterized mask"
 msgstr "光柵遮罩的疊層模式"
 
@@ -51414,14 +51092,6 @@ msgstr "調整最後的操作"
 
 msgid "Toolbar"
 msgstr "工具列"
-
-
-msgid "Show Seconds"
-msgstr "顯示秒數"
-
-
-msgid "Show timing in seconds not frames"
-msgstr "使用秒來計時，而不是正數"
 
 
 msgid "Show Stable"
@@ -52017,14 +51687,6 @@ msgid "Node tree type to display and edit"
 msgstr "用於顯示與編輯的節點樹類型"
 
 
-msgid "Auto Render"
-msgstr "自動算繪"
-
-
-msgid "Re-render and composite changed layers on 3D edits"
-msgstr "對有 3D 編輯的更動層做重算繪和合成"
-
-
 msgid "Space Outliner"
 msgstr "空間大綱管理器"
 
@@ -52225,10 +51887,6 @@ msgstr "參照"
 
 msgid "Show reference frame only"
 msgstr "僅顯示參照框幀"
-
-
-msgid "Current"
-msgstr "目前"
 
 
 msgid "Show current frame only"
@@ -52904,10 +52562,6 @@ msgid "Use global coordinates for the texture coordinates"
 msgstr "為紋理座標使用全域座標"
 
 
-msgid "Along stroke"
-msgstr "沿筆觸"
-
-
 msgid "Use stroke length for texture coordinates"
 msgstr "紋理座標使用筆觸長度"
 
@@ -53018,10 +52672,6 @@ msgstr "為紋理座標使用連結物體的座標"
 
 msgid "Use UV coordinates for texture coordinates"
 msgstr "為紋理座標系使用 UV 座標"
-
-
-msgid "Strand / Particle"
-msgstr "線股 / 粒子"
 
 
 msgid "Use normalized strand texture coordinate (1D) or particle age (X) and trail position (Y)"
@@ -53836,10 +53486,6 @@ msgid "Widget Style"
 msgstr "小工具樣式"
 
 
-msgid "Widget Label Style"
-msgstr "小工具標籤樣式"
-
-
 msgid "Theme Text Editor"
 msgstr "主題文字編輯器"
 
@@ -54373,10 +54019,6 @@ msgid "Snap onto Active"
 msgstr "吸附至作用中"
 
 
-msgid "Snap to strip edges or current frame"
-msgstr "吸附至片段邊緣或目前幀"
-
-
 msgid "Snap to Same Target"
 msgstr "吸附至相同目標"
 
@@ -54902,10 +54544,6 @@ msgid "Method to display/shade objects in the 3D View"
 msgstr "3D 視圖中顯示/著色物體的方法"
 
 
-msgid "Theme"
-msgstr "主題"
-
-
 msgid "Alpha Threshold"
 msgstr "Alpha 閾值"
 
@@ -55018,10 +54656,6 @@ msgstr "步行與飛行的基礎速度"
 
 msgid "Multiplication factor when using the fast or slow modifiers"
 msgstr "當使用快速或慢速修改器時的相乘係數"
-
-
-msgid "Widget"
-msgstr "元件"
 
 
 msgid "Length of rays, defines how far away other faces give occlusion effect"
@@ -55691,13 +55325,12 @@ msgid "Resize"
 msgstr "調整大小"
 
 
+msgid "Multiple add-ons with the same name found!"
+msgstr "找到多個同名的附加元件！"
+
+
 msgid "Warning"
 msgstr "警告"
-
-
-msgctxt "Operator"
-msgid "Documentation"
-msgstr "文件"
 
 
 msgctxt "Operator"
@@ -55818,6 +55451,44 @@ msgstr "ASCII FBX 檔未支援 %r"
 
 msgid "Version %r unsupported, must be %r or later"
 msgstr "未支援 %r 版，至少需 %r 或後續版本"
+
+
+msgid "Description:"
+msgstr "描述："
+
+
+msgid "Internet:"
+msgstr "網際網路："
+
+
+msgid "Author:"
+msgstr "作者："
+
+
+msgid "Version:"
+msgstr "版本："
+
+
+msgid "Warning:"
+msgstr "警告："
+
+
+msgctxt "Operator"
+msgid "Documentation"
+msgstr "文件"
+
+
+msgid "File:"
+msgstr "檔案："
+
+
+msgctxt "Operator"
+msgid "Apply"
+msgstr "套用"
+
+
+msgid "Options:"
+msgstr "選項："
 
 
 msgid "Save to PO File"
@@ -55952,11 +55623,6 @@ msgid "Restore"
 msgstr "恢復"
 
 
-msgctxt "Operator"
-msgid "New"
-msgstr "新增"
-
-
 msgid "API Defined"
 msgstr "API 已定義"
 
@@ -56085,11 +55751,6 @@ msgstr "外形"
 
 msgid "Axes"
 msgstr "軸"
-
-
-msgctxt "Operator"
-msgid "Remove"
-msgstr "移除"
 
 
 msgid "Control Rotation"
@@ -56253,6 +55914,11 @@ msgstr "重計幾何結構"
 
 
 msgctxt "Operator"
+msgid "Erase"
+msgstr "擦除"
+
+
+msgctxt "Operator"
 msgid "Poly"
 msgstr "多角形"
 
@@ -56282,11 +55948,6 @@ msgstr "親代："
 
 msgid "Transform:"
 msgstr "變換："
-
-
-msgctxt "Operator"
-msgid "Parent"
-msgstr "親子"
 
 
 msgctxt "Operator"
@@ -56475,6 +56136,11 @@ msgid "Color Layer"
 msgstr "色彩分層"
 
 
+msgctxt "Operator"
+msgid "Add Brush"
+msgstr "添加筆刷"
+
+
 msgid "Wave Clamp"
 msgstr "波形限定"
 
@@ -56485,10 +56151,6 @@ msgstr "場域吸收"
 
 msgid "Heat"
 msgstr "熱"
-
-
-msgid "Exponent"
-msgstr "指數"
 
 
 msgid "Concavity Upper"
@@ -56668,10 +56330,6 @@ msgid "Autocomplete"
 msgstr "自動補完"
 
 
-msgid "Options:"
-msgstr "選項："
-
-
 msgid "Snap To"
 msgstr "吸附至"
 
@@ -56754,6 +56412,11 @@ msgstr "在所選標記之間"
 msgctxt "Operator"
 msgid "Extend"
 msgstr "擴展"
+
+
+msgctxt "Operator"
+msgid "Slide"
+msgstr "滑動"
 
 
 msgctxt "Operator"
@@ -57274,10 +56937,6 @@ msgid "Panel Title"
 msgstr "面板標題"
 
 
-msgid "Widget Label"
-msgstr "小工具標籤"
-
-
 msgid "Render Output"
 msgstr "算繪輸出"
 
@@ -57294,10 +56953,6 @@ msgid "Invert Wheel Zoom Direction"
 msgstr "反轉滾輪遠近調焦方向"
 
 
-msgid "Multiple add-ons with the same name found!"
-msgstr "找到多個同名的附加元件！"
-
-
 msgid "Error (see console)"
 msgstr "錯誤 (查看主控臺)"
 
@@ -57306,32 +56961,8 @@ msgid "Missing script files"
 msgstr "遺失的命令稿檔案"
 
 
-msgid "Description:"
-msgstr "描述："
-
-
 msgid "Location:"
 msgstr "位置："
-
-
-msgid "File:"
-msgstr "檔案："
-
-
-msgid "Author:"
-msgstr "作者："
-
-
-msgid "Version:"
-msgstr "版本："
-
-
-msgid "Warning:"
-msgstr "警告："
-
-
-msgid "Internet:"
-msgstr "網際網路："
 
 
 msgctxt "Operator"
@@ -58184,11 +57815,6 @@ msgstr "快速編輯"
 
 
 msgctxt "Operator"
-msgid "Apply"
-msgstr "套用"
-
-
-msgctxt "Operator"
 msgid "Apply Camera Image"
 msgstr "套用攝影機影像"
 
@@ -58259,6 +57885,10 @@ msgstr "，無法有單框幀路徑"
 
 msgid "Motion path frame extents invalid for %s (%d to %d)%s"
 msgstr "%s 運動路徑框幀範圍無效 (%d 到 %d)%s"
+
+
+msgid "Saved \"%s\""
+msgstr "已儲存「%s」"
 
 
 msgid "Unable to create userpref path"
@@ -58655,10 +58285,6 @@ msgid "Edge-rings are not connected"
 msgstr "線環並未連接"
 
 
-msgid "Basic"
-msgstr "基本"
-
-
 msgid "Editability of keyframes for this channel"
 msgstr "此通道鍵幀的可編輯性"
 
@@ -59017,12 +58643,12 @@ msgid "Grease Pencil operator is already active"
 msgstr "蠟筆資料操作器已在作用中"
 
 
-msgid "Failed to set value"
-msgstr "無法設定數值"
-
-
 msgid "Could not resolve path '%s'"
 msgstr "無法解析路徑「%s」"
+
+
+msgid "Failed to set value"
+msgstr "無法設定數值"
 
 
 msgid "Property from path '%s' is not a float"
@@ -59142,18 +58768,6 @@ msgid "Active button not found"
 msgstr "找不到作用中按鈕"
 
 
-msgid "Please set your Preferences' 'Translation Branches Directory' path to a valid directory"
-msgstr "請將您的偏好設定「翻譯分支目錄」路徑設定成有效的目錄"
-
-
-msgid "Could not find operator '%s'! Please enable ui_translate add-on in the User Preferences"
-msgstr "找不到「%s」操作器！請啟用使用者偏好設定中的 ui_translate 附加元件"
-
-
-msgid "No valid po found for language '%s' under %s"
-msgstr "找不到有效的「%s」語言 po 檔，尋找目標為 %s"
-
-
 msgid "%d items"
 msgstr "%d 項"
 
@@ -59170,12 +58784,24 @@ msgid "Hex triplet for color (#RRGGBB)"
 msgstr "十六進位色彩三連子 (#RRGGBB)"
 
 
+msgid "OK"
+msgstr "確定"
+
+
+msgid "Cancel"
+msgstr "取消"
+
+
 msgid "Menu \"%s\" not found"
 msgstr "找不到「%s」選單"
 
 
 msgid "Internal error!"
 msgstr "內部錯誤！"
+
+
+msgid "Movie"
+msgstr "影片"
 
 
 msgctxt "Operator"
@@ -59569,10 +59195,6 @@ msgid "Icosphere"
 msgstr "Ico 球體"
 
 
-msgid "Cancel"
-msgstr "取消"
-
-
 msgid "Outer"
 msgstr "外部"
 
@@ -59611,10 +59233,6 @@ msgstr "面選取 - Shift+點擊 取得多種模式，Ctrl+點擊 擴展選取"
 
 msgid "Invalid selection order"
 msgstr "無效的選取順序"
-
-
-msgid "Mouse path too short"
-msgstr "滑鼠路徑過短"
 
 
 msgid "Selection not supported in object mode"
@@ -60267,16 +59885,24 @@ msgid "Flip to Bottom"
 msgstr "翻轉至底部"
 
 
-msgid "Blender Preferences"
-msgstr "Blender 偏好設定"
-
-
 msgid "Can only scale region size from an action zone"
 msgstr "僅可從動作區縮放區塊大小"
 
 
 msgid "No fullscreen areas were found"
 msgstr "找不到全螢幕面積"
+
+
+msgid "File not found '%s'"
+msgstr "找不到「%s」檔案"
+
+
+msgid "ON"
+msgstr "開"
+
+
+msgid "OFF"
+msgstr "關"
 
 
 msgid "Image could not be found"
@@ -60297,10 +59923,6 @@ msgstr "偵測到遺失%s%s%s%s！"
 
 msgid "Warning!"
 msgstr "警告！"
-
-
-msgid "OK"
-msgstr "確定"
 
 
 msgid "non-triangle face"
@@ -60658,10 +60280,6 @@ msgstr "沒有可複製的 F 修改器"
 
 msgid "No F-Modifiers to paste"
 msgstr "沒有要貼上的修改器"
-
-
-msgid "File not found '%s'"
-msgstr "找不到「%s」檔案"
 
 
 msgid "Euler Rotation F-Curve has invalid index (ID='%s', Path='%s', Index=%d)"
@@ -62791,10 +62409,6 @@ msgid "Cannot overwrite used library '%.240s'"
 msgstr "無法覆寫已使用的函式庫「%.240s」"
 
 
-msgid "Saved \"%s\""
-msgstr "已儲存「%s」"
-
-
 msgid "Not a library"
 msgstr "非函式庫"
 
@@ -62853,14 +62467,6 @@ msgstr "Esc"
 
 msgid "dbl-"
 msgstr "dbl-"
-
-
-msgid "ON"
-msgstr "開"
-
-
-msgid "OFF"
-msgstr "關"
 
 
 msgid "unsupported format"

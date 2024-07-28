@@ -17,6 +17,7 @@
 #include "BLI_math_matrix.h"
 #include "BLI_math_matrix_types.hh"
 #include "BLI_math_vector.h"
+#include "BLI_math_vector.hh"
 #include "BLI_math_vector_types.hh"
 #include "BLI_rect.h"
 #include "BLI_vector.hh"
@@ -319,9 +320,9 @@ static void flip_for_symmetry_pass(GestureData &gesture_data, const ePaintSymmet
   flip_plane(gesture_data.line.side_plane[1], gesture_data.line.true_side_plane[1], symmpass);
 }
 
-static Vector<PBVHNode *> update_affected_nodes_by_line_plane(GestureData &gesture_data)
+static Vector<bke::pbvh::Node *> update_affected_nodes_by_line_plane(GestureData &gesture_data)
 {
-  SculptSession *ss = gesture_data.ss;
+  SculptSession &ss = *gesture_data.ss;
   float clip_planes[3][4];
   copy_v4_v4(clip_planes[0], gesture_data.line.plane);
   copy_v4_v4(clip_planes[1], gesture_data.line.side_plane[0]);
@@ -331,14 +332,14 @@ static Vector<PBVHNode *> update_affected_nodes_by_line_plane(GestureData &gestu
   frustum.planes = clip_planes;
   frustum.num_planes = gesture_data.line.use_side_planes ? 3 : 1;
 
-  return gesture_data.nodes = bke::pbvh::search_gather(*ss->pbvh, [&](PBVHNode &node) {
+  return gesture_data.nodes = bke::pbvh::search_gather(*ss.pbvh, [&](bke::pbvh::Node &node) {
            return BKE_pbvh_node_frustum_contain_AABB(&node, &frustum);
          });
 }
 
 static void update_affected_nodes_by_clip_planes(GestureData &gesture_data)
 {
-  SculptSession *ss = gesture_data.ss;
+  SculptSession &ss = *gesture_data.ss;
   float clip_planes[4][4];
   copy_m4_m4(clip_planes, gesture_data.clip_planes);
   negate_m4(clip_planes);
@@ -347,7 +348,7 @@ static void update_affected_nodes_by_clip_planes(GestureData &gesture_data)
   frustum.planes = clip_planes;
   frustum.num_planes = 4;
 
-  gesture_data.nodes = bke::pbvh::search_gather(*ss->pbvh, [&](PBVHNode &node) {
+  gesture_data.nodes = bke::pbvh::search_gather(*ss.pbvh, [&](bke::pbvh::Node &node) {
     switch (gesture_data.selection_type) {
       case SelectionType::Inside:
         return BKE_pbvh_node_frustum_contain_AABB(&node, &frustum);
@@ -379,12 +380,12 @@ static void update_affected_nodes(GestureData &gesture_data)
   }
 }
 
-static bool is_affected_lasso(GestureData &gesture_data, const float co[3])
+static bool is_affected_lasso(const GestureData &gesture_data, const float3 &position)
 {
   int scr_co_s[2];
   float co_final[3];
 
-  flip_v3_v3(co_final, co, gesture_data.symmpass);
+  flip_v3_v3(co_final, position, gesture_data.symmpass);
 
   /* First project point to 2d space. */
   const float2 scr_co_f = ED_view3d_project_float_v2_m4(
@@ -394,15 +395,15 @@ static bool is_affected_lasso(GestureData &gesture_data, const float co[3])
   scr_co_s[1] = scr_co_f[1];
 
   /* Clip against lasso boundbox. */
-  LassoData *lasso = &gesture_data.lasso;
-  if (!BLI_rcti_isect_pt(&lasso->boundbox, scr_co_s[0], scr_co_s[1])) {
+  const LassoData &lasso = gesture_data.lasso;
+  if (!BLI_rcti_isect_pt(&lasso.boundbox, scr_co_s[0], scr_co_s[1])) {
     return gesture_data.selection_type == SelectionType::Outside;
   }
 
-  scr_co_s[0] -= lasso->boundbox.xmin;
-  scr_co_s[1] -= lasso->boundbox.ymin;
+  scr_co_s[0] -= lasso.boundbox.xmin;
+  scr_co_s[1] -= lasso.boundbox.ymin;
 
-  const bool bitmap_result = lasso->mask_px[scr_co_s[1] * lasso->width + scr_co_s[0]].test();
+  const bool bitmap_result = lasso.mask_px[scr_co_s[1] * lasso.width + scr_co_s[0]].test();
   switch (gesture_data.selection_type) {
     case SelectionType::Inside:
       return bitmap_result;
@@ -413,9 +414,9 @@ static bool is_affected_lasso(GestureData &gesture_data, const float co[3])
   return false;
 }
 
-bool is_affected(GestureData &gesture_data, const float3 &co, const float3 &vertex_normal)
+bool is_affected(const GestureData &gesture_data, const float3 &position, const float3 &normal)
 {
-  float dot = dot_v3v3(gesture_data.view_normal, vertex_normal);
+  float dot = math::dot(gesture_data.view_normal, normal);
   const bool is_effected_front_face = !(gesture_data.front_faces_only && dot < 0.0f);
 
   if (!is_effected_front_face) {
@@ -424,29 +425,40 @@ bool is_affected(GestureData &gesture_data, const float3 &co, const float3 &vert
 
   switch (gesture_data.shape_type) {
     case ShapeType::Box: {
-      const bool is_contained = isect_point_planes_v3(gesture_data.clip_planes, 4, co);
+      const bool is_contained = isect_point_planes_v3(gesture_data.clip_planes, 4, position);
       return ((is_contained && gesture_data.selection_type == SelectionType::Inside) ||
               (!is_contained && gesture_data.selection_type == SelectionType::Outside));
     }
     case ShapeType::Lasso:
-      return is_affected_lasso(gesture_data, co);
+      return is_affected_lasso(gesture_data, position);
     case ShapeType::Line:
       if (gesture_data.line.use_side_planes) {
-        return plane_point_side_v3(gesture_data.line.plane, co) > 0.0f &&
-               plane_point_side_v3(gesture_data.line.side_plane[0], co) > 0.0f &&
-               plane_point_side_v3(gesture_data.line.side_plane[1], co) > 0.0f;
+        return plane_point_side_v3(gesture_data.line.plane, position) > 0.0f &&
+               plane_point_side_v3(gesture_data.line.side_plane[0], position) > 0.0f &&
+               plane_point_side_v3(gesture_data.line.side_plane[1], position) > 0.0f;
       }
-      return plane_point_side_v3(gesture_data.line.plane, co) > 0.0f;
+      return plane_point_side_v3(gesture_data.line.plane, position) > 0.0f;
   }
   return false;
+}
+
+void filter_factors(const GestureData &gesture_data,
+                    const Span<float3> positions,
+                    const Span<float3> normals,
+                    const MutableSpan<float> factors)
+{
+  for (const int i : positions.index_range()) {
+    if (!is_affected(gesture_data, positions[i], normals[i])) {
+      factors[i] = 0.0f;
+    }
+  }
 }
 
 void apply(bContext &C, GestureData &gesture_data, wmOperator &op)
 {
   Operation *operation = gesture_data.operation;
-  undo::push_begin(*CTX_data_active_object(&C), &op);
 
-  operation->begin(C, gesture_data);
+  operation->begin(C, op, gesture_data);
 
   for (int symmpass = 0; symmpass <= gesture_data.symm; symmpass++) {
     if (SCULPT_is_symmetry_iteration_valid(symmpass, gesture_data.symm)) {
@@ -458,8 +470,6 @@ void apply(bContext &C, GestureData &gesture_data, wmOperator &op)
   }
 
   operation->end(C, gesture_data);
-
-  undo::push_end(*CTX_data_active_object(&C));
 
   SCULPT_tag_update_overlays(&C);
 }

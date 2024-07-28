@@ -680,6 +680,7 @@ static void createTransActionData(bContext *C, TransInfo *t)
       case ANIMTYPE_GROUP:
       case ANIMTYPE_NLACONTROLS:
       case ANIMTYPE_FILLACT_LAYERED:
+      case ANIMTYPE_ACTION_SLOT:
       case ANIMTYPE_FILLACTD:
       case ANIMTYPE_FILLDRIVERS:
       case ANIMTYPE_DSMAT:
@@ -982,8 +983,8 @@ static void recalcData_actedit(TransInfo *t)
   ac.area = t->area;
   ac.region = t->region;
   ac.sl = static_cast<SpaceLink *>((t->area) ? t->area->spacedata.first : nullptr);
-  ac.spacetype = (t->area) ? t->area->spacetype : 0;
-  ac.regiontype = (t->region) ? t->region->regiontype : 0;
+  ac.spacetype = eSpace_Type((t->area) ? t->area->spacetype : 0);
+  ac.regiontype = eRegion_Type((t->region) ? t->region->regiontype : 0);
 
   ANIM_animdata_context_getdata(&ac);
 

@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.2.0 Beta (b'a2795852cd29')\n"
+"Project-Id-Version: Blender 4.3.0 Alpha (b'de443e038c4e')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-06-10 10:16+0000\n"
+"POT-Creation-Date: 2024-07-22 07:23+0000\n"
 "PO-Revision-Date: 2023-10-06 09:54+0000\n"
 "Last-Translator: Eitan Traurig <eitant13@gmail.com>\n"
 "Language-Team: Hebrew <https://translate.blender.org/projects/blender-ui/ui/he/>\n"
@@ -59,6 +59,22 @@ msgid "Select"
 msgstr "רחוב"
 
 
+msgid "Replace"
+msgstr "ףלחה"
+
+
+msgid "Add"
+msgstr "ףסוה"
+
+
+msgid "Subtract"
+msgstr "ריסחהל"
+
+
+msgid "Multiply"
+msgstr "ליפכהל"
+
+
 msgid "Module"
 msgstr "לודומ"
 
@@ -75,24 +91,12 @@ msgid "Full"
 msgstr "אלמ"
 
 
+msgid "Center"
+msgstr "זכרמ"
+
+
 msgid "Animation Data"
 msgstr "היצמינא ינותנ"
-
-
-msgid "Replace"
-msgstr "ףלחה"
-
-
-msgid "Add"
-msgstr "ףסוה"
-
-
-msgid "Subtract"
-msgstr "ריסחהל"
-
-
-msgid "Multiply"
-msgstr "ליפכהל"
 
 
 msgid "Hold"
@@ -240,30 +244,8 @@ msgid "Tail"
 msgstr "בנז"
 
 
-msgid "Remove"
-msgstr "רסה"
-
-
 msgid "Vertex Color"
 msgstr "דוקדוק עבצ"
-
-
-msgid "Pencil"
-msgstr "ןורפע"
-
-
-msgid "Pen"
-msgstr "טע"
-
-
-msgctxt "GPencil"
-msgid "Smooth"
-msgstr "קלח"
-
-
-msgctxt "GPencil"
-msgid "Strength"
-msgstr "המצוע"
 
 
 msgctxt "Amount"
@@ -289,10 +271,6 @@ msgstr "לאמש"
 
 msgid "Right"
 msgstr "ןימי"
-
-
-msgid "Center"
-msgstr "זכרמ"
 
 
 msgid "Gamma"
@@ -425,12 +403,12 @@ msgid "Vertex Group"
 msgstr "דוקדוק תצובק"
 
 
-msgid "Generated"
-msgstr "רצוימ"
-
-
 msgid "Collection"
 msgstr "ףסוא"
+
+
+msgid "Generated"
+msgstr "רצוימ"
 
 
 msgid "Window"
@@ -498,14 +476,19 @@ msgid "Smooth"
 msgstr "קלח"
 
 
-msgctxt "Mask"
+msgctxt "GPencil"
 msgid "Smooth"
 msgstr "קלח"
 
 
-msgctxt "Brush"
-msgid "Sculpt Tool"
-msgstr "לוסיפ ילכ"
+msgctxt "GPencil"
+msgid "Strength"
+msgstr "המצוע"
+
+
+msgctxt "Mask"
+msgid "Smooth"
+msgstr "קלח"
 
 
 msgid "Up"
@@ -518,10 +501,6 @@ msgstr "ביתנ"
 
 msgid "Mean"
 msgstr "עצוממ"
-
-
-msgid "Movie"
-msgstr "טרס"
 
 
 msgctxt "Material"
@@ -751,6 +730,10 @@ msgid "Select Vertex Group"
 msgstr "דוקדוק תצובק רחב"
 
 
+msgid "Remove"
+msgstr "רסה"
+
+
 msgid "Image Name"
 msgstr "הנומת םש"
 
@@ -921,11 +904,6 @@ msgid "Location:"
 msgstr "‏:םוקימ"
 
 
-msgctxt "Operator"
-msgid "Grease Pencil"
-msgstr "Grease Pencil"
-
-
 msgid "Nothing selected"
 msgstr "רבד רחבנ אל"
 
@@ -965,6 +943,14 @@ msgid "Saturation:"
 msgstr ":היוור"
 
 
+msgid "Cancel"
+msgstr "לוטיב"
+
+
+msgid "Movie"
+msgstr "טרס"
+
+
 msgid "No Properties"
 msgstr "םינייפאמ אלל"
 
@@ -979,10 +965,6 @@ msgstr "תודוקנ קחמ"
 
 msgid "Stop this job"
 msgstr "וז הדובע רוצע"
-
-
-msgid "Cancel"
-msgstr "לוטיב"
 
 
 msgid "vertex data"

@@ -263,8 +263,6 @@ void calc_tracing_direction(inout PathTraceContext trace_ctx, TracedTriangle tri
                 }
             if (.0f < w_sum) D = normalize(dir_sum / w_sum); 
             else D = - normalize((tri.D[0] + tri.D[1] + tri.D[2]) / 3.0f); 
-
-            // D = normalize(mix(D, trace_ctx.D_prev, 0.9f));
         }
     }
 

@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.2.0 Beta (b'a2795852cd29')\n"
+"Project-Id-Version: Blender 4.3.0 Alpha (b'de443e038c4e')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-06-10 10:16+0000\n"
+"POT-Creation-Date: 2024-07-22 07:23+0000\n"
 "PO-Revision-Date: 2024-04-29 13:44+0000\n"
 "Last-Translator: Anonymous <noreply@weblate.org>\n"
 "Language-Team: Greek <https://translate.blender.org/projects/blender-ui/ui/el/>\n"
@@ -35,14 +35,6 @@ msgid "Select"
 msgstr "Επιλογή"
 
 
-msgid "On"
-msgstr "Ενεργό"
-
-
-msgid "Action"
-msgstr "Δράση"
-
-
 msgid "Add"
 msgstr "Προσθήκη"
 
@@ -51,8 +43,28 @@ msgid "Subtract"
 msgstr "Αφαίρεση"
 
 
+msgid "On"
+msgstr "Ενεργό"
+
+
+msgid "Always"
+msgstr "Πάντα"
+
+
+msgid "Center"
+msgstr "Κεντράρισμα"
+
+
+msgid "Action"
+msgstr "Δράση"
+
+
 msgid "Hold"
 msgstr "Κράτα"
+
+
+msgid "None"
+msgstr "Κανένα"
 
 
 msgid "End Frame"
@@ -99,10 +111,6 @@ msgid "Object"
 msgstr "Αντικείμενο"
 
 
-msgid "None"
-msgstr "Κανένα"
-
-
 msgid "Emit"
 msgstr "Εκπομπή"
 
@@ -135,20 +143,12 @@ msgid "Deform"
 msgstr "Παραμόρφωση"
 
 
-msgid "Remove"
-msgstr "Remove"
-
-
 msgid "Mode"
 msgstr "Κατάσταση"
 
 
 msgid "Fill"
 msgstr "Συμπλήρωμα"
-
-
-msgid "Draw"
-msgstr "Εμφάνιση"
 
 
 msgid "Crop"
@@ -161,10 +161,6 @@ msgstr "Μεγέθυνση"
 
 msgid "Left"
 msgstr "Αριστερά"
-
-
-msgid "Center"
-msgstr "Κεντράρισμα"
 
 
 msgid "Linear"
@@ -233,10 +229,6 @@ msgstr "Κάμερα"
 
 msgid "Bone"
 msgstr "Οστό"
-
-
-msgid "Always"
-msgstr "Πάντα"
 
 
 msgid "Script"
@@ -435,6 +427,10 @@ msgid "Dynamic"
 msgstr "Δυναμικό"
 
 
+msgid "Draw"
+msgstr "Εμφάνιση"
+
+
 msgid "Sequence"
 msgstr "Μείξη"
 
@@ -465,10 +461,6 @@ msgstr "Μέγιστο"
 
 msgid "Panel"
 msgstr "Ταμπλό"
-
-
-msgid "Movie"
-msgstr "Βίντεο"
 
 
 msgid "Render polygon transparent, depending on alpha channel of the texture"
@@ -587,6 +579,10 @@ msgid "Select Linked"
 msgstr "Επιλογή Συνδεδεμένων"
 
 
+msgid "Import"
+msgstr "Εισαγωγή"
+
+
 msgid "Apply"
 msgstr "Εφαρμογή"
 
@@ -605,10 +601,6 @@ msgstr "Αρχείο"
 
 msgid "Export"
 msgstr "Εξαγωγή"
-
-
-msgid "Import"
-msgstr "Εισαγωγή"
 
 
 msgid "Help"
@@ -767,6 +759,10 @@ msgstr "Both"
 
 msgid "Join"
 msgstr "Ένωσε"
+
+
+msgid "Remove"
+msgstr "Remove"
 
 
 msgid "Next Keyframe"
@@ -1032,6 +1028,10 @@ msgstr "Στρώμα"
 
 msgid "Cancel"
 msgstr "Ακύρωση"
+
+
+msgid "Movie"
+msgstr "Βίντεο"
 
 
 msgid "Fields"

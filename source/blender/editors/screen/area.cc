@@ -2853,6 +2853,11 @@ void ED_area_newspace(bContext *C, ScrArea *area, int type, const bool skip_regi
     ED_area_tag_refresh(area);
   }
 
+  if (BLI_listbase_is_single(&CTX_wm_screen(C)->areabase)) {
+    /* If there is only one area update the window title. */
+    WM_window_title(CTX_wm_manager(C), CTX_wm_window(C));
+  }
+
   /* also redraw when re-used */
   ED_area_tag_redraw(area);
 }

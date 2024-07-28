@@ -451,7 +451,14 @@ class PREFERENCES_OT_addon_enable(Operator):
             nonlocal err_str
             err_str = str(ex)
 
-        mod = addon_utils.enable(self.module, default_set=True, handle_error=err_cb)
+        module_name = self.module
+
+        # Ensure any wheels are setup before enabling.
+        is_extension = addon_utils.check_extension(module_name)
+        if is_extension:
+            addon_utils.extensions_refresh(ensure_wheels=True, addon_modules_pending=[module_name])
+
+        mod = addon_utils.enable(module_name, default_set=True, handle_error=err_cb)
 
         if mod:
             bl_info = addon_utils.module_bl_info(mod)
@@ -473,6 +480,10 @@ class PREFERENCES_OT_addon_enable(Operator):
 
             if err_str:
                 self.report({'ERROR'}, err_str)
+
+            if is_extension:
+                # Since the add-on didn't work, remove any wheels it may have installed.
+                addon_utils.extensions_refresh(ensure_wheels=True)
 
             return {'CANCELLED'}
 
@@ -498,7 +509,11 @@ class PREFERENCES_OT_addon_disable(Operator):
             err_str = traceback.format_exc()
             print(err_str)
 
-        addon_utils.disable(self.module, default_set=True, handle_error=err_cb)
+        module_name = self.module
+        is_extension = addon_utils.check_extension(module_name)
+        addon_utils.disable(module_name, default_set=True, handle_error=err_cb)
+        if is_extension:
+            addon_utils.extensions_refresh(ensure_wheels=True)
 
         if err_str:
             self.report({'ERROR'}, err_str)
@@ -749,9 +764,6 @@ class PREFERENCES_OT_addon_install(Operator):
             if mod.__name__ in addons_new:
                 bl_info = addon_utils.module_bl_info(mod)
 
-                if self.enable_on_install:
-                    bpy.ops.preferences.addon_enable(module=mod.__name__)
-
                 # show the newly installed addon.
                 context.preferences.view.show_addons_enabled_only = False
                 context.window_manager.addon_filter = 'All'
@@ -760,6 +772,12 @@ class PREFERENCES_OT_addon_install(Operator):
 
         # in case a new module path was created to install this addon.
         bpy.utils.refresh_script_paths()
+
+        # Auto enable if needed.
+        if self.enable_on_install:
+            for mod in addon_utils.modules(refresh=False):
+                if mod.__name__ in addons_new:
+                    bpy.ops.preferences.addon_enable(module=mod.__name__)
 
         # print message
         msg = rpt_("Modules Installed ({:s}) from {!r} into {!r}").format(
@@ -885,7 +903,7 @@ class PREFERENCES_OT_addon_show(Operator):
             bl_info = addon_utils.module_bl_info(mod)
             bl_info["show_expanded"] = True
 
-            context.preferences.active_section = 'EXTENSIONS'
+            context.preferences.active_section = 'ADDONS'
             context.preferences.view.show_addons_enabled_only = False
             context.window_manager.addon_filter = 'All'
             context.window_manager.addon_search = bl_info["name"]

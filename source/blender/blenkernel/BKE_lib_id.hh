@@ -205,6 +205,8 @@ enum {
    * duplicate scene/collections, or objects.
    */
   LIB_ID_COPY_RIGID_BODY_NO_COLLECTION_HANDLING = 1 << 28,
+  /* Copy asset metadata. */
+  LIB_ID_COPY_ASSET_METADATA = 1 << 29,
 
   /* *** Helper 'defines' gathering most common flag sets. *** */
   /** Shape-keys are not real ID's, more like local data to geometry IDs. */
@@ -339,12 +341,12 @@ void BKE_libblock_free_data_py(ID *id);
  * \param bmain: #Main database containing the freed #ID,
  * can be NULL in case it's a temp ID outside of any #Main.
  * \param idv: Pointer to ID to be freed.
- * \param flag: Set of \a LIB_ID_FREE_... flags controlling/overriding usual freeing process,
+ * \param flag_orig: Set of \a LIB_ID_FREE_... flags controlling/overriding usual freeing process,
  * 0 to get default safe behavior.
  * \param use_flag_from_idtag: Still use freeing info flags from given #ID data-block,
  * even if some overriding ones are passed in \a flag parameter.
  */
-void BKE_id_free_ex(Main *bmain, void *idv, int flag, bool use_flag_from_idtag);
+void BKE_id_free_ex(Main *bmain, void *idv, int flag_orig, bool use_flag_from_idtag);
 /**
  * Complete ID freeing, should be usable in most cases (even for out-of-Main IDs).
  *
@@ -435,20 +437,27 @@ void BKE_id_newptr_and_tag_clear(ID *id);
 
 /** Flags to control make local code behavior. */
 enum {
-  /** Making that ID local is part of making local a whole library. */
+  /**
+   * Making that ID local is part of making local a whole library. Implies
+   * #LIB_ID_MAKELOCAL_INDIRECT.
+   */
   LIB_ID_MAKELOCAL_FULL_LIBRARY = 1 << 0,
+  /** Also make local indirectly linked IDs. Implied by #LIB_ID_MAKELOCAL_FULL_LIBRARY. */
+  LIB_ID_MAKELOCAL_INDIRECT = 1 << 1,
 
   /** In case caller code already knows this ID should be made local without copying. */
-  LIB_ID_MAKELOCAL_FORCE_LOCAL = 1 << 1,
+  LIB_ID_MAKELOCAL_FORCE_LOCAL = 1 << 8,
   /** In case caller code already knows this ID should be made local using copying. */
-  LIB_ID_MAKELOCAL_FORCE_COPY = 1 << 2,
+  LIB_ID_MAKELOCAL_FORCE_COPY = 1 << 9,
 
-  /** Clear asset data (in case the ID can actually be made local, in copy case asset data is never
-   * copied over). */
-  LIB_ID_MAKELOCAL_ASSET_DATA_CLEAR = 1 << 3,
+  /**
+   * Clear asset data (in case the ID can actually be made local, in copy case asset data is never
+   * copied over).
+   */
+  LIB_ID_MAKELOCAL_ASSET_DATA_CLEAR = 1 << 16,
 
   /** Clear any liboverride data as part of making this linked data local. */
-  LIB_ID_MAKELOCAL_LIBOVERRIDE_CLEAR = 1 << 4,
+  LIB_ID_MAKELOCAL_LIBOVERRIDE_CLEAR = 1 << 17,
 };
 
 /**
@@ -603,7 +612,7 @@ void BKE_lib_id_expand_local(Main *bmain, ID *id, int flags);
  * Uniqueness is only ensured within the ID's library (nullptr for local ones), libraries act as
  * some kind of namespace for IDs.
  *
- * \param name: The new name of the given ID, if `nullptr` the current given ID name is used
+ * \param newname: The new name of the given ID, if `nullptr` the current given ID name is used
  * instead. If the given ID has no name (or the given name is an empty string), the default
  * matching data name is used as fallback.
  * \param do_linked_data: if true, also ensure a unique name in case the given ID is linked
@@ -615,7 +624,7 @@ void BKE_lib_id_expand_local(Main *bmain, ID *id, int flags);
 bool BKE_id_new_name_validate(Main *bmain,
                               ListBase *lb,
                               ID *id,
-                              const char *name,
+                              const char *newname,
                               bool do_linked_data) ATTR_NONNULL(1, 2, 3);
 
 /**

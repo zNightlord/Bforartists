@@ -109,6 +109,8 @@ struct GPUPass {
   bool should_optimize;
   /** Whether pass is in the GPUPass cache. */
   bool cached;
+
+  BatchHandle async_compilation_handle;
 };
 
 /* -------------------------------------------------------------------- */
@@ -282,10 +284,6 @@ class GPUCodegen {
     create_info = new GPUCodegenCreateInfo("codegen");
     output.create_info = reinterpret_cast<GPUShaderCreateInfo *>(
         static_cast<ShaderCreateInfo *>(create_info));
-
-    if (GPU_material_flag_get(mat_, GPU_MATFLAG_OBJECT_INFO)) {
-      create_info->additional_info("draw_object_infos");
-    }
   }
 
   ~GPUCodegen()
@@ -392,24 +390,6 @@ void GPUCodegen::generate_attribs()
 void GPUCodegen::generate_resources()
 {
   GPUCodegenCreateInfo &info = *create_info;
-
-  /* Ref. #98190: Defines are optimizations for old compilers.
-   * Might become unnecessary with EEVEE-Next. */
-  if (GPU_material_flag_get(&mat, GPU_MATFLAG_PRINCIPLED_COAT)) {
-    info.define("PRINCIPLED_COAT");
-  }
-  if (GPU_material_flag_get(&mat, GPU_MATFLAG_PRINCIPLED_METALLIC)) {
-    info.define("PRINCIPLED_METALLIC");
-  }
-  if (GPU_material_flag_get(&mat, GPU_MATFLAG_PRINCIPLED_DIELECTRIC)) {
-    info.define("PRINCIPLED_DIELECTRIC");
-  }
-  if (GPU_material_flag_get(&mat, GPU_MATFLAG_PRINCIPLED_GLASS)) {
-    info.define("PRINCIPLED_GLASS");
-  }
-  if (GPU_material_flag_get(&mat, GPU_MATFLAG_PRINCIPLED_ANY)) {
-    info.define("PRINCIPLED_ANY");
-  }
 
   std::stringstream ss;
 
@@ -813,6 +793,7 @@ GPUPass *GPU_generate_pass(GPUMaterial *material,
      * Optimized passes cannot be optimized further, even if the heuristic is still not
      * favorable. */
     pass->should_optimize = (!optimize_graph) && codegen.should_optimize_heuristic();
+    pass->async_compilation_handle = -1;
 
     codegen.create_info = nullptr;
 
@@ -914,6 +895,28 @@ bool GPU_pass_finalize_compilation(GPUPass *pass, GPUShader *shader)
     pass->compiled = true;
   }
   return success;
+}
+
+void GPU_pass_begin_async_compilation(GPUPass *pass, const char *shname)
+{
+  if (pass->async_compilation_handle == -1) {
+    GPUShaderCreateInfo *info = GPU_pass_begin_compilation(pass, shname);
+    BLI_assert(info);
+    pass->async_compilation_handle = GPU_shader_batch_create_from_infos({info});
+  }
+}
+
+bool GPU_pass_async_compilation_try_finalize(GPUPass *pass)
+{
+  BLI_assert(pass->async_compilation_handle != -1);
+  if (pass->async_compilation_handle) {
+    if (GPU_shader_batch_is_ready(pass->async_compilation_handle)) {
+      GPU_pass_finalize_compilation(
+          pass, GPU_shader_batch_finalize(pass->async_compilation_handle).first());
+    }
+  }
+
+  return pass->async_compilation_handle == 0;
 }
 
 bool GPU_pass_compile(GPUPass *pass, const char *shname)

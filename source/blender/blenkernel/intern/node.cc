@@ -79,7 +79,7 @@
 #include "RNA_access.hh"
 #include "RNA_define.hh"
 #include "RNA_enum_types.hh"
-#include "RNA_prototypes.h"
+#include "RNA_prototypes.hh"
 
 #include "NOD_common.h"
 #include "NOD_composite.hh"
@@ -90,6 +90,7 @@
 #include "NOD_geo_repeat.hh"
 #include "NOD_geo_simulation.hh"
 #include "NOD_geometry.hh"
+#include "NOD_geometry_nodes_gizmos.hh"
 #include "NOD_geometry_nodes_lazy_function.hh"
 #include "NOD_node_declaration.hh"
 #include "NOD_register.hh"
@@ -248,7 +249,7 @@ static void ntree_copy_data(Main * /*bmain*/,
   }
 
   if (ntree_src->geometry_node_asset_traits) {
-    ntree_dst->geometry_node_asset_traits = MEM_new<GeometryNodeAssetTraits>(
+    ntree_dst->geometry_node_asset_traits = MEM_cnew<GeometryNodeAssetTraits>(
         __func__, *ntree_src->geometry_node_asset_traits);
   }
 
@@ -309,7 +310,9 @@ static void ntree_free_data(ID *id)
     BKE_libblock_free_data(&ntree->id, true);
   }
 
-  MEM_delete(ntree->geometry_node_asset_traits);
+  if (ntree->geometry_node_asset_traits) {
+    MEM_freeN(ntree->geometry_node_asset_traits);
+  }
 
   if (ntree->nested_node_refs) {
     MEM_freeN(ntree->nested_node_refs);
@@ -541,6 +544,8 @@ static StringRef get_legacy_socket_subtype_idname(StringRef idname, const void *
         return "NodeSocketFloatDistance";
       case PROP_WAVELENGTH:
         return "NodeSocketFloatWavelength";
+      case PROP_COLOR_TEMPERATURE:
+        return "NodeSocketFloatColorTemperature";
     }
   }
   if (idname == "NodeSocketInt") {
@@ -2118,6 +2123,8 @@ const char *nodeStaticSocketType(const int type, const int subtype)
           return "NodeSocketFloatDistance";
         case PROP_WAVELENGTH:
           return "NodeSocketFloatWavelength";
+        case PROP_COLOR_TEMPERATURE:
+          return "NodeSocketFloatColorTemperature";
         case PROP_NONE:
         default:
           return "NodeSocketFloat";
@@ -2161,7 +2168,12 @@ const char *nodeStaticSocketType(const int type, const int subtype)
     case SOCK_RGBA:
       return "NodeSocketColor";
     case SOCK_STRING:
-      return "NodeSocketString";
+      switch (PropertySubType(subtype)) {
+        case PROP_FILEPATH:
+          return "NodeSocketStringFilePath";
+        default:
+          return "NodeSocketString";
+      }
     case SOCK_SHADER:
       return "NodeSocketShader";
     case SOCK_OBJECT:
@@ -2205,6 +2217,8 @@ const char *nodeStaticSocketInterfaceTypeNew(const int type, const int subtype)
           return "NodeTreeInterfaceSocketFloatDistance";
         case PROP_WAVELENGTH:
           return "NodeTreeInterfaceSocketFloatWavelength";
+        case PROP_COLOR_TEMPERATURE:
+          return "NodeTreeInterfaceSocketFloatColorTemperature";
         case PROP_NONE:
         default:
           return "NodeTreeInterfaceSocketFloat";
@@ -2248,7 +2262,12 @@ const char *nodeStaticSocketInterfaceTypeNew(const int type, const int subtype)
     case SOCK_RGBA:
       return "NodeTreeInterfaceSocketColor";
     case SOCK_STRING:
-      return "NodeTreeInterfaceSocketString";
+      switch (PropertySubType(subtype)) {
+        case PROP_FILEPATH:
+          return "NodeTreeInterfaceSocketVectorTranslation";
+        default:
+          return "NodeTreeInterfaceSocketString";
+      }
     case SOCK_SHADER:
       return "NodeTreeInterfaceSocketShader";
     case SOCK_OBJECT:

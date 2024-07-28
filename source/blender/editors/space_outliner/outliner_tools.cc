@@ -2953,6 +2953,7 @@ static int outliner_id_operation_exec(bContext *C, wmOperator *op)
         BKE_main_id_tag_all(bmain, LIB_TAG_DOIT, false);
         outliner_do_libdata_operation(C, op->reports, scene, space_outliner, id_delete_tag_fn);
         BKE_id_multi_tagged_delete(bmain);
+        WM_event_add_notifier(C, NC_OBJECT, nullptr);
         ED_undo_push(C, "Delete");
       }
       break;
@@ -3059,12 +3060,7 @@ enum eOutlinerLibOpTypes {
 };
 
 static const EnumPropertyItem outliner_lib_op_type_items[] = {
-    {OL_LIB_DELETE,
-     "DELETE",
-     ICON_X,
-     "Delete",
-     "Delete this library and all its items.\n"
-     "Warning: No undo"},
+    {OL_LIB_DELETE, "DELETE", ICON_X, "Delete", "Delete this library and all its items"},
     {OL_LIB_RELOCATE,
      "RELOCATE",
      0,
@@ -3110,6 +3106,8 @@ static int outliner_lib_operation_exec(bContext *C, wmOperator *op)
       /* invalid - unhandled */
       break;
   }
+
+  ED_node_tree_propagate_change(C, bmain, nullptr);
 
   /* wrong notifier still... */
   WM_event_add_notifier(C, NC_ID | NA_EDITED, nullptr);

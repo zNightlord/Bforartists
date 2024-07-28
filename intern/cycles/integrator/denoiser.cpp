@@ -97,7 +97,9 @@ unique_ptr<Denoiser> Denoiser::create(Device *denoiser_device,
   bool is_cpu_denoiser_device = single_denoiser_device->info.type == DEVICE_CPU;
   if (is_cpu_denoiser_device == false) {
 #ifdef WITH_OPTIX
-    if (params.type == DENOISER_OPTIX) {
+    if (params.type == DENOISER_OPTIX &&
+        OptiXDenoiser::is_device_supported(single_denoiser_device->info))
+    {
       return make_unique<OptiXDenoiser>(single_denoiser_device, params);
     }
 #endif
@@ -122,18 +124,20 @@ unique_ptr<Denoiser> Denoiser::create(Device *denoiser_device,
       is_cpu_denoiser_device ? single_denoiser_device : cpu_fallback_device, oidn_params);
 }
 
-DenoiserType Denoiser::automatic_viewport_denoiser_type(const DeviceInfo &path_trace_device_info)
+DenoiserType Denoiser::automatic_viewport_denoiser_type(const DeviceInfo &denoise_device_info)
 {
 #ifdef WITH_OPENIMAGEDENOISE
-  if (path_trace_device_info.type != DEVICE_CPU &&
-      OIDNDenoiserGPU::is_device_supported(path_trace_device_info))
+  if (denoise_device_info.type != DEVICE_CPU &&
+      OIDNDenoiserGPU::is_device_supported(denoise_device_info))
   {
     return DENOISER_OPENIMAGEDENOISE;
   }
+#else
+  (void)denoise_device_info;
 #endif
 
 #ifdef WITH_OPTIX
-  if (!Device::available_devices(DEVICE_MASK_OPTIX).empty()) {
+  if (OptiXDenoiser::is_device_supported(denoise_device_info)) {
     return DENOISER_OPTIX;
   }
 #endif

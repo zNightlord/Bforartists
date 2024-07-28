@@ -8,6 +8,7 @@
 #include "NOD_node_extra_info.hh"
 #include "NOD_rna_define.hh"
 #include "NOD_socket_items_ops.hh"
+#include "NOD_socket_search_link.hh"
 
 #include "UI_interface.hh"
 #include "UI_resources.hh"
@@ -24,7 +25,7 @@
 #include "DNA_modifier_types.h"
 
 #include "RNA_access.hh"
-#include "RNA_prototypes.h"
+#include "RNA_prototypes.hh"
 
 #include "MOD_nodes.hh"
 
@@ -83,7 +84,7 @@ static void node_init(bNodeTree * /*tree*/, bNode *node)
   data->items_num = 1;
 
   NodeGeometryBakeItem &item = data->items[0];
-  item.name = BLI_strdup("Geometry");
+  item.name = BLI_strdup(DATA_("Geometry"));
   item.identifier = data->next_identifier++;
   item.attribute_domain = int16_t(AttrDomain::Point);
   item.socket_type = SOCK_GEOMETRY;
@@ -100,7 +101,7 @@ static void node_free_storage(bNode *node)
 static void node_copy_storage(bNodeTree * /*tree*/, bNode *dst_node, const bNode *src_node)
 {
   const NodeGeometryBake &src_storage = node_storage(*src_node);
-  auto *dst_storage = MEM_new<NodeGeometryBake>(__func__, src_storage);
+  auto *dst_storage = MEM_cnew<NodeGeometryBake>(__func__, src_storage);
   dst_node->storage = dst_storage;
 
   socket_items::copy_array<BakeItemsAccessor>(*src_node, *dst_node);
@@ -590,7 +591,7 @@ static void node_layout(uiLayout *layout, bContext *C, PointerRNA *ptr)
   {
     uiLayout *row = uiLayoutRow(col, true);
     uiLayoutSetEnabled(row, !ctx.is_baked);
-    uiItemR(row, &ctx.bake_rna, "bake_mode", UI_ITEM_R_EXPAND, "Mode", ICON_NONE);
+    uiItemR(row, &ctx.bake_rna, "bake_mode", UI_ITEM_R_EXPAND, IFACE_("Mode"), ICON_NONE);
   }
   draw_bake_button(col, ctx);
 }
@@ -612,7 +613,7 @@ static void node_layout_ex(uiLayout *layout, bContext *C, PointerRNA *ptr)
     {
       uiLayout *row = uiLayoutRow(col, true);
       uiLayoutSetEnabled(row, !ctx.is_baked);
-      uiItemR(row, &ctx.bake_rna, "bake_mode", UI_ITEM_R_EXPAND, "Mode", ICON_NONE);
+      uiItemR(row, &ctx.bake_rna, "bake_mode", UI_ITEM_R_EXPAND, IFACE_("Mode"), ICON_NONE);
     }
 
     draw_bake_button(col, ctx);
@@ -629,10 +630,11 @@ static void node_layout_ex(uiLayout *layout, bContext *C, PointerRNA *ptr)
     uiLayoutSetEnabled(settings_col, !ctx.is_baked);
     {
       uiLayout *col = uiLayoutColumn(settings_col, true);
-      uiItemR(col, &ctx.bake_rna, "use_custom_path", UI_ITEM_NONE, "Custom Path", ICON_NONE);
+      uiItemR(
+          col, &ctx.bake_rna, "use_custom_path", UI_ITEM_NONE, IFACE_("Custom Path"), ICON_NONE);
       uiLayout *subcol = uiLayoutColumn(col, true);
       uiLayoutSetActive(subcol, ctx.bake->flag & NODES_MODIFIER_BAKE_CUSTOM_PATH);
-      uiItemR(subcol, &ctx.bake_rna, "directory", UI_ITEM_NONE, "Path", ICON_NONE);
+      uiItemR(subcol, &ctx.bake_rna, "directory", UI_ITEM_NONE, IFACE_("Path"), ICON_NONE);
     }
     if (!ctx.bake_still) {
       uiLayout *col = uiLayoutColumn(settings_col, true);
@@ -640,17 +642,39 @@ static void node_layout_ex(uiLayout *layout, bContext *C, PointerRNA *ptr)
               &ctx.bake_rna,
               "use_custom_simulation_frame_range",
               UI_ITEM_NONE,
-              "Custom Range",
+              IFACE_("Custom Range"),
               ICON_NONE);
       uiLayout *subcol = uiLayoutColumn(col, true);
       uiLayoutSetActive(subcol,
                         ctx.bake->flag & NODES_MODIFIER_BAKE_CUSTOM_SIMULATION_FRAME_RANGE);
-      uiItemR(subcol, &ctx.bake_rna, "frame_start", UI_ITEM_NONE, "Start", ICON_NONE);
-      uiItemR(subcol, &ctx.bake_rna, "frame_end", UI_ITEM_NONE, "End", ICON_NONE);
+      uiItemR(subcol, &ctx.bake_rna, "frame_start", UI_ITEM_NONE, IFACE_("Start"), ICON_NONE);
+      uiItemR(subcol, &ctx.bake_rna, "frame_end", UI_ITEM_NONE, IFACE_("End"), ICON_NONE);
     }
   }
 
   draw_data_blocks(C, layout, ctx.bake_rna);
+}
+
+static void node_gather_link_searches(GatherLinkSearchOpParams &params)
+{
+  const eNodeSocketDatatype type = eNodeSocketDatatype(params.other_socket().type);
+  if (type == SOCK_GEOMETRY) {
+    params.add_item(IFACE_("Geometry"), [](LinkSearchOpParams &params) {
+      bNode &node = params.add_node("GeometryNodeBake");
+      params.connect_available_socket(node, "Geometry");
+    });
+    return;
+  }
+  if (!BakeItemsAccessor::supports_socket_type(type)) {
+    return;
+  }
+
+  params.add_item(IFACE_("Value"), [type](LinkSearchOpParams &params) {
+    bNode &node = params.add_node("GeometryNodeBake");
+    socket_items::add_item_with_socket_type_and_name<BakeItemsAccessor>(
+        node, type, params.socket.name);
+    params.update_and_connect_available_socket(node, params.socket.name);
+  });
 }
 
 static void node_register()
@@ -665,6 +689,7 @@ static void node_register()
   ntype.draw_buttons_ex = node_layout_ex;
   ntype.get_extra_info = node_extra_info;
   ntype.register_operators = node_operators;
+  ntype.gather_link_search_ops = node_gather_link_searches;
   blender::bke::node_type_storage(
       &ntype, "NodeGeometryBake", node_free_storage, node_copy_storage);
   blender::bke::nodeRegisterType(&ntype);

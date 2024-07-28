@@ -216,6 +216,7 @@ static int wm_usd_export_exec(bContext *C, wmOperator *op)
   const bool export_animation = RNA_boolean_get(op->ptr, "export_animation");
   const bool export_hair = RNA_boolean_get(op->ptr, "export_hair");
   const bool export_uvmaps = RNA_boolean_get(op->ptr, "export_uvmaps");
+  const bool rename_uvmaps = RNA_boolean_get(op->ptr, "rename_uvmaps");
   const bool export_mesh_colors = RNA_boolean_get(op->ptr, "export_mesh_colors");
   const bool export_normals = RNA_boolean_get(op->ptr, "export_normals");
   const bool export_materials = RNA_boolean_get(op->ptr, "export_materials");
@@ -272,10 +273,14 @@ static int wm_usd_export_exec(bContext *C, wmOperator *op)
   RNA_string_get(op->ptr, "root_prim_path", root_prim_path);
   process_prim_path(root_prim_path);
 
+  char custom_properties_namespace[MAX_IDPROP_NAME];
+  RNA_string_get(op->ptr, "custom_properties_namespace", custom_properties_namespace);
+
   USDExportParams params = {
       export_animation,
       export_hair,
       export_uvmaps,
+      rename_uvmaps,
       export_normals,
       export_mesh_colors,
       export_materials,
@@ -313,6 +318,7 @@ static int wm_usd_export_exec(bContext *C, wmOperator *op)
   };
 
   STRNCPY(params.root_prim_path, root_prim_path);
+  STRNCPY(params.custom_properties_namespace, custom_properties_namespace);
   RNA_string_get(op->ptr, "collection", params.collection);
 
   bool ok = USD_export(C, filepath, &params, as_background_job, op->reports);
@@ -341,22 +347,26 @@ static void wm_usd_export_draw(bContext *C, wmOperator *op)
 
     sub = uiLayoutColumnWithHeading(col, true, IFACE_("Blender Data"));
     uiItemR(sub, ptr, "export_custom_properties", UI_ITEM_NONE, nullptr, ICON_NONE);
-    uiLayout *row = uiLayoutRow(sub, true);
-    uiItemR(row, ptr, "author_blender_name", UI_ITEM_NONE, nullptr, ICON_NONE);
-    uiLayoutSetActive(row, RNA_boolean_get(op->ptr, "export_custom_properties"));
+    uiLayout *props_col = uiLayoutColumn(sub, true);
+    uiItemR(props_col, ptr, "custom_properties_namespace", UI_ITEM_NONE, nullptr, ICON_NONE);
+    uiItemR(props_col, ptr, "author_blender_name", UI_ITEM_NONE, nullptr, ICON_NONE);
+    uiLayoutSetActive(props_col, RNA_boolean_get(op->ptr, "export_custom_properties"));
 #  if PXR_VERSION >= 2403
-    uiItemR(col, ptr, "allow_unicode", UI_ITEM_NONE, nullptr, ICON_NONE);
+    uiItemR(sub, ptr, "allow_unicode", UI_ITEM_NONE, nullptr, ICON_NONE);
 #  endif
 
-    col = uiLayoutColumnWithHeading(col, true, IFACE_("File References"));
-    uiItemR(col, ptr, "relative_paths", UI_ITEM_NONE, nullptr, ICON_NONE);
+    sub = uiLayoutColumnWithHeading(col, true, IFACE_("File References"));
+    uiItemR(sub, ptr, "relative_paths", UI_ITEM_NONE, nullptr, ICON_NONE);
 
+    col = uiLayoutColumn(panel, false);
     uiItemR(col, ptr, "convert_orientation", UI_ITEM_NONE, nullptr, ICON_NONE);
     if (RNA_boolean_get(ptr, "convert_orientation")) {
       uiItemR(col, ptr, "export_global_forward_selection", UI_ITEM_NONE, nullptr, ICON_NONE);
       uiItemR(col, ptr, "export_global_up_selection", UI_ITEM_NONE, nullptr, ICON_NONE);
     }
     uiItemR(col, ptr, "xform_op_mode", UI_ITEM_NONE, nullptr, ICON_NONE);
+
+    col = uiLayoutColumn(panel, false);
     uiItemR(col, ptr, "evaluation_mode", UI_ITEM_NONE, nullptr, ICON_NONE);
   }
 
@@ -376,6 +386,7 @@ static void wm_usd_export_draw(bContext *C, wmOperator *op)
   {
     uiLayout *col = uiLayoutColumn(panel, false);
     uiItemR(col, ptr, "export_uvmaps", UI_ITEM_NONE, nullptr, ICON_NONE);
+    uiItemR(col, ptr, "rename_uvmaps", UI_ITEM_NONE, nullptr, ICON_NONE);
     uiItemR(col, ptr, "export_normals", UI_ITEM_NONE, nullptr, ICON_NONE);
 
     uiItemR(col, ptr, "triangulate_meshes", UI_ITEM_NONE, nullptr, ICON_NONE);
@@ -471,19 +482,19 @@ static bool wm_usd_export_check(bContext * /*C*/, wmOperator *op)
 
 static void forward_axis_update(Main * /*main*/, Scene * /*scene*/, PointerRNA *ptr)
 {
-  int forward = RNA_enum_get(ptr, "forward_axis");
-  int up = RNA_enum_get(ptr, "up_axis");
+  int forward = RNA_enum_get(ptr, "export_global_forward_selection");
+  int up = RNA_enum_get(ptr, "export_global_up_selection");
   if ((forward % 3) == (up % 3)) {
-    RNA_enum_set(ptr, "up_axis", (up + 1) % 6);
+    RNA_enum_set(ptr, "export_global_up_selection", (up + 1) % 6);
   }
 }
 
 static void up_axis_update(Main * /*main*/, Scene * /*scene*/, PointerRNA *ptr)
 {
-  int forward = RNA_enum_get(ptr, "forward_axis");
-  int up = RNA_enum_get(ptr, "up_axis");
+  int forward = RNA_enum_get(ptr, "export_global_forward_selection");
+  int up = RNA_enum_get(ptr, "export_global_up_selection");
   if ((forward % 3) == (up % 3)) {
-    RNA_enum_set(ptr, "forward_axis", (forward + 1) % 6);
+    RNA_enum_set(ptr, "export_global_forward_selection", (forward + 1) % 6);
   }
 }
 
@@ -540,6 +551,11 @@ void WM_OT_usd_export(wmOperatorType *ot)
       ot->srna, "export_hair", false, "Hair", "Export hair particle systems as USD curves");
   RNA_def_boolean(
       ot->srna, "export_uvmaps", true, "UV Maps", "Include all mesh UV maps in the export");
+  RNA_def_boolean(ot->srna,
+                  "rename_uvmaps",
+                  true,
+                  "Rename UV Maps",
+                  "Rename active render UV map to \"st\" to match USD conventions");
   RNA_def_boolean(ot->srna,
                   "export_mesh_colors",
                   true,
@@ -666,7 +682,18 @@ void WM_OT_usd_export(wmOperatorType *ot)
                   "export_custom_properties",
                   true,
                   "Custom Properties",
-                  "Export custom properties as USD attributes in the 'userProperties' namespace");
+                  "Export custom properties as USD attributes");
+
+  RNA_def_string(ot->srna,
+                 "custom_properties_namespace",
+                 "userProperties",
+                 MAX_IDPROP_NAME,
+                 "Namespace",
+                 "If set, add the given namespace as a prefix to exported custom property names. "
+                 "This only applies to property names that do not already have a prefix "
+                 "(e.g., it would apply to name 'bar' but not 'foo:bar') and does not apply "
+                 "to blender object and data names which are always exported in the "
+                 "'userProperties:blender' namespace");
 
   RNA_def_boolean(ot->srna,
                   "author_blender_name",

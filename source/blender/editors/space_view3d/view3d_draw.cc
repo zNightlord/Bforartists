@@ -85,7 +85,7 @@ using blender::float4;
 
 #define M_GOLDEN_RATIO_CONJUGATE 0.618033988749895f
 
-#define VIEW3D_OVERLAY_LINEHEIGHT (UI_style_get()->widgetlabel.points * UI_SCALE_FAC * 1.6f)
+#define VIEW3D_OVERLAY_LINEHEIGHT (UI_style_get()->widget.points * UI_SCALE_FAC * 1.6f)
 
 /* -------------------------------------------------------------------- */
 /** \name General Functions
@@ -1496,7 +1496,7 @@ void view3d_draw_region_info(const bContext *C, ARegion *region)
     int xoffset = rect->xmin + (0.5f * U.widget_unit);
     int yoffset = rect->ymax - (0.1f * U.widget_unit);
 
-    const uiFontStyle *fstyle = UI_FSTYLE_WIDGET_LABEL;
+    const uiFontStyle *fstyle = UI_FSTYLE_WIDGET;
     UI_fontstyle_set(fstyle);
     BLF_default_size(fstyle->points);
     BLF_set_default();
@@ -1540,7 +1540,7 @@ void view3d_draw_region_info(const bContext *C, ARegion *region)
     }
 
     /* Set the size back to the default hard-coded size. Otherwise anyone drawing after this,
-     * without setting explicit size, will draw with widgetlabel size. That is probably ideal,
+     * without setting explicit size, will draw with widget size. That is probably ideal,
      * but size should be set at the calling site not just carried over from here. */
     BLF_default_size(UI_DEFAULT_TEXT_POINTS);
     BLF_disable(font_id, BLF_SHADOW);
@@ -1580,7 +1580,7 @@ RenderEngineType *ED_view3d_engine_type(const Scene *scene, int drawtype)
    */
   RenderEngineType *type = RE_engines_find(scene->r.engine);
   if (drawtype == OB_MATERIAL && (type->flag & RE_USE_EEVEE_VIEWPORT)) {
-    return RE_engines_find(RE_engine_id_BLENDER_EEVEE);
+    return RE_engines_find(RE_engine_id_BLENDER_EEVEE_NEXT);
   }
   return type;
 }
@@ -1831,6 +1831,9 @@ void ED_view3d_draw_offscreen_simple(Depsgraph *depsgraph,
     }
     if (draw_flags & V3D_OFSDRAW_XR_SHOW_CUSTOM_OVERLAYS) {
       v3d.flag2 |= V3D_XR_SHOW_CUSTOM_OVERLAYS;
+    }
+    if (draw_flags & V3D_OFSDRAW_XR_SHOW_PASSTHROUGH) {
+      v3d.flag2 |= V3D_XR_SHOW_PASSTHROUGH;
     }
     /* Disable other overlays (set all available _HIDE_ flags). */
     v3d.overlay.flag |= V3D_OVERLAY_HIDE_CURSOR | V3D_OVERLAY_HIDE_TEXT |
@@ -2477,8 +2480,7 @@ bool ED_view3d_has_depth_buffer_updated(const Depsgraph *depsgraph, const View3D
   bool is_viewport_preview_solid = v3d->shading.type == OB_SOLID;
   bool is_viewport_preview_material = v3d->shading.type == OB_MATERIAL;
   bool is_viewport_render_eevee = v3d->shading.type == OB_RENDER &&
-                                  (STREQ(engine_name, RE_engine_id_BLENDER_EEVEE) ||
-                                   STREQ(engine_name, RE_engine_id_BLENDER_EEVEE_NEXT));
+                                  (STREQ(engine_name, RE_engine_id_BLENDER_EEVEE_NEXT));
   bool is_viewport_render_workbench = v3d->shading.type == OB_RENDER &&
                                       STREQ(engine_name, RE_engine_id_BLENDER_WORKBENCH);
   bool is_viewport_render_external_with_overlay = v3d->shading.type == OB_RENDER &&
@@ -2700,6 +2702,62 @@ bool ED_view3d_calc_render_border(
 
   BLI_rcti_translate(rect, region->winrct.xmin, region->winrct.ymin);
   BLI_rcti_isect(&region->winrct, rect, rect);
+
+  return true;
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Viewport color picker
+ * \{ */
+
+bool ED_view3d_viewport_color_sample(ARegion *region, const int mval[2], float r_col[3])
+{
+  GPUViewport *viewport = WM_draw_region_get_viewport(region);
+  if (viewport == nullptr) {
+    return false;
+  }
+
+  GPUTexture *color_tx = GPU_viewport_color_texture(viewport, 0);
+  if (color_tx == nullptr) {
+    return false;
+  }
+
+  const int tex_w = GPU_texture_width(color_tx);
+  const int tex_h = GPU_texture_height(color_tx);
+
+  if (mval[0] >= min_ii(region->winx, tex_w) || mval[1] >= min_ii(region->winy, tex_h)) {
+    return false;
+  }
+
+  /* Copying pixels from textures only works when HOST_READ usage is enabled on them.
+   * However, doing so can have performance impact, which we don't want for the viewport.
+   * So, instead allocate a separate texture with HOST_READ here, copy to it, and then
+   * copy that back to the host.
+   * Since color picking is a fairly rare operation, the inefficiency here doesn't really
+   * matter, and it means the viewport doesn't need HOST_READ. */
+  GPUTexture *copy_tx = GPU_texture_create_2d(
+      "copy_tx", tex_w, tex_h, 1, GPU_RGBA16F, GPU_TEXTURE_USAGE_HOST_READ, nullptr);
+
+  GPU_texture_copy(copy_tx, color_tx);
+  GPU_memory_barrier(GPU_BARRIER_TEXTURE_UPDATE);
+
+  blender::ushort4 *data = (blender::ushort4 *)GPU_texture_read(copy_tx, GPU_DATA_HALF_FLOAT, 0);
+  blender::ushort4 pixel = data[mval[1] * tex_w + mval[0]];
+
+  MEM_freeN(data);
+  GPU_texture_free(copy_tx);
+
+  if (half_to_float(pixel.w) < 0.5f) {
+    /* Background etc. are not rendered to the viewport texture, so fall back to basic color
+     * picking for those. */
+    return false;
+  }
+
+  r_col[0] = half_to_float(pixel.x);
+  r_col[1] = half_to_float(pixel.y);
+  r_col[2] = half_to_float(pixel.z);
 
   return true;
 }

@@ -875,6 +875,12 @@ GPUMaterial *GPU_material_from_nodetree(Scene *scene,
   if (GPUPass *default_pass = pass_replacement_cb ? pass_replacement_cb(thunk, mat) : nullptr) {
     mat->pass = default_pass;
     GPU_pass_acquire(mat->pass);
+    /** WORKAROUND:
+     * The node tree code is never executed in default replaced passes,
+     * but the GPU validation will still complain if the node tree UBO is not bound.
+     * So we create a dummy UBO with (at least) the size of the default material one (192 bytes).
+     * We allocate 256 bytes to leave some room for future changes. */
+    mat->ubo = GPU_uniformbuf_create_ex(256, nullptr, "Dummy UBO");
   }
   else {
     /* Create source code and search pass cache for an already compiled version. */
@@ -1023,45 +1029,26 @@ void GPU_material_compile(GPUMaterial *mat)
   gpu_material_finalize(mat, success);
 }
 
-BatchHandle GPU_material_batch_compile(blender::Span<GPUMaterial *> mats)
+void GPU_material_async_compile(GPUMaterial *mat)
 {
-  blender::Vector<GPUShaderCreateInfo *> infos;
-  infos.reserve(mats.size());
-
-  for (GPUMaterial *mat : mats) {
-    BLI_assert(ELEM(mat->status, GPU_MAT_QUEUED, GPU_MAT_CREATED));
-    BLI_assert(mat->pass);
+  BLI_assert(ELEM(mat->status, GPU_MAT_QUEUED, GPU_MAT_CREATED));
+  BLI_assert(mat->pass);
 #ifndef NDEBUG
-    const char *name = mat->name;
+  const char *name = mat->name;
 #else
-    const char *name = __func__;
+  const char *name = __func__;
 #endif
-    mat->do_batch_compilation = false;
-    if (GPUShaderCreateInfo *info = GPU_pass_begin_compilation(mat->pass, name)) {
-      infos.append(info);
-      mat->do_batch_compilation = true;
-    }
-  }
-
-  return GPU_shader_batch_create_from_infos(infos);
+  GPU_pass_begin_async_compilation(mat->pass, name);
 }
 
-bool GPU_material_batch_is_ready(BatchHandle handle)
+bool GPU_material_async_try_finalize(GPUMaterial *mat)
 {
-  return GPU_shader_batch_is_ready(handle);
-}
-
-void GPU_material_batch_finalize(BatchHandle &handle, blender::Span<GPUMaterial *> mats)
-{
-  blender::Vector<GPUShader *> shaders = GPU_shader_batch_finalize(handle);
-  int i = 0;
-  for (GPUMaterial *mat : mats) {
-    bool success = true;
-    if (mat->do_batch_compilation) {
-      success = GPU_pass_finalize_compilation(mat->pass, shaders[i++]);
-    }
-    gpu_material_finalize(mat, success);
+  BLI_assert(ELEM(mat->status, GPU_MAT_QUEUED, GPU_MAT_CREATED));
+  if (GPU_pass_async_compilation_try_finalize(mat->pass)) {
+    gpu_material_finalize(mat, GPU_pass_shader_get(mat->pass) != nullptr);
+    return true;
   }
+  return false;
 }
 
 void GPU_material_optimize(GPUMaterial *mat)

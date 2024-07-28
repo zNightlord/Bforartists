@@ -656,7 +656,10 @@ wmDragAsset *WM_drag_create_asset_data(const blender::asset_system::AssetReprese
 
 static void wm_drag_free_asset_data(wmDragAsset **asset_data)
 {
-  MEM_SAFE_FREE(*asset_data);
+  if (*asset_data) {
+    MEM_delete(*asset_data);
+    *asset_data = nullptr;
+  }
 }
 
 wmDragAsset *WM_drag_get_asset_data(const wmDrag *drag, int idcode)
@@ -693,7 +696,7 @@ ID *WM_drag_asset_id_import(const bContext *C, wmDragAsset *asset_drag, const in
                               FILE_ACTIVE_COLLECTION;
 
   const char *name = asset_drag->asset->get_name().c_str();
-  const std::string blend_path = asset_drag->asset->get_identifier().full_library_path();
+  const std::string blend_path = asset_drag->asset->full_library_path();
   const ID_Type idtype = asset_drag->asset->get_id_type();
   const bool use_relative_path = asset_drag->asset->get_use_relative_path();
 

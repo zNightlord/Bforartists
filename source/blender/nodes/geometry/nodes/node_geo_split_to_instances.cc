@@ -330,6 +330,8 @@ static void node_geo_exec(GeoNodeExecParams params)
     dst_instances->add_reference(std::move(group_geometry));
   }
 
+  dst_geometry.name = src_geometry.name;
+
   geometry::debug_randomize_instance_order(dst_instances);
 
   params.set_output("Instances", std::move(dst_geometry));
@@ -343,8 +345,7 @@ static void node_rna(StructRNA *srna)
                     "Attribute domain for the Selection and Group ID inputs",
                     rna_enum_attribute_domain_without_corner_items,
                     NOD_inline_enum_accessors(custom1),
-                    int(AttrDomain::Point),
-                    enums::domain_without_corner_experimental_grease_pencil_version3_fn);
+                    int(AttrDomain::Point));
 }
 
 static void node_register()

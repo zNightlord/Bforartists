@@ -20,6 +20,8 @@
 
 #  ifndef _WIN32
 #    include <unistd.h>
+#  else
+#    include "BLI_winstuff.h"
 #  endif
 
 namespace blender::gpu {
@@ -102,9 +104,11 @@ class SubprocessShader {
 
     if (success_) {
       glGetProgramiv(program_, GL_PROGRAM_BINARY_LENGTH, &bin->size);
-      if (bin->size <= sizeof(ShaderBinaryHeader::data)) {
-        glGetProgramBinary(program_, bin->size, nullptr, &bin->format, bin->data);
+      if (bin->size > sizeof(ShaderBinaryHeader::data)) {
+        bin->size = 0;
+        return nullptr;
       }
+      glGetProgramBinary(program_, bin->size, nullptr, &bin->format, bin->data);
     }
 
     return bin;
@@ -124,6 +128,17 @@ static bool validate_binary(void *binary)
 }
 
 }  // namespace blender::gpu
+
+static std::string cache_dir_get()
+{
+  static char tmp_dir_buffer[1024];
+  BKE_appdir_folder_caches(tmp_dir_buffer, sizeof(tmp_dir_buffer));
+
+  std::string cache_dir = std::string(tmp_dir_buffer) + "gl-shader-cache" + SEP_STR;
+  BLI_dir_create_recursive(cache_dir.c_str());
+
+  return cache_dir;
+}
 
 void GPU_compilation_subprocess_run(const char *subprocess_name)
 {
@@ -163,9 +178,7 @@ void GPU_compilation_subprocess_run(const char *subprocess_name)
   GPUContext *gpu_context = GPU_context_create(nullptr, ghost_context);
   GPU_init();
 
-  BKE_tempdir_init(nullptr);
-  std::string cache_dir = std::string(BKE_tempdir_base()) + "BLENDER_SHADER_CACHE" + SEP_STR;
-  BLI_dir_create_recursive(cache_dir.c_str());
+  std::string cache_dir = cache_dir_get();
 
   while (true) {
     /* Process events to avoid crashes on Wayland.
@@ -221,6 +234,8 @@ void GPU_compilation_subprocess_run(const char *subprocess_name)
 
     /* TODO: This should lock the files? */
     if (BLI_exists(cache_path.c_str())) {
+      /* Prevent old cache files from being deleted if they're still being used. */
+      BLI_file_touch(cache_path.c_str());
       /* Read cached binary. */
       fstream file(cache_path, std::ios::binary | std::ios::in | std::ios::ate);
       std::streamsize size = file.tellg();
@@ -228,14 +243,16 @@ void GPU_compilation_subprocess_run(const char *subprocess_name)
         file.seekg(0, std::ios::beg);
         file.read(reinterpret_cast<char *>(shared_mem.get_data()), size);
         /* Ensure it's valid. */
-        if (validate_binary(shared_mem.get_data())) {
-          end_semaphore.increment();
-          continue;
-        }
-        else {
+        if (!validate_binary(shared_mem.get_data())) {
           std::cout << "Compilation Subprocess: Failed to load cached shader binary " << hash_str
                     << "\n";
+          /* We can't compile the shader anymore since we have written over the source code,
+           * but we delete the cache for the next time this shader is requested. */
+          file.close();
+          BLI_delete(cache_path.c_str(), false, false);
         }
+        end_semaphore.increment();
+        continue;
       }
       else {
         /* This should never happen, since shaders larger than the pool size should be discarded
@@ -251,15 +268,37 @@ void GPU_compilation_subprocess_run(const char *subprocess_name)
 
     end_semaphore.increment();
 
-    fstream file(cache_path, std::ios::binary | std::ios::out);
-    file.write(reinterpret_cast<char *>(shared_mem.get_data()),
-               binary->size + offsetof(ShaderBinaryHeader, data));
+    if (binary) {
+      fstream file(cache_path, std::ios::binary | std::ios::out);
+      file.write(reinterpret_cast<char *>(shared_mem.get_data()),
+                 binary->size + offsetof(ShaderBinaryHeader, data));
+    }
   }
 
   GPU_exit();
   GPU_context_discard(gpu_context);
   GHOST_DisposeGPUContext(ghost_system, ghost_context);
   GHOST_DisposeSystem(ghost_system);
+}
+
+void GPU_shader_cache_dir_clear_old()
+{
+  std::string cache_dir = cache_dir_get();
+
+  direntry *entries = nullptr;
+  uint32_t dir_len = BLI_filelist_dir_contents(cache_dir.c_str(), &entries);
+  for (int i : blender::IndexRange(dir_len)) {
+    direntry entry = entries[i];
+    if (S_ISDIR(entry.s.st_mode)) {
+      continue;
+    }
+    const time_t ts_now = time(nullptr);
+    const time_t delete_threshold = 60 /*seconds*/ * 60 /*minutes*/ * 24 /*hours*/ * 30 /*days*/;
+    if (entry.s.st_mtime + delete_threshold < ts_now) {
+      BLI_delete(entry.path, false, false);
+    }
+  }
+  BLI_filelist_free(entries, dir_len);
 }
 
 #endif
