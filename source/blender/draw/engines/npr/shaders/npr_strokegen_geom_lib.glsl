@@ -128,9 +128,6 @@ bool valid_vcurv_max(float vcurv_max)
 }
 
 #if defined(INCLUDE_VERTEX_CURV_MAX)
-    #if defined(_KERNEL_MULTICOMPILE__EDGE_SPLIT_EXECUTE)
-        #define ssbo_vcurv_max_ ssbo_epos_subd_ // swapped when split for interpolated contour 
-    #endif
     float ld_vcurv_max(uint vtx_id)
     {
         uint vcurv_max_enc = ssbo_vcurv_max_[vtx_id]; 

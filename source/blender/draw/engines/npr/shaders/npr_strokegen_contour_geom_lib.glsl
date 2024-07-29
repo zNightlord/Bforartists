@@ -95,26 +95,6 @@ vec3 calc_interp_contour_vert_pos(vec3 vnor[2], vec3 edge_vpos[2], vec3 cam_pos_
 	return edge_vpos[0] + contour_interpo_factor * (edge_vpos[1] - edge_vpos[0]); 
 }
 
-void calc_interp_contour_vert_curv_and_cusp(
-	vec2 vcurv_max, vec2 cusp_func, 
-	vec3 edge_vpos[2], vec3 vnor[2], vec3 cam_pos_ws
-	, out float vcurv_interp, out float vcusp_interp
-){ 
-	float contour_interpo_factor = .5f; 
-	{ // The same as interpolating position 
-		vec2 ndv = vec2(
-			dot(vnor[0], cam_pos_ws - edge_vpos[0]),  
-			dot(vnor[1], cam_pos_ws - edge_vpos[1]) 
-		); 
-		contour_interpo_factor = ndv[0] / (ndv[0] - ndv[1]); /* split pos = vpos_0 + interpo * (vpos_1 - vpos_0); */
-	}
-
-	vcurv_interp = vcurv_max[0] + contour_interpo_factor * (vcurv_max[1] - vcurv_max[0]); 
-	vcusp_interp = cusp_func[0] + contour_interpo_factor * (cusp_func[1] - cusp_func[0]); 
-}
-
-
-
 
 // ---------------------------------------------------------------------------------------------------
 // Functions for Rasterization

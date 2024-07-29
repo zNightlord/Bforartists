@@ -1443,10 +1443,7 @@ GPU_SHADER_CREATE_INFO(bnpr_meshing_edge_split_execute)
     .additional_info("bnpr_meshing_edge_split")
     .define("_KERNEL_MULTICOMPILE__EDGE_SPLIT", "1")
     .define("_KERNEL_MULTICOMPILE__EDGE_SPLIT_EXECUTE", "1")
-    .define("COMPACTION_LIB_EXCLUDE_DEFAULT_CODEGEN", "1")
-    
-    .define("INCLUDE_VERTEX_CURV_MAX", "1") /* fill cusp&curvature for split verts on interpolated contour  */
-    ; 
+    .define("COMPACTION_LIB_EXCLUDE_DEFAULT_CODEGEN", "1"); 
 /** \} */
 
 
