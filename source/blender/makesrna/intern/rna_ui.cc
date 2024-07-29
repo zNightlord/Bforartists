@@ -2439,6 +2439,7 @@ static void rna_def_asset_shelf(BlenderRNA *brna)
   RNA_def_property_update(prop, NC_SPACE | ND_REGIONS_ASSET_SHELF, nullptr);
 
   // bfa - assetshelf drop at origin, drop collection as instance
+  /* WIP disabled for now
   prop = RNA_def_property(srna, "drop_collections_at_origin", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "settings.drop_collections_at_origin", ASSETSHELF_DROP_ORIGIN);
   RNA_def_property_ui_text(
@@ -2454,6 +2455,7 @@ static void rna_def_asset_shelf(BlenderRNA *brna)
       "Drop collections as instances",
       "");
   RNA_def_property_update(prop, NC_SPACE | ND_REGIONS_ASSET_SHELF, nullptr);
+  */
 }
 
 static void rna_def_file_handler(BlenderRNA *brna)
