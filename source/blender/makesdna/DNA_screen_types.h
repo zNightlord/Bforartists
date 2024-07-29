@@ -847,10 +847,12 @@ typedef struct AssetShelfSettings {
 
   /** For filtering assets displayed in the asset view. */
   char search_string[64];
-
+  
   short preview_size;
   short display_flag; /* #AssetShelfSettings_DisplayFlag */
-  char _pad1[4];
+  bool drop_collections_at_origin;
+  bool drop_collections_as_instances;
+  char _pad1[2];
 
 #ifdef __cplusplus
   /* Zero initializes. */
