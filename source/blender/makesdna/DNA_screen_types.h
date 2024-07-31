@@ -850,9 +850,9 @@ typedef struct AssetShelfSettings {
   
   short preview_size;
   short display_flag; /* #AssetShelfSettings_DisplayFlag */
-  // bool drop_collections_at_origin;
-  // bool drop_collections_as_instances;
-  char _pad1[4];
+  char drop_collections_as_instances; /* BFA - boolean, needed for setting #use_instance from UI before executing the drop operator*/
+  char drop_collections_at_origin; /* BFA - boolean, needed for dropping collection at origin instead of cursor when #use_instance is enabled */
+  char _pad1[2];
 
 #ifdef __cplusplus
   /* Zero initializes. */
@@ -908,8 +908,6 @@ typedef struct RegionAssetShelf {
 /* #AssetShelfSettings.display_flag */
 typedef enum AssetShelfSettings_DisplayFlag {
   ASSETSHELF_SHOW_NAMES = (1 << 0),
-  // ASSETSHELF_DROP_ORIGIN = (1 << 1),
-  // ASSETSHELF_DROP_INSTANCE = (1 << 2),
 } AssetShelfSettings_DisplayFlag;
 ENUM_OPERATORS(AssetShelfSettings_DisplayFlag, ASSETSHELF_SHOW_NAMES);
 

@@ -825,6 +825,9 @@ static void asset_shelf_header_draw(const bContext *C, Header *header)
 
   uiItemSpacer(layout);
 
+  uiItemR(layout, &shelf_ptr, "drop_collections_at_origin", UI_ITEM_NONE, nullptr, ICON_CENTER);
+  uiItemR(layout, &shelf_ptr, "drop_collections_as_instances", UI_ITEM_NONE, nullptr, ICON_OUTLINER_OB_GROUP_INSTANCE);
+
   uiItemPopoverPanel(layout, C, "ASSETSHELF_PT_display", "", ICON_IMGDISPLAY);
   uiLayout *sub = uiLayoutRow(layout, false);
   /* Same as file/asset browser header. */
