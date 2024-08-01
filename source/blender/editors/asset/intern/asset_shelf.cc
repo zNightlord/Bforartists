@@ -824,10 +824,19 @@ static void asset_shelf_header_draw(const bContext *C, Header *header)
   }
 
   uiItemSpacer(layout);
-
-  uiItemR(layout, &shelf_ptr, "drop_collections_at_origin", UI_ITEM_NONE, "", ICON_CENTER);
-  uiItemR(layout, &shelf_ptr, "drop_collections_as_instances", UI_ITEM_NONE, "", ICON_OUTLINER_OB_GROUP_INSTANCE);
-
+  Main *bmain = CTX_data_main(C);
+  LISTBASE_FOREACH (bScreen *, screen, &bmain.screens) {
+    LISTBASE_FOREACH (ScrArea *, area, &screen->areabase) {
+      LISTBASE_FOREACH (SpaceLink *, sl, &area->spacedata) {
+        if (sl->spacetype != SPACE_VIEW3D) {
+          continue;
+        }
+        uiItemR(layout, &shelf_ptr, "drop_collections_at_origin", UI_ITEM_NONE, "", ICON_CENTER);
+        uiItemR(layout, &shelf_ptr, "drop_collections_as_instances", UI_ITEM_NONE, "", ICON_OUTLINER_OB_GROUP_INSTANCE);
+      }
+    }
+  }
+  
   uiItemPopoverPanel(layout, C, "ASSETSHELF_PT_display", "", ICON_IMGDISPLAY);
   uiLayout *sub = uiLayoutRow(layout, false);
   /* Same as file/asset browser header. */
