@@ -77,9 +77,10 @@ class AssetViewItem : public ui::PreviewGridItem {
 
 class AssetDragController : public ui::AbstractViewItemDragController {
   asset_system::AssetRepresentation &asset_;
+  const AssetShelfSettings &shelf_settings;
 
  public:
-  AssetDragController(ui::AbstractGridView &view, asset_system::AssetRepresentation &asset);
+  AssetDragController(ui::AbstractGridView &view, asset_system::AssetRepresentation &asset, const AssetShelfSettings &shelf_settings);
 
   eWM_DragDataType get_drag_type() const override;
   void *create_drag_data() const override;
@@ -297,11 +298,14 @@ bool AssetViewItem::should_be_filtered_visible(const StringRefNull filter_string
 
 std::unique_ptr<ui::AbstractViewItemDragController> AssetViewItem::create_drag_controller() const
 {
+  const AssetView &asset_view = dynamic_cast<const AssetView &>(this->get_view());
+  const AssetShelfSettings &shelf_settings = *asset_view.shelf_.settings;
+
   if (!allow_asset_drag_) {
     return nullptr;
   }
   asset_system::AssetRepresentation *asset = handle_get_representation(&asset_);
-  return std::make_unique<AssetDragController>(this->get_view(), *asset);
+  return std::make_unique<AssetDragController>(asset_view, *asset, shelf_settings);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -371,8 +375,8 @@ void *AssetDragController::create_drag_data() const
   const eAssetImportMethod import_method = asset_.get_import_method().value_or(
       ASSET_IMPORT_APPEND_REUSE);
   wmDragAsset *asset_drag = WM_drag_create_asset_data(&asset_, import_method);
-  // asset_drag->drop_collections_at_origin = shelf_ptr->drop_collections_at_origin;
-  asset_drag->drop_collections_as_instances = true; // shelf_ptr->drop_collections_as_instances;
+  asset_drag->drop_collections_at_origin = shelf_settings.drop_collections_at_origin;
+  asset_drag->drop_collections_as_instances = shelf_settings.drop_collections_as_instances;
   return asset_drag;
 }
 
