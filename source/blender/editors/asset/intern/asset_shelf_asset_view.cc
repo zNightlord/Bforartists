@@ -299,7 +299,7 @@ bool AssetViewItem::should_be_filtered_visible(const StringRefNull filter_string
 std::unique_ptr<ui::AbstractViewItemDragController> AssetViewItem::create_drag_controller() const
 {
   const AssetView &asset_view = dynamic_cast<const AssetView &>(this->get_view());
-  const AssetShelfSettings &shelf_settings = *asset_view.shelf_.settings;
+  const AssetShelfSettings &shelf_settings = asset_view.shelf_.settings;
 
   if (!allow_asset_drag_) {
     return nullptr;
@@ -354,8 +354,8 @@ void build_asset_view(uiLayout &layout,
 /* Dragging. */
 
 AssetDragController::AssetDragController(ui::AbstractGridView &view,
-                                         asset_system::AssetRepresentation &asset)
-    : ui::AbstractViewItemDragController(view), asset_(asset)
+                                         asset_system::AssetRepresentation &asset, AssetShelfSettings &shelf_settings)
+    : ui::AbstractViewItemDragController(view), asset_(asset), shelf_settings(shelf_settings)
 {
 }
 
@@ -370,7 +370,6 @@ void *AssetDragController::create_drag_data() const
   if (local_id) {
     return static_cast<void *>(local_id);
   }
-  PointerRNA shelf_ptr = CTX_data_pointer_get_type(C, "asset_shelf", &RNA_AssetShelf);
 
   const eAssetImportMethod import_method = asset_.get_import_method().value_or(
       ASSET_IMPORT_APPEND_REUSE);
