@@ -80,7 +80,7 @@ class AssetDragController : public ui::AbstractViewItemDragController {
   const AssetShelfSettings &shelf_settings_;
 
  public:
-  AssetDragController(ui::AbstractGridView &view, asset_system::AssetRepresentation &asset, AssetShelfSettings &shelf_settings);
+  AssetDragController(ui::AbstractGridView &view, asset_system::AssetRepresentation &asset, const AssetShelfSettings &shelf_settings);
 
   eWM_DragDataType get_drag_type() const override;
   void *create_drag_data() const override;
@@ -305,7 +305,7 @@ std::unique_ptr<ui::AbstractViewItemDragController> AssetViewItem::create_drag_c
     return nullptr;
   }
   asset_system::AssetRepresentation *asset = handle_get_representation(&asset_);
-  return std::make_unique<AssetDragController>(asset_view, *asset, shelf_settings);
+  return std::make_unique<AssetDragController>(this->get_view(), *asset, shelf_settings);
 }
 
 /* ---------------------------------------------------------------------- */
