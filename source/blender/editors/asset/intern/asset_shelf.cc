@@ -825,7 +825,7 @@ static void asset_shelf_header_draw(const bContext *C, Header *header)
 
   uiItemSpacer(layout);
   Main *bmain = CTX_data_main(C);
-  LISTBASE_FOREACH (bScreen *, screen, &bmain.screens) {
+  LISTBASE_FOREACH (bScreen *, screen, &bmain->screens) {
     LISTBASE_FOREACH (ScrArea *, area, &screen->areabase) {
       LISTBASE_FOREACH (SpaceLink *, sl, &area->spacedata) {
         if (sl->spacetype != SPACE_VIEW3D) {
