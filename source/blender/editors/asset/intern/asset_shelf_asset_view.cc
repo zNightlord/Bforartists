@@ -77,10 +77,10 @@ class AssetViewItem : public ui::PreviewGridItem {
 
 class AssetDragController : public ui::AbstractViewItemDragController {
   asset_system::AssetRepresentation &asset_;
-  const AssetShelfSettings &shelf_settings_;
+  AssetShelfSettings &shelf_settings_;
 
  public:
-  AssetDragController(ui::AbstractGridView &view, asset_system::AssetRepresentation &asset, const AssetShelfSettings &shelf_settings);
+  AssetDragController(ui::AbstractGridView &view, asset_system::AssetRepresentation &asset, AssetShelfSettings &shelf_settings);
 
   eWM_DragDataType get_drag_type() const override;
   void *create_drag_data() const override;
