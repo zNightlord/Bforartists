@@ -1695,6 +1695,7 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_analysis)
 #define NUM_SSBO_BASE 10
 
     .uniform_buf(0, "ViewMatrices", "ubo_view_matrices_")
+    .uniform_buf(1, "ViewMatrices", "ubo_view_matrices_last_frame_")
 
     .push_constant(Type::INT, "pcs_edge_count_")
     .push_constant(Type::INT, "pcs_vert_count_")
@@ -1703,6 +1704,7 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_analysis)
     .push_constant(Type::FLOAT, "pcs_dbg_geom_scale_")
     .push_constant(Type::INT, "pcs_only_selected_verts_")
     .push_constant(Type::INT, "pcs_order_1_eval_only_contour_verts_")
+    .push_constant(Type::INT, "pcs_dbg_ndv_grad_mode_")
 
     .local_group_size(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT)
     .compute_source("npr_strokegen_geom_analysis_comp.glsl"); 

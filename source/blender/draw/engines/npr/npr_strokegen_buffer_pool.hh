@@ -32,6 +32,7 @@ class GPUBufferPoolModule {
   float rot_angle_ubo_view_matrices_cache_;
   UBO_ViewMatrices ubo_view_matrices_cache_; // for visualizing contour curves in different view
   UBO_ViewMatrices ubo_view_matrices_cache_2_; // for visualizing contour curves in different view
+  UBO_ViewMatrices ubo_view_matrices_last_frame_; // for temporal optimizer
 
 
   SSBO_StrokeGenMeshPoolCounters ssbo_bnpr_mesh_pool_counters_;
@@ -604,7 +605,7 @@ class GPUBufferPoolModule {
     bool update_view_matrices_for_dbg_view_rotation = false
   );
   void sync_object(Object *ob);
-  void end_sync();
+  void on_end_sync();
 
 
   /* -------------------------------------------------------------------- */

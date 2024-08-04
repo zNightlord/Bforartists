@@ -184,9 +184,13 @@ namespace blender::npr::strokegen
 
   }
 
-  void GPUBufferPoolModule::end_sync()
+  void GPUBufferPoolModule::on_end_sync()
   {
-    // arr_buf_test_.resize(4096); // maybe needed for a few special buffers
+    ubo_view_matrices_last_frame_.viewmat = ubo_view_matrices_cache_.viewmat;
+    ubo_view_matrices_last_frame_.viewinv = ubo_view_matrices_cache_.viewinv;
+    ubo_view_matrices_last_frame_.winmat = ubo_view_matrices_cache_.winmat;
+    ubo_view_matrices_last_frame_.wininv = ubo_view_matrices_cache_.wininv;
+    ubo_view_matrices_last_frame_.push_update();
   }
 
 

@@ -127,6 +127,29 @@ void main()
 #if defined(_KERNEL_MULTICOMPILE__CALC_TEMPORAL_CONTOUR_RECORDS)
 
 #if defined(_KERNEL_MULTICOMPILE__CALC_TEMPORAL_CONTOUR_RECORDS__MAIN)
+struct TraceDebugContext
+{
+    bool record_dbg_lines; 
+
+    uvec2 dbg_line_id_beg; // beg dbg line addr on 2 paths 
+    bool dbg_show_both_paths_if_matched; 
+    bool dbg_show_full_path; 
+    bool dbg_show_both_paths; 
+
+    bool dbg_use_opti_0; 
+}; 
+TraceDebugContext init_trace_dbg_context()
+{
+    TraceDebugContext ctx;
+    ctx.record_dbg_lines = false;  
+    ctx.dbg_line_id_beg = uvec2(0u); 
+    ctx.dbg_show_both_paths_if_matched = (pc_dbg_matching_line_mode_ & 1u) != 0u;
+    ctx.dbg_show_full_path             = (pc_dbg_matching_line_mode_ & 2u) != 0u;
+    ctx.dbg_show_both_paths            = (pc_dbg_matching_line_mode_ & 4u) != 0u;
+    ctx.dbg_use_opti_0                 = (pc_dbg_matching_line_mode_ & 8u) != 0u;
+    return ctx; 
+}
+
 vec3 calc_trace_start_pos(uint beg_wedge_id, vec3 cam_pos_ws)
 {
     uint v1 = ssbo_edge_to_vert_[beg_wedge_id*4u + 1u]; 
@@ -205,6 +228,12 @@ struct TracedTriangle
     uvec2 ibwedges_Q1Q2; 
     vec3 D[3]; 
 }; 
+vec3 load_trace_gradient_at_vertex(uint vid)
+{
+    uvec3 Dk_enc; 
+    Load3(ssbo_vgrad_contour_, vid, Dk_enc);   
+    return normalize(uintBitsToFloat(Dk_enc)); 
+}
 void load_curr_walked_triangle_geometry(
     AdjWedgeInfo wlk_awi, out TracedTriangle tri
 )
@@ -226,12 +255,42 @@ void load_curr_walked_triangle_geometry(
     ); 
 
     for (uint k = 0; k < 3; ++k) {
-        uvec3 Dk_enc; 
-        Load3(ssbo_vgrad_contour_, tri.q[k], Dk_enc);   
-        tri.D[k] = normalize(uintBitsToFloat(Dk_enc)); 
+        tri.D[k] = load_trace_gradient_at_vertex(tri.q[k]); 
     }
 }
+void move_triangle_to_adjacent_wedge(
+    bool walk_to_Q1, bool walk_to_Q2, bool walk_to_adj_iface,  
+    AdjWedgeInfo wlk_awi_old, AdjWedgeInfo wlk_awi_new, TracedTriangle tri_old, 
+    out TracedTriangle tri_new
+){
+    // load new vtx q0: opposite vertex to the new wedge(wlk_awi_new)
+    uint ivert_oppo = mark__center_wedge_to_oppo_vert__at_face(wlk_awi_new.iface_adj); 
+    tri_new.q[0]    = ssbo_edge_to_vert_[wlk_awi_new.wedge_id*4u + ivert_oppo]; 
+    tri_new.qpos[0] = ld_vpos(tri_new.q[0]);
+    tri_new.D[0]    = load_trace_gradient_at_vertex(tri_new.q[0]); 
+    
+    // reuse data on old triangle to init q1, q2
+    uvec2 new_q1q2_to_old; 
+    if (walk_to_Q1 || walk_to_Q2) {
+        new_q1q2_to_old = walk_to_Q1 ? uvec2(1, 0) : uvec2(0, 2); // yes this works
+    }else if (walk_to_adj_iface) {
+        new_q1q2_to_old = uvec2(2 , 1); // reverse q1q2 order
+    }
+    for (uint iq = 1; iq <= 2; ++iq)
+    { 
+        uint iq_old = new_q1q2_to_old[iq - 1u]; 
+        tri_new.q[iq]    = tri_old.q[iq_old]; 
+        tri_new.qpos[iq] = tri_old.qpos[iq_old]; 
+        tri_new.D[iq]    = tri_old.D[iq_old]; 
+    }
 
+    tri_new.Q1 = tri_new.qpos[1] - tri_new.qpos[0]; 
+    tri_new.Q2 = tri_new.qpos[2] - tri_new.qpos[0]; 
+    tri_new.ibwedges_Q1Q2 = uvec2( // iwedge ids of Q1, Q2 
+        mark__cwedge_rotate_back(wlk_awi_new.iface_adj), 
+        mark__cwedge_rotate_next(wlk_awi_new.iface_adj) 
+    ); 
+}
 
 
 
@@ -246,14 +305,41 @@ struct PathTraceContext
     AdjWedgeInfo wlk_awi; 
     vec3 p; 
 }; 
-void calc_tracing_direction(inout PathTraceContext trace_ctx, TracedTriangle tri, uint path, uint trace_iter)
-{
-    // when we start from a interpolated contour point, 
-    // since the point is a local minima of the scalar field ||dot(N,V)||
-    // gradients around it - tri.D[1] and tri.D[2], or even tri.D[0] may bot be reliable  
+void calc_tracing_direction(
+    inout PathTraceContext trace_ctx, TracedTriangle tri, 
+    uint path, uint trace_iter, vec3 cam_pos_ws, TraceDebugContext dbg_ctx
+){
+    
     vec3 D; {
-        if (trace_iter == 0u) D = trace_ctx.auto_init_D ? tri.D[0] : trace_ctx.D_init; 
-        else{
+        if (trace_iter == 0u) 
+        {
+            if (!trace_ctx.auto_init_D) 
+                D = trace_ctx.D_init; 
+            else {
+                // when we start from a interpolated contour point, 
+                // since the point is a local minima of the scalar field ||dot(N,V)||
+                // gradients around it - tri.D[1] and tri.D[2], or even tri.D[0] may bot be reliable              
+                // So we choose the initial gradient from the most "un-contour" vtx on the triangle.
+                vec3 vnor_tri[3]; 
+                vec3 ndv_tri; 
+                for (uint i = 0; i < 3; ++i) {
+                    vnor_tri[i] = ld_vnor(tri.q[i]); 
+                    ndv_tri[i] = dot(vnor_tri[i], normalize(cam_pos_ws - tri.qpos[i])); 
+                }
+                
+                uint ivert_max = 0; 
+                float abs_ndv_max = .0f; 
+                for (uint i = 0; i < 3; ++i) {
+                    if (abs_ndv_max < abs(ndv_tri[i])) {
+                        abs_ndv_max = abs(ndv_tri[i]); 
+                        ivert_max = i; 
+                    }
+                }
+                D = tri.D[ivert_max]; 
+            }
+        }
+        else
+        {
             float w_sum = .0f; 
             vec3 dir_sum = vec3(.0f); 
             for (uint k = 0; k < 3; ++k)
@@ -266,37 +352,14 @@ void calc_tracing_direction(inout PathTraceContext trace_ctx, TracedTriangle tri
         }
     }
 
-    if (trace_ctx.auto_init_D && path == 0u && trace_iter == 0u) trace_ctx.D_init = D; // set initial direction
-    if (trace_ctx.auto_init_D && path == 1u && trace_iter == 0u) D = -trace_ctx.D_init; // reverse direction for the second path
+    if (trace_ctx.auto_init_D && path == 0u && trace_iter == 0u) trace_ctx.D_init = D; // cache initial direction
+    if (trace_ctx.auto_init_D && path == 1u && trace_iter == 0u && dot(D, trace_ctx.D_init) > .0f) D = -D; // reverse direction for the second path
 
     trace_ctx.D = D;
 }
 
 
 #define TRACE_STEPS ((pc_dbg_history_trace_steps_)) // 32u
-struct TraceDebugContext
-{
-    bool record_dbg_lines; 
-
-    uvec2 dbg_line_id_beg; // beg dbg line addr on 2 paths 
-    bool dbg_show_both_paths_if_matched; 
-    bool dbg_show_full_path; 
-    bool dbg_show_both_paths; 
-
-    bool dbg_use_runge_kutta; 
-}; 
-TraceDebugContext init_trace_dbg_context()
-{
-    TraceDebugContext ctx;
-    ctx.record_dbg_lines = false;  
-    ctx.dbg_line_id_beg = uvec2(0u); 
-    ctx.dbg_show_both_paths_if_matched = (pc_dbg_matching_line_mode_ & 1u) != 0u;
-    ctx.dbg_show_full_path             = (pc_dbg_matching_line_mode_ & 2u) != 0u;
-    ctx.dbg_show_both_paths            = (pc_dbg_matching_line_mode_ & 4u) != 0u;
-    ctx.dbg_use_runge_kutta            = (pc_dbg_matching_line_mode_ & 8u) != 0u;
-    return ctx; 
-}
-
 void trace_path(
     uint path, uint num_trace_steps, 
     vec3 cam_pos_ws, uint num_history_recs, 
@@ -306,6 +369,7 @@ void trace_path(
 ){
     uint curr_dbg_line_id = dbg_ctx.dbg_line_id_beg[path];  
 
+    TracedTriangle tri; 
     for (uint trace_iter = 0u; trace_iter < num_trace_steps; ++trace_iter) 
     { 
         match_to_history_record_on_edge( 
@@ -323,10 +387,9 @@ void trace_path(
         // D1  |   D           \_    |
         //   \ |    \            \__ |    
         //    \q1 -- p ------------ q2
-        TracedTriangle tri; 
-        load_curr_walked_triangle_geometry(trace_ctx.wlk_awi, /*out*/tri); 
+        if (trace_iter == 0u) load_curr_walked_triangle_geometry(trace_ctx.wlk_awi, /*out*/tri); 
         
-        calc_tracing_direction(/*inout*/trace_ctx, tri, path, trace_iter); 
+        calc_tracing_direction(/*inout*/trace_ctx, tri, path, trace_iter, cam_pos_ws, dbg_ctx); 
 
         // Project p, D onto the plane of the triangle q012
         vec3 D_proj; vec2 uvD;
@@ -365,7 +428,7 @@ void trace_path(
         //     \       \ iface1                   
         //      D       \ /                       
         //               *                        
-        bool walk_to_adj_face = 
+        bool walk_to_adj_iface = 
             (t1 < .0f && (1.0f <= s2 || s2 <= .0f)) 
             || (t2 < .0f && (1.0f <= s1 || s1 <= .0f)); 
         #undef u_D
@@ -373,7 +436,7 @@ void trace_path(
         #undef u_p
         #undef v_p
 
-        // Determine the next iface & edge
+        // Determine the next iface & edge 
         AdjWedgeInfo wlk_next_wedge = trace_ctx.wlk_awi; 
         if (walk_to_Q1 || walk_to_Q2)
         { // walk to new edge - either Q1 or Q2
@@ -381,9 +444,21 @@ void trace_path(
             wlk_next_wedge = decode_adj_wedge_info(
                 ssbo_edge_to_edges_[trace_ctx.wlk_awi.wedge_id*4u + wlk_next_iwedge]
             ); 
-        }else if (walk_to_adj_face)
+        }else if (walk_to_adj_iface)
         { // keep position in current edge, but flip to the other iface
             wlk_next_wedge.iface_adj = 1u - trace_ctx.wlk_awi.iface_adj;
+        }
+
+        // Determine the next triangle 
+        TracedTriangle tri_next; 
+        if (walk_to_Q1 || walk_to_Q2 || walk_to_adj_iface) {
+            move_triangle_to_adjacent_wedge(
+                walk_to_Q1, walk_to_Q2, walk_to_adj_iface, 
+                trace_ctx.wlk_awi, wlk_next_wedge, tri, 
+                /*out*/ tri_next
+            );
+        }else {
+            tri_next = tri; 
         }
 
         // Output debug lines  
@@ -391,7 +466,7 @@ void trace_path(
         {
             vec4 vpos_ws_10 = vec4(trace_ctx.p, 1.0f);
             vec4 vpos_ws_11 = vec4(p_next, 1.0f);
-            bool dead_end = !(walk_to_Q1 || walk_to_Q2 || walk_to_adj_face); 
+            bool dead_end = !(walk_to_Q1 || walk_to_Q2 || walk_to_adj_iface); 
             vec3 dvd_col = vec3(float(trace_iter) / float(TRACE_STEPS).xx, 1.0); 
             DebugVertData dvd_10 = DebugVertData(vpos_ws_10.xyz, dvd_col, uvec4(0u)); 
             DebugVertData dvd_11 = DebugVertData(vpos_ws_11.xyz, dvd_col, uvec4(0u));
@@ -401,9 +476,10 @@ void trace_path(
         }
 
         // Update contexts for next iteration
-        if (walk_to_Q1 || walk_to_Q2 || walk_to_adj_face) { 
+        if (walk_to_Q1 || walk_to_Q2 || walk_to_adj_iface) { 
             trace_ctx.wlk_awi = wlk_next_wedge;
             trace_ctx.D_prev  = trace_ctx.D;
+            tri = tri_next; 
         } 
         if (walk_to_Q1 || walk_to_Q2) {
             trace_ctx.p       = p_next; 
@@ -496,25 +572,25 @@ void main()
     }
 
 
-    // Walking on the triangulation
+    // Match to history records 
+    // Trace along the gradient field by walking on the triangular mesh
     // ----------------------------------------------------------------------------------------------
+    PathMatchingResult path_matching_info[2]; 
+    path_matching_info[0] = path_matching_info[1] = init_path_matching_result(); 
+    
     mat4 view_to_world = ubo_view_matrices_.viewinv; // transform matrices, see "common_view_lib.glsl"
     vec3 cam_pos_ws = view_to_world[3].xyz; // see "#define cameraPos ViewMatrixInverse[3].xyz" 
     
-
     uint dbg_line_id = compact_general_dbg_lines(valid_thread, groupIdx, 2u * TRACE_STEPS);
     dbg_line_id += get_debug_line_offset(DBG_LINE_TYPE__GENERAL); 
     TraceDebugContext dbg_ctx = init_trace_dbg_context(); 
 
-    PathMatchingResult path_matching_info[2]; 
-    path_matching_info[0] = path_matching_info[1] = init_path_matching_result(); 
-    
     if (valid_thread)
     {
         vec3 p_beg = calc_trace_start_pos(rec_wedge_id, cam_pos_ws); 
         uint beg_wedge_id = rec_wedge_id; 
         PathTraceContext trace_ctx;
-        
+
         for (uint path = 0; path < 2; ++path)
         {
             uint beg_iface = path; // TODO: classify 2 probing paths(fwd/bck) from contour curve orientation
@@ -528,7 +604,8 @@ void main()
                 dbg_ctx.record_dbg_lines = true; 
                 
                 trace_path(
-                    path, TRACE_STEPS, cam_pos_ws, num_history_recs, dbg_ctx,
+                    path, TRACE_STEPS, 
+                    cam_pos_ws, num_history_recs, dbg_ctx,
                     /*inout*/trace_ctx,  
                     /*record_path_matching_info*/true, 
                     /*inout*/path_matching_info[path]
@@ -557,21 +634,24 @@ void main()
                         path_matching_info[path == 0u ? 1u : 0u].num_steps_til_match
                     ); 
             
-            uint update_line_id = dbg_ctx.dbg_line_id_beg[path]; 
-            for (uint trace_iter = 0u; trace_iter < TRACE_STEPS; ++trace_iter)
+            if (dbg_ctx.record_dbg_lines)
             {
-                bool rmv_curr_line = rmv_curr_path; 
-                if (rmv_curr_line) {
-                    DebugVertData dvd_rmv = DebugVertData(vec3(.0f), vec3(.0f), uvec4(0u)); 
-                    store_debug_line_data(update_line_id, dvd_rmv, dvd_rmv); 
-                }else{
-                    // update the color of the line
-                    uint seg_key = path_matching_info[path].matched_trcd.seg_key; 
-                    vec3 dvd_col = rand_col_rgb(seg_key / 8, seg_key / 8); 
-                    store_debug_line_color(update_line_id, dvd_col);
+                uint update_dbg_line_id = dbg_ctx.dbg_line_id_beg[path]; 
+                for (uint trace_iter = 0u; trace_iter < TRACE_STEPS; ++trace_iter)
+                {
+                    bool rmv_curr_line = rmv_curr_path; 
+                    if (rmv_curr_line) {
+                        DebugVertData dvd_rmv = DebugVertData(vec3(.0f), vec3(.0f), uvec4(0u)); 
+                        store_debug_line_data(update_dbg_line_id, dvd_rmv, dvd_rmv); 
+                    }else{
+                        // update the color of the line
+                        uint seg_key = path_matching_info[path].matched_trcd.seg_key; 
+                        vec3 dvd_col = rand_col_rgb(seg_key / 8, seg_key / 8); 
+                        store_debug_line_color(update_dbg_line_id, dvd_col);
+                    }
+                    
+                    update_dbg_line_id++; 
                 }
-                
-                update_line_id++; 
             }
         }
     }

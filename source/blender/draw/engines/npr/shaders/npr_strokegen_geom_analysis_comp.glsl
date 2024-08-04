@@ -1038,6 +1038,7 @@ bool calc_vert_attr_order_1(
     #if defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1_GRAD_VDOTN)
     {
         vec3 cam_pos_ws = ubo_view_matrices_.viewinv[3].xyz; /* see "#define cameraPos ViewMatrixInverse[3].xyz" */
+        if (0 < pcs_dbg_ndv_grad_mode_) cam_pos_ws = ubo_view_matrices_last_frame_.viewinv[3].xyz; 
         vec3 vdir_c = normalize(ctx.vpos_c - cam_pos_ws);
         float abs_ndv_c = abs(dot(vdir_c, ctx.vnor_c)); 
 

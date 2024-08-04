@@ -104,6 +104,7 @@ namespace blender::npr::strokegen
   {
     /* Post processing after all object. (Finish recording the commands) */
     strokegen_passes.on_end_sync();
+    strokegen_buffers.on_end_sync(); 
 
     depsgraph_last_update_ = DEG_get_update_count(depsgraph);
   }

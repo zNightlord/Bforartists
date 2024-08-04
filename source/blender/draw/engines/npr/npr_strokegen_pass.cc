@@ -184,7 +184,8 @@ void StrokeGenPassModule::on_begin_sync(int frame_counter)
     // npr_test_val_23 is used for camera rotation
 
     meshing_params.dbg_matching_line_mode = scene_eval->npr.npr_test_val_24;
-    meshing_params.dbg_history_trace_steps = (int)(scene_eval->npr.npr_test_val_25 + 1e-10f); 
+    meshing_params.dbg_history_trace_steps = (int)(scene_eval->npr.npr_test_val_25 + 1e-10f);
+    meshing_params.dbg_ndv_grad_mode = (int)(scene_eval->npr.npr_test_val_26 + 1e-10f);
   }
 
 
@@ -695,7 +696,9 @@ void StrokeGenPassModule::on_end_sync()
         rsc_handle, num_verts, num_edges, surf_analysis_ctx_contour, surf_dbg_ctx_contour_insertion);
     }
 
-    { // Init temporal records after per-contour gradient being evaluated from surf_analysis_ctx_contour
+    { // Init temporal records
+      // trace new records to last frame records via a gradient field -
+      // - evaluated from surf_analysis_ctx_contour
       append_subpass_init_temporal_records(num_edges, surf_analysis_ctx_contour);
     }
 
@@ -1773,7 +1776,8 @@ void StrokeGenPassModule::on_end_sync()
       sub.bind_ssbo(9, buffers_.ssbo_dbg_lines_); 
       ssbo_offset_base = 10;
 
-      sub.bind_ubo(0, buffers_.ubo_view_matrices_cache_); 
+      sub.bind_ubo(0, buffers_.ubo_view_matrices_cache_);
+      sub.bind_ubo(1, buffers_./*ubo_view_matrices_last_frame_*/ubo_view_matrices_cache_2_);
 
       sub.push_constant("pcs_vert_count_", num_verts);
       sub.push_constant("pcs_edge_count_", num_edges);
@@ -1782,7 +1786,9 @@ void StrokeGenPassModule::on_end_sync()
       sub.push_constant("pcs_output_dbg_geom_", dbg_lines);
       sub.push_constant("pcs_dbg_geom_scale_", dbg_options.dbg_line_length);
       sub.push_constant("pcs_only_selected_verts_", only_selected_verts ? 1 : 0);
-      sub.push_constant("pcs_order_1_eval_only_contour_verts_", order_1_eval_only_contour_verts ? 1 : 0); 
+      sub.push_constant("pcs_order_1_eval_only_contour_verts_", order_1_eval_only_contour_verts ? 1 : 0);
+
+      sub.push_constant("pcs_dbg_ndv_grad_mode_", meshing_params.dbg_ndv_grad_mode);
     };
 
     // Calculate Feature Edges
