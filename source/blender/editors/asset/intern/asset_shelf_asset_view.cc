@@ -305,7 +305,7 @@ std::unique_ptr<ui::AbstractViewItemDragController> AssetViewItem::create_drag_c
     return nullptr;
   }
   asset_system::AssetRepresentation *asset = handle_get_representation(&asset_);
-  return std::make_unique<AssetDragController>(this->get_view(), *asset, shelf_settings);
+  return std::make_unique<AssetDragController>(this->get_view(), *asset, &shelf_settings);
 }
 
 /* ---------------------------------------------------------------------- */
