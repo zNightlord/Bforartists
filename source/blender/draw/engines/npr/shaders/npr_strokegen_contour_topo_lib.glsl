@@ -650,34 +650,114 @@ TemporalRecordContourData load_ssbo_contour_temporal_records_old__contour_data(u
 
 // Temporal Record - Tracing Result Cache | offset stride 6
 #if defined(USE_CONTOUR_TEMPORAL_RECORD_BUFFER_NEW)
+// 6x32bits per record: [cache_header][res#0][res#1][res#2][res#3][dbg_info]
+#define MAX_NUM_CACHED_TRACE_RESULTS 4u
+uint get_addr_temporal_tracing_results_header(uint rec_id, uint num_recs)
+{
+	uint subbuff_offset = num_recs * 6u;
+	uint rec_offset 	= rec_id * 6u; 
+	uint header_addr 	= subbuff_offset + rec_offset; 
+	return header_addr; 
+}
+uint get_addr_temporal_tracing_result(uint rec_id, uint slot, uint num_recs)
+{
+	uint addr_header = get_addr_temporal_tracing_results_header(rec_id, num_recs); 
+	return addr_header + 1u + slot;  
+}
+uint get_addr_temporal_tracing_result_dbg_info(uint rec_id, uint num_recs)
+{
+	uint addr_header = get_addr_temporal_tracing_results_header(rec_id, num_recs); 
+	return addr_header + 1u + MAX_NUM_CACHED_TRACE_RESULTS; 
+}
+
+struct TemporalTracingResultsHeader
+{
+	uint num_caches; 
+}; 
+TemporalTracingResultsHeader init_temporal_tracing_results_header()
+{
+	TemporalTracingResultsHeader ttrh_empty; 
+	ttrh_empty.num_caches = 0u;
+	return ttrh_empty; 
+}
+uint encode_temporal_tracing_results_header(TemporalTracingResultsHeader ttrh)
+{
+	uint enc = ttrh.num_caches; 
+
+	return enc; 
+}
+TemporalTracingResultsHeader decode_temporal_tracing_results_header(uint enc)
+{
+	TemporalTracingResultsHeader ttrh; 
+	ttrh.num_caches = enc;
+
+	return ttrh; 
+}
+TemporalTracingResultsHeader load_ssbo_contour_temporal_records_new__tracing_results_header(
+	uint rec_id, uint num_recs
+){
+	uint addr_header = get_addr_temporal_tracing_results_header(rec_id, num_recs); 
+	return decode_temporal_tracing_results_header(ssbo_contour_temporal_records_new_[addr_header]); 
+}
+void store_ssbo_contour_temporal_records_new__tracing_results_header(
+	uint rec_id, TemporalTracingResultsHeader ttrh, uint num_recs
+){
+	ssbo_contour_temporal_records_new_[get_addr_temporal_tracing_results_header(rec_id, num_recs)] = 
+		encode_temporal_tracing_results_header(ttrh); 
+}
+
 struct TemporalTracingResult
 {
 #define TEMPORAL_TRACING_RESULT__NULL 0xffffffffu 
 	uint num_trace_steps; 
 	uint matched_rec_id; 
+	uint dbg_path_id; // TODO: remove this if debugging is not needed
 };
 uint encode_temporal_tracing_result(TemporalTracingResult ttr)
 {
 	uint enc = ttr.matched_rec_id; 
 	enc <<= 5u; 
 	enc |= (ttr.num_trace_steps & 0x1fu); 
+	enc <<= 1u; 
+	enc |= (ttr.dbg_path_id & 1u); 
 	return enc;
 }
-// struct TemporalTracingResultsHeader
-// {
-// 	uint num_entries; 
+TemporalTracingResult decode_temporal_tracing_result(uint enc)
+{
+	TemporalTracingResult ttr; 
+	ttr.dbg_path_id = enc & 1u;
+	enc >>= 1u;
+	ttr.num_trace_steps = enc & 0x1fu; 
+	enc >>= 5u; 
+	ttr.matched_rec_id = enc; 
+	return ttr; 
+}
+TemporalTracingResult load_ssbo_contour_temporal_records_new__temporal_tracing_result_cache(
+	uint rec_id, uint cache_slot, uint num_recs
+){
+	uint addr_cache = get_addr_temporal_tracing_result(rec_id, cache_slot, num_recs); 
+	return decode_temporal_tracing_result(ssbo_contour_temporal_records_new_[addr_cache]);
+}
+void store_ssbo_contour_temporal_records_new__temporal_tracing_result_cache(
+	uint rec_id, uint cache_slot, TemporalTracingResult ttr, uint num_recs
+){
+	uint addr_cache = get_addr_temporal_tracing_result(rec_id, cache_slot, num_recs);
+	ssbo_contour_temporal_records_new_[addr_cache] = encode_temporal_tracing_result(ttr); 
+}
 
-// }
-// uint store_temporal_tracing_result_cache(uint rec_id, uint cache_slot, uint num_recs, TemporalTracingResult ttr)
-// {
-// 	uint subbuff_offset = num_recs * 6u;
-// 	uint rec_offset = rec_id * 5u; // [cache_header][res#0][res#1][res#2][res#3]
-	
-// 	uint cache_header = ssbo_contour_temporal_records_new_[subbuff_offset + rec_offset]; 
-// 	uint num_entries = cache_header & 0x3fu; // low 6 bits
-	
-	
-// }
+// Extra debug info
+uint load_ssbo_contour_temporal_records_new__dbg_line_beg_id(
+	uint rec_id, uint num_recs
+){
+	uint addr_dbg_info = get_addr_temporal_tracing_result_dbg_info(rec_id, num_recs); 
+	return ssbo_contour_temporal_records_new_[addr_dbg_info];
+}
+void store_ssbo_contour_temporal_records_new__dbg_line_beg_id(
+	uint rec_id, uint dbg_line_id, uint num_recs
+){
+	uint addr_dbg_info = get_addr_temporal_tracing_result_dbg_info(rec_id, num_recs); 
+	ssbo_contour_temporal_records_new_[addr_dbg_info] = dbg_line_id; 
+}
 #endif
 
 
