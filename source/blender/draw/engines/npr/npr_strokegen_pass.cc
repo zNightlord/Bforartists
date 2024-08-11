@@ -185,7 +185,8 @@ void StrokeGenPassModule::on_begin_sync(int frame_counter)
 
     meshing_params.dbg_matching_line_mode = scene_eval->npr.npr_test_val_24;
     meshing_params.dbg_history_trace_steps = (int)(scene_eval->npr.npr_test_val_25 + 1e-10f);
-    meshing_params.dbg_ndv_grad_mode = (int)(scene_eval->npr.npr_test_val_26 + 1e-10f);
+    meshing_params.dbg_history_trace_iters = (int)(scene_eval->npr.npr_test_val_26 + 1e-10f);
+    meshing_params.dbg_ndv_grad_mode = (int)(scene_eval->npr.npr_test_val_27 + 1e-10f);
   }
 
 
@@ -426,9 +427,14 @@ void StrokeGenPassModule::on_end_sync()
 
     append_subpass_fill_dispatch_args_temporal_records_(strokegen_obj_id, strokegen_frame_id);
 
+    for (int iter_temporal_trace = 0; iter_temporal_trace < meshing_params.dbg_history_trace_iters; ++iter_temporal_trace)
     {
       auto& sub = pass_extract_geom().sub("strokegen_calculate_new_temporal_contour_records");
-      sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_CALCULATE_NEW_TEMPORAL_RECORDS));
+      sub.shader_set(shaders_.static_shader_get(
+        iter_temporal_trace == 0 ?
+          eShaderType::MESH_CALCULATE_NEW_TEMPORAL_RECORDS_FIRST_ITER
+          : eShaderType::MESH_CALCULATE_NEW_TEMPORAL_RECORDS_TRACE_ITER
+      ));
       
       bind_src(sub, true); // reuse ssbo slot(s)
       sub.bind_ssbo(ssbo_offset_calc_temporal_rec + 0, surf_analysis_ctx_contour.ssbo_vgrad_contour_); 
@@ -437,6 +443,8 @@ void StrokeGenPassModule::on_end_sync()
       sub.bind_ssbo(ssbo_offset_calc_temporal_rec + 3, buffers_.ssbo_dbg_lines_);
       sub.push_constant("pcs_loop_subd_iters_", meshing_params.iters_test_subdiv);
       sub.push_constant("pc_frame_id_history_", strokegen_frame_id_prev(strokegen_frame_id));
+      sub.push_constant("pc_trace_iter_", iter_temporal_trace); 
+
       sub.push_constant("pc_dbg_matching_line_mode_", meshing_params.dbg_matching_line_mode);
       sub.push_constant("pc_dbg_history_trace_steps_", meshing_params.dbg_history_trace_steps);
       

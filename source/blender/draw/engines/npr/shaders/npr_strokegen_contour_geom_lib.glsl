@@ -77,23 +77,24 @@ bool is_interp_contour_edge__after_tessellation(
 	return is_contour; 
 }
 
-vec3 calc_interp_contour_vert_pos(vec3 vnor[2], vec3 edge_vpos[2], vec3 cam_pos_ws)
-{ // vnor, edge_vpos: normal/pos of 2 verts on the edge; 
-	// vec3 vnor[2] = { ld_vnor(v1), ld_vnor(v3) }; 
+float calc_interp_contour_edge_factor(vec3 edge_vnor[2], vec3 edge_vpos[2], vec3 cam_pos_ws)
+{ // edge_vnor, edge_vpos: normal/pos of 2 verts on the edge; 
 	float contour_interpo_factor = .5f; 
-	{        
-		// mat4 view_to_world = ubo_view_matrices_.viewinv;
-		// vec3 cam_pos_ws = view_to_world[3].xyz; /* see "#define cameraPos ViewMatrixInverse[3].xyz" */
+	vec2 ndv = vec2(
+		dot(edge_vnor[0], cam_pos_ws - edge_vpos[0]),  
+		dot(edge_vnor[1], cam_pos_ws - edge_vpos[1]) 
+	); 
+	contour_interpo_factor = ndv[0] / (ndv[0] - ndv[1]); 
+	/* split pos = mix(vpos_0, vpos_1, interpo) = vpos_0 + interpo * (vpos_1 - vpos_0) */
 
-		vec2 ndv = vec2(
-			dot(vnor[0], cam_pos_ws - edge_vpos[0]),  
-			dot(vnor[1], cam_pos_ws - edge_vpos[1]) 
-		); 
-		contour_interpo_factor = ndv[0] / (ndv[0] - ndv[1]); /* split pos = vpos_0 + interpo * (vpos_1 - vpos_0); */
-	}
-
+	return contour_interpo_factor; 
+}
+vec3 calc_interp_contour_vert_pos(vec3 edge_vnor[2], vec3 edge_vpos[2], vec3 cam_pos_ws)
+{ 
+	float contour_interpo_factor = calc_interp_contour_edge_factor(edge_vnor, edge_vpos, cam_pos_ws); 
 	return edge_vpos[0] + contour_interpo_factor * (edge_vpos[1] - edge_vpos[0]); 
 }
+
 
 
 // ---------------------------------------------------------------------------------------------------

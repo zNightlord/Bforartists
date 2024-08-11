@@ -1,6 +1,7 @@
 
 
 #pragma BLENDER_REQUIRE(npr_strokegen_encode_lib.glsl)
+#pragma BLENDER_REQUIRE(npr_strokegen_topo_lib.glsl)
 
 
 #ifndef BNPR_CONTOUR_TOPO__INCLUDED
@@ -521,7 +522,7 @@ uint load_ssbo_contour_temporal_records_old__subd_root_edge_id(uint enc_id, uint
 #endif
 
 
-// Temporal Record - Contour Data | offset stride 2
+// Temporal Record - Contour Data/Tracing Cache | offset stride 2
 struct TemporalRecordContourData
 {
 	uint curve_key; 	 // 24 bits
@@ -581,6 +582,57 @@ TemporalRecordContourData load_ssbo_contour_temporal_records_new__contour_data(u
 	enc[3] = ssbo_contour_temporal_records_new_[subbuff_offset + rec_id * 4u + 3u]; 
 	return decode_temporal_record_contour_data(enc); 
 }
+struct TracedPathCache
+{
+   AdjWedgeInfo awi; 
+   float edge_pos_factor; 
+}; 
+uvec2 encode_contour_trace_path_cache(TracedPathCache tpc)
+{
+	uvec2 enc; 
+	enc.x = tpc.awi.wedge_id; 
+	enc.x <<= 1u; 
+	enc.x |= (tpc.awi.iface_adj & 0x1u); 
+	
+	enc.y = floatBitsToUint(tpc.edge_pos_factor); 
+	
+	return enc; 
+}
+TracedPathCache decode_contour_trace_path_cache(uvec2 enc)
+{
+	TracedPathCache tpc; 
+	
+	tpc.edge_pos_factor = uintBitsToFloat(enc.y); 
+
+	tpc.awi.iface_adj 	 = enc.x & 1u; 
+	enc.x >>= 1u; 
+	tpc.awi.wedge_id 	 = enc.x;  
+
+	return tpc; 
+}
+void store_ssbo_contour_temporal_records_new__temp_trace_cache(
+	uint path_id, uint rec_id, uint num_recs, 
+	TracedPathCache tpc
+){
+	uint subbuff_offset = num_recs * 2u;
+	uvec2 enc = encode_contour_trace_path_cache(tpc); 
+	
+	uint path_offset = path_id * 2u;  
+	ssbo_contour_temporal_records_new_[subbuff_offset + rec_id * 4u + path_offset + 0u] = enc.x;
+	ssbo_contour_temporal_records_new_[subbuff_offset + rec_id * 4u + path_offset + 1u] = enc.y;
+}
+TracedPathCache load_ssbo_contour_temporal_records_new__temp_trace_cache(
+	uint path_id, uint rec_id, uint num_recs
+){
+	uint subbuff_offset = num_recs * 2u;
+	uint path_offset    = path_id * 2u;  
+	
+	uvec2 enc; 
+	enc.x = ssbo_contour_temporal_records_new_[subbuff_offset + rec_id * 4u + path_offset + 0u];
+	enc.y = ssbo_contour_temporal_records_new_[subbuff_offset + rec_id * 4u + path_offset + 1u];
+
+	return decode_contour_trace_path_cache(enc); 
+}
 #endif
 #if defined(USE_CONTOUR_TEMPORAL_RECORD_BUFFER_OLD)
 TemporalRecordContourData load_ssbo_contour_temporal_records_old__contour_data(uint rec_id, uint num_recs)
@@ -594,6 +646,45 @@ TemporalRecordContourData load_ssbo_contour_temporal_records_old__contour_data(u
 	return decode_temporal_record_contour_data(enc); 
 }
 #endif
+
+
+// Temporal Record - Tracing Result Cache | offset stride 6
+#if defined(USE_CONTOUR_TEMPORAL_RECORD_BUFFER_NEW)
+struct TemporalTracingResult
+{
+#define TEMPORAL_TRACING_RESULT__NULL 0xffffffffu 
+	uint num_trace_steps; 
+	uint matched_rec_id; 
+};
+uint encode_temporal_tracing_result(TemporalTracingResult ttr)
+{
+	uint enc = ttr.matched_rec_id; 
+	enc <<= 5u; 
+	enc |= (ttr.num_trace_steps & 0x1fu); 
+	return enc;
+}
+// struct TemporalTracingResultsHeader
+// {
+// 	uint num_entries; 
+
+// }
+// uint store_temporal_tracing_result_cache(uint rec_id, uint cache_slot, uint num_recs, TemporalTracingResult ttr)
+// {
+// 	uint subbuff_offset = num_recs * 6u;
+// 	uint rec_offset = rec_id * 5u; // [cache_header][res#0][res#1][res#2][res#3]
+	
+// 	uint cache_header = ssbo_contour_temporal_records_new_[subbuff_offset + rec_offset]; 
+// 	uint num_entries = cache_header & 0x3fu; // low 6 bits
+	
+	
+// }
+#endif
+
+
+
+
+
+
 
 
 // TODO: put the actual logic here, for now only for debug purposes

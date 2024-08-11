@@ -6,6 +6,8 @@
 #define STROKEGEN_LOOP_SUBDIV_EDGE_TREE_LIB__INCLUDED
 
 /* Loop subdivision tree -------------------------------------------------------------- 
+ * Encode sparse signals on a densely subdivided surface. 
+ * 
  *                  v0                    Inspired from the "Edge-Tree" encoding in   
  *                 /  \                   "Progressive Geometry Compression".
  *                /    \                  

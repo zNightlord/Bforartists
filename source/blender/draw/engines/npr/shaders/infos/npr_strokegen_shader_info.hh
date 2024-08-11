@@ -1971,10 +1971,30 @@ GPU_SHADER_CREATE_INFO(strokegen_calculate_new_temporal_contour_records)
     .push_constant(Type::INT, "pc_frame_id_history_")
     .push_constant(Type::INT, "pc_dbg_matching_line_mode_")
     .push_constant(Type::INT, "pc_dbg_history_trace_steps_")
+    .push_constant(Type::INT, "pc_trace_iter_")
 
     .local_group_size(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT)
     .compute_source("npr_strokegen_loop_subdiv_edge_tree_comp.glsl"); 
 
+GPU_SHADER_CREATE_INFO(strokegen_calculate_new_temporal_contour_records_first_iter)
+    .do_static_compilation(true)
+    .additional_info("strokegen_calculate_new_temporal_contour_records")
+    .define("_KERNEL_MULTICOMPILE__CALC_TEMPORAL_CONTOUR_RECORDS__MAIN__COMPUTE_SUBD_TREE_CODE", "1")
+    .define("_KERNEL_MULTICOMPILE__CALC_TEMPORAL_CONTOUR_RECORDS__MAIN__TEMPORAL_TRACING", "1"); 
+    // note: cannot init per-record contour data here since
+    // we reuse this part of buffer for caching tracing data.  
+    // .define("_KERNEL_MULTICOMPILE__CALC_TEMPORAL_CONTOUR_RECORDS__MAIN__INIT_CONTOUR_DATA", "1"); 
+
+GPU_SHADER_CREATE_INFO(strokegen_calculate_new_temporal_contour_records_trace_iter)
+    .do_static_compilation(true)
+    .additional_info("strokegen_calculate_new_temporal_contour_records")
+    .define("_KERNEL_MULTICOMPILE__CALC_TEMPORAL_CONTOUR_RECORDS__MAIN__TEMPORAL_TRACING", "1"); 
+
+GPU_SHADER_CREATE_INFO(strokegen_calculate_new_temporal_contour_records_last_iter)
+    .do_static_compilation(true)
+    .additional_info("strokegen_calculate_new_temporal_contour_records")
+    .define("_KERNEL_MULTICOMPILE__CALC_TEMPORAL_CONTOUR_RECORDS__MAIN__TEMPORAL_TRACING", "1")
+    .define("_KERNEL_MULTICOMPILE__CALC_TEMPORAL_CONTOUR_RECORDS__MAIN__INIT_CONTOUR_DATA", "1"); 
 
 GPU_SHADER_CREATE_INFO(strokegen_fill_dispatch_args_per_temporal_record)
     .do_static_compilation(true)
