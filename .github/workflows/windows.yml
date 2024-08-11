@@ -1,8 +1,8 @@
 name: Windows
 
 on:
-  #push:
-    #branches: [ master ]
+  push:
+    branches: [ accelerator-key-preferences-build ]
   schedule:
     - cron: 0 0 * * 1
   pull_request:
@@ -21,10 +21,10 @@ jobs:
       run: |
         mkdir C:/Users/runneradmin/bforartistsrepo
         cd C:/Users/runneradmin/bforartistsrepo
-        git clone https://github.com/Bforartists/Bforartists
+        git clone -b accelerator-key-preferences https://github.com/zNightlord/Bforartists
         cd Bforartists
         python ./build_files/utils/make_update.py
-        make
+        make lite
         dir
         cd ..
         dir
@@ -36,5 +36,5 @@ jobs:
         name: Bforartists-Release-${{ runner.os }}
         path: | 
           C:/Users/runneradmin/bforartistsrepo/bfa_build_windows_x64_vc17_Release/bin
-          D:/a/Bforartists/Bforartists/bfa_build_windows_x64_vc17_Release/bin
+          D:/a/Bforartists/Bforartists/bfa_build_windows*_x64_vc17*/bin
                 
