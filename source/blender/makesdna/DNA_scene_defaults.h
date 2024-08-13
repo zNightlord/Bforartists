@@ -250,6 +250,7 @@
  \
     .ray_tracing_options = _DNA_DEFAULT_RaytraceEEVEE, \
  \
+    .light_cache_data = NULL, \
     .light_threshold = 0.01f, \
  \
     .overscan = 3.0f, \
