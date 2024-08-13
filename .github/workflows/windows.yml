@@ -1,12 +1,12 @@
 name: Windows
 
 on:
-  #push:
-    #branches: [ master ]
+  push:
+    branches: [ re-eevee ]
   schedule:
     - cron: 0 0 * * 1
-  pull_request:
-    branches: [ master ]
+  # pull_request:
+  #   branches: [ master ]
   workflow_dispatch:
 
 permissions: {}
@@ -24,7 +24,7 @@ jobs:
         git clone https://github.com/Bforartists/Bforartists
         cd Bforartists
         python ./build_files/utils/make_update.py
-        make
+        make lite
         dir
         cd ..
         dir
