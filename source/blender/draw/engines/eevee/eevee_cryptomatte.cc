@@ -699,7 +699,7 @@ void EEVEE_cryptomatte_store_metadata(EEVEE_Data *vedata, RenderResult *render_r
   const ViewLayer *view_layer = draw_ctx->view_layer;
   BLI_assert(g_data->cryptomatte_session);
 
-  BKE_cryptomatte_store_metadata(g_data->cryptomatte_session, render_result, view_layer);
+  BKE_cryptomatte_store_metadata(g_data->cryptomatte_session, render_result);
 }
 
 /** \} */
