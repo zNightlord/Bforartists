@@ -24,7 +24,7 @@ jobs:
         git clone -b re-eevee https://github.com/zNightlord/Bforartists
         cd Bforartists
         python ./build_files/utils/make_update.py
-        make
+        make lite
         dir
         cd ..
         dir
