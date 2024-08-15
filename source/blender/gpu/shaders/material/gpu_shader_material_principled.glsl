@@ -95,11 +95,24 @@ void node_bsdf_principled(vec4 base_color,
   vec3 V = coordinate_incoming(g_data.P);
   float NV = dot(N, V);
 
+#ifdef GPU_SHADER_EEVEE_LEGACY_DEFINES  
   ClosureTransparency transparency_data;
   transparency_data.weight = weight;
   transparency_data.transmittance = vec3(1.0 - alpha);
   transparency_data.holdout = 0.0;
   weight *= alpha;
+#else
+  /* Transparency component. */
+  if (true) {
+    ClosureTransparency transparency_data;
+    transparency_data.weight = weight;
+    transparency_data.transmittance = vec3(1.0 - alpha);
+    transparency_data.holdout = 0.0;
+    closure_eval(transparency_data);
+
+    weight *= alpha;
+  }
+#endif
 
   /* First layer: Sheen */
   vec3 sheen_data_color = vec3(0.0);
@@ -112,15 +125,26 @@ void node_bsdf_principled(vec4 base_color,
   }
 
   /* Second layer: Coat */
+#ifdef GPU_SHADER_EEVEE_LEGACY_DEFINES  
   ClosureReflection coat_data;
   coat_data.N = CN;
   coat_data.roughness = coat_roughness;
   coat_data.color = vec3(1.0);
-
+#endif
   if (coat_weight > 0.0) {
     float coat_NV = dot(coat_data.N, V);
     float reflectance = bsdf_lut(coat_NV, coat_data.roughness, coat_ior, false).x;
+#ifndef GPU_SHADER_EEVEE_LEGACY_DEFINES  
+    ClosureReflection coat_data;
+    coat_data.N = CN;
+    coat_data.roughness = coat_roughness;
+    coat_data.color = vec3(1.0);
+#endif
     coat_data.weight = weight * coat_weight * reflectance;
+#ifndef GPU_SHADER_EEVEE_LEGACY_DEFINES
+    closure_eval(coat_data);
+#endif
+     
     /* Attenuate lower layers */
     weight *= max((1.0 - reflectance * coat_weight), 0.0);
 
@@ -136,10 +160,17 @@ void node_bsdf_principled(vec4 base_color,
     coat_data.weight = 0.0;
   }
 
-  /* Attenuated by sheen and coat. */
-  ClosureEmission emission_data;
-  emission_data.weight = weight;
-  emission_data.emission = coat_tint.rgb * emission.rgb * emission_strength;
+  /* Emission component.
+   * Attenuated by sheen and coat.
+   */
+  if (true) {
+    ClosureEmission emission_data;
+    emission_data.weight = weight;
+    emission_data.emission = coat_tint.rgb * emission.rgb * emission_strength;
+#ifndef GPU_SHADER_EEVEE_LEGACY_DEFINES
+    closure_eval(emission_data);
+#endif
+  }
 
   /* Metallic component */
   ClosureReflection reflection_data;
@@ -186,6 +217,10 @@ void node_bsdf_principled(vec4 base_color,
 
     refraction_data.weight = weight * transmission_weight;
     refraction_data.color = transmittance * coat_tint.rgb;
+    closure_eval(emission_data);
+#ifndef GPU_SHADER_EEVEE_LEGACY_DEFINES
+    closure_eval(refraction_data);
+#endif
     /* Attenuate lower layers */
     weight *= max((1.0 - transmission_weight), 0.0);
   }
@@ -217,6 +252,13 @@ void node_bsdf_principled(vec4 base_color,
     reflection_data.color *= coat_tint.rgb;
     reflection_data.weight = math_average(reflection_data.color);
     reflection_data.color *= safe_rcp(reflection_data.weight);
+
+#ifndef GPU_SHADER_EEVEE_LEGACY_DEFINES
+    reflection_data.color = (reflection_color + weight * reflectance) * coat_tint.rgb;
+    /* `weight` is already applied in `color`. */
+    reflection_data.weight = 1.0f;
+    closure_eval(reflection_data);
+#endif
 
     /* Attenuate lower layers */
     weight *= max((1.0 - math_reduce_max(reflectance)), 0.0);
@@ -273,6 +315,11 @@ void node_bsdf_principled(vec4 base_color,
 
     diffuse_data.weight = math_average(diffuse_data.color);
     diffuse_data.color *= safe_rcp(diffuse_data.weight);
+#ifndef GPU_SHADER_EEVEE_LEGACY_DEFINES 
+    /* `weight` is already applied in `color`. */
+    diffuse_data.weight = 1.0f;
+    closure_eval(diffuse_data);
+#endif
   }
 
   /* Ref. #98190: Defines are optimizations for old compilers.
@@ -307,8 +354,12 @@ void node_bsdf_principled(vec4 base_color,
     result = closure_eval(diffuse_data, reflection_data, coat_data, refraction_data);
 #endif
   }
+#ifdef GPU_SHADER_EEVEE_LEGACY_DEFINES
   Closure emission_cl = closure_eval(emission_data);
   Closure transparency_cl = closure_eval(transparency_data);
   result = closure_add(result, emission_cl);
   result = closure_add(result, transparency_cl);
+#else
+  result = Closure(0);
+#endif
 }
