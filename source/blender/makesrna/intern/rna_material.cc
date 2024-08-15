@@ -971,8 +971,8 @@ void RNA_def_material(BlenderRNA *brna)
       prop,
       "Blend Mode",
       "Blend Mode for Transparent Faces (Deprecated: use 'surface_render_method')");
-  RNA_def_property_enum_funcs(
-      prop, "rna_Material_blend_method_get", "rna_Material_blend_method_set", nullptr);
+  // RNA_def_property_enum_funcs(
+  //     prop, "rna_Material_blend_method_get", "rna_Material_blend_method_set", nullptr);
   RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_ID_MATERIAL);
   RNA_def_property_update(prop, 0, "rna_Material_draw_update");
 
