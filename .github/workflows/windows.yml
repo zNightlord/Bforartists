@@ -2,7 +2,7 @@ name: Windows
 
 on:
   push:
-    branches: [ re-eevee ]
+    branches: [ "re-eevee", "re-eevee-goo" ]
   schedule:
     - cron: 0 0 * * 1
   # pull_request:
