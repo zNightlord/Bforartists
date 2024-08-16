@@ -65,7 +65,7 @@ typedef struct uiFont {
 typedef struct uiFontStyle {
   /** Saved in file, 0 is default. */
   short uifont_id;
-  char _pad1[2];
+  char 1[2];
   /** Actual size depends on 'global' DPI. */
   float points;
   /** Style hint. */
@@ -74,7 +74,7 @@ typedef struct uiFontStyle {
   short shadow;
   /** Shadow offset in pixels. */
   short shadx, shady;
-  char _pad0[2];
+  char 0[2];
   /** Total alpha. */
   float shadowalpha;
   /** 1 value, typically white or black anyway. */
@@ -761,7 +761,7 @@ typedef struct UserDef_Experimental {
   char use_animation_baklava;
   char use_docking;
   char enable_new_cpu_compositor;
-  char _pad[1];
+  char _pad[4];
   /** `makesdna` does not allow empty structs. */
 } UserDef_Experimental;
 
