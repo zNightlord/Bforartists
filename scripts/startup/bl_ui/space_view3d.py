@@ -998,6 +998,8 @@ class VIEW3D_HT_header(Header):
                 sub.prop(tool_settings, "use_gpencil_weight_data_add", text="", icon='WPAINT_HLT')
                 sub.separator(factor=0.4)
                 sub.prop(tool_settings, "use_gpencil_draw_additive", text="", icon='FREEZE')
+                sub.separator(factor=0.4)
+                sub.prop(tool_settings, "use_gpencil_autoclose_strokes", text="")
 
             # Select mode for Editing
             if gpd.use_stroke_edit_mode:
@@ -5379,6 +5381,7 @@ class VIEW3D_MT_pose_constraints(Menu):
         layout.operator("pose.constraint_add_with_targets", text="Add (with Targets)", icon="CONSTRAINT_DATA")
         layout.operator("pose.constraints_copy", icon="COPYDOWN")
         layout.operator("pose.constraints_clear", icon="CLEAR_CONSTRAINT")
+        layout.operator("pose.constraints_merge")
 
 
 class VIEW3D_MT_pose_names(Menu):

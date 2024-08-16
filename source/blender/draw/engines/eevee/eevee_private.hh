@@ -147,7 +147,8 @@ enum {
   VAR_WORLD_BACKGROUND = (1 << 10),
   VAR_WORLD_PROBE = (1 << 11),
   VAR_WORLD_VOLUME = (1 << 12),
-  VAR_DEFAULT = (1 << 13),
+  VAR_MAT_SHADOW_ID = (1 << 13),
+  VAR_DEFAULT = (1 << 14),
 };
 
 /* Material shader cache keys */
@@ -446,6 +447,7 @@ struct EEVEE_Light {
   float upvec[3], sizey;
   float forwardvec[3], light_type;
   float diff, spec, volume, volume_radius;
+  int light_group_bits[4];
 };
 
 /* Special type for elliptic area lights and point/spot disk lights, matches lights_lib.glsl */
@@ -509,7 +511,7 @@ struct EEVEE_LightsInfo {
   int num_cascade_layer, cache_num_cascade_layer;
   int cube_len, cascade_len, shadow_len;
   int shadow_cube_size, shadow_cascade_size;
-  bool shadow_high_bitdepth, soft_shadows;
+  bool shadow_high_bitdepth, shadow_id_high_bitdepth, soft_shadows;
   /* UBO Storage : data used by UBO */
   EEVEE_Light light_data[MAX_LIGHT];
   EEVEE_Shadow shadow_data[MAX_SHADOW];
@@ -878,6 +880,7 @@ struct EEVEE_CommonUniformBuffer {
   float alpha_hash_scale;                      /* float */
   float camera_uv_scale[2], camera_uv_bias[2]; /* vec4 */
   float planar_clip_plane[4];                  /* vec4 */
+  int shadow_id_high_bitdepth;
 };
 
 BLI_STATIC_ASSERT_ALIGN(EEVEE_CommonUniformBuffer, 16)
@@ -902,6 +905,9 @@ struct EEVEE_ViewLayerData {
   GPUTexture *shadow_cube_pool;
   GPUTexture *shadow_cascade_pool;
 
+  GPUTexture *shadow_cube_id_pool;
+  GPUTexture *shadow_cascade_id_pool;
+  
   EEVEE_ShadowCasterBuffer shcasters_buffers[2];
 
   /* Probes */
@@ -1558,6 +1564,7 @@ void EEVEE_effects_draw_init(EEVEE_ViewLayerData *sldata, EEVEE_Data *vedata);
  * Simple down-sampling algorithm. Reconstruct mip chain up to mip level.
  */
 void EEVEE_effects_downsample_radiance_buffer(EEVEE_Data *vedata, GPUTexture *texture_src);
+void EEVEE_effects_radiance_copy(EEVEE_ViewLayerData *sldata, EEVEE_Data *vedata);
 void EEVEE_create_minmax_buffer(EEVEE_Data *vedata, GPUTexture *depth_src, int layer);
 /**
  * Simple down-sampling algorithm for cube-map. Reconstruct mip chain up to mip level.

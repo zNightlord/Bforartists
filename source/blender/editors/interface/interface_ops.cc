@@ -56,6 +56,7 @@
 #include "WM_api.hh"
 #include "WM_types.hh"
 
+#include "ED_anim_api.hh"
 #include "ED_object.hh"
 #include "ED_paint.hh"
 #include "ED_undo.hh"

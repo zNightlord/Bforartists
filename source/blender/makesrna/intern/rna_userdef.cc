@@ -6502,6 +6502,15 @@ static void rna_def_userdef_input(BlenderRNA *brna)
       "Let the mouse wrap around the view boundaries so mouse movements are not limited by the "
       "screen size (used by transform, dragging of UI controls, etc.)");
 
+  prop = RNA_def_property(srna, "use_accumulative_trackball", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "uiflag", USER_ACCUMULATE_TRACKBALL);
+  RNA_def_property_ui_text(
+      prop,
+      "Continuous Trackball",
+      "Continuously accumulate trackball rotation as the mouse is moved, rather than applying it all at once. "
+      "Allows for more intuitive trackball rotations when moving the mouse a larger distance."
+      );
+
   prop = RNA_def_property(srna, "use_drag_immediately", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "flag", USER_RELEASECONFIRM);
   RNA_def_property_ui_text(prop,
@@ -7376,6 +7385,14 @@ static void rna_def_userdef_experimental(BlenderRNA *brna)
   RNA_def_property_ui_text(
       prop, "New Point Cloud Type", "Enable the new point cloud type in the ui");
 
+  prop = RNA_def_property(srna, "disable_material_icon", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "disable_material_icon", 1);
+  RNA_def_property_ui_text(
+      prop,
+      "Disable Material Icon Rendering",
+      "If true, Material Preview Icons will NOT be rendered. "
+      "This can prevent stuttering from opening the material ID menu");
+  
   prop = RNA_def_property(srna, "use_new_curves_tools", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "use_new_curves_tools", 1);
   RNA_def_property_ui_text(

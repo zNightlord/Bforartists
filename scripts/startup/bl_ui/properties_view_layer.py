@@ -92,6 +92,7 @@ class VIEWLAYER_PT_layer(ViewLayerButtonsPanel, Panel):
         row = col.row()
         row.use_property_split = False
         row.prop(rd, "use_single_layer", text="Render Single Layer")
+        col.prop(layer, "samples", text="Sample Override")
 
 
 class VIEWLAYER_PT_layer_passes(ViewLayerButtonsPanel, Panel):

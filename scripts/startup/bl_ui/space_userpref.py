@@ -217,6 +217,8 @@ class USERPREF_PT_interface_display(InterfacePanel, CenterAlignMixIn, Panel):
         flow.prop(view, "ui_scale", text="Resolution Scale")
         flow.prop(view, "ui_line_width", text="Line Width")
         flow.prop(view, "viewport_line_width", text="Viewport Line Width")  # BFA - GooEngine
+        flow.prop(view, "show_splash", text="Splash Screen")
+        flow.prop(view, "show_developer_ui")
 
         layout.separator()
 
@@ -1966,6 +1968,7 @@ class USERPREF_PT_input_mouse(InputPanel, CenterAlignMixIn, Panel):
             rowsub.active = inputs.use_mouse_emulate_3_button
             rowsub.prop(inputs, "mouse_emulate_3_button_modifier")
         flow.prop(inputs, "use_mouse_continuous")
+        flow.prop(inputs, "use_accumulative_trackball")
         flow.prop(inputs, "use_drag_immediately")
 
         flow.use_property_split = True
@@ -3031,6 +3034,7 @@ class USERPREF_PT_experimental_debugging(ExperimentalPanel, Panel):
                 ({"property": "use_viewport_debug"}, None),
                 ({"property": "use_eevee_debug"}, None),
                 ({"property": "use_extensions_debug"}, ("/blender/blender/issues/119521", "#119521")),
+                ({"property": "disable_material_icon"}, None),
             ),
         )
 

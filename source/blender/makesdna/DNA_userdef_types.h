@@ -744,6 +744,8 @@ typedef struct UserDef_Experimental {
   char use_all_linked_data_direct;
   char use_extensions_debug;
   char use_recompute_usercount_on_save_debug;
+  char disable_material_icon;
+  char disable_search_on_keypress;
   char SANITIZE_AFTER_HERE;
   /* The following options are automatically sanitized (set to 0)
    * when the release cycle is not alpha. */
@@ -759,7 +761,7 @@ typedef struct UserDef_Experimental {
   char use_animation_baklava;
   char use_docking;
   char enable_new_cpu_compositor;
-  char _pad[1];
+  // char _pad[1];
   /** `makesdna` does not allow empty structs. */
 } UserDef_Experimental;
 
@@ -1286,7 +1288,7 @@ typedef enum eUserpref_UI_Flag {
   USER_HIDE_DOT = (1 << 16),
   USER_SHOW_GIZMO_NAVIGATE = (1 << 17),
   USER_SHOW_VIEWPORTNAME = (1 << 18),
-  USER_UIFLAG_UNUSED_3 = (1 << 19), /* Cleared. */
+  USER_ACCUMULATE_TRACKBALL = (1 << 19),
   USER_ZOOM_TO_MOUSEPOS = (1 << 20),
   USER_SHOW_FPS = (1 << 21),
   USER_REGISTER_ALL_USERS = (1 << 22),

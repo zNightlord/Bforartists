@@ -665,6 +665,7 @@ bGPDlayer *BKE_gpencil_layer_addnew(bGPdata *gpd,
                  offsetof(bGPDlayer, info),
                  sizeof(gpl->info));
 
+  /* Keep use lights disabled by default as we almost never use it */
   /* Enable always affected by scene lights. */
   gpl->flag |= GP_LAYER_USE_LIGHTS;
 

@@ -342,6 +342,12 @@ uint64_t GPU_material_uuid_get(GPUMaterial *mat);
 void GPU_pass_cache_init();
 void GPU_pass_cache_garbage_collect();
 void GPU_pass_cache_free();
+void GPU_material_light_group_bits_get(GPUMaterial *mat, int *out);
+void GPU_material_light_group_shadow_bits_get(GPUMaterial *mat, int *out);
+
+void GPU_pass_cache_init();
+void GPU_pass_cache_garbage_collect();
+void GPU_pass_cache_free();
 
 /* Requested Material Attributes and Textures */
 

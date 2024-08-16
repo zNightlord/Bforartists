@@ -168,7 +168,14 @@ static void eevee_cache_finish(void *vedata)
   EEVEE_volumes_draw_init(sldata, static_cast<EEVEE_Data *>(vedata));
 
   uint tot_samples = scene_eval->eevee.taa_render_samples;
+  uint vl_samples = draw_ctx->view_layer->samples;
+
+  if (vl_samples > 0){
+    tot_samples = vl_samples;
+  }
+
   if (tot_samples == 0) {
+
     /* Use a high number of samples so the outputs accumulation buffers
      * will have the highest possible precision. */
     tot_samples = 1024;
@@ -325,6 +332,9 @@ static void eevee_draw_scene(void *vedata)
     DRW_draw_pass(psl->depth_refract_ps);
     DRW_draw_pass(psl->material_refract_ps);
     DRW_stats_group_end();
+
+    /* Streamlined version of EEVEE_refraction_compute to just copy the colour buffer */
+    EEVEE_effects_radiance_copy(sldata, static_cast<EEVEE_Data *>(vedata));
 
     /* Volumetrics Resolve Opaque */
     EEVEE_volumes_resolve(sldata, static_cast<EEVEE_Data *>(vedata));
@@ -668,7 +678,7 @@ RenderEngineType DRW_engine_viewport_eevee_type = {
     /*next*/ nullptr,
     /*prev*/ nullptr,
     /*idname*/ EEVEE_ENGINE,
-    /*name*/ N_("EEVEE (Legacy)"),
+    /*name*/ N_("EEVEE (Goo Engine)"),
     /*flag*/ RE_INTERNAL | RE_USE_PREVIEW | RE_USE_STEREO_VIEWPORT | RE_USE_GPU_CONTEXT,
     /*update*/ nullptr,
     /*render*/ &DRW_render_to_image,

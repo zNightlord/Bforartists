@@ -194,6 +194,17 @@ static bool collection_new_poll(bContext *C)
   return true;
 }
 
+static bool collection_new_poll(bContext *C)
+{
+  if (!ED_operator_region_outliner_active(C)) {
+    return false;
+  }
+  if (!collection_edit_in_active_scene_poll(C)) {
+    return false;
+  }
+  return true;
+}
+
 /** \} */
 
 /* -------------------------------------------------------------------- */

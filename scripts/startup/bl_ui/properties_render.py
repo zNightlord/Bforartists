@@ -811,6 +811,7 @@ class RENDER_PT_eevee_shadows(RenderButtonsPanel, Panel):
         col.prop(props, "light_threshold")
         col.use_property_split = False
         col.prop(props, "use_shadow_high_bitdepth")
+        col.prop(props, "use_shadow_id_high_bitdepth")
         col.prop(props, "use_soft_shadows")
 
 
