@@ -131,6 +131,20 @@ vec3 attr_load_orco(vec4 orco)
 }
 #  endif
 
+vec3 attr_load_orco(vec4 orco)
+{
+  /* We know when there is no orco layer when orco.w is 1.0 because it uses the generic vertex
+   * attrib (which is [0,0,0,1]). */
+  if (orco.w == 0.0) {
+    return orco.xyz * 0.5 + 0.5;
+  }
+  else {
+    /* If the object does not have any deformation, the orco layer calculation is done on the fly
+     * using the orco_madd factors. */
+    return OrcoTexCoFactors[0].xyz + pos * OrcoTexCoFactors[1].xyz;
+  }
+}
+
 vec4 attr_load_tangent(vec4 tangent)
 {
   tangent.xyz = safe_normalize(normal_object_to_world(tangent.xyz));
