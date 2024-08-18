@@ -37,11 +37,7 @@ void Instance::begin_sync()
 {
   eGPUTextureUsage usage_fb_tx = GPU_TEXTURE_USAGE_SHADER_READ | GPU_TEXTURE_USAGE_ATTACHMENT;
 
-  id_tx_.ensure_2d(GPU_R32UI, resolution_, usage_fb_tx);
-  normal_tx_.ensure_2d(GPU_RGB16F, resolution_, usage_fb_tx);
-  tangent_tx_.ensure_2d(GPU_RGBA16F, resolution_, usage_fb_tx);
   depth_tx_.ensure_2d(GPU_DEPTH24_STENCIL8, resolution_, usage_fb_tx);
-
   line_data_tx_.ensure_2d(GPU_R16F, resolution_, usage_fb_tx);
   line_color_tx_.ensure_2d(GPU_RGBA16F, resolution_, usage_fb_tx);
 
@@ -52,9 +48,12 @@ void Instance::begin_sync()
 
   deferred_pass_ps_.init();
   deferred_pass_ps_.state_set(DRW_STATE_WRITE_COLOR);
+  // deferred_pass_ps_.framebuffer_set(&strokegen_inst_->strokegen_textures.fb_contour_raster);
+  // float fb_clear_col_1[4] = {0, 0, 0, 0};
+  // deferred_pass_ps_.clear_color(fb_clear_col_1);
+
   deferred_pass_ps_.shader_set(deferred_pass_sh_);
-  deferred_pass_ps_.bind_texture("id_tx", &id_tx_);
-  deferred_pass_ps_.bind_texture("normal_tx", &normal_tx_);
+  deferred_pass_ps_.framebuffer_set(&deferred_pass_fb_);
   deferred_pass_ps_.bind_texture("depth_tx", &depth_tx_);
   deferred_pass_ps_.bind_texture("contour_tx", &(strokegen_inst_->strokegen_textures.tex_contour_raster));
   deferred_pass_ps_.draw_procedural(GPU_PRIM_TRIS, 1, 3);
@@ -100,10 +99,11 @@ void Instance::draw(Manager &manager, View &view, GPUTexture *depth_tx, GPUTextu
 {
   view.sync(DRW_view_default_get());
 
-  prepass_fb_.ensure(GPU_ATTACHMENT_TEXTURE(depth_tx_),
-                     GPU_ATTACHMENT_TEXTURE(id_tx_),
-                     GPU_ATTACHMENT_TEXTURE(normal_tx_),
-                     GPU_ATTACHMENT_TEXTURE(tangent_tx_));
+  prepass_fb_.ensure(GPU_ATTACHMENT_TEXTURE(depth_tx_)
+                     // , GPU_ATTACHMENT_TEXTURE(id_tx_)
+                     // , GPU_ATTACHMENT_TEXTURE(normal_tx_)
+                     // , GPU_ATTACHMENT_TEXTURE(tangent_tx_)
+  );
   prepass_fb_.bind();
 
   manager.submit(prepass_ps_, view);
@@ -116,7 +116,7 @@ void Instance::draw(Manager &manager, View &view, GPUTexture *depth_tx, GPUTextu
                            GPU_ATTACHMENT_TEXTURE(color_tx),
                            GPU_ATTACHMENT_TEXTURE(line_color_tx_),
                            GPU_ATTACHMENT_TEXTURE(line_data_tx_));
-  deferred_pass_fb_.bind();
+  // deferred_pass_fb_.bind();
 
   manager.submit(deferred_pass_ps_);
 

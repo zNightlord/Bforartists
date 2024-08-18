@@ -22,6 +22,7 @@ namespace blender::npr::strokegen
 using namespace blender;
 
 
+
 PassSimple& StrokeGenPassModule::get_compute_pass(eType passType, int pass_id)
   {
     switch (passType) {
@@ -59,6 +60,11 @@ PassMain &StrokeGenPassModule::get_render_pass(eType passType, int pass_id)
     }
     return pass_draw_contour_edges; 
   }
+
+PassSimple &StrokeGenPassModule::get_clear_framebuffer_pass()
+{
+  return pass_clear_contour_framebuffers; 
+}
 
 
 void StrokeGenPassModule::prepare_validation_passes(int frame_counter)
@@ -107,11 +113,15 @@ void StrokeGenPassModule::prepare_validation_passes(int frame_counter)
 
 void StrokeGenPassModule::on_begin_sync(int frame_counter)
   {
+    // Update frame counter and object id
     strokegen_frame_id = frame_counter;
     if (0 < strokegen_frame_id) first_frame = false;
-
     strokegen_obj_id = 0;
 
+    // Reset tri/vtx/edge counters
+    num_total_mesh_tris = num_total_mesh_verts = num_total_mesh_edges = 0;  // TODO: these should go to the UBO
+
+    // Initialize the passes
     init_mesh_extraction_passes();
     pass_draw_contour_edges.init_pass(shaders_, textures_, StrokegenMeshRasterPass::DRAW_CONTOUR_EDGES);
     pass_draw_contour_2d_samples.init_pass(shaders_, textures_, StrokegenMeshRasterPass::DRAW_CONTOUR_2D_SAMPLES);
@@ -120,9 +130,10 @@ void StrokeGenPassModule::on_begin_sync(int frame_counter)
 
     pass_draw_debug_lines_.init_pass(shaders_, textures_, StrokegenMeshRasterPass::DBG_LINES); 
 
+    rebuild_pass_clear_framebuffers(); 
+
     prepare_validation_passes(frame_counter);
 
-    num_total_mesh_tris = num_total_mesh_verts = num_total_mesh_edges = 0; // TODO: these should go to the UBO
 
     // fetch ui inputs
     const DRWContextState *draw_ctx = DRW_context_state_get();
@@ -2620,6 +2631,23 @@ void StrokeGenPassModule::on_end_sync()
       sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_vert_dispatch_args_);
       sub.barrier(GPU_BARRIER_SHADER_STORAGE);
     }
+  }
+
+  void StrokeGenPassModule::rebuild_pass_clear_framebuffers()
+  {
+    pass_clear_contour_framebuffers.init(); 
+
+    auto &sub = pass_clear_contour_framebuffers.sub("clear_framebuffers");
+    sub.framebuffer_set(&textures_.fb_contour_raster);
+    sub.clear_color_depth_stencil(float4(0, 0, 0, 0), 1.0f, 0);
+
+    sub.framebuffer_set(&textures_.fb_contour_dbg);
+    sub.clear_color(float4(0, 0, 0, 0));
+
+    sub.framebuffer_set(&textures_.fb_remeshed_depth);
+    sub.clear_color_depth_stencil(float4(1, 1, 1, 1), 1.0f, 0); 
+
+    sub.barrier(GPU_BARRIER_FRAMEBUFFER | GPU_BARRIER_SHADER_IMAGE_ACCESS);
   }
 
 

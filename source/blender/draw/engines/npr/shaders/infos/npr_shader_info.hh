@@ -6,19 +6,20 @@
 
 GPU_SHADER_INTERFACE_INFO(npr_prepass_iface, "")
     .flat(Type::UINT, "id")
-    .smooth(Type::VEC3, "normal")
-    .smooth(Type::VEC4, "tangent");
+    // .smooth(Type::VEC3, "normal")
+    // .smooth(Type::VEC4, "tangent")
+    ;
  
 GPU_SHADER_CREATE_INFO(npr_prepass_mesh)
     .vertex_source("npr_prepass_vert.glsl")
     .vertex_in(0, Type::VEC3, "pos")
-    .vertex_in(1, Type::VEC3, "nor")
-    .vertex_in(2, Type::VEC4, "tan")
+    // .vertex_in(1, Type::VEC3, "nor")
+    // .vertex_in(2, Type::VEC4, "tan")
     .vertex_out(npr_prepass_iface)
     .fragment_source("npr_prepass_frag.glsl")
-    .fragment_out(0, Type::UINT, "out_id")
-    .fragment_out(1, Type::VEC3, "out_normal")
-    .fragment_out(2, Type::VEC4, "out_tangent")
+    // .fragment_out(0, Type::UINT, "out_id")
+    // .fragment_out(1, Type::VEC3, "out_normal")
+    // .fragment_out(2, Type::VEC4, "out_tangent")
     .additional_info("draw_modelmat_new", "draw_view", "draw_resource_handle_new")
     .do_static_compilation(true);
 

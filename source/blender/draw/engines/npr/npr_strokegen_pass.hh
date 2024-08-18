@@ -65,6 +65,7 @@ public:
   draw::PassSimple pass_listranking_test = {"List ranking test"};
 
   /** Draw Passes */
+  draw::PassSimple pass_clear_contour_framebuffers = { "Clear Strokegen Framebuffers" }; 
   StrokegenMeshRasterPass pass_draw_contour_edges = {"Draw Contour Edges"}; // Inherited from draw::PassMain
   StrokegenMeshRasterPass pass_draw_contour_2d_samples = {"Draw 2D Contour Curves"}; // Inherited from draw::PassMain
   int curr_mesh_id_surf_depth; 
@@ -112,7 +113,8 @@ public:
     LIST_RANKING_TEST,
 
     GEOM_EXTRACTION,
-    CONTOUR_PROCESS, 
+    CONTOUR_PROCESS,
+    CLEAR_CONTOUR_FRAMEBUFFERS, 
     INDIRECT_DRAW_CONTOUR_EDGES,
     INDIRECT_DRAW_CONTOUR_2D_SAMPLES,
     INDIRECT_DRAW_REMESHED_DEPTH,
@@ -123,6 +125,7 @@ public:
   };
 
   PassSimple& get_compute_pass(eType passType, int pass_id = 0);
+  PassSimple &get_clear_framebuffer_pass();
   PassMain &get_render_pass(eType passType, int pass_id = 0);
   void prepare_validation_passes(int frame_counter);
   void init_surface_depth_passes();
@@ -461,6 +464,7 @@ public:
   void append_subpass_calc_contour_edges_draw_data(); 
 
   // ---------------------------------------------------------------------------
+  void rebuild_pass_clear_framebuffers(); 
   void rebuild_pass_contour_edge_drawcall();
   void rebuild_pass_contour_2d_samples_drawcall();
   void rebuild_pass_compress_contour_pixels(bool debug = false);

@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include "BKE_object.hh"
 #include "BKE_report.hh"
@@ -23,8 +23,8 @@ class Instance {
   GPUShader *prepass_sh_ = nullptr;
 
   Texture id_tx_ = {"PrePass.ID"};
-  Texture normal_tx_ = {"PrePass.Normal"};
-  Texture tangent_tx_ = {"PrePass.Tangent"};
+  // Texture normal_tx_ = {"PrePass.Normal"};
+  // Texture tangent_tx_ = {"PrePass.Tangent"};
   Texture depth_tx_ = {"PrePass.Depth"};
 
   /* Line Width stored in red channel */
