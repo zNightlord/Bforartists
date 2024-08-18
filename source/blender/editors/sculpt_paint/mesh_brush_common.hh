@@ -62,6 +62,7 @@ struct Cache;
 void scale_translations(MutableSpan<float3> translations, Span<float> factors);
 void scale_translations(MutableSpan<float3> translations, float factor);
 void scale_factors(MutableSpan<float> factors, float strength);
+void scale_factors(MutableSpan<float> factors, Span<float> strengths);
 void translations_from_offset_and_factors(const float3 &offset,
                                           Span<float> factors,
                                           MutableSpan<float3> r_translations);
@@ -92,9 +93,9 @@ void transform_positions(const float4x4 &transform, MutableSpan<float3> position
 
 /** Fill the output array with all positions in the geometry referenced by the indices. */
 void gather_grids_positions(const CCGKey &key,
-                            const Span<CCGElem *> elems,
-                            const Span<int> grids,
-                            const MutableSpan<float3> positions);
+                            Span<CCGElem *> elems,
+                            Span<int> grids,
+                            MutableSpan<float3> positions);
 inline MutableSpan<float3> gather_grids_positions(const SubdivCCG &subdiv_ccg,
                                                   const Span<int> grids,
                                                   Vector<float3> &positions)
@@ -134,7 +135,28 @@ void gather_data_grids(const SubdivCCG &subdiv_ccg,
                        Span<int> grids,
                        MutableSpan<T> node_data);
 template<typename T>
+MutableSpan<T> gather_data_grids(const SubdivCCG &subdiv_ccg,
+                                 const Span<T> src,
+                                 const Span<int> grids,
+                                 Vector<T> &dst)
+{
+  const CCGKey key = BKE_subdiv_ccg_key_top_level(subdiv_ccg);
+  dst.resize(grids.size() * key.grid_area);
+  gather_data_grids(subdiv_ccg, src, grids, dst.as_mutable_span());
+  return dst;
+}
+
+template<typename T>
 void gather_data_vert_bmesh(Span<T> src, const Set<BMVert *, 0> &verts, MutableSpan<T> node_data);
+template<typename T>
+MutableSpan<T> gather_data_vert_bmesh(const Span<T> src,
+                                      const Set<BMVert *, 0> &verts,
+                                      Vector<T> &dst)
+{
+  dst.resize(verts.size());
+  gather_data_vert_bmesh(src, verts, dst.as_mutable_span());
+  return dst;
+}
 
 /** Scatter data from an array of the node's data to the referenced geometry vertices. */
 template<typename T> void scatter_data_mesh(Span<T> src, Span<int> indices, MutableSpan<T> dst);
@@ -182,10 +204,10 @@ void calc_front_face(const float3 &view_normal,
                      MutableSpan<float> factors);
 void calc_front_face(const float3 &view_normal,
                      const Set<BMVert *, 0> &verts,
-                     const MutableSpan<float> factors);
+                     MutableSpan<float> factors);
 void calc_front_face(const float3 &view_normal,
                      const Set<BMFace *, 0> &faces,
-                     const MutableSpan<float> factors);
+                     MutableSpan<float> factors);
 
 /**
  * When the 3D view's clipping planes are enabled, brushes shouldn't have any effect on vertices
@@ -211,8 +233,17 @@ void calc_brush_distances(const SculptSession &ss,
                           MutableSpan<float> r_distances);
 void calc_brush_distances(const SculptSession &ss,
                           Span<float3> positions,
-                          const eBrushFalloffShape falloff_shape,
+                          eBrushFalloffShape falloff_shape,
                           MutableSpan<float> r_distances);
+void calc_brush_distances_squared(const SculptSession &ss,
+                                  Span<float3> vert_positions,
+                                  Span<int> vert_indices,
+                                  eBrushFalloffShape falloff_shape,
+                                  MutableSpan<float> r_distances);
+void calc_brush_distances_squared(const SculptSession &ss,
+                                  Span<float3> positions,
+                                  eBrushFalloffShape falloff_shape,
+                                  MutableSpan<float> r_distances);
 
 /** Set the factor to zero for all distances greater than the radius. */
 void filter_distances_with_radius(float radius, Span<float> distances, MutableSpan<float> factors);
@@ -221,19 +252,17 @@ void filter_distances_with_radius(float radius, Span<float> distances, MutableSp
  * Calculate distances based on a "square" brush tip falloff and ignore vertices that are too far
  * away.
  */
-void calc_brush_cube_distances(const SculptSession &ss,
-                               const Brush &brush,
+void calc_brush_cube_distances(const Brush &brush,
                                const float4x4 &mat,
                                Span<float3> positions,
                                Span<int> verts,
                                MutableSpan<float> r_distances,
                                MutableSpan<float> factors);
-void calc_brush_cube_distances(const SculptSession &ss,
-                               const Brush &brush,
+void calc_brush_cube_distances(const Brush &brush,
                                const float4x4 &mat,
-                               const Span<float3> positions,
-                               const MutableSpan<float> r_distances,
-                               const MutableSpan<float> factors);
+                               Span<float3> positions,
+                               MutableSpan<float> r_distances,
+                               MutableSpan<float> factors);
 
 /**
  * Scale the distances based on the brush radius and the cached "hardness" setting, which increases
@@ -272,32 +301,72 @@ namespace auto_mask {
 /**
  * Calculate all auto-masking influence on each vertex.
  */
-void calc_vert_factors(const Object &object,
+void calc_vert_factors(const Depsgraph &depsgraph,
+                       const Object &object,
                        const Cache &cache,
                        const bke::pbvh::Node &node,
                        Span<int> verts,
                        MutableSpan<float> factors);
-void calc_grids_factors(const Object &object,
+inline void calc_vert_factors(const Depsgraph &depsgraph,
+                              const Object &object,
+                              const Cache *cache,
+                              const bke::pbvh::Node &node,
+                              Span<int> verts,
+                              MutableSpan<float> factors)
+{
+  if (cache == nullptr) {
+    return;
+  }
+  calc_vert_factors(depsgraph, object, *cache, node, verts, factors);
+}
+void calc_grids_factors(const Depsgraph &depsgraph,
+                        const Object &object,
                         const Cache &cache,
                         const bke::pbvh::Node &node,
                         Span<int> grids,
                         MutableSpan<float> factors);
-void calc_vert_factors(const Object &object,
+inline void calc_grids_factors(const Depsgraph &depsgraph,
+                               const Object &object,
+                               const Cache *cache,
+                               const bke::pbvh::Node &node,
+                               Span<int> grids,
+                               MutableSpan<float> factors)
+{
+  if (cache == nullptr) {
+    return;
+  }
+  calc_grids_factors(depsgraph, object, *cache, node, grids, factors);
+}
+void calc_vert_factors(const Depsgraph &depsgraph,
+                       const Object &object,
                        const Cache &cache,
                        const bke::pbvh::Node &node,
                        const Set<BMVert *, 0> &verts,
                        MutableSpan<float> factors);
+inline void calc_vert_factors(const Depsgraph &depsgraph,
+                              const Object &object,
+                              const Cache *cache,
+                              const bke::pbvh::Node &node,
+                              const Set<BMVert *, 0> &verts,
+                              MutableSpan<float> factors)
+{
+  if (cache == nullptr) {
+    return;
+  }
+  calc_vert_factors(depsgraph, object, *cache, node, verts, factors);
+}
 
 /**
  * Calculate all auto-masking influence on each face.
  */
-void calc_face_factors(const Object &object,
-                       const OffsetIndices<int> faces,
-                       const Span<int> corner_verts,
+void calc_face_factors(const Depsgraph &depsgraph,
+                       const Object &object,
+                       OffsetIndices<int> faces,
+                       Span<int> corner_verts,
                        const Cache &cache,
                        const bke::pbvh::Node &node,
-                       const Span<int> face_indices,
-                       const MutableSpan<float> factors);
+                       Span<int> face_indices,
+                       MutableSpan<float> factors);
 
 }  // namespace auto_mask
 
@@ -313,6 +382,17 @@ void apply_translations(Span<float3> translations, const Set<BMVert *, 0> &verts
 
 /** Align the translations with plane normal. */
 void project_translations(MutableSpan<float3> translations, const float3 &plane);
+
+/**
+ * Cancel out translations already applied over the course of the operation from the new
+ * translations. This is used for tools that calculate new positions based on the original
+ * positions for the entirety of an operation. Conceptually this is the same as resetting the
+ * positions before each step of the operation, but combining that into the same loop should be
+ * preferable for performance.
+ */
+void reset_translations_to_original(MutableSpan<float3> translations,
+                                    Span<float3> positions,
+                                    Span<float3> orig_positions);
 
 /**
  * Rotate translations to account for rotations from procedural deformation.
@@ -343,10 +423,12 @@ void clip_and_lock_translations(const Sculpt &sd,
  * shape key positions must be kept in sync, and shape keys dependent on the active key must also
  * be modified.
  */
-void apply_translations_to_shape_keys(Object &object,
-                                      Span<int> verts,
-                                      Span<float3> translations,
-                                      MutableSpan<float3> positions_mesh);
+void update_shape_keys(Object &object,
+                       const Mesh &mesh,
+                       const KeyBlock &active_key,
+                       Span<int> verts,
+                       Span<float3> translations,
+                       Span<float3> positions_orig);
 
 /**
  * Currently the pbvh::Tree owns its own copy of deformed positions that needs to be updated to
@@ -354,14 +436,18 @@ void apply_translations_to_shape_keys(Object &object,
  * \todo This should be removed one the pbvh::Tree no longer stores this copy of deformed
  * positions.
  */
-void apply_translations_to_pbvh(bke::pbvh::Tree &pbvh, Span<int> verts, Span<float3> translations);
+void apply_translations_to_pbvh(const Depsgraph &depsgraph,
+                                Object &object,
+                                Span<int> verts,
+                                Span<float3> translations);
 
 /**
  * Write the new translated positions to the original mesh, taking into account inverse
  * deformation from modifiers, axis locking, and clipping. Flush the deformation to shape keys as
  * well.
  */
-void write_translations(const Sculpt &sd,
+void write_translations(const Depsgraph &depsgraph,
+                        const Sculpt &sd,
                         Object &object,
                         Span<float3> positions_eval,
                         Span<int> verts,
@@ -399,6 +485,10 @@ void calc_vert_neighbors(OffsetIndices<int> faces,
                          Span<bool> hide_poly,
                          Span<int> verts,
                          MutableSpan<Vector<int>> result);
+void calc_vert_neighbors(const SubdivCCG &subdiv_ccg,
+                         Span<int> grids,
+                         MutableSpan<Vector<SubdivCCGCoord>> result);
+void calc_vert_neighbors(Set<BMVert *, 0> verts, MutableSpan<Vector<BMVert *>> result);
 
 /**
  * Find vertices connected to the indexed vertices across faces. For boundary vertices (stored in
@@ -418,8 +508,8 @@ void calc_vert_neighbors_interior(OffsetIndices<int> faces,
                                   Span<int> corner_verts,
                                   BitSpan boundary_verts,
                                   const SubdivCCG &subdiv_ccg,
-                                  const Span<int> grids,
-                                  const MutableSpan<Vector<SubdivCCGCoord>> result);
+                                  Span<int> grids,
+                                  MutableSpan<Vector<SubdivCCGCoord>> result);
 void calc_vert_neighbors_interior(const Set<BMVert *, 0> &verts,
                                   MutableSpan<Vector<BMVert *>> result);
 
@@ -431,6 +521,12 @@ void calc_translations_to_plane(Span<float3> vert_positions,
 void calc_translations_to_plane(Span<float3> positions,
                                 const float4 &plane,
                                 MutableSpan<float3> translations);
+
+/** Ignores verts outside of a symmetric area defined by a pivot point. */
+void filter_verts_outside_symmetry_area(Span<float3> positions,
+                                        const float3 &pivot,
+                                        ePaintSymmetryFlags symm,
+                                        MutableSpan<float> factors);
 
 /** Ignore points that fall below the "plane trim" threshold for the brush. */
 void filter_plane_trim_limit_factors(const Brush &brush,

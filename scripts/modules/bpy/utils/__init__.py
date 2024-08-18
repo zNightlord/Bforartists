@@ -36,6 +36,7 @@ __all__ = (
     "previews",
     "resource_path",
     "script_path_user",
+    "extension_path_user",
     "script_paths",
     "smpte_from_frame",
     "smpte_from_seconds",
@@ -583,6 +584,31 @@ def unregister_preset_path(path):
     return True
 
 
+def _is_path_parent_of(parent_path, path):
+    try:
+        if _os.path.samefile(
+                _os.path.commonpath([parent_path]),
+                _os.path.commonpath([parent_path, path])
+        ):
+            return True
+
+    # NOTE: skipping in the case files can't be found isn't ideal because
+    # `/a/b` is logically *inside* `/a/` irrespective of the permissions or existence of either paths.
+    # Nevertheless, skip them as it's impractical to operate on paths that can't be accessed.
+    # In all likelihood the caller is also unable to properly handle the result.
+    except FileNotFoundError:
+        # The path we tried to look up doesn't exist.
+        pass
+    except ValueError:
+        # Happens on Windows when paths don't have the same drive.
+        pass
+    except PermissionError:
+        # When either of the paths don't have permissions to access.
+        pass
+
+    return False
+
+
 def is_path_builtin(path):
     """
     Returns True if the path is one of the built-in paths used by Blender.
@@ -605,18 +631,27 @@ def is_path_builtin(path):
             # This can happen on portable installs.
             continue
 
-        try:
-            if _os.path.samefile(
-                    _os.path.commonpath([parent_path]),
-                    _os.path.commonpath([parent_path, path])
-            ):
-                return True
-        except FileNotFoundError:
-            # The path we tried to look up doesn't exist.
-            pass
-        except ValueError:
-            # Happens on Windows when paths don't have the same drive.
-            pass
+        if _is_path_parent_of(parent_path, path):
+            return True
+
+    return False
+
+
+def is_path_extension(path):
+    """
+    Returns True if the path is from an extensions repository.
+
+    :arg path: Path to check if it is within an extension repository.
+    :type path: str
+    :rtype: bool
+    """
+    for repo in _preferences.extensions.repos:
+        if not repo.enabled:
+            continue
+        # NOTE: since these paths are user defined, they can be anything.
+        # Empty or malformed paths will be skipped.
+        if _is_path_parent_of(repo.directory, path):
+            return True
 
     return False
 
@@ -810,8 +845,8 @@ def user_resource(resource_type, *, path="", create=False):
     """
     Return a user resource path (normally from the users home directory).
 
-    :arg type: Resource type in ['DATAFILES', 'CONFIG', 'SCRIPTS', 'EXTENSIONS'].
-    :type type: string
+    :arg resource_type: Resource type in ['DATAFILES', 'CONFIG', 'SCRIPTS', 'EXTENSIONS'].
+    :type resource_type: string
     :arg path: Optional subdirectory.
     :type path: string
     :arg create: Treat the path as a directory and create it if its not existing.

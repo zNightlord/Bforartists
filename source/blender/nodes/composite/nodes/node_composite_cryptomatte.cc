@@ -325,12 +325,12 @@ class BaseCryptoMatteOperation : public NodeOperation {
   Result compute_matte(Vector<GPUTexture *> &layers)
   {
     const Domain domain = compute_domain();
-    Result output_matte = context().create_temporary_result(ResultType::Float);
+    Result output_matte = context().create_result(ResultType::Float);
     output_matte.allocate_texture(domain);
 
     /* Clear the matte to zero to ready it to accumulate the coverage. */
     const float4 zero_color = float4(0.0f);
-    GPU_texture_clear(output_matte.texture(), GPU_DATA_FLOAT, zero_color);
+    GPU_texture_clear(output_matte, GPU_DATA_FLOAT, zero_color);
 
     Vector<float> identifiers = get_identifiers();
     /* The user haven't selected any entities, return the currently zero matte. */
@@ -832,7 +832,7 @@ class LegacyCryptoMatteOperation : public BaseCryptoMatteOperation {
     Vector<GPUTexture *> layers;
     /* Add all textures of all inputs except the first input, which is the input image. */
     for (const bNodeSocket *socket : bnode().input_sockets().drop_front(1)) {
-      layers.append(get_input(socket->identifier).texture());
+      layers.append(get_input(socket->identifier));
     }
     return layers;
   }

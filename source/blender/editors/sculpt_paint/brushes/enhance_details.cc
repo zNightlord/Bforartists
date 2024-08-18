@@ -36,7 +36,8 @@ struct LocalData {
   Vector<float3> translations;
 };
 
-static void calc_faces(const Sculpt &sd,
+static void calc_faces(const Depsgraph &depsgraph,
+                       const Sculpt &sd,
                        const Brush &brush,
                        const Span<float3> positions_eval,
                        const Span<float3> vert_normals,
@@ -69,9 +70,7 @@ static void calc_faces(const Sculpt &sd,
   apply_hardness_to_distances(cache, distances);
   calc_brush_strength_factors(cache, brush, distances, factors);
 
-  if (cache.automasking) {
-    auto_mask::calc_vert_factors(object, *cache.automasking, node, verts, factors);
-  }
+  auto_mask::calc_vert_factors(depsgraph, object, cache.automasking.get(), node, verts, factors);
 
   calc_brush_texture_factors(ss, brush, positions_eval, verts, factors);
 
@@ -82,10 +81,11 @@ static void calc_faces(const Sculpt &sd,
   gather_data_mesh(all_translations, verts, translations);
   scale_translations(translations, factors);
 
-  write_translations(sd, object, positions_eval, verts, translations, positions_orig);
+  write_translations(depsgraph, sd, object, positions_eval, verts, translations, positions_orig);
 }
 
-static void calc_grids(const Sculpt &sd,
+static void calc_grids(const Depsgraph &depsgraph,
+                       const Sculpt &sd,
                        Object &object,
                        const Brush &brush,
                        const Span<float3> all_translations,
@@ -115,24 +115,22 @@ static void calc_grids(const Sculpt &sd,
   apply_hardness_to_distances(cache, distances);
   calc_brush_strength_factors(cache, brush, distances, factors);
 
-  if (cache.automasking) {
-    auto_mask::calc_grids_factors(object, *cache.automasking, node, grids, factors);
-  }
+  auto_mask::calc_grids_factors(depsgraph, object, cache.automasking.get(), node, grids, factors);
 
   calc_brush_texture_factors(ss, brush, positions, factors);
 
   scale_factors(factors, strength);
 
-  tls.translations.resize(positions.size());
-  const MutableSpan<float3> translations = tls.translations;
-  gather_data_grids(subdiv_ccg, all_translations, grids, translations);
+  const MutableSpan<float3> translations = gather_data_grids(
+      subdiv_ccg, all_translations, grids, tls.translations);
   scale_translations(translations, factors);
 
   clip_and_lock_translations(sd, ss, positions, translations);
   apply_translations(translations, grids, subdiv_ccg);
 }
 
-static void calc_bmesh(const Sculpt &sd,
+static void calc_bmesh(const Depsgraph &depsgraph,
+                       const Sculpt &sd,
                        Object &object,
                        const Brush &brush,
                        const Span<float3> all_translations,
@@ -161,17 +159,14 @@ static void calc_bmesh(const Sculpt &sd,
   apply_hardness_to_distances(cache, distances);
   calc_brush_strength_factors(cache, brush, distances, factors);
 
-  if (cache.automasking) {
-    auto_mask::calc_vert_factors(object, *cache.automasking, node, verts, factors);
-  }
+  auto_mask::calc_vert_factors(depsgraph, object, cache.automasking.get(), node, verts, factors);
 
   calc_brush_texture_factors(ss, brush, positions, factors);
 
   scale_factors(factors, strength);
 
-  tls.translations.resize(verts.size());
-  const MutableSpan<float3> translations = tls.translations;
-  gather_data_vert_bmesh(all_translations, verts, translations);
+  const MutableSpan<float3> translations = gather_data_vert_bmesh(
+      all_translations, verts, tls.translations);
   scale_translations(translations, factors);
 
   clip_and_lock_translations(sd, ss, positions, translations);
@@ -237,35 +232,37 @@ static void calc_translations_bmesh(bke::pbvh::Node &node,
   scatter_data_vert_bmesh(translations.as_span(), verts, all_translations);
 }
 
+}  // namespace enhance_details_cc
+
 /**
  * The brush uses translations calculated at the beginning of the stroke. They can't be calculated
  * dynamically because changing positions will influence neighboring translations. However we can
  * reduce the cost in some cases by skipping initializing values for vertices in hidden or masked
  * nodes.
  */
-static void precalc_translations(Object &object, const MutableSpan<float3> translations)
+void calc_smooth_translations(const Depsgraph &depsgraph,
+                              const Object &object,
+                              const Span<bke::pbvh::Node *> nodes,
+                              const MutableSpan<float3> translations)
 {
-  SculptSession &ss = *object.sculpt;
-  bke::pbvh::Tree &pbvh = *ss.pbvh;
-
-  Vector<bke::pbvh::Node *> effective_nodes = bke::pbvh::search_gather(
-      pbvh, [&](bke::pbvh::Node &node) { return !node_fully_masked_or_hidden(node); });
+  const SculptSession &ss = *object.sculpt;
+  const bke::pbvh::Tree &pbvh = *ss.pbvh;
 
   threading::EnumerableThreadSpecific<LocalData> all_tls;
   switch (pbvh.type()) {
     case bke::pbvh::Type::Mesh: {
       Mesh &mesh = *static_cast<Mesh *>(object.data);
-      const Span<float3> positions_eval = BKE_pbvh_get_vert_positions(pbvh);
+      const Span<float3> positions_eval = bke::pbvh::vert_positions_eval(depsgraph, object);
       const OffsetIndices faces = mesh.faces();
       const Span<int> corner_verts = mesh.corner_verts();
-      threading::parallel_for(effective_nodes.index_range(), 1, [&](const IndexRange range) {
+      threading::parallel_for(nodes.index_range(), 1, [&](const IndexRange range) {
         LocalData &tls = all_tls.local();
         for (const int i : range) {
           calc_translations_faces(positions_eval,
                                   faces,
                                   corner_verts,
                                   ss.vert_to_face_map,
-                                  *effective_nodes[i],
+                                  *nodes[i],
                                   tls,
                                   translations);
         }
@@ -274,10 +271,10 @@ static void precalc_translations(Object &object, const MutableSpan<float3> trans
     }
     case bke::pbvh::Type::Grids: {
       SubdivCCG &subdiv_ccg = *ss.subdiv_ccg;
-      threading::parallel_for(effective_nodes.index_range(), 1, [&](const IndexRange range) {
+      threading::parallel_for(nodes.index_range(), 1, [&](const IndexRange range) {
         LocalData &tls = all_tls.local();
         for (const int i : range) {
-          calc_translations_grids(subdiv_ccg, *effective_nodes[i], tls, translations);
+          calc_translations_grids(subdiv_ccg, *nodes[i], tls, translations);
         }
       });
       break;
@@ -285,19 +282,20 @@ static void precalc_translations(Object &object, const MutableSpan<float3> trans
     case bke::pbvh::Type::BMesh:
       BM_mesh_elem_index_ensure(ss.bm, BM_VERT);
       BM_mesh_elem_table_ensure(ss.bm, BM_VERT);
-      threading::parallel_for(effective_nodes.index_range(), 1, [&](const IndexRange range) {
+      threading::parallel_for(nodes.index_range(), 1, [&](const IndexRange range) {
         LocalData &tls = all_tls.local();
         for (const int i : range) {
-          calc_translations_bmesh(*effective_nodes[i], tls, translations);
+          calc_translations_bmesh(*nodes[i], tls, translations);
         }
       });
       break;
   }
 }
 
-}  // namespace enhance_details_cc
-
-void do_enhance_details_brush(const Sculpt &sd, Object &object, Span<bke::pbvh::Node *> nodes)
+void do_enhance_details_brush(const Depsgraph &depsgraph,
+                              const Sculpt &sd,
+                              Object &object,
+                              Span<bke::pbvh::Node *> nodes)
 {
   SculptSession &ss = *object.sculpt;
   const Brush &brush = *BKE_paint_brush_for_read(&sd.paint);
@@ -305,7 +303,9 @@ void do_enhance_details_brush(const Sculpt &sd, Object &object, Span<bke::pbvh::
 
   if (SCULPT_stroke_is_first_brush_step(*ss.cache)) {
     ss.cache->detail_directions.reinitialize(SCULPT_vertex_count_get(ss));
-    precalc_translations(object, ss.cache->detail_directions);
+    Vector<bke::pbvh::Node *> effective_nodes = bke::pbvh::search_gather(
+        pbvh, [&](bke::pbvh::Node &node) { return !node_fully_masked_or_hidden(node); });
+    calc_smooth_translations(depsgraph, object, effective_nodes, ss.cache->detail_directions);
   }
 
   const float strength = std::clamp(ss.cache->bstrength, -1.0f, 1.0f);
@@ -315,13 +315,14 @@ void do_enhance_details_brush(const Sculpt &sd, Object &object, Span<bke::pbvh::
   switch (pbvh.type()) {
     case bke::pbvh::Type::Mesh: {
       Mesh &mesh = *static_cast<Mesh *>(object.data);
-      const Span<float3> positions_eval = BKE_pbvh_get_vert_positions(pbvh);
-      const Span<float3> vert_normals = BKE_pbvh_get_vert_normals(pbvh);
+      const Span<float3> positions_eval = bke::pbvh::vert_positions_eval(depsgraph, object);
+      const Span<float3> vert_normals = bke::pbvh::vert_normals_eval(depsgraph, object);
       MutableSpan<float3> positions_orig = mesh.vert_positions_for_write();
       threading::parallel_for(nodes.index_range(), 1, [&](const IndexRange range) {
         LocalData &tls = all_tls.local();
         for (const int i : range) {
-          calc_faces(sd,
+          calc_faces(depsgraph,
+                     sd,
                      brush,
                      positions_eval,
                      vert_normals,
@@ -340,7 +341,7 @@ void do_enhance_details_brush(const Sculpt &sd, Object &object, Span<bke::pbvh::
       threading::parallel_for(nodes.index_range(), 1, [&](const IndexRange range) {
         LocalData &tls = all_tls.local();
         for (const int i : range) {
-          calc_grids(sd, object, brush, translations, strength, *nodes[i], tls);
+          calc_grids(depsgraph, sd, object, brush, translations, strength, *nodes[i], tls);
         }
       });
       break;
@@ -348,7 +349,7 @@ void do_enhance_details_brush(const Sculpt &sd, Object &object, Span<bke::pbvh::
       threading::parallel_for(nodes.index_range(), 1, [&](const IndexRange range) {
         LocalData &tls = all_tls.local();
         for (const int i : range) {
-          calc_bmesh(sd, object, brush, translations, strength, *nodes[i], tls);
+          calc_bmesh(depsgraph, sd, object, brush, translations, strength, *nodes[i], tls);
         }
       });
       break;

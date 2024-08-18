@@ -1137,8 +1137,36 @@ static void rna_Action_show_errors_update(bContext *C, PointerRNA * /*ptr*/)
   blender::animrig::reevaluate_fcurve_errors(&ac);
 }
 
-static std::optional<std::string> rna_DopeSheet_path(const PointerRNA * /*ptr*/)
+static std::optional<std::string> rna_DopeSheet_path(const PointerRNA *ptr)
 {
+  if (GS(ptr->owner_id->name) == ID_SCR) {
+    const bScreen *screen = reinterpret_cast<bScreen *>(ptr->owner_id);
+    const bDopeSheet *ads = static_cast<bDopeSheet *>(ptr->data);
+    int area_index;
+    int space_index;
+    LISTBASE_FOREACH_INDEX (ScrArea *, area, &screen->areabase, area_index) {
+      LISTBASE_FOREACH_INDEX (SpaceLink *, sl, &area->spacedata, space_index) {
+        if (sl->spacetype == SPACE_GRAPH) {
+          SpaceGraph *sipo = reinterpret_cast<SpaceGraph *>(sl);
+          if (sipo->ads == ads) {
+            return fmt::format("areas[{}].spaces[{}].dopesheet", area_index, space_index);
+          }
+        }
+        else if (sl->spacetype == SPACE_NLA) {
+          SpaceNla *snla = reinterpret_cast<SpaceNla *>(sl);
+          if (snla->ads == ads) {
+            return fmt::format("areas[{}].spaces[{}].dopesheet", area_index, space_index);
+          }
+        }
+        else if (sl->spacetype == SPACE_ACTION) {
+          SpaceAction *saction = reinterpret_cast<SpaceAction *>(sl);
+          if (&saction->ads == ads) {
+            return fmt::format("areas[{}].spaces[{}].dopesheet", area_index, space_index);
+          }
+        }
+      }
+    }
+  }
   return "dopesheet";
 }
 
@@ -1501,7 +1529,7 @@ static void rna_def_action_slots(BlenderRNA *brna, PropertyRNA *cprop)
       "Data-Block",
       "If given, the new slot will be named after this data-block, and limited to animating "
       "data-blocks of its type. If ommitted, limiting the ID type will happen as soon as the "
-      "slot is assigned");
+      "slot is assigned.");
   /* Clear out the PARM_REQUIRED flag, which is set by default for pointer parameters. */
   RNA_def_parameter_flags(parm, PropertyFlag(0), ParameterFlag(0));
 
@@ -1526,7 +1554,7 @@ static void rna_def_action_layers(BlenderRNA *brna, PropertyRNA *cprop)
   RNA_def_function_flag(func, FUNC_USE_CONTEXT | FUNC_USE_REPORTS);
   RNA_def_function_ui_description(
       func,
-      "Add a layer to the Animation. Currently an Animation can only have at most one layer");
+      "Add a layer to the Animation. Currently an Animation can only have at most one layer.");
   parm = RNA_def_string(func,
                         "name",
                         nullptr,
@@ -1584,7 +1612,7 @@ static void rna_def_action_slot(BlenderRNA *brna)
       prop,
       "Slot Display Name",
       "Name of the slot for showing in the interface. It is the name, without the first two "
-      "characters that identify what kind of data-block it animates");
+      "characters that identify what kind of data-block it animates.");
 
   prop = RNA_def_property(srna, "handle", PROP_INT, PROP_NONE);
   RNA_def_property_clear_flag(prop, PROP_EDITABLE);
@@ -1635,7 +1663,7 @@ static void rna_def_ActionLayer_strips(BlenderRNA *brna, PropertyRNA *cprop)
   func = RNA_def_function(srna, "new", "rna_ActionStrips_new");
   RNA_def_function_ui_description(func,
                                   "Add a new strip to the layer. Currently a layer can only have "
-                                  "one strip, with infinite boundaries");
+                                  "one strip, with infinite boundaries.");
   RNA_def_function_flag(func, FUNC_USE_CONTEXT | FUNC_USE_REPORTS);
   parm = RNA_def_enum(func,
                       "type",
@@ -1880,12 +1908,12 @@ static void rna_def_channelbag_fcurves(BlenderRNA *brna, PropertyRNA *cprop)
       srna, "F-Curves", "Collection of F-Curves for a specific action slot, on a specific strip");
 
   /* ChannelBag.fcurves.new(...) */
-  extern struct FCurve *ActionChannelBagFCurves_new_func(struct ID * _selfid,
-                                                         struct ActionChannelBag * _self,
-                                                         Main * bmain,
-                                                         ReportList * reports,
-                                                         const char *data_path,
-                                                         int index);
+  extern FCurve *ActionChannelBagFCurves_new_func(ID * _selfid,
+                                                  ActionChannelBag * _self,
+                                                  Main * bmain,
+                                                  ReportList * reports,
+                                                  const char *data_path,
+                                                  int index);
 
   func = RNA_def_function(srna, "new", "rna_ChannelBag_fcurve_new");
   RNA_def_function_ui_description(func, "Add an F-Curve to the channelbag");
@@ -2233,7 +2261,7 @@ static void rna_def_action(BlenderRNA *brna)
       prop,
       "Is Legacy Action",
       "Return whether this is a legacy Action. Legacy Actions have no layers or slots. An "
-      "empty Action considered as both a 'legacy' and a 'layered' Action");
+      "empty Action considered as both a 'legacy' and a 'layered' Action.");
   RNA_def_property_boolean_funcs(prop, "rna_Action_is_action_legacy_get", nullptr);
 
   prop = RNA_def_property(srna, "is_action_layered", PROP_BOOLEAN, PROP_NONE);
@@ -2241,7 +2269,7 @@ static void rna_def_action(BlenderRNA *brna)
   RNA_def_property_ui_text(prop,
                            "Is Layered Action",
                            "Return whether this is a layered Action. An empty Action considered "
-                           "as both a 'layered' and a 'layered' Action");
+                           "as both a 'layered' and a 'layered' Action.");
   RNA_def_property_boolean_funcs(prop, "rna_Action_is_action_layered_get", nullptr);
 #  endif  // WITH_ANIM_BAKLAVA
 
@@ -2359,7 +2387,7 @@ static void rna_def_action(BlenderRNA *brna)
 
   FunctionRNA *func = RNA_def_function(srna, "deselect_keys", "rna_Action_deselect_keys");
   RNA_def_function_ui_description(
-      func, "Deselects all keys of the Action. The selection status of F-Curves is unchanged");
+      func, "Deselects all keys of the Action. The selection status of F-Curves is unchanged.");
 
   rna_def_action_legacy(brna, srna);
 

@@ -5,6 +5,7 @@
 #include "BKE_volume_grid.hh"
 #include "BKE_volume_openvdb.hh"
 
+#include "BLI_memory_counter.hh"
 #include "BLI_task.hh"
 
 #ifdef WITH_OPENVDB
@@ -63,10 +64,11 @@ VolumeGridData::VolumeGridData(std::shared_ptr<openvdb::GridBase> grid)
     : grid_(std::move(grid)), tree_loaded_(true), transform_loaded_(true), meta_data_loaded_(true)
 {
   BLI_assert(grid_);
-  BLI_assert(grid_.unique());
+  BLI_assert(grid_.use_count() == 1);
   BLI_assert(grid_->isTreeUnique());
 
-  tree_sharing_info_ = MEM_new<OpenvdbTreeSharingInfo>(__func__, grid_->baseTreePtr());
+  tree_sharing_info_ = ImplicitSharingPtr<>(
+      MEM_new<OpenvdbTreeSharingInfo>(__func__, grid_->baseTreePtr()));
   tree_access_token_ = std::make_shared<AccessToken>();
 }
 
@@ -81,12 +83,7 @@ VolumeGridData::VolumeGridData(std::function<std::shared_ptr<openvdb::GridBase>(
   tree_access_token_ = std::make_shared<AccessToken>();
 }
 
-VolumeGridData::~VolumeGridData()
-{
-  if (tree_sharing_info_) {
-    tree_sharing_info_->remove_user_and_delete_if_last();
-  }
-}
+VolumeGridData::~VolumeGridData() = default;
 
 void VolumeGridData::delete_self()
 {
@@ -125,8 +122,8 @@ std::shared_ptr<openvdb::GridBase> VolumeGridData::grid_ptr_for_write(
   else {
     auto tree_copy = grid_->baseTree().copy();
     grid_->setTree(tree_copy);
-    tree_sharing_info_->remove_user_and_delete_if_last();
-    tree_sharing_info_ = MEM_new<OpenvdbTreeSharingInfo>(__func__, std::move(tree_copy));
+    tree_sharing_info_ = ImplicitSharingPtr<>(
+        MEM_new<OpenvdbTreeSharingInfo>(__func__, std::move(tree_copy)));
   }
   /* Can't reload the grid anymore if it has been changed. */
   lazy_load_grid_ = {};
@@ -209,6 +206,17 @@ bool VolumeGridData::is_loaded() const
   return tree_loaded_ && transform_loaded_ && meta_data_loaded_;
 }
 
+void VolumeGridData::count_memory(MemoryCounter &memory) const
+{
+  std::lock_guard lock{mutex_};
+  if (!tree_loaded_) {
+    return;
+  }
+  const openvdb::TreeBase &tree = grid_->baseTree();
+  memory.add_shared(tree_sharing_info_.get(),
+                    [&](MemoryCounter &shared_memory) { shared_memory.add(tree.memUsage()); });
+}
+
 std::string VolumeGridData::error_message() const
 {
   std::lock_guard lock{mutex_};
@@ -221,17 +229,19 @@ void VolumeGridData::unload_tree_if_possible() const
   if (!grid_) {
     return;
   }
+  if (!tree_loaded_) {
+    return;
+  }
   if (!this->is_reloadable()) {
     return;
   }
-  if (!tree_access_token_.unique()) {
+  if (tree_access_token_.use_count() != 1) {
     /* Some code is using the tree currently, so it can't be freed. */
     return;
   }
   grid_->newTree();
   tree_loaded_ = false;
-  tree_sharing_info_->remove_user_and_delete_if_last();
-  tree_sharing_info_ = nullptr;
+  tree_sharing_info_.reset();
 }
 
 GVolumeGrid VolumeGridData::copy() const
@@ -243,7 +253,6 @@ GVolumeGrid VolumeGridData::copy() const
   /* Makes a deep copy of the meta-data but shares the tree. */
   new_copy->grid_ = grid_->copyGrid();
   new_copy->tree_sharing_info_ = tree_sharing_info_;
-  new_copy->tree_sharing_info_->add_user();
   new_copy->tree_loaded_ = tree_loaded_;
   new_copy->transform_loaded_ = transform_loaded_;
   new_copy->meta_data_loaded_ = meta_data_loaded_;
@@ -287,7 +296,7 @@ void VolumeGridData::ensure_grid_loaded() const
     loaded_grid = openvdb::FloatGrid::create();
   }
   BLI_assert(loaded_grid);
-  BLI_assert(loaded_grid.unique());
+  BLI_assert(loaded_grid.use_count() == 1);
   BLI_assert(loaded_grid->isTreeUnique());
 
   if (grid_) {
@@ -304,7 +313,8 @@ void VolumeGridData::ensure_grid_loaded() const
   }
 
   BLI_assert(tree_sharing_info_ == nullptr);
-  tree_sharing_info_ = MEM_new<OpenvdbTreeSharingInfo>(__func__, grid_->baseTreePtr());
+  tree_sharing_info_ = ImplicitSharingPtr<>(
+      MEM_new<OpenvdbTreeSharingInfo>(__func__, grid_->baseTreePtr()));
 
   tree_loaded_ = true;
   transform_loaded_ = true;
@@ -476,6 +486,15 @@ bool is_loaded(const VolumeGridData &grid)
 #else
   UNUSED_VARS(grid);
   return false;
+#endif
+}
+
+void count_memory(const VolumeGridData &grid, MemoryCounter &memory)
+{
+#ifdef WITH_OPENVDB
+  grid.count_memory(memory);
+#else
+  UNUSED_VARS(grid, memory);
 #endif
 }
 

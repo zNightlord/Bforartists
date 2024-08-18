@@ -114,10 +114,12 @@
 #include "BKE_main.hh"
 #include "BKE_main_namemap.hh"
 #include "BKE_node.hh"
-#include "BKE_packedFile.h"
+#include "BKE_packedFile.hh"
 #include "BKE_preferences.h"
 #include "BKE_report.hh"
 #include "BKE_workspace.hh"
+
+#include "DRW_engine.hh"
 
 #include "BLO_blend_defs.hh"
 #include "BLO_blend_validate.hh"
@@ -428,7 +430,7 @@ struct WriteData {
      */
     bool critical_error;
     /**
-     * A set of all 'old' adresses used as uid of written blocks for the current ID. Allows
+     * A set of all 'old' addresses used as UID of written blocks for the current ID. Allows
      * detecting invalid re-uses of the same address multiple times.
      */
     blender::Set<const void *> per_id_addresses_set;
@@ -738,9 +740,7 @@ static void writestruct_at_address_nr(
   bh.nr = nr;
 
   bh.SDNAnr = struct_nr;
-  const SDNA_Struct *struct_info = wd->sdna->structs[bh.SDNAnr];
-
-  bh.len = nr * wd->sdna->types_size[struct_info->type];
+  bh.len = nr * DNA_struct_size(wd->sdna, bh.SDNAnr);
 
   if (bh.len == 0) {
     return;
@@ -783,7 +783,8 @@ static void writedata(WriteData *wd, int filecode, size_t len, const void *adr)
   bh.code = filecode;
   bh.old = adr;
   bh.nr = 1;
-  bh.SDNAnr = 0;
+  BLI_STATIC_ASSERT(SDNA_RAW_DATA_STRUCT_INDEX == 0, "'raw data' SDNA struct index should be 0")
+  bh.SDNAnr = SDNA_RAW_DATA_STRUCT_INDEX;
   bh.len = int(len);
 
   mywrite(wd, &bh, sizeof(BHead));
@@ -1038,8 +1039,9 @@ static void write_libraries(WriteData *wd, Main *main)
       found_one = false;
       while (!found_one && tot--) {
         for (id = static_cast<ID *>(lbarray[tot]->first); id; id = static_cast<ID *>(id->next)) {
-          if (id->us > 0 && ((id->tag & LIB_TAG_EXTERN) || ((id->tag & LIB_TAG_INDIRECT) &&
-                                                            (id->flag & LIB_INDIRECT_WEAK_LINK))))
+          if (id->us > 0 &&
+              ((id->tag & ID_TAG_EXTERN) ||
+               ((id->tag & ID_TAG_INDIRECT) && (id->flag & ID_FLAG_INDIRECT_WEAK_LINK))))
           {
             found_one = true;
             break;
@@ -1074,8 +1076,9 @@ static void write_libraries(WriteData *wd, Main *main)
       /* Write link placeholders for all direct linked IDs. */
       while (a--) {
         for (id = static_cast<ID *>(lbarray[a]->first); id; id = static_cast<ID *>(id->next)) {
-          if (id->us > 0 && ((id->tag & LIB_TAG_EXTERN) || ((id->tag & LIB_TAG_INDIRECT) &&
-                                                            (id->flag & LIB_INDIRECT_WEAK_LINK))))
+          if (id->us > 0 &&
+              ((id->tag & ID_TAG_EXTERN) ||
+               ((id->tag & ID_TAG_INDIRECT) && (id->flag & ID_FLAG_INDIRECT_WEAK_LINK))))
           {
             if (!BKE_idtype_idcode_is_linkable(GS(id->name))) {
               CLOG_ERROR(&LOG,
@@ -1219,7 +1222,7 @@ static void id_buffer_init_from_id(BLO_Write_IDBuffer *id_buffer, ID *id, const 
 
   /* Clear runtime data to reduce false detection of changed data in undo/redo context. */
   if (is_undo) {
-    temp_id->tag &= LIB_TAG_KEEP_ON_UNDO;
+    temp_id->tag &= ID_TAG_KEEP_ON_UNDO;
   }
   else {
     temp_id->tag = 0;
@@ -1239,6 +1242,11 @@ static void id_buffer_init_from_id(BLO_Write_IDBuffer *id_buffer, ID *id, const 
    * when we need to re-read the ID into its original address, this is currently cleared in
    * #direct_link_id_common in `readfile.cc` anyway. */
   temp_id->py_instance = nullptr;
+
+  DrawDataList *drawdata = DRW_drawdatalist_from_id(temp_id);
+  if (drawdata) {
+    BLI_listbase_clear(reinterpret_cast<ListBase *>(drawdata));
+  }
 }
 
 /* Helper callback for checking linked IDs used by given ID (assumed local), to ensure directly
@@ -1255,7 +1263,7 @@ static int write_id_direct_linked_data_process_cb(LibraryIDLinkCallbackData *cb_
   BLI_assert(!ID_IS_LINKED(self_id));
   BLI_assert((cb_flag & IDWALK_CB_INDIRECT_USAGE) == 0);
 
-  if (self_id->tag & LIB_TAG_RUNTIME) {
+  if (self_id->tag & ID_TAG_RUNTIME) {
     return IDWALK_RET_NOP;
   }
 
@@ -1328,8 +1336,8 @@ static bool write_file_handle(Main *mainvar,
            *     easily discoverable and browsable from the main UI. */
         }
         else {
-          id_iter->tag |= LIB_TAG_INDIRECT;
-          id_iter->tag &= ~LIB_TAG_EXTERN;
+          id_iter->tag |= ID_TAG_INDIRECT;
+          id_iter->tag &= ~ID_TAG_EXTERN;
         }
       }
     }
@@ -1387,8 +1395,8 @@ static bool write_file_handle(Main *mainvar,
       for (; id; id = static_cast<ID *>(id->next)) {
         /* We should never attempt to write non-regular IDs
          * (i.e. all kind of temp/runtime ones). */
-        BLI_assert(
-            (id->tag & (LIB_TAG_NO_MAIN | LIB_TAG_NO_USER_REFCOUNT | LIB_TAG_NOT_ALLOCATED)) == 0);
+        BLI_assert((id->tag & (ID_TAG_NO_MAIN | ID_TAG_NO_USER_REFCOUNT | ID_TAG_NOT_ALLOCATED)) ==
+                   0);
 
         /* We only write unused IDs in undo case. */
         if (!wd->use_memfile) {
@@ -1425,7 +1433,7 @@ static bool write_file_handle(Main *mainvar,
           }
         }
 
-        if ((id->tag & LIB_TAG_RUNTIME) != 0 && !wd->use_memfile) {
+        if ((id->tag & ID_TAG_RUNTIME) != 0 && !wd->use_memfile) {
           /* Runtime IDs are never written to .blend files, and they should not influence
            * (in)direct status of linked IDs they may use. */
           continue;
@@ -1434,7 +1442,7 @@ static bool write_file_handle(Main *mainvar,
         const bool do_override = !ELEM(override_storage, nullptr, bmain) &&
                                  ID_IS_OVERRIDE_LIBRARY_REAL(id);
 
-        /* If not writing undo data, properly set directly linked IDs as `LIB_TAG_EXTERN`. */
+        /* If not writing undo data, properly set directly linked IDs as `ID_TAG_EXTERN`. */
         if (!wd->use_memfile) {
           BKE_library_foreach_ID_link(bmain,
                                       id,
@@ -1487,7 +1495,7 @@ static bool write_file_handle(Main *mainvar,
    *
    * Note that we *borrow* the pointer to 'DNAstr',
    * so writing each time uses the same address and doesn't cause unnecessary undo overhead. */
-  writedata(wd, BLO_CODE_DNA1, size_t(wd->sdna->data_len), wd->sdna->data);
+  writedata(wd, BLO_CODE_DNA1, size_t(wd->sdna->data_size), wd->sdna->data);
 
   /* End of file. */
   memset(&bhead, 0, sizeof(BHead));

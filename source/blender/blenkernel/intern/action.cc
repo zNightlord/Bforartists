@@ -452,7 +452,7 @@ static void action_blend_write(BlendWriter *writer, ID *id, const void *id_addre
      * Note that the FCurves themselves have been written as part of the layered
      * animation writing code called above. Writing them again as part of the
      * handling of the legacy `action.fcurves` ListBase would corrupt the
-     * blendfile by generating two `BHead` `DATA` blocks with the same old
+     * blend-file by generating two `BHead` `DATA` blocks with the same old
      * address for the same ID.
      */
     action_blend_write_clear_legacy_fcurves_listbase(action.curves);
@@ -475,7 +475,8 @@ static void action_blend_write(BlendWriter *writer, ID *id, const void *id_addre
 #ifdef WITH_ANIM_BAKLAVA
 static void read_channelbag(BlendDataReader *reader, animrig::ChannelBag &channelbag)
 {
-  BLO_read_pointer_array(reader, reinterpret_cast<void **>(&channelbag.fcurve_array));
+  BLO_read_pointer_array(
+      reader, channelbag.fcurve_array_num, reinterpret_cast<void **>(&channelbag.fcurve_array));
 
   for (int i = 0; i < channelbag.fcurve_array_num; i++) {
     BLO_read_struct(reader, FCurve, &channelbag.fcurve_array[i]);
@@ -492,7 +493,8 @@ static void read_channelbag(BlendDataReader *reader, animrig::ChannelBag &channe
 
 static void read_keyframe_strip(BlendDataReader *reader, animrig::KeyframeStrip &strip)
 {
-  BLO_read_pointer_array(reader, reinterpret_cast<void **>(&strip.channelbag_array));
+  BLO_read_pointer_array(
+      reader, strip.channelbag_array_num, reinterpret_cast<void **>(&strip.channelbag_array));
 
   for (int i = 0; i < strip.channelbag_array_num; i++) {
     BLO_read_struct(reader, ActionChannelBag, &strip.channelbag_array[i]);
@@ -503,13 +505,15 @@ static void read_keyframe_strip(BlendDataReader *reader, animrig::KeyframeStrip 
 
 static void read_layers(BlendDataReader *reader, animrig::Action &action)
 {
-  BLO_read_pointer_array(reader, reinterpret_cast<void **>(&action.layer_array));
+  BLO_read_pointer_array(
+      reader, action.layer_array_num, reinterpret_cast<void **>(&action.layer_array));
 
   for (int layer_idx = 0; layer_idx < action.layer_array_num; layer_idx++) {
     BLO_read_struct(reader, ActionLayer, &action.layer_array[layer_idx]);
     ActionLayer *layer = action.layer_array[layer_idx];
 
-    BLO_read_pointer_array(reader, reinterpret_cast<void **>(&layer->strip_array));
+    BLO_read_pointer_array(
+        reader, layer->strip_array_num, reinterpret_cast<void **>(&layer->strip_array));
     for (int strip_idx = 0; strip_idx < layer->strip_array_num; strip_idx++) {
       BLO_read_struct(reader, ActionStrip, &layer->strip_array[strip_idx]);
       ActionStrip *dna_strip = layer->strip_array[strip_idx];
@@ -526,7 +530,8 @@ static void read_layers(BlendDataReader *reader, animrig::Action &action)
 
 static void read_slots(BlendDataReader *reader, animrig::Action &action)
 {
-  BLO_read_pointer_array(reader, reinterpret_cast<void **>(&action.slot_array));
+  BLO_read_pointer_array(
+      reader, action.slot_array_num, reinterpret_cast<void **>(&action.slot_array));
 
   for (int i = 0; i < action.slot_array_num; i++) {
     BLO_read_struct(reader, ActionSlot, &action.slot_array[i]);
@@ -1846,132 +1851,6 @@ bool BKE_action_is_cyclic(const bAction *act)
   return act && (act->flag & ACT_FRAME_RANGE) && (act->flag & ACT_CYCLIC);
 }
 
-eAction_TransformFlags BKE_action_get_item_transform_flags(bAction *act,
-                                                           Object *ob,
-                                                           bPoseChannel *pchan,
-                                                           ListBase *curves)
-{
-  PointerRNA ptr;
-  short flags = 0;
-
-  /* build PointerRNA from provided data to obtain the paths to use */
-  if (pchan) {
-    ptr = RNA_pointer_create((ID *)ob, &RNA_PoseBone, pchan);
-  }
-  else if (ob) {
-    ptr = RNA_id_pointer_create((ID *)ob);
-  }
-  else {
-    return eAction_TransformFlags(0);
-  }
-
-  /* get the basic path to the properties of interest */
-  const std::optional<std::string> basePath = RNA_path_from_ID_to_struct(&ptr);
-  if (!basePath) {
-    return eAction_TransformFlags(0);
-  }
-
-  /* search F-Curves for the given properties
-   * - we cannot use the groups, since they may not be grouped in that way...
-   */
-  LISTBASE_FOREACH (FCurve *, fcu, &act->curves) {
-    const char *bPtr = nullptr, *pPtr = nullptr;
-
-    /* If enough flags have been found,
-     * we can stop checking unless we're also getting the curves. */
-    if ((flags == ACT_TRANS_ALL) && (curves == nullptr)) {
-      break;
-    }
-
-    /* just in case... */
-    if (fcu->rna_path == nullptr) {
-      continue;
-    }
-
-    /* step 1: check for matching base path */
-    bPtr = strstr(fcu->rna_path, basePath->c_str());
-
-    if (bPtr) {
-      /* we must add len(basePath) bytes to the match so that we are at the end of the
-       * base path so that we don't get false positives with these strings in the names
-       */
-      bPtr += strlen(basePath->c_str());
-
-      /* step 2: check for some property with transforms
-       * - to speed things up, only check for the ones not yet found
-       *   unless we're getting the curves too
-       * - if we're getting the curves, the BLI_genericNodeN() creates a LinkData
-       *   node wrapping the F-Curve, which then gets added to the list
-       * - once a match has been found, the curve cannot possibly be any other one
-       */
-      if ((curves) || (flags & ACT_TRANS_LOC) == 0) {
-        pPtr = strstr(bPtr, "location");
-        if (pPtr) {
-          flags |= ACT_TRANS_LOC;
-
-          if (curves) {
-            BLI_addtail(curves, BLI_genericNodeN(fcu));
-          }
-          continue;
-        }
-      }
-
-      if ((curves) || (flags & ACT_TRANS_SCALE) == 0) {
-        pPtr = strstr(bPtr, "scale");
-        if (pPtr) {
-          flags |= ACT_TRANS_SCALE;
-
-          if (curves) {
-            BLI_addtail(curves, BLI_genericNodeN(fcu));
-          }
-          continue;
-        }
-      }
-
-      if ((curves) || (flags & ACT_TRANS_ROT) == 0) {
-        pPtr = strstr(bPtr, "rotation");
-        if (pPtr) {
-          flags |= ACT_TRANS_ROT;
-
-          if (curves) {
-            BLI_addtail(curves, BLI_genericNodeN(fcu));
-          }
-          continue;
-        }
-      }
-
-      if ((curves) || (flags & ACT_TRANS_BBONE) == 0) {
-        /* bbone shape properties */
-        pPtr = strstr(bPtr, "bbone_");
-        if (pPtr) {
-          flags |= ACT_TRANS_BBONE;
-
-          if (curves) {
-            BLI_addtail(curves, BLI_genericNodeN(fcu));
-          }
-          continue;
-        }
-      }
-
-      if ((curves) || (flags & ACT_TRANS_PROP) == 0) {
-        /* custom properties only */
-        pPtr = strstr(bPtr, "[\"");
-        if (pPtr) {
-          flags |= ACT_TRANS_PROP;
-
-          if (curves) {
-            BLI_addtail(curves, BLI_genericNodeN(fcu));
-          }
-          continue;
-        }
-      }
-    }
-  }
-
-  /* return flags found */
-  return eAction_TransformFlags(flags);
-}
-
 /* ************** Pose Management Tools ****************** */
 
 void BKE_pose_rest(bPose *pose, bool selected_bones_only)
@@ -2271,7 +2150,13 @@ void BKE_pose_blend_read_data(BlendDataReader *reader, ID *id_owner, bPose *pose
   }
   pose->ikdata = nullptr;
   if (pose->ikparam != nullptr) {
-    BLO_read_data_address(reader, &pose->ikparam);
+    const char *structname = BKE_pose_ikparam_get_name(pose);
+    if (structname) {
+      pose->ikparam = BLO_read_struct_by_name_array(reader, structname, 1, pose->ikparam);
+    }
+    else {
+      pose->ikparam = nullptr;
+    }
   }
 }
 

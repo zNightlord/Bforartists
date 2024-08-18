@@ -77,7 +77,7 @@
 #include "BKE_main.hh"
 #include "BKE_main_namemap.hh"
 #include "BKE_node.hh"
-#include "BKE_packedFile.h"
+#include "BKE_packedFile.hh"
 #include "BKE_report.hh"
 #include "BKE_scene.hh"
 #include "BKE_screen.hh"
@@ -3571,19 +3571,21 @@ static int wm_save_as_mainfile_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
 
-  if (!is_save_as) {
-    /* If saved as current file, there are technically no more compatibility issues, the file on
-     * disk now matches the currently opened data version-wise. */
+  if (!use_save_as_copy) {
+    /* If saved file is the active one, there are technically no more compatibility issues, the
+     * file on disk now matches the currently opened data version-wise. */
     bmain->has_forward_compatibility_issues = false;
-  }
 
-  WM_event_add_notifier(C, NC_WM | ND_FILESAVE, nullptr);
-  if (wmWindowManager *wm = CTX_wm_manager(C)) {
-    /* Restart auto-save timer to avoid unnecessary unexpected freezing (because of auto-save) when
-     * often saving manually. */
-    wm_autosave_timer_end(wm);
-    wm_autosave_timer_begin(wm);
-    wm->autosave_scheduled = false;
+    /* If saved file is the active one, notify WM so that saved status and window title can be
+     * updated. */
+    WM_event_add_notifier(C, NC_WM | ND_FILESAVE, nullptr);
+    if (wmWindowManager *wm = CTX_wm_manager(C)) {
+      /* Restart auto-save timer to avoid unnecessary unexpected freezing (because of auto-save)
+       * when often saving manually. */
+      wm_autosave_timer_end(wm);
+      wm_autosave_timer_begin(wm);
+      wm->autosave_scheduled = false;
+    }
   }
 
   if (!is_save_as && RNA_boolean_get(op->ptr, "exit")) {

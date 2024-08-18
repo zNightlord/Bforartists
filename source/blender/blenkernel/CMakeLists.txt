@@ -10,7 +10,6 @@ set(INC
   ../bmesh
   ../draw
   ../functions
-  ../gpencil_modifiers_legacy
   ../gpu
   ../ikplugin
   ../imbuf
@@ -477,7 +476,7 @@ set(SRC
   BKE_object_types.hh
   BKE_ocean.h
   BKE_outliner_treehash.hh
-  BKE_packedFile.h
+  BKE_packedFile.hh
   BKE_paint.hh
   BKE_particle.h
   BKE_pbvh.hh
@@ -567,7 +566,6 @@ set(LIB
   bf_draw
   PRIVATE bf::extern::curve_fit_nd
   bf_functions
-  bf_gpencil_modifiers_legacy
   bf_gpu
   bf_ikplugin
   bf_imbuf

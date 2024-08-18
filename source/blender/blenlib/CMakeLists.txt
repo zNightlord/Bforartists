@@ -31,7 +31,6 @@ set(SRC
   intern/BLI_ghash_utils.cc
   intern/BLI_heap.c
   intern/BLI_heap_simple.c
-  intern/BLI_index_range.cc
   intern/BLI_kdopbvh.c
   intern/BLI_linklist.c
   intern/BLI_linklist_lockfree.c
@@ -117,6 +116,7 @@ set(SRC
   intern/math_vec.cc
   intern/math_vector.c
   intern/math_vector_inline.c
+  intern/memory_counter.cc
   intern/memory_utils.c
   intern/mesh_boolean.cc
   intern/mesh_intersect.cc
@@ -198,6 +198,7 @@ set(SRC
   BLI_bounds.hh
   BLI_bounds_types.hh
   BLI_boxpack_2d.h
+  BLI_build_config.h
   BLI_buffer.h
   BLI_cache_mutex.hh
   BLI_color.hh
@@ -317,6 +318,7 @@ set(SRC
   BLI_memarena.h
   BLI_memblock.h
   BLI_memiter.h
+  BLI_memory_counter.hh
   BLI_memory_utils.h
   BLI_memory_utils.hh
   BLI_mempool.h
@@ -510,6 +512,7 @@ if(WITH_GTESTS)
     tests/BLI_bit_ref_test.cc
     tests/BLI_bit_span_test.cc
     tests/BLI_bit_vector_test.cc
+    tests/BLI_build_config_test.cc
     tests/BLI_bitmap_test.cc
     tests/BLI_bounds_test.cc
     tests/BLI_color_test.cc
@@ -556,6 +559,7 @@ if(WITH_GTESTS)
     tests/BLI_math_vector_test.cc
     tests/BLI_math_vector_types_test.cc
     tests/BLI_memiter_test.cc
+    tests/BLI_memory_counter_test.cc
     tests/BLI_memory_utils_test.cc
     tests/BLI_mesh_boolean_test.cc
     tests/BLI_mesh_intersect_test.cc

@@ -474,6 +474,7 @@ class NODE_MT_category_import(Menu):
     def draw(self, _context):
         layout = self.layout
         node_add_menu.add_node_type(layout, "GeometryNodeImportOBJ")
+        node_add_menu.add_node_type(layout, "GeometryNodeImportPLY")
         node_add_menu.add_node_type(layout, "GeometryNodeImportSTL")
         node_add_menu.draw_assets_for_catalog(layout, "Input/Import")
 
@@ -564,6 +565,7 @@ class NODE_MT_category_GEO_TEXTURE(Menu):
         layout = self.layout
         node_add_menu.add_node_type(layout, "ShaderNodeTexBrick")
         node_add_menu.add_node_type(layout, "ShaderNodeTexChecker")
+        node_add_menu.add_node_type(layout, "ShaderNodeTexGabor")
         node_add_menu.add_node_type(layout, "ShaderNodeTexGradient")
         node_add_menu.add_node_type(layout, "GeometryNodeImageTexture")
         node_add_menu.add_node_type(layout, "ShaderNodeTexMagic")

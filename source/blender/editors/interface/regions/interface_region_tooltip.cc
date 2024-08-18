@@ -865,6 +865,11 @@ static std::unique_ptr<uiTooltipData> ui_tooltip_data_from_button_or_extra_icon(
         *data, std::move(enum_label), {}, UI_TIP_STYLE_HEADER, UI_TIP_LC_NORMAL);
   }
 
+  /* Don't include further details if this is just a quick label tooltip. */
+  if (is_label) {
+    return data->fields.is_empty() ? nullptr : std::move(data);
+  }
+
   /* Enum field label & tip. */
   if (!enum_tip.empty()) {
     UI_tooltip_text_field_add(
@@ -1203,8 +1208,8 @@ static ARegion *ui_tooltip_create_with_data(bContext *C,
 {
   const float pad_px = UI_TIP_PADDING;
   wmWindow *win = CTX_wm_window(C);
-  const int winx = WM_window_pixels_x(win);
-  const int winy = WM_window_pixels_y(win);
+  const int winx = WM_window_native_pixel_x(win);
+  const int winy = WM_window_native_pixel_y(win);
   const uiStyle *style = UI_style_get();
   rcti rect_i;
   int font_flag = 0;

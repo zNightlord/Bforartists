@@ -1323,6 +1323,24 @@ static size_t animfilter_fcurves(bAnimContext *ac,
   return items;
 }
 
+static inline bool fcurve_span_selection_matters(const eAnimFilter_Flags filter_mode)
+{
+  /* This means that ANIMFILTER_SELEDIT only works if ANIMFILTER_FOREDIT is also set. Given the
+   * description on ANIMFILTER_SELEDIT this seems reasonable. */
+  if ((filter_mode & ANIMFILTER_FOREDIT) && (filter_mode & ANIMFILTER_SELEDIT)) {
+    return true;
+  }
+  return filter_mode & (ANIMFILTER_SEL | ANIMFILTER_UNSEL);
+}
+
+static inline bool fcurve_span_must_be_selected(const eAnimFilter_Flags filter_mode)
+{
+  if ((filter_mode & ANIMFILTER_FOREDIT) && (filter_mode & ANIMFILTER_SELEDIT)) {
+    return true;
+  }
+  return filter_mode & ANIMFILTER_SEL;
+}
+
 /**
  * Add `bAnimListElem`s to `anim_data` for each F-Curve in `fcurves`.
  *
@@ -1350,9 +1368,10 @@ static size_t animfilter_fcurves_span(bAnimContext *ac,
   BLI_assert(animated_id);
 
   const bool active_matters = filter_mode & ANIMFILTER_ACTIVE;
-  const bool selection_matters = filter_mode & (ANIMFILTER_SEL | ANIMFILTER_UNSEL);
-  const bool must_be_selected = filter_mode & ANIMFILTER_SEL;
+  const bool selection_matters = fcurve_span_selection_matters(filter_mode);
+  const bool must_be_selected = fcurve_span_must_be_selected(filter_mode);
   const bool visibility_matters = filter_mode & ANIMFILTER_CURVE_VISIBLE;
+  const bool editability_matters = filter_mode & ANIMFILTER_FOREDIT;
   const bool show_only_errors = ac->ads && (ac->ads->filterflag & ADS_FILTER_ONLY_ERRORS);
   const bool filter_by_name = ac->ads && (ac->ads->searchstr[0] != '\0');
 
@@ -1360,6 +1379,10 @@ static size_t animfilter_fcurves_span(bAnimContext *ac,
     /* make_new_animlistelem will return nullptr when fcu == nullptr, and that's
      * going to cause problems. */
     BLI_assert(fcu);
+
+    if (editability_matters && (fcu->flag & FCURVE_PROTECTED)) {
+      continue;
+    }
 
     if (selection_matters && bool(fcu->flag & FCURVE_SELECTED) != must_be_selected) {
       continue;
@@ -1371,6 +1394,9 @@ static size_t animfilter_fcurves_span(bAnimContext *ac,
       continue;
     }
     if (show_only_errors && !fcurve_has_errors(ac, fcu)) {
+      continue;
+    }
+    if (skip_fcurve_selected_data(ac, fcu, animated_id, filter_mode)) {
       continue;
     }
 
@@ -2462,7 +2488,7 @@ static size_t animdata_filter_ds_linestyle(bAnimContext *ac,
   LISTBASE_FOREACH (ViewLayer *, view_layer, &sce->view_layers) {
     LISTBASE_FOREACH (FreestyleLineSet *, lineset, &view_layer->freestyle_config.linesets) {
       if (lineset->linestyle) {
-        lineset->linestyle->id.tag |= LIB_TAG_DOIT;
+        lineset->linestyle->id.tag |= ID_TAG_DOIT;
       }
     }
   }
@@ -2479,10 +2505,10 @@ static size_t animdata_filter_ds_linestyle(bAnimContext *ac,
       ListBase tmp_data = {nullptr, nullptr};
       size_t tmp_items = 0;
 
-      if ((linestyle == nullptr) || !(linestyle->id.tag & LIB_TAG_DOIT)) {
+      if ((linestyle == nullptr) || !(linestyle->id.tag & ID_TAG_DOIT)) {
         continue;
       }
-      linestyle->id.tag &= ~LIB_TAG_DOIT;
+      linestyle->id.tag &= ~ID_TAG_DOIT;
 
       /* add scene-level animation channels */
       BEGIN_ANIMFILTER_SUBCHANNELS (FILTER_LS_SCED(linestyle)) {

@@ -1134,15 +1134,7 @@ void filelist_setlibrary(FileList *filelist, const AssetLibraryReference *asset_
 
 static ImBuf *fileimage_from_icon(int icon_id)
 {
-  int width;
-  int height;
-  blender::Array<uchar> bitmap = BLF_svg_icon_bitmap(icon_id, 256.0f, &width, &height);
-  if (bitmap.is_empty()) {
-    return nullptr;
-  }
-  ImBuf *ibuf = IMB_allocFromBuffer(bitmap.data(), nullptr, width, height, 4);
-  IMB_flipy(ibuf);
-  return ibuf;
+  return UI_svg_icon_bitmap(icon_id, 256.0f, false);
 }
 
 void filelist_init_icons()
@@ -3579,7 +3571,7 @@ static void filelist_readjob_main_recursive(Main *bmain, FileList *filelist)
 #  endif
           //                  files->entry->nr = totbl + 1;
           files->entry->poin = id;
-          fake = id->flag & LIB_FAKEUSER;
+          fake = id->flag & ID_FLAG_FAKEUSER;
           if (ELEM(idcode, ID_MA, ID_TE, ID_LA, ID_WO, ID_IM)) {
             files->typeflag |= FILE_TYPE_IMAGE;
           }

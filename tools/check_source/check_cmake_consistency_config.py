@@ -8,6 +8,7 @@ from typing import (
 )
 
 IGNORE_SOURCE = (
+    "/lib/",
     "/test/",
     "/tests/gtests/",
 
@@ -100,16 +101,21 @@ IGNORE_SOURCE = (
 
 # Ignore cmake file, path pairs,
 # NOTE: keep commented block to show the intended format.
+"""
 IGNORE_SOURCE_MISSING: Tuple[Tuple[str, Tuple[str, ...]], ...] = (
-    # (   # Use for `WITH_NANOVDB`.
-    #     "intern/cycles/kernel/CMakeLists.txt", (
-    #         "nanovdb/util/CSampleFromVoxels.h",
-    #         "nanovdb/util/SampleFromVoxels.h",
-    #         "nanovdb/NanoVDB.h",
-    #         "nanovdb/CNanoVDB.h",
-    #     ),
-    # ),
+    (   # Use for `WITH_NANOVDB`.
+        "intern/cycles/kernel/CMakeLists.txt", (
+            "nanovdb/util/CSampleFromVoxels.h",
+            "nanovdb/util/SampleFromVoxels.h",
+            "nanovdb/NanoVDB.h",
+            "nanovdb/CNanoVDB.h",
+        ),
+    ),
 )
+"""
+IGNORE_SOURCE_MISSING: Tuple[Tuple[str, Tuple[str, ...]], ...] = (
+)
+
 
 IGNORE_CMAKE = (
     "extern/audaspace/CMakeLists.txt",

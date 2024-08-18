@@ -81,9 +81,11 @@ blender::bke::AttrDomain ED_grease_pencil_selection_domain_get(const ToolSetting
 
 namespace blender::ed::greasepencil {
 
-enum class DrawingPlacementDepth { ObjectOrigin, Cursor, Surface, NearestStroke };
+enum class ReprojectMode : int8_t { Front, Side, Top, View, Cursor, Surface, Keep };
 
-enum class DrawingPlacementPlane { View, Front, Side, Top, Cursor };
+enum class DrawingPlacementDepth : int8_t { ObjectOrigin, Cursor, Surface, NearestStroke };
+
+enum class DrawingPlacementPlane : int8_t { View, Front, Side, Top, Cursor };
 
 class DrawingPlacement {
   const ARegion *region_;
@@ -109,6 +111,20 @@ class DrawingPlacement {
                    const View3D &view3d,
                    const Object &eval_object,
                    const bke::greasepencil::Layer *layer);
+
+  /**
+   * Construct the object based on a ReprojectMode enum instead of Scene values.
+   */
+  DrawingPlacement(const Scene &scene,
+                   const ARegion &region,
+                   const View3D &view3d,
+                   const Object &eval_object,
+                   const bke::greasepencil::Layer *layer,
+                   ReprojectMode reproject_mode);
+  DrawingPlacement(const DrawingPlacement &other);
+  DrawingPlacement(DrawingPlacement &&other);
+  DrawingPlacement &operator=(const DrawingPlacement &other);
+  DrawingPlacement &operator=(DrawingPlacement &&other);
   ~DrawingPlacement();
 
  public:
@@ -317,6 +333,16 @@ IndexMask retrieve_visible_strokes(Object &grease_pencil_object,
 IndexMask retrieve_visible_points(Object &object,
                                   const bke::greasepencil::Drawing &drawing,
                                   IndexMaskMemory &memory);
+
+IndexMask retrieve_visible_bezier_handle_points(Object &object,
+                                                const bke::greasepencil::Drawing &drawing,
+                                                int layer_index,
+                                                IndexMaskMemory &memory);
+IndexMask retrieve_visible_bezier_handle_elements(Object &object,
+                                                  const bke::greasepencil::Drawing &drawing,
+                                                  int layer_index,
+                                                  bke::AttrDomain selection_domain,
+                                                  IndexMaskMemory &memory);
 
 IndexMask retrieve_editable_and_selected_strokes(Object &grease_pencil_object,
                                                  const bke::greasepencil::Drawing &drawing,

@@ -307,6 +307,7 @@ static void transform_active_color(bContext *C,
 {
   using namespace blender;
   using namespace blender::ed::sculpt_paint;
+  const Depsgraph &depsgraph = *CTX_data_depsgraph_pointer(C);
   Object &obact = *CTX_data_active_object(C);
 
   /* Ensure valid sculpt state. */
@@ -318,10 +319,10 @@ static void transform_active_color(bContext *C,
   const Mesh &mesh = *static_cast<const Mesh *>(obact.data);
   /* The sculpt undo system needs pbvh::Tree node corner indices for corner domain color
    * attributes. */
-  BKE_pbvh_ensure_node_loops(pbvh, mesh.corner_tris());
+  BKE_pbvh_ensure_node_face_corners(pbvh, mesh.corner_tris());
 
   Vector<bke::pbvh::Node *> nodes = bke::pbvh::search_gather(pbvh, {});
-  undo::push_nodes(obact, nodes, undo::Type::Color);
+  undo::push_nodes(depsgraph, obact, nodes, undo::Type::Color);
 
   transform_active_color_data(*BKE_mesh_from_object(&obact), transform_fn);
 

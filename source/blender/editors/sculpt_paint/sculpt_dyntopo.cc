@@ -126,12 +126,9 @@ static void disable(
   SculptSession &ss = *ob.sculpt;
   Mesh *mesh = static_cast<Mesh *>(ob.data);
 
-  if (ss.attrs.dyntopo_node_id_vertex) {
-    BKE_sculpt_attribute_destroy(&ob, ss.attrs.dyntopo_node_id_vertex);
-  }
-
-  if (ss.attrs.dyntopo_node_id_face) {
-    BKE_sculpt_attribute_destroy(&ob, ss.attrs.dyntopo_node_id_face);
+  if (BMesh *bm = ss.bm) {
+    BM_data_layer_free_named(bm, &bm->vdata, ".sculpt_dyntopo_node_id_vertex");
+    BM_data_layer_free_named(bm, &bm->pdata, ".sculpt_dyntopo_node_id_face");
   }
 
   SCULPT_pbvh_clear(ob);
@@ -189,7 +186,7 @@ void disable_with_undo(Main &bmain, Depsgraph &depsgraph, Scene &scene, Object &
     const bool use_undo = G.background ? (ED_undo_stack_get() != nullptr) : true;
     if (use_undo) {
       undo::push_begin_ex(ob, "Dynamic topology disable");
-      undo::push_node(ob, nullptr, undo::Type::DyntopoEnd);
+      undo::push_node(depsgraph, ob, nullptr, undo::Type::DyntopoEnd);
     }
     disable(bmain, depsgraph, scene, ob, nullptr);
     if (use_undo) {
@@ -209,7 +206,7 @@ static void enable_with_undo(Main &bmain, Depsgraph &depsgraph, Object &ob)
     }
     enable_ex(bmain, depsgraph, ob);
     if (use_undo) {
-      undo::push_node(ob, nullptr, undo::Type::DyntopoBegin);
+      undo::push_node(depsgraph, ob, nullptr, undo::Type::DyntopoBegin);
       undo::push_end(ob);
     }
   }

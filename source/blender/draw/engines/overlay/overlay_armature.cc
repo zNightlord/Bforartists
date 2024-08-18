@@ -973,7 +973,7 @@ static void drw_shgroup_bone_custom_solid(const ArmatureDrawContext *ctx,
    * by #data_eval. This is bad since it gives preference to an object's evaluated mesh over any
    * other data type, but supporting all evaluated geometry components would require a much
    * larger refactor of this area. */
-  Mesh *mesh = BKE_object_get_evaluated_mesh_no_subsurf(custom);
+  Mesh *mesh = BKE_object_get_evaluated_mesh_no_subsurf_unchecked(custom);
   if (mesh != nullptr) {
     drw_shgroup_bone_custom_solid_mesh(
         ctx, *mesh, bone_mat, bone_color, hint_color, outline_color, wire_width, *custom);
@@ -993,7 +993,7 @@ static void drw_shgroup_bone_custom_wire(const ArmatureDrawContext *ctx,
                                          Object *custom)
 {
   /* See comments in #drw_shgroup_bone_custom_solid. */
-  Mesh *mesh = BKE_object_get_evaluated_mesh_no_subsurf(custom);
+  Mesh *mesh = BKE_object_get_evaluated_mesh_no_subsurf_unchecked(custom);
   if (mesh != nullptr) {
     drw_shgroup_bone_custom_mesh_wire(ctx, *mesh, bone_mat, color, wire_width, *custom);
     return;
@@ -2249,6 +2249,10 @@ class ArmatureBoneDrawStrategyLine : public ArmatureBoneDrawStrategy {
       col_bone = col_head = col_tail = ctx->const_color;
     }
     else {
+      if (bone.is_editbone() && bone.flag() & BONE_TIPSEL) {
+        col_tail = &G_draw.block.color_vertex_select.x;
+      }
+
       /* Draw root point if we are not connected to our parent. */
       if (!(bone.has_parent() && (boneflag & BONE_CONNECTED))) {
 
