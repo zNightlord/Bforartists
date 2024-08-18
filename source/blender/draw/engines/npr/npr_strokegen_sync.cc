@@ -8,7 +8,6 @@
  * Converts the different renderable object types to drawcalls.
  */
 
-#include "bnpr_engine.h"
 
 #include "DEG_depsgraph_query.hh"
 #include "DNA_curves_types.h"

@@ -198,7 +198,6 @@ set(SRC
   engines/overlay/overlay_wireframe.cc
   engines/npr/npr_engine.cc
   engines/npr/npr_instance.cc
-  engines/npr/bnpr_engine.cc
   engines/npr/npr_strokegen_shader.cc
   engines/npr/npr_strokegen_instance.cc
   engines/npr/npr_strokegen_sync.cc
@@ -322,7 +321,6 @@ set(SRC
   engines/workbench/workbench_shader_shared.h
   engines/npr/npr_engine.h
   engines/npr/npr_instance.hh
-  engines/npr/bnpr_engine.h
   engines/npr/npr_sync_handles.hh
   engines/npr/npr_strokegen_instance.hh
   engines/npr/npr_strokegen_shader.hh
