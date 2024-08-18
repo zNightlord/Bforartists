@@ -154,6 +154,9 @@ namespace blender::npr::strokegen
 
   void Instance::draw_viewport(Manager& manager, View& view, GPUTexture* pre_depth)
   {
+    if (!strokegen_passes.has_strokegen_enabled_mesh)
+      return; // must skip due to non-initialized buffer content
+
     typedef StrokeGenPassModule::eType PType; 
 
     /* Submit passes here. (Execute render graph) */
@@ -200,10 +203,10 @@ namespace blender::npr::strokegen
     float fb_clear_col_1[4] = {0, 0, 0, 0};
     GPU_framebuffer_clear_color(strokegen_textures.fb_contour_raster, fb_clear_col_1);
     GPU_line_width(2.0f); // always snap to integer, see the opengl spec on line rasterization
-    manager.submit(strokegen_passes.get_render_pass(StrokeGenPassModule::INDIRECT_DRAW_DBG_VNOR), view);
+    // manager.submit(strokegen_passes.get_render_pass(StrokeGenPassModule::INDIRECT_DRAW_DBG_VNOR), view);
     GPU_line_width(4.0f); 
-    manager.submit(strokegen_passes.get_render_pass(StrokeGenPassModule::INDIRECT_DRAW_CONTOUR_EDGES), view);
-    // manager.submit(strokegen_passes.get_render_pass(StrokeGenPassModule::INDIRECT_DRAW_CONTOUR_2D_SAMPLES), view);
+    // manager.submit(strokegen_passes.get_render_pass(StrokeGenPassModule::INDIRECT_DRAW_CONTOUR_EDGES), view);
+    manager.submit(strokegen_passes.get_render_pass(StrokeGenPassModule::INDIRECT_DRAW_CONTOUR_2D_SAMPLES), view);
     GPU_line_width(1.0f);
     
     /* Pixel Extraction */

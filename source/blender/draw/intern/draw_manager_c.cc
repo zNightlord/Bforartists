@@ -1200,6 +1200,10 @@ static void drw_engines_enable_overlays()
   use_drw_engine((U.experimental.enable_overlay_next) ? &draw_engine_overlay_next_type :
                                                         &draw_engine_overlay_type);
 }
+static void drw_engines_enable_strokegen()
+{
+  use_drw_engine(&draw_engine_npr_type); 
+}
 /**
  * Use for select and depth-drawing.
  */
@@ -1294,6 +1298,7 @@ static void drw_engines_enable(ViewLayer * /*view_layer*/,
     use_drw_engine(&draw_engine_compositor_type);
   }
 
+  drw_engines_enable_strokegen(); 
   drw_engines_enable_overlays();
 
 #ifdef WITH_DRAW_DEBUG

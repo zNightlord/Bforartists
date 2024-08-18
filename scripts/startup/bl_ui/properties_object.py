@@ -327,6 +327,41 @@ class OBJECT_PT_lineart(ObjectButtonsPanel, Panel):
         subrow.active = lineart.use_intersection_priority_override
         subrow.prop(lineart, "intersection_priority", text="")
 
+class OBJECT_PT_strokegen(ObjectButtonsPanel, Panel):
+    bl_label = "Strokegen"
+    bl_options = {'DEFAULT_CLOSED'}
+    bl_order = 9
+
+    @classmethod
+    def poll(cls, context):
+        ob = context.object
+        return (ob.type in {'MESH', 'SURFACE'})
+
+    def draw(self, context):
+        layout = self.layout
+        ob = context.object
+        strokegen_settings = ob.strokegen_settings
+
+        col = layout.column(heading="Curve Types")
+        col.prop(strokegen_settings, "contour", text="Contour", toggle=False, invert_checkbox=True)
+        col.prop(strokegen_settings, "border", text="Border", toggle=False, invert_checkbox=True)
+
+        layout.separator()
+        col = layout.column(heading="Basic Settings")
+        col.prop(strokegen_settings, "curve_width")
+
+        # row = layout.row(heading="Override Crease")
+        # row.prop(strokegen_settings, "use_crease_override", text="")
+        # subrow = row.row()
+        # subrow.active = strokegen_settings.use_crease_override
+        # subrow.prop(strokegen_settings, "crease_threshold", slider=True, text="")
+
+        # row = layout.row(heading="Intersection Priority")
+        # row.prop(strokegen_settings, "use_intersection_priority_override", text="")
+        # subrow = row.row()
+        # subrow.active = strokegen_settings.use_intersection_priority_override
+        # subrow.prop(strokegen_settings, "intersection_priority", text="")
+
 
 class OBJECT_PT_motion_paths(MotionPathButtonsPanel, Panel):
     # bl_label = "Object Motion Paths"
@@ -439,6 +474,7 @@ classes = (
     OBJECT_PT_motion_paths_display,
     OBJECT_PT_display,
     OBJECT_PT_visibility,
+    OBJECT_PT_strokegen, 
     OBJECT_PT_lineart,
     OBJECT_PT_custom_props,
 )

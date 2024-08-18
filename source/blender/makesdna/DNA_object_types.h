@@ -118,6 +118,16 @@ typedef struct ObjectLineArt {
   char _pad[7];
 } ObjectLineArt;
 
+typedef struct PerObjectStrokegenSettings {
+  uint32_t curve_type;
+  // unsigned draw_style;
+  // float visibility_threshold;
+  float curve_width;
+  // float color[4];
+  uint32_t dummy_0;
+  uint32_t dummy_1;
+} PerObjectStrokegenSettings;
+
 /**
  * \warning while the values seem to be flags, they aren't treated as flags.
  */
@@ -131,6 +141,12 @@ enum eObjectLineArt_Usage {
   OBJECT_LRT_FORCE_INTERSECTION = (1 << 5),
 };
 ENUM_OPERATORS(eObjectLineArt_Usage, OBJECT_LRT_FORCE_INTERSECTION);
+
+enum ePerObjectStrokegenSetting_CurveType {
+  STROKEGEN_CURVE_TYPE_CONTOUR = 1, 
+  STROKEGEN_CURVE_TYPE_BORDER = (1 << 1)
+};
+ENUM_OPERATORS(ePerObjectStrokegenSetting_CurveType, STROKEGEN_CURVE_TYPE_CONTOUR);
 
 enum eObjectLineArt_Flags {
   OBJECT_LRT_OWN_CREASE = (1 << 0),
@@ -389,6 +405,8 @@ typedef struct Object {
   struct PreviewImage *preview;
 
   ObjectLineArt lineart;
+
+  PerObjectStrokegenSettings strokegen_settings; 
 
   /** Light-group membership information. */
   struct LightgroupMembership *lightgroup;

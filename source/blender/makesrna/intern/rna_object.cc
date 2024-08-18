@@ -2195,9 +2195,20 @@ static void rna_object_lineart_update(Main * /*bmain*/, Scene * /*scene*/, Point
   WM_main_add_notifier(NC_OBJECT | ND_MODIFIER, ptr->owner_id);
 }
 
+static void rna_object_strokegen_update(Main * /*bmain*/, Scene * /*scene*/, PointerRNA *ptr)
+{ // note: since we compute the geo in GPU, we do not need to recalc mesh, for now.  
+  // DEG_id_tag_update(ptr->owner_id, ID_RECALC_GEOMETRY);
+  // WM_main_add_notifier(NC_OBJECT | ND_MODIFIER, ptr->owner_id);
+}
+
 static std::optional<std::string> rna_ObjectLineArt_path(const PointerRNA * /*ptr*/)
 {
   return "lineart";
+}
+
+static std::optional<std::string> rna_PerObjectStrokegenSettings_path(const PointerRNA * /*ptr*/)
+{
+  return "strokegen";
 }
 
 static bool mesh_symmetry_get_common(PointerRNA *ptr, const eMeshSymmetryType sym)
@@ -2909,6 +2920,59 @@ static void rna_def_object_lineart(BlenderRNA *brna)
                            "The intersection line will be included into the object with the "
                            "higher intersection priority value");
   RNA_def_property_update(prop, NC_GPENCIL | ND_SHADING, "rna_object_lineart_update");
+}
+
+static void rna_def_object_strokegen(BlenderRNA *brna)
+{
+  StructRNA *srna;
+  PropertyRNA *prop;
+
+  static EnumPropertyItem prop_strokegen_curve_type_items[] = {
+      {STROKEGEN_CURVE_TYPE_CONTOUR, 
+        "STROKEGEN_CURVE_TYPE_CONTOUR", 
+        0, 
+        "Contour", 
+        "sillhouette/contour of the surface"},
+      {STROKEGEN_CURVE_TYPE_BORDER,
+       "BORDER",
+       0,
+       "Border",
+       "border/boundary of the surface"},
+      {0, nullptr, 0, nullptr, nullptr},
+  };
+
+  srna = RNA_def_struct(brna, "PerObjectStrokegenSettings", nullptr);
+  RNA_def_struct_ui_text(srna, "Strokegen", "Strokegen Settings");
+  RNA_def_struct_sdna(srna, "PerObjectStrokegenSettings");
+  RNA_def_struct_path_func(srna, "rna_PerObjectStrokegenSettings_path");
+
+  { // Curve types
+    prop = RNA_def_property(srna, "contour", PROP_BOOLEAN, PROP_NONE);
+    RNA_def_property_boolean_negative_sdna(
+        prop, nullptr, "curve_type", STROKEGEN_CURVE_TYPE_CONTOUR);
+    RNA_def_property_ui_text(prop, "Contour Curves", "draw the silhouette of this mesh");
+    RNA_def_property_ui_icon(prop, ICON_CURVE_BEZCURVE, -1);
+    RNA_def_property_update(prop, 0, "rna_object_strokegen_update");
+
+    prop = RNA_def_property(srna, "border", PROP_BOOLEAN, PROP_NONE);
+    RNA_def_property_boolean_negative_sdna(
+        prop, nullptr, "curve_type", STROKEGEN_CURVE_TYPE_BORDER);
+    RNA_def_property_ui_text(prop, "Border Curves", "draw the border edges");
+    RNA_def_property_ui_icon(prop, ICON_CURVE_BEZCURVE, -1);
+    RNA_def_property_update(prop, 0, "rna_object_strokegen_update");
+  }
+
+  prop = RNA_def_property(srna, "curve_width", PROP_FLOAT, PROP_NONE);
+  RNA_def_property_range(prop, 1.0f, 12.0f);
+  RNA_def_property_ui_range(prop, 1.0f, 12.0f, 0.5f, 1);
+  RNA_def_property_ui_text(prop, "Width", "the width of curves");
+  RNA_def_property_update(prop, 0, "rna_object_strokegen_update");
+
+  prop = RNA_def_property(srna, "dummy_0", PROP_INT, PROP_NONE);
+  RNA_def_property_update(prop, 0, "rna_object_strokegen_update");
+
+  prop = RNA_def_property(srna, "dummy_1", PROP_INT, PROP_NONE);
+  RNA_def_property_update(prop, 0, "rna_object_strokegen_update");
 }
 
 static void rna_def_object_visibility(StructRNA *srna)
@@ -3785,8 +3849,12 @@ static void rna_def_object(BlenderRNA *brna)
   RNA_def_property_struct_type(prop, "ObjectLineArt");
   RNA_def_property_ui_text(prop, "Line Art", "Line Art settings for the object");
 
-  /* Mesh Symmetry Settings */
+  /* Strokegen */
+  prop = RNA_def_property(srna, "strokegen_settings", PROP_POINTER, PROP_NONE);
+  RNA_def_property_struct_type(prop, "PerObjectStrokegenSettings");
+  RNA_def_property_ui_text(prop, "Strokegen", "Strokegen settings for the object");
 
+  /* Mesh Symmetry Settings */
   prop = RNA_def_property(srna, "use_mesh_mirror_x", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_funcs(
       prop, "rna_Object_mesh_symmetry_x_get", "rna_Object_mesh_symmetry_x_set");
@@ -3884,6 +3952,7 @@ void RNA_def_object(BlenderRNA *brna)
   rna_def_material_slot(brna);
   rna_def_object_display(brna);
   rna_def_object_lineart(brna);
+  rna_def_object_strokegen(brna); 
   rna_def_object_light_linking(brna);
   RNA_define_animate_sdna(true);
 }

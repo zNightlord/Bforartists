@@ -577,7 +577,7 @@ set(GLSL_SRC
   engines/npr/shaders/npr_strokegen_segloopconv1D_lib.glsl
   engines/npr/shaders/npr_strokegen_segloopconv1D_inputs_advanced_lib.glsl
   engines/npr/shaders/npr_strokegen_segloopconv1D_test_comp.glsl
-   
+    
   engines/npr/shaders/npr_strokegen_list_ranking_inputs_lib.glsl
   engines/npr/shaders/npr_strokegen_list_ranking_lib.glsl
   engines/npr/shaders/npr_strokegen_list_ranking_codegen_lib.glsl

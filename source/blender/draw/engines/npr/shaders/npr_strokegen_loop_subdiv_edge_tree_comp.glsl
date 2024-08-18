@@ -172,7 +172,6 @@ struct PathMatchingResult
     bool matched; 
     uint num_steps_til_match; 
     uint matched_rec_id; 
-    TemporalRecordContourData matched_trcd; 
 }; 
 PathMatchingResult init_path_matching_result()
 {
@@ -180,7 +179,6 @@ PathMatchingResult init_path_matching_result()
     match.matched = false; 
     match.num_steps_til_match   = 0u; 
     match.matched_rec_id        = PER_EDGE_TEMPORAL_REC_ID_NULL; 
-    match.matched_trcd = init_temporal_record_contour_data(); 
 
     return match; 
 }
@@ -202,7 +200,6 @@ void match_to_history_record_on_edge(
             // in the future we want to find the best match
             match.num_steps_til_match = trace_iter + 1; 
             match.matched_rec_id      = old_rec_id;
-            match.matched_trcd        = trcd; 
         }
         match.matched = match.matched || matched; 
     }
@@ -482,7 +479,7 @@ TracedPathCache trace_path(
             wlk_next_wedge.iface_adj = 1u - trace_ctx.wlk_awi.iface_adj;
         }
 
-        // Determine the next triangle 
+        // Update triangle geometry to next face 
         TracedTriangle tri_next; 
         if (walk_to_Q1 || walk_to_Q2 || walk_to_adj_iface) {
             move_to_adj_tri(
@@ -503,14 +500,14 @@ TracedPathCache trace_path(
             vec3 dvd_col = vec3(float(trace_iter) / float(TRACE_STEPS).xx, 1.0); 
             DebugVertData dvd_10 = DebugVertData(vpos_ws_10.xyz, dvd_col, uvec4(0u)); 
             DebugVertData dvd_11 = DebugVertData(vpos_ws_11.xyz, dvd_col, uvec4(0u));
-            if ((path_matching_info.matched/*  || dbg_ctx.found_any_matched_history */) 
+            if ((path_matching_info.matched || dbg_ctx.found_any_matched_history) 
                     && !dbg_ctx.dbg_show_full_path
                 ) dvd_11 = dvd_10; // remove this debug line
             store_debug_line_data(curr_dbg_line_id, dvd_10, dvd_11); 
             curr_dbg_line_id++; 
         }
 
-        // Update contexts for next iteration
+        // Update tracing context for next iteration
         if (walk_to_Q1 || walk_to_Q2 || walk_to_adj_iface) 
         { 
             trace_ctx.wlk_awi = wlk_next_wedge;
@@ -645,7 +642,7 @@ void main()
             store_ssbo_contour_temporal_records_new__dbg_line_beg_id(rec_id, dbg_line_id_beg, num_recs); 
         }else{
             dbg_line_id_beg = load_ssbo_contour_temporal_records_new__dbg_line_beg_id(rec_id, num_recs); 
-            dbg_line_id_beg += 2u * pc_trace_pass_ * TRACE_STEPS;
+            dbg_line_id_beg += (2u * TRACE_STEPS) * pc_trace_pass_;
         }
         
         
@@ -679,9 +676,16 @@ void main()
                 store_ssbo_contour_temporal_records_new__temp_trace_cache(path, rec_id, num_recs, tpc); 
             }
 
-            // Upgrade tracing results
-            if ((path_matching_info[0].matched || path_matching_info[1].matched)
-                && (ttrh.num_caches < MAX_NUM_CACHED_TRACE_RESULTS)) 
+            // Update tracing results
+            bool b_update_tracing_results; 
+            if (first_trace_pass) b_update_tracing_results = true; // we need to initialze the header here
+            else {
+                b_update_tracing_results = 
+                    (path_matching_info[0].matched || path_matching_info[1].matched)
+                        && (ttrh.num_caches < MAX_NUM_CACHED_TRACE_RESULTS); 
+            }
+
+            if (b_update_tracing_results) 
             { 
                 for (uint path = 0; path < 2; ++path)
                 {
@@ -704,45 +708,63 @@ void main()
                 store_ssbo_contour_temporal_records_new__tracing_results_header(rec_id, ttrh, num_recs); 
             }
 
-            if (valid_thread && last_trace_pass) {
-                // // find the best matched history record from both search paths 
-                // uint best_matched_path = 0xffffffffu; // note: do not use as index
-                // uint min_steps = 0xffffffffu; 
-                // uint num_cached_results = min(ttrh.num_caches, MAX_NUM_CACHED_TRACE_RESULTS); 
-                // for (uint i = 0; i < num_cached_results; ++i)
-                // {
-                //     TemporalTracingResult ttr = 
-                //         load_ssbo_contour_temporal_records_new__temporal_tracing_result_cache(
-                //             rec_id, i, num_recs
-                //         ); 
-                //     if (ttr.num_trace_steps < min_steps)
-                //     {
-                //         best_matched_path = ttr.dbg_path_id; 
-                //         min_steps = ttr.num_trace_steps; 
-                //     }
-                // }
-
-                for (uint path = 0; path < 2; ++path) 
+            if (valid_thread && last_trace_pass) 
+            {
+                // find the best matched history record from both search paths 
+                TemporalTracingResult ttr_best_matched; 
+                uint min_steps = 0xffffffffu; 
+                uint num_cached_results = min(ttrh.num_caches, MAX_NUM_CACHED_TRACE_RESULTS); 
+                bvec2 dbg_has_matched_on_path = bvec2(false); 
+                for (uint i = 0; i < num_cached_results; ++i)
                 {
-                    bool rmv_curr_path = false; // path != best_matched_path) && (!dbg_ctx.dbg_show_both_paths); 
-
-                    if (dbg_ctx.record_dbg_lines)
+                    TemporalTracingResult ttr = 
+                        load_ssbo_contour_temporal_records_new__temporal_tracing_result_cache(
+                            rec_id, i, num_recs
+                        ); 
+                    if (ttr.num_trace_steps < min_steps)
                     {
-                        uint update_dbg_line_id = dbg_ctx.dbg_line_id_beg[path]; 
-                        for (uint trace_iter = 0u; trace_iter < num_total_steps_per_path; ++trace_iter)
-                        { 
-                            bool rmv_curr_line = rmv_curr_path; 
-                            if (rmv_curr_line) {
-                                DebugVertData dvd_rmv = DebugVertData(vec3(.0f), vec3(.0f), uvec4(0u)); 
-                                store_debug_line_data(update_dbg_line_id, dvd_rmv, dvd_rmv); 
-                            }else{
-                                // update the color of the line
-                                uint seg_key = path_matching_info[path].matched_trcd.seg_key; 
-                                vec3 dvd_col = rand_col_rgb(seg_key / 8, seg_key / 8); 
-                                store_debug_line_color(update_dbg_line_id, dvd_col);
+                        ttr_best_matched = ttr; 
+                        min_steps = ttr_best_matched.num_trace_steps; 
+                    }
+
+                    dbg_has_matched_on_path[ttr.dbg_path_id % 2u] = true; 
+                }
+
+                if (dbg_ctx.record_dbg_lines)
+                {
+                    for (uint path = 0; path < 2; ++path) 
+                    {
+                        bool rmv_curr_path = // false == dbg_has_matched_on_path[path]
+                            (path != ttr_best_matched.dbg_path_id) 
+                            && (!dbg_ctx.dbg_show_both_paths)
+                            ; 
+
+                        uint dbg_line_id_beg_curr_pass = dbg_line_id_beg - (2u * TRACE_STEPS) * pc_trace_pass_;
+                        for (uint trace_pass = 0; trace_pass < pc_dbg_history_trace_passes_; ++trace_pass)
+                        {
+                            uint update_dbg_line_id = dbg_line_id_beg_curr_pass + TRACE_STEPS * path; 
+                            for (uint trace_iter = 0u; trace_iter < TRACE_STEPS; ++trace_iter)
+                            { 
+                                bool rmv_curr_line = rmv_curr_path; 
+                                if (rmv_curr_line) {
+                                    DebugVertData dvd_rmv = DebugVertData(vec3(.0f), vec3(.0f), uvec4(0u)); 
+                                    store_debug_line_data(update_dbg_line_id, dvd_rmv, dvd_rmv); 
+                                }else{
+                                    // update the color of the line
+                                    TemporalRecordContourData history_contour_data = 
+                                        load_ssbo_contour_temporal_records_old__contour_data(
+                                            ttr_best_matched.matched_rec_id, num_history_recs
+                                        ); 
+
+                                    uint seg_key = history_contour_data.seg_key; 
+                                    vec3 dvd_col = // rmv_curr_path ? vec3(1, 0, 1) : vec3(0, 1, 0); 
+                                        rand_col_rgb(seg_key / 8, seg_key / 8); 
+                                    store_debug_line_color(update_dbg_line_id, dvd_col);
+                                }
+                                update_dbg_line_id++; // move to next dbg line
                             }
-                            
-                            update_dbg_line_id++; 
+                            // move to dbg lines generated in next pass 
+                            dbg_line_id_beg_curr_pass += (2u * TRACE_STEPS); 
                         }
                     }
                 }
@@ -788,7 +810,7 @@ void main()
 
     uint tree_code_chain = trf.subd_tree_code_chain; 
     uint par_edge_id = base_edge_id; 
-uvec2 dbg_par_edge_ids = uvec2(0u); 
+    uvec2 dbg_par_edge_ids = uvec2(0u); 
     bool hit_leaf_node = false; 
     for (uint subd_level = 0; subd_level < pc_loop_subd_iters_; ++subd_level)
     {
@@ -804,7 +826,7 @@ uvec2 dbg_par_edge_ids = uvec2(0u);
         hit_leaf_node = (sub_node.wedge_id == par_edge_id) || (subd_level + 1 == pc_loop_subd_iters_); 
         par_edge_id = sub_node.wedge_id;
 
-dbg_par_edge_ids[subd_level] = par_edge_id;
+        dbg_par_edge_ids[subd_level] = par_edge_id;
 
         if (hit_leaf_node) break; /* arrived at a leaf node */
     }

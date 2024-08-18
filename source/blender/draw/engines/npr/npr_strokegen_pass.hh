@@ -152,6 +152,7 @@ public:
   int get_edgeid_offset() { return 0; }
   int num_total_mesh_tris;
 
+  bool has_strokegen_enabled_mesh; 
   void init_mesh_extraction_passes();
   void append_per_mesh_pass(
       Object* ob,
@@ -159,7 +160,7 @@ public:
       gpu::Batch* gpu_batch_surf,
       ResourceHandle& rsc_handle,
       const DRWView* drw_view
-      );
+    );
 
 
   // ---------------------------------------------------------------------------

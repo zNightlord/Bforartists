@@ -76,6 +76,10 @@ static void draw_data_init_cb(struct DrawData *dd)
     //  strokegen_passes.dispatch_XXX(...);
     //  ... ... ...
 
+    const PerObjectStrokegenSettings &ui_input = ob->strokegen_settings;
+    if (ui_input.curve_type == 0)
+      return; 
+
     if (inst_.strokegen_passes.boostrap_before_extract_first_batch) {
       // bootstrapping
       inst_.strokegen_passes.append_per_mesh_pass(
@@ -84,7 +88,7 @@ static void draw_data_init_cb(struct DrawData *dd)
           gpu_batch_surf /**gpu_batch_surf*/,
           rsc_handle,
           drw_view
-          );
+        );
 
       inst_.strokegen_passes.boostrap_before_extract_first_batch = false; // switch off
     }
@@ -95,8 +99,9 @@ static void draw_data_init_cb(struct DrawData *dd)
         rsc_handle,
         drw_view
         );
-    inst_.strokegen_passes.append_pass_remeshed_surface_depth_drawcall(); 
+    inst_.strokegen_passes.append_pass_remeshed_surface_depth_drawcall();
 
+    inst_.strokegen_passes.has_strokegen_enabled_mesh = true; 
   }
 
 

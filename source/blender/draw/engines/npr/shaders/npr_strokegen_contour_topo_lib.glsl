@@ -708,7 +708,6 @@ void store_ssbo_contour_temporal_records_new__tracing_results_header(
 
 struct TemporalTracingResult
 {
-#define TEMPORAL_TRACING_RESULT__NULL 0xffffffffu 
 	uint num_trace_steps; 
 	uint matched_rec_id; 
 	uint dbg_path_id; // TODO: remove this if debugging is not needed
