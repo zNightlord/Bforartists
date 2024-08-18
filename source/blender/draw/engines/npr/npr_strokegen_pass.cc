@@ -111,7 +111,6 @@ void StrokeGenPassModule::on_begin_sync(int frame_counter)
     if (0 < strokegen_frame_id) first_frame = false;
 
     strokegen_obj_id = 0;
-    has_strokegen_enabled_mesh = false; 
 
     init_mesh_extraction_passes();
     pass_draw_contour_edges.init_pass(shaders_, textures_, StrokegenMeshRasterPass::DRAW_CONTOUR_EDGES);

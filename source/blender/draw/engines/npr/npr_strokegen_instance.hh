@@ -35,6 +35,7 @@ namespace blender::npr::strokegen
     GPUBufferPoolModule   strokegen_buffers;
     GPUTexturePoolModule  strokegen_textures;
     StrokeGenPassModule   strokegen_passes;
+    bool has_strokegen_enabled_mesh; 
 
     /** Input data. */
     Depsgraph *depsgraph;
@@ -63,7 +64,8 @@ namespace blender::npr::strokegen
           sync(*this),
           strokegen_buffers(*this),
           strokegen_textures(*this),
-          strokegen_passes(shaders, strokegen_buffers, strokegen_textures)
+          strokegen_passes(shaders, strokegen_buffers, strokegen_textures),
+          has_strokegen_enabled_mesh(false)
     {
       strokegen_passes.test_looped_pass_list_ranking = true; // remember to also set flag at build_list_ranking_testing_data
     }

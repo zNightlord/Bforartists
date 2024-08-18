@@ -100,7 +100,7 @@ static void draw_data_init_cb(struct DrawData *dd)
         );
     inst_.strokegen_passes.append_pass_remeshed_surface_depth_drawcall();
 
-    inst_.strokegen_passes.has_strokegen_enabled_mesh = true; 
+    inst_.has_strokegen_enabled_mesh = true; 
   }
 
 

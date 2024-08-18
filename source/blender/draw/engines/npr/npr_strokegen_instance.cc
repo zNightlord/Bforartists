@@ -154,7 +154,7 @@ namespace blender::npr::strokegen
 
   void Instance::draw_viewport(Manager& manager, View& view, GPUTexture* pre_depth)
   {
-    if (!strokegen_passes.has_strokegen_enabled_mesh)
+    if (!has_strokegen_enabled_mesh)
       return; // must skip due to non-initialized buffer content
 
     typedef StrokeGenPassModule::eType PType; 
@@ -175,7 +175,7 @@ namespace blender::npr::strokegen
       /* Geometry Extraction */
       manager.submit(strokegen_passes.get_compute_pass(PType::GEOM_EXTRACTION, i), view);
 
-      /* Draw remeshed visibility */
+      /* Draw depth for remeshed surfaces */
       PassMain &render_pass_remesh_depth = strokegen_passes.get_render_pass(PType::INDIRECT_DRAW_REMESHED_DEPTH, i);
       render_pass_remesh_depth.framebuffer_set(&strokegen_textures.fb_remeshed_depth);
       strokegen_textures.fb_remeshed_depth.bind();
