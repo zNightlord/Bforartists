@@ -8,6 +8,8 @@
 #pragma BLENDER_REQUIRE(common_utiltex_lib.glsl)
 #pragma BLENDER_REQUIRE(closure_eval_surface_lib.glsl)
 #pragma BLENDER_REQUIRE(surface_lib.glsl)
+#pragma BLENDER_REQUIRE(eevee_attributes_lib.glsl)
+
 
 RESOURCE_ID_VARYING
 
