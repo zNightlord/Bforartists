@@ -13,6 +13,8 @@
 #pragma BLENDER_REQUIRE(surface_lib.glsl)
 #pragma BLENDER_REQUIRE(volumetric_lib.glsl)
 #pragma BLENDER_REQUIRE(renderpass_lib.glsl)
+#pragma BLENDER_REQUIRE(eevee_attributes_lib.glsl)
+
 
 #ifdef EEVEE_DISPLACEMENT_BUMP
 
