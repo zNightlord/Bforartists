@@ -1297,7 +1297,7 @@ static void drw_engines_enable(ViewLayer * /*view_layer*/,
     use_drw_engine(&draw_engine_compositor_type);
   }
 
-  drw_engines_enable_strokegen(); 
+  // drw_engines_enable_strokegen(); 
   drw_engines_enable_overlays();
 
 #ifdef WITH_DRAW_DEBUG
@@ -1985,6 +1985,104 @@ void DRW_render_gpencil(RenderEngine *engine, Depsgraph *depsgraph)
 
   DST.buffer_finish_called = false;
 }
+
+bool DRW_render_check_strokegen(Depsgraph *depsgraph)
+{ // idk how this works... I just copied from the grease pencil code
+  DEGObjectIterSettings deg_iter_settings = {nullptr};
+  deg_iter_settings.depsgraph = depsgraph;
+  deg_iter_settings.flags = DEG_OBJECT_ITER_FOR_RENDER_ENGINE_FLAGS;
+  DEG_OBJECT_ITER_BEGIN (&deg_iter_settings, ob)
+    if (DRW_object_visibility_in_active_context(ob) & OB_VISIBLE_SELF)
+      if (ob->strokegen_settings.curve_type != 0)
+        return true; 
+  DEG_OBJECT_ITER_END;
+
+  return false;
+}
+
+static void DRW_render_strokegen_to_image(RenderEngine *engine,
+                                        RenderLayer *render_layer,
+                                        const rcti *rect)
+{
+  DrawEngineType *draw_engine = &draw_engine_npr_type;
+  if (draw_engine->render_to_image) {
+    ViewportEngineData *engine_data = DRW_view_data_engine_data_get_ensure(DST.view_data_active,
+                                                                      draw_engine);
+    draw_engine->render_to_image(engine_data, engine, render_layer, rect);
+  }
+}
+
+void DRW_render_strokegen(RenderEngine *engine, Depsgraph *depsgraph)
+{
+  /* This function should only be called if there are grease pencil objects,
+   * especially important to avoid failing in background renders without GPU context. */
+  BLI_assert(DRW_render_check_strokegen(depsgraph));
+
+  Scene *scene = DEG_get_evaluated_scene(depsgraph);
+  ViewLayer *view_layer = DEG_get_evaluated_view_layer(depsgraph);
+  RenderResult *render_result = RE_engine_get_result(engine);
+  RenderLayer *render_layer = RE_GetRenderLayer(render_result, view_layer->name);
+  if (render_layer == nullptr) {
+    return;
+  }
+
+  RenderEngineType *engine_type = engine->type;
+  Render *render = engine->re;
+
+  DRW_render_context_enable(render);
+
+  /* Reset before using it. */
+  drw_state_prepare_clean_for_draw(&DST);
+  DST.options.is_image_render = true;
+  DST.options.is_scene_render = true;
+  DST.options.draw_background = scene->r.alphamode == R_ADDSKY;
+  DST.buffer_finish_called = true;
+
+  DST.draw_ctx = {};
+  DST.draw_ctx.scene = scene;
+  DST.draw_ctx.view_layer = view_layer;
+  DST.draw_ctx.engine_type = engine_type;
+  DST.draw_ctx.depsgraph = depsgraph;
+  DST.draw_ctx.object_mode = OB_MODE_OBJECT;
+
+  drw_context_state_init();
+
+  const int size[2] = {engine->resolution_x, engine->resolution_y};
+
+  drw_manager_init(&DST, nullptr, size);
+
+  /* Main rendering. */
+  rctf view_rect;
+  rcti render_rect;
+  RE_GetViewPlane(render, &view_rect, &render_rect);
+  if (BLI_rcti_is_empty(&render_rect)) {
+    BLI_rcti_init(&render_rect, 0, size[0], 0, size[1]);
+  }
+
+  for (RenderView *render_view = static_cast<RenderView *>(render_result->views.first);
+       render_view != nullptr;
+       render_view = render_view->next)
+  {
+    RE_SetActiveRenderView(render, render_view->name);
+    DRW_view_reset();
+    DST.buffer_finish_called = false;
+    DRW_render_strokegen_to_image(engine, render_layer, &render_rect);
+  }
+
+  DRW_state_reset();
+
+  GPU_depth_test(GPU_DEPTH_NONE);
+
+  drw_manager_exit(&DST);
+
+  /* Restore Drawing area. */
+  GPU_framebuffer_restore();
+
+  DRW_render_context_disable(render);
+
+  DST.buffer_finish_called = false;
+}
+
 
 void DRW_render_to_image(RenderEngine *engine, Depsgraph *depsgraph)
 {

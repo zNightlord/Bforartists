@@ -52,10 +52,9 @@ namespace blender::npr::strokegen
 
     /** Info string displayed at the top of the render / viewport. */
     std::string info = "";
-    /** Debug mode from debug value. */
-    // eDebugMode debug_mode = eDebugMode::DEBUG_NONE;
-    uint frame_counter; // for debugging
-
+    uint frame_counter;
+    // for debugging
+    uint rdc_dbg_counter;
 
 
    public:
@@ -65,7 +64,8 @@ namespace blender::npr::strokegen
           strokegen_buffers(*this),
           strokegen_textures(*this),
           strokegen_passes(shaders, strokegen_buffers, strokegen_textures),
-          has_strokegen_enabled_mesh(false)
+          has_strokegen_enabled_mesh(false),
+          rdc_dbg_counter(0)
     {
       strokegen_passes.test_looped_pass_list_ranking = true; // remember to also set flag at build_list_ranking_testing_data
     }

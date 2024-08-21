@@ -219,15 +219,13 @@ static void npr_render_to_image(void *vedata,
                                 RenderLayer *layer,
                                 const rcti *rect)
 {
+  using namespace blender::draw;
   if (!npr_render_framebuffers_init()) {
     RE_engine_report(engine, RPT_ERROR, "Failed to allocate GPU buffers");
     return;
   }
 
-  GPU_FINISH_DELIMITER();
-
   /* Setup */
-
   DefaultFramebufferList *dfbl = DRW_viewport_framebuffer_list_get();
   const DRWContextState *draw_ctx = DRW_context_state_get();
   Depsgraph *depsgraph = draw_ctx->depsgraph;
@@ -246,44 +244,44 @@ static void npr_render_to_image(void *vedata,
   RE_GetCameraModelMatrix(engine->re, camera_ob, viewinv.ptr());
   viewmat = math::invert(viewinv);
 
-  DRWView *view = DRW_view_create(viewmat.ptr(), winmat.ptr(), nullptr, nullptr, nullptr);
-  DRW_view_default_set(view);
-  DRW_view_set_active(view);
-
   /* Render */
-  do {
-    if (RE_engine_test_break(engine)) {
-      break;
-    }
+  /* TODO: Remove old draw manager calls. */
+  DRW_cache_restart();
+  DRWView *drw_view = DRW_view_create(viewmat.ptr(), winmat.ptr(), nullptr, nullptr, nullptr);
+  DRW_view_default_set(drw_view);
+  DRW_view_set_active(drw_view);
 
-    ved->instance->init(camera_ob);
+  ved->instance->init(camera_ob);
 
-    DRW_manager_get()->begin_sync();
+  draw::Manager &manager = *DRW_manager_get();
+  manager.begin_sync();
 
-    npr_cache_init(vedata);
-    auto npr_render_cache = [](void *vedata,
-                               struct Object *ob,
-                               struct RenderEngine * /*engine*/,
-                               struct Depsgraph * /*depsgraph*/) {
-      npr_cache_populate(vedata, ob);
-    };
-    DRW_render_object_iter(vedata, engine, depsgraph, npr_render_cache);
-    npr_cache_finish(vedata);
+  npr_cache_init(vedata);
+  auto workbench_render_cache =
+      [](void *vedata, Object *ob, RenderEngine * /*engine*/, Depsgraph * /*depsgraph*/) {
+        npr_cache_populate(vedata, ob);
+      };
+  DRW_render_object_iter(vedata, engine, depsgraph, workbench_render_cache);
+  npr_cache_finish(vedata);
 
-    DRW_manager_get()->end_sync();
+  manager.end_sync();
 
-    /* Also we weed to have a correct FBO bound for #DRW_curves_update */
-    // GPU_framebuffer_bind(dfbl->default_fb);
-    // DRW_curves_update(); /* TODO(@pragma37): Check this once curves are implemented */
+  /* TODO: Remove old draw manager calls. */
+  DRW_render_instance_buffer_finish();
+  DRW_curves_update();
 
-    npr_draw_scene(vedata);
+bool dbg_rdc = (ved->instance->strokegen_inst_->rdc_dbg_counter == 0);
+if (dbg_rdc) GPU_debug_capture_begin("strokegen render capture");
 
-    /* Perform render step between samples to allow
-     * flushing of freed GPUBackend resources. */
-    GPU_render_step();
-    GPU_FINISH_DELIMITER();
-  } while (false); /* Sample count goes here */
+  DefaultTextureList &dtxl = *DRW_viewport_texture_list_get();
+  draw::View view("npr view");
+  view.sync(drw_view); 
+  ved->instance->draw_viewport(manager, view, dtxl.depth, dtxl.color);
 
+if (dbg_rdc) GPU_debug_capture_end();
+if (dbg_rdc) ved->instance->strokegen_inst_->rdc_dbg_counter = 1; 
+
+  /* Write image */
   const char *viewname = RE_GetActiveRenderView(engine->re);
   write_render_color_output(layer, viewname, dfbl->default_fb, rect);
   write_render_z_output(layer, viewname, dfbl->default_fb, rect, winmat);

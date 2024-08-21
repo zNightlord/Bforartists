@@ -194,11 +194,6 @@ static void scene_init_data(ID *id)
   /* Anti-Aliasing threshold. */
   scene->grease_pencil_settings.smaa_threshold = 1.0f;
 
-  scene->npr.npr_test_val_0 = 1; 
-  scene->npr.npr_test_val_1 = 1; 
-  scene->npr.npr_test_val_2 = 1.0f; 
-  scene->npr.npr_test_val_3 = 1.0f; 
-
   {
     ParticleEditSettings *pset;
     pset = &scene->toolsettings->particle;

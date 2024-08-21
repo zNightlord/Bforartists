@@ -151,6 +151,13 @@ bool DRW_draw_in_progress();
 bool DRW_render_check_grease_pencil(Depsgraph *depsgraph);
 void DRW_render_gpencil(RenderEngine *engine, Depsgraph *depsgraph);
 
+/* Strokegen render. */
+/**
+ * Helper to check if exit object type to render.
+ */
+bool DRW_render_check_strokegen(Depsgraph *depsgraph);
+void DRW_render_strokegen(RenderEngine *engine, Depsgraph *depsgraph); 
+
 /**
  * This is here because #GPUViewport needs it.
  */

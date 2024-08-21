@@ -59,7 +59,7 @@ class Instance {
 
   void draw(Manager &manager, View &view, GPUTexture *depth_tx, GPUTexture *color_tx);
 
-  void draw_viewport(Manager &manager, View &view, GPUTexture *depth_tx, GPUTexture *color_tx);
+  void draw_viewport(Manager& manager, View& view, GPUTexture* depth_tx, GPUTexture* color_tx);
 };
 
 }  // namespace blender::npr
