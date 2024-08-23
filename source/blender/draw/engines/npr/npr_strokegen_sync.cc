@@ -65,20 +65,6 @@ static void draw_data_init_cb(struct DrawData *dd)
     if (gpu_batch_surf->elem == nullptr)
       return;
 
-    // Old way to do this:
-    // See "draw_subdiv_build_tris_buffer"
-    // const char *defines = "#define XXX\n";
-    // GPUShader *shader = get_strokegen_shader(...)
-    //
-    // eevvee_next way to do this:
-    //  strokegen_passes.dispatch_extract_mesh_contour(ob);
-    //  strokegen_passes.dispatch_XXX(...);
-    //  ... ... ...
-
-    const PerObjectStrokegenSettings &ui_input = ob->strokegen_settings;
-    if (ui_input.curve_type == 0)
-      return; 
-
     if (inst_.strokegen_passes.boostrap_before_extract_first_batch) {
       // bootstrapping
       inst_.strokegen_passes.append_per_mesh_pass(

@@ -1279,7 +1279,7 @@ bool DRW_is_viewport_compositor_enabled()
 
   return true;
 }
-
+// renderdoccmd capture --opt-hook-children --opt-delay-for-debugger 3 D:\Blender_Repo\Blender\build_windows_x64_vc17_Debug\bin\Debug\blender.exe --debug-gpu-renderdoc -b "D:\simple_test.blend" -t 1 -f 1
 static void drw_engines_enable(ViewLayer * /*view_layer*/,
                                RenderEngineType *engine_type,
                                bool gpencil_engine_needed)
@@ -1297,7 +1297,7 @@ static void drw_engines_enable(ViewLayer * /*view_layer*/,
     use_drw_engine(&draw_engine_compositor_type);
   }
 
-  // drw_engines_enable_strokegen(); 
+  drw_engines_enable_strokegen(); 
   drw_engines_enable_overlays();
 
 #ifdef WITH_DRAW_DEBUG

@@ -31,6 +31,7 @@ void Renderdoc::end_frame_capture(RENDERDOC_DevicePointer device_handle,
     return;
   }
   renderdoc_api_->EndFrameCapture(device_handle, window_handle);
+  renderdoc_api_->LaunchReplayUI(1, NULL); 
 }
 
 void Renderdoc::set_frame_capture_title(const char *title)

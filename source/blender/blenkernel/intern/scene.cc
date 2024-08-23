@@ -1582,7 +1582,6 @@ IDTypeInfo IDType_ID_SCE = get_type_info();
 const char *RE_engine_id_BLENDER_EEVEE = "BLENDER_EEVEE";
 const char *RE_engine_id_BLENDER_EEVEE_NEXT = "BLENDER_EEVEE_NEXT";
 const char *RE_engine_id_BLENDER_WORKBENCH = "BLENDER_WORKBENCH";
-const char *RE_engine_id_BLENDER_NPR = "BLENDER_NPR";
 const char *RE_engine_id_CYCLES = "CYCLES";
 
 static void remove_sequencer_fcurves(Scene *sce)

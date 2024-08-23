@@ -48,9 +48,6 @@ void Instance::begin_sync()
 
   deferred_pass_ps_.init();
   deferred_pass_ps_.state_set(DRW_STATE_WRITE_COLOR);
-  // deferred_pass_ps_.framebuffer_set(&strokegen_inst_->strokegen_textures.fb_contour_raster);
-  // float fb_clear_col_1[4] = {0, 0, 0, 0};
-  // deferred_pass_ps_.clear_color(fb_clear_col_1);
 
   deferred_pass_ps_.shader_set(deferred_pass_sh_);
   deferred_pass_ps_.framebuffer_set(&deferred_pass_fb_);
@@ -116,7 +113,7 @@ void Instance::draw(Manager &manager, View &view, GPUTexture *depth_tx, GPUTextu
                            GPU_ATTACHMENT_TEXTURE(color_tx),
                            GPU_ATTACHMENT_TEXTURE(line_color_tx_),
                            GPU_ATTACHMENT_TEXTURE(line_data_tx_));
-  // deferred_pass_fb_.bind();
+  deferred_pass_fb_.bind();
 
   manager.submit(deferred_pass_ps_);
 

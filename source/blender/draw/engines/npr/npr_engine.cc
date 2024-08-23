@@ -145,6 +145,7 @@ static bool npr_render_framebuffers_init(void)
 #  define GPU_FINISH_DELIMITER()
 #endif
 
+
 static void write_render_color_output(RenderLayer *layer,
                                       const char *viewname,
                                       GPUFrameBuffer *fb,
@@ -169,7 +170,7 @@ static void write_render_z_output(RenderLayer *layer,
                                   const char *viewname,
                                   GPUFrameBuffer *fb,
                                   const rcti *rect,
-                                  float4x4 winmat)
+                                  const float4x4 &winmat)
 {
   RenderPass *rp = RE_pass_find_by_name(layer, RE_PASSNAME_Z, viewname);
   if (rp) {
@@ -225,6 +226,7 @@ static void npr_render_to_image(void *vedata,
     return;
   }
 
+  GPU_debug_capture_begin("strokegen capture"); 
   /* Setup */
   DefaultFramebufferList *dfbl = DRW_viewport_framebuffer_list_get();
   const DRWContextState *draw_ctx = DRW_context_state_get();
@@ -262,6 +264,7 @@ static void npr_render_to_image(void *vedata,
         npr_cache_populate(vedata, ob);
       };
   DRW_render_object_iter(vedata, engine, depsgraph, workbench_render_cache);
+  DRW_render_object_iter(vedata, engine, depsgraph, workbench_render_cache);
   npr_cache_finish(vedata);
 
   manager.end_sync();
@@ -270,21 +273,17 @@ static void npr_render_to_image(void *vedata,
   DRW_render_instance_buffer_finish();
   DRW_curves_update();
 
-bool dbg_rdc = (ved->instance->strokegen_inst_->rdc_dbg_counter == 0);
-if (dbg_rdc) GPU_debug_capture_begin("strokegen render capture");
-
   DefaultTextureList &dtxl = *DRW_viewport_texture_list_get();
   draw::View view("npr view");
   view.sync(drw_view); 
   ved->instance->draw_viewport(manager, view, dtxl.depth, dtxl.color);
 
-if (dbg_rdc) GPU_debug_capture_end();
-if (dbg_rdc) ved->instance->strokegen_inst_->rdc_dbg_counter = 1; 
-
   /* Write image */
   const char *viewname = RE_GetActiveRenderView(engine->re);
   write_render_color_output(layer, viewname, dfbl->default_fb, rect);
   write_render_z_output(layer, viewname, dfbl->default_fb, rect, winmat);
+
+  GPU_debug_capture_end();
 }
 
 static void npr_render_update_passes(RenderEngine *engine, Scene *scene, ViewLayer *view_layer)
@@ -319,24 +318,6 @@ DrawEngineType draw_engine_npr_type = {
     nullptr,
 };
 
-RenderEngineType DRW_engine_viewport_npr_type = {
-    nullptr,
-    nullptr,
-    "BLENDER_NPR",
-    N_("NPR"),
-    RE_INTERNAL | RE_USE_STEREO_VIEWPORT | RE_USE_GPU_CONTEXT,
-    nullptr,
-    &DRW_render_to_image,
-    nullptr,
-    nullptr,
-    nullptr,
-    nullptr,
-    nullptr,
-    nullptr,
-    &npr_render_update_passes,
-    &draw_engine_npr_type,
-    {nullptr, nullptr, nullptr},
-};
 }
 
 /** \} */

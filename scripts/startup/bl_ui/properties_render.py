@@ -1391,57 +1391,6 @@ class RENDER_PT_hydra_debug(RenderButtonsPanel, Panel):
         layout.prop(hydra, "export_method")
 
 
-class RENDER_PT_npr_test(RenderButtonsPanel, Panel):
-    bl_label = "Test"
-    bl_options = {'DEFAULT_CLOSED'}
-    COMPAT_ENGINES = {
-        'BLENDER_NPR'
-    }
-
-    def draw(self, context):
-        rd = context.scene.render
-        layout = self.layout
-        layout.use_property_split = True
-        layout.active = True
-
-        scene = context.scene
-        props = scene.npr
-
-        flow = layout.grid_flow(row_major=True, columns=0, even_columns=False, even_rows=False, align=True)
-        col = flow.column()
-        col.prop(props, "npr_test_val_0",  text="dummy")
-        col.prop(props, "npr_test_val_1",  text="debug visualize mode")
-        col.prop(props, "npr_test_val_2",  text="edge_visualize_mode")
-        col.prop(props, "npr_test_val_3",  text="seconds_sync_view_mat")
-        col.prop(props, "npr_test_val_4",  text="num_vtx_smooth_iters")
-        col.prop(props, "npr_test_val_5",  text="visualize_contour_edges")
-        col.prop(props, "npr_test_val_6",  text="iters_test_sqrt_subdiv")
-        col.prop(props, "npr_test_val_7",  text="draw_hidden_lines")
-        col.prop(props, "npr_test_val_8",  text="num_quadric_diffusion_iters")
-        col.prop(props, "npr_test_val_9",  text="quadric_deviation")
-        col.prop(props, "npr_test_val_10", text="position_regularization_scale")
-        col.prop(props, "npr_test_val_11", text="num edge flooding iters")
-
-        col = flow.column()
-        col.prop(props, "npr_test_val_12", text="Remeshing Edge Length")
-        col.prop(props, "npr_test_val_13", text="Edge Split Iters")
-        col.prop(props, "npr_test_val_14", text="Edge Collapse Iters")
-        col.prop(props, "npr_test_val_15", text="Edge Flip Iters")
-        col.prop(props, "npr_test_val_16", text="Remeshing Iters")
-        col.prop(props, "npr_test_val_17", text="remeshing_delaunay_flip_iters")
-        col.prop(props, "npr_test_val_18", text="dbg_line_length")
-        col.prop(props, "npr_test_val_19", text="Subdiv Type")
-
-        col.prop(props, "npr_test_val_20", text="Subdiv Crease")
-        col.prop(props, "npr_test_val_21", text="Enable Cusp Denoise")
-        col.prop(props, "npr_test_val_22", text="Visibility Threshold")
-        col.prop(props, "npr_test_val_23", text="Camera Rotation")
-        col.prop(props, "npr_test_val_24", text="Dbg Trace Line Type")
-        col.prop(props, "npr_test_val_25", text="")
-        col.prop(props, "npr_test_val_26", text="")
-        col.prop(props, "npr_test_val_27", text="")
-
-
 classes = (
     RENDER_PT_context,
     RENDER_PT_eevee_sampling,
@@ -1498,7 +1447,6 @@ classes = (
     RENDER_PT_color_management,
     RENDER_PT_color_management_display_settings,
     RENDER_PT_color_management_curves,
-    RENDER_PT_npr_test, 
     RENDER_PT_color_management_white_balance_presets,
     RENDER_PT_color_management_white_balance,
 )

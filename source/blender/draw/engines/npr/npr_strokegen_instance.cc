@@ -127,6 +127,10 @@ namespace blender::npr::strokegen
       return;
     }
 
+    const PerObjectStrokegenSettings &ui_input = ob->strokegen_settings;
+    if (ui_input.curve_type == 0)
+      return; 
+
     /* fclem: TODO cleanup. */
     ObjectRef ob_ref = DRW_object_ref_get(ob);
 
