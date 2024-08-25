@@ -45,7 +45,7 @@ void GPUTexturePoolModule::on_begin_sync(Texture& tex_prepass_depth)
         perobjz_res, eGPUTextureFormat::GPU_R32F, usage_fb_tx);
     tex_remeshed_surf_depth_.acquire(perobjz_res, eGPUTextureFormat::GPU_DEPTH24_STENCIL8, usage_fb_tx);
 
-    GPUAttachment depth_att = GPU_ATTACHMENT_TEXTURE(tex_remeshed_surf_depth_);
+    GPUAttachment depth_att = GPU_ATTACHMENT_TEXTURE(/*tex_remeshed_surf_depth_*/ tex_contour_raster_depth);
     GPUAttachment col_att = GPU_ATTACHMENT_TEXTURE(tex_contour_per_obj_z_col);
     fb_remeshed_depth.ensure(depth_att, col_att);
   }

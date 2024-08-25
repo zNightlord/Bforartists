@@ -215,6 +215,9 @@ static void write_render_z_output(RenderLayer *layer,
   }
 }
 
+
+// Adapted from workbench_render_to_image
+// For now DRW_render_object_iter is called twice to ensure that the cache is populated
 static void npr_render_to_image(void *vedata,
                                 RenderEngine *engine,
                                 RenderLayer *layer,

@@ -1123,7 +1123,7 @@ void StrokeGenPassModule::on_end_sync()
     sub.bind_ssbo(0, &(gpu_batch_surf->elem));  // TODO: investigate whether double pointer is necessary
     sub.bind_ssbo(1, &(gpu_batch_surf->verts[1])); 
     sub.bind_ssbo(2, buffers_.ssbo_vbo_full_);
-    sub.bind_ssbo(3, DRW_manager_get()->matrix_buf.current());
+    sub.bind_ssbo(3, &DRW_manager_get()->matrix_buf.current());
     sub.bind_ssbo(4, buffers_.ssbo_bnpr_mesh_pool_counters_prev_); 
     sub.bind_ssbo(5, buffers_.ssbo_bnpr_mesh_pool_counters_); 
       
@@ -2086,7 +2086,7 @@ void StrokeGenPassModule::on_end_sync()
       sub.bind_ssbo(0, buffers_.ssbo_edge_to_vert_ /*&(gpu_batch_line_adj->elem)*/);
       sub.bind_ssbo(1, buffers_.ssbo_vbo_full_ /*&(gpu_batch_line_adj->verts[0])*/);
       sub.bind_ssbo(2, buffers_.reused_ssbo_contour_temp_data_());
-      sub.bind_ssbo(3, DRW_manager_get()->matrix_buf.current());
+      sub.bind_ssbo(3, &DRW_manager_get()->matrix_buf.current());
       sub.bind_ssbo(4, buffers_.ssbo_bnpr_mesh_pool_counters_);
       sub.bind_ssbo(5, buffers_.ssbo_bnpr_mesh_pool_counters_prev_);
       sub.bind_ssbo(6, buffers_.reused_ssbo_edge_to_contour_());
@@ -2718,7 +2718,8 @@ void StrokeGenPassModule::on_end_sync()
       sub.bind_ssbo(5, buffers_.reused_ssbo_tree_scan_input_contour_fragment_idmapping_());
       sub.bind_ubo(0, buffers_.ubo_view_matrices_cache_); 
       sub.bind_image(0, textures_.tex2d_contour_dbg_);
-      sub.bind_texture(0, textures_.tex_remeshed_surf_depth_, depthSamplerState); 
+      sub.bind_texture(
+          0, textures_./*tex_remeshed_surf_depth_*/tex_contour_raster_depth, depthSamplerState); 
 
       sub.push_constant("pcs_screen_size_", textures_.get_contour_raster_screen_res());
     };

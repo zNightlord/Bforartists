@@ -88,7 +88,9 @@ void Instance::object_sync(Manager &manager, ObjectRef &ob_ref)
 
     strokegen_inst_->mesh_sync(manager, ob_ref, handle, &batch);
 
-    prepass_ps_.draw(batch, handle);
+    if (ob->strokegen_settings.curve_type == 0)
+      // strokegen meshes are remeshed and requires a separate z-pass
+      prepass_ps_.draw(batch, handle);
   }
 }
 
