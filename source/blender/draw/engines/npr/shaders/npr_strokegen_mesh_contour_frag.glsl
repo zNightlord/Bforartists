@@ -12,8 +12,8 @@ void main()
 void main()
 {
     out_col = color;  
-    out_normal = normalize(normal);
-    out_tangent.xyz = normalize(tangent.xyz);
+    // out_normal = normalize(normal);
+    // out_tangent.xyz = normalize(tangent.xyz);
     if (out_col.a < .1f) discard; 
 }
 #endif

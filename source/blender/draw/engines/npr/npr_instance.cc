@@ -47,7 +47,7 @@ void Instance::begin_sync()
   prepass_ps_.shader_set(prepass_sh_);
 
   deferred_pass_ps_.init();
-  deferred_pass_ps_.state_set(DRW_STATE_WRITE_COLOR);
+  deferred_pass_ps_.state_set(DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_ALPHA);
 
   deferred_pass_ps_.shader_set(deferred_pass_sh_);
   deferred_pass_ps_.framebuffer_set(&deferred_pass_fb_);

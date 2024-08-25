@@ -768,13 +768,13 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_draw_contour_2d_samples)
 
     .vertex_source("npr_strokegen_mesh_contour_vert.glsl")
     .vertex_in(0, Type::VEC3, "pos")
-    .vertex_in(1, Type::VEC3, "nor")
-    .vertex_in(2, Type::VEC4, "tan")
+    // .vertex_in(1, Type::VEC3, "nor")
+    // .vertex_in(2, Type::VEC4, "tan")
     .vertex_out(bnpr_v2f_geom_draw_contour_edges)
     .fragment_source("npr_strokegen_mesh_contour_frag.glsl")
-    .fragment_out(0, Type::VEC4, "out_col")
-    .fragment_out(1, Type::VEC3, "out_normal")
-    .fragment_out(2, Type::VEC4, "out_tangent");
+    .fragment_out(0, Type::VEC4, "out_col"); 
+    // .fragment_out(1, Type::VEC3, "out_normal")
+    // .fragment_out(2, Type::VEC4, "out_tangent");
 
 /* Draw remeshed surface ----------------------------------------- */
 GPU_SHADER_CREATE_INFO(bnpr_geom_fill_draw_args_remeshed_surface)

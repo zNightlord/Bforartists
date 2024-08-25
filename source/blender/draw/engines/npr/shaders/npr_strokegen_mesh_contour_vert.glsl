@@ -123,7 +123,7 @@ void main()
     gl_Position.xyzw = pos_hclip;
 
     color = col; // vec4(1.0f, 0.0f, 0.0f, 1.0f); 
-    normal = vec3(0, 0, 1);
-    tangent.xyz = vec3(0, 0, 1);
+    // normal = vec3(0, 0, 1);
+    // tangent.xyz = vec3(0, 0, 1);
 }
 #endif
