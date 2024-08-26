@@ -205,7 +205,7 @@ static void scene_init_data(ID *id)
     pset->brush[PE_BRUSH_CUT].strength = 1.0f;
   }
 
-  STRNCPY(scene->r.engine, RE_engine_id_BLENDER_EEVEE_NEXT);
+  STRNCPY(scene->r.engine, RE_engine_id_BLENDER_EEVEE);
 
   STRNCPY(scene->r.pic, U.renderdir);
 
