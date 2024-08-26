@@ -4,7 +4,6 @@
 
 #pragma BLENDER_REQUIRE(common_view_lib.glsl)
 #pragma BLENDER_REQUIRE(surface_lib.glsl)
-#pragma BLENDER_REQUIRE(eevee_attributes_lib.glsl)
 
 layout(triangles) in;
 layout(triangle_strip, max_vertices = 3) out;
