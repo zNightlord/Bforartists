@@ -441,7 +441,7 @@ public:
   void append_subpass_setup_contour_edge_data();
 
   // ---------------------------------------------------------------------------
-  void append_pass_remeshed_surface_depth_drawcall();
+  void append_pass_remeshed_surface_depth_drawcall(bool is_transparent);
 
   // ---------------------------------------------------------------------------
   void append_subpass_contour_edges_soft_rasterization();

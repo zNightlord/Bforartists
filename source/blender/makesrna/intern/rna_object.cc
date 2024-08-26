@@ -2792,19 +2792,20 @@ static void rna_def_object_strokegen(BlenderRNA *brna)
   StructRNA *srna;
   PropertyRNA *prop;
 
-  static EnumPropertyItem prop_strokegen_curve_type_items[] = {
-      {STROKEGEN_CURVE_TYPE_CONTOUR, 
-        "STROKEGEN_CURVE_TYPE_CONTOUR", 
+  static EnumPropertyItem prop_strokegen_surface_shading_type_items[] = {
+      {STROKEGEN_SHADING_TYPE_OPAQUE, 
+        "STROKEGEN_SHADING_TYPE_OPAQUE", 
         0, 
-        "Contour", 
-        "sillhouette/contour of the surface"},
-      {STROKEGEN_CURVE_TYPE_BORDER,
-       "BORDER",
+        "Opaque", 
+        "Opaque surface"},
+      {STROKEGEN_SHADING_TYPE_TRANSPARENT,
+       "STROKEGEN_SHADING_TYPE_TRANSPARENT",
        0,
-       "Border",
-       "border/boundary of the surface"},
-      {0, nullptr, 0, nullptr, nullptr},
+       "Transparent",
+       "Transparent surface"},
+      {0 /*note: valid enums should not take value of 0*/, nullptr, 0, nullptr, nullptr},
   };
+
 
   srna = RNA_def_struct(brna, "PerObjectStrokegenSettings", nullptr);
   RNA_def_struct_ui_text(srna, "Strokegen", "Strokegen Settings");
@@ -2827,6 +2828,11 @@ static void rna_def_object_strokegen(BlenderRNA *brna)
     RNA_def_property_update(prop, 0, "rna_object_strokegen_update");
   }
 
+  prop = RNA_def_property(srna, "surface_shading_type", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_items(prop, prop_strokegen_surface_shading_type_items);
+  RNA_def_property_ui_text(prop, "Surface Shading Type", "Material type of this mesh");
+  RNA_def_property_update(prop, 0, "rna_object_strokegen_update");
+
   prop = RNA_def_property(srna, "curve_width", PROP_FLOAT, PROP_NONE);
   RNA_def_property_range(prop, 1.0f, 12.0f);
   RNA_def_property_ui_range(prop, 1.0f, 12.0f, 0.5f, 1);
@@ -2834,9 +2840,6 @@ static void rna_def_object_strokegen(BlenderRNA *brna)
   RNA_def_property_update(prop, 0, "rna_object_strokegen_update");
 
   prop = RNA_def_property(srna, "dummy_0", PROP_INT, PROP_NONE);
-  RNA_def_property_update(prop, 0, "rna_object_strokegen_update");
-
-  prop = RNA_def_property(srna, "dummy_1", PROP_INT, PROP_NONE);
   RNA_def_property_update(prop, 0, "rna_object_strokegen_update");
 }
 

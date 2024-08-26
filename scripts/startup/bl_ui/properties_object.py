@@ -346,6 +346,9 @@ class OBJECT_PT_strokegen(ObjectButtonsPanel, Panel):
         col.prop(strokegen_settings, "contour", text="Contour", toggle=False, invert_checkbox=True)
         col.prop(strokegen_settings, "border", text="Border", toggle=False, invert_checkbox=True)
 
+        col = layout.column(heading="Surface Shading Type")
+        col.prop(strokegen_settings, "surface_shading_type", text="surface shading type")
+
         layout.separator()
         col = layout.column(heading="Basic Settings")
         col.prop(strokegen_settings, "curve_width")

@@ -120,12 +120,12 @@ typedef struct ObjectLineArt {
 
 typedef struct PerObjectStrokegenSettings {
   uint32_t curve_type;
+  uint32_t surface_shading_type; 
   // unsigned draw_style;
   // float visibility_threshold;
   float curve_width;
   // float color[4];
   uint32_t dummy_0;
-  uint32_t dummy_1;
 } PerObjectStrokegenSettings;
 
 /**
@@ -147,6 +147,12 @@ enum ePerObjectStrokegenSetting_CurveType {
   STROKEGEN_CURVE_TYPE_BORDER = (1 << 1)
 };
 ENUM_OPERATORS(ePerObjectStrokegenSetting_CurveType, STROKEGEN_CURVE_TYPE_CONTOUR);
+
+enum ePerObjectStrokegenSetting_ShadingType {
+  STROKEGEN_SHADING_TYPE_OPAQUE = 1,
+  STROKEGEN_SHADING_TYPE_TRANSPARENT = 2
+};
+ENUM_OPERATORS(ePerObjectStrokegenSetting_ShadingType, STROKEGEN_SHADING_TYPE_OPAQUE);
 
 enum eObjectLineArt_Flags {
   OBJECT_LRT_OWN_CREASE = (1 << 0),

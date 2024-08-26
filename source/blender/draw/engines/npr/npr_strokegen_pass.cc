@@ -2683,11 +2683,11 @@ void StrokeGenPassModule::on_end_sync()
     pass_draw_contour_2d_samples.append_draw_contour_2d_subpass(shaders_, buffers_, textures_); 
   }
 
-  void StrokeGenPassModule::append_pass_remeshed_surface_depth_drawcall()
+  void StrokeGenPassModule::append_pass_remeshed_surface_depth_drawcall(bool is_transparent)
   {
     StrokegenMeshRasterPass &pass = pass_draw_remeshed_surface_depth_[++curr_mesh_id_surf_depth];
 
-    {
+    if (false == is_transparent) { // we leave an empty pass for transparent meshes
       auto &sub = pass.sub("bnpr_geom_fill_draw_args_remeshed_surface_depth");
 
       sub.shader_set(shaders_.static_shader_get(eShaderType::FILL_DRAW_ARGS_REMESHED_SURFACE_DEPTH));
@@ -2697,9 +2697,9 @@ void StrokeGenPassModule::on_end_sync()
 
       sub.dispatch(int3(1, 1, 1));
       sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_COMMAND);
-    }
 
-    pass.append_draw_remeshed_surface_depth_subpass(shaders_, buffers_, textures_);
+      pass.append_draw_remeshed_surface_depth_subpass(shaders_, buffers_, textures_);
+    }
   }
 
   void StrokeGenPassModule::append_subpass_contour_edges_soft_rasterization()
