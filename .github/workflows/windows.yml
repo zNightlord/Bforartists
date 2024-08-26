@@ -37,4 +37,5 @@ jobs:
         path: | 
           C:/Users/runneradmin/bforartistsrepo/bfa_build_windows_x64_vc17_Release/bin
           D:/a/Bforartists/Bforartists/bfa_build_windows_x64_vc17_Release/bin
+          D:/a/Bforartists/Bforartists/*build_windows_x64_vc17_Release/bin
               
