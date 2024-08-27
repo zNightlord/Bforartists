@@ -255,3 +255,8 @@ float film_scaling_factor_get()
 {
   return 1.0;
 }
+
+float texture_lod_bias_get()
+{
+  return uniform_buf.film.texture_lod_bias;
+}
