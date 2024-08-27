@@ -941,10 +941,10 @@ void main()
 
 	// Calc stroke mesh
 	float stylized_width_arc_len = 1.0f - abs(arc_len_param - .5f) * 2.0f; 
+	if (is_looped_samples) stylized_width_arc_len = 0.7f; 
 	float stylized_width_stk_len = 1.0f; 
 	if (seg_len < 24u) stylized_width_stk_len = float(seg_len) / 24.0f; 
 	float stk_width = pcs_stroke_width_ * stylized_width_arc_len * stylized_width_stk_len; 
-	// stk_width = 3.0f; 
 	mat3x2 verts = compute_wing_quad_verts(
 		pos, pcs_screen_size_.xy, 
 		vec2(tangent.y, -tangent.x), stk_width
