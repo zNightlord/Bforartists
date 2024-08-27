@@ -85,7 +85,7 @@ static void draw_data_init_cb(struct DrawData *dd)
         drw_view
     );
     inst_.strokegen_passes.append_pass_remeshed_surface_depth_drawcall(
-      STROKEGEN_SHADING_TYPE_TRANSPARENT == ob_ref.object->strokegen_settings.surface_shading_type
+      STROKEGEN_SHADING_TYPE_TRANSPARENT == ob_ref.object->strokegen.surface_shading_type
     );
 
     inst_.has_strokegen_enabled_mesh = true; 

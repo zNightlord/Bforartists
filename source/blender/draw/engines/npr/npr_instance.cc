@@ -88,8 +88,8 @@ void Instance::object_sync(Manager &manager, ObjectRef &ob_ref)
 
     strokegen_inst_->mesh_sync(manager, ob_ref, handle, &batch);
 
-    if ((ob->strokegen_settings.surface_shading_type != STROKEGEN_SHADING_TYPE_TRANSPARENT)
-          && (ob->strokegen_settings.curve_type == 0)
+    if ((ob->strokegen.surface_shading_type != STROKEGEN_SHADING_TYPE_TRANSPARENT)
+          && (ob->strokegen.curve_type == 0)
       ) // strokegen meshes are remeshed and requires a separate z-pass
       prepass_ps_.draw(batch, handle);
   }

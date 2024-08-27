@@ -340,30 +340,30 @@ class OBJECT_PT_strokegen(ObjectButtonsPanel, Panel):
     def draw(self, context):
         layout = self.layout
         ob = context.object
-        strokegen_settings = ob.strokegen_settings
+        strokegen = ob.strokegen
 
         col = layout.column(heading="Curve Types")
-        col.prop(strokegen_settings, "contour", text="Contour", toggle=False, invert_checkbox=True)
-        col.prop(strokegen_settings, "border", text="Border", toggle=False, invert_checkbox=True)
+        col.prop(strokegen, "contour", text="Contour", toggle=False, invert_checkbox=True)
+        col.prop(strokegen, "border", text="Border", toggle=False, invert_checkbox=True)
 
         col = layout.column(heading="Surface Shading Type")
-        col.prop(strokegen_settings, "surface_shading_type", text="surface shading type")
+        col.prop(strokegen, "surface_shading_type", text="surface shading type")
 
         layout.separator()
         col = layout.column(heading="Basic Settings")
-        col.prop(strokegen_settings, "curve_width")
+        col.prop(strokegen, "curve_width")
 
         # row = layout.row(heading="Override Crease")
-        # row.prop(strokegen_settings, "use_crease_override", text="")
+        # row.prop(strokegen, "use_crease_override", text="")
         # subrow = row.row()
-        # subrow.active = strokegen_settings.use_crease_override
-        # subrow.prop(strokegen_settings, "crease_threshold", slider=True, text="")
+        # subrow.active = strokegen.use_crease_override
+        # subrow.prop(strokegen, "crease_threshold", slider=True, text="")
 
         # row = layout.row(heading="Intersection Priority")
-        # row.prop(strokegen_settings, "use_intersection_priority_override", text="")
+        # row.prop(strokegen, "use_intersection_priority_override", text="")
         # subrow = row.row()
-        # subrow.active = strokegen_settings.use_intersection_priority_override
-        # subrow.prop(strokegen_settings, "intersection_priority", text="")
+        # subrow.active = strokegen.use_intersection_priority_override
+        # subrow.prop(strokegen, "intersection_priority", text="")
 
 
 class OBJECT_PT_motion_paths(MotionPathButtonsPanel, Panel):

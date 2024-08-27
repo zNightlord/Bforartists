@@ -1993,7 +1993,7 @@ bool DRW_render_check_strokegen(Depsgraph *depsgraph)
   deg_iter_settings.flags = DEG_OBJECT_ITER_FOR_RENDER_ENGINE_FLAGS;
   DEG_OBJECT_ITER_BEGIN (&deg_iter_settings, ob)
     if (DRW_object_visibility_in_active_context(ob) & OB_VISIBLE_SELF)
-      if (ob->strokegen_settings.curve_type != 0)
+      if (ob->strokegen.curve_type != 0)
         return true; 
   DEG_OBJECT_ITER_END;
 

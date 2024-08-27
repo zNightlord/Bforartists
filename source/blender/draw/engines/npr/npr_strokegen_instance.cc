@@ -127,7 +127,7 @@ namespace blender::npr::strokegen
       return;
     }
 
-    const PerObjectStrokegenSettings &ui_input = ob->strokegen_settings;
+    const PerObjectStrokegenSettings &ui_input = ob->strokegen;
     if (ui_input.curve_type == 0)
       return; 
 

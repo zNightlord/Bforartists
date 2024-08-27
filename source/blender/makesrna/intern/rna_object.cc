@@ -3707,7 +3707,7 @@ static void rna_def_object(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Line Art", "Line Art settings for the object");
 
   /* Strokegen */
-  prop = RNA_def_property(srna, "strokegen_settings", PROP_POINTER, PROP_NONE);
+  prop = RNA_def_property(srna, "strokegen", PROP_POINTER, PROP_NONE);
   RNA_def_property_struct_type(prop, "PerObjectStrokegenSettings");
   RNA_def_property_ui_text(prop, "Strokegen", "Strokegen settings for the object");
 

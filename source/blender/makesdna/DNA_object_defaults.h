@@ -54,7 +54,7 @@
     .duplicator_visibility_flag = OB_DUPLI_FLAG_VIEWPORT | OB_DUPLI_FLAG_RENDER, \
     .pc_ids = {NULL, NULL}, \
     .lineart = { .crease_threshold = DEG2RAD(140.0f) }, \
-    .strokegen_settings = { .curve_type = 0, .surface_shading_type = 1, .curve_width = 1.0 }, \
+    .strokegen = { .curve_type = 0, .surface_shading_type = 1, .curve_width = 1.0 }, \
   }
 
 /** \} */

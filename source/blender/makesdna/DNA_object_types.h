@@ -118,16 +118,6 @@ typedef struct ObjectLineArt {
   char _pad[7];
 } ObjectLineArt;
 
-typedef struct PerObjectStrokegenSettings {
-  uint32_t curve_type;
-  uint32_t surface_shading_type; 
-  // unsigned draw_style;
-  // float visibility_threshold;
-  float curve_width;
-  // float color[4];
-  uint32_t dummy_0;
-} PerObjectStrokegenSettings;
-
 /**
  * \warning while the values seem to be flags, they aren't treated as flags.
  */
@@ -142,6 +132,21 @@ enum eObjectLineArt_Usage {
 };
 ENUM_OPERATORS(eObjectLineArt_Usage, OBJECT_LRT_FORCE_INTERSECTION);
 
+enum eObjectLineArt_Flags {
+  OBJECT_LRT_OWN_CREASE = (1 << 0),
+  OBJECT_LRT_OWN_INTERSECTION_PRIORITY = (1 << 1),
+};
+
+typedef struct PerObjectStrokegenSettings {
+  uint32_t curve_type;
+  uint32_t surface_shading_type; 
+  // unsigned draw_style;
+  // float visibility_threshold;
+  float curve_width;
+  // float color[4];
+  uint32_t dummy_0;
+} PerObjectStrokegenSettings;
+
 enum ePerObjectStrokegenSetting_CurveType {
   STROKEGEN_CURVE_TYPE_CONTOUR = 1, 
   STROKEGEN_CURVE_TYPE_BORDER = (1 << 1)
@@ -154,10 +159,7 @@ enum ePerObjectStrokegenSetting_ShadingType {
 };
 ENUM_OPERATORS(ePerObjectStrokegenSetting_ShadingType, STROKEGEN_SHADING_TYPE_OPAQUE);
 
-enum eObjectLineArt_Flags {
-  OBJECT_LRT_OWN_CREASE = (1 << 0),
-  OBJECT_LRT_OWN_INTERSECTION_PRIORITY = (1 << 1),
-};
+
 
 /* Evaluated light linking state needed for the render engines integration. */
 typedef struct LightLinkingRuntime {
@@ -412,7 +414,9 @@ typedef struct Object {
 
   ObjectLineArt lineart;
 
-  PerObjectStrokegenSettings strokegen_settings; 
+  // Note: for some reason nested struct cannot have a name with any underscores
+  // I tried strokegen_settings and then everything fucked up
+  PerObjectStrokegenSettings strokegen;
 
   /** Light-group membership information. */
   struct LightgroupMembership *lightgroup;
