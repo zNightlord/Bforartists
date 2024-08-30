@@ -116,7 +116,6 @@ void StrokeGenPassModule::on_begin_sync(int frame_counter)
     // Update frame counter and object id
     strokegen_frame_id = frame_counter;
     if (0 < strokegen_frame_id) first_frame = false;
-    strokegen_obj_id = 0;
 
     // Reset tri/vtx/edge counters
     num_total_mesh_tris = num_total_mesh_verts = num_total_mesh_edges = 0;  // TODO: these should go to the UBO
@@ -766,8 +765,6 @@ void StrokeGenPassModule::on_end_sync()
     num_total_mesh_tris += num_tris;
     num_total_mesh_verts += num_verts;
     num_total_mesh_edges += num_edges;
-
-    strokegen_obj_id += 1; 
   }
 
   // After iterating each mesh, contour data is collected & processed once here

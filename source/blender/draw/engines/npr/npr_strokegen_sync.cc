@@ -57,6 +57,10 @@ void StrokegenSyncModule::sync_mesh(
     inst_.object_gpu_id_map.add(ob_key.hash(), gpu_obj_id);
     inst_.strokegen_buffers.sync_object(ob); // add object data to gpu buffers
 
+    { // sync scene info to submodules
+      inst_.strokegen_passes.strokegen_obj_id = gpu_obj_id;
+    }
+
 
     // Record per-object strokegen shaders
     if (inst_.strokegen_passes.boostrap_before_extract_first_batch) {
@@ -75,7 +79,7 @@ void StrokegenSyncModule::sync_mesh(
         gpu_batch_line_adj,
         gpu_batch_surf /**gpu_batch_surf*/,
         rsc_handle, drw_view
-        );
+      );
     inst_.strokegen_passes.append_pass_remeshed_surface_depth_drawcall(
       STROKEGEN_SHADING_TYPE_TRANSPARENT == ob_ref.object->strokegen.surface_shading_type
     );
