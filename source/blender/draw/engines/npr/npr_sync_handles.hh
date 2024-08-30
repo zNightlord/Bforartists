@@ -124,7 +124,7 @@ namespace blender::npr::strokegen
 
 
 
-/* -------------------------------------------------------------------- */
+  /* -------------------------------------------------------------------- */
   /** \name Engine-Specific Draw-Data
    * \{ */
   struct BaseHandle {
@@ -169,7 +169,7 @@ namespace blender::npr::strokegen
       }
     }
   };
-
+  /** \} */
 }
 
 /** \} */

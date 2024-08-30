@@ -70,6 +70,7 @@ void main()
 		store_contour_flags(vtx_addr, cf); 
 
 		ssbo_contour_snake_to_temporal_record_[vtx_addr] = cetd.temporal_rec_id; 
+		ssbo_contour_snake_to_object_id_[vtx_addr] = cetd.obj_id;
 		
 		ssbo_in_segloopconv1d_data_[vtx_addr] = encode_contour_flags(cf); // copy to segloopconv1d input buffer
 		
@@ -87,6 +88,7 @@ void main()
 			// TODO: fix this for non-looped curves, for now we're just copying...
 			// but this requires 2 rec_ids for both verts in the ContourEdgeTransferData
 			ssbo_contour_snake_to_temporal_record_[vtx_addr+1u] = cetd.temporal_rec_id; 
+			ssbo_contour_snake_to_object_id_[vtx_addr+1u] = cetd.obj_id;
 
 			ssbo_in_segloopconv1d_data_[vtx_addr+1u] = encode_contour_flags(cf); // copy to segloopconv1d input buffer
 		}
@@ -675,6 +677,7 @@ void main()
 		//
 		// The clipping complicated the topology of resampled curves:  
 		// - Breaks can happen within adjacent segments (gap from b1 to b9)
+		uint contour_id = ssbo_2d_sample_to_contour_[sample_id]; 
 		Contour2DSampleSegmentationInfo sample_si 	   = load_2d_sample_seg_key(sample_id, num_samples); 
 		ContourFlags cf = load_ssbo_contour_2d_sample_topology__flags(sample_id); 
 
@@ -710,7 +713,13 @@ void main()
 			}
 		}
 
-		if (sample_id == 0)
+		if (valid_thread && !segment_by_seg)
+		{ // in the initial segmentation pass we also store the sample's pointer to the scene object
+			uint object_id = ssbo_contour_snake_to_object_id_[contour_id];
+			store_ssbo_contour_2d_sample_topology__object_id(sample_id, object_id, num_samples); 
+		}
+		
+		if (sample_id == 0) // Prepare for segmented convolution
 			ssbo_segloopconv1d_info_.num_conv_items = num_samples; 
 
 		if (valid_thread)
@@ -925,6 +934,10 @@ void main()
 	const uint sample_id = gl_GlobalInvocationID.x; 
 	const uint num_samples = ssbo_bnpr_mesh_pool_counters_.num_2d_samples; 
 	bool valid_thread = sample_id < num_samples; 
+	
+	// Load object info
+	const uint object_id = load_ssbo_contour_2d_sample_topology__object_id(sample_id, num_samples); 
+	StrokegenObjectInfo object_info = load_strokegen_object_info(object_id); 
 
 	// Load topology
 	ContourFlags cf = load_ssbo_contour_2d_sample_topology__flags(sample_id); 
@@ -939,12 +952,18 @@ void main()
 	vec2 pos = vec2(pcs_screen_size_.xy) * load_ssbo_contour_2d_sample_geometry__position(sample_id); 
 	vec2 tangent = load_ssbo_contour_2d_sample_geometry__tangent(sample_id, num_samples); 
 
-	// Calc stroke mesh
+	// Calc stroke width
 	float stylized_width_arc_len = 1.0f - abs(arc_len_param - .5f) * 2.0f; 
 	if (is_looped_samples) stylized_width_arc_len = 0.7f; 
+	
 	float stylized_width_stk_len = 1.0f; 
 	if (seg_len < 24u) stylized_width_stk_len = float(seg_len) / 24.0f; 
-	float stk_width = pcs_stroke_width_ * stylized_width_arc_len * stylized_width_stk_len; 
+	
+	float object_stk_width = object_info.stroke_width; 
+
+	float stk_width = pcs_stroke_width_ * stylized_width_arc_len * stylized_width_stk_len * object_stk_width; 
+
+	// Calc stroke mesh
 	mat3x2 verts = compute_wing_quad_verts(
 		pos, pcs_screen_size_.xy, 
 		vec2(tangent.y, -tangent.x), stk_width

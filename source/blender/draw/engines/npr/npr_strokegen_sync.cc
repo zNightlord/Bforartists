@@ -30,22 +30,7 @@ static void draw_data_init_cb(struct DrawData *dd)
   }
 
 
-  ObjectHandle StrokegenSyncModule::sync_object(const ObjectRef& ob_ref)
-  {
-    ObjectKey key(ob_ref.object);
-
-    ObjectHandle &handle = ob_handles.lookup_or_add_cb(key, [&]() {
-      ObjectHandle new_handle;
-      new_handle.object_key = key;
-      return new_handle;
-    });
-
-    handle.recalc = inst_.get_recalc_flags(ob_ref);
-
-    return handle;
-  }
-
-  void StrokegenSyncModule::sync_mesh(
+void StrokegenSyncModule::sync_mesh(
       Object* ob,
       const draw::ObjectRef& ob_ref,
       draw::ResourceHandle& rsc_handle,
@@ -65,32 +50,38 @@ static void draw_data_init_cb(struct DrawData *dd)
     if (gpu_batch_surf->elem == nullptr)
       return;
 
+
+    // Register object to gpu scene
+    ObjectKey ob_key(ob);
+    int gpu_obj_id = inst_.object_gpu_id_map.size();
+    inst_.object_gpu_id_map.add(ob_key.hash(), gpu_obj_id);
+    inst_.strokegen_buffers.sync_object(ob); // add object data to gpu buffers
+
+
+    // Record per-object strokegen shaders
     if (inst_.strokegen_passes.boostrap_before_extract_first_batch) {
       // bootstrapping
       inst_.strokegen_passes.append_per_mesh_pass(
-          ob,
+          ob, gpu_obj_id, 
           gpu_batch_line_adj,
           gpu_batch_surf /**gpu_batch_surf*/,
-          rsc_handle,
-          drw_view
-        );
+          rsc_handle, drw_view
+      );
 
       inst_.strokegen_passes.boostrap_before_extract_first_batch = false; // switch off
     }
     inst_.strokegen_passes.append_per_mesh_pass(
-        ob,
+        ob, gpu_obj_id, 
         gpu_batch_line_adj,
         gpu_batch_surf /**gpu_batch_surf*/,
-        rsc_handle,
-        drw_view
-    );
+        rsc_handle, drw_view
+        );
     inst_.strokegen_passes.append_pass_remeshed_surface_depth_drawcall(
       STROKEGEN_SHADING_TYPE_TRANSPARENT == ob_ref.object->strokegen.surface_shading_type
     );
 
-    inst_.has_strokegen_enabled_mesh = true; 
+    inst_.has_strokegen_enabled_mesh = true;
   }
 
 
-
-  }  // namespace blender::npr::strokegen
+}  // namespace blender::npr::strokegen

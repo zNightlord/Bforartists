@@ -100,6 +100,9 @@ namespace blender::npr::strokegen
 
     /* Then setup render passes */
     strokegen_passes.on_begin_sync((int)frame_counter);
+
+    /* Setup gpu scene info */
+    object_gpu_id_map.clear();
   }
 
   void Instance::end_sync(Manager&)

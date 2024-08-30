@@ -213,6 +213,7 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_extract_mesh_contour_data)
     .storage_buf(14, Qualifier::READ_WRITE, "uint", "ssbo_edge_to_temporal_record_[]")
     .uniform_buf(0, "ViewMatrices", "ubo_view_matrices_")
     .push_constant(Type::VEC2, "pcs_screen_size_")
+    .push_constant(Type::INT, "pcs_curr_obj_id_")
     
     .local_group_size(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT) 
     .compute_source("npr_strokegen_geom_extract_comp.glsl");
@@ -376,6 +377,7 @@ GPU_SHADER_CREATE_INFO(strokegen_serialize_contour_edges)
     .storage_buf(12, Qualifier::WRITE, "uint", "ssbo_in_segloopconv1d_data_[]")
     .storage_buf(13, Qualifier::READ, "uint", "ssbo_list_ranking_addressing_counters_[]")
     .storage_buf(14, Qualifier::READ_WRITE, "uint", "ssbo_contour_snake_to_temporal_record_[]")
+    .storage_buf(15, Qualifier::READ_WRITE, "uint", "ssbo_contour_snake_to_object_id_[]")
 
     .local_group_size(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT) 
     .compute_source("npr_strokegen_contour_processing.glsl");
@@ -536,6 +538,7 @@ GPU_SHADER_CREATE_INFO(strokegen_contour_2d_resample_eval_topo_step_0)
     .define("_KERNEL_MULTICOMPILE__CONTOUR_EDGES_2D_RESAMPLE__EVALUATE_TOPOLOGY__STEP_0", "1")
 #define SSBO_OFFSET NUM_SSBO_strokegen_contour_2d_sample_eval
     .storage_buf(SSBO_OFFSET + 0, Qualifier::READ_WRITE, "UBData_SegLoopConv1D", "ssbo_segloopconv1d_info_")
+    .storage_buf(SSBO_OFFSET + 1, Qualifier::READ_WRITE, "uint", "ssbo_contour_snake_to_object_id_[]")
 #undef SSBO_OFFSET
     .push_constant(Type::INT, "pcs_segment_by_seg_");
 
@@ -601,11 +604,14 @@ GPU_SHADER_CREATE_INFO(strokegen_calc_contour_2d_curve_render_data)
     .define("USE_CONTOUR_2D_SAMPLE_GEOMETRY_BUFFER", "1")
     .define("USE_CONTOUR_2D_SAMPLE_TOPOLOGY_BUFFER", "1")
     .define("USE_CONTOUR_2D_STROKE_MESH_BUFFER", "1")
+    .define("INCLUDE_PER_OBJECT_INFO", "1")
 
     .storage_buf(0, Qualifier::READ_WRITE, "uint", "ssbo_contour_2d_sample_geometry_[]")
     .storage_buf(1, Qualifier::READ_WRITE, "uint", "ssbo_contour_2d_sample_topology_[]")
     .storage_buf(2, Qualifier::READ_WRITE, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
     .storage_buf(3, Qualifier::READ_WRITE, "uint", "ssbo_stroke_mesh_pool_[]")
+    .storage_buf(4, Qualifier::READ_WRITE, "uint", "ssbo_contour_snake_to_object_id_[]")
+    .storage_buf(5, Qualifier::READ_WRITE, "uint", "ssbo_merged_strokegen_object_infos_[]")
 
     .image(0, GPU_RGBA32F, Qualifier::WRITE, ImageType::FLOAT_2D, "tex2d_contour_dbg_")
 
@@ -645,7 +651,7 @@ GPU_SHADER_CREATE_INFO(strokegen_calc_contour_edges_draw_data)
     .storage_buf(SSBO_OFFSET + 0, Qualifier::WRITE, "uint", "buf_strokegen_mesh_pool[]"); 
 #undef SSBO_OFFSET
 
-/* Collect Mesh Verts */
+/* Collect Mesh Verts & Fill Object Info */
 GPU_SHADER_CREATE_INFO(bnpr_geom_extract_collect_verts)
     .do_static_compilation(true)
     .typedef_source("bnpr_shader_shared.hh")
@@ -653,6 +659,7 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_extract_collect_verts)
     .additional_info("npr_compaction_off") /* Remove compaction code */
     .define("DECODE_IBO_EXCLUDE", "1") /* Remove ibo code */
     .define("_KERNEL_MULTICOMPILE__COPY_VBO", "1")
+    .define("INCLUDE_PER_OBJECT_INFO", "1")
 
     .storage_buf(0, Qualifier::READ, "uint", "ssbo_meshbatch_ibo_[]")
     .storage_buf(1, Qualifier::READ, "float", "ssbo_meshbatch_vbo_[]") /* encoded posnor vbo */
@@ -660,9 +667,12 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_extract_collect_verts)
     .storage_buf(3, Qualifier::READ, "ObjectMatrices", "drw_matrix_buf[]")
     .storage_buf(4, Qualifier::WRITE, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_prev_")
     .storage_buf(5, Qualifier::READ_WRITE, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
+    .storage_buf(6, Qualifier::READ_WRITE, "uint", "ssbo_merged_strokegen_object_infos_[]")
     .uniform_buf(0, "ViewMatrices", "ubo_view_matrices_")
+    .uniform_buf(1, "UBOData_StrokegenObjectInfo", "ubo_current_strokegen_object_info_")
     .push_constant(Type::INT, "pcs_rsc_handle_")
     .push_constant(Type::INT, "pcs_meshbatch_num_verts_")
+    .push_constant(Type::INT, "pcs_curr_obj_id_")
 
     .local_group_size(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT)
     .compute_source("npr_strokegen_geom_extract_comp.glsl");

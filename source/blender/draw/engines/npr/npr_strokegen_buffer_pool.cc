@@ -36,6 +36,10 @@ namespace blender::npr::strokegen
     bool update_view_matrices_for_contour_extraction, 
     bool update_view_matrices_for_dbg_view_rotation)
   {
+    // reset objects in the gpu scene
+    ubo_current_strokegen_object_info_pool_->reset();
+
+    // Setup buffers for parallel computation operators
     UBO_BnprTreeScan& ubo_tree_scan = ubo_bnpr_tree_scan_infos_;
     {
       ubo_bnpr_tree_scan_infos_.num_scan_items = NUM_ITEMS_BNPR_SCAN_TEST;
@@ -181,7 +185,17 @@ namespace blender::npr::strokegen
 
   void GPUBufferPoolModule::sync_object(Object* ob)
   {
+    UBO_StrokegenObjectInfo *ubo_new_obj = ubo_current_strokegen_object_info_pool_->alloc(); 
+    ubo_new_obj->visibility_threshold = .3f;
+    ubo_new_obj->stroke_width = ob->strokegen.curve_width;
+    StrokegenObjectFlags flags;
+    flags.draw_contour = ob->strokegen.curve_type == STROKEGEN_CURVE_TYPE_CONTOUR; 
+    flags.draw_border = false;
+    flags.draw_invisible = false;
+    ubo_new_obj->flags = encode_strokegen_object_flags(flags);
+    ubo_new_obj->dummy = 0;
 
+    ubo_new_obj->push_update(); 
   }
 
   void GPUBufferPoolModule::on_end_sync()

@@ -36,9 +36,6 @@ namespace blender::npr::strokegen
     ~StrokegenSyncModule(){};
 
 
-    Map<ObjectKey, ObjectHandle> ob_handles = {};
-
-    ObjectHandle sync_object(const ObjectRef& ob_ref);
     WorldHandle &sync_world(::World *world) {};
     SceneHandle &sync_scene(::Scene *scene) {};
 

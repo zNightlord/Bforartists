@@ -514,7 +514,7 @@ void StrokeGenPassModule::on_end_sync()
    * \param gpu_batch_line_adj Mesh geometry stored in GPUBatch, ib stored with line adjacency info.
    */
   void StrokeGenPassModule::append_per_mesh_pass(
-      Object* ob,
+      Object* ob, int curr_obj_id, 
       gpu::Batch* gpu_batch_line_adj,
       gpu::Batch* gpu_batch_surf,
       ResourceHandle& rsc_handle,
@@ -576,7 +576,7 @@ void StrokeGenPassModule::on_end_sync()
     /* GPU_storagebuf_copy_sub_from_vertbuf(
      *  buffers_.ssbo_vbo_full_, gpu_batch_surf->verts[0], 4 * num_total_mesh_verts, 0, 4 * num_verts
      * ); */
-    append_subpass_cpy_vbo(gpu_batch_surf, batch_resource_index, num_verts);
+    append_subpass_cpy_vbo_and_object_info(gpu_batch_surf, batch_resource_index, num_verts, curr_obj_id);
     append_subpass_cpy_line_adj_ibo(gpu_batch_line_adj, ib_type, num_edges);
 
     // Basic Meshing -----------------------------------------------------------
@@ -760,7 +760,7 @@ void StrokeGenPassModule::on_end_sync()
       );
 
     append_subpass_fill_dispatch_args_contour_edges(pass_extract_geom(), false);
-    append_subpass_setup_contour_edge_data();
+    append_subpass_setup_contour_edge_data(curr_obj_id);
 
     // Note: this should be happening at the end
     num_total_mesh_tris += num_tris;
@@ -1114,7 +1114,8 @@ void StrokeGenPassModule::on_end_sync()
   }
 
 
-  void StrokeGenPassModule::append_subpass_cpy_vbo(gpu::Batch *gpu_batch_surf, int batch_resource_index, int num_verts)
+  void StrokeGenPassModule::append_subpass_cpy_vbo_and_object_info(
+    gpu::Batch *gpu_batch_surf, int batch_resource_index, int num_verts, int fill_object_data_slot)
   {
     auto &sub = pass_extract_geom().sub("bnpr_geom_extract_collect_verts");
       
@@ -1125,11 +1126,14 @@ void StrokeGenPassModule::on_end_sync()
     sub.bind_ssbo(2, buffers_.ssbo_vbo_full_);
     sub.bind_ssbo(3, &DRW_manager_get()->matrix_buf.current());
     sub.bind_ssbo(4, buffers_.ssbo_bnpr_mesh_pool_counters_prev_); 
-    sub.bind_ssbo(5, buffers_.ssbo_bnpr_mesh_pool_counters_); 
-      
+    sub.bind_ssbo(5, buffers_.ssbo_bnpr_mesh_pool_counters_);
+    sub.bind_ssbo(6, buffers_.ssbo_merged_strokegen_object_infos_); 
+    
     sub.bind_ubo(0, buffers_.ubo_view_matrices_); 
+    sub.bind_ubo(1, (buffers_.ubo_current_strokegen_object_info_pool_->back()->operator&())); 
     sub.push_constant("pcs_rsc_handle_", batch_resource_index); 
-    sub.push_constant("pcs_meshbatch_num_verts_", num_verts); 
+    sub.push_constant("pcs_meshbatch_num_verts_", num_verts);
+    sub.push_constant("pcs_curr_obj_id_", fill_object_data_slot); 
       
     int num_groups = compute_num_groups(num_verts, GROUP_SIZE_STROKEGEN_GEOM_EXTRACT); 
     sub.dispatch(int3(num_groups, 1, 1));
@@ -2130,7 +2134,7 @@ void StrokeGenPassModule::on_end_sync()
   }
 
 
-  void StrokeGenPassModule::append_subpass_setup_contour_edge_data()
+  void StrokeGenPassModule::append_subpass_setup_contour_edge_data(int curr_obj_id)
   {
     {
       auto &sub = pass_extract_geom().sub("bnpr_geom_extract_mesh_contour_data");
@@ -2153,7 +2157,8 @@ void StrokeGenPassModule::on_end_sync()
       sub.bind_ssbo(14, buffers_.reused_ssbo_edge_to_temporal_record_()); 
       sub.bind_ubo(0, buffers_.ubo_view_matrices_cache_); 
       float2 fb_res = textures_.get_contour_raster_screen_res(); 
-      sub.push_constant("pcs_screen_size_", fb_res); 
+      sub.push_constant("pcs_screen_size_", fb_res);
+      sub.push_constant("pcs_curr_obj_id_", curr_obj_id); 
 
       sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_edge_dispatch_args_);
       sub.barrier(GPU_BARRIER_SHADER_STORAGE);
@@ -2179,6 +2184,7 @@ void StrokeGenPassModule::on_end_sync()
       sub.bind_ssbo(12, buffers_.reused_ssbo_in_segloopconv1d_data_contour_seg_denoise());
       sub.bind_ssbo(13, buffers_.ssbo_list_ranking_addressing_counters_);
       sub.bind_ssbo(14, buffers_.ssbo_contour_snake_to_temporal_record_);
+      sub.bind_ssbo(15, buffers_.ssbo_contour_snake_to_object_id_); 
     };
     
     {
@@ -2538,6 +2544,7 @@ void StrokeGenPassModule::on_end_sync()
 
         bind_rsc_for_contour_2d_sample_evaluation_(sub, screen_res, sample_rate, ssbo_offset_);
         sub.bind_ssbo(ssbo_offset_ + 0, buffers_.ssbo_segloopconv1d_info_);
+        sub.bind_ssbo(ssbo_offset_ + 1, buffers_.ssbo_contour_snake_to_object_id_);
         sub.push_constant("pcs_segment_by_seg_", is_segmentation_by_curve_pass ? 0 : 1);
 
         sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_2d_sample_dispatch_args_);
@@ -2596,7 +2603,11 @@ void StrokeGenPassModule::on_end_sync()
       sub.bind_ssbo(1, buffers_.reused_ssbo_contour_2d_sample_topology_());
       sub.bind_ssbo(2, buffers_.ssbo_bnpr_mesh_pool_counters_);
       sub.bind_ssbo(3, buffers_.reused_ssbo_stroke_mesh_pool_());
+      sub.bind_ssbo(4, buffers_.ssbo_contour_snake_to_object_id_);
+      sub.bind_ssbo(5, buffers_.ssbo_merged_strokegen_object_infos_); 
+
       sub.bind_image(0, textures_.tex2d_contour_dbg_);
+
       sub.push_constant("pcs_screen_size_", screen_res);
       sub.push_constant("pcs_stroke_width_", 5.0f);
 

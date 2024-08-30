@@ -145,7 +145,7 @@ typedef struct PerObjectStrokegenSettings {
   float curve_width;
   // float color[4];
   uint32_t dummy_0;
-} PerObjectStrokegenSettings;
+} PerObjectStrokegenSettings; 
 
 enum ePerObjectStrokegenSetting_CurveType {
   STROKEGEN_CURVE_TYPE_CONTOUR = 1, 

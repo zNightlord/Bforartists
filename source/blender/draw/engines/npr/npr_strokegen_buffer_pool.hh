@@ -9,6 +9,7 @@
 #pragma once
 
 #include "bnpr_shader_shared.hh"
+#include "npr_sync_handles.hh"
 
 #include <set>
 
@@ -16,8 +17,44 @@ namespace blender::gpu {
 class StorageBuf;
 }
 
+
 namespace blender::npr::strokegen {
 class Instance;
+
+template<typename T>
+struct StrokegenUniformBufPool {
+
+  blender::Vector<T *> ubos;
+  uint used = 0;
+
+  ~StrokegenUniformBufPool()
+  {
+    for (T *ubo : ubos) {
+      delete ubo;
+    }
+  }
+
+  void reset()
+  {
+    used = 0;
+  }
+
+  T *alloc()
+  {
+    if (used >= ubos.size()) {
+      T *buf = new T();
+      ubos.append(buf);
+    }
+    return ubos[used++];
+  }
+
+  T *back()
+  {
+    if (used == 0) return nullptr; 
+    return ubos[used - 1]; 
+  }
+};
+
 
 class GPUBufferPoolModule {
   friend class StrokeGenPassModule;
@@ -103,6 +140,11 @@ class GPUBufferPoolModule {
   SSBO_StrokeGenMeshBufPerContour<uint, 6> ssbo_contour_snake_vpos_;       //
   SSBO_StrokeGenMeshBufPerContour<uint, 1> ssbo_contour_snake_flags_;      //
 
+  UBO_StrokegenObjectInfo ubo_current_strokegen_object_info_;
+  StrokegenUniformBufPool<UniformBuffer<UBOData_StrokegenObjectInfo>>
+      *ubo_current_strokegen_object_info_pool_; 
+  SSBO_StrokeGenDataPerObject<uint, 4> ssbo_merged_strokegen_object_infos_;
+  SSBO_StrokeGenMeshBufPerContour<uint, 1> ssbo_contour_snake_to_object_id_;  //
 
   SSBO_StrokeGenMeshBufPerContour<uint, 32> ssbo_contour_temporal_records_[MAX_TEMPORAL_FRAMES];
   GPUStorageBuf* ssbo_contour_temporal_records_new_(int strokegen_frame_id) {
@@ -593,9 +635,13 @@ class GPUBufferPoolModule {
     , listranking_test_data_validated(false)
     , rot_angle_ubo_view_matrices_cache_(.0f)
   {
+    ubo_current_strokegen_object_info_pool_ = new StrokegenUniformBufPool<UBO_StrokegenObjectInfo>(); 
   }
   ~GPUBufferPoolModule()
   {
+    delete reinterpret_cast<StrokegenUniformBufPool<UBO_StrokegenObjectInfo> *>(
+      ubo_current_strokegen_object_info_pool_
+    );
   }
 
 

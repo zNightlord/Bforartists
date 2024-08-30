@@ -401,6 +401,88 @@ using namespace draw;
   /** \} */
 
 
+  /* -------------------------------------------------------------------- */
+  /** \name Per-Object Draw Info
+   * \{ */
+  struct StrokegenObjectFlags
+  { /* Packed flags */
+    bool draw_contour;
+    bool draw_border;
+    bool draw_invisible;
+  };
+  static inline uint encode_strokegen_object_flags(StrokegenObjectFlags flags)
+  {
+#ifdef GPU_SHADER
+  #define U32_CAST(x) ((uint(x)))
+#else
+#  define U32_CAST(x) ((uint)(x))
+#endif
+    uint enc = U32_CAST((flags.draw_contour));
+    enc <<= 1;
+    enc |= U32_CAST((flags.draw_border));
+    enc <<= 1;
+    enc |= U32_CAST((flags.draw_invisible));
+    return enc;
+#undef U32_CAST
+  }
+  static inline StrokegenObjectFlags decode_strokegen_object_flags(uint enc)
+  {
+    StrokegenObjectFlags flags;
+    flags.draw_invisible = ((enc & 1u) == 1u);
+    enc >>= 1;
+    flags.draw_border = ((enc & 1u) == 1u);
+    enc >>= 1;
+    flags.draw_contour = ((enc & 1u) == 1u);
+
+    return flags;
+  }
+
+  /** Object info stored in the GPU side */
+  struct StrokegenObjectInfo {
+    float stroke_width;
+    float visibility_threshold;
+    StrokegenObjectFlags flags;
+    uint dummy; 
+  };
+  struct UBOData_StrokegenObjectInfo {
+    float stroke_width;
+    float visibility_threshold;
+    uint flags;
+    uint dummy;
+  };
+  BLI_STATIC_ASSERT_ALIGN(UBOData_StrokegenObjectInfo, 16)
+
+  static inline StrokegenObjectInfo copy_strokegen_object_data_from_ubo(UBOData_StrokegenObjectInfo ubo_data)
+  {
+    StrokegenObjectInfo info;
+    info.stroke_width = ubo_data.stroke_width;
+    info.visibility_threshold = ubo_data.visibility_threshold;
+    info.flags = decode_strokegen_object_flags(ubo_data.flags);
+    info.dummy = ubo_data.dummy;
+
+    return info; 
+  }
+
+#ifdef GPU_SHADER
+  uvec3 encode_strokegen_object_info(StrokegenObjectInfo info)
+  {
+    uvec3 enc;
+    enc.x = floatBitsToUint(info.stroke_width);
+    enc.y = floatBitsToUint(info.visibility_threshold);
+    enc.z = encode_strokegen_object_flags(info.flags);
+    return enc;
+  }
+  StrokegenObjectInfo decode_strokegen_object_info(uvec3 enc)
+  {
+    StrokegenObjectInfo info;
+    info.flags = decode_strokegen_object_flags(enc.z);
+    info.visibility_threshold = uintBitsToFloat(enc.y);
+    info.stroke_width = uintBitsToFloat(enc.x);
+    return info;
+  }
+#endif
+  /** \} */
+
 
   /* -------------------------------------------------------------------- */
   /** \name Geometry Extraction from GPUBatch(es)
@@ -533,9 +615,12 @@ using namespace draw;
 using UBO_ViewMatrices = draw::UniformBuffer<ViewMatrices>;
 using SSBO_IndirectDrawArgs = draw::StorageBuffer<DrawCommand, true>;
 using SSBO_IndirectDispatchArgs = draw::StorageBuffer<DispatchCommand>;
+using UBO_StrokegenObjectInfo = draw::UniformBuffer<UBOData_StrokegenObjectInfo>; 
 
 
 // Persistent Mesh Buffers ----------------
+template<typename T, size_t Stride>
+using SSBO_StrokeGenDataPerObject = draw::StorageArrayBuffer<T, MAX_NUM_STROKEGEN_OBJECTS * Stride, true>; 
 // about 64MB for single stride
 template<typename T, size_t Stride>
 using SSBO_StrokeGenMeshBufPerEdge = draw::StorageArrayBuffer<T, MAX_NUM_EDGES_PER_BATCH * Stride, true>;

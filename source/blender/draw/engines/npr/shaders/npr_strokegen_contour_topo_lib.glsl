@@ -304,48 +304,61 @@ void FixLoopedJumps(
 // Packed per-contour-edge data.
 // Used as minimum cache as we iterate through meshes. 
 // used for processing all extracted contours after all meshes are processed
+#define EDGE_TRANSFER_DASTA_STRIDE 10u
 struct ContourEdgeTransferData
 {
+	// Geometry/Topology info
 	vec3 vpos_ws[2]; 
 	ContourFlags cf; 
 	vec2 cusp_funcs; // cusp function at 2 verts
-	uint temporal_rec_id;  
-};
 
+	// History info	
+	uint temporal_rec_id;
+	
+	// Scene Object info 
+	uint obj_id; // 16 bits
+
+	// Note: we can pack temporal_rec_id, obj_id with new data
+};
 void store_contour_edge_transfer_data_(uint contour_edge_id, ContourEdgeTransferData cetd)
 {
-	ssbo_contour_edge_transfer_data_[contour_edge_id*9+0] = floatBitsToUint(cetd.vpos_ws[0].x);
-	ssbo_contour_edge_transfer_data_[contour_edge_id*9+1] = floatBitsToUint(cetd.vpos_ws[0].y);
-	ssbo_contour_edge_transfer_data_[contour_edge_id*9+2] = floatBitsToUint(cetd.vpos_ws[0].z);
-	ssbo_contour_edge_transfer_data_[contour_edge_id*9+3] = floatBitsToUint(cetd.vpos_ws[1].x);
-	ssbo_contour_edge_transfer_data_[contour_edge_id*9+4] = floatBitsToUint(cetd.vpos_ws[1].y);
-	ssbo_contour_edge_transfer_data_[contour_edge_id*9+5] = floatBitsToUint(cetd.vpos_ws[1].z);
+	uint offset = contour_edge_id * EDGE_TRANSFER_DASTA_STRIDE; 
+	ssbo_contour_edge_transfer_data_[offset + 0] = floatBitsToUint(cetd.vpos_ws[0].x);
+	ssbo_contour_edge_transfer_data_[offset + 1] = floatBitsToUint(cetd.vpos_ws[0].y);
+	ssbo_contour_edge_transfer_data_[offset + 2] = floatBitsToUint(cetd.vpos_ws[0].z);
+	ssbo_contour_edge_transfer_data_[offset + 3] = floatBitsToUint(cetd.vpos_ws[1].x);
+	ssbo_contour_edge_transfer_data_[offset + 4] = floatBitsToUint(cetd.vpos_ws[1].y);
+	ssbo_contour_edge_transfer_data_[offset + 5] = floatBitsToUint(cetd.vpos_ws[1].z);
 
-	ssbo_contour_edge_transfer_data_[contour_edge_id*9+6] = encode_contour_flags(cetd.cf);
-	ssbo_contour_edge_transfer_data_[contour_edge_id*9+7] = packHalf2x16(
+	ssbo_contour_edge_transfer_data_[offset + 6] = encode_contour_flags(cetd.cf);
+	ssbo_contour_edge_transfer_data_[offset + 7] = packHalf2x16(
 		vec2(
 			cetd.cusp_funcs[0] > .0f ? 1.0f : -1.0f, 
 			cetd.cusp_funcs[1] > .0f ? 1.0f : -1.0f
 		)
 	);
-	ssbo_contour_edge_transfer_data_[contour_edge_id*9+8] = cetd.temporal_rec_id; 
+	ssbo_contour_edge_transfer_data_[offset+8]   = cetd.temporal_rec_id; 
+	ssbo_contour_edge_transfer_data_[offset+9]   = cetd.obj_id; 
 }
 
 ContourEdgeTransferData load_contour_edge_transfer_data(uint contour_edge_id)
 {
+	uint offset = contour_edge_id * EDGE_TRANSFER_DASTA_STRIDE; 
+
 	ContourEdgeTransferData cetd; 
 	uvec4 enc_data[2];
-	cetd.vpos_ws[0].x = uintBitsToFloat(ssbo_contour_edge_transfer_data_[contour_edge_id*9u+0u]);
-	cetd.vpos_ws[0].y = uintBitsToFloat(ssbo_contour_edge_transfer_data_[contour_edge_id*9u+1u]);
-	cetd.vpos_ws[0].z = uintBitsToFloat(ssbo_contour_edge_transfer_data_[contour_edge_id*9u+2u]);
-	cetd.vpos_ws[1].x = uintBitsToFloat(ssbo_contour_edge_transfer_data_[contour_edge_id*9u+3u]);
-	cetd.vpos_ws[1].y = uintBitsToFloat(ssbo_contour_edge_transfer_data_[contour_edge_id*9u+4u]);
-	cetd.vpos_ws[1].z = uintBitsToFloat(ssbo_contour_edge_transfer_data_[contour_edge_id*9u+5u]);
+	cetd.vpos_ws[0].x = uintBitsToFloat(ssbo_contour_edge_transfer_data_[offset+0u]);
+	cetd.vpos_ws[0].y = uintBitsToFloat(ssbo_contour_edge_transfer_data_[offset+1u]);
+	cetd.vpos_ws[0].z = uintBitsToFloat(ssbo_contour_edge_transfer_data_[offset+2u]);
+	cetd.vpos_ws[1].x = uintBitsToFloat(ssbo_contour_edge_transfer_data_[offset+3u]);
+	cetd.vpos_ws[1].y = uintBitsToFloat(ssbo_contour_edge_transfer_data_[offset+4u]);
+	cetd.vpos_ws[1].z = uintBitsToFloat(ssbo_contour_edge_transfer_data_[offset+5u]);
 
-	cetd.cf = decode_contour_flags(ssbo_contour_edge_transfer_data_[contour_edge_id*9u+6u]);
-	cetd.cusp_funcs = unpackHalf2x16(ssbo_contour_edge_transfer_data_[contour_edge_id*9u+7u]);
-	cetd.temporal_rec_id = ssbo_contour_edge_transfer_data_[contour_edge_id*9u+8u];
-
+	cetd.cf 			 = decode_contour_flags(ssbo_contour_edge_transfer_data_[offset+6u]);
+	cetd.cusp_funcs 	 = unpackHalf2x16(ssbo_contour_edge_transfer_data_[offset+7u]);
+	cetd.temporal_rec_id = ssbo_contour_edge_transfer_data_[offset+8u];
+	cetd.obj_id 		 = ssbo_contour_edge_transfer_data_[offset+9u];
+	
     return cetd;  
 }
 #endif
@@ -401,6 +414,17 @@ uint load_ssbo_contour_2d_sample_topology__seg_len(uint sample_id, uint num_samp
 	uint subbuff_offset = num_samples * 4u; 
 	return ssbo_contour_2d_sample_topology_[subbuff_offset + sample_id]; 
 }
+void store_ssbo_contour_2d_sample_topology__object_id(uint sample_id, uint obj_id, uint num_samples)
+{
+	uint subbuff_offset = num_samples * 5u; 
+	ssbo_contour_2d_sample_topology_[subbuff_offset + sample_id] = obj_id; 
+}
+uint load_ssbo_contour_2d_sample_topology__object_id(uint sample_id, uint num_samples)
+{
+	uint subbuff_offset = num_samples * 5u; 
+	return ssbo_contour_2d_sample_topology_[subbuff_offset + sample_id]; 
+}
+
 ContourCurveTopo load_contour_2d_sample_curve_topo(uint contour_id, ContourFlags cf, uint num_samples)
 {
 	uint curve_rank = load_ssbo_contour_2d_sample_topology__curve_rank(contour_id, num_samples); 
@@ -417,6 +441,8 @@ bool is_2d_sample_curve_looped(bool contour_looped, bool contour_crve_clipped, b
 	bool is_sub_seg_loop = contour_looped && (!contour_crve_clipped) && single_sub_seg; 
 	return is_sub_seg_loop; 
 }
+
+
 #endif
 
 

@@ -50,6 +50,9 @@ namespace blender::npr::strokegen
     const View3D *v3d;
     const RegionView3D *rv3d;
 
+    /** Minimum gpu scene from storkegen objects */
+    Map<uint64_t, int> object_gpu_id_map; // maps object hash to an id in gpu scene.
+
     /** Info string displayed at the top of the render / viewport. */
     std::string info = "";
     uint frame_counter;
@@ -66,7 +69,7 @@ namespace blender::npr::strokegen
           strokegen_passes(shaders, strokegen_buffers, strokegen_textures),
           has_strokegen_enabled_mesh(false),
           rdc_dbg_counter(0)
-    {
+      {
       strokegen_passes.test_looped_pass_list_ranking = true; // remember to also set flag at build_list_ranking_testing_data
     }
 

@@ -31,6 +31,8 @@
 
 #define MAX_GPU_HASH_TABLE_SIZE ((2048 * 2048 * 16)) /* we just cannot afford more than this */
 
+#define MAX_NUM_STROKEGEN_OBJECTS ((65536u))
+
 #define MAX_NUM_EDGES_PER_BATCH ((2048 * 2048 * 4))
 
 /* https://math.stackexchange.com/questions/1541125/total-number-of-edges-in-a-triangle-mesh-with-n-vertices */

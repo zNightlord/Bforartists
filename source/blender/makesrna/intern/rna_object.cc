@@ -2837,7 +2837,7 @@ static void rna_def_object_strokegen(BlenderRNA *brna)
   RNA_def_property_range(prop, 1.0f, 12.0f);
   RNA_def_property_ui_range(prop, 1.0f, 12.0f, 0.5f, 1);
   RNA_def_property_ui_text(prop, "Width", "the width of curves");
-  RNA_def_property_update(prop, 0, "rna_object_strokegen_update");
+  RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, "rna_object_strokegen_update");
 
   prop = RNA_def_property(srna, "dummy_0", PROP_INT, PROP_NONE);
   RNA_def_property_update(prop, 0, "rna_object_strokegen_update");

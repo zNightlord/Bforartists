@@ -104,6 +104,12 @@ void main()
 		/* reset for each mesh */
 		ssbo_bnpr_mesh_pool_counters_.num_draw_faces = 0u; 
 	}
+
+	if (idx == 0)
+	{ /* Fill info for current object */
+		StrokegenObjectInfo obj_info_out = copy_strokegen_object_data_from_ubo(ubo_current_strokegen_object_info_); 
+		store_strokegen_object_info(pcs_curr_obj_id_, obj_info_out); 
+	}
  }
 #endif
 
@@ -494,6 +500,7 @@ void main()
 			cetd.vpos_ws[1] = vpos_ws[1].xyz;
 			cetd.cf = cf;
 			cetd.cusp_funcs = cusp_func;
+			cetd.obj_id = pcs_curr_obj_id_; // Save object handle to the GPU scene buffer(s)
 
 			{ /* Link contour edge to temporal record */
 				// For now we only implement for interpolated contours.
@@ -518,6 +525,7 @@ void main()
 			/* write to intermediate buffer, will be shuffled after list ranking */
 			store_contour_edge_transfer_data_(contour_id_global, cetd); 
 		}
+
 
 		{ /* Generate Topology */
 			/* build contour edge adjacency */
@@ -674,6 +682,7 @@ void interpo_contour_edge_transfer_data(
 	cetd.cusp_funcs[0] = mix(cetd_parent.cusp_funcs[0], cetd_parent.cusp_funcs[1], beg_ratio);
 	cetd.cusp_funcs[1] = mix(cetd_parent.cusp_funcs[0], cetd_parent.cusp_funcs[1], end_ratio); 
 	cetd.temporal_rec_id = cetd_parent.temporal_rec_id;
+	cetd.obj_id = cetd_parent.obj_id; 
 	
 	store_contour_edge_transfer_data_(contour_id, cetd); 
 }

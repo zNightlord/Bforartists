@@ -49,6 +49,11 @@ public:
   int get_num_passes_extract_geom() { return curr_mesh_id_extract_geom + 1; }
   int get_num_passes_remeshed_surf_depth() { return curr_mesh_id_surf_depth + 1; }
 
+  /** Sync states */
+  bool first_frame;
+  int strokegen_frame_id;
+  int strokegen_obj_id; 
+
  private:
   /** Compute Passes */
   draw::PassSimple pass_comp_test = {"Strokegen Compute Test"};
@@ -77,10 +82,7 @@ public:
   GPUBufferPoolModule   &buffers_;
   GPUTexturePoolModule  &textures_;
 
-  /** Sync states */
-  bool first_frame; 
-  int strokegen_frame_id;
-  int strokegen_obj_id; 
+
 
 
 public:
@@ -158,15 +160,15 @@ public:
   void init_mesh_extraction_passes();
   void append_per_mesh_pass(
       Object* ob,
+      int curr_obj_id,
       gpu::Batch* gpu_batch_line_adj,
       gpu::Batch* gpu_batch_surf,
-      ResourceHandle& rsc_handle,
-      const DRWView* drw_view
-    );
+      ResourceHandle& rsc_handle, const DRWView* drw_view
+      );
 
 
   // ---------------------------------------------------------------------------
-  void append_subpass_cpy_vbo(gpu::Batch* gpu_batch_surf, int batch_resource_index, int num_verts);
+  void append_subpass_cpy_vbo_and_object_info(gpu::Batch* gpu_batch_surf, int batch_resource_index, int num_verts, int fill_object_data_slot);
   void append_subpass_cpy_line_adj_ibo(gpu::Batch* gpu_batch_line_adj,
                                          gpu::GPUIndexBufType ib_type,
                                          int num_added_edges);
@@ -438,7 +440,7 @@ public:
   void append_subpass_fill_dispatch_args_contour_frags(PassSimple &pass, bool all_contour_frags);
   void append_subpass_fill_dispatch_args_contour_2d_samples(PassSimple &pass);
   void append_subpass_fill_dispatch_args_temporal_records_(int obj_id, int rec_frame_id);
-  void append_subpass_setup_contour_edge_data();
+  void append_subpass_setup_contour_edge_data(int curr_obj_id);
 
   // ---------------------------------------------------------------------------
   void append_pass_remeshed_surface_depth_drawcall(bool is_transparent);
