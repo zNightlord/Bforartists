@@ -2817,14 +2817,12 @@ static void rna_def_object_strokegen(BlenderRNA *brna)
     RNA_def_property_boolean_negative_sdna(
         prop, nullptr, "curve_type", STROKEGEN_CURVE_TYPE_CONTOUR);
     RNA_def_property_ui_text(prop, "Contour Curves", "draw the silhouette of this mesh");
-    RNA_def_property_ui_icon(prop, ICON_CURVE_BEZCURVE, -1);
     RNA_def_property_update(prop, 0, "rna_object_strokegen_update");
 
     prop = RNA_def_property(srna, "border", PROP_BOOLEAN, PROP_NONE);
     RNA_def_property_boolean_negative_sdna(
         prop, nullptr, "curve_type", STROKEGEN_CURVE_TYPE_BORDER);
     RNA_def_property_ui_text(prop, "Border Curves", "draw the border edges");
-    RNA_def_property_ui_icon(prop, ICON_CURVE_BEZCURVE, -1);
     RNA_def_property_update(prop, 0, "rna_object_strokegen_update");
   }
 
@@ -2839,8 +2837,26 @@ static void rna_def_object_strokegen(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Width", "the width of curves");
   RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, "rna_object_strokegen_update");
 
-  prop = RNA_def_property(srna, "dummy_0", PROP_INT, PROP_NONE);
-  RNA_def_property_update(prop, 0, "rna_object_strokegen_update");
+  prop = RNA_def_property(srna, "visibility_threshold", PROP_FLOAT, PROP_NONE);
+  RNA_def_property_range(prop, .0f, FLT_MAX);
+  RNA_def_property_ui_range(prop, .0f, FLT_MAX, 1, 4);
+  RNA_def_property_ui_text(prop, "Visibility Threshold", "the strength of occlusion culling");
+  RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, "rna_object_strokegen_update");
+
+  { // Misc Flags
+    prop = RNA_def_property(srna, "tessellation_on", PROP_BOOLEAN, PROP_NONE);
+    RNA_def_property_boolean_sdna(prop, nullptr, "flags", STROKEGEN_FLAG_TESSELLATION_ON);
+    RNA_def_property_ui_text(prop, "Use dynamic tessellation", "subdivide surface to improve visual smoothness and support advanced features");
+    RNA_def_property_update(prop, 0, "rna_object_strokegen_update");
+
+    prop = RNA_def_property(srna, "crease_on", PROP_BOOLEAN, PROP_NONE);
+    RNA_def_property_boolean_negative_sdna(prop, nullptr, "flags", STROKEGEN_FLAG_CREASE_ON);
+    RNA_def_property_ui_text(
+        prop,
+        "Use creases in dynamic tessellation",
+        "Detect sharp edges & allow for preserving sharp features");
+    RNA_def_property_update(prop, 0, "rna_object_strokegen_update");
+  }
 }
 
 static void rna_def_object_visibility(StructRNA *srna)

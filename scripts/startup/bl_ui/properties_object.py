@@ -342,16 +342,25 @@ class OBJECT_PT_strokegen(ObjectButtonsPanel, Panel):
         ob = context.object
         strokegen = ob.strokegen
 
+        layout.separator()
         col = layout.column(heading="Curve Types")
-        col.prop(strokegen, "contour", text="Contour", toggle=False, invert_checkbox=True)
-        col.prop(strokegen, "border", text="Border", toggle=False, invert_checkbox=True)
+        row = col.row(); 
+        row.prop(strokegen, "contour", text="Contour", toggle=True, invert_checkbox=True)
+        # col.prop(strokegen, "border", text="Border", toggle=True, invert_checkbox=True)
 
+        layout.separator()
         col = layout.column(heading="Surface Shading Type")
         col.prop(strokegen, "surface_shading_type", text="surface shading type")
 
         layout.separator()
         col = layout.column(heading="Basic Settings")
-        col.prop(strokegen, "curve_width")
+        col.prop(strokegen, "curve_width", text="Curve Width")
+        col.prop(strokegen, "visibility_threshold", text="Visibility Threshold")
+        col.prop(strokegen, "tessellation_on", text="Enable Tessellation", toggle=True)
+        subcol = col.column()
+        subcol.active = strokegen.tessellation_on
+        subcol.prop(strokegen, "crease_on", text="Enale Crease", toggle=False, invert_checkbox=True)
+
 
         # row = layout.row(heading="Override Crease")
         # row.prop(strokegen, "use_crease_override", text="")

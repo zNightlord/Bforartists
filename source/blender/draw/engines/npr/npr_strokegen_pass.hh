@@ -49,7 +49,7 @@ public:
   int get_num_passes_extract_geom() { return curr_mesh_id_extract_geom + 1; }
   int get_num_passes_remeshed_surf_depth() { return curr_mesh_id_surf_depth + 1; }
 
-  /** Sync states */
+  /** Sync states from StrokegenInstance */
   bool first_frame;
   int strokegen_frame_id;
   int strokegen_obj_id; 
@@ -58,8 +58,9 @@ public:
   /** Compute Passes */
   draw::PassSimple pass_comp_test = {"Strokegen Compute Test"};
 
-  int curr_mesh_id_extract_geom; 
+  int curr_mesh_id_extract_geom;
   std::array<StrokegenMeshComputePass, 1024> pass_extract_geom_arr;
+  std::vector<std::unique_ptr<StrokegenMeshComputePass>> pass_extract_geom_list; 
   StrokegenMeshComputePass &pass_extract_geom() { return pass_extract_geom_arr[curr_mesh_id_extract_geom]; }
   draw::PassSimple pass_process_contours = {"StrokeGen Process Contours"}; 
   draw::PassSimple pass_compress_contour_pixels = {"Generate Contour Pixel Mask"}; 
@@ -139,6 +140,7 @@ public:
   /** \name Sync with Draw Module
      * \{ */
   void on_begin_sync(int frame_counter);
+  void sync_object(int obj_id, PerObjectStrokegenSettings& obj_strokegen_settings); 
   void on_end_sync(); 
   /** \} */
 
@@ -164,7 +166,7 @@ public:
       gpu::Batch* gpu_batch_line_adj,
       gpu::Batch* gpu_batch_surf,
       ResourceHandle& rsc_handle, const DRWView* drw_view
-      );
+  );
 
 
   // ---------------------------------------------------------------------------

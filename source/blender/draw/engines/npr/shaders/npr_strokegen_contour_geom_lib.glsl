@@ -307,7 +307,16 @@ LineRasterResult load_contour_edge_raster_data(uint contour_edge_id, out uint he
 {
 	LineRasterResult line_raster_data = load_contour_edge_raster_data(contour_edge_id);
 	
-	head_frag_id = ssbo_contour_raster_data_[contour_edge_id * 6u + 5u]; 
+	head_frag_id = ssbo_contour_raster_data_[contour_edge_id * 6u + 5u]; // start frag rastered from this edge
+	
+	return line_raster_data; 
+}
+
+LineRasterResult load_contour_edge_raster_data(uint contour_edge_id, out uint head_frag_id, out uint tail_frag_id)
+{
+	LineRasterResult line_raster_data = load_contour_edge_raster_data(contour_edge_id, /*out*/head_frag_id);
+	
+	tail_frag_id = head_frag_id + line_raster_data.num_frags - 1u; // end frag rastered from this edge
 	
 	return line_raster_data; 
 }

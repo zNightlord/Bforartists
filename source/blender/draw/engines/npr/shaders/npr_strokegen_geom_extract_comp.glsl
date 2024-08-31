@@ -803,16 +803,17 @@ void main()
 
 	uint contour_edge_id = ssbo_frag_to_contour_[frag_id]; 
 
-	uint head_frag_id; 
-	LineRasterResult line_raster_data = load_contour_edge_raster_data(contour_edge_id, /*out*/head_frag_id); 
+	uint head_frag_id, tail_frag_id; 
+	LineRasterResult line_raster_data = load_contour_edge_raster_data(contour_edge_id, /*out*/head_frag_id, tail_frag_id); 
+	uint frag_id_reversed = head_frag_id + tail_frag_id - frag_id;
 
-	vec4 begend_frags = line_raster_data.begend_uvs.xyzw * pcs_screen_size_.xyxy;
+	vec4 begend_frags = line_raster_data.begend_uvs * pcs_screen_size_.xyxy;  
 	float linear_interp = 0;
     float linear_step = 0; // how much "factor" costs to go to neighbor frag on edge
 	vec2 sampleTexel = calc_frag_screen_pos(
         begend_frags,
         head_frag_id,
-        frag_id,
+        line_raster_data.beg_from_p0 ? frag_id : frag_id_reversed, // restore contour edge orientation
         line_raster_data.is_x_major_line,
         /* out */linear_interp, linear_step 
     );
@@ -1038,10 +1039,10 @@ void main()
 	
 	uint new_contour_id = compact_visibility_contour_split(add_new_contour, groupId); 
 	barrier(); 
-
+ContourVisibilitySplitInfo cvsi;
 	if (is_seg_head && valid_thread)
 	{ /* This should be ran for EVERY rasterized contour edge EXACTLY once */
-		ContourVisibilitySplitInfo cvsi;
+		// ContourVisibilitySplitInfo cvsi;
 		cvsi.parent_contour_id = contour_edge_id;
 		cvsi.is_visible = fvtr.visible;
 		cvsi.is_new_contour = add_new_contour; 
@@ -1081,8 +1082,11 @@ void main()
 	if (valid_thread)
 	{
 		vec2 frag_coord = load_frag_coord(frag_id, num_frags);	
-		imageStore(tex2d_contour_dbg_, ivec2(frag_coord), 
-			fvtr.visible ? vec4(.0, 1.0, .0, .0) : vec4(1.0, .0, 1.0, .0));
+vec4 dbg_col = vec4(1); 
+dbg_col = fvtr.visible ? vec4(.0, 1.0, .0, .0) : vec4(.0, .0, 1.0, .0); 
+dbg_col = is_seg_head ? vec4(1, cvsi.begend_ratios.xy, 1) : dbg_col;
+dbg_col.r = float(seg_rank) / float(seg_len); 
+		imageStore(tex2d_contour_dbg_, ivec2(frag_coord), dbg_col);
 	}
 	#endif
 

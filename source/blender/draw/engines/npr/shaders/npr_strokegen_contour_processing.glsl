@@ -531,7 +531,7 @@ void main()
 			ssbo_contour_to_start_sample_[contour_id]; 
 		vec4 dbg_col = vec4(float(alloc_sample_offset), .0f, .0f, 1.0f); 
 		ivec2 dbg_pos = ivec2(c2rd.begend_uvs.xy * pcs_screen_size_.xy);
-		// imageStore(tex2d_contour_dbg_, dbg_pos, dbg_col);
+		imageStore(tex2d_contour_dbg_, dbg_pos, dbg_col);
 	}
 #endif
 

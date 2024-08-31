@@ -50,19 +50,15 @@ void StrokegenSyncModule::sync_mesh(
     if (gpu_batch_surf->elem == nullptr)
       return;
 
-
+    // sync scene info to instace & submodules -------------
     // Register object to gpu scene
     ObjectKey ob_key(ob);
     int gpu_obj_id = inst_.object_gpu_id_map.size();
     inst_.object_gpu_id_map.add(ob_key.hash(), gpu_obj_id);
-    inst_.strokegen_buffers.sync_object(ob); // add object data to gpu buffers
+    inst_.strokegen_passes.sync_object(gpu_obj_id, ob->strokegen); 
+    inst_.strokegen_buffers.sync_object(ob);  // add object data to gpu buffers
 
-    { // sync scene info to submodules
-      inst_.strokegen_passes.strokegen_obj_id = gpu_obj_id;
-    }
-
-
-    // Record per-object strokegen shaders
+    // Record per-object strokegen shaders ------------------
     if (inst_.strokegen_passes.boostrap_before_extract_first_batch) {
       // bootstrapping
       inst_.strokegen_passes.append_per_mesh_pass(

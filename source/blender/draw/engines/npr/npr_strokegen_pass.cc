@@ -200,6 +200,22 @@ void StrokeGenPassModule::on_begin_sync(int frame_counter)
     meshing_params.dbg_ndv_grad_mode = (int)(scene_eval->npr.npr_test_val_27 + 1e-10f);
   }
 
+void StrokeGenPassModule::sync_object(int obj_id,
+    PerObjectStrokegenSettings &obj_strokegen_settings)
+{
+  strokegen_obj_id = obj_id;
+
+  bool use_subd = (1u == (obj_strokegen_settings.flags & STROKEGEN_FLAG_TESSELLATION_ON)); 
+
+  meshing_params.contour_mode = use_subd ? ContourType::Interpolated : ContourType::Raw; 
+
+  meshing_params.subdiv_type = 0; // loop subdiv
+  meshing_params.iters_test_subdiv = use_subd ? 2 : 0;
+  meshing_params.subdiv_use_crease = (0u != (obj_strokegen_settings.flags & STROKEGEN_FLAG_CREASE_ON));
+
+  meshing_params.visibility_thresh = obj_strokegen_settings.visibility_threshold; 
+}
+
 
 void StrokeGenPassModule::on_end_sync()
   {
@@ -226,6 +242,9 @@ void StrokeGenPassModule::on_end_sync()
     for (StrokegenMeshComputePass& pass_extract_geom : pass_extract_geom_arr) {
       pass_extract_geom.init(); 
     }
+    // for (std::unique_ptr<StrokegenMeshComputePass>& StrokegenMeshComputePass &pass_extract_geom : pass_extract_geom_list) {
+    //   pass_extract_geom->init(); 
+    // }
     boostrap_before_extract_first_batch = true;
 
     surf_dbg_ctx.dbg_line_length = 1.0f;
@@ -519,7 +538,7 @@ void StrokeGenPassModule::on_end_sync()
       ResourceHandle& rsc_handle,
       const DRWView* drw_view
   ){
-    curr_mesh_id_extract_geom++; 
+    curr_mesh_id_extract_geom++;
 
     if (boostrap_before_extract_first_batch) {
       auto &sub = pass_extract_geom().sub("bootstrap meshing passes");
