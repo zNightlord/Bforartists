@@ -807,7 +807,7 @@ void main()
 	LineRasterResult line_raster_data = load_contour_edge_raster_data(contour_edge_id, /*out*/head_frag_id, tail_frag_id); 
 	uint frag_id_reversed = head_frag_id + tail_frag_id - frag_id;
 
-	vec4 begend_frags = line_raster_data.begend_uvs * pcs_screen_size_.xyxy;  
+	vec4 begend_frags = line_raster_data.begend_uvs.xyzw * pcs_screen_size_.xyxy;  
 	float linear_interp = 0;
     float linear_step = 0; // how much "factor" costs to go to neighbor frag on edge
 	vec2 sampleTexel = calc_frag_screen_pos(
