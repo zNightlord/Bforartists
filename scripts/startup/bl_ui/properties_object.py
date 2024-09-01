@@ -356,6 +356,9 @@ class OBJECT_PT_strokegen(ObjectButtonsPanel, Panel):
         col = layout.column(heading="Basic Settings")
         col.prop(strokegen, "curve_width", text="Curve Width")
         col.prop(strokegen, "visibility_threshold", text="Visibility Threshold")
+        col.prop(strokegen, "draw_hidden_contour", text="Draw Hidden Contours", toggle=True, invert_checkbox=True)
+
+        col = layout.column(heading="Tessellation")
         col.prop(strokegen, "tessellation_on", text="Enable Tessellation", toggle=True)
         subcol = col.column()
         subcol.active = strokegen.tessellation_on

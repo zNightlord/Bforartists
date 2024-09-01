@@ -138,7 +138,7 @@ void StrokeGenPassModule::on_begin_sync(int frame_counter)
     const DRWContextState *draw_ctx = DRW_context_state_get();
     const Scene *scene_eval = DEG_get_evaluated_scene(draw_ctx->depsgraph);
 
-    meshing_params.max_num_remesh_dbg_iters = 100000; // scene_eval->npr.npr_test_val_0;
+    meshing_params.max_num_remesh_dbg_iters = 100000; 
 
     int val_1 = scene_eval->npr.npr_test_val_1; 
     surf_dbg_ctx.dbg_lines = (0 < val_1);
@@ -156,54 +156,51 @@ void StrokeGenPassModule::on_begin_sync(int frame_counter)
       surf_dbg_ctx.dbg_vert_contour_grad = surf_dbg_ctx.dbg_edges = true; 
 
     meshing_params.edge_visualize_mode = -1;
-    if (surf_dbg_ctx.dbg_edges) {
+    if (surf_dbg_ctx.dbg_edges) { // sub-debug types when edge-debug is on 
       meshing_params.edge_visualize_mode = (int)(scene_eval->npr.npr_test_val_2 + 1e-10f); 
     }
 
-    meshing_params.seconds_sync_view_mat = 0; // (int)(scene_eval->npr.npr_test_val_3 + 1e-10f);
-    meshing_params.num_vtx_smooth_iters = (int)(scene_eval->npr.npr_test_val_4 + 1e-10f);
+    meshing_params.seconds_sync_view_mat = (int)(scene_eval->npr.npr_test_val_3 + 1e-10f);
+    meshing_params.num_vtx_smooth_iters  = (int)(scene_eval->npr.npr_test_val_4 + 1e-10f);
 
-    meshing_params.contour_mode = ContourType::Interpolated; // (int)(scene_eval->npr.npr_test_val_5 + 1e-10f);
-    meshing_params.visualize_contour_edges = true; // 0 < (int)(scene_eval->npr.npr_test_val_5 + 1e-10f);
-    meshing_params.iters_test_subdiv = 2; // (int)(scene_eval->npr.npr_test_val_6 + 1e-10f); 
-
-    pass_draw_contour_edges.draw_settings.draw_hidden_lines = false; // scene_eval->npr.npr_test_val_7 > .5f;
-    pass_draw_contour_2d_samples.draw_settings.draw_hidden_lines = false;
-     // scene_eval->npr.npr_test_val_7 > .5f; 
-    pass_draw_debug_lines_.draw_settings.draw_hidden_lines = false; // scene_eval->npr.npr_test_val_7 > .5f;
-
-    meshing_params.num_quadric_diffusion_iters = scene_eval->npr.npr_test_val_8;
-    meshing_params.quadric_deviation = scene_eval->npr.npr_test_val_9;
-    meshing_params.position_regularization_scale = scene_eval->npr.npr_test_val_10;
+// TODO: to be removed ---
+    meshing_params.num_quadric_diffusion_iters = 0; 
+    meshing_params.quadric_deviation = 0; 
+    meshing_params.position_regularization_scale = 0;
+// -----------------------
     
-    meshing_params.num_edge_flooding_iters = 4; // (int)(scene_eval->npr.npr_test_val_11 + 1e-10f);
+    meshing_params.num_edge_flooding_iters = 4; 
 
-    meshing_params.remeshing_targ_edge_len = scene_eval->npr.npr_test_val_12;
-    meshing_params.remeshing_split_iters = (int)(scene_eval->npr.npr_test_val_13 + 1e-10f); 
-    meshing_params.remeshing_collapse_iters = (int)(scene_eval->npr.npr_test_val_14 + 1e-10f);
-    meshing_params.remeshing_flip_iters = (int)(scene_eval->npr.npr_test_val_15 + 1e-10f);
-    meshing_params.remeshing_iters = (int)(scene_eval->npr.npr_test_val_16 + 1e-10f);
-    meshing_params.remeshing_delaunay_flip_iters = (int)(scene_eval->npr.npr_test_val_17 + 1e-10f);
+    meshing_params.remeshing_targ_edge_len       = scene_eval->npr.npr_test_val_5;
+    meshing_params.remeshing_split_iters         = (int)(scene_eval->npr.npr_test_val_6 + 1e-10f); 
+    meshing_params.remeshing_collapse_iters      = (int)(scene_eval->npr.npr_test_val_7 + 1e-10f);
+    meshing_params.remeshing_flip_iters          = (int)(scene_eval->npr.npr_test_val_8 + 1e-10f);
+    meshing_params.remeshing_iters               = (int)(scene_eval->npr.npr_test_val_9 + 1e-10f);
+    meshing_params.remeshing_delaunay_flip_iters = (int)(scene_eval->npr.npr_test_val_10 + 1e-10f);
 
-    surf_dbg_ctx.dbg_line_length = .0f; // scene_eval->npr.npr_test_val_18;
-    meshing_params.subdiv_type = 0; // (int)(scene_eval->npr.npr_test_val_19 + 1e-10f);
-    meshing_params.subdiv_use_crease = false; // .0f < scene_eval->npr.npr_test_val_20; 
+    surf_dbg_ctx.dbg_line_length = scene_eval->npr.npr_test_val_11;
 
     meshing_params.denoise_cusp_segmentation = false; // .0f < scene_eval->npr.npr_test_val_21;
-    meshing_params.visibility_thresh = 0.3f; // scene_eval->npr.npr_test_val_22;
     meshing_params.cusp_eval_opti = true;
-    // npr_test_val_23 is used for camera rotation
 
-    meshing_params.dbg_matching_line_mode = scene_eval->npr.npr_test_val_24;
-    meshing_params.dbg_history_trace_steps = (int)(scene_eval->npr.npr_test_val_25 + 1e-10f);
-    meshing_params.dbg_history_trace_passes = (int)(scene_eval->npr.npr_test_val_26 + 1e-10f);
-    meshing_params.dbg_ndv_grad_mode = (int)(scene_eval->npr.npr_test_val_27 + 1e-10f);
+    // npr_test_val_12 is used for camera rotation
+    meshing_params.dbg_matching_line_mode   = (int)(scene_eval->npr.npr_test_val_13 + 1e-10f);
+    meshing_params.dbg_history_trace_steps  = (int)(scene_eval->npr.npr_test_val_14 + 1e-10f);
+    meshing_params.dbg_history_trace_passes = (int)(scene_eval->npr.npr_test_val_15 + 1e-10f);
+    meshing_params.dbg_ndv_grad_mode        = (int)(scene_eval->npr.npr_test_val_16 + 1e-10f);
   }
 
 void StrokeGenPassModule::sync_object(int obj_id,
     PerObjectStrokegenSettings &obj_strokegen_settings)
 {
   strokegen_obj_id = obj_id;
+
+  meshing_params.visualize_contour_edges = false; // generate both debug & contour stroke draw calls
+  pass_draw_contour_edges.draw_settings.draw_hidden_lines =
+    0u != (STROKEGEN_FLAG_DRAW_HIDDEN_CURVES & obj_strokegen_settings.flags);
+  pass_draw_contour_2d_samples.draw_settings.draw_hidden_lines =
+    pass_draw_contour_edges.draw_settings.draw_hidden_lines;
+  pass_draw_debug_lines_.draw_settings.draw_hidden_lines = false; 
 
   bool use_subd = (1u == (obj_strokegen_settings.flags & STROKEGEN_FLAG_TESSELLATION_ON)); 
 

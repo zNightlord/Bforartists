@@ -8745,7 +8745,7 @@ static void rna_def_scene_eevee(BlenderRNA *brna)
   RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
   RNA_def_property_update(prop, 0, "rna_SceneEEVEE_shadow_resolution_update");
 }
-
+ 
 static void rna_def_scene_gpencil(BlenderRNA *brna)
 {
   StructRNA *srna;

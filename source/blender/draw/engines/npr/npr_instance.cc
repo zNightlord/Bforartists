@@ -120,8 +120,6 @@ void Instance::draw(Manager &manager, View &view, GPUTexture *depth_tx, GPUTextu
 
   manager.submit(deferred_pass_ps_);
 
-  GPU_texture_copy(depth_tx, depth_tx_);
-
   strokegen_inst_->end_draw_viewport(); 
 }
 

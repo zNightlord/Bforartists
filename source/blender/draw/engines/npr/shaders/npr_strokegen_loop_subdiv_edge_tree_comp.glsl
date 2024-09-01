@@ -141,7 +141,7 @@ struct TraceDebugContext
 TraceDebugContext init_trace_dbg_context(bool found_any_matched_history)
 {
     TraceDebugContext ctx;
-    ctx.record_dbg_lines = false;  
+    ctx.record_dbg_lines = (pc_dbg_matching_line_mode_ & 1u) != 0u;  
     ctx.found_any_matched_history = found_any_matched_history; 
     ctx.dbg_line_id_beg = uvec2(0u); 
     ctx.dbg_show_full_path             = (pc_dbg_matching_line_mode_ & 2u) != 0u;
@@ -662,7 +662,7 @@ void main()
                 }
 
                 dbg_ctx.dbg_line_id_beg[path] = dbg_line_id_beg + TRACE_STEPS * path; 
-                dbg_ctx.record_dbg_lines = true; 
+                // dbg_ctx.record_dbg_lines = true; 
                 
                 TracedPathCache tpc = trace_path(
                     path, TRACE_STEPS, 

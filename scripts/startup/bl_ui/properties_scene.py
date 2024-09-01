@@ -344,7 +344,7 @@ class SCENE_PT_rigid_body_world(SceneButtonsPanel, Panel):
         rbw = scene.rigidbody_world
 
         if rbw is None:
-            layout.operator("rigidbody.world_add")
+            layout.operator("rigidbody.world_add") 
         else:
             layout.operator("rigidbody.world_remove")
 

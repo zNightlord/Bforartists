@@ -2856,6 +2856,13 @@ static void rna_def_object_strokegen(BlenderRNA *brna)
         "Use creases in dynamic tessellation",
         "Detect sharp edges & allow for preserving sharp features");
     RNA_def_property_update(prop, 0, "rna_object_strokegen_update");
+
+    prop = RNA_def_property(srna, "draw_hidden_contour", PROP_BOOLEAN, PROP_NONE);
+    RNA_def_property_boolean_negative_sdna(prop, nullptr, "flags", STROKEGEN_FLAG_DRAW_HIDDEN_CURVES);
+    RNA_def_property_ui_text(prop,
+                             "Draw Occluded Contours",
+                             "draw both visible & hidden contours");
+    RNA_def_property_update(prop, 0, "rna_object_strokegen_update");
   }
 }
 

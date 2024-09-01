@@ -162,7 +162,8 @@ ENUM_OPERATORS(ePerObjectStrokegenSetting_ShadingType, STROKEGEN_SHADING_TYPE_OP
 
 enum ePerObjectStrokegenSetting_Flags {
   STROKEGEN_FLAG_TESSELLATION_ON = 1, 
-  STROKEGEN_FLAG_CREASE_ON = (1 << 1)
+  STROKEGEN_FLAG_CREASE_ON = (1 << 1),
+  STROKEGEN_FLAG_DRAW_HIDDEN_CURVES = (1 << 2)
 };
 ENUM_OPERATORS(ePerObjectStrokegenSetting_Flags, STROKEGEN_CURVE_TYPE_CONTOUR);
 #define ePerObjectStrokegenSetting_Flags_Default_Val 1u

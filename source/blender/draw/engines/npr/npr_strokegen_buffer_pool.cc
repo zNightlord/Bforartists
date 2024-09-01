@@ -355,7 +355,7 @@ namespace blender::npr::strokegen
   void GPUBufferPoolModule::get_dbg_view_rot_angle(float& rot_ang) {
     const DRWContextState* draw_ctx = DRW_context_state_get();
     const Scene* scene_eval = DEG_get_evaluated_scene(draw_ctx->depsgraph);
-    rot_ang = .05f * scene_eval->npr.npr_test_val_23;
+    rot_ang = .05f * scene_eval->npr.npr_test_val_12;
   }
 
 void GPUBufferPoolModule::should_dbg_rotate_view_matrices_cache(float& rot_ang, bool& dbg_rotate_view_matrix) {

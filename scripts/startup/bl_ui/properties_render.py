@@ -1206,7 +1206,49 @@ class RENDER_PT_gpencil(RenderButtonsPanel, Panel):
         props = scene.grease_pencil_settings
 
         col = layout.column()
-        col.prop(props, "antialias_threshold")
+        col.prop(props, "antialias_threshold") 
+
+class RENDER_PT_npr_test(RenderButtonsPanel, Panel):
+    bl_label = "StrokeGen Internal Debug Params (Dev Only)"
+    bl_options = {'DEFAULT_CLOSED'}
+    COMPAT_ENGINES = {
+        'BLENDER_RENDER',
+        'BLENDER_EEVEE',
+        'BLENDER_EEVEE_NEXT',
+        'BLENDER_WORKBENCH',
+    }
+
+    def draw(self, context):
+        rd = context.scene.render
+        layout = self.layout
+        layout.use_property_split = True
+        layout.active = True
+
+        scene = context.scene
+        props = scene.npr
+
+        flow = layout.grid_flow(row_major=True, columns=0, even_columns=False, even_rows=False, align=True)
+        col = flow.column()
+        col.prop(props, "npr_test_val_0",  text="dummy")
+        col.prop(props, "npr_test_val_1",  text="debug visualize mode")
+        col.prop(props, "npr_test_val_2",  text="edge_visualize_mode")
+        col.prop(props, "npr_test_val_3",  text="seconds_sync_view_mat")
+        col.prop(props, "npr_test_val_4",  text="num_vtx_smooth_iters")
+
+        col = flow.column()
+        col.prop(props, "npr_test_val_5", text="Remeshing Edge Length")
+        col.prop(props, "npr_test_val_6", text="Edge Split Iters")
+        col.prop(props, "npr_test_val_7", text="Edge Collapse Iters")
+        col.prop(props, "npr_test_val_8", text="Edge Flip Iters")
+        col.prop(props, "npr_test_val_9", text="Remeshing Iters")
+        col.prop(props, "npr_test_val_10", text="remeshing_delaunay_flip_iters")
+        col.prop(props, "npr_test_val_11", text="dbg_line_length")
+
+        col.prop(props, "npr_test_val_12", text="Camera Rotation")
+        col.prop(props, "npr_test_val_13", text="dbg_matching_line_mode")
+        col.prop(props, "npr_test_val_14", text="dbg_history_trace_steps")
+        col.prop(props, "npr_test_val_15", text="dbg_history_trace_passes")
+        col.prop(props, "npr_test_val_16", text="dbg_ndv_grad_mode")
 
 
 class RENDER_PT_opengl_sampling(RenderButtonsPanel, Panel):
@@ -1438,6 +1480,7 @@ classes = (
 
 
     RENDER_PT_gpencil,
+    RENDER_PT_npr_test, 
     RENDER_PT_opengl_sampling,
     RENDER_PT_opengl_lighting,
     RENDER_PT_opengl_color,

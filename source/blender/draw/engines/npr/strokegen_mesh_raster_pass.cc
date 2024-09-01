@@ -121,7 +121,7 @@ void npr::strokegen::StrokegenMeshRasterPass::append_draw_remeshed_surface_depth
 
   subpass->bind_ssbo(0, buffers.reused_ssbo_face_to_vert_draw_depth_());
   subpass->bind_ssbo(1, buffers.ssbo_vbo_full_);
-  subpass->bind_ubo(0, buffers.ubo_view_matrices_cache_);
+  subpass->bind_ubo(0, buffers.ubo_view_matrices_); // ubo_view_matrices_cache_);
 
   subpass->barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
   subpass->draw_procedural_indirect(GPUPrimType::GPU_PRIM_TRIS, buffers.ssbo_bnpr_contour_mesh_draw_args_); 

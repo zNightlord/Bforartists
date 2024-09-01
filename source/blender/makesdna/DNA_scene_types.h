@@ -1922,7 +1922,7 @@ typedef struct SceneEEVEE {
 
 typedef struct SceneNPR {
   int npr_test_val_0;
-  int npr_test_val_1;
+  int npr_test_val_1; 
   float npr_test_val_2; 
   float npr_test_val_3;
   float npr_test_val_4; 

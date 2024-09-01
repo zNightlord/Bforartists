@@ -35,7 +35,7 @@ void StrokegenSyncModule::sync_mesh(
       const draw::ObjectRef& ob_ref,
       draw::ResourceHandle& rsc_handle,
       const DRWView* drw_view
-      )
+    )
   {
     bool mesh_is_manifold;
     gpu::Batch *gpu_batch_line_adj = DRW_cache_object_edge_detection_get(ob, &mesh_is_manifold);
@@ -76,6 +76,7 @@ void StrokegenSyncModule::sync_mesh(
         gpu_batch_surf /**gpu_batch_surf*/,
         rsc_handle, drw_view
       );
+    // draw strokgen meshes on to the pre-depth buffer, which only contains non-strokegen objects
     inst_.strokegen_passes.append_pass_remeshed_surface_depth_drawcall(
       STROKEGEN_SHADING_TYPE_TRANSPARENT == ob_ref.object->strokegen.surface_shading_type
     );
