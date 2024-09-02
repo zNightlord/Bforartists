@@ -25,14 +25,13 @@ class Instance;
 
 struct SurfaceDebugContext {
   enum DbgLineType {
-    vnor = 0, // to be deprecated
     general = 2,
-    edges = 1 // to be deprecated
   }; // match to shader defines
   bool dbg_lines; 
   bool dbg_vert_normal;
   bool dbg_vert_curv;
-  bool dbg_vert_contour_grad; 
+  bool dbg_vert_contour_grad;
+  bool dbg_temporal_tracing; 
   bool dbg_edges; 
 
   float dbg_line_length;

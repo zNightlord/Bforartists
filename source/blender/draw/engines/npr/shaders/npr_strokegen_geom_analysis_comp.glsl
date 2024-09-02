@@ -303,7 +303,7 @@ void main()
     {
         bool dbg_vtx_nor = (!vf.dupli) && valid_thread; 
         uint dbg_line_id = compact_normal_line(dbg_vtx_nor, groupIdx);
-        dbg_line_id += get_debug_line_offset(DBG_LINE_TYPE__VNOR); 
+        dbg_line_id += get_debug_line_offset(DBG_LINE_TYPE__GENERAL); 
         if (dbg_vtx_nor)
         {
             float dbg_line_len = pcs_dbg_geom_scale_; 

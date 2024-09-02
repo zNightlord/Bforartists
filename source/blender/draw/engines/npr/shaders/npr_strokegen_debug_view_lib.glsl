@@ -31,18 +31,16 @@ vec3 rand_col_rgb(uint seed0, uint seed1)
 
 #if defined(INCLUDE_DEBUG_LINE_CONFIG)
     /* Definitions for Debugging Lines */
-    #define DBG_LINE_TYPE__VNOR  0u
-    #define DBG_LINE_TYPE__GENERAL 1u
-    #define DBG_LINE_TYPE__EDGES 2u
+    #define DBG_LINE_TYPE__GENERAL 2u
 
     uint get_debug_line_counter(uint line_type)
     {
-        if (line_type == DBG_LINE_TYPE__VNOR)
-            return ssbo_bnpr_mesh_pool_counters_.num_dbg_vnor_lines;
-        else if (line_type == DBG_LINE_TYPE__GENERAL)
+        // if (line_type == DBG_LINE_TYPE__VNOR)
+        //     return ssbo_bnpr_mesh_pool_counters_.num_dbg_vnor_lines;
+        if (line_type == DBG_LINE_TYPE__GENERAL)
             return ssbo_bnpr_mesh_pool_counters_.num_dbg_general_lines;
-        else if (line_type == DBG_LINE_TYPE__EDGES)
-            return ssbo_bnpr_mesh_pool_counters_.num_dbg_edge_lines; 
+        // else if (line_type == DBG_LINE_TYPE__EDGES)
+        //     return ssbo_bnpr_mesh_pool_counters_.num_dbg_edge_lines; 
         return 0u; 
     }
 
@@ -50,17 +48,17 @@ vec3 rand_col_rgb(uint seed0, uint seed1)
     {
         /* memory offset line_id based on line type */
         uint line_offset = 0u; 
-        if (line_type == DBG_LINE_TYPE__VNOR)
-            return line_offset; 
-        line_offset += get_debug_line_counter(DBG_LINE_TYPE__VNOR); 
+        // if (line_type == DBG_LINE_TYPE__VNOR)
+        //     return line_offset; 
+        // line_offset += get_debug_line_counter(DBG_LINE_TYPE__VNOR); 
 
         if (line_type == DBG_LINE_TYPE__GENERAL)
             return line_offset; 
         line_offset += get_debug_line_counter(DBG_LINE_TYPE__GENERAL); 
 
-        if (line_type == DBG_LINE_TYPE__EDGES)
-            return line_offset;
-        line_offset += get_debug_line_counter(DBG_LINE_TYPE__EDGES);
+        // if (line_type == DBG_LINE_TYPE__EDGES)
+        //     return line_offset;
+        // line_offset += get_debug_line_counter(DBG_LINE_TYPE__EDGES);
         
         return line_offset; 
     }

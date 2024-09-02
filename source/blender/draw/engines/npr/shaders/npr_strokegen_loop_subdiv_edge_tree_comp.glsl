@@ -123,6 +123,11 @@ void main()
 #endif
 
 
+bool enable_trace_debug_draw(uint val_pc_dbg_matching_line_mode_)
+{
+    return (val_pc_dbg_matching_line_mode_ & 1u) != 0u; 
+}
+
 
 #if defined(_KERNEL_MULTICOMPILE__CALC_TEMPORAL_CONTOUR_RECORDS)
 
@@ -141,7 +146,7 @@ struct TraceDebugContext
 TraceDebugContext init_trace_dbg_context(bool found_any_matched_history)
 {
     TraceDebugContext ctx;
-    ctx.record_dbg_lines = (pc_dbg_matching_line_mode_ & 1u) != 0u;  
+    ctx.record_dbg_lines = enable_trace_debug_draw(pc_dbg_matching_line_mode_);  
     ctx.found_any_matched_history = found_any_matched_history; 
     ctx.dbg_line_id_beg = uvec2(0u); 
     ctx.dbg_show_full_path             = (pc_dbg_matching_line_mode_ & 2u) != 0u;
@@ -835,40 +840,42 @@ void main()
     hit_leaf_node = hit_leaf_node && valid_thread && !(ef.del_by_split || ef.dupli); 
  
 
-#define DRW_DEBUG_LINES 1u
-#if defined(DRW_DEBUG_LINES)
-    uint dbg_line_id = compact_general_dbg_lines(hit_leaf_node, groupIdx, 1u);
-    dbg_line_id += get_debug_line_offset(DBG_LINE_TYPE__GENERAL); 
-#endif
+    bool record_dbg_lines = enable_trace_debug_draw(pc_dbg_matching_line_mode_); 
+    uint dbg_line_id = 0u; 
+    if (record_dbg_lines) { // note: compaction must ran for all threads
+        dbg_line_id = compact_general_dbg_lines(hit_leaf_node, groupIdx, 1u);
+        dbg_line_id += get_debug_line_offset(DBG_LINE_TYPE__GENERAL); 
+    }
 
     if (hit_leaf_node)
     {
         store_ssbo_edge_to_old_temporal_record_(par_edge_id, rec_id); 
 
-#if defined(DRW_DEBUG_LINES)
-        uint dbg_edge_id = par_edge_id; 
-        uint v1 = ssbo_edge_to_vert_[dbg_edge_id * 4u + 1u]; 
-        vec3 vpos_1 = ld_vpos(v1); 
-        uint v3 = ssbo_edge_to_vert_[dbg_edge_id * 4u + 3u]; 
-        vec3 vpos_3 = ld_vpos(v3);
-
-        TemporalRecordContourData trcd = load_ssbo_contour_temporal_records_old__contour_data(rec_id, num_recs);
-
-        uint dbg_line_id = dbg_line_id; 
+        if (record_dbg_lines)
         {
-            vec3 vpos_ws_0 = vpos_1;
-            vec3 vpos_ws_1 = vpos_3;
-            vec3 dvd_col = vec3(1.0f, 1.0f, 1.0f); 
-            if (trf.valid_contour_data)
-                dvd_col = rand_col_rgb(trcd.seg_key / 8, trcd.seg_key / 8); 
-			uvec4 dvd_data = uvec4(base_edge_id, dbg_par_edge_ids[0], dbg_par_edge_ids[1], 0); 
-            DebugVertData dvd_0 = DebugVertData(vpos_ws_0.xyz, dvd_col, dvd_data); 
-            DebugVertData dvd_1 = DebugVertData(vpos_ws_1.xyz, dvd_col, dvd_data);
+            uint dbg_edge_id = par_edge_id; 
+            uint v1 = ssbo_edge_to_vert_[dbg_edge_id * 4u + 1u]; 
+            vec3 vpos_1 = ld_vpos(v1); 
+            uint v3 = ssbo_edge_to_vert_[dbg_edge_id * 4u + 3u]; 
+            vec3 vpos_3 = ld_vpos(v3);
 
-            store_debug_line_data(dbg_line_id, dvd_0, dvd_1); 
-            dbg_line_id++; 
+            TemporalRecordContourData trcd = load_ssbo_contour_temporal_records_old__contour_data(rec_id, num_recs);
+
+            uint dbg_line_id = dbg_line_id; 
+            {
+                vec3 vpos_ws_0 = vpos_1;
+                vec3 vpos_ws_1 = vpos_3;
+                vec3 dvd_col = vec3(1.0f, 1.0f, 1.0f); 
+                if (trf.valid_contour_data)
+                    dvd_col = rand_col_rgb(trcd.seg_key / 8, trcd.seg_key / 8); 
+                uvec4 dvd_data = uvec4(base_edge_id, dbg_par_edge_ids[0], dbg_par_edge_ids[1], 0); 
+                DebugVertData dvd_0 = DebugVertData(vpos_ws_0.xyz, dvd_col, dvd_data); 
+                DebugVertData dvd_1 = DebugVertData(vpos_ws_1.xyz, dvd_col, dvd_data);
+
+                store_debug_line_data(dbg_line_id, dvd_0, dvd_1); 
+                dbg_line_id++; 
+            }
         }
-#endif
     }
 
 }

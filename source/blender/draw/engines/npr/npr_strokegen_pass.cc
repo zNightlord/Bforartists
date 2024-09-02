@@ -188,6 +188,7 @@ void StrokeGenPassModule::on_begin_sync(int frame_counter)
     meshing_params.dbg_history_trace_steps  = (int)(scene_eval->npr.npr_test_val_14 + 1e-10f);
     meshing_params.dbg_history_trace_passes = (int)(scene_eval->npr.npr_test_val_15 + 1e-10f);
     meshing_params.dbg_ndv_grad_mode        = (int)(scene_eval->npr.npr_test_val_16 + 1e-10f);
+    surf_dbg_ctx.dbg_temporal_tracing = meshing_params.dbg_matching_line_mode != 0u; 
   }
 
 void StrokeGenPassModule::sync_object(int obj_id,
@@ -195,7 +196,7 @@ void StrokeGenPassModule::sync_object(int obj_id,
 {
   strokegen_obj_id = obj_id;
 
-  meshing_params.visualize_contour_edges = false; // generate both debug & contour stroke draw calls
+  meshing_params.visualize_contour_edges = true; // generate both debug & contour stroke draw calls
   pass_draw_contour_edges.draw_settings.draw_hidden_lines =
     0u != (STROKEGEN_FLAG_DRAW_HIDDEN_CURVES & obj_strokegen_settings.flags);
   pass_draw_contour_2d_samples.draw_settings.draw_hidden_lines =
@@ -504,6 +505,7 @@ void StrokeGenPassModule::on_end_sync()
       sub.push_constant("pc_frame_id_history_",
                         // strokegen_frame_id);
                         strokegen_frame_id_prev(strokegen_frame_id));
+      sub.push_constant("pc_dbg_matching_line_mode_", meshing_params.dbg_matching_line_mode);
     };
 
     append_subpass_fill_dispatch_args_temporal_records_(
@@ -2059,12 +2061,13 @@ void StrokeGenPassModule::on_end_sync()
   void StrokeGenPassModule::rebuild_pass_dbg_geom_drawcall(SurfaceDebugContext dbg_ctx)
   {
     Vector<int> dbgLineTypes;
-    if (dbg_ctx.dbg_vert_normal)
-      dbgLineTypes.append(SurfaceDebugContext::DbgLineType::vnor); 
-    if (dbg_ctx.dbg_vert_curv || dbg_ctx.dbg_vert_contour_grad)
+    if (dbg_ctx.dbg_vert_curv
+        || dbg_ctx.dbg_vert_contour_grad
+        || dbg_ctx.dbg_temporal_tracing
+        || dbg_ctx.dbg_edges
+        // || dbg_ctx.dbg_vert_normal
+      )
       dbgLineTypes.append(SurfaceDebugContext::DbgLineType::general);
-    if (dbg_ctx.dbg_edges)
-      dbgLineTypes.append(SurfaceDebugContext::DbgLineType::edges);
 
     for (int dbg_line_type : dbgLineTypes) {
       {
