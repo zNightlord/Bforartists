@@ -88,7 +88,7 @@ void main()
 
 
     color = // cf.occluded ? vec4(.5f, .5f, .5f, 0.0f) : 
-        vec4(rand_col_rgb(contour_seg_len / 8, contour_seg_len / 8), contour_edge_id);
+        vec4(rand_col_rgb(contour_seg_len / 16, contour_seg_len / 16), 1.0f); // contour_edge_id);
         // (contour_edge_list_len < contour_edge_rank || contour_edge_rank == 0) ?
         // vec4(prev_contour_id, contour_edge_rank, contour_edge_list_len, contour_edge_list_head) : vec4(.0f);
 
@@ -100,7 +100,7 @@ void main()
     /* Apply depth bias to curve breaks,
      * which can happen due to Z-fighting artifacts. */
     /* TODO: Further imporve this */
-    gl_Position.z -= 4.0e-4 * whclip;
+    gl_Position.z -= 1.0e-5 * whclip;
     gl_Position.xy += edgenor_uv * whclip * pcs_screen_size_inv_ * 1.0f;
 	vec2 edge_dir_ext = (vid % 2u == 1u) ? edgedir_uv : -edgedir_uv;
 	gl_Position.xy += edge_dir_ext * whclip * pcs_screen_size_inv_ * 1.5f;

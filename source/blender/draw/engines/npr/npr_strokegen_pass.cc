@@ -55,7 +55,7 @@ PassMain &StrokeGenPassModule::get_render_pass(eType passType, int pass_id)
         return pass_draw_contour_2d_samples; 
       case INDIRECT_DRAW_REMESHED_DEPTH:
         return pass_draw_remeshed_surface_depth_[pass_id]; 
-      case INDIRECT_DRAW_DBG_VNOR:
+      case INDIRECT_DRAW_DBG_LINES:
         return pass_draw_debug_lines_; 
     }
     return pass_draw_contour_edges; 
