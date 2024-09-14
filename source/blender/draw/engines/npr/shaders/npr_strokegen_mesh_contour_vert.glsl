@@ -88,6 +88,7 @@ void main()
 
 
     color = // cf.occluded ? vec4(.5f, .5f, .5f, 0.0f) : 
+        // cf.cusp_func_pstv ? vec4(.0f, 1.0f, 0.0f, 1.0f) : vec4(1.0f, 0.0f, 0.0f, 1.0f); 
         vec4(rand_col_rgb(contour_seg_len / 16, contour_seg_len / 16), 1.0f); // contour_edge_id);
         // (contour_edge_list_len < contour_edge_rank || contour_edge_rank == 0) ?
         // vec4(prev_contour_id, contour_edge_rank, contour_edge_list_len, contour_edge_list_head) : vec4(.0f);

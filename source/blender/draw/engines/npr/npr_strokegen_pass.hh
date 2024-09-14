@@ -236,6 +236,8 @@ public:
     int dbg_history_trace_steps;
     int dbg_history_trace_passes;
     int dbg_ndv_grad_mode;
+
+    enum SymmetricEigenSolver { Cardano = 0, Eberly } eigen_solver_type;
   } meshing_params;
 
 
@@ -361,7 +363,7 @@ public:
         set_calc_vert_normal(true, output_vertex_facing_flag); 
         set_calc_vert_voronoi_area(true);
         output_curvature_tensors = output_tensors;
-        output_maxcurv_with_cusp_function = output_cusp_and_maxcurv; 
+        output_maxcurv_with_cusp_function = output_cusp_and_maxcurv;
       } 
     }
 

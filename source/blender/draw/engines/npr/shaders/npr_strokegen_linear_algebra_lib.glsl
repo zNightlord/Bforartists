@@ -289,6 +289,318 @@ void dsyevv3(mat3 A, inout mat3 Q, inout vec3 w)
 
 
 
+
+// -----------------------------------------------------------------------------------
+// "A Robust Eigensolver for 3 × 3 Symmetric Matrices"
+// https://www.geometrictools.com/Documentation/RobustEigenSymmetric3x3.pdf#page=10.55
+
+#define T float // save my time for translating the "T"s to "float"s
+
+void ComputeOrthogonalComplement(vec3 W, inout vec3 U, inout vec3 V) 
+{
+	// Robustly compute a right-handed orthonormal set { U, V, W }.
+	// The vector W is guaranteed to be unit-length, in which case
+	// there is no need to worry about a division by zero when
+	// computing invLength.
+	T invLength;
+	if (abs(W[0]) > abs(W[1]))
+	{
+		// The component of maximum absolute value is either W[0]
+		// or W[2].
+		invLength = 1.0f / sqrt(W[0] * W[0] + W[2] * W[2]);
+		U = vec3( -W[2] * invLength, .0f, +W[0] * invLength );
+	}
+	else
+	{
+		// The component of maximum absolute value is either W[1]
+		// or W[2].
+		invLength = 1.0f / sqrt(W[1] * W[1] + W[2] * W[2]);
+		U = vec3( .0f, +W[2] * invLength, -W[1] * invLength );
+	}
+	V = cross(W, U);
+}
+
+void ComputeEigenvector0(
+	T a00, T a01, T a02, T a11, T a12, T a22, T eval0, 
+	inout vec3 evec0
+) {
+	// Compute a unit-length eigenvector for eigenvalue[i0].  The
+	// matrix is rank 2, so two of the rows are linearly independent.
+	// For a robust computation of the eigenvector, select the two
+	// rows whose cross product has largest length of all pairs of
+	// rows.
+	vec3 row0 = vec3( a00 - eval0, a01, a02 );
+	vec3 row1 = vec3( a01, a11 - eval0, a12 );
+	vec3 row2 = vec3( a02, a12, a22 - eval0 );
+	vec3 r0xr1 = cross(row0, row1);
+	vec3 r0xr2 = cross(row0, row2);
+	vec3 r1xr2 = cross(row1, row2);
+	T d0 = dot(r0xr1, r0xr1);
+	T d1 = dot(r0xr2, r0xr2);
+	T d2 = dot(r1xr2, r1xr2);
+
+	T dmax = d0;
+	int imax = 0;
+	if (d1 > dmax)
+	{
+		dmax = d1;
+		imax = 1;
+	}
+	if (d2 > dmax)
+	{
+		imax = 2;
+	}
+
+	if (imax == 0)
+	{
+		evec0 = r0xr1 / sqrt(d0);
+	}
+	else if (imax == 1)
+	{
+		evec0 = r0xr2 / sqrt(d1);
+	}
+	else
+	{
+		evec0 = r1xr2 / sqrt(d2);
+	}
+}
+
+void ComputeEigenvector1(
+	T a00, T a01, T a02, T a11, T a12, T a22,
+	vec3 evec0, T eval1, 
+	inout vec3 evec1
+) {
+	// Robustly compute a right-handed orthonormal set
+	// { U, V, evec0 }.
+	vec3 U, V;
+	ComputeOrthogonalComplement(evec0, U, V);
+
+	// Let e be eval1 and let E be a corresponding eigenvector which
+	// is a solution to the linear system (A - e*I)*E = 0.  The matrix
+	// (A - e*I) is 3x3, not invertible (so infinitely many
+	// solutions), and has rank 2 when eval1 and eval are different.
+	// It has rank 1 when eval1 and eval2 are equal.  Numerically, it
+	// is difficult to compute robustly the rank of a matrix.  Instead,
+	// the 3x3 linear system is reduced to a 2x2 system as follows.
+	// Define the 3x2 matrix J = [U V] whose columns are the U and V
+	// computed previously.  Define the 2x1 vector X = J*E.  The 2x2
+	// system is 0 = M * X = (J^T * (A - e*I) * J) * X where J^T is
+	// the transpose of J and M = J^T * (A - e*I) * J is a 2x2 matrix.
+	// The system may be written as
+	//     +-                        -++-  -+       +-  -+
+	//     | U^T*A*U - e  U^T*A*V     || x0 | = e * | x0 |
+	//     | V^T*A*U      V^T*A*V - e || x1 |       | x1 |
+	//     +-                        -++   -+       +-  -+
+	// where X has row entries x0 and x1.
+
+	vec3 AU =
+	{
+		a00 * U[0] + a01 * U[1] + a02 * U[2],
+		a01 * U[0] + a11 * U[1] + a12 * U[2],
+		a02 * U[0] + a12 * U[1] + a22 * U[2]
+	};
+
+	vec3 AV =
+	{
+		a00 * V[0] + a01 * V[1] + a02 * V[2],
+		a01 * V[0] + a11 * V[1] + a12 * V[2],
+		a02 * V[0] + a12 * V[1] + a22 * V[2]
+	};
+
+	T m00 = U[0] * AU[0] + U[1] * AU[1] + U[2] * AU[2] - eval1;
+	T m01 = U[0] * AV[0] + U[1] * AV[1] + U[2] * AV[2];
+	T m11 = V[0] * AV[0] + V[1] * AV[1] + V[2] * AV[2] - eval1;
+
+	// For robustness, choose the largest-length row of M to compute
+	// the eigenvector.  The 2-tuple of coefficients of U and V in the
+	// assignments to eigenvector[1] lies on a circle, and U and V are
+	// unit length and perpendicular, so eigenvector[1] is unit length
+	// (within numerical tolerance).
+	T absM00 = abs(m00);
+	T absM01 = abs(m01);
+	T absM11 = abs(m11);
+	T maxAbsComp;
+	if (absM00 >= absM11)
+	{
+		maxAbsComp = max(absM00, absM01);
+		if (maxAbsComp > .0f)
+		{
+			if (absM00 >= absM01)
+			{
+				m01 /= m00;
+				m00 = 1.0f / sqrt(1.0f + m01 * m01);
+				m01 *= m00;
+			}
+			else
+			{
+				m00 /= m01;
+				m01 = 1.0f / sqrt(1.0f + m00 * m00);
+				m00 *= m01;
+			}
+			evec1 = m01 * U - m00 * V;
+		}
+		else
+		{
+			evec1 = U;
+		}
+	}
+	else
+	{
+		maxAbsComp = max(absM11, absM01);
+		if (maxAbsComp > .0f)
+		{
+			if (absM11 >= absM01)
+			{
+				m01 /= m11;
+				m11 = 1.0f / sqrt(1.0f + m01 * m01);
+				m01 *= m11;
+			}
+			else
+			{
+				m11 /= m01;
+				m01 = 1.0f / sqrt(1.0f + m11 * m11);
+				m11 *= m01;
+			}
+			evec1 = m11 * U - m01 * V;
+		}
+		else
+		{
+			evec1 = U;
+		}
+	}
+}
+
+void NISymmetricEigensolver3x3_solve(
+	T a00, T a01, T a02, T a11, T a12, T a22,
+	// uint sortType, 
+	inout vec3 eval, inout mat3 evec
+) 
+{
+	// Precondition the matrix by factoring out the maximum absolute
+	// value of the components.  This guards against floating-point
+	// overflow when computing the eigenvalues.
+	T max0 = max(abs(a00), abs(a01));
+	T max1 = max(abs(a02), abs(a11));
+	T max2 = max(abs(a12), abs(a22));
+	T maxAbsElement = max(max(max0, max1), max2);
+	if (maxAbsElement == .0f)
+	{
+		// A is the zero matrix.
+		eval[0] = .0f;
+		eval[1] = .0f;
+		eval[2] = .0f;
+		evec[0] = vec3( 1.0f, .0f, .0f );
+		evec[1] = vec3( .0f, 1.0f, .0f );
+		evec[2] = vec3( .0f, .0f, 1.0f );
+		return;
+	}
+
+	T invMaxAbsElement = 1.0f / maxAbsElement;
+	a00 *= invMaxAbsElement;
+	a01 *= invMaxAbsElement;
+	a02 *= invMaxAbsElement;
+	a11 *= invMaxAbsElement;
+	a12 *= invMaxAbsElement;
+	a22 *= invMaxAbsElement;
+
+	T norm = a01 * a01 + a02 * a02 + a12 * a12;
+	if (norm > T(0))
+	{
+		// Compute the eigenvalues of A.
+
+		// In the PDF mentioned previously, B = (A - q*I)/p, where
+		// q = tr(A)/3 with tr(A) the trace of A (sum of the diagonal
+		// entries of A) and where p = sqrt(tr((A - q*I)^2)/6).
+		T q = (a00 + a11 + a22) / 3.0f;
+
+		// The matrix A - q*I is represented by the following, where
+		// b00, b11 and b22 are computed after these comments,
+		//   +-           -+
+		//   | b00 a01 a02 |
+		//   | a01 b11 a12 |
+		//   | a02 a12 b22 |
+		//   +-           -+
+		T b00 = a00 - q;
+		T b11 = a11 - q;
+		T b22 = a22 - q;
+
+		// The is the variable p mentioned in the PDF.
+		T p = sqrt((b00 * b00 + b11 * b11 + b22 * b22 + norm * 2.0f) / 6.0f);
+
+		// We need det(B) = det((A - q*I)/p) = det(A - q*I)/p^3.  The
+		// value det(A - q*I) is computed using a cofactor expansion
+		// by the first row of A - q*I.  The cofactors are c00, c01
+		// and c02 and the determinant is b00*c00 - a01*c01 + a02*c02.
+		// The det(B) is then computed finally by the division
+		// with p^3.
+		T c00 = b11 * b22 - a12 * a12;
+		T c01 = a01 * b22 - a12 * a02;
+		T c02 = a01 * a12 - b11 * a02;
+		T det = (b00 * c00 - a01 * c01 + a02 * c02) / (p * p * p);
+
+		// The halfDet value is cos(3*theta) mentioned in the PDF. The
+		// acos(z) function requires |z| <= 1, but will fail silently
+		// and return NaN if the input is larger than 1 in magnitude.
+		// To avoid this problem due to rounding errors, the halfDet
+		// value is clamped to [-1,1].
+		T halfDet = det * 0.5f;
+		halfDet = min(max(halfDet, -1.0f), 1.0f);
+
+		// The eigenvalues of B are ordered as
+		// beta0 <= beta1 <= beta2.  The number of digits in
+		// twoThirdsPi is chosen so that, whether float or double,
+		// the floating-point number is the closest to theoretical
+		// 2*pi/3.
+		T angle = acos(halfDet) / 3.0f;
+		T twoThirdsPi = 2.09439510239319549f;
+		T beta2 = cos(angle) * 2.0f;
+		T beta0 = cos(angle + twoThirdsPi) * 2.0f;
+		T beta1 = -(beta0 + beta2);
+
+		// The eigenvalues of A are ordered as
+		// alpha0 <= alpha1 <= alpha2.
+		eval[0] = q + p * beta0;
+		eval[1] = q + p * beta1;
+		eval[2] = q + p * beta2;
+
+		// Compute the eigenvectors so that the set
+		// {evec[0], evec[1], evec[2]} is right handed and
+		// orthonormal.
+		if (halfDet >= .0f)
+		{
+			ComputeEigenvector0(a00, a01, a02, a11, a12, a22, eval[2], evec[2]);
+			ComputeEigenvector1(a00, a01, a02, a11, a12, a22, evec[2], eval[1], evec[1]);
+			evec[0] = cross(evec[1], evec[2]);
+		}
+		else
+		{
+			ComputeEigenvector0(a00, a01, a02, a11, a12, a22, eval[0], evec[0]);
+			ComputeEigenvector1(a00, a01, a02, a11, a12, a22, evec[0], eval[1], evec[1]);
+			evec[2] = cross(evec[0], evec[1]);
+		}
+	}
+	else
+	{
+		// The matrix is diagonal.
+		eval[0] = a00;
+		eval[1] = a11;
+		eval[2] = a22;
+		evec[0] = vec3( 1.0f, .0f, .0f );
+		evec[1] = vec3( .0f, 1.0f, .0f );
+		evec[2] = vec3( .0f, .0f, 1.0f );
+	}
+
+	// The preconditioning scaled the matrix A, which scales the
+	// eigenvalues.  Revert the scaling.
+	eval[0] *= maxAbsElement;
+	eval[1] *= maxAbsElement;
+	eval[2] *= maxAbsElement;
+
+	// SortEigenstuff<T>()(sortType, true, eval, evec);
+}
+#undef T
+
+
 #endif 
 
 

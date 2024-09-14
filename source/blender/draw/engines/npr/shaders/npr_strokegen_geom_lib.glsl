@@ -465,57 +465,71 @@ mat3 muXYInterpolatedU( in vec3 a,
 ///---------------------- Helper functions ----------------
 ///
 ///
-/// Computing principal curvatures k1 and k2 from tensor
-/// @param tensor The muXY integrated tensor
-/// @param area Area of the face
-/// @param N the normal vector
-/// @return a pair of principal directions.
-void curvDirFromTensor(in mat3 tensor,
-                       in float area,
-                       in vec3 N, 
-                       out mat3 pdirs, 
-                       out vec3 evals)
-{
-    mat3 Mt = transpose(tensor);
-    mat3 M = tensor;
-    M += Mt;
-    M *= 0.5f;
-    const float coef_N = 1000.0f * area;
-    // Adding regulated term == 1000 area n x n 
-    // force the principal direction eigenvectors to be tangential to the surface
-    // (see @cite lachaud2020interpolated, section 2) 
-    for ( uint j = 0u; j < 3u; j++ )
-        for ( uint k = 0u; k < 3u; k++ )
-            M[ j ][ k ] += coef_N * N[ j ] * N[ k ];
+#if defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__INTERPO_CURVTENSOR)
+    /// Computing principal curvatures k1 and k2 from tensor
+    /// @param tensor The muXY integrated tensor
+    /// @param area Area of the face
+    /// @param N the normal vector
+    /// @return a pair of principal directions.
+    void curvDirFromTensor(in mat3 tensor,
+                        in float area,
+                        in vec3 N, 
+                        out mat3 pdirs, 
+                        out vec3 evals)
+    {
+        mat3 Mt = transpose(tensor);
+        mat3 M = tensor;
+        M += Mt;
+        M *= 0.5f;
+        const float coef_N = 1000.0f * area;
+        // Adding regulated term == 1000 area n x n 
+        // force the principal direction eigenvectors to be tangential to the surface
+        // (see @cite lachaud2020interpolated, section 2) 
+        for ( uint j = 0u; j < 3u; j++ )
+            for ( uint k = 0u; k < 3u; k++ )
+                M[ j ][ k ] += coef_N * N[ j ] * N[ k ];
 
-    pdirs = mat3(.0f); 
-    evals = vec3(.0f); 
-    dsyevv3(M, pdirs, evals); // TODO: we might need to transpose since dsyevv3 is for hlsl row major matrix
+        pdirs = mat3(.0f); 
+        evals = vec3(.0f); 
 
+        // if (pc_curvature_tensor_eigen_solver_type_ == 0)
+        //     dsyevv3(M, pdirs, evals); // TODO: we might need to transpose since dsyevv3 is for hlsl row major matrix
+        // else
+        { // Theoritically this is more robust, but I don't see any difference in practice
+            NISymmetricEigensolver3x3_solve(
+                M[0][0], M[1][0], M[2][0], 
+                         M[1][1], M[2][1], 
+                                  M[2][2],
+                /*inout*/evals,   pdirs
+            ); 
+            pdirs = transpose(pdirs); // to match the output of dsyevv3 
+        }
+        
 
-    // Sort eigenvalues and eigenvectors
-#define SWAP_EVAL_EVEC(i, j) \
-    if (evals[i] > evals[j])      \
-    {                             \
-        float temp = evals[i];    \
-        evals[i] = evals[j];      \
-        evals[j] = temp;          \
-                                \
-        vec3 temp_vec = vec3(pdirs[0][i], pdirs[1][i], pdirs[2][i]); \
-        pdirs[0][i] = pdirs[0][j];   \
-        pdirs[1][i] = pdirs[1][j];   \
-        pdirs[2][i] = pdirs[2][j];   \
-        pdirs[0][j] = temp_vec[0];   \
-        pdirs[1][j] = temp_vec[1];   \
-        pdirs[2][j] = temp_vec[2];   \
-    }                                \
+        // Sort eigenvalues and eigenvectors
+    #define SWAP_EVAL_EVEC(i, j) \
+        if (evals[i] > evals[j])      \
+        {                             \
+            float temp = evals[i];    \
+            evals[i] = evals[j];      \
+            evals[j] = temp;          \
+                                    \
+            vec3 temp_vec = vec3(pdirs[0][i], pdirs[1][i], pdirs[2][i]); \
+            pdirs[0][i] = pdirs[0][j];   \
+            pdirs[1][i] = pdirs[1][j];   \
+            pdirs[2][i] = pdirs[2][j];   \
+            pdirs[0][j] = temp_vec[0];   \
+            pdirs[1][j] = temp_vec[1];   \
+            pdirs[2][j] = temp_vec[2];   \
+        }                                \
 
-    SWAP_EVAL_EVEC(0, 1);
-    SWAP_EVAL_EVEC(1, 2); 
-    SWAP_EVAL_EVEC(0, 1);
-#undef SWAP_EVAL_EVEC
+        SWAP_EVAL_EVEC(0, 1);
+        SWAP_EVAL_EVEC(1, 2); 
+        SWAP_EVAL_EVEC(0, 1);
+    #undef SWAP_EVAL_EVEC
 
-}
+    }
+#endif
 
 /* Compute cusp function *
  * Cusp detection from "Illustrating smooth surface" by Hertzmann et al.

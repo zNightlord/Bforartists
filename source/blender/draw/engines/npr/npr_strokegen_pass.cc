@@ -188,7 +188,10 @@ void StrokeGenPassModule::on_begin_sync(int frame_counter)
     meshing_params.dbg_history_trace_steps  = (int)(scene_eval->npr.npr_test_val_14 + 1e-10f);
     meshing_params.dbg_history_trace_passes = (int)(scene_eval->npr.npr_test_val_15 + 1e-10f);
     meshing_params.dbg_ndv_grad_mode        = (int)(scene_eval->npr.npr_test_val_16 + 1e-10f);
-    surf_dbg_ctx.dbg_temporal_tracing = meshing_params.dbg_matching_line_mode != 0u; 
+    surf_dbg_ctx.dbg_temporal_tracing = meshing_params.dbg_matching_line_mode != 0u;
+
+    meshing_params.eigen_solver_type = (GPURemeshingParameters::SymmetricEigenSolver)(
+        (int)(scene_eval->npr.npr_test_val_17 + 1e-10f)); 
   }
 
 void StrokeGenPassModule::sync_object(int obj_id,
@@ -1918,7 +1921,9 @@ void StrokeGenPassModule::on_end_sync()
         sub.bind_ssbo(ssbo_offset_base_1 + 1, ctx.ssbo_vcurv_pdirs_k1k2_);
         sub.bind_ssbo(ssbo_offset_base_1 + 2, buffers_.ssbo_vcurv_max_);
         sub.push_constant("pcs_output_curv_tensors_", ctx.output_curvature_tensors);
-        sub.push_constant("pcs_output_maxcurv_with_cusp_function_", ctx.output_maxcurv_with_cusp_function ? 1 : 0); 
+        sub.push_constant("pcs_output_maxcurv_with_cusp_function_", ctx.output_maxcurv_with_cusp_function ? 1 : 0);
+        sub.push_constant("pc_curvature_tensor_eigen_solver_type_",
+                          (int)meshing_params.eigen_solver_type); 
 
         sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_verts_);
         sub.barrier(GPU_BARRIER_SHADER_STORAGE); 
