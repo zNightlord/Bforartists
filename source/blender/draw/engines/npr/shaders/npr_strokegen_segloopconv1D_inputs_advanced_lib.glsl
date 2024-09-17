@@ -73,7 +73,7 @@
                     seg_len, seg_head_id
                 );
 
-                const uint L = 16u; // (see the paper)
+                const uint L = 8; // 16u; // (in the paper they used 16 but it was too much for me)
                 float C = .0f;
                 uint filter_radius = L - 1u;
                 // if (seg_len < L) continue; // no corner for short curves
@@ -161,11 +161,11 @@
                         conv_temp_data.is_local_minima = false;
                 }
 
-                if (orig_curv < 6.0f) // planar sections of the curve
+                if (orig_curv < 2.0f) // planar sections of the curve
                     conv_temp_data.is_local_maxima = false;
-                if (6.0f <= orig_curv) // sharp point of the curve
+                if (2.0f <= orig_curv) // sharp point of the curve
                    conv_temp_data.is_local_minima = false;
-				if (orig_curv < 4.0f)
+				if (orig_curv < 0.3f)
 					conv_temp_data.is_local_minima = true;
 
                 if (sample_id < num_samples)
@@ -217,7 +217,7 @@
                 {
                     vec4 dbg_col = vec4(tangent.xy * .5f + .5f, abs(curv), 1.0f);
                     vec2 dbg_pix = pt;
-                    imageStore(tex2d_contour_dbg_, ivec2(dbg_pix), dbg_col);
+                    // imageStore(tex2d_contour_dbg_, ivec2(dbg_pix), dbg_col);
                 }
             #endif
             #if defined(_KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__2D_SAMPLE_VISIBILITY_DENOISING)
@@ -259,7 +259,7 @@
                         1.0f
                     );
                     vec2 dbg_pix = pcs_screen_size_ * load_ssbo_contour_2d_sample_geometry__position(sample_id);
-                    imageStore(tex2d_contour_dbg_, ivec2(dbg_pix), dbg_col);
+                    // imageStore(tex2d_contour_dbg_, ivec2(dbg_pix), dbg_col);
                 }
             #endif
         #endif // _KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__2DSAMPLE_PROCESSING

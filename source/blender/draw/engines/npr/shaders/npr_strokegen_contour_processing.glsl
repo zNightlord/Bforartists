@@ -731,7 +731,7 @@ void main()
 					dbg_col.g = prev_sample_si.contour_seg_head; 
 					dbg_col.b = sample_si.contour_seg_rank; 
 				}
-				imageStore(tex2d_contour_dbg_, ivec2(dbg_pix), dbg_col);
+				// imageStore(tex2d_contour_dbg_, ivec2(dbg_pix), dbg_col);
 			}
 		}
 
@@ -876,22 +876,21 @@ void main()
 				store_ssbo_contour_2d_sample_topology__seg_len(sample_id,  scanseg_len,  num_samples);
 			}
 
-			if (valid_thread)
+			if (valid_thread) // debug draw
 			{
 				ContourFlags cf = load_ssbo_contour_2d_sample_topology__flags(sample_id);
-
-				vec2 dbg_pix = pcs_screen_size_.xy * load_ssbo_contour_2d_sample_geometry__position(sample_id); 
-				vec4 dbg_col = cf.curve_clipped ? vec4(1, 0, 0, 1) : vec4(1.0f); 
-				dbg_col.rgb = rand_col_rgb(scanseg_len, scanseg_len + 17); 
 				uint curve_len = load_ssbo_contour_2d_sample_topology__curve_len(sample_id, num_samples); 
-
 				bool is_looped_samples = is_2d_sample_curve_looped(
 					cf.looped_curve && cf.no_segmentation_on_contour_curve, 
 					cf.curve_clipped, scanseg_len == curve_len
 				); 
-
+				
+				vec4 dbg_col = cf.curve_clipped ? vec4(1, 0, 0, 1) : vec4(1.0f); 
+				dbg_col.rgb = rand_col_rgb(scanseg_len, scanseg_len + 17); 
 				if (!is_looped_samples) dbg_col = vec4(.0f); 
-				imageStore(tex2d_contour_dbg_, ivec2(dbg_pix), dbg_col);
+
+				vec2 dbg_pix = pcs_screen_size_.xy * load_ssbo_contour_2d_sample_geometry__position(sample_id); 
+				// imageStore(tex2d_contour_dbg_, ivec2(dbg_pix), dbg_col);
 			}
 		}
 	#endif
@@ -919,13 +918,15 @@ void main()
 			vec2 vndir = normalize(vn); 
 
 			float angle = acos(dot(vpdir, vndir));
-			bool fake_corner = (angle > PI * .5f); 
+			bool fake_corner = (angle > PI * .4f); 
 
 			if (valid_thread)
 			{
 				float angle_degree = angle * 180.0f / PI; 
 				vec2 dbg_pix = pcs_screen_size_.xy * load_ssbo_contour_2d_sample_geometry__position(sample_id); 
-				vec4 dbg_col = fake_corner ? vec4(0, 1, 1, 1.0f) : vec4(1, 0, 0, 1.0f);  
+				vec4 dbg_col = vec4(.0f); 
+				dbg_col.r = fake_corner ? 1.0f : .0f;
+				dbg_col.g =  .0f;   
 				imageStore(tex2d_contour_dbg_, ivec2(dbg_pix), dbg_col);
 			}
 			if (fake_corner)
