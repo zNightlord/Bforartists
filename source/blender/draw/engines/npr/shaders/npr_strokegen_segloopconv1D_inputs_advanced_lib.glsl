@@ -59,7 +59,10 @@
             uint sub_seg_rank = load_ssbo_contour_2d_sample_topology__seg_rank(sample_id, num_samples);
             uint sub_seg_len = load_ssbo_contour_2d_sample_topology__seg_len(sample_id, num_samples);
             ContourFlags cf = load_ssbo_contour_2d_sample_topology__flags(sample_id);
-            bool is_sub_seg_loop = is_2d_sample_curve_looped(cf.looped_curve, cf.curve_clipped, sub_seg_len == seg_len);
+            bool is_sub_seg_loop = is_2d_sample_curve_looped(
+                cf.looped_curve && cf.no_segmentation_on_contour_curve, 
+                cf.curve_clipped, sub_seg_len == seg_len
+            );
 
             bool short_seg = sub_seg_len < 42u; // (see the paper)
 

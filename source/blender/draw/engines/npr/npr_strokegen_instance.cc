@@ -195,12 +195,21 @@ namespace blender::npr::strokegen
 
     /* Draw Contour Edges */
     strokegen_textures.fb_contour_raster.bind();
-    GPU_line_width(2.0f); // always snap to integer, see the opengl spec on line rasterization
-    manager.submit(strokegen_passes.get_render_pass(StrokeGenPassModule::INDIRECT_DRAW_DBG_LINES), view);
-    GPU_line_width(4.0f); 
-    manager.submit(strokegen_passes.get_render_pass(StrokeGenPassModule::INDIRECT_DRAW_CONTOUR_EDGES), view);
-    // manager.submit(strokegen_passes.get_render_pass(StrokeGenPassModule::INDIRECT_DRAW_CONTOUR_2D_SAMPLES), view);
-    GPU_line_width(1.0f);
+    if (strokegen_passes.surf_dbg_ctx.enable_dbg_view) {
+      GPU_line_width(2.0f);  // always snap to integer, see the opengl spec on line rasterization
+      manager.submit(strokegen_passes.get_render_pass(StrokeGenPassModule::INDIRECT_DRAW_DBG_LINES),
+      view);
+      GPU_line_width(4.0f);
+      manager.submit(strokegen_passes.get_render_pass(StrokeGenPassModule::INDIRECT_DRAW_CONTOUR_EDGES),
+      view);  
+    }
+    else {
+      GPU_line_width(4.0f);
+      manager.submit(
+          strokegen_passes.get_render_pass(StrokeGenPassModule::INDIRECT_DRAW_CONTOUR_2D_SAMPLES),
+          view);  
+    }
+    GPU_line_width(1.0f); // reset gl line thickness
     
     /* Pixel Extraction */
     manager.submit(strokegen_passes.get_compute_pass(PType::COMPRESS_CONTOUR_PIXELS), view); 

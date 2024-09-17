@@ -24,6 +24,9 @@ void main()
     uint contour_edge_list_head = ssbo_contour_snake_list_head_[contour_edge_id];
     uint contour_seg_rank = ssbo_contour_snake_seg_rank_[contour_edge_id];
     uint contour_seg_len = ssbo_contour_snake_seg_len_[contour_edge_id];
+    uint contour_seg_list_head = move_elem_along_loop(
+        contour_edge_id, -int(contour_seg_rank), contour_edge_list_head, contour_edge_list_len
+    ); 
     uint prev_contour_id = ssbo_contour_to_contour_[2*contour_edge_id];
     uint next_contour_id = ssbo_contour_to_contour_[2*contour_edge_id+1u];
     ContourFlags cf = load_contour_flags(contour_edge_id);
@@ -89,7 +92,10 @@ void main()
 
     color = // cf.occluded ? vec4(.5f, .5f, .5f, 0.0f) : 
         // cf.cusp_func_pstv ? vec4(.0f, 1.0f, 0.0f, 1.0f) : vec4(1.0f, 0.0f, 0.0f, 1.0f); 
-        vec4(rand_col_rgb(contour_seg_len / 16, contour_seg_len / 16), 1.0f); // contour_edge_id);
+        cf.dbg_flag_0 ? vec4(.0f, 1.0f, 0.0f, 1.0f) : vec4(1.0f, 0.0f, 0.0f, 1.0f); 
+        // vec4(rand_col_rgb(contour_seg_list_head, contour_seg_list_head), 1.0f); // contour_edge_id);
+        // vec4(rand_col_rgb(contour_seg_len / 12, contour_seg_len / 12), 1.0f); // contour_edge_id);
+        // contour_seg_len == contour_edge_list_len ? vec4(1.0f, 0.0f, 0.0f, 1.0f) : vec4(0.0f, 1.0f, 0.0f, 1.0f); 
         // (contour_edge_list_len < contour_edge_rank || contour_edge_rank == 0) ?
         // vec4(prev_contour_id, contour_edge_rank, contour_edge_list_len, contour_edge_list_head) : vec4(.0f);
 

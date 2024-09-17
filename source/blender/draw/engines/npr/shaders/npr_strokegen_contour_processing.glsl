@@ -336,7 +336,10 @@ void is_2d_sample_seg_head(
 	Contour2DSampleSegmentationInfo si, Contour2DSampleSegmentationInfo si_prev, 
 	out bool seg_head_contour, out bool seg_head_clipped)
 {
-	bool break_contour_seg = si.contour_seg_head != si_prev.contour_seg_head; 
+	bool break_contour_seg = false; 
+	if (si.contour_seg_head != si_prev.contour_seg_head) break_contour_seg = true; // different contour segments
+	// non-consecutive contour ranks - a segment jump from curve end to start  
+	else if (si.contour_seg_rank < si_prev.contour_seg_rank) break_contour_seg = true; 
 
 	float dist = length(get_raster_resolution() * (si.uv - si_prev.uv)); 
 	bool break_arc_len = 1.1f < dist && (si.contour_curve_head_id == si_prev.contour_curve_head_id); 
@@ -472,7 +475,7 @@ void main()
 	}
 
 	if (valid_thread)
-	{ // allocate samples for each curve, scan to preserve orders
+	{ // allocate samples for each curve, use scan to preserve orders
 		uint scan_val = num_samples; 
 		ssbo_tree_scan_input_2d_resampler_alloc_samples_[contour_id] = scan_val;
 
@@ -509,15 +512,15 @@ void main()
 
 	uint num_samples = ssbo_tree_scan_input_2d_resampler_alloc_samples_[contour_id]; 
 
-	if (contour_id == num_contours - 1u)
-	{
+	// record total number of allocated 2d samples
+	if (contour_id == num_contours - 1u) { 
 		uint alloc_sample_offset = /* == ssbo_tree_scan_output_2d_resampler_alloc_samples_ */
 			ssbo_contour_to_start_sample_[contour_id]; 
-
 		ssbo_bnpr_mesh_pool_counters_.num_2d_samples = alloc_sample_offset + num_samples;
 		/* fill dispatch args after this */
 	}
 
+	// debug draw
 	if (valid_thread)
 	{
 		Contour2DResampleRasterData c2rd; 
@@ -599,8 +602,7 @@ void main()
 	uint contour_id 			= ssbo_2d_sample_to_contour_[sample_id]; 
 	uint beg_sample_id 			= ssbo_contour_to_start_sample_[contour_id]; 
 	float contour_arc_len_param = uintBitsToFloat(ssbo_contour_arc_len_param_[contour_id * 2u]); 
-	Contour2DResampleRasterData c2rd; 
-	{
+	Contour2DResampleRasterData c2rd; {
 		uvec3 resample_data; 
 		Load3(ssbo_contour_2d_resample_raster_data_, contour_id, resample_data);
 		c2rd = decode_contour_2d_resample_data(resample_data);
@@ -649,7 +651,7 @@ void main()
 
 	#if defined(_KERNEL_MULTICOMPILE__CONTOUR_EDGES_2D_RESAMPLE__EVALUATE_TOPOLOGY__STEP_0)
 		// Detect curve head and seg head
-		// Let's say we have a contour curve starting at address H,
+		// Let's say we have a contour curve,
 		// with 2 segments A and B, and B is partially clipped.(from the view frustum)
 		// B is split into B1, BX and B2. 
 		//                                                
@@ -669,7 +671,7 @@ void main()
 		// After 2d resampling, 
 		// contour edges in BX do not have 2d samples.                                                   
 		// Hence the 2d samples are laied out as follows:
-		// [samples from edge a3-5, b0-b1, b9- b10, a0-a2] 
+		// [samples from edge a3-5, b0-b1, b9- b10, a0-a2] (in data buffers, the whole curve starts at a3) 
 		// curve head sample in a3,   detected by comparing the contour-curve-head-id with prev sample in memory
 		// seg head samples in a0,b0, detected by comparing the contour-seg-head-id with prev sample in memory
 		// seg head sample  in b9,    detected by comparing the arc-len-param with prev sample(b1) in memory
@@ -678,7 +680,7 @@ void main()
 		// The clipping complicated the topology of resampled curves:  
 		// - Breaks can happen within adjacent segments (gap from b1 to b9)
 		uint contour_id = ssbo_2d_sample_to_contour_[sample_id]; 
-		Contour2DSampleSegmentationInfo sample_si 	   = load_2d_sample_seg_key(sample_id, num_samples); 
+		Contour2DSampleSegmentationInfo sample_si = load_2d_sample_seg_key(sample_id, num_samples); 
 		ContourFlags cf = load_ssbo_contour_2d_sample_topology__flags(sample_id); 
 
 		if (!segment_by_seg)
@@ -692,7 +694,7 @@ void main()
 				cf.curve_head = is_curve_head; 
 				store_ssbo_contour_2d_sample_topology__flags(sample_id, cf); 
 			}
-		}else{
+		} else {
 			// curve segments are built so that we can divide them to build the sub-segments
 			ContourCurveTopo cct = load_contour_2d_sample_curve_topo(sample_id, cf, num_samples);
 
@@ -704,12 +706,32 @@ void main()
 				sample_si, prev_sample_si, 
 				/*out*/seg_head_contour, seg_head_clipped
 			);
+			
+			bool is_seg_entire_curve = false; 
+			uint contour_seg_len = ssbo_contour_snake_seg_len_[contour_id];
+			uint contour_curve_len = ssbo_contour_snake_list_len_[contour_id]; 
+			is_seg_entire_curve = cf.looped_curve && contour_seg_len == contour_curve_len; 
+
 			if (valid_thread)
 			{
 				cf.seg_head = seg_head_contour || seg_head_clipped; 
 				init_seg_head_contour(seg_head_contour/* is_seg_head */, cf); 
 				init_seg_head_clipped(seg_head_clipped, cf); 
+				init_no_segmentation_on_contour_curve(is_seg_entire_curve, cf);
 				store_ssbo_contour_2d_sample_topology__flags(sample_id, cf); 
+			}
+
+			// Debug draw 
+			if (valid_thread)
+			{
+				vec2 dbg_pix = pcs_screen_size_.xy * load_ssbo_contour_2d_sample_geometry__position(sample_id); 
+				vec4 dbg_col = vec4(.0f, .0f, 1.0f, 1.0f); 
+				if (seg_head_contour) {
+					dbg_col.r = sample_si.contour_seg_head; 
+					dbg_col.g = prev_sample_si.contour_seg_head; 
+					dbg_col.b = sample_si.contour_seg_rank; 
+				}
+				imageStore(tex2d_contour_dbg_, ivec2(dbg_pix), dbg_col);
 			}
 		}
 
@@ -721,13 +743,6 @@ void main()
 		
 		if (sample_id == 0) // Prepare for segmented convolution
 			ssbo_segloopconv1d_info_.num_conv_items = num_samples; 
-
-		if (valid_thread)
-		{
-			vec2 dbg_pix = pcs_screen_size_.xy * load_ssbo_contour_2d_sample_geometry__position(sample_id); 
-			vec4 dbg_col = vec4(1.0f); 
-			// imageStore(tex2d_contour_dbg_, ivec2(dbg_pix), dbg_col);
-		}
 	#endif
 
 	#if defined(_KERNEL_MULTICOMPILE__CONTOUR_EDGES_2D_RESAMPLE__EVALUATE_TOPOLOGY__SETMENTATION__PREP_SEGTAILS)
@@ -867,7 +882,15 @@ void main()
 
 				vec2 dbg_pix = pcs_screen_size_.xy * load_ssbo_contour_2d_sample_geometry__position(sample_id); 
 				vec4 dbg_col = cf.curve_clipped ? vec4(1, 0, 0, 1) : vec4(1.0f); 
-				dbg_col.rgb = rand_col_rgb(scanseg_len, scanseg_len); 
+				dbg_col.rgb = rand_col_rgb(scanseg_len, scanseg_len + 17); 
+				uint curve_len = load_ssbo_contour_2d_sample_topology__curve_len(sample_id, num_samples); 
+
+				bool is_looped_samples = is_2d_sample_curve_looped(
+					cf.looped_curve && cf.no_segmentation_on_contour_curve, 
+					cf.curve_clipped, scanseg_len == curve_len
+				); 
+
+				if (!is_looped_samples) dbg_col = vec4(.0f); 
 				imageStore(tex2d_contour_dbg_, ivec2(dbg_pix), dbg_col);
 			}
 		}
@@ -909,7 +932,7 @@ void main()
 				cf.is_corner = false; 
 		}
 
-		cf.seg_head = cf.is_corner || cf.seg_head_contour || cf.seg_head_clipped; 
+		cf.seg_head = /* cf.is_corner ||  */cf.seg_head_contour || cf.seg_head_clipped; 
 		if (valid_thread)
 			store_ssbo_contour_2d_sample_topology__flags(sample_id, cf); 
 	#endif
@@ -945,7 +968,10 @@ void main()
 	uint seg_rank = load_ssbo_contour_2d_sample_topology__seg_rank(sample_id, num_samples);  
 	uint seg_len = load_ssbo_contour_2d_sample_topology__seg_len(sample_id, num_samples); 
 
-	bool is_looped_samples = is_2d_sample_curve_looped(cf.looped_curve, cf.curve_clipped, seg_len == cct.len); 
+	bool is_looped_samples = is_2d_sample_curve_looped(
+		cf.looped_curve && cf.no_segmentation_on_contour_curve, 
+		cf.curve_clipped, seg_len == cct.len
+	); 
 	float arc_len_param = float(seg_rank) / float(seg_len); 
 
 	// Load Geometry
@@ -974,8 +1000,9 @@ void main()
 
 	vec4 col = vec4(.0f, .0f, .0f, 1.0f); 
 	// col.rgb = rand_col_rgb(seg_len, seg_len); 
-	if (cf.occluded_filtered) col.a = .0f; 
-	
+	if (cf.occluded/* occluded_filtered */) col.a = .0f; 
+	// if (is_looped_samples) col = vec4(1.0f, 0.0f, 0.0f, 1.0f); 
+
 	if (valid_thread) 
 	{
 		store_ssbo_stroke_mesh_pool__skeletal_VB(sample_id, verts);

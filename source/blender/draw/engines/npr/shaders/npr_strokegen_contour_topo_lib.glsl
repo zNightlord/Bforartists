@@ -39,12 +39,15 @@ struct ContourFlags
     bool cusp_func_pstv; /*has positive cusp function*/
 	bool occluded; /* valid when visibility test activated */
 
+	bool dbg_flag_0; /* debug flag */ 
+
 	/* flags used in 2d-resampled curves -------------------------- */
 	bool curve_clipped;  // TODO: may be buggy, needs further testing
 	bool is_corner;
 	bool seg_head_contour; // seg-head based on contour segmentation 
 	bool seg_head_clipped; // seg-head based on clipping
 	bool seg_tail_clipped; // seg-tail based on clipping 
+	bool no_segmentation_on_contour_curve; // the contour segment is the entire curve
 	bool is_curv_minima; // local curvature minima during corner detection
 	bool occluded_filtered; 
 }; 
@@ -66,6 +69,8 @@ uint encode_contour_flags(ContourFlags cf)
 	cf_enc <<= 1u;
 	cf_enc |= uint(cf.occluded);
 	cf_enc <<= 1u;
+	cf_enc |= uint(cf.dbg_flag_0); 
+	cf_enc <<= 1u; 
 	cf_enc |= uint(cf.curve_clipped);
 	cf_enc <<= 1u;
 	cf_enc |= uint(cf.is_corner);
@@ -75,6 +80,8 @@ uint encode_contour_flags(ContourFlags cf)
 	cf_enc |= uint(cf.seg_head_clipped); 
 	cf_enc <<= 1u;
 	cf_enc |= uint(cf.seg_tail_clipped);
+	cf_enc <<= 1u;
+	cf_enc |= uint(cf.no_segmentation_on_contour_curve);
 	cf_enc <<= 1u;
 	cf_enc |= uint(cf.is_curv_minima); 
 	cf_enc <<= 1u;
@@ -90,6 +97,8 @@ ContourFlags decode_contour_flags(uint cf_enc)
 	cf_enc >>= 1u;
 	cf.is_curv_minima = (1u == (cf_enc & 1u));
 	cf_enc >>= 1u;
+	cf.no_segmentation_on_contour_curve = (1u == (cf_enc & 1u));
+	cf_enc >>= 1u; 
 	cf.seg_tail_clipped = (1u == (cf_enc & 1u));
 	cf_enc >>= 1u;
 	cf.seg_head_clipped = (1u == (cf_enc & 1u));
@@ -100,6 +109,8 @@ ContourFlags decode_contour_flags(uint cf_enc)
 	cf_enc >>= 1u;
 	cf.curve_clipped = (1u == (cf_enc & 1u));
 	cf_enc >>= 1u;
+	cf.dbg_flag_0 = (1u == (cf_enc & 1u));  
+	cf_enc >>= 1u; 
 	cf.occluded = (1u == (cf_enc & 1u));
 	cf_enc >>= 1u;
     cf.cusp_func_pstv = (1u == (cf_enc & 1u));
@@ -127,11 +138,13 @@ ContourFlags init_contour_flags(bool seg_head)
     cf.looped_curve = true;    // needs further setup
     cf.cusp_func_pstv = false; // needs further setup
 	cf.occluded = false;       // needs further setup
+	cf.dbg_flag_0 = false;     // needs further setup
 	cf.curve_clipped = false;  // needs further setup 
 	cf.is_corner = false;      // needs further setup 
 	cf.seg_head_contour = false;  // needs further setup 
 	cf.seg_head_clipped = false;  // needs further setup
 	cf.seg_tail_clipped = false;  // needs further setup 
+	cf.no_segmentation_on_contour_curve = false;  // needs further setup 
 	cf.is_curv_minima = false;  // needs further setup
 	cf.occluded_filtered = false;  // needs further setup 
     return cf; 
@@ -160,6 +173,11 @@ void init_seg_head_clipped(bool sample_2d_is_seg_head, inout ContourFlags cf)
 void set_seg_tail_clipped(bool sample_2d_is_seg_tail, inout ContourFlags cf)
 { 
 	cf.seg_tail_clipped = sample_2d_is_seg_tail; 
+}
+
+void init_no_segmentation_on_contour_curve(bool no_seg, inout ContourFlags cf)
+{ /* should happen only once for all 2d samples */
+	cf.no_segmentation_on_contour_curve = no_seg; 
 }
 
 void set_contour_seg_head(bool seg_head, inout ContourFlags cf)
@@ -196,6 +214,11 @@ void set_contour_flags_is_corner(inout ContourFlags cf)
 {
 	cf.is_corner = true; 
 }
+
+void set_contour_flags_dbg_flag_0(bool dbg_bit, inout ContourFlags cf)
+{
+	cf.dbg_flag_0 = dbg_bit; 
+} 
 
 #if defined(INCLUDE_CONTOUR_FLAGS_LOAD_STORE)
 void store_contour_flags(uint contour_id, ContourFlags cf)
@@ -441,7 +464,6 @@ bool is_2d_sample_curve_looped(bool contour_looped, bool contour_crve_clipped, b
 	bool is_sub_seg_loop = contour_looped && (!contour_crve_clipped) && single_sub_seg; 
 	return is_sub_seg_loop; 
 }
-
 
 #endif
 

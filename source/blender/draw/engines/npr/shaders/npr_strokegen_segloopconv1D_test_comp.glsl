@@ -114,8 +114,8 @@ void main()
         float num_snakes_right = float(MAX_CONV_RADIUS);
         if (!seg_is_loop)
         {
-            num_snakes_left = idx - seg_head_id;
-            num_snakes_right = seg_tail_id - idx;
+            num_snakes_left = min(MAX_CONV_RADIUS, idx - seg_head_id/*edge loop head, not the seg head*/);
+            num_snakes_right = min(MAX_CONV_RADIUS, seg_tail_id - idx);
         }
 
         float num_pstv_cusps_left = float(conv_temp_data.num_pstv_cusps_left);
@@ -126,11 +126,21 @@ void main()
         bool right_seg_is_positive = num_pstv_cusps_right > num_snakes_right * .8f;
         bool right_seg_is_negative = num_pstv_cusps_right <= num_snakes_right * .2f;
 
+        // force segment breaks, this will cause small chunks of consecutive seg-heads
         bool at_seg_break = 
             (left_seg_is_positive && right_seg_is_negative)
             || (left_seg_is_negative && right_seg_is_positive);
-        
-        set_contour_seg_head(at_seg_break, efs_ori); 
+        // if (at_seg_break)
+        //     set_contour_seg_head(at_seg_break, efs_ori); 
+
+        // supress small noises 
+        bool wrong_seg_break = efs_ori.seg_head && (
+            (left_seg_is_positive && right_seg_is_positive)
+            || (left_seg_is_negative && right_seg_is_negative)
+        ); 
+        if (wrong_seg_break)
+            set_contour_seg_head(false, efs_ori);
+        set_contour_flags_dbg_flag_0(wrong_seg_break, efs_ori); 
 
         if (idx < get_num_items())
             ssbo_out_segloopconv1d_data_[idx] = encode_contour_flags(efs_ori);

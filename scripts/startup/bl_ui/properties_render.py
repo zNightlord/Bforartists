@@ -1249,8 +1249,8 @@ class RENDER_PT_npr_test(RenderButtonsPanel, Panel):
         col.prop(props, "npr_test_val_14", text="dbg_history_trace_steps")
         col.prop(props, "npr_test_val_15", text="dbg_history_trace_passes")
         col.prop(props, "npr_test_val_16", text="dbg_ndv_grad_mode")
-
-        col.prop(props, "npr_test_val_16", text="eigen_solver_type")
+        
+        col.prop(props, "npr_test_val_17", text="View Debug Draws") 
 
 
 

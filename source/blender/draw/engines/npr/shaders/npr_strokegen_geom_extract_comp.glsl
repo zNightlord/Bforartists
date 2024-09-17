@@ -706,7 +706,7 @@ ContourVisibilitySplitInfo load_contour_visibility_split_info(uint contour_id)
 #endif
 
 
-#define DEBUG_FRAGMENTS 1
+// #define DEBUG_FRAGMENTS 1
 #if defined(DEBUG_FRAGMENTS)
 void store_frag_coord(uint frag_id, vec2 frag_coord, uint num_frags)
 {
@@ -829,8 +829,8 @@ void main()
 	
 
 	
-	if (valid_thread && visible)
-		imageStore(tex2d_contour_dbg_, ivec2(sampleTexel), vec4(-z_frag, -z_vs_3x3[1][1], visible, .0f)); 
+	// if (valid_thread && visible)
+	// 	imageStore(tex2d_contour_dbg_, ivec2(sampleTexel), vec4(-z_frag, -z_vs_3x3[1][1], visible, .0f)); 
 
 	if (valid_thread)
 	{
@@ -1082,10 +1082,10 @@ ContourVisibilitySplitInfo cvsi;
 	if (valid_thread)
 	{
 		vec2 frag_coord = load_frag_coord(frag_id, num_frags);	
-vec4 dbg_col = vec4(1); 
-dbg_col = fvtr.visible ? vec4(.0, 1.0, .0, .0) : vec4(.0, .0, 1.0, .0); 
-dbg_col = is_seg_head ? vec4(1, cvsi.begend_ratios.xy, 1) : dbg_col;
-dbg_col.r = float(seg_rank) / float(seg_len); 
+		vec4 dbg_col = vec4(1); 
+		dbg_col = fvtr.visible ? vec4(.0, 1.0, .0, .0) : vec4(.0, .0, 1.0, .0); 
+		dbg_col = is_seg_head ? vec4(1, cvsi.begend_ratios.xy, 1) : dbg_col;
+		dbg_col.r = float(seg_rank) / float(seg_len); 
 		imageStore(tex2d_contour_dbg_, ivec2(frag_coord), dbg_col);
 	}
 	#endif

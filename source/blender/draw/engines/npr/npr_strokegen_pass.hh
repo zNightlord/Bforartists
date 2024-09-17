@@ -35,6 +35,8 @@ struct SurfaceDebugContext {
   bool dbg_edges; 
 
   float dbg_line_length;
+
+  bool enable_dbg_view; // draw debug lines & contour edges
 };
 
 class StrokegenMeshComputePass : public draw::PassSimple {
@@ -236,8 +238,6 @@ public:
     int dbg_history_trace_steps;
     int dbg_history_trace_passes;
     int dbg_ndv_grad_mode;
-
-    enum SymmetricEigenSolver { Cardano = 0, Eberly } eigen_solver_type;
   } meshing_params;
 
 
@@ -507,7 +507,9 @@ public:
     GPUStorageBuf *ssbo_segloopconv1d_patch_table_;
 
     eShaderType shader_build_patch_table;
-    bool lazy_dispatch; // skip shader_build_patch_table and reuse ssbo_segloopconv1d_patch_table_ 
+    bool lazy_dispatch; // skip shader_build_patch_table and reuse ssbo_segloopconv1d_patch_table_,
+    // - which should always be true when the segment topology doesn't change
+
     eShaderType shader_convolution;
   };
   bool test_segloopconv; 
