@@ -7,7 +7,8 @@
 
 
 
-// Contour Definition
+// ---------------------------------------------------------------------------------------------------
+// Functions for Detecting Contour Edges
 // ---------------------------------------------------------------------------------------------------
 bool is_back_face(float ndv)
 {
@@ -94,6 +95,8 @@ vec3 calc_interp_contour_vert_pos(vec3 edge_vnor[2], vec3 edge_vpos[2], vec3 cam
 	float contour_interpo_factor = calc_interp_contour_edge_factor(edge_vnor, edge_vpos, cam_pos_ws); 
 	return edge_vpos[0] + contour_interpo_factor * (edge_vpos[1] - edge_vpos[0]); 
 }
+
+
 
 
 
@@ -320,7 +323,6 @@ LineRasterResult load_contour_edge_raster_data(uint contour_edge_id, out uint he
 	
 	return line_raster_data; 
 }
-
 #endif
 
 LineRasterResult raster_line_segment(
@@ -574,7 +576,7 @@ ContourVisibilitySplitInfo decode_contour_visibility_split_info(uvec4 d0123)
 	return cvsi; 
 }
 
-#endif
+
 
 
 
@@ -745,7 +747,11 @@ float load_ssbo_contour_2d_sample_geometry__corner_curvature(uint sample_id, uin
 	uint subbuff_offset = 3u * num_samples; 
 	return uintBitsToFloat(ssbo_contour_2d_sample_geometry_[subbuff_offset + sample_id]); 
 }
+#endif
+
+
 
 
 #endif
+
 

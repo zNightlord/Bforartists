@@ -641,6 +641,9 @@ void proj_vec_to_triangle_plane(vec3 D, vec3 Q1, vec3 Q2, out vec3 D_proj, out v
 #endif
 
 
+
+
+
 #endif
 
 

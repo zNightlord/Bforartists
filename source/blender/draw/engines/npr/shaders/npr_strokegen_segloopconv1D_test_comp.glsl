@@ -108,8 +108,9 @@ void main()
         ssbo_out_segloopconv1d_data_[idx] = floatBitsToUint(conv_temp_data.val);
     #endif
     #if defined(_KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__SEG_DENOISING)
-        ContourFlags efs_ori = decode_contour_flags(orig_data);
-        
+        CuspSegmentDenoiseData csdd_ori = decode_cusp_segment_denoise_data(orig_data); 
+        ContourFlags cfs_ori = csdd_ori.cf;
+
         uint num_snakes_left = uint(MAX_CONV_RADIUS); 
         uint num_snakes_right = uint(MAX_CONV_RADIUS);
         // if (!seg_is_loop) {
@@ -120,24 +121,39 @@ void main()
         uint num_pstv_cusps_right = uint(conv_temp_data.num_pstv_cusps_right);
 
         // supress small noises 
-        uint num_ptsv_cusps_total = num_pstv_cusps_left + num_pstv_cusps_right + (efs_ori.cusp_func_pstv ? 1u : 0u);
+        uint num_ptsv_cusps_total = num_pstv_cusps_left + num_pstv_cusps_right + (cfs_ori.cusp_func_pstv ? 1u : 0u);
         uint num_snakes_total     = num_snakes_left     + num_snakes_right     + 1u;
-        bool stochastic_pstv_cusp  = (num_snakes_total - 2u <= num_ptsv_cusps_total);
-        bool stochastic_ngtv_cusp  =  (num_ptsv_cusps_total <= 2u);  
-        set_contour_flags_dbg_flag_0(
-            ((!efs_ori.cusp_func_pstv) && stochastic_pstv_cusp) 
-            || (efs_ori.cusp_func_pstv && stochastic_ngtv_cusp), 
-            efs_ori
-        );  
+        bool stochastic_pstv_cusp  = (num_snakes_total - 1u <= num_ptsv_cusps_total);
+        bool stochastic_ngtv_cusp  =  (num_ptsv_cusps_total <= 1u);  
         if (stochastic_pstv_cusp || stochastic_ngtv_cusp)
         {
-            set_contour_seg_head(false, efs_ori);
-            bool cusp_pstv_fixed = stochastic_pstv_cusp ? true : false; 
-            // set_contour_cusp_flags(cusp_pstv_fixed, efs_ori); 
+            // set_contour_seg_head(false, cfs_ori);
+            // bool cusp_pstv_fixed = stochastic_pstv_cusp ? true : false; 
+            // set_contour_cusp_flags(cusp_pstv_fixed, cfs_ori); 
+        }
+
+
+        float pstv_seg_len_total = conv_temp_data.pstv_seg_len_left + conv_temp_data.pstv_seg_len_right;
+        float ngtv_seg_len_total = conv_temp_data.ngtv_seg_len_left + conv_temp_data.ngtv_seg_len_right;
+        float seg_len_total = pstv_seg_len_total + ngtv_seg_len_total;
+        if (1e-13f < seg_len_total)
+        {
+            bool stochastic_pstv_seg = (pstv_seg_len_total / seg_len_total >= 0.875f);
+            bool stochastic_ngtv_seg = (ngtv_seg_len_total / seg_len_total >= 0.875f);
+            if (stochastic_pstv_seg || stochastic_ngtv_seg)
+                set_contour_seg_head(false, cfs_ori);
+            
+            set_contour_flags_dbg_flag_0(
+                ((!cfs_ori.cusp_func_pstv) && stochastic_pstv_seg) 
+                || (cfs_ori.cusp_func_pstv && stochastic_ngtv_seg), 
+                cfs_ori
+            );  
+            // bool cusp_pstv_fixed = stochastic_pstv_seg ? true : false; 
+            // set_contour_cusp_flags(cusp_pstv_fixed, cfs_ori); 
         }
 
         if (idx < get_num_items())
-            ssbo_out_segloopconv1d_data_[idx] = encode_contour_flags(efs_ori);
+            ssbo_out_segloopconv1d_data_[idx] = encode_contour_flags(cfs_ori);
     #endif
     #if defined(_KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__2DSAMPLE_CORNER_DETECTION__STEP_0)
         float curvature = conv_temp_data.corner_curv; 

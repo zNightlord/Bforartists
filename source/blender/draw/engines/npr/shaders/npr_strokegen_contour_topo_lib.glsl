@@ -233,6 +233,12 @@ ContourFlags load_contour_flags(uint contour_id)
 
 
 
+
+
+
+// -------------------------------------------------------------------------
+// 3D Contour Curve Topology
+// -------------------------------------------------------------------------
 // Covers full knowledge of edge-loop that current edge lies in
 struct ContourCurveTopo
 {
@@ -319,14 +325,42 @@ void FixLoopedJumps(
   }
 }
 
+struct CuspSegmentDenoiseData
+{
+	ContourFlags cf; 
+	vec3 vpos_ws; 
+}; 
+uvec4 encode_cusp_segment_denoise_data(CuspSegmentDenoiseData csdd)
+{
+	uvec4 enc_data; 
+	enc_data.x = encode_contour_flags(csdd.cf); 
+	enc_data.y = floatBitsToUint(csdd.vpos_ws.x); 
+	enc_data.z = floatBitsToUint(csdd.vpos_ws.y); 
+	enc_data.w = floatBitsToUint(csdd.vpos_ws.z); 
+	return enc_data; 
+}
+CuspSegmentDenoiseData decode_cusp_segment_denoise_data(uvec4 enc_data)
+{
+	CuspSegmentDenoiseData csdd; 
+	csdd.cf = decode_contour_flags(enc_data.x); 
+	csdd.vpos_ws.x = uintBitsToFloat(enc_data.y); 
+	csdd.vpos_ws.y = uintBitsToFloat(enc_data.z); 
+	csdd.vpos_ws.z = uintBitsToFloat(enc_data.w); 
+	return csdd; 
+}
 
 
 
 
-#if defined(USE_CONTOUR_TRANSFER_DATA_BUFFER)
-// Packed per-contour-edge data.
+
+
+
+// -------------------------------------------------------------------------
+// Packed per-contour-edge data
 // Used as minimum cache as we iterate through meshes. 
 // used for processing all extracted contours after all meshes are processed
+// -------------------------------------------------------------------------
+#if defined(USE_CONTOUR_TRANSFER_DATA_BUFFER)
 #define EDGE_TRANSFER_DASTA_STRIDE 10u
 struct ContourEdgeTransferData
 {
@@ -388,6 +422,13 @@ ContourEdgeTransferData load_contour_edge_transfer_data(uint contour_edge_id)
 
 
 
+
+
+
+
+// -------------------------------------------------------------------------
+// 2D Curve Topology
+// -------------------------------------------------------------------------
 #if defined(USE_CONTOUR_2D_SAMPLE_TOPOLOGY_BUFFER)
 void store_ssbo_contour_2d_sample_topology__flags(uint sample_id, ContourFlags flags)
 {
@@ -469,6 +510,14 @@ bool is_2d_sample_curve_looped(bool contour_looped, bool contour_crve_clipped, b
 
 
 
+
+
+
+
+
+// -------------------------------------------------------------------------
+// Temporal Contour Records 
+// -------------------------------------------------------------------------
 #if defined(_KERNEL_MULTICOMPILE__CALC_TEMPORAL_CONTOUR_RECORDS__MAIN)
 // reuse ssbo slots
 #define ssbo_contour_temporal_records_old_ ssbo_selected_edge_to_edge_
@@ -806,10 +855,6 @@ void store_ssbo_contour_temporal_records_new__dbg_line_beg_id(
 	ssbo_contour_temporal_records_new_[addr_dbg_info] = dbg_line_id; 
 }
 #endif
-
-
-
-
 
 
 

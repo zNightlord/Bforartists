@@ -63,11 +63,16 @@ uint get_num_items()
 
         seg_tail_id = seg_head_id + len - 1u; 
 
+
         #if defined(_KERNEL_MULTICOMPILE__1DSEGLOOP_BUILD_PATCH_TABLE)
             ContourFlags cfs = decode_contour_flags(ssbo_contour_snake_flags_[elem_id]);
         #endif
         #if defined(_KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION)
-            ContourFlags cfs = decode_contour_flags(ssbo_in_segloopconv1d_data_[elem_id]);
+            uvec4 conv_input_enc = uvec4(0u);
+            Load4(ssbo_in_segloopconv1d_data_, elem_id, conv_input_enc); 
+            CuspSegmentDenoiseData csdd = decode_cusp_segment_denoise_data(conv_input_enc);
+
+            ContourFlags cfs = csdd.cf; 
         #endif
         seg_is_loop = cfs.looped_curve; 
     }
@@ -131,27 +136,43 @@ bool should_init_conv_data(bool mov_left, uint mov_step) { return mov_left && (m
         struct T_CONV_TEMP_DATA
         {
             uint num_pstv_cusps_left;
+            float pstv_seg_len_left; 
+            float ngtv_seg_len_left; 
             uint num_pstv_cusps_right;  
+            float pstv_seg_len_right;
+            float ngtv_seg_len_right; 
+
             bool is_self_pstv_cusp; 
-            bool is_seg_head; 
+            bool is_seg_head;
+
+            vec3 vpos_prev;  
         }; 
         T_CV FUNC_DEVICE_LOAD_LOOPCONV1D_DATA(uint elemId) 
         {
-            return ssbo_in_segloopconv1d_data_[elemId];
+            uvec4 encoded_data; 
+            Load4(ssbo_in_segloopconv1d_data_, elemId, encoded_data); 
+            return encoded_data; 
         }
         void FUNC_CONVOLUTION_LOOPCONV1D(
             bool mov_left, uint mov_step, bool seg_is_loop, uint seg_head_id, uint seg_tail_id, uint item_id, 
             T_CV neighbor_data, T_CV orig_data, inout T_CONV_TEMP_DATA conv_data)
         {
-            ContourFlags efs_neigh = decode_contour_flags(neighbor_data);
-            ContourFlags efs_ori = decode_contour_flags(orig_data);
-            
-            if (should_init_conv_data(mov_left, mov_step))
-            {
-                conv_data.is_seg_head = efs_ori.seg_head; 
-                conv_data.is_self_pstv_cusp = efs_ori.cusp_func_pstv;
+            CuspSegmentDenoiseData csdd_neigh = decode_cusp_segment_denoise_data(neighbor_data);
+            if (should_init_conv_data(mov_left, mov_step)) {
+                CuspSegmentDenoiseData csdd_ori = decode_cusp_segment_denoise_data(orig_data);
+                
+                conv_data.is_seg_head = csdd_ori.cf.seg_head; 
+                conv_data.is_self_pstv_cusp = csdd_ori.cf.cusp_func_pstv;
+                
                 conv_data.num_pstv_cusps_left = 0u;
+                conv_data.pstv_seg_len_left = 0.0f; 
+                conv_data.ngtv_seg_len_left = 0.0f;
+
                 conv_data.num_pstv_cusps_right = 0u;
+                conv_data.pstv_seg_len_right = 0.0f;
+                conv_data.ngtv_seg_len_right = 0.0f; 
+
+                conv_data.vpos_prev = csdd_ori.vpos_ws; 
             }
 
             bool moved_across_end = 
@@ -160,10 +181,26 @@ bool should_init_conv_data(bool mov_left, uint mov_step) { return mov_left && (m
             bool skip_when_not_looped = (!seg_is_loop) && moved_across_end; 
             if (skip_when_not_looped) return; 
 
+            float edge_len = length(csdd_neigh.vpos_ws - conv_data.vpos_prev); 
             if (mov_left)
-                conv_data.num_pstv_cusps_left += efs_neigh.cusp_func_pstv ? 1 : 0; 
+            {
+                if (csdd_neigh.cf.cusp_func_pstv) {
+                    conv_data.num_pstv_cusps_left += 1;
+                    conv_data.pstv_seg_len_left += edge_len; 
+                } else {
+                    conv_data.ngtv_seg_len_left += edge_len;  
+                }
+            }
             else
-                conv_data.num_pstv_cusps_right += efs_neigh.cusp_func_pstv ? 1 : 0; 
+            {
+                if (csdd_neigh.cf.cusp_func_pstv) {
+                    conv_data.num_pstv_cusps_right += 1;
+                    conv_data.pstv_seg_len_right += edge_len; 
+                } else {
+                    conv_data.ngtv_seg_len_right += edge_len;  
+                }
+            }
+            conv_data.vpos_prev = csdd_neigh.vpos_ws; 
         }
     #endif
 

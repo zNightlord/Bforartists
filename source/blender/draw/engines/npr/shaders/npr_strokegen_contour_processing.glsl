@@ -72,7 +72,11 @@ void main()
 		ssbo_contour_snake_to_temporal_record_[vtx_addr] = cetd.temporal_rec_id; 
 		ssbo_contour_snake_to_object_id_[vtx_addr] = cetd.obj_id;
 		
-		ssbo_in_segloopconv1d_data_[vtx_addr] = encode_contour_flags(cf); // copy to segloopconv1d input buffer
+		CuspSegmentDenoiseData seg_denoise_data; // setup segloopconv1d input buffer
+		seg_denoise_data.cf = cf; 
+		seg_denoise_data.vpos_ws = cetd.vpos_ws[0]; 
+		uvec4 seg_denoise_data_enc = encode_cusp_segment_denoise_data(seg_denoise_data); 
+		Store4(ssbo_in_segloopconv1d_data_, vtx_addr, seg_denoise_data_enc);
 		
 		
 		if (additional_output_tail_vtx)
@@ -90,7 +94,11 @@ void main()
 			ssbo_contour_snake_to_temporal_record_[vtx_addr+1u] = cetd.temporal_rec_id; 
 			ssbo_contour_snake_to_object_id_[vtx_addr+1u] = cetd.obj_id;
 
-			ssbo_in_segloopconv1d_data_[vtx_addr+1u] = encode_contour_flags(cf); // copy to segloopconv1d input buffer
+			// setup segloopconv1d input buffer
+			seg_denoise_data.cf = cf; 
+			seg_denoise_data.vpos_ws = cetd.vpos_ws[1]; 
+			seg_denoise_data_enc = encode_cusp_segment_denoise_data(seg_denoise_data);
+			Store4(ssbo_in_segloopconv1d_data_, (vtx_addr+1u), seg_denoise_data_enc);
 		}
     }
 #endif
