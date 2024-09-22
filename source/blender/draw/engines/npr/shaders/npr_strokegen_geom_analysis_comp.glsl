@@ -904,6 +904,10 @@ bool calc_vert_attr_order_1_2ring(
     if (at_end)
         return false;
 
+    EdgeFlags ef = load_edge_flags(wi); 
+    if (ef.border) // note: its an empty face here
+        return false; 
+
     uint ivert_n = mark__ve_circ_bck__get_vn(iter); 
     uint vn = ssbo_edge_to_vert_[wi*4u + ivert_n];
 
@@ -1272,6 +1276,10 @@ void main()
         vec3 pdir1 = vec3(pdirs[0][1], pdirs[1][1], pdirs[2][1]); 
         vec3 pdir2 = vec3(pdirs[0][2], pdirs[1][2], pdirs[2][2]); 
         evals /= vtx_area_measure; 
+
+        // force tangency, there could be tiny deviations from the local tangent plane
+		pdir0 = pdir0 - vnor * dot(pdir0, vnor); 
+		pdir1 = pdir1 - vnor * dot(pdir0, vnor); 
 
         
         float max_curv = max(abs(evals[0]), abs(evals[1])); 

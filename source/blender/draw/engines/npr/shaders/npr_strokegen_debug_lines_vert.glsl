@@ -21,9 +21,9 @@ void main()
     vec4 pos_hclip = world_to_view * vpos; 
     pos_hclip = proj * vec4(pos_hclip.xyz, 1.0f); 
 
-    float z_bias = 5e-4f; 
+    float z_bias = 1e-2f; 
     if (vtx_data.dbg_data.x == DBG_LINE_SPEC_DATA_X__BOTTOM_LAYER) 
-        z_bias = 4e-4f; 
+        z_bias = 0.9e-2f; 
 
     gl_Position = pos_hclip;
     gl_Position.z -= z_bias * pos_hclip.w;

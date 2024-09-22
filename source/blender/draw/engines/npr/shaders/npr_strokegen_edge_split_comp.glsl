@@ -151,19 +151,6 @@ vec3 calc_split_vpos(uint v1, uint v3, uint wedge_id)
         mat4 view_to_world = ubo_view_matrices_.viewinv;
         vec3 cam_pos_ws = view_to_world[3].xyz; /* see "#define cameraPos ViewMatrixInverse[3].xyz" */
         return calc_interp_contour_vert_pos(vnor, edge_vpos, cam_pos_ws); 
-        // float contour_interpo_factor = .5f; 
-        // {        
-        //     mat4 view_to_world = ubo_view_matrices_.viewinv;
-        //     vec3 cam_pos_ws = view_to_world[3].xyz; /* see "#define cameraPos ViewMatrixInverse[3].xyz" */
-
-        //     vec2 ndv = vec2(
-        //         dot(vnor[0], cam_pos_ws - edge_vpos[0]),  
-        //         dot(vnor[1], cam_pos_ws - edge_vpos[1]) 
-        //     ); 
-        //     contour_interpo_factor = ndv[0] / (ndv[0] - ndv[1]); /* split pos = vpos_0 + interpo * (vpos_1 - vpos_0); */
-        // }
-
-        // return edge_vpos[0] + contour_interpo_factor * (edge_vpos[1] - edge_vpos[0]); 
     }
     if (is_loop_subdiv_pass())
     { /* loop subdiv for new verts */
@@ -372,11 +359,11 @@ void main()
         EdgeFlags ef_w2 = load_edge_flags(w[2].wedge_id); 
         EdgeFlags ef_w3 = load_edge_flags(w[3].wedge_id); 
 
-        /* except border edges */
+        /* reject border edges */
         if (any(bvec4(ef_w0.border, ef_w1.border, ef_w2.border, ef_w3.border))) 
             psei_curr.is_split_ok = false; 
 
-        /* except edges at selection border */
+        /* reject edges at selection border */
         if (!all(bvec4(ef_w0.selected, ef_w1.selected, ef_w2.selected, ef_w3.selected)))
             psei_curr.is_split_ok = false; 
 
@@ -406,13 +393,6 @@ void main()
         EdgeFlags ef_w1 = load_edge_flags(w[1].wedge_id); 
         EdgeFlags ef_w2 = load_edge_flags(w[2].wedge_id); 
         EdgeFlags ef_w3 = load_edge_flags(w[3].wedge_id); 
-
-        // /* except border edges */
-        // if (any(bvec4(ef_w0.border, ef_w1.border, ef_w2.border, ef_w3.border))) 
-        //     psei_curr.is_split_ok = false; 
-        // /* except edges at selection border */
-        // if (!all(bvec4(ef_w0.selected, ef_w1.selected, ef_w2.selected, ef_w3.selected)))
-        //     psei_curr.is_split_ok = false; 
 
         /* Resolve collision */
         EdgeSplitPriorityContext ctx_curr = EdgeSplitPriorityContext(psei_curr, psei_curr.id, ef.selected); 

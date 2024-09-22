@@ -180,7 +180,7 @@ void StrokeGenPassModule::on_begin_sync(int frame_counter)
 
     surf_dbg_ctx.dbg_line_length = scene_eval->npr.npr_test_val_11;
 
-    meshing_params.denoise_cusp_segmentation = false; // .0f < scene_eval->npr.npr_test_val_21;
+    meshing_params.denoise_cusp_segmentation = true; // .0f < scene_eval->npr.npr_test_val_21;
     meshing_params.cusp_eval_opti = true;
 
     // npr_test_val_12 is used for camera rotation

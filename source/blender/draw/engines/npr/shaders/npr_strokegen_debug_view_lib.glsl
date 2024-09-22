@@ -26,6 +26,22 @@ vec3 rand_col_rgb(uint seed0, uint seed1)
 
     return hsl2rgb(vec3(hue, saturation, luminosity));
 }
+/* https://www.pcg-random.org/ */
+uint pcg(uint v) /* pcg hash */
+{
+	uint state = v * 747796405u + 2891336453u;
+	uint word = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
+	return (word >> 22u) ^ word;
+}
+/* Hashing 3d vert position
+ * Converting 1D hashing func into ND via nesting.
+ * this is better than linear combination of N hashes, 
+ * see Ch 4.2 of https://jcgt.org/published/0009/03/02/paper.pdf */
+uint pcg_nested_3d(vec3 v)
+{
+    uvec3 v3 = floatBitsToUint(v);
+    return pcg(v3.z + pcg(v3.y + pcg(v3.x))); 
+}
 
 
 

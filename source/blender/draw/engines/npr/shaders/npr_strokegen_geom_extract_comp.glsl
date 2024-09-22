@@ -315,7 +315,10 @@ void main()
 		if (pcs_edge_visualize_mode_ == 3) 
 			dbg_line = dbg_line && (!valid_ve); 
 		if (pcs_edge_visualize_mode_ == 4) 
+		{
 			dbg_line = dbg_line && (ef.selected); 
+			dbg_col = rand_col_rgb(pcg_nested_3d(v[1]) % 137u, pcg_nested_3d(v[3]) % 137u); 
+		}
 
 		/* visualize selected edges */ 
 		if (pcs_edge_visualize_mode_ == 5) 

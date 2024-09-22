@@ -216,7 +216,9 @@ float loop_vpos_smooth_weight(float n, bool crease = false, bool corner = false)
 
 
 
-/* Scalable Curvature Computations on Triangle Meshes ----------------------- */
+/* Scalable Curvature Computations on Triangle Meshes 
+ * "Interpolated corrected curvature measures for polygonal surfaces", Jacques-Olivier Lachaud, et. al."
+ * --------------------------------------------------------------------------------------------------- */
 #ifndef M_PI
 #define M_PI           (3.1415926535897932384626433832795)
 #endif
@@ -382,9 +384,9 @@ float mu1InterpolatedU(in vec3 a,
     // MU1=1/2( | uM u_C-u_B A | + | uM u_A-u_C B | + | uM u_B-u_A C |
     vec3 uM = ( ua+ub+uc ) / 3.0f;
     if ( unit_u ) uM /= length(uM);
-    return 0.5f * dot(cross(uM, ( uc - ub )), a)
+    return 0.5f * (dot(cross(uM, ( uc - ub )), a)
                    + dot(cross(uM, ( ua - uc )), b)
-                   + dot(cross(uM, ( ub - ua )), c);
+                   + dot(cross(uM, ( ub - ua )), c));
   }
 
     
