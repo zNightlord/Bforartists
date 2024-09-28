@@ -89,7 +89,7 @@ void main()
     // goes CCW on screen.
     vec2 edgenor_uv = vec2(edgedir_uv.y, -edgedir_uv.x);
 
-
+#if !defined(DEBUG)
     color = // cf.occluded ? vec4(.5f, .5f, .5f, 0.0f) : 
         // cf.cusp_func_pstv ? vec4(.0f, 1.0f, 0.0f, 1.0f) : vec4(1.0f, 0.0f, 0.0f, 1.0f); 
         cf.dbg_flag_0 ? vec4(.0f, 1.0f, 0.0f, 1.0f) : cf.cusp_func_pstv ? vec4(0, 0.3, 1, 1) : vec4(1.0f, 0.0f, 0.0f, 1.0f); 
@@ -98,7 +98,28 @@ void main()
         // contour_seg_len == contour_edge_list_len ? vec4(1.0f, 0.0f, 0.0f, 1.0f) : vec4(0.0f, 1.0f, 0.0f, 1.0f); 
         // (contour_edge_list_len < contour_edge_rank || contour_edge_rank == 0) ?
         // vec4(prev_contour_id, contour_edge_rank, contour_edge_list_len, contour_edge_list_head) : vec4(.0f);
+#else
+    vec4 dbg_data;
+    uint offset = ssbo_bnpr_mesh_pool_counters_.num_contour_verts;
+    dbg_data[0] = uintBitsToFloat(ssbo_contour_snake_flags_[offset + contour_edge_id*4u+0]); 
+    dbg_data[1] = uintBitsToFloat(ssbo_contour_snake_flags_[offset + contour_edge_id*4u+1]); 
+    dbg_data[2] = uintBitsToFloat(ssbo_contour_snake_flags_[offset + contour_edge_id*4u+2]); 
+    dbg_data[3] = uintBitsToFloat(ssbo_contour_snake_flags_[offset + contour_edge_id*4u+3]); 
 
+        color = // cf.occluded ? vec4(.5f, .5f, .5f, 0.0f) : 
+            // cf.cusp_func_pstv ? vec4(.0f, 1.0f, 0.0f, 1.0f) : vec4(1.0f, 0.0f, 0.0f, 1.0f); 
+            // cf.dbg_flag_0 ? vec4(.0f, 1.0f, 0.0f, 1.0f) : cf.cusp_func_pstv ? vec4(0, 0.3, 1, 1) : vec4(1.0f, 0.0f, 0.0f, 1.0f); 
+            vec4(rand_col_rgb(contour_seg_list_head, contour_seg_list_head), 1.0f); // contour_edge_id);
+            // vec4(rand_col_rgb(contour_seg_len / 12, contour_seg_len / 12), 1.0f); // contour_edge_id);
+            // contour_seg_len == contour_edge_list_len ? vec4(1.0f, 0.0f, 0.0f, 1.0f) : vec4(0.0f, 1.0f, 0.0f, 1.0f); 
+            // (contour_edge_list_len < contour_edge_rank || contour_edge_rank == 0) ?
+            // vec4(prev_contour_id, contour_edge_rank, contour_edge_list_len, contour_edge_list_head) : vec4(.0f);
+            // vec4(vec3(float(contour_edge_rank) / float(contour_edge_list_len)).xyz, 1.0f); 
+
+    color.g = dbg_data[0]; // contour_edge_rank; // contour_seg_rank; 
+    color.b = dbg_data[3]; // dbg_data[1]; // cf.cusp_func_pstv ? float(contour_seg_rank) : float(contour_seg_rank) + .5f; 
+    color.a = cf.cusp_func_pstv ? 1.00 : 1; 
+#endif
 
     normal = vec3(0, 0, 1);
     tangent.xyz = vec3(0, 0, 1);

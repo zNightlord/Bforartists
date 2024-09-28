@@ -2413,7 +2413,7 @@ GPU_SHADER_CREATE_INFO(npr_segloopconv1D_test_convolution)
 GPU_SHADER_CREATE_INFO(npr_segloopconv1D_seg_denoising)
     .typedef_source("bnpr_shader_shared.hh")
     .define("LOOPCONV1D_TAG", "seg_denoising")
-    .define("LOOPCONV1D_MAX_RADIUS", "8")
+    .define("LOOPCONV1D_MAX_RADIUS", "32")
     .define("DATA_TYPE_LOOPCONV1D", "uvec4")
     .define("_KERNEL_MULTI_COMPILE__SEGLOOPCONV1D_INFO_SSBO", "1")
     .define("_KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__SEG_DENOISING", "1");

@@ -926,7 +926,7 @@ void main()
 			vec2 vndir = normalize(vn); 
 
 			float angle = acos(dot(vpdir, vndir));
-			bool fake_corner = (angle > PI * .4f); 
+			bool fake_corner = (angle > PI * .3f); 
 
 			if (valid_thread)
 			{
@@ -941,7 +941,7 @@ void main()
 				cf.is_corner = false; 
 		}
 
-		cf.seg_head = /* cf.is_corner ||  */cf.seg_head_contour || cf.seg_head_clipped; 
+		cf.seg_head = cf.is_corner || cf.seg_head_contour || cf.seg_head_clipped; 
 		if (valid_thread)
 			store_ssbo_contour_2d_sample_topology__flags(sample_id, cf); 
 	#endif

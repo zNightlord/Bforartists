@@ -117,7 +117,7 @@
                 {
                     vec4 dbg_col = vec4(C.xxx, 1.0f);
                     vec2 dbg_pix = pt;
-                    imageStore(tex2d_contour_dbg_, ivec2(dbg_pix), dbg_col);
+                    // imageStore(tex2d_contour_dbg_, ivec2(dbg_pix), dbg_col);
                 }
             #endif // _KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__2DSAMPLE_CORNER_DETECTION__STEP_0
             #if defined(_KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__2DSAMPLE_CORNER_DETECTION__STEP_1)
@@ -174,7 +174,7 @@
                     if (conv_temp_data.is_local_maxima) dbg_col = vec4(1, 0, 0, 1);
                     if (conv_temp_data.is_local_minima) dbg_col = vec4(0, 1, 0, 1);
                     vec2 dbg_pix = pcs_screen_size_ * load_ssbo_contour_2d_sample_geometry__position(sample_id);
-                    imageStore(tex2d_contour_dbg_, ivec2(dbg_pix), dbg_col);
+                    // imageStore(tex2d_contour_dbg_, ivec2(dbg_pix), dbg_col);
                 }
             #endif // _KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__2DSAMPLE_CORNER_DETECTION__STEP_1
             #if defined(_KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__2DSAMPLE_CALC_TANGENT_CURVATURE)

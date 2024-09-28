@@ -142,7 +142,6 @@ bool should_init_conv_data(bool mov_left, uint mov_step) { return mov_left && (m
             float pstv_seg_len_right;
             float ngtv_seg_len_right; 
 
-            bool is_self_pstv_cusp; 
             bool is_seg_head;
 
             vec3 vpos_prev;  
@@ -153,33 +152,42 @@ bool should_init_conv_data(bool mov_left, uint mov_step) { return mov_left && (m
             Load4(ssbo_in_segloopconv1d_data_, elemId, encoded_data); 
             return encoded_data; 
         }
+        
+        #define SEG_DENOISE_PROBE_DISTANCE 0.08f
+
         void FUNC_CONVOLUTION_LOOPCONV1D(
             bool mov_left, uint mov_step, bool seg_is_loop, uint seg_head_id, uint seg_tail_id, uint item_id, 
             T_CV neighbor_data, T_CV orig_data, inout T_CONV_TEMP_DATA conv_data)
         {
             CuspSegmentDenoiseData csdd_neigh = decode_cusp_segment_denoise_data(neighbor_data);
-            if (should_init_conv_data(mov_left, mov_step)) {
+            if (1u == mov_step) 
+            { // init/reset convolution data
                 CuspSegmentDenoiseData csdd_ori = decode_cusp_segment_denoise_data(orig_data);
                 
                 conv_data.is_seg_head = csdd_ori.cf.seg_head; 
-                conv_data.is_self_pstv_cusp = csdd_ori.cf.cusp_func_pstv;
+                if (mov_left) {
+                    conv_data.num_pstv_cusps_left = 0u;
+                    conv_data.pstv_seg_len_left = 0.0f; 
+                    conv_data.ngtv_seg_len_left = 0.0f;
+                } else {
+                    conv_data.num_pstv_cusps_right = 0u;
+                    conv_data.pstv_seg_len_right = 0.0f;
+                    conv_data.ngtv_seg_len_right = 0.0f; 
+                }
                 
-                conv_data.num_pstv_cusps_left = 0u;
-                conv_data.pstv_seg_len_left = 0.0f; 
-                conv_data.ngtv_seg_len_left = 0.0f;
-
-                conv_data.num_pstv_cusps_right = 0u;
-                conv_data.pstv_seg_len_right = 0.0f;
-                conv_data.ngtv_seg_len_right = 0.0f; 
-
                 conv_data.vpos_prev = csdd_ori.vpos_ws; 
             }
 
-            bool moved_across_end = 
+            bool moved_across_end = // exit when moving across the end of a non-looped curve
                 (mov_left && (seg_head_id + mov_step > item_id)) 
                 || (!mov_left && (seg_tail_id < item_id + mov_step));
             bool skip_when_not_looped = (!seg_is_loop) && moved_across_end; 
             if (skip_when_not_looped) return; 
+
+            float probed_distance = mov_left ? // constrain the Euclidean radius of the convolution window
+                conv_data.pstv_seg_len_left + conv_data.ngtv_seg_len_left 
+                : conv_data.pstv_seg_len_right + conv_data.ngtv_seg_len_right;
+            if (probed_distance > SEG_DENOISE_PROBE_DISTANCE) return;
 
             float edge_len = length(csdd_neigh.vpos_ws - conv_data.vpos_prev); 
             if (mov_left)
