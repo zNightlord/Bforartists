@@ -907,18 +907,29 @@ void main()
 		#define PI 3.1415926535614f
 		ContourFlags cf = load_ssbo_contour_2d_sample_topology__flags(sample_id); 
 
-		if (cf.is_corner) 
+		if (valid_thread) // cf.is_corner) 
 		{ // Detect fake corners
 			ContourCurveTopo cct = load_contour_2d_sample_curve_topo(sample_id, cf, num_samples); 
 			uint corner_seg_rank = load_ssbo_contour_2d_sample_topology__seg_rank(sample_id, num_samples); 
 			uint corner_seg_len  = load_ssbo_contour_2d_sample_topology__seg_len(sample_id, num_samples); 
+			// bool is_looped_samples = is_2d_sample_curve_looped(
+			// 	cf.looped_curve && cf.no_segmentation_on_contour_curve, 
+			// 	cf.curve_clipped, corner_seg_len == cct.len
+			// ); 
+
+			// Move to the prev & next segments 
+			uint seg_head_id = move_contour_id_along_loop(cct, sample_id, -float(corner_seg_rank));
+			uint prev_seg_tail_id = move_contour_id_along_loop(cct, seg_head_id, -1.0f); 
+			uint prev_seg_len = load_ssbo_contour_2d_sample_topology__seg_len(prev_seg_tail_id, num_samples); 
+			uint prev_seg_head_id = move_contour_id_along_loop(cct, prev_seg_tail_id, -float(prev_seg_len - 1u)); 
 
 			uint seg_tail_id = move_contour_id_along_loop(cct, sample_id, +float(corner_seg_len - 1u - corner_seg_rank)); 
-			uint seg_head_id = move_contour_id_along_loop(cct, sample_id, -float(corner_seg_rank));
+			uint next_seg_head_id = move_contour_id_along_loop(cct, seg_tail_id, +1.0f); 
+
 			// Note: need to consider clipped gaps between adjacent segments!!! 
-			vec2 p = load_ssbo_contour_2d_sample_geometry__position(sample_id); 
-			vec2 pp = load_ssbo_contour_2d_sample_geometry__position(seg_head_id); 
-			vec2 pn = load_ssbo_contour_2d_sample_geometry__position(seg_tail_id); 
+			vec2 p  = load_ssbo_contour_2d_sample_geometry__position(sample_id); 
+			vec2 pp = load_ssbo_contour_2d_sample_geometry__position(prev_seg_head_id); // seg_head_id); 
+			vec2 pn = load_ssbo_contour_2d_sample_geometry__position(next_seg_head_id); // seg_tail_id); 
 
 			vec2 vp = pcs_screen_size_.xy * (pp - p); 
 			vec2 vpdir = normalize(vp); 
@@ -926,22 +937,27 @@ void main()
 			vec2 vndir = normalize(vn); 
 
 			float angle = acos(dot(vpdir, vndir));
-			bool fake_corner = (angle > PI * .3f); 
+			bool fake_corner = (angle > PI * .30f); 
 
-			if (valid_thread)
+			if (cf.is_corner && valid_thread)
 			{
 				float angle_degree = angle * 180.0f / PI; 
 				vec2 dbg_pix = pcs_screen_size_.xy * load_ssbo_contour_2d_sample_geometry__position(sample_id); 
 				vec4 dbg_col = vec4(.0f); 
-				dbg_col.r = fake_corner ? 1.0f : .0f;
-				dbg_col.g =  .0f;   
+				dbg_col.r = angle_degree;
+				dbg_col.g = fake_corner ?  1.0f : .0f; 
+				// dbg_col.rgb = rand_col_rgb(corner_seg_len, corner_seg_len); 
+				// dbg_col.rg = pcs_screen_size_.xy * pp; 
 				imageStore(tex2d_contour_dbg_, ivec2(dbg_pix), dbg_col);
 			}
-			if (fake_corner)
+
+			if (fake_corner && cf.is_corner)
 				cf.is_corner = false; 
 		}
 
-		cf.seg_head = cf.is_corner || cf.seg_head_contour || cf.seg_head_clipped; 
+
+
+		cf.seg_head = /* cf.is_corner ||  */cf.seg_head_contour || cf.seg_head_clipped; 
 		if (valid_thread)
 			store_ssbo_contour_2d_sample_topology__flags(sample_id, cf); 
 	#endif

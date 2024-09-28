@@ -73,22 +73,23 @@
                     seg_len, seg_head_id
                 );
 
-                const uint L = 8; // 16u; // (in the paper they used 16 but it was too much for me)
+                const uint L = 4; // 16u; // (in the paper they used 16 but it was too much for me)
                 float C = .0f;
                 uint filter_radius = L - 1u;
                 // if (seg_len < L) continue; // no corner for short curves
-                if (L <= sub_seg_len && (!short_seg))
+                // if (L <= sub_seg_len && (!short_seg))
+                if (true)
                     for (uint d = 0; d < filter_radius; ++d)
                     {
                         bool valid_pt = true;
                         {
                             uint step_left = (filter_radius - d);
-                            if (sub_seg_rank < step_left && !is_sub_seg_loop) valid_pt = false;
-                            else
-                            {
-                                uint rank_chord_end = sub_seg_rank - step_left + L - 1u;
-                                if (sub_seg_len <= rank_chord_end && !is_sub_seg_loop) valid_pt = false;
-                            }
+                            // if (sub_seg_rank < step_left && !is_sub_seg_loop) valid_pt = false;
+                            // else
+                            // {
+                               // uint rank_chord_end = sub_seg_rank - step_left + L - 1u;
+                               // if (sub_seg_len <= rank_chord_end && !is_sub_seg_loop) valid_pt = false;
+                            // }
                         }
                         if (valid_pt)
                         {
@@ -116,12 +117,13 @@
                 if (sample_id < num_samples)
                 {
                     vec4 dbg_col = vec4(C.xxx, 1.0f);
+                    dbg_col.g = sub_seg_len; 
                     vec2 dbg_pix = pt;
-                    // imageStore(tex2d_contour_dbg_, ivec2(dbg_pix), dbg_col);
+                    imageStore(tex2d_contour_dbg_, ivec2(dbg_pix), dbg_col);
                 }
             #endif // _KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__2DSAMPLE_CORNER_DETECTION__STEP_0
             #if defined(_KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__2DSAMPLE_CORNER_DETECTION__STEP_1)
-                conv_temp_data.is_local_maxima = false;
+               conv_temp_data.is_local_maxima = false;
                 conv_temp_data.is_local_minima = false;
                 if (short_seg) return; // no corner for short sub-segs
                 conv_temp_data.is_local_maxima = true;
@@ -161,20 +163,20 @@
                         conv_temp_data.is_local_minima = false;
                 }
 
-                if (orig_curv < 2.0f) // planar sections of the curve
+                if (orig_curv < 0.1f) // planar sections of the curve
                     conv_temp_data.is_local_maxima = false;
-                if (2.0f <= orig_curv) // sharp point of the curve
+                if (0.1f <= orig_curv) // sharp point of the curve
                    conv_temp_data.is_local_minima = false;
-				if (orig_curv < 0.3f)
+				if (orig_curv < 0.07f)
 					conv_temp_data.is_local_minima = true;
 
                 if (sample_id < num_samples)
                 {
                     vec4 dbg_col = vec4(1.0f);
                     if (conv_temp_data.is_local_maxima) dbg_col = vec4(1, 0, 0, 1);
-                    if (conv_temp_data.is_local_minima) dbg_col = vec4(0, 1, 0, 1);
+                    if (conv_temp_data.is_local_minima) dbg_col = vec4(0, 1, 1, 1);
                     vec2 dbg_pix = pcs_screen_size_ * load_ssbo_contour_2d_sample_geometry__position(sample_id);
-                    // imageStore(tex2d_contour_dbg_, ivec2(dbg_pix), dbg_col);
+                    imageStore(tex2d_contour_dbg_, ivec2(dbg_pix), dbg_col);
                 }
             #endif // _KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__2DSAMPLE_CORNER_DETECTION__STEP_1
             #if defined(_KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__2DSAMPLE_CALC_TANGENT_CURVATURE)
