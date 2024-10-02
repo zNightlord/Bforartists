@@ -5115,15 +5115,20 @@ static int assetshelf_flip_exec(bContext *C, wmOperator *)
   ScrArea *area = CTX_wm_area(C);
 
   LISTBASE_FOREACH (ARegion *, region, &area->regionbase) {
-      if (!ELEM(region->regiontype, RGN_TYPE_ASSET_SHELF, RGN_TYPE_ASSET_SHELF_HEADER)) {
-        continue;
-      }
-
-      if (region->alignment == RGN_ALIGN_TOP) {
-        region->alignment = RGN_ALIGN_BOTTOM;
-      }
-      else if (region->alignment == RGN_ALIGN_BOTTOM) {
-        region->alignment = RGN_ALIGN_TOP;
+      if (region->regiontype == RGN_TYPE_ASSET_SHELF) {
+        if (region->alignment == RGN_ALIGN_TOP) {
+          region->alignment = RGN_ALIGN_BOTTOM;
+        }
+        if (region->alignment == RGN_ALIGN_BOTTOM) {
+           region->alignment = RGN_ALIGN_TOP;
+        }
+      } else if (region->regiontype == RGN_TYPE_ASSET_SHELF_HEADER) {
+        if (region->alignment == RGN_ALIGN_TOP | RGN_ALIGN_HIDE_WITH_PREV) {
+          region->alignment = RGN_ALIGN_BOTTOM | RGN_ALIGN_HIDE_WITH_PREV;
+        }
+        if (region->alignment == RGN_ALIGN_BOTTOM | RGN_ALIGN_HIDE_WITH_PREV) {
+           region->alignment = RGN_ALIGN_TOP | RGN_ALIGN_HIDE_WITH_PREV;
+        }
       }
   }
 
