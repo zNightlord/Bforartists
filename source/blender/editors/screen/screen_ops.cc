@@ -5110,6 +5110,41 @@ static void SCREEN_OT_header_toggle_editortypemenu(wmOperatorType *ot)
 }
 
 // bfa - show hide the file toolbar menus
+static int assetshelf_flip_exec(bContext *C, wmOperator *)
+{
+  ScrArea *area = CTX_wm_area(C);
+
+  LISTBASE_FOREACH (ARegion *, region, &area->regionbase) {
+      if (!ELEM(region->regiontype, RGN_TYPE_ASSET_SHELF, RGN_TYPE_ASSET_SHELF_HEADER)) {
+        continue;
+      }
+
+      if (region->alignment == RGN_ALIGN_TOP) {
+        region->alignment = RGN_ALIGN_BOTTOM;
+      }
+      else if (region->alignment == RGN_ALIGN_BOTTOM) {
+        region->alignment = RGN_ALIGN_TOP;
+      }
+  }
+
+  ED_area_tag_redraw(area);
+  WM_event_add_notifier(C, NC_SCREEN | NA_EDITED, nullptr);
+
+  return OPERATOR_FINISHED;
+}
+static void SCREEN_OT_assetshelf_flip(wmOperatorType *ot)
+{
+  /* identifiers */
+  ot->name = "Flip asset shelf";
+  ot->idname = "SCREEN_OT_assetshelf_flip";
+  ot->description = "Flip the asset shelf to top or bottom";
+
+  /* api callbacks */
+  ot->exec = assetshelf_flip_exec;
+  ot->poll = ED_operator_areaactive;
+  ot->flag = 0;
+}
+// bfa - assetshelf flip
 static int header_toolbar_file_exec(bContext *C, wmOperator *)
 {
   ScrArea *area = CTX_wm_area(C);
@@ -5548,6 +5583,14 @@ void ED_screens_header_tools_menu_create(bContext *C, uiLayout *layout, void * /
             (area->flag & HEADER_NO_EDITORTYPEMENU) ? ICON_CHECKBOX_HLT : ICON_CHECKBOX_DEHLT,
             "SCREEN_OT_header_toggle_editortypemenu");
     /*bfa - we don't show the area items in the rmb menu*/
+    /* bfa assetshelf alignment*/
+    if (ELEM(area->spacetype, SPACE_VIEW3D)) {
+      uiItemO(layout,
+      IFACE_("Flip asset shelf"),
+      (area->flag & ASSET_SHELF_TOP) ? ICON_CHECKBOX_HLT : ICON_CHECKBOX_DEHLT,
+      "SCREEN_OT_assetshelf_flip");
+    }
+     /* bfa - only 3d viewport can flip asset shelf*/
     /*uiItemS(layout);
      screen_area_menu_items(area, layout);*/
   }
@@ -7196,6 +7239,7 @@ void ED_operatortypes_screen()
   WM_operatortype_append(SCREEN_OT_header_toggle_menus);
   WM_operatortype_append(
       SCREEN_OT_header_toggle_editortypemenu);            // bfa - show hide the editorsmenu
+  WM_operatortype_append(SCREEN_OT_assetshelf_flip);      // bfa 
   WM_operatortype_append(SCREEN_OT_header_toolbar_file);  // bfa - show hide the file toolbar
   WM_operatortype_append(
       SCREEN_OT_header_toolbar_meshedit);  // bfa - show hide the meshedit toolbar

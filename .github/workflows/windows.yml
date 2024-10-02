@@ -1,8 +1,8 @@
 name: Windows
 
 on:
-  #push:
-    #branches: [ master ]
+  push:
+    branches: [ assetshelf-alignment ]
   schedule:
     - cron: 0 0 * * 1
   pull_request:
@@ -21,7 +21,7 @@ jobs:
       run: |
         mkdir C:/Users/runneradmin/bforartistsrepo
         cd C:/Users/runneradmin/bforartistsrepo
-        git clone https://github.com/Bforartists/Bforartists
+        git clone -b assetshelf-alignment https://github.com/zNightlord/Bforartists
         cd Bforartists
         python ./build_files/utils/make_update.py
         make

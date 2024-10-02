@@ -582,6 +582,7 @@ enum {
   HEADER_TOOLBAR_MISC = (1 << 17),
   /** For off-screen areas. */
   AREA_FLAG_OFFSCREEN = (1 << 18),/*bfa*/
+  ASSET_SHELF_TOP = (1 << 19),
 };
 
 

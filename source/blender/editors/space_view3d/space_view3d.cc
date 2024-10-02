@@ -227,14 +227,14 @@ static SpaceLink *view3d_create(const ScrArea * /*area*/, const Scene *scene)
 
   BLI_addtail(&v3d->regionbase, region);
   region->regiontype = RGN_TYPE_ASSET_SHELF;
-  region->alignment = RGN_ALIGN_BOTTOM;
+  region->alignment = (U.uiflag2 & USER_ASSETSHELF_TOP) ? RGN_ALIGN_BOTTOM : RGN_ALIGN_TOP;
   region->flag |= RGN_FLAG_HIDDEN;
 
   /* asset shelf header */
   region = MEM_cnew<ARegion>("asset shelf header for view3d");
   BLI_addtail(&v3d->regionbase, region);
   region->regiontype = RGN_TYPE_ASSET_SHELF_HEADER;
-  region->alignment = RGN_ALIGN_BOTTOM | RGN_ALIGN_HIDE_WITH_PREV;
+  region->alignment = (U.uiflag2 & USER_ASSETSHELF_TOP) ? RGN_ALIGN_BOTTOM | RGN_ALIGN_HIDE_WITH_PREV : RGN_ALIGN_TOP | RGN_ALIGN_HIDE_WITH_PREV;
 
   /* tool shelf */
   region = MEM_cnew<ARegion>("toolshelf for view3d");
