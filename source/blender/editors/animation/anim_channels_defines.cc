@@ -3891,9 +3891,15 @@ static void *layer_setting_ptr(bAnimListElem *ale,
   return GET_ACF_FLAG_PTR(layer->base.flag, r_type);
 }
 
-static int layer_group_icon(bAnimListElem * /*ale*/)
+static int layer_group_icon(bAnimListElem *ale)
 {
-  return ICON_FILE_FOLDER;
+  using namespace bke::greasepencil;
+  const LayerGroup &group = *static_cast<LayerGroup *>(ale->data);
+  int icon = ICON_GREASEPENCIL_LAYER_GROUP;
+  if (group.color_tag != LAYERGROUP_COLOR_NONE) {
+    icon = ICON_LAYERGROUP_COLOR_01 + group.color_tag;
+  }
+  return icon;
 }
 
 static void layer_group_color(bAnimContext * /*ac*/, bAnimListElem * /*ale*/, float r_color[3])
@@ -5528,8 +5534,9 @@ static void draw_setting_widget(bAnimContext *ac,
       break;
 
     case ACHANNEL_SETTING_EXPAND: /* expanded triangle */
-      // icon = (enabled ? ICON_TRIA_DOWN : ICON_TRIA_RIGHT);
-      icon = ICON_TRIA_RIGHT;
+      icon = (enabled ? ICON_TRIA_DOWN : ICON_TRIA_RIGHT); /* BFA - use proper icons */
+      usetoggle = false; /* BFA - use proper icons */
+      // icon = ICON_TRIA_RIGHT;
       tooltip = TIP_("Expand\nMake channels grouped under this channel visible");
       break;
 
@@ -5811,7 +5818,7 @@ void ANIM_channel_draw_widgets(const bContext *C,
                                bAnimContext *ac,
                                bAnimListElem *ale,
                                uiBlock *block,
-                               rctf *rect,
+                               const rctf *rect,
                                size_t channel_index)
 {
   const bAnimChannelType *acf = ANIM_channel_get_typeinfo(ale);
