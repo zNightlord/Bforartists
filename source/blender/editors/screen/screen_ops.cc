@@ -5046,11 +5046,12 @@ static int assetshelf_flip_exec(bContext *C, wmOperator *)
         if (region->alignment == RGN_ALIGN_BOTTOM) {
            region->alignment = RGN_ALIGN_TOP;
         }
-      } else if (region->regiontype == RGN_TYPE_ASSET_SHELF_HEADER) {
-        if (region->alignment == RGN_ALIGN_TOP | RGN_ALIGN_HIDE_WITH_PREV) {
+      } 
+      if (region->regiontype == RGN_TYPE_ASSET_SHELF_HEADER) {
+        if (region->alignment == (RGN_ALIGN_TOP | RGN_ALIGN_HIDE_WITH_PREV) || region->alignment == RGN_ALIGN_TOP) {
           region->alignment = RGN_ALIGN_BOTTOM | RGN_ALIGN_HIDE_WITH_PREV;
         }
-        if (region->alignment == RGN_ALIGN_BOTTOM | RGN_ALIGN_HIDE_WITH_PREV) {
+        if (region->alignment == (RGN_ALIGN_BOTTOM | RGN_ALIGN_HIDE_WITH_PREV) || region->alignment == RGN_ALIGN_BOTTOM) {
            region->alignment = RGN_ALIGN_TOP | RGN_ALIGN_HIDE_WITH_PREV;
         }
       }
