@@ -495,14 +495,14 @@ void main()
 			vec2 maxcurv; vec2 cusp_func; 
 			ld_vcurv_max_with_cusp(v0, /*out*/maxcurv[0], cusp_func[0]);
 			ld_vcurv_max_with_cusp(v1, /*out*/maxcurv[1], cusp_func[1]);
-			bool seg_head = sign(cusp_func[0]) != sign(cusp_func[1]); 
-			ContourFlags cf = init_contour_flags(seg_head);
+			ContourFlags cf = init_contour_flags();
 
 			ContourEdgeTransferData cetd; 
 			cetd.vpos_ws[0] = vpos_ws[0].xyz;
 			cetd.vpos_ws[1] = vpos_ws[1].xyz;
 			cetd.cf = cf;
 			cetd.cusp_funcs = cusp_func;
+
 			cetd.obj_id = pcs_curr_obj_id_; // Save object handle to the GPU scene buffer(s)
 
 			{ /* Link contour edge to temporal record */

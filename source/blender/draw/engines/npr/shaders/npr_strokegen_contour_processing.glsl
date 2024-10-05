@@ -64,7 +64,7 @@ void main()
 		init_contour_curve_tail(is_tail_edge, cf);
 
 		vec2 cusp_func_v = cetd.cusp_funcs; 
-		set_contour_cusp_flags(.0f < cusp_func_v[0], cf); 
+		set_contour_cusp_flags(-0.025f < cusp_func_v[0], cf); 
 
 		Store3(ssbo_contour_snake_vpos_, vtx_addr, floatBitsToUint(cetd.vpos_ws[0]));
 		store_contour_flags(vtx_addr, cf); 
@@ -73,10 +73,11 @@ void main()
 		ssbo_contour_snake_to_object_id_[vtx_addr] = cetd.obj_id;
 		
 		CuspSegmentDenoiseData seg_denoise_data; // setup segloopconv1d input buffer
-		seg_denoise_data.cf = cf; 
-		seg_denoise_data.vpos_ws = cetd.vpos_ws[0]; 
-		uvec4 seg_denoise_data_enc = encode_cusp_segment_denoise_data(seg_denoise_data); 
-		Store4(ssbo_in_segloopconv1d_data_, vtx_addr, seg_denoise_data_enc);
+		uvec4 seg_denoise_data_enc;
+		// seg_denoise_data.cf = cf; 
+		// seg_denoise_data.vpos_ws = cetd.vpos_ws[0]; 
+		// seg_denoise_data_enc = encode_cusp_segment_denoise_data(seg_denoise_data); 
+		// Store4(ssbo_in_segloopconv1d_data_, vtx_addr, seg_denoise_data_enc);
 		
 		
 		if (additional_output_tail_vtx)
@@ -86,7 +87,7 @@ void main()
 			cf.seg_head = false; 
 			init_contour_curve_head(false, cf);
 			init_contour_curve_tail(true, cf);
-			set_contour_cusp_flags(.0f < cusp_func_v[1], cf); 
+			set_contour_cusp_flags(-0.025f < cusp_func_v[1], cf); 
 			store_contour_flags(vtx_addr+1u, cf);
 		
 			// TODO: fix this for non-looped curves, for now we're just copying...
@@ -95,10 +96,10 @@ void main()
 			ssbo_contour_snake_to_object_id_[vtx_addr+1u] = cetd.obj_id;
 
 			// setup segloopconv1d input buffer
-			seg_denoise_data.cf = cf; 
-			seg_denoise_data.vpos_ws = cetd.vpos_ws[1]; 
-			seg_denoise_data_enc = encode_cusp_segment_denoise_data(seg_denoise_data);
-			Store4(ssbo_in_segloopconv1d_data_, (vtx_addr+1u), seg_denoise_data_enc);
+			// seg_denoise_data.cf = cf; 
+			// seg_denoise_data.vpos_ws = cetd.vpos_ws[1]; 
+			// seg_denoise_data_enc = encode_cusp_segment_denoise_data(seg_denoise_data);
+			// Store4(ssbo_in_segloopconv1d_data_, (vtx_addr+1u), seg_denoise_data_enc);
 		}
     }
 #endif
@@ -106,6 +107,10 @@ void main()
 }
 #endif
 
+// ----------------------------------------------------------------------------------
+// After the serialization, 
+// by default "contour id" means contour vertex(a.k.a "snake") id, not the edge id
+// ----------------------------------------------------------------------------------
 
 
 #if defined(_KERNEL_MULTICOMPILE__CONTOUR_SEGMENTATION)
@@ -122,6 +127,38 @@ void main()
 	bool is_curve_head = cct.head_id == contour_id; 
 	bool is_curve_tail = cct.tail_id == contour_id; 
 
+#if defined(_KERNEL_MULTICOMPILE__CONTOUR_CALC_CUSP_SEG_HEADS)
+
+	uint prev_contour_id = is_curve_head ? cct.tail_id : contour_id - 1u;
+	ContourFlags cf_prev = load_contour_flags(prev_contour_id);
+
+	bool non_looped_curve_head = is_curve_head && !cf.looped_curve; 
+
+	cf.seg_head = (cf_prev.cusp_func_pstv != cf.cusp_func_pstv) || (non_looped_curve_head);  
+
+	barrier(); 
+
+	if (valid_thread)
+	{ // setup segloopconv1d input buffer
+		CuspSegmentDenoiseData seg_denoise_data; {
+			vec3 vpos; {
+				uvec3 vpos_enc;
+				Load3(ssbo_contour_snake_vpos_, contour_id, vpos_enc);
+				vpos = uintBitsToFloat(vpos_enc);
+			}
+			seg_denoise_data.cf = cf; 
+			seg_denoise_data.vpos_ws = vpos; 
+		}
+
+		uvec4 seg_denoise_data_enc = encode_cusp_segment_denoise_data(seg_denoise_data);
+		Store4(ssbo_in_segloopconv1d_data_, contour_id, seg_denoise_data_enc);
+	}
+
+	// Update seg_head flag
+	if (valid_thread)
+		store_contour_flags(contour_id, cf);
+#endif
+
 #if defined(_KERNEL_MULTICOMPILE__CONTOUR_SEGMENTATION__SETUP)
 
 	uint prev_contour_id = is_curve_head ? cct.tail_id : contour_id - 1u;
@@ -129,7 +166,7 @@ void main()
 
 	uint next_contour_id = is_curve_tail ? cct.head_id : contour_id + 1u;
 	ContourFlags cf_next = load_contour_flags(next_contour_id);
-	
+
 	// cf.seg_head:= segment head due to cusp variation
 	bool is_scan_seg_head = cf.seg_head 	 || is_curve_head;  
 	bool is_scan_seg_tail = cf_next.seg_head || is_curve_tail;  
@@ -311,27 +348,32 @@ struct Contour2DSampleSegmentationInfo
 	uint contour_curve_head_id; 
 	// || (at different contour segments)
 	uint contour_seg_head; 
-	// || (contour rank is not consecutive) <= due to partially clipped contour curve(s)
+	// || (contour rank is not consecutive, due to partially clipped contour curve(s) -
+	//     - or, rank jumps from curve end to start, due to non-rastered segs betwen 2 ends of a segment) 
 	float contour_seg_rank; 
 
+	// Auxilliary info
 	vec2 uv; 
 	ContourFlags cf; 
+	uint contour_id; 
+	uint contour_curve_len; 
 }; 
 Contour2DSampleSegmentationInfo load_2d_sample_seg_key(uint sample_id, uint num_samples)
 {
 	Contour2DSampleSegmentationInfo info; 
 	
-	uint contour_id = ssbo_2d_sample_to_contour_[sample_id]; 
-	ContourFlags cf = load_contour_flags(contour_id); 
-	ContourCurveTopo cct = load_contour_curve_topo(contour_id, cf);
+	info.contour_id = ssbo_2d_sample_to_contour_[sample_id]; 
+	ContourFlags cf = load_contour_flags(info.contour_id); 
+	ContourCurveTopo cct = load_contour_curve_topo(info.contour_id, cf);
 
-	info.contour_curve_head_id = ssbo_contour_snake_list_head_[contour_id]; 
+	info.contour_curve_head_id = ssbo_contour_snake_list_head_[info.contour_id]; 
 
-	info.contour_seg_rank = ssbo_contour_snake_seg_rank_[contour_id];
-	info.contour_seg_head = move_contour_id_along_loop(cct, contour_id, -float(info.contour_seg_rank)); 
+	info.contour_seg_rank = ssbo_contour_snake_seg_rank_[info.contour_id];
+	info.contour_seg_head = move_contour_id_along_loop(cct, info.contour_id, -float(info.contour_seg_rank)); 
 
 	info.uv = load_ssbo_contour_2d_sample_geometry__position(sample_id);
 	info.cf = cf; 
+	info.contour_curve_len = cct.len; 
 
 	return info; 
 }
@@ -342,12 +384,15 @@ bool is_2d_sample_curve_head(Contour2DSampleSegmentationInfo si, Contour2DSample
 }
 void is_2d_sample_seg_head(
 	Contour2DSampleSegmentationInfo si, Contour2DSampleSegmentationInfo si_prev, 
+	bool contour_curve_has_no_segmentation, // seg_head_contour always ==false in this case 
 	out bool seg_head_contour, out bool seg_head_clipped)
 {
 	bool break_contour_seg = false; 
 	if (si.contour_seg_head != si_prev.contour_seg_head) break_contour_seg = true; // different contour segments
-	// non-consecutive contour ranks - a segment jump from curve end to start  
-	else if (si.contour_seg_rank < si_prev.contour_seg_rank) break_contour_seg = true; 
+	else if (si.contour_seg_rank < si_prev.contour_seg_rank) 
+	{ // non-consecutive contour ranks - a segment jump from curve end to start  
+		break_contour_seg = !(si.cf.looped_curve && contour_curve_has_no_segmentation); 
+	}
 
 	float dist = length(get_raster_resolution() * (si.uv - si_prev.uv)); 
 	bool break_arc_len = 1.1f < dist && (si.contour_curve_head_id == si_prev.contour_curve_head_id); 
@@ -709,17 +754,16 @@ void main()
 			uint prev_sample_id = move_contour_id_along_loop(cct, sample_id, -1.0f);
 			Contour2DSampleSegmentationInfo prev_sample_si = load_2d_sample_seg_key(prev_sample_id, num_samples);
 
+			bool is_seg_entire_curve = false; 
+			uint contour_seg_len = ssbo_contour_snake_seg_len_[contour_id]; 
+			is_seg_entire_curve = cf.looped_curve && contour_seg_len == sample_si.contour_curve_len; 
+
 			bool seg_head_contour = false; bool seg_head_clipped = false; 
 			is_2d_sample_seg_head(
-				sample_si, prev_sample_si, 
+				sample_si, prev_sample_si, is_seg_entire_curve, 
 				/*out*/seg_head_contour, seg_head_clipped
 			);
 			
-			bool is_seg_entire_curve = false; 
-			uint contour_seg_len = ssbo_contour_snake_seg_len_[contour_id];
-			uint contour_curve_len = ssbo_contour_snake_list_len_[contour_id]; 
-			is_seg_entire_curve = cf.looped_curve && contour_seg_len == contour_curve_len; 
-
 			if (valid_thread)
 			{
 				cf.seg_head = seg_head_contour || seg_head_clipped; 
@@ -758,7 +802,7 @@ void main()
 		ContourFlags cf = load_ssbo_contour_2d_sample_topology__flags(sample_id);
 		
 		if (!segment_by_seg)
-		{
+		{ // we are initializing the 2d curve topo
 			uint next_sample_id = sample_id == num_samples - 1u ? num_samples - 1u : sample_id + 1u;
 			ContourFlags cf_next = load_ssbo_contour_2d_sample_topology__flags(next_sample_id); 
 
@@ -770,7 +814,7 @@ void main()
 			}
 		}
 		else
-		{ // Default path unless we are initializing the 2d curve topo
+		{ // segmentation with keys; after the 2d curve topo has been initialized 
 			ContourCurveTopo cct = load_contour_2d_sample_curve_topo(sample_id, cf, num_samples); 
 			uint next_sample_id = move_contour_id_along_loop(cct, sample_id, +1.0f); 
 			ContourFlags cf_next = load_ssbo_contour_2d_sample_topology__flags(next_sample_id); 

@@ -128,12 +128,12 @@ ContourFlags decode_contour_flags(uint cf_enc)
     return cf; 
 }
 
-ContourFlags init_contour_flags(bool seg_head)
+ContourFlags init_contour_flags()
 {
     ContourFlags cf;
 	cf.curve_head = true; // needs further setup
 	cf.curve_tail = true; // needs further setup
-    cf.seg_head = seg_head;
+    cf.seg_head = false;
     cf.seg_tail = false;       // needs further setup
     cf.looped_curve = true;    // needs further setup
     cf.cusp_func_pstv = false; // needs further setup
@@ -269,14 +269,27 @@ uint move_contour_id_along_loop(ContourCurveTopo cct, uint start_contour_id, flo
 		cct.head_id, cct.len
 	);
 }
+ContourCurveTopo initialize_contour_curve_topo(bool looped_curve, uint head_id, uint len)
+{
+    ContourCurveTopo cct; 
+    cct.looped_curve = looped_curve; 
+    cct.head_id 	 = head_id; 
+    cct.len          = len; 
+    cct.tail_id = cct.head_id + cct.len - 1u;  
+    return cct; 
+}
 #if defined(INCLUDE_CONTOUR_CURVE_TOPOLOGY_LOAD)
 ContourCurveTopo load_contour_curve_topo(uint contour_id, ContourFlags cf)
 {
-    ContourCurveTopo cct; 
-    cct.looped_curve    = cf.looped_curve; 
-    cct.head_id = ssbo_contour_snake_list_head_[contour_id]; 
-    cct.len             = ssbo_contour_snake_list_len_[contour_id]; 
-    cct.tail_id = cct.head_id + cct.len - 1u;  
+    ContourCurveTopo cct = initialize_contour_curve_topo(
+		cf.looped_curve, 
+		ssbo_contour_snake_list_head_[contour_id], 
+		ssbo_contour_snake_list_len_[contour_id]
+	); 
+    // cct.looped_curve    = cf.looped_curve; 
+    // cct.head_id = ssbo_contour_snake_list_head_[contour_id]; 
+    // cct.len             = ssbo_contour_snake_list_len_[contour_id]; 
+    // cct.tail_id = cct.head_id + cct.len - 1u;  
     return cct; 
 }
 #endif
@@ -390,8 +403,8 @@ void store_contour_edge_transfer_data_(uint contour_edge_id, ContourEdgeTransfer
 	ssbo_contour_edge_transfer_data_[offset + 6] = encode_contour_flags(cetd.cf);
 	ssbo_contour_edge_transfer_data_[offset + 7] = packHalf2x16(
 		vec2(
-			cetd.cusp_funcs[0] > .0f ? 1.0f : -1.0f, 
-			cetd.cusp_funcs[1] > .0f ? 1.0f : -1.0f
+			cetd.cusp_funcs[0], //  > .0f ? 1.0f : -1.0f, 
+			cetd.cusp_funcs[1] // > .0f ? 1.0f : -1.0f
 		)
 	);
 	ssbo_contour_edge_transfer_data_[offset+8]   = cetd.temporal_rec_id; 
@@ -633,7 +646,7 @@ TemporalRecordContourData init_temporal_record_contour_data()
 {
 	TemporalRecordContourData trcd; 
 	trcd.curve_key = trcd.seg_key = trcd.curve_rank = trcd.seg_rank = 0u; 
-	trcd.cf = init_contour_flags(false); 
+	trcd.cf = init_contour_flags(); 
 	return trcd; 
 }
 void encode_temporal_record_contour_data(TemporalRecordContourData trcd, out uvec4 enc_0)

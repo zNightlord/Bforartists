@@ -544,16 +544,34 @@ mat3 muXYInterpolatedU( in vec3 a,
 float calc_cusp_func(vec3 pdir0, vec3 pdir1, float curv0, float curv1, vec3 vpos, vec3 vnor, vec3 cam_pos_ws)
 {
     vec3 v = cam_pos_ws - vpos; 
-    vec3 v_ = normalize(v); 
-    float ndv = dot(v_, vnor);
 
-    vec2 cusp_func = vec2(dot(v, normalize(pdir0)), dot(v, normalize(pdir1))); 
+    vec3 w0 = normalize(pdir0); 
+    float c0 = dot(v, w0); 
+
+    vec3 w1 = normalize(pdir1); 
+    float c1 = dot(v, w1); 
+
+    vec2 cusp_func = vec2(c0, c1); 
     cusp_func *= cusp_func;
     cusp_func.x = dot(cusp_func, vec2(curv0, curv1)); 
 
     return cusp_func.x; 
 }
+vec3 calc_cusp_binormal(vec3 pdir0, vec3 pdir1, float curv0, float curv1, vec3 vpos, vec3 vnor, vec3 cam_pos_ws)
+{
+    vec3 v = cam_pos_ws - vpos; 
 
+    vec3 w0 = normalize(pdir0); 
+    float c0 = dot(v, w0); 
+
+    vec3 w1 = normalize(pdir1); 
+    float c1 = dot(v, w1); 
+
+    vec3 binormal = (2*curv0*c0) * w0 + (2*curv1*c1) * w1;
+    binormal = normalize(binormal);
+
+    return binormal; 
+}
 
 /*
  * Compute the dihedral angle between two triangles sharing an edge v1-v3.

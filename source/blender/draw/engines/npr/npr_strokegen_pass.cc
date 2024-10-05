@@ -805,8 +805,13 @@ void StrokeGenPassModule::on_end_sync()
     append_subpass_serialize_contour_edges();
 
     // Segmentation based on cusp/(TODO: visibility)
-    append_subpass_fill_dispatch_args_contour_verts(pass_process_contours); 
-    if (meshing_params.denoise_cusp_segmentation){
+    append_subpass_fill_dispatch_args_contour_verts(pass_process_contours);
+
+    append_subpass_prepare_contour_cusp_segmentation(); 
+    if (meshing_params.denoise_cusp_segmentation)
+    {
+      append_subpass_contour_segmentation();
+
       SegLoopConv1DSettings conv1d_settings;
       conv1d_settings.is_validation_shader = false;
       conv1d_settings.use_indirect_dispatch = true;
@@ -2205,7 +2210,7 @@ void StrokeGenPassModule::on_end_sync()
       sub.bind_ssbo(15, buffers_.ssbo_contour_snake_to_object_id_); 
     };
     
-    {
+    { // fill serialized contour edges (which we call as snakes)
       auto &sub = pass_process_contours.sub("strokegen_serialize_contour_edges_pass_0");
       sub.shader_set(shaders_.static_shader_get(SERIALIZE_RANKED_CONTOUR_EDGES));
 
@@ -2216,10 +2221,9 @@ void StrokeGenPassModule::on_end_sync()
     }
   }
 
-
-  void StrokeGenPassModule::append_subpass_contour_segmentation()
+  void StrokeGenPassModule::bind_rsc_for_contour_segmentation(
+      draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub, int &out_ssbo_offset)
   {
-    auto bind_rsc = [&](draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub) {
       sub.bind_ssbo(0, buffers_.ssbo_contour_snake_rank_);
       sub.bind_ssbo(1, buffers_.ssbo_contour_snake_list_len_);
       sub.bind_ssbo(2, buffers_.ssbo_contour_snake_list_head_);
@@ -2232,6 +2236,29 @@ void StrokeGenPassModule::on_end_sync()
       sub.bind_ssbo(9, buffers_.ssbo_contour_snake_seg_len_);
       sub.bind_ssbo(10, buffers_.reused_ssbo_tree_scan_infos_contour_segmentation_());
       sub.bind_ssbo(11, buffers_.ssbo_bnpr_mesh_pool_counters_);
+      out_ssbo_offset = 12; 
+  }
+
+  void StrokeGenPassModule::append_subpass_prepare_contour_cusp_segmentation()
+  {
+    auto &sub = pass_process_contours.sub("strokegen_prep_contour_cusp_segmentation");
+    sub.shader_set(shaders_.static_shader_get(PREP_CUSP_SEGMENTATION));
+
+    int ssbo_offset = 0; 
+    bind_rsc_for_contour_segmentation(sub, /*out*/ssbo_offset);
+    sub.bind_ssbo(ssbo_offset + 0, buffers_.ssbo_contour_snake_vpos_);
+    sub.bind_ssbo(ssbo_offset + 1, buffers_.reused_ssbo_in_segloopconv1d_data_contour_seg_denoise());
+
+    sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_vert_dispatch_args_);
+    sub.barrier(GPU_BARRIER_SHADER_STORAGE);
+  }
+
+
+  void StrokeGenPassModule::append_subpass_contour_segmentation()
+  {
+    auto bind_rsc = [&](draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub) {
+      int ssbo_offset = 0; // not used here, for now...
+      bind_rsc_for_contour_segmentation(sub, ssbo_offset); 
     }; 
 
     {
@@ -3179,6 +3206,8 @@ void StrokeGenPassModule::on_end_sync()
       else if (settings.shader_convolution == CONV1D_SEG_DENOISE_CONVOLUTION) {
         sub.bind_ssbo(4, buffers_.ssbo_contour_snake_rank_);
         sub.bind_ssbo(5, buffers_.ssbo_contour_snake_list_len_);
+        sub.bind_ssbo(6, buffers_.ssbo_contour_snake_seg_rank_);
+        sub.bind_ssbo(7, buffers_.ssbo_contour_snake_seg_len_);
       }
       else if (settings.shader_convolution == CONV1D_2D_SAMPLE_CORNER_CONVOLUTION_STEP_0
                 || settings.shader_convolution == CONV1D_2D_SAMPLE_CORNER_CONVOLUTION_STEP_1

@@ -457,6 +457,10 @@ public:
   
   // ---------------------------------------------------------------------------
   void append_subpass_serialize_contour_edges();
+
+  void bind_rsc_for_contour_segmentation(
+      draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf>& sub, int& out_ssbo_offset);
+  void append_subpass_prepare_contour_cusp_segmentation();
   void append_subpass_contour_segmentation();
 
   void bind_rsc_for_contour_2d_resample_(

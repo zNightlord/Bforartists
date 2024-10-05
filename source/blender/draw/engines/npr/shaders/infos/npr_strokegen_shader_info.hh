@@ -407,6 +407,7 @@ GPU_SHADER_CREATE_INFO(strokegen_contour_segmentation)
     .storage_buf(9, Qualifier::WRITE, "uint", "ssbo_contour_snake_seg_len_[]")
     .storage_buf(10, Qualifier::WRITE, "UBData_TreeScan", "ssbo_tree_scan_infos_contour_segmentation_")
     .storage_buf(11, Qualifier::READ, "SSBOData_StrokeGenMeshPoolCounters", "ssbo_bnpr_mesh_pool_counters_")
+#define NUM_SSBO_strokegen_contour_segmentation 12
 
     .local_group_size(GROUP_SIZE_STROKEGEN_GEOM_EXTRACT) 
     .compute_source("npr_strokegen_contour_processing.glsl");
@@ -420,6 +421,14 @@ GPU_SHADER_CREATE_INFO(strokegen_finish_contour_segmentation)
     .do_static_compilation(true)
     .additional_info("strokegen_contour_segmentation")
     .define("_KERNEL_MULTICOMPILE__CONTOUR_SEGMENTATION__FINISH", "1");
+
+GPU_SHADER_CREATE_INFO(strokegen_prep_contour_cusp_segmentation)
+    .do_static_compilation(true)
+    .additional_info("strokegen_contour_segmentation")
+    .define("_KERNEL_MULTICOMPILE__CONTOUR_CALC_CUSP_SEG_HEADS", "1")
+#define SSBO_OFFSET NUM_SSBO_strokegen_contour_segmentation
+    .storage_buf(SSBO_OFFSET + 0, Qualifier::READ_WRITE, "uint", "ssbo_contour_snake_vpos_[]")
+    .storage_buf(SSBO_OFFSET + 1, Qualifier::READ_WRITE, "uint", "ssbo_in_segloopconv1d_data_[]");
 
 
 GPU_SHADER_CREATE_INFO(strokegen_contour_2d_resample)
@@ -2419,13 +2428,19 @@ GPU_SHADER_CREATE_INFO(npr_segloopconv1D_seg_denoising)
     .define("_KERNEL_MULTICOMPILE__1DSEGLOOP_CONVOLUTION__SEG_DENOISING", "1");
 GPU_SHADER_CREATE_INFO(npr_segloopconv1D_seg_denoising_build_patch)
     .additional_info("npr_segloopconv1D_seg_denoising")
+    /* extra ssbo bindings - note the slot starts from 2.
+     * see GPU_SHADER_CREATE_INFO__SEGLOOPCONV1D_BUILD_PATCH */
     .storage_buf(2, Qualifier::READ_WRITE, "uint", "ssbo_contour_snake_rank_[]")
     .storage_buf(3, Qualifier::READ_WRITE, "uint", "ssbo_contour_snake_list_len_[]")
     .storage_buf(4, Qualifier::READ_WRITE, "uint", "ssbo_contour_snake_flags_[]");
 GPU_SHADER_CREATE_INFO(npr_segloopconv1D_seg_denoising_convolution)
     .additional_info("npr_segloopconv1D_seg_denoising")
+    /* extra ssbo bindings - note the slot starts from 4.
+     * see GPU_SHADER_CREATE_INFO__SEGLOOPCONV1D_CONV */
     .storage_buf(4, Qualifier::READ_WRITE, "uint", "ssbo_contour_snake_rank_[]")
-    .storage_buf(5, Qualifier::READ_WRITE, "uint", "ssbo_contour_snake_list_len_[]");
+    .storage_buf(5, Qualifier::READ_WRITE, "uint", "ssbo_contour_snake_list_len_[]")
+    .storage_buf(6, Qualifier::READ_WRITE, "uint", "ssbo_contour_snake_seg_rank_[]")
+    .storage_buf(7, Qualifier::READ_WRITE, "uint", "ssbo_contour_snake_seg_len_[]");
 
 GPU_SHADER_CREATE_INFO(npr_segloopconv1D_2d_sample_processing)
     .typedef_source("bnpr_shader_shared.hh")

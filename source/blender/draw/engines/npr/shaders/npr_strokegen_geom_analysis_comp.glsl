@@ -1289,14 +1289,18 @@ void main()
 
 
         float cusp_func = .0f; 
+        float cusp_func_alternative = .0f; 
         bool near_contour = false; 
         if (0 < pcs_output_maxcurv_with_cusp_function_ && valid_thread)
         { // Cusp detection from "Illustrating smooth surface" by Hertzmann et al.
             mat4 view_to_world = ubo_view_matrices_.viewinv;
             bool is_persp = (ubo_view_matrices_.winmat[3][3] == 0.0);
             vec3 cam_pos_ws = view_to_world[3].xyz; /* see "#define cameraPos ViewMatrixInverse[3].xyz" */
-            
             cusp_func = calc_cusp_func(pdir0, pdir1, evals.x, evals.y, vpos, vnor, cam_pos_ws); 
+            
+            vec3 binormal = calc_cusp_binormal(pdir0, pdir1, evals.x, evals.y, vpos, vnor, cam_pos_ws); 
+            float bdotv = dot(binormal, normalize(vpos - cam_pos_ws)); 
+            cusp_func_alternative = bdotv; 
 
             float ndv = dot(normalize(cam_pos_ws - vpos), vnor);
             near_contour = abs(ndv) < .2f; 
@@ -1310,7 +1314,7 @@ void main()
             if (0 == pcs_output_maxcurv_with_cusp_function_)
                 st_vcurv_max(vert_id, max_curv); 
             else
-                st_vcurv_max_with_cusp(vert_id, max_curv, cusp_func);
+                st_vcurv_max_with_cusp(vert_id, max_curv, cusp_func_alternative); // cusp_func); 
         }
 
         

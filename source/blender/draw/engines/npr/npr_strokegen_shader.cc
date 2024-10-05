@@ -141,6 +141,8 @@ const char *StrokeGenShaderModule::static_shader_create_info_name_get(eShaderTyp
       return "strokegen_setup_contour_segmentation";
     case FINISH_CONTOUR_SEGMENTATION:
       return "strokegen_finish_contour_segmentation";
+    case PREP_CUSP_SEGMENTATION:
+      return "strokegen_prep_contour_cusp_segmentation";
 
     case RECORD_TEMPORAL_CONTOUR_DATA:
       return "strokegen_record_temporal_contour_data"; 
