@@ -43,32 +43,9 @@ bAction *BKE_action_add(Main *bmain, const char name[]);
 /* Action API ----------------- */
 
 /**
- * Calculate the extents of given action.
- */
-void BKE_action_frame_range_calc(const bAction *act,
-                                 bool include_modifiers,
-                                 float *r_start,
-                                 float *r_end) ATTR_NONNULL(3, 4);
-
-/**
- * Retrieve the intended playback frame range, using the manually set range if available,
- * or falling back to scanning F-Curves for their first & last frames otherwise.
- */
-void BKE_action_frame_range_get(const bAction *act, float *r_start, float *r_end)
-    ATTR_NONNULL(2, 3);
-
-/**
- * Check if the given action has any keyframes.
- */
-bool BKE_action_has_motion(const bAction *act) ATTR_WARN_UNUSED_RESULT;
-
-/**
- * Is the action configured as cyclic.
- */
-bool BKE_action_is_cyclic(const bAction *act) ATTR_WARN_UNUSED_RESULT;
-
-/**
  * Remove all fcurves from the action.
+ *
+ * \note This function only supports legacy Actions.
  */
 void BKE_action_fcurves_clear(bAction *act);
 
@@ -76,11 +53,15 @@ void BKE_action_fcurves_clear(bAction *act);
 
 /**
  * Get the active action-group for an Action.
+ *
+ * \note This function supports both legacy and layered Actions.
  */
 bActionGroup *get_active_actiongroup(bAction *act) ATTR_WARN_UNUSED_RESULT;
 
 /**
  * Make the given Action-Group the active one.
+ *
+ * \note This function supports both legacy and layered Actions.
  */
 void set_active_action_group(bAction *act, bActionGroup *agrp, short select);
 
@@ -106,6 +87,8 @@ void action_group_colors_set_from_posebone(bActionGroup *grp, const bPoseChannel
 
 /**
  * Add a new action group with the given name to the action>
+ *
+ * \note This function ONLY works on legacy Actions, not on layered Actions.
  */
 bActionGroup *action_groups_add_new(bAction *act, const char name[]);
 
@@ -113,41 +96,40 @@ bActionGroup *action_groups_add_new(bAction *act, const char name[]);
  * Add given channel into (active) group
  * - assumes that channel is not linked to anything anymore
  * - always adds at the end of the group
+ *
+ * \note This function ONLY works on legacy Actions, not on layered Actions.
  */
 void action_groups_add_channel(bAction *act, bActionGroup *agrp, FCurve *fcurve);
 
 /**
  * Remove the given channel from all groups.
+ *
+ * \note This function ONLY works on legacy Actions, not on layered Actions.
  */
 void action_groups_remove_channel(bAction *act, FCurve *fcu);
 
 /**
- * Recongroup channel pointers.
+ * Reconstruct channel pointers.
  * Assumes that the groups referred to by the FCurves are already in act->groups.
  * Reorders the main channel list to match group order.
+ *
+ * \note This function ONLY works on legacy Actions, not on layered Actions.
  */
 void BKE_action_groups_reconstruct(bAction *act);
 
 /**
  * Find a group with the given name.
+ *
+ * \note This function supports only legacy Actions.
  */
 bActionGroup *BKE_action_group_find_name(bAction *act, const char name[]);
 
 /**
  * Clear all 'temp' flags on all groups.
+ *
+ * \note This function supports both legacy and layered Actions.
  */
 void action_groups_clear_tempflags(bAction *act);
-
-/**
- * Return whether the action has one unique point in time keyed.
- *
- * This is mostly for the pose library, which will have different behavior depending on whether an
- * Action corresponds to a "pose" (one keyframe) or "animation snippet" (multiple keyframes).
- *
- * \return `false` when there is no keyframe at all or keys on different points in time, `true`
- * when exactly one point in time is keyed.
- */
-bool BKE_action_has_single_frame(const bAction *act) ATTR_WARN_UNUSED_RESULT;
 
 /* Pose API ----------------- */
 
@@ -338,6 +320,7 @@ void what_does_obaction(Object *ob,
                         Object *workob,
                         bPose *pose,
                         bAction *act,
+                        int32_t action_slot_handle,
                         char groupname[],
                         const AnimationEvalContext *anim_eval_context) ATTR_NONNULL(1, 2);
 

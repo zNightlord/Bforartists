@@ -6,14 +6,13 @@
  * NPR Evaluation.
  */
 
-#pragma BLENDER_REQUIRE(draw_view_lib.glsl)
-#pragma BLENDER_REQUIRE(common_hair_lib.glsl)
-#pragma BLENDER_REQUIRE(eevee_ambient_occlusion_lib.glsl)
-#pragma BLENDER_REQUIRE(eevee_surf_lib.glsl)
-#pragma BLENDER_REQUIRE(eevee_nodetree_lib.glsl)
-#pragma BLENDER_REQUIRE(eevee_sampling_lib.glsl)
-
-#pragma BLENDER_REQUIRE(eevee_deferred_combine_lib.glsl)
+#include "common_hair_lib.glsl"
+#include "draw_view_lib.glsl"
+#include "eevee_ambient_occlusion_lib.glsl"
+#include "eevee_deferred_combine_lib.glsl"
+#include "eevee_nodetree_lib.glsl"
+#include "eevee_sampling_lib.glsl"
+#include "eevee_surf_lib.glsl"
 
 #define TEX_HANDLE_NULL 0u
 #define TEX_HANDLE_COMBINED_COLOR 1u

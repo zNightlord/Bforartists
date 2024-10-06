@@ -609,7 +609,7 @@ void gpencil_point_conversion_init(bContext *C, GP_SpaceConversion *r_gsc)
     /* for camera view set the subrect */
     if (rv3d->persp == RV3D_CAMOB) {
       ED_view3d_calc_camera_border(
-          scene, depsgraph, region, v3d, rv3d, &r_gsc->subrect_data, true);
+          scene, depsgraph, region, v3d, rv3d, true, &r_gsc->subrect_data);
       r_gsc->subrect = &r_gsc->subrect_data;
     }
   }
@@ -1722,7 +1722,7 @@ void ED_gpencil_brush_draw_eraser(Brush *brush, int x, int y)
 
 bool ED_gpencil_brush_cursor_poll(bContext *C)
 {
-  if (WM_toolsystem_active_tool_is_brush(C)) {
+  if (WM_toolsystem_active_tool_is_brush(C) && !WM_toolsystem_active_tool_has_custom_cursor(C)) {
     return true;
   }
   return false;
