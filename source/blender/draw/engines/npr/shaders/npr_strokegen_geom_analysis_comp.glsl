@@ -2,6 +2,7 @@
 #pragma BLENDER_REQUIRE(npr_strokegen_compaction_lib.glsl)
 #pragma BLENDER_REQUIRE(npr_strokegen_topo_lib.glsl)
 #pragma BLENDER_REQUIRE(npr_strokegen_geom_lib.glsl)
+#pragma BLENDER_REQUIRE(npr_strokegen_contour_geom_lib.glsl)
 #pragma BLENDER_REQUIRE(npr_strokegen_debug_view_lib.glsl)
 
 
@@ -1085,33 +1086,44 @@ void main()
 {
     uint groupIdx = gl_LocalInvocationID.x; 
 
+    // Selective evaluation of vertices
+    // --------------------------------
     uint vert_id; 
     bool valid_thread; 
-    if (0 < pcs_only_selected_verts_)
-    {
+    // remeshed verts
+    if (0 < pcs_only_selected_verts_) {
         uint sel_vert_id = gl_GlobalInvocationID.x; 
         get_vert_id_from_selected_vert(sel_vert_id, /*out*/vert_id, valid_thread);
     }
-    else
-    {
+    else {
         vert_id = gl_GlobalInvocationID.x; 
         uint num_verts = get_vert_count(); 
         valid_thread = vert_id < num_verts; 
     }
-    if (0 < pcs_order_1_eval_only_contour_verts_)
-    {
+    // verts at the interpolated contour
+    if (0 < pcs_order_1_eval_only_contour_verts_) {
         VertFlags vf = load_vert_flags(vert_id); 
         if (!vf.contour) valid_thread = false; 
+        // unfortunately, we cannot early return since there are compactions to be done
+    }
+    // verts at the edges that has a interpolated contour vertex waiting to insert
+    if (0 < pcs_order_1_eval_only_interpo_contour_adj_verts_) {
+        VertFlags vf = load_vert_flags(vert_id); 
+        if (!vf.adj_to_contour_vtx) valid_thread = false; 
     }
     
+    
+    
+    // Actual computation starts here
+    // ------------------------------
     vec3 vpos = ld_vpos(vert_id); 
     vec3 vnor = LOAD_VNOR(vert_id, vpos);
     VertWedgeListHeader vwlh = decode_vert_wedge_list_header(ssbo_vert_to_edge_list_header_[vert_id]); 
 
-    // Accumulate partial tensors from 1-ring faces
     VertWedgeListHeader vwlh_rot = vwlh;
     CalcVertAttrContext_Order1 ctx; 
     #if defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__CURVTENSOR)
+        // Accumulate partial tensors from 1-ring faces
         ctx = init_vert_attr_context_order_1(vpos); 
     #endif
     #if defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__INTERPO_CURVATURE) || defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1__INTERPO_CURVTENSOR) || defined(_KERNEL_MULTICOMPILE__CALC_VERT_ATTRS_ORDER_1_GRAD_VDOTN)
@@ -1212,7 +1224,7 @@ void main()
         vec2 curv_fin = vec2(ctx.mu1, ctx.mu2); 
         bool valid_curv = !((any(isnan(curv_fin)) || any(isinf(curv_fin))) || ctx.border);
         if (!valid_curv) ctx.mu1 = ctx.mu2 = .0f;  
-        
+
         float max_curv = ctx.mu1 + sqrt(max(.0f, ctx.mu1 * ctx.mu1 - abs(ctx.mu2)));
         if (!valid_curv) max_curv = -1.0f; 
 
@@ -1464,10 +1476,14 @@ void main()
     }
 
     EdgeFlags ef = load_edge_flags(edge_id); 
-
     uvec4 v;
     for (uint i = 0u; i < 4u; i++)
         v[i] = ssbo_edge_to_vert_[edge_id*4u + i]; 
+
+    bool update_edge_flags = false; 
+
+#if defined(_KERNEL_MULTICOMPILE__CALC_FEATURE_EDGES__CREASE_DETECTION)
+    if (!valid_thread) return; 
 
     vec3 vpos[4]; 
     for (uint i = 0u; i < 4u; i++)
@@ -1477,8 +1493,132 @@ void main()
     uint crease_level = ((M_PI / 3.0f) < abs(dihedral - M_PI)) ? 3 : 0; 
     if (ef.border) crease_level = 3; 
 
-    if (valid_thread && 0u < crease_level)
-        update_edge_flags__detect_crease(edge_id, ef, crease_level);
+    update_edge_flags__detect_crease(crease_level, ef);
+    update_edge_flags = true; 
+#endif
+
+#if defined(_KERNEL_MULTICOMPILE__CALC_FEATURE_EDGES__CONTOUR_SPLIT_DETECTION)
+    if (!valid_thread) return; 
+
+    uvec2 iverts_cwedge = mark__cwedge_to_verts(0u);
+    uvec2 vids_cwedge = uvec2(v[iverts_cwedge[0]], v[iverts_cwedge[1]]); 
+    VertFlags vfs_cwedge[2] = { 
+        load_vert_flags(vids_cwedge[0]), 
+        load_vert_flags(vids_cwedge[1]) 
+    };  
+
+    // Check if the edge is a contour edge - TODO: make this a flag bit, compute only once
+    bool is_interp_contour_edge = 
+        is_interp_contour_edge__before_tessellation(vfs_cwedge[0], vfs_cwedge[1], ef); 
+
+    // Update edge flags
+    update_edge_flags__detect_contour_split(is_interp_contour_edge, /*inout*/ef);
+    update_edge_flags = true; 
+
+    // Update vert flags
+    // only write when true to avoid racing threads writhing opposite booleans
+    // !!! but this requires a clean up pass to set the flags to false !!!
+    if (is_interp_contour_edge) 
+        for (uint iivert = 0; iivert < 2; ++iivert) { 
+            update_vert_flags__adj_to_contour_vtx(true, vfs_cwedge[iivert]); 
+            store_vert_flags(vids_cwedge[iivert], vfs_cwedge[iivert]); 
+        }
+#endif
+
+    if (update_edge_flags)
+        store_edge_flags(edge_id, ef); 
 }
 
 #endif
+
+
+
+
+
+
+
+
+
+
+
+#if defined(_KERNEL_MULTICOMPILE__INTERPOLATE_CONTOUR_VERT_ATTRS)
+
+struct InterpVtxAttrs
+{
+    uint vid; 
+    vec3 vpos; 
+    vec3 vnor; 
+    float max_curv; 
+    float cusp_func; 
+}; 
+
+vec3 get_cam_pos_ws()
+{
+    mat4 view_to_world = ubo_view_matrices_.viewinv;
+    vec3 cam_pos_ws = view_to_world[3].xyz; /* see "#define cameraPos ViewMatrixInverse[3].xyz" */
+    return cam_pos_ws; 
+}
+
+void main()
+{
+    // Selective evaluation of vertices
+    // --------------------------------
+    uint vert_id; 
+    bool valid_thread; 
+    if (0 < pcs_only_selected_verts_) {
+        uint sel_vert_id = gl_GlobalInvocationID.x; 
+        get_vert_id_from_selected_vert(sel_vert_id, /*out*/vert_id, valid_thread);
+    }
+    else {
+        vert_id = gl_GlobalInvocationID.x; 
+        uint num_verts = get_vert_count(); 
+        valid_thread = vert_id < num_verts; 
+    }
+    // Only for interpolated contour vertices    
+    VertFlags vf = load_vert_flags(vert_id); 
+    if (!vf.contour) return; 
+
+
+    // Actual computation starts here
+    // ------------------------------ 
+    uint old_edge = ssbo_contour_vert_to_old_edge_[vert_id]; // edge that was split to create this contour vertex
+
+    InterpVtxAttrs old_verts[2]; {
+        uvec2 iverts_cwedge = mark__cwedge_to_verts(0u);  
+        old_verts[0].vid = ssbo_edge_to_vert_[old_edge*4u + iverts_cwedge[0]];
+        old_verts[1].vid = ssbo_edge_to_vert_[old_edge*4u + iverts_cwedge[1]];
+
+        for (uint i = 0; i < 2; i++)
+        {
+            old_verts[i].vpos = ld_vpos(old_verts[i].vid); 
+            old_verts[i].vnor = ld_vnor(old_verts[i].vid); 
+            ld_vcurv_max_with_cusp(
+                old_verts[i].vid, 
+                /*out*/old_verts[i].max_curv, old_verts[i].cusp_func
+            );
+        }
+    }
+
+    vec3 edge_vnor[2] = { old_verts[0].vnor, old_verts[1].vnor };
+    vec3 edge_vpos[2] = { old_verts[0].vpos, old_verts[1].vpos }; 
+    float interp_factor = calc_interp_contour_edge_factor(edge_vnor, edge_vpos, get_cam_pos_ws()); 
+
+    InterpVtxAttrs new_vert;
+    new_vert.vid = vert_id;
+    new_vert.vpos = mix(old_verts[0].vpos, old_verts[1].vpos, interp_factor);
+    new_vert.vnor = mix(old_verts[0].vnor, old_verts[1].vnor, interp_factor);
+    new_vert.max_curv = mix(old_verts[0].max_curv, old_verts[1].max_curv, interp_factor);
+    new_vert.cusp_func = mix(old_verts[0].cusp_func, old_verts[1].cusp_func, interp_factor);
+
+    if (valid_thread)
+    {
+        // st_vpos(vert_id, new_vert.vpos); // already done by edge splitting
+        st_vnor(vert_id, new_vert.vnor); 
+        st_vcurv_max_with_cusp(vert_id, new_vert.max_curv, new_vert.cusp_func); 
+    }
+}
+
+#endif
+
+
+

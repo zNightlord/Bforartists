@@ -187,7 +187,7 @@ public:
    bool output_selected_to_edge; // has effect only when .compact_edges==true
    bool output_edge_to_selected; // has effect only when .compact_edges==true
   };
-  void append_subpass_select_remeshed_edges(int num_edges, int num_verts, EdgeFloodingOptions options);
+  void append_subpass_select_remesh_region_edges(int num_edges, int num_verts, EdgeFloodingOptions options);
   void append_subpass_mark_selection_border_edges(int num_edges, int num_verts);
 
 
@@ -301,7 +301,9 @@ public:
     // calc_vert_topo_flags conflicts against calc_vert_voronoi_area
 
     bool order_1_only_selected;
-    bool order_1_only_contour; // make sure order-0 attrs for neighboring verts are properly computed
+    bool order_1_only_contour; // only for the interpolated contour vertices
+                               // make sure order-0 attrs for neighboring verts are properly computed
+    bool order_1_eval_only_interpo_contour_adj_verts; // only for verts on the edges having an interpolated contour vertex 
     bool calc_vert_curvature;
     enum CurvatureEstimator { Rusinkiewicz = 0, Jacques } curvature_estimator;
     bool output_curvature_tensors;
@@ -314,8 +316,13 @@ public:
     GPUStorageBuf *ssbo_vgrad_contour_; 
 
     // Edge attrs
-    bool calc_feature_edges; 
-    bool only_selected_edges; 
+    bool calc_feature_edges;
+    std::set<eShaderType> calc_feature_edges_shader_passes; 
+    bool calc_feature_edges_verts_contour_split; 
+    bool only_selected_edges;
+
+    // Interpolating vertex attributes
+    bool calc_interpolated_vert_attrs; 
 
 
     SurfaceAnalysisContext()
@@ -327,7 +334,8 @@ public:
         ssbo_varea_(nullptr),
         calc_vert_topo_flags(false), 
         order_1_only_selected(false),
-        order_1_only_contour(false), 
+        order_1_only_contour(false),
+        order_1_eval_only_interpo_contour_adj_verts(false), 
         calc_vert_curvature(false),
         curvature_estimator(Jacques),
         output_curvature_tensors(false),
@@ -338,7 +346,9 @@ public:
         calc_vert_contour_grad(false),
         ssbo_vgrad_contour_(nullptr), 
         calc_feature_edges(false),
-        only_selected_edges(false)
+        calc_feature_edges_shader_passes(),
+        only_selected_edges(false),
+        calc_interpolated_vert_attrs(false)
     {
     }
 
@@ -355,28 +365,41 @@ public:
       calc_vert_contour_grad = val; 
     }
 
-    void set_calc_vert_curvature(bool val, CurvatureEstimator algo, bool output_tensors, bool output_cusp_and_maxcurv) 
+    void set_calc_vert_curvature(bool val, CurvatureEstimator algo, bool output_tensors, bool output_cusp_and_maxcurv, bool skip_order_0_evaluation = false) 
     { 
       calc_vert_curvature = val;
       curvature_estimator = algo; 
-      if (calc_vert_curvature) {
-        set_calc_vert_normal(true, output_vertex_facing_flag); 
-        set_calc_vert_voronoi_area(true);
+      if (calc_vert_curvature)
+      {
+        if (!skip_order_0_evaluation) {
+          set_calc_vert_normal(true, output_vertex_facing_flag);
+          set_calc_vert_voronoi_area(true);  
+        }
+        
         output_curvature_tensors = output_tensors;
         output_maxcurv_with_cusp_function = output_cusp_and_maxcurv;
       } 
     }
 
-    void set_calc_feature_edges(bool val, bool only_selected)
+    void set_calc_feature_edges(bool val, const std::set<eShaderType>& passes, bool only_selected)
     {
-      calc_feature_edges = true;
+      calc_feature_edges = val;
+      calc_feature_edges_shader_passes = passes; 
       only_selected_edges = only_selected; 
     }
+
+    void set_calc_interpolated_contour_verts(bool val)
+    {
+      calc_interpolated_vert_attrs = val;
+    }
+
   };
   void GetSurfaceAnalysisContext_InitPass(SurfaceAnalysisContext &surf_analysis_ctx) const;
   void GetSurfaceAnalysisContext_VertexRelocationPass(SurfaceAnalysisContext &surf_analysis_ctx) const;
-  void GetSurfaceAnalysisContext_ContourInsertionPass(SurfaceAnalysisContext &surf_analysis_ctx) const;
-  void GetSurfaceAnalysisContext_CuspDetectionPass(SurfaceAnalysisContext &surf_analysis_ctx) const;
+  void GetSurfaceAnalysisContext_BeforeContourInsertion(
+      SurfaceAnalysisContext &surf_analysis_ctx_0,
+      SurfaceAnalysisContext &surf_analysis_ctx_1) const;
+  void GetSurfaceAnalysisContext_AfterContourInsertion(SurfaceAnalysisContext& surf_analysis_ctx_new) const;
   void GetSurfaceAnalysisContext_CurvatureForAdaptiveRemeshing(SurfaceAnalysisContext &surf_analysis_ctx) const;
 
   void append_subpasses_estimate_curvature_for_adaptive_remeshing(ResourceHandle& rsc_handle,

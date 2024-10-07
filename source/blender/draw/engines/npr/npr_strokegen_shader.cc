@@ -230,7 +230,7 @@ const char *StrokeGenShaderModule::static_shader_create_info_name_get(eShaderTyp
     case MESH_EXPAND_VERTS_FROM_SELECTED_EDGES:
       return "strokegen_expand_verts_from_selected_edges";
     case MESH_COMPACT_SELECTED_VERTS:
-      return "strokegen_compact_selected_verts";  
+      return "strokegen_compact_selected_verts";
 
     case FILL_DISPATCH_ARGS_FILTERED_EDGES:
       return "bnpr_meshing_fill_dispatch_args_per_filtered_edge";
@@ -319,9 +319,13 @@ const char *StrokeGenShaderModule::static_shader_create_info_name_get(eShaderTyp
     case MESH_ANALYSE_VERT_NORMAL_TOPOFLAGS:
       return "bnpr_geom_analysis_order_0_vert_normal_topoflags";
     case MESH_ANALYSE_VERT_NORMAL_VORONOIAREA_TOPOFLAGS:
-      return "bnpr_geom_analysis_order_0_vert_normal_voroarea_topoflags"; 
-    case MESH_ANALYSE_EDGE_FEATURES:
-      return "bnpr_geom_analysis_feature_edges"; 
+      return "bnpr_geom_analysis_order_0_vert_normal_voroarea_topoflags";
+    case MESH_ANALYSE_VERT_ATTRS_INTERP_CONTOUR:
+      return "bnpr_geom_analysis_interpolate_contour_vert_attrs"; 
+    case MESH_ANALYSE_FEATURE_EDGES_CREASE:
+      return "bnpr_geom_analysis_feature_edges_crease"; 
+    case MESH_ANALYSE_FEATURE_EDGES_VERTS_CONTOUR_SPLIT:
+      return "bnpr_geom_analysis_feature_edges_verts_contour_split";
 
     case MESH_ANALYSE_VERT_CONTOUR_GRADIENT:
       return "bnpr_geom_analysis_order_1_contour_grad_"; 

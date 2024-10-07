@@ -263,7 +263,11 @@ void StrokeGenPassModule::on_end_sync()
 
   void StrokeGenPassModule::GetSurfaceAnalysisContext_InitPass(SurfaceAnalysisContext &surf_analysis_ctx) const
   {
-    surf_analysis_ctx.set_calc_feature_edges(true, false); 
+    std::set<eShaderType> feature_edge_passes = {
+      eShaderType::MESH_ANALYSE_FEATURE_EDGES_CREASE
+    }; 
+    surf_analysis_ctx.set_calc_feature_edges(true, feature_edge_passes, false
+    ); 
 
     surf_analysis_ctx.order_0_only_selected = false;
     surf_analysis_ctx.set_calc_vert_normal(true, false);
@@ -287,7 +291,8 @@ void StrokeGenPassModule::on_end_sync()
   void StrokeGenPassModule::GetSurfaceAnalysisContext_CurvatureForAdaptiveRemeshing(
       SurfaceAnalysisContext &surf_analysis_ctx) const
   {
-    surf_analysis_ctx.set_calc_feature_edges(true, true); 
+    std::set<eShaderType> feature_edge_passes = { eShaderType::MESH_ANALYSE_FEATURE_EDGES_CREASE }; 
+    surf_analysis_ctx.set_calc_feature_edges(true, feature_edge_passes, true); 
 
     surf_analysis_ctx.order_0_only_selected = false;
     surf_analysis_ctx.set_calc_vert_normal(true, false);
@@ -328,45 +333,88 @@ void StrokeGenPassModule::on_end_sync()
   }
 
 
-  void StrokeGenPassModule::GetSurfaceAnalysisContext_ContourInsertionPass(SurfaceAnalysisContext &surf_analysis_ctx) const
+  void StrokeGenPassModule::GetSurfaceAnalysisContext_BeforeContourInsertion(StrokeGenPassModule::SurfaceAnalysisContext& surf_analysis_ctx_0, StrokeGenPassModule::SurfaceAnalysisContext& surf_analysis_ctx_1) const
   {
-    surf_analysis_ctx.order_0_only_selected = false;
-    surf_analysis_ctx.set_calc_vert_normal(true, true);
-    surf_analysis_ctx.ssbo_vnor_ = buffers_.ssbo_vnor_;
-    surf_analysis_ctx.set_calc_vert_voronoi_area(false);
-    surf_analysis_ctx.ssbo_varea_ = buffers_.ssbo_mesh_buffer_reuse_5_;
-    surf_analysis_ctx.set_calc_vert_topo_flags(true); 
+    std::set<eShaderType> feature_edge_passes = { eShaderType::MESH_ANALYSE_FEATURE_EDGES_VERTS_CONTOUR_SPLIT };
+    surf_analysis_ctx_0.set_calc_feature_edges(true, feature_edge_passes, true);
 
-    surf_analysis_ctx.order_1_only_selected = false;
-    surf_analysis_ctx.set_calc_vert_curvature(false, SurfaceAnalysisContext::CurvatureEstimator::Jacques, false, false);
-    surf_analysis_ctx.set_calc_vert_contour_grad(true); 
-    surf_analysis_ctx.ssbo_edge_vtensors_ = nullptr;
-    surf_analysis_ctx.ssbo_vgrad_contour_ = buffers_.ssbo_mesh_buffer_reuse_7_;
-    surf_analysis_ctx.ssbo_vcurv_tensor_ = buffers_.ssbo_mesh_buffer_reuse_1_;
-    surf_analysis_ctx.ssbo_vcurv_pdirs_k1k2_ = buffers_.ssbo_mesh_buffer_reuse_2_;
+    surf_analysis_ctx_0.order_0_only_selected = false;
+    surf_analysis_ctx_0.set_calc_vert_normal(true, true);
+    surf_analysis_ctx_0.ssbo_vnor_ = buffers_.ssbo_vnor_;
+    surf_analysis_ctx_0.set_calc_vert_voronoi_area(false);
+    surf_analysis_ctx_0.ssbo_varea_ = buffers_.ssbo_mesh_buffer_reuse_5_;
+    surf_analysis_ctx_0.set_calc_vert_topo_flags(true); 
+
+    surf_analysis_ctx_0.order_1_only_selected = false;
+    surf_analysis_ctx_0.set_calc_vert_curvature(false, SurfaceAnalysisContext::CurvatureEstimator::Jacques, false, false);
+    surf_analysis_ctx_0.set_calc_vert_contour_grad(true); 
+    surf_analysis_ctx_0.ssbo_edge_vtensors_ = nullptr;
+    surf_analysis_ctx_0.ssbo_vgrad_contour_ = buffers_.ssbo_mesh_buffer_reuse_7_;
+    surf_analysis_ctx_0.ssbo_vcurv_tensor_ = buffers_.ssbo_mesh_buffer_reuse_1_;
+    surf_analysis_ctx_0.ssbo_vcurv_pdirs_k1k2_ = buffers_.ssbo_mesh_buffer_reuse_2_;
+
+
+    surf_analysis_ctx_1.order_0_only_selected = false;
+    surf_analysis_ctx_1.set_calc_vert_normal(false, false);
+    surf_analysis_ctx_1.ssbo_vnor_ = surf_analysis_ctx_0.ssbo_vnor_;
+    surf_analysis_ctx_1.set_calc_vert_voronoi_area(false);
+    surf_analysis_ctx_1.ssbo_varea_ = surf_analysis_ctx_0.ssbo_varea_;
+    surf_analysis_ctx_1.set_calc_vert_topo_flags(false);
+
+    surf_analysis_ctx_1.order_1_only_selected = true;
+    surf_analysis_ctx_1.order_1_only_contour = false;
+    surf_analysis_ctx_1.order_1_eval_only_interpo_contour_adj_verts = true;
+    // meshing_params.cusp_eval_opti; // I'm still not sure about this.
+    surf_analysis_ctx_1.set_calc_vert_curvature(
+        true,
+        SurfaceAnalysisContext::CurvatureEstimator::Jacques,
+        false,
+        true,
+        true/*skip_order_0_evaluation*/);
+    surf_analysis_ctx_1.set_calc_vert_contour_grad(false);
+    surf_analysis_ctx_1.ssbo_edge_vtensors_ = buffers_.ssbo_mesh_buffer_reuse_7_;
+    surf_analysis_ctx_1.ssbo_vcurv_tensor_ = buffers_.ssbo_mesh_buffer_reuse_1_;
+    surf_analysis_ctx_1.ssbo_vcurv_pdirs_k1k2_ = buffers_.ssbo_mesh_buffer_reuse_2_;
   }
 
 
-  void StrokeGenPassModule::GetSurfaceAnalysisContext_CuspDetectionPass(
-      SurfaceAnalysisContext &surf_analysis_ctx) const
+  void StrokeGenPassModule::GetSurfaceAnalysisContext_AfterContourInsertion(SurfaceAnalysisContext & surf_analysis_ctx_new) const
   {
-    surf_analysis_ctx.order_0_only_selected = false;
-    surf_analysis_ctx.set_calc_vert_normal(true, false);
-    surf_analysis_ctx.ssbo_vnor_ = buffers_.ssbo_vnor_;
-    surf_analysis_ctx.set_calc_vert_voronoi_area(false);
-    surf_analysis_ctx.ssbo_varea_ = buffers_.ssbo_mesh_buffer_reuse_5_;
-    surf_analysis_ctx.set_calc_vert_topo_flags(false); 
+    // surf_analysis_ctx.order_0_only_selected = false;
+    // surf_analysis_ctx.set_calc_vert_normal(true, false);
+    // surf_analysis_ctx.ssbo_vnor_ = buffers_.ssbo_vnor_;
+    // surf_analysis_ctx.set_calc_vert_voronoi_area(false);
+    // surf_analysis_ctx.ssbo_varea_ = buffers_.ssbo_mesh_buffer_reuse_5_;
+    // surf_analysis_ctx.set_calc_vert_topo_flags(false); 
+    //
+    // surf_analysis_ctx.order_1_only_selected = true;
+    // surf_analysis_ctx.order_1_only_contour = meshing_params.cusp_eval_opti; // true; I'm still not sure about this. 
+    // surf_analysis_ctx.set_calc_vert_curvature(true,
+    //                                           SurfaceAnalysisContext::CurvatureEstimator::Jacques,
+    //                                           false,
+    //                                           true);
+    // surf_analysis_ctx.set_calc_vert_contour_grad(false); 
+    // surf_analysis_ctx.ssbo_edge_vtensors_ = buffers_.ssbo_mesh_buffer_reuse_7_;
+    // surf_analysis_ctx.ssbo_vcurv_tensor_ = buffers_.ssbo_mesh_buffer_reuse_1_;
+    // surf_analysis_ctx.ssbo_vcurv_pdirs_k1k2_ = buffers_.ssbo_mesh_buffer_reuse_2_;
 
-    surf_analysis_ctx.order_1_only_selected = true;
-    surf_analysis_ctx.order_1_only_contour = meshing_params.cusp_eval_opti; // true; I'm still not sure about this. 
-    surf_analysis_ctx.set_calc_vert_curvature(true,
-                                              SurfaceAnalysisContext::CurvatureEstimator::Jacques,
-                                              false,
-                                              true);
-    surf_analysis_ctx.set_calc_vert_contour_grad(false); 
-    surf_analysis_ctx.ssbo_edge_vtensors_ = buffers_.ssbo_mesh_buffer_reuse_7_;
-    surf_analysis_ctx.ssbo_vcurv_tensor_ = buffers_.ssbo_mesh_buffer_reuse_1_;
-    surf_analysis_ctx.ssbo_vcurv_pdirs_k1k2_ = buffers_.ssbo_mesh_buffer_reuse_2_;
+
+    surf_analysis_ctx_new.order_0_only_selected = false;
+    surf_analysis_ctx_new.set_calc_vert_normal(false, false);
+    surf_analysis_ctx_new.ssbo_vnor_ = buffers_.ssbo_vnor_;
+    surf_analysis_ctx_new.set_calc_vert_voronoi_area(false);
+    surf_analysis_ctx_new.ssbo_varea_ = buffers_.ssbo_mesh_buffer_reuse_5_;
+    surf_analysis_ctx_new.set_calc_vert_topo_flags(false);
+
+    surf_analysis_ctx_new.order_1_only_selected = false;
+    surf_analysis_ctx_new.set_calc_vert_curvature(
+        false, SurfaceAnalysisContext::CurvatureEstimator::Jacques, false, false);
+    surf_analysis_ctx_new.set_calc_vert_contour_grad(false);
+    surf_analysis_ctx_new.ssbo_edge_vtensors_ = buffers_.ssbo_mesh_buffer_reuse_7_;
+    surf_analysis_ctx_new.ssbo_vcurv_tensor_ = buffers_.ssbo_mesh_buffer_reuse_1_;
+    surf_analysis_ctx_new.ssbo_vcurv_pdirs_k1k2_ = buffers_.ssbo_mesh_buffer_reuse_2_;
+
+    surf_analysis_ctx_new.set_calc_interpolated_contour_verts(true); 
   }
 
 
@@ -608,7 +656,7 @@ void StrokeGenPassModule::on_end_sync()
     flooding_options.compact_edges = true;
     flooding_options.output_selected_to_edge = true;
     flooding_options.output_edge_to_selected = false;
-    append_subpass_select_remeshed_edges(num_edges, num_verts, flooding_options);
+    append_subpass_select_remesh_region_edges(num_edges, num_verts, flooding_options);
     append_subpass_fill_dispatch_args_remeshed_edges_(num_edges, true);
 
     append_subpass_mark_selection_border_edges(num_edges, num_verts); 
@@ -725,25 +773,38 @@ void StrokeGenPassModule::on_end_sync()
     }
 
     // Calc attributes for detecting interpolated contours
-    SurfaceAnalysisContext surf_analysis_ctx_contour;
-    GetSurfaceAnalysisContext_ContourInsertionPass(surf_analysis_ctx_contour);
-    if (meshing_params.contour_mode != ContourType::Raw) {
-      auto surf_dbg_ctx_contour_insertion = surf_dbg_ctx;
-      surf_dbg_ctx_contour_insertion.dbg_vert_normal = false;
-      surf_dbg_ctx_contour_insertion.dbg_vert_curv   = false;
-      surf_dbg_ctx_contour_insertion.dbg_vert_contour_grad = surf_dbg_ctx.dbg_vert_contour_grad; 
+    SurfaceAnalysisContext surf_analysis_ctx_contour_0;
+    SurfaceAnalysisContext surf_analysis_ctx_contour_1;
+    GetSurfaceAnalysisContext_BeforeContourInsertion(surf_analysis_ctx_contour_0,
+                                                     surf_analysis_ctx_contour_1);
+    if (meshing_params.contour_mode ==  ContourType::Interpolated)
+    {
+      auto surf_dbg_ctx_contour_insertion_0 = surf_dbg_ctx;
+      surf_dbg_ctx_contour_insertion_0.dbg_vert_normal = false;
+      surf_dbg_ctx_contour_insertion_0.dbg_vert_curv   = false;
+      surf_dbg_ctx_contour_insertion_0.dbg_vert_contour_grad = surf_dbg_ctx.dbg_vert_contour_grad; 
       append_subpass_surf_geom_analysis(
-        rsc_handle, num_verts, num_edges, surf_analysis_ctx_contour, surf_dbg_ctx_contour_insertion);
+        rsc_handle, num_verts, num_edges, surf_analysis_ctx_contour_0, surf_dbg_ctx_contour_insertion_0
+      );
+
+      auto surf_dbg_ctx_contour_insertion_1 = surf_dbg_ctx;
+      surf_dbg_ctx_contour_insertion_1.dbg_vert_normal = false; // surf_dbg_ctx.dbg_vert_normal;
+      surf_dbg_ctx_contour_insertion_1.dbg_vert_curv = surf_dbg_ctx.dbg_vert_curv;
+      surf_dbg_ctx_contour_insertion_1.dbg_vert_contour_grad = false; 
+      append_subpass_surf_geom_analysis(
+        rsc_handle, num_verts, num_edges, surf_analysis_ctx_contour_1, surf_dbg_ctx_contour_insertion_1
+      );
     }
 
     { // Init temporal records
       // trace new records to last frame records via a gradient field -
       // - evaluated from surf_analysis_ctx_contour
-      append_subpass_init_temporal_records(num_edges, surf_analysis_ctx_contour);
+      append_subpass_init_temporal_records(num_edges, surf_analysis_ctx_contour_0);
     }
 
     // Interpolated contour tessellation
-    if (meshing_params.contour_mode != ContourType::Raw) {
+    if (meshing_params.contour_mode == ContourType::Interpolated)
+    {
       for (int iter_contour_insertion = 0; iter_contour_insertion < 6; ++iter_contour_insertion) {
         append_subpass_fill_dispatch_args_remeshed_edges_(num_edges, true);
         append_subpass_split_edges(InterpContour, iter_contour_insertion, num_edges, num_verts);
@@ -754,13 +815,14 @@ void StrokeGenPassModule::on_end_sync()
     }
     
     { // Calc cusp function for contour vertices
-      SurfaceAnalysisContext surf_analysis_ctx_contour;
-      GetSurfaceAnalysisContext_CuspDetectionPass(surf_analysis_ctx_contour);
+      SurfaceAnalysisContext surf_analysis_ctx_contour_new;
+      GetSurfaceAnalysisContext_AfterContourInsertion(surf_analysis_ctx_contour_new);
       auto surf_dbg_ctx_cpy = surf_dbg_ctx;
-      surf_dbg_ctx_cpy.dbg_vert_normal = surf_dbg_ctx.dbg_vert_normal;
-      surf_dbg_ctx_cpy.dbg_vert_curv   = surf_dbg_ctx.dbg_vert_curv;
+      surf_dbg_ctx_cpy.dbg_vert_normal = false; // surf_dbg_ctx.dbg_vert_normal;
+      surf_dbg_ctx_cpy.dbg_vert_curv   = false; // surf_dbg_ctx.dbg_vert_curv;
       surf_dbg_ctx_cpy.dbg_vert_contour_grad = false; 
-      append_subpass_surf_geom_analysis(rsc_handle, num_verts, num_edges, surf_analysis_ctx_contour, surf_dbg_ctx_cpy);
+      append_subpass_surf_geom_analysis(
+          rsc_handle, num_verts, num_edges, surf_analysis_ctx_contour_new, surf_dbg_ctx_cpy);
     }
 
 
@@ -1086,20 +1148,20 @@ void StrokeGenPassModule::on_end_sync()
       SelectVertsFromEdgesContext ctx, int num_edges, int num_verts)
   {
     auto bind_rsc = [&](draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub, int4 active_sel_slots) {
-      sub.bind_ssbo(0, buffers_.ssbo_edge_to_edges_);            
-      sub.bind_ssbo(1, buffers_.ssbo_edge_to_vert_);             
-      sub.bind_ssbo(2, buffers_.ssbo_vert_to_edge_list_header_);
-      sub.bind_ssbo(3, buffers_.ssbo_edge_flags_);               
-      sub.bind_ssbo(4, buffers_.ssbo_vert_flags_);               
-      sub.bind_ssbo(5, buffers_.ssbo_selected_edge_to_edge_);
-      sub.bind_ssbo(6, buffers_.ssbo_selected_vert_to_vert_);
-      sub.bind_ssbo(7, buffers_.ssbo_vbo_full_);
-      sub.bind_ssbo(8, buffers_.ssbo_bnpr_mesh_pool_counters_);
-      sub.bind_ssbo(9, buffers_.ssbo_dyn_mesh_counters_out_());
+    sub.bind_ssbo(0, buffers_.ssbo_edge_to_edges_);
+    sub.bind_ssbo(1, buffers_.ssbo_edge_to_vert_);
+    sub.bind_ssbo(2, buffers_.ssbo_vert_to_edge_list_header_);
+    sub.bind_ssbo(3, buffers_.ssbo_edge_flags_);
+    sub.bind_ssbo(4, buffers_.ssbo_vert_flags_);
+    sub.bind_ssbo(5, buffers_.ssbo_selected_edge_to_edge_);
+    sub.bind_ssbo(6, buffers_.ssbo_selected_vert_to_vert_);
+    sub.bind_ssbo(7, buffers_.ssbo_vbo_full_);
+    sub.bind_ssbo(8, buffers_.ssbo_bnpr_mesh_pool_counters_);
+    sub.bind_ssbo(9, buffers_.ssbo_dyn_mesh_counters_out_());
 
-      sub.push_constant("pcs_vert_count_", num_verts);
-      sub.push_constant("pcs_edge_count_", num_edges);
-      sub.push_constant("pcs_vertex_selection_slots_", active_sel_slots); 
+    sub.push_constant("pcs_vert_count_", num_verts);
+    sub.push_constant("pcs_edge_count_", num_edges);
+    sub.push_constant("pcs_vertex_selection_slots_", active_sel_slots);
     }; 
 
     append_subpass_fill_dispatch_args_remeshed_edges_(num_edges, true);
@@ -1311,7 +1373,7 @@ void StrokeGenPassModule::on_end_sync()
   }
 
 
-  void StrokeGenPassModule::append_subpass_select_remeshed_edges(int num_edges, int num_verts, EdgeFloodingOptions options)
+  void StrokeGenPassModule::append_subpass_select_remesh_region_edges(int num_edges, int num_verts, EdgeFloodingOptions options)
   {
     auto bind_flooding_rsc = [&](
         draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub,
@@ -1810,7 +1872,11 @@ void StrokeGenPassModule::on_end_sync()
       const SurfaceDebugContext & dbg_options
   ){
     int ssbo_offset_base = 0;
-    auto bind_src = [&](draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub, bool only_selected_verts, bool order_1_eval_only_contour_verts, bool output_dbg_lines) {
+    auto bind_src = [&](draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub,
+          bool only_selected_verts,
+          bool order_1_eval_only_contour_verts,
+          bool output_dbg_lines
+    ) {
       sub.bind_ssbo(0,  buffers_.ssbo_dyn_mesh_counters_out_()); 
       sub.bind_ssbo(1,  buffers_.ssbo_bnpr_mesh_pool_counters_); 
       sub.bind_ssbo(2,  buffers_.ssbo_selected_edge_to_edge_); 
@@ -1834,16 +1900,18 @@ void StrokeGenPassModule::on_end_sync()
       sub.push_constant("pcs_dbg_geom_scale_", dbg_options.dbg_line_length);
       sub.push_constant("pcs_only_selected_verts_", only_selected_verts ? 1 : 0);
       sub.push_constant("pcs_order_1_eval_only_contour_verts_", order_1_eval_only_contour_verts ? 1 : 0);
+      // sub.push_constant("pcs_order_1_eval_only_interpo_contour_adj_verts_",
+      //                   pcs_order_1_eval_only_interpo_contour_adj_verts_ ? 1 : 0); 
 
       sub.push_constant("pcs_dbg_ndv_grad_mode_", meshing_params.dbg_ndv_grad_mode);
     };
 
-    // Calculate Feature Edges
-    if (ctx.calc_feature_edges) {
+    auto append_subpass_calc_feature_edges = [&](const eShaderType& shader_pass)
+    { // Encapsulate since we may call this in different locations
       append_subpass_fill_dispatch_args_remeshed_edges_(num_edges, ctx.only_selected_edges);
       {
         auto &sub = pass_extract_geom().sub("bnpr_geom_analysis_feature_edges");
-        sub.shader_set(shaders_.static_shader_get(MESH_ANALYSE_EDGE_FEATURES));
+        sub.shader_set(shaders_.static_shader_get(shader_pass));
 
         bind_src(sub, false, false, false);
         sub.bind_ssbo(ssbo_offset_base, buffers_.ssbo_edge_flags_);
@@ -1852,8 +1920,14 @@ void StrokeGenPassModule::on_end_sync()
         sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_edges_);
         sub.barrier(GPU_BARRIER_SHADER_STORAGE);
       }
-    }
+    }; 
 
+    // Calculate Crease Edges
+    if (ctx.calc_feature_edges &&
+        ctx.calc_feature_edges_shader_passes.find(eShaderType::MESH_ANALYSE_FEATURE_EDGES_CREASE) != ctx.calc_feature_edges_shader_passes.end())
+    { // this needs to happen before order-0 vertex attr eval
+      append_subpass_calc_feature_edges(MESH_ANALYSE_FEATURE_EDGES_CREASE); 
+    }
 
     // Calculate Order-0 Vertex Attributes
     append_subpass_fill_dispatch_args_remeshed_verts_(num_verts, ctx.order_0_only_selected); 
@@ -1888,26 +1962,38 @@ void StrokeGenPassModule::on_end_sync()
       sub.barrier(GPU_BARRIER_SHADER_STORAGE);
     }
 
+    // Calculate every edge with an interpolated contour vertex
+    if (ctx.calc_feature_edges &&
+        ctx.calc_feature_edges_shader_passes.find(
+            eShaderType::MESH_ANALYSE_FEATURE_EDGES_VERTS_CONTOUR_SPLIT) != ctx.calc_feature_edges_shader_passes.end())
+    { // this needs to happen after evaluating vertex normals
+      append_subpass_calc_feature_edges(MESH_ANALYSE_FEATURE_EDGES_VERTS_CONTOUR_SPLIT); 
+    }
+
     // Calculate Order-1 Vertex Attributes
     append_subpass_fill_dispatch_args_remeshed_edges_(num_edges, ctx.order_1_only_selected); 
     append_subpass_fill_dispatch_args_remeshed_verts_(num_verts, ctx.order_1_only_selected); 
-    int ssbo_offset_base_1 = 0; 
+    int ssbo_offset_base_1 = 0;
     auto bind_src_order_1 = [&](draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub,
+                                bool order_1_eval_only_interpo_contour_adj_verts,
                                 bool output_dbg_lines = false) {
           bind_src(sub, ctx.order_1_only_selected, ctx.order_1_only_contour, output_dbg_lines); 
-          sub.bind_ssbo(ssbo_offset_base + 0, ctx.ssbo_vnor_);
-          sub.bind_ssbo(ssbo_offset_base + 1, ctx.ssbo_varea_);
-          sub.bind_ssbo(ssbo_offset_base + 2, buffers_.ssbo_edge_flags_);
-          ssbo_offset_base_1 = ssbo_offset_base + 3;
-        };
+      sub.bind_ssbo(ssbo_offset_base + 0, ctx.ssbo_vnor_);
+      sub.bind_ssbo(ssbo_offset_base + 1, ctx.ssbo_varea_);
+      sub.bind_ssbo(ssbo_offset_base + 2, buffers_.ssbo_edge_flags_);
+      ssbo_offset_base_1 = ssbo_offset_base + 3;
+
+      sub.push_constant("pcs_order_1_eval_only_interpo_contour_adj_verts_",
+                        order_1_eval_only_interpo_contour_adj_verts ? 1 : 0);
+    };
 
     if (ctx.calc_vert_curvature)
-    {
+    { // Calculate curvature value & tensors
       if (ctx.curvature_estimator == SurfaceAnalysisContext::Rusinkiewicz) {
         auto &sub = pass_extract_geom().sub("bnpr_geom_analysis_order_1_vert_curv_pass_0");
         sub.shader_set(shaders_.static_shader_get(MESH_ANALYSE_VERT_CURV_PASS_0));
 
-        bind_src_order_1(sub); 
+        bind_src_order_1(sub, false); 
         sub.bind_ssbo(ssbo_offset_base_1 + 0, ctx.ssbo_edge_vtensors_);
 
         sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_edges_);
@@ -1920,7 +2006,7 @@ void StrokeGenPassModule::on_end_sync()
           MESH_ANALYSE_VERT_CURV_PASS_1_RUSINKIEWICZ : MESH_ANALYSE_VERT_CURV_PASS_1_JACQUES)
         );
 
-        bind_src_order_1(sub, dbg_options.dbg_vert_curv);
+        bind_src_order_1(sub, ctx.order_1_eval_only_interpo_contour_adj_verts, dbg_options.dbg_vert_curv);
         sub.bind_ssbo(ssbo_offset_base_1 + 0, ctx.ssbo_edge_vtensors_);
         sub.bind_ssbo(ssbo_offset_base_1 + 1, ctx.ssbo_vcurv_pdirs_k1k2_);
         sub.bind_ssbo(ssbo_offset_base_1 + 2, buffers_.ssbo_vcurv_max_);
@@ -1932,17 +2018,34 @@ void StrokeGenPassModule::on_end_sync()
       }
     }
 
-    if (ctx.calc_vert_contour_grad && !ctx.calc_vert_curvature)
-    {
+    if (ctx.calc_vert_contour_grad)
+    { // Calculate gradient of the scalar field defined by the dot(vtx_normal, view_dir)
       auto& sub = pass_extract_geom().sub("bnpr_geom_analysis_order_1_contour_grad_");
       sub.shader_set(shaders_.static_shader_get(MESH_ANALYSE_VERT_CONTOUR_GRADIENT));
 
-      bind_src_order_1(sub, dbg_options.dbg_vert_contour_grad);
+      bind_src_order_1(sub, ctx.order_1_eval_only_interpo_contour_adj_verts, dbg_options.dbg_vert_contour_grad);
       sub.bind_ssbo(ssbo_offset_base_1 + 0, ctx.ssbo_vgrad_contour_); 
 
       sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_edges_);
       sub.barrier(GPU_BARRIER_SHADER_STORAGE);
     }
+
+    if (ctx.calc_interpolated_vert_attrs)
+    {
+      append_subpass_fill_dispatch_args_remeshed_verts_(num_verts, true/*ctx.order_1_only_selected*/); // interpolated contour verts are a subset of the selected verts
+
+      auto &sub = pass_extract_geom().sub("bnpr_geom_analysis_interpolate_contour_vert_attrs");
+      sub.shader_set(shaders_.static_shader_get(MESH_ANALYSE_VERT_ATTRS_INTERP_CONTOUR));
+
+      bind_src(sub, true, false, false);
+      sub.bind_ssbo(ssbo_offset_base + 0, buffers_.reused_ssbo_contour_vert_to_old_edge_());
+      sub.bind_ssbo(ssbo_offset_base + 1, buffers_.ssbo_vnor_);
+      sub.bind_ssbo(ssbo_offset_base + 2, buffers_.ssbo_vcurv_max_);
+
+      sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_verts_);
+      sub.barrier(GPU_BARRIER_SHADER_STORAGE); 
+    }
+
   }
 
 

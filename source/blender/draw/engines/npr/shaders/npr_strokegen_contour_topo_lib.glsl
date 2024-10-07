@@ -338,6 +338,11 @@ void FixLoopedJumps(
   }
 }
 
+
+
+// ------------------------------------------------------------
+// Denoising contour edges segmented by cusp signs
+// ------------------------------------------------------------
 struct CuspSegmentDenoiseData
 {
 	ContourFlags cf; 

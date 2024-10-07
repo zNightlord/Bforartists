@@ -539,6 +539,7 @@ struct VertFlags
     bool contour; // contour vertex
     bool front_facing; // front facing vertex (dot(n, v) > .0f)
     bool back_facing;  // back facing vertex (dot(n, v) < .0f)
+    bool adj_to_contour_vtx; // vertex adjacent to a interpolated contour vertex
     bool border_eval; // border vertex, only valid after evaluated
     bool crease; // crease vertex for subdivision
     bool corner; // corner vertex for subdivision 
@@ -556,6 +557,7 @@ VertFlags init_vert_flags(bool dupli)
     // mark facing as undefined
     vf.front_facing = false;
     vf.back_facing = false;
+    vf.adj_to_contour_vtx = false; 
     vf.border_eval = false; 
     vf.crease = false;
     vf.corner = false;
@@ -575,6 +577,7 @@ VertFlags init_vert_flags__new_split_edge(bool is_split_for_contour, bool is_cre
     // mark facing as undefined
     vf.front_facing = false;
     vf.back_facing = false;
+    vf.adj_to_contour_vtx = false; 
     vf.border_eval = false;
     vf.crease = is_crease_edge;
     vf.corner = false;
@@ -594,6 +597,7 @@ VertFlags init_vert_flags__new_split_face()
     // mark facing as undefined
     vf.front_facing = false;
     vf.back_facing = false;
+    vf.adj_to_contour_vtx = false; 
     vf.border_eval = false;
     vf.crease = false;
     vf.corner = false;
@@ -630,6 +634,8 @@ uint encode_vert_flags(VertFlags vf)
     vf_enc |= uint(vf.front_facing);
     vf_enc <<= 1u;
     vf_enc |= uint(vf.back_facing);
+    vf_enc <<= 1u; 
+    vf_enc |= uint(vf.adj_to_contour_vtx); 
     
     vf_enc <<= 1u;
     vf_enc |= uint(vf.border_eval);
@@ -651,6 +657,8 @@ VertFlags decode_vert_flags(uint vf_enc)
     vf.border_eval = (1u == (vf_enc & 1u));
     vf_enc >>= 1u;
 
+    vf.adj_to_contour_vtx = (1u == (vf_enc & 1u));
+    vf_enc >>= 1u; 
     vf.back_facing = (1u == (vf_enc & 1u));
     vf_enc >>= 1u;
     vf.front_facing = (1u == (vf_enc & 1u));
@@ -742,6 +750,10 @@ void update_vert_flags__corner(bool corner, inout VertFlags vf_update)
 {
     vf_update.corner = corner; 
 }
+void update_vert_flags__adj_to_contour_vtx(bool adj_to_contour_vtx, inout VertFlags vf_update)
+{
+    vf_update.adj_to_contour_vtx = adj_to_contour_vtx; 
+}
 #endif
 
 
@@ -759,6 +771,7 @@ struct EdgeFlags
     bool new_by_face_split; // new edge created by edge split
     bool del_by_collapse; // deleted edge by edge collapse
     uint crease_level; // crease level, 2 bits 0~3
+    bool contour_split; // to be split by a interpolated contour vertex
 
     // Temp Flags, can share bits across different passes -
     bool temp_face_split_new_edge; // flipped edge
@@ -788,6 +801,8 @@ uint encode_edge_flags(EdgeFlags ef)
     ef_enc <<= 2u;
     ef_enc |= (ef.crease_level & 0x3u); 
     ef_enc <<= 1u; 
+    ef_enc |= uint(ef.contour_split);
+    ef_enc <<= 1u;
     ef_enc |= uint(ef.temp_face_split_new_edge); 
     ef_enc <<= 1u;
     ef_enc |= uint(ef.temp_dbg_draw_edge); 
@@ -800,6 +815,8 @@ EdgeFlags decode_edge_flags(uint ef_enc)
     ef.temp_dbg_draw_edge = (1u == (ef_enc & 1u));
     ef_enc >>= 1u; 
     ef.temp_face_split_new_edge = (1u == (ef_enc & 1u));
+    ef_enc >>= 1u; 
+    ef.contour_split = (1u == (ef_enc & 1u));
     ef_enc >>= 1u; 
     ef.crease_level = (ef_enc & 0x3u);
     ef_enc >>= 2u; 
@@ -847,6 +864,7 @@ EdgeFlags init_edge_flags(bool dupli, bool border)
     ef.new_by_face_split = false; 
     ef.del_by_collapse = false; 
     ef.crease_level = 0u; 
+    ef.contour_split = false;
 
     ef.temp_face_split_new_edge = false; 
     ef.temp_dbg_draw_edge = false; 
@@ -861,11 +879,14 @@ void update_edge_flags__detect_sel_border(uint edge_id, EdgeFlags ef_old)
     store_edge_flags(edge_id, ef); 
 }
 
-void update_edge_flags__detect_crease(uint edge_id, EdgeFlags ef_old, uint crease_level)
+void update_edge_flags__detect_crease(uint crease_level, inout EdgeFlags ef)
 {
-    EdgeFlags ef = ef_old; 
     ef.crease_level = crease_level; 
-    store_edge_flags(edge_id, ef); 
+}
+
+void update_edge_flags__detect_contour_split(bool split, inout EdgeFlags ef)
+{
+    ef.contour_split = split; 
 }
 
 void update_edge_flags__reset_face_split_new_edge(uint edge_id, EdgeFlags ef_old)
@@ -897,6 +918,7 @@ EdgeFlags init_edge_flags__new_split_edge(bool is_on_old_edge)
     ef.new_by_face_split = false; 
     ef.del_by_collapse = false; 
     ef.crease_level = 0u; 
+    ef.contour_split = false; 
 
     ef.temp_face_split_new_edge = false; 
     ef.temp_dbg_draw_edge = false;
@@ -934,6 +956,7 @@ EdgeFlags init_edge_flags__new_face_split_edge()
     ef.new_by_face_split = true; 
     ef.del_by_collapse = false; 
     ef.crease_level = 0u; 
+    ef.contour_split = false; 
 
     ef.temp_face_split_new_edge = true; 
     ef.temp_dbg_draw_edge = false;
@@ -1147,265 +1170,10 @@ void validate_wedge_topo(uint wedge_id, out bool valid_ee, out bool valid_ev, ou
 
 
 
-
 float gaussian(float dist, float tau)
 {
     return exp(-(dist * dist) / (2.0f * tau * tau)); 
 }
-
-#if defined(QUADRICS_FILTERING_INCLUDE)
-
-/* Quardratic Filtering */
-struct Quadric
-{
-    mat4 quadric; /* symmetric */
-    float area; 
-}; 
-/* Pack lower diagonal of 4x4 symmetric matrix "quadric" into 10 floats */
-void encode_quadric(Quadric q, out vec4 packed_0, out vec4 packed_1, out vec3 packed_2)
-{
-    packed_0 = vec4(q.quadric[0][0], q.quadric[1][1], q.quadric[2][2], q.quadric[3][3]);
-    packed_1 = vec4(q.quadric[1][0], q.quadric[2][1], q.quadric[3][2], q.quadric[2][0]);
-    packed_2 = vec3(q.quadric[3][1], q.quadric[3][0], q.area);
-} 
-/* Unpack lower diagonal of 4x4 symmetric matrix "quadric" from 10 floats */
-Quadric decode_quadric(vec4 packed_0, vec4 packed_1, vec3 packed_2)
-{
-    Quadric q; 
-    q.quadric[0][0] = packed_0.x;
-    q.quadric[1][1] = packed_0.y;
-    q.quadric[2][2] = packed_0.z;
-    q.quadric[3][3] = packed_0.w;
-    q.quadric[1][0] = q.quadric[0][1] = packed_1.x;
-    q.quadric[2][1] = q.quadric[1][2] = packed_1.y;
-    q.quadric[3][2] = q.quadric[2][3] = packed_1.z;
-    q.quadric[2][0] = q.quadric[0][2] = packed_1.w;
-    q.quadric[3][1] = q.quadric[1][3] = packed_2.x;
-    q.quadric[3][0] = q.quadric[0][3] = packed_2.y;
-    q.area = packed_2.z; 
-
-    return q; 
-}
-
-/* minimizing [nT(x-p)]^2 */
-mat4 compute_plane_quadric(vec3 n, vec3 p)
-{
-    vec4 nq = vec4(n.xyz, 1.0f);
-    nq.w = -dot(nq.xyz, p); 
-    return mat4(nq.x * nq, nq.y * nq, nq.z * nq, nq.w * nq);
-}
-
-mat4 compute_tri_quadric(vec3 p0, vec3 p1, vec3 p2)
-{
-    mat3 det = mat3(p0, p1, p2); 
-    vec4 nq = vec4(cross(p0, p1)+cross(p1, p2)+cross(p2,p0), -determinant(det)); 
-    return mat4(nq.x * nq, nq.y * nq, nq.z * nq, nq.w * nq); 
-}
-
-/* minimizing ||x-p||^2 */
-mat4 compute_point_quadric(vec3 p)
-{ 
-    mat4 q = mat4(1.0);
-    q[3] = vec4(-p.xyz, dot(p, p));
-    q[0][3] = -p.x; 
-    q[1][3] = -p.y; 
-    q[2][3] = -p.z; 
-
-    return q; 
-}
-
-mat4 compute_view_binormal_plane_quadric(vec3 n, vec3 p, vec3 cam_pos_ws)
-{
-    vec3 v = normalize(cam_pos_ws - p); 
-    vec3 bn = normalize(cross(n, v));
-
-    return compute_plane_quadric(bn, p);  
-}
-
-mat4 compute_view_tagent_plane_quadric(vec3 n, vec3 p, vec3 cam_pos_ws)
-{
-    vec3 v = normalize(cam_pos_ws - p); 
-    vec3 bn = normalize(cross(n, v));
-    vec3 t = normalize(cross(bn, n)); 
-
-    return compute_plane_quadric(t, p);  
-}
-
-mat4 compute_view_plane_quadric(vec3 n, vec3 p, vec3 cam_pos_ws)
-{
-    vec3 v = normalize(cam_pos_ws - p); 
-    vec3 bn = normalize(cross(n, v));
-    vec3 t = normalize(cross(bn, n)); 
-    vec3 n_view_proj = normalize(cross(t, bn));
-
-    return compute_plane_quadric(n_view_proj, p);  
-}
-
-float compute_view_plane_dist(vec3 n0, vec3 p0, vec3 cam_pos_ws, vec3 p1)
-{
-    vec3 v = normalize(cam_pos_ws - p0); 
-    vec3 bn = normalize(cross(n0, v));
-    vec3 t = normalize(cross(bn, n0)); 
-
-    float d = dot(p0, t); 
-    return abs(dot(p1, t) - d); 
-}
-
-/* Match with "GPUMeshQuadricFilter"
- */ 
-#define GEOM_NORMAL_PLANE 0u
-#define VIEW_NORMAL_PLANE 1u
-#define VIEW_TANGENT_PLANE 2u
-#define VIEW_BINORMAL_PLANE 3u
-mat4 compute_filter_quadric(vec3 n, vec3 p, vec3 cam_pos_ws, float silouetteness, float pos_reg_weight)
-{
-    mat4 res; 
-
-    if (pcs_filtered_quadric_type_ == GEOM_NORMAL_PLANE)
-        res = compute_plane_quadric(n, p); 
-    else if (pcs_filtered_quadric_type_ == VIEW_NORMAL_PLANE)
-        res = (0.2f + silouetteness) * compute_view_plane_quadric(n, p, cam_pos_ws); 
-    else if (pcs_filtered_quadric_type_ == VIEW_TANGENT_PLANE)
-        res = (0.2f + silouetteness) * compute_view_tagent_plane_quadric(n, p, cam_pos_ws);
-    else if (pcs_filtered_quadric_type_ == VIEW_BINORMAL_PLANE)
-        res = (0.2f + silouetteness) * compute_view_binormal_plane_quadric(n, p, cam_pos_ws);
-        
-    res += pos_reg_weight * compute_point_quadric(p); /* regularization */
-
-    return res;
-}
-
-
-float compute_wedge_area(vec3 p0, vec3 p1, vec3 p2, vec3 p3)
-{
-    vec3 v10 = p0 - p1;
-	vec3 v13 = p3 - p1;
-   	vec3 v12 = p2 - p1;
-    
-    vec3 v13_cross_v10 = cross(v13, v10); 
-    vec3 v12_cross_v13 = cross(v12, v13); 
-
-    /* Averaged area */
-    float area = ((length(v13_cross_v10)) + length(v12_cross_v13)) * .25f; 
-
-    return area; 
-}
-
-vec3 compute_wedge_normal(vec3 p0, vec3 p1, vec3 p2, vec3 p3)
-{
-    vec3 v10 = p0 - p1;
-	vec3 v13 = p3 - p1;
-   	vec3 v12 = p2 - p1;
-    
-    vec3 v13_cross_v10 = cross(v13, v10); 
-    vec3 v12_cross_v13 = cross(v12, v13); 
-
-	vec3 n0 = normalize(v13_cross_v10);
-	vec3 n2 = normalize(v12_cross_v13);
-
-    return normalize((n0.xyz + n2.xyz) * .5f); 
-}
-
-void bilateral_filter_wedge_normal(
-    vec3 p0, vec3 p1, vec3 p2, vec3 p3, vec3 np, 
-    vec3 q0, vec3 q1, vec3 q2, vec3 q3, vec3 nq, 
-    vec3 cam_pos_ws, 
-    out vec3 n_filtered, out float weight
-){
-    float q_area = compute_wedge_area(q0, q1, q2, q3); 
-
-    float dist = distance(p0, p1); 
-    float geometry_weight = q_area * gaussian(dist, 1.0f);
-    
-    vec3 pp = (p1 + p3) / 3.0f;
-    vec3 qq = (q1 + q3) / 3.0f; 
-    float plane_dist = max(abs(dot(pp - qq, np)), abs(dot(pp - qq, nq)));
-    float plane_weight = gaussian(plane_dist, 0.1f);
-
-
-    /* Bilateral weight from "Fast and Effective Feature-Preserving Mesh Denoising" */
-    float normal_weight = dot(np, nq);
-    if (normal_weight < 0.9f) normal_weight = 0.0f; 
-    normal_weight *= normal_weight; 
-    weight = normal_weight * plane_weight/*  * geometry_weight */; 
-    
-
-    /* Test for view-aligned filtering --------------- */
-    vec3 vq = normalize(cam_pos_ws - qq); 
-    float cos_theta = dot(nq, vq); 
-    float sin_theta = sqrt(1.0f - cos_theta * cos_theta); 
-    
-    vec3 vp = normalize(cam_pos_ws - pp); 
-    vec3 np_view_proj = normalize(np - dot(np, vp) * vp);
-    vec3 np_view_filtered = normalize(sin_theta * np_view_proj + cos_theta * vp); 
-
-
-    n_filtered = nq; 
-}
-
-Quadric compute_wedge_quadric(
-    vec3 p0, vec3 p1, vec3 p2, vec3 p3, vec3 cam_pos_ws, float position_regularize_weight, 
-    vec3 wedge_normal
-) /* world pos of p0~3 */
-{ 
-    Quadric q; 
-    
-	vec3 v10 = p0 - p1;
-	vec3 v13 = p3 - p1;
-   	vec3 v12 = p2 - p1;
-    
-    vec3 v13_cross_v10 = cross(v13, v10); 
-    vec3 v12_cross_v13 = cross(v12, v13); 
-
-    /* Averaged area */
-    q.area = ((length(v13_cross_v10)) + length(v12_cross_v13)) * .25f; 
-
-    /* Quadric */
-	vec3 n0 = normalize(v13_cross_v10);
-    vec3 c0 = (p0 + p1 + p3) / 3.0f;     
-    float ndv0 = dot(normalize(cam_pos_ws - c0), n0); 
-
-	vec3 n2 = normalize(v12_cross_v13);
-    vec3 c2 = (p1 + p2 + p3) / 3.0f; 
-    float ndv2 = dot(normalize(cam_pos_ws - c2), n2);
-
-    float silouetteness = .0f; 
-    if (sign(ndv0) != sign(ndv2))
-        silouetteness = abs(ndv0 - ndv2) * .5f; 
-
-    vec3 pe = (p1 + p3) * .5f; 
-    q.quadric = compute_filter_quadric(
-        wedge_normal, pe, cam_pos_ws, silouetteness, position_regularize_weight
-    );
-
-	return q; 
-}
-
-
-
-float compute_edge_quadric_weight(vec3 p_v, vec3 p_e, Quadric q_e)
-{
-    float dist = distance(p_v, p_e); 
-    float geometry_weight = q_e.area * gaussian(dist, 1.0f); 
-    return geometry_weight; 
-}
-
-float compute_vert_quadric_weight(vec3 p_v, Quadric q_v, vec3 p_x, Quadric q_x, float dev_q, float dev_g)
-{ /* bilateral filtering */
-    float dist = distance(p_v, p_x); 
-    
-    vec4 v = vec4(p_v, 1.0f); 
-    float quadric_dist_v2qx = dot(v, q_x.quadric * v); /* vT Q v */
-    float quadric_weight = gaussian(sqrt(abs(quadric_dist_v2qx)), dev_q); 
-
-    float geometry_weight = 1.0f; // q_v.area * gaussian(dist, dev_g); 
-    
-    return geometry_weight * quadric_weight; 
-}
-
-#endif
-
-
 
 /* Remeshing ----------------------------------------------------------------------------------- */
 /* New vert pos for split/collapse: 
@@ -1475,6 +1243,9 @@ float average_adaptive_remesh_len_to_vcurv(float l)
 }
 
 #endif
+
+
+
 
 
 

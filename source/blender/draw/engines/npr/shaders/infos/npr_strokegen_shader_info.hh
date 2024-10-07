@@ -1780,8 +1780,9 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_analysis_order_1)
     .define("EDGE_FLAGS_INCLUDED", "1")
     .storage_buf(NUM_SSBO_BASE + 0u, Qualifier::READ_WRITE, "uint", "ssbo_vnor_[]")
     .storage_buf(NUM_SSBO_BASE + 1u, Qualifier::READ_WRITE, "uint", "ssbo_varea_[]")
-    .storage_buf(NUM_SSBO_BASE + 2u, Qualifier::READ_WRITE, "uint", "ssbo_edge_flags_[]");
+    .storage_buf(NUM_SSBO_BASE + 2u, Qualifier::READ_WRITE, "uint", "ssbo_edge_flags_[]")
 #define NUM_SSBO_1 ((NUM_SSBO_BASE + 3u))
+    .push_constant(Type::INT, "pcs_order_1_eval_only_interpo_contour_adj_verts_");
 
 GPU_SHADER_CREATE_INFO(bnpr_geom_analysis_order_1_main)
     .do_static_compilation(true)
@@ -1855,6 +1856,31 @@ GPU_SHADER_CREATE_INFO(bnpr_geom_analysis_feature_edges)
     .define("EDGE_FLAGS_INCLUDED", "1")
     .storage_buf(NUM_SSBO_BASE, Qualifier::READ_WRITE, "uint", "ssbo_edge_flags_[]")
     .push_constant(Type::INT, "pcs_only_selected_edges_");
+
+GPU_SHADER_CREATE_INFO(bnpr_geom_analysis_feature_edges_crease)
+    .do_static_compilation(true)
+    .additional_info("bnpr_geom_analysis_feature_edges")
+    .define("_KERNEL_MULTICOMPILE__CALC_FEATURE_EDGES__CREASE_DETECTION");
+
+GPU_SHADER_CREATE_INFO(bnpr_geom_analysis_feature_edges_verts_contour_split)
+    .do_static_compilation(true)
+    .additional_info("bnpr_geom_analysis_feature_edges")
+    .define("_KERNEL_MULTICOMPILE__CALC_FEATURE_EDGES__CONTOUR_SPLIT_DETECTION");
+
+
+/* Interpolate geom attributes for interpolated contour vertices */
+GPU_SHADER_CREATE_INFO(bnpr_geom_analysis_interpolate_contour_vert_attrs)
+    .do_static_compilation(true)
+    .additional_info("bnpr_geom_analysis")
+    .define("_KERNEL_MULTICOMPILE__INTERPOLATE_CONTOUR_VERT_ATTRS", "1")
+    .define("INCLUDE_VERTEX_NORMAL", "1")
+    .define("INCLUDE_VERTEX_CURV_MAX", "1")
+    .define("COMPACTION_LIB_EXCLUDE_DEFAULT_CODEGEN", "1")
+    .storage_buf(NUM_SSBO_BASE + 0, Qualifier::READ_WRITE, "uint", "ssbo_contour_vert_to_old_edge_[]")
+    .storage_buf(NUM_SSBO_BASE + 1, Qualifier::READ_WRITE, "uint", "ssbo_vnor_[]")
+    .storage_buf(NUM_SSBO_BASE + 2, Qualifier::READ_WRITE, "uint", "ssbo_vcurv_max_[]"); 
+    
+
 
 #undef NUM_SSBO_BASE
 /** \} */

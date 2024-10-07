@@ -316,8 +316,9 @@ void main()
 			dbg_line = dbg_line && (!valid_ve); 
 		if (pcs_edge_visualize_mode_ == 4) 
 		{
-			dbg_line = dbg_line && (ef.selected); 
-			dbg_col = rand_col_rgb(pcg_nested_3d(v[1]) % 137u, pcg_nested_3d(v[3]) % 137u); 
+			dbg_line = valid_thread && ef.contour_split; 
+			// dbg_col = rand_col_rgb(pcg_nested_3d(v[1]) % 137u, pcg_nested_3d(v[3]) % 137u); 
+			dbg_col = ef.contour_split ? vec3(1.0f, 1.0f, 0.0f) : vec3(0.0f, 1.0f, 1.0f); 
 		}
 
 		/* visualize selected edges */ 
