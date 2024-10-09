@@ -70,7 +70,7 @@ using namespace draw;
     return numThreads;
   }
 
-  static inline uint compute_num_groups(
+  static inline uint compute_num_groups( 
     uint numWorkItems, uint groupSize,
     uint numItemsPerThread = 1u, uint numThreadsPerItem = 1u
   )

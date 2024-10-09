@@ -967,7 +967,7 @@ void main()
 			vec2 vndir = normalize(vn); 
 
 			float angle = acos(dot(vpdir, vndir));
-			bool fake_corner = (angle > PI * .30f); 
+			bool fake_corner = (angle > ((pcs_curve_max_split_angle_ / 180.0f) * PI)); 
 
 			if (cf.is_corner && valid_thread)
 			{

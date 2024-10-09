@@ -144,8 +144,9 @@ typedef struct PerObjectStrokegenSettings {
   float visibility_threshold;
   float curve_width;
   // float color[4];
+  float curve_max_split_angle;  // for STROKEGEN_FLAG_CURVE_SEGMENT_BY_2D_CORNERS
   uint32_t flags;
-  uint32_t _pad[3];
+  uint32_t _pad[2];
 } PerObjectStrokegenSettings; 
 
 enum ePerObjectStrokegenSetting_CurveType {

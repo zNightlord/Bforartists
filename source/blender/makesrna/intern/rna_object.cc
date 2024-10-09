@@ -2879,7 +2879,13 @@ static void rna_def_object_strokegen(BlenderRNA *brna)
     RNA_def_property_boolean_sdna(
         prop, nullptr, "flags", STROKEGEN_FLAG_CURVE_SEGMENT_BY_2D_CORNERS);
     RNA_def_property_ui_text(prop, "Curve Tapering: Sharp Corners", "Curves start/end at sharp corners");
-    RNA_def_property_update(prop, 0, "rna_object_strokegen_update"); 
+    RNA_def_property_update(prop, 0, "rna_object_strokegen_update");
+
+    prop = RNA_def_property(srna, "curve_max_split_angle", PROP_FLOAT, PROP_NONE);
+    RNA_def_property_range(prop, .0f, 180.0f);
+    RNA_def_property_ui_range(prop, .0f, 100.0f, 5.0f, 1);
+    RNA_def_property_ui_text(prop, "Max split angle", "maximum angle to split the curve");
+    RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, "rna_object_strokegen_update");
   }
 }
 

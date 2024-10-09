@@ -217,6 +217,8 @@ void StrokeGenPassModule::sync_object(int gpu_obj_id, Object* ob)
   meshing_params.visibility_thresh = obj_strokegen_settings.visibility_threshold;
 
   meshing_params.cusp_denoise_radius = calculate_3d_curve_denoising_radius(ob);
+
+  meshing_params.curve_2d_max_split_angle = obj_strokegen_settings.curve_max_split_angle; 
   // std::cout << "cusp_denoise_radius" << meshing_params.cusp_denoise_radius << std::endl;
 }
 
@@ -2742,7 +2744,8 @@ void StrokeGenPassModule::on_end_sync()
         sub.shader_set(shaders_.static_shader_get(CONTOUR_2D_SAMPLES_REJECT_FAKE_CORNERS));
 
         bind_rsc_for_contour_2d_sample_evaluation_(sub, screen_res, sample_rate, ssbo_offset);
-        sub.bind_ssbo(ssbo_offset + 0, buffers_.ssbo_merged_strokegen_object_infos_); 
+        sub.bind_ssbo(ssbo_offset + 0, buffers_.ssbo_merged_strokegen_object_infos_);
+        sub.push_constant("pcs_curve_max_split_angle_", meshing_params.curve_2d_max_split_angle); 
 
         sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_2d_sample_dispatch_args_);
         sub.barrier(GPU_BARRIER_SHADER_STORAGE);

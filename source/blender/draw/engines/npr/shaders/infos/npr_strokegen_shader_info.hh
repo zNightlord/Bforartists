@@ -579,6 +579,7 @@ GPU_SHADER_CREATE_INFO(strokegen_contour_2d_resample_eval_topo_remove_fake_corne
 #define SSBO_OFFSET NUM_SSBO_strokegen_contour_2d_sample_eval
     .storage_buf(SSBO_OFFSET + 0, Qualifier::READ_WRITE, "uint", "ssbo_merged_strokegen_object_infos_[]")
 #undef SSBO_OFFSET
+    .push_constant(Type::FLOAT, "pcs_curve_max_split_angle_");
     ;
 
 GPU_SHADER_CREATE_INFO(strokegen_contour_2d_resample_eval_topo_finish)

@@ -235,6 +235,8 @@ public:
     bool cusp_eval_opti;
     float visibility_thresh;
 
+    float curve_2d_max_split_angle; 
+
     int dbg_matching_line_mode; 
     int dbg_history_trace_steps;
     int dbg_history_trace_passes;

@@ -365,8 +365,11 @@ class OBJECT_PT_strokegen(ObjectButtonsPanel, Panel):
         subcol.prop(strokegen, "crease_on", text="Enale Crease", toggle=False, invert_checkbox=True)
 
         col = layout.column(heading="Curve Tapering")
-        col.prop(strokegen, "curve_segment_by_3d_cusps", text="Break at cusps", toggle=False)
-        col.prop(strokegen, "curve_segment_by_2d_corners", text="Break at sharp angles", toggle=False)
+        col.prop(strokegen, "curve_segment_by_3d_cusps", text="Break at cusps", toggle=True)
+        col.prop(strokegen, "curve_segment_by_2d_corners", text="Break at sharp angles", toggle=True)
+        subcol = col.column()
+        subcol.active = strokegen.curve_segment_by_2d_corners
+        subcol.prop(strokegen, "curve_max_split_angle", text="Corner Angle")
 
 
 
