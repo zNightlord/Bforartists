@@ -550,7 +550,7 @@ void main()
     // TODO: also support for cotour edges. 
     bool is_contour = false; 
     if (0 < pcs_extract_interpo_contour_)
-        is_contour = valid_thread && is_interp_contour_edge__before_tessellation(vf_1, vf_3, ef); 
+        is_contour = valid_thread && ef.contour_split; // is_interp_contour_edge__before_tessellation(vf_1, vf_3, ef); 
     else
     {
         mat4 view_to_world = ubo_view_matrices_.viewinv; // transform matrices, see "common_view_lib.glsl"

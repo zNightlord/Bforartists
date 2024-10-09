@@ -409,6 +409,9 @@ using namespace draw;
     bool draw_contour;
     bool draw_border;
     bool draw_invisible;
+
+    bool seg_by_cusp;
+    bool seg_by_corner_2d; 
   };
   static inline uint encode_strokegen_object_flags(StrokegenObjectFlags flags)
   {
@@ -422,12 +425,20 @@ using namespace draw;
     enc |= U32_CAST((flags.draw_border));
     enc <<= 1;
     enc |= U32_CAST((flags.draw_invisible));
+    enc <<= 1;
+    enc |= U32_CAST((flags.seg_by_cusp));
+    enc <<= 1;
+    enc |= U32_CAST((flags.seg_by_corner_2d)); 
     return enc;
 #undef U32_CAST
   }
   static inline StrokegenObjectFlags decode_strokegen_object_flags(uint enc)
   {
     StrokegenObjectFlags flags;
+    flags.seg_by_corner_2d = ((enc & 1u) == 1u);
+    enc >>= 1;
+    flags.seg_by_cusp = ((enc & 1u) == 1u);
+    enc >>= 1; 
     flags.draw_invisible = ((enc & 1u) == 1u);
     enc >>= 1;
     flags.draw_border = ((enc & 1u) == 1u);

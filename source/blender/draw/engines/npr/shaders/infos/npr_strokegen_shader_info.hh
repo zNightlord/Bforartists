@@ -574,7 +574,12 @@ GPU_SHADER_CREATE_INFO(strokegen_contour_2d_resample_eval_topo_remove_fake_corne
     .do_static_compilation(true)
     .additional_info("strokegen_contour_2d_sample_eval")
     .define("_KERNEL_MULTICOMPILE__CONTOUR_EDGES_2D_RESAMPLE__EVALUATE_TOPOLOGY", "1")
-    .define("_KERNEL_MULTICOMPILE__CONTOUR_EDGES_2D_RESAMPLE__EVALUATE_TOPOLOGY__REMOVE_FAKE_CORNERS", "1");
+    .define("_KERNEL_MULTICOMPILE__CONTOUR_EDGES_2D_RESAMPLE__EVALUATE_TOPOLOGY__REMOVE_FAKE_CORNERS", "1")
+    .define("INCLUDE_PER_OBJECT_INFO")
+#define SSBO_OFFSET NUM_SSBO_strokegen_contour_2d_sample_eval
+    .storage_buf(SSBO_OFFSET + 0, Qualifier::READ_WRITE, "uint", "ssbo_merged_strokegen_object_infos_[]")
+#undef SSBO_OFFSET
+    ;
 
 GPU_SHADER_CREATE_INFO(strokegen_contour_2d_resample_eval_topo_finish)
     .do_static_compilation(true)
@@ -2466,7 +2471,8 @@ GPU_SHADER_CREATE_INFO(npr_segloopconv1D_seg_denoising_convolution)
     .storage_buf(4, Qualifier::READ_WRITE, "uint", "ssbo_contour_snake_rank_[]")
     .storage_buf(5, Qualifier::READ_WRITE, "uint", "ssbo_contour_snake_list_len_[]")
     .storage_buf(6, Qualifier::READ_WRITE, "uint", "ssbo_contour_snake_seg_rank_[]")
-    .storage_buf(7, Qualifier::READ_WRITE, "uint", "ssbo_contour_snake_seg_len_[]");
+    .storage_buf(7, Qualifier::READ_WRITE, "uint", "ssbo_contour_snake_seg_len_[]")
+    .push_constant(Type::FLOAT, "pcs_cusp_denoise_radius_");
 
 GPU_SHADER_CREATE_INFO(npr_segloopconv1D_2d_sample_processing)
     .typedef_source("bnpr_shader_shared.hh")

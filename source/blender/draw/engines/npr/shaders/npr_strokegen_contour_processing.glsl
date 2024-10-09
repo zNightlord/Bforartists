@@ -72,14 +72,6 @@ void main()
 		ssbo_contour_snake_to_temporal_record_[vtx_addr] = cetd.temporal_rec_id; 
 		ssbo_contour_snake_to_object_id_[vtx_addr] = cetd.obj_id;
 		
-		CuspSegmentDenoiseData seg_denoise_data; // setup segloopconv1d input buffer
-		uvec4 seg_denoise_data_enc;
-		// seg_denoise_data.cf = cf; 
-		// seg_denoise_data.vpos_ws = cetd.vpos_ws[0]; 
-		// seg_denoise_data_enc = encode_cusp_segment_denoise_data(seg_denoise_data); 
-		// Store4(ssbo_in_segloopconv1d_data_, vtx_addr, seg_denoise_data_enc);
-		
-		
 		if (additional_output_tail_vtx)
 		{
         	Store3(ssbo_contour_snake_vpos_, vtx_addr+1u, floatBitsToUint(cetd.vpos_ws[1]));
@@ -94,12 +86,6 @@ void main()
 			// but this requires 2 rec_ids for both verts in the ContourEdgeTransferData
 			ssbo_contour_snake_to_temporal_record_[vtx_addr+1u] = cetd.temporal_rec_id; 
 			ssbo_contour_snake_to_object_id_[vtx_addr+1u] = cetd.obj_id;
-
-			// setup segloopconv1d input buffer
-			// seg_denoise_data.cf = cf; 
-			// seg_denoise_data.vpos_ws = cetd.vpos_ws[1]; 
-			// seg_denoise_data_enc = encode_cusp_segment_denoise_data(seg_denoise_data);
-			// Store4(ssbo_in_segloopconv1d_data_, (vtx_addr+1u), seg_denoise_data_enc);
 		}
     }
 #endif
@@ -999,9 +985,15 @@ void main()
 				cf.is_corner = false; 
 		}
 
+		{ // Determine final curve segmentation for render
+			const uint object_id = load_ssbo_contour_2d_sample_topology__object_id(sample_id, num_samples); 
+			StrokegenObjectInfo object_info = load_strokegen_object_info(object_id); 
 
+			cf.seg_head = /* cf.is_corner || cf.seg_head_contour ||  */cf.seg_head_clipped; 
+			if (object_info.flags.seg_by_cusp) 		cf.seg_head = cf.seg_head || cf.seg_head_contour;
+			if (object_info.flags.seg_by_corner_2d) cf.seg_head = cf.seg_head || cf.is_corner; 
+		}
 
-		cf.seg_head = /* cf.is_corner ||  */cf.seg_head_contour || cf.seg_head_clipped; 
 		if (valid_thread)
 			store_ssbo_contour_2d_sample_topology__flags(sample_id, cf); 
 	#endif

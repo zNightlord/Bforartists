@@ -55,7 +55,7 @@ void StrokegenSyncModule::sync_mesh(
     ObjectKey ob_key(ob);
     int gpu_obj_id = inst_.object_gpu_id_map.size();
     inst_.object_gpu_id_map.add(ob_key.hash(), gpu_obj_id);
-    inst_.strokegen_passes.sync_object(gpu_obj_id, ob->strokegen); 
+    inst_.strokegen_passes.sync_object(gpu_obj_id, ob); 
     inst_.strokegen_buffers.sync_object(ob);  // add object data to gpu buffers
 
     // Record per-object strokegen shaders ------------------

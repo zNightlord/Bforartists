@@ -193,10 +193,11 @@ void StrokeGenPassModule::on_begin_sync(int frame_counter)
     surf_dbg_ctx.enable_dbg_view = (0 < scene_eval->npr.npr_test_val_17);  
   } 
 
-void StrokeGenPassModule::sync_object(int obj_id,
-    PerObjectStrokegenSettings &obj_strokegen_settings)
+void StrokeGenPassModule::sync_object(int gpu_obj_id, Object* ob)
 {
-  strokegen_obj_id = obj_id;
+  PerObjectStrokegenSettings &obj_strokegen_settings = ob->strokegen; 
+
+  strokegen_obj_id = gpu_obj_id;
 
   meshing_params.visualize_contour_edges = true; // generate both debug & contour stroke draw calls
   pass_draw_contour_edges.draw_settings.draw_hidden_lines =
@@ -213,7 +214,10 @@ void StrokeGenPassModule::sync_object(int obj_id,
   meshing_params.iters_test_subdiv = use_subd ? 2 : 0;
   meshing_params.subdiv_use_crease = (0u != (obj_strokegen_settings.flags & STROKEGEN_FLAG_CREASE_ON));
 
-  meshing_params.visibility_thresh = obj_strokegen_settings.visibility_threshold; 
+  meshing_params.visibility_thresh = obj_strokegen_settings.visibility_threshold;
+
+  meshing_params.cusp_denoise_radius = calculate_3d_curve_denoising_radius(ob);
+  // std::cout << "cusp_denoise_radius" << meshing_params.cusp_denoise_radius << std::endl;
 }
 
 
@@ -575,6 +579,19 @@ void StrokeGenPassModule::on_end_sync()
   }
 
 
+  float StrokeGenPassModule::calculate_3d_curve_denoising_radius(Object *ob)
+  {
+    const std::optional<blender::Bounds<float3>> bounds = BKE_object_boundbox_get(ob);
+    const float4x4 object_mat{ob->object_to_world().ptr()};
+    float3 bbox_min_ws {object_mat * float4{bounds->min, 1.0f}}; 
+    float3 bbox_max_ws {object_mat * float4(bounds->max, 1.0f)};
+    float3 bbox_extent = (bbox_max_ws - bbox_min_ws) * .5f;
+    float bbox_diag_len = math::length(bbox_extent);
+    float seg_denoise_radius = bbox_diag_len * /*ratio from experience*/ (0.08f / 1.00266f);
+
+    return seg_denoise_radius; 
+  }
+
   /**
    * \brief Add a subpass for extracting geometry from given GPUBatch.
    * \param ob Mesh Object
@@ -637,7 +654,6 @@ void StrokeGenPassModule::on_end_sync()
     int num_verts = vbo_surf_pos->vertex_len;
 
 
-
     // Copy VBO/IBO ----------------------------------------------------------
     // Note: this also works
     /* GPU_storagebuf_copy_sub_from_vertbuf(
@@ -673,7 +689,7 @@ void StrokeGenPassModule::on_end_sync()
     SelectVertsFromEdgesContext vtx_sel_ctx_vnor = vtx_sel_ctx_flooding;
     append_subpass_select_verts_from_selected_edges(vtx_sel_ctx_vnor, num_edges, num_verts); 
 
-    // Init vert curvatures -------------------------------------------------------------------
+    // Init vert attrs on the base mesh -----------------------------------------------------
     SurfaceAnalysisContext surf_analysis_ctx_init;
     GetSurfaceAnalysisContext_InitPass(surf_analysis_ctx_init);
     auto surf_dbg_ctx_cpy = surf_dbg_ctx;
@@ -2719,13 +2735,14 @@ void StrokeGenPassModule::on_end_sync()
       settings.lazy_dispatch = true;
       append_subpass_segloopconv1d(settings, pass_process_contours);
 
-
+      
       append_subpass_2d_sample_segmentation(screen_res, sample_rate, false);
       { 
         auto& sub = pass_process_contours.sub("strokegen_contour_2d_resample_eval_topo_remove_fake_corners");
         sub.shader_set(shaders_.static_shader_get(CONTOUR_2D_SAMPLES_REJECT_FAKE_CORNERS));
 
         bind_rsc_for_contour_2d_sample_evaluation_(sub, screen_res, sample_rate, ssbo_offset);
+        sub.bind_ssbo(ssbo_offset + 0, buffers_.ssbo_merged_strokegen_object_infos_); 
 
         sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_2d_sample_dispatch_args_);
         sub.barrier(GPU_BARRIER_SHADER_STORAGE);
@@ -3311,6 +3328,7 @@ void StrokeGenPassModule::on_end_sync()
         sub.bind_ssbo(5, buffers_.ssbo_contour_snake_list_len_);
         sub.bind_ssbo(6, buffers_.ssbo_contour_snake_seg_rank_);
         sub.bind_ssbo(7, buffers_.ssbo_contour_snake_seg_len_);
+        sub.push_constant("pcs_cusp_denoise_radius_", meshing_params.cusp_denoise_radius); 
       }
       else if (settings.shader_convolution == CONV1D_2D_SAMPLE_CORNER_CONVOLUTION_STEP_0
                 || settings.shader_convolution == CONV1D_2D_SAMPLE_CORNER_CONVOLUTION_STEP_1

@@ -163,10 +163,12 @@ ENUM_OPERATORS(ePerObjectStrokegenSetting_ShadingType, STROKEGEN_SHADING_TYPE_OP
 enum ePerObjectStrokegenSetting_Flags {
   STROKEGEN_FLAG_TESSELLATION_ON = 1, 
   STROKEGEN_FLAG_CREASE_ON = (1 << 1),
-  STROKEGEN_FLAG_DRAW_HIDDEN_CURVES = (1 << 2)
+  STROKEGEN_FLAG_DRAW_HIDDEN_CURVES = (1 << 2),
+  STROKEGEN_FLAG_CURVE_SEGMENT_BY_3D_CUSPS = (1 << 3),
+  STROKEGEN_FLAG_CURVE_SEGMENT_BY_2D_CORNERS = (1 << 4),
 };
 ENUM_OPERATORS(ePerObjectStrokegenSetting_Flags, STROKEGEN_CURVE_TYPE_CONTOUR);
-#define ePerObjectStrokegenSetting_Flags_Default_Val 1u
+#define ePerObjectStrokegenSetting_Flags_Default_Val 25u
 
 /* Evaluated light linking state needed for the render engines integration. */
 typedef struct LightLinkingRuntime {

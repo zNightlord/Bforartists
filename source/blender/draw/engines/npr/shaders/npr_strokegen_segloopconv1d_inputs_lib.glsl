@@ -153,7 +153,7 @@ bool should_init_conv_data(bool mov_left, uint mov_step) { return mov_left && (m
             return encoded_data; 
         }
         
-        #define SEG_DENOISE_PROBE_DISTANCE 0.08f
+        #define SEG_DENOISE_PROBE_DISTANCE (pcs_cusp_denoise_radius_) // 0.08f
 
         void FUNC_CONVOLUTION_LOOPCONV1D(
             bool mov_left, uint mov_step, bool seg_is_loop, uint seg_head_id, uint seg_tail_id, uint item_id, 

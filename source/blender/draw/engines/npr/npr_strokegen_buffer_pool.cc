@@ -192,6 +192,8 @@ namespace blender::npr::strokegen
     flags.draw_contour = ob->strokegen.curve_type == STROKEGEN_CURVE_TYPE_CONTOUR; 
     flags.draw_border = false;
     flags.draw_invisible = false;
+    flags.seg_by_cusp      = (0 != (ob->strokegen.flags & STROKEGEN_FLAG_CURVE_SEGMENT_BY_3D_CUSPS));
+    flags.seg_by_corner_2d = (0 != (ob->strokegen.flags & STROKEGEN_FLAG_CURVE_SEGMENT_BY_2D_CORNERS));
     ubo_new_obj->flags = encode_strokegen_object_flags(flags);
     ubo_new_obj->dummy = 0;
 

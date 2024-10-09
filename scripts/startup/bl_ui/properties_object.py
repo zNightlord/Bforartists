@@ -364,18 +364,12 @@ class OBJECT_PT_strokegen(ObjectButtonsPanel, Panel):
         subcol.active = strokegen.tessellation_on
         subcol.prop(strokegen, "crease_on", text="Enale Crease", toggle=False, invert_checkbox=True)
 
+        col = layout.column(heading="Curve Tapering")
+        col.prop(strokegen, "curve_segment_by_3d_cusps", text="Break at cusps", toggle=False)
+        col.prop(strokegen, "curve_segment_by_2d_corners", text="Break at sharp angles", toggle=False)
 
-        # row = layout.row(heading="Override Crease")
-        # row.prop(strokegen, "use_crease_override", text="")
-        # subrow = row.row()
-        # subrow.active = strokegen.use_crease_override
-        # subrow.prop(strokegen, "crease_threshold", slider=True, text="")
 
-        # row = layout.row(heading="Intersection Priority")
-        # row.prop(strokegen, "use_intersection_priority_override", text="")
-        # subrow = row.row()
-        # subrow.active = strokegen.use_intersection_priority_override
-        # subrow.prop(strokegen, "intersection_priority", text="")
+
 
 
 class OBJECT_PT_motion_paths(MotionPathButtonsPanel, Panel):

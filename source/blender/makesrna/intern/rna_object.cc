@@ -2843,26 +2843,43 @@ static void rna_def_object_strokegen(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Visibility Threshold", "the strength of occlusion culling");
   RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, "rna_object_strokegen_update");
 
-  { // Misc Flags
+  { // Tessellation
     prop = RNA_def_property(srna, "tessellation_on", PROP_BOOLEAN, PROP_NONE);
     RNA_def_property_boolean_sdna(prop, nullptr, "flags", STROKEGEN_FLAG_TESSELLATION_ON);
-    RNA_def_property_ui_text(prop, "Use dynamic tessellation", "subdivide surface to improve visual smoothness and support advanced features");
+    RNA_def_property_ui_text(
+        prop,
+        "Use dynamic tessellation",
+        "subdivide surface to improve visual smoothness and support advanced features");
     RNA_def_property_update(prop, 0, "rna_object_strokegen_update");
 
     prop = RNA_def_property(srna, "crease_on", PROP_BOOLEAN, PROP_NONE);
     RNA_def_property_boolean_negative_sdna(prop, nullptr, "flags", STROKEGEN_FLAG_CREASE_ON);
+    RNA_def_property_ui_text(prop,
+                             "Use creases in dynamic tessellation",
+                             "Detect sharp edges & allow for preserving sharp features");
+    RNA_def_property_update(prop, 0, "rna_object_strokegen_update");
+  }
+
+  { // Stylization
+    prop = RNA_def_property(srna, "draw_hidden_contour", PROP_BOOLEAN, PROP_NONE);
+    RNA_def_property_boolean_negative_sdna(
+        prop, nullptr, "flags", STROKEGEN_FLAG_DRAW_HIDDEN_CURVES);
     RNA_def_property_ui_text(
-        prop,
-        "Use creases in dynamic tessellation",
-        "Detect sharp edges & allow for preserving sharp features");
+        prop, "Draw Occluded Contours", "draw both visible & hidden contours");
     RNA_def_property_update(prop, 0, "rna_object_strokegen_update");
 
-    prop = RNA_def_property(srna, "draw_hidden_contour", PROP_BOOLEAN, PROP_NONE);
-    RNA_def_property_boolean_negative_sdna(prop, nullptr, "flags", STROKEGEN_FLAG_DRAW_HIDDEN_CURVES);
-    RNA_def_property_ui_text(prop,
-                             "Draw Occluded Contours",
-                             "draw both visible & hidden contours");
+    prop = RNA_def_property(srna, "curve_segment_by_3d_cusps", PROP_BOOLEAN, PROP_NONE);
+    RNA_def_property_boolean_sdna(
+        prop, nullptr, "flags", STROKEGEN_FLAG_CURVE_SEGMENT_BY_3D_CUSPS);
+    RNA_def_property_ui_text(
+        prop, "Curve Tapering: Cusps", "Curves start/end at contour cusps");
     RNA_def_property_update(prop, 0, "rna_object_strokegen_update");
+
+    prop = RNA_def_property(srna, "curve_segment_by_2d_corners", PROP_BOOLEAN, PROP_NONE);
+    RNA_def_property_boolean_sdna(
+        prop, nullptr, "flags", STROKEGEN_FLAG_CURVE_SEGMENT_BY_2D_CORNERS);
+    RNA_def_property_ui_text(prop, "Curve Tapering: Sharp Corners", "Curves start/end at sharp corners");
+    RNA_def_property_update(prop, 0, "rna_object_strokegen_update"); 
   }
 }
 

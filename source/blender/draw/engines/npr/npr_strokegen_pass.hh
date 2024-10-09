@@ -141,7 +141,7 @@ public:
   /** \name Sync with Draw Module
      * \{ */
   void on_begin_sync(int frame_counter);
-  void sync_object(int obj_id, PerObjectStrokegenSettings& obj_strokegen_settings); 
+  void sync_object(int strokegen_obj_id, Object* ob); 
   void on_end_sync(); 
   /** \} */
 
@@ -231,6 +231,7 @@ public:
     bool subdiv_use_crease;
 
     bool denoise_cusp_segmentation;
+    float cusp_denoise_radius; // world space denoising radius along the curve
     bool cusp_eval_opti;
     float visibility_thresh;
 
@@ -408,6 +409,7 @@ public:
   void append_subpass_init_temporal_records(int num_edges,
                                             SurfaceAnalysisContext surf_analysis_ctx_contour);
   void append_subpass_reconstruct_last_frame_temporal_records();
+  float calculate_3d_curve_denoising_radius(Object* ob);
   void append_subpasses_sqrt_subdiv(int num_edges, int num_verts);
   void bind_rsc_for_loop_subd_tree_processing(StrokegenMeshComputePass::PassBase<DrawCommandBuf>& sub, int num_edges, int& out_ssbo_offset);
   void append_subpass_build_loop_subd_tree_upwards_for_face_edges(int num_edges);
