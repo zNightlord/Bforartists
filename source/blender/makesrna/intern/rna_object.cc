@@ -2814,9 +2814,15 @@ static void rna_def_object_strokegen(BlenderRNA *brna)
 
   { // Curve types
     prop = RNA_def_property(srna, "contour", PROP_BOOLEAN, PROP_NONE);
-    RNA_def_property_boolean_negative_sdna(
+    RNA_def_property_boolean_sdna(
         prop, nullptr, "curve_type", STROKEGEN_CURVE_TYPE_CONTOUR);
     RNA_def_property_ui_text(prop, "Contour Curves", "draw the silhouette of this mesh");
+    RNA_def_property_update(prop, 0, "rna_object_strokegen_update");
+
+    prop = RNA_def_property(srna, "smooth_contour", PROP_BOOLEAN, PROP_NONE);
+    RNA_def_property_boolean_sdna(
+        prop, nullptr, "flags", STROKEGEN_FLAG_SMOOTH_CONTOURS_ON);
+    RNA_def_property_ui_text(prop, "Smooth Contour", "use interpolated contour");
     RNA_def_property_update(prop, 0, "rna_object_strokegen_update");
 
     prop = RNA_def_property(srna, "border", PROP_BOOLEAN, PROP_NONE);
@@ -2852,8 +2858,14 @@ static void rna_def_object_strokegen(BlenderRNA *brna)
         "subdivide surface to improve visual smoothness and support advanced features");
     RNA_def_property_update(prop, 0, "rna_object_strokegen_update");
 
+    prop = RNA_def_property(srna, "tessellation_level", PROP_INT, PROP_NONE);
+    RNA_def_property_int_sdna(prop, nullptr, "tessellation_level");
+    RNA_def_property_ui_text(
+        prop, "Tessellation Level", "Determines how heavy the tessellation is");
+    RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, "rna_object_strokegen_update");
+
     prop = RNA_def_property(srna, "crease_on", PROP_BOOLEAN, PROP_NONE);
-    RNA_def_property_boolean_negative_sdna(prop, nullptr, "flags", STROKEGEN_FLAG_CREASE_ON);
+    RNA_def_property_boolean_sdna(prop, nullptr, "flags", STROKEGEN_FLAG_CREASE_ON);
     RNA_def_property_ui_text(prop,
                              "Use creases in dynamic tessellation",
                              "Detect sharp edges & allow for preserving sharp features");
@@ -2862,7 +2874,7 @@ static void rna_def_object_strokegen(BlenderRNA *brna)
 
   { // Stylization
     prop = RNA_def_property(srna, "draw_hidden_contour", PROP_BOOLEAN, PROP_NONE);
-    RNA_def_property_boolean_negative_sdna(
+    RNA_def_property_boolean_sdna(
         prop, nullptr, "flags", STROKEGEN_FLAG_DRAW_HIDDEN_CURVES);
     RNA_def_property_ui_text(
         prop, "Draw Occluded Contours", "draw both visible & hidden contours");

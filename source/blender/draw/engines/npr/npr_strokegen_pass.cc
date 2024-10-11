@@ -206,12 +206,14 @@ void StrokeGenPassModule::sync_object(int gpu_obj_id, Object* ob)
     pass_draw_contour_edges.draw_settings.draw_hidden_lines;
   pass_draw_debug_lines_.draw_settings.draw_hidden_lines = false; 
 
-  bool use_subd = (1u == (obj_strokegen_settings.flags & STROKEGEN_FLAG_TESSELLATION_ON)); 
+  bool use_subd = (0u != (obj_strokegen_settings.flags & STROKEGEN_FLAG_TESSELLATION_ON)); 
+  bool use_interpo_contour = (0u !=
+                              (obj_strokegen_settings.flags & STROKEGEN_FLAG_SMOOTH_CONTOURS_ON)); 
 
-  meshing_params.contour_mode = use_subd ? ContourType::Interpolated : ContourType::Raw; 
+  meshing_params.contour_mode = use_interpo_contour ? ContourType::Interpolated : ContourType::Raw; 
 
   meshing_params.subdiv_type = 0; // loop subdiv
-  meshing_params.iters_test_subdiv = use_subd ? 2 : 0;
+  meshing_params.iters_test_subdiv = use_subd ? obj_strokegen_settings.tessellation_level : 0;
   meshing_params.subdiv_use_crease = (0u != (obj_strokegen_settings.flags & STROKEGEN_FLAG_CREASE_ON));
 
   meshing_params.visibility_thresh = obj_strokegen_settings.visibility_threshold;

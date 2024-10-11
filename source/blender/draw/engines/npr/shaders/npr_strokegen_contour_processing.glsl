@@ -1060,10 +1060,10 @@ void main()
 
 
 	vec4 col = vec4(.0f, .0f, .0f, 1.0f); 
-	// col.rgb = rand_col_rgb(seg_len, seg_len); 
+	uint sample_seg_head_id = move_contour_id_along_loop(cct, sample_id, -float(seg_rank));
+	col.rgb = rand_col_rgb(sample_seg_head_id, sample_seg_head_id); 
 	if (cf.occluded/* occluded_filtered */) col.a = .0f; 
 	// if (is_looped_samples) col = vec4(1.0f, 0.0f, 0.0f, 1.0f); 
-
 	if (valid_thread) 
 	{
 		store_ssbo_stroke_mesh_pool__skeletal_VB(sample_id, verts);

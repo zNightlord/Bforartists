@@ -345,25 +345,35 @@ class OBJECT_PT_strokegen(ObjectButtonsPanel, Panel):
         layout.separator()
         col = layout.column(heading="Curve Types")
         row = col.row(); 
-        row.prop(strokegen, "contour", text="Contour", toggle=True, invert_checkbox=True)
+        row.prop(strokegen, "contour", text="Contour", toggle=True)
+        subcol = col.column()
+        subcol.active = strokegen.contour
+        subcol.prop(strokegen, "smooth_contour", text="Smoothed Contour", toggle=False)
         # col.prop(strokegen, "border", text="Border", toggle=True, invert_checkbox=True)
+
 
         layout.separator()
         col = layout.column(heading="Surface Shading Type")
         col.prop(strokegen, "surface_shading_type", text="surface shading type")
 
+
         layout.separator()
         col = layout.column(heading="Basic Settings")
         col.prop(strokegen, "curve_width", text="Curve Width")
         col.prop(strokegen, "visibility_threshold", text="Visibility Threshold")
-        col.prop(strokegen, "draw_hidden_contour", text="Draw Hidden Contours", toggle=True, invert_checkbox=True)
+        col.prop(strokegen, "draw_hidden_contour", text="Draw Hidden Contours", toggle=True)
 
+        layout.separator()
         col = layout.column(heading="Tessellation")
         col.prop(strokegen, "tessellation_on", text="Enable Tessellation", toggle=True)
         subcol = col.column()
         subcol.active = strokegen.tessellation_on
-        subcol.prop(strokegen, "crease_on", text="Enale Crease", toggle=False, invert_checkbox=True)
+        subcol.prop(strokegen, "tessellation_level", text="Tessellation Level")
+        subcol = col.column()
+        subcol.active = strokegen.tessellation_on
+        subcol.prop(strokegen, "crease_on", text="Enale Crease", toggle=False)
 
+        layout.separator()
         col = layout.column(heading="Curve Tapering")
         col.prop(strokegen, "curve_segment_by_3d_cusps", text="Break at cusps", toggle=True)
         col.prop(strokegen, "curve_segment_by_2d_corners", text="Break at sharp angles", toggle=True)

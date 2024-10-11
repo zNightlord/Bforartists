@@ -54,7 +54,7 @@
     .duplicator_visibility_flag = OB_DUPLI_FLAG_VIEWPORT | OB_DUPLI_FLAG_RENDER, \
     .pc_ids = {NULL, NULL}, \
     .lineart = { .crease_threshold = DEG2RAD(140.0f) }, \
-    .strokegen = { .curve_type = 0, .surface_shading_type = 1, .curve_width = 1.0, .visibility_threshold = 0.3, .curve_max_split_angle = 50.0f, .flags = ePerObjectStrokegenSetting_Flags_Default_Val }, \
+    .strokegen = { .curve_type = 0, .surface_shading_type = 1, .curve_width = 1.0, .visibility_threshold = 0.3, .curve_max_split_angle = 50.0f, .tessellation_level = 2, .flags = ePerObjectStrokegenSetting_Flags_Default_Val }, \
   }
 
 /** \} */

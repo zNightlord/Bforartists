@@ -140,13 +140,12 @@ enum eObjectLineArt_Flags {
 typedef struct PerObjectStrokegenSettings {
   uint32_t curve_type;
   uint32_t surface_shading_type; 
-  // unsigned draw_style;
   float visibility_threshold;
   float curve_width;
-  // float color[4];
   float curve_max_split_angle;  // for STROKEGEN_FLAG_CURVE_SEGMENT_BY_2D_CORNERS
+  uint32_t tessellation_level;  // 0, 1, 2
   uint32_t flags;
-  uint32_t _pad[2];
+  uint32_t _pad[1];
 } PerObjectStrokegenSettings; 
 
 enum ePerObjectStrokegenSetting_CurveType {
@@ -162,14 +161,20 @@ enum ePerObjectStrokegenSetting_ShadingType {
 ENUM_OPERATORS(ePerObjectStrokegenSetting_ShadingType, STROKEGEN_SHADING_TYPE_OPAQUE);
 
 enum ePerObjectStrokegenSetting_Flags {
-  STROKEGEN_FLAG_TESSELLATION_ON = 1, 
+  STROKEGEN_FLAG_TESSELLATION_ON = 1,
   STROKEGEN_FLAG_CREASE_ON = (1 << 1),
   STROKEGEN_FLAG_DRAW_HIDDEN_CURVES = (1 << 2),
   STROKEGEN_FLAG_CURVE_SEGMENT_BY_3D_CUSPS = (1 << 3),
   STROKEGEN_FLAG_CURVE_SEGMENT_BY_2D_CORNERS = (1 << 4),
+  STROKEGEN_FLAG_SMOOTH_CONTOURS_ON = (1 << 5),
 };
 ENUM_OPERATORS(ePerObjectStrokegenSetting_Flags, STROKEGEN_CURVE_TYPE_CONTOUR);
-#define ePerObjectStrokegenSetting_Flags_Default_Val 25u
+#define ePerObjectStrokegenSetting_Flags_Default_Val ( \
+  STROKEGEN_FLAG_CURVE_SEGMENT_BY_2D_CORNERS | \
+  STROKEGEN_FLAG_CURVE_SEGMENT_BY_3D_CUSPS | \
+  STROKEGEN_FLAG_SMOOTH_CONTOURS_ON |  \
+  STROKEGEN_FLAG_TESSELLATION_ON \
+)
 
 /* Evaluated light linking state needed for the render engines integration. */
 typedef struct LightLinkingRuntime {

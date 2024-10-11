@@ -91,10 +91,10 @@ void main()
 
 #if !defined(DEBUG)
     color = // cf.occluded ? vec4(.5f, .5f, .5f, 0.0f) : 
-        cf.cusp_func_pstv ? vec4(.0f, 1.0f, 0.0f, 1.0f) : vec4(1.0f, 0.0f, 0.0f, 1.0f); 
+        // cf.cusp_func_pstv ? vec4(.0f, 1.0f, 0.0f, 1.0f) : vec4(1.0f, 0.0f, 0.0f, 1.0f); 
         // cf.cusp_func_pstv ? vec4(.0f, 1.0f, 0.0f, 1.0f) : vec4(1.0f, 0.0f, 0.0f, 1.0f); 
         // cf.dbg_flag_0 ? vec4(.0f, 1.0f, 0.0f, 1.0f) : cf.cusp_func_pstv ? vec4(0, 0.3, 1, 1) : vec4(1.0f, 0.0f, 0.0f, 1.0f); 
-        // vec4(rand_col_rgb(contour_seg_list_head, contour_seg_list_head), 1.0f); // contour_edge_id);
+        vec4(rand_col_rgb(contour_seg_list_head, contour_seg_list_head), 1.0f); // contour_edge_id);
         // vec4(rand_col_rgb(contour_seg_len / 12, contour_seg_len / 12), 1.0f); // contour_edge_id);
         // contour_seg_len == contour_edge_list_len ? vec4(1.0f, 0.0f, 0.0f, 1.0f) : vec4(0.0f, 1.0f, 0.0f, 1.0f); 
         // (contour_edge_list_len < contour_edge_rank || contour_edge_rank == 0) ?
@@ -129,7 +129,7 @@ void main()
     /* Apply depth bias to curve breaks,
      * which can happen due to Z-fighting artifacts. */
     /* TODO: Further imporve this */
-    gl_Position.z -= 1.1e-2 * whclip;
+    gl_Position.z -= 1.1e-4 * whclip;
     gl_Position.xy += edgenor_uv * whclip * pcs_screen_size_inv_ * 1.0f;
 	vec2 edge_dir_ext = (vid % 2u == 1u) ? edgedir_uv : -edgedir_uv;
 	gl_Position.xy += edge_dir_ext * whclip * pcs_screen_size_inv_ * 1.5f;

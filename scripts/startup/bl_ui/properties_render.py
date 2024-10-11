@@ -1228,6 +1228,7 @@ class RENDER_PT_npr_test(RenderButtonsPanel, Panel):
         props = scene.npr
 
         flow = layout.grid_flow(row_major=True, columns=0, even_columns=False, even_rows=False, align=True)
+
         col = flow.column()
         col.prop(props, "npr_test_val_0",  text="dummy")
         col.prop(props, "npr_test_val_1",  text="debug visualize mode")
@@ -1251,6 +1252,10 @@ class RENDER_PT_npr_test(RenderButtonsPanel, Panel):
         col.prop(props, "npr_test_val_16", text="dbg_ndv_grad_mode")
         
         col.prop(props, "npr_test_val_17", text="View Debug Draws") 
+
+        col = flow.column()
+        col.prop(props, "npr_test_val_18",  text="contour full overlay")
+
 
 
 

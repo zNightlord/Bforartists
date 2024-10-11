@@ -42,7 +42,7 @@
 
 #define MAX_NUM_FACES_PER_BATCH (((((MAX_NUM_EDGES_PER_BATCH / 3) * 2) / 4) * 4)
 
-#define MAX_NUM_CONTOUR_EDGES_PER_BATCH ((1024 * 1024)) /* about MAX_NUM_EDGES_PER_BATCH ^ 0.8f */
+#define MAX_NUM_CONTOUR_EDGES_PER_BATCH ((8 * 1024 * 1024)) /* about MAX_NUM_EDGES_PER_BATCH ^ 0.8f */
 
 #define MAX_REMESHING_ITERS 4u /* max iters for the main remeshing loop */
 

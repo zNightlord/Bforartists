@@ -35,6 +35,10 @@ void Instance::init(Object *camera_ob)
 
 void Instance::begin_sync()
 {
+  const DRWContextState *draw_ctx = DRW_context_state_get();
+  const Scene *scene_eval = DEG_get_evaluated_scene(draw_ctx->depsgraph);
+  bool full_overlay = .0f < scene_eval->npr.npr_test_val_18; 
+
   eGPUTextureUsage usage_fb_tx = GPU_TEXTURE_USAGE_SHADER_READ | GPU_TEXTURE_USAGE_ATTACHMENT;
 
   depth_tx_.ensure_2d(GPU_DEPTH24_STENCIL8, resolution_, usage_fb_tx);
@@ -53,6 +57,7 @@ void Instance::begin_sync()
   deferred_pass_ps_.framebuffer_set(&deferred_pass_fb_);
   deferred_pass_ps_.bind_texture("depth_tx", &depth_tx_);
   deferred_pass_ps_.bind_texture("contour_tx", &(strokegen_inst_->strokegen_textures.tex_contour_raster));
+  deferred_pass_ps_.push_constant("pcs_full_overlay_", full_overlay ? 1 : 0); 
   deferred_pass_ps_.draw_procedural(GPU_PRIM_TRIS, 1, 3);
 
   strokegen_inst_->begin_sync(*DRW_manager_get(), depth_tx_);
