@@ -1,11 +1,11 @@
 #include "MEM_guardedalloc.h"
 
-#include "DNA_action_types.hh"
-#include "DNA_anim_types.hh"
-#include "DNA_armature_types.hh"
-#include "DNA_curve_types.hh"
-#include "DNA_space_types.hh"
-#include "DNA_userdef_types.hh"
+#include "DNA_action_types.h"
+#include "DNA_anim_types.h"
+#include "DNA_armature_types.h"
+#include "DNA_curve_types.h"
+#include "DNA_space_types.h"
+#include "DNA_userdef_types.h"
 
 #include "RNA_access.hh"
 #include "RNA_define.hh"
