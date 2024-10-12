@@ -204,6 +204,8 @@ void POSELIB_OT_blend_pose_asset(wmOperatorType *ot);
 
 /** \} */
 
+void POSE_OT_motion_curve(wmOperatorType *ot);
+
 /* -------------------------------------------------------------------- */
 /** \name Pose Sliding Tools
  * \{ */

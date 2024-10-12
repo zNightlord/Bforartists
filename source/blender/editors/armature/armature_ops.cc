@@ -116,6 +116,8 @@ void ED_operatortypes_armature()
   WM_operatortype_append(POSELIB_OT_apply_pose_asset);
   WM_operatortype_append(POSELIB_OT_blend_pose_asset);
 
+  WM_operatortype_append(POSE_OT_motion_curve);
+
   /* POSE SLIDING */
   WM_operatortype_append(POSE_OT_push);
   WM_operatortype_append(POSE_OT_relax);

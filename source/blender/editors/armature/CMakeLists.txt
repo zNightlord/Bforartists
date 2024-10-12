@@ -37,6 +37,7 @@ set(SRC
   pose_slide.cc
   pose_transform.cc
   pose_utils.cc
+  pose_anim_motion_curve.cc
 
   armature_intern.hh
   meshlaplacian.h
