@@ -46,9 +46,6 @@
 
 #include "armature_intern.hh"
 
-#include "PIL_time.h"
-
-
 #include <algorithm>
 #include <array>
 #include <iostream>
