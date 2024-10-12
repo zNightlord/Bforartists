@@ -993,15 +993,15 @@ static void WIDGETGROUP_motion_curve_refresh(const struct bContext *C,
   // Collect all objects that could be updated potentially
   std::set<Object *> arm_objs;
   {
+    blender::Vector<PointerRNA> lb = CTX_data_collection_get(C, "selected_pose_bones");
 
-    ListBase selected_pose_bones;
-    if (CTX_data_selected_pose_bones(C, &selected_pose_bones) == 0) {
+    if (lb.is_empty()) {
       return;
     }
 
-    LISTBASE_FOREACH (CollectionPointerLink *, link, &selected_pose_bones) {
-      bPoseChannel *pchan = (bPoseChannel *)link->ptr.data;
-      Object *ob = (Object *)link->ptr.owner_id;
+    for (PointerRNA &ptr : lb) {
+      bPoseChannel *pchan = static_cast<bPoseChannel *>(ptr.data);
+      Object *ob = (Object *)ptr.owner_id;
       arm_objs.insert(ob);
     }
     BLI_freelistN(&selected_pose_bones);
@@ -1162,12 +1162,11 @@ static void WIDGETGROUP_motion_curve_refresh(const struct bContext *C,
   // Update the visualization of the motin path
   G.curves.clear();
   {
-    ListBase selected_pose_bones;
-    CTX_data_selected_pose_bones(C, &selected_pose_bones);
+    blender::Vector<PointerRNA> lb = CTX_data_collection_get(C, "selected_pose_bones");
 
-    LISTBASE_FOREACH (CollectionPointerLink *, link, &selected_pose_bones) {
-      Object *ob = (Object *)link->ptr.owner_id;
-      bPoseChannel *pchan = (bPoseChannel *)link->ptr.data;
+   for (PointerRNA &ptr : lb) {
+      Object *ob = (Object *)ptr.owner_id;
+      bPoseChannel *pchan = static_cast<bPoseChannel *>(ptr.data);
 
       std::map<float, FrameData> &h_fra = G.fra[ob->id.name][pchan->name];
 
@@ -1254,7 +1253,7 @@ static void WIDGETGROUP_motion_curve_refresh(const struct bContext *C,
   G.is_updated = true;
 }
 
-static void motion_curve_property_update()
+static void motion_curve_property_update(Main * /*main*/, Scene * /*scene*/, PointerRNA *ptr)
 {
   G.is_updated = false;
 }
@@ -1338,7 +1337,7 @@ static void gizmo_motion_curve_setup(struct wmGizmo *gz)
 
 static int gizmo_motion_curve_invoke(bContext *C, wmGizmo *gz, const wmEvent *event)
 {
-  WM_operator_name_call(C, "POSE_OT_motion_curve_dummy_for_undo", WM_OP_EXEC_DEFAULT, NULL);
+  WM_operator_name_call(C, "POSE_OT_motion_curve_dummy_for_undo", WM_OP_EXEC_DEFAULT, nullptr, event);
   std::cout << "invoke" << std::endl;
   Scene *scene = CTX_data_scene(C);
   ARegion *ar = CTX_wm_region(C);
@@ -1431,7 +1430,7 @@ static int gizmo_motion_curve_invoke(bContext *C, wmGizmo *gz, const wmEvent *ev
         return OPERATOR_RUNNING_MODAL;
       }
     }
-    else if (event->ctrl && event->type == LEFTMOUSE) {
+    else if (ELEM(event->type, EVT_LEFTCTRLKEY, EVT_RIGHTCTRLKEY) && event->type == LEFTMOUSE && event->val == KM_PRESS) {
       auto iter = std::find(G.pin.begin(), G.pin.end(), pt);
       if (iter == G.pin.end()) {
         pt.get_latest_pos(pt.cached_pos);
@@ -1442,7 +1441,7 @@ static int gizmo_motion_curve_invoke(bContext *C, wmGizmo *gz, const wmEvent *ev
       }
       return OPERATOR_RUNNING_MODAL;
     }
-    else if (event->alt && event->type == LEFTMOUSE) {
+    else if (ELEM(event->type, EVT_LEFTALTKEY, EVT_RIGHTALTLKEY) && event->type == LEFTMOUSE && event->val == KM_PRESS) {
       float target_fra = pt.frame;
       /* set the new frame number */
       if (scene->r.flag & SCER_SHOW_SUBFRAME) {
@@ -1496,7 +1495,7 @@ static int gizmo_motion_curve_modal(bContext *C,
                                     eWM_GizmoFlagTweak tweak_flag)
 {
   MotionCurve &curve = G.curves[gz->highlight_part];
-  if (event->ctrl) {
+  if (ELEM(event->type, EVT_LEFTCTRLKEY, EVT_RIGHTCTRLKEY)) {
     auto iter = std::find(G.pin.begin(), G.pin.end(), G.select_pt);
     if (iter != G.pin.end()) {
       std::vector<FramePoint> curve_pins = curve.pt;
@@ -1761,10 +1760,10 @@ void DEG_update(Depsgraph *depsgraph, Main *bmain)
      * would loose any possible unkeyed changes made by the handler. */
     if (pass == 0) {
       const float ctime = BKE_scene_frame_get(scene);
-      DEG_evaluate_on_framechange(bmain, depsgraph, ctime);
+      DEG_evaluate_on_framechange(bmain, ctime, depsgraph);
     }
     else {
-      DEG_evaluate_on_refresh(bmain, depsgraph);
+      DEG_evaluate_on_refresh(depsgraph);
     }
 
     /* Notify editors and python about recalc. */
@@ -1788,6 +1787,7 @@ void DEG_update(Depsgraph *depsgraph, Main *bmain)
 
 struct bToolRef *WM_toolsystem_ref_from_const_context(const struct bContext *C)
 {
+  Scene *scene = CTX_data_scene(C);
   WorkSpace *workspace = CTX_wm_workspace(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   ScrArea *sa = CTX_wm_area(C);
@@ -1796,7 +1796,7 @@ struct bToolRef *WM_toolsystem_ref_from_const_context(const struct bContext *C)
   }
   const bToolKey tkey = {
       sa->spacetype,
-      WM_toolsystem_mode_from_spacetype(view_layer, sa, sa->spacetype),
+      WM_toolsystem_mode_from_spacetype(scene, view_layer, sa, sa->spacetype),
   };
   bToolRef *tref = WM_toolsystem_ref_find(workspace, &tkey);
   /* We could return 'sa->runtime.tool' in this case. */
@@ -1938,8 +1938,7 @@ void get_fcurve_segment_ex(
     std::vector<FCurveSegment> &segs, CurveType type, Object *ob, bPoseChannel *pchan, float frame)
 {
   bAction *act = ob->adt->action;
-  PointerRNA ptr;
-  RNA_pointer_create((ID *)ob, &RNA_PoseBone, pchan, &ptr);
+  PointerRNA ptr = RNA_pointer_create(ob->id, &RNA_PoseBone, pchan);
   char *basePath = RNA_path_from_ID_to_struct(&ptr);
 
   ListBase curve = {NULL, NULL};
