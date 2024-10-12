@@ -17,6 +17,7 @@ set(INC
 )
 
 set(INC_SYS
+  ${EIGEN3_INCLUDE_DIRS}
 )
 
 set(SRC
