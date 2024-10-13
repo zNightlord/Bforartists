@@ -416,6 +416,12 @@ void store_contour_edge_transfer_data_(uint contour_edge_id, ContourEdgeTransfer
 	ssbo_contour_edge_transfer_data_[offset+9]   = cetd.obj_id; 
 }
 
+uint load_contour_edge_transfer_data__obj_id(uint contour_edge_id)
+{
+	uint offset = contour_edge_id * EDGE_TRANSFER_DASTA_STRIDE; 
+	return ssbo_contour_edge_transfer_data_[offset+9u]; 
+}
+
 ContourEdgeTransferData load_contour_edge_transfer_data(uint contour_edge_id)
 {
 	uint offset = contour_edge_id * EDGE_TRANSFER_DASTA_STRIDE; 

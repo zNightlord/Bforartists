@@ -806,7 +806,9 @@ void main()
 	mat4 mat_camera_proj_inv = ubo_view_matrices_.wininv; 
 
 	uint contour_edge_id = ssbo_frag_to_contour_[frag_id]; 
-
+	uint strokegen_obj_id = load_contour_edge_transfer_data__obj_id(contour_edge_id); 
+	StrokegenObjectInfo obj_info = load_strokegen_object_info(strokegen_obj_id); 
+	
 	uint head_frag_id, tail_frag_id; 
 	LineRasterResult line_raster_data = load_contour_edge_raster_data(contour_edge_id, /*out*/head_frag_id, tail_frag_id); 
 	uint frag_id_reversed = head_frag_id + tail_frag_id - frag_id;
@@ -829,7 +831,7 @@ void main()
 		line_raster_data.begend_wclips.y, 
 		linear_interp
 	);
-	bool visible = 1.0f < frag_depth_test(z_vs_3x3, z_frag, 0.01f * pcs_visibility_thresh_);
+	bool visible = 1.0f < frag_depth_test(z_vs_3x3, z_frag, 0.01f * obj_info.visibility_threshold);
 	
 
 	

@@ -233,7 +233,6 @@ public:
     bool denoise_cusp_segmentation;
     float cusp_denoise_radius; // world space denoising radius along the curve
     bool cusp_eval_opti;
-    float visibility_thresh;
 
     float curve_2d_max_split_angle; 
 

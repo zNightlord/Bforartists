@@ -186,7 +186,7 @@ namespace blender::npr::strokegen
   void GPUBufferPoolModule::sync_object(Object* ob)
   {
     UBO_StrokegenObjectInfo *ubo_new_obj = ubo_current_strokegen_object_info_pool_->alloc(); 
-    ubo_new_obj->visibility_threshold = .3f;
+    ubo_new_obj->visibility_threshold = ob->strokegen.visibility_threshold;
     ubo_new_obj->stroke_width = ob->strokegen.curve_width;
     StrokegenObjectFlags flags;
     flags.draw_contour = ob->strokegen.curve_type == STROKEGEN_CURVE_TYPE_CONTOUR; 

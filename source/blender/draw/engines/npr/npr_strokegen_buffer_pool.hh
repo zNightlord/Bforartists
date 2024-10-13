@@ -9,8 +9,10 @@
 #pragma once
 
 #include "bnpr_shader_shared.hh"
+#include "GPU_capabilities.hh"
 #include "npr_sync_handles.hh"
 
+#include <iostream>
 #include <set>
 
 namespace blender::gpu {
@@ -129,7 +131,7 @@ class GPUBufferPoolModule {
 
   SSBO_StrokeGenMeshBufPerSelectedEdge<uint, 1> ssbo_selected_edge_to_edge_;    // 32MB    
   SSBO_StrokeGenMeshBufPerSelectedVert<uint, 1> ssbo_selected_vert_to_vert_;    // 16MB    
-  SSBO_StrokeGenMeshBufPerEdge<uint, 20> ssbo_dbg_lines_;                        // 256MB
+  SSBO_StrokeGenReusedLarge ssbo_dbg_lines_;                                    // 256MB
 
   SSBO_StrokeGenMeshBufPerContour<uint, 2> ssbo_contour_to_contour_;       //
   SSBO_StrokeGenMeshBufPerContour<uint, 1> ssbo_contour_snake_rank_;       // 
@@ -635,7 +637,8 @@ class GPUBufferPoolModule {
     , listranking_test_data_validated(false)
     , rot_angle_ubo_view_matrices_cache_(.0f)
   {
-    ubo_current_strokegen_object_info_pool_ = new StrokegenUniformBufPool<UBO_StrokegenObjectInfo>(); 
+    ubo_current_strokegen_object_info_pool_ = new StrokegenUniformBufPool<UBO_StrokegenObjectInfo>();
+    std::cout << "max ssbo size: " << GPU_max_storage_buffer_size() << std::endl; 
   }
   ~GPUBufferPoolModule()
   {

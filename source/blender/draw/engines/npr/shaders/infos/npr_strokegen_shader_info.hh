@@ -233,6 +233,7 @@ GPU_SHADER_CREATE_INFO(strokegen_build_contour_fragments)
     .storage_buf(3, Qualifier::READ_WRITE, "uint", "ssbo_frag_raster_data_[]")
     .storage_buf(4, Qualifier::WRITE, "UBData_TreeScan", "ssbo_tree_scan_infos_contour_segmentation_")
     .storage_buf(5, Qualifier::READ_WRITE, "uint", "ssbo_tree_scan_input_contour_fragment_idmapping_[]")
+#define NUM_SSBO_strokegen_build_contour_fragments 6
     .uniform_buf(0, "ViewMatrices", "ubo_view_matrices_")
     .sampler(0, ImageType::FLOAT_2D, "tex_remeshed_surf_depth_")
     .image(0, GPU_RGBA32F, Qualifier::WRITE, ImageType::FLOAT_2D, "tex2d_contour_dbg_")
@@ -260,7 +261,13 @@ GPU_SHADER_CREATE_INFO(strokegen_contour_frag_visibility_test)
     .do_static_compilation(true)
     .additional_info("strokegen_build_contour_fragments")
     .define("_KERNEL_MULTICOMPILE__PROCESS_CONTOUR_FRAGMENTS__VISIBILITY_TEST", "1")
-    .push_constant(Type::FLOAT, "pcs_visibility_thresh_");
+#define SSBO_OFFSET NUM_SSBO_strokegen_build_contour_fragments
+    .define("INCLUDE_PER_OBJECT_INFO", "1")
+    .storage_buf(SSBO_OFFSET + 0, Qualifier::READ_WRITE, "uint", "ssbo_merged_strokegen_object_infos_[]")
+    .define("USE_CONTOUR_TRANSFER_DATA_BUFFER", "1")
+    .storage_buf(SSBO_OFFSET + 1, Qualifier::READ_WRITE, "uint", "ssbo_contour_edge_transfer_data_[]")
+#undef SSBO_OFFSET
+    ;
 
 GPU_SHADER_CREATE_INFO(strokegen_visibility_split_contour_edges)
     .do_static_compilation(true)

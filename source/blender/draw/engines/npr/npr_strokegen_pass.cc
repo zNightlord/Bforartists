@@ -216,7 +216,6 @@ void StrokeGenPassModule::sync_object(int gpu_obj_id, Object* ob)
   meshing_params.iters_test_subdiv = use_subd ? obj_strokegen_settings.tessellation_level : 0;
   meshing_params.subdiv_use_crease = (0u != (obj_strokegen_settings.flags & STROKEGEN_FLAG_CREASE_ON));
 
-  meshing_params.visibility_thresh = obj_strokegen_settings.visibility_threshold;
 
   meshing_params.cusp_denoise_radius = calculate_3d_curve_denoising_radius(ob);
 
@@ -876,7 +875,8 @@ void StrokeGenPassModule::on_end_sync()
 
     // Split contour edges based on rasterized visibility
     append_subpass_contour_edges_soft_rasterization();
-    append_subpass_visibility_split_contour_edges(); 
+    if (false == pass_draw_contour_2d_samples.draw_settings.draw_hidden_lines)
+      append_subpass_visibility_split_contour_edges(); 
 
     // List ranking to generate curves
     append_subpass_fill_contour_list_ranking_inputs(); 
@@ -2889,7 +2889,7 @@ void StrokeGenPassModule::on_end_sync()
     depthSamplerState.filtering = GPU_SAMPLER_FILTERING_DEFAULT;
     depthSamplerState.extend_x = depthSamplerState.extend_yz = GPU_SAMPLER_EXTEND_MODE_CLAMP_TO_BORDER; 
 
-    auto bind_rsc = [&](draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub)
+    auto bind_rsc = [&](draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub, int& ssbo_offset)
     {
       sub.bind_ssbo(0, buffers_.ssbo_bnpr_mesh_pool_counters_);
       sub.bind_ssbo(1, buffers_.reused_ssbo_frag_to_contour_());
@@ -2897,6 +2897,8 @@ void StrokeGenPassModule::on_end_sync()
       sub.bind_ssbo(3, buffers_.reused_ssbo_frag_raster_data_());
       sub.bind_ssbo(4, buffers_.reused_ssbo_tree_scan_infos_contour_fragment_idmapping_()); 
       sub.bind_ssbo(5, buffers_.reused_ssbo_tree_scan_input_contour_fragment_idmapping_());
+      ssbo_offset = 6; 
+
       sub.bind_ubo(0, buffers_.ubo_view_matrices_cache_); 
       sub.bind_image(0, textures_.tex2d_contour_dbg_);
       sub.bind_texture(
@@ -2910,11 +2912,13 @@ void StrokeGenPassModule::on_end_sync()
     eGPUBarrier barrier_all = GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_COMMAND |
                           GPU_BARRIER_SHADER_IMAGE_ACCESS | GPU_BARRIER_TEXTURE_FETCH; 
 
+    int subbuff_offset = 0; 
+
     { // Clear frag to contour id mapping, dispatch per-fragment
       auto &sub = pass_process_contours.sub("strokegen_clear_frag_to_contour_idmapping");
       sub.shader_set(shaders_.static_shader_get(eShaderType::CLEAR_FRAG_TO_CONTOUR_IDMAPPING));
 
-      bind_rsc(sub);
+      bind_rsc(sub, subbuff_offset);
 
       sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_frag_dispatch_args_);
       sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_COMMAND);
@@ -2925,7 +2929,7 @@ void StrokeGenPassModule::on_end_sync()
       auto &sub = pass_process_contours.sub("strokegen_prep_segscan_frag_to_contour_idmapping");
       sub.shader_set(shaders_.static_shader_get(eShaderType::PREP_FRAG_TO_CONTOUR_IDMAPPING));
 
-      bind_rsc(sub);
+      bind_rsc(sub, subbuff_offset);
 
       sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_edge_dispatch_args_);
       sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_COMMAND); 
@@ -2951,7 +2955,7 @@ void StrokeGenPassModule::on_end_sync()
       auto &sub = pass_process_contours.sub("strokegen_finish_segscan_frag_to_contour_idmapping");
       sub.shader_set(shaders_.static_shader_get(eShaderType::FINISH_FRAG_TO_CONTOUR_IDMAPPING));
 
-      bind_rsc(sub);
+      bind_rsc(sub, subbuff_offset);
 
       sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_frag_dispatch_args_);
       sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_COMMAND); 
@@ -2961,8 +2965,9 @@ void StrokeGenPassModule::on_end_sync()
       auto &sub = pass_process_contours.sub("strokegen_contour_frag_visibility_test");
       sub.shader_set(shaders_.static_shader_get(eShaderType::CONTOUR_FRAG_VISIBILITY_TEST));
 
-      bind_rsc(sub);
-      sub.push_constant("pcs_visibility_thresh_", meshing_params.visibility_thresh); 
+      bind_rsc(sub, subbuff_offset);
+      sub.bind_ssbo(6, buffers_.ssbo_merged_strokegen_object_infos_);
+      sub.bind_ssbo(7, buffers_.ssbo_contour_edge_transfer_data_);
 
       sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_frag_dispatch_args_);
       sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_COMMAND |

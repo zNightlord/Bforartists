@@ -33,7 +33,7 @@
 
 #define MAX_NUM_STROKEGEN_OBJECTS ((65536u))
 
-#define MAX_NUM_EDGES_PER_BATCH ((2048 * 2048 * 4))
+#define MAX_NUM_EDGES_PER_BATCH ((2048 * 2048 * 8))
 
 /* https://math.stackexchange.com/questions/1541125/total-number-of-edges-in-a-triangle-mesh-with-n-vertices */
 // have to make bigger since verts in pos_nor are not merged & vbo is ridiculously huge
