@@ -435,10 +435,8 @@ void MotionCurve::draw(int final_select_id)
 
   if (pt.size() > 1) {
 
-    GPU_blend(true);
-    GPU_blend_set_func_separate(
-        GPU_SRC_ALPHA, GPU_ONE_MINUS_SRC_ALPHA, GPU_ONE, GPU_ONE_MINUS_SRC_ALPHA);
-    glDepthMask(GL_FALSE);
+    GPU_blend(GPU_BLEND_ALPHA);
+    GPU_depth_test(GPU_DEPTH_NONE);
     GPU_line_smooth(true);
 
     GPUVertFormat *format = immVertexFormat();
@@ -486,12 +484,10 @@ void MotionCurve::draw(int final_select_id)
     immEnd();
     immUnbindProgram();
 
-    GPU_blend(false);
-    glDepthMask(GL_TRUE);
+    GPU_blend(GPU_BLEND_NONE);
+    GPU_depth_test(GPU_DEPTH_LESS_EQUAL);
     GPU_line_smooth(false);
     /* Reset default. */
-    GPU_blend_set_func_separate(
-        GPU_SRC_ALPHA, GPU_ONE_MINUS_SRC_ALPHA, GPU_ONE, GPU_ONE_MINUS_SRC_ALPHA);
   }
 
   // don use points for selection
@@ -716,12 +712,12 @@ void MCSolver::update_target_interactive(bContext *C, wmGizmo *gz, const wmEvent
 
   View3D *v3d = CTX_wm_view3d(C);
   ARegion *ar = CTX_wm_region(C);
-  float zfac = ED_view3d_calc_zfac((RegionView3D *)ar->regiondata, ref_pos, NULL);
+  float zfac = ED_view3d_calc_zfac((RegionView3D *)ar->regiondata, ref_pos);
   float delta[3] = {0, 0, 0};
 
   float mval_fl[2];
 
-  float mval_del[2] = {event->x - event->prevx, event->y - event->prevy};
+  float mval_del[2] = {event->xy[0] - event->prevxy[0], event->xy[1] - event->prev_xy[1]};
 
   ED_view3d_win_to_delta(ar, mval_del, delta, zfac);
 
@@ -945,13 +941,13 @@ void MCSolver::solve(bContext *C)
 
     for (int i_s = 0; i_s < segs.size(); i_s++) {
       FCurveSegment &seg = segs[i_s];
-      PointerRNA id_ptr, ptr;
+      PointerRNA ptr;
       PropertyRNA *prop;
 
       Object *seg_ob = get_object_by_name(C, seg.ob_name);
       BLI_assert(seg_ob != NULL);
 
-      RNA_id_pointer_create((ID *)seg_ob, &id_ptr);
+      PointerRNA id_ptr = RNA_id_pointer_create((ID *)seg_ob);
 
       if (RNA_path_resolve_property(&id_ptr, seg.fcu->rna_path, &ptr, &prop)) {
         Scene *scene = CTX_data_scene(C);
@@ -1004,13 +1000,12 @@ static void WIDGETGROUP_motion_curve_refresh(const struct bContext *C,
       Object *ob = (Object *)ptr.owner_id;
       arm_objs.insert(ob);
     }
-    BLI_freelistN(&selected_pose_bones);
   }
 
   // Go through each obj and update its data at each frame
   G.fra.clear();
 
-  float cfra = CFRA;
+  int cfra = scene->r.cfra;
   // double time_start = PIL_check_seconds_timer();
   bToolRef *tref = WM_toolsystem_ref_from_const_context(C);
 
@@ -1103,14 +1098,14 @@ static void WIDGETGROUP_motion_curve_refresh(const struct bContext *C,
       ids[0] = &(ob->id);
 
       /* Build graph from all requested IDs. */
-      DEG_graph_build_from_ids(depsgraph, bmain, scene, view_layer, ids, 1);
+      DEG_graph_build_from_ids(depsgraph, ids);
       MEM_freeN(ids);
 
       int i_keyframes = start_keyframe_idx;
-      for (CFRA = start; CFRA <= end; CFRA++) {
+      for (scene->r.cfra = start; scene->r.cfra <= end; scene->r.cfra++) {
         bool is_keyframe = false;
 
-        if (CFRA == keyframes[i_keyframes]) {
+        if (scene->r.cfra == keyframes[i_keyframes]) {
           is_keyframe = true;
           i_keyframes++;
         }
@@ -1142,7 +1137,7 @@ static void WIDGETGROUP_motion_curve_refresh(const struct bContext *C,
 
           FrameData fra_data;
           fra_data.is_keyframe = is_keyframe;
-          copy_m4_m4(fra_data.ob_mat, ob_eval->obmat);
+          copy_m4_m4(fra_data.ob_mat, ob_eval->object_to_world().ptr());
           copy_v3_v3(fra_data.pose_tail, pchan_eval->pose_tail);
           copy_v3_v3(fra_data.pose_head, pchan_eval->pose_head);
           copy_m3_m3(fra_data.gimbal, gim_mat);
@@ -1150,14 +1145,14 @@ static void WIDGETGROUP_motion_curve_refresh(const struct bContext *C,
           copy_v4_v4(fra_data.quat, pchan_eval->quat);
           copy_m4_m4(fra_data.pose_mat, pchan_eval->pose_mat);
 
-          G.fra[ob->id.name][pchan->name][CFRA] = fra_data;
+          G.fra[ob->id.name][pchan->name][scene->r.cfra] = fra_data;
         }
       }
 
       DEG_graph_free(depsgraph);
     }
   }
-  CFRA = cfra;
+  scene->r.cfra = cfra;
 
   // Update the visualization of the motin path
   G.curves.clear();
@@ -1179,8 +1174,7 @@ static void WIDGETGROUP_motion_curve_refresh(const struct bContext *C,
         num_curves = 2;
       }
 
-      PointerRNA ptr;
-      RNA_pointer_create((ID *)ob, &RNA_PoseBone, pchan, &ptr);
+      PointerRNA ptr = RNA_pointer_create((ID *)ob, &RNA_PoseBone, pchan);
 
       bool is_show_head = RNA_boolean_get(&ptr, "show_head_curve");
       bool is_show_tail = RNA_boolean_get(&ptr, "show_tail_curve");
@@ -1247,7 +1241,6 @@ static void WIDGETGROUP_motion_curve_refresh(const struct bContext *C,
       }
     }
 
-    BLI_freelistN(&selected_pose_bones);
   }
 
   G.is_updated = true;
@@ -1343,7 +1336,7 @@ static int gizmo_motion_curve_invoke(bContext *C, wmGizmo *gz, const wmEvent *ev
   ARegion *ar = CTX_wm_region(C);
   MotionCurve &curve = G.curves[gz->highlight_part];
 
-  FramePoint pt = curve.get_selected_pt(CFRA);
+  FramePoint pt = curve.get_selected_pt(scene->r.cfra);
   G.select_pt = pt;
 
   bool is_check_for_outdated_pin = true;
@@ -1382,7 +1375,7 @@ static int gizmo_motion_curve_invoke(bContext *C, wmGizmo *gz, const wmEvent *ev
   bAction *act = ob->adt->action;
 
   if (act != NULL) {
-    if (event->shift && event->type == LEFTMOUSE) {
+    if (ELEM(event->type, EVT_LEFTSHIFTKEY, EVT_RIGHTSHIFTKEY) && event->type == LEFTMOUSE && event->val == KM_PRESS) {
 
       MCSolver solver;
       solver.mode = 1;
@@ -1430,7 +1423,7 @@ static int gizmo_motion_curve_invoke(bContext *C, wmGizmo *gz, const wmEvent *ev
         return OPERATOR_RUNNING_MODAL;
       }
     }
-    else if (ELEM(event->type, EVT_LEFTCTRLKEY, EVT_RIGHTCTRLKEY) && event->type == LEFTMOUSE && event->val == KM_PRESS) {
+    else if (ELEM(event->type, EVT_LEFTCTRLKEY, EVT_RIGHTCTRLKEY) && event->type == LEFTMOUSE) { //  && event->val == KM_PRESS
       auto iter = std::find(G.pin.begin(), G.pin.end(), pt);
       if (iter == G.pin.end()) {
         pt.get_latest_pos(pt.cached_pos);
@@ -1441,25 +1434,25 @@ static int gizmo_motion_curve_invoke(bContext *C, wmGizmo *gz, const wmEvent *ev
       }
       return OPERATOR_RUNNING_MODAL;
     }
-    else if (ELEM(event->type, EVT_LEFTALTKEY, EVT_RIGHTALTLKEY) && event->type == LEFTMOUSE && event->val == KM_PRESS) {
+    else if (ELEM(event->type, EVT_LEFTALTKEY, EVT_RIGHTALTKEY) && event->type == LEFTMOUSE) {
       float target_fra = pt.frame;
       /* set the new frame number */
       if (scene->r.flag & SCER_SHOW_SUBFRAME) {
-        CFRA = (int)target_fra;
+        scene->r.cfra = (int)target_fra;
         SUBFRA = target_fra - (int)target_fra;
       }
       else {
-        CFRA = round_fl_to_int(target_fra);
+        scene->r.cfra = round_fl_to_int(target_fra);
         SUBFRA = 0.0f;
       }
-      FRAMENUMBER_MIN_CLAMP(CFRA);
+      FRAMENUMBER_MIN_CLAMP(scene->r.cfra);
 
       /* do updates */
       DEG_id_tag_update(&scene->id, ID_RECALC_AUDIO_SEEK);
       WM_event_add_notifier(C, NC_SCENE | ND_FRAME, scene);
     }
     else {
-      if (pt.frame == CFRA) {
+      if (pt.frame == scene->r.cfra) {
         MCSolver solver;
         solver.mode = 2;
 
@@ -1580,11 +1573,11 @@ static void gizmo_motion_curve_draw(const bContext *C, wmGizmo *gz)
           else {
             Scene *scene = CTX_data_scene(C);
             for (int ip = 0; ip < G.curves[i].pt.size(); ip++) {
-              if (G.curves[i].pt[ip].frame == CFRA) {
+              if (G.curves[i].pt[ip].frame == cfra) {
                 i_highlight_pt = ip;
                 break;
               }
-              if (G.curves[i].pt[ip].frame > CFRA) {
+              if (G.curves[i].pt[ip].frame > scene->r.cfra) {
                 BLI_assert(ip - 1 >= 0);
                 i_highlight_pt = ip - 1;
                 break;
@@ -1748,7 +1741,7 @@ void DEG_update(Depsgraph *depsgraph, Main *bmain)
     /* Update animated image textures for particles, modifiers, gpu, etc,
      * call this at the start so modifiers with textures don't lag 1 frame.
      */
-    DEG_graph_relations_update(depsgraph, bmain, scene, view_layer);
+    DEG_graph_relations_update(depsgraph);
 #ifdef POSE_ANIMATION_WORKAROUND
     scene_armature_depsgraph_workaround(bmain, depsgraph);
 #endif
@@ -1760,7 +1753,7 @@ void DEG_update(Depsgraph *depsgraph, Main *bmain)
      * would loose any possible unkeyed changes made by the handler. */
     if (pass == 0) {
       const float ctime = BKE_scene_frame_get(scene);
-      DEG_evaluate_on_framechange(bmain, ctime, depsgraph);
+      DEG_evaluate_on_framechange(depsgraph, ctime, DEG_EVALUATE_SYNC_WRITEBACK_YES);
     }
     else {
       DEG_evaluate_on_refresh(depsgraph);
@@ -1774,7 +1767,7 @@ void DEG_update(Depsgraph *depsgraph, Main *bmain)
     /* Inform editors about possible changes. */
     // DEG_ids_check_recalc(bmain, depsgraph, scene, view_layer, true);
     /* clear recalc flags */
-    DEG_ids_clear_recalc(bmain, depsgraph);
+    DEG_ids_clear_recalc(depsgraph, false);
 
     /* If user callback did not tag anything for update we can skip second iteration.
      * Otherwise we update scene once again, but without running callbacks to bring
@@ -2081,8 +2074,7 @@ void get_sorted_primary_segments(bContext *C, std::vector<FCurveSegment> &segs, 
   Object *ob = get_object_by_name(C, pt.ob_name);
 
   bPoseChannel *pchan = BKE_pose_channel_find_name(ob->pose, pt.pchan_name.c_str());
-  PointerRNA ptr = {0};
-  RNA_pointer_create((ID *)ob, &RNA_PoseBone, pchan, &ptr);
+  PointerRNA ptr = RNA_pointer_create((ID *)ob, &RNA_PoseBone, pchan);
   int depth_limit = RNA_int_get(&ptr, "ik_chain_length");
 
   float frame = pt.frame;
