@@ -11,6 +11,7 @@
 #include "bnpr_shader_shared.hh"
 #include "GPU_capabilities.hh"
 #include "npr_sync_handles.hh"
+#include "gpu_storage_buffer_private.hh"
 
 #include <iostream>
 #include <set>
@@ -131,7 +132,6 @@ class GPUBufferPoolModule {
 
   SSBO_StrokeGenMeshBufPerSelectedEdge<uint, 1> ssbo_selected_edge_to_edge_;    // 32MB    
   SSBO_StrokeGenMeshBufPerSelectedVert<uint, 1> ssbo_selected_vert_to_vert_;    // 16MB    
-  SSBO_StrokeGenReusedLarge ssbo_dbg_lines_;                                    // 256MB
 
   SSBO_StrokeGenMeshBufPerContour<uint, 2> ssbo_contour_to_contour_;       //
   SSBO_StrokeGenMeshBufPerContour<uint, 1> ssbo_contour_snake_rank_;       // 
@@ -142,32 +142,35 @@ class GPUBufferPoolModule {
   SSBO_StrokeGenMeshBufPerContour<uint, 6> ssbo_contour_snake_vpos_;       //
   SSBO_StrokeGenMeshBufPerContour<uint, 1> ssbo_contour_snake_flags_;      //
 
-  UBO_StrokegenObjectInfo ubo_current_strokegen_object_info_;
-  StrokegenUniformBufPool<UniformBuffer<UBOData_StrokegenObjectInfo>>
-      *ubo_current_strokegen_object_info_pool_; 
-  SSBO_StrokeGenDataPerObject<uint, 4> ssbo_merged_strokegen_object_infos_;
   SSBO_StrokeGenMeshBufPerContour<uint, 1> ssbo_contour_snake_to_object_id_;  //
+  UBO_StrokegenObjectInfo ubo_current_strokegen_object_info_;
+  StrokegenUniformBufPool<UniformBuffer<UBOData_StrokegenObjectInfo>> *ubo_current_strokegen_object_info_pool_; 
+  SSBO_StrokeGenDataPerObject<uint, 4> ssbo_merged_strokegen_object_infos_;
 
-  SSBO_StrokeGenMeshBufPerContour<uint, 32> ssbo_contour_temporal_records_[MAX_TEMPORAL_FRAMES];
+  SSBO_StrokeGenMeshBufPerContour<uint, 1> ssbo_contour_snake_to_temporal_record_;  // 
+  SSBO_StrokeGenMeshBufPerContour<uint, 32> ssbo_contour_temporal_records_[MAX_TEMPORAL_FRAMES]; // 
   GPUStorageBuf* ssbo_contour_temporal_records_new_(int strokegen_frame_id) {
     return ssbo_contour_temporal_records_[strokegen_frame_id % MAX_TEMPORAL_FRAMES]; 
   }
   GPUStorageBuf* ssbo_contour_temporal_records_old_(int strokegen_frame_id) {
     return ssbo_contour_temporal_records_[strokegen_frame_id_prev(strokegen_frame_id) % MAX_TEMPORAL_FRAMES];
   }
-  SSBO_StrokeGenMeshBufPerContour<uint, 1> ssbo_contour_snake_to_temporal_record_;
+
+
+  SSBO_StrokeGenReusedLarge ssbo_dbg_lines_;  // 256MB
+
 
   // Reusable Large Buffers -------------------------------------------------------------
-  // note: don't ssbo_mesh_buffer_reuse_0_
+  // note: don't ssbo_mesh_buffer_reuse_large_[0]
   // from interpo contour tessellation till the end of append_subpass_setup_contour_edge_data
-  SSBO_StrokeGenReusedLarge ssbo_mesh_buffer_reuse_0_;                    // 256MB  Total  
-  SSBO_StrokeGenReusedMedium ssbo_mesh_buffer_reuse_1_;                   // 128MB  384MB
-  SSBO_StrokeGenReusedMedium ssbo_mesh_buffer_reuse_2_;                   // 128MB  512MB
-  SSBO_StrokeGenReusedLarge ssbo_mesh_buffer_reuse_3_;                    // 256MB  768MB
-  SSBO_StrokeGenReusedLarge ssbo_mesh_buffer_reuse_4_;                    // 256MB 1024MB
-  SSBO_StrokeGenReusedSmall ssbo_mesh_buffer_reuse_5_;                    // 64MB  1088MB
-  SSBO_StrokeGenReusedSmall ssbo_mesh_buffer_reuse_6_;                    // 64MB  1152MB
-  SSBO_StrokeGenReusedMedium ssbo_mesh_buffer_reuse_7_;                   // 128MB 1280MB
+#define NUM_REUSED_LARGE_BUFFERS 3
+  const int large_buffer_size = 2048 * 2048 * 16 * sizeof(uint32_t);
+  Array<GPUStorageBuf *, NUM_REUSED_LARGE_BUFFERS> ssbo_mesh_buffer_reuse_large_ = { nullptr, nullptr, nullptr};
+  SSBO_StrokeGenReusedMedium ssbo_mesh_buffer_reuse_1_;                   // 
+  SSBO_StrokeGenReusedMedium ssbo_mesh_buffer_reuse_2_;                   // 
+  SSBO_StrokeGenReusedMedium ssbo_mesh_buffer_reuse_7_;                   // 
+  SSBO_StrokeGenReusedSmall ssbo_mesh_buffer_reuse_5_;                    // 
+  SSBO_StrokeGenReusedSmall ssbo_mesh_buffer_reuse_6_;                    // 
   // note: don't ssbo_mesh_buffer_reuse_8_
   // from interpo contour tessellation till the end of append_subpass_setup_contour_edge_data
   SSBO_StrokeGenReusedMedium ssbo_mesh_buffer_reuse_8_;                   // 128MB 1280MB
@@ -183,11 +186,11 @@ class GPUBufferPoolModule {
   inline GPUStorageBuf *reused_ssbo_subd_edge_tree_node_dw_()
   { // [append_subpasses_loop_subdiv, interpolated contour tessellation)
     // note: must reuse, requires a 4_x_uint32-per-edge buffer, it's large
-    return ssbo_mesh_buffer_reuse_3_ /*ssbo_subd_edge_tree_node_dw_dbg_*/;
+    return ssbo_mesh_buffer_reuse_large_[1] /*ssbo_subd_edge_tree_node_dw_dbg_*/;
   }
   inline GPUStorageBuf *reused_ssbo_contour_vert_to_old_edge_()
   { // [interpolated contour tessellation, append_subpass_setup_contour_edge_data]
-    return ssbo_mesh_buffer_reuse_0_;
+    return ssbo_mesh_buffer_reuse_large_[0];
   }
   inline GPUStorageBuf *reused_ssbo_edge_to_temporal_record_()
   { // [interpolated contour tessellation, append_subpass_setup_contour_edge_data]
@@ -199,7 +202,7 @@ class GPUBufferPoolModule {
   // Reused Buffer Scheme for Basic Meshing ------------------------------------------------
   inline GPUStorageBuf *reused_ssbo_vert_spatial_map_headers_()
   {
-    return ssbo_mesh_buffer_reuse_4_; 
+    return ssbo_mesh_buffer_reuse_large_[2]; 
   }
   inline GPUStorageBuf *reused_ssbo_vert_merged_id_()
   {
@@ -207,11 +210,11 @@ class GPUBufferPoolModule {
   }
   inline GPUStorageBuf *reused_ssbo_vert_spatial_map_payloads_()
   {
-    return ssbo_mesh_buffer_reuse_0_;
+    return ssbo_mesh_buffer_reuse_large_[0];
   }
   inline GPUStorageBuf *reused_ssbo_edge_spatial_map_payloads_()
   {
-    return ssbo_mesh_buffer_reuse_0_;
+    return ssbo_mesh_buffer_reuse_large_[0];
   }
   inline void reused_ssbo_wedge_flooding_pointers_(uint iter,
                                                    GPUStorageBuf *&buf_in,
@@ -219,10 +222,10 @@ class GPUBufferPoolModule {
   {
     if (iter % 2u == 0u) {
       buf_in = ssbo_mesh_buffer_reuse_6_;
-      buf_out = ssbo_mesh_buffer_reuse_0_;
+      buf_out = ssbo_mesh_buffer_reuse_large_[0];
     }
     else {
-      buf_in = ssbo_mesh_buffer_reuse_0_;
+      buf_in = ssbo_mesh_buffer_reuse_large_[0];
       buf_out = ssbo_mesh_buffer_reuse_6_;
     }
   }
@@ -231,7 +234,7 @@ class GPUBufferPoolModule {
   // Reused Buffer Scheme throughout Edge Split, Collapse, Flip and Relocation ------
   inline GPUStorageBuf *reused_ssbo_vtx_remesh_len_()
   {
-    return ssbo_mesh_buffer_reuse_4_; 
+    return ssbo_mesh_buffer_reuse_large_[2]; 
   }
 
 
@@ -250,7 +253,7 @@ class GPUBufferPoolModule {
   // Don't reuse buffers reused by edge split
   inline GPUStorageBuf* reused_ssbo_subd_edge_vert_to_old_edge_()
   {
-    return ssbo_mesh_buffer_reuse_0_;
+    return ssbo_mesh_buffer_reuse_large_[0];
   }
 
 
@@ -268,11 +271,11 @@ class GPUBufferPoolModule {
   // Reused Buffer Scheme for Edge Collapse --------------------------------------------
   inline GPUStorageBuf *reused_ssbo_per_edge_collapse_info_in_(int step)
   {
-    return (step % 2 == 0) ? ssbo_mesh_buffer_reuse_0_ : ssbo_mesh_buffer_reuse_1_; 
+    return (step % 2 == 0) ? ssbo_mesh_buffer_reuse_large_[0] : ssbo_mesh_buffer_reuse_1_; 
   }
   inline GPUStorageBuf *reused_ssbo_per_edge_collapse_info_out_(int step)
   {
-    return (step % 2 == 0) ? ssbo_mesh_buffer_reuse_1_ : ssbo_mesh_buffer_reuse_0_; 
+    return (step % 2 == 0) ? ssbo_mesh_buffer_reuse_1_ : ssbo_mesh_buffer_reuse_large_[0]; 
   }
   inline GPUStorageBuf *reused_ssbo_per_collapse_edge_info_()
   {
@@ -302,7 +305,7 @@ class GPUBufferPoolModule {
   // Reused Buffer Scheme for Face Split --------------------------------------------
   inline GPUStorageBuf *reused_ssbo_per_face_split_info_()
   {
-    return ssbo_mesh_buffer_reuse_0_;
+    return ssbo_mesh_buffer_reuse_large_[0];
   }
 
 
@@ -311,18 +314,18 @@ class GPUBufferPoolModule {
   // Reused Buffer Scheme for Vertex Position Filtering -----------------------------------------------
   inline GPUStorageBuf *reused_ssbo_vpos_temp_()
   {
-    return ssbo_mesh_buffer_reuse_0_; 
+    return ssbo_mesh_buffer_reuse_large_[0]; 
   }
 
 
   // Reused Buffer Scheme for Quadric-based Filtering -----------------------------------------------
   inline GPUStorageBuf *reused_ssbo_vert_quadric_data_in_(int step)
   {
-    return step % 2u == 0u ? ssbo_mesh_buffer_reuse_3_ : ssbo_mesh_buffer_reuse_0_;
+    return step % 2u == 0u ? ssbo_mesh_buffer_reuse_large_[1] : ssbo_mesh_buffer_reuse_large_[0];
   }
   inline GPUStorageBuf *reused_ssbo_vert_quadric_data_out_(int step)
   {
-    return step % 2u == 0u ? ssbo_mesh_buffer_reuse_0_ : ssbo_mesh_buffer_reuse_3_;
+    return step % 2u == 0u ? ssbo_mesh_buffer_reuse_large_[0] : ssbo_mesh_buffer_reuse_large_[1];
   }
 
   // Reused Buffer Scheme for Curvature Smoothing -----------------------------------------------
@@ -342,7 +345,7 @@ class GPUBufferPoolModule {
   }
   inline GPUStorageBuf *reused_ssbo_contour_temp_data_()
   {
-    return ssbo_mesh_buffer_reuse_4_; 
+    return ssbo_mesh_buffer_reuse_large_[2]; 
   }
 
   // lifetime [append_subpass_extract_contour_edges, append_pass_remeshed_surface_depth_drawcall]
@@ -353,11 +356,11 @@ class GPUBufferPoolModule {
 
   inline GPUStorageBuf *reused_ssbo_frag_to_contour_()
   {
-    return ssbo_mesh_buffer_reuse_0_;
+    return ssbo_mesh_buffer_reuse_large_[0];
   }
   inline GPUStorageBuf *reused_ssbo_frag_raster_data_()
   {
-    return ssbo_mesh_buffer_reuse_3_;
+    return ssbo_mesh_buffer_reuse_large_[1];
   }
   inline GPUStorageBuf *reused_ssbo_tree_scan_input_contour_fragment_idmapping_()
   { // only used within the segscan passes
@@ -381,7 +384,7 @@ class GPUBufferPoolModule {
   }
   inline GPUStorageBuf *reused_ssbo_tree_scan_output_contour_visibility_split_1_()
   {
-    return ssbo_mesh_buffer_reuse_4_; 
+    return ssbo_mesh_buffer_reuse_large_[2]; 
   }
   inline GPUStorageBuf *reused_ssbo_contour_visibility_split_info_()
   {  
@@ -410,7 +413,7 @@ class GPUBufferPoolModule {
   // lifetime [append_subpass_serialize_contour_edges, append_subpass_contour_segmentation)
   inline GPUStorageBuf *reused_ssbo_in_segloopconv1d_data_contour_seg_denoise()
   {
-    return ssbo_mesh_buffer_reuse_4_;
+    return ssbo_mesh_buffer_reuse_large_[2];
   }
 
   // lifetime (append_subpass_contour_segmentation, append_subpass_calc_contour_edges_draw_data)
@@ -420,7 +423,7 @@ class GPUBufferPoolModule {
   }
   inline GPUStorageBuf *reused_ssbo_2d_sample_to_contour_()
   {
-    return ssbo_mesh_buffer_reuse_4_;
+    return ssbo_mesh_buffer_reuse_large_[2];
   }
   inline GPUStorageBuf *reused_ssbo_contour_arc_len_param_()
   {
@@ -430,7 +433,7 @@ class GPUBufferPoolModule {
   // life time (append_subpass_contour_segmentation, strokegen_contour_2d_resample_eval_position]
   inline GPUStorageBuf *reused_ssbo_contour_2d_resample_raster_data_()
   {
-    return ssbo_mesh_buffer_reuse_0_;
+    return ssbo_mesh_buffer_reuse_large_[0];
   }
 
   // shorter-lifetime buffers
@@ -452,7 +455,7 @@ class GPUBufferPoolModule {
   }
   inline GPUStorageBuf *reused_ssbo_tree_scan_input_2d_resample_contour_idmapping_()
   { // lifetime within scan, racing with above 2 buffers
-    return ssbo_mesh_buffer_reuse_3_; 
+    return ssbo_mesh_buffer_reuse_large_[1]; 
   }
   inline GPUStorageBuf *reused_ssbo_tree_scan_output_2d_resample_contour_idmapping_()
   {
@@ -469,11 +472,11 @@ class GPUBufferPoolModule {
   }
   inline GPUStorageBuf *reused_ssbo_tree_scan_input_2d_sample_segmentation_0_()
   {
-    return ssbo_mesh_buffer_reuse_0_; 
+    return ssbo_mesh_buffer_reuse_large_[0]; 
   }
   inline GPUStorageBuf *reused_ssbo_tree_scan_input_2d_sample_segmentation_1_()
   {
-    return ssbo_mesh_buffer_reuse_3_;
+    return ssbo_mesh_buffer_reuse_large_[1];
   }
   inline GPUStorageBuf *reused_ssbo_tree_scan_output_2d_sample_segmentation_0_()
   {
@@ -485,14 +488,14 @@ class GPUBufferPoolModule {
   }
   inline GPUStorageBuf *reused_ssbo_stroke_mesh_pool_()
   {
-    return ssbo_mesh_buffer_reuse_0_; 
+    return ssbo_mesh_buffer_reuse_large_[0]; 
   }
 
 
   // lifetime [append_subpass_calc_contour_edges_draw_data, append_draw_contour_subpass]
   inline GPUStorageBuf *reused_ssbo_bnpr_mesh_pool_()
   {
-    return ssbo_mesh_buffer_reuse_3_;
+    return ssbo_mesh_buffer_reuse_large_[1];
   }
 
 
@@ -645,8 +648,12 @@ class GPUBufferPoolModule {
     delete reinterpret_cast<StrokegenUniformBufPool<UBO_StrokegenObjectInfo> *>(
       ubo_current_strokegen_object_info_pool_
     );
+
+    free_reused_buffers(); 
   }
 
+  void alloc_reused_buffers();
+  void free_reused_buffers();
 
   void on_begin_sync(
     const DRWView* drw_view, bool upload_list_ranking_test_data,

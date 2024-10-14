@@ -24,107 +24,109 @@
 #include "BLI_utildefines.h"
 
 #include "BKE_global.hh"
+#include "gpu_drawlist_private.hh"
 
 #include "GPU_framebuffer.hh"
 
 
-namespace blender::npr::strokegen
+namespace blender::npr::strokegen {
+
+GPUStorageBuf *alloc_storage_buf(int size, const char *name)
 {
+  GPUStorageBuf *buf = GPU_storagebuf_create_ex(
+      size, nullptr, GPUUsageType::GPU_USAGE_DEVICE_ONLY, name
+    );
+  gpu::unwrap(buf)->update(nullptr); // trigger actual alloc on gpu
 
-  void GPUBufferPoolModule::on_begin_sync(
-    const DRWView* drw_view, bool upload_list_ranking_test_data,
-    bool update_view_matrices_for_contour_extraction, 
+  return buf; 
+}
+
+void GPUBufferPoolModule::alloc_reused_buffers()
+{
+  // if (ssbo_mesh_buffer_reuse_large_[0] != nullptr) {
+  //   GPU_storagebuf_free(ssbo_mesh_buffer_reuse_large_[0]);
+  //   ssbo_mesh_buffer_reuse_large_[0] = nullptr; 
+  // }
+  // for (int i = 0; i < 1000; ++i) {
+  //   if (ssbo_mesh_buffer_reuse_large_[0] == nullptr)
+  //     ssbo_mesh_buffer_reuse_large_[0] = alloc_storage_buf(
+  //         (i % 2 == 0 ? large_buffer_size : large_buffer_size / 4) - i * 16, "reused_large_buffers");
+
+    if (ssbo_mesh_buffer_reuse_large_[0] != nullptr) {
+      GPU_storagebuf_free(ssbo_mesh_buffer_reuse_large_[0]);
+      ssbo_mesh_buffer_reuse_large_[0] = nullptr;
+    }
+  }
+
+
+  for (int i = 0; i < NUM_REUSED_LARGE_BUFFERS; ++i) 
+    if (ssbo_mesh_buffer_reuse_large_[i] == nullptr) 
+      ssbo_mesh_buffer_reuse_large_[i] = alloc_storage_buf(large_buffer_size, "reused_large_buffers");
+}
+
+void GPUBufferPoolModule::free_reused_buffers()
+{
+  for (int i = 0; i < NUM_REUSED_LARGE_BUFFERS; ++i) 
+    if (ssbo_mesh_buffer_reuse_large_[i] != nullptr) {
+      GPU_storagebuf_free(ssbo_mesh_buffer_reuse_large_[i]); // vk/gl backend frees the buffer in its destructor
+      ssbo_mesh_buffer_reuse_large_[i] = nullptr;
+    }
+}
+
+void GPUBufferPoolModule::on_begin_sync(
+    const DRWView *drw_view,
+    bool upload_list_ranking_test_data,
+    bool update_view_matrices_for_contour_extraction,
     bool update_view_matrices_for_dbg_view_rotation)
-  {
-    // reset objects in the gpu scene
-    ubo_current_strokegen_object_info_pool_->reset();
+{
+  // reset objects in the gpu scene
+  ubo_current_strokegen_object_info_pool_->reset();
 
-    // Setup buffers for parallel computation operators
-    UBO_BnprTreeScan& ubo_tree_scan = ubo_bnpr_tree_scan_infos_;
+  {
+    // Setup rendering buffers
+    alloc_reused_buffers();
+  }
+
+  {
+    // Setup buffers for parallel computation operators ----------------------
+    UBO_BnprTreeScan &ubo_tree_scan = ubo_bnpr_tree_scan_infos_;
     {
       ubo_bnpr_tree_scan_infos_.num_scan_items = NUM_ITEMS_BNPR_SCAN_TEST;
       ubo_bnpr_tree_scan_infos_.num_valid_scan_threads = compute_num_threads(
-        NUM_ITEMS_BNPR_SCAN_TEST,
-        2u
-      );
+          NUM_ITEMS_BNPR_SCAN_TEST,
+          2u
+          );
       ubo_bnpr_tree_scan_infos_.num_thread_groups = compute_num_groups(
-        NUM_ITEMS_BNPR_SCAN_TEST,
-        GROUP_SIZE_BNPR_SCAN_SWEEP,
-        2u
-      );
+          NUM_ITEMS_BNPR_SCAN_TEST,
+          GROUP_SIZE_BNPR_SCAN_SWEEP,
+          2u
+          );
       ubo_bnpr_tree_scan_infos_.dummy = 0u;
     }
     ubo_bnpr_tree_scan_infos_.push_update();
 
-
-    UBO_SegLoopConv1D& ubo_segloopconv1d = ubo_segloopconv1d_;
+    UBO_SegLoopConv1D &ubo_segloopconv1d = ubo_segloopconv1d_;
     {
       ubo_segloopconv1d.num_thread_groups = compute_num_groups(
-        NUM_ITEMS_SEGLOOPCONV1D_TEST,
-        GROUP_SIZE_SEGLOOPCONV1D_TEST
-      );
+          NUM_ITEMS_SEGLOOPCONV1D_TEST,
+          GROUP_SIZE_SEGLOOPCONV1D_TEST
+          );
       ubo_segloopconv1d.num_conv_items = NUM_ITEMS_SEGLOOPCONV1D_TEST;
     }
     ubo_segloopconv1d_.push_update();
 
-    UBO_ListRanking& ubo_list_ranking_splicing__ = ubo_list_ranking_splicing_;
+    UBO_ListRanking &ubo_list_ranking_splicing__ = ubo_list_ranking_splicing_;
     {
       ubo_list_ranking_splicing__.num_thread_groups = compute_num_groups(
-        NUM_ITEMS_BNPR_LIST_RANK_TEST,
-        GROUP_SIZE_BNPR_LIST_RANK_TEST
-      );
+          NUM_ITEMS_BNPR_LIST_RANK_TEST,
+          GROUP_SIZE_BNPR_LIST_RANK_TEST
+          );
       ubo_list_ranking_splicing__.num_nodes = NUM_ITEMS_BNPR_LIST_RANK_TEST;
-      ubo_list_ranking_splicing__.subbuff_size = 4 * ((ubo_list_ranking_splicing__.num_nodes + 3) / 4);
+      ubo_list_ranking_splicing__.subbuff_size =
+          4 * ((ubo_list_ranking_splicing__.num_nodes + 3) / 4);
       ubo_list_ranking_splicing__.num_tagging_iters = 1u;
     }
     ubo_list_ranking_splicing_.push_update();
-
-    UBO_ViewMatrices& ubo_view_matrices__ = ubo_view_matrices_;
-    {
-      ubo_view_matrices__.viewmat = drw_view->storage.viewmat;
-      ubo_view_matrices__.viewinv = drw_view->storage.viewinv;
-      ubo_view_matrices__.winmat = drw_view->storage.winmat;
-      ubo_view_matrices__.wininv = drw_view->storage.wininv;
-
-      ubo_view_matrices__.push_update();
-    }
-
-    UBO_ViewMatrices & ubo_view_matrices_cache__ = ubo_view_matrices_cache_;
-    if (update_view_matrices_for_contour_extraction)
-    {
-      ubo_view_matrices_cache__.viewmat = drw_view->storage.viewmat;
-      ubo_view_matrices_cache__.viewinv = drw_view->storage.viewinv;
-      ubo_view_matrices_cache__.winmat = drw_view->storage.winmat;
-      ubo_view_matrices_cache__.wininv = drw_view->storage.wininv;
-      ubo_view_matrices_cache__.push_update();
-
-      ubo_view_matrices_cache_2_.viewmat = drw_view->storage.viewmat;
-      ubo_view_matrices_cache_2_.viewinv = drw_view->storage.viewinv;
-      ubo_view_matrices_cache_2_.winmat = drw_view->storage.winmat;
-      ubo_view_matrices_cache_2_.wininv = drw_view->storage.wininv;
-      ubo_view_matrices_cache_2_.push_update();
-    }else if (update_view_matrices_for_dbg_view_rotation){
-      // Fixed view, or with custom rotations
-      // fetch ui inputs
-      float rot_ang;
-      get_dbg_view_rot_angle(rot_ang);
-      float4x4 v = ubo_view_matrices_cache_2_.viewmat;
-
-      float r[4][4];
-      float rot_axis[3] = { .0f, .0f, 1.0f };
-      axis_angle_to_mat4(r, rot_axis, rot_ang);
-      v = v * float4x4(r);
-
-      float4x4 inv_v; // = math::invert(v); // invert_m4(v.ptr);
-      invert_m4_m4(inv_v.ptr(), v.ptr());
-
-      ubo_view_matrices_cache_.viewmat = v; // drw_view->storage.viewmat;
-      ubo_view_matrices_cache_.viewinv = inv_v; // drw_view->storage.viewinv;
-      ubo_view_matrices_cache_.winmat = ubo_view_matrices_cache_2_.winmat;
-      ubo_view_matrices_cache_.wininv = ubo_view_matrices_cache_2_.wininv;
-      ubo_view_matrices_cache_.push_update();
-    }
-
 
     {
       // ssbo_list_ranking_indirect_dispatch_args_per_anchor[0].clear_to_zero();
@@ -144,11 +146,11 @@ namespace blender::npr::strokegen
       // GPU_memory_barrier(GPU_BARRIER_BUFFER_UPDATE | GPU_BARRIER_COMMAND);
     }
 
-    if (upload_list_ranking_test_data)
-    {
-      if (false == listranking_test_data_uploaded) {  // list ranking test: build nodes on CPU &
-                                                      // upload to ssbo
-        build_list_ranking_testing_data(true);        // build listranking_test_nodes_prev_next
+    if (upload_list_ranking_test_data) {
+      if (false == listranking_test_data_uploaded) {
+        // list ranking test: build nodes on CPU &
+        // upload to ssbo
+        build_list_ranking_testing_data(true); // build listranking_test_nodes_prev_next
 
         ssbo_list_ranking_links_staging_buf_.resize(NUM_ITEMS_BNPR_LIST_RANK_TEST * 2);
         ssbo_list_ranking_links_staging_buf_.clear_to_zero();
@@ -159,15 +161,16 @@ namespace blender::npr::strokegen
         memcpy(data,
                listranking_test_nodes_prev_next.data(),
                ssbo_list_ranking_links_staging_buf_.size() * sizeof(uint));
-        ssbo_list_ranking_links_staging_buf_.push_update();  // glBufferSubData
+        ssbo_list_ranking_links_staging_buf_.push_update(); // glBufferSubData
 
         GPU_memory_barrier(GPU_BARRIER_BUFFER_UPDATE);
 
         listranking_test_data_uploaded = true;
       }
       if (!listranking_test_data_validated &&
-          listranking_test_data_uploaded) {  // list ranking test: validate uploaded nodes int the
-                                             // ssbo
+          listranking_test_data_uploaded) {
+        // list ranking test: validate uploaded nodes int the
+        // ssbo
         listranking_test_data_validated = true;
 
         ssbo_list_ranking_links_staging_buf_.read();
@@ -180,189 +183,245 @@ namespace blender::npr::strokegen
         }
       }
     }
-
   }
 
-  void GPUBufferPoolModule::sync_object(Object* ob)
   {
-    UBO_StrokegenObjectInfo *ubo_new_obj = ubo_current_strokegen_object_info_pool_->alloc(); 
-    ubo_new_obj->visibility_threshold = ob->strokegen.visibility_threshold;
-    ubo_new_obj->stroke_width = ob->strokegen.curve_width;
-    StrokegenObjectFlags flags;
-    flags.draw_contour = ob->strokegen.curve_type == STROKEGEN_CURVE_TYPE_CONTOUR; 
-    flags.draw_border = false;
-    flags.draw_invisible = false;
-    flags.seg_by_cusp      = (0 != (ob->strokegen.flags & STROKEGEN_FLAG_CURVE_SEGMENT_BY_3D_CUSPS));
-    flags.seg_by_corner_2d = (0 != (ob->strokegen.flags & STROKEGEN_FLAG_CURVE_SEGMENT_BY_2D_CORNERS));
-    ubo_new_obj->flags = encode_strokegen_object_flags(flags);
-    ubo_new_obj->dummy = 0;
-
-    ubo_new_obj->push_update(); 
-  }
-
-  void GPUBufferPoolModule::on_end_sync()
-  {
-    ubo_view_matrices_last_frame_.viewmat = ubo_view_matrices_cache_.viewmat;
-    ubo_view_matrices_last_frame_.viewinv = ubo_view_matrices_cache_.viewinv;
-    ubo_view_matrices_last_frame_.winmat = ubo_view_matrices_cache_.winmat;
-    ubo_view_matrices_last_frame_.wininv = ubo_view_matrices_cache_.wininv;
-    ubo_view_matrices_last_frame_.push_update();
-  }
-
-
-  void GPUBufferPoolModule::build_list_ranking_testing_data(bool test_loop_lists)
-  { // TODO: make multiple lists instead of one long list
-    int num_nodes = NUM_ITEMS_BNPR_LIST_RANK_TEST;
-
-    listranking_test_nodes_prev_next.reinitialize(2 * num_nodes);
-
-    listranking_test_nodes_rank.resize(num_nodes);
-    listranking_test_nodes_head.resize(num_nodes);
-    listranking_test_nodes_tail.resize(num_nodes);
-    listranking_test_nodes_list_len.resize(num_nodes);
-    listranking_test_head_nodes.clear();
-
-    std::vector<int> node_array;
-    node_array.resize(num_nodes);
-
-    std::vector<int> head, tail, seg_len, rank;
-    head.resize(num_nodes);
-    tail.resize(num_nodes);
-    seg_len.resize(num_nodes);
-    rank.resize(num_nodes);
-
-    std::random_device rd;
-    // std::mt19937 rng(/*rd()*/ (time(0)));
-    std::mt19937 rng((time(0)));
-    std::srand(time(0));
-    int curr_arr_head = 0;
-    int curr_len = std::max(2, (int)std::rand() % num_nodes / 2);
-    int curr_arr_tail = curr_arr_head + curr_len - 1;
-    for (int arr_id = 0; arr_id < num_nodes; ++arr_id) {
-      rank[arr_id] = arr_id - curr_arr_head;
-      seg_len[arr_id] = curr_len;
-      head[arr_id] = curr_arr_head;
-      tail[arr_id] = curr_arr_tail;
-      if (curr_arr_tail == arr_id) {  // update to next sublist
-        curr_arr_head = arr_id + 1;
-        curr_len = std::min(num_nodes - curr_arr_head,
-                            std::max((int)std::rand() % (num_nodes / 2), 2));
-          curr_arr_tail = curr_arr_head + curr_len - 1;
-        }
-
-        node_array[arr_id] = arr_id; // shuffle later
-    }
-    std::shuffle(node_array.begin(), node_array.end(), rng);
-
-    Map<int, int> nodeToArr;
-    Map<int, int> arrToNode;
-    for (int node_id = 0; node_id < num_nodes; ++node_id) {
-      uint arr_id = node_array[node_id];
-      nodeToArr.add(node_id, arr_id);
-      arrToNode.add(arr_id, node_id);
-    }
-
-    std::vector<int> arr_looped_rank, arr_looped_head, arr_looped_tail;
-    arr_looped_rank.resize(num_nodes);
-    arr_looped_head.resize(num_nodes);
-    arr_looped_tail.resize(num_nodes);
-    if (test_loop_lists)
+    // Update view matrices ------------------------------------------------
+    UBO_ViewMatrices &ubo_view_matrices__ = ubo_view_matrices_;
     {
-      int arr_id = 0;
-      while (arr_id < num_nodes)
-      { // traverse sub-lists
-        curr_arr_head = head[arr_id];
-        curr_arr_tail = tail[arr_id];
+      ubo_view_matrices__.viewmat = drw_view->storage.viewmat;
+      ubo_view_matrices__.viewinv = drw_view->storage.viewinv;
+      ubo_view_matrices__.winmat = drw_view->storage.winmat;
+      ubo_view_matrices__.wininv = drw_view->storage.wininv;
 
-        int arr_loop_shift = 0;
-        int loop_head_node_id = arrToNode.lookup(curr_arr_head);
-        int loop_len = seg_len[curr_arr_head];
+      ubo_view_matrices__.push_update();
+    }
 
-        // scan list to find loop head
-        for (int arr_id_scan = curr_arr_head; arr_id_scan <= curr_arr_tail; ++arr_id_scan)
-        { // node with maximum address is the loop head
-          int node_id = arrToNode.lookup(arr_id_scan);
-          if (node_id > loop_head_node_id)
-          {
-            loop_head_node_id = node_id;
-            arr_loop_shift = arr_id_scan - curr_arr_head;
-          }
+    UBO_ViewMatrices &ubo_view_matrices_cache__ = ubo_view_matrices_cache_;
+    if (update_view_matrices_for_contour_extraction) {
+      ubo_view_matrices_cache__.viewmat = drw_view->storage.viewmat;
+      ubo_view_matrices_cache__.viewinv = drw_view->storage.viewinv;
+      ubo_view_matrices_cache__.winmat = drw_view->storage.winmat;
+      ubo_view_matrices_cache__.wininv = drw_view->storage.wininv;
+      ubo_view_matrices_cache__.push_update();
+
+      ubo_view_matrices_cache_2_.viewmat = drw_view->storage.viewmat;
+      ubo_view_matrices_cache_2_.viewinv = drw_view->storage.viewinv;
+      ubo_view_matrices_cache_2_.winmat = drw_view->storage.winmat;
+      ubo_view_matrices_cache_2_.wininv = drw_view->storage.wininv;
+      ubo_view_matrices_cache_2_.push_update();
+    }
+    else if (update_view_matrices_for_dbg_view_rotation) {
+      // Fixed view, or with custom rotations
+      // fetch ui inputs
+      float rot_ang;
+      get_dbg_view_rot_angle(rot_ang);
+      float4x4 v = ubo_view_matrices_cache_2_.viewmat;
+
+      float r[4][4];
+      float rot_axis[3] = {.0f, .0f, 1.0f};
+      axis_angle_to_mat4(r, rot_axis, rot_ang);
+      v = v * float4x4(r);
+
+      float4x4 inv_v; // = math::invert(v); // invert_m4(v.ptr);
+      invert_m4_m4(inv_v.ptr(), v.ptr());
+
+      ubo_view_matrices_cache_.viewmat = v;     // drw_view->storage.viewmat;
+      ubo_view_matrices_cache_.viewinv = inv_v; // drw_view->storage.viewinv;
+      ubo_view_matrices_cache_.winmat = ubo_view_matrices_cache_2_.winmat;
+      ubo_view_matrices_cache_.wininv = ubo_view_matrices_cache_2_.wininv;
+      ubo_view_matrices_cache_.push_update();
+    }
+  }
+
+}
+
+void GPUBufferPoolModule::sync_object(Object *ob)
+{
+  UBO_StrokegenObjectInfo *ubo_new_obj = ubo_current_strokegen_object_info_pool_->alloc();
+  ubo_new_obj->visibility_threshold = ob->strokegen.visibility_threshold;
+  ubo_new_obj->stroke_width = ob->strokegen.curve_width;
+  StrokegenObjectFlags flags;
+  flags.draw_contour = ob->strokegen.curve_type == STROKEGEN_CURVE_TYPE_CONTOUR;
+  flags.draw_border = false;
+  flags.draw_invisible = false;
+  flags.seg_by_cusp = (0 != (ob->strokegen.flags & STROKEGEN_FLAG_CURVE_SEGMENT_BY_3D_CUSPS));
+  flags.seg_by_corner_2d = (0 != (ob->strokegen.flags &
+                                  STROKEGEN_FLAG_CURVE_SEGMENT_BY_2D_CORNERS));
+  ubo_new_obj->flags = encode_strokegen_object_flags(flags);
+  ubo_new_obj->dummy = 0;
+
+  ubo_new_obj->push_update();
+}
+
+void GPUBufferPoolModule::on_end_sync()
+{
+  ubo_view_matrices_last_frame_.viewmat = ubo_view_matrices_cache_.viewmat;
+  ubo_view_matrices_last_frame_.viewinv = ubo_view_matrices_cache_.viewinv;
+  ubo_view_matrices_last_frame_.winmat = ubo_view_matrices_cache_.winmat;
+  ubo_view_matrices_last_frame_.wininv = ubo_view_matrices_cache_.wininv;
+  ubo_view_matrices_last_frame_.push_update();
+}
+
+
+void GPUBufferPoolModule::build_list_ranking_testing_data(bool test_loop_lists)
+{
+  // TODO: make multiple lists instead of one long list
+  int num_nodes = NUM_ITEMS_BNPR_LIST_RANK_TEST;
+
+  listranking_test_nodes_prev_next.reinitialize(2 * num_nodes);
+
+  listranking_test_nodes_rank.resize(num_nodes);
+  listranking_test_nodes_head.resize(num_nodes);
+  listranking_test_nodes_tail.resize(num_nodes);
+  listranking_test_nodes_list_len.resize(num_nodes);
+  listranking_test_head_nodes.clear();
+
+  std::vector<int> node_array;
+  node_array.resize(num_nodes);
+
+  std::vector<int> head, tail, seg_len, rank;
+  head.resize(num_nodes);
+  tail.resize(num_nodes);
+  seg_len.resize(num_nodes);
+  rank.resize(num_nodes);
+
+  std::random_device rd;
+  // std::mt19937 rng(/*rd()*/ (time(0)));
+  std::mt19937 rng((time(0)));
+  std::srand(time(0));
+  int curr_arr_head = 0;
+  int curr_len = std::max(2, (int)std::rand() % num_nodes / 2);
+  int curr_arr_tail = curr_arr_head + curr_len - 1;
+  for (int arr_id = 0; arr_id < num_nodes; ++arr_id) {
+    rank[arr_id] = arr_id - curr_arr_head;
+    seg_len[arr_id] = curr_len;
+    head[arr_id] = curr_arr_head;
+    tail[arr_id] = curr_arr_tail;
+    if (curr_arr_tail == arr_id) {
+      // update to next sublist
+      curr_arr_head = arr_id + 1;
+      curr_len = std::min(num_nodes - curr_arr_head,
+                          std::max((int)std::rand() % (num_nodes / 2), 2));
+      curr_arr_tail = curr_arr_head + curr_len - 1;
+    }
+
+    node_array[arr_id] = arr_id; // shuffle later
+  }
+  std::shuffle(node_array.begin(), node_array.end(), rng);
+
+  Map<int, int> nodeToArr;
+  Map<int, int> arrToNode;
+  for (int node_id = 0; node_id < num_nodes; ++node_id) {
+    uint arr_id = node_array[node_id];
+    nodeToArr.add(node_id, arr_id);
+    arrToNode.add(arr_id, node_id);
+  }
+
+  std::vector<int> arr_looped_rank, arr_looped_head, arr_looped_tail;
+  arr_looped_rank.resize(num_nodes);
+  arr_looped_head.resize(num_nodes);
+  arr_looped_tail.resize(num_nodes);
+  if (test_loop_lists) {
+    int arr_id = 0;
+    while (arr_id < num_nodes) {
+      // traverse sub-lists
+      curr_arr_head = head[arr_id];
+      curr_arr_tail = tail[arr_id];
+
+      int arr_loop_shift = 0;
+      int loop_head_node_id = arrToNode.lookup(curr_arr_head);
+      int loop_len = seg_len[curr_arr_head];
+
+      // scan list to find loop head
+      for (int arr_id_scan = curr_arr_head; arr_id_scan <= curr_arr_tail; ++arr_id_scan) {
+        // node with maximum address is the loop head
+        int node_id = arrToNode.lookup(arr_id_scan);
+        if (node_id > loop_head_node_id) {
+          loop_head_node_id = node_id;
+          arr_loop_shift = arr_id_scan - curr_arr_head;
         }
-        listranking_test_head_nodes.insert(loop_head_node_id);
-        int loop_head_arr_id = nodeToArr.lookup(loop_head_node_id);
-
-        // record mapping from sub-lists to shifted ones
-        for (int arr_id_scan = curr_arr_head; arr_id_scan <= curr_arr_tail; ++arr_id_scan)
-        {
-          int local_rank = arr_id_scan - curr_arr_head;
-          local_rank = (local_rank - arr_loop_shift + loop_len) % loop_len; // shift loop head node to the start
-          arr_looped_rank[arr_id_scan] = local_rank;
-          arr_looped_head[arr_id_scan] = loop_head_arr_id;
-          arr_looped_tail[arr_id_scan] = curr_arr_head + ((arr_loop_shift - 1 + loop_len) % loop_len);
-        }
-
-        arr_id = curr_arr_tail + 1;
       }
+      listranking_test_head_nodes.insert(loop_head_node_id);
+      int loop_head_arr_id = nodeToArr.lookup(loop_head_node_id);
+
+      // record mapping from sub-lists to shifted ones
+      for (int arr_id_scan = curr_arr_head; arr_id_scan <= curr_arr_tail; ++arr_id_scan) {
+        int local_rank = arr_id_scan - curr_arr_head;
+        local_rank = (local_rank - arr_loop_shift + loop_len) % loop_len;
+        // shift loop head node to the start
+        arr_looped_rank[arr_id_scan] = local_rank;
+        arr_looped_head[arr_id_scan] = loop_head_arr_id;
+        arr_looped_tail[arr_id_scan] =
+            curr_arr_head + ((arr_loop_shift - 1 + loop_len) % loop_len);
+      }
+
+      arr_id = curr_arr_tail + 1;
     }
+  }
 
-
-    for (int node_id = 0; node_id < num_nodes; ++node_id)
-    {
-      uint arr_id = nodeToArr.lookup(node_id);
-      listranking_test_nodes_rank[node_id] = (!test_loop_lists) ? rank[arr_id] : arr_looped_rank[arr_id];
-      listranking_test_nodes_head[node_id] = arrToNode.lookup(
+  for (int node_id = 0; node_id < num_nodes; ++node_id) {
+    uint arr_id = nodeToArr.lookup(node_id);
+    listranking_test_nodes_rank[node_id] = (!test_loop_lists) ?
+                                             rank[arr_id] :
+                                             arr_looped_rank[arr_id];
+    listranking_test_nodes_head[node_id] = arrToNode.lookup(
         (!test_loop_lists) ? head[arr_id] : arr_looped_head[arr_id]
-      );
-      listranking_test_nodes_tail[node_id] = arrToNode.lookup(
+        );
+    listranking_test_nodes_tail[node_id] = arrToNode.lookup(
         (!test_loop_lists) ? tail[arr_id] : arr_looped_tail[arr_id]
-      );
-      listranking_test_nodes_list_len[node_id] = seg_len[arr_id];
+        );
+    listranking_test_nodes_list_len[node_id] = seg_len[arr_id];
+  }
+  for (int node = 0; node < num_nodes; ++node) {
+    int arr_id = nodeToArr.lookup(node);
+    int arr_prev, arr_next;
+    if (!test_loop_lists) {
+      arr_prev = (head[arr_id] == arr_id) ? arr_id : (arr_id - 1); // head->prev == itself
+      arr_next = (tail[arr_id] == arr_id) ? arr_id : (arr_id + 1); // tail->next= itself
     }
-    for (int node = 0; node < num_nodes; ++node) {
-      int arr_id = nodeToArr.lookup(node);
-      int arr_prev, arr_next;
-      if (!test_loop_lists){
-        arr_prev = (head[arr_id] == arr_id) ? arr_id : (arr_id - 1); // head->prev == itself
-        arr_next = (tail[arr_id] == arr_id) ? arr_id : (arr_id + 1); // tail->next= itself
-      }
-      else{
-        int curr_list_len = listranking_test_nodes_list_len[node];
-        int curr_list_beg = head[arr_id]; // start addr of serialized loop list
-        int list_rank = arr_id - curr_list_beg;
-        arr_prev = curr_list_beg + (list_rank - 1 + curr_list_len) % curr_list_len; // head->prev == itself
-        arr_next = curr_list_beg + (list_rank + 1 + curr_list_len) % curr_list_len; // tail->next == itself
-      }
-      listranking_test_nodes_prev_next[node*2]   = arrToNode.lookup(arr_prev);
-      listranking_test_nodes_prev_next[node*2+1] = arrToNode.lookup(arr_next);
+    else {
+      int curr_list_len = listranking_test_nodes_list_len[node];
+      int curr_list_beg = head[arr_id]; // start addr of serialized loop list
+      int list_rank = arr_id - curr_list_beg;
+      arr_prev = curr_list_beg + (list_rank - 1 + curr_list_len) % curr_list_len;
+      // head->prev == itself
+      arr_next = curr_list_beg + (list_rank + 1 + curr_list_len) % curr_list_len;
+      // tail->next == itself
     }
-
-    // Print linked lists
-    if (num_nodes <= 64)
-    {
-      for (int head_node_id : listranking_test_head_nodes)
-      {
-        int list_len = listranking_test_nodes_list_len[head_node_id];
-        int curr_node_id = head_node_id;
-        for (int i = 0; i < list_len; ++i)
-        {
-          std::cout << curr_node_id;
-          if ((i + 1) != list_len) std::cout << "->";
-          curr_node_id = listranking_test_nodes_prev_next[curr_node_id * 2 + 1];
-        }
-        std::cout << std::endl;
-      }
-    }
+    listranking_test_nodes_prev_next[node * 2] = arrToNode.lookup(arr_prev);
+    listranking_test_nodes_prev_next[node * 2 + 1] = arrToNode.lookup(arr_next);
   }
 
-  void GPUBufferPoolModule::get_dbg_view_rot_angle(float& rot_ang) {
-    const DRWContextState* draw_ctx = DRW_context_state_get();
-    const Scene* scene_eval = DEG_get_evaluated_scene(draw_ctx->depsgraph);
-    rot_ang = .05f * scene_eval->npr.npr_test_val_12;
+  // Print linked lists
+  if (num_nodes <= 64) {
+    for (int head_node_id : listranking_test_head_nodes) {
+      int list_len = listranking_test_nodes_list_len[head_node_id];
+      int curr_node_id = head_node_id;
+      for (int i = 0; i < list_len; ++i) {
+        std::cout << curr_node_id;
+        if ((i + 1) != list_len)
+          std::cout << "->";
+        curr_node_id = listranking_test_nodes_prev_next[curr_node_id * 2 + 1];
+      }
+      std::cout << std::endl;
+    }
   }
+}
 
-void GPUBufferPoolModule::should_dbg_rotate_view_matrices_cache(float& rot_ang, bool& dbg_rotate_view_matrix) {
-    get_dbg_view_rot_angle(rot_ang);
-    dbg_rotate_view_matrix = 1e-10f < math::abs(rot_angle_ubo_view_matrices_cache_ - rot_ang);
-    rot_angle_ubo_view_matrices_cache_ = rot_ang;
-  }
+void GPUBufferPoolModule::get_dbg_view_rot_angle(float &rot_ang)
+{
+  const DRWContextState *draw_ctx = DRW_context_state_get();
+  const Scene *scene_eval = DEG_get_evaluated_scene(draw_ctx->depsgraph);
+  rot_ang = .05f * scene_eval->npr.npr_test_val_12;
+}
+
+void GPUBufferPoolModule::should_dbg_rotate_view_matrices_cache(
+    float &rot_ang,
+    bool &dbg_rotate_view_matrix)
+{
+  get_dbg_view_rot_angle(rot_ang);
+  dbg_rotate_view_matrix = 1e-10f < math::abs(rot_angle_ubo_view_matrices_cache_ - rot_ang);
+  rot_angle_ubo_view_matrices_cache_ = rot_ang;
+}
 }

@@ -649,7 +649,7 @@ vec3 load_filtered_vert_pos(uint FilteredVertID, uint num_filtered_verts)
  * uint ssbo_selected_edge_to_edge_[]; 
  * uint ssbo_selected_vert_to_vert_[]; 
  * uint ssbo_vert_quadric_data_in_[];  <- (reuse) ssbo_bnpr_mesh_pool_
- * uint ssbo_vert_quadric_data_out_[]; <- (reuse) ssbo_mesh_buffer_reuse_0_
+ * uint ssbo_vert_quadric_data_out_[]; <- (reuse) ssbo_mesh_buffer_reuse_large_[0]
  * uint ssbo_edge_quadric_data_[];     <- (reuse) ssbo_vert_merged_id_
  * float ssbo_vbo_full_[]; rw
  * float ssbo_filtered_normal_vert_[];  <- (reuse) ssbo_mesh_buffer_reuse_1_
