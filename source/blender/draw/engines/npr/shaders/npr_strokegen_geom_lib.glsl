@@ -647,13 +647,13 @@ void proj_vec_to_triangle_plane(vec3 D, vec3 Q1, vec3 Q2, out vec3 D_proj, out v
 #if defined(INCLUDE_PER_OBJECT_INFO)
     void store_strokegen_object_info(uint obj_id, StrokegenObjectInfo info)
     {
-        uvec3 enc = encode_strokegen_object_info(info); 
-        Store3(ssbo_merged_strokegen_object_infos_, obj_id, enc); 
+        uvec4 enc = encode_strokegen_object_info(info); 
+        Store4(ssbo_merged_strokegen_object_infos_, obj_id, enc); 
     }
     StrokegenObjectInfo load_strokegen_object_info(uint obj_id)
     {
-        uvec3 enc; 
-        Load3(ssbo_merged_strokegen_object_infos_, obj_id, enc); 
+        uvec4 enc; 
+        Load4(ssbo_merged_strokegen_object_infos_, obj_id, enc); 
         return decode_strokegen_object_info(enc); 
     }
 #endif

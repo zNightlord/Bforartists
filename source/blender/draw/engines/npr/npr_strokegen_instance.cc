@@ -174,14 +174,20 @@ namespace blender::npr::strokegen
       return; 
 
     GPU_texture_copy(strokegen_textures.tex_contour_raster_depth, pre_depth);
-    
-    for (int i = 0; i < strokegen_passes.get_num_passes_extract_geom(); ++i)
+
+    manager.submit(strokegen_passes.get_singleton_compute_pass(PType::CONTOUR_BOOSTRAP), view);
+    for (int m = 0; m < strokegen_passes.get_num_processed_meshes(); ++m)
     {
       /* Geometry Extraction */
-      manager.submit(strokegen_passes.get_compute_pass(PType::GEOM_EXTRACTION, i), view);
+      for (int stage = 0; stage < StrokeGenPassModule::NUM_MESH_PROCESSING_STAGES; ++stage)
+      {
+        // strokegen_buffers.alloc_temp_ssbos_auto(stage); 
+        strokegen_passes.submit_per_mesh_passes(m, stage, manager);
+        // strokegen_buffers.free_temp_ssbos_auto(stage); 
+      }
 
       /* Draw depth for remeshed surfaces */
-      PassMain &render_pass_remesh_depth = strokegen_passes.get_render_pass(PType::INDIRECT_DRAW_REMESHED_DEPTH, i);
+      PassMain &render_pass_remesh_depth = strokegen_passes.get_render_pass(PType::INDIRECT_DRAW_REMESHED_DEPTH, m);
       render_pass_remesh_depth.framebuffer_set(&strokegen_textures.fb_remeshed_depth);
       strokegen_textures.fb_remeshed_depth.bind();
       manager.submit(render_pass_remesh_depth, view); 
@@ -189,7 +195,7 @@ namespace blender::npr::strokegen
 
 
     /* Process Contour Edges */
-    manager.submit(strokegen_passes.get_compute_pass(PType::CONTOUR_PROCESS), view); 
+    manager.submit(strokegen_passes.get_singleton_compute_pass(PType::CONTOUR_PROCESS), view); 
 
 
 
@@ -212,7 +218,7 @@ namespace blender::npr::strokegen
     GPU_line_width(1.0f); // reset gl line thickness
     
     /* Pixel Extraction */
-    manager.submit(strokegen_passes.get_compute_pass(PType::COMPRESS_CONTOUR_PIXELS), view); 
+    manager.submit(strokegen_passes.get_singleton_compute_pass(PType::COMPRESS_CONTOUR_PIXELS), view); 
 
 
 
@@ -222,7 +228,7 @@ namespace blender::npr::strokegen
 
     /* GPU (Seg-)Scan Test ------------------------------------------------------------------------- */
     const bool dbg_segscan = false; 
-    manager.submit(strokegen_passes.get_compute_pass(dbg_segscan ? PType::SEGSCAN_TEST : PType::SCAN_TEST), view);
+    manager.submit(strokegen_passes.get_singleton_compute_pass(dbg_segscan ? PType::SEGSCAN_TEST : PType::SCAN_TEST), view);
 
     if (strokegen_passes.test_scan && frame_counter % 32 == 0)
     {
@@ -253,7 +259,7 @@ namespace blender::npr::strokegen
 
 
     /* GPU 1d looped segmented convolution Test ----------------------------------------- */
-    manager.submit(strokegen_passes.get_compute_pass(PType::SEGLOOPCONV_TEST), view);
+    manager.submit(strokegen_passes.get_singleton_compute_pass(PType::SEGLOOPCONV_TEST), view);
     if (frame_counter % 32 == 0 && strokegen_passes.test_segloopconv) {
       // validate segloopconv1d
       strokegen_passes.validate_segloopconv1d<NPR_SEGLOOPCONV1D_TEST_DATA_TYPE>(
@@ -268,7 +274,7 @@ namespace blender::npr::strokegen
     /* GPU List Ranking Test ---------------------------------------------------------------- */
     if (strokegen_passes.test_list_ranking)
     {
-      manager.submit(strokegen_passes.get_compute_pass(PType::LIST_RANKING_TEST), view);
+      manager.submit(strokegen_passes.get_singleton_compute_pass(PType::LIST_RANKING_TEST), view);
       if (frame_counter % 8 == 0)
       {
         bool succ = strokegen_passes.validate_list_ranking();

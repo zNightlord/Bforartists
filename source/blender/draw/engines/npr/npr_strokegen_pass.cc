@@ -22,8 +22,12 @@ namespace blender::npr::strokegen
 using namespace blender;
 
 
+void StrokeGenPassModule::submit_per_mesh_passes(int mesh_id, int stage, Manager& drw_mgr) const
+{
+    drw_mgr.submit(*per_mesh_passes[mesh_id][stage]); 
+}
 
-PassSimple& StrokeGenPassModule::get_compute_pass(eType passType, int pass_id)
+PassSimple& StrokeGenPassModule::get_singleton_compute_pass(eType passType, int pass_id)
   {
     switch (passType) {
       case SCAN_TEST:
@@ -35,8 +39,9 @@ PassSimple& StrokeGenPassModule::get_compute_pass(eType passType, int pass_id)
       case LIST_RANKING_TEST:
         return pass_listranking_test;
 
-      case GEOM_EXTRACTION:
-        return pass_extract_geom_arr[pass_id];
+      case CONTOUR_BOOSTRAP:
+        return pass_mesh_pass_bootstrap; 
+
       case CONTOUR_PROCESS:
         return pass_process_contours; 
       case COMPRESS_CONTOUR_PIXELS:
@@ -219,8 +224,14 @@ void StrokeGenPassModule::sync_object(int gpu_obj_id, Object* ob)
 
   meshing_params.cusp_denoise_radius = calculate_3d_curve_denoising_radius(ob);
 
-  meshing_params.curve_2d_max_split_angle = obj_strokegen_settings.curve_max_split_angle; 
   // std::cout << "cusp_denoise_radius" << meshing_params.cusp_denoise_radius << std::endl;
+
+  std::vector<std::unique_ptr<StrokegenMeshComputePass>> passes;
+  for (int stage = 0; stage < NUM_MESH_PROCESSING_STAGES; ++stage) {
+    passes.emplace_back(std::make_unique<StrokegenMeshComputePass>(PerMeshProcessingStageName[stage].c_str()));
+    passes.back()->init(); 
+  }
+  per_mesh_passes.emplace_back(std::move(passes));
 }
 
 
@@ -244,14 +255,8 @@ void StrokeGenPassModule::on_end_sync()
    */
   void StrokeGenPassModule::init_mesh_extraction_passes()
   {
-    curr_mesh_id_extract_geom = -1; 
+    per_mesh_passes.clear(); 
 
-    for (StrokegenMeshComputePass& pass_extract_geom : pass_extract_geom_arr) {
-      pass_extract_geom.init(); 
-    }
-    // for (std::unique_ptr<StrokegenMeshComputePass>& StrokegenMeshComputePass &pass_extract_geom : pass_extract_geom_list) {
-    //   pass_extract_geom->init(); 
-    // }
     boostrap_before_extract_first_batch = true;
 
     surf_dbg_ctx.dbg_line_length = 1.0f;
@@ -260,7 +265,7 @@ void StrokeGenPassModule::on_end_sync()
 
   void StrokeGenPassModule::init_surface_depth_passes()
   {
-    curr_mesh_id_surf_depth = -1;
+    curr_mesh_remeshed_depth_iter = -1;
     for (StrokegenMeshRasterPass &surf_depth_pass : pass_draw_remeshed_surface_depth_) {
       surf_depth_pass.init_pass(
           shaders_, textures_, StrokegenMeshRasterPass::REMESHED_SURFACE_DEPTH);
@@ -500,7 +505,7 @@ void StrokeGenPassModule::on_end_sync()
     append_subpass_fill_dispatch_args_remeshed_edges_(num_edges, true); 
 
     {
-      auto &sub = pass_extract_geom().sub("strokegen_compact_new_temporal_contour_records");
+      auto &sub = pass_extract_geom()->sub("strokegen_compact_new_temporal_contour_records");
       sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_COMPACT_NEW_TEMPORAL_RECORDS));
 
       bind_src(sub);
@@ -514,7 +519,7 @@ void StrokeGenPassModule::on_end_sync()
 
     for (int iter_temporal_trace = 0; iter_temporal_trace < meshing_params.dbg_history_trace_passes; ++iter_temporal_trace)
     {
-      auto& sub = pass_extract_geom().sub("strokegen_calculate_new_temporal_contour_records");
+      auto& sub = pass_extract_geom()->sub("strokegen_calculate_new_temporal_contour_records");
       sub.shader_set(shaders_.static_shader_get(
         iter_temporal_trace == 0 ?
           eShaderType::MESH_CALCULATE_NEW_TEMPORAL_RECORDS_FIRST_ITER
@@ -571,7 +576,7 @@ void StrokeGenPassModule::on_end_sync()
       strokegen_frame_id_prev(strokegen_frame_id));
 
     {
-      auto& sub = pass_extract_geom().sub("strokegen_reconstruct_temporal_contour_records");
+      auto& sub = pass_extract_geom()->sub("strokegen_reconstruct_temporal_contour_records");
       sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_RECONSTRUCT_OLD_TEMPORAL_RECORDS));
       
       bind_src(sub);
@@ -607,10 +612,11 @@ void StrokeGenPassModule::on_end_sync()
       ResourceHandle& rsc_handle,
       const DRWView* drw_view
   ){
-    curr_mesh_id_extract_geom++;
+    if (boostrap_before_extract_first_batch)
+    {
+      pass_mesh_pass_bootstrap.init();
 
-    if (boostrap_before_extract_first_batch) {
-      auto &sub = pass_extract_geom().sub("bootstrap meshing passes");
+      auto &sub = pass_mesh_pass_bootstrap.sub("bootstrap meshing passes");
       sub.shader_set(shaders_.static_shader_get(GPU_MESHING_BOOSTRAP));
 
       sub.bind_ssbo(0, buffers_.ssbo_bnpr_mesh_pool_counters_);
@@ -618,12 +624,9 @@ void StrokeGenPassModule::on_end_sync()
       sub.barrier(GPU_BARRIER_SHADER_STORAGE);
       sub.dispatch(int3(1, 1, 1));
 
-      curr_mesh_id_extract_geom = -1; // reset counter
-
       return; // bootstrapping done. will re-enter this func for actual work
     }
 
-    pass_extract_geom().debug_name = "extract mesh pass"; 
 
     int batch_resource_index = (int)rsc_handle.resource_index();
 
@@ -657,6 +660,8 @@ void StrokeGenPassModule::on_end_sync()
     int num_verts = vbo_surf_pos->vertex_len;
 
 
+
+    curr_mesh_proc_stage = COPY_MESH;  //////////////////////////////////////////////////////////// 
     // Copy VBO/IBO ----------------------------------------------------------
     // Note: this also works
     /* GPU_storagebuf_copy_sub_from_vertbuf(
@@ -665,11 +670,17 @@ void StrokeGenPassModule::on_end_sync()
     append_subpass_cpy_vbo_and_object_info(gpu_batch_surf, batch_resource_index, num_verts, curr_obj_id);
     append_subpass_cpy_line_adj_ibo(gpu_batch_line_adj, ib_type, num_edges);
 
-    // Basic Meshing -----------------------------------------------------------
+
+
+
+    curr_mesh_proc_stage = BASIC_MESHING;  //////////////////////////////////////////////////////////// 
     append_subpass_meshing_merge_verts(num_verts);
     append_subpass_meshing_wedge_adjacency(num_edges, num_verts);
 
 
+
+
+    curr_mesh_proc_stage = SELECT_REMESHED_REGION;  /////////////////////////////////////////////////////
     // Mesh Selection -----------------------------------------------------------
     EdgeFloodingOptions flooding_options;
     flooding_options.compact_edges = true;
@@ -692,6 +703,10 @@ void StrokeGenPassModule::on_end_sync()
     SelectVertsFromEdgesContext vtx_sel_ctx_vnor = vtx_sel_ctx_flooding;
     append_subpass_select_verts_from_selected_edges(vtx_sel_ctx_vnor, num_edges, num_verts); 
 
+
+
+
+    curr_mesh_proc_stage = SURFACE_ANALYSIS__INIT;  /////////////////////////////////////////////////////
     // Init vert attrs on the base mesh -----------------------------------------------------
     SurfaceAnalysisContext surf_analysis_ctx_init;
     GetSurfaceAnalysisContext_InitPass(surf_analysis_ctx_init);
@@ -703,6 +718,10 @@ void StrokeGenPassModule::on_end_sync()
 
 
 
+
+
+
+    curr_mesh_proc_stage = ADAPTIVE_REMESHING;  /////////////////////////////////////////////////////
     // GPU Remesher -------------------------------------------------------------------------
     int dbg_step = 0;
     bool step_dbg_remesh = true;
@@ -779,6 +798,10 @@ void StrokeGenPassModule::on_end_sync()
       }
     }
 
+
+
+
+    curr_mesh_proc_stage = SUBDIVISION;  /////////////////////////////////////////////////////
     if (meshing_params.contour_mode != ContourType::Raw) {
       if (meshing_params.subdiv_type == 1)
         append_subpasses_sqrt_subdiv(num_edges, num_verts);
@@ -786,11 +809,18 @@ void StrokeGenPassModule::on_end_sync()
         append_subpasses_loop_subdiv(num_edges, num_verts); // default path
     }
 
+
+
+    curr_mesh_proc_stage = RECONSTRUCT_LAST_FRAME_HISTORY;  /////////////////////////////////
     if (!first_frame)
     {
       append_subpass_reconstruct_last_frame_temporal_records();
     }
 
+
+
+
+    curr_mesh_proc_stage = SURFACE_ANALYSIS__PREP_INTERP_CONTOUR_INSERTION;  ///////////
     // Calc attributes for detecting interpolated contours
     SurfaceAnalysisContext surf_analysis_ctx_contour_0;
     SurfaceAnalysisContext surf_analysis_ctx_contour_1;
@@ -815,12 +845,16 @@ void StrokeGenPassModule::on_end_sync()
       );
     }
 
+
+    curr_mesh_proc_stage = INITIALIZE_CURR_FRAME_HISTORY;  /////////////////////////////////
     { // Init temporal records
       // trace new records to last frame records via a gradient field -
       // - evaluated from surf_analysis_ctx_contour
       append_subpass_init_temporal_records(num_edges, surf_analysis_ctx_contour_0);
     }
 
+
+    curr_mesh_proc_stage = INTERP_CONTOUR_INSERTION;  /////////////////////////////////
     // Interpolated contour tessellation
     if (meshing_params.contour_mode == ContourType::Interpolated)
     {
@@ -832,7 +866,11 @@ void StrokeGenPassModule::on_end_sync()
         append_subpass_fill_dispatch_args_remeshed_verts_(num_verts, false);
       }
     }
-    
+
+
+
+
+    curr_mesh_proc_stage = SURFACE_ANALYSIS__CUSP_FUNC;  /////////////////////////////////
     { // Calc cusp function for contour vertices
       SurfaceAnalysisContext surf_analysis_ctx_contour_new;
       GetSurfaceAnalysisContext_AfterContourInsertion(surf_analysis_ctx_contour_new);
@@ -846,6 +884,8 @@ void StrokeGenPassModule::on_end_sync()
 
 
 
+
+    curr_mesh_proc_stage = CONTOUR_EXTRACTION;   /////////////////////////////////
     // Contour Processing --------------------------------------------------------
     append_subpass_fill_dispatch_args_remeshed_edges_(num_edges, false);
     append_subpass_fill_dispatch_args_remeshed_verts_(num_verts, false);
@@ -859,7 +899,7 @@ void StrokeGenPassModule::on_end_sync()
         meshing_params.contour_mode
       );
 
-    append_subpass_fill_dispatch_args_contour_edges(pass_extract_geom(), false);
+    append_subpass_fill_dispatch_args_contour_edges(*pass_extract_geom(), false);
     append_subpass_setup_contour_edge_data(curr_obj_id);
 
     // Note: this should be happening at the end
@@ -993,7 +1033,7 @@ void StrokeGenPassModule::on_end_sync()
       for (; step_vpos_filter < num_smooth_steps; ++step_vpos_filter)
       {
         {
-          auto &sub = pass_extract_geom().sub("bnpr_meshing_surf_filtering_vpos_filtering");
+          auto &sub = pass_extract_geom()->sub("bnpr_meshing_surf_filtering_vpos_filtering");
           sub.shader_set(shaders_.static_shader_get(MESH_FILTER_VPOS_FILTERING));
 
           bind_src(sub);
@@ -1028,7 +1068,7 @@ void StrokeGenPassModule::on_end_sync()
           int num_vq_filter_iters = num_vnor_filter_iters;
           int step_vq_filter = 0;
           for (; step_vq_filter < num_vq_filter_iters; ++step_vq_filter) {
-            auto &sub = pass_extract_geom().sub("bnpr_meshing_surf_filtering_vquadric_diffusion");
+            auto &sub = pass_extract_geom()->sub("bnpr_meshing_surf_filtering_vquadric_diffusion");
             sub.shader_set(shaders_.static_shader_get(MESH_FILTER_VQUADRIC_DIFFUSION));
 
             bind_src(sub);
@@ -1039,7 +1079,7 @@ void StrokeGenPassModule::on_end_sync()
           }
 
           {
-            auto &sub = pass_extract_geom().sub(
+            auto &sub = pass_extract_geom()->sub(
                 "bnpr_meshing_surf_filtering_quadric_vpos_filtering");
             sub.shader_set(shaders_.static_shader_get(MESH_FILTER_QUADRIC_VPOS_FILTERING));
 
@@ -1072,7 +1112,7 @@ void StrokeGenPassModule::on_end_sync()
     // Smooth old vertices
     if (mode == Sqrt3SubdivSmoothCache || mode == LoopSubdivSmoothCache) 
     {
-      auto &sub = pass_extract_geom().sub("bnpr_meshing_surf_filtering_subdiv_vpos_smoothing");
+      auto &sub = pass_extract_geom()->sub("bnpr_meshing_surf_filtering_subdiv_vpos_smoothing");
       sub.shader_set(shaders_.static_shader_get(MESH_FILTER_SUBDIV_VPOS_SMOOTH));
 
       bind_src(sub);
@@ -1082,7 +1122,7 @@ void StrokeGenPassModule::on_end_sync()
       sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
     }
     if (mode == Sqrt3SubdivSmoothApply || mode == LoopSubdivSmoothApply) {
-      auto &sub = pass_extract_geom().sub(
+      auto &sub = pass_extract_geom()->sub(
           "bnpr_meshing_surf_filtering_subdiv_vpos_smoothing_finish");
       sub.shader_set(shaders_.static_shader_get(MESH_FILTER_SUBDIV_VPOS_SMOOTH_FINISH));
 
@@ -1099,7 +1139,7 @@ void StrokeGenPassModule::on_end_sync()
       append_subpass_fill_dispatch_args_remeshed_edges_(num_edges, true); 
 
       {
-        auto &sub = pass_extract_geom().sub(
+        auto &sub = pass_extract_geom()->sub(
            "bnpr_meshing_surf_filtering_subdiv_edge_points"
         );
         sub.shader_set(shaders_.static_shader_get(MESH_FILTER_LOOP_SUBDIV_EDGE_POINTS));
@@ -1120,7 +1160,7 @@ void StrokeGenPassModule::on_end_sync()
     append_subpass_fill_dispatch_args_remeshed_verts_(num_verts, only_selected_verts);
 
     {
-      auto &sub = pass_extract_geom().sub("bnpr_meshing_surf_filtering_vcurv_smoothing");
+      auto &sub = pass_extract_geom()->sub("bnpr_meshing_surf_filtering_vcurv_smoothing");
       if (false == output_remesh_len)
         sub.shader_set(shaders_.static_shader_get(MESH_FILTER_VCURV_SMOOTHING));
       else
@@ -1155,7 +1195,7 @@ void StrokeGenPassModule::on_end_sync()
 
     append_subpass_fill_dispatch_args_remeshed_edges_(num_edges, true); 
     {
-      auto &sub = pass_extract_geom().sub("bnpr_meshing_edge_selection_mark_selection_border");
+      auto &sub = pass_extract_geom()->sub("bnpr_meshing_edge_selection_mark_selection_border");
       sub.shader_set(shaders_.static_shader_get(MESH_WEDGE_MARK_EDGES_ON_SELECTION_BORDER)); 
       bind_rsc(sub);
       sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_edges_);
@@ -1186,7 +1226,7 @@ void StrokeGenPassModule::on_end_sync()
 
     append_subpass_fill_dispatch_args_remeshed_edges_(num_edges, true);
     {
-      auto &sub = pass_extract_geom().sub("strokegen_select_verts_from_selected_edges");
+      auto &sub = pass_extract_geom()->sub("strokegen_select_verts_from_selected_edges");
       sub.shader_set(shaders_.static_shader_get(MESH_SELECT_VERTS_FROM_SELECTED_EDGES));
       bind_rsc(sub, ctx.active_selection_slots);
       sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_edges_); 
@@ -1195,7 +1235,7 @@ void StrokeGenPassModule::on_end_sync()
 
     append_subpass_fill_dispatch_args_remeshed_edges_(num_edges, false);
     if (ctx.expand_selection) {
-      auto &sub = pass_extract_geom().sub("strokegen_expand_verts_from_selected_edges");
+      auto &sub = pass_extract_geom()->sub("strokegen_expand_verts_from_selected_edges");
       sub.shader_set(shaders_.static_shader_get(MESH_EXPAND_VERTS_FROM_SELECTED_EDGES));
       bind_rsc(sub, ctx.input_selection_slots_for_expansion);
       sub.push_constant("pcs_vertex_selection_slots_out_",
@@ -1206,7 +1246,7 @@ void StrokeGenPassModule::on_end_sync()
     
     append_subpass_fill_dispatch_args_remeshed_verts_(num_verts, false);
     if (ctx.compact_verts) {
-      auto &sub = pass_extract_geom().sub("strokegen_compact_selected_verts");
+      auto &sub = pass_extract_geom()->sub("strokegen_compact_selected_verts");
       sub.shader_set(shaders_.static_shader_get(MESH_COMPACT_SELECTED_VERTS));
 
       bind_rsc(sub, ctx.selection_slots_for_compation);
@@ -1221,7 +1261,7 @@ void StrokeGenPassModule::on_end_sync()
   void StrokeGenPassModule::append_subpass_cpy_vbo_and_object_info(
     gpu::Batch *gpu_batch_surf, int batch_resource_index, int num_verts, int fill_object_data_slot)
   {
-    auto &sub = pass_extract_geom().sub("bnpr_geom_extract_collect_verts");
+    auto &sub = pass_extract_geom()->sub("bnpr_geom_extract_collect_verts");
       
     sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_COLLECT_VBO)); 
       
@@ -1250,7 +1290,7 @@ void StrokeGenPassModule::on_end_sync()
       gpu::GPUIndexBufType ib_type,
       int num_added_edges)
   {
-    auto &sub = pass_extract_geom().sub("bnpr_geom_extract_collect_edges");
+    auto &sub = pass_extract_geom()->sub("bnpr_geom_extract_collect_edges");
 
     if (ib_type == gpu::GPU_INDEX_U16)
       sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_COLLECT_EDGE_ADJ_IBO_16BIT));
@@ -1274,7 +1314,11 @@ void StrokeGenPassModule::on_end_sync()
 
     auto bind_rsc = [&](draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub)
     {
-      sub.bind_ssbo(0, buffers_.reused_ssbo_vert_spatial_map_headers_());
+      // sub.bind_ssbo(0, buffers_.reused_ssbo_vert_spatial_map_headers_());
+      sub.bind_ssbo(0, buffers_.need_temp_buf(
+        GPUBufferPoolModule::temp_ssbo_vert_spatial_map_headers_,
+        curr_mesh_proc_stage, hashmap_size)
+      );
       sub.bind_ssbo(1, buffers_.reused_ssbo_vert_spatial_map_payloads_());
       sub.bind_ssbo(2, buffers_.reused_ssbo_vert_merged_id_());
       sub.bind_ssbo(3, buffers_.ssbo_vbo_full_);
@@ -1285,7 +1329,7 @@ void StrokeGenPassModule::on_end_sync()
     }; 
 
     {
-      auto &sub = pass_extract_geom().sub("bnpr_meshing_merge_verts_bootstrap");
+      auto &sub = pass_extract_geom()->sub("bnpr_meshing_merge_verts_bootstrap");
       sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_VERT_MERGE_INIT));
 
       bind_rsc(sub);
@@ -1295,7 +1339,7 @@ void StrokeGenPassModule::on_end_sync()
       sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_SHADER_IMAGE_ACCESS);
     }
     {
-      auto &sub = pass_extract_geom().sub("bnpr_meshing_merge_verts_spatial_hashing");
+      auto &sub = pass_extract_geom()->sub("bnpr_meshing_merge_verts_spatial_hashing");
       sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_VERT_MERGE_HASH));
 
       bind_rsc(sub);
@@ -1305,7 +1349,7 @@ void StrokeGenPassModule::on_end_sync()
       sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_SHADER_IMAGE_ACCESS);
     }
     {
-      auto &sub = pass_extract_geom().sub("bnpr_meshing_merge_verts_deduplicate");
+      auto &sub = pass_extract_geom()->sub("bnpr_meshing_merge_verts_deduplicate");
       sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_VERT_MERGE_REINDEX));
 
       bind_rsc(sub); 
@@ -1332,7 +1376,11 @@ void StrokeGenPassModule::on_end_sync()
       ); 
 
       sub.bind_ssbo(0, buffers_.reused_ssbo_vert_merged_id_());
-      sub.bind_ssbo(1, buffers_.reused_ssbo_vert_spatial_map_headers_());
+      // sub.bind_ssbo(1, buffers_.reused_ssbo_vert_spatial_map_headers_());
+      sub.bind_ssbo(1, buffers_.need_temp_buf(
+        GPUBufferPoolModule::temp_ssbo_vert_spatial_map_headers_,
+        curr_mesh_proc_stage, hashmap_size
+      ));
       sub.bind_ssbo(2, buffers_.reused_ssbo_edge_spatial_map_payloads_());
       sub.bind_ssbo(3, buffers_.ssbo_edge_to_vert_);
       sub.bind_ssbo(4, buffers_.ssbo_edge_to_edges_);
@@ -1352,7 +1400,7 @@ void StrokeGenPassModule::on_end_sync()
     };
 
     {
-      auto &sub = pass_extract_geom().sub("bnpr_meshing_edge_adj_bootstrap");
+      auto &sub = pass_extract_geom()->sub("bnpr_meshing_edge_adj_bootstrap");
       sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_EDGE_ADJACENCY_INIT));
 
       bind_rsc(sub);
@@ -1361,7 +1409,7 @@ void StrokeGenPassModule::on_end_sync()
       sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_SHADER_IMAGE_ACCESS);
     }
     {
-      auto &sub = pass_extract_geom().sub("bnpr_meshing_edge_adj_hashing");
+      auto &sub = pass_extract_geom()->sub("bnpr_meshing_edge_adj_hashing");
       sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_EDGE_ADJACENCY_HASH));
 
       bind_rsc(sub);
@@ -1371,7 +1419,7 @@ void StrokeGenPassModule::on_end_sync()
       sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_SHADER_IMAGE_ACCESS);
     }
     {
-      auto &sub = pass_extract_geom().sub("bnpr_meshing_edge_adj_hashing_finish");
+      auto &sub = pass_extract_geom()->sub("bnpr_meshing_edge_adj_hashing_finish");
       sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_EDGE_ADJACENCY_HASH_FINISH));
 
       bind_rsc(sub);
@@ -1381,7 +1429,7 @@ void StrokeGenPassModule::on_end_sync()
       sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_SHADER_IMAGE_ACCESS);
     }
     {
-      auto &sub = pass_extract_geom().sub("bnpr_meshing_edge_adj_finish");
+      auto &sub = pass_extract_geom()->sub("bnpr_meshing_edge_adj_finish");
       sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_EDGE_ADJACENCY_FILL));
 
       bind_rsc(sub);
@@ -1430,7 +1478,7 @@ void StrokeGenPassModule::on_end_sync()
     // Must be even number !!!
     int flooding_iter = 0;
     for (; flooding_iter < num_flooding_iters; ++flooding_iter) {
-      auto &sub = pass_extract_geom().sub("bnpr_meshing_wedge_flooding");
+      auto &sub = pass_extract_geom()->sub("bnpr_meshing_wedge_flooding");
 
       if (flooding_iter == 0) {
         // first iter, setup selection seeds
@@ -1501,21 +1549,21 @@ void StrokeGenPassModule::on_end_sync()
 
     float remesh_len_scaled = meshing_params.remeshing_targ_edge_len / 100.0f; 
     if (iter_split == 0u) {
-      auto &sub = pass_extract_geom().sub("bnpr_meshing_edge_split_init");
+      auto &sub = pass_extract_geom()->sub("bnpr_meshing_edge_split_init");
       sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_OP_SPLIT_EDGE_INIT));
       bind_src(sub, remesh_len_scaled);
       sub.dispatch(int3(1, 1, 1));
       sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
     }
     {
-      auto &sub = pass_extract_geom().sub("bnpr_meshing_edge_split_compact");
+      auto &sub = pass_extract_geom()->sub("bnpr_meshing_edge_split_compact");
       sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_OP_SPLIT_EDGE_COMPACT));
       bind_src(sub, remesh_len_scaled);
       sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_edges_);
       sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
     }
     {
-      auto &sub = pass_extract_geom().sub("strokegen_remeshing_fill_dispatch_args_per_split_edge"); 
+      auto &sub = pass_extract_geom()->sub("strokegen_remeshing_fill_dispatch_args_per_split_edge"); 
       sub.shader_set(shaders_.static_shader_get(FILL_DISPATCH_ARGS_SPLIT_EDGES));
       sub.bind_ssbo(0, buffers_.ssbo_edge_split_counters_);
       sub.bind_ssbo(1, buffers_.ssbo_indirect_dispatch_args_per_split_edge_);
@@ -1526,21 +1574,21 @@ void StrokeGenPassModule::on_end_sync()
       sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
     }
     {
-      auto &sub = pass_extract_geom().sub("bnpr_meshing_edge_split_exclude_border");
+      auto &sub = pass_extract_geom()->sub("bnpr_meshing_edge_split_exclude_border");
       sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_OP_SPLIT_EDGE_EXCLUDE_BORDER));
       bind_src(sub, meshing_params.remeshing_targ_edge_len);
       sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_split_edge_);
       sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
     }
     {
-      auto &sub = pass_extract_geom().sub("bnpr_meshing_edge_split_resolve_conflict");
+      auto &sub = pass_extract_geom()->sub("bnpr_meshing_edge_split_resolve_conflict");
       sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_OP_SPLIT_EDGE_RESOLVE_CONFLICT));
       bind_src(sub, meshing_params.remeshing_targ_edge_len);
       sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_split_edge_);
       sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
     }
     {
-      auto &sub = pass_extract_geom().sub("bnpr_meshing_edge_split_execute");
+      auto &sub = pass_extract_geom()->sub("bnpr_meshing_edge_split_execute");
       sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_OP_SPLIT_EDGE_EXECUTE));
       bind_src(sub, meshing_params.remeshing_targ_edge_len, true);
       sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_split_edge_);
@@ -1579,14 +1627,14 @@ void StrokeGenPassModule::on_end_sync()
 
     float remesh_len_scaled = meshing_params.remeshing_targ_edge_len / 100.0f;
     {
-      auto &sub = pass_extract_geom().sub("bnpr_meshing_edge_collapse_init");
+      auto &sub = pass_extract_geom()->sub("bnpr_meshing_edge_collapse_init");
       sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_OP_COLLAPSE_EDGE_INIT));
       bind_src(sub, 0, remesh_len_scaled);
       sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_verts_);
       sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
     }
     {
-      auto &sub = pass_extract_geom().sub("bnpr_meshing_edge_collapse_compact");
+      auto &sub = pass_extract_geom()->sub("bnpr_meshing_edge_collapse_compact");
       sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_OP_COLLAPSE_EDGE_COMPACT));
       bind_src(sub, 0, remesh_len_scaled,
         buffers_.reused_ssbo_vtx_remesh_len_() // override ssbo slot
@@ -1595,7 +1643,7 @@ void StrokeGenPassModule::on_end_sync()
       sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
     }
     {
-      auto &sub = pass_extract_geom().sub("strokegen_remeshing_fill_dispatch_args_per_collapsed_edge");
+      auto &sub = pass_extract_geom()->sub("strokegen_remeshing_fill_dispatch_args_per_collapsed_edge");
       sub.shader_set(shaders_.static_shader_get(FILL_DISPATCH_ARGS_COLLAPSE_EDGES));
       sub.bind_ssbo(0, buffers_.ssbo_edge_collapse_counters_);
       sub.bind_ssbo(1, buffers_.ssbo_indirect_dispatch_args_per_collapsed_edge_);
@@ -1606,28 +1654,28 @@ void StrokeGenPassModule::on_end_sync()
       sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
     }
     {
-      auto &sub = pass_extract_geom().sub("bnpr_meshing_edge_collapse_resolve_conflict_0");
+      auto &sub = pass_extract_geom()->sub("bnpr_meshing_edge_collapse_resolve_conflict_0");
       sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_OP_COLLAPSE_EDGE_RESOLVE_CONFLICT_0));
       bind_src(sub, 1, meshing_params.remeshing_targ_edge_len);
       sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_collapsed_edge_);
       sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
     }
     {
-      auto &sub = pass_extract_geom().sub("bnpr_meshing_edge_collapse_resolve_conflict_1");
+      auto &sub = pass_extract_geom()->sub("bnpr_meshing_edge_collapse_resolve_conflict_1");
       sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_OP_COLLAPSE_EDGE_RESOLVE_CONFLICT_1));
       bind_src(sub, 2, meshing_params.remeshing_targ_edge_len);
       sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_collapsed_edge_);
       sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
     }
     {
-      auto &sub = pass_extract_geom().sub("bnpr_meshing_edge_collapse_resolve_conflict_2");
+      auto &sub = pass_extract_geom()->sub("bnpr_meshing_edge_collapse_resolve_conflict_2");
       sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_OP_COLLAPSE_EDGE_RESOLVE_CONFLICT_2));
       bind_src(sub, 3, meshing_params.remeshing_targ_edge_len);
       sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_collapsed_edge_);
       sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
     }
     {
-      auto &sub = pass_extract_geom().sub("bnpr_meshing_edge_collapse_execute");
+      auto &sub = pass_extract_geom()->sub("bnpr_meshing_edge_collapse_execute");
       sub.shader_set(shaders_.static_shader_get(eShaderType::MESH_OP_COLLAPSE_EDGE_EXECUTE));
       bind_src(sub, 4, meshing_params.remeshing_targ_edge_len,
         buffers_.reused_ssbo_vtx_remesh_len_() // override ssbo slot
@@ -1665,7 +1713,7 @@ void StrokeGenPassModule::on_end_sync()
     };
 
     {
-      auto &sub = pass_extract_geom().sub("bnpr_meshing_edge_flip_init");
+      auto &sub = pass_extract_geom()->sub("bnpr_meshing_edge_flip_init");
       sub.shader_set(shaders_.static_shader_get(MESH_OP_FLIP_EDGE_INIT));
       bind_src(sub);
       sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_verts_);
@@ -1673,7 +1721,7 @@ void StrokeGenPassModule::on_end_sync()
     }
 
     {
-      auto &sub = pass_extract_geom().sub("bnpr_meshing_edge_flip_compact");
+      auto &sub = pass_extract_geom()->sub("bnpr_meshing_edge_flip_compact");
       sub.shader_set(shaders_.static_shader_get(MESH_OP_FLIP_EDGE_COMPACT));
       bind_src(sub);
       sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_edges_);
@@ -1681,7 +1729,7 @@ void StrokeGenPassModule::on_end_sync()
     }
 
     {
-      auto &sub = pass_extract_geom().sub("strokegen_remeshing_fill_dispatch_args_per_flip_edge");
+      auto &sub = pass_extract_geom()->sub("strokegen_remeshing_fill_dispatch_args_per_flip_edge");
       sub.shader_set(shaders_.static_shader_get(FILL_DISPATCH_ARGS_FLIP_EDGES));
 
       sub.bind_ssbo(0, buffers_.ssbo_edge_flip_counters_);
@@ -1694,21 +1742,21 @@ void StrokeGenPassModule::on_end_sync()
     }
 
     {
-      auto &sub = pass_extract_geom().sub("bnpr_meshing_edge_flip_validate");
+      auto &sub = pass_extract_geom()->sub("bnpr_meshing_edge_flip_validate");
       sub.shader_set(shaders_.static_shader_get(MESH_OP_FLIP_EDGE_VALIDATE));
       bind_src(sub);
       sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_flip_edge_);
       sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
     }
     {
-      auto &sub = pass_extract_geom().sub("bnpr_meshing_edge_flip_resolve_conflict");
+      auto &sub = pass_extract_geom()->sub("bnpr_meshing_edge_flip_resolve_conflict");
       sub.shader_set(shaders_.static_shader_get(MESH_OP_FLIP_EDGE_RESOLVE_CONFLICT));
       bind_src(sub);
       sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_flip_edge_);
       sub.barrier(GPU_BARRIER_COMMAND | GPU_BARRIER_SHADER_STORAGE);
     }
     {
-      auto &sub = pass_extract_geom().sub("bnpr_meshing_edge_flip_execute");
+      auto &sub = pass_extract_geom()->sub("bnpr_meshing_edge_flip_execute");
       sub.shader_set(shaders_.static_shader_get(MESH_OP_FLIP_EDGE_EXECUTE));
       bind_src(sub);
       sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_flip_edge_);
@@ -1738,21 +1786,21 @@ void StrokeGenPassModule::on_end_sync()
     };
 
     {
-      auto &sub = pass_extract_geom().sub("bnpr_meshing_face_split_init");
+      auto &sub = pass_extract_geom()->sub("bnpr_meshing_face_split_init");
       sub.shader_set(shaders_.static_shader_get(MESH_OP_SPLIT_FACE_INIT)); 
       bind_src(sub);
       sub.dispatch(int3(1, 1, 1));
       sub.barrier(GPU_BARRIER_SHADER_STORAGE); 
     }
     {
-      auto &sub = pass_extract_geom().sub("bnpr_meshing_face_split_work_generation");
+      auto &sub = pass_extract_geom()->sub("bnpr_meshing_face_split_work_generation");
       sub.shader_set(shaders_.static_shader_get(MESH_OP_SPLIT_FACE_GENERATE_WORKS));
       bind_src(sub);
       sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_remeshed_edges_);
       sub.barrier(GPU_BARRIER_SHADER_STORAGE); 
     }
     {
-      auto &sub = pass_extract_geom().sub("strokegen_remeshing_fill_dispatch_args_per_split_face");
+      auto &sub = pass_extract_geom()->sub("strokegen_remeshing_fill_dispatch_args_per_split_face");
       sub.shader_set(shaders_.static_shader_get(FILL_DISPATCH_ARGS_SPLIT_FACES));
       
       sub.bind_ssbo(0, buffers_.ssbo_face_split_counters_); 
@@ -1764,7 +1812,7 @@ void StrokeGenPassModule::on_end_sync()
       sub.barrier(GPU_BARRIER_SHADER_STORAGE | GPU_BARRIER_COMMAND);
     }
     {
-      auto &sub = pass_extract_geom().sub("bnpr_meshing_face_split_execute");
+      auto &sub = pass_extract_geom()->sub("bnpr_meshing_face_split_execute");
       sub.shader_set(shaders_.static_shader_get(MESH_OP_SPLIT_FACE_EXECUTE));
       bind_src(sub);
       sub.dispatch(buffers_.ssbo_indirect_dispatch_args_per_split_face_);
@@ -1775,7 +1823,7 @@ void StrokeGenPassModule::on_end_sync()
 
   void StrokeGenPassModule::append_subpass_fill_dispatch_args_remeshed_edges_(int num_static_edges, bool only_selected_edges)
   {
-    auto &sub = pass_extract_geom().sub("strokegen_remeshing_fill_dispatch_args_per_remeshed_edge");
+    auto &sub = pass_extract_geom()->sub("strokegen_remeshing_fill_dispatch_args_per_remeshed_edge");
     sub.shader_set(shaders_.static_shader_get(FILL_DISPATCH_ARGS_REMESHED_EDGES));
 
     sub.bind_ssbo(0, buffers_.ssbo_dyn_mesh_counters_out_());
@@ -1794,7 +1842,7 @@ void StrokeGenPassModule::on_end_sync()
   void StrokeGenPassModule::append_subpass_fill_dispatch_args_remeshed_verts_(
       int num_static_verts, bool only_selected_elems_)
   {
-    auto &sub = pass_extract_geom().sub("strokegen_remeshing_fill_dispatch_args_per_remeshed_vert");
+    auto &sub = pass_extract_geom()->sub("strokegen_remeshing_fill_dispatch_args_per_remeshed_vert");
     sub.shader_set(shaders_.static_shader_get(FILL_DISPATCH_ARGS_REMESHED_VERTS));
     sub.bind_ssbo(0, buffers_.ssbo_dyn_mesh_counters_out_());
     sub.bind_ssbo(1, buffers_.ssbo_bnpr_mesh_pool_counters_);
@@ -1809,7 +1857,8 @@ void StrokeGenPassModule::on_end_sync()
 
   void StrokeGenPassModule::append_subpass_fill_dispatch_args_contour_edges(PassSimple& pass, bool all_contour_edges)
   { // fill dispatch args for contour edges
-    auto &sub = pass.sub("strokegen_fill_dispatch_args_per_contour_edge");
+    draw::detail::PassBase<DrawCommandBuf> &sub = pass.sub(
+        "strokegen_fill_dispatch_args_per_contour_edge");
     sub.shader_set(shaders_.static_shader_get(eShaderType::FILL_DISPATCH_ARGS_CONTOUR_EDGES));
 
     sub.bind_ssbo(0, buffers_.ssbo_bnpr_mesh_pool_counters_);
@@ -1873,7 +1922,7 @@ void StrokeGenPassModule::on_end_sync()
 
   void StrokeGenPassModule::append_subpass_fill_dispatch_args_temporal_records_(int obj_id, int rec_frame_id)
   {
-    auto &sub = pass_extract_geom().sub("strokegen_fill_dispatch_args_per_temporal_record");
+    auto &sub = pass_extract_geom()->sub("strokegen_fill_dispatch_args_per_temporal_record");
     sub.shader_set(shaders_.static_shader_get(eShaderType::FILL_DISPATCH_ARGS_TEMPORAL_RECORDS));
 
     sub.bind_ssbo(0, buffers_.ssbo_temporal_record_counters_);
@@ -1930,7 +1979,7 @@ void StrokeGenPassModule::on_end_sync()
     { // Encapsulate since we may call this in different locations
       append_subpass_fill_dispatch_args_remeshed_edges_(num_edges, ctx.only_selected_edges);
       {
-        auto &sub = pass_extract_geom().sub("bnpr_geom_analysis_feature_edges");
+        auto &sub = pass_extract_geom()->sub("bnpr_geom_analysis_feature_edges");
         sub.shader_set(shaders_.static_shader_get(shader_pass));
 
         bind_src(sub, false, false, false);
@@ -1953,7 +2002,7 @@ void StrokeGenPassModule::on_end_sync()
     append_subpass_fill_dispatch_args_remeshed_verts_(num_verts, ctx.order_0_only_selected); 
     if (ctx.calc_vert_normal)
     {
-      auto &sub = pass_extract_geom().sub("bnpr_geom_analysis_order_0_vert_normal");
+      auto &sub = pass_extract_geom()->sub("bnpr_geom_analysis_order_0_vert_normal");
       eShaderType shaderType =
           ctx.calc_vert_voronoi_area && ctx.calc_vert_topo_flags ?
               MESH_ANALYSE_VERT_NORMAL_VORONOIAREA_TOPOFLAGS :
@@ -2010,7 +2059,7 @@ void StrokeGenPassModule::on_end_sync()
     if (ctx.calc_vert_curvature)
     { // Calculate curvature value & tensors
       if (ctx.curvature_estimator == SurfaceAnalysisContext::Rusinkiewicz) {
-        auto &sub = pass_extract_geom().sub("bnpr_geom_analysis_order_1_vert_curv_pass_0");
+        auto &sub = pass_extract_geom()->sub("bnpr_geom_analysis_order_1_vert_curv_pass_0");
         sub.shader_set(shaders_.static_shader_get(MESH_ANALYSE_VERT_CURV_PASS_0));
 
         bind_src_order_1(sub, false); 
@@ -2020,7 +2069,7 @@ void StrokeGenPassModule::on_end_sync()
         sub.barrier(GPU_BARRIER_SHADER_STORAGE); 
       }
       {
-        auto &sub = pass_extract_geom().sub("bnpr_geom_analysis_order_1_main_curvature");
+        auto &sub = pass_extract_geom()->sub("bnpr_geom_analysis_order_1_main_curvature");
         sub.shader_set(shaders_.static_shader_get(
           ctx.curvature_estimator == SurfaceAnalysisContext::Rusinkiewicz ?
           MESH_ANALYSE_VERT_CURV_PASS_1_RUSINKIEWICZ : MESH_ANALYSE_VERT_CURV_PASS_1_JACQUES)
@@ -2040,7 +2089,7 @@ void StrokeGenPassModule::on_end_sync()
 
     if (ctx.calc_vert_contour_grad)
     { // Calculate gradient of the scalar field defined by the dot(vtx_normal, view_dir)
-      auto& sub = pass_extract_geom().sub("bnpr_geom_analysis_order_1_contour_grad_");
+      auto& sub = pass_extract_geom()->sub("bnpr_geom_analysis_order_1_contour_grad_");
       sub.shader_set(shaders_.static_shader_get(MESH_ANALYSE_VERT_CONTOUR_GRADIENT));
 
       bind_src_order_1(sub, ctx.order_1_eval_only_interpo_contour_adj_verts, dbg_options.dbg_vert_contour_grad);
@@ -2054,7 +2103,7 @@ void StrokeGenPassModule::on_end_sync()
     {
       append_subpass_fill_dispatch_args_remeshed_verts_(num_verts, true/*ctx.order_1_only_selected*/); // interpolated contour verts are a subset of the selected verts
 
-      auto &sub = pass_extract_geom().sub("bnpr_geom_analysis_interpolate_contour_vert_attrs");
+      auto &sub = pass_extract_geom()->sub("bnpr_geom_analysis_interpolate_contour_vert_attrs");
       sub.shader_set(shaders_.static_shader_get(MESH_ANALYSE_VERT_ATTRS_INTERP_CONTOUR));
 
       bind_src(sub, true, false, false);
@@ -2110,7 +2159,7 @@ void StrokeGenPassModule::on_end_sync()
   {
     append_subpass_fill_dispatch_args_remeshed_edges_(num_edges, true);
 
-    auto &sub = pass_extract_geom().sub("strokegen_loop_subdiv_tree_build_nodes_upwards_for_face_edges");
+    auto &sub = pass_extract_geom()->sub("strokegen_loop_subdiv_tree_build_nodes_upwards_for_face_edges");
     sub.shader_set(shaders_.static_shader_get(MESH_LOOP_SUBD_TREE_BUILD_NODES_UPWARDS_FOR_FACE_EDGES));
 
     int ssbo_offset = 0; 
@@ -2129,7 +2178,7 @@ void StrokeGenPassModule::on_end_sync()
     // and temporal record pointers (pointing to null)
     append_subpass_fill_dispatch_args_remeshed_edges_(num_edges, false);
     {
-      auto &sub = pass_extract_geom().sub(
+      auto &sub = pass_extract_geom()->sub(
           "strokegen_loop_subdiv_tree_build_nodes_downwards_init_");
       sub.shader_set(shaders_.static_shader_get(MESH_LOOP_SUBD_TREE_INIT_NODES_DOWNWARDS));
 
@@ -2147,7 +2196,7 @@ void StrokeGenPassModule::on_end_sync()
   {
     append_subpass_fill_dispatch_args_remeshed_edges_(num_edges, true);
     {
-      auto &sub = pass_extract_geom().sub("strokegen_loop_subdiv_tree_build_nodes_downwards_calc_");
+      auto &sub = pass_extract_geom()->sub("strokegen_loop_subdiv_tree_build_nodes_downwards_calc_");
       sub.shader_set(shaders_.static_shader_get(MESH_LOOP_SUBD_TREE_BUILD_NODES_DOWNWARDS));
 
       int ssbo_offset = 0;
@@ -2268,7 +2317,7 @@ void StrokeGenPassModule::on_end_sync()
     };
 
     {
-      auto &sub = pass_extract_geom().sub(
+      auto &sub = pass_extract_geom()->sub(
          boostrap_before_extract_first_batch ? "bnpr_geom_extract_boostrap" : "bnpr_geom_extract");
       sub.shader_set(shaders_.static_shader_get(eShaderType::CONTOUR_GEOM_EXTRACT));
 
@@ -2283,7 +2332,7 @@ void StrokeGenPassModule::on_end_sync()
   void StrokeGenPassModule::append_subpass_setup_contour_edge_data(int curr_obj_id)
   {
     {
-      auto &sub = pass_extract_geom().sub("bnpr_geom_extract_mesh_contour_data");
+      auto &sub = pass_extract_geom()->sub("bnpr_geom_extract_mesh_contour_data");
       sub.shader_set(shaders_.static_shader_get(eShaderType::EXTRACT_CURRENT_MESH_CONTOUR_DATA));
 
       sub.bind_ssbo(0, buffers_.reused_ssbo_contour_temp_data_());
@@ -2747,7 +2796,6 @@ void StrokeGenPassModule::on_end_sync()
 
         bind_rsc_for_contour_2d_sample_evaluation_(sub, screen_res, sample_rate, ssbo_offset);
         sub.bind_ssbo(ssbo_offset + 0, buffers_.ssbo_merged_strokegen_object_infos_);
-        sub.push_constant("pcs_curve_max_split_angle_", meshing_params.curve_2d_max_split_angle); 
 
         sub.dispatch(buffers_.ssbo_bnpr_mesh_contour_2d_sample_dispatch_args_);
         sub.barrier(GPU_BARRIER_SHADER_STORAGE);
@@ -2866,7 +2914,7 @@ void StrokeGenPassModule::on_end_sync()
 
   void StrokeGenPassModule::append_pass_remeshed_surface_depth_drawcall(bool is_transparent)
   {
-    StrokegenMeshRasterPass &pass = pass_draw_remeshed_surface_depth_[++curr_mesh_id_surf_depth];
+    StrokegenMeshRasterPass &pass = pass_draw_remeshed_surface_depth_[++curr_mesh_remeshed_depth_iter];
 
     if (false == is_transparent) { // we leave an empty pass for transparent meshes
       auto &sub = pass.sub("bnpr_geom_fill_draw_args_remeshed_surface_depth");

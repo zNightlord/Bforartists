@@ -11,10 +11,10 @@
 #include "bnpr_shader_shared.hh"
 #include "GPU_capabilities.hh"
 #include "npr_sync_handles.hh"
-#include "gpu_storage_buffer_private.hh"
 
 #include <iostream>
 #include <set>
+#include <unordered_map>
 
 namespace blender::gpu {
 class StorageBuf;
@@ -180,7 +180,32 @@ class GPUBufferPoolModule {
   SSBO_StrokeGenMeshBufPerContour<uint, 5> ssbo_contour_raster_data_;         // 40MB
   // Notes: DO NOT use reuse_4 when remeshing, it holds per-vertex remesh len
 
+public:
+  struct TempSSBO
+  {
+    std::string name;
+    int2 life_time;
+    int alloc_size; 
+    GPUStorageBuf *buf;
+    TempSSBO(const char* name) : name(name), life_time({10000000, -1}), alloc_size(-1), buf(nullptr) {}
+  };
+  enum TempSSBOHandle
+  {
+    temp_ssbo_vert_spatial_map_headers_ = 0,
+    NUM_TEMP_SSBO
+  };
+  GPUStorageBuf **need_temp_buf(TempSSBOHandle handle, int curr_time_stamp, int size = -1);
+  void alloc_temp_ssbos_auto(int curr_time_stamp); 
+  void free_temp_ssbos_auto(int curr_time_stamp); 
 
+ private:
+  std::array<TempSSBO, NUM_TEMP_SSBO> temp_ssbo_pool_ = {
+    { "temp_ssbo_vert_spatial_map_headers_" }
+  };
+  void alloc_temp_ssbo(TempSSBO& ssbo, int curr_time_stamp);
+  void free_temp_ssbo(TempSSBO& ssbo, int curr_time_stamp);
+
+private: 
   // Reused Buffer Scheme for Temporal Coherence   -----------------------------------------------
   // Long life-time buffers  -------------------------------
   inline GPUStorageBuf *reused_ssbo_subd_edge_tree_node_dw_()
@@ -202,7 +227,7 @@ class GPUBufferPoolModule {
   // Reused Buffer Scheme for Basic Meshing ------------------------------------------------
   inline GPUStorageBuf *reused_ssbo_vert_spatial_map_headers_()
   {
-    return ssbo_mesh_buffer_reuse_large_[2]; 
+    return ssbo_mesh_buffer_reuse_large_[2];
   }
   inline GPUStorageBuf *reused_ssbo_vert_merged_id_()
   {
@@ -641,6 +666,7 @@ class GPUBufferPoolModule {
     , rot_angle_ubo_view_matrices_cache_(.0f)
   {
     ubo_current_strokegen_object_info_pool_ = new StrokegenUniformBufPool<UBO_StrokegenObjectInfo>();
+
     std::cout << "max ssbo size: " << GPU_max_storage_buffer_size() << std::endl; 
   }
   ~GPUBufferPoolModule()

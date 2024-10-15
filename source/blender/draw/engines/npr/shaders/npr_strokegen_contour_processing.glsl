@@ -937,6 +937,9 @@ void main()
 		#define PI 3.1415926535614f
 		ContourFlags cf = load_ssbo_contour_2d_sample_topology__flags(sample_id); 
 
+		const uint object_id = load_ssbo_contour_2d_sample_topology__object_id(sample_id, num_samples); 
+		StrokegenObjectInfo object_info = load_strokegen_object_info(object_id); 
+
 		if (valid_thread) // cf.is_corner) 
 		{ // Detect fake corners
 			ContourCurveTopo cct = load_contour_2d_sample_curve_topo(sample_id, cf, num_samples); 
@@ -967,7 +970,7 @@ void main()
 			vec2 vndir = normalize(vn); 
 
 			float angle = acos(dot(vpdir, vndir));
-			bool fake_corner = (angle > ((pcs_curve_max_split_angle_ / 180.0f) * PI)); 
+			bool fake_corner = (angle > ((object_info.max_2d_corner_angle / 180.0f) * PI)); 
 
 			if (cf.is_corner && valid_thread)
 			{
@@ -986,9 +989,6 @@ void main()
 		}
 
 		{ // Determine final curve segmentation for render
-			const uint object_id = load_ssbo_contour_2d_sample_topology__object_id(sample_id, num_samples); 
-			StrokegenObjectInfo object_info = load_strokegen_object_info(object_id); 
-
 			cf.seg_head = /* cf.is_corner || cf.seg_head_contour ||  */cf.seg_head_clipped; 
 			if (object_info.flags.seg_by_cusp) 		cf.seg_head = cf.seg_head || cf.seg_head_contour;
 			if (object_info.flags.seg_by_corner_2d) cf.seg_head = cf.seg_head || cf.is_corner; 

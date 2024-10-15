@@ -27,11 +27,12 @@
 #include "gpu_drawlist_private.hh"
 
 #include "GPU_framebuffer.hh"
+#include "gpu_storage_buffer_private.hh"
 
 
 namespace blender::npr::strokegen {
 
-GPUStorageBuf *alloc_storage_buf(int size, const char *name)
+GPUStorageBuf *alloc_device_only_storage_buf(int size, const char *name)
 {
   GPUStorageBuf *buf = GPU_storagebuf_create_ex(
       size, nullptr, GPUUsageType::GPU_USAGE_DEVICE_ONLY, name
@@ -41,25 +42,61 @@ GPUStorageBuf *alloc_storage_buf(int size, const char *name)
   return buf; 
 }
 
+GPUStorageBuf** GPUBufferPoolModule::need_temp_buf(TempSSBOHandle handle, int curr_time_stamp, int size)
+{
+  TempSSBO& ssbo = temp_ssbo_pool_[handle];
+  ssbo.life_time.x = std::min(curr_time_stamp, ssbo.life_time.x);
+  ssbo.life_time.y = std::max(curr_time_stamp + 1, ssbo.life_time.y);
+  ssbo.alloc_size = std::max(ssbo.alloc_size, size);
+  ssbo.buf = nullptr; // mark as not allocated 
+
+  return &ssbo.buf;
+}
+
+void GPUBufferPoolModule::alloc_temp_ssbo(TempSSBO &ssbo, int curr_time_stamp)
+{
+  assert(ssbo.buf == nullptr); 
+  assert(ssbo.life_time.x <= curr_time_stamp && curr_time_stamp < ssbo.life_time.y);
+  assert(0 < ssbo.alloc_size);
+
+  ssbo.buf = alloc_device_only_storage_buf(ssbo.alloc_size, ssbo.name.c_str());
+}
+
+void GPUBufferPoolModule::free_temp_ssbo(TempSSBO &ssbo, int curr_time_stamp)
+{
+  assert(ssbo.buf != nullptr);
+  assert(curr_time_stamp < ssbo.life_time.x || ssbo.life_time.y <= curr_time_stamp); 
+
+	GPU_storagebuf_free(ssbo.buf);
+	ssbo.buf = nullptr;
+}
+
+void GPUBufferPoolModule::alloc_temp_ssbos_auto(int curr_time_stamp)
+{
+  for (TempSSBO &temp_ssbo : temp_ssbo_pool_) {
+    const int2 &lt = temp_ssbo.life_time;
+    if (lt.x <= curr_time_stamp && curr_time_stamp < lt.y)
+      if (temp_ssbo.buf == nullptr)
+        alloc_temp_ssbo(temp_ssbo, curr_time_stamp);
+  }
+}
+
+void GPUBufferPoolModule::free_temp_ssbos_auto(int curr_time_stamp)
+{
+  for (TempSSBO& temp_ssbo : temp_ssbo_pool_)
+  {
+    const int2& lt = temp_ssbo.life_time; 
+    if (curr_time_stamp < lt.x || lt.y <= curr_time_stamp)
+      if (temp_ssbo.buf != nullptr)
+        free_temp_ssbo(temp_ssbo, curr_time_stamp); 
+  }
+}
+
 void GPUBufferPoolModule::alloc_reused_buffers()
 {
-  // if (ssbo_mesh_buffer_reuse_large_[0] != nullptr) {
-  //   GPU_storagebuf_free(ssbo_mesh_buffer_reuse_large_[0]);
-  //   ssbo_mesh_buffer_reuse_large_[0] = nullptr; 
-  // }
-  // for (int i = 0; i < 1000; ++i) {
-  //   if (ssbo_mesh_buffer_reuse_large_[0] == nullptr)
-  //     ssbo_mesh_buffer_reuse_large_[0] = alloc_storage_buf(
-  //         (i % 2 == 0 ? large_buffer_size : large_buffer_size / 4) - i * 16, "reused_large_buffers");
-
-	if (ssbo_mesh_buffer_reuse_large_[0] != nullptr) {
-	  GPU_storagebuf_free(ssbo_mesh_buffer_reuse_large_[0]);
-	  ssbo_mesh_buffer_reuse_large_[0] = nullptr;
-	}
-
   for (int i = 0; i < NUM_REUSED_LARGE_BUFFERS; ++i) 
     if (ssbo_mesh_buffer_reuse_large_[i] == nullptr) 
-      ssbo_mesh_buffer_reuse_large_[i] = alloc_storage_buf(large_buffer_size, "reused_large_buffers");
+      ssbo_mesh_buffer_reuse_large_[i] = alloc_device_only_storage_buf(large_buffer_size, "reused_large_buffers");
 }
 
 void GPUBufferPoolModule::free_reused_buffers()
@@ -237,8 +274,11 @@ void GPUBufferPoolModule::on_begin_sync(
 void GPUBufferPoolModule::sync_object(Object *ob)
 {
   UBO_StrokegenObjectInfo *ubo_new_obj = ubo_current_strokegen_object_info_pool_->alloc();
+
   ubo_new_obj->visibility_threshold = ob->strokegen.visibility_threshold;
+
   ubo_new_obj->stroke_width = ob->strokegen.curve_width;
+
   StrokegenObjectFlags flags;
   flags.draw_contour = ob->strokegen.curve_type == STROKEGEN_CURVE_TYPE_CONTOUR;
   flags.draw_border = false;
@@ -247,7 +287,8 @@ void GPUBufferPoolModule::sync_object(Object *ob)
   flags.seg_by_corner_2d = (0 != (ob->strokegen.flags &
                                   STROKEGEN_FLAG_CURVE_SEGMENT_BY_2D_CORNERS));
   ubo_new_obj->flags = encode_strokegen_object_flags(flags);
-  ubo_new_obj->dummy = 0;
+
+  ubo_new_obj->max_2d_corner_angle = ob->strokegen.curve_max_split_angle;
 
   ubo_new_obj->push_update();
 }

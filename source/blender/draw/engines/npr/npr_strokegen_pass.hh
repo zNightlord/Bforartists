@@ -44,28 +44,72 @@ public:
   StrokegenMeshComputePass(const char *name = "unkown strokegen compute pass") : draw::PassSimple(name) {}
 };
 
+
+
+
+
+
 class StrokeGenPassModule // similar to "LineDrawingRenderPass"
 {
 public:
-  int get_num_passes_extract_geom() { return curr_mesh_id_extract_geom + 1; }
-  int get_num_passes_remeshed_surf_depth() { return curr_mesh_id_surf_depth + 1; }
+  int get_num_processed_meshes()
+  {
+    return per_mesh_passes.size();
+     // curr_mesh_extract_iter + 1;
+  }
+  int get_num_passes_remeshed_surf_depth() { return curr_mesh_remeshed_depth_iter + 1; }
+  void submit_per_mesh_passes(int mesh_id, int stage, Manager& drw_mgr) const; 
 
   /** Sync states from StrokegenInstance */
   bool first_frame;
   int strokegen_frame_id;
   int strokegen_obj_id; 
 
- private:
-  /** Compute Passes */
+  enum PerMeshProcessingStage {
+    COPY_MESH = 0,
+    BASIC_MESHING,
+    SELECT_REMESHED_REGION,
+    SURFACE_ANALYSIS__INIT, 
+    ADAPTIVE_REMESHING,
+    SUBDIVISION,
+    RECONSTRUCT_LAST_FRAME_HISTORY,
+    SURFACE_ANALYSIS__PREP_INTERP_CONTOUR_INSERTION,
+    INITIALIZE_CURR_FRAME_HISTORY,
+    INTERP_CONTOUR_INSERTION,
+    SURFACE_ANALYSIS__CUSP_FUNC,
+    CONTOUR_EXTRACTION, 
+
+    NUM_MESH_PROCESSING_STAGES
+  };
+  std::string PerMeshProcessingStageName[NUM_MESH_PROCESSING_STAGES] = {
+    "COPY_MESH ", 
+    "BASIC_MESHING", 
+    "SELECT_REMESHED_REGION", 
+    "SURFACE_ANALYSIS__INIT", 
+    "ADAPTIVE_REMESHING", 
+    "SUBDIVISION", 
+    "RECONSTRUCT_LAST_FRAME_HISTORY", 
+    "SURFACE_ANALYSIS__PREP_INTERP_CONTOUR_INSERTION", 
+    "INITIALIZE_CURR_FRAME_HISTORY", 
+    "INTERP_CONTOUR_INSERTION", 
+    "SURFACE_ANALYSIS__CUSP_FUNC", 
+    "CONTOUR_EXTRACTION"
+  };
+
+private:
   draw::PassSimple pass_comp_test = {"Strokegen Compute Test"};
 
-  int curr_mesh_id_extract_geom;
-  std::array<StrokegenMeshComputePass, 1024> pass_extract_geom_arr;
-  std::vector<std::unique_ptr<StrokegenMeshComputePass>> pass_extract_geom_list; 
-  StrokegenMeshComputePass &pass_extract_geom() { return pass_extract_geom_arr[curr_mesh_id_extract_geom]; }
+  /** Main Procedures */
+  draw::PassSimple pass_mesh_pass_bootstrap = {"Strokegen Mesh Boostrap Pass"}; 
+
+  PerMeshProcessingStage curr_mesh_proc_stage; // context when recording mesh passes
+  std::vector<std::vector<std::unique_ptr<StrokegenMeshComputePass>>> per_mesh_passes; // [mesh_id][stage_id]
+#define pass_extract_geom() ((per_mesh_passes.back()[0/*curr_mesh_proc_stage*/]))
+
   draw::PassSimple pass_process_contours = {"StrokeGen Process Contours"}; 
   draw::PassSimple pass_compress_contour_pixels = {"Generate Contour Pixel Mask"}; 
 
+  /** Test Parallel Operators */
   draw::PassSimple pass_scan_test = {"Bnpr GPU Blelloch Scan Test"};
   draw::PassSimple pass_segscan_test = {"Bnpr GPU Blelloch SegScan Test"};
   draw::PassSimple pass_conv1d_test = {"Test GPU 1d conv on circular segments"};
@@ -75,7 +119,7 @@ public:
   draw::PassSimple pass_clear_contour_framebuffers = { "Clear Strokegen Framebuffers" }; 
   StrokegenMeshRasterPass pass_draw_contour_edges = {"Draw Contour Edges"}; // Inherited from draw::PassMain
   StrokegenMeshRasterPass pass_draw_contour_2d_samples = {"Draw 2D Contour Curves"}; // Inherited from draw::PassMain
-  int curr_mesh_id_surf_depth; 
+  int curr_mesh_remeshed_depth_iter; 
   std::array<StrokegenMeshRasterPass, 1024> pass_draw_remeshed_surface_depth_;  
   StrokegenMeshRasterPass pass_draw_debug_lines_ = {"Draw Debug Lines"}; // Inherited from draw::PassMain 
 
@@ -116,7 +160,8 @@ public:
     SEGLOOPCONV_TEST,
     LIST_RANKING_TEST,
 
-    GEOM_EXTRACTION,
+    CONTOUR_BOOSTRAP, 
+
     CONTOUR_PROCESS,
     CLEAR_CONTOUR_FRAMEBUFFERS, 
     INDIRECT_DRAW_CONTOUR_EDGES,
@@ -128,7 +173,7 @@ public:
 
   };
 
-  PassSimple& get_compute_pass(eType passType, int pass_id = 0);
+  PassSimple& get_singleton_compute_pass(eType passType, int pass_id = 0);
   PassSimple &get_clear_framebuffer_pass();
   PassMain &get_render_pass(eType passType, int pass_id = 0);
   void prepare_validation_passes(int frame_counter);
@@ -233,8 +278,6 @@ public:
     bool denoise_cusp_segmentation;
     float cusp_denoise_radius; // world space denoising radius along the curve
     bool cusp_eval_opti;
-
-    float curve_2d_max_split_angle; 
 
     int dbg_matching_line_mode; 
     int dbg_history_trace_steps;

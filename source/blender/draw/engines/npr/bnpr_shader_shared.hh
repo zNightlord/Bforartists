@@ -453,13 +453,13 @@ using namespace draw;
     float stroke_width;
     float visibility_threshold;
     StrokegenObjectFlags flags;
-    uint dummy; 
+    float max_2d_corner_angle;
   };
   struct UBOData_StrokegenObjectInfo {
     float stroke_width;
     float visibility_threshold;
     uint flags;
-    uint dummy;
+    float max_2d_corner_angle;
   };
   BLI_STATIC_ASSERT_ALIGN(UBOData_StrokegenObjectInfo, 16)
 
@@ -469,26 +469,28 @@ using namespace draw;
     info.stroke_width = ubo_data.stroke_width;
     info.visibility_threshold = ubo_data.visibility_threshold;
     info.flags = decode_strokegen_object_flags(ubo_data.flags);
-    info.dummy = ubo_data.dummy;
+    info.max_2d_corner_angle = ubo_data.max_2d_corner_angle;
 
     return info; 
   }
 
 #ifdef GPU_SHADER
-  uvec3 encode_strokegen_object_info(StrokegenObjectInfo info)
+  uvec4 encode_strokegen_object_info(StrokegenObjectInfo info)
   {
-    uvec3 enc;
+    uvec4 enc;
     enc.x = floatBitsToUint(info.stroke_width);
     enc.y = floatBitsToUint(info.visibility_threshold);
     enc.z = encode_strokegen_object_flags(info.flags);
+    enc.w = floatBitsToUint(info.max_2d_corner_angle); 
     return enc;
   }
-  StrokegenObjectInfo decode_strokegen_object_info(uvec3 enc)
+  StrokegenObjectInfo decode_strokegen_object_info(uvec4 enc)
   {
     StrokegenObjectInfo info;
     info.flags = decode_strokegen_object_flags(enc.z);
     info.visibility_threshold = uintBitsToFloat(enc.y);
     info.stroke_width = uintBitsToFloat(enc.x);
+    info.max_2d_corner_angle = uintBitsToFloat(enc.w); 
     return info;
   }
 #endif
