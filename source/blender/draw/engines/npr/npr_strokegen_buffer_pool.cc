@@ -52,12 +52,10 @@ void GPUBufferPoolModule::alloc_reused_buffers()
   //     ssbo_mesh_buffer_reuse_large_[0] = alloc_storage_buf(
   //         (i % 2 == 0 ? large_buffer_size : large_buffer_size / 4) - i * 16, "reused_large_buffers");
 
-    if (ssbo_mesh_buffer_reuse_large_[0] != nullptr) {
-      GPU_storagebuf_free(ssbo_mesh_buffer_reuse_large_[0]);
-      ssbo_mesh_buffer_reuse_large_[0] = nullptr;
-    }
-  }
-
+	if (ssbo_mesh_buffer_reuse_large_[0] != nullptr) {
+	  GPU_storagebuf_free(ssbo_mesh_buffer_reuse_large_[0]);
+	  ssbo_mesh_buffer_reuse_large_[0] = nullptr;
+	}
 
   for (int i = 0; i < NUM_REUSED_LARGE_BUFFERS; ++i) 
     if (ssbo_mesh_buffer_reuse_large_[i] == nullptr) 
