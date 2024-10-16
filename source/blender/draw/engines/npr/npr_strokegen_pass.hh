@@ -104,7 +104,7 @@ private:
 
   PerMeshProcessingStage curr_mesh_proc_stage; // context when recording mesh passes
   std::vector<std::vector<std::unique_ptr<StrokegenMeshComputePass>>> per_mesh_passes; // [mesh_id][stage_id]
-#define pass_extract_geom() ((per_mesh_passes.back()[0/*curr_mesh_proc_stage*/]))
+#define pass_extract_geom() ((per_mesh_passes.back()[curr_mesh_proc_stage]))
 
   draw::PassSimple pass_process_contours = {"StrokeGen Process Contours"}; 
   draw::PassSimple pass_compress_contour_pixels = {"Generate Contour Pixel Mask"}; 

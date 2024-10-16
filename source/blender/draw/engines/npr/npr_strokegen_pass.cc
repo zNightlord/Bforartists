@@ -1314,10 +1314,9 @@ void StrokeGenPassModule::on_end_sync()
 
     auto bind_rsc = [&](draw::detail::Pass<DrawCommandBuf>::PassBase<DrawCommandBuf> &sub)
     {
-      // sub.bind_ssbo(0, buffers_.reused_ssbo_vert_spatial_map_headers_());
-      sub.bind_ssbo(0, buffers_.need_temp_buf(
-        GPUBufferPoolModule::temp_ssbo_vert_spatial_map_headers_,
-        curr_mesh_proc_stage, hashmap_size)
+      sub.bind_ssbo(0, buffers_.need_temp_buf( // "ssbo_vert_spatial_map_headers_"
+        GPUBufferPoolModule::temp_ssbo_mesh_hash_map_headers_,
+        curr_mesh_proc_stage, MAX_GPU_HASH_TABLE_SIZE)
       );
       sub.bind_ssbo(1, buffers_.reused_ssbo_vert_spatial_map_payloads_());
       sub.bind_ssbo(2, buffers_.reused_ssbo_vert_merged_id_());
@@ -1376,10 +1375,9 @@ void StrokeGenPassModule::on_end_sync()
       ); 
 
       sub.bind_ssbo(0, buffers_.reused_ssbo_vert_merged_id_());
-      // sub.bind_ssbo(1, buffers_.reused_ssbo_vert_spatial_map_headers_());
-      sub.bind_ssbo(1, buffers_.need_temp_buf(
-        GPUBufferPoolModule::temp_ssbo_vert_spatial_map_headers_,
-        curr_mesh_proc_stage, hashmap_size
+      sub.bind_ssbo(1, buffers_.need_temp_buf( // "ssbo_edge_index_map_headers_"
+        GPUBufferPoolModule::temp_ssbo_mesh_hash_map_headers_,
+        curr_mesh_proc_stage, MAX_GPU_HASH_TABLE_SIZE
       ));
       sub.bind_ssbo(2, buffers_.reused_ssbo_edge_spatial_map_payloads_());
       sub.bind_ssbo(3, buffers_.ssbo_edge_to_vert_);

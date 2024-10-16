@@ -12,6 +12,7 @@
 #include "GPU_capabilities.hh"
 #include "npr_sync_handles.hh"
 
+#include <functional>
 #include <iostream>
 #include <set>
 #include <unordered_map>
@@ -85,6 +86,7 @@ class GPUBufferPoolModule {
     return ssbo_dyn_mesh_counters_[0];
   }
   inline GPUStorageBuf *ssbo_dyn_mesh_counters_out_() { return ssbo_dyn_mesh_counters_[1]; }
+  inline SSBO_StrokeGenDynamicMeshCounters& wrapped_ssbo_dyn_mesh_counters_out_() { return ssbo_dyn_mesh_counters_[1]; }
   SSBO_StrokeGenEdgeSplitCounters ssbo_edge_split_counters_;
   SSBO_StrokeGenEdgeCollapseCounters ssbo_edge_collapse_counters_;
   SSBO_StrokeGenEdgeFlipCounters ssbo_edge_flip_counters_;
@@ -181,17 +183,27 @@ class GPUBufferPoolModule {
   // Notes: DO NOT use reuse_4 when remeshing, it holds per-vertex remesh len
 
 public:
+  struct TempSSBOAllocContext
+  {
+    SSBOData_StrokeGenMeshPoolCounters *mesh_pool_counters_data;
+    SSBOData_StrokeGenDynamicMeshCounters* dyn_mesh_counters_data;
+  };
+
   struct TempSSBO
   {
-    std::string name;
-    int2 life_time;
-    int alloc_size; 
     GPUStorageBuf *buf;
-    TempSSBO(const char* name) : name(name), life_time({10000000, -1}), alloc_size(-1), buf(nullptr) {}
+    int2 life_time;
+
+    int alloc_size;
+    std::function<void(TempSSBOAllocContext &alloc_info)> func_custom_calc_size; 
+
+    std::string name;
+
+    TempSSBO(const char* name) : buf(nullptr), life_time({10000000, -1}), alloc_size(-1), name(name) {}
   };
   enum TempSSBOHandle
   {
-    temp_ssbo_vert_spatial_map_headers_ = 0,
+    temp_ssbo_mesh_hash_map_headers_ = 0,
     NUM_TEMP_SSBO
   };
   GPUStorageBuf **need_temp_buf(TempSSBOHandle handle, int curr_time_stamp, int size = -1);
@@ -202,8 +214,8 @@ public:
   std::array<TempSSBO, NUM_TEMP_SSBO> temp_ssbo_pool_ = {
     { "temp_ssbo_vert_spatial_map_headers_" }
   };
-  void alloc_temp_ssbo(TempSSBO& ssbo, int curr_time_stamp);
-  void free_temp_ssbo(TempSSBO& ssbo, int curr_time_stamp);
+  void alloc_temp_ssbo(TempSSBO &ssbo, int curr_time_stamp);
+  void free_temp_ssbo(TempSSBO &ssbo, int curr_time_stamp);
 
 private: 
   // Reused Buffer Scheme for Temporal Coherence   -----------------------------------------------

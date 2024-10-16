@@ -47,7 +47,7 @@ GPUStorageBuf** GPUBufferPoolModule::need_temp_buf(TempSSBOHandle handle, int cu
   TempSSBO& ssbo = temp_ssbo_pool_[handle];
   ssbo.life_time.x = std::min(curr_time_stamp, ssbo.life_time.x);
   ssbo.life_time.y = std::max(curr_time_stamp + 1, ssbo.life_time.y);
-  ssbo.alloc_size = std::max(ssbo.alloc_size, size);
+  ssbo.alloc_size = std::max(ssbo.alloc_size, size); // keep the largest size 
   ssbo.buf = nullptr; // mark as not allocated 
 
   return &ssbo.buf;
@@ -73,11 +73,45 @@ void GPUBufferPoolModule::free_temp_ssbo(TempSSBO &ssbo, int curr_time_stamp)
 
 void GPUBufferPoolModule::alloc_temp_ssbos_auto(int curr_time_stamp)
 {
+  bool needs_last_stage_shader_output = false; 
+  for (TempSSBO &temp_ssbo : temp_ssbo_pool_)
+  { // scan through to see if gpu-driven counters are needed
+    const int2 &lt = temp_ssbo.life_time;
+    if (lt.x <= curr_time_stamp && curr_time_stamp < lt.y)
+      if (temp_ssbo.func_custom_calc_size != nullptr) {
+        needs_last_stage_shader_output = true; 
+        break;      
+      }
+  }
+
+  TempSSBOAllocContext alloc_ctx = { nullptr, nullptr }; 
+  if (needs_last_stage_shader_output)
+  { // readback counters from gpu
+    ssbo_bnpr_mesh_pool_counters_.read();
+    wrapped_ssbo_dyn_mesh_counters_out_().read();
+
+    alloc_ctx = {
+      ssbo_bnpr_mesh_pool_counters_.data(),
+      wrapped_ssbo_dyn_mesh_counters_out_().data()
+    };  
+  }
+  
   for (TempSSBO &temp_ssbo : temp_ssbo_pool_) {
     const int2 &lt = temp_ssbo.life_time;
     if (lt.x <= curr_time_stamp && curr_time_stamp < lt.y)
+    {
+      int alloc_size_old = temp_ssbo.alloc_size; 
+      temp_ssbo.func_custom_calc_size(alloc_ctx); // updates temp_ssbo.alloc_size 
+
       if (temp_ssbo.buf == nullptr)
+        // first time alloc
         alloc_temp_ssbo(temp_ssbo, curr_time_stamp);
+      else if (alloc_size_old < temp_ssbo.alloc_size)
+      { // realloc if size increased
+        free_temp_ssbo(temp_ssbo, curr_time_stamp);
+        alloc_temp_ssbo(temp_ssbo, curr_time_stamp);
+      }
+    }
   }
 }
 

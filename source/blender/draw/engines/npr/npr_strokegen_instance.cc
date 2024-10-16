@@ -181,9 +181,9 @@ namespace blender::npr::strokegen
       /* Geometry Extraction */
       for (int stage = 0; stage < StrokeGenPassModule::NUM_MESH_PROCESSING_STAGES; ++stage)
       {
-        // strokegen_buffers.alloc_temp_ssbos_auto(stage); 
+        strokegen_buffers.alloc_temp_ssbos_auto(stage); 
         strokegen_passes.submit_per_mesh_passes(m, stage, manager);
-        // strokegen_buffers.free_temp_ssbos_auto(stage); 
+        strokegen_buffers.free_temp_ssbos_auto(stage); 
       }
 
       /* Draw depth for remeshed surfaces */
