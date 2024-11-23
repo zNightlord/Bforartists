@@ -1089,6 +1089,22 @@ void blo_do_versions_userdef(UserDef *userdef)
         userdef, "VIEW3D_AST_brush_gpencil_sculpt", "Brushes/Grease Pencil Sculpt/Utilities");
   }
 
+  /* start bfa asset shelf default catalogs versioning */
+  if (!USER_VERSION_ATLEAST(404, 0)) {
+    /* 3D Viewport*/
+    BKE_preferences_asset_shelf_settings_ensure_catalog_path_enabled(
+        userdef, "VIEW3D_AST_object", "Collections");
+    BKE_preferences_asset_shelf_settings_ensure_catalog_path_enabled(
+        userdef, "VIEW3D_AST_object", "Materials");
+
+    /* Node editors*/
+    BKE_preferences_asset_shelf_settings_ensure_catalog_path_enabled(
+        userdef, "NODE_AST_shader_node_groups", "Shader Nodegroups");
+    BKE_preferences_asset_shelf_settings_ensure_catalog_path_enabled(
+        userdef, "NODE_AST_geometry_node_groups", "Curve");
+  }
+  /* end bfa asset shelf default catalogs versioning */
+
   /**
    * Always bump subversion in BKE_blender_version.h when adding versioning
    * code here, and wrap it inside a USER_VERSION_ATLEAST check.

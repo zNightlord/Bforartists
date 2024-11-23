@@ -1549,6 +1549,22 @@ UserDef *BKE_blendfile_userdef_from_defaults()
         userdef, "VIEW3D_AST_brush_gpencil_sculpt", "Brushes/Grease Pencil Sculpt/Utilities");
   }
 
+  /* start bfa asset shelf default catalogs */
+  {
+    /* 3D Viewport*/
+    BKE_preferences_asset_shelf_settings_ensure_catalog_path_enabled(
+        userdef, "VIEW3D_AST_object", "Collections");
+    BKE_preferences_asset_shelf_settings_ensure_catalog_path_enabled(
+        userdef, "VIEW3D_AST_object", "Materials");
+
+    /* Node editors*/
+    BKE_preferences_asset_shelf_settings_ensure_catalog_path_enabled(
+        userdef, "NODE_AST_shader_node_groups", "Shader Nodegroups");
+    BKE_preferences_asset_shelf_settings_ensure_catalog_path_enabled(
+        userdef, "NODE_AST_geometry_node_groups", "Curve");
+  }
+  /* end bfa asset shelf default catalogs */
+
   return userdef;
 }
 
