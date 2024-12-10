@@ -208,9 +208,9 @@ blender::bke::MeshNormalDomain Mesh::normals_domain(const bool support_sharp_fac
     switch (custom->domain) {
       case AttrDomain::Point:
       case AttrDomain::Edge:
+        return MeshNormalDomain::Point;
       case AttrDomain::Face:
-        /* Not supported yet. */
-        break;
+        return MeshNormalDomain::Face;
       case AttrDomain::Corner:
         return MeshNormalDomain::Corner;
       default:
@@ -246,6 +246,15 @@ blender::Span<blender::float3> Mesh::vert_normals() const
 {
   using namespace blender;
   using namespace blender::bke;
+  // TODO: Put the result of this attribute lookup into the cache.
+  if (const GAttributeReader custom_normals = this->attributes().lookup("custom_normal")) {
+    if (custom_normals.domain == AttrDomain::Point && custom_normals.varray.type().is<float3>()) {
+      BLI_assert(custom_normals.varray.is_span());
+      if (custom_normals.varray.is_span()) {
+        return custom_normals.varray.typed<float3>().get_internal_span();
+      }
+    }
+  }
   if (this->runtime->vert_normals_cache.is_cached()) {
     return this->runtime->vert_normals_cache.data();
   }
@@ -264,6 +273,15 @@ blender::Span<blender::float3> Mesh::vert_normals() const
 blender::Span<blender::float3> Mesh::face_normals() const
 {
   using namespace blender;
+  using namespace blender::bke;
+  if (const GAttributeReader custom_normals = this->attributes().lookup("custom_normal")) {
+    if (custom_normals.domain == AttrDomain::Face && custom_normals.varray.type().is<float3>()) {
+      BLI_assert(custom_normals.varray.is_span());
+      if (custom_normals.varray.is_span()) {
+        return custom_normals.varray.typed<float3>().get_internal_span();
+      }
+    }
+  }
   this->runtime->face_normals_cache.ensure([&](Vector<float3> &r_data) {
     const Span<float3> positions = this->vert_positions();
     const OffsetIndices faces = this->faces();
@@ -278,6 +296,7 @@ blender::Span<blender::float3> Mesh::corner_normals() const
 {
   using namespace blender;
   using namespace blender::bke;
+  Span<float3> result;
   this->runtime->corner_normals_cache.ensure([&](Vector<float3> &r_data) {
     r_data.reinitialize(this->corners_num);
     const OffsetIndices<int> faces = this->faces();
@@ -297,10 +316,21 @@ blender::Span<blender::float3> Mesh::corner_normals() const
       }
       case MeshNormalDomain::Corner: {
         const AttributeAccessor attributes = this->attributes();
+        const GAttributeReader custom_normals = attributes.lookup("custom_normal");
+        if (custom_normals && custom_normals.varray.type().is<float3>()) {
+          if (custom_normals.domain == AttrDomain::Corner) {
+            BLI_assert(custom_normals.varray.is_span());
+            if (custom_normals.varray.is_span()) {
+              result = custom_normals.varray.typed<float3>().get_internal_span();
+              return;
+            }
+          }
+          else {
+            BLI_assert_unreachable();
+          }
+        }
         const VArraySpan sharp_edges = *attributes.lookup<bool>("sharp_edge", AttrDomain::Edge);
         const VArraySpan sharp_faces = *attributes.lookup<bool>("sharp_face", AttrDomain::Face);
-        const VArraySpan custom_normals = *attributes.lookup<short2>("custom_normal",
-                                                                     AttrDomain::Corner);
         mesh::normals_calc_corners(this->vert_positions(),
                                    this->edges(),
                                    this->faces(),
@@ -311,14 +341,14 @@ blender::Span<blender::float3> Mesh::corner_normals() const
                                    this->face_normals(),
                                    sharp_edges,
                                    sharp_faces,
-                                   custom_normals,
+                                   VArraySpan<short2>(custom_normals.varray.typed<short2>()),
                                    nullptr,
                                    r_data);
-        break;
+        result = r_data;
       }
     }
   });
-  return this->runtime->corner_normals_cache.data();
+  return result;
 }
 
 void BKE_lnor_spacearr_init(MLoopNorSpaceArray *lnors_spacearr,
