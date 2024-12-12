@@ -584,6 +584,18 @@ const EnumPropertyItem rna_enum_geometry_nodes_linear_gizmo_draw_style_items[] =
     {0, nullptr, 0, nullptr, nullptr},
 };
 
+const EnumPropertyItem rna_enum_geometry_nodes_move_gizmo_draw_style_items[] = {
+    {GEO_NODE_MOVE_GIZMO_DRAW_STYLE_RING, "RING", 0, "Ring", ""},
+    {GEO_NODE_MOVE_GIZMO_DRAW_STYLE_CROSS, "CROSS", 0, "Cross", ""},
+    {0, nullptr, 0, nullptr, nullptr},
+};
+const EnumPropertyItem rna_enum_geometry_nodes_move_gizmo_draw_option_items[] = {
+    {GEO_NODE_MOVE_GIZMO_DRAW_OPTION_FILL, "FILL", 0, "Fill", ""},
+    {GEO_NODE_MOVE_GIZMO_DRAW_OPTION_FILL_SELECT, "FILL_SELECT", 0, "Fill Select", ""},
+    {GEO_NODE_MOVE_GIZMO_DRAW_OPTION_ALIGN_VIEW, "ALIGN_VIEW", 0, "Align View", ""},
+    {0, nullptr, 0, nullptr, nullptr},
+};
+
 #ifndef RNA_RUNTIME
 static const EnumPropertyItem node_sampler_type_items[] = {
     {0, "NEAREST", 0, "Nearest", ""},

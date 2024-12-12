@@ -3103,6 +3103,16 @@ typedef enum GeometryNodeLinearGizmoDrawStyle {
   GEO_NODE_LINEAR_GIZMO_DRAW_STYLE_BOX = 2,
 } GeometryNodeLinearGizmoDrawStyle;
 
+typedef enum GeometryNodeMoveGizmoDrawStyle {
+  GEO_NODE_MOVE_GIZMO_DRAW_STYLE_RING = 0,
+  GEO_NODE_MOVE_GIZMO_DRAW_STYLE_CROSS = 1,
+} GeometryNodeMoveGizmoDrawStyle;
+typedef enum GeometryNodeMoveGizmoDrawOption {
+  GEO_NODE_MOVE_GIZMO_DRAW_OPTION_FILL = 0,
+  GEO_NODE_MOVE_GIZMO_DRAW_OPTION_FILL_SELECT = 1,
+  GEO_NODE_MOVE_GIZMO_DRAW_OPTION_ALIGN_VIEW = 2,
+} GeometryNodeMoveGizmoDrawOption;
+
 typedef enum NodeGeometryTransformMode {
   GEO_NODE_TRANSFORM_MODE_COMPONENTS = 0,
   GEO_NODE_TRANSFORM_MODE_MATRIX = 1,

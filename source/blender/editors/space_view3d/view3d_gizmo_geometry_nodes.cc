@@ -335,9 +335,18 @@ class MoveGizmo : public NodeGizmos {
 
   void update_style(const NodeGeometryMoveGizmo &storage)
   {
+        /* Make sure the enum values are in sync. */
+    static_assert(int(GEO_NODE_MOVE_GIZMO_DRAW_STYLE_RING) == int(ED_GIZMO_MOVE_STYLE_RING_2D));
+    static_assert(int(GEO_NODE_MOVE_GIZMO_DRAW_STYLE_CROSS) == int(ED_GIZMO_MOVE_STYLE_CROSS_2D));
+    RNA_enum_set(gizmo_->ptr, "draw_style", storage.draw_style);
+    
+    RNA_enum_set(gizmo_->ptr, "draw_options", storage.draw_option);
+    
     WM_gizmo_set_line_width(gizmo_, 2.0f);
     WM_gizmo_set_scale(gizmo_, 1.0f);
     WM_gizmo_set_flag(gizmo_, WM_GIZMO_DRAW_NO_SCALE, true);
+
+    
 
     const ThemeColorID color_theme_id = get_gizmo_theme_color_id(
         GeometryNodeGizmoColor(storage.color_id));
