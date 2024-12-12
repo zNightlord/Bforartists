@@ -2114,6 +2114,16 @@ typedef struct NodeGeometryLinearGizmo {
   int draw_style;
 } NodeGeometryLinearGizmo;
 
+
+typedef struct NodeGeometryMoveGizmo {
+  /** #GeometryNodeGizmoColor. */
+  int color_id;
+  /** #GeometryNodeMoveGizmoDrawStyle. */
+  int draw_style;
+  /** #GeometryNodeMoveGizmoDrawOption. */
+  int draw_option;
+} NodeGeometryMoveGizmo;
+
 typedef struct NodeGeometryDialGizmo {
   /** #GeometryNodeGizmoColor. */
   int color_id;

@@ -298,6 +298,115 @@ class LinearGizmo : public NodeGizmos {
   }
 };
 
+class MoveGizmo : public NodeGizmos {
+ private:
+  wmGizmo *gizmo_ = nullptr;
+
+  struct EditData {
+    float3 current_value; 
+  } edit_data_;
+
+ public:
+  void create_gizmos(wmGizmoGroup &gzgroup) override
+  {
+    gizmo_ = WM_gizmo_new("GIZMO_GT_move_3d", &gzgroup, nullptr);
+  }
+
+  Vector<wmGizmo *> get_all_gizmos() override
+  {
+    return {gizmo_};
+  }
+
+  void update(GizmosUpdateParams &params) override
+  {
+    const auto &storage = *static_cast<const NodeGeometryMoveGizmo *>(params.gizmo_node.storage);
+    const bool is_interacting = gizmo_is_interacting(*gizmo_);
+
+    this->update_style(storage);
+
+    if (is_interacting) {
+      return;
+    }
+    if (!this->update_transform(params)) {
+      return;
+    }
+    this->update_target_property();
+  }
+
+  void update_style(const NodeGeometryMoveGizmo &storage)
+  {
+    WM_gizmo_set_line_width(gizmo_, 2.0f);
+    WM_gizmo_set_scale(gizmo_, 1.0f);
+
+
+    const ThemeColorID color_theme_id = get_gizmo_theme_color_id(
+        GeometryNodeGizmoColor(storage.color_id));
+    UI_GetThemeColor3fv(color_theme_id, gizmo_->color);
+    UI_GetThemeColor3fv(TH_GIZMO_HI, gizmo_->color_hi);
+  }
+
+  bool update_transform(GizmosUpdateParams &params)
+  {
+    float3 position;
+    float3 direction;
+    float radius;
+    if (!params.get_input_value("Position", position) ||
+        !params.get_input_value("Direction", direction) ||
+        !params.get_input_value("Radius", radius))
+    {
+      params.r_report.missing_socket_logs = true;
+      return false;
+    }
+    direction = math::normalize(direction);
+    if (math::is_zero(direction) || math::is_zero(radius)) {
+      params.r_report.invalid_transform = true;
+      return false;
+    }
+
+
+    const float4x4 gizmo_base_transform = matrix_from_position_and_up_direction(
+        position, direction, math::AxisSigned::Z_POS);
+
+    float4x4 gizmo_transform = params.parent_transform * gizmo_base_transform;
+
+    make_matrix_orthonormal_but_keep_z_axis(gizmo_transform);
+    copy_m4_m4(gizmo_->matrix_basis, gizmo_transform.ptr());
+    float transform_scale = 1.0f;
+    copy_m4_m4(gizmo_->matrix_offset,
+               math::from_scale<float4x4>(float3(radius * transform_scale)).ptr());
+    return true;
+  }
+
+ 
+  void update_target_property()
+  {
+    /* Always reset to 0 when not interacting. */
+    edit_data_.current_value = float3(0); 
+
+    wmGizmoPropertyFnParams fn_params{};
+    fn_params.user_data = this;
+    fn_params.value_set_fn =
+        [](const wmGizmo * /*gz*/, wmGizmoProperty *gz_prop, const void *value_ptr) {
+          MoveGizmo &self = *static_cast<MoveGizmo *>(gz_prop->custom_func.user_data);
+          BLI_assert(gz_prop->type->array_length == 3);
+          float3 offset;
+          const float3 new_gizmo_value = *static_cast<const float3 *>(value_ptr);
+          self.edit_data_.current_value = new_gizmo_value;
+          offset = new_gizmo_value;
+          self.apply_change("Value", [&](bke::SocketValueVariant &value_variant) {
+              value_variant.set(value_variant.get<float3>() + offset);
+          });
+        };
+    fn_params.value_get_fn =
+        [](const wmGizmo * /*gz*/, wmGizmoProperty *gz_prop, void *value_ptr) {
+          MoveGizmo &self = *static_cast<MoveGizmo *>(gz_prop->custom_func.user_data);
+          BLI_assert(gz_prop->type->array_length == 3);
+          *static_cast<float3 *>(value_ptr) = self.edit_data_.current_value;
+        };
+    WM_gizmo_target_property_def_func(gizmo_, "offset", &fn_params);
+  }
+};
+
 class DialGizmo : public NodeGizmos {
  private:
   wmGizmo *gizmo_ = nullptr;
@@ -795,6 +904,8 @@ static std::unique_ptr<NodeGizmos> create_gizmo_node_gizmos(const bNode &gizmo_n
   switch (gizmo_node.type) {
     case GEO_NODE_GIZMO_LINEAR:
       return std::make_unique<LinearGizmo>();
+    case GEO_NODE_GIZMO_MOVE:
+      return std::make_unique<MoveGizmo>();
     case GEO_NODE_GIZMO_DIAL:
       return std::make_unique<DialGizmo>();
     case GEO_NODE_GIZMO_TRANSFORM:

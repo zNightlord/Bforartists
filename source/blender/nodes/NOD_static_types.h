@@ -359,6 +359,7 @@ DefNode(GeometryNode, GEO_NODE_GEOMETRY_TO_INSTANCE, 0, "GEOMETRY_TO_INSTANCE", 
 DefNode(GeometryNode, GEO_NODE_GET_NAMED_GRID, 0, "GET_NAMED_GRID", GetNamedGrid, "Get Named Grid", "Add a Get Named Grid node\nGet volume grid from a volume geometry with the specified name")
 DefNode(GeometryNode, GEO_NODE_GIZMO_DIAL, 0, "GIZMO_DIAL", GizmoDial, "Dial Gizmo", "Add a Dial Gizmo node\nShow a dial gizmo in the viewport for a value")
 DefNode(GeometryNode, GEO_NODE_GIZMO_LINEAR, 0, "GIZMO_LINEAR", GizmoLinear, "Linear Gizmo", "Add a Linear Gizmo node\nShow a linear gizmo in the viewport for a value")
+DefNode(GeometryNode, GEO_NODE_GIZMO_MOVE, 0, "GIZMO_MOVE", GizmoMove, "Move Gizmo", "Add a Move Gizmo node\nShow a move gizmo in the viewport for a vector value")
 DefNode(GeometryNode, GEO_NODE_GIZMO_TRANSFORM, rna_def_geo_gizmo_transform, "GIZMO_TRANSFORM", GizmoTransform, "Transform Gizmo", "Add a Transform Gizmo node\nShow a transform gizmo in the viewport")
 DefNode(GeometryNode, GEO_NODE_GREASE_PENCIL_TO_CURVES, 0, "GREASE_PENCIL_TO_CURVES", GreasePencilToCurves, "Grease Pencil to Curves", "Add Grease Pencil to Curves node\nConvert Grease Pencil layers into curve instances")
 DefNode(GeometryNode, GEO_NODE_GRID_TO_MESH, 0, "GRID_TO_MESH", GridToMesh, "Grid to Mesh", "Add a Grid to Mesh node\nGenerate a mesh on the \"surface\" of a volume grid")
