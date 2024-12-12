@@ -337,7 +337,7 @@ class MoveGizmo : public NodeGizmos {
   {
     WM_gizmo_set_line_width(gizmo_, 2.0f);
     WM_gizmo_set_scale(gizmo_, 1.0f);
-
+    WM_gizmo_set_flag(gizmo_, WM_GIZMO_DRAW_NO_SCALE, true);
 
     const ThemeColorID color_theme_id = get_gizmo_theme_color_id(
         GeometryNodeGizmoColor(storage.color_id));
