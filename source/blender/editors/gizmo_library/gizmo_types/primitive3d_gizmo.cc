@@ -15,24 +15,36 @@
 
 #include "MEM_guardedalloc.h"
 
+#include "BLI_math_matrix.h"
+#include "BLI_math_vector_types.hh"
+
+#include "BKE_context.hh"
+
 #include "DNA_screen_types.h"
 #include "DNA_space_types.h"
 #include "DNA_view3d_types.h"
 
 #include "GPU_immediate.hh"
+#include "GPU_immediate_util.hh"
 #include "GPU_matrix.hh"
 #include "GPU_select.hh"
 #include "GPU_state.hh"
 
 #include "RNA_define.hh"
+#include "RNA_access.hh"
 
 #include "WM_api.hh"
 #include "WM_types.hh"
 
 #include "ED_gizmo_library.hh"
+#include "ED_screen.hh"
+#include "ED_transform_snap_object_context.hh"
+#include "ED_view3d.hh"
 
 /* own includes */
 #include "../gizmo_library_intern.hh"
+
+#define MVAL_MAX_PX_DIST 12.0f
 
 static float verts_plane[4][3] = {
     {-1, -1, 0},
@@ -47,7 +59,32 @@ struct PrimitiveGizmo3D {
   int draw_style;
   float arc_inner_factor;
   bool draw_inner;
+  /* Added to 'matrix_basis' when calculating the matrix. */
+  float prop_co[3];
 };
+
+struct PrimitiveInteraction {
+  struct {
+    float mval[2];
+    /* Only for when using properties. */
+    float prop_co[3];
+    float matrix_final[4][4];
+  } init;
+  struct {
+    eWM_GizmoFlagTweak tweak_flag;
+  } prev;
+
+  /* We could have other snap contexts, for now only support 3D view. */
+  SnapObjectContext *snap_context_v3d;
+};
+
+static void gizmo_primitive_matrix_basis_get(const wmGizmo *gz, float r_matrix[4][4])
+{
+  PrimitiveGizmo3D *gz_prim = (PrimitiveGizmo3D *)gz;
+
+  copy_m4_m4(r_matrix, gz_prim->gizmo.matrix_basis);
+  add_v3_v3(r_matrix[3], gz_prim->prop_co);
+}
 
 /* -------------------------------------------------------------------- */
 /** \name RNA callbacks */
@@ -216,6 +253,114 @@ static void gizmo_primitive_draw(const bContext * /*C*/, wmGizmo *gz)
   gizmo_primitive_draw_intern(gz, false, (gz->state & WM_GIZMO_STATE_HIGHLIGHT));
 }
 
+static void primitive_get_translate(const wmGizmo *gz,
+                                 const wmEvent *event,
+                                 const ARegion *region,
+                                 float co_delta[3])
+{
+  PrimitiveInteraction *inter = static_cast<PrimitiveInteraction *>(gz->interaction_data);
+  const float xy_delta[2] = {
+      event->mval[0] - inter->init.mval[0],
+      event->mval[1] - inter->init.mval[1],
+  };
+
+  RegionView3D *rv3d = static_cast<RegionView3D *>(region->regiondata);
+  float co_ref[3];
+  mul_v3_mat3_m4v3(co_ref, gz->matrix_space, inter->init.prop_co);
+  const float zfac = ED_view3d_calc_zfac(rv3d, co_ref);
+
+  ED_view3d_win_to_delta(region, xy_delta, zfac, co_delta);
+
+  float matrix_space_inv[3][3];
+  copy_m3_m4(matrix_space_inv, gz->matrix_space);
+  invert_m3(matrix_space_inv);
+  mul_m3_v3(matrix_space_inv, co_delta);
+}
+
+static int gizmo_primitive_modal(bContext *C,
+                            wmGizmo *gz,
+                            const wmEvent *event,
+                            eWM_GizmoFlagTweak tweak_flag)
+{
+  PrimitiveInteraction *inter = static_cast<PrimitiveInteraction *>(gz->interaction_data);
+  if ((event->type != MOUSEMOVE) && (inter->prev.tweak_flag == tweak_flag)) {
+    return OPERATOR_RUNNING_MODAL;
+  }
+  PrimitiveGizmo3D *prim = (PrimitiveGizmo3D *)gz;
+  ARegion *region = CTX_wm_region(C);
+
+  float prop_delta[3];
+  if (CTX_wm_area(C)->spacetype == SPACE_VIEW3D) {
+    primitive_get_translate(gz, event, region, prop_delta);
+  }
+  else {
+    float mval_proj_init[2], mval_proj_curr[2];
+    if ((gizmo_window_project_2d(C, gz, inter->init.mval, 2, false, mval_proj_init) == false) ||
+        (gizmo_window_project_2d(
+             C, gz, blender::float2(blender::int2(event->mval)), 2, false, mval_proj_curr) ==
+         false))
+    {
+      return OPERATOR_RUNNING_MODAL;
+    }
+    sub_v2_v2v2(prop_delta, mval_proj_curr, mval_proj_init);
+    if ((gz->flag & WM_GIZMO_DRAW_NO_SCALE) == 0) {
+      mul_v2_fl(prop_delta, gz->scale_final);
+    }
+    prop_delta[2] = 0.0f;
+  }
+
+  if (tweak_flag & WM_GIZMO_TWEAK_PRECISE) {
+    mul_v3_fl(prop_delta, 0.1f);
+  }
+
+  add_v3_v3v3(prim->prop_co, inter->init.prop_co, prop_delta);
+
+  if (tweak_flag & WM_GIZMO_TWEAK_SNAP) {
+    if (inter->snap_context_v3d) {
+      float dist_px = MVAL_MAX_PX_DIST * U.pixelsize;
+      const float mval_fl[2] = {float(event->mval[0]), float(event->mval[1])};
+      float co[3];
+      SnapObjectParams params{};
+      params.snap_target_select = SCE_SNAP_TARGET_ALL;
+      params.edit_mode_type = SNAP_GEOM_EDIT;
+      params.occlusion_test = SNAP_OCCLUSION_AS_SEEM;
+      if (ED_transform_snap_object_project_view3d(
+              inter->snap_context_v3d,
+              CTX_data_ensure_evaluated_depsgraph(C),
+              region,
+              CTX_wm_view3d(C),
+              (SCE_SNAP_TO_VERTEX | SCE_SNAP_TO_EDGE | SCE_SNAP_TO_FACE),
+              &params,
+              nullptr,
+              mval_fl,
+              nullptr,
+              &dist_px,
+              co,
+              nullptr))
+      {
+        float matrix_space_inv[4][4];
+        invert_m4_m4(matrix_space_inv, gz->matrix_space);
+        mul_v3_m4v3(prim->prop_co, matrix_space_inv, co);
+      }
+    }
+  }
+
+  /* set the property for the operator and call its modal function */
+  wmGizmoProperty *gz_prop = WM_gizmo_target_property_find(gz, "offset");
+  if (WM_gizmo_target_property_is_valid(gz_prop)) {
+    WM_gizmo_target_property_float_set_array(C, gz, gz_prop, prim->prop_co);
+  }
+  else {
+    zero_v3(prim->prop_co);
+  }
+
+  ED_region_tag_redraw_editor_overlays(region);
+
+  inter->prev.tweak_flag = tweak_flag;
+
+  return OPERATOR_RUNNING_MODAL;
+}
+
 static void gizmo_primitive_setup(wmGizmo *gz)
 {
   gz->flag |= WM_GIZMO_DRAW_MODAL;
@@ -227,17 +372,96 @@ static void gizmo_primitive_setup(wmGizmo *gz)
   gz_prim->draw_inner = true;
 }
 
-static int gizmo_primitive_invoke(bContext * /*C*/, wmGizmo *gz, const wmEvent * /*event*/)
+static int gizmo_primitive_invoke(bContext * /*C*/, wmGizmo *gz, const wmEvent *event)
 {
-  GizmoInteraction *inter = static_cast<GizmoInteraction *>(
-      MEM_callocN(sizeof(GizmoInteraction), __func__));
+   PrimitiveInteraction *inter = static_cast<PrimitiveInteraction *>(
+      MEM_callocN(sizeof(PrimitiveInteraction), __func__));
+    inter->init.mval[0] = event->mval[0];
+    inter->init.mval[1] = event->mval[1];
 
-  WM_gizmo_calc_matrix_final(gz, inter->init_matrix_final);
+ wmGizmoProperty *gz_prop = WM_gizmo_target_property_find(gz, "offset");
+  if (WM_gizmo_target_property_is_valid(gz_prop)) {
+    WM_gizmo_target_property_float_get_array(gz, gz_prop, inter->init.prop_co);
+  }
+
+  WM_gizmo_calc_matrix_final(gz, inter->init.matrix_final);
 
   gz->interaction_data = inter;
 
   return OPERATOR_RUNNING_MODAL;
 }
+
+static void gizmo_primitive_exit(bContext *C, wmGizmo *gz, const bool cancel)
+{
+  PrimitiveInteraction *inter = static_cast<PrimitiveInteraction *>(gz->interaction_data);
+  bool use_reset_value = false;
+  const float *reset_value = nullptr;
+  if (cancel) {
+    /* Set the property for the operator and call its modal function. */
+    wmGizmoProperty *gz_prop = WM_gizmo_target_property_find(gz, "offset");
+    if (WM_gizmo_target_property_is_valid(gz_prop)) {
+      use_reset_value = true;
+      reset_value = inter->init.prop_co;
+    }
+  }
+
+  if (use_reset_value) {
+    wmGizmoProperty *gz_prop = WM_gizmo_target_property_find(gz, "offset");
+    if (WM_gizmo_target_property_is_valid(gz_prop)) {
+      WM_gizmo_target_property_float_set_array(C, gz, gz_prop, reset_value);
+    }
+  }
+
+  if (inter->snap_context_v3d) {
+    ED_transform_snap_object_context_destroy(inter->snap_context_v3d);
+    inter->snap_context_v3d = nullptr;
+  }
+
+  if (!cancel) {
+    wmGizmoProperty *gz_prop = WM_gizmo_target_property_find(gz, "offset");
+    if (WM_gizmo_target_property_is_valid(gz_prop)) {
+      WM_gizmo_target_property_anim_autokey(C, gz, gz_prop);
+    }
+  }
+}
+
+
+static int gizmo_primitive_test_select(bContext *C, wmGizmo *gz, const int mval[2])
+{
+  float point_local[2];
+
+  if (gizmo_window_project_2d(C, gz, blender::float2(blender::int2(mval)), 2, true, point_local) ==
+      false)
+  {
+    return -1;
+  }
+
+  /* The 'gz->scale_final' is already applied to the projection
+   * when #WM_GIZMO_DRAW_NO_SCALE isn't set. */
+  const float radius = (gz->flag & WM_GIZMO_DRAW_NO_SCALE) ? gz->scale_final : 1.0f;
+  if (len_squared_v2(point_local) < radius) {
+    return 0;
+  }
+
+  return -1;
+}
+
+static void gizmo_move_property_update(wmGizmo *gz, wmGizmoProperty *gz_prop)
+{
+  PrimitiveGizmo3D *prim = (PrimitiveGizmo3D *)gz;
+  if (WM_gizmo_target_property_is_valid(gz_prop)) {
+    WM_gizmo_target_property_float_get_array(gz, gz_prop, prim->prop_co);
+  }
+  else {
+    zero_v3(prim->prop_co);
+  }
+}
+
+static int gizmo_primitive_cursor_get(wmGizmo * /*gz*/)
+{
+  return WM_CURSOR_NSEW_SCROLL;
+}
+
 
 /* -------------------------------------------------------------------- */
 /** \name Primitive Gizmo API
@@ -251,8 +475,14 @@ static void GIZMO_GT_primitive_3d(wmGizmoType *gzt)
   /* api callbacks */
   gzt->draw = gizmo_primitive_draw;
   gzt->draw_select = gizmo_primitive_draw_select;
+  gzt->test_select = gizmo_primitive_test_select;
+  gzt->matrix_basis_get = gizmo_primitive_matrix_basis_get;
   gzt->setup = gizmo_primitive_setup;
   gzt->invoke = gizmo_primitive_invoke;
+  gzt->property_update = gizmo_move_property_update;
+  gzt->modal = gizmo_primitive_modal;
+  gzt->exit = gizmo_primitive_exit;
+  gzt->cursor_get = gizmo_primitive_cursor_get;
 
   gzt->struct_size = sizeof(PrimitiveGizmo3D);
 
@@ -285,6 +515,8 @@ static void GIZMO_GT_primitive_3d(wmGizmoType *gzt)
   prop = RNA_def_boolean(gzt->srna, "draw_inner", true, "Draw Inner", "");
   RNA_def_property_boolean_funcs_runtime(
       prop, gizmo_primitive_rna__draw_inner_get_fn, gizmo_primitive_rna__draw_inner_set_fn);
+    
+  WM_gizmotype_target_property_def(gzt, "offset", PROP_FLOAT, 3);
 }
 
 void ED_gizmotypes_primitive_3d()

@@ -261,6 +261,7 @@ DEF_ENUM(rna_enum_geometry_nodes_linear_gizmo_draw_style_items)
 
 DEF_ENUM(rna_enum_geometry_nodes_move_gizmo_draw_style_items)
 DEF_ENUM(rna_enum_geometry_nodes_move_gizmo_draw_option_items)
+DEF_ENUM(rna_enum_geometry_nodes_move_primitive_gizmo_draw_style_items)
 
 /* Not available to RNA pre-processing (`makesrna`).
  * Defined in editors for example. */

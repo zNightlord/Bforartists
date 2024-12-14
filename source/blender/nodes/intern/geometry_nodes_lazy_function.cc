@@ -2776,6 +2776,7 @@ struct GeometryNodesLazyFunctionBuilder {
       }
       case GEO_NODE_GIZMO_LINEAR:
       case GEO_NODE_GIZMO_MOVE:
+      case GEO_NODE_GIZMO_MOVE_PRIMITIVE:
       case GEO_NODE_GIZMO_DIAL:
       case GEO_NODE_GIZMO_TRANSFORM: {
         this->build_gizmo_node(bnode, graph_params);

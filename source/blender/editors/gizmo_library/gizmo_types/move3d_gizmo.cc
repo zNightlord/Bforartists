@@ -46,6 +46,13 @@
 #define MVAL_MAX_PX_DIST 12.0f
 #define RING_2D_RESOLUTION 32
 
+static float verts_plane[4][3] = {
+    {-1, -1, 0},
+    {1, -1, 0},
+    {1, 1, 0},
+    {-1, 1, 0},
+};
+
 struct MoveGizmo3D {
   wmGizmo gizmo;
   /* Added to 'matrix_basis' when calculating the matrix. */
@@ -131,6 +138,12 @@ static void move_geom_draw(const wmGizmo *gz,
     immVertex3f(pos, -radius_diag, radius_diag, 0.0f);
     immVertex3f(pos, radius_diag, -radius_diag, 0.0f);
     immEnd();
+  } else if (draw_style == ED_GIZMO_MOVE_STYLE_PLANE) {
+    if (filled) {
+      wm_gizmo_vec_draw(color, verts_plane, ARRAY_SIZE(verts_plane), pos, GPU_PRIM_TRI_FAN);
+    } else {
+      wm_gizmo_vec_draw(color, verts_plane, ARRAY_SIZE(verts_plane), pos, GPU_PRIM_LINE_LOOP);
+    }
   }
   else {
     BLI_assert(0);

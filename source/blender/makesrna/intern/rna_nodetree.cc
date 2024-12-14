@@ -587,12 +587,21 @@ const EnumPropertyItem rna_enum_geometry_nodes_linear_gizmo_draw_style_items[] =
 const EnumPropertyItem rna_enum_geometry_nodes_move_gizmo_draw_style_items[] = {
     {GEO_NODE_MOVE_GIZMO_DRAW_STYLE_RING, "RING", 0, "Ring", ""},
     {GEO_NODE_MOVE_GIZMO_DRAW_STYLE_CROSS, "CROSS", 0, "Cross", ""},
+    {GEO_NODE_MOVE_GIZMO_DRAW_STYLE_PLANE, "PLANE", 0, "Plane", ""},
     {0, nullptr, 0, nullptr, nullptr},
 };
+
 const EnumPropertyItem rna_enum_geometry_nodes_move_gizmo_draw_option_items[] = {
     {GEO_NODE_MOVE_GIZMO_DRAW_OPTION_FILL, "FILL", 0, "Fill", ""},
     {GEO_NODE_MOVE_GIZMO_DRAW_OPTION_FILL_SELECT, "FILL_SELECT", 0, "Fill Select", ""},
     {GEO_NODE_MOVE_GIZMO_DRAW_OPTION_ALIGN_VIEW, "ALIGN_VIEW", 0, "Align View", ""},
+    {0, nullptr, 0, nullptr, nullptr},
+};
+
+const EnumPropertyItem rna_enum_geometry_nodes_move_primitive_gizmo_draw_style_items[] = {
+    {GEO_NODE_MOVE_PRIMITIVE_GIZMO_DRAW_STYLE_PLANE, "PLANE", 0, "Plane", ""},
+    {GEO_NODE_MOVE_PRIMITIVE_GIZMO_DRAW_STYLE_CIRCLE, "CIRCLE", 0, "Circle", ""},
+    {GEO_NODE_MOVE_PRIMITIVE_GIZMO_DRAW_STYLE_ANNULUS, "ANNULUS", 0, "Annulus", ""},
     {0, nullptr, 0, nullptr, nullptr},
 };
 

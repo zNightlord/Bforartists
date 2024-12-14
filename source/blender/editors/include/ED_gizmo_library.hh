@@ -207,6 +207,7 @@ enum {
 enum {
   ED_GIZMO_MOVE_STYLE_RING_2D = 0,
   ED_GIZMO_MOVE_STYLE_CROSS_2D = 1,
+  ED_GIZMO_MOVE_STYLE_PLANE = 2,
 };
 
 /* -------------------------------------------------------------------- */
@@ -227,8 +228,8 @@ enum {
 
 enum {
   ED_GIZMO_PRIMITIVE_STYLE_PLANE = 0,
-  ED_GIZMO_PRIMITIVE_STYLE_CIRCLE,
-  ED_GIZMO_PRIMITIVE_STYLE_ANNULUS,
+  ED_GIZMO_PRIMITIVE_STYLE_CIRCLE = 1,
+  ED_GIZMO_PRIMITIVE_STYLE_ANNULUS = 2,
 };
 
 /* -------------------------------------------------------------------- */

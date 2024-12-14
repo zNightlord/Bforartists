@@ -2124,6 +2124,13 @@ typedef struct NodeGeometryMoveGizmo {
   int draw_option;
 } NodeGeometryMoveGizmo;
 
+typedef struct NodeGeometryMovePrimitiveGizmo {
+  /** #GeometryNodeGizmoColor. */
+  int color_id;
+  /** #GeometryNodeMovePrimitiveGizmoDrawStyle. */
+  int draw_style;
+} NodeGeometryMovePrimitiveGizmo;
+
 typedef struct NodeGeometryDialGizmo {
   /** #GeometryNodeGizmoColor. */
   int color_id;
@@ -3106,12 +3113,20 @@ typedef enum GeometryNodeLinearGizmoDrawStyle {
 typedef enum GeometryNodeMoveGizmoDrawStyle {
   GEO_NODE_MOVE_GIZMO_DRAW_STYLE_RING = 0,
   GEO_NODE_MOVE_GIZMO_DRAW_STYLE_CROSS = 1,
+  GEO_NODE_MOVE_GIZMO_DRAW_STYLE_PLANE = 2,
 } GeometryNodeMoveGizmoDrawStyle;
+
 typedef enum GeometryNodeMoveGizmoDrawOption {
   GEO_NODE_MOVE_GIZMO_DRAW_OPTION_FILL = 0,
   GEO_NODE_MOVE_GIZMO_DRAW_OPTION_FILL_SELECT = 1,
   GEO_NODE_MOVE_GIZMO_DRAW_OPTION_ALIGN_VIEW = 2,
 } GeometryNodeMoveGizmoDrawOption;
+
+typedef enum GeometryNodeMoveGizmoPrimitiveDrawStyle {
+  GEO_NODE_MOVE_PRIMITIVE_GIZMO_DRAW_STYLE_PLANE = 0,
+  GEO_NODE_MOVE_PRIMITIVE_GIZMO_DRAW_STYLE_CIRCLE = 1,
+  GEO_NODE_MOVE_PRIMITIVE_GIZMO_DRAW_STYLE_ANNULUS = 2,
+} GeometryNodeMoveGizmoPrimitiveDrawStyle;
 
 typedef enum NodeGeometryTransformMode {
   GEO_NODE_TRANSFORM_MODE_COMPONENTS = 0,

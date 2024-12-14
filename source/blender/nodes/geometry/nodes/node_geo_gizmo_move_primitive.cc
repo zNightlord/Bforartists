@@ -11,9 +11,9 @@
 #include "UI_interface.hh"
 #include "UI_resources.hh"
 
-namespace blender::nodes::node_geo_gizmo_move_cc {
+namespace blender::nodes::node_geo_gizmo_move_primitive_cc {
 
-NODE_STORAGE_FUNCS(NodeGeometryMoveGizmo)
+NODE_STORAGE_FUNCS(NodeGeometryMovePrimitiveGizmo)
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
@@ -21,12 +21,13 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_input<decl::Vector>("Position").subtype(PROP_TRANSLATION);
   b.add_input<decl::Vector>("Direction").default_value({0, 0, 1}).subtype(PROP_XYZ);
   b.add_input<decl::Float>("Scale").default_value(1.0f);
+
   b.add_output<decl::Geometry>("Transform");
 }
 
 static void node_init(bNodeTree * /*tree*/, bNode *node)
 {
-  NodeGeometryMoveGizmo *storage = MEM_cnew<NodeGeometryMoveGizmo>(__func__);
+  NodeGeometryMovePrimitiveGizmo *storage = MEM_cnew<NodeGeometryMovePrimitiveGizmo>(__func__);
   node->storage = storage;
 }
 
@@ -34,7 +35,6 @@ static void node_layout(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
 {
   uiItemR(layout, ptr, "color_id", UI_ITEM_NONE, "", ICON_NONE);
   uiItemR(layout, ptr, "draw_style", UI_ITEM_NONE, "", ICON_NONE);
-  uiItemR(layout, ptr, "draw_option", UI_ITEM_NONE, "", ICON_NONE);
 }
 
 static void node_rna(StructRNA *srna)
@@ -50,23 +50,16 @@ static void node_rna(StructRNA *srna)
                     "draw_style",
                     "Draw Style",
                     "",
-                    rna_enum_geometry_nodes_move_gizmo_draw_style_items,
+                    rna_enum_geometry_nodes_move_primitive_gizmo_draw_style_items,
                     NOD_storage_enum_accessors(draw_style));
-
-  RNA_def_node_enum(srna,
-                    "draw_option",
-                    "Draw Option",
-                    "",
-                    rna_enum_geometry_nodes_move_gizmo_draw_option_items,
-                    NOD_storage_enum_accessors(draw_option));
 }
 
 static void node_register()
 {
   static bke::bNodeType ntype;
-  geo_node_type_base(&ntype, GEO_NODE_GIZMO_MOVE, "Move Gizmo", NODE_CLASS_INTERFACE);
+  geo_node_type_base(&ntype, GEO_NODE_GIZMO_MOVE_PRIMITIVE, "Move Primitive Gizmo", NODE_CLASS_INTERFACE);
   bke::node_type_storage(
-      &ntype, "NodeGeometryMoveGizmo", node_free_standard_storage, node_copy_standard_storage);
+      &ntype, "NodeGeometryMovePrimitiveGizmo", node_free_standard_storage, node_copy_standard_storage);
   ntype.declare = node_declare;
   ntype.draw_buttons = node_layout;
   ntype.initfunc = node_init;
@@ -76,4 +69,4 @@ static void node_register()
 }
 NOD_REGISTER_NODE(node_register)
 
-}  // namespace blender::nodes::node_geo_gizmo_move_cc
+}  // namespace blender::nodes::node_geo_gizmo_move_primitive_cc

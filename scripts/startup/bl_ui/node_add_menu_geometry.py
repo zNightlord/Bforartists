@@ -319,6 +319,7 @@ class NODE_MT_geometry_node_GEO_INPUT_GIZMO(Menu):
         node_add_menu.add_node_type(layout, "GeometryNodeGizmoDial")
         node_add_menu.add_node_type(layout, "GeometryNodeGizmoLinear")
         node_add_menu.add_node_type(layout, "GeometryNodeGizmoMove")
+        node_add_menu.add_node_type(layout, "GeometryNodeGizmoMovePrimitive")
         node_add_menu.add_node_type(layout, "GeometryNodeGizmoTransform")
         node_add_menu.draw_assets_for_catalog(layout, self.bl_label)
 
