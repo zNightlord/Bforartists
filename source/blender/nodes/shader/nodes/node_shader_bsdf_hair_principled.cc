@@ -198,6 +198,17 @@ static int node_shader_gpu_hair_principled(GPUMaterial *mat,
                                            GPUNodeStack *in,
                                            GPUNodeStack *out)
 {
+  /* Normals */
+  GPUNodeLink *N;
+  GPU_link(mat, "world_normals_get", &N);
+
+  /* Hair info */
+  GPUNodeLink *is_strand, *intercept, *thickness, *T, *hair_random;
+  GPU_link(mat, "node_hair_info", &is_strand, &intercept, &thickness, &T, &hair_random);
+
+  if (!in[12].link) {
+    in[12].link = hair_random;
+  }
   GPU_material_flag_set(mat, GPU_MATFLAG_DIFFUSE | GPU_MATFLAG_GLOSSY);
 
   return GPU_stack_link(mat, node, "node_bsdf_hair_principled", in, out);
