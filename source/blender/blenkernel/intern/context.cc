@@ -88,6 +88,7 @@ struct bContext {
   /* data context */
   struct {
     Main *main;
+    Scene *sequence;
     Scene *scene;
 
     int recursion;
@@ -1022,6 +1023,9 @@ void CTX_wm_manager_set(bContext *C, wmWindowManager *wm)
 void CTX_wm_window_set(bContext *C, wmWindow *win)
 {
   C->wm.window = win;
+  if (win) {
+    C->data.sequence = win->sequence;
+  }
   if (win) {
     C->data.scene = win->scene;
   }

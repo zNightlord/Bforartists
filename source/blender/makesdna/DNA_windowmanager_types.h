@@ -283,6 +283,8 @@ typedef struct wmWindow {
   /** Parent window. */
   struct wmWindow *parent;
 
+  /** Active sequence displayed in this window. */
+  struct Scene *sequence;
   /** Active scene displayed in this window. */
   struct Scene *scene;
   /** Temporary when switching. */
