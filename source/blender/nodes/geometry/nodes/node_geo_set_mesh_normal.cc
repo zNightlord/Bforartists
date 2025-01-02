@@ -1,9 +1,8 @@
-/* SPDX-FileCopyrightText: 2023 Blender Authors
+/* SPDX-FileCopyrightText: 2025 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BKE_curves.hh"
-#include "BKE_grease_pencil.hh"
+#include "BKE_mesh.hh"
 
 #include "UI_interface.hh"
 #include "UI_resources.hh"
@@ -16,106 +15,59 @@
 
 namespace blender::nodes::node_geo_set_mesh_normal_cc {
 
+enum class Mode {
+  Free = 0,
+  SmoothFanSpace = 1,
+};
+
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Geometry>("Curve").supported_type({GeometryComponent::Type::Mesh});
+  b.add_input<decl::Geometry>("Mesh").supported_type({GeometryComponent::Type::Mesh});
   b.add_input<decl::Bool>("Selection").default_value(true).hide_value().field_on_all();
-  auto &normal = b.add_input<decl::Vector>("Normal")
-                     .subtype(PROP_XYZ)
-                     .implicit_field(nodes::implicit_field_inputs::normal)
-                     .hide_value();
-  b.add_output<decl::Geometry>("Curve").propagate_all();
-
-  const bNode *node = b.node_or_null();
-  if (node != nullptr) {
-    const NormalMode mode = NormalMode(node->custom1);
-    normal.available(mode == NORMAL_MODE_FREE);
-  }
+  b.add_input<decl::Vector>("Normal")
+      .subtype(PROP_XYZ)
+      .implicit_field(nodes::implicit_field_inputs::normal)
+      .hide_value();
+  b.add_output<decl::Geometry>("Mesh").propagate_all();
 }
 
 static void node_layout(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
 {
+  const bNode &node = *static_cast<const bNode *>(ptr->data);
   uiItemR(layout, ptr, "mode", UI_ITEM_NONE, "", ICON_NONE);
 }
 
 static void node_init(bNodeTree * /*tree*/, bNode *node)
 {
-  node->custom1 = NORMAL_MODE_MINIMUM_TWIST;
+  node->custom1 = int16_t(Mode::Free);
 }
 
-static void set_mesh_normal(bke::CurvesGeometry &curves,
-                            const NormalMode mode,
-                            const fn::FieldContext &curve_context,
-                            const fn::FieldContext &point_context,
-                            const Field<bool> &selection_field,
-                            const Field<float3> &custom_normal)
-{
-  /* First evaluate the normal modes without changing the geometry, since that will influence the
-   * result of the "Normal" node if used in the input to the custom normal field evaluation. */
-  fn::FieldEvaluator evaluator(curve_context, curves.curves_num());
-  evaluator.set_selection(selection_field);
-  evaluator.evaluate();
-  const IndexMask curve_mask = evaluator.get_evaluated_selection_as_mask();
-
-  if (mode == NORMAL_MODE_FREE) {
-    bke::try_capture_field_on_geometry(curves.attributes_for_write(),
-                                       point_context,
-                                       "custom_normal",
-                                       AttrDomain::Point,
-                                       Field<bool>(std::make_shared<bke::EvaluateOnDomainInput>(
-                                           selection_field, AttrDomain::Curve)),
-                                       custom_normal);
-  }
-
-  index_mask::masked_fill(curves.normal_mode_for_write(), int8_t(mode), curve_mask);
-
-  curves.tag_normals_changed();
-}
-
-static void set_grease_pencil_normal(GreasePencil &grease_pencil,
-                                     const NormalMode mode,
-                                     const Field<bool> &selection_field,
-                                     const Field<float3> &custom_normal)
-{
-  using namespace blender::bke::greasepencil;
-  for (const int layer_index : grease_pencil.layers().index_range()) {
-    Drawing *drawing = grease_pencil.get_eval_drawing(grease_pencil.layer(layer_index));
-    if (drawing == nullptr) {
-      continue;
-    }
-    set_mesh_normal(
-        drawing->strokes_for_write(),
-        mode,
-        bke::GreasePencilLayerFieldContext(grease_pencil, AttrDomain::Curve, layer_index),
-        bke::GreasePencilLayerFieldContext(grease_pencil, AttrDomain::Point, layer_index),
-        selection_field,
-        custom_normal);
-  }
-}
+static void set_mesh_normal(Mesh &mesh, const Mode mode, const Field<float3> &custom_normal) {}
 
 static void node_geo_exec(GeoNodeExecParams params)
 {
-  const NormalMode mode = static_cast<NormalMode>(params.node().custom1);
-
-  GeometrySet geometry_set = params.extract_input<GeometrySet>("Curve");
-  Field<bool> selection_field = params.extract_input<Field<bool>>("Selection");
-  Field<float3> custom_normal;
-  if (mode == NORMAL_MODE_FREE) {
-    custom_normal = params.extract_input<Field<float3>>("Normal");
-  }
+  const bNode &node = params.node();
+  const Mode mode = static_cast<Mode>(node.custom1);
+  GeometrySet geometry_set = params.extract_input<GeometrySet>("Mesh");
+  fn::Field<float3> custom_normal = params.extract_input<fn::Field<float3>>("Normal");
 
   geometry_set.modify_geometry_sets([&](GeometrySet &geometry_set) {
-    if (Curves *curves_id = geometry_set.get_curves_for_write()) {
-      bke::CurvesGeometry &curves = curves_id->geometry.wrap();
-      set_mesh_normal(curves,
-                      mode,
-                      bke::CurvesFieldContext(*curves_id, AttrDomain::Curve),
-                      bke::CurvesFieldContext(*curves_id, AttrDomain::Point),
-                      selection_field,
-                      custom_normal);
-    }
-    if (GreasePencil *grease_pencil = geometry_set.get_grease_pencil_for_write()) {
-      set_grease_pencil_normal(*grease_pencil, mode, selection_field, custom_normal);
+    if (Mesh *mesh = geometry_set.get_mesh_for_write()) {
+      switch (mode) {
+        case Mode::Free: {
+          const bke::AttrDomain domain = bke::AttrDomain(node.custom2);
+          bke::try_capture_field_on_geometry(mesh->attributes_for_write(),
+                                             bke::MeshFieldContext(*mesh, domain),
+                                             "custom_normal",
+                                             domain,
+                                             fn::make_constant_field(true),
+                                             custom_normal);
+          break;
+        }
+        case Mode::SmoothFanSpace: {
+          BKE_mesh_set_custom_normals_normalized(mesh, ) break;
+        }
+      }
     }
   });
 
