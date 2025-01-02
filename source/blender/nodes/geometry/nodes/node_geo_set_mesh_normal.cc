@@ -17,13 +17,12 @@ namespace blender::nodes::node_geo_set_mesh_normal_cc {
 
 enum class Mode {
   Free = 0,
-  SmoothFanSpace = 1,
+  CornerFanSpace = 1,
 };
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
   b.add_input<decl::Geometry>("Mesh").supported_type({GeometryComponent::Type::Mesh});
-  b.add_input<decl::Bool>("Selection").default_value(true).hide_value().field_on_all();
   b.add_input<decl::Vector>("Normal")
       .subtype(PROP_XYZ)
       .implicit_field(nodes::implicit_field_inputs::normal)
@@ -35,14 +34,16 @@ static void node_layout(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
 {
   const bNode &node = *static_cast<const bNode *>(ptr->data);
   uiItemR(layout, ptr, "mode", UI_ITEM_NONE, "", ICON_NONE);
+  if (Mode(node.custom1) == Mode::Free) {
+    uiItemR(layout, ptr, "domain", UI_ITEM_NONE, "", ICON_NONE);
+  }
 }
 
 static void node_init(bNodeTree * /*tree*/, bNode *node)
 {
   node->custom1 = int16_t(Mode::Free);
+  node->custom2 = int16_t(bke::AttrDomain::Point);
 }
-
-static void set_mesh_normal(Mesh &mesh, const Mode mode, const Field<float3> &custom_normal) {}
 
 static void node_geo_exec(GeoNodeExecParams params)
 {
@@ -64,8 +65,14 @@ static void node_geo_exec(GeoNodeExecParams params)
                                              custom_normal);
           break;
         }
-        case Mode::SmoothFanSpace: {
-          BKE_mesh_set_custom_normals_normalized(mesh, ) break;
+        case Mode::CornerFanSpace: {
+          const bke::MeshFieldContext context(*mesh, bke::AttrDomain::Corner);
+          fn::FieldEvaluator evaluator(context, mesh->corners_num);
+          Array<float3> corner_normals(mesh->corners_num);
+          evaluator.add_with_destination<float3>(custom_normal, corner_normals);
+          evaluator.evaluate();
+          BKE_mesh_set_custom_normals_normalized(mesh, corner_normals);
+          break;
         }
       }
     }
@@ -76,12 +83,35 @@ static void node_geo_exec(GeoNodeExecParams params)
 
 static void node_rna(StructRNA *srna)
 {
+  static const EnumPropertyItem mode_items[] = {
+      {int(Mode::Free),
+       "Free",
+       0,
+       "Free",
+       "Store custom normals as simple vectors in the local space of the mesh. Values are not "
+       "necessarily updated automatically later on as the mesh is deformed."},
+      {int(Mode::CornerFanSpace),
+       "CORNER_FAN_SPACE",
+       0,
+       "Corner Fan Space",
+       "Store normals in a deformation independent custom transformation space. This method is "
+       "slower, but can be better when subsequent operations change the mesh without handling "
+       "normals specifically."},
+      {0, nullptr, 0, nullptr, nullptr},
+  };
+
   RNA_def_node_enum(srna,
                     "mode",
                     "Mode",
-                    "Mode for curve normal evaluation",
-                    rna_enum_curve_normal_mode_items,
+                    "Storage mode for custom normal data",
+                    mode_items,
                     NOD_inline_enum_accessors(custom1));
+  RNA_def_node_enum(srna,
+                    "domain",
+                    "Domain",
+                    "Attribute domain to store free custom normals",
+                    rna_enum_attribute_domain_only_mesh_no_edge_items,
+                    NOD_inline_enum_accessors(custom2));
 }
 
 static void node_register()
