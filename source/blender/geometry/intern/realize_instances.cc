@@ -1615,9 +1615,10 @@ static void execute_realize_mesh_task(const RealizeInstancesOptions &options,
       }
     }
     else {
-      all_dst_custom_normals.span.typed<float3>()
-          .slice(domain_to_range(all_dst_custom_normals.domain))
-          .copy_from(std::get<Span<float3>>(mesh_info.custom_normal));
+      const IndexRange dst_range = domain_to_range(all_dst_custom_normals.domain);
+      copy_transformed_normals(std::get<Span<float3>>(mesh_info.custom_normal),
+                               task.transform,
+                               all_dst_custom_normals.span.typed<float3>().slice(dst_range));
     }
   }
 
