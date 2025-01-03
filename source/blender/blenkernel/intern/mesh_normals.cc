@@ -284,6 +284,7 @@ blender::Span<blender::float3> Mesh::vert_normals() const
     if (const GAttributeReader custom = this->attributes().lookup("custom_normal")) {
       if (custom.domain == AttrDomain::Point && custom.varray.type().is<float3>()) {
         r_data.store_varray(custom.varray.typed<float3>());
+        return;
       }
     }
     const Span<float3> positions = this->vert_positions();
@@ -305,6 +306,7 @@ blender::Span<blender::float3> Mesh::face_normals() const
     if (const GAttributeReader custom = this->attributes().lookup("custom_normal")) {
       if (custom.domain == AttrDomain::Face && custom.varray.type().is<float3>()) {
         r_data.store_varray(custom.varray.typed<float3>());
+        return;
       }
     }
     const Span<float3> positions = this->vert_positions();
@@ -343,6 +345,7 @@ blender::Span<blender::float3> Mesh::corner_normals() const
         const GAttributeReader custom = attributes.lookup("custom_normal");
         if (custom && custom.varray.type().is<float3>()) {
           r_data.store_varray(custom.varray.typed<float3>());
+          return;
         }
         MutableSpan<float3> data = r_data.ensure_vector_size(this->corners_num);
         const VArraySpan sharp_edges = *attributes.lookup<bool>("sharp_edge", AttrDomain::Edge);
