@@ -71,7 +71,7 @@ static void node_geo_exec(GeoNodeExecParams params)
           Array<float3> corner_normals(mesh->corners_num);
           evaluator.add_with_destination<float3>(custom_normal, corner_normals);
           evaluator.evaluate();
-          bke::mesh_set_custom_normals_normalized(*mesh, corner_normals);
+          bke::mesh_set_custom_normals(*mesh, corner_normals);
           break;
         }
       }

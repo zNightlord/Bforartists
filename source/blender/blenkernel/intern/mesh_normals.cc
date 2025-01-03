@@ -49,13 +49,47 @@ namespace blender::bke {
 
 void mesh_vert_normals_assign(Mesh &mesh, Span<float3> vert_normals)
 {
-  mesh.runtime->vert_normals_cache.ensure([&](Vector<float3> &r_data) { r_data = vert_normals; });
+  mesh.runtime->vert_normals_cache.ensure([&](NormalsCache &r_data) {
+    r_data.ensure_vector_size(vert_normals.size()).copy_from(vert_normals);
+  });
 }
 
 void mesh_vert_normals_assign(Mesh &mesh, Vector<float3> vert_normals)
 {
   mesh.runtime->vert_normals_cache.ensure(
-      [&](Vector<float3> &r_data) { r_data = std::move(vert_normals); });
+      [&](NormalsCache &r_data) { r_data.store_vector(std::move(vert_normals)); });
+}
+
+MutableSpan<float3> NormalsCache::ensure_vector_size(const int size)
+{
+  if (auto *vector = std::get_if<Vector<float3>>(&data_)) {
+    vector->resize(size);
+  }
+  data_ = Vector<float3>(size);
+  return std::get<Vector<float3>>(data_).as_mutable_span();
+}
+
+Span<float3> NormalsCache::get_span() const
+{
+  if (const auto *vector = std::get_if<Vector<float3>>(&data_)) {
+    return vector->as_span();
+  }
+  return std::get<Span<float3>>(data_);
+}
+
+void NormalsCache::store_varray(const VArray<float3> &data)
+{
+  if (data.is_span()) {
+    data_ = data.get_internal_span();
+  }
+  else {
+    data.materialize(this->ensure_vector_size(data.size()));
+  }
+}
+
+void NormalsCache::store_vector(Vector<float3> &&data)
+{
+  data_ = std::move(data);
 }
 
 }  // namespace blender::bke
@@ -246,89 +280,71 @@ blender::Span<blender::float3> Mesh::vert_normals() const
 {
   using namespace blender;
   using namespace blender::bke;
-  // TODO: Put the result of this attribute lookup into the cache.
-  if (const GAttributeReader custom_normals = this->attributes().lookup("custom_normal")) {
-    if (custom_normals.domain == AttrDomain::Point && custom_normals.varray.type().is<float3>()) {
-      BLI_assert(custom_normals.varray.is_span());
-      if (custom_normals.varray.is_span()) {
-        return custom_normals.varray.typed<float3>().get_internal_span();
+  this->runtime->vert_normals_cache.ensure([&](NormalsCache &r_data) {
+    if (const GAttributeReader custom = this->attributes().lookup("custom_normal")) {
+      if (custom.domain == AttrDomain::Point && custom.varray.type().is<float3>()) {
+        r_data.store_varray(custom.varray.typed<float3>());
       }
     }
-  }
-  if (this->runtime->vert_normals_cache.is_cached()) {
-    return this->runtime->vert_normals_cache.data();
-  }
-  const Span<float3> positions = this->vert_positions();
-  const OffsetIndices faces = this->faces();
-  const Span<int> corner_verts = this->corner_verts();
-  const Span<float3> face_normals = this->face_normals();
-  const GroupedSpan<int> vert_to_face = this->vert_to_face_map();
-  this->runtime->vert_normals_cache.ensure([&](Vector<float3> &r_data) {
-    r_data.reinitialize(positions.size());
-    mesh::normals_calc_verts(positions, faces, corner_verts, vert_to_face, face_normals, r_data);
+    const Span<float3> positions = this->vert_positions();
+    const OffsetIndices faces = this->faces();
+    const Span<int> corner_verts = this->corner_verts();
+    const Span<float3> face_normals = this->face_normals();
+    const GroupedSpan<int> vert_to_face = this->vert_to_face_map();
+    MutableSpan<float3> data = r_data.ensure_vector_size(positions.size());
+    mesh::normals_calc_verts(positions, faces, corner_verts, vert_to_face, face_normals, data);
   });
-  return this->runtime->vert_normals_cache.data();
+  return this->runtime->vert_normals_cache.data().get_span();
 }
 
 blender::Span<blender::float3> Mesh::face_normals() const
 {
   using namespace blender;
   using namespace blender::bke;
-  if (const GAttributeReader custom_normals = this->attributes().lookup("custom_normal")) {
-    if (custom_normals.domain == AttrDomain::Face && custom_normals.varray.type().is<float3>()) {
-      BLI_assert(custom_normals.varray.is_span());
-      if (custom_normals.varray.is_span()) {
-        return custom_normals.varray.typed<float3>().get_internal_span();
+  this->runtime->face_normals_cache.ensure([&](NormalsCache &r_data) {
+    if (const GAttributeReader custom = this->attributes().lookup("custom_normal")) {
+      if (custom.domain == AttrDomain::Face && custom.varray.type().is<float3>()) {
+        r_data.store_varray(custom.varray.typed<float3>());
       }
     }
-  }
-  this->runtime->face_normals_cache.ensure([&](Vector<float3> &r_data) {
     const Span<float3> positions = this->vert_positions();
     const OffsetIndices faces = this->faces();
     const Span<int> corner_verts = this->corner_verts();
-    r_data.reinitialize(faces.size());
-    bke::mesh::normals_calc_faces(positions, faces, corner_verts, r_data);
+    MutableSpan<float3> data = r_data.ensure_vector_size(faces.size());
+    bke::mesh::normals_calc_faces(positions, faces, corner_verts, data);
   });
-  return this->runtime->face_normals_cache.data();
+  return this->runtime->face_normals_cache.data().get_span();
 }
 
 blender::Span<blender::float3> Mesh::corner_normals() const
 {
   using namespace blender;
   using namespace blender::bke;
-  Span<float3> result;
-  this->runtime->corner_normals_cache.ensure([&](Vector<float3> &r_data) {
-    r_data.reinitialize(this->corners_num);
+  this->runtime->corner_normals_cache.ensure([&](NormalsCache &r_data) {
     const OffsetIndices<int> faces = this->faces();
     switch (this->normals_domain()) {
       case MeshNormalDomain::Point: {
-        array_utils::gather(this->vert_normals(), this->corner_verts(), r_data.as_mutable_span());
+        MutableSpan<float3> data = r_data.ensure_vector_size(this->corners_num);
+        array_utils::gather(this->vert_normals(), this->corner_verts(), data);
         break;
       }
       case MeshNormalDomain::Face: {
+        MutableSpan<float3> data = r_data.ensure_vector_size(this->corners_num);
         const Span<float3> face_normals = this->face_normals();
         threading::parallel_for(faces.index_range(), 1024, [&](const IndexRange range) {
           for (const int i : range) {
-            r_data.as_mutable_span().slice(faces[i]).fill(face_normals[i]);
+            data.slice(faces[i]).fill(face_normals[i]);
           }
         });
         break;
       }
       case MeshNormalDomain::Corner: {
         const AttributeAccessor attributes = this->attributes();
-        const GAttributeReader custom_normals = attributes.lookup("custom_normal");
-        if (custom_normals && custom_normals.varray.type().is<float3>()) {
-          if (custom_normals.domain == AttrDomain::Corner) {
-            BLI_assert(custom_normals.varray.is_span());
-            if (custom_normals.varray.is_span()) {
-              result = custom_normals.varray.typed<float3>().get_internal_span();
-              return;
-            }
-          }
-          else {
-            BLI_assert_unreachable();
-          }
+        const GAttributeReader custom = attributes.lookup("custom_normal");
+        if (custom && custom.varray.type().is<float3>()) {
+          r_data.store_varray(custom.varray.typed<float3>());
         }
+        MutableSpan<float3> data = r_data.ensure_vector_size(this->corners_num);
         const VArraySpan sharp_edges = *attributes.lookup<bool>("sharp_edge", AttrDomain::Edge);
         const VArraySpan sharp_faces = *attributes.lookup<bool>("sharp_face", AttrDomain::Face);
         mesh::normals_calc_corners(this->vert_positions(),
@@ -341,14 +357,13 @@ blender::Span<blender::float3> Mesh::corner_normals() const
                                    this->face_normals(),
                                    sharp_edges,
                                    sharp_faces,
-                                   VArraySpan<short2>(custom_normals.varray.typed<short2>()),
+                                   VArraySpan<short2>(custom.varray.typed<short2>()),
                                    nullptr,
-                                   r_data);
-        result = r_data;
+                                   data);
       }
     }
   });
-  return result;
+  return this->runtime->corner_normals_cache.data().get_span();
 }
 
 void BKE_lnor_spacearr_init(MLoopNorSpaceArray *lnors_spacearr,

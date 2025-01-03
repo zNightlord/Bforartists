@@ -818,8 +818,8 @@ static bool mesh_topology_count_matches(const Mesh &a, const Mesh &b)
          a.verts_num == b.verts_num;
 }
 
-static const SharedCache<Vector<float3>> &vert_normals_cache_eval(const Object &object_orig,
-                                                                  const Object &object_eval)
+static const SharedCache<NormalsCache> &vert_normals_cache_eval(const Object &object_orig,
+                                                                const Object &object_eval)
 {
   const SculptSession &ss = *object_orig.sculpt;
   const Mesh &mesh_orig = *static_cast<const Mesh *>(object_orig.data);
@@ -842,15 +842,15 @@ static const SharedCache<Vector<float3>> &vert_normals_cache_eval(const Object &
 
   return mesh_orig.runtime->vert_normals_cache;
 }
-static SharedCache<Vector<float3>> &vert_normals_cache_eval_for_write(Object &object_orig,
-                                                                      Object &object_eval)
+static SharedCache<NormalsCache> &vert_normals_cache_eval_for_write(Object &object_orig,
+                                                                    Object &object_eval)
 {
-  return const_cast<SharedCache<Vector<float3>> &>(
+  return const_cast<SharedCache<NormalsCache> &>(
       vert_normals_cache_eval(object_orig, object_eval));
 }
 
-static const SharedCache<Vector<float3>> &face_normals_cache_eval(const Object &object_orig,
-                                                                  const Object &object_eval)
+static const SharedCache<NormalsCache> &face_normals_cache_eval(const Object &object_orig,
+                                                                const Object &object_eval)
 {
   const SculptSession &ss = *object_orig.sculpt;
   const Mesh &mesh_orig = *static_cast<const Mesh *>(object_orig.data);
@@ -873,10 +873,10 @@ static const SharedCache<Vector<float3>> &face_normals_cache_eval(const Object &
 
   return mesh_orig.runtime->face_normals_cache;
 }
-static SharedCache<Vector<float3>> &face_normals_cache_eval_for_write(Object &object_orig,
-                                                                      Object &object_eval)
+static SharedCache<NormalsCache> &face_normals_cache_eval_for_write(Object &object_orig,
+                                                                    Object &object_eval)
 {
-  return const_cast<SharedCache<Vector<float3>> &>(
+  return const_cast<SharedCache<NormalsCache> &>(
       face_normals_cache_eval(object_orig, object_eval));
 }
 
@@ -972,10 +972,10 @@ static void update_normals_mesh(Object &object_orig,
   const Span<int> corner_verts = mesh.corner_verts();
   const GroupedSpan<int> vert_to_face_map = mesh.vert_to_face_map();
 
-  SharedCache<Vector<float3>> &vert_normals_cache = vert_normals_cache_eval_for_write(object_orig,
-                                                                                      object_eval);
-  SharedCache<Vector<float3>> &face_normals_cache = face_normals_cache_eval_for_write(object_orig,
-                                                                                      object_eval);
+  SharedCache<NormalsCache> &vert_normals_cache = vert_normals_cache_eval_for_write(object_orig,
+                                                                                    object_eval);
+  SharedCache<NormalsCache> &face_normals_cache = face_normals_cache_eval_for_write(object_orig,
+                                                                                    object_eval);
 
   VectorSet<int> boundary_faces;
   nodes_to_update.foreach_index([&](const int i) {
@@ -990,15 +990,16 @@ static void update_normals_mesh(Object &object_orig,
   threading::parallel_invoke(
       [&]() {
         if (face_normals_cache.is_dirty()) {
-          face_normals_cache.ensure([&](Vector<float3> &r_data) {
-            r_data.resize(faces.size());
-            bke::mesh::normals_calc_faces(positions, faces, corner_verts, r_data);
+          face_normals_cache.ensure([&](NormalsCache &r_data) {
+            MutableSpan<float3> data = r_data.ensure_vector_size(faces.size());
+            bke::mesh::normals_calc_faces(positions, faces, corner_verts, data);
           });
         }
         else {
-          face_normals_cache.update([&](Vector<float3> &r_data) {
-            calc_node_face_normals(positions, faces, corner_verts, nodes, nodes_to_update, r_data);
-            calc_boundary_face_normals(positions, faces, corner_verts, boundary_faces, r_data);
+          face_normals_cache.update([&](NormalsCache &r_data) {
+            MutableSpan<float3> data = r_data.ensure_vector_size(faces.size());
+            calc_node_face_normals(positions, faces, corner_verts, nodes, nodes_to_update, data);
+            calc_boundary_face_normals(positions, faces, corner_verts, boundary_faces, data);
           });
         }
       },
@@ -1009,19 +1010,20 @@ static void update_normals_mesh(Object &object_orig,
           boundary_verts.add_multiple(corner_verts.slice(faces[face]));
         }
       });
-  const Span<float3> face_normals = face_normals_cache.data();
+  const Span<float3> face_normals = face_normals_cache.data().get_span();
 
   if (vert_normals_cache.is_dirty()) {
-    vert_normals_cache.ensure([&](Vector<float3> &r_data) {
-      r_data.resize(positions.size());
+    vert_normals_cache.ensure([&](NormalsCache &r_data) {
+      MutableSpan<float3> data = r_data.ensure_vector_size(positions.size());
       mesh::normals_calc_verts(
-          positions, faces, corner_verts, vert_to_face_map, face_normals, r_data);
+          positions, faces, corner_verts, vert_to_face_map, face_normals, data);
     });
   }
   else {
-    vert_normals_cache.update([&](Vector<float3> &r_data) {
-      calc_node_vert_normals(vert_to_face_map, face_normals, nodes, nodes_to_update, r_data);
-      calc_boundary_vert_normals(vert_to_face_map, face_normals, boundary_verts, r_data);
+    vert_normals_cache.update([&](NormalsCache &r_data) {
+      MutableSpan<float3> data = r_data.ensure_vector_size(positions.size());
+      calc_node_vert_normals(vert_to_face_map, face_normals, nodes, nodes_to_update, data);
+      calc_boundary_vert_normals(vert_to_face_map, face_normals, boundary_verts, data);
     });
   }
 }
@@ -2454,21 +2456,21 @@ Span<float3> vert_normals_eval(const Depsgraph &depsgraph, const Object &object_
 {
   const Object &object_eval = *DEG_get_evaluated_object(&depsgraph,
                                                         &const_cast<Object &>(object_orig));
-  return vert_normals_cache_eval(object_orig, object_eval).data();
+  return vert_normals_cache_eval(object_orig, object_eval).data().get_span();
 }
 
 Span<float3> vert_normals_eval_from_eval(const Object &object_eval)
 {
   BLI_assert(!DEG_is_original_object(&object_eval));
   Object &object_orig = *DEG_get_original_object(&const_cast<Object &>(object_eval));
-  return vert_normals_cache_eval(object_orig, object_eval).data();
+  return vert_normals_cache_eval(object_orig, object_eval).data().get_span();
 }
 
 Span<float3> face_normals_eval_from_eval(const Object &object_eval)
 {
   BLI_assert(!DEG_is_original_object(&object_eval));
   Object &object_orig = *DEG_get_original_object(&const_cast<Object &>(object_eval));
-  return face_normals_cache_eval(object_orig, object_eval).data();
+  return face_normals_cache_eval(object_orig, object_eval).data().get_span();
 }
 
 }  // namespace blender::bke::pbvh

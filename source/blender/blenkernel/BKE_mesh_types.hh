@@ -10,6 +10,7 @@
 
 #include <memory>
 #include <mutex>
+#include <variant>
 
 #include "BLI_array.hh"
 #include "BLI_bit_vector.hh"
@@ -19,6 +20,7 @@
 #include "BLI_math_vector_types.hh"
 #include "BLI_shared_cache.hh"
 #include "BLI_vector.hh"
+#include "BLI_virtual_array_fwd.hh"
 
 #include "DNA_customdata_types.h"
 
@@ -106,6 +108,16 @@ struct TrianglesCache {
   void unfreeze();
   /** Call instead of `data.tag_dirty()`. */
   void tag_dirty();
+};
+
+class NormalsCache {
+  std::variant<Vector<float3>, Span<float3>> data_;
+
+ public:
+  MutableSpan<float3> ensure_vector_size(const int size);
+  Span<float3> get_span() const;
+  void store_varray(const VArray<float3> &varray);
+  void store_vector(Vector<float3> &&varray);
 };
 
 struct MeshRuntime {
@@ -201,11 +213,11 @@ struct MeshRuntime {
   SubsurfRuntimeData *subsurf_runtime_data = nullptr;
 
   /** Lazily computed vertex normals (#Mesh::vert_normals()). */
-  SharedCache<Vector<float3>> vert_normals_cache;
+  SharedCache<NormalsCache> vert_normals_cache;
   /** Lazily computed face normals (#Mesh::face_normals()). */
-  SharedCache<Vector<float3>> face_normals_cache;
+  SharedCache<NormalsCache> face_normals_cache;
   /** Lazily computed face corner normals (#Mesh::corner_normals()). */
-  SharedCache<Vector<float3>> corner_normals_cache;
+  SharedCache<NormalsCache> corner_normals_cache;
 
   /**
    * Cache of offsets for vert to face/corner maps. The same offsets array is used to group
