@@ -92,6 +92,10 @@ struct MeshElementStartIndices {
   int loop = 0;
 };
 
+using RealizeAsFree = VArraySpan<float3>;
+using RealizeAsCornerFanSpace = Span<short2>;
+using MeshCustomNormalInfo = std::variant<RealizeAsFree, RealizeAsCornerFanSpace>;
+
 struct MeshRealizeInfo {
   const Mesh *mesh = nullptr;
   Span<float3> positions;
@@ -107,6 +111,8 @@ struct MeshRealizeInfo {
   /** Vertex ids stored on the mesh. If there are no ids, this #Span is empty. */
   Span<int> stored_vertex_ids;
   VArray<int> material_indices;
+  /** Custom normals are rotated based on each instance's transformation. */
+  MeshCustomNormalInfo custom_normal;
 };
 
 struct RealizeMeshTask {
@@ -208,6 +214,10 @@ struct AllPointCloudsInfo {
   bool create_radius_attribute = false;
 };
 
+struct CornerFanSpaceCustomNormal {};
+using FreeCustomNormal = bke::AttrDomain;
+using CustomNormalInfo = std::variant<CornerFanSpaceCustomNormal, FreeCustomNormal>;
+
 struct AllMeshesInfo {
   /** Ordering of all attributes that are propagated to the output mesh generically. */
   OrderedAttributes attributes;
@@ -219,6 +229,7 @@ struct AllMeshesInfo {
   VectorSet<Material *> materials;
   bool create_id_attribute = false;
   bool create_material_index_attribute = false;
+  CustomNormalInfo custom_normal_info;
 
   /** True if we know that there are no loose edges in any of the input meshes. */
   bool no_loose_edges_hint = false;
@@ -1299,6 +1310,7 @@ static OrderedAttributes gather_generic_mesh_attributes_to_propagate(
   attributes_to_propagate.remove(".edge_verts");
   attributes_to_propagate.remove(".corner_vert");
   attributes_to_propagate.remove(".corner_edge");
+  attributes_to_propagate.remove("custom_normal");
   r_create_id = attributes_to_propagate.pop_try("id").has_value();
   r_create_material_index = attributes_to_propagate.pop_try("material_index").has_value();
   OrderedAttributes ordered_attributes;
@@ -1349,6 +1361,43 @@ static AllMeshesInfo preprocess_meshes(const bke::GeometrySet &geometry_set,
       }
     }
   }
+
+  for (const Mesh *mesh : info.order) {
+    bke::AttributeAccessor attributes = mesh->attributes();
+    const std::optional<bke::AttributeMetaData> custom_normal = attributes.lookup_meta_data(
+        "custom_normal");
+    if (!custom_normal) {
+      continue;
+    }
+    if (custom_normal->data_type == CD_PROP_FLOAT3) {
+      if (custom_normal->domain == bke::AttrDomain::Edge) {
+        /* Skip invalid storage on the edge domain.*/
+        continue;
+      }
+      if (std::get_if<CornerFanSpaceCustomNormal>(&info.custom_normal_info)) {
+        /* If any mesh has free custom normals, the result should have free normals too. */
+        info.custom_normal_info = FreeCustomNormal(bke::AttrDomain::Corner);
+      }
+      else if (auto *domain = std::get_if<FreeCustomNormal>(&info.custom_normal_info)) {
+        /* Use a domain that retains the all input information as necessary. */
+        *domain = bke::attribute_domain_highest_priority({*domain, custom_normal->domain});
+      }
+      else {
+        /* This is the first mesh with custom normals.*/
+        info.custom_normal_info = FreeCustomNormal(custom_normal->domain);
+      }
+    }
+    else if (*custom_normal == bke::AttributeMetaData{bke::AttrDomain::Corner, CD_PROP_INT16_2D}) {
+      if (auto *domain = std::get_if<FreeCustomNormal>(&info.custom_normal_info)) {
+        /* There is already a mesh with free custom normals. */
+        *domain = bke::AttrDomain::Corner;
+      }
+      else {
+        info.custom_normal_info = CornerFanSpaceCustomNormal();
+      }
+    }
+  }
+
   info.create_material_index_attribute |= info.materials.size() > 1;
   info.realize_info.reinitialize(info.order.size());
   for (const int mesh_index : info.realize_info.index_range()) {
@@ -1394,6 +1443,41 @@ static AllMeshesInfo preprocess_meshes(const bke::GeometrySet &geometry_set,
     }
     mesh_info.material_indices = *attributes.lookup_or_default<int>(
         "material_index", bke::AttrDomain::Face, 0);
+
+    const std::optional<bke::AttributeMetaData> custom_normal = attributes.lookup_meta_data(
+        "custom_normal");
+    if (std::get_if<CornerFanSpaceCustomNormal>(&info.custom_normal_info)) {
+      if (custom_normal == bke::AttributeMetaData{bke::AttrDomain::Corner, CD_PROP_INT16_2D}) {
+        mesh_info.custom_normal = RealizeAsCornerFanSpace(
+            attributes.lookup<short2>("custom_normal", bke::AttrDomain::Corner)
+                .varray.get_internal_span());
+      }
+    }
+    else if (const auto *domain = std::get_if<FreeCustomNormal>(&info.custom_normal_info)) {
+      if (custom_normal == bke::AttributeMetaData{bke::AttrDomain::Corner, CD_PROP_INT16_2D}) {
+        BLI_assert(domain == bke::AttrDomain::Corner);
+        mesh_info.custom_normal = mesh->corner_normals();
+      }
+      else if (custom_normal->data_type == CD_PROP_FLOAT3) {
+        mesh_info.custom_normal = *attributes.lookup<float3>("custom_normal", *domain);
+      }
+      else {
+        switch (*domain) {
+          case bke::AttrDomain::Point: {
+            mesh_info.custom_normal = mesh->vert_normals();
+            break;
+          }
+          case bke::AttrDomain::Face: {
+            mesh_info.custom_normal = mesh->face_normals();
+            break;
+          }
+          case bke::AttrDomain::Corner: {
+            mesh_info.custom_normal = mesh->corner_normals();
+            break;
+          }
+        }
+      }
+    }
   }
 
   info.no_loose_edges_hint = std::all_of(
@@ -1422,7 +1506,8 @@ static void execute_realize_mesh_task(const RealizeInstancesOptions &options,
                                       MutableSpan<int> all_dst_corner_verts,
                                       MutableSpan<int> all_dst_corner_edges,
                                       MutableSpan<int> all_dst_vertex_ids,
-                                      MutableSpan<int> all_dst_material_indices)
+                                      MutableSpan<int> all_dst_material_indices,
+                                      GSpanAttributeWriter &all_dst_custom_normals)
 {
   const MeshRealizeInfo &mesh_info = *task.mesh_info;
   const Mesh &mesh = *mesh_info.mesh;
@@ -1502,26 +1587,45 @@ static void execute_realize_mesh_task(const RealizeInstancesOptions &options,
                       all_dst_vertex_ids.slice(task.start_indices.vertex, mesh.verts_num));
   }
 
-  copy_generic_attributes_to_result(
-      mesh_info.attributes,
-      task.attribute_fallbacks,
-      ordered_attributes,
-      [&](const bke::AttrDomain domain) {
-        switch (domain) {
-          case bke::AttrDomain::Point:
-            return dst_vert_range;
-          case bke::AttrDomain::Edge:
-            return dst_edge_range;
-          case bke::AttrDomain::Face:
-            return dst_face_range;
-          case bke::AttrDomain::Corner:
-            return dst_loop_range;
-          default:
-            BLI_assert_unreachable();
-            return IndexRange();
-        }
-      },
-      dst_attribute_writers);
+  const auto domain_to_range = [&](const bke::AttrDomain domain) {
+    switch (domain) {
+      case bke::AttrDomain::Point:
+        return dst_vert_range;
+      case bke::AttrDomain::Edge:
+        return dst_edge_range;
+      case bke::AttrDomain::Face:
+        return dst_face_range;
+      case bke::AttrDomain::Corner:
+        return dst_loop_range;
+      default:
+        BLI_assert_unreachable();
+        return IndexRange();
+    }
+  };
+
+  if (all_dst_custom_normals) {
+    if (all_dst_custom_normals.span.type().is<short2>()) {
+      if (std::holds_alternative<std::monostate>(mesh_info.custom_normal)) {
+        all_dst_custom_normals.span.typed<short2>().slice(dst_loop_range).fill(short2(0));
+      }
+      else {
+        all_dst_custom_normals.span.typed<short2>()
+            .slice(dst_loop_range)
+            .copy_from(std::get<Span<short2>>(mesh_info.custom_normal));
+      }
+    }
+    else {
+      all_dst_custom_normals.span.typed<float3>()
+          .slice(domain_to_range(all_dst_custom_normals.domain))
+          .copy_from(std::get<Span<float3>>(mesh_info.custom_normal));
+    }
+  }
+
+  copy_generic_attributes_to_result(mesh_info.attributes,
+                                    task.attribute_fallbacks,
+                                    ordered_attributes,
+                                    domain_to_range,
+                                    dst_attribute_writers);
 }
 
 static void copy_vertex_group_names(Mesh &dst_mesh,
@@ -1621,6 +1725,17 @@ static void execute_realize_mesh_tasks(const RealizeInstancesOptions &options,
         "material_index", bke::AttrDomain::Face);
   }
 
+  GSpanAttributeWriter custom_normals;
+  if (std::get_if<CornerFanSpaceCustomNormal>(&all_meshes_info.custom_normal_info)) {
+    custom_normals = dst_attributes.lookup_or_add_for_write_only_span(
+        "custom_normal", bke::AttrDomain::Corner, CD_PROP_INT16_2D);
+  }
+  else if (const auto *domain = std::get_if<FreeCustomNormal>(&all_meshes_info.custom_normal_info))
+  {
+    custom_normals = dst_attributes.lookup_or_add_for_write_only_span(
+        "custom_normal", *domain, CD_PROP_FLOAT3);
+  }
+
   /* Prepare generic output attributes. */
   Vector<GSpanAttributeWriter> dst_attribute_writers;
   for (const int attribute_index : ordered_attributes.index_range()) {
@@ -1660,7 +1775,8 @@ static void execute_realize_mesh_tasks(const RealizeInstancesOptions &options,
                                 dst_corner_verts,
                                 dst_corner_edges,
                                 vertex_ids.span,
-                                material_indices.span);
+                                material_indices.span,
+                                custom_normals);
     }
   });
 
@@ -1670,6 +1786,7 @@ static void execute_realize_mesh_tasks(const RealizeInstancesOptions &options,
   }
   vertex_ids.finish();
   material_indices.finish();
+  custom_normals.finish();
 
   if (all_meshes_info.no_loose_edges_hint) {
     dst_mesh->tag_loose_edges_none();
@@ -2176,7 +2293,8 @@ static void execute_realize_grease_pencil_tasks(
   /* Allocate all layers. */
   dst_grease_pencil->add_layers_with_empty_drawings_for_eval(new_layers_num);
 
-  /* Transfer material pointers. The material indices are updated for each task separately. */
+  /* Transfer material pointers. The material indices are updated for each task separately.
+   */
   if (!all_grease_pencils_info.materials.is_empty()) {
     MEM_SAFE_FREE(dst_grease_pencil->material_array);
     dst_grease_pencil->material_array_num = all_grease_pencils_info.materials.size();
@@ -2302,8 +2420,8 @@ bke::GeometrySet realize_instances(bke::GeometrySet geometry_set,
 {
   /* The algorithm works in three steps:
    * 1. Preprocess each unique geometry that is instanced (e.g. each `Mesh`).
-   * 2. Gather "tasks" that need to be executed to realize the instances. Each task corresponds
-   * to instances of the previously preprocessed geometry.
+   * 2. Gather "tasks" that need to be executed to realize the instances. Each task
+   * corresponds to instances of the previously preprocessed geometry.
    * 3. Execute all tasks in parallel.
    */
 
