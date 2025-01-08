@@ -171,7 +171,6 @@ static void extract_normals_bm(const MeshRenderData &mr, MutableSpan<GPUType> no
     });
   }
   else {
-    // TODO
     const bke::MeshNormalDomain domain = mr.normals_domain;
     threading::parallel_for(IndexRange(bm.totface), 2048, [&](const IndexRange range) {
       for (const int face_index : range) {
@@ -182,10 +181,19 @@ static void extract_normals_bm(const MeshRenderData &mr, MutableSpan<GPUType> no
         if (domain == bke::MeshNormalDomain::Face || !BM_elem_flag_test(&face, BM_ELEM_SMOOTH)) {
           normals.slice(face_range).fill(convert_normal<GPUType>(bm_face_no_get(mr, &face)));
         }
-        else {
+        else if (domain == bke::MeshNormalDomain::Point) {
           for ([[maybe_unused]] const int i : IndexRange(face.len)) {
             const int index = BM_elem_index_get(loop);
             normals[index] = convert_normal<GPUType>(bm_vert_no_get(mr, loop->v));
+            loop = loop->next;
+          }
+        }
+        else {
+          BLI_assert(mr.bm_free_normal_offset_corner != -1);
+          for ([[maybe_unused]] const int i : IndexRange(face.len)) {
+            const int index = BM_elem_index_get(loop);
+            normals[index] = convert_normal<GPUType>(
+                float3(BM_ELEM_CD_GET_FLOAT_P(loop, mr.bm_free_normal_offset_corner)));
             loop = loop->next;
           }
         }

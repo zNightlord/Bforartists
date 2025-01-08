@@ -571,11 +571,22 @@ std::unique_ptr<MeshRenderData> mesh_render_data_create(Object &object,
     /* If there is no distinct cage, hide unmapped edges that can't be selected. */
     mr->hide_unmapped_edges = !do_final || &mesh == eval_cage;
 
+    mr->bm_free_normal_offset_vert = CustomData_get_offset_named(
+        &mr->bm->vdata, CD_PROP_FLOAT3, "custom_normal");
+    mr->bm_free_normal_offset_face = CustomData_get_offset_named(
+        &mr->bm->pdata, CD_PROP_FLOAT3, "custom_normal");
+    mr->bm_free_normal_offset_corner = CustomData_get_offset_named(
+        &mr->bm->ldata, CD_PROP_FLOAT3, "custom_normal");
+
     if (bke::EditMeshData *emd = mr->edit_data) {
       if (!emd->vert_positions.is_empty()) {
         mr->bm_vert_coords = mr->edit_data->vert_positions;
-        mr->bm_vert_normals = BKE_editmesh_cache_ensure_vert_normals(*mr->edit_bmesh, *emd);
-        mr->bm_face_normals = BKE_editmesh_cache_ensure_face_normals(*mr->edit_bmesh, *emd);
+        if (mr->bm_free_normal_offset_vert == -1) {
+          mr->bm_vert_normals = BKE_editmesh_cache_ensure_vert_normals(*mr->edit_bmesh, *emd);
+        }
+        if (mr->bm_free_normal_offset_face == -1) {
+          mr->bm_face_normals = BKE_editmesh_cache_ensure_face_normals(*mr->edit_bmesh, *emd);
+        }
       }
     }
 
