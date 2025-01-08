@@ -82,9 +82,9 @@ struct MeshRenderData {
   Span<float3> bm_vert_normals;
   Span<float3> bm_face_normals;
   Array<float3> bm_loop_normals;
-  int bm_free_normal_offset_vert;
-  int bm_free_normal_offset_face;
-  int bm_free_normal_offset_corner;
+  int bm_free_normal_offset_vert = -1;
+  int bm_free_normal_offset_face = -1;
+  int bm_free_normal_offset_corner = -1;
 
   const int *orig_index_vert;
   const int *orig_index_edge;

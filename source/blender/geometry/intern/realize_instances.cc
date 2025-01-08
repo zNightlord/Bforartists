@@ -1457,7 +1457,7 @@ static AllMeshesInfo preprocess_meshes(const bke::GeometrySet &geometry_set,
     }
     else if (const auto *domain = std::get_if<FreeCustomNormal>(&info.custom_normal_info)) {
       if (custom_normal == bke::AttributeMetaData{bke::AttrDomain::Corner, CD_PROP_INT16_2D}) {
-        BLI_assert(domain == bke::AttrDomain::Corner);
+        BLI_assert(*domain == bke::AttrDomain::Corner);
         mesh_info.custom_normal = mesh->corner_normals();
       }
       else if (custom_normal->data_type == CD_PROP_FLOAT3) {
