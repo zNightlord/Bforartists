@@ -22,7 +22,7 @@ enum class Mode {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Geometry>("Mesh").supported_type({GeometryComponent::Type::Mesh});
+  b.add_input<decl::Geometry>("Mesh").supported_type(GeometryComponent::Type::Mesh);
   b.add_input<decl::Vector>("Normal")
       .subtype(PROP_XYZ)
       .implicit_field(nodes::implicit_field_inputs::normal)
