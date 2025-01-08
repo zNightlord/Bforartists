@@ -2,6 +2,8 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+#include <variant>
+
 #include "GEO_join_geometries.hh"
 #include "GEO_realize_instances.hh"
 
@@ -94,7 +96,7 @@ struct MeshElementStartIndices {
 
 using RealizeAsFree = VArraySpan<float3>;
 using RealizeAsCornerFanSpace = Span<short2>;
-using MeshCustomNormalInfo = std::variant<RealizeAsFree, RealizeAsCornerFanSpace>;
+using MeshCustomNormalInfo = std::variant<std::monostate, RealizeAsFree, RealizeAsCornerFanSpace>;
 
 struct MeshRealizeInfo {
   const Mesh *mesh = nullptr;
@@ -1463,18 +1465,17 @@ static AllMeshesInfo preprocess_meshes(const bke::GeometrySet &geometry_set,
       }
       else {
         switch (*domain) {
-          case bke::AttrDomain::Point: {
+          case bke::AttrDomain::Point:
             mesh_info.custom_normal = mesh->vert_normals();
             break;
-          }
-          case bke::AttrDomain::Face: {
+          case bke::AttrDomain::Face:
             mesh_info.custom_normal = mesh->face_normals();
             break;
-          }
-          case bke::AttrDomain::Corner: {
+          case bke::AttrDomain::Corner:
             mesh_info.custom_normal = mesh->corner_normals();
             break;
-          }
+          default:
+            BLI_assert_unreachable();
         }
       }
     }
@@ -1616,7 +1617,7 @@ static void execute_realize_mesh_task(const RealizeInstancesOptions &options,
     }
     else {
       const IndexRange dst_range = domain_to_range(all_dst_custom_normals.domain);
-      copy_transformed_normals(std::get<Span<float3>>(mesh_info.custom_normal),
+      copy_transformed_normals(std::get<RealizeAsFree>(mesh_info.custom_normal),
                                task.transform,
                                all_dst_custom_normals.span.typed<float3>().slice(dst_range));
     }
