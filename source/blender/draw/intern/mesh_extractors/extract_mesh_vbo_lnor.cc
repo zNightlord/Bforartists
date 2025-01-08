@@ -155,7 +155,6 @@ static void extract_paint_overlay_flags(const MeshRenderData &mr, MutableSpan<GP
 template<typename GPUType>
 static void extract_normals_bm(const MeshRenderData &mr, MutableSpan<GPUType> normals)
 {
-  // TODO
   const BMesh &bm = *mr.bm;
   if (!mr.bm_loop_normals.is_empty()) {
     convert_normals(mr.bm_loop_normals, normals);
@@ -172,6 +171,7 @@ static void extract_normals_bm(const MeshRenderData &mr, MutableSpan<GPUType> no
     });
   }
   else {
+    // TODO
     const bke::MeshNormalDomain domain = mr.normals_domain;
     threading::parallel_for(IndexRange(bm.totface), 2048, [&](const IndexRange range) {
       for (const int face_index : range) {
