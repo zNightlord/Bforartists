@@ -501,20 +501,23 @@ void mesh_render_data_update_corner_normals(MeshRenderData &mr)
     mr.corner_normals = mr.mesh->corner_normals();
   }
   else {
-    mr.bm_loop_normals_calculated.reinitialize(mr.corners_num);
-    const int clnors_offset = CustomData_get_offset_named(
-        &mr.bm->ldata, CD_PROP_INT16_2D, "custom_normal");
-    BM_loops_calc_normal_vcos(mr.bm,
-                              mr.bm_vert_coords,
-                              mr.bm_vert_normals,
-                              mr.bm_face_normals,
-                              true,
-                              mr.bm_loop_normals_calculated,
-                              nullptr,
-                              nullptr,
-                              clnors_offset,
-                              false);
-    mr.bm_loop_normals = mr.bm_loop_normals_calculated;
+    if (CustomData_has_layer_named(&mr.bm->ldata, CD_PROP_FLOAT3, "custom_normal")) {
+    }
+    else {
+      mr.bm_loop_normals.reinitialize(mr.corners_num);
+      const int clnors_offset = CustomData_get_offset_named(
+          &mr.bm->ldata, CD_PROP_INT16_2D, "custom_normal");
+      BM_loops_calc_normal_vcos(mr.bm,
+                                mr.bm_vert_coords,
+                                mr.bm_vert_normals,
+                                mr.bm_face_normals,
+                                true,
+                                mr.bm_loop_normals,
+                                nullptr,
+                                nullptr,
+                                clnors_offset,
+                                false);
+    }
   }
 }
 

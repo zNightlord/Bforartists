@@ -81,8 +81,7 @@ struct MeshRenderData {
   Span<float3> bm_vert_coords;
   Span<float3> bm_vert_normals;
   Span<float3> bm_face_normals;
-  Span<float3> bm_loop_normals;
-  Array<float3> bm_loop_normals_calculated;
+  Array<float3> bm_loop_normals;
 
   const int *orig_index_vert;
   const int *orig_index_edge;
