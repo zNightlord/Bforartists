@@ -66,8 +66,8 @@ MutableSpan<float3> NormalsCache::ensure_vector_size(const int size)
     vector->resize(size);
   }
   else {
-  data_ = Vector<float3>(size);
-}
+    data_ = Vector<float3>(size);
+  }
   return std::get<Vector<float3>>(data_).as_mutable_span();
 }
 
@@ -284,9 +284,11 @@ blender::Span<blender::float3> Mesh::vert_normals() const
   using namespace blender::bke;
   this->runtime->vert_normals_cache.ensure([&](NormalsCache &r_data) {
     if (const GAttributeReader custom = this->attributes().lookup("custom_normal")) {
-      if (custom.domain == AttrDomain::Point && custom.varray.type().is<float3>()) {
-        r_data.store_varray(custom.varray.typed<float3>());
-        return;
+      if (custom.varray.type().is<float3>()) {
+        if (custom.domain == AttrDomain::Point) {
+          r_data.store_varray(custom.varray.typed<float3>());
+          return;
+        }
       }
     }
     const Span<float3> positions = this->vert_positions();
@@ -306,9 +308,11 @@ blender::Span<blender::float3> Mesh::face_normals() const
   using namespace blender::bke;
   this->runtime->face_normals_cache.ensure([&](NormalsCache &r_data) {
     if (const GAttributeReader custom = this->attributes().lookup("custom_normal")) {
-      if (custom.domain == AttrDomain::Face && custom.varray.type().is<float3>()) {
-        r_data.store_varray(custom.varray.typed<float3>());
-        return;
+      if (custom.varray.type().is<float3>()) {
+        if (custom.domain == AttrDomain::Face) {
+          r_data.store_varray(custom.varray.typed<float3>());
+          return;
+        }
       }
     }
     const Span<float3> positions = this->vert_positions();
@@ -346,7 +350,9 @@ blender::Span<blender::float3> Mesh::corner_normals() const
         const AttributeAccessor attributes = this->attributes();
         const GAttributeReader custom = attributes.lookup("custom_normal");
         if (custom && custom.varray.type().is<float3>()) {
-          r_data.store_varray(custom.varray.typed<float3>());
+          if (custom.domain == bke::AttrDomain::Corner) {
+            r_data.store_varray(custom.varray.typed<float3>());
+          }
           return;
         }
         MutableSpan<float3> data = r_data.ensure_vector_size(this->corners_num);
