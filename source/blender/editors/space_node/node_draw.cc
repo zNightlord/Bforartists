@@ -144,7 +144,7 @@ struct TreeDrawContext {
   /**
    * Label for reroute nodes that is derived from upstream reroute nodes.
    */
-  blender::Map<const bNode *, blender::StringRefNull> reroute_auto_labels;
+  blender::Map<const bNode *, blender::StringRef> reroute_auto_labels;
 };
 
 float ED_node_grid_size()
@@ -1326,11 +1326,11 @@ static int node_get_colorid(TreeDrawContext &tree_draw_ctx, const bNode &node)
     case NODE_CLASS_INPUT:
       return TH_NODE_INPUT;
     case NODE_CLASS_OUTPUT: {
-      if (node.type == GEO_NODE_VIEWER) {
+      if (node.type_legacy == GEO_NODE_VIEWER) {
         return &node == tree_draw_ctx.active_geometry_nodes_viewer ? TH_NODE_OUTPUT : TH_NODE;
       }
       const bool is_output_node = (node.flag & NODE_DO_OUTPUT) ||
-                                  (node.type == CMP_NODE_OUTPUT_FILE);
+                                  (node.type_legacy == CMP_NODE_OUTPUT_FILE);
       return is_output_node ? TH_NODE_OUTPUT : TH_NODE;
     }
     case NODE_CLASS_CONVERTER:
@@ -2381,7 +2381,7 @@ static void node_panel_toggle_button_cb(bContext *C, void *panel_state_argv, voi
 
   panel_state->flag ^= NODE_PANEL_COLLAPSED;
 
-  ED_node_tree_propagate_change(bmain, ntree);
+  ED_node_tree_propagate_change(*bmain, ntree);
 }
 
 /* Draw panel backgrounds first, so other node elements can be rendered on top. */
@@ -2648,7 +2648,7 @@ static std::optional<std::chrono::nanoseconds> geo_node_get_execution_time(
   if (tree_log == nullptr) {
     return std::nullopt;
   }
-  if (node.type == NODE_GROUP_OUTPUT) {
+  if (node.type_legacy == NODE_GROUP_OUTPUT) {
     return tree_log->execution_time;
   }
   if (node.is_frame()) {
@@ -2881,7 +2881,7 @@ static std::optional<NodeExtraInfoRow> node_get_accessed_attributes_row(
   if (geo_tree_log == nullptr) {
     return std::nullopt;
   }
-  if (ELEM(node.type,
+  if (ELEM(node.type_legacy,
            GEO_NODE_STORE_NAMED_ATTRIBUTE,
            GEO_NODE_REMOVE_ATTRIBUTE,
            GEO_NODE_INPUT_NAMED_ATTRIBUTE))
@@ -3012,7 +3012,7 @@ static Vector<NodeExtraInfoRow> node_get_extra_info(const bContext &C,
 
   if (snode.overlay.flag & SN_OVERLAY_SHOW_TIMINGS &&
       (ELEM(node.typeinfo->nclass, NODE_CLASS_GEOMETRY, NODE_CLASS_GROUP, NODE_CLASS_ATTRIBUTE) ||
-       ELEM(node.type,
+       ELEM(node.type_legacy,
             NODE_FRAME,
             NODE_GROUP_OUTPUT,
             GEO_NODE_SIMULATION_OUTPUT,
@@ -3251,7 +3251,7 @@ static void node_draw_basis(const bContext &C,
   }
 
   /* Shadow. */
-  if (!bke::all_zone_node_types().contains(node.type)) {
+  if (!bke::all_zone_node_types().contains(node.type_legacy)) {
     node_draw_shadow(snode, node, BASIS_RAD, 1.0f);
   }
 
@@ -3322,7 +3322,7 @@ static void node_draw_basis(const bContext &C,
   float iconofs = rct.xmax - 0.35f * U.widget_unit;
 
   /* Group edit. This icon should be the first for the node groups. */
-  if (node.type == NODE_GROUP) {
+  if (node.type_legacy == NODE_GROUP) {
     iconofs -= iconbutw;
     UI_block_emboss_set(&block, UI_EMBOSS_NONE);
     uiBut *but = uiDefIconBut(&block,
@@ -3369,7 +3369,9 @@ static void node_draw_basis(const bContext &C,
                     (void *)"NODE_OT_preview_toggle");
     UI_block_emboss_set(&block, UI_EMBOSS);
   }
-  if (ELEM(node.type, NODE_CUSTOM, NODE_CUSTOM_GROUP) && node.typeinfo->ui_icon != ICON_NONE) {
+  if (ELEM(node.type_legacy, NODE_CUSTOM, NODE_CUSTOM_GROUP) &&
+      node.typeinfo->ui_icon != ICON_NONE)
+  {
     iconofs -= iconbutw;
     UI_block_emboss_set(&block, UI_EMBOSS_NONE);
     uiDefIconBut(&block,
@@ -3386,7 +3388,7 @@ static void node_draw_basis(const bContext &C,
                  "");
     UI_block_emboss_set(&block, UI_EMBOSS);
   }
-  if (node.type == GEO_NODE_VIEWER) {
+  if (node.type_legacy == GEO_NODE_VIEWER) {
     const bool is_active = &node == tree_draw_ctx.active_geometry_nodes_viewer;
     iconofs -= iconbutw;
     UI_block_emboss_set(&block, UI_EMBOSS_NONE);
@@ -3565,7 +3567,7 @@ static void node_draw_basis(const bContext &C,
     else if (bke::node_type_is_undefined(&node)) {
       UI_GetThemeColor4fv(TH_REDALERT, color_outline);
     }
-    else if (const bke::bNodeZoneType *zone_type = bke::zone_type_by_node_type(node.type)) {
+    else if (const bke::bNodeZoneType *zone_type = bke::zone_type_by_node_type(node.type_legacy)) {
       UI_GetThemeColor4fv(zone_type->theme_id, color_outline);
       color_outline[3] = 1.0f;
     }
@@ -4213,18 +4215,18 @@ static const bNode *reroute_node_get_linked_reroute(const bNode &reroute)
  * The auto label overlay displays a label on reroute nodes based on the user-defined label of a
  * linked reroute upstream.
  */
-static StringRefNull reroute_node_get_auto_label(TreeDrawContext &tree_draw_ctx,
-                                                 const bNode &src_reroute)
+static StringRef reroute_node_get_auto_label(TreeDrawContext &tree_draw_ctx,
+                                             const bNode &src_reroute)
 {
   BLI_assert(src_reroute.is_reroute());
 
   if (src_reroute.label[0] != '\0') {
-    return StringRefNull(src_reroute.label);
+    return src_reroute.label;
   }
 
-  Map<const bNode *, StringRefNull> &reroute_auto_labels = tree_draw_ctx.reroute_auto_labels;
+  Map<const bNode *, StringRef> &reroute_auto_labels = tree_draw_ctx.reroute_auto_labels;
 
-  StringRefNull label;
+  StringRef label;
   Vector<const bNode *> reroute_path;
 
   /* Traverse reroute path backwards until label, non-reroute node or link-cycle is found. */
@@ -4232,7 +4234,7 @@ static StringRefNull reroute_node_get_auto_label(TreeDrawContext &tree_draw_ctx,
        reroute = reroute_node_get_linked_reroute(*reroute))
   {
     reroute_path.append(reroute);
-    if (const StringRefNull *label_ptr = reroute_auto_labels.lookup_ptr(reroute)) {
+    if (const StringRef *label_ptr = reroute_auto_labels.lookup_ptr(reroute)) {
       label = *label_ptr;
       break;
     }
@@ -4304,16 +4306,17 @@ static void reroute_node_draw_label(TreeDrawContext &tree_draw_ctx,
     return;
   }
 
-  char showname[128];
-  STRNCPY(showname,
-          has_label ? node.label : reroute_node_get_auto_label(tree_draw_ctx, node).c_str());
+  const StringRef text = has_label ? node.label : reroute_node_get_auto_label(tree_draw_ctx, node);
+  if (text.is_empty()) {
+    return;
+  }
 
   const short width = 512;
   const int x = BLI_rctf_cent_x(&node.runtime->draw_bounds) - (width / 2);
   const int y = node.runtime->draw_bounds.ymax;
 
   uiBut *label_but = uiDefBut(
-      &block, UI_BTYPE_LABEL, 0, showname, x, y, width, short(NODE_DY), nullptr, 0, 0, nullptr);
+      &block, UI_BTYPE_LABEL, 0, text, x, y, width, short(NODE_DY), nullptr, 0, 0, nullptr);
 
   UI_but_drawflag_disable(label_but, UI_BUT_TEXT_LEFT);
 
@@ -4522,7 +4525,7 @@ static void node_draw_zones_and_frames(const bContext &C,
 
   const auto get_theme_id = [&](const int zone_i) {
     const bNode *node = zones->zones[zone_i]->output_node;
-    return bke::zone_type_by_node_type(node->type)->theme_id;
+    return bke::zone_type_by_node_type(node->type_legacy)->theme_id;
   };
 
   const uint pos = GPU_vertformat_attr_add(

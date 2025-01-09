@@ -31,7 +31,7 @@
 #include "BKE_context.hh"
 #include "BKE_icons.h"
 #include "BKE_main.hh"
-#include "BKE_material.h"
+#include "BKE_material.hh"
 #include "BKE_paint.hh"
 #include "BKE_scene.hh"
 
@@ -201,7 +201,7 @@ void ED_render_engine_changed(Main *bmain, const bool update_scene_data)
       ntreeCompositUpdateRLayers(scene->nodetree);
     }
   }
-  ED_node_tree_propagate_change(bmain, nullptr);
+  ED_node_tree_propagate_change(*bmain);
 
   /* Update #CacheFiles to ensure that procedurals are properly taken into account. */
   LISTBASE_FOREACH (CacheFile *, cachefile, &bmain->cachefiles) {
