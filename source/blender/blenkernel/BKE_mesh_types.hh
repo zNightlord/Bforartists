@@ -116,8 +116,8 @@ class NormalsCache {
  public:
   MutableSpan<float3> ensure_vector_size(const int size);
   Span<float3> get_span() const;
-  void store_varray(const VArray<float3> &varray);
-  void store_vector(Vector<float3> &&varray);
+  void store_varray(const VArray<float3> &data);
+  void store_vector(Vector<float3> &&data);
 };
 
 struct MeshRuntime {
