@@ -65,7 +65,9 @@ MutableSpan<float3> NormalsCache::ensure_vector_size(const int size)
   if (auto *vector = std::get_if<Vector<float3>>(&data_)) {
     vector->resize(size);
   }
+  else {
   data_ = Vector<float3>(size);
+}
   return std::get<Vector<float3>>(data_).as_mutable_span();
 }
 
