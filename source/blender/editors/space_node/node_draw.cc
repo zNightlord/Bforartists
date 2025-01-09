@@ -44,6 +44,7 @@
 #include "BKE_main.hh"
 #include "BKE_node.hh"
 #include "BKE_node_enum.hh"
+#include "BKE_node_legacy_types.hh"
 #include "BKE_node_runtime.hh"
 #include "BKE_node_tree_update.hh"
 #include "BKE_node_tree_zones.hh"
@@ -65,7 +66,6 @@
 #include "GPU_immediate.hh"
 #include "GPU_immediate_util.hh"
 #include "GPU_matrix.hh"
-#include "GPU_shader_shared.hh"
 #include "GPU_state.hh"
 #include "GPU_viewport.hh"
 
@@ -86,14 +86,11 @@
 #include "RNA_access.hh"
 #include "RNA_prototypes.hh"
 
-#include "NOD_geometry_exec.hh"
 #include "NOD_geometry_nodes_gizmos.hh"
 #include "NOD_geometry_nodes_log.hh"
 #include "NOD_node_declaration.hh"
 #include "NOD_node_extra_info.hh"
 #include "NOD_socket_declarations_geometry.hh"
-
-#include "FN_field.hh"
 
 #include "GEO_fillet_curves.hh"
 
@@ -107,6 +104,8 @@ using blender::bke::bNodeTreeZone;
 using blender::bke::bNodeTreeZones;
 using blender::ed::space_node::NestedTreePreviews;
 using blender::nodes::NodeExtraInfoRow;
+
+namespace blender::ed::space_node {
 
 /**
  * This is passed to many functions which draw the node editor.
@@ -130,7 +129,7 @@ struct TreeDrawContext {
    * Geometry nodes logs various data during execution. The logged data that corresponds to the
    * currently drawn node tree can be retrieved from the log below.
    */
-  blender::Map<const bNodeTreeZone *, geo_log::GeoTreeLog *> geo_log_by_zone;
+  Map<const bNodeTreeZone *, geo_log::GeoTreeLog *> geo_log_by_zone;
 
   NestedTreePreviews *nested_group_infos = nullptr;
   /**
@@ -138,24 +137,21 @@ struct TreeDrawContext {
    */
   bool used_by_compositor = false;
 
-  blender::Map<bNodeInstanceKey, blender::timeit::Nanoseconds>
-      *compositor_per_node_execution_time = nullptr;
+  Map<bNodeInstanceKey, timeit::Nanoseconds> *compositor_per_node_execution_time = nullptr;
 
   /**
    * Label for reroute nodes that is derived from upstream reroute nodes.
    */
-  blender::Map<const bNode *, blender::StringRef> reroute_auto_labels;
+  Map<const bNode *, StringRef> reroute_auto_labels;
 };
 
-float ED_node_grid_size()
+float grid_size_get()
 {
   return NODE_GRID_STEP_SIZE;
 }
 
-void ED_node_tree_update(const bContext *C)
+void tree_update(const bContext *C)
 {
-  using namespace blender::ed::space_node;
-
   SpaceNode *snode = CTX_wm_space_node(C);
   if (snode) {
     snode_set_context(*C);
@@ -173,13 +169,13 @@ static bNodeTree *node_tree_from_ID(ID *id)
     if (GS(id->name) == ID_NT) {
       return (bNodeTree *)id;
     }
-    return blender::bke::node_tree_from_id(id);
+    return bke::node_tree_from_id(id);
   }
 
   return nullptr;
 }
 
-void ED_node_tag_update_id(ID *id)
+void tag_update_id(ID *id)
 {
   bNodeTree *ntree = node_tree_from_ID(id);
   if (id == nullptr || ntree == nullptr) {
@@ -218,8 +214,6 @@ void ED_node_tag_update_id(ID *id)
     DEG_id_tag_update(id, 0);
   }
 }
-
-namespace blender::ed::space_node {
 
 static std::string node_socket_get_tooltip(const SpaceNode *snode,
                                            const bNodeTree &ntree,
@@ -1837,8 +1831,6 @@ static std::optional<std::string> create_description_inspection_string(const bNo
 static std::optional<std::string> create_log_inspection_string(geo_log::GeoTreeLog *geo_tree_log,
                                                                const bNodeSocket &socket)
 {
-  using namespace blender::nodes::geo_eval_log;
-
   if (geo_tree_log == nullptr) {
     return std::nullopt;
   }
@@ -1847,7 +1839,7 @@ static std::optional<std::string> create_log_inspection_string(geo_log::GeoTreeL
   }
 
   geo_tree_log->ensure_socket_values();
-  ValueLog *value_log = geo_tree_log->find_socket_value_log(socket);
+  geo_log::ValueLog *value_log = geo_tree_log->find_socket_value_log(socket);
   fmt::memory_buffer buf;
   if (const geo_log::GenericValueLog *generic_value_log =
           dynamic_cast<const geo_log::GenericValueLog *>(value_log))
@@ -2334,8 +2326,11 @@ static void node_draw_socket(const bContext &C,
       block, sock.index_in_tree(), socket_location, float2(2.0f * half_width, 2.0f * half_height));
 }
 
-static void node_draw_sockets(
-    const bContext &C, uiBlock &block, const SpaceNode &snode, bNodeTree &ntree, const bNode &node)
+static void node_draw_sockets(const bContext &C,
+                              uiBlock &block,
+                              const SpaceNode &snode,
+                              const bNodeTree &ntree,
+                              const bNode &node)
 {
   if (!draw_node_details(snode)) {
     return;
@@ -2473,7 +2468,7 @@ static void node_draw_panels(bNodeTree &ntree, const bNode &node, uiBlock &block
         int(draw_bounds.xmin + NODE_MARGIN_X + 0.4f),
         int(*panel_runtime.header_center_y - NODE_DYS),
         short(draw_bounds.xmax - draw_bounds.xmin - (30.0f * UI_SCALE_FAC)),
-        short(NODE_DY),
+        NODE_DY,
         nullptr,
         0,
         0,
@@ -2755,8 +2750,9 @@ static std::optional<std::chrono::nanoseconds> node_get_execution_time(
       return geo_node_get_execution_time(tree_draw_ctx, snode, node);
     case NTREE_COMPOSIT:
       return compositor_node_get_execution_time(tree_draw_ctx, snode, node);
+    default:
+      return std::nullopt;
   }
-  return std::nullopt;
 }
 
 static std::string node_get_execution_time_label(TreeDrawContext &tree_draw_ctx,
@@ -3093,7 +3089,7 @@ static void node_draw_extra_info_row(const bNode &node,
                              int(but_text_left),
                              int(rect.ymin + row * (20.0f * UI_SCALE_FAC)),
                              short(but_text_width),
-                             short(NODE_DY),
+                             NODE_DY,
                              nullptr,
                              0,
                              0,
@@ -3456,7 +3452,7 @@ static void node_draw_basis(const bContext &C,
                         int(rct.xmin + NODE_MARGIN_X + 0.4f),
                         int(rct.ymax - NODE_DY),
                         short(iconofs - rct.xmin - NODE_MARGIN_X),
-                        short(NODE_DY),
+                        NODE_DY,
                         nullptr,
                         0,
                         0,
@@ -3708,7 +3704,7 @@ static void node_draw_hidden(const bContext &C,
                         round_fl_to_int(rct.xmin + NODE_MARGIN_X),
                         round_fl_to_int(centy - NODE_DY * 0.5f),
                         short(BLI_rctf_size_x(&rct) - (2 * U.widget_unit)),
-                        short(NODE_DY),
+                        NODE_DY,
                         nullptr,
                         0,
                         0,
@@ -4316,7 +4312,7 @@ static void reroute_node_draw_label(TreeDrawContext &tree_draw_ctx,
   const int y = node.runtime->draw_bounds.ymax;
 
   uiBut *label_but = uiDefBut(
-      &block, UI_BTYPE_LABEL, 0, text, x, y, width, short(NODE_DY), nullptr, 0, 0, nullptr);
+      &block, UI_BTYPE_LABEL, 0, text, x, y, width, NODE_DY, nullptr, 0, 0, nullptr);
 
   UI_but_drawflag_disable(label_but, UI_BUT_TEXT_LEFT);
 

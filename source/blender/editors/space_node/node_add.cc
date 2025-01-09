@@ -27,6 +27,7 @@
 #include "BKE_lib_id.hh"
 #include "BKE_main.hh"
 #include "BKE_node.hh"
+#include "BKE_node_legacy_types.hh"
 #include "BKE_node_runtime.hh"
 #include "BKE_node_tree_update.hh"
 #include "BKE_report.hh"
@@ -1090,7 +1091,7 @@ static int new_node_tree_exec(bContext *C, wmOperator *op)
   else if (snode) {
     snode->nodetree = ntree;
 
-    ED_node_tree_update(C);
+    tree_update(C);
   }
 
   WM_event_add_notifier(C, NC_NODE | NA_ADDED, nullptr);
