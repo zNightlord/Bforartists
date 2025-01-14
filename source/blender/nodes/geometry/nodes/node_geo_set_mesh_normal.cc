@@ -117,10 +117,10 @@ static void node_rna(StructRNA *srna)
 static void node_register()
 {
   static blender::bke::bNodeType ntype;
-  geo_node_type_base(
-      &ntype, "GeometryNodeSetMeshNormal", GEO_NODE_SET_MESH_NORMAL, NODE_CLASS_GEOMETRY);
+  geo_node_type_base(&ntype, "GeometryNodeSetMeshNormal");
   ntype.ui_name = "Set Mesh Normal";
   ntype.ui_description = "Store a normal vector for each mesh element";
+  ntype.nclass = NODE_CLASS_GEOMETRY;
   ntype.declare = node_declare;
   ntype.geometry_node_execute = node_geo_exec;
   ntype.initfunc = node_init;
