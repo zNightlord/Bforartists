@@ -61,9 +61,14 @@ static void transform_mesh(Mesh &mesh, const float4x4 &transform)
 {
   transform_positions(mesh.vert_positions_for_write(), transform);
   bke::MutableAttributeAccessor attributes = mesh.attributes_for_write();
-  if (bke::GSpanAttributeWriter normals = attributes.lookup_for_write_span("custom_normal")) {
-    if (normals.span.type().is<float3>()) {
-      transform_normals(normals.span.typed<float3>(), transform);
+  if (const std::optional<bke::AttributeMetaData> meta_data = attributes.lookup_meta_data(
+          "custom_normal"))
+  {
+    if (meta_data->data_type == CD_PROP_FLOAT3) {
+      if (bke::GSpanAttributeWriter normals = attributes.lookup_for_write_span("custom_normal")) {
+        transform_normals(normals.span.typed<float3>(), transform);
+        normals.finish();
+      }
     }
   }
   mesh.tag_positions_changed();
