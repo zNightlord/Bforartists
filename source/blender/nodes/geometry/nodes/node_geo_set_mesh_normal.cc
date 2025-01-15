@@ -50,7 +50,7 @@ static void node_geo_exec(GeoNodeExecParams params)
   const bNode &node = params.node();
   const Mode mode = static_cast<Mode>(node.custom1);
   GeometrySet geometry_set = params.extract_input<GeometrySet>("Mesh");
-  fn::Field<float3> custom_normal = params.extract_input<fn::Field<float3>>("Normal");
+  const fn::Field<float3> custom_normal = params.extract_input<fn::Field<float3>>("Normal");
 
   geometry_set.modify_geometry_sets([&](GeometrySet &geometry_set) {
     if (Mesh *mesh = geometry_set.get_mesh_for_write()) {
