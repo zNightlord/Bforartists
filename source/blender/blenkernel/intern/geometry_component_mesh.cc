@@ -148,7 +148,12 @@ VArray<float3> mesh_normals_varray(const Mesh &mesh,
       return VArray<float3>::ForContainer(std::move(edge_normals));
     }
     case AttrDomain::Corner: {
-      return VArray<float3>::ForSpan(mesh.corner_normals());
+      /* The normals on corners are just the mesh's face normals, so start with the face normal
+       * array and copy the face normal for each of its corners. In this case using the mesh
+       * component's generic domain interpolation is fine, the data will still be normalized,
+       * since the face normal is just copied to every corner. */
+      return mesh.attributes().adapt_domain(
+          VArray<float3>::ForSpan(mesh.face_normals()), AttrDomain::Face, AttrDomain::Corner);
     }
     default:
       return {};
