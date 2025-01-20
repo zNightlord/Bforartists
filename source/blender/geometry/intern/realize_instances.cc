@@ -2,8 +2,6 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include <variant>
-
 #include "GEO_join_geometries.hh"
 #include "GEO_realize_instances.hh"
 
@@ -14,6 +12,7 @@
 #include "BLI_math_matrix.hh"
 #include "BLI_noise.hh"
 
+#include "BKE_attribute.hh"
 #include "BKE_curves.hh"
 #include "BKE_customdata.hh"
 #include "BKE_geometry_nodes_gizmos_transforms.hh"
@@ -94,10 +93,6 @@ struct MeshElementStartIndices {
   int loop = 0;
 };
 
-using RealizeAsFree = VArraySpan<float3>;
-using RealizeAsCornerFanSpace = Span<short2>;
-using MeshCustomNormalInfo = std::variant<std::monostate, RealizeAsFree, RealizeAsCornerFanSpace>;
-
 struct MeshRealizeInfo {
   const Mesh *mesh = nullptr;
   Span<float3> positions;
@@ -114,7 +109,7 @@ struct MeshRealizeInfo {
   Span<int> stored_vertex_ids;
   VArray<int> material_indices;
   /** Custom normals are rotated based on each instance's transformation. */
-  MeshCustomNormalInfo custom_normal;
+  GVArraySpan custom_normal;
 };
 
 struct RealizeMeshTask {
@@ -216,9 +211,69 @@ struct AllPointCloudsInfo {
   bool create_radius_attribute = false;
 };
 
-struct CornerFanSpaceCustomNormal {};
-using FreeCustomNormal = bke::AttrDomain;
-using CustomNormalInfo = std::variant<CornerFanSpaceCustomNormal, FreeCustomNormal>;
+static bke::AttrDomain normal_domain_to_domain(bke::MeshNormalDomain domain)
+{
+  switch (domain) {
+    case bke::MeshNormalDomain::Point:
+      return bke::AttrDomain::Point;
+    case bke::MeshNormalDomain::Face:
+      return bke::AttrDomain::Face;
+    case bke::MeshNormalDomain::Corner:
+      return bke::AttrDomain::Corner;
+  }
+  BLI_assert_unreachable();
+  return bke::AttrDomain::Point;
+}
+
+constexpr bke::AttributeMetaData CORNER_FAN_META_DATA{bke::AttrDomain::Corner, CD_PROP_INT16_2D};
+
+/** Tracks the storage format for the resulting mesh based on the combination of input meshes. */
+struct MeshNormalInfo {
+  enum class Output : int8_t { None, CornerFan, Free };
+  Output result_type = Output::None;
+  bke::AttrDomain result_domain = bke::AttrDomain::Face;
+
+  void add_no_custom_normals(const bke::MeshNormalDomain domain)
+  {
+    this->result_domain = normal_domain_to_domain(domain);
+  }
+
+  void add_corner_fan_normals()
+  {
+    this->result_domain = bke::AttrDomain::Corner;
+    if (this->result_type == Output::None) {
+      this->result_type = Output::CornerFan;
+    }
+  }
+
+  void add_free_normals(const bke::AttrDomain domain)
+  {
+    this->result_domain = bke::attribute_domain_highest_priority({this->result_domain, domain});
+    this->result_type = Output::Free;
+  }
+
+  void add_mesh(const Mesh &mesh)
+  {
+    const bke::AttributeAccessor attributes = mesh.attributes();
+    const std::optional<bke::AttributeMetaData> custom_normal = attributes.lookup_meta_data(
+        "custom_normal");
+    if (!custom_normal) {
+      this->add_no_custom_normals(mesh.normals_domain());
+      return;
+    }
+    if (custom_normal->data_type == CD_PROP_FLOAT3) {
+      if (custom_normal->domain == bke::AttrDomain::Edge) {
+        /* Skip invalid storage on the edge domain.*/
+        this->add_no_custom_normals(mesh.normals_domain());
+        return;
+      }
+      this->add_free_normals(custom_normal->domain);
+    }
+    else if (*custom_normal == CORNER_FAN_META_DATA) {
+      this->add_corner_fan_normals();
+    }
+  }
+};
 
 struct AllMeshesInfo {
   /** Ordering of all attributes that are propagated to the output mesh generically. */
@@ -231,7 +286,7 @@ struct AllMeshesInfo {
   VectorSet<Material *> materials;
   bool create_id_attribute = false;
   bool create_material_index_attribute = false;
-  CustomNormalInfo custom_normal_info;
+  MeshNormalInfo custom_normal_info;
 
   /** True if we know that there are no loose edges in any of the input meshes. */
   bool no_loose_edges_hint = false;
@@ -1365,39 +1420,7 @@ static AllMeshesInfo preprocess_meshes(const bke::GeometrySet &geometry_set,
   }
 
   for (const Mesh *mesh : info.order) {
-    bke::AttributeAccessor attributes = mesh->attributes();
-    const std::optional<bke::AttributeMetaData> custom_normal = attributes.lookup_meta_data(
-        "custom_normal");
-    if (!custom_normal) {
-      continue;
-    }
-    if (custom_normal->data_type == CD_PROP_FLOAT3) {
-      if (custom_normal->domain == bke::AttrDomain::Edge) {
-        /* Skip invalid storage on the edge domain.*/
-        continue;
-      }
-      if (std::get_if<CornerFanSpaceCustomNormal>(&info.custom_normal_info)) {
-        /* If any mesh has free custom normals, the result should have free normals too. */
-        info.custom_normal_info = FreeCustomNormal(bke::AttrDomain::Corner);
-      }
-      else if (auto *domain = std::get_if<FreeCustomNormal>(&info.custom_normal_info)) {
-        /* Use a domain that retains the all input information as necessary. */
-        *domain = bke::attribute_domain_highest_priority({*domain, custom_normal->domain});
-      }
-      else {
-        /* This is the first mesh with custom normals.*/
-        info.custom_normal_info = FreeCustomNormal(custom_normal->domain);
-      }
-    }
-    else if (*custom_normal == bke::AttributeMetaData{bke::AttrDomain::Corner, CD_PROP_INT16_2D}) {
-      if (auto *domain = std::get_if<FreeCustomNormal>(&info.custom_normal_info)) {
-        /* There is already a mesh with free custom normals. */
-        *domain = bke::AttrDomain::Corner;
-      }
-      else {
-        info.custom_normal_info = CornerFanSpaceCustomNormal();
-      }
-    }
+    info.custom_normal_info.add_mesh(*mesh);
   }
 
   info.create_material_index_attribute |= info.materials.size() > 1;
@@ -1446,37 +1469,32 @@ static AllMeshesInfo preprocess_meshes(const bke::GeometrySet &geometry_set,
     mesh_info.material_indices = *attributes.lookup_or_default<int>(
         "material_index", bke::AttrDomain::Face, 0);
 
-    const std::optional<bke::AttributeMetaData> custom_normal = attributes.lookup_meta_data(
-        "custom_normal");
-    if (std::get_if<CornerFanSpaceCustomNormal>(&info.custom_normal_info)) {
-      if (custom_normal == bke::AttributeMetaData{bke::AttrDomain::Corner, CD_PROP_INT16_2D}) {
-        mesh_info.custom_normal = RealizeAsCornerFanSpace(
-            attributes.lookup<short2>("custom_normal", bke::AttrDomain::Corner)
-                .varray.get_internal_span());
+    switch (info.custom_normal_info.result_type) {
+      case MeshNormalInfo::Output::None: {
+        break;
       }
-    }
-    else if (const auto *domain = std::get_if<FreeCustomNormal>(&info.custom_normal_info)) {
-      if (custom_normal == bke::AttributeMetaData{bke::AttrDomain::Corner, CD_PROP_INT16_2D}) {
-        BLI_assert(*domain == bke::AttrDomain::Corner);
-        mesh_info.custom_normal = mesh->corner_normals();
+      case MeshNormalInfo::Output::CornerFan: {
+        if (attributes.lookup_meta_data("custom_normal") == CORNER_FAN_META_DATA) {
+          mesh_info.custom_normal = *attributes.lookup<short2>("custom_normal",
+                                                               bke::AttrDomain::Corner);
+        }
+        break;
       }
-      else if (custom_normal->data_type == CD_PROP_FLOAT3) {
-        mesh_info.custom_normal = *attributes.lookup<float3>("custom_normal", *domain);
-      }
-      else {
-        switch (*domain) {
+      case MeshNormalInfo::Output::Free: {
+        switch (info.custom_normal_info.result_domain) {
           case bke::AttrDomain::Point:
-            mesh_info.custom_normal = mesh->vert_normals();
+            mesh_info.custom_normal = VArray<float3>::ForSpan(mesh->vert_normals());
             break;
           case bke::AttrDomain::Face:
-            mesh_info.custom_normal = mesh->face_normals();
+            mesh_info.custom_normal = VArray<float3>::ForSpan(mesh->face_normals());
             break;
           case bke::AttrDomain::Corner:
-            mesh_info.custom_normal = mesh->corner_normals();
+            mesh_info.custom_normal = VArray<float3>::ForSpan(mesh->corner_normals());
             break;
           default:
             BLI_assert_unreachable();
         }
+        break;
       }
     }
   }
@@ -1606,18 +1624,18 @@ static void execute_realize_mesh_task(const RealizeInstancesOptions &options,
 
   if (all_dst_custom_normals) {
     if (all_dst_custom_normals.span.type().is<short2>()) {
-      if (std::holds_alternative<std::monostate>(mesh_info.custom_normal)) {
+      if (mesh_info.custom_normal.is_empty()) {
         all_dst_custom_normals.span.typed<short2>().slice(dst_loop_range).fill(short2(0));
       }
       else {
         all_dst_custom_normals.span.typed<short2>()
             .slice(dst_loop_range)
-            .copy_from(std::get<Span<short2>>(mesh_info.custom_normal));
+            .copy_from(mesh_info.custom_normal.typed<short2>());
       }
     }
     else {
       const IndexRange dst_range = domain_to_range(all_dst_custom_normals.domain);
-      copy_transformed_normals(std::get<RealizeAsFree>(mesh_info.custom_normal),
+      copy_transformed_normals(mesh_info.custom_normal.typed<float3>(),
                                task.transform,
                                all_dst_custom_normals.span.typed<float3>().slice(dst_range));
     }
@@ -1728,14 +1746,21 @@ static void execute_realize_mesh_tasks(const RealizeInstancesOptions &options,
   }
 
   GSpanAttributeWriter custom_normals;
-  if (std::get_if<CornerFanSpaceCustomNormal>(&all_meshes_info.custom_normal_info)) {
-    custom_normals = dst_attributes.lookup_or_add_for_write_only_span(
-        "custom_normal", bke::AttrDomain::Corner, CD_PROP_INT16_2D);
-  }
-  else if (const auto *domain = std::get_if<FreeCustomNormal>(&all_meshes_info.custom_normal_info))
-  {
-    custom_normals = dst_attributes.lookup_or_add_for_write_only_span(
-        "custom_normal", *domain, CD_PROP_FLOAT3);
+  switch (all_meshes_info.custom_normal_info.result_type) {
+    case MeshNormalInfo::Output::None: {
+      break;
+    }
+    case MeshNormalInfo::Output::CornerFan: {
+      custom_normals = dst_attributes.lookup_or_add_for_write_only_span(
+          "custom_normal", bke::AttrDomain::Corner, CD_PROP_INT16_2D);
+      break;
+    }
+    case MeshNormalInfo::Output::Free: {
+      const bke::AttrDomain domain = all_meshes_info.custom_normal_info.result_domain;
+      custom_normals = dst_attributes.lookup_or_add_for_write_only_span(
+          "custom_normal", domain, CD_PROP_FLOAT3);
+      break;
+    }
   }
 
   /* Prepare generic output attributes. */
