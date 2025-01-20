@@ -2295,8 +2295,7 @@ static void execute_realize_grease_pencil_tasks(
   /* Allocate all layers. */
   dst_grease_pencil->add_layers_with_empty_drawings_for_eval(new_layers_num);
 
-  /* Transfer material pointers. The material indices are updated for each task separately.
-   */
+  /* Transfer material pointers. The material indices are updated for each task separately. */
   if (!all_grease_pencils_info.materials.is_empty()) {
     MEM_SAFE_FREE(dst_grease_pencil->material_array);
     dst_grease_pencil->material_array_num = all_grease_pencils_info.materials.size();
@@ -2422,8 +2421,8 @@ bke::GeometrySet realize_instances(bke::GeometrySet geometry_set,
 {
   /* The algorithm works in three steps:
    * 1. Preprocess each unique geometry that is instanced (e.g. each `Mesh`).
-   * 2. Gather "tasks" that need to be executed to realize the instances. Each task
-   * corresponds to instances of the previously preprocessed geometry.
+   * 2. Gather "tasks" that need to be executed to realize the instances. Each task corresponds
+   * to instances of the previously preprocessed geometry.
    * 3. Execute all tasks in parallel.
    */
 
