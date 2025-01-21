@@ -1035,7 +1035,6 @@ template<typename T> class VArraySpan final : public Span<T> {
  public:
   VArraySpan() = default;
 
-  // VArraySpan(const Span<T> span) : VArraySpan(VArray<T>::ForSpan(span)) {}
   VArraySpan(const VArray<T> &varray) : VArraySpan(VArray<T>(varray)) {}
 
   VArraySpan(VArray<T> &&varray) : Span<T>(), varray_(std::move(varray))
