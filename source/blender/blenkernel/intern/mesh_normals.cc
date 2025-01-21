@@ -308,8 +308,9 @@ blender::bke::MeshNormalDomain Mesh::normals_domain(const bool support_sharp_fac
   {
     switch (custom->domain) {
       case AttrDomain::Point:
-      case AttrDomain::Edge:
         return MeshNormalDomain::Point;
+      case AttrDomain::Edge:
+        break;
       case AttrDomain::Face:
         return MeshNormalDomain::Face;
       case AttrDomain::Corner:
