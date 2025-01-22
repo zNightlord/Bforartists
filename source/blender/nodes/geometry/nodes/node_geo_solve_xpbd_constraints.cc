@@ -10,7 +10,7 @@ static void node_declare(NodeDeclarationBuilder &b)
 {
   constexpr float default_fps = 1.0f / 25.0f;
 
-  b.add_input<decl::Float>("Delta Time").default(default_fps).hide_value();
+  b.add_input<decl::Float>("Delta Time").default_value(default_fps).hide_value();
   b.add_input<decl::Geometry>("Geometry");
   b.add_input<decl::Geometry>("Stretch/Shear Constraints");
   b.add_input<decl::Geometry>("Bend/Twist Constraints");
