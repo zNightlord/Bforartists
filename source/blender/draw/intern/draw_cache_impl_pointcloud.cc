@@ -12,10 +12,8 @@
 
 #include "MEM_guardedalloc.h"
 
+#include "BLI_color.hh"
 #include "BLI_listbase.h"
-#include "BLI_math_base.h"
-#include "BLI_math_color.hh"
-#include "BLI_math_vector.h"
 #include "BLI_task.hh"
 #include "BLI_utildefines.h"
 
@@ -23,7 +21,7 @@
 #include "DNA_pointcloud_types.h"
 
 #include "BKE_attribute.hh"
-#include "BKE_material.h"
+#include "BKE_material.hh"
 #include "BKE_pointcloud.hh"
 
 #include "GPU_batch.hh"
