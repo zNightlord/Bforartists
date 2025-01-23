@@ -265,7 +265,7 @@ typedef struct Ipo {
 #define TE_BRIGHT 25
 #define TE_CONTRA 26
 
-/* ******** Sequence (ID_SEQ) ********** */
+/* ******** Sequence (ID_SEQ_LEGACY) ********** */
 
 #define STRIP_TOTIPO 1
 #define STRIP_TOTNAM 1

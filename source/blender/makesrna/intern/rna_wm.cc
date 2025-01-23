@@ -2543,6 +2543,13 @@ static void rna_def_window(BlenderRNA *brna)
 
   rna_def_window_stereo3d(brna);
 
+  prop = RNA_def_property(srna, "sequence", PROP_POINTER, PROP_NONE);
+  RNA_def_property_flag(prop, PROP_EDITABLE | PROP_NEVER_NULL);
+  RNA_def_property_pointer_funcs(prop, nullptr, "rna_Window_sequence_set", nullptr, nullptr);
+  RNA_def_property_ui_text(prop, "Sequence", "Active sequence to be edited in the window");
+  RNA_def_property_flag(prop, PROP_CONTEXT_UPDATE);
+  RNA_def_property_update(prop, 0, "rna_Window_sequence_update");
+
   prop = RNA_def_property(srna, "scene", PROP_POINTER, PROP_NONE);
   RNA_def_property_flag(prop, PROP_EDITABLE | PROP_NEVER_NULL);
   RNA_def_property_pointer_funcs(prop, nullptr, "rna_Window_scene_set", nullptr, nullptr);

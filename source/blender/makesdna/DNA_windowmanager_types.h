@@ -284,7 +284,7 @@ typedef struct wmWindow {
   struct wmWindow *parent;
 
   /** Active sequence displayed in this window. */
-  struct Scene *sequence;
+  struct Sequence *sequence;
   /** Active scene displayed in this window. */
   struct Scene *scene;
   /** Temporary when switching. */

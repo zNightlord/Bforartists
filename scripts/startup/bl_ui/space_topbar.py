@@ -52,7 +52,7 @@ class TOPBAR_HT_upper_bar(Header):
         row = layout.row(align=True)
         
         # Active sequence
-        row.template_ID(window, "scene", new="scene.new", unlink="scene.delete")
+        row.template_ID(window, "sequence", new="sequence.new", unlink="sequence.delete")
 
         # Active workspace view-layer is retrieved through window, not through workspace.
         row.template_ID(window, "scene", new="scene.new", unlink="scene.delete")

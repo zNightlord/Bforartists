@@ -51,6 +51,10 @@ DNA_STRUCT_RENAME(SpaceButs, SpaceProperties)
 DNA_STRUCT_RENAME(SpaceIpo, SpaceGraph)
 DNA_STRUCT_RENAME(SpaceOops, SpaceOutliner)
 DNA_STRUCT_RENAME(Strip, StripData)
+/* HACK: We can't use the name 'Sequence' because that's the name that is stored for 'Strip's
+ * (since 4.4). Use renaming here to write 'Sequence' as 'bSequence' and avoid the naming conflict.
+ */
+DNA_STRUCT_RENAME(bSequence, Sequence)
 DNA_STRUCT_RENAME_MEMBER(ActionSlot, name, identifier)
 DNA_STRUCT_RENAME_MEMBER(AnimData, slot_name, last_slot_identifier)
 DNA_STRUCT_RENAME_MEMBER(AnimData, tmp_slot_name, tmp_last_slot_identifier)
