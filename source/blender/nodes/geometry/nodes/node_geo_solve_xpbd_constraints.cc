@@ -9,6 +9,8 @@
 
 #include "node_geometry_util.hh"
 
+#include <fmt/format.h>
+
 namespace blender::nodes::node_geo_solve_xpbd_constraints_cc {
 
 enum class ConstraintType {
@@ -29,7 +31,13 @@ enum class SolverMethod {
   Jacobi,
 };
 
-const char *ATTR_SOLVER_GROUP = "solver_group";
+/* Constraint attributes. */
+constexpr StringRef ATTR_SOLVER_GROUP = "solver_group";
+constexpr StringRef ATTR_POINT1 = "point1";
+constexpr StringRef ATTR_POINT2 = "point2";
+/* Geometry attributes. */
+constexpr StringRef ATTR_POSITION = "position";
+constexpr StringRef ATTR_ROTATION = "rotation";
 
 static StringRef constraint_ui_geometry(const ConstraintType type)
 {
@@ -71,6 +79,9 @@ static void node_declare(NodeDeclarationBuilder &b)
 {
   constexpr float default_fps = 1.0f / 25.0f;
 
+  b.use_custom_socket_order();
+  b.allow_any_socket_order();
+
   b.add_input<decl::Float>("Delta Time").default_value(default_fps).min(0.0f).hide_value();
   b.add_input<decl::Int>("Gauss-Seidel Steps").default_value(1).min(0);
 
@@ -88,46 +99,126 @@ static void node_declare(NodeDeclarationBuilder &b)
   };
 
   add_constraint_input_output(ConstraintType::PositionGoal);
+  b.add_output<decl::Vector>("Residual").field_on({1});
+  b.add_output<decl::Vector>("Point 1 Delta").field_on({1});
   add_constraint_input_output(ConstraintType::RotationGoal);
   add_constraint_input_output(ConstraintType::StretchShear);
   add_constraint_input_output(ConstraintType::BendTwist);
   add_constraint_input_output(ConstraintType::Contact);
 }
 
+struct ConstraintEvalInputs {
+  VArraySpan<float3> positions;
+  VArraySpan<math::Quaternion> rotations;
+
+  struct {
+    VArray<int> solver_group;
+    VArraySpan<int> points;
+    VArraySpan<float3> goals;
+  } position_goal;
+  struct {
+    VArray<int> solver_group;
+    VArraySpan<int> points;
+    VArraySpan<math::Quaternion> goals;
+  } rotation_goal;
+};
+
+struct ConstraintEvalOutputs {
+  struct {
+    Array<float3> residuals;
+    Array<float3> position_deltas;
+  } position_goal;
+  struct {
+    Array<float4> residuals;
+    Array<float4> rotation_deltas;
+  } rotation_goal;
+};
+
 struct SolverParams {
   float delta_time;
-  bke::MutableAttributeAccessor geometry_attributes;
-  Vector<std::optional<bke::MutableAttributeAccessor>> constraint_attributes;
+  // bke::MutableAttributeAccessor geometry_attributes;
+  // Array<std::optional<bke::MutableAttributeAccessor>> constraint_attributes;
+  ConstraintEvalInputs inputs;
+  ConstraintEvalOutputs outputs;
 
   std::function<void(const NodeWarningType type, const StringRef message)> error_message_add;
 };
+
+template<typename T>
+static AttributeReader<T> lookup_or_warn(const SolverParams &params,
+                                         AttributeAccessor &attributes,
+                                         const StringRef attribute_id,
+                                         const AttrDomain domain,
+                                         const T &default_value)
+{
+  if (!attributes.contains(attribute_id)) {
+    params.error_message_add(geo_eval_log::NodeWarningType::Warning,
+                             fmt::format("Missing \"{}\" attribute", attribute_id));
+  }
+  return attributes.lookup_or_default<T>(attribute_id, domain, default_value);
+}
+
+void evaluate_constraint_group_position_goal(const SolverParams &params,
+                                             const IndexMask &group_mask)
+{
+  group_mask.foreach_index(GrainSize(1024), [&](const int index) {
+    const int point1 = params.inputs.position_goal.points[index];
+    const float3 &residual = params.inputs.positions[point1];
+    params.outputs.position_goal.residuals[index] = residual;
+  });
+}
+
+static VArray<int> constraints_solver_groups(const SolverParams &params, const ConstraintType type)
+{
+  switch (type) {
+    case ConstraintType::PositionGoal:
+      return params.inputs.position_goal.solver_group;
+    case ConstraintType::RotationGoal:
+      return params.inputs.rotation_goal.solver_group;
+    case ConstraintType::StretchShear:
+      // TODO
+      return {};
+    case ConstraintType::BendTwist:
+      // TODO
+      return {};
+    case ConstraintType::Contact:
+      // TODO
+      return {};
+  }
+  BLI_assert_unreachable();
+  return {};
+}
+
+static IndexRange constraints_range(const SolverParams &params, const ConstraintType type)
+{
+  return constraints_solver_groups(params, type).index_range();
+}
 
 /* Evaluate a group of constraints in parallel.
  * It's important that none of the constraints write to the same variables. Solver groups must be
  * computed in such a way that each variable is only affected by one constraint in each group.
  */
-static void evaluate_constraint_group(const IndexMask &group_mask)
+static void evaluate_constraint_group(const SolverParams &params,
+                                      const ConstraintType type,
+                                      const IndexMask &group_mask)
 {
-  group_mask.foreach_index(GrainSize(1024), [&](const int index) {
+  BLI_assert(!constraints_range(params, type).is_empty());
 
-  });
+  switch (type) {
+    case ConstraintType::PositionGoal:
+      evaluate_constraint_group_position_goal(params, group_mask);
+      break;
+  }
 }
 
 static void do_single_constraint_passes(const SolverParams &params, const ConstraintType type)
 {
-  if (!params.constraint_attributes[int(type)]) {
+  const IndexRange constraints = constraints_range(params, type);
+  if (constraints.is_empty()) {
     return;
   }
 
-  MutableAttributeAccessor constraint_attributes = *params.constraint_attributes[int(type)];
-  const IndexRange constraints = IndexRange(constraint_attributes.domain_size(AttrDomain::Point));
-  if (!constraint_attributes.contains(ATTR_SOLVER_GROUP)) {
-    params.error_message_add(geo_eval_log::NodeWarningType::Warning,
-                             "Missing 'solver_group' attribute");
-  }
-  VArray<int> solver_groups = *constraint_attributes.lookup_or_default<int>(
-      ATTR_SOLVER_GROUP, AttrDomain::Point, 0);
-
+  const VArray<int> solver_groups = constraints_solver_groups(params, type);
   IndexMaskMemory memory;
   VectorSet<int> unique_group_ids;
   Vector<IndexMask> group_index_masks = IndexMask::from_group_ids(
@@ -154,7 +245,7 @@ static void do_single_constraint_passes(const SolverParams &params, const Constr
     /* Group ID is not really relevant at this point. */
     /* const int group_id = unique_group_ids[i_group]; */
 
-    evaluate_constraint_group(group_mask);
+    evaluate_constraint_group(params, type, group_mask);
   }
 }
 
@@ -198,22 +289,25 @@ static void node_geo_exec(GeoNodeExecParams params)
   const float delta_time = std::max(params.extract_input<float>("Delta Time"), 0.0f);
   GeometrySet geometry_set = params.extract_input<GeometrySet>("Geometry");
 
-  Array<PointCloudComponent *> constraint_components(5, nullptr);
-  auto extract_constraint_component = [&](const ConstraintType type) {
-    BLI_assert(constraint_components.index_range().contains(int(type)));
-    GeometrySet constraint_geometry_set = params.extract_input<GeometrySet>(
+  Array<GeometrySet> constraint_geometry_sets(5);
+  Array<std::optional<MutableAttributeAccessor>> constraint_attributes(5, std::nullopt);
+  auto extract_constraint_attributes = [&](const ConstraintType type) {
+    BLI_assert(constraint_geometry_sets.index_range().contains(int(type)));
+    BLI_assert(constraint_attributes.index_range().contains(int(type)));
+    constraint_geometry_sets[int(type)] = params.extract_input<GeometrySet>(
         constraint_ui_geometry(type));
-    if (constraint_geometry_set.is_empty()) {
-      return;
+    GeometrySet &geometry_set = constraint_geometry_sets[int(type)];
+    if (geometry_set.has_component<PointCloudComponent>()) {
+      PointCloudComponent &constraint_component =
+          geometry_set.get_component_for_write<PointCloudComponent>();
+      constraint_attributes[int(type)] = constraint_component.attributes_for_write();
     }
-    constraint_components[int(type)] =
-        &constraint_geometry_set.get_component_for_write<PointCloudComponent>();
   };
-  extract_constraint_component(ConstraintType::PositionGoal);
-  extract_constraint_component(ConstraintType::RotationGoal);
-  extract_constraint_component(ConstraintType::StretchShear);
-  extract_constraint_component(ConstraintType::BendTwist);
-  extract_constraint_component(ConstraintType::Contact);
+  extract_constraint_attributes(ConstraintType::PositionGoal);
+  extract_constraint_attributes(ConstraintType::RotationGoal);
+  extract_constraint_attributes(ConstraintType::StretchShear);
+  extract_constraint_attributes(ConstraintType::BendTwist);
+  extract_constraint_attributes(ConstraintType::Contact);
 
   static const Array<GeometryComponent::Type> types = {bke::GeometryComponent::Type::Mesh,
                                                        bke::GeometryComponent::Type::PointCloud,
@@ -228,24 +322,56 @@ static void node_geo_exec(GeoNodeExecParams params)
           continue;
         }
 
-        SolverParams solver_params = {delta_time, *attributes};
-        solver_params.constraint_attributes.reinitialize(constraint_components.size());
-        for (const int i : constraint_components.index_range()) {
-          solver_params.constraint_attributes[i] =
-              constraint_components[i] ? constraint_components[i]->attributes_for_write() :
-                                         std::nullopt;
-        }
+        // SolverParams solver_params = {delta_time, *attributes};
+        // solver_params.constraint_attributes = constraint_attributes;
+        SolverParams solver_params = {delta_time};
         solver_params.error_message_add = [params](const NodeWarningType type,
                                                    const StringRef message) {
           params.error_message_add(type, message);
         };
+
+        solver_params.inputs.positions = *attributes->lookup_or_default<float3>(
+            ATTR_POSITION, AttrDomain::Point, float3(0.0f));
+        solver_params.inputs.rotations = *attributes->lookup_or_default<math::Quaternion>(
+            ATTR_ROTATION, AttrDomain::Point, math::Quaternion::identity());
+
+        if (std::optional<MutableAttributeAccessor> attributes =
+                constraint_attributes[int(ConstraintType::PositionGoal)])
+        {
+          solver_params.inputs.position_goal.solver_group = *lookup_or_warn<int>(
+              solver_params, *attributes, ATTR_SOLVER_GROUP, AttrDomain::Point, 0);
+          solver_params.inputs.position_goal.points = *lookup_or_warn<int>(
+              solver_params, *attributes, ATTR_POINT1, AttrDomain::Point, 0);
+          solver_params.inputs.position_goal.goals = *lookup_or_warn<float3>(
+              solver_params, *attributes, "goal", AttrDomain::Point, float3(0.0f));
+
+          solver_params.inputs.rotation_goal.solver_group = *lookup_or_warn<int>(
+              solver_params, *attributes, ATTR_SOLVER_GROUP, AttrDomain::Point, 0);
+          solver_params.inputs.rotation_goal.points = *lookup_or_warn<int>(
+              solver_params, *attributes, ATTR_POINT1, AttrDomain::Point, 0);
+          solver_params.inputs.rotation_goal.goals = *lookup_or_warn<math::Quaternion>(
+              solver_params, *attributes, "goal", AttrDomain::Point, math::Quaternion::identity());
+
+          const int num_constraints = attributes->domain_size(AttrDomain::Point);
+          solver_params.outputs.position_goal.residuals.reinitialize(num_constraints);
+          solver_params.outputs.position_goal.position_deltas.reinitialize(num_constraints);
+        }
 
         do_solver_steps(SolverMethod::GaussSeidel, gauss_seidel_steps, solver_params);
       }
     }
   });
 
-  params.set_default_remaining_outputs();
+  params.set_output("Geometry", geometry_set);
+
+  auto set_constraint_outputs = [&](const ConstraintType type) {
+    params.set_output(constraint_ui_geometry(type), constraint_geometry_sets[int(type)]);
+  };
+  set_constraint_outputs(ConstraintType::PositionGoal);
+  set_constraint_outputs(ConstraintType::RotationGoal);
+  set_constraint_outputs(ConstraintType::StretchShear);
+  set_constraint_outputs(ConstraintType::BendTwist);
+  set_constraint_outputs(ConstraintType::Contact);
 }
 
 static void node_register()
