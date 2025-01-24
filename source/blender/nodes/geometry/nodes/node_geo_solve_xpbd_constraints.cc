@@ -188,6 +188,28 @@ void evaluate_constraint_group_position_goal(const SolverParams &params,
   });
 }
 
+void evaluate_constraint_group_rotation_goal(const SolverParams &params,
+                                             const IndexMask &group_mask)
+{
+  group_mask.foreach_index(GrainSize(1024), [&](const int index) {});
+}
+
+void evaluate_constraint_group_stretch_shear(const SolverParams &params,
+                                             const IndexMask &group_mask)
+{
+  group_mask.foreach_index(GrainSize(1024), [&](const int index) {});
+}
+
+void evaluate_constraint_group_bend_twist(const SolverParams &params, const IndexMask &group_mask)
+{
+  group_mask.foreach_index(GrainSize(1024), [&](const int index) {});
+}
+
+void evaluate_constraint_group_contact(const SolverParams &params, const IndexMask &group_mask)
+{
+  group_mask.foreach_index(GrainSize(1024), [&](const int index) {});
+}
+
 static VArray<int> constraints_solver_groups(const SolverParams &params, const ConstraintType type)
 {
   switch (type) {
@@ -224,6 +246,18 @@ static void evaluate_constraint_group(const SolverParams &params,
   switch (type) {
     case ConstraintType::PositionGoal:
       evaluate_constraint_group_position_goal(params, group_mask);
+      break;
+    case ConstraintType::RotationGoal:
+      evaluate_constraint_group_rotation_goal(params, group_mask);
+      break;
+    case ConstraintType::StretchShear:
+      evaluate_constraint_group_stretch_shear(params, group_mask);
+      break;
+    case ConstraintType::BendTwist:
+      evaluate_constraint_group_bend_twist(params, group_mask);
+      break;
+    case ConstraintType::Contact:
+      evaluate_constraint_group_contact(params, group_mask);
       break;
   }
 
