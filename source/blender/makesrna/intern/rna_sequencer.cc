@@ -2070,6 +2070,15 @@ static void rna_def_sequence_modifiers(BlenderRNA *brna, PropertyRNA *cprop)
   RNA_def_function_ui_description(func, "Remove all modifiers from the sequence");
 }
 
+static void rna_def_sequence(BlenderRNA *brna)
+{
+  StructRNA *srna;
+
+  srna = RNA_def_struct(brna, "Sequence", "ID");
+  RNA_def_struct_ui_text(
+      srna, "Sequence", "Sequence data-block containing strips and output settings");
+}
+
 static void rna_def_strip(BlenderRNA *brna)
 {
   StructRNA *srna;
@@ -4008,6 +4017,8 @@ void RNA_def_sequencer(BlenderRNA *brna)
   rna_def_strip_color_balance(brna);
   rna_def_strip_crop(brna);
   rna_def_strip_transform(brna);
+
+  rna_def_sequence(brna);
 
   rna_def_strip(brna);
   rna_def_editor(brna);

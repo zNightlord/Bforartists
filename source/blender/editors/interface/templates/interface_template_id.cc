@@ -859,6 +859,8 @@ static const char *template_id_browse_tip(const StructRNA *type)
         return N_("Browse Volume Data to be linked");
       case ID_GP:
         return N_("Browse Grease Pencil v3 Data to be linked");
+      case ID_SEQ:
+        return N_("Browse Sequence to be linked");
 
         /* Use generic text. */
       case ID_LI:

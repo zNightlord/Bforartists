@@ -924,6 +924,8 @@ ListBase *which_libbase(Main *bmain, short type)
       return &(bmain->pointclouds);
     case ID_VO:
       return &(bmain->volumes);
+    case ID_SEQ:
+      return &(bmain->sequences);
   }
   return nullptr;
 }

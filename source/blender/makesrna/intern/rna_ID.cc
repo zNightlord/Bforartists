@@ -548,6 +548,8 @@ StructRNA *ID_code_to_RNA_type(short idcode)
       return &RNA_Scene;
     case ID_SCR:
       return &RNA_Screen;
+    case ID_SEQ:
+      return &RNA_Sequence;
     case ID_SO:
       return &RNA_Sound;
     case ID_SPK:
