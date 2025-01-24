@@ -379,6 +379,7 @@ typedef struct Sequence {
   struct AnimData *adt;
 
   Scene legacy_scene_data;
+  void *_pad;
 #ifdef __cplusplus
   Scene *wrap_as_legacy_scene_data();
 #endif

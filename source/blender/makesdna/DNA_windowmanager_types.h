@@ -297,6 +297,8 @@ typedef struct wmWindow {
 
   struct WorkSpaceInstanceHook *workspace_hook;
 
+  void *_pad;
+
   /** Global areas aren't part of the screen, but part of the window directly.
    * \note Code assumes global areas with fixed height, fixed width not supported yet */
   ScrAreaMap global_areas;
