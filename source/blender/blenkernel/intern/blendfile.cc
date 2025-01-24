@@ -1052,7 +1052,6 @@ static void setup_app_data(bContext *C,
     /* Enforce `curscene` to be in current screen. */
     else if (win) { /* The window may be null in background-mode. */
       win->scene = curscene;
-      win->sequence = cur_sequence;
     }
   }
 

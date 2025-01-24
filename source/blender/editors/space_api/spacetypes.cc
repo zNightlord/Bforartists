@@ -48,6 +48,7 @@
 #include "ED_scene.hh"
 #include "ED_screen.hh"
 #include "ED_sculpt.hh"
+#include "ED_sequence.hh"
 #include "ED_sequencer.hh"
 #include "ED_sound.hh"
 #include "ED_space_api.hh"
@@ -90,6 +91,7 @@ void ED_spacetypes_init()
   ED_operatortypes_workspace();
   ED_operatortypes_scene();
   ED_operatortypes_screen();
+  ED_operatortypes_sequence();
   ED_operatortypes_anim();
   ED_operatortypes_animchannels();
   asset::operatortypes_asset();
