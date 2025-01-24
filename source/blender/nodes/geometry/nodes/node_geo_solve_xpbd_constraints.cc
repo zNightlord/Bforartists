@@ -110,6 +110,8 @@ static void node_declare(NodeDeclarationBuilder &b)
 struct ConstraintEvalInputs {
   VArraySpan<float3> positions;
   VArraySpan<math::Quaternion> rotations;
+  Array<float3> positions_buffer;
+  Array<math::Quaternion> rotations_buffer;
 
   struct {
     VArray<int> solver_group;
@@ -124,6 +126,9 @@ struct ConstraintEvalInputs {
 };
 
 struct ConstraintEvalOutputs {
+  Array<float3> positions;
+  Array<math::Quaternion> rotations;
+
   struct {
     Array<float3> residuals;
     Array<float3> position_deltas;
@@ -136,16 +141,14 @@ struct ConstraintEvalOutputs {
 
 struct SolverParams {
   float delta_time;
-  // bke::MutableAttributeAccessor geometry_attributes;
-  // Array<std::optional<bke::MutableAttributeAccessor>> constraint_attributes;
-  ConstraintEvalInputs inputs;
-  ConstraintEvalOutputs outputs;
+  ConstraintEvalInputs &inputs;
+  ConstraintEvalOutputs &outputs;
 
   std::function<void(const NodeWarningType type, const StringRef message)> error_message_add;
 };
 
 template<typename T>
-static AttributeReader<T> lookup_or_warn(const SolverParams &params,
+static AttributeReader<T> lookup_or_warn(const GeoNodeExecParams &params,
                                          AttributeAccessor &attributes,
                                          const StringRef attribute_id,
                                          const AttrDomain domain,
@@ -163,8 +166,16 @@ void evaluate_constraint_group_position_goal(const SolverParams &params,
 {
   group_mask.foreach_index(GrainSize(1024), [&](const int index) {
     const int point1 = params.inputs.position_goal.points[index];
-    const float3 &residual = params.inputs.positions[point1];
+    const float3 position1 = params.inputs.positions[point1];
+    const float3 goal = params.inputs.position_goal.goals[index];
+
+    const float3 residual = position1 - goal;
+    /* Gradient is identity transform. */
+    const float3 position_delta = -residual;
     params.outputs.position_goal.residuals[index] = residual;
+    params.outputs.position_goal.position_deltas[index] = position_delta;
+
+    params.outputs.positions[point1] = position1 + position_delta;
   });
 }
 
@@ -209,6 +220,12 @@ static void evaluate_constraint_group(const SolverParams &params,
       evaluate_constraint_group_position_goal(params, group_mask);
       break;
   }
+
+  /* Move output array to input buffer for next update. */
+  params.inputs.positions_buffer = params.outputs.positions;
+  params.inputs.rotations_buffer = params.outputs.rotations;
+  params.inputs.positions = VArray<float3>::ForContainer(params.inputs.positions_buffer);
+  params.inputs.rotations = VArray<math::Quaternion>::ForContainer(params.inputs.rotations_buffer);
 }
 
 static void do_single_constraint_passes(const SolverParams &params, const ConstraintType type)
@@ -322,42 +339,69 @@ static void node_geo_exec(GeoNodeExecParams params)
           continue;
         }
 
-        // SolverParams solver_params = {delta_time, *attributes};
-        // solver_params.constraint_attributes = constraint_attributes;
-        SolverParams solver_params = {delta_time};
+        ConstraintEvalInputs constraint_inputs;
+        ConstraintEvalOutputs constraint_outputs;
+
+        const int num_points = attributes->domain_size(AttrDomain::Point);
+        AttributeWriter<float3> positions_writer = attributes->lookup_or_add_for_write<float3>(
+            ATTR_POSITION, AttrDomain::Point);
+        AttributeWriter<math::Quaternion> rotations_writer =
+            attributes->lookup_or_add_for_write<math::Quaternion>(ATTR_ROTATION,
+                                                                  AttrDomain::Point);
+        constraint_inputs.positions = VArraySpan<float3>(positions_writer.varray);
+        constraint_inputs.rotations = VArraySpan<math::Quaternion>(rotations_writer.varray);
+
+        /* Full input copy to initialize outputs, since not all variables may be changed. */
+        constraint_outputs.positions.reinitialize(num_points);
+        constraint_outputs.rotations.reinitialize(num_points);
+        array_utils::copy(constraint_inputs.positions,
+                          constraint_outputs.positions.as_mutable_span());
+        array_utils::copy(constraint_inputs.rotations,
+                          constraint_outputs.rotations.as_mutable_span());
+
+        if (std::optional<MutableAttributeAccessor> attributes =
+                constraint_attributes[int(ConstraintType::PositionGoal)])
+        {
+          constraint_inputs.position_goal.solver_group = *lookup_or_warn<int>(
+              params, *attributes, ATTR_SOLVER_GROUP, AttrDomain::Point, 0);
+          constraint_inputs.position_goal.points = *lookup_or_warn<int>(
+              params, *attributes, ATTR_POINT1, AttrDomain::Point, 0);
+          constraint_inputs.position_goal.goals = *lookup_or_warn<float3>(
+              params, *attributes, "goal", AttrDomain::Point, float3(0.0f));
+
+          const int num_constraints = attributes->domain_size(AttrDomain::Point);
+          constraint_outputs.position_goal.residuals.reinitialize(num_constraints);
+          constraint_outputs.position_goal.position_deltas.reinitialize(num_constraints);
+        }
+        if (std::optional<MutableAttributeAccessor> attributes =
+                constraint_attributes[int(ConstraintType::RotationGoal)])
+        {
+          constraint_inputs.rotation_goal.solver_group = *lookup_or_warn<int>(
+              params, *attributes, ATTR_SOLVER_GROUP, AttrDomain::Point, 0);
+          constraint_inputs.rotation_goal.points = *lookup_or_warn<int>(
+              params, *attributes, ATTR_POINT1, AttrDomain::Point, 0);
+          constraint_inputs.rotation_goal.goals = *lookup_or_warn<math::Quaternion>(
+              params, *attributes, "goal", AttrDomain::Point, math::Quaternion::identity());
+        }
+
+        SolverParams solver_params = {delta_time, constraint_inputs, constraint_outputs};
         solver_params.error_message_add = [params](const NodeWarningType type,
                                                    const StringRef message) {
           params.error_message_add(type, message);
         };
 
-        solver_params.inputs.positions = *attributes->lookup_or_default<float3>(
-            ATTR_POSITION, AttrDomain::Point, float3(0.0f));
-        solver_params.inputs.rotations = *attributes->lookup_or_default<math::Quaternion>(
-            ATTR_ROTATION, AttrDomain::Point, math::Quaternion::identity());
-
-        if (std::optional<MutableAttributeAccessor> attributes =
-                constraint_attributes[int(ConstraintType::PositionGoal)])
-        {
-          solver_params.inputs.position_goal.solver_group = *lookup_or_warn<int>(
-              solver_params, *attributes, ATTR_SOLVER_GROUP, AttrDomain::Point, 0);
-          solver_params.inputs.position_goal.points = *lookup_or_warn<int>(
-              solver_params, *attributes, ATTR_POINT1, AttrDomain::Point, 0);
-          solver_params.inputs.position_goal.goals = *lookup_or_warn<float3>(
-              solver_params, *attributes, "goal", AttrDomain::Point, float3(0.0f));
-
-          solver_params.inputs.rotation_goal.solver_group = *lookup_or_warn<int>(
-              solver_params, *attributes, ATTR_SOLVER_GROUP, AttrDomain::Point, 0);
-          solver_params.inputs.rotation_goal.points = *lookup_or_warn<int>(
-              solver_params, *attributes, ATTR_POINT1, AttrDomain::Point, 0);
-          solver_params.inputs.rotation_goal.goals = *lookup_or_warn<math::Quaternion>(
-              solver_params, *attributes, "goal", AttrDomain::Point, math::Quaternion::identity());
-
-          const int num_constraints = attributes->domain_size(AttrDomain::Point);
-          solver_params.outputs.position_goal.residuals.reinitialize(num_constraints);
-          solver_params.outputs.position_goal.position_deltas.reinitialize(num_constraints);
-        }
-
         do_solver_steps(SolverMethod::GaussSeidel, gauss_seidel_steps, solver_params);
+
+        /* Result is in input buffers, move to attributes. */
+        /* TODO is there an efficient way to move this data rather than copy? */
+        if (constraint_inputs.positions_buffer.size() == num_points) {
+          positions_writer.varray.set_all(constraint_inputs.positions_buffer);
+        }
+        if (constraint_inputs.rotations_buffer.size() == num_points) {
+          rotations_writer.varray.set_all(constraint_inputs.rotations_buffer);
+        }
+        positions_writer.finish();
+        rotations_writer.finish();
       }
     }
   });
