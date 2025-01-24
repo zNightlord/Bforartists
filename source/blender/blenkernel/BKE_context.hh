@@ -386,7 +386,7 @@ enum eContextObjectMode CTX_data_mode_enum_ex(const Object *obedit,
 enum eContextObjectMode CTX_data_mode_enum(const bContext *C);
 
 void CTX_data_main_set(bContext *C, Main *bmain);
-void CTX_data_sequence_set(bContext *C, Sequence *scene);
+void CTX_data_sequence_set(bContext *C, Sequence *sequence);
 void CTX_data_scene_set(bContext *C, Scene *scene);
 
 /* Only Outliner currently! */

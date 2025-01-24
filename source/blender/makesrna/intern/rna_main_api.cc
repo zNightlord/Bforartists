@@ -55,6 +55,7 @@
 #  include "BKE_particle.h"
 #  include "BKE_pointcloud.hh"
 #  include "BKE_scene.hh"
+#  include "BKE_sequence.hh"
 #  include "BKE_sound.h"
 #  include "BKE_speaker.h"
 #  include "BKE_text.h"
@@ -207,6 +208,52 @@ static void rna_Main_scenes_remove(
                 RPT_ERROR,
                 "Scene '%s' is the last local one, cannot be removed",
                 scene->id.name + 2);
+  }
+}
+
+static Sequence *rna_Main_sequences_new(Main *bmain, const char *name)
+{
+  char safe_name[MAX_ID_NAME - 2];
+  rna_idname_validate(name, safe_name);
+
+  Sequence *sequence = BKE_sequence_add(*bmain, safe_name);
+
+  WM_main_add_notifier(NC_ID | NA_ADDED, nullptr);
+
+  return sequence;
+}
+static void rna_Main_sequences_remove(
+    Main *bmain, bContext *C, ReportList *reports, PointerRNA *sequence_ptr, bool do_unlink)
+{
+  /* don't call BKE_id_free(...) directly */
+  Sequence &sequence = *static_cast<Sequence *>(sequence_ptr->data);
+
+  if (BKE_sequence_can_be_removed(*bmain, sequence)) {
+    Sequence *sequence_new = static_cast<Sequence *>(sequence.id.prev ? sequence.id.prev :
+                                                                        sequence.id.next);
+    if (do_unlink) {
+      wmWindow *win = CTX_wm_window(C);
+
+      if (WM_window_get_active_sequence(win) == sequence_new) {
+
+#  ifdef WITH_PYTHON
+        BPy_BEGIN_ALLOW_THREADS;
+#  endif
+
+        WM_window_set_active_sequence(bmain, C, win, sequence_new);
+
+#  ifdef WITH_PYTHON
+        BPy_END_ALLOW_THREADS;
+#  endif
+      }
+    }
+    rna_Main_ID_remove(bmain, reports, sequence_ptr, do_unlink, true, true);
+  }
+  else {
+    BKE_reportf(reports,
+                RPT_ERROR,
+                "Sequence '%s' is the last local one, cannot be removed",
+                sequence.id.name + 2);
   }
 }
 
@@ -814,6 +861,7 @@ static Volume *rna_Main_volumes_new(Main *bmain, const char *name)
 
 RNA_MAIN_ID_TAG_FUNCS_DEF(cameras, cameras, ID_CA)
 RNA_MAIN_ID_TAG_FUNCS_DEF(scenes, scenes, ID_SCE)
+RNA_MAIN_ID_TAG_FUNCS_DEF(sequences, sequences, ID_SEQ)
 RNA_MAIN_ID_TAG_FUNCS_DEF(objects, objects, ID_OB)
 RNA_MAIN_ID_TAG_FUNCS_DEF(materials, materials, ID_MA)
 RNA_MAIN_ID_TAG_FUNCS_DEF(node_groups, nodetrees, ID_NT)
@@ -947,6 +995,39 @@ void RNA_def_main_scenes(BlenderRNA *brna, PropertyRNA *cprop)
       func, "do_unlink", true, "", "Unlink all usages of this scene before deleting it");
 
   func = RNA_def_function(srna, "tag", "rna_Main_scenes_tag");
+  parm = RNA_def_boolean(func, "value", false, "Value", "");
+  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+}
+
+void RNA_def_main_sequences(BlenderRNA *brna, PropertyRNA *cprop)
+{
+  StructRNA *srna;
+  FunctionRNA *func;
+  PropertyRNA *parm;
+
+  RNA_def_property_srna(cprop, "BlendDataSequences");
+  srna = RNA_def_struct(brna, "BlendDataSequences", nullptr);
+  RNA_def_struct_sdna(srna, "Main");
+  RNA_def_struct_ui_text(srna, "Main Sequences", "Collection of sequences");
+
+  func = RNA_def_function(srna, "new", "rna_Main_sequences_new");
+  RNA_def_function_ui_description(func, "Add a new sequence to the main database");
+  parm = RNA_def_string(func, "name", "Sequence", 0, "", "New name for the data-block");
+  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+  /* return type */
+  parm = RNA_def_pointer(func, "sequence", "Sequence", "", "New sequence data-block");
+  RNA_def_function_return(func, parm);
+
+  func = RNA_def_function(srna, "remove", "rna_Main_sequences_remove");
+  RNA_def_function_flag(func, FUNC_USE_CONTEXT | FUNC_USE_REPORTS);
+  RNA_def_function_ui_description(func, "Remove a sequence from the current blendfile");
+  parm = RNA_def_pointer(func, "sequence", "Sequence", "", "Sequence to remove");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED | PARM_RNAPTR);
+  RNA_def_parameter_clear_flags(parm, PROP_THICK_WRAP, ParameterFlag(0));
+  RNA_def_boolean(
+      func, "do_unlink", true, "", "Unlink all usages of this sequence before deleting it");
+
+  func = RNA_def_function(srna, "tag", "rna_Main_sequences_tag");
   parm = RNA_def_boolean(func, "value", false, "Value", "");
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
 }

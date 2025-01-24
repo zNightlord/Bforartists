@@ -8,6 +8,8 @@
  */
 
 #include "BKE_idtype.hh"
+#include "BKE_lib_id.hh"
+#include "BKE_main.hh"
 #include "BKE_sequence.hh"
 
 #include "BLT_translation.hh"
@@ -41,3 +43,27 @@ IDTypeInfo IDType_ID_SEQ = {
 
     /*lib_override_apply_post*/ nullptr,
 };
+
+Sequence *BKE_sequence_add(Main &bmain, const char *name)
+{
+  Sequence *sequence = static_cast<Sequence *>(BKE_id_new(&bmain, ID_SEQ, name));
+  id_us_min(&sequence->id);
+  id_us_ensure_real(&sequence->id);
+
+  return sequence;
+}
+
+bool BKE_sequence_can_be_removed(const Main &bmain, const Sequence &sequence)
+{
+  /* Linked sequences can always be removed. */
+  if (ID_IS_LINKED(&sequence)) {
+    return true;
+  }
+  /* Local scenes can only be removed, when there is at least one local scene left. */
+  LISTBASE_FOREACH (Sequence *, other_sequence, &bmain.sequences) {
+    if (other_sequence != &sequence && !ID_IS_LINKED(other_sequence)) {
+      return true;
+    }
+  }
+  return false;
+}

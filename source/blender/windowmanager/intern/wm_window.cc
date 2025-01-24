@@ -2981,6 +2981,40 @@ void WM_window_set_active_screen(wmWindow *win, WorkSpace *workspace, bScreen *s
   BKE_workspace_active_screen_set(win->workspace_hook, win->winid, workspace, screen);
 }
 
+Sequence *WM_window_get_active_sequence(const wmWindow *win)
+{
+  return win->sequence;
+}
+
+void WM_window_set_active_sequence(Main * /*bmain*/,
+                                   bContext *C,
+                                   wmWindow *win,
+                                   Sequence *sequence)
+{
+  wmWindowManager *wm = CTX_wm_manager(C);
+  wmWindow *win_parent = (win->parent) ? win->parent : win;
+  bool changed = false;
+
+  if (win_parent->sequence != sequence) {
+    /* TODO: Update sequence. */
+    changed = true;
+  }
+
+  LISTBASE_FOREACH (wmWindow *, win_child, &wm->windows) {
+    if (win_child->parent == win_parent && win_child->sequence != sequence) {
+      /* TODO: Update sequence. */
+      changed = true;
+    }
+  }
+
+  if (changed) {
+    /* TODO: Updates. */
+
+    /* Complete redraw. */
+    WM_event_add_notifier(C, NC_WINDOW, nullptr);
+  }
+}
+
 bool WM_window_is_temp_screen(const wmWindow *win)
 {
   const bScreen *screen = WM_window_get_active_screen(win);
