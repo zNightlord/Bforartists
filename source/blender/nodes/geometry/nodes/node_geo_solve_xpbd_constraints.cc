@@ -109,7 +109,7 @@ static void node_declare(NodeDeclarationBuilder &b)
   add_constraint_input_output(ConstraintType::BendTwist);
   add_constraint_input_output(ConstraintType::Contact);
   b.add_input<decl::Geometry>("Colliders")
-      .supported_type(GeometryComponent::Type::Instance)
+      .only_instances()
       .description("Instances of colliders to evaluate contact transforms");
 }
 
@@ -150,6 +150,9 @@ struct ConstraintEvalInputs {
     VArraySpan<float3> local_position1;
     VArraySpan<float3> local_position2;
     VArraySpan<float3> normal;
+
+    VArraySpan<float> friction;
+    VArraySpan<float> restitution;
   } contact;
 };
 
@@ -193,9 +196,9 @@ void evaluate_constraint_group_position_goal(const SolverParams &params,
 
     const float3 residual = position1 - goal;
     /* Gradient is identity transform. */
-    const float3 position_delta = -residual;
+    const float3 delta_position = -residual;
 
-    params.outputs.positions[point1] = position1 + position_delta;
+    params.outputs.positions[point1] = position1 + delta_position;
   });
 }
 
@@ -225,20 +228,60 @@ void evaluate_constraint_group_contact(const SolverParams &params, const IndexMa
       return;
     };
 
+    /* Local positions are relative to moving point and collider respectively. */
     const float3 &local_position1 = params.inputs.contact.local_position1[index];
     const float3 &local_position2 = params.inputs.contact.local_position2[index];
+    /* Normal is a fixed shared direction for both participants. */
+    const float3 &normal = params.inputs.contact.normal[index];
 
+    /* Construct transforms for both the point (translation only for now) as well as the collider.
+     * Also construct the "old" transforms from the previous step to compute velocity and apply
+     * friction and restitution. */
     const float3 position1 = params.inputs.positions[point1];
     const float3 old_position1 = params.inputs.old_positions[point1];
     const float4x4 point_transform = math::from_location<float4x4>(position1);
     const float4x4 old_point_transform = math::from_location<float4x4>(old_position1);
     const float4x4 &collider_transform = params.collider_transforms[collider_index];
     const float4x4 &old_collider_transform = params.old_collider_transforms[collider_index];
+    /* Contact points are computed by applying the transforms to relative local positions. */
     const float3 contact_point1 = math::transform_point(point_transform, local_position1);
     const float3 contact_point2 = math::transform_point(collider_transform, local_position2);
     const float3 old_contact_point1 = math::transform_point(old_point_transform, local_position1);
     const float3 old_contact_point2 = math::transform_point(old_collider_transform,
                                                             local_position2);
+
+    /* Positional constraint for penetration depth along the normal. */
+    const float residual_depth = math::dot(contact_point1 - contact_point2, normal);
+    /* Only act on contact. */
+    const bool active = residual_depth < 0.0f;
+    if (!active) {
+      return;
+    }
+    /* Gradient is normal, length is 1, no need to compute gradient norm. */
+    const float3 delta_position = -residual_depth * normal;
+
+    /* Compute location delta for the friction and restitution velocity constraints.
+     * Note that time step size can be ignored for applying positional constraints. */
+    const float3 velocity1 = contact_point1 - old_contact_point1;
+    const float3 velocity2 = contact_point2 - old_contact_point2;
+    const float3 relative_velocity = velocity1 - velocity2;
+    const float normal_relative_velocity = math::dot(relative_velocity, normal);
+    const float3 surface_relative_velocity = relative_velocity - normal * normal_relative_velocity;
+
+    const float residual_restitution = normal_relative_velocity;
+    /* Folded into delta. */
+    /* const float residual_friction = math::length(surface_relative_velocity); */
+    const float restitution = params.inputs.contact.restitution[index];
+    const float friction = params.inputs.contact.friction[index];
+    /* Gradients are normalized, no need to compute gradient norm. */
+    const float3 delta_velocity_restitution = (residual_restitution < 0.0f ?
+                                                   -normal * residual_restitution *
+                                                       (1.0f - restitution) :
+                                                   float3(0.0f));
+    const float3 delta_velocity_friction = -friction * surface_relative_velocity;
+
+    params.outputs.positions[point1] = position1 + delta_position + delta_velocity_restitution +
+                                       delta_velocity_friction;
   });
 }
 
@@ -488,6 +531,11 @@ static void node_geo_exec(GeoNodeExecParams params)
         params, *attributes, "local_position2", AttrDomain::Point, float3(0.0f));
     constraint_inputs.contact.normal = *lookup_or_warn<float3>(
         params, *attributes, "normal", AttrDomain::Point, float3(0.0f));
+
+    constraint_inputs.contact.friction = *attributes->lookup_or_default<float>(
+        "friction", AttrDomain::Point, 0.0f);
+    constraint_inputs.contact.restitution = *attributes->lookup_or_default<float>(
+        "restitution", AttrDomain::Point, 0.0f);
   }
 
   static const Array<GeometryComponent::Type> types = {bke::GeometryComponent::Type::Mesh,
@@ -540,16 +588,16 @@ static void node_geo_exec(GeoNodeExecParams params)
         if (position_output_id) {
           AttributeWriter<float3> positions_writer = attributes->lookup_or_add_for_write<float3>(
               *position_output_id, AttrDomain::Point);
-          BLI_assert(constraint_inputs.positions_buffer.size() == num_points);
-          positions_writer.varray.set_all(constraint_inputs.positions_buffer);
+          BLI_assert(constraint_inputs.positions.size() == num_points);
+          positions_writer.varray.set_all(constraint_inputs.positions);
           positions_writer.finish();
         }
-        if (rotation_output_id) {
+        if (rotation_output_id && !constraint_inputs.rotations_buffer.is_empty()) {
           AttributeWriter<math::Quaternion> rotations_writer =
               attributes->lookup_or_add_for_write<math::Quaternion>(*rotation_output_id,
                                                                     AttrDomain::Point);
-          BLI_assert(constraint_inputs.rotations_buffer.size() == num_points);
-          rotations_writer.varray.set_all(constraint_inputs.rotations_buffer);
+          BLI_assert(constraint_inputs.rotations.size() == num_points);
+          rotations_writer.varray.set_all(constraint_inputs.rotations);
           rotations_writer.finish();
         }
       }
