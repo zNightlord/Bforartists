@@ -123,20 +123,31 @@ struct ConstraintEvalInputs {
     VArraySpan<int> points;
     VArraySpan<math::Quaternion> goals;
   } rotation_goal;
+  struct {
+    VArray<int> solver_group;
+    VArraySpan<int> points1;
+    VArraySpan<int> points2;
+    VArraySpan<float> edge_length;
+  } stretch_shear;
+  struct {
+    VArray<int> solver_group;
+    VArraySpan<int> points1;
+    VArraySpan<int> points2;
+    VArraySpan<float3> darboux_vector;
+  } bend_twist;
+  struct {
+    VArray<int> solver_group;
+    VArraySpan<int> points;
+    VArraySpan<int> collider_index;
+    VArraySpan<float3> local_position1;
+    VArraySpan<float3> local_position2;
+    VArraySpan<float3> normal;
+  } contact;
 };
 
 struct ConstraintEvalOutputs {
   Array<float3> positions;
   Array<math::Quaternion> rotations;
-
-  struct {
-    Array<float3> residuals;
-    Array<float3> position_deltas;
-  } position_goal;
-  struct {
-    Array<float4> residuals;
-    Array<float4> rotation_deltas;
-  } rotation_goal;
 };
 
 struct SolverParams {
@@ -172,8 +183,6 @@ void evaluate_constraint_group_position_goal(const SolverParams &params,
     const float3 residual = position1 - goal;
     /* Gradient is identity transform. */
     const float3 position_delta = -residual;
-    params.outputs.position_goal.residuals[index] = residual;
-    params.outputs.position_goal.position_deltas[index] = position_delta;
 
     params.outputs.positions[point1] = position1 + position_delta;
   });
@@ -187,14 +196,11 @@ static VArray<int> constraints_solver_groups(const SolverParams &params, const C
     case ConstraintType::RotationGoal:
       return params.inputs.rotation_goal.solver_group;
     case ConstraintType::StretchShear:
-      // TODO
-      return {};
+      return params.inputs.stretch_shear.solver_group;
     case ConstraintType::BendTwist:
-      // TODO
-      return {};
+      return params.inputs.bend_twist.solver_group;
     case ConstraintType::Contact:
-      // TODO
-      return {};
+      return params.inputs.contact.solver_group;
   }
   BLI_assert_unreachable();
   return {};
@@ -326,6 +332,80 @@ static void node_geo_exec(GeoNodeExecParams params)
   extract_constraint_attributes(ConstraintType::BendTwist);
   extract_constraint_attributes(ConstraintType::Contact);
 
+  ConstraintEvalInputs constraint_inputs;
+  ConstraintEvalOutputs constraint_outputs;
+
+  if (std::optional<MutableAttributeAccessor> attributes =
+          constraint_attributes[int(ConstraintType::PositionGoal)])
+  {
+    const int num_constraints = attributes->domain_size(AttrDomain::Point);
+
+    constraint_inputs.position_goal.solver_group = *lookup_or_warn<int>(
+        params, *attributes, ATTR_SOLVER_GROUP, AttrDomain::Point, 0);
+    constraint_inputs.position_goal.points = *lookup_or_warn<int>(
+        params, *attributes, ATTR_POINT1, AttrDomain::Point, 0);
+    constraint_inputs.position_goal.goals = *lookup_or_warn<float3>(
+        params, *attributes, "goal", AttrDomain::Point, float3(0.0f));
+  }
+  if (std::optional<MutableAttributeAccessor> attributes =
+          constraint_attributes[int(ConstraintType::RotationGoal)])
+  {
+    const int num_constraints = attributes->domain_size(AttrDomain::Point);
+
+    constraint_inputs.rotation_goal.solver_group = *lookup_or_warn<int>(
+        params, *attributes, ATTR_SOLVER_GROUP, AttrDomain::Point, 0);
+    constraint_inputs.rotation_goal.points = *lookup_or_warn<int>(
+        params, *attributes, ATTR_POINT1, AttrDomain::Point, 0);
+    constraint_inputs.rotation_goal.goals = *lookup_or_warn<math::Quaternion>(
+        params, *attributes, "goal", AttrDomain::Point, math::Quaternion::identity());
+  }
+  if (std::optional<MutableAttributeAccessor> attributes =
+          constraint_attributes[int(ConstraintType::StretchShear)])
+  {
+    const int num_constraints = attributes->domain_size(AttrDomain::Point);
+
+    constraint_inputs.stretch_shear.solver_group = *lookup_or_warn<int>(
+        params, *attributes, ATTR_SOLVER_GROUP, AttrDomain::Point, 0);
+    constraint_inputs.stretch_shear.points1 = *lookup_or_warn<int>(
+        params, *attributes, ATTR_POINT1, AttrDomain::Point, 0);
+    constraint_inputs.stretch_shear.points2 = *lookup_or_warn<int>(
+        params, *attributes, ATTR_POINT2, AttrDomain::Point, 0);
+    constraint_inputs.stretch_shear.edge_length = *lookup_or_warn<float>(
+        params, *attributes, "edge_length", AttrDomain::Point, 0.0f);
+  }
+  if (std::optional<MutableAttributeAccessor> attributes =
+          constraint_attributes[int(ConstraintType::BendTwist)])
+  {
+    const int num_constraints = attributes->domain_size(AttrDomain::Point);
+
+    constraint_inputs.bend_twist.solver_group = *lookup_or_warn<int>(
+        params, *attributes, ATTR_SOLVER_GROUP, AttrDomain::Point, 0);
+    constraint_inputs.bend_twist.points1 = *lookup_or_warn<int>(
+        params, *attributes, ATTR_POINT1, AttrDomain::Point, 0);
+    constraint_inputs.bend_twist.points2 = *lookup_or_warn<int>(
+        params, *attributes, ATTR_POINT2, AttrDomain::Point, 0);
+    constraint_inputs.bend_twist.darboux_vector = *lookup_or_warn<float3>(
+        params, *attributes, "darboux_vector", AttrDomain::Point, float3(0.0f));
+  }
+  if (std::optional<MutableAttributeAccessor> attributes =
+          constraint_attributes[int(ConstraintType::Contact)])
+  {
+    const int num_constraints = attributes->domain_size(AttrDomain::Point);
+
+    constraint_inputs.contact.solver_group = *lookup_or_warn<int>(
+        params, *attributes, ATTR_SOLVER_GROUP, AttrDomain::Point, 0);
+    constraint_inputs.contact.points = *lookup_or_warn<int>(
+        params, *attributes, ATTR_POINT1, AttrDomain::Point, 0);
+    constraint_inputs.contact.collider_index = *lookup_or_warn<int>(
+        params, *attributes, "collider_index", AttrDomain::Point, 0);
+    constraint_inputs.contact.local_position1 = *lookup_or_warn<float3>(
+        params, *attributes, "local_position1", AttrDomain::Point, float3(0.0f));
+    constraint_inputs.contact.local_position2 = *lookup_or_warn<float3>(
+        params, *attributes, "local_position2", AttrDomain::Point, float3(0.0f));
+    constraint_inputs.contact.normal = *lookup_or_warn<float3>(
+        params, *attributes, "normal", AttrDomain::Point, float3(0.0f));
+  }
+
   static const Array<GeometryComponent::Type> types = {bke::GeometryComponent::Type::Mesh,
                                                        bke::GeometryComponent::Type::PointCloud,
                                                        bke::GeometryComponent::Type::Curve,
@@ -338,9 +418,6 @@ static void node_geo_exec(GeoNodeExecParams params)
         if (!attributes) {
           continue;
         }
-
-        ConstraintEvalInputs constraint_inputs;
-        ConstraintEvalOutputs constraint_outputs;
 
         const int num_points = attributes->domain_size(AttrDomain::Point);
         AttributeWriter<float3> positions_writer = attributes->lookup_or_add_for_write<float3>(
@@ -358,31 +435,6 @@ static void node_geo_exec(GeoNodeExecParams params)
                           constraint_outputs.positions.as_mutable_span());
         array_utils::copy(constraint_inputs.rotations,
                           constraint_outputs.rotations.as_mutable_span());
-
-        if (std::optional<MutableAttributeAccessor> attributes =
-                constraint_attributes[int(ConstraintType::PositionGoal)])
-        {
-          constraint_inputs.position_goal.solver_group = *lookup_or_warn<int>(
-              params, *attributes, ATTR_SOLVER_GROUP, AttrDomain::Point, 0);
-          constraint_inputs.position_goal.points = *lookup_or_warn<int>(
-              params, *attributes, ATTR_POINT1, AttrDomain::Point, 0);
-          constraint_inputs.position_goal.goals = *lookup_or_warn<float3>(
-              params, *attributes, "goal", AttrDomain::Point, float3(0.0f));
-
-          const int num_constraints = attributes->domain_size(AttrDomain::Point);
-          constraint_outputs.position_goal.residuals.reinitialize(num_constraints);
-          constraint_outputs.position_goal.position_deltas.reinitialize(num_constraints);
-        }
-        if (std::optional<MutableAttributeAccessor> attributes =
-                constraint_attributes[int(ConstraintType::RotationGoal)])
-        {
-          constraint_inputs.rotation_goal.solver_group = *lookup_or_warn<int>(
-              params, *attributes, ATTR_SOLVER_GROUP, AttrDomain::Point, 0);
-          constraint_inputs.rotation_goal.points = *lookup_or_warn<int>(
-              params, *attributes, ATTR_POINT1, AttrDomain::Point, 0);
-          constraint_inputs.rotation_goal.goals = *lookup_or_warn<math::Quaternion>(
-              params, *attributes, "goal", AttrDomain::Point, math::Quaternion::identity());
-        }
 
         SolverParams solver_params = {delta_time, constraint_inputs, constraint_outputs};
         solver_params.error_message_add = [params](const NodeWarningType type,
