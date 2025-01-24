@@ -2077,6 +2077,8 @@ static void rna_def_sequence(BlenderRNA *brna)
   srna = RNA_def_struct(brna, "Sequence", "ID");
   RNA_def_struct_ui_text(
       srna, "Sequence", "Sequence data-block containing strips and output settings");
+  /* TODO: Update icon. */
+  RNA_def_struct_ui_icon(srna, ICON_RENDER_ANIMATION);
 }
 
 static void rna_def_strip(BlenderRNA *brna)

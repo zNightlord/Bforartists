@@ -453,6 +453,9 @@ short RNA_type_to_ID_code(const StructRNA *type)
   if (base_type == &RNA_Screen) {
     return ID_SCR;
   }
+  if (base_type == &RNA_Sequence) {
+    return ID_SEQ;
+  }
   if (base_type == &RNA_Sound) {
     return ID_SO;
   }

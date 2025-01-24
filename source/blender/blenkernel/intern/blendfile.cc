@@ -1032,7 +1032,7 @@ static void setup_app_data(bContext *C,
   }
   if (cur_sequence == nullptr) {
     BLI_assert(bfd->main != nullptr);
-    cur_sequence = BKE_sequence_add(*bfd->main, "Empty");
+    cur_sequence = BKE_sequence_add(*bfd->main, N_("Sequence"));
   }
 
   /* If UI is not loaded when opening actual `.blend` file,
@@ -1100,6 +1100,7 @@ static void setup_app_data(bContext *C,
   if (mode != LOAD_UI) {
     if (win) {
       curscene = win->scene;
+      cur_sequence = win->sequence;
     }
 
     if (track_undo_scene) {
