@@ -26,6 +26,12 @@ enum class ConstraintType {
   /* Keep contact points from penetrating. */
   Contact,
 };
+constexpr int NumConstraintTypes = 5;
+
+enum class EvaluationTarget {
+  Positions,
+  Velocities,
+};
 
 enum class SolverMethod {
   GaussSeidel,
@@ -36,6 +42,7 @@ enum class SolverMethod {
 constexpr StringRef ATTR_SOLVER_GROUP = "solver_group";
 constexpr StringRef ATTR_POINT1 = "point1";
 constexpr StringRef ATTR_POINT2 = "point2";
+constexpr StringRef ATTR_ACTIVE = "active";
 
 static StringRef constraint_ui_geometry(const ConstraintType type)
 {
@@ -73,10 +80,10 @@ static StringRef constraint_ui_description(const ConstraintType type)
   return "";
 }
 
-static void node_declare(NodeDeclarationBuilder &b)
-{
-  constexpr float default_fps = 1.0f / 25.0f;
+constexpr float default_fps = 1.0f / 25.0f;
 
+static void node_declare_positions(NodeDeclarationBuilder &b)
+{
   b.use_custom_socket_order();
   b.allow_any_socket_order();
 
@@ -117,13 +124,78 @@ static void node_declare(NodeDeclarationBuilder &b)
       .description("Perform checks on input data, which can impact performance");
 }
 
+static void node_declare_velocities(NodeDeclarationBuilder &b)
+{
+  b.use_custom_socket_order();
+  b.allow_any_socket_order();
+
+  b.add_input<decl::Float>("Delta Time").default_value(default_fps).min(0.0f).hide_value();
+  b.add_input<decl::Int>("Gauss-Seidel Steps").default_value(1).min(0);
+
+  b.add_input<decl::Geometry>("Geometry");
+  b.add_output<decl::Geometry>("Geometry").align_with_previous();
+
+  b.add_input<decl::Vector>("Velocity").field_on({2});
+  b.add_output<decl::Vector>("Velocity").field_on({0}).align_with_previous();
+  b.add_input<decl::Vector>("Angular Velocity").field_on({2}).hide_value();
+  b.add_output<decl::Vector>("Angular Velocity").field_on({0}).align_with_previous();
+
+  auto add_constraint_input_output = [&](const ConstraintType type) {
+    const StringRef name = constraint_ui_geometry(type);
+    const StringRef description = constraint_ui_description(type);
+
+    b.add_input<decl::Geometry>(name)
+        .supported_type(GeometryComponent::Type::PointCloud)
+        .description(description);
+    b.add_output<decl::Geometry>(name).description(description).align_with_previous();
+  };
+
+  add_constraint_input_output(ConstraintType::PositionGoal);
+  add_constraint_input_output(ConstraintType::RotationGoal);
+  add_constraint_input_output(ConstraintType::StretchShear);
+  add_constraint_input_output(ConstraintType::BendTwist);
+  add_constraint_input_output(ConstraintType::Contact);
+  b.add_input<decl::Geometry>("Colliders")
+      .only_instances()
+      .description("Instances of colliders to evaluate contact transforms");
+
+  b.add_input<decl::Bool>("Debug Checks")
+      .default_value(false)
+      .description("Perform checks on input data, which can impact performance");
+}
+
+template<typename T>
+static AttributeReader<T> lookup_or_warn(const GeoNodeExecParams &params,
+                                         AttributeAccessor &attributes,
+                                         const StringRef attribute_id,
+                                         const AttrDomain domain,
+                                         const T &default_value)
+{
+  if (!attributes.contains(attribute_id)) {
+    params.error_message_add(geo_eval_log::NodeWarningType::Warning,
+                             fmt::format("Missing \"{}\" attribute", attribute_id));
+  }
+  return attributes.lookup_or_default<T>(attribute_id, domain, default_value);
+}
+
 struct ConstraintEvalInputs {
+  /* TODO split this by EvaluationTarget, only either (positions + rotations) or (velocities +
+   * angular_velocities) are used. */
   VArraySpan<float3> positions;
   VArraySpan<math::Quaternion> rotations;
   Array<float3> positions_buffer;
   Array<math::Quaternion> rotations_buffer;
   VArraySpan<float3> old_positions;
   VArraySpan<math::Quaternion> old_rotations;
+
+  VArraySpan<float3> velocities;
+  VArraySpan<float3> angular_velocities;
+  Array<float3> velocities_buffer;
+  Array<float3> angular_velocities_buffer;
+
+  Span<float4x4> collider_transforms;
+  /* Collider transforms of the previous frame for computing velocity constraints. */
+  Span<float4x4> old_collider_transforms;
 
   struct {
     VArray<int> solver_group;
@@ -163,15 +235,40 @@ struct ConstraintEvalInputs {
 struct ConstraintEvalOutputs {
   Array<float3> positions;
   Array<math::Quaternion> rotations;
+  Array<float3> velocities;
+  Array<float3> angular_velocities;
+
+  struct {
+    /* Remember active contacts for later velocity update (friction and restitution). */
+    Array<bool> active;
+  } contact;
 };
+
+static const VArray<int> &constraints_solver_groups(const ConstraintEvalInputs &inputs,
+                                                    const ConstraintType type)
+{
+  switch (type) {
+    case ConstraintType::PositionGoal:
+      return inputs.position_goal.solver_group;
+    case ConstraintType::RotationGoal:
+      return inputs.rotation_goal.solver_group;
+    case ConstraintType::StretchShear:
+      return inputs.stretch_shear.solver_group;
+    case ConstraintType::BendTwist:
+      return inputs.bend_twist.solver_group;
+    case ConstraintType::Contact:
+      return inputs.contact.solver_group;
+  }
+  BLI_assert_unreachable();
+  static const VArray<int> dummy;
+  return dummy;
+}
 
 struct SolverParams {
   float delta_time;
+  EvaluationTarget target;
   ConstraintEvalInputs &inputs;
   ConstraintEvalOutputs &outputs;
-  Span<float4x4> collider_transforms;
-  /* Collider transforms of the previous frame for computing velocity constraints. */
-  Span<float4x4> old_collider_transforms;
 
   std::function<void(const NodeWarningType type, const StringRef message)> error_message_add;
   /* Perform debug checks on user inputs at runtime. This helps avoid common errors but has a
@@ -179,146 +276,164 @@ struct SolverParams {
   bool debug_check;
 };
 
-template<typename T>
-static AttributeReader<T> lookup_or_warn(const GeoNodeExecParams &params,
-                                         AttributeAccessor &attributes,
-                                         const StringRef attribute_id,
-                                         const AttrDomain domain,
-                                         const T &default_value)
-{
-  if (!attributes.contains(attribute_id)) {
-    params.error_message_add(geo_eval_log::NodeWarningType::Warning,
-                             fmt::format("Missing \"{}\" attribute", attribute_id));
-  }
-  return attributes.lookup_or_default<T>(attribute_id, domain, default_value);
-}
-
 void evaluate_constraint_group_position_goal(const SolverParams &params,
                                              const IndexMask &group_mask)
 {
-  group_mask.foreach_index(GrainSize(1024), [&](const int index) {
-    const int point1 = params.inputs.position_goal.points[index];
-    const float3 position1 = params.inputs.positions[point1];
-    const float3 goal = params.inputs.position_goal.goals[index];
+  switch (params.target) {
+    case EvaluationTarget::Positions:
+      group_mask.foreach_index(GrainSize(1024), [&](const int index) {
+        const int point1 = params.inputs.position_goal.points[index];
+        const float3 position1 = params.inputs.positions[point1];
+        const float3 goal = params.inputs.position_goal.goals[index];
 
-    const float3 residual = position1 - goal;
-    /* Gradient is identity transform. */
-    const float3 delta_position = -residual;
+        const float3 residual = position1 - goal;
+        /* Gradient is identity transform. */
+        const float3 delta_position = -residual;
 
-    params.outputs.positions[point1] = position1 + delta_position;
-  });
+        params.outputs.positions[point1] = position1 + delta_position;
+      });
+      break;
+    case EvaluationTarget::Velocities:
+      break;
+  }
 }
 
 void evaluate_constraint_group_rotation_goal(const SolverParams &params,
                                              const IndexMask &group_mask)
 {
-  group_mask.foreach_index(GrainSize(1024), [&](const int index) {});
+  switch (params.target) {
+    case EvaluationTarget::Positions:
+      break;
+    case EvaluationTarget::Velocities:
+      break;
+  }
 }
 
 void evaluate_constraint_group_stretch_shear(const SolverParams &params,
                                              const IndexMask &group_mask)
 {
-  group_mask.foreach_index(GrainSize(1024), [&](const int index) {});
+  switch (params.target) {
+    case EvaluationTarget::Positions:
+      break;
+    case EvaluationTarget::Velocities:
+      break;
+  }
 }
 
 void evaluate_constraint_group_bend_twist(const SolverParams &params, const IndexMask &group_mask)
 {
-  group_mask.foreach_index(GrainSize(1024), [&](const int index) {});
+  switch (params.target) {
+    case EvaluationTarget::Positions:
+      break;
+    case EvaluationTarget::Velocities:
+      break;
+  }
 }
 
-template <bool debug_check>
+template<bool debug_check>
 void evaluate_constraint_group_contact(const SolverParams &params, const IndexMask &group_mask)
 {
-  group_mask.foreach_index(GrainSize(1024), [&](const int index) {
-    const int point1 = params.inputs.contact.points[index];
-    const int collider_index = params.inputs.contact.collider_index[index];
-    if (!params.collider_transforms.index_range().contains(collider_index)) {
-      return;
-    };
+  switch (params.target) {
+    case EvaluationTarget::Positions:
+      group_mask.foreach_index(GrainSize(1024), [&](const int index) {
+        const int point1 = params.inputs.contact.points[index];
+        const int collider_index = params.inputs.contact.collider_index[index];
+        if (!params.inputs.collider_transforms.index_range().contains(collider_index)) {
+          return;
+        };
 
-    /* Local positions are relative to moving point and collider respectively. */
-    const float3 &local_position1 = params.inputs.contact.local_position1[index];
-    const float3 &local_position2 = params.inputs.contact.local_position2[index];
-    /* Normal is a fixed shared direction for both participants. */
-    const float3 &normal = params.inputs.contact.normal[index];
-    if constexpr (debug_check) {
-      if (!math::is_unit(normal)) {
-        params.error_message_add(geo_eval_log::NodeWarningType::Error,
-                                 "Contact normal vector not normalized");
-      }
-    }
-    const float restitution = params.inputs.contact.restitution[index];
-    const float friction = params.inputs.contact.friction[index];
+        /* Local positions are relative to moving point and collider respectively. */
+        const float3 &local_position1 = params.inputs.contact.local_position1[index];
+        const float3 &local_position2 = params.inputs.contact.local_position2[index];
+        /* Normal is a fixed shared direction for both participants. */
+        const float3 &normal = params.inputs.contact.normal[index];
+        if constexpr (debug_check) {
+          if (!math::is_unit(normal)) {
+            params.error_message_add(geo_eval_log::NodeWarningType::Error,
+                                     "Contact normal vector not normalized");
+          }
+        }
 
-    /* Construct transforms for both the point (translation only for now) as well as the collider.
-     * Also construct the "old" transforms from the previous step to compute velocity and apply
-     * friction and restitution. */
-    const float3 position1 = params.inputs.positions[point1];
-    const float3 old_position1 = params.inputs.old_positions[point1];
-    const float4x4 point_transform = math::from_location<float4x4>(position1);
-    const float4x4 old_point_transform = math::from_location<float4x4>(old_position1);
-    const float4x4 &collider_transform = params.collider_transforms[collider_index];
-    const float4x4 &old_collider_transform = params.old_collider_transforms[collider_index];
-    /* Contact points are computed by applying the transforms to relative local positions. */
-    const float3 contact_point1 = math::transform_point(point_transform, local_position1);
-    const float3 contact_point2 = math::transform_point(collider_transform, local_position2);
-    const float3 old_contact_point1 = math::transform_point(old_point_transform, local_position1);
-    const float3 old_contact_point2 = math::transform_point(old_collider_transform,
-                                                            local_position2);
+        /* Construct transforms for both the point (translation only for now) as well as the
+         * collider. */
+        const float3 position1 = params.inputs.positions[point1];
+        const float4x4 point_transform = math::from_location<float4x4>(position1);
+        const float4x4 &collider_transform = params.inputs.collider_transforms[collider_index];
+        /* Contact points are computed by applying the transforms to relative local positions. */
+        const float3 contact_point1 = math::transform_point(point_transform, local_position1);
+        const float3 contact_point2 = math::transform_point(collider_transform, local_position2);
 
-    /* Positional constraint for penetration depth along the normal. */
-    const float residual_depth = math::dot(contact_point1 - contact_point2, normal);
-    /* Only act on contact. */
-    const bool active = residual_depth < 0.0f;
-    if (!active) {
-      return;
-    }
-    /* Gradient is normal, length is 1, no need to compute gradient norm. */
-    const float3 delta_position = -residual_depth * normal;
+        /* Positional constraint for penetration depth along the normal. */
+        const float residual_depth = math::dot(contact_point1 - contact_point2, normal);
+        /* Only act on contact. */
+        const bool active = residual_depth < 0.0f;
+        params.outputs.contact.active[index] = active;
+        if (!active) {
+          return;
+        }
 
-    /* Compute location delta for the friction and restitution velocity constraints.
-     * Note that time step size can be ignored for applying positional constraints. */
-    const float3 velocity1 = contact_point1 - old_contact_point1;
-    const float3 velocity2 = contact_point2 - old_contact_point2;
-    const float3 relative_velocity = velocity1 - velocity2;
-    const float normal_relative_velocity = math::dot(relative_velocity, normal);
-    const float3 surface_relative_velocity = relative_velocity - normal * normal_relative_velocity;
+        /* Gradient is normal, length is 1, no need to compute gradient norm. */
+        const float3 delta_position = -residual_depth * normal;
+        params.outputs.positions[point1] = position1 + delta_position;
+      });
+      break;
+    case EvaluationTarget::Velocities:
+      group_mask.foreach_index(GrainSize(1024), [&](const int index) {
+        /* Active status is determined by the position evaluation. */
+        if (!params.outputs.contact.active[index]) {
+          return;
+        }
 
-    const float residual_restitution = normal_relative_velocity;
-    /* Folded into delta. */
-    /* const float residual_friction = math::length(surface_relative_velocity); */
-    /* Gradients are normalized, no need to compute gradient norm. */
-    const float3 delta_velocity_restitution = (residual_restitution < 0.0f ?
-                                                   -restitution * residual_restitution * normal :
-                                                   float3(0.0f));
-    const float3 delta_velocity_friction = -friction * surface_relative_velocity;
+        const int point1 = params.inputs.contact.points[index];
+        const int collider_index = params.inputs.contact.collider_index[index];
+        if (!params.inputs.collider_transforms.index_range().contains(collider_index)) {
+          return;
+        };
 
-    params.outputs.positions[point1] = position1 + delta_position + delta_velocity_restitution +
-                                       delta_velocity_friction;
-  });
-}
+        /* Local positions are relative to moving point and collider respectively. */
+        const float3 &local_position2 = params.inputs.contact.local_position2[index];
+        /* Normal is a fixed shared direction for both participants. */
+        const float3 &normal = params.inputs.contact.normal[index];
+        if constexpr (debug_check) {
+          if (!math::is_unit(normal)) {
+            params.error_message_add(geo_eval_log::NodeWarningType::Error,
+                                     "Contact normal vector not normalized");
+          }
+        }
+        const float restitution = params.inputs.contact.restitution[index];
+        const float friction = params.inputs.contact.friction[index];
 
-static VArray<int> constraints_solver_groups(const SolverParams &params, const ConstraintType type)
-{
-  switch (type) {
-    case ConstraintType::PositionGoal:
-      return params.inputs.position_goal.solver_group;
-    case ConstraintType::RotationGoal:
-      return params.inputs.rotation_goal.solver_group;
-    case ConstraintType::StretchShear:
-      return params.inputs.stretch_shear.solver_group;
-    case ConstraintType::BendTwist:
-      return params.inputs.bend_twist.solver_group;
-    case ConstraintType::Contact:
-      return params.inputs.contact.solver_group;
+        const float4x4 &collider_transform = params.inputs.collider_transforms[collider_index];
+        const float4x4 &old_collider_transform =
+            params.inputs.old_collider_transforms[collider_index];
+        /* Contact points are computed by applying the transforms to relative local positions. */
+        const float3 contact_point2 = math::transform_point(collider_transform, local_position2);
+        const float3 old_contact_point2 = math::transform_point(old_collider_transform,
+                                                                local_position2);
+
+        const float3 velocity1 = params.inputs.velocities[point1];
+        /* Compute velocity of the collider contact point. */
+        const float3 velocity2 = contact_point2 - old_contact_point2;
+        const float3 relative_velocity = velocity1 - velocity2;
+        const float normal_relative_velocity = math::dot(relative_velocity, normal);
+        const float3 surface_relative_velocity = relative_velocity -
+                                                 normal * normal_relative_velocity;
+
+        const float residual_restitution = normal_relative_velocity;
+        /* Folded into delta. */
+        /* const float residual_friction = math::length(surface_relative_velocity); */
+        /* Gradients are normalized, no need to compute gradient norm. */
+        const float3 delta_velocity_restitution = (residual_restitution < 0.0f ?
+                                                       -restitution * residual_restitution *
+                                                           normal :
+                                                       float3(0.0f));
+        const float3 delta_velocity_friction = -friction * surface_relative_velocity;
+
+        params.outputs.velocities[point1] = velocity1 + delta_velocity_restitution +
+                                            delta_velocity_friction;
+      });
+      break;
   }
-  BLI_assert_unreachable();
-  return {};
-}
-
-static IndexRange constraints_range(const SolverParams &params, const ConstraintType type)
-{
-  return constraints_solver_groups(params, type).index_range();
 }
 
 /* Evaluate a group of constraints in parallel.
@@ -330,7 +445,7 @@ static void evaluate_constraint_group(const SolverParams &params,
                                       const ConstraintType type,
                                       const IndexMask &group_mask)
 {
-  BLI_assert(!constraints_range(params, type).is_empty());
+  BLI_assert(!constraints_solver_groups(params.inputs, type).is_empty());
 
   switch (type) {
     case ConstraintType::PositionGoal:
@@ -350,21 +465,34 @@ static void evaluate_constraint_group(const SolverParams &params,
       break;
   }
 
-  /* Move output array to input buffer for next update. */
-  params.inputs.positions_buffer = params.outputs.positions;
-  params.inputs.rotations_buffer = params.outputs.rotations;
-  params.inputs.positions = VArray<float3>::ForContainer(params.inputs.positions_buffer);
-  params.inputs.rotations = VArray<math::Quaternion>::ForContainer(params.inputs.rotations_buffer);
+  switch (params.target) {
+    case EvaluationTarget::Positions:
+      /* Move output array to input buffer for next update. */
+      params.inputs.positions_buffer = params.outputs.positions;
+      params.inputs.rotations_buffer = params.outputs.rotations;
+      params.inputs.positions = VArray<float3>::ForContainer(params.inputs.positions_buffer);
+      params.inputs.rotations = VArray<math::Quaternion>::ForContainer(
+          params.inputs.rotations_buffer);
+      break;
+    case EvaluationTarget::Velocities:
+      /* Move output array to input buffer for next update. */
+      params.inputs.velocities_buffer = params.outputs.velocities;
+      params.inputs.angular_velocities_buffer = params.outputs.angular_velocities;
+      params.inputs.velocities = VArray<float3>::ForContainer(params.inputs.velocities_buffer);
+      params.inputs.angular_velocities = VArray<float3>::ForContainer(
+          params.inputs.angular_velocities_buffer);
+      break;
+  }
 }
 
 static void do_single_constraint_passes(const SolverParams &params, const ConstraintType type)
 {
-  const IndexRange constraints = constraints_range(params, type);
-  if (constraints.is_empty()) {
+  const VArray<int> solver_groups = constraints_solver_groups(params.inputs, type);
+  if (solver_groups.is_empty()) {
     return;
   }
 
-  const VArray<int> solver_groups = constraints_solver_groups(params, type);
+  const IndexRange constraints = solver_groups.index_range();
   IndexMaskMemory memory;
   VectorSet<int> unique_group_ids;
   Vector<IndexMask> group_index_masks = IndexMask::from_group_ids(
@@ -403,7 +531,8 @@ static void do_single_constraint_passes(const SolverParams &params, const Constr
 static void do_gauss_seidel_step(const SolverParams &params)
 {
   /* Order of constraint passes is chosen by increasing "importance":
-   * Later constraints have less residual error, and the last constraint type is solved exactly. */
+   * Later constraints have less residual error, and the last constraint type is solved exactly.
+   */
   do_single_constraint_passes(params, ConstraintType::BendTwist);
   do_single_constraint_passes(params, ConstraintType::StretchShear);
   do_single_constraint_passes(params, ConstraintType::RotationGoal);
@@ -434,25 +563,14 @@ static void do_solver_steps(const SolverMethod method, const int steps, const So
   }
 }
 
-static void node_geo_exec(GeoNodeExecParams params)
+static void prepare_constraint_data(GeoNodeExecParams params,
+                                    Vector<GeometrySet> &constraint_geometry_sets,
+                                    ConstraintEvalInputs &constraint_inputs,
+                                    ConstraintEvalOutputs &constraint_outputs)
 {
-  const int gauss_seidel_steps = params.extract_input<int>("Gauss-Seidel Steps");
-  const float delta_time = std::max(params.extract_input<float>("Delta Time"), 0.0f);
-  const bool debug_check = params.extract_input<bool>("Debug Checks");
-  GeometrySet geometry_set = params.extract_input<GeometrySet>("Geometry");
-  Field<float3> position_field = params.extract_input<Field<float3>>("Position");
-  Field<math::Quaternion> rotation_field = params.extract_input<Field<math::Quaternion>>(
-      "Rotation");
-  Field<float3> old_position_field = params.extract_input<Field<float3>>("Old Position");
-  Field<math::Quaternion> old_rotation_field = params.extract_input<Field<math::Quaternion>>(
-      "Old Rotation");
-  std::optional<std::string> position_output_id =
-      params.get_output_anonymous_attribute_id_if_needed("Position");
-  std::optional<std::string> rotation_output_id =
-      params.get_output_anonymous_attribute_id_if_needed("Rotation");
-
-  Array<GeometrySet> constraint_geometry_sets(5);
-  Array<std::optional<MutableAttributeAccessor>> constraint_attributes(5, std::nullopt);
+  constraint_geometry_sets.resize(NumConstraintTypes);
+  Array<std::optional<MutableAttributeAccessor>> constraint_attributes(NumConstraintTypes,
+                                                                       std::nullopt);
   auto extract_constraint_attributes = [&](const ConstraintType type) {
     BLI_assert(constraint_geometry_sets.index_range().contains(int(type)));
     BLI_assert(constraint_attributes.index_range().contains(int(type)));
@@ -471,22 +589,9 @@ static void node_geo_exec(GeoNodeExecParams params)
   extract_constraint_attributes(ConstraintType::BendTwist);
   extract_constraint_attributes(ConstraintType::Contact);
 
-  const GeometrySet collider_geometry = params.extract_input<GeometrySet>("Colliders");
-  const Span<float4x4> collider_transforms = collider_geometry.has_instances() ?
-                                                 collider_geometry.get_instances()->transforms() :
-                                                 Span<float4x4>{};
-  /* XXX Transforms of the previous frame are not currently available, these are always the same as
-   * the current frame. Eventually this will allow transfer of velocity from animated colliders. */
-  const Span<float4x4> old_collider_transforms = collider_transforms;
-
-  ConstraintEvalInputs constraint_inputs;
-  ConstraintEvalOutputs constraint_outputs;
-
   if (std::optional<MutableAttributeAccessor> attributes =
           constraint_attributes[int(ConstraintType::PositionGoal)])
   {
-    const int num_constraints = attributes->domain_size(AttrDomain::Point);
-
     constraint_inputs.position_goal.solver_group = *lookup_or_warn<int>(
         params, *attributes, ATTR_SOLVER_GROUP, AttrDomain::Point, 0);
     constraint_inputs.position_goal.points = *lookup_or_warn<int>(
@@ -497,8 +602,6 @@ static void node_geo_exec(GeoNodeExecParams params)
   if (std::optional<MutableAttributeAccessor> attributes =
           constraint_attributes[int(ConstraintType::RotationGoal)])
   {
-    const int num_constraints = attributes->domain_size(AttrDomain::Point);
-
     constraint_inputs.rotation_goal.solver_group = *lookup_or_warn<int>(
         params, *attributes, ATTR_SOLVER_GROUP, AttrDomain::Point, 0);
     constraint_inputs.rotation_goal.points = *lookup_or_warn<int>(
@@ -509,8 +612,6 @@ static void node_geo_exec(GeoNodeExecParams params)
   if (std::optional<MutableAttributeAccessor> attributes =
           constraint_attributes[int(ConstraintType::StretchShear)])
   {
-    const int num_constraints = attributes->domain_size(AttrDomain::Point);
-
     constraint_inputs.stretch_shear.solver_group = *lookup_or_warn<int>(
         params, *attributes, ATTR_SOLVER_GROUP, AttrDomain::Point, 0);
     constraint_inputs.stretch_shear.points1 = *lookup_or_warn<int>(
@@ -523,8 +624,6 @@ static void node_geo_exec(GeoNodeExecParams params)
   if (std::optional<MutableAttributeAccessor> attributes =
           constraint_attributes[int(ConstraintType::BendTwist)])
   {
-    const int num_constraints = attributes->domain_size(AttrDomain::Point);
-
     constraint_inputs.bend_twist.solver_group = *lookup_or_warn<int>(
         params, *attributes, ATTR_SOLVER_GROUP, AttrDomain::Point, 0);
     constraint_inputs.bend_twist.points1 = *lookup_or_warn<int>(
@@ -537,8 +636,6 @@ static void node_geo_exec(GeoNodeExecParams params)
   if (std::optional<MutableAttributeAccessor> attributes =
           constraint_attributes[int(ConstraintType::Contact)])
   {
-    const int num_constraints = attributes->domain_size(AttrDomain::Point);
-
     constraint_inputs.contact.solver_group = *lookup_or_warn<int>(
         params, *attributes, ATTR_SOLVER_GROUP, AttrDomain::Point, 0);
     constraint_inputs.contact.points = *lookup_or_warn<int>(
@@ -556,7 +653,68 @@ static void node_geo_exec(GeoNodeExecParams params)
         "friction", AttrDomain::Point, 0.0f);
     constraint_inputs.contact.restitution = *attributes->lookup_or_default<float>(
         "restitution", AttrDomain::Point, 0.0f);
+
+    const GeometrySet collider_geometry = params.extract_input<GeometrySet>("Colliders");
+    constraint_inputs.collider_transforms = collider_geometry.has_instances() ?
+                                                collider_geometry.get_instances()->transforms() :
+                                                Span<float4x4>{};
+    /* XXX Transforms of the previous frame are not currently available, these are always the
+     * same as the current frame. Eventually this will allow transfer of velocity from animated
+     * colliders. */
+    constraint_inputs.old_collider_transforms = constraint_inputs.collider_transforms;
+
+    const int num_constraints = attributes->domain_size(AttrDomain::Point);
+    constraint_outputs.contact.active.reinitialize(num_constraints);
+    constraint_outputs.contact.active.fill(false);
   }
+}
+
+static void write_constraint_attributes(MutableSpan<GeometrySet> constraint_geometry_sets,
+                                        const ConstraintEvalOutputs &constraint_outputs)
+{
+  auto get_constraint_attributes =
+      [&](const ConstraintType type) -> std::optional<MutableAttributeAccessor> {
+    BLI_assert(constraint_geometry_sets.index_range().contains(int(type)));
+    GeometrySet &geometry_set = constraint_geometry_sets[int(type)];
+    if (geometry_set.has_component<PointCloudComponent>()) {
+      PointCloudComponent &constraint_component =
+          geometry_set.get_component_for_write<PointCloudComponent>();
+      return constraint_component.attributes_for_write();
+    }
+    return std::nullopt;
+  };
+
+  if (std::optional<MutableAttributeAccessor> attributes = get_constraint_attributes(
+          ConstraintType::Contact))
+  {
+    bke::AttributeWriter<bool> writer = attributes->lookup_or_add_for_write<bool>(
+        ATTR_ACTIVE, AttrDomain::Point);
+    writer.varray.set_all(constraint_outputs.contact.active);
+    writer.finish();
+  }
+}
+
+static void node_geo_exec_positions(GeoNodeExecParams params)
+{
+  const int gauss_seidel_steps = params.extract_input<int>("Gauss-Seidel Steps");
+  const float delta_time = std::max(params.extract_input<float>("Delta Time"), 0.0f);
+  const bool debug_check = params.extract_input<bool>("Debug Checks");
+  GeometrySet geometry_set = params.extract_input<GeometrySet>("Geometry");
+  Field<float3> position_field = params.extract_input<Field<float3>>("Position");
+  Field<math::Quaternion> rotation_field = params.extract_input<Field<math::Quaternion>>(
+      "Rotation");
+  Field<float3> old_position_field = params.extract_input<Field<float3>>("Old Position");
+  Field<math::Quaternion> old_rotation_field = params.extract_input<Field<math::Quaternion>>(
+      "Old Rotation");
+  std::optional<std::string> position_output_id =
+      params.get_output_anonymous_attribute_id_if_needed("Position");
+  std::optional<std::string> rotation_output_id =
+      params.get_output_anonymous_attribute_id_if_needed("Rotation");
+
+  Vector<GeometrySet> constraint_geometry_sets;
+  ConstraintEvalInputs constraint_inputs;
+  ConstraintEvalOutputs constraint_outputs;
+  prepare_constraint_data(params, constraint_geometry_sets, constraint_inputs, constraint_outputs);
 
   static const Array<GeometryComponent::Type> types = {bke::GeometryComponent::Type::Mesh,
                                                        bke::GeometryComponent::Type::PointCloud,
@@ -593,11 +751,8 @@ static void node_geo_exec(GeoNodeExecParams params)
         array_utils::copy(constraint_inputs.rotations,
                           constraint_outputs.rotations.as_mutable_span());
 
-        SolverParams solver_params = {delta_time,
-                                      constraint_inputs,
-                                      constraint_outputs,
-                                      collider_transforms,
-                                      old_collider_transforms};
+        SolverParams solver_params = {
+            delta_time, EvaluationTarget::Positions, constraint_inputs, constraint_outputs};
         solver_params.error_message_add = [params](const NodeWarningType type,
                                                    const StringRef message) {
           params.error_message_add(type, message);
@@ -625,6 +780,8 @@ static void node_geo_exec(GeoNodeExecParams params)
     }
   });
 
+  write_constraint_attributes(constraint_geometry_sets, constraint_outputs);
+
   params.set_output("Geometry", geometry_set);
 
   auto set_constraint_outputs = [&](const ConstraintType type) {
@@ -637,18 +794,131 @@ static void node_geo_exec(GeoNodeExecParams params)
   set_constraint_outputs(ConstraintType::Contact);
 }
 
-static void node_register()
+static void node_geo_exec_velocities(GeoNodeExecParams params)
+{
+  const int gauss_seidel_steps = params.extract_input<int>("Gauss-Seidel Steps");
+  const float delta_time = std::max(params.extract_input<float>("Delta Time"), 0.0f);
+  const bool debug_check = params.extract_input<bool>("Debug Checks");
+  GeometrySet geometry_set = params.extract_input<GeometrySet>("Geometry");
+  Field<float3> velocity_field = params.extract_input<Field<float3>>("Velocity");
+  Field<float3> angular_velocity_field = params.extract_input<Field<float3>>("Angular Velocity");
+  std::optional<std::string> velocity_output_id =
+      params.get_output_anonymous_attribute_id_if_needed("Velocity");
+  std::optional<std::string> angular_velocity_output_id =
+      params.get_output_anonymous_attribute_id_if_needed("Angular Velocity");
+
+  Vector<GeometrySet> constraint_geometry_sets;
+  ConstraintEvalInputs constraint_inputs;
+  ConstraintEvalOutputs constraint_outputs;
+  prepare_constraint_data(params, constraint_geometry_sets, constraint_inputs, constraint_outputs);
+
+  static const Array<GeometryComponent::Type> types = {bke::GeometryComponent::Type::Mesh,
+                                                       bke::GeometryComponent::Type::PointCloud,
+                                                       bke::GeometryComponent::Type::Curve,
+                                                       bke::GeometryComponent::Type::GreasePencil};
+  geometry_set.modify_geometry_sets([&](GeometrySet &geometry_set) {
+    for (const bke::GeometryComponent::Type type : types) {
+      if (geometry_set.has(type)) {
+        bke::GeometryComponent &component = geometry_set.get_component_for_write(type);
+        std::optional<bke::MutableAttributeAccessor> attributes = component.attributes_for_write();
+        if (!attributes) {
+          continue;
+        }
+
+        const int num_points = attributes->domain_size(AttrDomain::Point);
+
+        const bke::GeometryFieldContext field_context{component, AttrDomain::Point};
+        fn::FieldEvaluator evaluator{field_context, num_points};
+        evaluator.add(velocity_field);
+        evaluator.add(angular_velocity_field);
+        evaluator.evaluate();
+        constraint_inputs.velocities = evaluator.get_evaluated<float3>(0);
+        constraint_inputs.angular_velocities = evaluator.get_evaluated<float3>(1);
+
+        /* Full input copy to initialize outputs, since not all variables may be changed. */
+        constraint_outputs.velocities.reinitialize(num_points);
+        constraint_outputs.angular_velocities.reinitialize(num_points);
+        array_utils::copy(constraint_inputs.velocities,
+                          constraint_outputs.velocities.as_mutable_span());
+        array_utils::copy(constraint_inputs.angular_velocities,
+                          constraint_outputs.angular_velocities.as_mutable_span());
+
+        SolverParams solver_params = {
+            delta_time, EvaluationTarget::Velocities, constraint_inputs, constraint_outputs};
+        solver_params.error_message_add = [params](const NodeWarningType type,
+                                                   const StringRef message) {
+          params.error_message_add(type, message);
+        };
+        solver_params.debug_check = debug_check;
+
+        do_solver_steps(SolverMethod::GaussSeidel, gauss_seidel_steps, solver_params);
+
+        if (velocity_output_id) {
+          AttributeWriter<float3> velocities_writer = attributes->lookup_or_add_for_write<float3>(
+              *velocity_output_id, AttrDomain::Point);
+          BLI_assert(constraint_inputs.velocities.size() == num_points);
+          velocities_writer.varray.set_all(constraint_inputs.velocities);
+          velocities_writer.finish();
+        }
+        if (angular_velocity_output_id && !constraint_inputs.angular_velocities_buffer.is_empty())
+        {
+          AttributeWriter<float3> angular_velocities_writer =
+              attributes->lookup_or_add_for_write<float3>(*angular_velocity_output_id,
+                                                          AttrDomain::Point);
+          BLI_assert(constraint_inputs.angular_velocities.size() == num_points);
+          angular_velocities_writer.varray.set_all(constraint_inputs.angular_velocities);
+          angular_velocities_writer.finish();
+        }
+      }
+    }
+  });
+
+  params.set_output("Geometry", geometry_set);
+
+  auto set_constraint_outputs = [&](const ConstraintType type) {
+    params.set_output(constraint_ui_geometry(type), constraint_geometry_sets[int(type)]);
+  };
+  set_constraint_outputs(ConstraintType::PositionGoal);
+  set_constraint_outputs(ConstraintType::RotationGoal);
+  set_constraint_outputs(ConstraintType::StretchShear);
+  set_constraint_outputs(ConstraintType::BendTwist);
+  set_constraint_outputs(ConstraintType::Contact);
+}
+
+static void node_register_position_solve()
 {
   static blender::bke::bNodeType ntype;
 
-  geo_node_type_base(&ntype, "GeometryNodeSolveXPBDConstraints");
-  ntype.ui_name = "Solve XPBD Constraints";
+  geo_node_type_base(&ntype, "GeometryNodeSolvePositionConstraints");
+  ntype.ui_name = "Solve XPBD Position Constraints";
   ntype.ui_description =
       "Solve position and rotation constraints on geometry using the XPBD framework";
   ntype.nclass = NODE_CLASS_GEOMETRY;
-  ntype.geometry_node_execute = node_geo_exec;
-  ntype.declare = node_declare;
+  node_type_size(&ntype, 200, 120, 300);
+  ntype.geometry_node_execute = node_geo_exec_positions;
+  ntype.declare = node_declare_positions;
   blender::bke::node_register_type(&ntype);
+}
+
+static void node_register_velocity_solve()
+{
+  static blender::bke::bNodeType ntype;
+
+  geo_node_type_base(&ntype, "GeometryNodeSolveVelocityConstraints");
+  ntype.ui_name = "Solve XPBD Velocity Constraints";
+  ntype.ui_description =
+      "Solve linear and angular velocity constraints on geometry using the XPBD framework";
+  ntype.nclass = NODE_CLASS_GEOMETRY;
+  node_type_size(&ntype, 200, 120, 300);
+  ntype.geometry_node_execute = node_geo_exec_velocities;
+  ntype.declare = node_declare_velocities;
+  blender::bke::node_register_type(&ntype);
+}
+
+static void node_register()
+{
+  node_register_position_solve();
+  node_register_velocity_solve();
 }
 NOD_REGISTER_NODE(node_register)
 
