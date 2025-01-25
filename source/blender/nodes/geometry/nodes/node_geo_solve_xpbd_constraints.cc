@@ -130,15 +130,16 @@ static void node_declare_velocities(NodeDeclarationBuilder &b)
   b.allow_any_socket_order();
 
   b.add_input<decl::Float>("Delta Time").default_value(default_fps).min(0.0f).hide_value();
-  b.add_input<decl::Int>("Gauss-Seidel Steps").default_value(1).min(0);
 
   b.add_input<decl::Geometry>("Geometry");
   b.add_output<decl::Geometry>("Geometry").align_with_previous();
 
-  b.add_input<decl::Vector>("Velocity").field_on({2});
+  b.add_input<decl::Vector>("Velocity").field_on({1}).hide_value();
   b.add_output<decl::Vector>("Velocity").field_on({0}).align_with_previous();
-  b.add_input<decl::Vector>("Angular Velocity").field_on({2}).hide_value();
+  b.add_input<decl::Vector>("Angular Velocity").field_on({1}).hide_value();
   b.add_output<decl::Vector>("Angular Velocity").field_on({0}).align_with_previous();
+  b.add_input<decl::Vector>("Original Velocity").field_on({1}).hide_value();
+  b.add_input<decl::Vector>("Original Angular Velocity").field_on({1}).hide_value();
 
   auto add_constraint_input_output = [&](const ConstraintType type) {
     const StringRef name = constraint_ui_geometry(type);
@@ -192,6 +193,8 @@ struct ConstraintEvalInputs {
   VArraySpan<float3> angular_velocities;
   Array<float3> velocities_buffer;
   Array<float3> angular_velocities_buffer;
+  VArraySpan<float3> orig_velocities;
+  VArraySpan<float3> orig_angular_velocities;
 
   Span<float4x4> collider_transforms;
   /* Collider transforms of the previous frame for computing velocity constraints. */
@@ -239,8 +242,8 @@ struct ConstraintEvalOutputs {
   Array<float3> angular_velocities;
 
   struct {
-    /* Remember active contacts for later velocity update (friction and restitution). */
-    Array<bool> active;
+    /* Remember active contacts for later velocity update. */
+    SpanAttributeWriter<bool> active;
   } contact;
 };
 
@@ -334,7 +337,7 @@ template<bool debug_check>
 void evaluate_constraint_group_contact(const SolverParams &params, const IndexMask &group_mask)
 {
   switch (params.target) {
-    case EvaluationTarget::Positions:
+    case EvaluationTarget::Positions: {
       group_mask.foreach_index(GrainSize(1024), [&](const int index) {
         const int point1 = params.inputs.contact.points[index];
         const int collider_index = params.inputs.contact.collider_index[index];
@@ -367,20 +370,21 @@ void evaluate_constraint_group_contact(const SolverParams &params, const IndexMa
         const float residual_depth = math::dot(contact_point1 - contact_point2, normal);
         /* Only act on contact. */
         const bool active = residual_depth < 0.0f;
-        params.outputs.contact.active[index] = active;
+        params.outputs.contact.active.span[index] = active;
         if (!active) {
           return;
         }
 
         /* Gradient is normal, length is 1, no need to compute gradient norm. */
         const float3 delta_position = -residual_depth * normal;
-        params.outputs.positions[point1] = position1 + delta_position;
+        params.outputs.positions[point1] += delta_position;
       });
       break;
-    case EvaluationTarget::Velocities:
+    }
+    case EvaluationTarget::Velocities: {
       group_mask.foreach_index(GrainSize(1024), [&](const int index) {
         /* Active status is determined by the position evaluation. */
-        if (!params.outputs.contact.active[index]) {
+        if (!params.outputs.contact.active.span[index]) {
           return;
         }
 
@@ -411,7 +415,7 @@ void evaluate_constraint_group_contact(const SolverParams &params, const IndexMa
         const float3 old_contact_point2 = math::transform_point(old_collider_transform,
                                                                 local_position2);
 
-        const float3 velocity1 = params.inputs.velocities[point1];
+        const float3 velocity1 = params.inputs.orig_velocities[point1];
         /* Compute velocity of the collider contact point. */
         const float3 velocity2 = contact_point2 - old_contact_point2;
         const float3 relative_velocity = velocity1 - velocity2;
@@ -424,15 +428,15 @@ void evaluate_constraint_group_contact(const SolverParams &params, const IndexMa
         /* const float residual_friction = math::length(surface_relative_velocity); */
         /* Gradients are normalized, no need to compute gradient norm. */
         const float3 delta_velocity_restitution = (residual_restitution < 0.0f ?
-                                                       -restitution * residual_restitution *
-                                                           normal :
+                                                       -(1.0f + restitution) *
+                                                           residual_restitution * normal :
                                                        float3(0.0f));
         const float3 delta_velocity_friction = -friction * surface_relative_velocity;
 
-        params.outputs.velocities[point1] = velocity1 + delta_velocity_restitution +
-                                            delta_velocity_friction;
+        params.outputs.velocities[point1] += delta_velocity_restitution + delta_velocity_friction;
       });
       break;
+    }
   }
 }
 
@@ -664,33 +668,17 @@ static void prepare_constraint_data(GeoNodeExecParams params,
     constraint_inputs.old_collider_transforms = constraint_inputs.collider_transforms;
 
     const int num_constraints = attributes->domain_size(AttrDomain::Point);
-    constraint_outputs.contact.active.reinitialize(num_constraints);
-    constraint_outputs.contact.active.fill(false);
+    constraint_outputs.contact.active = attributes->lookup_or_add_for_write_span<bool>(
+        ATTR_ACTIVE,
+        AttrDomain::Point,
+        bke::AttributeInitVArray(VArray<bool>::ForSingle(false, num_constraints)));
   }
 }
 
-static void write_constraint_attributes(MutableSpan<GeometrySet> constraint_geometry_sets,
-                                        const ConstraintEvalOutputs &constraint_outputs)
+static void write_constraint_attributes(ConstraintEvalOutputs &constraint_outputs)
 {
-  auto get_constraint_attributes =
-      [&](const ConstraintType type) -> std::optional<MutableAttributeAccessor> {
-    BLI_assert(constraint_geometry_sets.index_range().contains(int(type)));
-    GeometrySet &geometry_set = constraint_geometry_sets[int(type)];
-    if (geometry_set.has_component<PointCloudComponent>()) {
-      PointCloudComponent &constraint_component =
-          geometry_set.get_component_for_write<PointCloudComponent>();
-      return constraint_component.attributes_for_write();
-    }
-    return std::nullopt;
-  };
-
-  if (std::optional<MutableAttributeAccessor> attributes = get_constraint_attributes(
-          ConstraintType::Contact))
-  {
-    bke::AttributeWriter<bool> writer = attributes->lookup_or_add_for_write<bool>(
-        ATTR_ACTIVE, AttrDomain::Point);
-    writer.varray.set_all(constraint_outputs.contact.active);
-    writer.finish();
+  if (constraint_outputs.contact.active) {
+    constraint_outputs.contact.active.finish();
   }
 }
 
@@ -768,7 +756,7 @@ static void node_geo_exec_positions(GeoNodeExecParams params)
           positions_writer.varray.set_all(constraint_inputs.positions);
           positions_writer.finish();
         }
-        if (rotation_output_id && !constraint_inputs.rotations_buffer.is_empty()) {
+        if (rotation_output_id) {
           AttributeWriter<math::Quaternion> rotations_writer =
               attributes->lookup_or_add_for_write<math::Quaternion>(*rotation_output_id,
                                                                     AttrDomain::Point);
@@ -780,7 +768,7 @@ static void node_geo_exec_positions(GeoNodeExecParams params)
     }
   });
 
-  write_constraint_attributes(constraint_geometry_sets, constraint_outputs);
+  write_constraint_attributes(constraint_outputs);
 
   params.set_output("Geometry", geometry_set);
 
@@ -796,7 +784,7 @@ static void node_geo_exec_positions(GeoNodeExecParams params)
 
 static void node_geo_exec_velocities(GeoNodeExecParams params)
 {
-  const int gauss_seidel_steps = params.extract_input<int>("Gauss-Seidel Steps");
+  constexpr int gauss_seidel_steps = 1;
   const float delta_time = std::max(params.extract_input<float>("Delta Time"), 0.0f);
   const bool debug_check = params.extract_input<bool>("Debug Checks");
   GeometrySet geometry_set = params.extract_input<GeometrySet>("Geometry");
@@ -806,6 +794,9 @@ static void node_geo_exec_velocities(GeoNodeExecParams params)
       params.get_output_anonymous_attribute_id_if_needed("Velocity");
   std::optional<std::string> angular_velocity_output_id =
       params.get_output_anonymous_attribute_id_if_needed("Angular Velocity");
+  Field<float3> orig_velocity_field = params.extract_input<Field<float3>>("Original Velocity");
+  Field<float3> orig_angular_velocity_field = params.extract_input<Field<float3>>(
+      "Original Angular Velocity");
 
   Vector<GeometrySet> constraint_geometry_sets;
   ConstraintEvalInputs constraint_inputs;
@@ -831,9 +822,13 @@ static void node_geo_exec_velocities(GeoNodeExecParams params)
         fn::FieldEvaluator evaluator{field_context, num_points};
         evaluator.add(velocity_field);
         evaluator.add(angular_velocity_field);
+        evaluator.add(orig_velocity_field);
+        evaluator.add(orig_angular_velocity_field);
         evaluator.evaluate();
         constraint_inputs.velocities = evaluator.get_evaluated<float3>(0);
         constraint_inputs.angular_velocities = evaluator.get_evaluated<float3>(1);
+        constraint_inputs.orig_velocities = evaluator.get_evaluated<float3>(2);
+        constraint_inputs.orig_angular_velocities = evaluator.get_evaluated<float3>(3);
 
         /* Full input copy to initialize outputs, since not all variables may be changed. */
         constraint_outputs.velocities.reinitialize(num_points);
