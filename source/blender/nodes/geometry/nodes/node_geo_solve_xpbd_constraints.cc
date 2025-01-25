@@ -111,6 +111,10 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_input<decl::Geometry>("Colliders")
       .only_instances()
       .description("Instances of colliders to evaluate contact transforms");
+
+  b.add_input<decl::Bool>("Debug Checks")
+      .default_value(false)
+      .description("Perform checks on input data, which can impact performance");
 }
 
 struct ConstraintEvalInputs {
@@ -170,6 +174,9 @@ struct SolverParams {
   Span<float4x4> old_collider_transforms;
 
   std::function<void(const NodeWarningType type, const StringRef message)> error_message_add;
+  /* Perform debug checks on user inputs at runtime. This helps avoid common errors but has a
+   * significant performance cost, so should be optional. */
+  bool debug_check;
 };
 
 template<typename T>
@@ -219,6 +226,7 @@ void evaluate_constraint_group_bend_twist(const SolverParams &params, const Inde
   group_mask.foreach_index(GrainSize(1024), [&](const int index) {});
 }
 
+template <bool debug_check>
 void evaluate_constraint_group_contact(const SolverParams &params, const IndexMask &group_mask)
 {
   group_mask.foreach_index(GrainSize(1024), [&](const int index) {
@@ -233,6 +241,14 @@ void evaluate_constraint_group_contact(const SolverParams &params, const IndexMa
     const float3 &local_position2 = params.inputs.contact.local_position2[index];
     /* Normal is a fixed shared direction for both participants. */
     const float3 &normal = params.inputs.contact.normal[index];
+    if constexpr (debug_check) {
+      if (!math::is_unit(normal)) {
+        params.error_message_add(geo_eval_log::NodeWarningType::Error,
+                                 "Contact normal vector not normalized");
+      }
+    }
+    const float restitution = params.inputs.contact.restitution[index];
+    const float friction = params.inputs.contact.friction[index];
 
     /* Construct transforms for both the point (translation only for now) as well as the collider.
      * Also construct the "old" transforms from the previous step to compute velocity and apply
@@ -271,12 +287,9 @@ void evaluate_constraint_group_contact(const SolverParams &params, const IndexMa
     const float residual_restitution = normal_relative_velocity;
     /* Folded into delta. */
     /* const float residual_friction = math::length(surface_relative_velocity); */
-    const float restitution = params.inputs.contact.restitution[index];
-    const float friction = params.inputs.contact.friction[index];
     /* Gradients are normalized, no need to compute gradient norm. */
     const float3 delta_velocity_restitution = (residual_restitution < 0.0f ?
-                                                   -normal * residual_restitution *
-                                                       (1.0f - restitution) :
+                                                   -restitution * residual_restitution * normal :
                                                    float3(0.0f));
     const float3 delta_velocity_friction = -friction * surface_relative_velocity;
 
@@ -312,6 +325,7 @@ static IndexRange constraints_range(const SolverParams &params, const Constraint
  * It's important that none of the constraints write to the same variables. Solver groups must be
  * computed in such a way that each variable is only affected by one constraint in each group.
  */
+template<bool debug_check>
 static void evaluate_constraint_group(const SolverParams &params,
                                       const ConstraintType type,
                                       const IndexMask &group_mask)
@@ -332,7 +346,7 @@ static void evaluate_constraint_group(const SolverParams &params,
       evaluate_constraint_group_bend_twist(params, group_mask);
       break;
     case ConstraintType::Contact:
-      evaluate_constraint_group_contact(params, group_mask);
+      evaluate_constraint_group_contact<debug_check>(params, group_mask);
       break;
   }
 
@@ -377,7 +391,12 @@ static void do_single_constraint_passes(const SolverParams &params, const Constr
     /* Group ID is not really relevant at this point. */
     /* const int group_id = unique_group_ids[i_group]; */
 
-    evaluate_constraint_group(params, type, group_mask);
+    if (params.debug_check) {
+      evaluate_constraint_group<true>(params, type, group_mask);
+    }
+    else {
+      evaluate_constraint_group<false>(params, type, group_mask);
+    }
   }
 }
 
@@ -419,6 +438,7 @@ static void node_geo_exec(GeoNodeExecParams params)
 {
   const int gauss_seidel_steps = params.extract_input<int>("Gauss-Seidel Steps");
   const float delta_time = std::max(params.extract_input<float>("Delta Time"), 0.0f);
+  const bool debug_check = params.extract_input<bool>("Debug Checks");
   GeometrySet geometry_set = params.extract_input<GeometrySet>("Geometry");
   Field<float3> position_field = params.extract_input<Field<float3>>("Position");
   Field<math::Quaternion> rotation_field = params.extract_input<Field<math::Quaternion>>(
@@ -582,6 +602,7 @@ static void node_geo_exec(GeoNodeExecParams params)
                                                    const StringRef message) {
           params.error_message_add(type, message);
         };
+        solver_params.debug_check = debug_check;
 
         do_solver_steps(SolverMethod::GaussSeidel, gauss_seidel_steps, solver_params);
 
