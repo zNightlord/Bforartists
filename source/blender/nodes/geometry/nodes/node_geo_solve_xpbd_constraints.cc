@@ -40,6 +40,8 @@ enum class SolverMethod {
 
 /* Constraint attributes. */
 constexpr StringRef ATTR_SOLVER_GROUP = "solver_group";
+constexpr StringRef ATTR_ALPHA = "alpha";
+constexpr StringRef ATTR_GAMMA = "gamma";
 constexpr StringRef ATTR_POINT1 = "point1";
 constexpr StringRef ATTR_POINT2 = "point2";
 constexpr StringRef ATTR_ACTIVE = "active";
@@ -100,6 +102,15 @@ static void node_declare_positions(NodeDeclarationBuilder &b)
   b.add_input<decl::Vector>("Old Position").field_on({2}).hide_value();
   b.add_input<decl::Rotation>("Old Rotation").field_on({2}).hide_value();
 
+  b.add_input<decl::Float>("Position Weight")
+      .default_value(1.0f)
+      .field_on({2})
+      .description("Influence weight of constraints for each point (inverse mass)");
+  b.add_input<decl::Float>("Rotation Weight")
+      .default_value(1.0f)
+      .field_on({2})
+      .description("Influence weight of constraints for each point (inverse moment of inertia)");
+
   auto add_constraint_input_output = [&](const ConstraintType type) {
     const StringRef name = constraint_ui_geometry(type);
     const StringRef description = constraint_ui_description(type);
@@ -140,6 +151,15 @@ static void node_declare_velocities(NodeDeclarationBuilder &b)
   b.add_output<decl::Vector>("Angular Velocity").field_on({0}).align_with_previous();
   b.add_input<decl::Vector>("Original Velocity").field_on({1}).hide_value();
   b.add_input<decl::Vector>("Original Angular Velocity").field_on({1}).hide_value();
+
+  b.add_input<decl::Float>("Position Weight")
+      .default_value(1.0f)
+      .field_on({2})
+      .description("Influence weight of constraints for each point (inverse mass)");
+  b.add_input<decl::Float>("Rotation Weight")
+      .default_value(1.0f)
+      .field_on({2})
+      .description("Influence weight of constraints for each point (inverse moment of inertia)");
 
   auto add_constraint_input_output = [&](const ConstraintType type) {
     const StringRef name = constraint_ui_geometry(type);
@@ -196,6 +216,9 @@ struct ConstraintEvalInputs {
   VArraySpan<float3> orig_velocities;
   VArraySpan<float3> orig_angular_velocities;
 
+  VArraySpan<float> position_weights;
+  VArraySpan<float> rotation_weights;
+
   Span<float4x4> collider_transforms;
   /* Collider transforms of the previous frame for computing velocity constraints. */
   Span<float4x4> old_collider_transforms;
@@ -212,6 +235,8 @@ struct ConstraintEvalInputs {
   } rotation_goal;
   struct {
     VArray<int> solver_group;
+    VArraySpan<float> alpha;
+    VArraySpan<float> gamma;
     VArraySpan<int> points1;
     VArraySpan<int> points2;
     VArraySpan<float> edge_length;
@@ -286,8 +311,9 @@ void evaluate_constraint_group_position_goal(const SolverParams &params,
     case EvaluationTarget::Positions:
       group_mask.foreach_index(GrainSize(1024), [&](const int index) {
         const int point1 = params.inputs.position_goal.points[index];
-        const float3 position1 = params.inputs.positions[point1];
-        const float3 goal = params.inputs.position_goal.goals[index];
+        const float3 &goal = params.inputs.position_goal.goals[index];
+
+        const float3 &position1 = params.inputs.positions[point1];
 
         const float3 residual = position1 - goal;
         /* Gradient is identity transform. */
@@ -316,8 +342,43 @@ void evaluate_constraint_group_stretch_shear(const SolverParams &params,
                                              const IndexMask &group_mask)
 {
   switch (params.target) {
-    case EvaluationTarget::Positions:
+    case EvaluationTarget::Positions: {
+      group_mask.foreach_index(GrainSize(1024), [&](const int index) {
+        const int point1 = params.inputs.stretch_shear.points1[index];
+        const int point2 = params.inputs.stretch_shear.points2[index];
+        const float edge_length = params.inputs.stretch_shear.edge_length[index];
+        const float inv_edge_length = math::safe_rcp(edge_length);
+        /* XPBD softness and damping factors. */
+        const float alpha = params.inputs.stretch_shear.alpha[index];
+        const float gamma = params.inputs.stretch_shear.gamma[index];
+
+        const float3 &position1 = params.inputs.positions[point1];
+        const float3 &position2 = params.inputs.positions[point2];
+        const math::Quaternion &rotation = params.inputs.rotations[point1];
+        const float weight_pos1 = params.inputs.position_weights[point1];
+        const float weight_pos2 = params.inputs.position_weights[point2];
+        const float weight_rot = params.inputs.rotation_weights[point1];
+
+        const float3 direction = math::transform_point(rotation, float3(0, 0, 1));
+        const float3 residual_position = inv_edge_length * (position2 - position1) - direction;
+        const math::Quaternion residual_rotation = math::Quaternion(0.0f, residual_position) *
+                                                   rotation * math::Quaternion(0, 0, 0, -1);
+        const float weight_norm = math::safe_rcp(
+            (weight_pos1 + weight_pos2) * inv_edge_length * inv_edge_length + 4.0f * weight_rot);
+
+        const float3 delta_position1 = weight_pos1 * weight_norm * inv_edge_length *
+                                       residual_position;
+        const float3 delta_position2 = weight_pos2 * weight_norm * inv_edge_length *
+                                       residual_position;
+        const float4 delta_rotation = weight_rot * weight_norm * float4(residual_rotation);
+
+        params.outputs.positions[point1] += delta_position1;
+        params.outputs.positions[point2] += delta_position2;
+        // params.outputs.rotations[point1] = math::normalize(
+        //     math::Quaternion(float4(params.outputs.rotations[point1]) + delta_rotation));
+      });
       break;
+    }
     case EvaluationTarget::Velocities:
       break;
   }
@@ -619,6 +680,12 @@ static void prepare_constraint_data(GeoNodeExecParams params,
   {
     constraint_inputs.stretch_shear.solver_group = *lookup_or_warn<int>(
         params, *attributes, ATTR_SOLVER_GROUP, AttrDomain::Point, 0);
+    constraint_inputs.stretch_shear.alpha = *attributes->lookup_or_default<float>(
+        ATTR_ALPHA, AttrDomain::Point, 0.0f);
+    constraint_inputs.stretch_shear.gamma = *attributes->lookup_or_default<float>(
+        ATTR_GAMMA, AttrDomain::Point, 0.0f);
+    constraint_inputs.stretch_shear.edge_length = *lookup_or_warn<float>(
+        params, *attributes, "edge_length", AttrDomain::Point, 0.0f);
     constraint_inputs.stretch_shear.points1 = *lookup_or_warn<int>(
         params, *attributes, ATTR_POINT1, AttrDomain::Point, 0);
     constraint_inputs.stretch_shear.points2 = *lookup_or_warn<int>(
@@ -699,6 +766,8 @@ static void node_geo_exec_positions(GeoNodeExecParams params)
       params.get_output_anonymous_attribute_id_if_needed("Position");
   std::optional<std::string> rotation_output_id =
       params.get_output_anonymous_attribute_id_if_needed("Rotation");
+  Field<float> position_weight_field = params.extract_input<Field<float>>("Position Weight");
+  Field<float> rotation_weight_field = params.extract_input<Field<float>>("Rotation Weight");
 
   Vector<GeometrySet> constraint_geometry_sets;
   ConstraintEvalInputs constraint_inputs;
@@ -726,11 +795,15 @@ static void node_geo_exec_positions(GeoNodeExecParams params)
         evaluator.add(rotation_field);
         evaluator.add(old_position_field);
         evaluator.add(old_rotation_field);
+        evaluator.add(position_weight_field);
+        evaluator.add(rotation_weight_field);
         evaluator.evaluate();
         constraint_inputs.positions = evaluator.get_evaluated<float3>(0);
         constraint_inputs.rotations = evaluator.get_evaluated<math::Quaternion>(1);
         constraint_inputs.old_positions = evaluator.get_evaluated<float3>(2);
         constraint_inputs.old_rotations = evaluator.get_evaluated<math::Quaternion>(3);
+        constraint_inputs.position_weights = evaluator.get_evaluated<float>(4);
+        constraint_inputs.rotation_weights = evaluator.get_evaluated<float>(5);
 
         /* Full input copy to initialize outputs, since not all variables may be changed. */
         constraint_outputs.positions.reinitialize(num_points);
@@ -798,6 +871,8 @@ static void node_geo_exec_velocities(GeoNodeExecParams params)
   Field<float3> orig_velocity_field = params.extract_input<Field<float3>>("Original Velocity");
   Field<float3> orig_angular_velocity_field = params.extract_input<Field<float3>>(
       "Original Angular Velocity");
+  Field<float> position_weight_field = params.extract_input<Field<float>>("Position Weight");
+  Field<float> rotation_weight_field = params.extract_input<Field<float>>("Rotation Weight");
 
   Vector<GeometrySet> constraint_geometry_sets;
   ConstraintEvalInputs constraint_inputs;
@@ -825,11 +900,15 @@ static void node_geo_exec_velocities(GeoNodeExecParams params)
         evaluator.add(angular_velocity_field);
         evaluator.add(orig_velocity_field);
         evaluator.add(orig_angular_velocity_field);
+        evaluator.add(position_weight_field);
+        evaluator.add(rotation_weight_field);
         evaluator.evaluate();
         constraint_inputs.velocities = evaluator.get_evaluated<float3>(0);
         constraint_inputs.angular_velocities = evaluator.get_evaluated<float3>(1);
         constraint_inputs.orig_velocities = evaluator.get_evaluated<float3>(2);
         constraint_inputs.orig_angular_velocities = evaluator.get_evaluated<float3>(3);
+        constraint_inputs.position_weights = evaluator.get_evaluated<float>(4);
+        constraint_inputs.rotation_weights = evaluator.get_evaluated<float>(5);
 
         /* Full input copy to initialize outputs, since not all variables may be changed. */
         constraint_outputs.velocities.reinitialize(num_points);
