@@ -415,23 +415,24 @@ void evaluate_constraint_group_contact(const SolverParams &params, const IndexMa
         const float3 old_contact_point2 = math::transform_point(old_collider_transform,
                                                                 local_position2);
 
-        const float3 velocity1 = params.inputs.orig_velocities[point1];
+        const float3 velocity1 = params.outputs.velocities[point1];
+        const float3 orig_velocity1 = params.inputs.orig_velocities[point1];
         /* Compute velocity of the collider contact point. */
         const float3 velocity2 = contact_point2 - old_contact_point2;
         const float3 relative_velocity = velocity1 - velocity2;
-        const float normal_relative_velocity = math::dot(relative_velocity, normal);
-        const float3 surface_relative_velocity = relative_velocity -
-                                                 normal * normal_relative_velocity;
+        const float3 orig_relative_velocity = orig_velocity1 - velocity2;
+        const float normal_velocity = math::dot(relative_velocity, normal);
+        const float orig_normal_velocity = math::dot(orig_relative_velocity, normal);
+        const float3 surface_velocity = relative_velocity - normal * normal_velocity;
 
-        const float residual_restitution = normal_relative_velocity;
         /* Folded into delta. */
-        /* const float residual_friction = math::length(surface_relative_velocity); */
+        /* const float residual_restitution = math::dot(relative_velocity, normal); */
+        /* const float residual_friction = math::length(surface_velocity); */
+
         /* Gradients are normalized, no need to compute gradient norm. */
-        const float3 delta_velocity_restitution = (residual_restitution < 0.0f ?
-                                                       -(1.0f + restitution) *
-                                                           residual_restitution * normal :
-                                                       float3(0.0f));
-        const float3 delta_velocity_friction = -friction * surface_relative_velocity;
+        const float3 delta_velocity_restitution =
+            (-normal_velocity - std::min(restitution * orig_normal_velocity, 0.0f)) * normal;
+        const float3 delta_velocity_friction = -friction * surface_velocity;
 
         params.outputs.velocities[point1] += delta_velocity_restitution + delta_velocity_friction;
       });
