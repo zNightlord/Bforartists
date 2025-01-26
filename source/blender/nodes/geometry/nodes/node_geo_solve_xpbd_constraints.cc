@@ -869,6 +869,8 @@ static void node_geo_exec_velocities(GeoNodeExecParams params)
     }
   });
 
+  write_constraint_attributes(constraint_outputs);
+
   params.set_output("Geometry", geometry_set);
 
   auto set_constraint_outputs = [&](const ConstraintType type) {
