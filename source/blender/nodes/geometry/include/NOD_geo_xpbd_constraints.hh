@@ -13,17 +13,13 @@ namespace blender::nodes::xpbd_constraints {
 struct ConstraintEvalInputs {
   /* TODO split this by EvaluationTarget, only either (positions + rotations) or (velocities +
    * angular_velocities) are used. */
-  VArraySpan<float3> positions;
-  VArraySpan<math::Quaternion> rotations;
-  Array<float3> positions_buffer;
-  Array<math::Quaternion> rotations_buffer;
+  Array<float3> positions;
+  Array<math::Quaternion> rotations;
   VArraySpan<float3> old_positions;
   VArraySpan<math::Quaternion> old_rotations;
 
-  VArraySpan<float3> velocities;
-  VArraySpan<float3> angular_velocities;
-  Array<float3> velocities_buffer;
-  Array<float3> angular_velocities_buffer;
+  Array<float3> velocities;
+  Array<float3> angular_velocities;
   VArraySpan<float3> orig_velocities;
   VArraySpan<float3> orig_angular_velocities;
 
@@ -72,11 +68,6 @@ struct ConstraintEvalInputs {
 };
 
 struct ConstraintEvalOutputs {
-  Array<float3> positions;
-  Array<math::Quaternion> rotations;
-  Array<float3> velocities;
-  Array<float3> angular_velocities;
-
   struct {
     /* Remember active contacts for later velocity update. */
     bke::SpanAttributeWriter<bool> active;

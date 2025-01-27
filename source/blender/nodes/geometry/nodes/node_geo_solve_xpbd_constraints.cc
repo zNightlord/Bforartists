@@ -251,7 +251,7 @@ static void evaluate_constraint_group_position_goal(const SolverParams &params,
         /* Gradient is identity transform. */
         const float3 delta_position = -residual;
 
-        params.outputs.positions[point1] = position1 + delta_position;
+        params.inputs.positions[point1] = position1 + delta_position;
       });
       break;
     case EvaluationTarget::Velocities:
@@ -304,8 +304,8 @@ static void evaluate_constraint_group_stretch_shear(const SolverParams &params,
                                        residual_position;
         const float4 delta_rotation = weight_rot * weight_norm * float4(residual_rotation);
 
-        params.outputs.positions[point1] += delta_position1;
-        params.outputs.positions[point2] += delta_position2;
+        params.inputs.positions[point1] += delta_position1;
+        params.inputs.positions[point2] += delta_position2;
         // params.outputs.rotations[point1] = math::normalize(
         //     math::Quaternion(float4(params.outputs.rotations[point1]) + delta_rotation));
       });
@@ -372,7 +372,7 @@ static void evaluate_constraint_group_contact(const SolverParams &params,
 
         /* Gradient is normal, length is 1, no need to compute gradient norm. */
         const float3 delta_position = -residual_depth * normal;
-        params.outputs.positions[point1] += delta_position;
+        params.inputs.positions[point1] += delta_position;
       });
       break;
     }
@@ -410,7 +410,7 @@ static void evaluate_constraint_group_contact(const SolverParams &params,
         const float3 old_contact_point2 = math::transform_point(old_collider_transform,
                                                                 local_position2);
 
-        const float3 velocity1 = params.outputs.velocities[point1];
+        const float3 velocity1 = params.inputs.velocities[point1];
         const float3 orig_velocity1 = params.inputs.orig_velocities[point1];
         /* Compute velocity of the collider contact point. */
         const float3 velocity2 = contact_point2 - old_contact_point2;
@@ -429,7 +429,7 @@ static void evaluate_constraint_group_contact(const SolverParams &params,
             (-normal_velocity - std::min(restitution * orig_normal_velocity, 0.0f)) * normal;
         const float3 delta_velocity_friction = -friction * surface_velocity;
 
-        params.outputs.velocities[point1] += delta_velocity_restitution + delta_velocity_friction;
+        params.inputs.velocities[point1] += delta_velocity_restitution + delta_velocity_friction;
       });
       break;
     }
@@ -462,25 +462,6 @@ static void evaluate_constraint_group(const SolverParams &params,
       break;
     case ConstraintType::Contact:
       evaluate_constraint_group_contact<debug_check>(params, group_mask);
-      break;
-  }
-
-  switch (params.target) {
-    case EvaluationTarget::Positions:
-      /* Move output array to input buffer for next update. */
-      params.inputs.positions_buffer = params.outputs.positions;
-      params.inputs.rotations_buffer = params.outputs.rotations;
-      params.inputs.positions = VArray<float3>::ForContainer(params.inputs.positions_buffer);
-      params.inputs.rotations = VArray<math::Quaternion>::ForContainer(
-          params.inputs.rotations_buffer);
-      break;
-    case EvaluationTarget::Velocities:
-      /* Move output array to input buffer for next update. */
-      params.inputs.velocities_buffer = params.outputs.velocities;
-      params.inputs.angular_velocities_buffer = params.outputs.angular_velocities;
-      params.inputs.velocities = VArray<float3>::ForContainer(params.inputs.velocities_buffer);
-      params.inputs.angular_velocities = VArray<float3>::ForContainer(
-          params.inputs.angular_velocities_buffer);
       break;
   }
 }
@@ -565,6 +546,7 @@ static void do_solver_steps(const SolverMethod method, const int steps, const So
 
 static void prepare_constraint_data(GeoNodeExecParams params,
                                     Vector<GeometrySet> &constraint_geometry_sets,
+                                    GeometrySet &colliders_geometry_set,
                                     ConstraintEvalInputs &constraint_inputs,
                                     ConstraintEvalOutputs &constraint_outputs)
 {
@@ -660,10 +642,11 @@ static void prepare_constraint_data(GeoNodeExecParams params,
     constraint_inputs.contact.restitution = *attributes->lookup_or_default<float>(
         "restitution", AttrDomain::Point, 0.0f);
 
-    const GeometrySet collider_geometry = params.extract_input<GeometrySet>("Colliders");
-    constraint_inputs.collider_transforms = collider_geometry.has_instances() ?
-                                                collider_geometry.get_instances()->transforms() :
-                                                Span<float4x4>{};
+    colliders_geometry_set = params.extract_input<GeometrySet>("Colliders");
+    constraint_inputs.collider_transforms =
+        colliders_geometry_set.has_instances() ?
+            colliders_geometry_set.get_instances()->transforms() :
+            Span<float4x4>{};
     /* XXX Transforms of the previous frame are not currently available, these are always the
      * same as the current frame. Eventually this will allow transfer of velocity from animated
      * colliders. */
@@ -704,9 +687,14 @@ static void node_geo_exec_positions(GeoNodeExecParams params)
   Field<float> rotation_weight_field = params.extract_input<Field<float>>("Rotation Weight");
 
   Vector<GeometrySet> constraint_geometry_sets;
+  GeometrySet colliders_geometry_set;
   ConstraintEvalInputs constraint_inputs;
   ConstraintEvalOutputs constraint_outputs;
-  prepare_constraint_data(params, constraint_geometry_sets, constraint_inputs, constraint_outputs);
+  prepare_constraint_data(params,
+                          constraint_geometry_sets,
+                          colliders_geometry_set,
+                          constraint_inputs,
+                          constraint_outputs);
 
   static const Array<GeometryComponent::Type> types = {bke::GeometryComponent::Type::Mesh,
                                                        bke::GeometryComponent::Type::PointCloud,
@@ -722,30 +710,24 @@ static void node_geo_exec_positions(GeoNodeExecParams params)
         }
 
         const int num_points = attributes->domain_size(AttrDomain::Point);
+        constraint_inputs.positions.reinitialize(num_points);
+        constraint_inputs.rotations.reinitialize(num_points);
 
         const bke::GeometryFieldContext field_context{component, AttrDomain::Point};
         fn::FieldEvaluator evaluator{field_context, num_points};
-        evaluator.add(position_field);
-        evaluator.add(rotation_field);
+        evaluator.add_with_destination(position_field,
+                                       constraint_inputs.positions.as_mutable_span());
+        evaluator.add_with_destination(rotation_field,
+                                       constraint_inputs.rotations.as_mutable_span());
         evaluator.add(old_position_field);
         evaluator.add(old_rotation_field);
         evaluator.add(position_weight_field);
         evaluator.add(rotation_weight_field);
         evaluator.evaluate();
-        constraint_inputs.positions = evaluator.get_evaluated<float3>(0);
-        constraint_inputs.rotations = evaluator.get_evaluated<math::Quaternion>(1);
         constraint_inputs.old_positions = evaluator.get_evaluated<float3>(2);
         constraint_inputs.old_rotations = evaluator.get_evaluated<math::Quaternion>(3);
         constraint_inputs.position_weights = evaluator.get_evaluated<float>(4);
         constraint_inputs.rotation_weights = evaluator.get_evaluated<float>(5);
-
-        /* Full input copy to initialize outputs, since not all variables may be changed. */
-        constraint_outputs.positions.reinitialize(num_points);
-        constraint_outputs.rotations.reinitialize(num_points);
-        array_utils::copy(constraint_inputs.positions,
-                          constraint_outputs.positions.as_mutable_span());
-        array_utils::copy(constraint_inputs.rotations,
-                          constraint_outputs.rotations.as_mutable_span());
 
         SolverParams solver_params = {
             delta_time, EvaluationTarget::Positions, constraint_inputs, constraint_outputs};
@@ -809,9 +791,14 @@ static void node_geo_exec_velocities(GeoNodeExecParams params)
   Field<float> rotation_weight_field = params.extract_input<Field<float>>("Rotation Weight");
 
   Vector<GeometrySet> constraint_geometry_sets;
+  GeometrySet colliders_geometry_set;
   ConstraintEvalInputs constraint_inputs;
   ConstraintEvalOutputs constraint_outputs;
-  prepare_constraint_data(params, constraint_geometry_sets, constraint_inputs, constraint_outputs);
+  prepare_constraint_data(params,
+                          constraint_geometry_sets,
+                          colliders_geometry_set,
+                          constraint_inputs,
+                          constraint_outputs);
 
   static const Array<GeometryComponent::Type> types = {bke::GeometryComponent::Type::Mesh,
                                                        bke::GeometryComponent::Type::PointCloud,
@@ -827,30 +814,24 @@ static void node_geo_exec_velocities(GeoNodeExecParams params)
         }
 
         const int num_points = attributes->domain_size(AttrDomain::Point);
+        constraint_inputs.velocities.reinitialize(num_points);
+        constraint_inputs.angular_velocities.reinitialize(num_points);
 
         const bke::GeometryFieldContext field_context{component, AttrDomain::Point};
         fn::FieldEvaluator evaluator{field_context, num_points};
-        evaluator.add(velocity_field);
-        evaluator.add(angular_velocity_field);
+        evaluator.add_with_destination(velocity_field,
+                                       constraint_inputs.velocities.as_mutable_span());
+        evaluator.add_with_destination(angular_velocity_field,
+                                       constraint_inputs.angular_velocities.as_mutable_span());
         evaluator.add(orig_velocity_field);
         evaluator.add(orig_angular_velocity_field);
         evaluator.add(position_weight_field);
         evaluator.add(rotation_weight_field);
         evaluator.evaluate();
-        constraint_inputs.velocities = evaluator.get_evaluated<float3>(0);
-        constraint_inputs.angular_velocities = evaluator.get_evaluated<float3>(1);
         constraint_inputs.orig_velocities = evaluator.get_evaluated<float3>(2);
         constraint_inputs.orig_angular_velocities = evaluator.get_evaluated<float3>(3);
         constraint_inputs.position_weights = evaluator.get_evaluated<float>(4);
         constraint_inputs.rotation_weights = evaluator.get_evaluated<float>(5);
-
-        /* Full input copy to initialize outputs, since not all variables may be changed. */
-        constraint_outputs.velocities.reinitialize(num_points);
-        constraint_outputs.angular_velocities.reinitialize(num_points);
-        array_utils::copy(constraint_inputs.velocities,
-                          constraint_outputs.velocities.as_mutable_span());
-        array_utils::copy(constraint_inputs.angular_velocities,
-                          constraint_outputs.angular_velocities.as_mutable_span());
 
         SolverParams solver_params = {
             delta_time, EvaluationTarget::Velocities, constraint_inputs, constraint_outputs};
@@ -869,8 +850,7 @@ static void node_geo_exec_velocities(GeoNodeExecParams params)
           velocities_writer.varray.set_all(constraint_inputs.velocities);
           velocities_writer.finish();
         }
-        if (angular_velocity_output_id && !constraint_inputs.angular_velocities_buffer.is_empty())
-        {
+        if (angular_velocity_output_id) {
           AttributeWriter<float3> angular_velocities_writer =
               attributes->lookup_or_add_for_write<float3>(*angular_velocity_output_id,
                                                           AttrDomain::Point);
