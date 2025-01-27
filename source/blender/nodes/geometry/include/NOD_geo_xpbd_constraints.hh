@@ -10,7 +10,7 @@
 
 namespace blender::nodes::xpbd_constraints {
 
-struct ConstraintEvalInputs {
+struct ConstraintEvalParams {
   /* TODO split this by EvaluationTarget, only either (positions + rotations) or (velocities +
    * angular_velocities) are used. */
   Array<float3> positions;
@@ -64,11 +64,7 @@ struct ConstraintEvalInputs {
 
     VArraySpan<float> friction;
     VArraySpan<float> restitution;
-  } contact;
-};
 
-struct ConstraintEvalOutputs {
-  struct {
     /* Remember active contacts for later velocity update. */
     bke::SpanAttributeWriter<bool> active;
   } contact;
