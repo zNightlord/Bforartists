@@ -8,6 +8,8 @@
 #include "BKE_geometry_set.hh"
 #include "BKE_instances.hh"
 
+#include "NOD_geo_xpbd_constraints.hh"
+
 #include "node_geometry_util.hh"
 
 #include <fmt/format.h>
@@ -199,78 +201,8 @@ static AttributeReader<T> lookup_or_warn(const GeoNodeExecParams &params,
   return attributes.lookup_or_default<T>(attribute_id, domain, default_value);
 }
 
-struct ConstraintEvalInputs {
-  /* TODO split this by EvaluationTarget, only either (positions + rotations) or (velocities +
-   * angular_velocities) are used. */
-  VArraySpan<float3> positions;
-  VArraySpan<math::Quaternion> rotations;
-  Array<float3> positions_buffer;
-  Array<math::Quaternion> rotations_buffer;
-  VArraySpan<float3> old_positions;
-  VArraySpan<math::Quaternion> old_rotations;
-
-  VArraySpan<float3> velocities;
-  VArraySpan<float3> angular_velocities;
-  Array<float3> velocities_buffer;
-  Array<float3> angular_velocities_buffer;
-  VArraySpan<float3> orig_velocities;
-  VArraySpan<float3> orig_angular_velocities;
-
-  VArraySpan<float> position_weights;
-  VArraySpan<float> rotation_weights;
-
-  Span<float4x4> collider_transforms;
-  /* Collider transforms of the previous frame for computing velocity constraints. */
-  Span<float4x4> old_collider_transforms;
-
-  struct {
-    VArray<int> solver_group;
-    VArraySpan<int> points;
-    VArraySpan<float3> goals;
-  } position_goal;
-  struct {
-    VArray<int> solver_group;
-    VArraySpan<int> points;
-    VArraySpan<math::Quaternion> goals;
-  } rotation_goal;
-  struct {
-    VArray<int> solver_group;
-    VArraySpan<float> alpha;
-    VArraySpan<float> gamma;
-    VArraySpan<int> points1;
-    VArraySpan<int> points2;
-    VArraySpan<float> edge_length;
-  } stretch_shear;
-  struct {
-    VArray<int> solver_group;
-    VArraySpan<int> points1;
-    VArraySpan<int> points2;
-    VArraySpan<float3> darboux_vector;
-  } bend_twist;
-  struct {
-    VArray<int> solver_group;
-    VArraySpan<int> points;
-    VArraySpan<int> collider_index;
-    VArraySpan<float3> local_position1;
-    VArraySpan<float3> local_position2;
-    VArraySpan<float3> normal;
-
-    VArraySpan<float> friction;
-    VArraySpan<float> restitution;
-  } contact;
-};
-
-struct ConstraintEvalOutputs {
-  Array<float3> positions;
-  Array<math::Quaternion> rotations;
-  Array<float3> velocities;
-  Array<float3> angular_velocities;
-
-  struct {
-    /* Remember active contacts for later velocity update. */
-    SpanAttributeWriter<bool> active;
-  } contact;
-};
+using xpbd_constraints::ConstraintEvalInputs;
+using xpbd_constraints::ConstraintEvalOutputs;
 
 static const VArray<int> &constraints_solver_groups(const ConstraintEvalInputs &inputs,
                                                     const ConstraintType type)
@@ -304,8 +236,8 @@ struct SolverParams {
   bool debug_check;
 };
 
-void evaluate_constraint_group_position_goal(const SolverParams &params,
-                                             const IndexMask &group_mask)
+static void evaluate_constraint_group_position_goal(const SolverParams &params,
+                                                    const IndexMask &group_mask)
 {
   switch (params.target) {
     case EvaluationTarget::Positions:
@@ -327,8 +259,8 @@ void evaluate_constraint_group_position_goal(const SolverParams &params,
   }
 }
 
-void evaluate_constraint_group_rotation_goal(const SolverParams &params,
-                                             const IndexMask &group_mask)
+static void evaluate_constraint_group_rotation_goal(const SolverParams &params,
+                                                    const IndexMask & /*group_mask*/)
 {
   switch (params.target) {
     case EvaluationTarget::Positions:
@@ -338,8 +270,8 @@ void evaluate_constraint_group_rotation_goal(const SolverParams &params,
   }
 }
 
-void evaluate_constraint_group_stretch_shear(const SolverParams &params,
-                                             const IndexMask &group_mask)
+static void evaluate_constraint_group_stretch_shear(const SolverParams &params,
+                                                    const IndexMask &group_mask)
 {
   switch (params.target) {
     case EvaluationTarget::Positions: {
@@ -384,7 +316,8 @@ void evaluate_constraint_group_stretch_shear(const SolverParams &params,
   }
 }
 
-void evaluate_constraint_group_bend_twist(const SolverParams &params, const IndexMask &group_mask)
+static void evaluate_constraint_group_bend_twist(const SolverParams &params,
+                                                 const IndexMask & /*group_mask*/)
 {
   switch (params.target) {
     case EvaluationTarget::Positions:
@@ -395,7 +328,8 @@ void evaluate_constraint_group_bend_twist(const SolverParams &params, const Inde
 }
 
 template<bool debug_check>
-void evaluate_constraint_group_contact(const SolverParams &params, const IndexMask &group_mask)
+static void evaluate_constraint_group_contact(const SolverParams &params,
+                                              const IndexMask &group_mask)
 {
   switch (params.target) {
     case EvaluationTarget::Positions: {
