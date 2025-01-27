@@ -241,14 +241,11 @@ static void evaluate_constraint_group_position_goal(const SolverParams &params,
     case EvaluationTarget::Positions:
       group_mask.foreach_index(GrainSize(1024), [&](const int index) {
         const int point1 = params.constraints.position_goal.points[index];
-        const float3 &goal = params.constraints.position_goal.goals[index];
-
-        const float3 &position1 = params.constraints.positions[point1];
-
-        const float3 residual = position1 - goal;
-        /* Gradient is identity transform. */
-        const float3 delta_position = -residual;
-
+        float3 &position1 = params.constraints.positions[point1];
+        const float3 goal = params.constraints.position_goal.goals[index];
+        float3 delta_lambda;
+        float3 delta_position;
+        xpbd_constraints::eval_position_goal(position1, goal, delta_lambda, delta_position);
         params.constraints.positions[point1] = position1 + delta_position;
       });
       break;
@@ -277,35 +274,38 @@ static void evaluate_constraint_group_stretch_shear(const SolverParams &params,
         const int point1 = params.constraints.stretch_shear.points1[index];
         const int point2 = params.constraints.stretch_shear.points2[index];
         const float edge_length = params.constraints.stretch_shear.edge_length[index];
-        const float inv_edge_length = math::safe_rcp(edge_length);
         /* XPBD softness and damping factors. */
         const float alpha = params.constraints.stretch_shear.alpha[index];
         const float gamma = params.constraints.stretch_shear.gamma[index];
 
-        const float3 &position1 = params.constraints.positions[point1];
-        const float3 &position2 = params.constraints.positions[point2];
-        const math::Quaternion &rotation = params.constraints.rotations[point1];
+        float3 &position1 = params.constraints.positions[point1];
+        float3 &position2 = params.constraints.positions[point2];
+        math::Quaternion &rotation = params.constraints.rotations[point1];
         const float weight_pos1 = params.constraints.position_weights[point1];
         const float weight_pos2 = params.constraints.position_weights[point2];
         const float weight_rot = params.constraints.rotation_weights[point1];
 
-        const float3 direction = math::transform_point(rotation, float3(0, 0, 1));
-        const float3 residual_position = inv_edge_length * (position2 - position1) - direction;
-        const math::Quaternion residual_rotation = math::Quaternion(0.0f, residual_position) *
-                                                   rotation * math::Quaternion(0, 0, 0, -1);
-        const float weight_norm = math::safe_rcp(
-            (weight_pos1 + weight_pos2) * inv_edge_length * inv_edge_length + 4.0f * weight_rot);
+        float3 delta_lambda;
+        float3 delta_position1;
+        float3 delta_position2;
+        float4 delta_rotation;
+        xpbd_constraints::eval_position_stretch_shear(position1,
+                                                      position2,
+                                                      rotation,
+                                                      weight_pos1,
+                                                      weight_pos2,
+                                                      weight_rot,
+                                                      edge_length,
+                                                      alpha,
+                                                      gamma,
+                                                      delta_lambda,
+                                                      delta_position1,
+                                                      delta_position2,
+                                                      delta_rotation);
 
-        const float3 delta_position1 = weight_pos1 * weight_norm * inv_edge_length *
-                                       residual_position;
-        const float3 delta_position2 = weight_pos2 * weight_norm * inv_edge_length *
-                                       residual_position;
-        const float4 delta_rotation = weight_rot * weight_norm * float4(residual_rotation);
-
-        params.constraints.positions[point1] += delta_position1;
-        params.constraints.positions[point2] += delta_position2;
-        // params.outputs.rotations[point1] = math::normalize(
-        //     math::Quaternion(float4(params.outputs.rotations[point1]) + delta_rotation));
+        position1 += delta_position1;
+        position2 += delta_position2;
+        rotation = math::normalize(math::Quaternion(float4(rotation) + delta_rotation));
       });
       break;
     }
@@ -338,10 +338,11 @@ static void evaluate_constraint_group_contact(const SolverParams &params,
           return;
         };
 
-        /* Local positions are relative to moving point and collider respectively. */
+        float3 &position1 = params.constraints.positions[point1];
+        bool &active = params.constraints.contact.active.span[index] = active;
+
         const float3 &local_position1 = params.constraints.contact.local_position1[index];
         const float3 &local_position2 = params.constraints.contact.local_position2[index];
-        /* Normal is a fixed shared direction for both participants. */
         const float3 &normal = params.constraints.contact.normal[index];
         if constexpr (debug_check) {
           if (!math::is_unit(normal)) {
@@ -350,28 +351,10 @@ static void evaluate_constraint_group_contact(const SolverParams &params,
           }
         }
 
-        /* Construct transforms for both the point (translation only for now) as well as the
-         * collider. */
-        const float3 position1 = params.constraints.positions[point1];
-        const float4x4 point_transform = math::from_location<float4x4>(position1);
-        const float4x4 &collider_transform =
-            params.constraints.collider_transforms[collider_index];
-        /* Contact points are computed by applying the transforms to relative local positions. */
-        const float3 contact_point1 = math::transform_point(point_transform, local_position1);
-        const float3 contact_point2 = math::transform_point(collider_transform, local_position2);
-
-        /* Positional constraint for penetration depth along the normal. */
-        const float residual_depth = math::dot(contact_point1 - contact_point2, normal);
-        /* Only act on contact. */
-        const bool active = residual_depth < 0.0f;
-        params.constraints.contact.active.span[index] = active;
-        if (!active) {
-          return;
-        }
-
-        /* Gradient is normal, length is 1, no need to compute gradient norm. */
-        const float3 delta_position = -residual_depth * normal;
-        params.constraints.positions[point1] += delta_position;
+        float delta_lambda;
+        float3 delta_position;
+        active = eval_position_contact(delta_lambda, delta_position);
+        position1 += delta_position;
       });
       break;
     }

@@ -4,11 +4,119 @@
 
 #pragma once
 
+#include "BLI_math_quaternion.hh"
 #include "BLI_math_quaternion_types.hh"
 
 #include "BKE_attribute.hh"
 
 namespace blender::nodes::xpbd_constraints {
+
+inline void eval_position_goal(const float3 &position,
+                               const float3 &goal,
+                               float3 &delta_lambda,
+                               float3 &delta_position)
+{
+  const float3 residual = position - goal;
+  /* Gradient is identity transform. */
+  delta_lambda = -residual;
+  delta_position = delta_lambda;
+}
+
+inline void eval_position_stretch_shear(const float3 &position1,
+                                        const float3 &position2,
+                                        const math::Quaternion &rotation,
+                                        const float weight_pos1,
+                                        const float weight_pos2,
+                                        const float weight_rot,
+                                        const float edge_length,
+                                        const float alpha,
+                                        const float gamma,
+                                        float3 &delta_lambda,
+                                        float3 &delta_position1,
+                                        float3 &delta_position2,
+                                        float4 &delta_rotation)
+{
+  const float inv_edge_length = math::safe_rcp(edge_length);
+
+  const float3 direction = math::transform_point(rotation, float3(0, 0, 1));
+  const float3 residual = inv_edge_length * (position2 - position1) - direction;
+  const float weight_norm = math::safe_rcp(
+      (weight_pos1 + weight_pos2) * inv_edge_length * inv_edge_length + 4.0f * weight_rot);
+
+  delta_lambda = weight_norm * residual;
+
+  delta_position1 = weight_pos1 * inv_edge_length * delta_lambda;
+  delta_position2 = weight_pos2 * inv_edge_length * delta_lambda;
+  delta_rotation = weight_rot * float4(math::Quaternion(0.0f, delta_lambda) * rotation *
+                                       math::Quaternion(0, 0, 0, -1));
+}
+
+inline bool eval_position_contact(const float3 position,
+                                  const float4x4 &collider_transform,
+                                  const float3 &local_position1,
+                                  const float3 &local_position2,
+                                  const float3 &normal,
+                                  float &delta_lambda,
+                                  float3 &delta_position,
+                                  float4 &delta_rotation)
+{
+  /* Local positions are relative to moving point and collider respectively.
+   * Normal is a fixed shared direction for both participants. */
+
+  /* Point transform is translation only for now. */
+  const float4x4 point_transform = math::from_location<float4x4>(position);
+  /* Contact points are computed by applying the transforms to relative local positions. */
+  const float3 contact_point1 = math::transform_point(point_transform, local_position1);
+  const float3 contact_point2 = math::transform_point(collider_transform, local_position2);
+
+  /* Positional constraint for penetration depth along the normal. */
+  const float residual_depth = math::dot(contact_point1 - contact_point2, normal);
+  /* Only act on contact. */
+  const bool active = residual_depth < 0.0f;
+  if (!active) {
+    return false;
+  }
+
+  /* Gradient is normal, length is 1, no need to compute gradient norm. */
+  delta_lambda = -residual_depth;
+  delta_position = delta_lambda * normal;
+  return true;
+}
+
+inline void eval_velocity_contact(const float3 &point_velocity,
+                                  const float3 &point_angular_velocity,
+                                  const float3 &orig_point_velocity,
+                                  const float3 &orig_point_angular_velocity,
+                                  const float3 &collider_velocity,
+                                  const float3 &collider_angular_velocity,
+                                  const float3 &local_position1,
+                                  const float3 &local_position2,
+                                  const float3 &normal,
+                                  const float restitution,
+                                  const float friction,
+                                  float &delta_lambda,
+                                  float3 &delta_velocity,
+                                  float3 &delta_angular_velocity)
+{
+  /* Compute velocity of the collider contact point. */
+  const float3 relative_velocity = point_velocity - collider_velocity;
+  const float3 orig_relative_velocity = orig_point_velocity - collider_velocity;
+  const float normal_velocity = math::dot(relative_velocity, normal);
+  const float orig_normal_velocity = math::dot(orig_relative_velocity, normal);
+  const float3 surface_velocity = relative_velocity - normal * normal_velocity;
+
+  /* Folded into delta. */
+  /* const float residual_restitution = math::dot(relative_velocity, normal); */
+  /* const float residual_friction = math::length(surface_velocity); */
+
+  /* Gradients are normalized, no need to compute gradient norm. */
+  const float3 delta_velocity_restitution = (-normal_velocity -
+                                             std::min(restitution * orig_normal_velocity, 0.0f)) *
+                                            normal;
+  const float3 delta_velocity_friction = -friction * surface_velocity;
+
+  params.constraints.velocities[point1] += delta_velocity_restitution + delta_velocity_friction;
+}
 
 struct ConstraintEvalParams {
   /* TODO split this by EvaluationTarget, only either (positions + rotations) or (velocities +
