@@ -51,7 +51,8 @@ inline void eval_position_stretch_shear(const float3 &position1,
                                        math::Quaternion(0, 0, 0, -1));
 }
 
-inline bool eval_position_contact(const float3 position,
+inline bool eval_position_contact(const float3 &position,
+                                  const math::Quaternion &rotation,
                                   const float4x4 &collider_transform,
                                   const float3 &local_position1,
                                   const float3 &local_position2,
@@ -63,8 +64,7 @@ inline bool eval_position_contact(const float3 position,
   /* Local positions are relative to moving point and collider respectively.
    * Normal is a fixed shared direction for both participants. */
 
-  /* Point transform is translation only for now. */
-  const float4x4 point_transform = math::from_location<float4x4>(position);
+  const float4x4 point_transform = math::from_loc_rot<float4x4>(position, rotation);
   /* Contact points are computed by applying the transforms to relative local positions. */
   const float3 contact_point1 = math::transform_point(point_transform, local_position1);
   const float3 contact_point2 = math::transform_point(collider_transform, local_position2);
@@ -79,7 +79,10 @@ inline bool eval_position_contact(const float3 position,
 
   /* Gradient is normal, length is 1, no need to compute gradient norm. */
   delta_lambda = -residual_depth;
-  delta_position = delta_lambda * normal;
+  const float3 impulse = delta_lambda * normal;
+  delta_position = impulse;
+  delta_rotation = 0.5f * float4(math::Quaternion(0.0f, math::cross(local_position1, impulse)) *
+                                 rotation);
   return true;
 }
 
@@ -94,7 +97,8 @@ inline void eval_velocity_contact(const float3 &point_velocity,
                                   const float3 &normal,
                                   const float restitution,
                                   const float friction,
-                                  float &delta_lambda,
+                                  float &delta_lambda_restitution,
+                                  float &delta_lambda_friction,
                                   float3 &delta_velocity,
                                   float3 &delta_angular_velocity)
 {
@@ -109,13 +113,15 @@ inline void eval_velocity_contact(const float3 &point_velocity,
   /* const float residual_restitution = math::dot(relative_velocity, normal); */
   /* const float residual_friction = math::length(surface_velocity); */
 
-  /* Gradients are normalized, no need to compute gradient norm. */
-  const float3 delta_velocity_restitution = (-normal_velocity -
-                                             std::min(restitution * orig_normal_velocity, 0.0f)) *
-                                            normal;
-  const float3 delta_velocity_friction = -friction * surface_velocity;
+  /* Kill normal velocity, then add restitution. */
+  delta_lambda_restitution = -std::min(restitution * orig_normal_velocity, 0.0f);
+  delta_lambda_friction = -friction * math::length(surface_velocity);
+  const float3 impulse_restitution = (-normal_velocity + delta_lambda_restitution) * normal;
+  const float3 impulse_friction = -friction * surface_velocity;
+  const float3 impulse = impulse_restitution + impulse_friction;
 
-  params.constraints.velocities[point1] += delta_velocity_restitution + delta_velocity_friction;
+  delta_velocity = impulse;
+  delta_angular_velocity = math::cross(local_position1, impulse);
 }
 
 struct ConstraintEvalParams {

@@ -339,6 +339,7 @@ static void evaluate_constraint_group_contact(const SolverParams &params,
         };
 
         float3 &position1 = params.constraints.positions[point1];
+        math::Quaternion &rotation1 = params.constraints.rotations[point1];
         bool &active = params.constraints.contact.active.span[index] = active;
 
         const float3 &local_position1 = params.constraints.contact.local_position1[index];
@@ -353,7 +354,8 @@ static void evaluate_constraint_group_contact(const SolverParams &params,
 
         float delta_lambda;
         float3 delta_position;
-        active = eval_position_contact(delta_lambda, delta_position);
+        active = xpbd_constraints::eval_position_contact(
+            position1, rotation1, delta_lambda, delta_position);
         position1 += delta_position;
       });
       break;
