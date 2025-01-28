@@ -103,8 +103,19 @@ inline void eval_velocity_contact(const float3 &point_velocity,
                                   float3 &delta_angular_velocity)
 {
   /* Compute velocity of the collider contact point. */
-  const float3 relative_velocity = point_velocity - collider_velocity;
-  const float3 orig_relative_velocity = orig_point_velocity - collider_velocity;
+  const float3 point_contact_velocity = point_velocity +
+                                        math::cross(point_angular_velocity, local_position1);
+  const float3 orig_point_contact_velocity = orig_point_velocity +
+                                             math::cross(orig_point_angular_velocity,
+                                                         local_position1);
+  const float3 collider_contact_velocity = collider_velocity -
+                                           math::cross(collider_angular_velocity, local_position2);
+
+  /* Relative contact velocity before and after position corrections. */
+  const float3 relative_velocity = point_contact_velocity - collider_contact_velocity;
+  const float3 orig_relative_velocity = orig_point_contact_velocity - collider_contact_velocity;
+
+  /* Decompose into normal and tangential velocity. */
   const float normal_velocity = math::dot(relative_velocity, normal);
   const float orig_normal_velocity = math::dot(orig_relative_velocity, normal);
   const float3 surface_velocity = relative_velocity - normal * normal_velocity;

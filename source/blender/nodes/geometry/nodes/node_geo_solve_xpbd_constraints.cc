@@ -332,15 +332,16 @@ static void evaluate_constraint_group_contact(const SolverParams &params,
   switch (params.target) {
     case EvaluationTarget::Positions: {
       group_mask.foreach_index(GrainSize(1024), [&](const int index) {
-        const int point1 = params.constraints.contact.points[index];
+        const int point = params.constraints.contact.points[index];
         const int collider_index = params.constraints.contact.collider_index[index];
         if (!params.constraints.collider_transforms.index_range().contains(collider_index)) {
           return;
         };
+        const float4x4 collider_transform = params.constraints.collider_transforms[collider_index];
 
-        float3 &position1 = params.constraints.positions[point1];
-        math::Quaternion &rotation1 = params.constraints.rotations[point1];
-        bool &active = params.constraints.contact.active.span[index] = active;
+        float3 &position = params.constraints.positions[point];
+        math::Quaternion &rotation = params.constraints.rotations[point];
+        bool &active = params.constraints.contact.active.span[index];
 
         const float3 &local_position1 = params.constraints.contact.local_position1[index];
         const float3 &local_position2 = params.constraints.contact.local_position2[index];
@@ -354,26 +355,38 @@ static void evaluate_constraint_group_contact(const SolverParams &params,
 
         float delta_lambda;
         float3 delta_position;
-        active = xpbd_constraints::eval_position_contact(
-            position1, rotation1, delta_lambda, delta_position);
-        position1 += delta_position;
+        float4 delta_rotation;
+        active = xpbd_constraints::eval_position_contact(position,
+                                                         rotation,
+                                                         collider_transform,
+                                                         local_position1,
+                                                         local_position2,
+                                                         normal,
+                                                         delta_lambda,
+                                                         delta_position,
+                                                         delta_rotation);
+        position += delta_position;
+        rotation = math::normalize(math::Quaternion(float4(rotation) + delta_rotation));
       });
       break;
     }
     case EvaluationTarget::Velocities: {
+      const float inv_delta_time = math::safe_rcp(params.delta_time);
+
       group_mask.foreach_index(GrainSize(1024), [&](const int index) {
         /* Active status is determined by the position evaluation. */
         if (!params.constraints.contact.active.span[index]) {
           return;
         }
 
-        const int point1 = params.constraints.contact.points[index];
+        const int point = params.constraints.contact.points[index];
         const int collider_index = params.constraints.contact.collider_index[index];
         if (!params.constraints.collider_transforms.index_range().contains(collider_index)) {
           return;
         };
 
         /* Local positions are relative to moving point and collider respectively. */
+        const float3 &local_position1 = params.constraints.contact.local_position1[index];
         const float3 &local_position2 = params.constraints.contact.local_position2[index];
         /* Normal is a fixed shared direction for both participants. */
         const float3 &normal = params.constraints.contact.normal[index];
@@ -390,32 +403,44 @@ static void evaluate_constraint_group_contact(const SolverParams &params,
             params.constraints.collider_transforms[collider_index];
         const float4x4 &old_collider_transform =
             params.constraints.old_collider_transforms[collider_index];
-        /* Contact points are computed by applying the transforms to relative local positions. */
-        const float3 contact_point2 = math::transform_point(collider_transform, local_position2);
-        const float3 old_contact_point2 = math::transform_point(old_collider_transform,
-                                                                local_position2);
 
-        const float3 velocity1 = params.constraints.velocities[point1];
-        const float3 orig_velocity1 = params.constraints.orig_velocities[point1];
-        /* Compute velocity of the collider contact point. */
-        const float3 velocity2 = contact_point2 - old_contact_point2;
-        const float3 relative_velocity = velocity1 - velocity2;
-        const float3 orig_relative_velocity = orig_velocity1 - velocity2;
-        const float normal_velocity = math::dot(relative_velocity, normal);
-        const float orig_normal_velocity = math::dot(orig_relative_velocity, normal);
-        const float3 surface_velocity = relative_velocity - normal * normal_velocity;
+        float3 &velocity = params.constraints.velocities[point];
+        float3 &angular_velocity = params.constraints.angular_velocities[point];
+        const float3 &orig_velocity = params.constraints.orig_velocities[point];
+        const float3 &orig_angular_velocity = params.constraints.orig_angular_velocities[point];
 
-        /* Folded into delta. */
-        /* const float residual_restitution = math::dot(relative_velocity, normal); */
-        /* const float residual_friction = math::length(surface_velocity); */
+        /* Compute velocity from old/new collider transforms. */
+        float3 collider_loc, old_collider_loc;
+        math::Quaternion collider_rot, old_collider_rot;
+        float3 collider_scale, old_collider_scale;
+        math::to_loc_rot_scale(collider_transform, collider_loc, collider_rot, collider_scale);
+        math::to_loc_rot_scale(
+            old_collider_transform, old_collider_loc, old_collider_rot, old_collider_scale);
+        const float3 collider_velocity = (collider_loc - old_collider_loc) * inv_delta_time;
+        const float3 collider_angular_velocity =
+            2.0f * (math::invert_normalized(old_collider_rot) * collider_rot).imaginary_part() *
+            inv_delta_time;
 
-        /* Gradients are normalized, no need to compute gradient norm. */
-        const float3 delta_velocity_restitution =
-            (-normal_velocity - std::min(restitution * orig_normal_velocity, 0.0f)) * normal;
-        const float3 delta_velocity_friction = -friction * surface_velocity;
+        float delta_lambda_restition, delta_lambda_friction;
+        float3 delta_velocity, delta_angular_velocity;
+        xpbd_constraints::eval_velocity_contact(velocity,
+                                                angular_velocity,
+                                                orig_velocity,
+                                                orig_angular_velocity,
+                                                collider_velocity,
+                                                collider_angular_velocity,
+                                                local_position1,
+                                                local_position2,
+                                                normal,
+                                                restitution,
+                                                friction,
+                                                delta_lambda_restition,
+                                                delta_lambda_friction,
+                                                delta_velocity,
+                                                delta_angular_velocity);
 
-        params.constraints.velocities[point1] += delta_velocity_restitution +
-                                                 delta_velocity_friction;
+        velocity += delta_velocity;
+        angular_velocity += delta_angular_velocity;
       });
       break;
     }
