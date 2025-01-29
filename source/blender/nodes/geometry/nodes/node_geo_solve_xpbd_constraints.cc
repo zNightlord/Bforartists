@@ -8,7 +8,7 @@
 #include "BKE_geometry_set.hh"
 #include "BKE_instances.hh"
 
-#include "NOD_geo_xpbd_constraints.hh"
+#include "NOD_xpbd_constraints.hh"
 
 #include "node_geometry_util.hh"
 
@@ -16,19 +16,7 @@
 
 namespace blender::nodes::node_geo_solve_xpbd_constraints_cc {
 
-enum class ConstraintType {
-  /* Set position of a point to a target vector. */
-  PositionGoal,
-  /* Set orientation of an edge to a target rotation. */
-  RotationGoal,
-  /* Enforces edge length and aligns forward direction with the edge vector. */
-  StretchShear,
-  /* Enforces angles between neighboring edges to their relative rest orientation. */
-  BendTwist,
-  /* Keep contact points from penetrating. */
-  Contact,
-};
-constexpr int NumConstraintTypes = 5;
+using xpbd_constraints::ConstraintType;
 
 enum class EvaluationTarget {
   Positions,
@@ -396,6 +384,11 @@ static void evaluate_constraint_group_contact(const SolverParams &params,
           return;
         };
         const float4x4 collider_transform = params.constraints.collider_transforms[collider_index];
+        float3 collider_position;
+        math::Quaternion collider_rotation;
+        float3 collider_scale;
+        math::to_loc_rot_scale(
+            collider_transform, collider_position, collider_rotation, collider_scale);
 
         float3 &position = params.constraints.positions[point];
         math::Quaternion &rotation = params.constraints.rotations[point];
@@ -411,20 +404,25 @@ static void evaluate_constraint_group_contact(const SolverParams &params,
           }
         }
 
-        float delta_lambda;
-        float3 delta_position;
-        float4 delta_rotation;
-        active = xpbd_constraints::eval_position_contact(position,
-                                                         rotation,
-                                                         collider_transform,
+        /* Contact constraints are stiff. */
+        const float alpha = 0.0f;
+
+        /* TODO store this for warm-starting. */
+        float lambda = 0.0f;
+        /* Zero weights for the collider, only the point can move. */
+        active = xpbd_constraints::eval_position_contact(1.0f,
+                                                         0.0f,
+                                                         1.0f,
+                                                         0.0f,
                                                          local_position1,
                                                          local_position2,
                                                          normal,
-                                                         delta_lambda,
-                                                         delta_position,
-                                                         delta_rotation);
-        position += delta_position;
-        rotation = math::normalize(math::Quaternion(float4(rotation) + delta_rotation));
+                                                         alpha,
+                                                         lambda,
+                                                         position,
+                                                         collider_position,
+                                                         rotation,
+                                                         collider_rotation);
       });
       break;
     }
@@ -618,9 +616,9 @@ static void prepare_constraint_data(GeoNodeExecParams params,
                                     GeometrySet &colliders_geometry_set,
                                     ConstraintEvalParams &constraint_params)
 {
-  constraint_geometry_sets.resize(NumConstraintTypes);
-  Array<std::optional<MutableAttributeAccessor>> constraint_attributes(NumConstraintTypes,
-                                                                       std::nullopt);
+  constraint_geometry_sets.resize(xpbd_constraints::NumConstraintTypes);
+  Array<std::optional<MutableAttributeAccessor>> constraint_attributes(
+      xpbd_constraints::NumConstraintTypes, std::nullopt);
   auto extract_constraint_attributes = [&](const ConstraintType type) {
     BLI_assert(constraint_geometry_sets.index_range().contains(int(type)));
     BLI_assert(constraint_attributes.index_range().contains(int(type)));

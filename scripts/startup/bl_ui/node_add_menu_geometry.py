@@ -541,6 +541,7 @@ class NODE_MT_category_simulation(Menu):
         node_add_menu.add_simulation_zone(layout, label="Simulation")
         node_add_menu.add_node_type(layout, "GeometryNodeSolvePositionConstraints")
         node_add_menu.add_node_type(layout, "GeometryNodeSolveVelocityConstraints")
+        node_add_menu.add_node_type(layout, "FunctionNodeConstraint")
         node_add_menu.draw_assets_for_catalog(layout, self.bl_label)
 
 

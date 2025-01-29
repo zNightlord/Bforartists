@@ -12341,6 +12341,7 @@ static void rna_def_nodes(BlenderRNA *brna)
   define("FunctionNode", "FunctionNodeCombineMatrix");
   define("FunctionNode", "FunctionNodeCombineTransform");
   define("FunctionNode", "FunctionNodeCompare");
+  define("FunctionNode", "FunctionNodeConstraint");
   define("FunctionNode", "FunctionNodeEulerToRotation");
   define("FunctionNode", "FunctionNodeFindInString");
   define("FunctionNode", "FunctionNodeFloatToInt", def_float_to_int);
