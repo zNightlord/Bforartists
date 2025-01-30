@@ -494,7 +494,7 @@ void mesh_render_data_update_corner_normals(MeshRenderData &mr)
     mr.corner_normals = mr.mesh->corner_normals();
   }
   else {
-    if (mr.bm_free_normal_offset_vert != -1 && mr.bm_free_normal_offset_face != -1 &&
+    if (mr.bm_free_normal_offset_vert != -1 || mr.bm_free_normal_offset_face != -1 ||
         mr.bm_free_normal_offset_corner != -1)
     {
       /* If there are free custom normals they should be used directly. */
