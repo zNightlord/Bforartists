@@ -89,19 +89,16 @@ inline void eval_angular_velocity_goal(const float3 &goal_angular_velocity,
   angular_velocity += delta_lambda * gradient;
 }
 
-inline void eval_position_stretch_shear(const float3 &position1,
-                                        const float3 &position2,
-                                        const math::Quaternion &rotation,
-                                        const float weight_pos1,
+inline void eval_position_stretch_shear(const float weight_pos1,
                                         const float weight_pos2,
                                         const float weight_rot,
                                         const float edge_length,
                                         const float alpha,
                                         const float gamma,
                                         float3 &delta_lambda,
-                                        float3 &delta_position1,
-                                        float3 &delta_position2,
-                                        float4 &delta_rotation)
+                                        float3 &position1,
+                                        float3 &position2,
+                                        math::Quaternion &rotation)
 {
   // TODO
   UNUSED_VARS(alpha, gamma);
@@ -115,10 +112,11 @@ inline void eval_position_stretch_shear(const float3 &position1,
 
   delta_lambda = weight_norm * residual;
 
-  delta_position1 = weight_pos1 * inv_edge_length * delta_lambda;
-  delta_position2 = weight_pos2 * inv_edge_length * delta_lambda;
-  delta_rotation = weight_rot * float4(math::Quaternion(0.0f, delta_lambda) * rotation *
-                                       math::Quaternion(0, 0, 0, -1));
+  position1 += weight_pos1 * inv_edge_length * delta_lambda;
+  position2 += weight_pos2 * inv_edge_length * delta_lambda;
+  const float4 delta_rot = float4(math::Quaternion(0.0f, delta_lambda) * rotation *
+                                  math::Quaternion(0, 0, 0, -1));
+  rotation = math::normalize(math::Quaternion(float4(rotation) + weight_rot * delta_rot));
 }
 
 /**
