@@ -231,11 +231,11 @@ constexpr bke::AttributeMetaData CORNER_FAN_META_DATA{bke::AttrDomain::Corner, C
 struct MeshNormalInfo {
   enum class Output : int8_t { None, CornerFan, Free };
   Output result_type = Output::None;
-  bke::AttrDomain result_domain = bke::AttrDomain::Face;
+  std::optional<bke::AttrDomain> result_domain;
 
   void add_no_custom_normals(const bke::MeshNormalDomain domain)
   {
-    this->result_domain = normal_domain_to_domain(domain);
+    this->add_free_normals(normal_domain_to_domain(domain));
   }
 
   void add_corner_fan_normals()
@@ -248,7 +248,15 @@ struct MeshNormalInfo {
 
   void add_free_normals(const bke::AttrDomain domain)
   {
-    this->result_domain = bke::attribute_domain_highest_priority({this->result_domain, domain});
+    if (this->result_domain) {
+      /* Any combination of point/face domains puts the result normals on the corner domain. */
+      if (this->result_domain != domain) {
+        this->result_domain = bke::AttrDomain::Corner;
+      }
+    }
+    else {
+      this->result_domain = domain;
+    }
     this->result_type = Output::Free;
   }
 
@@ -1481,7 +1489,7 @@ static AllMeshesInfo preprocess_meshes(const bke::GeometrySet &geometry_set,
         break;
       }
       case MeshNormalInfo::Output::Free: {
-        switch (info.custom_normal_info.result_domain) {
+        switch (*info.custom_normal_info.result_domain) {
           case bke::AttrDomain::Point:
             mesh_info.custom_normal = VArray<float3>::ForSpan(mesh->vert_normals());
             break;
@@ -1755,7 +1763,7 @@ static void execute_realize_mesh_tasks(const RealizeInstancesOptions &options,
       break;
     }
     case MeshNormalInfo::Output::Free: {
-      const bke::AttrDomain domain = all_meshes_info.custom_normal_info.result_domain;
+      const bke::AttrDomain domain = *all_meshes_info.custom_normal_info.result_domain;
       custom_normals = dst_attributes.lookup_or_add_for_write_only_span(
           "custom_normal", domain, CD_PROP_FLOAT3);
       break;
