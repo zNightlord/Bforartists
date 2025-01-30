@@ -94,7 +94,7 @@ static void node_rna(StructRNA *srna)
        "CORNER_FAN_SPACE",
        0,
        "Corner Fan Space",
-       "Store normals in a deformation-independent custom transformation space. This method is "
+       "Store normals in a deformation dependent custom transformation space. This method is "
        "slower, but can be better when subsequent operations change the mesh without handling "
        "normals specifically."},
       {0, nullptr, 0, nullptr, nullptr},
