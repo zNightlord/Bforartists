@@ -25,15 +25,16 @@ enum class ConstraintType {
 };
 constexpr int NumConstraintTypes = 5;
 
-inline void eval_position_goal(const float3 &position,
-                               const float3 &goal,
-                               float3 &delta_lambda,
-                               float3 &delta_position)
+inline void eval_position_goal(
+    const float3 &goal, const float alpha, const float gamma, float3 &lambda, float3 &position)
 {
+  const float3 old_position = position;
   const float3 residual = position - goal;
   /* Gradient is identity transform. */
-  delta_lambda = -residual;
-  delta_position = delta_lambda;
+  const float3 delta_lambda = (-residual - alpha * lambda - gamma * (position - old_position)) /
+                              ((1.0f + gamma) + alpha);
+  lambda += delta_lambda;
+  position += delta_lambda;
 }
 
 inline void eval_position_stretch_shear(const float3 &position1,

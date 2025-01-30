@@ -12,18 +12,15 @@ namespace blender::nodes::tests {
 
 TEST(xpbd_constraints, PositionGoal)
 {
-  float3 delta_lambda;
-  float3 delta_position;
+  float3 lambda = float3(0.0f);
+  float3 position = {1, 2, 3};
 
-  xpbd_constraints::eval_position_goal(
-      float3(1, 2, 3), float3(1, 2, 3), delta_lambda, delta_position);
-  EXPECT_V3_NEAR(float3(0.0f), delta_lambda, 1e-5f);
-  EXPECT_V3_NEAR(float3(0.0f), delta_position, 1e-5f);
+  const float alpha = 0.0f;
+  const float gamma = 0.0f;
 
-  xpbd_constraints::eval_position_goal(
-      float3(1, 2, 3), float3(-2, 0, 2), delta_lambda, delta_position);
-  EXPECT_V3_NEAR(float3(-3, -2, -1), delta_lambda, 1e-5f);
-  EXPECT_V3_NEAR(float3(-3, -2, -1), delta_position, 1e-5f);
+  xpbd_constraints::eval_position_goal(float3(-2, 0, 2), alpha, gamma, lambda, position);
+  EXPECT_V3_NEAR(float3(-3, -2, -1), lambda, 1e-5f);
+  EXPECT_V3_NEAR(float3(-2, 0, 2), position, 1e-5f);
 }
 
 TEST(xpbd_constraints, InactiveContact)

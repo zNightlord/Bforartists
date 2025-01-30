@@ -287,12 +287,14 @@ static void evaluate_constraint_group_position_goal(const SolverParams &params,
     case EvaluationTarget::Positions:
       group_mask.foreach_index(GrainSize(1024), [&](const int index) {
         const int point1 = params.constraints.position_goal.points[index];
+        float3 lambda = float3(0.0f);
         float3 &position1 = params.constraints.positions[point1];
         const float3 goal = params.constraints.position_goal.goals[index];
-        float3 delta_lambda;
-        float3 delta_position;
-        xpbd_constraints::eval_position_goal(position1, goal, delta_lambda, delta_position);
-        params.constraints.positions[point1] = position1 + delta_position;
+
+        const float alpha = 0.0f;
+        const float gamma = 0.0f;
+
+        xpbd_constraints::eval_position_goal(goal, alpha, gamma, lambda, position1);
       });
       break;
     case EvaluationTarget::Velocities:
