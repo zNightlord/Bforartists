@@ -1690,8 +1690,7 @@ static void execute_realize_mesh_tasks(const RealizeInstancesOptions &options,
     const RealizeMeshTask &task = tasks.first();
     Mesh *new_mesh = BKE_mesh_copy_for_eval(*task.mesh_info->mesh);
     if (!skip_transform(task.transform)) {
-      transform_positions(task.transform, new_mesh->vert_positions_for_write());
-      new_mesh->tag_positions_changed();
+      BKE_mesh_transform(new_mesh, task.transform.ptr(), false);
     }
     add_instance_attributes_to_single_geometry(
         ordered_attributes, task.attribute_fallbacks, new_mesh->attributes_for_write());
