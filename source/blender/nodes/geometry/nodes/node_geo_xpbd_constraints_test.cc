@@ -64,6 +64,7 @@ TEST(xpbd_constraints, InactiveContact)
 
 TEST(xpbd_constraints, CentralContact)
 {
+  float lambda = 0.0f;
   float3 position1 = {0, 0, 0};
   float3 position2 = {0, 0, 0};
   math::Quaternion rotation1 = math::Quaternion::identity();
@@ -81,7 +82,6 @@ TEST(xpbd_constraints, CentralContact)
 
   const float alpha = 0.0f;
 
-  float lambda = 0.0f;
   bool active = xpbd_constraints::eval_position_contact(weight_pos1,
                                                         weight_pos2,
                                                         weight_rot1,
@@ -137,9 +137,9 @@ TEST(xpbd_constraints, OffcenterContact)
                                                         rotation2);
 
   EXPECT_TRUE(active);
-  EXPECT_NEAR(1, lambda, 1e-5f);
-  EXPECT_V3_NEAR(float3(0, 0, 1), position1, 1e-5f);
-  EXPECT_V4_NEAR(float4(0, 0, 0.5f, 0), float4(rotation1), 1e-5f);
+  EXPECT_NEAR(0.5f, lambda, 1e-5f);
+  EXPECT_V3_NEAR(float3(0, 0, 0.5f), position1, 1e-5f);
+  EXPECT_V4_NEAR(math::normalize(float4(1, 0, 0.5f, 0)), float4(rotation1), 1e-5f);
 }
 
 TEST(xpbd_constraints, ContactFriction)

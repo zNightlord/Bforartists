@@ -104,9 +104,9 @@ inline bool eval_position_contact(const float weight_pos1,
   /* Effective mass correction to account for the effect of rotation on position displacement.
    * See section 3.3.1 "Positional Constraints" of the paper.
    * We use a simplified rotational weight factor instead of full inverse moment of inertia. */
-  const float rot_factor1 = math::length_squared(local_position1) +
+  const float rot_factor1 = math::length_squared(local_position1) -
                             math::square(math::dot(local_position1, normal));
-  const float rot_factor2 = math::length_squared(local_position2) +
+  const float rot_factor2 = math::length_squared(local_position2) -
                             math::square(math::dot(local_position2, normal));
   const float total_weight = weight_pos1 + weight_rot1 * rot_factor1 + weight_pos2 +
                              weight_rot2 * rot_factor2 + alpha;
@@ -116,6 +116,8 @@ inline bool eval_position_contact(const float weight_pos1,
   const float delta_lambda = (-residual_depth - alpha * lambda) / total_weight;
   const float3 impulse1 = delta_lambda * normal;
   const float3 impulse2 = -impulse1;
+
+  lambda += delta_lambda;
   position1 += impulse1 * weight_pos1;
   position2 += impulse2 * weight_pos2;
   const float3 angular_impulse1 = math::cross(local_position1, impulse1);
