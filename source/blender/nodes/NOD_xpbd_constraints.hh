@@ -131,12 +131,10 @@ inline bool eval_position_contact(const float weight_pos1,
  * Velocity contact constraint based on
  * "Detailed Rigid Body Simulation with Extended Position Based Dynamics", Mueller et al., 2020
  */
-inline void eval_velocity_contact(const float3 &point_velocity,
-                                  const float3 &point_angular_velocity,
-                                  const float3 &orig_point_velocity,
-                                  const float3 &orig_point_angular_velocity,
-                                  const float3 &collider_velocity,
-                                  const float3 &collider_angular_velocity,
+inline void eval_velocity_contact(const float3 &orig_velocity1,
+                                  const float3 &orig_velocity2,
+                                  const float3 &orig_angular_velocity1,
+                                  const float3 &orig_angular_velocity2,
                                   const float3 &local_position1,
                                   const float3 &local_position2,
                                   const float3 &normal,
@@ -144,21 +142,22 @@ inline void eval_velocity_contact(const float3 &point_velocity,
                                   const float friction,
                                   float &delta_lambda_restitution,
                                   float &delta_lambda_friction,
-                                  float3 &delta_velocity,
-                                  float3 &delta_angular_velocity)
+                                  float3 &velocity1,
+                                  float3 &velocity2,
+                                  float3 &angular_velocity1,
+                                  float3 &angular_velocity2)
 {
   /* Compute velocity of the collider contact point. */
-  const float3 point_contact_velocity = point_velocity +
-                                        math::cross(point_angular_velocity, local_position1);
-  const float3 orig_point_contact_velocity = orig_point_velocity +
-                                             math::cross(orig_point_angular_velocity,
-                                                         local_position1);
-  const float3 collider_contact_velocity = collider_velocity -
-                                           math::cross(collider_angular_velocity, local_position2);
+  const float3 contact_velocity1 = velocity1 + math::cross(angular_velocity1, local_position1);
+  const float3 contact_velocity2 = velocity2 + math::cross(angular_velocity2, local_position2);
+  const float3 orig_contact_velocity1 = orig_velocity1 +
+                                        math::cross(orig_angular_velocity1, local_position1);
+  const float3 orig_contact_velocity2 = orig_velocity2 -
+                                        math::cross(orig_angular_velocity2, local_position2);
 
   /* Relative contact velocity before and after position corrections. */
-  const float3 relative_velocity = point_contact_velocity - collider_contact_velocity;
-  const float3 orig_relative_velocity = orig_point_contact_velocity - collider_contact_velocity;
+  const float3 relative_velocity = contact_velocity1 - contact_velocity2;
+  const float3 orig_relative_velocity = orig_contact_velocity1 - orig_contact_velocity2;
 
   /* Decompose into normal and tangential velocity. */
   const float normal_velocity = math::dot(relative_velocity, normal);
@@ -176,8 +175,10 @@ inline void eval_velocity_contact(const float3 &point_velocity,
   const float3 impulse_friction = -friction * surface_velocity;
   const float3 impulse = impulse_restitution + impulse_friction;
 
-  delta_velocity = impulse;
-  delta_angular_velocity = math::cross(local_position1, impulse);
+  velocity1 += impulse;
+  velocity2 -= impulse;
+  angular_velocity1 += math::cross(local_position1, impulse);
+  angular_velocity2 -= math::cross(local_position2, impulse);
 }
 
 }  // namespace blender::nodes::xpbd_constraints

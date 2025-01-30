@@ -472,31 +472,32 @@ static void evaluate_constraint_group_contact(const SolverParams &params,
         math::to_loc_rot_scale(collider_transform, collider_loc, collider_rot, collider_scale);
         math::to_loc_rot_scale(
             old_collider_transform, old_collider_loc, old_collider_rot, old_collider_scale);
-        const float3 collider_velocity = (collider_loc - old_collider_loc) * inv_delta_time;
-        const float3 collider_angular_velocity =
+        float3 collider_velocity = (collider_loc - old_collider_loc) * inv_delta_time;
+        float3 collider_angular_velocity =
             2.0f * (math::invert_normalized(old_collider_rot) * collider_rot).imaginary_part() *
             inv_delta_time;
+        /* No change in animated collider velocity. */
+        const float3 orig_collider_velocity = collider_velocity;
+        const float3 orig_collider_angular_velocity = collider_angular_velocity;
 
-        float delta_lambda_restition, delta_lambda_friction;
-        float3 delta_velocity, delta_angular_velocity;
-        xpbd_constraints::eval_velocity_contact(velocity,
-                                                angular_velocity,
-                                                orig_velocity,
+        /* TODO store for warm-starting. */
+        float lambda_restition = 0.0f;
+        float lambda_friction = 0.0f;
+        xpbd_constraints::eval_velocity_contact(orig_velocity,
+                                                orig_collider_velocity,
                                                 orig_angular_velocity,
-                                                collider_velocity,
-                                                collider_angular_velocity,
+                                                orig_collider_angular_velocity,
                                                 local_position1,
                                                 local_position2,
                                                 normal,
                                                 restitution,
                                                 friction,
-                                                delta_lambda_restition,
-                                                delta_lambda_friction,
-                                                delta_velocity,
-                                                delta_angular_velocity);
-
-        velocity += delta_velocity;
-        angular_velocity += delta_angular_velocity;
+                                                lambda_restition,
+                                                lambda_friction,
+                                                velocity,
+                                                collider_velocity,
+                                                angular_velocity,
+                                                collider_angular_velocity);
       });
       break;
     }

@@ -28,6 +28,7 @@ TEST(xpbd_constraints, PositionGoal)
 
 TEST(xpbd_constraints, InactiveContact)
 {
+  float lambda = 0.0f;
   float3 position1 = {0, 0, 0};
   float3 position2 = {0, 0, 0};
   math::Quaternion rotation1 = math::Quaternion::identity();
@@ -45,7 +46,6 @@ TEST(xpbd_constraints, InactiveContact)
 
   const float alpha = 0.0f;
 
-  float lambda = 0.0f;
   bool active = xpbd_constraints::eval_position_contact(weight_pos1,
                                                         weight_pos2,
                                                         weight_rot1,
@@ -104,6 +104,7 @@ TEST(xpbd_constraints, CentralContact)
 
 TEST(xpbd_constraints, OffcenterContact)
 {
+  float lambda = 0.0f;
   float3 position1 = {0, 0, 0};
   float3 position2 = {0, 0, 0};
   math::Quaternion rotation1 = math::Quaternion::identity();
@@ -121,7 +122,6 @@ TEST(xpbd_constraints, OffcenterContact)
 
   const float alpha = 0.0f;
 
-  float lambda = 0.0f;
   bool active = xpbd_constraints::eval_position_contact(weight_pos1,
                                                         weight_pos2,
                                                         weight_rot1,
@@ -144,12 +144,16 @@ TEST(xpbd_constraints, OffcenterContact)
 
 TEST(xpbd_constraints, ContactFriction)
 {
-  const float3 velocity1 = {1, 0, 0};
+  float lambda_restitution = 0.0f;
+  float lambda_friction = 0.0f;
+  float3 velocity1 = {1, 0, 0};
+  float3 velocity2 = {0, 0, 0};
+  float3 angular_velocity1 = {0, 0, 0};
+  float3 angular_velocity2 = {0, 0, 0};
   const float3 orig_velocity1 = {0, 0, 0};
-  const float3 angular_velocity1 = {0, 0, 0};
+  const float3 orig_velocity2 = {0, 0, 0};
   const float3 orig_angular_velocity1 = {0, 0, 0};
-  const float3 velocity2 = {0, 0, 0};
-  const float3 angular_velocity2 = {0, 0, 0};
+  const float3 orig_angular_velocity2 = {0, 0, 0};
 
   const float3 local_position1 = {1, 1, 0};
   const float3 local_position2 = {0, 0, 0};
@@ -158,29 +162,68 @@ TEST(xpbd_constraints, ContactFriction)
   const float restitution = 0.0f;
   const float friction = 0.5f;
 
-  float delta_lambda_restitution, delta_lambda_friction;
-  float3 delta_velocity;
-  float3 delta_angular_velocity;
-  xpbd_constraints::eval_velocity_contact(velocity1,
-                                          angular_velocity1,
-                                          orig_velocity1,
+  xpbd_constraints::eval_velocity_contact(orig_velocity1,
+                                          orig_velocity2,
                                           orig_angular_velocity1,
-                                          velocity2,
-                                          angular_velocity2,
+                                          orig_angular_velocity2,
                                           local_position1,
                                           local_position2,
                                           normal,
                                           restitution,
                                           friction,
-                                          delta_lambda_restitution,
-                                          delta_lambda_friction,
-                                          delta_velocity,
-                                          delta_angular_velocity);
-  EXPECT_EQ(0, delta_lambda_restitution);
-  EXPECT_NEAR(-0.5f, delta_lambda_friction, 1e-5f);
-  EXPECT_V3_NEAR(float3(-0.5f, 0, 0), delta_velocity, 1e-5f);
-  /* Velocity (-0.5, 0, 0) at point (1, 1, 0) causes angular impulse. */
-  EXPECT_V3_NEAR(float3(0, 0, 0), delta_angular_velocity, 1e-5f);
+                                          lambda_restitution,
+                                          lambda_friction,
+                                          velocity1,
+                                          velocity2,
+                                          angular_velocity1,
+                                          angular_velocity2);
+  EXPECT_EQ(0, lambda_restitution);
+  EXPECT_NEAR(-0.5f, lambda_friction, 1e-5f);
+  EXPECT_V3_NEAR(float3(0.5f, 0, 0), velocity1, 1e-5f);
+  /* Friction impulse (-0.5, 0, 0) at point (1, 1, 0) causes torque around the Z axis. */
+  EXPECT_V3_NEAR(float3(0, 0, 0.5f), angular_velocity1, 1e-5f);
+}
+
+TEST(xpbd_constraints, ContactRestitution)
+{
+  float lambda_restitution = 0.0f;
+  float lambda_friction = 0.0f;
+  float3 velocity1 = {1, 0, -1};
+  float3 velocity2 = {0, 0, 0};
+  float3 angular_velocity1 = {0, 0, 0};
+  float3 angular_velocity2 = {0, 0, 0};
+  const float3 orig_velocity1 = velocity1;
+  const float3 orig_velocity2 = velocity2;
+  const float3 orig_angular_velocity1 = angular_velocity1;
+  const float3 orig_angular_velocity2 = angular_velocity2;
+
+  const float3 local_position1 = {1, 1, 0};
+  const float3 local_position2 = {0, 0, 0};
+  const float3 normal = {0, 0, 1};
+
+  const float restitution = 0.5f;
+  const float friction = 0.0f;
+
+  xpbd_constraints::eval_velocity_contact(orig_velocity1,
+                                          orig_velocity2,
+                                          orig_angular_velocity1,
+                                          orig_angular_velocity2,
+                                          local_position1,
+                                          local_position2,
+                                          normal,
+                                          restitution,
+                                          friction,
+                                          lambda_restitution,
+                                          lambda_friction,
+                                          velocity1,
+                                          velocity2,
+                                          angular_velocity1,
+                                          angular_velocity2);
+  EXPECT_EQ(0.5f, lambda_restitution);
+  EXPECT_NEAR(0, lambda_friction, 1e-5f);
+  EXPECT_V3_NEAR(float3(1.0f, 0, 0.5f), velocity1, 1e-5f);
+  /* Rebound impulse (0, 0, 0.5) at point (1, 1, 0) causes torque around X and Y. */
+  EXPECT_V3_NEAR(float3(1.5f, -1.5f, 0), angular_velocity1, 1e-5f);
 }
 
 }  // namespace blender::nodes::tests
