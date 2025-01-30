@@ -12,14 +12,14 @@ namespace blender::nodes::tests {
 
 TEST(xpbd_constraints, PositionGoal)
 {
-  float3 lambda = float3(0.0f);
+  float lambda = 0.0f;
   float3 position = {1, 2, 3};
 
   const float alpha = 0.0f;
   const float gamma = 0.0f;
 
   xpbd_constraints::eval_position_goal(float3(-2, 0, 2), alpha, gamma, lambda, position);
-  EXPECT_V3_NEAR(float3(-3, -2, -1), lambda, 1e-5f);
+  EXPECT_NEAR(math::length(float3(-3, -2, -1)), lambda, 1e-5f);
   EXPECT_V3_NEAR(float3(-2, 0, 2), position, 1e-5f);
 }
 

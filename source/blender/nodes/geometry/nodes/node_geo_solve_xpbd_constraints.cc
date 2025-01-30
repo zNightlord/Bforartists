@@ -287,7 +287,7 @@ static void evaluate_constraint_group_position_goal(const SolverParams &params,
     case EvaluationTarget::Positions:
       group_mask.foreach_index(GrainSize(1024), [&](const int index) {
         const int point1 = params.constraints.position_goal.points[index];
-        float3 lambda = float3(0.0f);
+        float lambda = 0.0f;
         float3 &position1 = params.constraints.positions[point1];
         const float3 goal = params.constraints.position_goal.goals[index];
 

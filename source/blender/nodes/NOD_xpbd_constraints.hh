@@ -25,16 +25,68 @@ enum class ConstraintType {
 };
 constexpr int NumConstraintTypes = 5;
 
-inline void eval_position_goal(
-    const float3 &goal, const float alpha, const float gamma, float3 &lambda, float3 &position)
+inline void eval_position_goal(const float3 &goal_position,
+                               const float alpha,
+                               const float gamma,
+                               float &lambda,
+                               float3 &position)
 {
   const float3 old_position = position;
-  const float3 residual = position - goal;
-  /* Gradient is identity transform. */
-  const float3 delta_lambda = (-residual - alpha * lambda - gamma * (position - old_position)) /
-                              ((1.0f + gamma) + alpha);
+  float residual;
+  const float3 gradient = math::normalize_and_get_length(position - goal_position, residual);
+
+  const float delta_lambda = (-residual - alpha * lambda -
+                              gamma * math::dot(gradient, position - old_position)) /
+                             ((1.0f + gamma) + alpha);
   lambda += delta_lambda;
-  position += delta_lambda;
+  position += delta_lambda * gradient;
+}
+
+inline void eval_rotation_goal(const math::Quaternion &goal_rotation,
+                               const float alpha,
+                               const float gamma,
+                               float &lambda,
+                               math::Quaternion &rotation)
+{
+  const math::Quaternion old_rotation = rotation;
+  math::AxisAngle axis_angle = math::to_axis_angle(math::invert(goal_rotation) * rotation);
+  const float residual = -axis_angle.angle().radian();
+  const float3 gradient = axis_angle.axis();
+
+  const math::Quaternion diff = math::invert(old_rotation) * rotation;
+  const float delta_lambda = (-residual - alpha * lambda -
+                              gamma * 0.5f * math::dot(float4(0.0f, gradient), float4(diff))) /
+                             ((1.0f + gamma) + alpha);
+  lambda += delta_lambda;
+  rotation = math::normalize(
+      math::Quaternion(float4(rotation) + delta_lambda * 0.5f * float4(0.0f, gradient)));
+}
+
+inline void eval_velocity_goal(const float3 &goal_velocity,
+                               const float alpha,
+                               float &lambda,
+                               float3 &velocity)
+{
+  float residual;
+  const float3 gradient = math::normalize_and_get_length(velocity - goal_velocity, residual);
+
+  const float delta_lambda = (-residual - alpha * lambda) / (1.0f + alpha);
+  lambda += delta_lambda;
+  velocity += delta_lambda * gradient;
+}
+
+inline void eval_angular_velocity_goal(const float3 &goal_angular_velocity,
+                                       const float alpha,
+                                       float &lambda,
+                                       float3 &angular_velocity)
+{
+  float residual;
+  const float3 gradient = math::normalize_and_get_length(angular_velocity - goal_angular_velocity,
+                                                         residual);
+
+  const float delta_lambda = (-residual - alpha * lambda) / (1.0f + alpha);
+  lambda += delta_lambda;
+  angular_velocity += delta_lambda * gradient;
 }
 
 inline void eval_position_stretch_shear(const float3 &position1,
