@@ -12535,15 +12535,15 @@ static void rna_def_nodes(BlenderRNA *brna)
   define(brna, "ShaderNode", "ShaderNodeWavelength", nullptr, ICON_NODE_WAVELENGTH, "Add a Wavelength Shader node\nConverts a wavelength value to an RGB value");
   define(brna, "ShaderNode", "ShaderNodeWireframe", def_sh_tex_wireframe, ICON_NODE_WIREFRAME, "Add a Wireframe Shader node\nRetreive and render the wireframe, triangulated");
   /* NPR-Prototype. */
-  define("ShaderNode", "ShaderNodeNPR_ImageSample", def_sh_image_sample);
-  define("ShaderNode", "ShaderNodeNPR_Input");
-  define("ShaderNode", "ShaderNodeNPR_Output", def_group_output);
-  define("ShaderNode", "ShaderNodeNPR_Refraction");
-  define("ShaderNode", "ShaderNodeInputAOV", def_sh_input_aov);
-  define("ShaderNode", "ShaderNodeRepeatInput", def_sh_repeat_input);
-  define("ShaderNode", "ShaderNodeRepeatOutput", def_sh_repeat_output);
-  define("ShaderNode", "ShaderNodeForeachLightInput", def_sh_foreach_light_input);
-  define("ShaderNode", "ShaderNodeForeachLightOutput", def_sh_foreach_light_output);
+  define(brna, "ShaderNode", "ShaderNodeNPR_ImageSample", def_sh_image_sample);
+  define(brna, "ShaderNode", "ShaderNodeNPR_Input");
+  define(brna, "ShaderNode", "ShaderNodeNPR_Output", def_group_output);
+  define(brna, "ShaderNode", "ShaderNodeNPR_Refraction");
+  define(brna, "ShaderNode", "ShaderNodeInputAOV", def_sh_input_aov);
+  define(brna, "ShaderNode", "ShaderNodeRepeatInput", def_sh_repeat_input);
+  define(brna, "ShaderNode", "ShaderNodeRepeatOutput", def_sh_repeat_output);
+  define(brna, "ShaderNode", "ShaderNodeForeachLightInput", def_sh_foreach_light_input);
+  define(brna, "ShaderNode", "ShaderNodeForeachLightOutput", def_sh_foreach_light_output);
 
   define(brna, "CompositorNode", "CompositorNodeAlphaOver", def_cmp_alpha_over, ICON_IMAGE_ALPHA, "Add a Alpha Over Compositor node\nLayer images with an alpha channel on top of one another");
   define(brna, "CompositorNode", "CompositorNodeAntiAliasing", def_cmp_antialiasing, ICON_ANTIALIASED, "Add a Anti-Aliasing Compositor node\nAnti-alias an image");
