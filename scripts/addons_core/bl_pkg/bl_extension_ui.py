@@ -225,6 +225,7 @@ def addon_draw_item_expanded(
         item_tracker_url,  # `str`
         # BFA - Necessary info for uninstalling extensions
         repo_index=-1, # `int`
+        show_developer_ui,  # `bool`
 ):
     from bpy.app.translations import (
         contexts as i18n_contexts,
@@ -305,7 +306,13 @@ def addon_draw_item_expanded(
 
     if addon_type != ADDON_TYPE_LEGACY_CORE:
         col_a.label(text="File")
-        col_b.label(text=mod.__file__, translate=False)
+        row = col_b.row()
+        row.label(text=mod.__file__, translate=False)
+
+        # Add a button to quickly open the add-on's folder for accessing its files and assets.
+        if show_developer_ui:
+            import os
+            row.operator("wm.path_open", text="", icon='FILE_FOLDER').filepath = os.path.dirname(mod.__file__)
 
 
 # NOTE: this can be removed once upgrading from 4.1 is no longer relevant.
@@ -458,7 +465,8 @@ def addons_panel_draw_items(
         show_development,  # `bool`
         # BFA - Mapping of repo indices for extensions to look up
         extension_repo_index_map, # `Dict[str, int]`
-):  # `-> Set[str]`
+        show_developer_ui,  # `bool`
+):  # `-> set[str]`
     # NOTE: this duplicates logic from `USERPREF_PT_addons` eventually this logic should be used instead.
     # Don't de-duplicate the logic as this is a temporary state - as long as extensions remains experimental.
     import addon_utils
@@ -634,6 +642,7 @@ def addons_panel_draw_items(
                 # pylint: disable-next=used-before-assignment
                 item_tracker_url=item_tracker_url,
                 repo_index=repo_index # BFA - Necessary info for uninstalling extensions
+                show_developer_ui=show_developer_ui,
             )
 
             if is_enabled:
@@ -645,6 +654,8 @@ def addons_panel_draw_items(
 
 def addons_panel_draw_error_duplicates(layout):
     import addon_utils
+    import os
+
     box = layout.box()
     row = box.row()
     row.label(text="Multiple add-ons with the same name found!")
@@ -654,8 +665,14 @@ def addons_panel_draw_error_duplicates(layout):
         box.separator()
         sub_col = box.column(align=True)
         sub_col.label(text=addon_name + ":")
-        sub_col.label(text="    " + addon_file)
-        sub_col.label(text="    " + addon_path)
+
+        sub_row = sub_col.row()
+        sub_row.label(text="    " + addon_file)
+        sub_row.operator("wm.path_open", text="", icon='FILE_FOLDER').filepath = os.path.dirname(addon_file)
+
+        sub_row = sub_col.row()
+        sub_row.label(text="    " + addon_path)
+        sub_row.operator("wm.path_open", text="", icon='FILE_FOLDER').filepath = os.path.dirname(addon_path)
 
 
 def addons_panel_draw_error_generic(layout, lines):
@@ -675,6 +692,7 @@ def addons_panel_draw_impl(
         enabled_only,  # `bool`
         *,
         show_development,  # `bool`
+        show_developer_ui,  # `bool`
 ):
     """
     Show all the items... we may want to paginate at some point.
@@ -769,6 +787,7 @@ def addons_panel_draw_impl(
         show_development=show_development,
         # BFA - Pass mapping of repo indices, which is needed to allow for uninstalling extensions
         extension_repo_index_map=extension_repo_index_map
+        show_developer_ui=show_developer_ui,
     )
 
     # Append missing scripts.
@@ -855,6 +874,7 @@ def addons_panel_draw(panel, context):
         addon_tags_exclude,
         view.show_addons_enabled_only,
         show_development=prefs.experimental.use_extensions_debug,
+        show_developer_ui=prefs.view.show_developer_ui,
     )
 
 
@@ -1335,6 +1355,7 @@ def extension_draw_item(
         repo_item,  # `RepoItem`
         operation_in_progress,  # `bool`
         extensions_warnings,  # `dict[str, list[str]]`
+        show_developer_ui,  # `bool`
 ):
     item = item_local or item_remote
     is_installed = item_local is not None
@@ -1544,7 +1565,12 @@ def extension_draw_item(
 
         if is_installed:
             col_a.label(text="Path")
-            col_b.label(text=os.path.join(repo_item.directory, pkg_id), translate=False)
+            row = col_b.row()
+            dirpath = os.path.join(repo_item.directory, pkg_id)
+            row.label(text=dirpath, translate=False)
+
+            if show_developer_ui:
+                row.operator("wm.path_open", text="", icon='FILE_FOLDER').filepath = dirpath
 
 
 def extensions_panel_draw_impl(
@@ -1825,6 +1851,7 @@ def extensions_panel_draw_impl(
                 repo_item=params.repos_all[ext_ui.repo_index],
                 operation_in_progress=operation_in_progress,
                 extensions_warnings=extensions_warnings,
+                show_developer_ui=prefs.view.show_developer_ui,
             )
 
     # Finally show any errors in a single panel which can be dismissed.

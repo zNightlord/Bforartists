@@ -1725,7 +1725,7 @@ static bool rearrange_layered_action_slots(bAnimContext *ac, const eRearrangeAni
           continue;
         }
 
-        action.slot_move(slot, to_index);
+        action.slot_move_to_index(slot, to_index);
         total_moved++;
       }
       break;
@@ -1741,7 +1741,7 @@ static bool rearrange_layered_action_slots(bAnimContext *ac, const eRearrangeAni
         const int current_index = action.slots().first_index_try(&slot);
         const int to_index = 0;
         if (current_index != to_index) {
-          action.slot_move(slot, to_index);
+          action.slot_move_to_index(slot, to_index);
           total_moved++;
         }
       }
@@ -1767,7 +1767,7 @@ static bool rearrange_layered_action_slots(bAnimContext *ac, const eRearrangeAni
           continue;
         }
 
-        action.slot_move(slot, to_index);
+        action.slot_move_to_index(slot, to_index);
         total_moved++;
       }
       break;
@@ -1783,7 +1783,7 @@ static bool rearrange_layered_action_slots(bAnimContext *ac, const eRearrangeAni
         const int current_index = action.slots().first_index_try(&slot);
         const int to_index = action.slots().size() - 1;
         if (current_index != to_index) {
-          action.slot_move(slot, to_index);
+          action.slot_move_to_index(slot, to_index);
           total_moved++;
         }
       }
@@ -1802,8 +1802,8 @@ static bool rearrange_layered_action_slots(bAnimContext *ac, const eRearrangeAni
  *
  * NOTE: the current implementation has quadratic performance with respect to
  * the number of groups in a `Channelbag`, due to both `Span::first_index_try()`
- * and `Channelbag::channel_group_move()` having linear performance. If this
- * becomes a performance bottleneck in practice, we can create a dedicated
+ * and `Channelbag::channel_group_move_to_index()` having linear performance. If
+ * this becomes a performance bottleneck in practice, we can create a dedicated
  * method on `Channelbag` for collectively moving a non-contiguous set of
  * channel groups that works in linear time.
  *
@@ -1847,7 +1847,7 @@ static void rearrange_layered_action_channel_groups(bAnimContext *ac,
           continue;
         }
 
-        bag.channel_group_move(*group, to_index);
+        bag.channel_group_move_to_index(*group, to_index);
       }
       break;
     }
@@ -1860,7 +1860,7 @@ static void rearrange_layered_action_channel_groups(bAnimContext *ac,
           continue;
         }
         blender::animrig::Channelbag &bag = group->channelbag->wrap();
-        bag.channel_group_move(*group, 0);
+        bag.channel_group_move_to_index(*group, 0);
       }
       break;
     }
@@ -1885,7 +1885,7 @@ static void rearrange_layered_action_channel_groups(bAnimContext *ac,
           continue;
         }
 
-        bag.channel_group_move(*group, to_index);
+        bag.channel_group_move_to_index(*group, to_index);
       }
       break;
     }
@@ -1898,7 +1898,7 @@ static void rearrange_layered_action_channel_groups(bAnimContext *ac,
           continue;
         }
         blender::animrig::Channelbag &bag = group->channelbag->wrap();
-        bag.channel_group_move(*group, bag.channel_groups().size() - 1);
+        bag.channel_group_move_to_index(*group, bag.channel_groups().size() - 1);
       }
       break;
     }
@@ -1912,9 +1912,9 @@ static void rearrange_layered_action_channel_groups(bAnimContext *ac,
  *
  * NOTE: the current implementation has quadratic performance with respect to
  * the number of fcurves in a `Channelbag`, due to both
- * `Span::first_index_try()` and `Channelbag::fcurve_move()` having linear
- * performance. If this becomes a performance bottleneck in practice, we can
- * create a dedicated method on `Channelbag` for collectively moving a
+ * `Span::first_index_try()` and `Channelbag::fcurve_move_to_index()` having
+ * linear performance. If this becomes a performance bottleneck in practice, we
+ * can create a dedicated method on `Channelbag` for collectively moving a
  * non-contiguous set of fcurves that works in linear time.
  *
  * TODO: there's a fair amount of apparent repetition in this code and the code
@@ -1998,7 +1998,7 @@ static void rearrange_layered_action_fcurves(bAnimContext *ac,
           continue;
         }
 
-        bag.fcurve_move(*fcurve, to_index);
+        bag.fcurve_move_to_index(*fcurve, to_index);
       }
       return;
     }
@@ -2014,7 +2014,7 @@ static void rearrange_layered_action_fcurves(bAnimContext *ac,
         }
 
         blender::animrig::Channelbag &bag = group.channelbag->wrap();
-        bag.fcurve_move(*fcurve, group.fcurve_range_start);
+        bag.fcurve_move_to_index(*fcurve, group.fcurve_range_start);
       }
       return;
     }
@@ -2043,7 +2043,7 @@ static void rearrange_layered_action_fcurves(bAnimContext *ac,
           continue;
         }
 
-        bag.fcurve_move(*fcurve, to_index);
+        bag.fcurve_move_to_index(*fcurve, to_index);
       }
       return;
     }
@@ -2059,7 +2059,8 @@ static void rearrange_layered_action_fcurves(bAnimContext *ac,
         }
 
         blender::animrig::Channelbag &bag = group.channelbag->wrap();
-        bag.fcurve_move(*fcurve, group.fcurve_range_start + group.fcurve_range_length - 1);
+        bag.fcurve_move_to_index(*fcurve,
+                                 group.fcurve_range_start + group.fcurve_range_length - 1);
       }
       return;
     }

@@ -1518,6 +1518,7 @@ class VIEW3D_MT_transform_base:
             "EDIT_ARMATURE",
             "EDIT_SURFACE",
             "EDIT_CURVE",
+            'EDIT_CURVES',
             "EDIT_LATTICE",
             "EDIT_METABALL",
         }:
