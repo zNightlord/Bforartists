@@ -1,9 +1,9 @@
 name: Windows
 on:
   push:
-      branches: [ "master" ]
+      branches: [ "pull-npr-texure-sockets" ]
   pull_request:
-      branches: [ "master" ]
+      branches: [ "pull-npr-texure-sockets" ]
 
 jobs:
   build:
