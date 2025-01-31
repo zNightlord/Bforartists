@@ -5,7 +5,9 @@
 set(INC
   .
   ..
+  include
   ../intern
+  ../../blenloader
   ../../editors/include
   ../../makesrna
   ../../../../intern/sky/include
@@ -53,10 +55,12 @@ set(SRC
   nodes/node_shader_holdout.cc
   nodes/node_shader_hueSatVal.cc
   nodes/node_shader_ies_light.cc
+  nodes/node_shader_input_aov.cc
   nodes/node_shader_invert.cc
   nodes/node_shader_layer_weight.cc
   nodes/node_shader_light_falloff.cc
   nodes/node_shader_light_path.cc
+  nodes/node_shader_foreach_light.cc
   nodes/node_shader_map_range.cc
   nodes/node_shader_mapping.cc
   nodes/node_shader_math.cc
@@ -65,6 +69,10 @@ set(SRC
   nodes/node_shader_mix_shader.cc
   nodes/node_shader_normal.cc
   nodes/node_shader_normal_map.cc
+  nodes/node_shader_npr_image_sample.cc
+  nodes/node_shader_npr_input.cc
+  nodes/node_shader_npr_output.cc
+  nodes/node_shader_npr_refraction.cc
   nodes/node_shader_object_info.cc
   nodes/node_shader_output_aov.cc
   nodes/node_shader_output_light.cc
@@ -73,6 +81,7 @@ set(SRC
   nodes/node_shader_output_world.cc
   nodes/node_shader_particle_info.cc
   nodes/node_shader_point_info.cc
+  nodes/node_shader_repeat.cc
   nodes/node_shader_rgb.cc
   nodes/node_shader_rgb_to_bw.cc
   nodes/node_shader_script.cc
@@ -119,6 +128,8 @@ set(SRC
 
   node_shader_register.hh
   node_shader_util.hh
+
+  include/NOD_sh_zones.hh
 )
 
 set(LIB

@@ -103,6 +103,9 @@ void SyncModule::sync_mesh(Object *ob, ObjectHandle &ob_handle, const ObjectRef 
 
   Span<gpu::Batch *> mat_geom = DRW_cache_object_surface_material_get(
       ob, material_array.gpu_materials);
+  Span<gpu::Batch *> mat_geom_npr = DRW_cache_object_surface_material_get(
+      ob, material_array.gpu_materials_npr);
+
   if (mat_geom.is_empty()) {
     return;
   }
@@ -135,12 +138,15 @@ void SyncModule::sync_mesh(Object *ob, ObjectHandle &ob_handle, const ObjectRef 
     geometry_call(material.overlap_masking.sub_pass, geom, res_handle);
     geometry_call(material.prepass.sub_pass, geom, res_handle);
     geometry_call(material.shading.sub_pass, geom, res_handle);
+    geometry_call(material.npr.sub_pass, mat_geom_npr[i], res_handle);
     geometry_call(material.shadow.sub_pass, geom, res_handle);
 
     geometry_call(material.planar_probe_prepass.sub_pass, geom, res_handle);
     geometry_call(material.planar_probe_shading.sub_pass, geom, res_handle);
+    geometry_call(material.planar_probe_npr.sub_pass, mat_geom_npr[i], res_handle);
     geometry_call(material.lightprobe_sphere_prepass.sub_pass, geom, res_handle);
     geometry_call(material.lightprobe_sphere_shading.sub_pass, geom, res_handle);
+    geometry_call(material.lightprobe_sphere_npr.sub_pass, mat_geom_npr[i], res_handle);
 
     is_alpha_blend = is_alpha_blend || material.is_alpha_blend_transparent;
     has_transparent_shadows = has_transparent_shadows || material.has_transparent_shadows;
@@ -162,6 +168,7 @@ void SyncModule::sync_mesh(Object *ob, ObjectHandle &ob_handle, const ObjectRef 
   }
 
   inst_.manager->extract_object_attributes(res_handle, ob_ref, material_array.gpu_materials);
+  inst_.manager->extract_object_attributes(res_handle, ob_ref, material_array.gpu_materials_npr);
 
   inst_.shadows.sync_object(ob, ob_handle, res_handle, is_alpha_blend, has_transparent_shadows);
   inst_.cryptomatte.sync_object(ob, res_handle);
@@ -183,19 +190,22 @@ bool SyncModule::sync_sculpt(Object *ob, ObjectHandle &ob_handle, const ObjectRe
   bool has_motion = false;
   MaterialArray &material_array = inst_.materials.material_array_get(ob, has_motion);
 
+  Vector<SculptBatch> batches = sculpt_batches_per_material_get(ob_ref.object,
+                                                                material_array.gpu_materials);
+  Vector<SculptBatch> batches_npr = sculpt_batches_per_material_get(
+      ob_ref.object, material_array.gpu_materials_npr);
+
   bool is_alpha_blend = false;
   bool has_transparent_shadows = false;
   bool has_volume = false;
   float inflate_bounds = 0.0f;
-  for (SculptBatch &batch :
-       sculpt_batches_per_material_get(ob_ref.object, material_array.gpu_materials))
-  {
-    gpu::Batch *geom = batch.batch;
+  for (auto i : material_array.gpu_materials.index_range()) {
+    gpu::Batch *geom = batches[i].batch;
     if (geom == nullptr) {
       continue;
     }
 
-    Material &material = material_array.materials[batch.material_slot];
+    Material &material = material_array.materials[batches[i].material_slot];
 
     if (material.has_volume) {
       volume_call(material.volume_occupancy, inst_.scene, ob, geom, res_handle);
@@ -212,17 +222,20 @@ bool SyncModule::sync_sculpt(Object *ob, ObjectHandle &ob_handle, const ObjectRe
     geometry_call(material.overlap_masking.sub_pass, geom, res_handle);
     geometry_call(material.prepass.sub_pass, geom, res_handle);
     geometry_call(material.shading.sub_pass, geom, res_handle);
+    geometry_call(material.npr.sub_pass, batches_npr[i].batch, res_handle);
     geometry_call(material.shadow.sub_pass, geom, res_handle);
 
     geometry_call(material.planar_probe_prepass.sub_pass, geom, res_handle);
     geometry_call(material.planar_probe_shading.sub_pass, geom, res_handle);
+    geometry_call(material.planar_probe_npr.sub_pass, batches_npr[i].batch, res_handle);
     geometry_call(material.lightprobe_sphere_prepass.sub_pass, geom, res_handle);
     geometry_call(material.lightprobe_sphere_shading.sub_pass, geom, res_handle);
+    geometry_call(material.lightprobe_sphere_npr.sub_pass, batches_npr[i].batch, res_handle);
 
     is_alpha_blend = is_alpha_blend || material.is_alpha_blend_transparent;
     has_transparent_shadows = has_transparent_shadows || material.has_transparent_shadows;
 
-    GPUMaterial *gpu_material = material_array.gpu_materials[batch.material_slot];
+    GPUMaterial *gpu_material = material_array.gpu_materials[i];
     ::Material *mat = GPU_material_get_material(gpu_material);
     inst_.cryptomatte.sync_material(mat);
 
@@ -294,12 +307,15 @@ void SyncModule::sync_point_cloud(Object *ob, ObjectHandle &ob_handle, const Obj
   drawcall_add(material.overlap_masking);
   drawcall_add(material.prepass);
   drawcall_add(material.shading);
+  drawcall_add(material.npr);
   drawcall_add(material.shadow);
 
   drawcall_add(material.planar_probe_prepass);
   drawcall_add(material.planar_probe_shading);
+  drawcall_add(material.planar_probe_npr);
   drawcall_add(material.lightprobe_sphere_prepass);
   drawcall_add(material.lightprobe_sphere_shading);
+  drawcall_add(material.lightprobe_sphere_npr);
 
   inst_.cryptomatte.sync_object(ob, res_handle);
   GPUMaterial *gpu_material = material.shading.gpumat;
@@ -445,12 +461,15 @@ void SyncModule::sync_curves(Object *ob,
   drawcall_add(material.overlap_masking);
   drawcall_add(material.prepass);
   drawcall_add(material.shading);
+  drawcall_add(material.npr);
   drawcall_add(material.shadow);
 
   drawcall_add(material.planar_probe_prepass);
   drawcall_add(material.planar_probe_shading);
+  drawcall_add(material.planar_probe_npr);
   drawcall_add(material.lightprobe_sphere_prepass);
   drawcall_add(material.lightprobe_sphere_shading);
+  drawcall_add(material.lightprobe_sphere_npr);
 
   inst_.cryptomatte.sync_object(ob, res_handle);
   GPUMaterial *gpu_material = material.shading.gpumat;

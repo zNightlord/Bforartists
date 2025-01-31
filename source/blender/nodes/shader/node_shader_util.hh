@@ -52,6 +52,7 @@ bool world_shader_nodes_poll(const bContext *C);
 bool object_shader_nodes_poll(const bContext *C);
 bool object_cycles_shader_nodes_poll(const bContext *C);
 bool object_eevee_shader_nodes_poll(const bContext *C);
+bool npr_shader_nodes_poll(const bContext *C);
 
 /* ********* exec data struct, remains internal *********** */
 

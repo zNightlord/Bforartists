@@ -60,6 +60,8 @@
 #include "WM_api.hh"
 #include "WM_types.hh"
 
+#include "NOD_shader.h"
+
 #include "node_intern.hh" /* own include */
 
 using blender::float2;
@@ -147,6 +149,15 @@ void ED_node_tree_pop(SpaceNode *snode)
 
   /* don't remove root */
   if (path == snode->treepath.first) {
+    if (ED_node_is_shader(snode)) {
+      if (snode->shaderfrom == SNODE_SHADER_OBJECT && npr_tree_get(snode->nodetree)) {
+        snode->shaderfrom = SNODE_SHADER_NPR;
+      }
+      else if (snode->shaderfrom == SNODE_SHADER_NPR) {
+        snode->shaderfrom = SNODE_SHADER_OBJECT;
+      }
+    }
+
     return;
   }
 
@@ -675,6 +686,10 @@ static void node_area_listener(const wmSpaceTypeListenerParams *params)
         node_area_tag_tree_recalc(snode, area);
       }
       break;
+#if 0
+    case NC_NPR:
+    /* TODO(NPR): ? */
+#endif
     case NC_WM:
       if (wmn->data == ND_UNDO) {
         node_area_tag_tree_recalc(snode, area);

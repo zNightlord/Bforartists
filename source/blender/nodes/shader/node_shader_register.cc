@@ -51,10 +51,12 @@ void register_shader_nodes()
   register_node_type_sh_hair_info();
   register_node_type_sh_holdout();
   register_node_type_sh_hue_sat();
+  register_node_type_sh_input_aov();
   register_node_type_sh_invert();
   register_node_type_sh_layer_weight();
   register_node_type_sh_light_falloff();
   register_node_type_sh_light_path();
+  register_node_type_sh_foreach_light();
   register_node_type_sh_map_range();
   register_node_type_sh_mapping();
   register_node_type_sh_math();
@@ -63,6 +65,10 @@ void register_shader_nodes()
   register_node_type_sh_mix();
   register_node_type_sh_normal_map();
   register_node_type_sh_normal();
+  register_node_type_sh_npr_image_sample();
+  register_node_type_sh_npr_input();
+  register_node_type_sh_npr_output();
+  register_node_type_sh_npr_refraction();
   register_node_type_sh_object_info();
   register_node_type_sh_output_aov();
   register_node_type_sh_output_light();
@@ -71,6 +77,7 @@ void register_shader_nodes()
   register_node_type_sh_output_world();
   register_node_type_sh_particle_info();
   register_node_type_sh_point_info();
+  register_node_type_sh_repeat();
   register_node_type_sh_rgb();
   register_node_type_sh_rgbtobw();
   register_node_type_sh_script();

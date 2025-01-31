@@ -61,6 +61,7 @@ enum eGPUNodeTag {
   GPU_NODE_TAG_AOV = (1 << 4),
   GPU_NODE_TAG_FUNCTION = (1 << 5),
   GPU_NODE_TAG_COMPOSITOR = (1 << 6),
+  GPU_NODE_TAG_NPR = (1 << 7),
 };
 
 ENUM_OPERATORS(eGPUNodeTag, GPU_NODE_TAG_COMPOSITOR)
@@ -75,6 +76,11 @@ struct GPUNode {
 
   ListBase inputs;
   ListBase outputs;
+
+  /* Zones. */
+  int zone_index;
+  bool is_zone_end;
+  bool skip_call;
 };
 
 struct GPUNodeLink {
@@ -110,6 +116,10 @@ struct GPUOutput {
   eGPUType type;     /* data type = length of vector/matrix */
   GPUNodeLink *link; /* output link */
   int id;            /* unique id as created by code generator */
+
+  /* Zones. */
+  bool is_zone_io;
+  bool is_duplicate;
 };
 
 struct GPUInput {
@@ -137,6 +147,10 @@ struct GPUInput {
     /* GPU_SOURCE_FUNCTION_CALL */
     char function_call[64];
   };
+
+  /* Zones. */
+  bool is_zone_io;
+  bool is_duplicate;
 };
 
 struct GPUNodeGraphOutputLink {
@@ -160,6 +174,8 @@ struct GPUNodeGraph {
   GPUNodeLink *outlink_volume;
   GPUNodeLink *outlink_displacement;
   GPUNodeLink *outlink_thickness;
+  /* NPR Output. */
+  GPUNodeLink *outlink_npr;
   /* List of GPUNodeGraphOutputLink */
   ListBase outlink_aovs;
   /* List of GPUNodeGraphFunctionLink */
