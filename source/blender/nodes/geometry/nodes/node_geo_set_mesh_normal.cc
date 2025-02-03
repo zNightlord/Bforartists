@@ -100,6 +100,7 @@ static void node_geo_exec(GeoNodeExecParams params)
             face_values.to_bools(attr.span);
             attr.finish();
           }
+          attributes.remove("custom_normal");
         }
       });
       break;
