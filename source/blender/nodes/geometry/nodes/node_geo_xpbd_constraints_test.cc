@@ -14,13 +14,54 @@ TEST(xpbd_constraints, PositionGoal)
 {
   float lambda = 0.0f;
   float3 position = {1, 2, 3};
+  const float3 goal = {-2, 0, 2};
+  const float delta = math::length(float3(-3, -2, -1));
+  EXPECT_NEAR(delta, 3.741657f, 1e-5f);
 
   const float alpha = 0.0f;
   const float gamma = 0.0f;
 
-  xpbd_constraints::eval_position_goal(float3(-2, 0, 2), alpha, gamma, lambda, position);
-  EXPECT_NEAR(-math::length(float3(-3, -2, -1)), lambda, 1e-5f);
-  EXPECT_V3_NEAR(float3(-2, 0, 2), position, 1e-5f);
+  xpbd_constraints::eval_position_goal(goal, alpha, gamma, lambda, position);
+  EXPECT_NEAR(-delta, lambda, 1e-5f);
+  EXPECT_V3_NEAR(goal, position, 1e-5f);
+}
+
+TEST(xpbd_constraints, RotationGoal)
+{
+  float lambda = 0.0f;
+  math::Quaternion rotation = math::to_quaternion(
+      math::AxisAngle(math::normalize(float3(-1, 2, -3)), math::AngleRadian::from_degree(45)));
+  const math::Quaternion goal = math::to_quaternion(
+      math::AxisAngle(math::normalize(float3(4, 4, 2)), math::AngleRadian::from_degree(-30)));
+  const math::AxisAngle delta = math::to_axis_angle(math::invert(goal) * rotation);
+  EXPECT_NEAR(delta.angle().radian(), 0.896427f, 1e-5f);
+  EXPECT_V3_NEAR(delta.axis(), float3(-0.023005f, 0.925597f, -0.37781f), 1e-5f);
+
+  const float alpha = 0.0f;
+  const float gamma = 0.0f;
+
+  xpbd_constraints::eval_rotation_goal<false>(goal, alpha, gamma, lambda, rotation);
+  EXPECT_NEAR(-delta.angle().radian(), lambda, 1e-5f);
+  EXPECT_V4_NEAR(float4(goal), float4(rotation), 1e-5f);
+}
+
+/* Linearized quaternion offset does not yield exact rotation for large offsets. */
+TEST(xpbd_constraints, RotationGoalLinearized)
+{
+  float lambda = 0.0f;
+  math::Quaternion rotation = math::to_quaternion(
+      math::AxisAngle(math::normalize(float3(-1, 2, -3)), math::AngleRadian::from_degree(45)));
+  const math::Quaternion goal = math::to_quaternion(
+      math::AxisAngle(math::normalize(float3(4, 4, 2)), math::AngleRadian::from_degree(-30)));
+  const math::AxisAngle delta = math::to_axis_angle(math::invert(goal) * rotation);
+  EXPECT_NEAR(delta.angle().radian(), 0.896427f, 1e-5f);
+  EXPECT_V3_NEAR(delta.axis(), float3(-0.023005f, 0.925597f, -0.37781f), 1e-5f);
+
+  const float alpha = 0.0f;
+  const float gamma = 0.0f;
+
+  xpbd_constraints::eval_rotation_goal<true>(goal, alpha, gamma, lambda, rotation);
+  EXPECT_NEAR(-delta.angle().radian(), lambda, 1e-5f);
 }
 
 TEST(xpbd_constraints, InactiveContact)

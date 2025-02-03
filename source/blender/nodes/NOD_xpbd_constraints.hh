@@ -42,6 +42,7 @@ inline void eval_position_goal(const float3 &goal_position,
   position += delta_lambda * gradient;
 }
 
+template<bool linearized>
 inline void eval_rotation_goal(const math::Quaternion &goal_rotation,
                                const float alpha,
                                const float gamma,
@@ -49,17 +50,37 @@ inline void eval_rotation_goal(const math::Quaternion &goal_rotation,
                                math::Quaternion &rotation)
 {
   const math::Quaternion old_rotation = rotation;
-  math::AxisAngle axis_angle = math::to_axis_angle(math::invert(goal_rotation) * rotation);
-  const float residual = -axis_angle.angle().radian();
+  math::AxisAngle axis_angle = math::to_axis_angle(rotation *
+                                                   math::invert_normalized(goal_rotation));
+  const float residual = axis_angle.angle().radian();
   const float3 gradient = axis_angle.axis();
 
-  const math::Quaternion diff = math::invert(old_rotation) * rotation;
+  const math::Quaternion diff = math::invert_normalized(old_rotation) * rotation;
   const float delta_lambda = (-residual - alpha * lambda -
                               gamma * 0.5f * math::dot(float4(0.0f, gradient), float4(diff))) /
                              ((1.0f + gamma) + alpha);
   lambda += delta_lambda;
-  rotation = math::normalize(
-      math::Quaternion(float4(rotation) + delta_lambda * 0.5f * float4(0.0f, gradient)));
+
+  /* Multiply Quaternion(0, gradient) * rotation. */
+  if constexpr (linearized) {
+    // const float4 q = float4(-math::dot(gradient, rotation.imaginary_part()),
+    //                               rotation.w * gradient +
+    //                                   math::cross(gradient, rotation.imaginary_part()));
+    const float4 q = float4(math::Quaternion(0.0f, gradient) * rotation);
+    rotation = math::normalize(math::Quaternion(float4(rotation) - delta_lambda * 0.5f * q));
+  }
+  else {
+    /* Normalize the final result to avoid accumulating errors. */
+    constexpr bool normalize_final = true;
+
+    const math::Quaternion q = math::to_quaternion(
+        math::AxisAngle(gradient, math::AngleRadian(delta_lambda)));
+
+    rotation = q * rotation;
+    if constexpr (normalize_final) {
+      rotation = math::normalize(rotation);
+    }
+  }
 }
 
 inline void eval_velocity_goal(const float3 &goal_velocity,
