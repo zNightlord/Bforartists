@@ -334,16 +334,16 @@ static void evaluate_constraint_group_stretch_shear(const SolverParams &params,
         const float weight_rot = params.constraints.rotation_weights[point1];
 
         float3 lambda = float3(0.0f);
-        xpbd_constraints::eval_position_stretch_shear(weight_pos1,
-                                                      weight_pos2,
-                                                      weight_rot,
-                                                      edge_length,
-                                                      alpha,
-                                                      gamma,
-                                                      lambda,
-                                                      position1,
-                                                      position2,
-                                                      rotation);
+        xpbd_constraints::eval_position_stretch_shear<true>(weight_pos1,
+                                                            weight_pos2,
+                                                            weight_rot,
+                                                            edge_length,
+                                                            alpha,
+                                                            gamma,
+                                                            lambda,
+                                                            position1,
+                                                            position2,
+                                                            rotation);
       });
       break;
     }

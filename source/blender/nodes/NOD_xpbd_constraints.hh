@@ -110,13 +110,14 @@ inline void eval_angular_velocity_goal(const float3 &goal_angular_velocity,
   angular_velocity += delta_lambda * gradient;
 }
 
+template<bool linearized_quaternion>
 inline void eval_position_stretch_shear(const float weight_pos1,
                                         const float weight_pos2,
                                         const float weight_rot,
                                         const float edge_length,
                                         const float alpha,
                                         const float gamma,
-                                        float3 &delta_lambda,
+                                        float3 &lambda,
                                         float3 &position1,
                                         float3 &position2,
                                         math::Quaternion &rotation)
@@ -131,13 +132,29 @@ inline void eval_position_stretch_shear(const float weight_pos1,
   const float weight_norm = math::safe_rcp(
       (weight_pos1 + weight_pos2) * inv_edge_length * inv_edge_length + 4.0f * weight_rot);
 
-  delta_lambda = weight_norm * residual;
+  const float3 delta_lambda = weight_norm * residual;
+  lambda = lambda + delta_lambda;
 
   position1 += weight_pos1 * inv_edge_length * delta_lambda;
-  position2 += weight_pos2 * inv_edge_length * delta_lambda;
-  const float4 delta_rot = float4(math::Quaternion(0.0f, delta_lambda) * rotation *
-                                  math::Quaternion(0, 0, 0, -1));
-  rotation = math::normalize(math::Quaternion(float4(rotation) + weight_rot * delta_rot));
+  position2 -= weight_pos2 * inv_edge_length * delta_lambda;
+  if constexpr (linearized_quaternion) {
+    /* XXX is this correct? */
+    const float4 delta_rot = weight_rot * float4(math::Quaternion(0.0f, delta_lambda) * rotation *
+                                                 math::Quaternion(0, 0, 0, -1));
+    rotation = math::normalize(math::Quaternion(float4(rotation) + delta_rot));
+  }
+  else {
+    /* Normalize the final result to avoid accumulating errors. */
+    constexpr bool normalize_final = true;
+
+    const math::Quaternion q = math::to_quaternion(
+        math::AxisAngle(direction, math::normalize(position2 - position1)));
+
+    rotation = q * rotation;
+    if constexpr (normalize_final) {
+      rotation = math::normalize(rotation);
+    }
+  }
 }
 
 /**

@@ -265,4 +265,72 @@ TEST(xpbd_constraints, ContactRestitution)
   EXPECT_V3_NEAR(float3(1.5f, -1.5f, 0), angular_velocity1, 1e-5f);
 }
 
+TEST(xpbd_constraints, StretchShear)
+{
+  const float edge_length = 2.0f;
+
+  const float alpha = 0.0f;
+  const float gamma = 0.0f;
+
+  /* Position 1 only. */
+  {
+    float3 lambda = float3(0.0f);
+    float3 position1 = {-1, 0, 0};
+    float3 position2 = {0, 0, 1};
+    math::Quaternion rotation = math::Quaternion::identity();
+    xpbd_constraints::eval_position_stretch_shear<false>(
+        1, 0, 0, edge_length, alpha, gamma, lambda, position1, position2, rotation);
+    EXPECT_V3_NEAR(float3(2, 0, -2), lambda, 1e-5f);
+    EXPECT_V3_NEAR(float3(0, 0, -1), position1, 1e-5f);
+    EXPECT_V3_NEAR(float3(0, 0, 1), position2, 1e-5f);
+    EXPECT_V4_NEAR(float4(1, 0, 0, 0), float4(rotation), 1e-5f);
+  }
+
+  /* Position 2 only. */
+  {
+    float3 lambda = float3(0.0f);
+    float3 position1 = {-1, 0, 0};
+    float3 position2 = {0, 0, 1};
+    math::Quaternion rotation = math::Quaternion::identity();
+    xpbd_constraints::eval_position_stretch_shear<false>(
+        0, 1, 0, edge_length, alpha, gamma, lambda, position1, position2, rotation);
+    EXPECT_V3_NEAR(float3(2, 0, -2), lambda, 1e-5f);
+    EXPECT_V3_NEAR(float3(-1, 0, 0), position1, 1e-5f);
+    EXPECT_V3_NEAR(float3(-1, 0, 2), position2, 1e-5f);
+    EXPECT_V4_NEAR(float4(1, 0, 0, 0), float4(rotation), 1e-5f);
+  }
+
+  /* Rotation only. */
+  {
+    float3 lambda = float3(0.0f);
+    float3 position1 = {-1, 0, 0};
+    float3 position2 = {0, 0, 1};
+    math::Quaternion rotation = math::Quaternion::identity();
+    xpbd_constraints::eval_position_stretch_shear<false>(
+        0, 0, 1, edge_length, alpha, gamma, lambda, position1, position2, rotation);
+    EXPECT_V3_NEAR(float3(0.125f, 0, -0.125f), lambda, 1e-5f);
+    EXPECT_V3_NEAR(float3(-1, 0, 0), position1, 1e-5f);
+    EXPECT_V3_NEAR(float3(0, 0, 1), position2, 1e-5f);
+    const math::AxisAngle axis_angle = math::to_axis_angle(rotation);
+    EXPECT_V3_NEAR(axis_angle.axis(), float3(0, 1, 0), 1e-5f);
+    EXPECT_NEAR(axis_angle.angle().degree(), 45.0f, 1e-5f);
+  }
+  /* Rotation only with linearized quaternions. */
+  {
+    float3 lambda = float3(0.0f);
+    float3 position1 = {-1, 0, 0};
+    float3 position2 = {0, 0, 1};
+    math::Quaternion rotation = math::Quaternion::identity();
+    xpbd_constraints::eval_position_stretch_shear<true>(
+        0, 0, 1, edge_length, alpha, gamma, lambda, position1, position2, rotation);
+    EXPECT_V3_NEAR(float3(0.125f, 0, -0.125f), lambda, 1e-5f);
+    EXPECT_V3_NEAR(float3(-1, 0, 0), position1, 1e-5f);
+    EXPECT_V3_NEAR(float3(0, 0, 1), position2, 1e-5f);
+    const math::AxisAngle axis_angle = math::to_axis_angle(rotation);
+    EXPECT_V3_NEAR(axis_angle.axis(), float3(0, 1, 0), 1e-5f);
+    // XXX BROKEN
+    EXPECT_NEAR(axis_angle.angle().degree(), 45.0f, 0.01f);
+  }
+}
+
 }  // namespace blender::nodes::tests
