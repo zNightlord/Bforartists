@@ -45,7 +45,6 @@ TEST(xpbd_constraints, RotationGoal)
   EXPECT_V4_NEAR(float4(goal), float4(rotation), 1e-5f);
 }
 
-/* Linearized quaternion offset does not yield exact rotation for large offsets. */
 TEST(xpbd_constraints, RotationGoalLinearized)
 {
   float lambda = 0.0f;
@@ -62,6 +61,8 @@ TEST(xpbd_constraints, RotationGoalLinearized)
 
   xpbd_constraints::eval_rotation_goal<true>(goal, alpha, gamma, lambda, rotation);
   EXPECT_NEAR(-delta.angle().radian(), lambda, 1e-5f);
+  /* Linearized quaternion offset does not yield exact rotation for large offsets. */
+  EXPECT_V4_NEAR(float4(goal), float4(rotation), 0.05f);
 }
 
 TEST(xpbd_constraints, InactiveContact)

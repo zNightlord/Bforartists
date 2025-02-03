@@ -42,7 +42,7 @@ inline void eval_position_goal(const float3 &goal_position,
   position += delta_lambda * gradient;
 }
 
-template<bool linearized>
+template<bool linearized_quaternion>
 inline void eval_rotation_goal(const math::Quaternion &goal_rotation,
                                const float alpha,
                                const float gamma,
@@ -62,12 +62,12 @@ inline void eval_rotation_goal(const math::Quaternion &goal_rotation,
   lambda += delta_lambda;
 
   /* Multiply Quaternion(0, gradient) * rotation. */
-  if constexpr (linearized) {
+  if constexpr (linearized_quaternion) {
     // const float4 q = float4(-math::dot(gradient, rotation.imaginary_part()),
     //                               rotation.w * gradient +
     //                                   math::cross(gradient, rotation.imaginary_part()));
     const float4 q = float4(math::Quaternion(0.0f, gradient) * rotation);
-    rotation = math::normalize(math::Quaternion(float4(rotation) - delta_lambda * 0.5f * q));
+    rotation = math::normalize(math::Quaternion(float4(rotation) + delta_lambda * 0.5f * q));
   }
   else {
     /* Normalize the final result to avoid accumulating errors. */
