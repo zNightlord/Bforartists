@@ -388,11 +388,13 @@ typedef struct Mesh {
    * Normal direction of faces, defined by positions and the winding direction of face corners.
    */
   blender::Span<blender::float3> face_normals() const;
+  blender::Span<blender::float3> face_normals_true() const;
   /**
    * Normal direction of vertices, defined as the weighted average of face normals
    * surrounding each vertex and the normalized position for loose vertices.
    */
   blender::Span<blender::float3> vert_normals() const;
+  blender::Span<blender::float3> vert_normals_true() const;
   /**
    * Normal direction at each face corner. Defined by a combination of face normals, vertex
    * normals, the `sharp_edge` and `sharp_face` attributes, and potentially by custom normals.
@@ -401,6 +403,7 @@ typedef struct Mesh {
    * using #face_normals() or #vert_normals() when possible (see #normals_domain()).
    */
   blender::Span<blender::float3> corner_normals() const;
+  blender::Span<blender::float3> corner_normals_true() const;
 
   blender::bke::BVHTreeFromMesh bvh_verts() const;
   blender::bke::BVHTreeFromMesh bvh_edges() const;

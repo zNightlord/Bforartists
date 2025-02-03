@@ -97,6 +97,18 @@ struct LooseEdgeCache : public LooseGeomCache {};
  */
 struct LooseVertCache : public LooseGeomCache {};
 
+/** Similar to #VArraySpan but with the ability to be resized and updated. */
+class NormalsCache {
+  std::variant<Vector<float3>, Span<float3>> data_;
+
+ public:
+  MutableSpan<float3> ensure_vector_size(const int size);
+  Span<float3> get_span() const;
+  void store_varray(const VArray<float3> &data);
+  void store_span(Span<float3> data);
+  void store_vector(Vector<float3> &&data);
+};
+
 struct TrianglesCache {
   SharedCache<Array<int3>> data;
   bool frozen = false;
@@ -108,16 +120,6 @@ struct TrianglesCache {
   void unfreeze();
   /** Call instead of `data.tag_dirty()`. */
   void tag_dirty();
-};
-
-class NormalsCache {
-  std::variant<Vector<float3>, Span<float3>> data_;
-
- public:
-  MutableSpan<float3> ensure_vector_size(const int size);
-  Span<float3> get_span() const;
-  void store_varray(const VArray<float3> &data);
-  void store_vector(Vector<float3> &&data);
 };
 
 struct MeshRuntime {
@@ -216,10 +218,13 @@ struct MeshRuntime {
 
   /** Lazily computed vertex normals (#Mesh::vert_normals()). */
   SharedCache<NormalsCache> vert_normals_cache;
+  SharedCache<Vector<float3>> vert_normals_true_cache;
   /** Lazily computed face normals (#Mesh::face_normals()). */
   SharedCache<NormalsCache> face_normals_cache;
+  SharedCache<Vector<float3>> face_normals_true_cache;
   /** Lazily computed face corner normals (#Mesh::corner_normals()). */
   SharedCache<NormalsCache> corner_normals_cache;
+  SharedCache<Vector<float3>> corner_normals_true_cache;
 
   /**
    * Cache of offsets for vert to face/corner maps. The same offsets array is used to group

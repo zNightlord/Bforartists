@@ -37,7 +37,6 @@ struct EnumPropertyItem;
 namespace blender {
 namespace bke {
 enum class AttrDomain : int8_t;
-class NormalsCache;
 namespace pbvh {
 class Tree;
 }
@@ -410,8 +409,8 @@ struct SculptSession : blender::NonCopyable, blender::NonMovable {
    * Normals corresponding to the #deform_cos evaluated/deform positions. Stored as a #SharedCache
    * for consistency with mesh caches in #MeshRuntime::vert_normals_cache.
    */
-  blender::SharedCache<blender::bke::NormalsCache> vert_normals_deform;
-  blender::SharedCache<blender::bke::NormalsCache> face_normals_deform;
+  blender::SharedCache<blender::Vector<blender::float3>> vert_normals_deform;
+  blender::SharedCache<blender::Vector<blender::float3>> face_normals_deform;
 
   /* Pool for texture evaluations. */
   ImagePool *tex_pool = nullptr;
