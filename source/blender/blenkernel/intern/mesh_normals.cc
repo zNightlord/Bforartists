@@ -386,7 +386,7 @@ blender::Span<blender::float3> Mesh::vert_normals() const
                                          r_data.ensure_vector_size(this->verts_num));
       }
     }
-    r_data.store_varray(VArray<float3>::ForSpan(this->vert_normals_true()));
+    r_data.store_span(this->vert_normals_true());
   });
   return this->runtime->vert_normals_cache.data().get_span();
 }
