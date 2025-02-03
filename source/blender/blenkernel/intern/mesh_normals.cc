@@ -374,6 +374,14 @@ blender::Span<blender::float3> Mesh::vert_normals() const
           return;
         }
       }
+      else if (custom.varray.type().is<short2>() && custom.domain == AttrDomain::Corner) {
+        mesh::mix_normals_corner_to_vert(this->vert_positions(),
+                                         this->faces(),
+                                         this->corner_verts(),
+                                         this->vert_to_face_map(),
+                                         this->corner_normals(),
+                                         r_data.ensure_vector_size(this->verts_num));
+      }
     }
     mesh::normals_calc_verts(this->vert_positions(),
                              this->faces(),
