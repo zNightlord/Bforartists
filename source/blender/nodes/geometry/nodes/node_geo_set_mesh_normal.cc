@@ -16,17 +16,29 @@
 namespace blender::nodes::node_geo_set_mesh_normal_cc {
 
 enum class Mode {
-  Free = 0,
-  CornerFanSpace = 1,
+  Sharpness = 0,
+  Free = 1,
+  CornerFanSpace = 2,
 };
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
   b.add_input<decl::Geometry>("Mesh").supported_type(GeometryComponent::Type::Mesh);
-  b.add_input<decl::Vector>("Normal")
-      .subtype(PROP_XYZ)
-      .implicit_field(nodes::implicit_field_inputs::normal)
-      .hide_value();
+  if (const bNode *node = b.node_or_null()) {
+    switch (Mode(node->custom1)) {
+      case Mode::Sharpness:
+        b.add_input<decl::Bool>("Edge Sharpness").supports_field();
+        b.add_input<decl::Bool>("Face Sharpness").supports_field();
+        break;
+      case Mode::Free:
+      case Mode::CornerFanSpace:
+        b.add_input<decl::Vector>("Custom Normal")
+            .subtype(PROP_XYZ)
+            .implicit_field(nodes::implicit_field_inputs::normal)
+            .hide_value();
+        break;
+    }
+  }
   b.add_output<decl::Geometry>("Mesh").propagate_all();
 }
 
@@ -41,7 +53,7 @@ static void node_layout(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
 
 static void node_init(bNodeTree * /*tree*/, bNode *node)
 {
-  node->custom1 = int16_t(Mode::Free);
+  node->custom1 = int16_t(Mode::Sharpness);
   node->custom2 = int16_t(bke::AttrDomain::Point);
 }
 
@@ -50,12 +62,52 @@ static void node_geo_exec(GeoNodeExecParams params)
   const bNode &node = params.node();
   const Mode mode = static_cast<Mode>(node.custom1);
   GeometrySet geometry_set = params.extract_input<GeometrySet>("Mesh");
-  const fn::Field<float3> custom_normal = params.extract_input<fn::Field<float3>>("Normal");
 
-  geometry_set.modify_geometry_sets([&](GeometrySet &geometry_set) {
-    if (Mesh *mesh = geometry_set.get_mesh_for_write()) {
-      switch (mode) {
-        case Mode::Free: {
+  switch (mode) {
+    case Mode::Sharpness: {
+      fn::Field<bool> sharp_edge = params.extract_input<fn::Field<bool>>("Edge Sharpness");
+      fn::Field<bool> sharp_face = params.extract_input<fn::Field<bool>>("Face Sharpness");
+      geometry_set.modify_geometry_sets([&](GeometrySet &geometry_set) {
+        if (Mesh *mesh = geometry_set.get_mesh_for_write()) {
+          /* Evaluate both fields before storing the result to avoid one attribute change
+           * potentially affecting the other field evaluation. */
+          const bke::MeshFieldContext edge_context(*mesh, bke::AttrDomain::Edge);
+          const bke::MeshFieldContext face_context(*mesh, bke::AttrDomain::Face);
+          fn::FieldEvaluator edge_evaluator(edge_context, mesh->edges_num);
+          fn::FieldEvaluator face_evaluator(face_context, mesh->faces_num);
+          edge_evaluator.add(sharp_edge);
+          face_evaluator.add(sharp_face);
+          edge_evaluator.evaluate();
+          face_evaluator.evaluate();
+          const IndexMask edge_values = edge_evaluator.get_evaluated_as_mask(0);
+          const IndexMask face_values = face_evaluator.get_evaluated_as_mask(0);
+          bke::MutableAttributeAccessor attributes = mesh->attributes_for_write();
+          if (edge_values.is_empty()) {
+            attributes.remove("sharp_edge");
+          }
+          else {
+            bke::SpanAttributeWriter attr = attributes.lookup_or_add_for_write_only_span<bool>(
+                "sharp_edge", bke::AttrDomain::Edge);
+            edge_values.to_bools(attr.span);
+            attr.finish();
+          }
+          if (face_values.is_empty()) {
+            attributes.remove("sharp_face");
+          }
+          else {
+            bke::SpanAttributeWriter attr = attributes.lookup_or_add_for_write_only_span<bool>(
+                "sharp_face", bke::AttrDomain::Face);
+            face_values.to_bools(attr.span);
+            attr.finish();
+          }
+        }
+      });
+      break;
+    }
+    case Mode::Free: {
+      fn::Field<float3> custom_normal = params.extract_input<fn::Field<float3>>("Custom Normal");
+      geometry_set.modify_geometry_sets([&](GeometrySet &geometry_set) {
+        if (Mesh *mesh = geometry_set.get_mesh_for_write()) {
           const bke::AttrDomain domain = bke::AttrDomain(node.custom2);
           bke::try_capture_field_on_geometry(mesh->attributes_for_write(),
                                              bke::MeshFieldContext(*mesh, domain),
@@ -63,20 +115,25 @@ static void node_geo_exec(GeoNodeExecParams params)
                                              domain,
                                              fn::make_constant_field(true),
                                              custom_normal);
-          break;
         }
-        case Mode::CornerFanSpace: {
+      });
+      break;
+    }
+    case Mode::CornerFanSpace: {
+      fn::Field<float3> custom_normal = params.extract_input<fn::Field<float3>>("Custom Normal");
+      geometry_set.modify_geometry_sets([&](GeometrySet &geometry_set) {
+        if (Mesh *mesh = geometry_set.get_mesh_for_write()) {
           const bke::MeshFieldContext context(*mesh, bke::AttrDomain::Corner);
           fn::FieldEvaluator evaluator(context, mesh->corners_num);
           Array<float3> corner_normals(mesh->corners_num);
           evaluator.add_with_destination<float3>(custom_normal, corner_normals);
           evaluator.evaluate();
           bke::mesh_set_custom_normals(*mesh, corner_normals);
-          break;
         }
-      }
+      });
+      break;
     }
-  });
+  }
 
   params.set_output("Mesh", std::move(geometry_set));
 }
@@ -84,16 +141,22 @@ static void node_geo_exec(GeoNodeExecParams params)
 static void node_rna(StructRNA *srna)
 {
   static const EnumPropertyItem mode_items[] = {
+      {int(Mode::Sharpness),
+       "SHARPNESS",
+       0,
+       "Sharpness",
+       "Store the sharpness of each face or edge. Similar to the \"Shade Smooth\" and \"Shade "
+       "Flat\" operators."},
       {int(Mode::Free),
-       "Free",
+       "FREE",
        0,
        "Free",
        "Store custom normals as simple vectors in the local space of the mesh. Values are not "
        "necessarily updated automatically later on as the mesh is deformed."},
       {int(Mode::CornerFanSpace),
-       "CORNER_FAN_SPACE",
+       "TANGENT_SPACE",
        0,
-       "Corner Fan Space",
+       "Tangent Space",
        "Store normals in a deformation dependent custom transformation space. This method is "
        "slower, but can be better when subsequent operations change the mesh without handling "
        "normals specifically."},
