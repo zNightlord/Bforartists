@@ -403,7 +403,7 @@ blender::Span<blender::float3> Mesh::face_normals() const
                                          r_data.ensure_vector_size(this->faces_num));
           return;
         }
-        if (custom.domain == AttrDomain::Point) {
+        if (custom.domain == AttrDomain::Corner) {
           mesh::mix_normals_corner_to_face(this->faces(),
                                            VArraySpan<float3>(custom.varray.typed<float3>()),
                                            r_data.ensure_vector_size(this->faces_num));
