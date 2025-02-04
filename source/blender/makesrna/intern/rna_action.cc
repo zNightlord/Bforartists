@@ -719,18 +719,19 @@ static void rna_Channelbag_group_remove(ActionChannelbag *dna_channelbag,
   WM_main_add_notifier(NC_ANIMATION | ND_KEYFRAME | NA_EDITED, nullptr);
 }
 
-static ActionChannelbag *rna_ActionStrip_channels(ID *dna_action_id,
-                                                  ActionStrip *self,
-                                                  const animrig::slot_handle_t slot_handle,
-                                                  const bool ensure)
+static ActionChannelbag *rna_ActionStrip_channelbag(ID *dna_action_id,
+                                                    ActionStrip *self,
+                                                    const ActionSlot *dna_slot,
+                                                    const bool ensure)
 {
   animrig::Action &action = reinterpret_cast<bAction *>(dna_action_id)->wrap();
   animrig::StripKeyframeData &strip_data = self->wrap().data<animrig::StripKeyframeData>(action);
+  const animrig::Slot &slot = dna_slot->wrap();
 
   if (ensure) {
-    return &strip_data.channelbag_for_slot_ensure(slot_handle);
+    return &strip_data.channelbag_for_slot_ensure(slot);
   }
-  return strip_data.channelbag_for_slot(slot_handle);
+  return strip_data.channelbag_for_slot(slot);
 }
 
 /**
@@ -1570,6 +1571,52 @@ static void rna_ActionSlot_target_id_type_set(PointerRNA *ptr, int value)
   action.slot_idtype_define(slot, ID_Type(value));
 }
 
+/* For API backwards compatability with pre-layered-actions (Blender 4.3 and
+ * earlier), we treat `Action.id_root` as a proxy for the `target_id_type`
+ * property (`idtype` in DNA) of the Action's first Slot.
+ *
+ * If the Action has no slots, then we fallback to returning 'unspecified' (0).
+ */
+static int rna_Action_id_root_get(PointerRNA *ptr)
+{
+  animrig::Action &action = reinterpret_cast<bAction *>(ptr->owner_id)->wrap();
+
+  if (action.slots().is_empty()) {
+    return 0;
+  }
+
+  return action.slot(0)->idtype;
+}
+
+/* For API backwards compatability with pre-layered-actions (Blender 4.3 and
+ * earlier), we treat `Action.id_root` as a proxy for the `target_id_type`
+ * property (`idtype` in DNA) of the Action's first Slot.
+ *
+ * If the Action has no slots, then a legacy slot is created and its
+ * `target_id_type` is set. */
+static void rna_Action_id_root_set(PointerRNA *ptr, int value)
+{
+  animrig::Action &action = reinterpret_cast<bAction *>(ptr->owner_id)->wrap();
+
+  animrig::Slot &slot = animrig::legacy::slot_ensure(action);
+  action.slot_idtype_define(slot, ID_Type(value));
+}
+
+static void rna_Action_id_root_update(Main *bmain, Scene *, PointerRNA *ptr)
+{
+  animrig::Action &action = rna_action(ptr);
+
+  if (action.slots().is_empty()) {
+    /* Nothing to do: id_root can't be set without at least one slot, so no
+     * change was possible that would necessitate an update. */
+    return;
+  }
+
+  /* Setting id_root actually sets the target ID type of the first slot, so it's
+   * the resulting changes to the first slot that we need to propagate. */
+  action.slot_identifier_propagate(*bmain, *action.slot(0));
+}
+
 #else
 
 static void rna_def_dopesheet(BlenderRNA *brna)
@@ -2245,25 +2292,18 @@ static void rna_def_action_keyframe_strip(BlenderRNA *brna)
     FunctionRNA *func;
     PropertyRNA *parm;
 
-    /* Strip.channels(...). */
-    func = RNA_def_function(srna, "channels", "rna_ActionStrip_channels");
+    /* Strip.channelbag(...). */
+    func = RNA_def_function(srna, "channelbag", "rna_ActionStrip_channelbag");
     RNA_def_function_flag(func, FUNC_USE_SELF_ID);
     RNA_def_function_ui_description(func, "Find the ActionChannelbag for a specific Slot");
-    parm = RNA_def_int(func,
-                       "slot_handle",
-                       0,
-                       0,
-                       INT_MAX,
-                       "Slot Handle",
-                       "Number that identifies a specific action slot",
-                       0,
-                       INT_MAX);
+    parm = RNA_def_pointer(
+        func, "slot", "ActionSlot", "Slot", "The slot for which to find the channelbag");
     RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
     RNA_def_boolean(func,
                     "ensure",
                     false,
                     "Create if necessary",
-                    "Ensure the channelbag exists for this slot handle, creating it if necessary");
+                    "Ensure the channelbag exists for this slot, creating it if necessary");
     parm = RNA_def_pointer(func, "channels", "ActionChannelbag", "Channels", "");
     RNA_def_function_return(func, parm);
 
@@ -2734,7 +2774,11 @@ static void rna_def_action_legacy(BlenderRNA *brna, StructRNA *srna)
   prop = RNA_def_property(srna, "id_root", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_sdna(prop, nullptr, "idroot");
   RNA_def_property_enum_items(prop, default_ActionSlot_target_id_type_items);
-  RNA_def_property_enum_funcs(prop, nullptr, nullptr, "rna_ActionSlot_target_id_type_itemf");
+  RNA_def_property_enum_funcs(prop,
+                              "rna_Action_id_root_get",
+                              "rna_Action_id_root_set",
+                              "rna_ActionSlot_target_id_type_itemf");
+  RNA_def_property_update(prop, NC_ANIMATION | ND_ANIMCHAN, "rna_Action_id_root_update");
   RNA_def_property_flag(prop, PROP_ENUM_NO_CONTEXT);
   RNA_def_property_ui_text(prop,
                            "ID Root Type",
