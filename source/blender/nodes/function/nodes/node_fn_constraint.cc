@@ -20,61 +20,130 @@
 #include "UI_interface.hh"
 #include "UI_resources.hh"
 
-namespace blender::fn::multi_function::build {
-
-/** Build multi-function with 13 single-input and 5 single output parameters. */
-template<typename In1,
-         typename In2,
-         typename In3,
-         typename In4,
-         typename In5,
-         typename In6,
-         typename In7,
-         typename In8,
-         typename In9,
-         typename In10,
-         typename In11,
-         typename In12,
-         typename In13,
-         typename Out1,
-         typename Out2,
-         typename Out3,
-         typename Out4,
-         typename Out5,
-         typename ElementFn,
-         typename ExecPreset = exec_presets::Materialized>
-inline auto SI13_SO5(const char *name,
-                     const ElementFn element_fn,
-                     const ExecPreset exec_preset = exec_presets::Materialized())
-{
-  constexpr auto param_tags = TypeSequence<ParamTag<ParamCategory::SingleInput, In1>,
-                                           ParamTag<ParamCategory::SingleInput, In2>,
-                                           ParamTag<ParamCategory::SingleInput, In3>,
-                                           ParamTag<ParamCategory::SingleInput, In4>,
-                                           ParamTag<ParamCategory::SingleInput, In5>,
-                                           ParamTag<ParamCategory::SingleInput, In6>,
-                                           ParamTag<ParamCategory::SingleInput, In7>,
-                                           ParamTag<ParamCategory::SingleInput, In8>,
-                                           ParamTag<ParamCategory::SingleInput, In9>,
-                                           ParamTag<ParamCategory::SingleInput, In10>,
-                                           ParamTag<ParamCategory::SingleInput, In11>,
-                                           ParamTag<ParamCategory::SingleInput, In12>,
-                                           ParamTag<ParamCategory::SingleInput, In13>,
-                                           ParamTag<ParamCategory::SingleOutput, Out1>,
-                                           ParamTag<ParamCategory::SingleOutput, Out2>,
-                                           ParamTag<ParamCategory::SingleOutput, Out3>,
-                                           ParamTag<ParamCategory::SingleOutput, Out4>,
-                                           ParamTag<ParamCategory::SingleOutput, Out5>>();
-  auto call_fn = detail::build_multi_function_call_from_element_fn(
-      element_fn, exec_preset, param_tags);
-  return detail::CustomMF(name, call_fn, param_tags);
-}
-
-}  // namespace blender::fn::multi_function::build
-
 namespace blender::nodes::node_fn_constraint_cc {
 
+namespace mf = blender::fn::multi_function;
+
 using xpbd_constraints::ConstraintType;
+
+/* Shortcuts. */
+template<typename T> using mf_input = mf::ParamTag<mf::ParamCategory::SingleInput, T>;
+template<typename T> using mf_output = mf::ParamTag<mf::ParamCategory::SingleOutput, T>;
+
+template<typename ExecPreset> static auto stretch_shear_multifunction(ExecPreset exec_preset)
+{
+  constexpr auto param_tags = TypeSequence<mf_input<float3>,
+                                           mf_input<float3>,
+                                           mf_input<float3>,
+                                           mf_input<math::Quaternion>,
+                                           mf_input<float>,
+                                           mf_input<float>,
+                                           mf_input<float>,
+                                           mf_input<float>,
+                                           mf_input<float>,
+                                           mf_input<float>,
+                                           mf_output<float3>,
+                                           mf_output<float3>,
+                                           mf_output<float3>,
+                                           mf_output<math::Quaternion>>();
+  auto call_fn = mf::build::detail::build_multi_function_call_from_element_fn(
+      [](float3 lambda,
+         float3 position1,
+         float3 position2,
+         math::Quaternion rotation,
+         const float weight_pos1,
+         const float weight_pos2,
+         const float weight_rot,
+         const float edge_length,
+         const float alpha,
+         const float gamma,
+         float3 &lambda_out,
+         float3 &position1_out,
+         float3 &position2_out,
+         math::Quaternion &rotation_out) -> void {
+        constexpr bool linearized_quaternion = false;
+        xpbd_constraints::eval_position_stretch_shear<linearized_quaternion>(weight_pos1,
+                                                                             weight_pos2,
+                                                                             weight_rot,
+                                                                             edge_length,
+                                                                             alpha,
+                                                                             gamma,
+                                                                             lambda,
+                                                                             position1,
+                                                                             position2,
+                                                                             rotation);
+        lambda = lambda_out;
+        position1_out = position1;
+        position2_out = position2;
+        rotation_out = rotation;
+      },
+      exec_preset,
+      param_tags);
+  return mf::build::detail::CustomMF("XPBD Stretch/Shear Rod Constraint", call_fn, param_tags);
+}
+
+template<typename ExecPreset> static auto contact_position_multifunction(ExecPreset exec_preset)
+{
+  constexpr auto param_tags = TypeSequence<mf_input<float>,
+                                           mf_input<float3>,
+                                           mf_input<float3>,
+                                           mf_input<math::Quaternion>,
+                                           mf_input<math::Quaternion>,
+                                           mf_input<float>,
+                                           mf_input<float>,
+                                           mf_input<float>,
+                                           mf_input<float>,
+                                           mf_input<float3>,
+                                           mf_input<float3>,
+                                           mf_input<float3>,
+                                           mf_input<float>,
+                                           mf_output<float>,
+                                           mf_output<float3>,
+                                           mf_output<float3>,
+                                           mf_output<math::Quaternion>,
+                                           mf_output<math::Quaternion>>();
+  auto call_fn = mf::build::detail::build_multi_function_call_from_element_fn(
+      [](float lambda,
+         float3 position1,
+         float3 position2,
+         math::Quaternion rotation1,
+         math::Quaternion rotation2,
+         const float weight_pos1,
+         const float weight_pos2,
+         const float weight_rot1,
+         const float weight_rot2,
+         const float3 &local_position1,
+         const float3 &local_position2,
+         const float3 &normal,
+         const float alpha,
+         float &lambda_out,
+         float3 &position1_out,
+         float3 &position2_out,
+         math::Quaternion &rotation1_out,
+         math::Quaternion &rotation2_out) -> void {
+        xpbd_constraints::eval_position_contact(weight_pos1,
+                                                weight_pos2,
+                                                weight_rot1,
+                                                weight_rot2,
+                                                local_position1,
+                                                local_position2,
+                                                normal,
+                                                alpha,
+                                                lambda,
+                                                position1,
+                                                position2,
+                                                rotation1,
+                                                rotation2);
+        lambda = lambda_out;
+        position1_out = position1;
+        position2_out = position2;
+        rotation1_out = rotation1;
+        rotation2_out = rotation2;
+      },
+      exec_preset,
+      param_tags);
+  return mf::build::detail::CustomMF("XPBD Contact Position Constraint", call_fn, param_tags);
+}
 
 static const EnumPropertyItem rna_enum_constraint_type_items[] = {
     {int(xpbd_constraints::ConstraintType::PositionGoal), "POSITION_GOAL", 0, "Position Goal", ""},
@@ -105,6 +174,22 @@ static void node_declare(NodeDeclarationBuilder &b)
     case ConstraintType::RotationGoal:
       break;
     case ConstraintType::StretchShear:
+      b.add_input<decl::Vector>("Lambda");
+      b.add_output<decl::Vector>("Lambda").align_with_previous();
+      b.add_input<decl::Vector>("Position 1").hide_value();
+      b.add_output<decl::Vector>("Position 1").align_with_previous();
+      b.add_input<decl::Vector>("Position 2").hide_value();
+      b.add_output<decl::Vector>("Position 2").align_with_previous();
+      b.add_input<decl::Rotation>("Rotation").hide_value();
+      b.add_output<decl::Rotation>("Rotation").align_with_previous();
+      b.add_separator();
+      b.add_input<decl::Float>("Position Weight 1").default_value(1.0f);
+      b.add_input<decl::Float>("Position Weight 2").default_value(1.0f);
+      b.add_input<decl::Float>("Rotation Weight").default_value(1.0f);
+      b.add_separator();
+      b.add_input<decl::Float>("Edge Length");
+      b.add_input<decl::Float>("Alpha");
+      b.add_input<decl::Float>("Gamma");
       break;
     case ConstraintType::BendTwist:
       break;
@@ -150,72 +235,21 @@ static const mf::MultiFunction *get_multi_function(const bNode &bnode)
   const ConstraintType constraint_type = ConstraintType(bnode.custom1);
   static auto exec_preset = mf::build::exec_presets::AllSpanOrSingle();
 
-  static auto fn_contact = mf::build::SI13_SO5<float,
-                                               float3,
-                                               float3,
-                                               math::Quaternion,
-                                               math::Quaternion,
-                                               float,
-                                               float,
-                                               float,
-                                               float,
-                                               float3,
-                                               float3,
-                                               float3,
-                                               float,
-                                               float,
-                                               float3,
-                                               float3,
-                                               math::Quaternion,
-                                               math::Quaternion>(
-      "XPBD Contact",
-      [](float lambda,
-         float3 position1,
-         float3 position2,
-         math::Quaternion rotation1,
-         math::Quaternion rotation2,
-         const float weight_pos1,
-         const float weight_pos2,
-         const float weight_rot1,
-         const float weight_rot2,
-         const float3 &local_position1,
-         const float3 &local_position2,
-         const float3 &normal,
-         const float alpha,
-         float &lambda_out,
-         float3 &position1_out,
-         float3 &position2_out,
-         math::Quaternion &rotation1_out,
-         math::Quaternion &rotation2_out) -> void {
-        xpbd_constraints::eval_position_contact(weight_pos1,
-                                                weight_pos2,
-                                                weight_rot1,
-                                                weight_rot2,
-                                                local_position1,
-                                                local_position2,
-                                                normal,
-                                                alpha,
-                                                lambda,
-                                                position1,
-                                                position2,
-                                                rotation1,
-                                                rotation2);
-        lambda = lambda_out;
-        position1_out = position1;
-        position2_out = position2;
-        rotation1_out = rotation1;
-        rotation2_out = rotation2;
-      },
-      exec_preset);
+  static auto fn_stretch_shear = stretch_shear_multifunction(exec_preset);
+  static auto fn_contact = contact_position_multifunction(exec_preset);
 
   switch (constraint_type) {
     case ConstraintType::PositionGoal:
+      BLI_assert_unreachable();
+      return nullptr;
     case ConstraintType::RotationGoal:
+      BLI_assert_unreachable();
+      return nullptr;
     case ConstraintType::StretchShear:
+      return &fn_stretch_shear;
     case ConstraintType::BendTwist:
       BLI_assert_unreachable();
       return nullptr;
-
     case ConstraintType::Contact:
       return &fn_contact;
     default:
