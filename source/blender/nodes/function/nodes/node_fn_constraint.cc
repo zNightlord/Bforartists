@@ -32,7 +32,8 @@ template<typename T> using mf_output = mf::ParamTag<mf::ParamCategory::SingleOut
 
 template<typename ExecPreset> static auto stretch_shear_multifunction(ExecPreset exec_preset)
 {
-  constexpr auto param_tags = TypeSequence<mf_input<float3>,
+  constexpr auto param_tags = TypeSequence<mf_input<bool>,
+                                           mf_input<float3>,
                                            mf_input<float3>,
                                            mf_input<float3>,
                                            mf_input<math::Quaternion>,
@@ -47,7 +48,8 @@ template<typename ExecPreset> static auto stretch_shear_multifunction(ExecPreset
                                            mf_output<float3>,
                                            mf_output<math::Quaternion>>();
   auto call_fn = mf::build::detail::build_multi_function_call_from_element_fn(
-      [](float3 lambda,
+      [](const bool linearized_rotation,
+         float3 lambda,
          float3 position1,
          float3 position2,
          math::Quaternion rotation,
@@ -61,17 +63,30 @@ template<typename ExecPreset> static auto stretch_shear_multifunction(ExecPreset
          float3 &position1_out,
          float3 &position2_out,
          math::Quaternion &rotation_out) -> void {
-        constexpr bool linearized_quaternion = false;
-        xpbd_constraints::eval_position_stretch_shear<linearized_quaternion>(weight_pos1,
-                                                                             weight_pos2,
-                                                                             weight_rot,
-                                                                             edge_length,
-                                                                             alpha,
-                                                                             gamma,
-                                                                             lambda,
-                                                                             position1,
-                                                                             position2,
-                                                                             rotation);
+        if (linearized_rotation) {
+          xpbd_constraints::eval_position_stretch_shear<true>(weight_pos1,
+                                                              weight_pos2,
+                                                              weight_rot,
+                                                              edge_length,
+                                                              alpha,
+                                                              gamma,
+                                                              lambda,
+                                                              position1,
+                                                              position2,
+                                                              rotation);
+        }
+        else {
+          xpbd_constraints::eval_position_stretch_shear<false>(weight_pos1,
+                                                               weight_pos2,
+                                                               weight_rot,
+                                                               edge_length,
+                                                               alpha,
+                                                               gamma,
+                                                               lambda,
+                                                               position1,
+                                                               position2,
+                                                               rotation);
+        }
         lambda = lambda_out;
         position1_out = position1;
         position2_out = position2;
@@ -84,7 +99,8 @@ template<typename ExecPreset> static auto stretch_shear_multifunction(ExecPreset
 
 template<typename ExecPreset> static auto contact_position_multifunction(ExecPreset exec_preset)
 {
-  constexpr auto param_tags = TypeSequence<mf_input<float>,
+  constexpr auto param_tags = TypeSequence<mf_input<bool>,
+                                           mf_input<float>,
                                            mf_input<float3>,
                                            mf_input<float3>,
                                            mf_input<math::Quaternion>,
@@ -103,7 +119,8 @@ template<typename ExecPreset> static auto contact_position_multifunction(ExecPre
                                            mf_output<math::Quaternion>,
                                            mf_output<math::Quaternion>>();
   auto call_fn = mf::build::detail::build_multi_function_call_from_element_fn(
-      [](float lambda,
+      [](const bool /*linearized_rotation*/,
+         float lambda,
          float3 position1,
          float3 position2,
          math::Quaternion rotation1,
@@ -166,8 +183,13 @@ static void node_declare(NodeDeclarationBuilder &b)
   if (!node) {
     return;
   }
-
   const ConstraintType constraint_type = ConstraintType(node->custom1);
+
+  /* XXX This should not really be a multifunction input but a fixed option. Using a bool input
+   * here for convenience for the time being. */
+  b.add_input<decl::Bool>("Linearized Rotation")
+      .description("Compute rotation offset as linear offsets, only accurate for small angles.");
+
   switch (constraint_type) {
     case ConstraintType::PositionGoal:
       break;
