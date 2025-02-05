@@ -328,13 +328,35 @@ static void evaluate_constraint_group_position_goal(const SolverParams &params,
 
 template<bool debug_check>
 static void evaluate_constraint_group_rotation_goal(const SolverParams &params,
-                                                    const IndexMask & /*group_mask*/)
+                                                    const IndexMask &group_mask)
 {
+  xpbd_constraints::error_check::VariableChecker<debug_check> rotation_checker(
+      params.constraints.rotations.index_range());
+
   switch (params.target) {
     case EvaluationTarget::Positions:
+      group_mask.foreach_index(GrainSize(1024), [&](const int index) {
+        const int point1 = params.constraints.rotation_goal.points[index];
+
+        rotation_checker.claim_variable(point1);
+
+        float lambda = 0.0f;
+        math::Quaternion &rotation1 = params.constraints.rotations[point1];
+        const math::Quaternion goal = params.constraints.rotation_goal.goals[index];
+
+        const float alpha = 0.0f;
+        const float gamma = 0.0f;
+
+        xpbd_constraints::eval_rotation_goal<false>(goal, alpha, gamma, lambda, rotation1);
+      });
       break;
     case EvaluationTarget::Velocities:
       break;
+  }
+
+  if (rotation_checker.has_overlap()) {
+    params.error_message_add(geo_eval_log::NodeWarningType::Error,
+                             "Overlapping constraint solver groups");
   }
 }
 
