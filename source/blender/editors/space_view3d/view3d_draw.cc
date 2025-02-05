@@ -189,7 +189,7 @@ static void view3d_main_region_setup_view(Depsgraph *depsgraph,
 
   ED_view3d_update_viewmat(depsgraph, scene, v3d, region, viewmat, winmat, rect, false);
 
-  /* set for opengl */
+  /* Set for GPU drawing. */
   GPU_matrix_projection_set(rv3d->winmat);
   GPU_matrix_set(rv3d->viewmat);
 }
@@ -204,7 +204,7 @@ static void view3d_main_region_setup_offscreen(Depsgraph *depsgraph,
   RegionView3D *rv3d = static_cast<RegionView3D *>(region->regiondata);
   ED_view3d_update_viewmat(depsgraph, scene, v3d, region, viewmat, winmat, nullptr, true);
 
-  /* set for opengl */
+  /* Set for GPU drawing. */
   GPU_matrix_projection_set(rv3d->winmat);
   GPU_matrix_set(rv3d->viewmat);
 }
@@ -1027,8 +1027,10 @@ static void draw_view_axis(RegionView3D *rv3d, const rcti *rect)
 }
 
 #ifdef WITH_INPUT_NDOF
-/* draw center and axis of rotation for ongoing 3D mouse navigation */
-static void draw_rotation_guide(const RegionView3D *rv3d)
+/**
+ * Draw center and axis of rotation for ongoing 3D mouse navigation.
+ */
+static void draw_ndof_guide_orbit_axis(const RegionView3D *rv3d)
 {
   float o[3];   /* center of rotation */
   float end[3]; /* endpoints for drawing */
@@ -1455,11 +1457,11 @@ void view3d_draw_region_info(const bContext *C, ARegion *region)
   ViewLayer *view_layer = CTX_data_view_layer(C);
 
 #ifdef WITH_INPUT_NDOF
-  if ((U.ndof_flag & NDOF_SHOW_GUIDE) && ((RV3D_LOCK_FLAGS(rv3d) & RV3D_LOCK_ROTATION) == 0) &&
-      (rv3d->persp != RV3D_CAMOB))
-  {
-    /* TODO: draw something else (but not this) during fly mode */
-    draw_rotation_guide(rv3d);
+  if (U.ndof_flag & NDOF_SHOW_GUIDE_ORBIT_AXIS) {
+    if (((RV3D_LOCK_FLAGS(rv3d) & RV3D_LOCK_ROTATION) == 0) && (rv3d->persp != RV3D_CAMOB)) {
+      /* TODO: draw something else (but not this) during fly mode. */
+      draw_ndof_guide_orbit_axis(rv3d);
+    }
   }
 #endif
 
@@ -2245,7 +2247,7 @@ static void validate_object_select_id(Depsgraph *depsgraph,
 
 /* Avoid calling this function multiple times in sequence to prevent frequent CPU-GPU
  * synchronization (which can be very slow). */
-static void view3d_opengl_read_Z_pixels(GPUViewport *viewport, rcti *rect, void *data)
+static void view3d_gpu_read_Z_pixels(GPUViewport *viewport, rcti *rect, void *data)
 {
   GPUTexture *depth_tx = GPU_viewport_depth_texture(viewport);
 
@@ -2319,7 +2321,7 @@ void view3d_depths_rect_create(ARegion *region, rcti *rect, ViewDepths *r_d)
 
   {
     GPUViewport *viewport = WM_draw_region_get_viewport(region);
-    view3d_opengl_read_Z_pixels(viewport, rect, r_d->depths);
+    view3d_gpu_read_Z_pixels(viewport, rect, r_d->depths);
     /* Range is assumed to be this as they are never changed. */
     r_d->depth_range[0] = 0.0;
     r_d->depth_range[1] = 1.0;
