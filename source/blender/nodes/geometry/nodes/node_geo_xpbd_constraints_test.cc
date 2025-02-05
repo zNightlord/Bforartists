@@ -333,4 +333,38 @@ TEST(xpbd_constraints, StretchShear)
   }
 }
 
+TEST(xpbd_constraints, VariableOverlapCheckerPass)
+{
+  const IndexRange range(10);
+
+  xpbd_constraints::error_check::VariableChecker<true> var_checker(range);
+  xpbd_constraints::error_check::VariableChecker<false> var_checker_disabled(range);
+  EXPECT_FALSE(var_checker.has_overlap());
+
+  Array<int> vars = {2, 7, 9, 0, 3, 1, 4};
+  for (const int i : vars) {
+    var_checker.claim_variable(i);
+    var_checker_disabled.claim_variable(i);
+  }
+  EXPECT_FALSE(var_checker.has_overlap());
+  EXPECT_FALSE(var_checker_disabled.has_overlap());
+}
+
+TEST(xpbd_constraints, VariableOverlapCheckerFail)
+{
+  const IndexRange range(10);
+
+  xpbd_constraints::error_check::VariableChecker<true> var_checker(range);
+  xpbd_constraints::error_check::VariableChecker<false> var_checker_disabled(range);
+  EXPECT_FALSE(var_checker.has_overlap());
+
+  Array<int> vars = {2, 7, 3, 5, 9, 0, 0, 3, 1, 7, 4};
+  for (const int i : vars) {
+    var_checker.claim_variable(i);
+    var_checker_disabled.claim_variable(i);
+  }
+  EXPECT_TRUE(var_checker.has_overlap());
+  EXPECT_FALSE(var_checker_disabled.has_overlap());
+}
+
 }  // namespace blender::nodes::tests

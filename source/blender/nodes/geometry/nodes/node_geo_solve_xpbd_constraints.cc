@@ -280,13 +280,20 @@ struct SolverParams {
   bool debug_check;
 };
 
+template<bool debug_check>
 static void evaluate_constraint_group_position_goal(const SolverParams &params,
                                                     const IndexMask &group_mask)
 {
+  xpbd_constraints::error_check::VariableChecker<debug_check> position_checker(
+      params.constraints.positions.index_range());
+
   switch (params.target) {
     case EvaluationTarget::Positions:
       group_mask.foreach_index(GrainSize(1024), [&](const int index) {
         const int point1 = params.constraints.position_goal.points[index];
+
+        position_checker.claim_variable(point1);
+
         float lambda = 0.0f;
         float3 &position1 = params.constraints.positions[point1];
         const float3 goal = params.constraints.position_goal.goals[index];
@@ -300,8 +307,14 @@ static void evaluate_constraint_group_position_goal(const SolverParams &params,
     case EvaluationTarget::Velocities:
       break;
   }
+
+  if (position_checker.has_overlap()) {
+    params.error_message_add(geo_eval_log::NodeWarningType::Error,
+                             "Overlapping constraint solver groups");
+  }
 }
 
+template<bool debug_check>
 static void evaluate_constraint_group_rotation_goal(const SolverParams &params,
                                                     const IndexMask & /*group_mask*/)
 {
@@ -313,14 +326,25 @@ static void evaluate_constraint_group_rotation_goal(const SolverParams &params,
   }
 }
 
+template<bool debug_check>
 static void evaluate_constraint_group_stretch_shear(const SolverParams &params,
                                                     const IndexMask &group_mask)
 {
+  xpbd_constraints::error_check::VariableChecker<debug_check> position_checker(
+      params.constraints.positions.index_range());
+  xpbd_constraints::error_check::VariableChecker<debug_check> rotation_checker(
+      params.constraints.positions.index_range());
+
   switch (params.target) {
     case EvaluationTarget::Positions: {
       group_mask.foreach_index(GrainSize(1024), [&](const int index) {
         const int point1 = params.constraints.stretch_shear.points1[index];
         const int point2 = params.constraints.stretch_shear.points2[index];
+
+        position_checker.claim_variable(point1);
+        position_checker.claim_variable(point2);
+        rotation_checker.claim_variable(point1);
+
         const float edge_length = params.constraints.stretch_shear.edge_length[index];
         /* XPBD softness and damping factors. */
         const float alpha = params.constraints.stretch_shear.alpha[index];
@@ -350,8 +374,14 @@ static void evaluate_constraint_group_stretch_shear(const SolverParams &params,
     case EvaluationTarget::Velocities:
       break;
   }
+
+  if (position_checker.has_overlap() || rotation_checker.has_overlap()) {
+    params.error_message_add(geo_eval_log::NodeWarningType::Error,
+                             "Overlapping constraint solver groups");
+  }
 }
 
+template<bool debug_check>
 static void evaluate_constraint_group_bend_twist(const SolverParams &params,
                                                  const IndexMask & /*group_mask*/)
 {
@@ -367,11 +397,20 @@ template<bool debug_check>
 static void evaluate_constraint_group_contact(const SolverParams &params,
                                               const IndexMask &group_mask)
 {
+  xpbd_constraints::error_check::VariableChecker<debug_check> position_checker(
+      params.constraints.positions.index_range());
+  xpbd_constraints::error_check::VariableChecker<debug_check> rotation_checker(
+      params.constraints.positions.index_range());
+
   switch (params.target) {
     case EvaluationTarget::Positions: {
       group_mask.foreach_index(GrainSize(1024), [&](const int index) {
         const int point = params.constraints.contact.points[index];
         const int collider_index = params.constraints.contact.collider_index[index];
+
+        position_checker.claim_variable(point);
+        rotation_checker.claim_variable(point);
+
         if (!params.constraints.collider_transforms.index_range().contains(collider_index)) {
           return;
         };
@@ -428,6 +467,8 @@ static void evaluate_constraint_group_contact(const SolverParams &params,
         }
 
         const int point = params.constraints.contact.points[index];
+        position_checker.claim_variable(point);
+        rotation_checker.claim_variable(point);
         const int collider_index = params.constraints.contact.collider_index[index];
         if (!params.constraints.collider_transforms.index_range().contains(collider_index)) {
           return;
@@ -494,6 +535,11 @@ static void evaluate_constraint_group_contact(const SolverParams &params,
       break;
     }
   }
+
+  if (position_checker.has_overlap() || rotation_checker.has_overlap()) {
+    params.error_message_add(geo_eval_log::NodeWarningType::Error,
+                             "Overlapping constraint solver groups");
+  }
 }
 
 /* Evaluate a group of constraints in parallel.
@@ -509,16 +555,16 @@ static void evaluate_constraint_group(const SolverParams &params,
 
   switch (type) {
     case ConstraintType::PositionGoal:
-      evaluate_constraint_group_position_goal(params, group_mask);
+      evaluate_constraint_group_position_goal<debug_check>(params, group_mask);
       break;
     case ConstraintType::RotationGoal:
-      evaluate_constraint_group_rotation_goal(params, group_mask);
+      evaluate_constraint_group_rotation_goal<debug_check>(params, group_mask);
       break;
     case ConstraintType::StretchShear:
-      evaluate_constraint_group_stretch_shear(params, group_mask);
+      evaluate_constraint_group_stretch_shear<debug_check>(params, group_mask);
       break;
     case ConstraintType::BendTwist:
-      evaluate_constraint_group_bend_twist(params, group_mask);
+      evaluate_constraint_group_bend_twist<debug_check>(params, group_mask);
       break;
     case ConstraintType::Contact:
       evaluate_constraint_group_contact<debug_check>(params, group_mask);

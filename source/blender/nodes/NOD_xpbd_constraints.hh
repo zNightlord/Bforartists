@@ -4,12 +4,62 @@
 
 #pragma once
 
+#include <atomic>
+
 #include "BLI_math_quaternion.hh"
 #include "BLI_math_quaternion_types.hh"
 
 #include "BKE_attribute.hh"
 
 namespace blender::nodes::xpbd_constraints {
+
+namespace error_check {
+
+/* Helper struct for checking that each variable is only written by one constraint.*/
+template<bool enable> struct VariableChecker;
+
+template<> struct VariableChecker<false> {
+  VariableChecker(const IndexRange /*range*/) {}
+
+  bool claim_variable(const int /*index*/)
+  {
+    return true;
+  }
+
+  bool has_overlap() const
+  {
+    return false;
+  }
+};
+
+template<> struct VariableChecker<true> {
+  Array<std::atomic_bool> variable_written;
+  std::atomic_bool variable_overlap = false;
+
+  VariableChecker(const IndexRange range)
+  {
+    variable_written.reinitialize(range.size());
+    for (const int i : variable_written.index_range()) {
+      variable_written[i].store(false, std::memory_order::memory_order_relaxed);
+    }
+  }
+
+  bool claim_variable(const int index)
+  {
+    if (variable_written[index].exchange(true, std::memory_order_relaxed)) {
+      variable_overlap.store(true, std::memory_order_relaxed);
+      return true;
+    }
+    return false;
+  }
+
+  bool has_overlap() const
+  {
+    return variable_overlap.load(std::memory_order_relaxed);
+  }
+};
+
+}  // namespace error_check
 
 enum class ConstraintType {
   /* Set position of a point to a target vector. */
