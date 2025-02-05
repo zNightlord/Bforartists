@@ -43,7 +43,7 @@ enum class SolverMethod {
 /* Constraint attributes. */
 constexpr StringRef ATTR_SOLVER_GROUP = "solver_group";
 constexpr StringRef ATTR_ALPHA = "compliance";
-constexpr StringRef ATTR_GAMMA = "damping";
+constexpr StringRef ATTR_BETA = "damping";
 constexpr StringRef ATTR_POINT1 = "point1";
 constexpr StringRef ATTR_POINT2 = "point2";
 constexpr StringRef ATTR_ACTIVE = "active";
@@ -225,22 +225,24 @@ struct ConstraintEvalParams {
     VArray<int> solver_group;
     VArraySpan<int> points;
     VArraySpan<float> alpha;
-    VArraySpan<float> gamma;
-    VArraySpan<float3> goals;
+    VArraySpan<float> beta;
+    VArraySpan<float3> goal_positions;
+    VArraySpan<float3> goal_velocities;
   } position_goal;
   struct {
     VArray<int> solver_group;
     VArraySpan<int> points;
     VArraySpan<float> alpha;
-    VArraySpan<float> gamma;
-    VArraySpan<math::Quaternion> goals;
+    VArraySpan<float> beta;
+    VArraySpan<math::Quaternion> goal_rotations;
+    VArraySpan<float3> goal_angular_velocities;
   } rotation_goal;
   struct {
     VArray<int> solver_group;
     VArraySpan<int> points1;
     VArraySpan<int> points2;
     VArraySpan<float> alpha;
-    VArraySpan<float> gamma;
+    VArraySpan<float> beta;
     VArraySpan<float> edge_length;
   } stretch_shear;
   struct {
@@ -248,7 +250,7 @@ struct ConstraintEvalParams {
     VArraySpan<int> points1;
     VArraySpan<int> points2;
     VArraySpan<float> alpha;
-    VArraySpan<float> gamma;
+    VArraySpan<float> beta;
     VArraySpan<float3> darboux_vector;
   } bend_twist;
   struct {
@@ -315,7 +317,7 @@ static void evaluate_constraint_group_position_goal(const SolverParams &params,
         float lambda = 0.0f;
         float3 &position1 = params.constraints.positions[point1];
         const float alpha = params.constraints.position_goal.alpha[index];
-        const float3 &goal = params.constraints.position_goal.goals[index];
+        const float3 &goal = params.constraints.position_goal.goal_positions[index];
 
         xpbd_constraints::eval_position_goal(goal, alpha, lambda, position1);
       });
@@ -326,8 +328,29 @@ static void evaluate_constraint_group_position_goal(const SolverParams &params,
       }
       break;
     }
-    case EvaluationTarget::Velocities:
+    case EvaluationTarget::Velocities: {
+      xpbd_constraints::error_check::VariableChecker<debug_check> velocity_checker(
+          params.constraints.velocities.index_range());
+
+      group_mask.foreach_index(GrainSize(1024), [&](const int index) {
+        const int point1 = params.constraints.position_goal.points[index];
+
+        velocity_checker.claim_variable(point1);
+
+        float lambda = 0.0f;
+        float3 &velocity1 = params.constraints.velocities[point1];
+        const float beta = params.constraints.position_goal.beta[index];
+        const float3 &goal = params.constraints.position_goal.goal_velocities[index];
+
+        xpbd_constraints::eval_velocity_goal(goal, beta, lambda, velocity1);
+      });
+
+      if (velocity_checker.has_overlap()) {
+        params.error_message_add(geo_eval_log::NodeWarningType::Error,
+                                 "Overlapping constraint solver groups");
+      }
       break;
+    }
   }
 }
 
@@ -348,7 +371,7 @@ static void evaluate_constraint_group_rotation_goal(const SolverParams &params,
         float lambda = 0.0f;
         math::Quaternion &rotation1 = params.constraints.rotations[point1];
         const float alpha = params.constraints.rotation_goal.alpha[index];
-        const math::Quaternion &goal = params.constraints.rotation_goal.goals[index];
+        const math::Quaternion &goal = params.constraints.rotation_goal.goal_rotations[index];
 
         xpbd_constraints::eval_rotation_goal<false>(goal, alpha, lambda, rotation1);
       });
@@ -359,8 +382,29 @@ static void evaluate_constraint_group_rotation_goal(const SolverParams &params,
       }
       break;
     }
-    case EvaluationTarget::Velocities:
+    case EvaluationTarget::Velocities: {
+      xpbd_constraints::error_check::VariableChecker<debug_check> angular_velocity_checker(
+          params.constraints.angular_velocities.index_range());
+
+      group_mask.foreach_index(GrainSize(1024), [&](const int index) {
+        const int point1 = params.constraints.rotation_goal.points[index];
+
+        angular_velocity_checker.claim_variable(point1);
+
+        float lambda = 0.0f;
+        float3 &angular_velocity1 = params.constraints.angular_velocities[point1];
+        const float beta = params.constraints.rotation_goal.beta[index];
+        const float3 &goal = params.constraints.rotation_goal.goal_angular_velocities[index];
+
+        xpbd_constraints::eval_angular_velocity_goal(goal, beta, lambda, angular_velocity1);
+      });
+
+      if (angular_velocity_checker.has_overlap()) {
+        params.error_message_add(geo_eval_log::NodeWarningType::Error,
+                                 "Overlapping constraint solver groups");
+      }
       break;
+    }
   }
 }
 
@@ -373,7 +417,7 @@ static void evaluate_constraint_group_stretch_shear(const SolverParams &params,
       xpbd_constraints::error_check::VariableChecker<debug_check> position_checker(
           params.constraints.positions.index_range());
       xpbd_constraints::error_check::VariableChecker<debug_check> rotation_checker(
-          params.constraints.positions.index_range());
+          params.constraints.rotations.index_range());
 
       group_mask.foreach_index(GrainSize(1024), [&](const int index) {
         const int point1 = params.constraints.stretch_shear.points1[index];
@@ -395,15 +439,15 @@ static void evaluate_constraint_group_stretch_shear(const SolverParams &params,
         const float weight_rot = params.constraints.rotation_weights[point1];
 
         float3 lambda = float3(0.0f);
-        xpbd_constraints::eval_position_stretch_shear<true>(weight_pos1,
-                                                            weight_pos2,
-                                                            weight_rot,
-                                                            edge_length,
-                                                            alpha,
-                                                            lambda,
-                                                            position1,
-                                                            position2,
-                                                            rotation);
+        xpbd_constraints::eval_position_stretch_shear<false>(weight_pos1,
+                                                             weight_pos2,
+                                                             weight_rot,
+                                                             edge_length,
+                                                             alpha,
+                                                             lambda,
+                                                             position1,
+                                                             position2,
+                                                             rotation);
       });
 
       if (position_checker.has_overlap() || rotation_checker.has_overlap()) {
@@ -412,8 +456,49 @@ static void evaluate_constraint_group_stretch_shear(const SolverParams &params,
       }
       break;
     }
-    case EvaluationTarget::Velocities:
+    case EvaluationTarget::Velocities: {
+      xpbd_constraints::error_check::VariableChecker<debug_check> velocity_checker(
+          params.constraints.velocities.index_range());
+      xpbd_constraints::error_check::VariableChecker<debug_check> angular_velocity_checker(
+          params.constraints.angular_velocities.index_range());
+
+      group_mask.foreach_index(GrainSize(1024), [&](const int index) {
+        const int point1 = params.constraints.stretch_shear.points1[index];
+        const int point2 = params.constraints.stretch_shear.points2[index];
+
+        velocity_checker.claim_variable(point1);
+        velocity_checker.claim_variable(point2);
+        angular_velocity_checker.claim_variable(point1);
+
+        const float edge_length = params.constraints.stretch_shear.edge_length[index];
+        /* XPBD softness and damping factors. */
+        const float beta = params.constraints.stretch_shear.beta[index];
+
+        float3 &velocity1 = params.constraints.velocities[point1];
+        float3 &velocity2 = params.constraints.velocities[point2];
+        float3 &angular_velocity = params.constraints.angular_velocities[point1];
+        const float weight_pos1 = params.constraints.position_weights[point1];
+        const float weight_pos2 = params.constraints.position_weights[point2];
+        const float weight_rot = params.constraints.rotation_weights[point1];
+
+        float3 lambda = float3(0.0f);
+        xpbd_constraints::eval_velocity_stretch_shear(weight_pos1,
+                                                      weight_pos2,
+                                                      weight_rot,
+                                                      edge_length,
+                                                      alpha,
+                                                      lambda,
+                                                      position1,
+                                                      position2,
+                                                      rotation);
+      });
+
+      if (velocity_checker.has_overlap() || angular_velocity_checker.has_overlap()) {
+        params.error_message_add(geo_eval_log::NodeWarningType::Error,
+                                 "Overlapping constraint solver groups");
+      }
       break;
+    }
   }
 }
 
@@ -732,10 +817,12 @@ static void prepare_constraint_data(GeoNodeExecParams params,
         params, *attributes, ATTR_POINT1, AttrDomain::Point, 0);
     constraint_params.position_goal.alpha = *attributes->lookup_or_default<float>(
         ATTR_ALPHA, AttrDomain::Point, 0.0f);
-    constraint_params.position_goal.gamma = *attributes->lookup_or_default<float>(
-        ATTR_GAMMA, AttrDomain::Point, 0.0f);
-    constraint_params.position_goal.goals = *lookup_or_warn<float3>(
-        params, *attributes, "goal", AttrDomain::Point, float3(0.0f));
+    constraint_params.position_goal.beta = *attributes->lookup_or_default<float>(
+        ATTR_BETA, AttrDomain::Point, 0.0f);
+    constraint_params.position_goal.goal_positions = *lookup_or_warn<float3>(
+        params, *attributes, "goal_position", AttrDomain::Point, float3(0.0f));
+    constraint_params.position_goal.goal_velocities = *lookup_or_warn<float3>(
+        params, *attributes, "goal_velocity", AttrDomain::Point, float3(0.0f));
   }
   if (std::optional<MutableAttributeAccessor> attributes =
           constraint_attributes[int(ConstraintGeometryType::RotationGoal)])
@@ -746,10 +833,12 @@ static void prepare_constraint_data(GeoNodeExecParams params,
         params, *attributes, ATTR_POINT1, AttrDomain::Point, 0);
     constraint_params.rotation_goal.alpha = *attributes->lookup_or_default<float>(
         ATTR_ALPHA, AttrDomain::Point, 0.0f);
-    constraint_params.rotation_goal.gamma = *attributes->lookup_or_default<float>(
-        ATTR_GAMMA, AttrDomain::Point, 0.0f);
-    constraint_params.rotation_goal.goals = *lookup_or_warn<math::Quaternion>(
-        params, *attributes, "goal", AttrDomain::Point, math::Quaternion::identity());
+    constraint_params.rotation_goal.beta = *attributes->lookup_or_default<float>(
+        ATTR_BETA, AttrDomain::Point, 0.0f);
+    constraint_params.rotation_goal.goal_rotations = *lookup_or_warn<math::Quaternion>(
+        params, *attributes, "goal_rotation", AttrDomain::Point, math::Quaternion::identity());
+    constraint_params.rotation_goal.goal_angular_velocities = *lookup_or_warn<float3>(
+        params, *attributes, "goal_angular_velocity", AttrDomain::Point, float3(0.0f));
   }
   if (std::optional<MutableAttributeAccessor> attributes =
           constraint_attributes[int(ConstraintGeometryType::StretchShear)])
@@ -762,8 +851,8 @@ static void prepare_constraint_data(GeoNodeExecParams params,
         params, *attributes, ATTR_POINT2, AttrDomain::Point, 0);
     constraint_params.stretch_shear.alpha = *attributes->lookup_or_default<float>(
         ATTR_ALPHA, AttrDomain::Point, 0.0f);
-    constraint_params.stretch_shear.gamma = *attributes->lookup_or_default<float>(
-        ATTR_GAMMA, AttrDomain::Point, 0.0f);
+    constraint_params.stretch_shear.beta = *attributes->lookup_or_default<float>(
+        ATTR_BETA, AttrDomain::Point, 0.0f);
     constraint_params.stretch_shear.edge_length = *lookup_or_warn<float>(
         params, *attributes, "edge_length", AttrDomain::Point, 0.0f);
   }
@@ -778,8 +867,8 @@ static void prepare_constraint_data(GeoNodeExecParams params,
         params, *attributes, ATTR_POINT2, AttrDomain::Point, 0);
     constraint_params.bend_twist.alpha = *attributes->lookup_or_default<float>(
         ATTR_ALPHA, AttrDomain::Point, 0.0f);
-    constraint_params.bend_twist.gamma = *attributes->lookup_or_default<float>(
-        ATTR_GAMMA, AttrDomain::Point, 0.0f);
+    constraint_params.bend_twist.beta = *attributes->lookup_or_default<float>(
+        ATTR_BETA, AttrDomain::Point, 0.0f);
     constraint_params.bend_twist.darboux_vector = *lookup_or_warn<float3>(
         params, *attributes, "darboux_vector", AttrDomain::Point, float3(0.0f));
   }

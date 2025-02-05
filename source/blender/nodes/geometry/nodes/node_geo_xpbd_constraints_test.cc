@@ -19,9 +19,8 @@ TEST(xpbd_constraints, PositionGoal)
   EXPECT_NEAR(delta, 3.741657f, 1e-5f);
 
   const float alpha = 0.0f;
-  const float gamma = 0.0f;
 
-  xpbd_constraints::eval_position_goal(goal, alpha, gamma, lambda, position);
+  xpbd_constraints::eval_position_goal(goal, alpha, lambda, position);
   EXPECT_NEAR(-delta, lambda, 1e-5f);
   EXPECT_V3_NEAR(goal, position, 1e-5f);
 }
@@ -38,9 +37,8 @@ TEST(xpbd_constraints, RotationGoal)
   EXPECT_V3_NEAR(delta.axis(), float3(-0.023005f, 0.925597f, -0.37781f), 1e-5f);
 
   const float alpha = 0.0f;
-  const float gamma = 0.0f;
 
-  xpbd_constraints::eval_rotation_goal<false>(goal, alpha, gamma, lambda, rotation);
+  xpbd_constraints::eval_rotation_goal<false>(goal, alpha, lambda, rotation);
   EXPECT_NEAR(-delta.angle().radian(), lambda, 1e-5f);
   EXPECT_V4_NEAR(float4(goal), float4(rotation), 1e-5f);
 }
@@ -57,9 +55,8 @@ TEST(xpbd_constraints, RotationGoalLinearized)
   EXPECT_V3_NEAR(delta.axis(), float3(-0.023005f, 0.925597f, -0.37781f), 1e-5f);
 
   const float alpha = 0.0f;
-  const float gamma = 0.0f;
 
-  xpbd_constraints::eval_rotation_goal<true>(goal, alpha, gamma, lambda, rotation);
+  xpbd_constraints::eval_rotation_goal<true>(goal, alpha, lambda, rotation);
   EXPECT_NEAR(-delta.angle().radian(), lambda, 1e-5f);
   /* Linearized quaternion offset does not yield exact rotation for large offsets. */
   EXPECT_V4_NEAR(float4(goal), float4(rotation), 0.05f);
@@ -270,7 +267,6 @@ TEST(xpbd_constraints, StretchShear)
   const float edge_length = 2.0f;
 
   const float alpha = 0.0f;
-  const float gamma = 0.0f;
 
   /* Position 1 only. */
   {
@@ -279,7 +275,7 @@ TEST(xpbd_constraints, StretchShear)
     float3 position2 = {0, 0, 1};
     math::Quaternion rotation = math::Quaternion::identity();
     xpbd_constraints::eval_position_stretch_shear<false>(
-        1, 0, 0, edge_length, alpha, gamma, lambda, position1, position2, rotation);
+        1, 0, 0, edge_length, alpha, lambda, position1, position2, rotation);
     EXPECT_V3_NEAR(float3(2, 0, -2), lambda, 1e-5f);
     EXPECT_V3_NEAR(float3(0, 0, -1), position1, 1e-5f);
     EXPECT_V3_NEAR(float3(0, 0, 1), position2, 1e-5f);
@@ -293,7 +289,7 @@ TEST(xpbd_constraints, StretchShear)
     float3 position2 = {0, 0, 1};
     math::Quaternion rotation = math::Quaternion::identity();
     xpbd_constraints::eval_position_stretch_shear<false>(
-        0, 1, 0, edge_length, alpha, gamma, lambda, position1, position2, rotation);
+        0, 1, 0, edge_length, alpha, lambda, position1, position2, rotation);
     EXPECT_V3_NEAR(float3(2, 0, -2), lambda, 1e-5f);
     EXPECT_V3_NEAR(float3(-1, 0, 0), position1, 1e-5f);
     EXPECT_V3_NEAR(float3(-1, 0, 2), position2, 1e-5f);
@@ -307,7 +303,7 @@ TEST(xpbd_constraints, StretchShear)
     float3 position2 = {0, 0, 1};
     math::Quaternion rotation = math::Quaternion::identity();
     xpbd_constraints::eval_position_stretch_shear<false>(
-        0, 0, 1, edge_length, alpha, gamma, lambda, position1, position2, rotation);
+        0, 0, 1, edge_length, alpha, lambda, position1, position2, rotation);
     EXPECT_V3_NEAR(float3(0.125f, 0, -0.125f), lambda, 1e-5f);
     EXPECT_V3_NEAR(float3(-1, 0, 0), position1, 1e-5f);
     EXPECT_V3_NEAR(float3(0, 0, 1), position2, 1e-5f);
@@ -322,7 +318,7 @@ TEST(xpbd_constraints, StretchShear)
     float3 position2 = {0, 0, 1};
     math::Quaternion rotation = math::Quaternion::identity();
     xpbd_constraints::eval_position_stretch_shear<true>(
-        0, 0, 1, edge_length, alpha, gamma, lambda, position1, position2, rotation);
+        0, 0, 1, edge_length, alpha, lambda, position1, position2, rotation);
     EXPECT_V3_NEAR(float3(0.125f, 0, -0.125f), lambda, 1e-5f);
     EXPECT_V3_NEAR(float3(-1, 0, 0), position1, 1e-5f);
     EXPECT_V3_NEAR(float3(0, 0, 1), position2, 1e-5f);
