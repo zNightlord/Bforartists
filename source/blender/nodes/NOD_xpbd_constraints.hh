@@ -74,17 +74,13 @@ enum class ConstraintType {
 
 inline void eval_position_goal(const float3 &goal_position,
                                const float alpha,
-                               const float gamma,
                                float &lambda,
                                float3 &position)
 {
-  const float3 old_position = position;
   float residual;
   const float3 gradient = math::normalize_and_get_length(position - goal_position, residual);
 
-  const float delta_lambda = (-residual - alpha * lambda -
-                              gamma * math::dot(gradient, position - old_position)) /
-                             ((1.0f + gamma) + alpha);
+  const float delta_lambda = (-residual - alpha * lambda) / (1.0f + alpha);
   lambda += delta_lambda;
   position += delta_lambda * gradient;
 }
@@ -92,20 +88,15 @@ inline void eval_position_goal(const float3 &goal_position,
 template<bool linearized_quaternion>
 inline void eval_rotation_goal(const math::Quaternion &goal_rotation,
                                const float alpha,
-                               const float gamma,
                                float &lambda,
                                math::Quaternion &rotation)
 {
-  const math::Quaternion old_rotation = rotation;
   math::AxisAngle axis_angle = math::to_axis_angle(rotation *
                                                    math::invert_normalized(goal_rotation));
   const float residual = axis_angle.angle().radian();
   const float3 gradient = axis_angle.axis();
 
-  const math::Quaternion diff = math::invert_normalized(old_rotation) * rotation;
-  const float delta_lambda = (-residual - alpha * lambda -
-                              gamma * 0.5f * math::dot(float4(0.0f, gradient), float4(diff))) /
-                             ((1.0f + gamma) + alpha);
+  const float delta_lambda = (-residual - alpha * lambda) / (1.0f + alpha);
   lambda += delta_lambda;
 
   /* Multiply Quaternion(0, gradient) * rotation. */
@@ -163,23 +154,19 @@ inline void eval_position_stretch_shear(const float weight_pos1,
                                         const float weight_rot,
                                         const float edge_length,
                                         const float alpha,
-                                        const float gamma,
                                         float3 &lambda,
                                         float3 &position1,
                                         float3 &position2,
                                         math::Quaternion &rotation)
 {
-  // TODO
-  UNUSED_VARS(alpha, gamma);
-
   const float inv_edge_length = math::safe_rcp(edge_length);
 
   const float3 direction = math::transform_point(rotation, float3(0, 0, 1));
   const float3 residual = inv_edge_length * (position2 - position1) - direction;
   const float weight_norm = math::safe_rcp(
-      (weight_pos1 + weight_pos2) * inv_edge_length * inv_edge_length + 4.0f * weight_rot);
+      (weight_pos1 + weight_pos2) * inv_edge_length * inv_edge_length + 4.0f * weight_rot + alpha);
 
-  const float3 delta_lambda = weight_norm * residual;
+  const float3 delta_lambda = weight_norm * residual - alpha * lambda;
   lambda = lambda + delta_lambda;
 
   position1 += weight_pos1 * inv_edge_length * delta_lambda;

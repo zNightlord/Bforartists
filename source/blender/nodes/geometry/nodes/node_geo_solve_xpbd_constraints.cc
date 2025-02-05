@@ -42,8 +42,8 @@ enum class SolverMethod {
 
 /* Constraint attributes. */
 constexpr StringRef ATTR_SOLVER_GROUP = "solver_group";
-constexpr StringRef ATTR_ALPHA = "alpha";
-constexpr StringRef ATTR_GAMMA = "gamma";
+constexpr StringRef ATTR_ALPHA = "compliance";
+constexpr StringRef ATTR_GAMMA = "damping";
 constexpr StringRef ATTR_POINT1 = "point1";
 constexpr StringRef ATTR_POINT2 = "point2";
 constexpr StringRef ATTR_ACTIVE = "active";
@@ -224,25 +224,31 @@ struct ConstraintEvalParams {
   struct {
     VArray<int> solver_group;
     VArraySpan<int> points;
+    VArraySpan<float> alpha;
+    VArraySpan<float> gamma;
     VArraySpan<float3> goals;
   } position_goal;
   struct {
     VArray<int> solver_group;
     VArraySpan<int> points;
+    VArraySpan<float> alpha;
+    VArraySpan<float> gamma;
     VArraySpan<math::Quaternion> goals;
   } rotation_goal;
   struct {
     VArray<int> solver_group;
-    VArraySpan<float> alpha;
-    VArraySpan<float> gamma;
     VArraySpan<int> points1;
     VArraySpan<int> points2;
+    VArraySpan<float> alpha;
+    VArraySpan<float> gamma;
     VArraySpan<float> edge_length;
   } stretch_shear;
   struct {
     VArray<int> solver_group;
     VArraySpan<int> points1;
     VArraySpan<int> points2;
+    VArraySpan<float> alpha;
+    VArraySpan<float> gamma;
     VArraySpan<float3> darboux_vector;
   } bend_twist;
   struct {
@@ -308,12 +314,10 @@ static void evaluate_constraint_group_position_goal(const SolverParams &params,
 
         float lambda = 0.0f;
         float3 &position1 = params.constraints.positions[point1];
-        const float3 goal = params.constraints.position_goal.goals[index];
+        const float alpha = params.constraints.position_goal.alpha[index];
+        const float3 &goal = params.constraints.position_goal.goals[index];
 
-        const float alpha = 0.0f;
-        const float gamma = 0.0f;
-
-        xpbd_constraints::eval_position_goal(goal, alpha, gamma, lambda, position1);
+        xpbd_constraints::eval_position_goal(goal, alpha, lambda, position1);
       });
 
       if (position_checker.has_overlap()) {
@@ -343,12 +347,10 @@ static void evaluate_constraint_group_rotation_goal(const SolverParams &params,
 
         float lambda = 0.0f;
         math::Quaternion &rotation1 = params.constraints.rotations[point1];
-        const math::Quaternion goal = params.constraints.rotation_goal.goals[index];
+        const float alpha = params.constraints.rotation_goal.alpha[index];
+        const math::Quaternion &goal = params.constraints.rotation_goal.goals[index];
 
-        const float alpha = 0.0f;
-        const float gamma = 0.0f;
-
-        xpbd_constraints::eval_rotation_goal<false>(goal, alpha, gamma, lambda, rotation1);
+        xpbd_constraints::eval_rotation_goal<false>(goal, alpha, lambda, rotation1);
       });
 
       if (rotation_checker.has_overlap()) {
@@ -384,7 +386,6 @@ static void evaluate_constraint_group_stretch_shear(const SolverParams &params,
         const float edge_length = params.constraints.stretch_shear.edge_length[index];
         /* XPBD softness and damping factors. */
         const float alpha = params.constraints.stretch_shear.alpha[index];
-        const float gamma = params.constraints.stretch_shear.gamma[index];
 
         float3 &position1 = params.constraints.positions[point1];
         float3 &position2 = params.constraints.positions[point2];
@@ -399,7 +400,6 @@ static void evaluate_constraint_group_stretch_shear(const SolverParams &params,
                                                             weight_rot,
                                                             edge_length,
                                                             alpha,
-                                                            gamma,
                                                             lambda,
                                                             position1,
                                                             position2,
@@ -730,6 +730,10 @@ static void prepare_constraint_data(GeoNodeExecParams params,
         params, *attributes, ATTR_SOLVER_GROUP, AttrDomain::Point, 0);
     constraint_params.position_goal.points = *lookup_or_warn<int>(
         params, *attributes, ATTR_POINT1, AttrDomain::Point, 0);
+    constraint_params.position_goal.alpha = *attributes->lookup_or_default<float>(
+        ATTR_ALPHA, AttrDomain::Point, 0.0f);
+    constraint_params.position_goal.gamma = *attributes->lookup_or_default<float>(
+        ATTR_GAMMA, AttrDomain::Point, 0.0f);
     constraint_params.position_goal.goals = *lookup_or_warn<float3>(
         params, *attributes, "goal", AttrDomain::Point, float3(0.0f));
   }
@@ -740,6 +744,10 @@ static void prepare_constraint_data(GeoNodeExecParams params,
         params, *attributes, ATTR_SOLVER_GROUP, AttrDomain::Point, 0);
     constraint_params.rotation_goal.points = *lookup_or_warn<int>(
         params, *attributes, ATTR_POINT1, AttrDomain::Point, 0);
+    constraint_params.rotation_goal.alpha = *attributes->lookup_or_default<float>(
+        ATTR_ALPHA, AttrDomain::Point, 0.0f);
+    constraint_params.rotation_goal.gamma = *attributes->lookup_or_default<float>(
+        ATTR_GAMMA, AttrDomain::Point, 0.0f);
     constraint_params.rotation_goal.goals = *lookup_or_warn<math::Quaternion>(
         params, *attributes, "goal", AttrDomain::Point, math::Quaternion::identity());
   }
@@ -748,16 +756,14 @@ static void prepare_constraint_data(GeoNodeExecParams params,
   {
     constraint_params.stretch_shear.solver_group = *lookup_or_warn<int>(
         params, *attributes, ATTR_SOLVER_GROUP, AttrDomain::Point, 0);
-    constraint_params.stretch_shear.alpha = *attributes->lookup_or_default<float>(
-        ATTR_ALPHA, AttrDomain::Point, 0.0f);
-    constraint_params.stretch_shear.gamma = *attributes->lookup_or_default<float>(
-        ATTR_GAMMA, AttrDomain::Point, 0.0f);
-    constraint_params.stretch_shear.edge_length = *lookup_or_warn<float>(
-        params, *attributes, "edge_length", AttrDomain::Point, 0.0f);
     constraint_params.stretch_shear.points1 = *lookup_or_warn<int>(
         params, *attributes, ATTR_POINT1, AttrDomain::Point, 0);
     constraint_params.stretch_shear.points2 = *lookup_or_warn<int>(
         params, *attributes, ATTR_POINT2, AttrDomain::Point, 0);
+    constraint_params.stretch_shear.alpha = *attributes->lookup_or_default<float>(
+        ATTR_ALPHA, AttrDomain::Point, 0.0f);
+    constraint_params.stretch_shear.gamma = *attributes->lookup_or_default<float>(
+        ATTR_GAMMA, AttrDomain::Point, 0.0f);
     constraint_params.stretch_shear.edge_length = *lookup_or_warn<float>(
         params, *attributes, "edge_length", AttrDomain::Point, 0.0f);
   }
@@ -770,6 +776,10 @@ static void prepare_constraint_data(GeoNodeExecParams params,
         params, *attributes, ATTR_POINT1, AttrDomain::Point, 0);
     constraint_params.bend_twist.points2 = *lookup_or_warn<int>(
         params, *attributes, ATTR_POINT2, AttrDomain::Point, 0);
+    constraint_params.bend_twist.alpha = *attributes->lookup_or_default<float>(
+        ATTR_ALPHA, AttrDomain::Point, 0.0f);
+    constraint_params.bend_twist.gamma = *attributes->lookup_or_default<float>(
+        ATTR_GAMMA, AttrDomain::Point, 0.0f);
     constraint_params.bend_twist.darboux_vector = *lookup_or_warn<float3>(
         params, *attributes, "darboux_vector", AttrDomain::Point, float3(0.0f));
   }
