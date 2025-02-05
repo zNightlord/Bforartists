@@ -62,18 +62,15 @@ template<> struct VariableChecker<true> {
 }  // namespace error_check
 
 enum class ConstraintType {
-  /* Set position of a point to a target vector. */
   PositionGoal,
-  /* Set orientation of an edge to a target rotation. */
   RotationGoal,
-  /* Enforces edge length and aligns forward direction with the edge vector. */
+  VelocityGoal,
+  AngularVelocityGoal,
   StretchShear,
-  /* Enforces angles between neighboring edges to their relative rest orientation. */
   BendTwist,
-  /* Keep contact points from penetrating. */
-  Contact,
+  ContactPosition,
+  ContactVelocity,
 };
-constexpr int NumConstraintTypes = 5;
 
 inline void eval_position_goal(const float3 &goal_position,
                                const float alpha,

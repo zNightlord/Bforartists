@@ -163,11 +163,18 @@ template<typename ExecPreset> static auto contact_position_multifunction(ExecPre
 }
 
 static const EnumPropertyItem rna_enum_constraint_type_items[] = {
-    {int(xpbd_constraints::ConstraintType::PositionGoal), "POSITION_GOAL", 0, "Position Goal", ""},
-    {int(xpbd_constraints::ConstraintType::RotationGoal), "ROTATION_GOAL", 0, "Rotation Goal", ""},
-    {int(xpbd_constraints::ConstraintType::StretchShear), "STRETCH_SHEAR", 0, "Stretch/Shear", ""},
-    {int(xpbd_constraints::ConstraintType::BendTwist), "BEND_TWIST", 0, "Bend/Twist", ""},
-    {int(xpbd_constraints::ConstraintType::Contact), "CONTACT", 0, "Contact", ""},
+    {int(ConstraintType::PositionGoal), "POSITION_GOAL", 0, "Position Goal", ""},
+    {int(ConstraintType::RotationGoal), "ROTATION_GOAL", 0, "Rotation Goal", ""},
+    {int(ConstraintType::VelocityGoal), "VELOCITY_GOAL", 0, "Velocity Goal", ""},
+    {int(ConstraintType::AngularVelocityGoal),
+     "ANGULAR_VELOCITY_GOAL",
+     0,
+     "Angular Velocity Goal",
+     ""},
+    {int(ConstraintType::StretchShear), "STRETCH_SHEAR", 0, "Stretch/Shear", ""},
+    {int(ConstraintType::BendTwist), "BEND_TWIST", 0, "Bend/Twist", ""},
+    {int(ConstraintType::ContactPosition), "CONTACT_POSITION", 0, "Contact Position", ""},
+    {int(ConstraintType::ContactVelocity), "CONTACT_VELOCITY", 0, "Contact Velocity", ""},
     {0, nullptr, 0, nullptr, nullptr},
 };
 
@@ -195,6 +202,10 @@ static void node_declare(NodeDeclarationBuilder &b)
       break;
     case ConstraintType::RotationGoal:
       break;
+    case ConstraintType::VelocityGoal:
+      break;
+    case ConstraintType::AngularVelocityGoal:
+      break;
     case ConstraintType::StretchShear:
       b.add_input<decl::Vector>("Lambda");
       b.add_output<decl::Vector>("Lambda").align_with_previous();
@@ -215,7 +226,7 @@ static void node_declare(NodeDeclarationBuilder &b)
       break;
     case ConstraintType::BendTwist:
       break;
-    case ConstraintType::Contact:
+    case ConstraintType::ContactPosition:
       b.add_input<decl::Float>("Lambda");
       b.add_output<decl::Float>("Lambda").align_with_previous();
       b.add_input<decl::Vector>("Position 1").hide_value();
@@ -237,6 +248,8 @@ static void node_declare(NodeDeclarationBuilder &b)
       b.add_input<decl::Vector>("Normal");
       b.add_input<decl::Float>("Alpha");
       break;
+    case ConstraintType::ContactVelocity:
+      break;
   }
 }
 
@@ -247,7 +260,7 @@ static void node_layout(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
 
 static void node_init(bNodeTree * /*tree*/, bNode *node)
 {
-  node->custom1 = int(ConstraintType::Contact);
+  node->custom1 = int(ConstraintType::PositionGoal);
 }
 
 static const mf::MultiFunction *get_multi_function(const bNode &bnode)
@@ -267,13 +280,22 @@ static const mf::MultiFunction *get_multi_function(const bNode &bnode)
     case ConstraintType::RotationGoal:
       BLI_assert_unreachable();
       return nullptr;
+    case ConstraintType::VelocityGoal:
+      BLI_assert_unreachable();
+      return nullptr;
+    case ConstraintType::AngularVelocityGoal:
+      BLI_assert_unreachable();
+      return nullptr;
     case ConstraintType::StretchShear:
       return &fn_stretch_shear;
     case ConstraintType::BendTwist:
       BLI_assert_unreachable();
       return nullptr;
-    case ConstraintType::Contact:
+    case ConstraintType::ContactPosition:
       return &fn_contact;
+    case ConstraintType::ContactVelocity:
+      BLI_assert_unreachable();
+      return nullptr;
     default:
       BLI_assert_unreachable();
       return nullptr;

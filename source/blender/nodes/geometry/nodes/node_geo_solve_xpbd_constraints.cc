@@ -16,7 +16,19 @@
 
 namespace blender::nodes::node_geo_solve_xpbd_constraints_cc {
 
-using xpbd_constraints::ConstraintType;
+enum class ConstraintGeometryType {
+  /* Set position of a point to a target vector. */
+  PositionGoal,
+  /* Set orientation of an edge to a target rotation. */
+  RotationGoal,
+  /* Enforces edge length and aligns forward direction with the edge vector. */
+  StretchShear,
+  /* Enforces angles between neighboring edges to their relative rest orientation. */
+  BendTwist,
+  /* Keep contact points from penetrating. */
+  Contact,
+};
+constexpr int NumConstraintGeometryTypes = 5;
 
 enum class EvaluationTarget {
   Positions,
@@ -36,36 +48,36 @@ constexpr StringRef ATTR_POINT1 = "point1";
 constexpr StringRef ATTR_POINT2 = "point2";
 constexpr StringRef ATTR_ACTIVE = "active";
 
-static StringRef constraint_ui_geometry(const ConstraintType type)
+static StringRef constraint_ui_geometry(const ConstraintGeometryType type)
 {
   switch (type) {
-    case ConstraintType::PositionGoal:
+    case ConstraintGeometryType::PositionGoal:
       return "Position Goal Constraints";
-    case ConstraintType::RotationGoal:
+    case ConstraintGeometryType::RotationGoal:
       return "Rotation Goal Constraints";
-    case ConstraintType::StretchShear:
+    case ConstraintGeometryType::StretchShear:
       return "Stretch/Shear Constraints";
-    case ConstraintType::BendTwist:
+    case ConstraintGeometryType::BendTwist:
       return "Bend/Twist Constraints";
-    case ConstraintType::Contact:
+    case ConstraintGeometryType::Contact:
       return "Contact Constraints";
   }
   BLI_assert_unreachable();
   return "";
 }
 
-static StringRef constraint_ui_description(const ConstraintType type)
+static StringRef constraint_ui_description(const ConstraintGeometryType type)
 {
   switch (type) {
-    case ConstraintType::PositionGoal:
+    case ConstraintGeometryType::PositionGoal:
       return "Set position of a point to a target vector";
-    case ConstraintType::RotationGoal:
+    case ConstraintGeometryType::RotationGoal:
       return "Set orientation of an edge to a target rotation";
-    case ConstraintType::StretchShear:
+    case ConstraintGeometryType::StretchShear:
       return "Enforces edge length and aligns forward direction with the edge vector";
-    case ConstraintType::BendTwist:
+    case ConstraintGeometryType::BendTwist:
       return "Enforces angles between neighboring edges to their relative rest orientation";
-    case ConstraintType::Contact:
+    case ConstraintGeometryType::Contact:
       return "Keep contact points from penetrating";
   }
   BLI_assert_unreachable();
@@ -101,7 +113,7 @@ static void node_declare_positions(NodeDeclarationBuilder &b)
       .field_on({2})
       .description("Influence weight of constraints for each point (inverse moment of inertia)");
 
-  auto add_constraint_input_output = [&](const ConstraintType type) {
+  auto add_constraint_input_output = [&](const ConstraintGeometryType type) {
     const StringRef name = constraint_ui_geometry(type);
     const StringRef description = constraint_ui_description(type);
 
@@ -111,11 +123,11 @@ static void node_declare_positions(NodeDeclarationBuilder &b)
     b.add_output<decl::Geometry>(name).description(description).align_with_previous();
   };
 
-  add_constraint_input_output(ConstraintType::PositionGoal);
-  add_constraint_input_output(ConstraintType::RotationGoal);
-  add_constraint_input_output(ConstraintType::StretchShear);
-  add_constraint_input_output(ConstraintType::BendTwist);
-  add_constraint_input_output(ConstraintType::Contact);
+  add_constraint_input_output(ConstraintGeometryType::PositionGoal);
+  add_constraint_input_output(ConstraintGeometryType::RotationGoal);
+  add_constraint_input_output(ConstraintGeometryType::StretchShear);
+  add_constraint_input_output(ConstraintGeometryType::BendTwist);
+  add_constraint_input_output(ConstraintGeometryType::Contact);
   b.add_input<decl::Geometry>("Colliders")
       .only_instances()
       .description("Instances of colliders to evaluate contact transforms");
@@ -151,7 +163,7 @@ static void node_declare_velocities(NodeDeclarationBuilder &b)
       .field_on({2})
       .description("Influence weight of constraints for each point (inverse moment of inertia)");
 
-  auto add_constraint_input_output = [&](const ConstraintType type) {
+  auto add_constraint_input_output = [&](const ConstraintGeometryType type) {
     const StringRef name = constraint_ui_geometry(type);
     const StringRef description = constraint_ui_description(type);
 
@@ -161,11 +173,11 @@ static void node_declare_velocities(NodeDeclarationBuilder &b)
     b.add_output<decl::Geometry>(name).description(description).align_with_previous();
   };
 
-  add_constraint_input_output(ConstraintType::PositionGoal);
-  add_constraint_input_output(ConstraintType::RotationGoal);
-  add_constraint_input_output(ConstraintType::StretchShear);
-  add_constraint_input_output(ConstraintType::BendTwist);
-  add_constraint_input_output(ConstraintType::Contact);
+  add_constraint_input_output(ConstraintGeometryType::PositionGoal);
+  add_constraint_input_output(ConstraintGeometryType::RotationGoal);
+  add_constraint_input_output(ConstraintGeometryType::StretchShear);
+  add_constraint_input_output(ConstraintGeometryType::BendTwist);
+  add_constraint_input_output(ConstraintGeometryType::Contact);
   b.add_input<decl::Geometry>("Colliders")
       .only_instances()
       .description("Instances of colliders to evaluate contact transforms");
@@ -250,18 +262,18 @@ struct ConstraintEvalParams {
 };
 
 static const VArray<int> &constraints_solver_groups(const ConstraintEvalParams &params,
-                                                    const ConstraintType type)
+                                                    const ConstraintGeometryType type)
 {
   switch (type) {
-    case ConstraintType::PositionGoal:
+    case ConstraintGeometryType::PositionGoal:
       return params.position_goal.solver_group;
-    case ConstraintType::RotationGoal:
+    case ConstraintGeometryType::RotationGoal:
       return params.rotation_goal.solver_group;
-    case ConstraintType::StretchShear:
+    case ConstraintGeometryType::StretchShear:
       return params.stretch_shear.solver_group;
-    case ConstraintType::BendTwist:
+    case ConstraintGeometryType::BendTwist:
       return params.bend_twist.solver_group;
-    case ConstraintType::Contact:
+    case ConstraintGeometryType::Contact:
       return params.contact.solver_group;
   }
   BLI_assert_unreachable();
@@ -548,31 +560,32 @@ static void evaluate_constraint_group_contact(const SolverParams &params,
  */
 template<bool debug_check>
 static void evaluate_constraint_group(const SolverParams &params,
-                                      const ConstraintType type,
+                                      const ConstraintGeometryType type,
                                       const IndexMask &group_mask)
 {
   BLI_assert(!constraints_solver_groups(params.constraints, type).is_empty());
 
   switch (type) {
-    case ConstraintType::PositionGoal:
+    case ConstraintGeometryType::PositionGoal:
       evaluate_constraint_group_position_goal<debug_check>(params, group_mask);
       break;
-    case ConstraintType::RotationGoal:
+    case ConstraintGeometryType::RotationGoal:
       evaluate_constraint_group_rotation_goal<debug_check>(params, group_mask);
       break;
-    case ConstraintType::StretchShear:
+    case ConstraintGeometryType::StretchShear:
       evaluate_constraint_group_stretch_shear<debug_check>(params, group_mask);
       break;
-    case ConstraintType::BendTwist:
+    case ConstraintGeometryType::BendTwist:
       evaluate_constraint_group_bend_twist<debug_check>(params, group_mask);
       break;
-    case ConstraintType::Contact:
+    case ConstraintGeometryType::Contact:
       evaluate_constraint_group_contact<debug_check>(params, group_mask);
       break;
   }
 }
 
-static void do_single_constraint_passes(const SolverParams &params, const ConstraintType type)
+static void do_single_constraint_passes(const SolverParams &params,
+                                        const ConstraintGeometryType type)
 {
   const VArray<int> solver_groups = constraints_solver_groups(params.constraints, type);
   if (solver_groups.is_empty()) {
@@ -620,11 +633,11 @@ static void do_gauss_seidel_step(const SolverParams &params)
   /* Order of constraint passes is chosen by increasing "importance":
    * Later constraints have less residual error, and the last constraint type is solved exactly.
    */
-  do_single_constraint_passes(params, ConstraintType::BendTwist);
-  do_single_constraint_passes(params, ConstraintType::StretchShear);
-  do_single_constraint_passes(params, ConstraintType::RotationGoal);
-  do_single_constraint_passes(params, ConstraintType::PositionGoal);
-  do_single_constraint_passes(params, ConstraintType::Contact);
+  do_single_constraint_passes(params, ConstraintGeometryType::BendTwist);
+  do_single_constraint_passes(params, ConstraintGeometryType::StretchShear);
+  do_single_constraint_passes(params, ConstraintGeometryType::RotationGoal);
+  do_single_constraint_passes(params, ConstraintGeometryType::PositionGoal);
+  do_single_constraint_passes(params, ConstraintGeometryType::Contact);
 }
 
 static void do_jacobi_step(const SolverParams & /*params*/)
@@ -655,10 +668,10 @@ static void prepare_constraint_data(GeoNodeExecParams params,
                                     GeometrySet &colliders_geometry_set,
                                     ConstraintEvalParams &constraint_params)
 {
-  constraint_geometry_sets.resize(xpbd_constraints::NumConstraintTypes);
-  Array<std::optional<MutableAttributeAccessor>> constraint_attributes(
-      xpbd_constraints::NumConstraintTypes, std::nullopt);
-  auto extract_constraint_attributes = [&](const ConstraintType type) {
+  constraint_geometry_sets.resize(NumConstraintGeometryTypes);
+  Array<std::optional<MutableAttributeAccessor>> constraint_attributes(NumConstraintGeometryTypes,
+                                                                       std::nullopt);
+  auto extract_constraint_attributes = [&](const ConstraintGeometryType type) {
     BLI_assert(constraint_geometry_sets.index_range().contains(int(type)));
     BLI_assert(constraint_attributes.index_range().contains(int(type)));
     constraint_geometry_sets[int(type)] = params.extract_input<GeometrySet>(
@@ -670,14 +683,14 @@ static void prepare_constraint_data(GeoNodeExecParams params,
       constraint_attributes[int(type)] = constraint_component.attributes_for_write();
     }
   };
-  extract_constraint_attributes(ConstraintType::PositionGoal);
-  extract_constraint_attributes(ConstraintType::RotationGoal);
-  extract_constraint_attributes(ConstraintType::StretchShear);
-  extract_constraint_attributes(ConstraintType::BendTwist);
-  extract_constraint_attributes(ConstraintType::Contact);
+  extract_constraint_attributes(ConstraintGeometryType::PositionGoal);
+  extract_constraint_attributes(ConstraintGeometryType::RotationGoal);
+  extract_constraint_attributes(ConstraintGeometryType::StretchShear);
+  extract_constraint_attributes(ConstraintGeometryType::BendTwist);
+  extract_constraint_attributes(ConstraintGeometryType::Contact);
 
   if (std::optional<MutableAttributeAccessor> attributes =
-          constraint_attributes[int(ConstraintType::PositionGoal)])
+          constraint_attributes[int(ConstraintGeometryType::PositionGoal)])
   {
     constraint_params.position_goal.solver_group = *lookup_or_warn<int>(
         params, *attributes, ATTR_SOLVER_GROUP, AttrDomain::Point, 0);
@@ -687,7 +700,7 @@ static void prepare_constraint_data(GeoNodeExecParams params,
         params, *attributes, "goal", AttrDomain::Point, float3(0.0f));
   }
   if (std::optional<MutableAttributeAccessor> attributes =
-          constraint_attributes[int(ConstraintType::RotationGoal)])
+          constraint_attributes[int(ConstraintGeometryType::RotationGoal)])
   {
     constraint_params.rotation_goal.solver_group = *lookup_or_warn<int>(
         params, *attributes, ATTR_SOLVER_GROUP, AttrDomain::Point, 0);
@@ -697,7 +710,7 @@ static void prepare_constraint_data(GeoNodeExecParams params,
         params, *attributes, "goal", AttrDomain::Point, math::Quaternion::identity());
   }
   if (std::optional<MutableAttributeAccessor> attributes =
-          constraint_attributes[int(ConstraintType::StretchShear)])
+          constraint_attributes[int(ConstraintGeometryType::StretchShear)])
   {
     constraint_params.stretch_shear.solver_group = *lookup_or_warn<int>(
         params, *attributes, ATTR_SOLVER_GROUP, AttrDomain::Point, 0);
@@ -715,7 +728,7 @@ static void prepare_constraint_data(GeoNodeExecParams params,
         params, *attributes, "edge_length", AttrDomain::Point, 0.0f);
   }
   if (std::optional<MutableAttributeAccessor> attributes =
-          constraint_attributes[int(ConstraintType::BendTwist)])
+          constraint_attributes[int(ConstraintGeometryType::BendTwist)])
   {
     constraint_params.bend_twist.solver_group = *lookup_or_warn<int>(
         params, *attributes, ATTR_SOLVER_GROUP, AttrDomain::Point, 0);
@@ -727,7 +740,7 @@ static void prepare_constraint_data(GeoNodeExecParams params,
         params, *attributes, "darboux_vector", AttrDomain::Point, float3(0.0f));
   }
   if (std::optional<MutableAttributeAccessor> attributes =
-          constraint_attributes[int(ConstraintType::Contact)])
+          constraint_attributes[int(ConstraintGeometryType::Contact)])
   {
     constraint_params.contact.solver_group = *lookup_or_warn<int>(
         params, *attributes, ATTR_SOLVER_GROUP, AttrDomain::Point, 0);
@@ -862,14 +875,14 @@ static void node_geo_exec_positions(GeoNodeExecParams params)
 
   params.set_output("Geometry", geometry_set);
 
-  auto set_constraint_outputs = [&](const ConstraintType type) {
+  auto set_constraint_outputs = [&](const ConstraintGeometryType type) {
     params.set_output(constraint_ui_geometry(type), constraint_geometry_sets[int(type)]);
   };
-  set_constraint_outputs(ConstraintType::PositionGoal);
-  set_constraint_outputs(ConstraintType::RotationGoal);
-  set_constraint_outputs(ConstraintType::StretchShear);
-  set_constraint_outputs(ConstraintType::BendTwist);
-  set_constraint_outputs(ConstraintType::Contact);
+  set_constraint_outputs(ConstraintGeometryType::PositionGoal);
+  set_constraint_outputs(ConstraintGeometryType::RotationGoal);
+  set_constraint_outputs(ConstraintGeometryType::StretchShear);
+  set_constraint_outputs(ConstraintGeometryType::BendTwist);
+  set_constraint_outputs(ConstraintGeometryType::Contact);
 }
 
 static void node_geo_exec_velocities(GeoNodeExecParams params)
@@ -961,14 +974,14 @@ static void node_geo_exec_velocities(GeoNodeExecParams params)
 
   params.set_output("Geometry", geometry_set);
 
-  auto set_constraint_outputs = [&](const ConstraintType type) {
+  auto set_constraint_outputs = [&](const ConstraintGeometryType type) {
     params.set_output(constraint_ui_geometry(type), constraint_geometry_sets[int(type)]);
   };
-  set_constraint_outputs(ConstraintType::PositionGoal);
-  set_constraint_outputs(ConstraintType::RotationGoal);
-  set_constraint_outputs(ConstraintType::StretchShear);
-  set_constraint_outputs(ConstraintType::BendTwist);
-  set_constraint_outputs(ConstraintType::Contact);
+  set_constraint_outputs(ConstraintGeometryType::PositionGoal);
+  set_constraint_outputs(ConstraintGeometryType::RotationGoal);
+  set_constraint_outputs(ConstraintGeometryType::StretchShear);
+  set_constraint_outputs(ConstraintGeometryType::BendTwist);
+  set_constraint_outputs(ConstraintGeometryType::Contact);
 }
 
 static void node_register_position_solve()
