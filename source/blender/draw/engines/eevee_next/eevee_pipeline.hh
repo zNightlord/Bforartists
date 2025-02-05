@@ -15,7 +15,6 @@
 #include "BLI_math_bits.h"
 
 #include "DRW_render.hh"
-#include "draw_shader_shared.hh"
 
 #include "eevee_lut.hh"
 #include "eevee_raytrace.hh"
@@ -463,9 +462,9 @@ class VolumeLayer {
                               GPUMaterial *gpumat);
 
   /* Return true if the given bounds overlaps any of the contained object in this layer. */
-  bool bounds_overlaps(const VolumeObjectBounds &object_aabb) const;
+  bool bounds_overlaps(const VolumeObjectBounds &object_bounds) const;
 
-  void add_object_bound(const VolumeObjectBounds &object_aabb);
+  void add_object_bound(const VolumeObjectBounds &object_bounds);
 
   void sync();
   void render(View &view, Texture &occupancy_tx);
@@ -499,7 +498,7 @@ class VolumePipeline {
 
   bool has_scatter() const
   {
-    for (auto &layer : layers_) {
+    for (const auto &layer : layers_) {
       if (layer->has_scatter) {
         return true;
       }
@@ -508,7 +507,7 @@ class VolumePipeline {
   }
   bool has_absorption() const
   {
-    for (auto &layer : layers_) {
+    for (const auto &layer : layers_) {
       if (layer->has_absorption) {
         return true;
       }
@@ -697,7 +696,7 @@ class UtilityTexture : public Texture {
     GPU_texture_update_mipmap(*this, 0, GPU_DATA_FLOAT, data.data());
   }
 
-  ~UtilityTexture(){};
+  ~UtilityTexture() = default;
 };
 
 /** \} */
@@ -724,7 +723,6 @@ class PipelineModule {
   UtilityTexture utility_tx;
   PipelineInfoData &data;
 
- public:
   PipelineModule(Instance &inst, PipelineInfoData &data)
       : background(inst),
         world(inst),

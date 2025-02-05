@@ -198,6 +198,7 @@ set(SRC
   nodes/node_geo_set_spline_cyclic.cc
   nodes/node_geo_set_spline_resolution.cc
   nodes/node_geo_simulation.cc
+  nodes/node_geo_solve_xpbd_constraints.cc
   nodes/node_geo_sort_elements.cc
   nodes/node_geo_split_to_instances.cc
   nodes/node_geo_store_named_attribute.cc
@@ -357,3 +358,19 @@ blender_set_target_unity_build(bf_nodes_geometry 10)
 
 # RNA_prototypes.hh
 add_dependencies(bf_nodes_geometry bf_rna)
+
+
+if(WITH_GTESTS)
+  set(TEST_SRC
+    nodes/node_geo_xpbd_constraints_test.cc
+  )
+  set(TEST_INC
+    ../../blenkernel
+    ../../blenlib
+    ../../makesdna
+    ../../../../intern/guardedalloc
+  )
+  set(TEST_LIB
+  )
+  blender_add_test_suite_lib(nodes_geometry "${TEST_SRC}" "${INC};${TEST_INC}" "${INC_SYS}" "${TEST_LIB}")
+endif()

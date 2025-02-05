@@ -950,6 +950,13 @@ def brush_settings(layout, context, brush, popover=False):
                 slider=True,
             )
 
+            if sculpt_tool != 'PLANE':
+                row = layout.row(heading="Plane Trim")
+                row.prop(brush, "use_plane_trim", text="")
+                sub = row.row()
+                sub.active = brush.use_plane_trim
+                sub.prop(brush, "plane_trim", slider=True, text="")
+
             layout.separator()
 
             split = layout.split(factor=0.36)
@@ -965,6 +972,12 @@ def brush_settings(layout, context, brush, popover=False):
         # height
         if capabilities.has_height:
             layout.prop(brush, "height", slider=True, text="Height")
+
+        if capabilities.has_plane_height:
+            layout.prop(brush, "plane_height", slider=True, text="Height")
+
+        if capabilities.has_plane_depth:
+            layout.prop(brush, "plane_depth", slider=True, text="Depth")
 
         # use_persistent, set_persistent_base
         if capabilities.has_persistence:
@@ -1075,7 +1088,17 @@ def brush_settings(layout, context, brush, popover=False):
             row.use_property_split = False
             row.prop(brush, "invert_to_scrape_fill", text="Invert to Scrape")
 
-        elif sculpt_tool == "GRAB":
+        elif sculpt_tool == 'PLANE':
+            row = layout.row(align=True)
+            row.prop(brush, "area_radius_factor")
+            row.prop(brush, "use_pressure_area_radius", text="")
+            layout.separator()
+            layout.prop(brush, "plane_inversion_mode")
+            layout.separator()
+            layout.prop(brush, "stabilize_normal")
+            layout.prop(brush, "stabilize_plane")
+
+        elif sculpt_tool == 'GRAB':
             layout.use_property_split = False
             layout.prop(brush, "use_grab_active_vertex")
             layout.prop(brush, "use_grab_silhouette")
@@ -1565,15 +1588,16 @@ def brush_settings_advanced(layout, context, brush, popover=False):
             col.prop(brush, "sculpt_plane")
             col.use_property_split = False
 
-            col = layout.column()
-            col.label(text="Use Original")
-            col.use_property_split = False
-            row = col.row()
-            row.separator()
-            row.prop(brush, "use_original_normal", text="Normal")
-            row = col.row()
-            row.separator()
-            row.prop(brush, "use_original_plane", text="Plane")
+            if brush.sculpt_tool != 'PLANE':
+                col = layout.column()
+                col.label(text="Use Original")
+                col.use_property_split = False
+                row = col.row()
+                row.separator()
+                row.prop(brush, "use_original_normal", text="Normal")
+                row = col.row()
+                row.separator()
+                row.prop(brush, "use_original_plane", text="Plane")
 
             layout.separator()
 

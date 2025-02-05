@@ -1055,9 +1055,7 @@ PassMain::Sub *DeferredPipeline::prepass_add(::Material *blender_mat,
   if (!use_combined_lightprobe_eval && (blender_mat->blend_flag & MA_BL_SS_REFRACTION)) {
     return get_refraction_layer(refraction_layer).prepass_add(blender_mat, gpumat, has_motion);
   }
-  else {
-    return opaque_layer_.prepass_add(blender_mat, gpumat, has_motion);
-  }
+  return opaque_layer_.prepass_add(blender_mat, gpumat, has_motion);
 }
 
 PassMain::Sub *DeferredPipeline::material_add(::Material *blender_mat,
@@ -1067,9 +1065,7 @@ PassMain::Sub *DeferredPipeline::material_add(::Material *blender_mat,
   if (!use_combined_lightprobe_eval && (blender_mat->blend_flag & MA_BL_SS_REFRACTION)) {
     return get_refraction_layer(refraction_layer).material_add(blender_mat, gpumat);
   }
-  else {
-    return opaque_layer_.material_add(blender_mat, gpumat);
-  }
+  return opaque_layer_.material_add(blender_mat, gpumat);
 }
 
 PassMain::Sub *DeferredPipeline::npr_add(::Material *blender_mat,
@@ -1332,7 +1328,7 @@ std::optional<Bounds<float>> VolumePipeline::object_integration_range() const
 
 bool VolumePipeline::use_hit_list() const
 {
-  for (auto &layer : layers_) {
+  for (const auto &layer : layers_) {
     if (layer->use_hit_list) {
       return true;
     }

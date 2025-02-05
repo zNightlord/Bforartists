@@ -1125,6 +1125,9 @@ class VIEW3D_HT_header(Header):
                     else canvas_source
                 )
                 row.popover(panel="VIEW3D_PT_slots_paint_canvas", icon=icon)
+                # TODO: Update this boolean condition so that the Canvas button is only active when
+                # the appropriate color types are selected in Solid mode, I.E. 'TEXTURE'
+                row.active = is_paint_tool
             else:
                 row.popover(panel="VIEW3D_PT_slots_color_attributes", icon="GROUP_VCOL")
 
@@ -6492,6 +6495,9 @@ class VIEW3D_MT_pose(Menu):
 
         layout.menu("VIEW3D_MT_pose_showhide")
         layout.menu("VIEW3D_MT_bone_options_toggle", text="Bone Settings")
+
+        layout.separator()
+        layout.operator("POSELIB.create_pose_asset")
 
 
 class VIEW3D_MT_pose_transform(Menu):

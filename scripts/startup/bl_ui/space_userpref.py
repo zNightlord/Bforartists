@@ -2220,7 +2220,7 @@ class USERPREF_PT_ndof_settings(Panel):
         col = layout.column(align=True)
         col.use_property_split = False
         if show_3dview_settings:
-            col.prop(props, "ndof_show_guide")
+            col.prop(props, "ndof_show_guide_orbit_axis")
         col.prop(props, "ndof_zoom_invert")
 
         col.label(text="Pan")
