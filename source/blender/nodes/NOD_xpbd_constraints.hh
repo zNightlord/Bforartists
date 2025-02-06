@@ -129,7 +129,7 @@ inline void eval_velocity_goal(const float3 &goal_velocity,
   float residual;
   const float3 gradient = math::normalize_and_get_length(velocity - goal_velocity, residual);
 
-  const float delta_lambda = (-residual - beta * lambda) / (1.0f + beta);
+  const float delta_lambda = (-beta * residual - lambda) / (1.0f + beta);
   lambda += delta_lambda;
   velocity += delta_lambda * gradient;
 }
@@ -143,7 +143,7 @@ inline void eval_angular_velocity_goal(const float3 &goal_angular_velocity,
   const float3 gradient = math::normalize_and_get_length(angular_velocity - goal_angular_velocity,
                                                          residual);
 
-  const float delta_lambda = (-residual - beta * lambda) / (1.0f + beta);
+  const float delta_lambda = (-beta * residual - lambda) / (1.0f + beta);
   lambda += delta_lambda;
   angular_velocity += delta_lambda * gradient;
 }
@@ -191,7 +191,8 @@ inline void eval_position_stretch_shear(const float weight_pos1,
   }
 }
 
-inline void eval_velocity_stretch_shear(const float weight_pos1,
+inline void eval_velocity_stretch_shear(const math::Quaternion &rotation,
+                                        const float weight_pos1,
                                         const float weight_pos2,
                                         const float weight_rot,
                                         const float edge_length,
@@ -201,39 +202,23 @@ inline void eval_velocity_stretch_shear(const float weight_pos1,
                                         float3 &velocity2,
                                         float3 &angular_velocity)
 {
-  // TODO
-  // const float inv_edge_length = math::safe_rcp(edge_length);
+  const float inv_edge_length = math::safe_rcp(edge_length);
 
-  // const float3 direction = math::transform_point(rotation, float3(0, 0, 1));
-  // const float3 residual = inv_edge_length * (position2 - position1) - direction;
-  // const float weight_norm = math::safe_rcp(
-  //     (weight_pos1 + weight_pos2) * inv_edge_length * inv_edge_length + 4.0f * weight_rot +
-  //     alpha);
+  const float3 direction = math::transform_point(rotation,
+                                                 math::cross(angular_velocity, float3(0, 0, 1)));
+  const float3 residual = inv_edge_length * (velocity2 - velocity1) - direction;
+  const float weight_norm = math::safe_rcp(
+      1.0f + beta * ((weight_pos1 + weight_pos2) * inv_edge_length * inv_edge_length +
+                     4.0f * weight_rot));
 
-  // const float3 delta_lambda = weight_norm * residual - alpha * lambda;
-  // lambda = lambda + delta_lambda;
+  const float3 delta_lambda = weight_norm * (beta * residual - lambda);
+  lambda = lambda + delta_lambda;
 
-  // position1 += weight_pos1 * inv_edge_length * delta_lambda;
-  // position2 -= weight_pos2 * inv_edge_length * delta_lambda;
-  // if constexpr (linearized_quaternion) {
-  //   /* XXX is this correct? */
-  //   const float4 delta_rot = weight_rot * float4(math::Quaternion(0.0f, delta_lambda) * rotation
-  //   *
-  //                                                math::Quaternion(0, 0, 0, -1));
-  //   rotation = math::normalize(math::Quaternion(float4(rotation) + delta_rot));
-  // }
-  // else {
-  //   /* Normalize the final result to avoid accumulating errors. */
-  //   constexpr bool normalize_final = true;
-
-  //   const math::Quaternion q = math::to_quaternion(
-  //       math::AxisAngle(direction, math::normalize(position2 - position1)));
-
-  //   rotation = q * rotation;
-  //   if constexpr (normalize_final) {
-  //     rotation = math::normalize(rotation);
-  //   }
-  // }
+  velocity1 += weight_pos1 * inv_edge_length * delta_lambda;
+  velocity2 -= weight_pos2 * inv_edge_length * delta_lambda;
+  angular_velocity += weight_rot *
+                      math::transform_point(math::invert_normalized(rotation),
+                                            math::cross(float3(0, 0, 1), delta_lambda));
 }
 
 /**
