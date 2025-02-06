@@ -231,8 +231,14 @@ inline void eval_position_bend_twist(const float weight_rot1,
                                      math::Quaternion &rotation1,
                                      math::Quaternion &rotation2)
 {
-  const float3 current_darboux = math::safe_divide(2.0f, edge_length) *
-                                 (math::invert(rotation1) * rotation2).imaginary_part();
+  /* XXX According to the paper ("Position and Orientation Based Cosserat Rods") the Darboux vector
+   * needs to be divided by the edge length, but this creates an unstable constraint. Have to
+   * confirm the math here ... */
+  // const float3 current_darboux = math::safe_divide(2.0f, edge_length) *
+  //                                (math::invert_normalized(rotation1) *
+  //                                rotation2).imaginary_part();
+  const float3 current_darboux = 2.0f *
+                                 (math::invert_normalized(rotation1) * rotation2).imaginary_part();
   const bool sign = math::length_squared(current_darboux - darboux_vector) <
                     math::length_squared(current_darboux + darboux_vector);
   const float3 residual = (sign ? current_darboux - darboux_vector :
@@ -240,7 +246,7 @@ inline void eval_position_bend_twist(const float weight_rot1,
 
   const float weight_norm = math::safe_rcp(weight_rot1 + weight_rot2 + alpha);
 
-  const float3 delta_lambda = weight_norm * residual - alpha * lambda;
+  const float3 delta_lambda = weight_norm * residual * 0.5f - alpha * lambda;
   lambda = lambda + delta_lambda;
 
   if constexpr (linearized_quaternion) {
