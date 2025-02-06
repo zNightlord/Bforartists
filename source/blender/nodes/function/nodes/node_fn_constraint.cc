@@ -93,6 +93,62 @@ template<typename ExecPreset> static auto stretch_shear_multifunction(ExecPreset
   return mf::build::detail::CustomMF("XPBD Stretch/Shear Rod Constraint", call_fn, param_tags);
 }
 
+template<typename ExecPreset> static auto bend_twist_multifunction(ExecPreset exec_preset)
+{
+  constexpr auto param_tags = TypeSequence<mf_input<bool>,
+                                           mf_input<float3>,
+                                           mf_input<math::Quaternion>,
+                                           mf_input<math::Quaternion>,
+                                           mf_input<float>,
+                                           mf_input<float>,
+                                           mf_input<float>,
+                                           mf_input<float3>,
+                                           mf_input<float>,
+                                           mf_output<float3>,
+                                           mf_output<math::Quaternion>,
+                                           mf_output<math::Quaternion>>();
+  auto call_fn = mf::build::detail::build_multi_function_call_from_element_fn(
+      [](const bool linearized_rotation,
+         float3 lambda,
+         math::Quaternion rotation1,
+         math::Quaternion rotation2,
+         const float weight_rot1,
+         const float weight_rot2,
+         const float edge_length,
+         const float3 &darboux_vector,
+         const float alpha,
+         float3 &lambda_out,
+         math::Quaternion &rotation_out1,
+         math::Quaternion &rotation_out2) -> void {
+        if (linearized_rotation) {
+          xpbd_constraints::eval_position_bend_twist<true>(weight_rot1,
+                                                           weight_rot2,
+                                                           edge_length,
+                                                           darboux_vector,
+                                                           alpha,
+                                                           lambda,
+                                                           rotation1,
+                                                           rotation2);
+        }
+        else {
+          xpbd_constraints::eval_position_bend_twist<false>(weight_rot1,
+                                                            weight_rot2,
+                                                            edge_length,
+                                                            darboux_vector,
+                                                            alpha,
+                                                            lambda,
+                                                            rotation1,
+                                                            rotation2);
+        }
+        lambda = lambda_out;
+        rotation_out1 = rotation1;
+        rotation_out2 = rotation2;
+      },
+      exec_preset,
+      param_tags);
+  return mf::build::detail::CustomMF("XPBD Stretch/Shear Rod Constraint", call_fn, param_tags);
+}
+
 template<typename ExecPreset> static auto contact_position_multifunction(ExecPreset exec_preset)
 {
   constexpr auto param_tags = TypeSequence<mf_input<bool>,
@@ -218,9 +274,21 @@ static void node_declare(NodeDeclarationBuilder &b)
       b.add_separator();
       b.add_input<decl::Float>("Edge Length");
       b.add_input<decl::Float>("Alpha");
-      b.add_input<decl::Float>("Gamma");
       break;
     case ConstraintType::BendTwist:
+      b.add_input<decl::Vector>("Lambda");
+      b.add_output<decl::Vector>("Lambda").align_with_previous();
+      b.add_input<decl::Rotation>("Rotation 1").hide_value();
+      b.add_output<decl::Rotation>("Rotation 1").align_with_previous();
+      b.add_input<decl::Rotation>("Rotation 2").hide_value();
+      b.add_output<decl::Rotation>("Rotation 2").align_with_previous();
+      b.add_separator();
+      b.add_input<decl::Float>("Rotation Weight 1").default_value(1.0f);
+      b.add_input<decl::Float>("Rotation Weight 2").default_value(1.0f);
+      b.add_separator();
+      b.add_input<decl::Float>("Edge Length");
+      b.add_input<decl::Vector>("Darboux Vector");
+      b.add_input<decl::Float>("Alpha");
       break;
     case ConstraintType::ContactPosition:
       b.add_input<decl::Float>("Lambda");
@@ -267,6 +335,7 @@ static const mf::MultiFunction *get_multi_function(const bNode &bnode)
   static auto exec_preset = mf::build::exec_presets::AllSpanOrSingle();
 
   static auto fn_stretch_shear = stretch_shear_multifunction(exec_preset);
+  static auto fn_bend_twist = bend_twist_multifunction(exec_preset);
   static auto fn_contact = contact_position_multifunction(exec_preset);
 
   switch (constraint_type) {
@@ -285,8 +354,7 @@ static const mf::MultiFunction *get_multi_function(const bNode &bnode)
     case ConstraintType::StretchShear:
       return &fn_stretch_shear;
     case ConstraintType::BendTwist:
-      BLI_assert_unreachable();
-      return nullptr;
+      return &fn_bend_twist;
     case ConstraintType::ContactPosition:
       return &fn_contact;
     case ConstraintType::ContactVelocity:
