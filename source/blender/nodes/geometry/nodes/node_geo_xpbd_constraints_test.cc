@@ -329,6 +329,49 @@ TEST(xpbd_constraints, StretchShear)
   }
 }
 
+TEST(xpbd_constraints, BendTwist)
+{
+  constexpr float x = 0.707107f;
+  const float edge_length = 2.0f;
+
+  const math::Quaternion target_rotation1 = math::Quaternion::identity();
+  const math::Quaternion target_rotation2 = math::to_quaternion(
+      math::AxisAngle(math::AxisSigned::X_POS, math::AngleRadian::from_degree(90.0f)));
+  EXPECT_V4_NEAR(float4(1, 0, 0, 0), float4(target_rotation1), 1e-5f);
+  EXPECT_V4_NEAR(float4(x, x, 0, 0), float4(target_rotation2), 1e-5f);
+  const float3 darboux_vector =
+      2.0f / edge_length * (math::invert(target_rotation1) * target_rotation2).imaginary_part();
+  /*   2/L * Im((a*) * b)
+   * = 2/L * (a.w*b.xyz - b.w*a.xyz - cross*(a.xyz, b.xyz))
+   * = 2/L * ((0.707107f,0,0) - (0,0,0) - (0,0,0)) */
+  EXPECT_V3_NEAR(float3(x, 0, 0), darboux_vector, 1.e-5f);
+
+  const float alpha = 0.0f;
+
+  /* Rotation 1 only. */
+  {
+    float3 lambda = float3(0.0f);
+    math::Quaternion rotation1 = math::Quaternion::identity();
+    math::Quaternion rotation2 = math::Quaternion::identity();
+    xpbd_constraints::eval_position_bend_twist<true>(
+        1, 0, edge_length, darboux_vector, alpha, lambda, rotation1, rotation2);
+    EXPECT_V3_NEAR(float3(x, 0, 0), lambda, 1e-5f);
+    EXPECT_V4_NEAR(math::normalize(float4(1.0f, x, 0, 0)), float4(rotation1), 1e-5f);
+    EXPECT_V4_NEAR(float4(1, 0, 0, 0), float4(rotation2), 1e-5f);
+  }
+  /* Rotation 2 only. */
+  {
+    float3 lambda = float3(0.0f);
+    math::Quaternion rotation1 = math::Quaternion::identity();
+    math::Quaternion rotation2 = math::Quaternion::identity();
+    xpbd_constraints::eval_position_bend_twist<true>(
+        0, 1, edge_length, darboux_vector, alpha, lambda, rotation1, rotation2);
+    EXPECT_V3_NEAR(float3(x, 0, 0), lambda, 1e-5f);
+    EXPECT_V4_NEAR(float4(1, 0, 0, 0), float4(rotation1), 1e-5f);
+    EXPECT_V4_NEAR(math::normalize(float4(1.0f, -x, 0, 0)), float4(rotation2), 1e-5f);
+  }
+}
+
 TEST(xpbd_constraints, VariableOverlapCheckerPass)
 {
   const IndexRange range(10);
