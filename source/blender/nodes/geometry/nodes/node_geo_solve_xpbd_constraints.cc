@@ -245,7 +245,7 @@ struct ConstraintEvalParams {
     VArraySpan<int> points2;
     VArraySpan<float> alpha;
     VArraySpan<float> beta;
-    VArraySpan<float> edge_length;
+    VArraySpan<float> edge_lengths;
   } stretch_shear;
   struct {
     VArray<int> solver_group;
@@ -253,7 +253,8 @@ struct ConstraintEvalParams {
     VArraySpan<int> points2;
     VArraySpan<float> alpha;
     VArraySpan<float> beta;
-    VArraySpan<float3> darboux_vector;
+    VArraySpan<float> edge_lengths;
+    VArraySpan<float3> darboux_vectors;
   } bend_twist;
   struct {
     VArray<int> solver_group;
@@ -379,7 +380,7 @@ static void evaluate_constraint_group_rotation_goal(const SolverParams &params,
         const float alpha = params.constraints.rotation_goal.alpha[index];
         const math::Quaternion &goal = params.constraints.rotation_goal.goal_rotations[index];
 
-        xpbd_constraints::eval_rotation_goal<false>(
+        xpbd_constraints::eval_rotation_goal<true>(
             goal, alpha * params.inv_delta_time_squared, lambda, rotation1);
       });
 
@@ -435,7 +436,7 @@ static void evaluate_constraint_group_stretch_shear(const SolverParams &params,
         position_checker.claim_variable(point2);
         rotation_checker.claim_variable(point1);
 
-        const float edge_length = params.constraints.stretch_shear.edge_length[index];
+        const float edge_length = params.constraints.stretch_shear.edge_lengths[index];
         /* XPBD softness and damping factors. */
         const float alpha = params.constraints.stretch_shear.alpha[index];
 
@@ -447,15 +448,15 @@ static void evaluate_constraint_group_stretch_shear(const SolverParams &params,
         const float weight_rot = params.constraints.rotation_weights[point1];
 
         float3 lambda = float3(0.0f);
-        xpbd_constraints::eval_position_stretch_shear<false>(weight_pos1,
-                                                             weight_pos2,
-                                                             weight_rot,
-                                                             edge_length,
-                                                             alpha * params.inv_delta_time_squared,
-                                                             lambda,
-                                                             position1,
-                                                             position2,
-                                                             rotation);
+        xpbd_constraints::eval_position_stretch_shear<true>(weight_pos1,
+                                                            weight_pos2,
+                                                            weight_rot,
+                                                            edge_length,
+                                                            alpha * params.inv_delta_time_squared,
+                                                            lambda,
+                                                            position1,
+                                                            position2,
+                                                            rotation);
       });
 
       if (position_checker.has_overlap() || rotation_checker.has_overlap()) {
@@ -478,7 +479,7 @@ static void evaluate_constraint_group_stretch_shear(const SolverParams &params,
         velocity_checker.claim_variable(point2);
         angular_velocity_checker.claim_variable(point1);
 
-        const float edge_length = params.constraints.stretch_shear.edge_length[index];
+        const float edge_length = params.constraints.stretch_shear.edge_lengths[index];
         /* XPBD softness and damping factors. */
         const float beta = params.constraints.stretch_shear.beta[index];
 
@@ -514,11 +515,47 @@ static void evaluate_constraint_group_stretch_shear(const SolverParams &params,
 
 template<bool debug_check>
 static void evaluate_constraint_group_bend_twist(const SolverParams &params,
-                                                 const IndexMask & /*group_mask*/)
+                                                 const IndexMask &group_mask)
 {
   switch (params.target) {
-    case EvaluationTarget::Positions:
+    case EvaluationTarget::Positions: {
+      xpbd_constraints::error_check::VariableChecker<debug_check> rotation_checker(
+          params.constraints.rotations.index_range());
+
+      group_mask.foreach_index(GrainSize(1024), [&](const int index) {
+        const int point1 = params.constraints.bend_twist.points1[index];
+        const int point2 = params.constraints.bend_twist.points2[index];
+
+        rotation_checker.claim_variable(point1);
+        rotation_checker.claim_variable(point2);
+
+        const float edge_length = params.constraints.bend_twist.edge_lengths[index];
+        const float3 darboux_vector = params.constraints.bend_twist.darboux_vectors[index];
+        /* XPBD softness and damping factors. */
+        const float alpha = params.constraints.bend_twist.alpha[index];
+
+        math::Quaternion &rotation1 = params.constraints.rotations[point1];
+        math::Quaternion &rotation2 = params.constraints.rotations[point2];
+        const float weight_rot1 = params.constraints.rotation_weights[point1];
+        const float weight_rot2 = params.constraints.rotation_weights[point2];
+
+        float3 lambda = float3(0.0f);
+        xpbd_constraints::eval_position_bend_twist<true>(weight_rot1,
+                                                         weight_rot2,
+                                                         edge_length,
+                                                         darboux_vector,
+                                                         alpha * params.inv_delta_time_squared,
+                                                         lambda,
+                                                         rotation1,
+                                                         rotation2);
+      });
+
+      if (rotation_checker.has_overlap()) {
+        params.error_message_add(geo_eval_log::NodeWarningType::Error,
+                                 "Overlapping constraint solver groups");
+      }
       break;
+    }
     case EvaluationTarget::Velocities:
       break;
   }
@@ -863,7 +900,7 @@ static void prepare_constraint_data(GeoNodeExecParams params,
         ATTR_ALPHA, AttrDomain::Point, 0.0f);
     constraint_params.stretch_shear.beta = *attributes->lookup_or_default<float>(
         ATTR_BETA, AttrDomain::Point, 0.0f);
-    constraint_params.stretch_shear.edge_length = *lookup_or_warn<float>(
+    constraint_params.stretch_shear.edge_lengths = *lookup_or_warn<float>(
         params, *attributes, "edge_length", AttrDomain::Point, 0.0f);
   }
   if (std::optional<MutableAttributeAccessor> attributes =
@@ -879,7 +916,9 @@ static void prepare_constraint_data(GeoNodeExecParams params,
         ATTR_ALPHA, AttrDomain::Point, 0.0f);
     constraint_params.bend_twist.beta = *attributes->lookup_or_default<float>(
         ATTR_BETA, AttrDomain::Point, 0.0f);
-    constraint_params.bend_twist.darboux_vector = *lookup_or_warn<float3>(
+    constraint_params.bend_twist.edge_lengths = *lookup_or_warn<float>(
+        params, *attributes, "edge_length", AttrDomain::Point, 0.0f);
+    constraint_params.bend_twist.darboux_vectors = *lookup_or_warn<float3>(
         params, *attributes, "darboux_vector", AttrDomain::Point, float3(0.0f));
   }
   if (std::optional<MutableAttributeAccessor> attributes =

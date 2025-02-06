@@ -221,6 +221,45 @@ inline void eval_velocity_stretch_shear(const math::Quaternion &rotation,
                                             math::cross(float3(0, 0, 1), delta_lambda));
 }
 
+template<bool linearized_quaternion>
+inline void eval_position_bend_twist(const float weight_rot1,
+                                     const float weight_rot2,
+                                     const float edge_length,
+                                     const float3 &darboux_vector,
+                                     const float alpha,
+                                     float3 &lambda,
+                                     math::Quaternion &rotation1,
+                                     math::Quaternion &rotation2)
+{
+  const float3 current_darboux = math::safe_divide(
+      2.0f * (math::invert(rotation1) * rotation2).imaginary_part(), edge_length);
+  const bool sign = math::length_squared(current_darboux - darboux_vector) <
+                    math::length_squared(current_darboux + darboux_vector);
+  const float3 residual = (sign ? current_darboux - darboux_vector :
+                                  current_darboux + darboux_vector);
+
+  const float weight_norm = math::safe_rcp(weight_rot1 + weight_rot2 + alpha);
+
+  const float3 delta_lambda = weight_norm * residual - alpha * lambda;
+  lambda = lambda + delta_lambda;
+
+  if constexpr (linearized_quaternion) {
+    const float4 delta_rot1 = weight_rot1 *
+                              float4(rotation1 * math::Quaternion(0.0f, delta_lambda));
+    const float4 delta_rot2 = -weight_rot2 *
+                              float4(rotation2 * math::Quaternion(0.0f, delta_lambda));
+    rotation1 = math::normalize(math::Quaternion(float4(rotation1) + delta_rot1));
+    rotation2 = math::normalize(math::Quaternion(float4(rotation2) + delta_rot2));
+  }
+  else {
+    /* Normalize the final result to avoid accumulating errors. */
+    // constexpr bool normalize_final = true;
+
+    // TODO
+    BLI_assert_unreachable();
+  }
+}
+
 /**
  * Positional contact constraint based on
  * "Detailed Rigid Body Simulation with Extended Position Based Dynamics", Mueller et al., 2020
