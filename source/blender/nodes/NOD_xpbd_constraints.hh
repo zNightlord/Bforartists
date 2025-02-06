@@ -231,8 +231,8 @@ inline void eval_position_bend_twist(const float weight_rot1,
                                      math::Quaternion &rotation1,
                                      math::Quaternion &rotation2)
 {
-  const float3 current_darboux = math::safe_divide(
-      2.0f * (math::invert(rotation1) * rotation2).imaginary_part(), edge_length);
+  const float3 current_darboux = math::safe_divide(2.0f, edge_length) *
+                                 (math::invert(rotation1) * rotation2).imaginary_part();
   const bool sign = math::length_squared(current_darboux - darboux_vector) <
                     math::length_squared(current_darboux + darboux_vector);
   const float3 residual = (sign ? current_darboux - darboux_vector :
@@ -245,9 +245,9 @@ inline void eval_position_bend_twist(const float weight_rot1,
 
   if constexpr (linearized_quaternion) {
     const float4 delta_rot1 = weight_rot1 *
-                              float4(rotation1 * math::Quaternion(0.0f, delta_lambda));
-    const float4 delta_rot2 = -weight_rot2 *
                               float4(rotation2 * math::Quaternion(0.0f, delta_lambda));
+    const float4 delta_rot2 = -weight_rot2 *
+                              float4(rotation1 * math::Quaternion(0.0f, delta_lambda));
     rotation1 = math::normalize(math::Quaternion(float4(rotation1) + delta_rot1));
     rotation2 = math::normalize(math::Quaternion(float4(rotation2) + delta_rot2));
   }
