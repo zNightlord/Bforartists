@@ -247,7 +247,7 @@ inline void eval_position_bend_twist(const float weight_rot1,
 
   const float weight_norm = math::safe_rcp(weight_rot1 + weight_rot2 + alpha);
 
-  const float3 delta_lambda = weight_norm * residual * 0.5f - alpha * lambda;
+  const float3 delta_lambda = weight_norm * (residual - alpha * lambda);
   lambda = lambda + delta_lambda;
 
   if constexpr (linearized_quaternion) {
@@ -265,6 +265,32 @@ inline void eval_position_bend_twist(const float weight_rot1,
     // TODO
     BLI_assert_unreachable();
   }
+}
+
+inline void eval_velocity_bend_twist(const float weight_rot1,
+                                     const float weight_rot2,
+                                     const float edge_length,
+                                     const float beta,
+                                     float3 &lambda,
+                                     float3 &angular_velocity1,
+                                     float3 &angular_velocity2)
+{
+  /* XXX According to the paper ("Position and Orientation Based Cosserat Rods") the Darboux vector
+   * needs to be divided by the edge length, but this creates an unstable constraint. Have to
+   * confirm the math here ... */
+  // const float3 current_darboux = math::safe_divide(2.0f, edge_length) *
+  //                                (math::invert_normalized(rotation1) *
+  //                                rotation2).imaginary_part();
+  UNUSED_VARS(edge_length);
+  const float3 residual = angular_velocity2 - angular_velocity1;
+
+  const float weight_norm = math::safe_rcp(1.0f + beta * (weight_rot1 + weight_rot2));
+
+  const float3 delta_lambda = weight_norm * (beta * residual - lambda);
+  lambda = lambda + delta_lambda;
+
+  angular_velocity1 += weight_rot1 * delta_lambda;
+  angular_velocity2 -= weight_rot2 * delta_lambda;
 }
 
 /**

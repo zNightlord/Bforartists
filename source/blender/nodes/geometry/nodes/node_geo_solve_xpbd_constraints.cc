@@ -556,8 +556,41 @@ static void evaluate_constraint_group_bend_twist(const SolverParams &params,
       }
       break;
     }
-    case EvaluationTarget::Velocities:
+    case EvaluationTarget::Velocities: {
+      xpbd_constraints::error_check::VariableChecker<debug_check> angular_velocity_checker(
+          params.constraints.angular_velocities.index_range());
+
+      group_mask.foreach_index(GrainSize(1024), [&](const int index) {
+        const int point1 = params.constraints.bend_twist.points1[index];
+        const int point2 = params.constraints.bend_twist.points2[index];
+
+        angular_velocity_checker.claim_variable(point1);
+        angular_velocity_checker.claim_variable(point2);
+
+        const float edge_length = params.constraints.bend_twist.edge_lengths[index];
+        const float beta = params.constraints.bend_twist.beta[index];
+
+        float3 &angular_velocity1 = params.constraints.angular_velocities[point1];
+        float3 &angular_velocity2 = params.constraints.angular_velocities[point2];
+        const float weight_rot1 = params.constraints.rotation_weights[point1];
+        const float weight_rot2 = params.constraints.rotation_weights[point2];
+
+        float3 lambda = float3(0.0f);
+        xpbd_constraints::eval_velocity_bend_twist(weight_rot1,
+                                                   weight_rot2,
+                                                   edge_length,
+                                                   beta * params.inv_delta_time_squared,
+                                                   lambda,
+                                                   angular_velocity1,
+                                                   angular_velocity2);
+      });
+
+      if (angular_velocity_checker.has_overlap()) {
+        params.error_message_add(geo_eval_log::NodeWarningType::Error,
+                                 "Overlapping constraint solver groups");
+      }
       break;
+    }
   }
 }
 
