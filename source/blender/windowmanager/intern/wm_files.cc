@@ -33,12 +33,12 @@
 #include "MEM_CacheLimiterC-Api.h"
 #include "MEM_guardedalloc.h"
 
-#include "BLI_blenlib.h"
-#include "BLI_fileops_types.h"
+#include "BLI_fileops.h"
 #include "BLI_filereader.h"
 #include "BLI_linklist.h"
 #include "BLI_math_time.h"
 #include "BLI_memory_cache.hh"
+#include "BLI_string.h"
 #include "BLI_system.h"
 #include "BLI_threads.h"
 #include "BLI_time.h"
@@ -132,6 +132,7 @@
 #include "DEG_depsgraph.hh"
 
 #include "WM_api.hh"
+#include "WM_keymap.hh"
 #include "WM_message.hh"
 #include "WM_toolsystem.hh"
 #include "WM_types.hh"
@@ -2317,8 +2318,9 @@ void WM_autosave_write(wmWindowManager *wm, Main *bmain)
 
   char filepath[FILE_MAX];
   wm_autosave_location(filepath);
-  /* Save as regular blend file with recovery information. */
-  const int fileflags = (G.fileflags & ~G_FILE_COMPRESS) | G_FILE_RECOVER_WRITE;
+  /* Save as regular blend file with recovery information and always compress them, see: !132685.
+   */
+  const int fileflags = G.fileflags | G_FILE_RECOVER_WRITE | G_FILE_COMPRESS;
 
   /* Error reporting into console. */
   BlendFileWriteParams params{};

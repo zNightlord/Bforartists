@@ -6,8 +6,8 @@
  * \ingroup spfile
  */
 
+#include <algorithm>
 #include <cerrno>
-#include <cmath>
 #include <cstring>
 #include <string>
 
@@ -17,9 +17,11 @@
 
 #include "AS_asset_representation.hh"
 
-#include "BLI_blenlib.h"
+#include "BLI_fileops.h"
 #include "BLI_fileops_types.h"
 #include "BLI_math_color.h"
+#include "BLI_path_utils.hh"
+#include "BLI_string.h"
 #include "BLI_utildefines.h"
 
 #ifdef WIN32
@@ -274,7 +276,7 @@ static void file_draw_tooltip_custom_func(bContext & /*C*/, uiTooltipData &tip, 
 
     char date_str[FILELIST_DIRENTRY_DATE_LEN], time_str[FILELIST_DIRENTRY_TIME_LEN];
     bool is_today, is_yesterday;
-    std::string day_string = ("");
+    std::string day_string;
     BLI_filelist_entry_datetime_to_string(
         nullptr, file->time, false, time_str, date_str, &is_today, &is_yesterday);
     if (is_today || is_yesterday) {
@@ -372,7 +374,7 @@ static void file_but_enable_drag(uiBut *but,
     const int import_method = ED_fileselect_asset_import_method_get(sfile, file);
     BLI_assert(import_method > -1);
 
-    UI_but_drag_set_asset(but, file->asset, import_method, icon, preview_image, scale);
+    UI_but_drag_set_asset(but, file->asset, import_method, icon, file->preview_icon_id);
   }
   else if (preview_image) {
     UI_but_drag_set_image(but, path, icon, preview_image, scale);
@@ -1199,9 +1201,7 @@ void file_draw_list(const bContext *C, ARegion *region)
 
   offset = ED_fileselect_layout_offset(
       layout, int(region->v2d.cur.xmin), int(-region->v2d.cur.ymax));
-  if (offset < 0) {
-    offset = 0;
-  }
+  offset = std::max(offset, 0);
 
   numfiles_layout = ED_fileselect_layout_numfiles(layout, region);
 
