@@ -254,7 +254,8 @@ struct ConstraintEvalParams {
     VArraySpan<float> alpha;
     VArraySpan<float> beta;
     VArraySpan<float> edge_lengths;
-    VArraySpan<float3> darboux_vectors;
+    VArraySpan<float> darboux_w;
+    VArraySpan<float3> darboux_xyz;
   } bend_twist;
   struct {
     VArray<int> solver_group;
@@ -530,7 +531,9 @@ static void evaluate_constraint_group_bend_twist(const SolverParams &params,
         rotation_checker.claim_variable(point2);
 
         const float edge_length = params.constraints.bend_twist.edge_lengths[index];
-        const float3 darboux_vector = params.constraints.bend_twist.darboux_vectors[index];
+        const math::Quaternion darboux_vector = math::Quaternion(
+            params.constraints.bend_twist.darboux_w[index],
+            params.constraints.bend_twist.darboux_xyz[index]);
         /* XPBD softness and damping factors. */
         const float alpha = params.constraints.bend_twist.alpha[index];
 
@@ -539,7 +542,7 @@ static void evaluate_constraint_group_bend_twist(const SolverParams &params,
         const float weight_rot1 = params.constraints.rotation_weights[point1];
         const float weight_rot2 = params.constraints.rotation_weights[point2];
 
-        float3 lambda = float3(0.0f);
+        float4 lambda = float4(0.0f);
         xpbd_constraints::eval_position_bend_twist<true>(weight_rot1,
                                                          weight_rot2,
                                                          edge_length,
@@ -951,8 +954,10 @@ static void prepare_constraint_data(GeoNodeExecParams params,
         ATTR_BETA, AttrDomain::Point, 0.0f);
     constraint_params.bend_twist.edge_lengths = *lookup_or_warn<float>(
         params, *attributes, "edge_length", AttrDomain::Point, 0.0f);
-    constraint_params.bend_twist.darboux_vectors = *lookup_or_warn<float3>(
-        params, *attributes, "darboux_vector", AttrDomain::Point, float3(0.0f));
+    constraint_params.bend_twist.darboux_w = *lookup_or_warn<float>(
+        params, *attributes, "darboux_w", AttrDomain::Point, float(0.0f));
+    constraint_params.bend_twist.darboux_xyz = *lookup_or_warn<float3>(
+        params, *attributes, "darboux_xyz", AttrDomain::Point, float3(0.0f));
   }
   if (std::optional<MutableAttributeAccessor> attributes =
           constraint_attributes[int(ConstraintGeometryType::Contact)])
