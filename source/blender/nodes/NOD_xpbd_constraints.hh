@@ -237,6 +237,7 @@ inline void eval_position_bend_twist(const float weight_rot1,
   // const float3 current_darboux = math::safe_divide(2.0f, edge_length) *
   //                                (math::invert_normalized(rotation1) *
   //                                rotation2).imaginary_part();
+  UNUSED_VARS(edge_length);
   const float3 current_darboux = 2.0f *
                                  (math::invert_normalized(rotation1) * rotation2).imaginary_part();
   const bool sign = math::length_squared(current_darboux - darboux_vector) <
