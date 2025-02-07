@@ -187,8 +187,8 @@ static void node_add_catalog_assets_draw(const bContext *C, Menu *menu)
     PointerRNA op_ptr;
     uiItemFullO(layout,
                 "NODE_OT_add_group_asset",
-                IFACE_(asset->get_name().c_str()),
-                ICON_NODETREE, /*BFA - Icon*/
+                IFACE_(asset->get_name()),
+                ICON_NODETREE,
                 nullptr,
                 WM_OP_INVOKE_REGION_WIN,
                 UI_ITEM_NONE,
@@ -227,8 +227,8 @@ static void node_add_unassigned_assets_draw(const bContext *C, Menu *menu)
     PointerRNA op_ptr;
     uiItemFullO(menu->layout,
                 "NODE_OT_add_group_asset",
-                IFACE_(asset->get_name().c_str()),
-                ICON_NODETREE, /*BFA - Icon*/
+                IFACE_(asset->get_name()),
+                ICON_NODETREE,
                 nullptr,
                 WM_OP_INVOKE_REGION_WIN,
                 UI_ITEM_NONE,

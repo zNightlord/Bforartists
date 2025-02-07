@@ -101,8 +101,8 @@ static void catalog_assets_draw(const bContext *C, Menu *menu)
     PointerRNA props_ptr;
     uiItemFullO_ptr(layout,
                     ot,
-                    IFACE_(asset->get_name().c_str()),
-                    ICON_NODETREE, /*BFA*/
+                    IFACE_(asset->get_name()),
+                    ICON_NODETREE,
                     nullptr,
                     WM_OP_INVOKE_DEFAULT,
                     UI_ITEM_NONE,
@@ -142,8 +142,8 @@ static void unassigned_assets_draw(const bContext *C, Menu *menu)
     PointerRNA props_ptr;
     uiItemFullO_ptr(layout,
                     ot,
-                    IFACE_(asset->get_name().c_str()),
-                    ICON_NODETREE, /*BFA*/
+                    IFACE_(asset->get_name()),
+                    ICON_NODETREE,
                     nullptr,
                     WM_OP_INVOKE_DEFAULT,
                     UI_ITEM_NONE,

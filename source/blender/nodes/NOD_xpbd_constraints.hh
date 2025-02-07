@@ -129,7 +129,7 @@ inline void eval_velocity_goal(const float3 &goal_velocity,
   float residual;
   const float3 gradient = math::normalize_and_get_length(velocity - goal_velocity, residual);
 
-  const float delta_lambda = (-residual - beta * lambda) / (1.0f + beta);
+  const float delta_lambda = (-beta * residual - lambda) / (1.0f + beta);
   lambda += delta_lambda;
   velocity += delta_lambda * gradient;
 }
@@ -143,7 +143,7 @@ inline void eval_angular_velocity_goal(const float3 &goal_angular_velocity,
   const float3 gradient = math::normalize_and_get_length(angular_velocity - goal_angular_velocity,
                                                          residual);
 
-  const float delta_lambda = (-residual - beta * lambda) / (1.0f + beta);
+  const float delta_lambda = (-beta * residual - lambda) / (1.0f + beta);
   lambda += delta_lambda;
   angular_velocity += delta_lambda * gradient;
 }
@@ -191,7 +191,8 @@ inline void eval_position_stretch_shear(const float weight_pos1,
   }
 }
 
-inline void eval_velocity_stretch_shear(const float weight_pos1,
+inline void eval_velocity_stretch_shear(const math::Quaternion &rotation,
+                                        const float weight_pos1,
                                         const float weight_pos2,
                                         const float weight_rot,
                                         const float edge_length,
@@ -201,39 +202,95 @@ inline void eval_velocity_stretch_shear(const float weight_pos1,
                                         float3 &velocity2,
                                         float3 &angular_velocity)
 {
-  // TODO
-  // const float inv_edge_length = math::safe_rcp(edge_length);
+  const float inv_edge_length = math::safe_rcp(edge_length);
 
-  // const float3 direction = math::transform_point(rotation, float3(0, 0, 1));
-  // const float3 residual = inv_edge_length * (position2 - position1) - direction;
-  // const float weight_norm = math::safe_rcp(
-  //     (weight_pos1 + weight_pos2) * inv_edge_length * inv_edge_length + 4.0f * weight_rot +
-  //     alpha);
+  const float3 direction = math::transform_point(rotation,
+                                                 math::cross(angular_velocity, float3(0, 0, 1)));
+  const float3 residual = inv_edge_length * (velocity2 - velocity1) - direction;
+  const float weight_norm = math::safe_rcp(
+      1.0f + beta * ((weight_pos1 + weight_pos2) * inv_edge_length * inv_edge_length +
+                     4.0f * weight_rot));
 
-  // const float3 delta_lambda = weight_norm * residual - alpha * lambda;
-  // lambda = lambda + delta_lambda;
+  const float3 delta_lambda = weight_norm * (beta * residual - lambda);
+  lambda = lambda + delta_lambda;
 
-  // position1 += weight_pos1 * inv_edge_length * delta_lambda;
-  // position2 -= weight_pos2 * inv_edge_length * delta_lambda;
-  // if constexpr (linearized_quaternion) {
-  //   /* XXX is this correct? */
-  //   const float4 delta_rot = weight_rot * float4(math::Quaternion(0.0f, delta_lambda) * rotation
-  //   *
-  //                                                math::Quaternion(0, 0, 0, -1));
-  //   rotation = math::normalize(math::Quaternion(float4(rotation) + delta_rot));
-  // }
-  // else {
-  //   /* Normalize the final result to avoid accumulating errors. */
-  //   constexpr bool normalize_final = true;
+  velocity1 += weight_pos1 * inv_edge_length * delta_lambda;
+  velocity2 -= weight_pos2 * inv_edge_length * delta_lambda;
+  angular_velocity += weight_rot *
+                      math::transform_point(math::invert_normalized(rotation),
+                                            math::cross(float3(0, 0, 1), delta_lambda));
+}
 
-  //   const math::Quaternion q = math::to_quaternion(
-  //       math::AxisAngle(direction, math::normalize(position2 - position1)));
+template<bool linearized_quaternion>
+inline void eval_position_bend_twist(const float weight_rot1,
+                                     const float weight_rot2,
+                                     const float edge_length,
+                                     const float3 &darboux_vector,
+                                     const float alpha,
+                                     float3 &lambda,
+                                     math::Quaternion &rotation1,
+                                     math::Quaternion &rotation2)
+{
+  /* XXX According to the paper ("Position and Orientation Based Cosserat Rods") the Darboux vector
+   * needs to be divided by the edge length, but this creates an unstable constraint. Have to
+   * confirm the math here ... */
+  // const float3 current_darboux = math::safe_divide(2.0f, edge_length) *
+  //                                (math::invert_normalized(rotation1) *
+  //                                rotation2).imaginary_part();
+  UNUSED_VARS(edge_length);
+  const float3 current_darboux = 2.0f *
+                                 (math::invert_normalized(rotation1) * rotation2).imaginary_part();
+  const bool sign = math::length_squared(current_darboux - darboux_vector) <
+                    math::length_squared(current_darboux + darboux_vector);
+  const float3 residual = (sign ? current_darboux - darboux_vector :
+                                  current_darboux + darboux_vector);
 
-  //   rotation = q * rotation;
-  //   if constexpr (normalize_final) {
-  //     rotation = math::normalize(rotation);
-  //   }
-  // }
+  const float weight_norm = math::safe_rcp(weight_rot1 + weight_rot2 + alpha);
+
+  const float3 delta_lambda = weight_norm * (residual - alpha * lambda);
+  lambda = lambda + delta_lambda;
+
+  if constexpr (linearized_quaternion) {
+    const float4 delta_rot1 = weight_rot1 *
+                              float4(rotation2 * math::Quaternion(0.0f, delta_lambda));
+    const float4 delta_rot2 = -weight_rot2 *
+                              float4(rotation1 * math::Quaternion(0.0f, delta_lambda));
+    rotation1 = math::normalize(math::Quaternion(float4(rotation1) + delta_rot1));
+    rotation2 = math::normalize(math::Quaternion(float4(rotation2) + delta_rot2));
+  }
+  else {
+    /* Normalize the final result to avoid accumulating errors. */
+    // constexpr bool normalize_final = true;
+
+    // TODO
+    BLI_assert_unreachable();
+  }
+}
+
+inline void eval_velocity_bend_twist(const float weight_rot1,
+                                     const float weight_rot2,
+                                     const float edge_length,
+                                     const float beta,
+                                     float3 &lambda,
+                                     float3 &angular_velocity1,
+                                     float3 &angular_velocity2)
+{
+  /* XXX According to the paper ("Position and Orientation Based Cosserat Rods") the Darboux vector
+   * needs to be divided by the edge length, but this creates an unstable constraint. Have to
+   * confirm the math here ... */
+  // const float3 current_darboux = math::safe_divide(2.0f, edge_length) *
+  //                                (math::invert_normalized(rotation1) *
+  //                                rotation2).imaginary_part();
+  UNUSED_VARS(edge_length);
+  const float3 residual = angular_velocity2 - angular_velocity1;
+
+  const float weight_norm = math::safe_rcp(1.0f + beta * (weight_rot1 + weight_rot2));
+
+  const float3 delta_lambda = weight_norm * (beta * residual - lambda);
+  lambda = lambda + delta_lambda;
+
+  angular_velocity1 += weight_rot1 * delta_lambda;
+  angular_velocity2 -= weight_rot2 * delta_lambda;
 }
 
 /**
