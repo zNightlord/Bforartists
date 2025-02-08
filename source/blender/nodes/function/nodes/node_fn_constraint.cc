@@ -83,7 +83,7 @@ template<typename ExecPreset> static auto stretch_shear_multifunction(ExecPreset
                                                                position2,
                                                                rotation);
         }
-        lambda = lambda_out;
+        lambda_out = lambda;
         position1_out = position1;
         position2_out = position2;
         rotation_out = rotation;
@@ -96,30 +96,35 @@ template<typename ExecPreset> static auto stretch_shear_multifunction(ExecPreset
 template<typename ExecPreset> static auto bend_twist_multifunction(ExecPreset exec_preset)
 {
   constexpr auto param_tags = TypeSequence<mf_input<bool>,
+                                           mf_input<float>,
                                            mf_input<float3>,
                                            mf_input<math::Quaternion>,
                                            mf_input<math::Quaternion>,
                                            mf_input<float>,
                                            mf_input<float>,
                                            mf_input<float>,
-                                           mf_input<float3>,
+                                           mf_input<math::Quaternion>,
                                            mf_input<float>,
+                                           mf_output<float>,
                                            mf_output<float3>,
                                            mf_output<math::Quaternion>,
                                            mf_output<math::Quaternion>>();
   auto call_fn = mf::build::detail::build_multi_function_call_from_element_fn(
       [](const bool linearized_rotation,
-         float3 lambda,
+         float lambda_w,
+         float3 lambda_xyz,
          math::Quaternion rotation1,
          math::Quaternion rotation2,
          const float weight_rot1,
          const float weight_rot2,
          const float edge_length,
-         const float3 &darboux_vector,
+         const math::Quaternion &darboux_vector,
          const float alpha,
-         float3 &lambda_out,
+         float &lambda_w_out,
+         float3 &lambda_xyz_out,
          math::Quaternion &rotation_out1,
          math::Quaternion &rotation_out2) -> void {
+        float4 lambda = float4(lambda_w, lambda_xyz);
         if (linearized_rotation) {
           xpbd_constraints::eval_position_bend_twist<true>(weight_rot1,
                                                            weight_rot2,
@@ -140,7 +145,8 @@ template<typename ExecPreset> static auto bend_twist_multifunction(ExecPreset ex
                                                             rotation1,
                                                             rotation2);
         }
-        lambda = lambda_out;
+        lambda_w_out = lambda.w;
+        lambda_xyz_out = lambda.xyz();
         rotation_out1 = rotation1;
         rotation_out2 = rotation2;
       },
@@ -203,7 +209,7 @@ template<typename ExecPreset> static auto contact_position_multifunction(ExecPre
                                                 position2,
                                                 rotation1,
                                                 rotation2);
-        lambda = lambda_out;
+        lambda_out = lambda;
         position1_out = position1;
         position2_out = position2;
         rotation1_out = rotation1;
@@ -276,8 +282,10 @@ static void node_declare(NodeDeclarationBuilder &b)
       b.add_input<decl::Float>("Alpha");
       break;
     case ConstraintType::BendTwist:
-      b.add_input<decl::Vector>("Lambda");
-      b.add_output<decl::Vector>("Lambda").align_with_previous();
+      b.add_input<decl::Float>("Lambda W");
+      b.add_output<decl::Float>("Lambda W").align_with_previous();
+      b.add_input<decl::Vector>("Lambda XYZ");
+      b.add_output<decl::Vector>("Lambda XYZ").align_with_previous();
       b.add_input<decl::Rotation>("Rotation 1").hide_value();
       b.add_output<decl::Rotation>("Rotation 1").align_with_previous();
       b.add_input<decl::Rotation>("Rotation 2").hide_value();
@@ -287,7 +295,7 @@ static void node_declare(NodeDeclarationBuilder &b)
       b.add_input<decl::Float>("Rotation Weight 2").default_value(1.0f);
       b.add_separator();
       b.add_input<decl::Float>("Edge Length");
-      b.add_input<decl::Vector>("Darboux Vector");
+      b.add_input<decl::Rotation>("Darboux Vector");
       b.add_input<decl::Float>("Alpha");
       break;
     case ConstraintType::ContactPosition:
