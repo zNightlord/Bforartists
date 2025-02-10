@@ -646,6 +646,7 @@ struct ContactClosure : public ConstraintClosure {
         eval_params.positions.index_range());
     xpbd_constraints::error_check::VariableChecker<debug_check> rotation_checker(
         eval_params.rotations.index_range());
+    [[maybe_unused]] std::atomic_bool error_unit_contact_normal = false;
 
     group_mask.foreach_index(GrainSize(1024), [&](const int index) {
       const int point = this->points[index];
@@ -673,8 +674,7 @@ struct ContactClosure : public ConstraintClosure {
       const float3 &normal = this->normal[index];
       if constexpr (debug_check) {
         if (!math::is_unit(normal)) {
-          solver_params.error_message_add(geo_eval_log::NodeWarningType::Error,
-                                          "Contact normal vector not normalized");
+          error_unit_contact_normal.store(true, std::memory_order_relaxed);
         }
       }
 
@@ -704,6 +704,10 @@ struct ContactClosure : public ConstraintClosure {
       solver_params.error_message_add(geo_eval_log::NodeWarningType::Error,
                                       "Overlapping constraint solver groups");
     }
+    if (error_unit_contact_normal) {
+      solver_params.error_message_add(geo_eval_log::NodeWarningType::Error,
+                                      "Contact normal vector not normalized");
+    }
   }
 
   template<bool debug_check>
@@ -717,6 +721,7 @@ struct ContactClosure : public ConstraintClosure {
         eval_params.velocities.index_range());
     xpbd_constraints::error_check::VariableChecker<debug_check> angular_velocity_checker(
         eval_params.angular_velocities.index_range());
+    [[maybe_unused]] std::atomic_bool error_unit_contact_normal = false;
 
     group_mask.foreach_index(GrainSize(1024), [&](const int index) {
       /* Active status is determined by the position evaluation. */
@@ -739,8 +744,7 @@ struct ContactClosure : public ConstraintClosure {
       const float3 &normal = this->normal[index];
       if constexpr (debug_check) {
         if (!math::is_unit(normal)) {
-          solver_params.error_message_add(geo_eval_log::NodeWarningType::Error,
-                                          "Contact normal vector not normalized");
+          error_unit_contact_normal.store(true, std::memory_order_relaxed);
         }
       }
       const float restitution = this->restitution[index];
@@ -792,6 +796,10 @@ struct ContactClosure : public ConstraintClosure {
     if (velocity_checker.has_overlap() || angular_velocity_checker.has_overlap()) {
       solver_params.error_message_add(geo_eval_log::NodeWarningType::Error,
                                       "Overlapping constraint solver groups");
+    }
+    if (error_unit_contact_normal) {
+      solver_params.error_message_add(geo_eval_log::NodeWarningType::Error,
+                                      "Contact normal vector not normalized");
     }
   }
 
