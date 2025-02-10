@@ -8866,8 +8866,25 @@ class VIEW3D_MT_edit_greasepencil(Menu):
 
         layout.separator()
 
-        layout.operator("grease_pencil.copy", text="Copy", icon="COPYDOWN")
-        layout.operator("grease_pencil.paste", text="Paste", icon="PASTEDOWN")
+        layout.operator("grease_pencil.duplicate_move", text="Duplicate")
+
+        layout.separator()
+
+        layout.operator("grease_pencil.copy", text="Copy", icon='COPYDOWN')
+        layout.operator("grease_pencil.paste", text="Paste", icon='PASTEDOWN').type = 'ACTIVE'
+        layout.operator("grease_pencil.paste", text="Paste by Layer").type = 'LAYER'
+
+        layout.separator()
+
+        layout.menu("VIEW3D_MT_weight_grease_pencil")
+
+        layout.separator()
+
+        layout.menu("VIEW3D_MT_edit_greasepencil_showhide")
+        layout.operator_menu_enum("grease_pencil.separate", "mode", text="Separate")
+        layout.menu("VIEW3D_MT_edit_greasepencil_cleanup")
+
+        layout.separator()
 
         layout.operator_menu_enum("grease_pencil.dissolve", "type")
         layout.menu("VIEW3D_MT_edit_greasepencil_delete")
@@ -12029,6 +12046,8 @@ class VIEW3D_MT_greasepencil_edit_context_menu(Menu):
             )
             col.operator("grease_pencil.copy", text="Copy", icon="COPYDOWN")
             col.operator("grease_pencil.paste", text="Paste", icon="PASTEDOWN")
+            col.operator("grease_pencil.paste", text="Paste", icon='PASTEDOWN').type = 'ACTIVE'
+            col.operator("grease_pencil.paste", text="Paste by Layer").type = 'LAYER'
 
             col.separator()
 
