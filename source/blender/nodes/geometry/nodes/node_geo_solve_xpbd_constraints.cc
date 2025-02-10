@@ -1053,7 +1053,9 @@ static void do_gauss_seidel_step(const SolverParams &solver_params,
                                  const Span<ConstraintClosure *> closures)
 {
   for (ConstraintClosure *closure : closures) {
-    do_single_constraint_passes(solver_params, eval_params, *closure);
+    if (closure) {
+      do_single_constraint_passes(solver_params, eval_params, *closure);
+    }
   }
 }
 
@@ -1095,6 +1097,7 @@ static void bind_constraint_closures(GeoNodeExecParams params,
 
   const Span<ConstraintTypeInfo> constraint_infos = get_constraint_info_ordered();
   closures.reinitialize(constraint_infos.size());
+  closures.fill(nullptr);
   for (const int i : constraint_infos.index_range()) {
     const ConstraintTypeInfo &info = constraint_infos[i];
     GeometrySet geometry_set = params.extract_input<GeometrySet>(info.ui_name);
@@ -1205,7 +1208,9 @@ static void node_geo_exec_positions(GeoNodeExecParams params)
   });
 
   for (ConstraintClosure *closure : constraint_closures) {
-    closure->finish_attributes();
+    if (closure) {
+      closure->finish_attributes();
+    }
   }
 
   params.set_output("Geometry", geometry_set);
@@ -1213,7 +1218,12 @@ static void node_geo_exec_positions(GeoNodeExecParams params)
   const Span<ConstraintTypeInfo> constraint_infos = get_constraint_info();
   for (const int i : constraint_infos.index_range()) {
     const ConstraintTypeInfo &info = constraint_infos[i];
-    params.set_output(info.ui_name, constraint_closures[i]->geometry_set);
+    if (constraint_closures[i]) {
+      params.set_output(info.ui_name, constraint_closures[i]->geometry_set);
+    }
+    else {
+      params.set_output(info.ui_name, GeometrySet{});
+    }
   }
 }
 
@@ -1325,7 +1335,9 @@ static void node_geo_exec_velocities(GeoNodeExecParams params)
   });
 
   for (ConstraintClosure *closure : constraint_closures) {
-    closure->finish_attributes();
+    if (closure) {
+      closure->finish_attributes();
+    }
   }
 
   params.set_output("Geometry", geometry_set);
@@ -1333,7 +1345,12 @@ static void node_geo_exec_velocities(GeoNodeExecParams params)
   const Span<ConstraintTypeInfo> constraint_infos = get_constraint_info();
   for (const int i : constraint_infos.index_range()) {
     const ConstraintTypeInfo &info = constraint_infos[i];
-    params.set_output(info.ui_name, constraint_closures[i]->geometry_set);
+    if (constraint_closures[i]) {
+      params.set_output(info.ui_name, constraint_closures[i]->geometry_set);
+    }
+    else {
+      params.set_output(info.ui_name, GeometrySet{});
+    }
   }
 }
 
