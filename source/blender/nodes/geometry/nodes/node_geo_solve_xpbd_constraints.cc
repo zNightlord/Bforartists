@@ -102,8 +102,9 @@ struct ConstraintClosure {
   ConstraintClosure(GeometrySet &&geometry_set, ErrorFn error_fn)
       : geometry_set(std::move(geometry_set))
   {
-    PointCloudComponent &component =
-        this->geometry_set.get_component_for_write<PointCloudComponent>();
+    BLI_assert(this->geometry_set.has_component<PointCloudComponent>());
+    const PointCloudComponent &component =
+        *this->geometry_set.get_component<PointCloudComponent>();
     std::optional<bke::AttributeAccessor> attributes = component.attributes();
     this->solver_groups = *lookup_or_warn<int>(
         *attributes, ATTR_SOLVER_GROUP, AttrDomain::Point, 0, error_fn);
@@ -1228,6 +1229,8 @@ static void node_geo_exec_positions(GeoNodeExecParams params)
     const ConstraintTypeInfo &info = constraint_infos[i];
     if (constraint_closures[i]) {
       params.set_output(info.ui_name, constraint_closures[i]->geometry_set);
+
+      delete constraint_closures[i];
     }
     else {
       params.set_output(info.ui_name, GeometrySet{});
@@ -1355,6 +1358,8 @@ static void node_geo_exec_velocities(GeoNodeExecParams params)
     const ConstraintTypeInfo &info = constraint_infos[i];
     if (constraint_closures[i]) {
       params.set_output(info.ui_name, constraint_closures[i]->geometry_set);
+
+      delete constraint_closures[i];
     }
     else {
       params.set_output(info.ui_name, GeometrySet{});
