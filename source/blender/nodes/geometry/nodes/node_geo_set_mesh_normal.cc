@@ -29,6 +29,7 @@ static void node_declare(NodeDeclarationBuilder &b)
       case Mode::Sharpness:
         b.add_input<decl::Bool>("Edge Sharpness").supports_field();
         b.add_input<decl::Bool>("Face Sharpness").supports_field();
+        b.add_input<decl::Bool>("Remove Custom").default_value(true);
         break;
       case Mode::Free:
       case Mode::CornerFanSpace:
@@ -65,6 +66,7 @@ static void node_geo_exec(GeoNodeExecParams params)
 
   switch (mode) {
     case Mode::Sharpness: {
+      const bool remove_custom = params.extract_input<bool>("Remove Custom");
       fn::Field<bool> sharp_edge = params.extract_input<fn::Field<bool>>("Edge Sharpness");
       fn::Field<bool> sharp_face = params.extract_input<fn::Field<bool>>("Face Sharpness");
       geometry_set.modify_geometry_sets([&](GeometrySet &geometry_set) {
@@ -100,7 +102,9 @@ static void node_geo_exec(GeoNodeExecParams params)
             face_values.to_bools(attr.span);
             attr.finish();
           }
-          attributes.remove("custom_normal");
+          if (remove_custom) {
+            attributes.remove("custom_normal");
+          }
         }
       });
       break;
