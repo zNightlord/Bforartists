@@ -98,11 +98,6 @@ class Shader {
    * See `GPU_shader_warm_cache(..)` in `GPU_shader.hh` for more information. */
   virtual void warm_cache(int limit) = 0;
 
-  virtual void transform_feedback_names_set(Span<const char *> name_list,
-                                            eGPUShaderTFBType geom_type) = 0;
-  virtual bool transform_feedback_enable(VertBuf *) = 0;
-  virtual void transform_feedback_disable() = 0;
-
   virtual void bind() = 0;
   virtual void unbind() = 0;
 

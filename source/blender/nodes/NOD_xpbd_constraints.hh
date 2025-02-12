@@ -93,7 +93,7 @@ inline void eval_rotation_goal(const math::Quaternion &goal_rotation,
 {
   math::AxisAngle axis_angle = math::to_axis_angle(rotation *
                                                    math::invert_normalized(goal_rotation));
-  const float residual = axis_angle.angle().radian();
+  const float residual = axis_angle.angle().wrapped().radian();
   const float3 gradient = axis_angle.axis();
 
   const float delta_lambda = (-residual - alpha * lambda) / (1.0f + alpha);

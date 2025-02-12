@@ -12660,6 +12660,7 @@ static void rna_def_nodes(BlenderRNA *brna)
   define(brna, "FunctionNode", "FunctionNodeCombineMatrix", nullptr, ICON_COMBINE_MATRIX, "Add a Combine Matrix Function node\nConstruct a 4x4 matrix from its individual values");
   define(brna, "FunctionNode", "FunctionNodeCombineTransform", nullptr, ICON_COMBINE_TRANSFORM, "Add a Combine Transform Function node\n Combines the transform of matrices");
   define(brna, "FunctionNode", "FunctionNodeCompare", nullptr, ICON_FLOAT_COMPARE, "Add a Compare Function node\nAdds a mathematical compare between two inputs");
+  define(brna, "FunctionNode", "FunctionNodeConstraint"); 
   define(brna, "FunctionNode", "FunctionNodeEulerToRotation", nullptr, ICON_EULER_TO_ROTATION, "Add a Euler to Rotation Function node\nConverts a euler angle to a rotation vector");
   define(brna, "FunctionNode", "FunctionNodeFindInString", nullptr, ICON_STRING_FIND, "Add a Find in String node\nReturns an integer of the total count of matching strings or the first integer position of a matching string");
   define(brna, "FunctionNode", "FunctionNodeFloatToInt", def_float_to_int, ICON_FLOAT_TO_INT, "Add a Float to Integer Function node\nConverts float values into integer values");

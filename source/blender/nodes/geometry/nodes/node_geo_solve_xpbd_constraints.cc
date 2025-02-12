@@ -102,8 +102,9 @@ struct ConstraintClosure {
   ConstraintClosure(GeometrySet &&geometry_set, ErrorFn error_fn)
       : geometry_set(std::move(geometry_set))
   {
-    PointCloudComponent &component =
-        this->geometry_set.get_component_for_write<PointCloudComponent>();
+    BLI_assert(this->geometry_set.has_component<PointCloudComponent>());
+    const PointCloudComponent &component =
+        *this->geometry_set.get_component<PointCloudComponent>();
     std::optional<bke::AttributeAccessor> attributes = component.attributes();
     this->solver_groups = *lookup_or_warn<int>(
         *attributes, ATTR_SOLVER_GROUP, AttrDomain::Point, 0, error_fn);
@@ -646,6 +647,7 @@ struct ContactClosure : public ConstraintClosure {
         eval_params.positions.index_range());
     xpbd_constraints::error_check::VariableChecker<debug_check> rotation_checker(
         eval_params.rotations.index_range());
+    [[maybe_unused]] std::atomic_bool error_unit_contact_normal = false;
 
     group_mask.foreach_index(GrainSize(1024), [&](const int index) {
       const int point = this->points[index];
@@ -673,8 +675,7 @@ struct ContactClosure : public ConstraintClosure {
       const float3 &normal = this->normal[index];
       if constexpr (debug_check) {
         if (!math::is_unit(normal)) {
-          solver_params.error_message_add(geo_eval_log::NodeWarningType::Error,
-                                          "Contact normal vector not normalized");
+          error_unit_contact_normal.store(true, std::memory_order_relaxed);
         }
       }
 
@@ -704,6 +705,10 @@ struct ContactClosure : public ConstraintClosure {
       solver_params.error_message_add(geo_eval_log::NodeWarningType::Error,
                                       "Overlapping constraint solver groups");
     }
+    if (error_unit_contact_normal) {
+      solver_params.error_message_add(geo_eval_log::NodeWarningType::Error,
+                                      "Contact normal vector not normalized");
+    }
   }
 
   template<bool debug_check>
@@ -717,6 +722,7 @@ struct ContactClosure : public ConstraintClosure {
         eval_params.velocities.index_range());
     xpbd_constraints::error_check::VariableChecker<debug_check> angular_velocity_checker(
         eval_params.angular_velocities.index_range());
+    [[maybe_unused]] std::atomic_bool error_unit_contact_normal = false;
 
     group_mask.foreach_index(GrainSize(1024), [&](const int index) {
       /* Active status is determined by the position evaluation. */
@@ -739,8 +745,7 @@ struct ContactClosure : public ConstraintClosure {
       const float3 &normal = this->normal[index];
       if constexpr (debug_check) {
         if (!math::is_unit(normal)) {
-          solver_params.error_message_add(geo_eval_log::NodeWarningType::Error,
-                                          "Contact normal vector not normalized");
+          error_unit_contact_normal.store(true, std::memory_order_relaxed);
         }
       }
       const float restitution = this->restitution[index];
@@ -792,6 +797,10 @@ struct ContactClosure : public ConstraintClosure {
     if (velocity_checker.has_overlap() || angular_velocity_checker.has_overlap()) {
       solver_params.error_message_add(geo_eval_log::NodeWarningType::Error,
                                       "Overlapping constraint solver groups");
+    }
+    if (error_unit_contact_normal) {
+      solver_params.error_message_add(geo_eval_log::NodeWarningType::Error,
+                                      "Contact normal vector not normalized");
     }
   }
 
@@ -1053,7 +1062,9 @@ static void do_gauss_seidel_step(const SolverParams &solver_params,
                                  const Span<ConstraintClosure *> closures)
 {
   for (ConstraintClosure *closure : closures) {
-    do_single_constraint_passes(solver_params, eval_params, *closure);
+    if (closure) {
+      do_single_constraint_passes(solver_params, eval_params, *closure);
+    }
   }
 }
 
@@ -1095,6 +1106,7 @@ static void bind_constraint_closures(GeoNodeExecParams params,
 
   const Span<ConstraintTypeInfo> constraint_infos = get_constraint_info_ordered();
   closures.reinitialize(constraint_infos.size());
+  closures.fill(nullptr);
   for (const int i : constraint_infos.index_range()) {
     const ConstraintTypeInfo &info = constraint_infos[i];
     GeometrySet geometry_set = params.extract_input<GeometrySet>(info.ui_name);
@@ -1205,7 +1217,9 @@ static void node_geo_exec_positions(GeoNodeExecParams params)
   });
 
   for (ConstraintClosure *closure : constraint_closures) {
-    closure->finish_attributes();
+    if (closure) {
+      closure->finish_attributes();
+    }
   }
 
   params.set_output("Geometry", geometry_set);
@@ -1213,7 +1227,14 @@ static void node_geo_exec_positions(GeoNodeExecParams params)
   const Span<ConstraintTypeInfo> constraint_infos = get_constraint_info();
   for (const int i : constraint_infos.index_range()) {
     const ConstraintTypeInfo &info = constraint_infos[i];
-    params.set_output(info.ui_name, constraint_closures[i]->geometry_set);
+    if (constraint_closures[i]) {
+      params.set_output(info.ui_name, constraint_closures[i]->geometry_set);
+
+      delete constraint_closures[i];
+    }
+    else {
+      params.set_output(info.ui_name, GeometrySet{});
+    }
   }
 }
 
@@ -1325,7 +1346,9 @@ static void node_geo_exec_velocities(GeoNodeExecParams params)
   });
 
   for (ConstraintClosure *closure : constraint_closures) {
-    closure->finish_attributes();
+    if (closure) {
+      closure->finish_attributes();
+    }
   }
 
   params.set_output("Geometry", geometry_set);
@@ -1333,7 +1356,14 @@ static void node_geo_exec_velocities(GeoNodeExecParams params)
   const Span<ConstraintTypeInfo> constraint_infos = get_constraint_info();
   for (const int i : constraint_infos.index_range()) {
     const ConstraintTypeInfo &info = constraint_infos[i];
-    params.set_output(info.ui_name, constraint_closures[i]->geometry_set);
+    if (constraint_closures[i]) {
+      params.set_output(info.ui_name, constraint_closures[i]->geometry_set);
+
+      delete constraint_closures[i];
+    }
+    else {
+      params.set_output(info.ui_name, GeometrySet{});
+    }
   }
 }
 
