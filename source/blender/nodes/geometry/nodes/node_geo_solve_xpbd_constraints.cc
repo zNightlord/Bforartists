@@ -128,12 +128,15 @@ struct PositionGoalClosure : public ConstraintClosure {
   VArraySpan<float3> goal_positions;
   VArraySpan<float3> goal_velocities;
 
+  bke::SpanAttributeWriter<float> position_lambda;
+  bke::SpanAttributeWriter<float> velocity_lambda;
+
   PositionGoalClosure(GeometrySet &&geometry_set, ErrorFn error_fn)
       : ConstraintClosure(std::move(geometry_set), error_fn)
   {
     PointCloudComponent &component =
         this->geometry_set.get_component_for_write<PointCloudComponent>();
-    std::optional<bke::AttributeAccessor> attributes = component.attributes();
+    std::optional<bke::MutableAttributeAccessor> attributes = component.attributes_for_write();
     this->points = *lookup_or_warn<int>(*attributes, ATTR_POINT1, AttrDomain::Point, 0, error_fn);
     this->alpha = *attributes->lookup_or_default<float>(ATTR_ALPHA, AttrDomain::Point, 0.0f);
     this->beta = *attributes->lookup_or_default<float>(ATTR_BETA, AttrDomain::Point, 0.0f);
@@ -141,6 +144,11 @@ struct PositionGoalClosure : public ConstraintClosure {
         *attributes, "goal_position", AttrDomain::Point, float3(0.0f), error_fn);
     this->goal_velocities = *lookup_or_warn<float3>(
         *attributes, "goal_velocity", AttrDomain::Point, float3(0.0f), error_fn);
+
+    this->position_lambda = attributes->lookup_or_add_for_write_span<float>(
+        "position_lambda", AttrDomain::Point, bke::AttributeInitDefaultValue());
+    this->velocity_lambda = attributes->lookup_or_add_for_write_span<float>(
+        "velocity_lambda", AttrDomain::Point, bke::AttributeInitDefaultValue());
   }
 
   template<bool debug_check>
@@ -153,12 +161,12 @@ struct PositionGoalClosure : public ConstraintClosure {
 
     group_mask.foreach_index(GrainSize(1024), [&](const int index) {
       const int point1 = this->points[index];
+      float &lambda = this->position_lambda.span[index];
       const float alpha = this->alpha[index];
       const float3 &goal = this->goal_positions[index];
 
       position_checker.claim_variable(point1);
 
-      float lambda = 0.0f;
       float3 &position1 = eval_params.positions[point1];
       xpbd_constraints::eval_position_goal(
           goal, alpha * solver_params.inv_delta_time_squared, lambda, position1);
@@ -180,12 +188,12 @@ struct PositionGoalClosure : public ConstraintClosure {
 
     group_mask.foreach_index(GrainSize(1024), [&](const int index) {
       const int point1 = this->points[index];
+      float &lambda = this->velocity_lambda.span[index];
       const float beta = this->beta[index];
       const float3 &goal = this->goal_velocities[index];
 
       velocity_checker.claim_variable(point1);
 
-      float lambda = 0.0f;
       float3 &velocity1 = eval_params.velocities[point1];
       xpbd_constraints::eval_velocity_goal(
           goal, beta * solver_params.inv_delta_time_squared, lambda, velocity1);
@@ -221,7 +229,11 @@ struct PositionGoalClosure : public ConstraintClosure {
     }
   }
 
-  void finish_attributes() override {}
+  void finish_attributes() override
+  {
+    this->position_lambda.finish();
+    this->velocity_lambda.finish();
+  }
 };
 
 struct RotationGoalClosure : public ConstraintClosure {
@@ -231,12 +243,15 @@ struct RotationGoalClosure : public ConstraintClosure {
   VArraySpan<math::Quaternion> goal_rotations;
   VArraySpan<float3> goal_angular_velocities;
 
+  bke::SpanAttributeWriter<float> position_lambda;
+  bke::SpanAttributeWriter<float> velocity_lambda;
+
   RotationGoalClosure(GeometrySet &&geometry_set, ErrorFn error_fn)
       : ConstraintClosure(std::move(geometry_set), error_fn)
   {
     PointCloudComponent &component =
         this->geometry_set.get_component_for_write<PointCloudComponent>();
-    std::optional<bke::AttributeAccessor> attributes = component.attributes();
+    std::optional<bke::MutableAttributeAccessor> attributes = component.attributes_for_write();
     this->points = *lookup_or_warn<int>(*attributes, ATTR_POINT1, AttrDomain::Point, 0, error_fn);
     this->alpha = *attributes->lookup_or_default<float>(ATTR_ALPHA, AttrDomain::Point, 0.0f);
     this->beta = *attributes->lookup_or_default<float>(ATTR_BETA, AttrDomain::Point, 0.0f);
@@ -244,6 +259,11 @@ struct RotationGoalClosure : public ConstraintClosure {
         *attributes, "goal_rotation", AttrDomain::Point, math::Quaternion::identity(), error_fn);
     this->goal_angular_velocities = *lookup_or_warn<float3>(
         *attributes, "goal_angular_velocity", AttrDomain::Point, float3(0.0f), error_fn);
+
+    this->position_lambda = attributes->lookup_or_add_for_write_span<float>(
+        "position_lambda", AttrDomain::Point, bke::AttributeInitDefaultValue());
+    this->velocity_lambda = attributes->lookup_or_add_for_write_span<float>(
+        "velocity_lambda", AttrDomain::Point, bke::AttributeInitDefaultValue());
   }
 
   template<bool debug_check>
@@ -256,12 +276,12 @@ struct RotationGoalClosure : public ConstraintClosure {
 
     group_mask.foreach_index(GrainSize(1024), [&](const int index) {
       const int point1 = this->points[index];
+      float &lambda = this->position_lambda.span[index];
       const float alpha = this->alpha[index];
       const math::Quaternion &goal = this->goal_rotations[index];
 
       rotation_checker.claim_variable(point1);
 
-      float lambda = 0.0f;
       math::Quaternion &rotation1 = eval_params.rotations[point1];
       xpbd_constraints::eval_rotation_goal<true>(
           goal, alpha * solver_params.inv_delta_time_squared, lambda, rotation1);
@@ -283,12 +303,12 @@ struct RotationGoalClosure : public ConstraintClosure {
 
     group_mask.foreach_index(GrainSize(1024), [&](const int index) {
       const int point1 = this->points[index];
+      float &lambda = this->velocity_lambda.span[index];
       const float beta = this->beta[index];
       const float3 &goal = this->goal_angular_velocities[index];
 
       angular_velocity_checker.claim_variable(point1);
 
-      float lambda = 0.0f;
       float3 &angular_velocity1 = eval_params.angular_velocities[point1];
       xpbd_constraints::eval_angular_velocity_goal(
           goal, beta * solver_params.inv_delta_time_squared, lambda, angular_velocity1);
@@ -324,7 +344,11 @@ struct RotationGoalClosure : public ConstraintClosure {
     }
   }
 
-  void finish_attributes() override {}
+  void finish_attributes() override
+  {
+    this->position_lambda.finish();
+    this->velocity_lambda.finish();
+  }
 };
 
 struct StretchShearClosure : public ConstraintClosure {
@@ -334,18 +358,26 @@ struct StretchShearClosure : public ConstraintClosure {
   VArraySpan<float> beta;
   VArraySpan<float> edge_lengths;
 
+  bke::SpanAttributeWriter<float3> position_lambda;
+  bke::SpanAttributeWriter<float3> velocity_lambda;
+
   StretchShearClosure(GeometrySet &&geometry_set, ErrorFn error_fn)
       : ConstraintClosure(std::move(geometry_set), error_fn)
   {
     PointCloudComponent &component =
         this->geometry_set.get_component_for_write<PointCloudComponent>();
-    std::optional<bke::AttributeAccessor> attributes = component.attributes();
+    std::optional<bke::MutableAttributeAccessor> attributes = component.attributes_for_write();
     this->points1 = *lookup_or_warn<int>(*attributes, ATTR_POINT1, AttrDomain::Point, 0, error_fn);
     this->points2 = *lookup_or_warn<int>(*attributes, ATTR_POINT2, AttrDomain::Point, 0, error_fn);
     this->alpha = *attributes->lookup_or_default<float>(ATTR_ALPHA, AttrDomain::Point, 0.0f);
     this->beta = *attributes->lookup_or_default<float>(ATTR_BETA, AttrDomain::Point, 0.0f);
     this->edge_lengths = *lookup_or_warn<float>(
         *attributes, "edge_length", AttrDomain::Point, 0.0f, error_fn);
+
+    this->position_lambda = attributes->lookup_or_add_for_write_span<float3>(
+        "position_lambda", AttrDomain::Point, bke::AttributeInitDefaultValue());
+    this->velocity_lambda = attributes->lookup_or_add_for_write_span<float3>(
+        "velocity_lambda", AttrDomain::Point, bke::AttributeInitDefaultValue());
   }
 
   template<bool debug_check>
@@ -361,6 +393,7 @@ struct StretchShearClosure : public ConstraintClosure {
     group_mask.foreach_index(GrainSize(1024), [&](const int index) {
       const int point1 = this->points1[index];
       const int point2 = this->points2[index];
+      float3 &lambda = this->position_lambda.span[index];
       const float edge_length = this->edge_lengths[index];
       const float alpha = this->alpha[index];
 
@@ -368,7 +401,6 @@ struct StretchShearClosure : public ConstraintClosure {
       position_checker.claim_variable(point2);
       rotation_checker.claim_variable(point1);
 
-      float3 lambda = float3(0.0f);
       float3 &position1 = eval_params.positions[point1];
       float3 &position2 = eval_params.positions[point2];
       math::Quaternion &rotation = eval_params.rotations[point1];
@@ -406,6 +438,7 @@ struct StretchShearClosure : public ConstraintClosure {
     group_mask.foreach_index(GrainSize(1024), [&](const int index) {
       const int point1 = this->points1[index];
       const int point2 = this->points2[index];
+      float3 &lambda = this->velocity_lambda.span[index];
       const float edge_length = this->edge_lengths[index];
       const float beta = this->beta[index];
 
@@ -413,7 +446,6 @@ struct StretchShearClosure : public ConstraintClosure {
       velocity_checker.claim_variable(point2);
       angular_velocity_checker.claim_variable(point1);
 
-      float3 lambda = float3(0.0f);
       const math::Quaternion &rotation = eval_params.rotations[point1];
       float3 &velocity1 = eval_params.velocities[point1];
       float3 &velocity2 = eval_params.velocities[point2];
@@ -463,7 +495,11 @@ struct StretchShearClosure : public ConstraintClosure {
     }
   }
 
-  void finish_attributes() override {}
+  void finish_attributes() override
+  {
+    this->position_lambda.finish();
+    this->velocity_lambda.finish();
+  }
 };
 
 struct BendTwistClosure : public ConstraintClosure {
@@ -475,12 +511,16 @@ struct BendTwistClosure : public ConstraintClosure {
   VArraySpan<float> darboux_w;
   VArraySpan<float3> darboux_xyz;
 
+  bke::SpanAttributeWriter<float> position_lambda_w;
+  bke::SpanAttributeWriter<float3> position_lambda_xyz;
+  bke::SpanAttributeWriter<float3> velocity_lambda;
+
   BendTwistClosure(GeometrySet &&geometry_set, ErrorFn error_fn)
       : ConstraintClosure(std::move(geometry_set), error_fn)
   {
     PointCloudComponent &component =
         this->geometry_set.get_component_for_write<PointCloudComponent>();
-    std::optional<bke::AttributeAccessor> attributes = component.attributes();
+    std::optional<bke::MutableAttributeAccessor> attributes = component.attributes_for_write();
     this->points1 = *lookup_or_warn<int>(*attributes, ATTR_POINT1, AttrDomain::Point, 0, error_fn);
     this->points2 = *lookup_or_warn<int>(*attributes, ATTR_POINT2, AttrDomain::Point, 0, error_fn);
     this->alpha = *attributes->lookup_or_default<float>(ATTR_ALPHA, AttrDomain::Point, 0.0f);
@@ -491,6 +531,14 @@ struct BendTwistClosure : public ConstraintClosure {
         *attributes, "darboux_w", AttrDomain::Point, float(0.0f), error_fn);
     this->darboux_xyz = *lookup_or_warn<float3>(
         *attributes, "darboux_xyz", AttrDomain::Point, float3(0.0f), error_fn);
+
+    /* XXX plain float4 attribute is not supported, have to store it as float + float3. */
+    this->position_lambda_w = attributes->lookup_or_add_for_write_span<float>(
+        "position_lambda_w", AttrDomain::Point, bke::AttributeInitDefaultValue());
+    this->position_lambda_xyz = attributes->lookup_or_add_for_write_span<float3>(
+        "position_lambda_xyz", AttrDomain::Point, bke::AttributeInitDefaultValue());
+    this->velocity_lambda = attributes->lookup_or_add_for_write_span<float3>(
+        "velocity_lambda", AttrDomain::Point, bke::AttributeInitDefaultValue());
   }
 
   template<bool debug_check>
@@ -504,6 +552,8 @@ struct BendTwistClosure : public ConstraintClosure {
     group_mask.foreach_index(GrainSize(1024), [&](const int index) {
       const int point1 = this->points1[index];
       const int point2 = this->points2[index];
+      float &lambda_w = this->position_lambda_w.span[index];
+      float3 &lambda_xyz = this->position_lambda_xyz.span[index];
       const float edge_length = this->edge_lengths[index];
       const math::Quaternion darboux_vector = math::Quaternion(this->darboux_w[index],
                                                                this->darboux_xyz[index]);
@@ -512,11 +562,12 @@ struct BendTwistClosure : public ConstraintClosure {
       rotation_checker.claim_variable(point1);
       rotation_checker.claim_variable(point2);
 
-      float4 lambda = float4(0.0f);
       math::Quaternion &rotation1 = eval_params.rotations[point1];
       math::Quaternion &rotation2 = eval_params.rotations[point2];
       const float weight_rot1 = eval_params.rotation_weights[point1];
       const float weight_rot2 = eval_params.rotation_weights[point2];
+
+      float4 lambda = float4(lambda_w, lambda_xyz);
       xpbd_constraints::eval_position_bend_twist<true>(weight_rot1,
                                                        weight_rot2,
                                                        edge_length,
@@ -526,6 +577,8 @@ struct BendTwistClosure : public ConstraintClosure {
                                                        lambda,
                                                        rotation1,
                                                        rotation2);
+      lambda_w = lambda[0];
+      lambda_xyz = float3(lambda[1], lambda[2], lambda[3]);
     });
 
     if (rotation_checker.has_overlap()) {
@@ -545,13 +598,13 @@ struct BendTwistClosure : public ConstraintClosure {
     group_mask.foreach_index(GrainSize(1024), [&](const int index) {
       const int point1 = this->points1[index];
       const int point2 = this->points2[index];
+      float3 &lambda = this->velocity_lambda.span[index];
       const float edge_length = this->edge_lengths[index];
       const float beta = this->beta[index];
 
       angular_velocity_checker.claim_variable(point1);
       angular_velocity_checker.claim_variable(point2);
 
-      float3 lambda = float3(0.0f);
       float3 &angular_velocity1 = eval_params.angular_velocities[point1];
       float3 &angular_velocity2 = eval_params.angular_velocities[point2];
       const float weight_rot1 = eval_params.rotation_weights[point1];
@@ -595,7 +648,12 @@ struct BendTwistClosure : public ConstraintClosure {
     }
   }
 
-  void finish_attributes() override {}
+  void finish_attributes() override
+  {
+    this->position_lambda_w.finish();
+    this->position_lambda_xyz.finish();
+    this->velocity_lambda.finish();
+  }
 };
 
 struct ContactClosure : public ConstraintClosure {
@@ -607,6 +665,10 @@ struct ContactClosure : public ConstraintClosure {
 
   VArraySpan<float> friction;
   VArraySpan<float> restitution;
+
+  bke::SpanAttributeWriter<float> position_lambda;
+  bke::SpanAttributeWriter<float> restitution_lambda;
+  bke::SpanAttributeWriter<float> friction_lambda;
 
   /* Remember active contacts for later velocity update. */
   bke::SpanAttributeWriter<bool> active;
@@ -636,6 +698,12 @@ struct ContactClosure : public ConstraintClosure {
         ATTR_ACTIVE,
         AttrDomain::Point,
         bke::AttributeInitVArray(VArray<bool>::ForSingle(false, num_constraints)));
+    this->position_lambda = attributes->lookup_or_add_for_write_span<float>(
+        "position_lambda", AttrDomain::Point, bke::AttributeInitDefaultValue());
+    this->restitution_lambda = attributes->lookup_or_add_for_write_span<float>(
+        "restitution_lambda", AttrDomain::Point, bke::AttributeInitDefaultValue());
+    this->friction_lambda = attributes->lookup_or_add_for_write_span<float>(
+        "friction_lambda", AttrDomain::Point, bke::AttributeInitDefaultValue());
   }
 
   template<bool debug_check>
@@ -652,6 +720,7 @@ struct ContactClosure : public ConstraintClosure {
     group_mask.foreach_index(GrainSize(1024), [&](const int index) {
       const int point = this->points[index];
       const int collider_index = this->collider_index[index];
+      float &lambda = this->position_lambda.span[index];
 
       position_checker.claim_variable(point);
       rotation_checker.claim_variable(point);
@@ -682,8 +751,6 @@ struct ContactClosure : public ConstraintClosure {
       /* Contact constraints are stiff. */
       const float alpha = 0.0f;
 
-      /* TODO store this for warm-starting. */
-      float lambda = 0.0f;
       /* Zero weights for the collider, only the point can move. */
       active = xpbd_constraints::eval_position_contact(1.0f,
                                                        0.0f,
@@ -731,12 +798,17 @@ struct ContactClosure : public ConstraintClosure {
       }
 
       const int point = this->points[index];
+
       velocity_checker.claim_variable(point);
       angular_velocity_checker.claim_variable(point);
+
       const int collider_index = this->collider_index[index];
       if (!eval_params.collider_transforms.index_range().contains(collider_index)) {
         return;
       };
+
+      float &lambda_restitution = this->restitution_lambda.span[index];
+      float &lambda_friction = this->friction_lambda.span[index];
 
       /* Local positions are relative to moving point and collider respectively. */
       const float3 &local_position1 = this->local_position1[index];
@@ -774,9 +846,6 @@ struct ContactClosure : public ConstraintClosure {
       const float3 orig_collider_velocity = collider_velocity;
       const float3 orig_collider_angular_velocity = collider_angular_velocity;
 
-      /* TODO store for warm-starting. */
-      float lambda_restitution = 0.0f;
-      float lambda_friction = 0.0f;
       xpbd_constraints::eval_velocity_contact(orig_velocity,
                                               orig_collider_velocity,
                                               orig_angular_velocity,
@@ -830,6 +899,9 @@ struct ContactClosure : public ConstraintClosure {
 
   void finish_attributes() override
   {
+    this->position_lambda.finish();
+    this->restitution_lambda.finish();
+    this->friction_lambda.finish();
     this->active.finish();
   }
 };
