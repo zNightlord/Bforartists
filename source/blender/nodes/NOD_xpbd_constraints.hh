@@ -193,7 +193,7 @@ inline void eval_angular_velocity_goal(const float3 &goal_angular_velocity,
                                        const float3 &angular_velocity,
                                        float &r_residual,
                                        float &r_delta_lambda,
-                                       float3 r_delta_angular_velocity)
+                                       float3 &r_delta_angular_velocity)
 {
   const float3 gradient = math::normalize_and_get_length(angular_velocity - goal_angular_velocity,
                                                          r_residual);
