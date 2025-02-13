@@ -62,18 +62,7 @@ template<typename ExecPreset> static auto stretch_shear_multifunction(ExecPreset
          float3 &position2_out,
          math::Quaternion &rotation_out) -> void {
         if (linearized_rotation) {
-          xpbd_constraints::eval_position_stretch_shear<true>(weight_pos1,
-                                                              weight_pos2,
-                                                              weight_rot,
-                                                              edge_length,
-                                                              alpha,
-                                                              lambda,
-                                                              position1,
-                                                              position2,
-                                                              rotation);
-        }
-        else {
-          xpbd_constraints::eval_position_stretch_shear<false>(weight_pos1,
+          xpbd_constraints::apply_position_stretch_shear<true>(weight_pos1,
                                                                weight_pos2,
                                                                weight_rot,
                                                                edge_length,
@@ -82,6 +71,17 @@ template<typename ExecPreset> static auto stretch_shear_multifunction(ExecPreset
                                                                position1,
                                                                position2,
                                                                rotation);
+        }
+        else {
+          xpbd_constraints::apply_position_stretch_shear<false>(weight_pos1,
+                                                                weight_pos2,
+                                                                weight_rot,
+                                                                edge_length,
+                                                                alpha,
+                                                                lambda,
+                                                                position1,
+                                                                position2,
+                                                                rotation);
         }
         lambda_out = lambda;
         position1_out = position1;
@@ -126,17 +126,7 @@ template<typename ExecPreset> static auto bend_twist_multifunction(ExecPreset ex
          math::Quaternion &rotation_out2) -> void {
         float4 lambda = float4(lambda_w, lambda_xyz);
         if (linearized_rotation) {
-          xpbd_constraints::eval_position_bend_twist<true>(weight_rot1,
-                                                           weight_rot2,
-                                                           edge_length,
-                                                           darboux_vector,
-                                                           alpha,
-                                                           lambda,
-                                                           rotation1,
-                                                           rotation2);
-        }
-        else {
-          xpbd_constraints::eval_position_bend_twist<false>(weight_rot1,
+          xpbd_constraints::apply_position_bend_twist<true>(weight_rot1,
                                                             weight_rot2,
                                                             edge_length,
                                                             darboux_vector,
@@ -144,6 +134,16 @@ template<typename ExecPreset> static auto bend_twist_multifunction(ExecPreset ex
                                                             lambda,
                                                             rotation1,
                                                             rotation2);
+        }
+        else {
+          xpbd_constraints::apply_position_bend_twist<false>(weight_rot1,
+                                                             weight_rot2,
+                                                             edge_length,
+                                                             darboux_vector,
+                                                             alpha,
+                                                             lambda,
+                                                             rotation1,
+                                                             rotation2);
         }
         lambda_w_out = lambda.w;
         lambda_xyz_out = lambda.xyz();
@@ -196,19 +196,19 @@ template<typename ExecPreset> static auto contact_position_multifunction(ExecPre
          float3 &position2_out,
          math::Quaternion &rotation1_out,
          math::Quaternion &rotation2_out) -> void {
-        xpbd_constraints::eval_position_contact(weight_pos1,
-                                                weight_pos2,
-                                                weight_rot1,
-                                                weight_rot2,
-                                                local_position1,
-                                                local_position2,
-                                                normal,
-                                                alpha,
-                                                lambda,
-                                                position1,
-                                                position2,
-                                                rotation1,
-                                                rotation2);
+        xpbd_constraints::apply_position_contact(weight_pos1,
+                                                 weight_pos2,
+                                                 weight_rot1,
+                                                 weight_rot2,
+                                                 local_position1,
+                                                 local_position2,
+                                                 normal,
+                                                 alpha,
+                                                 lambda,
+                                                 position1,
+                                                 position2,
+                                                 rotation1,
+                                                 rotation2);
         lambda_out = lambda;
         position1_out = position1;
         position2_out = position2;

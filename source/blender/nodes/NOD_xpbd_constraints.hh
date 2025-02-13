@@ -72,10 +72,10 @@ enum class ConstraintType {
   ContactVelocity,
 };
 
-inline void eval_position_goal(const float3 &goal_position,
-                               const float alpha,
-                               float &lambda,
-                               float3 &position)
+inline void apply_position_goal(const float3 &goal_position,
+                                const float alpha,
+                                float &lambda,
+                                float3 &position)
 {
   float residual;
   const float3 gradient = math::normalize_and_get_length(position - goal_position, residual);
@@ -86,10 +86,10 @@ inline void eval_position_goal(const float3 &goal_position,
 }
 
 template<bool linearized_quaternion>
-inline void eval_rotation_goal(const math::Quaternion &goal_rotation,
-                               const float alpha,
-                               float &lambda,
-                               math::Quaternion &rotation)
+inline void apply_rotation_goal(const math::Quaternion &goal_rotation,
+                                const float alpha,
+                                float &lambda,
+                                math::Quaternion &rotation)
 {
   math::AxisAngle axis_angle = math::to_axis_angle(rotation *
                                                    math::invert_normalized(goal_rotation));
@@ -121,10 +121,10 @@ inline void eval_rotation_goal(const math::Quaternion &goal_rotation,
   }
 }
 
-inline void eval_velocity_goal(const float3 &goal_velocity,
-                               const float beta,
-                               float &lambda,
-                               float3 &velocity)
+inline void apply_velocity_goal(const float3 &goal_velocity,
+                                const float beta,
+                                float &lambda,
+                                float3 &velocity)
 {
   float residual;
   const float3 gradient = math::normalize_and_get_length(velocity - goal_velocity, residual);
@@ -134,10 +134,10 @@ inline void eval_velocity_goal(const float3 &goal_velocity,
   velocity += delta_lambda * gradient;
 }
 
-inline void eval_angular_velocity_goal(const float3 &goal_angular_velocity,
-                                       const float beta,
-                                       float &lambda,
-                                       float3 &angular_velocity)
+inline void apply_angular_velocity_goal(const float3 &goal_angular_velocity,
+                                        const float beta,
+                                        float &lambda,
+                                        float3 &angular_velocity)
 {
   float residual;
   const float3 gradient = math::normalize_and_get_length(angular_velocity - goal_angular_velocity,
@@ -149,15 +149,15 @@ inline void eval_angular_velocity_goal(const float3 &goal_angular_velocity,
 }
 
 template<bool linearized_quaternion>
-inline void eval_position_stretch_shear(const float weight_pos1,
-                                        const float weight_pos2,
-                                        const float weight_rot,
-                                        const float edge_length,
-                                        const float alpha,
-                                        float3 &lambda,
-                                        float3 &position1,
-                                        float3 &position2,
-                                        math::Quaternion &rotation)
+inline void apply_position_stretch_shear(const float weight_pos1,
+                                         const float weight_pos2,
+                                         const float weight_rot,
+                                         const float edge_length,
+                                         const float alpha,
+                                         float3 &lambda,
+                                         float3 &position1,
+                                         float3 &position2,
+                                         math::Quaternion &rotation)
 {
   const float inv_edge_length = math::safe_rcp(edge_length);
 
@@ -191,16 +191,16 @@ inline void eval_position_stretch_shear(const float weight_pos1,
   }
 }
 
-inline void eval_velocity_stretch_shear(const math::Quaternion &rotation,
-                                        const float weight_pos1,
-                                        const float weight_pos2,
-                                        const float weight_rot,
-                                        const float edge_length,
-                                        const float beta,
-                                        float3 &lambda,
-                                        float3 &velocity1,
-                                        float3 &velocity2,
-                                        float3 &angular_velocity)
+inline void apply_velocity_stretch_shear(const math::Quaternion &rotation,
+                                         const float weight_pos1,
+                                         const float weight_pos2,
+                                         const float weight_rot,
+                                         const float edge_length,
+                                         const float beta,
+                                         float3 &lambda,
+                                         float3 &velocity1,
+                                         float3 &velocity2,
+                                         float3 &angular_velocity)
 {
   const float inv_edge_length = math::safe_rcp(edge_length);
 
@@ -222,14 +222,14 @@ inline void eval_velocity_stretch_shear(const math::Quaternion &rotation,
 }
 
 template<bool linearized_quaternion>
-inline void eval_position_bend_twist(const float weight_rot1,
-                                     const float weight_rot2,
-                                     const float edge_length,
-                                     const math::Quaternion &darboux_vector,
-                                     const float alpha,
-                                     float4 &lambda,
-                                     math::Quaternion &rotation1,
-                                     math::Quaternion &rotation2)
+inline void apply_position_bend_twist(const float weight_rot1,
+                                      const float weight_rot2,
+                                      const float edge_length,
+                                      const math::Quaternion &darboux_vector,
+                                      const float alpha,
+                                      float4 &lambda,
+                                      math::Quaternion &rotation1,
+                                      math::Quaternion &rotation2)
 {
   const math::Quaternion current_darboux = math::invert_normalized(rotation1) * rotation2;
   const float4 residual = (float4(current_darboux) - float4(darboux_vector)) *
@@ -256,13 +256,13 @@ inline void eval_position_bend_twist(const float weight_rot1,
   }
 }
 
-inline void eval_velocity_bend_twist(const float weight_rot1,
-                                     const float weight_rot2,
-                                     const float edge_length,
-                                     const float beta,
-                                     float3 &lambda,
-                                     float3 &angular_velocity1,
-                                     float3 &angular_velocity2)
+inline void apply_velocity_bend_twist(const float weight_rot1,
+                                      const float weight_rot2,
+                                      const float edge_length,
+                                      const float beta,
+                                      float3 &lambda,
+                                      float3 &angular_velocity1,
+                                      float3 &angular_velocity2)
 {
   /* XXX According to the paper ("Position and Orientation Based Cosserat Rods") the Darboux vector
    * needs to be divided by the edge length, but this creates an unstable constraint. Have to
@@ -286,19 +286,19 @@ inline void eval_velocity_bend_twist(const float weight_rot1,
  * Positional contact constraint based on
  * "Detailed Rigid Body Simulation with Extended Position Based Dynamics", Mueller et al., 2020
  */
-inline bool eval_position_contact(const float weight_pos1,
-                                  const float weight_pos2,
-                                  const float weight_rot1,
-                                  const float weight_rot2,
-                                  const float3 &local_position1,
-                                  const float3 &local_position2,
-                                  const float3 &normal,
-                                  const float alpha,
-                                  float &lambda,
-                                  float3 &position1,
-                                  float3 &position2,
-                                  math::Quaternion &rotation1,
-                                  math::Quaternion &rotation2)
+inline bool apply_position_contact(const float weight_pos1,
+                                   const float weight_pos2,
+                                   const float weight_rot1,
+                                   const float weight_rot2,
+                                   const float3 &local_position1,
+                                   const float3 &local_position2,
+                                   const float3 &normal,
+                                   const float alpha,
+                                   float &lambda,
+                                   float3 &position1,
+                                   float3 &position2,
+                                   math::Quaternion &rotation1,
+                                   math::Quaternion &rotation2)
 {
   /* Local positions are relative to colliders.
    * Normal is a fixed shared direction for both participants. */
@@ -345,21 +345,21 @@ inline bool eval_position_contact(const float weight_pos1,
  * Velocity contact constraint based on
  * "Detailed Rigid Body Simulation with Extended Position Based Dynamics", Mueller et al., 2020
  */
-inline void eval_velocity_contact(const float3 &orig_velocity1,
-                                  const float3 &orig_velocity2,
-                                  const float3 &orig_angular_velocity1,
-                                  const float3 &orig_angular_velocity2,
-                                  const float3 &local_position1,
-                                  const float3 &local_position2,
-                                  const float3 &normal,
-                                  const float restitution,
-                                  const float friction,
-                                  float &delta_lambda_restitution,
-                                  float &delta_lambda_friction,
-                                  float3 &velocity1,
-                                  float3 &velocity2,
-                                  float3 &angular_velocity1,
-                                  float3 &angular_velocity2)
+inline void apply_velocity_contact(const float3 &orig_velocity1,
+                                   const float3 &orig_velocity2,
+                                   const float3 &orig_angular_velocity1,
+                                   const float3 &orig_angular_velocity2,
+                                   const float3 &local_position1,
+                                   const float3 &local_position2,
+                                   const float3 &normal,
+                                   const float restitution,
+                                   const float friction,
+                                   float &delta_lambda_restitution,
+                                   float &delta_lambda_friction,
+                                   float3 &velocity1,
+                                   float3 &velocity2,
+                                   float3 &angular_velocity1,
+                                   float3 &angular_velocity2)
 {
   /* Compute velocity of the collider contact point. */
   const float3 contact_velocity1 = velocity1 + math::cross(angular_velocity1, local_position1);

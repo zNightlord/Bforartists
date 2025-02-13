@@ -168,7 +168,7 @@ struct PositionGoalClosure : public ConstraintClosure {
       position_checker.claim_variable(point1);
 
       float3 &position1 = eval_params.positions[point1];
-      xpbd_constraints::eval_position_goal(
+      xpbd_constraints::apply_position_goal(
           goal, alpha * solver_params.inv_delta_time_squared, lambda, position1);
     });
 
@@ -195,7 +195,7 @@ struct PositionGoalClosure : public ConstraintClosure {
       velocity_checker.claim_variable(point1);
 
       float3 &velocity1 = eval_params.velocities[point1];
-      xpbd_constraints::eval_velocity_goal(
+      xpbd_constraints::apply_velocity_goal(
           goal, beta * solver_params.inv_delta_time_squared, lambda, velocity1);
     });
 
@@ -283,7 +283,7 @@ struct RotationGoalClosure : public ConstraintClosure {
       rotation_checker.claim_variable(point1);
 
       math::Quaternion &rotation1 = eval_params.rotations[point1];
-      xpbd_constraints::eval_rotation_goal<true>(
+      xpbd_constraints::apply_rotation_goal<true>(
           goal, alpha * solver_params.inv_delta_time_squared, lambda, rotation1);
     });
 
@@ -310,7 +310,7 @@ struct RotationGoalClosure : public ConstraintClosure {
       angular_velocity_checker.claim_variable(point1);
 
       float3 &angular_velocity1 = eval_params.angular_velocities[point1];
-      xpbd_constraints::eval_angular_velocity_goal(
+      xpbd_constraints::apply_angular_velocity_goal(
           goal, beta * solver_params.inv_delta_time_squared, lambda, angular_velocity1);
     });
 
@@ -407,16 +407,16 @@ struct StretchShearClosure : public ConstraintClosure {
       const float weight_pos1 = eval_params.position_weights[point1];
       const float weight_pos2 = eval_params.position_weights[point2];
       const float weight_rot = eval_params.rotation_weights[point1];
-      xpbd_constraints::eval_position_stretch_shear<true>(weight_pos1,
-                                                          weight_pos2,
-                                                          weight_rot,
-                                                          edge_length,
-                                                          alpha *
-                                                              solver_params.inv_delta_time_squared,
-                                                          lambda,
-                                                          position1,
-                                                          position2,
-                                                          rotation);
+      xpbd_constraints::apply_position_stretch_shear<true>(
+          weight_pos1,
+          weight_pos2,
+          weight_rot,
+          edge_length,
+          alpha * solver_params.inv_delta_time_squared,
+          lambda,
+          position1,
+          position2,
+          rotation);
     });
 
     if (position_checker.has_overlap() || rotation_checker.has_overlap()) {
@@ -453,16 +453,16 @@ struct StretchShearClosure : public ConstraintClosure {
       const float weight_pos1 = eval_params.position_weights[point1];
       const float weight_pos2 = eval_params.position_weights[point2];
       const float weight_rot = eval_params.rotation_weights[point1];
-      xpbd_constraints::eval_velocity_stretch_shear(rotation,
-                                                    weight_pos1,
-                                                    weight_pos2,
-                                                    weight_rot,
-                                                    edge_length,
-                                                    beta * solver_params.inv_delta_time_squared,
-                                                    lambda,
-                                                    velocity1,
-                                                    velocity2,
-                                                    angular_velocity);
+      xpbd_constraints::apply_velocity_stretch_shear(rotation,
+                                                     weight_pos1,
+                                                     weight_pos2,
+                                                     weight_rot,
+                                                     edge_length,
+                                                     beta * solver_params.inv_delta_time_squared,
+                                                     lambda,
+                                                     velocity1,
+                                                     velocity2,
+                                                     angular_velocity);
     });
 
     if (velocity_checker.has_overlap() || angular_velocity_checker.has_overlap()) {
@@ -568,15 +568,15 @@ struct BendTwistClosure : public ConstraintClosure {
       const float weight_rot2 = eval_params.rotation_weights[point2];
 
       float4 lambda = float4(lambda_w, lambda_xyz);
-      xpbd_constraints::eval_position_bend_twist<true>(weight_rot1,
-                                                       weight_rot2,
-                                                       edge_length,
-                                                       darboux_vector,
-                                                       alpha *
-                                                           solver_params.inv_delta_time_squared,
-                                                       lambda,
-                                                       rotation1,
-                                                       rotation2);
+      xpbd_constraints::apply_position_bend_twist<true>(weight_rot1,
+                                                        weight_rot2,
+                                                        edge_length,
+                                                        darboux_vector,
+                                                        alpha *
+                                                            solver_params.inv_delta_time_squared,
+                                                        lambda,
+                                                        rotation1,
+                                                        rotation2);
       lambda_w = lambda[0];
       lambda_xyz = float3(lambda[1], lambda[2], lambda[3]);
     });
@@ -609,13 +609,13 @@ struct BendTwistClosure : public ConstraintClosure {
       float3 &angular_velocity2 = eval_params.angular_velocities[point2];
       const float weight_rot1 = eval_params.rotation_weights[point1];
       const float weight_rot2 = eval_params.rotation_weights[point2];
-      xpbd_constraints::eval_velocity_bend_twist(weight_rot1,
-                                                 weight_rot2,
-                                                 edge_length,
-                                                 beta * solver_params.inv_delta_time_squared,
-                                                 lambda,
-                                                 angular_velocity1,
-                                                 angular_velocity2);
+      xpbd_constraints::apply_velocity_bend_twist(weight_rot1,
+                                                  weight_rot2,
+                                                  edge_length,
+                                                  beta * solver_params.inv_delta_time_squared,
+                                                  lambda,
+                                                  angular_velocity1,
+                                                  angular_velocity2);
     });
 
     if (angular_velocity_checker.has_overlap()) {
@@ -752,20 +752,20 @@ struct ContactClosure : public ConstraintClosure {
       const float alpha = 0.0f;
 
       /* Zero weights for the collider, only the point can move. */
-      active = xpbd_constraints::eval_position_contact(1.0f,
-                                                       0.0f,
-                                                       1.0f,
-                                                       0.0f,
-                                                       local_position1,
-                                                       local_position2,
-                                                       normal,
-                                                       alpha *
-                                                           solver_params.inv_delta_time_squared,
-                                                       lambda,
-                                                       position,
-                                                       collider_position,
-                                                       rotation,
-                                                       collider_rotation);
+      active = xpbd_constraints::apply_position_contact(1.0f,
+                                                        0.0f,
+                                                        1.0f,
+                                                        0.0f,
+                                                        local_position1,
+                                                        local_position2,
+                                                        normal,
+                                                        alpha *
+                                                            solver_params.inv_delta_time_squared,
+                                                        lambda,
+                                                        position,
+                                                        collider_position,
+                                                        rotation,
+                                                        collider_rotation);
     });
 
     if (position_checker.has_overlap() || rotation_checker.has_overlap()) {
@@ -846,21 +846,21 @@ struct ContactClosure : public ConstraintClosure {
       const float3 orig_collider_velocity = collider_velocity;
       const float3 orig_collider_angular_velocity = collider_angular_velocity;
 
-      xpbd_constraints::eval_velocity_contact(orig_velocity,
-                                              orig_collider_velocity,
-                                              orig_angular_velocity,
-                                              orig_collider_angular_velocity,
-                                              local_position1,
-                                              local_position2,
-                                              normal,
-                                              restitution,
-                                              friction,
-                                              lambda_restitution,
-                                              lambda_friction,
-                                              velocity,
-                                              collider_velocity,
-                                              angular_velocity,
-                                              collider_angular_velocity);
+      xpbd_constraints::apply_velocity_contact(orig_velocity,
+                                               orig_collider_velocity,
+                                               orig_angular_velocity,
+                                               orig_collider_angular_velocity,
+                                               local_position1,
+                                               local_position2,
+                                               normal,
+                                               restitution,
+                                               friction,
+                                               lambda_restitution,
+                                               lambda_friction,
+                                               velocity,
+                                               collider_velocity,
+                                               angular_velocity,
+                                               collider_angular_velocity);
     });
 
     if (velocity_checker.has_overlap() || angular_velocity_checker.has_overlap()) {

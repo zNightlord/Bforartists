@@ -20,7 +20,7 @@ TEST(xpbd_constraints, PositionGoal)
 
   const float alpha = 0.0f;
 
-  xpbd_constraints::eval_position_goal(goal, alpha, lambda, position);
+  xpbd_constraints::apply_position_goal(goal, alpha, lambda, position);
   EXPECT_NEAR(-delta, lambda, 1e-5f);
   EXPECT_V3_NEAR(goal, position, 1e-5f);
 }
@@ -38,7 +38,7 @@ TEST(xpbd_constraints, RotationGoal)
 
   const float alpha = 0.0f;
 
-  xpbd_constraints::eval_rotation_goal<false>(goal, alpha, lambda, rotation);
+  xpbd_constraints::apply_rotation_goal<false>(goal, alpha, lambda, rotation);
   EXPECT_NEAR(-delta.angle().radian(), lambda, 1e-5f);
   EXPECT_V4_NEAR(float4(goal), float4(rotation), 1e-5f);
 }
@@ -56,7 +56,7 @@ TEST(xpbd_constraints, RotationGoalLinearized)
 
   const float alpha = 0.0f;
 
-  xpbd_constraints::eval_rotation_goal<true>(goal, alpha, lambda, rotation);
+  xpbd_constraints::apply_rotation_goal<true>(goal, alpha, lambda, rotation);
   EXPECT_NEAR(-delta.angle().radian(), lambda, 1e-5f);
   /* Linearized quaternion offset does not yield exact rotation for large offsets. */
   EXPECT_V4_NEAR(float4(goal), float4(rotation), 0.05f);
@@ -82,19 +82,19 @@ TEST(xpbd_constraints, InactiveContact)
 
   const float alpha = 0.0f;
 
-  bool active = xpbd_constraints::eval_position_contact(weight_pos1,
-                                                        weight_pos2,
-                                                        weight_rot1,
-                                                        weight_rot2,
-                                                        local_position1,
-                                                        local_position2,
-                                                        normal,
-                                                        alpha,
-                                                        lambda,
-                                                        position1,
-                                                        position2,
-                                                        rotation1,
-                                                        rotation2);
+  bool active = xpbd_constraints::apply_position_contact(weight_pos1,
+                                                         weight_pos2,
+                                                         weight_rot1,
+                                                         weight_rot2,
+                                                         local_position1,
+                                                         local_position2,
+                                                         normal,
+                                                         alpha,
+                                                         lambda,
+                                                         position1,
+                                                         position2,
+                                                         rotation1,
+                                                         rotation2);
   EXPECT_FALSE(active);
 }
 
@@ -118,19 +118,19 @@ TEST(xpbd_constraints, CentralContact)
 
   const float alpha = 0.0f;
 
-  bool active = xpbd_constraints::eval_position_contact(weight_pos1,
-                                                        weight_pos2,
-                                                        weight_rot1,
-                                                        weight_rot2,
-                                                        local_position1,
-                                                        local_position2,
-                                                        normal,
-                                                        alpha,
-                                                        lambda,
-                                                        position1,
-                                                        position2,
-                                                        rotation1,
-                                                        rotation2);
+  bool active = xpbd_constraints::apply_position_contact(weight_pos1,
+                                                         weight_pos2,
+                                                         weight_rot1,
+                                                         weight_rot2,
+                                                         local_position1,
+                                                         local_position2,
+                                                         normal,
+                                                         alpha,
+                                                         lambda,
+                                                         position1,
+                                                         position2,
+                                                         rotation1,
+                                                         rotation2);
 
   EXPECT_TRUE(active);
   EXPECT_NEAR(2, lambda, 1e-5f);
@@ -158,19 +158,19 @@ TEST(xpbd_constraints, OffcenterContact)
 
   const float alpha = 0.0f;
 
-  bool active = xpbd_constraints::eval_position_contact(weight_pos1,
-                                                        weight_pos2,
-                                                        weight_rot1,
-                                                        weight_rot2,
-                                                        local_position1,
-                                                        local_position2,
-                                                        normal,
-                                                        alpha,
-                                                        lambda,
-                                                        position1,
-                                                        position2,
-                                                        rotation1,
-                                                        rotation2);
+  bool active = xpbd_constraints::apply_position_contact(weight_pos1,
+                                                         weight_pos2,
+                                                         weight_rot1,
+                                                         weight_rot2,
+                                                         local_position1,
+                                                         local_position2,
+                                                         normal,
+                                                         alpha,
+                                                         lambda,
+                                                         position1,
+                                                         position2,
+                                                         rotation1,
+                                                         rotation2);
 
   EXPECT_TRUE(active);
   EXPECT_NEAR(0.5f, lambda, 1e-5f);
@@ -198,21 +198,21 @@ TEST(xpbd_constraints, ContactFriction)
   const float restitution = 0.0f;
   const float friction = 0.5f;
 
-  xpbd_constraints::eval_velocity_contact(orig_velocity1,
-                                          orig_velocity2,
-                                          orig_angular_velocity1,
-                                          orig_angular_velocity2,
-                                          local_position1,
-                                          local_position2,
-                                          normal,
-                                          restitution,
-                                          friction,
-                                          lambda_restitution,
-                                          lambda_friction,
-                                          velocity1,
-                                          velocity2,
-                                          angular_velocity1,
-                                          angular_velocity2);
+  xpbd_constraints::apply_velocity_contact(orig_velocity1,
+                                           orig_velocity2,
+                                           orig_angular_velocity1,
+                                           orig_angular_velocity2,
+                                           local_position1,
+                                           local_position2,
+                                           normal,
+                                           restitution,
+                                           friction,
+                                           lambda_restitution,
+                                           lambda_friction,
+                                           velocity1,
+                                           velocity2,
+                                           angular_velocity1,
+                                           angular_velocity2);
   EXPECT_EQ(0, lambda_restitution);
   EXPECT_NEAR(-0.5f, lambda_friction, 1e-5f);
   EXPECT_V3_NEAR(float3(0.5f, 0, 0), velocity1, 1e-5f);
@@ -240,21 +240,21 @@ TEST(xpbd_constraints, ContactRestitution)
   const float restitution = 0.5f;
   const float friction = 0.0f;
 
-  xpbd_constraints::eval_velocity_contact(orig_velocity1,
-                                          orig_velocity2,
-                                          orig_angular_velocity1,
-                                          orig_angular_velocity2,
-                                          local_position1,
-                                          local_position2,
-                                          normal,
-                                          restitution,
-                                          friction,
-                                          lambda_restitution,
-                                          lambda_friction,
-                                          velocity1,
-                                          velocity2,
-                                          angular_velocity1,
-                                          angular_velocity2);
+  xpbd_constraints::apply_velocity_contact(orig_velocity1,
+                                           orig_velocity2,
+                                           orig_angular_velocity1,
+                                           orig_angular_velocity2,
+                                           local_position1,
+                                           local_position2,
+                                           normal,
+                                           restitution,
+                                           friction,
+                                           lambda_restitution,
+                                           lambda_friction,
+                                           velocity1,
+                                           velocity2,
+                                           angular_velocity1,
+                                           angular_velocity2);
   EXPECT_EQ(0.5f, lambda_restitution);
   EXPECT_NEAR(0, lambda_friction, 1e-5f);
   EXPECT_V3_NEAR(float3(1.0f, 0, 0.5f), velocity1, 1e-5f);
@@ -274,7 +274,7 @@ TEST(xpbd_constraints, StretchShear)
     float3 position1 = {-1, 0, 0};
     float3 position2 = {0, 0, 1};
     math::Quaternion rotation = math::Quaternion::identity();
-    xpbd_constraints::eval_position_stretch_shear<false>(
+    xpbd_constraints::apply_position_stretch_shear<false>(
         1, 0, 0, edge_length, alpha, lambda, position1, position2, rotation);
     EXPECT_V3_NEAR(float3(2, 0, -2), lambda, 1e-5f);
     EXPECT_V3_NEAR(float3(0, 0, -1), position1, 1e-5f);
@@ -288,7 +288,7 @@ TEST(xpbd_constraints, StretchShear)
     float3 position1 = {-1, 0, 0};
     float3 position2 = {0, 0, 1};
     math::Quaternion rotation = math::Quaternion::identity();
-    xpbd_constraints::eval_position_stretch_shear<false>(
+    xpbd_constraints::apply_position_stretch_shear<false>(
         0, 1, 0, edge_length, alpha, lambda, position1, position2, rotation);
     EXPECT_V3_NEAR(float3(2, 0, -2), lambda, 1e-5f);
     EXPECT_V3_NEAR(float3(-1, 0, 0), position1, 1e-5f);
@@ -302,7 +302,7 @@ TEST(xpbd_constraints, StretchShear)
     float3 position1 = {-1, 0, 0};
     float3 position2 = {0, 0, 1};
     math::Quaternion rotation = math::Quaternion::identity();
-    xpbd_constraints::eval_position_stretch_shear<false>(
+    xpbd_constraints::apply_position_stretch_shear<false>(
         0, 0, 1, edge_length, alpha, lambda, position1, position2, rotation);
     EXPECT_V3_NEAR(float3(0.125f, 0, -0.125f), lambda, 1e-5f);
     EXPECT_V3_NEAR(float3(-1, 0, 0), position1, 1e-5f);
@@ -317,7 +317,7 @@ TEST(xpbd_constraints, StretchShear)
     float3 position1 = {-1, 0, 0};
     float3 position2 = {0, 0, 1};
     math::Quaternion rotation = math::Quaternion::identity();
-    xpbd_constraints::eval_position_stretch_shear<true>(
+    xpbd_constraints::apply_position_stretch_shear<true>(
         0, 0, 1, edge_length, alpha, lambda, position1, position2, rotation);
     EXPECT_V3_NEAR(float3(0.125f, 0, -0.125f), lambda, 1e-5f);
     EXPECT_V3_NEAR(float3(-1, 0, 0), position1, 1e-5f);
@@ -353,7 +353,7 @@ TEST(xpbd_constraints, BendTwist)
     float4 lambda = float4(0.0f);
     math::Quaternion rotation1 = math::Quaternion::identity();
     math::Quaternion rotation2 = math::Quaternion::identity();
-    xpbd_constraints::eval_position_bend_twist<true>(
+    xpbd_constraints::apply_position_bend_twist<true>(
         1, 0, edge_length, darboux_vector, alpha, lambda, rotation1, rotation2);
     EXPECT_V4_NEAR(float4(x, 0, 0, 0), lambda, 1e-5f);
     EXPECT_V4_NEAR(math::normalize(float4(1.0f, x, 0, 0)), float4(rotation1), 1e-5f);
@@ -364,7 +364,7 @@ TEST(xpbd_constraints, BendTwist)
     float4 lambda = float4(0.0f);
     math::Quaternion rotation1 = math::Quaternion::identity();
     math::Quaternion rotation2 = math::Quaternion::identity();
-    xpbd_constraints::eval_position_bend_twist<true>(
+    xpbd_constraints::apply_position_bend_twist<true>(
         0, 1, edge_length, darboux_vector, alpha, lambda, rotation1, rotation2);
     EXPECT_V4_NEAR(float4(x, 0, 0, 0), lambda, 1e-5f);
     EXPECT_V4_NEAR(float4(1, 0, 0, 0), float4(rotation1), 1e-5f);
