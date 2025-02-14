@@ -1685,7 +1685,7 @@ static void node_geo_exec_positions(GeoNodeExecParams params)
 
 static void node_geo_exec_velocities(GeoNodeExecParams params)
 {
-  const SolverParams solver_params = extract_solver_params(params, EvaluationTarget::Positions);
+  const SolverParams solver_params = extract_solver_params(params, EvaluationTarget::Velocities);
   constexpr int gauss_seidel_steps = 1;
   GeometrySet geometry_set = params.extract_input<GeometrySet>("Geometry");
   Field<float3> position_field = params.extract_input<Field<float3>>("Position");
