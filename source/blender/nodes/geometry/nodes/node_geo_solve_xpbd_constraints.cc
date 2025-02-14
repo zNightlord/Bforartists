@@ -1302,10 +1302,10 @@ static void node_declare_positions(NodeDeclarationBuilder &b)
   b.add_input<decl::Float>("Delta Time").default_value(default_fps).min(0.0f).hide_value();
   b.add_input<decl::Int>("Gauss-Seidel Steps").default_value(1).min(0);
   b.add_input<decl::Bool>("Initialize")
-      .default_value(false)
+      .default_value(true)
       .description("Initialize lambda values and positions from zero or warm start");
   b.add_input<decl::Bool>("Warm Start")
-      .default_value(true)
+      .default_value(false)
       .description("Use previous lambda value when initializing instead of starting from zero");
 
   b.add_input<decl::Geometry>("Geometry");
