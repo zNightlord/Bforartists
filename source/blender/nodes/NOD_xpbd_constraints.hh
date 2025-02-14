@@ -61,6 +61,39 @@ template<> struct VariableChecker<true> {
 
 }  // namespace error_check
 
+inline void apply_position_impulse(const float3 &delta_position, float3 &position)
+{
+  position += delta_position;
+}
+
+template<bool linearized_quaternion>
+inline void apply_rotation_impulse(const float4 &delta_rotation, math::Quaternion &rotation)
+{
+  if constexpr (linearized_quaternion) {
+    rotation = math::normalize(math::Quaternion(float4(rotation) + delta_rotation));
+  }
+  else {
+    /* Normalize the final result to avoid accumulating errors. */
+    constexpr bool normalize_final = true;
+
+    rotation = math::Quaternion(delta_rotation) * rotation;
+    if constexpr (normalize_final) {
+      rotation = math::normalize(rotation);
+    }
+  }
+}
+
+inline void apply_velocity_impulse(const float3 &delta_velocity, float3 &velocity)
+{
+  velocity += delta_velocity;
+}
+
+inline void apply_angular_velocity_impulse(const float3 &delta_angular_velocity,
+                                           float3 &angular_velocity)
+{
+  angular_velocity += delta_angular_velocity;
+}
+
 enum class ConstraintType {
   PositionGoal,
   RotationGoal,
@@ -98,7 +131,16 @@ inline void apply_position_goal(const float3 &goal_position,
       goal_position, alpha, lambda, position, residual, delta_lambda, delta_position);
 
   lambda += delta_lambda;
-  position += delta_position;
+  apply_position_impulse(delta_position, position);
+}
+
+inline void init_position_goal(const float3 &goal_position, const float lambda, float3 &position)
+{
+  const float3 gradient = math::normalize(position - goal_position);
+
+  const float3 delta_position = lambda * gradient;
+
+  apply_position_impulse(delta_position, position);
 }
 
 template<bool linearized_quaternion>
@@ -143,19 +185,29 @@ inline void apply_rotation_goal(const math::Quaternion &goal_rotation,
       goal_rotation, alpha, lambda, rotation, residual, delta_lambda, delta_rotation);
 
   lambda += delta_lambda;
-  /* Multiply Quaternion(0, gradient) * rotation. */
+  apply_rotation_impulse<linearized_quaternion>(delta_rotation, rotation);
+}
+
+template<bool linearized_quaternion>
+inline void init_rotation_goal(const math::Quaternion &goal_rotation,
+                               const float lambda,
+                               math::Quaternion &rotation)
+{
+  const math::AxisAngle axis_angle = math::to_axis_angle(rotation *
+                                                         math::invert_normalized(goal_rotation));
+  const float3 gradient = axis_angle.axis();
+
+  float4 delta_rotation;
   if constexpr (linearized_quaternion) {
-    rotation = math::normalize(math::Quaternion(float4(rotation) + delta_rotation));
+    const float4 q = float4(math::Quaternion(0.0f, gradient) * rotation);
+    delta_rotation = lambda * 0.5f * q;
   }
   else {
-    /* Normalize the final result to avoid accumulating errors. */
-    constexpr bool normalize_final = true;
-
-    rotation = math::Quaternion(delta_rotation) * rotation;
-    if constexpr (normalize_final) {
-      rotation = math::normalize(rotation);
-    }
+    delta_rotation = float4(
+        math::to_quaternion(math::AxisAngle(gradient, math::AngleRadian(lambda))));
   }
+
+  apply_rotation_impulse<linearized_quaternion>(delta_rotation, rotation);
 }
 
 inline void eval_velocity_goal(const float3 &goal_velocity,
@@ -184,7 +236,16 @@ inline void apply_velocity_goal(const float3 &goal_velocity,
       goal_velocity, beta, lambda, velocity, residual, delta_lambda, delta_velocity);
 
   lambda += delta_lambda;
-  velocity += delta_velocity;
+  apply_velocity_impulse(delta_velocity, velocity);
+}
+
+inline void init_velocity_goal(const float3 &goal_velocity, const float lambda, float3 &velocity)
+{
+  const float3 gradient = math::normalize(velocity - goal_velocity);
+
+  const float3 delta_velocity = lambda * gradient;
+
+  apply_velocity_impulse(delta_velocity, velocity);
 }
 
 inline void eval_angular_velocity_goal(const float3 &goal_angular_velocity,
@@ -219,7 +280,18 @@ inline void apply_angular_velocity_goal(const float3 &goal_angular_velocity,
                              delta_angular_velocity);
 
   lambda += delta_lambda;
-  angular_velocity += delta_angular_velocity;
+  apply_angular_velocity_impulse(delta_angular_velocity, angular_velocity);
+}
+
+inline void init_angular_velocity_goal(const float3 &goal_angular_velocity,
+                                       const float lambda,
+                                       float3 &angular_velocity)
+{
+  const float3 gradient = math::normalize(angular_velocity - goal_angular_velocity);
+
+  const float3 delta_angular_velocity = lambda * gradient;
+
+  apply_angular_velocity_impulse(delta_angular_velocity, angular_velocity);
 }
 
 template<bool linearized_quaternion>
@@ -290,20 +362,40 @@ inline void apply_position_stretch_shear(const float weight_pos1,
                                                      delta_rot);
 
   lambda += delta_lambda;
-  position1 += delta_pos1;
-  position2 += delta_pos2;
+  apply_position_impulse(delta_pos1, position1);
+  apply_position_impulse(delta_pos2, position2);
+  apply_rotation_impulse<linearized_quaternion>(delta_rot, rotation);
+}
+
+template<bool linearized_quaternion>
+inline void init_position_stretch_shear(const float weight_pos1,
+                                        const float weight_pos2,
+                                        const float weight_rot,
+                                        const float edge_length,
+                                        const float3 &lambda,
+                                        float3 &position1,
+                                        float3 &position2,
+                                        math::Quaternion &rotation)
+{
+  const float inv_edge_length = math::safe_rcp(edge_length);
+
+  const float3 direction = math::transform_point(rotation, float3(0, 0, 1));
+
+  const float3 delta_pos1 = weight_pos1 * inv_edge_length * lambda;
+  const float3 delta_pos2 = -weight_pos2 * inv_edge_length * lambda;
+  float4 delta_rot;
   if constexpr (linearized_quaternion) {
-    rotation = math::normalize(math::Quaternion(float4(rotation) + delta_rot));
+    delta_rot = weight_rot *
+                float4(math::Quaternion(0.0f, lambda) * rotation * math::Quaternion(0, 0, 0, -1));
   }
   else {
-    /* Normalize the final result to avoid accumulating errors. */
-    constexpr bool normalize_final = true;
-
-    rotation = math::Quaternion(delta_rot) * rotation;
-    if constexpr (normalize_final) {
-      rotation = math::normalize(rotation);
-    }
+    delta_rot = float4(
+        math::to_quaternion(math::AxisAngle(direction, math::normalize(position2 - position1))));
   }
+
+  apply_position_impulse(delta_pos1, position1);
+  apply_position_impulse(delta_pos2, position2);
+  apply_rotation_impulse<linearized_quaternion>(delta_rot, rotation);
 }
 
 inline void eval_velocity_stretch_shear(const math::Quaternion &rotation,
@@ -372,9 +464,32 @@ inline void apply_velocity_stretch_shear(const math::Quaternion &rotation,
                               delta_angvel);
 
   lambda += delta_lambda;
-  velocity1 += delta_vel1;
-  velocity2 += delta_vel2;
-  angular_velocity += delta_angvel;
+  apply_velocity_impulse(delta_vel1, velocity1);
+  apply_velocity_impulse(delta_vel1, velocity1);
+  apply_angular_velocity_impulse(delta_angvel, angular_velocity);
+}
+
+inline void init_velocity_stretch_shear(const math::Quaternion &rotation,
+                                        const float weight_pos1,
+                                        const float weight_pos2,
+                                        const float weight_rot,
+                                        const float edge_length,
+                                        const float3 &lambda,
+                                        float3 &velocity1,
+                                        float3 &velocity2,
+                                        float3 &angular_velocity)
+{
+  const float inv_edge_length = math::safe_rcp(edge_length);
+
+  const float3 delta_vel1 = weight_pos1 * inv_edge_length * lambda;
+  const float3 delta_vel2 = -weight_pos2 * inv_edge_length * lambda;
+  const float3 delta_angvel = weight_rot *
+                              math::transform_point(math::invert_normalized(rotation),
+                                                    math::cross(float3(0, 0, 1), lambda));
+
+  apply_velocity_impulse(delta_vel1, velocity1);
+  apply_velocity_impulse(delta_vel2, velocity2);
+  apply_angular_velocity_impulse(delta_angvel, angular_velocity);
 }
 
 template<bool linearized_quaternion>
@@ -437,21 +552,29 @@ inline void apply_position_bend_twist(const float weight_rot1,
                                                   delta_rot2);
 
   lambda += delta_lambda;
+  apply_rotation_impulse<linearized_quaternion>(delta_rot1, rotation1);
+  apply_rotation_impulse<linearized_quaternion>(delta_rot2, rotation2);
+}
+
+template<bool linearized_quaternion>
+inline void init_position_bend_twist(const float weight_rot1,
+                                     const float weight_rot2,
+                                     const float4 &lambda,
+                                     math::Quaternion &rotation1,
+                                     math::Quaternion &rotation2)
+{
+  float4 delta_rot1, delta_rot2;
   if constexpr (linearized_quaternion) {
-    rotation1 = math::normalize(math::Quaternion(float4(rotation1) + delta_rot1));
-    rotation2 = math::normalize(math::Quaternion(float4(rotation2) + delta_rot2));
+    delta_rot1 = weight_rot1 * float4(rotation2 * math::conjugate(math::Quaternion(lambda)));
+    delta_rot2 = weight_rot2 * float4(rotation1 * math::Quaternion(lambda));
   }
   else {
-    /* Normalize the final result to avoid accumulating errors. */
-    constexpr bool normalize_final = true;
-
-    rotation1 = math::Quaternion(delta_rot1) * rotation1;
-    rotation2 = math::Quaternion(delta_rot2) * rotation2;
-    if constexpr (normalize_final) {
-      rotation1 = math::normalize(rotation1);
-      rotation2 = math::normalize(rotation2);
-    }
+    // TODO
+    BLI_assert_unreachable();
   }
+
+  apply_rotation_impulse<linearized_quaternion>(delta_rot1, rotation1);
+  apply_rotation_impulse<linearized_quaternion>(delta_rot2, rotation2);
 }
 
 inline void eval_velocity_bend_twist(const float weight_rot1,
@@ -507,8 +630,21 @@ inline void apply_velocity_bend_twist(const float weight_rot1,
                            delta_angvel2);
 
   lambda += delta_lambda;
-  angular_velocity1 += delta_angvel1;
-  angular_velocity2 += delta_angvel2;
+  apply_angular_velocity_impulse(delta_angvel1, angular_velocity1);
+  apply_angular_velocity_impulse(delta_angvel2, angular_velocity2);
+}
+
+inline void init_velocity_bend_twist(const float weight_rot1,
+                                     const float weight_rot2,
+                                     const float3 &lambda,
+                                     float3 &angular_velocity1,
+                                     float3 &angular_velocity2)
+{
+  const float3 delta_angvel1 = weight_rot1 * lambda;
+  const float3 delta_angvel2 = -weight_rot2 * lambda;
+
+  apply_angular_velocity_impulse(delta_angvel1, angular_velocity1);
+  apply_angular_velocity_impulse(delta_angvel2, angular_velocity2);
 }
 
 /**
@@ -568,8 +704,8 @@ inline bool eval_position_contact(const float weight_pos1,
 
   r_delta_position1 = impulse1 * weight_pos1;
   r_delta_position2 = impulse2 * weight_pos2;
-  r_delta_rotation1 = float4(0.0f, math::cross(local_position1, impulse1));
-  r_delta_rotation2 = float4(0.0f, math::cross(local_position2, impulse2));
+  r_delta_rotation1 = float4(0.0f, math::cross(local_position1, impulse1)) * weight_rot1;
+  r_delta_rotation2 = float4(0.0f, math::cross(local_position2, impulse2)) * weight_rot2;
   return true;
 }
 
@@ -587,6 +723,8 @@ inline bool apply_position_contact(const float weight_pos1,
                                    math::Quaternion &rotation1,
                                    math::Quaternion &rotation2)
 {
+  constexpr bool linearized_quaternion = true;
+
   float residual_depth;
   float delta_lambda;
   float3 delta_pos1, delta_pos2;
@@ -615,10 +753,45 @@ inline bool apply_position_contact(const float weight_pos1,
   }
 
   lambda += delta_lambda;
-  position1 += delta_pos1;
-  position2 += delta_pos2;
-  rotation1 = math::normalize(math::Quaternion(float4(rotation1) + delta_rot1));
-  rotation2 = math::normalize(math::Quaternion(float4(rotation2) + delta_rot2));
+  apply_position_impulse(delta_pos1, position1);
+  apply_position_impulse(delta_pos2, position2);
+  apply_rotation_impulse<linearized_quaternion>(delta_rot1, rotation1);
+  apply_rotation_impulse<linearized_quaternion>(delta_rot2, rotation2);
+  return true;
+}
+
+inline bool init_position_contact(const float weight_pos1,
+                                  const float weight_pos2,
+                                  const float weight_rot1,
+                                  const float weight_rot2,
+                                  const float3 &local_position1,
+                                  const float3 &local_position2,
+                                  const float3 &normal,
+                                  const float lambda,
+                                  float3 &position1,
+                                  float3 &position2,
+                                  math::Quaternion &rotation1,
+                                  math::Quaternion &rotation2)
+{
+  constexpr bool linearized_quaternion = true;
+
+  const bool active = (lambda > 0.0f);
+  if (!active) {
+    return false;
+  }
+
+  const float3 impulse1 = lambda * normal;
+  const float3 impulse2 = -impulse1;
+
+  const float3 delta_pos1 = impulse1 * weight_pos1;
+  const float3 delta_pos2 = impulse2 * weight_pos2;
+  const float4 delta_rot1 = float4(0.0f, math::cross(local_position1, impulse1)) * weight_rot1;
+  const float4 delta_rot2 = float4(0.0f, math::cross(local_position2, impulse2)) * weight_rot2;
+
+  apply_position_impulse(delta_pos1, position1);
+  apply_position_impulse(delta_pos2, position2);
+  apply_rotation_impulse<linearized_quaternion>(delta_rot1, rotation1);
+  apply_rotation_impulse<linearized_quaternion>(delta_rot2, rotation2);
   return true;
 }
 
@@ -732,10 +905,47 @@ inline void apply_velocity_contact(const float3 &orig_velocity1,
 
   lambda_restitution += delta_lambda_restitution;
   lambda_friction += delta_lambda_friction;
-  velocity1 += delta_vel1;
-  velocity2 += delta_vel2;
-  angular_velocity1 += delta_angvel1;
-  angular_velocity2 += delta_angvel2;
+  apply_velocity_impulse(delta_vel1, velocity1);
+  apply_velocity_impulse(delta_vel2, velocity2);
+  apply_angular_velocity_impulse(delta_angvel1, angular_velocity1);
+  apply_angular_velocity_impulse(delta_angvel2, angular_velocity2);
+}
+
+inline void init_velocity_contact(const float3 &local_position1,
+                                  const float3 &local_position2,
+                                  const float3 &normal,
+                                  const float lambda_restitution,
+                                  const float lambda_friction,
+                                  float3 &velocity1,
+                                  float3 &velocity2,
+                                  float3 &angular_velocity1,
+                                  float3 &angular_velocity2)
+{
+  /* Compute velocity of the collider contact point. */
+  const float3 contact_velocity1 = velocity1 + math::cross(angular_velocity1, local_position1);
+  const float3 contact_velocity2 = velocity2 + math::cross(angular_velocity2, local_position2);
+
+  /* Relative contact velocity before and after position corrections. */
+  const float3 relative_velocity = contact_velocity1 - contact_velocity2;
+
+  /* Decompose into normal and tangential velocity. */
+  const float normal_velocity = math::dot(relative_velocity, normal);
+  const float3 surface_velocity = relative_velocity - normal * normal_velocity;
+
+  /* Kill normal velocity, then add restitution. */
+  const float3 impulse_restitution = (-normal_velocity + lambda_restitution) * normal;
+  const float3 impulse_friction = -lambda_friction * math::normalize(surface_velocity);
+  const float3 impulse = impulse_restitution + impulse_friction;
+
+  const float3 delta_vel1 = impulse;
+  const float3 delta_vel2 = -impulse;
+  const float3 delta_angvel1 = math::cross(local_position1, impulse);
+  const float3 delta_angvel2 = -math::cross(local_position2, impulse);
+
+  apply_velocity_impulse(delta_vel1, velocity1);
+  apply_velocity_impulse(delta_vel2, velocity2);
+  apply_angular_velocity_impulse(delta_angvel1, angular_velocity1);
+  apply_angular_velocity_impulse(delta_angvel2, angular_velocity2);
 }
 
 }  // namespace blender::nodes::xpbd_constraints

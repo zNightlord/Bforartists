@@ -61,11 +61,20 @@ enum class SolverMethod {
   Jacobi,
 };
 
+enum class ConstraintInit {
+  /* Zero initialize lambda and compute change from current positions. */
+  ZeroInit,
+  /* Warm start: Use previous lambda as initial step. */
+  WarmStart,
+};
+
 struct SolverParams {
   float delta_time;
   float delta_time_squared;
+  float inv_delta_time;
   float inv_delta_time_squared;
   EvaluationTarget target;
+  std::optional<ConstraintInit> init_mode;
 
   std::function<void(const NodeWarningType type, const StringRef message)> error_message_add;
   /* Perform debug checks on user inputs at runtime. This helps avoid common errors but has a
@@ -117,6 +126,12 @@ struct ConstraintClosure {
   virtual void apply_to_velocities(const SolverParams &solver_params,
                                    ConstraintEvalParams &eval_params,
                                    const IndexMask &group_mask) = 0;
+  virtual void init_positions(const SolverParams &solver_params,
+                              ConstraintEvalParams &eval_params,
+                              const IndexMask &group_mask) = 0;
+  virtual void init_velocities(const SolverParams &solver_params,
+                               ConstraintEvalParams &eval_params,
+                               const IndexMask &group_mask) = 0;
 
   virtual void finish_attributes() = 0;
 };
@@ -227,6 +242,44 @@ struct PositionGoalClosure : public ConstraintClosure {
     else {
       this->do_apply_to_velocities<false>(params, constraint_params, group_mask);
     }
+  }
+
+  void init_positions(const SolverParams &solver_params,
+                      ConstraintEvalParams &eval_params,
+                      const IndexMask &group_mask) override
+  {
+    group_mask.foreach_index(GrainSize(1024), [&](const int index) {
+      float &lambda = this->position_lambda.span[index];
+      if (solver_params.init_mode == ConstraintInit::ZeroInit) {
+        lambda = 0.0f;
+      }
+      else {
+        const int point1 = this->points[index];
+        const float3 &goal = this->goal_positions[index];
+
+        float3 &position1 = eval_params.positions[point1];
+        xpbd_constraints::init_position_goal(goal, lambda, position1);
+      }
+    });
+  }
+
+  void init_velocities(const SolverParams &solver_params,
+                       ConstraintEvalParams &eval_params,
+                       const IndexMask &group_mask) override
+  {
+    group_mask.foreach_index(GrainSize(1024), [&](const int index) {
+      float &lambda = this->velocity_lambda.span[index];
+      if (solver_params.init_mode == ConstraintInit::ZeroInit) {
+        lambda = 0.0f;
+      }
+      else {
+        const int point1 = this->points[index];
+        const float3 &goal = this->goal_velocities[index];
+
+        float3 &velocity1 = eval_params.velocities[point1];
+        xpbd_constraints::init_velocity_goal(goal, lambda, velocity1);
+      }
+    });
   }
 
   void finish_attributes() override
@@ -342,6 +395,44 @@ struct RotationGoalClosure : public ConstraintClosure {
     else {
       this->do_apply_to_velocities<false>(params, constraint_params, group_mask);
     }
+  }
+
+  void init_positions(const SolverParams &solver_params,
+                      ConstraintEvalParams &eval_params,
+                      const IndexMask &group_mask) override
+  {
+    group_mask.foreach_index(GrainSize(1024), [&](const int index) {
+      float &lambda = this->position_lambda.span[index];
+      if (solver_params.init_mode == ConstraintInit::ZeroInit) {
+        lambda = 0.0f;
+      }
+      else {
+        const int point1 = this->points[index];
+        const math::Quaternion &goal = this->goal_rotations[index];
+
+        math::Quaternion &rotation1 = eval_params.rotations[point1];
+        xpbd_constraints::init_rotation_goal<true>(goal, lambda, rotation1);
+      }
+    });
+  }
+
+  void init_velocities(const SolverParams &solver_params,
+                       ConstraintEvalParams &eval_params,
+                       const IndexMask &group_mask) override
+  {
+    group_mask.foreach_index(GrainSize(1024), [&](const int index) {
+      float &lambda = this->velocity_lambda.span[index];
+      if (solver_params.init_mode == ConstraintInit::ZeroInit) {
+        lambda = 0.0f;
+      }
+      else {
+        const int point1 = this->points[index];
+        const float3 &goal = this->goal_angular_velocities[index];
+
+        float3 &angular_velocity1 = eval_params.angular_velocities[point1];
+        xpbd_constraints::init_angular_velocity_goal(goal, lambda, angular_velocity1);
+      }
+    });
   }
 
   void finish_attributes() override
@@ -493,6 +584,74 @@ struct StretchShearClosure : public ConstraintClosure {
     else {
       this->do_apply_to_velocities<false>(params, constraint_params, group_mask);
     }
+  }
+
+  void init_positions(const SolverParams &solver_params,
+                      ConstraintEvalParams &eval_params,
+                      const IndexMask &group_mask) override
+  {
+    group_mask.foreach_index(GrainSize(1024), [&](const int index) {
+      float3 &lambda = this->position_lambda.span[index];
+      if (solver_params.init_mode == ConstraintInit::ZeroInit) {
+        lambda = float3(0.0f);
+      }
+      else {
+        const int point1 = this->points1[index];
+        const int point2 = this->points2[index];
+        const float edge_length = this->edge_lengths[index];
+
+        const float weight_pos1 = eval_params.position_weights[point1];
+        const float weight_pos2 = eval_params.position_weights[point2];
+        const float weight_rot = eval_params.rotation_weights[point1];
+
+        float3 &position1 = eval_params.positions[point1];
+        float3 &position2 = eval_params.positions[point2];
+        math::Quaternion &rotation = eval_params.rotations[point1];
+        xpbd_constraints::init_position_stretch_shear<true>(weight_pos1,
+                                                            weight_pos2,
+                                                            weight_rot,
+                                                            edge_length,
+                                                            lambda,
+                                                            position1,
+                                                            position2,
+                                                            rotation);
+      }
+    });
+  }
+
+  void init_velocities(const SolverParams &solver_params,
+                       ConstraintEvalParams &eval_params,
+                       const IndexMask &group_mask) override
+  {
+    group_mask.foreach_index(GrainSize(1024), [&](const int index) {
+      float3 &lambda = this->position_lambda.span[index];
+      if (solver_params.init_mode == ConstraintInit::ZeroInit) {
+        lambda = float3(0.0f);
+      }
+      else {
+        const int point1 = this->points1[index];
+        const int point2 = this->points2[index];
+        const float edge_length = this->edge_lengths[index];
+
+        const float weight_pos1 = eval_params.position_weights[point1];
+        const float weight_pos2 = eval_params.position_weights[point2];
+        const float weight_rot = eval_params.rotation_weights[point1];
+
+        const math::Quaternion &rotation = eval_params.rotations[point1];
+        float3 &velocity1 = eval_params.velocities[point1];
+        float3 &velocity2 = eval_params.velocities[point2];
+        float3 &angular_velocity = eval_params.angular_velocities[point1];
+        xpbd_constraints::init_velocity_stretch_shear(rotation,
+                                                      weight_pos1,
+                                                      weight_pos2,
+                                                      weight_rot,
+                                                      edge_length,
+                                                      lambda,
+                                                      velocity1,
+                                                      velocity2,
+                                                      angular_velocity);
+      }
+    });
   }
 
   void finish_attributes() override
@@ -648,6 +807,56 @@ struct BendTwistClosure : public ConstraintClosure {
     }
   }
 
+  void init_positions(const SolverParams &solver_params,
+                      ConstraintEvalParams &eval_params,
+                      const IndexMask &group_mask) override
+  {
+    group_mask.foreach_index(GrainSize(1024), [&](const int index) {
+      float &lambda_w = this->position_lambda_w.span[index];
+      float3 &lambda_xyz = this->position_lambda_xyz.span[index];
+      if (solver_params.init_mode == ConstraintInit::ZeroInit) {
+        lambda_w = 0.0f;
+        lambda_xyz = float3(0.0f);
+      }
+      else {
+        const int point1 = this->points1[index];
+        const int point2 = this->points2[index];
+
+        math::Quaternion &rotation1 = eval_params.rotations[point1];
+        math::Quaternion &rotation2 = eval_params.rotations[point2];
+        const float weight_rot1 = eval_params.rotation_weights[point1];
+        const float weight_rot2 = eval_params.rotation_weights[point2];
+
+        const float4 lambda = float4(lambda_w, lambda_xyz);
+        xpbd_constraints::init_position_bend_twist<true>(
+            weight_rot1, weight_rot2, lambda, rotation1, rotation2);
+      }
+    });
+  }
+
+  void init_velocities(const SolverParams &solver_params,
+                       ConstraintEvalParams &eval_params,
+                       const IndexMask &group_mask) override
+  {
+    group_mask.foreach_index(GrainSize(1024), [&](const int index) {
+      float3 &lambda = this->velocity_lambda.span[index];
+      if (solver_params.init_mode == ConstraintInit::ZeroInit) {
+        lambda = float3(0.0f);
+      }
+      else {
+        const int point1 = this->points1[index];
+        const int point2 = this->points2[index];
+
+        float3 &angular_velocity1 = eval_params.angular_velocities[point1];
+        float3 &angular_velocity2 = eval_params.angular_velocities[point2];
+        const float weight_rot1 = eval_params.rotation_weights[point1];
+        const float weight_rot2 = eval_params.rotation_weights[point2];
+        xpbd_constraints::init_velocity_bend_twist(
+            weight_rot1, weight_rot2, lambda, angular_velocity1, angular_velocity2);
+      }
+    });
+  }
+
   void finish_attributes() override
   {
     this->position_lambda_w.finish();
@@ -783,8 +992,6 @@ struct ContactClosure : public ConstraintClosure {
                               ConstraintEvalParams &eval_params,
                               const IndexMask &group_mask)
   {
-    const float inv_delta_time = math::safe_rcp(solver_params.delta_time);
-
     xpbd_constraints::error_check::VariableChecker<debug_check> velocity_checker(
         eval_params.velocities.index_range());
     xpbd_constraints::error_check::VariableChecker<debug_check> angular_velocity_checker(
@@ -838,10 +1045,10 @@ struct ContactClosure : public ConstraintClosure {
       math::to_loc_rot_scale(collider_transform, collider_loc, collider_rot, collider_scale);
       math::to_loc_rot_scale(
           old_collider_transform, old_collider_loc, old_collider_rot, old_collider_scale);
-      float3 collider_velocity = (collider_loc - old_collider_loc) * inv_delta_time;
+      float3 collider_velocity = (collider_loc - old_collider_loc) * solver_params.inv_delta_time;
       float3 collider_angular_velocity =
           2.0f * (math::invert_normalized(old_collider_rot) * collider_rot).imaginary_part() *
-          inv_delta_time;
+          solver_params.inv_delta_time;
       /* No change in animated collider velocity. */
       const float3 orig_collider_velocity = collider_velocity;
       const float3 orig_collider_angular_velocity = collider_angular_velocity;
@@ -895,6 +1102,116 @@ struct ContactClosure : public ConstraintClosure {
     else {
       this->do_apply_to_velocities<false>(params, constraint_params, group_mask);
     }
+  }
+
+  void init_positions(const SolverParams &solver_params,
+                      ConstraintEvalParams &eval_params,
+                      const IndexMask &group_mask) override
+  {
+    group_mask.foreach_index(GrainSize(1024), [&](const int index) {
+      float &lambda = this->position_lambda.span[index];
+      if (solver_params.init_mode == ConstraintInit::ZeroInit) {
+        lambda = 0.0f;
+      }
+      else {
+        const int point = this->points[index];
+        const int collider_index = this->collider_index[index];
+
+        if (!eval_params.collider_transforms.index_range().contains(collider_index)) {
+          return;
+        };
+        const float4x4 collider_transform = eval_params.collider_transforms[collider_index];
+        float3 collider_position;
+        math::Quaternion collider_rotation;
+        float3 collider_scale;
+        math::to_loc_rot_scale(
+            collider_transform, collider_position, collider_rotation, collider_scale);
+
+        float3 &position = eval_params.positions[point];
+        math::Quaternion &rotation = eval_params.rotations[point];
+        bool &active = this->active.span[index];
+
+        const float3 &local_position1 = this->local_position1[index];
+        const float3 &local_position2 = this->local_position2[index];
+        const float3 &normal = this->normal[index];
+
+        /* Zero weights for the collider, only the point can move. */
+        active = xpbd_constraints::init_position_contact(1.0f,
+                                                         0.0f,
+                                                         1.0f,
+                                                         0.0f,
+                                                         local_position1,
+                                                         local_position2,
+                                                         normal,
+                                                         lambda,
+                                                         position,
+                                                         collider_position,
+                                                         rotation,
+                                                         collider_rotation);
+      }
+    });
+  }
+
+  void init_velocities(const SolverParams &solver_params,
+                       ConstraintEvalParams &eval_params,
+                       const IndexMask &group_mask) override
+  {
+    group_mask.foreach_index(GrainSize(1024), [&](const int index) {
+      /* Active status is determined by the position evaluation. */
+      if (!this->active.span[index]) {
+        return;
+      }
+
+      float &lambda_restitution = this->restitution_lambda.span[index];
+      float &lambda_friction = this->friction_lambda.span[index];
+      if (solver_params.init_mode == ConstraintInit::ZeroInit) {
+        lambda_restitution = 0.0f;
+        lambda_friction = 0.0f;
+      }
+      else {
+        const int point = this->points[index];
+        const int collider_index = this->collider_index[index];
+        if (!eval_params.collider_transforms.index_range().contains(collider_index)) {
+          return;
+        };
+
+        /* Local positions are relative to moving point and collider respectively. */
+        const float3 &local_position1 = this->local_position1[index];
+        const float3 &local_position2 = this->local_position2[index];
+        /* Normal is a fixed shared direction for both participants. */
+        const float3 &normal = this->normal[index];
+
+        const float4x4 &collider_transform = eval_params.collider_transforms[collider_index];
+        const float4x4 &old_collider_transform =
+            eval_params.old_collider_transforms[collider_index];
+
+        float3 &velocity = eval_params.velocities[point];
+        float3 &angular_velocity = eval_params.angular_velocities[point];
+
+        /* Compute velocity from old/new collider transforms. */
+        float3 collider_loc, old_collider_loc;
+        math::Quaternion collider_rot, old_collider_rot;
+        float3 collider_scale, old_collider_scale;
+        math::to_loc_rot_scale(collider_transform, collider_loc, collider_rot, collider_scale);
+        math::to_loc_rot_scale(
+            old_collider_transform, old_collider_loc, old_collider_rot, old_collider_scale);
+        float3 collider_velocity = (collider_loc - old_collider_loc) *
+                                   solver_params.inv_delta_time;
+        float3 collider_angular_velocity =
+            2.0f * (math::invert_normalized(old_collider_rot) * collider_rot).imaginary_part() *
+            solver_params.inv_delta_time;
+
+        xpbd_constraints::init_velocity_contact(local_position1,
+                                                local_position2,
+                                                normal,
+                                                lambda_restitution,
+                                                lambda_friction,
+                                                velocity,
+                                                collider_velocity,
+                                                angular_velocity,
+                                                collider_angular_velocity);
+      }
+    });
   }
 
   void finish_attributes() override
@@ -984,24 +1301,33 @@ static void node_declare_positions(NodeDeclarationBuilder &b)
 
   b.add_input<decl::Float>("Delta Time").default_value(default_fps).min(0.0f).hide_value();
   b.add_input<decl::Int>("Gauss-Seidel Steps").default_value(1).min(0);
+  b.add_input<decl::Bool>("Initialize")
+      .default_value(false)
+      .description("Initialize lambda values and positions from zero or warm start");
+  b.add_input<decl::Bool>("Warm Start")
+      .default_value(true)
+      .description("Use previous lambda value when initializing instead of starting from zero");
 
   b.add_input<decl::Geometry>("Geometry");
   b.add_output<decl::Geometry>("Geometry").align_with_previous();
+  const int geometry_in = 4;
+  const int geometry_out = 0;
 
-  b.add_input<decl::Vector>("Position").implicit_field_on(implicit_field_inputs::position, {2});
-  b.add_output<decl::Vector>("Position").field_on({0}).align_with_previous();
-  b.add_input<decl::Rotation>("Rotation").field_on({2}).hide_value();
-  b.add_output<decl::Rotation>("Rotation").field_on({0}).align_with_previous();
-  b.add_input<decl::Vector>("Old Position").field_on({2}).hide_value();
-  b.add_input<decl::Rotation>("Old Rotation").field_on({2}).hide_value();
+  b.add_input<decl::Vector>("Position")
+      .implicit_field_on(implicit_field_inputs::position, {geometry_in});
+  b.add_output<decl::Vector>("Position").field_on({geometry_out}).align_with_previous();
+  b.add_input<decl::Rotation>("Rotation").field_on({geometry_in}).hide_value();
+  b.add_output<decl::Rotation>("Rotation").field_on({geometry_out}).align_with_previous();
+  b.add_input<decl::Vector>("Old Position").field_on({geometry_in}).hide_value();
+  b.add_input<decl::Rotation>("Old Rotation").field_on({geometry_in}).hide_value();
 
   b.add_input<decl::Float>("Position Weight")
       .default_value(1.0f)
-      .field_on({2})
+      .field_on({geometry_in})
       .description("Influence weight of constraints for each point (inverse mass)");
   b.add_input<decl::Float>("Rotation Weight")
       .default_value(1.0f)
-      .field_on({2})
+      .field_on({geometry_in})
       .description("Influence weight of constraints for each point (inverse moment of inertia)");
 
   for (const ConstraintTypeInfo &info : get_constraint_info()) {
@@ -1028,26 +1354,35 @@ static void node_declare_velocities(NodeDeclarationBuilder &b)
   b.allow_any_socket_order();
 
   b.add_input<decl::Float>("Delta Time").default_value(default_fps).min(0.0f).hide_value();
+  b.add_input<decl::Bool>("Initialize")
+      .default_value(false)
+      .description("Initialize lambda values and positions from zero or warm start");
+  b.add_input<decl::Bool>("Warm Start")
+      .default_value(true)
+      .description("Use previous lambda value when initializing instead of starting from zero");
 
   b.add_input<decl::Geometry>("Geometry");
   b.add_output<decl::Geometry>("Geometry").align_with_previous();
+  const int geometry_in = 3;
+  const int geometry_out = 0;
 
-  b.add_input<decl::Vector>("Position").implicit_field_on(implicit_field_inputs::position, {2});
-  b.add_input<decl::Rotation>("Rotation").field_on({2}).hide_value();
-  b.add_input<decl::Vector>("Velocity").field_on({1}).hide_value();
-  b.add_output<decl::Vector>("Velocity").field_on({0}).align_with_previous();
-  b.add_input<decl::Vector>("Angular Velocity").field_on({1}).hide_value();
-  b.add_output<decl::Vector>("Angular Velocity").field_on({0}).align_with_previous();
-  b.add_input<decl::Vector>("Original Velocity").field_on({1}).hide_value();
-  b.add_input<decl::Vector>("Original Angular Velocity").field_on({1}).hide_value();
+  b.add_input<decl::Vector>("Position")
+      .implicit_field_on(implicit_field_inputs::position, {geometry_in});
+  b.add_input<decl::Rotation>("Rotation").field_on({geometry_in}).hide_value();
+  b.add_input<decl::Vector>("Velocity").field_on({geometry_in}).hide_value();
+  b.add_output<decl::Vector>("Velocity").field_on({geometry_out}).align_with_previous();
+  b.add_input<decl::Vector>("Angular Velocity").field_on({geometry_in}).hide_value();
+  b.add_output<decl::Vector>("Angular Velocity").field_on({geometry_out}).align_with_previous();
+  b.add_input<decl::Vector>("Original Velocity").field_on({geometry_in}).hide_value();
+  b.add_input<decl::Vector>("Original Angular Velocity").field_on({geometry_in}).hide_value();
 
   b.add_input<decl::Float>("Position Weight")
       .default_value(1.0f)
-      .field_on({2})
+      .field_on({geometry_in})
       .description("Influence weight of constraints for each point (inverse mass)");
   b.add_input<decl::Float>("Rotation Weight")
       .default_value(1.0f)
-      .field_on({2})
+      .field_on({geometry_in})
       .description("Influence weight of constraints for each point (inverse moment of inertia)");
 
   for (const ConstraintTypeInfo &info : get_constraint_info()) {
@@ -1077,8 +1412,6 @@ static void evaluate_constraint_group(const SolverParams &solver_params,
                                       ConstraintClosure &closure,
                                       const IndexMask &group_mask)
 {
-  BLI_assert(!closure.solver_groups.is_empty());
-
   switch (solver_params.target) {
     case EvaluationTarget::Positions:
       closure.apply_to_positions(solver_params, eval_params, group_mask);
@@ -1091,15 +1424,23 @@ static void evaluate_constraint_group(const SolverParams &solver_params,
 
 static void do_single_constraint_passes(const SolverParams &solver_params,
                                         ConstraintEvalParams &eval_params,
-                                        ConstraintClosure &closure)
+                                        ConstraintClosure &closure,
+                                        const Span<IndexMask> group_masks)
+{
+  /* Solve in consistent order by using the sorted index set. */
+  for (const IndexMask &group_mask : group_masks) {
+    evaluate_constraint_group(solver_params, eval_params, closure, group_mask);
+  }
+}
+
+static Vector<IndexMask> build_group_masks(ConstraintClosure &closure, IndexMaskMemory &memory)
 {
   const VArray<int> &solver_groups = closure.solver_groups;
   if (solver_groups.is_empty()) {
-    return;
+    return {};
   }
 
   const IndexRange constraints = solver_groups.index_range();
-  IndexMaskMemory memory;
   VectorSet<int> unique_group_ids;
   Vector<IndexMask> group_index_masks = IndexMask::from_group_ids(
       constraints, solver_groups, memory, unique_group_ids);
@@ -1119,30 +1460,37 @@ static void do_single_constraint_passes(const SolverParams &solver_params,
               return group_id_a < group_id_b;
             });
 
-  /* Solve in consistent order by using the sorted index set. */
-  for (const int i_group : sorted_group_indices) {
-    const IndexMask &group_mask = group_index_masks[i_group];
+  Vector<IndexMask> group_masks;
+  group_masks.resize(sorted_group_indices.size());
+  for (const int i : sorted_group_indices.index_range()) {
     /* Group ID is not really relevant at this point. */
     /* const int group_id = unique_group_ids[i_group]; */
 
-    evaluate_constraint_group(solver_params, eval_params, closure, group_mask);
+    group_masks[i] = std::move(group_index_masks[sorted_group_indices[i]]);
   }
+  return group_masks;
 }
+
+/* A closure and associated solver group masks. */
+struct ClosureEvalInfo {
+  ConstraintClosure *closure;
+  Vector<IndexMask> group_masks;
+};
 
 static void do_gauss_seidel_step(const SolverParams &solver_params,
                                  ConstraintEvalParams &eval_params,
-                                 const Span<ConstraintClosure *> closures)
+                                 const Span<ClosureEvalInfo> closures)
 {
-  for (ConstraintClosure *closure : closures) {
-    if (closure) {
-      do_single_constraint_passes(solver_params, eval_params, *closure);
+  for (const ClosureEvalInfo &info : closures) {
+    if (info.closure) {
+      do_single_constraint_passes(solver_params, eval_params, *info.closure, info.group_masks);
     }
   }
 }
 
 static void do_jacobi_step(const SolverParams & /*solver_params*/,
                            ConstraintEvalParams & /*eval_params*/,
-                           const Span<ConstraintClosure *> /*closures*/)
+                           const Span<ClosureEvalInfo> /*closures*/)
 {
   /* TODO */
 }
@@ -1151,10 +1499,21 @@ static void do_solver_steps(const SolverMethod method,
                             const int steps,
                             const SolverParams &solver_params,
                             ConstraintEvalParams &eval_params,
-                            const Span<ConstraintClosure *> closures)
+                            const Span<ClosureEvalInfo> closures)
 {
-  if (steps < 1) {
-    return;
+  if (solver_params.init_mode) {
+    for (const ClosureEvalInfo &info : closures) {
+      for (const IndexMask &group_mask : info.group_masks) {
+        switch (solver_params.target) {
+          case EvaluationTarget::Positions:
+            info.closure->init_positions(solver_params, eval_params, group_mask);
+            break;
+          case EvaluationTarget::Velocities:
+            info.closure->init_velocities(solver_params, eval_params, group_mask);
+            break;
+        }
+      }
+    }
   }
 
   for ([[maybe_unused]] const int step : IndexRange(steps)) {
@@ -1169,8 +1528,37 @@ static void do_solver_steps(const SolverMethod method,
   }
 }
 
+static SolverParams extract_solver_params(GeoNodeExecParams params, const EvaluationTarget target)
+{
+  const float delta_time = std::max(params.extract_input<float>("Delta Time"), 0.0f);
+  const float delta_time_squared = delta_time * delta_time;
+  const float inv_delta_time = math::safe_rcp(delta_time);
+  const float inv_delta_time_squared = math::safe_rcp(delta_time_squared);
+  const bool debug_check = params.extract_input<bool>("Debug Checks");
+  const std::optional<ConstraintInit> init_mode =
+      params.extract_input<bool>("Initialize") ?
+          std::make_optional(params.extract_input<bool>("Warm Start") ? ConstraintInit::WarmStart :
+                                                                        ConstraintInit::ZeroInit) :
+          std::nullopt;
+
+  SolverParams solver_params;
+  solver_params.delta_time = delta_time;
+  solver_params.delta_time_squared = delta_time_squared;
+  solver_params.inv_delta_time = inv_delta_time;
+  solver_params.inv_delta_time_squared = inv_delta_time_squared;
+  solver_params.target = target;
+  solver_params.error_message_add = [params](const NodeWarningType type, const StringRef message) {
+    params.error_message_add(type, message);
+  };
+  solver_params.debug_check = debug_check;
+  solver_params.init_mode = init_mode;
+
+  return solver_params;
+}
+
 static void bind_constraint_closures(GeoNodeExecParams params,
-                                     Vector<ConstraintClosure *> &closures)
+                                     Vector<ClosureEvalInfo> &closures,
+                                     IndexMaskMemory &memory)
 {
   auto error_fn = [params](const NodeWarningType type, const StringRef message) {
     params.error_message_add(type, message);
@@ -1178,23 +1566,22 @@ static void bind_constraint_closures(GeoNodeExecParams params,
 
   const Span<ConstraintTypeInfo> constraint_infos = get_constraint_info_ordered();
   closures.reinitialize(constraint_infos.size());
-  closures.fill(nullptr);
+  closures.fill({});
   for (const int i : constraint_infos.index_range()) {
     const ConstraintTypeInfo &info = constraint_infos[i];
     GeometrySet geometry_set = params.extract_input<GeometrySet>(info.ui_name);
     if (geometry_set.has_component<PointCloudComponent>()) {
-      closures[i] = info.get_closure(std::move(geometry_set), error_fn);
+      ConstraintClosure *closure = info.get_closure(std::move(geometry_set), error_fn);
+      Vector<IndexMask> group_masks = build_group_masks(*closure, memory);
+      closures[i] = {closure, std::move(group_masks)};
     }
   }
 }
 
 static void node_geo_exec_positions(GeoNodeExecParams params)
 {
-  const int gauss_seidel_steps = params.extract_input<int>("Gauss-Seidel Steps");
-  const float delta_time = std::max(params.extract_input<float>("Delta Time"), 0.0f);
-  const float delta_time_squared = delta_time * delta_time;
-  const float inv_delta_time_squared = math::safe_rcp(delta_time_squared);
-  const bool debug_check = params.extract_input<bool>("Debug Checks");
+  const SolverParams solver_params = extract_solver_params(params, EvaluationTarget::Positions);
+  const int gauss_seidel_steps = std::max(params.extract_input<int>("Gauss-Seidel Steps"), 0);
   GeometrySet geometry_set = params.extract_input<GeometrySet>("Geometry");
   Field<float3> position_field = params.extract_input<Field<float3>>("Position");
   Field<math::Quaternion> rotation_field = params.extract_input<Field<math::Quaternion>>(
@@ -1214,8 +1601,9 @@ static void node_geo_exec_positions(GeoNodeExecParams params)
                                            colliders_geometry_set.get_instances()->transforms() :
                                            Span<float4x4>{};
 
-  Vector<ConstraintClosure *> constraint_closures;
-  bind_constraint_closures(params, constraint_closures);
+  Vector<ClosureEvalInfo> constraint_closures;
+  IndexMaskMemory memory;
+  bind_constraint_closures(params, constraint_closures, memory);
 
   static const Array<GeometryComponent::Type> types = {bke::GeometryComponent::Type::Mesh,
                                                        bke::GeometryComponent::Type::PointCloud,
@@ -1255,14 +1643,6 @@ static void node_geo_exec_positions(GeoNodeExecParams params)
          * colliders. */
         eval_params.old_collider_transforms = eval_params.collider_transforms;
 
-        SolverParams solver_params = {
-            delta_time, delta_time_squared, inv_delta_time_squared, EvaluationTarget::Positions};
-        solver_params.error_message_add = [params](const NodeWarningType type,
-                                                   const StringRef message) {
-          params.error_message_add(type, message);
-        };
-        solver_params.debug_check = debug_check;
-
         do_solver_steps(SolverMethod::GaussSeidel,
                         gauss_seidel_steps,
                         solver_params,
@@ -1288,9 +1668,9 @@ static void node_geo_exec_positions(GeoNodeExecParams params)
     }
   });
 
-  for (ConstraintClosure *closure : constraint_closures) {
-    if (closure) {
-      closure->finish_attributes();
+  for (const ClosureEvalInfo &info : constraint_closures) {
+    if (info.closure) {
+      info.closure->finish_attributes();
     }
   }
 
@@ -1299,10 +1679,10 @@ static void node_geo_exec_positions(GeoNodeExecParams params)
   const Span<ConstraintTypeInfo> constraint_infos = get_constraint_info();
   for (const int i : constraint_infos.index_range()) {
     const ConstraintTypeInfo &info = constraint_infos[i];
-    if (constraint_closures[i]) {
-      params.set_output(info.ui_name, constraint_closures[i]->geometry_set);
+    if (constraint_closures[i].closure) {
+      params.set_output(info.ui_name, constraint_closures[i].closure->geometry_set);
 
-      delete constraint_closures[i];
+      delete constraint_closures[i].closure;
     }
     else {
       params.set_output(info.ui_name, GeometrySet{});
@@ -1312,11 +1692,8 @@ static void node_geo_exec_positions(GeoNodeExecParams params)
 
 static void node_geo_exec_velocities(GeoNodeExecParams params)
 {
+  const SolverParams solver_params = extract_solver_params(params, EvaluationTarget::Positions);
   constexpr int gauss_seidel_steps = 1;
-  const float delta_time = std::max(params.extract_input<float>("Delta Time"), 0.0f);
-  const float delta_time_squared = delta_time * delta_time;
-  const float inv_delta_time_squared = math::safe_rcp(delta_time_squared);
-  const bool debug_check = params.extract_input<bool>("Debug Checks");
   GeometrySet geometry_set = params.extract_input<GeometrySet>("Geometry");
   Field<float3> position_field = params.extract_input<Field<float3>>("Position");
   Field<math::Quaternion> rotation_field = params.extract_input<Field<math::Quaternion>>(
@@ -1338,8 +1715,9 @@ static void node_geo_exec_velocities(GeoNodeExecParams params)
                                            colliders_geometry_set.get_instances()->transforms() :
                                            Span<float4x4>{};
 
-  Vector<ConstraintClosure *> constraint_closures;
-  bind_constraint_closures(params, constraint_closures);
+  Vector<ClosureEvalInfo> constraint_closures;
+  IndexMaskMemory memory;
+  bind_constraint_closures(params, constraint_closures, memory);
 
   static const Array<GeometryComponent::Type> types = {bke::GeometryComponent::Type::Mesh,
                                                        bke::GeometryComponent::Type::PointCloud,
@@ -1384,14 +1762,6 @@ static void node_geo_exec_velocities(GeoNodeExecParams params)
          * colliders. */
         eval_params.old_collider_transforms = eval_params.collider_transforms;
 
-        SolverParams solver_params = {
-            delta_time, delta_time_squared, inv_delta_time_squared, EvaluationTarget::Velocities};
-        solver_params.error_message_add = [params](const NodeWarningType type,
-                                                   const StringRef message) {
-          params.error_message_add(type, message);
-        };
-        solver_params.debug_check = debug_check;
-
         do_solver_steps(SolverMethod::GaussSeidel,
                         gauss_seidel_steps,
                         solver_params,
@@ -1417,9 +1787,9 @@ static void node_geo_exec_velocities(GeoNodeExecParams params)
     }
   });
 
-  for (ConstraintClosure *closure : constraint_closures) {
-    if (closure) {
-      closure->finish_attributes();
+  for (const ClosureEvalInfo &info : constraint_closures) {
+    if (info.closure) {
+      info.closure->finish_attributes();
     }
   }
 
@@ -1428,10 +1798,10 @@ static void node_geo_exec_velocities(GeoNodeExecParams params)
   const Span<ConstraintTypeInfo> constraint_infos = get_constraint_info();
   for (const int i : constraint_infos.index_range()) {
     const ConstraintTypeInfo &info = constraint_infos[i];
-    if (constraint_closures[i]) {
-      params.set_output(info.ui_name, constraint_closures[i]->geometry_set);
+    if (constraint_closures[i].closure) {
+      params.set_output(info.ui_name, constraint_closures[i].closure->geometry_set);
 
-      delete constraint_closures[i];
+      delete constraint_closures[i].closure;
     }
     else {
       params.set_output(info.ui_name, GeometrySet{});
