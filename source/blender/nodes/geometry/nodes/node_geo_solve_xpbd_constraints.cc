@@ -619,7 +619,7 @@ struct StretchShearClosure : public ConstraintClosure {
                        const IndexMask &group_mask) override
   {
     group_mask.foreach_index(GrainSize(1024), [&](const int index) {
-      float3 &lambda = this->position_lambda.span[index];
+      float3 &lambda = this->velocity_lambda.span[index];
       if (solver_params.init_mode == ConstraintInit::ZeroInit) {
         lambda = float3(0.0f);
       }
