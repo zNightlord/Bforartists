@@ -177,14 +177,13 @@ struct PositionGoalClosure : public ConstraintClosure {
     group_mask.foreach_index(GrainSize(1024), [&](const int index) {
       const int point1 = this->points[index];
       float &lambda = this->position_lambda.span[index];
-      const float alpha = this->alpha[index];
+      const float alpha = this->alpha[index] * solver_params.inv_delta_time_squared;
       const float3 &goal = this->goal_positions[index];
 
       position_checker.claim_variable(point1);
 
       float3 &position1 = eval_params.positions[point1];
-      xpbd_constraints::apply_position_goal(
-          goal, alpha * solver_params.inv_delta_time_squared, lambda, position1);
+      xpbd_constraints::apply_position_goal(goal, alpha, lambda, position1);
     });
 
     if (position_checker.has_overlap()) {
@@ -204,14 +203,13 @@ struct PositionGoalClosure : public ConstraintClosure {
     group_mask.foreach_index(GrainSize(1024), [&](const int index) {
       const int point1 = this->points[index];
       float &lambda = this->velocity_lambda.span[index];
-      const float beta = this->beta[index];
+      const float beta = this->beta[index] * solver_params.inv_delta_time_squared;
       const float3 &goal = this->goal_velocities[index];
 
       velocity_checker.claim_variable(point1);
 
       float3 &velocity1 = eval_params.velocities[point1];
-      xpbd_constraints::apply_velocity_goal(
-          goal, beta * solver_params.inv_delta_time_squared, lambda, velocity1);
+      xpbd_constraints::apply_velocity_goal(goal, beta, lambda, velocity1);
     });
 
     if (velocity_checker.has_overlap()) {
@@ -330,14 +328,13 @@ struct RotationGoalClosure : public ConstraintClosure {
     group_mask.foreach_index(GrainSize(1024), [&](const int index) {
       const int point1 = this->points[index];
       float &lambda = this->position_lambda.span[index];
-      const float alpha = this->alpha[index];
+      const float alpha = this->alpha[index] * solver_params.inv_delta_time_squared;
       const math::Quaternion &goal = this->goal_rotations[index];
 
       rotation_checker.claim_variable(point1);
 
       math::Quaternion &rotation1 = eval_params.rotations[point1];
-      xpbd_constraints::apply_rotation_goal<true>(
-          goal, alpha * solver_params.inv_delta_time_squared, lambda, rotation1);
+      xpbd_constraints::apply_rotation_goal<true>(goal, alpha, lambda, rotation1);
     });
 
     if (rotation_checker.has_overlap()) {
@@ -357,14 +354,13 @@ struct RotationGoalClosure : public ConstraintClosure {
     group_mask.foreach_index(GrainSize(1024), [&](const int index) {
       const int point1 = this->points[index];
       float &lambda = this->velocity_lambda.span[index];
-      const float beta = this->beta[index];
+      const float beta = this->beta[index] * solver_params.inv_delta_time_squared;
       const float3 &goal = this->goal_angular_velocities[index];
 
       angular_velocity_checker.claim_variable(point1);
 
       float3 &angular_velocity1 = eval_params.angular_velocities[point1];
-      xpbd_constraints::apply_angular_velocity_goal(
-          goal, beta * solver_params.inv_delta_time_squared, lambda, angular_velocity1);
+      xpbd_constraints::apply_angular_velocity_goal(goal, beta, lambda, angular_velocity1);
     });
 
     if (angular_velocity_checker.has_overlap()) {
@@ -486,7 +482,7 @@ struct StretchShearClosure : public ConstraintClosure {
       const int point2 = this->points2[index];
       float3 &lambda = this->position_lambda.span[index];
       const float edge_length = this->edge_lengths[index];
-      const float alpha = this->alpha[index];
+      const float alpha = this->alpha[index] * solver_params.inv_delta_time_squared;
 
       position_checker.claim_variable(point1);
       position_checker.claim_variable(point2);
@@ -498,16 +494,15 @@ struct StretchShearClosure : public ConstraintClosure {
       const float weight_pos1 = eval_params.position_weights[point1];
       const float weight_pos2 = eval_params.position_weights[point2];
       const float weight_rot = eval_params.rotation_weights[point1];
-      xpbd_constraints::apply_position_stretch_shear<true>(
-          weight_pos1,
-          weight_pos2,
-          weight_rot,
-          edge_length,
-          alpha * solver_params.inv_delta_time_squared,
-          lambda,
-          position1,
-          position2,
-          rotation);
+      xpbd_constraints::apply_position_stretch_shear<true>(weight_pos1,
+                                                           weight_pos2,
+                                                           weight_rot,
+                                                           edge_length,
+                                                           alpha,
+                                                           lambda,
+                                                           position1,
+                                                           position2,
+                                                           rotation);
     });
 
     if (position_checker.has_overlap() || rotation_checker.has_overlap()) {
@@ -531,7 +526,7 @@ struct StretchShearClosure : public ConstraintClosure {
       const int point2 = this->points2[index];
       float3 &lambda = this->velocity_lambda.span[index];
       const float edge_length = this->edge_lengths[index];
-      const float beta = this->beta[index];
+      const float beta = this->beta[index] * solver_params.inv_delta_time_squared;
 
       velocity_checker.claim_variable(point1);
       velocity_checker.claim_variable(point2);
@@ -549,7 +544,7 @@ struct StretchShearClosure : public ConstraintClosure {
                                                      weight_pos2,
                                                      weight_rot,
                                                      edge_length,
-                                                     beta * solver_params.inv_delta_time_squared,
+                                                     beta,
                                                      lambda,
                                                      velocity1,
                                                      velocity2,
@@ -716,7 +711,7 @@ struct BendTwistClosure : public ConstraintClosure {
       const float edge_length = this->edge_lengths[index];
       const math::Quaternion darboux_vector = math::Quaternion(this->darboux_w[index],
                                                                this->darboux_xyz[index]);
-      const float alpha = this->alpha[index];
+      const float alpha = this->alpha[index] * solver_params.inv_delta_time_squared;
 
       rotation_checker.claim_variable(point1);
       rotation_checker.claim_variable(point2);
@@ -731,8 +726,7 @@ struct BendTwistClosure : public ConstraintClosure {
                                                         weight_rot2,
                                                         edge_length,
                                                         darboux_vector,
-                                                        alpha *
-                                                            solver_params.inv_delta_time_squared,
+                                                        alpha,
                                                         lambda,
                                                         rotation1,
                                                         rotation2);
@@ -759,7 +753,7 @@ struct BendTwistClosure : public ConstraintClosure {
       const int point2 = this->points2[index];
       float3 &lambda = this->velocity_lambda.span[index];
       const float edge_length = this->edge_lengths[index];
-      const float beta = this->beta[index];
+      const float beta = this->beta[index] * solver_params.inv_delta_time_squared;
 
       angular_velocity_checker.claim_variable(point1);
       angular_velocity_checker.claim_variable(point2);
@@ -771,7 +765,7 @@ struct BendTwistClosure : public ConstraintClosure {
       xpbd_constraints::apply_velocity_bend_twist(weight_rot1,
                                                   weight_rot2,
                                                   edge_length,
-                                                  beta * solver_params.inv_delta_time_squared,
+                                                  beta,
                                                   lambda,
                                                   angular_velocity1,
                                                   angular_velocity2);
@@ -958,7 +952,7 @@ struct ContactClosure : public ConstraintClosure {
       }
 
       /* Contact constraints are stiff. */
-      const float alpha = 0.0f;
+      const float alpha = 0.0f * solver_params.inv_delta_time_squared;
 
       /* Zero weights for the collider, only the point can move. */
       active = xpbd_constraints::apply_position_contact(1.0f,
@@ -968,8 +962,7 @@ struct ContactClosure : public ConstraintClosure {
                                                         local_position1,
                                                         local_position2,
                                                         normal,
-                                                        alpha *
-                                                            solver_params.inv_delta_time_squared,
+                                                        alpha,
                                                         lambda,
                                                         position,
                                                         collider_position,
