@@ -6,12 +6,79 @@
 
 #include <atomic>
 
+#include "BLI_function_ref.hh"
 #include "BLI_math_quaternion.hh"
 #include "BLI_math_quaternion_types.hh"
+#include "BLI_string_ref.hh"
 
 #include "BKE_attribute.hh"
+#include "BKE_geometry_set.hh"
 
 namespace blender::nodes::xpbd_constraints {
+
+struct ConstraintEvalParams {
+  using ErrorFn = FunctionRef<void(const StringRef message)>;
+
+  ErrorFn error_message_add;
+  /* Perform debug checks on user inputs at runtime. This helps avoid common errors but has a
+   * significant performance cost, so should be optional. */
+  bool debug_check;
+
+  float delta_time;
+  float delta_time_squared;
+  float inv_delta_time;
+  float inv_delta_time_squared;
+
+  Array<float3> positions;
+  Array<math::Quaternion> rotations;
+  VArraySpan<float3> old_positions;
+  VArraySpan<math::Quaternion> old_rotations;
+
+  /* Velocity inputs are not defined during the position update stage. */
+  Array<float3> velocities;
+  Array<float3> angular_velocities;
+  VArraySpan<float3> orig_velocities;
+  VArraySpan<float3> orig_angular_velocities;
+
+  VArraySpan<float> position_weights;
+  VArraySpan<float> rotation_weights;
+
+  Span<float4x4> collider_transforms;
+  /* Collider transforms of the previous frame for computing velocity constraints. */
+  Span<float4x4> old_collider_transforms;
+};
+
+struct ConstraintClosure {
+  using ErrorFn = ConstraintEvalParams::ErrorFn;
+
+  bke::GeometrySet geometry_set;
+  VArray<int> solver_groups;
+
+  ConstraintClosure(bke::GeometrySet &&geometry_set, ErrorFn error_fn);
+  virtual ~ConstraintClosure() = default;
+
+  virtual void apply_to_positions(ConstraintEvalParams &eval_params,
+                                  const IndexMask &group_mask) = 0;
+  virtual void apply_to_velocities(ConstraintEvalParams &eval_params,
+                                   const IndexMask &group_mask) = 0;
+  virtual void init_positions(ConstraintEvalParams &eval_params, const IndexMask &group_mask) = 0;
+  virtual void init_velocities(ConstraintEvalParams &eval_params, const IndexMask &group_mask) = 0;
+  virtual void reset_lambda() = 0;
+
+  virtual void finish_attributes() = 0;
+};
+
+struct ConstraintTypeInfo {
+  using ErrorFn = ConstraintClosure::ErrorFn;
+
+  std::string ui_name;
+  std::string ui_description;
+
+  ConstraintClosure *(*get_closure)(bke::GeometrySet &&geometry_set, ErrorFn error_fn);
+};
+
+Span<ConstraintTypeInfo> get_constraint_info();
+Span<ConstraintTypeInfo> get_constraint_info_ordered();
 
 namespace error_check {
 
