@@ -1301,10 +1301,8 @@ static void node_declare_positions(NodeDeclarationBuilder &b)
       .default_value(false)
       .description("Use previous lambda value when initializing instead of starting from zero");
 
-  b.add_input<decl::Geometry>("Geometry");
-  b.add_output<decl::Geometry>("Geometry").align_with_previous();
-  const int geometry_in = 4;
-  const int geometry_out = 0;
+  const int geometry_in = b.add_input<decl::Geometry>("Geometry").index();
+  const int geometry_out = b.add_output<decl::Geometry>("Geometry").align_with_previous().index();
 
   b.add_input<decl::Vector>("Position")
       .implicit_field_on(implicit_field_inputs::position, {geometry_in});
@@ -1347,6 +1345,7 @@ static void node_declare_velocities(NodeDeclarationBuilder &b)
   b.allow_any_socket_order();
 
   b.add_input<decl::Float>("Delta Time").default_value(default_fps).min(0.0f).hide_value();
+  b.add_input<decl::Int>("Gauss-Seidel Steps").default_value(1).min(0);
   b.add_input<decl::Bool>("Initialize")
       .default_value(false)
       .description("Initialize lambda values and positions from zero or warm start");
@@ -1354,10 +1353,8 @@ static void node_declare_velocities(NodeDeclarationBuilder &b)
       .default_value(true)
       .description("Use previous lambda value when initializing instead of starting from zero");
 
-  b.add_input<decl::Geometry>("Geometry");
-  b.add_output<decl::Geometry>("Geometry").align_with_previous();
-  const int geometry_in = 3;
-  const int geometry_out = 0;
+  const int geometry_in = b.add_input<decl::Geometry>("Geometry").index();
+  const int geometry_out = b.add_output<decl::Geometry>("Geometry").align_with_previous().index();
 
   b.add_input<decl::Vector>("Position")
       .implicit_field_on(implicit_field_inputs::position, {geometry_in});
@@ -1686,7 +1683,7 @@ static void node_geo_exec_positions(GeoNodeExecParams params)
 static void node_geo_exec_velocities(GeoNodeExecParams params)
 {
   const SolverParams solver_params = extract_solver_params(params, EvaluationTarget::Velocities);
-  constexpr int gauss_seidel_steps = 1;
+  const int gauss_seidel_steps = std::max(params.extract_input<int>("Gauss-Seidel Steps"), 0);
   GeometrySet geometry_set = params.extract_input<GeometrySet>("Geometry");
   Field<float3> position_field = params.extract_input<Field<float3>>("Position");
   Field<math::Quaternion> rotation_field = params.extract_input<Field<math::Quaternion>>(
