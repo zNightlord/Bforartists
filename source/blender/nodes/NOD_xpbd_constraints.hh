@@ -29,22 +29,32 @@ struct ConstraintEvalParams {
   float inv_delta_time;
   float inv_delta_time_squared;
 
+  /** Positions after applying constraints. */
   Array<float3> positions;
+  /** Rotations after applying constraints. */
   Array<math::Quaternion> rotations;
+  /** Positions before applying constraints. */
   VArraySpan<float3> old_positions;
+  /** Rotations before applying constraints. */
   VArraySpan<math::Quaternion> old_rotations;
 
-  /* Velocity inputs are not defined during the position update stage. */
+  /** Velocities after applying constraints. */
   Array<float3> velocities;
+  /** Angular velocities after applying constraints. */
   Array<float3> angular_velocities;
+  /** Velocities derived after positional constraints. */
   VArraySpan<float3> orig_velocities;
+  /** Angular velocities derived after positional constraints. */
   VArraySpan<float3> orig_angular_velocities;
 
+  /** Inverse mass of points for constraint influence. */
   VArraySpan<float> position_weights;
+  /** Inverse moment of inertia for constraint influence. */
   VArraySpan<float> rotation_weights;
 
+  /** Collider transform at the end of the current time. */
   Span<float4x4> collider_transforms;
-  /* Collider transforms of the previous frame for computing velocity constraints. */
+  /** Collider transforms at the end of the previous frame. */
   Span<float4x4> old_collider_transforms;
 };
 
