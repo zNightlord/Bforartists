@@ -184,28 +184,40 @@ enum class ConstraintType {
 
 inline void eval_position_goal(const float3 &goal_position,
                                const float alpha,
+                               const float gamma,
                                const float lambda,
                                const float3 &position,
+                               const float3 &old_position,
                                float &r_residual,
                                float &r_delta_lambda,
                                float3 &r_delta_position)
 {
   const float3 gradient = math::normalize_and_get_length(position - goal_position, r_residual);
 
-  r_delta_lambda = (-r_residual - alpha * lambda) / (1.0f + alpha);
+  const float velocity = math::dot(gradient, position - old_position);
+  r_delta_lambda = (-r_residual - alpha * lambda - gamma * velocity) / (1.0f + gamma + alpha);
   r_delta_position = r_delta_lambda * gradient;
 }
 
 inline void apply_position_goal(const float3 &goal_position,
                                 const float alpha,
+                                const float gamma,
+                                const float3 &old_position,
                                 float &lambda,
                                 float3 &position)
 {
   float residual;
   float delta_lambda;
   float3 delta_position;
-  eval_position_goal(
-      goal_position, alpha, lambda, position, residual, delta_lambda, delta_position);
+  eval_position_goal(goal_position,
+                     alpha,
+                     gamma,
+                     lambda,
+                     position,
+                     old_position,
+                     residual,
+                     delta_lambda,
+                     delta_position);
 
   lambda += delta_lambda;
   apply_position_impulse(delta_position, position);
@@ -223,18 +235,23 @@ inline void init_position_goal(const float3 &goal_position, const float lambda, 
 template<bool linearized_quaternion>
 inline void eval_rotation_goal(const math::Quaternion &goal_rotation,
                                const float alpha,
+                               const float gamma,
                                const float lambda,
                                const math::Quaternion &rotation,
+                               const math::Quaternion &old_rotation,
                                float &r_residual,
                                float &r_delta_lambda,
                                float4 &r_delta_rotation)
 {
   const math::AxisAngle axis_angle = math::to_axis_angle(rotation *
                                                          math::invert_normalized(goal_rotation));
+  const math::AxisAngle old_axis_angle = math::to_axis_angle(
+      rotation * math::invert_normalized(old_rotation));
   r_residual = axis_angle.angle().wrapped().radian();
   const float3 gradient = axis_angle.axis();
+  const float velocity = math::dot(old_axis_angle.axis(), gradient);
 
-  r_delta_lambda = (-r_residual - alpha * lambda) / (1.0f + alpha);
+  r_delta_lambda = (-r_residual - alpha * lambda - gamma * velocity) / (1.0f + gamma + alpha);
 
   if constexpr (linearized_quaternion) {
     // const float4 q = float4(-math::dot(gradient, rotation.imaginary_part()),
@@ -252,14 +269,23 @@ inline void eval_rotation_goal(const math::Quaternion &goal_rotation,
 template<bool linearized_quaternion>
 inline void apply_rotation_goal(const math::Quaternion &goal_rotation,
                                 const float alpha,
+                                const float gamma,
+                                const math::Quaternion &old_rotation,
                                 float &lambda,
                                 math::Quaternion &rotation)
 {
   float residual;
   float delta_lambda;
   float4 delta_rotation;
-  eval_rotation_goal<linearized_quaternion>(
-      goal_rotation, alpha, lambda, rotation, residual, delta_lambda, delta_rotation);
+  eval_rotation_goal<linearized_quaternion>(goal_rotation,
+                                            alpha,
+                                            gamma,
+                                            lambda,
+                                            rotation,
+                                            old_rotation,
+                                            residual,
+                                            delta_lambda,
+                                            delta_rotation);
 
   lambda += delta_lambda;
   apply_rotation_impulse<linearized_quaternion>(delta_rotation, rotation);
@@ -377,10 +403,14 @@ inline void eval_position_stretch_shear(const float weight_pos1,
                                         const float weight_rot,
                                         const float edge_length,
                                         const float alpha,
+                                        const float gamma,
                                         const float3 &lambda,
                                         const float3 &position1,
                                         const float3 &position2,
                                         const math::Quaternion &rotation,
+                                        const float3 &old_position1,
+                                        const float3 &old_position2,
+                                        const math::Quaternion &old_rotation,
                                         float3 &r_residual,
                                         float3 &r_delta_lambda,
                                         float3 &r_delta_position1,
@@ -414,6 +444,10 @@ inline void apply_position_stretch_shear(const float weight_pos1,
                                          const float weight_rot,
                                          const float edge_length,
                                          const float alpha,
+                                         const float gamma,
+                                         const float3 &old_position1,
+                                         const float3 &old_position2,
+                                         const math::Quaternion &old_rotation,
                                          float3 &lambda,
                                          float3 &position1,
                                          float3 &position2,
@@ -428,10 +462,14 @@ inline void apply_position_stretch_shear(const float weight_pos1,
                                                      weight_rot,
                                                      edge_length,
                                                      alpha,
+                                                     gamma,
                                                      lambda,
                                                      position1,
                                                      position2,
                                                      rotation,
+                                                     old_position1,
+                                                     old_position2,
+                                                     old_rotation,
                                                      residual,
                                                      delta_lambda,
                                                      delta_pos1,

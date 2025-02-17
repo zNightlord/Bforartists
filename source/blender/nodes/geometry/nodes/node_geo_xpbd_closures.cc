@@ -55,6 +55,9 @@ ConstraintClosure::ConstraintClosure(GeometrySet &&geometry_set, ErrorFn error_f
 }
 
 struct PositionGoalClosure : public ConstraintClosure {
+  /* Include damping in the positional constraint update instead of a velocity constraint. */
+  static constexpr bool use_velocity_constraint = false;
+
   VArraySpan<int> points;
   VArraySpan<float> alpha;
   VArraySpan<float> beta;
@@ -93,13 +96,22 @@ struct PositionGoalClosure : public ConstraintClosure {
     group_mask.foreach_index(GrainSize(1024), [&](const int index) {
       const int point1 = this->points[index];
       float &lambda = this->position_lambda.span[index];
-      const float alpha = this->alpha[index] * params.inv_delta_time_squared;
       const float3 &goal = this->goal_positions[index];
 
       position_checker.claim_variable(point1);
 
       float3 &position1 = params.positions[point1];
-      xpbd_constraints::apply_position_goal(goal, alpha, lambda, position1);
+      if constexpr (use_velocity_constraint) {
+        const float alpha = this->alpha[index] * params.inv_delta_time_squared;
+        xpbd_constraints::apply_position_goal(goal, alpha, 0.0f, float3(0.0f), lambda, position1);
+      }
+      else {
+        const float3 &old_position1 = params.old_positions[point1];
+        const float alpha = this->alpha[index] * params.inv_delta_time_squared;
+        const float gamma = this->alpha[index] * this->beta[index] * params.inv_delta_time;
+        xpbd_constraints::apply_position_goal(
+            goal, alpha, gamma, old_position1, lambda, position1);
+      }
     });
 
     if (position_checker.has_overlap()) {
@@ -110,23 +122,25 @@ struct PositionGoalClosure : public ConstraintClosure {
   template<bool debug_check>
   void do_apply_to_velocities(ConstraintEvalParams &params, const IndexMask &group_mask)
   {
-    xpbd_constraints::error_check::VariableChecker<debug_check> velocity_checker(
-        params.velocities.index_range());
+    if constexpr (use_velocity_constraint) {
+      xpbd_constraints::error_check::VariableChecker<debug_check> velocity_checker(
+          params.velocities.index_range());
 
-    group_mask.foreach_index(GrainSize(1024), [&](const int index) {
-      const int point1 = this->points[index];
-      float &lambda = this->velocity_lambda.span[index];
-      const float beta = this->beta[index] * params.inv_delta_time_squared;
-      const float3 &goal = this->goal_velocities[index];
+      group_mask.foreach_index(GrainSize(1024), [&](const int index) {
+        const int point1 = this->points[index];
+        float &lambda = this->velocity_lambda.span[index];
+        const float beta = this->beta[index] * params.inv_delta_time_squared;
+        const float3 &goal = this->goal_velocities[index];
 
-      velocity_checker.claim_variable(point1);
+        velocity_checker.claim_variable(point1);
 
-      float3 &velocity1 = params.velocities[point1];
-      xpbd_constraints::apply_velocity_goal(goal, beta, lambda, velocity1);
-    });
+        float3 &velocity1 = params.velocities[point1];
+        xpbd_constraints::apply_velocity_goal(goal, beta, lambda, velocity1);
+      });
 
-    if (velocity_checker.has_overlap()) {
-      params.error_message_add("Overlapping constraint solver groups");
+      if (velocity_checker.has_overlap()) {
+        params.error_message_add("Overlapping constraint solver groups");
+      }
     }
   }
 
@@ -164,14 +178,16 @@ struct PositionGoalClosure : public ConstraintClosure {
 
   void init_velocities(ConstraintEvalParams &params, const IndexMask &group_mask) override
   {
-    group_mask.foreach_index(GrainSize(1024), [&](const int index) {
-      float &lambda = this->velocity_lambda.span[index];
-      const int point1 = this->points[index];
-      const float3 &goal = this->goal_velocities[index];
+    if constexpr (use_velocity_constraint) {
+      group_mask.foreach_index(GrainSize(1024), [&](const int index) {
+        float &lambda = this->velocity_lambda.span[index];
+        const int point1 = this->points[index];
+        const float3 &goal = this->goal_velocities[index];
 
-      float3 &velocity1 = params.velocities[point1];
-      xpbd_constraints::init_velocity_goal(goal, lambda, velocity1);
-    });
+        float3 &velocity1 = params.velocities[point1];
+        xpbd_constraints::init_velocity_goal(goal, lambda, velocity1);
+      });
+    }
   }
 
   void reset_lambda() override
@@ -190,6 +206,9 @@ struct PositionGoalClosure : public ConstraintClosure {
 };
 
 struct RotationGoalClosure : public ConstraintClosure {
+  /* Include damping in the positional constraint update instead of a velocity constraint. */
+  static constexpr bool use_velocity_constraint = false;
+
   VArraySpan<int> points;
   VArraySpan<float> alpha;
   VArraySpan<float> beta;
@@ -228,13 +247,23 @@ struct RotationGoalClosure : public ConstraintClosure {
     group_mask.foreach_index(GrainSize(1024), [&](const int index) {
       const int point1 = this->points[index];
       float &lambda = this->position_lambda.span[index];
-      const float alpha = this->alpha[index] * params.inv_delta_time_squared;
       const math::Quaternion &goal = this->goal_rotations[index];
 
       rotation_checker.claim_variable(point1);
 
       math::Quaternion &rotation1 = params.rotations[point1];
-      xpbd_constraints::apply_rotation_goal<true>(goal, alpha, lambda, rotation1);
+      if constexpr (use_velocity_constraint) {
+        const float alpha = this->alpha[index] * params.inv_delta_time_squared;
+        xpbd_constraints::apply_rotation_goal<true>(
+            goal, alpha, 0.0f, float3(0.0f), lambda, rotation1);
+      }
+      else {
+        const math::Quaternion &old_rotation1 = params.old_rotations[point1];
+        const float alpha = this->alpha[index] * params.inv_delta_time_squared;
+        const float gamma = this->alpha[index] * this->beta[index] * params.inv_delta_time;
+        xpbd_constraints::apply_rotation_goal<true>(
+            goal, alpha, gamma, old_rotation1, lambda, rotation1);
+      }
     });
 
     if (rotation_checker.has_overlap()) {
@@ -245,23 +274,25 @@ struct RotationGoalClosure : public ConstraintClosure {
   template<bool debug_check>
   void do_apply_to_velocities(ConstraintEvalParams &params, const IndexMask &group_mask)
   {
-    xpbd_constraints::error_check::VariableChecker<debug_check> angular_velocity_checker(
-        params.angular_velocities.index_range());
+    if constexpr (use_velocity_constraint) {
+      xpbd_constraints::error_check::VariableChecker<debug_check> angular_velocity_checker(
+          params.angular_velocities.index_range());
 
-    group_mask.foreach_index(GrainSize(1024), [&](const int index) {
-      const int point1 = this->points[index];
-      float &lambda = this->velocity_lambda.span[index];
-      const float beta = this->beta[index] * params.inv_delta_time_squared;
-      const float3 &goal = this->goal_angular_velocities[index];
+      group_mask.foreach_index(GrainSize(1024), [&](const int index) {
+        const int point1 = this->points[index];
+        float &lambda = this->velocity_lambda.span[index];
+        const float beta = this->beta[index] * params.inv_delta_time_squared;
+        const float3 &goal = this->goal_angular_velocities[index];
 
-      angular_velocity_checker.claim_variable(point1);
+        angular_velocity_checker.claim_variable(point1);
 
-      float3 &angular_velocity1 = params.angular_velocities[point1];
-      xpbd_constraints::apply_angular_velocity_goal(goal, beta, lambda, angular_velocity1);
-    });
+        float3 &angular_velocity1 = params.angular_velocities[point1];
+        xpbd_constraints::apply_angular_velocity_goal(goal, beta, lambda, angular_velocity1);
+      });
 
-    if (angular_velocity_checker.has_overlap()) {
-      params.error_message_add("Overlapping constraint solver groups");
+      if (angular_velocity_checker.has_overlap()) {
+        params.error_message_add("Overlapping constraint solver groups");
+      }
     }
   }
 
@@ -299,14 +330,16 @@ struct RotationGoalClosure : public ConstraintClosure {
 
   void init_velocities(ConstraintEvalParams &params, const IndexMask &group_mask) override
   {
-    group_mask.foreach_index(GrainSize(1024), [&](const int index) {
-      float &lambda = this->velocity_lambda.span[index];
-      const int point1 = this->points[index];
-      const float3 &goal = this->goal_angular_velocities[index];
+    if constexpr (use_velocity_constraint) {
+      group_mask.foreach_index(GrainSize(1024), [&](const int index) {
+        float &lambda = this->velocity_lambda.span[index];
+        const int point1 = this->points[index];
+        const float3 &goal = this->goal_angular_velocities[index];
 
-      float3 &angular_velocity1 = params.angular_velocities[point1];
-      xpbd_constraints::init_angular_velocity_goal(goal, lambda, angular_velocity1);
-    });
+        float3 &angular_velocity1 = params.angular_velocities[point1];
+        xpbd_constraints::init_angular_velocity_goal(goal, lambda, angular_velocity1);
+      });
+    }
   }
 
   void reset_lambda() override
@@ -325,6 +358,9 @@ struct RotationGoalClosure : public ConstraintClosure {
 };
 
 struct StretchShearClosure : public ConstraintClosure {
+  /* Include damping in the positional constraint update instead of a velocity constraint. */
+  static constexpr bool use_velocity_constraint = false;
+
   VArraySpan<int> points1;
   VArraySpan<int> points2;
   VArraySpan<float> alpha;
@@ -378,15 +414,31 @@ struct StretchShearClosure : public ConstraintClosure {
       const float weight_pos1 = params.position_weights[point1];
       const float weight_pos2 = params.position_weights[point2];
       const float weight_rot = params.rotation_weights[point1];
-      xpbd_constraints::apply_position_stretch_shear<true>(weight_pos1,
-                                                           weight_pos2,
-                                                           weight_rot,
-                                                           edge_length,
-                                                           alpha,
-                                                           lambda,
-                                                           position1,
-                                                           position2,
-                                                           rotation);
+      if constexpr (use_velocity_constraint) {
+        xpbd_constraints::apply_position_stretch_shear<true>(weight_pos1,
+                                                             weight_pos2,
+                                                             weight_rot,
+                                                             edge_length,
+                                                             alpha,
+                                                             lambda,
+                                                             position1,
+                                                             position2,
+                                                             rotation);
+      }
+      else {
+        const math::Quaternion &old_rotation1 = params.old_rotations[point1];
+        const float alpha = this->alpha[index] * params.inv_delta_time_squared;
+        const float gamma = this->alpha[index] * this->beta[index] * params.inv_delta_time;
+        xpbd_constraints::apply_position_stretch_shear<true>(weight_pos1,
+                                                             weight_pos2,
+                                                             weight_rot,
+                                                             edge_length,
+                                                             alpha,
+                                                             lambda,
+                                                             position1,
+                                                             position2,
+                                                             rotation);
+      }
     });
 
     if (position_checker.has_overlap() || rotation_checker.has_overlap()) {
@@ -397,43 +449,45 @@ struct StretchShearClosure : public ConstraintClosure {
   template<bool debug_check>
   void do_apply_to_velocities(ConstraintEvalParams &params, const IndexMask &group_mask)
   {
-    xpbd_constraints::error_check::VariableChecker<debug_check> velocity_checker(
-        params.velocities.index_range());
-    xpbd_constraints::error_check::VariableChecker<debug_check> angular_velocity_checker(
-        params.angular_velocities.index_range());
+    if constexpr (use_velocity_constraint) {
+      xpbd_constraints::error_check::VariableChecker<debug_check> velocity_checker(
+          params.velocities.index_range());
+      xpbd_constraints::error_check::VariableChecker<debug_check> angular_velocity_checker(
+          params.angular_velocities.index_range());
 
-    group_mask.foreach_index(GrainSize(1024), [&](const int index) {
-      const int point1 = this->points1[index];
-      const int point2 = this->points2[index];
-      float3 &lambda = this->velocity_lambda.span[index];
-      const float edge_length = this->edge_lengths[index];
-      const float beta = this->beta[index] * params.inv_delta_time_squared;
+      group_mask.foreach_index(GrainSize(1024), [&](const int index) {
+        const int point1 = this->points1[index];
+        const int point2 = this->points2[index];
+        float3 &lambda = this->velocity_lambda.span[index];
+        const float edge_length = this->edge_lengths[index];
+        const float beta = this->beta[index] * params.inv_delta_time_squared;
 
-      velocity_checker.claim_variable(point1);
-      velocity_checker.claim_variable(point2);
-      angular_velocity_checker.claim_variable(point1);
+        velocity_checker.claim_variable(point1);
+        velocity_checker.claim_variable(point2);
+        angular_velocity_checker.claim_variable(point1);
 
-      const math::Quaternion &rotation = params.rotations[point1];
-      float3 &velocity1 = params.velocities[point1];
-      float3 &velocity2 = params.velocities[point2];
-      float3 &angular_velocity = params.angular_velocities[point1];
-      const float weight_pos1 = params.position_weights[point1];
-      const float weight_pos2 = params.position_weights[point2];
-      const float weight_rot = params.rotation_weights[point1];
-      xpbd_constraints::apply_velocity_stretch_shear(rotation,
-                                                     weight_pos1,
-                                                     weight_pos2,
-                                                     weight_rot,
-                                                     edge_length,
-                                                     beta,
-                                                     lambda,
-                                                     velocity1,
-                                                     velocity2,
-                                                     angular_velocity);
-    });
+        const math::Quaternion &rotation = params.rotations[point1];
+        float3 &velocity1 = params.velocities[point1];
+        float3 &velocity2 = params.velocities[point2];
+        float3 &angular_velocity = params.angular_velocities[point1];
+        const float weight_pos1 = params.position_weights[point1];
+        const float weight_pos2 = params.position_weights[point2];
+        const float weight_rot = params.rotation_weights[point1];
+        xpbd_constraints::apply_velocity_stretch_shear(rotation,
+                                                       weight_pos1,
+                                                       weight_pos2,
+                                                       weight_rot,
+                                                       edge_length,
+                                                       beta,
+                                                       lambda,
+                                                       velocity1,
+                                                       velocity2,
+                                                       angular_velocity);
+      });
 
-    if (velocity_checker.has_overlap() || angular_velocity_checker.has_overlap()) {
-      params.error_message_add("Overlapping constraint solver groups");
+      if (velocity_checker.has_overlap() || angular_velocity_checker.has_overlap()) {
+        params.error_message_add("Overlapping constraint solver groups");
+      }
     }
   }
 
@@ -485,30 +539,32 @@ struct StretchShearClosure : public ConstraintClosure {
 
   void init_velocities(ConstraintEvalParams &params, const IndexMask &group_mask) override
   {
-    group_mask.foreach_index(GrainSize(1024), [&](const int index) {
-      float3 &lambda = this->velocity_lambda.span[index];
-      const int point1 = this->points1[index];
-      const int point2 = this->points2[index];
-      const float edge_length = this->edge_lengths[index];
+    if constexpr (use_velocity_constraint) {
+      group_mask.foreach_index(GrainSize(1024), [&](const int index) {
+        float3 &lambda = this->velocity_lambda.span[index];
+        const int point1 = this->points1[index];
+        const int point2 = this->points2[index];
+        const float edge_length = this->edge_lengths[index];
 
-      const float weight_pos1 = params.position_weights[point1];
-      const float weight_pos2 = params.position_weights[point2];
-      const float weight_rot = params.rotation_weights[point1];
+        const float weight_pos1 = params.position_weights[point1];
+        const float weight_pos2 = params.position_weights[point2];
+        const float weight_rot = params.rotation_weights[point1];
 
-      const math::Quaternion &rotation = params.rotations[point1];
-      float3 &velocity1 = params.velocities[point1];
-      float3 &velocity2 = params.velocities[point2];
-      float3 &angular_velocity = params.angular_velocities[point1];
-      xpbd_constraints::init_velocity_stretch_shear(rotation,
-                                                    weight_pos1,
-                                                    weight_pos2,
-                                                    weight_rot,
-                                                    edge_length,
-                                                    lambda,
-                                                    velocity1,
-                                                    velocity2,
-                                                    angular_velocity);
-    });
+        const math::Quaternion &rotation = params.rotations[point1];
+        float3 &velocity1 = params.velocities[point1];
+        float3 &velocity2 = params.velocities[point2];
+        float3 &angular_velocity = params.angular_velocities[point1];
+        xpbd_constraints::init_velocity_stretch_shear(rotation,
+                                                      weight_pos1,
+                                                      weight_pos2,
+                                                      weight_rot,
+                                                      edge_length,
+                                                      lambda,
+                                                      velocity1,
+                                                      velocity2,
+                                                      angular_velocity);
+      });
+    }
   }
 
   void reset_lambda() override
@@ -527,6 +583,9 @@ struct StretchShearClosure : public ConstraintClosure {
 };
 
 struct BendTwistClosure : public ConstraintClosure {
+  /* Include damping in the positional constraint update instead of a velocity constraint. */
+  static constexpr bool use_velocity_constraint = false;
+
   VArraySpan<int> points1;
   VArraySpan<int> points2;
   VArraySpan<float> alpha;
@@ -610,34 +669,36 @@ struct BendTwistClosure : public ConstraintClosure {
   template<bool debug_check>
   void do_apply_to_velocities(ConstraintEvalParams &params, const IndexMask &group_mask)
   {
-    xpbd_constraints::error_check::VariableChecker<debug_check> angular_velocity_checker(
-        params.angular_velocities.index_range());
+    if constexpr (use_velocity_constraint) {
+      xpbd_constraints::error_check::VariableChecker<debug_check> angular_velocity_checker(
+          params.angular_velocities.index_range());
 
-    group_mask.foreach_index(GrainSize(1024), [&](const int index) {
-      const int point1 = this->points1[index];
-      const int point2 = this->points2[index];
-      float3 &lambda = this->velocity_lambda.span[index];
-      const float edge_length = this->edge_lengths[index];
-      const float beta = this->beta[index] * params.inv_delta_time_squared;
+      group_mask.foreach_index(GrainSize(1024), [&](const int index) {
+        const int point1 = this->points1[index];
+        const int point2 = this->points2[index];
+        float3 &lambda = this->velocity_lambda.span[index];
+        const float edge_length = this->edge_lengths[index];
+        const float beta = this->beta[index] * params.inv_delta_time_squared;
 
-      angular_velocity_checker.claim_variable(point1);
-      angular_velocity_checker.claim_variable(point2);
+        angular_velocity_checker.claim_variable(point1);
+        angular_velocity_checker.claim_variable(point2);
 
-      float3 &angular_velocity1 = params.angular_velocities[point1];
-      float3 &angular_velocity2 = params.angular_velocities[point2];
-      const float weight_rot1 = params.rotation_weights[point1];
-      const float weight_rot2 = params.rotation_weights[point2];
-      xpbd_constraints::apply_velocity_bend_twist(weight_rot1,
-                                                  weight_rot2,
-                                                  edge_length,
-                                                  beta,
-                                                  lambda,
-                                                  angular_velocity1,
-                                                  angular_velocity2);
-    });
+        float3 &angular_velocity1 = params.angular_velocities[point1];
+        float3 &angular_velocity2 = params.angular_velocities[point2];
+        const float weight_rot1 = params.rotation_weights[point1];
+        const float weight_rot2 = params.rotation_weights[point2];
+        xpbd_constraints::apply_velocity_bend_twist(weight_rot1,
+                                                    weight_rot2,
+                                                    edge_length,
+                                                    beta,
+                                                    lambda,
+                                                    angular_velocity1,
+                                                    angular_velocity2);
+      });
 
-    if (angular_velocity_checker.has_overlap()) {
-      params.error_message_add("Overlapping constraint solver groups");
+      if (angular_velocity_checker.has_overlap()) {
+        params.error_message_add("Overlapping constraint solver groups");
+      }
     }
   }
 
@@ -682,18 +743,20 @@ struct BendTwistClosure : public ConstraintClosure {
 
   void init_velocities(ConstraintEvalParams &params, const IndexMask &group_mask) override
   {
-    group_mask.foreach_index(GrainSize(1024), [&](const int index) {
-      float3 &lambda = this->velocity_lambda.span[index];
-      const int point1 = this->points1[index];
-      const int point2 = this->points2[index];
+    if constexpr (use_velocity_constraint) {
+      group_mask.foreach_index(GrainSize(1024), [&](const int index) {
+        float3 &lambda = this->velocity_lambda.span[index];
+        const int point1 = this->points1[index];
+        const int point2 = this->points2[index];
 
-      float3 &angular_velocity1 = params.angular_velocities[point1];
-      float3 &angular_velocity2 = params.angular_velocities[point2];
-      const float weight_rot1 = params.rotation_weights[point1];
-      const float weight_rot2 = params.rotation_weights[point2];
-      xpbd_constraints::init_velocity_bend_twist(
-          weight_rot1, weight_rot2, lambda, angular_velocity1, angular_velocity2);
-    });
+        float3 &angular_velocity1 = params.angular_velocities[point1];
+        float3 &angular_velocity2 = params.angular_velocities[point2];
+        const float weight_rot1 = params.rotation_weights[point1];
+        const float weight_rot2 = params.rotation_weights[point2];
+        xpbd_constraints::init_velocity_bend_twist(
+            weight_rot1, weight_rot2, lambda, angular_velocity1, angular_velocity2);
+      });
+    }
   }
 
   void reset_lambda() override
