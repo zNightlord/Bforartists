@@ -7,6 +7,8 @@
  * \brief Low-level operations for the 'Sequence' data-block.
  */
 
+#include "BLI_listbase.h"
+
 #include "BKE_idtype.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_main.hh"
@@ -59,7 +61,7 @@ bool BKE_sequence_can_be_removed(const Main &bmain, const Sequence &sequence)
   if (ID_IS_LINKED(&sequence)) {
     return true;
   }
-  /* Local scenes can only be removed, when there is at least one local scene left. */
+  /* Local sequences can only be removed, when there is at least one local sequences left. */
   LISTBASE_FOREACH (Sequence *, other_sequence, &bmain.sequences) {
     if (other_sequence != &sequence && !ID_IS_LINKED(other_sequence)) {
       return true;

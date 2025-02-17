@@ -6,6 +6,8 @@
  * \ingroup edsequence
  */
 
+#include "BLI_listbase.h"
+
 #include "BKE_context.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_main.hh"
