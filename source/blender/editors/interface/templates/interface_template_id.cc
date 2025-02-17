@@ -13,10 +13,12 @@
 #include "BKE_layer.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_lib_override.hh"
+#include "BKE_library.hh"
 #include "BKE_main.hh"
 #include "BKE_main_invariants.hh"
 #include "BKE_packedFile.hh"
 
+#include "BLI_listbase.h"
 #include "BLI_string.h"
 #include "BLI_string_search.hh"
 
@@ -788,7 +790,7 @@ static void template_id_cb(bContext *C, void *arg_litem, void *arg_event)
   }
 }
 
-static const char *template_id_browse_tip(const StructRNA *type)
+static StringRef template_id_browse_tip(const StructRNA *type)
 {
   if (type) {
     switch ((ID_Type)RNA_type_to_ID_code(type)) {
@@ -985,7 +987,7 @@ static uiBut *template_id_def_new_but(uiBlock *block,
                             0,
                             w,
                             but_height,
-                            nullptr);
+                            std::nullopt);
     UI_but_funcN_set(but,
                      template_id_cb,
                      MEM_new<TemplateID>(__func__, template_ui),
@@ -995,7 +997,7 @@ static uiBut *template_id_def_new_but(uiBlock *block,
   }
   else {
     but = uiDefIconTextBut(
-        block, but_type, 0, icon, button_text, 0, 0, w, but_height, nullptr, 0, 0, nullptr);
+        block, but_type, 0, icon, button_text, 0, 0, w, but_height, nullptr, 0, 0, std::nullopt);
     UI_but_funcN_set(but,
                      template_id_cb,
                      MEM_new<TemplateID>(__func__, template_ui),
@@ -1238,7 +1240,7 @@ static void template_ID(const bContext *C,
                       0,
                       UI_UNIT_X,
                       UI_UNIT_Y,
-                      nullptr);
+                      std::nullopt);
       }
       else if (!ELEM(GS(id->name), ID_GR, ID_SCE, ID_SCR, ID_OB, ID_WS, ID_SEQ) &&
                (hide_buttons == false))
@@ -1256,7 +1258,7 @@ static void template_ID(const bContext *C,
                       -1,
                       0,
                       0,
-                      nullptr);
+                      std::nullopt);
       }
     }
   }
@@ -1308,7 +1310,7 @@ static void template_ID(const bContext *C,
                               0,
                               w,
                               UI_UNIT_Y,
-                              nullptr);
+                              std::nullopt);
       UI_but_funcN_set(but,
                        template_id_cb,
                        MEM_new<TemplateID>(__func__, template_ui),
@@ -1329,7 +1331,7 @@ static void template_ID(const bContext *C,
                              nullptr,
                              0,
                              0,
-                             nullptr);
+                             std::nullopt);
       UI_but_funcN_set(but,
                        template_id_cb,
                        MEM_new<TemplateID>(__func__, template_ui),
@@ -1359,7 +1361,7 @@ static void template_ID(const bContext *C,
                           0,
                           UI_UNIT_X,
                           UI_UNIT_Y,
-                          nullptr);
+                          std::nullopt);
       /* so we can access the template from operators, font unlinking needs this */
       UI_but_funcN_set(but,
                        template_id_cb,
