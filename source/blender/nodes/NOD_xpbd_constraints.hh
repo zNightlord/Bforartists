@@ -217,10 +217,12 @@ inline void eval_position_goal(const float3 &goal_position,
                                float &r_delta_lambda,
                                float3 &r_delta_position)
 {
-  const float3 gradient = math::normalize_and_get_length(position - goal_position, r_residual);
+  const float weight_norm = math::safe_rcp(1.0f + gamma + alpha);
 
+  const float3 gradient = math::normalize_and_get_length(position - goal_position, r_residual);
   const float velocity = math::dot(gradient, position - old_position);
-  r_delta_lambda = (-r_residual - alpha * lambda - gamma * velocity) / (1.0f + gamma + alpha);
+
+  r_delta_lambda = weight_norm * (-r_residual - alpha * lambda - gamma * velocity);
   r_delta_position = r_delta_lambda * gradient;
 }
 
@@ -281,16 +283,17 @@ inline void eval_rotation_goal(const math::Quaternion &goal_rotation,
                                float &r_delta_lambda,
                                float4 &r_delta_rotation)
 {
+  const float weight_norm = math::safe_rcp(1.0f + gamma + alpha);
+
   const math::AxisAngle axis_angle = math::to_axis_angle(rotation *
                                                          math::invert_normalized(goal_rotation));
   r_residual = axis_angle.angle().wrapped().radian();
   const float3 gradient = axis_angle.axis();
-
   const math::AxisAngle rotation_diff = math::to_axis_angle(math::invert_normalized(old_rotation) *
                                                             rotation);
   const float velocity = rotation_diff.angle().wrapped().radian();
 
-  r_delta_lambda = (-r_residual - alpha * lambda - gamma * velocity) / (1.0f + gamma + alpha);
+  r_delta_lambda = weight_norm * (-r_residual - alpha * lambda - gamma * velocity);
 
   if constexpr (linearized_quaternion) {
     // const float4 q = float4(-math::dot(gradient, rotation.imaginary_part()),
@@ -364,16 +367,16 @@ inline void eval_rotation_goal2(const math::Quaternion &goal_rotation,
                                 float4 &r_delta_lambda,
                                 float4 &r_delta_rotation)
 {
-  r_residual = quaternion_difference(rotation, goal_rotation);
-  float4 rotation_diff = float4(math::invert_normalized(old_rotation) * rotation);
-
   const float weight_norm = math::safe_rcp(1.0f + gamma + alpha);
+
+  r_residual = quaternion_difference(rotation, goal_rotation);
 
   /* Constraint gradient applied to variable differences.
    * This extends the rod constraints from "Position and Orientation Based Cosserat Rods"
    * (Kugelstadt et al.), section 6, with the damping terms for lambda from the XPBD paper ("XPBD:
    * Position-Based Simulation of Compliant Constrained Dynamics", Macklin et al.).
    */
+  float4 rotation_diff = float4(math::invert_normalized(old_rotation) * rotation);
   const float4 lambda_damping = float4(math::conjugate(rotation)) + rotation_diff;
 
   r_delta_lambda = weight_norm * (-r_residual - alpha * lambda - gamma * lambda_damping);
@@ -443,9 +446,11 @@ inline void eval_velocity_goal(const float3 &goal_velocity,
                                float &r_delta_lambda,
                                float3 &r_delta_velocity)
 {
+  const float weight_norm = math::safe_rcp(1.0f + beta);
+
   const float3 gradient = math::normalize_and_get_length(velocity - goal_velocity, r_residual);
 
-  r_delta_lambda = (-beta * r_residual - lambda) / (1.0f + beta);
+  r_delta_lambda = weight_norm * (-beta * r_residual - lambda);
   r_delta_velocity = r_delta_lambda * gradient;
 }
 
@@ -472,10 +477,12 @@ inline void eval_angular_velocity_goal(const float3 &goal_angular_velocity,
                                        float &r_delta_lambda,
                                        float3 &r_delta_angular_velocity)
 {
+  const float weight_norm = math::safe_rcp(1.0f + beta);
+
   const float3 gradient = math::normalize_and_get_length(angular_velocity - goal_angular_velocity,
                                                          r_residual);
 
-  r_delta_lambda = (-beta * r_residual - lambda) / (1.0f + beta);
+  r_delta_lambda = weight_norm * (-beta * r_residual - lambda);
   r_delta_angular_velocity = r_delta_lambda * gradient;
 }
 
@@ -507,9 +514,11 @@ inline void eval_angular_velocity_goal2(const float3 &goal_angular_velocity,
                                         float3 &r_delta_lambda,
                                         float3 &r_delta_angular_velocity)
 {
+  const float weight_norm = math::safe_rcp(1.0f + beta);
+
   r_residual = angular_velocity - goal_angular_velocity;
 
-  r_delta_lambda = (-beta * r_residual - lambda) / (1.0f + beta);
+  r_delta_lambda = weight_norm * (-beta * r_residual - lambda);
   r_delta_angular_velocity = r_delta_lambda;
 }
 
@@ -554,6 +563,10 @@ inline void eval_position_stretch_shear(const float weight_pos1,
                                         float4 &r_delta_rotation)
 {
   const float inv_edge_length = math::safe_rcp(edge_length);
+  const float weight_norm = math::safe_rcp(
+      ((weight_pos1 + weight_pos2) * inv_edge_length * inv_edge_length + 4.0f * weight_rot) *
+          (1.0f + gamma) +
+      alpha);
 
   const float3 direction = math::transform_point(rotation, float3(0, 0, 1));
   r_residual = inv_edge_length * (position2 - position1) - direction;
@@ -570,10 +583,6 @@ inline void eval_position_stretch_shear(const float weight_pos1,
                                     inv_edge_length +
                                 (math::Quaternion(rotation_diff) * Q).imaginary_part();
 
-  const float weight_norm = math::safe_rcp(
-      ((weight_pos1 + weight_pos2) * inv_edge_length * inv_edge_length + 4.0f * weight_rot) *
-          (1.0f + gamma) +
-      alpha);
   r_delta_lambda = weight_norm * r_residual - alpha * lambda - gamma * lambda_damping;
 
   r_delta_position1 = weight_pos1 * inv_edge_length * r_delta_lambda;
@@ -690,13 +699,13 @@ inline void eval_velocity_stretch_shear(const math::Quaternion &rotation,
                                         float3 &r_delta_angular_velocity)
 {
   const float inv_edge_length = math::safe_rcp(edge_length);
+  const float weight_norm = math::safe_rcp(
+      1.0f + beta * ((weight_pos1 + weight_pos2) * inv_edge_length * inv_edge_length +
+                     4.0f * weight_rot));
 
   const float3 direction = math::transform_point(rotation,
                                                  math::cross(angular_velocity, float3(0, 0, 1)));
   r_residual = inv_edge_length * (velocity2 - velocity1) - direction;
-  const float weight_norm = math::safe_rcp(
-      1.0f + beta * ((weight_pos1 + weight_pos2) * inv_edge_length * inv_edge_length +
-                     4.0f * weight_rot));
 
   r_delta_lambda = weight_norm * (beta * r_residual - lambda);
 
@@ -761,6 +770,8 @@ inline void eval_position_bend_twist(const float weight_rot1,
                                      float4 &r_delta_rotation1,
                                      float4 &r_delta_rotation2)
 {
+  const float weight_norm = math::safe_rcp((weight_rot1 + weight_rot2) * (1.0f + gamma) + alpha);
+
   const math::Quaternion current_darboux = math::invert_normalized(rotation1) * rotation2;
   r_residual = quaternion_difference(current_darboux, darboux_vector) *
                math::safe_divide(2.0f, edge_length);
@@ -769,8 +780,6 @@ inline void eval_position_bend_twist(const float weight_rot1,
   float4 rotation_diff2;
   rotation_diff1 = float4(math::invert_normalized(old_rotation1) * rotation1);
   rotation_diff2 = float4(math::invert_normalized(old_rotation2) * rotation2);
-
-  const float weight_norm = math::safe_rcp((weight_rot1 + weight_rot2) * (1.0f + gamma) + alpha);
 
   /* Constraint gradient applied to variable differences.
    * This extends the rod constraints from "Position and Orientation Based Cosserat Rods"
@@ -887,9 +896,9 @@ inline void eval_velocity_bend_twist(const float weight_rot1,
   //                                (math::invert_normalized(rotation1) *
   //                                rotation2).imaginary_part();
   UNUSED_VARS(edge_length);
-  r_residual = 0.5f * (angular_velocity2 - angular_velocity1);
-
   const float weight_norm = math::safe_rcp(1.0f + beta * (weight_rot1 + weight_rot2));
+
+  r_residual = 0.5f * (angular_velocity2 - angular_velocity1);
 
   r_delta_lambda = weight_norm * (beta * r_residual - lambda);
 
@@ -971,12 +980,11 @@ inline bool eval_position_contact(const float weight_pos1,
                             math::square(math::dot(local_position1, normal));
   const float rot_factor2 = math::length_squared(local_position2) -
                             math::square(math::dot(local_position2, normal));
-  const float total_weight = weight_pos1 + weight_rot1 * rot_factor1 + weight_pos2 +
-                             weight_rot2 * rot_factor2 + alpha;
-  BLI_assert(!math::is_zero(total_weight));
+  const float weight_norm = math::safe_rcp(weight_pos1 + weight_rot1 * rot_factor1 + weight_pos2 +
+                                           weight_rot2 * rot_factor2 + alpha);
 
   /* Gradient is normal, length is 1, no need to compute gradient norm. */
-  r_delta_lambda = (-r_residual_depth - alpha * lambda) / total_weight;
+  r_delta_lambda = weight_norm * (-r_residual_depth - alpha * lambda);
   const float3 impulse1 = r_delta_lambda * normal;
   const float3 impulse2 = -impulse1;
 
