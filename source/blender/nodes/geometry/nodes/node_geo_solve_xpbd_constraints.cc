@@ -246,6 +246,9 @@ static void do_solver_steps(const SolverMethod method,
 {
   if (init_mode) {
     for (const ClosureEvalInfo &info : closures) {
+      if (!info.closure) {
+        continue;
+      }
       switch (*init_mode) {
         case ConstraintInit::ZeroInit:
           info.closure->reset_lambda();
@@ -358,6 +361,8 @@ static void node_geo_exec_positions(GeoNodeExecParams params)
   IndexMaskMemory memory;
   bind_constraint_closures(params, constraint_closures, memory);
 
+  ConstraintEvalParams eval_params = extract_eval_params(params);
+
   static const Array<GeometryComponent::Type> types = {bke::GeometryComponent::Type::Mesh,
                                                        bke::GeometryComponent::Type::PointCloud,
                                                        bke::GeometryComponent::Type::Curve,
@@ -372,7 +377,6 @@ static void node_geo_exec_positions(GeoNodeExecParams params)
         }
 
         const int num_points = attributes->domain_size(AttrDomain::Point);
-        ConstraintEvalParams eval_params;
         eval_params.positions.reinitialize(num_points);
         eval_params.rotations.reinitialize(num_points);
 
@@ -473,6 +477,8 @@ static void node_geo_exec_velocities(GeoNodeExecParams params)
   IndexMaskMemory memory;
   bind_constraint_closures(params, constraint_closures, memory);
 
+  ConstraintEvalParams eval_params = extract_eval_params(params);
+
   static const Array<GeometryComponent::Type> types = {bke::GeometryComponent::Type::Mesh,
                                                        bke::GeometryComponent::Type::PointCloud,
                                                        bke::GeometryComponent::Type::Curve,
@@ -485,8 +491,6 @@ static void node_geo_exec_velocities(GeoNodeExecParams params)
         if (!attributes) {
           continue;
         }
-
-        ConstraintEvalParams eval_params = extract_eval_params(params);
 
         const int num_points = attributes->domain_size(AttrDomain::Point);
         eval_params.positions.reinitialize(num_points);

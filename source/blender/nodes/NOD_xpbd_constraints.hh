@@ -7,8 +7,8 @@
 #include <atomic>
 
 #include "BLI_function_ref.hh"
+#include "BLI_math_axis_angle.hh"
 #include "BLI_math_quaternion.hh"
-#include "BLI_math_quaternion_types.hh"
 #include "BLI_string_ref.hh"
 
 #include "BKE_attribute.hh"
@@ -138,6 +138,33 @@ template<> struct VariableChecker<true> {
 
 }  // namespace error_check
 
+/* Linearized quaternion arithmetic relies on consistent quaternion orientation (w component should
+ * be positive). This is not guaranteed by all math operations, e.g. Euler-to-Quaternion
+ * conversion. These utility functions check the sign of q.w to ensure differences are applied
+ * consistently and don't cause issues with flipping. */
+
+inline bool is_positive_quaternion(const math::Quaternion &q)
+{
+  return q.w >= 0.0f;
+}
+
+inline math::Quaternion ensure_positive_quaternion(const math::Quaternion &q)
+{
+  return q.w >= 0.0f ? q : math::Quaternion(-q.w, -q.x, -q.y, -q.z);
+}
+
+inline float4 quaternion_difference(const math::Quaternion &a, const math::Quaternion &b)
+{
+  return float4(ensure_positive_quaternion(a)) - float4(ensure_positive_quaternion(b));
+}
+
+/* Add a positive or negative offset depending on the quaternion sign. */
+inline math::Quaternion quaternion_offset(const math::Quaternion &q, const float4 &offset)
+{
+  return is_positive_quaternion(q) ? math::Quaternion(float4(q) + offset) :
+                                     math::Quaternion(float4(q) - offset);
+}
+
 inline void apply_position_impulse(const float3 &delta_position, float3 &position)
 {
   position += delta_position;
@@ -147,7 +174,7 @@ template<bool linearized_quaternion>
 inline void apply_rotation_impulse(const float4 &delta_rotation, math::Quaternion &rotation)
 {
   if constexpr (linearized_quaternion) {
-    rotation = math::normalize(math::Quaternion(float4(rotation) + delta_rotation));
+    rotation = math::normalize(quaternion_offset(rotation, delta_rotation));
   }
   else {
     /* Normalize the final result to avoid accumulating errors. */
@@ -201,6 +228,28 @@ inline void eval_position_goal(const float3 &goal_position,
 
 inline void apply_position_goal(const float3 &goal_position,
                                 const float alpha,
+                                float &lambda,
+                                float3 &position)
+{
+  float residual;
+  float delta_lambda;
+  float3 delta_position;
+  eval_position_goal(goal_position,
+                     alpha,
+                     0.0f,
+                     lambda,
+                     position,
+                     float3(0.0f),
+                     residual,
+                     delta_lambda,
+                     delta_position);
+
+  lambda += delta_lambda;
+  apply_position_impulse(delta_position, position);
+}
+
+inline void apply_position_goal(const float3 &goal_position,
+                                const float alpha,
                                 const float gamma,
                                 const float3 &old_position,
                                 float &lambda,
@@ -245,11 +294,12 @@ inline void eval_rotation_goal(const math::Quaternion &goal_rotation,
 {
   const math::AxisAngle axis_angle = math::to_axis_angle(rotation *
                                                          math::invert_normalized(goal_rotation));
-  const math::AxisAngle old_axis_angle = math::to_axis_angle(
-      rotation * math::invert_normalized(old_rotation));
   r_residual = axis_angle.angle().wrapped().radian();
   const float3 gradient = axis_angle.axis();
-  const float velocity = math::dot(old_axis_angle.axis(), gradient);
+
+  const math::AxisAngle rotation_diff = math::to_axis_angle(math::invert_normalized(old_rotation) *
+                                                            rotation);
+  const float velocity = rotation_diff.angle().wrapped().radian();
 
   r_delta_lambda = (-r_residual - alpha * lambda - gamma * velocity) / (1.0f + gamma + alpha);
 
@@ -264,6 +314,29 @@ inline void eval_rotation_goal(const math::Quaternion &goal_rotation,
     r_delta_rotation = float4(
         math::to_quaternion(math::AxisAngle(gradient, math::AngleRadian(r_delta_lambda))));
   }
+}
+
+template<bool linearized_quaternion>
+inline void apply_rotation_goal(const math::Quaternion &goal_rotation,
+                                const float alpha,
+                                float &lambda,
+                                math::Quaternion &rotation)
+{
+  float residual;
+  float delta_lambda;
+  float4 delta_rotation;
+  eval_rotation_goal<linearized_quaternion>(goal_rotation,
+                                            alpha,
+                                            0.0f,
+                                            lambda,
+                                            rotation,
+                                            math::Quaternion::identity(),
+                                            residual,
+                                            delta_lambda,
+                                            delta_rotation);
+
+  lambda += delta_lambda;
+  apply_rotation_impulse<linearized_quaternion>(delta_rotation, rotation);
 }
 
 template<bool linearized_quaternion>
@@ -311,6 +384,96 @@ inline void init_rotation_goal(const math::Quaternion &goal_rotation,
   }
 
   apply_rotation_impulse<linearized_quaternion>(delta_rotation, rotation);
+}
+
+template<bool linearized_quaternion>
+inline void eval_rotation_goal2(const math::Quaternion &goal_rotation,
+                                const float alpha,
+                                const float gamma,
+                                const float4 &lambda,
+                                const math::Quaternion &rotation,
+                                const math::Quaternion &old_rotation,
+                                float4 &r_residual,
+                                float4 &r_delta_lambda,
+                                float4 &r_delta_rotation)
+{
+  r_residual = quaternion_difference(rotation, goal_rotation);
+  float4 rotation_diff = float4(math::invert_normalized(old_rotation) * rotation);
+
+  const float weight_norm = math::safe_rcp(1.0f + gamma + alpha);
+
+  /* Constraint gradient applied to variable differences.
+   * This extends the rod constraints from "Position and Orientation Based Cosserat Rods"
+   * (Kugelstadt et al.), section 6, with the damping terms for lambda from the XPBD paper ("XPBD:
+   * Position-Based Simulation of Compliant Constrained Dynamics", Macklin et al.).
+   */
+  const float4 lambda_damping = float4(math::conjugate(rotation)) + rotation_diff;
+
+  r_delta_lambda = weight_norm * (-r_residual - alpha * lambda - gamma * lambda_damping);
+
+  if constexpr (linearized_quaternion) {
+    r_delta_rotation = r_delta_lambda;
+  }
+  else {
+    // TODO
+    BLI_assert_unreachable();
+  }
+}
+
+template<bool linearized_quaternion>
+inline void apply_rotation_goal2(const math::Quaternion &goal_rotation,
+                                 const float alpha,
+                                 float4 &lambda,
+                                 math::Quaternion &rotation)
+{
+  float residual;
+  float4 delta_lambda;
+  float4 delta_rotation;
+  eval_rotation_goal2<linearized_quaternion>(goal_rotation,
+                                             alpha,
+                                             0.0f,
+                                             lambda,
+                                             rotation,
+                                             math::Quaternion::identity(),
+                                             residual,
+                                             delta_lambda,
+                                             delta_rotation);
+
+  lambda += delta_lambda;
+  apply_rotation_impulse<linearized_quaternion>(delta_rotation, rotation);
+}
+
+template<bool linearized_quaternion>
+inline void apply_rotation_goal2(const math::Quaternion &goal_rotation,
+                                 const float alpha,
+                                 const float gamma,
+                                 const math::Quaternion &old_rotation,
+                                 float4 &lambda,
+                                 math::Quaternion &rotation)
+{
+  float4 residual;
+  float4 delta_lambda;
+  float4 delta_rotation;
+  eval_rotation_goal2<linearized_quaternion>(goal_rotation,
+                                             alpha,
+                                             gamma,
+                                             lambda,
+                                             rotation,
+                                             old_rotation,
+                                             residual,
+                                             delta_lambda,
+                                             delta_rotation);
+
+  lambda += delta_lambda;
+  apply_rotation_impulse<linearized_quaternion>(delta_rotation, rotation);
+}
+
+template<bool linearized_quaternion>
+inline void init_rotation_goal2(const math::Quaternion & /*goal_rotation*/,
+                                const float4 & /*lambda*/,
+                                math::Quaternion & /*rotation*/)
+{
+  // TODO
 }
 
 inline void eval_velocity_goal(const float3 &goal_velocity,
@@ -397,6 +560,47 @@ inline void init_angular_velocity_goal(const float3 &goal_angular_velocity,
   apply_angular_velocity_impulse(delta_angular_velocity, angular_velocity);
 }
 
+inline void eval_angular_velocity_goal2(const float3 &goal_angular_velocity,
+                                        const float beta,
+                                        const float3 &lambda,
+                                        const float3 &angular_velocity,
+                                        float3 &r_residual,
+                                        float3 &r_delta_lambda,
+                                        float3 &r_delta_angular_velocity)
+{
+  r_residual = angular_velocity - goal_angular_velocity;
+
+  r_delta_lambda = (-beta * r_residual - lambda) / (1.0f + beta);
+  r_delta_angular_velocity = r_delta_lambda;
+}
+
+inline void apply_angular_velocity_goal2(const float3 &goal_angular_velocity,
+                                         const float beta,
+                                         float3 &lambda,
+                                         float3 &angular_velocity)
+{
+  float3 residual;
+  float3 delta_lambda;
+  float3 delta_angular_velocity;
+  eval_angular_velocity_goal2(goal_angular_velocity,
+                              beta,
+                              lambda,
+                              angular_velocity,
+                              residual,
+                              delta_lambda,
+                              delta_angular_velocity);
+
+  lambda += delta_lambda;
+  apply_angular_velocity_impulse(delta_angular_velocity, angular_velocity);
+}
+
+inline void init_angular_velocity_goal2(const float3 &lambda, float3 &angular_velocity)
+{
+  const float3 delta_angular_velocity = lambda;
+
+  apply_angular_velocity_impulse(delta_angular_velocity, angular_velocity);
+}
+
 template<bool linearized_quaternion>
 inline void eval_position_stretch_shear(const float weight_pos1,
                                         const float weight_pos2,
@@ -421,21 +625,76 @@ inline void eval_position_stretch_shear(const float weight_pos1,
 
   const float3 direction = math::transform_point(rotation, float3(0, 0, 1));
   r_residual = inv_edge_length * (position2 - position1) - direction;
-  const float weight_norm = math::safe_rcp(
-      (weight_pos1 + weight_pos2) * inv_edge_length * inv_edge_length + 4.0f * weight_rot + alpha);
 
-  r_delta_lambda = weight_norm * r_residual - alpha * lambda;
+  float4 rotation_diff = float4(
+      ensure_positive_quaternion(math::conjugate(old_rotation) * rotation));
+  /* Constraint gradient applied to variable differences.
+   * This extends the rod constraints from "Position and Orientation Based Cosserat Rods"
+   * (Kugelstadt et al.), section 6, with the damping terms for lambda from the XPBD paper ("XPBD:
+   * Position-Based Simulation of Compliant Constrained Dynamics", Macklin et al.).
+   */
+  const math::Quaternion Q = math::Quaternion(0, 0, 0, 1) * math::conjugate(rotation);
+  const float3 lambda_damping = (position1 - old_position1 + position2 - old_position2) *
+                                    inv_edge_length +
+                                (math::Quaternion(rotation_diff) * Q).imaginary_part();
+
+  const float weight_norm = math::safe_rcp(
+      ((weight_pos1 + weight_pos2) * inv_edge_length * inv_edge_length + 4.0f * weight_rot) *
+          (1.0f + gamma) +
+      alpha);
+  r_delta_lambda = weight_norm * r_residual - alpha * lambda - gamma * lambda_damping;
 
   r_delta_position1 = weight_pos1 * inv_edge_length * r_delta_lambda;
   r_delta_position2 = -weight_pos2 * inv_edge_length * r_delta_lambda;
   if constexpr (linearized_quaternion) {
-    r_delta_rotation = weight_rot * float4(math::Quaternion(0.0f, r_delta_lambda) * rotation *
+    r_delta_rotation = weight_rot * float4(math::Quaternion(0.0f, r_delta_lambda) *
+                                           ensure_positive_quaternion(rotation) *
                                            math::Quaternion(0, 0, 0, -1));
   }
   else {
     r_delta_rotation = float4(
         math::to_quaternion(math::AxisAngle(direction, math::normalize(position2 - position1))));
   }
+}
+
+template<bool linearized_quaternion>
+inline void apply_position_stretch_shear(const float weight_pos1,
+                                         const float weight_pos2,
+                                         const float weight_rot,
+                                         const float edge_length,
+                                         const float alpha,
+                                         float3 &lambda,
+                                         float3 &position1,
+                                         float3 &position2,
+                                         math::Quaternion &rotation)
+{
+  float3 residual;
+  float3 delta_lambda;
+  float3 delta_pos1, delta_pos2;
+  float4 delta_rot;
+  eval_position_stretch_shear<linearized_quaternion>(weight_pos1,
+                                                     weight_pos2,
+                                                     weight_rot,
+                                                     edge_length,
+                                                     alpha,
+                                                     0.0f,
+                                                     lambda,
+                                                     position1,
+                                                     position2,
+                                                     rotation,
+                                                     float3(0.0f),
+                                                     float3(0.0f),
+                                                     math::Quaternion::identity(),
+                                                     residual,
+                                                     delta_lambda,
+                                                     delta_pos1,
+                                                     delta_pos2,
+                                                     delta_rot);
+
+  lambda += delta_lambda;
+  apply_position_impulse(delta_pos1, position1);
+  apply_position_impulse(delta_pos2, position2);
+  apply_rotation_impulse<linearized_quaternion>(delta_rot, rotation);
 }
 
 template<bool linearized_quaternion>
@@ -613,26 +872,46 @@ inline void eval_position_bend_twist(const float weight_rot1,
                                      const float edge_length,
                                      const math::Quaternion &darboux_vector,
                                      const float alpha,
+                                     const float gamma,
                                      const float4 &lambda,
                                      const math::Quaternion &rotation1,
                                      const math::Quaternion &rotation2,
+                                     const math::Quaternion &old_rotation1,
+                                     const math::Quaternion &old_rotation2,
                                      float4 &r_residual,
                                      float4 &r_delta_lambda,
                                      float4 &r_delta_rotation1,
                                      float4 &r_delta_rotation2)
 {
   const math::Quaternion current_darboux = math::invert_normalized(rotation1) * rotation2;
-  r_residual = (float4(current_darboux) - float4(darboux_vector)) *
+  r_residual = quaternion_difference(current_darboux, darboux_vector) *
                math::safe_divide(2.0f, edge_length);
 
-  const float weight_norm = math::safe_rcp(weight_rot1 + weight_rot2 + alpha);
+  float4 rotation_diff1;
+  float4 rotation_diff2;
+  rotation_diff1 = float4(math::invert_normalized(old_rotation1) * rotation1);
+  rotation_diff2 = float4(math::invert_normalized(old_rotation2) * rotation2);
 
-  r_delta_lambda = weight_norm * (-r_residual - alpha * lambda);
+  const float weight_norm = math::safe_rcp((weight_rot1 + weight_rot2) * (1.0f + gamma) + alpha);
+
+  /* Constraint gradient applied to variable differences.
+   * This extends the rod constraints from "Position and Orientation Based Cosserat Rods"
+   * (Kugelstadt et al.), section 6, with the damping terms for lambda from the XPBD paper ("XPBD:
+   * Position-Based Simulation of Compliant Constrained Dynamics", Macklin et al.).
+   */
+  const float4 lambda_damping = float4(math::Quaternion(rotation_diff1) *
+                                       math::conjugate(ensure_positive_quaternion(rotation2))) +
+                                float4(math::Quaternion(rotation_diff2) *
+                                       math::conjugate(ensure_positive_quaternion(rotation1)));
+
+  r_delta_lambda = weight_norm * (-r_residual - alpha * lambda - gamma * lambda_damping);
 
   if constexpr (linearized_quaternion) {
     r_delta_rotation1 = weight_rot1 *
-                        float4(rotation2 * math::conjugate(math::Quaternion(r_delta_lambda)));
-    r_delta_rotation2 = weight_rot2 * float4(rotation1 * math::Quaternion(r_delta_lambda));
+                        float4(ensure_positive_quaternion(rotation2) *
+                               math::conjugate(math::Quaternion(0.5f * r_delta_lambda)));
+    r_delta_rotation2 = weight_rot2 * float4(ensure_positive_quaternion(rotation1) *
+                                             math::Quaternion(0.5f * r_delta_lambda));
   }
   else {
     // TODO
@@ -658,9 +937,49 @@ inline void apply_position_bend_twist(const float weight_rot1,
                                                   edge_length,
                                                   darboux_vector,
                                                   alpha,
+                                                  0.0f,
                                                   lambda,
                                                   rotation1,
                                                   rotation2,
+                                                  math::Quaternion::identity(),
+                                                  math::Quaternion::identity(),
+                                                  residual,
+                                                  delta_lambda,
+                                                  delta_rot1,
+                                                  delta_rot2);
+
+  lambda += delta_lambda;
+  apply_rotation_impulse<linearized_quaternion>(delta_rot1, rotation1);
+  apply_rotation_impulse<linearized_quaternion>(delta_rot2, rotation2);
+}
+
+template<bool linearized_quaternion>
+inline void apply_position_bend_twist(const float weight_rot1,
+                                      const float weight_rot2,
+                                      const float edge_length,
+                                      const math::Quaternion &darboux_vector,
+                                      const float alpha,
+                                      const float gamma,
+                                      const math::Quaternion &old_rotation1,
+                                      const math::Quaternion &old_rotation2,
+                                      float4 &lambda,
+                                      math::Quaternion &rotation1,
+                                      math::Quaternion &rotation2)
+{
+  float4 residual;
+  float4 delta_lambda;
+  float4 delta_rot1, delta_rot2;
+  eval_position_bend_twist<linearized_quaternion>(weight_rot1,
+                                                  weight_rot2,
+                                                  edge_length,
+                                                  darboux_vector,
+                                                  alpha,
+                                                  gamma,
+                                                  lambda,
+                                                  rotation1,
+                                                  rotation2,
+                                                  old_rotation1,
+                                                  old_rotation2,
                                                   residual,
                                                   delta_lambda,
                                                   delta_rot1,

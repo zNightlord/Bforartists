@@ -103,7 +103,7 @@ struct PositionGoalClosure : public ConstraintClosure {
       float3 &position1 = params.positions[point1];
       if constexpr (use_velocity_constraint) {
         const float alpha = this->alpha[index] * params.inv_delta_time_squared;
-        xpbd_constraints::apply_position_goal(goal, alpha, 0.0f, float3(0.0f), lambda, position1);
+        xpbd_constraints::apply_position_goal(goal, alpha, lambda, position1);
       }
       else {
         const float3 &old_position1 = params.old_positions[point1];
@@ -215,8 +215,9 @@ struct RotationGoalClosure : public ConstraintClosure {
   VArraySpan<math::Quaternion> goal_rotations;
   VArraySpan<float3> goal_angular_velocities;
 
-  bke::SpanAttributeWriter<float> position_lambda;
-  bke::SpanAttributeWriter<float> velocity_lambda;
+  bke::SpanAttributeWriter<float> position_lambda_w;
+  bke::SpanAttributeWriter<float3> position_lambda_xyz;
+  bke::SpanAttributeWriter<float3> velocity_lambda;
 
   RotationGoalClosure(GeometrySet &&geometry_set, ErrorFn error_fn)
       : ConstraintClosure(std::move(geometry_set), error_fn)
@@ -232,9 +233,11 @@ struct RotationGoalClosure : public ConstraintClosure {
     this->goal_angular_velocities = *lookup_or_warn<float3>(
         *attributes, "goal_angular_velocity", AttrDomain::Point, float3(0.0f), error_fn);
 
-    this->position_lambda = attributes->lookup_or_add_for_write_span<float>(
-        "position_lambda", AttrDomain::Point, bke::AttributeInitDefaultValue());
-    this->velocity_lambda = attributes->lookup_or_add_for_write_span<float>(
+    this->position_lambda_w = attributes->lookup_or_add_for_write_span<float>(
+        "position_lambda_w", AttrDomain::Point, bke::AttributeInitDefaultValue());
+    this->position_lambda_xyz = attributes->lookup_or_add_for_write_span<float3>(
+        "position_lambda_xyz", AttrDomain::Point, bke::AttributeInitDefaultValue());
+    this->velocity_lambda = attributes->lookup_or_add_for_write_span<float3>(
         "velocity_lambda", AttrDomain::Point, bke::AttributeInitDefaultValue());
   }
 
@@ -246,24 +249,27 @@ struct RotationGoalClosure : public ConstraintClosure {
 
     group_mask.foreach_index(GrainSize(1024), [&](const int index) {
       const int point1 = this->points[index];
-      float &lambda = this->position_lambda.span[index];
+      float &lambda_w = this->position_lambda_w.span[index];
+      float3 &lambda_xyz = this->position_lambda_xyz.span[index];
       const math::Quaternion &goal = this->goal_rotations[index];
 
       rotation_checker.claim_variable(point1);
 
       math::Quaternion &rotation1 = params.rotations[point1];
+      float4 lambda = float4(lambda_w, lambda_xyz);
       if constexpr (use_velocity_constraint) {
         const float alpha = this->alpha[index] * params.inv_delta_time_squared;
-        xpbd_constraints::apply_rotation_goal<true>(
-            goal, alpha, 0.0f, float3(0.0f), lambda, rotation1);
+        xpbd_constraints::apply_rotation_goal2<true>(goal, alpha, lambda, rotation1);
       }
       else {
         const math::Quaternion &old_rotation1 = params.old_rotations[point1];
         const float alpha = this->alpha[index] * params.inv_delta_time_squared;
         const float gamma = this->alpha[index] * this->beta[index] * params.inv_delta_time;
-        xpbd_constraints::apply_rotation_goal<true>(
+        xpbd_constraints::apply_rotation_goal2<true>(
             goal, alpha, gamma, old_rotation1, lambda, rotation1);
       }
+      lambda_w = lambda.x;
+      lambda_xyz = lambda.yzw();
     });
 
     if (rotation_checker.has_overlap()) {
@@ -280,14 +286,14 @@ struct RotationGoalClosure : public ConstraintClosure {
 
       group_mask.foreach_index(GrainSize(1024), [&](const int index) {
         const int point1 = this->points[index];
-        float &lambda = this->velocity_lambda.span[index];
+        float3 &lambda = this->velocity_lambda.span[index];
         const float beta = this->beta[index] * params.inv_delta_time_squared;
         const float3 &goal = this->goal_angular_velocities[index];
 
         angular_velocity_checker.claim_variable(point1);
 
         float3 &angular_velocity1 = params.angular_velocities[point1];
-        xpbd_constraints::apply_angular_velocity_goal(goal, beta, lambda, angular_velocity1);
+        xpbd_constraints::apply_angular_velocity_goal2(goal, beta, lambda, angular_velocity1);
       });
 
       if (angular_velocity_checker.has_overlap()) {
@@ -319,12 +325,13 @@ struct RotationGoalClosure : public ConstraintClosure {
   void init_positions(ConstraintEvalParams &params, const IndexMask &group_mask) override
   {
     group_mask.foreach_index(GrainSize(1024), [&](const int index) {
-      float &lambda = this->position_lambda.span[index];
+      const float4 lambda = float4(this->position_lambda_w.span[index],
+                                   this->position_lambda_xyz.span[index]);
       const int point1 = this->points[index];
       const math::Quaternion &goal = this->goal_rotations[index];
 
       math::Quaternion &rotation1 = params.rotations[point1];
-      xpbd_constraints::init_rotation_goal<true>(goal, lambda, rotation1);
+      xpbd_constraints::init_rotation_goal2<true>(goal, lambda, rotation1);
     });
   }
 
@@ -332,27 +339,28 @@ struct RotationGoalClosure : public ConstraintClosure {
   {
     if constexpr (use_velocity_constraint) {
       group_mask.foreach_index(GrainSize(1024), [&](const int index) {
-        float &lambda = this->velocity_lambda.span[index];
+        float3 &lambda = this->velocity_lambda.span[index];
         const int point1 = this->points[index];
-        const float3 &goal = this->goal_angular_velocities[index];
 
         float3 &angular_velocity1 = params.angular_velocities[point1];
-        xpbd_constraints::init_angular_velocity_goal(goal, lambda, angular_velocity1);
+        xpbd_constraints::init_angular_velocity_goal2(lambda, angular_velocity1);
       });
     }
   }
 
   void reset_lambda() override
   {
-    for (const int index : this->position_lambda.span.index_range()) {
-      this->position_lambda.span[index] = 0.0f;
-      this->velocity_lambda.span[index] = 0.0f;
+    for (const int index : this->position_lambda_w.span.index_range()) {
+      this->position_lambda_w.span[index] = 0.0f;
+      this->position_lambda_xyz.span[index] = float3(0.0f);
+      this->velocity_lambda.span[index] = float3(0.0f);
     }
   }
 
   void finish_attributes() override
   {
-    this->position_lambda.finish();
+    this->position_lambda_w.finish();
+    this->position_lambda_xyz.finish();
     this->velocity_lambda.finish();
   }
 };
@@ -402,7 +410,6 @@ struct StretchShearClosure : public ConstraintClosure {
       const int point2 = this->points2[index];
       float3 &lambda = this->position_lambda.span[index];
       const float edge_length = this->edge_lengths[index];
-      const float alpha = this->alpha[index] * params.inv_delta_time_squared;
 
       position_checker.claim_variable(point1);
       position_checker.claim_variable(point2);
@@ -415,6 +422,7 @@ struct StretchShearClosure : public ConstraintClosure {
       const float weight_pos2 = params.position_weights[point2];
       const float weight_rot = params.rotation_weights[point1];
       if constexpr (use_velocity_constraint) {
+        const float alpha = this->alpha[index] * params.inv_delta_time_squared;
         xpbd_constraints::apply_position_stretch_shear<true>(weight_pos1,
                                                              weight_pos2,
                                                              weight_rot,
@@ -426,7 +434,9 @@ struct StretchShearClosure : public ConstraintClosure {
                                                              rotation);
       }
       else {
-        const math::Quaternion &old_rotation1 = params.old_rotations[point1];
+        const float3 old_position1 = params.old_positions[point1];
+        const float3 old_position2 = params.old_positions[point2];
+        const math::Quaternion &old_rotation = params.old_rotations[point1];
         const float alpha = this->alpha[index] * params.inv_delta_time_squared;
         const float gamma = this->alpha[index] * this->beta[index] * params.inv_delta_time;
         xpbd_constraints::apply_position_stretch_shear<true>(weight_pos1,
@@ -434,6 +444,10 @@ struct StretchShearClosure : public ConstraintClosure {
                                                              weight_rot,
                                                              edge_length,
                                                              alpha,
+                                                             gamma,
+                                                             old_position1,
+                                                             old_position2,
+                                                             old_rotation,
                                                              lambda,
                                                              position1,
                                                              position2,
@@ -638,7 +652,6 @@ struct BendTwistClosure : public ConstraintClosure {
       const float edge_length = this->edge_lengths[index];
       const math::Quaternion darboux_vector = math::Quaternion(this->darboux_w[index],
                                                                this->darboux_xyz[index]);
-      const float alpha = this->alpha[index] * params.inv_delta_time_squared;
 
       rotation_checker.claim_variable(point1);
       rotation_checker.claim_variable(point2);
@@ -649,14 +662,34 @@ struct BendTwistClosure : public ConstraintClosure {
       const float weight_rot2 = params.rotation_weights[point2];
 
       float4 lambda = float4(lambda_w, lambda_xyz);
-      xpbd_constraints::apply_position_bend_twist<true>(weight_rot1,
-                                                        weight_rot2,
-                                                        edge_length,
-                                                        darboux_vector,
-                                                        alpha,
-                                                        lambda,
-                                                        rotation1,
-                                                        rotation2);
+      if constexpr (use_velocity_constraint) {
+        const float alpha = this->alpha[index] * params.inv_delta_time_squared;
+        xpbd_constraints::apply_position_bend_twist<true>(weight_rot1,
+                                                          weight_rot2,
+                                                          edge_length,
+                                                          darboux_vector,
+                                                          alpha,
+                                                          lambda,
+                                                          rotation1,
+                                                          rotation2);
+      }
+      else {
+        const math::Quaternion &old_rotation1 = params.old_rotations[point1];
+        const math::Quaternion &old_rotation2 = params.old_rotations[point2];
+        const float alpha = this->alpha[index] * params.inv_delta_time_squared;
+        const float gamma = this->alpha[index] * this->beta[index] * params.inv_delta_time;
+        xpbd_constraints::apply_position_bend_twist<true>(weight_rot1,
+                                                          weight_rot2,
+                                                          edge_length,
+                                                          darboux_vector,
+                                                          alpha,
+                                                          gamma,
+                                                          old_rotation1,
+                                                          old_rotation2,
+                                                          lambda,
+                                                          rotation1,
+                                                          rotation2);
+      }
       lambda_w = lambda[0];
       lambda_xyz = float3(lambda[1], lambda[2], lambda[3]);
     });
