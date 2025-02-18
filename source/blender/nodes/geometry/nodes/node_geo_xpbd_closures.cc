@@ -164,32 +164,6 @@ struct PositionGoalClosure : public ConstraintClosure {
     }
   }
 
-  void init_positions(ConstraintEvalParams &params, const IndexMask &group_mask) override
-  {
-    group_mask.foreach_index(GrainSize(1024), [&](const int index) {
-      float &lambda = this->position_lambda.span[index];
-      const int point1 = this->points[index];
-      const float3 &goal = this->goal_positions[index];
-
-      float3 &position1 = params.positions[point1];
-      xpbd_constraints::init_position_goal(goal, lambda, position1);
-    });
-  }
-
-  void init_velocities(ConstraintEvalParams &params, const IndexMask &group_mask) override
-  {
-    if constexpr (use_velocity_constraint) {
-      group_mask.foreach_index(GrainSize(1024), [&](const int index) {
-        float &lambda = this->velocity_lambda.span[index];
-        const int point1 = this->points[index];
-        const float3 &goal = this->goal_velocities[index];
-
-        float3 &velocity1 = params.velocities[point1];
-        xpbd_constraints::init_velocity_goal(goal, lambda, velocity1);
-      });
-    }
-  }
-
   void reset_lambda() override
   {
     for (const int index : this->position_lambda.span.index_range()) {
@@ -319,32 +293,6 @@ struct RotationGoalClosure : public ConstraintClosure {
     }
     else {
       this->do_apply_to_velocities<false>(params, group_mask);
-    }
-  }
-
-  void init_positions(ConstraintEvalParams &params, const IndexMask &group_mask) override
-  {
-    group_mask.foreach_index(GrainSize(1024), [&](const int index) {
-      const float4 lambda = float4(this->position_lambda_w.span[index],
-                                   this->position_lambda_xyz.span[index]);
-      const int point1 = this->points[index];
-      const math::Quaternion &goal = this->goal_rotations[index];
-
-      math::Quaternion &rotation1 = params.rotations[point1];
-      xpbd_constraints::init_rotation_goal2<true>(goal, lambda, rotation1);
-    });
-  }
-
-  void init_velocities(ConstraintEvalParams &params, const IndexMask &group_mask) override
-  {
-    if constexpr (use_velocity_constraint) {
-      group_mask.foreach_index(GrainSize(1024), [&](const int index) {
-        float3 &lambda = this->velocity_lambda.span[index];
-        const int point1 = this->points[index];
-
-        float3 &angular_velocity1 = params.angular_velocities[point1];
-        xpbd_constraints::init_angular_velocity_goal2(lambda, angular_velocity1);
-      });
     }
   }
 
@@ -525,62 +473,6 @@ struct StretchShearClosure : public ConstraintClosure {
     }
   }
 
-  void init_positions(ConstraintEvalParams &params, const IndexMask &group_mask) override
-  {
-    group_mask.foreach_index(GrainSize(1024), [&](const int index) {
-      float3 &lambda = this->position_lambda.span[index];
-      const int point1 = this->points1[index];
-      const int point2 = this->points2[index];
-      const float edge_length = this->edge_lengths[index];
-
-      const float weight_pos1 = params.position_weights[point1];
-      const float weight_pos2 = params.position_weights[point2];
-      const float weight_rot = params.rotation_weights[point1];
-
-      float3 &position1 = params.positions[point1];
-      float3 &position2 = params.positions[point2];
-      math::Quaternion &rotation = params.rotations[point1];
-      xpbd_constraints::init_position_stretch_shear<true>(weight_pos1,
-                                                          weight_pos2,
-                                                          weight_rot,
-                                                          edge_length,
-                                                          lambda,
-                                                          position1,
-                                                          position2,
-                                                          rotation);
-    });
-  }
-
-  void init_velocities(ConstraintEvalParams &params, const IndexMask &group_mask) override
-  {
-    if constexpr (use_velocity_constraint) {
-      group_mask.foreach_index(GrainSize(1024), [&](const int index) {
-        float3 &lambda = this->velocity_lambda.span[index];
-        const int point1 = this->points1[index];
-        const int point2 = this->points2[index];
-        const float edge_length = this->edge_lengths[index];
-
-        const float weight_pos1 = params.position_weights[point1];
-        const float weight_pos2 = params.position_weights[point2];
-        const float weight_rot = params.rotation_weights[point1];
-
-        const math::Quaternion &rotation = params.rotations[point1];
-        float3 &velocity1 = params.velocities[point1];
-        float3 &velocity2 = params.velocities[point2];
-        float3 &angular_velocity = params.angular_velocities[point1];
-        xpbd_constraints::init_velocity_stretch_shear(rotation,
-                                                      weight_pos1,
-                                                      weight_pos2,
-                                                      weight_rot,
-                                                      edge_length,
-                                                      lambda,
-                                                      velocity1,
-                                                      velocity2,
-                                                      angular_velocity);
-      });
-    }
-  }
-
   void reset_lambda() override
   {
     for (const int index : this->position_lambda.span.index_range()) {
@@ -752,43 +644,6 @@ struct BendTwistClosure : public ConstraintClosure {
     }
     else {
       this->do_apply_to_velocities<false>(params, group_mask);
-    }
-  }
-
-  void init_positions(ConstraintEvalParams &params, const IndexMask &group_mask) override
-  {
-    group_mask.foreach_index(GrainSize(1024), [&](const int index) {
-      float &lambda_w = this->position_lambda_w.span[index];
-      float3 &lambda_xyz = this->position_lambda_xyz.span[index];
-      const int point1 = this->points1[index];
-      const int point2 = this->points2[index];
-
-      math::Quaternion &rotation1 = params.rotations[point1];
-      math::Quaternion &rotation2 = params.rotations[point2];
-      const float weight_rot1 = params.rotation_weights[point1];
-      const float weight_rot2 = params.rotation_weights[point2];
-
-      const float4 lambda = float4(lambda_w, lambda_xyz);
-      xpbd_constraints::init_position_bend_twist<true>(
-          weight_rot1, weight_rot2, lambda, rotation1, rotation2);
-    });
-  }
-
-  void init_velocities(ConstraintEvalParams &params, const IndexMask &group_mask) override
-  {
-    if constexpr (use_velocity_constraint) {
-      group_mask.foreach_index(GrainSize(1024), [&](const int index) {
-        float3 &lambda = this->velocity_lambda.span[index];
-        const int point1 = this->points1[index];
-        const int point2 = this->points2[index];
-
-        float3 &angular_velocity1 = params.angular_velocities[point1];
-        float3 &angular_velocity2 = params.angular_velocities[point2];
-        const float weight_rot1 = params.rotation_weights[point1];
-        const float weight_rot2 = params.rotation_weights[point2];
-        xpbd_constraints::init_velocity_bend_twist(
-            weight_rot1, weight_rot2, lambda, angular_velocity1, angular_velocity2);
-      });
     }
   }
 
@@ -1033,99 +888,6 @@ struct ContactClosure : public ConstraintClosure {
     else {
       this->do_apply_to_velocities<false>(params, group_mask);
     }
-  }
-
-  void init_positions(ConstraintEvalParams &params, const IndexMask &group_mask) override
-  {
-    group_mask.foreach_index(GrainSize(1024), [&](const int index) {
-      float &lambda = this->position_lambda.span[index];
-      const int point = this->points[index];
-      const int collider_index = this->collider_index[index];
-
-      if (!params.collider_transforms.index_range().contains(collider_index)) {
-        return;
-      };
-      const float4x4 collider_transform = params.collider_transforms[collider_index];
-      float3 collider_position;
-      math::Quaternion collider_rotation;
-      float3 collider_scale;
-      math::to_loc_rot_scale(
-          collider_transform, collider_position, collider_rotation, collider_scale);
-
-      float3 &position = params.positions[point];
-      math::Quaternion &rotation = params.rotations[point];
-      bool &active = this->active.span[index];
-
-      const float3 &local_position1 = this->local_position1[index];
-      const float3 &local_position2 = this->local_position2[index];
-      const float3 &normal = this->normal[index];
-
-      /* Zero weights for the collider, only the point can move. */
-      active = xpbd_constraints::init_position_contact(1.0f,
-                                                       0.0f,
-                                                       1.0f,
-                                                       0.0f,
-                                                       local_position1,
-                                                       local_position2,
-                                                       normal,
-                                                       lambda,
-                                                       position,
-                                                       collider_position,
-                                                       rotation,
-                                                       collider_rotation);
-    });
-  }
-
-  void init_velocities(ConstraintEvalParams &params, const IndexMask &group_mask) override
-  {
-    group_mask.foreach_index(GrainSize(1024), [&](const int index) {
-      /* Active status is determined by the position evaluation. */
-      if (!this->active.span[index]) {
-        return;
-      }
-
-      float &lambda_restitution = this->restitution_lambda.span[index];
-      float &lambda_friction = this->friction_lambda.span[index];
-      const int point = this->points[index];
-      const int collider_index = this->collider_index[index];
-      if (!params.collider_transforms.index_range().contains(collider_index)) {
-        return;
-      };
-
-      /* Local positions are relative to moving point and collider respectively. */
-      const float3 &local_position1 = this->local_position1[index];
-      const float3 &local_position2 = this->local_position2[index];
-      /* Normal is a fixed shared direction for both participants. */
-      const float3 &normal = this->normal[index];
-
-      const float4x4 &collider_transform = params.collider_transforms[collider_index];
-      const float4x4 &old_collider_transform = params.old_collider_transforms[collider_index];
-
-      float3 &velocity = params.velocities[point];
-      float3 &angular_velocity = params.angular_velocities[point];
-
-      /* Compute velocity from old/new collider transforms. */
-      float3 collider_loc, old_collider_loc;
-      math::Quaternion collider_rot, old_collider_rot;
-      float3 collider_scale, old_collider_scale;
-      math::to_loc_rot_scale(collider_transform, collider_loc, collider_rot, collider_scale);
-      math::to_loc_rot_scale(
-          old_collider_transform, old_collider_loc, old_collider_rot, old_collider_scale);
-      float3 collider_velocity = (collider_loc - old_collider_loc) * params.inv_delta_time;
-      float3 collider_angular_velocity =
-          2.0f * (math::invert_normalized(old_collider_rot) * collider_rot).imaginary_part() *
-          params.inv_delta_time;
-
-      xpbd_constraints::init_velocity_contact(local_position1,
-                                              local_position2,
-                                              normal,
-                                              lambda_restitution,
-                                              lambda_friction,
-                                              velocity,
-                                              collider_velocity,
-                                              angular_velocity,
-                                              collider_angular_velocity);
-    });
   }
 
   void reset_lambda() override

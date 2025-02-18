@@ -254,16 +254,19 @@ static void do_solver_steps(const SolverMethod method,
           info.closure->reset_lambda();
           break;
         case ConstraintInit::WarmStart:
-          for (const IndexMask &group_mask : info.group_masks) {
-            switch (target) {
-              case EvaluationTarget::Positions:
-                info.closure->init_positions(eval_params, group_mask);
-                break;
-              case EvaluationTarget::Velocities:
-                info.closure->init_velocities(eval_params, group_mask);
-                break;
-            }
-          }
+          /* TODO */
+          eval_params.error_message_add("Warm starting not yet implemented");
+          info.closure->reset_lambda();
+          // for (const IndexMask &group_mask : info.group_masks) {
+          //   switch (target) {
+          //     case EvaluationTarget::Positions:
+          //       info.closure->init_positions(eval_params, group_mask);
+          //       break;
+          //     case EvaluationTarget::Velocities:
+          //       info.closure->init_velocities(eval_params, group_mask);
+          //       break;
+          //   }
+          // }
           break;
       }
     }
