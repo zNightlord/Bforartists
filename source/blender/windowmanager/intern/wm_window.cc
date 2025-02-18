@@ -3110,13 +3110,13 @@ void WM_window_set_active_sequence(Main * /*bmain*/,
   bool changed = false;
 
   if (win_parent->sequence != sequence) {
-    /* TODO: Update sequence. */
+    ED_screen_sequence_change(C, win, sequence);
     changed = true;
   }
 
   LISTBASE_FOREACH (wmWindow *, win_child, &wm->windows) {
     if (win_child->parent == win_parent && win_child->sequence != sequence) {
-      /* TODO: Update sequence. */
+      ED_screen_sequence_change(C, win_child, sequence);
       changed = true;
     }
   }

@@ -29,6 +29,7 @@
 #include "BKE_main.hh"
 #include "BKE_scene.hh"
 #include "BKE_screen.hh"
+#include "BKE_sequence.hh"
 #include "BKE_sound.h"
 #include "BKE_workspace.hh"
 
@@ -1438,6 +1439,14 @@ static void screen_set_3dview_camera(Scene *scene,
         }
       }
     }
+  }
+}
+
+void ED_screen_sequence_change(bContext *C, wmWindow *win, Sequence *sequence)
+{
+  win->sequence = sequence;
+  if (CTX_wm_window(C) == win) {
+    CTX_data_sequence_set(C, sequence);
   }
 }
 
