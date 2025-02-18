@@ -9,12 +9,28 @@
 
 #include "BLI_listbase.h"
 
+#include "BKE_collection.hh"
 #include "BKE_idtype.hh"
+#include "BKE_layer.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_main.hh"
 #include "BKE_sequence.hh"
 
 #include "BLT_translation.hh"
+
+#include "DNA_defaults.h"
+
+static void sequence_data_init(ID *id)
+{
+  Sequence *sequence = reinterpret_cast<Sequence *>(id);
+
+  /* FIXME: Only here for compatibility with some scene APIs to avoid crashes. */
+  Scene *legacy_scene = &sequence->legacy_scene_data;
+  MEMCPY_STRUCT_AFTER(legacy_scene, DNA_struct_default_get(Scene), id);
+
+  legacy_scene->master_collection = BKE_collection_master_add(legacy_scene);
+  BKE_view_layer_add(legacy_scene, DATA_("ViewLayer"), nullptr, VIEWLAYER_ADD_NEW);
+}
 
 IDTypeInfo IDType_ID_SEQ = {
     /*id_code*/ ID_SEQ,
@@ -28,7 +44,7 @@ IDTypeInfo IDType_ID_SEQ = {
     /*flags*/ IDTYPE_FLAGS_NEVER_UNUSED,
     /*asset_type_info*/ nullptr,
 
-    /*init_data*/ nullptr,
+    /*init_data*/ sequence_data_init,
     /*copy_data*/ nullptr,
     /*free_data*/ nullptr,
     /*make_local*/ nullptr,
