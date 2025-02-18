@@ -378,11 +378,10 @@ typedef struct Sequence {
   /** Animation data (must be immediately after id for utilities to use it). */
   struct AnimData *adt;
 
+  /* TODO: This field should be removed in the long term. It's only necessary, because too much
+   * code of the VSE used to depend on the scene. */
   Scene legacy_scene_data;
   void *_pad;
-#ifdef __cplusplus
-  Scene *wrap_as_legacy_scene_data();
-#endif
 } Sequence;
 
 /** \} */

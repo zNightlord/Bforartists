@@ -337,16 +337,19 @@ static int /*eContextResult*/ sequencer_context(const bContext *C,
   if (CTX_data_equals(member, "scene")) {
     Sequence *sequence = CTX_data_sequence(C);
     if (sequence) {
-      CTX_data_id_pointer_set(result, &sequence->legacy_scene_data.id);
+      CTX_data_pointer_set(
+          result, &sequence->legacy_scene_data.id, &RNA_Scene, &sequence->legacy_scene_data);
     }
+    CTX_data_type_set(result, CTX_DATA_TYPE_POINTER);
     return CTX_RESULT_OK;
   }
   if (CTX_data_equals(member, "sequence")) {
     const wmWindow *win = CTX_wm_window(C);
     Sequence *sequence = WM_window_get_active_sequence(win);
     if (sequence) {
-      CTX_data_id_pointer_set(result, &sequence->id);
+      CTX_data_pointer_set(result, &sequence->id, &RNA_Sequence, sequence);
     }
+    CTX_data_type_set(result, CTX_DATA_TYPE_POINTER);
     return CTX_RESULT_OK;
   }
   if (CTX_data_equals(member, "edit_mask")) {

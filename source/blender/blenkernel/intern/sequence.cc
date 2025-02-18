@@ -18,18 +18,25 @@
 
 #include "BLT_translation.hh"
 
-#include "DNA_defaults.h"
+#include "SEQ_sequencer.hh"
 
 static void sequence_data_init(ID *id)
 {
   Sequence *sequence = reinterpret_cast<Sequence *>(id);
 
   /* FIXME: Only here for compatibility with some scene APIs to avoid crashes. */
-  Scene *legacy_scene = &sequence->legacy_scene_data;
-  MEMCPY_STRUCT_AFTER(legacy_scene, DNA_struct_default_get(Scene), id);
+  Scene *new_scene = static_cast<Scene *>(BKE_id_new_nomain(ID_SCE, nullptr));
+  sequence->legacy_scene_data = *new_scene;
+  MEM_freeN(new_scene);
 
-  legacy_scene->master_collection = BKE_collection_master_add(legacy_scene);
-  BKE_view_layer_add(legacy_scene, DATA_("ViewLayer"), nullptr, VIEWLAYER_ADD_NEW);
+  SEQ_editing_ensure(&sequence->legacy_scene_data);
+}
+
+static void sequence_data_free(ID *id)
+{
+  Sequence *sequence = reinterpret_cast<Sequence *>(id);
+
+  BKE_libblock_free_datablock(&sequence->legacy_scene_data.id, 0);
 }
 
 IDTypeInfo IDType_ID_SEQ = {
@@ -46,7 +53,7 @@ IDTypeInfo IDType_ID_SEQ = {
 
     /*init_data*/ sequence_data_init,
     /*copy_data*/ nullptr,
-    /*free_data*/ nullptr,
+    /*free_data*/ sequence_data_free,
     /*make_local*/ nullptr,
     /*foreach_id*/ nullptr,
     /*foreach_cache*/ nullptr,
