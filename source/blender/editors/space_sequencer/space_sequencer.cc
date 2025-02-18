@@ -307,6 +307,9 @@ static void sequencer_listener(const wmSpaceTypeListenerParams *params)
       break;
     case NC_WINDOW:
     case NC_SPACE:
+      if (wmn->data == ND_SEQUENCER) {
+        ED_area_tag_redraw(area);
+      }
       if (wmn->data == ND_SPACE_SEQUENCER) {
         sequencer_scopes_tag_refresh(area);
       }
@@ -327,14 +330,20 @@ static int /*eContextResult*/ sequencer_context(const bContext *C,
                                                 const char *member,
                                                 bContextDataResult *result)
 {
-  Scene *scene = CTX_data_scene(C);
-
   if (CTX_data_dir(member)) {
     CTX_data_dir_set(result, sequencer_context_dir);
-
+    return CTX_RESULT_OK;
+  }
+  if (CTX_data_equals(member, "sequence")) {
+    const wmWindow *win = CTX_wm_window(C);
+    Sequence *sequence = WM_window_get_active_sequence(win);
+    if (sequence) {
+      CTX_data_id_pointer_set(result, &sequence->id);
+    }
     return CTX_RESULT_OK;
   }
   if (CTX_data_equals(member, "edit_mask")) {
+    Scene *scene = CTX_data_scene(C);
     Mask *mask = SEQ_active_mask_get(scene);
     if (mask) {
       CTX_data_id_pointer_set(result, &mask->id);
