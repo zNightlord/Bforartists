@@ -708,8 +708,8 @@ inline void eval_position_bend_twist(const float weight_rot1,
   r_delta_lambda = weight_norm * (r_residual /*- alpha * lambda - gamma * lambda_damping*/);
 
   if constexpr (linearized_quaternion) {
-    r_delta_rotation1 = weight_rot1 * float4(rotation2 * math::Quaternion(r_delta_lambda));
-    r_delta_rotation2 = weight_rot2 *
+    r_delta_rotation1 = weight_rot1 * 0.5f * float4(rotation2 * math::Quaternion(r_delta_lambda));
+    r_delta_rotation2 = weight_rot2 * 0.5f *
                         float4(rotation1 * math::conjugate(math::Quaternion(r_delta_lambda)));
   }
   else {
@@ -858,25 +858,26 @@ inline void eval_rotation_goal2(const math::Quaternion &goal_rotation,
                                 float4 &r_delta_rotation)
 {
   const float edge_length = 1.0f;
-  const math::Quaternion darboux_vector = math::Quaternion(2.0f / edge_length *
-                                                           float4(goal_rotation));
-  math::Quaternion root_rotation = math::Quaternion::identity();
+  const math::Quaternion darboux_vector = math::Quaternion::identity();
+  /* TODO account for root animation. */
+  const math::Quaternion old_goal_rotation = goal_rotation;
   float4 delta_root_rotation;
-  return eval_position_bend_twist<linearized_quaternion>(0.0f,
-                                                         1.0f,
-                                                         edge_length,
-                                                         darboux_vector,
-                                                         alpha,
-                                                         gamma,
-                                                         lambda,
-                                                         root_rotation,
-                                                         rotation,
-                                                         root_rotation,
-                                                         old_rotation,
-                                                         r_residual,
-                                                         r_delta_lambda,
-                                                         delta_root_rotation,
-                                                         r_delta_rotation);
+  eval_position_bend_twist<linearized_quaternion>(0.0f,
+                                                  1.0f,
+                                                  edge_length,
+                                                  darboux_vector,
+                                                  alpha,
+                                                  gamma,
+                                                  lambda,
+                                                  goal_rotation,
+                                                  rotation,
+                                                  old_goal_rotation,
+                                                  old_rotation,
+                                                  r_residual,
+                                                  r_delta_lambda,
+                                                  delta_root_rotation,
+                                                  r_delta_rotation);
+
   // const float weight_norm = math::safe_rcp(1.0f + gamma + alpha);
 
   // r_residual = quaternion_difference(rotation, goal_rotation);
