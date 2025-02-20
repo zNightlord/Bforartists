@@ -1045,6 +1045,7 @@ wmWindow *WM_window_open(bContext *C,
   Main *bmain = CTX_data_main(C);
   wmWindowManager *wm = CTX_wm_manager(C);
   wmWindow *win_prev = CTX_wm_window(C);
+  Sequence *sequence = CTX_data_sequence(C);
   Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   int x = rect_unscaled->xmin;
@@ -1127,6 +1128,9 @@ wmWindow *WM_window_open(bContext *C,
   if (WM_window_get_active_scene(win) != scene) {
     /* No need to refresh the tool-system as the window has not yet finished being setup. */
     ED_screen_scene_change(C, win, scene, false);
+  }
+  if (WM_window_get_active_sequence(win) != sequence) {
+    ED_screen_sequence_change(C, win, sequence);
   }
 
   screen->temp = temp;
