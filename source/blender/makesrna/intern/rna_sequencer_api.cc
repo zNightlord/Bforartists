@@ -84,7 +84,7 @@ static void rna_Strips_move_strip_to_meta(
 
   SEQ_strip_lookup_invalidate(scene->ed);
 
-  WM_main_add_notifier(NC_SCENE | ND_SEQUENCER, scene);
+  WM_main_add_notifier(NC_SEQUENCE | ND_SEQUENCER, scene);
 }
 
 static Strip *rna_Strip_split(
@@ -104,7 +104,7 @@ static Strip *rna_Strip_split(
   DEG_relations_tag_update(bmain);
   DEG_id_tag_update(&scene->id, ID_RECALC_SEQUENCER_STRIPS);
 
-  WM_main_add_notifier(NC_SCENE | ND_SEQUENCER, scene);
+  WM_main_add_notifier(NC_SEQUENCE | ND_SEQUENCER, scene);
 
   return r_seq;
 }
@@ -133,7 +133,7 @@ static Strip *rna_Strips_new_clip(ID *id,
 
   DEG_relations_tag_update(bmain);
   DEG_id_tag_update(&scene->id, ID_RECALC_SEQUENCER_STRIPS);
-  WM_main_add_notifier(NC_SCENE | ND_SEQUENCER, scene);
+  WM_main_add_notifier(NC_SEQUENCE | ND_SEQUENCER, scene);
 
   return strip;
 }
@@ -176,7 +176,7 @@ static Strip *rna_Strips_new_mask(ID *id,
 
   DEG_relations_tag_update(bmain);
   DEG_id_tag_update(&scene->id, ID_RECALC_SEQUENCER_STRIPS);
-  WM_main_add_notifier(NC_SCENE | ND_SEQUENCER, scene);
+  WM_main_add_notifier(NC_SEQUENCE | ND_SEQUENCER, scene);
 
   return strip;
 }
@@ -208,7 +208,7 @@ static Strip *rna_Strips_new_scene(ID *id,
 
   DEG_relations_tag_update(bmain);
   DEG_id_tag_update(&scene->id, ID_RECALC_SEQUENCER_STRIPS);
-  WM_main_add_notifier(NC_SCENE | ND_SEQUENCER, scene);
+  WM_main_add_notifier(NC_SEQUENCE | ND_SEQUENCER, scene);
 
   return strip;
 }
@@ -261,7 +261,7 @@ static Strip *rna_Strips_new_image(ID *id,
 
   DEG_relations_tag_update(bmain);
   DEG_id_tag_update(&scene->id, ID_RECALC_SEQUENCER_STRIPS);
-  WM_main_add_notifier(NC_SCENE | ND_SEQUENCER, scene);
+  WM_main_add_notifier(NC_SEQUENCE | ND_SEQUENCER, scene);
 
   return strip;
 }
@@ -312,7 +312,7 @@ static Strip *rna_Strips_new_movie(ID *id,
 
   DEG_relations_tag_update(bmain);
   DEG_id_tag_update(&scene->id, ID_RECALC_SEQUENCER_STRIPS);
-  WM_main_add_notifier(NC_SCENE | ND_SEQUENCER, scene);
+  WM_main_add_notifier(NC_SEQUENCE | ND_SEQUENCER, scene);
 
   return strip;
 }
@@ -366,7 +366,7 @@ static Strip *rna_Strips_new_sound(ID *id,
 
   DEG_relations_tag_update(bmain);
   DEG_id_tag_update(&scene->id, ID_RECALC_SEQUENCER_STRIPS);
-  WM_main_add_notifier(NC_SCENE | ND_SEQUENCER, scene);
+  WM_main_add_notifier(NC_SEQUENCE | ND_SEQUENCER, scene);
 
   return strip;
 }
@@ -488,7 +488,7 @@ static Strip *rna_Strips_new_effect(ID *id,
   strip = SEQ_add_effect_strip(scene, seqbase, &load_data);
 
   DEG_id_tag_update(&scene->id, ID_RECALC_SEQUENCER_STRIPS);
-  WM_main_add_notifier(NC_SCENE | ND_SEQUENCER, scene);
+  WM_main_add_notifier(NC_SEQUENCE | ND_SEQUENCER, scene);
 
   return strip;
 }
@@ -541,7 +541,7 @@ static void rna_Strips_remove(
 
   DEG_relations_tag_update(bmain);
   DEG_id_tag_update(&scene->id, ID_RECALC_SEQUENCER_STRIPS);
-  WM_main_add_notifier(NC_SCENE | ND_SEQUENCER, scene);
+  WM_main_add_notifier(NC_SEQUENCE | ND_SEQUENCER, scene);
 }
 
 static void rna_Strips_editing_remove(
@@ -569,7 +569,7 @@ static StripElem *rna_StripElements_append(ID *id, Strip *strip, const char *fil
 
   strip->flag &= ~SEQ_SINGLE_FRAME_CONTENT;
 
-  WM_main_add_notifier(NC_SCENE | ND_SEQUENCER, scene);
+  WM_main_add_notifier(NC_SEQUENCE | ND_SEQUENCER, scene);
 
   return se;
 }
@@ -614,7 +614,7 @@ static void rna_StripElements_pop(ID *id, Strip *strip, ReportList *reports, int
   MEM_freeN(strip->data->stripdata);
   strip->data->stripdata = new_seq;
 
-  WM_main_add_notifier(NC_SCENE | ND_SEQUENCER, scene);
+  WM_main_add_notifier(NC_SEQUENCE | ND_SEQUENCER, scene);
 }
 
 static void rna_Strip_invalidate_cache_rnafunc(ID *id, Strip *self, int type)
@@ -639,7 +639,7 @@ static SeqRetimingKey *rna_Strip_retiming_keys_add(ID *id, Strip *strip, int tim
   SeqRetimingKey *key = SEQ_retiming_add_key(scene, strip, timeline_frame);
 
   SEQ_relations_invalidate_cache_raw(scene, strip);
-  WM_main_add_notifier(NC_SCENE | ND_SEQUENCER, nullptr);
+  WM_main_add_notifier(NC_SEQUENCE | ND_SEQUENCER, nullptr);
   return key;
 }
 
@@ -650,7 +650,7 @@ static void rna_Strip_retiming_keys_reset(ID *id, Strip *strip)
   SEQ_retiming_data_clear(strip);
 
   SEQ_relations_invalidate_cache_raw(scene, strip);
-  WM_main_add_notifier(NC_SCENE | ND_SEQUENCER, nullptr);
+  WM_main_add_notifier(NC_SEQUENCE | ND_SEQUENCER, nullptr);
 }
 
 #else
