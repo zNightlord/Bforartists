@@ -13,6 +13,7 @@
 #include "node_geometry_util.hh"
 
 #include <fmt/format.h>
+#include <iostream>
 
 namespace blender::nodes::node_geo_solve_xpbd_constraints_cc {
 
@@ -273,6 +274,7 @@ static void do_solver_steps(const SolverMethod method,
   }
 
   for ([[maybe_unused]] const int step : IndexRange(steps)) {
+    std::cout << "Step " << step << std::endl;
     switch (method) {
       case SolverMethod::GaussSeidel:
         do_gauss_seidel_step(target, eval_params, closures);

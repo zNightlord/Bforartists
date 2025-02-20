@@ -705,12 +705,14 @@ inline void eval_position_bend_twist(const float weight_rot1,
   //                               float4(rotation_diff2 * math::conjugate(rotation1));
   UNUSED_VARS(lambda, alpha, gamma, old_rotation1, old_rotation2);
 
-  r_delta_lambda = weight_norm * (r_residual /*- alpha * lambda - gamma * lambda_damping*/);
+  r_delta_lambda = weight_norm * (-r_residual /*- alpha * lambda - gamma * lambda_damping*/);
 
   if constexpr (linearized_quaternion) {
-    r_delta_rotation1 = weight_rot1 * 0.5f * float4(rotation2 * math::Quaternion(r_delta_lambda));
-    r_delta_rotation2 = weight_rot2 * 0.5f *
-                        float4(rotation1 * math::conjugate(math::Quaternion(r_delta_lambda)));
+    r_delta_rotation1 = weight_rot1 * float4(math::invert_normalized(rotation2) *
+                                             math::Quaternion(r_delta_lambda));
+    r_delta_rotation2 = weight_rot2 * float4(rotation1 * math::Quaternion(r_delta_lambda));
+    std::cout << "rotation2=" << rotation2 << " + " << r_delta_rotation2
+              << " residual=" << r_residual << " lambda=" << lambda << std::endl;
   }
   else {
     // TODO
