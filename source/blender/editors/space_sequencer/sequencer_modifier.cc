@@ -43,7 +43,7 @@ static int strip_modifier_add_exec(bContext *C, wmOperator *op)
   SEQ_modifier_new(strip, nullptr, type);
 
   SEQ_relations_invalidate_cache_preprocessed(scene, strip);
-  WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER, scene);
+  WM_event_add_notifier(C, NC_SEQUENCE | ND_SEQUENCER, scene);
 
   return OPERATOR_FINISHED;
 }
@@ -118,7 +118,7 @@ static int strip_modifier_remove_exec(bContext *C, wmOperator *op)
   else {
     SEQ_relations_invalidate_cache_preprocessed(scene, strip);
   }
-  WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER, scene);
+  WM_event_add_notifier(C, NC_SEQUENCE | ND_SEQUENCER, scene);
 
   return OPERATOR_FINISHED;
 }
@@ -191,7 +191,7 @@ static int strip_modifier_move_exec(bContext *C, wmOperator *op)
     SEQ_relations_invalidate_cache_preprocessed(scene, strip);
   }
 
-  WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER, scene);
+  WM_event_add_notifier(C, NC_SEQUENCE | ND_SEQUENCER, scene);
 
   return OPERATOR_FINISHED;
 }
@@ -287,7 +287,7 @@ static int strip_modifier_copy_exec(bContext *C, wmOperator *op)
     SEQ_relations_invalidate_cache_preprocessed(scene, strip);
   }
 
-  WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER, scene);
+  WM_event_add_notifier(C, NC_SEQUENCE | ND_SEQUENCER, scene);
 
   return OPERATOR_FINISHED;
 }
@@ -344,7 +344,7 @@ static int strip_modifier_equalizer_redefine_exec(bContext *C, wmOperator *op)
   SEQ_sound_equalizermodifier_set_graphs((SoundEqualizerModifierData *)smd, number);
 
   SEQ_relations_invalidate_cache_preprocessed(scene, strip);
-  WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER, scene);
+  WM_event_add_notifier(C, NC_SEQUENCE | ND_SEQUENCER, scene);
 
   return OPERATOR_FINISHED;
 }

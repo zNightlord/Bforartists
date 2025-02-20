@@ -297,6 +297,7 @@ static void sequencer_listener(const wmSpaceTypeListenerParams *params)
 
   /* Context changes. */
   switch (wmn->category) {
+    case NC_SEQUENCE:
     case NC_SCENE:
       switch (wmn->data) {
         case ND_FRAME:
@@ -570,6 +571,7 @@ static void sequencer_main_region_listener(const wmRegionListenerParams *params)
 
   /* Context changes. */
   switch (wmn->category) {
+    case NC_SEQUENCE:
     case NC_SCENE:
       switch (wmn->data) {
         case ND_FRAME:
@@ -1025,6 +1027,7 @@ static void sequencer_preview_region_listener(const wmRegionListenerParams *para
         ED_region_tag_redraw(region);
       }
       break;
+    case NC_SEQUENCE:
     case NC_SCENE:
       switch (wmn->data) {
         case ND_FRAME:
@@ -1094,6 +1097,7 @@ static void sequencer_buttons_region_listener(const wmRegionListenerParams *para
         ED_region_tag_redraw(region);
       }
       break;
+    case NC_SEQUENCE:
     case NC_SCENE:
       switch (wmn->data) {
         case ND_FRAME:

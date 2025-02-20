@@ -462,7 +462,7 @@ static int view_ghost_border_exec(bContext *C, wmOperator *op)
 
   scene->ed->overlay_frame_rect = rect;
 
-  WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER, scene);
+  WM_event_add_notifier(C, NC_SEQUENCE | ND_SEQUENCER, scene);
 
   return OPERATOR_FINISHED;
 }

@@ -164,7 +164,7 @@ static void text_editing_update(const bContext *C)
 {
   Strip *strip = SEQ_select_active_get(CTX_data_scene(C));
   SEQ_relations_invalidate_cache_raw(CTX_data_scene(C), strip);
-  WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER, CTX_data_scene(C));
+  WM_event_add_notifier(C, NC_SEQUENCE | ND_SEQUENCER, CTX_data_scene(C));
 }
 
 enum {
@@ -351,7 +351,7 @@ static int sequencer_text_cursor_move_exec(bContext *C, wmOperator *op)
     text_selection_cancel(data);
   }
 
-  WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER, CTX_data_scene(C));
+  WM_event_add_notifier(C, NC_SEQUENCE | ND_SEQUENCER, CTX_data_scene(C));
   return OPERATOR_FINISHED;
 }
 
@@ -621,7 +621,7 @@ static int sequencer_text_edit_mode_toggle(bContext *C, wmOperator * /*op*/)
     strip->flag |= SEQ_FLAG_TEXT_EDITING_ACTIVE;
   }
 
-  WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER, CTX_data_scene(C));
+  WM_event_add_notifier(C, NC_SEQUENCE | ND_SEQUENCER, CTX_data_scene(C));
   return OPERATOR_FINISHED;
 }
 
@@ -713,7 +713,7 @@ static int sequencer_text_cursor_set_modal(bContext *C, wmOperator * /*op*/, con
       break;
   }
 
-  WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER, CTX_data_scene(C));
+  WM_event_add_notifier(C, NC_SEQUENCE | ND_SEQUENCER, CTX_data_scene(C));
   return OPERATOR_RUNNING_MODAL;
 }
 
@@ -738,7 +738,7 @@ static int sequencer_text_cursor_set_invoke(bContext *C, wmOperator *op, const w
   cursor_set_by_mouse_position(C, event);
 
   WM_event_add_modal_handler(C, op);
-  WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER, CTX_data_scene(C));
+  WM_event_add_notifier(C, NC_SEQUENCE | ND_SEQUENCER, CTX_data_scene(C));
   return OPERATOR_RUNNING_MODAL;
 }
 

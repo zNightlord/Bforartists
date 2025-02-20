@@ -214,7 +214,7 @@ static int sequencer_enable_proxies_exec(bContext *C, wmOperator *op)
     }
   }
 
-  WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER, scene);
+  WM_event_add_notifier(C, NC_SEQUENCE | ND_SEQUENCER, scene);
 
   return OPERATOR_FINISHED;
 }

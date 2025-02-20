@@ -386,7 +386,7 @@ bool strip_point_image_isect(const Scene *scene, const Strip *strip, float point
 static void sequencer_select_do_updates(bContext *C, Scene *scene)
 {
   ED_outliner_select_sync_from_sequence_tag(C);
-  WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER | NA_SELECTED, scene);
+  WM_event_add_notifier(C, NC_SEQUENCE | ND_SEQUENCER | NA_SELECTED, scene);
 }
 
 /** \} */
@@ -442,7 +442,7 @@ static int sequencer_de_select_all_exec(bContext *C, wmOperator *op)
     }
   }
   ED_outliner_select_sync_from_sequence_tag(C);
-  WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER | NA_SELECTED, scene);
+  WM_event_add_notifier(C, NC_SEQUENCE | ND_SEQUENCER | NA_SELECTED, scene);
 
   return OPERATOR_FINISHED;
 }
@@ -491,7 +491,7 @@ static int sequencer_select_inverse_exec(bContext *C, wmOperator * /*op*/)
   }
 
   ED_outliner_select_sync_from_sequence_tag(C);
-  WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER | NA_SELECTED, scene);
+  WM_event_add_notifier(C, NC_SEQUENCE | ND_SEQUENCER | NA_SELECTED, scene);
 
   return OPERATOR_FINISHED;
 }
@@ -1167,7 +1167,7 @@ int sequencer_select_exec(bContext *C, wmOperator *op)
   /* We should only reach here if no retiming selection is happening. */
   if (was_retiming) {
     SEQ_retiming_selection_clear(ed);
-    WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER, scene);
+    WM_event_add_notifier(C, NC_SEQUENCE | ND_SEQUENCER, scene);
   }
 
   bool extend = RNA_boolean_get(op->ptr, "extend");
@@ -1562,7 +1562,7 @@ static int sequencer_select_more_exec(bContext *C, wmOperator * /*op*/)
 
   ED_outliner_select_sync_from_sequence_tag(C);
 
-  WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER | NA_SELECTED, scene);
+  WM_event_add_notifier(C, NC_SEQUENCE | ND_SEQUENCER | NA_SELECTED, scene);
 
   return OPERATOR_FINISHED;
 }
@@ -1598,7 +1598,7 @@ static int sequencer_select_less_exec(bContext *C, wmOperator * /*op*/)
 
   ED_outliner_select_sync_from_sequence_tag(C);
 
-  WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER | NA_SELECTED, scene);
+  WM_event_add_notifier(C, NC_SEQUENCE | ND_SEQUENCER | NA_SELECTED, scene);
 
   return OPERATOR_FINISHED;
 }
@@ -1654,7 +1654,7 @@ static int sequencer_select_linked_pick_invoke(bContext *C, wmOperator *op, cons
 
   ED_outliner_select_sync_from_sequence_tag(C);
 
-  WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER | NA_SELECTED, scene);
+  WM_event_add_notifier(C, NC_SEQUENCE | ND_SEQUENCER | NA_SELECTED, scene);
 
   return OPERATOR_FINISHED;
 }
@@ -1697,7 +1697,7 @@ static int sequencer_select_linked_exec(bContext *C, wmOperator * /*op*/)
 
   ED_outliner_select_sync_from_sequence_tag(C);
 
-  WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER | NA_SELECTED, scene);
+  WM_event_add_notifier(C, NC_SEQUENCE | ND_SEQUENCER | NA_SELECTED, scene);
 
   return OPERATOR_FINISHED;
 }
@@ -1805,7 +1805,7 @@ static int sequencer_select_handles_exec(bContext *C, wmOperator *op)
 
   ED_outliner_select_sync_from_sequence_tag(C);
 
-  WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER | NA_SELECTED, scene);
+  WM_event_add_notifier(C, NC_SEQUENCE | ND_SEQUENCER | NA_SELECTED, scene);
 
   return OPERATOR_FINISHED;
 }
@@ -1875,7 +1875,7 @@ static int sequencer_select_side_of_frame_exec(bContext *C, wmOperator *op)
 
   ED_outliner_select_sync_from_sequence_tag(C);
 
-  WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER | NA_SELECTED, scene);
+  WM_event_add_notifier(C, NC_SEQUENCE | ND_SEQUENCER | NA_SELECTED, scene);
 
   return OPERATOR_FINISHED;
 }
@@ -1950,7 +1950,7 @@ static int sequencer_select_side_exec(bContext *C, wmOperator *op)
 
   ED_outliner_select_sync_from_sequence_tag(C);
 
-  WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER | NA_SELECTED, scene);
+  WM_event_add_notifier(C, NC_SEQUENCE | ND_SEQUENCER | NA_SELECTED, scene);
 
   return OPERATOR_FINISHED;
 }
@@ -2549,7 +2549,7 @@ static int sequencer_select_grouped_exec(bContext *C, wmOperator *op)
 
   if (changed) {
     ED_outliner_select_sync_from_sequence_tag(C);
-    WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER | NA_SELECTED, scene);
+    WM_event_add_notifier(C, NC_SEQUENCE | ND_SEQUENCER | NA_SELECTED, scene);
     return OPERATOR_FINISHED;
   }
 

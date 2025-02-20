@@ -106,7 +106,7 @@ static int sequencer_retiming_data_show_exec(bContext *C, wmOperator * /*op*/)
     sequencer_retiming_data_show_selection(ed->seqbasep);
   }
 
-  WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER, scene);
+  WM_event_add_notifier(C, NC_SEQUENCE | ND_SEQUENCER, scene);
   return OPERATOR_FINISHED;
 }
 
@@ -157,7 +157,7 @@ static int sequencer_retiming_reset_exec(bContext *C, wmOperator * /*op*/)
     SEQ_retiming_reset(scene, strip);
   }
 
-  WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER, scene);
+  WM_event_add_notifier(C, NC_SEQUENCE | ND_SEQUENCER, scene);
   return OPERATOR_FINISHED;
 }
 
@@ -274,7 +274,7 @@ static int sequencer_retiming_key_add_exec(bContext *C, wmOperator *op)
     ret_val = retiming_key_add_to_editable_strips(C, op, timeline_frame);
   }
 
-  WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER, scene);
+  WM_event_add_notifier(C, NC_SEQUENCE | ND_SEQUENCER, scene);
   return ret_val;
 }
 
@@ -397,7 +397,7 @@ static int sequencer_retiming_freeze_frame_add_exec(bContext *C, wmOperator *op)
     success = freeze_frame_add_from_strip_selection(C, op, duration);
   }
 
-  WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER, scene);
+  WM_event_add_notifier(C, NC_SEQUENCE | ND_SEQUENCER, scene);
 
   return success ? OPERATOR_FINISHED : OPERATOR_PASS_THROUGH;
 }
@@ -504,7 +504,7 @@ static int sequencer_retiming_transition_add_exec(bContext *C, wmOperator *op)
     return false;
   }
 
-  WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER, scene);
+  WM_event_add_notifier(C, NC_SEQUENCE | ND_SEQUENCER, scene);
 
   return success ? OPERATOR_FINISHED : OPERATOR_PASS_THROUGH;
 }
@@ -572,7 +572,7 @@ static int sequencer_retiming_key_delete_exec(bContext *C, wmOperator * /*op*/)
     SEQ_relations_invalidate_cache_raw(scene, strip);
   }
 
-  WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER, scene);
+  WM_event_add_notifier(C, NC_SEQUENCE | ND_SEQUENCER, scene);
   return OPERATOR_FINISHED;
 }
 
@@ -666,7 +666,7 @@ static int strip_speed_set_exec(bContext *C, const wmOperator *op)
     SEQ_relations_invalidate_cache_raw(scene, strip);
   }
 
-  WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER, scene);
+  WM_event_add_notifier(C, NC_SEQUENCE | ND_SEQUENCER, scene);
   return OPERATOR_FINISHED;
 }
 
@@ -691,7 +691,7 @@ static int segment_speed_set_exec(const bContext *C,
     SEQ_relations_invalidate_cache_raw(scene, item.value);
   }
 
-  WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER, scene);
+  WM_event_add_notifier(C, NC_SEQUENCE | ND_SEQUENCER, scene);
   return OPERATOR_FINISHED;
 }
 
@@ -824,7 +824,7 @@ int sequencer_retiming_select_linked_time(bContext *C,
     select_key(ed, key, false, false);
     select_connected_keys(scene, key, key_owner);
   }
-  WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER, scene);
+  WM_event_add_notifier(C, NC_SEQUENCE | ND_SEQUENCER, scene);
   return OPERATOR_FINISHED;
 }
 
@@ -863,7 +863,7 @@ int sequencer_retiming_key_select_exec(bContext *C,
     changed |= select_connected_keys(scene, key, key_owner);
   }
 
-  WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER, scene);
+  WM_event_add_notifier(C, NC_SEQUENCE | ND_SEQUENCER, scene);
   return changed ? OPERATOR_FINISHED : OPERATOR_CANCELLED;
 }
 
@@ -1015,6 +1015,6 @@ int sequencer_retiming_select_all_exec(bContext *C, wmOperator *op)
     }
   }
 
-  WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER, scene);
+  WM_event_add_notifier(C, NC_SEQUENCE | ND_SEQUENCER, scene);
   return OPERATOR_FINISHED;
 }

@@ -19,6 +19,7 @@
 #include "DNA_listBase.h"
 #include "DNA_scene_types.h"
 #include "DNA_screen_types.h"
+#include "DNA_sequence_types.h"
 #include "DNA_userdef_types.h"
 #include "DNA_windowmanager_types.h"
 
@@ -718,6 +719,7 @@ void wm_event_do_notifiers(bContext *C)
     BLI_assert(removed);
     UNUSED_VARS_NDEBUG(removed);
     LISTBASE_FOREACH (wmWindow *, win, &wm->windows) {
+      Sequence *sequence = WM_window_get_active_sequence(win);
       Scene *scene = WM_window_get_active_scene(win);
       bScreen *screen = WM_window_get_active_screen(win);
       WorkSpace *workspace = WM_window_get_active_workspace(win);
@@ -726,6 +728,10 @@ void wm_event_do_notifiers(bContext *C)
       if (note->category == NC_SCREEN && note->reference && note->reference != screen &&
           note->reference != workspace && note->reference != WM_window_get_active_layout(win))
       {
+        /* Pass. */
+      }
+      /* TODO: Compare the sequences not the scenes! */
+      else if (note->category == NC_SEQUENCE && note->reference && note->reference != &sequence->legacy_scene_data) {
         /* Pass. */
       }
       else if (note->category == NC_SCENE && note->reference && note->reference != scene) {
