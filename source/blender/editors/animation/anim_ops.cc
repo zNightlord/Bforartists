@@ -141,11 +141,13 @@ static void change_frame_apply(bContext *C, wmOperator *op, const bool always_up
   float frame = RNA_float_get(op->ptr, "frame");
   bool do_snap = RNA_boolean_get(op->ptr, "snap");
 
+  const bool is_sequencer = CTX_wm_space_seq(C) && SEQ_editing_get(scene) != nullptr;
+
   const int old_frame = scene->r.cfra;
   const float old_subframe = scene->r.subframe;
 
   if (do_snap) {
-    if (CTX_wm_space_seq(C) && SEQ_editing_get(scene) != nullptr) {
+    if (is_sequencer) {
       frame = seq_frame_apply_snap(C, scene, frame);
     }
     else {
@@ -168,7 +170,12 @@ static void change_frame_apply(bContext *C, wmOperator *op, const bool always_up
   const bool frame_changed = (old_frame != scene->r.cfra) || (old_subframe != scene->r.subframe);
   if (frame_changed || always_update) {
     DEG_id_tag_update(&scene->id, ID_RECALC_FRAME_CHANGE);
-    WM_event_add_notifier(C, NC_SCENE | ND_FRAME, scene);
+    if (is_sequencer) {
+      WM_event_add_notifier(C, NC_SEQUENCE | ND_FRAME, scene);
+    }
+    else {
+      WM_event_add_notifier(C, NC_SCENE | ND_FRAME, scene);
+    }
   }
 }
 
