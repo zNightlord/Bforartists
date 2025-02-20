@@ -402,8 +402,8 @@ static void node_register()
   ntype.initfunc = node_init;
   ntype.build_multi_function = node_build_multi_function;
   ntype.draw_buttons = node_layout;
-  bke::node_type_size(&ntype, 200, 100, 300);
-  blender::bke::node_register_type(&ntype);
+  bke::node_type_size(ntype, 200, 100, 300);
+  blender::bke::node_register_type(ntype);
 
   node_rna(ntype.rna_ext.srna);
 }

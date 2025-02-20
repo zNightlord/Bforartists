@@ -583,10 +583,10 @@ static void node_register_position_solve()
   ntype.ui_description =
       "Solve position and rotation constraints on geometry using the XPBD framework";
   ntype.nclass = NODE_CLASS_GEOMETRY;
-  node_type_size(&ntype, 200, 120, 300);
+  node_type_size(ntype, 200, 120, 300);
   ntype.geometry_node_execute = node_geo_exec_positions;
   ntype.declare = node_declare_positions;
-  blender::bke::node_register_type(&ntype);
+  blender::bke::node_register_type(ntype);
 }
 
 static void node_register_velocity_solve()
@@ -598,10 +598,10 @@ static void node_register_velocity_solve()
   ntype.ui_description =
       "Solve linear and angular velocity constraints on geometry using the XPBD framework";
   ntype.nclass = NODE_CLASS_GEOMETRY;
-  node_type_size(&ntype, 200, 120, 300);
+  node_type_size(ntype, 200, 120, 300);
   ntype.geometry_node_execute = node_geo_exec_velocities;
   ntype.declare = node_declare_velocities;
-  blender::bke::node_register_type(&ntype);
+  blender::bke::node_register_type(ntype);
 }
 
 static void node_register()
