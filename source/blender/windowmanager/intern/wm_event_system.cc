@@ -731,7 +731,9 @@ void wm_event_do_notifiers(bContext *C)
         /* Pass. */
       }
       /* TODO: Compare the sequences not the scenes! */
-      else if (note->category == NC_SEQUENCE && note->reference && note->reference != &sequence->legacy_scene_data) {
+      else if (note->category == NC_SEQUENCE && note->reference &&
+               note->reference != &sequence->legacy_scene_data)
+      {
         /* Pass. */
       }
       else if (note->category == NC_SCENE && note->reference && note->reference != scene) {

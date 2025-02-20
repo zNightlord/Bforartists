@@ -10,10 +10,6 @@
 
 #include "BKE_sequence.hh"
 
-enum class AddSequenceMode : int8_t {
-  Blank = 0,
-  CopySettings,
-  FullCopy
-};
+enum class AddSequenceMode : int8_t { Blank = 0, CopySettings, FullCopy };
 
 void ED_operatortypes_sequence();

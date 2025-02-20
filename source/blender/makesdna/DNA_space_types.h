@@ -735,8 +735,8 @@ typedef enum eSpaceSeq_Flag {
   SEQ_CLAMP_VIEW = (1 << 3),
   SPACE_SEQ_DESELECT_STRIP_HANDLE = (1 << 4),
   SPACE_SEQ_FLAG_UNUSED_5 = (1 << 5),
-  SEQ_USE_ALPHA = (1 << 6), /* use RGBA display mode for preview */
-  SEQ_USE_PINNED = (1 << 10), /* Use the pinned sequence in this editor. */
+  SEQ_USE_ALPHA = (1 << 6),     /* use RGBA display mode for preview */
+  SEQ_USE_PINNED = (1 << 10),   /* Use the pinned sequence in this editor. */
   SEQ_SHOW_MARKERS = (1 << 11), /* show markers region */
   SEQ_ZOOM_TO_FIT = (1 << 12),
   SEQ_SHOW_OVERLAY = (1 << 13),

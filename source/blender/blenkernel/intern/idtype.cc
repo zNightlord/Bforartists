@@ -96,7 +96,7 @@ static void id_type_init()
   INIT_TYPE(ID_VO);
   INIT_TYPE(ID_GP);
   INIT_TYPE(ID_SEQ);
-  
+
   /* Special case. */
   BLI_assert(IDType_ID_LINK_PLACEHOLDER.main_listbase_index == INDEX_ID_NULL);
   id_types[INDEX_ID_NULL] = &IDType_ID_LINK_PLACEHOLDER;

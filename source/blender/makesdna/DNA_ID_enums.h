@@ -156,7 +156,7 @@ typedef enum ID_Type {
   ID_VO = MAKE_ID2('V', 'O'),        /* Volume */
   ID_GP = MAKE_ID2('G', 'P'),        /* Grease Pencil */
   /* TODO: Can we use 'SQ' ? */
-  ID_SEQ = MAKE_ID2('S', 'E'),       /* Sequence */
+  ID_SEQ = MAKE_ID2('S', 'E'), /* Sequence */
 } ID_Type;
 
 /* Only used as 'placeholder' in .blend files for directly linked data-blocks. */
