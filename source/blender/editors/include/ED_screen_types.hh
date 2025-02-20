@@ -31,6 +31,8 @@ struct ScreenAnimData {
   double lagging_frame_count;
   /** Playback was invoked from animation editor */
   bool from_anim_edit;
+
+  bool is_playing_sequence = false;
 };
 
 /** #ScreenAnimData.flag */

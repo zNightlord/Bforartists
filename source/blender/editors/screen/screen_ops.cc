@@ -28,6 +28,7 @@
 #include "DNA_node_types.h"
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
+#include "DNA_sequence_types.h"
 #include "DNA_userdef_types.h"
 #include "DNA_workspace_types.h"
 
@@ -5412,12 +5413,25 @@ static int screen_animation_step_invoke(bContext *C, wmOperator * /*op*/, const 
   int newfra_int;
 #endif
 
-  Main *bmain = CTX_data_main(C);
-  Scene *scene = CTX_data_scene(C);
-  ViewLayer *view_layer = WM_window_get_active_view_layer(win);
-  Depsgraph *depsgraph = BKE_scene_get_depsgraph(scene, view_layer);
-  Scene *scene_eval = (depsgraph != nullptr) ? DEG_get_evaluated_scene(depsgraph) : nullptr;
   ScreenAnimData *sad = static_cast<ScreenAnimData *>(wt->customdata);
+  Scene *scene, *scene_eval;
+  ViewLayer *view_layer;
+  Depsgraph *depsgraph;
+  if (sad->is_playing_sequence) {
+    Sequence *sequence = WM_window_get_active_sequence(win);
+    scene = &sequence->legacy_scene_data;
+    view_layer = static_cast<ViewLayer *>(scene->view_layers.first);
+    depsgraph = nullptr;
+    scene_eval = nullptr;
+  }
+  else {
+    scene = WM_window_get_active_scene(win);
+    view_layer = WM_window_get_active_view_layer(win);
+    depsgraph = BKE_scene_get_depsgraph(scene, view_layer);
+    scene_eval = (depsgraph != nullptr) ? DEG_get_evaluated_scene(depsgraph) : nullptr;
+  }
+
+  Main *bmain = CTX_data_main(C);
   wmWindowManager *wm = CTX_wm_manager(C);
   int sync;
   double time;
@@ -5433,14 +5447,15 @@ static int screen_animation_step_invoke(bContext *C, wmOperator * /*op*/, const 
     sync = (scene->flag & SCE_FRAME_DROP);
   }
 
-  if (scene_eval == nullptr) {
+  if (!sad->is_playing_sequence && scene_eval == nullptr) {
     /* Happens when undo/redo system is used during playback, nothing meaningful we can do here. */
   }
-  else if (scene_eval->id.recalc & ID_RECALC_FRAME_CHANGE) {
+  else if (!sad->is_playing_sequence && scene_eval->id.recalc & ID_RECALC_FRAME_CHANGE) {
     /* Ignore seek here, the audio will be updated to the scene frame after jump during next
      * dependency graph update. */
   }
-  else if ((scene->audio.flag & AUDIO_SYNC) && (sad->flag & ANIMPLAY_FLAG_REVERSE) == false &&
+  else if (!sad->is_playing_sequence && (scene->audio.flag & AUDIO_SYNC) &&
+           (sad->flag & ANIMPLAY_FLAG_REVERSE) == false &&
            isfinite(time = BKE_sound_sync_scene(scene_eval)))
   {
     scene->r.cfra = round(time * FPS);
@@ -5701,7 +5716,7 @@ int ED_screen_animation_play(bContext *C, int sync, int mode)
 
     /* Triggers redraw of sequencer preview so that it does not show to fps anymore after stopping
      * playback. */
-    WM_event_add_notifier(C, NC_SPACE | ND_SPACE_SEQUENCER, scene);
+    WM_event_add_notifier(C, NC_SEQUENCE | ND_SPACE_SEQUENCER, scene);
     WM_event_add_notifier(C, NC_SPACE | ND_SPACE_SPREADSHEET, scene);
     WM_event_add_notifier(C, NC_SCENE | ND_TRANSFORM, scene);
   }
