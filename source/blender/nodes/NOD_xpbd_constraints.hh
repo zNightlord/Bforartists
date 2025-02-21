@@ -487,16 +487,15 @@ inline void eval_position_stretch_shear(const float weight_pos1,
   const float3 direction = math::transform_point(rotation, float3(0, 0, 1));
   r_residual = inv_edge_length * (position2 - position1) - direction;
 
-  math::Quaternion rotation_diff = math::conjugate(old_rotation) * rotation;
   /* Constraint gradient applied to variable differences.
    * This extends the rod constraints from "Position and Orientation Based Cosserat Rods"
    * (Kugelstadt et al.), section 6, with the damping terms for lambda from the XPBD paper ("XPBD:
    * Position-Based Simulation of Compliant Constrained Dynamics", Macklin et al.).
    */
-  const math::Quaternion Q = math::Quaternion(0, 0, 0, 1) * math::conjugate(rotation);
-  const float3 lambda_damping = (position1 - old_position1 + position2 - old_position2) *
-                                    inv_edge_length +
-                                (rotation_diff * Q).imaginary_part();
+  const math::Quaternion q3 = {0, 0, 0, 1};
+  const float3 lambda_damping =
+      ((position1 - old_position1) - (position2 - old_position2)) * inv_edge_length +
+      2.0f * (direction - (math::conjugate(old_rotation) * q3 * rotation).imaginary_part());
 
   r_delta_lambda = weight_norm * (r_residual - alpha * lambda - gamma * lambda_damping);
 
