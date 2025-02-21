@@ -14,8 +14,6 @@
 #include "BKE_attribute.hh"
 #include "BKE_geometry_set.hh"
 
-#include <iostream>
-
 namespace blender::nodes::xpbd_constraints {
 
 struct ConstraintEvalParams {
