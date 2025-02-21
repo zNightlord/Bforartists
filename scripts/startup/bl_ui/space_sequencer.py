@@ -179,8 +179,8 @@ class SEQUENCER_HT_header(Header):
 
         if st.view_type in {'SEQUENCER', 'SEQUENCER_PREVIEW'}:
             row = layout.row(align=True)
-            row.template_ID(context, "sequence")
-            row.prop(st, "pin", text="", emboss=False)
+            row.template_ID(st, "sequence")
+            row.prop(st, "pin_sequence", text="", emboss=False)
 
         layout.separator_spacer()
 

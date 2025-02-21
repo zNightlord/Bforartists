@@ -5413,12 +5413,23 @@ static int screen_animation_step_invoke(bContext *C, wmOperator * /*op*/, const 
   int newfra_int;
 #endif
 
+  Main *bmain = CTX_data_main(C);
   ScreenAnimData *sad = static_cast<ScreenAnimData *>(wt->customdata);
+
   Scene *scene, *scene_eval;
   ViewLayer *view_layer;
   Depsgraph *depsgraph;
   if (sad->is_playing_sequence) {
-    Sequence *sequence = WM_window_get_active_sequence(win);
+    Sequence *sequence = nullptr;
+    LISTBASE_FOREACH (Sequence *, iter_seq, &bmain->sequences) {
+      if (STREQLEN(sad->sequence_name, iter_seq->id.name, 66)) {
+        sequence = iter_seq;
+        break;
+      }
+    }
+    if (!sequence) {
+      return OPERATOR_PASS_THROUGH;
+    }
     scene = &sequence->legacy_scene_data;
     view_layer = static_cast<ViewLayer *>(scene->view_layers.first);
     depsgraph = nullptr;
@@ -5431,7 +5442,6 @@ static int screen_animation_step_invoke(bContext *C, wmOperator * /*op*/, const 
     scene_eval = (depsgraph != nullptr) ? DEG_get_evaluated_scene(depsgraph) : nullptr;
   }
 
-  Main *bmain = CTX_data_main(C);
   wmWindowManager *wm = CTX_wm_manager(C);
   int sync;
   double time;

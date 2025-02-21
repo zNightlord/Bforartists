@@ -1448,6 +1448,18 @@ void ED_screen_sequence_change(bContext *C, wmWindow *win, Sequence *sequence)
   if (CTX_wm_window(C) == win) {
     CTX_data_sequence_set(C, sequence);
   }
+
+  const bScreen *screen = WM_window_get_active_screen(win);
+  LISTBASE_FOREACH (ScrArea *, area, &screen->areabase) {
+    LISTBASE_FOREACH (SpaceLink *, sl, &area->spacedata) {
+      if (sl->spacetype == SPACE_SEQ) {
+        SpaceSeq *sseq = reinterpret_cast<SpaceSeq *>(sl);
+        if (!(sseq->flag & SEQ_USE_PINNED) && sseq->sequence != sequence) {
+          sseq->sequence = sequence;
+        }
+      }
+    }
+  }
 }
 
 void ED_screen_scene_change(bContext *C,
@@ -1830,6 +1842,7 @@ void ED_screen_animation_timer(bContext *C, int redraws, int sync, int enable)
   bScreen *screen = CTX_wm_screen(C);
   wmWindowManager *wm = CTX_wm_manager(C);
   wmWindow *win = CTX_wm_window(C);
+  Sequence *sequence = CTX_data_sequence(C);
   Scene *scene = CTX_data_scene(C);
   bScreen *stopscreen = ED_screen_animation_playing(wm);
 
@@ -1880,6 +1893,9 @@ void ED_screen_animation_timer(bContext *C, int redraws, int sync, int enable)
     sad->from_anim_edit = ELEM(spacetype, SPACE_GRAPH, SPACE_ACTION, SPACE_NLA);
 
     sad->is_playing_sequence = spacetype == SPACE_SEQ;
+    if (sad->is_playing_sequence) {
+      STRNCPY(sad->sequence_name, sequence->id.name);
+    }
 
     screen->animtimer->customdata = sad;
   }

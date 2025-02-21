@@ -33,6 +33,7 @@ struct ScreenAnimData {
   bool from_anim_edit;
 
   bool is_playing_sequence = false;
+  char sequence_name[66];
 };
 
 /** #ScreenAnimData.flag */
