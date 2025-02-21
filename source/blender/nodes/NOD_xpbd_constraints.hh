@@ -422,42 +422,6 @@ inline void apply_angular_velocity_goal(const float3 &goal_angular_velocity,
   apply_angular_velocity_impulse(delta_angular_velocity, angular_velocity);
 }
 
-inline void eval_angular_velocity_goal2(const float3 &goal_angular_velocity,
-                                        const float beta,
-                                        const float3 &lambda,
-                                        const float3 &angular_velocity,
-                                        float3 &r_residual,
-                                        float3 &r_delta_lambda,
-                                        float3 &r_delta_angular_velocity)
-{
-  const float weight_norm = math::safe_rcp(1.0f + beta);
-
-  r_residual = angular_velocity - goal_angular_velocity;
-
-  r_delta_lambda = weight_norm * (-beta * r_residual - lambda);
-  r_delta_angular_velocity = r_delta_lambda;
-}
-
-inline void apply_angular_velocity_goal2(const float3 &goal_angular_velocity,
-                                         const float beta,
-                                         float3 &lambda,
-                                         float3 &angular_velocity)
-{
-  float3 residual;
-  float3 delta_lambda;
-  float3 delta_angular_velocity;
-  eval_angular_velocity_goal2(goal_angular_velocity,
-                              beta,
-                              lambda,
-                              angular_velocity,
-                              residual,
-                              delta_lambda,
-                              delta_angular_velocity);
-
-  lambda += delta_lambda;
-  apply_angular_velocity_impulse(delta_angular_velocity, angular_velocity);
-}
-
 template<bool linearized_quaternion>
 inline void eval_position_stretch_shear(const float weight_pos1,
                                         const float weight_pos2,
@@ -595,77 +559,6 @@ inline void apply_position_stretch_shear(const float weight_pos1,
   apply_rotation_impulse<linearized_quaternion>(delta_rot, rotation);
 }
 
-inline void eval_velocity_stretch_shear(const math::Quaternion &rotation,
-                                        const float weight_pos1,
-                                        const float weight_pos2,
-                                        const float weight_rot,
-                                        const float edge_length,
-                                        const float beta,
-                                        const float3 &lambda,
-                                        const float3 &velocity1,
-                                        const float3 &velocity2,
-                                        const float3 &angular_velocity,
-                                        float3 &r_residual,
-                                        float3 &r_delta_lambda,
-                                        float3 &r_delta_velocity1,
-                                        float3 &r_delta_velocity2,
-                                        float3 &r_delta_angular_velocity)
-{
-  const float inv_edge_length = math::safe_rcp(edge_length);
-  const float weight_norm = math::safe_rcp(
-      1.0f + beta * ((weight_pos1 + weight_pos2) * inv_edge_length * inv_edge_length +
-                     4.0f * weight_rot));
-
-  const float3 direction = math::transform_point(rotation,
-                                                 math::cross(angular_velocity, float3(0, 0, 1)));
-  r_residual = inv_edge_length * (velocity2 - velocity1) - direction;
-
-  r_delta_lambda = weight_norm * (beta * r_residual - lambda);
-
-  r_delta_velocity1 = weight_pos1 * inv_edge_length * r_delta_lambda;
-  r_delta_velocity2 = -weight_pos2 * inv_edge_length * r_delta_lambda;
-  r_delta_angular_velocity = weight_rot *
-                             math::transform_point(math::invert_normalized(rotation),
-                                                   math::cross(float3(0, 0, 1), r_delta_lambda));
-}
-
-inline void apply_velocity_stretch_shear(const math::Quaternion &rotation,
-                                         const float weight_pos1,
-                                         const float weight_pos2,
-                                         const float weight_rot,
-                                         const float edge_length,
-                                         const float beta,
-                                         float3 &lambda,
-                                         float3 &velocity1,
-                                         float3 &velocity2,
-                                         float3 &angular_velocity)
-{
-  float3 residual;
-  float3 delta_lambda;
-  float3 delta_vel1, delta_vel2;
-  float3 delta_angvel;
-  eval_velocity_stretch_shear(rotation,
-                              weight_pos1,
-                              weight_pos2,
-                              weight_rot,
-                              edge_length,
-                              beta,
-                              lambda,
-                              velocity1,
-                              velocity2,
-                              angular_velocity,
-                              residual,
-                              delta_lambda,
-                              delta_vel1,
-                              delta_vel2,
-                              delta_angvel);
-
-  lambda += delta_lambda;
-  apply_velocity_impulse(delta_vel1, velocity1);
-  apply_velocity_impulse(delta_vel1, velocity1);
-  apply_angular_velocity_impulse(delta_angvel, angular_velocity);
-}
-
 template<bool linearized_quaternion>
 inline void eval_position_bend_twist(const float weight_rot1,
                                      const float weight_rot2,
@@ -782,63 +675,6 @@ inline void apply_position_bend_twist(const float weight_rot1,
   lambda += delta_lambda;
   apply_rotation_impulse<linearized_quaternion>(delta_rot1, rotation1);
   apply_rotation_impulse<linearized_quaternion>(delta_rot2, rotation2);
-}
-
-inline void eval_velocity_bend_twist(const float weight_rot1,
-                                     const float weight_rot2,
-                                     const float edge_length,
-                                     const float beta,
-                                     const float3 &lambda,
-                                     const float3 &angular_velocity1,
-                                     const float3 &angular_velocity2,
-                                     float3 &r_residual,
-                                     float3 &r_delta_lambda,
-                                     float3 &r_delta_angular_velocity1,
-                                     float3 &r_delta_angular_velocity2)
-{
-  /* XXX According to the paper ("Position and Orientation Based Cosserat Rods") the Darboux vector
-   * needs to be divided by the edge length, but this creates an unstable constraint. Have to
-   * confirm the math here ... */
-  // const float3 current_darboux = math::safe_divide(2.0f, edge_length) *
-  //                                (math::invert_normalized(rotation1) *
-  //                                rotation2).imaginary_part();
-  UNUSED_VARS(edge_length);
-  const float weight_norm = math::safe_rcp(1.0f + beta * (weight_rot1 + weight_rot2));
-
-  r_residual = 0.5f * (angular_velocity2 - angular_velocity1);
-
-  r_delta_lambda = weight_norm * (beta * r_residual - lambda);
-
-  r_delta_angular_velocity1 = weight_rot1 * r_delta_lambda;
-  r_delta_angular_velocity2 = -weight_rot2 * r_delta_lambda;
-}
-
-inline void apply_velocity_bend_twist(const float weight_rot1,
-                                      const float weight_rot2,
-                                      const float edge_length,
-                                      const float beta,
-                                      float3 &lambda,
-                                      float3 &angular_velocity1,
-                                      float3 &angular_velocity2)
-{
-  float3 residual;
-  float3 delta_lambda;
-  float3 delta_angvel1, delta_angvel2;
-  eval_velocity_bend_twist(weight_rot1,
-                           weight_rot2,
-                           edge_length,
-                           beta,
-                           lambda,
-                           angular_velocity1,
-                           angular_velocity2,
-                           residual,
-                           delta_lambda,
-                           delta_angvel1,
-                           delta_angvel2);
-
-  lambda += delta_lambda;
-  apply_angular_velocity_impulse(delta_angvel1, angular_velocity1);
-  apply_angular_velocity_impulse(delta_angvel2, angular_velocity2);
 }
 
 template<bool linearized_quaternion>
