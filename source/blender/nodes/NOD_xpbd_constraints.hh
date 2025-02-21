@@ -708,11 +708,9 @@ inline void eval_position_bend_twist(const float weight_rot1,
   r_delta_lambda = weight_norm * (-r_residual /*- alpha * lambda - gamma * lambda_damping*/);
 
   if constexpr (linearized_quaternion) {
-    r_delta_rotation1 = weight_rot1 * float4(math::invert_normalized(rotation2) *
-                                             math::Quaternion(r_delta_lambda));
+    r_delta_rotation1 = weight_rot1 *
+                        float4(rotation2 * math::conjugate(math::Quaternion(r_delta_lambda)));
     r_delta_rotation2 = weight_rot2 * float4(rotation1 * math::Quaternion(r_delta_lambda));
-    std::cout << "rotation2=" << rotation2 << " + " << r_delta_rotation2
-              << " residual=" << r_residual << " lambda=" << lambda << std::endl;
   }
   else {
     // TODO
@@ -860,7 +858,8 @@ inline void eval_rotation_goal2(const math::Quaternion &goal_rotation,
                                 float4 &r_delta_rotation)
 {
   const float edge_length = 1.0f;
-  const math::Quaternion darboux_vector = math::Quaternion::identity();
+  const math::Quaternion darboux_vector = math::Quaternion(2.0f / edge_length *
+                                                           float4(math::Quaternion::identity()));
   /* TODO account for root animation. */
   const math::Quaternion old_goal_rotation = goal_rotation;
   float4 delta_root_rotation;
@@ -879,33 +878,6 @@ inline void eval_rotation_goal2(const math::Quaternion &goal_rotation,
                                                   r_delta_lambda,
                                                   delta_root_rotation,
                                                   r_delta_rotation);
-
-  // const float weight_norm = math::safe_rcp(1.0f + gamma + alpha);
-
-  // r_residual = quaternion_difference(rotation, goal_rotation);
-
-  // /* Constraint gradient applied to variable differences.
-  //  * This extends the rod constraints from "Position and Orientation Based Cosserat Rods"
-  //  * (Kugelstadt et al.), section 6, with the damping terms for lambda from the XPBD paper
-  //  ("XPBD:
-  //  * Position-Based Simulation of Compliant Constrained Dynamics", Macklin et al.).
-  //  */
-  // // math::Quaternion rotation_diff = math::invert_normalized(old_rotation) * rotation;
-  // // const float4 lambda_damping = quaternion_difference(math::conjugate(rotation),
-  // //                                                     math::Quaternion::identity()) +
-  // //                               quaternion_difference(rotation_diff,
-  // //                               math::Quaternion::identity());
-  // UNUSED_VARS(lambda, alpha, gamma, old_rotation);
-
-  // r_delta_lambda = weight_norm * (r_residual /*- alpha * lambda - gamma * lambda_damping*/);
-
-  // if constexpr (linearized_quaternion) {
-  //   r_delta_rotation = r_delta_lambda;
-  // }
-  // else {
-  //   // TODO
-  //   BLI_assert_unreachable();
-  // }
 }
 
 template<bool linearized_quaternion>
