@@ -5397,53 +5397,8 @@ static void screen_animation_region_tag_redraw(
 
 // #define PROFILE_AUDIO_SYNC
 
-static int screen_animation_step_invoke(bContext *C, wmOperator * /*op*/, const wmEvent *event)
+static void screen_animation_step_scene(Main *bmain, wmTimer *wt, ScreenAnimData *sad, Scene *scene, Depsgraph *depsgraph, Scene *scene_eval)
 {
-  bScreen *screen = CTX_wm_screen(C);
-  wmTimer *wt = screen->animtimer;
-
-  if (!(wt && wt == event->customdata)) {
-    return OPERATOR_PASS_THROUGH;
-  }
-
-  wmWindow *win = CTX_wm_window(C);
-
-#ifdef PROFILE_AUDIO_SYNC
-  static int old_frame = 0;
-  int newfra_int;
-#endif
-
-  Main *bmain = CTX_data_main(C);
-  ScreenAnimData *sad = static_cast<ScreenAnimData *>(wt->customdata);
-
-  Scene *scene, *scene_eval;
-  ViewLayer *view_layer;
-  Depsgraph *depsgraph;
-  Sequence *sequence = nullptr;
-  if (sad->is_playing_sequence) {
-    // LISTBASE_FOREACH (Sequence *, iter_seq, &bmain->sequences) {
-    //   if (STREQLEN(sad->sequence_name, iter_seq->id.name, 66)) {
-    //     sequence = iter_seq;
-    //     break;
-    //   }
-    // }
-    // if (!sequence) {
-    //   return OPERATOR_PASS_THROUGH;
-    // }
-    sequence = WM_window_get_active_sequence(win);
-    scene = &sequence->legacy_scene_data;
-    view_layer = static_cast<ViewLayer *>(scene->view_layers.first);
-    depsgraph = nullptr;
-    scene_eval = nullptr;
-  }
-  else {
-    scene = WM_window_get_active_scene(win);
-    view_layer = WM_window_get_active_view_layer(win);
-    depsgraph = BKE_scene_get_depsgraph(scene, view_layer);
-    scene_eval = (depsgraph != nullptr) ? DEG_get_evaluated_scene(depsgraph) : nullptr;
-  }
-
-  wmWindowManager *wm = CTX_wm_manager(C);
   int sync;
   double time;
 
@@ -5581,6 +5536,63 @@ static int screen_animation_step_invoke(bContext *C, wmOperator * /*op*/, const 
     ED_update_for_newframe(bmain, depsgraph);
   }
 
+  if (U.uiflag & USER_SHOW_FPS) {
+    /* Update frame rate info too.
+     * NOTE: this may not be accurate enough, since we might need this after modifiers/etc.
+     * have been calculated instead of just before updates have been done? */
+    ED_scene_fps_average_accumulate(scene, U.playback_fps_samples, wt->time_last);
+  }
+}
+
+static int screen_animation_step_invoke(bContext *C, wmOperator * /*op*/, const wmEvent *event)
+{
+  bScreen *screen = CTX_wm_screen(C);
+  wmTimer *wt = screen->animtimer;
+
+  if (!(wt && wt == event->customdata)) {
+    return OPERATOR_PASS_THROUGH;
+  }
+
+  wmWindow *win = CTX_wm_window(C);
+
+#ifdef PROFILE_AUDIO_SYNC
+  static int old_frame = 0;
+  int newfra_int;
+#endif
+
+  Main *bmain = CTX_data_main(C);
+  ScreenAnimData *sad = static_cast<ScreenAnimData *>(wt->customdata);
+
+  Scene *scene, *scene_eval;
+  ViewLayer *view_layer;
+  Depsgraph *depsgraph;
+  Sequence *sequence = nullptr;
+  if (sad->is_playing_sequence) {
+    // LISTBASE_FOREACH (Sequence *, iter_seq, &bmain->sequences) {
+    //   if (STREQLEN(sad->sequence_name, iter_seq->id.name, 66)) {
+    //     sequence = iter_seq;
+    //     break;
+    //   }
+    // }
+    // if (!sequence) {
+    //   return OPERATOR_PASS_THROUGH;
+    // }
+    sequence = WM_window_get_active_sequence(win);
+    scene = &sequence->legacy_scene_data;
+    view_layer = static_cast<ViewLayer *>(scene->view_layers.first);
+    depsgraph = nullptr;
+    scene_eval = nullptr;
+  }
+  else {
+    scene = WM_window_get_active_scene(win);
+    view_layer = WM_window_get_active_view_layer(win);
+    depsgraph = BKE_scene_get_depsgraph(scene, view_layer);
+    scene_eval = (depsgraph != nullptr) ? DEG_get_evaluated_scene(depsgraph) : nullptr;
+  }
+
+  screen_animation_step_scene(bmain, wt, sad, scene, depsgraph, scene_eval);
+  
+  wmWindowManager *wm = CTX_wm_manager(C);
   LISTBASE_FOREACH (wmWindow *, window, &wm->windows) {
     bScreen *win_screen = WM_window_get_active_screen(window);
 
@@ -5607,13 +5619,6 @@ static int screen_animation_step_invoke(bContext *C, wmOperator * /*op*/, const 
         }
       }
     }
-  }
-
-  if (U.uiflag & USER_SHOW_FPS) {
-    /* Update frame rate info too.
-     * NOTE: this may not be accurate enough, since we might need this after modifiers/etc.
-     * have been calculated instead of just before updates have been done? */
-    ED_scene_fps_average_accumulate(scene, U.playback_fps_samples, wt->time_last);
   }
 
   /* Recalculate the time-step for the timer now that we've finished calculating this,
