@@ -698,7 +698,7 @@ typedef struct SpaceSeq {
   /** Grease-pencil data. */
   struct bGPdata *gpd;
 
-  struct Sequence *sequence;
+  // struct Sequence *sequence;
 
   struct SequencerPreviewOverlay preview_overlay;
   struct SequencerTimelineOverlay timeline_overlay;

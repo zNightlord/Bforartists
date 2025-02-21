@@ -5419,17 +5419,18 @@ static int screen_animation_step_invoke(bContext *C, wmOperator * /*op*/, const 
   Scene *scene, *scene_eval;
   ViewLayer *view_layer;
   Depsgraph *depsgraph;
+  Sequence *sequence = nullptr;
   if (sad->is_playing_sequence) {
-    Sequence *sequence = nullptr;
-    LISTBASE_FOREACH (Sequence *, iter_seq, &bmain->sequences) {
-      if (STREQLEN(sad->sequence_name, iter_seq->id.name, 66)) {
-        sequence = iter_seq;
-        break;
-      }
-    }
-    if (!sequence) {
-      return OPERATOR_PASS_THROUGH;
-    }
+    // LISTBASE_FOREACH (Sequence *, iter_seq, &bmain->sequences) {
+    //   if (STREQLEN(sad->sequence_name, iter_seq->id.name, 66)) {
+    //     sequence = iter_seq;
+    //     break;
+    //   }
+    // }
+    // if (!sequence) {
+    //   return OPERATOR_PASS_THROUGH;
+    // }
+    sequence = WM_window_get_active_sequence(win);
     scene = &sequence->legacy_scene_data;
     view_layer = static_cast<ViewLayer *>(scene->view_layers.first);
     depsgraph = nullptr;

@@ -216,10 +216,10 @@ static void sequencer_free(SpaceLink *sl)
 static void sequencer_init(wmWindowManager *wm, ScrArea *area)
 {
   SpaceSeq *sseq = (SpaceSeq *)area->spacedata.first;
-  if (sseq->sequence == nullptr) {
-    wmWindow *win = WM_window_find_by_area(wm, area);
-    sseq->sequence = WM_window_get_active_sequence(win);
-  }
+  // if (sseq->sequence == nullptr) {
+  //   wmWindow *win = WM_window_find_by_area(wm, area);
+  //   sseq->sequence = WM_window_get_active_sequence(win);
+  // }
   if (sseq->runtime == nullptr) {
     sseq->runtime = MEM_new<SpaceSeq_Runtime>(__func__);
   }
@@ -335,7 +335,7 @@ static int /*eContextResult*/ sequencer_context(const bContext *C,
                                                 const char *member,
                                                 bContextDataResult *result)
 {
-  SpaceSeq *sseq = CTX_wm_space_seq(C);
+  // SpaceSeq *sseq = CTX_wm_space_seq(C);
 
   if (CTX_data_dir(member)) {
     CTX_data_dir_set(result, sequencer_context_dir);
@@ -351,8 +351,9 @@ static int /*eContextResult*/ sequencer_context(const bContext *C,
     return CTX_RESULT_OK;
   }
   if (CTX_data_equals(member, "sequence")) {
-    BLI_assert(sseq->sequence);
-    Sequence *sequence = sseq->sequence;
+    // BLI_assert(sseq->sequence);
+    const wmWindow *win = CTX_wm_window(C);
+    Sequence *sequence = WM_window_get_active_sequence(win);
     CTX_data_pointer_set(result, &sequence->id, &RNA_Sequence, sequence);
     CTX_data_type_set(result, CTX_DATA_TYPE_POINTER);
     return CTX_RESULT_OK;

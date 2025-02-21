@@ -16,6 +16,7 @@
 #include <cstring>
 
 #include "DNA_windowmanager_types.h"
+#include "DNA_sequence_types.h"
 
 #include "MEM_guardedalloc.h"
 
@@ -72,7 +73,7 @@ static void window_manager_foreach_id(ID *id, LibraryForeachIDData *data)
   const int flag = BKE_lib_query_foreachid_process_flags_get(data);
 
   LISTBASE_FOREACH (wmWindow *, win, &wm->windows) {
-    // BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, win->sequence, IDWALK_CB_USER_ONE);
+    BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, win->sequence, IDWALK_CB_USER_ONE);
     BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, win->scene, IDWALK_CB_USER_ONE);
 
     /* This pointer can be nullptr during old files reading. */
