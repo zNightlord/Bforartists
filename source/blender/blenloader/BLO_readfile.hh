@@ -30,6 +30,7 @@ struct MemFile;
 struct PreviewImage;
 struct ReportList;
 struct Scene;
+struct Sequence;
 struct UserDef;
 struct View3D;
 struct ViewLayer;
@@ -73,6 +74,7 @@ struct BlendFileData : blender::NonCopyable, blender::NonMovable {
   Scene *curscene = nullptr;
   /** Layer to activate in workspaces when reading without UI. */
   ViewLayer *cur_view_layer = nullptr;
+  Sequence *cur_sequence = nullptr;
 
   eBlenFileType type = eBlenFileType(0);
 };

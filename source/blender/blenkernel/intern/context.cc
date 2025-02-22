@@ -16,6 +16,7 @@
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 #include "DNA_screen_types.h"
+#include "DNA_sequence_types.h"
 #include "DNA_space_types.h"
 #include "DNA_view3d_types.h"
 #include "DNA_windowmanager_types.h"
@@ -85,6 +86,7 @@ struct bContext {
   /* data context */
   struct {
     Main *main;
+    Sequence *sequence;
     Scene *scene;
 
     int recursion;
@@ -1023,12 +1025,15 @@ void CTX_wm_manager_set(bContext *C, wmWindowManager *wm)
 #  define PYCTX_REGION_MEMBERS "region", "region_data"
 #  define PYCTX_AREA_MEMBERS "area", "space_data", PYCTX_REGION_MEMBERS
 #  define PYCTX_SCREEN_MEMBERS "screen", PYCTX_AREA_MEMBERS
-#  define PYCTX_WINDOW_MEMBERS "window", "scene", "workspace", PYCTX_SCREEN_MEMBERS
+#  define PYCTX_WINDOW_MEMBERS "window", "sequence", "scene", "workspace", PYCTX_SCREEN_MEMBERS
 #endif
 
 void CTX_wm_window_set(bContext *C, wmWindow *win)
 {
   C->wm.window = win;
+  if (win) {
+    C->data.sequence = win->sequence;
+  }
   if (win) {
     C->data.scene = win->scene;
   }
@@ -1158,6 +1163,28 @@ void CTX_data_main_set(bContext *C, Main *bmain)
   BKE_sound_init_main(bmain);
 }
 
+Sequence *CTX_data_sequence(const bContext *C)
+{
+  Sequence *sequence;
+  if (ctx_data_pointer_verify(C, "sequence", (void **)&sequence)) {
+    return sequence;
+  }
+
+  return C->data.sequence;
+}
+
+void CTX_data_sequence_set(bContext *C, Sequence *sequence)
+{
+  C->data.sequence = sequence;
+
+#ifdef WITH_PYTHON
+  if (C->data.py_context != nullptr) {
+    const char *members[] = {"sequence"};
+    BPY_context_dict_clear_members_array(&C->data.py_context, C->data.py_context_orig, members, 1);
+  }
+#endif
+}
+
 Scene *CTX_data_scene(const bContext *C)
 {
   Scene *scene;
@@ -1252,7 +1279,7 @@ enum eContextObjectMode CTX_data_mode_enum_ex(const Object *obedit,
       case OB_GREASE_PENCIL:
         return CTX_MODE_EDIT_GREASE_PENCIL;
       case OB_POINTCLOUD:
-        return CTX_MODE_EDIT_POINT_CLOUD;
+        return CTX_MODE_EDIT_POINTCLOUD;
     }
   }
   else {
@@ -1329,8 +1356,8 @@ static const char *data_mode_strings[] = {
     "mball_edit",
     "lattice_edit",
     "curves_edit",
-    "grease_pencil_edit", /*BFA - New*/
-    "point_cloud_edit",
+    "grease_pencil_edit",
+    "pointcloud_edit",
     "posemode",
     "sculpt_mode",
     "weightpaint",

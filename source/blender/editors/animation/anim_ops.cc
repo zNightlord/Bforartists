@@ -14,8 +14,10 @@
 #include "BLI_math_base.h"
 #include "BLI_utildefines.h"
 #include "BLI_vector.hh"
+#include "BLI_vector_set.hh"
 
 #include "DNA_scene_types.h"
+#include "DNA_sequence_types.h"
 
 #include "BKE_anim_data.hh"
 #include "BKE_context.hh"
@@ -41,6 +43,7 @@
 #include "DEG_depsgraph.hh"
 #include "DEG_depsgraph_build.hh"
 
+#include "SEQ_channels.hh"
 #include "SEQ_iterator.hh"
 #include "SEQ_sequencer.hh"
 #include "SEQ_time.hh"
@@ -134,6 +137,54 @@ static int seq_frame_apply_snap(bContext *C, Scene *scene, const int timeline_fr
   return timeline_frame;
 }
 
+static void seq_sync_scene_strip(bContext *C, Scene *sequence_scene)
+{
+  using namespace blender;
+  wmWindow *win = CTX_wm_window(C);
+  Scene *active_scene = WM_window_get_active_scene(win);
+
+  Editing *ed = SEQ_editing_get(sequence_scene);
+  ListBase *seqbase = SEQ_active_seqbase_get(ed);
+  ListBase *channels = SEQ_channels_displayed_get(ed);
+  VectorSet<Strip *> render_strips = SEQ_query_rendered_strips(
+      sequence_scene, channels, seqbase, sequence_scene->r.cfra, 0);
+  Vector<Strip *> strips = render_strips.extract_vector();
+  /* Sort strips by channel. */
+  std::sort(strips.begin(), strips.end(), [](const Strip *a, const Strip *b) {
+    return a->machine > b->machine;
+  });
+  const Strip *scene_strip = [&]() -> const Strip * {
+    for (const Strip *strip : strips) {
+      if (strip->type == STRIP_TYPE_SCENE) {
+        return strip;
+      }
+    }
+    return nullptr;
+  }();
+  if (scene_strip && scene_strip->scene) {
+    if (active_scene != scene_strip->scene) {
+      /* Change active scene in window. */
+      Main *bmain = CTX_data_main(C);
+      WM_window_set_active_scene(bmain, C, win, scene_strip->scene);
+      active_scene = scene_strip->scene;
+    }
+
+    float frame_index = SEQ_give_frame_index(sequence_scene, scene_strip, sequence_scene->r.cfra);
+    if (active_scene->r.flag & SCER_SHOW_SUBFRAME) {
+      active_scene->r.cfra = int(frame_index);
+      active_scene->r.subframe = frame_index - int(frame_index);
+    }
+    else {
+      active_scene->r.cfra = round_fl_to_int(frame_index);
+      active_scene->r.subframe = 0.0f;
+    }
+    FRAMENUMBER_MIN_CLAMP(active_scene->r.cfra);
+
+    DEG_id_tag_update(&active_scene->id, ID_RECALC_FRAME_CHANGE);
+    WM_event_add_notifier(C, NC_SCENE | ND_FRAME, active_scene);
+  }
+}
+
 /* Set the new frame number */
 static void change_frame_apply(bContext *C, wmOperator *op, const bool always_update)
 {
@@ -141,11 +192,13 @@ static void change_frame_apply(bContext *C, wmOperator *op, const bool always_up
   float frame = RNA_float_get(op->ptr, "frame");
   bool do_snap = RNA_boolean_get(op->ptr, "snap");
 
+  const bool is_sequencer = CTX_wm_space_seq(C) && SEQ_editing_get(scene) != nullptr;
+
   const int old_frame = scene->r.cfra;
   const float old_subframe = scene->r.subframe;
 
   if (do_snap) {
-    if (CTX_wm_space_seq(C) && SEQ_editing_get(scene) != nullptr) {
+    if (is_sequencer) {
       frame = seq_frame_apply_snap(C, scene, frame);
     }
     else {
@@ -164,11 +217,20 @@ static void change_frame_apply(bContext *C, wmOperator *op, const bool always_up
   }
   FRAMENUMBER_MIN_CLAMP(scene->r.cfra);
 
+  if (is_sequencer) {
+    seq_sync_scene_strip(C, scene);
+  }
+
   /* do updates */
   const bool frame_changed = (old_frame != scene->r.cfra) || (old_subframe != scene->r.subframe);
   if (frame_changed || always_update) {
     DEG_id_tag_update(&scene->id, ID_RECALC_FRAME_CHANGE);
-    WM_event_add_notifier(C, NC_SCENE | ND_FRAME, scene);
+    if (is_sequencer) {
+      WM_event_add_notifier(C, NC_SEQUENCE | ND_FRAME, scene);
+    }
+    else {
+      WM_event_add_notifier(C, NC_SCENE | ND_FRAME, scene);
+    }
   }
 }
 

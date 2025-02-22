@@ -605,7 +605,8 @@ typedef struct PreviewImage {
 #define ID_REFCOUNTING_USERS(id) (ID_REAL_USERS(id) - ID_EXTRA_REAL_USERS(id))
 
 #define ID_CHECK_UNDO(id) \
-  ((GS((id)->name) != ID_SCR) && (GS((id)->name) != ID_WM) && (GS((id)->name) != ID_WS))
+  ((GS((id)->name) != ID_SCR) && (GS((id)->name) != ID_WM) && (GS((id)->name) != ID_WS)) && \
+      (GS((id)->name) != ID_BR)
 
 #define ID_BLEND_PATH(_bmain, _id) \
   ((_id)->lib ? (_id)->lib->runtime->filepath_abs : BKE_main_blendfile_path((_bmain)))
@@ -616,7 +617,8 @@ typedef struct PreviewImage {
 
 #define ID_IS_LINKED(_id) (((const ID *)(_id))->lib != NULL)
 
-#define ID_TYPE_SUPPORTS_ASSET_EDITABLE(id_type) ELEM(id_type, ID_BR, ID_TE, ID_NT, ID_IM, ID_PC)
+#define ID_TYPE_SUPPORTS_ASSET_EDITABLE(id_type) \
+  ELEM(id_type, ID_BR, ID_TE, ID_NT, ID_IM, ID_PC, ID_MA)
 
 #define ID_IS_EDITABLE(_id) \
   ((((const ID *)(_id))->lib == NULL) || \
@@ -1144,6 +1146,7 @@ typedef enum IDRecalcFlag {
 #define FILTER_ID_LI (1ULL << 39)
 #define FILTER_ID_GP (1ULL << 40)
 #define FILTER_ID_IP (1ULL << 41)
+#define FILTER_ID_SEQ (1ULL << 42)
 
 #define FILTER_ID_ALL \
   (FILTER_ID_AC | FILTER_ID_AR | FILTER_ID_BR | FILTER_ID_CA | FILTER_ID_CU_LEGACY | \
@@ -1153,7 +1156,7 @@ typedef enum IDRecalcFlag {
    FILTER_ID_SPK | FILTER_ID_SO | FILTER_ID_TE | FILTER_ID_TXT | FILTER_ID_VF | FILTER_ID_WO | \
    FILTER_ID_CF | FILTER_ID_WS | FILTER_ID_LP | FILTER_ID_CV | FILTER_ID_PT | FILTER_ID_VO | \
    FILTER_ID_SIM | FILTER_ID_KE | FILTER_ID_SCR | FILTER_ID_WM | FILTER_ID_LI | FILTER_ID_GP | \
-   FILTER_ID_IP)
+   FILTER_ID_IP | FILTER_ID_SEQ)
 
 /**
  * This enum defines the index assigned to each type of IDs in the array returned by
@@ -1257,6 +1260,8 @@ typedef enum eID_Index {
 
   /* Scene, after preset-like ID types because of tool settings. */
   INDEX_ID_SCE,
+
+  INDEX_ID_SEQ,
 
   /* UI-related types, should never be used by any other data type. */
   INDEX_ID_SCR,

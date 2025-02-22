@@ -377,6 +377,8 @@ if(WITH_BLENDER)
       center_only
       centertocursor
       centertomouse
+      char_notdef
+      char_replacement
       checkbox_dehlt
       checkbox_hlt
       checker_deselect
@@ -744,6 +746,7 @@ if(WITH_BLENDER)
       gridfill
       grip
       groundgrid
+      grip_v
       group
       group_bone
       group_uvs
@@ -1297,7 +1300,8 @@ if(WITH_BLENDER)
       normals_face
       normals_vertex
       normals_vertex_face
-
+      not_found
+      
       # letter o
       object_contents
       object_data

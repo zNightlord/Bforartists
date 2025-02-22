@@ -498,10 +498,11 @@ set(LIB
   bf_editor_mesh
   bf_editor_object
   bf_editor_physics
-  bf_editor_point_cloud
+  bf_editor_pointcloud
   bf_editor_render
   bf_editor_scene
   bf_editor_sculpt_paint
+  bf_editor_sequence
   bf_editor_sound
   bf_editor_transform
   bf_editor_undo

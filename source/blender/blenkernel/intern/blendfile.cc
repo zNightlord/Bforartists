@@ -60,6 +60,7 @@
 #include "BKE_report.hh"
 #include "BKE_scene.hh"
 #include "BKE_screen.hh"
+#include "BKE_sequence.hh"
 #include "BKE_studiolight.h"
 #include "BKE_undo_system.hh"
 #include "BKE_workspace.hh"
@@ -319,6 +320,12 @@ static bool reuse_bmain_move_id(ReuseOldBMainData *reuse_data,
                                 const bool reuse_existing)
 {
   id::IDRemapper &remapper = reuse_bmain_data_remapper_ensure(reuse_data);
+  /* Nothing to move for embedded ID. */
+  if (id->flag & ID_FLAG_EMBEDDED_DATA) {
+    remapper.add(id, id);
+    return true;
+  }
+
   Main *new_bmain = reuse_data->new_bmain;
   Main *old_bmain = reuse_data->old_bmain;
   ListBase *new_lb = which_libbase(new_bmain, GS(id->name));
@@ -850,7 +857,8 @@ static void view3d_data_consistency_ensure(wmWindow *win, Scene *scene, ViewLaye
 
 static void wm_data_consistency_ensure(wmWindowManager *curwm,
                                        Scene *cur_scene,
-                                       ViewLayer *cur_view_layer)
+                                       ViewLayer *cur_view_layer,
+                                       Sequence *cur_sequence)
 {
   /* There may not be any available WM (e.g. when reading `userpref.blend`). */
   if (curwm == nullptr) {
@@ -860,6 +868,9 @@ static void wm_data_consistency_ensure(wmWindowManager *curwm,
   LISTBASE_FOREACH (wmWindow *, win, &curwm->windows) {
     if (win->scene == nullptr) {
       win->scene = cur_scene;
+    }
+    if (win->sequence == nullptr) {
+      win->sequence = cur_sequence;
     }
     if (BKE_view_layer_find(win->scene, win->view_layer_name) == nullptr) {
       STRNCPY(win->view_layer_name, cur_view_layer->name);
@@ -1004,6 +1015,7 @@ static void setup_app_data(bContext *C,
   /* Always use the Scene and ViewLayer pointers from new file, if possible. */
   ViewLayer *cur_view_layer = bfd->cur_view_layer;
   Scene *curscene = bfd->curscene;
+  Sequence *cur_sequence = bfd->cur_sequence;
 
   wmWindow *win = nullptr;
   bScreen *curscreen = nullptr;
@@ -1019,6 +1031,13 @@ static void setup_app_data(bContext *C,
   if (cur_view_layer == nullptr) {
     /* Fallback to the active scene view layer. */
     cur_view_layer = BKE_view_layer_default_view(curscene);
+  }
+  if (cur_sequence == nullptr) {
+    cur_sequence = static_cast<Sequence *>(bfd->main->sequences.first);
+  }
+  if (cur_sequence == nullptr) {
+    BLI_assert(bfd->main != nullptr);
+    cur_sequence = BKE_sequence_add(*bfd->main, N_("Sequence"));
   }
 
   /* If UI is not loaded when opening actual `.blend` file,
@@ -1064,7 +1083,7 @@ static void setup_app_data(bContext *C,
     MEM_delete(reuse_data.remapper);
     reuse_data.remapper = nullptr;
 
-    wm_data_consistency_ensure(CTX_wm_manager(C), curscene, cur_view_layer);
+    wm_data_consistency_ensure(CTX_wm_manager(C), curscene, cur_view_layer, cur_sequence);
   }
 
   if (mode == LOAD_UNDO) {
@@ -1077,7 +1096,7 @@ static void setup_app_data(bContext *C,
      * Another source of potential inconsistency is undoing into a step where the active camera
      * object does not exist (see e.g. #125636).
      */
-    wm_data_consistency_ensure(CTX_wm_manager(C), curscene, cur_view_layer);
+    wm_data_consistency_ensure(CTX_wm_manager(C), curscene, cur_view_layer, cur_sequence);
   }
 
   BLI_assert(BKE_main_namemap_validate(bfd->main));
@@ -1085,6 +1104,7 @@ static void setup_app_data(bContext *C,
   if (mode != LOAD_UI) {
     if (win) {
       curscene = win->scene;
+      cur_sequence = win->sequence;
     }
 
     if (track_undo_scene) {
@@ -1106,6 +1126,7 @@ static void setup_app_data(bContext *C,
     }
   }
   CTX_data_scene_set(C, curscene);
+  CTX_data_sequence_set(C, cur_sequence);
 
   BLI_assert(BKE_main_namemap_validate(bfd->main));
 

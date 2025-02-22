@@ -37,6 +37,7 @@
 #include "BKE_paint.hh"
 #include "BKE_particle.h"
 #include "BKE_screen.hh"
+#include "BKE_sequence.hh"
 
 #include "RNA_access.hh"
 #include "RNA_prototypes.hh"
@@ -80,6 +81,14 @@ static PointerRNA *get_pointer_type(ButsContextPath *path, StructRNA *type)
 }
 
 /************************* Creating the Path ************************/
+
+static bool buttons_context_path_sequence(ButsContextPath *path)
+{
+  PointerRNA *ptr = &path->ptr[path->len - 1];
+
+  /* this one just verifies */
+  return RNA_struct_is_a(ptr->type, &RNA_Sequence);
+}
 
 static bool buttons_context_path_scene(ButsContextPath *path)
 {
@@ -264,7 +273,7 @@ static bool buttons_context_path_data(ButsContextPath *path, int type)
   if (RNA_struct_is_a(ptr->type, &RNA_Curves) && ELEM(type, -1, OB_CURVES)) {
     return true;
   }
-#ifdef WITH_POINT_CLOUD
+#ifdef WITH_POINTCLOUD
   if (RNA_struct_is_a(ptr->type, &RNA_PointCloud) && ELEM(type, -1, OB_POINTCLOUD)) {
     return true;
   }
@@ -546,6 +555,7 @@ static bool buttons_context_path(
   /* Note we don't use CTX_data here, instead we get it from the window.
    * Otherwise there is a loop reading the context that we are setting. */
   wmWindow *window = CTX_wm_window(C);
+  Sequence *sequence = WM_window_get_active_sequence(window);
   Scene *scene = WM_window_get_active_scene(window);
   ViewLayer *view_layer = WM_window_get_active_view_layer(window);
 
@@ -560,20 +570,18 @@ static bool buttons_context_path(
     path->len++;
   }
   /* No pinned root, use scene as initial root. */
-  else if (mainb != BCONTEXT_TOOL) {
+  else if (!ELEM(mainb, BCONTEXT_TOOL, BCONTEXT_OUTPUT)) {
     path->ptr[0] = RNA_id_pointer_create(&scene->id);
     path->len++;
 
-    if (!ELEM(mainb,
-              BCONTEXT_SCENE,
-              BCONTEXT_RENDER,
-              BCONTEXT_OUTPUT,
-              BCONTEXT_VIEW_LAYER,
-              BCONTEXT_WORLD))
-    {
+    if (!ELEM(mainb, BCONTEXT_SCENE, BCONTEXT_RENDER, BCONTEXT_VIEW_LAYER, BCONTEXT_WORLD)) {
       path->ptr[path->len] = RNA_pointer_create_discrete(nullptr, &RNA_ViewLayer, view_layer);
       path->len++;
     }
+  }
+  else if (mainb == BCONTEXT_OUTPUT) {
+    path->ptr[0] = RNA_id_pointer_create(&sequence->id);
+    path->len++;
   }
 
   /* now for each buttons context type, we try to construct a path,
@@ -582,8 +590,10 @@ static bool buttons_context_path(
   switch (mainb) {
     case BCONTEXT_SCENE:
     case BCONTEXT_RENDER:
-    case BCONTEXT_OUTPUT:
       found = buttons_context_path_scene(path);
+      break;
+    case BCONTEXT_OUTPUT:
+      found = buttons_context_path_sequence(path);
       break;
     case BCONTEXT_VIEW_LAYER:
 #ifdef WITH_FREESTYLE
@@ -842,7 +852,7 @@ const char *buttons_context_dir[] = {
     "gpencil",
     "grease_pencil",
     "curves",
-#ifdef WITH_POINT_CLOUD
+#ifdef WITH_POINTCLOUD
     "pointcloud",
 #endif
     "volume",
@@ -939,7 +949,7 @@ int /*eContextResult*/ buttons_context(const bContext *C,
     set_pointer_type(path, result, &RNA_Curves);
     return CTX_RESULT_OK;
   }
-#ifdef WITH_POINT_CLOUD
+#ifdef WITH_POINTCLOUD
   if (CTX_data_equals(member, "pointcloud")) {
     set_pointer_type(path, result, &RNA_PointCloud);
     return CTX_RESULT_OK;

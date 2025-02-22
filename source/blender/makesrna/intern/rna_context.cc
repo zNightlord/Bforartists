@@ -26,7 +26,7 @@ const EnumPropertyItem rna_enum_context_mode_items[] = {
     {CTX_MODE_EDIT_METABALL, "EDIT_METABALL", 0, "Metaball Edit", ""},
     {CTX_MODE_EDIT_LATTICE, "EDIT_LATTICE", 0, "Lattice Edit", ""},
     {CTX_MODE_EDIT_GREASE_PENCIL, "EDIT_GREASE_PENCIL", 0, "Grease Pencil Edit", ""},
-    {CTX_MODE_EDIT_POINT_CLOUD, "EDIT_POINT_CLOUD", 0, "Point Cloud Edit", ""},
+    {CTX_MODE_EDIT_POINTCLOUD, "EDIT_POINTCLOUD", 0, "Point Cloud Edit", ""},
     {CTX_MODE_POSE, "POSE", 0, "Pose", ""},
     {CTX_MODE_SCULPT, "SCULPT", 0, "Sculpt", ""},
     {CTX_MODE_PAINT_WEIGHT, "PAINT_WEIGHT", 0, "Weight Paint", ""},
@@ -146,6 +146,12 @@ static PointerRNA rna_Context_main_get(PointerRNA *ptr)
 {
   bContext *C = (bContext *)ptr->data;
   return RNA_main_pointer_create(CTX_data_main(C));
+}
+
+static PointerRNA rna_Context_sequence_get(PointerRNA *ptr)
+{
+  bContext *C = (bContext *)ptr->data;
+  return RNA_id_pointer_create(reinterpret_cast<ID *>(CTX_data_sequence(C)));
 }
 
 static PointerRNA rna_Context_scene_get(PointerRNA *ptr)
@@ -308,6 +314,11 @@ void RNA_def_context(BlenderRNA *brna)
   RNA_def_property_clear_flag(prop, PROP_EDITABLE);
   RNA_def_property_struct_type(prop, "BlendData");
   RNA_def_property_pointer_funcs(prop, "rna_Context_main_get", nullptr, nullptr, nullptr);
+
+  prop = RNA_def_property(srna, "sequence", PROP_POINTER, PROP_NONE);
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_struct_type(prop, "Sequence");
+  RNA_def_property_pointer_funcs(prop, "rna_Context_sequence_get", nullptr, nullptr, nullptr);
 
   prop = RNA_def_property(srna, "scene", PROP_POINTER, PROP_NONE);
   RNA_def_property_clear_flag(prop, PROP_EDITABLE);

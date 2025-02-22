@@ -65,13 +65,14 @@ set(SRC
   ../include/ED_paint.hh
   ../include/ED_particle.hh
   ../include/ED_physics.hh
-  ../include/ED_point_cloud.hh
+  ../include/ED_pointcloud.hh
   ../include/ED_render.hh
   ../include/ED_scene.hh
   ../include/ED_screen.hh
   ../include/ED_screen_types.hh
   ../include/ED_sculpt.hh
   ../include/ED_select_utils.hh
+  ../include/ED_sequence.hh
   ../include/ED_sequencer.hh
   ../include/ED_sound.hh
   ../include/ED_space_api.hh

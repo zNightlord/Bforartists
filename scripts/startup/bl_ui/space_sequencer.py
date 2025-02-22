@@ -185,6 +185,12 @@ class SEQUENCER_HT_header(Header):
 
         if st.view_type in {"SEQUENCER", "SEQUENCER_PREVIEW"}:
             row = layout.row(align=True)
+            row.template_ID(context, "sequence")
+
+        layout.separator_spacer()
+
+        if st.view_type in {'SEQUENCER', 'SEQUENCER_PREVIEW'}:
+            row = layout.row(align=True)
             row.prop(sequencer_tool_settings, "overlap_mode", text="")
 
         # if st.view_type in {'SEQUENCER', 'SEQUENCER_PREVIEW'}:

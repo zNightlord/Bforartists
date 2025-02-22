@@ -473,6 +473,7 @@ void RNA_api_workspace_tool(StructRNA *srna);
 /* main collection functions */
 void RNA_def_main_cameras(BlenderRNA *brna, PropertyRNA *cprop);
 void RNA_def_main_scenes(BlenderRNA *brna, PropertyRNA *cprop);
+void RNA_def_main_sequences(BlenderRNA *brna, PropertyRNA *cprop);
 void RNA_def_main_objects(BlenderRNA *brna, PropertyRNA *cprop);
 void RNA_def_main_materials(BlenderRNA *brna, PropertyRNA *cprop);
 void RNA_def_main_node_groups(BlenderRNA *brna, PropertyRNA *cprop);

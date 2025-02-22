@@ -5,27 +5,26 @@
 set(INC
   ../include
   ../../makesrna
-
-  # RNA_prototypes.hh
-  ${CMAKE_BINARY_DIR}/source/blender/makesrna
 )
 
 set(INC_SYS
+
 )
 
 set(SRC
-  intern/point_cloud_ops.cc
-  intern/point_cloud_selection.cc
-  )
+  sequence_edit.cc
+)
 
 set(LIB
   PRIVATE bf::blenkernel
   PRIVATE bf::blenlib
+  PRIVATE bf::blentranslation
   PRIVATE bf::depsgraph
   PRIVATE bf::dna
   PRIVATE bf::intern::guardedalloc
+  PRIVATE bf::sequencer
   PRIVATE bf::windowmanager
 )
 
-blender_add_lib(bf_editor_point_cloud "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
-add_dependencies(bf_editor_point_cloud bf_rna)
+
+blender_add_lib(bf_editor_sequence "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")

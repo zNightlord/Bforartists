@@ -224,7 +224,7 @@ void rna_Action_slots_remove(bAction *dna_action,
     return;
   }
 
-  RNA_POINTER_INVALIDATE(slot_ptr);
+  slot_ptr->invalidate();
   WM_event_add_notifier(C, NC_ANIMATION | ND_ANIMCHAN, nullptr);
   DEG_id_tag_update(&action.id, ID_RECALC_ANIMATION);
 }
@@ -281,7 +281,7 @@ void rna_Action_layers_remove(bAction *dna_action,
     return;
   }
 
-  RNA_POINTER_INVALIDATE(layer_ptr);
+  layer_ptr->invalidate();
   WM_event_add_notifier(C, NC_ANIMATION | ND_ANIMCHAN, nullptr);
   DEG_id_tag_update(&action.id, ID_RECALC_ANIMATION);
 }
@@ -464,7 +464,7 @@ void rna_ActionStrips_remove(
     return;
   }
 
-  RNA_POINTER_INVALIDATE(strip_ptr);
+  strip_ptr->invalidate();
   WM_event_add_notifier(C, NC_ANIMATION | ND_ANIMCHAN, nullptr);
   DEG_id_tag_update(action_id, ID_RECALC_ANIMATION);
 }
@@ -547,7 +547,7 @@ static void rna_Channelbags_remove(ID *dna_action_id,
     return;
   }
 
-  RNA_POINTER_INVALIDATE(channelbag_ptr);
+  channelbag_ptr->invalidate();
   WM_event_add_notifier(C, NC_ANIMATION | ND_ANIMCHAN, nullptr);
   DEG_id_tag_update(dna_action_id, ID_RECALC_ANIMATION);
 }
@@ -738,7 +738,7 @@ static void rna_Channelbag_group_remove(ActionChannelbag *dna_channelbag,
     return;
   }
 
-  RNA_POINTER_INVALIDATE(agrp_ptr);
+  agrp_ptr->invalidate();
   WM_main_add_notifier(NC_ANIMATION | ND_KEYFRAME | NA_EDITED, nullptr);
 }
 
@@ -1013,7 +1013,7 @@ static void rna_Action_groups_remove(bAction *act, ReportList *reports, PointerR
   }
 
   MEM_freeN(agrp);
-  RNA_POINTER_INVALIDATE(agrp_ptr);
+  agrp_ptr->invalidate();
 
   DEG_id_tag_update(&act->id, ID_RECALC_ANIMATION_NO_FLUSH);
   WM_main_add_notifier(NC_ANIMATION | ND_KEYFRAME | NA_EDITED, nullptr);
@@ -1176,7 +1176,7 @@ static void rna_Action_fcurve_remove(bAction *act, ReportList *reports, PointerR
       BKE_reportf(reports, RPT_ERROR, "F-Curve not found in action '%s'", act->id.name + 2);
       return;
     }
-    RNA_POINTER_INVALIDATE(fcu_ptr);
+    fcu_ptr->invalidate();
 
     DEG_id_tag_update(&act->id, ID_RECALC_ANIMATION_NO_FLUSH);
     WM_main_add_notifier(NC_ANIMATION | ND_KEYFRAME | NA_EDITED, nullptr);
@@ -1196,7 +1196,7 @@ static void rna_Action_fcurve_remove(bAction *act, ReportList *reports, PointerR
 
     action_groups_remove_channel(act, fcu);
     BKE_fcurve_free(fcu);
-    RNA_POINTER_INVALIDATE(fcu_ptr);
+    fcu_ptr->invalidate();
   }
   else {
     if (BLI_findindex(&act->curves, fcu) == -1) {
@@ -1206,7 +1206,7 @@ static void rna_Action_fcurve_remove(bAction *act, ReportList *reports, PointerR
 
     BLI_remlink(&act->curves, fcu);
     BKE_fcurve_free(fcu);
-    RNA_POINTER_INVALIDATE(fcu_ptr);
+    fcu_ptr->invalidate();
   }
 
   DEG_id_tag_update(&act->id, ID_RECALC_ANIMATION_NO_FLUSH);
@@ -1256,7 +1256,7 @@ static void rna_Action_pose_markers_remove(bAction *act,
   }
 
   MEM_freeN(marker);
-  RNA_POINTER_INVALIDATE(marker_ptr);
+  marker_ptr->invalidate();
 }
 
 static PointerRNA rna_Action_active_pose_marker_get(PointerRNA *ptr)
@@ -1400,17 +1400,11 @@ static FCurve *rna_Action_fcurve_ensure_for_datablock(bAction *_self,
     }
   }
 
-  FCurve *fcurve = blender::animrig::action_fcurve_ensure(
+  FCurve &fcurve = blender::animrig::action_fcurve_ensure(
       bmain, *_self, *datablock, {data_path, array_index});
 
-  if (!fcurve) {
-    /* This should never happen, given the precondition check above. */
-    BLI_assert_unreachable();
-    return nullptr;
-  }
-
   WM_main_add_notifier(NC_ANIMATION | ND_KEYFRAME | NA_EDITED, nullptr);
-  return fcurve;
+  return &fcurve;
 }
 
 /**

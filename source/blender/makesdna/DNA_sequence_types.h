@@ -18,6 +18,7 @@
 #include "DNA_color_types.h"
 #include "DNA_defs.h"
 #include "DNA_listBase.h"
+#include "DNA_scene_types.h"
 #include "DNA_session_uid_types.h" /* for #SessionUID */
 #include "DNA_vec_types.h"         /* for #rctf */
 
@@ -27,6 +28,7 @@ struct Scene;
 struct StripLookup;
 struct VFont;
 struct bSound;
+struct RenderData;
 
 #ifdef __cplusplus
 namespace blender::seq {
@@ -370,6 +372,17 @@ typedef struct Editing {
 
   EditingRuntime runtime;
 } Editing;
+
+typedef struct Sequence {
+  ID id;
+  /** Animation data (must be immediately after id for utilities to use it). */
+  struct AnimData *adt;
+
+  /* TODO: This field should be removed in the long term. It's only necessary, because too much
+   * code of the VSE used to depend on the scene. */
+  Scene legacy_scene_data;
+  void *_pad;
+} Sequence;
 
 /** \} */
 

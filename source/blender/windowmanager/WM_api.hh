@@ -43,6 +43,7 @@ struct ScrArea;
 struct View3D;
 struct ViewLayer;
 struct bContext;
+struct Sequence;
 struct rcti;
 struct uiListType;
 struct WorkSpace;
@@ -334,6 +335,10 @@ ViewLayer *WM_window_get_active_view_layer(const wmWindow *win)
     ATTR_NONNULL(1) ATTR_WARN_UNUSED_RESULT;
 void WM_window_set_active_view_layer(wmWindow *win, ViewLayer *view_layer) ATTR_NONNULL(1);
 void WM_window_ensure_active_view_layer(wmWindow *win) ATTR_NONNULL(1);
+Sequence *WM_window_get_active_sequence(const wmWindow *win)
+    ATTR_NONNULL() ATTR_WARN_UNUSED_RESULT;
+void WM_window_set_active_sequence(Main *bmain, bContext *C, wmWindow *win, Sequence *sequence)
+    ATTR_NONNULL();
 
 bool WM_window_is_temp_screen(const wmWindow *win) ATTR_WARN_UNUSED_RESULT;
 

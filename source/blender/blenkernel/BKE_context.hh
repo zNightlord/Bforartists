@@ -43,6 +43,7 @@ struct RenderEngineType;
 struct ReportList;
 struct Scene;
 struct ScrArea;
+struct Sequence;
 struct SpaceAction;
 struct SpaceClip;
 struct SpaceClip;
@@ -126,7 +127,7 @@ enum eContextObjectMode {
   CTX_MODE_EDIT_LATTICE,
   CTX_MODE_EDIT_CURVES,
   CTX_MODE_EDIT_GREASE_PENCIL,
-  CTX_MODE_EDIT_POINT_CLOUD,
+  CTX_MODE_EDIT_POINTCLOUD,
   CTX_MODE_POSE,
   CTX_MODE_SCULPT,
   CTX_MODE_PAINT_WEIGHT,
@@ -365,6 +366,7 @@ int ctx_data_list_count(const bContext *C,
 /* Data Context Members */
 
 Main *CTX_data_main(const bContext *C);
+Sequence *CTX_data_sequence(const bContext *C);
 Scene *CTX_data_scene(const bContext *C);
 /**
  * This is tricky. Sometimes the user overrides the render_layer
@@ -386,6 +388,7 @@ enum eContextObjectMode CTX_data_mode_enum_ex(const Object *obedit,
 enum eContextObjectMode CTX_data_mode_enum(const bContext *C);
 
 void CTX_data_main_set(bContext *C, Main *bmain);
+void CTX_data_sequence_set(bContext *C, Sequence *sequence);
 void CTX_data_scene_set(bContext *C, Scene *scene);
 
 /* Only Outliner currently! */

@@ -155,6 +155,8 @@ typedef enum ID_Type {
   ID_PT = MAKE_ID2('P', 'T'),        /* PointCloud */
   ID_VO = MAKE_ID2('V', 'O'),        /* Volume */
   ID_GP = MAKE_ID2('G', 'P'),        /* Grease Pencil */
+  /* TODO: Can we use 'SQ' ? */
+  ID_SEQ = MAKE_ID2('S', 'E'), /* Sequence */
 } ID_Type;
 
 /* Only used as 'placeholder' in .blend files for directly linked data-blocks. */
@@ -164,7 +166,7 @@ typedef enum ID_Type {
 #define ID_SCRN MAKE_ID2('S', 'N')
 
 /* NOTE: Fake IDs, needed for `g.sipo->blocktype` or outliner. */
-#define ID_SEQ MAKE_ID2('S', 'Q')
+#define ID_SEQ_LEGACY MAKE_ID2('S', 'Q')
 /* constraint */
 #define ID_CO MAKE_ID2('C', 'O')
 /* pose (action channel, used to be ID_AC in code, so we keep code for backwards compatible). */

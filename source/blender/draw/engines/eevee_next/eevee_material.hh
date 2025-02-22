@@ -51,7 +51,7 @@ enum eMaterialPipeline {
 enum eMaterialGeometry {
   /* These maps directly to object types. */
   MAT_GEOM_MESH = 0,
-  MAT_GEOM_POINT_CLOUD,
+  MAT_GEOM_POINTCLOUD,
   MAT_GEOM_CURVES,
   MAT_GEOM_GPENCIL,
   MAT_GEOM_VOLUME,
@@ -196,7 +196,7 @@ static inline eMaterialGeometry to_material_geometry(const Object *ob)
     case OB_GPENCIL_LEGACY:
       return MAT_GEOM_GPENCIL;
     case OB_POINTCLOUD:
-      return MAT_GEOM_POINT_CLOUD;
+      return MAT_GEOM_POINTCLOUD;
     default:
       return MAT_GEOM_MESH;
   }

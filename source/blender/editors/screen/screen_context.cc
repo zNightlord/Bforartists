@@ -1149,7 +1149,8 @@ static eContextResult screen_ctx_ui_list(const bContext *C, bContextDataResult *
 static eContextResult screen_ctx_active_strip(const bContext *C, bContextDataResult *result)
 {
   wmWindow *win = CTX_wm_window(C);
-  Scene *scene = WM_window_get_active_scene(win);
+  Sequence *sequence = WM_window_get_active_sequence(win);
+  Scene *scene = &sequence->legacy_scene_data;
   Strip *strip = SEQ_select_active_get(scene);
   if (strip) {
     CTX_data_pointer_set(result, &scene->id, &RNA_Strip, strip);
@@ -1160,7 +1161,8 @@ static eContextResult screen_ctx_active_strip(const bContext *C, bContextDataRes
 static eContextResult screen_ctx_strips(const bContext *C, bContextDataResult *result)
 {
   wmWindow *win = CTX_wm_window(C);
-  Scene *scene = WM_window_get_active_scene(win);
+  Sequence *sequence = WM_window_get_active_sequence(win);
+  Scene *scene = &sequence->legacy_scene_data;
   Editing *ed = SEQ_editing_get(scene);
   if (ed) {
     LISTBASE_FOREACH (Strip *, strip, ed->seqbasep) {
@@ -1174,7 +1176,8 @@ static eContextResult screen_ctx_strips(const bContext *C, bContextDataResult *r
 static eContextResult screen_ctx_selected_strips(const bContext *C, bContextDataResult *result)
 {
   wmWindow *win = CTX_wm_window(C);
-  Scene *scene = WM_window_get_active_scene(win);
+  Sequence *sequence = WM_window_get_active_sequence(win);
+  Scene *scene = &sequence->legacy_scene_data;
   Editing *ed = SEQ_editing_get(scene);
   if (ed) {
     LISTBASE_FOREACH (Strip *, strip, ed->seqbasep) {
@@ -1191,7 +1194,8 @@ static eContextResult screen_ctx_selected_editable_strips(const bContext *C,
                                                           bContextDataResult *result)
 {
   wmWindow *win = CTX_wm_window(C);
-  Scene *scene = WM_window_get_active_scene(win);
+  Sequence *sequence = WM_window_get_active_sequence(win);
+  Scene *scene = &sequence->legacy_scene_data;
   Editing *ed = SEQ_editing_get(scene);
   if (ed == nullptr) {
     return CTX_RESULT_NO_DATA;

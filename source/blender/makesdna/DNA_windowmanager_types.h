@@ -283,6 +283,8 @@ typedef struct wmWindow {
   /** Parent window. */
   struct wmWindow *parent;
 
+  /** Active sequence displayed in this window. */
+  struct Sequence *sequence;
   /** Active scene displayed in this window. */
   struct Scene *scene;
   /** Temporary when switching. */
@@ -294,6 +296,8 @@ typedef struct wmWindow {
   struct Scene *unpinned_scene;
 
   struct WorkSpaceInstanceHook *workspace_hook;
+
+  void *_pad;
 
   /** Global areas aren't part of the screen, but part of the window directly.
    * \note Code assumes global areas with fixed height, fixed width not supported yet */

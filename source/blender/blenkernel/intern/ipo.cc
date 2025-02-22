@@ -1099,7 +1099,7 @@ static char *get_rna_access(ID *id,
       break;
 
     /* XXX problematic block-types. */
-    case ID_SEQ: /* sequencer strip */
+    case ID_SEQ_LEGACY: /* sequencer strip */
       /* STRIP_FAC1: */
       switch (adrcode) {
         case STRIP_FAC1:
