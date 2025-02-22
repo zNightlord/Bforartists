@@ -1870,6 +1870,12 @@ class TOPBAR_MT_misc(Menu):
                 row.operator("screen.repeat_last", icon='REPEAT', text="")
                 row.operator("screen.repeat_history", icon='REDO_HISTORY', text="")
 
+            if addon_prefs.topbar_misc_sequence:
+
+                row = layout.row(align=True)
+
+                layout.template_ID(window, "sequence", new="sequence.new", unlink="sequence.delete")
+
             if addon_prefs.topbar_misc_scene:
 
                 row = layout.row(align=True)

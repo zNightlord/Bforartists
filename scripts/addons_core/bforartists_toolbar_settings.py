@@ -169,6 +169,7 @@ class BFA_OT_toolbar_settings_prefs(AddonPreferences):
     topbar_misc_undoredo : BoolProperty(name="Undo / Redo", default=True, description = "Display the Undo Redo Topbar\nAll Modes", )
     topbar_misc_undohistory : BoolProperty(name="Undo History", default=True, description = "Display the Undo History Topbar\nAll Modes", )
     topbar_misc_repeat : BoolProperty(name="Repeat", default=True, description = "Display the Repeat Topbar\nAll Modes", )
+    topbar_misc_sequence : BoolProperty(name="Sequence", default=False, description = "Display the Sequence dropdown box", )
     topbar_misc_scene : BoolProperty(name="Scene", default=False, description = "Display the Scene dropdown box", )
     topbar_misc_viewlayer : BoolProperty(name="View Layer", default=False, description = "Display the View Layer dropdown box", )
     topbar_misc_last : BoolProperty(name="Last", default=True, description = "Display the Adjust Last Operator panel\nAll Modes", )
