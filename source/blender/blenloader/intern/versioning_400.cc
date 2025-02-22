@@ -1522,6 +1522,20 @@ void do_versions_after_linking_400(FileData *fd, Main *bmain)
     blender::animrig::versioning::tag_action_users_for_slotted_actions_conversion(*bmain);
   }
 
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 404, 6)) {
+    LISTBASE_FOREACH (bNodeTree *, ntree, &bmain->nodetrees) {
+      if (ntree->type != NTREE_SHADER || ntree->shader_node_traits->type != SH_TREE_TYPE_GROUP) {
+        continue;
+      }
+      LISTBASE_FOREACH (bNode *, node, &ntree->nodes) {
+        if (node->type_legacy == SH_NODE_NPR_OUTPUT) {
+          ntree->shader_node_traits->type = SH_TREE_TYPE_NPR;
+          break;
+        }
+      }
+    }
+  }
+
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 404, 7)) {
     constexpr char SCE_SNAP_TO_NODE_X = (1 << 0);
     constexpr char SCE_SNAP_TO_NODE_Y = (1 << 1);

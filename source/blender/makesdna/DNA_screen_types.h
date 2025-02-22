@@ -439,7 +439,6 @@ typedef struct ScrArea {
    */
   char butspacetype;
   short butspacetype_subtype;
-  short butspacetype_subtype_prev;
 
   /** Size. */
   short winx, winy;
@@ -453,8 +452,8 @@ typedef struct ScrArea {
    * Index of last used region of 'RGN_TYPE_WINDOW'
    * runtime variable, updated by executing operators.
    */
-  int region_active_win;
-  char _pad[4];
+  short region_active_win;
+  char _pad[2];
 
   /** Callbacks for this space type. */
   struct SpaceType *type;

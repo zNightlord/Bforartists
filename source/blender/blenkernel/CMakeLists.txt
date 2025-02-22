@@ -8,6 +8,7 @@ set(INC
   ../makesrna
   ../modifiers
   ../nodes/geometry/include
+  ../nodes/shader/include
   ../shader_fx
   ../simulation
   ../windowmanager
@@ -238,6 +239,7 @@ set(SRC
   intern/node_tree_reference_lifetimes.cc
   intern/node_tree_update.cc
   intern/node_tree_zones.cc
+  intern/npr.cc
   intern/object.cc
   intern/object_deform.cc
   intern/object_dupli.cc
@@ -471,6 +473,7 @@ set(SRC
   BKE_node_tree_reference_lifetimes.hh
   BKE_node_tree_update.hh
   BKE_node_tree_zones.hh
+  BKE_npr.hh
   BKE_object.hh
   BKE_object_deform.h
   BKE_object_types.hh

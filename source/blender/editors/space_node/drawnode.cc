@@ -438,9 +438,16 @@ static void node_shader_buts_glossy(uiLayout *layout, bContext * /*C*/, PointerR
   uiItemR(layout, ptr, "distribution", DEFAULT_FLAGS, "", ICON_NONE);
 }
 
-static void node_buts_output_shader(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
+static void node_buts_output_shader(uiLayout *layout, bContext *C, PointerRNA *ptr)
 {
   uiItemR(layout, ptr, "target", DEFAULT_FLAGS, "", ICON_NONE);
+}
+
+static void node_buts_output_shader_with_npr(uiLayout *layout, bContext *C, PointerRNA *ptr)
+{
+  uiItemR(layout, ptr, "target", DEFAULT_FLAGS, "", ICON_NONE);
+
+  uiTemplateID(layout, C, ptr, "nprtree", "render.npr_new", nullptr, nullptr, 0, false, nullptr);
 }
 
 static void node_shader_buts_scatter(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
@@ -500,6 +507,9 @@ static void node_shader_set_butfunc(blender::bke::bNodeType *ntype)
       ntype->draw_buttons = node_shader_buts_glossy;
       break;
     case SH_NODE_OUTPUT_MATERIAL:
+      /* TODO(NPR): EEVEE only? */
+      ntype->draw_buttons = node_buts_output_shader_with_npr;
+      break;
     case SH_NODE_OUTPUT_LIGHT:
     case SH_NODE_OUTPUT_WORLD:
       ntype->draw_buttons = node_buts_output_shader;

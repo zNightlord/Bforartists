@@ -38,7 +38,7 @@ def draw_node_group_add_menu(context, layout):
 
     layout.operator("node.group_edit", text = " Toggle Edit Group", icon = "NODE_EDITGROUP").exit = False
 
-    if node_tree in all_node_groups.values():
+    if node_tree in all_node_groups.values() and node_tree.is_group():
         layout.separator()
         add_node_type(layout, "NodeGroupInput")
         add_node_type(layout, "NodeGroupOutput")
@@ -49,8 +49,8 @@ def draw_node_group_add_menu(context, layout):
         groups = [
             group for group in context.blend_data.node_groups
             if (group.bl_idname == node_tree.bl_idname and
-                not group.contains_tree(node_tree) and
-                not group.name.startswith('.'))
+                not group.name.startswith('.') and
+                node_tree.poll_group(group))
         ]
         if groups:
             layout.separator()
@@ -93,6 +93,18 @@ def add_foreach_geometry_element_zone(layout, label):
         text=label,
         text_ctxt=i18n_contexts.default,
     )
+    props.use_transform = True
+    return props
+
+
+def add_shader_repeat_zone(layout, label):
+    props = layout.operator("node.add_shader_repeat_zone", text=label, text_ctxt=i18n_contexts.default)
+    props.use_transform = True
+    return props
+
+
+def add_shader_foreach_light_zone(layout, label):
+    props = layout.operator("node.add_shader_foreach_light_zone", text=label, text_ctxt=i18n_contexts.default)
     props.use_transform = True
     return props
 

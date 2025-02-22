@@ -42,7 +42,9 @@ vec4 closure_to_rgba(Closure cl)
 void main()
 {
   /* Clear AOVs first. In case the material renders to them. */
+#ifndef MAT_REFRACTION
   clear_aovs();
+#endif
 
   init_globals();
 
@@ -121,6 +123,10 @@ void main()
   for (int layer = 1; layer < GBUFFER_NORMAL_MAX && layer < gbuf.normal_len; layer++) {
     imageStoreFast(out_gbuf_normal_img, ivec3(out_texel, layer - 1), gbuf.N[layer].xyyy);
   }
+
+#ifdef NPR_INDEX
+  out_npr_index = npr_index;
+#endif
 
   /* ----- Radiance output ----- */
 

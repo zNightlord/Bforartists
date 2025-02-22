@@ -233,6 +233,28 @@ class NODE_OT_add_foreach_geometry_element_zone(NodeAddZoneOperator, Operator):
     add_default_geometry_link = False
 
 
+class NODE_OT_add_shader_repeat_zone(NodeAddZoneOperator, Operator):
+    """Add a repeat zone that allows executing nodes a dynamic number of times"""
+    bl_idname = "node.add_shader_repeat_zone"
+    bl_label = "Add Repeat Zone"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    input_node_type = "ShaderNodeRepeatInput"
+    output_node_type = "ShaderNodeRepeatOutput"
+    add_default_geometry_link = False
+
+
+class NODE_OT_add_shader_foreach_light_zone(NodeAddZoneOperator, Operator):
+    """Add a zone that allows executing nodes for each light"""
+    bl_idname = "node.add_shader_foreach_light_zone"
+    bl_label = "Add For Each Light Zone"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    input_node_type = "ShaderNodeForeachLightInput"
+    output_node_type = "ShaderNodeForeachLightOutput"
+    add_default_geometry_link = False
+
+
 class NODE_OT_collapse_hide_unused_toggle(Operator):
     """Toggle collapsed nodes and hide unused sockets"""
     bl_idname = "node.collapse_hide_unused_toggle"
@@ -662,6 +684,8 @@ classes = (
     NODE_OT_add_simulation_zone,
     NODE_OT_add_repeat_zone,
     NODE_OT_add_foreach_geometry_element_zone,
+    NODE_OT_add_shader_repeat_zone,
+    NODE_OT_add_shader_foreach_light_zone,
     NODE_OT_collapse_hide_unused_toggle,
     NODE_OT_interface_item_new_input, # BFA separated add input operator with own description.
     NODE_OT_interface_item_new_output, # BFA separated add output operator with own description.

@@ -25,9 +25,34 @@ packed_float3 g_volume_scattering;
 float g_volume_anisotropy;
 packed_float3 g_volume_absorption;
 
+#ifdef NPR_SHADER
+vec4 g_combined_color;
+vec4 g_diffuse_color;
+vec4 g_diffuse_direct;
+vec4 g_diffuse_indirect;
+vec4 g_specular_color;
+vec4 g_specular_direct;
+vec4 g_specular_indirect;
+#endif
+
 /* The Closure type is never used. Use float as dummy type. */
 #define Closure float
 #define CLOSURE_DEFAULT 0.0
+
+struct TextureHandle {
+  uint type;
+  uint index;
+#ifdef __cplusplus
+  /* Constructors for Metal MSL. */
+  inline TextureHandle() = default;
+  inline TextureHandle(uint in_type, uint in_index) : type(in_type), index(in_index) {}
+#endif
+};
+
+#define TEXTURE_HANDLE_DEFAULT TextureHandle(0, 0)
+#ifndef NPR_SHADER
+#  define TextureHandle_eval(t, o, ot) vec4(0.0)
+#endif
 
 /* Maximum number of picked closure. */
 #ifndef CLOSURE_BIN_COUNT
@@ -417,6 +442,7 @@ Closure nodetree_volume();
 vec3 nodetree_displacement();
 float nodetree_thickness();
 vec4 closure_to_rgba(Closure cl);
+vec4 nodetree_npr();
 #endif
 
 /* Simplified form of F_eta(eta, 1.0). */
@@ -599,6 +625,7 @@ vec2 bsdf_lut(float cos_theta, float roughness, float ior, bool do_multiscatter)
 #  define attrib_load()
 #  define nodetree_displacement() vec3(0.0)
 #  define nodetree_surface(closure_rand) Closure(0)
+#  define nodetree_npr() vec4(0.0)
 #  define nodetree_volume() Closure(0)
 #  define nodetree_thickness() 0.1
 #  define thickness_mode 1.0
@@ -800,3 +827,15 @@ vec4 attr_load_uniform(vec4 attr, const uint attr_hash)
 }
 
 /** \} */
+
+#define REPEAT_BEGIN(count, var) \
+  for (var = 0.0; round(var) < round(count); var += 1.0) {
+
+#define REPEAT_END() }
+
+#if !defined(NPR_SHADER) || !defined(GPU_FRAGMENT_SHADER)
+#  define FOREACH_LIGHT_BEGIN( \
+      N, out_color, out_vector, out_distance, out_attenuation, out_shadow_mask)
+
+#  define FOREACH_LIGHT_END()
+#endif

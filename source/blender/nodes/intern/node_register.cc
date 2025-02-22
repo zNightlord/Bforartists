@@ -102,14 +102,55 @@ class ForeachGeometryElementZoneType : public blender::bke::bNodeZoneType {
   }
 };
 
+class ShaderRepeatZoneType : public blender::bke::bNodeZoneType {
+ public:
+  ShaderRepeatZoneType()
+  {
+    this->input_idname = "ShaderNodeRepeatInput";
+    this->output_idname = "ShaderNodeRepeatOutput";
+    this->input_type = SH_NODE_REPEAT_INPUT;
+    this->output_type = SH_NODE_REPEAT_OUTPUT;
+    this->theme_id = TH_NODE_ZONE_REPEAT;
+  }
+
+  const int &get_corresponding_output_id(const bNode &input_bnode) const override
+  {
+    BLI_assert(input_bnode.type_legacy == this->input_type);
+    return static_cast<NodeShaderRepeatInput *>(input_bnode.storage)->output_node_id;
+  }
+};
+
+class ShaderForeachLightZoneType : public blender::bke::bNodeZoneType {
+ public:
+  ShaderForeachLightZoneType()
+  {
+    this->input_idname = "ShaderNodeForeachLightInput";
+    this->output_idname = "ShaderNodeForeachLightOutput";
+    this->input_type = SH_NODE_FOREACH_LIGHT_INPUT;
+    this->output_type = SH_NODE_FOREACH_LIGHT_OUTPUT;
+    // TODO(NPR)
+    this->theme_id = TH_NODE_ZONE_FOREACH_GEOMETRY_ELEMENT;
+  }
+
+  const int &get_corresponding_output_id(const bNode &input_bnode) const override
+  {
+    BLI_assert(input_bnode.type_legacy == this->input_type);
+    return static_cast<NodeShaderForeachLightInput *>(input_bnode.storage)->output_node_id;
+  }
+};
+
 static void register_zone_types()
 {
   static SimulationZoneType simulation_zone_type;
   static RepeatZoneType repeat_zone_type;
   static ForeachGeometryElementZoneType foreach_geometry_element_zone_type;
+  static ShaderRepeatZoneType shader_repeat_zone_type;
+  static ShaderForeachLightZoneType shader_foreach_light_zone_type;
   blender::bke::register_node_zone_type(simulation_zone_type);
   blender::bke::register_node_zone_type(repeat_zone_type);
   blender::bke::register_node_zone_type(foreach_geometry_element_zone_type);
+  blender::bke::register_node_zone_type(shader_repeat_zone_type);
+  blender::bke::register_node_zone_type(shader_foreach_light_zone_type);
 }
 
 void register_nodes()

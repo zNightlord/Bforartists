@@ -55,6 +55,7 @@ enum eGPUType {
 
   /* GLSL Struct types */
   GPU_CLOSURE = 1007,
+  GPU_TEX_HANDLE = 1008,
 
   /* Opengl Attributes */
   GPU_ATTR = 3001,
@@ -73,6 +74,7 @@ enum eGPUMaterialFlag {
   /* Signals the presence of multiple reflection closures. */
   GPU_MATFLAG_COAT = (1 << 9),
   GPU_MATFLAG_TRANSLUCENT = (1 << 10),
+  GPU_MATFLAG_NPR = (1 << 11),
 
   GPU_MATFLAG_VOLUME_SCATTER = (1 << 16),
   GPU_MATFLAG_VOLUME_ABSORPTION = (1 << 17),
@@ -129,6 +131,7 @@ struct GPUCodegenOutput {
   std::string surface;
   std::string volume;
   std::string thickness;
+  std::string npr;
   std::string composite;
   std::string material_functions;
 
@@ -196,10 +199,22 @@ bool GPU_stack_link(GPUMaterial *mat,
                     GPUNodeStack *out,
                     ...);
 
+bool GPU_stack_link_zone(GPUMaterial *mat,
+                         const bNode *node,
+                         const char *name,
+                         GPUNodeStack *in,
+                         GPUNodeStack *out,
+                         int zone_index,
+                         bool is_zone_output,
+                         int in_argument_count,
+                         int out_argument_count);
+
 void GPU_material_output_surface(GPUMaterial *material, GPUNodeLink *link);
 void GPU_material_output_volume(GPUMaterial *material, GPUNodeLink *link);
 void GPU_material_output_displacement(GPUMaterial *material, GPUNodeLink *link);
 void GPU_material_output_thickness(GPUMaterial *material, GPUNodeLink *link);
+
+void GPU_material_output_npr(GPUMaterial *material, GPUNodeLink *link);
 
 void GPU_material_add_output_link_aov(GPUMaterial *material, GPUNodeLink *link, int hash);
 
@@ -237,6 +252,7 @@ GPUMaterial *GPU_material_from_nodetree(
     uint64_t shader_uuid,
     bool is_volume_shader,
     bool is_lookdev,
+    bool is_npr_shader,
     GPUCodegenCallbackFn callback,
     void *thunk,
     GPUMaterialPassReplacementCallbackFn pass_replacement_cb = nullptr);

@@ -803,6 +803,8 @@ typedef struct bNodeTree {
 
   struct GeometryNodeAssetTraits *geometry_node_asset_traits;
 
+  struct ShaderNodeTraits *shader_node_traits;
+
   /** Image representing what the node group does. */
   struct PreviewImage *preview;
 
@@ -1034,6 +1036,19 @@ typedef enum GeometryNodeAssetTraitFlag {
   GEO_NODE_ASSET_WAIT_FOR_CURSOR = (1 << 8),
 } GeometryNodeAssetTraitFlag;
 ENUM_OPERATORS(GeometryNodeAssetTraitFlag, GEO_NODE_ASSET_WAIT_FOR_CURSOR);
+
+typedef struct ShaderNodeTraits {
+  int type;
+} ShaderNodeTraits;
+
+typedef enum ShaderNodeTraitsType {
+  SH_TREE_TYPE_GROUP = (1 << 0),
+  SH_TREE_TYPE_MATERIAL = (1 << 1),
+  SH_TREE_TYPE_WORLD = (1 << 2),
+  SH_TREE_TYPE_LIGHT = (1 << 3),
+  SH_TREE_TYPE_NPR = (1 << 4),
+} ShaderNodeTraitsType;
+ENUM_OPERATORS(ShaderNodeTraitsType, SH_TREE_TYPE_NPR);
 
 /* Data structs, for `node->storage`. */
 
@@ -2049,6 +2064,68 @@ typedef struct NodeGeometryRepeatOutput {
 #endif
 } NodeGeometryRepeatOutput;
 
+typedef struct NodeShaderRepeatItem {
+  char *name;
+  /** #eNodeSocketDatatype. */
+  short socket_type;
+  char _pad[2];
+  /**
+   * Generated unique identifier for sockets which stays the same even when the item order or
+   * names change.
+   */
+  int identifier;
+} NodeShaderRepeatItem;
+
+typedef struct NodeShaderRepeatInput {
+  /** bNode.identifier of the corresponding output node. */
+  int32_t output_node_id;
+} NodeShaderRepeatInput;
+
+typedef struct NodeShaderRepeatOutput {
+  NodeShaderRepeatItem *items;
+  int items_num;
+  int active_index;
+  /** Identifier to give to the next repeat item. */
+  int next_identifier;
+  int _pad0;
+
+#ifdef __cplusplus
+  blender::Span<NodeShaderRepeatItem> items_span() const;
+  blender::MutableSpan<NodeShaderRepeatItem> items_span();
+#endif
+} NodeShaderRepeatOutput;
+
+typedef struct NodeShaderForeachLightItem {
+  char *name;
+  /** #eNodeSocketDatatype. */
+  short socket_type;
+  char _pad[2];
+  /**
+   * Generated unique identifier for sockets which stays the same even when the item order or
+   * names change.
+   */
+  int identifier;
+} NodeShaderForeachLightItem;
+
+typedef struct NodeShaderForeachLightInput {
+  /** bNode.identifier of the corresponding output node. */
+  int32_t output_node_id;
+} NodeShaderForeachLightInput;
+
+typedef struct NodeShaderForeachLightOutput {
+  NodeShaderForeachLightItem *items;
+  int items_num;
+  int active_index;
+  /** Identifier to give to the next ForeachLight item. */
+  int next_identifier;
+  int _pad0;
+
+#ifdef __cplusplus
+  blender::Span<NodeShaderForeachLightItem> items_span() const;
+  blender::MutableSpan<NodeShaderForeachLightItem> items_span();
+#endif
+} NodeShaderForeachLightOutput;
+
 typedef struct NodeGeometryForeachGeometryElementInput {
   /** bNode.identifier of the corresponding output node. */
   int32_t output_node_id;
@@ -2490,6 +2567,11 @@ enum {
 enum {
   SHD_AO_INSIDE = 1,
   SHD_AO_LOCAL = 2,
+};
+
+enum {
+  SHD_IMG_SAMPLE_OFFSET_VIEW = 0,
+  SHD_IMG_SAMPLE_OFFSET_PIXEL = 1,
 };
 
 /** Mapping node vector types. */

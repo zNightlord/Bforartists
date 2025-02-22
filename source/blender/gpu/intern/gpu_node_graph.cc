@@ -59,6 +59,9 @@ static GPUNode *gpu_node_create(const char *name)
   GPUNode *node = MEM_cnew<GPUNode>("GPUNode");
 
   node->name = name;
+  node->zone_index = -1;
+  node->is_zone_end = false;
+  node->skip_call = false;
 
   return node;
 }
@@ -143,7 +146,8 @@ static void gpu_node_input_link(GPUNode *node, GPUNodeLink *link, const eGPUType
       input->layer_attr = link->layer_attr;
       break;
     case GPU_NODE_LINK_CONSTANT:
-      input->source = (type == GPU_CLOSURE) ? GPU_SOURCE_STRUCT : GPU_SOURCE_CONSTANT;
+      input->source = ELEM(type, GPU_CLOSURE, GPU_TEX_HANDLE) ? GPU_SOURCE_STRUCT :
+                                                                GPU_SOURCE_CONSTANT;
       break;
     case GPU_NODE_LINK_UNIFORM:
       input->source = GPU_SOURCE_UNIFORM;
@@ -833,6 +837,57 @@ bool GPU_stack_link(GPUMaterial *material,
   return valid;
 }
 
+bool GPU_stack_link_zone(GPUMaterial *material,
+                         const bNode *bnode,
+                         const char *name,
+                         GPUNodeStack *in,
+                         GPUNodeStack *out,
+                         int zone_index,
+                         bool is_zone_end,
+                         int in_argument_count,
+                         int out_argument_count)
+{
+  GPUNodeGraph *graph = gpu_material_node_graph(material);
+  GPUNode *node;
+  int i, totin, totout;
+
+  node = gpu_node_create(name);
+  node->zone_index = zone_index;
+  node->is_zone_end = is_zone_end;
+
+  totin = 0;
+  totout = 0;
+
+  if (in) {
+    for (i = 0; !in[i].end; i++) {
+      if (in[i].type != GPU_NONE) {
+        gpu_node_input_socket(material, bnode, node, &in[i], i);
+        totin++;
+      }
+    }
+  }
+
+  if (out) {
+    for (i = 0; !out[i].end; i++) {
+      if (out[i].type != GPU_NONE) {
+        gpu_node_output(node, out[i].type, &out[i].link);
+        totout++;
+      }
+    }
+  }
+
+  LISTBASE_FOREACH_INDEX (GPUInput *, input, &node->inputs, i) {
+    input->is_zone_io = i >= in_argument_count;
+  }
+  LISTBASE_FOREACH_INDEX (GPUOutput *, output, &node->outputs, i) {
+    output->is_zone_io = i >= out_argument_count;
+  }
+
+  BLI_addtail(&graph->nodes, node);
+
+  return true;
+}
+
 /* Node Graph */
 
 static void gpu_inputs_free(ListBase *inputs)
@@ -890,6 +945,7 @@ void gpu_node_graph_free_nodes(GPUNodeGraph *graph)
   graph->outlink_volume = nullptr;
   graph->outlink_displacement = nullptr;
   graph->outlink_thickness = nullptr;
+  graph->outlink_npr = nullptr;
 }
 
 void gpu_node_graph_free(GPUNodeGraph *graph)
@@ -943,6 +999,8 @@ void gpu_node_graph_prune_unused(GPUNodeGraph *graph)
   gpu_nodes_tag(graph->outlink_volume, GPU_NODE_TAG_VOLUME);
   gpu_nodes_tag(graph->outlink_displacement, GPU_NODE_TAG_DISPLACEMENT);
   gpu_nodes_tag(graph->outlink_thickness, GPU_NODE_TAG_THICKNESS);
+
+  gpu_nodes_tag(graph->outlink_npr, GPU_NODE_TAG_NPR);
 
   LISTBASE_FOREACH (GPUNodeGraphOutputLink *, aovlink, &graph->outlink_aovs) {
     gpu_nodes_tag(aovlink->outlink, GPU_NODE_TAG_AOV);
@@ -1014,7 +1072,8 @@ void gpu_node_graph_optimize(GPUNodeGraph *graph)
         }
       }
       if (input->source == GPU_SOURCE_UNIFORM) {
-        input->source = (input->type == GPU_CLOSURE) ? GPU_SOURCE_STRUCT : GPU_SOURCE_CONSTANT;
+        input->source = ELEM(input->type, GPU_CLOSURE, GPU_TEX_HANDLE) ? GPU_SOURCE_STRUCT :
+                                                                         GPU_SOURCE_CONSTANT;
       }
     }
   }

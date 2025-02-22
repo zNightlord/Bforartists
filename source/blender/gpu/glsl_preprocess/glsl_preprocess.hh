@@ -689,6 +689,7 @@ enum Type : uint64_t {
   sampler2D = Preprocessor::hash("sampler2D"),
   sampler3D = Preprocessor::hash("sampler3D"),
   Closure = Preprocessor::hash("Closure"),
+  TextureHandle = Preprocessor::hash("TextureHandle"),
 };
 
 }  // namespace metadata

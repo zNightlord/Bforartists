@@ -127,6 +127,10 @@ void ShadingView::render()
 
   inst_.volume.draw_prepass(main_view_);
 
+  /* TODO(NPR): This is supposed to go after deferred,
+   * but NPR needs to read the background color too. */
+  inst_.pipelines.background.render(render_view_, combined_fb_);
+
   /* TODO(Miguel Pozo): Deferred and forward prepass should happen before the GBuffer pass. */
   inst_.pipelines.deferred.render(main_view_,
                                   render_view_,
@@ -136,8 +140,6 @@ void ShadingView::render()
                                   extent_,
                                   rt_buffer_opaque_,
                                   rt_buffer_refract_);
-
-  inst_.pipelines.background.render(render_view_, combined_fb_);
 
   inst_.gbuffer.release();
 
@@ -365,7 +367,12 @@ void CaptureView::render_probes()
 
       GPU_framebuffer_bind(combined_fb_);
       GPU_framebuffer_clear_color_depth(combined_fb_, float4(0.0f, 0.0f, 0.0f, 1.0f), 1.0f);
-      inst_.pipelines.probe.render(view, prepass_fb, combined_fb_, gbuffer_fb_, extent);
+      inst_.pipelines.probe.render(view,
+                                   prepass_fb,
+                                   combined_fb_,
+                                   gbuffer_fb_,
+                                   extent,
+                                   inst_.sphere_probes.cubemap_face_views_[face]);
     }
 
     inst_.render_buffers.release();

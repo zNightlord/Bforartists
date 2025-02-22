@@ -49,6 +49,17 @@ def object_eevee_shader_nodes_poll(context):
             eevee_shader_nodes_poll(context))
 
 
+def npr_shader_nodes_poll(context):
+    snode = context.space_data
+    return (eevee_shader_nodes_poll and
+            snode.tree_type == 'ShaderNodeTree' and
+            snode.shader_type == 'NPR')
+
+
+def not_npr_shader_nodes_poll(context):
+    return not npr_shader_nodes_poll(context)
+
+
 class NODE_MT_category_shader_input(Menu):
     bl_idname = "NODE_MT_category_shader_input"
     bl_label = "Input"
@@ -77,6 +88,9 @@ class NODE_MT_category_shader_input(Menu):
         node_add_menu.add_node_type(layout, "ShaderNodeValue")
         node_add_menu.add_node_type(layout, "ShaderNodeVolumeInfo")
         node_add_menu.add_node_type(layout, "ShaderNodeWireframe")
+        node_add_menu.add_node_type(layout, "ShaderNodeNPR_Input", poll=npr_shader_nodes_poll(context))
+        node_add_menu.add_node_type(layout, "ShaderNodeNPR_Refraction", poll=npr_shader_nodes_poll(context))
+        node_add_menu.add_node_type(layout, "ShaderNodeInputAOV", poll=npr_shader_nodes_poll(context))
 
         node_add_menu.draw_assets_for_catalog(layout, self.bl_label)
 
@@ -112,6 +126,11 @@ class NODE_MT_category_shader_output(Menu):
             "ShaderNodeOutputLineStyle",
             poll=line_style_shader_nodes_poll(context),
         )
+        node_add_menu.add_node_type(
+            layout,
+            "ShaderNodeNPR_Output",
+            poll=npr_shader_nodes_poll(context),
+        )
 
         node_add_menu.draw_assets_for_catalog(layout, self.bl_label)
 
@@ -126,6 +145,7 @@ class NODE_MT_category_shader_shader(Menu):
         node_add_menu.add_node_type(
             layout,
             "ShaderNodeAddShader",
+            poll=not_npr_shader_nodes_poll(context),
         )
         node_add_menu.add_node_type(
             layout,
@@ -145,6 +165,7 @@ class NODE_MT_category_shader_shader(Menu):
         node_add_menu.add_node_type(
             layout,
             "ShaderNodeEmission",
+            poll=not_npr_shader_nodes_poll(context),
         )
         node_add_menu.add_node_type(
             layout,
@@ -169,6 +190,7 @@ class NODE_MT_category_shader_shader(Menu):
         node_add_menu.add_node_type(
             layout,
             "ShaderNodeMixShader",
+            poll=not_npr_shader_nodes_poll(context),
         )
         node_add_menu.add_node_type(
             layout,
@@ -182,7 +204,8 @@ class NODE_MT_category_shader_shader(Menu):
         )
         node_add_menu.add_node_type(
             layout,
-            "ShaderNodeVolumePrincipled"
+            "ShaderNodeVolumePrincipled",
+            poll=not_npr_shader_nodes_poll(context),
         )
         node_add_menu.add_node_type(
             layout,
@@ -227,10 +250,12 @@ class NODE_MT_category_shader_shader(Menu):
         node_add_menu.add_node_type(
             layout,
             "ShaderNodeVolumeAbsorption",
+            poll=not_npr_shader_nodes_poll(context),
         )
         node_add_menu.add_node_type(
             layout,
             "ShaderNodeVolumeScatter",
+            poll=not_npr_shader_nodes_poll(context),
         )
 
         node_add_menu.draw_assets_for_catalog(layout, self.bl_label)
@@ -279,6 +304,7 @@ class NODE_MT_category_shader_converter(Menu):
         node_add_menu.add_node_type(layout, "ShaderNodeShaderToRGB", poll=object_eevee_shader_nodes_poll(context))
         node_add_menu.add_node_type(layout, "ShaderNodeVectorMath")
         node_add_menu.add_node_type(layout, "ShaderNodeWavelength")
+        node_add_menu.add_node_type(layout, "ShaderNodeNPR_ImageSample", poll=npr_shader_nodes_poll(context))
 
         node_add_menu.draw_assets_for_catalog(layout, self.bl_label)
 
@@ -350,6 +376,17 @@ class NODE_MT_category_shader_group(Menu):
         node_add_menu.draw_assets_for_catalog(layout, self.bl_label)
 
 
+class NODE_MT_category_shader_zones(Menu):
+    bl_idname = "NODE_MT_category_shader_zones"
+    bl_label = "Zones"
+
+    def draw(self, context):
+        layout = self.layout
+        node_add_menu.add_shader_repeat_zone(layout, label="Repeat")
+        if npr_shader_nodes_poll(context):
+            node_add_menu.add_shader_foreach_light_zone(layout, label="For Each Light")
+
+
 class NODE_MT_shader_node_add_all(Menu):
     bl_idname = "NODE_MT_shader_node_add_all"
     bl_label = "Add"
@@ -366,6 +403,7 @@ class NODE_MT_shader_node_add_all(Menu):
         layout.menu("NODE_MT_category_shader_texture")
         layout.menu("NODE_MT_category_shader_vector")
         layout.separator()
+        layout.menu("NODE_MT_category_shader_zones")
         layout.menu("NODE_MT_category_shader_script")
         layout.separator()
         layout.menu("NODE_MT_category_shader_group")
@@ -385,6 +423,7 @@ classes = (
     NODE_MT_category_shader_vector,
     NODE_MT_category_shader_script,
     NODE_MT_category_shader_group,
+    NODE_MT_category_shader_zones,
 )
 
 

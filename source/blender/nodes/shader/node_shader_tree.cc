@@ -19,6 +19,7 @@
 #include "BLI_array.hh"
 #include "BLI_linklist.h"
 #include "BLI_listbase.h"
+#include "BLI_map.hh"
 #include "BLI_math_vector.h"
 #include "BLI_set.hh"
 #include "BLI_threads.h"
@@ -49,6 +50,7 @@
 #include "node_util.hh"
 
 using blender::Array;
+using blender::Map;
 using blender::Vector;
 
 static bool shader_tree_poll(const bContext *C, blender::bke::bNodeTreeType * /*treetype*/)
@@ -74,7 +76,7 @@ static void shader_get_from_context(const bContext *C,
   BKE_view_layer_synced_ensure(scene, view_layer);
   Object *ob = BKE_view_layer_active_object_get(view_layer);
 
-  if (snode->shaderfrom == SNODE_SHADER_OBJECT) {
+  if (ELEM(snode->shaderfrom, SNODE_SHADER_OBJECT, SNODE_SHADER_NPR)) {
     if (ob) {
       *r_from = &ob->id;
       if (ob->type == OB_LAMP) {
@@ -86,6 +88,11 @@ static void shader_get_from_context(const bContext *C,
         if (ma) {
           *r_id = &ma->id;
           *r_ntree = ma->nodetree;
+          if (snode->shaderfrom == SNODE_SHADER_NPR) {
+            bNodeTree *nprtree = npr_tree_get_from_mat(ma);
+            *r_id = &nprtree->id;
+            *r_ntree = nprtree;
+          }
         }
       }
     }
@@ -100,12 +107,15 @@ static void shader_get_from_context(const bContext *C,
     }
   }
 #endif
-  else { /* SNODE_SHADER_WORLD */
+  else if (snode->shaderfrom == SNODE_SHADER_WORLD) {
     if (scene->world) {
       *r_from = nullptr;
       *r_id = &scene->world->id;
       *r_ntree = scene->world->nodetree;
     }
+  }
+  else {
+    BLI_assert_unreachable();
   }
 }
 
@@ -169,7 +179,8 @@ static bool shader_node_tree_socket_type_valid(blender::bke::bNodeTreeType * /*n
                                                                        SOCK_BOOLEAN,
                                                                        SOCK_VECTOR,
                                                                        SOCK_RGBA,
-                                                                       SOCK_SHADER);
+                                                                       SOCK_SHADER,
+                                                                       SOCK_IMAGE);
 }
 
 blender::bke::bNodeTreeType *ntreeType_Shader;
@@ -461,10 +472,52 @@ static void ntree_shader_groups_remove_muted_links(bNodeTree *ntree)
   }
 }
 
+static bool is_zone_input_node(bNode *node)
+{
+  using namespace blender::bke;
+  if (const bNodeZoneType *zone_type = zone_type_by_node_type(node->type_legacy)) {
+    return node->type_legacy == zone_type->input_type;
+  }
+  return false;
+}
+
+static bool is_zone_output_node(bNode *node)
+{
+  using namespace blender::bke;
+  if (const bNodeZoneType *zone_type = zone_type_by_node_type(node->type_legacy)) {
+    return node->type_legacy == zone_type->output_type;
+  }
+  return false;
+}
+
+static bool is_zone_node(bNode *node)
+{
+  using namespace blender::bke;
+  return zone_type_by_node_type(node->type_legacy) != nullptr;
+}
+
+static int &node_zone_id(bNode *node)
+{
+  switch (node->type_legacy) {
+    case SH_NODE_REPEAT_INPUT:
+      return ((NodeShaderRepeatInput *)node->storage)->output_node_id;
+    case SH_NODE_FOREACH_LIGHT_INPUT:
+      return ((NodeShaderForeachLightInput *)node->storage)->output_node_id;
+    case SH_NODE_REPEAT_OUTPUT:
+    case SH_NODE_FOREACH_LIGHT_OUTPUT:
+      return node->identifier;
+    default:
+      BLI_assert_unreachable();
+      return node->identifier;
+  }
+}
+
 static void flatten_group_do(bNodeTree *ntree, bNode *gnode)
 {
   LinkNode *group_interface_nodes = nullptr;
   bNodeTree *ngroup = (bNodeTree *)gnode->id;
+
+  Map<int, std::pair<bNode *, bNode *>> zone_ids;
 
   /* Add the nodes into the ntree */
   LISTBASE_FOREACH_MUTABLE (bNode *, node, &ngroup->nodes) {
@@ -477,12 +530,34 @@ static void flatten_group_do(bNodeTree *ntree, bNode *gnode)
     /* migrate node */
     BLI_remlink(&ngroup->nodes, node);
     BLI_addtail(&ntree->nodes, node);
+    int old_id = 0;
+    if (is_zone_node(node)) {
+      old_id = node_zone_id(node);
+      if (!zone_ids.contains(old_id)) {
+        zone_ids.add(old_id, {nullptr, nullptr});
+      }
+    }
     blender::bke::node_unique_id(ntree, node);
     /* ensure unique node name in the node tree */
     /* This is very slow and it has no use for GPU nodetree. (see #70609) */
     // blender::bke::node_unique_name(ntree, node);
+    if (is_zone_input_node(node)) {
+      zone_ids.lookup(old_id).first = node;
+    }
+    else if (is_zone_output_node(node)) {
+      zone_ids.lookup(old_id).second = node;
+    }
   }
   ngroup->runtime->nodes_by_id.clear();
+
+  for (auto &nodes : zone_ids.values()) {
+    if (nodes.first && nodes.second) {
+      node_zone_id(nodes.first) = node_zone_id(nodes.second);
+    }
+    else if (nodes.first) {
+      node_zone_id(nodes.first) = nodes.first->identifier;
+    }
+  }
 
   /* Save first and last link to iterate over flattened group links. */
   bNodeLink *glinks_first = static_cast<bNodeLink *>(ntree->links.last);
@@ -677,6 +752,74 @@ static void ntree_shader_copy_branch(bNodeTree *ntree,
           link->tosock);
       blender::bke::node_remove_link(ntree, link);
     }
+  }
+}
+
+static void ntree_shader_embed_tree_branch(bNodeTree *src,
+                                           bNodeTree *dst,
+                                           bNode *root,
+                                           const char *root_socket = nullptr)
+{
+  /* Initialize `runtime->tmp_flag`. */
+  LISTBASE_FOREACH (bNode *, node, &src->nodes) {
+    node->runtime->tmp_flag = 0;
+  }
+
+  auto tag_node =
+      [](bNode *fromnode, bNode * /*tonode*/ = nullptr, void * /*userdata*/ = nullptr) {
+        fromnode->runtime->tmp_flag = 1;
+        return true;
+      };
+
+  tag_node(root);
+  if (root_socket) {
+    bNodeSocket *socket = ntree_shader_node_find_input(root, root_socket);
+    root = socket->link ? socket->link->fromnode : nullptr;
+  }
+
+  if (root) {
+    tag_node(root);
+    blender::bke::node_chain_iterator_backwards(src, root, tag_node, nullptr, 0);
+  }
+
+  blender::Vector<bNode *> new_nodes = {nullptr};
+
+  LISTBASE_FOREACH (bNode *, node, &src->nodes) {
+    if (!node->runtime->tmp_flag) {
+      continue;
+    }
+    /* Avoid creating unique names in the new tree, since it is very slow.
+     * The names on the new nodes will be invalid. */
+    bNode *copy = blender::bke::node_copy(
+        dst, *node, LIB_ID_CREATE_NO_USER_REFCOUNT | LIB_ID_CREATE_NO_MAIN, false);
+    /* But identifiers must be created for the `bNodeTree::all_nodes()` vector,
+     * so they won't match the original. */
+    blender::bke::node_unique_id(dst, copy);
+    /* Make sure to clear all sockets links as they are invalid. */
+    LISTBASE_FOREACH (bNodeSocket *, sock, &copy->inputs) {
+      sock->link = nullptr;
+    }
+    LISTBASE_FOREACH (bNodeSocket *, sock, &copy->outputs) {
+      sock->link = nullptr;
+    }
+    copy->runtime->original = node->runtime->original;
+    node->runtime->tmp_flag = new_nodes.size();
+    new_nodes.append(copy);
+  }
+
+  /* Reconnect the node links. */
+  LISTBASE_FOREACH_MUTABLE (bNodeLink *, link, &src->links) {
+    bNode *from_node = new_nodes[link->fromnode->runtime->tmp_flag];
+    bNode *to_node = new_nodes[link->tonode->runtime->tmp_flag];
+    if (!from_node || !to_node) {
+      continue;
+    }
+    blender::bke::node_add_link(
+        dst,
+        from_node,
+        ntree_shader_node_find_output(from_node, link->fromsock->identifier),
+        to_node,
+        ntree_shader_node_find_input(to_node, link->tosock->identifier));
   }
 }
 
@@ -1189,7 +1332,7 @@ static void ntree_shader_pruned_unused(bNodeTree *ntree, bNode *output_node)
   }
 
   LISTBASE_FOREACH (bNode *, node, &ntree->nodes) {
-    if (node->type_legacy == SH_NODE_OUTPUT_AOV) {
+    if (ELEM(node->type_legacy, SH_NODE_OUTPUT_AOV, SH_NODE_NPR_OUTPUT)) {
       node->runtime->tmp_flag = 1;
       blender::bke::node_chain_iterator_backwards(ntree, node, ntree_branch_node_tag, nullptr, 0);
     }
@@ -1207,6 +1350,77 @@ static void ntree_shader_pruned_unused(bNodeTree *ntree, bNode *output_node)
   }
 }
 
+bNodeTree *npr_tree_get(bNodeTree *ntree)
+{
+  if (!ntree) {
+    return nullptr;
+  }
+  if (bNode *output = ntreeShaderOutputNode(ntree, SHD_OUTPUT_EEVEE)) {
+    return reinterpret_cast<bNodeTree *>(output->id);
+  }
+  return nullptr;
+}
+
+bNodeTree *npr_tree_get_from_mat(Material *material)
+{
+  if (!material) {
+    return nullptr;
+  }
+  return npr_tree_get(material->nodetree);
+}
+
+static bNode *ntreeShaderNPROutputNode(bNodeTree *localtree)
+{
+  bNode *output = nullptr;
+  LISTBASE_FOREACH (bNode *, node, &localtree->nodes) {
+    if (node->type_legacy == SH_NODE_NPR_OUTPUT) {
+      output = node;
+      break;
+#if 0
+      /* TODO(NPR) */
+      if ((node->flag & NODE_DO_OUTPUT) && !(output->flag & NODE_DO_OUTPUT)) {
+        output = node;
+      }
+#endif
+    }
+  }
+
+  return output;
+}
+
+bNodeTree *ntreeGPUNPRNodes(bNodeTree *material_tree, GPUMaterial *mat)
+{
+  bNodeTree *npr_tree = npr_tree_get(material_tree);
+  bNodeTree *localtree = blender::bke::node_tree_localize(npr_tree, nullptr);
+
+  if (bNode *material_output = ntreeShaderOutputNode(material_tree, SHD_OUTPUT_EEVEE)) {
+    /* Embed material output and Displacement branch. */
+    ntree_shader_embed_tree_branch(material_tree, localtree, material_output, "Displacement");
+  }
+
+  ntree_shader_groups_remove_muted_links(localtree);
+  ntree_shader_groups_expand_inputs(localtree);
+  ntree_shader_groups_flatten(localtree);
+
+  bNodeTreeExec *exec = ntreeShaderBeginExecTree(localtree);
+
+  if (bNode *npr_output = ntreeShaderNPROutputNode(localtree)) {
+    ntreeExecGPUNodes(exec, mat, npr_output);
+  }
+  if (bNode *material_output = ntreeShaderOutputNode(localtree, SHD_OUTPUT_EEVEE)) {
+    ntreeExecGPUNodes(exec, mat, material_output);
+  }
+  LISTBASE_FOREACH (bNode *, node, &localtree->nodes) {
+    if (node->type_legacy == SH_NODE_OUTPUT_AOV) {
+      ntreeExecGPUNodes(exec, mat, node);
+    }
+  }
+
+  ntreeShaderEndExecTree(exec);
+
+  return localtree;
+}
+
 void ntreeGPUMaterialNodes(bNodeTree *localtree, GPUMaterial *mat)
 {
   bNodeTreeExec *exec;
@@ -1216,7 +1430,6 @@ void ntreeGPUMaterialNodes(bNodeTree *localtree, GPUMaterial *mat)
   ntree_shader_groups_flatten(localtree);
 
   bNode *output = ntreeShaderOutputNode(localtree, SHD_OUTPUT_EEVEE);
-
   /* Tree is valid if it contains no undefined implicit socket type cast. */
   bool valid_tree = ntree_shader_implicit_closure_cast(localtree);
 
@@ -1251,6 +1464,7 @@ void ntreeGPUMaterialNodes(bNodeTree *localtree, GPUMaterial *mat)
       }
     }
   }
+
   ntreeShaderEndExecTree(exec);
 }
 
