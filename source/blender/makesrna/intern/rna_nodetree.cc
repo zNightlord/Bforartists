@@ -12861,6 +12861,7 @@ static void rna_def_nodes(BlenderRNA *brna)
   define(brna, "GeometryNode", "GeometryNodeSetInstanceTransform", nullptr, ICON_INSTANCE_TRANSFORM, "Add a Set Instance Transform node\nSet the transformation matrix of every instance");
   define(brna, "GeometryNode", "GeometryNodeSetMaterial", nullptr, ICON_MATERIAL_ADD, "Add a Set Material Geometry node\nAssign a material to geometry elements");
   define(brna, "GeometryNode", "GeometryNodeSetMaterialIndex", nullptr, ICON_SET_MATERIAL_INDEX, "Add a Set Material Index Geometry node\nSet the material index for each selected geometry element");
+  define(brna, "GeometryNode", "GeometryNodeSetMeshNormal");
   define(brna, "GeometryNode", "GeometryNodeSetPointRadius", nullptr, ICON_SET_CURVE_RADIUS, "Add a Set Point Radius Geometry node\nSet the display size of point cloud points");
   define(brna, "GeometryNode", "GeometryNodeSetPosition", nullptr, ICON_SET_POSITION, "Add a Set Position Geometry node\nSet the location of each point");
   define(brna, "GeometryNode", "GeometryNodeSetShadeSmooth", nullptr, ICON_SET_SHADE_SMOOTH, "Add a Set Shade Smooth Geometry node\nControl the smoothness of mesh normals around each face by changing the \"shade smooth\" attribute");

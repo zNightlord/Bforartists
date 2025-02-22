@@ -26,7 +26,7 @@
 #include "BLI_implicit_sharing.hh"
 #include "BLI_index_range.hh"
 #include "BLI_listbase.h"
-#include "BLI_math_matrix.h"
+#include "BLI_math_matrix.hh"
 #include "BLI_math_vector.hh"
 #include "BLI_memory_counter.hh"
 #include "BLI_set.hh"
@@ -138,8 +138,11 @@ static void mesh_copy_data(Main *bmain,
    * Caches will be "un-shared" as necessary later on. */
   mesh_dst->runtime->bounds_cache = mesh_src->runtime->bounds_cache;
   mesh_dst->runtime->vert_normals_cache = mesh_src->runtime->vert_normals_cache;
+  mesh_dst->runtime->vert_normals_true_cache = mesh_src->runtime->vert_normals_true_cache;
   mesh_dst->runtime->face_normals_cache = mesh_src->runtime->face_normals_cache;
+  mesh_dst->runtime->face_normals_true_cache = mesh_src->runtime->face_normals_true_cache;
   mesh_dst->runtime->corner_normals_cache = mesh_src->runtime->corner_normals_cache;
+  mesh_dst->runtime->corner_normals_true_cache = mesh_src->runtime->corner_normals_true_cache;
   mesh_dst->runtime->loose_verts_cache = mesh_src->runtime->loose_verts_cache;
   mesh_dst->runtime->verts_no_face_cache = mesh_src->runtime->verts_no_face_cache;
   mesh_dst->runtime->loose_edges_cache = mesh_src->runtime->loose_edges_cache;
@@ -1328,20 +1331,51 @@ void Mesh::bounds_set_eager(const blender::Bounds<float3> &bounds)
   this->runtime->bounds_cache.ensure([&](blender::Bounds<float3> &r_data) { r_data = bounds; });
 }
 
+namespace blender::bke {
+
+static void transform_positions(const float4x4 &transform, MutableSpan<float3> positions)
+{
+  threading::parallel_for(positions.index_range(), 1024, [&](const IndexRange range) {
+    for (const int i : range) {
+      positions[i] = math::transform_point(transform, positions[i]);
+    }
+  });
+}
+
+static void transform_normals(MutableSpan<float3> normals, const float4x4 &matrix)
+{
+  const float3x3 normal_transform = math::transpose(math::invert(float3x3(matrix)));
+  threading::parallel_for(normals.index_range(), 1024, [&](const IndexRange range) {
+    for (float3 &normal : normals.slice(range)) {
+      normal = normal_transform * normal;
+    }
+  });
+}
+
+}  // namespace blender::bke
+
 void BKE_mesh_transform(Mesh *mesh, const float mat[4][4], bool do_keys)
 {
-  MutableSpan<float3> positions = mesh->vert_positions_for_write();
-
-  for (float3 &position : positions) {
-    mul_m4_v3(mat, position);
-  }
+  using namespace blender;
+  using namespace blender::bke;
+  const float4x4 transform(mat);
+  transform_positions(transform, mesh->vert_positions_for_write());
 
   if (do_keys && mesh->key) {
     LISTBASE_FOREACH (KeyBlock *, kb, &mesh->key->block) {
-      float *fp = (float *)kb->data;
-      for (int i = kb->totelem; i--; fp += 3) {
-        mul_m4_v3(mat, fp);
-      }
+      transform_positions(transform,
+                          MutableSpan(static_cast<float3 *>(kb->data), mesh->verts_num));
+    }
+  }
+
+  MutableAttributeAccessor attributes = mesh->attributes_for_write();
+  if (const std::optional<AttributeMetaData> meta_data = attributes.lookup_meta_data(
+          "custom_normal"))
+  {
+    if (meta_data->data_type == CD_PROP_FLOAT3) {
+      bke::SpanAttributeWriter normals = attributes.lookup_for_write_span<float3>("custom_normal");
+      transform_normals(normals.span, transform);
+      normals.finish();
     }
   }
 
