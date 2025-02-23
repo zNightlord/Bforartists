@@ -155,9 +155,9 @@ static void node_register()
   ntype.no_muting = true;
   ntype.draw_buttons_ex = node_layout_ex;
   blender::bke::node_type_storage(
-      &ntype, "NodeShaderRepeatInput", node_free_standard_storage, node_copy_standard_storage);
+      ntype, "NodeShaderRepeatInput", node_free_standard_storage, node_copy_standard_storage);
   ntype.gpu_fn = node_shader_fn;
-  blender::bke::node_register_type(&ntype);
+  blender::bke::node_register_type(ntype);
 }
 // NOD_REGISTER_NODE(node_register)
 
@@ -256,9 +256,9 @@ static void node_register()
   ntype.draw_buttons_ex = node_layout_ex;
   ntype.register_operators = node_operators;
   blender::bke::node_type_storage(
-      &ntype, "NodeShaderRepeatOutput", node_free_storage, node_copy_storage);
+      ntype, "NodeShaderRepeatOutput", node_free_storage, node_copy_storage);
   ntype.gpu_fn = node_shader_fn;
-  blender::bke::node_register_type(&ntype);
+  blender::bke::node_register_type(ntype);
 }
 // NOD_REGISTER_NODE(node_register)
 
