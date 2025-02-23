@@ -42,5 +42,5 @@ void register_node_type_sh_npr_refraction()
   ntype.add_ui_poll = npr_shader_nodes_poll;
   ntype.gpu_fn = file_ns::node_shader_fn;
 
-  blender::bke::node_register_type(&ntype);
+  blender::bke::node_register_type(ntype);
 }
