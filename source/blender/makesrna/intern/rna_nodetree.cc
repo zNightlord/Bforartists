@@ -959,7 +959,7 @@ static bool rna_NodeTree_poll(const bContext *C, blender::bke::bNodeTreeType *nt
 
 static bool rna_NodeTree_poll_group(bNodeTree *ntree, bNodeTree *group)
 {
-  if (ntree->type != group->type || blender::bke::node_tree_contains_tree(group, ntree)) {
+  if (ntree->type != group->type || blender::bke::node_tree_contains_tree(*group, *ntree)) {
     return false;
   }
 

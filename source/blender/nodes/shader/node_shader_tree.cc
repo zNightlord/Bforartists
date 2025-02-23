@@ -173,7 +173,7 @@ static bool shader_validate_link(eNodeSocketDatatype from, eNodeSocketDatatype t
 static bool shader_node_tree_socket_type_valid(blender::bke::bNodeTreeType * /*ntreetype*/,
                                                blender::bke::bNodeSocketType *socket_type)
 {
-  return blender::bke::node_is_static_socket_type(socket_type) && ELEM(socket_type->type,
+  return blender::bke::node_is_static_socket_type(*socket_type) && ELEM(socket_type->type,
                                                                        SOCK_FLOAT,
                                                                        SOCK_INT,
                                                                        SOCK_BOOLEAN,
@@ -802,7 +802,7 @@ static void ntree_shader_embed_tree_branch(bNodeTree *src,
         dst, *node, LIB_ID_CREATE_NO_USER_REFCOUNT | LIB_ID_CREATE_NO_MAIN, false);
     /* But identifiers must be created for the `bNodeTree::all_nodes()` vector,
      * so they won't match the original. */
-    blender::bke::node_unique_id(dst, copy);
+    blender::bke::node_unique_id(*dst, *copy);
     /* Make sure to clear all sockets links as they are invalid. */
     LISTBASE_FOREACH (bNodeSocket *, sock, &copy->inputs) {
       sock->link = nullptr;
@@ -823,11 +823,11 @@ static void ntree_shader_embed_tree_branch(bNodeTree *src,
       continue;
     }
     blender::bke::node_add_link(
-        dst,
-        from_node,
-        ntree_shader_node_find_output(from_node, link->fromsock->identifier),
-        to_node,
-        ntree_shader_node_find_input(to_node, link->tosock->identifier));
+        *dst,
+        *from_node,
+        *ntree_shader_node_find_output(from_node, link->fromsock->identifier),
+        *to_node,
+        *ntree_shader_node_find_input(to_node, link->tosock->identifier));
   }
 }
 

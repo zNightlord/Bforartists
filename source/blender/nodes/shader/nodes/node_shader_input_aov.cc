@@ -67,10 +67,10 @@ void register_node_type_sh_input_aov()
   ntype.draw_buttons = file_ns::node_shader_buts_input_aov;
   ntype.initfunc = file_ns::node_shader_init_input_aov;
   blender::bke::node_type_storage(
-      &ntype, "NodeShaderOutputAOV", node_free_standard_storage, node_copy_standard_storage);
+      ntype, "NodeShaderOutputAOV", node_free_standard_storage, node_copy_standard_storage);
   ntype.gpu_fn = file_ns::node_shader_gpu_input_aov;
 
   ntype.no_muting = true;
 
-  blender::bke::node_register_type(&ntype);
+  blender::bke::node_register_type(ntype);
 }
