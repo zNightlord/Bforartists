@@ -45,9 +45,6 @@ DEF_ICON(CHAR_NOTDEF)
 DEF_ICON(CHAR_REPLACEMENT)
 DEF_ICON(NOT_FOUND)
 
-/* Blank is no real icon, but used as placeholder or spacers,
- * it takes the space of an icon but is empty. */
-DEF_ICON(BLANK1)
 
 DEF_ICON_COLOR(NONE) /* bfa - never change! Needs to remain at the top of the list */
 

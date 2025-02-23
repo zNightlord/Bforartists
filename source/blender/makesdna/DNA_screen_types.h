@@ -447,7 +447,7 @@ typedef struct ScrArea {
   char headertype DNA_DEPRECATED;
   /** Private, for spacetype refresh callback. */
   char do_refresh;
-  int flag;
+  short flag;
   /**
    * Index of last used region of 'RGN_TYPE_WINDOW'
    * runtime variable, updated by executing operators.
