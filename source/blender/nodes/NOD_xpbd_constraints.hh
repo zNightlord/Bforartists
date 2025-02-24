@@ -587,13 +587,10 @@ inline void eval_position_bend_twist(const float weight_rot1,
    * This extends the rod constraints from "Position and Orientation Based Cosserat Rods"
    * (Kugelstadt et al.), section 6, with the damping terms for lambda from the XPBD paper
    * ("XPBD: Position-Based Simulation of Compliant Constrained Dynamics", Macklin et al.). */
-  const float4 lambda_damping =
-      float4(math::conjugate(rotation1) *
-             math::Quaternion(quaternion_difference(rotation2, old_rotation2))) -
-      float4(math::conjugate(rotation2) *
-             math::Quaternion(quaternion_difference(rotation1, old_rotation1)));
+  const float4 velocity = -quaternion_difference(math::conjugate(old_rotation1) * old_rotation2,
+                                                 math::conjugate(rotation1) * rotation2);
 
-  r_delta_lambda = weight_norm * (-r_residual - alpha * lambda - gamma * lambda_damping);
+  r_delta_lambda = weight_norm * (-r_residual - alpha * lambda - gamma * velocity);
 
   if constexpr (linearized_quaternion) {
     r_delta_rotation1 = weight_rot1 *
