@@ -12664,6 +12664,7 @@ static void rna_def_nodes(BlenderRNA *brna)
   define(brna, "FunctionNode", "FunctionNodeCombineMatrix", nullptr, ICON_COMBINE_MATRIX, "Add a Combine Matrix Function node\nConstruct a 4x4 matrix from its individual values");
   define(brna, "FunctionNode", "FunctionNodeCombineTransform", nullptr, ICON_COMBINE_TRANSFORM, "Add a Combine Transform Function node\n Combines the transform of matrices");
   define(brna, "FunctionNode", "FunctionNodeCompare", nullptr, ICON_FLOAT_COMPARE, "Add a Compare Function node\nAdds a mathematical compare between two inputs");
+  define(brna, "FunctionNode", "FunctionNodeConstraint");
   define(brna, "FunctionNode", "FunctionNodeEulerToRotation", nullptr, ICON_EULER_TO_ROTATION, "Add a Euler to Rotation Function node\nConverts a euler angle to a rotation vector");
   define(brna, "FunctionNode", "FunctionNodeFindInString", nullptr, ICON_STRING_FIND, "Add a Find in String node\nReturns an integer of the total count of matching strings or the first integer position of a matching string");
   define(brna, "FunctionNode", "FunctionNodeFloatToInt", def_float_to_int, ICON_FLOAT_TO_INT, "Add a Float to Integer Function node\nConverts float values into integer values");
@@ -12871,6 +12872,8 @@ static void rna_def_nodes(BlenderRNA *brna)
   define(brna, "GeometryNode", "GeometryNodeSetSplineResolution", nullptr, ICON_SET_SPLINE_RESOLUTION, "Add a Set Spline Resolution Geometry node\nControl how many evaluated points should be generated on every curve segment");
   define(brna, "GeometryNode", "GeometryNodeSimulationInput", def_geo_simulation_input, ICON_TIME, "Add a Simulation Input Geometry node\nInput data for the simulation zone");
   define(brna, "GeometryNode", "GeometryNodeSimulationOutput", def_geo_simulation_output, ICON_TIME, "Add a Simulation Output Geometry node\nOutput data from the simulation zone");
+  define(brna, "GeometryNode", "GeometryNodeSolvePositionConstraints");
+  define(brna, "GeometryNode", "GeometryNodeSolveVelocityConstraints");
   define(brna, "GeometryNode", "GeometryNodeSortElements", nullptr, ICON_SORTSIZE, "Add a Sort Elements node\nRearrange geometry elements, changing their indices");
   define(brna, "GeometryNode", "GeometryNodeSplineLength", nullptr, ICON_SPLINE_LENGTH, "Add a Spline Length node\nRetrieve the total length of each spline, as a distance or as a number of points");
   define(brna, "GeometryNode", "GeometryNodeSplineParameter", nullptr, ICON_CURVE_PARAMETER, "Add a Spline Parameter Geometry node\nRetrieve how far along each spline a control point is");

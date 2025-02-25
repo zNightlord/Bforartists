@@ -3883,7 +3883,7 @@ class VIEW3D_MT_add(Menu):
         layout.menu("VIEW3D_MT_surface_add", icon="OUTLINER_OB_SURFACE")
         layout.menu("VIEW3D_MT_metaball_add", text="Metaball", icon="OUTLINER_OB_META")
         layout.operator("object.text_add", text="Text", icon="OUTLINER_OB_FONT")
-        if context.preferences.experimental.use_new_point_cloud_type:
+        if context.preferences.experimental.use_new_pointcloud_type:
             layout.operator(
                 "object.pointcloud_add",
                 text="Point Cloud",
@@ -4686,6 +4686,7 @@ class VIEW3D_MT_object_context_menu(Menu):
                 "POINTCLOUD",
                 "META",
                 "FONT",
+                "GREASEPENCIL"
             }:
                 layout.operator_menu_enum("object.convert", "target")
 
@@ -9062,6 +9063,10 @@ class VIEW3D_MT_edit_curves_context_menu(Menu):
         layout.separator()
 
         layout.operator_menu_enum("curves.handle_type_set", "type")
+
+        layout.separator()
+
+        layout.operator("curves.split")
 
 
 class VIEW3D_MT_edit_pointcloud(Menu):
