@@ -1936,6 +1936,7 @@ class TOPBAR_PT_misc(Panel):
         col.prop(addon_prefs, "topbar_misc_undoredo",toggle=addon_prefs.bfa_button_style)
         col.prop(addon_prefs, "topbar_misc_undohistory",toggle=addon_prefs.bfa_button_style)
         col.prop(addon_prefs, "topbar_misc_repeat",toggle=addon_prefs.bfa_button_style)
+        col.prop(addon_prefs, "topbar_misc_sequence",toggle=addon_prefs.bfa_button_style)
         col.prop(addon_prefs, "topbar_misc_scene",toggle=addon_prefs.bfa_button_style)
         col.prop(addon_prefs, "topbar_misc_viewlayer",toggle=addon_prefs.bfa_button_style)
         col.prop(addon_prefs, "topbar_misc_last",toggle=addon_prefs.bfa_button_style)

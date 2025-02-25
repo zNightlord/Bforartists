@@ -146,7 +146,7 @@ static void extract_vert_normals_bm(const MeshRenderData &mr, MutableSpan<GPUTyp
         const BMLoop *loop = BM_FACE_FIRST_LOOP(&face);
         const IndexRange face_range(BM_elem_index_get(loop), face.len);
         for (const int corner : face_range) {
-          normals[corner] = convert_normal<GPUType>(
+          normals[corner] = gpu::convert_normal<GPUType>(
               BM_ELEM_CD_GET_FLOAT_P(loop->v, mr.bm_free_normal_offset_vert));
           loop = loop->next;
         }
@@ -193,7 +193,7 @@ static void extract_face_normals_bm(const MeshRenderData &mr, MutableSpan<GPUTyp
         const BMFace &face = *BM_face_at_index(&const_cast<BMesh &>(bm), face_index);
         const IndexRange face_range(BM_elem_index_get(BM_FACE_FIRST_LOOP(&face)), face.len);
         normals.slice(face_range)
-            .fill(convert_normal<GPUType>(
+            .fill(gpu::convert_normal<GPUType>(
                 BM_ELEM_CD_GET_FLOAT_P(&face, mr.bm_free_normal_offset_face)));
       }
     });
@@ -254,7 +254,7 @@ static void extract_normals_bm(const MeshRenderData &mr, MutableSpan<GPUType> no
         const BMLoop *loop = BM_FACE_FIRST_LOOP(&face);
         const IndexRange face_range(BM_elem_index_get(loop), face.len);
         for (const int corner : face_range) {
-          normals[corner] = convert_normal<GPUType>(
+          normals[corner] = gpu::convert_normal<GPUType>(
               BM_ELEM_CD_GET_FLOAT_P(loop, mr.bm_free_normal_offset_corner));
           loop = loop->next;
         }

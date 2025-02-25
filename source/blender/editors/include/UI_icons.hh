@@ -43,6 +43,11 @@
 
 DEF_ICON_COLOR(NONE) /* bfa - never change! Needs to remain at the top of the list */
 
+/* Keep these here, in this order. Their IDs should be static. */
+DEF_ICON(CHAR_NOTDEF)
+DEF_ICON(CHAR_REPLACEMENT)
+DEF_ICON(NOT_FOUND)
+
 /* letter def icon*/
 
 DEF_ICON(ANIM)           /*BFA - DEF_ICON*/
@@ -612,7 +617,7 @@ DEF_ICON_COLOR(GREASEPENCIL_LAYER_GROUP)
 DEF_ICON_COLOR(GRID)
 DEF_ICON_COLOR(GRIDFILL)
 DEF_ICON_COLOR(GRIP)
-DEF_ICON(GRIP_V)
+DEF_ICON_COLOR(GRIP_V)
 DEF_ICON_COLOR(GROUNDGRID)
 DEF_ICON_COLOR(GROUP)
 DEF_ICON_COLOR(GROUPINPUT)
@@ -2293,12 +2298,6 @@ DEF_ICON_COLOR(EVENT_NDOF_BUTTON_PLUS)
 DEF_ICON_COLOR(EVENT_NDOF_BUTTON_MINUS)
 
 /* add as needed. */
-
-/* Keep these here, in this order. Their IDs should be static. */
-DEF_ICON(CHAR_NOTDEF)
-DEF_ICON(CHAR_REPLACEMENT)
-DEF_ICON(NOT_FOUND)
-
 
 /* Undefine all types. */
 
