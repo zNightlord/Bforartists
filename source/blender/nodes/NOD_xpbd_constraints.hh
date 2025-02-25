@@ -6,6 +6,7 @@
 
 #include <atomic>
 
+#include "BKE_geometry_set.hh"
 #include "BLI_function_ref.hh"
 #include "BLI_math_axis_angle.hh"
 #include "BLI_math_quaternion.hh"
@@ -16,6 +17,28 @@
 
 namespace blender::nodes::xpbd_constraints {
 
+struct ConstraintEvalParams;
+struct ConstraintClosure;
+
+struct DebugRecorder {
+ private:
+  bke::GeometrySet geometry_set_;
+  bke::GeometryComponent::Type component_type_;
+
+  bke::GeometrySet debug_steps_;
+
+ public:
+  void set_geometry(const bke::GeometrySet &geometry_set,
+                    bke::GeometryComponent::Type component_type);
+
+  void record_step(const StringRef label,
+                   ConstraintEvalParams &eval_params,
+                   const ConstraintClosure *closure,
+                   const IndexMask &group_mask);
+
+  const bke::GeometrySet &debug_steps() const;
+};
+
 struct ConstraintEvalParams {
   using ErrorFn = FunctionRef<void(const StringRef message)>;
 
@@ -23,6 +46,7 @@ struct ConstraintEvalParams {
   /* Perform debug checks on user inputs at runtime. This helps avoid common errors but has a
    * significant performance cost, so should be optional. */
   bool debug_check;
+  std::optional<DebugRecorder> debug_recorder;
 
   float delta_time;
   float delta_time_squared;
