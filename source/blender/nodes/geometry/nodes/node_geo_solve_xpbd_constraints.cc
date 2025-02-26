@@ -86,11 +86,11 @@ void DebugRecorder::record_step(const StringRef label,
         constraint_geometry.get_component_for_write<PointCloudComponent>();
     MutableAttributeAccessor attributes = *constraint_component.attributes_for_write();
     attributes.remove("active");
-    SpanAttributeWriter<bool> active_writer = attributes.lookup_or_add_for_write_only_span<bool>(
-        "active", AttrDomain::Point);
+    SpanAttributeWriter<bool> group_active_writer =
+        attributes.lookup_or_add_for_write_only_span<bool>("group_active", AttrDomain::Point);
     group_mask.foreach_index(GrainSize(4096),
-                             [&](const int index) { active_writer.span[index] = true; });
-    active_writer.finish();
+                             [&](const int index) { group_active_writer.span[index] = true; });
+    group_active_writer.finish();
 
     append_instance_item(step_geometry, constraint_geometry, "Constraints");
   }
