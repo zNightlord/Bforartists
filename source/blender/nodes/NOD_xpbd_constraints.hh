@@ -28,6 +28,8 @@ struct DebugRecorder {
   bke::GeometrySet debug_steps_;
 
  public:
+  DebugRecorder(const bke::GeometrySet &debug_steps);
+
   void set_geometry(const bke::GeometrySet &geometry_set,
                     bke::GeometryComponent::Type component_type);
 

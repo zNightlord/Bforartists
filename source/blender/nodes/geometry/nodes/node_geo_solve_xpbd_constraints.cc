@@ -16,6 +16,24 @@
 
 namespace blender::nodes::xpbd_constraints {
 
+static void append_instance_item(GeometrySet &container,
+                                 GeometrySet item,
+                                 const StringRef name,
+                                 const float4x4 &transform = float4x4::identity())
+{
+  if (!container.has_instances()) {
+    container.replace_instances(new bke::Instances);
+  }
+  bke::Instances &instances =
+      *container.get_component_for_write<InstancesComponent>().get_for_write();
+
+  item.name = name;
+  const int handle = instances.add_new_reference(std::move(item));
+  instances.add_instance(handle, transform);
+}
+
+DebugRecorder::DebugRecorder(const bke::GeometrySet &debug_steps) : debug_steps_(debug_steps) {}
+
 void DebugRecorder::set_geometry(const GeometrySet &geometry_set,
                                  GeometryComponent::Type component_type)
 {
@@ -28,7 +46,7 @@ void DebugRecorder::record_step(const StringRef label,
                                 const ConstraintClosure *closure,
                                 const IndexMask &group_mask)
 {
-  bke::Instances *step_instances = new bke::Instances;
+  GeometrySet step_geometry;
 
   {
     GeometrySet updated_geometry = geometry_set_;
@@ -59,8 +77,7 @@ void DebugRecorder::record_step(const StringRef label,
       angular_velocities_writer.finish();
     }
 
-    const int geo_handle = step_instances->add_new_reference(updated_geometry);
-    step_instances->add_instance(geo_handle, float4x4::identity());
+    append_instance_item(step_geometry, updated_geometry, "Geometry");
   }
 
   if (closure) {
@@ -75,20 +92,10 @@ void DebugRecorder::record_step(const StringRef label,
                              [&](const int index) { active_writer.span[index] = true; });
     active_writer.finish();
 
-    const int constraints_handle = step_instances->add_new_reference(constraint_geometry);
-    step_instances->add_instance(constraints_handle, float4x4::identity());
+    append_instance_item(step_geometry, constraint_geometry, "Constraints");
   }
 
-  GeometrySet step = GeometrySet::from_instances(step_instances);
-  step.name = label;
-
-  if (!debug_steps_.has_instances()) {
-    debug_steps_.replace_instances(new bke::Instances);
-  }
-  bke::Instances &debug_instances =
-      *debug_steps_.get_component_for_write<InstancesComponent>().get_for_write();
-  const int step_handle = debug_instances.add_new_reference(step);
-  debug_instances.add_instance(step_handle, float4x4::identity());
+  append_instance_item(debug_steps_, step_geometry, label);
 }
 
 const bke::GeometrySet &DebugRecorder::debug_steps() const
@@ -173,8 +180,11 @@ static void node_declare_positions(NodeDeclarationBuilder &b)
   b.add_input<decl::Bool>("Debug Checks")
       .default_value(false)
       .description("Perform checks on input data, which can impact performance");
-  b.add_output<decl::Geometry>("Debug Steps")
+  b.add_input<decl::Geometry>("Debug Steps")
       .description("Complete constraint and geometry information for each solver iteration");
+  b.add_output<decl::Geometry>("Debug Steps")
+      .description("Complete constraint and geometry information for each solver iteration")
+      .align_with_previous();
 }
 
 static void node_declare_velocities(NodeDeclarationBuilder &b)
@@ -229,8 +239,11 @@ static void node_declare_velocities(NodeDeclarationBuilder &b)
   b.add_input<decl::Bool>("Debug Checks")
       .default_value(false)
       .description("Perform checks on input data, which can impact performance");
-  b.add_output<decl::Geometry>("Debug Steps")
+  b.add_input<decl::Geometry>("Debug Steps")
       .description("Complete constraint and geometry information for each solver iteration");
+  b.add_output<decl::Geometry>("Debug Steps")
+      .description("Complete constraint and geometry information for each solver iteration")
+      .align_with_previous();
 }
 
 /* Evaluate a group of constraints in parallel.
@@ -433,7 +446,8 @@ static ConstraintEvalParams extract_eval_params(GeoNodeExecParams params)
   };
   eval_params.debug_check = debug_check;
   if (use_debug_steps) {
-    eval_params.debug_recorder = xpbd_constraints::DebugRecorder();
+    eval_params.debug_recorder = xpbd_constraints::DebugRecorder(
+        params.extract_input<GeometrySet>("Debug Steps"));
   }
 
   return eval_params;
