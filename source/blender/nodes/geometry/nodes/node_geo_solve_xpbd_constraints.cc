@@ -103,7 +103,9 @@ void DebugRecorder::record_step(const StringRef label,
   AttributeWriter<int> type_code_writer = instance_attributes.lookup_or_add_for_write<int>(
       "type_code", AttrDomain::Instance);
   type_code_writer.varray.set(0, -1);
-  type_code_writer.varray.set(1, constraint_type_code);
+  if (closure) {
+    type_code_writer.varray.set(1, constraint_type_code);
+  }
   type_code_writer.finish();
 
   append_instance_item(debug_steps_, step_geometry, label);
