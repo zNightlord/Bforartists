@@ -737,30 +737,35 @@ static Array<ConstraintTypeInfo> create_constraint_info()
   ConstraintTypeInfo position_goal_info = {
       "Position Goal Constraints",
       "Set position of a point to a target vector",
+      0,
       [](GeometrySet &&geometry_set, ErrorFn error_fn) -> ConstraintClosure * {
         return new PositionGoalClosure(std::move(geometry_set), error_fn);
       }};
   ConstraintTypeInfo rotation_goal_info = {
       "Rotation Goal Constraints",
       "Set orientation of an edge to a target rotation",
+      1,
       [](GeometrySet &&geometry_set, ErrorFn error_fn) -> ConstraintClosure * {
         return new RotationGoalClosure(std::move(geometry_set), error_fn);
       }};
   ConstraintTypeInfo stretch_shear_info = {
       "Stretch/Shear Constraints",
       "Enforces edge length and aligns forward direction with the edge vector",
+      2,
       [](GeometrySet &&geometry_set, ErrorFn error_fn) -> ConstraintClosure * {
         return new StretchShearClosure(std::move(geometry_set), error_fn);
       }};
   ConstraintTypeInfo bend_twist_info = {
       "Bend/Twist Constraints",
       "Enforces angles between neighboring edges to their relative rest orientation",
+      3,
       [](GeometrySet &&geometry_set, ErrorFn error_fn) -> ConstraintClosure * {
         return new BendTwistClosure(std::move(geometry_set), error_fn);
       }};
   ConstraintTypeInfo contact_info = {
       "Contact Constraints",
       "Keep contact points from penetrating",
+      4,
       [](GeometrySet &&geometry_set, ErrorFn error_fn) -> ConstraintClosure * {
         return new ContactClosure(std::move(geometry_set), error_fn);
       }};

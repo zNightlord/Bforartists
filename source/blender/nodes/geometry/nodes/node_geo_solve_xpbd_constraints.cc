@@ -44,6 +44,7 @@ void DebugRecorder::set_geometry(const GeometrySet &geometry_set,
 void DebugRecorder::record_step(const StringRef label,
                                 ConstraintEvalParams &eval_params,
                                 const ConstraintClosure *closure,
+                                const int constraint_type_code,
                                 const IndexMask &group_mask)
 {
   GeometrySet step_geometry;
@@ -94,6 +95,16 @@ void DebugRecorder::record_step(const StringRef label,
 
     append_instance_item(step_geometry, constraint_geometry, "Constraints");
   }
+
+  MutableAttributeAccessor instance_attributes = step_geometry
+                                                     .get_component_for_write<InstancesComponent>()
+                                                     .get_for_write()
+                                                     ->attributes_for_write();
+  AttributeWriter<int> type_code_writer = instance_attributes.lookup_or_add_for_write<int>(
+      "type_code", AttrDomain::Instance);
+  type_code_writer.varray.set(0, -1);
+  type_code_writer.varray.set(1, constraint_type_code);
+  type_code_writer.finish();
 
   append_instance_item(debug_steps_, step_geometry, label);
 }
@@ -267,7 +278,8 @@ static void evaluate_constraint_group(EvaluationTarget target,
 
   if (eval_params.debug_recorder) {
     const std::string label = fmt::format("Evaluate: {}", constraint_info.ui_name);
-    eval_params.debug_recorder->record_step(label, eval_params, &closure, group_mask);
+    eval_params.debug_recorder->record_step(
+        label, eval_params, &closure, constraint_info.type_code, group_mask);
   }
 }
 
@@ -403,7 +415,7 @@ static void do_solver_steps(const SolverMethod method,
       break;
   }
   if (eval_params.debug_recorder) {
-    eval_params.debug_recorder->record_step(label, eval_params, nullptr, {});
+    eval_params.debug_recorder->record_step(label, eval_params, nullptr, -1, {});
   }
 
   for ([[maybe_unused]] const int step : IndexRange(steps)) {

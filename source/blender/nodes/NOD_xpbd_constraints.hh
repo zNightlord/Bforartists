@@ -36,6 +36,7 @@ struct DebugRecorder {
   void record_step(const StringRef label,
                    ConstraintEvalParams &eval_params,
                    const ConstraintClosure *closure,
+                   const int constraint_type_code,
                    const IndexMask &group_mask);
 
   const bke::GeometrySet &debug_steps() const;
@@ -107,6 +108,7 @@ struct ConstraintTypeInfo {
 
   std::string ui_name;
   std::string ui_description;
+  int type_code;
 
   ConstraintClosure *(*get_closure)(bke::GeometrySet &&geometry_set, ErrorFn error_fn);
 };
