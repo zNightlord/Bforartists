@@ -334,7 +334,6 @@ TEST(xpbd_constraints, StretchShear)
 TEST(xpbd_constraints, BendTwist)
 {
   constexpr float x = 0.707107f;
-  const float edge_length = 2.0f;
 
   const math::Quaternion target_rotation1 = math::Quaternion::identity();
   const math::Quaternion target_rotation2 = math::to_quaternion(
@@ -342,7 +341,7 @@ TEST(xpbd_constraints, BendTwist)
   EXPECT_V4_NEAR(float4(1, 0, 0, 0), float4(target_rotation1), 1e-5f);
   EXPECT_V4_NEAR(float4(x, x, 0, 0), float4(target_rotation2), 1e-5f);
   const math::Quaternion darboux_vector = math::Quaternion(
-      2.0f / edge_length * float4(math::invert(target_rotation1) * target_rotation2));
+      float4(math::invert(target_rotation1) * target_rotation2));
   EXPECT_V4_NEAR(float4(x, x, 0, 0), float4(darboux_vector), 1.e-5f);
 
   const float alpha = 0.0f;
@@ -353,7 +352,7 @@ TEST(xpbd_constraints, BendTwist)
     math::Quaternion rotation1 = math::Quaternion::identity();
     math::Quaternion rotation2 = math::Quaternion::identity();
     xpbd_constraints::apply_position_bend_twist<true>(
-        1, 0, edge_length, darboux_vector, alpha, lambda, rotation1, rotation2);
+        1, 0, darboux_vector, alpha, lambda, rotation1, rotation2);
     EXPECT_V4_NEAR(float4(x - 1.0f, x, 0, 0), lambda, 1e-5f);
     EXPECT_V4_NEAR(float4(x, -x, 0, 0), float4(rotation1), 1e-5f);
     EXPECT_V4_NEAR(float4(1, 0, 0, 0), float4(rotation2), 1e-5f);
@@ -364,7 +363,7 @@ TEST(xpbd_constraints, BendTwist)
     math::Quaternion rotation1 = math::Quaternion::identity();
     math::Quaternion rotation2 = math::Quaternion::identity();
     xpbd_constraints::apply_position_bend_twist<true>(
-        0, 1, edge_length, darboux_vector, alpha, lambda, rotation1, rotation2);
+        0, 1, darboux_vector, alpha, lambda, rotation1, rotation2);
     EXPECT_V4_NEAR(float4(x - 1.0f, x, 0, 0), lambda, 1e-5f);
     EXPECT_V4_NEAR(float4(1, 0, 0, 0), float4(rotation1), 1e-5f);
     EXPECT_V4_NEAR(float4(x, x, 0, 0), float4(rotation2), 1e-5f);
