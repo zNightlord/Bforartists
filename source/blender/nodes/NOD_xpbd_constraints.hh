@@ -590,7 +590,6 @@ inline void apply_position_stretch_shear(const float weight_pos1,
 template<bool linearized_quaternion>
 inline void eval_position_bend_twist(const float weight_rot1,
                                      const float weight_rot2,
-                                     const float edge_length,
                                      const math::Quaternion &darboux_vector,
                                      const float alpha,
                                      const float gamma,
@@ -604,11 +603,10 @@ inline void eval_position_bend_twist(const float weight_rot1,
                                      float4 &r_delta_rotation1,
                                      float4 &r_delta_rotation2)
 {
-  const float inv_edge_length = math::safe_rcp(edge_length);
   const float weight_norm = math::safe_rcp((weight_rot1 + weight_rot2) * (1.0f + gamma) + alpha);
 
   const math::Quaternion current_darboux = math::Quaternion(
-      2.0f * inv_edge_length * float4(math::invert_normalized(rotation1) * rotation2));
+      float4(math::invert_normalized(rotation1) * rotation2));
   r_residual = quaternion_difference(current_darboux, darboux_vector);
 
   /* Constraint gradient applied to variable differences.
@@ -634,7 +632,6 @@ inline void eval_position_bend_twist(const float weight_rot1,
 template<bool linearized_quaternion>
 inline void apply_position_bend_twist(const float weight_rot1,
                                       const float weight_rot2,
-                                      const float edge_length,
                                       const math::Quaternion &darboux_vector,
                                       const float alpha,
                                       float4 &lambda,
@@ -646,7 +643,6 @@ inline void apply_position_bend_twist(const float weight_rot1,
   float4 delta_rot1, delta_rot2;
   eval_position_bend_twist<linearized_quaternion>(weight_rot1,
                                                   weight_rot2,
-                                                  edge_length,
                                                   darboux_vector,
                                                   alpha,
                                                   0.0f,
@@ -668,7 +664,6 @@ inline void apply_position_bend_twist(const float weight_rot1,
 template<bool linearized_quaternion>
 inline void apply_position_bend_twist(const float weight_rot1,
                                       const float weight_rot2,
-                                      const float edge_length,
                                       const math::Quaternion &darboux_vector,
                                       const float alpha,
                                       const float gamma,
@@ -683,7 +678,6 @@ inline void apply_position_bend_twist(const float weight_rot1,
   float4 delta_rot1, delta_rot2;
   eval_position_bend_twist<linearized_quaternion>(weight_rot1,
                                                   weight_rot2,
-                                                  edge_length,
                                                   darboux_vector,
                                                   alpha,
                                                   gamma,
@@ -713,15 +707,12 @@ inline void eval_rotation_goal2(const math::Quaternion &goal_rotation,
                                 float4 &r_delta_lambda,
                                 float4 &r_delta_rotation)
 {
-  const float edge_length = 1.0f;
-  const math::Quaternion darboux_vector = math::Quaternion(2.0f / edge_length *
-                                                           float4(math::Quaternion::identity()));
+  const math::Quaternion darboux_vector = math::Quaternion(float4(math::Quaternion::identity()));
   /* TODO account for root animation. */
   const math::Quaternion old_goal_rotation = goal_rotation;
   float4 delta_root_rotation;
   eval_position_bend_twist<linearized_quaternion>(0.0f,
                                                   1.0f,
-                                                  edge_length,
                                                   darboux_vector,
                                                   alpha,
                                                   gamma,

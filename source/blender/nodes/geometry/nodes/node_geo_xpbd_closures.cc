@@ -365,7 +365,6 @@ struct BendTwistClosure : public ConstraintClosure {
   VArraySpan<int> points2;
   VArraySpan<float> alpha;
   VArraySpan<float> beta;
-  VArraySpan<float> edge_lengths;
   VArraySpan<float> darboux_w;
   VArraySpan<float3> darboux_xyz;
 
@@ -382,8 +381,6 @@ struct BendTwistClosure : public ConstraintClosure {
     this->points2 = *lookup_or_warn<int>(*attributes, ATTR_POINT2, AttrDomain::Point, 0, error_fn);
     this->alpha = *attributes->lookup_or_default<float>(ATTR_ALPHA, AttrDomain::Point, 0.0f);
     this->beta = *attributes->lookup_or_default<float>(ATTR_BETA, AttrDomain::Point, 0.0f);
-    this->edge_lengths = *lookup_or_warn<float>(
-        *attributes, "edge_length", AttrDomain::Point, 0.0f, error_fn);
     this->darboux_w = *lookup_or_warn<float>(
         *attributes, "darboux_w", AttrDomain::Point, float(0.0f), error_fn);
     this->darboux_xyz = *lookup_or_warn<float3>(
@@ -407,7 +404,6 @@ struct BendTwistClosure : public ConstraintClosure {
       const int point2 = this->points2[index];
       float &lambda_w = this->position_lambda_w.span[index];
       float3 &lambda_xyz = this->position_lambda_xyz.span[index];
-      const float edge_length = this->edge_lengths[index];
       const math::Quaternion darboux_vector = math::Quaternion(this->darboux_w[index],
                                                                this->darboux_xyz[index]);
 
@@ -427,7 +423,6 @@ struct BendTwistClosure : public ConstraintClosure {
         const float gamma = this->alpha[index] * this->beta[index] * params.inv_delta_time;
         xpbd_constraints::apply_position_bend_twist<true>(weight_rot1,
                                                           weight_rot2,
-                                                          edge_length,
                                                           darboux_vector,
                                                           alpha,
                                                           gamma,
@@ -439,14 +434,8 @@ struct BendTwistClosure : public ConstraintClosure {
       }
       else {
         const float alpha = this->alpha[index] * params.inv_delta_time_squared;
-        xpbd_constraints::apply_position_bend_twist<true>(weight_rot1,
-                                                          weight_rot2,
-                                                          edge_length,
-                                                          darboux_vector,
-                                                          alpha,
-                                                          lambda,
-                                                          rotation1,
-                                                          rotation2);
+        xpbd_constraints::apply_position_bend_twist<true>(
+            weight_rot1, weight_rot2, darboux_vector, alpha, lambda, rotation1, rotation2);
       }
       lambda_w = lambda[0];
       lambda_xyz = float3(lambda[1], lambda[2], lambda[3]);
