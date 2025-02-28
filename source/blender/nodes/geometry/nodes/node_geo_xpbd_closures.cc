@@ -43,6 +43,7 @@ constexpr StringRef ATTR_BETA = "damping";
 constexpr StringRef ATTR_POINT1 = "point1";
 constexpr StringRef ATTR_POINT2 = "point2";
 constexpr StringRef ATTR_ACTIVE = "active";
+constexpr StringRef ATTR_LAST_ACTIVE = "last_active";
 
 ConstraintClosure::ConstraintClosure(GeometrySet &&geometry_set, ErrorFn error_fn)
     : geometry_set(std::move(geometry_set))
@@ -493,6 +494,7 @@ struct ContactClosure : public ConstraintClosure {
 
   /* Remember active contacts for later velocity update. */
   bke::SpanAttributeWriter<bool> active;
+  bke::SpanAttributeWriter<bool> last_active;
 
   ContactClosure(GeometrySet &&geometry_set, ErrorFn error_fn)
       : ConstraintClosure(std::move(geometry_set), error_fn)
@@ -519,6 +521,10 @@ struct ContactClosure : public ConstraintClosure {
     const int num_constraints = attributes->domain_size(AttrDomain::Point);
     this->active = attributes->lookup_or_add_for_write_span<bool>(
         ATTR_ACTIVE,
+        AttrDomain::Point,
+        bke::AttributeInitVArray(VArray<bool>::ForSingle(false, num_constraints)));
+    this->last_active = attributes->lookup_or_add_for_write_span<bool>(
+        ATTR_LAST_ACTIVE,
         AttrDomain::Point,
         bke::AttributeInitVArray(VArray<bool>::ForSingle(false, num_constraints)));
     this->position_lambda = attributes->lookup_or_add_for_write_span<float>(
@@ -559,6 +565,7 @@ struct ContactClosure : public ConstraintClosure {
       float3 &position = params.positions[point];
       math::Quaternion &rotation = params.rotations[point];
       bool &active = this->active.span[index];
+      bool &last_active = this->last_active.span[index];
 
       const float3 &local_position1 = this->local_position1[index];
       const float3 &local_position2 = this->local_position2[index];
@@ -573,19 +580,21 @@ struct ContactClosure : public ConstraintClosure {
       const float alpha = 0.0f * params.inv_delta_time_squared;
 
       /* Zero weights for the collider, only the point can move. */
-      active = xpbd_constraints::apply_position_contact(1.0f,
-                                                        0.0f,
-                                                        1.0f,
-                                                        0.0f,
-                                                        local_position1,
-                                                        local_position2,
-                                                        normal,
-                                                        alpha,
-                                                        lambda,
-                                                        position,
-                                                        collider_position,
-                                                        rotation,
-                                                        collider_rotation);
+      last_active = xpbd_constraints::apply_position_contact(1.0f,
+                                                             0.0f,
+                                                             1.0f,
+                                                             0.0f,
+                                                             local_position1,
+                                                             local_position2,
+                                                             normal,
+                                                             alpha,
+                                                             lambda,
+                                                             position,
+                                                             collider_position,
+                                                             rotation,
+                                                             collider_rotation);
+      /* Accumulate "active" flags over the entire time step. */
+      active |= last_active;
     });
 
     if (position_checker.has_overlap() || rotation_checker.has_overlap()) {
@@ -710,6 +719,8 @@ struct ContactClosure : public ConstraintClosure {
   void reset_lambda() override
   {
     for (const int index : this->position_lambda.span.index_range()) {
+      this->active.span[index] = false;
+      this->last_active.span[index] = false;
       this->position_lambda.span[index] = 0.0f;
       this->restitution_lambda.span[index] = 0.0f;
       this->friction_lambda.span[index] = 0.0f;
