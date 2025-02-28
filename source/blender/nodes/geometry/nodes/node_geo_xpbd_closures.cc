@@ -732,6 +732,7 @@ struct ContactClosure : public ConstraintClosure {
     this->restitution_lambda.finish();
     this->friction_lambda.finish();
     this->active.finish();
+    this->last_active.finish();
   }
 };
 
