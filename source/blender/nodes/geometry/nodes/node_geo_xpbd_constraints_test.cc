@@ -197,6 +197,7 @@ TEST(xpbd_constraints, ContactFriction)
 
   const float restitution = 0.0f;
   const float friction = 0.5f;
+  const float threshold_normal_velocity = 0.0f;
 
   xpbd_constraints::apply_velocity_contact(orig_velocity1,
                                            orig_velocity2,
@@ -207,6 +208,7 @@ TEST(xpbd_constraints, ContactFriction)
                                            normal,
                                            restitution,
                                            friction,
+                                           threshold_normal_velocity,
                                            lambda_restitution,
                                            lambda_friction,
                                            velocity1,
@@ -239,6 +241,7 @@ TEST(xpbd_constraints, ContactRestitution)
 
   const float restitution = 0.5f;
   const float friction = 0.0f;
+  const float threshold_normal_velocity = 0.0f;
 
   xpbd_constraints::apply_velocity_contact(orig_velocity1,
                                            orig_velocity2,
@@ -249,6 +252,7 @@ TEST(xpbd_constraints, ContactRestitution)
                                            normal,
                                            restitution,
                                            friction,
+                                           threshold_normal_velocity,
                                            lambda_restitution,
                                            lambda_friction,
                                            velocity1,

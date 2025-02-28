@@ -906,6 +906,7 @@ inline void eval_velocity_contact(const float3 &orig_velocity1,
                                   const float3 &velocity2,
                                   const float3 &angular_velocity1,
                                   const float3 &angular_velocity2,
+                                  const float threshold_normal_velocity,
                                   float &r_residual_restitution,
                                   float &r_residual_friction,
                                   float &r_delta_lambda_restitution,
@@ -934,12 +935,16 @@ inline void eval_velocity_contact(const float3 &orig_velocity1,
   const float normal_velocity = math::dot(relative_velocity, normal);
   const float orig_normal_velocity = math::dot(orig_relative_velocity, normal);
   const float3 surface_velocity = relative_velocity - normal * normal_velocity;
+  /* If normal velocity after update is below jitter threshold avoid any restitution. */
+  const bool is_jitter_velocity = (math::abs(normal_velocity) < threshold_normal_velocity);
 
   r_residual_restitution = orig_normal_velocity;
   r_residual_friction = math::length(surface_velocity);
 
   /* Kill normal velocity, then add restitution. */
-  r_delta_lambda_restitution = -std::min(restitution * r_residual_restitution, 0.0f);
+  r_delta_lambda_restitution = is_jitter_velocity ?
+                                   0.0f :
+                                   -std::min(restitution * r_residual_restitution, 0.0f);
   r_delta_lambda_friction = -friction * r_residual_friction;
   const float3 impulse_restitution = (-normal_velocity + r_delta_lambda_restitution) * normal;
   const float3 impulse_friction = -friction * surface_velocity;
@@ -960,6 +965,7 @@ inline void apply_velocity_contact(const float3 &orig_velocity1,
                                    const float3 &normal,
                                    const float restitution,
                                    const float friction,
+                                   const float threshold_normal_velocity,
                                    float &lambda_restitution,
                                    float &lambda_friction,
                                    float3 &velocity1,
@@ -986,6 +992,7 @@ inline void apply_velocity_contact(const float3 &orig_velocity1,
                         velocity2,
                         angular_velocity1,
                         angular_velocity2,
+                        threshold_normal_velocity,
                         residual_restitution,
                         residual_friction,
                         delta_lambda_restitution,

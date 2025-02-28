@@ -485,6 +485,7 @@ struct ContactClosure : public ConstraintClosure {
 
   VArraySpan<float> friction;
   VArraySpan<float> restitution;
+  VArraySpan<float> threshold_normal_velocity;
 
   bke::SpanAttributeWriter<float> position_lambda;
   bke::SpanAttributeWriter<float> restitution_lambda;
@@ -512,6 +513,8 @@ struct ContactClosure : public ConstraintClosure {
     this->friction = *attributes->lookup_or_default<float>("friction", AttrDomain::Point, 0.0f);
     this->restitution = *attributes->lookup_or_default<float>(
         "restitution", AttrDomain::Point, 0.0f);
+    this->threshold_normal_velocity = *attributes->lookup_or_default<float>(
+        "threshold_normal_velocity", AttrDomain::Point, 0.0f);
 
     const int num_constraints = attributes->domain_size(AttrDomain::Point);
     this->active = attributes->lookup_or_add_for_write_span<bool>(
@@ -633,6 +636,7 @@ struct ContactClosure : public ConstraintClosure {
       }
       const float restitution = this->restitution[index];
       const float friction = this->friction[index];
+      const float threshold_normal_velocity = this->threshold_normal_velocity[index];
 
       const float4x4 &collider_transform = params.collider_transforms[collider_index];
       const float4x4 &old_collider_transform = params.old_collider_transforms[collider_index];
@@ -666,6 +670,7 @@ struct ContactClosure : public ConstraintClosure {
                                                normal,
                                                restitution,
                                                friction,
+                                               threshold_normal_velocity,
                                                lambda_restitution,
                                                lambda_friction,
                                                velocity,
