@@ -129,12 +129,14 @@ struct PositionGoalClosure : public ConstraintClosure {
   {
   }
 
-  void reset_lambda() override
+  void reset_for_positions() override
   {
     for (const int index : this->position_lambda.span.index_range()) {
       this->position_lambda.span[index] = 0.0f;
     }
   }
+
+  void reset_for_velocities() override {}
 
   void finish_attributes() override
   {
@@ -223,13 +225,15 @@ struct RotationGoalClosure : public ConstraintClosure {
   {
   }
 
-  void reset_lambda() override
+  void reset_for_positions() override
   {
     for (const int index : this->position_lambda_w.span.index_range()) {
       this->position_lambda_w.span[index] = 0.0f;
       this->position_lambda_xyz.span[index] = float3(0.0f);
     }
   }
+
+  void reset_for_velocities() override {}
 
   void finish_attributes() override
   {
@@ -345,12 +349,14 @@ struct StretchShearClosure : public ConstraintClosure {
   {
   }
 
-  void reset_lambda() override
+  void reset_for_positions() override
   {
     for (const int index : this->position_lambda.span.index_range()) {
       this->position_lambda.span[index] = float3(0.0f);
     }
   }
+
+  void reset_for_velocities() override {}
 
   void finish_attributes() override
   {
@@ -462,13 +468,15 @@ struct BendTwistClosure : public ConstraintClosure {
   {
   }
 
-  void reset_lambda() override
+  void reset_for_positions() override
   {
     for (const int index : this->position_lambda_w.span.index_range()) {
       this->position_lambda_w.span[index] = 0.0f;
       this->position_lambda_xyz.span[index] = float3(0.0f);
     }
   }
+
+  void reset_for_velocities() override {}
 
   void finish_attributes() override
   {
@@ -716,16 +724,23 @@ struct ContactClosure : public ConstraintClosure {
     }
   }
 
-  void reset_lambda() override
+  void reset_for_positions() override
   {
     for (const int index : this->position_lambda.span.index_range()) {
       this->active.span[index] = false;
       this->last_active.span[index] = false;
       this->position_lambda.span[index] = 0.0f;
+    }
+  }
+
+  void reset_for_velocities() override
+  {
+    for (const int index : this->restitution_lambda.span.index_range()) {
       this->restitution_lambda.span[index] = 0.0f;
       this->friction_lambda.span[index] = 0.0f;
     }
   }
+
   void finish_attributes() override
   {
     this->position_lambda.finish();

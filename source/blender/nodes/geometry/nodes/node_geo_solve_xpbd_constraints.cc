@@ -150,9 +150,6 @@ static void node_declare_positions(NodeDeclarationBuilder &b)
 
   b.add_input<decl::Float>("Delta Time").default_value(default_fps).min(0.0f).hide_value();
   b.add_input<decl::Int>("Gauss-Seidel Steps").default_value(1).min(0);
-  b.add_input<decl::Bool>("Initialize")
-      .default_value(true)
-      .description("Initialize lambda values and positions from zero or warm start");
   b.add_input<decl::Bool>("Warm Start")
       .default_value(false)
       .description("Use previous lambda value when initializing instead of starting from zero");
@@ -207,9 +204,6 @@ static void node_declare_velocities(NodeDeclarationBuilder &b)
 
   b.add_input<decl::Float>("Delta Time").default_value(default_fps).min(0.0f).hide_value();
   b.add_input<decl::Int>("Gauss-Seidel Steps").default_value(1).min(0);
-  b.add_input<decl::Bool>("Initialize")
-      .default_value(false)
-      .description("Initialize lambda values and positions from zero or warm start");
   b.add_input<decl::Bool>("Warm Start")
       .default_value(true)
       .description("Use previous lambda value when initializing instead of starting from zero");
@@ -364,39 +358,68 @@ static void do_jacobi_step(EvaluationTarget /*target*/,
   /* TODO */
 }
 
+static void zero_init_solver(EvaluationTarget target, const Span<ClosureEvalInfo> closures)
+{
+  for (const ClosureEvalInfo &info : closures) {
+    if (!info.closure) {
+      continue;
+    }
+    switch (target) {
+      case EvaluationTarget::Positions:
+        info.closure->reset_for_positions();
+        break;
+      case EvaluationTarget::Velocities:
+        info.closure->reset_for_velocities();
+        break;
+    }
+  }
+}
+
+static void warm_start_solver(EvaluationTarget target,
+                              ConstraintEvalParams &eval_params,
+                              const Span<ClosureEvalInfo> closures)
+{
+  for (const ClosureEvalInfo &info : closures) {
+    if (!info.closure) {
+      continue;
+    }
+    /* TODO */
+    eval_params.error_message_add("Warm starting not yet implemented");
+    switch (target) {
+      case EvaluationTarget::Positions:
+        info.closure->reset_for_positions();
+        break;
+      case EvaluationTarget::Velocities:
+        info.closure->reset_for_velocities();
+        break;
+    }
+    // for (const IndexMask &group_mask : info.group_masks) {
+    //   switch (target) {
+    //     case EvaluationTarget::Positions:
+    //       info.closure->init_positions(eval_params, group_mask);
+    //       break;
+    //     case EvaluationTarget::Velocities:
+    //       info.closure->init_velocities(eval_params, group_mask);
+    //       break;
+    //   }
+    // }
+  }
+}
+
 static void do_solver_steps(const SolverMethod method,
                             const int steps,
                             EvaluationTarget target,
-                            std::optional<ConstraintInit> init_mode,
+                            ConstraintInit init_mode,
                             ConstraintEvalParams &eval_params,
                             const Span<ClosureEvalInfo> closures)
 {
-  if (init_mode) {
-    for (const ClosureEvalInfo &info : closures) {
-      if (!info.closure) {
-        continue;
-      }
-      switch (*init_mode) {
-        case ConstraintInit::ZeroInit:
-          info.closure->reset_lambda();
-          break;
-        case ConstraintInit::WarmStart:
-          /* TODO */
-          eval_params.error_message_add("Warm starting not yet implemented");
-          info.closure->reset_lambda();
-          // for (const IndexMask &group_mask : info.group_masks) {
-          //   switch (target) {
-          //     case EvaluationTarget::Positions:
-          //       info.closure->init_positions(eval_params, group_mask);
-          //       break;
-          //     case EvaluationTarget::Velocities:
-          //       info.closure->init_velocities(eval_params, group_mask);
-          //       break;
-          //   }
-          // }
-          break;
-      }
-    }
+  switch (init_mode) {
+    case ConstraintInit::ZeroInit:
+      zero_init_solver(target, closures);
+      break;
+    case ConstraintInit::WarmStart:
+      warm_start_solver(target, eval_params, closures);
+      break;
   }
 
   std::string label;
@@ -430,15 +453,6 @@ static void do_solver_steps(const SolverMethod method,
         break;
     }
   }
-}
-
-static const std::optional<ConstraintInit> extract_init_mode(GeoNodeExecParams params)
-{
-  return params.extract_input<bool>("Initialize") ?
-             std::make_optional(params.extract_input<bool>("Warm Start") ?
-                                    ConstraintInit::WarmStart :
-                                    ConstraintInit::ZeroInit) :
-             std::nullopt;
 }
 
 static ConstraintEvalParams extract_eval_params(GeoNodeExecParams params)
@@ -492,7 +506,8 @@ static void bind_constraint_closures(GeoNodeExecParams params,
 
 static void node_geo_exec_positions(GeoNodeExecParams params)
 {
-  std::optional<ConstraintInit> init_mode = extract_init_mode(params);
+  ConstraintInit init_mode = params.extract_input<bool>("Warm Start") ? ConstraintInit::WarmStart :
+                                                                        ConstraintInit::ZeroInit;
   const int gauss_seidel_steps = std::max(params.extract_input<int>("Gauss-Seidel Steps"), 0);
   GeometrySet geometry_set = params.extract_input<GeometrySet>("Geometry");
   Field<float3> position_field = params.extract_input<Field<float3>>("Position");
@@ -614,7 +629,9 @@ static void node_geo_exec_positions(GeoNodeExecParams params)
 
 static void node_geo_exec_velocities(GeoNodeExecParams params)
 {
-  std::optional<ConstraintInit> init_mode = extract_init_mode(params);
+  const ConstraintInit init_mode = params.extract_input<bool>("Warm Start") ?
+                                       ConstraintInit::WarmStart :
+                                       ConstraintInit::ZeroInit;
   const int gauss_seidel_steps = std::max(params.extract_input<int>("Gauss-Seidel Steps"), 0);
   GeometrySet geometry_set = params.extract_input<GeometrySet>("Geometry");
   Field<float3> position_field = params.extract_input<Field<float3>>("Position");

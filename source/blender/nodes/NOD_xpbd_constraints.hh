@@ -98,7 +98,8 @@ struct ConstraintClosure {
                                   const IndexMask &group_mask) = 0;
   virtual void apply_to_velocities(ConstraintEvalParams &eval_params,
                                    const IndexMask &group_mask) = 0;
-  virtual void reset_lambda() = 0;
+  virtual void reset_for_positions() = 0;
+  virtual void reset_for_velocities() = 0;
 
   virtual void finish_attributes() = 0;
 };
