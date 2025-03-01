@@ -6,6 +6,7 @@
 
 #include <atomic>
 
+#include "BKE_geometry_set.hh"
 #include "BLI_function_ref.hh"
 #include "BLI_math_axis_angle.hh"
 #include "BLI_math_quaternion.hh"
@@ -16,6 +17,31 @@
 
 namespace blender::nodes::xpbd_constraints {
 
+struct ConstraintEvalParams;
+struct ConstraintClosure;
+
+struct DebugRecorder {
+ private:
+  bke::GeometrySet geometry_set_;
+  bke::GeometryComponent::Type component_type_;
+
+  bke::GeometrySet debug_steps_;
+
+ public:
+  DebugRecorder(const bke::GeometrySet &debug_steps);
+
+  void set_geometry(const bke::GeometrySet &geometry_set,
+                    bke::GeometryComponent::Type component_type);
+
+  void record_step(const StringRef label,
+                   ConstraintEvalParams &eval_params,
+                   const ConstraintClosure *closure,
+                   const int constraint_type_code,
+                   const IndexMask &group_mask);
+
+  const bke::GeometrySet &debug_steps() const;
+};
+
 struct ConstraintEvalParams {
   using ErrorFn = FunctionRef<void(const StringRef message)>;
 
@@ -23,6 +49,7 @@ struct ConstraintEvalParams {
   /* Perform debug checks on user inputs at runtime. This helps avoid common errors but has a
    * significant performance cost, so should be optional. */
   bool debug_check;
+  std::optional<DebugRecorder> debug_recorder;
 
   float delta_time;
   float delta_time_squared;
@@ -71,7 +98,8 @@ struct ConstraintClosure {
                                   const IndexMask &group_mask) = 0;
   virtual void apply_to_velocities(ConstraintEvalParams &eval_params,
                                    const IndexMask &group_mask) = 0;
-  virtual void reset_lambda() = 0;
+  virtual void reset_for_positions() = 0;
+  virtual void reset_for_velocities() = 0;
 
   virtual void finish_attributes() = 0;
 };
@@ -81,6 +109,7 @@ struct ConstraintTypeInfo {
 
   std::string ui_name;
   std::string ui_description;
+  int type_code;
 
   ConstraintClosure *(*get_closure)(bke::GeometrySet &&geometry_set, ErrorFn error_fn);
 };
@@ -562,7 +591,6 @@ inline void apply_position_stretch_shear(const float weight_pos1,
 template<bool linearized_quaternion>
 inline void eval_position_bend_twist(const float weight_rot1,
                                      const float weight_rot2,
-                                     const float edge_length,
                                      const math::Quaternion &darboux_vector,
                                      const float alpha,
                                      const float gamma,
@@ -576,11 +604,10 @@ inline void eval_position_bend_twist(const float weight_rot1,
                                      float4 &r_delta_rotation1,
                                      float4 &r_delta_rotation2)
 {
-  const float inv_edge_length = math::safe_rcp(edge_length);
   const float weight_norm = math::safe_rcp((weight_rot1 + weight_rot2) * (1.0f + gamma) + alpha);
 
   const math::Quaternion current_darboux = math::Quaternion(
-      2.0f * inv_edge_length * float4(math::invert_normalized(rotation1) * rotation2));
+      float4(math::invert_normalized(rotation1) * rotation2));
   r_residual = quaternion_difference(current_darboux, darboux_vector);
 
   /* Constraint gradient applied to variable differences.
@@ -606,7 +633,6 @@ inline void eval_position_bend_twist(const float weight_rot1,
 template<bool linearized_quaternion>
 inline void apply_position_bend_twist(const float weight_rot1,
                                       const float weight_rot2,
-                                      const float edge_length,
                                       const math::Quaternion &darboux_vector,
                                       const float alpha,
                                       float4 &lambda,
@@ -618,7 +644,6 @@ inline void apply_position_bend_twist(const float weight_rot1,
   float4 delta_rot1, delta_rot2;
   eval_position_bend_twist<linearized_quaternion>(weight_rot1,
                                                   weight_rot2,
-                                                  edge_length,
                                                   darboux_vector,
                                                   alpha,
                                                   0.0f,
@@ -640,7 +665,6 @@ inline void apply_position_bend_twist(const float weight_rot1,
 template<bool linearized_quaternion>
 inline void apply_position_bend_twist(const float weight_rot1,
                                       const float weight_rot2,
-                                      const float edge_length,
                                       const math::Quaternion &darboux_vector,
                                       const float alpha,
                                       const float gamma,
@@ -655,7 +679,6 @@ inline void apply_position_bend_twist(const float weight_rot1,
   float4 delta_rot1, delta_rot2;
   eval_position_bend_twist<linearized_quaternion>(weight_rot1,
                                                   weight_rot2,
-                                                  edge_length,
                                                   darboux_vector,
                                                   alpha,
                                                   gamma,
@@ -685,15 +708,12 @@ inline void eval_rotation_goal2(const math::Quaternion &goal_rotation,
                                 float4 &r_delta_lambda,
                                 float4 &r_delta_rotation)
 {
-  const float edge_length = 1.0f;
-  const math::Quaternion darboux_vector = math::Quaternion(2.0f / edge_length *
-                                                           float4(math::Quaternion::identity()));
+  const math::Quaternion darboux_vector = math::Quaternion(float4(math::Quaternion::identity()));
   /* TODO account for root animation. */
   const math::Quaternion old_goal_rotation = goal_rotation;
   float4 delta_root_rotation;
   eval_position_bend_twist<linearized_quaternion>(0.0f,
                                                   1.0f,
-                                                  edge_length,
                                                   darboux_vector,
                                                   alpha,
                                                   gamma,
@@ -887,6 +907,7 @@ inline void eval_velocity_contact(const float3 &orig_velocity1,
                                   const float3 &velocity2,
                                   const float3 &angular_velocity1,
                                   const float3 &angular_velocity2,
+                                  const float threshold_normal_velocity,
                                   float &r_residual_restitution,
                                   float &r_residual_friction,
                                   float &r_delta_lambda_restitution,
@@ -915,12 +936,16 @@ inline void eval_velocity_contact(const float3 &orig_velocity1,
   const float normal_velocity = math::dot(relative_velocity, normal);
   const float orig_normal_velocity = math::dot(orig_relative_velocity, normal);
   const float3 surface_velocity = relative_velocity - normal * normal_velocity;
+  /* If normal velocity after update is below jitter threshold avoid any restitution. */
+  const bool is_jitter_velocity = (math::abs(normal_velocity) < threshold_normal_velocity);
 
   r_residual_restitution = orig_normal_velocity;
   r_residual_friction = math::length(surface_velocity);
 
   /* Kill normal velocity, then add restitution. */
-  r_delta_lambda_restitution = -std::min(restitution * r_residual_restitution, 0.0f);
+  r_delta_lambda_restitution = is_jitter_velocity ?
+                                   0.0f :
+                                   -std::min(restitution * r_residual_restitution, 0.0f);
   r_delta_lambda_friction = -friction * r_residual_friction;
   const float3 impulse_restitution = (-normal_velocity + r_delta_lambda_restitution) * normal;
   const float3 impulse_friction = -friction * surface_velocity;
@@ -941,6 +966,7 @@ inline void apply_velocity_contact(const float3 &orig_velocity1,
                                    const float3 &normal,
                                    const float restitution,
                                    const float friction,
+                                   const float threshold_normal_velocity,
                                    float &lambda_restitution,
                                    float &lambda_friction,
                                    float3 &velocity1,
@@ -967,6 +993,7 @@ inline void apply_velocity_contact(const float3 &orig_velocity1,
                         velocity2,
                         angular_velocity1,
                         angular_velocity2,
+                        threshold_normal_velocity,
                         residual_restitution,
                         residual_friction,
                         delta_lambda_restitution,

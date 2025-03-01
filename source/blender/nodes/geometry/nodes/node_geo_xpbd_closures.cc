@@ -43,6 +43,7 @@ constexpr StringRef ATTR_BETA = "damping";
 constexpr StringRef ATTR_POINT1 = "point1";
 constexpr StringRef ATTR_POINT2 = "point2";
 constexpr StringRef ATTR_ACTIVE = "active";
+constexpr StringRef ATTR_LAST_ACTIVE = "last_active";
 
 ConstraintClosure::ConstraintClosure(GeometrySet &&geometry_set, ErrorFn error_fn)
     : geometry_set(std::move(geometry_set))
@@ -128,12 +129,14 @@ struct PositionGoalClosure : public ConstraintClosure {
   {
   }
 
-  void reset_lambda() override
+  void reset_for_positions() override
   {
     for (const int index : this->position_lambda.span.index_range()) {
       this->position_lambda.span[index] = 0.0f;
     }
   }
+
+  void reset_for_velocities() override {}
 
   void finish_attributes() override
   {
@@ -222,13 +225,15 @@ struct RotationGoalClosure : public ConstraintClosure {
   {
   }
 
-  void reset_lambda() override
+  void reset_for_positions() override
   {
     for (const int index : this->position_lambda_w.span.index_range()) {
       this->position_lambda_w.span[index] = 0.0f;
       this->position_lambda_xyz.span[index] = float3(0.0f);
     }
   }
+
+  void reset_for_velocities() override {}
 
   void finish_attributes() override
   {
@@ -344,12 +349,14 @@ struct StretchShearClosure : public ConstraintClosure {
   {
   }
 
-  void reset_lambda() override
+  void reset_for_positions() override
   {
     for (const int index : this->position_lambda.span.index_range()) {
       this->position_lambda.span[index] = float3(0.0f);
     }
   }
+
+  void reset_for_velocities() override {}
 
   void finish_attributes() override
   {
@@ -365,7 +372,6 @@ struct BendTwistClosure : public ConstraintClosure {
   VArraySpan<int> points2;
   VArraySpan<float> alpha;
   VArraySpan<float> beta;
-  VArraySpan<float> edge_lengths;
   VArraySpan<float> darboux_w;
   VArraySpan<float3> darboux_xyz;
 
@@ -382,8 +388,6 @@ struct BendTwistClosure : public ConstraintClosure {
     this->points2 = *lookup_or_warn<int>(*attributes, ATTR_POINT2, AttrDomain::Point, 0, error_fn);
     this->alpha = *attributes->lookup_or_default<float>(ATTR_ALPHA, AttrDomain::Point, 0.0f);
     this->beta = *attributes->lookup_or_default<float>(ATTR_BETA, AttrDomain::Point, 0.0f);
-    this->edge_lengths = *lookup_or_warn<float>(
-        *attributes, "edge_length", AttrDomain::Point, 0.0f, error_fn);
     this->darboux_w = *lookup_or_warn<float>(
         *attributes, "darboux_w", AttrDomain::Point, float(0.0f), error_fn);
     this->darboux_xyz = *lookup_or_warn<float3>(
@@ -407,7 +411,6 @@ struct BendTwistClosure : public ConstraintClosure {
       const int point2 = this->points2[index];
       float &lambda_w = this->position_lambda_w.span[index];
       float3 &lambda_xyz = this->position_lambda_xyz.span[index];
-      const float edge_length = this->edge_lengths[index];
       const math::Quaternion darboux_vector = math::Quaternion(this->darboux_w[index],
                                                                this->darboux_xyz[index]);
 
@@ -427,7 +430,6 @@ struct BendTwistClosure : public ConstraintClosure {
         const float gamma = this->alpha[index] * this->beta[index] * params.inv_delta_time;
         xpbd_constraints::apply_position_bend_twist<true>(weight_rot1,
                                                           weight_rot2,
-                                                          edge_length,
                                                           darboux_vector,
                                                           alpha,
                                                           gamma,
@@ -439,14 +441,8 @@ struct BendTwistClosure : public ConstraintClosure {
       }
       else {
         const float alpha = this->alpha[index] * params.inv_delta_time_squared;
-        xpbd_constraints::apply_position_bend_twist<true>(weight_rot1,
-                                                          weight_rot2,
-                                                          edge_length,
-                                                          darboux_vector,
-                                                          alpha,
-                                                          lambda,
-                                                          rotation1,
-                                                          rotation2);
+        xpbd_constraints::apply_position_bend_twist<true>(
+            weight_rot1, weight_rot2, darboux_vector, alpha, lambda, rotation1, rotation2);
       }
       lambda_w = lambda[0];
       lambda_xyz = float3(lambda[1], lambda[2], lambda[3]);
@@ -472,13 +468,15 @@ struct BendTwistClosure : public ConstraintClosure {
   {
   }
 
-  void reset_lambda() override
+  void reset_for_positions() override
   {
     for (const int index : this->position_lambda_w.span.index_range()) {
       this->position_lambda_w.span[index] = 0.0f;
       this->position_lambda_xyz.span[index] = float3(0.0f);
     }
   }
+
+  void reset_for_velocities() override {}
 
   void finish_attributes() override
   {
@@ -496,6 +494,7 @@ struct ContactClosure : public ConstraintClosure {
 
   VArraySpan<float> friction;
   VArraySpan<float> restitution;
+  VArraySpan<float> threshold_normal_velocity;
 
   bke::SpanAttributeWriter<float> position_lambda;
   bke::SpanAttributeWriter<float> restitution_lambda;
@@ -503,6 +502,7 @@ struct ContactClosure : public ConstraintClosure {
 
   /* Remember active contacts for later velocity update. */
   bke::SpanAttributeWriter<bool> active;
+  bke::SpanAttributeWriter<bool> last_active;
 
   ContactClosure(GeometrySet &&geometry_set, ErrorFn error_fn)
       : ConstraintClosure(std::move(geometry_set), error_fn)
@@ -523,10 +523,16 @@ struct ContactClosure : public ConstraintClosure {
     this->friction = *attributes->lookup_or_default<float>("friction", AttrDomain::Point, 0.0f);
     this->restitution = *attributes->lookup_or_default<float>(
         "restitution", AttrDomain::Point, 0.0f);
+    this->threshold_normal_velocity = *attributes->lookup_or_default<float>(
+        "threshold_normal_velocity", AttrDomain::Point, 0.0f);
 
     const int num_constraints = attributes->domain_size(AttrDomain::Point);
     this->active = attributes->lookup_or_add_for_write_span<bool>(
         ATTR_ACTIVE,
+        AttrDomain::Point,
+        bke::AttributeInitVArray(VArray<bool>::ForSingle(false, num_constraints)));
+    this->last_active = attributes->lookup_or_add_for_write_span<bool>(
+        ATTR_LAST_ACTIVE,
         AttrDomain::Point,
         bke::AttributeInitVArray(VArray<bool>::ForSingle(false, num_constraints)));
     this->position_lambda = attributes->lookup_or_add_for_write_span<float>(
@@ -567,6 +573,7 @@ struct ContactClosure : public ConstraintClosure {
       float3 &position = params.positions[point];
       math::Quaternion &rotation = params.rotations[point];
       bool &active = this->active.span[index];
+      bool &last_active = this->last_active.span[index];
 
       const float3 &local_position1 = this->local_position1[index];
       const float3 &local_position2 = this->local_position2[index];
@@ -581,19 +588,21 @@ struct ContactClosure : public ConstraintClosure {
       const float alpha = 0.0f * params.inv_delta_time_squared;
 
       /* Zero weights for the collider, only the point can move. */
-      active = xpbd_constraints::apply_position_contact(1.0f,
-                                                        0.0f,
-                                                        1.0f,
-                                                        0.0f,
-                                                        local_position1,
-                                                        local_position2,
-                                                        normal,
-                                                        alpha,
-                                                        lambda,
-                                                        position,
-                                                        collider_position,
-                                                        rotation,
-                                                        collider_rotation);
+      last_active = xpbd_constraints::apply_position_contact(1.0f,
+                                                             0.0f,
+                                                             1.0f,
+                                                             0.0f,
+                                                             local_position1,
+                                                             local_position2,
+                                                             normal,
+                                                             alpha,
+                                                             lambda,
+                                                             position,
+                                                             collider_position,
+                                                             rotation,
+                                                             collider_rotation);
+      /* Accumulate "active" flags over the entire time step. */
+      active |= last_active;
     });
 
     if (position_checker.has_overlap() || rotation_checker.has_overlap()) {
@@ -644,6 +653,7 @@ struct ContactClosure : public ConstraintClosure {
       }
       const float restitution = this->restitution[index];
       const float friction = this->friction[index];
+      const float threshold_normal_velocity = this->threshold_normal_velocity[index];
 
       const float4x4 &collider_transform = params.collider_transforms[collider_index];
       const float4x4 &old_collider_transform = params.old_collider_transforms[collider_index];
@@ -677,6 +687,7 @@ struct ContactClosure : public ConstraintClosure {
                                                normal,
                                                restitution,
                                                friction,
+                                               threshold_normal_velocity,
                                                lambda_restitution,
                                                lambda_friction,
                                                velocity,
@@ -713,20 +724,30 @@ struct ContactClosure : public ConstraintClosure {
     }
   }
 
-  void reset_lambda() override
+  void reset_for_positions() override
   {
     for (const int index : this->position_lambda.span.index_range()) {
+      this->active.span[index] = false;
+      this->last_active.span[index] = false;
       this->position_lambda.span[index] = 0.0f;
+    }
+  }
+
+  void reset_for_velocities() override
+  {
+    for (const int index : this->restitution_lambda.span.index_range()) {
       this->restitution_lambda.span[index] = 0.0f;
       this->friction_lambda.span[index] = 0.0f;
     }
   }
+
   void finish_attributes() override
   {
     this->position_lambda.finish();
     this->restitution_lambda.finish();
     this->friction_lambda.finish();
     this->active.finish();
+    this->last_active.finish();
   }
 };
 
@@ -737,30 +758,35 @@ static Array<ConstraintTypeInfo> create_constraint_info()
   ConstraintTypeInfo position_goal_info = {
       "Position Goal Constraints",
       "Set position of a point to a target vector",
+      0,
       [](GeometrySet &&geometry_set, ErrorFn error_fn) -> ConstraintClosure * {
         return new PositionGoalClosure(std::move(geometry_set), error_fn);
       }};
   ConstraintTypeInfo rotation_goal_info = {
       "Rotation Goal Constraints",
       "Set orientation of an edge to a target rotation",
+      1,
       [](GeometrySet &&geometry_set, ErrorFn error_fn) -> ConstraintClosure * {
         return new RotationGoalClosure(std::move(geometry_set), error_fn);
       }};
   ConstraintTypeInfo stretch_shear_info = {
       "Stretch/Shear Constraints",
       "Enforces edge length and aligns forward direction with the edge vector",
+      2,
       [](GeometrySet &&geometry_set, ErrorFn error_fn) -> ConstraintClosure * {
         return new StretchShearClosure(std::move(geometry_set), error_fn);
       }};
   ConstraintTypeInfo bend_twist_info = {
       "Bend/Twist Constraints",
       "Enforces angles between neighboring edges to their relative rest orientation",
+      3,
       [](GeometrySet &&geometry_set, ErrorFn error_fn) -> ConstraintClosure * {
         return new BendTwistClosure(std::move(geometry_set), error_fn);
       }};
   ConstraintTypeInfo contact_info = {
       "Contact Constraints",
       "Keep contact points from penetrating",
+      4,
       [](GeometrySet &&geometry_set, ErrorFn error_fn) -> ConstraintClosure * {
         return new ContactClosure(std::move(geometry_set), error_fn);
       }};

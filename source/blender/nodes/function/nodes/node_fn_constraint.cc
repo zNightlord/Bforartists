@@ -102,7 +102,6 @@ template<typename ExecPreset> static auto bend_twist_multifunction(ExecPreset ex
                                            mf_input<math::Quaternion>,
                                            mf_input<float>,
                                            mf_input<float>,
-                                           mf_input<float>,
                                            mf_input<math::Quaternion>,
                                            mf_input<float>,
                                            mf_output<float>,
@@ -117,7 +116,6 @@ template<typename ExecPreset> static auto bend_twist_multifunction(ExecPreset ex
          math::Quaternion rotation2,
          const float weight_rot1,
          const float weight_rot2,
-         const float edge_length,
          const math::Quaternion &darboux_vector,
          const float alpha,
          float &lambda_w_out,
@@ -126,24 +124,12 @@ template<typename ExecPreset> static auto bend_twist_multifunction(ExecPreset ex
          math::Quaternion &rotation_out2) -> void {
         float4 lambda = float4(lambda_w, lambda_xyz);
         if (linearized_rotation) {
-          xpbd_constraints::apply_position_bend_twist<true>(weight_rot1,
-                                                            weight_rot2,
-                                                            edge_length,
-                                                            darboux_vector,
-                                                            alpha,
-                                                            lambda,
-                                                            rotation1,
-                                                            rotation2);
+          xpbd_constraints::apply_position_bend_twist<true>(
+              weight_rot1, weight_rot2, darboux_vector, alpha, lambda, rotation1, rotation2);
         }
         else {
-          xpbd_constraints::apply_position_bend_twist<false>(weight_rot1,
-                                                             weight_rot2,
-                                                             edge_length,
-                                                             darboux_vector,
-                                                             alpha,
-                                                             lambda,
-                                                             rotation1,
-                                                             rotation2);
+          xpbd_constraints::apply_position_bend_twist<false>(
+              weight_rot1, weight_rot2, darboux_vector, alpha, lambda, rotation1, rotation2);
         }
         lambda_w_out = lambda.w;
         lambda_xyz_out = lambda.xyz();
