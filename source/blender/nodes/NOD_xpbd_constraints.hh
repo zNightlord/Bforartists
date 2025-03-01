@@ -34,8 +34,8 @@ struct DebugRecorder {
                     bke::GeometryComponent::Type component_type);
 
   void record_step(const StringRef label,
-                   ConstraintEvalParams &eval_params,
-                   const ConstraintClosure *closure,
+                   const ConstraintEvalParams &eval_params,
+                   bke::GeometrySet *constraints,
                    const int constraint_type_code,
                    const IndexMask &group_mask);
 

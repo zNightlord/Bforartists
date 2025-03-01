@@ -42,8 +42,8 @@ void DebugRecorder::set_geometry(const GeometrySet &geometry_set,
 }
 
 void DebugRecorder::record_step(const StringRef label,
-                                ConstraintEvalParams &eval_params,
-                                const ConstraintClosure *closure,
+                                const ConstraintEvalParams &eval_params,
+                                GeometrySet *constraints,
                                 const int constraint_type_code,
                                 const IndexMask &group_mask)
 {
@@ -81,10 +81,9 @@ void DebugRecorder::record_step(const StringRef label,
     append_instance_item(step_geometry, updated_geometry, "Geometry");
   }
 
-  if (closure) {
-    GeometrySet constraint_geometry = closure->geometry_set;
+  if (constraints) {
     PointCloudComponent &constraint_component =
-        constraint_geometry.get_component_for_write<PointCloudComponent>();
+        constraints->get_component_for_write<PointCloudComponent>();
     MutableAttributeAccessor attributes = *constraint_component.attributes_for_write();
     attributes.remove("group_active");
     SpanAttributeWriter<bool> group_active_writer = attributes.lookup_or_add_for_write_span<bool>(
@@ -93,7 +92,7 @@ void DebugRecorder::record_step(const StringRef label,
                              [&](const int index) { group_active_writer.span[index] = true; });
     group_active_writer.finish();
 
-    append_instance_item(step_geometry, constraint_geometry, "Constraints");
+    append_instance_item(step_geometry, *constraints, "Constraints");
   }
 
   MutableAttributeAccessor instance_attributes = step_geometry
@@ -103,7 +102,7 @@ void DebugRecorder::record_step(const StringRef label,
   AttributeWriter<int> type_code_writer = instance_attributes.lookup_or_add_for_write<int>(
       "type_code", AttrDomain::Instance);
   type_code_writer.varray.set(0, -1);
-  if (closure) {
+  if (constraints) {
     type_code_writer.varray.set(1, constraint_type_code);
   }
   type_code_writer.finish();
@@ -275,7 +274,7 @@ static void evaluate_constraint_group(EvaluationTarget target,
   if (eval_params.debug_recorder) {
     const std::string label = fmt::format("Evaluate: {}", constraint_info.ui_name);
     eval_params.debug_recorder->record_step(
-        label, eval_params, &closure, constraint_info.type_code, group_mask);
+        label, eval_params, &closure.geometry_set, constraint_info.type_code, group_mask);
   }
 }
 
