@@ -4023,20 +4023,6 @@ class EXTENSIONS_OT_userpref_allow_online_popup(Operator):
             col.label(text=line, translate=False)
 
 
-class EXTENSIONS_OT_package_enable_not_installed(Operator):
-    """Turn on this extension"""
-    bl_idname = "extensions.package_enable_not_installed"
-    bl_label = "Enable Extension"
-
-    @classmethod
-    def poll(cls, _context):
-        cls.poll_message_set("Extension needs to be installed before it can be enabled")
-        return False
-
-    def execute(self, _context):
-        # This operator only exists to be able to show disabled check-boxes for extensions
-        # while giving users a reasonable explanation on why is that.
-        return {'CANCELLED'}
 
 
 ## BFA - custom operator to install pre-downlaoded extensions - START ##
@@ -4149,12 +4135,6 @@ classes = (
     EXTENSIONS_OT_userpref_show_online,
     EXTENSIONS_OT_userpref_allow_online,
     EXTENSIONS_OT_userpref_allow_online_popup,
-
-    # Dummy, just shows a message.
-    EXTENSIONS_OT_package_enable_not_installed,
-
-    # Dummy commands (for testing).
-    EXTENSIONS_OT_dummy_progress,
 
     EXTENSIONS_OT_install_downloaded_extensions, # BFA - custom operator to install pre-downloaded extensions
 )
