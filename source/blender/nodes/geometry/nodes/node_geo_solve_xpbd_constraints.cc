@@ -32,7 +32,10 @@ static void append_instance_item(GeometrySet &container,
   instances.add_instance(handle, transform);
 }
 
-DebugRecorder::DebugRecorder(const bke::GeometrySet &debug_steps) : debug_steps_(debug_steps) {}
+DebugRecorder::DebugRecorder(const bke::GeometrySet &debug_steps)
+    : component_type_(GeometryComponent::Type::PointCloud), debug_steps_(debug_steps)
+{
+}
 
 void DebugRecorder::set_geometry(const GeometrySet &geometry_set,
                                  GeometryComponent::Type component_type)
@@ -42,10 +45,10 @@ void DebugRecorder::set_geometry(const GeometrySet &geometry_set,
 }
 
 void DebugRecorder::record_step(const StringRef label,
-                                ConstraintEvalParams &eval_params,
-                                const ConstraintClosure *closure,
+                                GeometrySet *constraints,
                                 const int constraint_type_code,
-                                const IndexMask &group_mask)
+                                const IndexMask &group_mask,
+                                const ConstraintVariables &variables)
 {
   GeometrySet step_geometry;
 
@@ -53,38 +56,37 @@ void DebugRecorder::record_step(const StringRef label,
     GeometrySet updated_geometry = geometry_set_;
     GeometryComponent &component = updated_geometry.get_component_for_write(component_type_);
     MutableAttributeAccessor attributes = *component.attributes_for_write();
-    if (!eval_params.positions.is_empty()) {
+    if (!variables.positions.is_empty()) {
       AttributeWriter<float3> positions_writer = attributes.lookup_or_add_for_write<float3>(
           "position", AttrDomain::Point);
-      positions_writer.varray.set_all(eval_params.positions);
+      positions_writer.varray.set_all(variables.positions);
       positions_writer.finish();
     }
-    if (!eval_params.rotations.is_empty()) {
+    if (!variables.rotations.is_empty()) {
       AttributeWriter<math::Quaternion> rotations_writer =
           attributes.lookup_or_add_for_write<math::Quaternion>("rotation", AttrDomain::Point);
-      rotations_writer.varray.set_all(eval_params.rotations);
+      rotations_writer.varray.set_all(variables.rotations);
       rotations_writer.finish();
     }
-    if (!eval_params.velocities.is_empty()) {
+    if (!variables.velocities.is_empty()) {
       AttributeWriter<float3> velocities_writer = attributes.lookup_or_add_for_write<float3>(
           "velocity", AttrDomain::Point);
-      velocities_writer.varray.set_all(eval_params.velocities);
+      velocities_writer.varray.set_all(variables.velocities);
       velocities_writer.finish();
     }
-    if (!eval_params.angular_velocities.is_empty()) {
+    if (!variables.angular_velocities.is_empty()) {
       AttributeWriter<float3> angular_velocities_writer =
           attributes.lookup_or_add_for_write<float3>("angular_velocity", AttrDomain::Point);
-      angular_velocities_writer.varray.set_all(eval_params.angular_velocities);
+      angular_velocities_writer.varray.set_all(variables.angular_velocities);
       angular_velocities_writer.finish();
     }
 
     append_instance_item(step_geometry, updated_geometry, "Geometry");
   }
 
-  if (closure) {
-    GeometrySet constraint_geometry = closure->geometry_set;
+  if (constraints) {
     PointCloudComponent &constraint_component =
-        constraint_geometry.get_component_for_write<PointCloudComponent>();
+        constraints->get_component_for_write<PointCloudComponent>();
     MutableAttributeAccessor attributes = *constraint_component.attributes_for_write();
     attributes.remove("group_active");
     SpanAttributeWriter<bool> group_active_writer = attributes.lookup_or_add_for_write_span<bool>(
@@ -93,7 +95,7 @@ void DebugRecorder::record_step(const StringRef label,
                              [&](const int index) { group_active_writer.span[index] = true; });
     group_active_writer.finish();
 
-    append_instance_item(step_geometry, constraint_geometry, "Constraints");
+    append_instance_item(step_geometry, *constraints, "Constraints");
   }
 
   MutableAttributeAccessor instance_attributes = step_geometry
@@ -103,7 +105,7 @@ void DebugRecorder::record_step(const StringRef label,
   AttributeWriter<int> type_code_writer = instance_attributes.lookup_or_add_for_write<int>(
       "type_code", AttrDomain::Instance);
   type_code_writer.varray.set(0, -1);
-  if (closure) {
+  if (constraints) {
     type_code_writer.varray.set(1, constraint_type_code);
   }
   type_code_writer.finish();
@@ -120,9 +122,9 @@ const bke::GeometrySet &DebugRecorder::debug_steps() const
 
 namespace blender::nodes::node_geo_solve_xpbd_constraints_cc {
 
-using xpbd_constraints::ConstraintClosure;
 using xpbd_constraints::ConstraintEvalParams;
 using xpbd_constraints::ConstraintTypeInfo;
+using xpbd_constraints::ConstraintVariables;
 
 constexpr float default_fps = 1.0f / 25.0f;
 
@@ -253,47 +255,141 @@ static void node_declare_velocities(NodeDeclarationBuilder &b)
       .align_with_previous();
 }
 
-/* Evaluate a group of constraints in parallel.
- * It's important that none of the constraints write to the same variables. Solver groups must be
- * computed in such a way that each variable is only affected by one constraint in each group.
- */
-static void evaluate_constraint_group(EvaluationTarget target,
-                                      ConstraintEvalParams &eval_params,
-                                      const ConstraintTypeInfo &constraint_info,
-                                      ConstraintClosure &closure,
-                                      const IndexMask &group_mask)
+static void apply_gauss_seidel_positions_group(const ConstraintEvalParams &eval_params,
+                                               const ConstraintTypeInfo &constraint_info,
+                                               GeometrySet &constraints,
+                                               const IndexMask &group_mask,
+                                               ConstraintVariables &variables)
 {
-  switch (target) {
-    case EvaluationTarget::Positions:
-      closure.apply_to_positions(eval_params, group_mask);
-      break;
-    case EvaluationTarget::Velocities:
-      closure.apply_to_velocities(eval_params, group_mask);
-      break;
+  constexpr bool linearized_quaternion = true;
+
+  if (!constraint_info.evaluate_position) {
+    return;
+  }
+
+  Vector<VArray<float3>> delta_positions;
+  Vector<VArray<float4>> delta_rotations;
+  constraint_info.evaluate_position(
+      eval_params, variables, group_mask, constraints, delta_positions, delta_rotations);
+
+  Vector<VArray<int>> mapping = constraint_info.get_mapping(constraints);
+  BLI_assert(delta_positions.size() == mapping.size());
+  BLI_assert(delta_rotations.size() == mapping.size());
+  /* TODO optimize: constraints should have at most 4 point maps and associated deltas.
+   * It should be possible to unroll the mapping loop and use only a single group mask iteration.
+   */
+  const IndexRange points_range = variables.positions.index_range();
+  for (const int map_i : mapping.index_range()) {
+    const VArraySpan<int> map = mapping[map_i];
+    /* Gauss-Seidel solver has a unique source for each point and can just write to it. */
+    if (delta_positions[map_i]) {
+      const VArraySpan<float3> delta_pos = delta_positions[map_i];
+      group_mask.foreach_index(GrainSize(4096), [&](const int index) {
+        const int point = map[index];
+        if (points_range.contains(point)) {
+          xpbd_constraints::apply_position_impulse(delta_pos[index], variables.positions[point]);
+        }
+      });
+    }
+    if (delta_rotations[map_i]) {
+      const VArraySpan<float4> delta_rot = delta_rotations[map_i];
+      group_mask.foreach_index(GrainSize(4096), [&](const int index) {
+        const int point = map[index];
+        if (points_range.contains(point)) {
+          xpbd_constraints::apply_rotation_impulse<linearized_quaternion>(
+              delta_rot[index], variables.rotations[point]);
+        }
+      });
+    }
   }
 
   if (eval_params.debug_recorder) {
     const std::string label = fmt::format("Evaluate: {}", constraint_info.ui_name);
     eval_params.debug_recorder->record_step(
-        label, eval_params, &closure, constraint_info.type_code, group_mask);
+        label, &constraints, constraint_info.type_code, group_mask, variables);
   }
 }
 
-static void do_single_constraint_passes(EvaluationTarget target,
-                                        ConstraintEvalParams &eval_params,
-                                        const ConstraintTypeInfo &constraint_info,
-                                        ConstraintClosure &closure,
-                                        const Span<IndexMask> group_masks)
+static void apply_gauss_seidel_velocities_group(const ConstraintEvalParams &eval_params,
+                                                const ConstraintTypeInfo &constraint_info,
+                                                GeometrySet &constraints,
+                                                const IndexMask &group_mask,
+                                                ConstraintVariables &variables)
+{
+  if (!constraint_info.evaluate_velocity) {
+    return;
+  }
+
+  Vector<VArray<float3>> delta_velocities;
+  Vector<VArray<float3>> delta_angular_velocities;
+  constraint_info.evaluate_velocity(
+      eval_params, variables, group_mask, constraints, delta_velocities, delta_angular_velocities);
+
+  Vector<VArray<int>> mapping = constraint_info.get_mapping(constraints);
+  BLI_assert(mapping.size() == delta_velocities.size());
+  BLI_assert(mapping.size() == delta_angular_velocities.size());
+  /* TODO optimize: constraints should have at most 4 point maps and associated deltas.
+   * It should be possible to unroll the mapping loop and use only a single group mask iteration.
+   */
+  const IndexRange points_range = variables.positions.index_range();
+  for (const int map_i : mapping.index_range()) {
+    const VArraySpan<int> map = mapping[map_i];
+    /* Gauss-Seidel solver has a unique source for each point and can just write to it. */
+    if (delta_velocities[map_i]) {
+      const VArraySpan<float3> delta_vel = delta_velocities[map_i];
+      group_mask.foreach_index(GrainSize(4096), [&](const int index) {
+        const int point = map[index];
+        if (points_range.contains(point)) {
+          xpbd_constraints::apply_velocity_impulse(delta_vel[index], variables.velocities[point]);
+        }
+      });
+    }
+    if (delta_angular_velocities[map_i]) {
+      const VArraySpan<float3> delta_angvel = delta_angular_velocities[map_i];
+      group_mask.foreach_index(GrainSize(4096), [&](const int index) {
+        const int point = map[index];
+        if (points_range.contains(point)) {
+          xpbd_constraints::apply_angular_velocity_impulse(delta_angvel[index],
+                                                           variables.angular_velocities[point]);
+        }
+      });
+    }
+  }
+
+  if (eval_params.debug_recorder) {
+    const std::string label = fmt::format("Evaluate: {}", constraint_info.ui_name);
+    eval_params.debug_recorder->record_step(
+        label, &constraints, constraint_info.type_code, group_mask, variables);
+  }
+}
+
+static void do_gauss_seidel_passes(const EvaluationTarget target,
+                                   const ConstraintEvalParams &eval_params,
+                                   const ConstraintTypeInfo &constraint_info,
+                                   GeometrySet &constraints,
+                                   const Span<IndexMask> group_masks,
+                                   ConstraintVariables &variables)
 {
   /* Solve in consistent order by using the sorted index set. */
   for (const IndexMask &group_mask : group_masks) {
-    evaluate_constraint_group(target, eval_params, constraint_info, closure, group_mask);
+    switch (target) {
+      case EvaluationTarget::Positions: {
+        apply_gauss_seidel_positions_group(
+            eval_params, constraint_info, constraints, group_mask, variables);
+        break;
+      }
+      case EvaluationTarget::Velocities: {
+        apply_gauss_seidel_velocities_group(
+            eval_params, constraint_info, constraints, group_mask, variables);
+        break;
+      }
+    }
   }
 }
 
-static Vector<IndexMask> build_group_masks(ConstraintClosure &closure, IndexMaskMemory &memory)
+static Vector<IndexMask> build_group_masks(const VArray<int> &solver_groups,
+                                           IndexMaskMemory &memory)
 {
-  const VArray<int> &solver_groups = closure.solver_groups;
   if (solver_groups.is_empty()) {
     return {};
   }
@@ -330,95 +426,95 @@ static Vector<IndexMask> build_group_masks(ConstraintClosure &closure, IndexMask
 }
 
 /* A closure and associated solver group masks. */
-struct ClosureEvalInfo {
-  ConstraintClosure *closure;
+struct ConstraintEvalData {
+  const ConstraintTypeInfo *type;
+  std::optional<GeometrySet> geometry;
   Vector<IndexMask> group_masks;
 };
 
-static void do_gauss_seidel_step(EvaluationTarget target,
-                                 ConstraintEvalParams &eval_params,
-                                 const Span<ClosureEvalInfo> closures)
+static void do_gauss_seidel_step(const EvaluationTarget target,
+                                 const ConstraintEvalParams &eval_params,
+                                 MutableSpan<ConstraintEvalData> constraint_data,
+                                 ConstraintVariables &variables)
 {
 
-  const Span<ConstraintTypeInfo> constraint_infos =
-      xpbd_constraints::get_constraint_info_ordered();
-  for (const int i : closures.index_range()) {
-    const ClosureEvalInfo &info = closures[i];
-    if (info.closure) {
-      do_single_constraint_passes(
-          target, eval_params, constraint_infos[i], *info.closure, info.group_masks);
+  for (ConstraintEvalData &data : constraint_data) {
+    if (data.geometry) {
+      do_gauss_seidel_passes(
+          target, eval_params, *data.type, *data.geometry, data.group_masks, variables);
     }
   }
 }
 
-static void do_jacobi_step(EvaluationTarget /*target*/,
-                           ConstraintEvalParams & /*eval_params*/,
-                           const Span<ClosureEvalInfo> /*closures*/)
+static void do_jacobi_step(const EvaluationTarget /*target*/,
+                           const ConstraintEvalParams & /*eval_params*/,
+                           MutableSpan<ConstraintEvalData> /*constraint_data*/,
+                           ConstraintVariables & /*variables*/)
 {
   /* TODO */
 }
 
-static void zero_init_solver(EvaluationTarget target, const Span<ClosureEvalInfo> closures)
+static void zero_init_solver(const EvaluationTarget target,
+                             MutableSpan<ConstraintEvalData> constraint_data)
 {
-  for (const ClosureEvalInfo &info : closures) {
-    if (!info.closure) {
+  for (ConstraintEvalData &data : constraint_data) {
+    if (!data.geometry) {
       continue;
     }
     switch (target) {
       case EvaluationTarget::Positions:
-        info.closure->reset_for_positions();
+        if (data.type->init_position_step) {
+          data.type->init_position_step(*data.geometry);
+        }
         break;
       case EvaluationTarget::Velocities:
-        info.closure->reset_for_velocities();
+        if (data.type->init_velocity_step) {
+          data.type->init_velocity_step(*data.geometry);
+        }
         break;
     }
   }
 }
 
 static void warm_start_solver(EvaluationTarget target,
-                              ConstraintEvalParams &eval_params,
-                              const Span<ClosureEvalInfo> closures)
+                              const ConstraintEvalParams &eval_params,
+                              MutableSpan<ConstraintEvalData> constraint_data)
 {
-  for (const ClosureEvalInfo &info : closures) {
-    if (!info.closure) {
+  for (ConstraintEvalData &data : constraint_data) {
+    if (!data.geometry) {
       continue;
     }
     /* TODO */
     eval_params.error_message_add("Warm starting not yet implemented");
     switch (target) {
       case EvaluationTarget::Positions:
-        info.closure->reset_for_positions();
+        if (data.type->init_position_step) {
+          data.type->init_position_step(*data.geometry);
+        }
         break;
       case EvaluationTarget::Velocities:
-        info.closure->reset_for_velocities();
+        if (data.type->init_velocity_step) {
+          data.type->init_velocity_step(*data.geometry);
+        }
         break;
     }
-    // for (const IndexMask &group_mask : info.group_masks) {
-    //   switch (target) {
-    //     case EvaluationTarget::Positions:
-    //       info.closure->init_positions(eval_params, group_mask);
-    //       break;
-    //     case EvaluationTarget::Velocities:
-    //       info.closure->init_velocities(eval_params, group_mask);
-    //       break;
-    //   }
-    // }
   }
 }
 
 static void do_solver_steps(const SolverMethod method,
                             const int steps,
-                            EvaluationTarget target,
-                            ConstraintInit init_mode,
-                            ConstraintEvalParams &eval_params,
-                            const Span<ClosureEvalInfo> closures)
+                            const EvaluationTarget target,
+                            const ConstraintInit init_mode,
+                            const ConstraintEvalParams &eval_params,
+                            MutableSpan<ConstraintEvalData> constraint_data,
+                            ConstraintVariables &variables)
 {
   switch (init_mode) {
     case ConstraintInit::ZeroInit:
-      zero_init_solver(target, closures);
+      zero_init_solver(target, constraint_data);
       break;
     case ConstraintInit::WarmStart:
-      warm_start_solver(target, eval_params, closures);
+      warm_start_solver(target, eval_params, constraint_data);
       break;
   }
 
@@ -440,16 +536,16 @@ static void do_solver_steps(const SolverMethod method,
       break;
   }
   if (eval_params.debug_recorder) {
-    eval_params.debug_recorder->record_step(label, eval_params, nullptr, -1, {});
+    eval_params.debug_recorder->record_step(label, nullptr, -1, {}, variables);
   }
 
   for ([[maybe_unused]] const int step : IndexRange(steps)) {
     switch (method) {
       case SolverMethod::GaussSeidel:
-        do_gauss_seidel_step(target, eval_params, closures);
+        do_gauss_seidel_step(target, eval_params, constraint_data, variables);
         break;
       case SolverMethod::Jacobi:
-        do_jacobi_step(target, eval_params, closures);
+        do_jacobi_step(target, eval_params, constraint_data, variables);
         break;
     }
   }
@@ -474,32 +570,51 @@ static ConstraintEvalParams extract_eval_params(GeoNodeExecParams params)
   };
   eval_params.debug_check = debug_check;
   if (use_debug_steps) {
-    eval_params.debug_recorder = xpbd_constraints::DebugRecorder(
+    eval_params.debug_recorder = std::make_unique<xpbd_constraints::DebugRecorder>(
         params.extract_input<GeometrySet>("Debug Steps"));
   }
 
   return eval_params;
 }
 
-static void bind_constraint_closures(GeoNodeExecParams params,
-                                     Vector<ClosureEvalInfo> &closures,
-                                     IndexMaskMemory &memory)
+static void get_constraint_data(GeoNodeExecParams params,
+                                Vector<ConstraintEvalData> &constraint_data,
+                                IndexMaskMemory &memory)
 {
-  auto error_fn = [params](const StringRef message) {
-    params.error_message_add(geo_eval_log::NodeWarningType::Warning, message);
-  };
-
   const Span<ConstraintTypeInfo> constraint_infos =
       xpbd_constraints::get_constraint_info_ordered();
-  closures.reinitialize(constraint_infos.size());
-  closures.fill({});
+  constraint_data.reinitialize(constraint_infos.size());
   for (const int i : constraint_infos.index_range()) {
     const ConstraintTypeInfo &info = constraint_infos[i];
+    constraint_data[i].type = &info;
+
     GeometrySet geometry_set = params.extract_input<GeometrySet>(info.ui_name);
     if (geometry_set.has_component<PointCloudComponent>()) {
-      ConstraintClosure *closure = info.get_closure(std::move(geometry_set), error_fn);
-      Vector<IndexMask> group_masks = build_group_masks(*closure, memory);
-      closures[i] = {closure, std::move(group_masks)};
+      const AttributeAccessor attributes =
+          *geometry_set.get_component<PointCloudComponent>()->attributes();
+      const VArray<int> solver_groups = *attributes.lookup_or_default<int>(
+          "solver_group", AttrDomain::Point, 0);
+
+      Vector<IndexMask> group_masks = build_group_masks(std::move(solver_groups), memory);
+      constraint_data[i].geometry = std::move(geometry_set);
+      constraint_data[i].group_masks = std::move(group_masks);
+    }
+    else {
+      constraint_data[i].geometry = {};
+      constraint_data[i].group_masks = {};
+    }
+  }
+}
+
+static void set_constraint_data_output(GeoNodeExecParams params,
+                                       const Span<ConstraintEvalData> constraint_data)
+{
+  for (const ConstraintEvalData &data : constraint_data) {
+    if (data.geometry) {
+      params.set_output(data.type->ui_name, *data.geometry);
+    }
+    else {
+      params.set_output(data.type->ui_name, GeometrySet{});
     }
   }
 }
@@ -528,9 +643,9 @@ static void node_geo_exec_positions(GeoNodeExecParams params)
                                            colliders_geometry_set.get_instances()->transforms() :
                                            Span<float4x4>{};
 
-  Vector<ClosureEvalInfo> constraint_closures;
+  Vector<ConstraintEvalData> constraint_data;
   IndexMaskMemory memory;
-  bind_constraint_closures(params, constraint_closures, memory);
+  get_constraint_data(params, constraint_data, memory);
 
   ConstraintEvalParams eval_params = extract_eval_params(params);
 
@@ -552,13 +667,14 @@ static void node_geo_exec_positions(GeoNodeExecParams params)
         }
 
         const int num_points = attributes->domain_size(AttrDomain::Point);
-        eval_params.positions.reinitialize(num_points);
-        eval_params.rotations.reinitialize(num_points);
+        ConstraintVariables vars;
+        vars.positions.reinitialize(num_points);
+        vars.rotations.reinitialize(num_points);
 
         const bke::GeometryFieldContext field_context{component, AttrDomain::Point};
         fn::FieldEvaluator evaluator{field_context, num_points};
-        evaluator.add_with_destination(position_field, eval_params.positions.as_mutable_span());
-        evaluator.add_with_destination(rotation_field, eval_params.rotations.as_mutable_span());
+        evaluator.add_with_destination(position_field, vars.positions.as_mutable_span());
+        evaluator.add_with_destination(rotation_field, vars.rotations.as_mutable_span());
         evaluator.add(old_position_field);
         evaluator.add(old_rotation_field);
         evaluator.add(position_weight_field);
@@ -580,48 +696,30 @@ static void node_geo_exec_positions(GeoNodeExecParams params)
                         EvaluationTarget::Positions,
                         init_mode,
                         eval_params,
-                        constraint_closures);
+                        constraint_data,
+                        vars);
 
         if (position_output_id) {
           AttributeWriter<float3> positions_writer = attributes->lookup_or_add_for_write<float3>(
               *position_output_id, AttrDomain::Point);
-          BLI_assert(eval_params.positions.size() == num_points);
-          positions_writer.varray.set_all(eval_params.positions);
+          BLI_assert(vars.positions.size() == num_points);
+          positions_writer.varray.set_all(vars.positions);
           positions_writer.finish();
         }
         if (rotation_output_id) {
           AttributeWriter<math::Quaternion> rotations_writer =
               attributes->lookup_or_add_for_write<math::Quaternion>(*rotation_output_id,
                                                                     AttrDomain::Point);
-          BLI_assert(eval_params.rotations.size() == num_points);
-          rotations_writer.varray.set_all(eval_params.rotations);
+          BLI_assert(vars.rotations.size() == num_points);
+          rotations_writer.varray.set_all(vars.rotations);
           rotations_writer.finish();
         }
       }
     }
   });
 
-  for (const ClosureEvalInfo &info : constraint_closures) {
-    if (info.closure) {
-      info.closure->finish_attributes();
-    }
-  }
-
   params.set_output("Geometry", geometry_set);
-
-  const Span<ConstraintTypeInfo> constraint_infos = xpbd_constraints::get_constraint_info();
-  for (const int i : constraint_infos.index_range()) {
-    const ConstraintTypeInfo &info = constraint_infos[i];
-    if (constraint_closures[i].closure) {
-      params.set_output(info.ui_name, constraint_closures[i].closure->geometry_set);
-
-      delete constraint_closures[i].closure;
-    }
-    else {
-      params.set_output(info.ui_name, GeometrySet{});
-    }
-  }
-
+  set_constraint_data_output(params, constraint_data);
   if (eval_params.debug_recorder) {
     params.set_output("Debug Steps", eval_params.debug_recorder->debug_steps());
   }
@@ -654,9 +752,9 @@ static void node_geo_exec_velocities(GeoNodeExecParams params)
                                            colliders_geometry_set.get_instances()->transforms() :
                                            Span<float4x4>{};
 
-  Vector<ClosureEvalInfo> constraint_closures;
+  Vector<ConstraintEvalData> constraint_data;
   IndexMaskMemory memory;
-  bind_constraint_closures(params, constraint_closures, memory);
+  get_constraint_data(params, constraint_data, memory);
 
   ConstraintEvalParams eval_params = extract_eval_params(params);
 
@@ -678,18 +776,19 @@ static void node_geo_exec_velocities(GeoNodeExecParams params)
         }
 
         const int num_points = attributes->domain_size(AttrDomain::Point);
-        eval_params.positions.reinitialize(num_points);
-        eval_params.rotations.reinitialize(num_points);
-        eval_params.velocities.reinitialize(num_points);
-        eval_params.angular_velocities.reinitialize(num_points);
+        ConstraintVariables vars;
+        vars.positions.reinitialize(num_points);
+        vars.rotations.reinitialize(num_points);
+        vars.velocities.reinitialize(num_points);
+        vars.angular_velocities.reinitialize(num_points);
 
         const bke::GeometryFieldContext field_context{component, AttrDomain::Point};
         fn::FieldEvaluator evaluator{field_context, num_points};
-        evaluator.add_with_destination(position_field, eval_params.positions.as_mutable_span());
-        evaluator.add_with_destination(rotation_field, eval_params.rotations.as_mutable_span());
-        evaluator.add_with_destination(velocity_field, eval_params.velocities.as_mutable_span());
+        evaluator.add_with_destination(position_field, vars.positions.as_mutable_span());
+        evaluator.add_with_destination(rotation_field, vars.rotations.as_mutable_span());
+        evaluator.add_with_destination(velocity_field, vars.velocities.as_mutable_span());
         evaluator.add_with_destination(angular_velocity_field,
-                                       eval_params.angular_velocities.as_mutable_span());
+                                       vars.angular_velocities.as_mutable_span());
         evaluator.add(orig_velocity_field);
         evaluator.add(orig_angular_velocity_field);
         evaluator.add(position_weight_field);
@@ -711,48 +810,30 @@ static void node_geo_exec_velocities(GeoNodeExecParams params)
                         EvaluationTarget::Velocities,
                         init_mode,
                         eval_params,
-                        constraint_closures);
+                        constraint_data,
+                        vars);
 
         if (velocity_output_id) {
           AttributeWriter<float3> velocities_writer = attributes->lookup_or_add_for_write<float3>(
               *velocity_output_id, AttrDomain::Point);
-          BLI_assert(eval_params.velocities.size() == num_points);
-          velocities_writer.varray.set_all(eval_params.velocities);
+          BLI_assert(vars.velocities.size() == num_points);
+          velocities_writer.varray.set_all(vars.velocities);
           velocities_writer.finish();
         }
         if (angular_velocity_output_id) {
           AttributeWriter<float3> angular_velocities_writer =
               attributes->lookup_or_add_for_write<float3>(*angular_velocity_output_id,
                                                           AttrDomain::Point);
-          BLI_assert(eval_params.angular_velocities.size() == num_points);
-          angular_velocities_writer.varray.set_all(eval_params.angular_velocities);
+          BLI_assert(vars.angular_velocities.size() == num_points);
+          angular_velocities_writer.varray.set_all(vars.angular_velocities);
           angular_velocities_writer.finish();
         }
       }
     }
   });
 
-  for (const ClosureEvalInfo &info : constraint_closures) {
-    if (info.closure) {
-      info.closure->finish_attributes();
-    }
-  }
-
   params.set_output("Geometry", geometry_set);
-
-  const Span<ConstraintTypeInfo> constraint_infos = xpbd_constraints::get_constraint_info();
-  for (const int i : constraint_infos.index_range()) {
-    const ConstraintTypeInfo &info = constraint_infos[i];
-    if (constraint_closures[i].closure) {
-      params.set_output(info.ui_name, constraint_closures[i].closure->geometry_set);
-
-      delete constraint_closures[i].closure;
-    }
-    else {
-      params.set_output(info.ui_name, GeometrySet{});
-    }
-  }
-
+  set_constraint_data_output(params, constraint_data);
   if (eval_params.debug_recorder) {
     params.set_output("Debug Steps", eval_params.debug_recorder->debug_steps());
   }

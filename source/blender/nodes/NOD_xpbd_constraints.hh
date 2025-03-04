@@ -17,8 +17,7 @@
 
 namespace blender::nodes::xpbd_constraints {
 
-struct ConstraintEvalParams;
-struct ConstraintClosure;
+struct ConstraintVariables;
 
 struct DebugRecorder {
  private:
@@ -34,10 +33,10 @@ struct DebugRecorder {
                     bke::GeometryComponent::Type component_type);
 
   void record_step(const StringRef label,
-                   ConstraintEvalParams &eval_params,
-                   const ConstraintClosure *closure,
+                   bke::GeometrySet *constraints,
                    const int constraint_type_code,
-                   const IndexMask &group_mask);
+                   const IndexMask &group_mask,
+                   const ConstraintVariables &variables);
 
   const bke::GeometrySet &debug_steps() const;
 };
@@ -49,26 +48,18 @@ struct ConstraintEvalParams {
   /* Perform debug checks on user inputs at runtime. This helps avoid common errors but has a
    * significant performance cost, so should be optional. */
   bool debug_check;
-  std::optional<DebugRecorder> debug_recorder;
+  std::unique_ptr<DebugRecorder> debug_recorder;
 
   float delta_time;
   float delta_time_squared;
   float inv_delta_time;
   float inv_delta_time_squared;
 
-  /** Positions after applying constraints. */
-  Array<float3> positions;
-  /** Rotations after applying constraints. */
-  Array<math::Quaternion> rotations;
   /** Positions before applying constraints. */
   VArraySpan<float3> old_positions;
   /** Rotations before applying constraints. */
   VArraySpan<math::Quaternion> old_rotations;
 
-  /** Velocities after applying constraints. */
-  Array<float3> velocities;
-  /** Angular velocities after applying constraints. */
-  Array<float3> angular_velocities;
   /** Velocities derived after positional constraints. */
   VArraySpan<float3> orig_velocities;
   /** Angular velocities derived after positional constraints. */
@@ -85,33 +76,61 @@ struct ConstraintEvalParams {
   Span<float4x4> old_collider_transforms;
 };
 
-struct ConstraintClosure {
-  using ErrorFn = ConstraintEvalParams::ErrorFn;
-
-  bke::GeometrySet geometry_set;
-  VArray<int> solver_groups;
-
-  ConstraintClosure(bke::GeometrySet &&geometry_set, ErrorFn error_fn);
-  virtual ~ConstraintClosure() = default;
-
-  virtual void apply_to_positions(ConstraintEvalParams &eval_params,
-                                  const IndexMask &group_mask) = 0;
-  virtual void apply_to_velocities(ConstraintEvalParams &eval_params,
-                                   const IndexMask &group_mask) = 0;
-  virtual void reset_for_positions() = 0;
-  virtual void reset_for_velocities() = 0;
-
-  virtual void finish_attributes() = 0;
+struct ConstraintVariables {
+  /** Positions after applying constraints. */
+  Array<float3> positions;
+  /** Rotations after applying constraints. */
+  Array<math::Quaternion> rotations;
+  /** Velocities after applying constraints. */
+  Array<float3> velocities;
+  /** Angular velocities after applying constraints. */
+  Array<float3> angular_velocities;
 };
 
+/**
+ * Evaluates position constraints based on current geometry state.
+ * It should write the results to attributes in the constraints geometry, which are then applied to
+ * the geometry by the solver using the constraint mapping.
+ */
+using ConstraintEvalPositionFunc = std::function<void(const ConstraintEvalParams &eval_params,
+                                                      const ConstraintVariables &variables,
+                                                      const IndexMask &group_mask,
+                                                      bke::GeometrySet &constraints,
+                                                      Vector<VArray<float3>> &r_delta_positions,
+                                                      Vector<VArray<float4>> &r_delta_rotations)>;
+/**
+ * Evaluates velocity constraints based on current geometry state.
+ * It should write the results to attributes in the constraints geometry, which are then applied to
+ * the geometry by the solver using the constraint mapping.
+ */
+using ConstraintEvalVelocityFunc =
+    std::function<void(const ConstraintEvalParams &eval_params,
+                       const ConstraintVariables &variables,
+                       const IndexMask &group_mask,
+                       bke::GeometrySet &constraints,
+                       Vector<VArray<float3>> &r_delta_velocities,
+                       Vector<VArray<float3>> &r_delta_angular_velocities)>;
+
+/**
+ * Returns up to 4 index attributes mapping constraints to geometry points.
+ */
+using ConstraintMappingFunc =
+    std::function<Vector<VArray<int>>(const bke::GeometrySet &constraints)>;
+
+using ConstraintInitStepFunc = std::function<void(bke::GeometrySet &constraints)>;
+
 struct ConstraintTypeInfo {
-  using ErrorFn = ConstraintClosure::ErrorFn;
+  using ErrorFn = ConstraintEvalParams::ErrorFn;
 
   std::string ui_name;
   std::string ui_description;
   int type_code;
 
-  ConstraintClosure *(*get_closure)(bke::GeometrySet &&geometry_set, ErrorFn error_fn);
+  ConstraintInitStepFunc init_position_step;
+  ConstraintInitStepFunc init_velocity_step;
+  ConstraintEvalPositionFunc evaluate_position;
+  ConstraintEvalVelocityFunc evaluate_velocity;
+  ConstraintMappingFunc get_mapping;
 };
 
 Span<ConstraintTypeInfo> get_constraint_info();

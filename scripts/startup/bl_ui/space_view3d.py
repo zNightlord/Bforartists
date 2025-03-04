@@ -9020,14 +9020,25 @@ class VIEW3D_MT_edit_curves(Menu):
         layout = self.layout
 
         layout.menu("VIEW3D_MT_transform")
+        layout.menu("VIEW3D_MT_mirror")
+        layout.menu("VIEW3D_MT_snap")
+
         layout.separator()
+
         layout.operator("curves.duplicate_move", icon="DUPLICATE")
+        layout.operator("curves.extrude_move")
+
         layout.separator()
+
         layout.operator("curves.attribute_set", icon="NODE_ATTRIBUTE")
-        layout.operator("curves.delete", icon="DELETE")
-        layout.operator("curves.cyclic_toggle", icon="TOGGLE_CYCLIC")
         layout.operator_menu_enum("curves.curve_type_set", "type")
+        layout.operator("curves.cyclic_toggle", icon="TOGGLE_CYCLIC")
         layout.template_node_operator_asset_menu_items(catalog_path=self.bl_label)
+
+        layout.separator()
+
+        layout.operator("curves.separate")
+        layout.operator("curves.delete", icon="DELETE")
 
 
 class VIEW3D_MT_edit_curves_control_points(Menu):
@@ -9058,12 +9069,29 @@ class VIEW3D_MT_edit_curves_context_menu(Menu):
 
         layout.operator_context = "INVOKE_DEFAULT"
 
+        # Additive Operators
         layout.operator("curves.subdivide", icon="SUBDIVIDE_EDGES")
         layout.operator("curves.extrude_move", icon="EXTRUDE_REGION")
 
         layout.separator()
 
+        # Deform Operators
+        layout.menu("VIEW3D_MT_mirror")
+        layout.menu("VIEW3D_MT_snap")
+
+        layout.separator()
+
+        # Modify Flags
+        layout.operator_menu_enum("curves.curve_type_set", "type")
         layout.operator_menu_enum("curves.handle_type_set", "type")
+        layout.operator("curves.cyclic_toggle")
+        layout.operator("curves.switch_direction")
+
+        layout.separator()
+
+        # Removal Operators
+        layout.operator("curves.separate")
+        layout.operator("curves.delete")
 
         layout.separator()
 
