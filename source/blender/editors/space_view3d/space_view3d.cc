@@ -230,14 +230,14 @@ static SpaceLink *view3d_create(const ScrArea * /*area*/, const Scene *scene)
   region->regiontype = RGN_TYPE_ASSET_SHELF;
   region->alignment = (U.uiflag2 & USER_ASSETSHELF_TOP) ? RGN_ALIGN_BOTTOM : RGN_ALIGN_TOP;
   region->flag |= RGN_FLAG_HIDDEN;
-  region->overlap = (U.uiflag2 & USER_ASSETSHELF_TOP);
+  region->overlap = !(U.uiflag2 & USER_ASSETSHELF_TOP);
 
   /* asset shelf header */
   region = BKE_area_region_new();
   BLI_addtail(&v3d->regionbase, region);
   region->regiontype = RGN_TYPE_ASSET_SHELF_HEADER;
   region->alignment = (U.uiflag2 & USER_ASSETSHELF_TOP) ? RGN_ALIGN_BOTTOM | RGN_ALIGN_HIDE_WITH_PREV : RGN_ALIGN_TOP | RGN_ALIGN_HIDE_WITH_PREV;
-  region->overlap = (U.uiflag2 & USER_ASSETSHELF_TOP);
+  region->overlap = !(U.uiflag2 & USER_ASSETSHELF_TOP);
 
   /* tool shelf */
   region = BKE_area_region_new();
