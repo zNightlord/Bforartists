@@ -581,6 +581,7 @@ enum {
   HEADER_TOOLBAR_EDIT = (1 << 17),
   // bfa - show hide the Misc toolbars
   HEADER_TOOLBAR_MISC = (1 << 18),
+  ASSET_SHELF_TOP = (1 << 19),
 };
 
 #define AREAGRID 4
