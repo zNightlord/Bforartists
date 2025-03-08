@@ -222,22 +222,22 @@ static SpaceLink *view3d_create(const ScrArea * /*area*/, const Scene *scene)
   region->regiontype = RGN_TYPE_TOOL_HEADER;
   region->alignment = (U.uiflag & USER_HEADER_BOTTOM) ? RGN_ALIGN_BOTTOM : RGN_ALIGN_TOP;
   region->flag = RGN_FLAG_HIDDEN | RGN_FLAG_HIDDEN_BY_USER;
+  region->overlap = false;
+
+/* asset shelf header */
+  region = BKE_area_region_new();
+  BLI_addtail(&v3d->regionbase, region);
+  region->regiontype = RGN_TYPE_ASSET_SHELF_HEADER;
+  region->alignment = RGN_ALIGN_TOP;
+  region->overlap = false;
 
   /* asset shelf */
   region = BKE_area_region_new();
 
   BLI_addtail(&v3d->regionbase, region);
   region->regiontype = RGN_TYPE_ASSET_SHELF;
-  region->alignment = (U.uiflag2 & USER_ASSETSHELF_TOP) ? RGN_ALIGN_BOTTOM : RGN_ALIGN_TOP;
+  region->alignment = RGN_ALIGN_TOP;
   region->flag |= RGN_FLAG_HIDDEN;
-  region->overlap = !(U.uiflag2 & USER_ASSETSHELF_TOP);
-
-  /* asset shelf header */
-  region = BKE_area_region_new();
-  BLI_addtail(&v3d->regionbase, region);
-  region->regiontype = RGN_TYPE_ASSET_SHELF_HEADER;
-  region->alignment = (U.uiflag2 & USER_ASSETSHELF_TOP) ? RGN_ALIGN_BOTTOM | RGN_ALIGN_HIDE_WITH_PREV : RGN_ALIGN_TOP | RGN_ALIGN_HIDE_WITH_PREV;
-  region->overlap = !(U.uiflag2 & USER_ASSETSHELF_TOP);
 
   /* tool shelf */
   region = BKE_area_region_new();
@@ -2248,6 +2248,18 @@ void ED_spacetype_view3d()
   art->draw = view3d_header_region_draw;
   BLI_addhead(&st->regiontypes, art);
 
+  /* regions: asset shelf header */
+  art = MEM_cnew<ARegionType>("spacetype view3d asset shelf header region");
+  art->regionid = RGN_TYPE_ASSET_SHELF_HEADER;
+  art->keymapflag = ED_KEYMAP_UI | ED_KEYMAP_ASSET_SHELF | ED_KEYMAP_VIEW2D | ED_KEYMAP_FOOTER;
+  art->init = asset::shelf::header_region_init;
+  art->poll = asset::shelf::regions_poll;
+  art->draw = asset::shelf::header_region;
+  art->listener = asset::shelf::header_region_listen;
+  art->context = asset::shelf::context;
+  BLI_addhead(&st->regiontypes, art);
+  asset::shelf::types_register(art, SPACE_VIEW3D);
+
   /* regions: asset shelf */
   art = MEM_cnew<ARegionType>("spacetype view3d asset shelf region");
   art->regionid = RGN_TYPE_ASSET_SHELF;
@@ -2265,18 +2277,6 @@ void ED_spacetype_view3d()
   art->layout = asset::shelf::region_layout;
   art->draw = asset::shelf::region_draw;
   BLI_addhead(&st->regiontypes, art);
-
-  /* regions: asset shelf header */
-  art = MEM_cnew<ARegionType>("spacetype view3d asset shelf header region");
-  art->regionid = RGN_TYPE_ASSET_SHELF_HEADER;
-  art->keymapflag = ED_KEYMAP_UI | ED_KEYMAP_ASSET_SHELF | ED_KEYMAP_VIEW2D | ED_KEYMAP_FOOTER;
-  art->init = asset::shelf::header_region_init;
-  art->poll = asset::shelf::regions_poll;
-  art->draw = asset::shelf::header_region;
-  art->listener = asset::shelf::header_region_listen;
-  art->context = asset::shelf::context;
-  BLI_addhead(&st->regiontypes, art);
-  asset::shelf::types_register(art, SPACE_VIEW3D);
 
   /* regions: hud */
   art = ED_area_type_hud(st->spaceid);
