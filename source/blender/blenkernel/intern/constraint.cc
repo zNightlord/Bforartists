@@ -5576,6 +5576,119 @@ static bConstraintTypeInfo CTI_TRANSFORM_CACHE = {
     /*evaluate_constraint*/ transformcache_evaluate,
 };
 
+/* ---------- Attribute Transform  Constraint ----------- */
+
+static void attribute_id_looper(bConstraint *con, ConstraintIDFunc func, void *userdata)
+{
+  bShrinkwrapConstraint *data = static_cast<bShrinkwrapConstraint *>(con->data);
+
+  /* target only */
+  func(con, (ID **)&data->target, false, userdata);
+}
+
+static void attribute_new_data(void *cdata)
+{
+  bShrinkwrapConstraint *data = (bShrinkwrapConstraint *)cdata;
+
+  data->projAxis = OB_POSZ;
+  data->projAxisSpace = CONSTRAINT_SPACE_LOCAL;
+}
+
+static int attribute_get_tars(bConstraint *con, ListBase *list)
+{
+  if (con && list) {
+    bShrinkwrapConstraint *data = static_cast<bShrinkwrapConstraint *>(con->data);
+    bConstraintTarget *ct;
+
+    SINGLETARGETNS_GET_TARS(con, data->target, ct, list);
+
+    return 1;
+  }
+
+  return 0;
+}
+
+static void attribute_flush_tars(bConstraint *con, ListBase *list, bool no_copy)
+{
+  if (con && list) {
+    bAttributeConstraint *data = static_cast<bAttributeConstraint *>(con->data);
+    bConstraintTarget *ct = static_cast<bConstraintTarget *>(list->first);
+
+    SINGLETARGETNS_FLUSH_TARS(con, data->target, ct, list, no_copy);
+  }
+}
+
+static bool attribute_get_tarmat(Depsgraph * /*depsgraph*/,
+                                 bConstraint *con,
+                                 bConstraintOb *cob,
+                                 bConstraintTarget *ct,
+                                 float /*ctime*/)
+{
+  bShrinkwrapConstraint *scon = (bShrinkwrapConstraint *)con->data;
+
+  if (!VALID_CONS_TARGET(ct) || ct->tar->type != OB_MESH) {
+    return false;
+  }
+
+  float co[3] = {0.0f, 0.0f, 0.0f};
+  SpaceTransform transform;
+  Mesh *target_eval = BKE_object_get_evaluated_mesh(ct->tar);
+  ShrinkwrapTreeData tree;
+  copy_m4_m4(ct->matrix, cob->matrix);
+
+  if (!BKE_shrinkwrap_init_tree(&tree, target_eval, MOD_SHRINKWRAP_NEAREST_VERTEX, 0, false)) {
+    return false;
+  }
+
+  BLI_space_transform_from_matrices(&transform, cob->matrix, ct->tar->object_to_world().ptr());
+  BVHTreeNearest nearest;
+  nearest.index = -1;
+  nearest.dist_sq = FLT_MAX;
+
+  BLI_space_transform_apply(&transform, co);
+  BKE_shrinkwrap_find_nearest_surface(&tree, &nearest, co, scon->shrinkType);
+  if (nearest.index < 0) {
+    return false;
+  }
+
+  const float(*transform_matrices)[4][4] = (const float(*)[4][4])CustomData_get_layer_named(
+      &target_eval->vert_data, CD_PROP_FLOAT4X4, "transform");
+  if (!transform_matrices) {
+    return false;
+  }
+
+  copy_m4_m4(cob->matrix, transform_matrices[nearest.index]);
+  copy_m4_m4(ct->matrix, transform_matrices[nearest.index]);
+  BKE_shrinkwrap_free_tree(&tree);
+
+  return true;
+}
+
+static void attribute_evaluate(bConstraint * /*con*/, bConstraintOb *cob, ListBase *targets)
+{
+  bConstraintTarget *ct = static_cast<bConstraintTarget *>(targets->first);
+
+  /* only evaluate if there is a target */
+  if (VALID_CONS_TARGET(ct)) {
+    copy_m4_m4(cob->matrix, ct->matrix);
+  }
+}
+
+static bConstraintTypeInfo CTI_ATTRIBUTE = {
+    /*type*/ CONSTRAINT_TYPE_ATTRIBUTE,
+    /*size*/ sizeof(bAttributeConstraint),
+    /*name*/ N_("Attribute Transform"),
+    /*struct_name*/ "bAttributeConstraint",
+    /*free_data*/ nullptr,
+    /*id_looper*/ attribute_id_looper,
+    /*copy_data*/ nullptr,
+    /*new_data*/ attribute_new_data,
+    /*get_constraint_targets*/ attribute_get_tars,
+    /*flush_constraint_targets*/ attribute_flush_tars,
+    /*get_target_matrix*/ attribute_get_tarmat,
+    /*evaluate_constraint*/ attribute_evaluate,
+};
+
 /* ************************* Constraints Type-Info *************************** */
 /* All of the constraints api functions use bConstraintTypeInfo structs to carry out
  * and operations that involve constraint specific code.
@@ -5619,6 +5732,7 @@ static void constraints_init_typeinfo()
   constraintsTypeInfo[28] = &CTI_OBJECTSOLVER;    /* Object Solver Constraint */
   constraintsTypeInfo[29] = &CTI_TRANSFORM_CACHE; /* Transform Cache Constraint */
   constraintsTypeInfo[30] = &CTI_ARMATURE;        /* Armature Constraint */
+  constraintsTypeInfo[31] = &CTI_ATTRIBUTE;       /* Attribtue Transform Constraint */
 }
 
 const bConstraintTypeInfo *BKE_constraint_typeinfo_from_type(int type)

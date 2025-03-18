@@ -981,6 +981,67 @@ class ConstraintButtonsPanel:
 
         self.draw_influence(layout, con)
 
+    def draw_attribute(self, context):
+        layout = self.layout
+        con = self.get_constraint(context)
+        layout.use_property_split = True
+        layout.use_property_decorate = True
+
+        self.target_template(layout, con, False)
+
+        layout.prop(con, "distance")
+        layout.prop(con, "shrinkwrap_type", text="Mode")
+
+        layout.separator()
+
+        if con.shrinkwrap_type == 'PROJECT':
+            layout.prop(con, "project_axis", expand=True, text="Project Axis")
+            layout.prop(con, "project_axis_space", text="Space")
+
+            if con.project_axis_space == 'CUSTOM':
+                col = layout.column()
+                col.prop(con, "space_object")
+                if space_object := con.space_object:
+                    match space_object.type:
+                        case 'ARMATURE':
+                            col.prop_search(
+                                con, "space_subtarget",
+                                con.space_object.data, "bones",
+                                text="Bone",
+                            )
+                        case 'MESH', 'LATTICE':
+                            col.prop_search(
+                                con, "space_subtarget",
+                                con.space_object, "vertex_groups",
+                                text="Vertex Group",
+                            )
+
+            layout.prop(con, "project_limit", text="Distance")
+            layout.prop(con, "use_project_opposite")
+
+            layout.separator()
+
+            col = layout.column()
+            row = col.row()
+            row.prop(con, "cull_face", expand=True)
+            row = col.row()
+            row.active = con.use_project_opposite and con.cull_face != 'OFF'
+            row.prop(con, "use_invert_cull")
+
+            layout.separator()
+
+        if con.shrinkwrap_type in {'PROJECT', 'NEAREST_SURFACE', 'TARGET_PROJECT'}:
+            layout.prop(con, "wrap_mode", text="Snap Mode")
+            row = layout.row(heading="Align to Normal", align=True)
+            row.use_property_decorate = False
+            sub = row.row(align=True)
+            sub.prop(con, "use_track_normal", text="")
+            subsub = sub.row(align=True)
+            subsub.active = con.use_track_normal
+            subsub.prop(con, "track_axis", text="")
+            row.prop_decorator(con, "track_axis")
+
+        self.draw_influence(layout, con)
 
 # Parent class for constraint sub-panels.
 class ConstraintButtonsSubPanel:
@@ -1701,6 +1762,16 @@ class BONE_PT_bKinematicConstraint(BoneConstraintPanel, ConstraintButtonsPanel, 
     def draw(self, context):
         self.draw_kinematic(context)
 
+ # Attribute Constraint.
+
+class OBJECT_PT_bAttributeConstraint(ObjectConstraintPanel, ConstraintButtonsPanel, Panel):
+    def draw(self, context):
+        self.draw_attribute(context)
+
+
+class BONE_PT_bAttributeConstraint(BoneConstraintPanel, ConstraintButtonsPanel, Panel):
+    def draw(self, context):
+        self.draw_attribute(context)
 
 classes = (
     # Object Panels
@@ -1743,6 +1814,8 @@ classes = (
     OBJECT_PT_bPythonConstraint,
     OBJECT_PT_bArmatureConstraint,
     OBJECT_PT_bArmatureConstraint_bones,
+    OBJECT_PT_bAttributeConstraint,
+
     # Bone panels
     BONE_PT_bChildOfConstraint,
     BONE_PT_bTrackToConstraint,
@@ -1784,6 +1857,7 @@ classes = (
     BONE_PT_bPythonConstraint,
     BONE_PT_bArmatureConstraint,
     BONE_PT_bArmatureConstraint_bones,
+    BONE_PT_bAttributeConstraint,
 )
 
 if __name__ == "__main__":  # only for live edit.

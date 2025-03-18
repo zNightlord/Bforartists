@@ -2256,6 +2256,7 @@ static bool get_new_constraint_target(
 
     /* mesh only? */
     case CONSTRAINT_TYPE_SHRINKWRAP:
+    case CONSTRAINT_TYPE_ATTRIBUTE:
       only_mesh = true;
       only_ob = true;
       add = false;

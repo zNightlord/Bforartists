@@ -619,6 +619,28 @@ typedef struct bTransformCacheConstraint {
   char reader_object_path[1024];
 } bTransformCacheConstraint;
 
+/* Attribute Constraint */
+typedef struct bAttributeConstraint {
+  struct Object *target;
+  /** Distance to kept from target. */
+  float dist;
+  /** Shrink type (look on MOD shrinkwrap for values). */
+  short shrinkType;
+  /** Axis to project/constrain. */
+  char projAxis;
+  /** Space to project axis in. */
+  char projAxisSpace;
+  /** Distance to search. */
+  float projLimit;
+  /** Inside/outside/on surface (see MOD shrinkwrap). */
+  char shrinkMode;
+  /** Options. */
+  char flag;
+  /** Axis to align to normal. */
+  char trackAxis;
+  char _pad;
+} bAttributeConstraint;
+
 /* ------------------------------------------ */
 
 /* bConstraint->type
@@ -664,6 +686,7 @@ typedef enum eBConstraint_Types {
   CONSTRAINT_TYPE_OBJECTSOLVER = 28,
   CONSTRAINT_TYPE_TRANSFORM_CACHE = 29,
   CONSTRAINT_TYPE_ARMATURE = 30,
+  CONSTRAINT_TYPE_ATTRIBUTE = 31,
 
   /* This should be the last entry in this list. */
   NUM_CONSTRAINT_TYPES,
