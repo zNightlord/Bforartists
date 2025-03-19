@@ -5589,6 +5589,9 @@ static void attribute_id_looper(bConstraint *con, ConstraintIDFunc func, void *u
 static void attribute_new_data(void *cdata)
 {
   bAttributeConstraint *data = (bAttributeConstraint *)cdata;
+  STRNCPY(data->attributeName, "transform");
+  data->bstartMat = false;
+  data->hashName = true;
 }
 
 static int attribute_get_tars(bConstraint *con, ListBase *list)
@@ -5629,27 +5632,28 @@ static bool attribute_get_tarmat(Depsgraph * /*depsgraph*/,
 
   float co[3] = {0.0f, 0.0f, 0.0f};
   SpaceTransform transform;
-  Mesh *target_eval = BKE_object_get_evaluated_mesh(ct->tar);
   ShrinkwrapTreeData tree;
+  Mesh *target_eval = BKE_object_get_evaluated_mesh(ct->tar);
   copy_m4_m4(ct->matrix, cob->matrix);
-  int index = 0;
 
   if (!BKE_shrinkwrap_init_tree(&tree, target_eval, 2, 0, false)) {
     return false;
   }
 
-  BLI_space_transform_from_matrices(&transform, cob->matrix, ct->tar->object_to_world().ptr());
   const float(*transform_matrices)[4][4] = (const float(*)[4][4])CustomData_get_layer_named(
-      &target_eval->vert_data, CD_PROP_FLOAT4X4, "transform");
+      &target_eval->vert_data, CD_PROP_FLOAT4X4, scon->attributeName);
   if (!transform_matrices) {
     return false;
   }
+
   switch (scon->sampleType) {
-    case CON_ATTRIBUTE_NEAREST_VERT: {
+    case CON_ATTRIBUTE_SAMPLE_NEAREST_VERT: {
       BVHTreeNearest nearest;
       nearest.index = -1;
       nearest.dist_sq = FLT_MAX;
+      const float(*tmatrix)[4] = (scon->bstartMat) ? cob->startmat : cob->matrix;
 
+      BLI_space_transform_from_matrices(&transform, tmatrix, ct->tar->object_to_world().ptr());
       BLI_space_transform_apply(&transform, co);
       BKE_shrinkwrap_find_nearest_surface(&tree, &nearest, co, scon->sampleType);
       if (nearest.index < 0) {
@@ -5659,7 +5663,16 @@ static bool attribute_get_tarmat(Depsgraph * /*depsgraph*/,
       break;
     }
     case CON_ATTRIBUTE_SAMPLE_INDEX: {
-      copy_m4_m4(ct->matrix, transform_matrices[index]);
+      copy_m4_m4(ct->matrix, transform_matrices[scon->sampleIndex]);
+      break;
+    }
+    case CON_ATTRIBUTE_SAMPLE_RANDOM: {
+      int seed_hash = std::hash<int>{}(scon->Seed);
+      if (scon->hashName) {
+        seed_hash += std::hash<std::string>{}(cob->ob->id.name);
+      }
+      int random_index = abs(seed_hash) % target_eval->verts_num;
+      copy_m4_m4(ct->matrix, transform_matrices[random_index]);
       break;
     }
     default: {
@@ -5678,7 +5691,10 @@ static void attribute_evaluate(bConstraint *con, bConstraintOb *cob, ListBase *t
 
   /* only evaluate if there is a target */
   if (VALID_CONS_TARGET(ct)) {
-    if (data->flag & CON_ATTRIBUTE_OFFSET) {
+    if (data->offsetMatrix) {
+      mul_m4_m4m4(cob->matrix, cob->matrix, ct->matrix);
+    }
+    else {
       copy_m4_m4(cob->matrix, ct->matrix);
     }
   }

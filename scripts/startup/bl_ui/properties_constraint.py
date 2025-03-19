@@ -989,11 +989,17 @@ class ConstraintButtonsPanel:
 
         self.target_template(layout, con, False)
 
-   
+        layout.prop(con, "attribute_name", text="Attribute Name")
         layout.prop(con, "sample_type", text="Mode")
-
+        if con.sample_type == 'SAMPLE_INDEX':
+            layout.prop(con, "sample_index", text="Sample Index")
+        if con.sample_type == 'SAMPLE_NEAREST':
+            layout.prop(con, "bstart_mat", text="Original Transform")
+        if con.sample_type == 'SAMPLE_RANDOM':
+            layout.prop(con, "seed", text="Seed")
+            layout.prop(con, "hash_name", text="Hash Name") 
         layout.prop(con, "offset_matrix", text="Offset Matrix")
-
+       
         self.draw_influence(layout, con)
 
 # Parent class for constraint sub-panels.

@@ -622,12 +622,15 @@ typedef struct bTransformCacheConstraint {
 /* Attribute Constraint */
 typedef struct bAttributeConstraint {
   struct Object *target;
-  /** Sample type. */
+  int sampleIndex;
+  int Seed;
+  char offsetMatrix;
+  char hashName;
+  char bstartMat;
+  char _pad;
   short sampleType;
-
-  char _pad[2];
-  /** Offset original matrix */
-  int flag;
+  char attributeName[256];
+  char _pad2[2];
 } bAttributeConstraint;
 
 /* ------------------------------------------ */
@@ -1192,16 +1195,12 @@ typedef enum eStretchTo_Flags {
   STRETCHTOCON_USE_BULGE_MAX = (1 << 1),
 } eStretchTo_Flags;
 
-/* Attribute flags */
-typedef enum eAttribute_Flags {
-  /* Offset Transform. */
-  CON_ATTRIBUTE_OFFSET = (1 << 0),
-} eAttribute_Flags;
-
 /* Atrtibute Index Mode*/
 typedef enum eAttribute_Sample_Mode {
-  /* Sample Nearest Vert. */
-  CON_ATTRIBUTE_NEAREST_VERT = 0,
   /*Sample Vert Index*/
-  CON_ATTRIBUTE_SAMPLE_INDEX = 1,
+  CON_ATTRIBUTE_SAMPLE_INDEX = 0,
+  /* Sample Nearest Vert. */
+  CON_ATTRIBUTE_SAMPLE_NEAREST_VERT = 1,
+  /*Sample Random*/
+  CON_ATTRIBUTE_SAMPLE_RANDOM = 2,
 } eAttribute_Sample;

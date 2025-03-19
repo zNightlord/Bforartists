@@ -3678,16 +3678,13 @@ static void rna_def_constraint_attribute(BlenderRNA *brna)
   PropertyRNA *prop;
 
   static const EnumPropertyItem type_items[] = {
-      {CON_ATTRIBUTE_NEAREST_VERT,
-       "NEAREST_VERT",
+      {CON_ATTRIBUTE_SAMPLE_INDEX, "SAMPLE_INDEX", 0, "Sample Index", "Sample vertex index"},
+      {CON_ATTRIBUTE_SAMPLE_NEAREST_VERT,
+       "SAMPLE_NEAREST",
        0,
-       "Nearest Vert",
-       "Sample Attribute from Nearest Vertex"},
-      {CON_ATTRIBUTE_SAMPLE_INDEX,
-       "SAMPLEINDEX",
-       0,
-       "Sample Index",
-       "Sample attribute vertex index"},
+       "Sample Nearest",
+       "Sample nearest vertex"},
+      {CON_ATTRIBUTE_SAMPLE_RANDOM, "SAMPLE_RANDOM", 0, "Sample Random", "Sample random index"},
       {0, nullptr, 0, nullptr, nullptr},
   };
 
@@ -3706,6 +3703,14 @@ static void rna_def_constraint_attribute(BlenderRNA *brna)
   RNA_def_property_flag(prop, PROP_EDITABLE);
   RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_dependency_update");
 
+  prop = RNA_def_property(srna, "attribute_name", PROP_STRING, PROP_NONE);
+  RNA_def_property_string_sdna(prop, nullptr, "attributeName");
+  RNA_def_property_string_default(prop, "transform");
+  RNA_def_property_string_maxlength(prop, 256);
+  RNA_def_property_ui_text(prop, "Attribute Name", "Name of transform attribute");
+  RNA_def_property_flag(prop, PROP_EDITABLE);
+  RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
+
   prop = RNA_def_property(srna, "sample_type", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_sdna(prop, nullptr, "sampleType");
   RNA_def_property_enum_items(prop, type_items);
@@ -3713,9 +3718,31 @@ static void rna_def_constraint_attribute(BlenderRNA *brna)
       prop, "Sample Type", "Select type of sample algorithm for target transform");
   RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_dependency_update");
 
+  prop = RNA_def_property(srna, "sample_index", PROP_INT, PROP_NONE);
+  RNA_def_property_int_sdna(prop, nullptr, "sampleIndex");
+  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
+  RNA_def_property_ui_text(prop, "Sample Index", "Mesh Sample Index");
+  RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
+
+  prop = RNA_def_property(srna, "bstart_mat", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "bstartMat", 1);
+  RNA_def_property_ui_text(prop, "Original Transform", "Use original transform");
+  RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
+
+  prop = RNA_def_property(srna, "hash_name", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "hashName", 1);
+  RNA_def_property_ui_text(prop, "Hash Name", "Hash self name");
+  RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
+
+  prop = RNA_def_property(srna, "seed", PROP_INT, PROP_NONE);
+  RNA_def_property_int_sdna(prop, nullptr, "Seed");
+  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
+  RNA_def_property_ui_text(prop, "Seed", "Hash Seed");
+  RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
+
   prop = RNA_def_property(srna, "offset_matrix", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, nullptr, "flag", CON_ATTRIBUTE_OFFSET);
-  RNA_def_property_ui_text(prop, "OffsetTransform", "Offset current Transform");
+  RNA_def_property_boolean_sdna(prop, nullptr, "offsetMatrix", 1);
+  RNA_def_property_ui_text(prop, "Offset Transform", "Offset current transform");
   RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
 
   RNA_define_lib_overridable(false);
