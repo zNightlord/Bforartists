@@ -3678,13 +3678,9 @@ static void rna_def_constraint_attribute(BlenderRNA *brna)
   PropertyRNA *prop;
 
   static const EnumPropertyItem type_items[] = {
-      {CON_ATTRIBUTE_SAMPLE_INDEX, "SAMPLE_INDEX", 0, "Sample Index", "Sample vertex index"},
-      {CON_ATTRIBUTE_SAMPLE_NEAREST_VERT,
-       "SAMPLE_NEAREST",
-       0,
-       "Sample Nearest",
-       "Sample nearest vertex"},
-      {CON_ATTRIBUTE_SAMPLE_RANDOM, "SAMPLE_RANDOM", 0, "Sample Random", "Sample random index"},
+      {CON_ATTRIBUTE_SAMPLE_INDEX, "SAMPLE_INDEX", 0, "Index", "Sample index"},
+      {CON_ATTRIBUTE_SAMPLE_NEAREST_VERT, "SAMPLE_NEAREST", 0, "Nearest", "Sample nearest vertex"},
+      {CON_ATTRIBUTE_SAMPLE_RANDOM, "SAMPLE_RANDOM", 0, "Random", "Sample random index"},
       {0, nullptr, 0, nullptr, nullptr},
   };
 

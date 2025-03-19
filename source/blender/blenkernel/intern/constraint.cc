@@ -5630,15 +5630,11 @@ static bool attribute_get_tarmat(Depsgraph * /*depsgraph*/,
     return false;
   }
 
+  int index;
   float co[3] = {0.0f, 0.0f, 0.0f};
   SpaceTransform transform;
-  ShrinkwrapTreeData tree;
   Mesh *target_eval = BKE_object_get_evaluated_mesh(ct->tar);
   copy_m4_m4(ct->matrix, cob->matrix);
-
-  if (!BKE_shrinkwrap_init_tree(&tree, target_eval, 2, 0, false)) {
-    return false;
-  }
 
   const float(*transform_matrices)[4][4] = (const float(*)[4][4])CustomData_get_layer_named(
       &target_eval->vert_data, CD_PROP_FLOAT4X4, scon->attributeName);
@@ -5653,17 +5649,22 @@ static bool attribute_get_tarmat(Depsgraph * /*depsgraph*/,
       nearest.dist_sq = FLT_MAX;
       const float(*tmatrix)[4] = (scon->bstartMat) ? cob->startmat : cob->matrix;
 
+      ShrinkwrapTreeData tree;
+      if (!BKE_shrinkwrap_init_tree(&tree, target_eval, 2, 0, false)) {
+        return false;
+      }
+
       BLI_space_transform_from_matrices(&transform, tmatrix, ct->tar->object_to_world().ptr());
       BLI_space_transform_apply(&transform, co);
-      BKE_shrinkwrap_find_nearest_surface(&tree, &nearest, co, scon->sampleType);
+      BKE_shrinkwrap_find_nearest_surface(&tree, &nearest, co, 2);
       if (nearest.index < 0) {
         return false;
       }
-      copy_m4_m4(ct->matrix, transform_matrices[nearest.index]);
+      index = nearest.index;
       break;
     }
     case CON_ATTRIBUTE_SAMPLE_INDEX: {
-      copy_m4_m4(ct->matrix, transform_matrices[scon->sampleIndex]);
+      index = scon->sampleIndex;
       break;
     }
     case CON_ATTRIBUTE_SAMPLE_RANDOM: {
@@ -5671,8 +5672,7 @@ static bool attribute_get_tarmat(Depsgraph * /*depsgraph*/,
       if (scon->hashName) {
         seed_hash += std::hash<std::string>{}(cob->ob->id.name);
       }
-      int random_index = abs(seed_hash) % target_eval->verts_num;
-      copy_m4_m4(ct->matrix, transform_matrices[random_index]);
+      index = abs(seed_hash) % target_eval->verts_num;
       break;
     }
     default: {
@@ -5680,7 +5680,7 @@ static bool attribute_get_tarmat(Depsgraph * /*depsgraph*/,
       break;
     }
   };
-
+  copy_m4_m4(ct->matrix, transform_matrices[index]);
   return true;
 }
 
