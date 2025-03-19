@@ -160,12 +160,6 @@ const EnumPropertyItem rna_enum_constraint_type_items[] = {
      ICON_CON_PIVOT,
      "Pivot",
      "Change pivot point for transforms (buggy)"},
-    {CONSTRAINT_TYPE_ATTRIBUTE,
-     "ATTRIBUTE",
-     ICON_CON_ATTRIBUTE,
-     "Attribute",
-     "Retrieve Transform from Mesh Verts"},
-    {0, nullptr, 0, nullptr, nullptr},
 #if 0
     {CONSTRAINT_TYPE_RIGIDBODYJOINT,
      "RIGID_BODY_JOINT",
@@ -183,6 +177,11 @@ const EnumPropertyItem rna_enum_constraint_type_items[] = {
      ICON_CON_SHRINKWRAP,
      "Shrinkwrap",
      "Restrict movements to surface of target mesh"},
+    {CONSTRAINT_TYPE_ATTRIBUTE,
+     "ATTRIBUTE",
+     ICON_CON_ATTRIBUTE,
+     "Attribute",
+     "Retrieve Transform from Mesh Verts"},
     {0, nullptr, 0, nullptr, nullptr},
 
 };
@@ -3679,49 +3678,23 @@ static void rna_def_constraint_attribute(BlenderRNA *brna)
   PropertyRNA *prop;
 
   static const EnumPropertyItem type_items[] = {
-      {MOD_SHRINKWRAP_NEAREST_SURFACE,
-       "NEAREST_SURFACE",
+      {CON_ATTRIBUTE_NEAREST_VERT,
+       "NEAREST_VERT",
        0,
-       "Nearest Surface Point",
-       "Shrink the location to the nearest target surface"},
-      {MOD_SHRINKWRAP_PROJECT,
-       "PROJECT",
+       "Nearest Vert",
+       "Sample Attribute from Nearest Vertex"},
+      {CON_ATTRIBUTE_SAMPLE_INDEX,
+       "SAMPLEINDEX",
        0,
-       "Project",
-       "Shrink the location to the nearest target surface along a given axis"},
-      {MOD_SHRINKWRAP_NEAREST_VERTEX,
-       "NEAREST_VERTEX",
-       0,
-       "Nearest Vertex",
-       "Shrink the location to the nearest target vertex"},
-      {MOD_SHRINKWRAP_TARGET_PROJECT,
-       "TARGET_PROJECT",
-       0,
-       "Target Normal Project",
-       "Shrink the location to the nearest target surface "
-       "along the interpolated vertex normals of the target"},
-      {0, nullptr, 0, nullptr, nullptr},
-  };
-
-  static const EnumPropertyItem shrink_face_cull_items[] = {
-      {0, "OFF", 0, "Off", "No culling"},
-      {CON_SHRINKWRAP_PROJECT_CULL_FRONTFACE,
-       "FRONT",
-       0,
-       "Front",
-       "No projection when in front of the face"},
-      {CON_SHRINKWRAP_PROJECT_CULL_BACKFACE,
-       "BACK",
-       0,
-       "Back",
-       "No projection when behind the face"},
+       "Sample Index",
+       "Sample attribute vertex index"},
       {0, nullptr, 0, nullptr, nullptr},
   };
 
   srna = RNA_def_struct(brna, "AttributeConstraint", "Constraint");
   RNA_def_struct_ui_text(
       srna, "Attribute Constraint", "Create attribute constraint-based relationship");
-  RNA_def_struct_sdna_from(srna, "bShrinkwrapConstraint", "data");
+  RNA_def_struct_sdna_from(srna, "bAttributeConstraint", "data");
   RNA_def_struct_ui_icon(srna, ICON_CON_ATTRIBUTE);
 
   RNA_define_lib_overridable(true);
@@ -3733,82 +3706,16 @@ static void rna_def_constraint_attribute(BlenderRNA *brna)
   RNA_def_property_flag(prop, PROP_EDITABLE);
   RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_dependency_update");
 
-  prop = RNA_def_property(srna, "shrinkwrap_type", PROP_ENUM, PROP_NONE);
-  RNA_def_property_enum_sdna(prop, nullptr, "shrinkType");
+  prop = RNA_def_property(srna, "sample_type", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, nullptr, "sampleType");
   RNA_def_property_enum_items(prop, type_items);
   RNA_def_property_ui_text(
-      prop, "Shrinkwrap Type", "Select type of shrinkwrap algorithm for target position");
+      prop, "Sample Type", "Select type of sample algorithm for target transform");
   RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_dependency_update");
 
-  prop = RNA_def_property(srna, "wrap_mode", PROP_ENUM, PROP_NONE);
-  RNA_def_property_enum_sdna(prop, nullptr, "shrinkMode");
-  RNA_def_property_enum_items(prop, rna_enum_modifier_shrinkwrap_mode_items);
-  RNA_def_property_ui_text(
-      prop, "Snap Mode", "Select how to constrain the object to the target surface");
-  RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_dependency_update");
-
-  prop = RNA_def_property(srna, "distance", PROP_FLOAT, PROP_DISTANCE);
-  RNA_def_property_float_sdna(prop, nullptr, "dist");
-  RNA_def_property_range(prop, 0.0f, FLT_MAX);
-  RNA_def_property_ui_range(prop, 0.0f, 100.0f, 10, 3);
-  RNA_def_property_ui_text(prop, "Distance", "Distance to Target");
-  RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
-
-  prop = RNA_def_property(srna, "project_axis", PROP_ENUM, PROP_NONE);
-  RNA_def_property_enum_sdna(prop, nullptr, "projAxis");
-  RNA_def_property_enum_items(prop, rna_enum_object_axis_items);
-  RNA_def_property_ui_text(prop, "Project Axis", "Axis constrain to");
-  RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
-
-  prop = RNA_def_property(srna, "project_axis_space", PROP_ENUM, PROP_NONE);
-  RNA_def_property_enum_sdna(prop, nullptr, "projAxisSpace");
-  RNA_def_property_enum_items(prop, owner_space_pchan_items);
-  RNA_def_property_enum_funcs(prop, nullptr, nullptr, "rna_Constraint_owner_space_itemf");
-  RNA_def_property_ui_text(prop, "Axis Space", "Space for the projection axis");
-
-  prop = RNA_def_property(srna, "project_limit", PROP_FLOAT, PROP_DISTANCE);
-  RNA_def_property_float_sdna(prop, nullptr, "projLimit");
-  RNA_def_property_range(prop, 0.0f, FLT_MAX);
-  RNA_def_property_ui_range(prop, 0.0f, 100.0f, 10, 3);
-  RNA_def_property_ui_text(
-      prop, "Project Distance", "Limit the distance used for projection (zero disables)");
-  RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
-
-  prop = RNA_def_property(srna, "use_project_opposite", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, nullptr, "flag", CON_SHRINKWRAP_PROJECT_OPPOSITE);
-  RNA_def_property_ui_text(
-      prop, "Project Opposite", "Project in both specified and opposite directions");
-  RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
-
-  prop = RNA_def_property(srna, "cull_face", PROP_ENUM, PROP_NONE);
-  RNA_def_property_enum_sdna(prop, nullptr, "flag");
-  RNA_def_property_enum_items(prop, shrink_face_cull_items);
-  RNA_def_property_enum_funcs(prop,
-                              "rna_ShrinkwrapConstraint_face_cull_get",
-                              "rna_ShrinkwrapConstraint_face_cull_set",
-                              nullptr);
-  RNA_def_property_ui_text(
-      prop,
-      "Face Cull",
-      "Stop vertices from projecting to a face on the target when facing towards/away");
-  RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
-
-  prop = RNA_def_property(srna, "use_invert_cull", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, nullptr, "flag", CON_SHRINKWRAP_PROJECT_INVERT_CULL);
-  RNA_def_property_ui_text(
-      prop, "Invert Cull", "When projecting in the opposite direction invert the face cull mode");
-  RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
-
-  prop = RNA_def_property(srna, "use_track_normal", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, nullptr, "flag", CON_SHRINKWRAP_TRACK_NORMAL);
-  RNA_def_property_ui_text(
-      prop, "Align Axis To Normal", "Align the specified axis to the surface normal");
-  RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_dependency_update");
-
-  prop = RNA_def_property(srna, "track_axis", PROP_ENUM, PROP_NONE);
-  RNA_def_property_enum_sdna(prop, nullptr, "trackAxis");
-  RNA_def_property_enum_items(prop, track_axis_items);
-  RNA_def_property_ui_text(prop, "Track Axis", "Axis that is aligned to the normal");
+  prop = RNA_def_property(srna, "offset_matrix", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "flag", CON_ATTRIBUTE_OFFSET);
+  RNA_def_property_ui_text(prop, "OffsetTransform", "Offset current Transform");
   RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
 
   RNA_define_lib_overridable(false);

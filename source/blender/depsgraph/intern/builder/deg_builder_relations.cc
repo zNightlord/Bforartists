@@ -1523,13 +1523,6 @@ void DepsgraphRelationBuilder::build_constraints(ID *id,
           ComponentKey target_key(&ct->tar->id, NodeType::GEOMETRY);
           add_relation(target_key, constraint_op_key, cti->name);
 
-          /* Add dependency on normal layers if necessary. */
-          if (ct->tar->type == OB_MESH && scon->shrinkType != MOD_SHRINKWRAP_NEAREST_VERTEX) {
-            if (scon->shrinkType == MOD_SHRINKWRAP_TARGET_PROJECT) {
-              add_special_eval_flag(&ct->tar->id, DAG_EVAL_NEED_SHRINKWRAP_BOUNDARY);
-            }
-          }
-
           /* NOTE: obdata eval now doesn't necessarily depend on the
            * object's transform. */
           ComponentKey target_transform_key(&ct->tar->id, NodeType::TRANSFORM);

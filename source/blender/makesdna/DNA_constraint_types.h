@@ -622,23 +622,12 @@ typedef struct bTransformCacheConstraint {
 /* Attribute Constraint */
 typedef struct bAttributeConstraint {
   struct Object *target;
-  /** Distance to kept from target. */
-  float dist;
-  /** Shrink type (look on MOD shrinkwrap for values). */
-  short shrinkType;
-  /** Axis to project/constrain. */
-  char projAxis;
-  /** Space to project axis in. */
-  char projAxisSpace;
-  /** Distance to search. */
-  float projLimit;
-  /** Inside/outside/on surface (see MOD shrinkwrap). */
-  char shrinkMode;
-  /** Options. */
-  char flag;
-  /** Axis to align to normal. */
-  char trackAxis;
-  char _pad;
+  /** Sample type. */
+  short sampleType;
+
+  char _pad[2];
+  /** Offset original matrix */
+  int flag;
 } bAttributeConstraint;
 
 /* ------------------------------------------ */
@@ -1202,3 +1191,17 @@ typedef enum eStretchTo_Flags {
   STRETCHTOCON_USE_BULGE_MIN = (1 << 0),
   STRETCHTOCON_USE_BULGE_MAX = (1 << 1),
 } eStretchTo_Flags;
+
+/* Attribute flags */
+typedef enum eAttribute_Flags {
+  /* Offset Transform. */
+  CON_ATTRIBUTE_OFFSET = (1 << 0),
+} eAttribute_Flags;
+
+/* Atrtibute Index Mode*/
+typedef enum eAttribute_Sample_Mode {
+  /* Sample Nearest Vert. */
+  CON_ATTRIBUTE_NEAREST_VERT = 0,
+  /*Sample Vert Index*/
+  CON_ATTRIBUTE_SAMPLE_INDEX = 1,
+} eAttribute_Sample;

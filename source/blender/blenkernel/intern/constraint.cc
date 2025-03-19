@@ -5576,11 +5576,11 @@ static bConstraintTypeInfo CTI_TRANSFORM_CACHE = {
     /*evaluate_constraint*/ transformcache_evaluate,
 };
 
-/* ---------- Attribute Transform  Constraint ----------- */
+/* ---------- Attribute Transform Constraint ----------- */
 
 static void attribute_id_looper(bConstraint *con, ConstraintIDFunc func, void *userdata)
 {
-  bShrinkwrapConstraint *data = static_cast<bShrinkwrapConstraint *>(con->data);
+  bAttributeConstraint *data = static_cast<bAttributeConstraint *>(con->data);
 
   /* target only */
   func(con, (ID **)&data->target, false, userdata);
@@ -5588,16 +5588,13 @@ static void attribute_id_looper(bConstraint *con, ConstraintIDFunc func, void *u
 
 static void attribute_new_data(void *cdata)
 {
-  bShrinkwrapConstraint *data = (bShrinkwrapConstraint *)cdata;
-
-  data->projAxis = OB_POSZ;
-  data->projAxisSpace = CONSTRAINT_SPACE_LOCAL;
+  bAttributeConstraint *data = (bAttributeConstraint *)cdata;
 }
 
 static int attribute_get_tars(bConstraint *con, ListBase *list)
 {
   if (con && list) {
-    bShrinkwrapConstraint *data = static_cast<bShrinkwrapConstraint *>(con->data);
+    bAttributeConstraint *data = static_cast<bAttributeConstraint *>(con->data);
     bConstraintTarget *ct;
 
     SINGLETARGETNS_GET_TARS(con, data->target, ct, list);
@@ -5624,7 +5621,7 @@ static bool attribute_get_tarmat(Depsgraph * /*depsgraph*/,
                                  bConstraintTarget *ct,
                                  float /*ctime*/)
 {
-  bShrinkwrapConstraint *scon = (bShrinkwrapConstraint *)con->data;
+  bAttributeConstraint *scon = (bAttributeConstraint *)con->data;
 
   if (!VALID_CONS_TARGET(ct) || ct->tar->type != OB_MESH) {
     return false;
@@ -5635,42 +5632,55 @@ static bool attribute_get_tarmat(Depsgraph * /*depsgraph*/,
   Mesh *target_eval = BKE_object_get_evaluated_mesh(ct->tar);
   ShrinkwrapTreeData tree;
   copy_m4_m4(ct->matrix, cob->matrix);
+  int index = 0;
 
-  if (!BKE_shrinkwrap_init_tree(&tree, target_eval, MOD_SHRINKWRAP_NEAREST_VERTEX, 0, false)) {
+  if (!BKE_shrinkwrap_init_tree(&tree, target_eval, 2, 0, false)) {
     return false;
   }
 
   BLI_space_transform_from_matrices(&transform, cob->matrix, ct->tar->object_to_world().ptr());
-  BVHTreeNearest nearest;
-  nearest.index = -1;
-  nearest.dist_sq = FLT_MAX;
-
-  BLI_space_transform_apply(&transform, co);
-  BKE_shrinkwrap_find_nearest_surface(&tree, &nearest, co, scon->shrinkType);
-  if (nearest.index < 0) {
-    return false;
-  }
-
   const float(*transform_matrices)[4][4] = (const float(*)[4][4])CustomData_get_layer_named(
       &target_eval->vert_data, CD_PROP_FLOAT4X4, "transform");
   if (!transform_matrices) {
     return false;
   }
+  switch (scon->sampleType) {
+    case CON_ATTRIBUTE_NEAREST_VERT: {
+      BVHTreeNearest nearest;
+      nearest.index = -1;
+      nearest.dist_sq = FLT_MAX;
 
-  copy_m4_m4(cob->matrix, transform_matrices[nearest.index]);
-  copy_m4_m4(ct->matrix, transform_matrices[nearest.index]);
-  BKE_shrinkwrap_free_tree(&tree);
+      BLI_space_transform_apply(&transform, co);
+      BKE_shrinkwrap_find_nearest_surface(&tree, &nearest, co, scon->sampleType);
+      if (nearest.index < 0) {
+        return false;
+      }
+      copy_m4_m4(ct->matrix, transform_matrices[nearest.index]);
+      break;
+    }
+    case CON_ATTRIBUTE_SAMPLE_INDEX: {
+      copy_m4_m4(ct->matrix, transform_matrices[index]);
+      break;
+    }
+    default: {
+      return false;
+      break;
+    }
+  };
 
   return true;
 }
 
-static void attribute_evaluate(bConstraint * /*con*/, bConstraintOb *cob, ListBase *targets)
+static void attribute_evaluate(bConstraint *con, bConstraintOb *cob, ListBase *targets)
 {
   bConstraintTarget *ct = static_cast<bConstraintTarget *>(targets->first);
+  bAttributeConstraint *data = static_cast<bAttributeConstraint *>(con->data);
 
   /* only evaluate if there is a target */
   if (VALID_CONS_TARGET(ct)) {
-    copy_m4_m4(cob->matrix, ct->matrix);
+    if (data->flag & CON_ATTRIBUTE_OFFSET) {
+      copy_m4_m4(cob->matrix, ct->matrix);
+    }
   }
 }
 
@@ -5732,7 +5742,7 @@ static void constraints_init_typeinfo()
   constraintsTypeInfo[28] = &CTI_OBJECTSOLVER;    /* Object Solver Constraint */
   constraintsTypeInfo[29] = &CTI_TRANSFORM_CACHE; /* Transform Cache Constraint */
   constraintsTypeInfo[30] = &CTI_ARMATURE;        /* Armature Constraint */
-  constraintsTypeInfo[31] = &CTI_ATTRIBUTE;       /* Attribtue Transform Constraint */
+  constraintsTypeInfo[31] = &CTI_ATTRIBUTE;       /* Attribute Transform Constraint */
 }
 
 const bConstraintTypeInfo *BKE_constraint_typeinfo_from_type(int type)
