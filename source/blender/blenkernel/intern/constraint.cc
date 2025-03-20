@@ -5646,19 +5646,19 @@ static bool attribute_get_tarmat(Depsgraph * /*depsgraph*/,
 
   switch (scon->sampleType) {
     case CON_ATTRIBUTE_SAMPLE_NEAREST_VERT: {
+
+      blender::bke::BVHTreeFromMesh tree = target_eval->bvh_verts();
+      const BVHTree *bvh = tree.tree;
       BVHTreeNearest nearest;
       nearest.index = -1;
       nearest.dist_sq = FLT_MAX;
+
       const float(*tmatrix)[4] = (scon->bstartMat) ? cob->startmat : cob->matrix;
-
-      ShrinkwrapTreeData tree;
-      if (!BKE_shrinkwrap_init_tree(&tree, target_eval, 2, 0, false)) {
-        return false;
-      }
-
       BLI_space_transform_from_matrices(&transform, tmatrix, ct->tar->object_to_world().ptr());
       BLI_space_transform_apply(&transform, co);
-      BKE_shrinkwrap_find_nearest_surface(&tree, &nearest, co, 2);
+
+      BLI_bvhtree_find_nearest_ex(
+          bvh, co, &nearest, tree.nearest_callback, nullptr, BVH_NEAREST_OPTIMAL_ORDER);
       if (nearest.index < 0) {
         return false;
       }
