@@ -999,9 +999,12 @@ class ConstraintButtonsPanel:
         if con.sample_type == 'SAMPLE_RANDOM':
             layout.prop(con, "seed", text="Seed")
             layout.prop(con, "hash_name", text="Hash Name") 
-        layout.prop(con, "mix_mode", text="Mix", text_ctxt=i18n_contexts.constraint)
-       
-        self.space_template(layout, con)
+
+        layout.separator()
+        layout.prop(con, "mix_loc", text="Location", text_ctxt=i18n_contexts.constraint)
+        layout.prop(con, "mix_rot", text="Rotation", text_ctxt=i18n_contexts.constraint)
+        layout.prop(con, "mix_scale", text="Scale", text_ctxt=i18n_contexts.constraint)
+
         self.draw_influence(layout, con)
 
 # Parent class for constraint sub-panels.

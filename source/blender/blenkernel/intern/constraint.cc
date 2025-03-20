@@ -5689,37 +5689,58 @@ static void attribute_evaluate(bConstraint *con, bConstraintOb *cob, ListBase *t
 
   /* only evaluate if there is a target */
   if (VALID_CONS_TARGET(ct)) {
-    float target_mat[4][4];
 
-    copy_m4_m4(target_mat, ct->matrix);
+    float loc_cob[3], scale_cob[3], loc_ct[3], scale_ct[3];
+    float rot_cob[3][3], rot_ct[3][3];
 
-    /* Finally, combine the matrices. */
-    switch (data->mix_mode) {
-      case TRANSLIKE_MIX_REPLACE:
-        copy_m4_m4(cob->matrix, target_mat);
+    mat4_to_loc_rot_size(loc_cob, rot_cob, scale_cob, cob->matrix);
+    mat4_to_loc_rot_size(loc_ct, rot_ct, scale_ct, ct->matrix);
+
+    switch (data->mixLoc) {
+      case ATTRIBUTE_LRS_MIX_REPLACE:
+        copy_v3_v3(loc_cob, loc_ct);
         break;
-
-      /* Simple matrix multiplication. */
-      case TRANSLIKE_MIX_BEFORE_FULL:
-        mul_m4_m4m4(cob->matrix, target_mat, cob->matrix);
+      case ATTRIBUTE_LRS_MIX_BEFORE:
+        add_v3_v3(loc_cob, loc_ct);
         break;
-
-      case TRANSLIKE_MIX_AFTER_FULL:
-        mul_m4_m4m4(cob->matrix, cob->matrix, target_mat);
+      case ATTRIBUTE_LRS_MIX_AFTER:
+        add_v3_v3(loc_cob, loc_ct);
         break;
-
-      /* Fully separate handling of channels. */
-      case TRANSLIKE_MIX_BEFORE_SPLIT:
-        mul_m4_m4m4_split_channels(cob->matrix, target_mat, cob->matrix);
-        break;
-
-      case TRANSLIKE_MIX_AFTER_SPLIT:
-        mul_m4_m4m4_split_channels(cob->matrix, cob->matrix, target_mat);
-        break;
-
       default:
-        BLI_assert_msg(0, "Unknown Copy Transforms mix mode");
+        break;
     }
+
+    switch (data->mixRot) {
+      case ATTRIBUTE_LRS_MIX_REPLACE:
+        copy_m3_m3(rot_cob, rot_ct);
+        break;
+      case ATTRIBUTE_LRS_MIX_BEFORE:
+        mul_m3_m3m3(rot_cob, rot_ct, rot_cob);
+        break;
+      case TRANSLIKE_MIX_AFTER_FULL:
+      case ATTRIBUTE_LRS_MIX_AFTER:
+        mul_m3_m3m3(rot_cob, rot_cob, rot_ct);
+        break;
+      default:
+        break;
+    }
+
+    switch (data->mixScale) {
+      case ATTRIBUTE_LRS_MIX_REPLACE:
+        copy_v3_v3(scale_cob, scale_ct);
+        break;
+      case ATTRIBUTE_LRS_MIX_BEFORE:
+      case ATTRIBUTE_LRS_MIX_AFTER:
+        mul_v3_v3(scale_cob, scale_ct);
+        break;
+      default:
+        break;
+    }
+
+    float final_mat[4][4];
+    loc_rot_size_to_mat4(final_mat, loc_cob, rot_cob, scale_cob);
+    copy_m4_m4(cob->matrix, final_mat);
+
     if (data->utargetMat) {
       mul_m4_m4m4(cob->matrix, ct->tar->object_to_world().ptr(), cob->matrix);
       mul_m4_m4m4(ct->matrix, ct->tar->object_to_world().ptr(), ct->matrix);

@@ -628,8 +628,10 @@ typedef struct bAttributeConstraint {
   char hashName;
   char bstartMat;
   char utargetMat;
-  char mix_mode;
-  char _pad[3];
+  char mixLoc;
+  char mixRot;
+  char mixScale;
+  char _pad[1];
   short sampleType;
   char _pad2[6];
   /** MAX_ID_NAME-2. */
@@ -1208,3 +1210,16 @@ typedef enum eAttribute_Sample_Mode {
   /*Sample Random*/
   CON_ATTRIBUTE_SAMPLE_RANDOM = 2,
 } eAttribute_Sample;
+
+/** Atrtibute Component Mix Mode */
+typedef enum eAttribute_MixMode {
+  /* Replace values. */
+  ATTRIBUTE_LRS_MIX_REPLACE = 0,
+  /* Multiply the copied transformation on the left. */
+  ATTRIBUTE_LRS_MIX_BEFORE = 1,
+  /* Multiply the copied transformation on the right. */
+  ATTRIBUTE_LRS_MIX_AFTER = 2,
+  /* Don't copy component */
+  ATTRIBUTE_LRS_NONE = 3,
+
+} eAttribute_MixMode;
