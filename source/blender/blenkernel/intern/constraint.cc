@@ -5634,7 +5634,6 @@ static bool attribute_get_tarmat(Depsgraph * /*depsgraph*/,
   float co[3] = {0.0f, 0.0f, 0.0f};
   SpaceTransform transform;
   Mesh *target_eval = BKE_object_get_evaluated_mesh(ct->tar);
-  copy_m4_m4(ct->matrix, cob->matrix);
 
   const float(*transform_matrices)[4][4] = (const float(*)[4][4])CustomData_get_layer_named(
       &target_eval->vert_data, CD_PROP_FLOAT4X4, scon->attributeName);
@@ -5691,11 +5690,45 @@ static void attribute_evaluate(bConstraint *con, bConstraintOb *cob, ListBase *t
 
   /* only evaluate if there is a target */
   if (VALID_CONS_TARGET(ct)) {
-    if (data->offsetMatrix) {
-      mul_m4_m4m4(cob->matrix, cob->matrix, ct->matrix);
-    }
-    else {
-      copy_m4_m4(cob->matrix, ct->matrix);
+    float target_mat[4][4];
+
+    copy_m4_m4(target_mat, ct->matrix);
+
+    /* Finally, combine the matrices. */
+    switch (data->mix_mode) {
+      case TRANSLIKE_MIX_REPLACE:
+        copy_m4_m4(cob->matrix, target_mat);
+        break;
+
+      /* Simple matrix multiplication. */
+      case TRANSLIKE_MIX_BEFORE_FULL:
+        mul_m4_m4m4(cob->matrix, target_mat, cob->matrix);
+        break;
+
+      case TRANSLIKE_MIX_AFTER_FULL:
+        mul_m4_m4m4(cob->matrix, cob->matrix, target_mat);
+        break;
+
+      /* Aligned Inherit Scale emulation. */
+      case TRANSLIKE_MIX_BEFORE:
+        mul_m4_m4m4_aligned_scale(cob->matrix, target_mat, cob->matrix);
+        break;
+
+      case TRANSLIKE_MIX_AFTER:
+        mul_m4_m4m4_aligned_scale(cob->matrix, cob->matrix, target_mat);
+        break;
+
+      /* Fully separate handling of channels. */
+      case TRANSLIKE_MIX_BEFORE_SPLIT:
+        mul_m4_m4m4_split_channels(cob->matrix, target_mat, cob->matrix);
+        break;
+
+      case TRANSLIKE_MIX_AFTER_SPLIT:
+        mul_m4_m4m4_split_channels(cob->matrix, cob->matrix, target_mat);
+        break;
+
+      default:
+        BLI_assert_msg(0, "Unknown Copy Transforms mix mode");
     }
   }
 }

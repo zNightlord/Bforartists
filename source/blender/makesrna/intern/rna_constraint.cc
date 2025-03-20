@@ -3684,6 +3684,57 @@ static void rna_def_constraint_attribute(BlenderRNA *brna)
       {0, nullptr, 0, nullptr, nullptr},
   };
 
+  static const EnumPropertyItem mix_mode_items[] = {
+      {TRANSLIKE_MIX_REPLACE,
+       "REPLACE",
+       0,
+       "Replace",
+       "Replace the original transformation with copied"},
+      RNA_ENUM_ITEM_SEPR,
+      {TRANSLIKE_MIX_BEFORE_FULL,
+       "BEFORE_FULL",
+       0,
+       "Before Original (Full)",
+       "Apply copied transformation before original, using simple matrix multiplication as if "
+       "the constraint target is a parent in Full Inherit Scale mode. "
+       "Will create shear when combining rotation and non-uniform scale."},
+      {TRANSLIKE_MIX_BEFORE,
+       "BEFORE",
+       0,
+       "Before Original (Aligned)",
+       "Apply copied transformation before original, as if the constraint target is a parent in "
+       "Aligned Inherit Scale mode. This effectively uses Full for location and Split Channels "
+       "for rotation and scale."},
+      {TRANSLIKE_MIX_BEFORE_SPLIT,
+       "BEFORE_SPLIT",
+       0,
+       "Before Original (Split Channels)",
+       "Apply copied transformation before original, handling location, rotation and scale "
+       "separately, similar to a sequence of three Copy constraints"},
+      RNA_ENUM_ITEM_SEPR,
+      {TRANSLIKE_MIX_AFTER_FULL,
+       "AFTER_FULL",
+       0,
+       "After Original (Full)",
+       "Apply copied transformation after original, using simple matrix multiplication as if "
+       "the constraint target is a child in Full Inherit Scale mode. "
+       "Will create shear when combining rotation and non-uniform scale."},
+      {TRANSLIKE_MIX_AFTER,
+       "AFTER",
+       0,
+       "After Original (Aligned)",
+       "Apply copied transformation after original, as if the constraint target is a child in "
+       "Aligned Inherit Scale mode. This effectively uses Full for location and Split Channels "
+       "for rotation and scale."},
+      {TRANSLIKE_MIX_AFTER_SPLIT,
+       "AFTER_SPLIT",
+       0,
+       "After Original (Split Channels)",
+       "Apply copied transformation after original, handling location, rotation and scale "
+       "separately, similar to a sequence of three Copy constraints"},
+      {0, nullptr, 0, nullptr, nullptr},
+  };
+
   srna = RNA_def_struct(brna, "AttributeConstraint", "Constraint");
   RNA_def_struct_ui_text(
       srna, "Attribute Constraint", "Create attribute constraint-based relationship");
@@ -3736,9 +3787,11 @@ static void rna_def_constraint_attribute(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Seed", "Hash Seed");
   RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
 
-  prop = RNA_def_property(srna, "offset_matrix", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, nullptr, "offsetMatrix", 1);
-  RNA_def_property_ui_text(prop, "Offset Transform", "Offset current transform");
+  prop = RNA_def_property(srna, "mix_mode", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, nullptr, "mix_mode");
+  RNA_def_property_enum_items(prop, mix_mode_items);
+  RNA_def_property_ui_text(
+      prop, "Mix Mode", "Specify how the copied and existing transformations are combined");
   RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
 
   RNA_define_lib_overridable(false);
