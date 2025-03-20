@@ -627,12 +627,14 @@ typedef struct bAttributeConstraint {
   char offsetMatrix;
   char hashName;
   char bstartMat;
+  char utargetMat;
   char mix_mode;
+  char _pad[3];
   short sampleType;
+  char _pad2[6];
   /** MAX_ID_NAME-2. */
   char subtarget[64];
   char attributeName[256];
-  char _pad2[2];
 } bAttributeConstraint;
 
 /* ------------------------------------------ */

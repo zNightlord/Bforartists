@@ -3698,13 +3698,6 @@ static void rna_def_constraint_attribute(BlenderRNA *brna)
        "Apply copied transformation before original, using simple matrix multiplication as if "
        "the constraint target is a parent in Full Inherit Scale mode. "
        "Will create shear when combining rotation and non-uniform scale."},
-      {TRANSLIKE_MIX_BEFORE,
-       "BEFORE",
-       0,
-       "Before Original (Aligned)",
-       "Apply copied transformation before original, as if the constraint target is a parent in "
-       "Aligned Inherit Scale mode. This effectively uses Full for location and Split Channels "
-       "for rotation and scale."},
       {TRANSLIKE_MIX_BEFORE_SPLIT,
        "BEFORE_SPLIT",
        0,
@@ -3719,13 +3712,6 @@ static void rna_def_constraint_attribute(BlenderRNA *brna)
        "Apply copied transformation after original, using simple matrix multiplication as if "
        "the constraint target is a child in Full Inherit Scale mode. "
        "Will create shear when combining rotation and non-uniform scale."},
-      {TRANSLIKE_MIX_AFTER,
-       "AFTER",
-       0,
-       "After Original (Aligned)",
-       "Apply copied transformation after original, as if the constraint target is a child in "
-       "Aligned Inherit Scale mode. This effectively uses Full for location and Split Channels "
-       "for rotation and scale."},
       {TRANSLIKE_MIX_AFTER_SPLIT,
        "AFTER_SPLIT",
        0,
@@ -3756,6 +3742,11 @@ static void rna_def_constraint_attribute(BlenderRNA *brna)
   RNA_def_property_string_maxlength(prop, 256);
   RNA_def_property_ui_text(prop, "Attribute Name", "Name of transform attribute");
   RNA_def_property_flag(prop, PROP_EDITABLE);
+  RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
+
+  prop = RNA_def_property(srna, "utarget_mat", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "utargetMat", 1);
+  RNA_def_property_ui_text(prop, "Target Transform", "Apply target transform");
   RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
 
   prop = RNA_def_property(srna, "sample_type", PROP_ENUM, PROP_NONE);

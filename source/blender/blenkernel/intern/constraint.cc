@@ -5590,7 +5590,6 @@ static void attribute_new_data(void *cdata)
 {
   bAttributeConstraint *data = (bAttributeConstraint *)cdata;
   STRNCPY(data->attributeName, "transform");
-  data->bstartMat = false;
   data->hashName = true;
 }
 
@@ -5709,15 +5708,6 @@ static void attribute_evaluate(bConstraint *con, bConstraintOb *cob, ListBase *t
         mul_m4_m4m4(cob->matrix, cob->matrix, target_mat);
         break;
 
-      /* Aligned Inherit Scale emulation. */
-      case TRANSLIKE_MIX_BEFORE:
-        mul_m4_m4m4_aligned_scale(cob->matrix, target_mat, cob->matrix);
-        break;
-
-      case TRANSLIKE_MIX_AFTER:
-        mul_m4_m4m4_aligned_scale(cob->matrix, cob->matrix, target_mat);
-        break;
-
       /* Fully separate handling of channels. */
       case TRANSLIKE_MIX_BEFORE_SPLIT:
         mul_m4_m4m4_split_channels(cob->matrix, target_mat, cob->matrix);
@@ -5729,6 +5719,10 @@ static void attribute_evaluate(bConstraint *con, bConstraintOb *cob, ListBase *t
 
       default:
         BLI_assert_msg(0, "Unknown Copy Transforms mix mode");
+    }
+    if (data->utargetMat) {
+      mul_m4_m4m4(cob->matrix, ct->tar->object_to_world().ptr(), cob->matrix);
+      mul_m4_m4m4(ct->matrix, ct->tar->object_to_world().ptr(), ct->matrix);
     }
   }
 }
