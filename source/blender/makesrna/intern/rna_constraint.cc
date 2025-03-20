@@ -3684,28 +3684,40 @@ static void rna_def_constraint_attribute(BlenderRNA *brna)
       {0, nullptr, 0, nullptr, nullptr},
   };
 
-  static const EnumPropertyItem lrs_mix_items[] = {
-      {ATTRIBUTE_LRS_MIX_REPLACE,
+  static const EnumPropertyItem attribute_mix_mode_items[] = {
+      {ATTRIBUTE_MIX_REPLACE,
        "REPLACE",
        0,
        "Replace",
        "Replace the original transformation with copied"},
-      {ATTRIBUTE_LRS_MIX_BEFORE,
+      RNA_ENUM_ITEM_SEPR,
+      {ATTRIBUTE_MIX_BEFORE_FULL,
        "BEFORE_FULL",
        0,
-       "Before Original",
-       "Apply copied transformation before original"},
-      {ATTRIBUTE_LRS_MIX_AFTER,
+       "Before Original (Full)",
+       "Apply copied transformation before original, using simple matrix multiplication as if "
+       "the constraint target is a parent in Full Inherit Scale mode. "
+       "Will create shear when combining rotation and non-uniform scale."},
+      {ATTRIBUTE_MIX_BEFORE_SPLIT,
+       "BEFORE_SPLIT",
+       0,
+       "Before Original (Split Channels)",
+       "Apply copied transformation before original, handling location, rotation and scale "
+       "separately, similar to a sequence of three Copy constraints"},
+      RNA_ENUM_ITEM_SEPR,
+      {ATTRIBUTE_MIX_AFTER_FULL,
        "AFTER_FULL",
        0,
-       "After Original",
-       "Apply copied transformation after original"},
-      {ATTRIBUTE_LRS_NONE,
-       "NONE",
+       "After Original (Full)",
+       "Apply copied transformation after original, using simple matrix multiplication as if "
+       "the constraint target is a child in Full Inherit Scale mode. "
+       "Will create shear when combining rotation and non-uniform scale."},
+      {ATTRIBUTE_MIX_AFTER_SPLIT,
+       "AFTER_SPLIT",
        0,
-       "Disable",
-       ""
-       ""},
+       "After Original (Split Channels)",
+       "Apply copied transformation after original, handling location, rotation and scale "
+       "separately, similar to a sequence of three Copy constraints"},
       {0, nullptr, 0, nullptr, nullptr},
   };
 
@@ -3766,25 +3778,26 @@ static void rna_def_constraint_attribute(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Seed", "Hash Seed");
   RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
 
-  prop = RNA_def_property(srna, "mix_loc", PROP_ENUM, PROP_NONE);
-  RNA_def_property_enum_sdna(prop, nullptr, "mixLoc");
-  RNA_def_property_enum_items(prop, lrs_mix_items);
-  RNA_def_property_ui_text(
-      prop, "Mix Location", "Specify how the copied and existing transformations are combined");
+  prop = RNA_def_property(srna, "mix_loc", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "mixLoc", 1);
+  RNA_def_property_ui_text(prop, "Mix Loc", "Mix Location");
   RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
 
-  prop = RNA_def_property(srna, "mix_rot", PROP_ENUM, PROP_NONE);
-  RNA_def_property_enum_sdna(prop, nullptr, "mixRot");
-  RNA_def_property_enum_items(prop, lrs_mix_items);
-  RNA_def_property_ui_text(
-      prop, "Mix Rotation", "Specify how the copied and existing transformations are combined");
+  prop = RNA_def_property(srna, "mix_rot", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "mixRot", 1);
+  RNA_def_property_ui_text(prop, "Mix Rot", "Mix Rotation");
   RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
 
-  prop = RNA_def_property(srna, "mix_scale", PROP_ENUM, PROP_NONE);
-  RNA_def_property_enum_sdna(prop, nullptr, "mixScale");
-  RNA_def_property_enum_items(prop, lrs_mix_items);
+  prop = RNA_def_property(srna, "mix_scl", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "mixScl", 1);
+  RNA_def_property_ui_text(prop, "Mix Scl", "Mix Scale");
+  RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
+
+  prop = RNA_def_property(srna, "mix_mode", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, nullptr, "mixMode");
+  RNA_def_property_enum_items(prop, attribute_mix_mode_items);
   RNA_def_property_ui_text(
-      prop, "Mix Scale", "Specify how the copied and existing transformations are combined");
+      prop, "Mix Mode", "Specify how the copied and existing transformations are combined");
   RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
 
   RNA_define_lib_overridable(false);

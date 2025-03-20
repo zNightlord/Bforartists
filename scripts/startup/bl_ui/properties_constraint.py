@@ -990,7 +990,6 @@ class ConstraintButtonsPanel:
         self.target_template(layout, con, False)
 
         layout.prop(con, "attribute_name", text="Attribute Name")
-        layout.prop(con, "utarget_mat", text="Apply Target Transform")
         layout.prop(con, "sample_type", text="Sample Mode")
         if con.sample_type == 'SAMPLE_INDEX':
             layout.prop(con, "sample_index", text="Sample Index")
@@ -1001,9 +1000,14 @@ class ConstraintButtonsPanel:
             layout.prop(con, "hash_name", text="Hash Name") 
 
         layout.separator()
-        layout.prop(con, "mix_loc", text="Location", text_ctxt=i18n_contexts.constraint)
-        layout.prop(con, "mix_rot", text="Rotation", text_ctxt=i18n_contexts.constraint)
-        layout.prop(con, "mix_scale", text="Scale", text_ctxt=i18n_contexts.constraint)
+        layout.prop(con, "mix_mode", text="Mix Mode", text_ctxt=i18n_contexts.constraint)
+
+        row = layout.row(heading="Enabled")
+        row.prop(con, "mix_loc", text="Location",toggle=True)
+        row.prop(con, "mix_rot", text="Rotation",toggle=True)
+        row.prop(con, "mix_scl", text="Scale",toggle=True)
+        row.label(icon='BLANK1')
+        layout.prop(con, "utarget_mat", text="Apply Target Transform")
 
         self.draw_influence(layout, con)
 
