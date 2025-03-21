@@ -633,7 +633,8 @@ typedef struct bAttributeConstraint {
   char mixScl;
   char mixMode;
   short sampleType;
-  char _pad2[6];
+  short domainType;
+  char _pad2[4];
   char attributeName[256];
 } bAttributeConstraint;
 
@@ -1199,6 +1200,16 @@ typedef enum eStretchTo_Flags {
   STRETCHTOCON_USE_BULGE_MAX = (1 << 1),
 } eStretchTo_Flags;
 
+/** Atrtibute Domain Mode */
+typedef enum eAttribute_DomainMode {
+  /* Vert domain */
+  CON_ATTRIBUTE_DOMAIN_VERT = 0,
+  /* Edge domain */
+  CON_ATTRIBUTE_DOMAIN_EDGE = 1,
+  /* Face domain */
+  CON_ATTRIBUTE_DOMAIN_FACE = 2,
+} eAttribute_DomainMode;
+
 /* Atrtibute Index Mode*/
 typedef enum eAttribute_Sample_Mode {
   /*Sample Vert Index*/
@@ -1212,13 +1223,13 @@ typedef enum eAttribute_Sample_Mode {
 /** Atrtibute Component Mix Mode */
 typedef enum eAttribute_MixMode {
   /* Replace rotation channel values. */
-  ATTRIBUTE_MIX_REPLACE = 0,
+  CON_ATTRIBUTE_MIX_REPLACE = 0,
   /* Multiply the copied transformation on the left, handling loc/rot/scale separately. */
-  ATTRIBUTE_MIX_BEFORE_SPLIT = 1,
+  CON_ATTRIBUTE_MIX_BEFORE_SPLIT = 1,
   /* Multiply the copied transformation on the right, handling loc/rot/scale separately. */
-  ATTRIBUTE_MIX_AFTER_SPLIT = 2,
+  CON_ATTRIBUTE_MIX_AFTER_SPLIT = 2,
   /* Multiply the copied transformation on the left, using simple matrix multiplication. */
-  ATTRIBUTE_MIX_BEFORE_FULL = 3,
+  CON_ATTRIBUTE_MIX_BEFORE_FULL = 3,
   /* Multiply the copied transformation on the right, using simple matrix multiplication. */
-  ATTRIBUTE_MIX_AFTER_FULL = 4,
+  CON_ATTRIBUTE_MIX_AFTER_FULL = 4,
 } eAttribute_MixMode;

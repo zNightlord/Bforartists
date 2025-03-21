@@ -990,9 +990,10 @@ class ConstraintButtonsPanel:
         self.target_template(layout, con, False)
 
         layout.prop(con, "attribute_name", text="Attribute Name")
+        layout.prop(con, "domain_type", text="Domain")
         layout.prop(con, "sample_type", text="Sample Mode")
         if con.sample_type == 'SAMPLE_INDEX':
-            layout.prop(con, "sample_index", text="Sample Index")
+            layout.prop(con, "sample_index", text="Index")
         if con.sample_type == 'SAMPLE_NEAREST':
             layout.prop(con, "bstart_mat", text="Original Transform")
         if con.sample_type == 'SAMPLE_RANDOM':

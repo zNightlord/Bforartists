@@ -5632,55 +5632,89 @@ static bool attribute_get_tarmat(Depsgraph * /*depsgraph*/,
     return false;
   }
 
-  int index;
-  float co[3] = {0.0f, 0.0f, 0.0f};
   SpaceTransform transform;
-  Mesh *target_eval = BKE_object_get_evaluated_mesh(ct->tar);
+  float(*tmatrix)[4] = (scon->bstartMat) ? cob->startmat : cob->matrix;
+  BLI_space_transform_from_matrices(&transform, tmatrix, ct->tar->object_to_world().ptr());
 
+  Mesh *target_eval = BKE_object_get_evaluated_mesh(ct->tar);
+  CustomData domain;
+  int d_count = 0;
+  int index = -1;
+
+  switch (scon->domainType) {
+    case CON_ATTRIBUTE_DOMAIN_VERT:
+      domain = target_eval->vert_data;
+      d_count = target_eval->verts_num;
+      break;
+    case CON_ATTRIBUTE_DOMAIN_EDGE:
+      domain = target_eval->edge_data;
+      d_count = target_eval->edges_num;
+      break;
+    case CON_ATTRIBUTE_DOMAIN_FACE:
+      domain = target_eval->face_data;
+      d_count = target_eval->faces_num;
+      break;
+    default:
+      return false;
+  };
   const float(*transform_matrices)[4][4] = (const float(*)[4][4])CustomData_get_layer_named(
-      &target_eval->vert_data, CD_PROP_FLOAT4X4, scon->attributeName);
+      &domain, CD_PROP_FLOAT4X4, scon->attributeName);
   if (!transform_matrices) {
     return false;
   }
-  int mat_count = target_eval->verts_num;
 
   switch (scon->sampleType) {
     case CON_ATTRIBUTE_SAMPLE_NEAREST_VERT: {
 
-      blender::bke::BVHTreeFromMesh tree = target_eval->bvh_verts();
-      const BVHTree *bvh = tree.tree;
+      float co[3] = {0.0f, 0.0f, 0.0f};
+      blender::bke::BVHTreeFromMesh bvh;
       BVHTreeNearest nearest;
       nearest.index = -1;
       nearest.dist_sq = FLT_MAX;
 
-      const float(*tmatrix)[4] = (scon->bstartMat) ? cob->startmat : cob->matrix;
-      BLI_space_transform_from_matrices(&transform, tmatrix, ct->tar->object_to_world().ptr());
-      BLI_space_transform_apply(&transform, co);
+      switch (scon->domainType) {
+        case CON_ATTRIBUTE_DOMAIN_VERT:
+          bvh = target_eval->bvh_verts();
+          break;
+        case CON_ATTRIBUTE_DOMAIN_EDGE:
+          bvh = target_eval->bvh_edges();
+          break;
+        case CON_ATTRIBUTE_DOMAIN_FACE:
+          bvh = target_eval->bvh_corner_tris();
+          break;
+        default:
+          return false;
+      }
 
-      BLI_bvhtree_find_nearest_ex(
-          bvh, co, &nearest, tree.nearest_callback, nullptr, BVH_NEAREST_OPTIMAL_ORDER);
+      BLI_space_transform_apply(&transform, co);
+      BLI_bvhtree_find_nearest(bvh.tree, co, &nearest, bvh.nearest_callback, &bvh);
       if (nearest.index < 0) {
         return false;
       }
-      index = nearest.index;
+
+      index = (scon->domainType == CON_ATTRIBUTE_DOMAIN_FACE) ?
+                  target_eval->corner_tri_faces()[nearest.index] :
+                  nearest.index;
       break;
     }
+
     case CON_ATTRIBUTE_SAMPLE_INDEX: {
-      index = std::clamp(scon->sampleIndex, 0, mat_count + 1);
+      index = std::clamp(scon->sampleIndex, 0, d_count - 1);
       break;
     }
+
     case CON_ATTRIBUTE_SAMPLE_RANDOM: {
       int seed_hash = std::hash<int>{}(scon->Seed);
       if (scon->hashName) {
         seed_hash += std::hash<std::string>{}(cob->ob->id.name);
       }
-      index = std::abs(seed_hash) % mat_count;
+      index = std::abs(seed_hash) % d_count;
       break;
     }
-    default: {
+
+    default:
       return false;
       break;
-    }
   };
   copy_m4_m4(ct->matrix, transform_matrices[index]);
   return true;
@@ -5713,25 +5747,25 @@ static void attribute_evaluate(bConstraint *con, bConstraintOb *cob, ListBase *t
 
     /* Finally, combine the matrices. */
     switch (data->mixMode) {
-      case ATTRIBUTE_MIX_REPLACE:
+      case CON_ATTRIBUTE_MIX_REPLACE:
         copy_m4_m4(cob->matrix, target_mat);
         break;
 
       /* Simple matrix multiplication. */
-      case ATTRIBUTE_MIX_BEFORE_FULL:
+      case CON_ATTRIBUTE_MIX_BEFORE_FULL:
         mul_m4_m4m4(cob->matrix, target_mat, cob->matrix);
         break;
 
-      case ATTRIBUTE_MIX_AFTER_FULL:
+      case CON_ATTRIBUTE_MIX_AFTER_FULL:
         mul_m4_m4m4(cob->matrix, cob->matrix, target_mat);
         break;
 
       /* Fully separate handling of channels. */
-      case ATTRIBUTE_MIX_BEFORE_SPLIT:
+      case CON_ATTRIBUTE_MIX_BEFORE_SPLIT:
         mul_m4_m4m4_split_channels(cob->matrix, target_mat, cob->matrix);
         break;
 
-      case ATTRIBUTE_MIX_AFTER_SPLIT:
+      case CON_ATTRIBUTE_MIX_AFTER_SPLIT:
         mul_m4_m4m4_split_channels(cob->matrix, cob->matrix, target_mat);
         break;
 
