@@ -1045,6 +1045,7 @@ wmWindow *WM_window_open(bContext *C,
   Main *bmain = CTX_data_main(C);
   wmWindowManager *wm = CTX_wm_manager(C);
   wmWindow *win_prev = CTX_wm_window(C);
+  Sequence *sequence = CTX_data_sequence(C);
   Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   int x = rect_unscaled->xmin;
@@ -1127,6 +1128,9 @@ wmWindow *WM_window_open(bContext *C,
   if (WM_window_get_active_scene(win) != scene) {
     /* No need to refresh the tool-system as the window has not yet finished being setup. */
     ED_screen_scene_change(C, win, scene, false);
+  }
+  if (WM_window_get_active_sequence(win) != sequence) {
+    ED_screen_sequence_change(C, win, sequence);
   }
 
   screen->temp = temp;
@@ -3093,6 +3097,40 @@ bScreen *WM_window_get_active_screen(const wmWindow *win)
 void WM_window_set_active_screen(wmWindow *win, WorkSpace *workspace, bScreen *screen)
 {
   BKE_workspace_active_screen_set(win->workspace_hook, win->winid, workspace, screen);
+}
+
+Sequence *WM_window_get_active_sequence(const wmWindow *win)
+{
+  return win->sequence;
+}
+
+void WM_window_set_active_sequence(Main * /*bmain*/,
+                                   bContext *C,
+                                   wmWindow *win,
+                                   Sequence *sequence)
+{
+  wmWindowManager *wm = CTX_wm_manager(C);
+  wmWindow *win_parent = (win->parent) ? win->parent : win;
+  bool changed = false;
+
+  if (win_parent->sequence != sequence) {
+    ED_screen_sequence_change(C, win, sequence);
+    changed = true;
+  }
+
+  LISTBASE_FOREACH (wmWindow *, win_child, &wm->windows) {
+    if (win_child->parent == win_parent && win_child->sequence != sequence) {
+      ED_screen_sequence_change(C, win_child, sequence);
+      changed = true;
+    }
+  }
+
+  if (changed) {
+    /* TODO: Updates. */
+
+    /* Complete redraw. */
+    WM_event_add_notifier(C, NC_WINDOW, nullptr);
+  }
 }
 
 bool WM_window_is_temp_screen(const wmWindow *win)

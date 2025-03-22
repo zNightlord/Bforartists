@@ -862,6 +862,8 @@ static StringRef template_id_browse_tip(const StructRNA *type)
         return N_("Browse Volume Data to be linked");
       case ID_GP:
         return N_("Browse Grease Pencil v3 Data to be linked");
+      case ID_SEQ:
+        return N_("Browse Sequence to be linked");
 
         /* Use generic text. */
       case ID_LI:
@@ -1241,7 +1243,8 @@ static void template_ID(const bContext *C,
                       UI_UNIT_Y,
                       std::nullopt);
       }
-      else if (!ELEM(GS(id->name), ID_GR, ID_SCE, ID_SCR, ID_OB, ID_WS) && (hide_buttons == false))
+      else if (!ELEM(GS(id->name), ID_GR, ID_SCE, ID_SCR, ID_OB, ID_WS, ID_SEQ) &&
+               (hide_buttons == false))
       {
         uiDefIconButR(block,
                       UI_BTYPE_ICON_TOGGLE,

@@ -132,7 +132,7 @@ Strip *sequence_alloc(ListBase *lb, int timeline_frame, int machine, int type)
   strip = MEM_callocN<Strip>("addseq");
   BLI_addtail(lb, strip);
 
-  *((short *)strip->name) = ID_SEQ;
+  *((short *)strip->name) = ID_SEQ_LEGACY;
   strip->name[2] = 0;
 
   strip->flag = SELECT;

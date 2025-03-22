@@ -477,8 +477,9 @@ static int sequencer_add_scene_strip_exec(bContext *C, wmOperator *op)
 
   DEG_id_tag_update(&scene->id, ID_RECALC_SEQUENCER_STRIPS);
   DEG_relations_tag_update(bmain);
-  WM_event_add_notifier(
-      C, NC_SCENE | ND_SEQUENCER, seq::get_ref_scene_for_notifiers(C)); /*BFA - 3D Sequencer*/
+  // WM_event_add_notifier(
+  //     C, NC_SCENE | ND_SEQUENCER, seq::get_ref_scene_for_notifiers(C)); /*BFA - 3D Sequencer*/
+  WM_event_add_notifier(C, NC_SEQUENCE | ND_SEQUENCER, scene);
 
   return OPERATOR_FINISHED;
 }
@@ -577,7 +578,7 @@ static int sequencer_add_scene_strip_new_exec(bContext *C, wmOperator *op)
 
   DEG_id_tag_update(&scene->id, ID_RECALC_SEQUENCER_STRIPS);
   DEG_relations_tag_update(bmain);
-  WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER, scene);
+  WM_event_add_notifier(C, NC_SEQUENCE | ND_SEQUENCER, scene);
 
   return OPERATOR_FINISHED;
 }
@@ -678,8 +679,9 @@ static int sequencer_add_movieclip_strip_exec(bContext *C, wmOperator *op)
   seq_load_apply_generic_options(C, op, strip);
 
   DEG_id_tag_update(&scene->id, ID_RECALC_SEQUENCER_STRIPS);
-  WM_event_add_notifier(
-      C, NC_SCENE | ND_SEQUENCER, seq::get_ref_scene_for_notifiers(C)); /*BFA - 3D Sequencer*/
+  // WM_event_add_notifier(
+  //     C, NC_SCENE | ND_SEQUENCER, seq::get_ref_scene_for_notifiers(C)); /*BFA - 3D Sequencer*/
+  WM_event_add_notifier(C, NC_SEQUENCE | ND_SEQUENCER, scene);
 
   return OPERATOR_FINISHED;
 }
@@ -743,8 +745,9 @@ static int sequencer_add_mask_strip_exec(bContext *C, wmOperator *op)
   seq_load_apply_generic_options(C, op, strip);
 
   DEG_id_tag_update(&scene->id, ID_RECALC_SEQUENCER_STRIPS);
-  WM_event_add_notifier(
-      C, NC_SCENE | ND_SEQUENCER, seq::get_ref_scene_for_notifiers(C)); /*BFA - 3D Sequencer*/
+  // WM_event_add_notifier(
+  //     C, NC_SCENE | ND_SEQUENCER, seq::get_ref_scene_for_notifiers(C)); /*BFA - 3D Sequencer*/
+  WM_event_add_notifier(C, NC_SEQUENCE | ND_SEQUENCER, scene);
 
   return OPERATOR_FINISHED;
 }
@@ -1055,8 +1058,9 @@ static int sequencer_add_movie_strip_exec(bContext *C, wmOperator *op)
   seq_build_proxy(C, movie_strips);
   DEG_relations_tag_update(bmain);
   DEG_id_tag_update(&scene->id, ID_RECALC_SEQUENCER_STRIPS);
-  WM_event_add_notifier(
-      C, NC_SCENE | ND_SEQUENCER, seq::get_ref_scene_for_notifiers(C)); /*BFA - 3D Sequencer*/
+  // WM_event_add_notifier(
+  //     C, NC_SCENE | ND_SEQUENCER, seq::get_ref_scene_for_notifiers(C)); /*BFA - 3D Sequencer*/
+  WM_event_add_notifier(C, NC_SEQUENCE | ND_SEQUENCER, scene);
 
   /* Free custom data. */
   sequencer_add_cancel(C, op);
@@ -1227,8 +1231,9 @@ static int sequencer_add_sound_strip_exec(bContext *C, wmOperator *op)
 
   DEG_relations_tag_update(bmain);
   DEG_id_tag_update(&scene->id, ID_RECALC_SEQUENCER_STRIPS);
-  WM_event_add_notifier(
-      C, NC_SCENE | ND_SEQUENCER, seq::get_ref_scene_for_notifiers(C)); /*BFA - 3D Sequencer*/
+  // WM_event_add_notifier(
+  //     C, NC_SCENE | ND_SEQUENCER, seq::get_ref_scene_for_notifiers(C)); /*BFA - 3D Sequencer*/
+  WM_event_add_notifier(C, NC_SEQUENCE | ND_SEQUENCER, scene);
 
   return OPERATOR_FINISHED;
 }
@@ -1427,8 +1432,9 @@ static int sequencer_add_image_strip_exec(bContext *C, wmOperator *op)
   seq_load_apply_generic_options(C, op, strip);
 
   DEG_id_tag_update(&scene->id, ID_RECALC_SEQUENCER_STRIPS);
-  WM_event_add_notifier(
-      C, NC_SCENE | ND_SEQUENCER, seq::get_ref_scene_for_notifiers(C)); /*BFA - 3D Sequencer*/
+  // WM_event_add_notifier(
+  //     C, NC_SCENE | ND_SEQUENCER, seq::get_ref_scene_for_notifiers(C)); /*BFA - 3D Sequencer*/
+  WM_event_add_notifier(C, NC_SEQUENCE | ND_SEQUENCER, scene);
 
   /* Free custom data. */
   sequencer_add_cancel(C, op);
@@ -1542,8 +1548,9 @@ static int sequencer_add_effect_strip_exec(bContext *C, wmOperator *op)
   }
 
   DEG_id_tag_update(&scene->id, ID_RECALC_SEQUENCER_STRIPS);
-  WM_event_add_notifier(
-      C, NC_SCENE | ND_SEQUENCER, seq::get_ref_scene_for_notifiers(C)); /*BFA - 3D Sequencer*/
+  // WM_event_add_notifier(
+  //     C, NC_SCENE | ND_SEQUENCER, seq::get_ref_scene_for_notifiers(C)); /*BFA - 3D Sequencer*/
+  WM_event_add_notifier(C, NC_SEQUENCE | ND_SEQUENCER, scene);
 
   return OPERATOR_FINISHED;
 }

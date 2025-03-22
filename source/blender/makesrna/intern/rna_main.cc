@@ -117,6 +117,7 @@ RNA_MAIN_LISTBASE_FUNCS_DEF(particles)
 RNA_MAIN_LISTBASE_FUNCS_DEF(pointclouds)
 RNA_MAIN_LISTBASE_FUNCS_DEF(scenes)
 RNA_MAIN_LISTBASE_FUNCS_DEF(screens)
+RNA_MAIN_LISTBASE_FUNCS_DEF(sequences)
 RNA_MAIN_LISTBASE_FUNCS_DEF(shapekeys)
 RNA_MAIN_LISTBASE_FUNCS_DEF(sounds)
 RNA_MAIN_LISTBASE_FUNCS_DEF(speakers)
@@ -182,6 +183,12 @@ void RNA_def_main(BlenderRNA *brna)
        "Scenes",
        "Scene data",
        RNA_def_main_scenes},
+      {"sequences",
+       "Sequence",
+       "rna_Main_sequences_begin",
+       "Sequences",
+       "Sequence data-blocks",
+       RNA_def_main_sequences},
       {"objects",
        "Object",
        "rna_Main_objects_begin",

@@ -46,7 +46,7 @@ static int strip_modifier_add_exec(bContext *C, wmOperator *op)
 
   seq::relations_invalidate_cache_preprocessed(scene, strip);
   WM_event_add_notifier(
-      C, NC_SCENE | ND_SEQUENCER, seq::get_ref_scene_for_notifiers(C)); /*BFA - 3D Sequencer*/
+      C, NC_SEQUENCE | ND_SEQUENCER, scene); /* seq::get_ref_scene_for_notifiers(C) BFA - 3D Sequencer*/
 
   return OPERATOR_FINISHED;
 }
@@ -121,8 +121,9 @@ static int strip_modifier_remove_exec(bContext *C, wmOperator *op)
   else {
     seq::relations_invalidate_cache_preprocessed(scene, strip);
   }
-  WM_event_add_notifier(
-      C, NC_SCENE | ND_SEQUENCER, seq::get_ref_scene_for_notifiers(C)); /*BFA - 3D Sequencer*/
+  // WM_event_add_notifier(
+  //     C, NC_SCENE | ND_SEQUENCER, seq::get_ref_scene_for_notifiers(C)); /*BFA - 3D Sequencer*/
+  WM_event_add_notifier(C, NC_SEQUENCE | ND_SEQUENCER, scene);
 
   return OPERATOR_FINISHED;
 }
@@ -195,8 +196,9 @@ static int strip_modifier_move_exec(bContext *C, wmOperator *op)
     seq::relations_invalidate_cache_preprocessed(scene, strip);
   }
 
-  WM_event_add_notifier(
-      C, NC_SCENE | ND_SEQUENCER, seq::get_ref_scene_for_notifiers(C)); /*BFA - 3D Sequencer*/
+  // WM_event_add_notifier(
+  //     C, NC_SCENE | ND_SEQUENCER, seq::get_ref_scene_for_notifiers(C)); /*BFA - 3D Sequencer*/
+  WM_event_add_notifier(C, NC_SEQUENCE | ND_SEQUENCER, scene);
 
   return OPERATOR_FINISHED;
 }
@@ -292,8 +294,9 @@ static int strip_modifier_copy_exec(bContext *C, wmOperator *op)
     seq::relations_invalidate_cache_preprocessed(scene, strip);
   }
 
-  WM_event_add_notifier(
-      C, NC_SCENE | ND_SEQUENCER, seq::get_ref_scene_for_notifiers(C)); /*BFA - 3D Sequencer*/
+  // WM_event_add_notifier(
+  //     C, NC_SCENE | ND_SEQUENCER, seq::get_ref_scene_for_notifiers(C)); /*BFA - 3D Sequencer*/
+  WM_event_add_notifier(C, NC_SEQUENCE | ND_SEQUENCER, scene);
 
   return OPERATOR_FINISHED;
 }
@@ -350,7 +353,7 @@ static int strip_modifier_equalizer_redefine_exec(bContext *C, wmOperator *op)
   seq::sound_equalizermodifier_set_graphs((SoundEqualizerModifierData *)smd, number);
 
   seq::relations_invalidate_cache_preprocessed(scene, strip);
-  WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER, scene);
+  WM_event_add_notifier(C, NC_SEQUENCE | ND_SEQUENCER, scene);
 
   return OPERATOR_FINISHED;
 }

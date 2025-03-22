@@ -148,6 +148,12 @@ static PointerRNA rna_Context_main_get(PointerRNA *ptr)
   return RNA_main_pointer_create(CTX_data_main(C));
 }
 
+static PointerRNA rna_Context_sequence_get(PointerRNA *ptr)
+{
+  bContext *C = (bContext *)ptr->data;
+  return RNA_id_pointer_create(reinterpret_cast<ID *>(CTX_data_sequence(C)));
+}
+
 static PointerRNA rna_Context_scene_get(PointerRNA *ptr)
 {
   bContext *C = (bContext *)ptr->data;
@@ -308,6 +314,11 @@ void RNA_def_context(BlenderRNA *brna)
   RNA_def_property_clear_flag(prop, PROP_EDITABLE);
   RNA_def_property_struct_type(prop, "BlendData");
   RNA_def_property_pointer_funcs(prop, "rna_Context_main_get", nullptr, nullptr, nullptr);
+
+  prop = RNA_def_property(srna, "sequence", PROP_POINTER, PROP_NONE);
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_struct_type(prop, "Sequence");
+  RNA_def_property_pointer_funcs(prop, "rna_Context_sequence_get", nullptr, nullptr, nullptr);
 
   prop = RNA_def_property(srna, "scene", PROP_POINTER, PROP_NONE);
   RNA_def_property_clear_flag(prop, PROP_EDITABLE);
