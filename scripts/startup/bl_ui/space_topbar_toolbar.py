@@ -1870,6 +1870,12 @@ class TOPBAR_MT_misc(Menu):
                 row.operator("screen.repeat_last", icon='REPEAT', text="")
                 row.operator("screen.repeat_history", icon='REDO_HISTORY', text="")
 
+            if addon_prefs.topbar_misc_sequence:
+
+                row = layout.row(align=True)
+
+                layout.template_ID(window, "sequence", new="sequence.new", unlink="sequence.delete")
+
             if addon_prefs.topbar_misc_scene:
 
                 row = layout.row(align=True)
@@ -1930,6 +1936,7 @@ class TOPBAR_PT_misc(Panel):
         col.prop(addon_prefs, "topbar_misc_undoredo",toggle=addon_prefs.bfa_button_style)
         col.prop(addon_prefs, "topbar_misc_undohistory",toggle=addon_prefs.bfa_button_style)
         col.prop(addon_prefs, "topbar_misc_repeat",toggle=addon_prefs.bfa_button_style)
+        col.prop(addon_prefs, "topbar_misc_sequence",toggle=addon_prefs.bfa_button_style)
         col.prop(addon_prefs, "topbar_misc_scene",toggle=addon_prefs.bfa_button_style)
         col.prop(addon_prefs, "topbar_misc_viewlayer",toggle=addon_prefs.bfa_button_style)
         col.prop(addon_prefs, "topbar_misc_last",toggle=addon_prefs.bfa_button_style)
