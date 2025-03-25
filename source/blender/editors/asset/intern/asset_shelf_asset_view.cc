@@ -389,8 +389,12 @@ void *AssetDragController::create_drag_data() const
 
   const eAssetImportMethod import_method = asset_.get_import_method().value_or(
       ASSET_IMPORT_APPEND_REUSE);
+  AssetImportSettings import_settings{};
+  import_settings.method = import_method;
+  import_settings.use_instance_collections = false;
+  
   // bfa asset shelf - NOTES: current default behavior will be drop as instance 
-  wmDragAsset *asset_drag = WM_drag_create_asset_data(&asset_, import_method);
+  wmDragAsset *asset_drag = WM_drag_create_asset_data(&asset_, import_settings);
   asset_drag->drop_collections_as_instances = true;
   return asset_drag;
 }

@@ -375,12 +375,20 @@ static void file_but_enable_drag(uiBut *but,
   {
     const int import_method = ED_fileselect_asset_import_method_get(sfile, file);
     BLI_assert(import_method > -1);
+    if (import_method > -1) {
+      AssetImportSettings import_settings{};
+      import_settings.method = eAssetImportMethod(import_method);
+      import_settings.use_instance_collections =
+          (sfile->asset_params->import_flags &
+           (import_method == ASSET_IMPORT_LINK ?
+                FILE_ASSET_IMPORT_INSTANCE_COLLECTIONS_ON_LINK :
+                FILE_ASSET_IMPORT_INSTANCE_COLLECTIONS_ON_APPEND)) != 0;
 
     BLI_assert(ED_fileselect_is_asset_browser(sfile) && file->asset);
     const FileAssetSelectParams *params = ED_fileselect_get_asset_params(sfile); /*BFA*/
     bool drop_collections_as_instances = params->drop_collections_as_instances; /*BFA*/
     bool drop_collections_at_origin = params->drop_collections_at_origin; /*BFA*/
-    UI_but_drag_set_asset(but, file->asset, import_method, icon, file->preview_icon_id, drop_collections_as_instances, drop_collections_at_origin); /*BFA*/
+    UI_but_drag_set_asset(but, file->asset, import_settings, icon, file->preview_icon_id, drop_collections_as_instances, drop_collections_at_origin); /*BFA*/
   }
   else if (preview_image) {
     UI_but_drag_set_image(but, path, icon, preview_image, scale);

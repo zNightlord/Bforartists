@@ -131,7 +131,7 @@ bConstraintOb *BKE_constraints_make_evalob(
   bConstraintOb *cob;
 
   /* create regardless of whether we have any data! */
-  cob = static_cast<bConstraintOb *>(MEM_callocN(sizeof(bConstraintOb), "bConstraintOb"));
+  cob = MEM_callocN<bConstraintOb>("bConstraintOb");
 
   /* NOTE(@ton): For system time, part of de-globalization, code nicer later with local time. */
   cob->scene = scene;
@@ -880,8 +880,7 @@ static bool default_get_tarmat_full_bbone(Depsgraph * /*depsgraph*/,
 /* TODO: cope with getting rotation order... */
 #define SINGLETARGET_GET_TARS(con, datatar, datasubtarget, ct, list) \
   { \
-    ct = static_cast<bConstraintTarget *>( \
-        MEM_callocN(sizeof(bConstraintTarget), "tempConstraintTarget")); \
+    ct = MEM_callocN<bConstraintTarget>("tempConstraintTarget"); \
 \
     ct->tar = datatar; \
     STRNCPY(ct->subtarget, datasubtarget); \
@@ -916,8 +915,7 @@ static bool default_get_tarmat_full_bbone(Depsgraph * /*depsgraph*/,
 /* TODO: cope with getting rotation order... */
 #define SINGLETARGETNS_GET_TARS(con, datatar, ct, list) \
   { \
-    ct = static_cast<bConstraintTarget *>( \
-        MEM_callocN(sizeof(bConstraintTarget), "tempConstraintTarget")); \
+    ct = MEM_callocN<bConstraintTarget>("tempConstraintTarget"); \
 \
     ct->tar = datatar; \
     ct->space = con->tarspace; \
@@ -2500,7 +2498,7 @@ static void pycon_new_data(void *cdata)
   bPythonConstraint *data = (bPythonConstraint *)cdata;
 
   /* Everything should be set correctly by calloc, except for the prop->type constant. */
-  data->prop = static_cast<IDProperty *>(MEM_callocN(sizeof(IDProperty), "PyConstraintProps"));
+  data->prop = MEM_callocN<IDProperty>("PyConstraintProps");
   data->prop->type = IDP_GROUP;
 }
 
@@ -5581,6 +5579,225 @@ static bConstraintTypeInfo CTI_TRANSFORM_CACHE = {
     /*evaluate_constraint*/ transformcache_evaluate,
 };
 
+/* ---------- Attribute Transform Constraint ----------- */
+
+static void attribute_id_looper(bConstraint *con, ConstraintIDFunc func, void *userdata)
+{
+  bAttributeConstraint *data = static_cast<bAttributeConstraint *>(con->data);
+
+  /* target only */
+  func(con, (ID **)&data->target, false, userdata);
+}
+
+static void attribute_new_data(void *cdata)
+{
+  bAttributeConstraint *data = (bAttributeConstraint *)cdata;
+  STRNCPY(data->attributeName, "transform");
+  data->hashName = true;
+  data->mixLoc = true;
+  data->mixRot = true;
+  data->mixScl = true;
+}
+
+static int attribute_get_tars(bConstraint *con, ListBase *list)
+{
+  if (con && list) {
+    bAttributeConstraint *data = static_cast<bAttributeConstraint *>(con->data);
+    bConstraintTarget *ct;
+
+    SINGLETARGETNS_GET_TARS(con, data->target, ct, list);
+
+    return 1;
+  }
+
+  return 0;
+}
+
+static void attribute_flush_tars(bConstraint *con, ListBase *list, bool no_copy)
+{
+  if (con && list) {
+    bAttributeConstraint *data = static_cast<bAttributeConstraint *>(con->data);
+    bConstraintTarget *ct = static_cast<bConstraintTarget *>(list->first);
+
+    SINGLETARGETNS_FLUSH_TARS(con, data->target, ct, list, no_copy);
+  }
+}
+
+static bool attribute_get_tarmat(Depsgraph * /*depsgraph*/,
+                                 bConstraint *con,
+                                 bConstraintOb *cob,
+                                 bConstraintTarget *ct,
+                                 float /*ctime*/)
+{
+  bAttributeConstraint *scon = (bAttributeConstraint *)con->data;
+
+  if (!VALID_CONS_TARGET(ct) || ct->tar->type != OB_MESH) {
+    return false;
+  }
+
+  SpaceTransform transform;
+  float(*tmatrix)[4] = (scon->bstartMat) ? cob->startmat : cob->matrix;
+  BLI_space_transform_from_matrices(&transform, tmatrix, ct->tar->object_to_world().ptr());
+
+  Mesh *target_eval = BKE_object_get_evaluated_mesh(ct->tar);
+  CustomData domain;
+  int d_count = 0;
+  int index = -1;
+
+  switch (scon->domainType) {
+    case CON_ATTRIBUTE_DOMAIN_VERT:
+      domain = target_eval->vert_data;
+      d_count = target_eval->verts_num;
+      break;
+    case CON_ATTRIBUTE_DOMAIN_EDGE:
+      domain = target_eval->edge_data;
+      d_count = target_eval->edges_num;
+      break;
+    case CON_ATTRIBUTE_DOMAIN_FACE:
+      domain = target_eval->face_data;
+      d_count = target_eval->faces_num;
+      break;
+    default:
+      return false;
+  };
+  const float(*transform_matrices)[4][4] = (const float(*)[4][4])CustomData_get_layer_named(
+      &domain, CD_PROP_FLOAT4X4, scon->attributeName);
+  if (!transform_matrices) {
+    return false;
+  }
+
+  switch (scon->sampleType) {
+    case CON_ATTRIBUTE_SAMPLE_NEAREST_VERT: {
+
+      float co[3] = {0.0f, 0.0f, 0.0f};
+      blender::bke::BVHTreeFromMesh bvh;
+      BVHTreeNearest nearest;
+      nearest.index = -1;
+      nearest.dist_sq = FLT_MAX;
+
+      switch (scon->domainType) {
+        case CON_ATTRIBUTE_DOMAIN_VERT:
+          bvh = target_eval->bvh_verts();
+          break;
+        case CON_ATTRIBUTE_DOMAIN_EDGE:
+          bvh = target_eval->bvh_edges();
+          break;
+        case CON_ATTRIBUTE_DOMAIN_FACE:
+          bvh = target_eval->bvh_corner_tris();
+          break;
+        default:
+          return false;
+      }
+
+      BLI_space_transform_apply(&transform, co);
+      BLI_bvhtree_find_nearest(bvh.tree, co, &nearest, bvh.nearest_callback, &bvh);
+      if (nearest.index < 0) {
+        return false;
+      }
+
+      index = (scon->domainType == CON_ATTRIBUTE_DOMAIN_FACE) ?
+                  target_eval->corner_tri_faces()[nearest.index] :
+                  nearest.index;
+      break;
+    }
+
+    case CON_ATTRIBUTE_SAMPLE_INDEX: {
+      index = std::clamp(scon->sampleIndex, 0, d_count - 1);
+      break;
+    }
+
+    case CON_ATTRIBUTE_SAMPLE_RANDOM: {
+      int seed_hash = std::hash<int>{}(scon->Seed);
+      if (scon->hashName) {
+        seed_hash += std::hash<std::string>{}(cob->ob->id.name);
+      }
+      index = std::abs(seed_hash) % d_count;
+      break;
+    }
+
+    default:
+      return false;
+      break;
+  };
+  copy_m4_m4(ct->matrix, transform_matrices[index]);
+  return true;
+}
+
+static void attribute_evaluate(bConstraint *con, bConstraintOb *cob, ListBase *targets)
+{
+  bConstraintTarget *ct = static_cast<bConstraintTarget *>(targets->first);
+  bAttributeConstraint *data = static_cast<bAttributeConstraint *>(con->data);
+
+  /* only evaluate if there is a target */
+  if (VALID_CONS_TARGET(ct)) {
+    float target_mat[4][4];
+    copy_m4_m4(target_mat, ct->matrix);
+
+    if (!data->mixLoc) {
+      zero_v3(target_mat[3]);
+    }
+    if (!data->mixRot) {
+      float loc[3];
+      float rot[3][3];
+      float scl[3];
+      mat4_to_loc_rot_size(loc, rot, scl, target_mat);
+      unit_m3(rot);
+      loc_rot_size_to_mat4(target_mat, loc, rot, scl);
+    }
+    if (!data->mixScl) {
+      normalize_m4(target_mat);
+    }
+
+    /* Finally, combine the matrices. */
+    switch (data->mixMode) {
+      case CON_ATTRIBUTE_MIX_REPLACE:
+        copy_m4_m4(cob->matrix, target_mat);
+        break;
+
+      /* Simple matrix multiplication. */
+      case CON_ATTRIBUTE_MIX_BEFORE_FULL:
+        mul_m4_m4m4(cob->matrix, target_mat, cob->matrix);
+        break;
+
+      case CON_ATTRIBUTE_MIX_AFTER_FULL:
+        mul_m4_m4m4(cob->matrix, cob->matrix, target_mat);
+        break;
+
+      /* Fully separate handling of channels. */
+      case CON_ATTRIBUTE_MIX_BEFORE_SPLIT:
+        mul_m4_m4m4_split_channels(cob->matrix, target_mat, cob->matrix);
+        break;
+
+      case CON_ATTRIBUTE_MIX_AFTER_SPLIT:
+        mul_m4_m4m4_split_channels(cob->matrix, cob->matrix, target_mat);
+        break;
+
+      default:
+        BLI_assert_msg(0, "Unknown Copy Transforms mix mode");
+    }
+
+    if (data->utargetMat) {
+      mul_m4_m4m4(cob->matrix, ct->tar->object_to_world().ptr(), cob->matrix);
+      mul_m4_m4m4(ct->matrix, ct->matrix, ct->tar->object_to_world().ptr());
+    }
+  }
+}
+
+static bConstraintTypeInfo CTI_ATTRIBUTE = {
+    /*type*/ CONSTRAINT_TYPE_ATTRIBUTE,
+    /*size*/ sizeof(bAttributeConstraint),
+    /*name*/ N_("Attribute Transform"),
+    /*struct_name*/ "bAttributeConstraint",
+    /*free_data*/ nullptr,
+    /*id_looper*/ attribute_id_looper,
+    /*copy_data*/ nullptr,
+    /*new_data*/ attribute_new_data,
+    /*get_constraint_targets*/ attribute_get_tars,
+    /*flush_constraint_targets*/ attribute_flush_tars,
+    /*get_target_matrix*/ attribute_get_tarmat,
+    /*evaluate_constraint*/ attribute_evaluate,
+};
+
 /* ************************* Constraints Type-Info *************************** */
 /* All of the constraints api functions use bConstraintTypeInfo structs to carry out
  * and operations that involve constraint specific code.
@@ -5624,6 +5841,7 @@ static void constraints_init_typeinfo()
   constraintsTypeInfo[28] = &CTI_OBJECTSOLVER;    /* Object Solver Constraint */
   constraintsTypeInfo[29] = &CTI_TRANSFORM_CACHE; /* Transform Cache Constraint */
   constraintsTypeInfo[30] = &CTI_ARMATURE;        /* Armature Constraint */
+  constraintsTypeInfo[31] = &CTI_ATTRIBUTE;       /* Attribute Transform Constraint */
 }
 
 const bConstraintTypeInfo *BKE_constraint_typeinfo_from_type(int type)
@@ -5890,7 +6108,7 @@ void BKE_constraint_panel_expand(bConstraint *con)
 /* Creates a new constraint, initializes its data, and returns it */
 static bConstraint *add_new_constraint_internal(const char *name, short type)
 {
-  bConstraint *con = static_cast<bConstraint *>(MEM_callocN(sizeof(bConstraint), "Constraint"));
+  bConstraint *con = MEM_callocN<bConstraint>("Constraint");
   const bConstraintTypeInfo *cti = BKE_constraint_typeinfo_from_type(type);
   const char *newName;
 
@@ -6381,7 +6599,7 @@ void BKE_constraint_target_matrix_get(Depsgraph *depsgraph,
 
   if (cti && cti->get_constraint_targets) {
     /* make 'constraint-ob' */
-    cob = static_cast<bConstraintOb *>(MEM_callocN(sizeof(bConstraintOb), "tempConstraintOb"));
+    cob = MEM_callocN<bConstraintOb>("tempConstraintOb");
     cob->type = ownertype;
     cob->scene = scene;
     cob->depsgraph = depsgraph;

@@ -1518,6 +1518,18 @@ void DepsgraphRelationBuilder::build_constraints(ID *id,
           ComponentKey target_transform_key(&ct->tar->id, NodeType::TRANSFORM);
           add_relation(target_transform_key, constraint_op_key, cti->name);
         }
+        else if (con->type == CONSTRAINT_TYPE_ATTRIBUTE) {
+          bAttributeConstraint *scon = (bAttributeConstraint *)con->data;
+
+          /* Constraints which requires the target object surface. */
+          ComponentKey target_key(&ct->tar->id, NodeType::GEOMETRY);
+          add_relation(target_key, constraint_op_key, cti->name);
+
+          /* NOTE: obdata eval now doesn't necessarily depend on the
+           * object's transform. */
+          ComponentKey target_transform_key(&ct->tar->id, NodeType::TRANSFORM);
+          add_relation(target_transform_key, constraint_op_key, cti->name);
+        }
         else {
           /* Standard object relation. */
           /* TODO: loc vs rot vs scale? */

@@ -783,7 +783,7 @@ static bool scene_fn(bContext *C,
   return true;
 }
 
-static int outliner_scene_operation_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus outliner_scene_operation_exec(bContext *C, wmOperator *op)
 {
   SpaceOutliner *space_outliner = CTX_wm_space_outliner(C);
   /* bfa - add scene outliner operators  */
@@ -1919,7 +1919,7 @@ static bool outliner_liboverride_operation_poll(bContext *C)
   return true;
 }
 
-static int outliner_liboverride_operation_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus outliner_liboverride_operation_exec(bContext *C, wmOperator *op)
 {
   Scene *scene = CTX_data_scene(C);
   SpaceOutliner *space_outliner = CTX_wm_space_outliner(C);
@@ -2562,7 +2562,7 @@ static const EnumPropertyItem prop_object_op_types[] = {
     {0, nullptr, 0, nullptr, nullptr},
 };
 
-static int outliner_object_operation_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus outliner_object_operation_exec(bContext *C, wmOperator *op)
 {
   Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
@@ -2735,7 +2735,7 @@ static TreeTraversalAction outliner_collect_objects_to_delete(TreeElement *te, v
   return TRAVERSE_CONTINUE;
 }
 
-static int outliner_delete_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus outliner_delete_exec(bContext *C, wmOperator *op)
 {
   Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
@@ -2931,7 +2931,7 @@ static const EnumPropertyItem *outliner_id_operation_itemf(bContext *C,
   return items;
 }
 
-static int outliner_id_operation_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus outliner_id_operation_exec(bContext *C, wmOperator *op)
 {
   Main *bmain = CTX_data_main(C);
   wmWindowManager *wm = CTX_wm_manager(C);
@@ -3155,7 +3155,7 @@ static const EnumPropertyItem outliner_lib_op_type_items[] = {
     {0, nullptr, 0, nullptr, nullptr},
 };
 
-static int outliner_lib_operation_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus outliner_lib_operation_exec(bContext *C, wmOperator *op)
 {
   Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
@@ -3262,7 +3262,7 @@ static void actionset_id_fn(TreeElement * /*te*/,
   /* TODO: other cases not supported yet. */
 }
 
-static int outliner_action_set_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus outliner_action_set_exec(bContext *C, wmOperator *op)
 {
   Main *bmain = CTX_data_main(C);
   SpaceOutliner *space_outliner = CTX_wm_space_outliner(C);
@@ -3366,7 +3366,7 @@ static const EnumPropertyItem prop_animdata_op_types[] = {
     {0, nullptr, 0, nullptr, nullptr},
 };
 
-static int outliner_animdata_operation_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus outliner_animdata_operation_exec(bContext *C, wmOperator *op)
 {
   wmWindowManager *wm = CTX_wm_manager(C);
   SpaceOutliner *space_outliner = CTX_wm_space_outliner(C);
@@ -3461,7 +3461,7 @@ static const EnumPropertyItem prop_constraint_op_types[] = {
     {0, nullptr, 0, nullptr, nullptr},
 };
 
-static int outliner_constraint_operation_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus outliner_constraint_operation_exec(bContext *C, wmOperator *op)
 {
   SpaceOutliner *space_outliner = CTX_wm_space_outliner(C);
   eOutliner_PropConstraintOps event = (eOutliner_PropConstraintOps)RNA_enum_get(op->ptr, "type");
@@ -3509,7 +3509,7 @@ static const EnumPropertyItem prop_modifier_op_types[] = {
     {0, nullptr, 0, nullptr, nullptr},
 };
 
-static int outliner_modifier_operation_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus outliner_modifier_operation_exec(bContext *C, wmOperator *op)
 {
   SpaceOutliner *space_outliner = CTX_wm_space_outliner(C);
   eOutliner_PropModifierOps event = (eOutliner_PropModifierOps)RNA_enum_get(op->ptr, "type");
@@ -3569,7 +3569,7 @@ static bool outliner_data_operation_poll(bContext *C)
       datalevel, TSE_POSE_CHANNEL, TSE_BONE, TSE_EBONE, TSE_STRIP, TSE_GP_LAYER, TSE_RNA_STRUCT);
 }
 
-static int outliner_data_operation_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus outliner_data_operation_exec(bContext *C, wmOperator *op)
 {
   SpaceOutliner *space_outliner = CTX_wm_space_outliner(C);
   int scenelevel = 0, objectlevel = 0, idlevel = 0, datalevel = 0;
@@ -3701,7 +3701,7 @@ void OUTLINER_OT_data_operation(wmOperatorType *ot)
 /** \name Context Menu Operator
  * \{ */
 
-static int outliner_operator_menu(bContext *C, const char *opname)
+static wmOperatorStatus outliner_operator_menu(bContext *C, const char *opname)
 {
   wmOperatorType *ot = WM_operatortype_find(opname, false);
   uiPopupMenu *pup = UI_popup_menu_begin(C, WM_operatortype_name(ot, nullptr).c_str(), ICON_NONE);
@@ -3723,10 +3723,10 @@ static int outliner_operator_menu(bContext *C, const char *opname)
   return OPERATOR_INTERFACE;
 }
 
-static int do_outliner_operation_event(bContext *C,
-                                       ARegion *region,
-                                       SpaceOutliner *space_outliner,
-                                       TreeElement *te)
+static wmOperatorStatus do_outliner_operation_event(bContext *C,
+                                                    ARegion *region,
+                                                    SpaceOutliner *space_outliner,
+                                                    TreeElement *te)
 {
   int scenelevel = 0, objectlevel = 0, idlevel = 0, datalevel = 0;
   TreeStoreElem *tselem = TREESTORE(te);
@@ -3798,7 +3798,9 @@ static int do_outliner_operation_event(bContext *C,
   return OPERATOR_CANCELLED;
 }
 
-static int outliner_operation_invoke(bContext *C, wmOperator * /*op*/, const wmEvent *event)
+static wmOperatorStatus outliner_operation_invoke(bContext *C,
+                                                  wmOperator * /*op*/,
+                                                  const wmEvent *event)
 {
   ARegion *region = CTX_wm_region(C);
   SpaceOutliner *space_outliner = CTX_wm_space_outliner(C);

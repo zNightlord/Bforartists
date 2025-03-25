@@ -8399,7 +8399,8 @@ static void def_cmp_glare(BlenderRNA * /*brna*/, StructRNA *srna)
 
   prop = RNA_def_property(srna, "use_rotate_45", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "star_45", 0);
-  RNA_def_property_ui_text(prop, "Rotate 45", "Simple star filter: add 45 degree rotation offset");
+  RNA_def_property_ui_text(
+      prop, "Rotate 45°", "Simple star filter: add 45 degree rotation offset");
   RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
 
   prop = RNA_def_property(srna, "size", PROP_INT, PROP_NONE);
@@ -12594,6 +12595,7 @@ static void rna_def_nodes(BlenderRNA *brna)
   define(brna, "CompositorNode", "CompositorNodeKeyingScreen", def_cmp_keyingscreen, ICON_NODE_KEYINGSCREEN, "Add a Keying Screen Compositor node\nCreates plates for use as a color reference for keying nodes");
   define(brna, "CompositorNode", "CompositorNodeKuwahara", def_cmp_kuwahara, ICON_KUWAHARA, "Add a Kuwahara Compositor node\nKuwahara is a stylize filter");
   define(brna, "CompositorNode", "CompositorNodeLensdist", def_cmp_lensdist, ICON_NODE_LENSDISTORT, "Add a Lens Distortion Compositor node\nSimulate distortions from real camera lenses");
+  define(brna, "CompositorNode", "CompositorNodeImageInfo", nullptr);
   define(brna, "CompositorNode", "CompositorNodeLevels", def_cmp_levels, ICON_LEVELS, "Add a Levels Compositor node\nReads the inputs color channels and outputs analytical values");
   define(brna, "CompositorNode", "CompositorNodeLumaMatte", def_cmp_luma_matte, ICON_NODE_LUMINANCE, "Add a Luminance Key Compositor node\nDetermines background objects from foreground objects by the difference in the brightness level");
   define(brna, "CompositorNode", "CompositorNodeMapRange", def_cmp_map_range, ICON_NODE_MAP_RANGE, "Add a Map Range Compositor node\nRemaps a value from a source range to a target range");

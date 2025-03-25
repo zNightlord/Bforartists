@@ -36,7 +36,7 @@ void UI_but_drag_attach_image(uiBut *but, const ImBuf *imb, const float scale)
 void UI_but_drag_set_asset(
     uiBut *but,
     const blender::asset_system::AssetRepresentation *asset,
-    int import_method,
+    const AssetImportSettings &import_settings,
     BIFIconID icon,
     BIFIconID preview_icon,
     bool drop_collections_as_instances, /* BFA - needed for setting #use_instance from UI before

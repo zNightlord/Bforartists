@@ -1171,7 +1171,7 @@ static void minimize_stretch_exit(bContext *C, wmOperator *op, bool cancel)
   op->customdata = nullptr;
 }
 
-static int minimize_stretch_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus minimize_stretch_exec(bContext *C, wmOperator *op)
 {
   int i, iterations;
 
@@ -1188,7 +1188,9 @@ static int minimize_stretch_exec(bContext *C, wmOperator *op)
   return OPERATOR_FINISHED;
 }
 
-static int minimize_stretch_invoke(bContext *C, wmOperator *op, const wmEvent * /*event*/)
+static wmOperatorStatus minimize_stretch_invoke(bContext *C,
+                                                wmOperator *op,
+                                                const wmEvent * /*event*/)
 {
   if (!minimize_stretch_init(C, op)) {
     return OPERATOR_CANCELLED;
@@ -1203,7 +1205,7 @@ static int minimize_stretch_invoke(bContext *C, wmOperator *op, const wmEvent * 
   return OPERATOR_RUNNING_MODAL;
 }
 
-static int minimize_stretch_modal(bContext *C, wmOperator *op, const wmEvent *event)
+static wmOperatorStatus minimize_stretch_modal(bContext *C, wmOperator *op, const wmEvent *event)
 {
   MinStretch *ms = static_cast<MinStretch *>(op->customdata);
 
@@ -1712,7 +1714,7 @@ static void pack_islands_freejob(void *pidv)
   MEM_delete(pid);
 }
 
-static int pack_islands_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus pack_islands_exec(bContext *C, wmOperator *op)
 {
   ViewLayer *view_layer = CTX_data_view_layer(C);
   const Scene *scene = CTX_data_scene(C);
@@ -1980,7 +1982,7 @@ static void uv_pack_islands_ui(bContext * /*C*/, wmOperator *op)
   uiItemS(layout);
 }
 
-static int uv_pack_islands_invoke(bContext *C, wmOperator *op, const wmEvent *event)
+static wmOperatorStatus uv_pack_islands_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
   return WM_operator_props_popup_confirm_ex(C, op, event, IFACE_("Pack Islands"), IFACE_("Pack"));
 }
@@ -2070,7 +2072,7 @@ void UV_OT_pack_islands(wmOperatorType *ot)
 /** \name Average UV Islands Scale Operator
  * \{ */
 
-static int average_islands_scale_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus average_islands_scale_exec(bContext *C, wmOperator *op)
 {
   const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
@@ -2834,7 +2836,7 @@ enum {
   UNWRAP_ERROR_NEGATIVE = (1 << 1),
 };
 
-static int unwrap_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus unwrap_exec(bContext *C, wmOperator *op)
 {
   ViewLayer *view_layer = CTX_data_view_layer(C);
   const Scene *scene = CTX_data_scene(C);
@@ -3226,7 +3228,7 @@ static blender::Vector<blender::float3> smart_uv_project_calculate_project_norma
   return project_normal_array;
 }
 
-static int smart_project_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus smart_project_exec(bContext *C, wmOperator *op)
 {
   Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
@@ -3405,7 +3407,7 @@ static int smart_project_exec(bContext *C, wmOperator *op)
   return OPERATOR_FINISHED;
 }
 
-static int smart_project_invoke(bContext *C, wmOperator *op, const wmEvent *event)
+static wmOperatorStatus smart_project_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
   return WM_operator_props_popup_confirm_ex(
       C, op, event, IFACE_("Smart UV Project"), IFACE_("Unwrap"));
@@ -3482,9 +3484,9 @@ void UV_OT_smart_project(wmOperatorType *ot)
 /** \name Project UV From View Operator
  * \{ */
 
-static int uv_from_view_exec(bContext *C, wmOperator *op);
+static wmOperatorStatus uv_from_view_exec(bContext *C, wmOperator *op);
 
-static int uv_from_view_invoke(bContext *C, wmOperator *op, const wmEvent * /*event*/)
+static wmOperatorStatus uv_from_view_invoke(bContext *C, wmOperator *op, const wmEvent * /*event*/)
 {
   View3D *v3d = CTX_wm_view3d(C);
   RegionView3D *rv3d = CTX_wm_region_view3d(C);
@@ -3503,7 +3505,7 @@ static int uv_from_view_invoke(bContext *C, wmOperator *op, const wmEvent * /*ev
   return uv_from_view_exec(C, op);
 }
 
-static int uv_from_view_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus uv_from_view_exec(bContext *C, wmOperator *op)
 {
   ViewLayer *view_layer = CTX_data_view_layer(C);
   const Scene *scene = CTX_data_scene(C);
@@ -3662,7 +3664,7 @@ void UV_OT_project_from_view(wmOperatorType *ot)
 /** \name Reset UV Operator
  * \{ */
 
-static int reset_exec(bContext *C, wmOperator * /*op*/)
+static wmOperatorStatus reset_exec(bContext *C, wmOperator * /*op*/)
 {
   const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
@@ -3917,7 +3919,7 @@ static float uv_sphere_project(const Scene *scene,
   return max_u;
 }
 
-static int sphere_project_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus sphere_project_exec(bContext *C, wmOperator *op)
 {
   const Scene *scene = CTX_data_scene(C);
   View3D *v3d = CTX_wm_view3d(C);
@@ -4095,7 +4097,7 @@ static float uv_cylinder_project(const Scene *scene,
   return max_u;
 }
 
-static int cylinder_project_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus cylinder_project_exec(bContext *C, wmOperator *op)
 {
   const Scene *scene = CTX_data_scene(C);
   View3D *v3d = CTX_wm_view3d(C);
@@ -4243,7 +4245,7 @@ static void uvedit_unwrap_cube_project(const Scene *scene,
   }
 }
 
-static int cube_project_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus cube_project_exec(bContext *C, wmOperator *op)
 {
   const Scene *scene = CTX_data_scene(C);
   View3D *v3d = CTX_wm_view3d(C);
