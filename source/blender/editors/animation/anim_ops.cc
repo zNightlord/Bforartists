@@ -147,10 +147,10 @@ static void seq_sync_scene_strip(bContext *C, Scene *sequence_scene)
   wmWindow *win = CTX_wm_window(C);
   Scene *active_scene = WM_window_get_active_scene(win);
 
-  Editing *ed = SEQ_editing_get(sequence_scene);
-  ListBase *seqbase = SEQ_active_seqbase_get(ed);
-  ListBase *channels = SEQ_channels_displayed_get(ed);
-  VectorSet<Strip *> render_strips = SEQ_query_rendered_strips(
+  Editing *ed = seq::editing_get(sequence_scene);
+  ListBase *seqbase = seq::active_seqbase_get(ed);
+  ListBase *channels = seq::channels_displayed_get(ed);
+  VectorSet<Strip *> render_strips = seq::query_rendered_strips(
       sequence_scene, channels, seqbase, sequence_scene->r.cfra, 0);
   Vector<Strip *> strips = render_strips.extract_vector();
   /* Sort strips by channel. */
@@ -173,7 +173,7 @@ static void seq_sync_scene_strip(bContext *C, Scene *sequence_scene)
       active_scene = scene_strip->scene;
     }
 
-    float frame_index = SEQ_give_frame_index(sequence_scene, scene_strip, sequence_scene->r.cfra);
+    float frame_index = seq::give_frame_index(sequence_scene, scene_strip, sequence_scene->r.cfra);
     if (active_scene->r.flag & SCER_SHOW_SUBFRAME) {
       active_scene->r.cfra = int(frame_index);
       active_scene->r.subframe = frame_index - int(frame_index);

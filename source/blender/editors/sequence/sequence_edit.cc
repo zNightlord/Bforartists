@@ -91,7 +91,7 @@ static bool sequence_delete(bContext &C, Main &bmain, Sequence &sequence)
 /** \name Sequence New Operator
  * \{ */
 
-static int sequence_new_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus sequence_new_exec(bContext *C, wmOperator *op)
 {
   Main *bmain = CTX_data_main(C);
   wmWindow *win = CTX_wm_window(C);
@@ -157,7 +157,7 @@ static bool sequence_delete_poll(bContext *C)
   return false;
 }
 
-static int sequence_delete_exec(bContext *C, wmOperator * /*op*/)
+static wmOperatorStatus sequence_delete_exec(bContext *C, wmOperator * /*op*/)
 {
   Main *bmain = CTX_data_main(C);
   Sequence *sequence = CTX_data_sequence(C);

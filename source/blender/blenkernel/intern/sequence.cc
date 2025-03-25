@@ -26,6 +26,7 @@
 
 static void sequence_data_init(ID *id)
 {
+  using namespace blender;
   Sequence *sequence = reinterpret_cast<Sequence *>(id);
 
   /* FIXME: Only here for compatibility with some scene APIs to avoid crashes. */
@@ -35,7 +36,7 @@ static void sequence_data_init(ID *id)
 
   sequence->legacy_scene_data.id.flag |= ID_FLAG_EMBEDDED_DATA;
 
-  SEQ_editing_ensure(&sequence->legacy_scene_data);
+  seq::editing_ensure(&sequence->legacy_scene_data);
 }
 
 static void sequence_data_free(ID *id)
@@ -54,6 +55,7 @@ static void sequence_foreach_id(ID *id, LibraryForeachIDData *data)
 
 static void sequence_blend_write(BlendWriter *writer, ID *id, const void *id_address)
 {
+  using namespace blender;
   Sequence *sequence = reinterpret_cast<Sequence *>(id);
 
   BLO_write_id_struct(writer, Sequence, id_address, &sequence->id);
@@ -66,7 +68,7 @@ static void sequence_blend_write(BlendWriter *writer, ID *id, const void *id_add
   BLI_assert(ed);
   BLO_write_struct(writer, Editing, ed);
 
-  SEQ_blend_write(writer, &ed->seqbase);
+  seq::blend_write(writer, &ed->seqbase);
   LISTBASE_FOREACH (SeqTimelineChannel *, channel, &ed->channels) {
     BLO_write_struct(writer, SeqTimelineChannel, channel);
   }
@@ -80,11 +82,12 @@ static void sequence_blend_write(BlendWriter *writer, ID *id, const void *id_add
 
 static void link_recurs_seq(BlendDataReader *reader, ListBase *lb)
 {
+  using namespace blender;
   BLO_read_struct_list(reader, Strip, lb);
 
   LISTBASE_FOREACH_MUTABLE (Strip *, seq, lb) {
     /* Sanity check. */
-    if (!SEQ_is_valid_strip_channel(seq)) {
+    if (!seq::is_valid_strip_channel(seq)) {
       BLI_freelinkN(lb, seq);
       BLO_read_data_reports(reader)->count.sequence_strips_skipped++;
     }
@@ -96,6 +99,7 @@ static void link_recurs_seq(BlendDataReader *reader, ListBase *lb)
 
 static void sequence_read_data(BlendDataReader *reader, Scene *sce)
 {
+  using namespace blender;
   Editing *ed = sce->ed;
 
   ListBase *old_seqbasep = &sce->ed->seqbase;
@@ -113,7 +117,7 @@ static void sequence_read_data(BlendDataReader *reader, Scene *sce)
   link_recurs_seq(reader, &ed->seqbase);
 
   /* Read in sequence member data. */
-  SEQ_blend_read(reader, &ed->seqbase);
+  seq::blend_read(reader, &ed->seqbase);
   BLO_read_struct_list(reader, SeqTimelineChannel, &ed->channels);
 
   /* link metastack, slight abuse of structs here,

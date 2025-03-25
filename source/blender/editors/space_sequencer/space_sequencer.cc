@@ -215,7 +215,7 @@ static void sequencer_free(SpaceLink *sl)
 }
 
 /* Space-type init callback. */
-static void sequencer_init(wmWindowManager *wm, ScrArea *area)
+static void sequencer_init(wmWindowManager */*wm*/, ScrArea *area)
 {
   SpaceSeq *sseq = (SpaceSeq *)area->spacedata.first;
   // if (sseq->sequence == nullptr) {
