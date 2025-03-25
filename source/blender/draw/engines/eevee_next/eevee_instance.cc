@@ -128,6 +128,7 @@ void Instance::init(const int2 &output_res,
   volume_probes.init();
   volume.init();
   lookdev.init(visible_rect);
+  npr.init();
 
   shaders_are_ready_ = shaders.static_shaders_are_ready(is_image_render()) &&
                        shaders.request_specializations(is_image_render(),
@@ -177,6 +178,7 @@ void Instance::init_light_bake(Depsgraph *depsgraph, draw::Manager *manager)
                                   render_buffers.data.shadow_id,
                                   shadows.get_data().ray_count,
                                   shadows.get_data().step_count);
+  npr.init();
 }
 
 void Instance::set_time(float time)
@@ -223,6 +225,7 @@ void Instance::begin_sync()
   cryptomatte.begin_sync();
   sphere_probes.begin_sync();
   light_probes.begin_sync();
+  npr.begin_sync();
 
   depth_of_field.sync();
   raytracing.sync();
@@ -342,6 +345,7 @@ void Instance::end_sync()
   light_probes.end_sync();
   sphere_probes.end_sync();
   planar_probes.end_sync();
+  npr.end_sync();
 
   uniform_data.push_update();
 

@@ -59,14 +59,15 @@ void Film::init_aovs(const Set<std::string> &passes_used_by_viewport_compositor)
       }
     }
 
-    if (this->is_viewport_compositor_enabled()) {
+    if (this->is_viewport_compositor_enabled() || inst_.npr_enabled()) {
       LISTBASE_FOREACH (ViewLayerAOV *, aov, &inst_.view_layer->aovs) {
         /* Already added as a display pass. No need to add again. */
         if (!aovs.is_empty() && aovs.last() == aov) {
           continue;
         }
 
-        if (passes_used_by_viewport_compositor.contains(aov->name)) {
+        /* TODO(NPR): passes_used_by_npr_pass. */
+        if (passes_used_by_viewport_compositor.contains(aov->name) || inst_.npr_enabled()) {
           aovs.append(aov);
         }
       }

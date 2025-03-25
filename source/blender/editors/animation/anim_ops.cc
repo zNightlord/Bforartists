@@ -147,10 +147,10 @@ static void seq_sync_scene_strip(bContext *C, Scene *sequence_scene)
   wmWindow *win = CTX_wm_window(C);
   Scene *active_scene = WM_window_get_active_scene(win);
 
-  Editing *ed = SEQ_editing_get(sequence_scene);
-  ListBase *seqbase = SEQ_active_seqbase_get(ed);
-  ListBase *channels = SEQ_channels_displayed_get(ed);
-  VectorSet<Strip *> render_strips = SEQ_query_rendered_strips(
+  Editing *ed = blender::seq::editing_get(sequence_scene);
+  ListBase *seqbase = blender::seq::active_seqbase_get(ed);
+  ListBase *channels = blender::seq::channels_displayed_get(ed);
+  VectorSet<Strip *> render_strips = blender::seq::query_rendered_strips(
       sequence_scene, channels, seqbase, sequence_scene->r.cfra, 0);
   Vector<Strip *> strips = render_strips.extract_vector();
   /* Sort strips by channel. */
@@ -173,7 +173,7 @@ static void seq_sync_scene_strip(bContext *C, Scene *sequence_scene)
       active_scene = scene_strip->scene;
     }
 
-    float frame_index = SEQ_give_frame_index(sequence_scene, scene_strip, sequence_scene->r.cfra);
+    float frame_index = blender::seq::give_frame_index(sequence_scene, scene_strip, sequence_scene->r.cfra);
     if (active_scene->r.flag & SCER_SHOW_SUBFRAME) {
       active_scene->r.cfra = int(frame_index);
       active_scene->r.subframe = frame_index - int(frame_index);
@@ -941,6 +941,7 @@ static int merge_actions_selection_exec(bContext *C, wmOperator *op)
   }
 
   Main *bmain = CTX_data_main(C);
+  int moved_slots_count = 0;
   for (const PointerRNA &ptr : selection) {
     blender::Vector<ID *> related_ids = find_related_ids(*bmain, *ptr.owner_id);
     for (ID *related_id : related_ids) {
@@ -967,9 +968,22 @@ static int merge_actions_selection_exec(bContext *C, wmOperator *op)
         continue;
       }
       blender::animrig::move_slot(*bmain, *slot, *action, active_action);
+      moved_slots_count++;
       ANIM_id_update(bmain, related_id);
       DEG_id_tag_update_ex(bmain, &action->id, ID_RECALC_ANIMATION_NO_FLUSH);
     }
+  }
+
+  if (moved_slots_count > 0) {
+    BKE_reportf(op->reports,
+                RPT_INFO,
+                "Moved %i slot(s) into the action of the active object",
+                moved_slots_count);
+  }
+  else {
+    BKE_reportf(op->reports,
+                RPT_ERROR,
+                "Failed to merge any animation. Note that NLA strips cannot be merged");
   }
 
   /* `ID_RECALC_ANIMATION_NO_FLUSH` is used here (and above), as the actual animation values do not

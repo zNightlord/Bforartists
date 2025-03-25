@@ -390,7 +390,7 @@ bool strip_point_image_isect(const Scene *scene, const Strip *strip, float point
 /*static void sequencer_select_do_updates(bContext *C, Scene *scene)*/ /*BFA - warning, 'scene':
                                                                           unreferenced formal
                                                                           parameter*/
-static void sequencer_select_do_updates(bContext *C, Scene *)
+static void sequencer_select_do_updates(bContext *C, Scene *scene)
 {
   ED_outliner_select_sync_from_sequence_tag(C);
   // WM_event_add_notifier(C,
@@ -408,8 +408,7 @@ static void sequencer_select_do_updates(bContext *C, Scene *)
 static int sequencer_de_select_all_exec(bContext *C, wmOperator *op)
 {
   int action = RNA_enum_get(op->ptr, "action");
-  /*Scene *scene = CTX_data_scene(C);*/ /*BFA - warning, 'scene': local variable is initialized but
-                                           not referenced*/
+  Scene *scene = CTX_data_scene(C);
 
   if (sequencer_view_has_preview_poll(C) && !sequencer_view_preview_only_poll(C)) {
     return OPERATOR_CANCELLED;

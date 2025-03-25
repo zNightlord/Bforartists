@@ -27,7 +27,13 @@ void ntreeShaderEndExecTree(struct bNodeTreeExec *exec);
  */
 struct bNode *ntreeShaderOutputNode(struct bNodeTree *ntree, int target);
 
+bNodeTree *npr_tree_get(struct bNodeTree *ntree);
+bNodeTree *npr_tree_get_from_mat(struct Material *material);
+
 /**
  * This one needs to work on a local tree.
  */
 void ntreeGPUMaterialNodes(struct bNodeTree *localtree, struct GPUMaterial *mat);
+
+/* Thre returned tree is local and must be released. */
+struct bNodeTree *ntreeGPUNPRNodes(struct bNodeTree *material_tree, struct GPUMaterial *mat);

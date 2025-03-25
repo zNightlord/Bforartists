@@ -1151,7 +1151,7 @@ static eContextResult screen_ctx_active_strip(const bContext *C, bContextDataRes
   wmWindow *win = CTX_wm_window(C);
   Sequence *sequence = WM_window_get_active_sequence(win);
   Scene *scene = &sequence->legacy_scene_data;
-  Strip *strip = blender::seq::editing_get(scene);
+  Strip *strip = blender::seq::select_active_get(scene);
   if (strip) {
     CTX_data_pointer_set(result, &scene->id, &RNA_Strip, strip);
     return CTX_RESULT_OK;

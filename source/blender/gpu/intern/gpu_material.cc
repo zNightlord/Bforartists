@@ -390,6 +390,13 @@ void GPU_material_output_thickness(GPUMaterial *material, GPUNodeLink *link)
   }
 }
 
+void GPU_material_output_npr(GPUMaterial *material, GPUNodeLink *link)
+{
+  if (!material->graph.outlink_npr) {
+    material->graph.outlink_npr = link;
+  }
+}
+
 void GPU_material_add_output_link_aov(GPUMaterial *material, GPUNodeLink *link, int hash)
 {
   GPUNodeGraphOutputLink *aov_link = static_cast<GPUNodeGraphOutputLink *>(
@@ -544,6 +551,7 @@ GPUMaterial *GPU_material_from_nodetree(Scene *scene,
                                         uint64_t shader_uuid,
                                         bool is_volume_shader,
                                         bool is_lookdev,
+                                        bool is_npr_shader,
                                         GPUCodegenCallbackFn callback,
                                         void *thunk,
                                         GPUMaterialPassReplacementCallbackFn pass_replacement_cb)
@@ -574,8 +582,14 @@ GPUMaterial *GPU_material_from_nodetree(Scene *scene,
   }
 
   /* Localize tree to create links for reroute and mute. */
-  bNodeTree *localtree = blender::bke::node_tree_localize(ntree, nullptr);
-  ntreeGPUMaterialNodes(localtree, mat);
+  bNodeTree *localtree = nullptr;
+  if (!is_npr_shader) {
+    localtree = blender::bke::node_tree_localize(ntree, nullptr);
+    ntreeGPUMaterialNodes(localtree, mat);
+  }
+  else {
+    localtree = ntreeGPUNPRNodes(ntree, mat);
+  }
 
   gpu_material_ramp_texture_build(mat);
   gpu_material_sky_texture_build(mat);

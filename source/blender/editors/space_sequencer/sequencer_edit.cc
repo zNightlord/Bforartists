@@ -1109,7 +1109,7 @@ static int sequencer_disconnect_exec(bContext *C, wmOperator * /*op*/)
 
   // if (seq::disconnect(selected)) {
   //   WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER, scene);
-  if (SEQ_disconnect(selected)) {
+  if (seq::disconnect(selected)) {
     WM_event_add_notifier(C, NC_SEQUENCE | ND_SEQUENCER, scene);
     return OPERATOR_FINISHED;
   }
