@@ -1080,7 +1080,7 @@ PassMain::Sub *DeferredPipeline::npr_add(::Material *blender_mat,
   }
 }
 
-void DeferredPipeline::render(View &main_view,
+void &DeferredPipeline::render(View &main_view,
                               View &render_view,
                               Framebuffer &prepass_fb,
                               Framebuffer &combined_fb,

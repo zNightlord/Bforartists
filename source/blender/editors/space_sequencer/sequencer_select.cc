@@ -500,7 +500,7 @@ void SEQUENCER_OT_select_all(wmOperatorType *ot)
 
 static wmOperatorStatus sequencer_select_inverse_exec(bContext *C, wmOperator * /*op*/)
 {
-  /*Scene *scene = CTX_data_scene(C);*/ /*BFA - warning, 'scene': local variable is initialized but
+  Scene *scene = CTX_data_scene(C); /*BFA - warning, 'scene': local variable is initialized but
                                            not referenced*/
 
   if (sequencer_view_has_preview_poll(C) && !sequencer_view_preview_only_poll(C)) {
