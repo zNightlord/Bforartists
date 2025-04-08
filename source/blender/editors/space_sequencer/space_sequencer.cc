@@ -215,7 +215,7 @@ static void sequencer_free(SpaceLink *sl)
 }
 
 /* Space-type init callback. */
-static void sequencer_init(wmWindowManager */*wm*/, ScrArea *area)
+static void sequencer_init(wmWindowManager * /*wm*/, ScrArea *area)
 {
   SpaceSeq *sseq = (SpaceSeq *)area->spacedata.first;
   // if (sseq->sequence == nullptr) {
@@ -483,12 +483,18 @@ static void sequencer_main_region_init(wmWindowManager *wm, ARegion *region)
 /* Strip editing timeline. */
 static void sequencer_main_region_draw(const bContext *C, ARegion *region)
 {
+  if (!CTX_data_scene(C)) {
+    return;
+  }
   draw_timeline_seq(C, region);
 }
 
 /* Strip editing timeline. */
 static void sequencer_main_region_draw_overlay(const bContext *C, ARegion *region)
 {
+  if (!CTX_data_scene(C)) {
+    return;
+  }
   draw_timeline_seq_display(C, region);
 }
 
@@ -502,6 +508,9 @@ static void sequencer_main_clamp_view(const bContext *C, ARegion *region)
 
   View2D *v2d = &region->v2d;
   Scene *scene = CTX_data_scene(C);
+  if (!scene) {
+    return;
+  }
 
   /* Transformation uses edge panning to move view. Also if smooth view is running, don't apply
    * clamping to prevent overriding this functionality. */
@@ -631,7 +640,7 @@ static void sequencer_main_region_message_subscribe(const wmRegionMessageSubscri
   msg_sub_value_region_tag_redraw.notify = ED_region_do_msg_notify_tag_redraw;
 
   /* Timeline depends on scene properties. */
-  {
+  if (scene) {
     bool use_preview = (scene->r.flag & SCER_PRV_RANGE);
     const PropertyRNA *props[] = {
         use_preview ? &rna_Scene_frame_preview_start : &rna_Scene_frame_start,
@@ -764,6 +773,9 @@ static void sequencer_header_region_init(wmWindowManager * /*wm*/, ARegion *regi
 
 static void sequencer_header_region_draw(const bContext *C, ARegion *region)
 {
+  if (!CTX_data_scene(C)) {
+    return;
+  }
   ED_region_header(C, region);
 }
 
@@ -794,6 +806,10 @@ static void sequencer_tools_region_draw(const bContext *C, ARegion *region)
 
   if (region->regiontype == RGN_TYPE_CHANNELS) {
     op_context = WM_OP_INVOKE_REGION_CHANNELS;
+  }
+
+  if (!CTX_data_scene(C)) {
+    return;
   }
 
   ED_region_panels_ex(C, region, op_context, nullptr);
@@ -956,6 +972,9 @@ static void sequencer_preview_region_draw(const bContext *C, ARegion *region)
   ScrArea *area = CTX_wm_area(C);
   SpaceSeq *sseq = static_cast<SpaceSeq *>(area->spacedata.first);
   Scene *scene = CTX_data_scene(C);
+  if (!scene) {
+    return;
+  }
   wmWindowManager *wm = CTX_wm_manager(C);
   const bool draw_overlay = sseq->flag & SEQ_SHOW_OVERLAY;
   const bool draw_frame_overlay = (scene->ed &&
@@ -1088,6 +1107,9 @@ static void sequencer_buttons_region_init(wmWindowManager *wm, ARegion *region)
 
 static void sequencer_buttons_region_draw(const bContext *C, ARegion *region)
 {
+  if (!CTX_data_scene(C)) {
+    return;
+  }
   ED_region_panels(C, region);
 }
 

@@ -329,6 +329,10 @@ void draw_channels(const bContext *C, ARegion *region)
 {
   draw_background();
 
+  if (!CTX_data_scene(C)) {
+    return;
+  }
+
   Editing *ed = seq::editing_get(CTX_data_scene(C));
   if (ed == nullptr) {
     return;
