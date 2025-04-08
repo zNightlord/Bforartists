@@ -221,34 +221,25 @@ static void rna_Main_sequences_remove(
 {
   /* don't call BKE_id_free(...) directly */
   Sequence &sequence = *static_cast<Sequence *>(sequence_ptr->data);
+  Sequence *sequence_new = static_cast<Sequence *>(sequence.id.prev ? sequence.id.prev :
+                                                                      sequence.id.next);
+  if (do_unlink) {
+    wmWindow *win = CTX_wm_window(C);
 
-  if (BKE_sequence_can_be_removed(*bmain, sequence)) {
-    Sequence *sequence_new = static_cast<Sequence *>(sequence.id.prev ? sequence.id.prev :
-                                                                        sequence.id.next);
-    if (do_unlink) {
-      wmWindow *win = CTX_wm_window(C);
-
-      if (WM_window_get_active_sequence(win) == sequence_new) {
+    if (WM_window_get_active_sequence(win) == sequence_new) {
 
 #  ifdef WITH_PYTHON
-        BPy_BEGIN_ALLOW_THREADS;
+      BPy_BEGIN_ALLOW_THREADS;
 #  endif
 
-        WM_window_set_active_sequence(bmain, C, win, sequence_new);
+      WM_window_set_active_sequence(bmain, C, win, sequence_new);
 
 #  ifdef WITH_PYTHON
-        BPy_END_ALLOW_THREADS;
+      BPy_END_ALLOW_THREADS;
 #  endif
-      }
     }
-    rna_Main_ID_remove(bmain, reports, sequence_ptr, do_unlink, true, true);
   }
-  else {
-    BKE_reportf(reports,
-                RPT_ERROR,
-                "Sequence '%s' is the last local one, cannot be removed",
-                sequence.id.name + 2);
-  }
+  rna_Main_ID_remove(bmain, reports, sequence_ptr, do_unlink, true, true);
 }
 
 static Object *rna_Main_objects_new(Main *bmain, ReportList *reports, const char *name, ID *data)

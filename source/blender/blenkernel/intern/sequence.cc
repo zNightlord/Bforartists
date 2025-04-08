@@ -266,18 +266,3 @@ Sequence *BKE_sequence_add(Main &bmain, const char *name)
 
   return sequence;
 }
-
-bool BKE_sequence_can_be_removed(const Main &bmain, const Sequence &sequence)
-{
-  /* Linked sequences can always be removed. */
-  if (ID_IS_LINKED(&sequence)) {
-    return true;
-  }
-  /* Local sequences can only be removed, when there is at least one local sequences left. */
-  LISTBASE_FOREACH (Sequence *, other_sequence, &bmain.sequences) {
-    if (other_sequence != &sequence && !ID_IS_LINKED(other_sequence)) {
-      return true;
-    }
-  }
-  return false;
-}

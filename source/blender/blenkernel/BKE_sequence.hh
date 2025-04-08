@@ -14,4 +14,3 @@
 struct Main;
 
 Sequence *BKE_sequence_add(Main &bmain, const char *name);
-bool BKE_sequence_can_be_removed(const Main &bmain, const Sequence &sequence);

@@ -12,6 +12,8 @@
 #include "BKE_lib_id.hh"
 #include "BKE_main.hh"
 
+#include "DNA_space_types.h"
+
 #include "ED_sequence.hh"
 
 #include "RNA_access.hh"
@@ -91,6 +93,12 @@ static bool sequence_delete(bContext &C, Main &bmain, Sequence &sequence)
 /** \name Sequence New Operator
  * \{ */
 
+static bool sequence_new_poll(bContext *C)
+{
+  SpaceLink *sl = CTX_wm_space_data(C);
+  return ((sl != nullptr) && (sl->spacetype == SPACE_SEQ));
+}
+
 static wmOperatorStatus sequence_new_exec(bContext *C, wmOperator *op)
 {
   Main *bmain = CTX_data_main(C);
@@ -130,6 +138,7 @@ static void SEQUENCE_OT_new(wmOperatorType *ot)
 
   /* api callbacks */
   ot->exec = sequence_new_exec;
+  ot->poll = sequence_new_poll;
   ot->invoke = WM_menu_invoke;
 
   /* flags */
@@ -150,9 +159,8 @@ static void SEQUENCE_OT_new(wmOperatorType *ot)
 static bool sequence_delete_poll(bContext *C)
 {
   Main *bmain = CTX_data_main(C);
-  Sequence *sequence = CTX_data_sequence(C);
-  if (bmain && sequence) {
-    return BKE_sequence_can_be_removed(*bmain, *sequence);
+  if (bmain) {
+    return true;
   }
   return false;
 }
