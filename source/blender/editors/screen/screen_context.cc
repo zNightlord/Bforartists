@@ -1139,7 +1139,7 @@ static eContextResult screen_ctx_active_strip(const bContext *C, bContextDataRes
 {
   wmWindow *win = CTX_wm_window(C);
   Sequence *sequence = WM_window_get_active_sequence(win);
-  Scene *scene = &sequence->legacy_scene_data;
+  Scene *scene = sequence ? &sequence->legacy_scene_data : CTX_data_scene(C);
   Strip *strip = blender::seq::select_active_get(scene);
   if (strip) {
     CTX_data_pointer_set(result, &scene->id, &RNA_Strip, strip);
@@ -1151,7 +1151,7 @@ static eContextResult screen_ctx_strips(const bContext *C, bContextDataResult *r
 {
   wmWindow *win = CTX_wm_window(C);
   Sequence *sequence = WM_window_get_active_sequence(win);
-  Scene *scene = &sequence->legacy_scene_data;
+  Scene *scene = sequence ? &sequence->legacy_scene_data : CTX_data_scene(C);
   Editing *ed = blender::seq::editing_get(scene);
 
   if (ed) {
@@ -1167,7 +1167,7 @@ static eContextResult screen_ctx_selected_strips(const bContext *C, bContextData
 {
   wmWindow *win = CTX_wm_window(C);
   Sequence *sequence = WM_window_get_active_sequence(win);
-  Scene *scene = &sequence->legacy_scene_data;
+  Scene *scene = sequence ? &sequence->legacy_scene_data : CTX_data_scene(C);
   Editing *ed = blender::seq::editing_get(scene);
   if (ed) {
     LISTBASE_FOREACH (Strip *, strip, ed->seqbasep) {
@@ -1185,7 +1185,7 @@ static eContextResult screen_ctx_selected_editable_strips(const bContext *C,
 {
   wmWindow *win = CTX_wm_window(C);
   Sequence *sequence = WM_window_get_active_sequence(win);
-  Scene *scene = &sequence->legacy_scene_data;
+  Scene *scene = sequence ? &sequence->legacy_scene_data : CTX_data_scene(C);
   Editing *ed = blender::seq::editing_get(scene);
   if (ed == nullptr) {
     return CTX_RESULT_NO_DATA;
