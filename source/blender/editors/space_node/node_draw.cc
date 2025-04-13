@@ -4856,57 +4856,84 @@ class LinkLayoutSolver {
     float max;
   };
 
-  struct LinkAnchors {
+  struct LinkInfo {
+    const bNodeLink *link;
     float2 start;
     float2 end;
+    float length;
   };
 
   Vector<StraightSegment> verticals_;
   Vector<StraightSegment> horizontals_;
+  float x_pad_;
+  float y_pad_;
 
  public:
+  LinkLayoutSolver()
+  {
+    x_pad_ = UI_UNIT_X;
+    y_pad_ = 0.5 * UI_UNIT_X;
+  }
+
   Vector<Vector<float2>> solve_links(const Span<const bNodeLink *> links, const float2 cursor)
   {
-    Vector<LinkAnchors> links_anchors(links.size());
+    Vector<LinkInfo> link_infos(links.size());
     Vector<int> sorted_link_indices(links.size());
     threading::parallel_for(links.index_range(), 512, [&](const IndexRange range) {
       for (const int i : range) {
-        links_anchors[i] = get_link_anchors(*links[i], cursor);
+        link_infos[i] = get_link_info(*links[i], cursor);
         sorted_link_indices[i] = i;
       }
     });
 
     /* Sort links so that short links are solved first. */
     std::sort(sorted_link_indices.begin(), sorted_link_indices.end(), [&](int a, int b) {
-      const LinkAnchors &anchors_a = links_anchors[a];
-      const LinkAnchors &anchors_b = links_anchors[b];
-      return math::distance(anchors_a.start, anchors_a.end) <
-             math::distance(anchors_b.start, anchors_b.end);
+      return link_infos[a].length < link_infos[b].length;
     });
 
     Vector<Vector<float2>> routes;
     for (const int link_i : sorted_link_indices) {
-      const bNodeLink &link = *links[link_i];
-      const LinkAnchors &anchors = links_anchors[link_i];
-
-      Vector<float2> route;
-      route.append(anchors.start);
-      route.append(anchors.end);
-      routes.append(std::move(route));
+      routes.append(this->solve_link(link_infos[link_i]));
     }
     return routes;
   }
 
  private:
-  LinkAnchors get_link_anchors(const bNodeLink &link, const float2 cursor)
+  Vector<float2> solve_link(const LinkInfo &link)
   {
-    LinkAnchors anchors;
-    anchors.start = link.fromsock ?
-                        socket_link_connection_location(*link.fromnode, *link.fromsock, link) :
-                        cursor;
-    anchors.end = link.tosock ? socket_link_connection_location(*link.tonode, *link.tosock, link) :
-                                cursor;
-    return anchors;
+    if (link.start.x < link.end.x) {
+      return this->solve_forward_link(link);
+    }
+    return this->solve_backward_link(link);
+  }
+
+  Vector<float2> solve_forward_link(const LinkInfo &link)
+  {
+    Vector<float2> route;
+    route.append(link.start);
+    route.append(link.end);
+    return route;
+  }
+
+  Vector<float2> solve_backward_link(const LinkInfo &link)
+  {
+    Vector<float2> route;
+    route.append(link.start);
+    route.append(link.end);
+    return route;
+  }
+
+  LinkInfo get_link_info(const bNodeLink &link, const float2 cursor)
+  {
+    LinkInfo info;
+    info.link = &link;
+    info.start = link.fromsock ?
+                     socket_link_connection_location(*link.fromnode, *link.fromsock, link) :
+                     cursor;
+    info.end = link.tosock ? socket_link_connection_location(*link.tonode, *link.tosock, link) :
+                             cursor;
+    info.length = math::distance(info.start, info.end);
+    return info;
   }
 };
 
