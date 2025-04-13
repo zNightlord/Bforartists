@@ -5208,14 +5208,14 @@ static void draw_links_test(const bContext &C,
     const OffsetIndices points_by_curve = routes_curves.points_by_curve();
     for (const int curve_i : routes_curves.curves_range()) {
       const IndexRange points = points_by_curve[curve_i];
-      for (const int point_i : points.index_range().drop_front(1).drop_back(1)) {
+      for (const int point_i : points.drop_front(1).drop_back(1)) {
         const float3 &a = positions[point_i - 1];
         const float3 &b = positions[point_i];
         const float3 &c = positions[point_i + 1];
         const math::AngleRadian angle = math::angle_between(math::normalize(a - b),
                                                             math::normalize(c - b));
         const float fac = angle.degree() / 180.0f;
-        fillet_radii[point_i] = 2.0f * UI_UNIT_X * (fac * fac);
+        fillet_radii[point_i] = 2.0f * fac * fac * UI_UNIT_X;
       }
     }
   }
