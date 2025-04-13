@@ -4860,29 +4860,43 @@ class LinkLayoutSolver {
     float length;
   };
 
-  struct SegmentFinder {
-    Vector<StraightSegment> segments_;
+  class SegmentFinder {
+   private:
+    float bucket_size_ = 10.0f;
+    MultiValueMap<int, StraightSegment> segments_by_bucket_;
 
+   public:
     void add(const StraightSegment &segment)
     {
-      segments_.append(segment);
+      const int bucket = this->pos_to_bucket(segment.pos);
+      segments_by_bucket_.add(bucket, segment);
     }
 
     std::optional<float> find(const StraightSegment &query,
-                              const float pad_dir,
-                              const float pad_ortho) const
+                              const float pad_extent,
+                              const float pad_width) const
     {
-      for (const StraightSegment &segment : segments_) {
-        if (segment.origin == query.origin) {
-          continue;
-        }
-        if (segment.pos < query.pos + pad_ortho && segment.pos > query.pos - pad_ortho) {
-          if (segment.min < query.max + pad_dir && segment.max > query.min - pad_dir) {
-            return segment.pos;
+      const int min_bucket = this->pos_to_bucket(query.pos - pad_width);
+      const int max_bucket = this->pos_to_bucket(query.pos + pad_width);
+      for (int bucket = min_bucket; bucket <= max_bucket; bucket++) {
+        for (const StraightSegment &segment : segments_by_bucket_.lookup(bucket)) {
+          if (segment.origin == query.origin) {
+            continue;
+          }
+          if (segment.pos < query.pos + pad_width && segment.pos > query.pos - pad_width) {
+            if (segment.min < query.max + pad_extent && segment.max > query.min - pad_extent) {
+              return segment.pos;
+            }
           }
         }
       }
       return std::nullopt;
+    }
+
+   private:
+    int pos_to_bucket(const float pos) const
+    {
+      return int(pos / bucket_size_);
     }
   };
 
@@ -4985,6 +4999,10 @@ class LinkLayoutSolver {
                                 const Span<LinkInfo> link_infos,
                                 MutableSpan<Vector<float2>> r_routes)
   {
+    if (link_indices.is_empty()) {
+      return;
+    }
+
     Array<std::optional<float>> vertical_xs(link_indices.size());
     std::optional<float> max_vertical_x = -FLT_MAX;
     float min_distance_x = FLT_MAX;
@@ -5013,7 +5031,7 @@ class LinkLayoutSolver {
             from_socket, y, closest_link.start.x, *max_vertical_x);
         const std::optional<float> collision = this->find_overlap(segment);
         if (collision) {
-          y = *collision + dir_factor * (pad_y_ + 0.00001f);
+          y = std::nexttowardf(*collision + dir_factor * pad_y_, dir_factor * FLT_MAX);
           continue;
         }
         break;
@@ -5047,6 +5065,10 @@ class LinkLayoutSolver {
                                  const Span<LinkInfo> link_infos,
                                  MutableSpan<Vector<float2>> r_routes)
   {
+    if (link_indices.is_empty()) {
+      return;
+    }
+
     for (const int link_i : link_indices) {
       const LinkInfo &link = link_infos[link_i];
       Vector<float2> &route = r_routes[link_i];
@@ -5064,7 +5086,7 @@ class LinkLayoutSolver {
           link.link->fromsock, corner_x, link.start.y, link.end.y);
       const std::optional<float> collision = this->find_overlap(segment);
       if (collision) {
-        corner_x = *collision - pad_x_ - 0.0001f;
+        corner_x = std::nexttowardf(*collision - pad_x_, -FLT_MAX);
         continue;
       }
       return corner_x;
@@ -5133,7 +5155,12 @@ static void draw_links_test(const bContext &C,
   const bNodeTree &tree = *snode.edittree;
   tree.ensure_topology_cache();
 
-  Vector<const bNodeLink *> links = ntree.all_links();
+  Vector<const bNodeLink *> links;
+  for (const bNodeLink *link : ntree.all_links()) {
+    if (link->is_available()) {
+      links.append(link);
+    }
+  }
   if (snode.runtime->linkdrag) {
     for (const bNodeLink &link : snode.runtime->linkdrag->links) {
       links.append(&link);
