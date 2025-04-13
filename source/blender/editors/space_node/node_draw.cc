@@ -5280,17 +5280,35 @@ static void draw_links_test(const bContext &C,
   immUniform2fv("viewportSize", &viewport[2]);
   immUniform1f("lineWidth", line_width * U.pixelsize);
 
+  ColorTheme4f color_selected;
+  UI_GetThemeColor4fv(TH_EDGE_SELECT, color_selected);
+
+  const auto get_link_color = [&](const bNodeLink &link) {
+    if (link.is_muted()) {
+      return ColorTheme4f{0.8f, 0.3f, 0.3f, 0.7f};
+    }
+    if (link.fromnode && (link.fromnode->flag & SELECT)) {
+      return color_selected;
+    }
+    if (link.tonode && (link.tonode->flag & SELECT)) {
+      return color_selected;
+    }
+
+    ColorTheme4f color;
+    PointerRNA node_ptr = RNA_pointer_create_discrete(
+        &ntree.id, &RNA_Node, const_cast<bNode *>(link.fromnode ? link.fromnode : link.tonode));
+    node_socket_color_get(
+        C, ntree, node_ptr, link.fromsock ? *link.fromsock : *link.tosock, color);
+    return color;
+  };
+
   int segments_num = routes_curves.points_num() - routes_curves.curves_num();
   immBegin(GPU_PRIM_LINES, segments_num * 2);
   const OffsetIndices points_by_curve = routes_curves.points_by_curve();
   const Span<float3> positions = routes_curves.positions();
   for (const int curve_i : routes_curves.curves_range()) {
     const bNodeLink &link = *links[curve_i];
-    float4 color;
-    PointerRNA node_ptr = RNA_pointer_create_discrete(
-        &ntree.id, &RNA_Node, const_cast<bNode *>(link.fromnode ? link.fromnode : link.tonode));
-    node_socket_color_get(
-        C, ntree, node_ptr, link.fromsock ? *link.fromsock : *link.tosock, color);
+    ColorTheme4f color = get_link_color(link);
     const IndexRange points = points_by_curve[curve_i];
     for (const int i : points.drop_back(1)) {
       const float3 &a = positions[i];
