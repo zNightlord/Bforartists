@@ -4878,8 +4878,10 @@ static void draw_links_test(const bContext &C,
   tree.ensure_topology_cache();
   const Span<const bNodeLink *> links = ntree.all_links();
 
-  const uint pos = GPU_vertformat_attr_add(
-      immVertexFormat(), "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
+  GPUVertFormat *format = immVertexFormat();
+  const uint attr_pos = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
+  const uint attr_color = GPU_vertformat_attr_add(
+      format, "color", GPU_COMP_F32, 4, GPU_FETCH_FLOAT);
 
   // const float grid_size = grid_size_get();
   const float padding = UI_UNIT_X;
@@ -4943,7 +4945,7 @@ static void draw_links_test(const bContext &C,
   GPU_viewport_size_get_f(viewport);
 
   GPU_blend(GPU_BLEND_ALPHA);
-  immBindBuiltinProgram(GPU_SHADER_3D_POLYLINE_UNIFORM_COLOR);
+  immBindBuiltinProgram(GPU_SHADER_3D_POLYLINE_FLAT_COLOR);
   immUniformColor4f(0.8, 0.8, 0.8, 1.0);
   immUniform2fv("viewportSize", &viewport[2]);
   immUniform1f("lineWidth", line_width * U.pixelsize);
@@ -4953,12 +4955,19 @@ static void draw_links_test(const bContext &C,
   const OffsetIndices points_by_curve = links_curves.points_by_curve();
   const Span<float3> positions = links_curves.positions();
   for (const int curve_i : links_curves.curves_range()) {
+    const bNodeLink &link = *links[curve_i];
+    float4 color;
+    PointerRNA node_ptr = RNA_pointer_create_discrete(
+        &ntree.id, &RNA_Node, const_cast<bNode *>(link.fromnode));
+    node_socket_color_get(C, ntree, node_ptr, *link.fromsock, color);
     const IndexRange points = points_by_curve[curve_i];
     for (const int i : points.drop_back(1)) {
       const float3 &a = positions[i];
       const float3 &b = positions[i + 1];
-      immVertex3f(pos, a.x, a.y, 0.0f);
-      immVertex3f(pos, b.x, b.y, 0.0f);
+      immAttr4fv(attr_color, color);
+      immVertex3f(attr_pos, a.x, a.y, 0.0f);
+      immAttr4fv(attr_color, color);
+      immVertex3f(attr_pos, b.x, b.y, 0.0f);
     }
   }
   immEnd();
