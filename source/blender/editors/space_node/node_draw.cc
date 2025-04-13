@@ -4842,6 +4842,7 @@ static void node_draw_zones_and_frames(const bContext &C,
 }
 
 struct VerticalLine {
+  const bNodeSocket *origin;
   float x;
   float min;
   float max;
@@ -4853,6 +4854,9 @@ static bool overlaps_existing_line(const Span<VerticalLine> lines,
                                    const float padding_y)
 {
   for (const VerticalLine &line : lines) {
+    if (line.origin == query.origin) {
+      continue;
+    }
     if (query.x - padding_x < line.x && query.x + padding_x > line.x) {
       if (query.min - padding_y < line.max && query.max + padding_y > line.min) {
         return true;
@@ -4892,10 +4896,12 @@ static void draw_links_test(const bContext &C,
     const float max_y = std::max(start_pos.y, end_pos.y);
 
     float x = initial_x;
-    while (overlaps_existing_line(vertical_lines, {x, min_y, max_y}, padding, padding)) {
+    while (overlaps_existing_line(
+        vertical_lines, {link->fromsock, x, min_y, max_y}, padding, padding))
+    {
       x -= padding;
     }
-    vertical_lines.append({x, min_y, max_y});
+    vertical_lines.append({link->fromsock, x, min_y, max_y});
 
     Vector<float2> coords;
     coords.append(start_pos);
@@ -4931,8 +4937,17 @@ static void draw_links_test(const bContext &C,
                                               true,
                                               {});
 
-  immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
+  float scale;
+  UI_view2d_scale_get(&region.v2d, &scale, nullptr);
+  float line_width = 1.0f * scale;
+  float viewport[4] = {};
+  GPU_viewport_size_get_f(viewport);
+
+  GPU_blend(GPU_BLEND_ALPHA);
+  immBindBuiltinProgram(GPU_SHADER_3D_POLYLINE_UNIFORM_COLOR);
   immUniformColor4f(0.8, 0.8, 0.8, 1.0);
+  immUniform2fv("viewportSize", &viewport[2]);
+  immUniform1f("lineWidth", line_width * U.pixelsize);
 
   int segments_num = links_curves.points_num() - links_curves.curves_num();
   immBegin(GPU_PRIM_LINES, segments_num * 2);
@@ -4949,6 +4964,7 @@ static void draw_links_test(const bContext &C,
   }
   immEnd();
   immUnbindProgram();
+  GPU_blend(GPU_BLEND_NONE);
 }
 
 #define USE_DRAW_TOT_UPDATE
