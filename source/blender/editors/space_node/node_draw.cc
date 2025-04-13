@@ -4841,6 +4841,27 @@ static void node_draw_zones_and_frames(const bContext &C,
   }
 }
 
+struct VerticalLine {
+  float x;
+  float min;
+  float max;
+};
+
+static bool overlaps_existing_line(const Span<VerticalLine> lines,
+                                   const VerticalLine &query,
+                                   const float padding_x,
+                                   const float padding_y)
+{
+  for (const VerticalLine &line : lines) {
+    if (query.x - padding_x < line.x && query.x + padding_x > line.x) {
+      if (query.min - padding_y < line.max && query.max + padding_y > line.min) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 static void draw_links_test(const bContext &C,
                             TreeDrawContext &tree_draw_ctx,
                             ARegion &region,
@@ -4856,18 +4877,29 @@ static void draw_links_test(const bContext &C,
   const uint pos = GPU_vertformat_attr_add(
       immVertexFormat(), "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
 
-  const float grid_size = grid_size_get();
+  // const float grid_size = grid_size_get();
   const float padding = UI_UNIT_X;
   Vector<Vector<float2>> coords_per_link;
+  Vector<VerticalLine> vertical_lines;
   for (const bNodeLink *link : links) {
     const float2 start_pos = socket_link_connection_location(
         *link->fromnode, *link->fromsock, *link);
     const float2 end_pos = socket_link_connection_location(*link->tonode, *link->tosock, *link);
 
+    const float initial_x = end_pos.x - padding;
+    const float min_y = std::min(start_pos.y, end_pos.y);
+    const float max_y = std::max(start_pos.y, end_pos.y);
+
+    float x = initial_x;
+    while (overlaps_existing_line(vertical_lines, {x, min_y, max_y}, padding, padding)) {
+      x -= padding;
+    }
+    vertical_lines.append({x, min_y, max_y});
+
     Vector<float2> coords;
     coords.append(start_pos);
-    coords.append({end_pos.x - grid_size, start_pos.y});
-    coords.append({end_pos.x - grid_size, end_pos.y});
+    coords.append({x, start_pos.y});
+    coords.append({x, end_pos.y});
     coords.append(end_pos);
 
     coords_per_link.append(coords);
