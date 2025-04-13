@@ -4860,8 +4860,34 @@ class LinkLayoutSolver {
     float length;
   };
 
-  Vector<VerticalSegment> verticals_;
-  Vector<HorizontalSegment> horizontals_;
+  struct SegmentFinder {
+    Vector<StraightSegment> segments_;
+
+    void add(const StraightSegment &segment)
+    {
+      segments_.append(segment);
+    }
+
+    std::optional<float> find(const StraightSegment &query,
+                              const float pad_dir,
+                              const float pad_ortho) const
+    {
+      for (const StraightSegment &segment : segments_) {
+        if (segment.origin == query.origin) {
+          continue;
+        }
+        if (segment.pos < query.pos + pad_ortho && segment.pos > query.pos - pad_ortho) {
+          if (segment.min < query.max + pad_dir && segment.max > query.min - pad_dir) {
+            return segment.pos;
+          }
+        }
+      }
+      return std::nullopt;
+    }
+  };
+
+  SegmentFinder verticals_;
+  SegmentFinder horizontals_;
   float pad_x_;
   float pad_y_;
 
@@ -5048,43 +5074,12 @@ class LinkLayoutSolver {
 
   std::optional<float> find_overlap(const VerticalSegment &query) const
   {
-    return this->find_overlapping_pos(
-        verticals_.as_span().cast<StraightSegment>(), query, pad_y_, pad_x_);
+    return this->verticals_.find(query, pad_y_, pad_x_);
   }
 
   std::optional<float> find_overlap(const HorizontalSegment &query) const
   {
-    return this->find_overlapping_pos(
-        horizontals_.as_span().cast<StraightSegment>(), query, pad_x_, pad_y_);
-  }
-
-  std::optional<float> find_overlapping_pos(const Span<StraightSegment> segments,
-                                            const StraightSegment &query,
-                                            const float pad_dir,
-                                            const float pad_ortho) const
-  {
-    for (const StraightSegment &segment : segments) {
-      if (this->segments_overlap(segment, query, pad_dir, pad_ortho)) {
-        return segment.pos;
-      }
-    }
-    return std::nullopt;
-  }
-
-  bool segments_overlap(const StraightSegment &segment,
-                        const StraightSegment &query,
-                        const float pad_dir,
-                        const float pad_ortho) const
-  {
-    if (segment.origin == query.origin) {
-      return false;
-    }
-    if (segment.pos < query.pos + pad_ortho && segment.pos > query.pos - pad_ortho) {
-      if (segment.min < query.max + pad_dir && segment.max > query.min - pad_dir) {
-        return true;
-      }
-    }
-    return false;
+    return this->horizontals_.find(query, pad_x_, pad_y_);
   }
 
   LinkInfo get_link_info(const bNodeLink &link, const float2 cursor)
@@ -5102,12 +5097,12 @@ class LinkLayoutSolver {
 
   void save_segment(const HorizontalSegment &segment)
   {
-    horizontals_.append(segment);
+    horizontals_.add(segment);
   }
 
   void save_segment(const VerticalSegment &segment)
   {
-    verticals_.append(segment);
+    verticals_.add(segment);
   }
 
   VerticalSegment vertical(const bNodeSocket *from_socket,
