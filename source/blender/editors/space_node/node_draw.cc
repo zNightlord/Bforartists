@@ -4896,9 +4896,7 @@ static void draw_links_test(const bContext &C,
     const float max_y = std::max(start_pos.y, end_pos.y);
 
     float x = initial_x;
-    while (overlaps_existing_line(
-        vertical_lines, {link->fromsock, x, min_y, max_y}, padding, padding))
-    {
+    while (overlaps_existing_line(vertical_lines, {link->fromsock, x, min_y, max_y}, padding, 1)) {
       x -= padding;
     }
     vertical_lines.append({link->fromsock, x, min_y, max_y});
@@ -4930,16 +4928,17 @@ static void draw_links_test(const bContext &C,
     }
     links_curves_offsets.last() = count;
   }
-  links_curves = geometry::fillet_curves_poly(links_curves,
-                                              links_curves.curves_range(),
-                                              VArray<float>::ForSingle(BASIS_RAD, coords_num),
-                                              VArray<int>::ForSingle(5, coords_num),
-                                              true,
-                                              {});
+  links_curves = geometry::fillet_curves_poly(
+      links_curves,
+      links_curves.curves_range(),
+      VArray<float>::ForSingle(0.5 * UI_UNIT_X, coords_num),
+      VArray<int>::ForSingle(5, coords_num),
+      true,
+      {});
 
   float scale;
   UI_view2d_scale_get(&region.v2d, &scale, nullptr);
-  float line_width = 1.0f * scale;
+  float line_width = 2.0f * scale;
   float viewport[4] = {};
   GPU_viewport_size_get_f(viewport);
 
@@ -4964,7 +4963,6 @@ static void draw_links_test(const bContext &C,
   }
   immEnd();
   immUnbindProgram();
-  GPU_blend(GPU_BLEND_NONE);
 }
 
 #define USE_DRAW_TOT_UPDATE
