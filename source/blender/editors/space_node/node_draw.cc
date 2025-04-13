@@ -4881,7 +4881,7 @@ class LinkLayoutSolver {
       const int max_bucket = this->pos_to_bucket(query.pos + pad_width);
       for (int bucket = min_bucket; bucket <= max_bucket; bucket++) {
         for (const StraightSegment &segment : segments_by_bucket_.lookup(bucket)) {
-          if (segment.origin == query.origin) {
+          if (this->segments_are_compatible(segment, query)) {
             continue;
           }
           if (segment.pos < query.pos + pad_width && segment.pos > query.pos - pad_width) {
@@ -4895,6 +4895,28 @@ class LinkLayoutSolver {
     }
 
    private:
+    bool segments_are_compatible(const StraightSegment &a, const StraightSegment &b) const
+    {
+      if (a.origin == b.origin) {
+        return true;
+      }
+      if (a.origin) {
+        const bNode &node = a.origin->owner_node();
+        if (node.is_reroute() && node.input_socket(0).directly_linked_sockets() == Span{b.origin})
+        {
+          return true;
+        }
+      }
+      if (b.origin) {
+        const bNode &node = b.origin->owner_node();
+        if (node.is_reroute() && node.input_socket(0).directly_linked_sockets() == Span{a.origin})
+        {
+          return true;
+        }
+      }
+      return false;
+    }
+
     int pos_to_bucket(const float pos) const
     {
       return int(pos / bucket_size_);
