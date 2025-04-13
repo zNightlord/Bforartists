@@ -4848,23 +4848,67 @@ struct VerticalLine {
   float max;
 };
 
-static bool overlaps_existing_line(const Span<VerticalLine> lines,
-                                   const VerticalLine &query,
-                                   const float padding_x,
-                                   const float padding_y)
-{
-  for (const VerticalLine &line : lines) {
-    if (line.origin == query.origin) {
-      continue;
-    }
-    if (query.x - padding_x < line.x && query.x + padding_x > line.x) {
-      if (query.min - padding_y < line.max && query.max + padding_y > line.min) {
-        return true;
+class LinkLayoutSolver {
+ private:
+  struct StraightSegment {
+    float pos;
+    float min;
+    float max;
+  };
+
+  struct LinkAnchors {
+    float2 start;
+    float2 end;
+  };
+
+  Vector<StraightSegment> verticals_;
+  Vector<StraightSegment> horizontals_;
+
+ public:
+  Vector<Vector<float2>> solve_links(const Span<const bNodeLink *> links, const float2 cursor)
+  {
+    Vector<LinkAnchors> links_anchors(links.size());
+    Vector<int> sorted_link_indices(links.size());
+    threading::parallel_for(links.index_range(), 512, [&](const IndexRange range) {
+      for (const int i : range) {
+        links_anchors[i] = get_link_anchors(*links[i], cursor);
+        sorted_link_indices[i] = i;
       }
+    });
+
+    /* Sort links so that short links are solved first. */
+    std::sort(sorted_link_indices.begin(), sorted_link_indices.end(), [&](int a, int b) {
+      const LinkAnchors &anchors_a = links_anchors[a];
+      const LinkAnchors &anchors_b = links_anchors[b];
+      return math::distance(anchors_a.start, anchors_a.end) <
+             math::distance(anchors_b.start, anchors_b.end);
+    });
+
+    Vector<Vector<float2>> routes;
+    for (const int link_i : sorted_link_indices) {
+      const bNodeLink &link = *links[link_i];
+      const LinkAnchors &anchors = links_anchors[link_i];
+
+      Vector<float2> route;
+      route.append(anchors.start);
+      route.append(anchors.end);
+      routes.append(std::move(route));
     }
+    return routes;
   }
-  return false;
-}
+
+ private:
+  LinkAnchors get_link_anchors(const bNodeLink &link, const float2 cursor)
+  {
+    LinkAnchors anchors;
+    anchors.start = link.fromsock ?
+                        socket_link_connection_location(*link.fromnode, *link.fromsock, link) :
+                        cursor;
+    anchors.end = link.tosock ? socket_link_connection_location(*link.tonode, *link.tosock, link) :
+                                cursor;
+    return anchors;
+  }
+};
 
 static void draw_links_test(const bContext &C,
                             TreeDrawContext &tree_draw_ctx,
@@ -4884,67 +4928,39 @@ static void draw_links_test(const bContext &C,
     }
   }
 
+  LinkLayoutSolver layout_solver;
+  Vector<Vector<float2>> routes = layout_solver.solve_links(links, snode.runtime->cursor);
+  int routes_points_num = 0;
+  for (const Span<float2> route : routes) {
+    routes_points_num += route.size();
+  }
+
   GPUVertFormat *format = immVertexFormat();
   const uint attr_pos = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
   const uint attr_color = GPU_vertformat_attr_add(
       format, "color", GPU_COMP_F32, 4, GPU_FETCH_FLOAT);
 
-  // const float grid_size = grid_size_get();
-  const float padding = UI_UNIT_X;
-  Vector<Vector<float2>> coords_per_link;
-  Vector<VerticalLine> vertical_lines;
-  int coords_num = 0;
-  const float2 cursor = snode.runtime->cursor;
-  for (const bNodeLink *link : links) {
-    const float2 start_pos = link->fromsock ? socket_link_connection_location(
-                                                  *link->fromnode, *link->fromsock, *link) :
-                                              cursor;
-    const float2 end_pos = link->tosock ? socket_link_connection_location(
-                                              *link->tonode, *link->tosock, *link) :
-                                          cursor;
-
-    const float initial_x = end_pos.x - padding;
-    const float min_y = std::min(start_pos.y, end_pos.y);
-    const float max_y = std::max(start_pos.y, end_pos.y);
-
-    float x = initial_x;
-    while (overlaps_existing_line(vertical_lines, {link->fromsock, x, min_y, max_y}, padding, 1)) {
-      x -= padding;
-    }
-    vertical_lines.append({link->fromsock, x, min_y, max_y});
-
-    Vector<float2> coords;
-    coords.append(start_pos);
-    coords.append({x, start_pos.y});
-    coords.append({x, end_pos.y});
-    coords.append(end_pos);
-
-    coords_num += coords.size();
-    coords_per_link.append(coords);
-  }
-
-  bke::CurvesGeometry links_curves(coords_num, coords_per_link.size());
+  bke::CurvesGeometry routes_curves(routes_points_num, routes.size());
   {
-
-    links_curves.fill_curve_types(CURVE_TYPE_POLY);
-    MutableSpan<float3> links_curves_positions = links_curves.positions_for_write();
-    MutableSpan<int> links_curves_offsets = links_curves.offsets_for_write();
+    routes_curves.fill_curve_types(CURVE_TYPE_POLY);
+    MutableSpan<float3> links_curves_positions = routes_curves.positions_for_write();
+    MutableSpan<int> links_curves_offsets = routes_curves.offsets_for_write();
     int count = 0;
-    for (const int i : coords_per_link.index_range()) {
-      const Span<float2> coords = coords_per_link[i];
+    for (const int i : routes.index_range()) {
+      const Span<float2> route = routes[i];
       links_curves_offsets[i] = count;
-      for (const int j : IndexRange(coords.size())) {
-        links_curves_positions[count + j] = float3(coords[j], 0.0f);
+      for (const int j : IndexRange(route.size())) {
+        links_curves_positions[count + j] = float3(route[j], 0.0f);
       }
-      count += coords.size();
+      count += route.size();
     }
     links_curves_offsets.last() = count;
   }
-  links_curves = geometry::fillet_curves_poly(
-      links_curves,
-      links_curves.curves_range(),
-      VArray<float>::ForSingle(0.5 * UI_UNIT_X, coords_num),
-      VArray<int>::ForSingle(5, coords_num),
+  routes_curves = geometry::fillet_curves_poly(
+      routes_curves,
+      routes_curves.curves_range(),
+      VArray<float>::ForSingle(0.5 * UI_UNIT_X, routes_points_num),
+      VArray<int>::ForSingle(5, routes_points_num),
       true,
       {});
 
@@ -4959,11 +4975,11 @@ static void draw_links_test(const bContext &C,
   immUniform2fv("viewportSize", &viewport[2]);
   immUniform1f("lineWidth", line_width * U.pixelsize);
 
-  int segments_num = links_curves.points_num() - links_curves.curves_num();
+  int segments_num = routes_curves.points_num() - routes_curves.curves_num();
   immBegin(GPU_PRIM_LINES, segments_num * 2);
-  const OffsetIndices points_by_curve = links_curves.points_by_curve();
-  const Span<float3> positions = links_curves.positions();
-  for (const int curve_i : links_curves.curves_range()) {
+  const OffsetIndices points_by_curve = routes_curves.points_by_curve();
+  const Span<float3> positions = routes_curves.positions();
+  for (const int curve_i : routes_curves.curves_range()) {
     const bNodeLink &link = *links[curve_i];
     float4 color;
     PointerRNA node_ptr = RNA_pointer_create_discrete(
