@@ -4881,6 +4881,7 @@ static void draw_links_test(const bContext &C,
   const float padding = UI_UNIT_X;
   Vector<Vector<float2>> coords_per_link;
   Vector<VerticalLine> vertical_lines;
+  int coords_num = 0;
   for (const bNodeLink *link : links) {
     const float2 start_pos = socket_link_connection_location(
         *link->fromnode, *link->fromsock, *link);
@@ -4902,23 +4903,48 @@ static void draw_links_test(const bContext &C,
     coords.append({x, end_pos.y});
     coords.append(end_pos);
 
+    coords_num += coords.size();
     coords_per_link.append(coords);
   }
+
+  bke::CurvesGeometry links_curves(coords_num, coords_per_link.size());
+  {
+
+    links_curves.fill_curve_types(CURVE_TYPE_POLY);
+    MutableSpan<float3> links_curves_positions = links_curves.positions_for_write();
+    MutableSpan<int> links_curves_offsets = links_curves.offsets_for_write();
+    int count = 0;
+    for (const int i : coords_per_link.index_range()) {
+      const Span<float2> coords = coords_per_link[i];
+      links_curves_offsets[i] = count;
+      for (const int j : IndexRange(coords.size())) {
+        links_curves_positions[count + j] = float3(coords[j], 0.0f);
+      }
+      count += coords.size();
+    }
+    links_curves_offsets.last() = count;
+  }
+  links_curves = geometry::fillet_curves_poly(links_curves,
+                                              links_curves.curves_range(),
+                                              VArray<float>::ForSingle(BASIS_RAD, coords_num),
+                                              VArray<int>::ForSingle(5, coords_num),
+                                              true,
+                                              {});
 
   immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
   immUniformColor4f(0.8, 0.8, 0.8, 1.0);
 
-  int verts_num = 0;
-  for (const Span<float2> link_coords : coords_per_link) {
-    verts_num += (link_coords.size() - 1) * 2;
-  }
-  immBegin(GPU_PRIM_LINES, verts_num);
-  for (const Span<float2> link_coords : coords_per_link) {
-    for (const int i : IndexRange(link_coords.size() - 1)) {
-      const float2 &a = link_coords[i];
-      const float2 &b = link_coords[i + 1];
-      immVertex3f(pos, a.x, a.y, 0.0);
-      immVertex3f(pos, b.x, b.y, 0.0);
+  int segments_num = links_curves.points_num() - links_curves.curves_num();
+  immBegin(GPU_PRIM_LINES, segments_num * 2);
+  const OffsetIndices points_by_curve = links_curves.points_by_curve();
+  const Span<float3> positions = links_curves.positions();
+  for (const int curve_i : links_curves.curves_range()) {
+    const IndexRange points = points_by_curve[curve_i];
+    for (const int i : points.drop_back(1)) {
+      const float3 &a = positions[i];
+      const float3 &b = positions[i + 1];
+      immVertex3f(pos, a.x, a.y, 0.0f);
+      immVertex3f(pos, b.x, b.y, 0.0f);
     }
   }
   immEnd();
