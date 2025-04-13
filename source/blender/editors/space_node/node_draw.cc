@@ -5287,12 +5287,6 @@ static void draw_links_test(const bContext &C,
     if (link.is_muted()) {
       return ColorTheme4f{0.8f, 0.3f, 0.3f, 0.7f};
     }
-    if (link.fromnode && (link.fromnode->flag & SELECT)) {
-      return color_selected;
-    }
-    if (link.tonode && (link.tonode->flag & SELECT)) {
-      return color_selected;
-    }
 
     ColorTheme4f color;
     PointerRNA node_ptr = RNA_pointer_create_discrete(
@@ -5308,7 +5302,10 @@ static void draw_links_test(const bContext &C,
   const Span<float3> positions = routes_curves.positions();
   for (const int curve_i : routes_curves.curves_range()) {
     const bNodeLink &link = *links[curve_i];
+
     ColorTheme4f color = get_link_color(link);
+    const float dim_factor = node_link_dim_factor(region.v2d, link);
+    color.a *= dim_factor;
     const IndexRange points = points_by_curve[curve_i];
     for (const int i : points.drop_back(1)) {
       const float3 &a = positions[i];
