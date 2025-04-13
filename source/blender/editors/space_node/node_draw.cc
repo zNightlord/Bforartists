@@ -5148,6 +5148,26 @@ class LinkLayoutSolver {
   }
 };
 
+bNodeLinkPaths get_node_link_paths(const SpaceNode &snode)
+{
+  snode.edittree->ensure_topology_cache();
+  Vector<const bNodeLink *> links;
+  for (const bNodeLink *link : snode.edittree->all_links()) {
+    if (link->is_available()) {
+      links.append(link);
+    }
+  }
+  LinkLayoutSolver layout_solver;
+  Vector<Vector<float2>> routes = layout_solver.solve_links(links, snode.runtime->cursor);
+
+  bNodeLinkPaths paths;
+  for (const int i : links.index_range()) {
+    const bNodeLink &link = *links[i];
+    paths.paths.add(&link, routes[i]);
+  }
+  return paths;
+}
+
 static void draw_links_test(const bContext &C,
                             TreeDrawContext &tree_draw_ctx,
                             ARegion &region,
