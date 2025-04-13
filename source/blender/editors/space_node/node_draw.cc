@@ -5179,13 +5179,22 @@ bNodeLinkPaths get_node_link_paths(const SpaceNode &snode)
       links.append(link);
     }
   }
-  LinkLayoutSolver layout_solver;
-  Vector<Vector<float2>> routes = layout_solver.solve_links(links, snode.runtime->cursor);
 
   bNodeLinkPaths paths;
-  for (const int i : links.index_range()) {
-    const bNodeLink &link = *links[i];
-    paths.paths.add(&link, routes[i]);
+  if (snode.overlay.flag & SN_OVERLAY_NO_LINK_ROUTING) {
+    for (const bNodeLink *link : links) {
+      std::array<float2, NODE_LINK_RESOL + 1> coords;
+      node_link_bezier_points_evaluated(*link, coords);
+      paths.paths.add(link, coords);
+    }
+  }
+  else {
+    LinkLayoutSolver layout_solver;
+    Vector<Vector<float2>> routes = layout_solver.solve_links(links, snode.runtime->cursor);
+    for (const int i : links.index_range()) {
+      const bNodeLink &link = *links[i];
+      paths.paths.add(&link, routes[i]);
+    }
   }
   return paths;
 }
@@ -5344,26 +5353,29 @@ static void node_draw_nodetree(const bContext &C,
   }
 
   /* Node lines. */
-  // GPU_blend(GPU_BLEND_ALPHA);
-  // nodelink_batch_start(snode);
+  if (snode.overlay.flag & SN_OVERLAY_NO_LINK_ROUTING) {
+    GPU_blend(GPU_BLEND_ALPHA);
+    nodelink_batch_start(snode);
 
-  // for (const bNodeLink *link : ntree.all_links()) {
-  //   if (!bke::node_link_is_hidden(*link) && !bke::node_link_is_selected(*link)) {
-  //     node_draw_link(C, region.v2d, snode, *link, false);
-  //   }
-  // }
+    for (const bNodeLink *link : ntree.all_links()) {
+      if (!bke::node_link_is_hidden(*link) && !bke::node_link_is_selected(*link)) {
+        node_draw_link(C, region.v2d, snode, *link, false);
+      }
+    }
 
-  // /* Draw selected node links after the unselected ones, so they are shown on top. */
-  // for (const bNodeLink *link : ntree.all_links()) {
-  //   if (!bke::node_link_is_hidden(*link) && bke::node_link_is_selected(*link)) {
-  //     node_draw_link(C, region.v2d, snode, *link, true);
-  //   }
-  // }
+    /* Draw selected node links after the unselected ones, so they are shown on top. */
+    for (const bNodeLink *link : ntree.all_links()) {
+      if (!bke::node_link_is_hidden(*link) && bke::node_link_is_selected(*link)) {
+        node_draw_link(C, region.v2d, snode, *link, true);
+      }
+    }
 
-  // nodelink_batch_end(snode);
-  // GPU_blend(GPU_BLEND_NONE);
-
-  draw_links_test(C, tree_draw_ctx, region, snode, ntree, nodes);
+    nodelink_batch_end(snode);
+    GPU_blend(GPU_BLEND_NONE);
+  }
+  else {
+    draw_links_test(C, tree_draw_ctx, region, snode, ntree, nodes);
+  }
 
   /* Draw foreground nodes, last nodes in front. */
   for (const int i : nodes.index_range()) {
@@ -5614,15 +5626,17 @@ void node_draw_space(const bContext &C, ARegion &region)
     }
 
     /* Temporary links. */
-    // GPU_blend(GPU_BLEND_ALPHA);
-    // GPU_line_smooth(true);
-    // if (snode.runtime->linkdrag) {
-    //   for (const bNodeLink &link : snode.runtime->linkdrag->links) {
-    //     node_draw_link_dragged(C, v2d, snode, link);
-    //   }
-    // }
-    // GPU_line_smooth(false);
-    // GPU_blend(GPU_BLEND_NONE);
+    if (snode.overlay.flag & SN_OVERLAY_NO_LINK_ROUTING) {
+      GPU_blend(GPU_BLEND_ALPHA);
+      GPU_line_smooth(true);
+      if (snode.runtime->linkdrag) {
+        for (const bNodeLink &link : snode.runtime->linkdrag->links) {
+          node_draw_link_dragged(C, v2d, snode, link);
+        }
+      }
+      GPU_line_smooth(false);
+      GPU_blend(GPU_BLEND_NONE);
+    }
 
     if (snode.overlay.flag & SN_OVERLAY_SHOW_OVERLAYS && snode.flag & SNODE_SHOW_GPENCIL) {
       /* Draw grease-pencil annotations. */

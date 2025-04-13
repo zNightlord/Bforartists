@@ -125,7 +125,7 @@ std::optional<float2> link_path_intersection(const bNodeLinkPaths &link_paths,
                                              const bNodeLink &link,
                                              const Span<float2> path)
 {
-  const Span<float2> coords = link_paths.paths.lookup(&link);
+  const Vector<float2> coords = link_paths.paths.lookup(&link);
 
   for (const int i : path.index_range().drop_back(1)) {
     for (const int j : coords.index_range().drop_back(1)) {

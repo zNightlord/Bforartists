@@ -2354,7 +2354,6 @@ static void node_draw_link_bezier_ex(const SpaceNode &snode,
                                      const NodeLinkDrawConfig &draw_config,
                                      const std::array<float2, 4> &points)
 {
-  return;
   if (g_batch_link.batch == nullptr) {
     nodelink_batch_init();
   }
