@@ -4876,7 +4876,13 @@ static void draw_links_test(const bContext &C,
   UNUSED_VARS(C, tree_draw_ctx, region, snode, ntree, nodes);
   const bNodeTree &tree = *snode.edittree;
   tree.ensure_topology_cache();
-  const Span<const bNodeLink *> links = ntree.all_links();
+
+  Vector<const bNodeLink *> links = ntree.all_links();
+  if (snode.runtime->linkdrag) {
+    for (const bNodeLink &link : snode.runtime->linkdrag->links) {
+      links.append(&link);
+    }
+  }
 
   GPUVertFormat *format = immVertexFormat();
   const uint attr_pos = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
@@ -4888,10 +4894,14 @@ static void draw_links_test(const bContext &C,
   Vector<Vector<float2>> coords_per_link;
   Vector<VerticalLine> vertical_lines;
   int coords_num = 0;
+  const float2 cursor = snode.runtime->cursor;
   for (const bNodeLink *link : links) {
-    const float2 start_pos = socket_link_connection_location(
-        *link->fromnode, *link->fromsock, *link);
-    const float2 end_pos = socket_link_connection_location(*link->tonode, *link->tosock, *link);
+    const float2 start_pos = link->fromsock ? socket_link_connection_location(
+                                                  *link->fromnode, *link->fromsock, *link) :
+                                              cursor;
+    const float2 end_pos = link->tosock ? socket_link_connection_location(
+                                              *link->tonode, *link->tosock, *link) :
+                                          cursor;
 
     const float initial_x = end_pos.x - padding;
     const float min_y = std::min(start_pos.y, end_pos.y);
@@ -4946,7 +4956,6 @@ static void draw_links_test(const bContext &C,
 
   GPU_blend(GPU_BLEND_ALPHA);
   immBindBuiltinProgram(GPU_SHADER_3D_POLYLINE_FLAT_COLOR);
-  immUniformColor4f(0.8, 0.8, 0.8, 1.0);
   immUniform2fv("viewportSize", &viewport[2]);
   immUniform1f("lineWidth", line_width * U.pixelsize);
 
@@ -4958,8 +4967,9 @@ static void draw_links_test(const bContext &C,
     const bNodeLink &link = *links[curve_i];
     float4 color;
     PointerRNA node_ptr = RNA_pointer_create_discrete(
-        &ntree.id, &RNA_Node, const_cast<bNode *>(link.fromnode));
-    node_socket_color_get(C, ntree, node_ptr, *link.fromsock, color);
+        &ntree.id, &RNA_Node, const_cast<bNode *>(link.fromnode ? link.fromnode : link.tonode));
+    node_socket_color_get(
+        C, ntree, node_ptr, link.fromsock ? *link.fromsock : *link.tosock, color);
     const IndexRange points = points_by_curve[curve_i];
     for (const int i : points.drop_back(1)) {
       const float3 &a = positions[i];
@@ -5268,15 +5278,15 @@ void node_draw_space(const bContext &C, ARegion &region)
     }
 
     /* Temporary links. */
-    GPU_blend(GPU_BLEND_ALPHA);
-    GPU_line_smooth(true);
-    if (snode.runtime->linkdrag) {
-      for (const bNodeLink &link : snode.runtime->linkdrag->links) {
-        node_draw_link_dragged(C, v2d, snode, link);
-      }
-    }
-    GPU_line_smooth(false);
-    GPU_blend(GPU_BLEND_NONE);
+    // GPU_blend(GPU_BLEND_ALPHA);
+    // GPU_line_smooth(true);
+    // if (snode.runtime->linkdrag) {
+    //   for (const bNodeLink &link : snode.runtime->linkdrag->links) {
+    //     node_draw_link_dragged(C, v2d, snode, link);
+    //   }
+    // }
+    // GPU_line_smooth(false);
+    // GPU_blend(GPU_BLEND_NONE);
 
     if (snode.overlay.flag & SN_OVERLAY_SHOW_OVERLAYS && snode.flag & SNODE_SHOW_GPENCIL) {
       /* Draw grease-pencil annotations. */
