@@ -4856,12 +4856,21 @@ static void draw_links_test(const bContext &C,
   const uint pos = GPU_vertformat_attr_add(
       immVertexFormat(), "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
 
+  const float grid_size = grid_size_get();
+  const float padding = UI_UNIT_X;
   Vector<Vector<float2>> coords_per_link;
   for (const bNodeLink *link : links) {
     const float2 start_pos = socket_link_connection_location(
         *link->fromnode, *link->fromsock, *link);
     const float2 end_pos = socket_link_connection_location(*link->tonode, *link->tosock, *link);
-    coords_per_link.append({start_pos, end_pos});
+
+    Vector<float2> coords;
+    coords.append(start_pos);
+    coords.append({end_pos.x - grid_size, start_pos.y});
+    coords.append({end_pos.x - grid_size, end_pos.y});
+    coords.append(end_pos);
+
+    coords_per_link.append(coords);
   }
 
   immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
