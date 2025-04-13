@@ -4841,20 +4841,17 @@ static void node_draw_zones_and_frames(const bContext &C,
   }
 }
 
-struct VerticalLine {
-  const bNodeSocket *origin;
-  float x;
-  float min;
-  float max;
-};
-
 class LinkLayoutSolver {
  private:
   struct StraightSegment {
+    const bNodeSocket *origin;
     float pos;
     float min;
     float max;
   };
+
+  struct HorizontalSegment : public StraightSegment {};
+  struct VerticalSegment : public StraightSegment {};
 
   struct LinkInfo {
     const bNodeLink *link;
@@ -4863,22 +4860,23 @@ class LinkLayoutSolver {
     float length;
   };
 
-  Vector<StraightSegment> verticals_;
-  Vector<StraightSegment> horizontals_;
-  float x_pad_;
-  float y_pad_;
+  Vector<VerticalSegment> verticals_;
+  Vector<HorizontalSegment> horizontals_;
+  float pad_x_;
+  float pad_y_;
 
  public:
   LinkLayoutSolver()
   {
-    x_pad_ = UI_UNIT_X;
-    y_pad_ = 0.5 * UI_UNIT_X;
+    pad_x_ = UI_UNIT_X;
+    pad_y_ = 0.1 * UI_UNIT_X;
   }
 
   Vector<Vector<float2>> solve_links(const Span<const bNodeLink *> links, const float2 cursor)
   {
-    Vector<LinkInfo> link_infos(links.size());
-    Vector<int> sorted_link_indices(links.size());
+    const int links_num = links.size();
+    Vector<LinkInfo> link_infos(links_num);
+    Vector<int> sorted_link_indices(links_num);
     threading::parallel_for(links.index_range(), 512, [&](const IndexRange range) {
       for (const int i : range) {
         link_infos[i] = get_link_info(*links[i], cursor);
@@ -4891,9 +4889,9 @@ class LinkLayoutSolver {
       return link_infos[a].length < link_infos[b].length;
     });
 
-    Vector<Vector<float2>> routes;
+    Vector<Vector<float2>> routes(links_num);
     for (const int link_i : sorted_link_indices) {
-      routes.append(this->solve_link(link_infos[link_i]));
+      routes[link_i] = this->solve_link(link_infos[link_i]);
     }
     return routes;
   }
@@ -4909,10 +4907,46 @@ class LinkLayoutSolver {
 
   Vector<float2> solve_forward_link(const LinkInfo &link)
   {
+    if (std::optional<Vector<float2>> route = this->try_solve_link_with_single_corner(link)) {
+      return *route;
+    }
     Vector<float2> route;
     route.append(link.start);
     route.append(link.end);
     return route;
+  }
+
+  std::optional<Vector<float2>> try_solve_link_with_single_corner(const LinkInfo &link)
+  {
+    float corner_x = link.end.x - pad_x_;
+    while (corner_x >= link.start.x + pad_x_) {
+      const HorizontalSegment segment_a = this->horizontal(
+          link, link.start.y, link.start.x, corner_x);
+      const VerticalSegment segment_b = this->vertical(link, corner_x, link.start.y, link.end.y);
+      const HorizontalSegment segment_c = this->horizontal(link, link.end.y, corner_x, link.end.x);
+
+      const std::optional<float> collision = this->find_overlap(segment_b);
+      if (collision) {
+        corner_x = *collision - pad_x_;
+        continue;
+      }
+      if (this->find_overlap(segment_a)) {
+        corner_x -= pad_x_;
+        continue;
+      }
+
+      this->save_segment(segment_a);
+      this->save_segment(segment_b);
+      this->save_segment(segment_c);
+
+      Vector<float2> route;
+      route.append(link.start);
+      route.append({corner_x, link.start.y});
+      route.append({corner_x, link.end.y});
+      route.append(link.end);
+      return route;
+    }
+    return std::nullopt;
   }
 
   Vector<float2> solve_backward_link(const LinkInfo &link)
@@ -4921,6 +4955,47 @@ class LinkLayoutSolver {
     route.append(link.start);
     route.append(link.end);
     return route;
+  }
+
+  std::optional<float> find_overlap(const VerticalSegment &query) const
+  {
+    return this->find_overlapping_pos(
+        verticals_.as_span().cast<StraightSegment>(), query, pad_y_, pad_x_);
+  }
+
+  std::optional<float> find_overlap(const HorizontalSegment &query) const
+  {
+    return this->find_overlapping_pos(
+        horizontals_.as_span().cast<StraightSegment>(), query, pad_x_, pad_y_);
+  }
+
+  std::optional<float> find_overlapping_pos(const Span<StraightSegment> segments,
+                                            const StraightSegment &query,
+                                            const float pad_dir,
+                                            const float pad_ortho) const
+  {
+    for (const StraightSegment &segment : segments) {
+      if (this->segments_overlap(segment, query, pad_dir, pad_ortho)) {
+        return segment.pos;
+      }
+    }
+    return std::nullopt;
+  }
+
+  bool segments_overlap(const StraightSegment &segment,
+                        const StraightSegment &query,
+                        const float pad_dir,
+                        const float pad_ortho) const
+  {
+    if (segment.origin == query.origin) {
+      return false;
+    }
+    if (segment.pos < query.pos + pad_ortho && segment.pos > query.pos - pad_ortho) {
+      if (segment.min < query.max + pad_dir && segment.max > query.min - pad_dir) {
+        return true;
+      }
+    }
+    return false;
   }
 
   LinkInfo get_link_info(const bNodeLink &link, const float2 cursor)
@@ -4934,6 +5009,32 @@ class LinkLayoutSolver {
                              cursor;
     info.length = math::distance(info.start, info.end);
     return info;
+  }
+
+  void save_segment(const HorizontalSegment &segment)
+  {
+    horizontals_.append(segment);
+  }
+
+  void save_segment(const VerticalSegment &segment)
+  {
+    verticals_.append(segment);
+  }
+
+  VerticalSegment vertical(const LinkInfo &link,
+                           const float x,
+                           const float start_y,
+                           const float end_y) const
+  {
+    return {link.link->fromsock, x, std::min(start_y, end_y), std::max(start_y, end_y)};
+  }
+
+  HorizontalSegment horizontal(const LinkInfo &link,
+                               const float y,
+                               const float start_x,
+                               const float end_x) const
+  {
+    return {link.link->fromsock, y, std::min(start_x, end_x), std::max(start_x, end_x)};
   }
 };
 
@@ -4953,6 +5054,9 @@ static void draw_links_test(const bContext &C,
     for (const bNodeLink &link : snode.runtime->linkdrag->links) {
       links.append(&link);
     }
+  }
+  if (links.is_empty()) {
+    return;
   }
 
   LinkLayoutSolver layout_solver;
