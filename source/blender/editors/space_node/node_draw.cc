@@ -5067,7 +5067,9 @@ class LinkLayoutSolver {
       Vector<float2> &route = r_routes[link_i];
       route.append(link.start);
       if (const std::optional<float> vertical_x = vertical_xs[i]) {
-        this->save_segment(this->vertical(from_socket, *vertical_x, y, link.end.y));
+        const float dir = y < link.end.y ? 1.0f : -1.0f;
+        this->save_segment(
+            this->vertical(from_socket, *vertical_x, y + dir * pad_x_, link.end.y - dir * pad_x_));
         if (y != link.start.y || y != link.end.y) {
           if (y != link.start.y) {
             route.append({link.start.x + pad_x_, y});
