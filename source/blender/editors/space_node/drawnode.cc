@@ -1664,9 +1664,9 @@ void draw_nodespace_back_pix(const bContext &C,
   GPU_matrix_pop();
 }
 
-static float2 socket_link_connection_location(const bNode &node,
-                                              const bNodeSocket &socket,
-                                              const bNodeLink &link)
+float2 socket_link_connection_location(const bNode &node,
+                                       const bNodeSocket &socket,
+                                       const bNodeLink &link)
 {
   const float2 socket_location = socket.runtime->location;
   if (socket.is_multi_input() && socket.is_input() && !(node.flag & NODE_HIDDEN)) {
@@ -2354,6 +2354,7 @@ static void node_draw_link_bezier_ex(const SpaceNode &snode,
                                      const NodeLinkDrawConfig &draw_config,
                                      const std::array<float2, 4> &points)
 {
+  return;
   if (g_batch_link.batch == nullptr) {
     nodelink_batch_init();
   }

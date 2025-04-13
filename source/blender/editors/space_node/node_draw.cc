@@ -4841,6 +4841,49 @@ static void node_draw_zones_and_frames(const bContext &C,
   }
 }
 
+static void draw_links_test(const bContext &C,
+                            TreeDrawContext &tree_draw_ctx,
+                            ARegion &region,
+                            SpaceNode &snode,
+                            bNodeTree &ntree,
+                            Span<bNode *> nodes)
+{
+  UNUSED_VARS(C, tree_draw_ctx, region, snode, ntree, nodes);
+  const bNodeTree &tree = *snode.edittree;
+  tree.ensure_topology_cache();
+  const Span<const bNodeLink *> links = ntree.all_links();
+
+  const uint pos = GPU_vertformat_attr_add(
+      immVertexFormat(), "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
+
+  Vector<Vector<float2>> coords_per_link;
+  for (const bNodeLink *link : links) {
+    const float2 start_pos = socket_link_connection_location(
+        *link->fromnode, *link->fromsock, *link);
+    const float2 end_pos = socket_link_connection_location(*link->tonode, *link->tosock, *link);
+    coords_per_link.append({start_pos, end_pos});
+  }
+
+  immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
+  immUniformColor4f(0.8, 0.8, 0.8, 1.0);
+
+  int verts_num = 0;
+  for (const Span<float2> link_coords : coords_per_link) {
+    verts_num += (link_coords.size() - 1) * 2;
+  }
+  immBegin(GPU_PRIM_LINES, verts_num);
+  for (const Span<float2> link_coords : coords_per_link) {
+    for (const int i : IndexRange(link_coords.size() - 1)) {
+      const float2 &a = link_coords[i];
+      const float2 &b = link_coords[i + 1];
+      immVertex3f(pos, a.x, a.y, 0.0);
+      immVertex3f(pos, b.x, b.y, 0.0);
+    }
+  }
+  immEnd();
+  immUnbindProgram();
+}
+
 #define USE_DRAW_TOT_UPDATE
 
 static void node_draw_nodetree(const bContext &C,
@@ -4865,24 +4908,26 @@ static void node_draw_nodetree(const bContext &C,
   }
 
   /* Node lines. */
-  GPU_blend(GPU_BLEND_ALPHA);
-  nodelink_batch_start(snode);
+  // GPU_blend(GPU_BLEND_ALPHA);
+  // nodelink_batch_start(snode);
 
-  for (const bNodeLink *link : ntree.all_links()) {
-    if (!bke::node_link_is_hidden(*link) && !bke::node_link_is_selected(*link)) {
-      node_draw_link(C, region.v2d, snode, *link, false);
-    }
-  }
+  // for (const bNodeLink *link : ntree.all_links()) {
+  //   if (!bke::node_link_is_hidden(*link) && !bke::node_link_is_selected(*link)) {
+  //     node_draw_link(C, region.v2d, snode, *link, false);
+  //   }
+  // }
 
-  /* Draw selected node links after the unselected ones, so they are shown on top. */
-  for (const bNodeLink *link : ntree.all_links()) {
-    if (!bke::node_link_is_hidden(*link) && bke::node_link_is_selected(*link)) {
-      node_draw_link(C, region.v2d, snode, *link, true);
-    }
-  }
+  // /* Draw selected node links after the unselected ones, so they are shown on top. */
+  // for (const bNodeLink *link : ntree.all_links()) {
+  //   if (!bke::node_link_is_hidden(*link) && bke::node_link_is_selected(*link)) {
+  //     node_draw_link(C, region.v2d, snode, *link, true);
+  //   }
+  // }
 
-  nodelink_batch_end(snode);
-  GPU_blend(GPU_BLEND_NONE);
+  // nodelink_batch_end(snode);
+  // GPU_blend(GPU_BLEND_NONE);
+
+  draw_links_test(C, tree_draw_ctx, region, snode, ntree, nodes);
 
   /* Draw foreground nodes, last nodes in front. */
   for (const int i : nodes.index_range()) {

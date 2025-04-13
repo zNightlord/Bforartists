@@ -7,6 +7,7 @@
 #include <optional>
 
 #include "BLI_compute_context.hh"
+#include "BLI_math_vector_types.hh"
 #include "BLI_string_ref.hh"
 #include "BLI_vector_set.hh"
 
@@ -23,6 +24,7 @@ struct rcti;
 struct rctf;
 struct NodesModifierData;
 struct uiLayout;
+struct bNodeLink;
 
 namespace blender::ed::space_node {
 
@@ -61,6 +63,9 @@ void node_draw_nodesocket(const rctf *rect,
                           float outline_thickness,
                           int shape,
                           float aspect);
+float2 socket_link_connection_location(const bNode &node,
+                                       const bNodeSocket &socket,
+                                       const bNodeLink &link);
 
 void std_node_socket_colors_get(int socket_type, float *r_color);
 
