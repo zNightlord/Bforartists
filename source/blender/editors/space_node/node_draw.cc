@@ -4868,8 +4868,8 @@ class LinkLayoutSolver {
  public:
   LinkLayoutSolver()
   {
-    pad_x_ = UI_UNIT_X;
-    pad_y_ = 0.1 * UI_UNIT_X;
+    pad_x_ = 0.5f * UI_UNIT_X;
+    pad_y_ = 0.15f * UI_UNIT_X;
   }
 
   Vector<Vector<float2>> solve_links(const Span<const bNodeLink *> links, const float2 cursor)
@@ -4889,6 +4889,10 @@ class LinkLayoutSolver {
       return link_infos[a].length < link_infos[b].length;
     });
 
+    for (const LinkInfo &link : link_infos) {
+      this->save_link_endings(link);
+    }
+
     Vector<Vector<float2>> routes(links_num);
     for (const int link_i : sorted_link_indices) {
       routes[link_i] = this->solve_link(link_infos[link_i]);
@@ -4897,6 +4901,17 @@ class LinkLayoutSolver {
   }
 
  private:
+  void save_link_endings(const LinkInfo &link)
+  {
+    if (link.link->fromsock) {
+      this->save_segment(
+          this->horizontal(link, link.start.y, link.start.x, link.start.x + pad_x_));
+    }
+    if (link.link->tosock) {
+      this->save_segment(this->horizontal(link, link.end.y, link.end.x - pad_x_, link.end.x));
+    }
+  }
+
   Vector<float2> solve_link(const LinkInfo &link)
   {
     if (link.start.x < link.end.x) {
@@ -4907,7 +4922,7 @@ class LinkLayoutSolver {
 
   Vector<float2> solve_forward_link(const LinkInfo &link)
   {
-    if (std::optional<Vector<float2>> route = this->try_solve_link_with_single_corner(link)) {
+    if (std::optional<Vector<float2>> route = this->try_solve_link_forward_best(link)) {
       return *route;
     }
     Vector<float2> route;
@@ -4916,37 +4931,66 @@ class LinkLayoutSolver {
     return route;
   }
 
-  std::optional<Vector<float2>> try_solve_link_with_single_corner(const LinkInfo &link)
+  std::optional<Vector<float2>> try_solve_link_forward_best(const LinkInfo &link)
   {
-    float corner_x = link.end.x - pad_x_;
+    const std::optional<float> vertical_x = this->find_vertical_segment_x(link);
+    if (!vertical_x) {
+      return std::nullopt;
+    }
+    const std::optional<float> horizontal_y = this->find_horizontal_segment_y(link, *vertical_x);
+    if (!horizontal_y) {
+      return std::nullopt;
+    }
+    Vector<float2> route;
+    route.append(link.start);
+    if (horizontal_y != link.start.y) {
+      route.append({link.start.x + pad_x_, *horizontal_y});
+    }
+    route.append({*vertical_x, *horizontal_y});
+    if (horizontal_y != link.end.y) {
+      const float height = math::distance(*horizontal_y, link.end.y);
+      const float fac = 1.0f - std::clamp(height / pad_x_, 0.0f, 1.0f);
+      route.append({*vertical_x + pad_x_ * fac, link.end.y});
+    }
+    route.append(link.end);
+
+    this->save_segment(this->horizontal(link, *horizontal_y, link.start.x, *vertical_x));
+    this->save_segment(this->vertical(link, *vertical_x, *horizontal_y, link.end.y));
+
+    return route;
+  }
+
+  std::optional<float> find_vertical_segment_x(const LinkInfo &link) const
+  {
+    const float best_corner_x = link.end.x - pad_x_;
+    float corner_x = best_corner_x;
     while (corner_x >= link.start.x + pad_x_) {
-      const HorizontalSegment segment_a = this->horizontal(
-          link, link.start.y, link.start.x, corner_x);
-      const VerticalSegment segment_b = this->vertical(link, corner_x, link.start.y, link.end.y);
-      const HorizontalSegment segment_c = this->horizontal(link, link.end.y, corner_x, link.end.x);
-
-      const std::optional<float> collision = this->find_overlap(segment_b);
+      const VerticalSegment segment = this->vertical(link, corner_x, link.start.y, link.end.y);
+      const std::optional<float> collision = this->find_overlap(segment);
       if (collision) {
-        corner_x = *collision - pad_x_;
+        corner_x = *collision - pad_x_ - 0.0001f;
         continue;
       }
-      if (this->find_overlap(segment_a)) {
-        corner_x -= pad_x_;
-        continue;
-      }
-
-      this->save_segment(segment_a);
-      this->save_segment(segment_b);
-      this->save_segment(segment_c);
-
-      Vector<float2> route;
-      route.append(link.start);
-      route.append({corner_x, link.start.y});
-      route.append({corner_x, link.end.y});
-      route.append(link.end);
-      return route;
+      return corner_x;
     }
     return std::nullopt;
+  }
+
+  std::optional<float> find_horizontal_segment_y(const LinkInfo &link,
+                                                 const float vertical_x) const
+  {
+    const float best_y = link.start.y;
+    float y = best_y;
+    const float direction = link.start.y < link.end.y ? 1.0f : -1.0f;
+    while (true) {
+      const HorizontalSegment segment = this->horizontal(link, y, link.start.x, vertical_x);
+      const std::optional<float> collision = this->find_overlap(segment);
+      if (collision) {
+        y = *collision + direction * (pad_y_ + 0.00001f);
+        continue;
+      }
+      return y;
+    }
   }
 
   Vector<float2> solve_backward_link(const LinkInfo &link)
