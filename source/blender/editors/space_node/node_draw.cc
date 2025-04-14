@@ -5192,7 +5192,8 @@ bNodeLinkPaths get_node_link_paths(const SpaceNode &snode)
   }
   else {
     LinkLayoutSolver layout_solver;
-    Vector<Vector<float2>> routes = layout_solver.solve_links(links, snode.runtime->cursor);
+    Vector<Vector<float2>> routes = layout_solver.solve_links(
+        links, snode.runtime->cursor * UI_SCALE_FAC);
     for (const int i : links.index_range()) {
       const bNodeLink &link = *links[i];
       paths.paths.add(&link, routes[i]);
@@ -5228,7 +5229,8 @@ static void draw_links_test(const bContext &C,
   }
 
   LinkLayoutSolver layout_solver;
-  Vector<Vector<float2>> routes = layout_solver.solve_links(links, snode.runtime->cursor);
+  Vector<Vector<float2>> routes = layout_solver.solve_links(links,
+                                                            snode.runtime->cursor * UI_SCALE_FAC);
   int routes_points_num = 0;
   for (const Span<float2> route : routes) {
     routes_points_num += route.size();
