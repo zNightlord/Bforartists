@@ -1540,11 +1540,11 @@ void MESH_OT_select_mode(wmOperatorType *ot)
   /* Properties. */
   /* Hide all, not to show redo panel. */
   prop = RNA_def_boolean(ot->srna, "use_extend", false, "Extend", "");
-  RNA_def_property_flag(prop, PropertyFlag(PROP_HIDDEN | PROP_SKIP_SAVE));
+  RNA_def_property_flag(prop, PROP_HIDDEN | PROP_SKIP_SAVE);
   prop = RNA_def_boolean(ot->srna, "use_expand", false, "Expand", "");
-  RNA_def_property_flag(prop, PropertyFlag(PROP_HIDDEN | PROP_SKIP_SAVE));
+  RNA_def_property_flag(prop, PROP_HIDDEN | PROP_SKIP_SAVE);
   ot->prop = prop = RNA_def_enum(ot->srna, "type", rna_enum_mesh_select_mode_items, 0, "Type", "");
-  RNA_def_property_flag(prop, PropertyFlag(PROP_HIDDEN | PROP_SKIP_SAVE));
+  RNA_def_property_flag(prop, PROP_HIDDEN | PROP_SKIP_SAVE);
 
   prop = RNA_def_enum(
       ot->srna, "action", actions_items, 2, "Action", "Selection action to execute");
@@ -3845,9 +3845,9 @@ void MESH_OT_select_linked_pick(wmOperatorType *ot)
 
   /* Use for redo. */
   prop = RNA_def_int(ot->srna, "object_index", -1, -1, INT_MAX, "", "", 0, INT_MAX);
-  RNA_def_property_flag(prop, PropertyFlag(PROP_HIDDEN | PROP_SKIP_SAVE));
+  RNA_def_property_flag(prop, PROP_HIDDEN | PROP_SKIP_SAVE);
   prop = RNA_def_int(ot->srna, "index", -1, -1, INT_MAX, "", "", 0, INT_MAX);
-  RNA_def_property_flag(prop, PropertyFlag(PROP_HIDDEN | PROP_SKIP_SAVE));
+  RNA_def_property_flag(prop, PROP_HIDDEN | PROP_SKIP_SAVE);
 }
 
 /** \} */
@@ -5251,6 +5251,7 @@ static wmOperatorStatus edbm_region_to_loop_exec(bContext *C, wmOperator * /*op*
   ViewLayer *view_layer = CTX_data_view_layer(C);
   const Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data(
       scene, view_layer, CTX_wm_view3d(C));
+  bool changed = false;
   for (Object *obedit : objects) {
     BMEditMesh *em = BKE_editmesh_from_object(obedit);
 
@@ -5286,19 +5287,19 @@ static wmOperatorStatus edbm_region_to_loop_exec(bContext *C, wmOperator * /*op*
     BM_ITER_MESH (e, &iter, em->bm, BM_EDGES_OF_MESH) {
       if (BM_elem_flag_test(e, BM_ELEM_TAG)) {
         BM_edge_select_set(em->bm, e, true);
+        changed = true;
       }
-    }
-
-    /* If in face-only select mode, switch to edge select mode so that
-     * an edge-only selection is not inconsistent state. */
-    if (em->selectmode == SCE_SELECT_FACE) {
-      em->selectmode = SCE_SELECT_EDGE;
-      EDBM_selectmode_set(em);
-      EDBM_selectmode_to_scene(C);
     }
 
     DEG_id_tag_update(&obedit->id, ID_RECALC_GEOMETRY);
     WM_event_add_notifier(C, NC_GEOM | ND_SELECT, obedit->data);
+  }
+
+  if (changed) {
+    /* If in face-only select mode, switch to edge select mode so that
+     * an edge-only selection is not inconsistent state. Do this for all meshes in multi-object
+     * editmode so their selectmode is in sync for following operators. */
+    EDBM_selectmode_disable_multi(C, SCE_SELECT_FACE, SCE_SELECT_EDGE);
   }
 
   return OPERATOR_FINISHED;
