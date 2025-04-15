@@ -590,6 +590,21 @@ static void print_bevvert(int bevvert_index, const BevelState &bs)
   print_vmesh(bevvert_index, bs);
 }
 
+static void draw_bevvert(int bevvert_index, const BevelState &bs)
+{
+  const BevVert &bevvert = bs.bevverts[bevvert_index];
+  float3 bevvert_co = bs.src_mesh.vert_positions()[bevvert.v];
+  draw::drw_debug_point(bevvert_co, 0.1f, {1, 0, 0, 1}, draw::drw_debug_persistent_lifetime);
+  /* TODO: more! */
+}
+
+static void draw_all_bevverts(const BevelState &bs)
+{
+  for (const int bevvert_index : bs.bevverts.index_range()) {
+    draw_bevvert(bevvert_index, bs);
+  }
+}
+
 }  // end namespace debug
 #endif
 
@@ -9122,6 +9137,7 @@ std::optional<Mesh *> mesh_bevel(const Mesh &src_mesh,
   state.build_boundary_verts_and_bevvert_topology();
   state.set_edge_half_specs();
   state.set_boundary_vert_positions();
+  debug::draw_all_bevverts(state);
   return std::nullopt;
 }
 
