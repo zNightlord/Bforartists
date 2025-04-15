@@ -6,6 +6,8 @@ set(INC
   PUBLIC .
   ../makesrna
   ../../../intern/eigen
+  ../draw/intern
+  ../gpu
 )
 
 set(INC_SYS
