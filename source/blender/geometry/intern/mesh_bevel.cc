@@ -280,15 +280,16 @@ enum class AngleKind {
   Larger = 1,
 };
 
-/** Functions to move forewards and backwards in an index range,  in modulo fashion. */
+/** Return what range[i+1] would when wrapping around at end. */
 static inline int index_range_next(const IndexRange range, const int index)
 {
-  return (index >= range.last()) ? range.first() : index + 1;
+  return (index >= range.size() - 1) ? range.first() : range[index + 1];
 }
 
+/** Return what range[i-1] would when wraping around at the beginning. */
 static inline int index_range_prev(const IndexRange range, const int index)
 {
-  return (index <= range.first()) ? range.last() : index - 1;
+  return (index <= 0) ? range.last() : range[index - 1];
 }
 
 /** Bevel parameters and state. */
@@ -553,6 +554,11 @@ static void print_boundary_vert(int boundary_vert_index,
   const BoundaryVert &boundary_vert = bs.boundary_verts[boundary_vert_index];
   int efirstpos = boundary_vert.edgehalf_first_pos;
   int edges_num = bevvert.edge_halfs_range.size();
+  fmt::println("bv{} at ({},{},{})",
+               boundary_vert_index,
+               boundary_vert.new_vert.co[0],
+               boundary_vert.new_vert.co[1],
+               boundary_vert.new_vert.co[2]);
   fmt::print("edges");
   for (const int i : IndexRange(boundary_vert.edgehalf_count)) {
     fmt::print(" e{}", bs.edge_half(bevvert, (efirstpos + i) % edges_num).edge);
@@ -581,7 +587,8 @@ static void print_vmesh(int vmesh_index, const BevelState &bs)
 static void print_bevvert(int bevvert_index, const BevelState &bs)
 {
   const BevVert &bevvert = bs.bevverts[bevvert_index];
-  fmt::println("v{}\nedges", bevvert.v);
+  const float3 co = bs.src_mesh.vert_positions()[bevvert.v];
+  fmt::println("v{} at ({},{},{})\nedges", bevvert.v, co[0], co[1], co[2]);
   for (const int e_index : bevvert.edge_halfs_range) {
     fmt::print("  ");
     print_edgehalf(e_index, bs);
@@ -592,10 +599,20 @@ static void print_bevvert(int bevvert_index, const BevelState &bs)
 
 static void draw_bevvert(int bevvert_index, const BevelState &bs)
 {
+  constexpr uint life = draw::drw_debug_persistent_lifetime;
+  constexpr float pntsize = 0.04f;
+  const float4 orig_vert_col = {1, 0, 0, 1};
+  const float4 first_bndv_col = {0, 0, 1, 1};
+  const float4 bndv_col = {0, 1, 0, 1};
   const BevVert &bevvert = bs.bevverts[bevvert_index];
   float3 bevvert_co = bs.src_mesh.vert_positions()[bevvert.v];
-  draw::drw_debug_point(bevvert_co, 0.1f, {1, 0, 0, 1}, draw::drw_debug_persistent_lifetime);
-  /* TODO: more! */
+  draw::drw_debug_point(bevvert_co, pntsize, {1, 0, 0, 1}, life);
+  const VMesh &vmesh = bs.vmeshes[bevvert_index];
+  for (const int i : IndexRange(vmesh.verts_num())) {
+    const BoundaryVert &bndv = bs.boundary_verts[vmesh.boundary_verts[i]];
+    float3 co = bndv.new_vert.co;
+    draw::drw_debug_point(co, pntsize, i == 0 ? first_bndv_col : bndv_col, life);
+  }
 }
 
 static void draw_all_bevverts(const BevelState &bs)
@@ -641,7 +658,7 @@ static float3 edge_dir(int mesh_edge, const Mesh &mesh)
 static float3 edge_dir(const EdgeHalf &edge_half, const Mesh &mesh)
 {
   int2 e = mesh.edges()[edge_half.edge];
-  float3 dir = mesh.vert_positions()[e[1]] - mesh.vert_positions()[e[2]];
+  float3 dir = mesh.vert_positions()[e[1]] - mesh.vert_positions()[e[0]];
   return edge_half.is_rev ? -dir : dir;
 }
 
@@ -681,7 +698,7 @@ static float angle_between_edges(const BevVert &bevvert,
 /**
  * \return True if d1 and d2 are parallel or nearly parallel.
  */
-static bool nearly_parallel_normalized(const float3 d1, const float3 d2)
+[[maybe_unused]] static bool nearly_parallel_normalized(const float3 d1, const float3 d2)
 {
   return compare_ff(math::abs(math::dot(d1, d2)), 1.0f, bevel_epsilon_ang_dot);
 }
@@ -887,9 +904,9 @@ static float3 offset_meet(const BevVert &bevvert,
   float3 dir1 = -edge_dir(e1, mesh);
   float3 dir2 = edge_dir(e2, mesh);
   const EdgeHalf &e1_next = bs.edge_half_next(bevvert, e1_pos);
-  const EdgeHalf &e2_next = bs.edge_half_prev(bevvert, e1_pos);
+  const EdgeHalf &e2_prev = bs.edge_half_prev(bevvert, e2_pos);
   float3 dir1n = -edge_dir(e1_next, mesh);
-  float3 dir2p = edge_dir(e2_next, mesh);
+  float3 dir2p = edge_dir(e2_prev, mesh);
   float3 vert_norm = mesh.vert_normals()[bevvert.v];
   float ang = angle_v3v3(dir1, dir2);
   if (ang < bevel_epsilon_ang) {
@@ -950,7 +967,7 @@ static float3 offset_meet(const BevVert &bevvert,
     norm_v1 = mesh.face_normals()[face];
     norm_v2 = norm_v1;
   }
-  else if (edges_between) {
+  else if (!edges_between) {
     norm_v1 = math::normalize(math::cross(dir2, dir1));
     if (math::dot(norm_v1, face != -1 ? mesh.face_normals()[face] : vert_norm) < 0.0f) {
       norm_v1 = -norm_v1;
@@ -974,7 +991,7 @@ static float3 offset_meet(const BevVert &bevvert,
   float3 norm_perp1 = math::normalize(math::cross(dir1, norm_v1));
   float3 norm_perp2 = math::normalize(math::cross(dir2, norm_v2));
   /* Get points on two lines to intersect in order to find the meet point. */
-  Array<float3, 4> off_pts;
+  Array<float3, 4> off_pts(4);
   if (ELEM(bs.params.offset_type, BevelOffsetType::Percent, BevelOffsetType::Absolute)) {
     offset_meet_lines_percent_or_absolute(e1, e2, bevvert.v, off_pts.as_mutable_span(), bs);
   }
@@ -1011,48 +1028,116 @@ static float3 offset_meet(const BevVert &bevvert,
       /* Lines didn't meet in 3d: get average of meetco and isect2. */
       mid_v3_v3v3(meetco, meetco, isect2);
     }
-  }
-  for (int i = e1_pos; i != e2_pos; i = (i + 1) % bevvert.edges_num()) {
-    const EdgeHalf &e = bs.edge_half(bevvert, i);
-    const int fnext = e.face_next;
-    if (fnext == -1) {
-      continue;
-    }
-    const float3 fnext_norm = mesh.face_normals()[fnext];
-    float4 plane;
-    plane_from_point_normal_v3(plane, bevvert_pos, fnext_norm);
-    float3 dropco;
-    closest_to_plane3_normalized_v3(dropco, plane, meetco);
-    /* Don't drop to the faces next to the in plane edge. */
-    if (e_in_plane_pos != -1) {
-      const EdgeHalf &e_in_plane = bs.edge_half(bevvert, e_in_plane_pos);
-      if (e_in_plane.face_next != -1) {
-        ang = angle_v3v3(fnext_norm, mesh.face_normals()[e_in_plane.face_next]);
-        if (math::abs(ang) < bevel_small_ang ||
-            math::abs(ang - math::numbers::pi) < bevel_small_ang)
-        {
-          continue;
+
+    for (int i = e1_pos; i != e2_pos; i = (i + 1) % bevvert.edges_num()) {
+      const EdgeHalf &e = bs.edge_half(bevvert, i);
+      const int fnext = e.face_next;
+      if (fnext == -1) {
+        continue;
+      }
+      const float3 fnext_norm = mesh.face_normals()[fnext];
+      float4 plane;
+      plane_from_point_normal_v3(plane, bevvert_pos, fnext_norm);
+      float3 dropco;
+      closest_to_plane3_normalized_v3(dropco, plane, meetco);
+      /* Don't drop to the faces next to the in plane edge. */
+      if (e_in_plane_pos != -1) {
+        const EdgeHalf &e_in_plane = bs.edge_half(bevvert, e_in_plane_pos);
+        if (e_in_plane.face_next != -1) {
+          ang = angle_v3v3(fnext_norm, mesh.face_normals()[e_in_plane.face_next]);
+          if (math::abs(ang) < bevel_small_ang ||
+              math::abs(ang - math::numbers::pi) < bevel_small_ang)
+          {
+            continue;
+          }
         }
       }
-    }
-    if (point_between_edges(dropco, bevvert.v, fnext, e, bs.edge_half_next(bevvert, i), bs)) {
-      meetco = dropco;
-      break;
+      if (point_between_edges(dropco, bevvert.v, fnext, e, bs.edge_half_next(bevvert, i), bs)) {
+        meetco = dropco;
+        break;
+      }
     }
   }
+
   return meetco;
 }
 
-static bool try_offset_meet_edge(const BevVert &bevvert, int e1_pos, int e2_pos)
+/* This was changed from 0.25f to fix bug #86768.
+ * Original bug #44961 remains fixed with this value.
+ * Update: changed again from 0.0001f to fix bug #95335.
+ * Original two bugs remained fixed.
+ */
+const float good_angle = 0.1f;
+
+/** Calculate the meeting point between the right offset edge  of the edges a position \a
+ * e1_pos and the left offset edge of the edge at position \a e2_pos, where \a e1 precedes \a
+ * e2 in CCW order. Assume that at most of the specified widths is non-zero. It is possible
+ * that no such meeting point exists (if the angle between is reflex), in which case false is
+ * returned.  It is also possible that the angle is so close to a straight angle that the
+ * position of the meet point would be a big spike, so return false in that case too.
+ * Otherwise, return the meeting point in *r_co and the angle between in *r_angle and return
+ * true.
+ */
+static bool try_offset_meet_edge(const BevVert &bevvert,
+                                 int e1_pos,
+                                 int e2_pos,
+                                 float e1_spec_r,
+                                 float e2_spec_l,
+                                 float3 *r_co,
+                                 float *r_angle,
+                                 const BevelState &bs)
 {
-  return false;
+  BLI_assert(e1_spec_r == 0.0f || e2_spec_l == 0.0f);
+  float ang = angle_between_edges(bevvert, e1_pos, e2_pos, bs);
+  if (math::abs(ang) < good_angle || math::numbers::pi - ang < good_angle) {
+    return false;
+  }
+  if (r_angle) {
+    *r_angle = ang;
+  }
+  if (r_co == nullptr) {
+    return true;
+  }
+  float3 co = bs.src_mesh.vert_positions()[bevvert.v];
+  float sinang = math::sin(ang);
+  BLI_assert(sinang != 0.0f);
+  if (e1_spec_r == 0.0f) {
+    const EdgeHalf &e1 = bs.edge_half(bevvert, e1_pos);
+    float3 dir1 = math::normalize(edge_dir(e1, bs.src_mesh));
+    *r_co = co + (e2_spec_l / sinang) * dir1;
+  }
+  else {
+    const EdgeHalf &e2 = bs.edge_half(bevvert, e2_pos);
+    float3 dir2 = math::normalize(edge_dir(e2, bs.src_mesh));
+    *r_co = co + (e1_spec_r / sinang) * dir2;
+  }
+  return true;
 }
 
-static bool good_slide(int e1_pos, int e2_pos, int eslide_pos, const BevelState &bs)
+/** Return true if it will look good to put the meeting point where try_offset_on_edge_between
+ * would put it. This means that neither side sees a reflex angle or too close to a straight
+ * angle.
+ */
+static bool good_slide(const BevVert &bevvert,
+                       int e1_pos,
+                       int e2_pos,
+                       int eslide_pos,
+                       float e1_spec_r,
+                       float e2_spec_l,
+                       const BevelState &bs)
 {
-  return false;
+  return try_offset_meet_edge(
+             bevvert, e1_pos, eslide_pos, e1_spec_r, 0.0f, nullptr, nullptr, bs) &&
+         try_offset_meet_edge(bevvert, eslide_pos, e2_pos, 0.0f, e2_spec_l, nullptr, nullptr, bs);
 }
 
+/** Calculate the best place for a meeting point for the offsets from edges at \a e1_pos and \a
+ * e2_pos on the in-between edge at \a eon_pos. Viewed from the vertex normal side, the CCW
+ * order of these edges is e1, eon, e2. Return true if we placed in *r_co as compromise between
+ * where two edges met. If we did, put the ratio of sines of angles in *r_sin_ratio too.
+ * However, if the offset_type is Percent or Absolute, we just slide along eon by the specified
+ * amount.
+ */
 static bool try_offset_on_edge_between(const BevVert &bevvert,
                                        int e1_pos,
                                        int e2_pos,
@@ -1063,6 +1148,50 @@ static bool try_offset_on_edge_between(const BevVert &bevvert,
                                        float *r_sin_ratio,
                                        const BevelState &bs)
 {
+  const EdgeHalf &e1 = bs.edge_half(bevvert, e1_pos);
+  const EdgeHalf &e2 = bs.edge_half(bevvert, e2_pos);
+  const EdgeHalf &eon = bs.edge_half(bevvert, eon_pos);
+  BLI_assert(e1.is_bev && e2.is_bev && !eon.is_bev);
+  BLI_assert(r_co != nullptr);
+  float ang1, ang2;
+  float3 meet1, meet2;
+  bool ok1 = try_offset_meet_edge(bevvert, e1_pos, eon_pos, e1_spec_r, 0.0f, &meet1, &ang1, bs);
+  bool ok2 = try_offset_meet_edge(bevvert, eon_pos, e2_pos, 0.0f, e2_spec_l, &meet2, &ang2, bs);
+  if (r_sin_ratio != nullptr) {
+    *r_sin_ratio = ang1 == 0.0f ? 1.0f : math::sin(ang2) / math::sin(ang1);
+  }
+  if (ELEM(bs.params.offset_type, BevelOffsetType::Percent, BevelOffsetType::Absolute)) {
+    float3 v_co = bs.src_mesh.vert_positions()[bevvert.v];
+    float eon_len;
+    float3 eon_unit_dir = math::normalize_and_get_length(edge_dir(eon, bs.src_mesh), eon_len);
+    if (bs.params.offset_type == BevelOffsetType::Percent) {
+      /* TODO: use weights, if required. */
+      *r_co = v_co + (bs.params.offset / 100.0f) * eon_len * eon_unit_dir;
+    }
+    else {
+      *r_co = v_co + bs.params.offset * eon_unit_dir;
+    }
+    return true;
+  }
+  if (ok1 && ok2) {
+    /* The two sides will likely lead to different meet points.
+     * Compromise on the midpint between them.
+     */
+    mid_v3_v3v3(*r_co, meet1, meet2);
+    return true;
+  }
+  else if (ok1 && !ok2) {
+    *r_co = meet1;
+  }
+  else if (!ok1 && ok2) {
+    *r_co = meet2;
+  }
+  else {
+    /* Neither offset line met eon.
+     * This should only happen if all three lines are on top of each other.
+     */
+    *r_co = slide_dist(eon, e1_spec_r, bs);
+  }
   return false;
 }
 
@@ -1119,7 +1248,8 @@ static double find_superellipse_chord_endpoint(double x0, double dtarget, float 
   const double tol = 1e-13; /* accumulates for many segments so use low value. */
   const int maxiter = 10;
 
-  /* For gradient between -1 and 1, xnew can only be in [x0 + sqrt(2)/2*dtarget, x0 + dtarget]. */
+  /* For gradient between -1 and 1, xnew can only be in [x0 + sqrt(2)/2*dtarget, x0 + dtarget].
+   */
   double xmin = x0 + math::numbers::sqrt2 / 2.0 * dtarget;
   xmin = std::min(xmin, 1.0);
   double xmax = x0 + dtarget;
@@ -1412,8 +1542,8 @@ static float find_profile_fullness(BevelState *bs)
  * The superellipse used for multi-segment profiles does not have a closed-form way
  * to generate evenly spaced points along an arc. We use an expensive search procedure
  * to find the parameter values that lead to bp->seg even chords.
- * We also want spacing for a number of segments that is a power of 2 >= bp->seg (but at least 4).
- * Use doubles because otherwise we cannot come close to float precision for final results.
+ * We also want spacing for a number of segments that is a power of 2 >= bp->seg (but at least
+ * 4). Use doubles because otherwise we cannot come close to float precision for final results.
  *
  * \param pro_spacing: The struct to fill. Changes depending on whether there needs
  * to be a separate miter profile.
@@ -1440,7 +1570,8 @@ static void set_profile_spacing(BevelState *bs, ProfileSpacing *pro_spacing, boo
     pro_spacing->xvals_2 = Array<double>(segments_power_2 + 1);
     pro_spacing->yvals_2 = Array<double>(segments_power_2 + 1);
     if (custom) {
-      /* Make sure the curve profile widget's sample table is full of the segments_power_2 samples.
+      /* Make sure the curve profile widget's sample table is full of the segments_power_2
+       * samples.
        */
       BKE_curveprofile_init((CurveProfile *)bs->params.custom_profile, short(segments_power_2));
 
@@ -1485,8 +1616,8 @@ namespace topology {
 /** Functions for analyzing the topology around bevels and setting up main bevel data structures
  * before construction. */
 
-/** if there is common member of both values1 and values2, return the first lexicographically where
- * that is so. Else return -1.
+/** if there is common member of both values1 and values2, return the first lexicographically
+ * where that is so. Else return -1.
  */
 static int find_in_both(Span<int> values1, Span<int> values2)
 {
@@ -1511,7 +1642,8 @@ static int find_edge_pos_in_face(int edge, int face, const Mesh &mesh)
   return -1;
 }
 
-/** Assuming edge1 and edge2 are both in face, are they ccw around a common vertex in that face? */
+/** Assuming edge1 and edge2 are both in face, are they ccw around a common vertex in that face?
+ */
 static int edges_ccw_in_face(const int edge1, const int edge2, const int face, const Mesh &mesh)
 {
   int pos1 = find_edge_pos_in_face(edge1, face, mesh);
@@ -1792,9 +1924,10 @@ static void fill_bevvert_and_edgehalfs(BevelState &bs, int bv_index)
 {
   BevVert &bevvert = bs.bevverts[bv_index];
   int bev_num = 0;
-  for (const int e_index : bevvert.edge_halfs_range) {
-    EdgeHalf &edge_half = bs.edge_halfs[e_index];
-    EdgeHalf &edge_half_next = bs.edge_halfs[bs.edge_half_next_e_index(bevvert, e_index)];
+  IndexRange edge_pos_range(bevvert.edges_num());
+  for (const int pos : edge_pos_range) {
+    EdgeHalf &edge_half = bs.edge_half(bevvert, pos);
+    EdgeHalf &edge_half_next = bs.edge_half_next(bevvert, pos);
     int edge = edge_half.edge;
     int edge_next = edge_half_next.edge;
     if (edge_half.is_bev) {
@@ -2074,19 +2207,35 @@ static void set_bevvert_boundary_positions(const int bevvert_index, BevelState &
          */
         BoundaryVert &bv0 = bs.boundary_vert(vmesh, 0);
         BoundaryVert &bv1 = bs.boundary_vert(vmesh, 1);
-        EdgeHalf &e0 = bs.edge_half(bevvert, 0);
-        EdgeHalf &e0_prev = bs.edge_half_prev(bevvert, 0);
-        float2 spec = specs[bevvert.edge_half_index(0)];
+        IndexRange edge_range(bevvert.edges_num());
+        const int e0_pos = 0;
+        const int e0_prev_pos = index_range_prev(edge_range, e0_pos);
+        const int e0_next_pos = index_range_next(edge_range, e0_pos);
+        const EdgeHalf &e0 = bs.edge_half(bevvert, e0_pos);
+        const float2 spec = specs[bevvert.edge_half_index(e0_pos)];
         bool leg_slide = ELEM(
             bs.params.offset_type, BevelOffsetType::Percent, BevelOffsetType::Absolute);
         if (leg_slide) {
-          bv0.new_vert.co = geom::slide_dist(e0_prev, spec[0], bs);
+          bv0.new_vert.co = geom::slide_dist(bs.edge_half(bevvert, e0_prev_pos), spec[0], bs);
           bv1.new_vert.co = geom::slide_dist(e0, spec[1], bs);
         }
         else {
-          int e0_prev_index = bs.edge_half_prev_e_index(bevvert, 0);
           bv0.new_vert.co = geom::offset_meet(
-              bevvert, e0_prev_index, 0, spec[0], spec[0], e0.face_prev, false, -1, bs);
+              bevvert, e0_prev_pos, e0_pos, 0.0f, spec[0], e0.face_prev, false, -1, bs);
+          bv1.new_vert.co = geom::offset_meet(
+              bevvert, e0_pos, e0_next_pos, spec[1], 0.0f, e0.face_next, false, -1, bs);
+        }
+        if (edge_range.size() > 3) {
+          for (int i = 2; i < edge_range.size() - 1; i++) {
+            const EdgeHalf &e = bs.edge_half(bevvert, i);
+            BoundaryVert &bv = bs.boundary_vert(vmesh, e.boundary_vert_pos);
+            float d = specs[bevvert.edge_half_index(i)][0];
+            if (bs.params.profile_type == BevelProfileType::Custom || bs.params.profile < 0.25f) {
+              /* Need to go further along edge to make room for full profile area. */
+              d *= math::numbers::sqrt2;
+            }
+            bv.new_vert.co = geom::slide_dist(e, d, bs);
+          }
         }
       }
     }
@@ -2098,7 +2247,6 @@ static void set_bevvert_boundary_positions(const int bevvert_index, BevelState &
                                                                           BevelMiterType::Sharp;
       BevelMiterType miter_inner = bs.params.miter_inner;
       bool mitering = miter_outer != BevelMiterType::Sharp || miter_inner != BevelMiterType::Sharp;
-      int cur_boundary_pos = 0;
       int cur_edge_pos = 0;
       IndexRange edge_range(bevvert.edges_num());
       do {
@@ -2115,6 +2263,9 @@ static void set_bevvert_boundary_positions(const int bevvert_index, BevelState &
         int next_edge_pos = index_range_next(edge_range, cur_edge_pos);
         while (next_edge_pos != cur_edge_pos) {
           EdgeHalf &e2 = bs.edge_half(bevvert, next_edge_pos);
+          if (e2.is_bev) {
+            break;
+          }
           if (geom::edge_half_on_plane(e2, bs)) {
             in_plane++;
             eip = cur_edge_pos;
@@ -2142,7 +2293,8 @@ static void set_bevvert_boundary_positions(const int bevvert_index, BevelState &
         int offset_e_in_plane = -1;
         if (not_in_plane > 0) {
           if (bs.params.loop_slide && not_in_plane == 1 &&
-              geom::good_slide(cur_edge_pos, next_edge_pos, enip, bs))
+              geom::good_slide(
+                  bevvert, cur_edge_pos, next_edge_pos, enip, spec_r, spec_next_l, bs))
           {
             offset_edge_between = true;
             offset_e_in_plane = eip;
@@ -2155,7 +2307,7 @@ static void set_bevvert_boundary_positions(const int bevvert_index, BevelState &
         }
         else if (in_plane > 0) {
           if (bs.params.loop_slide && in_plane == 1 &&
-              geom::good_slide(cur_edge_pos, next_edge_pos, eip, bs))
+              geom::good_slide(bevvert, cur_edge_pos, next_edge_pos, eip, spec_r, spec_next_l, bs))
           {
             offset_edge_between = true;
             eon = eip;
@@ -2192,6 +2344,18 @@ static void set_bevvert_boundary_positions(const int bevvert_index, BevelState &
                                  bs);
         }
         /* set boundary co, eon */
+        int boundary_pos = edge_half.boundary_vert_pos;
+        bs.boundary_vert(vmesh, boundary_pos).new_vert.co = co;
+        if (edge_half_next_bev.boundary_vert_pos != boundary_pos) {
+          do {
+            bs.boundary_vert(vmesh, boundary_pos).new_vert.co = co;
+            boundary_pos = index_range_next(IndexRange(vmesh.verts_num()), boundary_pos);
+          } while (boundary_pos != edge_half_next_bev.boundary_vert_pos);
+        }
+        if (eon) {
+          /* TODO */
+          ;
+        }
         if (mitering) {
           /* TODO */
           fmt::println("Implement me");
@@ -2206,18 +2370,14 @@ static void set_bevvert_boundary_positions(const int bevvert_index, BevelState &
 
 namespace spec {
 
-/** Use the bs.params offset type and amount to set initial specs of edge-half \a edge_half_index,
- * in the case where we are edge beveling. */
+/** Use the bs.params offset type and amount to set initial specs of edge-half \a
+ * edge_half_index, in the case where we are edge beveling. */
 static void edge_bevel_init_specs_from_params(const BevVert &bevvert,
                                               const int edge_pos,
                                               BevelState &bs)
 {
   const int edge_half_index = bevvert.edge_halfs_range[edge_pos];
   const EdgeHalf &edge_half = bs.edge_halfs[edge_half_index];
-  fmt::println("init edge bevel spec for vertex {} edge pos {} edge {}",
-               bevvert.v,
-               edge_pos,
-               edge_half.edge);
   float2 &specs = bs.edge_half_specs[edge_half_index];
   if (!edge_half.is_bev) {
     specs[0] = 0.0f;
@@ -2270,11 +2430,10 @@ static void edge_bevel_init_specs_from_params(const BevVert &bevvert,
      * Before doing this, change the API (see the bevel case comment).
      */
   }
-  fmt::println(" specs[0] = {}", specs[0]);
 }
 
-/** Use the bs.params offset type and amount to set initial specs of edge-half \a edge_half_index,
- * in the case where we are vertex beveling. */
+/** Use the bs.params offset type and amount to set initial specs of edge-half \a
+ * edge_half_index, in the case where we are vertex beveling. */
 static void vertex_bevel_init_specs_from_params(const BevVert &bevvert,
                                                 const int edge_pos,
                                                 BevelState &bs)
@@ -2443,7 +2602,8 @@ void BevelState::build_boundary_verts_and_bevvert_topology()
 {
   const int bevverts_num = this->bevverts.size();
   this->vmeshes = Array<VMesh>(bevverts_num);
-  /* Get offsets for per-Bevvert BoundaryVerts by accumulating counts, then converting to offsets.
+  /* Get offsets for per-Bevvert BoundaryVerts by accumulating counts, then converting to
+   * offsets.
    */
   Array<int> boundary_verts_data(bevverts_num + 1);
   threading::parallel_for(IndexRange(bevverts_num), 4096, [&](IndexRange range) {
@@ -2459,7 +2619,7 @@ void BevelState::build_boundary_verts_and_bevvert_topology()
     for (const int bv : range) {
       this->vmeshes[bv].boundary_verts = boundary_vert_offsets[bv];
       topology::build_bevvert_boundary_verts(bv, *this);
-      if (true) {
+      if (false) {
         debug::print_bevvert(bv, *this);
         fmt::println("");
       }
@@ -2494,6 +2654,9 @@ void BevelState::set_boundary_vert_positions()
   threading::parallel_for(IndexRange(this->bevverts.size()), 4096, [&](IndexRange range) {
     for (const int bv : range) {
       topology::set_bevvert_boundary_positions(bv, *this);
+      if (true) {
+        debug::print_bevvert(bv, *this);
+      }
     }
   });
 }
