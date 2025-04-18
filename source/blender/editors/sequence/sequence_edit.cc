@@ -55,7 +55,7 @@ static Sequence *sequence_add(Main &bmain, bContext &C, wmWindow &win, const Add
   return sequence_new;
 }
 
-static bool sequence_delete(bContext &C, Main &bmain, Sequence &sequence)
+static void sequence_delete(bContext &C, Main &bmain, Sequence &sequence)
 {
   Sequence *sequence_new = [&]() -> Sequence * {
     if (sequence.id.prev) {
@@ -66,10 +66,6 @@ static bool sequence_delete(bContext &C, Main &bmain, Sequence &sequence)
     }
     return nullptr;
   }();
-
-  if (!sequence_new) {
-    return false;
-  }
 
   wmWindowManager *wm = static_cast<wmWindowManager *>(bmain.wm.first);
 
@@ -83,8 +79,6 @@ static bool sequence_delete(bContext &C, Main &bmain, Sequence &sequence)
   }
 
   BKE_id_delete(&bmain, &sequence);
-
-  return true;
 }
 
 /** \} */
@@ -108,6 +102,16 @@ static wmOperatorStatus sequence_new_exec(bContext *C, wmOperator *op)
   sequence_add(*bmain, *C, *win, mode);
 
   return OPERATOR_FINISHED;
+}
+
+static wmOperatorStatus sequence_new_invoke(bContext *C, wmOperator *op, const wmEvent *event)
+{
+  if (!WM_window_get_active_sequence(CTX_wm_window(C))) {
+    /* Always create a blank sequence if there is none in the window. */
+    RNA_enum_set(op->ptr, "mode", int(AddSequenceMode::Blank));
+    return sequence_new_exec(C, op);
+  }
+  return WM_menu_invoke(C, op, event);
 }
 
 static EnumPropertyItem sequence_new_items[] = {
@@ -139,7 +143,7 @@ static void SEQUENCE_OT_new(wmOperatorType *ot)
   /* api callbacks */
   ot->exec = sequence_new_exec;
   ot->poll = sequence_new_poll;
-  ot->invoke = WM_menu_invoke;
+  ot->invoke = sequence_new_invoke;
 
   /* flags */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
@@ -170,9 +174,7 @@ static wmOperatorStatus sequence_delete_exec(bContext *C, wmOperator * /*op*/)
   Main *bmain = CTX_data_main(C);
   Sequence *sequence = CTX_data_sequence(C);
 
-  if (!sequence_delete(*C, *bmain, *sequence)) {
-    return OPERATOR_CANCELLED;
-  }
+  sequence_delete(*C, *bmain, *sequence);
 
   /* TODO: Correct notifiers. */
   WM_event_add_notifier(C, NC_WINDOW, nullptr);

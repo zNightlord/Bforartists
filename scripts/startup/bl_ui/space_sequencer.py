@@ -179,7 +179,7 @@ class SEQUENCER_HT_header(Header):
 
         if st.view_type in {'SEQUENCER', 'SEQUENCER_PREVIEW'}:
             row = layout.row(align=True)
-            row.template_ID(context.window, "sequence", new="sequence.new")
+            row.template_ID(context.window, "sequence", new="sequence.new", unlink="sequence.delete")
 
         layout.separator_spacer()
 
