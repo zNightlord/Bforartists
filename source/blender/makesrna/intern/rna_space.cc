@@ -497,6 +497,7 @@ const EnumPropertyItem buttons_context_items[] = {
     {BCONTEXT_PARTICLE, "PARTICLES", ICON_PARTICLES, "Particles", "Particle Properties"},
     {BCONTEXT_PHYSICS, "PHYSICS", ICON_PHYSICS, "Physics", "Physics Properties"},
     {BCONTEXT_SHADERFX, "SHADERFX", ICON_SHADERFX, "Effects", "Visual Effects Properties"},
+    {BCONTEXT_SEQUENCE, "SEQUENCE", ICON_RENDER_ANIMATION, "Sequence", "Sequence Properties"},
     {0, nullptr, 0, nullptr, nullptr},
 };
 
@@ -5687,6 +5688,7 @@ static void rna_def_space_properties_filter(StructRNA *srna)
       "show_properties_particles",
       "show_properties_physics",
       "show_properties_effects",
+      "show_properties_sequence",
   };
 
   for (const int i : blender::IndexRange(BCONTEXT_TOT)) {

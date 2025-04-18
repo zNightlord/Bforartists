@@ -218,6 +218,10 @@ blender::Vector<eSpaceButtons_Context> ED_buttons_tabs_list(const SpacePropertie
 
   add_spacer();
 
+  add_tab(BCONTEXT_SEQUENCE);
+
+  add_spacer();
+
   add_tab(BCONTEXT_RENDER);
   add_tab(BCONTEXT_OUTPUT);
   add_tab(BCONTEXT_VIEW_LAYER);
@@ -287,6 +291,8 @@ static const char *buttons_main_region_context_string(const short mainb)
       return "bone_constraint";
     case BCONTEXT_TOOL:
       return "tool";
+    case BCONTEXT_SEQUENCE:
+      return "sequence";
   }
 
   /* All the cases should be handled. */
@@ -641,7 +647,7 @@ static void buttons_header_region_message_subscribe(const wmRegionMessageSubscri
    * where one has no active object, so that available contexts changes. */
   WM_msg_subscribe_rna_anon_prop(mbus, Window, view_layer, &msg_sub_value_region_tag_redraw);
 
-  if (!ELEM(sbuts->mainb, BCONTEXT_RENDER, BCONTEXT_SCENE, BCONTEXT_WORLD)) {
+  if (!ELEM(sbuts->mainb, BCONTEXT_RENDER, BCONTEXT_OUTPUT, BCONTEXT_SCENE, BCONTEXT_WORLD)) {
     WM_msg_subscribe_rna_anon_prop(mbus, ViewLayer, name, &msg_sub_value_region_tag_redraw);
   }
 

@@ -102,6 +102,7 @@ class PROPERTIES_PT_options(Panel):
         layout.use_property_decorate = False
         col = layout.column(heading="Visible Tabs", align=True)
         col.prop(space, "show_properties_tool")
+        col.prop(space, "show_properties_sequence")
         col.prop(space, "show_properties_render")
         col.prop(space, "show_properties_output")
         col.prop(space, "show_properties_view_layer")

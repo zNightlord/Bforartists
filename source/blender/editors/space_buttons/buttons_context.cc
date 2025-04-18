@@ -578,16 +578,22 @@ static bool buttons_context_path(
     path->len++;
   }
   /* No pinned root, use scene as initial root. */
-  else if (!ELEM(mainb, BCONTEXT_TOOL, BCONTEXT_OUTPUT)) {
+  else if (!ELEM(mainb, BCONTEXT_TOOL, BCONTEXT_SEQUENCE)) {
     path->ptr[0] = RNA_id_pointer_create(&scene->id);
     path->len++;
 
-    if (!ELEM(mainb, BCONTEXT_SCENE, BCONTEXT_RENDER, BCONTEXT_VIEW_LAYER, BCONTEXT_WORLD)) {
+    if (!ELEM(mainb,
+              BCONTEXT_SCENE,
+              BCONTEXT_RENDER,
+              BCONTEXT_OUTPUT,
+              BCONTEXT_VIEW_LAYER,
+              BCONTEXT_WORLD))
+    {
       path->ptr[path->len] = RNA_pointer_create_discrete(nullptr, &RNA_ViewLayer, view_layer);
       path->len++;
     }
   }
-  else if (mainb == BCONTEXT_OUTPUT) {
+  else if (mainb == BCONTEXT_SEQUENCE) {
     path->ptr[0] = RNA_id_pointer_create(&sequence->id);
     path->len++;
   }
@@ -598,10 +604,8 @@ static bool buttons_context_path(
   switch (mainb) {
     case BCONTEXT_SCENE:
     case BCONTEXT_RENDER:
-      found = buttons_context_path_scene(path);
-      break;
     case BCONTEXT_OUTPUT:
-      found = buttons_context_path_sequence(path);
+      found = buttons_context_path_scene(path);
       break;
     case BCONTEXT_VIEW_LAYER:
 #ifdef WITH_FREESTYLE
@@ -655,6 +659,9 @@ static bool buttons_context_path(
       break;
     case BCONTEXT_BONE_CONSTRAINT:
       found = buttons_context_path_pose_bone(path);
+      break;
+    case BCONTEXT_SEQUENCE:
+      found = buttons_context_path_sequence(path);
       break;
     default:
       found = false;
@@ -864,6 +871,7 @@ const char *buttons_context_dir[] = {
     "pointcloud",
 #endif
     "volume",
+    "sequence",
     nullptr,
 };
 
@@ -1186,6 +1194,10 @@ int /*eContextResult*/ buttons_context(const bContext *C,
   }
   if (CTX_data_equals(member, "grease_pencil")) {
     set_pointer_type(path, result, &RNA_GreasePencilv3);
+    return CTX_RESULT_OK;
+  }
+  if (CTX_data_equals(member, "sequence")) {
+    set_pointer_type(path, result, &RNA_Sequence);
     return CTX_RESULT_OK;
   }
   return CTX_RESULT_MEMBER_NOT_FOUND;
