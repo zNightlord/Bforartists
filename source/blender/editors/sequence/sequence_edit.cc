@@ -157,7 +157,7 @@ static void SEQUENCE_OT_new(wmOperatorType *ot)
 /** \} */
 
 /* -------------------------------------------------------------------- */
-/** \name Scene Delete Operator
+/** \name Sequence Delete Operator
  * \{ */
 
 static bool sequence_delete_poll(bContext *C)
@@ -200,6 +200,41 @@ static void SEQUENCE_OT_delete(wmOperatorType *ot)
 /** \} */
 
 /* -------------------------------------------------------------------- */
+/** \name Sequence Render Operator
+ * \{ */
+
+/* TODO: MOVE TO SEPARATE FILE! */
+
+static bool sequence_render_poll(bContext *C)
+{
+  return CTX_data_sequence(C) != nullptr;
+}
+
+static wmOperatorStatus sequence_render_exec(bContext * /*C*/, wmOperator * /*op*/)
+{
+  /* TODO: This is just a stub. */
+
+  return OPERATOR_FINISHED;
+}
+
+static void SEQUENCE_OT_render(wmOperatorType *ot)
+{
+  /* identifiers */
+  ot->name = "Render Sequence";
+  ot->description = "Render active sequence";
+  ot->idname = "SEQUENCE_OT_render";
+
+  /* api callbacks */
+  ot->exec = sequence_render_exec;
+  ot->poll = sequence_render_poll;
+
+  /* flags */
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
 /** \name Registration
  * \{ */
 
@@ -207,6 +242,7 @@ void ED_operatortypes_sequence()
 {
   WM_operatortype_append(SEQUENCE_OT_new);
   WM_operatortype_append(SEQUENCE_OT_delete);
+  WM_operatortype_append(SEQUENCE_OT_render);
 }
 
 /** \} */

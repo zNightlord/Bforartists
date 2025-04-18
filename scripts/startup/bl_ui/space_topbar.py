@@ -470,6 +470,10 @@ class TOPBAR_MT_render(Menu):
 
         layout.separator()
 
+        layout.operator("sequence.render", text="Render Sequence", icon='RENDER_ANIMATION')
+
+        layout.separator()
+
         layout.operator("sound.mixdown", text="Render Audio...")
 
         layout.separator()
