@@ -833,11 +833,29 @@ static PointerRNA rna_PieMenu_layout_get(PointerRNA *ptr)
   return rptr;
 }
 
+static void rna_Window_sequence_set(PointerRNA *ptr, PointerRNA value, ReportList * /*reports*/)
+{
+  wmWindow *win = static_cast<wmWindow *>(ptr->data);
+
+  if (value.data == nullptr) {
+    return;
+  }
+
+  win->runtime->new_sequence = static_cast<Sequence *>(value.data);
+}
+
 static void rna_Window_sequence_update(bContext *C, PointerRNA *ptr)
 {
-  wmWindowManager *wm = CTX_wm_manager(C);
   wmWindow *win = static_cast<wmWindow *>(ptr->data);
-  WM_event_add_notifier_ex(wm, win, NC_WINDOW | ND_SEQUENCER, win->sequence);
+  if (win->runtime->new_sequence) {
+    Main *bmain = CTX_data_main(C);
+    wmWindowManager *wm = CTX_wm_manager(C);
+
+    WM_window_set_active_sequence(bmain, C, win, win->runtime->new_sequence);
+    win->runtime->new_sequence = nullptr;
+
+    WM_event_add_notifier_ex(wm, win, NC_WINDOW | ND_SEQUENCER, win->sequence);
+  }
 }
 
 static void rna_Window_scene_set(PointerRNA *ptr, PointerRNA value, ReportList * /*reports*/)
@@ -2573,7 +2591,7 @@ static void rna_def_window(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "sequence", PROP_POINTER, PROP_NONE);
   RNA_def_property_flag(prop, PROP_EDITABLE | PROP_NEVER_NULL);
-  // RNA_def_property_pointer_funcs(prop, nullptr, "rna_Window_sequence_set", nullptr, nullptr);
+  RNA_def_property_pointer_funcs(prop, nullptr, "rna_Window_sequence_set", nullptr, nullptr);
   RNA_def_property_ui_text(prop, "Sequence", "Active sequence to be edited in the window");
   RNA_def_property_flag(prop, PROP_CONTEXT_UPDATE);
   RNA_def_property_update(prop, 0, "rna_Window_sequence_update");
