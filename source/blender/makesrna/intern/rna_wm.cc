@@ -1722,7 +1722,7 @@ static StructRNA *rna_Operator_register(Main *bmain,
     STRNCPY(temp_buffers.translation_context, BLT_I18NCONTEXT_OPERATOR_DEFAULT);
   }
 
-  /* Convert foo.bar to FOO_OT_bar
+  /* Convert foo.bar to `FOO_OT_bar`
    * allocate all strings at once. */
   {
     const char *strings[] = {
@@ -1896,7 +1896,7 @@ static StructRNA *rna_MacroOperator_register(Main *bmain,
     STRNCPY(temp_buffers.translation_context, BLT_I18NCONTEXT_OPERATOR_DEFAULT);
   }
 
-  /* Convert foo.bar to FOO_OT_bar
+  /* Convert `foo.bar` to `FOO_OT_bar`
    * allocate all strings at once. */
   {
     const char *strings[] = {
