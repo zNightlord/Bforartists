@@ -357,6 +357,7 @@ class BevelState {
   void build_boundary_verts_and_bevvert_topology();
   void set_edge_half_specs();
   void set_boundary_vert_positions();
+  void build_vertex_meshes();
 
   /** Return the EdgeHalf that is in position \a edge_pos among those of  \a bevvert. */
   EdgeHalf &edge_half(const BevVert &bevvert, const int edge_pos)
@@ -2659,6 +2660,12 @@ void BevelState::set_boundary_vert_positions()
       }
     }
   });
+}
+
+/** Build the meshes around bevel vertices. */
+void BevelState::build_vertex_meshes()
+{
+  // TODD
 }
 
 #if 0
@@ -9300,7 +9307,8 @@ std::optional<Mesh *> mesh_bevel(const Mesh &src_mesh,
   state.build_boundary_verts_and_bevvert_topology();
   state.set_edge_half_specs();
   state.set_boundary_vert_positions();
-  debug::draw_all_bevverts(state);
+  //debug::draw_all_bevverts(state);
+  state.build_vertex_meshes();
   return std::nullopt;
 }
 
