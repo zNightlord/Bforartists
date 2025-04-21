@@ -3627,9 +3627,9 @@ static void rna_def_constraint_attribute(BlenderRNA *brna)
   };
 
   static const EnumPropertyItem type_items[] = {
-      {CON_ATTRIBUTE_SAMPLE_INDEX, "SAMPLE_INDEX", 0, "Index", "Sample index"},
-      {CON_ATTRIBUTE_SAMPLE_NEAREST_VERT, "SAMPLE_NEAREST", 0, "Nearest", "Sample nearest vertex"},
-      {CON_ATTRIBUTE_SAMPLE_RANDOM, "SAMPLE_RANDOM", 0, "Random", "Sample random index"},
+      {CON_ATTRIBUTE_4X4MATRIX, "4X4MATRIX", 0, "4x4 Matrix", "4x4 Matrix data type"},
+      {CON_ATTRIBUTE_VECTOR, "VECTOR", 0, "Vector", "Vector data type"},
+      {CON_ATTRIBUTE_QUATERNION, "QUATERNION", 0, "Quaternion", "Quaternion data type"},
       {0, nullptr, 0, nullptr, nullptr},
   };
 
@@ -3704,11 +3704,11 @@ static void rna_def_constraint_attribute(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Target Transform", "Apply target transform");
   RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
 
-  prop = RNA_def_property(srna, "sample_type", PROP_ENUM, PROP_NONE);
-  RNA_def_property_enum_sdna(prop, nullptr, "sampleType");
+  prop = RNA_def_property(srna, "data_type", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, nullptr, "dataType");
   RNA_def_property_enum_items(prop, type_items);
   RNA_def_property_ui_text(
-      prop, "Sample Type", "Select type of sample algorithm for target transform");
+      prop, "Data Type", "Select data type of attribute");
   RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_dependency_update");
 
   prop = RNA_def_property(srna, "sample_index", PROP_INT, PROP_NONE);
@@ -3719,16 +3719,6 @@ static void rna_def_constraint_attribute(BlenderRNA *brna)
   prop = RNA_def_property(srna, "bstart_mat", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "bstartMat", 1);
   RNA_def_property_ui_text(prop, "Original Transform", "Use original transform");
-  RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
-
-  prop = RNA_def_property(srna, "hash_name", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, nullptr, "hashName", 1);
-  RNA_def_property_ui_text(prop, "Hash Name", "Hash self name");
-  RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
-
-  prop = RNA_def_property(srna, "seed", PROP_INT, PROP_NONE);
-  RNA_def_property_int_sdna(prop, nullptr, "Seed");
-  RNA_def_property_ui_text(prop, "Seed", "Hash Seed");
   RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
 
   prop = RNA_def_property(srna, "mix_loc", PROP_BOOLEAN, PROP_NONE);

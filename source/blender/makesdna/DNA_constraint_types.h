@@ -596,16 +596,16 @@ typedef struct bTransformCacheConstraint {
 typedef struct bAttributeConstraint {
   struct Object *target;
   int sampleIndex;
-  int Seed;
+  char _pad0[4];
   char offsetMatrix;
-  char hashName;
   char bstartMat;
   char utargetMat;
   char mixLoc;
   char mixRot;
   char mixScl;
   char mixMode;
-  short sampleType;
+  char _pad1;
+  short dataType;
   short domainType;
   char _pad2[4];
   char attributeName[256];
@@ -1177,15 +1177,15 @@ typedef enum eAttribute_DomainMode {
   CON_ATTRIBUTE_DOMAIN_FACE = 2,
 } eAttribute_DomainMode;
 
-/* Atrtibute Index Mode*/
-typedef enum eAttribute_Sample_Mode {
-  /*Sample Vert Index*/
-  CON_ATTRIBUTE_SAMPLE_INDEX = 0,
-  /* Sample Nearest Vert. */
-  CON_ATTRIBUTE_SAMPLE_NEAREST_VERT = 1,
-  /*Sample Random*/
-  CON_ATTRIBUTE_SAMPLE_RANDOM = 2,
-} eAttribute_Sample;
+/* Atrtibute Data Type*/
+typedef enum eAttribute_Data_Type {
+  /*Matrix*/
+  CON_ATTRIBUTE_4X4MATRIX = 0,
+  /* Vector */
+  CON_ATTRIBUTE_VECTOR = 1,
+  /*Quaternion*/
+  CON_ATTRIBUTE_QUATERNION = 2,
+} eAttribute_Data_Type;
 
 /** Atrtibute Component Mix Mode */
 typedef enum eAttribute_MixMode {

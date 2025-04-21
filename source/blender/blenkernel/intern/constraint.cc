@@ -5455,7 +5455,6 @@ static void attribute_new_data(void *cdata)
 {
   bAttributeConstraint *data = (bAttributeConstraint *)cdata;
   STRNCPY(data->attributeName, "transform");
-  data->hashName = true;
   data->mixLoc = true;
   data->mixRot = true;
   data->mixScl = true;
@@ -5498,7 +5497,7 @@ static bool attribute_get_tarmat(Depsgraph * /*depsgraph*/,
   }
 
   SpaceTransform transform;
-  float(*tmatrix)[4] = (scon->bstartMat) ? cob->startmat : cob->matrix;
+  float (*tmatrix)[4] = (scon->bstartMat) ? cob->startmat : cob->matrix;
   BLI_space_transform_from_matrices(&transform, tmatrix, ct->tar->object_to_world().ptr());
 
   Mesh *target_eval = BKE_object_get_evaluated_mesh(ct->tar);
@@ -5522,66 +5521,59 @@ static bool attribute_get_tarmat(Depsgraph * /*depsgraph*/,
     default:
       return false;
   };
-  const float(*transform_matrices)[4][4] = (const float(*)[4][4])CustomData_get_layer_named(
-      &domain, CD_PROP_FLOAT4X4, scon->attributeName);
-  if (!transform_matrices) {
-    return false;
-  }
 
-  switch (scon->sampleType) {
-    case CON_ATTRIBUTE_SAMPLE_NEAREST_VERT: {
+  index = std::clamp(scon->sampleIndex, 0, d_count - 1);
 
-      float co[3] = {0.0f, 0.0f, 0.0f};
-      blender::bke::BVHTreeFromMesh bvh;
-      BVHTreeNearest nearest;
-      nearest.index = -1;
-      nearest.dist_sq = FLT_MAX;
-
-      switch (scon->domainType) {
-        case CON_ATTRIBUTE_DOMAIN_VERT:
-          bvh = target_eval->bvh_verts();
-          break;
-        case CON_ATTRIBUTE_DOMAIN_EDGE:
-          bvh = target_eval->bvh_edges();
-          break;
-        case CON_ATTRIBUTE_DOMAIN_FACE:
-          bvh = target_eval->bvh_corner_tris();
-          break;
-        default:
-          return false;
+  switch (scon->dataType) {
+    case CON_ATTRIBUTE_4X4MATRIX: {
+      const float (*matrices)[4][4] = (const float (*)[4][4])CustomData_get_layer_named(
+          &domain, CD_PROP_FLOAT4X4, scon->attributeName);
+      if (!matrices) {
+        return false;
       }
-
-      BLI_space_transform_apply(&transform, co);
-      BLI_bvhtree_find_nearest(bvh.tree, co, &nearest, bvh.nearest_callback, &bvh);
-      if (nearest.index < 0) {
+      copy_m4_m4(ct->matrix, matrices[index]);
+      break;
+    }
+    case CON_ATTRIBUTE_VECTOR: {
+      const float (*vectors)[3] = (const float (*)[3])CustomData_get_layer_named(
+          &domain, CD_PROP_FLOAT3, scon->attributeName);
+      if (!vectors) {
         return false;
       }
 
-      index = (scon->domainType == CON_ATTRIBUTE_DOMAIN_FACE) ?
-                  target_eval->corner_tri_faces()[nearest.index] :
-                  nearest.index;
-      break;
-    }
+      const float *vec = vectors[index];
 
-    case CON_ATTRIBUTE_SAMPLE_INDEX: {
-      index = std::clamp(scon->sampleIndex, 0, d_count - 1);
-      break;
-    }
+      float loc[3] = {0.0f, 0.0f, 0.0f};
+      float rot[3][3];
+      unit_m3(rot);
+      float scl[3] = {1.0f, 1.0f, 1.0f};
 
-    case CON_ATTRIBUTE_SAMPLE_RANDOM: {
-      int seed_hash = std::hash<int>{}(scon->Seed);
-      if (scon->hashName) {
-        seed_hash += std::hash<std::string>{}(cob->ob->id.name);
+      if (scon->mixLoc) {
+        copy_v3_v3(loc, vec);
       }
-      index = std::abs(seed_hash) % d_count;
+      if (scon->mixRot) {
+        eul_to_mat3(rot, vec);
+      }
+      if (scon->mixScl) {
+        copy_v3_v3(scl, vec);
+      }
+
+      loc_rot_size_to_mat4(ct->matrix, loc, rot, scl);
       break;
     }
-
+    case CON_ATTRIBUTE_QUATERNION: {
+      const float (*quaternions)[4] = (const float (*)[4])CustomData_get_layer_named(
+          &domain, CD_PROP_QUATERNION, scon->attributeName);
+      if (!quaternions) {
+        return false;
+      }
+      quat_to_mat4(ct->matrix, quaternions[index]);
+      break;
+    }
     default:
       return false;
-      break;
-  };
-  copy_m4_m4(ct->matrix, transform_matrices[index]);
+  }
+
   return true;
 }
 
