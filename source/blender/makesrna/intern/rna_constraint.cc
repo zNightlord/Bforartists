@@ -3713,7 +3713,6 @@ static void rna_def_constraint_attribute(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "sample_index", PROP_INT, PROP_NONE);
   RNA_def_property_int_sdna(prop, nullptr, "sampleIndex");
-  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
   RNA_def_property_ui_text(prop, "Sample Index", "Mesh Sample Index");
   RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
 
@@ -3729,7 +3728,6 @@ static void rna_def_constraint_attribute(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "seed", PROP_INT, PROP_NONE);
   RNA_def_property_int_sdna(prop, nullptr, "Seed");
-  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
   RNA_def_property_ui_text(prop, "Seed", "Hash Seed");
   RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
 
