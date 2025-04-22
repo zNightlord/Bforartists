@@ -5496,10 +5496,7 @@ static bool attribute_get_tarmat(Depsgraph * /*depsgraph*/,
     return false;
   }
 
-  SpaceTransform transform;
-  float (*tmatrix)[4] = (scon->bstartMat) ? cob->startmat : cob->matrix;
-  BLI_space_transform_from_matrices(&transform, tmatrix, ct->tar->object_to_world().ptr());
-
+  unit_m4(ct->matrix);
   Mesh *target_eval = BKE_object_get_evaluated_mesh(ct->tar);
   CustomData domain;
   int d_count = 0;
@@ -5540,7 +5537,6 @@ static bool attribute_get_tarmat(Depsgraph * /*depsgraph*/,
       if (!vectors) {
         return false;
       }
-      unit_m4(ct->matrix);
       copy_v3_v3(ct->matrix[3], vectors[index]);
       break;
     }
