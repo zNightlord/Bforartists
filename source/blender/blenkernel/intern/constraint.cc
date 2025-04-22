@@ -5454,7 +5454,7 @@ static void attribute_id_looper(bConstraint *con, ConstraintIDFunc func, void *u
 static void attribute_new_data(void *cdata)
 {
   bAttributeConstraint *data = (bAttributeConstraint *)cdata;
-  STRNCPY(data->attributeName, "transform");
+  STRNCPY(data->attributeName, "position");
   data->mixLoc = true;
   data->mixRot = true;
   data->mixScl = true;

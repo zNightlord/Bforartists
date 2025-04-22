@@ -1179,12 +1179,12 @@ typedef enum eAttribute_DomainMode {
 
 /* Atrtibute Data Type*/
 typedef enum eAttribute_Data_Type {
-  /*Matrix*/
-  CON_ATTRIBUTE_4X4MATRIX = 0,
   /* Vector */
-  CON_ATTRIBUTE_VECTOR = 1,
+  CON_ATTRIBUTE_VECTOR = 0,
   /*Quaternion*/
-  CON_ATTRIBUTE_QUATERNION = 2,
+  CON_ATTRIBUTE_QUATERNION = 1,
+  /*Matrix*/
+  CON_ATTRIBUTE_4X4MATRIX = 2,
 } eAttribute_Data_Type;
 
 /** Atrtibute Component Mix Mode */
