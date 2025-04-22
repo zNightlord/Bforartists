@@ -5540,25 +5540,8 @@ static bool attribute_get_tarmat(Depsgraph * /*depsgraph*/,
       if (!vectors) {
         return false;
       }
-
-      const float *vec = vectors[index];
-
-      float loc[3] = {0.0f, 0.0f, 0.0f};
-      float rot[3][3];
-      unit_m3(rot);
-      float scl[3] = {1.0f, 1.0f, 1.0f};
-
-      if (scon->mixLoc) {
-        copy_v3_v3(loc, vec);
-      }
-      if (scon->mixRot) {
-        eul_to_mat3(rot, vec);
-      }
-      if (scon->mixScl) {
-        copy_v3_v3(scl, vec);
-      }
-
-      loc_rot_size_to_mat4(ct->matrix, loc, rot, scl);
+      unit_m4(ct->matrix);
+      copy_v3_v3(ct->matrix[3], vectors[index]);
       break;
     }
     case CON_ATTRIBUTE_QUATERNION: {

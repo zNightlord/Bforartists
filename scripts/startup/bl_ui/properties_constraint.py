@@ -993,7 +993,7 @@ class ConstraintButtonsPanel:
         layout.separator()
         layout.prop(con, "mix_mode", text="Mix Mode", text_ctxt=i18n_contexts.constraint)
 
-        if con.data_type != 'QUATERNION':
+        if con.data_type == '4X4MATRIX':
             row = layout.row(heading="Enabled")
             row.prop(con, "mix_loc", text="Location",toggle=True)
             row.prop(con, "mix_rot", text="Rotation",toggle=True)
