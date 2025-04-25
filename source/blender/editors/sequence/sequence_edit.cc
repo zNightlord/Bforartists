@@ -21,6 +21,7 @@
 
 #include "RNA_access.hh"
 #include "RNA_define.hh"
+#include "RNA_prototypes.hh"
 
 #include "SEQ_channels.hh"
 #include "SEQ_iterator.hh"
@@ -121,6 +122,25 @@ void sync_scene_strip(bContext *C, Scene *sequence_scene)
       Main *bmain = CTX_data_main(C);
       WM_window_set_active_scene(bmain, C, win, scene_strip->scene);
       active_scene = scene_strip->scene;
+    }
+    if (scene_strip->scene_camera) {
+      /* Update the camera in any 3D view that uses camera view. */
+      PointerRNA camera_ptr = RNA_id_pointer_create(&scene_strip->scene_camera->id);
+      bScreen *screen = WM_window_get_active_screen(win);
+      LISTBASE_FOREACH (ScrArea *, area, &screen->areabase) {
+        LISTBASE_FOREACH (SpaceLink *, sl, &area->spacedata) {
+          if (sl->spacetype != SPACE_VIEW3D) {
+            continue;
+          }
+          View3D *view3d = reinterpret_cast<View3D *>(sl);
+          if (view3d->camera == scene_strip->scene_camera) {
+            continue;
+          }
+          PointerRNA view3d_ptr = RNA_pointer_create_discrete(
+              &screen->id, &RNA_SpaceView3D, view3d);
+          RNA_pointer_set(&view3d_ptr, "camera", camera_ptr);
+        }
+      }
     }
 
     float frame_index = seq::give_frame_index(sequence_scene, scene_strip, sequence_scene->r.cfra);
