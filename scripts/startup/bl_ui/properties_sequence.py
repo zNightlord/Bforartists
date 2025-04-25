@@ -10,6 +10,7 @@ from bpy.app.translations import (
     pgettext_iface as iface_,
 )
 
+
 class SequenceButtonsPanel:
     bl_space_type = 'PROPERTIES'
     bl_region_type = 'WINDOW'
@@ -358,6 +359,7 @@ class SEQUENCE_PT_encoding_audio(SequenceButtonsPanel, Panel):
             layout.prop(ffmpeg, "audio_mixrate", text="Sample Rate")
             layout.prop(ffmpeg, "audio_bitrate")
             layout.prop(ffmpeg, "audio_volume", slider=True)
+
 
 classes = (
     SEQUENCE_PT_format,
