@@ -908,6 +908,15 @@ int /*eContextResult*/ buttons_context(const bContext *C,
     return CTX_RESULT_OK;
   }
   if (CTX_data_equals(member, "scene")) {
+    if (sbuts->mainb == BCONTEXT_SEQUENCE) {
+      /* HACK: Override scene context. */
+      Sequence *sequence = CTX_data_sequence(C);
+      if (sequence) {
+        CTX_data_pointer_set(
+            result, &sequence->legacy_scene_data.id, &RNA_Scene, &sequence->legacy_scene_data);
+        return CTX_RESULT_OK;
+      }
+    }
     /* Do not return one here if scene is not found in path,
      * in this case we want to get default context scene! */
     return set_pointer_type(path, result, &RNA_Scene);
