@@ -49,6 +49,10 @@ class TOPBAR_HT_upper_bar(Header):
             layout.template_reports_banner()
             layout.template_running_jobs()
 
+        # Show selector for active sequence if there is one
+        if context.sequence:
+            layout.template_ID(window, "sequence", new="sequence.new", unlink="sequence.delete")
+
         # Active workspace view-layer is retrieved through window, not through workspace.
         layout.template_ID(window, "scene", new="scene.new", unlink="scene.delete")
 

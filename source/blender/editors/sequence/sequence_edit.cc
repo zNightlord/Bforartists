@@ -167,12 +167,6 @@ void sync_scene_strip(bContext *C, Scene *sequence_scene)
 /** \name Sequence New Operator
  * \{ */
 
-static bool sequence_new_poll(bContext *C)
-{
-  SpaceLink *sl = CTX_wm_space_data(C);
-  return ((sl != nullptr) && (sl->spacetype == SPACE_SEQ));
-}
-
 static wmOperatorStatus sequence_new_exec(bContext *C, wmOperator *op)
 {
   Main *bmain = CTX_data_main(C);
@@ -222,7 +216,6 @@ static void SEQUENCE_OT_new(wmOperatorType *ot)
 
   /* api callbacks */
   ot->exec = sequence_new_exec;
-  ot->poll = sequence_new_poll;
   ot->invoke = sequence_new_invoke;
 
   /* flags */
