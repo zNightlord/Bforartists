@@ -35,6 +35,7 @@ static void sequence_data_init(ID *id)
   MEM_freeN(new_scene);
 
   sequence->legacy_scene_data.id.flag |= ID_FLAG_EMBEDDED_DATA;
+  sequence->legacy_scene_data.sequence = id;
 
   seq::editing_ensure(&sequence->legacy_scene_data);
 }

@@ -249,6 +249,8 @@ static void scene_init_data(ID *id)
 
   BKE_view_layer_add(scene, DATA_("ViewLayer"), nullptr, VIEWLAYER_ADD_NEW);
 
+  scene->sequence = nullptr;
+
   scene->runtime = MEM_new<SceneRuntime>(__func__);
 }
 
@@ -1552,6 +1554,18 @@ static void scene_lib_override_apply_post(ID *id_dst, ID * /*id_src*/)
   }
 }
 
+static ID **scene_owner_pointer_get(ID *id, bool debug_relationship_assert)
+{
+  Scene *scene = (Scene *)id;
+  if (scene->sequence) {
+    if (debug_relationship_assert) {
+      BLI_assert(GS(scene->sequence->name) == ID_SEQ);
+    }
+    return &scene->sequence;
+  }
+  return nullptr;
+}
+
 constexpr IDTypeInfo get_type_info()
 {
   IDTypeInfo info{};
@@ -1578,7 +1592,7 @@ constexpr IDTypeInfo get_type_info()
   info.foreach_id = scene_foreach_id;
   info.foreach_cache = scene_foreach_cache;
   info.foreach_path = scene_foreach_path;
-  info.owner_pointer_get = nullptr;
+  info.owner_pointer_get = scene_owner_pointer_get;
 
   info.blend_write = scene_blend_write;
   info.blend_read_data = scene_blend_read_data;

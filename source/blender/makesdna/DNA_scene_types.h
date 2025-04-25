@@ -2172,8 +2172,10 @@ typedef struct Scene {
   struct SceneGpencil grease_pencil_settings;
   struct SceneHydra hydra;
 
+  /* HACK: Only used when the scene is embedded in a Sequence. */
+  ID *sequence;
+
   SceneRuntimeHandle *runtime;
-  void *_pad9;
 } Scene;
 
 /** \} */
