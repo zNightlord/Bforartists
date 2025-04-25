@@ -406,6 +406,12 @@ static wmOperatorStatus change_frame_modal(bContext *C, wmOperator *op, const wm
 
     if (need_extra_redraw_after_scrubbing_ends(C)) {
       Scene *scene = CTX_data_scene(C);
+      SpaceSeq *sseq = CTX_wm_space_seq(C);
+      if (sseq != nullptr) {
+        wmWindow *win = CTX_wm_window(C);
+        /* We might need to send notifiers to the active scene in the window. */
+        WM_event_add_notifier(C, NC_SCENE | ND_FRAME, WM_window_get_active_scene(win));
+      }
       WM_event_add_notifier(C, NC_SCENE | ND_FRAME, scene);
     }
   }
