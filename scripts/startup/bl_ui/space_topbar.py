@@ -455,6 +455,18 @@ class TOPBAR_MT_file_previews(Menu):
         layout.operator("wm.previews_batch_clear", text="Batch-Clear Previews...")
 
 
+class TOPBAR_MT_render_scene(Menu):
+    bl_label = "Render Scene"
+
+    def draw(self, context):
+        layout = self.layout
+
+        layout.operator("render.render", text="Render Image", icon='RENDER_STILL').use_viewport = True
+        props = layout.operator("render.render", text="Render Animation", icon='RENDER_ANIMATION')
+        props.animation = True
+        props.use_viewport = True
+
+
 class TOPBAR_MT_render(Menu):
     bl_label = "Render"
 
@@ -468,9 +480,9 @@ class TOPBAR_MT_render(Menu):
         props.animation = True
         props.use_viewport = True
 
-        layout.separator()
-
-        layout.operator("sequence.render", text="Render Sequence", icon='RENDER_ANIMATION')
+        if context.sequence:
+            layout.separator()
+            layout.menu("TOPBAR_MT_render_scene", text="Render Active Scene")
 
         layout.separator()
 
@@ -844,6 +856,7 @@ classes = (
     TOPBAR_MT_file_previews,
     TOPBAR_MT_edit,
     TOPBAR_MT_render,
+    TOPBAR_MT_render_scene,
     TOPBAR_MT_window,
     TOPBAR_MT_help,
     TOPBAR_PT_tool_fallback,
