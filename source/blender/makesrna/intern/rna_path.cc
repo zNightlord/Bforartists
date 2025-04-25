@@ -978,7 +978,7 @@ ID *RNA_find_real_ID_and_path(ID *id, const char **r_path)
   }
 
   ID *owner_id = BKE_id_owner_get(id);
-  // BLI_assert_msg(owner_id != nullptr, "Missing handling of embedded id type.");
+  BLI_assert_msg(owner_id != nullptr, "Missing handling of embedded id type.");
   return (owner_id != nullptr) ? owner_id : id;
 }
 
