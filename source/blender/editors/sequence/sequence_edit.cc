@@ -7,6 +7,7 @@
  */
 
 #include "BLI_listbase.h"
+#include "BLI_vector_set.hh"
 
 #include "BKE_context.hh"
 #include "BKE_lib_id.hh"
@@ -14,10 +15,17 @@
 
 #include "DNA_space_types.h"
 
+#include "DEG_depsgraph.hh"
+
 #include "ED_sequence.hh"
 
 #include "RNA_access.hh"
 #include "RNA_define.hh"
+
+#include "SEQ_channels.hh"
+#include "SEQ_iterator.hh"
+#include "SEQ_sequencer.hh"
+#include "SEQ_time.hh"
 
 #include "BLT_translation.hh"
 
@@ -80,6 +88,58 @@ static void sequence_delete(bContext &C, Main &bmain, Sequence &sequence)
 
   BKE_id_delete(&bmain, &sequence);
 }
+
+namespace blender::ed::sequence {
+
+void sync_scene_strip(bContext *C, Scene *sequence_scene)
+{
+  using namespace blender;
+  wmWindow *win = CTX_wm_window(C);
+  Scene *active_scene = WM_window_get_active_scene(win);
+
+  Editing *ed = seq::editing_get(sequence_scene);
+  ListBase *seqbase = seq::active_seqbase_get(ed);
+  ListBase *channels = seq::channels_displayed_get(ed);
+  VectorSet<Strip *> render_strips = seq::query_rendered_strips(
+      sequence_scene, channels, seqbase, sequence_scene->r.cfra, 0);
+  Vector<Strip *> strips = render_strips.extract_vector();
+  /* Sort strips by channel. */
+  std::sort(strips.begin(), strips.end(), [](const Strip *a, const Strip *b) {
+    return a->machine > b->machine;
+  });
+  const Strip *scene_strip = [&]() -> const Strip * {
+    for (const Strip *strip : strips) {
+      if (strip->type == STRIP_TYPE_SCENE) {
+        return strip;
+      }
+    }
+    return nullptr;
+  }();
+  if (scene_strip && scene_strip->scene) {
+    if (active_scene != scene_strip->scene) {
+      /* Change active scene in window. */
+      Main *bmain = CTX_data_main(C);
+      WM_window_set_active_scene(bmain, C, win, scene_strip->scene);
+      active_scene = scene_strip->scene;
+    }
+
+    float frame_index = seq::give_frame_index(sequence_scene, scene_strip, sequence_scene->r.cfra);
+    if (active_scene->r.flag & SCER_SHOW_SUBFRAME) {
+      active_scene->r.cfra = int(frame_index);
+      active_scene->r.subframe = frame_index - int(frame_index);
+    }
+    else {
+      active_scene->r.cfra = round_fl_to_int(frame_index);
+      active_scene->r.subframe = 0.0f;
+    }
+    FRAMENUMBER_MIN_CLAMP(active_scene->r.cfra);
+
+    DEG_id_tag_update(&active_scene->id, ID_RECALC_FRAME_CHANGE);
+    WM_event_add_notifier(C, NC_SCENE | ND_FRAME, active_scene);
+  }
+}
+
+}  // namespace blender::ed::sequence
 
 /** \} */
 
