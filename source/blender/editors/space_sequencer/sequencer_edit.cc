@@ -62,6 +62,7 @@
 #include "ED_numinput.hh"
 #include "ED_scene.hh"
 #include "ED_screen.hh"
+#include "ED_sequence.hh"
 #include "ED_sequencer.hh"
 
 #include "UI_interface.hh"
@@ -834,7 +835,9 @@ static wmOperatorStatus sequencer_slip_modal(bContext *C, wmOperator *op, const 
       slip_strips_delta(op, scene, data, clamped_offset_delta);
       slip_update_header(scene, area, data, clamped_offset);
 
-      WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER, scene);
+      blender::ed::sequence::sync_scene_strip(C, scene);
+
+      WM_event_add_notifier(C, NC_SEQUENCE | ND_SEQUENCER, scene);
     }
   }
 
@@ -2870,7 +2873,7 @@ static wmOperatorStatus sequencer_change_path_exec(bContext *C, wmOperator *op)
 
   seq::relations_invalidate_cache_raw(scene, strip);
   WM_event_add_notifier(C, NC_SEQUENCE | ND_SEQUENCER, scene);
-  
+
   return OPERATOR_FINISHED;
 }
 
