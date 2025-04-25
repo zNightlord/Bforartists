@@ -182,8 +182,6 @@ class SEQUENCER_HT_header(Header):
             row = layout.row(align=True)
             row.template_ID(context.window, "sequence", new="sequence.new", unlink="sequence.delete")
 
-        layout.separator_spacer()
-
         if st.view_type in {'SEQUENCER', 'SEQUENCER_PREVIEW'}:
             row = layout.row(align=True)
             row.prop(sequencer_tool_settings, "overlap_mode", text="")
@@ -192,6 +190,8 @@ class SEQUENCER_HT_header(Header):
         row.prop(tool_settings, "use_snap_sequencer", text="")
         sub = row.row(align=True)
         sub.popover(panel="SEQUENCER_PT_snapping")
+
+        layout.separator_spacer()
 
         if st.view_type in {'PREVIEW', 'SEQUENCER_PREVIEW'}:
             layout.prop(st, "display_mode", text="", icon_only=True)
