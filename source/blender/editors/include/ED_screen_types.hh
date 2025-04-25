@@ -32,7 +32,7 @@ struct ScreenAnimData {
   /** Playback was invoked from animation editor */
   bool from_anim_edit;
 
-  bool is_playing_sequence = false;
+  bool is_playing_sequence;
   char sequence_name[66];
 };
 
