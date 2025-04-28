@@ -51,7 +51,7 @@ static void sequence_foreach_id(ID *id, LibraryForeachIDData *data)
 {
   Sequence *sequence = reinterpret_cast<Sequence *>(id);
   ID *scene_id = &sequence->legacy_scene_data.id;
-  // BKE_library_foreach_ID_embedded(data, &scene_id);
+  BKE_library_foreach_ID_embedded(data, &scene_id);
 }
 
 static void sequence_blend_write(BlendWriter *writer, ID *id, const void *id_address)
@@ -98,13 +98,15 @@ static void link_recurs_seq(BlendDataReader *reader, ListBase *lb)
   }
 }
 
-static void sequence_read_data(BlendDataReader *reader, Scene *sce)
+static void sequence_read_legacy_scene_data(BlendDataReader *reader, Scene *sce)
 {
   using namespace blender;
-  Editing *ed = sce->ed;
-
   ListBase *old_seqbasep = &sce->ed->seqbase;
   ListBase *old_displayed_channels = &sce->ed->channels;
+
+  BLO_read_struct(reader, Editing, sce->ed);
+  Editing *ed = sce->ed;
+  BLI_assert(ed);
 
   ed->act_seq = static_cast<Strip *>(
       BLO_read_get_new_data_address_no_us(reader, ed->act_seq, sizeof(Strip)));
@@ -221,10 +223,7 @@ static void sequence_blend_read_data(BlendDataReader *reader, ID *id)
   BLO_read_struct(reader, Scene, &sequence->legacy_scene_data);
   Scene *scene = &sequence->legacy_scene_data;
 
-  BLO_read_struct(reader, Editing, scene->ed);
-  Editing *ed = scene->ed;
-  BLI_assert(ed);
-  sequence_read_data(reader, scene);
+  sequence_read_legacy_scene_data(reader, scene);
 
   // BKE_image_format_blend_read_data(reader, &scene->r.im_format);
 }
