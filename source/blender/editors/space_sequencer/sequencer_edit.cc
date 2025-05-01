@@ -26,6 +26,7 @@
 
 #include "BKE_context.hh"
 #include "BKE_global.hh"
+#include "BKE_layer.hh"
 #include "BKE_library.hh"
 #include "BKE_main.hh"
 #include "BKE_report.hh"
@@ -1511,6 +1512,7 @@ static wmOperatorStatus sequencer_split_exec(bContext *C, wmOperator *op)
   const seq::eSplitMethod method = seq::eSplitMethod(RNA_enum_get(op->ptr, "type"));
   const int split_side = sequence_split_side_for_exec_get(op);
   const bool ignore_selection = RNA_boolean_get(op->ptr, "ignore_selection");
+  const bool switch_camera = RNA_boolean_get(op->ptr, "switch_camera");
 
   seq::prefetch_stop(scene);
 
@@ -1521,6 +1523,29 @@ static wmOperatorStatus sequencer_split_exec(bContext *C, wmOperator *op)
 
     if (ignore_selection || strip->flag & SELECT) {
       const char *error_msg = nullptr;
+      if (switch_camera && strip->type == STRIP_TYPE_SCENE) {
+        if (Strip *new_strip = seq::edit_strip_split(
+                bmain, scene, ed->seqbasep, strip, split_frame, method, &error_msg))
+        {
+          Object *camera_object = nullptr;
+          const int camera_i = RNA_enum_get(op->ptr, "camera");
+          int i = 0;
+          FOREACH_OBJECT_BEGIN (
+              strip->scene, static_cast<ViewLayer *>(strip->scene->view_layers.first), ob)
+          {
+            if (ob && ob->type == OB_CAMERA) {
+              if (i++ == camera_i) {
+                camera_object = ob;
+                break;
+              }
+            }
+          }
+          FOREACH_OBJECT_END;
+          new_strip->scene_camera = camera_object;
+          changed = true;
+          blender::ed::sequence::sync_scene_strip(C, scene);
+        }
+      }
       if (seq::edit_strip_split(
               bmain, scene, ed->seqbasep, strip, split_frame, method, &error_msg) != nullptr)
       {
@@ -1607,6 +1632,22 @@ static wmOperatorStatus sequencer_split_invoke(bContext *C, wmOperator *op, cons
   RNA_enum_set(op->ptr, "side", split_side);
   // RNA_enum_set(op->ptr, "type", split_hard);
 
+  PropertyRNA *camera_prop = RNA_struct_find_property(op->ptr, "camera");
+  if (RNA_boolean_get(op->ptr, "switch_camera") && !RNA_property_is_set(op->ptr, camera_prop)) {
+    uiPopupMenu *pup = UI_popup_menu_begin(
+        C, WM_operatortype_name(op->type, op->ptr).c_str(), ICON_NONE);
+    uiLayout *layout = UI_popup_menu_layout(pup);
+    uiLayoutSetOperatorContext(layout, WM_OP_INVOKE_REGION_WIN);
+    uiItemsFullEnumO(layout,
+                     op->type->idname,
+                     RNA_property_identifier(camera_prop),
+                     static_cast<IDProperty *>(op->ptr->data),
+                     WM_OP_INVOKE_REGION_WIN,
+                     UI_ITEM_NONE);
+    UI_popup_menu_end(C, pup);
+    return OPERATOR_INTERFACE;
+  }
+
   return sequencer_split_exec(C, op);
 }
 
@@ -1627,6 +1668,47 @@ static void sequencer_split_ui(bContext * /*C*/, wmOperator *op)
   if (RNA_boolean_get(op->ptr, "use_cursor_position")) {
     uiItemR(layout, op->ptr, "channel", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   }
+}
+
+static const EnumPropertyItem *sequencer_scene_split_scene_cameras_itemf(bContext *C,
+                                                                         PointerRNA * /*ptr*/,
+                                                                         PropertyRNA * /*prop*/,
+                                                                         bool *r_free)
+{
+  EnumPropertyItem *camera_items = nullptr;
+  int totitem = 0;
+
+  Scene *scene = CTX_data_scene(C);
+  Editing *ed = seq::editing_get(scene);
+
+  Strip *scene_strip = nullptr;
+  LISTBASE_FOREACH_BACKWARD (Strip *, strip, ed->seqbasep) {
+    /* First selected strip. */
+    if (strip->flag & SELECT && strip->type == STRIP_TYPE_SCENE) {
+      scene_strip = strip;
+      break;
+    }
+  }
+
+  int i = 0;
+  FOREACH_OBJECT_BEGIN (
+      scene_strip->scene, static_cast<ViewLayer *>(scene_strip->scene->view_layers.first), ob)
+  {
+    if (ob && ob->type == OB_CAMERA) {
+      EnumPropertyItem tmp_item = {0};
+      tmp_item.identifier = ob->id.name + 2;
+      tmp_item.name = ob->id.name + 2;
+      tmp_item.icon = ICON_NONE;
+      tmp_item.value = i++;
+      RNA_enum_item_add(&camera_items, &totitem, &tmp_item);
+    }
+  }
+  FOREACH_OBJECT_END;
+
+  RNA_enum_item_end(&camera_items, &totitem);
+  *r_free = true;
+
+  return camera_items;
 }
 
 void SEQUENCER_OT_split(wmOperatorType *ot)
@@ -1693,6 +1775,16 @@ void SEQUENCER_OT_split(wmOperatorType *ot)
       "Ignore Selection",
       "Make cut even if strip is not selected preserving selection state after cut");
 
+  RNA_def_property_flag(prop, PROP_HIDDEN);
+
+  prop = RNA_def_boolean(ot->srna,
+                         "switch_camera",
+                         false,
+                         "Switch Camera",
+                         "Cut to a different camera if the strip is a scene strip");
+  RNA_def_property_flag(prop, PROP_HIDDEN);
+  prop = RNA_def_enum(ot->srna, "camera", rna_enum_dummy_DEFAULT_items, 0, "Camera", "");
+  RNA_def_enum_funcs(prop, sequencer_scene_split_scene_cameras_itemf);
   RNA_def_property_flag(prop, PROP_HIDDEN);
 }
 
