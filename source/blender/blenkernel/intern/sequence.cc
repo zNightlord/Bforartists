@@ -108,8 +108,8 @@ static void sequence_read_legacy_scene_data(BlendDataReader *reader, Scene *sce)
   Editing *ed = sce->ed;
   BLI_assert(ed);
 
-  ed->act_seq = static_cast<Strip *>(
-      BLO_read_get_new_data_address_no_us(reader, ed->act_seq, sizeof(Strip)));
+  ed->act_strip = static_cast<Strip *>(
+      BLO_read_get_new_data_address_no_us(reader, ed->act_strip, sizeof(Strip)));
   ed->cache = nullptr;
   ed->prefetch_job = nullptr;
   ed->runtime.strip_lookup = nullptr;
@@ -181,7 +181,7 @@ static void sequence_read_legacy_scene_data(BlendDataReader *reader, Scene *sce)
     BLO_read_struct_list(reader, MetaStack, &(ed->metastack));
 
     LISTBASE_FOREACH (MetaStack *, ms, &ed->metastack) {
-      BLO_read_struct(reader, Strip, &ms->parseq);
+      BLO_read_struct(reader, Strip, &ms->parent_strip);
 
       if (ms->oldbasep == old_seqbasep) {
         ms->oldbasep = &ed->seqbase;
