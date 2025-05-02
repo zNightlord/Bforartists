@@ -14,8 +14,10 @@
 #include "BLI_math_base.h"
 #include "BLI_utildefines.h"
 #include "BLI_vector.hh"
+#include "BLI_vector_set.hh"
 
 #include "DNA_scene_types.h"
+#include "DNA_sequence_types.h"
 
 #include "BKE_anim_data.hh"
 #include "BKE_context.hh"
@@ -37,12 +39,14 @@
 
 #include "ED_anim_api.hh"
 #include "ED_screen.hh"
+#include "ED_sequence.hh"
 #include "ED_sequencer.hh"
 #include "ED_time_scrub_ui.hh"
 
 #include "DEG_depsgraph.hh"
 #include "DEG_depsgraph_build.hh"
 
+#include "SEQ_channels.hh"
 #include "SEQ_iterator.hh"
 #include "SEQ_sequencer.hh"
 #include "SEQ_time.hh"
@@ -145,11 +149,13 @@ static void change_frame_apply(bContext *C, wmOperator *op, const bool always_up
   float frame = RNA_float_get(op->ptr, "frame");
   bool do_snap = RNA_boolean_get(op->ptr, "snap");
 
+  const bool is_sequencer = CTX_wm_space_seq(C) && blender::seq::editing_get(scene) != nullptr;
+
   const int old_frame = scene->r.cfra;
   const float old_subframe = scene->r.subframe;
 
   if (do_snap) {
-    if (CTX_wm_space_seq(C) && blender::seq::editing_get(scene) != nullptr) {
+    if (is_sequencer) {
       frame = seq_frame_apply_snap(C, scene, frame);
     }
     else {
@@ -168,11 +174,20 @@ static void change_frame_apply(bContext *C, wmOperator *op, const bool always_up
   }
   FRAMENUMBER_MIN_CLAMP(scene->r.cfra);
 
+  if (is_sequencer) {
+    blender::ed::sequence::sync_scene_strip(C, scene);
+  }
+
   /* do updates */
   const bool frame_changed = (old_frame != scene->r.cfra) || (old_subframe != scene->r.subframe);
   if (frame_changed || always_update) {
     DEG_id_tag_update(&scene->id, ID_RECALC_FRAME_CHANGE);
-    WM_event_add_notifier(C, NC_SCENE | ND_FRAME, scene);
+    if (is_sequencer) {
+      WM_event_add_notifier(C, NC_SEQUENCE | ND_FRAME, scene);
+    }
+    else {
+      WM_event_add_notifier(C, NC_SCENE | ND_FRAME, scene);
+    }
   }
 }
 
@@ -391,6 +406,12 @@ static wmOperatorStatus change_frame_modal(bContext *C, wmOperator *op, const wm
 
     if (need_extra_redraw_after_scrubbing_ends(C)) {
       Scene *scene = CTX_data_scene(C);
+      SpaceSeq *sseq = CTX_wm_space_seq(C);
+      if (sseq != nullptr) {
+        wmWindow *win = CTX_wm_window(C);
+        /* We might need to send notifiers to the active scene in the window. */
+        WM_event_add_notifier(C, NC_SCENE | ND_FRAME, WM_window_get_active_scene(win));
+      }
       WM_event_add_notifier(C, NC_SCENE | ND_FRAME, scene);
     }
   }

@@ -192,6 +192,7 @@ void ED_buttons_visible_tabs_menu(bContext *C, uiLayout *layout, void * /*arg*/)
       "show_properties_bone_constraints",
       "show_properties_material",
       "show_properties_texture",
+      "show_properties_sequence",
   };
 
   for (blender::StringRefNull item : filter_items) {
@@ -220,6 +221,10 @@ blender::Vector<eSpaceButtons_Context> ED_buttons_tabs_list(const SpacePropertie
   //add_tab(BCONTEXT_TOOL);
 
  // add_spacer();
+
+  add_tab(BCONTEXT_SEQUENCE);
+
+  add_spacer();
 
   add_tab(BCONTEXT_RENDER);
   add_tab(BCONTEXT_OUTPUT);
@@ -291,6 +296,8 @@ static const char *buttons_main_region_context_string(const short mainb)
     /*BFA - Tools tab not shown*/
     //case BCONTEXT_TOOL:
     //  return "tool";
+    case BCONTEXT_SEQUENCE:
+      return "sequence";
   }
 
   /* All the cases should be handled. */

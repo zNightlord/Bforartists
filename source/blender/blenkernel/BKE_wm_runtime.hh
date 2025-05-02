@@ -45,6 +45,9 @@ struct WindowRuntime {
   /** All events #wmEvent (ghost level events were handled). */
   ListBase event_queue = {nullptr, nullptr};
 
+  /* Used temporarily while switching sequences. */
+  Sequence *new_sequence = nullptr;
+
   WindowRuntime() = default;
   ~WindowRuntime();
 };

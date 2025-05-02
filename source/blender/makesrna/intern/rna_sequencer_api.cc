@@ -62,7 +62,7 @@ static void rna_Strip_swap_internal(ID *id,
   const char *error_msg;
   Scene *scene = (Scene *)id;
 
-  if (blender::seq::edit_sequence_swap(scene, strip_self, strip_other, &error_msg) == false) {
+  if (blender::seq::edit_strip_swap(scene, strip_self, strip_other, &error_msg) == false) {
     BKE_report(reports, RPT_ERROR, error_msg);
   }
 }
@@ -84,14 +84,14 @@ static void rna_Strips_move_strip_to_meta(
 
   blender::seq::strip_lookup_invalidate(scene->ed);
 
-  WM_main_add_notifier(NC_SCENE | ND_SEQUENCER, scene);
+  WM_main_add_notifier(NC_SEQUENCE | ND_SEQUENCER, scene);
 }
 
 static Strip *rna_Strip_split(
     ID *id, Strip *strip, Main *bmain, ReportList *reports, int frame, int split_method)
 {
   Scene *scene = (Scene *)id;
-  ListBase *seqbase = blender::seq::get_seqbase_by_seq(scene, strip);
+  ListBase *seqbase = blender::seq::get_seqbase_by_strip(scene, strip);
 
   const char *error_msg = nullptr;
   Strip *r_seq = blender::seq::edit_strip_split(
@@ -104,7 +104,7 @@ static Strip *rna_Strip_split(
   DEG_relations_tag_update(bmain);
   DEG_id_tag_update(&scene->id, ID_RECALC_SEQUENCER_STRIPS);
 
-  WM_main_add_notifier(NC_SCENE | ND_SEQUENCER, scene);
+  WM_main_add_notifier(NC_SEQUENCE | ND_SEQUENCER, scene);
 
   return r_seq;
 }
@@ -131,7 +131,7 @@ static Strip *rna_Strips_new_clip(ID *id,
 
   DEG_relations_tag_update(bmain);
   DEG_id_tag_update(&scene->id, ID_RECALC_SEQUENCER_STRIPS);
-  WM_main_add_notifier(NC_SCENE | ND_SEQUENCER, scene);
+  WM_main_add_notifier(NC_SEQUENCE | ND_SEQUENCER, scene);
 
   return strip;
 }
@@ -174,7 +174,7 @@ static Strip *rna_Strips_new_mask(ID *id,
 
   DEG_relations_tag_update(bmain);
   DEG_id_tag_update(&scene->id, ID_RECALC_SEQUENCER_STRIPS);
-  WM_main_add_notifier(NC_SCENE | ND_SEQUENCER, scene);
+  WM_main_add_notifier(NC_SEQUENCE | ND_SEQUENCER, scene);
 
   return strip;
 }
@@ -194,19 +194,19 @@ static Strip *rna_Strips_new_scene(ID *id,
                                    ListBase *seqbase,
                                    Main *bmain,
                                    const char *name,
-                                   Scene *sce_seq,
+                                   Scene *sce_strip,
                                    int channel,
                                    int frame_start)
 {
   Scene *scene = (Scene *)id;
   blender::seq::LoadData load_data;
   blender::seq::add_load_data_init(&load_data, name, nullptr, frame_start, channel);
-  load_data.scene = sce_seq;
+  load_data.scene = sce_strip;
   Strip *strip = blender::seq::add_scene_strip(scene, seqbase, &load_data);
 
   DEG_relations_tag_update(bmain);
   DEG_id_tag_update(&scene->id, ID_RECALC_SEQUENCER_STRIPS);
-  WM_main_add_notifier(NC_SCENE | ND_SEQUENCER, scene);
+  WM_main_add_notifier(NC_SEQUENCE | ND_SEQUENCER, scene);
 
   return strip;
 }
@@ -215,22 +215,22 @@ static Strip *rna_Strips_editing_new_scene(ID *id,
                                            Editing *ed,
                                            Main *bmain,
                                            const char *name,
-                                           Scene *sce_seq,
+                                           Scene *sce_strip,
                                            int channel,
                                            int frame_start)
 {
-  return rna_Strips_new_scene(id, &ed->seqbase, bmain, name, sce_seq, channel, frame_start);
+  return rna_Strips_new_scene(id, &ed->seqbase, bmain, name, sce_strip, channel, frame_start);
 }
 
 static Strip *rna_Strips_meta_new_scene(ID *id,
                                         Strip *strip,
                                         Main *bmain,
                                         const char *name,
-                                        Scene *sce_seq,
+                                        Scene *sce_strip,
                                         int channel,
                                         int frame_start)
 {
-  return rna_Strips_new_scene(id, &strip->seqbase, bmain, name, sce_seq, channel, frame_start);
+  return rna_Strips_new_scene(id, &strip->seqbase, bmain, name, sce_strip, channel, frame_start);
 }
 
 static Strip *rna_Strips_new_image(ID *id,
@@ -271,7 +271,7 @@ static Strip *rna_Strips_new_image(ID *id,
 
   DEG_relations_tag_update(bmain);
   DEG_id_tag_update(&scene->id, ID_RECALC_SEQUENCER_STRIPS);
-  WM_main_add_notifier(NC_SCENE | ND_SEQUENCER, scene);
+  WM_main_add_notifier(NC_SEQUENCE | ND_SEQUENCER, scene);
 
   return strip;
 }
@@ -344,7 +344,7 @@ static Strip *rna_Strips_new_movie(ID *id,
 
   DEG_relations_tag_update(bmain);
   DEG_id_tag_update(&scene->id, ID_RECALC_SEQUENCER_STRIPS);
-  WM_main_add_notifier(NC_SCENE | ND_SEQUENCER, scene);
+  WM_main_add_notifier(NC_SEQUENCE | ND_SEQUENCER, scene);
 
   return strip;
 }
@@ -400,7 +400,7 @@ static Strip *rna_Strips_new_sound(ID *id,
 
   DEG_relations_tag_update(bmain);
   DEG_id_tag_update(&scene->id, ID_RECALC_SEQUENCER_STRIPS);
-  WM_main_add_notifier(NC_SCENE | ND_SEQUENCER, scene);
+  WM_main_add_notifier(NC_SEQUENCE | ND_SEQUENCER, scene);
 
   return strip;
 }
@@ -522,7 +522,7 @@ static Strip *rna_Strips_new_effect(ID *id,
   strip = blender::seq::add_effect_strip(scene, seqbase, &load_data);
 
   DEG_id_tag_update(&scene->id, ID_RECALC_SEQUENCER_STRIPS);
-  WM_main_add_notifier(NC_SCENE | ND_SEQUENCER, scene);
+  WM_main_add_notifier(NC_SEQUENCE | ND_SEQUENCER, scene);
 
   return strip;
 }
@@ -570,12 +570,12 @@ static void rna_Strips_remove(
   }
 
   blender::seq::edit_flag_for_removal(scene, seqbase, strip);
-  blender::seq::edit_remove_flagged_sequences(scene, seqbase);
+  blender::seq::edit_remove_flagged_strips(scene, seqbase);
   strip_ptr->invalidate();
 
   DEG_relations_tag_update(bmain);
   DEG_id_tag_update(&scene->id, ID_RECALC_SEQUENCER_STRIPS);
-  WM_main_add_notifier(NC_SCENE | ND_SEQUENCER, scene);
+  WM_main_add_notifier(NC_SEQUENCE | ND_SEQUENCER, scene);
 }
 
 static void rna_Strips_editing_remove(
@@ -603,7 +603,7 @@ static StripElem *rna_StripElements_append(ID *id, Strip *strip, const char *fil
 
   strip->flag &= ~SEQ_SINGLE_FRAME_CONTENT;
 
-  WM_main_add_notifier(NC_SCENE | ND_SEQUENCER, scene);
+  WM_main_add_notifier(NC_SEQUENCE | ND_SEQUENCER, scene);
 
   return se;
 }
@@ -611,7 +611,7 @@ static StripElem *rna_StripElements_append(ID *id, Strip *strip, const char *fil
 static void rna_StripElements_pop(ID *id, Strip *strip, ReportList *reports, int index)
 {
   Scene *scene = (Scene *)id;
-  StripElem *new_seq, *se;
+  StripElem *new_se, *se;
 
   if (strip->len == 1) {
     BKE_report(reports, RPT_ERROR, "StripElements.pop: cannot pop the last element");
@@ -628,7 +628,7 @@ static void rna_StripElements_pop(ID *id, Strip *strip, ReportList *reports, int
     return;
   }
 
-  new_seq = MEM_calloc_arrayN<StripElem>(size_t(strip->len) - 1, "StripElements_pop");
+  new_se = MEM_calloc_arrayN<StripElem>(size_t(strip->len) - 1, "StripElements_pop");
   strip->len--;
 
   if (strip->len == 1) {
@@ -637,17 +637,17 @@ static void rna_StripElements_pop(ID *id, Strip *strip, ReportList *reports, int
 
   se = strip->data->stripdata;
   if (index > 0) {
-    memcpy(new_seq, se, sizeof(StripElem) * index);
+    memcpy(new_se, se, sizeof(StripElem) * index);
   }
 
   if (index < strip->len) {
-    memcpy(&new_seq[index], &se[index + 1], sizeof(StripElem) * (strip->len - index));
+    memcpy(&new_se[index], &se[index + 1], sizeof(StripElem) * (strip->len - index));
   }
 
   MEM_freeN(strip->data->stripdata);
-  strip->data->stripdata = new_seq;
+  strip->data->stripdata = new_se;
 
-  WM_main_add_notifier(NC_SCENE | ND_SEQUENCER, scene);
+  WM_main_add_notifier(NC_SEQUENCE | ND_SEQUENCER, scene);
 }
 
 static void rna_Strip_invalidate_cache_rnafunc(ID *id, Strip *self, int type)
@@ -672,7 +672,7 @@ static SeqRetimingKey *rna_Strip_retiming_keys_add(ID *id, Strip *strip, int tim
   SeqRetimingKey *key = blender::seq::retiming_add_key(scene, strip, timeline_frame);
 
   blender::seq::relations_invalidate_cache_raw(scene, strip);
-  WM_main_add_notifier(NC_SCENE | ND_SEQUENCER, nullptr);
+  WM_main_add_notifier(NC_SEQUENCE | ND_SEQUENCER, nullptr);
   return key;
 }
 
@@ -683,7 +683,7 @@ static void rna_Strip_retiming_keys_reset(ID *id, Strip *strip)
   blender::seq::retiming_data_clear(strip);
 
   blender::seq::relations_invalidate_cache_raw(scene, strip);
-  WM_main_add_notifier(NC_SCENE | ND_SEQUENCER, nullptr);
+  WM_main_add_notifier(NC_SEQUENCE | ND_SEQUENCER, nullptr);
 }
 
 #else

@@ -401,6 +401,7 @@ struct wmNotifier {
 #define NC_ASSET (27 << 24)
 /* Changes to the active viewer path. */
 #define NC_VIEWER_PATH (28 << 24)
+#define NC_SEQUENCE (29 << 24)
 
 /* Data type, 256 entries is enough, it can overlap. */
 #define NOTE_DATA 0x00FF0000
@@ -701,10 +702,11 @@ struct wmTabletData {
   int active;
   /** Range 0.0 (not touching) to 1.0 (full pressure). */
   float pressure;
-  /** range -1.0 (left) to +1.0 (right). */
-  float x_tilt;
-  /** range -1.0 (away from user) to +1.0 (toward user). */
-  float y_tilt;
+  /**
+   * X axis range: -1.0 (left) to +1.0 (right).
+   * Y axis range: -1.0 (away from user) to +1.0 (toward user).
+   */
+  blender::float2 tilt;
   /** Interpret mouse motion as absolute as typical for tablets. */
   char is_motion_absolute;
 };

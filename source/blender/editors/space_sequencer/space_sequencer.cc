@@ -124,6 +124,14 @@ static SpaceLink *sequencer_create(const ScrArea * /*area*/, const Scene *scene)
   region->alignment = (U.uiflag & USER_HEADER_BOTTOM) ? RGN_ALIGN_BOTTOM : RGN_ALIGN_TOP;
   region->flag = RGN_FLAG_HIDDEN | RGN_FLAG_HIDDEN_BY_USER;
 
+  /* Footer. */
+  region = BKE_area_region_new();
+
+  BLI_addtail(&sseq->regionbase, region);
+  region->regiontype = RGN_TYPE_FOOTER;
+  region->alignment = (U.uiflag & USER_HEADER_BOTTOM) ? RGN_ALIGN_TOP : RGN_ALIGN_BOTTOM;
+  region->flag = RGN_FLAG_HIDDEN;
+
   /* Buttons/list view. */
   region = BKE_area_region_new();
 
@@ -220,6 +228,10 @@ static void sequencer_free(SpaceLink *sl)
 static void sequencer_init(wmWindowManager * /*wm*/, ScrArea *area)
 {
   SpaceSeq *sseq = (SpaceSeq *)area->spacedata.first;
+  // if (sseq->sequence == nullptr) {
+  //   wmWindow *win = WM_window_find_by_area(wm, area);
+  //   sseq->sequence = WM_window_get_active_sequence(win);
+  // }
   if (sseq->runtime == nullptr) {
     sseq->runtime = MEM_new<SpaceSeq_Runtime>(__func__);
   }
@@ -301,6 +313,7 @@ static void sequencer_listener(const wmSpaceTypeListenerParams *params)
 
   /* Context changes. */
   switch (wmn->category) {
+    case NC_SEQUENCE:
     case NC_SCENE:
       switch (wmn->data) {
         case ND_FRAME:
@@ -311,6 +324,9 @@ static void sequencer_listener(const wmSpaceTypeListenerParams *params)
       break;
     case NC_WINDOW:
     case NC_SPACE:
+      if (wmn->data == ND_SEQUENCER) {
+        ED_area_tag_redraw(area);
+      }
       if (wmn->data == ND_SPACE_SEQUENCER) {
         sequencer_scopes_tag_refresh(area);
       }
@@ -325,20 +341,41 @@ static void sequencer_listener(const wmSpaceTypeListenerParams *params)
 
 /* DO NOT make this static, this hides the symbol and breaks API generation script. */
 extern "C" const char *sequencer_context_dir[]; /* Quiet warning. */
-const char *sequencer_context_dir[] = {"edit_mask", nullptr};
+const char *sequencer_context_dir[] = {"scene", "sequence", "edit_mask", nullptr};
 
 static int /*eContextResult*/ sequencer_context(const bContext *C,
                                                 const char *member,
                                                 bContextDataResult *result)
 {
-  Scene *scene = CTX_data_scene(C);
+  // SpaceSeq *sseq = CTX_wm_space_seq(C);
 
   if (CTX_data_dir(member)) {
     CTX_data_dir_set(result, sequencer_context_dir);
-
+    return CTX_RESULT_OK;
+  }
+  if (CTX_data_equals(member, "scene")) {
+    Sequence *sequence = CTX_data_sequence(C);
+    if (sequence) {
+      CTX_data_pointer_set(
+          result, &sequence->legacy_scene_data.id, &RNA_Scene, &sequence->legacy_scene_data);
+    }
+    else {
+      Scene *scene = CTX_data_scene(C);
+      CTX_data_pointer_set(result, &scene->id, &RNA_Scene, scene);
+    }
+    CTX_data_type_set(result, CTX_DATA_TYPE_POINTER);
+    return CTX_RESULT_OK;
+  }
+  if (CTX_data_equals(member, "sequence")) {
+    // BLI_assert(sseq->sequence);
+    const wmWindow *win = CTX_wm_window(C);
+    Sequence *sequence = WM_window_get_active_sequence(win);
+    CTX_data_pointer_set(result, &sequence->id, &RNA_Sequence, sequence);
+    CTX_data_type_set(result, CTX_DATA_TYPE_POINTER);
     return CTX_RESULT_OK;
   }
   if (CTX_data_equals(member, "edit_mask")) {
+    Scene *scene = CTX_data_scene(C);
     Mask *mask = seq::active_mask_get(scene);
     if (mask) {
       CTX_data_id_pointer_set(result, &mask->id);
@@ -566,6 +603,7 @@ static void sequencer_main_region_listener(const wmRegionListenerParams *params)
 
   /* Context changes. */
   switch (wmn->category) {
+    case NC_SEQUENCE:
     case NC_SCENE:
       switch (wmn->data) {
         case ND_FRAME:
@@ -765,6 +803,28 @@ static void sequencer_header_region_init(wmWindowManager * /*wm*/, ARegion *regi
 static void sequencer_header_region_draw(const bContext *C, ARegion *region)
 {
   ED_region_header(C, region);
+}
+
+static void sequencer_footer_region_listener(const wmRegionListenerParams *params)
+{
+  ARegion *region = params->region;
+  const wmNotifier *wmn = params->notifier;
+
+  /* context changes */
+  switch (wmn->category) {
+    case NC_SCREEN:
+      if (wmn->data == ND_ANIMPLAY) {
+        ED_region_tag_redraw(region);
+      }
+      break;
+    case NC_SCENE:
+      switch (wmn->data) {
+        case ND_FRAME:
+          ED_region_tag_redraw(region);
+          break;
+      }
+      break;
+  }
 }
 
 /* *********************** toolbar region ************************ */
@@ -1033,6 +1093,7 @@ static void sequencer_preview_region_listener(const wmRegionListenerParams *para
         ED_region_tag_redraw(region);
       }
       break;
+    case NC_SEQUENCE:
     case NC_SCENE:
       switch (wmn->data) {
         case ND_FRAME:
@@ -1102,6 +1163,7 @@ static void sequencer_buttons_region_listener(const wmRegionListenerParams *para
         ED_region_tag_redraw(region);
       }
       break;
+    case NC_SEQUENCE:
     case NC_SCENE:
       switch (wmn->data) {
         case ND_FRAME:
@@ -1301,6 +1363,17 @@ void ED_spacetype_sequencer()
   art->init = sequencer_header_region_init;
   art->draw = sequencer_header_region_draw;
   art->listener = sequencer_main_region_listener;
+  BLI_addhead(&st->regiontypes, art);
+
+  /* Footer. */
+  art = MEM_callocN<ARegionType>("spacetype sequencer region");
+  art->regionid = RGN_TYPE_FOOTER;
+  art->prefsizey = HEADERY;
+  art->keymapflag = ED_KEYMAP_UI | ED_KEYMAP_VIEW2D | ED_KEYMAP_FOOTER;
+
+  art->init = sequencer_header_region_init;
+  art->draw = sequencer_header_region_draw;
+  art->listener = sequencer_footer_region_listener;
   BLI_addhead(&st->regiontypes, art);
 
   /* HUD. */

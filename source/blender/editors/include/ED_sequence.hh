@@ -1,0 +1,24 @@
+/* SPDX-FileCopyrightText: 2025 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
+
+/** \file
+ * \ingroup editors
+ */
+
+#pragma once
+
+#include "BKE_sequence.hh"
+
+struct bContext;
+struct Scene;
+
+enum class AddSequenceMode : int8_t { Blank = 0, CopySettings, FullCopy };
+
+void ED_operatortypes_sequence();
+
+namespace blender::ed::sequence {
+
+void sync_scene_strip(bContext *C, Scene *sequence_scene);
+
+}  // namespace blender::ed::sequence

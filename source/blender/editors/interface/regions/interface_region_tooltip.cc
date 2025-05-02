@@ -608,7 +608,7 @@ static std::unique_ptr<uiTooltipData> ui_tooltip_data_from_tool(bContext *C,
                                 {},
                                 UI_TIP_STYLE_NORMAL,
                                 (is_error) ? UI_TIP_LC_ALERT : UI_TIP_LC_MAIN,
-                                true);
+                                false);
       MEM_freeN(expr_result);
     }
   }
@@ -899,6 +899,7 @@ static std::unique_ptr<uiTooltipData> ui_tooltip_data_from_button_or_extra_icon(
    * Otherwise fallback to the regular label. */
   if (!but_tip_label.empty()) {
     UI_tooltip_text_field_add(*data, but_tip_label, {}, UI_TIP_STYLE_HEADER, UI_TIP_LC_NORMAL);
+    UI_tooltip_text_field_add(*data, {}, {}, UI_TIP_STYLE_SPACER, UI_TIP_LC_NORMAL);
   }
   /* Regular (non-custom) label. Only show when the button doesn't already show the label. Check
    * prefix instead of comparing because the button may include the shortcut. Buttons with dynamic
@@ -907,7 +908,17 @@ static std::unique_ptr<uiTooltipData> ui_tooltip_data_from_button_or_extra_icon(
   else if (!but_label.empty() && !blender::StringRef(but->drawstr).startswith(but_label) &&
            !but->tip_func)
   {
-    UI_tooltip_text_field_add(*data, but_label, {}, UI_TIP_STYLE_HEADER, UI_TIP_LC_NORMAL);
+    if (!enum_label.empty()) {
+      UI_tooltip_text_field_add(*data,
+                                fmt::format("{}: ", but_label),
+                                enum_label,
+                                UI_TIP_STYLE_HEADER,
+                                UI_TIP_LC_NORMAL);
+    }
+    else {
+      UI_tooltip_text_field_add(*data, but_label, {}, UI_TIP_STYLE_HEADER, UI_TIP_LC_NORMAL);
+    }
+    UI_tooltip_text_field_add(*data, {}, {}, UI_TIP_STYLE_SPACER, UI_TIP_LC_NORMAL);
   }
   /*bfa - still no tooltip? Then add it !*/
   else if (!but_label.empty() && but_tip_label.empty())   {
@@ -917,9 +928,10 @@ static std::unique_ptr<uiTooltipData> ui_tooltip_data_from_button_or_extra_icon(
 
   /* Tip */
   if (!but_tip.empty()) {
-    if (!enum_label.empty()) {
+    if (!enum_label.empty() && enum_label == but_label) {
       UI_tooltip_text_field_add(
           *data, fmt::format("{}: ", but_tip), enum_label, UI_TIP_STYLE_HEADER, UI_TIP_LC_NORMAL);
+      UI_tooltip_text_field_add(*data, {}, {}, UI_TIP_STYLE_SPACER, UI_TIP_LC_NORMAL);
     }
     else {
       const bool add_period = ui_tooltip_period_needed(but_tip);
@@ -928,6 +940,9 @@ static std::unique_ptr<uiTooltipData> ui_tooltip_data_from_button_or_extra_icon(
                                 {},
                                 UI_TIP_STYLE_HEADER,
                                 UI_TIP_LC_NORMAL);
+      if (but_label.empty()) {
+        UI_tooltip_text_field_add(*data, {}, {}, UI_TIP_STYLE_SPACER, UI_TIP_LC_NORMAL);
+      }
     }
 
     /* special case enum rna buttons */
@@ -963,7 +978,7 @@ static std::unique_ptr<uiTooltipData> ui_tooltip_data_from_button_or_extra_icon(
                               {},
                               UI_TIP_STYLE_NORMAL,
                               UI_TIP_LC_VALUE,
-                              true);
+                              !data->fields.is_empty());
   }
 
   /* Property context-toggle shortcut. */
@@ -1205,6 +1220,11 @@ static std::unique_ptr<uiTooltipData> ui_tooltip_data_from_button_or_extra_icon(
 
     /* Tooltip now owns a copy of the ImBuf, so we can delete ours. */
     IMB_freeImBuf(image_data.ibuf);
+  }
+
+  /* If the last field is a spacer, remove it. */
+  while (!data->fields.is_empty() && data->fields.last().format.style == UI_TIP_STYLE_SPACER) {
+    data->fields.pop_last();
   }
 
   return data->fields.is_empty() ? nullptr : std::move(data);

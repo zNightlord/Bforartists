@@ -152,7 +152,8 @@ struct TreeElementIcon {
         ID_MC, \
         ID_WS, \
         ID_MSK, \
-        ID_PC))
+        ID_PC, \
+        ID_SEQ))
 
 /* TreeElement->flag */
 enum {

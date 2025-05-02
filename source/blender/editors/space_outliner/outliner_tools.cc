@@ -171,6 +171,7 @@ static void get_element_operation_type(
         break;
       case ID_WM:
       case ID_SCR:
+      case ID_SEQ:
         /* Those are ignored here. */
         /* NOTE: while Screens should be manageable here, deleting a screen used by a workspace
          * will cause crashes when trying to use that workspace, so for now let's play minimal,
@@ -2229,7 +2230,7 @@ static void sequence_fn(int event, TreeElement *te, TreeStoreElem * /*tselem*/, 
   Editing *ed = seq::editing_get(scene);
   if (BLI_findindex(ed->seqbasep, strip) != -1) {
     if (event == OL_DOP_SELECT) {
-      vse::select_sequence_single(scene, strip, true);
+      vse::select_strip_single(scene, strip, true);
     }
     else if (event == OL_DOP_DESELECT) {
       strip->flag &= ~SELECT;

@@ -969,6 +969,9 @@ ID *RNA_find_real_ID_and_path(ID *id, const char **r_path)
       case ID_GR:
         *r_path = "collection";
         break;
+      case ID_SCE:
+        *r_path = "scene";
+        break;
       default:
         BLI_assert_msg(0, "Missing handling of embedded id type.");
     }

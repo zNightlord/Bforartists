@@ -29,7 +29,8 @@ class PROPERTIES_HT_header(Header):
                 space.show_properties_bone or
                 space.show_properties_bone_constraints or
                 space.show_properties_material or
-                space.show_properties_texture
+                space.show_properties_texture or
+                space.show_properties_sequence
                 )
 
     def draw(self, context):
@@ -106,6 +107,7 @@ class PROPERTIES_PT_options(Panel):
         layout.use_property_decorate = False
         col = layout.column(heading="Visible Tabs", align=True)
         col.prop(space, "show_properties_tool")
+        col.prop(space, "show_properties_sequence")
         col.prop(space, "show_properties_render")
         col.prop(space, "show_properties_output")
         col.prop(space, "show_properties_view_layer")

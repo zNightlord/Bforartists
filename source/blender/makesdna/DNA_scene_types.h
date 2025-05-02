@@ -111,7 +111,7 @@ typedef enum eFFMpegProresProfile {
   FFM_PRORES_PROFILE_422_PROXY = 0, /* FF_PROFILE_PRORES_PROXY */
   FFM_PRORES_PROFILE_422_LT = 1,    /* FF_PROFILE_PRORES_LT */
   FFM_PRORES_PROFILE_422_STD = 2,   /* FF_PROFILE_PRORES_STANDARD */
-  FFM_PRORES_PROFILE_422_HQ = 3,    /* FF_PROFILE_PRORES_HQ*/
+  FFM_PRORES_PROFILE_422_HQ = 3,    /* FF_PROFILE_PRORES_HQ */
   FFM_PRORES_PROFILE_4444 = 4,      /* FF_PROFILE_PRORES_4444 */
   FFM_PRORES_PROFILE_4444_XQ = 5,   /* FF_PROFILE_PRORES_XQ */
 } eFFMpegProresProfile;
@@ -2172,8 +2172,10 @@ typedef struct Scene {
   struct SceneGpencil grease_pencil_settings;
   struct SceneHydra hydra;
 
+  /* HACK: Only used when the scene is embedded in a Sequence. */
+  ID *sequence;
+
   SceneRuntimeHandle *runtime;
-  void *_pad9;
 } Scene;
 
 /** \} */

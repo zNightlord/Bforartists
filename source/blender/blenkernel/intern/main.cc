@@ -962,6 +962,8 @@ ListBase *which_libbase(Main *bmain, short type)
       return &(bmain->pointclouds);
     case ID_VO:
       return &(bmain->volumes);
+    case ID_SEQ:
+      return &(bmain->sequences);
   }
   return nullptr;
 }
@@ -1026,6 +1028,7 @@ MainListsArray BKE_main_lists_get(Main &bmain)
   /* referenced by scenes */
   lb[INDEX_ID_LS] = &bmain.linestyles;
   lb[INDEX_ID_SCE] = &bmain.scenes;
+  lb[INDEX_ID_SEQ] = &bmain.sequences;
   /* before wm, so it's freed after it! */
   lb[INDEX_ID_WS] = &bmain.workspaces;
   lb[INDEX_ID_WM] = &bmain.wm;

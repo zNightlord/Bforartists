@@ -665,6 +665,8 @@ void DepsgraphNodeBuilder::build_id(ID *id, const bool force_be_visible)
     case ID_PAL:
     case ID_PC:
     case ID_WS:
+    /* TODO! */
+    case ID_SEQ:
       BLI_assert(!deg_eval_copy_is_needed(id_type));
       build_generic_id(id);
       break;
@@ -2286,7 +2288,7 @@ void DepsgraphNodeBuilder::build_scene_sequencer(Scene *scene)
                      NodeType::SEQUENCER,
                      OperationCode::SEQUENCES_EVAL,
                      [scene_cow](::Depsgraph *depsgraph) {
-                       seq::eval_sequences(depsgraph, scene_cow, &scene_cow->ed->seqbase);
+                       seq::eval_strips(depsgraph, scene_cow, &scene_cow->ed->seqbase);
                      });
   /* Make sure data for sequences is in the graph. */
   seq::for_each_callback(&scene->ed->seqbase, strip_node_build_cb, this);

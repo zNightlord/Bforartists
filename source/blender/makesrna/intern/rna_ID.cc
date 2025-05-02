@@ -57,6 +57,7 @@ const EnumPropertyItem rna_enum_id_type_items[] = {
     {ID_PA, "PARTICLE", ICON_PARTICLE_DATA, "Particle", ""},
     {ID_PT, "POINTCLOUD", ICON_POINTCLOUD_DATA, "Point Cloud", ""},
     {ID_SCE, "SCENE", ICON_SCENE_DATA, "Scene", ""},
+    {ID_SEQ, "SEQUENCE", ICON_RENDER_ANIMATION, "Sequence", ""},
     {ID_SCR, "SCREEN", ICON_WORKSPACE, "Screen", ""},
     {ID_SO, "SOUND", ICON_SOUND, "Sound", ""},
     {ID_SPK, "SPEAKER", ICON_SPEAKER, "Speaker", ""},
@@ -454,6 +455,9 @@ short RNA_type_to_ID_code(const StructRNA *type)
   if (base_type == &RNA_Screen) {
     return ID_SCR;
   }
+  if (base_type == &RNA_Sequence) {
+    return ID_SEQ;
+  }
   if (base_type == &RNA_Sound) {
     return ID_SO;
   }
@@ -550,6 +554,8 @@ StructRNA *ID_code_to_RNA_type(short idcode)
       return &RNA_Scene;
     case ID_SCR:
       return &RNA_Screen;
+    case ID_SEQ:
+      return &RNA_Sequence;
     case ID_SO:
       return &RNA_Sound;
     case ID_SPK:

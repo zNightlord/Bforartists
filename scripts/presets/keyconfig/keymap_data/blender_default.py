@@ -3019,6 +3019,8 @@ def km_sequencer(params):
          {"properties": [("type", 'SOFT')]}),
         ("sequencer.split", {"type": 'K', "value": 'PRESS', "shift": True},
          {"properties": [("type", 'HARD')]}),
+        ("sequencer.split", {"type": 'K', "value": 'PRESS', "ctrl": True},
+         {"properties": [("switch_camera", True)]}),
         ("sequencer.mute", {"type": 'H', "value": 'PRESS'},
          {"properties": [("unselected", False)]}),
         ("sequencer.mute", {"type": 'H', "value": 'PRESS', "shift": True},

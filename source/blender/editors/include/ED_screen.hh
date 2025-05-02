@@ -23,6 +23,7 @@ struct Depsgraph;
 struct IDProperty;
 struct Main;
 struct MenuType;
+struct Sequence;
 struct Scene;
 struct SpaceLink;
 struct WorkSpace;
@@ -323,6 +324,7 @@ void ED_screen_do_listen(bContext *C, const wmNotifier *note);
  * \returns if screen changing was successful.
  */
 bool ED_screen_change(bContext *C, bScreen *screen);
+void ED_screen_sequence_change(bContext *C, wmWindow *win, Sequence *sequence);
 void ED_screen_scene_change(bContext *C, wmWindow *win, Scene *scene, bool refresh_toolsystem);
 /**
  * Called in `wm_event_system.cc`. sets state vars in screen, cursors.

@@ -89,6 +89,7 @@ std::unique_ptr<TreeElementID> TreeElementID::create_from_id(TreeElement &legacy
     case ID_PAL:
     case ID_PC:
     case ID_CF:
+    case ID_SEQ:
       return std::make_unique<TreeElementID>(legacy_te, id);
     case ID_IP:
       BLI_assert_unreachable();

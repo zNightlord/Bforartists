@@ -62,6 +62,11 @@ class TOPBAR_HT_upper_bar(Header):
             layout.template_reports_banner()
             layout.template_running_jobs()
         # BFA - now in the toolbar as an opt-in
+
+        # # Show selector for active sequence if there is one
+        # if context.sequence:
+        #     layout.template_ID(window, "sequence", new="sequence.new", unlink="sequence.delete")
+
         # Active workspace view-layer is retrieved through window, not through workspace.
         # layout.template_ID(window, "scene", new="scene.new", unlink="scene.delete")
 
@@ -639,6 +644,18 @@ class TOPBAR_MT_file_previews(Menu):
         )
 
 
+class TOPBAR_MT_render_scene(Menu):
+    bl_label = "Render Scene"
+
+    def draw(self, context):
+        layout = self.layout
+
+        layout.operator("render.render", text="Render Image", icon='RENDER_STILL').use_viewport = True
+        props = layout.operator("render.render", text="Render Animation", icon='RENDER_ANIMATION')
+        props.animation = True
+        props.use_viewport = True
+
+
 class TOPBAR_MT_render(Menu):
     bl_label = "Render"
 
@@ -655,6 +672,10 @@ class TOPBAR_MT_render(Menu):
         )
         props.animation = True
         props.use_viewport = True
+
+        if context.sequence:
+            layout.separator()
+            layout.menu("TOPBAR_MT_render_scene", text="Render Active Scene")
 
         layout.separator()
 
@@ -1157,6 +1178,7 @@ classes = (
     TOPBAR_MT_file_previews,
     TOPBAR_MT_edit,
     TOPBAR_MT_render,
+    TOPBAR_MT_render_scene,
     TOPBAR_MT_window,
     TOPBAR_MT_edit_no_prefsfolder,  # BFA
     TOPBAR_MT_help,

@@ -18,6 +18,7 @@
 #include "DNA_color_types.h"
 #include "DNA_defs.h"
 #include "DNA_listBase.h"
+#include "DNA_scene_types.h"
 #include "DNA_session_uid_types.h" /* for #SessionUID */
 #include "DNA_vec_types.h"         /* for #rctf */
 
@@ -26,6 +27,7 @@ struct MovieClip;
 struct Scene;
 struct VFont;
 struct bSound;
+struct RenderData;
 
 #ifdef __cplusplus
 namespace blender::seq {
@@ -166,8 +168,8 @@ typedef struct StripRuntime {
 } StripRuntime;
 
 /**
- * The sequence structure is the basic struct used by any strip.
- * each of the strips uses a different sequence structure.
+ * `Strip` is the basic struct used by any strip.
+ * Each strip uses a different `Strip` struct.
  *
  * \warning The first part identical to ID (for use in ipo's)
  * the comment above is historic, probably we can drop the ID compatibility,
@@ -181,7 +183,7 @@ typedef struct Strip {
   /** STRIP_NAME_MAXSTR - name, set by default and needs to be unique, for RNA paths. */
   char name[64];
 
-  /** Flags bitmap (see below) and the type of sequence. */
+  /** Flags bitmap (see below) and the type of strip. */
   int flag, type;
   /** The length of the contents of this strip - before handles are applied. */
   int len;
@@ -313,7 +315,7 @@ typedef struct MetaStack {
   struct MetaStack *next, *prev;
   ListBase *oldbasep;
   ListBase *old_channels;
-  Strip *parseq;
+  Strip *parent_strip;
   /* the startdisp/enddisp when entering the meta */
   int disp_range[2];
 } MetaStack;
@@ -348,7 +350,7 @@ typedef struct Editing {
   ListBase channels; /* SeqTimelineChannel */
 
   /* Context vars, used to be static */
-  Strip *act_seq;
+  Strip *act_strip;
   /** 1024 = FILE_MAX. */
   char act_imagedir[1024];
   /** 1024 = FILE_MAX. */
@@ -378,6 +380,17 @@ typedef struct Editing {
 
   EditingRuntime runtime;
 } Editing;
+
+typedef struct Sequence {
+  ID id;
+  /** Animation data (must be immediately after id for utilities to use it). */
+  struct AnimData *adt;
+
+  /* TODO: This field should be removed in the long term. It's only necessary, because too much
+   * code of the VSE used to depend on the scene. */
+  Scene legacy_scene_data;
+  void *_pad;
+} Sequence;
 
 /** \} */
 
@@ -513,8 +526,8 @@ typedef struct ColorMixVars {
 /** \name Strip Modifiers
  * \{ */
 
-typedef struct SequenceModifierData {
-  struct SequenceModifierData *next, *prev;
+typedef struct StripModifierData {
+  struct StripModifierData *next, *prev;
   int type, flag;
   /** MAX_NAME. */
   char name[64];
@@ -523,12 +536,12 @@ typedef struct SequenceModifierData {
   int mask_input_type;
   int mask_time;
 
-  struct Strip *mask_sequence;
+  struct Strip *mask_strip;
   struct Mask *mask_id;
-} SequenceModifierData;
+} StripModifierData;
 
 typedef struct ColorBalanceModifierData {
-  SequenceModifierData modifier;
+  StripModifierData modifier;
 
   StripColorBalance color_balance;
   float color_multiply;
@@ -540,37 +553,37 @@ enum {
 };
 
 typedef struct CurvesModifierData {
-  SequenceModifierData modifier;
+  StripModifierData modifier;
 
   struct CurveMapping curve_mapping;
 } CurvesModifierData;
 
 typedef struct HueCorrectModifierData {
-  SequenceModifierData modifier;
+  StripModifierData modifier;
 
   struct CurveMapping curve_mapping;
 } HueCorrectModifierData;
 
 typedef struct BrightContrastModifierData {
-  SequenceModifierData modifier;
+  StripModifierData modifier;
 
   float bright;
   float contrast;
 } BrightContrastModifierData;
 
 typedef struct SequencerMaskModifierData {
-  SequenceModifierData modifier;
+  StripModifierData modifier;
 } SequencerMaskModifierData;
 
 typedef struct WhiteBalanceModifierData {
-  SequenceModifierData modifier;
+  StripModifierData modifier;
 
   float white_value[3];
   char _pad[4];
 } WhiteBalanceModifierData;
 
 typedef struct SequencerTonemapModifierData {
-  SequenceModifierData modifier;
+  StripModifierData modifier;
 
   float key, offset, gamma;
   float intensity, contrast, adaptation, correction;
@@ -593,7 +606,7 @@ typedef struct EQCurveMappingData {
 } EQCurveMappingData;
 
 typedef struct SoundEqualizerModifierData {
-  SequenceModifierData modifier;
+  StripModifierData modifier;
   /* EQCurveMappingData */
   ListBase graphics;
 } SoundEqualizerModifierData;
@@ -804,8 +817,8 @@ enum {
  * otherwise, you can't really blend, right :) !)
  */
 
-#define STRIP_HAS_PATH(_seq) \
-  (ELEM((_seq)->type, \
+#define STRIP_HAS_PATH(_strip) \
+  (ELEM((_strip)->type, \
         STRIP_TYPE_MOVIE, \
         STRIP_TYPE_IMAGE, \
         STRIP_TYPE_SOUND_RAM, \
@@ -813,7 +826,7 @@ enum {
 
 /* modifiers */
 
-/** #SequenceModifierData.type */
+/** #StripModifierData.type */
 enum {
   seqModifierType_ColorBalance = 1,
   seqModifierType_Curves = 2,
@@ -827,7 +840,7 @@ enum {
   NUM_SEQUENCE_MODIFIER_TYPES,
 };
 
-/** #SequenceModifierData.flag */
+/** #StripModifierData.flag */
 enum {
   SEQUENCE_MODIFIER_MUTE = (1 << 0),
   SEQUENCE_MODIFIER_EXPANDED = (1 << 1),

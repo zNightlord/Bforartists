@@ -37,6 +37,7 @@
 #include "BKE_paint.hh"
 #include "BKE_particle.h"
 #include "BKE_screen.hh"
+#include "BKE_sequence.hh"
 
 #include "RNA_access.hh"
 #include "RNA_prototypes.hh"
@@ -80,6 +81,14 @@ static PointerRNA *get_pointer_type(ButsContextPath *path, StructRNA *type)
 }
 
 /************************* Creating the Path ************************/
+
+static bool buttons_context_path_sequence(ButsContextPath *path)
+{
+  PointerRNA *ptr = &path->ptr[path->len - 1];
+
+  /* this one just verifies */
+  return RNA_struct_is_a(ptr->type, &RNA_Sequence);
+}
 
 static bool buttons_context_path_scene(ButsContextPath *path)
 {
@@ -554,6 +563,7 @@ static bool buttons_context_path(
   /* Note we don't use CTX_data here, instead we get it from the window.
    * Otherwise there is a loop reading the context that we are setting. */
   wmWindow *window = CTX_wm_window(C);
+  Sequence *sequence = WM_window_get_active_sequence(window);
   Scene *scene = WM_window_get_active_scene(window);
   ViewLayer *view_layer = WM_window_get_active_view_layer(window);
 
@@ -568,7 +578,7 @@ static bool buttons_context_path(
     path->len++;
   }
   /* No pinned root, use scene as initial root. */
-  else if (mainb != BCONTEXT_TOOL) {
+  else if (!ELEM(mainb, BCONTEXT_TOOL, BCONTEXT_SEQUENCE)) {
     path->ptr[0] = RNA_id_pointer_create(&scene->id);
     path->len++;
 
@@ -582,6 +592,10 @@ static bool buttons_context_path(
       path->ptr[path->len] = RNA_pointer_create_discrete(nullptr, &RNA_ViewLayer, view_layer);
       path->len++;
     }
+  }
+  else if (mainb == BCONTEXT_SEQUENCE) {
+    path->ptr[0] = RNA_id_pointer_create(&sequence->id);
+    path->len++;
   }
 
   /* now for each buttons context type, we try to construct a path,
@@ -645,6 +659,9 @@ static bool buttons_context_path(
       break;
     case BCONTEXT_BONE_CONSTRAINT:
       found = buttons_context_path_pose_bone(path);
+      break;
+    case BCONTEXT_SEQUENCE:
+      found = buttons_context_path_sequence(path);
       break;
     default:
       found = false;
@@ -854,6 +871,7 @@ const char *buttons_context_dir[] = {
     "pointcloud",
 #endif
     "volume",
+    "sequence",
     nullptr,
 };
 
@@ -890,6 +908,15 @@ int /*eContextResult*/ buttons_context(const bContext *C,
     return CTX_RESULT_OK;
   }
   if (CTX_data_equals(member, "scene")) {
+    if (sbuts->mainb == BCONTEXT_SEQUENCE) {
+      /* HACK: Override scene context. */
+      Sequence *sequence = CTX_data_sequence(C);
+      if (sequence) {
+        CTX_data_pointer_set(
+            result, &sequence->legacy_scene_data.id, &RNA_Scene, &sequence->legacy_scene_data);
+        return CTX_RESULT_OK;
+      }
+    }
     /* Do not return one here if scene is not found in path,
      * in this case we want to get default context scene! */
     return set_pointer_type(path, result, &RNA_Scene);
@@ -1176,6 +1203,10 @@ int /*eContextResult*/ buttons_context(const bContext *C,
   }
   if (CTX_data_equals(member, "grease_pencil")) {
     set_pointer_type(path, result, &RNA_GreasePencilv3);
+    return CTX_RESULT_OK;
+  }
+  if (CTX_data_equals(member, "sequence")) {
+    set_pointer_type(path, result, &RNA_Sequence);
     return CTX_RESULT_OK;
   }
   return CTX_RESULT_MEMBER_NOT_FOUND;

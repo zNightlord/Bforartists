@@ -20,6 +20,7 @@ from bl_ui.space_toolsystem_common import (
     ToolActivePanelHelper,
 )
 from rna_prop_ui import PropertyPanel
+from bl_ui.space_time import playback_controls
 
 
 def _space_view_types(st):
@@ -195,6 +196,10 @@ class SEQUENCER_HT_header(Header):
 
         if st.view_type in {'SEQUENCER', 'SEQUENCER_PREVIEW'}:
             row = layout.row(align=True)
+            row.template_ID(context.window, "sequence", new="sequence.new", unlink="sequence.delete")
+
+        if st.view_type in {'SEQUENCER', 'SEQUENCER_PREVIEW'}:
+            row = layout.row(align=True)
             row.prop(sequencer_tool_settings, "overlap_mode", text="")
 
         # if st.view_type in {'SEQUENCER', 'SEQUENCER_PREVIEW'}:
@@ -227,6 +232,38 @@ class SEQUENCER_HT_header(Header):
 
         row.popover(panel="SEQUENCER_PT_view_options", text="Options")
         # BFA - moved "class SEQUENCER_MT_editor_menus" below
+
+class SEQUENCER_HT_playback_controls(Header):
+    bl_space_type = 'SEQUENCE_EDITOR'
+    bl_region_type = 'FOOTER'
+
+    def draw(self, context):
+        layout = self.layout
+
+        playback_controls(layout, context)
+
+
+class SEQUENCER_MT_editor_menus(Menu):
+    bl_idname = "SEQUENCER_MT_editor_menus"
+    bl_label = ""
+
+    def draw(self, context):
+        layout = self.layout
+        st = context.space_data
+        has_sequencer, _has_preview = _space_view_types(st)
+
+        layout.menu("SEQUENCER_MT_view")
+        layout.menu("SEQUENCER_MT_select")
+
+        if has_sequencer:
+            if st.show_markers:
+                layout.menu("SEQUENCER_MT_marker")
+            layout.menu("SEQUENCER_MT_add")
+
+        layout.menu("SEQUENCER_MT_strip")
+
+        if st.view_type in {'SEQUENCER', 'PREVIEW'}:
+            layout.menu("SEQUENCER_MT_image")
 
 
 class SEQUENCER_PT_gizmo_display(Panel):
@@ -571,6 +608,7 @@ class SEQUENCER_MT_view(Menu):
 
         layout.prop(addon_prefs, "vse_show_toolshelf_tabs")  # BFA
 
+        layout.prop(st, "show_region_footer")
         layout.separator()
 
         layout.menu("SEQUENCER_MT_view_annotations")  # BFA
@@ -4231,6 +4269,7 @@ classes = (
     SEQUENCER_MT_change,  # BFA - no longer used
     SEQUENCER_HT_tool_header,
     SEQUENCER_HT_header,
+    SEQUENCER_HT_playback_controls,
     SEQUENCER_MT_editor_menus,
     SEQUENCER_MT_range,
     SEQUENCER_MT_view_pie_menus,  # BFA

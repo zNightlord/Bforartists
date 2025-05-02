@@ -8,6 +8,25 @@ from bl_ui.space_dopesheet import (
     DopesheetFilterPopoverBase,
     dopesheet_filter,
 )
+from bl_ui.space_time import playback_controls
+
+
+def drivers_editor_footer(layout, context):
+    act_fcurve = context.active_editable_fcurve
+    act_driver = act_fcurve.driver if act_fcurve else None
+
+    layout.separator_spacer()
+
+    if act_fcurve:
+        layout.label(text="Driver: %s (%s)" % (act_fcurve.id_data.name, act_fcurve.data_path))
+
+    if act_driver and act_driver.variables:
+        layout.separator(type='LINE')
+        layout.label(text="Variables: %i" % len(act_driver.variables))
+
+    if act_driver and act_driver.type == 'SCRIPTED' and act_driver.expression:
+        layout.separator(type='LINE')
+        layout.label(text="Expression: %s" % act_driver.expression)
 
 ################################ BFA - Switch between the editors ##########################################
 
@@ -159,6 +178,20 @@ class ALL_MT_editormenu_graph(Menu):
         row.template_header()  # editor type menus
 
 
+class GRAPH_HT_playback_controls(Header):
+    bl_space_type = 'GRAPH_EDITOR'
+    bl_region_type = 'FOOTER'
+
+    def draw(self, context):
+        layout = self.layout
+        is_drivers_editor = context.space_data.mode == 'DRIVERS'
+
+        if is_drivers_editor:
+            drivers_editor_footer(layout, context)
+        else:
+            playback_controls(layout, context)
+
+
 class GRAPH_PT_proportional_edit(Panel):
     bl_space_type = "GRAPH_EDITOR"
     bl_region_type = "HEADER"
@@ -286,6 +319,8 @@ class GRAPH_MT_view(Menu):
         layout.prop(st, "show_region_channels")  # BFA - channels
         layout.prop(st, "show_region_ui")
         layout.prop(st, "show_region_hud")
+        layout.prop(st, "show_region_channels")
+        layout.prop(st, "show_region_footer")
         layout.separator()
 
         layout.operator("anim.previewrange_set", icon="BORDER_RECT")
@@ -920,6 +955,7 @@ classes = (
     ALL_MT_editormenu_graph,
     GRAPH_HT_header,
     GRAPH_PT_properties_view_options,
+    GRAPH_HT_playback_controls,
     GRAPH_PT_proportional_edit,
     GRAPH_MT_editor_menus,
     GRAPH_MT_view,
