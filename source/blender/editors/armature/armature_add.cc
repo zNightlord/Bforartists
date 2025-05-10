@@ -902,11 +902,6 @@ static void update_duplicate_constraint_shrinkwrap_settings(bConstraint *curcon)
   track_axis_x_swap(data->trackAxis);
 }
 
-static void update_duplicate_constraint_attribute_settings(bConstraint *curcon)
-{
-  bAttributeConstraint *data = static_cast<bAttributeConstraint *>(curcon->data);
-}
-
 static void update_duplicate_constraint_settings(EditBone *dup_bone,
                                                  EditBone *orig_bone,
                                                  Object *ob)
@@ -949,9 +944,6 @@ static void update_duplicate_constraint_settings(EditBone *dup_bone,
         break;
       case CONSTRAINT_TYPE_SHRINKWRAP:
         update_duplicate_constraint_shrinkwrap_settings(curcon);
-        break;
-      case CONSTRAINT_TYPE_ATTRIBUTE:
-        update_duplicate_constraint_attribute_settings(curcon);
         break;
     }
   }

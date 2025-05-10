@@ -5485,11 +5485,11 @@ static void attribute_flush_tars(bConstraint *con, ListBase *list, bool no_copy)
 
 static bool attribute_get_tarmat(Depsgraph * /*depsgraph*/,
                                  bConstraint *con,
-                                 bConstraintOb *cob,
+                                 bConstraintOb * /*cob*/,
                                  bConstraintTarget *ct,
                                  float /*ctime*/)
 {
-  bAttributeConstraint *scon = (bAttributeConstraint *)con->data;
+  bAttributeConstraint *acon = (bAttributeConstraint *)con->data;
 
   if (!VALID_CONS_TARGET(ct) || ct->tar->type != OB_MESH) {
     return false;
@@ -5501,7 +5501,7 @@ static bool attribute_get_tarmat(Depsgraph * /*depsgraph*/,
   int d_count = 0;
   int index = -1;
 
-  switch (scon->domainType) {
+  switch (acon->domainType) {
     case CON_ATTRIBUTE_DOMAIN_VERT:
       domain = target_eval->vert_data;
       d_count = target_eval->verts_num;
@@ -5518,12 +5518,12 @@ static bool attribute_get_tarmat(Depsgraph * /*depsgraph*/,
       return false;
   };
 
-  index = std::clamp(scon->sampleIndex, 0, d_count - 1);
+  index = std::clamp(acon->sampleIndex, 0, d_count - 1);
 
-  switch (scon->dataType) {
+  switch (acon->dataType) {
     case CON_ATTRIBUTE_4X4MATRIX: {
       const float (*matrices)[4][4] = (const float (*)[4][4])CustomData_get_layer_named(
-          &domain, CD_PROP_FLOAT4X4, scon->attributeName);
+          &domain, CD_PROP_FLOAT4X4, acon->attributeName);
       if (!matrices) {
         return false;
       }
@@ -5532,7 +5532,7 @@ static bool attribute_get_tarmat(Depsgraph * /*depsgraph*/,
     }
     case CON_ATTRIBUTE_VECTOR: {
       const float (*vectors)[3] = (const float (*)[3])CustomData_get_layer_named(
-          &domain, CD_PROP_FLOAT3, scon->attributeName);
+          &domain, CD_PROP_FLOAT3, acon->attributeName);
       if (!vectors) {
         return false;
       }
@@ -5541,7 +5541,7 @@ static bool attribute_get_tarmat(Depsgraph * /*depsgraph*/,
     }
     case CON_ATTRIBUTE_QUATERNION: {
       const float (*quaternions)[4] = (const float (*)[4])CustomData_get_layer_named(
-          &domain, CD_PROP_QUATERNION, scon->attributeName);
+          &domain, CD_PROP_QUATERNION, acon->attributeName);
       if (!quaternions) {
         return false;
       }
