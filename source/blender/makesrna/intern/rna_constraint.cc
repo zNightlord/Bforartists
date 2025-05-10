@@ -171,7 +171,6 @@ const EnumPropertyItem rna_enum_constraint_type_items[] = {
      "Attribute",
      "Retrieve Transform from Mesh Verts"},
     {0, nullptr, 0, nullptr, nullptr},
-
 };
 
 static const EnumPropertyItem target_space_pchan_items[] = {
@@ -627,8 +626,7 @@ static const EnumPropertyItem *rna_Constraint_target_space_itemf(bContext * /*C*
 static bConstraintTarget *rna_ArmatureConstraint_target_new(ID *id, bConstraint *con, Main *bmain)
 {
   bArmatureConstraint *acon = static_cast<bArmatureConstraint *>(con->data);
-  bConstraintTarget *tgt = static_cast<bConstraintTarget *>(
-      MEM_callocN(sizeof(bConstraintTarget), "Constraint Target"));
+  bConstraintTarget *tgt = MEM_callocN<bConstraintTarget>("Constraint Target");
 
   tgt->weight = 1.0f;
   BLI_addtail(&acon->targets, tgt);
@@ -3707,8 +3705,7 @@ static void rna_def_constraint_attribute(BlenderRNA *brna)
   prop = RNA_def_property(srna, "data_type", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_sdna(prop, nullptr, "dataType");
   RNA_def_property_enum_items(prop, type_items);
-  RNA_def_property_ui_text(
-      prop, "Data Type", "Select data type of attribute");
+  RNA_def_property_ui_text(prop, "Data Type", "Select data type of attribute");
   RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_dependency_update");
 
   prop = RNA_def_property(srna, "sample_index", PROP_INT, PROP_NONE);
