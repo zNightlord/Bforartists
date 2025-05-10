@@ -32,6 +32,7 @@
 #include "BKE_gpencil_legacy.h"
 #include "BKE_idprop.hh"
 #include "BKE_lib_id.hh"
+#include "BKE_lib_override.hh"// bfa
 #include "BKE_lib_query.hh"
 #include "BKE_lib_remap.hh"
 #include "BKE_node_legacy_types.hh"
@@ -1153,19 +1154,24 @@ static void node_group_drop_copy(bContext *C, wmDrag *drag, wmDropBox *drop)
       eAssetImportMethod import_method_prop = eAssetImportMethod(active_shelf->settings.import_method);
       asset_drag->import_settings.method = import_method_prop;
       asset_drag->import_settings.use_instance_collections = false;
-      asset_drag->import_settings.use_override = import_method_prop == ASSET_IMPORT_LINK_OVERRIDE;
+      const bool use_override = import_method_prop == ASSET_IMPORT_LINK_OVERRIDE;
+      asset_drag->import_settings.use_override = use_override;
       printf("import method %i\n", import_method_prop);
       printf("override %i\n", use_override);
     }
   }
   ID *id = WM_drag_asset_id_import(C, asset_drag, 0);
+  BKE_lib_override_library_get(CTX_data_main(C), id, nullptr, &id);
+
   /* end bfa */
 
   // ID *id = WM_drag_get_local_ID_or_import_from_asset(C, drag, 0);
 
   RNA_int_set(drop->ptr, "session_uid", int(id->session_uid));
 
-  RNA_boolean_set(drop->ptr, "show_datablock_in_node", (drag->type != WM_DRAG_ASSET));
+  RNA_boolean_set(drop->ptr, "show_datablock_in_node", (drag->type != WM_DRAG_ASSET || 
+    (asset_drag->import_settings.method == ASSET_IMPORT_LINK_OVERRIDE || asset_drag->import_settings.method == ASSET_IMPORT_LINK))
+  );
 }
 
 static void node_id_drop_copy(bContext *C, wmDrag *drag, wmDropBox *drop)
