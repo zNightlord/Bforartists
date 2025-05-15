@@ -480,7 +480,7 @@ static void view3d_collection_drop_copy_external_asset(bContext *C, wmDrag *drag
 
   /* start bfa asset shelf props*/
   bool use_instance = asset_drag->import_settings.use_instance_collections;
-  bool use_override = asset_drag->import_settings.use_override;
+  bool use_override = false;
   bool drop_instances_to_origin = asset_drag->import_settings.drop_instances_to_origin;
 
   // use is_from_browser to differentiate between asset browser and asset shelf drag.
@@ -535,7 +535,7 @@ static void view3d_collection_drop_copy_external_asset(bContext *C, wmDrag *drag
     RNA_float_set_array(drop->ptr, "location", zeros);
     RNA_float_set_array(drop->ptr, "rotation", zeros);
   }
-  else if (snap_state && false) {
+  else {
     float loc[3], rot[3];
     view3d_collection_drop_matrix_from_snap(snap_state, loc, rot);
     RNA_float_set_array(drop->ptr, "location", loc);
