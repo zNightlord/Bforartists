@@ -15,6 +15,7 @@
 #include "BLI_math_base.h"
 #include "BLI_math_base.hh"
 #include "BLI_math_geom.h"
+#include "BLI_math_matrix.hh"
 #include "BLI_math_numbers.hh"
 #include "BLI_math_vector.h"
 #include "BLI_math_vector.hh"
@@ -36,45 +37,6 @@
 #endif
 
 namespace blender::geometry {
-
-/**
- * Profile specification:
- * The profile is a path defined with start, middle, and end control points projected onto a
- * plane (plane_no is normal, plane_co is a point on it) via lines in a given direction (proj_dir).
- *
- * Many interesting profiles are in family of superellipses:
- *     (abs(x/a))^r + abs(y/b))^r = 1
- * r==2 => ellipse; r==1 => line; r < 1 => concave; r > 1 => bulging out.
- * Special cases: let r==0 mean straight-inward, and r==4 mean straight outward.
- *
- * After the parameters are all set, the actual profile points are calculated and pointed to
- * by prof_co. We also may need profile points for a higher resolution number of segments
- * for the subdivision while making the ADJ vertex mesh pattern, and that goes in prof_co_2.
- */
-struct Profile {
-  /** Superellipse r parameter. */
-  float super_r;
-  /** Height for profile cutoff face sides. */
-  float height;
-  /** Start control point for profile. */
-  float3 start;
-  /** Mid control point for profile. */
-  float3 middle;
-  /** End control point for profile. */
-  float3 end;
-  /** Normal of plane to project to. */
-  float3 plane_no;
-  /** Coordinate on plane to project to. */
-  float3 plane_co;
-  /** Direction of projection line. */
-  float3 proj_dir;
-  /** segments+1 profile coordinates (triples of floats). */
-  Array<float> prof_co;
-  /** Like prof_co, but for seg power of 2 >= seg. */
-  Array<float> prof_co_2;
-  /** Mark a special case so the these parameters aren't reset with others. */
-  bool special_params;
-};
 
 /**
  * The un-transformed 2D storage of profile vertex locations. Also, for non-custom profiles
@@ -462,6 +424,9 @@ class BevelState {
     return bevvert_mesh_verts_[bv] == mesh_info.mesh.edges()[bevedge_mesh_edges_[be]][0] ? 0 : 1;
   }
 
+  /** Return the bevedge poisition of the last bevedge attached to newvert, or -1 if none. */
+  int last_attached_bevedge_pos(const int bv, const int newvert) const;
+
  private:
   IndexMaskMemory memory_;
   IndexMask bevedges_mask_;
@@ -568,6 +533,22 @@ static void print_anchor_newvert_positions(const BevelState &bs, const char *lab
   }
 }
 
+static void print_bevedge_attach_verts(const BevelState &bs, const char *label)
+{
+  fmt::println("{}", label);
+  for (const int bv : IndexRange(bs.bevverts_num)) {
+    fmt::println("bv {}: ", bv);
+    Span<int> edges = bs.bevvert_bevedges()[bv];
+    for (const int epos : edges.index_range()) {
+      const int be = edges[epos];
+      const int end = bs.bevedge_vert_end(bv, be);
+      const int nv = bs.bevedge_attach_verts()[be][end];
+      fmt::print(" [{}]: be={} nv={}", epos, be, nv);
+    }
+    fmt::println("");
+  }
+}
+
 [[maybe_unused]] static void dump_bevel_state(const BevelState &bs, const char *label)
 {
   bool vertex_only = bs.params.affect_type == BevelAffect::Vertices;
@@ -586,6 +567,9 @@ static void print_anchor_newvert_positions(const BevelState &bs, const char *lab
   }
   print_groupedspan(bs.bevvert_bevedges(), "bevvert_bevedges");
   print_groupedspan(bs.bevvert_faces(), "bevvert_faces");
+  if (bs.bevedge_attach_verts().size() > 0) {
+    print_bevedge_attach_verts(bs, "bevedge_attach_verts");
+  }
   if (bs.newvert_positions().size() > 0) {
     print_anchor_newvert_positions(bs, "anchor newvert positions");
   }
@@ -1156,7 +1140,7 @@ static float angle_between_edges(const int bv,
 /**
  * \return True if d1 and d2 are parallel or nearly parallel.
  */
-[[maybe_unused]] static bool nearly_parallel_normalized(const float3 d1, const float3 d2)
+static bool nearly_parallel_normalized(const float3 d1, const float3 d2)
 {
   return compare_ff(math::abs(math::dot(d1, d2)), 1.0f, bevel_epsilon_ang_dot);
 }
@@ -1669,10 +1653,71 @@ static bool bevedge_on_plane(const int bv, const int epos, const BevelState &bs)
   return false;
 }
 
+/** Return the closest point on the line (a, b) to the given bevedge specified by \a bv and \a
+ * epos. */
+static float3 project_to_edge(
+    const int bv, const int epos, const float3 &a, const float3 &b, const BevelState &bs)
+{
+  float3 co1, co2;
+  const int be = bs.bevvert_bevedges()[bv][epos];
+  const Mesh &mesh = bs.mesh_info.mesh;
+  const int2 mesh_e = mesh.edges()[bs.bevedge_mesh_edges()[be]];
+  const float3 e1 = mesh.vert_positions()[mesh_e[0]];
+  const float3 e2 = mesh.vert_positions()[mesh_e[1]];
+  if (!isect_line_line_v3(e1, e2, a, b, co1, co2)) {
+    return e1;
+  }
+  return co1;
+}
+
 }  // end namespace geom
 
 namespace profile {
-/** Functions and constants related to superellipse profiles. */
+/** Structures, functions and constants related to superellipse profiles. */
+
+/**
+ * Profile specification:
+ * The profile is a path defined with start, middle, and end control points projected onto a
+ * plane (plane_no is normal, plane_co is a point on it) via lines in a given direction (proj_dir).
+ *
+ * Many interesting profiles are in family of superellipses:
+ *     (abs(x/a))^r + abs(y/b))^r = 1
+ * r==2 => ellipse; r==1 => line; r < 1 => concave; r > 1 => bulging out.
+ * Special cases: let r==0 mean straight-inward, and r==4 mean straight outward.
+ *
+ * After the parameters are all set, the actual profile points are calculated and pointed to
+ * by prof_co. We also may need profile points for a higher resolution number of segments
+ * for the subdivision while making the ADJ vertex mesh pattern, and that goes in prof_co_2.
+ */
+struct Profile {
+  /** Superellipse r parameter. */
+  float super_r;
+  /** Height for profile cutoff face sides. */
+  float height;
+  /** Start control point for profile. */
+  float3 start;
+  /** Mid control point for profile. */
+  float3 middle;
+  /** End control point for profile. */
+  float3 end;
+  /** Normal of plane to project to. */
+  float3 plane_no;
+  /** Coordinate on plane to project to. */
+  float3 plane_co;
+  /** Direction of projection line. */
+  float3 proj_dir;
+  /** segments+1 profile coordinates. */
+  Array<float3, 10> prof_co;
+  /** Like prof_co, but for seg power of 2 >= seg. */
+  Array<float3, 10> prof_co_2;
+  /** Mark a special case so the these parameters aren't reset with others. */
+  bool special_params;
+};
+
+/** Holds the profiles for each anchor vertex in a vertex mesh pattern.
+ * Given an inline capacity to make the need for allocates rare.
+ */
+typedef Array<Profile, 20> AnchorProfiles;
 
 /* Values for super_r to give particular special shapes. */
 constexpr float pro_square_r = 1e4f;
@@ -2000,6 +2045,110 @@ static float find_profile_fullness(BevelState *bs)
 }
 
 /**
+ * Fill matrix r_mat so that a point in the sheared parallelogram with corners
+ * va, vmid, vb (and the 4th that is implied by it being a parallelogram)
+ * is the result of transforming the unit square by multiplication with r_mat.
+ * If it can't be done because the parallelogram is degenerate, return false,
+ * else return true.
+ * Method:
+ * Find vo, the origin of the parallelogram with other three points va, vmid, vb.
+ * Also find vd, which is in direction normal to parallelogram and 1 unit away
+ * from the origin.
+ * The quarter circle in first quadrant of unit square will be mapped to the
+ * quadrant of a sheared ellipse in the parallelogram, using a matrix.
+ * The matrix mat is calculated to map:
+ *    (0,1,0) -> va
+ *    (1,1,0) -> vmid
+ *    (1,0,0) -> vb
+ *    (0,1,1) -> vd
+ * We want M to make M*A=B where A has the left side above, as columns
+ * and B has the right side as columns - both extended into homogeneous coords.
+ * So M = B*(Ainverse).  Doing Ainverse by hand gives the code below.
+ */
+static bool make_unit_square_map(const float3 va,
+                                 const float3 vmid,
+                                 const float3 vb,
+                                 float4x4 &r_mat)
+{
+  const float3 va_vmid = vmid - va;
+  const float3 vb_vmid = vmid - vb;
+
+  if (math::is_zero(va_vmid) || math::is_zero(vb_vmid)) {
+    return false;
+  }
+
+  if (math::abs(angle_v3v3(va_vmid, vb_vmid) - math::numbers::pi) <= geom::bevel_epsilon_ang) {
+    return false;
+  }
+
+  const float3 vo = va - vb_vmid;
+  const float3 vddir = math::normalize(math::cross(vb_vmid, va_vmid));
+  const float3 vd = vo + vddir;
+
+  /* The cols of m are: `vmid - va, vmid - vb, vmid + vd - va -vb, va + vb - vmid`;
+   * Blender transform matrices are stored such that `m[i][*]` is `i-th` column;
+   * the last elements of each col remain as they are in unity matrix. */
+  const float3 col0 = vmid - va;
+  const float3 col1 = vmid - vb;
+  const float3 col2 = vmid + vd - va - vb;
+  const float3 col3 = va + vb - vmid;
+  r_mat[0] = float4(col0[0], col0[1], col0[2], 0.0f);
+  r_mat[1] = float4(col1[0], col1[1], col1[2], 0.0f);
+  r_mat[2] = float4(col2[0], col2[1], col2[2], 0.0f);
+  r_mat[3] = float4(col3[0], col3[1], col3[2], 1.0f);
+
+  return true;
+}
+
+/**
+ * Helper for #calculate_profiles that builds the 3D locations for the segments
+ * and the higher power of 2 segments.
+ */
+static void calculate_profile_segments(const Profile &profile,
+                                       const float4x4 map,
+                                       const bool use_map,
+                                       const bool reversed,
+                                       const int ns,
+                                       Span<double> xvals,
+                                       Span<double> yvals,
+                                       MutableSpan<float3> r_prof_co)
+{
+  /* Iterate over the vertices along the boundary arc. */
+  for (int k = 0; k <= ns; k++) {
+    float3 co;
+    if (k == 0) {
+      co = profile.start;
+    }
+    else if (k == ns) {
+      co = profile.end;
+    }
+    else {
+      if (use_map) {
+        const float3 p = reversed ? float3(yvals[ns - k], xvals[ns - k], 0.0f) :
+                                    float3(xvals[k], yvals[k], 0.0f);
+        /* Do the 2D->3D transformation of the profile coordinates. */
+        co = math::transform_point(map, p);
+      }
+      else {
+        co = math::interpolate(profile.start, profile.end, float(k) / float(ns));
+      }
+    }
+    /* Finish the 2D->3D transformation by projecting onto the final profile plane. */
+    float3 &prof_co_k = r_prof_co[k];
+    if (!math::is_zero(profile.proj_dir)) {
+      float3 co2 = co + profile.proj_dir;
+      if (!isect_line_plane_v3(prof_co_k, co, co2, profile.plane_co, profile.plane_no)) {
+        /* Shouldn't happen. */
+        prof_co_k = co;
+      }
+    }
+    else {
+      prof_co_k = co;
+    }
+  }
+}
+
+/**
  * Fills the ProfileSpacing struct with the 2D coordinates for the profile's vertices.
  * The superellipse used for multi-segment profiles does not have a closed-form way
  * to generate evenly spaced points along an arc. We use an expensive search procedure
@@ -2069,6 +2218,128 @@ static void set_profile_spacing(BevelState *bs, ProfileSpacing *pro_spacing, boo
   else {
     find_even_superellipse_chords(
         segments, bs->pro_super_r, pro_spacing->xvals, pro_spacing->yvals);
+  }
+}
+
+static void calculate_profiles(const int bv, AnchorProfiles &profiles, const BevelState &bs)
+{
+  if (bs.params.segments == 1) {
+    /* Profiles are unnecessary for 1-segment bevels. */
+    return;
+  }
+  const MeshPattern &pat = bs.bevvert_meshpatterns()[bv];
+  Span<int> edges = bs.bevvert_bevedges()[bv];
+  IndexRange newverts = bs.bevvert_newverts()[bv];
+  const float3 bv_v_pos = bs.mesh_info.mesh.vert_positions()[bs.bevvert_mesh_verts()[bv]];
+  for (const int a : IndexRange(pat.num_anchors)) {
+    Profile &profile = profiles[a];
+    /* First fill in the profile parameters. */
+    const int apos = pat.anchor_vert(a);
+    const int anext = (a + 1) % pat.num_anchors;
+    const int aposnext = pat.anchor_vert(anext);
+    profile.start = bs.newvert_positions()[newverts[apos]];
+    profile.end = bs.newvert_positions()[newverts[aposnext]];
+    /* Fallback will be linear interopolation bewtween start and end. */
+    profile.middle = math::interpolate(profile.start, profile.end, 0.5f);
+    profile.super_r = pro_line_r;
+    profile.plane_co = float3(0.0, 0.0, 0.0);
+    profile.plane_no = float3(0.0, 0.0, 0.0);
+    profile.proj_dir = float3(0.0, 0.0, 0.0);
+    if (bs.params.affect_type == BevelAffect::Vertices) {
+      profile.middle = bv_v_pos;
+      continue;
+    }
+    const int be_pos = bs.last_attached_bevedge_pos(bv, apos);
+    if (be_pos == -1) {
+      /* TODO: this shouldn't happen. */
+      BLI_assert(false);
+      continue;
+    }
+    const int be = edges[be_pos];
+    if (bs.bevedge_is_beveled(be)) {
+      /* Projection direction is along be towards bv. */
+      profile.proj_dir = -math::normalize(geom::edge_dir(bv, be_pos, bs));
+      profile.middle = geom::project_to_edge(bv, be_pos, profile.start, profile.end, bs);
+      /* Usual plane to project to is the one containing start, middle, and end. */
+      const float3 d1 = math::normalize(profile.middle - profile.start);
+      const float3 d2 = math::normalize(profile.middle - profile.end);
+      if (!geom::nearly_parallel_normalized(d1, d2)) {
+        /* Usual plane is fine. */
+        profile.plane_no = math::normalize(math::cross(d1, d2));
+        profile.plane_co = profile.start;
+        profile.super_r = bs.pro_super_r;
+      }
+      else {
+        /* It seems that the beveled edge is coplanar with the two anchor verts.
+         * We want to make that plane the profile plane, if possible.
+         */
+        const int be_prev_pos = be_pos == 0 ? edges.size() - 1 : be_pos - 1;
+        const int be_next_pos = be_pos == edges.size() - 1 ? 0 : be_pos + 1;
+        const int be_prev = edges[be_prev_pos];
+        const int be_next = edges[be_next_pos];
+        if (bs.bevedge_is_beveled(be_prev) && bs.bevedge_is_beveled(be_next) && be_prev != be_next)
+        {
+          const float3 d3 = math::normalize(geom::edge_dir(bv, be_prev_pos, bs));
+          const float3 d4 = math::normalize(geom::edge_dir(bv, be_next_pos, bs));
+          if (!geom::nearly_parallel_normalized(d3, d4)) {
+            const float3 co3 = profile.start + d3;
+            const float3 co4 = profile.end + d4;
+            float3 meetco, isect2;
+            if (isect_line_line_v3(profile.start, co3, profile.end, co4, meetco, isect2)) {
+              profile.middle = meetco;
+              profile.super_r = bs.pro_super_r;
+            }
+          }
+        }
+        else {
+          profile.middle = bv_v_pos;
+          profile.super_r = bs.pro_super_r;
+        }
+        if (profile.super_r != pro_line_r) {
+          const float3 d5 = math::normalize(profile.middle - profile.start);
+          const float3 d6 = math::normalize(profile.middle - profile.end);
+          if (!geom::nearly_parallel_normalized(d5, d6)) {
+            profile.plane_no = math::normalize(math::cross(d5, d6));
+            profile.plane_co = profile.start;
+          }
+        }
+      }
+    }
+    /* TODO: miters */
+
+    /* Now that the profile parameters are set, we can calculate the positions
+     */
+    profile.prof_co.reinitialize(bs.params.segments + 1);
+    profile.prof_co_2.reinitialize(bs.pro_spacing.segments_power_2);
+    float4x4 map;
+    bool use_map = bs.params.profile_type == BevelProfileType::Superellipse &&
+                   profile.super_r == pro_line_r;
+    if (use_map) {
+      use_map = make_unit_square_map(profile.start, profile.middle, profile.end, map);
+    }
+    /* TODO: cutoff method. */
+    /* Calculate the 3D locations for the profile points. */
+    calculate_profile_segments(profile,
+                               map,
+                               use_map,
+                               false,
+                               bs.params.segments,
+                               bs.pro_spacing.xvals,
+                               bs.pro_spacing.yvals,
+                               profile.prof_co.as_mutable_span());
+    if (bs.params.segments != bs.pro_spacing.segments_power_2) {
+      calculate_profile_segments(profile,
+                                 map,
+                                 use_map,
+                                 false,
+                                 bs.pro_spacing.segments_power_2,
+                                 bs.pro_spacing.xvals_2,
+                                 bs.pro_spacing.yvals_2,
+                                 profile.prof_co_2.as_mutable_span());
+    }
+    else {
+      std::copy(profile.prof_co.begin(), profile.prof_co.end(), profile.prof_co_2.begin());
+    }
   }
 }
 
@@ -2702,6 +2973,44 @@ static void build_vmesh_skeleton(int bv,
   }
 }
 
+static void build_internal_adj(const int bv,
+                               const profile::AnchorProfiles &profiles,
+                               MutableSpan<float3> bv_newvert_positions,
+                               const BevelState &bs)
+{
+  const MeshPattern &pat = bs.bevvert_meshpatterns()[bv];
+  const int ns = bs.params.segments;
+  const int nv = pat.num_anchors;
+  BLI_assert(ns > 1 && pat.kind == MeshKind::Adj);
+}
+
+static void build_internal_vmesh(const int bv,
+                                 const profile::AnchorProfiles &profiles,
+                                 MutableSpan<float3> bv_newvert_positions,
+                                 const BevelState &bs)
+{
+  const MeshPattern &pat = bs.bevvert_meshpatterns()[bv];
+  const int ns = bs.params.segments;
+  if (ns == 1) {
+    /* The newverts are all anchor points, so already set. */
+    return;
+  }
+  if (pat.kind == MeshKind::Line) {
+    BLI_assert(pat.num_anchors == 2 && pat.num_elements()[0] == ns + 1);
+    const profile::Profile pro = profiles[0];
+    for (int i = 1; i <= ns; i++) {
+      bv_newvert_positions[i] = pro.prof_co[i];
+    }
+  }
+  else if (pat.kind == MeshKind::Adj) {
+    build_internal_adj(bv, profiles, bv_newvert_positions, bs);
+  }
+  else {
+    /* TODO: implement me. */
+    BLI_assert(false);
+  }
+}
+
 }  // end of namespace topology
 
 namespace spec {
@@ -2980,6 +3289,22 @@ BevelState::BevelState(const Mesh &src_mesh,
   bevvert_bevedges_ = GroupedSpan<int>(offsets, bevvert_bevedges_indices_);
 }
 
+/** Return the bevedge poisition of the last bevedge attached to newvert, or -1 if none. */
+int BevelState::last_attached_bevedge_pos(const int bv, const int newvert) const
+{
+  Span<int> edges = bevvert_bevedges_[bv];
+  int ans = -1;
+  for (const int epos : edges.index_range()) {
+    const int be = edges[epos];
+    const int be_end = bevedge_vert_end(bv, be);
+    const int attach_vert = bevedge_attach_verts_[be][be_end];
+    if (attach_vert == newvert) {
+      ans = epos;
+    }
+  }
+  return ans;
+}
+
 /** Initialize the part of the state related to the profile curves that will be used in the
  * non-custom shapes of multisegment bevels.
  */
@@ -3110,6 +3435,11 @@ void BevelState::build_vertex_meshes()
           newvert_positions_.as_mutable_span().slice(bevvert_newverts_[bv]),
           bevedge_attach_verts_.as_mutable_span(),
           *this);
+      const int anchors_num = bevvert_meshpatterns_[bv].num_anchors;
+      profile::AnchorProfiles profiles(anchors_num);
+      profile::calculate_profiles(bv, profiles, *this);
+      topology::build_internal_vmesh(
+          bv, profiles, newvert_positions_.as_mutable_span().slice(bevvert_newverts_[bv]), *this);
     }
   });
 }
