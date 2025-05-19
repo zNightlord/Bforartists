@@ -600,563 +600,6 @@ static void draw_bevvert(int bv, const BevelState &bs)
   }
 }
 
-/** Mesh Patterns. */
-
-namespace adj {
-/** The "Adj" pattern is the only really complicated pattern.
- * The pattern for nv anchor verts and ns segments is a set of
- * concentric rings of vertices, which form rings of faces.
- * The outer most ring has a skeleton of nv anchor verts, and
- * between successive anchors there are ns edge segments and
- * hence (ns - 2) non-anchor verts (sometimes we'll call them
- * "span" verts) between the successive anchor verts.
- *
- * Each successive inner ring has 2 less verts than the next
- * outward ring.  If ns is odd, we end up with an nv-gon as
- * the innermost ring; if ns is even, we end up with a single
- * vertex in the innermost ring.
- *
- * The edges that go between the verts of the same ring are
- * called "ring edges". There are also edges that go between
- * two successive rings, called "cross-ring" edges. The span
- * vertices are connected one-to-one between the rings, while
- * an anchor vertex has edges to the just-preceding and
- * just-succeeding span vert in the next outer ring.
- * The ring edges and cross ring edges together form rings
- * of faces, which are all quads except possibly the center
- * face, which is an nv-gon ns is odd.
- *
- * The verts, edges, and faces are indexed by starting at the
- * innermost ring and going counterclockwise from the 0th
- * anchor vertex, and continuing with successive rings.
- * The edges index the ring edges first, then the cross ring
- * edges.
- *
- * TODO: link to external doc that has a picture of all this.
- */
-
-static inline int odd(int i)
-{
-  return i % 2 == 1;
-}
-
-static inline int v_ringstart_odd(int r, int nv)
-{
-  return nv * r * r;
-}
-
-static inline int v_ringlen_odd(int r, int nv)
-{
-  return nv * (2 * r + 1);
-}
-
-static inline int v_num_rings_odd(int ns)
-{
-  return (ns - 1) / 2 + 1;
-}
-
-static inline int v_ringstart_even(int r, int nv)
-{
-  return r == 0 ? 0 : 1 + nv * (r - 1) * r;
-}
-
-static inline int v_ringlen_even(int r, int nv)
-{
-  return r == 0 ? 1 : 2 * nv * r;
-}
-
-static inline int v_num_rings_even(int ns)
-{
-  return ns / 2 + 1;
-}
-
-static int v_ringstart(int r, int nv, int ns)
-{
-  return odd(ns) ? v_ringstart_odd(r, nv) : v_ringstart_even(r, nv);
-}
-
-static int v_ringlen(int r, int nv, int ns)
-{
-  return odd(ns) ? v_ringlen_odd(r, nv) : v_ringlen_even(r, nv);
-}
-
-static int v_num_rings(int ns)
-{
-  return odd(ns) ? v_num_rings_odd(ns) : v_num_rings_even(ns);
-}
-
-static int v_total_verts(int nv, int ns)
-{
-  return v_ringstart(v_num_rings(ns), nv, ns);
-}
-
-static inline int f_ringstart_odd(int r, int nv)
-{
-  return v_ringstart_even(r, nv);
-}
-
-static inline int f_ringlen_odd(int r, int nv)
-{
-  return v_ringlen_even(r, nv);
-}
-
-static inline int f_num_rings_odd(int ns)
-{
-  return (ns - 1) / 2 + 1;
-}
-
-static inline int f_ringstart_even(int r, int nv)
-{
-  return v_ringstart_odd(r, nv);
-}
-
-static inline int f_ringlen_even(int r, int nv)
-{
-  return v_ringlen_odd(r, nv);
-}
-
-static inline int f_num_rings_even(int ns)
-{
-  return ns / 2;
-}
-
-static int f_ringstart(int r, int nv, int ns)
-{
-  return odd(ns) ? f_ringstart_odd(r, nv) : f_ringstart_even(r, nv);
-}
-
-static int f_ringlen(int r, int nv, int ns)
-{
-  return odd(ns) ? f_ringlen_odd(r, nv) : f_ringlen_even(r, nv);
-}
-
-static int f_num_rings(int ns)
-{
-  return odd(ns) ? f_num_rings_odd(ns) : f_num_rings_even(ns);
-}
-
-static int f_total_faces(int nv, int ns)
-{
-  return f_ringstart(f_num_rings(ns), nv, ns);
-}
-
-static inline int e_ringstart_odd(int r, int nv)
-{
-  return v_ringstart_odd(r, nv);
-}
-
-static inline int e_ringlen_odd(int r, int nv)
-{
-  return v_ringlen_odd(r, nv);
-}
-
-static inline int e_num_rings_odd(int ns)
-{
-  return (ns - 1) / 2 + 1;
-}
-
-static inline int e_crossring_start_odd(int r, int nv, int ns)
-{
-  return e_ringstart_odd(e_num_rings_odd(ns), nv) + nv * r * (r + 1);
-}
-
-static inline int e_crossring_len_odd(int r, int nv)
-{
-  return 2 * nv * (r + 1);
-}
-
-static inline int e_num_crossrings_odd(int ns)
-{
-  return ns > 1 ? (ns - 1) / 2 : 0;
-}
-
-static inline int e_ringstart_even(int r, int nv)
-{
-  return v_ringstart_even(r + 1, nv) - 1;
-}
-
-static inline int e_ringlen_even(int r, int nv)
-{
-  return v_ringlen_even(r + 1, nv);
-}
-
-static inline int e_num_rings_even(int ns)
-{
-  return ns / 2;
-}
-
-static inline int e_crossring_start_even(int r, int nv, int ns)
-{
-  return e_ringstart_even(e_num_rings_even(ns), nv) + nv * r * r;
-}
-
-static inline int e_crossring_len_even(int r, int nv)
-{
-  return nv * (2 * r + 1);
-}
-
-static inline int e_num_crossrings_even(int ns)
-{
-  return ns / 2;
-}
-
-static int e_ringstart(int r, int nv, int ns)
-{
-  return odd(ns) ? e_ringstart_odd(r, nv) : e_ringstart_even(r, nv);
-}
-
-static int e_ringlen(int r, int nv, int ns)
-{
-  return odd(ns) ? e_ringlen_odd(r, nv) : e_ringlen_even(r, nv);
-}
-
-static int e_num_rings(int ns)
-{
-  return odd(ns) ? e_num_rings_odd(ns) : e_num_rings_even(ns);
-}
-
-static int e_crossring_start(int r, int nv, int ns)
-{
-  return odd(ns) ? e_crossring_start_odd(r, nv, ns) : e_crossring_start_even(r, nv, ns);
-}
-
-static int e_crossring_len(int r, int nv, int ns)
-{
-  return odd(ns) ? e_crossring_len_odd(r, nv) : e_crossring_len_even(r, nv);
-}
-
-static int e_num_crossrings(int ns)
-{
-  return odd(ns) ? e_num_crossrings_odd(ns) : e_num_crossrings_even(ns);
-}
-
-static int e_num_edges(int nv, int ns)
-{
-  return e_crossring_start(e_num_crossrings(ns), nv, ns);
-}
-
-static int face_ring(int f, int nv, int ns)
-{
-  if (odd(ns)) {
-    return f < 1 ? 0 : int(((nv + math::sqrt(nv * nv + 4 * nv * (f - 1))) / (2 * nv)));
-  }
-  else {
-    return f < 0 ? 0 : int(math::sqrt(f / nv));
-  }
-}
-
-static int vertex_ring(int v, int nv, int ns)
-{
-  if (odd(ns)) {
-    return v < 0 ? 0 : int(math::sqrt(v / nv));
-  }
-  else {
-    return v < 1 ? 0 : int(((nv + math::sqrt(nv * nv + 4 * nv * (v - 1))) / (2 * nv)));
-  }
-}
-
-static inline int v_anchor_div(int r, int nv, int ns)
-{
-  return v_ringlen(r, nv, ns) / nv;
-}
-
-static inline int f_anchor_div(int r, int nv, int ns)
-{
-  return f_ringlen(r, nv, ns) / nv;
-}
-
-[[maybe_unused]] static int3 v_ring_anchor_offset(int v, int nv, int ns)
-{
-  int ring = vertex_ring(v, nv, ns);
-  int ring_offset = v - v_ringstart(ring, nv, ns);
-  int anchor_index = ring_offset / v_anchor_div(ring, nv, ns);
-  int offset = ring_offset % v_anchor_div(ring, nv, ns);
-  return int3(ring, anchor_index, offset);
-}
-
-static int3 f_ring_anchor_offset(int f, int nv, int ns)
-{
-  int ring = face_ring(f, nv, ns);
-  int ring_offset = f - f_ringstart(ring, nv, ns);
-  int anchor_index = ring_offset / f_anchor_div(ring, nv, ns);
-  int offset = ring_offset % f_anchor_div(ring, nv, ns);
-  return int3(ring, anchor_index, offset);
-}
-
-static int rao_to_vert(int r, int a, int o, int nv, int ns)
-{
-  int delta = (v_anchor_div(r, nv, ns) * a + o) % v_ringlen(r, nv, ns);
-  return v_ringstart(r, nv, ns) + delta;
-}
-
-[[maybe_unused]] static int rao_to_face(int r, int a, int o, int nv, int ns)
-{
-  int delta = (f_anchor_div(r, nv, ns) * a + o) % f_ringlen(r, nv, ns);
-  return f_ringstart(r, nv, ns) + delta;
-}
-
-static int face_outer_vertex_ring(int f, int nv, int ns)
-{
-  return odd(ns) ? face_ring(f, nv, ns) : face_ring(f, nv, ns) + 1;
-}
-
-static std::pair<int4, int4> face_vertices_and_edges(int f, int nv, int ns)
-{
-  if (f == 0 and odd(ns)) {
-    /* The center ngon has vertex and edge indices 0, ..., nv-1,
-     * and we expect the caller to know this as this API doesn't let
-     * us return an ngon. */
-    return std::pair<int4, int4>(int4(0, 1, 2, 3), int4(0, 1, 2, 3));
-  }
-  auto [fr, fa, fo] = f_ring_anchor_offset(f, nv, ns);
-  int outer_r = face_outer_vertex_ring(f, nv, ns);
-  int inner_r = outer_r - 1;
-  int vr = outer_r;
-  int va = fa;
-  int vo = fo;
-  int vroot = rao_to_vert(vr, va, vo, nv, ns);
-  int vafter = vroot + 1;
-  int vopposite, vbefore;
-  if (fo == 0) {
-    vopposite = rao_to_vert(inner_r, va, vo, nv, ns);
-    vbefore = va > 0 ? vroot - 1 : vroot + v_ringlen(outer_r, nv, ns) - 1;
-  }
-  else {
-    vopposite = rao_to_vert(inner_r, va, vo, nv, ns);
-    vbefore = vopposite > v_ringstart(inner_r, nv, ns) ?
-                  vopposite - 1 :
-                  v_ringstart(inner_r, nv, ns) + v_ringlen(inner_r, nv, ns) - 1;
-  }
-  int4 vertices = int4(vroot, vafter, vopposite, vbefore);
-  int e0 = odd(ns) ? vroot : vroot - 1;
-  int f_ring_pos = f - f_ringstart(fr, nv, ns);
-  int e_cross_r = odd(ns) ? fr - 1 : fr;
-  int e_outer_r = fr;
-  int e_inner_r = e_outer_r - 1;
-  int e1 = e_crossring_start(e_cross_r, nv, ns) + f_ring_pos;
-  int e2, e3;
-  if (fo == 0) {
-    e2 = fa > 0 ? e1 - 1 : e1 + e_crossring_len(e_cross_r, nv, ns) - 1;
-    e3 = e0 > e_ringstart(e_outer_r, nv, ns) ?
-             e0 - 1 :
-             e_ringstart(e_outer_r, nv, ns) + e_ringlen(e_outer_r, nv, ns) - 1;
-  }
-  else {
-    if (odd(ns)) {
-      e2 = vopposite > e_ringstart(e_inner_r, nv, ns) ?
-               vopposite - 1 :
-               e_ringstart(e_inner_r, nv, ns) + e_ringlen(e_inner_r, nv, ns) - 1;
-    }
-    else {
-      e2 = vopposite - 1 > e_ringstart(e_inner_r, nv, ns) ?
-               vopposite - 2 :
-               e_ringstart(e_inner_r, nv, ns) + e_ringlen(e_inner_r, nv, ns) - 1;
-    }
-    e3 = e1 - 1;
-  }
-  int4 edges = int4(e0, e1, e2, e3);
-  return std::pair<int4, int4>(vertices, edges);
-}
-
-[[maybe_unused]] static void print_adj(int nv, int ns)
-{
-  fmt::println("\nnv = {}, ns = {}", nv, ns);
-  int nvrings = v_num_rings(ns);
-  fmt::println("verts");
-  fmt::println("v_num_rings = {}", nvrings);
-  for (const int r : IndexRange(nvrings)) {
-    fmt::println("r = {}: start = {}, len = {}", r, v_ringstart(r, nv, ns), v_ringlen(r, nv, ns));
-  }
-  fmt::println("total verts = {}", v_total_verts(nv, ns));
-  fmt::println("faces");
-  int nfrings = f_num_rings(ns);
-  fmt::println("f_num_rings = {}", nfrings);
-  for (const int r : IndexRange(nfrings)) {
-    fmt::println("r = {}: start = {}, len = {}", r, f_ringstart(r, nv, ns), f_ringlen(r, nv, ns));
-  }
-  fmt::println("total faces = {}", f_total_faces(nv, ns));
-  fmt::println("edges");
-  int nerings = e_num_rings(ns);
-  fmt::println("e_num_rings = {}", nerings);
-  for (const int r : IndexRange(nerings)) {
-    fmt::println("r = {}: start = {}, len = {}", r, e_ringstart(r, nv, ns), e_ringlen(r, nv, ns));
-  }
-  int necrossrings = e_num_crossrings(ns);
-  fmt::println("e_num_crossrings = {}", necrossrings);
-  for (const int r : IndexRange(necrossrings)) {
-    fmt::println("r = {}: start = {}, len = {}",
-                 r,
-                 e_crossring_start(r, nv, ns),
-                 e_crossring_len(r, nv, ns));
-  }
-  fmt::println("total edges = {}", e_num_edges(nv, ns));
-  fmt::println("");
-  for (const int f : IndexRange(f_total_faces(nv, ns))) {
-    auto [fv, fe] = face_vertices_and_edges(f, nv, ns);
-    fmt::println("f = {}, fverts = ({},{},{},{}), fedges = ({},{},{},{})",
-                 f,
-                 fv[0],
-                 fv[1],
-                 fv[2],
-                 fv[3],
-                 fe[0],
-                 fe[1],
-                 fe[2],
-                 fe[3]);
-  }
-}
-
-/** A structure to hold the vertex positions of an Adj pattern. */
-struct AdjVerts {
-  /** The coordinates of vertices arranged according to indexing given above.
-   * The inline size 125 will accommodate anchors=4, segments=10. */
-  Array<float3, 125> verts;
-  /** How many anchors (often abbreviated nv). */
-  int anchors;
-  /** How many segments (often abbreviated ns). */
-  int segments;
-
-  AdjVerts(const int anchors, const int segments) :
-    anchors(anchors), segments(segments)
-  {
-    verts.reinitialize(v_total_verts(anchors, segments));
-    verts.fill(float3(0.0f, 0.0f, 0.0f));
-  }
-
-  int anchor_offset_to_outer_ring_vert(const int anchor, const int offset) const;
-
-  const float3 &outer_ring_vert(const int anchor, const int offset) const
-  {
-    return verts[anchor_offset_to_outer_ring_vert(anchor, offset)];
-  }
-
-  float3 &mutable_outer_ring_vert(const int anchor, const int offset)
-  {
-    return verts[anchor_offset_to_outer_ring_vert(anchor, offset)];
-  }
-
-};
-
-int AdjVerts::anchor_offset_to_outer_ring_vert(const int anchor, const int offset) const
-{
-  const int ring = v_num_rings(this->segments) - 1;
-  return rao_to_vert(ring, anchor, offset, this->anchors, this->segments);
-}
-
-
-/* Fill \a adjverts using recursive cubic subdivision, until reach the
- * base case where \a adjverts_2_segs is the answer.
- * adjverts.segments should be a power of 2, and >= 2.
- */
-static void fill_adjverts(AdjVerts &adjverts, const AdjVerts &adjverts_2_segs)
-{
-  BLI_assert(adjverts_2_segs.segments == 2 && adjverts.segments % 2 == 0);
-  BLI_assert(adjverts.segments < 1000); /* TODO: stop too-deep recursion. */
-  if (adjverts.segments < 2) {
-    return;
-  }
-  if (adjverts.segments == 2) {
-    std::copy(adjverts_2_segs.verts.begin(), adjverts_2_segs.verts.end(),
-              adjverts.verts.begin());
-    return;
-  }
-  int nhalf = adjverts.segments / 2;
-  BLI_assert(nhalf % 2 == 0);
-  AdjVerts adjverts_half = AdjVerts(adjverts.anchors, nhalf);
-  fill_adjverts(adjverts_half, adjverts_2_segs);
-  /* Do a step of cubic subdivision (Catmull-Clark) with special rules
-   * at boundaries. See Levin 1999 paper "Filling an N-sided hole using combined
-   * subdivision schemes".
-   */
-  const int n_boundary = adjverts_half.anchors;
-  const int ns_in = adjverts_half.segments;
-  const int ns_in_half = ns_in / 2;
-  const int ns_out = adjverts.segments;
-
-  /* First adjust the boundary vertices of the input, storing in the output. */
-  for (const int i : IndexRange(n_boundary)) {
-    adjverts.mutable_outer_ring_vert(i, 0) = adjverts_half.outer_ring_vert(i, 0);
-    for (int k = 0; k < ns_in; k++) {
-      float3 co = adjverts_half.outer_ring_vert(i, k);
-      /* Smooth boundary rule. */
-      const float3 co1 = adjverts_half.outer_ring_vert(i, k - 1);
-      const float3 co2 = adjverts_half.outer_ring_vert(i, k + 1);
-      co = co - (1.0f / 6.0f) * (co1 + co2 - 2.0f * co);
-      adjverts.mutable_outer_ring_vert(i, 2 * k) = co;
-    }
-  }
-}
-
-}  // namespace adj
-
-/** Return a 4-tuple with the number of vertices, edges, faces, corners.  */
-int4 MeshPattern::num_elements() const
-{
-  int4 ans;
-  switch (this->kind) {
-    case MeshKind::None:
-      ans = int4(0, 0, 0, 0);
-      break;
-    case MeshKind::Line:
-      ans = int4(num_anchors + num_segs - 1, num_segs, 0, 0);
-      break;
-    case MeshKind::TerminalPoly:
-      ans = int4(
-          num_anchors + num_segs - 2, num_anchors + num_segs - 1, 1, num_anchors + num_segs - 1);
-      break;
-    case MeshKind::Adj: {
-      int totf = adj::f_total_faces(num_anchors, num_segs);
-      ans = int4(adj::v_total_verts(num_anchors, num_segs),
-                 adj::e_num_edges(num_anchors, num_segs),
-                 totf,
-                 4 * totf + (adj::odd(num_segs) ? num_anchors - 4 : 0));
-      break;
-    }
-    case MeshKind::TriFan:
-      ans = int4(num_segs + 2, num_segs + 2, num_segs, 3 * num_segs);
-      break;
-    case MeshKind::Cutoff:
-      /* TODO */
-      BLI_assert(false);
-      ans = int4(0, 0, 0, 0);
-  }
-  return ans;
-}
-
-/** Return the index of the vertex in this MeshPattern for the given anchor vertex. */
-int MeshPattern::anchor_vert(int anchor_index) const
-{
-  int ans;
-  BLI_assert(0 <= anchor_index && anchor_index < this->num_anchors);
-  switch (this->kind) {
-    case MeshKind::None:
-      ans = 0;
-      break;
-    case MeshKind::Line:
-      ans = anchor_index == 0 ? 0 : this->num_segs;
-      break;
-    case MeshKind::TerminalPoly:
-      ans = anchor_index == 0 ? 0 : this->num_segs + anchor_index;
-      break;
-    case MeshKind::Adj: {
-      const int ring = adj::v_num_rings(this->num_segs) - 1;
-      ans = adj::v_ringstart(ring, this->num_anchors, this->num_segs);
-      ans += anchor_index * adj::v_anchor_div(ring, this->num_anchors, this->num_segs);
-      break;
-    }
-    case MeshKind::TriFan:
-      ans = anchor_index == 0 ? 0 : this->num_segs + anchor_index;
-      break;
-    case MeshKind::Cutoff:
-      /* TODO */
-      BLI_assert(false);
-      ans = 0;
-      break;
-  }
-  BLI_assert(0 <= ans && ans < this->num_elements()[0]);
-  return ans;
-}
-
 namespace geom {
 /** Functions and data for geometric calculations. */
 
@@ -2424,7 +1867,681 @@ static void calculate_profiles(const int bv, AnchorProfiles &profiles, const Bev
   }
 }
 
+/**
+ * Find the point on given profile at parameter \a at_index which goes from 0 to \a nseg as
+ * the profile moves from `profile.start` to `profile.end`.
+ * We assume that nseg is either the profile's seg number or a power of 2 less than
+ * or equal to the power of 2 >= seg.
+ * In the latter case, we subsample the profile.prof_co_2, which will not necessarily
+ * give equal spaced chords, but is in fact more what is desired by the cubic subdivision
+ * method used to make the adj pattern.
+ */
+static float3 get_profile_point(const Profile &profile, const int at_index, const int nseg)
+{
+  const int profile_nseg = profile.prof_co.size() - 1;
+  if (profile_nseg == 1) {
+    return at_index == 0 ? profile.start : profile.end;
+  }
+  if (nseg == profile_nseg) {
+    return profile.prof_co[at_index];
+  }
+  BLI_assert(is_power_of_2_i(nseg) && nseg < profile.prof_co_2.size());
+  const int subsample_spacing = (profile.prof_co_2.size() - 1) / nseg;
+  return profile.prof_co_2[at_index * subsample_spacing];
+}
+
 }  // end namespace profile
+
+/** Hole Filling Mesh Pattern. */
+
+namespace adj {
+/** The "Adj" pattern is the only really complicated pattern.
+ * The pattern for nv anchor verts and ns segments is a set of
+ * concentric rings of vertices, which form rings of faces.
+ * The outer most ring has a skeleton of nv anchor verts, and
+ * between successive anchors there are ns edge segments and
+ * hence (ns - 2) non-anchor verts (sometimes we'll call them
+ * "span" verts) between the successive anchor verts.
+ *
+ * Each successive inner ring has 2 less verts than the next
+ * outward ring.  If ns is odd, we end up with an nv-gon as
+ * the innermost ring; if ns is even, we end up with a single
+ * vertex in the innermost ring.
+ *
+ * The edges that go between the verts of the same ring are
+ * called "ring edges". There are also edges that go between
+ * two successive rings, called "cross-ring" edges. The span
+ * vertices are connected one-to-one between the rings, while
+ * an anchor vertex has edges to the just-preceding and
+ * just-succeeding span vert in the next outer ring.
+ * The ring edges and cross ring edges together form rings
+ * of faces, which are all quads except possibly the center
+ * face, which is an nv-gon ns is odd.
+ *
+ * The verts, edges, and faces are indexed by starting at the
+ * innermost ring and going counterclockwise from the 0th
+ * anchor vertex, and continuing with successive rings.
+ * The edges index the ring edges first, then the cross ring
+ * edges.
+ *
+ * TODO: link to external doc that has a picture of all this.
+ */
+
+static inline int odd(int i)
+{
+  return i % 2 == 1;
+}
+
+static inline int v_ringstart_odd(int r, int nv)
+{
+  return nv * r * r;
+}
+
+static inline int v_ringlen_odd(int r, int nv)
+{
+  return nv * (2 * r + 1);
+}
+
+static inline int v_num_rings_odd(int ns)
+{
+  return (ns - 1) / 2 + 1;
+}
+
+static inline int v_ringstart_even(int r, int nv)
+{
+  return r == 0 ? 0 : 1 + nv * (r - 1) * r;
+}
+
+static inline int v_ringlen_even(int r, int nv)
+{
+  return r == 0 ? 1 : 2 * nv * r;
+}
+
+static inline int v_num_rings_even(int ns)
+{
+  return ns / 2 + 1;
+}
+
+static int v_ringstart(int r, int nv, int ns)
+{
+  return odd(ns) ? v_ringstart_odd(r, nv) : v_ringstart_even(r, nv);
+}
+
+static int v_ringlen(int r, int nv, int ns)
+{
+  return odd(ns) ? v_ringlen_odd(r, nv) : v_ringlen_even(r, nv);
+}
+
+static int v_num_rings(int ns)
+{
+  return odd(ns) ? v_num_rings_odd(ns) : v_num_rings_even(ns);
+}
+
+static int v_total_verts(int nv, int ns)
+{
+  return v_ringstart(v_num_rings(ns), nv, ns);
+}
+
+static inline int f_ringstart_odd(int r, int nv)
+{
+  return v_ringstart_even(r, nv);
+}
+
+static inline int f_ringlen_odd(int r, int nv)
+{
+  return v_ringlen_even(r, nv);
+}
+
+static inline int f_num_rings_odd(int ns)
+{
+  return (ns - 1) / 2 + 1;
+}
+
+static inline int f_ringstart_even(int r, int nv)
+{
+  return v_ringstart_odd(r, nv);
+}
+
+static inline int f_ringlen_even(int r, int nv)
+{
+  return v_ringlen_odd(r, nv);
+}
+
+static inline int f_num_rings_even(int ns)
+{
+  return ns / 2;
+}
+
+static int f_ringstart(int r, int nv, int ns)
+{
+  return odd(ns) ? f_ringstart_odd(r, nv) : f_ringstart_even(r, nv);
+}
+
+static int f_ringlen(int r, int nv, int ns)
+{
+  return odd(ns) ? f_ringlen_odd(r, nv) : f_ringlen_even(r, nv);
+}
+
+static int f_num_rings(int ns)
+{
+  return odd(ns) ? f_num_rings_odd(ns) : f_num_rings_even(ns);
+}
+
+static int f_total_faces(int nv, int ns)
+{
+  return f_ringstart(f_num_rings(ns), nv, ns);
+}
+
+static inline int e_ringstart_odd(int r, int nv)
+{
+  return v_ringstart_odd(r, nv);
+}
+
+static inline int e_ringlen_odd(int r, int nv)
+{
+  return v_ringlen_odd(r, nv);
+}
+
+static inline int e_num_rings_odd(int ns)
+{
+  return (ns - 1) / 2 + 1;
+}
+
+static inline int e_crossring_start_odd(int r, int nv, int ns)
+{
+  return e_ringstart_odd(e_num_rings_odd(ns), nv) + nv * r * (r + 1);
+}
+
+static inline int e_crossring_len_odd(int r, int nv)
+{
+  return 2 * nv * (r + 1);
+}
+
+static inline int e_num_crossrings_odd(int ns)
+{
+  return ns > 1 ? (ns - 1) / 2 : 0;
+}
+
+static inline int e_ringstart_even(int r, int nv)
+{
+  return v_ringstart_even(r + 1, nv) - 1;
+}
+
+static inline int e_ringlen_even(int r, int nv)
+{
+  return v_ringlen_even(r + 1, nv);
+}
+
+static inline int e_num_rings_even(int ns)
+{
+  return ns / 2;
+}
+
+static inline int e_crossring_start_even(int r, int nv, int ns)
+{
+  return e_ringstart_even(e_num_rings_even(ns), nv) + nv * r * r;
+}
+
+static inline int e_crossring_len_even(int r, int nv)
+{
+  return nv * (2 * r + 1);
+}
+
+static inline int e_num_crossrings_even(int ns)
+{
+  return ns / 2;
+}
+
+static int e_ringstart(int r, int nv, int ns)
+{
+  return odd(ns) ? e_ringstart_odd(r, nv) : e_ringstart_even(r, nv);
+}
+
+static int e_ringlen(int r, int nv, int ns)
+{
+  return odd(ns) ? e_ringlen_odd(r, nv) : e_ringlen_even(r, nv);
+}
+
+static int e_num_rings(int ns)
+{
+  return odd(ns) ? e_num_rings_odd(ns) : e_num_rings_even(ns);
+}
+
+static int e_crossring_start(int r, int nv, int ns)
+{
+  return odd(ns) ? e_crossring_start_odd(r, nv, ns) : e_crossring_start_even(r, nv, ns);
+}
+
+static int e_crossring_len(int r, int nv, int ns)
+{
+  return odd(ns) ? e_crossring_len_odd(r, nv) : e_crossring_len_even(r, nv);
+}
+
+static int e_num_crossrings(int ns)
+{
+  return odd(ns) ? e_num_crossrings_odd(ns) : e_num_crossrings_even(ns);
+}
+
+static int e_num_edges(int nv, int ns)
+{
+  return e_crossring_start(e_num_crossrings(ns), nv, ns);
+}
+
+static int face_ring(int f, int nv, int ns)
+{
+  if (odd(ns)) {
+    return f < 1 ? 0 : int(((nv + math::sqrt(nv * nv + 4 * nv * (f - 1))) / (2 * nv)));
+  }
+  else {
+    return f < 0 ? 0 : int(math::sqrt(f / nv));
+  }
+}
+
+static int vertex_ring(int v, int nv, int ns)
+{
+  if (odd(ns)) {
+    return v < 0 ? 0 : int(math::sqrt(v / nv));
+  }
+  else {
+    return v < 1 ? 0 : int(((nv + math::sqrt(nv * nv + 4 * nv * (v - 1))) / (2 * nv)));
+  }
+}
+
+static inline int v_anchor_div(int r, int nv, int ns)
+{
+  return v_ringlen(r, nv, ns) / nv;
+}
+
+static inline int f_anchor_div(int r, int nv, int ns)
+{
+  return f_ringlen(r, nv, ns) / nv;
+}
+
+[[maybe_unused]] static int3 v_ring_anchor_offset(int v, int nv, int ns)
+{
+  int ring = vertex_ring(v, nv, ns);
+  int ring_offset = v - v_ringstart(ring, nv, ns);
+  int anchor_index = ring_offset / v_anchor_div(ring, nv, ns);
+  int offset = ring_offset % v_anchor_div(ring, nv, ns);
+  return int3(ring, anchor_index, offset);
+}
+
+static int3 f_ring_anchor_offset(int f, int nv, int ns)
+{
+  int ring = face_ring(f, nv, ns);
+  int ring_offset = f - f_ringstart(ring, nv, ns);
+  int anchor_index = ring_offset / f_anchor_div(ring, nv, ns);
+  int offset = ring_offset % f_anchor_div(ring, nv, ns);
+  return int3(ring, anchor_index, offset);
+}
+
+static int rao_to_vert(int r, int a, int o, int nv, int ns)
+{
+  int delta = (v_anchor_div(r, nv, ns) * a + o) % v_ringlen(r, nv, ns);
+  return v_ringstart(r, nv, ns) + delta;
+}
+
+[[maybe_unused]] static int rao_to_face(int r, int a, int o, int nv, int ns)
+{
+  int delta = (f_anchor_div(r, nv, ns) * a + o) % f_ringlen(r, nv, ns);
+  return f_ringstart(r, nv, ns) + delta;
+}
+
+static int face_outer_vertex_ring(int f, int nv, int ns)
+{
+  return odd(ns) ? face_ring(f, nv, ns) : face_ring(f, nv, ns) + 1;
+}
+
+static std::pair<int4, int4> face_vertices_and_edges(int f, int nv, int ns)
+{
+  if (f == 0 and odd(ns)) {
+    /* The center ngon has vertex and edge indices 0, ..., nv-1,
+     * and we expect the caller to know this as this API doesn't let
+     * us return an ngon. */
+    return std::pair<int4, int4>(int4(0, 1, 2, 3), int4(0, 1, 2, 3));
+  }
+  auto [fr, fa, fo] = f_ring_anchor_offset(f, nv, ns);
+  int outer_r = face_outer_vertex_ring(f, nv, ns);
+  int inner_r = outer_r - 1;
+  int vr = outer_r;
+  int va = fa;
+  int vo = fo;
+  int vroot = rao_to_vert(vr, va, vo, nv, ns);
+  int vafter = vroot + 1;
+  int vopposite, vbefore;
+  if (fo == 0) {
+    vopposite = rao_to_vert(inner_r, va, vo, nv, ns);
+    vbefore = va > 0 ? vroot - 1 : vroot + v_ringlen(outer_r, nv, ns) - 1;
+  }
+  else {
+    vopposite = rao_to_vert(inner_r, va, vo, nv, ns);
+    vbefore = vopposite > v_ringstart(inner_r, nv, ns) ?
+                  vopposite - 1 :
+                  v_ringstart(inner_r, nv, ns) + v_ringlen(inner_r, nv, ns) - 1;
+  }
+  int4 vertices = int4(vroot, vafter, vopposite, vbefore);
+  int e0 = odd(ns) ? vroot : vroot - 1;
+  int f_ring_pos = f - f_ringstart(fr, nv, ns);
+  int e_cross_r = odd(ns) ? fr - 1 : fr;
+  int e_outer_r = fr;
+  int e_inner_r = e_outer_r - 1;
+  int e1 = e_crossring_start(e_cross_r, nv, ns) + f_ring_pos;
+  int e2, e3;
+  if (fo == 0) {
+    e2 = fa > 0 ? e1 - 1 : e1 + e_crossring_len(e_cross_r, nv, ns) - 1;
+    e3 = e0 > e_ringstart(e_outer_r, nv, ns) ?
+             e0 - 1 :
+             e_ringstart(e_outer_r, nv, ns) + e_ringlen(e_outer_r, nv, ns) - 1;
+  }
+  else {
+    if (odd(ns)) {
+      e2 = vopposite > e_ringstart(e_inner_r, nv, ns) ?
+               vopposite - 1 :
+               e_ringstart(e_inner_r, nv, ns) + e_ringlen(e_inner_r, nv, ns) - 1;
+    }
+    else {
+      e2 = vopposite - 1 > e_ringstart(e_inner_r, nv, ns) ?
+               vopposite - 2 :
+               e_ringstart(e_inner_r, nv, ns) + e_ringlen(e_inner_r, nv, ns) - 1;
+    }
+    e3 = e1 - 1;
+  }
+  int4 edges = int4(e0, e1, e2, e3);
+  return std::pair<int4, int4>(vertices, edges);
+}
+
+[[maybe_unused]] static void print_adj(int nv, int ns)
+{
+  fmt::println("\nnv = {}, ns = {}", nv, ns);
+  int nvrings = v_num_rings(ns);
+  fmt::println("verts");
+  fmt::println("v_num_rings = {}", nvrings);
+  for (const int r : IndexRange(nvrings)) {
+    fmt::println("r = {}: start = {}, len = {}", r, v_ringstart(r, nv, ns), v_ringlen(r, nv, ns));
+  }
+  fmt::println("total verts = {}", v_total_verts(nv, ns));
+  fmt::println("faces");
+  int nfrings = f_num_rings(ns);
+  fmt::println("f_num_rings = {}", nfrings);
+  for (const int r : IndexRange(nfrings)) {
+    fmt::println("r = {}: start = {}, len = {}", r, f_ringstart(r, nv, ns), f_ringlen(r, nv, ns));
+  }
+  fmt::println("total faces = {}", f_total_faces(nv, ns));
+  fmt::println("edges");
+  int nerings = e_num_rings(ns);
+  fmt::println("e_num_rings = {}", nerings);
+  for (const int r : IndexRange(nerings)) {
+    fmt::println("r = {}: start = {}, len = {}", r, e_ringstart(r, nv, ns), e_ringlen(r, nv, ns));
+  }
+  int necrossrings = e_num_crossrings(ns);
+  fmt::println("e_num_crossrings = {}", necrossrings);
+  for (const int r : IndexRange(necrossrings)) {
+    fmt::println("r = {}: start = {}, len = {}",
+                 r,
+                 e_crossring_start(r, nv, ns),
+                 e_crossring_len(r, nv, ns));
+  }
+  fmt::println("total edges = {}", e_num_edges(nv, ns));
+  fmt::println("");
+  for (const int f : IndexRange(f_total_faces(nv, ns))) {
+    auto [fv, fe] = face_vertices_and_edges(f, nv, ns);
+    fmt::println("f = {}, fverts = ({},{},{},{}), fedges = ({},{},{},{})",
+                 f,
+                 fv[0],
+                 fv[1],
+                 fv[2],
+                 fv[3],
+                 fe[0],
+                 fe[1],
+                 fe[2],
+                 fe[3]);
+  }
+}
+
+/** A structure to hold the vertex positions of an Adj pattern. */
+struct AdjVerts {
+  /** The coordinates of vertices arranged according to indexing given above.
+   * The inline size 125 will accommodate anchors=4, segments=10. */
+  Array<float3, 125> verts;
+  /** How many anchors (often abbreviated nv). */
+  int anchors;
+  /** How many segments (often abbreviated ns). */
+  int segments;
+
+  AdjVerts(const int anchors, const int segments) : anchors(anchors), segments(segments)
+  {
+    verts.reinitialize(v_total_verts(anchors, segments));
+    verts.fill(float3(0.0f, 0.0f, 0.0f));
+  }
+
+  const int anchor_offset_to_outer_ring_vert(const int anchor, const int offset) const;
+
+  const float3 &outer_ring_vert(const int anchor, const int offset) const
+  {
+    return verts[anchor_offset_to_outer_ring_vert(anchor, offset)];
+  }
+
+  float3 &mutable_outer_ring_vert(const int anchor, const int offset)
+  {
+    return verts[anchor_offset_to_outer_ring_vert(anchor, offset)];
+  }
+
+  const int ring_anchor_offset_to_vert(const int ring, const int anchor, const int offset) const;
+
+  const float3 &vert(const int ring, const int anchor, const int offset) const
+  {
+    return verts[ring_anchor_offset_to_vert(ring, anchor, offset)];
+  }
+
+  float3 &mutable_vert(const int ring, const int anchor, const int offset)
+  {
+    return verts[ring_anchor_offset_to_vert(ring, anchor, offset)];
+  }
+};
+
+const int AdjVerts::anchor_offset_to_outer_ring_vert(const int anchor, const int offset) const
+{
+  const int ring = v_num_rings(this->segments) - 1;
+  return rao_to_vert(ring, anchor, offset, this->anchors, this->segments);
+}
+
+const int AdjVerts::ring_anchor_offset_to_vert(const int ring,
+                                               const int anchor,
+                                               const int offset) const
+{
+  return rao_to_vert(ring, anchor, offset, this->anchors, this->segments);
+}
+
+static float3 avg4(const float3 &v0, const float3 &v1, const float3 &v2, const float3 &v3)
+{
+  return 0.25f * (v0 + v1 + v2 + v3);
+}
+
+/* Gamma needed for smooth Catmull-Clark, Sabin modification. */
+static float sabin_gamma(int n)
+{
+  /* Precalculated for common cases of n. */
+  if (n < 3) {
+    return 0.0f;
+  }
+  if (n == 3) {
+    return 0.065247584f;
+  }
+  if (n == 4) {
+    return 0.25f;
+  }
+  if (n == 5) {
+    return 0.401983447f;
+  }
+  if (n == 6) {
+    return 0.523423277f;
+  }
+  const double k = cos(M_PI / double(n));
+  /* Need x, real root of x^3 + (4k^2 - 3)x - 2k = 0.
+   * Answer calculated via Wolfram Alpha. */
+  const double k2 = k * k;
+  const double k4 = k2 * k2;
+  const double k6 = k4 * k2;
+  const double y = pow(
+      math::numbers::sqrt3 * math::sqrt(64.0 * k6 - 144.0 * k4 + 135.0 * k2 - 27.0) + 9.0 * k,
+      1.0 / 3.0);
+  const double x = 0.480749856769136 * y - (0.231120424783545 * (12.0 * k2 - 9.0)) / y;
+  return (k * x + 2.0 * k2 - 1.0) / (x * x * (k * x + 1.0));
+}
+
+/* Fill \a adjverts using recursive cubic subdivision, until reach the
+ * base case where \a adjverts_2_segs is the answer.
+ * adjverts.segments should be a power of 2, and >= 2.
+ */
+static void fill_adjverts(AdjVerts &adjverts,
+                          const AdjVerts &adjverts_2_segs,
+                          const profile::AnchorProfiles &profiles)
+{
+  BLI_assert(adjverts_2_segs.segments == 2 && adjverts.segments % 2 == 0);
+  BLI_assert(adjverts.segments < 1000); /* TODO: stop too-deep recursion. */
+  if (adjverts.segments < 2) {
+    return;
+  }
+  if (adjverts.segments == 2) {
+    std::copy(adjverts_2_segs.verts.begin(), adjverts_2_segs.verts.end(), adjverts.verts.begin());
+    return;
+  }
+  int nhalf = adjverts.segments / 2;
+  BLI_assert(nhalf % 2 == 0);
+  AdjVerts adjverts_half = AdjVerts(adjverts.anchors, nhalf);
+  fill_adjverts(adjverts_half, adjverts_2_segs, profiles);
+  /* Do a step of cubic subdivision (Catmull-Clark) with special rules
+   * at boundaries. See Levin 1999 paper "Filling an N-sided hole using combined
+   * subdivision schemes".
+   */
+  const int n_boundary = adjverts_half.anchors;
+  const int ns_in = adjverts_half.segments;
+  const int ns_in_half = ns_in / 2;
+  const int ns_out = adjverts.segments;
+
+  /* First adjust the boundary vertices of the input, storing in the output. */
+  for (const int a : IndexRange(n_boundary)) {
+    adjverts.mutable_outer_ring_vert(a, 0) = adjverts_half.outer_ring_vert(a, 0);
+    for (int k = 1; k < ns_in; k++) {
+      float3 co = adjverts_half.outer_ring_vert(a, k);
+      /* Smooth boundary rule for even verts. TODO: Custom profiles. */
+      const float3 co1 = adjverts_half.outer_ring_vert(a, k - 1);
+      const float3 co2 = adjverts_half.outer_ring_vert(a, k + 1);
+      co = co - (1.0f / 6.0f) * (co1 + co2 - 2.0f * co);
+      adjverts.mutable_outer_ring_vert(a, 2 * k) = co;
+    }
+  }
+  /* Now set odd boundary verts, using input profiles. */
+  for (const int a : IndexRange(n_boundary)) {
+    const profile::Profile &profile = profiles[a];
+    for (int k = 1; k < ns_out; k += 2) {
+      float3 co = profile::get_profile_point(profile, k, ns_out);
+      /* Smooth boundary rule for odd verts. TODO: Custom profiles. */
+      const float3 co1 = adjverts.outer_ring_vert(a, k - 1);
+      const float3 co2 = adjverts.outer_ring_vert(a, k + 1);
+      co = co - (1.0f / 6.0f) * (co1 + co2 - 2.0f * co);
+      adjverts.mutable_outer_ring_vert(a, k) = co;
+    }
+  }
+  /* Copy adjusted boundary verts back into adjverts_half, prior to subdivision. */
+  for (const int a : IndexRange(n_boundary)) {
+    for (const int k : IndexRange(ns_in)) {
+      adjverts_half.mutable_outer_ring_vert(a, k) = adjverts.outer_ring_vert(a, 2 * k);
+    }
+  }
+  /* Now we do the internal vertices, using standard Catmull-Clark
+   * and assuming all boundary vertices have valence 4. */
+
+  /* The new face vertices. */
+  const int nrings_in = v_num_rings(ns_in);
+  for (int r = nrings_in - 1; r > 0; r--) {
+    for (const int a : IndexRange(n_boundary)) {
+      const int side = v_anchor_div(r, n_boundary, ns_in);
+      const int aprev = a == 0 ? n_boundary - 1 : a - 1;
+      /* Corner faces have a different indexing pattern. */
+      adjverts.mutable_vert(r + 1, a, 0) = avg4(adjverts_half.vert(r, a, 0),
+                                                adjverts_half.vert(r, a, 1),
+                                                adjverts_half.vert(r + 1, a, 0),
+                                                adjverts_half.vert(r, aprev, side - 1));
+      for (int k = 1; k < side - 1; k++) {
+        adjverts.mutable_vert(r + 1, a, 2 * k) = avg4(adjverts_half.vert(r, a, k),
+                                                      adjverts_half.vert(r, a, k + 1),
+                                                      adjverts_half.vert(r + 1, a, k),
+                                                      adjverts_half.vert(r + 1, a, k - 1));
+      }
+    }
+  }
+}
+
+}  // namespace adj
+
+/** Return a 4-tuple with the number of vertices, edges, faces, corners.  */
+int4 MeshPattern::num_elements() const
+{
+  int4 ans;
+  switch (this->kind) {
+    case MeshKind::None:
+      ans = int4(0, 0, 0, 0);
+      break;
+    case MeshKind::Line:
+      ans = int4(num_anchors + num_segs - 1, num_segs, 0, 0);
+      break;
+    case MeshKind::TerminalPoly:
+      ans = int4(
+          num_anchors + num_segs - 2, num_anchors + num_segs - 1, 1, num_anchors + num_segs - 1);
+      break;
+    case MeshKind::Adj: {
+      int totf = adj::f_total_faces(num_anchors, num_segs);
+      ans = int4(adj::v_total_verts(num_anchors, num_segs),
+                 adj::e_num_edges(num_anchors, num_segs),
+                 totf,
+                 4 * totf + (adj::odd(num_segs) ? num_anchors - 4 : 0));
+      break;
+    }
+    case MeshKind::TriFan:
+      ans = int4(num_segs + 2, num_segs + 2, num_segs, 3 * num_segs);
+      break;
+    case MeshKind::Cutoff:
+      /* TODO */
+      BLI_assert(false);
+      ans = int4(0, 0, 0, 0);
+  }
+  return ans;
+}
+
+/** Return the index of the vertex in this MeshPattern for the given anchor vertex. */
+int MeshPattern::anchor_vert(int anchor_index) const
+{
+  int ans;
+  BLI_assert(0 <= anchor_index && anchor_index < this->num_anchors);
+  switch (this->kind) {
+    case MeshKind::None:
+      ans = 0;
+      break;
+    case MeshKind::Line:
+      ans = anchor_index == 0 ? 0 : this->num_segs;
+      break;
+    case MeshKind::TerminalPoly:
+      ans = anchor_index == 0 ? 0 : this->num_segs + anchor_index;
+      break;
+    case MeshKind::Adj: {
+      const int ring = adj::v_num_rings(this->num_segs) - 1;
+      ans = adj::v_ringstart(ring, this->num_anchors, this->num_segs);
+      ans += anchor_index * adj::v_anchor_div(ring, this->num_anchors, this->num_segs);
+      break;
+    }
+    case MeshKind::TriFan:
+      ans = anchor_index == 0 ? 0 : this->num_segs + anchor_index;
+      break;
+    case MeshKind::Cutoff:
+      /* TODO */
+      BLI_assert(false);
+      ans = 0;
+      break;
+  }
+  BLI_assert(0 <= ans && ans < this->num_elements()[0]);
+  return ans;
+}
 
 namespace topology {
 /** Functions for analyzing the topology around bevels and setting up main bevel data structures
