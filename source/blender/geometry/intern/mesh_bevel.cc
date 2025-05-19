@@ -1006,6 +1006,87 @@ static std::pair<int4, int4> face_vertices_and_edges(int f, int nv, int ns)
   }
 }
 
+/** A structure to hold the vertex positions of an Adj pattern. */
+struct AdjVerts {
+  /** The coordinates of vertices arranged according to indexing given above.
+   * The inline size 125 will accommodate anchors=4, segments=10. */
+  Array<float3, 125> verts;
+  /** How many anchors (often abbreviated nv). */
+  int anchors;
+  /** How many segments (often abbreviated ns). */
+  int segments;
+
+  AdjVerts(const int anchors, const int segments) :
+    anchors(anchors), segments(segments)
+  {
+    verts.reinitialize(v_total_verts(anchors, segments));
+    verts.fill(float3(0.0f, 0.0f, 0.0f));
+  }
+
+  int anchor_offset_to_outer_ring_vert(const int anchor, const int offset) const;
+
+  const float3 &outer_ring_vert(const int anchor, const int offset) const
+  {
+    return verts[anchor_offset_to_outer_ring_vert(anchor, offset)];
+  }
+
+  float3 &mutable_outer_ring_vert(const int anchor, const int offset)
+  {
+    return verts[anchor_offset_to_outer_ring_vert(anchor, offset)];
+  }
+
+};
+
+int AdjVerts::anchor_offset_to_outer_ring_vert(const int anchor, const int offset) const
+{
+  const int ring = v_num_rings(this->segments) - 1;
+  return rao_to_vert(ring, anchor, offset, this->anchors, this->segments);
+}
+
+
+/* Fill \a adjverts using recursive cubic subdivision, until reach the
+ * base case where \a adjverts_2_segs is the answer.
+ * adjverts.segments should be a power of 2, and >= 2.
+ */
+static void fill_adjverts(AdjVerts &adjverts, const AdjVerts &adjverts_2_segs)
+{
+  BLI_assert(adjverts_2_segs.segments == 2 && adjverts.segments % 2 == 0);
+  BLI_assert(adjverts.segments < 1000); /* TODO: stop too-deep recursion. */
+  if (adjverts.segments < 2) {
+    return;
+  }
+  if (adjverts.segments == 2) {
+    std::copy(adjverts_2_segs.verts.begin(), adjverts_2_segs.verts.end(),
+              adjverts.verts.begin());
+    return;
+  }
+  int nhalf = adjverts.segments / 2;
+  BLI_assert(nhalf % 2 == 0);
+  AdjVerts adjverts_half = AdjVerts(adjverts.anchors, nhalf);
+  fill_adjverts(adjverts_half, adjverts_2_segs);
+  /* Do a step of cubic subdivision (Catmull-Clark) with special rules
+   * at boundaries. See Levin 1999 paper "Filling an N-sided hole using combined
+   * subdivision schemes".
+   */
+  const int n_boundary = adjverts_half.anchors;
+  const int ns_in = adjverts_half.segments;
+  const int ns_in_half = ns_in / 2;
+  const int ns_out = adjverts.segments;
+
+  /* First adjust the boundary vertices of the input, storing in the output. */
+  for (const int i : IndexRange(n_boundary)) {
+    adjverts.mutable_outer_ring_vert(i, 0) = adjverts_half.outer_ring_vert(i, 0);
+    for (int k = 0; k < ns_in; k++) {
+      float3 co = adjverts_half.outer_ring_vert(i, k);
+      /* Smooth boundary rule. */
+      const float3 co1 = adjverts_half.outer_ring_vert(i, k - 1);
+      const float3 co2 = adjverts_half.outer_ring_vert(i, k + 1);
+      co = co - (1.0f / 6.0f) * (co1 + co2 - 2.0f * co);
+      adjverts.mutable_outer_ring_vert(i, 2 * k) = co;
+    }
+  }
+}
+
 }  // namespace adj
 
 /** Return a 4-tuple with the number of vertices, edges, faces, corners.  */
@@ -2982,6 +3063,10 @@ static void build_internal_adj(const int bv,
   const int ns = bs.params.segments;
   const int nv = pat.num_anchors;
   BLI_assert(ns > 1 && pat.kind == MeshKind::Adj);
+  const int ns_power_2 = bs.pro_spacing.segments_power_2;
+  /*
+  adj::adj_build(bv, profiles, bv_newvert_positions, adjv_power_of_2, ns_power_2);
+   */
 }
 
 static void build_internal_vmesh(const int bv,
