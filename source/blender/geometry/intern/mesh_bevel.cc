@@ -707,7 +707,8 @@ static float edge_face_angle(const int bv, const int edge_pos, const BevelState 
 static float3 bevvert_axis(const int bv, const BevelState &bs)
 {
   float3 vert_axis(0.0f, 0.0f, 0.0f);
-  for (const int be : bs.bevvert_bevedges()[bv]) {
+  Span<int> edges = bs.bevvert_bevedges()[bv];
+  for (const int be : edges) {
     float3 edir = edge_dir(bv, be, bs);
     if (bs.bevedge_vert_end(bv, be) == 0) {
       edir = -edir;
@@ -2416,59 +2417,134 @@ static void fill_adjverts(AdjVerts &adjverts,
    */
   const int n_boundary = adjverts_half.anchors;
   const int ns_in = adjverts_half.segments;
-  const int ns_in_half = ns_in / 2;
   const int ns_out = adjverts.segments;
+
+  fmt::println("\ncubic subdivision ns_in={} ns_out={}", ns_in, ns_out);
 
   /* First adjust the boundary vertices of the input, storing in the output. */
   for (const int a : IndexRange(n_boundary)) {
     adjverts.mutable_outer_ring_vert(a, 0) = adjverts_half.outer_ring_vert(a, 0);
-    for (int k = 1; k < ns_in; k++) {
-      float3 co = adjverts_half.outer_ring_vert(a, k);
+    for (const int o : IndexRange::from_begin_end(1, ns_in)) {
+      float3 co = adjverts_half.outer_ring_vert(a, o);
       /* Smooth boundary rule for even verts. TODO: Custom profiles. */
-      const float3 co1 = adjverts_half.outer_ring_vert(a, k - 1);
-      const float3 co2 = adjverts_half.outer_ring_vert(a, k + 1);
+      const float3 co1 = adjverts_half.outer_ring_vert(a, o - 1);
+      const float3 co2 = adjverts_half.outer_ring_vert(a, o + 1);
       co = co - (1.0f / 6.0f) * (co1 + co2 - 2.0f * co);
-      adjverts.mutable_outer_ring_vert(a, 2 * k) = co;
+      adjverts.mutable_outer_ring_vert(a, 2 * o) = co;
     }
   }
   /* Now set odd boundary verts, using input profiles. */
   for (const int a : IndexRange(n_boundary)) {
     const profile::Profile &profile = profiles[a];
-    for (int k = 1; k < ns_out; k += 2) {
-      float3 co = profile::get_profile_point(profile, k, ns_out);
+    for (int o = 1; o < ns_out; o += 2) {
+      float3 co = profile::get_profile_point(profile, o, ns_out);
       /* Smooth boundary rule for odd verts. TODO: Custom profiles. */
-      const float3 co1 = adjverts.outer_ring_vert(a, k - 1);
-      const float3 co2 = adjverts.outer_ring_vert(a, k + 1);
+      const float3 co1 = adjverts.outer_ring_vert(a, o - 1);
+      const float3 co2 = adjverts.outer_ring_vert(a, o + 1);
       co = co - (1.0f / 6.0f) * (co1 + co2 - 2.0f * co);
-      adjverts.mutable_outer_ring_vert(a, k) = co;
+      adjverts.mutable_outer_ring_vert(a, o) = co;
     }
   }
   /* Copy adjusted boundary verts back into adjverts_half, prior to subdivision. */
   for (const int a : IndexRange(n_boundary)) {
-    for (const int k : IndexRange(ns_in)) {
-      adjverts_half.mutable_outer_ring_vert(a, k) = adjverts.outer_ring_vert(a, 2 * k);
+    for (const int o : IndexRange(ns_in)) {
+      adjverts_half.mutable_outer_ring_vert(a, o) = adjverts.outer_ring_vert(a, 2 * o);
     }
   }
   /* Now we do the internal vertices, using standard Catmull-Clark
    * and assuming all boundary vertices have valence 4. */
 
-  /* The new face vertices. */
+  /* The new face-center vertices.
+   * Made as average of four corners of quads of the input mesh.
+   */
+  fmt::println("face center vertices");
   const int nrings_in = v_num_rings(ns_in);
-  for (int r = nrings_in - 1; r > 0; r--) {
+  for (const int r : IndexRange::from_begin_end(1, nrings_in)) {
+    const int side = v_anchor_div(r, n_boundary, ns_in);
     for (const int a : IndexRange(n_boundary)) {
-      const int side = v_anchor_div(r, n_boundary, ns_in);
+      fmt::println("r={} a={} side={}", r, a, side);
       const int aprev = a == 0 ? n_boundary - 1 : a - 1;
       /* Corner faces have a different indexing pattern. */
-      adjverts.mutable_vert(r + 1, a, 0) = avg4(adjverts_half.vert(r, a, 0),
+      fmt::println(" FC: O({},{},0) = avg I({},{},0) I({},{},1) I({},{},0) I({},{},{})",
+                    2*r -1, a, r, a, r, a, r-1,a, r, aprev, side - 1);
+      adjverts.mutable_vert(2*r - 1, a, 0) = avg4(adjverts_half.vert(r, a, 0),
                                                 adjverts_half.vert(r, a, 1),
-                                                adjverts_half.vert(r + 1, a, 0),
+                                                adjverts_half.vert(r - 1, a, 0),
                                                 adjverts_half.vert(r, aprev, side - 1));
-      for (int k = 1; k < side - 1; k++) {
-        adjverts.mutable_vert(r + 1, a, 2 * k) = avg4(adjverts_half.vert(r, a, k),
-                                                      adjverts_half.vert(r, a, k + 1),
-                                                      adjverts_half.vert(r + 1, a, k),
-                                                      adjverts_half.vert(r + 1, a, k - 1));
+      for (const int o : IndexRange::from_begin_end(1, side - 1)) {
+        fmt::println(" FS: O({},{},{}) = avg I({},{},{}) I({},{},{}) I({},{},{}) I({},{},{})",
+                    2*r -1, a, 2*o, r, a, o, r, a, o+1, r-1, a, o, r-1, a, o-1);
+        adjverts.mutable_vert(2*r - 1, a, 2 * o) = avg4(adjverts_half.vert(r, a, o),
+                                                      adjverts_half.vert(r, a, o + 1),
+                                                      adjverts_half.vert(r - 1, a, o),
+                                                      adjverts_half.vert(r - 1, a, o - 1));
       }
+    }
+  }
+
+  /* The new cross-ring edge vertices.
+   * Made as average of ends of cross-ring edges of the input mesh and the adjacent newly-made
+   * face-center vertices of the output mesh left and right of that edge.
+   */
+  fmt::println("cross-ring edge vertices");
+  for (const int r : IndexRange::from_begin_end(1, nrings_in)) {
+    const int side = v_anchor_div(r, n_boundary, ns_in);
+    for (const int a : IndexRange(n_boundary)) {
+      fmt::println("r={} a={} side={}", r, a, side);
+      fmt::println(" CRC: O({},{},{}) = avg I({},{},{}) I({},{},{}) O({},{},{}) O({},{},{})",
+                    2*r-1, a, 1, r, a, 1, r-1, a, 0, 2*r-1, a, 0, 2*r-1, a, 2);
+      adjverts.mutable_vert(2*r - 1, a, 1) = avg4(adjverts_half.vert(r, a, 1),
+                                                  adjverts_half.vert(r - 1, a, 0),
+                                                  adjverts.vert(2*r - 1, a, 0),
+                                                  adjverts.vert(2*r - 1, a, 2));
+      for (const int o : IndexRange::from_begin_end(2, side-1)) {
+        fmt::println(" CRS: O({},{},{}) = avg I({},{},{}) I({},{},{}) O({},{},{}) O({},{},{})",
+                    2*r-1, a, 2*o-2, r, a, o, r-1, a, o-1, 2*r-1, a, 2*o-2, 2*r-1, a, 2*o+2);
+        adjverts.mutable_vert(2*r - 1, a, 2*o - 2) = avg4(adjverts_half.vert(r, a, o),
+                                                          adjverts_half.vert(r - 1, a, o - 1),
+                                                          adjverts.vert(2*r - 1, a, 2*o - 2),
+                                                          adjverts.vert(2*r - 1, a, 2*o + 2));
+      }
+      const int anext = (a + 1) % n_boundary;
+      fmt::println(" CRC2: O({},{},{}) = avg I({},{},{}) I({},{},{}) O({},{},{}) O({},{},{})",
+                    2*r-1, a, side-1, r, a, side-1, r-1, anext, 0, 2*r-1, a, 2*side-4, 2*r-1, anext, 0);
+      adjverts.mutable_vert(2*r - 1, a, side - 1) = avg4(adjverts_half.vert(r, a, side - 1),
+                                                         adjverts_half.vert(r - 1, anext, 0),
+                                                         adjverts.vert(2*r - 1, a, 2*side - 4),
+                                                         adjverts.vert(2*r - 1, anext, 0));
+    }
+  }
+
+  /* The new edge-ring edge vertices. 
+   * Made as the average of the ends of the edge0ring edges of input mesh and the 
+   * face-center vertices of the output mesh above and below that edge.
+   */
+  fmt::println("edge-ring edge vertices");
+  for (const int r : IndexRange::from_begin_end(1, nrings_in - 2)) {
+    const int side = v_anchor_div(r, n_boundary, ns_in);
+    for (const int a : IndexRange(n_boundary)) {
+      fmt::println("r={} a={} side={}", r, a, side);
+      fmt::println(" ERC: O({},{},{}) = avg I({},{},{}) I({},{},{}) O({},{},{}) O({},{},{})",
+                    2*r, a, 1, r, a, 0, r, a, 1, 2*r+1, a, 2, 2*r+1, a, 0);
+      adjverts.mutable_vert(2*r, a, 1) = avg4(adjverts_half.vert(r, a, 0),
+                                              adjverts_half.vert(r, a, 1),
+                                              adjverts.vert(2*r+1, a, 2),
+                                              adjverts.vert(2*r-1, a, 0));
+      for (const int o : IndexRange::from_begin_end(2, side-1)) {
+        fmt::println(" ERS: O({},{},{}) = avg I({},{},{}) I({},{},{}) O({},{},{}) O({},{},{})",
+                    2*r, a, 2*o+1, r, a, o, r, a, o+1, 2*r+1, a, 2*o + 2, 2*r -1, a, 2*o);
+        adjverts.mutable_vert(2*r, a, 2*o + 1) = avg4(adjverts_half.vert(r, a, o),
+                                                      adjverts_half.vert(r, a, o+1),
+                                                      adjverts.vert(2*r + 1, a, 2*o + 2),
+                                                      adjverts.vert(2*r - 1, a, 2*o));
+      }
+      const int anext = (a + 1) % n_boundary;
+      fmt::println(" ERC2: O({},{},{}) = avg I({},{},{}) I({},{},{}) O({},{},{}) O({},{},{})",
+                    2*r, a, 2*side-1, r, a, 2*side-1, r, anext, 0, 2*r+1, a, 2*side, 2*r-1, a, 2*side - 2);
+      adjverts.mutable_vert(2*r, a, 2*side - 1) = avg4(adjverts_half.vert(r, a, 2*side-1),
+                                                       adjverts_half.vert(r, anext, 0),
+                                                       adjverts.vert(2*r + 1, a, 2*side),
+                                                       adjverts.vert(2*r - 1, a, 2*side - 2));
     }
   }
 }
@@ -3382,8 +3458,8 @@ BevelState::BevelState(const Mesh &src_mesh,
   /* There is an adjustment procedure that modifies bevel amounts to make the best compromise
    * when all specifications cannot be met simultaneously. That procedure cannot be applied
    * in all circumstances. */
-  this->offset_adjust = !(vertex_only || params.offset_type != BevelOffsetType::Percent ||
-                          params.offset_type != BevelOffsetType::Absolute);
+  this->offset_adjust = !(vertex_only || params.offset_type == BevelOffsetType::Percent ||
+                          params.offset_type == BevelOffsetType::Absolute);
 
   /* Disable the miters with the cutoff vertex mesh method, the combination isn't useful anyway.
    */
@@ -3425,7 +3501,8 @@ BevelState::BevelState(const Mesh &src_mesh,
   }
   Array<bool> bevel_involved_edge(src_mesh.edges_num, false);
   bevverts_mask_.foreach_index([&](const int v) {
-    for (const int e : this->mesh_info.vert_edges()[v]) {
+    Span<int> edges = this->mesh_info.vert_edges()[v];
+    for (const int e : edges) {
       bevel_involved_edge[e] = true;
     }
   });
