@@ -166,9 +166,8 @@ class SEQUENCER_HT_header(Header):
 
         st = context.space_data
 
-        layout.template_header()
-        
         # bfa - show hide the editormenu, editor suffix is needed.
+        # layout.template_header()
         ALL_MT_editormenu_sequencer.draw_hidden(context, layout)
 
         layout.prop(st, "view_type", text="")
@@ -422,7 +421,7 @@ class SEQUENCER_MT_editor_menus(Menu):
                 layout.menu("SEQUENCER_MT_strip_text")
         # BFA - end
 
-
+#BFA - Submenu
 class SEQUENCER_MT_view_cache(Menu):
     bl_label = "Cache"
 
@@ -433,13 +432,17 @@ class SEQUENCER_MT_view_cache(Menu):
         layout.prop(ed, "show_cache")
         layout.separator()
 
-        col = layout.column()
-        col.enabled = ed.show_cache
+        cache_settings = context.space_data.cache_overlay
 
-        col.prop(ed, "show_cache_final_out")
-        col.prop(ed, "show_cache_raw")
-        col.prop(ed, "show_cache_preprocessed")
-        col.prop(ed, "show_cache_composite")
+        col = layout.column()
+
+        show_developer_ui = context.preferences.view.show_developer_ui
+        col.prop(cache_settings, "show_cache_final_out", text="Final")
+        if show_developer_ui:
+            col.prop(cache_settings, "show_cache_raw", text="Raw")
+            col.prop(cache_settings, "show_cache_preprocessed", text="Preprocessed")
+            col.prop(cache_settings, "show_cache_composite", text="Composite")
+
 
 
 class SEQUENCER_MT_range(Menu):
@@ -575,10 +578,7 @@ class SEQUENCER_MT_view(Menu):
 
         layout.menu("SEQUENCER_MT_view_annotations")  # BFA
         # BFA - properties in properties menu
-        # if is_sequencer_only
-        #    layout.prop(st, "show_backdrop", text="Preview as Backdrop")
-        # if is_preview or st.show_backdrop:
-        #    layout.prop(st, "show_transform_preview", text="Preview During Transform")
+
         layout.separator()
 
         layout.operator_context = 'INVOKE_REGION_WIN'
@@ -795,7 +795,10 @@ class SEQUENCER_MT_select(Menu):
 
         st = context.space_data
         has_sequencer, has_preview = _space_view_types(st)
-
+        if has_preview:
+            layout.operator_context = 'INVOKE_REGION_PREVIEW'
+        else:
+            layout.operator_context = 'INVOKE_REGION_WIN'
         layout.operator(
             "sequencer.select_all", text="All", icon="SELECT_ALL"
         ).action = 'SELECT'
@@ -1754,6 +1757,10 @@ class SEQUENCER_MT_strip(Menu):
             layout.operator("sequencer.connect", icon="LINKED").toggle = True
             layout.operator("sequencer.disconnect", icon="UNLINKED")
 
+        # bfa - preview mode only
+        if has_preview:
+            layout.separator()
+            layout.menu("SEQUENCER_MT_strip_lock_mute")
 
 class SEQUENCER_MT_image(Menu):
     bl_label = "Image"
@@ -1791,6 +1798,8 @@ class SEQUENCER_MT_image_transform(Menu):
         layout.operator("transform.translate", icon="TRANSFORM_MOVE")
         layout.operator("transform.rotate", icon="TRANSFORM_ROTATE")
         layout.operator("transform.resize", text="Scale", icon="TRANSFORM_SCALE")
+        layout.separator()
+        layout.operator("transform.translate", text="Move Origin").translate_origin = True
 
 
 # BFA - Was used in the image menu. But not used in the UI anymore, remains for compatibility
@@ -2175,7 +2184,7 @@ class SequencerButtonsPanel_Output:
     @staticmethod
     def has_preview(context):
         st = context.space_data
-        return (st.view_type in {'PREVIEW', 'SEQUENCER_PREVIEW'}) or st.show_backdrop
+        return (st.view_type in {'PREVIEW', 'SEQUENCER_PREVIEW'})
 
     @classmethod
     def poll(cls, context):
@@ -3491,14 +3500,12 @@ class SEQUENCER_PT_cache_settings(SequencerButtonsPanel, Panel):
 
         col = layout.column()
 
-        col.prop(ed, "use_cache_raw", text="Raw")
-        col.prop(ed, "use_cache_preprocessed", text="Preprocessed")
-        col.prop(ed, "use_cache_composite", text="Composite")
-        col.prop(ed, "use_cache_final", text="Final")
+        # BFA - double entries
+
 
 
 class SEQUENCER_PT_cache_view_settings(SequencerButtonsPanel, Panel):
-    bl_label = "Display"
+    bl_label = "Display Cache"
     bl_category = "Cache"
     bl_parent_id = "SEQUENCER_PT_cache_settings"
 
@@ -3513,20 +3520,54 @@ class SEQUENCER_PT_cache_view_settings(SequencerButtonsPanel, Panel):
 
     def draw(self, context):
         layout = self.layout
-        layout.use_property_split = True
+        layout.use_property_split = False
         layout.use_property_decorate = False
 
         cache_settings = context.space_data.cache_overlay
+        ed = context.scene.sequence_editor
         layout.active = cache_settings.show_cache
 
-        col = layout.column(heading="Cache", align=True)
+        col = layout.column(align=True)
+        col.use_property_split = False
+
+        split = layout.split(factor=0.15)
+        col = split.column()
+        col.label(text="")
+
+        col = split.column()
 
         show_developer_ui = context.preferences.view.show_developer_ui
+        col.prop(cache_settings, "show_cache_final_out", text="Final")
         if show_developer_ui:
             col.prop(cache_settings, "show_cache_raw", text="Raw")
             col.prop(cache_settings, "show_cache_preprocessed", text="Preprocessed")
             col.prop(cache_settings, "show_cache_composite", text="Composite")
-        col.prop(cache_settings, "show_cache_final_out", text="Final")
+
+        show_cache_size = show_developer_ui and (ed.use_cache_raw or ed.use_cache_final)
+        if show_cache_size:
+            cache_raw_size = ed.cache_raw_size
+            cache_final_size = ed.cache_final_size
+
+            col = layout.box()
+            col = col.column(align=True)
+
+            split = col.split(factor=0.4, align=True)
+            split.alignment = 'RIGHT'
+            split.label(text="Current Cache Size")
+            split.alignment = 'LEFT'
+            split.label(text="{:d} MB".format(cache_raw_size + cache_final_size), translate=False)
+
+            split = col.split(factor=0.4, align=True)
+            split.alignment = 'RIGHT'
+            split.label(text="Raw")
+            split.alignment = 'LEFT'
+            split.label(text="{:d} MB".format(cache_raw_size), translate=False)
+
+            split = col.split(factor=0.4, align=True)
+            split.alignment = 'RIGHT'
+            split.label(text="Final")
+            split.alignment = 'LEFT'
+            split.label(text="{:d} MB".format(cache_final_size), translate=False)
 
 
 class SEQUENCER_PT_proxy_settings(SequencerButtonsPanel, Panel):
@@ -3653,6 +3694,31 @@ class SEQUENCER_PT_strip_cache(SequencerButtonsPanel, Panel):
         col.prop(strip, "use_cache_preprocessed", text="Preprocessed")
         col.prop(strip, "use_cache_composite")
 
+        show_cache_size = show_developer_ui and (ed.use_cache_raw or ed.use_cache_final)
+        if show_cache_size:
+            cache_raw_size = ed.cache_raw_size
+            cache_final_size = ed.cache_final_size
+
+            col = layout.box()
+            col = col.column(align=True)
+
+            split = col.split(factor=0.4, align=True)
+            split.alignment = 'RIGHT'
+            split.label(text="Current Cache Size")
+            split.alignment = 'LEFT'
+            split.label(text="{:d} MB".format(cache_raw_size + cache_final_size), translate=False)
+
+            split = col.split(factor=0.4, align=True)
+            split.alignment = 'RIGHT'
+            split.label(text="Raw")
+            split.alignment = 'LEFT'
+            split.label(text="{:d} MB".format(cache_raw_size), translate=False)
+
+            split = col.split(factor=0.4, align=True)
+            split.alignment = 'RIGHT'
+            split.label(text="Final")
+            split.alignment = 'LEFT'
+            split.label(text="{:d} MB".format(cache_final_size), translate=False)
 
 class SEQUENCER_PT_preview(SequencerButtonsPanel_Output, Panel):
     bl_label = "Scene Strip Display"
@@ -4153,20 +4219,17 @@ class SEQUENCER_PT_view_options(bpy.types.Panel):
         is_sequencer_view = st.view_type in {'SEQUENCER', 'SEQUENCER_PREVIEW'}
         tool_settings = context.tool_settings
 
+        cache_settings = context.space_data.cache_overlay #BFA
+
         if is_sequencer_view:
             col = layout.column(align=True)
             if st.view_type == "SEQUENCER":
                 split = layout.split(factor=0.6)
                 col = split.column()
                 col.use_property_split = False
-                col.prop(st, "show_backdrop", text="Preview as Backdrop")
                 col = split.column()
-                if st.show_backdrop:
-                    col.label(icon="DISCLOSURE_TRI_DOWN")
-                else:
-                    col.label(icon="DISCLOSURE_TRI_RIGHT")
 
-                if is_preview or st.show_backdrop:
+                if is_preview:
                     row = layout.row()
                     row.separator()
                     row.prop(
@@ -4180,7 +4243,27 @@ class SEQUENCER_PT_view_options(bpy.types.Panel):
             col.prop(st, "show_seconds")
             col.prop(st, "show_locked_time")
 
-            layout.menu("SEQUENCER_MT_view_cache")
+            # BFA - Cache settings
+            row = layout.row()
+            row.prop(cache_settings, "show_cache", text="Display Cache")
+            if cache_settings.show_cache:
+                row.label(icon="DISCLOSURE_TRI_DOWN")
+            else:
+                row.label(icon="DISCLOSURE_TRI_RIGHT")
+
+            if cache_settings.show_cache:
+                split = layout.split(factor=0.05)
+                col = split.column()
+                col.label(text="")
+
+                col = split.column()
+                show_developer_ui = context.preferences.view.show_developer_ui
+                col.prop(cache_settings, "show_cache_final_out", text="Final")
+                if show_developer_ui:
+                    col.prop(cache_settings, "show_cache_raw", text="Raw")
+                    col.prop(cache_settings, "show_cache_preprocessed", text="Preprocessed")
+                    col.prop(cache_settings, "show_cache_composite", text="Composite")
+
 
             layout.use_property_split = False
             layout.prop(st, "show_markers")
@@ -4302,7 +4385,6 @@ classes = (
     SEQUENCER_PT_modifiers,
     SEQUENCER_PT_cache_settings,
     SEQUENCER_PT_cache_view_settings,
-    SEQUENCER_PT_strip_cache,
     SEQUENCER_PT_proxy_settings,
     SEQUENCER_PT_strip_proxy,
     SEQUENCER_PT_custom_props,

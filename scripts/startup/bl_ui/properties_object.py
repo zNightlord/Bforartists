@@ -9,7 +9,7 @@ from bl_ui.properties_animviz import (
 import bpy
 from bpy.types import Panel, Menu
 from rna_prop_ui import PropertyPanel
-from .space_properties import PropertiesAnimationMixin
+from bl_ui.space_properties import PropertiesAnimationMixin
 
 
 class ObjectButtonsPanel:
@@ -83,7 +83,7 @@ class OBJECT_PT_transform(ObjectButtonsPanel, Panel):
             row.use_property_decorate = False
             row.prop(ob, "lock_rotation", text="", emboss=False, icon='DECORATE_UNLOCKED')
 
-        row = layout.row(align=False)
+        row = layout.row(align=True)
         row.prop(ob, "rotation_mode", text="Mode")
         row = row.row(align=False)
         row.ui_units_x = 1.0

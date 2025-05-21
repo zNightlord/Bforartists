@@ -1590,10 +1590,10 @@ static void panel_draw(const bContext * /*C*/, Panel *panel)
 
   col = &layout->column(false);
   uiLayoutSetActive(col, !is_bound);
-  uiItemR(col, ptr, "target", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-  uiItemR(col, ptr, "falloff", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  col->prop(ptr, "target", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  col->prop(ptr, "falloff", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 
-  uiItemR(layout, ptr, "strength", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  layout->prop(ptr, "strength", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 
   modifier_vgroup_ui(layout, ptr, &ob_ptr, "vertex_group", "invert_vertex_group", std::nullopt);
 
@@ -1601,25 +1601,24 @@ static void panel_draw(const bContext * /*C*/, Panel *panel)
   uiLayoutSetEnabled(col, !is_bound);
   uiLayoutSetActive(col, !is_bound && RNA_string_length(ptr, "vertex_group") != 0);
   /*------------------- bfa - original props */
-  // uiItemR(col, ptr, "use_sparse_bind", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 
   row = &col->row(true);
-  uiItemS(row);
+  layout->separator();;
   uiLayoutSetPropSep(row, false); /* bfa - use_property_split = False */
-  uiItemR(row, ptr, "use_sparse_bind", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  row->prop(ptr, "use_sparse_bind", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   /* ------------ end bfa */
 
-  uiItemS(layout);
+  layout->separator();
 
   col = &layout->column(false);
   if (is_bound) {
-    uiItemO(col, IFACE_("Unbind"), ICON_NONE, "OBJECT_OT_surfacedeform_bind");
+    col->op("OBJECT_OT_surfacedeform_bind", IFACE_("Unbind"), ICON_NONE);
   }
   else {
     uiLayoutSetActive(col, !RNA_pointer_is_null(&target_ptr));
-    uiItemO(col, IFACE_("Bind"), ICON_NONE, "OBJECT_OT_surfacedeform_bind");
+    col->op("OBJECT_OT_surfacedeform_bind", IFACE_("Bind"), ICON_NONE);
   }
-  modifier_panel_end(layout, ptr);
+  modifier_error_message_draw(layout, ptr);
 }
 
 static void panel_register(ARegionType *region_type)

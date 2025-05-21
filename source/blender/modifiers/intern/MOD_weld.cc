@@ -160,23 +160,21 @@ static void panel_draw(const bContext * /*C*/, Panel *panel)
 
   uiLayoutSetPropSep(layout, true);
 
-  uiItemR(layout, ptr, "mode", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-  uiItemR(layout, ptr, "merge_threshold", UI_ITEM_NONE, IFACE_("Distance"), ICON_NONE);
+  layout->prop(ptr, "mode", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  layout->prop(ptr, "merge_threshold", UI_ITEM_NONE, IFACE_("Distance"), ICON_NONE);
   if (weld_mode == MOD_WELD_MODE_CONNECTED) {
     /*------------------- bfa - original props */
-    // uiItemR(layout, ptr, "loose_edges", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-
-    uiLayout *row, *col; /*bfa*/
+    uiLayout * row, *col; /*bfa*/
     col = &layout->column(true);
     row = &col->row(true);
     uiLayoutSetPropSep(row, false); /* bfa - use_property_split = False */
-    uiItemR(row, ptr, "loose_edges", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    row->prop( ptr, "loose_edges", UI_ITEM_NONE, std::nullopt, ICON_NONE);
     uiItemDecoratorR(row, ptr, "loose_edges", 0); /*bfa - decorator*/
     /* ------------ end bfa */
   }
   modifier_vgroup_ui(layout, ptr, &ob_ptr, "vertex_group", "invert_vertex_group", std::nullopt);
 
-  modifier_panel_end(layout, ptr);
+  modifier_error_message_draw(layout, ptr);
 }
 
 static void panel_register(ARegionType *region_type)

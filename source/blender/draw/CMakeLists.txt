@@ -164,7 +164,6 @@ set(SRC
   intern/draw_command.hh
   intern/draw_common.hh
   intern/draw_common_c.hh
-  intern/draw_common_shader_shared.hh
   intern/draw_context_private.hh
   intern/draw_curves_private.hh
   intern/draw_debug.hh
@@ -238,7 +237,6 @@ set(SRC
   engines/image/image_state.hh
   engines/image/image_texture_info.hh
   engines/image/image_usage.hh
-  engines/overlay/overlay_engine.h
   engines/overlay/overlay_antialiasing.hh
   engines/overlay/overlay_armature.hh
   engines/overlay/overlay_attribute_text.hh
@@ -250,8 +248,9 @@ set(SRC
   engines/overlay/overlay_camera.hh
   engines/overlay/overlay_cursor.hh
   engines/overlay/overlay_curve.hh
-  engines/overlay/overlay_edit_text.hh
+  engines/overlay/overlay_text.hh
   engines/overlay/overlay_empty.hh
+  engines/overlay/overlay_engine.h
   engines/overlay/overlay_facing.hh
   engines/overlay/overlay_fade.hh
   engines/overlay/overlay_fluid.hh
@@ -429,6 +428,7 @@ set(GLSL_SRC
   engines/eevee/shaders/eevee_ray_trace_screen_comp.glsl
   engines/eevee/shaders/eevee_ray_trace_screen_lib.glsl
   engines/eevee/shaders/eevee_ray_types_lib.glsl
+  engines/eevee/shaders/eevee_reverse_z_lib.glsl
   engines/eevee/shaders/eevee_lightprobe_sphere_convolve_comp.glsl
   engines/eevee/shaders/eevee_lightprobe_sphere_eval_lib.glsl
   engines/eevee/shaders/eevee_lightprobe_sphere_irradiance_comp.glsl
@@ -572,7 +572,6 @@ set(GLSL_SRC
   intern/shaders/draw_visibility_comp.glsl
 
   intern/draw_command_shared.hh
-  intern/draw_common_shader_shared.hh
   intern/draw_defines.hh
   intern/draw_pointcloud_private.hh
   intern/draw_shader_shared.hh
@@ -735,6 +734,7 @@ foreach(GLSL_FILE ${GLSL_SRC})
 endforeach()
 
 blender_add_lib(bf_draw_shaders "${GLSL_C}" "" "" "")
+blender_set_target_unity_build(bf_draw_shaders 10)
 
 list(APPEND LIB
   PRIVATE bf::animrig

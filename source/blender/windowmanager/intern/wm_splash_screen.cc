@@ -58,26 +58,7 @@ static void wm_block_splash_close(bContext *C, void *arg_block, void * /*arg*/)
   UI_popup_block_close(C, win, static_cast<uiBlock *>(arg_block));
 }
 
-/* BFA - TO DO - unused? */
-static void wm_block_splash_add_label(uiBlock *block, const char *label, int x, int y)
-{
-  if (!(label && label[0])) {
-    return;
-  }
-
-  UI_block_emboss_set(block, blender::ui::EmbossType::None);
-
-  uiBut *but = uiDefBut(
-      block, UI_BTYPE_LABEL, 0, label, 0, y, x, UI_UNIT_Y, nullptr, 0, 0, std::nullopt);
-  UI_but_drawflag_disable(but, UI_BUT_TEXT_LEFT);
-  UI_but_drawflag_enable(but, UI_BUT_TEXT_RIGHT);
-
-  /* Regardless of theme, this text should always be bright white. */
-  uchar color[4] = {255, 255, 255, 255};
-  UI_but_color_set(but, color);
-
-  UI_block_emboss_set(block, blender::ui::EmbossType::Emboss);
-}
+/* BFA - wm_block_splash_add_label - removed! */
 
 #ifndef WITH_HEADLESS
 static void wm_block_splash_image_roundcorners_add(ImBuf *ibuf)
@@ -310,10 +291,7 @@ static uiBlock *wm_block_splash_create(bContext *C, ARegion *region, void * /*ar
 
     UI_but_func_set(but, wm_block_splash_close, block, nullptr);
 
-    wm_block_splash_add_label(block,
-                              BKE_blender_version_string(),
-                              splash_width - 8.0 * UI_SCALE_FAC,
-                              splash_height - 13.0 * UI_SCALE_FAC);
+    /* BFA - wm_block_splash_add_label - removed! */
   }
 
   /* Banner image passed through the environment, to overlay on the splash and
@@ -370,23 +348,19 @@ static uiBlock *wm_block_splash_create(bContext *C, ARegion *region, void * /*ar
   if (proc_id && strncmp(proc_id, "ARM", 3) == 0)
 #  endif
   {
-    uiItemS_ex(layout, 2.0f, LayoutSeparatorType::Line);
+    layout->separator(2.0f, LayoutSeparatorType::Line);
 
-    uiLayout *split = uiLayoutSplit(layout, 0.725, true);
+    uiLayout *split = &layout->split(0.725, true);
     uiLayout *row1 = &split->row(true);
     uiLayout *row2 = &split->row(true);
 
-    uiItemL(row1, RPT_("Intel binary detected. Expect reduced performance."), ICON_ERROR);
+    row1->label(RPT_("Intel binary detected. Expect reduced performance."), ICON_ERROR);
 
-    PointerRNA op_ptr;
-    uiItemFullO(row2,
-                "WM_OT_url_open",
-                CTX_IFACE_(BLT_I18NCONTEXT_OPERATOR_DEFAULT, "Learn More"),
-                ICON_URL,
-                nullptr,
-                WM_OP_INVOKE_DEFAULT,
-                UI_ITEM_NONE,
-                &op_ptr);
+    PointerRNA op_ptr = row2->op("WM_OT_url_open",
+                                 CTX_IFACE_(BLT_I18NCONTEXT_OPERATOR_DEFAULT, "Learn More"),
+                                 ICON_URL,
+                                 WM_OP_INVOKE_DEFAULT,
+                                 UI_ITEM_NONE);
 #  if defined(__APPLE__)
     RNA_string_set(
         &op_ptr,
@@ -399,7 +373,7 @@ static uiBlock *wm_block_splash_create(bContext *C, ARegion *region, void * /*ar
         "https://docs.blender.org/manual/en/latest/getting_started/installing/windows.html");
 #  endif
 
-    uiItemS(layout);
+    layout->separator();
   }
 #endif
 
@@ -459,7 +433,7 @@ static uiBlock *wm_block_about_create(bContext *C, ARegion *region, void * /*arg
 
     /* The top margin. */
     uiLayout *row = &layout->row(false);
-    uiItemS_ex(row, 0.2f);
+    row->separator(0.2f);
 
     /* The logo image. */
     row = &layout->row(false);
@@ -468,7 +442,7 @@ static uiBlock *wm_block_about_create(bContext *C, ARegion *region, void * /*arg
 
     /* Padding below the logo. */
     row = &layout->row(false);
-    uiItemS_ex(row, 2.7f);
+    row->separator(2.7f);
   }
 #endif /* !WITH_HEADLESS */
 

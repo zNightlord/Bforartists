@@ -95,7 +95,7 @@ static void catalog_assets_draw(const bContext *C, Menu *menu)
   }
 
   uiLayout *layout = menu->layout;
-  uiItemS(layout);
+  layout->separator();
 
   wmOperatorType *ot = WM_operatortype_find("OBJECT_OT_modifier_add_node_group", true);
   for (const asset_system::AssetRepresentation *asset : assets) {
@@ -166,11 +166,11 @@ static void unassigned_assets_draw(const bContext *C, Menu *menu)
     }
 
     if (add_separator) {
-      uiItemS(layout);
+      layout->separator();
       add_separator = false;
     }
     if (first) {
-      uiItemL(layout, IFACE_("Unmarked Assets:"), ICON_NONE); /*BFA - changed label*/
+      layout->label(IFACE_("Unmarked Assets"), ICON_NONE); /*BFA - changed label*/
       first = false;
     }
 
@@ -203,10 +203,10 @@ static void root_catalogs_draw(const bContext *C, Menu *menu)
     return;
   }
 
-  uiItemS(layout);
+  layout->separator();
 
   if (!loading_finished) {
-    uiItemL(layout, IFACE_("Loading Asset Libraries"), ICON_INFO);
+    layout->label(IFACE_("Loading Asset Libraries"), ICON_INFO);
   }
 
   Set<std::string> all_builtin_menus = [&]() {
@@ -236,11 +236,9 @@ static void root_catalogs_draw(const bContext *C, Menu *menu)
   });
 
   if (!tree.unassigned_assets.is_empty() || unassigned_local_poll(*CTX_data_main(C))) {
-    uiItemS(layout);
-    uiItemM(layout,
-            "OBJECT_MT_add_modifier_unassigned_assets",
-            IFACE_("Unassigned"),
-            ICON_FILE_HIDDEN);
+    layout->separator();
+    layout->menu(
+        "OBJECT_MT_add_modifier_unassigned_assets", IFACE_("Unassigned"), ICON_FILE_HIDDEN);
   }
 }
 
@@ -350,7 +348,7 @@ static std::string modifier_add_asset_get_description(bContext *C,
 static void OBJECT_OT_modifier_add_node_group(wmOperatorType *ot)
 {
   ot->name = "Add Modifier";
-  ot->description = "Add a procedural operation/effect to all selected objects"; /*BFA - defaults to all*/
+  ot->description = "Add a procedural operation/effect to all selected objectsn/Hold ALT to add to only selected."; /*BFA - defaults to all*/
   ot->idname = "OBJECT_OT_modifier_add_node_group";
 
   ot->invoke = modifier_add_asset_invoke;
@@ -417,7 +415,7 @@ void ui_template_modifier_asset_menu_items(uiLayout &layout, const StringRef cat
   if (!all_library) {
     return;
   }
-  uiItemS(&layout);
+  layout.separator();
   uiLayout *col = &layout.column(false);
   uiLayoutSetContextString(col, "asset_catalog_path", item->catalog_path().str());
   uiItemMContents(col, "OBJECT_MT_add_modifier_catalog_assets");
