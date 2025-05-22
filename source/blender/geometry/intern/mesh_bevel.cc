@@ -2516,7 +2516,7 @@ static void fill_adjverts(AdjVerts &adjverts,
   }
 
   /* The new edge-ring edge vertices. 
-   * Made as the average of the ends of the edge0ring edges of input mesh and the 
+   * Made as the average of the ends of the edge-ring edges of input mesh and the 
    * face-center vertices of the output mesh above and below that edge.
    */
   fmt::println("edge-ring edge vertices");
@@ -2547,6 +2547,23 @@ static void fill_adjverts(AdjVerts &adjverts,
                                                        adjverts.vert(2*r - 1, a, 2*side - 2));
     }
   }
+
+/*
+for r in [1, 2, ..., RI-2]:
+	d = # segments in vert ring r of I; d2 = # segments in vert ring 2r of O
+	make vertex-vertex at O(2r, a, 0) from
+		edges: from O(2r, a, 0) to all of O(2r, a, 1), O(2r, a-1, -1), O(r+1, a-1, -1), O(r-1, a 1)
+faces-verts: O(2r-1, a-1, -1), O(2r-1, a, 1), O(2r, a, 1), O(2r, a-1, -1)
+	for k in [1, 2, ..., d-1]:
+		make vertex-vertex at O(2r, a, 2k) from
+			edges: from O(2r, a, 2k) to all of O(2r, a, 2k+1), O(2r, a, 2k-1), O(2r+1, a, 2k+1), O(2r-1, a, 2k-1)
+			face-verts: O(2*r, a, 2*k-1), O(2*r, a, 2*k + 1), O(2*r+1, a, 2*k +1), O(2*r-1 , a, 2*k-1)
+
+*/
+  /* The new vertex-vertex vertices (transformation of input interior vertices).
+   * Made as a function of the average of the ends of the four new edges leading into the vertex,
+   * and the average of the four new face vertices surrounding the vertex.
+   */
 }
 
 }  // namespace adj
