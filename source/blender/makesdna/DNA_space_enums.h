@@ -478,6 +478,7 @@ typedef enum eFileAssetImportMethod {
   FILE_ASSET_IMPORT_APPEND_REUSE = 2,
   /** Default: Follow the preference setting for this asset library. */
   FILE_ASSET_IMPORT_FOLLOW_PREFS = 3,
+  FILE_ASSET_IMPORT_LINK_OVERRIDE = 4,
 } eFileAssetImportMethod;
 
 typedef enum eFileAssetImportFlags {
