@@ -2466,18 +2466,42 @@ static void fill_adjverts(AdjVerts &adjverts,
       const int aprev = a == 0 ? n_boundary - 1 : a - 1;
       /* Corner faces have a different indexing pattern. */
       fmt::println(" FC: O({},{},0) = avg I({},{},0) I({},{},1) I({},{},0) I({},{},{})",
-                    2*r -1, a, r, a, r, a, r-1,a, r, aprev, side - 1);
-      adjverts.mutable_vert(2*r - 1, a, 0) = avg4(adjverts_half.vert(r, a, 0),
-                                                adjverts_half.vert(r, a, 1),
-                                                adjverts_half.vert(r - 1, a, 0),
-                                                adjverts_half.vert(r, aprev, side - 1));
+                   2 * r - 1,
+                   a,
+                   r,
+                   a,
+                   r,
+                   a,
+                   r - 1,
+                   a,
+                   r,
+                   aprev,
+                   side - 1);
+      adjverts.mutable_vert(2 * r - 1, a, 0) = avg4(adjverts_half.vert(r, a, 0),
+                                                    adjverts_half.vert(r, a, 1),
+                                                    adjverts_half.vert(r - 1, a, 0),
+                                                    adjverts_half.vert(r, aprev, side - 1));
       for (const int o : IndexRange::from_begin_end(1, side - 1)) {
         fmt::println(" FS: O({},{},{}) = avg I({},{},{}) I({},{},{}) I({},{},{}) I({},{},{})",
-                    2*r -1, a, 2*o, r, a, o, r, a, o+1, r-1, a, o, r-1, a, o-1);
-        adjverts.mutable_vert(2*r - 1, a, 2 * o) = avg4(adjverts_half.vert(r, a, o),
-                                                      adjverts_half.vert(r, a, o + 1),
-                                                      adjverts_half.vert(r - 1, a, o),
-                                                      adjverts_half.vert(r - 1, a, o - 1));
+                     2 * r - 1,
+                     a,
+                     2 * o,
+                     r,
+                     a,
+                     o,
+                     r,
+                     a,
+                     o + 1,
+                     r - 1,
+                     a,
+                     o,
+                     r - 1,
+                     a,
+                     o - 1);
+        adjverts.mutable_vert(2 * r - 1, a, 2 * o) = avg4(adjverts_half.vert(r, a, o),
+                                                          adjverts_half.vert(r, a, o + 1),
+                                                          adjverts_half.vert(r - 1, a, o),
+                                                          adjverts_half.vert(r - 1, a, o - 1));
       }
     }
   }
@@ -2492,31 +2516,75 @@ static void fill_adjverts(AdjVerts &adjverts,
     for (const int a : IndexRange(n_boundary)) {
       fmt::println("r={} a={} side={}", r, a, side);
       fmt::println(" CRC: O({},{},{}) = avg I({},{},{}) I({},{},{}) O({},{},{}) O({},{},{})",
-                    2*r-1, a, 1, r, a, 1, r-1, a, 0, 2*r-1, a, 0, 2*r-1, a, 2);
-      adjverts.mutable_vert(2*r - 1, a, 1) = avg4(adjverts_half.vert(r, a, 1),
-                                                  adjverts_half.vert(r - 1, a, 0),
-                                                  adjverts.vert(2*r - 1, a, 0),
-                                                  adjverts.vert(2*r - 1, a, 2));
-      for (const int o : IndexRange::from_begin_end(2, side-1)) {
+                   2 * r - 1,
+                   a,
+                   1,
+                   r,
+                   a,
+                   1,
+                   r - 1,
+                   a,
+                   0,
+                   2 * r - 1,
+                   a,
+                   0,
+                   2 * r - 1,
+                   a,
+                   2);
+      adjverts.mutable_vert(2 * r - 1, a, 1) = avg4(adjverts_half.vert(r, a, 1),
+                                                    adjverts_half.vert(r - 1, a, 0),
+                                                    adjverts.vert(2 * r - 1, a, 0),
+                                                    adjverts.vert(2 * r - 1, a, 2));
+      for (const int o : IndexRange::from_begin_end(2, side - 1)) {
         fmt::println(" CRS: O({},{},{}) = avg I({},{},{}) I({},{},{}) O({},{},{}) O({},{},{})",
-                    2*r-1, a, 2*o-2, r, a, o, r-1, a, o-1, 2*r-1, a, 2*o-2, 2*r-1, a, 2*o+2);
-        adjverts.mutable_vert(2*r - 1, a, 2*o - 2) = avg4(adjverts_half.vert(r, a, o),
-                                                          adjverts_half.vert(r - 1, a, o - 1),
-                                                          adjverts.vert(2*r - 1, a, 2*o - 2),
-                                                          adjverts.vert(2*r - 1, a, 2*o + 2));
+                     2 * r - 1,
+                     a,
+                     2 * o - 2,
+                     r,
+                     a,
+                     o,
+                     r - 1,
+                     a,
+                     o - 1,
+                     2 * r - 1,
+                     a,
+                     2 * o - 2,
+                     2 * r - 1,
+                     a,
+                     2 * o + 2);
+        adjverts.mutable_vert(2 * r - 1, a, 2 * o - 2) = avg4(
+            adjverts_half.vert(r, a, o),
+            adjverts_half.vert(r - 1, a, o - 1),
+            adjverts.vert(2 * r - 1, a, 2 * o - 2),
+            adjverts.vert(2 * r - 1, a, 2 * o + 2));
       }
       const int anext = (a + 1) % n_boundary;
       fmt::println(" CRC2: O({},{},{}) = avg I({},{},{}) I({},{},{}) O({},{},{}) O({},{},{})",
-                    2*r-1, a, side-1, r, a, side-1, r-1, anext, 0, 2*r-1, a, 2*side-4, 2*r-1, anext, 0);
-      adjverts.mutable_vert(2*r - 1, a, side - 1) = avg4(adjverts_half.vert(r, a, side - 1),
-                                                         adjverts_half.vert(r - 1, anext, 0),
-                                                         adjverts.vert(2*r - 1, a, 2*side - 4),
-                                                         adjverts.vert(2*r - 1, anext, 0));
+                   2 * r - 1,
+                   a,
+                   side - 1,
+                   r,
+                   a,
+                   side - 1,
+                   r - 1,
+                   anext,
+                   0,
+                   2 * r - 1,
+                   a,
+                   2 * side - 4,
+                   2 * r - 1,
+                   anext,
+                   0);
+      adjverts.mutable_vert(2 * r - 1, a, side - 1) = avg4(
+          adjverts_half.vert(r, a, side - 1),
+          adjverts_half.vert(r - 1, anext, 0),
+          adjverts.vert(2 * r - 1, a, 2 * side - 4),
+          adjverts.vert(2 * r - 1, anext, 0));
     }
   }
 
-  /* The new edge-ring edge vertices. 
-   * Made as the average of the ends of the edge-ring edges of input mesh and the 
+  /* The new edge-ring edge vertices.
+   * Made as the average of the ends of the edge-ring edges of input mesh and the
    * face-center vertices of the output mesh above and below that edge.
    */
   fmt::println("edge-ring edge vertices");
@@ -2525,45 +2593,182 @@ static void fill_adjverts(AdjVerts &adjverts,
     for (const int a : IndexRange(n_boundary)) {
       fmt::println("r={} a={} side={}", r, a, side);
       fmt::println(" ERC: O({},{},{}) = avg I({},{},{}) I({},{},{}) O({},{},{}) O({},{},{})",
-                    2*r, a, 1, r, a, 0, r, a, 1, 2*r+1, a, 2, 2*r+1, a, 0);
-      adjverts.mutable_vert(2*r, a, 1) = avg4(adjverts_half.vert(r, a, 0),
-                                              adjverts_half.vert(r, a, 1),
-                                              adjverts.vert(2*r+1, a, 2),
-                                              adjverts.vert(2*r-1, a, 0));
-      for (const int o : IndexRange::from_begin_end(2, side-1)) {
+                   2 * r,
+                   a,
+                   1,
+                   r,
+                   a,
+                   0,
+                   r,
+                   a,
+                   1,
+                   2 * r + 1,
+                   a,
+                   2,
+                   2 * r + 1,
+                   a,
+                   0);
+      adjverts.mutable_vert(2 * r, a, 1) = avg4(adjverts_half.vert(r, a, 0),
+                                                adjverts_half.vert(r, a, 1),
+                                                adjverts.vert(2 * r + 1, a, 2),
+                                                adjverts.vert(2 * r - 1, a, 0));
+      for (const int o : IndexRange::from_begin_end(2, side - 1)) {
         fmt::println(" ERS: O({},{},{}) = avg I({},{},{}) I({},{},{}) O({},{},{}) O({},{},{})",
-                    2*r, a, 2*o+1, r, a, o, r, a, o+1, 2*r+1, a, 2*o + 2, 2*r -1, a, 2*o);
-        adjverts.mutable_vert(2*r, a, 2*o + 1) = avg4(adjverts_half.vert(r, a, o),
-                                                      adjverts_half.vert(r, a, o+1),
-                                                      adjverts.vert(2*r + 1, a, 2*o + 2),
-                                                      adjverts.vert(2*r - 1, a, 2*o));
+                     2 * r,
+                     a,
+                     2 * o + 1,
+                     r,
+                     a,
+                     o,
+                     r,
+                     a,
+                     o + 1,
+                     2 * r + 1,
+                     a,
+                     2 * o + 2,
+                     2 * r - 1,
+                     a,
+                     2 * o);
+        adjverts.mutable_vert(2 * r, a, 2 * o + 1) = avg4(adjverts_half.vert(r, a, o),
+                                                          adjverts_half.vert(r, a, o + 1),
+                                                          adjverts.vert(2 * r + 1, a, 2 * o + 2),
+                                                          adjverts.vert(2 * r - 1, a, 2 * o));
       }
       const int anext = (a + 1) % n_boundary;
       fmt::println(" ERC2: O({},{},{}) = avg I({},{},{}) I({},{},{}) O({},{},{}) O({},{},{})",
-                    2*r, a, 2*side-1, r, a, 2*side-1, r, anext, 0, 2*r+1, a, 2*side, 2*r-1, a, 2*side - 2);
-      adjverts.mutable_vert(2*r, a, 2*side - 1) = avg4(adjverts_half.vert(r, a, 2*side-1),
-                                                       adjverts_half.vert(r, anext, 0),
-                                                       adjverts.vert(2*r + 1, a, 2*side),
-                                                       adjverts.vert(2*r - 1, a, 2*side - 2));
+                   2 * r,
+                   a,
+                   2 * side - 1,
+                   r,
+                   a,
+                   2 * side - 1,
+                   r,
+                   anext,
+                   0,
+                   2 * r + 1,
+                   a,
+                   2 * side,
+                   2 * r - 1,
+                   a,
+                   2 * side - 2);
+      adjverts.mutable_vert(2 * r, a, 2 * side - 1) = avg4(
+          adjverts_half.vert(r, a, 2 * side - 1),
+          adjverts_half.vert(r, anext, 0),
+          adjverts.vert(2 * r + 1, a, 2 * side),
+          adjverts.vert(2 * r - 1, a, 2 * side - 2));
     }
   }
 
-/*
-for r in [1, 2, ..., RI-2]:
-	d = # segments in vert ring r of I; d2 = # segments in vert ring 2r of O
-	make vertex-vertex at O(2r, a, 0) from
-		edges: from O(2r, a, 0) to all of O(2r, a, 1), O(2r, a-1, -1), O(r+1, a-1, -1), O(r-1, a 1)
-faces-verts: O(2r-1, a-1, -1), O(2r-1, a, 1), O(2r, a, 1), O(2r, a-1, -1)
-	for k in [1, 2, ..., d-1]:
-		make vertex-vertex at O(2r, a, 2k) from
-			edges: from O(2r, a, 2k) to all of O(2r, a, 2k+1), O(2r, a, 2k-1), O(2r+1, a, 2k+1), O(2r-1, a, 2k-1)
-			face-verts: O(2*r, a, 2*k-1), O(2*r, a, 2*k + 1), O(2*r+1, a, 2*k +1), O(2*r-1 , a, 2*k-1)
-
-*/
   /* The new vertex-vertex vertices (transformation of input interior vertices).
-   * Made as a function of the average of the ends of the four new edges leading into the vertex,
-   * and the average of the four new face vertices surrounding the vertex.
+   * Made as a function of the average of the ends of the four new edges leading into the
+   * vertex, and the average of the four new face vertices surrounding the vertex.
    */
+  fmt::println("vertex vertices");
+  float gamma = 0.25f;
+  float beta = -gamma;
+  for (const int r : IndexRange::from_begin_end(1, nrings_in - 1)) {
+    const int iside = v_anchor_div(r, n_boundary, ns_in);
+    const int oside = v_anchor_div(r, n_boundary, ns_out);
+    for (const int a : IndexRange(n_boundary)) {
+      fmt::println("r={} a={} iside={} oside={}", r, a, iside, oside);
+      const int aprev = a == 0 ? n_boundary - 1 : a - 1;
+      fmt::println("VVC: co1 = avg O({},{},{}) O({},{},{}) O({},{},{})",
+                   2 * r,
+                   a,
+                   0,
+                   2 * r,
+                   a,
+                   1,
+                   2 * r,
+                   a - 1,
+                   oside - 1,
+                   2 * r - 1,
+                   a,
+                   1);
+      float3 co1 = avg4(adjverts.vert(2 * r, a, 0),
+                        adjverts.vert(2 * r, a, 1),
+                        adjverts.vert(2 * r, a - 1, oside - 1),
+                        adjverts.vert(2 * r - 1, a, 1));
+      fmt::println("     co2 = avg  O({},{},{}) O({},{},{}) O({},{},{})",
+                   2 * r - 1,
+                   aprev,
+                   oside - 1,
+                   2 * r - 1,
+                   a,
+                   1,
+                   2 * r,
+                   a,
+                   1,
+                   2 * r,
+                   aprev,
+                   oside - 1);
+      float3 co2 = avg4(adjverts.vert(2 * r - 1, aprev, oside - 1),
+                        adjverts.vert(2 * r - 1, a, 1),
+                        adjverts.vert(2 * r, a, 1),
+                        adjverts.vert(2 * r, aprev, oside - 1));
+      fmt::println(
+          "     O({},{},{}) = co1 + beta * co2 + gamma * I({}, {}, {})", 2 * r, a, 0, r, a, 0);
+      adjverts.mutable_vert(2 * r, a, 0) = co1 + beta * co2 + gamma * adjverts_half.vert(r, a, 0);
+      for (const int o : IndexRange(iside)) {
+        fmt::println("VVS: co1 = avg O({},{},{}) O({},{},{}) O({},{},{})",
+                     2 * r,
+                     a,
+                     2 * o + 1,
+                     2 * r,
+                     a,
+                     2 * o - 1,
+                     2 * r + 1,
+                     a,
+                     2 * o + 1,
+                     2 * r - 1,
+                     a,
+                     2 * o - 1);
+        co1 = avg4(adjverts.vert(2 * r, a, 2 * o + 1),
+                   adjverts.vert(2 * r, a, 2 * o - 1),
+                   adjverts.vert(2 * r + 1, a, 2 * o + 1),
+                   adjverts.vert(2 * r - 1, a, 2 * o - 1));
+        fmt::println("     co2 = avg  O({},{},{}) O({},{},{}) O({},{},{})",
+                     2 * r,
+                     a,
+                     2 * o - 1,
+                     2 * r,
+                     a,
+                     2 * o + 1,
+                     2 * r,
+                     a,
+                     2 * o + 1,
+                     2 * r - 1,
+                     a,
+                     2 * o - 1);
+        co2 = avg4(adjverts.vert(2 * r, a, 2 * o - 1),
+                   adjverts.vert(2 * r, a, 2 * o + 1),
+                   adjverts.vert(2 * r, a, 2 * o + 1),
+                   adjverts.vert(2 * r - 1, a, 2 * o - 1));
+        fmt::println("     O({},{},{}) = co1 + beta * co2 + gamma * I({}, {}, {})",
+                     2 * r,
+                     a,
+                     2 * o,
+                     r,
+                     a,
+                     o);
+        adjverts.mutable_vert(2 * r, a, 2 * o) = co1 + beta * co2 +
+                                                 gamma * adjverts_half.vert(r, a, o);
+      }
+    }
+  }
+
+  /* The center vertex is special. */
+  gamma = sabin_gamma(n_boundary);
+  beta = -gamma;
+  /* Accumulate edge verts in co1, face verts in co2. */
+  float3 co1(0.0f, 0.0f, 0.0f);
+  float3 co2(0.0f, 0.0f, 0.0f);
+  for (const int a : IndexRange(n_boundary)) {
+    const int oside = v_anchor_div(1, n_boundary, ns_out);
+    for (const int o : IndexRange(oside)) {
+      co1 = co1 + adjverts.vert(a, 1, o);
+    }
+  }
 }
 
 }  // namespace adj
