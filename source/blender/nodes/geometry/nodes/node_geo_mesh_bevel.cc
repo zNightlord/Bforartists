@@ -20,6 +20,7 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_input<decl::Geometry>("Mesh").supported_type(GeometryComponent::Type::Mesh);
   b.add_input<decl::Bool>("Selection").default_value(true).field_on_all().hide_value();
   b.add_input<decl::Float>("Offset").default_value(0.0f).min(0.0f);
+  b.add_input<decl::Int>("Segments").default_value(1);
   b.add_output<decl::Geometry>("Mesh").propagate_all();
 }
 
@@ -41,6 +42,7 @@ static void node_geo_exec(GeoNodeExecParams params)
   Field<bool> selection_field = params.extract_input<Field<bool>>("Selection");
   const AttributeFilter &attribute_filter = params.get_attribute_filter("Mesh");
   float offset = params.extract_input<float>("Offset");
+  int segments = params.extract_input<int>("Segments");
 
   geometry::BevelAffect affect = geometry::BevelAffect(params.node().custom1);
   

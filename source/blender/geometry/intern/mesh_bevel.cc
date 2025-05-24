@@ -2251,7 +2251,7 @@ static std::pair<int4, int4> face_vertices_and_edges(int f, int nv, int ns)
   return std::pair<int4, int4>(vertices, edges);
 }
 
-[[maybe_unused]] static void print_adj(int nv, int ns)
+[[maybe_unused]] static void print_adj_pattern(int nv, int ns)
 {
   fmt::println("\nnv = {}, ns = {}", nv, ns);
   int nvrings = v_num_rings(ns);
@@ -2353,6 +2353,14 @@ const int AdjVerts::ring_anchor_offset_to_vert(const int ring,
   return rao_to_vert(ring, anchor, offset, this->anchors, this->segments);
 }
 
+[[maybe_unused]] static void draw_adj(const AdjVerts &adjverts)
+{
+  for (const int i : adjverts.verts.index_range()) {
+    float3 co = adjverts.verts[i];
+    draw::drw_debug_point(co, 0.04f, {1, 1, 0, 1});
+  }
+}
+
 static float3 avg4(const float3 &v0, const float3 &v1, const float3 &v2, const float3 &v3)
 {
   return 0.25f * (v0 + v1 + v2 + v3);
@@ -2377,7 +2385,7 @@ static float sabin_gamma(int n)
   if (n == 6) {
     return 0.523423277f;
   }
-  const double k = cos(M_PI / double(n));
+  const double k = cos(math::numbers::pi / double(n));
   /* Need x, real root of x^3 + (4k^2 - 3)x - 2k = 0.
    * Answer calculated via Wolfram Alpha. */
   const double k2 = k * k;
@@ -2418,9 +2426,9 @@ static void fill_adjverts(AdjVerts &adjverts,
   const int n_boundary = adjverts_half.anchors;
   const int ns_in = adjverts_half.segments;
   const int ns_out = adjverts.segments;
-
+  
   fmt::println("\ncubic subdivision ns_in={} ns_out={}", ns_in, ns_out);
-
+  
   /* First adjust the boundary vertices of the input, storing in the output. */
   for (const int a : IndexRange(n_boundary)) {
     adjverts.mutable_outer_ring_vert(a, 0) = adjverts_half.outer_ring_vert(a, 0);
@@ -2453,7 +2461,7 @@ static void fill_adjverts(AdjVerts &adjverts,
   }
   /* Now we do the internal vertices, using standard Catmull-Clark
    * and assuming all boundary vertices have valence 4. */
-
+  
   /* The new face-center vertices.
    * Made as average of four corners of quads of the input mesh.
    */
@@ -2505,7 +2513,7 @@ static void fill_adjverts(AdjVerts &adjverts,
       }
     }
   }
-
+  
   /* The new cross-ring edge vertices.
    * Made as average of ends of cross-ring edges of the input mesh and the adjacent newly-made
    * face-center vertices of the output mesh left and right of that edge.
@@ -2553,10 +2561,10 @@ static void fill_adjverts(AdjVerts &adjverts,
                      a,
                      2 * o + 2);
         adjverts.mutable_vert(2 * r - 1, a, 2 * o - 2) = avg4(
-            adjverts_half.vert(r, a, o),
-            adjverts_half.vert(r - 1, a, o - 1),
-            adjverts.vert(2 * r - 1, a, 2 * o - 2),
-            adjverts.vert(2 * r - 1, a, 2 * o + 2));
+                                                              adjverts_half.vert(r, a, o),
+                                                              adjverts_half.vert(r - 1, a, o - 1),
+                                                              adjverts.vert(2 * r - 1, a, 2 * o - 2),
+                                                              adjverts.vert(2 * r - 1, a, 2 * o + 2));
       }
       const int anext = (a + 1) % n_boundary;
       fmt::println(" CRC2: O({},{},{}) = avg I({},{},{}) I({},{},{}) O({},{},{}) O({},{},{})",
@@ -2576,13 +2584,13 @@ static void fill_adjverts(AdjVerts &adjverts,
                    anext,
                    0);
       adjverts.mutable_vert(2 * r - 1, a, side - 1) = avg4(
-          adjverts_half.vert(r, a, side - 1),
-          adjverts_half.vert(r - 1, anext, 0),
-          adjverts.vert(2 * r - 1, a, 2 * side - 4),
-          adjverts.vert(2 * r - 1, anext, 0));
+                                                           adjverts_half.vert(r, a, side - 1),
+                                                           adjverts_half.vert(r - 1, anext, 0),
+                                                           adjverts.vert(2 * r - 1, a, 2 * side - 4),
+                                                           adjverts.vert(2 * r - 1, anext, 0));
     }
   }
-
+  
   /* The new edge-ring edge vertices.
    * Made as the average of the ends of the edge-ring edges of input mesh and the
    * face-center vertices of the output mesh above and below that edge.
@@ -2652,19 +2660,19 @@ static void fill_adjverts(AdjVerts &adjverts,
                    a,
                    2 * side - 2);
       adjverts.mutable_vert(2 * r, a, 2 * side - 1) = avg4(
-          adjverts_half.vert(r, a, 2 * side - 1),
-          adjverts_half.vert(r, anext, 0),
-          adjverts.vert(2 * r + 1, a, 2 * side),
-          adjverts.vert(2 * r - 1, a, 2 * side - 2));
+                                                           adjverts_half.vert(r, a, 2 * side - 1),
+                                                           adjverts_half.vert(r, anext, 0),
+                                                           adjverts.vert(2 * r + 1, a, 2 * side),
+                                                           adjverts.vert(2 * r - 1, a, 2 * side - 2));
     }
   }
-
+  
   /* The new vertex-vertex vertices (transformation of input interior vertices).
    * Made as a function of the average of the ends of the four new edges leading into the
    * vertex, and the average of the four new face vertices surrounding the vertex.
    */
   fmt::println("vertex vertices");
-  float gamma = 0.25f;
+  float gamma = sabin_gamma(4);
   float beta = -gamma;
   for (const int r : IndexRange::from_begin_end(1, nrings_in - 1)) {
     const int iside = v_anchor_div(r, n_boundary, ns_in);
@@ -2707,7 +2715,7 @@ static void fill_adjverts(AdjVerts &adjverts,
                         adjverts.vert(2 * r, a, 1),
                         adjverts.vert(2 * r, aprev, oside - 1));
       fmt::println(
-          "     O({},{},{}) = co1 + beta * co2 + gamma * I({}, {}, {})", 2 * r, a, 0, r, a, 0);
+                   "     O({},{},{}) = co1 + beta * co2 + gamma * I({}, {}, {})", 2 * r, a, 0, r, a, 0);
       adjverts.mutable_vert(2 * r, a, 0) = co1 + beta * co2 + gamma * adjverts_half.vert(r, a, 0);
       for (const int o : IndexRange(iside)) {
         fmt::println("VVS: co1 = avg O({},{},{}) O({},{},{}) O({},{},{})",
@@ -2752,23 +2760,36 @@ static void fill_adjverts(AdjVerts &adjverts,
                      a,
                      o);
         adjverts.mutable_vert(2 * r, a, 2 * o) = co1 + beta * co2 +
-                                                 gamma * adjverts_half.vert(r, a, o);
+        gamma * adjverts_half.vert(r, a, o);
       }
     }
   }
-
-  /* The center vertex is special. */
+  
+  /* The center vertex-vertex is like the ones calculated for the quads, but
+   * the gamma is different because the valence is not necessarily 4.
+   */
   gamma = sabin_gamma(n_boundary);
   beta = -gamma;
-  /* Accumulate edge verts in co1, face verts in co2. */
-  float3 co1(0.0f, 0.0f, 0.0f);
-  float3 co2(0.0f, 0.0f, 0.0f);
+  /* Get centroids of new edge-verts and new face-verts adjacent to center. */
+  float3 ev_centroid(0.0f, 0.0f, 0.0f);
+  float3 ef_centroid(0.0f, 0.0f, 0.0f);
   for (const int a : IndexRange(n_boundary)) {
-    const int oside = v_anchor_div(1, n_boundary, ns_out);
-    for (const int o : IndexRange(oside)) {
-      co1 = co1 + adjverts.vert(a, 1, o);
+    ev_centroid = ev_centroid + adjverts.vert(1, a, 0);
+    ef_centroid = ef_centroid + adjverts.vert(1, a, 1);
+  }
+  ev_centroid = ev_centroid / float(n_boundary);
+  ef_centroid = ef_centroid / float(n_boundary);
+  adjverts.mutable_vert(0, 0, 0) = ev_centroid + beta * ef_centroid +
+  gamma * adjverts_half.vert(0, 0, 0);
+  
+  /* Final step: Copy the profile vertices to the output boundary. */
+  for (const int a : IndexRange(n_boundary)) {
+    const profile::Profile &profile = profiles[a];
+    for (const int o : IndexRange(ns_out)) {
+      adjverts.mutable_outer_ring_vert(a, o) = profile::get_profile_point(profile, o, ns_out);
     }
   }
+  
 }
 
 }  // namespace adj
@@ -3476,12 +3497,42 @@ static void build_internal_adj(const int bv,
 {
   const MeshPattern &pat = bs.bevvert_meshpatterns()[bv];
   const int ns = bs.params.segments;
-  const int nv = pat.num_anchors;
+  const int na = pat.num_anchors;
   BLI_assert(ns > 1 && pat.kind == MeshKind::Adj);
   const int ns_power_2 = bs.pro_spacing.segments_power_2;
-  /*
-  adj::adj_build(bv, profiles, bv_newvert_positions, adjv_power_of_2, ns_power_2);
+
+  /* First construct an initial control mesh with 2 segments. */
+  adj::AdjVerts adj2(na, 2);
+  float3 center(0.0f, 0.0f, 0.0f);
+  for (const int a : IndexRange(na)) {
+    adj2.mutable_outer_ring_vert(a, 0) = bv_newvert_positions[pat.anchor_vert(a)];
+    adj2.mutable_outer_ring_vert(a, 1) = profile::get_profile_point(profiles[a], 1, 2);
+    center = center + adj2.vert(0, a, 0);
+  }
+  center = center / float(na);
+
+  
+  /* To place the center vertex, let:
+   * 'negative_fullest' = the original vertex across the boundverts' center.
+   * 'fullness' = fraction of the way from the boundvert's centroid
+   *  to the original vertex (if positive) or to negative_fullest (if negative).
    */
+  const float3 orig_v = bs.mesh_info.mesh.vert_positions()[bs.bevvert_mesh_verts()[bv]];
+  const float fullness = bs.pro_spacing.fullness;
+  const float3 center_dir = orig_v - center;
+  if (math::length_squared(center_dir) > geom::bevel_epsilon_sq) {
+    adj2.mutable_vert(0, 0, 0) = center + fullness * center_dir;
+    /* TODO: custom profile is different here. */
+    /* const float3 negative_fullest = center + (center - orig_v); */
+  }
+  else {
+    adj2.mutable_vert(0, 0, 0) = center;
+  }
+  adj::draw_adj(adj2); // DEBUG!!
+
+  /* Make and fill adj mesh with #ns_power_2 segements. */
+  adj::AdjVerts adj_sup_power_2(na, ns_power_2);
+  adj::fill_adjverts(adj_sup_power_2, adj2, profiles);
 }
 
 static void build_internal_vmesh(const int bv,
