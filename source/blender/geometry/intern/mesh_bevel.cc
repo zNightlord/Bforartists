@@ -487,6 +487,24 @@ template<typename T> static void print_span(Span<T> span, const char *label)
   fmt::println("");
 }
 
+static void print_float3(const float3 &v)
+{
+  fmt::print("({},{},{})", v[0], v[1], v[2]);
+}
+
+static void print_float3_span(Span<float3> span, const char *label)
+{
+  fmt::print("{}:", label);
+  for (const int i : span.index_range()) {
+    if (i % 10 == 0) {
+      fmt::print("\n[{}] ", i);
+    }
+    print_float3(span[i]);
+    fmt::print(" ");
+  }
+  fmt::println("");
+}
+
 static void print_indexmask(const IndexMask &index_mask, const char *label)
 {
   fmt::print("{}:", label);
@@ -2426,9 +2444,9 @@ static void fill_adjverts(AdjVerts &adjverts,
   const int n_boundary = adjverts_half.anchors;
   const int ns_in = adjverts_half.segments;
   const int ns_out = adjverts.segments;
-  
+
   fmt::println("\ncubic subdivision ns_in={} ns_out={}", ns_in, ns_out);
-  
+
   /* First adjust the boundary vertices of the input, storing in the output. */
   for (const int a : IndexRange(n_boundary)) {
     adjverts.mutable_outer_ring_vert(a, 0) = adjverts_half.outer_ring_vert(a, 0);
@@ -2461,7 +2479,7 @@ static void fill_adjverts(AdjVerts &adjverts,
   }
   /* Now we do the internal vertices, using standard Catmull-Clark
    * and assuming all boundary vertices have valence 4. */
-  
+
   /* The new face-center vertices.
    * Made as average of four corners of quads of the input mesh.
    */
@@ -2513,7 +2531,7 @@ static void fill_adjverts(AdjVerts &adjverts,
       }
     }
   }
-  
+
   /* The new cross-ring edge vertices.
    * Made as average of ends of cross-ring edges of the input mesh and the adjacent newly-made
    * face-center vertices of the output mesh left and right of that edge.
@@ -2561,10 +2579,10 @@ static void fill_adjverts(AdjVerts &adjverts,
                      a,
                      2 * o + 2);
         adjverts.mutable_vert(2 * r - 1, a, 2 * o - 2) = avg4(
-                                                              adjverts_half.vert(r, a, o),
-                                                              adjverts_half.vert(r - 1, a, o - 1),
-                                                              adjverts.vert(2 * r - 1, a, 2 * o - 2),
-                                                              adjverts.vert(2 * r - 1, a, 2 * o + 2));
+            adjverts_half.vert(r, a, o),
+            adjverts_half.vert(r - 1, a, o - 1),
+            adjverts.vert(2 * r - 1, a, 2 * o - 2),
+            adjverts.vert(2 * r - 1, a, 2 * o + 2));
       }
       const int anext = (a + 1) % n_boundary;
       fmt::println(" CRC2: O({},{},{}) = avg I({},{},{}) I({},{},{}) O({},{},{}) O({},{},{})",
@@ -2584,13 +2602,13 @@ static void fill_adjverts(AdjVerts &adjverts,
                    anext,
                    0);
       adjverts.mutable_vert(2 * r - 1, a, side - 1) = avg4(
-                                                           adjverts_half.vert(r, a, side - 1),
-                                                           adjverts_half.vert(r - 1, anext, 0),
-                                                           adjverts.vert(2 * r - 1, a, 2 * side - 4),
-                                                           adjverts.vert(2 * r - 1, anext, 0));
+          adjverts_half.vert(r, a, side - 1),
+          adjverts_half.vert(r - 1, anext, 0),
+          adjverts.vert(2 * r - 1, a, 2 * side - 4),
+          adjverts.vert(2 * r - 1, anext, 0));
     }
   }
-  
+
   /* The new edge-ring edge vertices.
    * Made as the average of the ends of the edge-ring edges of input mesh and the
    * face-center vertices of the output mesh above and below that edge.
@@ -2660,13 +2678,13 @@ static void fill_adjverts(AdjVerts &adjverts,
                    a,
                    2 * side - 2);
       adjverts.mutable_vert(2 * r, a, 2 * side - 1) = avg4(
-                                                           adjverts_half.vert(r, a, 2 * side - 1),
-                                                           adjverts_half.vert(r, anext, 0),
-                                                           adjverts.vert(2 * r + 1, a, 2 * side),
-                                                           adjverts.vert(2 * r - 1, a, 2 * side - 2));
+          adjverts_half.vert(r, a, 2 * side - 1),
+          adjverts_half.vert(r, anext, 0),
+          adjverts.vert(2 * r + 1, a, 2 * side),
+          adjverts.vert(2 * r - 1, a, 2 * side - 2));
     }
   }
-  
+
   /* The new vertex-vertex vertices (transformation of input interior vertices).
    * Made as a function of the average of the ends of the four new edges leading into the
    * vertex, and the average of the four new face vertices surrounding the vertex.
@@ -2715,7 +2733,7 @@ static void fill_adjverts(AdjVerts &adjverts,
                         adjverts.vert(2 * r, a, 1),
                         adjverts.vert(2 * r, aprev, oside - 1));
       fmt::println(
-                   "     O({},{},{}) = co1 + beta * co2 + gamma * I({}, {}, {})", 2 * r, a, 0, r, a, 0);
+          "     O({},{},{}) = co1 + beta * co2 + gamma * I({}, {}, {})", 2 * r, a, 0, r, a, 0);
       adjverts.mutable_vert(2 * r, a, 0) = co1 + beta * co2 + gamma * adjverts_half.vert(r, a, 0);
       for (const int o : IndexRange(iside)) {
         fmt::println("VVS: co1 = avg O({},{},{}) O({},{},{}) O({},{},{})",
@@ -2760,11 +2778,11 @@ static void fill_adjverts(AdjVerts &adjverts,
                      a,
                      o);
         adjverts.mutable_vert(2 * r, a, 2 * o) = co1 + beta * co2 +
-        gamma * adjverts_half.vert(r, a, o);
+                                                 gamma * adjverts_half.vert(r, a, o);
       }
     }
   }
-  
+
   /* The center vertex-vertex is like the ones calculated for the quads, but
    * the gamma is different because the valence is not necessarily 4.
    */
@@ -2780,8 +2798,8 @@ static void fill_adjverts(AdjVerts &adjverts,
   ev_centroid = ev_centroid / float(n_boundary);
   ef_centroid = ef_centroid / float(n_boundary);
   adjverts.mutable_vert(0, 0, 0) = ev_centroid + beta * ef_centroid +
-  gamma * adjverts_half.vert(0, 0, 0);
-  
+                                   gamma * adjverts_half.vert(0, 0, 0);
+
   /* Final step: Copy the profile vertices to the output boundary. */
   for (const int a : IndexRange(n_boundary)) {
     const profile::Profile &profile = profiles[a];
@@ -2789,7 +2807,6 @@ static void fill_adjverts(AdjVerts &adjverts,
       adjverts.mutable_outer_ring_vert(a, o) = profile::get_profile_point(profile, o, ns_out);
     }
   }
-  
 }
 
 }  // namespace adj
@@ -2952,6 +2969,12 @@ static void general_edge_order(MutableSpan<int> edges, const BevelState &bs)
 {
   MultiValueMap<int, int> edge_to_edge = build_edge_to_edge_map(edges, bs);
   int n = edges.size();
+  Map<int, int> edge_to_index;
+  /* An edge should appear at most once in edges. Make an edge -> position map. */
+  edge_to_index.reserve(n);
+  for (const int i : edges.index_range()) {
+    edge_to_index.add_new(edges[i], i);
+  }
   const Mesh &mesh = bs.mesh_info.mesh;
   GroupedSpan<int> edge_faces = bs.mesh_info.edge_faces();
   Array<bool, 20> placed(n, false);
@@ -2962,12 +2985,13 @@ static void general_edge_order(MutableSpan<int> edges, const BevelState &bs)
   while (ordered_edges.size() != n) {
     /* Loop invariant: edges in ordered_edges are placed.
      * The loop always adds at least first_e to ordered_edges, so will not loop forever.
+     * Start by finding the first index #i of an edge that has not yet been placed.
      */
-    int first_i = std::find_if(placed.begin(), placed.end(), [](bool b) { return b; }) -
+    int first_i = std::find_if(placed.begin(), placed.end(), [](bool b) { return !b; }) -
                   placed.begin();
     BLI_assert(first_i < n);
     int first_e = edges[first_i];
-    placed[first_e] = true;
+    placed[first_i] = true;
     chain_cw.resize(0);
     chain_ccw.resize(0);
     /* Grow chain in two directions from first_e: cw when dir == 0, ccw when dir == 1. */
@@ -2978,7 +3002,7 @@ static void general_edge_order(MutableSpan<int> edges, const BevelState &bs)
         Span<int> neighbors = edge_to_edge.lookup(cur_e);
         int next_e = -1;
         for (const int e : neighbors) {
-          if (placed[e]) {
+          if (placed[edge_to_index.lookup(e)]) {
             continue;
           }
           int common_face = find_in_both(edge_faces[cur_e], edge_faces[e]);
@@ -2999,7 +3023,7 @@ static void general_edge_order(MutableSpan<int> edges, const BevelState &bs)
           else {
             chain_ccw.append(next_e);
           }
-          placed[next_e] = true;
+          placed[edge_to_index.lookup(next_e)] = true;
         }
         cur_e = next_e;
       }
@@ -3310,6 +3334,8 @@ static void build_vmesh_skeleton(int bv,
                                  MutableSpan<int2> be_attach_verts,
                                  const BevelState &bs)
 {
+  fmt::println("build_vmesh_skelton bv={}", bv);
+  bv_newvert_positions.fill(float3(0.0f, 0.0f, 0.0f));
   Span<int> bevedges = bs.bevvert_bevedges()[bv];
   const int num_edges = bevedges.size();
   BLI_assert(num_edges > 1);
@@ -3478,14 +3504,19 @@ static void build_vmesh_skeleton(int bv,
           }
         }
       }
-      bv_newvert_positions[anchor0] = adj_edge_anchor_co(bv,
-                                                         bevel_pos[cur_anchor],
-                                                         bevel_pos[next_anchor],
-                                                         num_in_plane,
-                                                         be_in_plane_pos,
-                                                         num_not_in_plane,
-                                                         be_not_in_plane_pos,
-                                                         bs);
+      const int anchor_pos = pat.anchor_vert(next_anchor);
+      fmt::println(
+          "cur_anchor={} next_anchor={} anchor_pos={}", cur_anchor, next_anchor, anchor_pos);
+      bv_newvert_positions[anchor_pos] = adj_edge_anchor_co(bv,
+                                                            bevel_pos[cur_anchor],
+                                                            bevel_pos[next_anchor],
+                                                            num_in_plane,
+                                                            be_in_plane_pos,
+                                                            num_not_in_plane,
+                                                            be_not_in_plane_pos,
+                                                            bs);
+      print_float3(bv_newvert_positions[anchor_pos]);
+      fmt::println("");
     }
   }
 }
@@ -3501,17 +3532,30 @@ static void build_internal_adj(const int bv,
   BLI_assert(ns > 1 && pat.kind == MeshKind::Adj);
   const int ns_power_2 = bs.pro_spacing.segments_power_2;
 
+  print_float3_span(bv_newvert_positions.as_span(), "bv_newvert_positions");  // DEBUG!!
   /* First construct an initial control mesh with 2 segments. */
   adj::AdjVerts adj2(na, 2);
   float3 center(0.0f, 0.0f, 0.0f);
   for (const int a : IndexRange(na)) {
+    int p = adj2.anchor_offset_to_outer_ring_vert(a, 0);
+    int q = pat.anchor_vert(a);
+    float3 pos = bv_newvert_positions[q];
+    fmt::println("a={}, C  verts[{}] = bv_newvert_positions[{}] = ({},{},{})",
+                 a,
+                 p,
+                 q,
+                 pos[0],
+                 pos[1],
+                 pos[2]);
     adj2.mutable_outer_ring_vert(a, 0) = bv_newvert_positions[pat.anchor_vert(a)];
+    p = adj2.anchor_offset_to_outer_ring_vert(a, 1);
+    pos = profile::get_profile_point(profiles[a], 1, 2);
+    fmt::println("     S verts[{}] = profile_point(1,2) = ({},{},{})", p, pos[0], pos[1], pos[2]);
     adj2.mutable_outer_ring_vert(a, 1) = profile::get_profile_point(profiles[a], 1, 2);
     center = center + adj2.vert(0, a, 0);
   }
   center = center / float(na);
 
-  
   /* To place the center vertex, let:
    * 'negative_fullest' = the original vertex across the boundverts' center.
    * 'fullness' = fraction of the way from the boundvert's centroid
@@ -3528,7 +3572,8 @@ static void build_internal_adj(const int bv,
   else {
     adj2.mutable_vert(0, 0, 0) = center;
   }
-  adj::draw_adj(adj2); // DEBUG!!
+  adj::draw_adj(adj2);  // DEBUG!!
+  return;               // DEBUG!!
 
   /* Make and fill adj mesh with #ns_power_2 segements. */
   adj::AdjVerts adj_sup_power_2(na, ns_power_2);
@@ -4005,15 +4050,18 @@ std::optional<Mesh *> mesh_bevel(const Mesh &src_mesh,
     return std::nullopt;
   }
   std::cout << "\n\nBEVEL, offset = " << params.offset << "\n\n";
+
   BevelState state(src_mesh, selection, params);
   state.initialize_profile_data();
+  dump_bevel_state(state, "after initialization");
+
   state.order_bevedges();
   state.set_bevedge_widths();
   dump_bevel_state(state, "after construction and ordering bevedges");
   state.set_bevvert_mesh_topology();
   state.build_vertex_meshes();
   dump_bevel_state(state, "after build_vertex_meshes");
-  draw_all_bevverts(state);
+  // draw_all_bevverts(state);
   return std::nullopt;
 }
 

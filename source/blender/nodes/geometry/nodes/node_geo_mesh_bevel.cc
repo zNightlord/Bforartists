@@ -45,17 +45,13 @@ static void node_geo_exec(GeoNodeExecParams params)
   int segments = params.extract_input<int>("Segments");
 
   geometry::BevelAffect affect = geometry::BevelAffect(params.node().custom1);
-  
+
   geometry_set.modify_geometry_sets([&](GeometrySet &geometry_set) {
     const Mesh *src_mesh = geometry_set.get_mesh();
     if (!src_mesh) {
       return;
     }
-    if (src_mesh->corners_num == src_mesh->faces_num * 3) {
-      /* The mesh is already completely triangulated. */
-      return;
-    }
-    
+
     const bke::MeshFieldContext context(*src_mesh, AttrDomain::Edge);
     FieldEvaluator evaluator{context, src_mesh->edges_num};
     evaluator.add(selection_field);
@@ -68,14 +64,13 @@ static void node_geo_exec(GeoNodeExecParams params)
     geometry::BevelParameters bevel_params;
     bevel_params.offset = offset;
     bevel_params.affect_type = affect;
-    std::optional<Mesh *> mesh = geometry::mesh_bevel(*src_mesh,
-                                                      selection,
-                                                      bevel_params,
-                                                      attribute_filter);
+    bevel_params.segments = segments;
+    std::optional<Mesh *> mesh = geometry::mesh_bevel(
+        *src_mesh, selection, bevel_params, attribute_filter);
     if (!mesh) {
       return;
     }
-    
+
     geometry_set.replace_mesh(*mesh);
   });
 
@@ -85,19 +80,11 @@ static void node_geo_exec(GeoNodeExecParams params)
 static void node_rna(StructRNA *srna)
 {
   static const EnumPropertyItem rna_node_geometry_bevel_affect_items[] = {
-    {int(geometry::BevelAffect::Vertices),
-      "VERTICES",
-      0,
-      "Vertices",
-      "Bevel selected vertices"},
-    {int(geometry::BevelAffect::Edges),
-      "EDGES",
-      0,
-      "Edges",
-      "Bevel selected edges"},
-    {0, nullptr, 0, nullptr, nullptr},
+      {int(geometry::BevelAffect::Vertices), "VERTICES", 0, "Vertices", "Bevel selected vertices"},
+      {int(geometry::BevelAffect::Edges), "EDGES", 0, "Edges", "Bevel selected edges"},
+      {0, nullptr, 0, nullptr, nullptr},
   };
-  
+
   RNA_def_node_enum(srna,
                     "affect",
                     "Affect Kind",
@@ -107,16 +94,8 @@ static void node_rna(StructRNA *srna)
                     std::optional<int>(int(geometry::BevelAffect::Edges)),
                     nullptr,
                     true);
-  
-  RNA_def_float(srna,
-                       "offset",
-                       0.0f,
-                       0.0f,
-                       1e10f,
-                       "Offset",
-                       "How much to bevel",
-                       0.0f,
-                       10.0f);
+
+  RNA_def_float(srna, "offset", 0.0f, 0.0f, 1e10f, "Offset", "How much to bevel", 0.0f, 10.0f);
 }
 
 static void node_register()
