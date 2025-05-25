@@ -2373,9 +2373,10 @@ const int AdjVerts::ring_anchor_offset_to_vert(const int ring,
 
 [[maybe_unused]] static void draw_adj(const AdjVerts &adjverts)
 {
+  constexpr uint life = draw::drw_debug_persistent_lifetime;
   for (const int i : adjverts.verts.index_range()) {
     float3 co = adjverts.verts[i];
-    draw::drw_debug_point(co, 0.04f, {1, 1, 0, 1});
+    draw::drw_debug_point(co, 0.04f, {1, 1, 0, 1}, life);
   }
 }
 
@@ -3478,7 +3479,9 @@ static void build_vmesh_skeleton(int bv,
         be_attach_verts[be][be_end] = pat.anchor_vert(next_anchor);
         if (i == bevel_pos[next_anchor]) {
           /* We have reached the next beveled edge. */
-          bv_newvert_positions[i] = adj_edge_anchor_co(bv,
+          const int anchor_pos = pat.anchor_vert(next_anchor);
+          fmt::println("cur_anchor={} next_anchor={} anchor_pos={}", cur_anchor, next_anchor, anchor_pos);
+          bv_newvert_positions[anchor_pos] = adj_edge_anchor_co(bv,
                                                        bevel_pos[cur_anchor],
                                                        bevel_pos[next_anchor],
                                                        num_in_plane,
@@ -3486,7 +3489,8 @@ static void build_vmesh_skeleton(int bv,
                                                        num_not_in_plane,
                                                        be_not_in_plane_pos,
                                                        bs);
-          cur_anchor = next_anchor;
+          print_float3(bv_newvert_positions[anchor_pos]);
+          fmt::println("");          cur_anchor = next_anchor;
           next_anchor = (cur_anchor + 1) % num_beveled;
           num_in_plane = 0;
           num_not_in_plane = 0;
