@@ -1853,10 +1853,10 @@ static void calculate_profiles(const int bv, AnchorProfiles &profiles, const Bev
     /* Now that the profile parameters are set, we can calculate the positions
      */
     profile.prof_co.reinitialize(bs.params.segments + 1);
-    profile.prof_co_2.reinitialize(bs.pro_spacing.segments_power_2);
+    profile.prof_co_2.reinitialize(bs.pro_spacing.segments_power_2 + 1);
     float4x4 map;
     bool use_map = bs.params.profile_type == BevelProfileType::Superellipse &&
-                   profile.super_r == pro_line_r;
+                   profile.super_r != pro_line_r;
     if (use_map) {
       use_map = make_unit_square_map(profile.start, profile.middle, profile.end, map);
     }
@@ -2376,7 +2376,7 @@ const int AdjVerts::ring_anchor_offset_to_vert(const int ring,
   constexpr uint life = draw::drw_debug_persistent_lifetime;
   for (const int i : adjverts.verts.index_range()) {
     float3 co = adjverts.verts[i];
-    draw::drw_debug_point(co, 0.04f, {1, 1, 0, 1}, life);
+    draw::drw_debug_point(co, 0.01f, {1, 0, 0, 1}, life);
   }
 }
 
@@ -2500,15 +2500,15 @@ static void fill_adjverts(AdjVerts &adjverts,
                    r,
                    a,
                    r - 1,
-                   a,
+                   r == 1 ? 0 : a,
                    r,
                    aprev,
                    side - 1);
       adjverts.mutable_vert(2 * r - 1, a, 0) = avg4(adjverts_half.vert(r, a, 0),
                                                     adjverts_half.vert(r, a, 1),
-                                                    adjverts_half.vert(r - 1, a, 0),
+                                                    adjverts_half.vert(r - 1, r == 1 ? 0 : a, 0),
                                                     adjverts_half.vert(r, aprev, side - 1));
-      for (const int o : IndexRange::from_begin_end(1, side - 1)) {
+      for (int o = 1; o < side - 1; o++) {
         fmt::println(" FS: O({},{},{}) = avg I({},{},{}) I({},{},{}) I({},{},{}) I({},{},{})",
                      2 * r - 1,
                      a,
@@ -2550,7 +2550,7 @@ static void fill_adjverts(AdjVerts &adjverts,
                    a,
                    1,
                    r - 1,
-                   a,
+                   r == 1 ? 0 : a,
                    0,
                    2 * r - 1,
                    a,
@@ -2559,10 +2559,10 @@ static void fill_adjverts(AdjVerts &adjverts,
                    a,
                    2);
       adjverts.mutable_vert(2 * r - 1, a, 1) = avg4(adjverts_half.vert(r, a, 1),
-                                                    adjverts_half.vert(r - 1, a, 0),
+                                                    adjverts_half.vert(r - 1, r == 1 ? 0 : a, 0),
                                                     adjverts.vert(2 * r - 1, a, 0),
                                                     adjverts.vert(2 * r - 1, a, 2));
-      for (const int o : IndexRange::from_begin_end(2, side - 1)) {
+      for (int o = 2; o < side - 1; o++) {
         fmt::println(" CRS: O({},{},{}) = avg I({},{},{}) I({},{},{}) O({},{},{}) O({},{},{})",
                      2 * r - 1,
                      a,
@@ -2585,28 +2585,6 @@ static void fill_adjverts(AdjVerts &adjverts,
             adjverts.vert(2 * r - 1, a, 2 * o - 2),
             adjverts.vert(2 * r - 1, a, 2 * o + 2));
       }
-      const int anext = (a + 1) % n_boundary;
-      fmt::println(" CRC2: O({},{},{}) = avg I({},{},{}) I({},{},{}) O({},{},{}) O({},{},{})",
-                   2 * r - 1,
-                   a,
-                   side - 1,
-                   r,
-                   a,
-                   side - 1,
-                   r - 1,
-                   anext,
-                   0,
-                   2 * r - 1,
-                   a,
-                   2 * side - 4,
-                   2 * r - 1,
-                   anext,
-                   0);
-      adjverts.mutable_vert(2 * r - 1, a, side - 1) = avg4(
-          adjverts_half.vert(r, a, side - 1),
-          adjverts_half.vert(r - 1, anext, 0),
-          adjverts.vert(2 * r - 1, a, 2 * side - 4),
-          adjverts.vert(2 * r - 1, anext, 0));
     }
   }
 
@@ -2615,7 +2593,7 @@ static void fill_adjverts(AdjVerts &adjverts,
    * face-center vertices of the output mesh above and below that edge.
    */
   fmt::println("edge-ring edge vertices");
-  for (const int r : IndexRange::from_begin_end(1, nrings_in - 2)) {
+  for (int r = 1; r < nrings_in - 2; r++) {
     const int side = v_anchor_div(r, n_boundary, ns_in);
     for (const int a : IndexRange(n_boundary)) {
       fmt::println("r={} a={} side={}", r, a, side);
@@ -2639,7 +2617,7 @@ static void fill_adjverts(AdjVerts &adjverts,
                                                 adjverts_half.vert(r, a, 1),
                                                 adjverts.vert(2 * r + 1, a, 2),
                                                 adjverts.vert(2 * r - 1, a, 0));
-      for (const int o : IndexRange::from_begin_end(2, side - 1)) {
+      for (int o = 2; o < side - 1; o++) {
         fmt::println(" ERS: O({},{},{}) = avg I({},{},{}) I({},{},{}) O({},{},{}) O({},{},{})",
                      2 * r,
                      a,
@@ -2693,7 +2671,7 @@ static void fill_adjverts(AdjVerts &adjverts,
   fmt::println("vertex vertices");
   float gamma = sabin_gamma(4);
   float beta = -gamma;
-  for (const int r : IndexRange::from_begin_end(1, nrings_in - 1)) {
+  for (int r = 1; r < nrings_in - 1; r++) {
     const int iside = v_anchor_div(r, n_boundary, ns_in);
     const int oside = v_anchor_div(r, n_boundary, ns_out);
     for (const int a : IndexRange(n_boundary)) {
@@ -3536,7 +3514,6 @@ static void build_internal_adj(const int bv,
   BLI_assert(ns > 1 && pat.kind == MeshKind::Adj);
   const int ns_power_2 = bs.pro_spacing.segments_power_2;
 
-  print_float3_span(bv_newvert_positions.as_span(), "bv_newvert_positions");  // DEBUG!!
   /* First construct an initial control mesh with 2 segments. */
   adj::AdjVerts adj2(na, 2);
   float3 center(0.0f, 0.0f, 0.0f);
@@ -3544,17 +3521,9 @@ static void build_internal_adj(const int bv,
     int p = adj2.anchor_offset_to_outer_ring_vert(a, 0);
     int q = pat.anchor_vert(a);
     float3 pos = bv_newvert_positions[q];
-    fmt::println("a={}, C  verts[{}] = bv_newvert_positions[{}] = ({},{},{})",
-                 a,
-                 p,
-                 q,
-                 pos[0],
-                 pos[1],
-                 pos[2]);
     adj2.mutable_outer_ring_vert(a, 0) = bv_newvert_positions[pat.anchor_vert(a)];
     p = adj2.anchor_offset_to_outer_ring_vert(a, 1);
     pos = profile::get_profile_point(profiles[a], 1, 2);
-    fmt::println("     S verts[{}] = profile_point(1,2) = ({},{},{})", p, pos[0], pos[1], pos[2]);
     adj2.mutable_outer_ring_vert(a, 1) = profile::get_profile_point(profiles[a], 1, 2);
     center = center + adj2.vert(0, a, 0);
   }
@@ -3576,12 +3545,11 @@ static void build_internal_adj(const int bv,
   else {
     adj2.mutable_vert(0, 0, 0) = center;
   }
-  adj::draw_adj(adj2);  // DEBUG!!
-  return;               // DEBUG!!
 
   /* Make and fill adj mesh with #ns_power_2 segements. */
   adj::AdjVerts adj_sup_power_2(na, ns_power_2);
   adj::fill_adjverts(adj_sup_power_2, adj2, profiles);
+  adj::draw_adj(adj_sup_power_2);
 }
 
 static void build_internal_vmesh(const int bv,
