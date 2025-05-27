@@ -22,7 +22,7 @@ struct IDProperty;
 namespace blender::nodes {
 struct GeoNodesCallData;
 namespace geo_eval_log {
-class GeoModifierLog;
+class GeoNodesLog;
 }  // namespace geo_eval_log
 }  // namespace blender::nodes
 
@@ -42,7 +42,7 @@ struct IDPropNameGetter {
  * Use a #VectorSet to store properties for constant time lookup, to avoid slowdown with many
  * inputs.
  */
-using PropertiesVectorSet = CustomIDVectorSet<IDProperty *, IDPropNameGetter>;
+using PropertiesVectorSet = CustomIDVectorSet<IDProperty *, IDPropNameGetter, 16>;
 PropertiesVectorSet build_properties_vector_set(const IDProperty *properties);
 
 std::optional<StringRef> input_attribute_name_get(const PropertiesVectorSet &properties,
