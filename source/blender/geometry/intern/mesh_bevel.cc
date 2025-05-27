@@ -2607,7 +2607,23 @@ static std::pair<int, float> tick_and_remainder(const float value, const float d
   return std::pair<int, float>(tick, value - tick * div);
 }
 
-/** Interpolate four coordinates by u along the co00 -> c01 direction and v along the c01 -> c10 direction. */
+/** Return the index of the first interval in \a breaks (assumed ascending) that is
+ * less than or equal to \a value and either at the end, or less than the next one.
+ */
+static int which_interval(const float value, Span<float> breaks)
+{
+  int i = 0;
+  while ((i + 1) < breaks.size() && value >= breaks[i + 1]) {
+    i++;
+  }
+  fmt::println("which_interval({})", value);
+  print_span(breaks, "breaks");
+  fmt::println("which_span answer = {}", i);
+  return i;
+}
+
+/** Interpolate four coordinates by u along the co00 -> c01 direction and v along the c01 -> c10
+ * direction. */
 static float3 interp_bilinear_quad(const float3 &co00,
                                    const float3 &co01,
                                    const float3 &co11,
@@ -2615,17 +2631,16 @@ static float3 interp_bilinear_quad(const float3 &co00,
                                    const float u,
                                    const float v)
 {
-  return (1 - u) * (1 - v) * co00 +
-         u * (1 - v) * co01 +
-         u * v * co11 +
-        (1 - u) * v * co10;
+  return (1 - u) * (1 - v) * co00 + u * (1 - v) * co01 + u * v * co11 + (1 - u) * v * co10;
 }
 
-/** Interpolate given \a adjverts_in to make one with a different number of segments, in \a adjverts.
- * Assume they both have the same number of anchors, that adjverts_in has more segments,
+/** Interpolate given \a adjverts_in to make one with a different number of segments, in \a
+ * adjverts. Assume they both have the same number of anchors, that adjverts_in has more segments,
  * and that adjverts_in has an even number of segments.
  */
-static void interp_adj(AdjVerts &adjverts, const AdjVerts &adjverts_in, const profile::AnchorProfiles &profiles)
+static void interp_adj(AdjVerts &adjverts,
+                       const AdjVerts &adjverts_in,
+                       const profile::AnchorProfiles &profiles)
 {
   const int na = adjverts_in.anchors;
   const int ns_in = adjverts_in.segments;
@@ -2634,13 +2649,11 @@ static void interp_adj(AdjVerts &adjverts, const AdjVerts &adjverts_in, const pr
   BLI_assert(adjverts.anchors == na && (ns_in % 2) == 0 && ns_out < ns_in);
   const int num_rings_in = v_num_rings(ns_in);
   const int num_rings_out = v_num_rings(ns_out);
-  fmt::println("num_rings_in={} num_rings_out={}", num_rings_in, num_rings_out);
   bool odd_out = (ns_out % 2) == 1;
   /* The radial_divs are the fractional spacing between rings.
    * For odd number of segments, there is a half space at the center. */
   const float radial_div_in = 2.0f / ns_in;
   const float radial_div_out = odd_out ? 1.0f / ((ns_out / 2) + 0.5f) : 2.0f / ns_out;
-  fmt::println("div_in={}, div_out={}", radial_div_in, radial_div_out);
   for (int r_out = 0; r_out < num_rings_out - 1; r_out++) {
     if (r_out == 0 && !odd_out) {
       /* Just copy the center vertex. */
@@ -2650,33 +2663,58 @@ static void interp_adj(AdjVerts &adjverts, const AdjVerts &adjverts_in, const pr
     const float radial_frac_out = (num_rings_out - r_out - 1) * radial_div_out;
     auto [tick_in, remainder_in] = tick_and_remainder(radial_frac_out, radial_div_in);
     const int r_in = num_rings_in - 1 - tick_in;
-    fmt::println("  r_out={} -> r_in={}, rem={}", r_out, r_in, remainder_in);
+    const int iside = v_anchor_div(r_in, na, ns_in);
+    const int oside = v_anchor_div(r_out, na, ns_out);
     for (const int a : IndexRange(na)) {
-      const int iside = v_anchor_div(r_in, na, ns_in);
       const int aprev = a == 0 ? na - 1 : a - 1;
-      float3 co00 = adjverts_in.vert(r_in, a, 0);
-      float3 co01 = adjverts_in.vert(r_in, a, 1);
-      float3 co11 = adjverts_in.vert(r_in - 1, r_in == 1 ? 0 : a, 0);
-      float3 co10 = adjverts_in.vert(r_in, aprev, iside - 1);
-      float3 co_interp = interp_bilinear_quad(co00, co01, co11, co10,
-                                              remainder_in, remainder_in);
+      const float3 co00 = adjverts_in.vert(r_in, a, 0);
+      const float3 co01 = adjverts_in.vert(r_in, a, 1);
+      const float3 co11 = adjverts_in.vert(r_in - 1, r_in == 1 ? 0 : a, 0);
+      const float3 co10 = adjverts_in.vert(r_in, aprev, iside - 1);
+      const float3 co_interp = interp_bilinear_quad(
+          co00, co01, co11, co10, remainder_in, remainder_in);
       adjverts.mutable_vert(r_out, a, 0) = co_interp;
     }
-    for (const int a : IndexRange(na)) {
-      const int iside = v_anchor_div(r_in, na, ns_in);
-      const int oside = v_anchor_div(r_out, na, ns_out);
-      fmt::println("  a={} iside={} oside={}", a, iside, oside);
-      const int anext = a == na - 1 ? 0 : na + 1;
-      const float ilen = math::length(adjverts_in.vert(r_in, anext, 0) - adjverts_in.vert(r_in, a, 0));
-      const float idiv =  ilen / iside;
-      const float olen = math::length(adjverts.vert(r_out, anext, 0) - adjverts.vert(r_out, a, 0));
-      const float odiv =  olen / oside;
-      for (int o_out = 1; o_out < oside; o_out++) {
-        const float o_out_len = (o_out + remainder_in) * odiv;
-        auto [o_in, rem] = tick_and_remainder(o_out_len, idiv);
-        const float rem_frac = rem / idiv;
-        fmt::println("  o_out={}, o_in={}, rem_frac={}", o_out, o_in, rem_frac);
+    if (oside > 1) {
+      BLI_assert(iside >= oside);
+      /* Make #i_breaks be cumulative lengths of segments in #adverts_in's anchor #a ring. */
+      Array<float, 20> i_breaks(iside + 1);
+      for (const int a : IndexRange(na)) {
+        const int anext = a == na - 1 ? 0 : a + 1;
+        i_breaks[0] = 0.0f;
+        for (const int o : IndexRange().from_begin_end(1, iside + 1)) {
+          i_breaks[o] = i_breaks[o - 1] + math::length(adjverts_in.vert(r_in, a, o) -
+                                                       adjverts_in.vert(r_in, a, o - 1));
+        }
+        /* We'll put the output vertices at equal intervals along #advert's anchor #a ring. */
+        const float olen = math::length(adjverts.vert(r_out, anext, 0) -
+                                        adjverts.vert(r_out, a, 0));
+        const float odiv = olen / oside;
+        for (int o_out = 1; o_out < oside; o_out++) {
+          const float o_out_pos = (o_out + remainder_in) * odiv;
+          /* Where does #o_out_pos fit amount #i_breaks? */
+          const int o_in = which_interval(o_out_pos, i_breaks);
+          bool o_in_last = o_in == i_breaks.size() - 1;
+          const float rem = (o_in == i_breaks.size() - 1) ? 0.0f : o_out_pos - i_breaks[o_in];
+          const float o_in_seg_len = o_in_last ? 0.0f : i_breaks[o_in + 1] - i_breaks[o_in];
+          const float rem_frac = (o_in_seg_len == 0.0f) ? 0.0f : rem / o_in_seg_len;
+          const float3 co00 = adjverts_in.vert(r_in, a, o_in);
+          const float3 co01 = adjverts_in.vert(r_in, a, o_in_last ? o_in : o_in + 1);
+          const float3 co11 = adjverts_in.vert(r_in - 1, a, o_in_last ? o_in : o_in + 1);
+          const float3 co10 = adjverts_in.vert(r_in - 1, a, o_in);
+          const float3 co_interp = interp_bilinear_quad(
+              co00, co01, co11, co10, rem_frac, remainder_in);
+          adjverts.mutable_vert(r_out, a, o_out) = co_interp;
+        }
       }
+    }
+  }
+  /* Outer ring comes from the boundary profile. */
+  const int oside = v_anchor_div(num_rings_out - 1, na, ns_out);
+  for (const int a : IndexRange(na)) {
+    for (const int o : IndexRange(oside)) {
+      float3 co = profile::get_profile_point(profiles[a], o, ns_out);
+      adjverts.mutable_outer_ring_vert(a, o) = co;
     }
   }
 }
@@ -3451,9 +3489,6 @@ static void build_internal_adj(const int bv,
   else {
     adj::interp_adj(adj, adj_sup_power_2, profiles);
   }
-
-  /* Snap the vertices of adj to the superellipsoid. */
-
 
   BLI_assert(adj.verts.size() == bv_newvert_positions.size());
   std::copy(adj.verts.begin(), adj.verts.end(), bv_newvert_positions.begin());
