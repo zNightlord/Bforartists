@@ -386,6 +386,16 @@ class BevelState {
     return newcorner_edges_;
   }
 
+  OffsetIndices<int> bevface_newedges()
+  {
+    return bevface_newedges_;
+  }
+
+  OffsetIndices<int> bevface_newfaces()
+  {
+    return bevface_newfaces_;
+  }
+
   /** Is the edge corresponding to bevedge \a be beveled? */
   bool bevedge_is_beveled(const int be) const
   {
@@ -442,11 +452,11 @@ class BevelState {
   Array<int> bevvert_faces_indices_;
   Array<MeshPattern> bevvert_meshpatterns_;
   OffsetIndices<int> bevvert_newverts_;
-  Array<int> bevvert_newverts_offsets_;
+  Array<int> newverts_offsets_;
   OffsetIndices<int> bevvert_newedges_;
-  Array<int> bevvert_newedges_offsets_;
+  Array<int> newedges_offsets_;
   OffsetIndices<int> bevvert_newfaces_;
-  Array<int> bevvert_newfaces_offsets_;
+  Array<int> newfaces_offsets_;
   Array<int> bevedge_mesh_edges_;
   Array<float> bevedge_weights_;
   Array<float4> bevedge_widths_;
@@ -456,6 +466,10 @@ class BevelState {
   OffsetIndices<int> bevedge_newfaces_;
   Array<float3> newvert_positions_;
   OffsetIndices<int> newface_faces_;
+  OffsetIndices<int> bevface_newedges_;
+  OffsetIndices<int> bevface_newfaces_;
+  Array<int> newface_faces_offsets_;
+  OffsetIndices<int> newface_faces_face_;
   Array<int> newcorner_verts_;
   Array<int> newcorner_edges_;
 };
@@ -529,7 +543,7 @@ static void print_groupedspan(const GroupedSpan<int> &groupedspan, const char *l
   }
 }
 
-static void print_meshpattern(const MeshPattern &pat)
+[[maybe_unused]] static void print_meshpattern(const MeshPattern &pat)
 {
   static const char *kind_names[] = {"None", "Line", "TerminalPoly", "Adj", "TriFan", "Cutoff"};
   fmt::println("{} anchors={} segs={}", kind_names[int(pat.kind)], pat.num_anchors, pat.num_segs);
@@ -3891,26 +3905,25 @@ void BevelState::order_bevedges()
 void BevelState::set_bevvert_mesh_topology()
 {
   bevvert_meshpatterns_ = Array<MeshPattern>(this->bevverts_num);
-  bevvert_newverts_offsets_ = Array<int>(this->bevverts_num + 1);
-  bevvert_newedges_offsets_ = Array<int>(this->bevverts_num + 1);
-  bevvert_newfaces_offsets_ = Array<int>(this->bevverts_num + 1);
+  newverts_offsets_ = Array<int>(this->bevverts_num + 1);
+  newedges_offsets_ = Array<int>(this->bevverts_num + 1);
+  newfaces_offsets_ = Array<int>(this->bevverts_num + 1);
   threading::parallel_for(IndexRange(this->bevverts_num), 20'000, [&](IndexRange range) {
     for (const int bv : range) {
       bevvert_meshpatterns_[bv] = topology::find_meshpattern(bv, *this);
-      print_meshpattern(bevvert_meshpatterns_[bv]);
       auto [numv, nume, numf, numc] = bevvert_meshpatterns_[bv].num_elements();
       /* In this loop, accumulate counts. Will covert to offsets later. */
-      bevvert_newverts_offsets_[bv] = numv;
-      bevvert_newedges_offsets_[bv] = nume;
-      bevvert_newfaces_offsets_[bv] = numf;
+      newverts_offsets_[bv] = numv;
+      newedges_offsets_[bv] = nume;
+      newfaces_offsets_[bv] = numf;
     }
   });
-  offset_indices::accumulate_counts_to_offsets(bevvert_newverts_offsets_);
-  offset_indices::accumulate_counts_to_offsets(bevvert_newedges_offsets_);
-  offset_indices::accumulate_counts_to_offsets(bevvert_newfaces_offsets_);
-  bevvert_newverts_ = OffsetIndices<int>(bevvert_newverts_offsets_);
-  bevvert_newedges_ = OffsetIndices<int>(bevvert_newedges_offsets_);
-  bevvert_newfaces_ = OffsetIndices<int>(bevvert_newfaces_offsets_);
+  offset_indices::accumulate_counts_to_offsets(newverts_offsets_);
+  offset_indices::accumulate_counts_to_offsets(newedges_offsets_);
+  offset_indices::accumulate_counts_to_offsets(newfaces_offsets_);
+  bevvert_newverts_ = OffsetIndices<int>(newverts_offsets_);
+  bevvert_newedges_ = OffsetIndices<int>(newedges_offsets_);
+  bevvert_newfaces_ = OffsetIndices<int>(newfaces_offsets_);
   newvert_positions_ = Array<float3>(bevvert_newverts_.total_size());
 }
 
@@ -3967,15 +3980,11 @@ std::optional<Mesh *> mesh_bevel(const Mesh &src_mesh,
 
   BevelState state(src_mesh, selection, params);
   state.initialize_profile_data();
-  dump_bevel_state(state, "after initialization");
-
   state.order_bevedges();
   state.set_bevedge_widths();
-  dump_bevel_state(state, "after construction and ordering bevedges");
   state.set_bevvert_mesh_topology();
   state.build_vertex_meshes();
   dump_bevel_state(state, "after build_vertex_meshes");
-  // draw_all_bevverts(state);
   return std::nullopt;
 }
 
