@@ -8872,6 +8872,7 @@ class VIEW3D_MT_edit_greasepencil(Menu):
 
         layout.separator()
         layout.operator("grease_pencil.stroke_split", text="Split", icon="SPLIT")
+        layout.operator("grease_pencil.outline", text="Outline")
         layout.separator()
         layout.operator("grease_pencil.copy", text="Copy", icon="COPYDOWN")
         layout.operator(
@@ -8927,6 +8928,7 @@ class VIEW3D_MT_edit_greasepencil_stroke(Menu):
             layout.operator(
                 "grease_pencil.stroke_simplify", text="Merge", icon="MERGE"
             ).mode = "MERGE"
+        layout.operator("grease_pencil.outline", text="Outline")
         layout.separator()
         layout.operator_menu_enum("grease_pencil.join_selection", "type", text="Join")
 
@@ -12117,6 +12119,7 @@ class VIEW3D_MT_greasepencil_edit_context_menu(Menu):
                 text="Subdivide and Smooth",
                 icon="SUBDIVIDE_EDGES",
             )
+            col.operator("grease_pencil.outline", text="Outline")
 
             # Deform Operators
             col.operator(
@@ -12181,6 +12184,7 @@ class VIEW3D_MT_greasepencil_edit_context_menu(Menu):
             col.operator(
                 "grease_pencil.extrude_move", text="Extrude", icon="EXTRUDE_REGION"
             )
+            col.operator("grease_pencil.outline", text="Outline")
 
             col.separator()
 
