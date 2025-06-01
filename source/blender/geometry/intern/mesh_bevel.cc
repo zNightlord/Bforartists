@@ -29,6 +29,8 @@
 #include "BKE_mesh.hh"
 #include "BKE_mesh_mapping.hh"
 
+#include "atomic_ops.h"
+
 #include "GEO_mesh_bevel.hh"
 
 #define DEBUG_BEVEL
@@ -85,6 +87,9 @@ class MeshPattern {
 
   /** Return the vertex index of the give anchor vertex. */
   int anchor_vert(int anchor_index) const;
+
+  /** Return arrays of the verts and edges (in pattern indexing space) for pattern face \a face. */
+  std::pair<Array<int, 20>, Array<int, 20>> face_verts_and_edges(int face) const;
 };
 
 /** Helper for keeping track of angle kind. */
@@ -211,11 +216,32 @@ class BevelState {
 
   void order_bevedges();
 
-  void set_bevvert_mesh_topology();
-
   void set_bevedge_widths();
 
+  void determine_needed_new_elements();
+
   void build_vertex_meshes();
+
+  /** Build the edge e from vertices v0 and v1, where those indices are in a local "pattern" space.
+   * Use newverts and newedges to convert those into indices in "new" space.
+   * Negative input values are just copied as is (used to encode original elements).
+   * Only build canonical edges, where the converted values are such that the first element
+   * has a lower index.
+   */
+  void build_newedge(
+      const int e, const int v0, const int v1, IndexRange newverts, IndexRange newedges);
+
+  /** Build the face f from verts and edges, where those indices are in a local "pattern" space.
+   * Use newverts, newedges, and newfaces to convert those indices into "new" space.
+   * Negative input elements are just copied as is (used to encode original elements).
+   */
+  void build_newface(const int f,
+                     Span<int> verts,
+                     Span<int> edges,
+                     IndexRange newverts,
+                     IndexRange newedges,
+                     IndexRange newfaces,
+                     bool build_edges);
 
   /** Indices of Mesh vertices that have corresponding bevverts.
    */
@@ -230,6 +256,12 @@ class BevelState {
     return bevedges_mask_;
   }
 
+  /** Indices of Mesh faces that have corresponding bevfaces. */
+  const IndexMask &bevfaces_mask() const
+  {
+    return bevfaces_mask_;
+  }
+
   /** Map from Mesh vertex index to bevverts index. */
   Span<int> vert_bevverts() const
   {
@@ -240,6 +272,12 @@ class BevelState {
   Span<int> edge_bevedges() const
   {
     return edge_bevedges_;
+  }
+
+  /** Map from Mesh face index to bevfaces index. */
+  Span<int> face_bevfaces() const
+  {
+    return face_bevfaces_;
   }
 
   /* The following are indexed by a bevvert index, 0 to bevverts_num - 1. */
@@ -341,6 +379,14 @@ class BevelState {
     return bevedge_newedges_;
   }
 
+  /* The following are indexed by a bevface index, 0..bevfaces_num - 1. */
+
+  /** The Mesh edge associated with the given bevedge. */
+  Span<int> bevface_mesh_faces() const
+  {
+    return bevface_mesh_faces_;
+  }
+
   /* The following are indexed by a newvert index, 0 to newverts_num - 1. */
 
   /** The cooredinates of the given newvert. */
@@ -384,11 +430,6 @@ class BevelState {
   Span<int> newcorner_edges() const
   {
     return newcorner_edges_;
-  }
-
-  OffsetIndices<int> bevface_newedges()
-  {
-    return bevface_newedges_;
   }
 
   OffsetIndices<int> bevface_newfaces()
@@ -441,8 +482,11 @@ class BevelState {
   IndexMaskMemory memory_;
   IndexMask bevedges_mask_;
   IndexMask bevverts_mask_;
+  IndexMask bevfaces_mask_;
   Array<int> vert_bevverts_;
   Array<int> edge_bevedges_;
+  Array<int> face_bevfaces_;
+
   Array<int> bevvert_mesh_verts_;
   Array<float> bevvert_weights_;
   GroupedSpan<int> bevvert_bevedges_;
@@ -452,24 +496,30 @@ class BevelState {
   Array<int> bevvert_faces_indices_;
   Array<MeshPattern> bevvert_meshpatterns_;
   OffsetIndices<int> bevvert_newverts_;
-  Array<int> newverts_offsets_;
   OffsetIndices<int> bevvert_newedges_;
-  Array<int> newedges_offsets_;
   OffsetIndices<int> bevvert_newfaces_;
-  Array<int> newfaces_offsets_;
+
   Array<int> bevedge_mesh_edges_;
   Array<float> bevedge_weights_;
   Array<float4> bevedge_widths_;
   Array<int2> bevedge_attach_verts_;
-  Array<int2> newedge_vertpairs_;
   OffsetIndices<int> bevedge_newedges_;
   OffsetIndices<int> bevedge_newfaces_;
-  Array<float3> newvert_positions_;
-  OffsetIndices<int> newface_faces_;
-  OffsetIndices<int> bevface_newedges_;
+
+  Array<int> bevface_mesh_faces_;
   OffsetIndices<int> bevface_newfaces_;
-  Array<int> newface_faces_offsets_;
+
+  Array<int> newverts_offsets_;
+  Array<float3> newvert_positions_;
+
+  Array<int> newedges_offsets_;
+  Array<int2> newedge_vertpairs_;
+
+  Array<int> newfaces_offsets_;
+  OffsetIndices<int> newface_faces_;
+  Array<int> newface_faces_face_offsets_;
   OffsetIndices<int> newface_faces_face_;
+
   Array<int> newcorner_verts_;
   Array<int> newcorner_edges_;
 };
@@ -587,8 +637,10 @@ static void print_bevedge_attach_verts(const BevelState &bs, const char *label)
   fmt::println("\nBevelState {}", label);
   print_indexmask(bs.bevverts_mask(), "bevverts_mask");
   print_indexmask(bs.bevedges_mask(), "bevedges_mask");
+  print_indexmask(bs.bevfaces_mask(), "bevfaces_mask");
   print_span(bs.vert_bevverts(), "vert_bevverts");
   print_span(bs.edge_bevedges(), "edge_bevedges");
+  print_span(bs.face_bevfaces(), "face_bevfaces");
   print_span(bs.bevvert_mesh_verts(), "bevvert_mesh_verts");
   if (vertex_only) {
     print_span(bs.bevvert_weights(), "bevvert_weights");
@@ -597,6 +649,7 @@ static void print_bevedge_attach_verts(const BevelState &bs, const char *label)
   if (!vertex_only) {
     print_span(bs.bevedge_weights(), "bevedge_weights");
   }
+  print_span(bs.bevface_mesh_faces(), "bevface_mesh_faces");
   print_groupedspan(bs.bevvert_bevedges(), "bevvert_bevedges");
   print_groupedspan(bs.bevvert_faces(), "bevvert_faces");
   if (bs.bevedge_attach_verts().size() > 0) {
@@ -2748,7 +2801,7 @@ int4 MeshPattern::num_elements() const
       break;
     case MeshKind::TerminalPoly:
       ans = int4(
-          num_anchors + num_segs - 2, num_anchors + num_segs - 1, 1, num_anchors + num_segs - 1);
+          num_anchors + num_segs - 2, num_anchors + num_segs - 2, 1, num_anchors + num_segs - 1);
       break;
     case MeshKind::Adj: {
       int totf = adj::f_total_faces(num_anchors, num_segs);
@@ -2801,6 +2854,141 @@ int MeshPattern::anchor_vert(int anchor_index) const
   }
   BLI_assert(0 <= ans && ans < this->num_elements()[0]);
   return ans;
+}
+
+/** Return arrays of the verts and edges (in pattern indexing space) for pattern face \a face. */
+std::pair<Array<int, 20>, Array<int, 20>> MeshPattern::face_verts_and_edges(int face) const
+{
+  int4 vefc_nums = this->num_elements();
+  BLI_assert(0 <= face && face < vefc_nums[2]);
+  std::pair<Array<int, 20>, Array<int, 20>> ans;
+  Array<int, 20> &ans_verts = ans.first;
+  Array<int, 20> &ans_edges = ans.second;
+  switch (this->kind) {
+    case MeshKind::TerminalPoly: {
+      /* There is only one face. */
+      BLI_assert(face == 0);
+      const int n = num_anchors + num_segs - 2;
+      ans_verts.reinitialize(n);
+      ans_edges.reinitialize(n);
+      std::iota(ans_verts.begin(), ans_verts.end(), 0);
+      std::iota(ans_edges.begin(), ans_edges.end(), 0);
+      break;
+    }
+    case MeshKind::Adj: {
+      if (face == 0 && (num_segs % 2) == 1) {
+        /* Center polygon is an ngon with num_anchors sides. */
+        ans_verts.reinitialize(num_anchors);
+        ans_edges.reinitialize(num_anchors);
+        std::iota(ans_verts.begin(), ans_verts.end(), 0);
+        std::iota(ans_edges.begin(), ans_edges.end(), 0);
+      }
+      else {
+        std::pair<int4, int4> vs_es = adj::face_vertices_and_edges(face, num_anchors, num_segs);
+        ans_verts.reinitialize(4);
+        ans_edges.reinitialize(4);
+        for (const int i : IndexRange(4)) {
+          ans_verts[i] = vs_es.first[i];
+          ans_edges[i] = vs_es.second[i];
+        }
+      }
+      break;
+    }
+    case MeshKind::TriFan: {
+      BLI_assert(0 <= face && face < num_segs);
+      ans_verts.reinitialize(3);
+      ans_edges.reinitialize(3);
+      ans_verts[0] = face;
+      ans_verts[1] = face + 1;
+      ans_verts[3] = num_segs + 1;
+      ans_edges[0] = face;
+      ans_edges[1] = face + num_segs;
+      ans_edges[2] = face + num_segs + 1;
+      break;
+    }
+    case MeshKind::Cutoff:
+      /* TODO */
+      BLI_assert(false);
+      break;
+    case MeshKind::Line:
+    case MeshKind::None:
+      /* These have no faces. */
+      BLI_assert_unreachable();
+      break;
+  }
+  return ans;
+}
+
+/** Return a 4-tuple with the number of vertices, edges, faces, corners needed for edge mesh. */
+int4 bevedge_num_elements(const int be, const BevelState &bs)
+{
+  /* There are ns parallel quad faces, needed.
+   * The verts and end edges come from the bevvert meshes, so
+   * don't get counted here.
+   */
+  if (bs.params.affect_type == BevelAffect::Vertices || bs.bevedge_weights()[be] == 0.0f) {
+    return int4(0, 0, 0, 0);
+  }
+  const int ns = bs.params.segments;
+  return int4(0, ns + 1, ns, 4 * ns);
+}
+
+/** Return a 4-tuple with the number of vertices, edges, faces, corners needed for face mesh
+ * (at the momemt, 'face mesh' just means a single reconstructed face). */
+int4 bevface_num_elements(const int bf, const BevelState &bs)
+{
+  /* The only tricky part is the number of corners needed. */
+  int ncorners = 0;
+  const Mesh &mesh = bs.mesh_info.mesh;
+  const int mesh_face = bs.bevface_mesh_faces()[bf];
+  bool vertex_only = bs.params.affect_type == BevelAffect::Vertices;
+  const int segments = bs.params.segments;
+  IndexRange face_corners = mesh.faces()[mesh_face];
+  int prev_corner = face_corners.last();
+  for (const int corner : face_corners) {
+    const int mesh_vertex = mesh.corner_verts()[corner];
+    const int bv = bs.vert_bevverts()[mesh_vertex];
+    if (bv == -1) {
+      /* Non-bevel-involved vertex contributes one corner. */
+      ncorners += 1;
+    }
+    else {
+      if (vertex_only) {
+        ncorners += segments;
+      }
+      else {
+        const MeshPattern &pat = bs.bevvert_meshpatterns()[bv];
+        if (pat.kind == MeshKind::Adj) {
+          /* TODO: miters. */
+          ncorners += 1;
+        }
+        else {
+          /* Is this corner adjacent to a beveled edges? */
+          const int mesh_edge = mesh.corner_edges()[corner];
+          const int bevedge = bs.edge_bevedges()[mesh_edge];
+          const int prev_mesh_edge = mesh.corner_edges()[prev_corner];
+          const int prev_bevedge = bs.edge_bevedges()[prev_mesh_edge];
+          bool bev_adjacent = (bevedge != -1 && bs.bevedge_weights()[bevedge] > 0.0f) ||
+                              (prev_bevedge != -1 && bs.bevedge_weights()[prev_bevedge] > 0.0f);
+          if (pat.kind == MeshKind::Line) {
+            ncorners += bev_adjacent ? 1 : segments + 1;
+          }
+          else if (pat.kind == MeshKind::TriFan) {
+            const int numedges = bs.bevvert_bevedges()[bv].size();
+            ncorners += (numedges == 2 || !bev_adjacent) ? 2 : 1;
+          }
+          else if (pat.kind == MeshKind::TerminalPoly) {
+            ncorners += bev_adjacent ? 1 : 2;
+          }
+          else {
+            BLI_assert_unreachable();
+          }
+        }
+      }
+    }
+    prev_corner = corner;
+  }
+  return int4(0, 0, 1, ncorners);
 }
 
 namespace topology {
@@ -3714,8 +3902,9 @@ BevelState::BevelState(const Mesh &src_mesh,
     params.miter_inner = BevelMiterType::Sharp;
   }
 
-  /* Get the IndexMasks for bevel-involved edges and bevel-involved vertices,
-   * and set the weights that modify the bevel amount for those elements
+  /* Get the IndexMasks for bevel-involved edges, bevel-involved vertices,
+   * and bevel-involved faces.
+   * Set the weights that modify the bevel amount for those elements
    * actually beveled.
    *
    * The selection parameter selectes what is beveled depending on the affect type.
@@ -3754,6 +3943,14 @@ BevelState::BevelState(const Mesh &src_mesh,
   });
   bevedges_mask_ = IndexMask::from_bools(bevel_involved_edge, memory_);
 
+  Array<bool> bevel_involved_face(src_mesh.faces_num, false);
+  bevedges_mask_.foreach_index([&](const int e) {
+    for (const int f : mesh_info.edge_faces()[e]) {
+      bevel_involved_face[f] = true;
+    }
+  });
+  bevfaces_mask_ = IndexMask::from_bools(bevel_involved_face, memory_);
+
   /* Create the arrays for bevverts and maps between verts and bevverts. */
   this->bevverts_num = bevverts_mask_.size();
   bevvert_mesh_verts_ = Array<int>(this->bevverts_num);
@@ -3786,6 +3983,15 @@ BevelState::BevelState(const Mesh &src_mesh,
     else {
       bevedge_weights_[mask] = selection.contains(e);
     }
+  });
+
+  /* Create the arrays for the bevfaces and maps between faces and bevfaces. */
+  this->bevfaces_num = bevfaces_mask_.size();
+  bevface_mesh_faces_ = Array<int>(this->bevfaces_num);
+  face_bevfaces_ = Array<int>(this->mesh_info.mesh.faces_num, -1);
+  bevfaces_mask_.foreach_index([&](const int f, const int mask) {
+    face_bevfaces_[f] = mask;
+    bevface_mesh_faces_[mask] = f;
   });
 
   /* Find the bevedges attached to each bevvert. */
@@ -3899,16 +4105,24 @@ void BevelState::order_bevedges()
   bevvert_faces_ = GroupedSpan<int>(offsets, bevvert_faces_indices_);
 }
 
-/** Figure out the topology of the vertex meshes at each bevvert.
- * Allocate the containers for newverts, newedges, and newfaces.
+/** Figure out number of each new element type needed, allocate those arrays,
+ * and set up the OffsetIndices to map bevverts, bevedges, and bevfafces to the
+ * corrsponding new elements (newverts, newedges, newfaces, newcorners0.
+ * To do this, we need to know the mesh patterns for each bevverrt, so determint that too.
  */
-void BevelState::set_bevvert_mesh_topology()
+void BevelState::determine_needed_new_elements()
 {
-  bevvert_meshpatterns_ = Array<MeshPattern>(this->bevverts_num);
-  newverts_offsets_ = Array<int>(this->bevverts_num + 1);
-  newedges_offsets_ = Array<int>(this->bevverts_num + 1);
-  newfaces_offsets_ = Array<int>(this->bevverts_num + 1);
+  bevvert_meshpatterns_ = Array<MeshPattern>(bevverts_num);
+  /* We need newverts only for bevvert meshes.
+   * We need newedges only for bevvert and bevedges meshes.
+   * We need newfaces for all three.
+   */
+  newverts_offsets_ = Array<int>(bevverts_num + 1);
+  newedges_offsets_ = Array<int>(bevverts_num + bevedges_num + 1);
+  newfaces_offsets_ = Array<int>(bevverts_num + bevedges_num + bevfaces_num + 1);
+  int32_t total_corners = 0;
   threading::parallel_for(IndexRange(this->bevverts_num), 20'000, [&](IndexRange range) {
+    int32_t bevvert_tot_corners = 0;
     for (const int bv : range) {
       bevvert_meshpatterns_[bv] = topology::find_meshpattern(bv, *this);
       auto [numv, nume, numf, numc] = bevvert_meshpatterns_[bv].num_elements();
@@ -3916,15 +4130,88 @@ void BevelState::set_bevvert_mesh_topology()
       newverts_offsets_[bv] = numv;
       newedges_offsets_[bv] = nume;
       newfaces_offsets_[bv] = numf;
+      bevvert_tot_corners += numc;
     }
+    atomic_add_and_fetch_int32(&total_corners, bevvert_tot_corners);
   });
+  threading::parallel_for(IndexRange(this->bevedges_num), 20'000, [&](IndexRange range) {
+    int32_t bevedge_tot_corners = 0;
+    for (const int be : range) {
+      auto [numv, nume, numf, numc] = bevedge_num_elements(be, *this);
+      BLI_assert(numv == 0);
+      newedges_offsets_[bevverts_num + be] = nume;
+      newfaces_offsets_[bevverts_num + be] = numf;
+      bevedge_tot_corners += numc;
+    }
+    atomic_add_and_fetch_int32(&total_corners, bevedge_tot_corners);
+  });
+  threading::parallel_for(IndexRange(this->bevfaces_num), 20'000, [&](IndexRange range) {
+    int32_t bevface_tot_corners = 0;
+    for (const int bf : range) {
+      auto [numv, nume, numf, numc] = bevface_num_elements(bf, *this);
+      BLI_assert(numv == 0 && nume == 0);
+      newfaces_offsets_[bevverts_num + bevedges_num + bf] = numf;
+      bevface_tot_corners += numc;
+    }
+    atomic_add_and_fetch_int32(&total_corners, bevface_tot_corners);
+  });
+
   offset_indices::accumulate_counts_to_offsets(newverts_offsets_);
   offset_indices::accumulate_counts_to_offsets(newedges_offsets_);
   offset_indices::accumulate_counts_to_offsets(newfaces_offsets_);
-  bevvert_newverts_ = OffsetIndices<int>(newverts_offsets_);
-  bevvert_newedges_ = OffsetIndices<int>(newedges_offsets_);
-  bevvert_newfaces_ = OffsetIndices<int>(newfaces_offsets_);
-  newvert_positions_ = Array<float3>(bevvert_newverts_.total_size());
+
+  this->newverts_num = newverts_offsets_.last();
+  this->newedges_num = newedges_offsets_.last();
+  this->newfaces_num = newfaces_offsets_.last();
+
+  bevvert_newverts_ = OffsetIndices<int>(newverts_offsets_.as_span().take_front(bevverts_num + 1));
+  bevvert_newedges_ = OffsetIndices<int>(newedges_offsets_.as_span().take_front(bevverts_num + 1));
+  bevvert_newfaces_ = OffsetIndices<int>(newfaces_offsets_.as_span().take_front(bevverts_num + 1));
+
+  bevedge_newedges_ = OffsetIndices<int>(
+      newedges_offsets_.as_span().drop_front(bevverts_num).take_front(bevedges_num + 1));
+  bevedge_newfaces_ = OffsetIndices<int>(
+      newfaces_offsets_.as_span().drop_front(bevverts_num).take_front(bevedges_num + 1));
+
+  bevface_newfaces_ = OffsetIndices<int>(
+      newfaces_offsets_.as_span().drop_front(bevverts_num + bevedges_num));
+
+  newvert_positions_ = Array<float3>(newverts_num);
+  newedge_vertpairs_ = Array<int2>(newedges_num);
+  newcorner_verts_ = Array<int>(total_corners);
+  newcorner_edges_ = Array<int>(total_corners);
+
+  /* Now set up corners for new faces. */
+  newface_faces_face_offsets_ = Array<int>(newfaces_num + 1);
+  threading::parallel_for(IndexRange(bevverts_num), 20'000, [&](IndexRange range) {
+    for (const int bv : range) {
+      const MeshPattern &pat = bevvert_meshpatterns_[bv];
+      for (const int patf : IndexRange(bevvert_newfaces_[bv].size())) {
+        const int newf = bevvert_newfaces_[bv][patf];
+        auto [verts, edges] = pat.face_verts_and_edges(patf);
+        /* TODO: make function that just returns face size for f. */
+        newface_faces_face_offsets_[newf] = verts.size();
+      }
+    }
+  });
+  threading::parallel_for(IndexRange(bevedges_num), 20'000, [&](IndexRange range) {
+    for (const int be : range) {
+      if (bevedge_newfaces_[be].size() > 0) {
+        for (const int newf : bevedge_newfaces_[be]) {
+          newface_faces_face_offsets_[newf] = 4;
+        }
+      }
+    }
+  });
+  threading::parallel_for(IndexRange(bevfaces_num), 20'000, [&](IndexRange range) {
+    for (const int bf : range) {
+      int newf = bevface_newfaces_[bf][0];
+      const int4 vefc = bevface_num_elements(bf, *this);
+      newface_faces_face_offsets_[newf] = vefc[3];
+    }
+  });
+  offset_indices::accumulate_counts_to_offsets(newface_faces_face_offsets_);
+  newface_faces_face_ = OffsetIndices<int>(newface_faces_face_offsets_);
 }
 
 /** Set the widths of each half of each end of the beveled and non-beveled edges. */
@@ -3947,23 +4234,83 @@ void BevelState::set_bevedge_widths()
   });
 }
 
-/** Build all the data needed for the vertex meshes. */
+/** Build the edge e from vertices v0 and v1, where those indices are in a local "pattern" space.
+ * Use newverts and newedges to convert those into indices in "new" space.
+ * Negative input values are just copied as is (used to encode original elements).
+ * Only build canonical edges, where the converted values are such that the first element
+ * has a lower index.
+ */
+void BevelState::build_newedge(
+    const int e, const int v0, const int v1, IndexRange newverts, IndexRange newedges)
+{
+  const int newv0 = v0 >= 0 ? newverts[v0] : v0;
+  const int newv1 = v1 >= 0 ? newverts[v1] : v1;
+  if (v0 < v1) {
+    const int newe = newedges[e];
+    newedge_vertpairs_[newe] = int2(newv0, newv1);
+  }
+}
+
+/** Build the face f from verts and edges, where those indices are in a local "pattern" space.
+ * Use newverts, newedges, and newfaces to convert those indices into "new" space.
+ * Negative input elements are just copied as is (used to encode original elements).
+ * If build_edges is true, we also call build_newedge on the constituent edges.
+ */
+void BevelState::build_newface(const int f,
+                               Span<int> verts,
+                               Span<int> edges,
+                               IndexRange newverts,
+                               IndexRange newedges,
+                               IndexRange newfaces,
+                               bool build_edges)
+{
+  BLI_assert(verts.size() >= 3 && verts.size() == edges.size());
+  const int newf = newfaces[f];
+  IndexRange newf_corners = newface_faces_face_[newf];
+  BLI_assert(newf_corners.size() == verts.size());
+  for (const int i : newf_corners.index_range()) {
+    const int v = verts[i];
+    const int newv = v >= 0 ? newverts[v] : v;
+    const int e = edges[i];
+    const int newe = e >= 0 ? newedges[e] : e;
+    const int c = newf_corners[i];
+    newcorner_verts_[c] = newv;
+    newcorner_edges_[c] = newe;
+    if (build_edges && e >= 0) {
+      this->build_newedge(e, verts[i], verts[(i + 1) % verts.size()], newverts, newedges);
+    }
+  }
+}
+
+/** Build the vertex meshes. */
 void BevelState::build_vertex_meshes()
 {
   bevedge_attach_verts_ = Array<int2>(this->bevedges_num);
 
-  threading::parallel_for(IndexRange(bevverts_num), 20'000, [&](IndexRange range) {
+  threading::parallel_for(IndexRange(bevverts_num), 10'000, [&](IndexRange range) {
     for (const int bv : range) {
+      fmt::println("building bv {}", bv);
       topology::build_vmesh_skeleton(
           bv,
           newvert_positions_.as_mutable_span().slice(bevvert_newverts_[bv]),
           bevedge_attach_verts_.as_mutable_span(),
           *this);
-      const int anchors_num = bevvert_meshpatterns_[bv].num_anchors;
+      const MeshPattern &pat = bevvert_meshpatterns_[bv];
+      const int anchors_num = pat.num_anchors;
       profile::AnchorProfiles profiles(anchors_num);
       profile::calculate_profiles(bv, profiles, *this);
       topology::build_internal_vmesh(
           bv, profiles, newvert_positions_.as_mutable_span().slice(bevvert_newverts_[bv]), *this);
+      IndexRange newverts_range = bevvert_newverts_[bv];
+      IndexRange newedges_range = bevvert_newedges_[bv];
+      IndexRange newfaces_range = bevvert_newfaces_[bv];
+      for (const int f : IndexRange(bevvert_newfaces_[bv].size())) {
+        fmt::println("now build face {}", f);
+        auto [verts, edges] = pat.face_verts_and_edges(f);
+        print_span(verts.as_span(), "verts");
+        print_span(edges.as_span(), "edges");
+        build_newface(f, verts, edges, newverts_range, newedges_range, newfaces_range, true);
+      }
     }
   });
 }
@@ -3982,7 +4329,7 @@ std::optional<Mesh *> mesh_bevel(const Mesh &src_mesh,
   state.initialize_profile_data();
   state.order_bevedges();
   state.set_bevedge_widths();
-  state.set_bevvert_mesh_topology();
+  state.determine_needed_new_elements();
   state.build_vertex_meshes();
   dump_bevel_state(state, "after build_vertex_meshes");
   return std::nullopt;
