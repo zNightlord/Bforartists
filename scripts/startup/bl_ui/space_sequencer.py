@@ -965,6 +965,10 @@ class SEQUENCER_MT_change(Menu):
         layout = self.layout
         strip = context.active_strip
 
+        layout.operator_context = 'INVOKE_DEFAULT'
+        layout.menu("SEQUENCER_MT_strip_effect_change")
+        layout.operator("sequencer.swap_inputs")
+        props = layout.operator("sequencer.change_path", text="Path/Files")
         # BFA - Changed the Change contextual operator visibility to be based on strip type selection
         # BFA - This is done by listing the strip types then checking if it exists for the relevant operators
         # BFA - If there is no correct strip selected, a label will advise what to do
@@ -1228,10 +1232,10 @@ class SEQUENCER_MT_add_transitions(Menu):
 
         col = layout.column()
         col.operator(
-            "sequencer.effect_strip_add", text="Cross", icon="NODE_VECTOR"
+            "sequencer.effect_strip_add", text="Crossfade", icon="NODE_VECTOR"
         ).type ='CROSS'
         col.operator(
-            "sequencer.effect_strip_add", text="Gamma Cross", icon="NODE_GAMMA"
+            "sequencer.effect_strip_add", text="Gamma Crossfade", icon="NODE_GAMMA"
         ).type = 'GAMMA_CROSS'
 
         col.separator()
@@ -1464,9 +1468,47 @@ class SEQUENCER_MT_strip_effect(Menu):
     def draw(self, _context):
         layout = self.layout
 
+        layout.menu("SEQUENCER_MT_strip_effect_change")
         # BFA - couple of these operators were moved to a conditional
         layout.operator("sequencer.reassign_inputs", icon='RANDOMIZE_TRANSFORM')
         layout.operator("sequencer.swap_inputs", icon='RANDOMIZE')
+
+
+class SEQUENCER_MT_strip_effect_change(Menu):
+    bl_label = "Change Effect Type"
+
+    def draw(self, context):
+        layout = self.layout
+
+        strip = context.active_strip
+
+        col = layout.column()
+        col.operator("sequencer.change_effect_type", text="Adjustment Layer").type = 'ADJUSTMENT'
+        col.operator("sequencer.change_effect_type", text="Multicam Selector").type = 'MULTICAM'
+        col.enabled = strip.input_count == 0
+
+        layout.separator()
+
+        col = layout.column()
+        col.operator("sequencer.change_effect_type", text="Transform").type = 'TRANSFORM'
+        col.operator("sequencer.change_effect_type", text="Speed Control").type = 'SPEED'
+        col.operator("sequencer.change_effect_type", text="Glow").type = 'GLOW'
+        col.operator("sequencer.change_effect_type", text="Gaussian Blur").type = 'GAUSSIAN_BLUR'
+        col.enabled = strip.input_count == 1
+
+        layout.separator()
+
+        col = layout.column()
+        col.operator("sequencer.change_effect_type", text="Add").type = 'ADD'
+        col.operator("sequencer.change_effect_type", text="Subtract").type = 'SUBTRACT'
+        col.operator("sequencer.change_effect_type", text="Multiply").type = 'MULTIPLY'
+        col.operator("sequencer.change_effect_type", text="Alpha Over").type = 'ALPHA_OVER'
+        col.operator("sequencer.change_effect_type", text="Alpha Under").type = 'ALPHA_UNDER'
+        col.operator("sequencer.change_effect_type", text="Color Mix").type = 'COLORMIX'
+        col.operator("sequencer.change_effect_type", text="Crossfade").type = 'CROSS'
+        col.operator("sequencer.change_effect_type", text="Gamma Crossfade").type = 'GAMMA_CROSS'
+        col.operator("sequencer.change_effect_type", text="Wipe").type = 'WIPE'
+        col.enabled = strip.input_count == 2
 
 
 class SEQUENCER_MT_strip_movie(Menu):
@@ -3569,6 +3611,32 @@ class SEQUENCER_PT_cache_view_settings(SequencerButtonsPanel, Panel):
             split.alignment = 'LEFT'
             split.label(text="{:d} MB".format(cache_final_size), translate=False)
 
+        show_cache_size = show_developer_ui and (ed.use_cache_raw or ed.use_cache_final)
+        if show_cache_size:
+            cache_raw_size = ed.cache_raw_size
+            cache_final_size = ed.cache_final_size
+
+            col = layout.box()
+            col = col.column(align=True)
+
+            split = col.split(factor=0.4, align=True)
+            split.alignment = 'RIGHT'
+            split.label(text="Current Cache Size")
+            split.alignment = 'LEFT'
+            split.label(text="{:d} MB".format(cache_raw_size + cache_final_size), translate=False)
+
+            split = col.split(factor=0.4, align=True)
+            split.alignment = 'RIGHT'
+            split.label(text="Raw")
+            split.alignment = 'LEFT'
+            split.label(text="{:d} MB".format(cache_raw_size), translate=False)
+
+            split = col.split(factor=0.4, align=True)
+            split.alignment = 'RIGHT'
+            split.label(text="Final")
+            split.alignment = 'LEFT'
+            split.label(text="{:d} MB".format(cache_final_size), translate=False)
+
 
 class SEQUENCER_PT_proxy_settings(SequencerButtonsPanel, Panel):
     bl_label = "Proxy Settings"
@@ -4336,6 +4404,7 @@ classes = (
     SEQUENCER_MT_add_transitions,
     SEQUENCER_MT_add_empty,
     SEQUENCER_MT_strip_effect,
+    SEQUENCER_MT_strip_effect_change,
     SEQUENCER_MT_strip_movie,
     SEQUENCER_MT_strip,
     SEQUENCER_MT_strip_transform,

@@ -1766,7 +1766,6 @@ class CYCLES_LIGHT_PT_light(CyclesButtonsPanel, Panel):
             col.prop(light, "use_soft_falloff")
             col.use_property_split = True
             col.prop(light, "shadow_soft_size", text="Radius")
-            col.prop(light, "use_soft_falloff")
         elif light.type == 'SUN':
             col.prop(light, "angle")
         elif light.type == 'AREA':

@@ -114,12 +114,11 @@ class VIEW3D_HT_tool_header(Header):
             if is_valid_context:
                 brush = context.tool_settings.gpencil_paint.brush
                 if brush:
-                    if brush.gpencil_tool != 'ERASE':
-                        if brush.gpencil_tool != 'TINT':
-                            layout.popover("VIEW3D_PT_tools_grease_pencil_v3_brush_advanced")
-
-                        if brush.gpencil_tool not in {'FILL', 'TINT'}:
-                            layout.popover("VIEW3D_PT_tools_grease_pencil_v3_brush_stroke")
+                    if brush.gpencil_tool not in {'FILL', 'TINT', 'ERASE'}:
+                        layout.popover("VIEW3D_PT_tools_grease_pencil_v3_brush_advanced")
+                        layout.popover("VIEW3D_PT_tools_grease_pencil_v3_brush_stroke")
+                    if brush.gpencil_tool == 'FILL':
+                        layout.popover("VIEW3D_PT_tools_grease_pencil_v3_brush_fill_advanced")
                     layout.popover("VIEW3D_PT_tools_grease_pencil_paint_appearance")
         elif tool_mode == 'SCULPT_GREASE_PENCIL':
             if is_valid_context:
@@ -8842,6 +8841,7 @@ class VIEW3D_MT_edit_greasepencil_cleanup(Menu):
                 icon="REMOVE_DOUBLES",
             )
             layout.operator("grease_pencil.reproject", icon="REPROJECT")
+            layout.operator("grease_pencil.remove_fill_guides")
 
 
 class VIEW3D_MT_edit_greasepencil(Menu):

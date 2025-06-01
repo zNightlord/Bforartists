@@ -1930,7 +1930,7 @@ static void uv_pack_islands_ui(bContext * /*C*/, wmOperator *op)
       layout->separator();
     }
   }
-  layout->prop(op->ptr, "margin_method", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  
   layout->prop(op->ptr, "margin", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   uiLayout *sub = &layout->row(true);
   layout->separator(); /*bfa - separator*/

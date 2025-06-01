@@ -855,8 +855,8 @@ static void collection_exporter_menu_draw(const bContext * /*C*/, Menu *menu)
         icon = ICON_NONE;
       }
       /* BFA end */
-      uiItemStringO(
-          layout, fh->label, icon, "COLLECTION_OT_exporter_add", "name", fh->idname);
+      PointerRNA op_ptr = layout->op("COLLECTION_OT_exporter_add", fh->label, icon);
+      RNA_string_set(&op_ptr, "name", fh->idname);
       at_least_one = true;
     }
   }

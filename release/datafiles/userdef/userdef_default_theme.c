@@ -1015,6 +1015,7 @@ const bTheme U_theme_default = {
     .strip = RGBA(0x0c0a0a80),
     .strip_select = RGBA(0xff8c00ff),
     .cframe = RGBA(0x60c040ff),
+    .anim_preview_range = RGBA(0xa14d0066),
     .time_scrub_background = RGBA(0x292929e6),
     .time_marker_line = RGBA(0x00000060),
     .time_marker_line_selected = RGBA(0xffffff60),
