@@ -387,6 +387,11 @@ class BevelState {
     return bevface_mesh_faces_;
   }
 
+  OffsetIndices<int> bevface_newfaces() const
+  {
+    return bevface_newfaces_;
+  }
+
   /* The following are indexed by a newvert index, 0 to newverts_num - 1. */
 
   /** The cooredinates of the given newvert. */
@@ -412,6 +417,11 @@ class BevelState {
   OffsetIndices<int> newface_faces() const
   {
     return newface_faces_;
+  }
+
+  OffsetIndices<int> newface_faces_face() const
+  {
+    return newface_faces_face_;
   }
 
   /* The following are indexed by a newcorner index, 0 to newcorners_num - 1. */
@@ -541,6 +551,9 @@ MeshInfo::MeshInfo(const Mesh &mesh) : mesh(mesh)
 
 template<typename T> static void print_span(Span<T> span, const char *label)
 {
+  if (span.size() == 0) {
+    return;
+  }
   fmt::print("{}:", label);
   for (const int i : span.index_range()) {
     if (i % 10 == 0) {
@@ -556,8 +569,11 @@ static void print_float3(const float3 &v)
   fmt::print("({},{},{})", v[0], v[1], v[2]);
 }
 
-[[maybe_unused]] static void print_float3_span(Span<float3> span, const char *label)
+static void print_float3_span(Span<float3> span, const char *label)
 {
+  if (span.size() == 0) {
+    return;
+  }
   fmt::print("{}:", label);
   for (const int i : span.index_range()) {
     if (i % 10 == 0) {
@@ -569,8 +585,73 @@ static void print_float3(const float3 &v)
   fmt::println("");
 }
 
+static void print_int2(const int2 pair)
+{
+  fmt::print("({},{})", pair[0], pair[1]);
+}
+
+static void print_int2_span(Span<int2> span, const char *label)
+{
+  if (span.size() == 0) {
+    return;
+  }
+  fmt::print("{}:", label);
+  for (const int i : span.index_range()) {
+    if (i % 10 == 0) {
+      fmt::print("\n[{}] ", i);
+    }
+    print_int2(span[i]);
+    fmt::print(" ");
+  }
+  fmt::println("");
+}
+
+[[maybe_unused]] static void print_int3(const int3 triple)
+{
+  fmt::print("({},{},{})", triple[0], triple[1], triple[2]);
+}
+
+[[maybe_unused]] static void print_int4(const int4 quad)
+{
+  fmt::print("({},{},{},{})", quad[0], quad[1], quad[2], quad[3]);
+}
+
+static void print_float4(const float4 quad)
+{
+  fmt::print("({},{},{},{})", quad[0], quad[1], quad[2], quad[3]);
+}
+
+static void print_float4_span(Span<float4> span, const char *label)
+{
+  if (span.size() == 0) {
+    return;
+  }
+  fmt::print("{}:", label);
+  for (const int i : span.index_range()) {
+    if (i % 5 == 0) {
+      fmt::print("\n[{}] ", i);
+    }
+    print_float4(span[i]);
+    fmt::print(" ");
+  }
+  fmt::println("");
+}
+
+static void print_indexrange(const IndexRange &range)
+{
+  if (range.size() == 0) {
+    fmt::print("[]");
+  }
+  else {
+    fmt::print("[{}..{}]", range.first(), range.last());
+  }
+}
+
 static void print_indexmask(const IndexMask &index_mask, const char *label)
 {
+  if (index_mask.size() == 0) {
+    return;
+  }
   fmt::print("{}:", label);
   index_mask.foreach_index([&](const int v, const int mask) {
     if (mask % 10 == 0) {
@@ -583,6 +664,9 @@ static void print_indexmask(const IndexMask &index_mask, const char *label)
 
 static void print_groupedspan(const GroupedSpan<int> &groupedspan, const char *label)
 {
+  if (groupedspan.size() == 0) {
+    return;
+  }
   fmt::println("{}:", label);
   for (const int i : groupedspan.index_range()) {
     fmt::print("[{}] ", i);
@@ -593,7 +677,23 @@ static void print_groupedspan(const GroupedSpan<int> &groupedspan, const char *l
   }
 }
 
-[[maybe_unused]] static void print_meshpattern(const MeshPattern &pat)
+static void print_offsetindices(const OffsetIndices<int> &offsetindices, const char *label)
+{
+  if (offsetindices.size() == 0) {
+    return;
+  }
+  fmt::println("{}", label);
+  for (const int i : offsetindices.index_range()) {
+    if (i % 10 == 0) {
+      fmt::print("\n[{}] ", i);
+    }
+    print_indexrange(offsetindices[i]);
+    fmt::print(" ");
+  }
+  fmt::println("");
+}
+
+static void print_meshpattern(const MeshPattern &pat)
 {
   static const char *kind_names[] = {"None", "Line", "TerminalPoly", "Adj", "TriFan", "Cutoff"};
   fmt::println("{} anchors={} segs={}", kind_names[int(pat.kind)], pat.num_anchors, pat.num_segs);
@@ -601,6 +701,9 @@ static void print_groupedspan(const GroupedSpan<int> &groupedspan, const char *l
 
 static void print_anchor_newvert_positions(const BevelState &bs, const char *label)
 {
+  if (bs.newvert_positions().size() == 0) {
+    return;
+  }
   fmt::println("{}", label);
   for (const int bv : IndexRange(bs.bevverts_num)) {
     const MeshPattern &pat = bs.bevvert_meshpatterns()[bv];
@@ -610,22 +713,6 @@ static void print_anchor_newvert_positions(const BevelState &bs, const char *lab
       const int nv_index = bs.bevvert_newverts()[bv][apos];
       float3 co = bs.newvert_positions()[nv_index];
       fmt::print(" [{}]({}.{},{})", apos, co[0], co[1], co[2]);
-    }
-    fmt::println("");
-  }
-}
-
-static void print_bevedge_attach_verts(const BevelState &bs, const char *label)
-{
-  fmt::println("{}", label);
-  for (const int bv : IndexRange(bs.bevverts_num)) {
-    fmt::println("bv {}: ", bv);
-    Span<int> edges = bs.bevvert_bevedges()[bv];
-    for (const int epos : edges.index_range()) {
-      const int be = edges[epos];
-      const int end = bs.bevedge_vert_end(bv, be);
-      const int nv = bs.bevedge_attach_verts()[be][end];
-      fmt::print(" [{}]: be={} nv={}", epos, be, nv);
     }
     fmt::println("");
   }
@@ -648,16 +735,30 @@ static void print_bevedge_attach_verts(const BevelState &bs, const char *label)
   print_span(bs.bevedge_mesh_edges(), "bevedge_mesh_edges");
   if (!vertex_only) {
     print_span(bs.bevedge_weights(), "bevedge_weights");
+    print_float4_span(bs.bevedge_widths(), "bevedge_widths");
   }
   print_span(bs.bevface_mesh_faces(), "bevface_mesh_faces");
   print_groupedspan(bs.bevvert_bevedges(), "bevvert_bevedges");
   print_groupedspan(bs.bevvert_faces(), "bevvert_faces");
-  if (bs.bevedge_attach_verts().size() > 0) {
-    print_bevedge_attach_verts(bs, "bevedge_attach_verts");
+  print_int2_span(bs.bevedge_attach_verts(), "bevedge_attach_verts");
+  print_anchor_newvert_positions(bs, "anchor newvert positions");
+  if (bs.bevvert_meshpatterns().size() > 0) {
+    fmt::println("meshpatterns");
+    for (const int bv : bs.bevvert_meshpatterns().index_range()) {
+      fmt::print("{}: ", bv);
+      print_meshpattern(bs.bevvert_meshpatterns()[bv]);
+    }
   }
-  if (bs.newvert_positions().size() > 0) {
-    print_anchor_newvert_positions(bs, "anchor newvert positions");
-  }
+  print_offsetindices(bs.bevvert_newverts(), "bevvert_newverts");
+  print_offsetindices(bs.bevvert_newedges(), "bevvert_newedges");
+  print_offsetindices(bs.bevvert_newfaces(), "bevvert_newfaces");
+  print_offsetindices(bs.bevedge_newedges(), "bevedge_newedges");
+  print_offsetindices(bs.bevedge_newfaces(), "bevedge_newfaces");
+  print_offsetindices(bs.bevface_newfaces(), "bevface_newfaces");
+  print_offsetindices(bs.newface_faces(), "newface_faces");
+  print_float3_span(bs.newvert_positions(), "newvert_positions");
+  print_span(bs.newcorner_verts(), "newcorner_verts");
+  print_span(bs.newcorner_edges(), "newcorner_edges");
 }
 
 static void draw_bevvert(int bv, const BevelState &bs)
@@ -2920,7 +3021,7 @@ std::pair<Array<int, 20>, Array<int, 20>> MeshPattern::face_verts_and_edges(int 
 }
 
 /** Return a 4-tuple with the number of vertices, edges, faces, corners needed for edge mesh. */
-int4 bevedge_num_elements(const int be, const BevelState &bs)
+static int4 bevedge_num_elements(const int be, const BevelState &bs)
 {
   /* There are ns parallel quad faces, needed.
    * The verts and end edges come from the bevvert meshes, so
@@ -2935,7 +3036,7 @@ int4 bevedge_num_elements(const int be, const BevelState &bs)
 
 /** Return a 4-tuple with the number of vertices, edges, faces, corners needed for face mesh
  * (at the momemt, 'face mesh' just means a single reconstructed face). */
-int4 bevface_num_elements(const int bf, const BevelState &bs)
+static int4 bevface_num_elements(const int bf, const BevelState &bs)
 {
   /* The only tricky part is the number of corners needed. */
   int ncorners = 0;
