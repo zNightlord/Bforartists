@@ -3027,9 +3027,11 @@ static int4 bevedge_num_elements(const int be, const BevelState &bs)
   /* There are ns parallel quad faces, needed.
    * The verts and end edges come from the bevvert meshes, so
    * don't get counted here.
+   * Unbeveled edges get 1 new edge, because at least one end of the edge will change
+   * and it is cleaner to make a new edge then to do surgery on the original mesh edges.
    */
   if (bs.params.affect_type == BevelAffect::Vertices || bs.bevedge_weights()[be] == 0.0f) {
-    return int4(0, 0, 0, 0);
+    return int4(0, 1, 0, 0);
   }
   const int ns = bs.params.segments;
   return int4(0, ns + 1, ns, 4 * ns);
