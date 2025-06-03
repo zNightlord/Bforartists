@@ -756,6 +756,7 @@ static void print_anchor_newvert_positions(const BevelState &bs, const char *lab
   print_offsetindices(bs.bevedge_newfaces(), "bevedge_newfaces");
   print_offsetindices(bs.bevface_newfaces(), "bevface_newfaces");
   print_offsetindices(bs.newface_faces(), "newface_faces");
+  print_offsetindices(bs.newface_faces_face(), "newface_faces_face");
   print_float3_span(bs.newvert_positions(), "newvert_positions");
   print_span(bs.newcorner_verts(), "newcorner_verts");
   print_span(bs.newcorner_edges(), "newcorner_edges");
