@@ -90,6 +90,16 @@ class MeshPattern {
 
   /** Return arrays of the verts and edges (in pattern indexing space) for pattern face \a face. */
   std::pair<Array<int, 20>, Array<int, 20>> face_verts_and_edges(int face) const;
+
+  /** Assuming \a v is a vert on the outer boundary, return the boundary vert that is \a delta away
+   * in the ccw direction along the boundary.
+   */
+  int next_boundary_vert(const int v, const int ccw_delta) const;
+
+  /** Assuming \a v is a vert on the outer boundary, return the edge that leaves \a v in the ccw
+   * direction around the boundary.
+   */
+  int boundary_edge_from_vert(const int v) const;
 };
 
 /** Helper for keeping track of angle kind. */
@@ -221,6 +231,8 @@ class BevelState {
   void determine_needed_new_elements();
 
   void build_vertex_meshes();
+
+  void build_edge_meshes();
 
   /** Build the edge e from vertices v0 and v1, where those indices are in a local "pattern" space.
    * Use newverts and newedges to convert those into indices in "new" space.
@@ -758,6 +770,7 @@ static void print_anchor_newvert_positions(const BevelState &bs, const char *lab
   print_offsetindices(bs.newface_faces(), "newface_faces");
   print_offsetindices(bs.newface_faces_face(), "newface_faces_face");
   print_float3_span(bs.newvert_positions(), "newvert_positions");
+  print_int2_span(bs.newedge_vertpairs(), "newedge_vertpairs");
   print_span(bs.newcorner_verts(), "newcorner_verts");
   print_span(bs.newcorner_edges(), "newcorner_edges");
 }
@@ -3095,6 +3108,76 @@ static int4 bevface_num_elements(const int bf, const BevelState &bs)
   return int4(0, 0, 1, ncorners);
 }
 
+  /** Assuming \a v is a vert on the outer boundary, return the boundary vert that is \a delta away
+   * in the ccw direction along the boundary. Return -1 if there is no such vert.
+   */
+  int MeshPattern::next_boundary_vert(const int v, const int ccw_delta) const
+{
+  int ans;
+  const int v_num = this->num_elements()[0];
+  switch (kind) {
+    case MeshKind::None:
+      ans = ccw_delta == 0 ? v : -1;
+      break;
+    case MeshKind::Line:
+      ans = v + ccw_delta;
+      if (ans < 0 || ans >= v_num) {
+        ans = -1;
+      }
+      break;
+    case MeshKind::TerminalPoly:
+    case MeshKind::TriFan:
+      ans = num_segs == 0 ? v : (v + v_num + ccw_delta) % v_num;
+      break;
+    case MeshKind::Adj:
+    {
+      const int ring = adj::v_num_rings(num_segs) - 1;
+      const int ring_len = adj::v_ringlen(ring, num_anchors, num_segs);
+      const int v_start = adj::v_ringstart(ring, num_anchors, num_segs);
+      ans = v_start + (((v - v_start) + ring_len + ccw_delta) % ring_len);
+      break;
+    }
+    case MeshKind::Cutoff:
+      /* TODO */
+      BLI_assert(false);
+  }
+  return ans;
+}
+
+  /** Assuming \a v is a vert on the outer boundary, return the edge that leaves \a v in the ccw
+   * direction around the boundary. Return -1 if there is no such edge.
+   */
+int MeshPattern::boundary_edge_from_vert(const int v) const
+{
+  int ans;
+  const int4 vefc = this->num_elements();
+  const int e_num = vefc[1];
+  switch (this->kind) {
+    case MeshKind::None:
+      ans = -1;
+      break;
+    case MeshKind::Line:
+    case MeshKind::TerminalPoly:
+      ans = v;
+      break;
+    case MeshKind::TriFan:
+      ans = v < num_segs ? v : (v == num_segs ? e_num - 1 : num_segs);
+      break;
+    case MeshKind::Adj:
+    {
+      const int ring = adj::v_num_rings(num_segs) - 1;
+      const int v_start = adj::v_ringstart(ring, num_anchors, num_segs);
+      const int e_start = adj::e_ringstart(ring, num_anchors, num_segs);
+      ans = e_start + (v - v_start);
+      break;
+    }
+    case MeshKind::Cutoff:
+      /* TODO */
+      BLI_assert(false);
+  }
+  return ans;
+}
+
 namespace topology {
 /** Functions for analyzing the topology around bevels and setting up main bevel data structures
  * before construction. */
@@ -4049,7 +4132,8 @@ BevelState::BevelState(const Mesh &src_mesh,
 
   Array<bool> bevel_involved_face(src_mesh.faces_num, false);
   bevedges_mask_.foreach_index([&](const int e) {
-    for (const int f : mesh_info.edge_faces()[e]) {
+    Span<int> faces = mesh_info.edge_faces()[e];
+    for (const int f : faces) {
       bevel_involved_face[f] = true;
     }
   });
@@ -4282,8 +4366,8 @@ void BevelState::determine_needed_new_elements()
 
   newvert_positions_ = Array<float3>(newverts_num);
   newedge_vertpairs_ = Array<int2>(newedges_num);
-  newcorner_verts_ = Array<int>(total_corners);
-  newcorner_edges_ = Array<int>(total_corners);
+  newcorner_verts_ = Array<int>(total_corners, -1);
+  newcorner_edges_ = Array<int>(total_corners, -1);
 
   /* Now set up corners for new faces. */
   newface_faces_face_offsets_ = Array<int>(newfaces_num + 1);
@@ -4419,6 +4503,69 @@ void BevelState::build_vertex_meshes()
   });
 }
 
+/** Build the edge meshes. */
+void BevelState::build_edge_meshes()
+{
+  fmt::println("\nbuild_edges_mesh");
+  threading::parallel_for(IndexRange(bevedges_num), 10'000, [&](IndexRange range) {
+    for (const int be : range) {
+      const int mesh_edge = bevedge_mesh_edges_[be];
+      /* Get v0 and v1 to be such that mesh_v0 < mesh_v1. */
+      auto [mesh_v0, mesh_v1] = mesh_info.mesh.edges()[mesh_edge];
+      int bv0 = vert_bevverts_[mesh_v0];
+      int bv1 = vert_bevverts_[mesh_v1];
+      auto [pos0, pos1] = bevedge_attach_verts_[be];
+      if (mesh_v0 > mesh_v1) {
+        std::swap(mesh_v0, mesh_v1);
+        std::swap(bv0, bv1);
+        std::swap(pos0, pos1);
+      }
+      /* It is possible that one or the other end of be does not have a bv (it will be -1).
+       * In that case, we encode the original mesh vertex index as a "new vertex index" by
+       * adding one and negating.
+       */
+      fmt::println("be {}: mesh_v0={} mesh_v1={} bv0={} bv1={} pos0={} pos1={}", be, mesh_v0, mesh_v1, bv0, bv1, pos0, pos1);
+      const int nv0 = bv0 >= 0 ? bevvert_newverts_[bv0][pos0] : -(mesh_v0 + 1);
+      const int nv1 = bv1 >= 0 ? bevvert_newverts_[bv1][pos1] : -(mesh_v1 + 1);
+      fmt::println("attach newverts nv0={} nv1={}", nv0, nv1);
+      if (bevedge_weights_[be] == 0.0) {
+        /* Just a single edge, but with one or both ends attached to new vertices. */
+        const int ne = bevedge_newedges_[be][0];
+        fmt::println("make single edge at ne={} = ({},{})", ne, nv0, nv1);
+        newedge_vertpairs_[ne] = int2(nv0, nv1);
+      }
+      else {
+        /* Make params.segments quads. nv0 is upper left, nv1 is lower right. */
+        fmt::println("make {} quads", params.segments);
+        const int first_nv0 = bevvert_newverts_[bv0][0];
+        const int first_nv1 = bevvert_newverts_[bv1][0];
+        const MeshPattern &pat0 = bevvert_meshpatterns_[bv0];
+        const MeshPattern &pat1 = bevvert_meshpatterns_[bv1];
+        /* Set nv_ul and nv_ll to upper left and lower left of leftmost quad. */
+        const int nv_ul = nv0;
+        const int nv_ll = first_nv1 + pat1.next_boundary_vert(nv1, -params.segments);
+        for (const int seg : IndexRange(params.segments)) {
+          const int nv0 = first_nv0 + pat0.next_boundary_vert(nv_ul - first_nv0, seg);
+          const int nv1 = first_nv1 + pat1.next_boundary_vert(nv_ll - first_nv1, -seg);
+          const int nv2 = first_nv1 + pat1.next_boundary_vert(nv1 - first_nv1, -1);
+          const int nv3 = first_nv0 + pat0.next_boundary_vert(nv0 - first_nv0, 1);
+          const int4 nverts = int4(nv0, nv1, nv2, nv3);
+          const int ne_l = bevedge_newedges_[be][seg];
+          const int ne_r = bevedge_newedges_[be][seg + 1];
+          const int ne_b = 0;
+          const int ne_t = 0;
+          const int4 nedges = int4(ne_l, ne_b, ne_r, ne_t);
+          fmt::print("nverts ");
+          print_int4(nverts);
+          fmt::print(" nedges ");
+          print_int4(nedges);
+          fmt::println("");
+        }
+      }
+    }
+  });
+}
+
 std::optional<Mesh *> mesh_bevel(const Mesh &src_mesh,
                                  const IndexMask &selection,
                                  const BevelParameters &params,
@@ -4435,7 +4582,8 @@ std::optional<Mesh *> mesh_bevel(const Mesh &src_mesh,
   state.set_bevedge_widths();
   state.determine_needed_new_elements();
   state.build_vertex_meshes();
-  dump_bevel_state(state, "after build_vertex_meshes");
+  state.build_edge_meshes();
+  dump_bevel_state(state, "after build_edge_meshes");
   return std::nullopt;
 }
 
