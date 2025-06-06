@@ -86,20 +86,26 @@ class MeshPattern {
   int4 num_elements() const;
 
   /** Return the vertex index of the give anchor vertex. */
-  int anchor_vert(int anchor_index) const;
+  int anchor_vert(const int anchor_index) const;
 
-  /** Return arrays of the verts and edges (in pattern indexing space) for pattern face \a face. */
-  std::pair<Array<int, 20>, Array<int, 20>> face_verts_and_edges(int face) const;
+  /** Return arrays of the verts and edges for pattern face \a face,
+   * where \a first_v and \a first_e give the offsets to add to pattern space indices.
+   */
+  std::pair<Array<int, 20>, Array<int, 20>> face_verts_and_edges(const int face,
+                                                                 const int first_v,
+                                                                 const int first_e) const;
 
   /** Assuming \a v is a vert on the outer boundary, return the boundary vert that is \a delta away
    * in the ccw direction along the boundary.
+   * Assume \a v is offset from 0 by \a first_v, and return a similarly offset answer.
    */
-  int next_boundary_vert(const int v, const int ccw_delta) const;
+  int next_boundary_vert(const int v, const int ccw_delta, const int first_v) const;
 
   /** Assuming \a v is a vert on the outer boundary, return the edge that leaves \a v in the ccw
    * direction around the boundary.
+   * Assume \a v is offset by \a first_v, and return an edge offset by \a first_e.
    */
-  int boundary_edge_from_vert(const int v) const;
+  int boundary_edge_from_vert(const int v, const int first_v, const int first_e) const;
 };
 
 /** Helper for keeping track of angle kind. */
@@ -234,26 +240,15 @@ class BevelState {
 
   void build_edge_meshes();
 
-  /** Build the edge e from vertices v0 and v1, where those indices are in a local "pattern" space.
-   * Use newverts and newedges to convert those into indices in "new" space.
+  /** Build the edge e from vertices v0 and v1, where those indices are in a "new element" space.
    * Negative input values are just copied as is (used to encode original elements).
-   * Only build canonical edges, where the converted values are such that the first element
-   * has a lower index.
    */
-  void build_newedge(
-      const int e, const int v0, const int v1, IndexRange newverts, IndexRange newedges);
+  void build_newedge(const int e, const int v0, const int v1);
 
-  /** Build the face f from verts and edges, where those indices are in a local "pattern" space.
-   * Use newverts, newedges, and newfaces to convert those indices into "new" space.
+  /** Build the face f from verts and edges, where those indices are in "new" element" space.
    * Negative input elements are just copied as is (used to encode original elements).
    */
-  void build_newface(const int f,
-                     Span<int> verts,
-                     Span<int> edges,
-                     IndexRange newverts,
-                     IndexRange newedges,
-                     IndexRange newfaces,
-                     bool build_edges);
+  void build_newface(const int f, Span<int> verts, Span<int> edges);
 
   /** Indices of Mesh vertices that have corresponding bevverts.
    */
@@ -388,7 +383,7 @@ class BevelState {
   /** The newfaces that are  the edge polygons for the given bevvedge. */
   OffsetIndices<int> bevedge_newfaces() const
   {
-    return bevedge_newedges_;
+    return bevedge_newfaces_;
   }
 
   /* The following are indexed by a bevface index, 0..bevfaces_num - 1. */
@@ -694,7 +689,7 @@ static void print_offsetindices(const OffsetIndices<int> &offsetindices, const c
   if (offsetindices.size() == 0) {
     return;
   }
-  fmt::println("{}", label);
+  fmt::print("{}", label);
   for (const int i : offsetindices.index_range()) {
     if (i % 10 == 0) {
       fmt::print("\n[{}] ", i);
@@ -2971,8 +2966,11 @@ int MeshPattern::anchor_vert(int anchor_index) const
   return ans;
 }
 
-/** Return arrays of the verts and edges (in pattern indexing space) for pattern face \a face. */
-std::pair<Array<int, 20>, Array<int, 20>> MeshPattern::face_verts_and_edges(int face) const
+/** Return arrays of the verts and edges for pattern face \a face,
+ * where \a first_v and \a first_e give the offsets to add to pattern space indices.
+ */
+std::pair<Array<int, 20>, Array<int, 20>> MeshPattern::face_verts_and_edges(
+    const int face, const int first_v, const int first_e) const
 {
   int4 vefc_nums = this->num_elements();
   BLI_assert(0 <= face && face < vefc_nums[2]);
@@ -3030,6 +3028,12 @@ std::pair<Array<int, 20>, Array<int, 20>> MeshPattern::face_verts_and_edges(int 
       /* These have no faces. */
       BLI_assert_unreachable();
       break;
+  }
+  for (int &v : ans_verts) {
+    v = v + first_v;
+  }
+  for (int &e : ans_edges) {
+    e = e + first_e;
   }
   return ans;
 }
@@ -3108,48 +3112,51 @@ static int4 bevface_num_elements(const int bf, const BevelState &bs)
   return int4(0, 0, 1, ncorners);
 }
 
-  /** Assuming \a v is a vert on the outer boundary, return the boundary vert that is \a delta away
-   * in the ccw direction along the boundary. Return -1 if there is no such vert.
-   */
-  int MeshPattern::next_boundary_vert(const int v, const int ccw_delta) const
+/** Assuming \a v is a vert on the outer boundary, return the boundary vert that is \a delta away
+ * in the ccw direction along the boundary. Return -1 if there is no such vert.
+ * Assume \a v is offset from 0 by \a first_v, and return a similarly offset answer.
+ */
+int MeshPattern::next_boundary_vert(const int v, const int ccw_delta, const int first_v) const
 {
   int ans;
   const int v_num = this->num_elements()[0];
+  const int pat_v = v - first_v;
   switch (kind) {
     case MeshKind::None:
-      ans = ccw_delta == 0 ? v : -1;
+      ans = ccw_delta == 0 ? pat_v : -1;
       break;
     case MeshKind::Line:
-      ans = v + ccw_delta;
+      ans = pat_v + ccw_delta;
       if (ans < 0 || ans >= v_num) {
         ans = -1;
       }
       break;
     case MeshKind::TerminalPoly:
     case MeshKind::TriFan:
-      ans = num_segs == 0 ? v : (v + v_num + ccw_delta) % v_num;
+      ans = num_segs == 0 ? pat_v : (pat_v + v_num + ccw_delta) % v_num;
       break;
-    case MeshKind::Adj:
-    {
+    case MeshKind::Adj: {
       const int ring = adj::v_num_rings(num_segs) - 1;
       const int ring_len = adj::v_ringlen(ring, num_anchors, num_segs);
       const int v_start = adj::v_ringstart(ring, num_anchors, num_segs);
-      ans = v_start + (((v - v_start) + ring_len + ccw_delta) % ring_len);
+      ans = v_start + (((pat_v - v_start) + ring_len + ccw_delta) % ring_len);
       break;
     }
     case MeshKind::Cutoff:
       /* TODO */
       BLI_assert(false);
   }
-  return ans;
+  return ans + first_v;
 }
 
-  /** Assuming \a v is a vert on the outer boundary, return the edge that leaves \a v in the ccw
-   * direction around the boundary. Return -1 if there is no such edge.
-   */
-int MeshPattern::boundary_edge_from_vert(const int v) const
+/** Assuming \a v is a vert on the outer boundary, return the edge that leaves \a v in the ccw
+ * direction around the boundary. Return -1 if there is no such edge.
+ * Assume \a v is offset from 0 by \a first_v, and return a similarly offset answer.
+ */
+int MeshPattern::boundary_edge_from_vert(const int v, const int first_v, const int first_e) const
 {
   int ans;
+  const int pat_v = v - first_v;
   const int4 vefc = this->num_elements();
   const int e_num = vefc[1];
   switch (this->kind) {
@@ -3158,24 +3165,23 @@ int MeshPattern::boundary_edge_from_vert(const int v) const
       break;
     case MeshKind::Line:
     case MeshKind::TerminalPoly:
-      ans = v;
+      ans = pat_v;
       break;
     case MeshKind::TriFan:
-      ans = v < num_segs ? v : (v == num_segs ? e_num - 1 : num_segs);
+      ans = pat_v < num_segs ? pat_v : (pat_v == num_segs ? e_num - 1 : num_segs);
       break;
-    case MeshKind::Adj:
-    {
+    case MeshKind::Adj: {
       const int ring = adj::v_num_rings(num_segs) - 1;
       const int v_start = adj::v_ringstart(ring, num_anchors, num_segs);
       const int e_start = adj::e_ringstart(ring, num_anchors, num_segs);
-      ans = e_start + (v - v_start);
+      ans = e_start + (pat_v - v_start);
       break;
     }
     case MeshKind::Cutoff:
       /* TODO */
       BLI_assert(false);
   }
-  return ans;
+  return ans + first_e;
 }
 
 namespace topology {
@@ -4376,7 +4382,7 @@ void BevelState::determine_needed_new_elements()
       const MeshPattern &pat = bevvert_meshpatterns_[bv];
       for (const int patf : IndexRange(bevvert_newfaces_[bv].size())) {
         const int newf = bevvert_newfaces_[bv][patf];
-        auto [verts, edges] = pat.face_verts_and_edges(patf);
+        auto [verts, edges] = pat.face_verts_and_edges(patf, 0, 0);
         /* TODO: make function that just returns face size for f. */
         newface_faces_face_offsets_[newf] = verts.size();
       }
@@ -4422,62 +4428,38 @@ void BevelState::set_bevedge_widths()
   });
 }
 
-/** Build the edge e from vertices v0 and v1, where those indices are in a local "pattern" space.
- * Use newverts and newedges to convert those into indices in "new" space.
+/** Build the edge e from vertices v0 and v1, where those indices are in a "new element" space.
  * Negative input values are just copied as is (used to encode original elements).
- * Only build canonical edges, where the converted values are such that the first element
- * has a lower index.
  */
-void BevelState::build_newedge(
-    const int e, const int v0, const int v1, IndexRange newverts, IndexRange newedges)
+void BevelState::build_newedge(const int e, const int v0, const int v1)
 {
-  const int newv0 = v0 >= 0 ? newverts[v0] : v0;
-  const int newv1 = v1 >= 0 ? newverts[v1] : v1;
-  if (v0 < v1) {
-    const int newe = newedges[e];
-    newedge_vertpairs_[newe] = int2(newv0, newv1);
-  }
+  newedge_vertpairs_[e] = int2(v0, v1);
 }
 
-/** Build the face f from verts and edges, where those indices are in a local "pattern" space.
- * Use newverts, newedges, and newfaces to convert those indices into "new" space.
+/** Build the face f from verts and edges, where those indices are in "new" element" space.
  * Negative input elements are just copied as is (used to encode original elements).
- * If build_edges is true, we also call build_newedge on the constituent edges.
  */
-void BevelState::build_newface(const int f,
-                               Span<int> verts,
-                               Span<int> edges,
-                               IndexRange newverts,
-                               IndexRange newedges,
-                               IndexRange newfaces,
-                               bool build_edges)
+void BevelState::build_newface(const int f, Span<int> verts, Span<int> edges)
 {
   BLI_assert(verts.size() >= 3 && verts.size() == edges.size());
-  const int newf = newfaces[f];
-  IndexRange newf_corners = newface_faces_face_[newf];
-  BLI_assert(newf_corners.size() == verts.size());
-  for (const int i : newf_corners.index_range()) {
+  IndexRange f_corners = newface_faces_face_[f];
+  BLI_assert(f_corners.size() == verts.size());
+  for (const int i : f_corners.index_range()) {
     const int v = verts[i];
-    const int newv = v >= 0 ? newverts[v] : v;
     const int e = edges[i];
-    const int newe = e >= 0 ? newedges[e] : e;
-    const int c = newf_corners[i];
-    newcorner_verts_[c] = newv;
-    newcorner_edges_[c] = newe;
-    if (build_edges && e >= 0) {
-      this->build_newedge(e, verts[i], verts[(i + 1) % verts.size()], newverts, newedges);
-    }
+    const int c = f_corners[i];
+    newcorner_verts_[c] = v;
+    newcorner_edges_[c] = e;
   }
 }
 
 /** Build the vertex meshes. */
 void BevelState::build_vertex_meshes()
 {
-  bevedge_attach_verts_ = Array<int2>(this->bevedges_num);
+  bevedge_attach_verts_ = Array<int2>(this->bevedges_num, int2(-1, -1));
 
   threading::parallel_for(IndexRange(bevverts_num), 10'000, [&](IndexRange range) {
     for (const int bv : range) {
-      fmt::println("building bv {}", bv);
       topology::build_vmesh_skeleton(
           bv,
           newvert_positions_.as_mutable_span().slice(bevvert_newverts_[bv]),
@@ -4489,15 +4471,18 @@ void BevelState::build_vertex_meshes()
       profile::calculate_profiles(bv, profiles, *this);
       topology::build_internal_vmesh(
           bv, profiles, newvert_positions_.as_mutable_span().slice(bevvert_newverts_[bv]), *this);
-      IndexRange newverts_range = bevvert_newverts_[bv];
-      IndexRange newedges_range = bevvert_newedges_[bv];
-      IndexRange newfaces_range = bevvert_newfaces_[bv];
+      if (bevvert_newfaces_[bv].size() == 0) {
+        continue;
+      }
+      const int first_v = bevvert_newverts_[bv][0];
+      const int first_e = bevvert_newedges_[bv][0];
+      const int first_f = bevvert_newfaces_[bv][0];
       for (const int f : IndexRange(bevvert_newfaces_[bv].size())) {
-        fmt::println("now build face {}", f);
-        auto [verts, edges] = pat.face_verts_and_edges(f);
-        print_span(verts.as_span(), "verts");
-        print_span(edges.as_span(), "edges");
-        build_newface(f, verts, edges, newverts_range, newedges_range, newfaces_range, true);
+        auto [verts, edges] = pat.face_verts_and_edges(f + first_f, first_v, first_e);
+        build_newface(f, verts, edges);
+        for (const int i : edges.index_range()) {
+          build_newedge(edges[i], verts[i], verts[(i + 1) % verts.size()]);
+        }
       }
     }
   });
@@ -4506,7 +4491,6 @@ void BevelState::build_vertex_meshes()
 /** Build the edge meshes. */
 void BevelState::build_edge_meshes()
 {
-  fmt::println("\nbuild_edges_mesh");
   threading::parallel_for(IndexRange(bevedges_num), 10'000, [&](IndexRange range) {
     for (const int be : range) {
       const int mesh_edge = bevedge_mesh_edges_[be];
@@ -4524,42 +4508,41 @@ void BevelState::build_edge_meshes()
        * In that case, we encode the original mesh vertex index as a "new vertex index" by
        * adding one and negating.
        */
-      fmt::println("be {}: mesh_v0={} mesh_v1={} bv0={} bv1={} pos0={} pos1={}", be, mesh_v0, mesh_v1, bv0, bv1, pos0, pos1);
       const int nv0 = bv0 >= 0 ? bevvert_newverts_[bv0][pos0] : -(mesh_v0 + 1);
       const int nv1 = bv1 >= 0 ? bevvert_newverts_[bv1][pos1] : -(mesh_v1 + 1);
-      fmt::println("attach newverts nv0={} nv1={}", nv0, nv1);
       if (bevedge_weights_[be] == 0.0) {
         /* Just a single edge, but with one or both ends attached to new vertices. */
         const int ne = bevedge_newedges_[be][0];
-        fmt::println("make single edge at ne={} = ({},{})", ne, nv0, nv1);
         newedge_vertpairs_[ne] = int2(nv0, nv1);
       }
       else {
         /* Make params.segments quads. nv0 is upper left, nv1 is lower right. */
-        fmt::println("make {} quads", params.segments);
         const int first_nv0 = bevvert_newverts_[bv0][0];
         const int first_nv1 = bevvert_newverts_[bv1][0];
+        const int first_ne0 = bevvert_newedges_[bv0][0];
+        const int first_ne1 = bevvert_newedges_[bv1][0];
+        const int first_f = bevedge_newfaces_[be][0];
         const MeshPattern &pat0 = bevvert_meshpatterns_[bv0];
         const MeshPattern &pat1 = bevvert_meshpatterns_[bv1];
         /* Set nv_ul and nv_ll to upper left and lower left of leftmost quad. */
         const int nv_ul = nv0;
-        const int nv_ll = first_nv1 + pat1.next_boundary_vert(nv1, -params.segments);
+        const int nv_ll = pat1.next_boundary_vert(nv1, params.segments, first_nv1);
         for (const int seg : IndexRange(params.segments)) {
-          const int nv0 = first_nv0 + pat0.next_boundary_vert(nv_ul - first_nv0, seg);
-          const int nv1 = first_nv1 + pat1.next_boundary_vert(nv_ll - first_nv1, -seg);
-          const int nv2 = first_nv1 + pat1.next_boundary_vert(nv1 - first_nv1, -1);
-          const int nv3 = first_nv0 + pat0.next_boundary_vert(nv0 - first_nv0, 1);
-          const int4 nverts = int4(nv0, nv1, nv2, nv3);
+          const int nv0 = pat0.next_boundary_vert(nv_ul, seg, first_nv0);
+          const int nv1 = pat1.next_boundary_vert(nv_ll, -seg, first_nv1);
+          const int nv2 = pat1.next_boundary_vert(nv1, -1, first_nv1);
+          const int nv3 = pat0.next_boundary_vert(nv0, 1, first_nv0);
+          const Array<int, 4> nverts = {nv0, nv1, nv2, nv3};
           const int ne_l = bevedge_newedges_[be][seg];
+          const int ne_b = pat1.boundary_edge_from_vert(nv2, first_nv1, first_ne1);
           const int ne_r = bevedge_newedges_[be][seg + 1];
-          const int ne_b = 0;
-          const int ne_t = 0;
-          const int4 nedges = int4(ne_l, ne_b, ne_r, ne_t);
-          fmt::print("nverts ");
-          print_int4(nverts);
-          fmt::print(" nedges ");
-          print_int4(nedges);
-          fmt::println("");
+          const int ne_t = pat0.boundary_edge_from_vert(nv0, first_nv0, first_ne0);
+          const Array<int, 4> nedges = {ne_l, ne_b, ne_r, ne_t};
+          build_newface(first_f + seg, nverts, nedges);
+          build_newedge(ne_l, nv0, nv1);
+          if (seg == params.segments - 1) {
+            build_newedge(ne_r, nv2, nv3);
+          }
         }
       }
     }
