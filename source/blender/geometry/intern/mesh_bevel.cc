@@ -240,6 +240,8 @@ class BevelState {
 
   void build_edge_meshes();
 
+  void build_face_meshes();
+
   /** Build the edge e from vertices v0 and v1, where those indices are in a "new element" space.
    * Negative input values are just copied as is (used to encode original elements).
    */
@@ -3128,7 +3130,8 @@ int MeshPattern::next_boundary_vert(const int v, const int ccw_delta, const int 
     case MeshKind::Line:
       ans = pat_v + ccw_delta;
       if (ans < 0 || ans >= v_num) {
-        ans = -1;
+        /* Wrapping allows traversing both sides of the line. */
+        ans = (ans + v_num) % v_num;
       }
       break;
     case MeshKind::TerminalPoly:
@@ -3144,6 +3147,7 @@ int MeshPattern::next_boundary_vert(const int v, const int ccw_delta, const int 
     }
     case MeshKind::Cutoff:
       /* TODO */
+      ans = -1;
       BLI_assert(false);
   }
   return ans + first_v;
@@ -4549,6 +4553,70 @@ void BevelState::build_edge_meshes()
   });
 }
 
+/** Build the face meshes. I.e., reconstruct faces that have bevel involvement. */
+void BevelState::build_face_meshes()
+{
+  const Mesh &mesh = mesh_info.mesh;
+  threading::parallel_for(IndexRange(bevfaces_num), 10'000, [&](IndexRange range) {
+    for (const int bf : range) {
+      const int newf = bevface_newfaces_[bf][0];
+      const int meshf = bevface_mesh_faces_[bf];
+      IndexRange newcorners = newface_faces_face_[newf];
+      fmt::println("build face {}, newf {}, meshf {}, corners ", bf, newf, meshf);
+      print_indexrange(newcorners);
+      fmt::println("");
+      Array<int, 20> nverts(newcorners.size());
+      Array<int, 20> nedges(newcorners.size());
+      IndexRange origcorners = mesh.faces()[meshf];
+      int newc = 0;
+      int meshe_prev = mesh.corner_edges()[origcorners.last()];
+      int be_prev = edge_bevedges_[meshe_prev];
+      for (const int i : IndexRange(origcorners.size())) {
+        const int origc = origcorners[i];
+        const int meshv = mesh.corner_verts()[origc];
+        const int meshe = mesh.corner_edges()[origc];
+        fmt::println("meshv {}, meshe {}", meshv, meshe);
+        const int bv = vert_bevverts_[meshv];
+        const int be = edge_bevedges_[meshe];
+        if (bv < 0) {
+          /* Use original vert. Encode it as -(meshv+1). */
+          nverts[newc] = -(meshv + 1);
+          nedges[newc] = 0; // TODO
+          fmt::println("  unaffected orig v={}, encode as {}", meshv, -(meshv+1));
+          newc++;
+        }
+        else {
+          /* This is a bevel involved vert. There should also be a bevedge in and out. */
+          BLI_assert(be_prev >= 0 && be >= 0);
+          const MeshPattern &pat = bevvert_meshpatterns_[bv];
+          int pos_prev = bevedge_attach_verts_[be_prev][bevedge_vert_end(bv, be_prev)];
+          int pos = bevedge_attach_verts_[be][bevedge_vert_end(bv, be)];
+          if (bevedge_is_beveled(be)) {
+            /* Get to the other side of beveled edge. */
+            pos = pat.next_boundary_vert(pos, params.segments, 0);
+          }
+          fmt::println("  new verts bv {}, from pos_prev {} to pos {}", bv, pos_prev, pos);
+          nverts[newc] = bevvert_newverts_[bv][pos_prev];
+          nedges[newc] = 0; // TODO
+          newc++;
+          if (pos_prev != pos) {
+            int p = pos_prev;
+            do {
+              p = pat.next_boundary_vert(p, -1, 0);
+              nverts[newc] = bevvert_newverts_[bv][p];
+              nedges[newc] = 0; // TODO
+              newc++;
+            } while (p != pos);
+          }
+        }
+        be_prev = be;
+      }
+      print_span(nverts.as_span(), "nverts");
+      build_newface(newf, nverts, nedges);
+    }
+  });
+}
+
 std::optional<Mesh *> mesh_bevel(const Mesh &src_mesh,
                                  const IndexMask &selection,
                                  const BevelParameters &params,
@@ -4566,7 +4634,8 @@ std::optional<Mesh *> mesh_bevel(const Mesh &src_mesh,
   state.determine_needed_new_elements();
   state.build_vertex_meshes();
   state.build_edge_meshes();
-  dump_bevel_state(state, "after build_edge_meshes");
+  state.build_face_meshes();
+  dump_bevel_state(state, "after build_face_meshes");
   return std::nullopt;
 }
 
