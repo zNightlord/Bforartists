@@ -4497,17 +4497,16 @@ void BevelState::build_edge_meshes()
 {
   threading::parallel_for(IndexRange(bevedges_num), 10'000, [&](IndexRange range) {
     for (const int be : range) {
+      fmt::println("build be {}", be);
       const int mesh_edge = bevedge_mesh_edges_[be];
       /* Get v0 and v1 to be such that mesh_v0 < mesh_v1. */
       auto [mesh_v0, mesh_v1] = mesh_info.mesh.edges()[mesh_edge];
       int bv0 = vert_bevverts_[mesh_v0];
       int bv1 = vert_bevverts_[mesh_v1];
+      fmt::println("  be {}, mesh_edge {}, mesh_v0 {}, mesh_v1 {}",
+                   be, mesh_edge, mesh_v0, mesh_v1);
+      fmt::println("     bv0 {}, bv1 {}", bv0, bv1);
       auto [pos0, pos1] = bevedge_attach_verts_[be];
-      if (mesh_v0 > mesh_v1) {
-        std::swap(mesh_v0, mesh_v1);
-        std::swap(bv0, bv1);
-        std::swap(pos0, pos1);
-      }
       /* It is possible that one or the other end of be does not have a bv (it will be -1).
        * In that case, we encode the original mesh vertex index as a "new vertex index" by
        * adding one and negating.
@@ -4544,8 +4543,12 @@ void BevelState::build_edge_meshes()
           const Array<int, 4> nedges = {ne_l, ne_b, ne_r, ne_t};
           build_newface(first_f + seg, nverts, nedges);
           build_newedge(ne_l, nv0, nv1);
+          fmt::println("  newface verts: {} {} {} {}", nv0, nv1, nv2, nv3);
+          fmt::println("  newface edges: {} {} {} {}", ne_l,ne_b, ne_r, ne_t);
+          fmt::println("  newedge {} = {} {}", ne_l, nv0, nv1);
           if (seg == params.segments - 1) {
             build_newedge(ne_r, nv2, nv3);
+            fmt::println("  final newedge: {} = {} {}", ne_r, nv2, nv3);
           }
         }
       }
@@ -4581,7 +4584,7 @@ void BevelState::build_face_meshes()
         if (bv < 0) {
           /* Use original vert. Encode it as -(meshv+1). */
           nverts[newc] = -(meshv + 1);
-          nedges[newc] = 0; // TODO
+          /* nedges[newc] will be set below. */
           fmt::println("  unaffected orig v={}, encode as {}", meshv, -(meshv+1));
           newc++;
         }
@@ -4597,21 +4600,36 @@ void BevelState::build_face_meshes()
           }
           fmt::println("  new verts bv {}, from pos_prev {} to pos {}", bv, pos_prev, pos);
           nverts[newc] = bevvert_newverts_[bv][pos_prev];
-          nedges[newc] = 0; // TODO
+          nedges[newc] = pat.boundary_edge_from_vert(nverts[newc], bevvert_newverts_[bv][0], bevvert_newedges_[bv][0]);
           newc++;
           if (pos_prev != pos) {
             int p = pos_prev;
             do {
               p = pat.next_boundary_vert(p, -1, 0);
-              nverts[newc] = bevvert_newverts_[bv][p];
-              nedges[newc] = 0; // TODO
+              const int newv = bevvert_newverts_[bv][p];
+              nverts[newc] = newv;
+              const int newe = pat.boundary_edge_from_vert(newv, bevvert_newverts_[bv][0], bevvert_newedges_[bv][0]);
+              nedges[newc] = newe;
               newc++;
             } while (p != pos);
+          }
+        }
+        /* The last edge actually needs to be the one for be. */
+        if (be == -1) {
+          nedges[newc - 1] = -(meshe + 1);
+        }
+        else {
+          if (!bevedge_is_beveled(be) || bevedge_vert_end(bv, be) == 1) {
+            nedges[newc - 1] = bevedge_newedges_[be][0];
+          }
+          else {
+            nedges[newc - 1] = bevedge_newedges_[be][params.segments - 1];
           }
         }
         be_prev = be;
       }
       print_span(nverts.as_span(), "nverts");
+      print_span(nedges.as_span(), "nedges");
       build_newface(newf, nverts, nedges);
     }
   });
