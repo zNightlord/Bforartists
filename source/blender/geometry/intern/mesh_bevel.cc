@@ -4620,8 +4620,11 @@ void BevelState::build_face_meshes()
           nedges[newc - 1] = -(meshe + 1);
         }
         else {
-          fmt::println("  doing last edge, is_beveled({})=={}, end={}", bevedge_is_beveled(be), bevedge_vert_end(bv, be));
-          if (!bevedge_is_beveled(be) || bevedge_vert_end(bv, be) == 1) {
+          fmt::println("  doing last edge, is_beveled({})=={}", be, int(bevedge_is_beveled(be)));
+          if (bevedge_is_beveled(be)) {
+            fmt::println("    end={}", bevedge_vert_end(bv, be));
+          }
+          if (!bevedge_is_beveled(be) || bevedge_vert_end(bv, be) == 0) {
             nedges[newc - 1] = bevedge_newedges_[be][0];
           }
           else {
