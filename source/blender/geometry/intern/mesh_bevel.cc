@@ -4591,6 +4591,7 @@ void BevelState::build_face_meshes()
         else {
           /* This is a bevel involved vert. There should also be a bevedge in and out. */
           BLI_assert(be_prev >= 0 && be >= 0);
+          fmt::println("i = {}, be_prev={}, be={}", i, be_prev, be);
           const MeshPattern &pat = bevvert_meshpatterns_[bv];
           int pos_prev = bevedge_attach_verts_[be_prev][bevedge_vert_end(bv, be_prev)];
           int pos = bevedge_attach_verts_[be][bevedge_vert_end(bv, be)];
@@ -4619,6 +4620,7 @@ void BevelState::build_face_meshes()
           nedges[newc - 1] = -(meshe + 1);
         }
         else {
+          fmt::println("  doing last edge, is_beveled({})=={}, end={}", bevedge_is_beveled(be), bevedge_vert_end(bv, be));
           if (!bevedge_is_beveled(be) || bevedge_vert_end(bv, be) == 1) {
             nedges[newc - 1] = bevedge_newedges_[be][0];
           }
