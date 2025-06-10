@@ -365,6 +365,8 @@ typedef struct SpaceSeq {
   struct SequencerTimelineOverlay timeline_overlay;
   struct SequencerCacheOverlay cache_overlay;
 
+  struct Scene *pinned_scene;
+
   /** Multi-view current eye - for internal use. */
   char multiview_eye;
   char _pad2[7];

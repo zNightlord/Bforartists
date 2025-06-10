@@ -346,6 +346,16 @@ static int /*eContextResult*/ sequencer_context(const bContext *C,
     }
     return CTX_RESULT_OK;
   }
+  if (CTX_data_equals(member, "scene")) {
+    SpaceSeq *sseq = CTX_wm_space_seq(C);
+    if ((sseq != nullptr) && (sseq->pinned_scene != nullptr)) {
+      CTX_data_id_pointer_set(result, &sseq->pinned_scene->id);
+    }
+    else {
+      CTX_data_id_pointer_set(result, &scene->id);
+    }
+    return CTX_RESULT_OK;
+  }
 
   return CTX_RESULT_MEMBER_NOT_FOUND;
 }
