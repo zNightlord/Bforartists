@@ -3643,7 +3643,6 @@ static void build_vmesh_skeleton(int bv,
                                  MutableSpan<int2> be_attach_verts,
                                  const BevelState &bs)
 {
-  fmt::println("build_vmesh_skelton bv={}", bv);
   bv_newvert_positions.fill(float3(0.0f, 0.0f, 0.0f));
   Span<int> bevedges = bs.bevvert_bevedges()[bv];
   const int num_edges = bevedges.size();
@@ -3788,8 +3787,6 @@ static void build_vmesh_skeleton(int bv,
         if (i == bevel_pos[next_anchor]) {
           /* We have reached the next beveled edge. */
           const int anchor_pos = pat.anchor_vert(next_anchor);
-          fmt::println(
-              "cur_anchor={} next_anchor={} anchor_pos={}", cur_anchor, next_anchor, anchor_pos);
           bv_newvert_positions[anchor_pos] = adj_edge_anchor_co(bv,
                                                                 bevel_pos[cur_anchor],
                                                                 bevel_pos[next_anchor],
@@ -3798,8 +3795,6 @@ static void build_vmesh_skeleton(int bv,
                                                                 num_not_in_plane,
                                                                 be_not_in_plane_pos,
                                                                 bs);
-          print_float3(bv_newvert_positions[anchor_pos]);
-          fmt::println("");
           cur_anchor = next_anchor;
           next_anchor = (cur_anchor + 1) % num_beveled;
           num_in_plane = 0;
@@ -3819,8 +3814,6 @@ static void build_vmesh_skeleton(int bv,
         }
       }
       const int anchor_pos = pat.anchor_vert(next_anchor);
-      fmt::println(
-          "cur_anchor={} next_anchor={} anchor_pos={}", cur_anchor, next_anchor, anchor_pos);
       bv_newvert_positions[anchor_pos] = adj_edge_anchor_co(bv,
                                                             bevel_pos[cur_anchor],
                                                             bevel_pos[next_anchor],
@@ -3829,8 +3822,6 @@ static void build_vmesh_skeleton(int bv,
                                                             num_not_in_plane,
                                                             be_not_in_plane_pos,
                                                             bs);
-      print_float3(bv_newvert_positions[anchor_pos]);
-      fmt::println("");
     }
   }
 }
@@ -4497,15 +4488,11 @@ void BevelState::build_edge_meshes()
 {
   threading::parallel_for(IndexRange(bevedges_num), 10'000, [&](IndexRange range) {
     for (const int be : range) {
-      fmt::println("build be {}", be);
       const int mesh_edge = bevedge_mesh_edges_[be];
       /* Get v0 and v1 to be such that mesh_v0 < mesh_v1. */
       auto [mesh_v0, mesh_v1] = mesh_info.mesh.edges()[mesh_edge];
       int bv0 = vert_bevverts_[mesh_v0];
       int bv1 = vert_bevverts_[mesh_v1];
-      fmt::println("  be {}, mesh_edge {}, mesh_v0 {}, mesh_v1 {}",
-                   be, mesh_edge, mesh_v0, mesh_v1);
-      fmt::println("     bv0 {}, bv1 {}", bv0, bv1);
       auto [pos0, pos1] = bevedge_attach_verts_[be];
       /* It is possible that one or the other end of be does not have a bv (it will be -1).
        * In that case, we encode the original mesh vertex index as a "new vertex index" by
@@ -4543,12 +4530,8 @@ void BevelState::build_edge_meshes()
           const Array<int, 4> nedges = {ne_l, ne_b, ne_r, ne_t};
           build_newface(first_f + seg, nverts, nedges);
           build_newedge(ne_l, nv0, nv1);
-          fmt::println("  newface verts: {} {} {} {}", nv0, nv1, nv2, nv3);
-          fmt::println("  newface edges: {} {} {} {}", ne_l,ne_b, ne_r, ne_t);
-          fmt::println("  newedge {} = {} {}", ne_l, nv0, nv1);
           if (seg == params.segments - 1) {
             build_newedge(ne_r, nv2, nv3);
-            fmt::println("  final newedge: {} = {} {}", ne_r, nv2, nv3);
           }
         }
       }
@@ -4565,9 +4548,6 @@ void BevelState::build_face_meshes()
       const int newf = bevface_newfaces_[bf][0];
       const int meshf = bevface_mesh_faces_[bf];
       IndexRange newcorners = newface_faces_face_[newf];
-      fmt::println("build face {}, newf {}, meshf {}, corners ", bf, newf, meshf);
-      print_indexrange(newcorners);
-      fmt::println("");
       Array<int, 20> nverts(newcorners.size());
       Array<int, 20> nedges(newcorners.size());
       IndexRange origcorners = mesh.faces()[meshf];
@@ -4578,20 +4558,17 @@ void BevelState::build_face_meshes()
         const int origc = origcorners[i];
         const int meshv = mesh.corner_verts()[origc];
         const int meshe = mesh.corner_edges()[origc];
-        fmt::println("meshv {}, meshe {}", meshv, meshe);
         const int bv = vert_bevverts_[meshv];
         const int be = edge_bevedges_[meshe];
         if (bv < 0) {
           /* Use original vert. Encode it as -(meshv+1). */
           nverts[newc] = -(meshv + 1);
           /* nedges[newc] will be set below. */
-          fmt::println("  unaffected orig v={}, encode as {}", meshv, -(meshv+1));
           newc++;
         }
         else {
           /* This is a bevel involved vert. There should also be a bevedge in and out. */
           BLI_assert(be_prev >= 0 && be >= 0);
-          fmt::println("i = {}, be_prev={}, be={}", i, be_prev, be);
           const MeshPattern &pat = bevvert_meshpatterns_[bv];
           int pos_prev = bevedge_attach_verts_[be_prev][bevedge_vert_end(bv, be_prev)];
           int pos = bevedge_attach_verts_[be][bevedge_vert_end(bv, be)];
@@ -4599,7 +4576,6 @@ void BevelState::build_face_meshes()
             /* Get to the other side of beveled edge. */
             pos = pat.next_boundary_vert(pos, params.segments, 0);
           }
-          fmt::println("  new verts bv {}, from pos_prev {} to pos {}", bv, pos_prev, pos);
           nverts[newc] = bevvert_newverts_[bv][pos_prev];
           nedges[newc] = pat.boundary_edge_from_vert(nverts[newc], bevvert_newverts_[bv][0], bevvert_newedges_[bv][0]);
           newc++;
@@ -4620,21 +4596,15 @@ void BevelState::build_face_meshes()
           nedges[newc - 1] = -(meshe + 1);
         }
         else {
-          fmt::println("  doing last edge, is_beveled({})=={}", be, int(bevedge_is_beveled(be)));
-          if (bevedge_is_beveled(be)) {
-            fmt::println("    end={}", bevedge_vert_end(bv, be));
-          }
-          if (!bevedge_is_beveled(be) || bevedge_vert_end(bv, be) == 0) {
+          if (!bevedge_is_beveled(be) || bevedge_vert_end(bv, be) == 1) {
             nedges[newc - 1] = bevedge_newedges_[be][0];
           }
           else {
-            nedges[newc - 1] = bevedge_newedges_[be][params.segments - 1];
+            nedges[newc - 1] = bevedge_newedges_[be][params.segments];
           }
         }
         be_prev = be;
       }
-      print_span(nverts.as_span(), "nverts");
-      print_span(nedges.as_span(), "nedges");
       build_newface(newf, nverts, nedges);
     }
   });
