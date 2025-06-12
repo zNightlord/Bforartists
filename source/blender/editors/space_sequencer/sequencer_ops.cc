@@ -31,16 +31,12 @@ static wmOperatorStatus toggle_scene_pin_exec(bContext *C, wmOperator * /*op*/)
   Scene *active_scene = WM_window_get_active_scene(CTX_wm_window(C));
   SpaceSeq *sseq = CTX_wm_space_seq(C);
 
-  const bool toggle_pin_on = (sseq->flag & SEQ_PIN_SCENE) == 0;
-
-  if (toggle_pin_on) {
+  if (sseq->pinned_scene == nullptr) {
     sseq->pinned_scene = active_scene;
   }
   else {
     sseq->pinned_scene = nullptr;
   }
-
-  sseq->flag ^= SEQ_PIN_SCENE;
 
   ED_area_tag_redraw(CTX_wm_area(C));
 
