@@ -20,6 +20,11 @@ struct ARegion;
 struct ScreenAnimData {
   /** Do not read from this, only for comparing if region exists. */
   ARegion *region;
+
+  /* Scene and the ViewLayer that is playing. */
+  Scene *scene;
+  ViewLayer *view_layer;
+
   short redraws;
   /** Flags for playback */
   short flag;

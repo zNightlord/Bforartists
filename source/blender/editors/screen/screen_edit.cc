@@ -1852,6 +1852,9 @@ void ED_screen_animation_timer(bContext *C, int redraws, int sync, int enable)
     screen->animtimer = WM_event_timer_add(wm, win, TIMER0, (1.0 / FPS));
 
     sad->region = CTX_wm_region(C);
+    sad->scene = scene;
+    sad->view_layer = CTX_data_view_layer(C);
+
     sad->sfra = scene->r.cfra;
     /* Make sure that were are inside the scene or preview frame range. */
     CLAMP(scene->r.cfra, PSFRA, PEFRA);

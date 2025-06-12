@@ -26,6 +26,7 @@
 #include "BLF_api.hh"
 
 #include "BKE_global.hh"
+#include "BKE_layer.hh"
 #include "BKE_lib_query.hh"
 #include "BKE_lib_remap.hh"
 #include "BKE_screen.hh"
@@ -353,6 +354,17 @@ static int /*eContextResult*/ sequencer_context(const bContext *C,
     }
     else {
       CTX_data_id_pointer_set(result, &scene->id);
+    }
+    return CTX_RESULT_OK;
+  }
+  if (CTX_data_equals(member, "view_layer")) {
+    SpaceSeq *sseq = CTX_wm_space_seq(C);
+    if ((sseq != nullptr) && (sseq->pinned_scene != nullptr)) {
+      CTX_data_pointer_set(
+          result, nullptr, &RNA_ViewLayer, BKE_view_layer_default_render(sseq->pinned_scene));
+    }
+    else {
+      CTX_data_pointer_set(result, nullptr, &RNA_ViewLayer, CTX_data_view_layer(C));
     }
     return CTX_RESULT_OK;
   }
