@@ -8,16 +8,58 @@
 
 #include <cstdlib>
 
+#include "BKE_context.hh"
+
 #include "DNA_space_types.h"
 
 #include "WM_api.hh"
 #include "WM_types.hh"
 
+#include "ED_screen.hh"
 #include "ED_sequencer.hh"
 
 #include "sequencer_intern.hh"
 
 namespace blender::ed::vse {
+
+/* -------------------------------------------------------------------- */
+/** \name Pin Scene Operator
+ * \{ */
+
+static wmOperatorStatus toggle_scene_pin_exec(bContext *C, wmOperator * /*op*/)
+{
+  Scene *active_scene = WM_window_get_active_scene(CTX_wm_window(C));
+  SpaceSeq *sseq = CTX_wm_space_seq(C);
+
+  const bool toggle_pin_on = (sseq->flag & SEQ_PIN_SCENE) == 0;
+
+  if (toggle_pin_on) {
+    sseq->pinned_scene = active_scene;
+  }
+  else {
+    sseq->pinned_scene = nullptr;
+  }
+
+  sseq->flag ^= SEQ_PIN_SCENE;
+
+  ED_area_tag_redraw(CTX_wm_area(C));
+
+  return OPERATOR_FINISHED;
+}
+
+static void SEQUENCER_OT_toggle_scene_pin(wmOperatorType *ot)
+{
+  /* Identifiers. */
+  ot->name = "Toggle Scene Pin";
+  ot->description = "Pin the scene to the current sequencer editor";
+  ot->idname = "SEQUENCER_OT_toggle_scene_pin";
+
+  /* Callbacks. */
+  ot->exec = toggle_scene_pin_exec;
+  ot->poll = ED_operator_sequencer_active;
+}
+
+/** \} */
 
 /* ************************** registration **********************************/
 
@@ -135,6 +177,8 @@ void sequencer_operatortypes()
 
   /* `sequencer_channels_edit.cc` */
   WM_operatortype_append(SEQUENCER_OT_rename_channel);
+
+  WM_operatortype_append(SEQUENCER_OT_toggle_scene_pin);
 }
 
 void sequencer_keymap(wmKeyConfig *keyconf)

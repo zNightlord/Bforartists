@@ -178,6 +178,11 @@ class SEQUENCER_HT_header(Header):
         tool_settings = context.tool_settings
         sequencer_tool_settings = tool_settings.sequencer_tool_settings
 
+        row = layout.row(align=True)
+        row.template_ID(context, "scene")
+        pin_icon = 'PINNED' if st.pinned_scene else 'UNPINNED'
+        row.operator("sequencer.toggle_scene_pin", text="", icon=pin_icon, emboss=False)
+
         if st.view_type == 'PREVIEW':
             layout.prop(sequencer_tool_settings, "pivot_point", text="", icon_only=True)
 

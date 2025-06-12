@@ -6383,6 +6383,12 @@ static void rna_def_space_sequencer(BlenderRNA *brna)
                                                 (1 << RGN_TYPE_TOOLS) | (1 << RGN_TYPE_HUD) |
                                                 (1 << RGN_TYPE_CHANNELS));
 
+  /* The pinned scene to this editor. */
+  prop = RNA_def_property(srna, "pinned_scene", PROP_POINTER, PROP_NONE);
+  RNA_def_property_pointer_sdna(prop, nullptr, "pinned_scene");
+  RNA_def_property_ui_text(prop, "Pinned Scene", "");
+  RNA_def_property_flag(prop, PROP_PTR_NO_OWNERSHIP);
+
   /* view type, fairly important */
   prop = RNA_def_property(srna, "view_type", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_sdna(prop, nullptr, "view");
