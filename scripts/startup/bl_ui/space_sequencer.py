@@ -179,7 +179,9 @@ class SEQUENCER_HT_header(Header):
         sequencer_tool_settings = tool_settings.sequencer_tool_settings
 
         row = layout.row(align=True)
-        row.template_ID(context, "scene")
+        scene_owner = st if st.pinned_scene else context.window
+        scene_property = "pinned_scene" if st.pinned_scene else "scene"
+        row.template_ID(scene_owner, scene_property)
         pin_icon = 'PINNED' if st.pinned_scene else 'UNPINNED'
         row.operator("sequencer.toggle_scene_pin", text="", icon=pin_icon, emboss=False)
 
