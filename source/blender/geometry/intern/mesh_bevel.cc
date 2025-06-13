@@ -153,7 +153,7 @@ class MeshInfo {
   };
 
  private:
-  IndexMaskMemory memory_;
+  index_mask::IndexMaskMemory memory_;
   Array<int> vert_to_edge_offsets_;
   Array<int> vert_to_edge_indices_;
   Array<int> edge_to_face_map_offsets_;
@@ -434,6 +434,11 @@ class BevelState {
   OffsetIndices<int> newface_faces_face() const
   {
     return newface_faces_face_;
+  }
+
+  Span<int> newface_faces_face_offsets() const
+  {
+    return newface_faces_face_offsets_;
   }
 
   /* The following are indexed by a newcorner index, 0 to newcorners_num - 1. */
@@ -4581,7 +4586,8 @@ void BevelState::build_face_meshes()
             pos = pat.next_boundary_vert(pos, params.segments, 0);
           }
           nverts[newc] = bevvert_newverts_[bv][pos_prev];
-          nedges[newc] = pat.boundary_edge_from_vert(nverts[newc], bevvert_newverts_[bv][0], bevvert_newedges_[bv][0]);
+          nedges[newc] = pat.boundary_edge_from_vert(
+              nverts[newc], bevvert_newverts_[bv][0], bevvert_newedges_[bv][0]);
           newc++;
           if (pos_prev != pos) {
             int p = pos_prev;
@@ -4589,7 +4595,8 @@ void BevelState::build_face_meshes()
               p = pat.next_boundary_vert(p, -1, 0);
               const int newv = bevvert_newverts_[bv][p];
               nverts[newc] = newv;
-              const int newe = pat.boundary_edge_from_vert(newv, bevvert_newverts_[bv][0], bevvert_newedges_[bv][0]);
+              const int newe = pat.boundary_edge_from_vert(
+                  newv, bevvert_newverts_[bv][0], bevvert_newedges_[bv][0]);
               nedges[newc] = newe;
               newc++;
             } while (p != pos);
@@ -4618,18 +4625,17 @@ static int count_bevface_corners(const BevelState &bs)
 {
   const OffsetIndices faces = bs.mesh_info.mesh.faces();
   return threading::parallel_reduce(
-                                    IndexRange(bs.bevfaces_num),
-                                    10'000,
-                                    0,
-                                    [&](const IndexRange range, int sum) {
-                                      for (const int i : range) {
-                                        const int f = bs.bevface_mesh_faces()[i];
-                                        sum += faces[f].size();
-                                      }
-                                      return sum;
-                                    },
-                                    [](const int a, const int b) { return a + b; }
-                                  );
+      IndexRange(bs.bevfaces_num),
+      10'000,
+      0,
+      [&](const IndexRange range, int sum) {
+        for (const int i : range) {
+          const int f = bs.bevface_mesh_faces()[i];
+          sum += faces[f].size();
+        }
+        return sum;
+      },
+      [](const int a, const int b) { return a + b; });
 }
 
 static void remap_verts(const OffsetIndices<int> src_faces,
@@ -4641,10 +4647,9 @@ static void remap_verts(const OffsetIndices<int> src_faces,
                         const Span<int2> src_edges,
                         const Span<int> src_corner_verts,
                         MutableSpan<int2> dst_edges,
-                        MutableSpan<int> dst_corner_verts)
+                        MutableSpan<int> dst_corner_verts,
+                        Span<int> map)
 {
-  Array<int> map(src_verts_num);
-  index_mask::build_reverse_map<int>(vert_mask, map);
   threading::parallel_invoke(
       vert_mask.size() > 1024,
       [&]() {
@@ -4670,10 +4675,9 @@ static void remap_edges(const OffsetIndices<int> src_faces,
                         const IndexMask &edge_mask,
                         const IndexMask &face_mask,
                         const Span<int> src_corner_edges,
-                        MutableSpan<int> dst_corner_edges)
+                        MutableSpan<int> dst_corner_edges,
+                        Span<int> map)
 {
-  Array<int> map(src_edges_num);
-  index_mask::build_reverse_map<int>(edge_mask, map);
   face_mask.foreach_index(GrainSize(512), [&](const int64_t src_i, const int64_t dst_i) {
     const IndexRange src_face = src_faces[src_i];
     const IndexRange dst_face = dst_faces[dst_i];
@@ -4708,7 +4712,8 @@ static void gather_vert_attributes(const Mesh &mesh_src,
 }
 
 /** Assemble the result Mesh. */
-static std::optional<Mesh *> build_mesh(const BevelState &bs, const bke::AttributeFilter &attribute_filter)
+static std::optional<Mesh *> build_mesh(const BevelState &bs,
+                                        const bke::AttributeFilter &attribute_filter)
 {
   const Mesh &src_mesh = bs.mesh_info.mesh;
   const int src_survive_nverts = src_mesh.verts_num - bs.bevverts_num;
@@ -4719,25 +4724,22 @@ static std::optional<Mesh *> build_mesh(const BevelState &bs, const bke::Attribu
   const int result_nedges = src_survive_nedges + bs.newedges_num;
   const int result_nfaces = src_survive_nfaces + bs.newfaces_num;
   const int result_ncorners = src_survive_ncorners + bs.newcorners_num;
-  fmt::println("build_mesh({},{},{},{})", result_nverts, result_nedges, result_nfaces, result_ncorners);
   IndexMaskMemory memory;
-  IndexMask src_survive_verts = bs.bevverts_mask().complement(IndexMask(src_mesh.verts_num), memory);
+  IndexMask src_survive_verts = bs.bevverts_mask().complement(IndexMask(src_mesh.verts_num),
+                                                              memory);
   Array<int> src_vert_map(src_mesh.verts_num);
   index_mask::build_reverse_map(src_survive_verts, src_vert_map.as_mutable_span());
-  print_span(src_vert_map.as_span(), "src_vert_map");
-  IndexMask src_survive_edges = bs.bevedges_mask().complement(IndexMask(src_mesh.edges_num), memory);
+  IndexMask src_survive_edges = bs.bevedges_mask().complement(IndexMask(src_mesh.edges_num),
+                                                              memory);
   Array<int> src_edge_map(src_mesh.edges_num);
   index_mask::build_reverse_map(src_survive_edges, src_edge_map.as_mutable_span());
-  print_span(src_edge_map.as_span(), "src_edge_map");
-  IndexMask src_survive_faces = bs.bevfaces_mask().complement(IndexMask(src_mesh.faces_num), memory);
+  IndexMask src_survive_faces = bs.bevfaces_mask().complement(IndexMask(src_mesh.faces_num),
+                                                              memory);
   Array<int> src_face_map(src_mesh.faces_num);
   index_mask::build_reverse_map(src_survive_faces, src_face_map.as_mutable_span());
-  print_span(src_face_map.as_span(), "src_face_map");
 
-  /*
-  Mesh *dst_mesh = bke::mesh_new_no_attributes(result_nverts, result_nedges, result_nfaces, result_ncorners);
-   */
-  Mesh *dst_mesh = bke::mesh_new_no_attributes(src_survive_verts.size(), src_survive_edges.size(), src_survive_faces.size(), 0);
+  Mesh *dst_mesh = bke::mesh_new_no_attributes(
+      result_nverts, result_nedges, result_nfaces, result_ncorners);
   BKE_mesh_copy_parameters_for_eval(dst_mesh, &src_mesh);
   bke::MutableAttributeAccessor dst_attributes = dst_mesh->attributes_for_write();
   dst_attributes.add<int2>(".edge_verts", bke::AttrDomain::Edge, bke::AttributeInitConstruct());
@@ -4750,14 +4752,14 @@ static std::optional<Mesh *> build_mesh(const BevelState &bs, const bke::Attribu
   const bke::AttributeAccessor src_attributes = src_mesh.attributes();
   const OffsetIndices<int> dst_faces = offset_indices::gather_selected_offsets(
       src_faces, src_survive_faces, dst_mesh->face_offsets_for_write());
-  dst_mesh->corners_num = dst_faces.total_size();
+  ;
   dst_attributes.add<int>(".corner_vert", bke::AttrDomain::Corner, bke::AttributeInitConstruct());
   dst_attributes.add<int>(".corner_edge", bke::AttrDomain::Corner, bke::AttributeInitConstruct());
   MutableSpan<int> dst_corner_verts = dst_mesh->corner_verts_for_write();
   MutableSpan<int> dst_corner_edges = dst_mesh->corner_edges_for_write();
 
   threading::parallel_invoke(
-                             src_survive_verts.size() > 1024,
+      src_survive_verts.size() > 1024,
       [&]() {
         remap_verts(src_faces,
                     dst_faces,
@@ -4768,7 +4770,8 @@ static std::optional<Mesh *> build_mesh(const BevelState &bs, const bke::Attribu
                     src_edges,
                     src_corner_verts,
                     dst_edges,
-                    dst_corner_verts);
+                    dst_corner_verts,
+                    src_vert_map);
       },
       [&]() {
         remap_edges(src_faces,
@@ -4777,7 +4780,8 @@ static std::optional<Mesh *> build_mesh(const BevelState &bs, const bke::Attribu
                     src_survive_edges,
                     src_survive_faces,
                     src_corner_edges,
-                    dst_corner_edges);
+                    dst_corner_edges,
+                    src_edge_map);
       },
       [&]() {
         gather_vert_attributes(src_mesh, attribute_filter, src_survive_verts, *dst_mesh);
@@ -4805,6 +4809,55 @@ static std::optional<Mesh *> build_mesh(const BevelState &bs, const bke::Attribu
             src_survive_faces,
             dst_attributes);
       });
+
+  auto mixed_vert_map = [&](const int v) {
+    if (v < 0) {
+      return src_vert_map[-(v + 1)];
+    }
+    else {
+      return src_survive_nverts + v;
+    }
+  };
+  auto mixed_edge_map = [&](const int e) {
+    if (e < 0) {
+      return src_edge_map[-(e + 1)];
+    }
+    else {
+      return src_survive_nedges + e;
+    }
+  };
+  auto new_vert_map = [&](const int nv) { return src_survive_nverts + nv; };
+  auto new_edge_map = [&](const int ne) { return src_survive_nedges + ne; };
+  auto new_face_map = [&](const int nf) { return src_survive_nfaces + nf; };
+
+  /* TODO: move the following out into functions and parallelize.  */
+  MutableSpan<float3> dst_positions = dst_mesh->vert_positions_for_write();
+  Span<float3> new_positions = bs.newvert_positions();
+  for (const int nv : IndexRange(bs.newverts_num)) {
+    dst_positions[new_vert_map(nv)] = new_positions[nv];
+  }
+  for (const int ne : IndexRange(bs.newedges_num)) {
+    const int emapped = new_edge_map(ne);
+    int2 vertpair = bs.newedge_vertpairs()[ne];
+    dst_edges[emapped][0] = mixed_vert_map(vertpair[0]);
+    dst_edges[emapped][1] = mixed_vert_map(vertpair[1]);
+  }
+  MutableSpan<int> dst_offset_indices = dst_mesh->face_offsets_for_write();
+  const Span<int> new_face_offsets = bs.newface_faces_face_offsets();
+  const int new_offset = dst_offset_indices[src_survive_nfaces];
+  for (const int nf : IndexRange(bs.newfaces_num + 1)) {
+    int fmapped = new_face_map(nf);
+    dst_offset_indices[fmapped] = new_face_offsets[nf] + new_offset;
+  }
+  for (const int nf : IndexRange(bs.newfaces_num)) {
+    int fmapped = new_face_map(nf);
+    const IndexRange new_face = bs.newface_faces_face()[nf];
+    const IndexRange dst_face = dst_faces[fmapped];
+    for (const int i : dst_face.index_range()) {
+      dst_corner_verts[dst_face[i]] = mixed_vert_map(bs.newcorner_verts()[new_face[i]]);
+      dst_corner_edges[dst_face[i]] = mixed_edge_map(bs.newcorner_edges()[new_face[i]]);
+    }
+  }
 
   return dst_mesh;
 }
