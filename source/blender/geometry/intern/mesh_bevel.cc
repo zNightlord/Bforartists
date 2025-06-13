@@ -12,6 +12,7 @@
 
 #include "BLI_array.hh"
 #include "BLI_index_mask.hh"
+#include "BLI_listbase.h"
 #include "BLI_math_base.h"
 #include "BLI_math_base.hh"
 #include "BLI_math_geom.h"
@@ -25,7 +26,9 @@
 #include "BLI_task.hh"
 #include "BLI_vector.hh"
 
+#include "BKE_attribute.hh"
 #include "BKE_curveprofile.h"
+#include "BKE_deform.hh"
 #include "BKE_mesh.hh"
 #include "BKE_mesh_mapping.hh"
 
@@ -4369,6 +4372,7 @@ void BevelState::determine_needed_new_elements()
   newedge_vertpairs_ = Array<int2>(newedges_num);
   newcorner_verts_ = Array<int>(total_corners, -1);
   newcorner_edges_ = Array<int>(total_corners, -1);
+  this->newcorners_num = total_corners;
 
   /* Now set up corners for new faces. */
   newface_faces_face_offsets_ = Array<int>(newfaces_num + 1);
@@ -4610,10 +4614,205 @@ void BevelState::build_face_meshes()
   });
 }
 
+static int count_bevface_corners(const BevelState &bs)
+{
+  const OffsetIndices faces = bs.mesh_info.mesh.faces();
+  return threading::parallel_reduce(
+                                    IndexRange(bs.bevfaces_num),
+                                    10'000,
+                                    0,
+                                    [&](const IndexRange range, int sum) {
+                                      for (const int i : range) {
+                                        const int f = bs.bevface_mesh_faces()[i];
+                                        sum += faces[f].size();
+                                      }
+                                      return sum;
+                                    },
+                                    [](const int a, const int b) { return a + b; }
+                                  );
+}
+
+static void remap_verts(const OffsetIndices<int> src_faces,
+                        const OffsetIndices<int> dst_faces,
+                        const int src_verts_num,
+                        const IndexMask &vert_mask,
+                        const IndexMask &edge_mask,
+                        const IndexMask &face_mask,
+                        const Span<int2> src_edges,
+                        const Span<int> src_corner_verts,
+                        MutableSpan<int2> dst_edges,
+                        MutableSpan<int> dst_corner_verts)
+{
+  Array<int> map(src_verts_num);
+  index_mask::build_reverse_map<int>(vert_mask, map);
+  threading::parallel_invoke(
+      vert_mask.size() > 1024,
+      [&]() {
+        face_mask.foreach_index(GrainSize(512), [&](const int64_t src_i, const int64_t dst_i) {
+          const IndexRange src_face = src_faces[src_i];
+          const IndexRange dst_face = dst_faces[dst_i];
+          for (const int i : src_face.index_range()) {
+            dst_corner_verts[dst_face[i]] = map[src_corner_verts[src_face[i]]];
+          }
+        });
+      },
+      [&]() {
+        edge_mask.foreach_index(GrainSize(512), [&](const int64_t src_i, const int64_t dst_i) {
+          dst_edges[dst_i][0] = map[src_edges[src_i][0]];
+          dst_edges[dst_i][1] = map[src_edges[src_i][1]];
+        });
+      });
+}
+
+static void remap_edges(const OffsetIndices<int> src_faces,
+                        const OffsetIndices<int> dst_faces,
+                        const int src_edges_num,
+                        const IndexMask &edge_mask,
+                        const IndexMask &face_mask,
+                        const Span<int> src_corner_edges,
+                        MutableSpan<int> dst_corner_edges)
+{
+  Array<int> map(src_edges_num);
+  index_mask::build_reverse_map<int>(edge_mask, map);
+  face_mask.foreach_index(GrainSize(512), [&](const int64_t src_i, const int64_t dst_i) {
+    const IndexRange src_face = src_faces[src_i];
+    const IndexRange dst_face = dst_faces[dst_i];
+    for (const int i : src_face.index_range()) {
+      dst_corner_edges[dst_face[i]] = map[src_corner_edges[src_face[i]]];
+    }
+  });
+}
+
+static void gather_vert_attributes(const Mesh &mesh_src,
+                                   const bke::AttributeFilter &attribute_filter,
+                                   const IndexMask &vert_mask,
+                                   Mesh &mesh_dst)
+{
+  Set<std::string> vertex_group_names;
+  LISTBASE_FOREACH (bDeformGroup *, group, &mesh_src.vertex_group_names) {
+    vertex_group_names.add(group->name);
+  }
+
+  const Span<MDeformVert> src = mesh_src.deform_verts();
+  if (!vertex_group_names.is_empty() && !src.is_empty()) {
+    MutableSpan<MDeformVert> dst = mesh_dst.deform_verts_for_write();
+    bke::gather_deform_verts(src, vert_mask, dst);
+  }
+
+  bke::gather_attributes(mesh_src.attributes(),
+                         bke::AttrDomain::Point,
+                         bke::AttrDomain::Point,
+                         bke::attribute_filter_with_skip_ref(attribute_filter, vertex_group_names),
+                         vert_mask,
+                         mesh_dst.attributes_for_write());
+}
+
+/** Assemble the result Mesh. */
+static std::optional<Mesh *> build_mesh(const BevelState &bs, const bke::AttributeFilter &attribute_filter)
+{
+  const Mesh &src_mesh = bs.mesh_info.mesh;
+  const int src_survive_nverts = src_mesh.verts_num - bs.bevverts_num;
+  const int src_survive_nedges = src_mesh.edges_num - bs.bevedges_num;
+  const int src_survive_nfaces = src_mesh.faces_num - bs.bevfaces_num;
+  const int src_survive_ncorners = src_mesh.corners_num - count_bevface_corners(bs);
+  const int result_nverts = src_survive_nverts + bs.newverts_num;
+  const int result_nedges = src_survive_nedges + bs.newedges_num;
+  const int result_nfaces = src_survive_nfaces + bs.newfaces_num;
+  const int result_ncorners = src_survive_ncorners + bs.newcorners_num;
+  fmt::println("build_mesh({},{},{},{})", result_nverts, result_nedges, result_nfaces, result_ncorners);
+  IndexMaskMemory memory;
+  IndexMask src_survive_verts = bs.bevverts_mask().complement(IndexMask(src_mesh.verts_num), memory);
+  Array<int> src_vert_map(src_mesh.verts_num);
+  index_mask::build_reverse_map(src_survive_verts, src_vert_map.as_mutable_span());
+  print_span(src_vert_map.as_span(), "src_vert_map");
+  IndexMask src_survive_edges = bs.bevedges_mask().complement(IndexMask(src_mesh.edges_num), memory);
+  Array<int> src_edge_map(src_mesh.edges_num);
+  index_mask::build_reverse_map(src_survive_edges, src_edge_map.as_mutable_span());
+  print_span(src_edge_map.as_span(), "src_edge_map");
+  IndexMask src_survive_faces = bs.bevfaces_mask().complement(IndexMask(src_mesh.faces_num), memory);
+  Array<int> src_face_map(src_mesh.faces_num);
+  index_mask::build_reverse_map(src_survive_faces, src_face_map.as_mutable_span());
+  print_span(src_face_map.as_span(), "src_face_map");
+
+  /*
+  Mesh *dst_mesh = bke::mesh_new_no_attributes(result_nverts, result_nedges, result_nfaces, result_ncorners);
+   */
+  Mesh *dst_mesh = bke::mesh_new_no_attributes(src_survive_verts.size(), src_survive_edges.size(), src_survive_faces.size(), 0);
+  BKE_mesh_copy_parameters_for_eval(dst_mesh, &src_mesh);
+  bke::MutableAttributeAccessor dst_attributes = dst_mesh->attributes_for_write();
+  dst_attributes.add<int2>(".edge_verts", bke::AttrDomain::Edge, bke::AttributeInitConstruct());
+  MutableSpan<int2> dst_edges = dst_mesh->edges_for_write();
+
+  const Span<int2> src_edges = src_mesh.edges();
+  const OffsetIndices src_faces = src_mesh.faces();
+  const Span<int> src_corner_verts = src_mesh.corner_verts();
+  const Span<int> src_corner_edges = src_mesh.corner_edges();
+  const bke::AttributeAccessor src_attributes = src_mesh.attributes();
+  const OffsetIndices<int> dst_faces = offset_indices::gather_selected_offsets(
+      src_faces, src_survive_faces, dst_mesh->face_offsets_for_write());
+  dst_mesh->corners_num = dst_faces.total_size();
+  dst_attributes.add<int>(".corner_vert", bke::AttrDomain::Corner, bke::AttributeInitConstruct());
+  dst_attributes.add<int>(".corner_edge", bke::AttrDomain::Corner, bke::AttributeInitConstruct());
+  MutableSpan<int> dst_corner_verts = dst_mesh->corner_verts_for_write();
+  MutableSpan<int> dst_corner_edges = dst_mesh->corner_edges_for_write();
+
+  threading::parallel_invoke(
+                             src_survive_verts.size() > 1024,
+      [&]() {
+        remap_verts(src_faces,
+                    dst_faces,
+                    src_mesh.verts_num,
+                    src_survive_verts,
+                    src_survive_edges,
+                    src_survive_faces,
+                    src_edges,
+                    src_corner_verts,
+                    dst_edges,
+                    dst_corner_verts);
+      },
+      [&]() {
+        remap_edges(src_faces,
+                    dst_faces,
+                    src_edges.size(),
+                    src_survive_edges,
+                    src_survive_faces,
+                    src_corner_edges,
+                    dst_corner_edges);
+      },
+      [&]() {
+        gather_vert_attributes(src_mesh, attribute_filter, src_survive_verts, *dst_mesh);
+        bke::gather_attributes(
+            src_attributes,
+            bke::AttrDomain::Edge,
+            bke::AttrDomain::Edge,
+            bke::attribute_filter_with_skip_ref(attribute_filter, {".edge_verts"}),
+            src_survive_edges,
+            dst_attributes);
+        bke::gather_attributes(src_attributes,
+                               bke::AttrDomain::Face,
+                               bke::AttrDomain::Face,
+                               attribute_filter,
+                               src_survive_faces,
+                               dst_attributes);
+        bke::gather_attributes_group_to_group(
+            src_attributes,
+            bke::AttrDomain::Corner,
+            bke::AttrDomain::Corner,
+            bke::attribute_filter_with_skip_ref(attribute_filter,
+                                                {".corner_edge", ".corner_vert"}),
+            src_faces,
+            dst_faces,
+            src_survive_faces,
+            dst_attributes);
+      });
+
+  return dst_mesh;
+}
+
 std::optional<Mesh *> mesh_bevel(const Mesh &src_mesh,
                                  const IndexMask &selection,
                                  const BevelParameters &params,
-                                 const bke::AttributeFilter & /*attribute_filter*/)
+                                 const bke::AttributeFilter &attribute_filter)
 {
   if (params.offset <= 0) {
     return std::nullopt;
@@ -4621,6 +4820,9 @@ std::optional<Mesh *> mesh_bevel(const Mesh &src_mesh,
   std::cout << "\n\nBEVEL, offset = " << params.offset << "\n\n";
 
   BevelState state(src_mesh, selection, params);
+  if (state.bevverts_num == 0 && state.bevedges_num == 0 && state.bevfaces_num == 0) {
+    return std::nullopt;
+  }
   state.initialize_profile_data();
   state.order_bevedges();
   state.set_bevedge_widths();
@@ -4628,8 +4830,8 @@ std::optional<Mesh *> mesh_bevel(const Mesh &src_mesh,
   state.build_vertex_meshes();
   state.build_edge_meshes();
   state.build_face_meshes();
-  dump_bevel_state(state, "after build_face_meshes");
-  return std::nullopt;
+  // dump_bevel_state(state, "after build_face_meshes");
+  return build_mesh(state, attribute_filter);
 }
 
 }  // namespace blender::geometry
