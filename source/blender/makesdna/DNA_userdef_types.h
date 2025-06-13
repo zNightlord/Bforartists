@@ -806,7 +806,7 @@ typedef enum eUserpref_UI_Flag2 {
 
 /** #UserDef.gpu_flag */
 typedef enum eUserpref_GPU_Flag {
-  USER_GPU_FLAG_NO_DEPT_PICK = (1 << 0), /* Unused. To be removed. */
+  USER_GPU_FLAG_UNUSED_0 = (1 << 0), /* Unused. To be removed. */
   USER_GPU_FLAG_NO_EDIT_MODE_SMOOTH_WIRE = (1 << 1),
   USER_GPU_FLAG_OVERLAY_SMOOTH_WIRE = (1 << 2),
   USER_GPU_FLAG_SUBDIVISION_EVALUATION = (1 << 3),
@@ -1125,7 +1125,7 @@ typedef enum eUserpref_SeqProxySetup {
 } eUserpref_SeqProxySetup;
 
 typedef enum eUserpref_SeqEditorFlags {
-  USER_SEQ_ED_SIMPLE_TWEAKING = (1 << 0),
+  USER_SEQ_ED_UNUSED_0 = (1 << 0), /* Dirty. */
   USER_SEQ_ED_CONNECT_STRIPS_BY_DEFAULT = (1 << 1),
 } eUserpref_SeqEditorFlags;
 
