@@ -198,6 +198,7 @@ class SEQUENCER_HT_header(Header):
         sub.popover(panel="SEQUENCER_PT_snapping")
         if st.view_type in {'SEQUENCER', 'SEQUENCER_PREVIEW'}:
             layout.popover(panel="SEQUENCER_PT_playhead_snapping")
+        layout.prop(st, "use_scene_time_sync", text="", icon='SCENE_DATA', icon_only=True)
         layout.separator_spacer()
 
         if st.view_type in {'PREVIEW', 'SEQUENCER_PREVIEW'}:
