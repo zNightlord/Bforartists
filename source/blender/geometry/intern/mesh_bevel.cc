@@ -105,18 +105,11 @@ class MeshPattern {
    */
   int next_boundary_vert(const int v, const int ccw_delta, const int first_v) const;
 
-  /** Return the number of positions, inclusive, going from position \ firstpos to position \a
-   * lastpos when going clockwise around the outer boundary of the pattern. */
-  int count_boundary_verts_clockwise(const int firstpos, const int lsstpos) const;
-
   /** Assuming \a v is a vert on the outer boundary, return the edge that leaves \a v in the ccw
    * direction around the boundary.
    * Assume \a v is offset by \a first_v, and return an edge offset by \a first_e.
    */
   int boundary_edge_from_vert(const int v, const int first_v, const int first_e) const;
-
-  /** Like #boundary_edge_from_vert but for the edge entering \a v.*/
-  int boundary_edge_to_vert(const int v, const int first_v, const int first_E) const;
 
   std::pair<Array<int, 20>, Array<int, 20>> boundary_vert_and_edges(const int firstpos,
                                                                     const int lastpos,
@@ -3291,40 +3284,6 @@ int MeshPattern::next_boundary_vert(const int v, const int ccw_delta, const int 
   return ans + first_v;
 }
 
-int MeshPattern::count_boundary_verts_clockwise(const int firstpos, const int lastpos) const
-{
-  int ans;
-  const int v_num = this->num_elements()[0];
-  switch (kind) {
-    case MeshKind::Line:
-      if (firstpos >= lastpos) {
-        ans = firstpos - lastpos + 1;
-      }
-      else {
-        ans = lastpos - firstpos + 1;
-      }
-      break;
-    case MeshKind::TerminalPoly:
-    case MeshKind::TriFan:
-      ans = (firstpos - lastpos + v_num) % v_num;
-      break;
-    case MeshKind::Adj: {
-      const int ring = adj::v_num_rings(num_segs) - 1;
-      const int ring_len = adj::v_ringlen(ring, num_anchors, num_segs);
-      ans = (firstpos - lastpos + ring_len) % ring_len;
-      break;
-    }
-    case MeshKind::None:
-      ans = 1;
-      break;
-    case MeshKind::Cutoff:
-      /* TODO */
-      ans = -1;
-      BLI_assert(false);
-  }
-  return ans;
-}
-
 /** Assuming \a v is a vert on the outer boundary, return the edge that leaves \a v in the ccw
  * direction around the boundary. Return -1 if there is no such edge.
  * Assume \a v is offset from 0 by \a first_v, and return a similarly offset answer.
@@ -3352,45 +3311,6 @@ int MeshPattern::boundary_edge_from_vert(const int v, const int first_v, const i
       const int v_start = adj::v_ringstart(v_ring, num_anchors, num_segs);
       const int e_start = adj::e_ringstart(e_ring, num_anchors, num_segs);
       ans = e_start + (pat_v - v_start);
-      break;
-    }
-    case MeshKind::Cutoff:
-      /* TODO */
-      ans = 0;
-      BLI_assert(false);
-  }
-  return ans + first_e;
-}
-
-/** Like #boundary_edge_from_vert but for the edge entering \a v.*/
-int MeshPattern::boundary_edge_to_vert(const int v, const int first_v, const int first_e) const
-{
-  int ans;
-  const int pat_v = v - first_v;
-  const int4 vefc = this->num_elements();
-  const int e_num = vefc[1];
-  switch (this->kind) {
-    case MeshKind::None:
-      ans = -1;
-      break;
-    case MeshKind::Line:
-    case MeshKind::TerminalPoly:
-      ans = pat_v - 1;
-      break;
-    case MeshKind::TriFan:
-      ans = (pat_v > 0 && pat_v <= num_segs) ? pat_v - 1 :
-                                               (pat_v == num_segs + 1 ? e_num - 1 : num_segs);
-      break;
-    case MeshKind::Adj: {
-      const int ring = adj::v_num_rings(num_segs) - 1;
-      const int v_start = adj::v_ringstart(ring, num_anchors, num_segs);
-      const int e_start = adj::e_ringstart(ring, num_anchors, num_segs);
-      if (pat_v > 0) {
-        ans = e_start + (pat_v - v_start);
-      }
-      else {
-        ans = e_start + adj::v_ringlen(ring, num_anchors, num_segs) - 1;
-      }
       break;
     }
     case MeshKind::Cutoff:
@@ -4054,11 +3974,10 @@ static void build_internal_adj(const int bv,
   adj::AdjVerts adj2(na, 2);
   float3 center(0.0f, 0.0f, 0.0f);
   for (const int a : IndexRange(na)) {
-    float3 pos = bv_newvert_positions[pat.anchor_vert(a)];
-    adj2.mutable_outer_ring_vert(a, 0) = bv_newvert_positions[pat.anchor_vert(a)];
-    pos = profile::get_profile_point(profiles[a], 1, 2);
+    float3 a_pos = bv_newvert_positions[pat.anchor_vert(a)];
+    adj2.mutable_outer_ring_vert(a, 0) = a_pos;
     adj2.mutable_outer_ring_vert(a, 1) = profile::get_profile_point(profiles[a], 1, 2);
-    center = center + adj2.vert(0, a, 0);
+    center = center + a_pos;
   }
   center = center / float(na);
 
