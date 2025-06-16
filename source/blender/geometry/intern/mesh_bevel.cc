@@ -105,11 +105,24 @@ class MeshPattern {
    */
   int next_boundary_vert(const int v, const int ccw_delta, const int first_v) const;
 
+  /** Return the number of positions, inclusive, going from position \ firstpos to position \a lastpos
+   * when going clockwise around the outer boundary of the pattern. */
+  int count_boundary_verts_clockwise(const int firstpos, const int lsstpos) const;
+
   /** Assuming \a v is a vert on the outer boundary, return the edge that leaves \a v in the ccw
    * direction around the boundary.
    * Assume \a v is offset by \a first_v, and return an edge offset by \a first_e.
    */
   int boundary_edge_from_vert(const int v, const int first_v, const int first_e) const;
+
+  /** Like #boundary_edge_from_vert but for the edge entering \a v.*/
+  int boundary_edge_to_vert(const int v, const int first_v, const int first_E) const;
+
+
+  std::pair<Array<int, 20>, Array<int, 20>> boundary_vert_and_edges(const int firstpos,
+                                                    const int lastpos,
+                                                    const int first_v,
+                                                    const int first_e) const;
 };
 
 /** Helper for keeping track of angle kind. */
@@ -2139,6 +2152,7 @@ static inline int odd(int i)
   return i % 2 == 1;
 }
 
+/** Odd vertex rings start with ring 0 = the innermost polygon. */
 static inline int v_ringstart_odd(int r, int nv)
 {
   return nv * r * r;
@@ -2154,6 +2168,7 @@ static inline int v_num_rings_odd(int ns)
   return (ns - 1) / 2 + 1;
 }
 
+/** Even vertex ring 0 is the single vertex in the center. */
 static inline int v_ringstart_even(int r, int nv)
 {
   return r == 0 ? 0 : 1 + nv * (r - 1) * r;
@@ -2189,6 +2204,7 @@ static int v_total_verts(int nv, int ns)
   return v_ringstart(v_num_rings(ns), nv, ns);
 }
 
+/** Odd face ring 0 is the polygon in the center. */
 static inline int f_ringstart_odd(int r, int nv)
 {
   return v_ringstart_even(r, nv);
@@ -3049,6 +3065,114 @@ std::pair<Array<int, 20>, Array<int, 20>> MeshPattern::face_verts_and_edges(
   return ans;
 }
 
+/** Return arrays of the verts and edges for pattern boundary, going clockwise
+ * from \a firtpos to \a lastpos, and where \a first_v and \a first_e give the
+ * offsets to add to pattern space indices.
+ * Note that in the current use of this function, the last element of the returned
+ * edges array will not be used, as the final edge of a face reconstruction leaves
+ * the bevvert rather than continuing around it.
+ */
+std::pair<Array<int, 20>, Array<int, 20>> MeshPattern::boundary_vert_and_edges(const int firstpos,
+                                                  const int lastpos,
+                                                  const int first_v,
+                                                  const int first_e) const
+{
+  int4 vefc_nums = this->num_elements();
+  const int v_num = vefc_nums[0];
+  std::pair<Array<int, 20>, Array<int, 20>> ans;
+  Array<int, 20> &ans_verts = ans.first;
+  Array<int, 20> &ans_edges = ans.second;
+  switch (this->kind) {
+    case MeshKind::TerminalPoly: {
+      const int ans_size = (firstpos - lastpos + 1 + v_num) % v_num;
+      ans_verts.reinitialize(ans_size);
+      ans_edges.reinitialize(ans_size);
+      int pos = firstpos;
+      for (const int i : IndexRange(ans_size)) {
+        ans_verts[i] = pos;
+        const int pos_prev = (pos - 1 + v_num) % v_num;
+        ans_edges[i] = pos_prev;
+        pos = pos_prev;
+      }
+      break;
+    }
+    case MeshKind::Adj: {
+      const int ring = adj::v_num_rings(num_segs) - 1;
+      const int ring_len = adj::v_ringlen(ring, num_anchors, num_segs);
+      const int ans_size = (firstpos - lastpos + 1 + ring_len) % ring_len;
+      const int ring_first_v = adj::v_ringstart(ring, num_anchors, num_segs);
+      const int ring_first_e = adj::e_ringstart(ring, num_anchors, num_segs);
+      ans_verts.reinitialize(ans_size);
+      ans_edges.reinitialize(ans_size);
+      int pos = firstpos;
+      for (const int i : IndexRange(ans_size)) {
+        ans_verts[i] = pos;
+        ans_edges[i] = pos > 0 ? ring_first_e + (pos - ring_first_v) - 1 : ring_first_e + ring_len - 1;
+        pos = (pos -1 + ring_len) % ring_len;
+      }
+      break;
+    }
+    case MeshKind::TriFan: {
+      const int ans_size = (firstpos - lastpos + 1 + v_num) % v_num;
+      const int num_e = vefc_nums[1];
+      ans_verts.reinitialize(ans_size);
+      ans_edges.reinitialize(ans_size);
+      int pos = firstpos;
+      for (const int i : IndexRange(ans_size)) {
+        ans_verts[i] = pos;
+        ans_edges[i] = (pos == 0) ? num_segs : (pos == v_num -1 ? num_e - 1 : pos - 1);
+        pos = (pos - 1 + v_num) % v_num;
+      }
+      break;
+    }
+    case MeshKind::Line: {
+      /* Since there are two sides: we are going up or down depending
+       * on which of firstpos and lastpos is bigger. Wraparound is not possible.
+       */
+      int diff = firstpos - lastpos;
+      if (diff >= 0) {
+        const int ans_size = diff + 1;
+        ans_verts.reinitialize(ans_size);
+        ans_edges.reinitialize(ans_size);
+        int pos = firstpos;
+        for (const int i : IndexRange(ans_size)) {
+          ans_verts[i] = pos;
+          /* Note: ok if the last number is -1, since it won't be used. */
+          ans_edges[i] = pos - 1;
+          pos--;
+        }
+      }
+      else {
+        const int ans_size = -diff + 1;
+        ans_verts.reinitialize(ans_size);
+        ans_edges.reinitialize(ans_size);
+        int pos = firstpos;
+        for (const int i : IndexRange(ans_size)) {
+          ans_verts[i] = pos;
+          ans_edges[i] = pos;
+          pos++;
+        }
+      }
+      break;
+    }
+    case MeshKind::Cutoff:
+      /* TODO */
+      BLI_assert(false);
+      break;
+    case MeshKind::None:
+      BLI_assert_unreachable();
+      break;
+  }
+  for (int &v : ans_verts) {
+    v = v + first_v;
+  }
+  for (int &e : ans_edges) {
+    e = e + first_e;
+  }
+  return ans;
+}
+
+
 /** Return a 4-tuple with the number of vertices, edges, faces, corners needed for edge mesh. */
 static int4 bevedge_num_elements(const int be, const BevelState &bs)
 {
@@ -3138,9 +3262,11 @@ int MeshPattern::next_boundary_vert(const int v, const int ccw_delta, const int 
       break;
     case MeshKind::Line:
       ans = pat_v + ccw_delta;
-      if (ans < 0 || ans >= v_num) {
-        /* Wrapping allows traversing both sides of the line. */
-        ans = (ans + v_num) % v_num;
+      if (ccw_delta < 0 & ans < 0) {
+        /* We want the "prev" of position 0 to be the prev of position v_num.
+         * This allows us to traverse both sides of the line.
+         */
+        ans += v_num - 1;
       }
       break;
     case MeshKind::TerminalPoly:
@@ -3160,6 +3286,40 @@ int MeshPattern::next_boundary_vert(const int v, const int ccw_delta, const int 
       BLI_assert(false);
   }
   return ans + first_v;
+}
+
+int MeshPattern::count_boundary_verts_clockwise(const int firstpos, const int lastpos) const
+{
+  int ans;
+  const int v_num = this->num_elements()[0];
+  switch (kind) {
+    case MeshKind::Line:
+      if (firstpos >= lastpos) {
+        ans = firstpos - lastpos + 1;
+      }
+      else {
+        ans = lastpos - firstpos + 1;
+      }
+      break;
+    case MeshKind::TerminalPoly:
+    case MeshKind::TriFan:
+      ans = (firstpos - lastpos + v_num) % v_num;
+      break;
+    case MeshKind::Adj: {
+      const int ring = adj::v_num_rings(num_segs) - 1;
+      const int ring_len = adj::v_ringlen(ring, num_anchors, num_segs);
+      ans = (firstpos - lastpos + ring_len) % ring_len;
+      break;
+    }
+    case MeshKind::None:
+      ans = 1;
+      break;
+    case MeshKind::Cutoff:
+      /* TODO */
+      ans = -1;
+      BLI_assert(false);
+  }
+  return ans;
 }
 
 /** Assuming \a v is a vert on the outer boundary, return the edge that leaves \a v in the ccw
@@ -3192,6 +3352,45 @@ int MeshPattern::boundary_edge_from_vert(const int v, const int first_v, const i
     }
     case MeshKind::Cutoff:
       /* TODO */
+      ans = 0;
+      BLI_assert(false);
+  }
+  return ans + first_e;
+}
+
+/** Like #boundary_edge_from_vert but for the edge entering \a v.*/
+int MeshPattern::boundary_edge_to_vert(const int v, const int first_v, const int first_e) const
+{
+  int ans;
+  const int pat_v = v - first_v;
+  const int4 vefc = this->num_elements();
+  const int e_num = vefc[1];
+  switch (this->kind) {
+    case MeshKind::None:
+      ans = -1;
+      break;
+    case MeshKind::Line:
+    case MeshKind::TerminalPoly:
+      ans = pat_v - 1;
+      break;
+    case MeshKind::TriFan:
+      ans = (pat_v > 0 && pat_v <= num_segs) ? pat_v - 1 : (pat_v == num_segs + 1 ? e_num - 1 : num_segs);
+      break;
+    case MeshKind::Adj: {
+      const int ring = adj::v_num_rings(num_segs) - 1;
+      const int v_start = adj::v_ringstart(ring, num_anchors, num_segs);
+      const int e_start = adj::e_ringstart(ring, num_anchors, num_segs);
+      if (pat_v > 0) {
+        ans = e_start + (pat_v - v_start);
+      }
+      else {
+        ans = e_start + adj::v_ringlen(ring, num_anchors, num_segs) - 1;
+      }
+      break;
+    }
+    case MeshKind::Cutoff:
+      /* TODO */
+      ans = 0;
       BLI_assert(false);
   }
   return ans + first_e;
@@ -4562,6 +4761,7 @@ void BevelState::build_face_meshes()
   const Mesh &mesh = mesh_info.mesh;
   threading::parallel_for(IndexRange(bevfaces_num), 10'000, [&](IndexRange range) {
     for (const int bf : range) {
+      fmt::println("rebuild bf {}", bf);
       const int newf = bevface_newfaces_[bf][0];
       const int meshf = bevface_mesh_faces_[bf];
       IndexRange newcorners = newface_faces_face_[newf];
@@ -4593,21 +4793,13 @@ void BevelState::build_face_meshes()
             /* Get to the other side of beveled edge. */
             pos = pat.next_boundary_vert(pos, params.segments, 0);
           }
-          nverts[newc] = bevvert_newverts_[bv][pos_prev];
-          nedges[newc] = pat.boundary_edge_from_vert(
-              nverts[newc], bevvert_newverts_[bv][0], bevvert_newedges_[bv][0]);
-          newc++;
-          if (pos_prev != pos) {
-            int p = pos_prev;
-            do {
-              p = pat.next_boundary_vert(p, -1, 0);
-              const int newv = bevvert_newverts_[bv][p];
-              nverts[newc] = newv;
-              const int newe = pat.boundary_edge_from_vert(
-                  newv, bevvert_newverts_[bv][0], bevvert_newedges_[bv][0]);
-              nedges[newc] = newe;
-              newc++;
-            } while (p != pos);
+          const int first_v = bevvert_newverts_[bv][0];
+          const int first_e = bevvert_newedges_[bv][0];
+          auto [verts, edges] = pat.boundary_vert_and_edges(pos_prev, pos, first_v, first_e);
+          for (const int c : verts.index_range()) {
+            nverts[newc] = verts[c];
+            nedges[newc] = edges[c];
+            newc++;
           }
         }
         /* The last edge actually needs to be the one for be. */
@@ -4624,6 +4816,8 @@ void BevelState::build_face_meshes()
         }
         be_prev = be;
       }
+      print_span(nverts.as_span(), "nverts");
+      print_span(nedges.as_span(), "nedges");
       build_newface(newf, nverts, nedges);
     }
   });
@@ -4836,7 +5030,7 @@ std::optional<Mesh *> mesh_bevel(const Mesh &src_mesh,
   if (params.offset <= 0) {
     return std::nullopt;
   }
-  std::cout << "\n\nBEVEL, offset = " << params.offset << "\n\n";
+  fmt::println("\n\nBEVEL, offset={}, segments={}\n", params.offset, params.segments);
 
   BevelState state(src_mesh, selection, params);
   if (state.bevverts_num == 0 && state.bevedges_num == 0 && state.bevfaces_num == 0) {
@@ -4849,7 +5043,7 @@ std::optional<Mesh *> mesh_bevel(const Mesh &src_mesh,
   state.build_vertex_meshes();
   state.build_edge_meshes();
   state.build_face_meshes();
-  // dump_bevel_state(state, "after build_face_meshes");
+  dump_bevel_state(state, "after build_face_meshes");
   return build_mesh(state, attribute_filter);
 }
 

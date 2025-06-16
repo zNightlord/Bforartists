@@ -26,7 +26,6 @@ static void node_declare(NodeDeclarationBuilder &b)
 
 static void node_layout(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
 {
-  layout->prop(ptr, "offset", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   layout->prop(ptr, "affect", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 }
 
