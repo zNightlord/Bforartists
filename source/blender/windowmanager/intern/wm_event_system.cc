@@ -5610,8 +5610,8 @@ static void attach_ndof_data(wmEvent *event, const GHOST_TEventNDOFMotionData *g
 {
   wmNDOFMotionData *data = MEM_callocN<wmNDOFMotionData>("Custom-data NDOF");
 
-  const float ts = U.ndof_sensitivity;
-  const float rs = U.ndof_orbit_sensitivity;
+  const float ts = U.ndof_translation_sensitivity;
+  const float rs = U.ndof_rotation_sensitivity;
 
   mul_v3_v3fl(data->tvec, &ghost->tx, ts);
   mul_v3_v3fl(data->rvec, &ghost->rx, rs);
@@ -5623,7 +5623,7 @@ static void attach_ndof_data(wmEvent *event, const GHOST_TEventNDOFMotionData *g
     data->tvec[2] = t;
   }
 
-  data->dt = ghost->dt;
+  data->time_delta = ghost->dt;
 
   data->progress = (wmProgress)ghost->progress;
 
