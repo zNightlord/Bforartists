@@ -5520,7 +5520,7 @@ static wmOperatorStatus screen_animation_step_invoke(bContext *C,
   ViewLayer *view_layer = sad->view_layer;
   Depsgraph *depsgraph = BKE_scene_get_depsgraph(scene, view_layer);
   Scene *scene_eval = (depsgraph != nullptr) ? DEG_get_evaluated_scene(depsgraph) : nullptr;
-  
+
   wmWindowManager *wm = CTX_wm_manager(C);
   int sync;
   double time;
@@ -5644,6 +5644,10 @@ static wmOperatorStatus screen_animation_step_invoke(bContext *C,
     scene->r.cfra = sad->nextfra;
     sad->flag &= ~ANIMPLAY_FLAG_USE_NEXT_FRAME;
     sad->flag |= ANIMPLAY_FLAG_JUMPED;
+  }
+
+  if (blender::ed::vse::is_scene_sync_needed(*C)) {
+    blender::ed::vse::sync_active_scene_and_time_with_scene_strip(*C);
   }
 
   if (sad->flag & ANIMPLAY_FLAG_JUMPED) {

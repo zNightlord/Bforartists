@@ -549,6 +549,10 @@ static void change_frame_apply(bContext *C, wmOperator *op, const bool always_up
   }
   FRAMENUMBER_MIN_CLAMP(scene->r.cfra);
 
+  if (blender::ed::vse::is_scene_sync_needed(*C)) {
+    blender::ed::vse::sync_active_scene_and_time_with_scene_strip(*C);
+  }
+
   /* do updates */
   const bool frame_changed = (old_frame != scene->r.cfra) || (old_subframe != scene->r.subframe);
   if (frame_changed || always_update) {

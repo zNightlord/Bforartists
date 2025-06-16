@@ -292,6 +292,100 @@ static bool sequencer_swap_inputs_poll(bContext *C)
 /** \} */
 
 /* -------------------------------------------------------------------- */
+/** \name Scene syncing with current scene strip
+ * \{ */
+
+bool is_scene_sync_needed(const bContext &C)
+{
+  SpaceSeq *sseq = CTX_wm_space_seq(&C);
+  if (!sseq || !sseq->pinned_scene || (sseq->flag & SEQ_SYNC_SCENE_TIME) == 0) {
+    return false;
+  }
+  return true;
+}
+
+void sync_active_scene_and_time_with_scene_strip(bContext &C)
+{
+  using namespace blender;
+  SpaceSeq *sseq = CTX_wm_space_seq(&C);
+  if (!sseq || !sseq->pinned_scene || (sseq->flag & SEQ_SYNC_SCENE_TIME) == 0) {
+    return;
+  }
+  Scene *sequence_scene = sseq->pinned_scene;
+
+  wmWindow *win = CTX_wm_window(&C);
+  Scene *active_scene = WM_window_get_active_scene(win);
+  if (sequence_scene == active_scene) {
+    return;
+  }
+
+  Editing *ed = seq::editing_get(sequence_scene);
+  ListBase *seqbase = seq::active_seqbase_get(ed);
+  ListBase *channels = seq::channels_displayed_get(ed);
+  VectorSet<Strip *> render_strips = seq::query_rendered_strips(
+      sequence_scene, channels, seqbase, sequence_scene->r.cfra, 0);
+  Vector<Strip *> strips = render_strips.extract_vector();
+  /* Sort strips by channel. */
+  std::sort(strips.begin(), strips.end(), [](const Strip *a, const Strip *b) {
+    return a->channel > b->channel;
+  });
+  const Strip *scene_strip = [&]() -> const Strip * {
+    for (const Strip *strip : strips) {
+      if (strip->type == STRIP_TYPE_SCENE) {
+        return strip;
+      }
+    }
+    return nullptr;
+  }();
+  if (!scene_strip || !scene_strip->scene) {
+    /* No scene strip with scene found. */
+    return;
+  }
+  if (active_scene != scene_strip->scene) {
+    /* Sync active scene in window. */
+    Main *bmain = CTX_data_main(&C);
+    WM_window_set_active_scene(bmain, &C, win, scene_strip->scene);
+    active_scene = scene_strip->scene;
+  }
+  if (scene_strip->scene_camera) {
+    /* Sync camera in any 3D view that uses camera view. */
+    PointerRNA camera_ptr = RNA_id_pointer_create(&scene_strip->scene_camera->id);
+    bScreen *screen = WM_window_get_active_screen(win);
+    LISTBASE_FOREACH (ScrArea *, area, &screen->areabase) {
+      LISTBASE_FOREACH (SpaceLink *, sl, &area->spacedata) {
+        if (sl->spacetype != SPACE_VIEW3D) {
+          continue;
+        }
+        View3D *view3d = reinterpret_cast<View3D *>(sl);
+        if (view3d->camera == scene_strip->scene_camera) {
+          continue;
+        }
+        PointerRNA view3d_ptr = RNA_pointer_create_discrete(&screen->id, &RNA_SpaceView3D, view3d);
+        RNA_pointer_set(&view3d_ptr, "camera", camera_ptr);
+      }
+    }
+  }
+
+  /* Compute the scene time based on the scene strip. */
+  const float frame_index = seq::give_frame_index(
+      sequence_scene, scene_strip, sequence_scene->r.cfra);
+  if (active_scene->r.flag & SCER_SHOW_SUBFRAME) {
+    active_scene->r.cfra = int(frame_index);
+    active_scene->r.subframe = frame_index - int(frame_index);
+  }
+  else {
+    active_scene->r.cfra = round_fl_to_int(frame_index);
+    active_scene->r.subframe = 0.0f;
+  }
+  FRAMENUMBER_MIN_CLAMP(active_scene->r.cfra);
+
+  DEG_id_tag_update(&active_scene->id, ID_RECALC_FRAME_CHANGE);
+  WM_event_add_notifier(&C, NC_SCENE | ND_FRAME, active_scene);
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
 /** \name Remove Gaps Operator
  * \{ */
 
