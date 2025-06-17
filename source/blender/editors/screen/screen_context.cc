@@ -1140,8 +1140,9 @@ static eContextResult screen_ctx_ui_list(const bContext *C, bContextDataResult *
 
 static eContextResult screen_ctx_active_strip(const bContext *C, bContextDataResult *result)
 {
-  wmWindow *win = CTX_wm_window(C);
-  Scene *scene = WM_window_get_active_scene(win);
+  SpaceSeq *sseq = CTX_wm_space_seq(C);
+  Scene *scene = ((sseq != nullptr) && (sseq->pinned_scene != nullptr)) ? sseq->pinned_scene :
+                                                                          CTX_data_scene(C);
   Strip *strip = blender::seq::select_active_get(scene);
   if (strip) {
     CTX_data_pointer_set(result, &scene->id, &RNA_Strip, strip);
@@ -1151,8 +1152,9 @@ static eContextResult screen_ctx_active_strip(const bContext *C, bContextDataRes
 }
 static eContextResult screen_ctx_strips(const bContext *C, bContextDataResult *result)
 {
-  wmWindow *win = CTX_wm_window(C);
-  Scene *scene = WM_window_get_active_scene(win);
+  SpaceSeq *sseq = CTX_wm_space_seq(C);
+  Scene *scene = ((sseq != nullptr) && (sseq->pinned_scene != nullptr)) ? sseq->pinned_scene :
+                                                                          CTX_data_scene(C);
   Editing *ed = blender::seq::editing_get(scene);
   if (ed) {
     LISTBASE_FOREACH (Strip *, strip, ed->seqbasep) {
@@ -1165,8 +1167,9 @@ static eContextResult screen_ctx_strips(const bContext *C, bContextDataResult *r
 }
 static eContextResult screen_ctx_selected_strips(const bContext *C, bContextDataResult *result)
 {
-  wmWindow *win = CTX_wm_window(C);
-  Scene *scene = WM_window_get_active_scene(win);
+  SpaceSeq *sseq = CTX_wm_space_seq(C);
+  Scene *scene = ((sseq != nullptr) && (sseq->pinned_scene != nullptr)) ? sseq->pinned_scene :
+                                                                          CTX_data_scene(C);
   Editing *ed = blender::seq::editing_get(scene);
   if (ed) {
     LISTBASE_FOREACH (Strip *, strip, ed->seqbasep) {
@@ -1182,8 +1185,9 @@ static eContextResult screen_ctx_selected_strips(const bContext *C, bContextData
 static eContextResult screen_ctx_selected_editable_strips(const bContext *C,
                                                           bContextDataResult *result)
 {
-  wmWindow *win = CTX_wm_window(C);
-  Scene *scene = WM_window_get_active_scene(win);
+  SpaceSeq *sseq = CTX_wm_space_seq(C);
+  Scene *scene = ((sseq != nullptr) && (sseq->pinned_scene != nullptr)) ? sseq->pinned_scene :
+                                                                          CTX_data_scene(C);
   Editing *ed = blender::seq::editing_get(scene);
   if (ed == nullptr) {
     return CTX_RESULT_NO_DATA;
