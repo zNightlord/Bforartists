@@ -734,7 +734,8 @@ void wm_event_do_notifiers(bContext *C)
        *    Option 1): Make this check here more complicated. Basically loop through all the vse
        *               editors and filter out the ones that don't match.
        *    Option 2): Set the reference to null when calling the notifier function.
-       *    Option 3): Add a different notifier category for the VSE. Then we don't end up in this check.
+       *    Option 3): Add a different notifier category for the VSE. Then we don't end up in this
+       * check.
        */
       // else if (note->category == NC_SCENE && note->reference && note->reference != scene) {
       //   /* Pass. */
