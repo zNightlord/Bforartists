@@ -308,18 +308,15 @@ void sync_active_scene_and_time_with_scene_strip(bContext &C)
 {
   using namespace blender;
   SpaceSeq *sseq = CTX_wm_space_seq(&C);
-  if (!sseq || !sseq->pinned_scene || (sseq->flag & SEQ_SYNC_SCENE_TIME) == 0) {
-    return;
-  }
   Scene *sequence_scene = sseq->pinned_scene;
 
   wmWindow *win = CTX_wm_window(&C);
   Scene *active_scene = WM_window_get_active_scene(win);
-  if (sequence_scene == active_scene) {
-    return;
-  }
 
   Editing *ed = seq::editing_get(sequence_scene);
+  if (!ed) {
+    return;
+  }
   ListBase *seqbase = seq::active_seqbase_get(ed);
   ListBase *channels = seq::channels_displayed_get(ed);
   VectorSet<Strip *> render_strips = seq::query_rendered_strips(
@@ -338,7 +335,9 @@ void sync_active_scene_and_time_with_scene_strip(bContext &C)
     return nullptr;
   }();
   if (!scene_strip || !scene_strip->scene) {
-    /* No scene strip with scene found. */
+    /* No scene strip with scene found. Switch to pinned scene. */
+    Main *bmain = CTX_data_main(&C);
+    WM_window_set_active_scene(bmain, &C, win, sequence_scene);
     return;
   }
   if (active_scene != scene_strip->scene) {
