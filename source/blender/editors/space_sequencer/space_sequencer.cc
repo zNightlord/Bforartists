@@ -1065,7 +1065,8 @@ static void sequencer_foreach_id(SpaceLink *space_link, LibraryForeachIDData *da
 {
   SpaceSeq *sseq = reinterpret_cast<SpaceSeq *>(space_link);
   BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, sseq->gpd, IDWALK_CB_USER | IDWALK_CB_DIRECT_WEAK_LINK);
-  BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, sseq->pinned_scene, IDWALK_CB_USER | IDWALK_CB_DIRECT_WEAK_LINK);
+  BKE_LIB_FOREACHID_PROCESS_IDSUPER(
+      data, sseq->pinned_scene, IDWALK_CB_USER | IDWALK_CB_DIRECT_WEAK_LINK);
 }
 
 /* ************************************* */
