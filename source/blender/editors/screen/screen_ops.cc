@@ -3240,6 +3240,10 @@ static wmOperatorStatus frame_offset_exec(bContext *C, wmOperator *op)
 
   ED_areas_do_frame_follow(C, false);
 
+  if (blender::ed::vse::is_scene_sync_needed(*C)) {
+    blender::ed::vse::sync_active_scene_and_time_with_scene_strip(*C);
+  }
+
   DEG_id_tag_update(&scene->id, ID_RECALC_FRAME_CHANGE);
 
   WM_event_add_notifier(C, NC_SCENE | ND_FRAME, scene);
@@ -3300,6 +3304,10 @@ static wmOperatorStatus frame_jump_exec(bContext *C, wmOperator *op)
     }
 
     ED_areas_do_frame_follow(C, true);
+
+    if (blender::ed::vse::is_scene_sync_needed(*C)) {
+      blender::ed::vse::sync_active_scene_and_time_with_scene_strip(*C);
+    }
 
     DEG_id_tag_update(&scene->id, ID_RECALC_FRAME_CHANGE);
 
@@ -3544,6 +3552,10 @@ static wmOperatorStatus marker_jump_exec(bContext *C, wmOperator *op)
   scene->r.cfra = closest;
 
   ED_areas_do_frame_follow(C, true);
+
+  if (blender::ed::vse::is_scene_sync_needed(*C)) {
+    blender::ed::vse::sync_active_scene_and_time_with_scene_strip(*C);
+  }
 
   DEG_id_tag_update(&scene->id, ID_RECALC_FRAME_CHANGE);
 
