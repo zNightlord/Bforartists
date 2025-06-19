@@ -37,6 +37,7 @@
 #include "BKE_fcurve.hh"
 #include "BKE_global.hh"
 #include "BKE_icons.h"
+#include "BKE_layer.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_library.hh"
 #include "BKE_main.hh"
@@ -5821,6 +5822,24 @@ wmOperatorStatus ED_screen_animation_play(bContext *C, int sync, int mode)
     ED_screen_animation_timer(C, 0, 0, 0);
     ED_scene_fps_average_clear(scene);
     BKE_sound_stop_scene(scene_eval);
+
+    /* Stop sound for all pinned scenes in VSE editors. */
+    wmWindow *win = CTX_wm_window(C);
+    ED_screen_areas_iter (win, screen, area) {
+      LISTBASE_FOREACH (SpaceLink *, space, &area->spacedata) {
+        if (space->spacetype == SPACE_SEQ) {
+          SpaceSeq *seq = reinterpret_cast<SpaceSeq *>(space);
+          if (seq->pinned_scene == nullptr) {
+            continue;
+          }
+          Scene *pinned_scene = seq->pinned_scene;
+          Depsgraph *depsgraph = BKE_scene_ensure_depsgraph(
+              CTX_data_main(C), pinned_scene, BKE_view_layer_default_render(pinned_scene));
+          Scene *pinned_scene_eval = DEG_get_evaluated_scene(depsgraph);
+          BKE_sound_stop_scene(pinned_scene_eval);
+        }
+      }
+    }
 
     BKE_callback_exec_id_depsgraph(
         bmain, &scene->id, depsgraph, BKE_CB_EVT_ANIMATION_PLAYBACK_POST);
