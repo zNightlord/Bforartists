@@ -365,6 +365,7 @@ class NODE_MT_geometry_node_GEO_INPUT_SCENE(Menu):
             node_add_menu.add_node_type_with_outputs(
                 context, layout, "GeometryNodeViewportTransform", [
                     "Projection", "View", "Is Orthographic"])
+        node_add_menu.add_node_type(layout, "GeometryNodeInputArmature")
         node_add_menu.draw_assets_for_catalog(layout, "Input/Scene")
 
 

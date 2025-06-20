@@ -45,6 +45,7 @@ void GeometryNodesEvalDependencies::add_object(Object *object,
   deps.geometry |= object_deps.geometry;
   deps.transform |= object_deps.transform;
   deps.camera_parameters |= object_deps.camera_parameters;
+  deps.pose |= object_deps.pose;
 }
 
 void GeometryNodesEvalDependencies::merge(const GeometryNodesEvalDependencies &other)
@@ -124,6 +125,14 @@ static void add_eval_dependencies_from_node_data(const bNodeTree &tree,
       continue;
     }
     deps.add_generic_id(node->id);
+  }
+  for (const bNode *node : tree.nodes_by_type("GeometryNodeInputArmature")) {
+    if (node->is_muted()) {
+      continue;
+    }
+    GeometryNodesEvalDependencies::ObjectDependencyInfo armature_deps;
+    armature_deps.pose = true;
+    deps.add_object(reinterpret_cast<Object *>(node->id), armature_deps);
   }
 }
 

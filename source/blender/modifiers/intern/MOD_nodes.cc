@@ -159,6 +159,9 @@ static void add_object_relation(
       DEG_add_object_relation(ctx->node, &object, DEG_OB_COMP_PARAMETERS, "Nodes Modifier");
     }
   }
+  if (info.pose && object.type == OB_ARMATURE) {
+    DEG_add_object_relation(ctx->node, &object, DEG_OB_COMP_EVAL_POSE, "Armature Modifier");
+  }
 }
 
 static void update_depsgraph(ModifierData *md, const ModifierUpdateDepsgraphContext *ctx)
