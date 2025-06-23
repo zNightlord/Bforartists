@@ -298,7 +298,15 @@ static bool sequencer_swap_inputs_poll(bContext *C)
 bool is_scene_sync_needed(const bContext &C)
 {
   SpaceSeq *sseq = CTX_wm_space_seq(&C);
-  if (!sseq || !sseq->pinned_scene || (sseq->flag & SEQ_SYNC_SCENE_TIME) == 0) {
+  if (!sseq || !sseq->scene) {
+    return false;
+  }
+  if ((sseq->flag & SEQ_PIN_SCENE) == 0) {
+    /* Can't change the active scene if there is no pinned scene to editor. */
+    return false;
+  }
+  if ((sseq->flag & SEQ_SYNC_SCENE_TIME) == 0) {
+    /* Scene time sync is disabled. */
     return false;
   }
   return true;
@@ -308,7 +316,8 @@ void sync_active_scene_and_time_with_scene_strip(bContext &C)
 {
   using namespace blender;
   SpaceSeq *sseq = CTX_wm_space_seq(&C);
-  Scene *sequence_scene = sseq->pinned_scene;
+  Scene *sequence_scene = sseq->scene;
+  BLI_assert(sequence_scene);
 
   wmWindow *win = CTX_wm_window(&C);
   Scene *active_scene = WM_window_get_active_scene(win);
