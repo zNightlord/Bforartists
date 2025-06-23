@@ -355,9 +355,15 @@ void sync_active_scene_and_time_with_scene_strip(bContext &C)
     WM_window_set_active_scene(bmain, &C, win, scene_strip->scene);
     active_scene = scene_strip->scene;
   }
-  if (scene_strip->scene_camera) {
+  Object *camera = [&]() -> Object * {
+    if (scene_strip->scene_camera) {
+      return scene_strip->scene_camera;
+    }
+    return scene_strip->scene->camera;
+  }();
+  if (camera) {
     /* Sync camera in any 3D view that uses camera view. */
-    PointerRNA camera_ptr = RNA_id_pointer_create(&scene_strip->scene_camera->id);
+    PointerRNA camera_ptr = RNA_id_pointer_create(&camera->id);
     bScreen *screen = WM_window_get_active_screen(win);
     LISTBASE_FOREACH (ScrArea *, area, &screen->areabase) {
       LISTBASE_FOREACH (SpaceLink *, sl, &area->spacedata) {
@@ -365,7 +371,7 @@ void sync_active_scene_and_time_with_scene_strip(bContext &C)
           continue;
         }
         View3D *view3d = reinterpret_cast<View3D *>(sl);
-        if (view3d->camera == scene_strip->scene_camera) {
+        if (view3d->camera == camera) {
           continue;
         }
         PointerRNA view3d_ptr = RNA_pointer_create_discrete(&screen->id, &RNA_SpaceView3D, view3d);
