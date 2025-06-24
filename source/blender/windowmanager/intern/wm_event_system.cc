@@ -40,6 +40,7 @@
 #include "BKE_customdata.hh"
 #include "BKE_global.hh"
 #include "BKE_idprop.hh"
+#include "BKE_layer.hh"
 #include "BKE_lib_remap.hh"
 #include "BKE_library.hh"
 #include "BKE_main.hh"
@@ -510,6 +511,28 @@ void wm_event_do_depsgraph(bContext *C, bool is_after_open_file)
     Scene *scene = WM_window_get_active_scene(win);
     ViewLayer *view_layer = WM_window_get_active_view_layer(win);
     Main *bmain = CTX_data_main(C);
+
+    /* Find pinned scenes in this window and ensure they have a depsgraph. */
+    bScreen *screen = WM_window_get_active_screen(win);
+    ED_screen_areas_iter (win, screen, area) {
+      LISTBASE_FOREACH (SpaceLink *, space, &area->spacedata) {
+        if (space->spacetype != SPACE_SEQ) {
+          continue;
+        }
+        SpaceSeq *seq = reinterpret_cast<SpaceSeq *>(space);
+        if (!seq->scene || seq->scene == scene) {
+          continue;
+        }
+        ViewLayer *seq_view_layer = BKE_view_layer_default_render(seq->scene);
+        Depsgraph *depsgraph = BKE_scene_ensure_depsgraph(bmain, seq->scene, seq_view_layer);
+        if (is_after_open_file) {
+          DEG_graph_relations_update(depsgraph);
+          DEG_tag_on_visible_update(bmain, depsgraph);
+        }
+        BKE_scene_graph_update_tagged(depsgraph, bmain);
+      }
+    }
+
     /* Copied to set's in #scene_update_tagged_recursive(). */
     scene->customdata_mask = win_combine_v3d_datamask;
     /* XXX, hack so operators can enforce data-masks #26482, GPU render. */
