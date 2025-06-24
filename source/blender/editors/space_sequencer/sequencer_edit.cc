@@ -63,6 +63,7 @@
 #include "ED_numinput.hh"
 #include "ED_scene.hh"
 #include "ED_screen.hh"
+#include "ED_screen_types.hh"
 #include "ED_sequencer.hh"
 
 #include "UI_interface_layout.hh"
@@ -312,12 +313,33 @@ bool is_scene_sync_needed(const bContext &C)
   return true;
 }
 
+static Scene *get_sequence_scene_from_context(const bContext &C)
+{
+  wmWindowManager *wm = CTX_wm_manager(&C);
+  bScreen *screen = ED_screen_animation_playing(wm);
+  if (screen && screen->animtimer) {
+    wmTimer *wt = screen->animtimer;
+    ScreenAnimData *sad = static_cast<ScreenAnimData *>(wt->customdata);
+    if (sad->do_scene_syncing) {
+      return sad->scene;
+    }
+    /* If we're playing a scene that's not a sequence scene, don't try and sync. */
+    return nullptr;
+  }
+  SpaceSeq *sseq = CTX_wm_space_seq(&C);
+  if (!sseq || !is_scene_sync_needed(C)) {
+    return nullptr;
+  }
+  return sseq->scene;
+}
+
 void sync_active_scene_and_time_with_scene_strip(bContext &C)
 {
   using namespace blender;
-  SpaceSeq *sseq = CTX_wm_space_seq(&C);
-  Scene *sequence_scene = sseq->scene;
-  BLI_assert(sequence_scene);
+  Scene *sequence_scene = get_sequence_scene_from_context(C);
+  if (!sequence_scene) {
+    return;
+  }
 
   wmWindow *win = CTX_wm_window(&C);
   Scene *active_scene = WM_window_get_active_scene(win);
@@ -394,7 +416,8 @@ void sync_active_scene_and_time_with_scene_strip(bContext &C)
   FRAMENUMBER_MIN_CLAMP(active_scene->r.cfra);
 
   DEG_id_tag_update(&active_scene->id, ID_RECALC_FRAME_CHANGE);
-  WM_event_add_notifier(&C, NC_SCENE | ND_FRAME, active_scene);
+  WM_event_add_notifier(&C, NC_WINDOW, nullptr);
+  WM_event_add_notifier(&C, NC_SCENE | ND_FRAME, nullptr);
 }
 
 /** \} */

@@ -40,6 +40,7 @@
 #include "ED_node.hh"
 #include "ED_screen.hh"
 #include "ED_screen_types.hh"
+#include "ED_sequencer.hh"
 
 #include "RNA_access.hh"
 #include "RNA_enum_types.hh"
@@ -1865,6 +1866,8 @@ void ED_screen_animation_timer(bContext *C, int redraws, int sync, int enable)
     sad->region = CTX_wm_region(C);
     sad->scene = scene;
     sad->view_layer = CTX_data_view_layer(C);
+
+    sad->do_scene_syncing = blender::ed::vse::is_scene_sync_needed(*C);
 
     sad->sfra = scene->r.cfra;
     /* Make sure that were are inside the scene or preview frame range. */
