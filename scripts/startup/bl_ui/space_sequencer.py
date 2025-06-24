@@ -180,7 +180,7 @@ class SEQUENCER_HT_header(Header):
         sequencer_tool_settings = tool_settings.sequencer_tool_settings
 
         row = layout.row(align=True)
-        row.template_ID(st, "scene", new="scene.new_sequencer")
+        row.template_ID(st, "scene", new="scene.new")
         row.prop(st, "pin", text="", icon_only=True, emboss=False)
 
         if st.view_type == 'PREVIEW':
