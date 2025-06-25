@@ -676,7 +676,8 @@ static eContextResult screen_ctx_active_sequence_strip(const bContext *C,
                                                        bContextDataResult *result)
 {
   WorkSpace *workspace = CTX_wm_workspace(C);
-  Scene *scene = (workspace->sequencer_scene != nullptr) ? workspace->sequencer_scene : CTX_data_scene(C);
+  Scene *scene = (workspace->sequencer_scene != nullptr) ? workspace->sequencer_scene :
+                                                           CTX_data_scene(C);
   Strip *strip = blender::seq::select_active_get(scene);
   if (strip) {
     CTX_data_pointer_set(result, &scene->id, &RNA_Strip, strip);
@@ -687,7 +688,8 @@ static eContextResult screen_ctx_active_sequence_strip(const bContext *C,
 static eContextResult screen_ctx_sequences(const bContext *C, bContextDataResult *result)
 {
   WorkSpace *workspace = CTX_wm_workspace(C);
-  Scene *scene = (workspace->sequencer_scene != nullptr) ? workspace->sequencer_scene : CTX_data_scene(C);
+  Scene *scene = (workspace->sequencer_scene != nullptr) ? workspace->sequencer_scene :
+                                                           CTX_data_scene(C);
   Editing *ed = blender::seq::editing_get(scene);
   if (ed) {
     LISTBASE_FOREACH (Strip *, strip, ed->seqbasep) {
@@ -701,7 +703,8 @@ static eContextResult screen_ctx_sequences(const bContext *C, bContextDataResult
 static eContextResult screen_ctx_selected_sequences(const bContext *C, bContextDataResult *result)
 {
   WorkSpace *workspace = CTX_wm_workspace(C);
-  Scene *scene = (workspace->sequencer_scene != nullptr) ? workspace->sequencer_scene : CTX_data_scene(C);
+  Scene *scene = (workspace->sequencer_scene != nullptr) ? workspace->sequencer_scene :
+                                                           CTX_data_scene(C);
   Editing *ed = blender::seq::editing_get(scene);
   if (ed) {
     LISTBASE_FOREACH (Strip *, strip, ed->seqbasep) {
@@ -718,7 +721,8 @@ static eContextResult screen_ctx_selected_editable_sequences(const bContext *C,
                                                              bContextDataResult *result)
 {
   WorkSpace *workspace = CTX_wm_workspace(C);
-  Scene *scene = (workspace->sequencer_scene != nullptr) ? workspace->sequencer_scene : CTX_data_scene(C);
+  Scene *scene = (workspace->sequencer_scene != nullptr) ? workspace->sequencer_scene :
+                                                           CTX_data_scene(C);
   Editing *ed = blender::seq::editing_get(scene);
   if (ed == nullptr) {
     return CTX_RESULT_NO_DATA;
@@ -1141,7 +1145,8 @@ static eContextResult screen_ctx_ui_list(const bContext *C, bContextDataResult *
 static eContextResult screen_ctx_active_strip(const bContext *C, bContextDataResult *result)
 {
   WorkSpace *workspace = CTX_wm_workspace(C);
-  Scene *scene = (workspace->sequencer_scene != nullptr) ? workspace->sequencer_scene : CTX_data_scene(C);
+  Scene *scene = (workspace->sequencer_scene != nullptr) ? workspace->sequencer_scene :
+                                                           CTX_data_scene(C);
   Strip *strip = blender::seq::select_active_get(scene);
   if (strip) {
     CTX_data_pointer_set(result, &scene->id, &RNA_Strip, strip);
@@ -1152,7 +1157,8 @@ static eContextResult screen_ctx_active_strip(const bContext *C, bContextDataRes
 static eContextResult screen_ctx_strips(const bContext *C, bContextDataResult *result)
 {
   WorkSpace *workspace = CTX_wm_workspace(C);
-  Scene *scene = (workspace->sequencer_scene != nullptr) ? workspace->sequencer_scene : CTX_data_scene(C);
+  Scene *scene = (workspace->sequencer_scene != nullptr) ? workspace->sequencer_scene :
+                                                           CTX_data_scene(C);
   Editing *ed = blender::seq::editing_get(scene);
   if (ed) {
     LISTBASE_FOREACH (Strip *, strip, ed->seqbasep) {
@@ -1166,7 +1172,8 @@ static eContextResult screen_ctx_strips(const bContext *C, bContextDataResult *r
 static eContextResult screen_ctx_selected_strips(const bContext *C, bContextDataResult *result)
 {
   WorkSpace *workspace = CTX_wm_workspace(C);
-  Scene *scene = (workspace->sequencer_scene != nullptr) ? workspace->sequencer_scene : CTX_data_scene(C);
+  Scene *scene = (workspace->sequencer_scene != nullptr) ? workspace->sequencer_scene :
+                                                           CTX_data_scene(C);
   Editing *ed = blender::seq::editing_get(scene);
   if (ed) {
     LISTBASE_FOREACH (Strip *, strip, ed->seqbasep) {
@@ -1183,7 +1190,8 @@ static eContextResult screen_ctx_selected_editable_strips(const bContext *C,
                                                           bContextDataResult *result)
 {
   WorkSpace *workspace = CTX_wm_workspace(C);
-  Scene *scene = (workspace->sequencer_scene != nullptr) ? workspace->sequencer_scene : CTX_data_scene(C);
+  Scene *scene = (workspace->sequencer_scene != nullptr) ? workspace->sequencer_scene :
+                                                           CTX_data_scene(C);
   Editing *ed = blender::seq::editing_get(scene);
   if (ed == nullptr) {
     return CTX_RESULT_NO_DATA;
