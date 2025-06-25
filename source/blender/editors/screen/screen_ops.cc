@@ -5580,7 +5580,6 @@ static wmOperatorStatus screen_animation_step_invoke(bContext *C,
   ViewLayer *view_layer = sad->view_layer;
   Depsgraph *depsgraph = BKE_scene_get_depsgraph(scene, view_layer);
   Scene *scene_eval = (depsgraph != nullptr) ? DEG_get_evaluated_scene(depsgraph) : nullptr;
-
   wmWindowManager *wm = CTX_wm_manager(C);
   int sync;
   double time;
@@ -5862,21 +5861,16 @@ wmOperatorStatus ED_screen_animation_play(bContext *C, int sync, int mode)
     ED_scene_fps_average_clear(scene);
     BKE_sound_stop_scene(scene_eval);
 
-    /* Stop sound for all pinned scenes in VSE editors. */
-    wmWindow *win = CTX_wm_window(C);
-    ED_screen_areas_iter (win, screen, area) {
-      LISTBASE_FOREACH (SpaceLink *, space, &area->spacedata) {
-        if (space->spacetype == SPACE_SEQ) {
-          SpaceSeq *seq = reinterpret_cast<SpaceSeq *>(space);
-          if (seq->scene == nullptr || seq->scene == scene) {
-            continue;
-          }
-          Depsgraph *depsgraph = BKE_scene_ensure_depsgraph(
-              CTX_data_main(C), seq->scene, BKE_view_layer_default_render(seq->scene));
-          Scene *seq_scene_eval = DEG_get_evaluated_scene(depsgraph);
-          BKE_sound_stop_scene(seq_scene_eval);
-        }
-      }
+    /* Stop sound for sequencer scene. */
+    WorkSpace *workspace = CTX_wm_workspace(C);
+    if (workspace && workspace->sequencer_scene && workspace->sequencer_scene != scene) {
+      Depsgraph *depsgraph = BKE_scene_ensure_depsgraph(
+          CTX_data_main(C),
+          workspace->sequencer_scene,
+          BKE_view_layer_default_render(workspace->sequencer_scene));
+      Scene *seq_scene_eval = DEG_get_evaluated_scene(depsgraph);
+      BKE_sound_stop_scene(seq_scene_eval);
+      WM_event_add_notifier(C, NC_SPACE | ND_SPACE_SEQUENCER, workspace->sequencer_scene);
     }
 
     BKE_callback_exec_id_depsgraph(

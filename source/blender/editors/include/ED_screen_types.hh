@@ -21,7 +21,7 @@ struct ScreenAnimData {
   /** Do not read from this, only for comparing if region exists. */
   ARegion *region;
 
-  /* Scene and the ViewLayer that is playing. */
+  /* Scene and the View Layer that is playing. */
   Scene *scene;
   ViewLayer *view_layer;
   /* For scenes that are pinned to VSE editors, account for scene syncing during playback. */

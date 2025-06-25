@@ -6386,18 +6386,6 @@ static void rna_def_space_sequencer(BlenderRNA *brna)
                                                 (1 << RGN_TYPE_UI) | (1 << RGN_TYPE_TOOLS) |
                                                 (1 << RGN_TYPE_HUD) | (1 << RGN_TYPE_CHANNELS));
 
-  /* The the scene used in this editor. */
-  prop = RNA_def_property(srna, "scene", PROP_POINTER, PROP_NONE);
-  RNA_def_property_pointer_sdna(prop, nullptr, "scene");
-  RNA_def_property_ui_text(prop, "Scene", "");
-  RNA_def_property_flag(prop, PROP_EDITABLE | PROP_NEVER_UNLINK | PROP_PTR_NO_OWNERSHIP);
-
-  prop = RNA_def_property(srna, "pin", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, nullptr, "flag", SEQ_PIN_SCENE);
-  RNA_def_property_ui_text(prop, "Pinned", "Use the pinned scene");
-  RNA_def_property_ui_icon(prop, ICON_UNPINNED, 1);
-  RNA_def_property_update(prop, NC_SPACE | ND_SPACE_SEQUENCER, nullptr);
-
   prop = RNA_def_property(srna, "use_scene_time_sync", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "flag", SEQ_SYNC_SCENE_TIME);
   RNA_def_property_ui_text(prop,

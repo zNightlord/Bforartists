@@ -15,6 +15,7 @@
 #include "DNA_node_types.h"
 #include "DNA_screen_types.h"
 #include "DNA_sequence_types.h"
+#include "DNA_workspace_types.h"
 
 #include "BLI_listbase.h"
 #include "BLI_math_numbers.hh"
@@ -1014,6 +1015,13 @@ void do_versions_after_linking_500(FileData * /*fd*/, Main *bmain)
       }
     }
     FOREACH_NODETREE_END;
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 29)) {
+    LISTBASE_FOREACH (WorkSpace *, workspace, &bmain->workspaces) {
+      /* TODO: Find better scene to assign to a workspace. */
+      workspace->sequencer_scene = static_cast<Scene *>(bmain->scenes.first);
+    }
   }
 
   /**

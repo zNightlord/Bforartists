@@ -415,7 +415,7 @@ typedef enum eSpaceSeq_Flag {
   SPACE_SEQ_DESELECT_STRIP_HANDLE = (1 << 4),
   SPACE_SEQ_FLAG_UNUSED_5 = (1 << 5),
   SEQ_USE_ALPHA = (1 << 6), /* use RGBA display mode for preview */
-  SEQ_PIN_SCENE = (1 << 10),
+  SPACE_SEQ_FLAG_UNUSED_10 = (1 << 10),
   SEQ_SHOW_MARKERS = (1 << 11), /* show markers region */
   SEQ_ZOOM_TO_FIT = (1 << 12),
   SEQ_SHOW_OVERLAY = (1 << 13),

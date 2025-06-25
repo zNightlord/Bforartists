@@ -166,6 +166,9 @@ typedef struct WorkSpace {
    * link/append. */
   struct Scene *pin_scene;
 
+  /* Scene that is used by the VSE editors in this workspace. */
+  struct Scene *sequencer_scene;
+
   char _pad[4];
 
   int object_mode;

@@ -298,12 +298,12 @@ static bool sequencer_swap_inputs_poll(bContext *C)
 
 bool is_scene_sync_needed(const bContext &C)
 {
-  SpaceSeq *sseq = CTX_wm_space_seq(&C);
-  if (!sseq || !sseq->scene) {
+  WorkSpace *workspace = CTX_wm_workspace(&C);
+  if (!workspace || !workspace->sequencer_scene) {
     return false;
   }
-  if ((sseq->flag & SEQ_PIN_SCENE) == 0) {
-    /* Can't change the active scene if there is no pinned scene to editor. */
+  SpaceSeq *sseq = CTX_wm_space_seq(&C);
+  if (!sseq) {
     return false;
   }
   if ((sseq->flag & SEQ_SYNC_SCENE_TIME) == 0) {
@@ -326,11 +326,15 @@ static Scene *get_sequence_scene_from_context(const bContext &C)
     /* If we're playing a scene that's not a sequence scene, don't try and sync. */
     return nullptr;
   }
+  WorkSpace *workspace = CTX_wm_workspace(&C);
+  if (!workspace || !workspace->sequencer_scene) {
+    return workspace->sequencer_scene;
+  }
   SpaceSeq *sseq = CTX_wm_space_seq(&C);
   if (!sseq || !is_scene_sync_needed(C)) {
     return nullptr;
   }
-  return sseq->scene;
+  return workspace->sequencer_scene;
 }
 
 void sync_active_scene_and_time_with_scene_strip(bContext &C)

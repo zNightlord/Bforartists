@@ -179,9 +179,10 @@ class SEQUENCER_HT_header(Header):
         tool_settings = context.tool_settings
         sequencer_tool_settings = tool_settings.sequencer_tool_settings
 
-        row = layout.row(align=True)
-        row.template_ID(st, "scene", new="scene.new")
-        row.prop(st, "pin", text="", icon_only=True, emboss=False)
+        if st.view_type == 'SEQUENCER':
+            row = layout.row(align=True)
+            # TODO: Use separate operator to assign new scene to workspace.
+            row.template_ID(context.workspace, "sequencer_scene", new="scene.new")
 
         if st.view_type == 'PREVIEW':
             layout.prop(sequencer_tool_settings, "pivot_point", text="", icon_only=True)

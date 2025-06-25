@@ -150,6 +150,14 @@ bool ED_scene_delete(bContext *C, Main *bmain, Scene *scene)
     }
   }
 
+  /* Update scenes used by the sequencer. */
+  LISTBASE_FOREACH (WorkSpace *, workspace, &bmain->workspaces) {
+    if (workspace->sequencer_scene == scene) {
+      workspace->sequencer_scene = scene_new;
+      WM_event_add_notifier(C, NC_WINDOW, nullptr);
+    }
+  }
+
   BKE_id_delete(bmain, scene);
 
   return true;

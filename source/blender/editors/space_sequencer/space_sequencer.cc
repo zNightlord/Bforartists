@@ -226,30 +226,12 @@ static void sequencer_free(SpaceLink *sl)
 #endif
 }
 
-static void sequencer_scene_context_update(ScrArea *area, SpaceSeq *sseq, const Scene *scene)
-{
-  if (((sseq->flag & SEQ_PIN_SCENE) != 0) && (sseq->scene != nullptr)) {
-    return;
-  }
-  sseq->scene = const_cast<Scene *>(scene);
-  ED_area_tag_redraw(area);
-}
-
 /* Space-type init callback. */
-static void sequencer_init(wmWindowManager *wm, ScrArea *area)
+static void sequencer_init(wmWindowManager * /*wm*/, ScrArea *area)
 {
   SpaceSeq *sseq = (SpaceSeq *)area->spacedata.first;
   if (sseq->runtime == nullptr) {
     sseq->runtime = MEM_new<SpaceSeq_Runtime>(__func__);
-  }
-  LISTBASE_FOREACH (wmWindow *, win, &wm->windows) {
-    Scene *scene = WM_window_get_active_scene(win);
-    bScreen *screen = WM_window_get_active_screen(win);
-    if (area ==
-        BKE_screen_find_area_from_space(screen, static_cast<SpaceLink *>(area->spacedata.first)))
-    {
-      sequencer_scene_context_update(area, sseq, scene);
-    }
   }
 }
 
@@ -325,7 +307,6 @@ static SpaceLink *sequencer_duplicate(SpaceLink *sl)
 static void sequencer_listener(const wmSpaceTypeListenerParams *params)
 {
   ScrArea *area = params->area;
-  SpaceSeq *sseq = static_cast<SpaceSeq *>(area->spacedata.first);
   const wmNotifier *wmn = params->notifier;
 
   /* Context changes. */
@@ -336,18 +317,9 @@ static void sequencer_listener(const wmSpaceTypeListenerParams *params)
         case ND_SEQUENCER:
           sequencer_scopes_tag_refresh(area);
           break;
-        case NA_REMOVED:
-        case ND_SCENEBROWSE:
-          sequencer_scene_context_update(area, sseq, params->scene);
-          break;
       }
       break;
     case NC_WINDOW:
-      if (wmn->data == ND_SPACE_SEQUENCER) {
-        sequencer_scopes_tag_refresh(area);
-      }
-      sequencer_scene_context_update(area, sseq, params->scene);
-      break;
     case NC_SPACE:
       if (wmn->data == ND_SPACE_SEQUENCER) {
         sequencer_scopes_tag_refresh(area);
@@ -375,18 +347,20 @@ static int /*eContextResult*/ sequencer_context(const bContext *C,
     return CTX_RESULT_OK;
   }
   if (CTX_data_equals(member, "scene")) {
-    SpaceSeq *sseq = CTX_wm_space_seq(C);
-    BLI_assert(sseq);
-    BLI_assert(sseq->scene);
-    CTX_data_id_pointer_set(result, &sseq->scene->id);
+    WorkSpace *workspace = CTX_wm_workspace(C);
+    BLI_assert(workspace);
+    BLI_assert(workspace->sequencer_scene);
+    CTX_data_id_pointer_set(result, &workspace->sequencer_scene->id);
     return CTX_RESULT_OK;
   }
   if (CTX_data_equals(member, "view_layer")) {
-    SpaceSeq *sseq = CTX_wm_space_seq(C);
-    BLI_assert(sseq);
-    BLI_assert(sseq->scene);
-    CTX_data_pointer_set(
-        result, nullptr, &RNA_ViewLayer, BKE_view_layer_default_render(sseq->scene));
+    WorkSpace *workspace = CTX_wm_workspace(C);
+    BLI_assert(workspace);
+    BLI_assert(workspace->sequencer_scene);
+    CTX_data_pointer_set(result,
+                         nullptr,
+                         &RNA_ViewLayer,
+                         BKE_view_layer_default_render(workspace->sequencer_scene));
     return CTX_RESULT_OK;
   }
   if (CTX_data_equals(member, "edit_mask")) {
@@ -1116,8 +1090,6 @@ static void sequencer_foreach_id(SpaceLink *space_link, LibraryForeachIDData *da
 {
   SpaceSeq *sseq = reinterpret_cast<SpaceSeq *>(space_link);
   BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, sseq->gpd, IDWALK_CB_USER | IDWALK_CB_DIRECT_WEAK_LINK);
-  BKE_LIB_FOREACHID_PROCESS_IDSUPER(
-      data, sseq->scene, IDWALK_CB_USER | IDWALK_CB_DIRECT_WEAK_LINK);
 }
 
 /* ************************************* */

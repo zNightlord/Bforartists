@@ -8,14 +8,11 @@
 
 #include <cstdlib>
 
-#include "BKE_context.hh"
-
 #include "DNA_space_types.h"
 
 #include "WM_api.hh"
 #include "WM_types.hh"
 
-#include "ED_screen.hh"
 #include "ED_sequencer.hh"
 
 #include "sequencer_intern.hh"
