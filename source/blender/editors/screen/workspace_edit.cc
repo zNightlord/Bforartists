@@ -137,6 +137,11 @@ static void workspace_change_update(WorkSpace *workspace_new,
                                     bContext *C,
                                     wmWindowManager *wm)
 {
+  /* Ensure that there is a sequencer scene on the workspace. */
+  if (workspace_new->sequencer_scene == nullptr) {
+    wmWindow *win = CTX_wm_window(C);
+    workspace_new->sequencer_scene = WM_window_get_active_scene(win);
+  }
   workspace_scene_pinning_update(workspace_new, workspace_old, C);
   /* needs to be done before changing mode! (to ensure right context) */
   UNUSED_VARS(wm);

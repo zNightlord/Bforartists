@@ -15,6 +15,7 @@
 #include "DNA_node_types.h"
 #include "DNA_screen_types.h"
 #include "DNA_sequence_types.h"
+#include "DNA_windowmanager_types.h"
 #include "DNA_workspace_types.h"
 
 #include "BLI_listbase.h"
@@ -39,6 +40,8 @@
 #include "BKE_node_runtime.hh"
 
 #include "SEQ_iterator.hh"
+
+#include "WM_api.hh"
 
 #include "readfile.hh"
 
@@ -1018,9 +1021,12 @@ void do_versions_after_linking_500(FileData * /*fd*/, Main *bmain)
   }
 
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 29)) {
-    LISTBASE_FOREACH (WorkSpace *, workspace, &bmain->workspaces) {
-      /* TODO: Find better scene to assign? */
-      workspace->sequencer_scene = static_cast<Scene *>(bmain->scenes.first);
+    LISTBASE_FOREACH (wmWindowManager *, wm, &bmain->wm) {
+      LISTBASE_FOREACH (wmWindow *, win, &wm->windows) {
+        Scene *scene = WM_window_get_active_scene(win);
+        WorkSpace *workspace = WM_window_get_active_workspace(win);
+        workspace->sequencer_scene = scene;
+      }
     }
   }
 
