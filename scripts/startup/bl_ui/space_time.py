@@ -13,7 +13,6 @@ def playback_controls(layout, context):
     screen = context.screen
     st = context.space_data
     is_graph_editor = st.type == 'GRAPH_EDITOR'
-    is_sequencer = st.type == 'SEQUENCE_EDITOR'
 
     row = layout.row(align=True)
     row.popover(
@@ -25,8 +24,6 @@ def playback_controls(layout, context):
         text="Keying",
         text_ctxt=i18n_contexts.id_windowmanager,
     )
-    if is_sequencer and st.view_type not in {'SEQUENCER_PREVIEW', 'PREVIEW'}:
-        layout.prop(st, "use_scene_time_sync", text="", icon='SCENE_DATA', icon_only=True)
 
     layout.separator_spacer()
 

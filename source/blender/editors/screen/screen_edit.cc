@@ -1867,7 +1867,7 @@ void ED_screen_animation_timer(bContext *C, int redraws, int sync, int enable)
     sad->scene = scene;
     sad->view_layer = CTX_data_view_layer(C);
 
-    sad->do_scene_syncing = blender::ed::vse::is_scene_sync_needed(*C);
+    sad->do_scene_syncing = blender::ed::vse::is_scene_sync_needed_for_playback(*C);
 
     sad->sfra = scene->r.cfra;
     /* Make sure that were are inside the scene or preview frame range. */
