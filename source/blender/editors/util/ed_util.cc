@@ -72,7 +72,7 @@ void ED_editors_init_for_undo(Main *bmain)
 
     /* Stop animation from playing.
      * TODO: There might be a way to keep the animation from playing, but sad->scene and
-     * sad->view_layer pointers are outdated and need to be updated somehow. */
+     * sad->view_layer pointers are outdated and would need to be updated somehow. */
     bScreen *animscreen = ED_screen_animation_playing(wm);
     if (animscreen && animscreen->animtimer) {
       WM_event_timer_remove(wm, win, animscreen->animtimer);

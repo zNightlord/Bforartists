@@ -166,7 +166,7 @@ typedef struct WorkSpace {
    * link/append. */
   struct Scene *pin_scene;
 
-  /* Scene that is used by the VSE editors in this workspace. */
+  /* Scene that is used by the sequence editors in this workspace. */
   struct Scene *sequencer_scene;
 
   char _pad[4];
@@ -251,6 +251,6 @@ typedef struct WorkSpaceInstanceHook {
 typedef enum eWorkSpaceFlags {
   WORKSPACE_USE_FILTER_BY_ORIGIN = (1 << 1),
   WORKSPACE_USE_PIN_SCENE = (1 << 2),
-  /* Used for syncing time between VSE scene strips and the active scene. */
+  /* Used for syncing time between sequencer scene strips and the active scene. */
   WORKSPACE_SYNC_SCENE_TIME = (1 << 3),
 } eWorkSpaceFlags;

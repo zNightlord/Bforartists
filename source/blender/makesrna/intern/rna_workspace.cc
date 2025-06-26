@@ -501,7 +501,7 @@ static void rna_def_workspace(BlenderRNA *brna)
   RNA_def_property_ui_text(prop,
                            "Sync Scene Time",
                            "Sync the active scene and time with the with the current scene strip "
-                           "under the time cursor (if there is one) in the VSE");
+                           "under the time cursor (if there is one) in the sequencer");
   RNA_def_property_flag(prop, PROP_CONTEXT_UPDATE);
   RNA_def_property_update(prop, NC_WINDOW, "rna_workspace_sync_scene_time_update");
 

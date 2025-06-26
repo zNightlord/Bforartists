@@ -1019,7 +1019,7 @@ void do_versions_after_linking_500(FileData * /*fd*/, Main *bmain)
 
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 29)) {
     LISTBASE_FOREACH (WorkSpace *, workspace, &bmain->workspaces) {
-      /* TODO: Find better scene to assign to a workspace. */
+      /* TODO: Find better scene to assign? */
       workspace->sequencer_scene = static_cast<Scene *>(bmain->scenes.first);
     }
   }
