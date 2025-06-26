@@ -24,7 +24,7 @@ struct ScreenAnimData {
   /* Scene and the View Layer that is playing. */
   Scene *scene;
   ViewLayer *view_layer;
-  /* For scenes that are pinned to VSE editors, account for scene syncing during playback. */
+  /* For sequencer scenes, account for scene syncing during playback. */
   bool do_scene_syncing;
 
   short redraws;
