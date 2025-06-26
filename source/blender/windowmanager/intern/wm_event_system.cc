@@ -746,16 +746,11 @@ void wm_event_do_notifiers(bContext *C)
       {
         /* Pass. */
       }
-      /* TODO: We need to figure out how to deal with pinned scenes in the notifiers.
-       *    Option 1): Make this check here more complicated. Basically loop through all the vse
-       *               editors and filter out the ones that don't match.
-       *    Option 2): Set the reference to null when calling the notifier function.
-       *    Option 3): Add a different notifier category for the VSE. Then we don't end up in this
-       * check.
-       */
-      // else if (note->category == NC_SCENE && note->reference && note->reference != scene) {
-      //   /* Pass. */
-      // }
+      else if (note->category == NC_SCENE && note->reference &&
+               (note->reference != scene && note->reference != workspace->sequencer_scene))
+      {
+        /* Pass. */
+      }
       else {
         /* XXX context in notifiers? */
         CTX_wm_window_set(C, win);
