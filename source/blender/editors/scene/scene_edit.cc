@@ -385,6 +385,48 @@ static void SCENE_OT_new_sequencer(wmOperatorType *ot)
 /** \} */
 
 /* -------------------------------------------------------------------- */
+/** \name New Scene Sequencer Operator
+ * \{ */
+
+static wmOperatorStatus new_sequencer_scene_exec(bContext *C, wmOperator *op)
+{
+  Main *bmain = CTX_data_main(C);
+  wmWindow *win = CTX_wm_window(C);
+  Scene *scene_old = WM_window_get_active_scene(win);
+  int type = RNA_enum_get(op->ptr, "type");
+
+  Scene *new_scene = scene_add(bmain, scene_old, eSceneCopyMethod(type));
+
+  WorkSpace *workspace = CTX_wm_workspace(C);
+  workspace->sequencer_scene = new_scene;
+
+  WM_event_add_notifier(C, NC_WINDOW, nullptr);
+  return OPERATOR_FINISHED;
+}
+
+static void SCENE_OT_new_sequencer_scene(wmOperatorType *ot)
+{
+
+  /* identifiers */
+  ot->name = "New Sequencer Scene";
+  ot->description = "Add new scene to be used by the sequencer";
+  ot->idname = "SCENE_OT_new_sequencer_scene";
+
+  /* API callbacks. */
+  ot->exec = new_sequencer_scene_exec;
+  ot->invoke = WM_menu_invoke;
+
+  /* flags */
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+
+  /* properties */
+  ot->prop = RNA_def_enum(ot->srna, "type", scene_new_items, SCE_COPY_NEW, "Type", "");
+  RNA_def_property_translation_context(ot->prop, BLT_I18NCONTEXT_ID_SCENE);
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
 /** \name Scene Delete Operator
  * \{ */
 
@@ -438,6 +480,7 @@ void ED_operatortypes_scene()
   WM_operatortype_append(SCENE_OT_new);
   WM_operatortype_append(SCENE_OT_delete);
   WM_operatortype_append(SCENE_OT_new_sequencer);
+  WM_operatortype_append(SCENE_OT_new_sequencer_scene);
 }
 
 /** \} */
