@@ -25,6 +25,9 @@ def playback_controls(layout, context):
         text_ctxt=i18n_contexts.id_windowmanager,
     )
 
+    if st.type == 'SEQUENCE_EDITOR' and st.view_type == 'SEQUENCER':
+        layout.prop(context.workspace, "use_scene_time_sync", text="Sync Scene Time")
+
     layout.separator_spacer()
 
     row = layout.row(align=True)
