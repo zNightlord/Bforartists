@@ -296,7 +296,7 @@ static bool sequencer_swap_inputs_poll(bContext *C)
 /** \name Scene syncing with current scene strip
  * \{ */
 
-bool is_scene_sync_needed_for_playback(const bContext &C)
+bool is_scene_time_sync_needed(const bContext &C)
 {
   WorkSpace *workspace = CTX_wm_workspace(&C);
   if (!workspace || !workspace->sequencer_scene) {
@@ -307,7 +307,8 @@ bool is_scene_sync_needed_for_playback(const bContext &C)
   }
   SpaceSeq *sseq = CTX_wm_space_seq(&C);
   if (!sseq) {
-    /* We only want to start syncing the time when we start playback from a VSE editor. */
+    /* We only want to start syncing the time when we're in a sequence editor.
+     * Changing time in any other editor should just affect the active scene. */
     return false;
   }
   return true;
@@ -327,7 +328,7 @@ static Scene *get_sequence_scene_from_context(const bContext &C)
     return nullptr;
   }
   WorkSpace *workspace = CTX_wm_workspace(&C);
-  if (workspace && workspace->sequencer_scene && (workspace->flags & WORKSPACE_SYNC_SCENE_TIME)) {
+  if (is_scene_time_sync_needed(C)) {
     return workspace->sequencer_scene;
   }
   return nullptr;
