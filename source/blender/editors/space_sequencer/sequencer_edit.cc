@@ -817,7 +817,8 @@ static wmOperatorStatus sequencer_slip_invoke(bContext *C, wmOperator *op, const
   return OPERATOR_RUNNING_MODAL;
 }
 
-static void slip_strips_delta(wmOperator *op, Scene *scene, SlipData *data, const float delta)
+static void slip_strips_delta(
+    bContext *C, wmOperator *op, Scene *scene, SlipData *data, const float delta)
 {
   float new_offset = data->prev_offset + delta;
   /* Calculate rounded whole frames between offsets, which cannot be determined from `delta` alone.
@@ -837,6 +838,8 @@ static void slip_strips_delta(wmOperator *op, Scene *scene, SlipData *data, cons
     seq::time_slip_strip(scene, strip, frame_delta, subframe_delta, slip_keyframes);
     seq::relations_invalidate_cache(scene, strip);
   }
+
+  sync_active_scene_and_time_with_scene_strip(*C);
 
   RNA_float_set(op->ptr, "offset", new_offset);
   data->prev_offset = new_offset;
@@ -921,13 +924,14 @@ static wmOperatorStatus sequencer_slip_exec(bContext *C, wmOperator *op)
   float offset = RNA_float_get(op->ptr, "offset");
   slip_apply_clamp(scene, data, &offset);
 
-  slip_strips_delta(op, scene, data, offset);
+  slip_strips_delta(C, op, scene, data, offset);
+
   slip_cleanup(C, op, scene);
   return OPERATOR_FINISHED;
 }
 
 static void slip_handle_num_input(
-    const bContext *C, wmOperator *op, ScrArea *area, SlipData *data, Scene *scene)
+    bContext *C, wmOperator *op, ScrArea *area, SlipData *data, Scene *scene)
 {
   float offset;
   applyNumInput(&data->num_input, &offset);
@@ -936,7 +940,7 @@ static void slip_handle_num_input(
   slip_update_header(scene, area, data, offset);
   RNA_float_set(op->ptr, "offset", offset);
 
-  slip_strips_delta(op, scene, data, offset_delta);
+  slip_strips_delta(C, op, scene, data, offset_delta);
 
   WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER, scene);
 }
@@ -961,7 +965,7 @@ static wmOperatorStatus sequencer_slip_modal(bContext *C, wmOperator *op, const 
         return OPERATOR_FINISHED;
       }
       case SLIP_MODAL_CANCEL: {
-        slip_strips_delta(op, scene, data, -data->prev_offset);
+        slip_strips_delta(C, op, scene, data, -data->prev_offset);
         slip_cleanup(C, op, scene);
         return OPERATOR_CANCELLED;
       }
@@ -982,7 +986,7 @@ static wmOperatorStatus sequencer_slip_modal(bContext *C, wmOperator *op, const 
           /* If we exit precision mode, make sure we undo the fractional adjustments and align the
            * virtual mouse pointer. */
           float to_nearest_frame = -(data->prev_offset - round_fl_to_int(data->prev_offset));
-          slip_strips_delta(op, scene, data, to_nearest_frame);
+          slip_strips_delta(C, op, scene, data, to_nearest_frame);
           data->virtual_mval_x += to_nearest_frame * UI_view2d_scale_get_x(v2d);
         }
         break;
@@ -1017,7 +1021,7 @@ static wmOperatorStatus sequencer_slip_modal(bContext *C, wmOperator *op, const 
       /* Also adjust virtual mouse pointer after clamp is applied. */
       data->virtual_mval_x += (clamped_offset - offset) * UI_view2d_scale_get_x(v2d);
 
-      slip_strips_delta(op, scene, data, clamped_offset_delta);
+      slip_strips_delta(C, op, scene, data, clamped_offset_delta);
       slip_update_header(scene, area, data, clamped_offset);
 
       WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER, scene);
