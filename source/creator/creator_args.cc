@@ -764,6 +764,9 @@ static void print_help(bArgs *ba, bool all)
     BLI_args_print_arg_doc(ba, "--debug-gpu-scope-capture");
     BLI_args_print_arg_doc(ba, "--debug-gpu-renderdoc");
   }
+#  ifdef WITH_VULKAN_BACKEND
+  BLI_args_print_arg_doc(ba, "--debug-gpu-vulkan-local-read");
+#  endif
   BLI_args_print_arg_doc(ba, "--debug-wm");
   if (defs.with_xr_openxr) {
     BLI_args_print_arg_doc(ba, "--debug-xr");
@@ -1978,7 +1981,7 @@ static int arg_handle_engine_set(int argc, const char **argv, void *data)
     else {
       Scene *scene = CTX_data_scene(C);
       if (scene) {
-        /* Backwards compatibiltiy. */
+        /* Backwards compatibility. */
         if (STREQ(engine_name, "BLENDER_EEVEE_NEXT")) {
           engine_name = "BLENDER_EEVEE";
         }
