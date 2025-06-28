@@ -4823,15 +4823,15 @@ static std::optional<Mesh *> build_mesh(const BevelState &bs,
   IndexMaskMemory memory;
   IndexMask src_survive_verts = bs.bevverts_mask().complement(IndexMask(src_mesh.verts_num),
                                                               memory);
-  Array<int> src_vert_map(src_mesh.verts_num);
+  Array<int> src_vert_map(src_mesh.verts_num, -1);
   index_mask::build_reverse_map(src_survive_verts, src_vert_map.as_mutable_span());
   IndexMask src_survive_edges = bs.bevedges_mask().complement(IndexMask(src_mesh.edges_num),
                                                               memory);
-  Array<int> src_edge_map(src_mesh.edges_num);
+  Array<int> src_edge_map(src_mesh.edges_num, -1);
   index_mask::build_reverse_map(src_survive_edges, src_edge_map.as_mutable_span());
   IndexMask src_survive_faces = bs.bevfaces_mask().complement(IndexMask(src_mesh.faces_num),
                                                               memory);
-  Array<int> src_face_map(src_mesh.faces_num);
+  Array<int> src_face_map(src_mesh.faces_num, -1);
   index_mask::build_reverse_map(src_survive_faces, src_face_map.as_mutable_span());
 
   Mesh *dst_mesh = BKE_mesh_new_nomain_from_template(
@@ -4844,7 +4844,7 @@ static std::optional<Mesh *> build_mesh(const BevelState &bs,
   const Span<int> src_corner_edges = src_mesh.corner_edges();
   // const bke::AttributeAccessor src_attributes = src_mesh.attributes();
   const OffsetIndices<int> dst_faces = offset_indices::gather_selected_offsets(
-      src_faces, src_survive_faces, dst_mesh->face_offsets_for_write());
+      src_faces, src_survive_faces, dst_mesh->face_offsets_for_write().take_front(src_survive_faces.size() + 1));
   MutableSpan<int> dst_corner_verts = dst_mesh->corner_verts_for_write();
   MutableSpan<int> dst_corner_edges = dst_mesh->corner_edges_for_write();
 
@@ -4965,7 +4965,7 @@ std::optional<Mesh *> mesh_bevel(const Mesh &src_mesh,
   state.build_vertex_meshes();
   state.build_edge_meshes();
   state.build_face_meshes();
-  // dump_bevel_state(state, "after build_face_meshes");
+  dump_bevel_state(state, "after build_face_meshes");
   return build_mesh(state, attribute_filter);
 }
 
