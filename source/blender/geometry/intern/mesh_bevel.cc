@@ -1221,7 +1221,7 @@ static float3 offset_meet(const int bv,
       float4 plane;
       plane_from_point_normal_v3(plane, bevvert_pos, fnext_norm);
       float3 dropco;
-      closest_to_plane3_normalized_v3(dropco, plane, meetco);
+      closest_to_plane_normalized_v3(dropco, plane, meetco);
       /* Don't drop to the faces next to the in plane edge. */
       if (e_in_plane_pos != -1) {
         const int face = bs.face_next(bv, e_in_plane_pos);
@@ -3264,6 +3264,10 @@ int MeshPattern::next_boundary_vert(const int v, const int ccw_delta, const int 
          */
         ans += v_num - 1;
       }
+      else if (ans >= v_num && ccw_delta > 0) {
+        /* Go back down the other side. */
+        ans = pat_v - ccw_delta;
+      }
       break;
     case MeshKind::TerminalPoly:
     case MeshKind::TriFan:
@@ -3281,6 +3285,7 @@ int MeshPattern::next_boundary_vert(const int v, const int ccw_delta, const int 
       ans = -1;
       BLI_assert(false);
   }
+  BLI_assert(0 <= ans && ans < v_num);
   return ans + first_v;
 }
 
@@ -3888,15 +3893,22 @@ static void build_vmesh_skeleton(int bv,
     }
     else if (num_beveled == 2) {
       BLI_assert(pat.kind == MeshKind::Line && pat.num_anchors == 2);
+      be_attach_verts[be1][be1_end] = anchor1;
+      bool edges_between10 = !(anchor0 == (anchor1 + 1) % num_edges);
+      bool edges_between01 = !(anchor1 == (anchor0 + 1) % num_edges);
+      bv_newvert_positions[anchor0] = geom::offset_meet(
+          bv, 1, 0, widths[1][1], widths[0][0], bs.face_prev(bv, 0), edges_between10, -1, bs);
+      bv_newvert_positions[anchor1] = geom::offset_meet(
+          bv, 0, 1, widths[0][1], widths[1][0], bs.face_next(bv, 0), edges_between01, -1, bs);
       bool seen_second_bevel = false;
       for (int i = 1; i < num_edges; i++) {
-        seen_second_bevel = seen_second_bevel || i == bevel_pos[1];
-        const int be = bevedges[i];
-        be_attach_verts[be][bs.bevedge_vert_end(bv, be)] = seen_second_bevel ? anchor0 : anchor1;
-        bv_newvert_positions[anchor0] = geom::offset_meet(
-            bv, 1, 0, widths[1][1], widths[0][0], bs.face_prev(bv, 0), false, -1, bs);
-        bv_newvert_positions[anchor1] = geom::offset_meet(
-            bv, 0, 1, widths[0][1], widths[1][0], bs.face_next(bv, 0), false, -1, bs);
+        if (i == bevel_pos[1]) {
+          seen_second_bevel = true;
+        }
+        else {
+          const int be = bevedges[i];
+          be_attach_verts[be][bs.bevedge_vert_end(bv, be)] = seen_second_bevel ? anchor0 : anchor1;
+        }
       }
     }
     else {
@@ -4353,6 +4365,10 @@ int BevelState::last_attached_bevedge_pos(const int bv, const int newvert) const
     if (attach_vert == newvert) {
       ans = epos;
     }
+    else if (ans != -1) {
+      /* We reached the end of the range of edges having newvert as attachment. */
+      break;
+    }
   }
   return ans;
 }
@@ -4622,7 +4638,7 @@ void BevelState::build_edge_meshes()
   threading::parallel_for(IndexRange(bevedges_num), 10'000, [&](IndexRange range) {
     for (const int be : range) {
       const int mesh_edge = bevedge_mesh_edges_[be];
-      /* Get v0 and v1 to be such that mesh_v0 < mesh_v1. */
+      /* Get v0 and v1 to be in the same order as in the underlying mesh edge. */
       auto [mesh_v0, mesh_v1] = mesh_info.mesh.edges()[mesh_edge];
       int bv0 = vert_bevverts_[mesh_v0];
       int bv1 = vert_bevverts_[mesh_v1];
@@ -4631,15 +4647,16 @@ void BevelState::build_edge_meshes()
        * In that case, we encode the original mesh vertex index as a "new vertex index" by
        * adding one and negating.
        */
-      const int nv0 = bv0 >= 0 ? bevvert_newverts_[bv0][pos0] : -(mesh_v0 + 1);
-      const int nv1 = bv1 >= 0 ? bevvert_newverts_[bv1][pos1] : -(mesh_v1 + 1);
+      const int attach_nv0 = bv0 >= 0 ? bevvert_newverts_[bv0][pos0] : -(mesh_v0 + 1);
+      const int attach_nv1 = bv1 >= 0 ? bevvert_newverts_[bv1][pos1] : -(mesh_v1 + 1);
       if (bevedge_weights_[be] == 0.0) {
         /* Just a single edge, but with one or both ends attached to new vertices. */
         const int ne = bevedge_newedges_[be][0];
-        newedge_vertpairs_[ne] = int2(nv0, nv1);
+        newedge_vertpairs_[ne] = int2(attach_nv0, attach_nv1);
       }
       else {
-        /* Make params.segments quads. nv0 is upper left, nv1 is lower right. */
+        /* Make params.segments quads.
+         * #attach_nv0 is upper left, #attach_nv1 is lower right. */
         const int first_nv0 = bevvert_newverts_[bv0][0];
         const int first_nv1 = bevvert_newverts_[bv1][0];
         const int first_ne0 = bevvert_newedges_[bv0][0];
@@ -4647,21 +4664,28 @@ void BevelState::build_edge_meshes()
         const int first_f = bevedge_newfaces_[be][0];
         const MeshPattern &pat0 = bevvert_meshpatterns_[bv0];
         const MeshPattern &pat1 = bevvert_meshpatterns_[bv1];
-        /* Set nv_ul and nv_ll to upper left and lower left of leftmost quad. */
-        const int nv_ul = nv0;
-        const int nv_ll = pat1.next_boundary_vert(nv1, params.segments, first_nv1);
-        for (const int seg : IndexRange(params.segments)) {
-          const int nv0 = pat0.next_boundary_vert(nv_ul, seg, first_nv0);
-          const int nv1 = pat1.next_boundary_vert(nv_ll, -seg, first_nv1);
-          const int nv2 = pat1.next_boundary_vert(nv1, -1, first_nv1);
-          const int nv3 = pat0.next_boundary_vert(nv0, 1, first_nv0);
+        /* Normally go clockwise (positively) from the attachment point, but for a Line
+         * pattern we need to go the opposite way if the attachment point is at the end. */
+        const int u_dir = (pat0.kind != MeshKind::Line || pos0 == 0) ? 1 : -1;
+        const int l_dir = (pat1.kind != MeshKind::Line || pos1 == 0) ? 1 : -1;
+        for (const int i : IndexRange(params.segments)) {
+          /* Upper left and upper right vertices. */
+          const int nv0 = pat0.next_boundary_vert(attach_nv0, i * u_dir, first_nv0);
+          const int nv3 = pat0.next_boundary_vert(attach_nv0, (i + 1) * u_dir, first_nv0);
+          /* Lower left and lower right vertices. */
+          const int nv1 = pat1.next_boundary_vert(
+              attach_nv1, (pat1.num_segs - i) * l_dir, first_nv1);
+          const int nv2 = pat1.next_boundary_vert(
+              attach_nv1, (pat1.num_segs - i - 1) * l_dir, first_nv1);
           const Array<int, 4> nverts = {nv0, nv1, nv2, nv3};
-          const int ne_l = bevedge_newedges_[be][seg];
-          const int ne_b = pat1.boundary_edge_from_vert(nv2, first_nv1, first_ne1);
-          const int ne_r = bevedge_newedges_[be][seg + 1];
-          const int ne_t = pat0.boundary_edge_from_vert(nv0, first_nv0, first_ne0);
+          const int ne_l = bevedge_newedges_[be][i];
+          const int ne_r = bevedge_newedges_[be][i + 1];
+          const int ne_t = pat0.boundary_edge_from_vert(
+              u_dir == 1 ? nv0 : nv3, first_nv0, first_ne0);
+          const int ne_b = pat1.boundary_edge_from_vert(
+              l_dir == 1 ? nv2 : nv1, first_nv1, first_ne1);
           const Array<int, 4> nedges = {ne_l, ne_b, ne_r, ne_t};
-          build_newface(first_f + seg, nverts, nedges);
+          build_newface(first_f + i, nverts, nedges);
           build_newedge(ne_l, nv0, nv1);
           /* If bottom or top are Line patterns, build them here. */
           if (pat0.kind == MeshKind::Line) {
@@ -4670,7 +4694,7 @@ void BevelState::build_edge_meshes()
           if (pat1.kind == MeshKind::Line) {
             build_newedge(ne_b, nv1, nv2);
           }
-          if (seg == params.segments - 1) {
+          if (i == params.segments - 1) {
             build_newedge(ne_r, nv2, nv3);
           }
         }
@@ -4844,7 +4868,9 @@ static std::optional<Mesh *> build_mesh(const BevelState &bs,
   const Span<int> src_corner_edges = src_mesh.corner_edges();
   // const bke::AttributeAccessor src_attributes = src_mesh.attributes();
   const OffsetIndices<int> dst_faces = offset_indices::gather_selected_offsets(
-      src_faces, src_survive_faces, dst_mesh->face_offsets_for_write().take_front(src_survive_faces.size() + 1));
+      src_faces,
+      src_survive_faces,
+      dst_mesh->face_offsets_for_write().take_front(src_survive_faces.size() + 1));
   MutableSpan<int> dst_corner_verts = dst_mesh->corner_verts_for_write();
   MutableSpan<int> dst_corner_edges = dst_mesh->corner_edges_for_write();
 
@@ -4963,9 +4989,11 @@ std::optional<Mesh *> mesh_bevel(const Mesh &src_mesh,
   state.set_bevedge_widths();
   state.determine_needed_new_elements();
   state.build_vertex_meshes();
+  dump_bevel_state(state, "before build_edge_meshes");
   state.build_edge_meshes();
+  dump_bevel_state(state, "before build_face_meshes");
   state.build_face_meshes();
-  dump_bevel_state(state, "after build_face_meshes");
+  dump_bevel_state(state, "before build_mesh");
   return build_mesh(state, attribute_filter);
 }
 

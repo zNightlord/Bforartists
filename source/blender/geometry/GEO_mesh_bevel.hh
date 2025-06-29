@@ -74,11 +74,13 @@ struct BevelParameters {
   /** Bevel vertices only or edges. */
   BevelAffect affect_type = BevelAffect::Edges;
   /** Should we multiply edge width specs by bevel edge weight attribute?
-   * Or, if vertex-only, should we multiply distance along arms by vertex bevel weight attribute? */
+   * Or, if vertex-only, should we multiply distance along arms by vertex bevel weight attribute?
+   */
   bool use_weights = false;
   /** Should offsets be limited by collisions? */
   bool limit_offset = false;
-  /** Vertex group array, maybe set if vertex only bevel to control which vertices are beveled and by how much. */
+  /** Vertex group array, maybe set if vertex only bevel to control which vertices are beveled and
+   * by how much. */
   MDeformVert *dvert = nullptr;
   /** Vertex group index, maybe set if vertex only to say which group to get weights from.. */
   int vertex_group = -1;
@@ -118,6 +120,5 @@ std::optional<Mesh *> mesh_bevel(const Mesh &src_mesh,
                                  const IndexMask &selection,
                                  const BevelParameters &params,
                                  const bke::AttributeFilter &attribute_filter);
-
 
 }  // namespace blender::geometry
