@@ -3894,8 +3894,8 @@ static void build_vmesh_skeleton(int bv,
     else if (num_beveled == 2) {
       BLI_assert(pat.kind == MeshKind::Line && pat.num_anchors == 2);
       be_attach_verts[be1][be1_end] = anchor1;
-      bool edges_between10 = !(anchor0 == (anchor1 + 1) % num_edges);
-      bool edges_between01 = !(anchor1 == (anchor0 + 1) % num_edges);
+      bool edges_between10 = !(anchor0 == (anchor1 + pat.num_segs) % num_edges);
+      bool edges_between01 = !(anchor1 == (anchor0 + pat.num_segs) % num_edges);
       bv_newvert_positions[anchor0] = geom::offset_meet(
           bv, 1, 0, widths[1][1], widths[0][0], bs.face_prev(bv, 0), edges_between10, -1, bs);
       bv_newvert_positions[anchor1] = geom::offset_meet(
