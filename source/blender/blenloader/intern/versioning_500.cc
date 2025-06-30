@@ -1020,7 +1020,7 @@ void do_versions_after_linking_500(FileData * /*fd*/, Main *bmain)
     FOREACH_NODETREE_END;
   }
 
-  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 31)) {
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 32)) {
     LISTBASE_FOREACH (wmWindowManager *, wm, &bmain->wm) {
       LISTBASE_FOREACH (wmWindow *, win, &wm->windows) {
         Scene *scene = WM_window_get_active_scene(win);
