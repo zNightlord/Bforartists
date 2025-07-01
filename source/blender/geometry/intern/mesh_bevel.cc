@@ -2819,9 +2819,6 @@ static int which_interval(const float value, Span<float> breaks)
   while ((i + 1) < breaks.size() && value >= breaks[i + 1]) {
     i++;
   }
-  fmt::println("which_interval({})", value);
-  print_span(breaks, "breaks");
-  fmt::println("which_span answer = {}", i);
   return i;
 }
 
@@ -4622,8 +4619,8 @@ void BevelState::build_vertex_meshes()
       const int first_e = bevvert_newedges_[bv][0];
       const int first_f = bevvert_newfaces_[bv][0];
       for (const int f : IndexRange(bevvert_newfaces_[bv].size())) {
-        auto [verts, edges] = pat.face_verts_and_edges(f + first_f, first_v, first_e);
-        build_newface(f, verts, edges);
+        auto [verts, edges] = pat.face_verts_and_edges(f, first_v, first_e);
+        build_newface(f + first_f, verts, edges);
         for (const int i : edges.index_range()) {
           build_newedge(edges[i], verts[i], verts[(i + 1) % verts.size()]);
         }
@@ -4989,11 +4986,9 @@ std::optional<Mesh *> mesh_bevel(const Mesh &src_mesh,
   state.set_bevedge_widths();
   state.determine_needed_new_elements();
   state.build_vertex_meshes();
-  dump_bevel_state(state, "before build_edge_meshes");
   state.build_edge_meshes();
-  dump_bevel_state(state, "before build_face_meshes");
   state.build_face_meshes();
-  dump_bevel_state(state, "before build_mesh");
+  // dump_bevel_state(state, "before build_mesh");
   return build_mesh(state, attribute_filter);
 }
 
