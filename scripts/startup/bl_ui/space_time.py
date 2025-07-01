@@ -10,6 +10,7 @@ from bpy.app.translations import contexts as i18n_contexts
 def playback_controls(layout, context):
     scene = context.scene
     tool_settings = context.tool_settings
+    st = context.space_data
     screen = context.screen
 
     row = layout.row(align=True)
