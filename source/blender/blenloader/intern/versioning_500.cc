@@ -451,7 +451,7 @@ static void do_version_normal_node_dot_product(bNodeTree *node_tree, bNode *node
   bNode *dot_product_node = blender::bke::node_add_node(
       nullptr, *node_tree, "ShaderNodeVectorMath");
   dot_product_node->custom1 = NODE_VECTOR_MATH_DOT_PRODUCT;
-  dot_product_node->flag |= NODE_HIDDEN;
+  dot_product_node->flag |= NODE_COLLAPSED;
   dot_product_node->parent = node->parent;
   dot_product_node->location[0] = node->location[0];
   dot_product_node->location[1] = node->location[1];
@@ -595,7 +595,7 @@ static void do_version_mix_color_use_alpha(bNodeTree *node_tree, bNode *node)
   multiply_node->custom1 = NODE_MATH_MULTIPLY;
   multiply_node->location[0] = node->location[0] - node->width - 20.0f;
   multiply_node->location[1] = node->location[1];
-  multiply_node->flag |= NODE_HIDDEN;
+  multiply_node->flag |= NODE_COLLAPSED;
 
   bNodeSocket *multiply_input_a = static_cast<bNodeSocket *>(
       BLI_findlink(&multiply_node->inputs, 0));
@@ -631,7 +631,7 @@ static void do_version_mix_color_use_alpha(bNodeTree *node_tree, bNode *node)
     separate_color_node->parent = node->parent;
     separate_color_node->location[0] = multiply_node->location[0] - multiply_node->width - 20.0f;
     separate_color_node->location[1] = multiply_node->location[1];
-    separate_color_node->flag |= NODE_HIDDEN;
+    separate_color_node->flag |= NODE_COLLAPSED;
 
     bNodeSocket *image_input = blender::bke::node_find_socket(
         *separate_color_node, SOCK_IN, "Image");
@@ -719,7 +719,7 @@ static void do_version_map_value_node(bNodeTree *node_tree, bNode *node)
   add_node->custom1 = NODE_MATH_ADD;
   add_node->location[0] = node->location[0];
   add_node->location[1] = node->location[1];
-  add_node->flag |= NODE_HIDDEN;
+  add_node->flag |= NODE_COLLAPSED;
 
   bNodeSocket *add_input_a = static_cast<bNodeSocket *>(BLI_findlink(&add_node->inputs, 0));
   bNodeSocket *add_input_b = static_cast<bNodeSocket *>(BLI_findlink(&add_node->inputs, 1));
@@ -740,7 +740,7 @@ static void do_version_map_value_node(bNodeTree *node_tree, bNode *node)
   multiply_node->custom1 = NODE_MATH_MULTIPLY;
   multiply_node->location[0] = add_node->location[0];
   multiply_node->location[1] = add_node->location[1] - 40.0f;
-  multiply_node->flag |= NODE_HIDDEN;
+  multiply_node->flag |= NODE_COLLAPSED;
 
   bNodeSocket *multiply_input_a = static_cast<bNodeSocket *>(
       BLI_findlink(&multiply_node->inputs, 0));
@@ -764,7 +764,7 @@ static void do_version_map_value_node(bNodeTree *node_tree, bNode *node)
     max_node->custom1 = NODE_MATH_MAXIMUM;
     max_node->location[0] = final_node->location[0];
     max_node->location[1] = final_node->location[1] - 40.0f;
-    max_node->flag |= NODE_HIDDEN;
+    max_node->flag |= NODE_COLLAPSED;
 
     bNodeSocket *max_input_a = static_cast<bNodeSocket *>(BLI_findlink(&max_node->inputs, 0));
     bNodeSocket *max_input_b = static_cast<bNodeSocket *>(BLI_findlink(&max_node->inputs, 1));
@@ -787,7 +787,7 @@ static void do_version_map_value_node(bNodeTree *node_tree, bNode *node)
     min_node->custom1 = NODE_MATH_MINIMUM;
     min_node->location[0] = final_node->location[0];
     min_node->location[1] = final_node->location[1] - 40.0f;
-    min_node->flag |= NODE_HIDDEN;
+    min_node->flag |= NODE_COLLAPSED;
 
     bNodeSocket *min_input_a = static_cast<bNodeSocket *>(BLI_findlink(&min_node->inputs, 0));
     bNodeSocket *min_input_b = static_cast<bNodeSocket *>(BLI_findlink(&min_node->inputs, 1));
@@ -1264,6 +1264,14 @@ void blo_do_versions_500(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
         node->storage = data;
       }
       FOREACH_NODETREE_END;
+    }
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 32)) {
+    LISTBASE_FOREACH (Mesh *, mesh, &bmain->meshes) {
+      mesh->radial_symmetry[0] = 1;
+      mesh->radial_symmetry[1] = 1;
+      mesh->radial_symmetry[2] = 1;
     }
   }
 
