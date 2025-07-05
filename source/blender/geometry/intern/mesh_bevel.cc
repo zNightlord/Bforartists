@@ -4634,7 +4634,7 @@ void BevelState::determine_needed_attribute_data()
         this->any_face_attributes = true;
         break;
       case bke::AttrDomain::Corner:
-        if (iter.data_type == CD_PROP_FLOAT2) {
+        if (iter.data_type == bke::AttrType::Float2) {
           /* Assume this is a UV map attribute. */
           uv_attribute_names_.append(iter.name);
           this->uvmaps_num++;
