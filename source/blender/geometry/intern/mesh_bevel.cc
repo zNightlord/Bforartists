@@ -231,6 +231,16 @@ class BevelState {
   ProfileSpacing pro_spacing_miter;
   /** Profile shape parameter converted to a superellipse exponent. */
   float pro_super_r = 2;
+  /** How many UV maps are there? */
+  int uvmaps_num = 0;
+  /** Are there any vertex attributes to be copied (besidies position)? */
+  bool any_vert_attributes = false;
+  /** Are there any ege attributes to be copied? */
+  bool any_edge_attributes = false;
+  /** Are there any face attributes to be copied? */
+  bool any_face_attributes = false;
+  /** Are there any corner attributes (besodes UV maps) to be copied? */
+  bool any_corner_attributes = false;
 
   /** Construct initial state from input. */
   BevelState(const Mesh &src_mesh,
@@ -244,6 +254,8 @@ class BevelState {
   void set_bevedge_widths();
 
   void determine_needed_new_elements();
+
+  void determine_needed_attribute_data();
 
   void build_vertex_meshes();
 
@@ -418,6 +430,12 @@ class BevelState {
     return newvert_positions_;
   }
 
+  /** The representative (for attributes) original vertex of the given newvert. */
+  Span<int> newvert_repverts() const
+  {
+    return newvert_repverts_;
+  }
+
   /* The following are indexed by a newedge index, 0 to newedges_num - 1. */
 
   /** The start and end  indices of vertices for the given newedge. If the indices are in the
@@ -426,6 +444,12 @@ class BevelState {
   Span<int2> newedge_vertpairs() const
   {
     return newedge_vertpairs_;
+  }
+
+  /** The representative (for attributrs) original edge of the given newedge. */
+  Span<int> newedge_repedges() const
+  {
+    return newedge_repedges_;
   }
 
   /* The following are indexed by a newface index, 0 to newfaces_num - 1. */
@@ -447,6 +471,12 @@ class BevelState {
     return newface_faces_face_offsets_;
   }
 
+  /** The representative (for attributes) original face of the given newface. */
+  Span<int> newface_repfaces() const
+  {
+    return newface_repfaces_;
+  }
+
   /* The following are indexed by a newcorner index, 0 to newcorners_num - 1. */
 
   /** Analog of a #Mesh corner_verts() function. The indices are either in the
@@ -463,6 +493,11 @@ class BevelState {
   Span<int> newcorner_edges() const
   {
     return newcorner_edges_;
+  }
+
+  Span<int> newcorner_repcorners() const
+  {
+    return newcorner_repcorners_;
   }
 
   OffsetIndices<int> bevface_newfaces()
@@ -544,17 +579,24 @@ class BevelState {
 
   Array<int> newverts_offsets_;
   Array<float3> newvert_positions_;
+  Array<int> newvert_repverts_;
 
   Array<int> newedges_offsets_;
   Array<int2> newedge_vertpairs_;
+  Array<int> newedge_repedges_;
 
   Array<int> newfaces_offsets_;
   OffsetIndices<int> newface_faces_;
   Array<int> newface_faces_face_offsets_;
   OffsetIndices<int> newface_faces_face_;
+  Array<int> newface_repfaces_;
 
   Array<int> newcorner_verts_;
   Array<int> newcorner_edges_;
+  Array<int> newcorner_repcorners_;
+
+  Vector<std::string> uv_attribute_names_;
+  Vector<Array<float2>> uv_attributes_;
 };
 
 MeshInfo::MeshInfo(const Mesh &mesh) : mesh(mesh)
@@ -4569,6 +4611,50 @@ void BevelState::set_bevedge_widths()
   });
 }
 
+/** Find out which elements have attributes beyond the special builtin ones, and then
+ * allocate the arrays needed to keep track of how to calculate attribute values
+ * for the new elements.
+ */
+void BevelState::determine_needed_attribute_data()
+{
+  const Mesh &mesh = mesh_info.mesh;
+  bke::AttributeAccessor attrs = mesh.attributes();
+  attrs.foreach_attribute([&](const bke::AttributeIter &iter) {
+    if (ELEM(iter.name, "position", ".edge_verts", ".corner_vert", ".corner_edge")) {
+      return;
+    }
+    switch (iter.domain) {
+      case bke::AttrDomain::Point:
+        this->any_vert_attributes = true;
+        break;
+      case bke::AttrDomain::Edge:
+        this->any_edge_attributes = true;
+        break;
+      case bke::AttrDomain::Face:
+        this->any_face_attributes = true;
+        break;
+      case bke::AttrDomain::Corner:
+        if (iter.data_type == CD_PROP_FLOAT2) {
+          /* Assume this is a UV map attribute. */
+          uv_attribute_names_.append(iter.name);
+          this->uvmaps_num++;
+        }
+        else {
+          this->any_corner_attributes = true;
+        }
+      default:
+        break;
+    }
+  });
+  fmt::println("any_vert_attributes = {}", any_vert_attributes);
+  fmt::println("any_edge_attributes = {}", any_edge_attributes);
+  fmt::println("any_face_attributes = {}", any_face_attributes);
+  fmt::println("any_corner_attributes = {}", any_corner_attributes);
+  for (const std::string &str : uv_attribute_names_) {
+    fmt::println("uv map: {}", str);
+  }
+}
+
 /** Build the edge e from vertices v0 and v1, where those indices are in a "new element" space.
  * Negative input values are just copied as is (used to encode original elements).
  */
@@ -4985,6 +5071,7 @@ std::optional<Mesh *> mesh_bevel(const Mesh &src_mesh,
   state.order_bevedges();
   state.set_bevedge_widths();
   state.determine_needed_new_elements();
+  state.determine_needed_attribute_data();
   state.build_vertex_meshes();
   state.build_edge_meshes();
   state.build_face_meshes();
