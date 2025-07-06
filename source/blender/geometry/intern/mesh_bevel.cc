@@ -5015,7 +5015,6 @@ static std::optional<Mesh *> build_mesh(const BevelState &bs,
    * have indices for the surviving prefixes, so make similar code but
    * use array_utils::gather directly with a prefix of the destination.
    */
-
   const bke::AttributeAccessor src_attributes = src_mesh.attributes();
   bke::MutableAttributeAccessor dst_attributes = dst_mesh->attributes_for_write();
   src_attributes.foreach_attribute([&](const bke::AttributeIter &iter) {
@@ -5023,6 +5022,8 @@ static std::optional<Mesh *> build_mesh(const BevelState &bs,
       return;
     }
     const bke::GAttributeReader src = iter.get();
+    bke::GSpanAttributeWriter dst = dst_attributes.lookup_or_add_for_write_span(
+        iter.name, iter.domain, iter.data_type);
     IndexMask *survive_mask = nullptr;
     switch (iter.domain) {
       case bke::AttrDomain::Point:
@@ -5042,8 +5043,6 @@ static std::optional<Mesh *> build_mesh(const BevelState &bs,
         BLI_assert(false);
         return;
     }
-    bke::GSpanAttributeWriter dst = dst_attributes.lookup_or_add_for_write_span(
-        iter.name, iter.domain, iter.data_type);
     array_utils::gather(src.varray, *survive_mask, dst.span.take_front(survive_mask->size()));
     dst.finish();
   });
@@ -5067,8 +5066,10 @@ static std::optional<Mesh *> build_mesh(const BevelState &bs,
   auto new_vert_map = [&](const int nv) { return src_survive_nverts + nv; };
   auto new_edge_map = [&](const int ne) { return src_survive_nedges + ne; };
   auto new_face_map = [&](const int nf) { return src_survive_nfaces + nf; };
+  auto new_corner_map = [&](const int nc) { return src_survive_ncorners + nc; };
 
   /* TODO: move the following out into functions and parallelize.  */
+  MutableSpan<float3> dst_positions = dst_mesh->vert_positions_for_write();
   Span<float3> new_positions = bs.newvert_positions();
   for (const int nv : IndexRange(bs.newverts_num)) {
     dst_positions[new_vert_map(nv)] = new_positions[nv];
@@ -5096,6 +5097,61 @@ static std::optional<Mesh *> build_mesh(const BevelState &bs,
       dst_corner_edges[dst_face[i]] = mixed_edge_map(bs.newcorner_edges()[new_face[i]]);
     }
   }
+
+  /* Most attributes are copied from the representative src elements. */
+  src_attributes.foreach_attribute([&](const bke::AttributeIter &iter) {
+    if (ELEM(iter.name, "position", ".edge_verts", ".corner_vert", ".corner_edge")) {
+      return;
+    }
+    const bke::GAttributeReader src = iter.get();
+    bke::GSpanAttributeWriter dst = dst_attributes.lookup_or_add_for_write_span(
+        iter.name, iter.domain, iter.data_type);
+    GMutableSpan dst_span = dst.span;
+    switch (iter.domain) {
+      case bke::AttrDomain::Point: {
+        Span<int> rep = bs.newvert_repverts();
+        for (const int nv : bs.newvert_repverts().index_range()) {
+          if (rep[nv] >= 0) {
+            src.varray.get(rep[nv], dst_span[new_vert_map(nv)]);
+          }
+        }
+        break;
+      }
+      case bke::AttrDomain::Edge: {
+        Span<int> rep = bs.newedge_repedges();
+        for (const int ne : bs.newedge_repedges().index_range()) {
+          if (rep[ne] >= 0) {
+            src.varray.get(rep[ne], dst_span[new_edge_map(ne)]);
+          }
+          break;
+        }
+        break;
+      }
+      case bke::AttrDomain::Face: {
+        Span<int> rep = bs.newface_repfaces();
+        for (const int nf : bs.newface_repfaces().index_range()) {
+          if (rep[nf] >= 0) {
+            src.varray.get(rep[nf], dst_span[new_face_map(nf)]);
+          }
+        }
+        break;
+      }
+      case bke::AttrDomain::Corner: {
+        Span<int> rep = bs.newcorner_repcorners();
+        for (const int nc : bs.newcorner_repcorners().index_range()) {
+          if (rep[nc] >= 0) {
+            src.varray.get(rep[nc], dst_span[new_corner_map(nc)]);
+          }
+        }
+        break;
+      }
+      default:
+        /* Not expecting any other domain for Mesh. */
+        BLI_assert(false);
+        return;
+    }
+    dst.finish();
+  });
   if (false) {
     fmt::println("dst mesh");
     print_float3_span(dst_mesh->vert_positions(), "vert_positions");
