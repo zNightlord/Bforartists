@@ -4618,7 +4618,7 @@ void BevelState::set_bevedge_widths()
 void BevelState::determine_needed_attribute_data()
 {
   const Mesh &mesh = mesh_info.mesh;
-  bke::AttributeAccessor attrs = mesh.attributes();
+  const bke::AttributeAccessor attrs = mesh.attributes();
   attrs.foreach_attribute([&](const bke::AttributeIter &iter) {
     if (ELEM(iter.name, "position", ".edge_verts", ".corner_vert", ".corner_edge")) {
       return;
@@ -4646,12 +4646,27 @@ void BevelState::determine_needed_attribute_data()
         break;
     }
   });
-  fmt::println("any_vert_attributes = {}", any_vert_attributes);
-  fmt::println("any_edge_attributes = {}", any_edge_attributes);
-  fmt::println("any_face_attributes = {}", any_face_attributes);
-  fmt::println("any_corner_attributes = {}", any_corner_attributes);
-  for (const std::string &str : uv_attribute_names_) {
-    fmt::println("uv map: {}", str);
+  /* For those domains where we have attributes to propagage. we allocate
+   * the arrays needed. */
+  if (any_vert_attributes) {
+    newvert_repverts_.reinitialize(newverts_num);
+    newvert_repverts_.fill(-1);
+  }
+  if (any_edge_attributes) {
+    newedge_repedges_.reinitialize(newedges_num);
+    newedge_repedges_.fill(-1);
+  }
+  if (any_face_attributes) {
+    newface_repfaces_.reinitialize(newfaces_num);
+    newface_repfaces_.fill(-1);
+  }
+  if (any_corner_attributes) {
+    newcorner_repcorners_.fill(-1);
+  }
+  if (uvmaps_num > 0) {
+    for (int i = 0; i < uvmaps_num; i++) {
+      uv_attributes_.append(Array<float2>(newcorners_num, float2(0.0f, 0.0f)));
+    }
   }
 }
 
@@ -4698,6 +4713,10 @@ void BevelState::build_vertex_meshes()
       profile::calculate_profiles(bv, profiles, *this);
       topology::build_internal_vmesh(
           bv, profiles, newvert_positions_.as_mutable_span().slice(bevvert_newverts_[bv]), *this);
+      const int mesh_v = bevvert_mesh_verts_[bv];
+      for (const int nv : bevvert_newverts_[bv]) {
+        newvert_repverts_[nv] = mesh_v;
+      }
       if (bevvert_newfaces_[bv].size() == 0) {
         continue;
       }
@@ -4941,6 +4960,18 @@ static std::optional<Mesh *> build_mesh(const BevelState &bs,
   Array<int> src_face_map(src_mesh.faces_num, -1);
   index_mask::build_reverse_map(src_survive_faces, src_face_map.as_mutable_span());
 
+  IndexMask src_survive_corners;
+  if (bs.any_corner_attributes || bs.uvmaps_num > 0) {
+    /* Need src_survive_corners only if there are corner attributes to copy. */
+    Array<bool> need_corner(src_mesh.corners_num, false);
+    src_survive_faces.foreach_index([&](const int f) {
+      for (const int c : src_mesh.faces()[f]) {
+        need_corner[c] = true;
+      }
+    });
+    src_survive_corners = IndexMask::from_bools(need_corner, memory);
+  }
+
   Mesh *dst_mesh = BKE_mesh_new_nomain_from_template(
       &src_mesh, result_nverts, result_nedges, result_nfaces, result_ncorners);
   MutableSpan<int2> dst_edges = dst_mesh->edges_for_write();
@@ -4949,7 +4980,6 @@ static std::optional<Mesh *> build_mesh(const BevelState &bs,
   const OffsetIndices src_faces = src_mesh.faces();
   const Span<int> src_corner_verts = src_mesh.corner_verts();
   const Span<int> src_corner_edges = src_mesh.corner_edges();
-  // const bke::AttributeAccessor src_attributes = src_mesh.attributes();
   const OffsetIndices<int> dst_faces = offset_indices::gather_selected_offsets(
       src_faces,
       src_survive_faces,
@@ -4980,15 +5010,43 @@ static std::optional<Mesh *> build_mesh(const BevelState &bs,
                     src_edge_map);
       });
 
-  /* Temporary: bke::gather_attributes calls as in mesh_copy_selection don't work
-   * because they assume that all element attributes will be filled in, not just
-   * a prefix of them.
-   * For now, just do vertex position separately.
+  /* We want to do something like bke::gather_attributes, but that assumes that
+   * we have indices to map the entire destination space, but here we only
+   * have indices for the surviving prefixes, so make similar code but
+   * use array_utils::gather directly with a prefix of the destination.
    */
-  MutableSpan<float3> dst_positions = dst_mesh->vert_positions_for_write();
-  array_utils::gather(src_mesh.vert_positions().take_front(src_survive_nverts),
-                      src_survive_verts,
-                      dst_positions.take_front(src_survive_nverts));
+
+  const bke::AttributeAccessor src_attributes = src_mesh.attributes();
+  bke::MutableAttributeAccessor dst_attributes = dst_mesh->attributes_for_write();
+  src_attributes.foreach_attribute([&](const bke::AttributeIter &iter) {
+    if (ELEM(iter.name, ".edge_verts", ".corner_vert", ".corner_edge")) {
+      return;
+    }
+    const bke::GAttributeReader src = iter.get();
+    IndexMask *survive_mask = nullptr;
+    switch (iter.domain) {
+      case bke::AttrDomain::Point:
+        survive_mask = &src_survive_verts;
+        break;
+      case bke::AttrDomain::Edge:
+        survive_mask = &src_survive_edges;
+        break;
+      case bke::AttrDomain::Face:
+        survive_mask = &src_survive_faces;
+        break;
+      case bke::AttrDomain::Corner:
+        survive_mask = &src_survive_corners;
+        break;
+      default:
+        /* Not expecting any other domain for Mesh. */
+        BLI_assert(false);
+        return;
+    }
+    bke::GSpanAttributeWriter dst = dst_attributes.lookup_or_add_for_write_span(
+        iter.name, iter.domain, iter.data_type);
+    array_utils::gather(src.varray, *survive_mask, dst.span.take_front(survive_mask->size()));
+    dst.finish();
+  });
 
   auto mixed_vert_map = [&](const int v) {
     if (v < 0) {
@@ -5038,7 +5096,6 @@ static std::optional<Mesh *> build_mesh(const BevelState &bs,
       dst_corner_edges[dst_face[i]] = mixed_edge_map(bs.newcorner_edges()[new_face[i]]);
     }
   }
-  /* TEMP: while developing, before we have attributes done properly. */
   if (false) {
     fmt::println("dst mesh");
     print_float3_span(dst_mesh->vert_positions(), "vert_positions");
@@ -5047,6 +5104,7 @@ static std::optional<Mesh *> build_mesh(const BevelState &bs,
     print_span(dst_mesh->corner_verts(), "corner_verts");
     print_span(dst_mesh->corner_edges(), "corner_edges");
   }
+  /* TEMP: while developing, before we have attributes done properly. */
   bke::mesh_smooth_set(*dst_mesh, false, true);
   BLI_assert(BKE_mesh_is_valid(dst_mesh));
 
