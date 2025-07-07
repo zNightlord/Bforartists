@@ -860,16 +860,16 @@ constexpr double bevel_epsilon_d = 1e-6;
 constexpr float bevel_epsilon = 1e-6f;
 constexpr float bevel_epsilon_sq = 1e-12f;
 constexpr float bevel_epsilon_big = 1e-4f;
-constexpr float bevel_epsilon_big_sq = 1e-8f;
+// constexpr float bevel_epsilon_big_sq = 1e-8f;
 constexpr float bevel_epsilon_ang = DEG2RADF(2.0f);
 constexpr float bevel_small_ang = DEG2RADF(10.0f);
 /** Difference in dot products that corresponds to 10 degree difference between vectors. */
 const float bevel_small_ang_dot = (1.0f - math::cos(bevel_small_ang));
 /** Difference in dot products that corresponds to 2.0 degree difference between vectors. */
 const float bevel_epsilon_ang_dot = (1.0f - cosf(bevel_epsilon_ang));
-constexpr float bevel_max_adjust_pct = 10.0f;
-constexpr float bevel_max_auto_adjust_pct = 300.0f;
-constexpr double bevel_match_spec_weight = 0.2;
+// constexpr float bevel_max_adjust_pct = 10.0f;
+// constexpr float bevel_max_auto_adjust_pct = 300.0f;
+// constexpr double bevel_match_spec_weight = 0.2;
 
 /** Return the direction of the edge leaving bevvert \a bv and position \a epos. */
 static float3 edge_dir(const int bv, const int epos, const BevelState &bs)
@@ -4695,6 +4695,31 @@ void BevelState::build_newface(const int f, Span<int> verts, Span<int> edges)
   }
 }
 
+/** Set representative original elements to copy attributes from for new elements. */
+static void set_vertex_mesh_reps(const int bv,
+                                 MutableSpan<int> repverts,
+                                 MutableSpan<int> repedges,
+                                 MutableSpan<int> repfaces,
+                                 const BevelState &bs)
+{
+  /* For vertices, just use the mesh vertex at bv as the representative.
+   * Do this ieven if bs.any_vert_attributes is false, since we need it for positions.
+   */
+  const int mesh_v = bs.bevvert_mesh_verts()[bv];
+  for (const int nv : bs.bevvert_newverts()[bv]) {
+    repverts[nv] = mesh_v;
+  }
+  const MeshPattern &pat = bs.bevvert_meshpatterns()[bv];
+  /* Placeholder logic for edges. TODO: fix. */
+  if (bs.any_edge_attributes && pat.kind == MeshKind::Adj && pat.num_segs > 1) {
+    /* Use the beveled edge as rep for the "center lines" between anchors. */
+    int seg_half = pat.num_segs / 2;
+    for (const int a : IndexRange(pat.num_anchors)) {
+      
+    }
+  }
+}
+
 /** Build the vertex meshes. */
 void BevelState::build_vertex_meshes()
 {
@@ -4713,23 +4738,23 @@ void BevelState::build_vertex_meshes()
       profile::calculate_profiles(bv, profiles, *this);
       topology::build_internal_vmesh(
           bv, profiles, newvert_positions_.as_mutable_span().slice(bevvert_newverts_[bv]), *this);
-      const int mesh_v = bevvert_mesh_verts_[bv];
-      for (const int nv : bevvert_newverts_[bv]) {
-        newvert_repverts_[nv] = mesh_v;
-      }
-      if (bevvert_newfaces_[bv].size() == 0) {
-        continue;
-      }
-      const int first_v = bevvert_newverts_[bv][0];
-      const int first_e = bevvert_newedges_[bv][0];
-      const int first_f = bevvert_newfaces_[bv][0];
-      for (const int f : IndexRange(bevvert_newfaces_[bv].size())) {
-        auto [verts, edges] = pat.face_verts_and_edges(f, first_v, first_e);
-        build_newface(f + first_f, verts, edges);
-        for (const int i : edges.index_range()) {
-          build_newedge(edges[i], verts[i], verts[(i + 1) % verts.size()]);
+      if (bevvert_newfaces_[bv].size() > 0) {
+        const int first_v = bevvert_newverts_[bv][0];
+        const int first_e = bevvert_newedges_[bv][0];
+        const int first_f = bevvert_newfaces_[bv][0];
+        for (const int f : IndexRange(bevvert_newfaces_[bv].size())) {
+          auto [verts, edges] = pat.face_verts_and_edges(f, first_v, first_e);
+          build_newface(f + first_f, verts, edges);
+          for (const int i : edges.index_range()) {
+            build_newedge(edges[i], verts[i], verts[(i + 1) % verts.size()]);
+          }
         }
       }
+      set_vertex_mesh_reps(bv,
+                           newvert_repverts_.as_mutable_span(),
+                           newedge_repedges_.as_mutable_span(),
+                           newface_repfaces_.as_mutable_span(),
+                           *this);
     }
   });
 }
