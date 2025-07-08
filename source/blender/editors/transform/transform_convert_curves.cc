@@ -36,9 +36,10 @@
 
 namespace blender::ed::transform::curves {
 
-static void create_aligned_handles_masks(const bke::CurvesGeometry &curves,
-                                         const Span<IndexMask> points_to_transform_per_attr,
-                                         TransCustomData &custom_data)
+void create_aligned_handles_masks(const bke::CurvesGeometry &curves,
+                                  const Span<IndexMask> points_to_transform_per_attr,
+                                  const int curve_index,
+                                  TransCustomData &custom_data)
 {
   if (points_to_transform_per_attr.size() == 1) {
     return;
@@ -75,9 +76,9 @@ static void create_aligned_handles_masks(const bke::CurvesGeometry &curves,
       aligned_handles_to_selection(handle_types_right),
       memory);
 
-  transform_data.aligned_with_left = IndexMask::from_intersection(
+  transform_data.aligned_with_left[curve_index] = IndexMask::from_intersection(
       selected_left_handles, both_aligned, transform_data.memory);
-  transform_data.aligned_with_right = IndexMask::from_intersection(
+  transform_data.aligned_with_right[curve_index] = IndexMask::from_intersection(
       selected_right_handles, both_aligned, transform_data.memory);
 }
 
@@ -158,8 +159,8 @@ static IndexMask handles_by_type(const IndexMask handles,
       handles, GrainSize(4096), memory, [&](const int64_t i) { return types[i] == type; });
 }
 
-static void update_vector_handle_types(const IndexMask &selected_handles,
-                                       MutableSpan<int8_t> handle_types)
+void update_vector_handle_types(const IndexMask &selected_handles,
+                                MutableSpan<int8_t> handle_types)
 {
   IndexMaskMemory memory;
   /* Selected BEZIER_HANDLE_VECTOR handles. */
@@ -188,11 +189,11 @@ static void update_auto_handle_types(const IndexMask &auto_handles,
   index_mask::masked_fill(handle_types, int8_t(BEZIER_HANDLE_ALIGN), convert_to_align);
 }
 
-static void update_auto_handle_types(const IndexMask &selected_handles_left,
-                                     const IndexMask &selected_handles_right,
-                                     const IndexMask &bezier_points,
-                                     MutableSpan<int8_t> handle_types_left,
-                                     MutableSpan<int8_t> handle_types_right)
+void update_auto_handle_types(const IndexMask &selected_handles_left,
+                              const IndexMask &selected_handles_right,
+                              const IndexMask &bezier_points,
+                              MutableSpan<int8_t> handle_types_left,
+                              MutableSpan<int8_t> handle_types_right)
 {
   IndexMaskMemory memory;
   const IndexMask auto_left = handles_by_type(
@@ -279,6 +280,7 @@ static void createTransCurvesVerts(bContext *C, TransInfo *t)
       update_vector_handle_types(selected_right, handle_types_right);
       update_auto_handle_types(
           selected_left, selected_right, bezier_points, handle_types_left, handle_types_right);
+      curves.tag_topology_changed();
 
       index_mask::ExprBuilder builder;
       const index_mask::Expr &selected_bezier_points = builder.intersect(
@@ -349,6 +351,10 @@ static void createTransCurvesVerts(bContext *C, TransInfo *t)
       value_attribute = attribute_writer.span;
     }
 
+    CurvesTransformData &transform_data = *static_cast<CurvesTransformData *>(tc.custom.type.data);
+    transform_data.aligned_with_left.reinitialize(1);
+    transform_data.aligned_with_right.reinitialize(1);
+
     curve_populate_trans_data_structs(*t,
                                       tc,
                                       curves,
@@ -359,15 +365,16 @@ static void createTransCurvesVerts(bContext *C, TransInfo *t)
                                       curves.curves_range(),
                                       use_connected_only,
                                       bezier_curves[i]);
-    create_aligned_handles_masks(curves, points_to_transform_per_attribute[i], tc.custom.type);
+    create_aligned_handles_masks(curves, points_to_transform_per_attribute[i], 0, tc.custom.type);
 
     /* TODO: This is wrong. The attribute writer should live at least as long as the span. */
     attribute_writer.finish();
   }
 }
 
-static void calculate_aligned_handles(const TransCustomData &custom_data,
-                                      bke::CurvesGeometry &curves)
+void calculate_aligned_handles(const TransCustomData &custom_data,
+                               bke::CurvesGeometry &curves,
+                               const int curve_index)
 {
   if (ed::curves::get_curves_selection_attribute_names(curves).size() == 1) {
     return;
@@ -379,10 +386,14 @@ static void calculate_aligned_handles(const TransCustomData &custom_data,
   MutableSpan<float3> handle_positions_left = curves.handle_positions_left_for_write();
   MutableSpan<float3> handle_positions_right = curves.handle_positions_right_for_write();
 
-  bke::curves::bezier::calculate_aligned_handles(
-      transform_data.aligned_with_left, positions, handle_positions_left, handle_positions_right);
-  bke::curves::bezier::calculate_aligned_handles(
-      transform_data.aligned_with_right, positions, handle_positions_right, handle_positions_left);
+  bke::curves::bezier::calculate_aligned_handles(transform_data.aligned_with_left[curve_index],
+                                                 positions,
+                                                 handle_positions_left,
+                                                 handle_positions_right);
+  bke::curves::bezier::calculate_aligned_handles(transform_data.aligned_with_right[curve_index],
+                                                 positions,
+                                                 handle_positions_right,
+                                                 handle_positions_left);
 }
 
 static void recalcData_curves(TransInfo *t)
@@ -410,7 +421,7 @@ static void recalcData_curves(TransInfo *t)
       }
       curves.tag_positions_changed();
       curves.calculate_bezier_auto_handles();
-      calculate_aligned_handles(tc.custom.type, curves);
+      calculate_aligned_handles(tc.custom.type, curves, 0);
     }
     DEG_id_tag_update(&curves_id->id, ID_RECALC_GEOMETRY);
   }
