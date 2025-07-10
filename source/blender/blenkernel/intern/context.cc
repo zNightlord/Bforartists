@@ -1178,6 +1178,9 @@ ViewLayer *CTX_data_view_layer(const bContext *C)
 
   wmWindow *win = CTX_wm_window(C);
   Scene *scene = CTX_data_scene(C);
+  if (!scene) {
+    return nullptr;
+  }
   if (win) {
     view_layer = BKE_view_layer_find(scene, win->view_layer_name);
     if (view_layer) {

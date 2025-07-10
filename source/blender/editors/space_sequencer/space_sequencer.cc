@@ -321,7 +321,7 @@ static void sequencer_listener(const wmSpaceTypeListenerParams *params)
 
 /* DO NOT make this static, this hides the symbol and breaks API generation script. */
 extern "C" const char *sequencer_context_dir[]; /* Quiet warning. */
-const char *sequencer_context_dir[] = {"edit_mask", nullptr};
+const char *sequencer_context_dir[] = {"edit_mask", "scene", nullptr};
 
 static int /*eContextResult*/ sequencer_context(const bContext *C,
                                                 const char *member,
@@ -332,6 +332,10 @@ static int /*eContextResult*/ sequencer_context(const bContext *C,
   if (CTX_data_dir(member)) {
     CTX_data_dir_set(result, sequencer_context_dir);
 
+    return CTX_RESULT_OK;
+  }
+  if (CTX_data_equals(member, "scene")) {
+    CTX_data_id_pointer_set(result, nullptr);
     return CTX_RESULT_OK;
   }
   if (CTX_data_equals(member, "edit_mask")) {
