@@ -4713,9 +4713,22 @@ static void set_vertex_mesh_reps(const int bv,
   /* Placeholder logic for edges. TODO: fix. */
   if (bs.any_edge_attributes && pat.kind == MeshKind::Adj && pat.num_segs > 1) {
     /* Use the beveled edge as rep for the "center lines" between anchors. */
-    int seg_half = pat.num_segs / 2;
+    const int rings = adj::e_num_crossrings(pat.num_segs);
+    const int ne_start = bs.bevvert_newedges()[bv][0];
+    Span<int> edges = bs.bevvert_bevedges()[bv];
     for (const int a : IndexRange(pat.num_anchors)) {
-      
+      const int nv_a = pat.anchor_vert(a);
+      const int be_pos = bs.last_attached_bevedge_pos(bv, nv_a);
+      const int be = edges[be_pos];
+      const int mesh_e = bs.bevedge_mesh_edges()[be];
+      for (const int r : IndexRange(rings)) {
+        const int start = adj::e_crossring_start(r, pat.num_anchors, pat.num_segs);
+        const int len = adj::e_crossring_len(r, pat.num_anchors, pat.num_segs);
+        const int side_len = len / pat.num_anchors;
+        const int c_index = (pat.num_segs % 2) == 1 ? side_len / 2 - 1 : side_len / 2;
+        const int e = ne_start + start + a * side_len + c_index;
+        repedges[e] = mesh_e;
+      }
     }
   }
 }
@@ -5148,7 +5161,6 @@ static std::optional<Mesh *> build_mesh(const BevelState &bs,
           if (rep[ne] >= 0) {
             src.varray.get(rep[ne], dst_span[new_edge_map(ne)]);
           }
-          break;
         }
         break;
       }
