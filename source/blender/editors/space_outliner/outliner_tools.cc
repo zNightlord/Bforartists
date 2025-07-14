@@ -98,7 +98,7 @@
 
 namespace blender::ed::outliner {
 
-static CLG_LogRef LOG = {"ed.outliner.tools"};
+static CLG_LogRef LOG = {"outliner.tools"};
 
 /* -------------------------------------------------------------------- */
 /** \name ID/Library/Data Set/Un-link Utilities
@@ -3624,12 +3624,12 @@ static wmOperatorStatus outliner_operator_menu(bContext *C, const char *opname)
   layout->operator_context_set(WM_OP_INVOKE_REGION_WIN);
 
   if (WM_operator_poll(C, ot)) {
-    uiItemsEnumO(layout, ot->idname, RNA_property_identifier(ot->prop));
+    layout->op_enum(ot->idname, RNA_property_identifier(ot->prop));
 
     layout->separator();
   }
 
-  uiItemMContents(layout, "OUTLINER_MT_context_menu");
+  layout->menu_contents("OUTLINER_MT_context_menu");
 
   UI_popup_menu_end(C, pup);
 
