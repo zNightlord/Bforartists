@@ -322,32 +322,17 @@ static void sequencer_listener(const wmSpaceTypeListenerParams *params)
 
 /* DO NOT make this static, this hides the symbol and breaks API generation script. */
 extern "C" const char *sequencer_context_dir[]; /* Quiet warning. */
-const char *sequencer_context_dir[] = {"scene", "view_layer", "edit_mask", nullptr};
+const char *sequencer_context_dir[] = {"edit_mask", nullptr};
 
 static int /*eContextResult*/ sequencer_context(const bContext *C,
                                                 const char *member,
                                                 bContextDataResult *result)
 {
+  Scene *scene = CTX_data_sequencer_scene(C);
+
   if (CTX_data_dir(member)) {
     CTX_data_dir_set(result, sequencer_context_dir);
 
-    return CTX_RESULT_OK;
-  }
-  if (CTX_data_equals(member, "scene")) {
-    WorkSpace *workspace = CTX_wm_workspace(C);
-    BLI_assert(workspace);
-    BLI_assert(workspace->sequencer_scene);
-    CTX_data_id_pointer_set(result, &workspace->sequencer_scene->id);
-    return CTX_RESULT_OK;
-  }
-  if (CTX_data_equals(member, "view_layer")) {
-    WorkSpace *workspace = CTX_wm_workspace(C);
-    BLI_assert(workspace);
-    BLI_assert(workspace->sequencer_scene);
-    CTX_data_pointer_set(result,
-                         nullptr,
-                         &RNA_ViewLayer,
-                         BKE_view_layer_default_render(workspace->sequencer_scene));
     return CTX_RESULT_OK;
   }
   if (CTX_data_equals(member, "edit_mask")) {
@@ -491,7 +476,7 @@ static void sequencer_main_clamp_view(const bContext *C, ARegion *region)
   }
 
   View2D *v2d = &region->v2d;
-  Scene *scene = CTX_data_scene(C);
+  Scene *scene = CTX_data_sequencer_scene(C);
 
   /* Transformation uses edge panning to move view. Also if smooth view is running, don't apply
    * clamping to prevent overriding this functionality. */
