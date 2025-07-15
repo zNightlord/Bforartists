@@ -3288,7 +3288,8 @@ static void SCREEN_OT_frame_offset(wmOperatorType *ot)
 /* function to be called outside UI context, or for redo */
 static wmOperatorStatus frame_jump_exec(bContext *C, wmOperator *op)
 {
-  Scene *scene = CTX_data_scene(C);
+  const bool is_sequencer = CTX_wm_space_seq(C) != nullptr;
+  Scene *scene = is_sequencer ? CTX_data_sequencer_scene(C) : CTX_data_scene(C);
   wmTimer *animtimer = CTX_wm_screen(C)->animtimer;
 
   /* Don't change scene->r.cfra directly if animtimer is running as this can cause
@@ -3531,7 +3532,8 @@ static void SCREEN_OT_keyframe_jump(wmOperatorType *ot)
 /* function to be called outside UI context, or for redo */
 static wmOperatorStatus marker_jump_exec(bContext *C, wmOperator *op)
 {
-  Scene *scene = CTX_data_scene(C);
+  const bool is_sequencer = CTX_wm_space_seq(C) != nullptr;
+  Scene *scene = is_sequencer ? CTX_data_sequencer_scene(C) : CTX_data_scene(C);
   int closest = scene->r.cfra;
   const bool next = RNA_boolean_get(op->ptr, "next");
   bool found = false;
@@ -5851,14 +5853,17 @@ bScreen *ED_screen_animation_no_scrub(const wmWindowManager *wm)
 wmOperatorStatus ED_screen_animation_play(bContext *C, int sync, int mode)
 {
   bScreen *screen = CTX_wm_screen(C);
-  Scene *scene = CTX_data_scene(C);
+  const bool is_sequencer = CTX_wm_space_seq(C) != nullptr;
+  Scene *scene = is_sequencer ? CTX_data_sequencer_scene(C) : CTX_data_scene(C);
+  ViewLayer *view_layer = is_sequencer ? BKE_view_layer_default_render(scene) :
+                                         CTX_data_view_layer(C);
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
   Scene *scene_eval = DEG_get_evaluated_scene(depsgraph);
   Main *bmain = DEG_get_bmain(depsgraph);
 
   if (ED_screen_animation_playing(CTX_wm_manager(C))) {
     /* stop playback now */
-    ED_screen_animation_timer(C, 0, 0, 0);
+    ED_screen_animation_timer(C, scene, view_layer, 0, 0, 0);
     ED_scene_fps_average_clear(scene);
     BKE_sound_stop_scene(scene_eval);
 
@@ -5866,12 +5871,11 @@ wmOperatorStatus ED_screen_animation_play(bContext *C, int sync, int mode)
     WorkSpace *workspace = CTX_wm_workspace(C);
     if (workspace && workspace->sequencer_scene && workspace->sequencer_scene != scene) {
       Depsgraph *depsgraph = BKE_scene_ensure_depsgraph(
-          CTX_data_main(C),
+          bmain,
           workspace->sequencer_scene,
           BKE_view_layer_default_render(workspace->sequencer_scene));
       Scene *seq_scene_eval = DEG_get_evaluated_scene(depsgraph);
       BKE_sound_stop_scene(seq_scene_eval);
-      WM_event_add_notifier(C, NC_SPACE | ND_SPACE_SEQUENCER, workspace->sequencer_scene);
     }
 
     BKE_callback_exec_id_depsgraph(
@@ -5892,7 +5896,18 @@ wmOperatorStatus ED_screen_animation_play(bContext *C, int sync, int mode)
       BKE_sound_play_scene(scene_eval);
     }
 
-    ED_screen_animation_timer(C, screen->redraws_flag, sync, mode);
+    /* Stop sound for sequencer scene. */
+    WorkSpace *workspace = CTX_wm_workspace(C);
+    if (workspace && workspace->sequencer_scene && workspace->sequencer_scene != scene) {
+      Depsgraph *depsgraph = BKE_scene_ensure_depsgraph(
+          bmain,
+          workspace->sequencer_scene,
+          BKE_view_layer_default_render(workspace->sequencer_scene));
+      Scene *seq_scene_eval = DEG_get_evaluated_scene(depsgraph);
+      BKE_sound_play_scene(seq_scene_eval);
+    }
+
+    ED_screen_animation_timer(C, scene, view_layer, screen->redraws_flag, sync, mode);
     ED_scene_fps_average_clear(scene);
 
     if (screen->animtimer) {

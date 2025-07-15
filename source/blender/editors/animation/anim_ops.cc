@@ -526,7 +526,8 @@ static float apply_frame_snap(bContext *C, FrameChangeModalData &op_data, const 
 /* Set the new frame number */
 static void change_frame_apply(bContext *C, wmOperator *op, const bool always_update)
 {
-  Scene *scene = CTX_data_scene(C);
+  const bool is_sequencer = CTX_wm_space_seq(C) != nullptr;
+  Scene *scene = is_sequencer ? CTX_data_sequencer_scene(C) : CTX_data_scene(C);
   float frame = RNA_float_get(op->ptr, "frame");
   bool do_snap = RNA_boolean_get(op->ptr, "snap");
 
@@ -626,7 +627,7 @@ static bool use_playhead_snapping(bContext *C)
 
 static bool sequencer_skip_for_handle_tweak(const bContext *C, const wmEvent *event)
 {
-  const Scene *scene = CTX_data_scene(C);
+  Scene *scene = CTX_data_sequencer_scene(C);
   if (!blender::seq::editing_get(scene)) {
     return false;
   }
@@ -860,7 +861,8 @@ static bool anim_set_end_frames_poll(bContext *C)
 
 static wmOperatorStatus anim_set_sfra_exec(bContext *C, wmOperator *op)
 {
-  Scene *scene = CTX_data_scene(C);
+  const bool is_sequencer = CTX_wm_space_seq(C) != nullptr;
+  Scene *scene = is_sequencer ? CTX_data_sequencer_scene(C) : CTX_data_scene(C);
   int frame;
 
   if (scene == nullptr) {
@@ -915,7 +917,8 @@ static void ANIM_OT_start_frame_set(wmOperatorType *ot)
 
 static wmOperatorStatus anim_set_efra_exec(bContext *C, wmOperator *op)
 {
-  Scene *scene = CTX_data_scene(C);
+  const bool is_sequencer = CTX_wm_space_seq(C) != nullptr;
+  Scene *scene = is_sequencer ? CTX_data_sequencer_scene(C) : CTX_data_scene(C);
   int frame;
 
   if (scene == nullptr) {
@@ -976,7 +979,8 @@ static void ANIM_OT_end_frame_set(wmOperatorType *ot)
 
 static wmOperatorStatus previewrange_define_exec(bContext *C, wmOperator *op)
 {
-  Scene *scene = CTX_data_scene(C);
+  const bool is_sequencer = CTX_wm_space_seq(C) != nullptr;
+  Scene *scene = is_sequencer ? CTX_data_sequencer_scene(C) : CTX_data_scene(C);
   ARegion *region = CTX_wm_region(C);
   float sfra, efra;
   rcti rect;
@@ -1040,7 +1044,8 @@ static void ANIM_OT_previewrange_set(wmOperatorType *ot)
 
 static wmOperatorStatus previewrange_clear_exec(bContext *C, wmOperator * /*op*/)
 {
-  Scene *scene = CTX_data_scene(C);
+  const bool is_sequencer = CTX_wm_space_seq(C) != nullptr;
+  Scene *scene = is_sequencer ? CTX_data_sequencer_scene(C) : CTX_data_scene(C);
   ScrArea *curarea = CTX_wm_area(C);
 
   /* sanity checks */
@@ -1136,9 +1141,9 @@ static void ANIM_OT_debug_channel_list(wmOperatorType *ot)
 static wmOperatorStatus scene_range_frame_exec(bContext *C, wmOperator * /*op*/)
 {
   ARegion *region = CTX_wm_region(C);
-  const Scene *scene = CTX_data_scene(C);
+  const bool is_sequencer = CTX_wm_space_seq(C) != nullptr;
+  const Scene *scene = is_sequencer ? CTX_data_sequencer_scene(C) : CTX_data_scene(C);
   BLI_assert(region);
-  BLI_assert(scene);
 
   View2D &v2d = region->v2d;
   v2d.cur.xmin = PSFRA;

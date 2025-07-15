@@ -1849,12 +1849,11 @@ ScrArea *ED_screen_temp_space_open(bContext *C,
   return area;
 }
 
-void ED_screen_animation_timer(bContext *C, int redraws, int sync, int enable)
+void ED_screen_animation_timer(bContext *C, Scene *scene, ViewLayer *view_layer, int redraws, int sync, int enable)
 {
   bScreen *screen = CTX_wm_screen(C);
   wmWindowManager *wm = CTX_wm_manager(C);
   wmWindow *win = CTX_wm_window(C);
-  Scene *scene = CTX_data_scene(C);
   bScreen *stopscreen = ED_screen_animation_playing(wm);
 
   if (stopscreen) {
@@ -1869,7 +1868,7 @@ void ED_screen_animation_timer(bContext *C, int redraws, int sync, int enable)
 
     sad->region = CTX_wm_region(C);
     sad->scene = scene;
-    sad->view_layer = CTX_data_view_layer(C);
+    sad->view_layer = view_layer;
 
     sad->do_scene_syncing = blender::ed::vse::is_scene_time_sync_needed(*C);
 

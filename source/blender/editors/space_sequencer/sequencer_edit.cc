@@ -327,9 +327,8 @@ static Scene *get_sequence_scene_from_context(const bContext &C)
     /* If we're playing a scene that's not a sequence scene, don't try and sync. */
     return nullptr;
   }
-  WorkSpace *workspace = CTX_wm_workspace(&C);
   if (is_scene_time_sync_needed(C)) {
-    return workspace->sequencer_scene;
+    return CTX_data_sequencer_scene(&C);
   }
   return nullptr;
 }

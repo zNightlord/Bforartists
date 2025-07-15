@@ -385,7 +385,7 @@ static void SCENE_OT_new_sequencer(wmOperatorType *ot)
 /** \} */
 
 /* -------------------------------------------------------------------- */
-/** \name New Scene Sequencer Operator
+/** \name New Sequencer Scene Operator
  * \{ */
 
 static wmOperatorStatus new_sequencer_scene_exec(bContext *C, wmOperator *op)
@@ -422,6 +422,44 @@ static void SCENE_OT_new_sequencer_scene(wmOperatorType *ot)
   /* properties */
   ot->prop = RNA_def_enum(ot->srna, "type", scene_new_items, SCE_COPY_NEW, "Type", "");
   RNA_def_property_translation_context(ot->prop, BLT_I18NCONTEXT_ID_SCENE);
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Delete Sequencer Scene Operator
+ * \{ */
+
+static wmOperatorStatus delete_sequencer_scene_exec(bContext *C, wmOperator * /*op*/)
+{
+  Main *bmain = CTX_data_main(C);
+  WorkSpace *workspace = CTX_wm_workspace(C);
+
+  if (workspace->sequencer_scene) {
+    wmWindowManager *wm = static_cast<wmWindowManager *>(bmain->wm.first);
+    WM_jobs_kill_all_from_owner(wm, workspace->sequencer_scene);
+    BKE_id_delete(bmain, workspace->sequencer_scene);
+    workspace->sequencer_scene = nullptr;
+
+    WM_event_add_notifier(C, NC_WINDOW, nullptr);
+  }
+
+  return OPERATOR_FINISHED;
+}
+
+static void SCENE_OT_delete_sequencer_scene(wmOperatorType *ot)
+{
+
+  /* identifiers */
+  ot->name = "Delete Sequencer Scene";
+  ot->description = "Delete scene used by the sequencer in this workspace";
+  ot->idname = "SCENE_OT_delete_sequencer_scene";
+
+  /* API callbacks. */
+  ot->exec = delete_sequencer_scene_exec;
+
+  /* flags */
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
 
 /** \} */
@@ -520,6 +558,7 @@ void ED_operatortypes_scene()
   WM_operatortype_append(SCENE_OT_delete);
   WM_operatortype_append(SCENE_OT_new_sequencer);
   WM_operatortype_append(SCENE_OT_new_sequencer_scene);
+  WM_operatortype_append(SCENE_OT_delete_sequencer_scene);
 
   WM_operatortype_append(SCENE_OT_drop_scene_asset);
 }

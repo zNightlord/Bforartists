@@ -513,8 +513,7 @@ void wm_event_do_depsgraph(bContext *C, bool is_after_open_file)
     Main *bmain = CTX_data_main(C);
 
     /* Update dependency graph of sequencer scene. */
-    WorkSpace *workspace = WM_window_get_active_workspace(win);
-    Scene *sequencer_scene = workspace->sequencer_scene;
+    Scene *sequencer_scene = CTX_data_sequencer_scene(C);
     if (sequencer_scene && sequencer_scene != scene) {
       Depsgraph *depsgraph = BKE_scene_ensure_depsgraph(
           bmain, sequencer_scene, BKE_view_layer_default_render(sequencer_scene));

@@ -182,7 +182,7 @@ class SEQUENCER_HT_header(Header):
 
         if st.view_type == 'SEQUENCER':
             row = layout.row(align=True)
-            row.template_ID(context.workspace, "sequencer_scene", new="scene.new_sequencer_scene")
+            row.template_ID(context.workspace, "sequencer_scene", new="scene.new_sequencer_scene", unlink="scene.delete_sequencer_scene")
 
         if st.view_type == 'PREVIEW':
             layout.prop(sequencer_tool_settings, "pivot_point", text="", icon_only=True)
