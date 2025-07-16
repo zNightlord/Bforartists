@@ -16,6 +16,7 @@
 
 #include "MEM_guardedalloc.h"
 
+#include "BLI_array_utils.hh"
 #include "BLI_index_mask.hh"
 #include "BLI_listbase.h"
 #include "BLI_listbase_wrapper.hh"
@@ -414,6 +415,78 @@ static ArmatureDeformParams get_armature_deform_params(
   return deform_params;
 }
 
+struct VertexGroupMask {
+  int def_nr;
+  IndexMask mask;
+  /* Compressed weights, matches positions in the index mask. */
+  Array<float> weights;
+};
+
+static Vector<VertexGroupMask> vertex_groups_to_masks(const Span<MDeformVert> dverts,
+                                                      const IndexMask &selection,
+                                                      const IndexRange def_nr_range,
+                                                      const std::optional<float> weight_threshold,
+                                                      const bool discard_empty_groups,
+                                                      IndexMaskMemory &memory)
+{
+  Array<int> def_nr_counts(def_nr_range.size() + 1, 0);
+  selection.foreach_index(GrainSize(1024), [&](const int index) {
+    const MDeformVert &dvert = dverts[index];
+    const Span<MDeformWeight> dweights(dvert.dw, dvert.totweight);
+    for (const MDeformWeight &dw : dweights) {
+      if (!def_nr_range.contains(dw.def_nr)) {
+        continue;
+      }
+      if (weight_threshold && dw.weight < *weight_threshold) {
+        continue;
+      }
+
+      ++def_nr_counts[def_nr_range[dw.def_nr]];
+    }
+  });
+  const OffsetIndices verts_by_def_nr = offset_indices::accumulate_counts_to_offsets(
+      def_nr_counts);
+
+  Array<int> all_indices(verts_by_def_nr.total_size());
+  Array<float> all_weights(verts_by_def_nr.total_size());
+  Array<int> next_entry = def_nr_counts.as_span().drop_back(1);
+  selection.foreach_index(GrainSize(1024), [&](const int index) {
+    const MDeformVert &dvert = dverts[index];
+    const Span<MDeformWeight> dweights(dvert.dw, dvert.totweight);
+    for (const MDeformWeight &dw : dweights) {
+      if (!def_nr_range.contains(dw.def_nr)) {
+        continue;
+      }
+      if (weight_threshold && dw.weight < *weight_threshold) {
+        continue;
+      }
+
+      const int def_nr_i = dw.def_nr - def_nr_range.start();
+      int &entry = next_entry[def_nr_i];
+      BLI_assert(entry < def_nr_counts[def_nr_i + 1]);
+      all_indices[entry] = index;
+      all_weights[entry] = dw.weight;
+      ++entry;
+    }
+  });
+
+  Vector<VertexGroupMask> group_masks;
+  group_masks.reserve(def_nr_range.size());
+  for (const int def_nr_i : def_nr_range.index_range()) {
+    const IndexRange entries = verts_by_def_nr[def_nr_i];
+    if (discard_empty_groups && entries.is_empty()) {
+      continue;
+    }
+
+    const int def_nr = def_nr_range[def_nr_i];
+    IndexMask mask = IndexMask::from_indices(all_indices.as_span().slice(entries), memory);
+    Array<float> weights = all_weights.as_span().slice(entries);
+    group_masks.append_unchecked({def_nr, std::move(mask), std::move(weights)});
+  }
+
+  return group_masks;
+}
+
 /* Accumulate bone deformations using the mixer implementation. */
 template<typename MixerT>
 static void armature_vert_task_with_mixer(const ArmatureDeformParams &params,
@@ -517,6 +590,138 @@ static void armature_vert_task_with_mixer(const ArmatureDeformParams &params,
   }
 }
 
+/* Accumulate bone deformations using the mixer implementation. */
+template<typename MixerT>
+static void armature_vert_task_with_mixer(const ArmatureDeformParams &params,
+                                          const IndexMask &selection,
+                                          const std::optional<Span<MDeformVert>> dverts)
+{
+  constexpr GrainSize grain_size = GrainSize(1024);
+  const bool full_deform = params.vert_deform_mats.has_value();
+
+  /* Input coordinates to start from. */
+  Array<float3> positions = params.vert_coords_prev ? *params.vert_coords_prev :
+                                                      params.vert_coords;
+  /* Transform to armature space. */
+  selection.foreach_index(grain_size, [&](const int index) {
+    float3 &position = positions[index];
+    position = math::transform_point(params.target_to_armature, position);
+  });
+
+  Array<MixerT> mixers(positions.size(), MixerT{});
+  Array<float> contrib(positions.size(), 0.0f);
+  Array<bool> deformed(positions.size(), false);
+  /* Apply vertex group deformation if enabled. */
+  if (params.use_dverts && dverts) {
+    /* Range of valid def_nr in MDeformWeight. */
+    const IndexRange def_nr_range = params.pose_channel_by_vertex_group.index_range();
+    IndexMaskMemory memory;
+    /* Build index masks for all vertex groups.
+     * TODO It may be worthwile to cache this - unless in the future the sparse attribute storage
+     * will provide vertex weights in this order anyway, which would make index masks a lot
+     * cheaper to create. */
+    const Vector<VertexGroupMask> group_masks = vertex_groups_to_masks(
+        *dverts, selection, def_nr_range, std::nullopt, true, memory);
+
+    for (const VertexGroupMask &group_mask : group_masks) {
+      BLI_assert(def_nr_range.contains(group_mask.def_nr));
+      const bPoseChannel *pchan = params.pose_channel_by_vertex_group[group_mask.def_nr];
+      if (pchan == nullptr) {
+        continue;
+      }
+      /* Bone option to mix with envelope weight. */
+      const Bone *bone = pchan->bone;
+      const bool use_envelope_multiply = (bone && bone->flag & BONE_MULT_VG_ENV);
+
+      group_mask.mask.foreach_index(grain_size, [&](const int index, const int pos) {
+        const float3 &position = positions[index];
+        /* Weights are stored as compressed array. */
+        float weight = group_mask.weights[pos];
+        /* Multiply with bone envelope falloff if enabled for this bone. */
+        if (use_envelope_multiply) {
+          weight *= distfactor_to_bone(position,
+                                       float3(bone->arm_head),
+                                       float3(bone->arm_tail),
+                                       bone->rad_head,
+                                       bone->rad_tail,
+                                       bone->dist);
+        }
+
+        contrib[index] += pchan_bone_deform(*pchan, weight, position, mixers[index]);
+        deformed[index] = true;
+      });
+    }
+  }
+  /* Use envelope if enabled and no bone deformed the vertex yet. */
+  if (params.use_envelope) {
+    selection.foreach_index(grain_size, [&](const int index) {
+      if (deformed[index]) {
+        return;
+      }
+
+      const float3 &position = positions[index];
+      for (const bPoseChannel *pchan : params.pose_channels) {
+        if (!(pchan->bone->flag & BONE_NO_DEFORM)) {
+          contrib[index] += dist_bone_deform(*pchan, position, mixers[index]);
+        }
+      }
+    });
+  }
+
+  selection.foreach_index(grain_size, [&](const int index) {
+    float3 &position = positions[index];
+
+    /* Overall influence, can change by masking with a vertex group. */
+    float armature_weight = 1.0f;
+    float prevco_weight = 0.0f; /* weight for optional cached vertexcos */
+    if (params.vert_influence) {
+      const float mask_weight = (*params.vert_influence)[index];
+      /* On multi-modifier the mask is used to blend with previous coordinates. */
+      if (params.vert_coords_prev) {
+        prevco_weight = params.invert_vgroup ? mask_weight : 1.0f - mask_weight;
+        if (prevco_weight == 1.0f) {
+          return;
+        }
+      }
+      else {
+        armature_weight = params.invert_vgroup ? 1.0f - mask_weight : mask_weight;
+        if (armature_weight == 0.0f) {
+          return;
+        }
+      }
+    }
+
+    /* TODO Actually should be EPSILON? Weight values and contrib can be like 10e-39 small. */
+    constexpr float contrib_threshold = 0.0001f;
+    if (contrib[index] > contrib_threshold) {
+      float3 delta_co;
+      float3x3 local_deform_mat;
+      mixers[index].finalize(
+          position, contrib[index], armature_weight, delta_co, local_deform_mat);
+
+      position += delta_co;
+      if (full_deform) {
+        float3x3 &deform_mat = (*params.vert_deform_mats)[index];
+        const float3x3 armature_to_target = params.armature_to_target.view<3, 3>();
+        const float3x3 target_to_armature = params.target_to_armature.view<3, 3>();
+        deform_mat = armature_to_target * local_deform_mat * target_to_armature * deform_mat;
+      }
+    }
+
+    /* Transform back to target object space. */
+    position = math::transform_point(params.armature_to_target, position);
+
+    /* Multi-modifier: Interpolate with previous modifier position using the vertex group mask. */
+    if (params.vert_coords_prev) {
+      copy_v3_v3(params.vert_coords[index],
+                 math::interpolate(position, params.vert_coords[index], prevco_weight));
+    }
+    else {
+      copy_v3_v3(params.vert_coords[index], position);
+    }
+  });
+}
+
 /* Accumulate bone deformations for a vertex. */
 static void armature_vert_task_with_dvert(const ArmatureDeformParams &deform_params,
                                           const int i,
@@ -546,32 +751,55 @@ static void armature_vert_task_with_dvert(const ArmatureDeformParams &deform_par
   }
 }
 
+/* Accumulate bone deformations. */
+static void armature_vert_task_with_dvert(const ArmatureDeformParams &deform_params,
+                                          const IndexMask &selection,
+                                          const std::optional<Span<MDeformVert>> dverts,
+                                          const bool use_quaternion)
+{
+  const bool full_deform = deform_params.vert_deform_mats.has_value();
+  if (use_quaternion) {
+    if (full_deform) {
+      armature_vert_task_with_mixer<bke::BoneDeformDualQuaternionMixer<true>>(
+          deform_params, selection, dverts);
+    }
+    else {
+      armature_vert_task_with_mixer<bke::BoneDeformDualQuaternionMixer<false>>(
+          deform_params, selection, dverts);
+    }
+  }
+  else {
+    if (full_deform) {
+      armature_vert_task_with_mixer<bke::BoneDeformLinearMixer<true>>(
+          deform_params, selection, dverts);
+    }
+    else {
+      armature_vert_task_with_mixer<bke::BoneDeformLinearMixer<false>>(
+          deform_params, selection, dverts);
+    }
+  }
+}
+
 static void armature_deform_coords(const MutableSpan<float3> vert_coords,
                                    const bool use_quaternion,
                                    const std::optional<Span<MDeformVert>> dverts,
-                                   const Mesh *me_target,
                                    const ArmatureDeformParams &deform_params)
 {
-  constexpr GrainSize grain_size = GrainSize(32);
-  const IndexMask full_range_mask = vert_coords.index_range();
-  const IndexMask &final_selection = deform_params.selection ? *deform_params.selection :
-                                                               full_range_mask;
-  final_selection.foreach_index(grain_size, [&](const int index) {
-    const MDeformVert *dvert = nullptr;
-    if (deform_params.use_dverts) {
-      if (me_target) {
-        BLI_assert(index < me_target->verts_num);
-        if (dverts) {
-          dvert = &(*dverts)[index];
-        }
-      }
-      else if (dverts && index < dverts->size()) {
-        dvert = &(*dverts)[index];
-      }
-    }
+  const IndexMask &masked_selection = deform_params.selection ?
+                                          *deform_params.selection :
+                                          IndexMask(vert_coords.index_range());
+  const bool use_dverts = deform_params.use_dverts && dverts;
+  /* Split selection to avoid checking each item for valid dvert individually. */
+  const IndexMask dvert_selection = use_dverts ?
+                                        masked_selection.slice_content(dverts->index_range()) :
+                                        IndexMask();
+  const IndexMask no_dvert_selection = use_dverts ?
+                                           masked_selection.slice_content(
+                                               dverts->size(), masked_selection.min_array_size()) :
+                                           masked_selection;
 
-    armature_vert_task_with_dvert(deform_params, index, dvert, use_quaternion);
-  });
+  armature_vert_task_with_dvert(deform_params, dvert_selection, dverts, use_quaternion);
+  armature_vert_task_with_dvert(deform_params, no_dvert_selection, std::nullopt, use_quaternion);
 }
 
 static std::optional<Array<float>> get_vert_influence_from_dverts(const ListBase &defbase,
@@ -765,7 +993,7 @@ void BKE_armature_deform_coords_with_curves(
                                                                             vert_influence,
                                                                             true);
   const bool use_quaternion = bool(deformflag & ARM_DEF_QUATERNION);
-  bke::armature_deform_coords(vert_coords, use_quaternion, dverts, nullptr, deform_params);
+  bke::armature_deform_coords(vert_coords, use_quaternion, dverts, deform_params);
 }
 
 void BKE_armature_deform_coords_with_mesh(
@@ -816,6 +1044,9 @@ void BKE_armature_deform_coords_with_mesh(
   {
     dverts_opt = dverts;
   }
+  if (me_target) {
+    BLI_assert(vert_coords.size() <= me_target->verts_num);
+  }
 
   std::optional<Array<float>> vert_influence;
   if (defbase && !defgrp_name.is_empty() && dverts_opt) {
@@ -832,7 +1063,7 @@ void BKE_armature_deform_coords_with_mesh(
       vert_influence,
       dverts_opt.has_value());
   const bool use_quaternion = bool(deformflag & ARM_DEF_QUATERNION);
-  bke::armature_deform_coords(vert_coords, use_quaternion, dverts_opt, me_target, deform_params);
+  bke::armature_deform_coords(vert_coords, use_quaternion, dverts_opt, deform_params);
 }
 
 void BKE_armature_deform_coords_with_editmesh(
@@ -895,7 +1126,7 @@ void BKE_armature_deform_vectors(
         selection,
         weights);
     bke::armature_deform_coords(
-        vectors, use_quaternion, vertex_group_params->dverts, nullptr, deform_params);
+        vectors, use_quaternion, vertex_group_params->dverts, deform_params);
   }
   else {
     bke::ArmatureDeformParams deform_params = bke::get_armature_deform_params(ob_arm,
@@ -908,7 +1139,7 @@ void BKE_armature_deform_vectors(
                                                                               false,
                                                                               selection,
                                                                               weights);
-    bke::armature_deform_coords(vectors, use_quaternion, std::nullopt, nullptr, deform_params);
+    bke::armature_deform_coords(vectors, use_quaternion, std::nullopt, deform_params);
   }
 }
 
