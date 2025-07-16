@@ -10,6 +10,13 @@
 
 #include "NOD_geometry_nodes_closure.hh"
 #include "NOD_geometry_nodes_closure_eval.hh"
+#include "NOD_rna_define.hh"
+
+#include "UI_interface_layout.hh"
+#include "UI_resources.hh"
+
+#include "RNA_access.hh"
+#include "RNA_enum_types.hh"
 
 #include "node_geometry_util.hh"
 
@@ -19,9 +26,6 @@ static void node_declare(NodeDeclarationBuilder &b)
 {
   b.use_custom_socket_order();
   b.allow_any_socket_order();
-
-  b.add_input<decl::Geometry>("Geometry");
-  b.add_output<decl::Geometry>("Geometry").align_with_previous();
 
   b.add_input<decl::Object>("Armature Object").hide_label();
 
@@ -43,26 +47,195 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_input<decl::Float>("Mask").default_value(1.0f).hide_value().field_on_all().description(
       "Influence of the deformation for each point");
 
-  b.add_output<decl::Matrix>("Deform Matrix")
-      .field_on_all()
-      .description("Local deformation gradient for each point");
+  const bNode *node = b.node_or_null();
+  if (node == nullptr) {
+    return;
+  }
+  const eNodeSocketDatatype data_type = eNodeSocketDatatype(node->custom1);
+
+  b.add_default_layout();
+
+  switch (data_type) {
+    case SOCK_VECTOR:
+      b.add_input<decl::Vector>("Position", "Value")
+          .implicit_field_on_all(NodeDefaultInputType::NODE_DEFAULT_INPUT_POSITION_FIELD);
+      b.add_output<decl::Vector>("Position", "Value").field_on_all().align_with_previous();
+      break;
+    case SOCK_MATRIX:
+      b.add_input<decl::Matrix>("Transform", "Value")
+          .field_on_all()
+          .description("Local deformation gradient for each point");
+      b.add_output<decl::Matrix>("Transform", "Value")
+          .field_on_all()
+          .description("Local deformation gradient for each point")
+          .align_with_previous();
+      break;
+    case SOCK_ROTATION:
+      b.add_input<decl::Rotation>("Rotation", "Value").field_on_all();
+      b.add_output<decl::Rotation>("Rotation", "Value").field_on_all().align_with_previous();
+      break;
+    default:
+      BLI_assert_unreachable();
+      break;
+  }
 }
+
+static void node_layout(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
+{
+  layout->use_property_split_set(true);
+  layout->use_property_decorate_set(false);
+  layout->prop(ptr, "data_type", UI_ITEM_NONE, "", ICON_NONE);
+}
+
+static void node_init(bNodeTree * /*tree*/, bNode *node)
+{
+  node->custom1 = SOCK_VECTOR;
+}
+
+class ArmatureDeformField final : public bke::GeometryFieldInput {
+ private:
+  const Object &armature_object_;
+  float4x4 target_to_world_;
+  const GField value_field_;
+  const Field<float> mask_field_;
+  bool use_envelope_;
+  bool use_vertex_groups_;
+  bool invert_vertex_groups_;
+  bool use_quaternion_;
+
+ public:
+  ArmatureDeformField(const Object &armature_object,
+                      const float4x4 &target_to_world,
+                      GField value_field,
+                      Field<float> mask_field,
+                      const bool use_envelope,
+                      const bool use_vertex_groups,
+                      const bool invert_vertex_groups,
+                      const bool use_quaternion)
+      : bke::GeometryFieldInput(value_field.cpp_type(), "Armature Deform"),
+        armature_object_(armature_object),
+        target_to_world_(target_to_world),
+        value_field_(std::move(value_field)),
+        mask_field_(std::move(mask_field)),
+        use_envelope_(use_envelope),
+        use_vertex_groups_(use_vertex_groups),
+        invert_vertex_groups_(invert_vertex_groups),
+        use_quaternion_(use_quaternion)
+  {
+  }
+
+  GVArray get_varray_for_context(const bke::GeometryFieldContext &context,
+                                 const IndexMask &mask) const final
+  {
+    const int64_t domain_size = context.attributes()->domain_size(context.domain());
+
+    GArray<> value_buffer(*type_, domain_size);
+    Array<float> mask_buffer(domain_size);
+    FieldEvaluator evaluator(context, domain_size);
+    evaluator.add_with_destination(mask_field_, mask_buffer.as_mutable_span());
+    evaluator.add_with_destination(value_field_, value_buffer.as_mutable_span());
+    evaluator.evaluate();
+    const std::optional<Span<float>> vert_influence = mask_buffer;
+
+    std::optional<ArmatureDeformVertexGroupParams> vgroup_params;
+    switch (context.type()) {
+      case GeometryComponent::Type::Mesh:
+        if (ELEM(context.domain(), AttrDomain::Point, AttrDomain::Edge, AttrDomain::Face)) {
+          if (const Mesh *mesh = context.mesh()) {
+            if (use_vertex_groups_) {
+              const ListBase *vertex_groups = BKE_id_defgroup_list_get(
+                  reinterpret_cast<const ID *>(mesh));
+              if (vertex_groups) {
+                vgroup_params = {*vertex_groups, mesh->deform_verts(), invert_vertex_groups_};
+              }
+            }
+          }
+        }
+        break;
+        // TODO read vertex groups where possible.
+      // case GeometryComponent::Type::Curve:
+      // case GeometryComponent::Type::GreasePencil:
+      //   break;
+      default:
+        break;
+    }
+
+    if (type_ == &CPPType::get<float3>()) {
+      BKE_armature_deform_vectors(armature_object_,
+                                  target_to_world_,
+                                  use_envelope_,
+                                  use_quaternion_,
+                                  mask,
+                                  vgroup_params,
+                                  vert_influence,
+                                  value_buffer.as_mutable_span().typed<float3>());
+    }
+    else if (type_ == &CPPType::get<float4x4>()) {
+      // TODO
+    }
+    else if (type_ == &CPPType::get<math::Quaternion>()) {
+      // TODO
+    }
+    else {
+      /* Unsupported field type for armature deformation. */
+      BLI_assert_unreachable();
+    }
+
+    return GVArray::ForGArray(std::move(value_buffer));
+  }
+
+  void for_each_field_input_recursive(FunctionRef<void(const FieldInput &)> fn) const override
+  {
+    value_field_.node().for_each_field_input_recursive(fn);
+    mask_field_.node().for_each_field_input_recursive(fn);
+  }
+
+  uint64_t hash() const override
+  {
+    return get_default_hash(get_default_hash(&armature_object_, target_to_world_, value_field_),
+                            get_default_hash(mask_field_, use_envelope_, use_vertex_groups_),
+                            get_default_hash(invert_vertex_groups_, use_quaternion_));
+  }
+
+  bool is_equal_to(const fn::FieldNode &other) const override
+  {
+    if (const ArmatureDeformField *other_deform = dynamic_cast<const ArmatureDeformField *>(
+            &other))
+    {
+      return &armature_object_ == &other_deform->armature_object_ &&
+             target_to_world_ == other_deform->target_to_world_ &&
+             value_field_ == other_deform->value_field_ &&
+             mask_field_ == other_deform->mask_field_ &&
+             use_envelope_ == other_deform->use_envelope_ &&
+             use_vertex_groups_ == other_deform->use_vertex_groups_ &&
+             invert_vertex_groups_ == other_deform->invert_vertex_groups_ &&
+             use_quaternion_ == other_deform->use_quaternion_;
+    }
+    return false;
+  }
+
+  std::optional<AttrDomain> preferred_domain(const GeometryComponent &component) const override
+  {
+    const std::optional<AttrDomain> domain = bke::try_detect_field_domain(component, value_field_);
+    if (domain.has_value() && *domain == AttrDomain::Corner) {
+      return AttrDomain::Point;
+    }
+    return domain;
+  }
+};
 
 static void node_geo_exec(GeoNodeExecParams params)
 {
+  GField value_field = params.extract_input<GField>("Value");
+
   const Object *armature_object = params.extract_input<Object *>("Armature Object");
   if (!armature_object || armature_object->type != OB_ARMATURE) {
-    params.set_output("Geometry", params.extract_input<GeometrySet>("Geometry"));
-    params.set_default_remaining_outputs();
+    params.set_output("Value", value_field);
     return;
   }
   const Object *self_object = params.self_object();
   BLI_assert(self_object != nullptr);
   const float4x4 &target_to_world = self_object->object_to_world();
-  const ListBase *vertex_groups = self_object->data ?
-                                      BKE_id_defgroup_list_get(
-                                          static_cast<const ID *>(self_object->data)) :
-                                      nullptr;
 
   const bool use_quaternion = params.extract_input<bool>("Preserve Volume");
   const bool use_envelope = params.extract_input<bool>("Use Envelope");
@@ -71,68 +244,34 @@ static void node_geo_exec(GeoNodeExecParams params)
   const ClosurePtr custom_weights = params.extract_input<ClosurePtr>("Custom Weights");
   const Field<float> mask_field = params.extract_input<Field<float>>("Mask");
 
-  GeometrySet geometry_set = params.extract_input<GeometrySet>("Geometry");
-  /* Deform matrix is only computed if necessary. */
-  const std::optional<std::string> deform_matrix_id =
-      params.get_output_anonymous_attribute_id_if_needed("Deform Matrix");
+  GField output_field{std::make_shared<ArmatureDeformField>(*armature_object,
+                                                            target_to_world,
+                                                            std::move(value_field),
+                                                            std::move(mask_field),
+                                                            use_envelope,
+                                                            use_vertex_groups,
+                                                            invert_vertex_groups,
+                                                            use_quaternion)};
+  params.set_output<GField>("Value", std::move(output_field));
+}
 
-  static const Array<GeometryComponent::Type> types = {GeometryComponent::Type::Mesh,
-                                                       GeometryComponent::Type::PointCloud,
-                                                       GeometryComponent::Type::Curve,
-                                                       GeometryComponent::Type::GreasePencil};
-  geometry_set.modify_geometry_sets([&](GeometrySet &geometry_set) {
-    if (geometry_set.has_mesh()) {
-      Mesh &mesh = *geometry_set.get_mesh_for_write();
-      std::optional<ArmatureDeformVertexGroupParams> vgroup_params;
-      if (use_vertex_groups && vertex_groups) {
-        vgroup_params = {*vertex_groups, mesh.deform_verts(), invert_vertex_groups};
-      }
-
-      std::optional<Span<float>> vert_influence;
-      Array<float> vert_influence_data;
-      if (mask_field) {
-        bke::MeshFieldContext field_context(mesh, AttrDomain::Point);
-        FieldEvaluator evaluator(field_context, mesh.verts_num);
-        vert_influence_data.reinitialize(mesh.verts_num);
-        evaluator.add_with_destination(mask_field, vert_influence_data.as_mutable_span());
-        evaluator.evaluate();
-        vert_influence = vert_influence_data;
-      }
-
-      SpanAttributeWriter<float4x4> deform_matrix_writer;
-      std::optional<Array<float3x3>> deform_matrix_buffer;
-      if (deform_matrix_id) {
-        deform_matrix_writer = mesh.attributes_for_write().lookup_or_add_for_write_span<float4x4>(
-            *deform_matrix_id, AttrDomain::Point);
-        // TODO armature deform should support outputting float4x4 directly instead of only
-        // float3x3. Then this extra buffer and conversion wouldn't be necessary.
-        deform_matrix_buffer = Array<float3x3>(mesh.verts_num, float3x3::identity());
-      }
-
-      BKE_armature_deform_coords(*armature_object,
-                                 target_to_world,
-                                 use_envelope,
-                                 use_quaternion,
-                                 vgroup_params,
-                                 vert_influence,
-                                 mesh.vert_positions_for_write(),
-                                 deform_matrix_writer ? deform_matrix_buffer : std::nullopt);
-
-      mesh.tag_positions_changed();
-
-      if (deform_matrix_writer) {
-        const Span<float3x3> deform_matrix3 = *deform_matrix_buffer;
-        threading::parallel_for(IndexRange(mesh.verts_num), 1024, [&](const IndexRange range) {
-          for (const int i : range) {
-            deform_matrix_writer.span[i] = float4x4(deform_matrix3[i]);
-          }
-        });
-        deform_matrix_writer.finish();
-      }
-    }
-  });
-
-  params.set_output("Geometry", std::move(geometry_set));
+static void node_rna(StructRNA *srna)
+{
+  RNA_def_node_enum(
+      srna,
+      "data_type",
+      "Data Type",
+      "Type of grid data",
+      rna_enum_node_socket_data_type_items,
+      NOD_inline_enum_accessors(custom1),
+      SOCK_FLOAT,
+      [](bContext * /*C*/, PointerRNA * /*ptr*/, PropertyRNA * /*prop*/, bool *r_free) {
+        *r_free = true;
+        return enum_items_filter(
+            rna_enum_node_socket_data_type_items, [](const EnumPropertyItem &item) -> bool {
+              return ELEM(item.value, SOCK_VECTOR, SOCK_ROTATION, SOCK_MATRIX);
+            });
+      });
 }
 
 static void node_register()
@@ -141,11 +280,15 @@ static void node_register()
 
   geo_node_type_base(&ntype, "GeometryNodeArmatureDeform");
   ntype.ui_name = "Armature Deform";
-  ntype.ui_description = "Deform geometry using armature bones";
-  ntype.nclass = NODE_CLASS_GEOMETRY;
+  ntype.ui_description = "Deformation using armature bones";
+  ntype.nclass = NODE_CLASS_CONVERTER;
   ntype.geometry_node_execute = node_geo_exec;
   ntype.declare = node_declare;
+  ntype.draw_buttons = node_layout;
+  ntype.initfunc = node_init;
   blender::bke::node_register_type(ntype);
+
+  node_rna(ntype.rna_ext.srna);
 }
 NOD_REGISTER_NODE(node_register)
 

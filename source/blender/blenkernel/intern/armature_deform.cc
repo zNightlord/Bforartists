@@ -16,6 +16,7 @@
 
 #include "MEM_guardedalloc.h"
 
+#include "BLI_index_mask.hh"
 #include "BLI_listbase.h"
 #include "BLI_listbase_wrapper.hh"
 #include "BLI_math_matrix.h"
@@ -286,6 +287,7 @@ struct ArmatureDeformParams {
   bool invert_vgroup = false;
   bool use_dverts = false;
 
+  const IndexMask *selection = nullptr;
   std::optional<Span<float>> vert_influence;
 
   /* List of all pose channels on the target object. */
@@ -364,6 +366,7 @@ static ArmatureDeformParams get_armature_deform_params(
     const bool use_envelope,
     const std::optional<ListBase> vertex_groups,
     const bool invert_vertex_groups,
+    const IndexMask &selection,
     std::optional<Span<float>> vert_influence)
 {
   ArmatureDeformParams deform_params;
@@ -372,6 +375,7 @@ static ArmatureDeformParams get_armature_deform_params(
   deform_params.vert_coords_prev = vert_coords_prev;
   deform_params.use_envelope = use_envelope;
   deform_params.invert_vgroup = invert_vertex_groups;
+  deform_params.selection = &selection;
   deform_params.vert_influence = vert_influence;
 
   deform_params.pose_channels = {ob_arm.pose->chanbase};
@@ -548,24 +552,25 @@ static void armature_deform_coords(const MutableSpan<float3> vert_coords,
                                    const Mesh *me_target,
                                    const ArmatureDeformParams &deform_params)
 {
-  constexpr int grain_size = 32;
-  threading::parallel_for(vert_coords.index_range(), grain_size, [&](const IndexRange range) {
-    for (const int i : range) {
-      const MDeformVert *dvert = nullptr;
-      if (deform_params.use_dverts) {
-        if (me_target) {
-          BLI_assert(i < me_target->verts_num);
-          if (dverts) {
-            dvert = &(*dverts)[i];
-          }
-        }
-        else if (dverts && i < dverts->size()) {
-          dvert = &(*dverts)[i];
+  constexpr GrainSize grain_size = GrainSize(32);
+  const IndexMask full_range_mask = vert_coords.index_range();
+  const IndexMask &final_selection = deform_params.selection ? *deform_params.selection :
+                                                               full_range_mask;
+  final_selection.foreach_index(grain_size, [&](const int index) {
+    const MDeformVert *dvert = nullptr;
+    if (deform_params.use_dverts) {
+      if (me_target) {
+        BLI_assert(index < me_target->verts_num);
+        if (dverts) {
+          dvert = &(*dverts)[index];
         }
       }
-
-      armature_vert_task_with_dvert(deform_params, i, dvert, use_quaternion);
+      else if (dverts && index < dverts->size()) {
+        dvert = &(*dverts)[index];
+      }
     }
+
+    armature_vert_task_with_dvert(deform_params, index, dvert, use_quaternion);
   });
 }
 
@@ -860,15 +865,15 @@ void BKE_armature_deform_coords_with_editmesh(
                                 cd_dvert_offset);
 }
 
-void BKE_armature_deform_coords(
+void BKE_armature_deform_vectors(
     const Object &ob_arm,
     const blender::float4x4 &target_to_world,
     const bool use_envelope,
     const bool use_quaternion,
+    const blender::IndexMask &selection,
     std::optional<ArmatureDeformVertexGroupParams> vertex_group_params,
-    std::optional<blender::Span<float>> vert_influence,
-    blender::MutableSpan<blender::float3> vert_coords,
-    std::optional<blender::MutableSpan<blender::float3x3>> vert_deform_mats)
+    std::optional<blender::Span<float>> weights,
+    blender::MutableSpan<blender::float3> vectors)
 {
   using namespace blender;
 
@@ -876,32 +881,34 @@ void BKE_armature_deform_coords(
     return;
   }
 
-  BLI_assert(!vertex_group_params || vertex_group_params->dverts.size() == vert_coords.size());
+  BLI_assert(!vertex_group_params || vertex_group_params->dverts.size() == vectors.size());
   if (vertex_group_params) {
     bke::ArmatureDeformParams deform_params = bke::get_armature_deform_params(
         ob_arm,
         target_to_world,
-        vert_coords,
+        vectors,
         std::nullopt,
-        vert_deform_mats,
+        std::nullopt,
         use_envelope,
         vertex_group_params->vertex_groups,
         vertex_group_params->invert_vertex_groups,
-        vert_influence);
+        selection,
+        weights);
     bke::armature_deform_coords(
-        vert_coords, use_quaternion, vertex_group_params->dverts, nullptr, deform_params);
+        vectors, use_quaternion, vertex_group_params->dverts, nullptr, deform_params);
   }
   else {
     bke::ArmatureDeformParams deform_params = bke::get_armature_deform_params(ob_arm,
                                                                               target_to_world,
-                                                                              vert_coords,
+                                                                              vectors,
                                                                               std::nullopt,
-                                                                              vert_deform_mats,
+                                                                              std::nullopt,
                                                                               use_envelope,
                                                                               std::nullopt,
                                                                               false,
-                                                                              vert_influence);
-    bke::armature_deform_coords(vert_coords, use_quaternion, std::nullopt, nullptr, deform_params);
+                                                                              selection,
+                                                                              weights);
+    bke::armature_deform_coords(vectors, use_quaternion, std::nullopt, nullptr, deform_params);
   }
 }
 

@@ -12,7 +12,9 @@
 
 #include "BLI_bounds_types.hh"
 #include "BLI_function_ref.hh"
+#include "BLI_index_mask_fwd.hh"
 #include "BLI_math_matrix_types.hh"
+#include "BLI_math_rotation_types.hh"
 #include "BLI_math_vector_types.hh"
 #include "BLI_set.hh"
 
@@ -685,15 +687,35 @@ void BKE_armature_deform_coords_with_editmesh(
     blender::StringRefNull defgrp_name,
     const BMEditMesh &em_target);
 
-void BKE_armature_deform_coords(
+void BKE_armature_deform_vectors(
     const Object &ob_arm,
     const blender::float4x4 &target_to_world,
     bool use_envelope,
     bool use_quaternion,
+    const blender::IndexMask &selection,
     std::optional<ArmatureDeformVertexGroupParams> vertex_group_params,
-    std::optional<blender::Span<float>> vert_influence,
-    blender::MutableSpan<blender::float3> vert_coords,
-    std::optional<blender::MutableSpan<blender::float3x3>> vert_deform_mats);
+    std::optional<blender::Span<float>> weights,
+    blender::MutableSpan<blender::float3> vectors);
+
+void BKE_armature_deform_matrices(
+    const Object &ob_arm,
+    const blender::float4x4 &target_to_world,
+    bool use_envelope,
+    bool use_quaternion,
+    const blender::IndexMask &selection,
+    std::optional<ArmatureDeformVertexGroupParams> vertex_group_params,
+    std::optional<blender::Span<float>> weights,
+    blender::MutableSpan<blender::float3x3> deform_mats);
+
+void BKE_armature_deform_rotations(
+    const Object &ob_arm,
+    const blender::float4x4 &target_to_world,
+    bool use_envelope,
+    bool use_quaternion,
+    const blender::IndexMask &selection,
+    std::optional<ArmatureDeformVertexGroupParams> vertex_group_params,
+    std::optional<blender::Span<float>> weights,
+    blender::MutableSpan<blender::math::Quaternion> rotations);
 
 /** \} */
 
