@@ -648,6 +648,12 @@ void BKE_pose_eval_cleanup(Depsgraph *depsgraph, Scene *scene, Object *object);
 /* Note that we could have a #BKE_armature_deform_coords that doesn't take object data
  * currently there are no callers for this though. */
 
+struct ArmatureDeformVertexGroupParams {
+  ListBase vertex_groups;
+  blender::Span<MDeformVert> dverts;
+  bool invert_vertex_groups;
+};
+
 void BKE_armature_deform_coords_with_curves(
     const Object &ob_arm,
     const Object &ob_target,
@@ -678,6 +684,16 @@ void BKE_armature_deform_coords_with_editmesh(
     int deformflag,
     blender::StringRefNull defgrp_name,
     const BMEditMesh &em_target);
+
+void BKE_armature_deform_coords(
+    const Object &ob_arm,
+    const blender::float4x4 &target_to_world,
+    bool use_envelope,
+    bool use_quaternion,
+    std::optional<ArmatureDeformVertexGroupParams> vertex_group_params,
+    std::optional<blender::Span<float>> vert_influence,
+    blender::MutableSpan<blender::float3> vert_coords,
+    std::optional<blender::MutableSpan<blender::float3x3>> vert_deform_mats);
 
 /** \} */
 

@@ -354,6 +354,62 @@ static ArmatureDeformParams get_armature_deform_params(
   return deform_params;
 }
 
+/* Alternative for defining parameters without a target object. */
+static ArmatureDeformParams get_armature_deform_params(
+    const Object &ob_arm,
+    const float4x4 &target_to_world,
+    MutableSpan<float3> vert_coords,
+    std::optional<Span<float3>> vert_coords_prev,
+    std::optional<MutableSpan<float3x3>> vert_deform_mats,
+    const bool use_envelope,
+    const std::optional<ListBase> vertex_groups,
+    const bool invert_vertex_groups,
+    std::optional<Span<float>> vert_influence)
+{
+  ArmatureDeformParams deform_params;
+  deform_params.vert_coords = vert_coords;
+  deform_params.vert_deform_mats = vert_deform_mats;
+  deform_params.vert_coords_prev = vert_coords_prev;
+  deform_params.use_envelope = use_envelope;
+  deform_params.invert_vgroup = invert_vertex_groups;
+  deform_params.vert_influence = vert_influence;
+
+  deform_params.pose_channels = {ob_arm.pose->chanbase};
+  if (vertex_groups) {
+    deform_params.use_dverts = true;
+
+    const ListBase *defbase = &(*vertex_groups);
+    const int defbase_len = BLI_listbase_count(defbase);
+    deform_params.pose_channel_by_vertex_group.reinitialize(defbase_len);
+    /* TODO(sergey): Some considerations here:
+     *
+     * - Check whether keeping this consistent across frames gives speedup.
+     */
+    int i;
+    LISTBASE_FOREACH_INDEX (bDeformGroup *, dg, defbase, i) {
+      bPoseChannel *pchan = BKE_pose_channel_find_name(ob_arm.pose, dg->name);
+      /* Exclude non-deforming bones. */
+      deform_params.pose_channel_by_vertex_group[i] = (pchan &&
+                                                       !(pchan->bone->flag & BONE_NO_DEFORM)) ?
+                                                          pchan :
+                                                          nullptr;
+    }
+  }
+
+/* TODO using the existing matrices directly is better, but fails tests because old code was
+ * doing a double-inverse of the object matrix, leading to small differences on the order of 10^-5.
+ * Test data needs to be updated if the transforms change. */
+#if 0
+  deform_params.target_to_armature = ob_arm.world_to_object() * target_to_world;
+  deform_params.armature_to_target = math::invert(target_to_world) * ob_arm.object_to_world();
+#else
+  deform_params.armature_to_target = math::invert(target_to_world) * ob_arm.object_to_world();
+  deform_params.target_to_armature = math::invert(deform_params.armature_to_target);
+#endif
+
+  return deform_params;
+}
+
 /* Accumulate bone deformations using the mixer implementation. */
 template<typename MixerT>
 static void armature_vert_task_with_mixer(const ArmatureDeformParams &params,
@@ -487,12 +543,11 @@ static void armature_vert_task_with_dvert(const ArmatureDeformParams &deform_par
 }
 
 static void armature_deform_coords(const MutableSpan<float3> vert_coords,
-                                   const int deformflag,
+                                   const bool use_quaternion,
                                    const std::optional<Span<MDeformVert>> dverts,
                                    const Mesh *me_target,
                                    const ArmatureDeformParams &deform_params)
 {
-  const bool use_quaternion = bool(deformflag & ARM_DEF_QUATERNION);
   constexpr int grain_size = 32;
   threading::parallel_for(vert_coords.index_range(), grain_size, [&](const IndexRange range) {
     for (const int i : range) {
@@ -704,7 +759,8 @@ void BKE_armature_deform_coords_with_curves(
                                                                             deformflag,
                                                                             vert_influence,
                                                                             true);
-  bke::armature_deform_coords(vert_coords, deformflag, dverts, nullptr, deform_params);
+  const bool use_quaternion = bool(deformflag & ARM_DEF_QUATERNION);
+  bke::armature_deform_coords(vert_coords, use_quaternion, dverts, nullptr, deform_params);
 }
 
 void BKE_armature_deform_coords_with_mesh(
@@ -770,7 +826,8 @@ void BKE_armature_deform_coords_with_mesh(
       deformflag,
       vert_influence,
       dverts_opt.has_value());
-  bke::armature_deform_coords(vert_coords, deformflag, dverts_opt, me_target, deform_params);
+  const bool use_quaternion = bool(deformflag & ARM_DEF_QUATERNION);
+  bke::armature_deform_coords(vert_coords, use_quaternion, dverts_opt, me_target, deform_params);
 }
 
 void BKE_armature_deform_coords_with_editmesh(
@@ -801,6 +858,51 @@ void BKE_armature_deform_coords_with_editmesh(
                                 defgrp_name,
                                 em_target,
                                 cd_dvert_offset);
+}
+
+void BKE_armature_deform_coords(
+    const Object &ob_arm,
+    const blender::float4x4 &target_to_world,
+    const bool use_envelope,
+    const bool use_quaternion,
+    std::optional<ArmatureDeformVertexGroupParams> vertex_group_params,
+    std::optional<blender::Span<float>> vert_influence,
+    blender::MutableSpan<blender::float3> vert_coords,
+    std::optional<blender::MutableSpan<blender::float3x3>> vert_deform_mats)
+{
+  using namespace blender;
+
+  if (!bke::verify_armature_deform_valid(ob_arm)) {
+    return;
+  }
+
+  BLI_assert(!vertex_group_params || vertex_group_params->dverts.size() == vert_coords.size());
+  if (vertex_group_params) {
+    bke::ArmatureDeformParams deform_params = bke::get_armature_deform_params(
+        ob_arm,
+        target_to_world,
+        vert_coords,
+        std::nullopt,
+        vert_deform_mats,
+        use_envelope,
+        vertex_group_params->vertex_groups,
+        vertex_group_params->invert_vertex_groups,
+        vert_influence);
+    bke::armature_deform_coords(
+        vert_coords, use_quaternion, vertex_group_params->dverts, nullptr, deform_params);
+  }
+  else {
+    bke::ArmatureDeformParams deform_params = bke::get_armature_deform_params(ob_arm,
+                                                                              target_to_world,
+                                                                              vert_coords,
+                                                                              std::nullopt,
+                                                                              vert_deform_mats,
+                                                                              use_envelope,
+                                                                              std::nullopt,
+                                                                              false,
+                                                                              vert_influence);
+    bke::armature_deform_coords(vert_coords, use_quaternion, std::nullopt, nullptr, deform_params);
+  }
 }
 
 /** \} */
