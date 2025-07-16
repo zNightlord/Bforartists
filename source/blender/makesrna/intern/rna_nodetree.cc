@@ -10769,6 +10769,7 @@ static void rna_def_nodes(BlenderRNA *brna)
   define("FunctionNode", "FunctionNodeValueToString");
 
   define("GeometryNode", "GeometryNodeAccumulateField");
+  define("GeometryNode", "GeometryNodeArmatureDeform");
   define("GeometryNode", "GeometryNodeAttributeDomainSize");
   define("GeometryNode", "GeometryNodeAttributeStatistic");
   define("GeometryNode", "GeometryNodeBake", rna_def_geo_bake);
