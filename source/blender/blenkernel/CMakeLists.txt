@@ -50,6 +50,7 @@ set(SRC
   intern/appdir.cc
   intern/armature.cc
   intern/armature_deform.cc
+  intern/armature_deform2.cc
   intern/armature_selection.cc
   intern/armature_update.cc
   intern/asset.cc

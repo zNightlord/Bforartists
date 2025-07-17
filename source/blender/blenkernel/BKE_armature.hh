@@ -12,7 +12,7 @@
 
 #include "BLI_bounds_types.hh"
 #include "BLI_function_ref.hh"
-#include "BLI_index_mask_fwd.hh"
+#include "BLI_index_mask.hh"
 #include "BLI_math_matrix_types.hh"
 #include "BLI_math_rotation_types.hh"
 #include "BLI_math_vector_types.hh"
@@ -650,12 +650,6 @@ void BKE_pose_eval_cleanup(Depsgraph *depsgraph, Scene *scene, Object *object);
 /* Note that we could have a #BKE_armature_deform_coords that doesn't take object data
  * currently there are no callers for this though. */
 
-struct ArmatureDeformVertexGroupParams {
-  ListBase vertex_groups;
-  blender::Span<MDeformVert> dverts;
-  bool invert_vertex_groups;
-};
-
 void BKE_armature_deform_coords_with_curves(
     const Object &ob_arm,
     const Object &ob_target,
@@ -687,6 +681,40 @@ void BKE_armature_deform_coords_with_editmesh(
     blender::StringRefNull defgrp_name,
     const BMEditMesh &em_target);
 
+namespace blender::bke {
+
+struct ArmatureDeformVertexGroupParams {
+  ListBase vertex_groups;
+  blender::Span<MDeformVert> dverts;
+  bool invert_vertex_groups;
+};
+
+/**
+ * Group of deformation weights associated with a pose channel.
+ */
+struct ArmatureDeformGroup {
+  /**
+   * Point indices included in this group.
+   */
+  blender::IndexMask mask;
+  /**
+   * Compressed weights, matches positions in the index mask.
+   */
+  blender::Array<float> weights;
+};
+
+/**
+ * Build deform group for a given vertex group.
+ *
+ * \return The deform group for the vertex group.
+ */
+ArmatureDeformGroup build_deform_group_for_vertex_group(
+    const Span<MDeformVert> dverts,
+    const IndexMask &selection,
+    const int def_nr,
+    const std::optional<float> weight_threshold,
+    IndexMaskMemory &memory);
+
 void BKE_armature_deform_vectors(
     const Object &ob_arm,
     const blender::float4x4 &target_to_world,
@@ -716,6 +744,8 @@ void BKE_armature_deform_rotations(
     std::optional<ArmatureDeformVertexGroupParams> vertex_group_params,
     std::optional<blender::Span<float>> weights,
     blender::MutableSpan<blender::math::Quaternion> rotations);
+
+}  // namespace blender::bke
 
 /** \} */
 
