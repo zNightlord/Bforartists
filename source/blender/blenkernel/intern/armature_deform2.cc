@@ -77,6 +77,7 @@ ArmatureDeformGroup build_deform_group_for_vertex_group(
     return {};
   }
 
+  // XXX TODO THIS IS NOT THREADSAFE! NEEDS THREAD-LOCAL DATA AND REDUCE!
   Vector<int> indices;
   indices.reserve(def_nr_count);
   Array<float> weights(def_nr_count);
@@ -376,15 +377,88 @@ static void deform_with_mixer(
   });
 }
 
-void armature_deform_vectors(const Object &ob_arm,
-                             const blender::float4x4 &target_to_world,
-                             const blender::IndexMask &selection,
-                             std::optional<Span<float>> point_weights,
-                             const Span<PoseChannelDeformGroup> custom_groups,
-                             std::optional<ArmatureDeformVertexGroupParams> vertex_group_params,
-                             bool use_envelope,
-                             const ArmatureDeformSkinningMode skinning_mode,
-                             blender::MutableSpan<blender::float3> vectors)
+/* Statically determine the correct mixer type. */
+static void deform_values(
+    const ListBase &pose_channels,
+    const blender::IndexMask &selection,
+    const std::optional<Span<float>> point_weights,
+    const Span<PoseChannelDeformGroup> custom_groups,
+    const std::optional<ArmatureDeformVertexGroupParams> &vertex_group_params,
+    const bool use_envelope,
+    const std::optional<float> weight_threshold,
+    const bool use_envelope_multiply,
+    const ArmatureDeformSkinningMode skinning_mode,
+    const MutableSpan<float3> positions,
+    const std::optional<MutableSpan<float3x3>> deform_mats)
+{
+  if (deform_mats) {
+    switch (skinning_mode) {
+      case ArmatureDeformSkinningMode::Linear:
+        deform_with_mixer<BoneDeformLinearMixer<true>>(pose_channels,
+                                                       selection,
+                                                       point_weights,
+                                                       custom_groups,
+                                                       vertex_group_params,
+                                                       use_envelope,
+                                                       weight_threshold,
+                                                       use_envelope_multiply,
+                                                       positions,
+                                                       deform_mats);
+        break;
+      case ArmatureDeformSkinningMode::DualQuatenrion:
+        deform_with_mixer<BoneDeformDualQuaternionMixer<true>>(pose_channels,
+                                                               selection,
+                                                               point_weights,
+                                                               custom_groups,
+                                                               vertex_group_params,
+                                                               use_envelope,
+                                                               weight_threshold,
+                                                               use_envelope_multiply,
+                                                               positions,
+                                                               deform_mats);
+        break;
+    }
+  }
+  else {
+    switch (skinning_mode) {
+      case ArmatureDeformSkinningMode::Linear:
+        deform_with_mixer<BoneDeformLinearMixer<false>>(pose_channels,
+                                                        selection,
+                                                        point_weights,
+                                                        custom_groups,
+                                                        vertex_group_params,
+                                                        use_envelope,
+                                                        weight_threshold,
+                                                        use_envelope_multiply,
+                                                        positions,
+                                                        std::nullopt);
+        break;
+      case ArmatureDeformSkinningMode::DualQuatenrion:
+        deform_with_mixer<BoneDeformDualQuaternionMixer<false>>(pose_channels,
+                                                                selection,
+                                                                point_weights,
+                                                                custom_groups,
+                                                                vertex_group_params,
+                                                                use_envelope,
+                                                                weight_threshold,
+                                                                use_envelope_multiply,
+                                                                positions,
+                                                                std::nullopt);
+        break;
+    }
+  }
+}
+
+void armature_deform_positions(
+    const Object &ob_arm,
+    const blender::float4x4 &target_to_world,
+    const blender::IndexMask &selection,
+    const std::optional<Span<float>> point_weights,
+    const Span<PoseChannelDeformGroup> custom_groups,
+    const std::optional<ArmatureDeformVertexGroupParams> vertex_group_params,
+    bool use_envelope,
+    const ArmatureDeformSkinningMode skinning_mode,
+    blender::MutableSpan<blender::float3> positions)
 {
   constexpr GrainSize grain_size = GrainSize(1024);
 
@@ -392,42 +466,76 @@ void armature_deform_vectors(const Object &ob_arm,
   const float4x4 armature_to_target = ob_arm.object_to_world() * math::invert(target_to_world);
 
   /* Input coordinates to start from. */
-  Array<float3> positions(vectors.size());
+  Array<float3> armature_positions(positions.size());
   /* Transform to armature space. */
   selection.foreach_index(grain_size, [&](const int index) {
-    positions[index] = math::transform_point(target_to_armature, vectors[index]);
+    armature_positions[index] = math::transform_point(target_to_armature, positions[index]);
   });
 
-  switch (skinning_mode) {
-    case ArmatureDeformSkinningMode::Linear:
-      deform_with_mixer<BoneDeformLinearMixer<false>>(ob_arm.pose->chanbase,
-                                                      selection,
-                                                      point_weights,
-                                                      custom_groups,
-                                                      vertex_group_params,
-                                                      use_envelope,
-                                                      0.0f,
-                                                      true,
-                                                      positions,
-                                                      std::nullopt);
-      break;
-    case ArmatureDeformSkinningMode::DualQuatenrion:
-      deform_with_mixer<BoneDeformDualQuaternionMixer<false>>(ob_arm.pose->chanbase,
-                                                              selection,
-                                                              point_weights,
-                                                              custom_groups,
-                                                              vertex_group_params,
-                                                              use_envelope,
-                                                              0.0f,
-                                                              true,
-                                                              positions,
-                                                              std::nullopt);
-      break;
-  }
+  deform_values(ob_arm.pose->chanbase,
+                selection,
+                point_weights,
+                custom_groups,
+                vertex_group_params,
+                use_envelope,
+                0.0f,
+                true,
+                skinning_mode,
+                armature_positions,
+                std::nullopt);
 
   /* Transform back to target object space. */
   selection.foreach_index(grain_size, [&](const int index) {
-    vectors[index] = math::transform_point(armature_to_target, positions[index]);
+    positions[index] = math::transform_point(armature_to_target, armature_positions[index]);
+  });
+}
+
+void armature_deform_matrices(
+    const Object &ob_arm,
+    const blender::float4x4 &target_to_world,
+    const blender::IndexMask &selection,
+    const std::optional<Span<float>> point_weights,
+    const Span<PoseChannelDeformGroup> custom_groups,
+    const std::optional<ArmatureDeformVertexGroupParams> vertex_group_params,
+    const bool use_envelope,
+    const ArmatureDeformSkinningMode skinning_mode,
+    blender::MutableSpan<blender::float4x4> matrices)
+{
+  constexpr GrainSize grain_size = GrainSize(1024);
+
+  const float4x4 target_to_armature = ob_arm.world_to_object() * target_to_world;
+  const float4x4 armature_to_target = ob_arm.object_to_world() * math::invert(target_to_world);
+
+  /* Input coordinates to start from. */
+  Array<float3> armature_positions(matrices.size());
+  Array<float3x3> deform_mats(matrices.size());
+  /* Transform to armature space. */
+  selection.foreach_index(grain_size, [&](const int index) {
+    const float4x4 armature_matrix = target_to_armature * matrices[index];
+    armature_positions[index] = armature_matrix.location();
+    deform_mats[index] = armature_matrix.view<3, 3>();
+  });
+
+  deform_values(ob_arm.pose->chanbase,
+                selection,
+                point_weights,
+                custom_groups,
+                vertex_group_params,
+                use_envelope,
+                0.0f,
+                true,
+                skinning_mode,
+                armature_positions,
+                std::nullopt);
+
+  /* Transform back to target object space. */
+  selection.foreach_index(grain_size, [&](const int index) {
+    const float3x3 &deform_mat = deform_mats[index];
+    const float4x4 armature_matrix = float4x4(float4(deform_mat.x, 0),
+                                              float4(deform_mat.y, 0),
+                                              float4(deform_mat.z, 0),
+                                              float4(armature_positions[index], 1));
+    matrices[index] = armature_to_target * armature_matrix;
   });
 }
 

@@ -70,10 +70,6 @@ static void node_declare(NodeDeclarationBuilder &b)
           .description("Local deformation gradient for each point")
           .align_with_previous();
       break;
-    case SOCK_ROTATION:
-      b.add_input<decl::Rotation>("Rotation", "Value").field_on_all();
-      b.add_output<decl::Rotation>("Rotation", "Value").field_on_all().align_with_previous();
-      break;
     default:
       BLI_assert_unreachable();
       break;
@@ -162,21 +158,26 @@ class ArmatureDeformField final : public bke::GeometryFieldInput {
 
     Span<bke::PoseChannelDeformGroup> custom_groups;
     if (type_ == &CPPType::get<float3>()) {
-      bke::armature_deform_vectors(armature_object_,
-                                   target_to_world_,
-                                   mask,
-                                   vert_influence,
-                                   custom_groups,
-                                   vgroup_params,
-                                   use_envelope_,
-                                   skinning_mode_,
-                                   value_buffer.as_mutable_span().typed<float3>());
+      bke::armature_deform_positions(armature_object_,
+                                     target_to_world_,
+                                     mask,
+                                     vert_influence,
+                                     custom_groups,
+                                     vgroup_params,
+                                     use_envelope_,
+                                     skinning_mode_,
+                                     value_buffer.as_mutable_span().typed<float3>());
     }
     else if (type_ == &CPPType::get<float4x4>()) {
-      // TODO
-    }
-    else if (type_ == &CPPType::get<math::Quaternion>()) {
-      // TODO
+      bke::armature_deform_matrices(armature_object_,
+                                    target_to_world_,
+                                    mask,
+                                    vert_influence,
+                                    custom_groups,
+                                    vgroup_params,
+                                    use_envelope_,
+                                    skinning_mode_,
+                                    value_buffer.as_mutable_span().typed<float4x4>());
     }
     else {
       /* Unsupported field type for armature deformation. */
@@ -272,10 +273,10 @@ static void node_rna(StructRNA *srna)
       SOCK_FLOAT,
       [](bContext * /*C*/, PointerRNA * /*ptr*/, PropertyRNA * /*prop*/, bool *r_free) {
         *r_free = true;
-        return enum_items_filter(
-            rna_enum_node_socket_data_type_items, [](const EnumPropertyItem &item) -> bool {
-              return ELEM(item.value, SOCK_VECTOR, SOCK_ROTATION, SOCK_MATRIX);
-            });
+        return enum_items_filter(rna_enum_node_socket_data_type_items,
+                                 [](const EnumPropertyItem &item) -> bool {
+                                   return ELEM(item.value, SOCK_VECTOR, SOCK_MATRIX);
+                                 });
       });
 }
 
