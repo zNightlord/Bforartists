@@ -708,48 +708,47 @@ struct ArmatureDeformGroup {
  *
  * \return The deform group for the vertex group.
  */
-ArmatureDeformGroup build_deform_group_for_vertex_group(
-    const IndexMask &universe,
-    const Span<MDeformVert> dverts,
-    const int def_nr,
-    const std::optional<float> weight_threshold,
-    const std::optional<float> weight_factor,
-    IndexMaskMemory &memory);
+ArmatureDeformGroup build_deform_group_for_vertex_group(const IndexMask &universe,
+                                                        Span<float3> positions,
+                                                        Span<MDeformVert> dverts,
+                                                        int def_nr,
+                                                        const Bone &bone,
+                                                        std::optional<float> weight_threshold,
+                                                        bool use_envelope_multiply,
+                                                        IndexMaskMemory &memory);
 
 enum class ArmatureDeformSkinningMode {
   Linear,
   DualQuatenrion,
 };
 
-void BKE_armature_deform_vectors(
-    const Object &ob_arm,
-    const blender::float4x4 &target_to_world,
-    const blender::IndexMask &selection,
-    std::optional<ArmatureDeformVertexGroupParams> vertex_group_params,
-    bool use_envelope,
-    const ArmatureDeformSkinningMode skinning_mode,
-    std::optional<blender::Span<float>> weights,
-    blender::MutableSpan<blender::float3> vectors);
+void armature_deform_vectors(const Object &ob_arm,
+                             const blender::float4x4 &target_to_world,
+                             const blender::IndexMask &selection,
+                             std::optional<ArmatureDeformVertexGroupParams> vertex_group_params,
+                             bool use_envelope,
+                             const ArmatureDeformSkinningMode skinning_mode,
+                             blender::MutableSpan<blender::float3> vectors);
 
-void BKE_armature_deform_matrices(
-    const Object &ob_arm,
-    const blender::float4x4 &target_to_world,
-    bool use_envelope,
-    bool use_quaternion,
-    const blender::IndexMask &selection,
-    std::optional<ArmatureDeformVertexGroupParams> vertex_group_params,
-    std::optional<blender::Span<float>> weights,
-    blender::MutableSpan<blender::float3x3> deform_mats);
+// void BKE_armature_deform_matrices(
+//     const Object &ob_arm,
+//     const blender::float4x4 &target_to_world,
+//     bool use_envelope,
+//     bool use_quaternion,
+//     const blender::IndexMask &selection,
+//     std::optional<ArmatureDeformVertexGroupParams> vertex_group_params,
+//     std::optional<blender::Span<float>> weights,
+//     blender::MutableSpan<blender::float3x3> deform_mats);
 
-void BKE_armature_deform_rotations(
-    const Object &ob_arm,
-    const blender::float4x4 &target_to_world,
-    bool use_envelope,
-    bool use_quaternion,
-    const blender::IndexMask &selection,
-    std::optional<ArmatureDeformVertexGroupParams> vertex_group_params,
-    std::optional<blender::Span<float>> weights,
-    blender::MutableSpan<blender::math::Quaternion> rotations);
+// void BKE_armature_deform_rotations(
+//     const Object &ob_arm,
+//     const blender::float4x4 &target_to_world,
+//     bool use_envelope,
+//     bool use_quaternion,
+//     const blender::IndexMask &selection,
+//     std::optional<ArmatureDeformVertexGroupParams> vertex_group_params,
+//     std::optional<blender::Span<float>> weights,
+//     blender::MutableSpan<blender::math::Quaternion> rotations);
 
 }  // namespace blender::bke
 
