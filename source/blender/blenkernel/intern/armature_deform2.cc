@@ -71,6 +71,7 @@ ArmatureDeformGroup build_deform_group_for_vertex_group(
       }
 
       ++def_nr_count;
+      break;
     }
   });
   if (def_nr_count == 0) {
@@ -95,6 +96,7 @@ ArmatureDeformGroup build_deform_group_for_vertex_group(
 
       indices.append_unchecked(index);
       weights[indices.size() - 1] = dw.weight;
+      break;
     }
   });
 
