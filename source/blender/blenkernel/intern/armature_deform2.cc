@@ -463,7 +463,7 @@ void armature_deform_positions(
   constexpr GrainSize grain_size = GrainSize(1024);
 
   const float4x4 target_to_armature = ob_arm.world_to_object() * target_to_world;
-  const float4x4 armature_to_target = ob_arm.object_to_world() * math::invert(target_to_world);
+  const float4x4 armature_to_target = math::invert(target_to_world) * ob_arm.object_to_world();
 
   /* Input coordinates to start from. */
   Array<float3> armature_positions(positions.size());
