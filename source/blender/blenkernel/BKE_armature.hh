@@ -704,6 +704,14 @@ struct ArmatureDeformGroup {
 };
 
 /**
+ * Armature deform group associated with a pose channel.
+ */
+struct PoseChannelDeformGroup {
+  ArmatureDeformGroup deform_group;
+  const bPoseChannel *pose_channel;
+};
+
+/**
  * Build deform group for a given vertex group.
  *
  * \return The deform group for the vertex group.
@@ -725,6 +733,8 @@ enum class ArmatureDeformSkinningMode {
 void armature_deform_vectors(const Object &ob_arm,
                              const blender::float4x4 &target_to_world,
                              const blender::IndexMask &selection,
+                             std::optional<Span<float>> point_weights,
+                             Span<PoseChannelDeformGroup> custom_groups,
                              std::optional<ArmatureDeformVertexGroupParams> vertex_group_params,
                              bool use_envelope,
                              const ArmatureDeformSkinningMode skinning_mode,
