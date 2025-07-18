@@ -4710,7 +4710,7 @@ static void set_vertex_mesh_reps(const int bv,
     repverts[nv] = mesh_v;
   }
   const MeshPattern &pat = bs.bevvert_meshpatterns()[bv];
-  /* Placeholder logic for edges. TODO: fix. */
+  /* Placeholder logic for edges. */
   if (bs.any_edge_attributes && pat.kind == MeshKind::Adj && pat.num_segs > 1) {
     /* Use the beveled edge as rep for the "center lines" between anchors. */
     const int rings = adj::e_num_crossrings(pat.num_segs);
@@ -4730,6 +4730,10 @@ static void set_vertex_mesh_reps(const int bv,
         repedges[e] = mesh_e;
       }
     }
+  }
+  /* Placeholder logic for faces. */
+  if (bs.any_face_attributes) {
+    
   }
 }
 
