@@ -43,10 +43,6 @@
 #include "BKE_lattice.hh"
 #include "BKE_mesh.hh"
 
-#include "CLG_log.h"
-
-static CLG_LogRef LOG = {"geom.armature_deform"};
-
 namespace blender::bke {
 
 ArmatureDeformGroup build_deform_group_for_vertex_group(
@@ -67,7 +63,7 @@ ArmatureDeformGroup build_deform_group_for_vertex_group(
     const MDeformVert &dvert = dverts[index];
     const Span<MDeformWeight> dweights(dvert.dw, dvert.totweight);
     for (const MDeformWeight &dw : dweights) {
-      if (!dw.def_nr != def_nr) {
+      if (dw.def_nr != def_nr) {
         continue;
       }
       if (weight_threshold && dw.weight < *weight_threshold) {
@@ -89,7 +85,7 @@ ArmatureDeformGroup build_deform_group_for_vertex_group(
     const MDeformVert &dvert = dverts[index];
     const Span<MDeformWeight> dweights(dvert.dw, dvert.totweight);
     for (const MDeformWeight &dw : dweights) {
-      if (!dw.def_nr == def_nr) {
+      if (dw.def_nr != def_nr) {
         continue;
       }
       if (weight_threshold && dw.weight < *weight_threshold) {
@@ -121,6 +117,7 @@ ArmatureDeformGroup build_deform_group_for_envelope(const IndexMask &universe,
                                                     IndexMaskMemory &memory)
 {
   // TODO
+  UNUSED_VARS(universe, positions, bone, weight_threshold, memory);
   return {};
 }
 
@@ -158,15 +155,18 @@ template<bool full_deform> struct BoneDeformLinearMixer {
     }
   }
 
-  void finalize(const float3 & /*co*/,
-                float total,
-                float armature_weight,
-                float3 &r_delta_co,
-                float3x3 &r_deform_mat)
+  void finalize(const float total, float3 &r_position) const
   {
-    const float scale_factor = armature_weight / total;
-    r_delta_co = position_delta * scale_factor;
-    r_deform_mat = deform * scale_factor;
+    const float scale_factor = 1.0f / total;
+    r_position = r_position + position_delta * scale_factor;
+  };
+
+  void finalize(const float total, float3 &r_position, float3x3 &r_deform_mat)
+  {
+    BLI_assert(full_deform);
+    const float scale_factor = 1.0f / total;
+    r_position = r_position + position_delta * scale_factor;
+    r_deform_mat = (deform * scale_factor) * r_deform_mat;
   };
 };
 
@@ -196,19 +196,20 @@ template<bool full_deform> struct BoneDeformDualQuaternionMixer {
     add_weighted_dq_dq_pivot(&dq, &deform_quat, co, weight, full_deform);
   }
 
-  void finalize(const float3 &co,
-                float total,
-                float armature_weight,
-                float3 &r_delta_co,
-                float3x3 &r_deform_mat)
+  void finalize(const float total, float3 &r_position)
   {
     normalize_dq(&dq, total);
-    float3 dco = co;
-    float3x3 dmat;
-    mul_v3m3_dq(dco, dmat.ptr(), &dq);
-    r_delta_co = (dco - co) * armature_weight;
-    /* Quaternion already is scale corrected. */
-    r_deform_mat = dmat;
+    float3x3 local_deform_mat;
+    mul_v3m3_dq(r_position, local_deform_mat.ptr(), &dq);
+  }
+
+  void finalize(const float total, float3 &r_position, float3x3 &r_deform_mat)
+  {
+    BLI_assert(full_deform);
+    normalize_dq(&dq, total);
+    float3x3 local_deform_mat;
+    mul_v3m3_dq(r_position, local_deform_mat.ptr(), &dq);
+    r_deform_mat = local_deform_mat * r_deform_mat;
   }
 };
 
@@ -260,8 +261,8 @@ static IndexMask filter_index_mask(const IndexMask &universe,
           if (!deny_list[universe_segment.offset() + local_index]) {
             builder.add(local_index);
           }
-          return universe_segment.offset();
         }
+        return universe_segment.offset();
       });
 }
 
@@ -284,7 +285,7 @@ static void deform_with_mixer(
 
   IndexMaskMemory memory;
 
-  Array<MixerT> mixers(selection.min_array_size(), {});
+  Array<MixerT> mixers(selection.min_array_size(), MixerT{});
   Array<float> contrib(selection.min_array_size(), 0.0f);
   Array<bool> deformed(selection.min_array_size(), false);
 
@@ -295,7 +296,7 @@ static void deform_with_mixer(
     pchan_group.deform_group.mask.foreach_index(grain_size, [&](const int index, const int pos) {
       const float3 &position = positions[index];
       /* Weights are stored as compressed array. */
-      const float weight = deform_group.weights[pos];
+      const float weight = pchan_group.deform_group.weights[pos];
       pchan_bone_deform(*pchan_group.pose_channel, position, weight, mixers[index]);
       contrib[index] += weight;
       deformed[index] = true;
@@ -340,11 +341,17 @@ static void deform_with_mixer(
 
   if (use_envelope) {
     const IndexMask undeformed_mask = filter_index_mask(selection, deformed, memory);
+    int pchan_i;
+    LISTBASE_FOREACH_INDEX (bPoseChannel *, pchan, &pose_channels, pchan_i) {
+      const Bone *bone = pchan->bone;
+      if (!bone || (bone->flag & BONE_NO_DEFORM)) {
+        continue;
+      }
 
-    ArmatureDeformGroup deform_group = build_deform_group_for_envelope(
-        undeformed_mask, positions, *bone, weight_threshold, memory);
-
-    // TODO
+      ArmatureDeformGroup deform_group = build_deform_group_for_envelope(
+          undeformed_mask, positions, *bone, weight_threshold, memory);
+      // TODO
+    }
   }
 
   const bool full_deform = deform_mats.has_value();
@@ -357,16 +364,14 @@ static void deform_with_mixer(
       return;
     }
 
-    float3 delta_co;
-    float3x3 local_deform_mat;
-    mixers[index].finalize(position, weight, mask_weight, delta_co, local_deform_mat);
-
-    float3 &position = positions[index];
-    position += delta_co;
-
     if (full_deform) {
+      float3 &position = positions[index];
       float3x3 &deform_mat = (*deform_mats)[index];
-      deform_mat = local_deform_mat * deform_mat;
+      mixers[index].finalize(weight, position, deform_mat);
+    }
+    else {
+      float3 &position = positions[index];
+      mixers[index].finalize(weight, position);
     }
   });
 }

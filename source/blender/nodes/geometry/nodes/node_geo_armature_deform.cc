@@ -101,7 +101,7 @@ class ArmatureDeformField final : public bke::GeometryFieldInput {
   bool use_envelope_;
   bool use_vertex_groups_;
   bool invert_vertex_groups_;
-  bool use_quaternion_;
+  bke::ArmatureDeformSkinningMode skinning_mode_;
 
  public:
   ArmatureDeformField(const Object &armature_object,
@@ -111,7 +111,7 @@ class ArmatureDeformField final : public bke::GeometryFieldInput {
                       const bool use_envelope,
                       const bool use_vertex_groups,
                       const bool invert_vertex_groups,
-                      const bool use_quaternion)
+                      const bke::ArmatureDeformSkinningMode skinning_mode)
       : bke::GeometryFieldInput(value_field.cpp_type(), "Armature Deform"),
         armature_object_(armature_object),
         target_to_world_(target_to_world),
@@ -120,7 +120,7 @@ class ArmatureDeformField final : public bke::GeometryFieldInput {
         use_envelope_(use_envelope),
         use_vertex_groups_(use_vertex_groups),
         invert_vertex_groups_(invert_vertex_groups),
-        use_quaternion_(use_quaternion)
+        skinning_mode_(skinning_mode)
   {
   }
 
@@ -137,7 +137,7 @@ class ArmatureDeformField final : public bke::GeometryFieldInput {
     evaluator.evaluate();
     const std::optional<Span<float>> vert_influence = mask_buffer;
 
-    std::optional<ArmatureDeformVertexGroupParams> vgroup_params;
+    std::optional<bke::ArmatureDeformVertexGroupParams> vgroup_params;
     switch (context.type()) {
       case GeometryComponent::Type::Mesh:
         if (ELEM(context.domain(), AttrDomain::Point, AttrDomain::Edge, AttrDomain::Face)) {
@@ -160,15 +160,17 @@ class ArmatureDeformField final : public bke::GeometryFieldInput {
         break;
     }
 
+    Span<bke::PoseChannelDeformGroup> custom_groups;
     if (type_ == &CPPType::get<float3>()) {
-      BKE_armature_deform_vectors(armature_object_,
-                                  target_to_world_,
-                                  use_envelope_,
-                                  use_quaternion_,
-                                  mask,
-                                  vgroup_params,
-                                  vert_influence,
-                                  value_buffer.as_mutable_span().typed<float3>());
+      bke::armature_deform_vectors(armature_object_,
+                                   target_to_world_,
+                                   mask,
+                                   vert_influence,
+                                   custom_groups,
+                                   vgroup_params,
+                                   use_envelope_,
+                                   skinning_mode_,
+                                   value_buffer.as_mutable_span().typed<float3>());
     }
     else if (type_ == &CPPType::get<float4x4>()) {
       // TODO
@@ -181,7 +183,7 @@ class ArmatureDeformField final : public bke::GeometryFieldInput {
       BLI_assert_unreachable();
     }
 
-    return GVArray::ForGArray(std::move(value_buffer));
+    return GVArray::from_garray(std::move(value_buffer));
   }
 
   void for_each_field_input_recursive(FunctionRef<void(const FieldInput &)> fn) const override
@@ -194,7 +196,7 @@ class ArmatureDeformField final : public bke::GeometryFieldInput {
   {
     return get_default_hash(get_default_hash(&armature_object_, target_to_world_, value_field_),
                             get_default_hash(mask_field_, use_envelope_, use_vertex_groups_),
-                            get_default_hash(invert_vertex_groups_, use_quaternion_));
+                            get_default_hash(invert_vertex_groups_, skinning_mode_));
   }
 
   bool is_equal_to(const fn::FieldNode &other) const override
@@ -209,7 +211,7 @@ class ArmatureDeformField final : public bke::GeometryFieldInput {
              use_envelope_ == other_deform->use_envelope_ &&
              use_vertex_groups_ == other_deform->use_vertex_groups_ &&
              invert_vertex_groups_ == other_deform->invert_vertex_groups_ &&
-             use_quaternion_ == other_deform->use_quaternion_;
+             skinning_mode_ == other_deform->skinning_mode_;
     }
     return false;
   }
@@ -237,7 +239,10 @@ static void node_geo_exec(GeoNodeExecParams params)
   BLI_assert(self_object != nullptr);
   const float4x4 &target_to_world = self_object->object_to_world();
 
-  const bool use_quaternion = params.extract_input<bool>("Preserve Volume");
+  const bke::ArmatureDeformSkinningMode skinning_mode =
+      params.extract_input<bool>("Preserve Volume") ?
+          bke::ArmatureDeformSkinningMode::DualQuatenrion :
+          bke::ArmatureDeformSkinningMode::Linear;
   const bool use_envelope = params.extract_input<bool>("Use Envelope");
   const bool use_vertex_groups = params.extract_input<bool>("Use Vertex Groups");
   const bool invert_vertex_groups = params.extract_input<bool>("Invert Vertex Groups");
@@ -251,7 +256,7 @@ static void node_geo_exec(GeoNodeExecParams params)
                                                             use_envelope,
                                                             use_vertex_groups,
                                                             invert_vertex_groups,
-                                                            use_quaternion)};
+                                                            skinning_mode)};
   params.set_output<GField>("Value", std::move(output_field));
 }
 

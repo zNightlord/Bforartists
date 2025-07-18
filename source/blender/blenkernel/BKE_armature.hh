@@ -725,6 +725,17 @@ ArmatureDeformGroup build_deform_group_for_vertex_group(const IndexMask &univers
                                                         bool use_envelope_multiply,
                                                         IndexMaskMemory &memory);
 
+/*
+ * Build deform group for envelope weights from a bone.
+ *
+ * \return The deform group for all points within falloff distance.
+ */
+ArmatureDeformGroup build_deform_group_for_envelope(const IndexMask &universe,
+                                                    Span<float3> positions,
+                                                    const Bone &bone,
+                                                    std::optional<float> weight_threshold,
+                                                    IndexMaskMemory &memory);
+
 enum class ArmatureDeformSkinningMode {
   Linear,
   DualQuatenrion,
