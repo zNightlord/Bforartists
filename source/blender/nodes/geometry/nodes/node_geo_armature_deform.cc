@@ -2,6 +2,8 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+#include "BLI_listbase_wrapper.hh"
+
 #include "BKE_armature.hh"
 #include "BKE_curves.hh"
 #include "BKE_deform.hh"
@@ -88,6 +90,12 @@ static void node_init(bNodeTree * /*tree*/, bNode *node)
   node->custom1 = SOCK_VECTOR;
 }
 
+struct CustomDeformGroupFields {
+  const bPoseChannel *pose_channel;
+  Field<float> weights_field;
+  Field<bool> selection_field;
+};
+
 class ArmatureDeformField final : public bke::GeometryFieldInput {
  private:
   const Object &armature_object_;
@@ -97,6 +105,7 @@ class ArmatureDeformField final : public bke::GeometryFieldInput {
   bool use_envelope_;
   bool use_vertex_groups_;
   bool invert_vertex_groups_;
+  Array<CustomDeformGroupFields> custom_group_fields_;
   bke::ArmatureDeformSkinningMode skinning_mode_;
 
  public:
@@ -107,6 +116,7 @@ class ArmatureDeformField final : public bke::GeometryFieldInput {
                       const bool use_envelope,
                       const bool use_vertex_groups,
                       const bool invert_vertex_groups,
+                      const Span<CustomDeformGroupFields> custom_group_fields,
                       const bke::ArmatureDeformSkinningMode skinning_mode)
       : bke::GeometryFieldInput(value_field.cpp_type(), "Armature Deform"),
         armature_object_(armature_object),
@@ -116,6 +126,7 @@ class ArmatureDeformField final : public bke::GeometryFieldInput {
         use_envelope_(use_envelope),
         use_vertex_groups_(use_vertex_groups),
         invert_vertex_groups_(invert_vertex_groups),
+        custom_group_fields_(custom_group_fields),
         skinning_mode_(skinning_mode)
   {
   }
@@ -127,18 +138,33 @@ class ArmatureDeformField final : public bke::GeometryFieldInput {
 
     GArray<> value_buffer(*type_, domain_size);
     Array<float> mask_buffer(domain_size);
+    Array<bke::PoseChannelDeformGroup> custom_groups(custom_group_fields_.size());
+
     FieldEvaluator evaluator(context, domain_size);
     evaluator.add_with_destination(mask_field_, mask_buffer.as_mutable_span());
     evaluator.add_with_destination(value_field_, value_buffer.as_mutable_span());
+    for (const int i : custom_group_fields_.index_range()) {
+      const CustomDeformGroupFields &group_fields = custom_group_fields_[i];
+      custom_groups[i].pose_channel = group_fields.pose_channel;
+      custom_groups[i].deform_group.weights.reinitialize(domain_size);
+      evaluator.add(group_fields.selection_field);
+      MutableSpan<float> weights = custom_groups[i].deform_group.weights;
+      evaluator.add_with_destination(group_fields.weights_field, weights);
+    }
+    /* Output indices of custom group selection masks. */
     evaluator.evaluate();
     const std::optional<Span<float>> vert_influence = mask_buffer;
+    for (const int i : custom_groups.index_range()) {
+      const int mask_field_output = 2 + i * 2;
+      custom_groups[i].deform_group.mask = evaluator.get_evaluated_as_mask(mask_field_output);
+    }
 
     std::optional<bke::ArmatureDeformVertexGroupParams> vgroup_params;
-    switch (context.type()) {
-      case GeometryComponent::Type::Mesh:
-        if (ELEM(context.domain(), AttrDomain::Point, AttrDomain::Edge, AttrDomain::Face)) {
-          if (const Mesh *mesh = context.mesh()) {
-            if (use_vertex_groups_) {
+    if (use_vertex_groups_) {
+      switch (context.type()) {
+        case GeometryComponent::Type::Mesh:
+          if (ELEM(context.domain(), AttrDomain::Point, AttrDomain::Edge, AttrDomain::Face)) {
+            if (const Mesh *mesh = context.mesh()) {
               const ListBase *vertex_groups = BKE_id_defgroup_list_get(
                   reinterpret_cast<const ID *>(mesh));
               if (vertex_groups) {
@@ -146,17 +172,16 @@ class ArmatureDeformField final : public bke::GeometryFieldInput {
               }
             }
           }
-        }
-        break;
-        // TODO read vertex groups where possible.
-      // case GeometryComponent::Type::Curve:
-      // case GeometryComponent::Type::GreasePencil:
-      //   break;
-      default:
-        break;
+          break;
+          // TODO read vertex groups where possible.
+        // case GeometryComponent::Type::Curve:
+        // case GeometryComponent::Type::GreasePencil:
+        //   break;
+        default:
+          break;
+      }
     }
 
-    Span<bke::PoseChannelDeformGroup> custom_groups;
     if (type_ == &CPPType::get<float3>()) {
       bke::armature_deform_positions(armature_object_,
                                      target_to_world_,
@@ -195,9 +220,17 @@ class ArmatureDeformField final : public bke::GeometryFieldInput {
 
   uint64_t hash() const override
   {
-    return get_default_hash(get_default_hash(&armature_object_, target_to_world_, value_field_),
-                            get_default_hash(mask_field_, use_envelope_, use_vertex_groups_),
-                            get_default_hash(invert_vertex_groups_, skinning_mode_));
+    uint64_t custom_group_fields_hash = 0;
+    for (const CustomDeformGroupFields &group_fields : custom_group_fields_) {
+      custom_group_fields_hash = get_default_hash(custom_group_fields_hash,
+                                                  get_default_hash(group_fields.pose_channel,
+                                                                   group_fields.weights_field,
+                                                                   group_fields.selection_field));
+    }
+    return get_default_hash(
+        get_default_hash(&armature_object_, target_to_world_, value_field_),
+        get_default_hash(mask_field_, use_envelope_, use_vertex_groups_),
+        get_default_hash(invert_vertex_groups_, skinning_mode_, custom_group_fields_hash));
   }
 
   bool is_equal_to(const fn::FieldNode &other) const override
@@ -205,6 +238,20 @@ class ArmatureDeformField final : public bke::GeometryFieldInput {
     if (const ArmatureDeformField *other_deform = dynamic_cast<const ArmatureDeformField *>(
             &other))
     {
+      if (custom_group_fields_.size() != other_deform->custom_group_fields_.size()) {
+        return false;
+      }
+      for (const int i : custom_group_fields_.index_range()) {
+        if (custom_group_fields_[i].pose_channel !=
+                other_deform->custom_group_fields_[i].pose_channel ||
+            custom_group_fields_[i].weights_field !=
+                other_deform->custom_group_fields_[i].weights_field ||
+            custom_group_fields_[i].selection_field !=
+                other_deform->custom_group_fields_[i].selection_field)
+        {
+          return false;
+        }
+      }
       return &armature_object_ == &other_deform->armature_object_ &&
              target_to_world_ == other_deform->target_to_world_ &&
              value_field_ == other_deform->value_field_ &&
@@ -227,6 +274,43 @@ class ArmatureDeformField final : public bke::GeometryFieldInput {
   }
 };
 
+static Vector<CustomDeformGroupFields> evaluate_custom_deform_groups(
+    const Object &armature_object,
+    GeoNodesUserData *user_data,
+    const Closure &custom_groups_closure)
+{
+  const ConstListBaseWrapper<bPoseChannel> pose_channels(armature_object.pose->chanbase);
+  const int pose_channels_num = BLI_listbase_count(&armature_object.pose->chanbase);
+  const bke::bNodeSocketType *stype_string = bke::node_socket_type_find_static(SOCK_STRING);
+  const bke::bNodeSocketType *stype_float = bke::node_socket_type_find_static(SOCK_FLOAT);
+  const bke::bNodeSocketType *stype_bool = bke::node_socket_type_find_static(SOCK_BOOLEAN);
+
+  Vector<CustomDeformGroupFields> custom_group_fields;
+  custom_group_fields.reserve(pose_channels_num);
+
+  for (const bPoseChannel *pose_channel : pose_channels) {
+    if (!pose_channel->bone || bool(pose_channel->bone->flag & BONE_NO_DEFORM)) {
+      continue;
+    }
+
+    SocketValueVariant bone_variant(std::string(pose_channel->name));
+    SocketValueVariant weights_variant;
+    SocketValueVariant selection_variant;
+    ClosureEagerEvalParams eval_params = {
+        {{SocketInterfaceKey("Bone"), stype_string, &bone_variant}},
+        {{SocketInterfaceKey("Weight"), stype_float, &weights_variant},
+         {SocketInterfaceKey("Selection"), stype_bool, &selection_variant}},
+        user_data};
+    evaluate_closure_eagerly(custom_groups_closure, eval_params);
+
+    Field<float> weights_field = weights_variant.extract<Field<float>>();
+    Field<bool> selection_field = selection_variant.extract<Field<bool>>();
+    custom_group_fields.append_unchecked(
+        {pose_channel, std::move(weights_field), std::move(selection_field)});
+  }
+  return custom_group_fields;
+}
+
 static void node_geo_exec(GeoNodeExecParams params)
 {
   GField value_field = params.extract_input<GField>("Value");
@@ -248,7 +332,13 @@ static void node_geo_exec(GeoNodeExecParams params)
   const bool use_vertex_groups = params.extract_input<bool>("Use Vertex Groups");
   const bool invert_vertex_groups = params.extract_input<bool>("Invert Vertex Groups");
   const ClosurePtr custom_weights = params.extract_input<ClosurePtr>("Custom Weights");
-  const Field<float> mask_field = params.extract_input<Field<float>>("Mask");
+  Field<float> mask_field = params.extract_input<Field<float>>("Mask");
+
+  Vector<CustomDeformGroupFields> custom_group_fields;
+  if (custom_weights) {
+    custom_group_fields = evaluate_custom_deform_groups(
+        *armature_object, params.user_data(), *custom_weights);
+  }
 
   GField output_field{std::make_shared<ArmatureDeformField>(*armature_object,
                                                             target_to_world,
@@ -257,6 +347,7 @@ static void node_geo_exec(GeoNodeExecParams params)
                                                             use_envelope,
                                                             use_vertex_groups,
                                                             invert_vertex_groups,
+                                                            custom_group_fields,
                                                             skinning_mode)};
   params.set_output<GField>("Value", std::move(output_field));
 }
