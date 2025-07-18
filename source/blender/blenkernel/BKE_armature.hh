@@ -709,19 +709,25 @@ struct ArmatureDeformGroup {
  * \return The deform group for the vertex group.
  */
 ArmatureDeformGroup build_deform_group_for_vertex_group(
+    const IndexMask &universe,
     const Span<MDeformVert> dverts,
-    const IndexMask &selection,
     const int def_nr,
     const std::optional<float> weight_threshold,
+    const std::optional<float> weight_factor,
     IndexMaskMemory &memory);
+
+enum class ArmatureDeformSkinningMode {
+  Linear,
+  DualQuatenrion,
+};
 
 void BKE_armature_deform_vectors(
     const Object &ob_arm,
     const blender::float4x4 &target_to_world,
-    bool use_envelope,
-    bool use_quaternion,
     const blender::IndexMask &selection,
     std::optional<ArmatureDeformVertexGroupParams> vertex_group_params,
+    bool use_envelope,
+    const ArmatureDeformSkinningMode skinning_mode,
     std::optional<blender::Span<float>> weights,
     blender::MutableSpan<blender::float3> vectors);
 
