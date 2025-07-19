@@ -311,47 +311,53 @@ Vector<PoseChannelDeformGroup> pose_channel_groups_from_envelopes(
  * If full_deform is true the deformation matrix is also computed.
  */
 template<bool full_deform> struct BoneDeformLinearMixer {
-  float3 position_delta = float3(0.0f);
-  float3x3 deform = float3x3::zero();
+  Array<float3> position_delta;
+  Array<float3x3> deform;
 
-  void accumulate(const bPoseChannel &pchan, const float3 &co, const float weight)
+  BoneDeformLinearMixer(const int size)
+      : position_delta(size, float3(0.0f)), deform(size, float3x3::identity())
+  {
+  }
+
+  void accumulate(const bPoseChannel &pchan, const int index, const float3 &co, const float weight)
   {
     const float4x4 &pose_mat = float4x4(pchan.chan_mat);
 
-    position_delta += weight * (math::transform_point(pose_mat, co) - co);
+    position_delta[index] += weight * (math::transform_point(pose_mat, co) - co);
     if constexpr (full_deform) {
-      deform += weight * pose_mat.view<3, 3>();
+      deform[index] += weight * pose_mat.view<3, 3>();
     }
   }
 
   void accumulate_bbone(const bPoseChannel &pchan,
+                        const int index,
                         const float3 &co,
                         const float weight,
-                        const int index)
+                        const int bbone_index)
   {
     const Span<float4x4> pose_mats = Span<Mat4>(pchan.runtime.bbone_deform_mats,
                                                 pchan.runtime.bbone_segments + 2)
                                          .cast<float4x4>();
-    const float4x4 &pose_mat = pose_mats[index + 1];
+    const float4x4 &pose_mat = pose_mats[bbone_index + 1];
 
-    position_delta += weight * (math::transform_point(pose_mat, co) - co);
+    position_delta[index] += weight * (math::transform_point(pose_mat, co) - co);
     if constexpr (full_deform) {
-      deform += weight * pose_mat.view<3, 3>();
+      deform[index] += weight * pose_mat.view<3, 3>();
     }
   }
 
-  void finalize(const float total, float3 &r_position) const
+  void finalize(const int index, const float total, float3 &r_position) const
   {
     const float scale_factor = 1.0f / total;
-    r_position = r_position + position_delta * scale_factor;
+    r_position = r_position + position_delta[index] * scale_factor;
   };
 
-  void finalize(const float total, float3 &r_position, float3x3 &r_deform_mat)
+  void finalize(const int index, const float total, float3 &r_position, float3x3 &r_deform_mat)
   {
     BLI_assert(full_deform);
     const float scale_factor = 1.0f / total;
-    r_position = r_position + position_delta * scale_factor;
-    r_deform_mat = (deform * scale_factor) * r_deform_mat;
+    r_position = r_position + position_delta[index] * scale_factor;
+    r_deform_mat = (deform[index] * scale_factor) * r_deform_mat;
   };
 };
 
@@ -360,40 +366,43 @@ template<bool full_deform> struct BoneDeformLinearMixer {
  * If full_deform is true the deformation matrix is also computed.
  */
 template<bool full_deform> struct BoneDeformDualQuaternionMixer {
-  DualQuat dq = {};
+  Array<DualQuat> dq;
 
-  void accumulate(const bPoseChannel &pchan, const float3 &co, const float weight)
+  BoneDeformDualQuaternionMixer(const int size) : dq(size, DualQuat{}) {}
+
+  void accumulate(const bPoseChannel &pchan, const int index, const float3 &co, const float weight)
   {
     const DualQuat &deform_quat = pchan.runtime.deform_dual_quat;
 
-    add_weighted_dq_dq_pivot(&dq, &deform_quat, co, weight, full_deform);
+    add_weighted_dq_dq_pivot(&dq[index], &deform_quat, co, weight, full_deform);
   }
 
   void accumulate_bbone(const bPoseChannel &pchan,
+                        const int index,
                         const float3 &co,
                         const float weight,
-                        const int index)
+                        const int bbone_index)
   {
     const Span<DualQuat> quats = {pchan.runtime.bbone_dual_quats,
                                   pchan.runtime.bbone_segments + 1};
-    const DualQuat &deform_quat = quats[index];
+    const DualQuat &deform_quat = quats[bbone_index];
 
-    add_weighted_dq_dq_pivot(&dq, &deform_quat, co, weight, full_deform);
+    add_weighted_dq_dq_pivot(&dq[index], &deform_quat, co, weight, full_deform);
   }
 
-  void finalize(const float total, float3 &r_position)
+  void finalize(const int index, const float total, float3 &r_position)
   {
-    normalize_dq(&dq, total);
+    normalize_dq(&dq[index], total);
     float3x3 local_deform_mat;
-    mul_v3m3_dq(r_position, local_deform_mat.ptr(), &dq);
+    mul_v3m3_dq(r_position, local_deform_mat.ptr(), &dq[index]);
   }
 
-  void finalize(const float total, float3 &r_position, float3x3 &r_deform_mat)
+  void finalize(const int index, const float total, float3 &r_position, float3x3 &r_deform_mat)
   {
     BLI_assert(full_deform);
-    normalize_dq(&dq, total);
+    normalize_dq(&dq[index], total);
     float3x3 local_deform_mat;
-    mul_v3m3_dq(r_position, local_deform_mat.ptr(), &dq);
+    mul_v3m3_dq(r_position, local_deform_mat.ptr(), &dq[index]);
     r_deform_mat = local_deform_mat * r_deform_mat;
   }
 };
@@ -402,7 +411,7 @@ template<typename MixerT>
 static void deform_single_group_with_mixer(const bPoseChannel &pchan,
                                            const ArmatureDeformGroup &deform_group,
                                            const Span<float3> positions,
-                                           MutableSpan<MixerT> mixers,
+                                           MixerT &mixer,
                                            MutableSpan<float> contrib)
 {
   BLI_assert(pchan.bone != nullptr);
@@ -421,8 +430,8 @@ static void deform_single_group_with_mixer(const bPoseChannel &pchan,
       int bbone_index;
       float bbone_blend;
       BKE_pchan_bbone_deform_segment_index(&pchan, position, &bbone_index, &bbone_blend);
-      mixers[index].accumulate_bbone(pchan, position, weight * (1.0f - bbone_blend), bbone_index);
-      mixers[index].accumulate_bbone(pchan, position, weight * bbone_blend, bbone_index + 1);
+      mixer.accumulate_bbone(pchan, index, position, weight * (1.0f - bbone_blend), bbone_index);
+      mixer.accumulate_bbone(pchan, index, position, weight * bbone_blend, bbone_index + 1);
       contrib[index] += weight;
     });
   }
@@ -432,7 +441,7 @@ static void deform_single_group_with_mixer(const bPoseChannel &pchan,
       /* Weights are stored as compressed array. */
       const float weight = deform_group.weights[pos];
 
-      mixers[index].accumulate(pchan, position, weight);
+      mixer.accumulate(pchan, index, position, weight);
       contrib[index] += weight;
     });
   }
@@ -441,7 +450,7 @@ static void deform_single_group_with_mixer(const bPoseChannel &pchan,
 template<typename MixerT>
 static void deform_groups_with_mixer(const Span<PoseChannelDeformGroup> pchan_groups,
                                      const Span<float3> positions,
-                                     MutableSpan<MixerT> mixers,
+                                     MixerT &mixer,
                                      MutableSpan<float> contrib,
                                      IndexMask *r_undeformed_mask,
                                      IndexMaskMemory &memory)
@@ -452,7 +461,7 @@ static void deform_groups_with_mixer(const Span<PoseChannelDeformGroup> pchan_gr
     }
 
     deform_single_group_with_mixer<MixerT>(
-        *group.pose_channel, group.deform_group, positions, mixers, contrib);
+        *group.pose_channel, group.deform_group, positions, mixer, contrib);
 
     if (r_undeformed_mask) {
       *r_undeformed_mask = IndexMask::from_difference(
@@ -480,12 +489,12 @@ static void deform_with_mixer(
 
   IndexMaskMemory memory;
 
-  Array<MixerT> mixers(selection.min_array_size(), MixerT{});
+  MixerT mixer(selection.min_array_size());
   Array<float> contrib(selection.min_array_size(), 0.0f);
   IndexMask undeformed_mask = selection;
 
   deform_groups_with_mixer<MixerT>(
-      custom_groups, positions, mixers, contrib, &undeformed_mask, memory);
+      custom_groups, positions, mixer, contrib, &undeformed_mask, memory);
 
   if (vertex_group_params) {
     Vector<PoseChannelDeformGroup> pchan_groups = pose_channel_groups_from_vertex_groups(
@@ -497,7 +506,7 @@ static void deform_with_mixer(
         positions,
         memory);
     deform_groups_with_mixer<MixerT>(
-        pchan_groups, positions, mixers, contrib, &undeformed_mask, memory);
+        pchan_groups, positions, mixer, contrib, &undeformed_mask, memory);
   }
 
   if (use_envelope) {
@@ -505,7 +514,7 @@ static void deform_with_mixer(
         pose_channels, undeformed_mask, weight_threshold, positions, memory);
     /* Note: undeformed_mask is not updated here, no further groups are added. */
     deform_groups_with_mixer<MixerT>(
-        pchan_groups, positions, mixers, contrib, nullptr /*&undeformed_mask*/, memory);
+        pchan_groups, positions, mixer, contrib, nullptr /*&undeformed_mask*/, memory);
   }
 
   const bool full_deform = deform_mats.has_value();
@@ -521,11 +530,11 @@ static void deform_with_mixer(
     if (full_deform) {
       float3 &position = positions[index];
       float3x3 &deform_mat = (*deform_mats)[index];
-      mixers[index].finalize(weight, position, deform_mat);
+      mixer.finalize(index, weight, position, deform_mat);
     }
     else {
       float3 &position = positions[index];
-      mixers[index].finalize(weight, position);
+      mixer.finalize(index, weight, position);
     }
   });
 }
