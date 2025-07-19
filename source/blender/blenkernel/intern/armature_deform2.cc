@@ -407,11 +407,15 @@ template<bool full_deform> struct BoneDeformDualQuaternionMixer {
   }
 };
 
-template<typename MixerT>
+using MixerVariant = std::variant<BoneDeformLinearMixer<true>,
+                                  BoneDeformLinearMixer<false>,
+                                  BoneDeformDualQuaternionMixer<true>,
+                                  BoneDeformDualQuaternionMixer<false>>;
+
 static void deform_single_group_with_mixer(const bPoseChannel &pchan,
                                            const ArmatureDeformGroup &deform_group,
                                            const Span<float3> positions,
-                                           MixerT &mixer,
+                                           MixerVariant &mixer,
                                            MutableSpan<float> contrib)
 {
   BLI_assert(pchan.bone != nullptr);
@@ -421,36 +425,44 @@ static void deform_single_group_with_mixer(const bPoseChannel &pchan,
   constexpr GrainSize grain_size = GrainSize(1024);
 
   if (bone.segments > 1 && pchan.runtime.bbone_segments == bone.segments) {
-    deform_group.mask.foreach_index(grain_size, [&](const int index, const int pos) {
-      const float3 &position = positions[index];
-      /* Weights are stored as compressed array. */
-      const float weight = deform_group.weights[pos];
+    std::visit(
+        [&](auto &mixer) {
+          deform_group.mask.foreach_index(grain_size, [&](const int index, const int pos) {
+            const float3 &position = positions[index];
+            /* Weights are stored as compressed array. */
+            const float weight = deform_group.weights[pos];
 
-      /* Calculate the indices of the 2 affecting b_bone segments. */
-      int bbone_index;
-      float bbone_blend;
-      BKE_pchan_bbone_deform_segment_index(&pchan, position, &bbone_index, &bbone_blend);
-      mixer.accumulate_bbone(pchan, index, position, weight * (1.0f - bbone_blend), bbone_index);
-      mixer.accumulate_bbone(pchan, index, position, weight * bbone_blend, bbone_index + 1);
-      contrib[index] += weight;
-    });
+            /* Calculate the indices of the 2 affecting b_bone segments. */
+            int bbone_index;
+            float bbone_blend;
+            BKE_pchan_bbone_deform_segment_index(&pchan, position, &bbone_index, &bbone_blend);
+            mixer.accumulate_bbone(
+                pchan, index, position, weight * (1.0f - bbone_blend), bbone_index);
+            mixer.accumulate_bbone(pchan, index, position, weight * bbone_blend, bbone_index + 1);
+            contrib[index] += weight;
+          });
+        },
+        mixer);
   }
   else {
-    deform_group.mask.foreach_index(grain_size, [&](const int index, const int pos) {
-      const float3 &position = positions[index];
-      /* Weights are stored as compressed array. */
-      const float weight = deform_group.weights[pos];
+    std::visit(
+        [&](auto &mixer) {
+          deform_group.mask.foreach_index(grain_size, [&](const int index, const int pos) {
+            const float3 &position = positions[index];
+            /* Weights are stored as compressed array. */
+            const float weight = deform_group.weights[pos];
 
-      mixer.accumulate(pchan, index, position, weight);
-      contrib[index] += weight;
-    });
+            mixer.accumulate(pchan, index, position, weight);
+            contrib[index] += weight;
+          });
+        },
+        mixer);
   }
 }
 
-template<typename MixerT>
 static void deform_groups_with_mixer(const Span<PoseChannelDeformGroup> pchan_groups,
                                      const Span<float3> positions,
-                                     MixerT &mixer,
+                                     MixerVariant &mixer,
                                      MutableSpan<float> contrib,
                                      IndexMask *r_undeformed_mask,
                                      IndexMaskMemory &memory)
@@ -460,7 +472,7 @@ static void deform_groups_with_mixer(const Span<PoseChannelDeformGroup> pchan_gr
       continue;
     }
 
-    deform_single_group_with_mixer<MixerT>(
+    deform_single_group_with_mixer(
         *group.pose_channel, group.deform_group, positions, mixer, contrib);
 
     if (r_undeformed_mask) {
@@ -470,7 +482,6 @@ static void deform_groups_with_mixer(const Span<PoseChannelDeformGroup> pchan_gr
   }
 }
 
-template<typename MixerT>
 static void deform_with_mixer(
     const ListBase &pose_channels,
     const blender::IndexMask &selection,
@@ -480,6 +491,7 @@ static void deform_with_mixer(
     const bool use_envelope,
     const std::optional<float> weight_threshold,
     const bool use_envelope_multiply,
+    MixerVariant &mixer,
     const MutableSpan<float3> positions,
     const std::optional<MutableSpan<float3x3>> deform_mats)
 {
@@ -489,12 +501,10 @@ static void deform_with_mixer(
 
   IndexMaskMemory memory;
 
-  MixerT mixer(selection.min_array_size());
   Array<float> contrib(selection.min_array_size(), 0.0f);
   IndexMask undeformed_mask = selection;
 
-  deform_groups_with_mixer<MixerT>(
-      custom_groups, positions, mixer, contrib, &undeformed_mask, memory);
+  deform_groups_with_mixer(custom_groups, positions, mixer, contrib, &undeformed_mask, memory);
 
   if (vertex_group_params) {
     Vector<PoseChannelDeformGroup> pchan_groups = pose_channel_groups_from_vertex_groups(
@@ -505,110 +515,80 @@ static void deform_with_mixer(
         use_envelope_multiply,
         positions,
         memory);
-    deform_groups_with_mixer<MixerT>(
-        pchan_groups, positions, mixer, contrib, &undeformed_mask, memory);
+    deform_groups_with_mixer(pchan_groups, positions, mixer, contrib, &undeformed_mask, memory);
   }
 
   if (use_envelope) {
     Vector<PoseChannelDeformGroup> pchan_groups = pose_channel_groups_from_envelopes(
         pose_channels, undeformed_mask, weight_threshold, positions, memory);
     /* Note: undeformed_mask is not updated here, no further groups are added. */
-    deform_groups_with_mixer<MixerT>(
+    deform_groups_with_mixer(
         pchan_groups, positions, mixer, contrib, nullptr /*&undeformed_mask*/, memory);
   }
 
-  const bool full_deform = deform_mats.has_value();
-  selection.foreach_index(grain_size, [&](const int index) {
-    /* Overall influence. */
-    const float mask_weight = point_weights ? (*point_weights)[index] : 1.0f;
-    const float weight = contrib[index];
-    const float total_weight = weight * mask_weight;
-    if (weight_threshold && total_weight <= weight_threshold) {
-      return;
-    }
+  if (deform_mats) {
+    std::visit(
+        [&](auto &mixer) {
+          selection.foreach_index(grain_size, [&](const int index) {
+            /* Overall influence. */
+            const float mask_weight = point_weights ? (*point_weights)[index] : 1.0f;
+            const float weight = contrib[index];
+            const float total_weight = weight * mask_weight;
+            if (weight_threshold && total_weight <= weight_threshold) {
+              return;
+            }
 
-    if (full_deform) {
-      float3 &position = positions[index];
-      float3x3 &deform_mat = (*deform_mats)[index];
-      mixer.finalize(index, weight, position, deform_mat);
-    }
-    else {
-      float3 &position = positions[index];
-      mixer.finalize(index, weight, position);
-    }
-  });
+            float3 &position = positions[index];
+            float3x3 &deform_mat = (*deform_mats)[index];
+            mixer.finalize(index, weight, position, deform_mat);
+          });
+        },
+        mixer);
+  }
+  else {
+    std::visit(
+        [&](auto &mixer) {
+          // TODO can optimize based on full_deform case here.
+          selection.foreach_index(grain_size, [&](const int index) {
+            /* Overall influence. */
+            const float mask_weight = point_weights ? (*point_weights)[index] : 1.0f;
+            const float weight = contrib[index];
+            const float total_weight = weight * mask_weight;
+            if (weight_threshold && total_weight <= weight_threshold) {
+              return;
+            }
+
+            float3 &position = positions[index];
+            mixer.finalize(index, weight, position);
+          });
+        },
+        mixer);
+  }
 }
 
-/* Statically determine the correct mixer type. */
-static void deform_values(
-    const ListBase &pose_channels,
-    const blender::IndexMask &selection,
-    const std::optional<Span<float>> point_weights,
-    const Span<PoseChannelDeformGroup> custom_groups,
-    const std::optional<ArmatureDeformVertexGroupParams> &vertex_group_params,
-    const bool use_envelope,
-    const std::optional<float> weight_threshold,
-    const bool use_envelope_multiply,
-    const ArmatureDeformSkinningMode skinning_mode,
-    const MutableSpan<float3> positions,
-    const std::optional<MutableSpan<float3x3>> deform_mats)
+/* Determine the correct mixer type. */
+static MixerVariant get_deform_mixer(const ArmatureDeformSkinningMode skinning_mode,
+                                     const bool has_deform_mats,
+                                     const int size)
 {
-  if (deform_mats) {
+  if (has_deform_mats) {
     switch (skinning_mode) {
       case ArmatureDeformSkinningMode::Linear:
-        deform_with_mixer<BoneDeformLinearMixer<true>>(pose_channels,
-                                                       selection,
-                                                       point_weights,
-                                                       custom_groups,
-                                                       vertex_group_params,
-                                                       use_envelope,
-                                                       weight_threshold,
-                                                       use_envelope_multiply,
-                                                       positions,
-                                                       deform_mats);
-        break;
+        return BoneDeformLinearMixer<true>(size);
       case ArmatureDeformSkinningMode::DualQuatenrion:
-        deform_with_mixer<BoneDeformDualQuaternionMixer<true>>(pose_channels,
-                                                               selection,
-                                                               point_weights,
-                                                               custom_groups,
-                                                               vertex_group_params,
-                                                               use_envelope,
-                                                               weight_threshold,
-                                                               use_envelope_multiply,
-                                                               positions,
-                                                               deform_mats);
-        break;
+        return BoneDeformDualQuaternionMixer<true>(size);
     }
   }
   else {
     switch (skinning_mode) {
       case ArmatureDeformSkinningMode::Linear:
-        deform_with_mixer<BoneDeformLinearMixer<false>>(pose_channels,
-                                                        selection,
-                                                        point_weights,
-                                                        custom_groups,
-                                                        vertex_group_params,
-                                                        use_envelope,
-                                                        weight_threshold,
-                                                        use_envelope_multiply,
-                                                        positions,
-                                                        std::nullopt);
-        break;
+        return BoneDeformLinearMixer<false>(size);
       case ArmatureDeformSkinningMode::DualQuatenrion:
-        deform_with_mixer<BoneDeformDualQuaternionMixer<false>>(pose_channels,
-                                                                selection,
-                                                                point_weights,
-                                                                custom_groups,
-                                                                vertex_group_params,
-                                                                use_envelope,
-                                                                weight_threshold,
-                                                                use_envelope_multiply,
-                                                                positions,
-                                                                std::nullopt);
-        break;
+        return BoneDeformDualQuaternionMixer<false>(size);
     }
   }
+  BLI_assert_unreachable();
+  return BoneDeformLinearMixer<false>(0);
 }
 
 void armature_deform_positions(
@@ -634,17 +614,18 @@ void armature_deform_positions(
     armature_positions[index] = math::transform_point(target_to_armature, positions[index]);
   });
 
-  deform_values(ob_arm.pose->chanbase,
-                selection,
-                point_weights,
-                custom_groups,
-                vertex_group_params,
-                use_envelope,
-                0.0f,
-                true,
-                skinning_mode,
-                armature_positions,
-                std::nullopt);
+  MixerVariant mixer = get_deform_mixer(skinning_mode, false, selection.min_array_size());
+  deform_with_mixer(ob_arm.pose->chanbase,
+                    selection,
+                    point_weights,
+                    custom_groups,
+                    vertex_group_params,
+                    use_envelope,
+                    0.0f,
+                    true,
+                    mixer,
+                    armature_positions,
+                    std::nullopt);
 
   /* Transform back to target object space. */
   selection.foreach_index(grain_size, [&](const int index) {
@@ -678,17 +659,18 @@ void armature_deform_matrices(
     deform_mats[index] = armature_matrix.view<3, 3>();
   });
 
-  deform_values(ob_arm.pose->chanbase,
-                selection,
-                point_weights,
-                custom_groups,
-                vertex_group_params,
-                use_envelope,
-                0.0f,
-                true,
-                skinning_mode,
-                armature_positions,
-                std::nullopt);
+  MixerVariant mixer = get_deform_mixer(skinning_mode, false, selection.min_array_size());
+  deform_with_mixer(ob_arm.pose->chanbase,
+                    selection,
+                    point_weights,
+                    custom_groups,
+                    vertex_group_params,
+                    use_envelope,
+                    0.0f,
+                    true,
+                    mixer,
+                    armature_positions,
+                    std::nullopt);
 
   /* Transform back to target object space. */
   selection.foreach_index(grain_size, [&](const int index) {
