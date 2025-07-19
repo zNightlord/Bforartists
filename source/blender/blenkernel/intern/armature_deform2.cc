@@ -268,8 +268,26 @@ static void build_deform_groups_for_envelopes(const IndexMask &universe,
                                               IndexMaskMemory &memory,
                                               MutableSpan<ArmatureDeformGroup> r_groups)
 {
-  // TODO
-  UNUSED_VARS(universe, positions, bones, weight_threshold, memory, r_groups);
+  constexpr GrainSize grain_size(1024);
+
+  for (const int i : bones.index_range()) {
+    const Bone &bone = *bones[i];
+
+    Array<bool> inside_falloff(universe.size());
+    Array<float> all_weights(universe.size());
+    universe.foreach_index(grain_size, [&](const int index, const int pos) {
+      const float weight = distfactor_to_bone(
+          positions[index], bone.head, bone.tail, bone.rad_head, bone.rad_tail, bone.dist);
+
+      inside_falloff[pos] = (weight > 0.0f);
+      all_weights[pos] = weight;
+    });
+
+    IndexMask mask = IndexMask::from_bools(inside_falloff, memory);
+    Array<float> weights(mask.size());
+    array_utils::gather(all_weights.as_span(), mask, weights.as_mutable_span());
+    r_groups[i] = {std::move(mask), std::move(weights)};
+  }
 }
 
 Vector<PoseChannelDeformGroup> pose_channel_groups_from_envelopes(
