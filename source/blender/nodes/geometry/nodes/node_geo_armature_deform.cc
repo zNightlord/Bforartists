@@ -96,6 +96,15 @@ struct CustomDeformGroupFields {
   Field<bool> selection_field;
 };
 
+// class ArmatureVertexGroupsDeformFunction : public mf::MultiFunction {
+// private:
+//  const Object &armature_object_;
+//  bool use_envelope_;
+//  bool use_vertex_groups_;
+//  bool invert_vertex_groups_;
+//  bke::ArmatureDeformSkinningMode skinning_mode_;
+//};
+
 class ArmatureDeformField final : public bke::GeometryFieldInput {
  private:
   const Object &armature_object_;

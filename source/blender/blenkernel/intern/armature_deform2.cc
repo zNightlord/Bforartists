@@ -55,6 +55,10 @@ ArmatureDeformGroup build_deform_group_for_vertex_group(
     const bool use_envelope_multiply,
     IndexMaskMemory &memory)
 {
+  /* dverts span is empty if no vertex groups are defined. */
+  if (dverts.is_empty()) {
+    return {};
+  }
   BLI_assert(positions.size() >= universe.min_array_size());
   BLI_assert(dverts.size() >= universe.min_array_size());
 
@@ -113,15 +117,23 @@ ArmatureDeformGroup build_deform_group_for_vertex_group(
   return {std::move(mask), std::move(weights)};
 }
 
-void build_deform_groups_for_all_vertex_groups(const IndexMask &universe,
-                                               const Span<float3> positions,
-                                               const Span<MDeformVert> dverts,
-                                               const Span<const Bone *> bone_by_def_nr,
-                                               const std::optional<float> weight_threshold,
-                                               const bool use_envelope_multiply,
-                                               IndexMaskMemory &memory,
-                                               MutableSpan<ArmatureDeformGroup> r_group_by_def_nr)
+static void build_deform_groups_for_all_vertex_groups(
+    const IndexMask &universe,
+    const Span<float3> positions,
+    const Span<MDeformVert> dverts,
+    const Span<const Bone *> bone_by_def_nr,
+    const std::optional<float> weight_threshold,
+    const bool use_envelope_multiply,
+    IndexMaskMemory &memory,
+    MutableSpan<ArmatureDeformGroup> r_group_by_def_nr)
 {
+  /* dverts span is empty if no vertex groups are defined. */
+  if (dverts.is_empty()) {
+    return;
+  }
+  BLI_assert(positions.size() >= universe.min_array_size());
+  BLI_assert(dverts.size() >= universe.min_array_size());
+
   const int bones_num = bone_by_def_nr.size();
   Array<int> def_nr_offsets(bones_num + 1, 0);
   universe.foreach_index(GrainSize(1024), [&](const int index) {
@@ -188,15 +200,110 @@ void build_deform_groups_for_all_vertex_groups(const IndexMask &universe,
   }
 }
 
-ArmatureDeformGroup build_deform_group_for_envelope(const IndexMask &universe,
-                                                    const Span<float3> positions,
-                                                    const Bone &bone,
-                                                    const std::optional<float> weight_threshold,
-                                                    IndexMaskMemory &memory)
+static std::optional<int> find_def_nr_from_pose_channel(const bPoseChannel &pchan,
+                                                        const ListBase &vertex_groups)
+{
+  const int def_nr = BLI_findstringindex(&vertex_groups, pchan.name, offsetof(bDeformGroup, name));
+  if (def_nr >= 0) {
+    return def_nr;
+  }
+  return std::nullopt;
+}
+
+Vector<PoseChannelDeformGroup> pose_channel_groups_from_vertex_groups(
+    const ListBase &pose_channels,
+    const blender::IndexMask &mask,
+    const std::optional<ArmatureDeformVertexGroupParams> &vertex_group_params,
+    const std::optional<float> weight_threshold,
+    const bool use_envelope_multiply,
+    const Span<float3> positions,
+    IndexMaskMemory &memory)
+{
+  const int vertex_group_num = BLI_listbase_count(&vertex_group_params->vertex_groups);
+  Array<const bPoseChannel *> pose_channel_by_def_nr(vertex_group_num, nullptr);
+  Array<const Bone *> bone_by_def_nr(vertex_group_num, nullptr);
+  LISTBASE_FOREACH (bPoseChannel *, pchan, &pose_channels) {
+    const Bone *bone = pchan->bone;
+    if (!bone || (bone->flag & BONE_NO_DEFORM)) {
+      continue;
+    }
+
+    const std::optional<int> def_nr = find_def_nr_from_pose_channel(
+        *pchan, vertex_group_params->vertex_groups);
+    if (!def_nr) {
+      continue;
+    }
+
+    pose_channel_by_def_nr[*def_nr] = pchan;
+    bone_by_def_nr[*def_nr] = bone;
+  }
+
+  Array<ArmatureDeformGroup> deform_group_by_def_nr(vertex_group_num);
+  build_deform_groups_for_all_vertex_groups(mask,
+                                            positions,
+                                            vertex_group_params->dverts,
+                                            bone_by_def_nr,
+                                            weight_threshold,
+                                            use_envelope_multiply,
+                                            memory,
+                                            deform_group_by_def_nr);
+
+  Vector<PoseChannelDeformGroup> pchan_groups;
+  pchan_groups.reserve(vertex_group_num);
+  for (const int def_nr : deform_group_by_def_nr.index_range()) {
+    const bPoseChannel *pchan = pose_channel_by_def_nr[def_nr];
+    ArmatureDeformGroup &deform_group = deform_group_by_def_nr[def_nr];
+    if (!pchan || deform_group.mask.is_empty()) {
+      continue;
+    }
+    pchan_groups.append_unchecked({std::move(deform_group), pchan});
+  }
+  return pchan_groups;
+}
+
+static void build_deform_groups_for_envelopes(const IndexMask &universe,
+                                              const Span<float3> positions,
+                                              const Span<const Bone *> bones,
+                                              const std::optional<float> weight_threshold,
+                                              IndexMaskMemory &memory,
+                                              MutableSpan<ArmatureDeformGroup> r_groups)
 {
   // TODO
-  UNUSED_VARS(universe, positions, bone, weight_threshold, memory);
-  return {};
+  UNUSED_VARS(universe, positions, bones, weight_threshold, memory, r_groups);
+}
+
+Vector<PoseChannelDeformGroup> pose_channel_groups_from_envelopes(
+    const ListBase &pose_channels,
+    const blender::IndexMask &mask,
+    const std::optional<float> weight_threshold,
+    const Span<float3> positions,
+    IndexMaskMemory &memory)
+{
+  const int pose_channel_num = BLI_listbase_count(&pose_channels);
+  Array<const Bone *> bones(pose_channel_num, nullptr);
+  int pchan_i;
+  LISTBASE_FOREACH_INDEX (bPoseChannel *, pchan, &pose_channels, pchan_i) {
+    const Bone *bone = pchan->bone;
+    if (!bone || (bone->flag & BONE_NO_DEFORM)) {
+      continue;
+    }
+    bones[pchan_i] = pchan->bone;
+  }
+
+  Array<ArmatureDeformGroup> deform_groups(pose_channel_num);
+  build_deform_groups_for_envelopes(
+      mask, positions, bones, weight_threshold, memory, deform_groups);
+
+  Vector<PoseChannelDeformGroup> pchan_groups;
+  pchan_groups.reserve(pose_channel_num);
+  LISTBASE_FOREACH_INDEX (bPoseChannel *, pchan, &pose_channels, pchan_i) {
+    ArmatureDeformGroup &deform_group = deform_groups[pchan_i];
+    if (!pchan || deform_group.mask.is_empty()) {
+      continue;
+    }
+    pchan_groups.append_unchecked({std::move(deform_group), pchan});
+  }
+  return pchan_groups;
 }
 
 /**
@@ -291,57 +398,67 @@ template<bool full_deform> struct BoneDeformDualQuaternionMixer {
   }
 };
 
-static std::optional<int> find_def_nr_from_pose_channel(const bPoseChannel &pchan,
-                                                        const ListBase &vertex_groups)
-{
-  const int def_nr = BLI_findstringindex(&vertex_groups, pchan.name, offsetof(bDeformGroup, name));
-  if (def_nr >= 0) {
-    return def_nr;
-  }
-  return std::nullopt;
-}
-
 template<typename MixerT>
-static void pchan_bone_deform(const bPoseChannel &pchan,
-                              const float3 &position,
-                              const float weight,
-                              MixerT &mixer)
+static void deform_single_group_with_mixer(const bPoseChannel &pchan,
+                                           const ArmatureDeformGroup &deform_group,
+                                           const Span<float3> positions,
+                                           MutableSpan<MixerT> mixers,
+                                           MutableSpan<float> contrib)
 {
   BLI_assert(pchan.bone != nullptr);
   const Bone &bone = *pchan.bone;
   BLI_assert(!(bone.flag & BONE_NO_DEFORM));
 
-  if (bone.segments > 1 && pchan.runtime.bbone_segments == bone.segments) {
-    /* Calculate the indices of the 2 affecting b_bone segments. */
-    int index;
-    float blend;
-    BKE_pchan_bbone_deform_segment_index(&pchan, position, &index, &blend);
+  constexpr GrainSize grain_size = GrainSize(1024);
 
-    mixer.accumulate_bbone(pchan, position, weight * (1.0f - blend), index);
-    mixer.accumulate_bbone(pchan, position, weight * blend, index + 1);
+  if (bone.segments > 1 && pchan.runtime.bbone_segments == bone.segments) {
+    deform_group.mask.foreach_index(grain_size, [&](const int index, const int pos) {
+      const float3 &position = positions[index];
+      /* Weights are stored as compressed array. */
+      const float weight = deform_group.weights[pos];
+
+      /* Calculate the indices of the 2 affecting b_bone segments. */
+      int bbone_index;
+      float bbone_blend;
+      BKE_pchan_bbone_deform_segment_index(&pchan, position, &bbone_index, &bbone_blend);
+      mixers[index].accumulate_bbone(pchan, position, weight * (1.0f - bbone_blend), bbone_index);
+      mixers[index].accumulate_bbone(pchan, position, weight * bbone_blend, bbone_index + 1);
+      contrib[index] += weight;
+    });
   }
   else {
-    mixer.accumulate(pchan, position, weight);
+    deform_group.mask.foreach_index(grain_size, [&](const int index, const int pos) {
+      const float3 &position = positions[index];
+      /* Weights are stored as compressed array. */
+      const float weight = deform_group.weights[pos];
+
+      mixers[index].accumulate(pchan, position, weight);
+      contrib[index] += weight;
+    });
   }
 }
 
-static IndexMask filter_index_mask(const IndexMask &universe,
-                                   const Span<bool> deny_list,
-                                   IndexMaskMemory &memory)
+template<typename MixerT>
+static void deform_groups_with_mixer(const Span<PoseChannelDeformGroup> pchan_groups,
+                                     const Span<float3> positions,
+                                     MutableSpan<MixerT> mixers,
+                                     MutableSpan<float> contrib,
+                                     IndexMask *r_undeformed_mask,
+                                     IndexMaskMemory &memory)
 {
-  constexpr GrainSize grain_size = GrainSize(4096);
-  return IndexMask::from_batch_predicate(
-      universe,
-      grain_size,
-      memory,
-      [&](const IndexMaskSegment universe_segment, IndexRangesBuilder<int16_t> &builder) {
-        for (const int16_t local_index : universe_segment.base_span()) {
-          if (!deny_list[universe_segment.offset() + local_index]) {
-            builder.add(local_index);
-          }
-        }
-        return universe_segment.offset();
-      });
+  for (const PoseChannelDeformGroup &group : pchan_groups) {
+    if (!group.pose_channel) {
+      continue;
+    }
+
+    deform_single_group_with_mixer<MixerT>(
+        *group.pose_channel, group.deform_group, positions, mixers, contrib);
+
+    if (r_undeformed_mask) {
+      *r_undeformed_mask = IndexMask::from_difference(
+          *r_undeformed_mask, group.deform_group.mask, memory);
+    }
+  }
 }
 
 template<typename MixerT>
@@ -365,71 +482,30 @@ static void deform_with_mixer(
 
   Array<MixerT> mixers(selection.min_array_size(), MixerT{});
   Array<float> contrib(selection.min_array_size(), 0.0f);
-  Array<bool> deformed(selection.min_array_size(), false);
+  IndexMask undeformed_mask = selection;
 
-  for (const PoseChannelDeformGroup &pchan_group : custom_groups) {
-    if (pchan_group.pose_channel == nullptr) {
-      continue;
-    }
-    pchan_group.deform_group.mask.foreach_index(grain_size, [&](const int index, const int pos) {
-      const float3 &position = positions[index];
-      /* Weights are stored as compressed array. */
-      const float weight = pchan_group.deform_group.weights[pos];
-      pchan_bone_deform(*pchan_group.pose_channel, position, weight, mixers[index]);
-      contrib[index] += weight;
-      deformed[index] = true;
-    });
-  }
+  deform_groups_with_mixer<MixerT>(
+      custom_groups, positions, mixers, contrib, &undeformed_mask, memory);
 
   if (vertex_group_params) {
-    const IndexMask undeformed_mask = filter_index_mask(selection, deformed, memory);
-
-    int pchan_i;
-    LISTBASE_FOREACH_INDEX (bPoseChannel *, pchan, &pose_channels, pchan_i) {
-      const Bone *bone = pchan->bone;
-      if (!bone || (bone->flag & BONE_NO_DEFORM)) {
-        continue;
-      }
-
-      const std::optional<int> def_nr = find_def_nr_from_pose_channel(
-          *pchan, vertex_group_params->vertex_groups);
-      if (!def_nr) {
-        continue;
-      }
-
-      ArmatureDeformGroup deform_group = build_deform_group_for_vertex_group(
-          undeformed_mask,
-          positions,
-          vertex_group_params->dverts,
-          *def_nr,
-          *bone,
-          weight_threshold,
-          use_envelope_multiply,
-          memory);
-      deform_group.mask.foreach_index(grain_size, [&](const int index, const int pos) {
-        const float3 &position = positions[index];
-        /* Weights are stored as compressed array. */
-        const float weight = deform_group.weights[pos];
-        pchan_bone_deform(*pchan, position, weight, mixers[index]);
-        contrib[index] += weight;
-        deformed[index] = true;
-      });
-    }
+    Vector<PoseChannelDeformGroup> pchan_groups = pose_channel_groups_from_vertex_groups(
+        pose_channels,
+        undeformed_mask,
+        vertex_group_params,
+        weight_threshold,
+        use_envelope_multiply,
+        positions,
+        memory);
+    deform_groups_with_mixer<MixerT>(
+        pchan_groups, positions, mixers, contrib, &undeformed_mask, memory);
   }
 
   if (use_envelope) {
-    const IndexMask undeformed_mask = filter_index_mask(selection, deformed, memory);
-    int pchan_i;
-    LISTBASE_FOREACH_INDEX (bPoseChannel *, pchan, &pose_channels, pchan_i) {
-      const Bone *bone = pchan->bone;
-      if (!bone || (bone->flag & BONE_NO_DEFORM)) {
-        continue;
-      }
-
-      ArmatureDeformGroup deform_group = build_deform_group_for_envelope(
-          undeformed_mask, positions, *bone, weight_threshold, memory);
-      // TODO
-    }
+    Vector<PoseChannelDeformGroup> pchan_groups = pose_channel_groups_from_envelopes(
+        pose_channels, undeformed_mask, weight_threshold, positions, memory);
+    /* Note: undeformed_mask is not updated here, no further groups are added. */
+    deform_groups_with_mixer<MixerT>(
+        pchan_groups, positions, mixers, contrib, nullptr /*&undeformed_mask*/, memory);
   }
 
   const bool full_deform = deform_mats.has_value();

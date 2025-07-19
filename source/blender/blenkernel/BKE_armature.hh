@@ -726,27 +726,26 @@ ArmatureDeformGroup build_deform_group_for_vertex_group(const IndexMask &univers
                                                         IndexMaskMemory &memory);
 /**
  * Build deform groups for a list of vertex groups.
- * This can be more efficient than building one group at a time when there are a lot of vertex
- * groups.
+ * This can be more efficient than building one group at a time when there are many vertex groups.
  */
-void build_deform_groups_for_all_vertex_groups(const IndexMask &universe,
-                                               Span<float3> positions,
-                                               Span<MDeformVert> dverts,
-                                               Span<const Bone *> bone_by_def_nr,
-                                               std::optional<float> weight_threshold,
-                                               bool use_envelope_multiply,
-                                               IndexMaskMemory &memory,
-                                               MutableSpan<ArmatureDeformGroup> r_group_by_def_nr);
+Vector<PoseChannelDeformGroup> pose_channel_groups_from_vertex_groups(
+    const ListBase &pose_channels,
+    const blender::IndexMask &mask,
+    std::optional<ArmatureDeformVertexGroupParams> &vertex_group_params,
+    std::optional<float> weight_threshold,
+    bool use_envelope_multiply,
+    Span<float3> positions,
+    IndexMaskMemory &memory);
+
 /*
- * Build deform group for envelope weights from a bone.
- *
- * \return The deform group for all points within falloff distance.
+ * Build deform groups based on bone envelope weights.
  */
-ArmatureDeformGroup build_deform_group_for_envelope(const IndexMask &universe,
-                                                    Span<float3> positions,
-                                                    const Bone &bone,
-                                                    std::optional<float> weight_threshold,
-                                                    IndexMaskMemory &memory);
+Vector<PoseChannelDeformGroup> pose_channel_groups_from_envelopes(
+    const ListBase &pose_channels,
+    const blender::IndexMask &mask,
+    std::optional<float> weight_threshold,
+    Span<float3> positions,
+    IndexMaskMemory &memory);
 
 enum class ArmatureDeformSkinningMode {
   Linear,
