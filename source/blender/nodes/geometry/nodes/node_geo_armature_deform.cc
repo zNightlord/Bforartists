@@ -135,6 +135,12 @@ class ArmatureDeformField final : public bke::GeometryFieldInput {
                                  const IndexMask &mask) const final
   {
     const int64_t domain_size = context.attributes()->domain_size(context.domain());
+    if (context.domain() != AttrDomain::Point) {
+      FieldEvaluator evaluator(context, domain_size);
+      evaluator.add(value_field_);
+      evaluator.evaluate();
+      return evaluator.get_evaluated(0);
+    }
 
     GArray<> value_buffer(*type_, domain_size);
     Array<float> mask_buffer(domain_size);
@@ -163,20 +169,27 @@ class ArmatureDeformField final : public bke::GeometryFieldInput {
     if (use_vertex_groups_) {
       switch (context.type()) {
         case GeometryComponent::Type::Mesh:
-          if (ELEM(context.domain(), AttrDomain::Point, AttrDomain::Edge, AttrDomain::Face)) {
-            if (const Mesh *mesh = context.mesh()) {
-              const ListBase *vertex_groups = BKE_id_defgroup_list_get(
-                  reinterpret_cast<const ID *>(mesh));
-              if (vertex_groups) {
-                vgroup_params = {*vertex_groups, mesh->deform_verts(), invert_vertex_groups_};
-              }
-            }
+          if (const Mesh *mesh = context.mesh()) {
+            vgroup_params = {
+                mesh->vertex_group_names, mesh->deform_verts(), invert_vertex_groups_};
           }
           break;
-          // TODO read vertex groups where possible.
-        // case GeometryComponent::Type::Curve:
-        // case GeometryComponent::Type::GreasePencil:
-        //   break;
+        case GeometryComponent::Type::Curve:
+          if (const bke::CurvesGeometry *curves = context.curves()) {
+            vgroup_params = {
+                curves->vertex_group_names, curves->deform_verts(), invert_vertex_groups_};
+          }
+          break;
+        case GeometryComponent::Type::GreasePencil: {
+          const GreasePencil *grease_pencil = context.grease_pencil();
+          const bke::greasepencil::Drawing *drawing = context.grease_pencil_layer_drawing();
+          if (grease_pencil && drawing) {
+            vgroup_params = {grease_pencil->vertex_group_names,
+                             drawing->geometry.wrap().deform_verts(),
+                             invert_vertex_groups_};
+          }
+          break;
+        }
         default:
           break;
       }
