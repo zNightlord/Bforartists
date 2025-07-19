@@ -724,7 +724,19 @@ ArmatureDeformGroup build_deform_group_for_vertex_group(const IndexMask &univers
                                                         std::optional<float> weight_threshold,
                                                         bool use_envelope_multiply,
                                                         IndexMaskMemory &memory);
-
+/**
+ * Build deform groups for a list of vertex groups.
+ * This can be more efficient than building one group at a time when there are a lot of vertex
+ * groups.
+ */
+void build_deform_groups_for_all_vertex_groups(const IndexMask &universe,
+                                               Span<float3> positions,
+                                               Span<MDeformVert> dverts,
+                                               Span<const Bone *> bone_by_def_nr,
+                                               std::optional<float> weight_threshold,
+                                               bool use_envelope_multiply,
+                                               IndexMaskMemory &memory,
+                                               MutableSpan<ArmatureDeformGroup> r_group_by_def_nr);
 /*
  * Build deform group for envelope weights from a bone.
  *

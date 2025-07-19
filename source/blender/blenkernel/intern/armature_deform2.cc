@@ -113,6 +113,81 @@ ArmatureDeformGroup build_deform_group_for_vertex_group(
   return {std::move(mask), std::move(weights)};
 }
 
+void build_deform_groups_for_all_vertex_groups(const IndexMask &universe,
+                                               const Span<float3> positions,
+                                               const Span<MDeformVert> dverts,
+                                               const Span<const Bone *> bone_by_def_nr,
+                                               const std::optional<float> weight_threshold,
+                                               const bool use_envelope_multiply,
+                                               IndexMaskMemory &memory,
+                                               MutableSpan<ArmatureDeformGroup> r_group_by_def_nr)
+{
+  const int bones_num = bone_by_def_nr.size();
+  Array<int> def_nr_offsets(bones_num + 1, 0);
+  universe.foreach_index(GrainSize(1024), [&](const int index) {
+    const MDeformVert &dvert = dverts[index];
+    const Span<MDeformWeight> dweights(dvert.dw, dvert.totweight);
+    for (const MDeformWeight &dw : dweights) {
+      if (dw.def_nr >= bones_num) {
+        continue;
+      }
+      if (weight_threshold && dw.weight < *weight_threshold) {
+        continue;
+      }
+
+      ++def_nr_offsets[dw.def_nr];
+    }
+  });
+  const OffsetIndices verts_by_def_nr = offset_indices::accumulate_counts_to_offsets(
+      def_nr_offsets);
+
+  Array<int> all_indices(verts_by_def_nr.total_size());
+  Array<float> all_weights(verts_by_def_nr.total_size());
+  Array<int> next_entry = def_nr_offsets.as_span().drop_back(1);
+  universe.foreach_index(GrainSize(1024), [&](const int index) {
+    const MDeformVert &dvert = dverts[index];
+    const Span<MDeformWeight> dweights(dvert.dw, dvert.totweight);
+    for (const MDeformWeight &dw : dweights) {
+      if (dw.def_nr >= bones_num) {
+        continue;
+      }
+      if (weight_threshold && dw.weight < *weight_threshold) {
+        continue;
+      }
+
+      int &entry = next_entry[dw.def_nr];
+      BLI_assert(entry < def_nr_offsets[dw.def_nr + 1]);
+      all_indices[entry] = index;
+      all_weights[entry] = dw.weight;
+      ++entry;
+    }
+  });
+
+  for (const int def_nr : IndexRange(bones_num)) {
+    const IndexRange entries = verts_by_def_nr[def_nr];
+    const Span<int> indices = all_indices.as_span().slice(entries);
+    MutableSpan<float> weights = all_weights.as_mutable_span().slice(entries);
+
+    /* Bone option to mix with envelope weight. */
+    if (use_envelope_multiply) {
+      const Bone *bone = bone_by_def_nr[def_nr];
+      if (bone && bool(bone->flag & BONE_MULT_VG_ENV)) {
+        for (const int i : indices.index_range()) {
+          weights[i] *= distfactor_to_bone(positions[indices[i]],
+                                           bone->head,
+                                           bone->tail,
+                                           bone->rad_head,
+                                           bone->rad_tail,
+                                           bone->dist);
+        }
+      }
+    }
+
+    IndexMask mask = IndexMask::from_indices(indices, memory);
+    r_group_by_def_nr[def_nr] = {std::move(mask), Array<float>(weights.as_span())};
+  }
+}
+
 ArmatureDeformGroup build_deform_group_for_envelope(const IndexMask &universe,
                                                     const Span<float3> positions,
                                                     const Bone &bone,
