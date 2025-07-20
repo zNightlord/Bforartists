@@ -17,6 +17,7 @@
 #include "MEM_guardedalloc.h"
 
 #include "BLI_array_utils.hh"
+#include "BLI_enumerable_thread_specific.hh"
 #include "BLI_index_mask.hh"
 #include "BLI_index_ranges_builder.hh"
 #include "BLI_listbase.h"
@@ -82,12 +83,25 @@ ArmatureDeformGroup build_deform_group_for_vertex_group(
     return {};
   }
 
-  // XXX TODO THIS IS NOT THREADSAFE! NEEDS THREAD-LOCAL DATA AND REDUCE!
-  Vector<int> indices;
-  indices.reserve(def_nr_count);
-  Array<float> weights(def_nr_count);
+  struct GroupIndices {
+    Vector<int> indices;
+    Vector<float> weights;
+    GroupIndices(const int max_size)
+    {
+      indices.reserve(max_size);
+      weights.reserve(max_size);
+    }
+    GroupIndices(const GroupIndices &other)
+    {
+      indices.reserve(other.indices.capacity());
+      weights.reserve(other.weights.capacity());
+    }
+  };
 
+  threading::EnumerableThreadSpecific<GroupIndices> tls(
+      [&]() { return GroupIndices(def_nr_count); });
   universe.foreach_index(GrainSize(1024), [&](const int index) {
+    GroupIndices &data = tls.local();
     const MDeformVert &dvert = dverts[index];
     const Span<MDeformWeight> dweights(dvert.dw, dvert.totweight);
     for (const MDeformWeight &dw : dweights) {
@@ -98,23 +112,28 @@ ArmatureDeformGroup build_deform_group_for_vertex_group(
         continue;
       }
 
-      indices.append_unchecked(index);
-      weights[indices.size() - 1] = dw.weight;
+      data.indices.append_unchecked(index);
+      data.weights.append_unchecked(dw.weight);
       break;
     }
   });
+  GroupIndices result(def_nr_count);
+  for (const GroupIndices &data : tls) {
+    result.indices.extend_unchecked(data.indices);
+    result.weights.extend_unchecked(data.weights);
+  }
 
   /* Bone option to mix with envelope weight. */
   if (use_envelope_multiply && (bone.flag & BONE_MULT_VG_ENV)) {
-    for (const int i : indices.index_range()) {
-      const int index = indices[i];
-      weights[i] *= distfactor_to_bone(
+    for (const int i : result.indices.index_range()) {
+      const int index = result.indices[i];
+      result.weights[i] *= distfactor_to_bone(
           positions[index], bone.head, bone.tail, bone.rad_head, bone.rad_tail, bone.dist);
     }
   }
 
-  IndexMask mask = IndexMask::from_indices(indices.as_span(), memory);
-  return {std::move(mask), std::move(weights)};
+  IndexMask mask = IndexMask::from_indices(result.indices.as_span(), memory);
+  return {std::move(mask), Array<float>(result.weights.as_span())};
 }
 
 static void build_deform_groups_for_all_vertex_groups(
@@ -153,10 +172,29 @@ static void build_deform_groups_for_all_vertex_groups(
   const OffsetIndices verts_by_def_nr = offset_indices::accumulate_counts_to_offsets(
       def_nr_offsets);
 
-  Array<int> all_indices(verts_by_def_nr.total_size());
-  Array<float> all_weights(verts_by_def_nr.total_size());
-  Array<int> next_entry = def_nr_offsets.as_span().drop_back(1);
+  struct GroupIndices {
+    Array<int> all_indices;
+    Array<float> all_weights;
+    Array<int> next_entry;
+    GroupIndices(const OffsetIndices<int> verts_by_def_nr)
+    {
+      all_indices.reinitialize(verts_by_def_nr.total_size());
+      all_weights.reinitialize(verts_by_def_nr.total_size());
+      next_entry = verts_by_def_nr.data().drop_back(1);
+    }
+    GroupIndices(const GroupIndices &other)
+    {
+      all_indices.reinitialize(other.all_indices.size());
+      all_weights.reinitialize(other.all_weights.size());
+      next_entry = other.next_entry;
+    }
+  };
+
+  threading::EnumerableThreadSpecific<GroupIndices> tls(
+      [&]() { return GroupIndices(verts_by_def_nr); });
+
   universe.foreach_index(GrainSize(1024), [&](const int index) {
+    GroupIndices &data = tls.local();
     const MDeformVert &dvert = dverts[index];
     const Span<MDeformWeight> dweights(dvert.dw, dvert.totweight);
     for (const MDeformWeight &dw : dweights) {
@@ -167,18 +205,41 @@ static void build_deform_groups_for_all_vertex_groups(
         continue;
       }
 
-      int &entry = next_entry[dw.def_nr];
+      int &entry = data.next_entry[dw.def_nr];
       BLI_assert(entry < def_nr_offsets[dw.def_nr + 1]);
-      all_indices[entry] = index;
-      all_weights[entry] = dw.weight;
+      data.all_indices[entry] = index;
+      data.all_weights[entry] = dw.weight;
       ++entry;
     }
   });
+  GroupIndices result(verts_by_def_nr);
+  for (const GroupIndices &data : tls) {
+    for (const int def_nr : result.next_entry.index_range()) {
+      /* `next_entry` in the source data is the end positions of the data range. */
+      const IndexRange src_range = IndexRange::from_begin_end(def_nr_offsets[def_nr],
+                                                              data.next_entry[def_nr]);
+      /* `next_entry` in the result data is current write position of collected data. */
+      const IndexRange dst_range = IndexRange::from_begin_size(result.next_entry[def_nr],
+                                                               src_range.size());
+
+      result.all_indices.as_mutable_span().slice(dst_range).copy_from(
+          data.all_indices.as_span().slice(src_range));
+      result.all_weights.as_mutable_span().slice(dst_range).copy_from(
+          data.all_weights.as_span().slice(src_range));
+      result.next_entry[def_nr] = dst_range.one_after_last();
+    }
+  }
+#ifndef NDEBUG
+  /* Verify that the whole range has been filled. */
+  for (const int def_nr : result.next_entry.index_range()) {
+    BLI_assert(result.next_entry[def_nr] == def_nr_offsets[def_nr + 1]);
+  }
+#endif
 
   for (const int def_nr : IndexRange(bones_num)) {
     const IndexRange entries = verts_by_def_nr[def_nr];
-    const Span<int> indices = all_indices.as_span().slice(entries);
-    MutableSpan<float> weights = all_weights.as_mutable_span().slice(entries);
+    const Span<int> indices = result.all_indices.as_span().slice(entries);
+    MutableSpan<float> weights = result.all_weights.as_mutable_span().slice(entries);
 
     /* Bone option to mix with envelope weight. */
     if (use_envelope_multiply) {
