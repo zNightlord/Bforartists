@@ -24,6 +24,35 @@
 
 namespace blender::nodes::node_geo_armature_deform_cc {
 
+/* Source of deformation weights. */
+enum class WeightSource {
+  /* Use vertex groups weights defined in the geometry context. */
+  VertexGroups,
+  /* Use distance from bone envelopes as weights. */
+  Envelope,
+  /* Use custom weight and selection fields for each bone. */
+  CustomWeights,
+};
+
+static const EnumPropertyItem weight_source_items[] = {
+    {int(WeightSource::VertexGroups),
+     "VERTEX_GROUPS",
+     0,
+     "Vertex Groups",
+     "Use vertex groups weights defined in the geometry context"},
+    {int(WeightSource::Envelope),
+     "ENVELOPE",
+     0,
+     "Envelope",
+     "Use distance from bone envelopes as weights"},
+    {int(WeightSource::CustomWeights),
+     "CUSTOM_WEIGHTS",
+     0,
+     "Custom Weights",
+     "Use custom weight and selection fields for each bone"},
+    {0, nullptr, 0, nullptr, nullptr},
+};
+
 static void node_declare(NodeDeclarationBuilder &b)
 {
   b.use_custom_socket_order();
@@ -35,16 +64,15 @@ static void node_declare(NodeDeclarationBuilder &b)
       .default_value(false)
       .description(
           "Use dual quaternion deformation to better preserve the initial volume of the geometry");
-  b.add_input<decl::Bool>("Use Envelope")
-      .default_value(false)
-      .description("Use bone envelope distance to compute deformation weights");
-  b.add_input<decl::Bool>("Use Vertex Groups")
-      .default_value(true)
-      .description("Use vertex groups as deformation weights");
+  b.add_input<decl::Menu>("Weight Source")
+      .static_items(weight_source_items)
+      .description("Source of deformation weights");
   b.add_input<decl::Bool>("Invert Vertex Groups")
       .default_value(false)
-      .description("Invert vertex group weights");
-  b.add_input<decl::Closure>("Custom Weights");
+      .description("Invert vertex group weights")
+      .usage_by_single_menu(int(WeightSource::VertexGroups));
+  b.add_input<decl::Closure>("Custom Weights")
+      .usage_by_single_menu(int(WeightSource::CustomWeights));
 
   b.add_input<decl::Float>("Mask").default_value(1.0f).hide_value().field_on_all().description(
       "Influence of the deformation for each point");
@@ -525,8 +553,7 @@ static void node_geo_exec(GeoNodeExecParams params)
       params.extract_input<bool>("Preserve Volume") ?
           bke::ArmatureDeformSkinningMode::DualQuatenrion :
           bke::ArmatureDeformSkinningMode::Linear;
-  const bool use_envelope = params.extract_input<bool>("Use Envelope");
-  const bool use_vertex_groups = params.extract_input<bool>("Use Vertex Groups");
+  const WeightSource weight_source = params.extract_input<WeightSource>("Weight Source");
   const bool invert_vertex_groups = params.extract_input<bool>("Invert Vertex Groups");
   const ClosurePtr custom_weights = params.extract_input<ClosurePtr>("Custom Weights");
   Field<float> mask_field = params.extract_input<Field<float>>("Mask");
