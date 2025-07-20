@@ -90,21 +90,195 @@ static void node_init(bNodeTree * /*tree*/, bNode *node)
   node->custom1 = SOCK_VECTOR;
 }
 
+class ArmatureDeformFunction : public mf::MultiFunction {
+ private:
+  struct DeformGroupInput {
+    std::string pose_channel_name;
+    std::string weight_input_name;
+    std::string selection_input_name;
+    int weight_input;
+    int selection_input;
+  };
+
+  const Object &armature_object_;
+  float4x4 target_to_world_;
+  bke::ArmatureDeformSkinningMode skinning_mode_;
+  Array<DeformGroupInput> deform_groups_;
+  int value_input_;
+  int value_output_;
+  int mask_input_;
+
+  mf::Signature signature_;
+
+ public:
+  mf::Signature build_signature(const CPPType &value_type) const
+  {
+    mf::Signature signature;
+    mf::SignatureBuilder builder{"Armature Deform", signature};
+    builder.single_input("Value", value_type);
+    builder.single_input<float>("Mask");
+    for (const DeformGroupInput &group : deform_groups_) {
+      builder.single_input<float>(group.weight_input_name.c_str());
+      builder.single_input<bool>(group.selection_input_name.c_str());
+    }
+    builder.single_output("Value Output", value_type, mf::ParamFlag::SupportsUnusedOutput);
+    return signature;
+  }
+
+  ArmatureDeformFunction(const Object &armature_object,
+                         const float4x4 &target_to_world,
+                         const bke::ArmatureDeformSkinningMode skinning_mode,
+                         const CPPType &value_type,
+                         const Span<StringRef> deform_groups)
+      : armature_object_(armature_object),
+        target_to_world_(target_to_world),
+        skinning_mode_(skinning_mode)
+  {
+    value_input_ = 0;
+    value_output_ = 2 + 2 * deform_groups.size();
+    mask_input_ = 1;
+    deform_groups_.reinitialize(deform_groups.size());
+    for (const int i : deform_groups.index_range()) {
+      deform_groups_[i].pose_channel_name = deform_groups[i];
+      deform_groups_[i].weight_input_name = "Group " + std::to_string(i) + " Weight";
+      deform_groups_[i].selection_input_name = "Group " + std::to_string(i) + " Selection";
+      deform_groups_[i].weight_input = 2 + 2 * i;
+      deform_groups_[i].selection_input = 3 + 2 * i;
+    }
+
+    signature_ = build_signature(value_type);
+    this->set_signature(&signature_);
+  }
+
+  const bPoseChannel *find_pose_channel(const StringRefNull name) const
+  {
+    return static_cast<const bPoseChannel *>(BLI_findstring(
+        &armature_object_.pose->chanbase, name.c_str(), offsetof(bPoseChannel, name)));
+  }
+
+  bke::PoseChannelDeformGroup get_deform_group_input(const IndexMask &mask,
+                                                     mf::Params &params,
+                                                     const int group_index,
+                                                     IndexMaskMemory &memory) const
+  {
+    BLI_assert(deform_groups_.index_range().contains(group_index));
+    const DeformGroupInput &group_input = deform_groups_[group_index];
+
+    VArray<bool> selection = params.readonly_single_input<bool>(group_input.selection_input);
+    VArray<float> weights = params.readonly_single_input<float>(group_input.weight_input);
+    IndexMask group_mask = IndexMask::from_bools(mask, selection, memory);
+    Array<float> weights_buffer(group_mask.size());
+    weights.materialize_compressed_to_uninitialized(group_mask, weights_buffer);
+
+    bke::PoseChannelDeformGroup pchan_group;
+    pchan_group.pose_channel = find_pose_channel(group_input.pose_channel_name);
+    pchan_group.deform_group.mask = std::move(group_mask);
+    pchan_group.deform_group.weights = std::move(weights_buffer);
+    return pchan_group;
+  }
+
+  void call(const IndexMask &mask, mf::Params params, mf::Context context) const override
+  {
+    const auto *user_data = dynamic_cast<const GeoNodesUserData *>(context.user_data);
+    const Object *self_object = (user_data != nullptr) ? user_data->call_data->self_object() :
+                                                         nullptr;
+    const float4x4 target_to_world = self_object ?
+                                         target_to_world_ * self_object->object_to_world() :
+                                         target_to_world_;
+    IndexMaskMemory memory;
+
+    if (!params.single_output_is_required(value_output_)) {
+      return;
+    }
+
+    const GVArray &value = params.readonly_single_input(0, "Value");
+    const VArraySpan<float> vert_influence = params.readonly_single_input<float>(1, "Mask");
+    Array<bke::PoseChannelDeformGroup> custom_groups(deform_groups_.size());
+    for (const int i : deform_groups_.index_range()) {
+      custom_groups[i] = get_deform_group_input(mask, params, i, memory);
+    }
+
+    if (&value.type() == &CPPType::get<float3>()) {
+      MutableSpan<float3> value_output = params.uninitialized_single_output_if_required<float3>(
+          value_output_);
+      if (!value_output.is_empty()) {
+        value.typed<float3>().materialize_to_uninitialized(mask, value_output);
+        bke::armature_deform_positions(armature_object_,
+                                       target_to_world,
+                                       mask,
+                                       vert_influence,
+                                       custom_groups,
+                                       std::nullopt,
+                                       false,
+                                       skinning_mode_,
+                                       value_output);
+      }
+    }
+    else if (&value.type() == &CPPType::get<float4x4>()) {
+      MutableSpan<float4x4> value_output =
+          params.uninitialized_single_output_if_required<float4x4>(value_output_);
+      if (!value_output.is_empty()) {
+        value.typed<float4x4>().materialize_to_uninitialized(mask, value_output);
+        bke::armature_deform_matrices(armature_object_,
+                                      target_to_world,
+                                      mask,
+                                      vert_influence,
+                                      custom_groups,
+                                      std::nullopt,
+                                      false,
+                                      skinning_mode_,
+                                      value_output);
+      }
+    }
+    else {
+      /* Unsupported field type for armature deformation. */
+      BLI_assert_unreachable();
+    }
+  }
+
+  uint64_t hash() const override
+  {
+    uint64_t hash = get_default_hash(&armature_object_, target_to_world_, skinning_mode_);
+    for (const DeformGroupInput &group : deform_groups_) {
+      hash = get_default_hash(hash, group.pose_channel_name);
+    }
+    return hash;
+  }
+
+  bool equals(const MultiFunction &other) const override
+  {
+    const auto *other_deform = dynamic_cast<const ArmatureDeformFunction *>(&other);
+    if (!other_deform) {
+      return false;
+    }
+    if (deform_groups_.size() != other_deform->deform_groups_.size()) {
+      return false;
+    }
+    for (const int i : deform_groups_.index_range()) {
+      const DeformGroupInput &group = deform_groups_[i];
+      const DeformGroupInput &other_group = other_deform->deform_groups_[i];
+      if (group.pose_channel_name != other_group.pose_channel_name) {
+        return false;
+      }
+    }
+    if (&armature_object_ != &other_deform->armature_object_ ||
+        target_to_world_ != other_deform->target_to_world_ ||
+        skinning_mode_ != other_deform->skinning_mode_)
+    {
+      return false;
+    }
+
+    return true;
+  }
+};
+
 struct CustomDeformGroupFields {
   const bPoseChannel *pose_channel;
   Field<float> weights_field;
   Field<bool> selection_field;
 };
 
-// class ArmatureVertexGroupsDeformFunction : public mf::MultiFunction {
-// private:
-//  const Object &armature_object_;
-//  bool use_envelope_;
-//  bool use_vertex_groups_;
-//  bool invert_vertex_groups_;
-//  bke::ArmatureDeformSkinningMode skinning_mode_;
-//};
-
+#if 0
 class ArmatureDeformField final : public bke::GeometryFieldInput {
  private:
   const Object &armature_object_;
@@ -295,6 +469,7 @@ class ArmatureDeformField final : public bke::GeometryFieldInput {
     return domain;
   }
 };
+#endif
 
 static Vector<CustomDeformGroupFields> evaluate_custom_deform_groups(
     const Object &armature_object,
@@ -362,16 +537,37 @@ static void node_geo_exec(GeoNodeExecParams params)
         *armature_object, params.user_data(), *custom_weights);
   }
 
-  GField output_field{std::make_shared<ArmatureDeformField>(*armature_object,
-                                                            target_to_world,
-                                                            std::move(value_field),
-                                                            std::move(mask_field),
-                                                            use_envelope,
-                                                            use_vertex_groups,
-                                                            invert_vertex_groups,
-                                                            custom_group_fields,
-                                                            skinning_mode)};
-  params.set_output<GField>("Value", std::move(output_field));
+  // GField output_field{std::make_shared<ArmatureDeformField>(*armature_object,
+  //                                                           target_to_world,
+  //                                                           std::move(value_field),
+  //                                                           std::move(mask_field),
+  //                                                           use_envelope,
+  //                                                           use_vertex_groups,
+  //                                                           invert_vertex_groups,
+  //                                                           custom_group_fields,
+  //                                                           skinning_mode)};
+  // params.set_output<GField>("Value", std::move(output_field));
+
+  Array<StringRef> deform_groups_bone_names(custom_group_fields.size());
+  for (const int i : custom_group_fields.index_range()) {
+    deform_groups_bone_names[i] = custom_group_fields[i].pose_channel->name;
+  }
+  Vector<GField> input_fields;
+  input_fields.reserve(3 + 2 * custom_group_fields.size());
+  input_fields.append_unchecked(value_field);
+  input_fields.append_unchecked(mask_field);
+  for (const int i : custom_group_fields.index_range()) {
+    input_fields.append_unchecked(custom_group_fields[i].weights_field);
+    input_fields.append_unchecked(custom_group_fields[i].selection_field);
+  }
+  auto deform_op = FieldOperation::from(
+      std::make_unique<ArmatureDeformFunction>(*armature_object,
+                                               target_to_world,
+                                               skinning_mode,
+                                               value_field.cpp_type(),
+                                               deform_groups_bone_names),
+      input_fields);
+  params.set_output<GField>("Value", GField(deform_op, 0));
 }
 
 static void node_rna(StructRNA *srna)
