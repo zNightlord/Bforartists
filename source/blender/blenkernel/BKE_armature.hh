@@ -683,13 +683,8 @@ void BKE_armature_deform_coords_with_editmesh(
 
 namespace blender::bke {
 
-struct ArmatureDeformVertexGroupParams {
-  ListBase vertex_groups;
-  blender::Span<MDeformVert> dverts;
-};
-
 /**
- * Group of deformation weights associated with a pose channel.
+ * Group of deformation weights defined on a set of points.
  */
 struct ArmatureDeformGroup {
   /**
@@ -709,42 +704,6 @@ struct PoseChannelDeformGroup {
   ArmatureDeformGroup deform_group;
   const bPoseChannel *pose_channel;
 };
-
-/**
- * Build deform group for a given vertex group.
- *
- * \return The deform group for the vertex group.
- */
-ArmatureDeformGroup build_deform_group_for_vertex_group(const IndexMask &universe,
-                                                        Span<float3> positions,
-                                                        Span<MDeformVert> dverts,
-                                                        int def_nr,
-                                                        const Bone &bone,
-                                                        std::optional<float> weight_threshold,
-                                                        bool use_envelope_multiply,
-                                                        IndexMaskMemory &memory);
-/**
- * Build deform groups for a list of vertex groups.
- * This can be more efficient than building one group at a time when there are many vertex groups.
- */
-Vector<PoseChannelDeformGroup> pose_channel_groups_from_vertex_groups(
-    const ListBase &pose_channels,
-    const blender::IndexMask &mask,
-    ArmatureDeformVertexGroupParams vertex_group_params,
-    std::optional<float> weight_threshold,
-    bool use_envelope_multiply,
-    Span<float3> positions,
-    IndexMaskMemory &memory);
-
-/*
- * Build deform groups based on bone envelope weights.
- */
-Vector<PoseChannelDeformGroup> pose_channel_groups_from_envelopes(
-    const ListBase &pose_channels,
-    const blender::IndexMask &mask,
-    std::optional<float> weight_threshold,
-    Span<float3> positions,
-    IndexMaskMemory &memory);
 
 enum class ArmatureDeformSkinningMode {
   Linear,

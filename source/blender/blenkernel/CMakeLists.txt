@@ -336,6 +336,7 @@ set(SRC
   BKE_anonymous_attribute_make.hh
   BKE_appdir.hh
   BKE_armature.hh
+  BKE_armature_fields.hh
   BKE_asset.hh
   BKE_asset_edit.hh
   BKE_attribute.h

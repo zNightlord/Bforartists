@@ -5,6 +5,7 @@
 #include "BLI_listbase_wrapper.hh"
 
 #include "BKE_armature.hh"
+#include "BKE_armature_fields.hh"
 #include "BKE_curves.hh"
 #include "BKE_deform.hh"
 #include "BKE_grease_pencil.hh"
@@ -289,31 +290,53 @@ struct DeformGroupFields {
   Field<bool> selection_field;
 };
 
-static Vector<DeformGroupFields> construct_vertex_group_deform_fields(
-    const Object &armature_object, const bool use_envelope_multiply)
+static Vector<DeformGroupFields> build_vertex_group_deform_fields(const Object &armature_object,
+                                                                  const bool use_envelope_multiply)
 {
-  // Vector<bke::PoseChannelDeformGroup> pchan_groups =
-  // bke::pose_channel_groups_from_vertex_groups(
-  //     armature_object.pose->chanbase,
-  //     selection,
-  //     std::move(vertex_group_params),
-  //     weight_threshold,
-  //     use_envelope_multiply,
-  //     positions,
-  //     memory);
+  // TODO
   return {};
 }
 
-static Vector<DeformGroupFields> construct_envelope_deform_fields(const Object &armature_object)
+static Vector<DeformGroupFields> build_envelope_deform_fields(
+    const Object &armature_object,
+    const float4x4 &target_to_world,
+    const std::optional<float> threshold_weight)
 {
-  return {};
+  const ConstListBaseWrapper<bPoseChannel> pose_channels(armature_object.pose->chanbase);
+  const int pose_channels_num = BLI_listbase_count(&armature_object.pose->chanbase);
+  const float4x4 target_to_armature = armature_object.world_to_object() * target_to_world;
+
+  Vector<DeformGroupFields> envelope_group_fields;
+  envelope_group_fields.reserve(pose_channels_num);
+
+  for (const bPoseChannel *pose_channel : pose_channels) {
+    if (!pose_channel->bone || bool(pose_channel->bone->flag & BONE_NO_DEFORM)) {
+      continue;
+    }
+
+    const Bone &bone = *pose_channel->bone;
+    const float threshold = threshold_weight ? std::max(*threshold_weight, 0.0f) : 0.0f;
+    Field<float3> position_field = AttributeFieldInput::from<float3>("position");
+    Field<float> weight_field(
+        std::make_shared<bke::BoneEnvelopeWeightInput>(target_to_armature, bone, position_field));
+    Field<bool> selection_field(std::make_shared<bke::BoneEnvelopeSelectionInput>(
+        target_to_armature, bone, position_field, threshold));
+    envelope_group_fields.append_unchecked(
+        {pose_channel, std::move(weight_field), std::move(selection_field)});
+  }
+
+  return envelope_group_fields;
 }
 
-static Vector<DeformGroupFields> evaluate_custom_deform_fields(
+static Vector<DeformGroupFields> build_custom_deform_fields(
     const Object &armature_object,
     GeoNodesUserData *user_data,
-    const Closure &custom_groups_closure)
+    const ClosurePtr &custom_groups_closure)
 {
+  if (!custom_groups_closure) {
+    return {};
+  }
+
   const ConstListBaseWrapper<bPoseChannel> pose_channels(armature_object.pose->chanbase);
   const int pose_channels_num = BLI_listbase_count(&armature_object.pose->chanbase);
   const bke::bNodeSocketType *stype_string = bke::node_socket_type_find_static(SOCK_STRING);
@@ -336,7 +359,7 @@ static Vector<DeformGroupFields> evaluate_custom_deform_fields(
         {{SocketInterfaceKey("Weight"), stype_float, &weights_variant},
          {SocketInterfaceKey("Selection"), stype_bool, &selection_variant}},
         user_data};
-    evaluate_closure_eagerly(custom_groups_closure, eval_params);
+    evaluate_closure_eagerly(*custom_groups_closure, eval_params);
 
     Field<float> weights_field = weights_variant.extract<Field<float>>();
     Field<bool> selection_field = selection_variant.extract<Field<bool>>();
@@ -366,24 +389,24 @@ static void node_geo_exec(GeoNodeExecParams params)
   const WeightSource weight_source = params.extract_input<WeightSource>("Weight Source");
   /* TODO could be an input option (always enabled in legacy armature deform). */
   const bool use_envelope_multiply = true;
+  const std::optional<float> threshold_weight = std::nullopt;
 
   Vector<DeformGroupFields> deform_group_fields;
   switch (weight_source) {
     case WeightSource::VertexGroups: {
-      deform_group_fields = construct_vertex_group_deform_fields(*armature_object,
-                                                                 use_envelope_multiply);
+      deform_group_fields = build_vertex_group_deform_fields(*armature_object,
+                                                             use_envelope_multiply);
       break;
     }
     case WeightSource::Envelope: {
-      deform_group_fields = construct_envelope_deform_fields(*armature_object);
+      deform_group_fields = build_envelope_deform_fields(
+          *armature_object, target_to_world, threshold_weight);
       break;
     }
     case WeightSource::CustomWeights: {
       const ClosurePtr custom_weights = params.extract_input<ClosurePtr>("Custom Weights");
-      if (custom_weights) {
-        deform_group_fields = evaluate_custom_deform_fields(
-            *armature_object, params.user_data(), *custom_weights);
-      }
+      deform_group_fields = build_custom_deform_fields(
+          *armature_object, params.user_data(), custom_weights);
       break;
     }
   }

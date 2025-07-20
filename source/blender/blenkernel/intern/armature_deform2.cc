@@ -38,6 +38,7 @@
 
 #include "BKE_action.hh"
 #include "BKE_armature.hh"
+#include "BKE_armature_fields.hh"
 #include "BKE_customdata.hh"
 #include "BKE_deform.hh"
 #include "BKE_editmesh.hh"
@@ -46,6 +47,7 @@
 
 namespace blender::bke {
 
+#if 0 /* UNUSED */
 ArmatureDeformGroup build_deform_group_for_vertex_group(
     const IndexMask &universe,
     const Span<float3> positions,
@@ -229,12 +231,12 @@ static void build_deform_groups_for_all_vertex_groups(
       result.next_entry[def_nr] = dst_range.one_after_last();
     }
   }
-#ifndef NDEBUG
+#  ifndef NDEBUG
   /* Verify that the whole range has been filled. */
   for (const int def_nr : result.next_entry.index_range()) {
     BLI_assert(result.next_entry[def_nr] == def_nr_offsets[def_nr + 1]);
   }
-#endif
+#  endif
 
   for (const int def_nr : IndexRange(bones_num)) {
     const IndexRange entries = verts_by_def_nr[def_nr];
@@ -270,6 +272,11 @@ static std::optional<int> find_def_nr_from_pose_channel(const bPoseChannel &pcha
   }
   return std::nullopt;
 }
+
+struct ArmatureDeformVertexGroupParams {
+  ListBase vertex_groups;
+  blender::Span<MDeformVert> dverts;
+};
 
 Vector<PoseChannelDeformGroup> pose_channel_groups_from_vertex_groups(
     const ListBase &pose_channels,
@@ -383,6 +390,113 @@ Vector<PoseChannelDeformGroup> pose_channel_groups_from_envelopes(
     pchan_groups.append_unchecked({std::move(deform_group), pchan});
   }
   return pchan_groups;
+}
+#endif
+
+BoneEnvelopeWeightInput::BoneEnvelopeWeightInput(const float4x4 &target_to_armature,
+                                                 const Bone &bone,
+                                                 fn::Field<float3> position_field)
+    : bke::GeometryFieldInput(CPPType::get<float>(), "Bone Envelope Weight Input"),
+      target_to_armature_(target_to_armature),
+      bone_(&bone),
+      position_field_(std::move(position_field))
+{
+}
+
+GVArray BoneEnvelopeWeightInput::get_varray_for_context(const bke::GeometryFieldContext &context,
+                                                        const IndexMask &mask) const
+{
+  fn::FieldEvaluator evaluator{context, mask.min_array_size()};
+  evaluator.add(position_field_);
+  evaluator.evaluate();
+  const VArray<float3> positions = evaluator.get_evaluated<float3>(0);
+
+  Array<float> weights(mask.min_array_size());
+  devirtualize_varray(positions, [&](const auto positions) {
+    mask.foreach_index(GrainSize(4096), [&](const int64_t index) {
+      const float3 &pos = positions[index];
+      const float3 arm_pos = math::transform_point(target_to_armature_, pos);
+      weights[index] = distfactor_to_bone(
+          arm_pos, bone_->head, bone_->tail, bone_->rad_head, bone_->rad_tail, bone_->dist);
+    });
+  });
+  return VArray<float>::from_container(std::move(weights));
+}
+
+uint64_t BoneEnvelopeWeightInput::hash() const
+{
+  return get_default_hash(target_to_armature_, bone_, position_field_);
+}
+
+bool BoneEnvelopeWeightInput::is_equal_to(const fn::FieldNode &other) const
+{
+  if (const auto *other_field = dynamic_cast<const BoneEnvelopeWeightInput *>(&other)) {
+    return other_field->target_to_armature_ == target_to_armature_ &&
+           other_field->bone_ == bone_ && other_field->position_field_ == position_field_;
+  }
+  return false;
+}
+
+std::optional<AttrDomain> BoneEnvelopeWeightInput::preferred_domain(
+    const GeometryComponent & /*component*/) const
+{
+  return AttrDomain::Point;
+}
+
+BoneEnvelopeSelectionInput::BoneEnvelopeSelectionInput(const float4x4 &target_to_armature,
+                                                       const Bone &bone,
+                                                       fn::Field<float3> position_field,
+                                                       const float threshold)
+    : bke::GeometryFieldInput(CPPType::get<bool>(), "Bone Envelope Selection Input"),
+      target_to_armature_(target_to_armature),
+      bone_(&bone),
+      position_field_(std::move(position_field)),
+      threshold_(threshold)
+{
+}
+
+GVArray BoneEnvelopeSelectionInput::get_varray_for_context(
+    const bke::GeometryFieldContext &context, const IndexMask &mask) const
+{
+  fn::FieldEvaluator evaluator{context, mask.min_array_size()};
+  evaluator.add(position_field_);
+  evaluator.evaluate();
+  const VArray<float3> positions = evaluator.get_evaluated<float3>(0);
+
+  Array<bool> selection(mask.min_array_size());
+  devirtualize_varray(positions, [&](const auto positions) {
+    mask.foreach_index(GrainSize(4096), [&](const int64_t index) {
+      const float3 &pos = positions[index];
+      const float3 arm_pos = math::transform_point(target_to_armature_, pos);
+      /* TODO optimize with simplified "distfactor" function for threshold selection. */
+      const float weight = distfactor_to_bone(
+          arm_pos, bone_->head, bone_->tail, bone_->rad_head, bone_->rad_tail, bone_->dist);
+      selection[index] = weight > threshold_;
+    });
+  });
+  return VArray<bool>::from_container(std::move(selection));
+}
+
+uint64_t BoneEnvelopeSelectionInput::hash() const
+{
+  return get_default_hash(get_default_hash(target_to_armature_, bone_, position_field_),
+                          threshold_);
+}
+
+bool BoneEnvelopeSelectionInput::is_equal_to(const fn::FieldNode &other) const
+{
+  if (const auto *other_field = dynamic_cast<const BoneEnvelopeSelectionInput *>(&other)) {
+    return other_field->target_to_armature_ == target_to_armature_ &&
+           other_field->bone_ == bone_ && other_field->position_field_ == position_field_ &&
+           other_field->threshold_ == threshold_;
+  }
+  return false;
+}
+
+std::optional<AttrDomain> BoneEnvelopeSelectionInput::preferred_domain(
+    const GeometryComponent & /*component*/) const
+{
+  return AttrDomain::Point;
 }
 
 /**
