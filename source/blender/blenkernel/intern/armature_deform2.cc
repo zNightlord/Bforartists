@@ -274,13 +274,13 @@ static std::optional<int> find_def_nr_from_pose_channel(const bPoseChannel &pcha
 Vector<PoseChannelDeformGroup> pose_channel_groups_from_vertex_groups(
     const ListBase &pose_channels,
     const blender::IndexMask &mask,
-    const std::optional<ArmatureDeformVertexGroupParams> &vertex_group_params,
+    const ArmatureDeformVertexGroupParams vertex_group_params,
     const std::optional<float> weight_threshold,
     const bool use_envelope_multiply,
     const Span<float3> positions,
     IndexMaskMemory &memory)
 {
-  const int vertex_group_num = BLI_listbase_count(&vertex_group_params->vertex_groups);
+  const int vertex_group_num = BLI_listbase_count(&vertex_group_params.vertex_groups);
   Array<const bPoseChannel *> pose_channel_by_def_nr(vertex_group_num, nullptr);
   Array<const Bone *> bone_by_def_nr(vertex_group_num, nullptr);
   LISTBASE_FOREACH (bPoseChannel *, pchan, &pose_channels) {
@@ -290,7 +290,7 @@ Vector<PoseChannelDeformGroup> pose_channel_groups_from_vertex_groups(
     }
 
     const std::optional<int> def_nr = find_def_nr_from_pose_channel(
-        *pchan, vertex_group_params->vertex_groups);
+        *pchan, vertex_group_params.vertex_groups);
     if (!def_nr) {
       continue;
     }
@@ -302,7 +302,7 @@ Vector<PoseChannelDeformGroup> pose_channel_groups_from_vertex_groups(
   Array<ArmatureDeformGroup> deform_group_by_def_nr(vertex_group_num);
   build_deform_groups_for_all_vertex_groups(mask,
                                             positions,
-                                            vertex_group_params->dverts,
+                                            vertex_group_params.dverts,
                                             bone_by_def_nr,
                                             weight_threshold,
                                             use_envelope_multiply,
@@ -340,7 +340,7 @@ static void build_deform_groups_for_envelopes(const IndexMask &universe,
       const float weight = distfactor_to_bone(
           positions[index], bone.head, bone.tail, bone.rad_head, bone.rad_tail, bone.dist);
 
-      inside_falloff[pos] = (weight > 0.0f);
+      inside_falloff[pos] = weight_threshold ? (weight >= *weight_threshold) : true;
       all_weights[pos] = weight;
     });
 
@@ -539,70 +539,27 @@ static void deform_single_group_with_mixer(const bPoseChannel &pchan,
   }
 }
 
-static void deform_groups_with_mixer(const Span<PoseChannelDeformGroup> pchan_groups,
-                                     const Span<float3> positions,
-                                     MixerVariant &mixer,
-                                     MutableSpan<float> contrib,
-                                     IndexMask *r_undeformed_mask,
-                                     IndexMaskMemory &memory)
+static void deform_with_mixer(const blender::IndexMask &selection,
+                              const std::optional<Span<float>> point_weights,
+                              const Span<PoseChannelDeformGroup> deform_groups,
+                              const std::optional<float> weight_threshold,
+                              MixerVariant &mixer,
+                              const MutableSpan<float3> positions,
+                              const std::optional<MutableSpan<float3x3>> deform_mats)
 {
-  for (const PoseChannelDeformGroup &group : pchan_groups) {
+  constexpr GrainSize grain_size = GrainSize(1024);
+
+  BLI_assert(positions.size() >= selection.min_array_size());
+
+  Array<float> contrib(selection.min_array_size(), 0.0f);
+
+  for (const PoseChannelDeformGroup &group : deform_groups) {
     if (!group.pose_channel) {
       continue;
     }
 
     deform_single_group_with_mixer(
         *group.pose_channel, group.deform_group, positions, mixer, contrib);
-
-    if (r_undeformed_mask) {
-      *r_undeformed_mask = IndexMask::from_difference(
-          *r_undeformed_mask, group.deform_group.mask, memory);
-    }
-  }
-}
-
-static void deform_with_mixer(
-    const ListBase &pose_channels,
-    const blender::IndexMask &selection,
-    const std::optional<Span<float>> point_weights,
-    const Span<PoseChannelDeformGroup> custom_groups,
-    const std::optional<ArmatureDeformVertexGroupParams> &vertex_group_params,
-    const bool use_envelope,
-    const std::optional<float> weight_threshold,
-    const bool use_envelope_multiply,
-    MixerVariant &mixer,
-    const MutableSpan<float3> positions,
-    const std::optional<MutableSpan<float3x3>> deform_mats)
-{
-  constexpr GrainSize grain_size = GrainSize(1024);
-
-  BLI_assert(positions.size() >= selection.min_array_size());
-
-  IndexMaskMemory memory;
-
-  Array<float> contrib(selection.min_array_size(), 0.0f);
-  IndexMask undeformed_mask = selection;
-
-  deform_groups_with_mixer(custom_groups, positions, mixer, contrib, &undeformed_mask, memory);
-
-  if (vertex_group_params) {
-    Vector<PoseChannelDeformGroup> pchan_groups = pose_channel_groups_from_vertex_groups(
-        pose_channels,
-        undeformed_mask,
-        vertex_group_params,
-        weight_threshold,
-        use_envelope_multiply,
-        positions,
-        memory);
-    deform_groups_with_mixer(pchan_groups, positions, mixer, contrib, &undeformed_mask, memory);
-  }
-
-  if (use_envelope) {
-    Vector<PoseChannelDeformGroup> pchan_groups = pose_channel_groups_from_envelopes(
-        pose_channels, undeformed_mask, weight_threshold, positions, memory);
-    /* Note: undeformed_mask is not updated here, no further groups are added. */
-    deform_groups_with_mixer(
-        pchan_groups, positions, mixer, contrib, nullptr /*&undeformed_mask*/, memory);
   }
 
   if (deform_mats) {
@@ -670,21 +627,16 @@ static MixerVariant get_deform_mixer(const ArmatureDeformSkinningMode skinning_m
   return BoneDeformLinearMixer<false>(0);
 }
 
-void armature_deform_positions(
-    const Object &ob_arm,
-    const blender::float4x4 &target_to_world,
-    const blender::IndexMask &selection,
-    const std::optional<Span<float>> point_weights,
-    const Span<PoseChannelDeformGroup> custom_groups,
-    const std::optional<ArmatureDeformVertexGroupParams> vertex_group_params,
-    bool use_envelope,
-    const ArmatureDeformSkinningMode skinning_mode,
-    blender::MutableSpan<blender::float3> positions)
+void armature_deform_positions(const blender::float4x4 &target_to_armature,
+                               const blender::IndexMask &selection,
+                               const std::optional<Span<float>> point_weights,
+                               const Span<PoseChannelDeformGroup> deform_groups,
+                               const ArmatureDeformSkinningMode skinning_mode,
+                               blender::MutableSpan<blender::float3> positions)
 {
   constexpr GrainSize grain_size = GrainSize(1024);
 
-  const float4x4 target_to_armature = ob_arm.world_to_object() * target_to_world;
-  const float4x4 armature_to_target = math::invert(target_to_world) * ob_arm.object_to_world();
+  const float4x4 armature_to_target = math::invert(target_to_armature);
 
   /* Input coordinates to start from. */
   Array<float3> armature_positions(positions.size());
@@ -694,17 +646,8 @@ void armature_deform_positions(
   });
 
   MixerVariant mixer = get_deform_mixer(skinning_mode, false, selection.min_array_size());
-  deform_with_mixer(ob_arm.pose->chanbase,
-                    selection,
-                    point_weights,
-                    custom_groups,
-                    vertex_group_params,
-                    use_envelope,
-                    0.0f,
-                    true,
-                    mixer,
-                    armature_positions,
-                    std::nullopt);
+  deform_with_mixer(
+      selection, point_weights, deform_groups, 0.0f, mixer, armature_positions, std::nullopt);
 
   /* Transform back to target object space. */
   selection.foreach_index(grain_size, [&](const int index) {
@@ -712,21 +655,16 @@ void armature_deform_positions(
   });
 }
 
-void armature_deform_matrices(
-    const Object &ob_arm,
-    const blender::float4x4 &target_to_world,
-    const blender::IndexMask &selection,
-    const std::optional<Span<float>> point_weights,
-    const Span<PoseChannelDeformGroup> custom_groups,
-    const std::optional<ArmatureDeformVertexGroupParams> vertex_group_params,
-    const bool use_envelope,
-    const ArmatureDeformSkinningMode skinning_mode,
-    blender::MutableSpan<blender::float4x4> matrices)
+void armature_deform_matrices(const blender::float4x4 &target_to_armature,
+                              const blender::IndexMask &selection,
+                              const std::optional<Span<float>> point_weights,
+                              const Span<PoseChannelDeformGroup> deform_groups,
+                              const ArmatureDeformSkinningMode skinning_mode,
+                              blender::MutableSpan<blender::float4x4> matrices)
 {
   constexpr GrainSize grain_size = GrainSize(1024);
 
-  const float4x4 target_to_armature = ob_arm.world_to_object() * target_to_world;
-  const float4x4 armature_to_target = ob_arm.object_to_world() * math::invert(target_to_world);
+  const float4x4 armature_to_target = math::invert(target_to_armature);
 
   /* Input coordinates to start from. */
   Array<float3> armature_positions(matrices.size());
@@ -739,17 +677,8 @@ void armature_deform_matrices(
   });
 
   MixerVariant mixer = get_deform_mixer(skinning_mode, false, selection.min_array_size());
-  deform_with_mixer(ob_arm.pose->chanbase,
-                    selection,
-                    point_weights,
-                    custom_groups,
-                    vertex_group_params,
-                    use_envelope,
-                    0.0f,
-                    true,
-                    mixer,
-                    armature_positions,
-                    std::nullopt);
+  deform_with_mixer(
+      selection, point_weights, deform_groups, 0.0f, mixer, armature_positions, std::nullopt);
 
   /* Transform back to target object space. */
   selection.foreach_index(grain_size, [&](const int index) {

@@ -686,7 +686,6 @@ namespace blender::bke {
 struct ArmatureDeformVertexGroupParams {
   ListBase vertex_groups;
   blender::Span<MDeformVert> dverts;
-  bool invert_vertex_groups;
 };
 
 /**
@@ -731,7 +730,7 @@ ArmatureDeformGroup build_deform_group_for_vertex_group(const IndexMask &univers
 Vector<PoseChannelDeformGroup> pose_channel_groups_from_vertex_groups(
     const ListBase &pose_channels,
     const blender::IndexMask &mask,
-    std::optional<ArmatureDeformVertexGroupParams> &vertex_group_params,
+    ArmatureDeformVertexGroupParams vertex_group_params,
     std::optional<float> weight_threshold,
     bool use_envelope_multiply,
     Span<float3> positions,
@@ -752,23 +751,17 @@ enum class ArmatureDeformSkinningMode {
   DualQuatenrion,
 };
 
-void armature_deform_positions(const Object &ob_arm,
-                               const blender::float4x4 &target_to_world,
+void armature_deform_positions(const blender::float4x4 &target_to_armature,
                                const blender::IndexMask &selection,
                                std::optional<Span<float>> point_weights,
-                               Span<PoseChannelDeformGroup> custom_groups,
-                               std::optional<ArmatureDeformVertexGroupParams> vertex_group_params,
-                               bool use_envelope,
+                               Span<PoseChannelDeformGroup> deform_groups,
                                const ArmatureDeformSkinningMode skinning_mode,
                                blender::MutableSpan<blender::float3> positions);
 
-void armature_deform_matrices(const Object &ob_arm,
-                              const blender::float4x4 &target_to_world,
+void armature_deform_matrices(const blender::float4x4 &target_to_armature,
                               const blender::IndexMask &selection,
                               std::optional<Span<float>> point_weights,
-                              Span<PoseChannelDeformGroup> custom_groups,
-                              std::optional<ArmatureDeformVertexGroupParams> vertex_group_params,
-                              bool use_envelope,
+                              Span<PoseChannelDeformGroup> deform_groups,
                               const ArmatureDeformSkinningMode skinning_mode,
                               blender::MutableSpan<blender::float4x4> matrices);
 

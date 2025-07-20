@@ -67,10 +67,6 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_input<decl::Menu>("Weight Source")
       .static_items(weight_source_items)
       .description("Source of deformation weights");
-  b.add_input<decl::Bool>("Invert Vertex Groups")
-      .default_value(false)
-      .description("Invert vertex group weights")
-      .usage_by_single_menu(int(WeightSource::VertexGroups));
   b.add_input<decl::Closure>("Custom Weights")
       .usage_by_single_menu(int(WeightSource::CustomWeights));
 
@@ -129,9 +125,9 @@ class ArmatureDeformFunction : public mf::MultiFunction {
   };
 
   const Object &armature_object_;
-  float4x4 target_to_world_;
+  float4x4 target_to_armature_;
   bke::ArmatureDeformSkinningMode skinning_mode_;
-  Array<DeformGroupInput> deform_groups_;
+  Array<DeformGroupInput> deform_groups_inputs_;
   int value_input_;
   int value_output_;
   int mask_input_;
@@ -145,7 +141,7 @@ class ArmatureDeformFunction : public mf::MultiFunction {
     mf::SignatureBuilder builder{"Armature Deform", signature};
     builder.single_input("Value", value_type);
     builder.single_input<float>("Mask");
-    for (const DeformGroupInput &group : deform_groups_) {
+    for (const DeformGroupInput &group : deform_groups_inputs_) {
       builder.single_input<float>(group.weight_input_name.c_str());
       builder.single_input<bool>(group.selection_input_name.c_str());
     }
@@ -154,24 +150,25 @@ class ArmatureDeformFunction : public mf::MultiFunction {
   }
 
   ArmatureDeformFunction(const Object &armature_object,
-                         const float4x4 &target_to_world,
+                         const float4x4 &target_to_armature,
                          const bke::ArmatureDeformSkinningMode skinning_mode,
                          const CPPType &value_type,
                          const Span<StringRef> deform_groups)
       : armature_object_(armature_object),
-        target_to_world_(target_to_world),
+        target_to_armature_(target_to_armature),
         skinning_mode_(skinning_mode)
   {
     value_input_ = 0;
     value_output_ = 2 + 2 * deform_groups.size();
     mask_input_ = 1;
-    deform_groups_.reinitialize(deform_groups.size());
+    deform_groups_inputs_.reinitialize(deform_groups.size());
     for (const int i : deform_groups.index_range()) {
-      deform_groups_[i].pose_channel_name = deform_groups[i];
-      deform_groups_[i].weight_input_name = "Group " + std::to_string(i) + " Weight";
-      deform_groups_[i].selection_input_name = "Group " + std::to_string(i) + " Selection";
-      deform_groups_[i].weight_input = 2 + 2 * i;
-      deform_groups_[i].selection_input = 3 + 2 * i;
+      DeformGroupInput &input = deform_groups_inputs_[i];
+      input.pose_channel_name = deform_groups[i];
+      input.weight_input_name = "Group " + std::to_string(i) + " Weight";
+      input.selection_input_name = "Group " + std::to_string(i) + " Selection";
+      input.weight_input = 2 + 2 * i;
+      input.selection_input = 3 + 2 * i;
     }
 
     signature_ = build_signature(value_type);
@@ -189,8 +186,8 @@ class ArmatureDeformFunction : public mf::MultiFunction {
                                                      const int group_index,
                                                      IndexMaskMemory &memory) const
   {
-    BLI_assert(deform_groups_.index_range().contains(group_index));
-    const DeformGroupInput &group_input = deform_groups_[group_index];
+    BLI_assert(deform_groups_inputs_.index_range().contains(group_index));
+    const DeformGroupInput &group_input = deform_groups_inputs_[group_index];
 
     VArray<bool> selection = params.readonly_single_input<bool>(group_input.selection_input);
     VArray<float> weights = params.readonly_single_input<float>(group_input.weight_input);
@@ -210,9 +207,9 @@ class ArmatureDeformFunction : public mf::MultiFunction {
     const auto *user_data = dynamic_cast<const GeoNodesUserData *>(context.user_data);
     const Object *self_object = (user_data != nullptr) ? user_data->call_data->self_object() :
                                                          nullptr;
-    const float4x4 target_to_world = self_object ?
-                                         target_to_world_ * self_object->object_to_world() :
-                                         target_to_world_;
+    const float4x4 target_to_armature = self_object ?
+                                            target_to_armature_ * self_object->object_to_world() :
+                                            target_to_armature_;
     IndexMaskMemory memory;
 
     if (!params.single_output_is_required(value_output_)) {
@@ -221,9 +218,9 @@ class ArmatureDeformFunction : public mf::MultiFunction {
 
     const GVArray &value = params.readonly_single_input(0, "Value");
     const VArraySpan<float> vert_influence = params.readonly_single_input<float>(1, "Mask");
-    Array<bke::PoseChannelDeformGroup> custom_groups(deform_groups_.size());
-    for (const int i : deform_groups_.index_range()) {
-      custom_groups[i] = get_deform_group_input(mask, params, i, memory);
+    Array<bke::PoseChannelDeformGroup> deform_groups(deform_groups_inputs_.size());
+    for (const int i : deform_groups.index_range()) {
+      deform_groups[i] = get_deform_group_input(mask, params, i, memory);
     }
 
     if (&value.type() == &CPPType::get<float3>()) {
@@ -231,15 +228,8 @@ class ArmatureDeformFunction : public mf::MultiFunction {
           value_output_);
       if (!value_output.is_empty()) {
         value.typed<float3>().materialize_to_uninitialized(mask, value_output);
-        bke::armature_deform_positions(armature_object_,
-                                       target_to_world,
-                                       mask,
-                                       vert_influence,
-                                       custom_groups,
-                                       std::nullopt,
-                                       false,
-                                       skinning_mode_,
-                                       value_output);
+        bke::armature_deform_positions(
+            target_to_armature, mask, vert_influence, deform_groups, skinning_mode_, value_output);
       }
     }
     else if (&value.type() == &CPPType::get<float4x4>()) {
@@ -247,15 +237,8 @@ class ArmatureDeformFunction : public mf::MultiFunction {
           params.uninitialized_single_output_if_required<float4x4>(value_output_);
       if (!value_output.is_empty()) {
         value.typed<float4x4>().materialize_to_uninitialized(mask, value_output);
-        bke::armature_deform_matrices(armature_object_,
-                                      target_to_world,
-                                      mask,
-                                      vert_influence,
-                                      custom_groups,
-                                      std::nullopt,
-                                      false,
-                                      skinning_mode_,
-                                      value_output);
+        bke::armature_deform_matrices(
+            target_to_armature, mask, vert_influence, deform_groups, skinning_mode_, value_output);
       }
     }
     else {
@@ -266,8 +249,8 @@ class ArmatureDeformFunction : public mf::MultiFunction {
 
   uint64_t hash() const override
   {
-    uint64_t hash = get_default_hash(&armature_object_, target_to_world_, skinning_mode_);
-    for (const DeformGroupInput &group : deform_groups_) {
+    uint64_t hash = get_default_hash(&armature_object_, target_to_armature_, skinning_mode_);
+    for (const DeformGroupInput &group : deform_groups_inputs_) {
       hash = get_default_hash(hash, group.pose_channel_name);
     }
     return hash;
@@ -279,18 +262,18 @@ class ArmatureDeformFunction : public mf::MultiFunction {
     if (!other_deform) {
       return false;
     }
-    if (deform_groups_.size() != other_deform->deform_groups_.size()) {
+    if (deform_groups_inputs_.size() != other_deform->deform_groups_inputs_.size()) {
       return false;
     }
-    for (const int i : deform_groups_.index_range()) {
-      const DeformGroupInput &group = deform_groups_[i];
-      const DeformGroupInput &other_group = other_deform->deform_groups_[i];
+    for (const int i : deform_groups_inputs_.index_range()) {
+      const DeformGroupInput &group = deform_groups_inputs_[i];
+      const DeformGroupInput &other_group = other_deform->deform_groups_inputs_[i];
       if (group.pose_channel_name != other_group.pose_channel_name) {
         return false;
       }
     }
     if (&armature_object_ != &other_deform->armature_object_ ||
-        target_to_world_ != other_deform->target_to_world_ ||
+        target_to_armature_ != other_deform->target_to_armature_ ||
         skinning_mode_ != other_deform->skinning_mode_)
     {
       return false;
@@ -300,206 +283,33 @@ class ArmatureDeformFunction : public mf::MultiFunction {
   }
 };
 
-struct CustomDeformGroupFields {
+struct DeformGroupFields {
   const bPoseChannel *pose_channel;
   Field<float> weights_field;
   Field<bool> selection_field;
 };
 
-#if 0
-class ArmatureDeformField final : public bke::GeometryFieldInput {
- private:
-  const Object &armature_object_;
-  float4x4 target_to_world_;
-  const GField value_field_;
-  const Field<float> mask_field_;
-  bool use_envelope_;
-  bool use_vertex_groups_;
-  bool invert_vertex_groups_;
-  Array<CustomDeformGroupFields> custom_group_fields_;
-  bke::ArmatureDeformSkinningMode skinning_mode_;
+static Vector<DeformGroupFields> construct_vertex_group_deform_fields(
+    const Object &armature_object, const bool use_envelope_multiply)
+{
+  // Vector<bke::PoseChannelDeformGroup> pchan_groups =
+  // bke::pose_channel_groups_from_vertex_groups(
+  //     armature_object.pose->chanbase,
+  //     selection,
+  //     std::move(vertex_group_params),
+  //     weight_threshold,
+  //     use_envelope_multiply,
+  //     positions,
+  //     memory);
+  return {};
+}
 
- public:
-  ArmatureDeformField(const Object &armature_object,
-                      const float4x4 &target_to_world,
-                      GField value_field,
-                      Field<float> mask_field,
-                      const bool use_envelope,
-                      const bool use_vertex_groups,
-                      const bool invert_vertex_groups,
-                      const Span<CustomDeformGroupFields> custom_group_fields,
-                      const bke::ArmatureDeformSkinningMode skinning_mode)
-      : bke::GeometryFieldInput(value_field.cpp_type(), "Armature Deform"),
-        armature_object_(armature_object),
-        target_to_world_(target_to_world),
-        value_field_(std::move(value_field)),
-        mask_field_(std::move(mask_field)),
-        use_envelope_(use_envelope),
-        use_vertex_groups_(use_vertex_groups),
-        invert_vertex_groups_(invert_vertex_groups),
-        custom_group_fields_(custom_group_fields),
-        skinning_mode_(skinning_mode)
-  {
-  }
+static Vector<DeformGroupFields> construct_envelope_deform_fields(const Object &armature_object)
+{
+  return {};
+}
 
-  GVArray get_varray_for_context(const bke::GeometryFieldContext &context,
-                                 const IndexMask &mask) const final
-  {
-    const int64_t domain_size = context.attributes()->domain_size(context.domain());
-    if (context.domain() != AttrDomain::Point) {
-      FieldEvaluator evaluator(context, domain_size);
-      evaluator.add(value_field_);
-      evaluator.evaluate();
-      return evaluator.get_evaluated(0);
-    }
-
-    GArray<> value_buffer(*type_, domain_size);
-    Array<float> mask_buffer(domain_size);
-    Array<bke::PoseChannelDeformGroup> custom_groups(custom_group_fields_.size());
-
-    FieldEvaluator evaluator(context, domain_size);
-    evaluator.add_with_destination(mask_field_, mask_buffer.as_mutable_span());
-    evaluator.add_with_destination(value_field_, value_buffer.as_mutable_span());
-    for (const int i : custom_group_fields_.index_range()) {
-      const CustomDeformGroupFields &group_fields = custom_group_fields_[i];
-      custom_groups[i].pose_channel = group_fields.pose_channel;
-      custom_groups[i].deform_group.weights.reinitialize(domain_size);
-      evaluator.add(group_fields.selection_field);
-      MutableSpan<float> weights = custom_groups[i].deform_group.weights;
-      evaluator.add_with_destination(group_fields.weights_field, weights);
-    }
-    /* Output indices of custom group selection masks. */
-    evaluator.evaluate();
-    const std::optional<Span<float>> vert_influence = mask_buffer;
-    for (const int i : custom_groups.index_range()) {
-      const int mask_field_output = 2 + i * 2;
-      custom_groups[i].deform_group.mask = evaluator.get_evaluated_as_mask(mask_field_output);
-    }
-
-    std::optional<bke::ArmatureDeformVertexGroupParams> vgroup_params;
-    if (use_vertex_groups_) {
-      switch (context.type()) {
-        case GeometryComponent::Type::Mesh:
-          if (const Mesh *mesh = context.mesh()) {
-            vgroup_params = {
-                mesh->vertex_group_names, mesh->deform_verts(), invert_vertex_groups_};
-          }
-          break;
-        case GeometryComponent::Type::Curve:
-          if (const bke::CurvesGeometry *curves = context.curves()) {
-            vgroup_params = {
-                curves->vertex_group_names, curves->deform_verts(), invert_vertex_groups_};
-          }
-          break;
-        case GeometryComponent::Type::GreasePencil: {
-          const GreasePencil *grease_pencil = context.grease_pencil();
-          const bke::greasepencil::Drawing *drawing = context.grease_pencil_layer_drawing();
-          if (grease_pencil && drawing) {
-            vgroup_params = {grease_pencil->vertex_group_names,
-                             drawing->geometry.wrap().deform_verts(),
-                             invert_vertex_groups_};
-          }
-          break;
-        }
-        default:
-          break;
-      }
-    }
-
-    if (type_ == &CPPType::get<float3>()) {
-      bke::armature_deform_positions(armature_object_,
-                                     target_to_world_,
-                                     mask,
-                                     vert_influence,
-                                     custom_groups,
-                                     vgroup_params,
-                                     use_envelope_,
-                                     skinning_mode_,
-                                     value_buffer.as_mutable_span().typed<float3>());
-    }
-    else if (type_ == &CPPType::get<float4x4>()) {
-      bke::armature_deform_matrices(armature_object_,
-                                    target_to_world_,
-                                    mask,
-                                    vert_influence,
-                                    custom_groups,
-                                    vgroup_params,
-                                    use_envelope_,
-                                    skinning_mode_,
-                                    value_buffer.as_mutable_span().typed<float4x4>());
-    }
-    else {
-      /* Unsupported field type for armature deformation. */
-      BLI_assert_unreachable();
-    }
-
-    return GVArray::from_garray(std::move(value_buffer));
-  }
-
-  void for_each_field_input_recursive(FunctionRef<void(const FieldInput &)> fn) const override
-  {
-    value_field_.node().for_each_field_input_recursive(fn);
-    mask_field_.node().for_each_field_input_recursive(fn);
-  }
-
-  uint64_t hash() const override
-  {
-    uint64_t custom_group_fields_hash = 0;
-    for (const CustomDeformGroupFields &group_fields : custom_group_fields_) {
-      custom_group_fields_hash = get_default_hash(custom_group_fields_hash,
-                                                  get_default_hash(group_fields.pose_channel,
-                                                                   group_fields.weights_field,
-                                                                   group_fields.selection_field));
-    }
-    return get_default_hash(
-        get_default_hash(&armature_object_, target_to_world_, value_field_),
-        get_default_hash(mask_field_, use_envelope_, use_vertex_groups_),
-        get_default_hash(invert_vertex_groups_, skinning_mode_, custom_group_fields_hash));
-  }
-
-  bool is_equal_to(const fn::FieldNode &other) const override
-  {
-    if (const ArmatureDeformField *other_deform = dynamic_cast<const ArmatureDeformField *>(
-            &other))
-    {
-      if (custom_group_fields_.size() != other_deform->custom_group_fields_.size()) {
-        return false;
-      }
-      for (const int i : custom_group_fields_.index_range()) {
-        if (custom_group_fields_[i].pose_channel !=
-                other_deform->custom_group_fields_[i].pose_channel ||
-            custom_group_fields_[i].weights_field !=
-                other_deform->custom_group_fields_[i].weights_field ||
-            custom_group_fields_[i].selection_field !=
-                other_deform->custom_group_fields_[i].selection_field)
-        {
-          return false;
-        }
-      }
-      return &armature_object_ == &other_deform->armature_object_ &&
-             target_to_world_ == other_deform->target_to_world_ &&
-             value_field_ == other_deform->value_field_ &&
-             mask_field_ == other_deform->mask_field_ &&
-             use_envelope_ == other_deform->use_envelope_ &&
-             use_vertex_groups_ == other_deform->use_vertex_groups_ &&
-             invert_vertex_groups_ == other_deform->invert_vertex_groups_ &&
-             skinning_mode_ == other_deform->skinning_mode_;
-    }
-    return false;
-  }
-
-  std::optional<AttrDomain> preferred_domain(const GeometryComponent &component) const override
-  {
-    const std::optional<AttrDomain> domain = bke::try_detect_field_domain(component, value_field_);
-    if (domain.has_value() && *domain == AttrDomain::Corner) {
-      return AttrDomain::Point;
-    }
-    return domain;
-  }
-};
-#endif
-
-static Vector<CustomDeformGroupFields> evaluate_custom_deform_groups(
+static Vector<DeformGroupFields> evaluate_custom_deform_fields(
     const Object &armature_object,
     GeoNodesUserData *user_data,
     const Closure &custom_groups_closure)
@@ -510,7 +320,7 @@ static Vector<CustomDeformGroupFields> evaluate_custom_deform_groups(
   const bke::bNodeSocketType *stype_float = bke::node_socket_type_find_static(SOCK_FLOAT);
   const bke::bNodeSocketType *stype_bool = bke::node_socket_type_find_static(SOCK_BOOLEAN);
 
-  Vector<CustomDeformGroupFields> custom_group_fields;
+  Vector<DeformGroupFields> custom_group_fields;
   custom_group_fields.reserve(pose_channels_num);
 
   for (const bPoseChannel *pose_channel : pose_channels) {
@@ -554,38 +364,43 @@ static void node_geo_exec(GeoNodeExecParams params)
           bke::ArmatureDeformSkinningMode::DualQuatenrion :
           bke::ArmatureDeformSkinningMode::Linear;
   const WeightSource weight_source = params.extract_input<WeightSource>("Weight Source");
-  const bool invert_vertex_groups = params.extract_input<bool>("Invert Vertex Groups");
-  const ClosurePtr custom_weights = params.extract_input<ClosurePtr>("Custom Weights");
+  /* TODO could be an input option (always enabled in legacy armature deform). */
+  const bool use_envelope_multiply = true;
+
+  Vector<DeformGroupFields> deform_group_fields;
+  switch (weight_source) {
+    case WeightSource::VertexGroups: {
+      deform_group_fields = construct_vertex_group_deform_fields(*armature_object,
+                                                                 use_envelope_multiply);
+      break;
+    }
+    case WeightSource::Envelope: {
+      deform_group_fields = construct_envelope_deform_fields(*armature_object);
+      break;
+    }
+    case WeightSource::CustomWeights: {
+      const ClosurePtr custom_weights = params.extract_input<ClosurePtr>("Custom Weights");
+      if (custom_weights) {
+        deform_group_fields = evaluate_custom_deform_fields(
+            *armature_object, params.user_data(), *custom_weights);
+      }
+      break;
+    }
+  }
+
   Field<float> mask_field = params.extract_input<Field<float>>("Mask");
 
-  Vector<CustomDeformGroupFields> custom_group_fields;
-  if (custom_weights) {
-    custom_group_fields = evaluate_custom_deform_groups(
-        *armature_object, params.user_data(), *custom_weights);
-  }
-
-  // GField output_field{std::make_shared<ArmatureDeformField>(*armature_object,
-  //                                                           target_to_world,
-  //                                                           std::move(value_field),
-  //                                                           std::move(mask_field),
-  //                                                           use_envelope,
-  //                                                           use_vertex_groups,
-  //                                                           invert_vertex_groups,
-  //                                                           custom_group_fields,
-  //                                                           skinning_mode)};
-  // params.set_output<GField>("Value", std::move(output_field));
-
-  Array<StringRef> deform_groups_bone_names(custom_group_fields.size());
-  for (const int i : custom_group_fields.index_range()) {
-    deform_groups_bone_names[i] = custom_group_fields[i].pose_channel->name;
+  Array<StringRef> deform_groups_bone_names(deform_group_fields.size());
+  for (const int i : deform_group_fields.index_range()) {
+    deform_groups_bone_names[i] = deform_group_fields[i].pose_channel->name;
   }
   Vector<GField> input_fields;
-  input_fields.reserve(3 + 2 * custom_group_fields.size());
+  input_fields.reserve(3 + 2 * deform_group_fields.size());
   input_fields.append_unchecked(value_field);
   input_fields.append_unchecked(mask_field);
-  for (const int i : custom_group_fields.index_range()) {
-    input_fields.append_unchecked(custom_group_fields[i].weights_field);
-    input_fields.append_unchecked(custom_group_fields[i].selection_field);
+  for (const int i : deform_group_fields.index_range()) {
+    input_fields.append_unchecked(deform_group_fields[i].weights_field);
+    input_fields.append_unchecked(deform_group_fields[i].selection_field);
   }
   auto deform_op = FieldOperation::from(
       std::make_unique<ArmatureDeformFunction>(*armature_object,
