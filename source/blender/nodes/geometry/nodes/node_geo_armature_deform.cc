@@ -310,7 +310,9 @@ static Vector<DeformGroupFields> build_vertex_group_deform_fields(
 
     const float threshold = threshold_weight ? std::max(*threshold_weight, 0.0f) : 0.0f;
     auto vertex_group_op = FieldOperation::from(
-        std::make_shared<bke::VertexGroupMultiFunction>(target_to_armature, bone), {});
+        std::make_shared<bke::VertexGroupMultiFunction>(
+            target_to_armature, pose_channel->name, threshold),
+        {});
     Field<float> weight_field(vertex_group_op, 0);
     Field<bool> selection_field(vertex_group_op, 1);
     vertex_group_fields.append_unchecked(
@@ -341,7 +343,7 @@ static Vector<DeformGroupFields> build_envelope_deform_fields(
     const Bone &bone = *pose_channel->bone;
     const float threshold = threshold_weight ? std::max(*threshold_weight, 0.0f) : 0.0f;
     auto bone_envelope_op = FieldOperation::from(
-        std::make_shared<bke::BoneEnvelopeMultiFunction>(target_to_armature, bone),
+        std::make_shared<bke::BoneEnvelopeMultiFunction>(target_to_armature, bone, threshold),
         {position_field});
     Field<float> weight_field(bone_envelope_op, 0);
     Field<bool> selection_field(bone_envelope_op, 1);
