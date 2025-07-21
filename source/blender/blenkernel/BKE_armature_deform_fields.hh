@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2001-2002 NaN Holding BV. All rights reserved.
+/* SPDX-FileCopyrightText: 2025 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -8,17 +8,9 @@
  * \ingroup bke
  */
 
-#include "BLI_listbase_wrapper.hh"
 #include "BLI_math_matrix_types.hh"
 
-#include "BKE_armature.hh"
-#include "BKE_curves.hh"
 #include "BKE_geometry_fields.hh"
-#include "BKE_grease_pencil.hh"
-#include "BKE_mesh.hh"
-
-#include "DNA_meshdata_types.h"
-#include "DNA_object_types.h"
 
 struct bArmature;
 struct Bone;
