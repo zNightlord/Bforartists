@@ -4,8 +4,7 @@
 
 #include "BLI_listbase_wrapper.hh"
 
-#include "BKE_armature.hh"
-#include "BKE_armature_fields.hh"
+#include "BKE_armature_deform_fields.hh"
 #include "BKE_curves.hh"
 #include "BKE_deform.hh"
 #include "BKE_grease_pencil.hh"

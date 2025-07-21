@@ -50,7 +50,7 @@ set(SRC
   intern/appdir.cc
   intern/armature.cc
   intern/armature_deform.cc
-  intern/armature_deform2.cc
+  intern/armature_deform_fields.cc
   intern/armature_selection.cc
   intern/armature_update.cc
   intern/asset.cc
@@ -336,7 +336,7 @@ set(SRC
   BKE_anonymous_attribute_make.hh
   BKE_appdir.hh
   BKE_armature.hh
-  BKE_armature_fields.hh
+  BKE_armature_deform_fields.hh
   BKE_asset.hh
   BKE_asset_edit.hh
   BKE_attribute.h

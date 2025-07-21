@@ -38,7 +38,7 @@
 
 #include "BKE_action.hh"
 #include "BKE_armature.hh"
-#include "BKE_armature_fields.hh"
+#include "BKE_armature_deform_fields.hh"
 #include "BKE_customdata.hh"
 #include "BKE_deform.hh"
 #include "BKE_editmesh.hh"
