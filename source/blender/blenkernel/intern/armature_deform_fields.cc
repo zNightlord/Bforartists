@@ -214,12 +214,15 @@ BoneEnvelopeMultiFunction::BoneEnvelopeMultiFunction(const float4x4 &target_to_a
                                                      const float threshold)
     : target_to_armature_(target_to_armature), bone_(&bone), threshold_(threshold)
 {
-  static mf::Signature signature_;
-  mf::SignatureBuilder builder{"Bone Envelope", signature_};
-  builder.single_input<float3>("Position");
-  builder.single_output<float>("Weight");
-  builder.single_output<bool>("Selection");
-  this->set_signature(&signature_);
+  static const mf::Signature signature = []() {
+    mf::Signature signature;
+    mf::SignatureBuilder builder{"Bone Envelope", signature};
+    builder.single_input<float3>("Position");
+    builder.single_output<float>("Weight");
+    builder.single_output<bool>("Selection");
+    return signature;
+  }();
+  this->set_signature(&signature);
 }
 
 void BoneEnvelopeMultiFunction::call(const IndexMask &mask,
