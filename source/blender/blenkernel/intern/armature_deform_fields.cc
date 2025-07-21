@@ -45,7 +45,7 @@
 #include "BKE_lattice.hh"
 #include "BKE_mesh.hh"
 
-namespace blender::bke {
+namespace blender::bke::armature_deform {
 
 #if 0 /* UNUSED */
 ArmatureDeformGroup build_deform_group_for_vertex_group(
@@ -275,12 +275,12 @@ static std::optional<int> find_def_nr_from_pose_channel(const bPoseChannel &pcha
 
 struct ArmatureDeformVertexGroupParams {
   ListBase vertex_groups;
-  blender::Span<MDeformVert> dverts;
+  Span<MDeformVert> dverts;
 };
 
 Vector<PoseChannelDeformGroup> pose_channel_groups_from_vertex_groups(
     const ListBase &pose_channels,
-    const blender::IndexMask &mask,
+    const IndexMask &mask,
     const ArmatureDeformVertexGroupParams vertex_group_params,
     const std::optional<float> weight_threshold,
     const bool use_envelope_multiply,
@@ -360,7 +360,7 @@ static void build_deform_groups_for_envelopes(const IndexMask &universe,
 
 Vector<PoseChannelDeformGroup> pose_channel_groups_from_envelopes(
     const ListBase &pose_channels,
-    const blender::IndexMask &mask,
+    const IndexMask &mask,
     const std::optional<float> weight_threshold,
     const Span<float3> positions,
     IndexMaskMemory &memory)
@@ -392,6 +392,216 @@ Vector<PoseChannelDeformGroup> pose_channel_groups_from_envelopes(
   return pchan_groups;
 }
 #endif
+
+/* Vertex group information:
+ * dverts contain weight information and index the vertex_group list.
+ * The vertex_groups list is matched against the pose channels of an armature by name, which maps
+ * the deformation weight to a bone pose channel. */
+struct VertexGroupData {
+  ConstListBaseWrapper<bDeformGroup> vertex_groups;
+  Span<MDeformVert> dverts;
+};
+
+/* Return vertex group information for supported geometry types (mesh, grease pencil).
+ * This data is only available on original object geometry with user-defined vertex groups. */
+static std::optional<VertexGroupData> vertex_groups_from_field_context(
+    const bke::GeometryFieldContext &context)
+{
+  switch (context.type()) {
+    case GeometryComponent::Type::Mesh:
+      if (const Mesh *mesh = context.mesh()) {
+        return VertexGroupData{{mesh->vertex_group_names}, mesh->deform_verts()};
+      }
+      break;
+    case GeometryComponent::Type::GreasePencil: {
+      const GreasePencil *grease_pencil = context.grease_pencil();
+      const bke::greasepencil::Drawing *drawing = context.grease_pencil_layer_drawing();
+      if (grease_pencil && drawing) {
+        return VertexGroupData{{grease_pencil->vertex_group_names},
+                               drawing->geometry.wrap().deform_verts()};
+      }
+      break;
+    }
+    default:
+      break;
+  }
+  return std::nullopt;
+}
+
+static std::optional<int> find_vertex_group_def_nr(
+    const ConstListBaseWrapper<bDeformGroup> &vertex_groups, StringRef name)
+{
+  int def_nr = 0;
+  for (const bDeformGroup *def_grp : vertex_groups) {
+    if (def_grp->name == name) {
+      return def_nr;
+    }
+    ++def_nr;
+  }
+  return std::nullopt;
+}
+
+static void weights_from_deform_verts(const IndexMask &mask,
+                                      const Span<MDeformVert> dverts,
+                                      const int def_nr,
+                                      MutableSpan<float> weights)
+{
+  constexpr GrainSize grain_size(1024);
+
+  BLI_assert(dverts.size() >= mask.min_array_size());
+
+  mask.foreach_index(grain_size, [&](const int index) {
+    const MDeformVert &dvert = dverts[index];
+    const Span<MDeformWeight> dweights(dvert.dw, dvert.totweight);
+    weights[index] = 0.0f;
+    for (const MDeformWeight &dw : dweights) {
+      if (dw.def_nr == def_nr) {
+        weights[index] = dw.weight;
+        break;
+      }
+    }
+  });
+}
+
+static void selection_from_deform_verts(const IndexMask &mask,
+                                        const Span<MDeformVert> dverts,
+                                        const int def_nr,
+                                        const float threshold,
+                                        MutableSpan<bool> selection)
+{
+  constexpr GrainSize grain_size(1024);
+
+  BLI_assert(dverts.size() >= mask.min_array_size());
+
+  mask.foreach_index(grain_size, [&](const int index) {
+    const MDeformVert &dvert = dverts[index];
+    const Span<MDeformWeight> dweights(dvert.dw, dvert.totweight);
+    selection[index] = false;
+    for (const MDeformWeight &dw : dweights) {
+      if (dw.def_nr == def_nr && dw.weight > threshold) {
+        selection[index] = true;
+        break;
+      }
+    }
+  });
+}
+
+VertexGroupWeightInput::VertexGroupWeightInput(const Bone &bone)
+    : bke::GeometryFieldInput(CPPType::get<float>(), "Vertex Group Weight Input"), bone_(&bone)
+{
+}
+
+GVArray VertexGroupWeightInput::get_varray_for_context(const bke::GeometryFieldContext &context,
+                                                       const IndexMask &mask) const
+{
+  const auto default_weights = VArray<float>::from_single(0.0f, mask.min_array_size());
+  std::optional<VertexGroupData> vgroup_data = vertex_groups_from_field_context(context);
+  if (!vgroup_data) {
+    return default_weights;
+  }
+  const std::optional<int> def_nr = find_vertex_group_def_nr(vgroup_data->vertex_groups,
+                                                             bone_->name);
+  if (!def_nr) {
+    return default_weights;
+  }
+
+  Array<float> weights(mask.min_array_size());
+  weights_from_deform_verts(mask, vgroup_data->dverts, *def_nr, weights);
+  return VArray<float>::from_container(std::move(weights));
+}
+
+uint64_t VertexGroupWeightInput::hash() const
+{
+  return get_default_hash(bone_);
+}
+
+bool VertexGroupWeightInput::is_equal_to(const fn::FieldNode &other) const
+{
+  if (const auto *other_field = dynamic_cast<const VertexGroupWeightInput *>(&other)) {
+    return other_field->bone_ == bone_;
+  }
+  return false;
+}
+
+std::optional<AttrDomain> VertexGroupWeightInput::preferred_domain(
+    const GeometryComponent & /*component*/) const
+{
+  return AttrDomain::Point;
+}
+
+VertexGroupSelectionInput::VertexGroupSelectionInput(const Bone &bone, const float threshold)
+    : bke::GeometryFieldInput(CPPType::get<bool>(), "Vertex Group Selection Input"),
+      bone_(&bone),
+      threshold_(threshold)
+{
+}
+
+GVArray VertexGroupSelectionInput::get_varray_for_context(const bke::GeometryFieldContext &context,
+                                                          const IndexMask &mask) const
+{
+  const auto default_selection = VArray<bool>::from_single(false, mask.min_array_size());
+  std::optional<VertexGroupData> vgroup_data = vertex_groups_from_field_context(context);
+  if (!vgroup_data) {
+    return default_selection;
+  }
+  const std::optional<int> def_nr = find_vertex_group_def_nr(vgroup_data->vertex_groups,
+                                                             bone_->name);
+  if (!def_nr) {
+    return default_selection;
+  }
+
+  Array<bool> selection(mask.min_array_size());
+  selection_from_deform_verts(mask, vgroup_data->dverts, *def_nr, threshold_, selection);
+  return VArray<bool>::from_container(std::move(selection));
+}
+
+uint64_t VertexGroupSelectionInput::hash() const
+{
+  return get_default_hash(bone_, threshold_);
+}
+
+bool VertexGroupSelectionInput::is_equal_to(const fn::FieldNode &other) const
+{
+  if (const auto *other_field = dynamic_cast<const VertexGroupSelectionInput *>(&other)) {
+    return other_field->bone_ == bone_ && other_field->threshold_ == threshold_;
+  }
+  return false;
+}
+
+std::optional<AttrDomain> VertexGroupSelectionInput::preferred_domain(
+    const GeometryComponent & /*component*/) const
+{
+  return AttrDomain::Point;
+}
+
+BoneEnvelopeMultiFunction::BoneEnvelopeMultiFunction(const float4x4 &target_to_armature,
+                                                     const Bone &bone,
+                                                     const float threshold)
+    : target_to_armature_(target_to_armature), bone_(&bone), threshold_(threshold)
+{
+  static mf::Signature signature_;
+  mf::SignatureBuilder builder{"Bone Envelope", signature_};
+  builder.single_input<float3>("Position");
+  builder.single_output<float>("Weight");
+  builder.single_output<bool>("Selection");
+  this->set_signature(&signature_);
+}
+
+void BoneEnvelopeMultiFunction::call(const IndexMask &mask,
+                                     mf::Params params,
+                                     mf::Context /*context*/) const
+{
+  const VArraySpan<float3> positions = params.readonly_single_input<float3>(0, "Position");
+  MutableSpan<float> weights = params.uninitialized_single_output<float>(1, "Weight");
+  MutableSpan<bool> selection = params.uninitialized_single_output<bool>(2, "Selection");
+  mask.foreach_index([&](const int64_t i) {
+    const float3 &pos = positions[i];
+    const float3 arm_pos = math::transform_point(target_to_armature_, pos);
+    weights[i] = distfactor_to_bone(
+        arm_pos, bone_->head, bone_->tail, bone_->rad_head, bone_->rad_tail, bone_->dist);
+    selection[i] = weights[i] > threshold_;
+  });
+}
 
 /**
  * Utility class for accumulating linear bone deformation.
@@ -547,7 +757,7 @@ static void deform_single_group_with_mixer(const bPoseChannel &pchan,
   }
 }
 
-static void deform_with_mixer(const blender::IndexMask &selection,
+static void deform_with_mixer(const IndexMask &selection,
                               const std::optional<Span<float>> point_weights,
                               const Span<PoseChannelDeformGroup> deform_groups,
                               const std::optional<float> weight_threshold,
@@ -611,23 +821,23 @@ static void deform_with_mixer(const blender::IndexMask &selection,
 }
 
 /* Determine the correct mixer type. */
-static MixerVariant get_deform_mixer(const ArmatureDeformSkinningMode skinning_mode,
+static MixerVariant get_deform_mixer(const SkinningMode skinning_mode,
                                      const bool has_deform_mats,
                                      const int size)
 {
   if (has_deform_mats) {
     switch (skinning_mode) {
-      case ArmatureDeformSkinningMode::Linear:
+      case SkinningMode::Linear:
         return BoneDeformLinearMixer<true>(size);
-      case ArmatureDeformSkinningMode::DualQuatenrion:
+      case SkinningMode::DualQuaternion:
         return BoneDeformDualQuaternionMixer<true>(size);
     }
   }
   else {
     switch (skinning_mode) {
-      case ArmatureDeformSkinningMode::Linear:
+      case SkinningMode::Linear:
         return BoneDeformLinearMixer<false>(size);
-      case ArmatureDeformSkinningMode::DualQuatenrion:
+      case SkinningMode::DualQuaternion:
         return BoneDeformDualQuaternionMixer<false>(size);
     }
   }
@@ -635,12 +845,12 @@ static MixerVariant get_deform_mixer(const ArmatureDeformSkinningMode skinning_m
   return BoneDeformLinearMixer<false>(0);
 }
 
-void armature_deform_positions(const blender::float4x4 &target_to_armature,
-                               const blender::IndexMask &selection,
-                               const std::optional<Span<float>> point_weights,
-                               const Span<PoseChannelDeformGroup> deform_groups,
-                               const ArmatureDeformSkinningMode skinning_mode,
-                               blender::MutableSpan<blender::float3> positions)
+void deform_positions(const float4x4 &target_to_armature,
+                      const IndexMask &selection,
+                      const std::optional<Span<float>> point_weights,
+                      const Span<PoseChannelDeformGroup> deform_groups,
+                      const SkinningMode skinning_mode,
+                      MutableSpan<float3> positions)
 {
   constexpr GrainSize grain_size = GrainSize(1024);
 
@@ -663,12 +873,12 @@ void armature_deform_positions(const blender::float4x4 &target_to_armature,
   });
 }
 
-void armature_deform_matrices(const blender::float4x4 &target_to_armature,
-                              const blender::IndexMask &selection,
-                              const std::optional<Span<float>> point_weights,
-                              const Span<PoseChannelDeformGroup> deform_groups,
-                              const ArmatureDeformSkinningMode skinning_mode,
-                              blender::MutableSpan<blender::float4x4> matrices)
+void deform_matrices(const float4x4 &target_to_armature,
+                     const IndexMask &selection,
+                     const std::optional<Span<float>> point_weights,
+                     const Span<PoseChannelDeformGroup> deform_groups,
+                     const SkinningMode skinning_mode,
+                     MutableSpan<float4x4> matrices)
 {
   constexpr GrainSize grain_size = GrainSize(1024);
 
@@ -699,6 +909,6 @@ void armature_deform_matrices(const blender::float4x4 &target_to_armature,
   });
 }
 
-}  // namespace blender::bke
+}  // namespace blender::bke::armature_deform
 
 /** \} */

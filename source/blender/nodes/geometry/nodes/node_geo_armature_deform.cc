@@ -24,6 +24,9 @@
 
 namespace blender::nodes::node_geo_armature_deform_cc {
 
+using bke::armature_deform::PoseChannelDeformGroup;
+using bke::armature_deform::SkinningMode;
+
 /* Source of deformation weights. */
 enum class WeightSource {
   /* Use vertex groups weights defined in the geometry context. */
@@ -114,6 +117,24 @@ static void node_init(bNodeTree * /*tree*/, bNode *node)
   node->custom1 = SOCK_VECTOR;
 }
 
+/**
+ * A multifunction that computes normalized deformation for all bones of an armature.
+ *
+ * The function has a variable number of inputs based on armature bones:
+ *   - Main value input (float3 or float4x4)
+ *   - Global influence factor
+ *   - Bone 1 weights
+ *   - Bone 1 selection
+ *   - Bone 2 weights
+ *   - Bone 2 selection
+ *     [...]
+ *   - Bone n weights
+ *   - Bone n selection
+ *
+ *   - Main value output
+ *   - Weight output (total weight sum)
+ *   - Selection output (all deformed points)
+ */
 class ArmatureDeformFunction : public mf::MultiFunction {
  private:
   struct DeformGroupInput {
@@ -126,11 +147,13 @@ class ArmatureDeformFunction : public mf::MultiFunction {
 
   const Object &armature_object_;
   float4x4 target_to_armature_;
-  bke::ArmatureDeformSkinningMode skinning_mode_;
+  SkinningMode skinning_mode_;
   Array<DeformGroupInput> deform_groups_inputs_;
   int value_input_;
   int value_output_;
   int mask_input_;
+  int weight_output_;
+  int selection_output_;
 
   mf::Signature signature_;
 
@@ -146,22 +169,27 @@ class ArmatureDeformFunction : public mf::MultiFunction {
       builder.single_input<bool>(group.selection_input_name.c_str());
     }
     builder.single_output("Value Output", value_type, mf::ParamFlag::SupportsUnusedOutput);
+    builder.single_output<float>("Weight Output", mf::ParamFlag::SupportsUnusedOutput);
+    builder.single_output<bool>("Selection Output", mf::ParamFlag::SupportsUnusedOutput);
     return signature;
   }
 
   ArmatureDeformFunction(const Object &armature_object,
                          const float4x4 &target_to_armature,
-                         const bke::ArmatureDeformSkinningMode skinning_mode,
+                         const SkinningMode skinning_mode,
                          const CPPType &value_type,
                          const Span<StringRef> deform_groups)
       : armature_object_(armature_object),
         target_to_armature_(target_to_armature),
         skinning_mode_(skinning_mode)
   {
+    const int groups_num = deform_groups.size();
     value_input_ = 0;
-    value_output_ = 2 + 2 * deform_groups.size();
+    value_output_ = 2 + 2 * groups_num;
+    weight_output_ = 3 + 2 * groups_num;
+    selection_output_ = 4 + 2 * groups_num;
     mask_input_ = 1;
-    deform_groups_inputs_.reinitialize(deform_groups.size());
+    deform_groups_inputs_.reinitialize(groups_num);
     for (const int i : deform_groups.index_range()) {
       DeformGroupInput &input = deform_groups_inputs_[i];
       input.pose_channel_name = deform_groups[i];
@@ -181,10 +209,10 @@ class ArmatureDeformFunction : public mf::MultiFunction {
         &armature_object_.pose->chanbase, name.c_str(), offsetof(bPoseChannel, name)));
   }
 
-  bke::PoseChannelDeformGroup get_deform_group_input(const IndexMask &mask,
-                                                     mf::Params &params,
-                                                     const int group_index,
-                                                     IndexMaskMemory &memory) const
+  PoseChannelDeformGroup get_deform_group_input(const IndexMask &mask,
+                                                mf::Params &params,
+                                                const int group_index,
+                                                IndexMaskMemory &memory) const
   {
     BLI_assert(deform_groups_inputs_.index_range().contains(group_index));
     const DeformGroupInput &group_input = deform_groups_inputs_[group_index];
@@ -195,7 +223,7 @@ class ArmatureDeformFunction : public mf::MultiFunction {
     Array<float> weights_buffer(group_mask.size());
     weights.materialize_compressed_to_uninitialized(group_mask, weights_buffer);
 
-    bke::PoseChannelDeformGroup pchan_group;
+    PoseChannelDeformGroup pchan_group;
     pchan_group.pose_channel = find_pose_channel(group_input.pose_channel_name);
     pchan_group.deform_group.mask = std::move(group_mask);
     pchan_group.deform_group.weights = std::move(weights_buffer);
@@ -218,7 +246,7 @@ class ArmatureDeformFunction : public mf::MultiFunction {
 
     const GVArray &value = params.readonly_single_input(0, "Value");
     const VArraySpan<float> vert_influence = params.readonly_single_input<float>(1, "Mask");
-    Array<bke::PoseChannelDeformGroup> deform_groups(deform_groups_inputs_.size());
+    Array<PoseChannelDeformGroup> deform_groups(deform_groups_inputs_.size());
     for (const int i : deform_groups.index_range()) {
       deform_groups[i] = get_deform_group_input(mask, params, i, memory);
     }
@@ -228,7 +256,7 @@ class ArmatureDeformFunction : public mf::MultiFunction {
           value_output_);
       if (!value_output.is_empty()) {
         value.typed<float3>().materialize_to_uninitialized(mask, value_output);
-        bke::armature_deform_positions(
+        bke::armature_deform::deform_positions(
             target_to_armature, mask, vert_influence, deform_groups, skinning_mode_, value_output);
       }
     }
@@ -237,13 +265,35 @@ class ArmatureDeformFunction : public mf::MultiFunction {
           params.uninitialized_single_output_if_required<float4x4>(value_output_);
       if (!value_output.is_empty()) {
         value.typed<float4x4>().materialize_to_uninitialized(mask, value_output);
-        bke::armature_deform_matrices(
+        bke::armature_deform::deform_matrices(
             target_to_armature, mask, vert_influence, deform_groups, skinning_mode_, value_output);
       }
     }
     else {
       /* Unsupported field type for armature deformation. */
       BLI_assert_unreachable();
+    }
+
+    if (params.single_output_is_required(weight_output_)) {
+      MutableSpan<float> weights_output = params.uninitialized_single_output_if_required<float>(
+          weight_output_);
+      mask.foreach_index(GrainSize(4096), [&](const int index) { weights_output[index] = 0.0f; });
+      for (const PoseChannelDeformGroup &group : deform_groups) {
+        group.deform_group.mask.foreach_index(
+            GrainSize(4096), [&](const int index, const int pos) {
+              weights_output[index] += group.deform_group.weights[pos];
+            });
+      }
+    }
+
+    if (params.single_output_is_required(selection_output_)) {
+      MutableSpan<bool> bools_output = params.uninitialized_single_output_if_required<bool>(
+          selection_output_);
+      mask.foreach_index(GrainSize(4096), [&](const int index) { bools_output[index] = false; });
+      for (const PoseChannelDeformGroup &group : deform_groups) {
+        group.deform_group.mask.foreach_index(
+            GrainSize(4096), [&](const int index) { bools_output[index] = true; });
+      }
     }
   }
 
@@ -440,10 +490,9 @@ static void node_geo_exec(GeoNodeExecParams params)
   BLI_assert(self_object != nullptr);
   const float4x4 &target_to_world = self_object->object_to_world();
 
-  const bke::ArmatureDeformSkinningMode skinning_mode =
-      params.extract_input<bool>("Preserve Volume") ?
-          bke::ArmatureDeformSkinningMode::DualQuatenrion :
-          bke::ArmatureDeformSkinningMode::Linear;
+  const SkinningMode skinning_mode = params.extract_input<bool>("Preserve Volume") ?
+                                         SkinningMode::DualQuaternion :
+                                         SkinningMode::Linear;
   const WeightSource weight_source = params.extract_input<WeightSource>("Weight Source");
   /* TODO could be an input option (always enabled in legacy armature deform). */
   const bool use_envelope_multiply = true;

@@ -681,51 +681,6 @@ void BKE_armature_deform_coords_with_editmesh(
     blender::StringRefNull defgrp_name,
     const BMEditMesh &em_target);
 
-namespace blender::bke {
-
-/**
- * Group of deformation weights defined on a set of points.
- */
-struct ArmatureDeformGroup {
-  /**
-   * Point indices included in this group.
-   */
-  blender::IndexMask mask;
-  /**
-   * Compressed weights, matches positions in the index mask.
-   */
-  blender::Array<float> weights;
-};
-
-/**
- * Armature deform group associated with a pose channel.
- */
-struct PoseChannelDeformGroup {
-  ArmatureDeformGroup deform_group;
-  const bPoseChannel *pose_channel;
-};
-
-enum class ArmatureDeformSkinningMode {
-  Linear,
-  DualQuatenrion,
-};
-
-void armature_deform_positions(const blender::float4x4 &target_to_armature,
-                               const blender::IndexMask &selection,
-                               std::optional<Span<float>> point_weights,
-                               Span<PoseChannelDeformGroup> deform_groups,
-                               const ArmatureDeformSkinningMode skinning_mode,
-                               blender::MutableSpan<blender::float3> positions);
-
-void armature_deform_matrices(const blender::float4x4 &target_to_armature,
-                              const blender::IndexMask &selection,
-                              std::optional<Span<float>> point_weights,
-                              Span<PoseChannelDeformGroup> deform_groups,
-                              const ArmatureDeformSkinningMode skinning_mode,
-                              blender::MutableSpan<blender::float4x4> matrices);
-
-}  // namespace blender::bke
-
 /** \} */
 
 namespace blender::bke {
