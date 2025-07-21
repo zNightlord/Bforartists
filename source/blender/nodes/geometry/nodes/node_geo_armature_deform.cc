@@ -293,8 +293,9 @@ struct DeformGroupFields {
 static Vector<DeformGroupFields> build_vertex_group_deform_fields(
     const Object &armature_object,
     const float4x4 &target_to_world,
+    const std::optional<float> threshold_weight,
     const bool use_envelope_multiply,
-    const std::optional<float> threshold_weight)
+    Field<float3> position_field)
 {
   const ConstListBaseWrapper<bPoseChannel> pose_channels(armature_object.pose->chanbase);
   const int pose_channels_num = BLI_listbase_count(&armature_object.pose->chanbase);
@@ -308,13 +309,27 @@ static Vector<DeformGroupFields> build_vertex_group_deform_fields(
       continue;
     }
 
+    const Bone &bone = *pose_channel->bone;
     const float threshold = threshold_weight ? std::max(*threshold_weight, 0.0f) : 0.0f;
-    auto vertex_group_op = FieldOperation::from(
-        std::make_shared<bke::VertexGroupMultiFunction>(
-            target_to_armature, pose_channel->name, threshold),
-        {});
-    Field<float> weight_field(vertex_group_op, 0);
-    Field<bool> selection_field(vertex_group_op, 1);
+    Field<float> weight_field(
+        std::make_shared<bke::armature_deform::VertexGroupWeightInput>(bone));
+
+    /* Bone feature: multiply with envelope weight. */
+    if (use_envelope_multiply && (bone.flag & BONE_MULT_VG_ENV)) {
+      const Field<float> envelope_field = Field<float>(
+          FieldOperation::from(std::make_shared<bke::armature_deform::BoneEnvelopeMultiFunction>(
+                                   target_to_armature, bone, threshold),
+                               {position_field}),
+          0);
+      static auto multiply_envelope_fn = mf::build::SI2_SO<float, float, float>(
+          "Multiply Bone Envelope",
+          [&](const float weight, const float envelope) -> float { return weight * envelope; });
+      weight_field = Field<float>(
+          FieldOperation::from(multiply_envelope_fn, {weight_field, envelope_field}));
+    }
+
+    Field<bool> selection_field(
+        std::make_shared<bke::armature_deform::VertexGroupSelectionInput>(bone, threshold));
     vertex_group_fields.append_unchecked(
         {pose_channel, std::move(weight_field), std::move(selection_field)});
   }
@@ -343,7 +358,8 @@ static Vector<DeformGroupFields> build_envelope_deform_fields(
     const Bone &bone = *pose_channel->bone;
     const float threshold = threshold_weight ? std::max(*threshold_weight, 0.0f) : 0.0f;
     auto bone_envelope_op = FieldOperation::from(
-        std::make_shared<bke::BoneEnvelopeMultiFunction>(target_to_armature, bone, threshold),
+        std::make_shared<bke::armature_deform::BoneEnvelopeMultiFunction>(
+            target_to_armature, bone, threshold),
         {position_field});
     Field<float> weight_field(bone_envelope_op, 0);
     Field<bool> selection_field(bone_envelope_op, 1);
@@ -401,7 +417,7 @@ static Field<float3> position_from_value_field(const GField &value_field)
   if (value_field.cpp_type() == CPPType::get<float3>()) {
     position_field = value_field;
   }
-  else if (value_field.cpp_type() == CPPType::get<float3>()) {
+  else if (value_field.cpp_type() == CPPType::get<float4x4>()) {
     static const auto matrix_location_fn = mf::build::SI1_SO<float4x4, float3>(
         "matrix_location", [](const float4x4 &matrix) -> float3 { return matrix.location(); });
     position_field = Field<float3>(FieldOperation::from(matrix_location_fn, {value_field}));
@@ -437,8 +453,12 @@ static void node_geo_exec(GeoNodeExecParams params)
   Vector<DeformGroupFields> deform_group_fields;
   switch (weight_source) {
     case WeightSource::VertexGroups: {
-      deform_group_fields = build_vertex_group_deform_fields(
-          *armature_object, target_to_world, use_envelope_multiply, threshold_weight);
+      Field<float3> position_field = position_from_value_field(value_field);
+      deform_group_fields = build_vertex_group_deform_fields(*armature_object,
+                                                             target_to_world,
+                                                             threshold_weight,
+                                                             use_envelope_multiply,
+                                                             position_field);
       break;
     }
     case WeightSource::Envelope: {
