@@ -532,9 +532,9 @@ void deform_matrices(const float4x4 &target_to_armature,
     deform_mats[index] = armature_matrix.view<3, 3>();
   });
 
-  MixerVariant mixer = get_deform_mixer(skinning_mode, false, selection.min_array_size());
+  MixerVariant mixer = get_deform_mixer(skinning_mode, true, selection.min_array_size());
   deform_with_mixer(
-      selection, point_weights, deform_groups, 0.0f, mixer, armature_positions, std::nullopt);
+      selection, point_weights, deform_groups, 0.0f, mixer, armature_positions, deform_mats);
 
   /* Transform back to target object space. */
   selection.foreach_index(grain_size, [&](const int index) {
