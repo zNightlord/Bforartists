@@ -111,6 +111,11 @@ class MeshPattern {
    */
   int boundary_edge_from_vert(const int v, const int first_v, const int first_e) const;
 
+  /** Given \a firstpos and \a lastpos, vertex indices in pattern space, and
+   * assuming they are on the outer boundary, return arrays of verts and edges that
+   * trace the boundary between those positions (inclusive), where \a first_v
+   * and \a first_e give the offsets to add to pattern space indices.
+   */
   std::pair<Array<int, 20>, Array<int, 20>> boundary_vert_and_edges(const int firstpos,
                                                                     const int lastpos,
                                                                     const int first_v,
@@ -4695,6 +4700,11 @@ void BevelState::build_newface(const int f, Span<int> verts, Span<int> edges)
   }
 }
 
+static void find_anchor_face_reps(const int bv, Array<int, 20> &reps, const BevelState &bs)
+{
+  const MeshPattern &pat = bs.bevvert_meshpatterns()[bv];
+}
+
 /** Set representative original elements to copy attributes from for new elements. */
 static void set_vertex_mesh_reps(const int bv,
                                  MutableSpan<int> repverts,
@@ -4732,8 +4742,23 @@ static void set_vertex_mesh_reps(const int bv,
     }
   }
   /* Placeholder logic for faces. */
-  if (bs.any_face_attributes) {
-    
+  int num_faces = pat.num_elements()[2];
+  if (bs.any_face_attributes && num_faces > 0) {
+    Array<int, 20> anchor_face_reps(pat.num_anchors, -1);
+    find_anchor_face_reps(bv, anchor_face_reps, bs);
+    switch (pat.kind) {
+      case MeshKind::Adj: {
+        break;
+      }
+      case MeshKind::TriFan:
+      case MeshKind::TerminalPoly: {
+        BLI_assert(num_faces == 1);
+        break;
+      }
+      default:
+        BLI_assert_unreachable();
+        break;
+    }
   }
 }
 
