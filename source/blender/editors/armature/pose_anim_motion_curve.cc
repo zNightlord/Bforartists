@@ -1,5 +1,4 @@
 #include "MEM_guardedalloc.h"
-extern "C" {
 
 #include "DNA_action_types.h"
 #include "DNA_anim_types.h"
@@ -8,47 +7,46 @@ extern "C" {
 #include "DNA_space_types.h"
 #include "DNA_userdef_types.h"
 
-#include "RNA_access.h"
-#include "RNA_define.h"
-#include "RNA_types.h"
+#include "RNA_access.hh"
+#include "RNA_define.hh"
+#include "RNA_types.hh"
+#include "RNA_path.hh"
+
 
 #include "BLI_listbase.h"
-#include "BLI_math.h"
+#include "BLI_math_base.h"
 #include "BLI_math_color.h"
 #include "BLI_math_color_blend.h"
 
-#include "BKE_action.h"
-#include "BKE_callbacks.h"
-#include "BKE_context.h"
-#include "BKE_fcurve.h"
-#include "BKE_object.h"
-#include "BKE_scene.h"
+#include "BKE_action.hh"
+#include "BKE_callbacks.hh"
+#include "BKE_context.hh"
+#include "BKE_fcurve.hh"
+#include "BKE_object.hh"
+#include "BKE_scene.hh"
 
-#include "WM_api.h"
-#include "WM_message.h"
-#include "WM_toolsystem.h"
-#include "WM_types.h"
-#include "wm_event_types.h"
-#include "wm_window.h"
+#include "WM_api.hh"
+#include "WM_message.hh"
+#include "WM_toolsystem.hh"
+#include "WM_types.hh"
+#include "wm_event_types.hh"
+#include "wm_window.hh"
 
-#include "ED_anim_api.h"
-#include "ED_gizmo_utils.h"
-#include "ED_screen.h"
-#include "ED_view3d.h"
+#include "ED_anim_api.hh"
+#include "ED_gizmo_utils.hh"
+#include "ED_screen.hh"
+#include "ED_view3d.hh"
 
-#include "DEG_depsgraph.h"
-#include "DEG_depsgraph_build.h"
-#include "DEG_depsgraph_query.h"
+#include "DEG_depsgraph.hh"
+#include "DEG_depsgraph_build.hh"
+#include "DEG_depsgraph_query.hh"
 
-#include "GPU_immediate.h"
-#include "GPU_immediate_util.h"
-#include "GPU_select.h"
-#include "GPU_state.h"
+#include "GPU_immediate.hh"
+#include "GPU_immediate_util.hh"
+#include "GPU_select.hh"
+#include "GPU_state.hh"
 
-#include "armature_intern.h"
-
-#include "PIL_time.h"
-}
+#include "armature_intern.hh"
 
 #include <algorithm>
 #include <array>
@@ -439,16 +437,18 @@ void MotionCurve::draw(int final_select_id)
 
   if (pt.size() > 1) {
 
-    GPU_blend(true);
-    GPU_blend_set_func_separate(
-        GPU_SRC_ALPHA, GPU_ONE_MINUS_SRC_ALPHA, GPU_ONE, GPU_ONE_MINUS_SRC_ALPHA);
-    glDepthMask(GL_FALSE);
+    // GPU_blend(true);
+    // GPU_blend_set_func_separate(
+    //     GPU_SRC_ALPHA, GPU_ONE_MINUS_SRC_ALPHA, GPU_ONE, GPU_ONE_MINUS_SRC_ALPHA);
+    // glDepthMask(GL_FALSE);
+    GPU_blend(GPU_BLEND_ALPHA);
+    GPU_depth_test(GPU_DEPTH_NONE);
     GPU_line_smooth(true);
 
     GPUVertFormat *format = immVertexFormat();
-    uint pos = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
+    uint pos = GPU_vertformat_attr_add(format, "pos", blender::gpu::VertAttrType::SFLOAT_32_32_32_32);
     uint col = GPU_vertformat_attr_add(
-        format, "color", GPU_COMP_U8, 4, GPU_FETCH_INT_TO_FLOAT_UNIT);
+        format, "color", blender::gpu::VertAttrType::UNORM_8_8_8_8);
     immBindBuiltinProgram(GPU_SHADER_3D_POLYLINE_SMOOTH_COLOR);
 
     float viewport[4];
@@ -490,22 +490,26 @@ void MotionCurve::draw(int final_select_id)
     immEnd();
     immUnbindProgram();
 
-    GPU_blend(false);
-    glDepthMask(GL_TRUE);
+    // GPU_blend(false);
+    // glDepthMask(GL_TRUE);
+    // GPU_line_smooth(false);
+    // /* Reset default. */
+    // GPU_blend_set_func_separate(
+    //     GPU_SRC_ALPHA, GPU_ONE_MINUS_SRC_ALPHA, GPU_ONE, GPU_ONE_MINUS_SRC_ALPHA);
+    GPU_blend(GPU_BLEND_NONE);
+    GPU_depth_test(GPU_DEPTH_LESS_EQUAL);
     GPU_line_smooth(false);
     /* Reset default. */
-    GPU_blend_set_func_separate(
-        GPU_SRC_ALPHA, GPU_ONE_MINUS_SRC_ALPHA, GPU_ONE, GPU_ONE_MINUS_SRC_ALPHA);
   }
 
   // don use points for selection
   {
     GPU_program_point_size(true);
     GPUVertFormat *format = immVertexFormat();
-    uint pos_attr = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
-    uint size_attr = GPU_vertformat_attr_add(format, "size", GPU_COMP_F32, 1, GPU_FETCH_FLOAT);
+    uint pos_attr = GPU_vertformat_attr_add(format, "pos", blender::gpu::VertAttrType::SFLOAT_32_32_32_32);
+    uint size_attr = GPU_vertformat_attr_add(format, "size", blender::gpu::VertAttrType::SFLOAT_32);
     uint color_attr = GPU_vertformat_attr_add(
-        format, "color", GPU_COMP_U8, 4, GPU_FETCH_INT_TO_FLOAT_UNIT);
+        format, "color", blender::gpu::VertAttrType::UNORM_8_8_8_8);
 
     immBindBuiltinProgram(GPU_SHADER_3D_POINT_VARYING_SIZE_VARYING_COLOR);
     immBegin(GPU_PRIM_POINTS, pt.size());
@@ -720,14 +724,14 @@ void MCSolver::update_target_interactive(bContext *C, wmGizmo *gz, const wmEvent
 
   View3D *v3d = CTX_wm_view3d(C);
   ARegion *ar = CTX_wm_region(C);
-  float zfac = ED_view3d_calc_zfac((RegionView3D *)ar->regiondata, ref_pos, NULL);
+  float zfac = ED_view3d_calc_zfac((RegionView3D *)ar->regiondata, ref_pos);
   float delta[3] = {0, 0, 0};
 
   float mval_fl[2];
 
-  float mval_del[2] = {event->x - event->prevx, event->y - event->prevy};
+  float mval_del[2] = {event->xy[0] - event->prevxy[0], event->xy[1] - event->prev_xy[1]};
 
-  ED_view3d_win_to_delta(ar, mval_del, delta, zfac);
+  ED_view3d_win_to_delta(ar, mval_del, zfac, delta);
 
   add_v3_v3v3(targets[0].target, ref_pos, delta);
 }
@@ -949,13 +953,13 @@ void MCSolver::solve(bContext *C)
 
     for (int i_s = 0; i_s < segs.size(); i_s++) {
       FCurveSegment &seg = segs[i_s];
-      PointerRNA id_ptr, ptr;
+      PointerRNA ptr;
       PropertyRNA *prop;
 
       Object *seg_ob = get_object_by_name(C, seg.ob_name);
-      BLI_assert(seg_ob != NULL);
+      BLI_assert(seg_ob != nullptr);
 
-      RNA_id_pointer_create((ID *)seg_ob, &id_ptr);
+      PointerRNA id_ptr = RNA_id_pointer_create((ID *)seg_ob);
 
       if (RNA_path_resolve_property(&id_ptr, seg.fcu->rna_path, &ptr, &prop)) {
         Scene *scene = CTX_data_scene(C);
@@ -966,7 +970,7 @@ void MCSolver::solve(bContext *C)
 
     Object *ob = get_object_by_name(C, targets[0].pt.ob_name);
     DEG_id_tag_update((ID *)ob, ID_RECALC_ANIMATION);
-    if (ob->adt->action != NULL) {
+    if (ob->adt->action != nullptr) {
       DEG_id_tag_update(&ob->adt->action->id, ID_RECALC_ANIMATION);
     }
 
@@ -980,7 +984,7 @@ static void WIDGETGROUP_motion_curve_setup(const bContext *C, wmGizmoGroup *gzgr
     G.is_init = true;
   }
 
-  wmGizmo *gz = WM_gizmo_new("POSE_GT_motion_curve_item", gzgroup, NULL);
+  wmGizmo *gz = WM_gizmo_new("POSE_GT_motion_curve_item", gzgroup, nullptr);
 }
 
 static void WIDGETGROUP_motion_curve_refresh(const struct bContext *C,
@@ -998,23 +1002,34 @@ static void WIDGETGROUP_motion_curve_refresh(const struct bContext *C,
   std::set<Object *> arm_objs;
   {
 
-    ListBase selected_pose_bones;
-    if (CTX_data_selected_pose_bones(C, &selected_pose_bones) == 0) {
+    // ListBase selected_pose_bones;
+    // if (CTX_data_selected_pose_bones(C, &selected_pose_bones) == 0) {
+    //   return;
+    // }
+
+    // LISTBASE_FOREACH (CollectionPointerLink *, link, &selected_pose_bones) {
+    //   bPoseChannel *pchan = (bPoseChannel *)link->ptr.data;
+    //   Object *ob = (Object *)link->ptr.owner_id;
+    //   arm_objs.insert(ob);
+    // }
+    // BLI_freelistN(&selected_pose_bones);
+    blender::Vector<PointerRNA> lb = CTX_data_collection_get(C, "selected_pose_bones");
+
+    if (lb.is_empty()) {
       return;
     }
 
-    LISTBASE_FOREACH (CollectionPointerLink *, link, &selected_pose_bones) {
-      bPoseChannel *pchan = (bPoseChannel *)link->ptr.data;
-      Object *ob = (Object *)link->ptr.owner_id;
+    for (PointerRNA &ptr : lb) {
+      bPoseChannel *pchan = static_cast<bPoseChannel *>(ptr.data);
+      Object *ob = (Object *)ptr.owner_id;
       arm_objs.insert(ob);
     }
-    BLI_freelistN(&selected_pose_bones);
   }
 
   // Go through each obj and update its data at each frame
   G.fra.clear();
 
-  float cfra = CFRA;
+  int cfra = scene->r.cfra;
   // double time_start = PIL_check_seconds_timer();
   bToolRef *tref = WM_toolsystem_ref_from_const_context(C);
 
@@ -1033,18 +1048,18 @@ static void WIDGETGROUP_motion_curve_refresh(const struct bContext *C,
     {
       bAction *act = ob->adt->action;
 
-      if (act == NULL) {
+      if (act == nullptr) {
         continue;
       }
 
-      FCurve *fcu = NULL;
+      FCurve *fcu = nullptr;
       for (fcu = (FCurve *)act->curves.first; fcu; fcu = fcu->next) {
         if (fcu->totvert) {
           break;
         }
       }
 
-      if (fcu == NULL) {
+      if (fcu == nullptr) {
         continue;
       }
 
@@ -1107,14 +1122,22 @@ static void WIDGETGROUP_motion_curve_refresh(const struct bContext *C,
       ids[0] = &(ob->id);
 
       /* Build graph from all requested IDs. */
-      DEG_graph_build_from_ids(depsgraph, bmain, scene, view_layer, ids, 1);
+//       DEG_graph_build_from_ids(depsgraph, bmain, scene, view_layer, ids, 1);
+//       MEM_freeN(ids);
+
+//       int i_keyframes = start_keyframe_idx;
+//       for (CFRA = start; CFRA <= end; CFRA++) {
+//         bool is_keyframe = false;
+
+//         if (CFRA == keyframes[i_keyframes]) {
+      DEG_graph_build_from_ids(depsgraph, ids);
       MEM_freeN(ids);
 
       int i_keyframes = start_keyframe_idx;
-      for (CFRA = start; CFRA <= end; CFRA++) {
+      for (scene->r.cfra = start; scene->r.cfra <= end; scene->r.cfra++) {
         bool is_keyframe = false;
 
-        if (CFRA == keyframes[i_keyframes]) {
+        if (scene->r.cfra == keyframes[i_keyframes]) {
           is_keyframe = true;
           i_keyframes++;
         }
@@ -1146,7 +1169,7 @@ static void WIDGETGROUP_motion_curve_refresh(const struct bContext *C,
 
           FrameData fra_data;
           fra_data.is_keyframe = is_keyframe;
-          copy_m4_m4(fra_data.ob_mat, ob_eval->obmat);
+          copy_m4_m4(fra_data.ob_mat, ob_eval->object_to_world().ptr());
           copy_v3_v3(fra_data.pose_tail, pchan_eval->pose_tail);
           copy_v3_v3(fra_data.pose_head, pchan_eval->pose_head);
           copy_m3_m3(fra_data.gimbal, gim_mat);
@@ -1154,24 +1177,29 @@ static void WIDGETGROUP_motion_curve_refresh(const struct bContext *C,
           copy_v4_v4(fra_data.quat, pchan_eval->quat);
           copy_m4_m4(fra_data.pose_mat, pchan_eval->pose_mat);
 
-          G.fra[ob->id.name][pchan->name][CFRA] = fra_data;
+          G.fra[ob->id.name][pchan->name][scene->r.cfra] = fra_data;
         }
       }
 
       DEG_graph_free(depsgraph);
     }
   }
-  CFRA = cfra;
+  scene->r.cfra = cfra;
 
   // Update the visualization of the motin path
   G.curves.clear();
   {
-    ListBase selected_pose_bones;
-    CTX_data_selected_pose_bones(C, &selected_pose_bones);
+    // ListBase selected_pose_bones;
+    // CTX_data_selected_pose_bones(C, &selected_pose_bones);
 
-    LISTBASE_FOREACH (CollectionPointerLink *, link, &selected_pose_bones) {
-      Object *ob = (Object *)link->ptr.owner_id;
-      bPoseChannel *pchan = (bPoseChannel *)link->ptr.data;
+    // LISTBASE_FOREACH (CollectionPointerLink *, link, &selected_pose_bones) {
+    //   Object *ob = (Object *)link->ptr.owner_id;
+    //   bPoseChannel *pchan = (bPoseChannel *)link->ptr.data;
+    blender::Vector<PointerRNA> lb = CTX_data_collection_get(C, "selected_pose_bones");
+
+   for (PointerRNA &ptr : lb) {
+      Object *ob = (Object *)ptr.owner_id;
+      bPoseChannel *pchan = static_cast<bPoseChannel *>(ptr.data);
 
       std::map<float, FrameData> &h_fra = G.fra[ob->id.name][pchan->name];
 
@@ -1184,8 +1212,7 @@ static void WIDGETGROUP_motion_curve_refresh(const struct bContext *C,
         num_curves = 2;
       }
 
-      PointerRNA ptr;
-      RNA_pointer_create((ID *)ob, &RNA_PoseBone, pchan, &ptr);
+      PointerRNA ptr = RNA_pointer_create((ID *)ob, &RNA_PoseBone, pchan);
 
       bool is_show_head = RNA_boolean_get(&ptr, "show_head_curve");
       bool is_show_tail = RNA_boolean_get(&ptr, "show_tail_curve");
@@ -1252,13 +1279,12 @@ static void WIDGETGROUP_motion_curve_refresh(const struct bContext *C,
       }
     }
 
-    BLI_freelistN(&selected_pose_bones);
   }
 
   G.is_updated = true;
 }
 
-static void motion_curve_property_update()
+static void motion_curve_property_update(Main * /*main*/, Scene * /*scene*/, PointerRNA *ptr)
 {
   G.is_updated = false;
 }
@@ -1280,7 +1306,7 @@ static void WIDGETGROUP_motion_curve_message_subscribe(const bContext *C,
     PointerRNA gzg_ptr;
     WM_toolsystem_ref_properties_ensure_from_gizmo_group(tref, gzgroup->type, &gzg_ptr);
 
-    WM_msg_subscribe_rna(mbus, &gzg_ptr, NULL, &msg_sub_value_gz_tag_refresh, __func__);
+    WM_msg_subscribe_rna(mbus, &gzg_ptr, nullptr, &msg_sub_value_gz_tag_refresh, __func__);
   }
 
   {
@@ -1297,7 +1323,7 @@ static void WIDGETGROUP_motion_curve_message_subscribe(const bContext *C,
     wmMsgParams_RNA param = {0};
 
     param.ptr = ptr;
-    param.prop = NULL;
+    param.prop = nullptr;
 
     WM_msg_subscribe_rna_params(mbus, &param, &msg_sub_value_gz_tag_refresh, __func__);
   }
@@ -1331,7 +1357,7 @@ void POSE_GGT_motion_curve(wmGizmoGroupType *gzgt)
   RNA_def_property_int_default(prop, 1);
   RNA_def_property_ui_text(
       prop, "Motion Curve Range", "range of keyframes in both direction to gather anim data");
-  RNA_def_property_update_runtime(prop, motion_curve_property_update);
+  RNA_def_property_update_runtime(prop, "motion_curve_property_update");
   RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
 }
 
@@ -1342,13 +1368,13 @@ static void gizmo_motion_curve_setup(struct wmGizmo *gz)
 
 static int gizmo_motion_curve_invoke(bContext *C, wmGizmo *gz, const wmEvent *event)
 {
-  WM_operator_name_call(C, "POSE_OT_motion_curve_dummy_for_undo", WM_OP_EXEC_DEFAULT, NULL);
+  WM_operator_name_call(C, "POSE_OT_motion_curve_dummy_for_undo", WM_OP_EXEC_DEFAULT, nullptr, event);
   std::cout << "invoke" << std::endl;
   Scene *scene = CTX_data_scene(C);
   ARegion *ar = CTX_wm_region(C);
   MotionCurve &curve = G.curves[gz->highlight_part];
 
-  FramePoint pt = curve.get_selected_pt(CFRA);
+  FramePoint pt = curve.get_selected_pt(scene->r.cfra);
   G.select_pt = pt;
 
   bool is_check_for_outdated_pin = true;
@@ -1365,7 +1391,7 @@ static int gizmo_motion_curve_invoke(bContext *C, wmGizmo *gz, const wmEvent *ev
       Object *ob = get_object_by_name(C, ob_name);
 
       bool is_pchan_exist = false;
-      if (ob != NULL) {
+      if (ob != nullptr) {
         LISTBASE_FOREACH (bPoseChannel *, ob_pchan, &ob->pose->chanbase) {
           if (std::string(ob_pchan->name) == pchan_name) {
             is_pchan_exist = true;
@@ -1374,7 +1400,7 @@ static int gizmo_motion_curve_invoke(bContext *C, wmGizmo *gz, const wmEvent *ev
         }
       }
 
-      if (ob != NULL && is_pchan_exist) {
+      if (ob != nullptr && is_pchan_exist) {
         std::cout << pin << std::endl;
         pins.insert(pin);
       }
@@ -1386,8 +1412,8 @@ static int gizmo_motion_curve_invoke(bContext *C, wmGizmo *gz, const wmEvent *ev
   Object *ob = get_object_by_name(C, curve.ob_name);
   bAction *act = ob->adt->action;
 
-  if (act != NULL) {
-    if (event->shift && event->type == LEFTMOUSE) {
+  if (act != nullptr) {
+    if (ELEM(event->type, EVT_LEFTSHIFTKEY, EVT_RIGHTSHIFTKEY) && event->type == LEFTMOUSE && event->val == KM_PRESS) {
 
       MCSolver solver;
       solver.mode = 1;
@@ -1435,7 +1461,7 @@ static int gizmo_motion_curve_invoke(bContext *C, wmGizmo *gz, const wmEvent *ev
         return OPERATOR_RUNNING_MODAL;
       }
     }
-    else if (event->ctrl && event->type == LEFTMOUSE) {
+    else if (ELEM(event->type, EVT_LEFTCTRLKEY, EVT_RIGHTCTRLKEY) && event->type == LEFTMOUSE) { //  && event->val == KM_PRESS
       auto iter = std::find(G.pin.begin(), G.pin.end(), pt);
       if (iter == G.pin.end()) {
         pt.get_latest_pos(pt.cached_pos);
@@ -1446,25 +1472,25 @@ static int gizmo_motion_curve_invoke(bContext *C, wmGizmo *gz, const wmEvent *ev
       }
       return OPERATOR_RUNNING_MODAL;
     }
-    else if (event->alt && event->type == LEFTMOUSE) {
+    else if (ELEM(event->type, EVT_LEFTALTKEY, EVT_RIGHTALTKEY) && event->type == LEFTMOUSE) {
       float target_fra = pt.frame;
       /* set the new frame number */
       if (scene->r.flag & SCER_SHOW_SUBFRAME) {
-        CFRA = (int)target_fra;
+        scene->r.cfra = (int)target_fra;
         SUBFRA = target_fra - (int)target_fra;
       }
       else {
-        CFRA = round_fl_to_int(target_fra);
+        scene->r.cfra = round_fl_to_int(target_fra);
         SUBFRA = 0.0f;
       }
-      FRAMENUMBER_MIN_CLAMP(CFRA);
+      FRAMENUMBER_MIN_CLAMP(scene->r.cfra);
 
       /* do updates */
-      DEG_id_tag_update(&scene->id, ID_RECALC_AUDIO_SEEK);
+      DEG_id_tag_update(&scene->id, ID_RECALC_AUDIO);
       WM_event_add_notifier(C, NC_SCENE | ND_FRAME, scene);
     }
     else {
-      if (pt.frame == CFRA) {
+      if (pt.frame == scene->r.cfra) {
         MCSolver solver;
         solver.mode = 2;
 
@@ -1500,7 +1526,7 @@ static int gizmo_motion_curve_modal(bContext *C,
                                     eWM_GizmoFlagTweak tweak_flag)
 {
   MotionCurve &curve = G.curves[gz->highlight_part];
-  if (event->ctrl) {
+  if (ELEM(event->type, EVT_LEFTCTRLKEY, EVT_RIGHTCTRLKEY)) {
     auto iter = std::find(G.pin.begin(), G.pin.end(), G.select_pt);
     if (iter != G.pin.end()) {
       std::vector<FramePoint> curve_pins = curve.pt;
@@ -1585,11 +1611,11 @@ static void gizmo_motion_curve_draw(const bContext *C, wmGizmo *gz)
           else {
             Scene *scene = CTX_data_scene(C);
             for (int ip = 0; ip < G.curves[i].pt.size(); ip++) {
-              if (G.curves[i].pt[ip].frame == CFRA) {
+              if (G.curves[i].pt[ip].frame == cfra) {
                 i_highlight_pt = ip;
                 break;
               }
-              if (G.curves[i].pt[ip].frame > CFRA) {
+              if (G.curves[i].pt[ip].frame > scene->r.cfra) {
                 BLI_assert(ip - 1 >= 0);
                 i_highlight_pt = ip - 1;
                 break;
@@ -1644,10 +1670,10 @@ static void frame_count(struct Main * /*main*/,
 }
 
 static bCallbackFuncStore frame_counter = {
-    NULL,
-    NULL,        /* next, prev */
+    nullptr,
+    nullptr,        /* next, prev */
     frame_count, /* func */
-    NULL,        /* arg */
+    nullptr,        /* arg */
     0            /* alloc */
 };
 
@@ -1753,7 +1779,7 @@ void DEG_update(Depsgraph *depsgraph, Main *bmain)
     /* Update animated image textures for particles, modifiers, gpu, etc,
      * call this at the start so modifiers with textures don't lag 1 frame.
      */
-    DEG_graph_relations_update(depsgraph, bmain, scene, view_layer);
+    DEG_graph_relations_update(depsgraph);
 #ifdef POSE_ANIMATION_WORKAROUND
     scene_armature_depsgraph_workaround(bmain, depsgraph);
 #endif
@@ -1765,10 +1791,10 @@ void DEG_update(Depsgraph *depsgraph, Main *bmain)
      * would loose any possible unkeyed changes made by the handler. */
     if (pass == 0) {
       const float ctime = BKE_scene_frame_get(scene);
-      DEG_evaluate_on_framechange(bmain, depsgraph, ctime);
+      DEG_evaluate_on_framechange(depsgraph, ctime, DEG_EVALUATE_SYNC_WRITEBACK_YES);
     }
     else {
-      DEG_evaluate_on_refresh(bmain, depsgraph);
+      DEG_evaluate_on_refresh(depsgraph);
     }
 
     /* Notify editors and python about recalc. */
@@ -1779,7 +1805,7 @@ void DEG_update(Depsgraph *depsgraph, Main *bmain)
     /* Inform editors about possible changes. */
     // DEG_ids_check_recalc(bmain, depsgraph, scene, view_layer, true);
     /* clear recalc flags */
-    DEG_ids_clear_recalc(bmain, depsgraph);
+    DEG_ids_clear_recalc(depsgraph, false);
 
     /* If user callback did not tag anything for update we can skip second iteration.
      * Otherwise we update scene once again, but without running callbacks to bring
@@ -1792,15 +1818,16 @@ void DEG_update(Depsgraph *depsgraph, Main *bmain)
 
 struct bToolRef *WM_toolsystem_ref_from_const_context(const struct bContext *C)
 {
+  Scene *scene = CTX_data_scene(C);
   WorkSpace *workspace = CTX_wm_workspace(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   ScrArea *sa = CTX_wm_area(C);
   if (((1 << sa->spacetype) & WM_TOOLSYSTEM_SPACE_MASK) == 0) {
-    return NULL;
+    return nullptr;
   }
   const bToolKey tkey = {
       sa->spacetype,
-      WM_toolsystem_mode_from_spacetype(view_layer, sa, sa->spacetype),
+      WM_toolsystem_mode_from_spacetype(scene, view_layer, sa, sa->spacetype),
   };
   bToolRef *tref = WM_toolsystem_ref_find(workspace, &tkey);
   /* We could return 'sa->runtime.tool' in this case. */
@@ -1942,11 +1969,10 @@ void get_fcurve_segment_ex(
     std::vector<FCurveSegment> &segs, CurveType type, Object *ob, bPoseChannel *pchan, float frame)
 {
   bAction *act = ob->adt->action;
-  PointerRNA ptr;
-  RNA_pointer_create((ID *)ob, &RNA_PoseBone, pchan, &ptr);
+  PointerRNA ptr = RNA_pointer_create(ob->id, &RNA_PoseBone, pchan);
   char *basePath = RNA_path_from_ID_to_struct(&ptr);
 
-  ListBase curve = {NULL, NULL};
+  ListBase curve = {nullptr, nullptr};
   action_get_item_transforms(act, ob, pchan, &curve);
 
   bool use_limit_rot_x = RNA_boolean_get(&ptr, "use_limit_rot_x");
@@ -1959,7 +1985,7 @@ void get_fcurve_segment_ex(
 
   LISTBASE_FOREACH (LinkData *, link, &curve) {
     FCurve *fcu = (FCurve *)link->data;
-    const char *bPtr = NULL, *pPtr = NULL;
+    const char *bPtr = nullptr, *pPtr = nullptr;
     bPtr = strstr(fcu->rna_path, basePath);
     bPtr += strlen(basePath);
 
@@ -2056,7 +2082,7 @@ void get_sorted_fcurve_segment(bContext *C, std::vector<FCurveSegment> &segs, Fr
 
   bPoseChannel *chain_pchan = pchan->parent;
 
-  while (chain_pchan != NULL) {
+  while (chain_pchan != nullptr) {
 
     switch (chain_pchan->rotmode) {
       case ROT_MODE_XYZ:
@@ -2086,8 +2112,7 @@ void get_sorted_primary_segments(bContext *C, std::vector<FCurveSegment> &segs, 
   Object *ob = get_object_by_name(C, pt.ob_name);
 
   bPoseChannel *pchan = BKE_pose_channel_find_name(ob->pose, pt.pchan_name.c_str());
-  PointerRNA ptr = {0};
-  RNA_pointer_create((ID *)ob, &RNA_PoseBone, pchan, &ptr);
+  PointerRNA ptr = RNA_pointer_create((ID *)ob, &RNA_PoseBone, pchan);
   int depth_limit = RNA_int_get(&ptr, "ik_chain_length");
 
   float frame = pt.frame;
@@ -2101,7 +2126,7 @@ void get_sorted_primary_segments(bContext *C, std::vector<FCurveSegment> &segs, 
   else {
     bPoseChannel *chain_pchan = pchan;
     int chain_depth = 0;
-    while (chain_pchan != NULL) {
+    while (chain_pchan != nullptr) {
 
       switch (chain_pchan->rotmode) {
         case ROT_MODE_XYZ:
