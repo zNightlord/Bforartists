@@ -223,6 +223,7 @@ void POSE_OT_breakdown(wmOperatorType *ot);
 void POSE_OT_blend_to_neighbors(wmOperatorType *ot);
 
 void POSE_OT_propagate(wmOperatorType *ot);
+void POSE_OT_motion_curve(wmOperatorType *ot); // TODO - zNight
 
 /** \} */
 

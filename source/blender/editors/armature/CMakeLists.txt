@@ -8,6 +8,9 @@ set(INC
   ../../../../intern/eigen
   # RNA_prototypes.hh
   ${CMAKE_BINARY_DIR}/source/blender/makesrna
+  # ../../../../intern/glew-mx
+  # ../../../../intern/guardedalloc
+  # ../../../../extern/Eigen3/
 )
 
 set(INC_SYS
@@ -31,6 +34,7 @@ set(SRC
   pose_slide.cc
   pose_transform.cc
   pose_utils.cc
+  pose_anim_motion_curve.cc
 
   armature_intern.hh
   meshlaplacian.h

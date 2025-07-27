@@ -599,6 +599,39 @@ class BONE_PT_inverse_kinematics(BoneButtonsPanel, Panel):
             # row.prop(pchan, "ik_linear_weight", text="Weight", slider=True)
 
 
+class BONE_PT_motion_curve(BoneButtonsPanel, Panel):
+    bl_label = "Motion Curve"
+    bl_options = {'DEFAULT_CLOSED'}
+
+    @classmethod
+    def poll(cls, context):
+        ob = context.object
+        return ob and ob.mode == 'POSE' and context.bone
+
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+
+        ob = context.object
+        bone = context.bone
+        pchan = ob.pose.bones[bone.name]
+ 
+        col = layout.column(align=True)
+
+        col.prop(pchan, "show_head_curve", text="Display curve for head")
+        col.prop(pchan, "show_tail_curve", text="Display curve for tail")
+
+        col.separator()
+        col.prop(pchan, "use_limit_rot_x", text="limit Rot X")
+        col.prop(pchan, "use_limit_rot_y", text="Rot Y")
+        col.prop(pchan, "use_limit_rot_z", text="Rot Z")
+        col.prop(pchan, "use_limit_pos_x", text="limit Pos X")
+        col.prop(pchan, "use_limit_pos_y", text="Pos Y")
+        col.prop(pchan, "use_limit_pos_z", text="Pos Z")
+        col.separator()
+        col.prop(pchan, "ik_chain_length", text="Chain length limit") 
+
+
 class BONE_PT_deform(BoneButtonsPanel, Panel):
     bl_label = "Deform"
     bl_options = {'DEFAULT_CLOSED'}
@@ -693,6 +726,7 @@ classes = (
     BONE_PT_display,
     BONE_PT_display_custom_shape,
     BONE_PT_custom_props,
+    BONE_PT_motion_curve,
 )
 
 if __name__ == "__main__":  # only for live edit.

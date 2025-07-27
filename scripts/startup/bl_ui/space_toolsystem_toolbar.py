@@ -1456,6 +1456,25 @@ class _defs_pose:
             keymap=(),
         )
 
+    @ToolDef.from_fn
+    def motion_curve():
+        def draw_settings(_context, layout, tool):
+            props = tool.gizmo_group_properties("POSE_GGT_motion_curve")
+            layout.use_property_split = True
+            col = layout.column(align=True)
+            col.prop(props, "range", text="Range")
+            pass
+        return dict(
+            idname="builtin.motion_curve",
+            label="Motion Curve",
+            description=(
+                "Motion curve description from space_toolsystem_toolbar.py"
+            ),
+            icon="none",
+            widget="POSE_GGT_motion_curve",
+            draw_settings=draw_settings
+        )
+
 
 class _defs_particle:
 
