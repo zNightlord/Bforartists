@@ -35,6 +35,7 @@
 
 #include "SEQ_relations.hh"
 #include "SEQ_select.hh"
+#include "SEQ_sequencer.hh"
 
 #include "RNA_access.hh"
 #include "RNA_define.hh"
@@ -396,6 +397,7 @@ static wmOperatorStatus new_sequencer_scene_exec(bContext *C, wmOperator *op)
   int type = RNA_enum_get(op->ptr, "type");
 
   Scene *new_scene = scene_add(bmain, scene_old, eSceneCopyMethod(type));
+  blender::seq::editing_ensure(new_scene);
 
   WorkSpace *workspace = CTX_wm_workspace(C);
   workspace->sequencer_scene = new_scene;
