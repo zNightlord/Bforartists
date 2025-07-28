@@ -8,9 +8,11 @@ from bpy.app.translations import contexts as i18n_contexts
 
 
 def playback_controls(layout, context):
-    scene = context.scene
-    tool_settings = context.tool_settings
     st = context.space_data
+    is_sequencer = st.type == 'SEQUENCE_EDITOR' and st.view_type == 'SEQUENCER'
+
+    scene = context.scene if not is_sequencer else context.sequencer_scene
+    tool_settings = context.tool_settings
     screen = context.screen
 
     row = layout.row(align=True)
@@ -24,7 +26,7 @@ def playback_controls(layout, context):
         text_ctxt=i18n_contexts.id_windowmanager,
     )
 
-    if st.type == 'SEQUENCE_EDITOR' and st.view_type == 'SEQUENCER':
+    if is_sequencer:
         layout.prop(context.workspace, "use_scene_time_sync", text="Sync Scene Time")
 
     layout.separator_spacer()
