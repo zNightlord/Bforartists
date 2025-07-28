@@ -690,7 +690,12 @@ static void sequencer_main_cursor(wmWindow *win, ScrArea *area, ARegion *region)
   UI_view2d_region_to_view(
       &region->v2d, mouse_co_region[0], mouse_co_region[1], &mouse_co_view[0], &mouse_co_view[1]);
 
-  const Scene *scene = win->scene;
+  const WorkSpace *workspace = WM_window_get_active_workspace(win);
+  const Scene *scene = workspace->sequencer_scene;
+  if (!scene) {
+    WM_cursor_set(win, wmcursor);
+    return;
+  }
   const Editing *ed = seq::editing_get(scene);
 
   if (STREQ(tref->idname, "builtin.blade")) {
