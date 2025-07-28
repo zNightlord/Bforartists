@@ -326,7 +326,6 @@ void *sound_equalizermodifier_recreator(Strip *strip,
     return smd->runtime.last_sound_out;
   }
 
-  
   AUD_Sound *sound_out = AUD_Sound_equalize(sound_in,
                                             buf,
                                             SOUND_EQUALIZER_SIZE_DEFINITION,
@@ -340,7 +339,7 @@ void *sound_equalizermodifier_recreator(Strip *strip,
 
   return sound_out;
 #else
-  UNUSED_VARS(strip, smd, sound);
+  UNUSED_VARS(strip, smd, sound_in, needs_update);
   return nullptr;
 #endif
 }

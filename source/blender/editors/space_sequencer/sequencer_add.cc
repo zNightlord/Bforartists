@@ -16,6 +16,7 @@
 #include "BLI_listbase.h"
 #include "BLI_path_utils.hh"
 #include "BLI_string.h"
+#include "BLI_string_utf8.h"
 #include "BLI_utildefines.h"
 
 #include "BLT_translation.hh"
@@ -52,6 +53,7 @@
 /* For menu, popup, icons, etc. */
 #include "ED_screen.hh"
 #include "ED_sequencer.hh"
+#include "ED_time_scrub_ui.hh"
 
 #include "UI_interface.hh"
 #include "UI_interface_layout.hh"
@@ -365,6 +367,7 @@ static void move_strips(bContext *C)
   WM_operator_properties_create_ptr(&ptr, ot);
   RNA_boolean_set(&ptr, "remove_on_cancel", true);
   RNA_boolean_set(&ptr, "view2d_edge_pan", true);
+  RNA_boolean_set(&ptr, "release_confirm", false);
   WM_operator_name_call_ptr(C, ot, wm::OpCallContext::InvokeDefault, &ptr, nullptr);
   WM_operator_properties_free(&ptr);
 }
@@ -491,13 +494,27 @@ static bool load_data_init_from_operator(seq::LoadData *load_data, bContext *C, 
       RNA_property_boolean_get(op->ptr, prop))
   {
     const wmWindow *win = CTX_wm_window(C);
-    const float2 mouse_region(win->eventstate->xy[0] - region->winrct.xmin,
-                              win->eventstate->xy[1] - region->winrct.ymin);
+    int2 mouse_region(win->eventstate->xy[0] - region->winrct.xmin,
+                      win->eventstate->xy[1] - region->winrct.ymin);
+
+    /* Clamp mouse cursor location (strip starting position) to the sequencer region bounds so that
+     * it is immediately visible even if the mouse cursor is out of bounds. For maximums, use 90%
+     * of the bounds instead of 1 frame away, which works well even if zoomed out. */
+    const rcti mask = ED_time_scrub_clamp_scroller_mask(region->v2d.mask);
+    rcti clamp_bounds;
+    BLI_rcti_init(&clamp_bounds,
+                  mask.xmin,
+                  mask.xmin + 0.9 * BLI_rcti_size_x(&mask),
+                  mask.ymin,
+                  mask.ymin + 0.9 * BLI_rcti_size_y(&mask));
+    BLI_rcti_clamp_pt_v(&clamp_bounds, mouse_region);
+
     float2 mouse_view;
     UI_view2d_region_to_view(
         &region->v2d, mouse_region.x, mouse_region.y, &mouse_view.x, &mouse_view.y);
-    load_data->start_frame = mouse_view.x;
-    load_data->channel = mouse_view.y;
+
+    load_data->start_frame = std::trunc(mouse_view.x);
+    load_data->channel = std::trunc(mouse_view.y);
     load_data->image.end_frame = load_data->start_frame + DEFAULT_IMG_STRIP_LENGTH;
     load_data->effect.end_frame = load_data->image.end_frame;
   }
@@ -1208,7 +1225,7 @@ static wmOperatorStatus sequencer_add_movie_strip_exec(bContext *C, wmOperator *
                                                        RNA_struct_find_property(op->ptr, "files"));
 
   char vt_old[64];
-  STRNCPY(vt_old, scene->view_settings.view_transform);
+  STRNCPY_UTF8(vt_old, scene->view_settings.view_transform);
   float fps_old = scene->r.frs_sec / scene->r.frs_sec_base;
 
   if (tot_files > 1) {
@@ -1655,7 +1672,7 @@ static wmOperatorStatus sequencer_add_image_strip_exec(bContext *C, wmOperator *
   }
 
   char vt_old[64];
-  STRNCPY(vt_old, scene->view_settings.view_transform);
+  STRNCPY_UTF8(vt_old, scene->view_settings.view_transform);
 
   Strip *strip = seq::add_image_strip(CTX_data_main(C), scene, ed->seqbasep, &load_data);
 
