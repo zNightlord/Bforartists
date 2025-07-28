@@ -340,7 +340,7 @@ bool is_scene_time_sync_needed(const bContext &C)
   return true;
 }
 
-static Scene *get_sequence_scene_from_context(const bContext &C)
+static Scene *get_sequencer_scene_for_time_sync(const bContext &C)
 {
   wmWindowManager *wm = CTX_wm_manager(&C);
   bScreen *screen = ED_screen_animation_playing(wm);
@@ -362,7 +362,7 @@ static Scene *get_sequence_scene_from_context(const bContext &C)
 void sync_active_scene_and_time_with_scene_strip(bContext &C)
 {
   using namespace blender;
-  Scene *sequence_scene = get_sequence_scene_from_context(C);
+  Scene *sequence_scene = get_sequencer_scene_for_time_sync(C);
   if (!sequence_scene) {
     return;
   }
