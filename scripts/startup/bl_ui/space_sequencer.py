@@ -809,7 +809,7 @@ class SEQUENCER_MT_add_scene(Menu):
             layout.operator("sequencer.scene_strip_add", text="Scene...", icon='SCENE_DATA')
         elif bpy_data_scenes_len > 1:
             layout.separator()
-            scene = context.scene
+            scene = context.sequencer_scene
             for sc_item in bpy.data.scenes:
                 if sc_item == scene:
                     continue
