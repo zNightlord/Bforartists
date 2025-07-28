@@ -161,7 +161,11 @@ bool has_playback_animation(const Scene *scene)
 
 bool sequencer_edit_poll(bContext *C)
 {
-  return (seq::editing_get(CTX_data_sequencer_scene(C)) != nullptr);
+  Scene *scene = CTX_data_sequencer_scene(C);
+  if (!scene) {
+    return false;
+  }
+  return (seq::editing_get(scene) != nullptr);
 }
 
 bool sequencer_edit_with_channel_region_poll(bContext *C)
@@ -192,7 +196,7 @@ bool sequencer_strip_poll(bContext *C)
 bool sequencer_strip_editable_poll(bContext *C)
 {
   Scene *scene = CTX_data_sequencer_scene(C);
-  if (!ID_IS_EDITABLE(&scene->id)) {
+  if (!scene || !ID_IS_EDITABLE(&scene->id)) {
     return false;
   }
   Editing *ed = seq::editing_get(scene);
@@ -201,19 +205,28 @@ bool sequencer_strip_editable_poll(bContext *C)
 
 bool sequencer_strip_has_path_poll(bContext *C)
 {
-  Editing *ed;
-  Strip *strip;
-  return (((ed = seq::editing_get(CTX_data_sequencer_scene(C))) != nullptr) &&
-          ((strip = ed->act_strip) != nullptr) && STRIP_HAS_PATH(strip));
+  Scene *scene = CTX_data_sequencer_scene(C);
+  if (!scene) {
+    return false;
+  }
+  Editing *ed = seq::editing_get(scene);
+  if (!ed) {
+    return false;
+  }
+  Strip *strip = ed->act_strip;
+  if (!strip) {
+    return false;
+  }
+  return STRIP_HAS_PATH(strip);
 }
 
 bool sequencer_view_has_preview_poll(bContext *C)
 {
-  SpaceSeq *sseq = CTX_wm_space_seq(C);
-  if (sseq == nullptr) {
+  if (!sequencer_edit_poll(C)) {
     return false;
   }
-  if (seq::editing_get(CTX_data_sequencer_scene(C)) == nullptr) {
+  SpaceSeq *sseq = CTX_wm_space_seq(C);
+  if (sseq == nullptr) {
     return false;
   }
   if (!(ELEM(sseq->view, SEQ_VIEW_PREVIEW, SEQ_VIEW_SEQUENCE_PREVIEW) &&
@@ -231,11 +244,16 @@ bool sequencer_view_has_preview_poll(bContext *C)
 
 bool sequencer_view_preview_only_poll(const bContext *C)
 {
-  SpaceSeq *sseq = CTX_wm_space_seq(C);
-  if (sseq == nullptr) {
+  Scene *scene = CTX_data_sequencer_scene(C);
+  if (!scene) {
     return false;
   }
-  if (seq::editing_get(CTX_data_sequencer_scene(C)) == nullptr) {
+  Editing *ed = seq::editing_get(scene);
+  if (!ed) {
+    return false;
+  }
+  SpaceSeq *sseq = CTX_wm_space_seq(C);
+  if (sseq == nullptr) {
     return false;
   }
   if (!(ELEM(sseq->view, SEQ_VIEW_PREVIEW) && (sseq->mainb == SEQ_DRAW_IMG_IMBUF))) {
@@ -267,6 +285,9 @@ bool sequencer_view_strips_poll(bContext *C)
 
 static bool sequencer_effect_poll(bContext *C)
 {
+  if (!sequencer_edit_poll(C)) {
+    return false;
+  }
   Scene *scene = CTX_data_sequencer_scene(C);
   Editing *ed = seq::editing_get(scene);
 
@@ -282,6 +303,9 @@ static bool sequencer_effect_poll(bContext *C)
 
 static bool sequencer_swap_inputs_poll(bContext *C)
 {
+  if (!sequencer_edit_poll(C)) {
+    return false;
+  }
   Scene *scene = CTX_data_sequencer_scene(C);
   Strip *active_strip = seq::select_active_get(scene);
 
@@ -3310,10 +3334,19 @@ static wmOperatorStatus sequencer_export_subtitles_exec(bContext *C, wmOperator 
 
 static bool sequencer_strip_is_text_poll(bContext *C)
 {
-  Editing *ed;
-  Strip *strip;
-  return (((ed = seq::editing_get(CTX_data_sequencer_scene(C))) != nullptr) &&
-          ((strip = ed->act_strip) != nullptr) && (strip->type == STRIP_TYPE_TEXT));
+  Scene *scene = CTX_data_sequencer_scene(C);
+  if (!scene) {
+    return false;
+  }
+  Editing *ed = seq::editing_get(scene);
+  if (!ed) {
+    return false;
+  }
+  Strip *strip = ed->act_strip;
+  if (!strip) {
+    return false;
+  }
+  return strip->type == STRIP_TYPE_TEXT;
 }
 
 void SEQUENCER_OT_export_subtitles(wmOperatorType *ot)

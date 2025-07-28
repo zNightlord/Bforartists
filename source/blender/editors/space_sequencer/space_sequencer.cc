@@ -476,6 +476,9 @@ static void sequencer_main_clamp_view(const bContext *C, ARegion *region)
 
   View2D *v2d = &region->v2d;
   Scene *scene = CTX_data_sequencer_scene(C);
+  if (!scene) {
+    return;
+  }
 
   /* Transformation uses edge panning to move view. Also if smooth view is running, don't apply
    * clamping to prevent overriding this functionality. */

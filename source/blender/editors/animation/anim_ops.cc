@@ -528,6 +528,9 @@ static void change_frame_apply(bContext *C, wmOperator *op, const bool always_up
 {
   const bool is_sequencer = CTX_wm_space_seq(C) != nullptr;
   Scene *scene = is_sequencer ? CTX_data_sequencer_scene(C) : CTX_data_scene(C);
+  if (!scene) {
+    return;
+  }
   float frame = RNA_float_get(op->ptr, "frame");
   bool do_snap = RNA_boolean_get(op->ptr, "snap");
 
@@ -981,6 +984,9 @@ static wmOperatorStatus previewrange_define_exec(bContext *C, wmOperator *op)
 {
   const bool is_sequencer = CTX_wm_space_seq(C) != nullptr;
   Scene *scene = is_sequencer ? CTX_data_sequencer_scene(C) : CTX_data_scene(C);
+  if (!scene) {
+    return OPERATOR_CANCELLED;
+  }
   ARegion *region = CTX_wm_region(C);
   float sfra, efra;
   rcti rect;
@@ -1140,9 +1146,12 @@ static void ANIM_OT_debug_channel_list(wmOperatorType *ot)
 
 static wmOperatorStatus scene_range_frame_exec(bContext *C, wmOperator * /*op*/)
 {
-  ARegion *region = CTX_wm_region(C);
   const bool is_sequencer = CTX_wm_space_seq(C) != nullptr;
   const Scene *scene = is_sequencer ? CTX_data_sequencer_scene(C) : CTX_data_scene(C);
+  if (!scene) {
+    return OPERATOR_CANCELLED;
+  }
+  ARegion *region = CTX_wm_region(C);
   BLI_assert(region);
 
   View2D &v2d = region->v2d;

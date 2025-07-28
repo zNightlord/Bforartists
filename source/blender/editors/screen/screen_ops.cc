@@ -183,9 +183,27 @@ bool ED_operator_scene(bContext *C)
   return false;
 }
 
+bool ED_operator_sequencer_scene(bContext *C)
+{
+  Scene *scene = CTX_data_sequencer_scene(C);
+  if (scene == nullptr || !BKE_id_is_editable(CTX_data_main(C), &scene->id)) {
+    return false;
+  }
+  return true;
+}
+
 bool ED_operator_scene_editable(bContext *C)
 {
   Scene *scene = CTX_data_scene(C);
+  if (scene == nullptr || !BKE_id_is_editable(CTX_data_main(C), &scene->id)) {
+    return false;
+  }
+  return true;
+}
+
+bool ED_operator_sequencer_scene_editable(bContext *C)
+{
+  Scene *scene = CTX_data_sequencer_scene(C);
   if (scene == nullptr || !BKE_id_is_editable(CTX_data_main(C), &scene->id)) {
     return false;
   }
@@ -380,12 +398,12 @@ bool ED_operator_graphedit_active(bContext *C)
 
 bool ED_operator_sequencer_active(bContext *C)
 {
-  return ed_spacetype_test(C, SPACE_SEQ);
+  return ed_spacetype_test(C, SPACE_SEQ) && CTX_data_sequencer_scene(C) != nullptr;
 }
 
 bool ED_operator_sequencer_active_editable(bContext *C)
 {
-  return ed_spacetype_test(C, SPACE_SEQ) && ED_operator_scene_editable(C);
+  return ed_spacetype_test(C, SPACE_SEQ) && ED_operator_sequencer_scene_editable(C);
 }
 
 bool ED_operator_image_active(bContext *C)
@@ -3290,6 +3308,9 @@ static wmOperatorStatus frame_jump_exec(bContext *C, wmOperator *op)
 {
   const bool is_sequencer = CTX_wm_space_seq(C) != nullptr;
   Scene *scene = is_sequencer ? CTX_data_sequencer_scene(C) : CTX_data_scene(C);
+  if (!scene) {
+    return OPERATOR_CANCELLED;
+  }
   wmTimer *animtimer = CTX_wm_screen(C)->animtimer;
 
   /* Don't change scene->r.cfra directly if animtimer is running as this can cause
@@ -3534,6 +3555,9 @@ static wmOperatorStatus marker_jump_exec(bContext *C, wmOperator *op)
 {
   const bool is_sequencer = CTX_wm_space_seq(C) != nullptr;
   Scene *scene = is_sequencer ? CTX_data_sequencer_scene(C) : CTX_data_scene(C);
+  if (!scene) {
+    return OPERATOR_CANCELLED;
+  }
   int closest = scene->r.cfra;
   const bool next = RNA_boolean_get(op->ptr, "next");
   bool found = false;
@@ -5855,6 +5879,9 @@ wmOperatorStatus ED_screen_animation_play(bContext *C, int sync, int mode)
   bScreen *screen = CTX_wm_screen(C);
   const bool is_sequencer = CTX_wm_space_seq(C) != nullptr;
   Scene *scene = is_sequencer ? CTX_data_sequencer_scene(C) : CTX_data_scene(C);
+  if (!scene) {
+    return OPERATOR_CANCELLED;
+  }
   ViewLayer *view_layer = is_sequencer ? BKE_view_layer_default_render(scene) :
                                          CTX_data_view_layer(C);
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);

@@ -779,9 +779,11 @@ static const EnumPropertyItem *strip_new_sequencer_enum_itemf(bContext *C,
   }
   else {
     Scene *scene = CTX_data_sequencer_scene(C);
-    Strip *strip = seq::select_active_get(scene);
-    if (strip && (strip->type == STRIP_TYPE_SCENE) && (strip->scene != nullptr)) {
-      has_scene_or_no_context = true;
+    if (scene) {
+      Strip *strip = seq::select_active_get(scene);
+      if (strip && (strip->type == STRIP_TYPE_SCENE) && (strip->scene != nullptr)) {
+        has_scene_or_no_context = true;
+      }
     }
   }
 
