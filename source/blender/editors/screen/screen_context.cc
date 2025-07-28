@@ -117,6 +117,7 @@ const char *screen_context_dir[] = {
     "strips",
     "selected_strips",
     "selected_editable_strips",
+    "sequencer_scene",
     nullptr,
 };
 
@@ -1214,6 +1215,15 @@ static eContextResult screen_ctx_selected_editable_strips(const bContext *C,
   CTX_data_type_set(result, CTX_DATA_TYPE_COLLECTION);
   return CTX_RESULT_OK;
 }
+static eContextResult screen_ctx_sequencer_scene(const bContext *C, bContextDataResult *result)
+{
+  Scene *scene = CTX_data_sequencer_scene(C);
+  if (scene) {
+    CTX_data_id_pointer_set(result, &scene->id);
+    return CTX_RESULT_OK;
+  }
+  return CTX_RESULT_NO_DATA;
+}
 
 /* Registry of context callback functions. */
 
@@ -1281,6 +1291,7 @@ ensure_ed_screen_context_functions()
     map.add("strips", screen_ctx_strips);
     map.add("selected_strips", screen_ctx_selected_strips);
     map.add("selected_editable_strips", screen_ctx_selected_editable_strips);
+    map.add("sequencer_scene", screen_ctx_sequencer_scene);
     return map;
   }();
   return screen_context_functions;
