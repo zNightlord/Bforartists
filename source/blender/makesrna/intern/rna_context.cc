@@ -198,7 +198,7 @@ static PointerRNA rna_Context_tool_settings_get(PointerRNA *ptr)
     if (scene) {
       ToolSettings *toolsettings = scene->toolsettings;
       return RNA_pointer_create_id_subdata(
-      *reinterpret_cast<ID *>(scene), &RNA_ToolSettings, toolsettings);
+          *reinterpret_cast<ID *>(scene), &RNA_ToolSettings, toolsettings);
     }
     return PointerRNA_NULL;
   }

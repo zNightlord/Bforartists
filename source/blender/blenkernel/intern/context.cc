@@ -1378,7 +1378,7 @@ ToolSettings *CTX_data_tool_settings(const bContext *C)
   if (ctx_data_pointer_verify(C, "tool_settings", (void **)&toolsettings)) {
     return toolsettings;
   }
-  
+
   Scene *scene = CTX_data_scene(C);
   if (scene) {
     return scene->toolsettings;
