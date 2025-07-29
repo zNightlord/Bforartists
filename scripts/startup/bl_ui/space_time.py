@@ -31,14 +31,15 @@ def playback_controls(layout, context):
 
     layout.separator_spacer()
 
-    row = layout.row(align=True)
-    row.prop(tool_settings, "use_keyframe_insert_auto", text="", toggle=True)
-    sub = row.row(align=True)
-    sub.active = tool_settings.use_keyframe_insert_auto
-    sub.popover(
-        panel="TIME_PT_auto_keyframing",
-        text="",
-    )
+    if tool_settings:
+        row = layout.row(align=True)
+        row.prop(tool_settings, "use_keyframe_insert_auto", text="", toggle=True)
+        sub = row.row(align=True)
+        sub.active = tool_settings.use_keyframe_insert_auto
+        sub.popover(
+            panel="TIME_PT_auto_keyframing",
+            text="",
+        )
 
     row = layout.row(align=True)
     row.operator("screen.frame_jump", text="", icon='REW').end = False
@@ -48,7 +49,7 @@ def playback_controls(layout, context):
         # if using JACK and A/V sync:
         #   hide the play-reversed button
         #   since JACK transport doesn't support reversed playback
-        if scene.sync_mode == 'AUDIO_SYNC' and context.preferences.system.audio_device == 'JACK':
+        if scene and scene.sync_mode == 'AUDIO_SYNC' and context.preferences.system.audio_device == 'JACK':
             row.scale_x = 2
             row.operator("screen.animation_play", text="", icon='PLAY')
             row.scale_x = 1
@@ -65,24 +66,25 @@ def playback_controls(layout, context):
 
     layout.separator_spacer()
 
-    row = layout.row()
-    if scene.show_subframe:
-        row.scale_x = 1.15
-        row.prop(scene, "frame_float", text="")
-    else:
-        row.scale_x = 0.95
-        row.prop(scene, "frame_current", text="")
+    if scene:
+        row = layout.row()
+        if scene.show_subframe:
+            row.scale_x = 1.15
+            row.prop(scene, "frame_float", text="")
+        else:
+            row.scale_x = 0.95
+            row.prop(scene, "frame_current", text="")
 
-    row = layout.row(align=True)
-    row.prop(scene, "use_preview_range", text="", toggle=True)
-    sub = row.row(align=True)
-    sub.scale_x = 0.8
-    if not scene.use_preview_range:
-        sub.prop(scene, "frame_start", text="Start")
-        sub.prop(scene, "frame_end", text="End")
-    else:
-        sub.prop(scene, "frame_preview_start", text="Start")
-        sub.prop(scene, "frame_preview_end", text="End")
+        row = layout.row(align=True)
+        row.prop(scene, "use_preview_range", text="", toggle=True)
+        sub = row.row(align=True)
+        sub.scale_x = 0.8
+        if not scene.use_preview_range:
+            sub.prop(scene, "frame_start", text="Start")
+            sub.prop(scene, "frame_end", text="End")
+        else:
+            sub.prop(scene, "frame_preview_start", text="Start")
+            sub.prop(scene, "frame_preview_end", text="End")
 
 
 class TIME_MT_editor_menus(Menu):
