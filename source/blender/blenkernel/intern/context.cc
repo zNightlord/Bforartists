@@ -1374,8 +1374,12 @@ void CTX_data_scene_set(bContext *C, Scene *scene)
 
 ToolSettings *CTX_data_tool_settings(const bContext *C)
 {
+  ToolSettings *toolsettings;
+  if (ctx_data_pointer_verify(C, "tool_settings", (void **)&toolsettings)) {
+    return toolsettings;
+  }
+  
   Scene *scene = CTX_data_scene(C);
-
   if (scene) {
     return scene->toolsettings;
   }

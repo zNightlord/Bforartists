@@ -178,25 +178,26 @@ class SEQUENCER_HT_header(Header):
         layout.separator_spacer()
 
         tool_settings = context.tool_settings
-        sequencer_tool_settings = tool_settings.sequencer_tool_settings
+        sequencer_tool_settings = tool_settings.sequencer_tool_settings if tool_settings else None
 
         if st.view_type == 'SEQUENCER':
             row = layout.row(align=True)
             row.template_ID(context.workspace, "sequencer_scene", new="scene.new_sequencer_scene")
 
-        if st.view_type == 'PREVIEW':
+        if sequencer_tool_settings and st.view_type == 'PREVIEW':
             layout.prop(sequencer_tool_settings, "pivot_point", text="", icon_only=True)
 
-        if st.view_type in {'SEQUENCER', 'SEQUENCER_PREVIEW'}:
+        if sequencer_tool_settings and st.view_type in {'SEQUENCER', 'SEQUENCER_PREVIEW'}:
             row = layout.row(align=True)
             row.prop(sequencer_tool_settings, "overlap_mode", text="")
 
-        row = layout.row(align=True)
-        row.prop(tool_settings, "use_snap_sequencer", text="")
-        sub = row.row(align=True)
-        sub.popover(panel="SEQUENCER_PT_snapping")
-        if st.view_type in {'SEQUENCER', 'SEQUENCER_PREVIEW'}:
-            layout.popover(panel="SEQUENCER_PT_playhead_snapping")
+        if tool_settings:
+            row = layout.row(align=True)
+            row.prop(tool_settings, "use_snap_sequencer", text="")
+            sub = row.row(align=True)
+            sub.popover(panel="SEQUENCER_PT_snapping")
+            if st.view_type in {'SEQUENCER', 'SEQUENCER_PREVIEW'}:
+                layout.popover(panel="SEQUENCER_PT_playhead_snapping")
         layout.separator_spacer()
 
         if st.view_type in {'PREVIEW', 'SEQUENCER_PREVIEW'}:
@@ -1451,12 +1452,13 @@ class SEQUENCER_MT_pivot_pie(Menu):
         layout = self.layout
         pie = layout.menu_pie()
 
-        sequencer_tool_settings = context.tool_settings.sequencer_tool_settings
+        if context.tool_settings:
+            sequencer_tool_settings = context.tool_settings.sequencer_tool_settings
 
-        pie.prop_enum(sequencer_tool_settings, "pivot_point", value='CENTER')
-        pie.prop_enum(sequencer_tool_settings, "pivot_point", value='CURSOR')
-        pie.prop_enum(sequencer_tool_settings, "pivot_point", value='INDIVIDUAL_ORIGINS')
-        pie.prop_enum(sequencer_tool_settings, "pivot_point", value='MEDIAN')
+            pie.prop_enum(sequencer_tool_settings, "pivot_point", value='CENTER')
+            pie.prop_enum(sequencer_tool_settings, "pivot_point", value='CURSOR')
+            pie.prop_enum(sequencer_tool_settings, "pivot_point", value='INDIVIDUAL_ORIGINS')
+            pie.prop_enum(sequencer_tool_settings, "pivot_point", value='MEDIAN')
 
 
 class SEQUENCER_MT_view_pie(Menu):
@@ -3130,7 +3132,7 @@ class SEQUENCER_PT_preview_snapping(Panel):
     @classmethod
     def poll(cls, context):
         st = context.space_data
-        return st.view_type in {'PREVIEW', 'SEQUENCER_PREVIEW'}
+        return st.view_type in {'PREVIEW', 'SEQUENCER_PREVIEW'} and context.tool_settings
 
     def draw(self, context):
         tool_settings = context.tool_settings
@@ -3155,7 +3157,7 @@ class SEQUENCER_PT_sequencer_snapping(Panel):
     @classmethod
     def poll(cls, context):
         st = context.space_data
-        return st.view_type in {'SEQUENCER', 'SEQUENCER_PREVIEW'}
+        return st.view_type in {'SEQUENCER', 'SEQUENCER_PREVIEW'} and context.tool_settings
 
     def draw(self, context):
         tool_settings = context.tool_settings

@@ -322,7 +322,7 @@ static void sequencer_listener(const wmSpaceTypeListenerParams *params)
 
 /* DO NOT make this static, this hides the symbol and breaks API generation script. */
 extern "C" const char *sequencer_context_dir[]; /* Quiet warning. */
-const char *sequencer_context_dir[] = {"edit_mask", nullptr};
+const char *sequencer_context_dir[] = {"edit_mask", "tool_settings", nullptr};
 
 static int /*eContextResult*/ sequencer_context(const bContext *C,
                                                 const char *member,
@@ -335,12 +335,20 @@ static int /*eContextResult*/ sequencer_context(const bContext *C,
 
     return CTX_RESULT_OK;
   }
-  if (CTX_data_equals(member, "edit_mask")) {
-    Mask *mask = seq::active_mask_get(scene);
-    if (mask) {
-      CTX_data_id_pointer_set(result, &mask->id);
+  if (CTX_data_equals(member, "tool_settings")) {
+    if (scene) {
+      CTX_data_pointer_set(result, &scene->id, &RNA_ToolSettings, scene->toolsettings);
+      return CTX_RESULT_OK;
     }
-    return CTX_RESULT_OK;
+  }
+  if (CTX_data_equals(member, "edit_mask")) {
+    if (scene) {
+      Mask *mask = seq::active_mask_get(scene);
+      if (mask) {
+        CTX_data_id_pointer_set(result, &mask->id);
+      }
+      return CTX_RESULT_OK;
+    }
   }
 
   return CTX_RESULT_MEMBER_NOT_FOUND;
