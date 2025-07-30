@@ -544,7 +544,7 @@ def sync_system_update(context: bpy.types.Context, force: bool = False):
         if window.scene != strip.scene:
             # Use scene_change_manager to optionnaly keep tool settings between scenes
             with scene_change_manager(context):
-                window.scene = strip.scene
+                window.scene = strip.scene # TODO Scene Selector
         # Use strip camera if specified
         if strip.scene_camera and window.scene.camera != strip.scene_camera:
             window.scene.camera = strip.scene_camera
