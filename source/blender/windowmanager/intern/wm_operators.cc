@@ -4581,17 +4581,17 @@ const EnumPropertyItem *RNA_scene_local_itemf(bContext *C,
   return rna_id_itemf(
       r_free, C ? (ID *)CTX_data_main(C)->scenes.first : nullptr, true, nullptr, nullptr);
 }
-const EnumPropertyItem *RNA_scene_without_active_itemf(bContext *C,
-                                                       PointerRNA * /*ptr*/,
-                                                       PropertyRNA * /*prop*/,
-                                                       bool *r_free)
+const EnumPropertyItem *RNA_scene_without_sequencer_scene_itemf(bContext *C,
+                                                                PointerRNA * /*ptr*/,
+                                                                PropertyRNA * /*prop*/,
+                                                                bool *r_free)
 {
-  Scene *scene_active = C ? CTX_data_scene(C) : nullptr;
+  Scene *sequencer_scene = C ? CTX_data_sequencer_scene(C) : nullptr;
   return rna_id_itemf(r_free,
                       C ? (ID *)CTX_data_main(C)->scenes.first : nullptr,
                       false,
                       rna_id_enum_filter_single,
-                      scene_active);
+                      sequencer_scene);
 }
 /*############## BFA - 3D Sequencer ##############*/
 const EnumPropertyItem *RNA_seq_scene_without_active_itemf(bContext *C,

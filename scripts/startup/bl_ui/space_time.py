@@ -9,15 +9,32 @@ from bpy.app.translations import contexts as i18n_contexts
 # BFA - Added icons and floated properties left
 
 def playback_controls(layout, context):
-    scene = context.scene
+    st = context.space_data
+    is_sequencer = st.type == 'SEQUENCE_EDITOR' and st.view_type == 'SEQUENCER'
+
+    scene = context.scene if not is_sequencer else context.sequencer_scene
     tool_settings = context.tool_settings
     screen = context.screen
 
     row = layout.row(align=True)
 
+    if is_sequencer:
+        layout.prop(context.workspace, "use_scene_time_sync", text="Sync Scene Time")
+
     layout.separator_spacer()
     #BFA - moved dropdowns to consistently float right
 
+    if tool_settings:
+        row = layout.row(align=True)
+        row.prop(tool_settings, "use_keyframe_insert_auto", text="", toggle=True)
+        sub = row.row(align=True)
+        sub.active = tool_settings.use_keyframe_insert_auto
+        sub.popover(
+            panel="TIME_PT_auto_keyframing",
+            text="",
+        )
+
+    row = layout.row(align=True)
     row.operator("screen.frame_jump", text="", icon='REW').end = False
     row.operator("screen.keyframe_jump", text="", icon='PREV_KEYFRAME').next = False
 
@@ -25,7 +42,7 @@ def playback_controls(layout, context):
         # if using JACK and A/V sync:
         #   hide the play-reversed button
         #   since JACK transport doesn't support reversed playback
-        if scene.sync_mode == 'AUDIO_SYNC' and context.preferences.system.audio_device == 'JACK':
+        if scene and scene.sync_mode == 'AUDIO_SYNC' and context.preferences.system.audio_device == 'JACK':
             row.scale_x = 2
             row.operator("screen.animation_play", text="", icon='PLAY')
             row.scale_x = 1
@@ -41,17 +58,18 @@ def playback_controls(layout, context):
     row.operator("screen.frame_jump", text="", icon='FF').end = True
     row.operator("screen.animation_cancel", text = "", icon = 'LOOP_BACK').restore_frame = True
 
-    row = layout.row()
-    if scene.show_subframe:
-        row.scale_x = 1.15
-        row.prop(scene, "frame_float", text="")
-    else:
-        row.scale_x = 0.95
-        row.prop(scene, "frame_current", text="")
+    if scene:
+        row = layout.row()
+        if scene.show_subframe:
+            row.scale_x = 1.15
+            row.prop(scene, "frame_float", text="")
+        else:
+            row.scale_x = 0.95
+            row.prop(scene, "frame_current", text="")
 
         row = layout.row(align=True)
         row.prop(scene, "use_preview_range", text="", toggle=True)
-        row.operator("anim.start_frame_set", text="", icon = 'SET_POSITION')
+        row.operator("anim.start_frame_set", text="", icon = 'SET_POSITION') # bfa story tools
         sub = row.row(align=True)
         sub.scale_x = 0.8
         if not scene.use_preview_range:
