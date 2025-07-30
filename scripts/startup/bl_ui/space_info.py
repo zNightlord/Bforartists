@@ -91,6 +91,11 @@ class INFO_MT_area(Menu):
 
         layout.separator()
 
+        if context.screen.show_fullscreen:
+            layout.operator("screen.screen_full_area", text="Restore Areas")
+        else:
+            layout.operator("screen.screen_full_area", text="Maximize Area")
+        layout.operator("screen.screen_full_area", text="Focus Mode").use_hide_panels = True
         layout.operator("screen.area_dupli", icon="NEW_WINDOW")
 
         layout.separator()
