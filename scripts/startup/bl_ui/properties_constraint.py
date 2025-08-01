@@ -984,6 +984,7 @@ class ConstraintButtonsPanel:
         layout.use_property_decorate = True
 
         self.target_template(layout, con, False)
+        layout.prop(con, "utarget_mat", text="Offset with Target Transform")
 
         layout.prop(con, "attribute_name", text="Attribute Name")
         layout.prop(con, "data_type", text="Data Type")
@@ -999,7 +1000,7 @@ class ConstraintButtonsPanel:
             row.prop(con, "mix_rot", text="Rotation",toggle=True)
             row.prop(con, "mix_scl", text="Scale",toggle=True)
             row.label(icon='BLANK1')
-        layout.prop(con, "utarget_mat", text="Apply Target Transform")
+
 
         self.draw_influence(layout, con)
 

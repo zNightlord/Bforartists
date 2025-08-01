@@ -3631,9 +3631,9 @@ static void rna_def_constraint_attribute(BlenderRNA *brna)
   };
 
   static const EnumPropertyItem type_items[] = {
-      {CON_ATTRIBUTE_VECTOR, "VECTOR", 0, "Vector", "Vector data type"},
-      {CON_ATTRIBUTE_QUATERNION, "QUATERNION", 0, "Quaternion", "Quaternion data type"},
-      {CON_ATTRIBUTE_4X4MATRIX, "4X4MATRIX", 0, "4x4 Matrix", "4x4 Matrix data type"},
+      {CON_ATTRIBUTE_VECTOR, "VECTOR", 0, "Vector", "Vector data type, affects position"},
+      {CON_ATTRIBUTE_QUATERNION, "QUATERNION", 0, "Quaternion", "Quaternion data type, affects rotation"},
+      {CON_ATTRIBUTE_4X4MATRIX, "4X4MATRIX", 0, "4x4 Matrix", "4x4 Matrix data type, affects transform"},
       {0, nullptr, 0, nullptr, nullptr},
   };
 
