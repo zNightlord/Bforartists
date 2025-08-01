@@ -122,12 +122,12 @@ class MeshPattern {
                                                                     const int first_e) const;
 
   /** Return the face indices (if any) that are unabiguously closested to anchor. */
-  Array<int, 20> faces_for_anchor(const int anchor);
+  Array<int, 20> faces_for_anchor(const int anchor) const;
 
   /** Return the face indices on the center line between first_anchor and the one after that.
    * This will only be non-empty for Adj with odd segments, and excludes the center polygon.
    */
-  Array<int, 20> faces_for_centerline(const int first_anchor);
+  Array<int, 20> faces_for_centerline(const int first_anchor) const;
 };
 
 /** Helper for keeping track of angle kind. */
@@ -3221,7 +3221,7 @@ std::pair<Array<int, 20>, Array<int, 20>> MeshPattern::boundary_vert_and_edges(
   return ans;
 }
 
-Array<int, 20> MeshPattern::faces_for_anchor(const int anchor)
+Array<int, 20> MeshPattern::faces_for_anchor(const int anchor) const
 {
   if (num_segs <= 1 || kind != MeshKind::Adj) {
     return Array<int, 20>(0);
@@ -3230,19 +3230,30 @@ Array<int, 20> MeshPattern::faces_for_anchor(const int anchor)
   const bool ns_odd = (num_segs % 2) == 1;
   const int num_face_rings = adj::f_num_rings(num_segs);
   Array<int, 20> ans(floor_n2 * floor_n2);
+  int ans_pos = 0;
   for (int r = ns_odd ? 1 : 0; r < num_face_rings; r++) {
-    
+    const int ring_side = adj::f_ringlen(r, num_anchors, num_segs) / num_anchors + 1;
+    const int half_ring_side = ring_side / 2;
+    const int anchor_prev = anchor > 0 ? anchor - 1 : num_anchors - 1;
+    const int v = adj::rao_to_face(r, anchor, 0, num_anchors, num_segs);
+    ans[ans_pos++] = v;
+    for (int o = 1; o < half_ring_side; o++) {
+      ans[ans_pos++] = adj::rao_to_face(r, anchor, o, num_anchors, num_segs);
+      ans[ans_pos++] = adj::rao_to_face(r, anchor_prev, ring_side - o - 1, num_anchors, num_segs);
+    }
   }
+  BLI_assert(ans_pos == ans.size());
   return ans;
 }
 
-Array<int, 20> MeshPattern::faces_for_centerline(const int first_anchor)
+Array<int, 20> MeshPattern::faces_for_centerline(const int first_anchor) const
 {
   if (kind != MeshKind::Adj || num_segs <= 1 || (num_segs % 2) == 0) {
     return Array<int, 20>(0);
   }
   const int floor_n2 = num_segs / 2;
   Array<int, 20> ans(floor_n2);
+  return ans;
 }
 
 /** Return a 4-tuple with the number of vertices, edges, faces, corners needed for edge mesh. */
@@ -4799,12 +4810,19 @@ static void set_vertex_mesh_reps(const int bv,
     Array<int, 20> anchor_face_reps(pat.num_anchors, -1);
     find_anchor_face_reps(bv, anchor_face_reps, bs);
     const int center_frep = ((pat.num_segs % 2) == 1 || pat.kind != MeshKind::Adj) ?
-      find_center_face_rep(bv, anchor_face_reps, bs) : -1;
+                                find_center_face_rep(bv, anchor_face_reps, bs) :
+                                -1;
     switch (pat.kind) {
       case MeshKind::Adj: {
         if ((pat.num_segs % 2) == 1) {
           /* The center face is always face 0 in the pattern. */
           repfaces[0] = center_frep;
+        }
+        for (const int a : IndexRange(pat.num_anchors)) {
+          Array<int, 20> afaces = pat.faces_for_anchor(a);
+          for (const int f : afaces) {
+            repfaces[f] = anchor_face_reps[a];
+          }
         }
         break;
       }
@@ -5311,7 +5329,7 @@ std::optional<Mesh *> mesh_bevel(const Mesh &src_mesh,
   state.set_bevedge_widths();
   state.determine_needed_new_elements();
   state.determine_needed_attribute_data();
-  dump_bevel_state(state, "before build_vertex_meshes");
+  // dump_bevel_state(state, "before build_vertex_meshes");
   state.build_vertex_meshes();
   state.build_edge_meshes();
   state.build_face_meshes();
