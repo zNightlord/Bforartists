@@ -120,6 +120,14 @@ class MeshPattern {
                                                                     const int lastpos,
                                                                     const int first_v,
                                                                     const int first_e) const;
+
+  /** Return the face indices (if any) that are unabiguously closested to anchor. */
+  Array<int, 20> faces_for_anchor(const int anchor);
+
+  /** Return the face indices on the center line between first_anchor and the one after that.
+   * This will only be non-empty for Adj with odd segments, and excludes the center polygon.
+   */
+  Array<int, 20> faces_for_centerline(const int first_anchor);
 };
 
 /** Helper for keeping track of angle kind. */
@@ -525,7 +533,7 @@ class BevelState {
   /** Return the previous bevedge position around bevvert \a bv before \a edge_pos. */
   int prev_edge_pos(const int bv, const int edge_pos) const
   {
-    return edge_pos == 0 ? bevvert_bevedges_[bv].size() - 1 : edge_pos + 1;
+    return edge_pos == 0 ? bevvert_bevedges_[bv].size() - 1 : edge_pos - 1;
   }
 
   /** Return the next face after the bevedge in position \a edge_pos of bevvert \a bv. */
@@ -3213,6 +3221,30 @@ std::pair<Array<int, 20>, Array<int, 20>> MeshPattern::boundary_vert_and_edges(
   return ans;
 }
 
+Array<int, 20> MeshPattern::faces_for_anchor(const int anchor)
+{
+  if (num_segs <= 1 || kind != MeshKind::Adj) {
+    return Array<int, 20>(0);
+  }
+  const int floor_n2 = num_segs / 2;
+  const bool ns_odd = (num_segs % 2) == 1;
+  const int num_face_rings = adj::f_num_rings(num_segs);
+  Array<int, 20> ans(floor_n2 * floor_n2);
+  for (int r = ns_odd ? 1 : 0; r < num_face_rings; r++) {
+    
+  }
+  return ans;
+}
+
+Array<int, 20> MeshPattern::faces_for_centerline(const int first_anchor)
+{
+  if (kind != MeshKind::Adj || num_segs <= 1 || (num_segs % 2) == 0) {
+    return Array<int, 20>(0);
+  }
+  const int floor_n2 = num_segs / 2;
+  Array<int, 20> ans(floor_n2);
+}
+
 /** Return a 4-tuple with the number of vertices, edges, faces, corners needed for edge mesh. */
 static int4 bevedge_num_elements(const int be, const BevelState &bs)
 {
@@ -4700,9 +4732,29 @@ void BevelState::build_newface(const int f, Span<int> verts, Span<int> edges)
   }
 }
 
+/** Find the face representatives to use for each anchor position. */
 static void find_anchor_face_reps(const int bv, Array<int, 20> &reps, const BevelState &bs)
 {
   const MeshPattern &pat = bs.bevvert_meshpatterns()[bv];
+  BLI_assert(pat.num_anchors == reps.size());
+  for (const int anchor : IndexRange(pat.num_anchors)) {
+    const int anchor_vert = pat.anchor_vert(anchor);
+    const int be_pos = bs.last_attached_bevedge_pos(bv, anchor_vert);
+    const int f = bs.face_prev(bv, be_pos);
+    reps[anchor] = f;
+  }
+}
+
+/** Pick a good original face representative for the center polygon for bevvert \a bv. */
+static int find_center_face_rep(const int bv, const Array<int, 20> &reps, const BevelState &bs)
+{
+  /* Placeholder logic. Just use the first one that is non-negative. */
+  for (const int f : reps) {
+    if (f != -1) {
+      return f;
+    }
+  }
+  return -1;
 }
 
 /** Set representative original elements to copy attributes from for new elements. */
@@ -4742,17 +4794,24 @@ static void set_vertex_mesh_reps(const int bv,
     }
   }
   /* Placeholder logic for faces. */
-  int num_faces = pat.num_elements()[2];
+  const int num_faces = pat.num_elements()[2];
   if (bs.any_face_attributes && num_faces > 0) {
     Array<int, 20> anchor_face_reps(pat.num_anchors, -1);
     find_anchor_face_reps(bv, anchor_face_reps, bs);
+    const int center_frep = ((pat.num_segs % 2) == 1 || pat.kind != MeshKind::Adj) ?
+      find_center_face_rep(bv, anchor_face_reps, bs) : -1;
     switch (pat.kind) {
       case MeshKind::Adj: {
+        if ((pat.num_segs % 2) == 1) {
+          /* The center face is always face 0 in the pattern. */
+          repfaces[0] = center_frep;
+        }
         break;
       }
       case MeshKind::TriFan:
       case MeshKind::TerminalPoly: {
         BLI_assert(num_faces == 1);
+        repfaces[0] = center_frep;
         break;
       }
       default:
@@ -5252,6 +5311,7 @@ std::optional<Mesh *> mesh_bevel(const Mesh &src_mesh,
   state.set_bevedge_widths();
   state.determine_needed_new_elements();
   state.determine_needed_attribute_data();
+  dump_bevel_state(state, "before build_vertex_meshes");
   state.build_vertex_meshes();
   state.build_edge_meshes();
   state.build_face_meshes();
