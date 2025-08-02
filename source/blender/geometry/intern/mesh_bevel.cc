@@ -3221,6 +3221,7 @@ std::pair<Array<int, 20>, Array<int, 20>> MeshPattern::boundary_vert_and_edges(
   return ans;
 }
 
+/** Return the faces (in pattern space) that are unambiguously nearest to \a anchor. */
 Array<int, 20> MeshPattern::faces_for_anchor(const int anchor) const
 {
   if (num_segs <= 1 || kind != MeshKind::Adj) {
@@ -3246,13 +3247,23 @@ Array<int, 20> MeshPattern::faces_for_anchor(const int anchor) const
   return ans;
 }
 
+/** Return the faces (in pattern space) that are on the centerline between \a first_anchor
+ * and its successor. Don't include the center face, for odd number of segments. */
 Array<int, 20> MeshPattern::faces_for_centerline(const int first_anchor) const
 {
   if (kind != MeshKind::Adj || num_segs <= 1 || (num_segs % 2) == 0) {
     return Array<int, 20>(0);
   }
   const int floor_n2 = num_segs / 2;
+  const int num_face_rings = adj::f_num_rings(num_segs);
   Array<int, 20> ans(floor_n2);
+  BLI_assert(num_face_rings == floor_n2 + 1);
+  for (int r = 1; r < num_face_rings; r++) {
+    const int ring_side = adj::f_ringlen(r, num_anchors, num_segs) / num_anchors + 1;
+    const int half_ring_side = ring_side / 2;
+    const int v = adj::rao_to_face(r, first_anchor, half_ring_side, num_anchors, num_segs);
+    ans[r - 1] = v;
+  }
   return ans;
 }
 
@@ -4821,6 +4832,11 @@ static void set_vertex_mesh_reps(const int bv,
         for (const int a : IndexRange(pat.num_anchors)) {
           Array<int, 20> afaces = pat.faces_for_anchor(a);
           for (const int f : afaces) {
+            repfaces[f] = anchor_face_reps[a];
+          }
+          Array<int, 20> clinefaces = pat.faces_for_centerline(a);
+          /* For now, associate centerline with preceding anchor. */
+          for (const int f : clinefaces) {
             repfaces[f] = anchor_face_reps[a];
           }
         }
