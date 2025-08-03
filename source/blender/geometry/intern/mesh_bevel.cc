@@ -4855,6 +4855,25 @@ static void set_vertex_mesh_reps(const int bv,
   }
 }
 
+/** Set representative original elements to copy attributes from for new elements. */
+static void set_edge_mesh_reps(const int be,
+                               MutableSpan<int> repedges,
+                               MutableSpan<int> repfaces,
+                               const BevelState &bs)
+{
+  if (bs.bevedge_weights()[be] == 0.0f) {
+    /* Not-beveled case. */
+    BLI_assert(repedges.size() == 1 && repfaces.size() == 0);
+    repedges[0] = bs.bevedge_mesh_edges()[be];
+  }
+  else {
+    const int nsegs = bs.params.segments;
+    /* New edges are numbered 0 to nsegs, left to right (looking into 0 end).
+     * New faces are numered 0 to nsegs-1, left to right. */
+    BLI_assert(repedges.size() == nsegs + 1 && repfaces.size() == nsegs);
+  }
+}
+
 /** Build the vertex meshes. */
 void BevelState::build_vertex_meshes()
 {
@@ -4961,6 +4980,10 @@ void BevelState::build_edge_meshes()
           }
         }
       }
+      set_edge_mesh_reps(be,
+                         newedge_repedges_.as_mutable_span(),
+                         newface_repfaces_.as_mutable_span(),
+                         *this);
     }
   });
 }
@@ -5026,6 +5049,7 @@ void BevelState::build_face_meshes()
         be_prev = be;
       }
       build_newface(newf, nverts, nedges);
+      newface_repfaces_[newf] = meshf;
     }
   });
 }
