@@ -6,6 +6,7 @@
 
 #include "NOD_rna_define.hh"
 
+#include "GEO_foreach_geometry.hh"
 #include "GEO_mesh_bevel.hh"
 
 #include "UI_interface.hh"
@@ -45,7 +46,7 @@ static void node_geo_exec(GeoNodeExecParams params)
 
   geometry::BevelAffect affect = geometry::BevelAffect(params.node().custom1);
 
-  geometry_set.modify_geometry_sets([&](GeometrySet &geometry_set) {
+  geometry::foreach_real_geometry(geometry_set, [&](GeometrySet &geometry_set) {
     const Mesh *src_mesh = geometry_set.get_mesh();
     if (!src_mesh) {
       return;

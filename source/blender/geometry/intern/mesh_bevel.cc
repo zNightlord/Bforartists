@@ -4877,7 +4877,7 @@ static void set_edge_mesh_reps(const int be,
                                const BevelState &bs)
 {
   const int mesh_edge = bs.bevedge_mesh_edges()[be];
-  const int nsegs = bs.bevedge_weights()[be] == 0.0f? 0 : bs.params.segments;
+  const int nsegs = bs.bevedge_weights()[be] == 0.0f ? 0 : bs.params.segments;
   const int ne_start = bs.bevedge_newedges()[be][0];
   for (const int i : IndexRange(nsegs + 1)) {
     repedges[ne_start + i] = mesh_edge;
@@ -5012,10 +5012,8 @@ void BevelState::build_edge_meshes()
           }
         }
       }
-      set_edge_mesh_reps(be,
-                         newedge_repedges_.as_mutable_span(),
-                         newface_repfaces_.as_mutable_span(),
-                         *this);
+      set_edge_mesh_reps(
+          be, newedge_repedges_.as_mutable_span(), newface_repfaces_.as_mutable_span(), *this);
     }
   });
 }
