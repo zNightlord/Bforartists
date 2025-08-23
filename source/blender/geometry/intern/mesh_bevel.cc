@@ -559,6 +559,9 @@ class BevelState {
   /** Return the bevedge poisition of the last bevedge attached to newvert, or -1 if none. */
   int last_attached_bevedge_pos(const int bv, const int newvert) const;
 
+  /** Return the edge position for bevedge \a be around bevvert \a bv. */
+  int bevedge_pos(const int be, const int bv) const;
+
  private:
   IndexMaskMemory memory_;
   IndexMask bevedges_mask_;
@@ -4471,6 +4474,18 @@ int BevelState::last_attached_bevedge_pos(const int bv, const int newvert) const
   return ans;
 }
 
+/** Return the edge position for bevedge \a be around bevvert \a bv. */
+int BevelState::bevedge_pos(const int be, const int bv) const
+{
+  Span<int> edges = bevvert_bevedges_[bv];
+  for (const int epos : edges.index_range()) {
+    if (be == edges[epos]) {
+      return epos;
+    }
+  }
+  return -1;
+}
+
 /** Initialize the part of the state related to the profile curves that will be used in the
  * non-custom shapes of multisegment bevels.
  */
@@ -4861,16 +4876,33 @@ static void set_edge_mesh_reps(const int be,
                                MutableSpan<int> repfaces,
                                const BevelState &bs)
 {
-  if (bs.bevedge_weights()[be] == 0.0f) {
-    /* Not-beveled case. */
-    BLI_assert(repedges.size() == 1 && repfaces.size() == 0);
-    repedges[0] = bs.bevedge_mesh_edges()[be];
+  const int mesh_edge = bs.bevedge_mesh_edges()[be];
+  const int nsegs = bs.bevedge_weights()[be] == 0.0f? 0 : bs.params.segments;
+  const int ne_start = bs.bevedge_newedges()[be][0];
+  for (const int i : IndexRange(nsegs + 1)) {
+    repedges[ne_start + i] = mesh_edge;
   }
-  else {
-    const int nsegs = bs.params.segments;
-    /* New edges are numbered 0 to nsegs, left to right (looking into 0 end).
-     * New faces are numered 0 to nsegs-1, left to right. */
-    BLI_assert(repedges.size() == nsegs + 1 && repfaces.size() == nsegs);
+  if (nsegs > 0) {
+    const int2 mesh_verts = bs.mesh_info.mesh.edges()[mesh_edge];
+    /* Find a bevvert for one of the mesh_verts. */
+    int bv = bs.vert_bevverts()[mesh_verts[0]];
+    if (bv == -1) {
+      bv = bs.vert_bevverts()[mesh_verts[1]];
+    }
+    BLI_assert(bv != -1);
+    const int end = bs.bevedge_vert_end(bv, be);
+    const int epos = bs.bevedge_pos(be, bv);
+    BLI_assert(epos != -1);
+    /* New faces are numered 0 to nsegs-1, left to right. */
+    const int fa = bs.face_prev(bv, epos);
+    const int fb = bs.face_next(bv, epos);
+    const int fpre = end == 0 ? fa : fb;
+    const int fpost = end == 0 ? fb : fa;
+    const int nf_start = bs.bevedge_newfaces()[be][0];
+    const int first_half_end = (nsegs % 2) == 1 ? nsegs / 2 : nsegs / 2 - 1;
+    for (const int i : IndexRange(nsegs)) {
+      repfaces[nf_start + i] = i <= first_half_end ? fpre : fpost;
+    }
   }
 }
 
@@ -5369,8 +5401,8 @@ std::optional<Mesh *> mesh_bevel(const Mesh &src_mesh,
   state.set_bevedge_widths();
   state.determine_needed_new_elements();
   state.determine_needed_attribute_data();
-  // dump_bevel_state(state, "before build_vertex_meshes");
   state.build_vertex_meshes();
+  // dump_bevel_state(state, "before build_edge_meshes");
   state.build_edge_meshes();
   state.build_face_meshes();
   // dump_bevel_state(state, "before build_mesh");
