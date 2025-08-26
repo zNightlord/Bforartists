@@ -3624,7 +3624,7 @@ static void rna_def_constraint_attribute(BlenderRNA *brna)
   PropertyRNA *prop;
 
   static const EnumPropertyItem domain_items[] = {
-      {CON_ATTRIBUTE_DOMAIN_VERT, "VERT_DOMAIN", 0, "Vertex", "Vertex Domain"},
+      {CON_ATTRIBUTE_DOMAIN_POINT, "POINT_DOMAIN", 0, "Point", "Point Domain"},
       {CON_ATTRIBUTE_DOMAIN_EDGE, "EDGE_DOMAIN", 0, "Edge", "Edge Domain"},
       {CON_ATTRIBUTE_DOMAIN_FACE, "FACE_DOMAIN", 0, "Face", "Face Domain"},
       {0, nullptr, 0, nullptr, nullptr},

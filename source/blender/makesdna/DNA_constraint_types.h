@@ -1154,27 +1154,21 @@ typedef enum eStretchTo_Flags {
 } eStretchTo_Flags;
 
 /** Atrtibute Domain Mode */
-typedef enum eAttribute_DomainMode {
-  /* Vert domain */
-  CON_ATTRIBUTE_DOMAIN_VERT = 0,
-  /* Edge domain */
+typedef enum Attribute_DomainMode {
+  CON_ATTRIBUTE_DOMAIN_POINT = 0,
   CON_ATTRIBUTE_DOMAIN_EDGE = 1,
-  /* Face domain */
   CON_ATTRIBUTE_DOMAIN_FACE = 2,
-} eAttribute_DomainMode;
+} Attribute_DomainMode;
 
 /* Atrtibute Data Type*/
-typedef enum eAttribute_Data_Type {
-  /* Vector */
+typedef enum Attribute_Data_Type {
   CON_ATTRIBUTE_VECTOR = 0,
-  /*Quaternion*/
   CON_ATTRIBUTE_QUATERNION = 1,
-  /*Matrix*/
   CON_ATTRIBUTE_4X4MATRIX = 2,
-} eAttribute_Data_Type;
+} Attribute_Data_Type;
 
 /** Atrtibute Component Mix Mode */
-typedef enum eAttribute_MixMode {
+typedef enum Attribute_MixMode {
   /* Replace rotation channel values. */
   CON_ATTRIBUTE_MIX_REPLACE = 0,
   /* Multiply the copied transformation on the left, handling loc/rot/scale separately. */
@@ -1185,4 +1179,4 @@ typedef enum eAttribute_MixMode {
   CON_ATTRIBUTE_MIX_BEFORE_FULL = 3,
   /* Multiply the copied transformation on the right, using simple matrix multiplication. */
   CON_ATTRIBUTE_MIX_AFTER_FULL = 4,
-} eAttribute_MixMode;
+} Attribute_MixMode;

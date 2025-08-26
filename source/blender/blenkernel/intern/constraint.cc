@@ -5507,7 +5507,7 @@ static bool attribute_get_tarmat(Depsgraph * /*depsgraph*/,
   int index = -1;
 
   switch (acon->domainType) {
-    case CON_ATTRIBUTE_DOMAIN_VERT:
+    case CON_ATTRIBUTE_DOMAIN_POINT:
       domain = target_eval->vert_data;
       d_count = target_eval->verts_num;
       break;
