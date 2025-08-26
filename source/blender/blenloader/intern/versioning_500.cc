@@ -1308,7 +1308,6 @@ static void do_version_world_remove_use_nodes(Main *bmain, World *world)
 
 // TODO Add proper working versioning
 static Scene *get_3d_sequencer_scene(Main *bmain){
-  Scene *scene_override = nullptr;
   LISTBASE_FOREACH (bScreen *, screen, &bmain->screens) {
     LISTBASE_FOREACH (ScrArea *, area, &screen->areabase) {
       LISTBASE_FOREACH (SpaceLink *, sl, &area->spacedata) {
@@ -1316,13 +1315,13 @@ static Scene *get_3d_sequencer_scene(Main *bmain){
           continue;
         }
         SpaceSeq *seq = (SpaceSeq *)sl;
-        if (seq->scene_override) {
-          scene_override = seq->scene_override;
+        if (seq->scene_override != nullptr) {
+          return seq->scene_override;
         }
       }
     }
   }
-  return scene_override;
+  return nullptr;
 }
 
 void do_versions_after_linking_500(FileData *fd, Main *bmain)

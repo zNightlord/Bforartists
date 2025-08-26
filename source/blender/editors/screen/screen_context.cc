@@ -686,19 +686,6 @@ static eContextResult screen_ctx_pose_object(const bContext *C, bContextDataResu
 //   return scene;
 // }
 
-static eContextResult screen_ctx_active_sequence_strip(const bContext *C, bContextDataResult *result)
-{
-  wmWindow *win = CTX_wm_window(C);
-  Scene *scene = WM_window_get_active_scene(win);
-  /*############## BFA - 3D Sequencer ##############*/
-  SpaceSeq *sseq = CTX_wm_space_seq(C);
-
-  if (sseq != NULL && sseq->scene_override != NULL) {
-    scene = sseq->scene_override;
-  }
-  return scene;
-}
-
 static eContextResult screen_ctx_active_sequence_strip(const bContext *C,
                                                        bContextDataResult *result)
 {
