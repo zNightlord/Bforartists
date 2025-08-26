@@ -3699,8 +3699,6 @@ static void rna_def_constraint_attribute(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "attribute_name", PROP_STRING, PROP_NONE);
   RNA_def_property_string_sdna(prop, nullptr, "attributeName");
-  RNA_def_property_string_default(prop, "transform");
-  RNA_def_property_string_maxlength(prop, 256);
   RNA_def_property_ui_text(prop, "Attribute Name", "Name of transform attribute");
   RNA_def_property_flag(prop, PROP_EDITABLE);
   RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
