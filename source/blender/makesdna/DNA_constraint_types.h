@@ -592,7 +592,7 @@ typedef struct bAttributeConstraint {
   short dataType;
   short domainType;
   char _pad2[4];
-  char attributeName[256];
+  char *attributeName;
 } bAttributeConstraint;
 
 /* ------------------------------------------ */

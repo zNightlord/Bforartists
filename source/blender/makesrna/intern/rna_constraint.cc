@@ -3624,16 +3624,24 @@ static void rna_def_constraint_attribute(BlenderRNA *brna)
   PropertyRNA *prop;
 
   static const EnumPropertyItem domain_items[] = {
-      {CON_ATTRIBUTE_DOMAIN_POINT, "POINT_DOMAIN", 0, "Point", "Point Domain"},
-      {CON_ATTRIBUTE_DOMAIN_EDGE, "EDGE_DOMAIN", 0, "Edge", "Edge Domain"},
-      {CON_ATTRIBUTE_DOMAIN_FACE, "FACE_DOMAIN", 0, "Face", "Face Domain"},
+      {CON_ATTRIBUTE_DOMAIN_POINT, "POINT", 0, "Point", "Point Domain"},
+      {CON_ATTRIBUTE_DOMAIN_EDGE, "EDGE", 0, "Edge", "Edge Domain"},
+      {CON_ATTRIBUTE_DOMAIN_FACE, "FACE", 0, "Face", "Face Domain"},
       {0, nullptr, 0, nullptr, nullptr},
   };
 
   static const EnumPropertyItem type_items[] = {
       {CON_ATTRIBUTE_VECTOR, "VECTOR", 0, "Vector", "Vector data type, affects position"},
-      {CON_ATTRIBUTE_QUATERNION, "QUATERNION", 0, "Quaternion", "Quaternion data type, affects rotation"},
-      {CON_ATTRIBUTE_4X4MATRIX, "4X4MATRIX", 0, "4x4 Matrix", "4x4 Matrix data type, affects transform"},
+      {CON_ATTRIBUTE_QUATERNION,
+       "QUATERNION",
+       0,
+       "Quaternion",
+       "Quaternion data type, affects rotation"},
+      {CON_ATTRIBUTE_4X4MATRIX,
+       "FLOAT4X4",
+       0,
+       "4x4 Matrix",
+       "4x4 Matrix data type, affects transform"},
       {0, nullptr, 0, nullptr, nullptr},
   };
 
