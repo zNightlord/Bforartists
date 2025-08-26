@@ -5501,7 +5501,7 @@ static bool attribute_get_tarmat(Depsgraph * /*depsgraph*/,
   }
 
   unit_m4(ct->matrix);
-  Mesh *target_eval = BKE_object_get_evaluated_mesh(ct->tar);
+  const Mesh *target_eval = BKE_object_get_evaluated_mesh(ct->tar);
   CustomData domain;
   int d_count = 0;
   int index = -1;
