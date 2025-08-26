@@ -580,18 +580,15 @@ typedef struct bTransformCacheConstraint {
 typedef struct bAttributeConstraint {
   struct Object *target;
   int sample_index;
-  char _pad0[4];
-  char offset_matrix;
-  char bstart_mat;
   char utarget_mat;
   char mix_loc;
   char mix_rot;
   char mix_scl;
   char mix_mode;
-  char _pad1;
+  char _pad0[3];
   short data_type;
   short domain_type;
-  char _pad2[4];
+  char _pad1[8];
   char *attribute_name;
 } bAttributeConstraint;
 

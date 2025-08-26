@@ -3725,11 +3725,6 @@ static void rna_def_constraint_attribute(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Sample Index", "Mesh Sample Index");
   RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
 
-  prop = RNA_def_property(srna, "bstart_mat", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, nullptr, "bstart_mat", 1);
-  RNA_def_property_ui_text(prop, "Original Transform", "Use original transform");
-  RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
-
   prop = RNA_def_property(srna, "mix_loc", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "mix_loc", 1);
   RNA_def_property_ui_text(prop, "Mix Loc", "Mix Location");
