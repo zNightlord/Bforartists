@@ -5458,10 +5458,10 @@ static void attribute_id_looper(bConstraint *con, ConstraintIDFunc func, void *u
 static void attribute_new_data(void *cdata)
 {
   bAttributeConstraint *data = (bAttributeConstraint *)cdata;
-  data->attributeName = BLI_strdup("position");
-  data->mixLoc = true;
-  data->mixRot = true;
-  data->mixScl = true;
+  data->attribute_name = BLI_strdup("position");
+  data->mix_loc = true;
+  data->mix_rot = true;
+  data->mix_scl = true;
 }
 
 static int attribute_get_tars(bConstraint *con, ListBase *list)
@@ -5506,7 +5506,7 @@ static bool attribute_get_tarmat(Depsgraph * /*depsgraph*/,
   int d_count = 0;
   int index = -1;
 
-  switch (acon->domainType) {
+  switch (acon->domain_type) {
     case CON_ATTRIBUTE_DOMAIN_POINT:
       domain = target_eval->vert_data;
       d_count = target_eval->verts_num;
@@ -5523,12 +5523,12 @@ static bool attribute_get_tarmat(Depsgraph * /*depsgraph*/,
       return false;
   };
 
-  index = std::clamp(acon->sampleIndex, 0, d_count - 1);
+  index = std::clamp(acon->sample_index, 0, d_count - 1);
 
-  switch (acon->dataType) {
+  switch (acon->data_type) {
     case CON_ATTRIBUTE_4X4MATRIX: {
       const float (*matrices)[4][4] = (const float (*)[4][4])CustomData_get_layer_named(
-          &domain, CD_PROP_FLOAT4X4, acon->attributeName);
+          &domain, CD_PROP_FLOAT4X4, acon->attribute_name);
       if (!matrices) {
         return false;
       }
@@ -5537,7 +5537,7 @@ static bool attribute_get_tarmat(Depsgraph * /*depsgraph*/,
     }
     case CON_ATTRIBUTE_VECTOR: {
       const float (*vectors)[3] = (const float (*)[3])CustomData_get_layer_named(
-          &domain, CD_PROP_FLOAT3, acon->attributeName);
+          &domain, CD_PROP_FLOAT3, acon->attribute_name);
       if (!vectors) {
         return false;
       }
@@ -5546,7 +5546,7 @@ static bool attribute_get_tarmat(Depsgraph * /*depsgraph*/,
     }
     case CON_ATTRIBUTE_QUATERNION: {
       const float (*quaternions)[4] = (const float (*)[4])CustomData_get_layer_named(
-          &domain, CD_PROP_QUATERNION, acon->attributeName);
+          &domain, CD_PROP_QUATERNION, acon->attribute_name);
       if (!quaternions) {
         return false;
       }
@@ -5570,10 +5570,10 @@ static void attribute_evaluate(bConstraint *con, bConstraintOb *cob, ListBase *t
     float target_mat[4][4];
     copy_m4_m4(target_mat, ct->matrix);
 
-    if (!data->mixLoc) {
+    if (!data->mix_loc) {
       zero_v3(target_mat[3]);
     }
-    if (!data->mixRot) {
+    if (!data->mix_rot) {
       float loc[3];
       float rot[3][3];
       float scl[3];
@@ -5581,12 +5581,12 @@ static void attribute_evaluate(bConstraint *con, bConstraintOb *cob, ListBase *t
       unit_m3(rot);
       loc_rot_size_to_mat4(target_mat, loc, rot, scl);
     }
-    if (!data->mixScl) {
+    if (!data->mix_scl) {
       normalize_m4(target_mat);
     }
 
     /* Finally, combine the matrices. */
-    switch (data->mixMode) {
+    switch (data->mix_mode) {
       case CON_ATTRIBUTE_MIX_REPLACE:
         copy_m4_m4(cob->matrix, target_mat);
         break;
@@ -5613,7 +5613,7 @@ static void attribute_evaluate(bConstraint *con, bConstraintOb *cob, ListBase *t
         BLI_assert_msg(0, "Unknown Copy Transforms mix mode");
     }
 
-    if (data->utargetMat) {
+    if (data->utarget_mat) {
       mul_m4_m4m4(cob->matrix, ct->tar->object_to_world().ptr(), cob->matrix);
       mul_m4_m4m4(ct->matrix, ct->matrix, ct->tar->object_to_world().ptr());
     }
