@@ -3691,8 +3691,8 @@ static void rna_def_constraint_attribute(BlenderRNA *brna)
   RNA_define_lib_overridable(true);
 
   prop = RNA_def_property(srna, "target", PROP_POINTER, PROP_NONE);
-  RNA_def_property_pointer_sdna(prop, nullptr, "target"); /* TODO: mesh type. */
-  RNA_def_property_pointer_funcs(prop, nullptr, nullptr, nullptr, "rna_Mesh_object_poll");
+  RNA_def_property_pointer_sdna(prop, nullptr, "target");
+  RNA_def_property_pointer_funcs(prop, nullptr, nullptr, nullptr, nullptr);
   RNA_def_property_ui_text(prop, "Target", "Target Mesh object");
   RNA_def_property_flag(prop, PROP_EDITABLE);
   RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_dependency_update");

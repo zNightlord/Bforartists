@@ -5447,6 +5447,15 @@ static bConstraintTypeInfo CTI_TRANSFORM_CACHE = {
 
 /* ---------- Attribute Transform Constraint ----------- */
 
+static void attribute_free_data(bConstraint *con)
+{
+  bAttributeConstraint *data = static_cast<bAttributeConstraint *>(con->data);
+  if (data->attribute_name) {
+    MEM_freeN(data->attribute_name);
+    data->attribute_name = nullptr;
+  }
+}
+
 static void attribute_id_looper(bConstraint *con, ConstraintIDFunc func, void *userdata)
 {
   bAttributeConstraint *data = static_cast<bAttributeConstraint *>(con->data);
@@ -5457,9 +5466,8 @@ static void attribute_id_looper(bConstraint *con, ConstraintIDFunc func, void *u
 
 static void attribute_new_data(void *cdata)
 {
-  bAttributeConstraint *data = (bAttributeConstraint *)cdata;
+  bAttributeConstraint *data = static_cast<bAttributeConstraint *>(cdata);
   data->attribute_name = BLI_strdup("position");
-  //  STRNCPY(data->attribute_name, "position");
   data->mix_loc = true;
   data->mix_rot = true;
   data->mix_scl = true;
@@ -5625,7 +5633,7 @@ static bConstraintTypeInfo CTI_ATTRIBUTE = {
     /*size*/ sizeof(bAttributeConstraint),
     /*name*/ N_("Attribute Transform"),
     /*struct_name*/ "bAttributeConstraint",
-    /*free_data*/ nullptr,
+    /*free_data*/ attribute_free_data,
     /*id_looper*/ attribute_id_looper,
     /*copy_data*/ nullptr,
     /*new_data*/ attribute_new_data,
