@@ -5459,6 +5459,7 @@ static void attribute_new_data(void *cdata)
 {
   bAttributeConstraint *data = (bAttributeConstraint *)cdata;
   data->attribute_name = BLI_strdup("position");
+  //  STRNCPY(data->attribute_name, "position");
   data->mix_loc = true;
   data->mix_rot = true;
   data->mix_scl = true;
@@ -5502,55 +5503,54 @@ static bool attribute_get_tarmat(Depsgraph * /*depsgraph*/,
 
   unit_m4(ct->matrix);
   const Mesh *target_eval = BKE_object_get_evaluated_mesh(ct->tar);
-  CustomData domain;
-  int d_count = 0;
+  const blender::bke::AttributeAccessor target_attributes = target_eval->attributes();
+
+  blender::bke::AttrDomain domain;
   int index = -1;
 
   switch (acon->domain_type) {
     case CON_ATTRIBUTE_DOMAIN_POINT:
-      domain = target_eval->vert_data;
-      d_count = target_eval->verts_num;
+      domain = blender::bke::AttrDomain::Point;
       break;
     case CON_ATTRIBUTE_DOMAIN_EDGE:
-      domain = target_eval->edge_data;
-      d_count = target_eval->edges_num;
+      domain = blender::bke::AttrDomain::Edge;
       break;
     case CON_ATTRIBUTE_DOMAIN_FACE:
-      domain = target_eval->face_data;
-      d_count = target_eval->faces_num;
+      domain = blender::bke::AttrDomain::Face;
       break;
     default:
       return false;
   };
 
-  index = std::clamp(acon->sample_index, 0, d_count - 1);
-
   switch (acon->data_type) {
-    case CON_ATTRIBUTE_4X4MATRIX: {
-      const float (*matrices)[4][4] = (const float (*)[4][4])CustomData_get_layer_named(
-          &domain, CD_PROP_FLOAT4X4, acon->attribute_name);
-      if (!matrices) {
-        return false;
-      }
-      copy_m4_m4(ct->matrix, matrices[index]);
-      break;
-    }
     case CON_ATTRIBUTE_VECTOR: {
-      const float (*vectors)[3] = (const float (*)[3])CustomData_get_layer_named(
-          &domain, CD_PROP_FLOAT3, acon->attribute_name);
-      if (!vectors) {
+      const blender::VArraySpan vectors = *target_attributes.lookup<blender::float3>(
+          acon->attribute_name, domain);
+      if (vectors.is_empty()) {
         return false;
       }
+      index = std::clamp(acon->sample_index, 0, int(vectors.size() - 1));
       copy_v3_v3(ct->matrix[3], vectors[index]);
       break;
     }
     case CON_ATTRIBUTE_QUATERNION: {
-      const float (*quaternions)[4] = (const float (*)[4])CustomData_get_layer_named(
-          &domain, CD_PROP_QUATERNION, acon->attribute_name);
-      if (!quaternions) {
+      const blender::VArraySpan quaternions = *target_attributes.lookup<blender::float4>(
+          acon->attribute_name, domain);
+      if (quaternions.is_empty()) {
         return false;
       }
+      index = std::clamp(acon->sample_index, 0, int(quaternions.size() - 1));
       quat_to_mat4(ct->matrix, quaternions[index]);
+      break;
+    }
+    case CON_ATTRIBUTE_4X4MATRIX: {
+      const blender::VArraySpan matrices = *target_attributes.lookup<blender::float4x4>(
+          acon->attribute_name, domain);
+      if (matrices.is_empty()) {
+        return false;
+      }
+      index = std::clamp(acon->sample_index, 0, int(matrices.size() - 1));
+      copy_m4_m4(ct->matrix, reinterpret_cast<const float (*)[4]>(&matrices[index]));
       break;
     }
     default:
