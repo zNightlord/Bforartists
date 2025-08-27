@@ -1532,7 +1532,7 @@ void DepsgraphRelationBuilder::build_constraints(ID *id,
           add_relation(target_transform_key, constraint_op_key, cti->name);
         }
         else if (con->type == CONSTRAINT_TYPE_ATTRIBUTE) {
-          /* Constraints which requires the target object surface. */
+          /* Constraints which require the target object geometry attributes. */
           ComponentKey target_key(&ct->tar->id, NodeType::GEOMETRY);
           add_relation(target_key, constraint_op_key, cti->name);
 

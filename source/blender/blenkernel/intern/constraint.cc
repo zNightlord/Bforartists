@@ -5574,57 +5574,59 @@ static void attribute_evaluate(bConstraint *con, bConstraintOb *cob, ListBase *t
   bAttributeConstraint *data = static_cast<bAttributeConstraint *>(con->data);
 
   /* only evaluate if there is a target */
-  if (VALID_CONS_TARGET(ct)) {
-    float target_mat[4][4];
-    copy_m4_m4(target_mat, ct->matrix);
+  if (!VALID_CONS_TARGET(ct)) {
+    return;
+  }
 
-    if (!data->mix_loc) {
-      zero_v3(target_mat[3]);
-    }
-    if (!data->mix_rot) {
-      float loc[3];
-      float rot[3][3];
-      float scl[3];
-      mat4_to_loc_rot_size(loc, rot, scl, target_mat);
-      unit_m3(rot);
-      loc_rot_size_to_mat4(target_mat, loc, rot, scl);
-    }
-    if (!data->mix_scl) {
-      normalize_m4(target_mat);
-    }
+  float target_mat[4][4];
+  copy_m4_m4(target_mat, ct->matrix);
 
-    /* Finally, combine the matrices. */
-    switch (data->mix_mode) {
-      case CON_ATTRIBUTE_MIX_REPLACE:
-        copy_m4_m4(cob->matrix, target_mat);
-        break;
+  if (!data->mix_loc) {
+    zero_v3(target_mat[3]);
+  }
+  if (!data->mix_rot) {
+    float loc[3];
+    float rot[3][3];
+    float scl[3];
+    mat4_to_loc_rot_size(loc, rot, scl, target_mat);
+    unit_m3(rot);
+    loc_rot_size_to_mat4(target_mat, loc, rot, scl);
+  }
+  if (!data->mix_scl) {
+    normalize_m4(target_mat);
+  }
 
-      /* Simple matrix multiplication. */
-      case CON_ATTRIBUTE_MIX_BEFORE_FULL:
-        mul_m4_m4m4(cob->matrix, target_mat, cob->matrix);
-        break;
+  /* Finally, combine the matrices. */
+  switch (data->mix_mode) {
+    case CON_ATTRIBUTE_MIX_REPLACE:
+      copy_m4_m4(cob->matrix, target_mat);
+      break;
 
-      case CON_ATTRIBUTE_MIX_AFTER_FULL:
-        mul_m4_m4m4(cob->matrix, cob->matrix, target_mat);
-        break;
+    /* Simple matrix multiplication. */
+    case CON_ATTRIBUTE_MIX_BEFORE_FULL:
+      mul_m4_m4m4(cob->matrix, target_mat, cob->matrix);
+      break;
 
-      /* Fully separate handling of channels. */
-      case CON_ATTRIBUTE_MIX_BEFORE_SPLIT:
-        mul_m4_m4m4_split_channels(cob->matrix, target_mat, cob->matrix);
-        break;
+    case CON_ATTRIBUTE_MIX_AFTER_FULL:
+      mul_m4_m4m4(cob->matrix, cob->matrix, target_mat);
+      break;
 
-      case CON_ATTRIBUTE_MIX_AFTER_SPLIT:
-        mul_m4_m4m4_split_channels(cob->matrix, cob->matrix, target_mat);
-        break;
+    /* Fully separate handling of channels. */
+    case CON_ATTRIBUTE_MIX_BEFORE_SPLIT:
+      mul_m4_m4m4_split_channels(cob->matrix, target_mat, cob->matrix);
+      break;
 
-      default:
-        BLI_assert_msg(0, "Unknown Copy Transforms mix mode");
-    }
+    case CON_ATTRIBUTE_MIX_AFTER_SPLIT:
+      mul_m4_m4m4_split_channels(cob->matrix, cob->matrix, target_mat);
+      break;
 
-    if (data->utarget_mat) {
-      mul_m4_m4m4(cob->matrix, ct->tar->object_to_world().ptr(), cob->matrix);
-      mul_m4_m4m4(ct->matrix, ct->matrix, ct->tar->object_to_world().ptr());
-    }
+    default:
+      BLI_assert_msg(0, "Unknown Copy Transforms mix mode");
+  }
+
+  if (data->utarget_mat) {
+    mul_m4_m4m4(cob->matrix, ct->tar->object_to_world().ptr(), cob->matrix);
+    mul_m4_m4m4(ct->matrix, ct->matrix, ct->tar->object_to_world().ptr());
   }
 }
 
@@ -6672,6 +6674,11 @@ void BKE_constraint_blend_write(BlendWriter *writer, ListBase *conlist)
 
           break;
         }
+        case CONSTRAINT_TYPE_ATTRIBUTE: {
+          bAttributeConstraint *data = static_cast<bAttributeConstraint *>(con->data);
+          BLO_write_string(writer, data->attribute_name);
+          break;
+        }
       }
     }
 
@@ -6733,6 +6740,11 @@ void BKE_constraint_blend_read_data(BlendDataReader *reader, ID *id_owner, ListB
         bTransformCacheConstraint *data = static_cast<bTransformCacheConstraint *>(con->data);
         data->reader = nullptr;
         data->reader_object_path[0] = '\0';
+      }
+      case CONSTRAINT_TYPE_ATTRIBUTE: {
+        bAttributeConstraint *data = static_cast<bAttributeConstraint *>(con->data);
+        BLO_read_string(reader, &data->attribute_name);
+        break;
       }
     }
   }
