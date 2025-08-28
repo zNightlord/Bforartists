@@ -59,6 +59,7 @@
 #include "BKE_displist.h"
 #include "BKE_editmesh.hh"
 #include "BKE_fcurve_driver.h"
+#include "BKE_geometry_set_instances.hh"
 #include "BKE_global.hh"
 #include "BKE_idprop.hh"
 #include "BKE_lib_id.hh"
@@ -5550,13 +5551,32 @@ static bool attribute_get_tarmat(Depsgraph * /*depsgraph*/,
 {
   bAttributeConstraint *acon = (bAttributeConstraint *)con->data;
 
-  if (!VALID_CONS_TARGET(ct) || ct->tar->type != OB_MESH) {
+  if (!VALID_CONS_TARGET(ct)) {
     return false;
   }
 
   unit_m4(ct->matrix);
-  const Mesh *target_eval = BKE_object_get_evaluated_mesh(ct->tar);
-  const blender::bke::AttributeAccessor target_attributes = target_eval->attributes();
+
+  const blender::bke::GeometrySet &target_eval = blender::bke::object_get_evaluated_geometry_set(
+      *ct->tar);
+
+  const blender::bke::GeometryComponent *component =
+      target_eval.get_component<blender::bke::MeshComponent>();
+  if (!component)
+    component = target_eval.get_component<blender::bke::CurveComponent>();
+  if (!component)
+    component = target_eval.get_component<blender::bke::PointCloudComponent>();
+  if (!component)
+    return false;
+
+  const std::optional<blender::bke::AttributeAccessor> optional_attributes =
+      component->attributes();
+
+  if (!optional_attributes.has_value()) {
+    return false;
+  }
+
+  const blender::bke::AttributeAccessor &target_attributes = *optional_attributes;
 
   const blender::bke::AttrDomain domain = domain_value_to_attribute(acon->domain_type);
   const blender::bke::AttrType sample_data_type = type_value_to_attribute(acon->data_type);
