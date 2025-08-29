@@ -5478,16 +5478,21 @@ static blender::bke::AttrType type_value_to_attribute(short data_type)
   }
 }
 
-static void value_attribute_to_matrix(float output_matrix[4][4], const blender::GPointer value)
+static void value_attribute_to_matrix(float output_matrix[4][4],
+                                      const blender::GPointer value,
+                                      short data_type)
+
 {
-  if (value.type()->is<blender::float3>()) {
-    copy_v3_v3(output_matrix[3], *value.get<blender::float3>());
-  }
-  else if (value.type()->is<blender::math::Quaternion>()) {
-    quat_to_mat4(output_matrix, *value.get<blender::float4>());
-  }
-  else if (value.type()->is<blender::float4x4>()) {
-    copy_m4_m4(output_matrix, (*value.get<blender::float4x4>()).ptr());
+  switch (data_type) {
+    case CON_ATTRIBUTE_VECTOR:
+      copy_v3_v3(output_matrix[3], *value.get<blender::float3>());
+      break;
+    case CON_ATTRIBUTE_QUATERNION:
+      quat_to_mat4(output_matrix, *value.get<blender::float4>());
+      break;
+    case CON_ATTRIBUTE_4X4MATRIX:
+      copy_m4_m4(output_matrix, (*value.get<blender::float4x4>()).ptr());
+      break;
   }
 }
 
@@ -5597,7 +5602,7 @@ static bool attribute_get_tarmat(Depsgraph * /*depsgraph*/,
   BUFFER_FOR_CPP_TYPE_VALUE(type, sampled_value);
   attribute.get_to_uninitialized(index, sampled_value);
 
-  value_attribute_to_matrix(ct->matrix, blender::GPointer(type, sampled_value));
+  value_attribute_to_matrix(ct->matrix, blender::GPointer(type, sampled_value), acon->data_type);
   type.destruct(sampled_value);
 
   return true;
