@@ -5597,9 +5597,6 @@ static bool attribute_get_tarmat(Depsgraph * /*depsgraph*/,
   const blender::GVArray attribute = *target_attributes.lookup(
       acon->attribute_name, domain, sample_data_type);
 
-  /* const blender::bke::GAttributeReader attribute =
-    target_attributes.lookup(acon->attribute_name); this doesn't interpolate*/
-
   if (attribute.is_empty()) {
     return false;
   }
