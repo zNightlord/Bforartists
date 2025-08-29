@@ -5483,7 +5483,7 @@ static void value_attribute_to_matrix(float output_matrix[4][4], const blender::
   if (value.type()->is<blender::float3>()) {
     copy_v3_v3(output_matrix[3], *value.get<blender::float3>());
   }
-  else if (value.type()->is<blender::float4>()) {
+  else if (value.type()->is<blender::math::Quaternion>()) {
     quat_to_mat4(output_matrix, *value.get<blender::float4>());
   }
   else if (value.type()->is<blender::float4x4>()) {
