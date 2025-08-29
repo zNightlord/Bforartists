@@ -5496,7 +5496,6 @@ static void value_attribute_to_matrix(float output_matrix[4][4],
   }
 }
 
-/*
 static void attribute_free_data(bConstraint *con)
 {
   bAttributeConstraint *data = static_cast<bAttributeConstraint *>(con->data);
@@ -5505,7 +5504,6 @@ static void attribute_free_data(bConstraint *con)
     data->attribute_name = nullptr;
   }
 }
-*/
 
 static void attribute_id_looper(bConstraint *con, ConstraintIDFunc func, void *userdata)
 {
@@ -5515,10 +5513,20 @@ static void attribute_id_looper(bConstraint *con, ConstraintIDFunc func, void *u
   func(con, (ID **)&data->target, false, userdata);
 }
 
+static void attribute_copy_data(bConstraint *con, bConstraint *srccon)
+{
+  bAttributeConstraint *src = static_cast<bAttributeConstraint *>(srccon->data);
+  bAttributeConstraint *dst = static_cast<bAttributeConstraint *>(con->data);
+
+  if (src->attribute_name) {
+    dst->attribute_name = BLI_strdup(src->attribute_name);
+  }
+}
+
 static void attribute_new_data(void *cdata)
 {
   bAttributeConstraint *data = static_cast<bAttributeConstraint *>(cdata);
-  STRNCPY(data->attribute_name, "position");
+  data->attribute_name = BLI_strdup("position");
   data->mix_loc = true;
   data->mix_rot = true;
   data->mix_scl = true;
@@ -5675,9 +5683,9 @@ static bConstraintTypeInfo CTI_ATTRIBUTE = {
     /*size*/ sizeof(bAttributeConstraint),
     /*name*/ N_("Attribute Transform"),
     /*struct_name*/ "bAttributeConstraint",
-    /*free_data*/ nullptr, /*attribute_free_data*/
+    /*free_data*/ attribute_free_data,
     /*id_looper*/ attribute_id_looper,
-    /*copy_data*/ nullptr,
+    /*copy_data*/ attribute_copy_data,
     /*new_data*/ attribute_new_data,
     /*get_constraint_targets*/ attribute_get_tars,
     /*flush_constraint_targets*/ attribute_flush_tars,
@@ -6713,12 +6721,12 @@ void BKE_constraint_blend_write(BlendWriter *writer, ListBase *conlist)
           BLO_write_float_array(writer, data->numpoints, data->points);
 
           break;
-        } /*
-         case CONSTRAINT_TYPE_ATTRIBUTE: {
-           bAttributeConstraint *data = static_cast<bAttributeConstraint *>(con->data);
-           BLO_write_string(writer, data->attribute_name);
-           break;
-         }*/
+        }
+        case CONSTRAINT_TYPE_ATTRIBUTE: {
+          bAttributeConstraint *data = static_cast<bAttributeConstraint *>(con->data);
+          BLO_write_string(writer, data->attribute_name);
+          break;
+        }
       }
     }
 
@@ -6780,12 +6788,12 @@ void BKE_constraint_blend_read_data(BlendDataReader *reader, ID *id_owner, ListB
         bTransformCacheConstraint *data = static_cast<bTransformCacheConstraint *>(con->data);
         data->reader = nullptr;
         data->reader_object_path[0] = '\0';
-      } /*
-       case CONSTRAINT_TYPE_ATTRIBUTE: {
-         bAttributeConstraint *data = static_cast<bAttributeConstraint *>(con->data);
-         BLO_read_string(reader, &data->attribute_name);
-         break;
-       }*/
+      }
+      case CONSTRAINT_TYPE_ATTRIBUTE: {
+        bAttributeConstraint *data = static_cast<bAttributeConstraint *>(con->data);
+        BLO_read_string(reader, &data->attribute_name);
+        break;
+      }
     }
   }
 }
