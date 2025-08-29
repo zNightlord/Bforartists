@@ -5576,9 +5576,9 @@ static bool attribute_get_tarmat(Depsgraph * /*depsgraph*/,
   const blender::bke::GeometryComponent *component =
       target_eval.get_component<blender::bke::MeshComponent>();
   if (!component)
-    component = target_eval.get_component<blender::bke::CurveComponent>();
-  if (!component)
     component = target_eval.get_component<blender::bke::PointCloudComponent>();
+  if (!component)
+    component = target_eval.get_component<blender::bke::CurveComponent>();
   if (!component)
     return false;
 
@@ -5593,7 +5593,7 @@ static bool attribute_get_tarmat(Depsgraph * /*depsgraph*/,
 
   const blender::bke::AttrDomain domain = domain_value_to_attribute(acon->domain_type);
   const blender::bke::AttrType sample_data_type = type_value_to_attribute(acon->data_type);
-
+  
   const blender::GVArray attribute = *target_attributes.lookup(
       acon->attribute_name, domain, sample_data_type);
 
