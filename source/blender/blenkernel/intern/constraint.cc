@@ -5448,9 +5448,9 @@ static bConstraintTypeInfo CTI_TRANSFORM_CACHE = {
 
 /* ---------- Attribute Transform Constraint ----------- */
 
-static blender::bke::AttrDomain domain_value_to_attribute(short domain_mode)
+using namespace blender::bke;
+static AttrDomain domain_value_to_attribute(short domain_mode)
 {
-  using namespace blender::bke;
   switch (domain_mode) {
     case CON_ATTRIBUTE_DOMAIN_POINT:
       return AttrDomain::Point;
@@ -5463,9 +5463,8 @@ static blender::bke::AttrDomain domain_value_to_attribute(short domain_mode)
   }
 }
 
-static blender::bke::AttrType type_value_to_attribute(short data_type)
+static AttrType type_value_to_attribute(short data_type)
 {
-  using namespace blender::bke;
   switch (data_type) {
     case CON_ATTRIBUTE_VECTOR:
       return AttrType::Float3;
@@ -5481,7 +5480,6 @@ static blender::bke::AttrType type_value_to_attribute(short data_type)
 static void value_attribute_to_matrix(float output_matrix[4][4],
                                       const blender::GPointer value,
                                       short data_type)
-
 {
   switch (data_type) {
     case CON_ATTRIBUTE_VECTOR:
@@ -5494,6 +5492,37 @@ static void value_attribute_to_matrix(float output_matrix[4][4],
       copy_m4_m4(output_matrix, (*value.get<blender::float4x4>()).ptr());
       break;
   }
+}
+
+static bool component_is_available(const GeometrySet &geometry,
+                                   const GeometryComponent::Type type,
+                                   const AttrDomain domain)
+{
+  if (!geometry.has(type)) {
+    return false;
+  }
+  const GeometryComponent &component = *geometry.get_component(type);
+  return component.attribute_domain_size(domain) != 0;
+}
+
+static const GeometryComponent *find_source_component(const GeometrySet &geometry,
+                                                      const AttrDomain domain)
+{
+  /* Choose the other component based on a consistent order, rather than some more complicated
+   * heuristic. This is the same order visible in the spreadsheet and used in the ray-cast node. */
+  static const blender::Array<GeometryComponent::Type> supported_types = {
+      GeometryComponent::Type::Mesh,
+      GeometryComponent::Type::PointCloud,
+      GeometryComponent::Type::Curve,
+      GeometryComponent::Type::Instance,
+      GeometryComponent::Type::GreasePencil};
+  for (const GeometryComponent::Type src_type : supported_types) {
+    if (component_is_available(geometry, src_type, domain)) {
+      return geometry.get_component(src_type);
+    }
+  }
+
+  return nullptr;
 }
 
 static void attribute_free_data(bConstraint *con)
@@ -5570,30 +5599,23 @@ static bool attribute_get_tarmat(Depsgraph * /*depsgraph*/,
 
   unit_m4(ct->matrix);
 
+  const blender::bke::AttrDomain domain = domain_value_to_attribute(acon->domain_type);
+  const blender::bke::AttrType sample_data_type = type_value_to_attribute(acon->data_type);
   const blender::bke::GeometrySet &target_eval = blender::bke::object_get_evaluated_geometry_set(
       *ct->tar);
 
-  const blender::bke::GeometryComponent *component =
-      target_eval.get_component<blender::bke::MeshComponent>();
-  if (!component)
-    component = target_eval.get_component<blender::bke::PointCloudComponent>();
-  if (!component)
-    component = target_eval.get_component<blender::bke::CurveComponent>();
-  if (!component)
+  const blender::bke::GeometryComponent *component = find_source_component(target_eval, domain);
+  if (component == nullptr) {
     return false;
+  }
 
   const std::optional<blender::bke::AttributeAccessor> optional_attributes =
       component->attributes();
-
   if (!optional_attributes.has_value()) {
     return false;
   }
 
   const blender::bke::AttributeAccessor &target_attributes = *optional_attributes;
-
-  const blender::bke::AttrDomain domain = domain_value_to_attribute(acon->domain_type);
-  const blender::bke::AttrType sample_data_type = type_value_to_attribute(acon->data_type);
-  
   const blender::GVArray attribute = *target_attributes.lookup(
       acon->attribute_name, domain, sample_data_type);
 
