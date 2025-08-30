@@ -1154,7 +1154,11 @@ typedef enum Attribute_DomainMode {
   CON_ATTRIBUTE_DOMAIN_POINT = 0,
   CON_ATTRIBUTE_DOMAIN_EDGE = 1,
   CON_ATTRIBUTE_DOMAIN_FACE = 2,
-} Attribute_DomainMode;
+  CON_ATTRIBUTE_DOMAIN_FACE_CORNER = 3,
+  CON_ATTRIBUTE_DOMAIN_CURVE = 4,
+  CON_ATTRIBUTE_DOMAIN_INSTANCE = 5,
+}
+Attribute_DomainMode;
 
 /* Atrtibute Data Type*/
 typedef enum Attribute_Data_Type {

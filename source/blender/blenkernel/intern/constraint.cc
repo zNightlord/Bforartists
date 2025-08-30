@@ -5458,6 +5458,12 @@ static AttrDomain domain_value_to_attribute(short domain_mode)
       return AttrDomain::Edge;
     case CON_ATTRIBUTE_DOMAIN_FACE:
       return AttrDomain::Face;
+    case CON_ATTRIBUTE_DOMAIN_FACE_CORNER:
+      return AttrDomain::Corner;
+    case CON_ATTRIBUTE_DOMAIN_CURVE:
+      return AttrDomain::Curve;
+    case CON_ATTRIBUTE_DOMAIN_INSTANCE:
+      return AttrDomain::Instance;
     default:
       return AttrDomain::Point;
   }

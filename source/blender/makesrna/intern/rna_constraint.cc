@@ -3627,6 +3627,9 @@ static void rna_def_constraint_attribute(BlenderRNA *brna)
       {CON_ATTRIBUTE_DOMAIN_POINT, "POINT", 0, "Point", "Point Domain"},
       {CON_ATTRIBUTE_DOMAIN_EDGE, "EDGE", 0, "Edge", "Edge Domain"},
       {CON_ATTRIBUTE_DOMAIN_FACE, "FACE", 0, "Face", "Face Domain"},
+      {CON_ATTRIBUTE_DOMAIN_FACE_CORNER, "FACE_CORNER", 0, "Face Corner", "Face Corner Domain"},
+      {CON_ATTRIBUTE_DOMAIN_CURVE, "CURVE", 0, "Spline", "Spline Domain"},
+      {CON_ATTRIBUTE_DOMAIN_INSTANCE, "INSTANCE", 0, "Instance", "Instance Domain"},
       {0, nullptr, 0, nullptr, nullptr},
   };
 
