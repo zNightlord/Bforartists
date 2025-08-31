@@ -3725,6 +3725,7 @@ static void rna_def_constraint_attribute(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "sample_index", PROP_INT, PROP_NONE);
   RNA_def_property_int_sdna(prop, nullptr, "sample_index");
+  RNA_def_property_range(prop, 0, INT_MAX);
   RNA_def_property_ui_text(prop, "Sample Index", "Mesh Sample Index");
   RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
 
