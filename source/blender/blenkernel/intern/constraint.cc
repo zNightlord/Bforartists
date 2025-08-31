@@ -5448,38 +5448,37 @@ static bConstraintTypeInfo CTI_TRANSFORM_CACHE = {
 
 /* ---------- Attribute Transform Constraint ----------- */
 
-using namespace blender::bke;
-static AttrDomain domain_value_to_attribute(short domain_mode)
+static blender::bke::AttrDomain domain_value_to_attribute(short domain_mode)
 {
   switch (domain_mode) {
     case CON_ATTRIBUTE_DOMAIN_POINT:
-      return AttrDomain::Point;
+      return blender::bke::AttrDomain::Point;
     case CON_ATTRIBUTE_DOMAIN_EDGE:
-      return AttrDomain::Edge;
+      return blender::bke::AttrDomain::Edge;
     case CON_ATTRIBUTE_DOMAIN_FACE:
-      return AttrDomain::Face;
+      return blender::bke::AttrDomain::Face;
     case CON_ATTRIBUTE_DOMAIN_FACE_CORNER:
-      return AttrDomain::Corner;
+      return blender::bke::AttrDomain::Corner;
     case CON_ATTRIBUTE_DOMAIN_CURVE:
-      return AttrDomain::Curve;
+      return blender::bke::AttrDomain::Curve;
     case CON_ATTRIBUTE_DOMAIN_INSTANCE:
-      return AttrDomain::Instance;
+      return blender::bke::AttrDomain::Instance;
     default:
-      return AttrDomain::Point;
+      return blender::bke::AttrDomain::Point;
   }
 }
 
-static AttrType type_value_to_attribute(short data_type)
+static blender::bke::AttrType type_value_to_attribute(short data_type)
 {
   switch (data_type) {
     case CON_ATTRIBUTE_VECTOR:
-      return AttrType::Float3;
+      return blender::bke::AttrType::Float3;
     case CON_ATTRIBUTE_QUATERNION:
-      return AttrType::Quaternion;
+      return blender::bke::AttrType::Quaternion;
     case CON_ATTRIBUTE_4X4MATRIX:
-      return AttrType::Float4x4;
+      return blender::bke::AttrType::Float4x4;
     default:
-      return AttrType::Float3;
+      return blender::bke::AttrType::Float3;
   }
 }
 
@@ -5500,29 +5499,29 @@ static void value_attribute_to_matrix(float output_matrix[4][4],
   }
 }
 
-static bool component_is_available(const GeometrySet &geometry,
-                                   const GeometryComponent::Type type,
-                                   const AttrDomain domain)
+static bool component_is_available(const blender::bke::GeometrySet &geometry,
+                                   const blender::bke::GeometryComponent::Type type,
+                                   const blender::bke::AttrDomain domain)
 {
   if (!geometry.has(type)) {
     return false;
   }
-  const GeometryComponent &component = *geometry.get_component(type);
+  const blender::bke::GeometryComponent &component = *geometry.get_component(type);
   return component.attribute_domain_size(domain) != 0;
 }
 
-static const GeometryComponent *find_source_component(const GeometrySet &geometry,
-                                                      const AttrDomain domain)
+static const blender::bke::GeometryComponent *find_source_component(const blender::bke::GeometrySet &geometry,
+                                                      const blender::bke::AttrDomain domain)
 {
   /* Choose the other component based on a consistent order, rather than some more complicated
    * heuristic. This is the same order visible in the spreadsheet and used in the ray-cast node. */
-  static const blender::Array<GeometryComponent::Type> supported_types = {
-      GeometryComponent::Type::Mesh,
-      GeometryComponent::Type::PointCloud,
-      GeometryComponent::Type::Curve,
-      GeometryComponent::Type::Instance,
-      GeometryComponent::Type::GreasePencil};
-  for (const GeometryComponent::Type src_type : supported_types) {
+  static const blender::Array<blender::bke::GeometryComponent::Type> supported_types = {
+      blender::bke::GeometryComponent::Type::Mesh,
+      blender::bke::GeometryComponent::Type::PointCloud,
+      blender::bke::GeometryComponent::Type::Curve,
+      blender::bke::GeometryComponent::Type::Instance,
+      blender::bke::GeometryComponent::Type::GreasePencil};
+  for (const blender::bke::GeometryComponent::Type src_type : supported_types) {
     if (component_is_available(geometry, src_type, domain)) {
       return geometry.get_component(src_type);
     }
