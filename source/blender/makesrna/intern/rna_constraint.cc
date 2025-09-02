@@ -3710,7 +3710,7 @@ static void rna_def_constraint_attribute(BlenderRNA *brna)
   RNA_def_property_enum_sdna(prop, nullptr, "domain_type");
   RNA_def_property_enum_items(prop, domain_items);
   RNA_def_property_ui_text(prop, "Domain Type", "Attribute domain");
-  RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_dependency_update");
+  RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
 
   prop = RNA_def_property(srna, "utarget_mat", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "utarget_mat", 1);
@@ -3721,7 +3721,7 @@ static void rna_def_constraint_attribute(BlenderRNA *brna)
   RNA_def_property_enum_sdna(prop, nullptr, "data_type");
   RNA_def_property_enum_items(prop, type_items);
   RNA_def_property_ui_text(prop, "Data Type", "Select data type of attribute");
-  RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_dependency_update");
+  RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
 
   prop = RNA_def_property(srna, "sample_index", PROP_INT, PROP_NONE);
   RNA_def_property_int_sdna(prop, nullptr, "sample_index");
