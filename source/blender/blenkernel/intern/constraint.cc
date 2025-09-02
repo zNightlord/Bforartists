@@ -5464,6 +5464,7 @@ static blender::bke::AttrDomain domain_value_to_attribute(const int domain_mode)
     case CON_ATTRIBUTE_DOMAIN_INSTANCE:
       return blender::bke::AttrDomain::Instance;
     default:
+      BLI_assert_unreachable();
       return blender::bke::AttrDomain::Point;
   }
 }
@@ -5478,24 +5479,27 @@ static blender::bke::AttrType type_value_to_attribute(const int data_type)
     case CON_ATTRIBUTE_4X4MATRIX:
       return blender::bke::AttrType::Float4x4;
     default:
+      BLI_assert_unreachable();
       return blender::bke::AttrType::Float3;
   }
 }
 
-static void value_attribute_to_matrix(float output_matrix[4][4],
+static void value_attribute_to_matrix(float r_matrix[4][4],
                                       const blender::GPointer value,
                                       const int data_type)
 {
   switch (data_type) {
     case CON_ATTRIBUTE_VECTOR:
-      copy_v3_v3(output_matrix[3], *value.get<blender::float3>());
+      copy_v3_v3(r_matrix[3], *value.get<blender::float3>());
       break;
     case CON_ATTRIBUTE_QUATERNION:
-      quat_to_mat4(output_matrix, *value.get<blender::float4>());
+      quat_to_mat4(r_matrix, *value.get<blender::float4>());
       break;
     case CON_ATTRIBUTE_4X4MATRIX:
-      copy_m4_m4(output_matrix, (*value.get<blender::float4x4>()).ptr());
+      copy_m4_m4(r_matrix, (*value.get<blender::float4x4>()).ptr());
       break;
+    default:
+      BLI_assert_unreachable();
   }
 }
 
@@ -5642,7 +5646,7 @@ static bool attribute_get_tarmat(Depsgraph * /*depsgraph*/,
 
 static void attribute_evaluate(bConstraint *con, bConstraintOb *cob, ListBase *targets)
 {
-  const bConstraintTarget *ct = static_cast<bConstraintTarget *>(targets->first);
+  bConstraintTarget *ct = static_cast<bConstraintTarget *>(targets->first);
   const bAttributeConstraint *data = static_cast<bAttributeConstraint *>(con->data);
 
   /* only evaluate if there is a target */
@@ -5693,7 +5697,7 @@ static void attribute_evaluate(bConstraint *con, bConstraintOb *cob, ListBase *t
       break;
 
     default:
-      BLI_assert_msg(0, "Unknown Copy Transforms mix mode");
+      BLI_assert_unreachable();
   }
 
   if (data->utarget_mat) {
