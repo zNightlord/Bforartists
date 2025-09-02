@@ -5697,7 +5697,7 @@ static void attribute_evaluate(bConstraint *con, bConstraintOb *cob, ListBase *t
       break;
 
     default:
-      BLI_assert_unreachable();
+      BLI_assert_msg(0, "Unknown Copy Transforms mix mode");
   }
 
   if (data->utarget_mat) {
