@@ -5489,17 +5489,21 @@ static void value_attribute_to_matrix(float r_matrix[4][4],
                                       const int data_type)
 {
   switch (data_type) {
-    case CON_ATTRIBUTE_VECTOR:
+    case CON_ATTRIBUTE_VECTOR: {
       copy_v3_v3(r_matrix[3], *value.get<blender::float3>());
       break;
-    case CON_ATTRIBUTE_QUATERNION:
+    }
+    case CON_ATTRIBUTE_QUATERNION: {
       quat_to_mat4(r_matrix, *value.get<blender::float4>());
       break;
-    case CON_ATTRIBUTE_4X4MATRIX:
+    }
+    case CON_ATTRIBUTE_4X4MATRIX: {
       copy_m4_m4(r_matrix, (*value.get<blender::float4x4>()).ptr());
       break;
-    default:
+    }
+    default: {
       BLI_assert_unreachable();
+    }
   }
 }
 
@@ -5674,30 +5678,36 @@ static void attribute_evaluate(bConstraint *con, bConstraintOb *cob, ListBase *t
 
   /* Finally, combine the matrices. */
   switch (data->mix_mode) {
-    case CON_ATTRIBUTE_MIX_REPLACE:
+    case CON_ATTRIBUTE_MIX_REPLACE: {
       copy_m4_m4(cob->matrix, target_mat);
       break;
+    }
 
     /* Simple matrix multiplication. */
-    case CON_ATTRIBUTE_MIX_BEFORE_FULL:
+    case CON_ATTRIBUTE_MIX_BEFORE_FULL: {
       mul_m4_m4m4(cob->matrix, target_mat, cob->matrix);
       break;
+    }
 
-    case CON_ATTRIBUTE_MIX_AFTER_FULL:
+    case CON_ATTRIBUTE_MIX_AFTER_FULL: {
       mul_m4_m4m4(cob->matrix, cob->matrix, target_mat);
       break;
+    }
 
     /* Fully separate handling of channels. */
-    case CON_ATTRIBUTE_MIX_BEFORE_SPLIT:
+    case CON_ATTRIBUTE_MIX_BEFORE_SPLIT: {
       mul_m4_m4m4_split_channels(cob->matrix, target_mat, cob->matrix);
       break;
+    }
 
-    case CON_ATTRIBUTE_MIX_AFTER_SPLIT:
+    case CON_ATTRIBUTE_MIX_AFTER_SPLIT: {
       mul_m4_m4m4_split_channels(cob->matrix, cob->matrix, target_mat);
       break;
+    }
 
-    default:
+    default: {
       BLI_assert_msg(0, "Unknown Copy Transforms mix mode");
+    }
   }
 
   if (data->utarget_mat) {

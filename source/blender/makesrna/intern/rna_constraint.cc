@@ -3741,7 +3741,7 @@ static void rna_def_constraint_attribute(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "mix_scl", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "mix_scl", 1);
-  RNA_def_property_ui_text(prop, "Mix Scl", "Mix Scale");
+  RNA_def_property_ui_text(prop, "Mix Scale", "Mix Scale");
   RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
 
   prop = RNA_def_property(srna, "mix_mode", PROP_ENUM, PROP_NONE);
