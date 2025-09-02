@@ -1536,8 +1536,8 @@ void DepsgraphRelationBuilder::build_constraints(ID *id,
           ComponentKey target_key(&ct->tar->id, NodeType::GEOMETRY);
           add_relation(target_key, constraint_op_key, cti->name);
 
-          /* NOTE: obdata eval now doesn't necessarily depend on the
-           * object's transform. */
+          /* NOTE: The target object's transform is used when the 'Apply target transform' flag
+           * is set.*/
           ComponentKey target_transform_key(&ct->tar->id, NodeType::TRANSFORM);
           add_relation(target_transform_key, constraint_op_key, cti->name);
         }
