@@ -5448,7 +5448,7 @@ static bConstraintTypeInfo CTI_TRANSFORM_CACHE = {
 
 /* ---------- Attribute Transform Constraint ----------- */
 
-static blender::bke::AttrDomain domain_value_to_attribute(short domain_mode)
+static blender::bke::AttrDomain domain_value_to_attribute(const int domain_mode)
 {
   switch (domain_mode) {
     case CON_ATTRIBUTE_DOMAIN_POINT:
@@ -5468,7 +5468,7 @@ static blender::bke::AttrDomain domain_value_to_attribute(short domain_mode)
   }
 }
 
-static blender::bke::AttrType type_value_to_attribute(short data_type)
+static blender::bke::AttrType type_value_to_attribute(const int data_type)
 {
   switch (data_type) {
     case CON_ATTRIBUTE_VECTOR:
@@ -5484,7 +5484,7 @@ static blender::bke::AttrType type_value_to_attribute(short data_type)
 
 static void value_attribute_to_matrix(float output_matrix[4][4],
                                       const blender::GPointer value,
-                                      short data_type)
+                                      const int data_type)
 {
   switch (data_type) {
     case CON_ATTRIBUTE_VECTOR:
@@ -5510,8 +5510,8 @@ static bool component_is_available(const blender::bke::GeometrySet &geometry,
   return component.attribute_domain_size(domain) != 0;
 }
 
-static const blender::bke::GeometryComponent *find_source_component(const blender::bke::GeometrySet &geometry,
-                                                      const blender::bke::AttrDomain domain)
+static const blender::bke::GeometryComponent *find_source_component(
+    const blender::bke::GeometrySet &geometry, const blender::bke::AttrDomain domain)
 {
   /* Choose the other component based on a consistent order, rather than some more complicated
    * heuristic. This is the same order visible in the spreadsheet and used in the ray-cast node. */
@@ -5549,7 +5549,7 @@ static void attribute_id_looper(bConstraint *con, ConstraintIDFunc func, void *u
 
 static void attribute_copy_data(bConstraint *con, bConstraint *srccon)
 {
-  bAttributeConstraint *src = static_cast<bAttributeConstraint *>(srccon->data);
+  const bAttributeConstraint *src = static_cast<bAttributeConstraint *>(srccon->data);
   bAttributeConstraint *dst = static_cast<bAttributeConstraint *>(con->data);
 
   if (src->attribute_name) {
@@ -5596,7 +5596,7 @@ static bool attribute_get_tarmat(Depsgraph * /*depsgraph*/,
                                  bConstraintTarget *ct,
                                  float /*ctime*/)
 {
-  bAttributeConstraint *acon = (bAttributeConstraint *)con->data;
+  const bAttributeConstraint *acon = static_cast<bAttributeConstraint *>(con->data);
 
   if (!VALID_CONS_TARGET(ct)) {
     return false;
@@ -5620,15 +5620,15 @@ static bool attribute_get_tarmat(Depsgraph * /*depsgraph*/,
     return false;
   }
 
-  const blender::bke::AttributeAccessor &target_attributes = *optional_attributes;
-  const blender::GVArray attribute = *target_attributes.lookup(
+  const blender::bke::AttributeAccessor &attributes = *optional_attributes;
+  const blender::GVArray attribute = *attributes.lookup(
       acon->attribute_name, domain, sample_data_type);
 
   if (attribute.is_empty()) {
     return false;
   }
 
-  const int index = std::clamp<int>(int(acon->sample_index), 0, attribute.size() - 1);
+  const int index = std::clamp<int>(acon->sample_index, 0, attribute.size() - 1);
 
   const blender::CPPType &type = attribute.type();
   BUFFER_FOR_CPP_TYPE_VALUE(type, sampled_value);
@@ -5642,8 +5642,8 @@ static bool attribute_get_tarmat(Depsgraph * /*depsgraph*/,
 
 static void attribute_evaluate(bConstraint *con, bConstraintOb *cob, ListBase *targets)
 {
-  bConstraintTarget *ct = static_cast<bConstraintTarget *>(targets->first);
-  bAttributeConstraint *data = static_cast<bAttributeConstraint *>(con->data);
+  const bConstraintTarget *ct = static_cast<bConstraintTarget *>(targets->first);
+  const bAttributeConstraint *data = static_cast<bAttributeConstraint *>(con->data);
 
   /* only evaluate if there is a target */
   if (!VALID_CONS_TARGET(ct)) {
