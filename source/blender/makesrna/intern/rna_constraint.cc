@@ -3731,12 +3731,12 @@ static void rna_def_constraint_attribute(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "mix_loc", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "mix_loc", 1);
-  RNA_def_property_ui_text(prop, "Mix Loc", "Mix Location");
+  RNA_def_property_ui_text(prop, "Mix Location", "Mix Location");
   RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
 
   prop = RNA_def_property(srna, "mix_rot", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "mix_rot", 1);
-  RNA_def_property_ui_text(prop, "Mix Rot", "Mix Rotation");
+  RNA_def_property_ui_text(prop, "Mix Rotation", "Mix Rotation");
   RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
 
   prop = RNA_def_property(srna, "mix_scl", PROP_BOOLEAN, PROP_NONE);
