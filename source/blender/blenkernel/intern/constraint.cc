@@ -5552,7 +5552,7 @@ static void attribute_id_looper(bConstraint *con, ConstraintIDFunc func, void *u
   bAttributeConstraint *data = static_cast<bAttributeConstraint *>(con->data);
 
   /* target only */
-  func(con, (ID **)&data->target, false, userdata);
+  func(con, (ID **)&data->target, true, userdata);
 }
 
 static void attribute_copy_data(bConstraint *con, bConstraint *srccon)
