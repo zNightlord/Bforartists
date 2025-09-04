@@ -4664,7 +4664,7 @@ static void pivotcon_id_looper(bConstraint *con, ConstraintIDFunc func, void *us
   bPivotConstraint *data = static_cast<bPivotConstraint *>(con->data);
 
   /* target only */
-  func(con, (ID **)&data->tar, false, userdata);
+  func(con, (ID **)&data->tar, true, userdata);
 }
 
 static int pivotcon_get_tars(bConstraint *con, ListBase *list)
