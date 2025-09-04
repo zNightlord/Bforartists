@@ -4664,7 +4664,7 @@ static void pivotcon_id_looper(bConstraint *con, ConstraintIDFunc func, void *us
   bPivotConstraint *data = static_cast<bPivotConstraint *>(con->data);
 
   /* target only */
-  func(con, (ID **)&data->tar, true, userdata);
+  func(con, (ID **)&data->tar, false, userdata);
 }
 
 static int pivotcon_get_tars(bConstraint *con, ListBase *list)
@@ -5552,7 +5552,7 @@ static void attribute_id_looper(bConstraint *con, ConstraintIDFunc func, void *u
   bAttributeConstraint *data = static_cast<bAttributeConstraint *>(con->data);
 
   /* target only */
-  func(con, (ID **)&data->target, true, userdata);
+  func(con, (ID **)&data->target, false, userdata);
 }
 
 static void attribute_copy_data(bConstraint *con, bConstraint *srccon)
