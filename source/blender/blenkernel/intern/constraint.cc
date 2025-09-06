@@ -5659,21 +5659,45 @@ static void attribute_evaluate(bConstraint *con, bConstraintOb *cob, ListBase *t
   }
 
   float target_mat[4][4];
-  copy_m4_m4(target_mat, ct->matrix);
+  if (data->mix_mode == CON_ATTRIBUTE_MIX_REPLACE) {
+    copy_m4_m4(target_mat, cob->matrix);
+  }
+  else {
+    unit_m4(target_mat);
+  }
 
-  if (!data->mix_loc) {
-    zero_v3(target_mat[3]);
-  }
-  if (!data->mix_rot) {
-    float loc[3];
-    float rot[3][3];
-    float scl[3];
-    mat4_to_loc_rot_size(loc, rot, scl, target_mat);
-    unit_m3(rot);
-    loc_rot_size_to_mat4(target_mat, loc, rot, scl);
-  }
-  if (!data->mix_scl) {
-    normalize_m4(target_mat);
+  float loc_a[3], rot_a[3][3], size_a[3];
+  float loc_b[3], rot_b[3][3], size_b[3];
+  mat4_to_loc_rot_size(loc_a, rot_a, size_a, target_mat);
+  mat4_to_loc_rot_size(loc_b, rot_b, size_b, ct->matrix);
+
+  switch (data->data_type) {
+    case CON_ATTRIBUTE_VECTOR: {
+      loc_rot_size_to_mat4(target_mat, loc_b, rot_a, size_a);
+      break;
+    }
+    case CON_ATTRIBUTE_QUATERNION: {
+      loc_rot_size_to_mat4(target_mat, loc_a, rot_b, size_a);
+      break;
+    }
+    case CON_ATTRIBUTE_4X4MATRIX: {
+      if (data->mix_loc && data->mix_rot && data->mix_scl) {
+        copy_m4_m4(target_mat, ct->matrix);
+      }
+      else {
+        if (data->mix_loc) {
+          copy_v3_v3(loc_a, loc_b);
+        }
+        if (data->mix_rot) {
+          copy_m3_m3(rot_a, rot_b);
+        }
+        if (data->mix_scl) {
+          copy_v3_v3(size_a, size_b);
+        }
+        loc_rot_size_to_mat4(target_mat, loc_a, rot_a, size_a);
+      }
+      break;
+    }
   }
 
   /* Finally, combine the matrices. */
