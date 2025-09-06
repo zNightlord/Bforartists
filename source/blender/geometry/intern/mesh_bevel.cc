@@ -329,12 +329,6 @@ class BevelState {
     return bevvert_mesh_verts_;
   }
 
-  /** The weight that mulitplies the vertex bevel amount for a given bevvert. */
-  Span<float> bevvert_weights() const
-  {
-    return bevvert_weights_;
-  }
-
   /** The bevedges associated with a given bevvert.
    * The are sorted to be CCW around the vertex, as much as possible. */
   GroupedSpan<int> bevvert_bevedges() const
@@ -380,12 +374,6 @@ class BevelState {
   Span<int> bevedge_mesh_edges() const
   {
     return bevedge_mesh_edges_;
-  }
-
-  /** The weight that mulitplies the edge bevel amount for a given bevedge. */
-  Span<float> bevedge_weights() const
-  {
-    return bevedge_weights_;
   }
 
   /** Return the offset paramenter for bevedge \a be.
@@ -521,7 +509,7 @@ class BevelState {
   /** Is the edge corresponding to bevedge \a be beveled? */
   bool bevedge_is_beveled(const int be) const
   {
-    return bevedge_weights_[be] > 0.0f ? true : false;
+    return bevedge_is_beveled_[be];
   }
 
   /** Return the next bevedge position around bevvert \a bv after \a edge_pos. */
@@ -572,7 +560,7 @@ class BevelState {
   Array<int> face_bevfaces_;
 
   Array<int> bevvert_mesh_verts_;
-  Array<float> bevvert_weights_;
+  Array<bool> bevvert_is_beveled_;
   GroupedSpan<int> bevvert_bevedges_;
   Array<int> bevvert_bevedges_offsets_;
   Array<int> bevvert_bevedges_indices_;
@@ -584,7 +572,7 @@ class BevelState {
   OffsetIndices<int> bevvert_newfaces_;
 
   Array<int> bevedge_mesh_edges_;
-  Array<float> bevedge_weights_;
+  Array<bool> bevedge_is_beveled_;
   Array<int2> bevedge_attach_verts_;
   OffsetIndices<int> bevedge_newedges_;
   OffsetIndices<int> bevedge_newfaces_;
@@ -694,27 +682,6 @@ static void print_int2_span(Span<int2> span, const char *label)
 [[maybe_unused]] static void print_int4(const int4 quad)
 {
   fmt::print("({},{},{},{})", quad[0], quad[1], quad[2], quad[3]);
-}
-
-static void print_float4(const float4 quad)
-{
-  fmt::print("({},{},{},{})", quad[0], quad[1], quad[2], quad[3]);
-}
-
-static void print_float4_span(Span<float4> span, const char *label)
-{
-  if (span.size() == 0) {
-    return;
-  }
-  fmt::print("{}:", label);
-  for (const int i : span.index_range()) {
-    if (i % 5 == 0) {
-      fmt::print("\n[{}] ", i);
-    }
-    print_float4(span[i]);
-    fmt::print(" ");
-  }
-  fmt::println("");
 }
 
 static void print_indexrange(const IndexRange &range)
@@ -2080,8 +2047,7 @@ static void calculate_profiles(const int bv, AnchorProfiles &profiles, const Bev
     profile.prof_co.reinitialize(bs.params.segments + 1);
     profile.prof_co_2.reinitialize(bs.pro_spacing.segments_power_2 + 1);
     float4x4 map;
-    bool use_map = !bs.params.custom_profile &&
-                   profile.super_r != pro_line_r;
+    bool use_map = !bs.params.custom_profile && profile.super_r != pro_line_r;
     if (use_map) {
       use_map = make_unit_square_map(profile.start, profile.middle, profile.end, map);
     }
@@ -3253,7 +3219,7 @@ static int4 bevedge_num_elements(const int be, const BevelState &bs)
    * Unbeveled edges get 1 new edge, because at least one end of the edge will change
    * and it is cleaner to make a new edge then to do surgery on the original mesh edges.
    */
-  if (bs.params.affect_type == BevelAffect::Vertices || bs.bevedge_weights()[be] == 0.0f) {
+  if (bs.params.affect_type == BevelAffect::Vertices || !bs.bevedge_is_beveled(be)) {
     return int4(0, 1, 0, 0);
   }
   const int ns = bs.params.segments;
@@ -3295,8 +3261,8 @@ static int4 bevface_num_elements(const int bf, const BevelState &bs)
           const int bevedge = bs.edge_bevedges()[mesh_edge];
           const int prev_mesh_edge = mesh.corner_edges()[prev_corner];
           const int prev_bevedge = bs.edge_bevedges()[prev_mesh_edge];
-          bool bev_adjacent = (bevedge != -1 && bs.bevedge_weights()[bevedge] > 0.0f) ||
-                              (prev_bevedge != -1 && bs.bevedge_weights()[prev_bevedge] > 0.0f);
+          bool bev_adjacent = (bevedge != -1 && bs.bevedge_is_beveled(bevedge)) ||
+                              (prev_bevedge != -1 && bs.bevedge_is_beveled(prev_bevedge));
           if (pat.kind == MeshKind::Line) {
             ncorners += bev_adjacent ? 1 : segments + 1;
           }
@@ -3670,7 +3636,7 @@ static void bevvert_order_edges(BevelState &bs, MutableSpan<int> bevedges, Mutab
   if (bs.params.affect_type == BevelAffect::Edges) {
     auto first_beveled_edge_iter = std::find_if(edges.begin(), edges.end(), [&](int e) {
       int be = bs.edge_bevedges()[e];
-      return bs.bevedge_weights()[be] > 0.0f;
+      return bs.bevedge_is_beveled(be);
     });
     BLI_assert(first_beveled_edge_iter != edges.end());
     std::rotate(edges.begin(), first_beveled_edge_iter, edges.end());
@@ -3897,8 +3863,7 @@ static void build_vmesh_skeleton(int bv,
       if (bs.bevedge_is_beveled(be)) {
         bevel_pos.append(epos);
         const int end = bs.bevedge_vert_end(bv, be);
-        widths.append(float2(bs.bevedge_offset(be, 2 * end),
-                             bs.bevedge_offset(be, 2 * end + 1)));
+        widths.append(float2(bs.bevedge_offset(be, 2 * end), bs.bevedge_offset(be, 2 * end + 1)));
       }
       else {
         widths.append(float2(0.0f, 0.0f));
@@ -3914,7 +3879,7 @@ static void build_vmesh_skeleton(int bv,
     const int anchor1 = pat.anchor_vert(1);
     /* All cases have be0 attached to anchor 0. */
     be_attach_verts[be0][be0_end] = anchor0;
-    bool leg_side = false;  /* TODO: remove if not necessary. */
+    bool leg_side = false; /* TODO: remove if not necessary. */
     if (num_beveled == 1) {
       /* Terminal edge cases. */
       if (num_edges == 2) {
@@ -4164,7 +4129,6 @@ BevelState::BevelState(const Mesh &src_mesh,
                           params.offset_type == BevelOffsetType::Absolute);
 #endif
 
-
   /* Get the IndexMasks for bevel-involved edges, bevel-involved vertices,
    * and bevel-involved faces.
    * Set the weights that modify the bevel amount for those elements
@@ -4220,13 +4184,13 @@ BevelState::BevelState(const Mesh &src_mesh,
   bevvert_mesh_verts_ = Array<int>(this->bevverts_num);
   vert_bevverts_ = Array<int>(this->mesh_info.mesh.verts_num, -1);
   if (vertex_only) {
-    bevvert_weights_ = Array<float>(this->bevverts_num, 1.0f);
+    bevvert_is_beveled_ = Array<bool>(this->bevverts_num, false);
   }
   bevverts_mask_.foreach_index([&](const int v, const int mask) {
     vert_bevverts_[v] = mask;
     bevvert_mesh_verts_[mask] = v;
     if (vertex_only) {
-      bevvert_weights_[mask] = selection.contains(v);
+      bevvert_is_beveled_[mask] = selection.contains(v);
     }
   });
 
@@ -4235,16 +4199,13 @@ BevelState::BevelState(const Mesh &src_mesh,
   bevedge_mesh_edges_ = Array<int>(this->bevedges_num);
   edge_bevedges_ = Array<int>(this->mesh_info.mesh.edges_num, -1);
   if (!vertex_only) {
-    bevedge_weights_ = Array<float>(this->bevedges_num);
+    bevedge_is_beveled_ = Array<bool>(this->bevedges_num);
   }
   bevedges_mask_.foreach_index([&](const int e, const int mask) {
     edge_bevedges_[e] = mask;
     bevedge_mesh_edges_[mask] = e;
-    if (vertex_only) {
-      bevedge_weights_[mask] = 0.0f;
-    }
-    else {
-      bevedge_weights_[mask] = selection.contains(e);
+    if (!vertex_only) {
+      bevedge_is_beveled_[mask] = selection.contains(e);
     }
   });
 
@@ -4339,8 +4300,7 @@ void BevelState::initialize_profile_data()
     this->pro_super_r = profile::pro_square_in_r;
   }
 
-  profile::set_profile_spacing(
-      this, &this->pro_spacing, this->params.custom_profile != nullptr);
+  profile::set_profile_spacing(this, &this->pro_spacing, this->params.custom_profile != nullptr);
 
   if (this->params.segments > 1) {
     this->pro_spacing.fullness = profile::find_profile_fullness(this);
@@ -4689,7 +4649,7 @@ static void set_edge_mesh_reps(const int be,
                                const BevelState &bs)
 {
   const int mesh_edge = bs.bevedge_mesh_edges()[be];
-  const int nsegs = bs.bevedge_weights()[be] == 0.0f ? 0 : bs.params.segments;
+  const int nsegs = bs.bevedge_is_beveled(be) ? bs.params.segments : 0;
   const int ne_start = bs.bevedge_newedges()[be][0];
   for (const int i : IndexRange(nsegs + 1)) {
     repedges[ne_start + i] = mesh_edge;
@@ -4774,7 +4734,7 @@ void BevelState::build_edge_meshes()
        */
       const int attach_nv0 = bv0 >= 0 ? bevvert_newverts_[bv0][pos0] : -(mesh_v0 + 1);
       const int attach_nv1 = bv1 >= 0 ? bevvert_newverts_[bv1][pos1] : -(mesh_v1 + 1);
-      if (bevedge_weights_[be] == 0.0) {
+      if (!bevedge_is_beveled(be)) {
         /* Just a single edge, but with one or both ends attached to new vertices. */
         const int ne = bevedge_newedges_[be][0];
         newedge_vertpairs_[ne] = int2(attach_nv0, attach_nv1);
@@ -5197,9 +5157,12 @@ std::optional<Mesh *> mesh_bevel(const Mesh &src_mesh,
                                  const BevelParameters &params,
                                  const bke::AttributeFilter &attribute_filter)
 {
-  auto all_zero =
-  [](const Array<float> &o) { return std::all_of(o.begin(), o.end(), [](float f) { return f == 0.0;});};
-  if (all_zero(params.offsets[0]) && all_zero(params.offsets[1]) && all_zero(params.offsets[2]) && all_zero(params.offsets[3])) {
+  auto all_zero = [](const Array<float> &o) {
+    return std::all_of(o.begin(), o.end(), [](float f) { return f == 0.0; });
+  };
+  if (all_zero(params.offsets[0]) && all_zero(params.offsets[1]) && all_zero(params.offsets[2]) &&
+      all_zero(params.offsets[3]))
+  {
     return std::nullopt;
   }
   fmt::println("\n\nBEVEL, segments={}\n", params.segments);
