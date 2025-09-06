@@ -16,24 +16,110 @@
 
 namespace blender::nodes::node_geo_bevel_cc {
 
+static const EnumPropertyItem affect_items[] = {
+  {int(geometry::BevelAffect::Vertices),
+    "VERTICES",
+    0,
+    "Vertices",
+    "Bevel affects vertices"},
+  {int(geometry::BevelAffect::Edges),
+    "EDGES",
+    0,
+    "Edges",
+    "Bevel affects edges"},
+  {int(geometry::BevelAffect::Faces),
+    "FACES",
+    0,
+    "Faces",
+    "Bevel affects faces"},
+  {0, nullptr, 0, nullptr, nullptr}
+};
+
+static const EnumPropertyItem miter_items[] = {
+  {int(geometry::BevelMiterType::Sharp),
+    "SHARP",
+    0,
+    "Sharp",
+    "Sharp miter (no intermediate points)"},
+  {int(geometry::BevelMiterType::Patch),
+    "PATCH",
+    0,
+    "Patch",
+    "Patch miter (2 intermediate points)"},
+  {int(geometry::BevelMiterType::Arc),
+    "ARC",
+    0,
+    "Arc",
+    "Arc miter (1 intermediate point)"},
+  {0, nullptr, 0, nullptr}
+};
+
 static void node_declare(NodeDeclarationBuilder &b)
 {
   b.add_input<decl::Geometry>("Mesh").supported_type(GeometryComponent::Type::Mesh);
-  b.add_input<decl::Bool>("Selection").default_value(true).field_on_all().hide_value();
-  b.add_input<decl::Float>("Offset").default_value(0.0f).min(0.0f);
-  b.add_input<decl::Int>("Segments").default_value(1);
+  b.add_input<decl::Menu>("Affect Kind")
+    .default_value(geometry::BevelAffect::Edges)
+    .static_items(affect_items);
+  b.add_input<decl::Bool>("Selection")
+    .default_value(true).field_on_all()
+    .description("Selects elements of 'Affect Kind' for beveling");
+  /* TODO: when there is good support for 4d vectors, use those here. */
+  b.add_input<decl::Float>("Offset0")
+    .default_value(0.0f)
+    .min(0.0f)
+    .field_on_all()
+    .description("Offset for left side of source end of edge");
+  b.add_input<decl::Float>("Offset1")
+    .default_value(0.0f)
+    .min(0.0f)
+    .field_on_all()
+    .description("Offset for right side of source end of edge");
+  b.add_input<decl::Float>("Offset2")
+    .default_value(0.0f)
+    .min(0.0f)
+    .field_on_all()
+    .description("Offset for left side of dest end of edge");
+  b.add_input<decl::Float>("Offset3")
+    .default_value(0.0f)
+    .min(0.0f)
+    .field_on_all()
+    .description("Offset for right side of dest end of edge");
+  b.add_input<decl::Menu>("Miter")
+    .default_value(geometry::BevelMiterType::Sharp)
+    .static_items(miter_items)
+    .field_on_all()
+    .description("Per corner specification of miter kind");
+  b.add_input<decl::Float>("Spread")
+    .default_value(0.0f)
+    .field_on_all()
+    .description("Per corner specification of 'spread' for arc miters");
+  b.add_input<decl::Int>("Segments")
+    .default_value(1)
+    .description("How many pieces is an edge beveled into, "
+                 "or, for vertex bevels, the how many segments on the arcs between the edges.");
+  b.add_input<decl::Float>("Shape")
+    .default_value(0.5f)
+    .min(0.0f)
+    .max(1.0f)
+    .description("Superellipse shape parameter, used when there is no Profile, "
+                 " and also used for Arc and Patch miters");
+  b.add_input<decl::Geometry>("Profile")
+    .supported_type(GeometryComponent::Type::Curve)
+    .description("If present, will be sampled to give custom profile on edges");
   b.add_output<decl::Geometry>("Mesh").propagate_all();
-}
-
-static void node_layout(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
-{
-  layout->prop(ptr, "affect", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-}
-
-static void geo_bevel_init(bNodeTree * /*tree*/, bNode *node)
-{
-  /* Use node->custom1 for affect. */
-  node->custom1 = int(geometry::BevelAffect::Edges);
+  b.add_output<decl::Bool>("Vertex Face")
+    .field_on_all()
+    .description("Identifies output faces that are in the new mesh parts for vertices");
+  b.add_output<decl::Bool>("Edge Face")
+    .field_on_all()
+    .description("Identifies output faces that are in the new mesh parts for edges");
+  b.add_output<decl::Bool>("Outer Edge")
+    .field_on_all()
+    .description("Identifies output edges that are on the outsides of new mesh parts for edges");
+  b.add_output<decl::Bool>("Mid Edge")
+    .field_on_all()
+    .description("Identifies output edges that are in the middle of new mesh parts of edges "
+                 " and continued through vertices (round down if odd number of segments)");
 }
 
 static void node_geo_exec(GeoNodeExecParams params)
@@ -41,30 +127,48 @@ static void node_geo_exec(GeoNodeExecParams params)
   GeometrySet geometry_set = params.extract_input<GeometrySet>("Mesh");
   Field<bool> selection_field = params.extract_input<Field<bool>>("Selection");
   const AttributeFilter &attribute_filter = params.get_attribute_filter("Mesh");
-  float offset = params.extract_input<float>("Offset");
   int segments = params.extract_input<int>("Segments");
+  geometry::BevelAffect affect = params.extract_input<blender::geometry::BevelAffect>("Affect Kind");
 
-  geometry::BevelAffect affect = geometry::BevelAffect(params.node().custom1);
+  Field<float> offset0_field = params.extract_input<Field<float>>("Offset0");
+  Field<float> offset1_field = params.extract_input<Field<float>>("Offset1");
+  Field<float> offset2_field = params.extract_input<Field<float>>("Offset2");
+  Field<float> offset3_field = params.extract_input<Field<float>>("Offset3");
+
 
   geometry::foreach_real_geometry(geometry_set, [&](GeometrySet &geometry_set) {
     const Mesh *src_mesh = geometry_set.get_mesh();
     if (!src_mesh) {
       return;
     }
+    geometry::BevelParameters bevel_params;
+    bevel_params.affect_type = affect;
+    bevel_params.segments = segments;
+    const int ne = src_mesh->edges_num;
+    bevel_params.offsets = {
+      Array<float>(ne),
+      Array<float>(ne),
+      Array<float>(ne),
+      Array<float>(ne)
+    };
 
-    const bke::MeshFieldContext context(*src_mesh, AttrDomain::Edge);
-    FieldEvaluator evaluator{context, src_mesh->edges_num};
-    evaluator.add(selection_field);
-    evaluator.evaluate();
-    const IndexMask selection = evaluator.get_evaluated_as_mask(0);
+    const bke::MeshFieldContext edge_context(*src_mesh, AttrDomain::Edge);
+    FieldEvaluator edge_evaluator{edge_context, src_mesh->edges_num};
+    edge_evaluator.add(selection_field);
+    edge_evaluator.add_with_destination(offset0_field,
+                                        bevel_params.offsets[0].as_mutable_span());
+    edge_evaluator.add_with_destination(offset1_field,
+                                        bevel_params.offsets[1].as_mutable_span());
+    edge_evaluator.add_with_destination(offset2_field,
+                                        bevel_params.offsets[2].as_mutable_span());
+    edge_evaluator.add_with_destination(offset3_field,
+                                        bevel_params.offsets[3].as_mutable_span());
+    edge_evaluator.evaluate();
+    const IndexMask selection = edge_evaluator.get_evaluated_as_mask(0);
     if (selection.is_empty()) {
       return;
     }
 
-    geometry::BevelParameters bevel_params;
-    bevel_params.offset = offset;
-    bevel_params.affect_type = affect;
-    bevel_params.segments = segments;
     std::optional<Mesh *> mesh = geometry::mesh_bevel(
         *src_mesh, selection, bevel_params, attribute_filter);
     if (!mesh) {
@@ -77,27 +181,6 @@ static void node_geo_exec(GeoNodeExecParams params)
   params.set_output("Mesh", std::move(geometry_set));
 }
 
-static void node_rna(StructRNA *srna)
-{
-  static const EnumPropertyItem rna_node_geometry_bevel_affect_items[] = {
-      {int(geometry::BevelAffect::Vertices), "VERTICES", 0, "Vertices", "Bevel selected vertices"},
-      {int(geometry::BevelAffect::Edges), "EDGES", 0, "Edges", "Bevel selected edges"},
-      {0, nullptr, 0, nullptr, nullptr},
-  };
-
-  RNA_def_node_enum(srna,
-                    "affect",
-                    "Affect Kind",
-                    "Which mesh element type to bevel",
-                    rna_node_geometry_bevel_affect_items,
-                    NOD_inline_enum_accessors(custom3),
-                    std::optional<int>(int(geometry::BevelAffect::Edges)),
-                    nullptr,
-                    true);
-
-  RNA_def_float(srna, "offset", 0.0f, 0.0f, 1e10f, "Offset", "How much to bevel", 0.0f, 10.0f);
-}
-
 static void node_register()
 {
   static blender::bke::bNodeType ntype;
@@ -106,13 +189,9 @@ static void node_register()
   ntype.ui_name = "Mesh Bevel";
   ntype.ui_description = "Bevel selected edges or vertices";
   ntype.nclass = NODE_CLASS_GEOMETRY;
-  ntype.draw_buttons = node_layout;
   ntype.declare = node_declare;
-  ntype.initfunc = geo_bevel_init;
   ntype.geometry_node_execute = node_geo_exec;
   blender::bke::node_register_type(ntype);
-
-  node_rna(ntype.rna_ext.srna);
 }
 NOD_REGISTER_NODE(node_register)
 

@@ -264,8 +264,6 @@ class BevelState {
 
   void order_bevedges();
 
-  void set_bevedge_widths();
-
   void determine_needed_new_elements();
 
   void determine_needed_attribute_data();
@@ -390,17 +388,19 @@ class BevelState {
     return bevedge_weights_;
   }
 
-  /** Left and right edge specs for each bevedge.
-   * In order, the left and right sides (looking down edge) at the end of the origin end
-   * of the bevedge, followed by the same for the destination end.
-   * For edge beveling with type Offset, Width, or Depth: the width of each side of the centerline.
-   * For edge beveling with type Percent or Absolute: the distance along the previous and next
-   * edges, either absolutely or as a fraction.
-   * For vertex beveling, the 0th spec is the distance to offset the on-edge vertex.
+  /** Return the offset paramenter for bevedge \a be.
+   * The \a width_index parameter says which offset is desired: one of four in the order:
+   *  [0] left side (looking at vertex) at source end of the mesh edge
+   *  [1] right side at source end of the mesh edge
+   *  [2] left side of the destination edge of the mesh edge
+   *  [3] right side of the destiaation edge of the mesh edge.
+   *  If edge beveling, these are perpendicular offsets.
+   *  If vertex beveling, only the 0 and 2 indices are used, and the give the amount
+   *  to move along the edge away from the vertex at the source and destination edges.
    */
-  Span<float4> bevedge_widths() const
+  float bevedge_offset(const int be, const int width_index) const
   {
-    return bevedge_widths_;
+    return params.offsets[width_index][bevedge_mesh_edges_[be]];
   }
 
   /** Near and far end indices in the vmesh index space where the given bevedge is attached.
@@ -585,7 +585,6 @@ class BevelState {
 
   Array<int> bevedge_mesh_edges_;
   Array<float> bevedge_weights_;
-  Array<float4> bevedge_widths_;
   Array<int2> bevedge_attach_verts_;
   OffsetIndices<int> bevedge_newedges_;
   OffsetIndices<int> bevedge_newfaces_;
@@ -810,14 +809,6 @@ static void print_anchor_newvert_positions(const BevelState &bs, const char *lab
   print_span(bs.edge_bevedges(), "edge_bevedges");
   print_span(bs.face_bevfaces(), "face_bevfaces");
   print_span(bs.bevvert_mesh_verts(), "bevvert_mesh_verts");
-  if (vertex_only) {
-    print_span(bs.bevvert_weights(), "bevvert_weights");
-  }
-  print_span(bs.bevedge_mesh_edges(), "bevedge_mesh_edges");
-  if (!vertex_only) {
-    print_span(bs.bevedge_weights(), "bevedge_weights");
-    print_float4_span(bs.bevedge_widths(), "bevedge_widths");
-  }
   print_span(bs.bevface_mesh_faces(), "bevface_mesh_faces");
   print_groupedspan(bs.bevvert_bevedges(), "bevvert_bevedges");
   print_groupedspan(bs.bevvert_faces(), "bevvert_faces");
@@ -1233,15 +1224,11 @@ static float3 offset_meet(const int bv,
   float3 norm_perp2 = math::normalize(math::cross(dir2, norm_v2));
   /* Get points on two lines to intersect in order to find the meet point. */
   Array<float3, 4> off_pts(4);
-  if (ELEM(bs.params.offset_type, BevelOffsetType::Percent, BevelOffsetType::Absolute)) {
-    offset_meet_lines_percent_or_absolute(bv, e1_pos, e2_pos, off_pts.as_mutable_span(), bs);
-  }
-  else {
-    off_pts[0] = bevvert_pos + e1_spec_r * norm_perp1;
-    off_pts[1] = off_pts[0] + dir1;
-    off_pts[2] = bevvert_pos + e2_spec_l * norm_perp2;
-    off_pts[3] = off_pts[2] + dir2;
-  }
+  off_pts[0] = bevvert_pos + e1_spec_r * norm_perp1;
+  off_pts[1] = off_pts[0] + dir1;
+  off_pts[2] = bevvert_pos + e2_spec_l * norm_perp2;
+  off_pts[3] = off_pts[2] + dir2;
+
   /* Intersect the offset lines. */
   float3 meetco;
   float3 isect2;
@@ -1396,19 +1383,6 @@ static bool try_offset_on_edge_between(const int bv,
   bool ok2 = try_offset_meet_edge(bv, eon_pos, e2_pos, 0.0f, e2_spec_l, &meet2, &ang2, bs);
   if (r_sin_ratio != nullptr) {
     *r_sin_ratio = ang1 == 0.0f ? 1.0f : math::sin(ang2) / math::sin(ang1);
-  }
-  if (ELEM(bs.params.offset_type, BevelOffsetType::Percent, BevelOffsetType::Absolute)) {
-    float3 v_co = bs.mesh_info.mesh.vert_positions()[bs.bevvert_mesh_verts()[bv]];
-    float eon_len;
-    float3 eon_unit_dir = math::normalize_and_get_length(edge_dir(bv, eon_pos, bs), eon_len);
-    if (bs.params.offset_type == BevelOffsetType::Percent) {
-      /* TODO: use weights, if required. */
-      *r_co = v_co + (bs.params.offset / 100.0f) * eon_len * eon_unit_dir;
-    }
-    else {
-      *r_co = v_co + bs.params.offset * eon_unit_dir;
-    }
-    return true;
   }
   if (ok1 && ok2) {
     /* The two sides will likely lead to different meet points.
@@ -1809,7 +1783,7 @@ static float find_profile_fullness(BevelState *bs)
   };
 
   float fullness;
-  if (bs->params.profile_type == BevelProfileType::Custom) {
+  if (bs->params.custom_profile) {
     /* Set fullness to the average "height" of the profile's sampled points. */
     fullness = 0.0f;
     for (int i = 0; i < nseg; i++) { /* Don't use the end points. */
@@ -1828,10 +1802,10 @@ static float find_profile_fullness(BevelState *bs)
     else {
       /* Linear regression fit found best linear function, separately for even/odd segs. */
       if (nseg % 2 == 0) {
-        fullness = 2.4506f * bs->params.profile - 0.00000300f * nseg - 0.6266f;
+        fullness = 2.4506f * bs->params.shape - 0.00000300f * nseg - 0.6266f;
       }
       else {
-        fullness = 2.3635f * bs->params.profile + 0.000152f * nseg - 0.6060f;
+        fullness = 2.3635f * bs->params.shape + 0.000152f * nseg - 0.6060f;
       }
     }
   }
@@ -2106,7 +2080,7 @@ static void calculate_profiles(const int bv, AnchorProfiles &profiles, const Bev
     profile.prof_co.reinitialize(bs.params.segments + 1);
     profile.prof_co_2.reinitialize(bs.pro_spacing.segments_power_2 + 1);
     float4x4 map;
-    bool use_map = bs.params.profile_type == BevelProfileType::Superellipse &&
+    bool use_map = !bs.params.custom_profile &&
                    profile.super_r != pro_line_r;
     if (use_map) {
       use_map = make_unit_square_map(profile.start, profile.middle, profile.end, map);
@@ -3782,6 +3756,8 @@ static MeshPattern find_meshpattern(int bv, BevelState &bs)
          * between the beveled edges: one additional for "arc" miters and two
          * additional for "patch" miters. We can only have pacth miters on
          * outer miters (where there is an obtuse angle). */
+#if 0
+        TODO
         if (bs.params.miter_inner != BevelMiterType::Sharp) {
           pat.num_anchors += num_beveled;
         }
@@ -3790,6 +3766,7 @@ static MeshPattern find_meshpattern(int bv, BevelState &bs)
            * successive beveled edges! */
           pat.num_anchors += 1;
         }
+#endif
       }
     }
   }
@@ -3816,11 +3793,13 @@ static float3 adj_edge_anchor_co(int bv,
   float3 co;
   float sin_ratio = 1.0f;
   int eon_pos = -1;
-  const float spec_r = bs.bevedge_widths()[be_cur][2 * be_cur_end + 1];
-  const float spec_next_l = bs.bevedge_widths()[be_next][2 * be_next_end];
+  const float spec_r = bs.bevedge_offset(be_cur, 2 * be_cur_end + 1);
+  const float spec_next_l = bs.bevedge_offset(be_next, 2 * be_next_end);
   int offset_bepos_in_plane = -1;
   int offset_meet_face = bs.face_next(bv, cur_anchor_pos);
   if (num_not_in_plane > 0) {
+#if 0
+    TODO: either delete this or revive it if we need loop_slide
     if (bs.params.loop_slide && num_not_in_plane == 1 &&
         geom::good_slide(
             bv, cur_anchor_pos, next_anchor_pos, be_not_in_plane_pos, spec_r, spec_next_l, bs))
@@ -3833,8 +3812,14 @@ static float3 adj_edge_anchor_co(int bv,
       offset_meet_face = -1;
       offset_meet_edges_between = true;
     }
+#else
+    offset_meet_face = -1;
+    offset_meet_edges_between = true;
+#endif
   }
   else if (num_in_plane > 0) {
+#if 0
+    TODO: either delete this or revive it if we need loop_slide
     if (bs.params.loop_slide && num_in_plane == 1 &&
         geom::good_slide(
             bv, cur_anchor_pos, next_anchor_pos, be_in_plane_pos, spec_r, spec_next_l, bs))
@@ -3845,6 +3830,9 @@ static float3 adj_edge_anchor_co(int bv,
     else {
       offset_meet_edges_between = false;
     }
+#else
+    offset_meet_edges_between = false;
+#endif
   }
   if (offset_edge_between) {
     if (!geom::try_offset_on_edge_between(bv,
@@ -3892,7 +3880,7 @@ static void build_vmesh_skeleton(int bv,
     for (const int epos : bevedges.index_range()) {
       int be = bevedges[epos];
       int be_end = bs.bevedge_vert_end(bv, be);
-      float spec = bs.bevedge_widths()[be][be_end * 2];
+      float spec = bs.bevedge_offset(be, be_end * 2);
       float3 co = geom::slide_dist(bv, epos, spec, bs);
       int nv_index = pat.anchor_vert(epos);
       bv_newvert_positions[nv_index] = co;
@@ -3908,9 +3896,9 @@ static void build_vmesh_skeleton(int bv,
       const int be = bevedges[epos];
       if (bs.bevedge_is_beveled(be)) {
         bevel_pos.append(epos);
-        const float4 be_bev_widths = bs.bevedge_widths()[be];
         const int end = bs.bevedge_vert_end(bv, be);
-        widths.append(float2(be_bev_widths[2 * end], be_bev_widths[2 * end + 1]));
+        widths.append(float2(bs.bevedge_offset(be, 2 * end),
+                             bs.bevedge_offset(be, 2 * end + 1)));
       }
       else {
         widths.append(float2(0.0f, 0.0f));
@@ -3926,8 +3914,7 @@ static void build_vmesh_skeleton(int bv,
     const int anchor1 = pat.anchor_vert(1);
     /* All cases have be0 attached to anchor 0. */
     be_attach_verts[be0][be0_end] = anchor0;
-    bool leg_side = ELEM(
-        bs.params.offset_type, BevelOffsetType::Percent, BevelOffsetType::Absolute);
+    bool leg_side = false;  /* TODO: remove if not necessary. */
     if (num_beveled == 1) {
       /* Terminal edge cases. */
       if (num_edges == 2) {
@@ -4015,8 +4002,6 @@ static void build_vmesh_skeleton(int bv,
     else {
       BLI_assert(pat.kind == MeshKind::Adj && pat.num_anchors >= 3);
       /* TODO: miters. */
-      BLI_assert(bs.params.miter_inner == BevelMiterType::Sharp &&
-                 bs.params.miter_outer == BevelMiterType::Sharp);
       int cur_anchor = 0;
       int next_anchor = 1;
       /* We need to know the number of edges between the current beveled edge and the
@@ -4158,158 +4143,6 @@ static void build_internal_vmesh(const int bv,
 
 }  // end of namespace topology
 
-namespace spec {
-
-/** Use the bs.params offset type and amount to set initial widths at the
- * \a bv end of the edge at its position \a edge_pos.
- * Fill in either the first two elements of \a r_widths or the last two,
- * depending on whether bv is first in the edge or second.
- */
-static void edge_bevel_init_widths_from_params(const int bv,
-                                               const int edge_pos,
-                                               float4 &r_widths,
-                                               const BevelState &bs)
-{
-  const int be = bs.bevvert_bevedges()[bv][edge_pos];
-  float2 specs;
-  if (!bs.bevedge_is_beveled(be)) {
-    specs[0] = 0.0f;
-    specs[1] = 0.0f;
-  }
-  else {
-    float offset = bs.params.offset;
-    switch (bs.params.offset_type) {
-      case BevelOffsetType::Offset:
-        specs[0] = offset;
-        specs[1] = offset;
-        break;
-      case BevelOffsetType::Width:
-      case BevelOffsetType::Depth: {
-        float z = bs.params.offset_type == BevelOffsetType::Width ?
-                      math::abs(2.0f * math::sin(geom::edge_face_angle(bv, edge_pos, bs) / 2.0f)) :
-                      math::abs(math::cos(geom::edge_face_angle(bv, edge_pos, bs) / 2.0f));
-        if (z < geom::bevel_epsilon) {
-          /* Undefined behavior, so just do a tiny bevel. */
-          specs[0] = 0.01f * offset;
-        }
-        else {
-          specs[0] = offset / z;
-        }
-        specs[1] = specs[0];
-        break;
-      }
-      case BevelOffsetType::Percent: {
-        /* Offset needs to meet adjacent edges at percentage of their lengths.
-         * Since the width isn't constant, we don't store a width at all, but
-         * rather the distance along the adjacent edge that we need to go
-         * at this end of the edge.
-         */
-        const int edge_pos_prev = bs.prev_edge_pos(bv, edge_pos);
-        const int edge_pos_next = bs.next_edge_pos(bv, edge_pos);
-        specs[0] = geom::edge_length(bv, edge_pos_prev, bs) * offset / 100.0f;
-        specs[1] = geom::edge_length(bv, edge_pos_next, bs) * offset / 100.0f;
-        break;
-      }
-      case BevelOffsetType::Absolute:
-        /* Spec is the absolute amount along previous and next edges. */
-        specs[0] = offset;
-        specs[1] = offset;
-        break;
-      default:
-        BLI_assert_unreachable();
-    }
-    if (bs.params.use_weights) {
-      /* TODO: implement me.
-       * Before doing this, change the API..
-       */
-    }
-  }
-  const bool near_end = bs.bevedge_vert_end(bv, be) == 0;
-  if (near_end) {
-    r_widths[0] = specs[0];
-    r_widths[1] = specs[1];
-  }
-  else {
-    r_widths[2] = specs[0];
-    r_widths[3] = specs[1];
-  }
-}
-
-/** Like the previous, but for vertex beveling. */
-static void vertex_bevel_init_widths_from_params(const int bv,
-                                                 const int edge_pos,
-                                                 float4 &r_widths,
-                                                 const BevelState &bs)
-{
-  const int be = bs.bevvert_bevedges()[bv][edge_pos];
-  const bool near_end = bs.bevedge_vert_end(bv, be) == 0;
-  float spec;
-  float offset = bs.params.offset;
-  switch (bs.params.offset_type) {
-    case BevelOffsetType::Offset:
-      spec = offset;
-      break;
-    case BevelOffsetType::Width:
-    case BevelOffsetType::Depth: {
-
-      float3 edir = geom::edge_dir(bv, edge_pos, bs);
-      float3 vert_axis = geom::bevvert_axis(bv, bs);
-      if (near_end) {
-        edir = -edir;
-      }
-      float z = bs.params.offset_type == BevelOffsetType::Width ?
-                    math::abs(2.0f * math::sin(angle_v3v3(vert_axis, edir))) :
-                    math::abs(math::cos(angle_v3v3(vert_axis, edir)));
-      if (z < geom::bevel_epsilon) {
-        /* Undefined behavior, so do tiny bevel. */
-        spec = 0.01f * offset;
-      }
-      else {
-        spec = offset / z;
-      }
-      break;
-    }
-    case BevelOffsetType::Percent: {
-      spec = geom::edge_length(bv, edge_pos, bs) * offset / 100.0f;
-      break;
-    }
-    case BevelOffsetType::Absolute:
-      spec = offset;
-      break;
-    default:
-      BLI_assert_unreachable();
-  }
-  float weight = 1.0f;
-  if (bs.params.use_weights) {
-    /* TODO: change bevel weight API.
-     * Current code takes in a weight name and converts that
-     * to a CustomData layer index.
-     * We should just take in the weight name.
-     */
-  }
-  else if (bs.params.dvert != nullptr) {
-    /* TODO: change bevel vertex group API.
-     * Current code uses MOD_get_vgroup to get an MDeformVert pointer
-     * from a name.
-     * We should just take in the vgroup name.
-     */
-  }
-  if (weight != 1.0f) {
-    /* TODO: multiple all specs by weight. */
-  }
-
-  if (near_end) {
-    r_widths[0] = spec;
-    r_widths[1] = 0.0f;
-  }
-  else {
-    r_widths[2] = spec;
-    r_widths[3] = 0.0f;
-  }
-}
-
-}  // end of namespace spec
-
 /** Initialize the bevel_edges and bevel_verts IndexMasks, and also some fields
  * that will control the basic operaiton of the whole bevel.
  */
@@ -4325,15 +4158,12 @@ BevelState::BevelState(const Mesh &src_mesh,
   /* There is an adjustment procedure that modifies bevel amounts to make the best compromise
    * when all specifications cannot be met simultaneously. That procedure cannot be applied
    * in all circumstances. */
+  this->offset_adjust = false;
+#if 0
   this->offset_adjust = !(vertex_only || params.offset_type == BevelOffsetType::Percent ||
                           params.offset_type == BevelOffsetType::Absolute);
+#endif
 
-  /* Disable the miters with the cutoff vertex mesh method, the combination isn't useful anyway.
-   */
-  if (params.vmesh_method == BevelVmeshMethod::Cutoff) {
-    params.miter_outer = BevelMiterType::Sharp;
-    params.miter_inner = BevelMiterType::Sharp;
-  }
 
   /* Get the IndexMasks for bevel-involved edges, bevel-involved vertices,
    * and bevel-involved faces.
@@ -4406,7 +4236,6 @@ BevelState::BevelState(const Mesh &src_mesh,
   edge_bevedges_ = Array<int>(this->mesh_info.mesh.edges_num, -1);
   if (!vertex_only) {
     bevedge_weights_ = Array<float>(this->bevedges_num);
-    bevedge_widths_ = Array<float4>(this->bevedges_num);
   }
   bevedges_mask_.foreach_index([&](const int e, const int mask) {
     edge_bevedges_[e] = mask;
@@ -4493,11 +4322,11 @@ void BevelState::initialize_profile_data()
 {
   /* Convert the input profile shape parameter to the actual exponent of a superellipse. */
   const float psr = -std::log(2.0) /
-                    std::log(math::sqrt(this->params.profile > 0 ? this->params.profile : 1e-20f));
+                    std::log(math::sqrt(this->params.shape > 0 ? this->params.shape : 1e-20f));
   this->pro_super_r = psr;
 
   /* Snap some ranges of profile to particular shapes. */
-  if (this->params.profile >= 0.950f) { /* r ~ 692, so pro_square_r is 1e4 */
+  if (this->params.shape >= 0.950f) { /* r ~ 692, so pro_square_r is 1e4 */
     this->pro_super_r = profile::pro_square_r;
   }
   else if (abs(psr - profile::pro_circle_r) < 1e-4f) {
@@ -4511,12 +4340,14 @@ void BevelState::initialize_profile_data()
   }
 
   profile::set_profile_spacing(
-      this, &this->pro_spacing, this->params.profile_type == BevelProfileType::Custom);
+      this, &this->pro_spacing, this->params.custom_profile != nullptr);
 
   if (this->params.segments > 1) {
     this->pro_spacing.fullness = profile::find_profile_fullness(this);
   }
 
+#if 0
+  TODO
   /* Get separate non-custom profile samples for the miter profiles if they are needed */
   /* TODO: check: bmesh code seems wrong here: the first check is ==, not != */
   if (this->params.profile_type != BevelProfileType::Custom &&
@@ -4525,6 +4356,7 @@ void BevelState::initialize_profile_data()
   {
     profile::set_profile_spacing(this, &this->pro_spacing_miter, false);
   }
+#endif
 }
 
 /** Order the bevedges around each bevvert so that they form manifold caps
@@ -4663,26 +4495,6 @@ void BevelState::determine_needed_new_elements()
   });
   offset_indices::accumulate_counts_to_offsets(newface_faces_face_offsets_);
   newface_faces_face_ = OffsetIndices<int>(newface_faces_face_offsets_);
-}
-
-/** Set the widths of each half of each end of the beveled and non-beveled edges. */
-void BevelState::set_bevedge_widths()
-{
-  bevedge_widths_ = Array<float4>(this->bevedges_num);
-  bool is_edge_bevel = this->params.affect_type == BevelAffect::Edges;
-  threading::parallel_for(IndexRange(bevverts_num), 10'000, [&](IndexRange range) {
-    for (const int bv : range) {
-      for (const int epos : IndexRange(bevvert_bevedges_[bv].size())) {
-        const int be = bevvert_bevedges_[bv][epos];
-        if (is_edge_bevel) {
-          spec::edge_bevel_init_widths_from_params(bv, epos, bevedge_widths_[be], *this);
-        }
-        else {
-          spec::vertex_bevel_init_widths_from_params(bv, epos, bevedge_widths_[be], *this);
-        }
-      }
-    }
-  });
 }
 
 /** Find out which elements have attributes beyond the special builtin ones, and then
@@ -5385,10 +5197,12 @@ std::optional<Mesh *> mesh_bevel(const Mesh &src_mesh,
                                  const BevelParameters &params,
                                  const bke::AttributeFilter &attribute_filter)
 {
-  if (params.offset <= 0) {
+  auto all_zero =
+  [](const Array<float> &o) { return std::all_of(o.begin(), o.end(), [](float f) { return f == 0.0;});};
+  if (all_zero(params.offsets[0]) && all_zero(params.offsets[1]) && all_zero(params.offsets[2]) && all_zero(params.offsets[3])) {
     return std::nullopt;
   }
-  fmt::println("\n\nBEVEL, offset={}, segments={}\n", params.offset, params.segments);
+  fmt::println("\n\nBEVEL, segments={}\n", params.segments);
 
   BevelState state(src_mesh, selection, params);
   if (state.bevverts_num == 0 && state.bevedges_num == 0 && state.bevfaces_num == 0) {
@@ -5396,7 +5210,6 @@ std::optional<Mesh *> mesh_bevel(const Mesh &src_mesh,
   }
   state.initialize_profile_data();
   state.order_bevedges();
-  state.set_bevedge_widths();
   state.determine_needed_new_elements();
   state.determine_needed_attribute_data();
   state.build_vertex_meshes();
