@@ -5733,10 +5733,9 @@ static void attribute_evaluate(bConstraint *con, bConstraintOb *cob, ListBase *t
       BLI_assert_msg(0, "Unknown Copy Transforms mix mode");
     }
   }
-
+  
   if (data->utarget_mat) {
     mul_m4_m4m4(cob->matrix, ct->tar->object_to_world().ptr(), cob->matrix);
-    mul_m4_m4m4(ct->matrix, ct->matrix, ct->tar->object_to_world().ptr());
   }
 }
 
