@@ -169,7 +169,7 @@ const EnumPropertyItem rna_enum_constraint_type_items[] = {
      "ATTRIBUTE",
      ICON_CON_ATTRIBUTE,
      "Attribute",
-     "Retrieve Transform from Mesh Verts"},
+     "Retrieve transform from target geometry attribute data"},
     {0, nullptr, 0, nullptr, nullptr},
 };
 
