@@ -30,6 +30,13 @@ enum class BevelMiterType {
   Arc = 2,
 };
 
+struct BevelAttributeOutputs {
+  std::optional<std::string> vertex_face_id;
+  std::optional<std::string> edge_face_id;
+  std::optional<std::string> outer_edge_id;
+  std::optional<std::string> mid_edge_id;
+};
+
 struct BevelParameters {
   int segments = 1;
   /** Profile shape parameter.  */
@@ -44,6 +51,12 @@ struct BevelParameters {
    * end (left, right). If affect_type is Vertices, these are the amounts to move along each edge
    * from the vertex, and only the first and third values are used. */
   Array<Array<float>, 4> offsets;
+  /** Per corner bool saying whether or not to miter at that corner. */
+  Array<bool> miter;
+  /** Per corner float saying how much to spread arc miters. */
+  Array<float> spread;
+  /** Which output attributes are needed.*/
+  geometry::BevelAttributeOutputs attribute_outputs;
 };
 
 /**

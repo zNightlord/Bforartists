@@ -5180,6 +5180,7 @@ std::optional<Mesh *> mesh_bevel(const Mesh &src_mesh,
   state.build_edge_meshes();
   state.build_face_meshes();
   // dump_bevel_state(state, "before build_mesh");
+  /* TODO: calculate output attributes, e.g. like create_cylinder_or_cone_mesh. */
   return build_mesh(state, attribute_filter);
 }
 

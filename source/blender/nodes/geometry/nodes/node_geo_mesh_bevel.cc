@@ -22,20 +22,6 @@ static const EnumPropertyItem affect_items[] = {
     {int(geometry::BevelAffect::Faces), "FACES", 0, "Faces", "Bevel affects faces"},
     {0, nullptr, 0, nullptr, nullptr}};
 
-static const EnumPropertyItem miter_items[] = {
-    {int(geometry::BevelMiterType::Sharp),
-     "SHARP",
-     0,
-     "Sharp",
-     "Sharp miter (no intermediate points)"},
-    {int(geometry::BevelMiterType::Patch),
-     "PATCH",
-     0,
-     "Patch",
-     "Patch miter (2 intermediate points)"},
-    {int(geometry::BevelMiterType::Arc), "ARC", 0, "Arc", "Arc miter (1 intermediate point)"},
-    {0, nullptr, 0, nullptr}};
-
 static void node_declare(NodeDeclarationBuilder &b)
 {
   b.add_input<decl::Geometry>("Mesh").supported_type(GeometryComponent::Type::Mesh);
@@ -55,11 +41,8 @@ static void node_declare(NodeDeclarationBuilder &b)
       "Offset for left side of dest end of edge");
   b.add_input<decl::Float>("Offset3").default_value(0.0f).min(0.0f).field_on_all().description(
       "Offset for right side of dest end of edge");
-  b.add_input<decl::Menu>("Miter")
-      .default_value(geometry::BevelMiterType::Sharp)
-      .static_items(miter_items)
-      .field_on_all()
-      .description("Per corner specification of miter kind");
+  b.add_input<decl::Bool>("Miter").default_value(false).field_on_all().description(
+      "Use a miter for corner");
   b.add_input<decl::Float>("Spread").default_value(0.0f).field_on_all().description(
       "Per corner specification of 'spread' for arc miters");
   b.add_input<decl::Int>("Segments")
@@ -104,6 +87,9 @@ static void node_geo_exec(GeoNodeExecParams params)
   Field<float> offset2_field = params.extract_input<Field<float>>("Offset2");
   Field<float> offset3_field = params.extract_input<Field<float>>("Offset3");
 
+  Field<bool> miter_field = params.extract_input<Field<bool>>("Miter");
+  Field<float> spread_field = params.extract_input<Field<float>>("Spread");
+
   geometry::foreach_real_geometry(geometry_set, [&](GeometrySet &geometry_set) {
     const Mesh *src_mesh = geometry_set.get_mesh();
     if (!src_mesh) {
@@ -128,6 +114,24 @@ static void node_geo_exec(GeoNodeExecParams params)
     if (selection.is_empty()) {
       return;
     }
+
+    const bke::MeshFieldContext corner_context(*src_mesh, AttrDomain::Corner);
+    FieldEvaluator corner_evaluator{corner_context, src_mesh->corners_num};
+    /* TODO: make this more efficient in usual case of no miters. */
+    bevel_params.miter = Array<bool>(src_mesh->corners_num);
+    bevel_params.spread = Array<float>(src_mesh->corners_num);
+    corner_evaluator.add_with_destination(miter_field, bevel_params.miter.as_mutable_span());
+    corner_evaluator.add_with_destination(spread_field, bevel_params.spread.as_mutable_span());
+    corner_evaluator.evaluate();
+
+    bevel_params.attribute_outputs.vertex_face_id =
+        params.get_output_anonymous_attribute_id_if_needed("Vertex Face");
+    bevel_params.attribute_outputs.edge_face_id =
+        params.get_output_anonymous_attribute_id_if_needed("Edge Face");
+    bevel_params.attribute_outputs.outer_edge_id =
+        params.get_output_anonymous_attribute_id_if_needed("Outer Edge");
+    bevel_params.attribute_outputs.mid_edge_id =
+        params.get_output_anonymous_attribute_id_if_needed("Vertex Face");
 
     std::optional<Mesh *> mesh = geometry::mesh_bevel(
         *src_mesh, selection, bevel_params, attribute_filter);
