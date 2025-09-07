@@ -10,8 +10,9 @@ namespace blender::nodes::node_geo_bone_info_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Object>("Object").hide_label().description(
-      "Object to retrieve the bone information from");
+  b.add_input<decl::Object>("Armature")
+      .hide_label()
+      .description("Armature object to retrieve the bone information from");
   b.add_input<decl::String>("Bone Name").hide_label().description("Name of the bone to retrieve");
 
   b.add_output<decl::Matrix>("Pose").description(
@@ -23,7 +24,7 @@ static void node_declare(NodeDeclarationBuilder &b)
 
 static void node_geo_exec(GeoNodeExecParams params)
 {
-  Object *object = params.extract_input<Object *>("Object");
+  Object *object = params.extract_input<Object *>("Armature");
   if (!object) {
     params.set_default_remaining_outputs();
     return;
