@@ -6849,6 +6849,7 @@ void BKE_constraint_blend_read_data(BlendDataReader *reader, ID *id_owner, ListB
         bTransformCacheConstraint *data = static_cast<bTransformCacheConstraint *>(con->data);
         data->reader = nullptr;
         data->reader_object_path[0] = '\0';
+        break;
       }
       case CONSTRAINT_TYPE_ATTRIBUTE: {
         bAttributeConstraint *data = static_cast<bAttributeConstraint *>(con->data);
