@@ -5610,6 +5610,9 @@ static bool attribute_get_tarmat(Depsgraph * /*depsgraph*/,
     return false;
   }
 
+  // remove when constraint only updates when needed (atm it updates when the viewport moves)
+  printf("attribute_get_tarmat updated \n");
+
   unit_m4(ct->matrix);
 
   const blender::bke::AttrDomain domain = domain_value_to_attribute(acon->domain_type);
@@ -5733,7 +5736,7 @@ static void attribute_evaluate(bConstraint *con, bConstraintOb *cob, ListBase *t
       BLI_assert_msg(0, "Unknown Copy Transforms mix mode");
     }
   }
-  
+
   if (data->utarget_mat) {
     mul_m4_m4m4(cob->matrix, ct->tar->object_to_world().ptr(), cob->matrix);
   }
