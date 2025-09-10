@@ -1060,13 +1060,13 @@ class TOPBAR_PT_name_marker(Panel):
             sd.type == "DOPESHEET_EDITOR"
             and sd.mode in {"ACTION", "SHAPEKEY"}
             and sd.show_pose_markers
-            and sd.action
+            and sd.active_action
         )
 
     @staticmethod
     def get_selected_marker(context):
         if TOPBAR_PT_name_marker.is_using_pose_markers(context):
-            markers = context.space_data.action.pose_markers
+            markers = context.active_action.pose_markers
         else:
             markers = context.scene.timeline_markers
 

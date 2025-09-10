@@ -13,17 +13,7 @@
 #include "DNA_defs.h"
 #include "DNA_listBase.h"
 
-struct Ipo;
 struct Text;
-
-/* channels reside in Object or Action (ListBase) constraintChannels */
-/* XXX: deprecated... old AnimSys. */
-typedef struct bConstraintChannel {
-  struct bConstraintChannel *next, *prev;
-  struct Ipo *ipo;
-  short flag;
-  char name[30];
-} bConstraintChannel;
 
 /** A Constraint. */
 typedef struct bConstraint {
@@ -56,10 +46,6 @@ typedef struct bConstraint {
   float enforce;
   /** Point along `subtarget` bone where the actual target is. 0=head (default for all), 1=tail. */
   float headtail;
-
-  /* old animation system, deprecated for 2.5. */
-  /** Local influence ipo or driver */
-  struct Ipo *ipo DNA_DEPRECATED;
 
   /* Below are read-only fields that are set at runtime
    * by the solver for use in the GE (only IK at the moment). */
@@ -576,6 +562,21 @@ typedef struct bTransformCacheConstraint {
   char reader_object_path[/*FILE_MAX*/ 1024];
 } bTransformCacheConstraint;
 
+/* Attribute Constraint */
+typedef struct bAttributeConstraint {
+  struct Object *target;
+  int sample_index;
+  char utarget_mat;
+  char mix_loc;
+  char mix_rot;
+  char mix_scl;
+  char mix_mode;
+  char _pad0[3];
+  short data_type;
+  short domain_type;
+  char *attribute_name;
+} bAttributeConstraint;
+
 /* ------------------------------------------ */
 
 /* bConstraint->type
@@ -621,6 +622,7 @@ typedef enum eBConstraint_Types {
   CONSTRAINT_TYPE_OBJECTSOLVER = 28,
   CONSTRAINT_TYPE_TRANSFORM_CACHE = 29,
   CONSTRAINT_TYPE_ARMATURE = 30,
+  CONSTRAINT_TYPE_ATTRIBUTE = 31,
 
   /* This should be the last entry in this list. */
   NUM_CONSTRAINT_TYPES,
@@ -1133,3 +1135,35 @@ typedef enum eStretchTo_Flags {
   STRETCHTOCON_USE_BULGE_MIN = (1 << 0),
   STRETCHTOCON_USE_BULGE_MAX = (1 << 1),
 } eStretchTo_Flags;
+
+/** Atrtibute Domain Mode */
+typedef enum Attribute_DomainMode {
+  CON_ATTRIBUTE_DOMAIN_POINT = 0,
+  CON_ATTRIBUTE_DOMAIN_EDGE = 1,
+  CON_ATTRIBUTE_DOMAIN_FACE = 2,
+  CON_ATTRIBUTE_DOMAIN_FACE_CORNER = 3,
+  CON_ATTRIBUTE_DOMAIN_CURVE = 4,
+  CON_ATTRIBUTE_DOMAIN_INSTANCE = 5,
+}
+Attribute_DomainMode;
+
+/* Atrtibute Data Type*/
+typedef enum Attribute_Data_Type {
+  CON_ATTRIBUTE_VECTOR = 0,
+  CON_ATTRIBUTE_QUATERNION = 1,
+  CON_ATTRIBUTE_4X4MATRIX = 2,
+} Attribute_Data_Type;
+
+/** Atrtibute Component Mix Mode */
+typedef enum Attribute_MixMode {
+  /* Replace rotation channel values. */
+  CON_ATTRIBUTE_MIX_REPLACE = 0,
+  /* Multiply the copied transformation on the left, handling loc/rot/scale separately. */
+  CON_ATTRIBUTE_MIX_BEFORE_SPLIT = 1,
+  /* Multiply the copied transformation on the right, handling loc/rot/scale separately. */
+  CON_ATTRIBUTE_MIX_AFTER_SPLIT = 2,
+  /* Multiply the copied transformation on the left, using simple matrix multiplication. */
+  CON_ATTRIBUTE_MIX_BEFORE_FULL = 3,
+  /* Multiply the copied transformation on the right, using simple matrix multiplication. */
+  CON_ATTRIBUTE_MIX_AFTER_FULL = 4,
+} Attribute_MixMode;

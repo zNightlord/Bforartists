@@ -599,7 +599,6 @@ void DepsgraphRelationBuilder::build_id(ID *id)
       break;
 
     case ID_LI:
-    case ID_IP:
     case ID_SCR:
     case ID_VF:
     case ID_BR:
@@ -1528,6 +1527,16 @@ void DepsgraphRelationBuilder::build_constraints(ID *id,
 
           /* NOTE: obdata eval now doesn't necessarily depend on the
            * object's transform. */
+          ComponentKey target_transform_key(&ct->tar->id, NodeType::TRANSFORM);
+          add_relation(target_transform_key, constraint_op_key, cti->name);
+        }
+        else if (con->type == CONSTRAINT_TYPE_ATTRIBUTE) {
+          /* Constraints which require the target object geometry attributes. */
+          ComponentKey target_key(&ct->tar->id, NodeType::GEOMETRY);
+          add_relation(target_key, constraint_op_key, cti->name);
+
+          /* NOTE: The target object's transform is used when the 'Apply target transform' flag
+           * is set.*/
           ComponentKey target_transform_key(&ct->tar->id, NodeType::TRANSFORM);
           add_relation(target_transform_key, constraint_op_key, cti->name);
         }

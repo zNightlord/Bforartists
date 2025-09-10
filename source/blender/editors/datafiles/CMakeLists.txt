@@ -437,6 +437,7 @@ if(WITH_BLENDER)
       comment
       community
       con_action
+      con_attribute
       con_armature
       con_camerasolver
       con_childof

@@ -593,7 +593,7 @@ class IMAGE_MT_uvs_mirror(Menu):
     def draw(self, _context):
         layout = self.layout
 
-        layout.operator("mesh.faces_mirror_uv", icon="COPYMIRRORED")
+        layout.operator("uv.copy_mirrored_faces", icon="COPYMIRRORED")
 
         layout.separator()
 
@@ -713,6 +713,7 @@ class IMAGE_MT_uvs(Menu):
 
         layout.operator_context = 'EXEC_REGION_WIN'
         layout.operator("uv.average_islands_scale", icon="AVERAGEISLANDSCALE")
+        layout.operator("uv.arrange_islands")
         layout.operator("uv.minimize_stretch", icon="MINIMIZESTRETCH")
         layout.operator("uv.stitch", icon="STITCH")
 

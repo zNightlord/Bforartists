@@ -165,6 +165,11 @@ const EnumPropertyItem rna_enum_constraint_type_items[] = {
      ICON_CON_SHRINKWRAP,
      "Shrinkwrap",
      "Restrict movements to surface of target mesh"},
+    {CONSTRAINT_TYPE_ATTRIBUTE,
+     "ATTRIBUTE",
+     ICON_CON_ATTRIBUTE,
+     "Attribute",
+     "Retrieve transform from target geometry attribute data"},
     {0, nullptr, 0, nullptr, nullptr},
 };
 
@@ -381,6 +386,8 @@ static StructRNA *rna_ConstraintType_refine(PointerRNA *ptr)
       return &RNA_ObjectSolverConstraint;
     case CONSTRAINT_TYPE_TRANSFORM_CACHE:
       return &RNA_TransformCacheConstraint;
+    case CONSTRAINT_TYPE_ATTRIBUTE:
+      return &RNA_AttributeConstraint;
     default:
       return &RNA_UnknownType;
   }
@@ -3617,6 +3624,142 @@ static void rna_def_constraint_transform_cache(BlenderRNA *brna)
   RNA_define_lib_overridable(false);
 }
 
+static void rna_def_constraint_attribute(BlenderRNA *brna)
+{
+  StructRNA *srna;
+  PropertyRNA *prop;
+
+  static const EnumPropertyItem domain_items[] = {
+      {CON_ATTRIBUTE_DOMAIN_POINT, "POINT", 0, "Point", "Point Domain"},
+      {CON_ATTRIBUTE_DOMAIN_EDGE, "EDGE", 0, "Edge", "Edge Domain"},
+      {CON_ATTRIBUTE_DOMAIN_FACE, "FACE", 0, "Face", "Face Domain"},
+      {CON_ATTRIBUTE_DOMAIN_FACE_CORNER, "FACE_CORNER", 0, "Face Corner", "Face Corner Domain"},
+      {CON_ATTRIBUTE_DOMAIN_CURVE, "CURVE", 0, "Spline", "Spline Domain"},
+      {CON_ATTRIBUTE_DOMAIN_INSTANCE, "INSTANCE", 0, "Instance", "Instance Domain"},
+      {0, nullptr, 0, nullptr, nullptr},
+  };
+
+  static const EnumPropertyItem type_items[] = {
+      {CON_ATTRIBUTE_VECTOR, "VECTOR", 0, "Vector", "Vector data type, affects position"},
+      {CON_ATTRIBUTE_QUATERNION,
+       "QUATERNION",
+       0,
+       "Quaternion",
+       "Quaternion data type, affects rotation"},
+      {CON_ATTRIBUTE_4X4MATRIX,
+       "FLOAT4X4",
+       0,
+       "4x4 Matrix",
+       "4x4 Matrix data type, affects transform"},
+      {0, nullptr, 0, nullptr, nullptr},
+  };
+
+  static const EnumPropertyItem attribute_mix_mode_items[] = {
+      {CON_ATTRIBUTE_MIX_REPLACE,
+       "REPLACE",
+       0,
+       "Replace",
+       "Replace the original transformation with copied"},
+      RNA_ENUM_ITEM_SEPR,
+      {CON_ATTRIBUTE_MIX_BEFORE_FULL,
+       "BEFORE_FULL",
+       0,
+       "Before Original (Full)",
+       "Apply copied transformation before original, using simple matrix multiplication as if "
+       "the constraint target is a parent in Full Inherit Scale mode. "
+       "Will create shear when combining rotation and non-uniform scale."},
+      {CON_ATTRIBUTE_MIX_BEFORE_SPLIT,
+       "BEFORE_SPLIT",
+       0,
+       "Before Original (Split Channels)",
+       "Apply copied transformation before original, handling location, rotation and scale "
+       "separately, similar to a sequence of three Copy constraints"},
+      RNA_ENUM_ITEM_SEPR,
+      {CON_ATTRIBUTE_MIX_AFTER_FULL,
+       "AFTER_FULL",
+       0,
+       "After Original (Full)",
+       "Apply copied transformation after original, using simple matrix multiplication as if "
+       "the constraint target is a child in Full Inherit Scale mode. "
+       "Will create shear when combining rotation and non-uniform scale."},
+      {CON_ATTRIBUTE_MIX_AFTER_SPLIT,
+       "AFTER_SPLIT",
+       0,
+       "After Original (Split Channels)",
+       "Apply copied transformation after original, handling location, rotation and scale "
+       "separately, similar to a sequence of three Copy constraints"},
+      {0, nullptr, 0, nullptr, nullptr},
+  };
+
+  srna = RNA_def_struct(brna, "AttributeConstraint", "Constraint");
+  RNA_def_struct_ui_text(
+      srna, "Attribute Constraint", "Create attribute constraint-based relationship");
+  RNA_def_struct_sdna_from(srna, "bAttributeConstraint", "data");
+  RNA_def_struct_ui_icon(srna, ICON_CON_ATTRIBUTE);
+
+  RNA_define_lib_overridable(true);
+
+  prop = RNA_def_property(srna, "target", PROP_POINTER, PROP_NONE);
+  RNA_def_property_pointer_sdna(prop, nullptr, "target");
+  RNA_def_property_pointer_funcs(prop, nullptr, nullptr, nullptr, nullptr);
+  RNA_def_property_ui_text(prop, "Target", "Target Mesh object");
+  RNA_def_property_flag(prop, PROP_EDITABLE);
+  RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_dependency_update");
+
+  prop = RNA_def_property(srna, "attribute_name", PROP_STRING, PROP_NONE);
+  RNA_def_property_string_sdna(prop, nullptr, "attribute_name");
+  RNA_def_property_ui_text(prop, "Attribute Name", "Name of transform attribute");
+  RNA_def_property_flag(prop, PROP_EDITABLE);
+  RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
+
+  prop = RNA_def_property(srna, "domain_type", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, nullptr, "domain_type");
+  RNA_def_property_enum_items(prop, domain_items);
+  RNA_def_property_ui_text(prop, "Domain Type", "Attribute domain");
+  RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
+
+  prop = RNA_def_property(srna, "utarget_mat", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "utarget_mat", 1);
+  RNA_def_property_ui_text(prop, "Target Transform", "Apply target transform");
+  RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
+
+  prop = RNA_def_property(srna, "data_type", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, nullptr, "data_type");
+  RNA_def_property_enum_items(prop, type_items);
+  RNA_def_property_ui_text(prop, "Data Type", "Select data type of attribute");
+  RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
+
+  prop = RNA_def_property(srna, "sample_index", PROP_INT, PROP_NONE);
+  RNA_def_property_int_sdna(prop, nullptr, "sample_index");
+  RNA_def_property_range(prop, 0, INT_MAX);
+  RNA_def_property_ui_text(prop, "Sample Index", "Sample Index");
+  RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
+
+  prop = RNA_def_property(srna, "mix_loc", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "mix_loc", 1);
+  RNA_def_property_ui_text(prop, "Mix Location", "Mix Location");
+  RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
+
+  prop = RNA_def_property(srna, "mix_rot", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "mix_rot", 1);
+  RNA_def_property_ui_text(prop, "Mix Rotation", "Mix Rotation");
+  RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
+
+  prop = RNA_def_property(srna, "mix_scl", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "mix_scl", 1);
+  RNA_def_property_ui_text(prop, "Mix Scale", "Mix Scale");
+  RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
+
+  prop = RNA_def_property(srna, "mix_mode", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, nullptr, "mix_mode");
+  RNA_def_property_enum_items(prop, attribute_mix_mode_items);
+  RNA_def_property_ui_text(
+      prop, "Mix Mode", "Specify how the copied and existing transformations are combined");
+  RNA_def_property_update(prop, NC_OBJECT | ND_CONSTRAINT, "rna_Constraint_update");
+
+  RNA_define_lib_overridable(false);
+}
+
 /* Define the base struct for constraints. */
 
 void RNA_def_constraint(BlenderRNA *brna)
@@ -3774,6 +3917,7 @@ void RNA_def_constraint(BlenderRNA *brna)
   rna_def_constraint_camera_solver(brna);
   rna_def_constraint_object_solver(brna);
   rna_def_constraint_transform_cache(brna);
+  rna_def_constraint_attribute(brna);
 }
 
 #endif

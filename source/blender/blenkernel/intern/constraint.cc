@@ -59,6 +59,7 @@
 #include "BKE_displist.h"
 #include "BKE_editmesh.hh"
 #include "BKE_fcurve_driver.h"
+#include "BKE_geometry_set_instances.hh"
 #include "BKE_global.hh"
 #include "BKE_idprop.hh"
 #include "BKE_lib_id.hh"
@@ -5450,6 +5451,314 @@ static bConstraintTypeInfo CTI_TRANSFORM_CACHE = {
     /*evaluate_constraint*/ transformcache_evaluate,
 };
 
+/* ---------- Attribute Transform Constraint ----------- */
+
+static blender::bke::AttrDomain domain_value_to_attribute(const int domain_mode)
+{
+  switch (domain_mode) {
+    case CON_ATTRIBUTE_DOMAIN_POINT:
+      return blender::bke::AttrDomain::Point;
+    case CON_ATTRIBUTE_DOMAIN_EDGE:
+      return blender::bke::AttrDomain::Edge;
+    case CON_ATTRIBUTE_DOMAIN_FACE:
+      return blender::bke::AttrDomain::Face;
+    case CON_ATTRIBUTE_DOMAIN_FACE_CORNER:
+      return blender::bke::AttrDomain::Corner;
+    case CON_ATTRIBUTE_DOMAIN_CURVE:
+      return blender::bke::AttrDomain::Curve;
+    case CON_ATTRIBUTE_DOMAIN_INSTANCE:
+      return blender::bke::AttrDomain::Instance;
+    default:
+      BLI_assert_unreachable();
+      return blender::bke::AttrDomain::Point;
+  }
+}
+
+static blender::bke::AttrType type_value_to_attribute(const int data_type)
+{
+  switch (data_type) {
+    case CON_ATTRIBUTE_VECTOR:
+      return blender::bke::AttrType::Float3;
+    case CON_ATTRIBUTE_QUATERNION:
+      return blender::bke::AttrType::Quaternion;
+    case CON_ATTRIBUTE_4X4MATRIX:
+      return blender::bke::AttrType::Float4x4;
+    default:
+      BLI_assert_unreachable();
+      return blender::bke::AttrType::Float3;
+  }
+}
+
+static void value_attribute_to_matrix(float r_matrix[4][4],
+                                      const blender::GPointer value,
+                                      const int data_type)
+{
+  switch (data_type) {
+    case CON_ATTRIBUTE_VECTOR: {
+      copy_v3_v3(r_matrix[3], *value.get<blender::float3>());
+      break;
+    }
+    case CON_ATTRIBUTE_QUATERNION: {
+      quat_to_mat4(r_matrix, *value.get<blender::float4>());
+      break;
+    }
+    case CON_ATTRIBUTE_4X4MATRIX: {
+      copy_m4_m4(r_matrix, (*value.get<blender::float4x4>()).ptr());
+      break;
+    }
+    default: {
+      BLI_assert_unreachable();
+    }
+  }
+}
+
+static bool component_is_available(const blender::bke::GeometrySet &geometry,
+                                   const blender::bke::GeometryComponent::Type type,
+                                   const blender::bke::AttrDomain domain)
+{
+  if (!geometry.has(type)) {
+    return false;
+  }
+  const blender::bke::GeometryComponent &component = *geometry.get_component(type);
+  return component.attribute_domain_size(domain) != 0;
+}
+
+static const blender::bke::GeometryComponent *find_source_component(
+    const blender::bke::GeometrySet &geometry, const blender::bke::AttrDomain domain)
+{
+  /* Choose the other component based on a consistent order, rather than some more complicated
+   * heuristic. This is the same order visible in the spreadsheet and used in the ray-cast node. */
+  static const blender::Array<blender::bke::GeometryComponent::Type> supported_types = {
+      blender::bke::GeometryComponent::Type::Mesh,
+      blender::bke::GeometryComponent::Type::PointCloud,
+      blender::bke::GeometryComponent::Type::Curve,
+      blender::bke::GeometryComponent::Type::Instance,
+      blender::bke::GeometryComponent::Type::GreasePencil};
+  for (const blender::bke::GeometryComponent::Type src_type : supported_types) {
+    if (component_is_available(geometry, src_type, domain)) {
+      return geometry.get_component(src_type);
+    }
+  }
+
+  return nullptr;
+}
+
+static void attribute_free_data(bConstraint *con)
+{
+  bAttributeConstraint *data = static_cast<bAttributeConstraint *>(con->data);
+  if (data->attribute_name) {
+    MEM_freeN(data->attribute_name);
+    data->attribute_name = nullptr;
+  }
+}
+
+static void attribute_id_looper(bConstraint *con, ConstraintIDFunc func, void *userdata)
+{
+  bAttributeConstraint *data = static_cast<bAttributeConstraint *>(con->data);
+
+  /* target only */
+  func(con, (ID **)&data->target, false, userdata);
+}
+
+static void attribute_copy_data(bConstraint *con, bConstraint *srccon)
+{
+  const bAttributeConstraint *src = static_cast<bAttributeConstraint *>(srccon->data);
+  bAttributeConstraint *dst = static_cast<bAttributeConstraint *>(con->data);
+
+  if (src->attribute_name) {
+    dst->attribute_name = BLI_strdup(src->attribute_name);
+  }
+}
+
+static void attribute_new_data(void *cdata)
+{
+  bAttributeConstraint *data = static_cast<bAttributeConstraint *>(cdata);
+  data->attribute_name = BLI_strdup("position");
+  data->mix_loc = true;
+  data->mix_rot = true;
+  data->mix_scl = true;
+}
+
+static int attribute_get_tars(bConstraint *con, ListBase *list)
+{
+  if (con && list) {
+    bAttributeConstraint *data = static_cast<bAttributeConstraint *>(con->data);
+    bConstraintTarget *ct;
+
+    SINGLETARGETNS_GET_TARS(con, data->target, ct, list);
+
+    return 1;
+  }
+
+  return 0;
+}
+
+static void attribute_flush_tars(bConstraint *con, ListBase *list, bool no_copy)
+{
+  if (con && list) {
+    bAttributeConstraint *data = static_cast<bAttributeConstraint *>(con->data);
+    bConstraintTarget *ct = static_cast<bConstraintTarget *>(list->first);
+
+    SINGLETARGETNS_FLUSH_TARS(con, data->target, ct, list, no_copy);
+  }
+}
+
+static bool attribute_get_tarmat(Depsgraph * /*depsgraph*/,
+                                 bConstraint *con,
+                                 bConstraintOb * /*cob*/,
+                                 bConstraintTarget *ct,
+                                 float /*ctime*/)
+{
+  const bAttributeConstraint *acon = static_cast<bAttributeConstraint *>(con->data);
+
+  if (!VALID_CONS_TARGET(ct)) {
+    return false;
+  }
+
+  unit_m4(ct->matrix);
+
+  const blender::bke::AttrDomain domain = domain_value_to_attribute(acon->domain_type);
+  const blender::bke::AttrType sample_data_type = type_value_to_attribute(acon->data_type);
+  const blender::bke::GeometrySet &target_eval = blender::bke::object_get_evaluated_geometry_set(
+      *ct->tar);
+
+  const blender::bke::GeometryComponent *component = find_source_component(target_eval, domain);
+  if (component == nullptr) {
+    return false;
+  }
+
+  const std::optional<blender::bke::AttributeAccessor> optional_attributes =
+      component->attributes();
+  if (!optional_attributes.has_value()) {
+    return false;
+  }
+
+  const blender::bke::AttributeAccessor &attributes = *optional_attributes;
+  const blender::GVArray attribute = *attributes.lookup(
+      acon->attribute_name, domain, sample_data_type);
+
+  if (attribute.is_empty()) {
+    return false;
+  }
+
+  const int index = std::clamp<int>(acon->sample_index, 0, attribute.size() - 1);
+
+  const blender::CPPType &type = attribute.type();
+  BUFFER_FOR_CPP_TYPE_VALUE(type, sampled_value);
+  attribute.get_to_uninitialized(index, sampled_value);
+
+  value_attribute_to_matrix(ct->matrix, blender::GPointer(type, sampled_value), acon->data_type);
+  type.destruct(sampled_value);
+
+  return true;
+}
+
+static void attribute_evaluate(bConstraint *con, bConstraintOb *cob, ListBase *targets)
+{
+  bConstraintTarget *ct = static_cast<bConstraintTarget *>(targets->first);
+  const bAttributeConstraint *data = static_cast<bAttributeConstraint *>(con->data);
+
+  /* only evaluate if there is a target */
+  if (!VALID_CONS_TARGET(ct)) {
+    return;
+  }
+
+  float target_mat[4][4];
+  if (data->mix_mode == CON_ATTRIBUTE_MIX_REPLACE) {
+    copy_m4_m4(target_mat, cob->matrix);
+  }
+  else {
+    unit_m4(target_mat);
+  }
+
+  float loc_a[3], rot_a[3][3], size_a[3];
+  float loc_b[3], rot_b[3][3], size_b[3];
+  mat4_to_loc_rot_size(loc_a, rot_a, size_a, target_mat);
+  mat4_to_loc_rot_size(loc_b, rot_b, size_b, ct->matrix);
+
+  switch (data->data_type) {
+    case CON_ATTRIBUTE_VECTOR: {
+      loc_rot_size_to_mat4(target_mat, loc_b, rot_a, size_a);
+      break;
+    }
+    case CON_ATTRIBUTE_QUATERNION: {
+      loc_rot_size_to_mat4(target_mat, loc_a, rot_b, size_a);
+      break;
+    }
+    case CON_ATTRIBUTE_4X4MATRIX: {
+      if (data->mix_loc && data->mix_rot && data->mix_scl) {
+        copy_m4_m4(target_mat, ct->matrix);
+      }
+      else {
+        if (data->mix_loc) {
+          copy_v3_v3(loc_a, loc_b);
+        }
+        if (data->mix_rot) {
+          copy_m3_m3(rot_a, rot_b);
+        }
+        if (data->mix_scl) {
+          copy_v3_v3(size_a, size_b);
+        }
+        loc_rot_size_to_mat4(target_mat, loc_a, rot_a, size_a);
+      }
+      break;
+    }
+  }
+
+  /* Finally, combine the matrices. */
+  switch (data->mix_mode) {
+    case CON_ATTRIBUTE_MIX_REPLACE: {
+      copy_m4_m4(cob->matrix, target_mat);
+      break;
+    }
+
+    /* Simple matrix multiplication. */
+    case CON_ATTRIBUTE_MIX_BEFORE_FULL: {
+      mul_m4_m4m4(cob->matrix, target_mat, cob->matrix);
+      break;
+    }
+
+    case CON_ATTRIBUTE_MIX_AFTER_FULL: {
+      mul_m4_m4m4(cob->matrix, cob->matrix, target_mat);
+      break;
+    }
+
+    /* Fully separate handling of channels. */
+    case CON_ATTRIBUTE_MIX_BEFORE_SPLIT: {
+      mul_m4_m4m4_split_channels(cob->matrix, target_mat, cob->matrix);
+      break;
+    }
+
+    case CON_ATTRIBUTE_MIX_AFTER_SPLIT: {
+      mul_m4_m4m4_split_channels(cob->matrix, cob->matrix, target_mat);
+      break;
+    }
+
+    default: {
+      BLI_assert_msg(0, "Unknown Copy Transforms mix mode");
+    }
+  }
+
+  if (data->utarget_mat) {
+    mul_m4_m4m4(cob->matrix, ct->tar->object_to_world().ptr(), cob->matrix);
+  }
+}
+
+static bConstraintTypeInfo CTI_ATTRIBUTE = {
+    /*type*/ CONSTRAINT_TYPE_ATTRIBUTE,
+    /*size*/ sizeof(bAttributeConstraint),
+    /*name*/ N_("Attribute Transform"),
+    /*struct_name*/ "bAttributeConstraint",
+    /*free_data*/ attribute_free_data,
+    /*id_looper*/ attribute_id_looper,
+    /*copy_data*/ attribute_copy_data,
+    /*new_data*/ attribute_new_data,
+    /*get_constraint_targets*/ attribute_get_tars,
+    /*flush_constraint_targets*/ attribute_flush_tars,
+    /*get_target_matrix*/ attribute_get_tarmat,
+    /*evaluate_constraint*/ attribute_evaluate,
+};
+
 /* ************************* Constraints Type-Info *************************** */
 /* All of the constraints API functions use #bConstraintTypeInfo structs to carry out
  * and operations that involve constraint specific code.
@@ -5493,6 +5802,7 @@ static void constraints_init_typeinfo()
   constraintsTypeInfo[28] = &CTI_OBJECTSOLVER;    /* Object Solver Constraint */
   constraintsTypeInfo[29] = &CTI_TRANSFORM_CACHE; /* Transform Cache Constraint */
   constraintsTypeInfo[30] = &CTI_ARMATURE;        /* Armature Constraint */
+  constraintsTypeInfo[31] = &CTI_ATTRIBUTE;       /* Attribute Transform Constraint */
 }
 
 const bConstraintTypeInfo *BKE_constraint_typeinfo_from_type(int type)
@@ -5544,11 +5854,16 @@ static void con_unlink_refs_cb(bConstraint * /*con*/,
   }
 }
 
-/** Helper function to invoke the id_looper callback, including custom space. */
+/**
+ * Helper function to invoke the id_looper callback, including custom space.
+ *
+ * \param flag is unused right now, but it's kept as a reminder that new code may need to check
+ * flags as well. See enum LibraryForeachIDFlag in BKE_lib_query.hh.
+ */
 static void con_invoke_id_looper(const bConstraintTypeInfo *cti,
                                  bConstraint *con,
                                  ConstraintIDFunc func,
-                                 const int flag,
+                                 const int /*flag*/,
                                  void *userdata)
 {
   if (cti->id_looper) {
@@ -5556,10 +5871,6 @@ static void con_invoke_id_looper(const bConstraintTypeInfo *cti,
   }
 
   func(con, (ID **)&con->space_object, false, userdata);
-
-  if (flag & IDWALK_DO_DEPRECATED_POINTERS) {
-    func(con, reinterpret_cast<ID **>(&con->ipo), false, userdata);
-  }
 }
 
 void BKE_constraint_free_data_ex(bConstraint *con, bool do_id_user)
@@ -6478,6 +6789,11 @@ void BKE_constraint_blend_write(BlendWriter *writer, ListBase *conlist)
 
           break;
         }
+        case CONSTRAINT_TYPE_ATTRIBUTE: {
+          bAttributeConstraint *data = static_cast<bAttributeConstraint *>(con->data);
+          BLO_write_string(writer, data->attribute_name);
+          break;
+        }
       }
     }
 
@@ -6539,6 +6855,12 @@ void BKE_constraint_blend_read_data(BlendDataReader *reader, ID *id_owner, ListB
         bTransformCacheConstraint *data = static_cast<bTransformCacheConstraint *>(con->data);
         data->reader = nullptr;
         data->reader_object_path[0] = '\0';
+        break;
+      }
+      case CONSTRAINT_TYPE_ATTRIBUTE: {
+        bAttributeConstraint *data = static_cast<bAttributeConstraint *>(con->data);
+        BLO_read_string(reader, &data->attribute_name);
+        break;
       }
     }
   }
