@@ -5610,9 +5610,6 @@ static bool attribute_get_tarmat(Depsgraph * /*depsgraph*/,
     return false;
   }
 
-  // remove when constraint only updates when needed (atm it updates when the viewport moves)
-  printf("attribute_get_tarmat updated \n");
-
   unit_m4(ct->matrix);
 
   const blender::bke::AttrDomain domain = domain_value_to_attribute(acon->domain_type);
