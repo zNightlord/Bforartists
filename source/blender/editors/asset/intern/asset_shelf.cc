@@ -417,7 +417,7 @@ static int calculate_row_count_from_tile_draw_height(const int region_height_sca
   return std::max(1, int((region_height_scaled - 2 * main_region_padding_y()) / tile_draw_height));
 }
 
-static int calculate_scaled_region_height_from_row_count(const ARegion *region,
+static int calculate_scaled_region_height_from_row_count(const ARegion */*region*/,
                                                          const int row_count,
                                                          const int tile_draw_height)
 {
@@ -474,6 +474,7 @@ static void region_resize_to_preferred(ScrArea *area, ARegion *region)
       size_y_avail * UI_SCALE_FAC, tile_height);
 
   const int new_size_y = calculate_scaled_region_height_from_row_count(
+                             region,
                              std::min(max_row_count, active_shelf->preferred_row_count),
                              tile_height) /
                          UI_SCALE_FAC;
