@@ -186,7 +186,7 @@ class SEQUENCER_HT_header(Header):
 
         layout.separator_spacer()
         row = layout.row()  # BFA - 3D Sequencer
-        row.label(text="Timeline:", icon='VIEW3D')  # BFA - 3D Sequencer
+        row.label(icon='PINNED' if context.workspace.sequencer_scene else 'UNPINNED')  # BFA - 3D Sequencer
 
         # BFA - wip merge of new sequencer
         if st.view_type == 'SEQUENCER':
@@ -201,18 +201,19 @@ class SEQUENCER_HT_header(Header):
 
         if sequencer_tool_settings and st.view_type in {'SEQUENCER', 'SEQUENCER_PREVIEW'}:
             row = layout.row(align=True)
-            row.prop(sequencer_tool_settings, "overlap_mode", text="")
+            row.prop(sequencer_tool_settings, "overlap_mode", text="", icon_only=True) # BFA - icon only
 
         # if st.view_type in {'SEQUENCER', 'SEQUENCER_PREVIEW'}:
-        row = layout.row(align=True)
-        row.prop(tool_settings, "use_snap_sequencer", text="")
-        sub = row.row(align=True)
-        sub.popover(panel="SEQUENCER_PT_snapping", text="",)  # BFA - removed title
-        if st.view_type in {'SEQUENCER', 'SEQUENCER_PREVIEW'}:
+        if tool_settings:
             row = layout.row(align=True)
             row.prop(tool_settings, "use_snap_sequencer", text="")
             sub = row.row(align=True)
-            sub.popover(panel="SEQUENCER_PT_snapping")
+            sub.popover(panel="SEQUENCER_PT_snapping", text="",) # BFA - removed title
+        if st.view_type in {'SEQUENCER', 'SEQUENCER_PREVIEW'} and tool_settings:
+            row = layout.row(align=True)
+            row.prop(tool_settings, "use_snap_sequencer", text="")
+            sub = row.row(align=True)
+            sub.popover(panel="SEQUENCER_PT_snapping", text="")  # BFA - removed title
 
         # layout.separator_spacer()  #BFA
 
@@ -1420,8 +1421,8 @@ class SEQUENCER_MT_strip_animation(Menu):
             text="Insert Keyframe with Keying Set",
             icon="KEYFRAMES_INSERT").always_prompt = True
         layout.operator("anim.keying_set_active_set", text="Change Keying Set", icon="KEYINGSET")
-        layout.operator("anim.keyframe_delete_vse", text="Delete Keyframes")
-        layout.operator("anim.keyframe_clear_vse", text="Clear Keyframes...")
+        layout.operator("anim.keyframe_delete_vse", text="Delete Keyframes", icon="KEYFRAMES_REMOVE")
+        layout.operator("anim.keyframe_clear_vse", text="Clear Keyframes...", icon="KEYFRAMES_CLEAR")
 
 
 class SEQUENCER_MT_strip_mirror(Menu):
@@ -1710,7 +1711,7 @@ class SEQUENCER_MT_strip(Menu):
             layout.operator("sequencer.copy", text="Copy", icon="COPYDOWN")
             layout.operator("sequencer.paste", text="Paste", icon="PASTEDOWN")
             layout.operator("sequencer.duplicate_move", icon="DUPLICATE")
-            layout.operator("sequencer.duplicate_move_linked", text="Duplicate Linked")
+            layout.operator("sequencer.duplicate_move_linked", text="Duplicate Linked", icon="DUPLICATE")
 
         layout.separator()
         layout.operator("sequencer.delete", text="Delete", icon="DELETE")
@@ -3079,16 +3080,18 @@ class SEQUENCER_PT_scene(SequencerButtonsPanel, Panel):
         if strip.scene_input == 'CAMERA':
             layout = layout.column(align=True)
             layout.label(text="Show")
-            layout.use_property_split = False
+            
+            # BFA - Align bool properties left and indent
             row = layout.row()
             row.separator()
-            layout.prop(strip, "use_annotations", text="Annotations")
+            col = row.column(align=True)
+            col.use_property_split = False
+            
+            col.prop(strip, "use_annotations", text="Annotations")
             if scene:
                 # Warning, this is not a good convention to follow.
                 # Expose here because setting the alpha from the "Render" menu is very inconvenient.
-                row = layout.row()
-                row.separator()
-                row.prop(scene.render, "film_transparent")
+                col.prop(scene.render, "film_transparent")
 
 
 class SEQUENCER_PT_scene_sound(SequencerButtonsPanel, Panel):
@@ -3405,10 +3408,7 @@ class SEQUENCER_PT_adjust_sound(SequencerButtonsPanel, Panel):
 
             layout.use_property_split = False
             col = layout.column()
-
-            split = col.split(factor=0.4)
-            split.label(text="")
-            split.prop(sound, "use_mono")
+            col.prop(sound, "use_mono") # BFA - Align bool property left
 
             layout.use_property_split = True
             col = layout.column()
@@ -3696,23 +3696,20 @@ class SEQUENCER_PT_cache_view_settings(SequencerButtonsPanel, Panel):
             col = layout.box()
             col = col.column(align=True)
 
-            split = col.split(factor=0.4, align=True)
-            split.alignment = 'RIGHT'
-            split.label(text="Current Cache Size")
-            split.alignment = 'LEFT'
-            split.label(text=iface_("{:d} MB").format(cache_raw_size + cache_final_size), translate=False)
-
-            split = col.split(factor=0.4, align=True)
-            split.alignment = 'RIGHT'
-            split.label(text="Raw")
-            split.alignment = 'LEFT'
-            split.label(text=iface_("{:d} MB").format(cache_raw_size), translate=False)
-
-            split = col.split(factor=0.4, align=True)
-            split.alignment = 'RIGHT'
-            split.label(text="Final")
-            split.alignment = 'LEFT'
-            split.label(text=iface_("{:d} MB").format(cache_final_size), translate=False)
+            # BFA - Rework UI to avoid labels cutting off
+            split = col.split(factor=0.75, align=True)
+            col1 = split.column(align=True)
+            col2 = split.column(align=True)
+            col1.alignment = 'LEFT'
+            col2.alignment = 'RIGHT'
+            
+            col1.label(text="Current Cache Size")
+            col1.label(text="Raw")
+            col1.label(text="Final")
+            
+            col2.label(text=iface_("{:d} MB").format(cache_raw_size + cache_final_size), translate=False)
+            col2.label(text=iface_("{:d} MB").format(cache_raw_size), translate=False)
+            col2.label(text=iface_("{:d} MB").format(cache_final_size), translate=False)
 
 
 class SEQUENCER_PT_proxy_settings(SequencerButtonsPanel, Panel):
@@ -3845,23 +3842,20 @@ class SEQUENCER_PT_strip_cache(SequencerButtonsPanel, Panel):
             col = layout.box()
             col = col.column(align=True)
 
-            split = col.split(factor=0.4, align=True)
-            split.alignment = 'RIGHT'
-            split.label(text="Current Cache Size")
-            split.alignment = 'LEFT'
-            split.label(text="{:d} MB".format(cache_raw_size + cache_final_size), translate=False)
-
-            split = col.split(factor=0.4, align=True)
-            split.alignment = 'RIGHT'
-            split.label(text="Raw")
-            split.alignment = 'LEFT'
-            split.label(text="{:d} MB".format(cache_raw_size), translate=False)
-
-            split = col.split(factor=0.4, align=True)
-            split.alignment = 'RIGHT'
-            split.label(text="Final")
-            split.alignment = 'LEFT'
-            split.label(text="{:d} MB".format(cache_final_size), translate=False)
+            # BFA - Rework UI to avoid labels cutting off
+            split = col.split(factor=0.75, align=True)
+            col1 = split.column(align=True)
+            col2 = split.column(align=True)
+            col1.alignment = 'LEFT'
+            col2.alignment = 'RIGHT'
+            
+            col1.label(text="Current Cache Size")
+            col1.label(text="Raw")
+            col1.label(text="Final")
+            
+            col2.label(text=iface_("{:d} MB").format(cache_raw_size + cache_final_size), translate=False)
+            col2.label(text=iface_("{:d} MB").format(cache_raw_size), translate=False)
+            col2.label(text=iface_("{:d} MB").format(cache_final_size), translate=False)
 
 
 class SEQUENCER_PT_preview(SequencerButtonsPanel_Output, Panel):

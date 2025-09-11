@@ -6,6 +6,7 @@ import bpy
 from bpy.types import Menu, Panel
 from bpy.app.translations import contexts as i18n_contexts
 
+import addon_utils  # bfa import
 # BFA - Added icons and floated properties left
 
 class TIME_PT_playhead_snapping(Panel):
@@ -45,8 +46,9 @@ def playback_controls(layout, context):
 
     row = layout.row(align=True)
 
-    if is_sequencer:
-        layout.prop(context.workspace, "use_scene_time_sync", text="Sync Scene Time")
+    # BFA - exposed to top sequener header, where contextually relevant, make sure 3D Sequencer is enabled
+    if is_sequencer and not addon_utils.check("bfa_3Dsequencer")[0]:
+       layout.prop(context.workspace, "use_scene_time_sync", text="Sync Scene Time")
 
     layout.separator_spacer()
     #BFA - moved dropdowns to consistently float right
@@ -73,11 +75,6 @@ def playback_controls(layout, context):
     row.operator("screen.keyframe_jump", text="", icon='NEXT_KEYFRAME').next = True
     row.operator("screen.frame_jump", text="", icon='FF').end = True
     row.operator("screen.animation_cancel", text = "", icon = 'LOOP_BACK').restore_frame = True
-
-    row = layout.row(align=True)
-    row.prop(tool_settings, "use_snap_playhead", text="")
-    sub = row.row(align=True)
-    sub.popover(panel="TIME_PT_playhead_snapping", text="")
 
     # layout.separator_spacer() #BFA
 
@@ -111,6 +108,12 @@ def playback_controls(layout, context):
         row.operator("anim.keyframe_delete_v3d", text="", icon='KEYFRAMES_REMOVE') # BFA - updated to work like it would in the 3D View (as expected)
 
         layout.separator_spacer()
+
+        # BFA - moved to end with options consistently
+        row = layout.row(align=True)
+        row.prop(tool_settings, "use_snap_playhead", text="")
+        sub = row.row(align=True)
+        sub.popover(panel="TIME_PT_playhead_snapping", text="")
 
         row = layout.row(align=True)
         sub = row.row(align=True)

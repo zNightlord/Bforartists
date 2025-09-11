@@ -15,13 +15,27 @@ SequenceType = Type[bpy.types.Strip]
 class TimelineSyncSettings(bpy.types.PropertyGroup):
     """3D View Sync Settings."""
     
+    def is_sync(self):
+        return bpy.context.workspace.use_scene_time_sync if self.sync_mode == 'BUILTIN' else self.enabled
+
+    def set_sync(self, toggle):
+        if self.sync_mode == 'BUILTIN':
+            bpy.context.workspace.use_scene_time_sync = toggle
+        else:
+            self.enabled = toggle
+    
+    def sync_mode_bidirectional_update(self, context):
+        if self.sync_mode == 'BUILTIN':
+            self.bidirectional = False
+
     sync_mode: bpy.props.EnumProperty(
-        name="Enabled",
-        description="Status of 3D View Sync system\n(TODO remove, use is_sync() and set_sync() instead)",
+        name="Sync mode",
+        description="Use Builtin Blender Story tool scene selector sync or Legacy Bforartists 3D Sequencer sync",
         items=(
-            ('LEGACY', "Legacy 3D Sequencer", "Bforartists 3D Sequencer Sync")
             ('BUILTIN', "Built-in", "Blender default Scene Selector Sync"),
+            ('LEGACY', "Legacy", "Bforartists 3D Sequencer Sync")
         ),
+        default='LEGACY',
     )
 
     def is_sync(self):
@@ -52,9 +66,11 @@ class TimelineSyncSettings(bpy.types.PropertyGroup):
         name="Bidirectional (Scrubbing only)",
         description=(
             "Whether changing the active scene's time should update "
-            "the Master Scene's current frame in the Sequencer"
+            "the Master Scene's current frame in the Sequencer\n"
+            "(in Built-in sync mode should only use for scrubbing only)"
         ),
-        default=False,
+        update=sync_mode_bidirectional_update,
+        default=True,
     )
 
     sync_all_windows: bpy.props.BoolProperty(
@@ -542,7 +558,7 @@ def sync_system_update(context: bpy.types.Context, force: bool = False):
 
     # Update strip's underlying scene frame before making it active in context's window
     # to avoid unwanted updates in case bidirectional sync is enabled.
-    if strip.scene.frame_current != inner_frame and sync_settings.sync_mode == 'BUILTIN':
+    if strip.scene.frame_current != inner_frame and sync_settings.sync_mode == 'LEGACY':
         scene_frame_set(context, strip.scene, inner_frame)
 
     if sync_settings.use_preview_range:
@@ -619,19 +635,18 @@ def on_load_post(*args):
     sync_settings = get_sync_settings()
     # Auto-setup the system for the new file if the active screen contains
     # a Sequence Editor area defining a scene override with at least 1 scene strip.
-    for area in bpy.context.screen.areas:
-        space = area.spaces.active
-        if isinstance(space, bpy.types.SpaceSequenceEditor) and getattr(
-            space, "scene_override", False
-        ):
-            seq_editor = area.spaces.active.scene_override.sequence_editor
-            if seq_editor and any(
-                isinstance(s, bpy.types.SceneStrip) for s in seq_editor.strips
-            ):
-                sync_settings.master_scene = area.spaces.active.scene_override
-                sync_settings.enabled = True
-                update_sync_cache_from_current_state()
-                break
+    if bpy.context.workspace.sequencer_scene is not None:
+        for area in bpy.context.screen.areas:
+            space = area.spaces.active
+            if isinstance(space, bpy.types.SpaceSequenceEditor):
+                seq_editor = bpy.context.workspace.squencer_scene.sequence_editor
+                if seq_editor and any(
+                    isinstance(s, bpy.types.SceneStrip) for s in seq_editor.strips
+                ):
+                    sync_settings.master_scene = bpy.context.workspace.sequencer_scene
+                    sync_settings.set_sync(True)
+                    update_sync_cache_from_current_state()
+                    break
 
 
 @bpy.app.handlers.persistent
