@@ -14,10 +14,28 @@ SequenceType = Type[bpy.types.Strip]
 
 class TimelineSyncSettings(bpy.types.PropertyGroup):
     """3D View Sync Settings."""
+    
+    sync_mode: bpy.props.EnumProperty(
+        name="Enabled",
+        description="Status of 3D View Sync system\n(TODO remove, use is_sync() and set_sync() instead)",
+        items=(
+            ('LEGACY', "Legacy 3D Sequencer", "Bforartists 3D Sequencer Sync")
+            ('BUILTIN', "Built-in", "Blender default Scene Selector Sync"),
+        ),
+    )
 
+    def is_sync(self):
+        return bpy.context.workspace.use_scene_time_sync if self.sync_mode == 'BUILTIN' else self.enabled
+
+    def set_sync(self, toggle):
+        if (self.sync_mode == 'BUILTIN'):
+            bpy.context.workspace.use_scene_time_sync = toggle
+        else:
+            self.enabled = toggle
+    
     enabled: bpy.props.BoolProperty(
         name="Enabled",
-        description="Status of 3D View Sync system",
+        description="Status of 3D View Sync system\n(TODO remove, use is_sync() and set_sync() instead)",
         default=False,
     )
 
@@ -31,12 +49,12 @@ class TimelineSyncSettings(bpy.types.PropertyGroup):
     )
 
     bidirectional: bpy.props.BoolProperty(
-        name="Bidirectional",
+        name="Bidirectional (Scrubbing only)",
         description=(
             "Whether changing the active scene's time should update "
             "the Master Scene's current frame in the Sequencer"
         ),
-        default=True,
+        default=False,
     )
 
     sync_all_windows: bpy.props.BoolProperty(
@@ -352,7 +370,7 @@ def get_sync_master_strip(
     """
     settings = get_sync_settings()
     master_scene = settings.master_scene
-    if not settings.enabled or not master_scene or not master_scene.sequence_editor:
+    if not settings.is_sync() or not master_scene or not master_scene.sequence_editor:
         return None, -1
 
     if use_cache:
@@ -408,7 +426,7 @@ def sync_system_update(context: bpy.types.Context, force: bool = False):
 
     # Discard update if disabled or not properly configured
     if (
-        not sync_settings.enabled
+        not sync_settings.is_sync()
         or not master_scene
         or not master_scene.sequence_editor
     ):
@@ -524,7 +542,7 @@ def sync_system_update(context: bpy.types.Context, force: bool = False):
 
     # Update strip's underlying scene frame before making it active in context's window
     # to avoid unwanted updates in case bidirectional sync is enabled.
-    if strip.scene.frame_current != inner_frame:
+    if strip.scene.frame_current != inner_frame and sync_settings.sync_mode == 'BUILTIN':
         scene_frame_set(context, strip.scene, inner_frame)
 
     if sync_settings.use_preview_range:
@@ -544,7 +562,8 @@ def sync_system_update(context: bpy.types.Context, force: bool = False):
         if window.scene != strip.scene:
             # Use scene_change_manager to optionnaly keep tool settings between scenes
             with scene_change_manager(context):
-                window.scene = strip.scene
+                pass
+                # window.scene = strip.scene  # TODO Scene Selector
         # Use strip camera if specified
         if strip.scene_camera and window.scene.camera != strip.scene_camera:
             window.scene.camera = strip.scene_camera
@@ -585,7 +604,7 @@ def update_sync_cache_from_current_state():
 def on_load_pre(*args):
     sync_settings = get_sync_settings()
     # Reset 3D View Sync settings
-    sync_settings.enabled = False
+    sync_settings.set_sync(False)
     sync_settings.master_scene = None
     sync_settings.last_master_frame = -1
     sync_settings.last_master_strip = ""
@@ -619,7 +638,7 @@ def on_load_post(*args):
 def on_undo_redo(scene, _):
     """Undo/Redo post handler callback."""
     sync_settings = get_sync_settings()
-    if not sync_settings.enabled:
+    if not sync_settings.is_sync():
         return
 
     # Explicitly update cached values on undo/redo events since

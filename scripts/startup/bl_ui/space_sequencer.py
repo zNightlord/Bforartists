@@ -187,12 +187,9 @@ class SEQUENCER_HT_header(Header):
         layout.separator_spacer()
         row = layout.row()  # BFA - 3D Sequencer
         row.label(text="Timeline:", icon='VIEW3D')  # BFA - 3D Sequencer
-        row.template_ID(
-            st, "scene_override", unlink="sequencer.remove_scene_override"
-        )  # BFA - 3D Sequencer
 
         # BFA - wip merge of new sequencer
-        if sequencer_tool_settings == 'SEQUENCER':
+        if st.view_type == 'SEQUENCER':
             row = layout.row(align=True)
             row.template_ID(context.workspace, "sequencer_scene", new="scene.new_sequencer_scene")
 

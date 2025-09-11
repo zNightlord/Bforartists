@@ -23,10 +23,10 @@ static constexpr float bone_box_verts[8][3] = {
     {1.0f, 0.0f, -1.0f},
     {-1.0f, 0.0f, -1.0f},
     {-1.0f, 0.0f, 1.0f},
-    {1.0f, 1.0f, 1.0f},
-    {1.0f, 1.0f, -1.0f},
-    {-1.0f, 1.0f, -1.0f},
-    {-1.0f, 1.0f, 1.0f},
+    {0.7f, 1.0f, 0.7f},
+    {0.7f, 1.0f, -0.7f},
+    {-0.7f, 1.0f, -0.7f},
+    {-0.7f, 1.0f, 0.7f},
 };
 
 static constexpr std::array<uint, 24> bone_box_wire_lines = {

@@ -2677,32 +2677,53 @@ void blo_do_versions_500(FileData *fd, Library * /*lib*/, Main *bmain)
     LISTBASE_FOREACH (bScreen *, screen, &bmain->screens) {
       LISTBASE_FOREACH (ScrArea *, area, &screen->areabase) {
         LISTBASE_FOREACH (SpaceLink *, sl, &area->spacedata) {
+          if (!ELEM(sl->spacetype, SPACE_NODE, SPACE_NLA)) {
+            continue;
+          }
           if (sl->spacetype != SPACE_NODE) {
-            continue;
-          }
-          const SpaceNode *snode = reinterpret_cast<SpaceNode *>(sl);
-          if (!STREQ(snode->tree_idname, "CompositorNodeTree")) {
-            continue;
-          }
+            const SpaceNode *snode = reinterpret_cast<SpaceNode *>(sl);
+            if (!STREQ(snode->tree_idname, "CompositorNodeTree")) {
+              continue;
+            }
 
-          ListBase *regionbase = (sl == area->spacedata.first) ? &area->regionbase :
+            ListBase *regionbase = (sl == area->spacedata.first) ? &area->regionbase :
+                                                                  &sl->regionbase;
+
+            if (ARegion *new_shelf_region = do_versions_add_region_if_not_found(
+                    regionbase,
+                    RGN_TYPE_ASSET_SHELF,
+                    "Asset shelf for compositing (versioning)",
+                    RGN_TYPE_HEADER))
+            {
+              new_shelf_region->alignment = RGN_ALIGN_BOTTOM;
+            }
+            if (ARegion *new_shelf_header = do_versions_add_region_if_not_found(
+                    regionbase,
+                    RGN_TYPE_ASSET_SHELF_HEADER,
+                    "Asset shelf header for compositing (versioning)",
+                    RGN_TYPE_ASSET_SHELF))
+            {
+              new_shelf_header->alignment = RGN_ALIGN_BOTTOM | RGN_ALIGN_HIDE_WITH_PREV;
+            }
+          } else {
+            ListBase *regionbase = (sl == area->spacedata.first) ? &area->regionbase :
                                                                  &sl->regionbase;
-
-          if (ARegion *new_shelf_region = do_versions_add_region_if_not_found(
-                  regionbase,
-                  RGN_TYPE_ASSET_SHELF,
-                  "Asset shelf for compositing (versioning)",
-                  RGN_TYPE_HEADER))
-          {
-            new_shelf_region->alignment = RGN_ALIGN_BOTTOM;
-          }
-          if (ARegion *new_shelf_header = do_versions_add_region_if_not_found(
-                  regionbase,
-                  RGN_TYPE_ASSET_SHELF_HEADER,
-                  "Asset shelf header for compositing (versioning)",
-                  RGN_TYPE_ASSET_SHELF))
-          {
-            new_shelf_header->alignment = RGN_ALIGN_BOTTOM | RGN_ALIGN_HIDE_WITH_PREV;
+            if (ARegion *new_shelf_region = do_versions_add_region_if_not_found(
+                    regionbase,
+                    RGN_TYPE_ASSET_SHELF,
+                    "Asset shelf for nla (versioning)",
+                    RGN_TYPE_HEADER))
+            {
+              new_shelf_region->alignment = RGN_ALIGN_BOTTOM;
+            }
+            if (ARegion *new_shelf_header = do_versions_add_region_if_not_found(
+                    regionbase,
+                    RGN_TYPE_ASSET_SHELF_HEADER,
+                    "Asset shelf header for nla (versioning)",
+                    RGN_TYPE_ASSET_SHELF))
+            {
+              new_shelf_header->alignment = RGN_ALIGN_BOTTOM | RGN_ALIGN_HIDE_WITH_PREV;
+            }
           }
         }
       }
@@ -2867,6 +2888,26 @@ void blo_do_versions_500(FileData *fd, Library * /*lib*/, Main *bmain)
       remove_in_and_out_node_interface(*node_tree);
     }
     FOREACH_NODETREE_END;
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 50)) {
+    LISTBASE_FOREACH (Scene *, scene, &bmain->scenes) {
+      const float default_snap_move_increment = 1.0f;
+      const float default_snap_move_increment_precision = 0.1f;
+      scene->toolsettings->snap_move_increment_2d = default_snap_move_increment;
+      scene->toolsettings->snap_move_increment_3d = default_snap_move_increment;
+      scene->toolsettings->snap_move_increment_2d_precision =
+          default_snap_move_increment_precision;
+      scene->toolsettings->snap_move_increment_3d_precision =
+          default_snap_move_increment_precision;
+      const float default_snap_scale_increment = 0.1f;
+      const float default_snap_scale_increment_precision = 0.01f;
+      scene->toolsettings->snap_scale_increment_2d = default_snap_scale_increment;
+      scene->toolsettings->snap_scale_increment_3d = default_snap_scale_increment;
+      scene->toolsettings->snap_scale_increment_2d_precision =
+          default_snap_scale_increment_precision;
+      scene->toolsettings->snap_scale_increment_3d_precision = default_snap_scale_increment_precision;
+    }
   }
 
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 65)) {

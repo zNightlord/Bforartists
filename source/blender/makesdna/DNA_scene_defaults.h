@@ -394,10 +394,18 @@
     .snap_flag_playhead = 0, \
     .snap_transform_mode_flag = SCE_SNAP_TRANSFORM_MODE_TRANSLATE, \
     .snap_face_nearest_steps = 1, \
+    .snap_move_increment_3d = 1.0f, \
+    .snap_move_increment_2d = 1.0f, \
+    .snap_move_increment_3d_precision = 0.1f, \
+    .snap_move_increment_2d_precision = 0.1f, \
     .snap_angle_increment_3d = DEG2RADF(5.0f), \
     .snap_angle_increment_2d = DEG2RADF(5.0f), \
     .snap_angle_increment_3d_precision = DEG2RADF(1.0f), \
     .snap_angle_increment_2d_precision = DEG2RADF(1.0f), \
+    .snap_scale_increment_3d = 0.1f, \
+    .snap_scale_increment_2d = 0.1f, \
+    .snap_scale_increment_3d_precision = 0.1f, \
+    .snap_scale_increment_2d_precision = 0.1f, \
  \
     .snap_flag_seq = SCE_SNAP, \
     /* Weight Paint */ \

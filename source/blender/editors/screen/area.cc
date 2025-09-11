@@ -1491,11 +1491,35 @@ bool ED_region_is_overlap(int spacetype, int regiontype)
       }
     }
     else if (spacetype == SPACE_VIEW3D) {
-      if (regiontype == RGN_TYPE_HEADER) {
+      const bool asset_shelf_top = !((U.uiflag2 & USER_ASSETSHELF_TOP) && (U.uiflag2 & USER_REGION_OVERLAP_BAR));
+      if (regiontype == RGN_TYPE_HEADER && asset_shelf_top) {
         /* Do not treat as overlapped if no transparency. */
         bTheme *theme = UI_GetTheme();
         return theme->space_view3d.header[3] != 255;
       }
+      if (ELEM(regiontype,
+               RGN_TYPE_HEADER,
+               RGN_TYPE_TOOLS,
+               RGN_TYPE_UI,
+               RGN_TYPE_TOOL_PROPS,
+               RGN_TYPE_FOOTER,
+               RGN_TYPE_TOOL_HEADER,
+               RGN_TYPE_ASSET_SHELF,
+               RGN_TYPE_ASSET_SHELF_HEADER))
+      {
+        if (ELEM(regiontype,
+               RGN_TYPE_HEADER,
+               RGN_TYPE_TOOL_PROPS,
+               RGN_TYPE_TOOL_HEADER,
+               RGN_TYPE_ASSET_SHELF,
+               RGN_TYPE_ASSET_SHELF_HEADER))
+        {
+          return asset_shelf_top;
+        }
+        return true;
+      }
+    }
+    else if (spacetype == SPACE_IMAGE) {
       if (ELEM(regiontype,
                RGN_TYPE_TOOLS,
                RGN_TYPE_UI,
@@ -1508,13 +1532,8 @@ bool ED_region_is_overlap(int spacetype, int regiontype)
         return true;
       }
     }
-    else if (spacetype == SPACE_IMAGE) {
+    else if (spacetype == SPACE_NLA) {
       if (ELEM(regiontype,
-               RGN_TYPE_TOOLS,
-               RGN_TYPE_UI,
-               RGN_TYPE_TOOL_PROPS,
-               RGN_TYPE_FOOTER,
-               RGN_TYPE_TOOL_HEADER,
                RGN_TYPE_ASSET_SHELF,
                RGN_TYPE_ASSET_SHELF_HEADER))
       {

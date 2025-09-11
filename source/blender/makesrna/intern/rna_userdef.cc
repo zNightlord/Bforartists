@@ -1484,6 +1484,28 @@ static void rna_preference_gpu_preferred_device_set(PointerRNA *ptr, int value)
   preferences->gpu_preferred_device_id = 0u;
 }
 
+static void rna_userdef_screen_update_asset_shelf_default(Main *bmain, Scene *scene, PointerRNA *ptr)
+{
+  for (bScreen *screen = static_cast<bScreen *>(bmain->screens.first); screen;
+        screen = static_cast<bScreen *>(screen->id.next))
+  {
+    LISTBASE_FOREACH (ScrArea *, area, &screen->areabase) {
+      LISTBASE_FOREACH (ARegion *, region, &area->regionbase) {
+        if (ELEM(region->regiontype, RGN_TYPE_ASSET_SHELF, RGN_TYPE_ASSET_SHELF_HEADER)) {
+          if (!ELEM(area->spacetype, SPACE_VIEW3D)) {
+            continue;
+          }
+          region->alignment = (U.uiflag2 & USER_ASSETSHELF_TOP) ? RGN_ALIGN_TOP : RGN_ALIGN_BOTTOM | RGN_ALIGN_HIDE_WITH_PREV;
+        }
+    }
+  }
+  screen->do_refresh = true;
+  }
+  rna_userdef_screen_update(bmain, scene, ptr);
+  
+  USERDEF_TAG_DIRTY;
+}
+
 #else
 
 #  define USERDEF_TAG_DIRTY_PROPERTY_UPDATE_ENABLE \
@@ -5169,7 +5191,7 @@ static void rna_def_userdef_view(BlenderRNA *brna)
   RNA_def_property_enum_default(prop, USER_HEADER_FROM_PREF | USER_HEADER_BOTTOM);
   RNA_def_property_ui_text(prop, "Header Position", "Default header position for new space-types");
   RNA_def_property_update(prop, 0, "rna_userdef_screen_update_header_default");
-
+  
   prop = RNA_def_property(srna, "render_display_type", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_items(prop, render_display_types);
   RNA_def_property_ui_text(
@@ -5383,7 +5405,7 @@ static void rna_def_userdef_view(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "show_statusbar_version", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "statusbar_flag", STATUSBAR_SHOW_VERSION);
-  RNA_def_property_ui_text(prop, "Show Version", "Show Bforartists version string");
+  RNA_def_property_ui_text(prop, "Show Version", "Show Bforartists version");
   RNA_def_property_update(prop, NC_SPACE | ND_SPACE_INFO, "rna_userdef_update");
 
   prop = RNA_def_property(srna, "show_statusbar_stats", PROP_BOOLEAN, PROP_NONE);
@@ -5401,13 +5423,18 @@ static void rna_def_userdef_view(BlenderRNA *brna)
       prop, nullptr, "statusbar_flag", STATUSBAR_SHOW_EXTENSIONS_UPDATES);
   RNA_def_property_ui_text(prop, "Extensions Updates", "Show available Extensions Updates\nFor online access, open the preferences to adjust the internet access in the Extensions tab or System tab");/* BFA */
   RNA_def_property_update(prop, NC_SPACE | ND_SPACE_INFO, "rna_userdef_update");
-
   /* Accessibility. */
   prop = RNA_def_property(srna, "use_reduce_motion", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "uiflag", USER_REDUCE_MOTION);
   RNA_def_property_ui_text(
       prop, "Reduce Motion", "Avoid animations and other motion effects in the interface");
   RNA_def_property_update(prop, 0, "rna_userdef_update");
+  /* bfa start*/
+  prop = RNA_def_property(srna, "show_statusbar_blender_version", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "statusbar_flag", STATUSBAR_SHOW_BLENDER_VERSION);
+  RNA_def_property_ui_text(prop, "Show Blender version", "Show Blender version");
+  RNA_def_property_update(prop, NC_SPACE | ND_SPACE_INFO, "rna_userdef_update");
+  /* bfa end */
 }
 
 static void rna_def_userdef_edit(BlenderRNA *brna)
@@ -6046,6 +6073,18 @@ static void rna_def_userdef_system(BlenderRNA *brna)
   RNA_def_property_ui_text(
       prop, "Region Overlap", "Display tool/property regions over the main region");
   RNA_def_property_update(prop, 0, "rna_userdef_gpu_update");
+
+  prop = RNA_def_property(srna, "use_region_overlap_bar", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "uiflag2", USER_REGION_OVERLAP_BAR);
+  RNA_def_property_ui_text(
+      prop, "Overlap bars only", "Only overlap bars, headers, footers only.");
+  RNA_def_property_update(prop, 0, "rna_userdef_gpu_update");
+
+  prop = RNA_def_property(srna, "use_asset_shelf_top", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "uiflag2", USER_ASSETSHELF_TOP);
+  RNA_def_property_ui_text(
+      prop, "Top Assetshelf", "Make asset shelf align top");
+  RNA_def_property_update(prop, 0, "rna_userdef_screen_update_asset_shelf_default");
 
   prop = RNA_def_property(srna, "viewport_aa", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_items(prop, rna_enum_userdef_viewport_aa_items);

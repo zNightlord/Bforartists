@@ -41,20 +41,20 @@ static CLG_LogRef LOG = {"tool.gizmo"};
 /* factor for precision tweaking */
 #define GIZMO_PRECISION_FAC 0.05f
 
-BLI_INLINE float gizmo_offset_from_value_constr(const float range_fac,
-                                                const float min,
-                                                const float range,
-                                                const float value,
-                                                const bool inverted)
+float gizmo_offset_from_value_constr(const float range_fac,
+                                     const float min,
+                                     const float range,
+                                     const float value,
+                                     const bool inverted)
 {
   return inverted ? (range_fac * (min + range - value) / range) : (range_fac * (value / range));
 }
 
-BLI_INLINE float gizmo_value_from_offset_constr(const float range_fac,
-                                                const float min,
-                                                const float range,
-                                                const float value,
-                                                const bool inverted)
+float gizmo_value_from_offset_constr(const float range_fac,
+                                     const float min,
+                                     const float range,
+                                     const float value,
+                                     const bool inverted)
 {
   return inverted ? (min + range - (value * range / range_fac)) : (value * range / range_fac);
 }
@@ -87,8 +87,9 @@ float gizmo_value_from_offset(GizmoCommonData *data,
   }
   inter->prev_offset = offset;
 
-  float ofs_new = inter->init_offset + offset -
-                  inter->precision_offset * (1.0f - GIZMO_PRECISION_FAC);
+  const float precision_offset = offset - inter->precision_offset * (1.0f - GIZMO_PRECISION_FAC);
+
+  float ofs_new = inter->init_offset + precision_offset;
   float value;
 
   if (constrained) {
