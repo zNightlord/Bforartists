@@ -1292,8 +1292,21 @@ static void ui_menu_block_set_keyaccels(uiBlock *block)
         continue;
       }
 
+      
+
       const char *str_pt = but->str.c_str();
       uchar menu_key;
+
+      if (pass == 0) {
+        if (but->str.find("Boolean") != std::string::npos) {
+          menu_key = 'b';
+          if (!(menu_key_mask & 1 << (menu_key - 'a'))) {
+            menu_key_mask |= 1 << (menu_key - 'a');
+            but->menu_key = menu_key;
+            continue; // Skip to next button
+          }
+        }
+      }
       do {
         menu_key = tolower(*str_pt);
         if ((menu_key >= 'a' && menu_key <= 'z') && !(menu_key_mask & 1 << (menu_key - 'a'))) {
