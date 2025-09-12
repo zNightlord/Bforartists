@@ -38,15 +38,6 @@ class TimelineSyncSettings(bpy.types.PropertyGroup):
         default='LEGACY',
     )
 
-    def is_sync(self):
-        return bpy.context.workspace.use_scene_time_sync if self.sync_mode == 'BUILTIN' else self.enabled
-
-    def set_sync(self, toggle):
-        if (self.sync_mode == 'BUILTIN'):
-            bpy.context.workspace.use_scene_time_sync = toggle
-        else:
-            self.enabled = toggle
-    
     enabled: bpy.props.BoolProperty(
         name="Enabled",
         description="Status of 3D View Sync system\n(TODO remove, use is_sync() and set_sync() instead)",
