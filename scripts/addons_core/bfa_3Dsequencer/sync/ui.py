@@ -4,7 +4,9 @@
 import bpy
 
 from bfa_3Dsequencer.sync.core import get_sync_settings
+from bfa_3Dsequencer.sync.ops import SEQUENCER_OT_set_master_scene
 from bfa_3Dsequencer.utils import register_classes, unregister_classes
+
 
 class SEQUENCER_PT_SyncPanel(bpy.types.Panel):
     """3D View Sync Panel."""
@@ -17,10 +19,25 @@ class SEQUENCER_PT_SyncPanel(bpy.types.Panel):
     def draw(self, context):
         self.layout.use_property_split = True
         self.layout.use_property_decorate = False
-        settings = get_sync_settings()
+        master_scene = get_sync_settings().master_scene
 
         # Master Scene prop
-        self.layout.prop(settings, "master_scene", text="Master Scene:", icon="SEQ_STRIP_DUPLICATE")
+        row = self.layout.row(align=True)
+        row.label(text="Synchronization Timeline:")
+        self.layout.prop(context.window_manager.timeline_sync_settings, "master_scene", text="", icon="SEQ_STRIP_DUPLICATE",)
+
+        if (
+            not master_scene
+            or not master_scene.sequence_editor
+            or not master_scene.sequence_editor.strips
+        ):
+            # Button to set pinned scene as master
+            row = self.layout.row(align=True)
+            row.operator("sequencer.set_master_scene", text="Use Pinned Scene", icon="PINNED")
+
+            self.layout.label(text="Set the Synchronization Timeline", icon="QUESTION")
+            self.layout.label(text="to sync from Sequencer", icon="NONE")
+            return
 
 #        # Operator to syncronize viewport
 #        self.layout.operator("wm.timeline_sync_toggle", text="Synchronize Timeline to 3D View", icon="VIEW3D", depress=settings.enabled)
@@ -29,8 +46,24 @@ class SEQUENCER_PT_SyncPanel(bpy.types.Panel):
 #        self.layout.operator('sequencer.change_3d_view_scene', text='Toggle Active Scene Strip', icon="FILE_REFRESH")
 
 def SEQUENCER_HT_Syncbutton(self, context):
+    layout = self.layout
+
+    master_scene = get_sync_settings().master_scene
+
     settings = get_sync_settings()
-    self.layout.operator("wm.timeline_sync_toggle", text="Sync", icon="VIEW3D", depress=settings.is_sync())
+
+    if context.workspace.sequencer_scene:
+        if (
+                context.workspace.sequencer_scene != master_scene
+            ):
+
+            row = layout.row(align=True)
+            row.operator("sequencer.set_master_scene", text="Set Sync", icon='SEQ_STRIP_DUPLICATE')
+        else:
+            text = "Sync (Legacy)" if settings.sync_mode == "LEGACY" else "Sync"
+            row = layout.row(align=True)
+            row.operator("wm.timeline_sync_toggle", text=text, icon="VIEW3D", depress=settings.is_sync())
+
 
 class SEQUENCER_PT_SyncPanelAdvancedSettings(bpy.types.Panel):
     """3D View Sync advanced settings Panel."""
@@ -46,8 +79,13 @@ class SEQUENCER_PT_SyncPanelAdvancedSettings(bpy.types.Panel):
         row = self.layout.row()
         row.label(text="Sync mode:")
         row.prop(settings, "sync_mode", text="")
-        self.layout.prop(settings, "keep_gpencil_tool_settings")
+        if settings.sync_mode == 'BUILTIN':
+            box = self.layout.box()
+            box.label(text="Bidirection playback is not supported yet", icon='WARNING')
+            if settings.bidirectional:
+                box.label(text="Disabled bidirectional playback")
         self.layout.prop(settings, "bidirectional")
+        self.layout.prop(settings, "keep_gpencil_tool_settings")
         self.layout.prop(settings, "use_preview_range")
         self.layout.prop(settings, "sync_all_windows")
         self.layout.prop(settings, "active_follows_playhead")
