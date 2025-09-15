@@ -397,6 +397,23 @@ static void grease_pencil_simplify_ui(bContext *C, wmOperator *op)
   }
 }
 
+/* BFA - Make "Simplify Stroke" description dynamic*/
+/* It uses the mode's description if that was set, otherwise use the operator description is fallback */
+static std::string simplify_strokes_description(bContext * /* C */,
+                                                wmOperatorType *ot,
+                                                PointerRNA *ptr)
+{
+  PropertyRNA *prop = RNA_struct_find_property(ptr, "mode");
+
+  if (RNA_property_is_set(ptr, prop)) {
+    const int mode = RNA_property_enum_get(ptr, prop);
+    return std::string(prop_simplify_modes[mode].description);
+  }
+  else {
+    return std::string(ot->description);
+  }
+}
+
 static void GREASE_PENCIL_OT_stroke_simplify(wmOperatorType *ot)
 {
   PropertyRNA *prop;
@@ -404,6 +421,8 @@ static void GREASE_PENCIL_OT_stroke_simplify(wmOperatorType *ot)
   ot->name = "Simplify Stroke";
   ot->idname = "GREASE_PENCIL_OT_stroke_simplify";
   ot->description = "Simplify selected strokes";
+  ot->get_description =
+      simplify_strokes_description; /* BFA - Generate description from 'mode' property*/
 
   ot->exec = grease_pencil_stroke_simplify_exec;
   ot->poll = editable_grease_pencil_poll;
@@ -4532,7 +4551,10 @@ static void convert_to_catmull_rom(bke::CurvesGeometry &curves,
   const IndexMask non_catmull_rom_curves_selection =
       curves.indices_for_curve_type(CURVE_TYPE_CATMULL_ROM, selection, memory)
           .complement(selection, memory);
-  BLI_assert(!non_catmull_rom_curves_selection.is_empty());
+  if (non_catmull_rom_curves_selection.is_empty()) {
+    return;
+  }
+
   curves = geometry::resample_to_evaluated(curves, non_catmull_rom_curves_selection);
 
   /* To avoid having too many control points, simplify the position attribute based on the
@@ -4567,7 +4589,10 @@ static void convert_to_poly(bke::CurvesGeometry &curves, const IndexMask &select
                                                   .indices_for_curve_type(
                                                       CURVE_TYPE_POLY, selection, memory)
                                                   .complement(selection, memory);
-  BLI_assert(!non_poly_curves_selection.is_empty());
+  if (non_poly_curves_selection.is_empty()) {
+    return;
+  }
+
   curves = geometry::resample_to_evaluated(curves, non_poly_curves_selection);
 }
 

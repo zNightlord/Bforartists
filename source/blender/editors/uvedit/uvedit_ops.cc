@@ -124,7 +124,7 @@ bool ED_object_get_active_image(Object *ob,
 {
   Material *ma = DEG_is_evaluated(ob) ? BKE_object_material_get_eval(ob, mat_nr) :
                                         BKE_object_material_get(ob, mat_nr);
-  bNodeTree *ntree = (ma && ma->use_nodes) ? ma->nodetree : nullptr;
+  bNodeTree *ntree = ma ? ma->nodetree : nullptr;
   bNode *node = (ntree) ? bke::node_get_active_texture(*ntree) : nullptr;
 
   if (node && is_image_texture_node(node)) {
@@ -170,7 +170,7 @@ bool ED_object_get_active_image(Object *ob,
 void ED_object_assign_active_image(Main *bmain, Object *ob, int mat_nr, Image *ima)
 {
   Material *ma = BKE_object_material_get(ob, mat_nr);
-  bNode *node = (ma && ma->use_nodes) ? bke::node_get_active_texture(*ma->nodetree) : nullptr;
+  bNode *node = ma ? bke::node_get_active_texture(*ma->nodetree) : nullptr;
 
   if (node && is_image_texture_node(node)) {
     node->id = &ima->id;
@@ -588,7 +588,7 @@ static bool uvedit_uv_islands_arrange(const Scene *scene,
   }
 
   const BMUVOffsets offsets = BM_uv_map_offsets_get(bm);
-  const int other_axis = (int(axis) + 1) % 2;
+  const uint other_axis = (uint(axis) + 1) % 2;
   Array<UVAlignIslandBounds> island_bounds_all(element_map->total_islands);
   for (int i = 0; i < element_map->total_islands; i++) {
     UvElement *element = element_map->storage + element_map->island_indices[i];
@@ -649,7 +649,7 @@ static wmOperatorStatus uv_arrange_islands_exec(bContext *C, wmOperator *op)
   const UVAlignIslandMode align = UVAlignIslandMode(RNA_enum_get(op->ptr, "align"));
   const UVAlignIslandOrder order = UVAlignIslandOrder(RNA_enum_get(op->ptr, "order"));
   const float margin = RNA_float_get(op->ptr, "margin");
-  const int other_axis = (int(axis) + 1) % 2;
+  const uint other_axis = (uint(axis) + 1) % 2;
 
   float2 position = {0.0f, 0.0f};
   Bounds<float2> bounds = {{0.0f, 0.0f}, {1.0f, 1.0f}};
@@ -948,8 +948,16 @@ static void UV_OT_align(wmOperatorType *ot)
        ICON_ALIGNAUTO,
        "Align Auto",
        "Automatically choose the direction on which there is most alignment already"},
-      {UV_ALIGN_X, "ALIGN_X", ICON_ALIGNHORIZONTAL, "Align Vertically", "Align UV vertices on a vertical line"},
-      {UV_ALIGN_Y, "ALIGN_Y", ICON_ALIGNVERTICAL, "Align Horizontally", "Align UV vertices on a horizontal line"},
+      {UV_ALIGN_X,
+       "ALIGN_X",
+       ICON_ALIGNHORIZONTAL,
+       "Align Vertically",
+       "Align UV vertices on a vertical line"},
+      {UV_ALIGN_Y,
+       "ALIGN_Y",
+       ICON_ALIGNVERTICAL,
+       "Align Horizontally",
+       "Align UV vertices on a horizontal line"},
       {0, nullptr, 0, nullptr, nullptr},
   };
 
@@ -2115,7 +2123,8 @@ static void UV_OT_cursor_set(wmOperatorType *ot)
 {
   /* identifiers */
   ot->name = "Set 2D Cursor";
-  ot->description = "Set 2D cursor location\nHotkey Only Tool. Please use the hotkey in the 2D View";
+  ot->description =
+      "Set 2D cursor location\nHotkey Only Tool. Please use the hotkey in the 2D View";
   ot->idname = "UV_OT_cursor_set";
 
   /* API callbacks. */
@@ -2550,6 +2559,7 @@ void ED_operatortypes_uvedit()
   WM_operatortype_append(UV_OT_select_less);
   WM_operatortype_append(UV_OT_select_overlap);
   WM_operatortype_append(UV_OT_select_mode);
+  WM_operatortype_append(UV_OT_custom_region_set);
 
   WM_operatortype_append(UV_OT_snap_cursor);
   WM_operatortype_append(UV_OT_snap_selected);

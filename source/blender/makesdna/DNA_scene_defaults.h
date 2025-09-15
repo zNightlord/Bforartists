@@ -354,10 +354,10 @@
 
 #define _DNA_DEFAULTS_UvSculpt \
   { \
-    .size = 100, \
-    .strength = 1.0f, \
-    .curve_preset = BRUSH_CURVE_SMOOTH, \
-  }
+   .size = 100, \
+   .strength = 1.0f, \
+   .curve_preset = BRUSH_CURVE_SMOOTH, \
+}
 
 /* bfa - change default uvcalc_margin */
 #define _DNA_DEFAULT_ToolSettings \
