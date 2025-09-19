@@ -162,8 +162,6 @@ static char bforartists_version_string_compact[48] = "";
 /* BFA Blender sub version */
 static char bforartists_sub_version_string[48] = "";
 
-static char bforartists_sub_version_string[48] = "";
-
 static void bforartists_version_init()
 {
   const char *version_cycle = "";
