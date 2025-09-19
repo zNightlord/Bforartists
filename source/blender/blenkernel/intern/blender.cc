@@ -159,6 +159,8 @@ static char bforartists_version_string[48] = "";
 
 /* Only includes patch if non-zero. */
 static char bforartists_version_string_compact[48] = "";
+/* BFA Blender sub version */
+static char bforartists_sub_version_string[48] = "";
 
 static char bforartists_sub_version_string[48] = "";
 
@@ -242,17 +244,22 @@ void BKE_bforartists_version_blendfile_string_from_blender(char *str_buff,
         bfa_version_major_from_blender = file_version_major;
         bfa_version_minor_from_blender = bfa_version_minor_from_blender - 1;
     }
+     BLI_snprintf_utf8(
+      str_buff, str_buff_maxncpy, "%d.%d", 
+      bfa_version_major_from_blender, 
+      bfa_version_minor_from_blender
+    );
   } else {
+    // use bfa version with patch number directly
     bfa_version_major_from_blender = bfa_version_major;
     bfa_version_minor_from_blender = BFORARTISTS_VERSION % 10;
+    BLI_snprintf_utf8(
+      str_buff, str_buff_maxncpy, "%d.%d.%d", 
+      bfa_version_major_from_blender, 
+      bfa_version_minor_from_blender, 
+      BFORARTISTS_VERSION_PATCH
+   );
   }
-  
-  BLI_snprintf_utf8(
-    str_buff, str_buff_maxncpy, "%d.%d.%d", 
-    bfa_version_major_from_blender, 
-    bfa_version_minor_from_blender, 
-    BFORARTISTS_VERSION_PATCH
-  );
 }
 
 /* -------------- bfa - end -----------------*/
@@ -267,7 +274,7 @@ void BKE_blender_version_blendfile_string_from_values(char *str_buff,
   if (file_subversion >= 0) {
     BLI_snprintf_utf8(str_buff,
                       str_buff_maxncpy,
-                      "%d.%d sub %d", // bfa remove brackets
+                      "%d.%d sub %d", // bfa remove sub brackets
                       file_version_major,
                       file_version_minor,
                       file_subversion);

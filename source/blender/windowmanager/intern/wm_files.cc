@@ -1022,14 +1022,13 @@ static void file_read_reports_finalize(BlendFileReadReport *bf_reports)
   if (bf_reports->count.proxies_to_lib_overrides_success != 0 ||
       bf_reports->count.proxies_to_lib_overrides_failures != 0)
   {
-    BKE_reportf(
-        bf_reports->reports,
-        RPT_WARNING,
-        "Proxies have been removed from Bforartists (%d proxies were automatically converted "
-        "to library overrides, %d proxies could not be converted and were cleared). "
-        "Consider re-saving any library .blend file with the newest Bforartists version",
-        bf_reports->count.proxies_to_lib_overrides_success,
-        bf_reports->count.proxies_to_lib_overrides_failures);
+    BKE_reportf(bf_reports->reports,
+                RPT_WARNING,
+                "Proxies have been removed from Bforartists (%d proxies were automatically converted "
+                "to library overrides, %d proxies could not be converted and were cleared). "
+                "Consider re-saving any library .blend file with the newest Blender version",
+                bf_reports->count.proxies_to_lib_overrides_success,
+                bf_reports->count.proxies_to_lib_overrides_failures);
   }
 
   if (bf_reports->count.sequence_strips_skipped != 0) {
@@ -3984,13 +3983,12 @@ void WM_OT_save_mainfile(wmOperatorType *ot)
   prop = RNA_def_boolean(ot->srna, "exit", false, "Exit", "Exit Bforartists after saving");
   RNA_def_property_flag(prop, PROP_HIDDEN | PROP_SKIP_SAVE);
 
-  prop = RNA_def_boolean(
-      ot->srna,
-      "incremental",
-      false,
-      "Incremental",
-      "Save the current Bforartists file with a numerically incremented name that "
-      "does not overwrite any existing files");
+  prop = RNA_def_boolean(ot->srna,
+                         "incremental",
+                         false,
+                         "Incremental",
+                         "Save the current Bforartists file with a numerically incremented name that "
+                         "does not overwrite any existing files");
   RNA_def_property_flag(prop, PROP_HIDDEN | PROP_SKIP_SAVE);
 }
 
@@ -4529,11 +4527,8 @@ static uiBlock *block_create_save_file_overwrite_dialog(bContext *C, ARegion *re
       uiItemL_ex(layout, RPT_("with an older Bforartists version?"), ICON_NONE, true, false);
     }
     else {
-      uiItemL_ex(layout,
-                 RPT_("Overwrite file with an older Bforartists version?"),
-                 ICON_NONE,
-                 true,
-                 false);
+      uiItemL_ex(
+          layout, RPT_("Overwrite file with an older Bforartists version?"), ICON_NONE, true, false);
     }
   }
   else if (bmain->is_asset_edit_file) {
