@@ -17,12 +17,12 @@
 # ##### END GPL LICENSE BLOCK #####
 
 from bfa_3Dsequencer import (
-    #editorial, #BFA - temporariliy removed
-    #keymaps, #BFA - temporariliy removed
+    editorial, #BFA - temporariliy removed
+    keymaps, #BFA - temporariliy removed
     preferences,
-    #render, #BFA - temporariliy removed
+    render, #BFA - temporariliy removed
     sequence,
-    #shared_collections, #BFA - temporariliy removed
+    shared_collections, #BFA - temporariliy removed
     scene,
     sync,
 )
@@ -47,16 +47,19 @@ packages = (
     sync,
     scene,
     sequence,
-    #render, #BFA - temporariliy removed
-    #editorial, #BFA - temporariliy removed
-    #shared_collections, #BFA - temporariliy removed
+    render, #BFA - temporariliy removed
+    editorial, #BFA - temporariliy removed
+    shared_collections, #BFA - temporariliy removed
     preferences,
-    #keymaps, #BFA - temporariliy removed
+    keymaps, #BFA - temporariliy removed
 )
 
 
 def register():
     for package in packages:
+        if preferences.get_addon_prefs().debug_mode:
+            if package.__name__ in ("shared_collections", "editorial", "keymaps", "render"):
+                continue
         package.register()
 
 

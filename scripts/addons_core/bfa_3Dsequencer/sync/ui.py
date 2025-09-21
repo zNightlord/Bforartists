@@ -3,9 +3,10 @@
 
 import bpy
 
-from bfa_3Dsequencer.sync.core import get_sync_settings
-from bfa_3Dsequencer.sync.ops import SEQUENCER_OT_set_master_scene
-from bfa_3Dsequencer.utils import register_classes, unregister_classes
+from ..preferences import get_addon_prefs
+from ..sync.core import get_sync_settings
+from ..sync.ops import SEQUENCER_OT_set_master_scene
+from ..utils import register_classes, unregister_classes
 
 
 class SEQUENCER_PT_SyncPanel(bpy.types.Panel):
@@ -46,12 +47,6 @@ class SEQUENCER_PT_SyncPanel(bpy.types.Panel):
                 self.layout.label(text="to sync from Sequencer", icon="NONE")
                 return
 
-    #        # Operator to syncronize viewport
-    #        self.layout.operator("wm.timeline_sync_toggle", text="Synchronize Timeline to 3D View", icon="VIEW3D", depress=settings.enabled)
-
-    #        # Operator to update to active scene strip
-    #        self.layout.operator('sequencer.change_3d_view_scene', text='Toggle Active Scene Strip', icon="FILE_REFRESH")
-
 
 def SEQUENCER_HT_Syncbutton(self, context):
     layout = self.layout
@@ -89,7 +84,8 @@ class SEQUENCER_PT_SyncPanelAdvancedSettings(bpy.types.Panel):
 
     def draw(self, context):
         settings = get_sync_settings()
-        if settings.sync_mode == "LEGACY":
+        prefs = get_addon_prefs()
+        if settings.sync_mode == "LEGACY" or prefs.debug_mode:
             self.layout.prop(settings, "bidirectional")
         self.layout.prop(settings, "keep_gpencil_tool_settings")
         self.layout.prop(settings, "use_preview_range")
