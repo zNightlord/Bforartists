@@ -86,10 +86,10 @@ class SEQUENCER_PT_SyncPanelAdvancedSettings(bpy.types.Panel):
         settings = get_sync_settings()
         prefs = get_addon_prefs()
         if settings.sync_mode == "LEGACY" or prefs.debug_mode:
+            self.layout.prop(settings, "keep_gpencil_tool_settings")
             self.layout.prop(settings, "bidirectional")
-        self.layout.prop(settings, "keep_gpencil_tool_settings")
+            self.layout.prop(settings, "sync_all_windows")
         self.layout.prop(settings, "use_preview_range")
-        self.layout.prop(settings, "sync_all_windows")
         self.layout.prop(settings, "active_follows_playhead")
 
 
