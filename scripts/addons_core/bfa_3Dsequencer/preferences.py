@@ -7,7 +7,7 @@ Addon preferences management.
 
 import bpy
 
-from bfa_3Dsequencer.utils import register_classes, unregister_classes
+from ..utils import register_classes, unregister_classes
 
 
 class SPASequencerAddonPreferences(bpy.types.AddonPreferences):
@@ -17,6 +17,12 @@ class SPASequencerAddonPreferences(bpy.types.AddonPreferences):
         name="Shot Template Prefix",
         description="Scene name prefix that identifies Scene Templates",
         default="TEMPLATE_SHOT",
+    )
+
+    debug_mode: bpy.props.BoolProperty(
+        name="Debug mode",
+        description="Use for debugging, for other 3D Sequencer feature require restart",
+        default=False,
     )
 
     def draw(self, context):

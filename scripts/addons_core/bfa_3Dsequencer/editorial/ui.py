@@ -5,8 +5,8 @@
 
 import bpy
 
-from bfa_3Dsequencer.utils import register_classes, unregister_classes
-from bfa_3Dsequencer.editorial.vse_io import HAS_OTIO
+from ..utils import register_classes, unregister_classes
+from ..editorial.vse_io import HAS_OTIO
 
 
 class SEQUENCER_MT_edit_conform(bpy.types.Menu):

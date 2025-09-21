@@ -3,9 +3,9 @@
 
 import bpy
 
-from bfa_3Dsequencer.sync.core import get_sync_settings, sync_system_update
+from ..sync.core import get_sync_settings, sync_system_update
 
-from bfa_3Dsequencer.utils import register_classes, unregister_classes
+from ..utils import register_classes, unregister_classes
 
 
 
