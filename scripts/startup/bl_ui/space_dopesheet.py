@@ -507,7 +507,7 @@ class DOPESHEET_MT_editor_menus(Menu):
 
         layout.menu("DOPESHEET_MT_key")
 
-        if st.mode in {"ACTION", "SHAPEKEY"} and st.action is not None:
+        if st.mode in {"ACTION", "SHAPEKEY"} and context.active_action is not None:
             layout.menu("DOPESHEET_MT_action")
 
 
@@ -522,7 +522,7 @@ class DOPESHEET_MT_view(Menu):
         layout.prop(st, "show_region_channels")  # BFA - channels
         layout.prop(st, "show_region_ui")
         layout.prop(st, "show_region_hud")
-        layout.prop(st, "show_region_footer")
+        layout.prop(st, "show_region_footer", text="Playback Controls")
         layout.separator()
 
         layout.operator("anim.previewrange_set", icon="BORDER_RECT")
