@@ -1719,9 +1719,9 @@ static void node_draw_node_group_indicator(const SpaceNode &snode,
   float color_offset[4];
   copy_v4_v4(color_offset, color);
 
-  color_offset[0] += color_header[0];
-  color_offset[1] += color_header[1];
-  color_offset[2] += color_header[2];
+  color_offset[0] = color_header[0];
+  color_offset[1] = color_header[1];
+  color_offset[2] = color_header[2];
 
   /* How far it extends down and narrows. */
   const float offset = 2.8f * UI_SCALE_FAC;
@@ -1731,24 +1731,24 @@ static void node_draw_node_group_indicator(const SpaceNode &snode,
 
   UI_draw_roundbox_corner_set(UI_CNR_BOTTOM_LEFT | UI_CNR_BOTTOM_RIGHT);
 
-  /* Start with the last copy. */
-  {
-    const rctf rect_group_copy = {
-        rect.xmin + offset * 4,
-        rect.xmax - offset * 4,
-        rect.ymin - offset * 2,
-        rect.ymin - offset,
-    };
+  // /* Start with the last copy. */
+  // {
+  //   const rctf rect_group_copy = {
+  //       rect.xmin + offset * 4,
+  //       rect.xmax - offset * 4,
+  //       rect.ymin - offset * 2,
+  //       rect.ymin - offset,
+  //   };
 
-    ui_draw_dropshadow(
-        &rect_group_copy, radius, shadow_width, snode.runtime->aspect, shadow_alpha);
+  //   ui_draw_dropshadow(
+  //       &rect_group_copy, radius, shadow_width, snode.runtime->aspect, shadow_alpha);
 
-    /* Use the node (or header) color but slightly transparent. */
-    float color_copy[4];
-    copy_v4_v4(color_copy, color_offset);
-    color_copy[3] *= 0.2f + alpha_selected;
-    UI_draw_roundbox_4fv(&rect_group_copy, true, radius * 0.66f, color_copy);
-  }
+  //   /* Use the node (or header) color but slightly transparent. */
+  //   float color_copy[4];
+  //   copy_v4_v4(color_copy, color_offset);
+  //   color_copy[3] *= 0.2f + alpha_selected;
+  //   UI_draw_roundbox_4fv(&rect_group_copy, true, radius * 0.66f, color_copy);
+  // }
 
   /* Draw the first copy in the front. */
   {
@@ -1764,7 +1764,7 @@ static void node_draw_node_group_indicator(const SpaceNode &snode,
 
     float color_copy[4];
     copy_v4_v4(color_copy, color_offset);
-    color_copy[3] *= 0.5f + alpha_selected;
+    color_copy[3] *= 0.8f + alpha_selected;
     UI_draw_roundbox_4fv(&rect_group_copy, true, radius * 0.66f, color_copy);
   }
 
@@ -1774,10 +1774,9 @@ static void node_draw_node_group_indicator(const SpaceNode &snode,
         immVertexFormat(), "pos", blender::gpu::VertAttrType::SFLOAT_32_32);
     immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
 
-    const int node_group_lighten = node.type_legacy != NODE_GROUP ? 40 : 150;
-    const float node_group_padding = node.type_legacy != NODE_GROUP ? 4.0f : 20.0f;
+    const int node_group_lighten = node.type_legacy != NODE_GROUP ? 40 : 230;
 
-    const float padding = node_group_padding * U.pixelsize;
+    const float padding = 4.0f * U.pixelsize;
 
     /* Use the body color as base, and lighten it a bit. */
     uchar color_line[4];
@@ -2938,7 +2937,7 @@ static void node_draw_basis(const bContext &C,
 
   const float padding = 0.5f;
   const float corner_radius = BASIS_RAD + padding;
-  const float outline_width = U.pixelsize;
+  const float outline_width = U.pixelsize + 8f;
   /* Header. */
   float color_header[4];
   {
@@ -3418,10 +3417,10 @@ static void node_draw_collapsed(const bContext &C,
     };
 
     /* Node Group indicator. */
-    if (draw_node_details(snode)) {
-      node_draw_node_group_indicator(
-          snode, node, rect, BASIS_RAD + padding, color, color, node.flag & SELECT);
-    }
+    // if (draw_node_details(snode)) {
+    //   node_draw_node_group_indicator(
+    //       snode, node, rect, BASIS_RAD + padding, color, color, node.flag & SELECT);
+    // }
 
     UI_draw_roundbox_corner_set(UI_CNR_ALL);
     UI_draw_roundbox_4fv(&rect, true, BASIS_RAD + padding, color);
