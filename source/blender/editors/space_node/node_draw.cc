@@ -1688,8 +1688,8 @@ static void node_draw_shadow(const SpaceNode &snode,
   const rctf &rct = node.runtime->draw_bounds;
   UI_draw_roundbox_corner_set(UI_CNR_ALL);
 
-  const float shadow_width = 0.4f * U.widget_unit;
-  const float shadow_alpha = 0.2f * alpha;
+  const float shadow_width = 0.6f * U.widget_unit;
+  const float shadow_alpha = 0.5f * alpha;
 
   ui_draw_dropshadow(&rct, radius, shadow_width, snode.runtime->aspect, shadow_alpha);
 
@@ -1708,12 +1708,20 @@ static void node_draw_node_group_indicator(const SpaceNode &snode,
                                            const bNode &node,
                                            const rctf &rect,
                                            const float radius,
+                                           const float color_header[4],
                                            const float color[4],
                                            const bool is_selected)
 {
   if (node.type_legacy != NODE_GROUP) {
     return;
   }
+
+  float color_offset[4];
+  copy_v4_v4(color_offset, color);
+
+  color_offset[0] += color_header[0];
+  color_offset[1] += color_header[1];
+  color_offset[2] += color_header[2];
 
   /* How far it extends down and narrows. */
   const float offset = 2.8f * UI_SCALE_FAC;
@@ -1737,7 +1745,7 @@ static void node_draw_node_group_indicator(const SpaceNode &snode,
 
     /* Use the node (or header) color but slightly transparent. */
     float color_copy[4];
-    copy_v4_v4(color_copy, color);
+    copy_v4_v4(color_copy, color_offset);
     color_copy[3] *= 0.2f + alpha_selected;
     UI_draw_roundbox_4fv(&rect_group_copy, true, radius * 0.66f, color_copy);
   }
@@ -1755,7 +1763,7 @@ static void node_draw_node_group_indicator(const SpaceNode &snode,
         &rect_group_copy, radius, shadow_width, snode.runtime->aspect, shadow_alpha);
 
     float color_copy[4];
-    copy_v4_v4(color_copy, color);
+    copy_v4_v4(color_copy, color_offset);
     color_copy[3] *= 0.5f + alpha_selected;
     UI_draw_roundbox_4fv(&rect_group_copy, true, radius * 0.66f, color_copy);
   }
@@ -1766,14 +1774,17 @@ static void node_draw_node_group_indicator(const SpaceNode &snode,
         immVertexFormat(), "pos", blender::gpu::VertAttrType::SFLOAT_32_32);
     immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
 
-    const float padding = 4.0f * U.pixelsize;
+    const int node_group_lighten = node.type_legacy != NODE_GROUP ? 40 : 150;
+    const float node_group_padding = node.type_legacy != NODE_GROUP ? 4.0f : 20.0f;
+
+    const float padding = node_group_padding * U.pixelsize;
 
     /* Use the body color as base, and lighten it a bit. */
     uchar color_line[4];
-    rgba_float_to_uchar(color_line, color);
-    color_line[0] = min_ii(color_line[0] + 40, 255);
-    color_line[1] = min_ii(color_line[1] + 40, 255);
-    color_line[2] = min_ii(color_line[2] + 40, 255);
+    rgba_float_to_uchar(color_line, color_offset);
+    color_line[0] = min_ii(color_line[0] + node_group_lighten, 255);
+    color_line[1] = min_ii(color_line[1] + node_group_lighten, 255);
+    color_line[2] = min_ii(color_line[2] + node_group_lighten, 255);
 
     GPU_blend(GPU_BLEND_ALPHA);
     GPU_line_width(1.0f);
@@ -2929,6 +2940,7 @@ static void node_draw_basis(const bContext &C,
   const float corner_radius = BASIS_RAD + padding;
   const float outline_width = U.pixelsize;
   /* Header. */
+  float color_header[4];
   {
     /* Add some padding to prevent transparent gaps with the outline. */
     const rctf rect = {
@@ -2938,7 +2950,6 @@ static void node_draw_basis(const bContext &C,
         rct.ymax + padding,
     };
 
-    float color_header[4];
 
     /* Muted nodes get a mix of the background with the node color. */
     if (node_undefined_or_unsupported(ntree, node)) {
@@ -2957,6 +2968,33 @@ static void node_draw_basis(const bContext &C,
 
   /* Show/hide icons. */
   float iconofs = rct.xmax - 0.35f * U.widget_unit;
+
+  /* Group edit. This icon should be the first for the node groups. Note that we intentionally
+   * don't check for NODE_GROUP_CUSTOM here. */
+  if (node.type_legacy == NODE_GROUP) {
+    iconofs -= iconbutw;
+    UI_block_emboss_set(&block, ui::EmbossType::None);
+    uiBut *but = uiDefIconBut(&block,
+                              ButType::ButToggle,
+                              0,
+                              ICON_NODETREE,
+                              iconofs,
+                              rct.ymax - NODE_DY,
+                              iconbutw,
+                              UI_UNIT_Y,
+                              nullptr,
+                              0,
+                              0,
+                              "");
+    UI_but_func_set(but,
+                    node_toggle_button_cb,
+                    POINTER_FROM_INT(node.identifier),
+                    (void *)"NODE_OT_group_edit");
+    if (node.id) {
+      UI_but_icon_indicator_number_set(but, ID_REAL_USERS(node.id));
+    }
+    UI_block_emboss_set(&block, ui::EmbossType::Emboss);
+  }
 
   if (nodes::node_can_sync_sockets(C, ntree, node)) {
     iconofs -= iconbutw;
@@ -3218,7 +3256,7 @@ static void node_draw_basis(const bContext &C,
 
     /* Node Group indicator. */
     if (draw_node_details(snode)) {
-      node_draw_node_group_indicator(snode, node, rect, corner_radius, color, node.flag & SELECT);
+      node_draw_node_group_indicator(snode, node, rect, corner_radius, color_header, color, node.flag & SELECT);
     }
 
     UI_draw_roundbox_corner_set(UI_CNR_BOTTOM_LEFT | UI_CNR_BOTTOM_RIGHT);
@@ -3382,7 +3420,7 @@ static void node_draw_collapsed(const bContext &C,
     /* Node Group indicator. */
     if (draw_node_details(snode)) {
       node_draw_node_group_indicator(
-          snode, node, rect, BASIS_RAD + padding, color, node.flag & SELECT);
+          snode, node, rect, BASIS_RAD + padding, color, color, node.flag & SELECT);
     }
 
     UI_draw_roundbox_corner_set(UI_CNR_ALL);
