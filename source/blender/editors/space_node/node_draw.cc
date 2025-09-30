@@ -3230,14 +3230,14 @@ static void node_draw_basis(const bContext &C,
       float color_background[4];
       float color_blend[4]; 
       UI_GetThemeColor4fv(TH_BACK, color_background);
-      UI_GetThemeColorBlend4f(TH_NODE, color_id, btheme->space_node.color_blend, color_blend);
+      UI_GetThemeColorBlend4f(TH_NODE, color_id, btheme->space_node.bfa_node_color_blend, color_blend);
       interp_v4_v4v4(color, color_background, color_blend, 0.2f);
     }
     else if (node.flag & NODE_CUSTOM_COLOR) {
       rgba_float_args_set(color, node.color[0], node.color[1], node.color[2], 1.0f);
     }
     else {
-      UI_GetThemeColorBlend4f(TH_NODE, color_id, btheme->space_node.color_blend, color); // bfa UI_GetThemeColor4fv(TH_NODE, color);
+      UI_GetThemeColorBlend4f(TH_NODE, color_id, btheme->space_node.bfa_node_color_blend, color); // bfa UI_GetThemeColor4fv(TH_NODE, color);
     }
 
     /* Draw selected nodes fully opaque. */
