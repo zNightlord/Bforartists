@@ -2937,7 +2937,7 @@ static void node_draw_basis(const bContext &C,
 
   const float padding = 0.5f;
   const float corner_radius = BASIS_RAD + padding;
-  const float outline_width = U.pixelsize + 8f;
+  const float outline_width = U.pixelsize + 8.0f;
   /* Header. */
   float color_header[4];
   {
