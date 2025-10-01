@@ -3272,7 +3272,6 @@ static void node_draw_basis(const bContext &C,
     }
 
     /* Outline around the entire node to highlight selection, alert, or for simulation zones. */
-    outline_width = outline_width + (node.type_legacy != NODE_GROUP ?  0.0f : 8.0f);
     const rctf rect_node = {
         rct.xmin - outline_width,
         rct.xmax + outline_width,
