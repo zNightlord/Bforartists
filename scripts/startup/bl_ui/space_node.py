@@ -1293,6 +1293,9 @@ class NODE_PT_overlay(Panel):
         if snode.tree_type == 'CompositorNodeTree':
             col.prop(overlay, "show_timing", text="Timings")
 
+        col.separator()
+        col.prop(overlay, "auto_link_routing", text="Auto Link Routing")
+
 
 class NODE_MT_node_tree_interface_context_menu(Menu):
     bl_label = "Node Tree Interface Specials"

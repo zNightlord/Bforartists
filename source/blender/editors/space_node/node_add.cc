@@ -120,13 +120,14 @@ bNode *add_static_node(const bContext &C, int type, const float2 &location)
 /** \name Add Reroute Operator
  * \{ */
 
-std::optional<float2> link_path_intersection(const bNodeLink &link, const Span<float2> path)
+std::optional<float2> link_path_intersection(const bNodeLinkPaths &link_paths,
+                                             const bNodeLink &link,
+                                             const Span<float2> path)
 {
-  std::array<float2, NODE_LINK_RESOL + 1> coords;
-  node_link_bezier_points_evaluated(link, coords);
+  const Vector<float2> coords = link_paths.paths.lookup(&link);
 
   for (const int i : path.index_range().drop_back(1)) {
-    for (const int j : IndexRange(NODE_LINK_RESOL)) {
+    for (const int j : coords.index_range().drop_back(1)) {
       float2 result;
       if (isect_seg_seg_v2_point(path[i], path[i + 1], coords[j], coords[j + 1], result) > 0) {
         return result;
@@ -180,13 +181,14 @@ static wmOperatorStatus add_reroute_exec(bContext *C, wmOperator *op)
   Map<bNodeSocket *, RerouteCutsForSocket> cuts_per_socket;
 
   int intersection_count = 0;
+  const bNodeLinkPaths link_paths = get_node_link_paths(snode);
 
   LISTBASE_FOREACH (bNodeLink *, link, &ntree.links) {
 
     if (node_link_is_hidden_or_dimmed(region.v2d, *link)) {
       continue;
     }
-    const std::optional<float2> cut = link_path_intersection(*link, path);
+    const std::optional<float2> cut = link_path_intersection(link_paths, *link, path);
     if (!cut) {
       continue;
     }
