@@ -1707,7 +1707,7 @@ static void node_draw_shadow(const SpaceNode &snode,
 }
 
 /* BFA - Draw an outline with padding around node groups */
-static void node_draw_node_group_indicator(const SpaceNode &snode,
+static void node_draw_node_group_indicator(const SpaceNode /*&snode*/,
   TreeDrawContext &tree_draw_ctx,
   const bNode &node,
   const rctf &rect,
@@ -3173,7 +3173,6 @@ static void node_draw_basis(const bContext &C,
 
   /* Body. */
   {
-    bTheme *btheme = UI_GetTheme();
     /* Use warning color to indicate undefined types. */
     if (node_undefined_or_unsupported(ntree, node)) {
       UI_GetThemeColorShade4fv(TH_REDALERT, -40, color);
@@ -5080,9 +5079,10 @@ static void draw_links_test(const bContext &C,
   }
 
   GPUVertFormat *format = immVertexFormat();
-  const uint attr_pos = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
+  const uint attr_pos = GPU_vertformat_attr_add(
+      format, "pos", blender::gpu::VertAttrType::SFLOAT_32_32_32);
   const uint attr_color = GPU_vertformat_attr_add(
-      format, "color", GPU_COMP_F32, 4, GPU_FETCH_FLOAT);
+      format, "color", blender::gpu::VertAttrType::SFLOAT_32_32_32_32);
 
   bke::CurvesGeometry routes_curves(routes_points_num, routes.size());
   {
@@ -5120,8 +5120,8 @@ static void draw_links_test(const bContext &C,
 
   routes_curves = geometry::fillet_curves_poly(routes_curves,
                                                routes_curves.curves_range(),
-                                               VArray<float>::ForSpan(fillet_radii),
-                                               VArray<int>::ForSingle(5, routes_points_num),
+                                               VArray<float>::from_span(fillet_radii.as_span()),
+                                               VArray<int>::from_single(5, routes_points_num),
                                                true,
                                                {});
 
