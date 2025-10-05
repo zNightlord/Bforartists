@@ -12,8 +12,10 @@
 
 #include "BLI_array.hh"
 #include "BLI_array_utils.hh"
+#include "BLI_disjoint_set.hh"
 #include "BLI_index_mask.hh"
 #include "BLI_listbase.h"
+#include "BLI_map.hh"
 #include "BLI_math_base.h"
 #include "BLI_math_base.hh"
 #include "BLI_math_geom.h"
@@ -171,14 +173,50 @@ class MeshInfo {
     return edge_faces_;
   };
 
+  /** For each Mesh vert v, vert_corners[v] is a Span of corner indices incident on v. */
+  GroupedSpan<int> vert_corners() const
+  {
+    return vert_corners_;
+  }
+
+  /** For a corner c, return the face containing it. */
+  int corner_face(const int c) const
+  {
+    return corner_to_face_map_[c];
+  }
+
  private:
   index_mask::IndexMaskMemory memory_;
   Array<int> vert_to_edge_offsets_;
   Array<int> vert_to_edge_indices_;
   Array<int> edge_to_face_map_offsets_;
   Array<int> edge_to_face_map_indices_;
+  Array<int> vert_to_corner_offsets_;
+  Array<int> vert_to_corner_indices_;
+  Array<int> corner_to_face_map_;
   GroupedSpan<int> vert_edges_;
   GroupedSpan<int> edge_faces_;
+  GroupedSpan<int> vert_corners_;
+};
+
+/** Information about a UV map. */
+class UVMapInfo {
+ public:
+  std::string uv_attr_name;
+  UVMapInfo(const std::string &uv_attr_name) : uv_attr_name(uv_attr_name) {}
+
+  /** Which connected component is a given Mesh face in?
+   * Only valid after find_components() has been called. */
+  int component_id(const int face) const
+  {
+    return face_to_component_id_[face];
+  }
+
+  /** Find the connected components (by face) for this UV map. */
+  void find_components(const MeshInfo &mesh_info);
+
+ private:
+  Array<int> face_to_component_id_;
 };
 
 /** Bevel parameters and state.
@@ -550,6 +588,11 @@ class BevelState {
   /** Return the edge position for bevedge \a be around bevvert \a bv. */
   int bevedge_pos(const int be, const int bv) const;
 
+  const UVMapInfo &uv_map_info(const int uv_map_index) const
+  {
+    return uv_map_infos_[uv_map_index];
+  }
+  
  private:
   IndexMaskMemory memory_;
   IndexMask bevedges_mask_;
@@ -598,21 +641,22 @@ class BevelState {
   Array<int> newcorner_edges_;
   Array<int> newcorner_repcorners_;
 
-  Vector<std::string> uv_attribute_names_;
+  Vector<UVMapInfo> uv_map_infos_;
   Vector<Array<float2>> uv_attributes_;
 };
 
 MeshInfo::MeshInfo(const Mesh &mesh) : mesh(mesh)
 {
-  /* Calculate the vert_to_edge topology map. */
   vert_edges_ = bke::mesh::build_vert_to_edge_map(
       mesh.edges(), mesh.verts_num, vert_to_edge_offsets_, vert_to_edge_indices_);
-  /* Calculate the edge_to_face topology map. */
   edge_faces_ = bke::mesh::build_edge_to_face_map(mesh.faces(),
                                                   mesh.corner_edges(),
                                                   mesh.edges_num,
                                                   edge_to_face_map_indices_,
                                                   edge_to_face_map_offsets_);
+  vert_corners_ = bke::mesh::build_vert_to_corner_map(
+      mesh.corner_verts(), mesh.verts_num, vert_to_corner_offsets_, vert_to_corner_indices_);
+  corner_to_face_map_ = bke::mesh::build_corner_to_face_map(mesh.faces());
 }
 
 /** Functions for debug printing. */
@@ -767,7 +811,6 @@ static void print_anchor_newvert_positions(const BevelState &bs, const char *lab
 
 [[maybe_unused]] static void dump_bevel_state(const BevelState &bs, const char *label)
 {
-  bool vertex_only = bs.params.affect_type == BevelAffect::Vertices;
   fmt::println("\nBevelState {}", label);
   print_indexmask(bs.bevverts_mask(), "bevverts_mask");
   print_indexmask(bs.bevedges_mask(), "bevedges_mask");
@@ -1406,6 +1449,93 @@ static float3 project_to_edge(
 }
 
 }  // end namespace geom
+
+namespace uv {
+
+static Array<int> find_uv_components(const MeshInfo &mesh_info, const std::string &uv_attr_name)
+{
+  const Mesh &mesh = mesh_info.mesh;
+  Array<int> components(mesh.faces_num, -1);
+  if (mesh.faces_num == 0) {
+    return components;
+  }
+
+  const bke::AttributeAccessor attrs = mesh.attributes();
+
+  const bke::AttributeReader<float2> uv_reader =
+      attrs.lookup<float2>(uv_attr_name, bke::AttrDomain::Corner);
+  if (!uv_reader) {
+    /* Attribute not found. Just have all components be -1. */
+    return components;
+  }
+
+  VArraySpan<float2> uv{uv_reader.varray};
+
+  GroupedSpan<int> vert_to_corners = mesh_info.vert_corners();
+
+  DisjointSet<int> dsu(mesh.faces_num);
+
+  for (const int v : IndexRange(mesh.verts_num)) {
+    Span<int> corners = vert_to_corners[v];
+    if (corners.size() <= 1) {
+      continue;
+    }
+
+    /* Group corners by UV value. */
+    struct CornerUV {
+      float2 uv;
+      int corner_idx;
+    };
+    Array<CornerUV> corner_uvs(corners.size());
+    for (const int i : corners.index_range()) {
+      corner_uvs[i] = {uv[corners[i]], corners[i]};
+    }
+
+    std::sort(corner_uvs.begin(), corner_uvs.end(), [](const CornerUV &a, const CornerUV &b) {
+      if (a.uv[0] != b.uv[0]) {
+        return a.uv[0] < b.uv[0];
+      }
+      return a.uv[1] < b.uv[1];
+    });
+
+    /* Join faces in the same group. */
+    for (int i = 0; i < corner_uvs.size();) {
+      int j = i + 1;
+      while (j < corner_uvs.size() && corner_uvs[j].uv == corner_uvs[i].uv) {
+        j++;
+      }
+      /* Group is corner_uvs[i..j-1] */
+      if (j > i + 1) {
+        const int first_face_idx = mesh_info.corner_face(corner_uvs[i].corner_idx);
+        for (int k = i + 1; k < j; k++) {
+          const int other_face_idx = mesh_info.corner_face(corner_uvs[k].corner_idx);
+          dsu.join(first_face_idx, other_face_idx);
+        }
+      }
+      i = j;
+    }
+  }
+
+  /* Normalize component IDs. */
+  Map<int, int> root_to_component;
+  int next_component_id = 0;
+  for (const int f : IndexRange(mesh.faces_num)) {
+    const int root = dsu.find_root(f);
+    if (!root_to_component.contains(root)) {
+      root_to_component.add_new(root, next_component_id++);
+    }
+    components[f] = root_to_component.lookup(root);
+  }
+
+  return components;
+}
+
+}  // end namespace uv
+
+void UVMapInfo::find_components(const MeshInfo &mesh_info)
+{
+  face_to_component_id_ = uv::find_uv_components(mesh_info, this->uv_attr_name);
+}
 
 namespace profile {
 /** Structures, functions and constants related to superellipse profiles. */
@@ -4482,7 +4612,7 @@ void BevelState::determine_needed_attribute_data()
       case bke::AttrDomain::Corner:
         if (iter.data_type == bke::AttrType::Float2) {
           /* Assume this is a UV map attribute. */
-          uv_attribute_names_.append(iter.name);
+          this->uv_map_infos_.append(UVMapInfo(iter.name));
           this->uvmaps_num++;
         }
         else {
@@ -4511,6 +4641,7 @@ void BevelState::determine_needed_attribute_data()
   }
   if (uvmaps_num > 0) {
     for (int i = 0; i < uvmaps_num; i++) {
+      uv_map_infos_[i].find_components(mesh_info);
       uv_attributes_.append(Array<float2>(newcorners_num, float2(0.0f, 0.0f)));
     }
   }
@@ -4708,11 +4839,13 @@ void BevelState::build_vertex_meshes()
           }
         }
       }
-      set_vertex_mesh_reps(bv,
-                           newvert_repverts_.as_mutable_span(),
-                           newedge_repedges_.as_mutable_span(),
-                           newface_repfaces_.as_mutable_span(),
-                           *this);
+      if (any_vert_attributes) {
+        set_vertex_mesh_reps(bv,
+                             newvert_repverts_.as_mutable_span(),
+                             newedge_repedges_.as_mutable_span(),
+                             newface_repfaces_.as_mutable_span(),
+                             *this);
+      }
     }
   });
 }
@@ -4784,8 +4917,10 @@ void BevelState::build_edge_meshes()
           }
         }
       }
-      set_edge_mesh_reps(
-          be, newedge_repedges_.as_mutable_span(), newface_repfaces_.as_mutable_span(), *this);
+      if (any_edge_attributes) {
+        set_edge_mesh_reps(
+                           be, newedge_repedges_.as_mutable_span(), newface_repfaces_.as_mutable_span(), *this);
+      }
     }
   });
 }
@@ -4851,7 +4986,9 @@ void BevelState::build_face_meshes()
         be_prev = be;
       }
       build_newface(newf, nverts, nedges);
-      newface_repfaces_[newf] = meshf;
+      if (any_face_attributes) {
+        newface_repfaces_[newf] = meshf;
+      }
     }
   });
 }
