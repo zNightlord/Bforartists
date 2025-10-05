@@ -9,6 +9,8 @@ if(WITH_IO_FBX)
   add_subdirectory(ufbx)
 endif()
 
+add_subdirectory(mixbox)
+
 # Otherwise we get warnings here that we cant fix in external projects
 remove_strict_flags()
 

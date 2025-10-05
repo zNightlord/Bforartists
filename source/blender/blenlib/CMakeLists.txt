@@ -434,6 +434,8 @@ set(LIB
   PRIVATE bf::dependencies::eigen
   ${ZLIB_LIBRARIES}
   ${ZSTD_LIBRARIES}
+  
+  PRIVATE bf::extern::mixbox
 )
 
 if(NOT WITH_PYTHON_MODULE)

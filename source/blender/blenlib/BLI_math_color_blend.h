@@ -25,6 +25,9 @@ MINLINE void blend_color_add_byte(unsigned char dst[4],
 MINLINE void blend_color_sub_byte(unsigned char dst[4],
                                   const unsigned char src1[4],
                                   const unsigned char src2[4]);
+MINLINE void blend_color_sub_mix_byte(unsigned char dst[4],
+                                      const unsigned char src1[4],
+                                      const unsigned char src2[4]);
 MINLINE void blend_color_mul_byte(unsigned char dst[4],
                                   const unsigned char src1[4],
                                   const unsigned char src2[4]);
@@ -94,6 +97,7 @@ MINLINE void blend_color_interpolate_byte(unsigned char dst[4],
 MINLINE void blend_color_mix_float(float dst[4], const float src1[4], const float src2[4]);
 MINLINE void blend_color_add_float(float dst[4], const float src1[4], const float src2[4]);
 MINLINE void blend_color_sub_float(float dst[4], const float src1[4], const float src2[4]);
+MINLINE void blend_color_sub_mix_float(float dst[4], const float src1[4], const float src2[4]);
 MINLINE void blend_color_mul_float(float dst[4], const float src1[4], const float src2[4]);
 MINLINE void blend_color_lighten_float(float dst[4], const float src1[4], const float src2[4]);
 MINLINE void blend_color_darken_float(float dst[4], const float src1[4], const float src2[4]);
