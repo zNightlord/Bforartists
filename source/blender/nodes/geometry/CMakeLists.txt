@@ -29,6 +29,7 @@ set(INC_SYS
 
 set(SRC
   nodes/node_geo_accumulate_field.cc
+  nodes/node_geo_armature_deform.cc
   nodes/node_geo_attribute_capture.cc
   nodes/node_geo_attribute_domain_size.cc
   nodes/node_geo_attribute_statistic.cc

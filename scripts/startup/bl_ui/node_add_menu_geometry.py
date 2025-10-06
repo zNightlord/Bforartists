@@ -266,6 +266,7 @@ class NODE_MT_gn_geometry_operations_base(node_add_menu.NodeMenu):
 
     def draw(self, _context):
         layout = self.layout
+        self.node_operator(layout, "GeometryNodeArmatureDeform")
         self.node_operator(layout, "GeometryNodeBake")
         self.node_operator(layout, "GeometryNodeBoundBox")
         self.node_operator(layout, "GeometryNodeConvexHull")
