@@ -110,23 +110,17 @@ MINLINE void blend_color_sub_mix_byte(uchar dst[4], const uchar src1[4], const u
     const int t = src2[3];
     const int mt = 255 - t;
     int tmp[4];
-    unsigned char r, g, b;
+    uchar r, g, b;
 
-    mixbox_lerp(mt * src1[3] * src1[0], 
-                mt * src1[3] * src1[1], 
-                mt * src1[3] * src1[2],  // first color
-                t * 255 * src2[0],
-                t * 255 * src2[1], 
-                t * 255 * src2[2],  // second color
-                t,           // mixing ratio
-                &r, &g, &b); // result
-
-    tmp[0] = r + (t * 255 * src2[0]);
-    tmp[1] = g + (t * 255 * src2[1]);
-    tmp[2] = b + (t * 255 * src2[2]);
+    mixbox_lerp(src1[0] * 255, src1[1] * 255, src1[2] * 255,  // first color
+              t * 255 * src2[0], t * 255 * src2[1], t * 255 * src2[2],  // second color
+              t,           // mixing ratio
+              &r, &g, &b); // result
+        
+    tmp[0] = r;
+    tmp[1] = g;
+    tmp[2] = b;
     tmp[3] = (mt * src1[3]) + (t * 255);
-  
-
 
     dst[0] = (uchar)divide_round_i(tmp[0], tmp[3]);
     dst[1] = (uchar)divide_round_i(tmp[1], tmp[3]);
