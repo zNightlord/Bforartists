@@ -36,6 +36,7 @@ class NODE_MT_compositor_node_input_constant_base(node_add_menu.NodeMenu):
 
     def draw(self, _context):
         layout = self.layout
+        self.node_operator(layout, "CompositorNodeStripInfo")
         self.node_operator(layout, "CompositorNodeRGB")
         self.node_operator(layout, "ShaderNodeValue")
         self.node_operator(layout, "CompositorNodeNormal")

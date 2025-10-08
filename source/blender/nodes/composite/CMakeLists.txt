@@ -106,6 +106,7 @@ set(SRC
   nodes/node_composite_val_to_rgb.cc
   nodes/node_composite_vec_blur.cc
   nodes/node_composite_viewer.cc
+  nodes/node_composite_strip_info.cc
 
   node_composite_tree.cc
   node_composite_util.cc
