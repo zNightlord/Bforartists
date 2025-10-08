@@ -105,8 +105,12 @@ class SocketUsageInferencerImpl {
   bool is_group_input_used(const int input_i)
   {
     for (const bNode *node : root_tree_.group_input_nodes()) {
-      const SocketInContext socket{nullptr, &node->output_socket(input_i)};
-      if (this->is_socket_used(socket)) {
+      const bNodeSocket &socket = node->output_socket(input_i);
+      if (!socket.is_directly_linked()) {
+        continue;
+      }
+      const SocketInContext socket_ctx{nullptr, &socket};
+      if (this->is_socket_used(socket_ctx)) {
         return true;
       }
     }
@@ -539,25 +543,30 @@ class SocketUsageInferencerImpl {
                                           const ComputeContext *dependent_socket_context)
   {
     /* Check if any of the dependent outputs are used. */
-    SocketInContext next_unknown_output;
+    SocketInContext next_unknown_socket;
     bool any_output_used = false;
     for (const bNodeSocket *dependent_socket_ptr : dependent_outputs) {
       const SocketInContext dependent_socket{dependent_socket_context, dependent_socket_ptr};
       const std::optional<bool> is_used = all_socket_usages_.lookup_try(dependent_socket);
-      if (!is_used.has_value() && !next_unknown_output) {
-        next_unknown_output = dependent_socket;
-        continue;
+      if (!is_used.has_value()) {
+        if (dependent_socket_ptr->is_output() && !dependent_socket_ptr->is_directly_linked()) {
+          continue;
+        }
+        if (!next_unknown_socket) {
+          next_unknown_socket = dependent_socket;
+          continue;
+        }
       }
       if (is_used.value_or(false)) {
         any_output_used = true;
         break;
       }
     }
-    if (next_unknown_output) {
+    if (next_unknown_socket) {
       /* Create a task that checks if the next dependent socket is used. Intentionally only create
        * a task for the very next one and not for all, because that could potentially trigger a lot
        * of unnecessary evaluations. */
-      this->push_usage_task(next_unknown_output);
+      this->push_usage_task(next_unknown_socket);
       return;
     }
     if (!any_output_used) {
@@ -852,10 +861,10 @@ void infer_group_interface_usage(const bNodeTree &group,
 
   {
     /* Detect actually used inputs. */
-    SocketValueInferencer value_inferencer{
-        group, scope, compute_context_cache, [&](const int group_input_i) {
-          return group_input_values[group_input_i];
-        }};
+    const auto get_input_value = [&](const int group_input_i) {
+      return group_input_values[group_input_i];
+    };
+    SocketValueInferencer value_inferencer{group, scope, compute_context_cache, get_input_value};
     SocketUsageInferencer usage_inferencer{group, scope, value_inferencer, compute_context_cache};
     for (const int i : group.interface_inputs().index_range()) {
       r_input_usages[i].is_used |= usage_inferencer.is_group_input_used(i);
@@ -875,14 +884,15 @@ void infer_group_interface_usage(const bNodeTree &group,
   SocketValueInferencer value_inferencer_all_unknown{group, scope, compute_context_cache};
   SocketUsageInferencer usage_inferencer_all_unknown{
       group, scope, value_inferencer_all_unknown, compute_context_cache};
+  const auto get_only_controllers_input_value = [&](const int group_input_i) {
+    const bNodeTreeInterfaceSocket &io_socket = *group.interface_inputs()[group_input_i];
+    if (input_may_affect_visibility(io_socket)) {
+      return group_input_values[group_input_i];
+    }
+    return InferenceValue::Unknown();
+  };
   SocketValueInferencer value_inferencer_only_controllers{
-      group, scope, compute_context_cache, [&](const int group_input_i) {
-        const bNodeTreeInterfaceSocket &io_socket = *group.interface_inputs()[group_input_i];
-        if (input_may_affect_visibility(io_socket)) {
-          return group_input_values[group_input_i];
-        }
-        return InferenceValue::Unknown();
-      }};
+      group, scope, compute_context_cache, get_only_controllers_input_value};
   SocketUsageInferencer usage_inferencer_only_controllers{
       group, scope, value_inferencer_only_controllers, compute_context_cache};
   for (const int i : group.interface_inputs().index_range()) {
