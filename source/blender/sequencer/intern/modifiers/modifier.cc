@@ -537,7 +537,7 @@ void modifier_apply_stack(const RenderData *context,
       }
 
       ImBuf *mask = modifier_mask_get(smd, context, state, timeline_frame, frame_offset);
-      smti->apply(context, quad, smd, ibuf, mask);
+      smti->apply(context, quad, smd, ibuf, mask, *strip);
       if (mask) {
         IMB_freeImBuf(mask);
       }

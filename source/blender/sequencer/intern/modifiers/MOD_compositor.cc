@@ -115,6 +115,16 @@ class CompositorContext : public compositor::Context {
       result.wrap_external(mask_buffer_->float_buffer.data,
                            int2(mask_buffer_->x, mask_buffer_->y));
     }
+    else if (name == "Start") {
+      result = this->create_result(compositor::ResultType::Int);
+      result.allocate_single_value();
+      result.set_single_value(modifier_data_->modifier.start_frame);
+    }
+    else if (name == "End") {
+      result = this->create_result(compositor::ResultType::Int);
+      result.allocate_single_value();
+      result.set_single_value(modifier_data_->modifier.end_frame);
+    }
 
     return result;
   }
@@ -168,8 +178,11 @@ static void compositor_modifier_apply(const RenderData *render_data,
                                       const StripScreenQuad & /*quad*/,
                                       StripModifierData *strip_modifier_data,
                                       ImBuf *image_buffer,
-                                      ImBuf *mask)
+                                      ImBuf *mask,
+                                      Strip strip)
 {
+  strip_modifier_data->start_frame = strip.start;
+  strip_modifier_data->end_frame = strip.enddisp;
   const SequencerCompositorModifierData *modifier_data =
       reinterpret_cast<SequencerCompositorModifierData *>(strip_modifier_data);
   if (!modifier_data->node_group) {

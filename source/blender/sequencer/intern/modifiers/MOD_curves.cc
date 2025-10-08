@@ -69,7 +69,8 @@ static void curves_apply(const RenderData * /*render_data*/,
                          const StripScreenQuad & /*quad*/,
                          StripModifierData *smd,
                          ImBuf *ibuf,
-                         ImBuf *mask)
+                         ImBuf *mask,
+                         Strip strip)
 {
   CurvesModifierData *cmd = (CurvesModifierData *)smd;
 

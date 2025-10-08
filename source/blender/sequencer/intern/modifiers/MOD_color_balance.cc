@@ -248,7 +248,8 @@ static void colorBalance_apply(const RenderData * /*render_data*/,
                                const StripScreenQuad & /*quad*/,
                                StripModifierData *smd,
                                ImBuf *ibuf,
-                               ImBuf *mask)
+                               ImBuf *mask,
+                               Strip strip)
 {
   const ColorBalanceModifierData *cbmd = (const ColorBalanceModifierData *)smd;
 

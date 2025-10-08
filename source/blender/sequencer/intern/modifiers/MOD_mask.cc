@@ -67,7 +67,8 @@ static void maskmodifier_apply(const RenderData * /*render_data*/,
                                const StripScreenQuad & /*quad*/,
                                StripModifierData * /*smd*/,
                                ImBuf *ibuf,
-                               ImBuf *mask)
+                               ImBuf *mask,
+                               Strip strip)
 {
   if (mask == nullptr || (mask->byte_buffer.data == nullptr && mask->float_buffer.data == nullptr))
   {

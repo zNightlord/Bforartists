@@ -62,7 +62,8 @@ static void whiteBalance_apply(const RenderData * /*render_data*/,
                                const StripScreenQuad & /*quad*/,
                                StripModifierData *smd,
                                ImBuf *ibuf,
-                               ImBuf *mask)
+                               ImBuf *mask,
+                               Strip strip)
 {
   const WhiteBalanceModifierData *data = (const WhiteBalanceModifierData *)smd;
 

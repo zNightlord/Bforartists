@@ -52,7 +52,8 @@ static void brightcontrast_apply(const RenderData * /*render_data*/,
                                  const StripScreenQuad & /*quad*/,
                                  StripModifierData *smd,
                                  ImBuf *ibuf,
-                                 ImBuf *mask)
+                                 ImBuf *mask,
+                                 Strip strip)
 {
   const BrightContrastModifierData *bcmd = (BrightContrastModifierData *)smd;
 

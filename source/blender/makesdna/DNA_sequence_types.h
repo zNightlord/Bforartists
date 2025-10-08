@@ -567,6 +567,9 @@ typedef struct StripModifierData {
   uint16_t layout_panel_open_flag;
   char _pad[2];
 
+  int start_frame;
+  int end_frame;
+
   StripModifierDataRuntime runtime;
 } StripModifierData;
 

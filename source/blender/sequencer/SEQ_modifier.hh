@@ -58,7 +58,8 @@ struct StripModifierTypeInfo {
                 const StripScreenQuad &quad,
                 StripModifierData *smd,
                 ImBuf *ibuf,
-                ImBuf *mask);
+                ImBuf *mask,
+                Strip strip);
 
   /** Register the panel types for the modifier's UI. */
   void (*panel_register)(ARegionType *region_type);
