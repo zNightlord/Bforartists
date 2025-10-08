@@ -46,7 +46,6 @@ void GeometryNodesEvalDependencies::add_object(Object *object,
   deps.transform |= object_deps.transform;
   deps.camera_parameters |= object_deps.camera_parameters;
   deps.pose |= object_deps.pose;
-  deps.armature_pose |= object_deps.armature_pose;
 }
 
 void GeometryNodesEvalDependencies::merge(const GeometryNodesEvalDependencies &other)
@@ -187,7 +186,7 @@ static void add_object_socket_pose_dependency(const bNodeSocket &socket,
         int session_uid = object->id.session_uid;
         if (deps.objects_info.contains(session_uid)) {
           auto &info = deps.objects_info.lookup(session_uid);
-          info.armature_pose = true;
+          info.pose = true;
         }
       }
     }

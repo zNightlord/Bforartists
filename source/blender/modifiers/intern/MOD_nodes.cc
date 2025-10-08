@@ -160,7 +160,7 @@ static void add_object_relation(
     }
   }
   if (object.type == OB_ARMATURE) {
-    if (info.pose || info.armature_pose) {
+    if (info.pose) {
       DEG_add_object_relation(ctx->node, &object, DEG_OB_COMP_EVAL_POSE, "Nodes Modifier");
     }
   }

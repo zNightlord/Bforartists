@@ -446,9 +446,9 @@ static Vector<DeformGroupFields> build_custom_deform_fields(
     SocketValueVariant weights_variant;
     SocketValueVariant selection_variant;
     ClosureEagerEvalParams eval_params = {
-        {{SocketInterfaceKey("Bone"), stype_string, &bone_variant}},
-        {{SocketInterfaceKey("Weight"), stype_float, &weights_variant},
-         {SocketInterfaceKey("Selection"), stype_bool, &selection_variant}},
+        {{StringRef("Bone"), stype_string, &bone_variant}},
+        {{StringRef("Weight"), stype_float, &weights_variant},
+         {StringRef("Selection"), stype_bool, &selection_variant}},
         user_data};
     evaluate_closure_eagerly(*custom_groups_closure, eval_params);
 
