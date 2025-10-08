@@ -64,7 +64,7 @@ static NodeOperation *get_compositor_operation(Context &context, DNode node)
 
 }  // namespace blender::nodes::node_composite_rgb_cc
 
-static void register_node_type_cmp_rgb()
+static void register_node_type_cmp_strip_info()
 {
   namespace file_ns = blender::nodes::node_composite_rgb_cc;
 
@@ -81,4 +81,4 @@ static void register_node_type_cmp_rgb()
 
   blender::bke::node_register_type(ntype);
 }
-NOD_REGISTER_NODE(register_node_type_cmp_rgb)
+NOD_REGISTER_NODE(register_node_type_cmp_strip_info)
