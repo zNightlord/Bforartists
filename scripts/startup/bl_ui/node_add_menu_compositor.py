@@ -34,9 +34,10 @@ class NODE_MT_compositor_node_input_constant_base(node_add_menu.NodeMenu):
     bl_label = "Constant"
     menu_path = "Input/Constant"
 
-    def draw(self, _context):
+    def draw(self, context):
         layout = self.layout
-        self.node_operator(layout, "CompositorNodeStripInfo")
+        if context.space_data.node_tree_sub_type == 'SEQUENCER':
+            self.node_operator(layout, "CompositorNodeStripInfo")
         self.node_operator(layout, "CompositorNodeRGB")
         self.node_operator(layout, "ShaderNodeValue")
         self.node_operator(layout, "CompositorNodeNormal")
