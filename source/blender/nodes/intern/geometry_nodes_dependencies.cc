@@ -126,6 +126,14 @@ static void add_eval_dependencies_from_node_data(const bNodeTree &tree,
     }
     deps.add_generic_id(node->id);
   }
+  for (const bNode *node : tree.nodes_by_type("GeometryNodeInputArmature")) {
+    if (node->is_muted()) {
+      continue;
+    }
+    GeometryNodesEvalDependencies::ObjectDependencyInfo armature_deps;
+    armature_deps.pose = true;
+    deps.add_object(reinterpret_cast<Object *>(node->id), armature_deps);
+  }
 }
 
 static bool has_enabled_nodes_of_type(const bNodeTree &tree,

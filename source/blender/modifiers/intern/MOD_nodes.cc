@@ -162,6 +162,7 @@ static void add_object_relation(
   if (object.type == OB_ARMATURE) {
     if (info.pose) {
       DEG_add_object_relation(ctx->node, &object, DEG_OB_COMP_EVAL_POSE, "Nodes Modifier");
+      DEG_add_object_relation(ctx->node, &object, DEG_OB_COMP_EVAL_POSE, "Armature Modifier");
     }
   }
 }
