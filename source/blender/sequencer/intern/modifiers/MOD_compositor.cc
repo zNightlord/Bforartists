@@ -129,6 +129,12 @@ class CompositorContext : public compositor::Context {
     return result;
   }
 
+  SequencerCompositorModifierData get_compositor_modifier_data() const override
+  {
+    return *modifier_data_;
+  }
+
+
   bool use_gpu() const override
   {
     return false;

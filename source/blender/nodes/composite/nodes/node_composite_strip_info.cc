@@ -12,10 +12,6 @@
 
 #include "COM_node_operation.hh"
 
-#include "UI_interface.hh"
-#include "UI_interface_layout.hh"
-#include "UI_resources.hh"
-
 #include "node_composite_util.hh"
 
 /* **************** RGB ******************** */
@@ -24,42 +20,34 @@ namespace blender::nodes::node_composite_rgb_cc {
 
 static void cmp_node_rgb_declare(NodeDeclarationBuilder &b)
 {
-  b.add_output<decl::Color>("Color")
-      .default_value({0.5f, 0.5f, 0.5f, 1.0f})
-      .custom_draw([](CustomSocketDrawParams &params) {
-        params.layout.alignment_set(ui::LayoutAlign::Expand);
-        uiLayout &col = params.layout.column(false);
-        uiTemplateColorPicker(
-            &col, &params.socket_ptr, "default_value", true, false, false, false);
-        col.prop(&params.socket_ptr,
-                 "default_value",
-                 UI_ITEM_R_SLIDER | UI_ITEM_R_SPLIT_EMPTY_NAME,
-                 "",
-                 ICON_NONE);
-      });
+  b.add_output<decl::Int>("Start").default_value(0);
+  b.add_output<decl::Int>("End").default_value(0);
 }
 
 using namespace blender::compositor;
 
-class RGBOperation : public NodeOperation {
+class StripInfoOperation : public NodeOperation {
  public:
   using NodeOperation::NodeOperation;
 
   void execute() override
   {
-    Result &result = get_result("Color");
-    result.allocate_single_value();
+    Result &result_start = get_result("Start");
+    Result &result_end = get_result("End");
 
-    const bNodeSocket *socket = static_cast<const bNodeSocket *>(bnode().outputs.first);
-    float4 color = float4(static_cast<const bNodeSocketValueRGBA *>(socket->default_value)->value);
+    result_start.allocate_single_value();
+    result_end.allocate_single_value();
 
-    result.set_single_value(color);
+
+    SequencerCompositorModifierData modifier_data = context().get_compositor_modifier_data();
+    result_start.set_single_value(modifier_data.modifier.start_frame);
+    result_end.set_single_value(modifier_data.modifier.end_frame);
   }
 };
 
 static NodeOperation *get_compositor_operation(Context &context, DNode node)
 {
-  return new RGBOperation(context, node);
+  return new StripInfoOperation(context, node);
 }
 
 }  // namespace blender::nodes::node_composite_rgb_cc
