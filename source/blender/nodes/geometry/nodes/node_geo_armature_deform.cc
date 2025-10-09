@@ -445,10 +445,16 @@ static Vector<DeformGroupFields> build_custom_deform_fields(
     SocketValueVariant bone_variant(std::string(pose_channel->name));
     SocketValueVariant weights_variant;
     SocketValueVariant selection_variant;
+    Vector<ClosureEagerEvalParams::InputItem> in_items;
+    Vector<ClosureEagerEvalParams::OutputItem> out_items;
+
+    in_items.append(ClosureEagerEvalParams::InputItem{"Bone", stype_string, bone_variant});
+    out_items.append(ClosureEagerEvalParams::OutputItem{"Weight", stype_float, weights_variant});
+    out_items.append(ClosureEagerEvalParams::OutputItem{"Selection", stype_bool, selection_variant});
+
     ClosureEagerEvalParams eval_params = {
-        {{StringRef("Bone"), stype_string, &bone_variant}},
-        {{StringRef("Weight"), stype_float, &weights_variant},
-         {StringRef("Selection"), stype_bool, &selection_variant}},
+        in_items,
+        out_items,
         user_data};
     evaluate_closure_eagerly(*custom_groups_closure, eval_params);
 
