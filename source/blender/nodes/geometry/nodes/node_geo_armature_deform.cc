@@ -449,8 +449,8 @@ static Vector<DeformGroupFields> build_custom_deform_fields(
     Vector<ClosureEagerEvalParams::OutputItem> out_items;
 
     in_items.append(ClosureEagerEvalParams::InputItem{"Bone", stype_string, bone_variant});
-    out_items.append(ClosureEagerEvalParams::OutputItem{"Weight", stype_float, weights_variant});
-    out_items.append(ClosureEagerEvalParams::OutputItem{"Selection", stype_bool, selection_variant});
+    out_items.append(ClosureEagerEvalParams::OutputItem{"Weight", stype_float, &weights_variant});
+    out_items.append(ClosureEagerEvalParams::OutputItem{"Selection", stype_bool, &selection_variant});
 
     ClosureEagerEvalParams eval_params = {
         in_items,
