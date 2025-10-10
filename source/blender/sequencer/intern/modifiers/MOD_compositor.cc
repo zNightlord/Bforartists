@@ -45,6 +45,7 @@ class CompositorContext : public compositor::Context {
   ImBuf *mask_buffer_;
   float3x3 xform_;
   float2 result_translation_ = float2(0, 0);
+  Strip strip_;
 
  public:
   CompositorContext(const RenderData &render_data,
@@ -57,7 +58,8 @@ class CompositorContext : public compositor::Context {
         modifier_data_(modifier_data),
         image_buffer_(image_buffer),
         mask_buffer_(mask_buffer),
-        xform_(float3x3::identity())
+        xform_(float3x3::identity()),
+        strip_(strip)
   {
     if (mask_buffer) {
       /* Note: do not use passed transform matrix since compositor coordinate
@@ -147,9 +149,9 @@ class CompositorContext : public compositor::Context {
     return result;
   }
 
-  SequencerCompositorModifierData get_compositor_modifier_data() const override
+  Strip get_strip() const override
   {
-    return *modifier_data_;
+    return strip_;
   }
 
 
@@ -206,8 +208,8 @@ static void compositor_modifier_apply(ModifierApplyContext &context,
                                       StripModifierData *strip_modifier_data,
                                       ImBuf *mask)
 {
-  strip_modifier_data->start_frame = strip->start;
-  strip_modifier_data->end_frame = strip->enddisp;
+  // strip_modifier_data->start_frame = strip->start;
+  // strip_modifier_data->end_frame = strip->enddisp;
   const SequencerCompositorModifierData *modifier_data =
       reinterpret_cast<SequencerCompositorModifierData *>(strip_modifier_data);
   if (!modifier_data->node_group) {

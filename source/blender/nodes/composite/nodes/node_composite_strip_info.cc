@@ -38,10 +38,9 @@ class StripInfoOperation : public NodeOperation {
     result_start.allocate_single_value();
     result_end.allocate_single_value();
 
-
-    SequencerCompositorModifierData modifier_data = context().get_compositor_modifier_data();
-    result_start.set_single_value(modifier_data.modifier.start_frame);
-    result_end.set_single_value(modifier_data.modifier.end_frame);
+    Strip strip = context().get_strip();
+    result_start.set_single_value(static_cast<int>(strip.start));
+    result_end.set_single_value(strip.enddisp);
   }
 };
 

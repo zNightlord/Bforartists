@@ -141,7 +141,7 @@ StaticCacheManager &Context::cache_manager()
   return cache_manager_;
 }
 
-SequencerCompositorModifierData Context::get_compositor_modifier_data() const
+Strip Context::get_strip() const
 {
   return {};
 }
