@@ -1421,6 +1421,13 @@ elseif(WIN32)
 
   # Filenames change slightly between FFMPEG versions check both 6.0 and fallback to 5.0
   # to ease the transition between versions.
+  if(EXISTS "${LIBDIR}/ffmpeg/lib/avfilter-10.dll")
+    windows_install_shared_manifest(
+      FILES
+        ${LIBDIR}/ffmpeg/lib/avfilter-10.dll
+      ALL
+    )  
+  endif()
   if(EXISTS "${LIBDIR}/ffmpeg/lib/avcodec-61.dll")
     windows_install_shared_manifest(
       FILES
@@ -1843,7 +1850,7 @@ install(
 # -----------------------------------------------------------------------------
 # Bundle assets
 
-set(ASSET_BUNDLE_DIR ${CMAKE_SOURCE_DIR}/assets/)
+set(ASSET_BUNDLE_DIR ${CMAKE_SOURCE_DIR}/assets_bfa/)
 
 if(EXISTS "${ASSET_BUNDLE_DIR}")
   install(

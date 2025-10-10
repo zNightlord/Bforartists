@@ -30,18 +30,15 @@ set_property(GLOBAL PROPERTY ICON_GEOM_NAMES
   brush.generic
   brush.gpencil_draw.erase
   brush.gpencil_draw.fill
+  brush.paint_texture.blur
   brush.paint_texture.clone
-  brush.paint_texture.soften
-  brush.paint_texture.smear
   brush.paint_texture.fill
   brush.paint_texture.mask
+  brush.paint_texture.smear
+  brush.paint_texture.soften
   brush.paint_vertex.average
   brush.paint_vertex.blur
-  brush.paint_vertex.replace
   brush.paint_vertex.smear
-  brush.paint_weight.average
-  brush.paint_weight.blur
-  brush.paint_weight.smear
   brush.particle.add
   brush.particle.comb
   brush.particle.cut
@@ -49,12 +46,9 @@ set_property(GLOBAL PROPERTY ICON_GEOM_NAMES
   brush.particle.puff
   brush.particle.smooth
   brush.particle.weight
-  brush.sculpt.displacement_eraser
-  brush.sculpt.displacement_smear
   brush.sculpt.draw_face_sets
   brush.sculpt.mask
   brush.sculpt.paint
-  brush.sculpt.simplify
   brush.uv_sculpt.grab
   brush.uv_sculpt.pinch
   brush.uv_sculpt.relax
@@ -68,9 +62,6 @@ set_property(GLOBAL PROPERTY ICON_GEOM_NAMES
   ops.curve.pen
   ops.curve.radius
   ops.curve.vertex_random
-  ops.curves.sculpt_add
-  ops.curves.sculpt_delete
-  ops.curves.sculpt_density
   ops.generic.cursor
   ops.generic.select
   ops.generic.select_box
@@ -97,6 +88,7 @@ set_property(GLOBAL PROPERTY ICON_GEOM_NAMES
   ops.gpencil.sculpt_blur
   ops.gpencil.sculpt_clone
   ops.gpencil.sculpt_smear
+  ops.gpencil.stroke_cutter
   ops.gpencil.stroke_trim
   ops.gpencil.transform_fill
   ops.mesh.bevel
@@ -175,7 +167,6 @@ set_property(GLOBAL PROPERTY ICON_GEOM_NAMES
   ops.transform.vert_slide
   ops.transform.vertex_random
   ops.view3d.ruler
-
   # END ICON_GEOM_NAMES
 )
 
@@ -1087,6 +1078,7 @@ if(WITH_BLENDER)
       mod_cloth
       mod_color_balance
       mod_curve
+      mod_curve_to_tube
       mod_curves
       mod_dash
       mod_data_transfer
@@ -1119,6 +1111,7 @@ if(WITH_BLENDER)
       mod_particles
       mod_physics
       mod_remesh
+      mod_scatter_on_surface
       mod_screw
       mod_shrinkwrap
       mod_simpledeform
@@ -1695,6 +1688,7 @@ if(WITH_BLENDER)
       save_stl
       save_svg
       save_usd
+      save_uv
       save_x3d
       scale_average
       scale_instance
@@ -1781,7 +1775,7 @@ if(WITH_BLENDER)
       seq_strip_duplicate
       seq_strip_expand
       seq_strip_overwrite
-      seq_strip_meta
+      seq_strip_modifier
       seq_strip_shuffle
       seq_swap_left
       seq_swap_right
@@ -2049,6 +2043,7 @@ if(WITH_BLENDER)
       uv_data
       uv_edgesel
       uv_facesel
+      uv_islandalign
       uv_islandsel
       uv_sync_select
       uv_vertexsel
