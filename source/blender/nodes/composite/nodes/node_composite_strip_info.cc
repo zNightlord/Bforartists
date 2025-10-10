@@ -60,7 +60,7 @@ static void register_node_type_cmp_strip_info()
 
   cmp_node_type_base(&ntype, "CompositorNodeStripInfo", CMP_NODE_STRIP_INFO);
   ntype.ui_name = "Strip Info";
-  ntype.ui_description = "A color picker";
+  ntype.ui_description = "Retrieve information about the strip";
   ntype.enum_name_legacy = "Strip Info";
   ntype.nclass = NODE_CLASS_INPUT;
   ntype.declare = file_ns::cmp_node_strip_info_declare;
