@@ -179,24 +179,6 @@ void get_compositor_group_input_extra_info(blender::nodes::NodeExtraInfoParams &
         parameters.rows.append(std::move(row));
       }
     }
-    else if (StringRef(input->name) == "Start") {
-      if (input->type != SOCK_INT) {
-        blender::nodes::NodeExtraInfoRow row;
-        row.text = IFACE_("Wrong Input Type");
-        row.icon = ICON_ERROR;
-        row.tooltip = TIP_("Node group's Mask input should be of type Color"); // TODO change
-        parameters.rows.append(std::move(row));
-      }
-    }
-    else if (StringRef(input->name) == "End") {
-      if (input->type != SOCK_INT) {
-        blender::nodes::NodeExtraInfoRow row;
-        row.text = IFACE_("Wrong Input Type");
-        row.icon = ICON_ERROR;
-        row.tooltip = TIP_("Node group's Mask input should be of type Color"); // TODO change
-        parameters.rows.append(std::move(row));
-      }
-    }
     else {
       if (added_warning_for_unsupported_inputs) {
         continue;

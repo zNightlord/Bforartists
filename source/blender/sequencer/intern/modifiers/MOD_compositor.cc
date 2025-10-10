@@ -115,16 +115,6 @@ class CompositorContext : public compositor::Context {
       result.wrap_external(mask_buffer_->float_buffer.data,
                            int2(mask_buffer_->x, mask_buffer_->y));
     }
-    else if (name == "Start") {
-      result = this->create_result(compositor::ResultType::Int);
-      result.allocate_single_value();
-      result.set_single_value(modifier_data_->modifier.start_frame);
-    }
-    else if (name == "End") {
-      result = this->create_result(compositor::ResultType::Int);
-      result.allocate_single_value();
-      result.set_single_value(modifier_data_->modifier.end_frame);
-    }
 
     return result;
   }
