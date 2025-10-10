@@ -23,6 +23,7 @@ class TimelineSyncSettings(bpy.types.PropertyGroup):
             bpy.context.workspace.use_scene_time_sync = toggle
         else:
             self.enabled = toggle
+        bpy.context.workspace.use_bfa_sync_scene = toggle
 
     def update_sync(self, context):
         """Update the sync toggle on changing mode"""

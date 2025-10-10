@@ -253,4 +253,5 @@ typedef enum eWorkSpaceFlags {
   WORKSPACE_USE_PIN_SCENE = (1 << 2),
   /* Used for syncing time between sequencer scene strips and the active scene. */
   WORKSPACE_SYNC_SCENE_TIME = (1 << 3),
+  WORKSPACE_BFA_SYNC_SCENE = (1 << 4), /* BFA - 3D Sequencer Overlay*/
 } eWorkSpaceFlags;
