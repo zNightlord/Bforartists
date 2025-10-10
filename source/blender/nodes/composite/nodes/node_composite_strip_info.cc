@@ -14,11 +14,11 @@
 
 #include "node_composite_util.hh"
 
-/* **************** RGB ******************** */
+/* **************** Strip Info ******************** */
 
-namespace blender::nodes::node_composite_rgb_cc {
+namespace blender::nodes::node_composite_strip_info_cc {
 
-static void cmp_node_rgb_declare(NodeDeclarationBuilder &b)
+static void cmp_node_strip_info_declare(NodeDeclarationBuilder &b)
 {
   b.add_output<decl::Int>("Start").default_value(0);
   b.add_output<decl::Int>("End").default_value(0);
@@ -50,20 +50,20 @@ static NodeOperation *get_compositor_operation(Context &context, DNode node)
   return new StripInfoOperation(context, node);
 }
 
-}  // namespace blender::nodes::node_composite_rgb_cc
+}  // namespace blender::nodes::node_composite_strip_info_cc
 
 static void register_node_type_cmp_strip_info()
 {
-  namespace file_ns = blender::nodes::node_composite_rgb_cc;
+  namespace file_ns = blender::nodes::node_composite_strip_info_cc;
 
   static blender::bke::bNodeType ntype;
 
   cmp_node_type_base(&ntype, "CompositorNodeStripInfo", CMP_NODE_STRIP_INFO);
   ntype.ui_name = "Strip Info";
   ntype.ui_description = "A color picker";
-  ntype.enum_name_legacy = "RGB";
+  ntype.enum_name_legacy = "Strip Info";
   ntype.nclass = NODE_CLASS_INPUT;
-  ntype.declare = file_ns::cmp_node_rgb_declare;
+  ntype.declare = file_ns::cmp_node_strip_info_declare;
   blender::bke::node_type_size_preset(ntype, blender::bke::eNodeSizePreset::Default);
   ntype.get_compositor_operation = file_ns::get_compositor_operation;
 
