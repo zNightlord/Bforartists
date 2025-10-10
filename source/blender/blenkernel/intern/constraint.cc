@@ -5446,11 +5446,11 @@ static bConstraintTypeInfo CTI_TRANSFORM_CACHE = {
     /*evaluate_constraint*/ transformcache_evaluate,
 };
 
-/* ---------- Attribute Transform Constraint ----------- */
+/* ---------- Geometry Attribute Constraint ----------- */
 
-static blender::bke::AttrDomain domain_value_to_attribute(const int domain_mode)
+static blender::bke::AttrDomain domain_value_to_attribute(const Attribute_Domain domain)
 {
-  switch (domain_mode) {
+  switch (domain) {
     case CON_ATTRIBUTE_DOMAIN_POINT:
       return blender::bke::AttrDomain::Point;
     case CON_ATTRIBUTE_DOMAIN_EDGE:
@@ -5463,13 +5463,12 @@ static blender::bke::AttrDomain domain_value_to_attribute(const int domain_mode)
       return blender::bke::AttrDomain::Curve;
     case CON_ATTRIBUTE_DOMAIN_INSTANCE:
       return blender::bke::AttrDomain::Instance;
-    default:
-      BLI_assert_unreachable();
-      return blender::bke::AttrDomain::Point;
   }
+  BLI_assert_unreachable();
+  return blender::bke::AttrDomain::Point;
 }
 
-static blender::bke::AttrType type_value_to_attribute(const int data_type)
+static blender::bke::AttrType type_value_to_attribute(const Attribute_Data_Type data_type)
 {
   switch (data_type) {
     case CON_ATTRIBUTE_VECTOR:
@@ -5478,44 +5477,37 @@ static blender::bke::AttrType type_value_to_attribute(const int data_type)
       return blender::bke::AttrType::Quaternion;
     case CON_ATTRIBUTE_4X4MATRIX:
       return blender::bke::AttrType::Float4x4;
-    default:
-      BLI_assert_unreachable();
-      return blender::bke::AttrType::Float3;
   }
+  BLI_assert_unreachable();
+  return blender::bke::AttrType::Float3;
 }
 
 static void value_attribute_to_matrix(float r_matrix[4][4],
                                       const blender::GPointer value,
-                                      const int data_type)
+                                      const Attribute_Data_Type data_type)
 {
   switch (data_type) {
-    case CON_ATTRIBUTE_VECTOR: {
+    case CON_ATTRIBUTE_VECTOR:
       copy_v3_v3(r_matrix[3], *value.get<blender::float3>());
-      break;
-    }
-    case CON_ATTRIBUTE_QUATERNION: {
+      return;
+    case CON_ATTRIBUTE_QUATERNION:
       quat_to_mat4(r_matrix, *value.get<blender::float4>());
-      break;
-    }
-    case CON_ATTRIBUTE_4X4MATRIX: {
-      copy_m4_m4(r_matrix, (*value.get<blender::float4x4>()).ptr());
-      break;
-    }
-    default: {
-      BLI_assert_unreachable();
-    }
+      return;
+    case CON_ATTRIBUTE_4X4MATRIX:
+      copy_m4_m4(r_matrix, value.get<blender::float4x4>()->ptr());
+      return;
   }
+  BLI_assert_unreachable();
 }
 
 static bool component_is_available(const blender::bke::GeometrySet &geometry,
                                    const blender::bke::GeometryComponent::Type type,
                                    const blender::bke::AttrDomain domain)
 {
-  if (!geometry.has(type)) {
-    return false;
+  if (const blender::bke::GeometryComponent *component = geometry.get_component(type)) {
+    return component->attribute_domain_size(domain) != 0;
   }
-  const blender::bke::GeometryComponent &component = *geometry.get_component(type);
-  return component.attribute_domain_size(domain) != 0;
+  return false;
 }
 
 static const blender::bke::GeometryComponent *find_source_component(
@@ -5538,73 +5530,65 @@ static const blender::bke::GeometryComponent *find_source_component(
   return nullptr;
 }
 
-static void attribute_free_data(bConstraint *con)
+static void geometry_attribute_free_data(bConstraint *con)
 {
-  bAttributeConstraint *data = static_cast<bAttributeConstraint *>(con->data);
-  if (data->attribute_name) {
-    MEM_freeN(data->attribute_name);
-    data->attribute_name = nullptr;
-  }
+  bGeometryAttributeConstraint *data = static_cast<bGeometryAttributeConstraint *>(con->data);
+  MEM_SAFE_FREE(data->attribute_name);
 }
 
-static void attribute_id_looper(bConstraint *con, ConstraintIDFunc func, void *userdata)
+static void geometry_attribute_id_looper(bConstraint *con, ConstraintIDFunc func, void *userdata)
 {
-  bAttributeConstraint *data = static_cast<bAttributeConstraint *>(con->data);
-
-  /* target only */
+  bGeometryAttributeConstraint *data = static_cast<bGeometryAttributeConstraint *>(con->data);
   func(con, (ID **)&data->target, false, userdata);
 }
 
-static void attribute_copy_data(bConstraint *con, bConstraint *srccon)
+static void geometry_attribute_copy_data(bConstraint *con, bConstraint *srccon)
 {
-  const bAttributeConstraint *src = static_cast<bAttributeConstraint *>(srccon->data);
-  bAttributeConstraint *dst = static_cast<bAttributeConstraint *>(con->data);
-
-  if (src->attribute_name) {
-    dst->attribute_name = BLI_strdup(src->attribute_name);
-  }
+  const auto *src = static_cast<bGeometryAttributeConstraint *>(srccon->data);
+  auto *dst = static_cast<bGeometryAttributeConstraint *>(con->data);
+  dst->attribute_name = BLI_strdup_null(src->attribute_name);
 }
 
-static void attribute_new_data(void *cdata)
+static void geometry_attribute_new_data(void *cdata)
 {
-  bAttributeConstraint *data = static_cast<bAttributeConstraint *>(cdata);
+  bGeometryAttributeConstraint *data = static_cast<bGeometryAttributeConstraint *>(cdata);
   data->attribute_name = BLI_strdup("position");
-  data->mix_loc = true;
-  data->mix_rot = true;
-  data->mix_scl = true;
+  data->flags = MIX_LOC | MIX_ROT | MIX_SCALE;
 }
 
-static int attribute_get_tars(bConstraint *con, ListBase *list)
+static int geometry_attribute_get_tars(bConstraint *con, ListBase *list)
 {
-  if (con && list) {
-    bAttributeConstraint *data = static_cast<bAttributeConstraint *>(con->data);
-    bConstraintTarget *ct;
-
-    SINGLETARGETNS_GET_TARS(con, data->target, ct, list);
-
-    return 1;
+  if (!con || !list) {
+    return 0;
   }
+  bGeometryAttributeConstraint *data = static_cast<bGeometryAttributeConstraint *>(con->data);
+  bConstraintTarget *ct;
 
-  return 0;
+  SINGLETARGETNS_GET_TARS(con, data->target, ct, list);
+
+  return 1;
 }
 
-static void attribute_flush_tars(bConstraint *con, ListBase *list, bool no_copy)
+static void geometry_attribute_flush_tars(bConstraint *con, ListBase *list, const bool no_copy)
 {
-  if (con && list) {
-    bAttributeConstraint *data = static_cast<bAttributeConstraint *>(con->data);
-    bConstraintTarget *ct = static_cast<bConstraintTarget *>(list->first);
-
-    SINGLETARGETNS_FLUSH_TARS(con, data->target, ct, list, no_copy);
+  if (!con || !list) {
+    return;
   }
+  bGeometryAttributeConstraint *data = static_cast<bGeometryAttributeConstraint *>(con->data);
+  bConstraintTarget *ct = static_cast<bConstraintTarget *>(list->first);
+
+  SINGLETARGETNS_FLUSH_TARS(con, data->target, ct, list, no_copy);
 }
 
-static bool attribute_get_tarmat(Depsgraph * /*depsgraph*/,
-                                 bConstraint *con,
-                                 bConstraintOb * /*cob*/,
-                                 bConstraintTarget *ct,
-                                 float /*ctime*/)
+static bool geometry_attribute_get_tarmat(Depsgraph * /*depsgraph*/,
+                                          bConstraint *con,
+                                          bConstraintOb * /*cob*/,
+                                          bConstraintTarget *ct,
+                                          float /*ctime*/)
 {
-  const bAttributeConstraint *acon = static_cast<bAttributeConstraint *>(con->data);
+  using namespace blender;
+  const bGeometryAttributeConstraint *acon = static_cast<bGeometryAttributeConstraint *>(
+      con->data);
 
   if (!VALID_CONS_TARGET(ct)) {
     return false;
@@ -5612,25 +5596,24 @@ static bool attribute_get_tarmat(Depsgraph * /*depsgraph*/,
 
   unit_m4(ct->matrix);
 
-  const blender::bke::AttrDomain domain = domain_value_to_attribute(acon->domain_type);
-  const blender::bke::AttrType sample_data_type = type_value_to_attribute(acon->data_type);
-  const blender::bke::GeometrySet &target_eval = blender::bke::object_get_evaluated_geometry_set(
-      *ct->tar);
+  const bke::AttrDomain domain = domain_value_to_attribute(
+      static_cast<Attribute_Domain>(acon->domain));
+  const bke::AttrType sample_data_type = type_value_to_attribute(
+      static_cast<Attribute_Data_Type>(acon->data_type));
+  const bke::GeometrySet &target_eval = bke::object_get_evaluated_geometry_set(*ct->tar);
 
-  const blender::bke::GeometryComponent *component = find_source_component(target_eval, domain);
+  const bke::GeometryComponent *component = find_source_component(target_eval, domain);
   if (component == nullptr) {
     return false;
   }
 
-  const std::optional<blender::bke::AttributeAccessor> optional_attributes =
-      component->attributes();
+  const std::optional<bke::AttributeAccessor> optional_attributes = component->attributes();
   if (!optional_attributes.has_value()) {
     return false;
   }
 
-  const blender::bke::AttributeAccessor &attributes = *optional_attributes;
-  const blender::GVArray attribute = *attributes.lookup(
-      acon->attribute_name, domain, sample_data_type);
+  const bke::AttributeAccessor &attributes = *optional_attributes;
+  const GVArray attribute = *attributes.lookup(acon->attribute_name, domain, sample_data_type);
 
   if (attribute.is_empty()) {
     return false;
@@ -5638,22 +5621,25 @@ static bool attribute_get_tarmat(Depsgraph * /*depsgraph*/,
 
   const int index = std::clamp<int>(acon->sample_index, 0, attribute.size() - 1);
 
-  const blender::CPPType &type = attribute.type();
+  const CPPType &type = attribute.type();
   BUFFER_FOR_CPP_TYPE_VALUE(type, sampled_value);
   attribute.get_to_uninitialized(index, sampled_value);
 
-  value_attribute_to_matrix(ct->matrix, blender::GPointer(type, sampled_value), acon->data_type);
+  value_attribute_to_matrix(ct->matrix,
+                            GPointer(type, sampled_value),
+                            static_cast<Attribute_Data_Type>(acon->data_type));
   type.destruct(sampled_value);
 
   return true;
 }
 
-static void attribute_evaluate(bConstraint *con, bConstraintOb *cob, ListBase *targets)
+static void geometry_attribute_evaluate(bConstraint *con, bConstraintOb *cob, ListBase *targets)
 {
   bConstraintTarget *ct = static_cast<bConstraintTarget *>(targets->first);
-  const bAttributeConstraint *data = static_cast<bAttributeConstraint *>(con->data);
+  const bGeometryAttributeConstraint *data = static_cast<bGeometryAttributeConstraint *>(
+      con->data);
 
-  /* only evaluate if there is a target */
+  /* Only evaluate if there is a target. */
   if (!VALID_CONS_TARGET(ct)) {
     return;
   }
@@ -5666,92 +5652,81 @@ static void attribute_evaluate(bConstraint *con, bConstraintOb *cob, ListBase *t
     unit_m4(target_mat);
   }
 
-  float loc_a[3], rot_a[3][3], size_a[3];
-  float loc_b[3], rot_b[3][3], size_b[3];
-  mat4_to_loc_rot_size(loc_a, rot_a, size_a, target_mat);
-  mat4_to_loc_rot_size(loc_b, rot_b, size_b, ct->matrix);
+  float prev_location[3];
+  float prev_rotation[3][3];
+  float prev_size[3];
+  mat4_to_loc_rot_size(prev_location, prev_rotation, prev_size, target_mat);
+
+  float next_location[3];
+  float next_rotation[3][3];
+  float next_size[3];
+  mat4_to_loc_rot_size(next_location, next_rotation, next_size, ct->matrix);
 
   switch (data->data_type) {
-    case CON_ATTRIBUTE_VECTOR: {
-      loc_rot_size_to_mat4(target_mat, loc_b, rot_a, size_a);
+    case CON_ATTRIBUTE_VECTOR:
+      loc_rot_size_to_mat4(target_mat, next_location, prev_rotation, prev_size);
       break;
-    }
-    case CON_ATTRIBUTE_QUATERNION: {
-      loc_rot_size_to_mat4(target_mat, loc_a, rot_b, size_a);
+    case CON_ATTRIBUTE_QUATERNION:
+      loc_rot_size_to_mat4(target_mat, prev_location, next_rotation, prev_size);
       break;
-    }
-    case CON_ATTRIBUTE_4X4MATRIX: {
-      if (data->mix_loc && data->mix_rot && data->mix_scl) {
+    case CON_ATTRIBUTE_4X4MATRIX:
+      if ((data->flags & MIX_LOC) && (data->flags & MIX_ROT) && (data->flags & MIX_SCALE)) {
         copy_m4_m4(target_mat, ct->matrix);
       }
       else {
-        if (data->mix_loc) {
-          copy_v3_v3(loc_a, loc_b);
+        if (data->flags & MIX_LOC) {
+          copy_v3_v3(prev_location, next_location);
         }
-        if (data->mix_rot) {
-          copy_m3_m3(rot_a, rot_b);
+        if (data->flags & MIX_ROT) {
+          copy_m3_m3(prev_rotation, next_rotation);
         }
-        if (data->mix_scl) {
-          copy_v3_v3(size_a, size_b);
+        if (data->flags & MIX_SCALE) {
+          copy_v3_v3(prev_size, next_size);
         }
-        loc_rot_size_to_mat4(target_mat, loc_a, rot_a, size_a);
+        loc_rot_size_to_mat4(target_mat, prev_location, prev_rotation, prev_size);
       }
       break;
-    }
   }
 
   /* Finally, combine the matrices. */
   switch (data->mix_mode) {
-    case CON_ATTRIBUTE_MIX_REPLACE: {
+    case CON_ATTRIBUTE_MIX_REPLACE:
       copy_m4_m4(cob->matrix, target_mat);
       break;
-    }
-
     /* Simple matrix multiplication. */
-    case CON_ATTRIBUTE_MIX_BEFORE_FULL: {
+    case CON_ATTRIBUTE_MIX_BEFORE_FULL:
       mul_m4_m4m4(cob->matrix, target_mat, cob->matrix);
       break;
-    }
-
-    case CON_ATTRIBUTE_MIX_AFTER_FULL: {
+    case CON_ATTRIBUTE_MIX_AFTER_FULL:
       mul_m4_m4m4(cob->matrix, cob->matrix, target_mat);
       break;
-    }
-
     /* Fully separate handling of channels. */
-    case CON_ATTRIBUTE_MIX_BEFORE_SPLIT: {
+    case CON_ATTRIBUTE_MIX_BEFORE_SPLIT:
       mul_m4_m4m4_split_channels(cob->matrix, target_mat, cob->matrix);
       break;
-    }
-
-    case CON_ATTRIBUTE_MIX_AFTER_SPLIT: {
+    case CON_ATTRIBUTE_MIX_AFTER_SPLIT:
       mul_m4_m4m4_split_channels(cob->matrix, cob->matrix, target_mat);
       break;
-    }
-
-    default: {
-      BLI_assert_msg(0, "Unknown Copy Transforms mix mode");
-    }
   }
 
-  if (data->utarget_mat) {
+  if (data->apply_target_transform) {
     mul_m4_m4m4(cob->matrix, ct->tar->object_to_world().ptr(), cob->matrix);
   }
 }
 
 static bConstraintTypeInfo CTI_ATTRIBUTE = {
-    /*type*/ CONSTRAINT_TYPE_ATTRIBUTE,
-    /*size*/ sizeof(bAttributeConstraint),
-    /*name*/ N_("Attribute Transform"),
-    /*struct_name*/ "bAttributeConstraint",
-    /*free_data*/ attribute_free_data,
-    /*id_looper*/ attribute_id_looper,
-    /*copy_data*/ attribute_copy_data,
-    /*new_data*/ attribute_new_data,
-    /*get_constraint_targets*/ attribute_get_tars,
-    /*flush_constraint_targets*/ attribute_flush_tars,
-    /*get_target_matrix*/ attribute_get_tarmat,
-    /*evaluate_constraint*/ attribute_evaluate,
+    /*type*/ CONSTRAINT_TYPE_GEOMETRY_ATTRIBUTE,
+    /*size*/ sizeof(bGeometryAttributeConstraint),
+    /*name*/ N_("Geometry Attribute"),
+    /*struct_name*/ "bGeometryAttributeConstraint",
+    /*free_data*/ geometry_attribute_free_data,
+    /*id_looper*/ geometry_attribute_id_looper,
+    /*copy_data*/ geometry_attribute_copy_data,
+    /*new_data*/ geometry_attribute_new_data,
+    /*get_constraint_targets*/ geometry_attribute_get_tars,
+    /*flush_constraint_targets*/ geometry_attribute_flush_tars,
+    /*get_target_matrix*/ geometry_attribute_get_tarmat,
+    /*evaluate_constraint*/ geometry_attribute_evaluate,
 };
 
 /* ************************* Constraints Type-Info *************************** */
@@ -6784,8 +6759,9 @@ void BKE_constraint_blend_write(BlendWriter *writer, ListBase *conlist)
 
           break;
         }
-        case CONSTRAINT_TYPE_ATTRIBUTE: {
-          bAttributeConstraint *data = static_cast<bAttributeConstraint *>(con->data);
+        case CONSTRAINT_TYPE_GEOMETRY_ATTRIBUTE: {
+          bGeometryAttributeConstraint *data = static_cast<bGeometryAttributeConstraint *>(
+              con->data);
           BLO_write_string(writer, data->attribute_name);
           break;
         }
@@ -6852,8 +6828,9 @@ void BKE_constraint_blend_read_data(BlendDataReader *reader, ID *id_owner, ListB
         data->reader_object_path[0] = '\0';
         break;
       }
-      case CONSTRAINT_TYPE_ATTRIBUTE: {
-        bAttributeConstraint *data = static_cast<bAttributeConstraint *>(con->data);
+      case CONSTRAINT_TYPE_GEOMETRY_ATTRIBUTE: {
+        bGeometryAttributeConstraint *data = static_cast<bGeometryAttributeConstraint *>(
+            con->data);
         BLO_read_string(reader, &data->attribute_name);
         break;
       }

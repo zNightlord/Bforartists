@@ -576,7 +576,7 @@ void BKE_pchan_bbone_deform_segment_index(const bPoseChannel *pchan,
        _pchan = _pchan->next) \
   { \
     if (blender::animrig::bone_is_visible(((bArmature *)(_ob)->data), _pchan) && \
-        ((_pchan)->bone->flag & BONE_SELECTED)) \
+        ((_pchan)->flag & POSE_SELECTED)) \
     {
 #define FOREACH_PCHAN_SELECTED_IN_OBJECT_END \
   } \
@@ -694,4 +694,5 @@ using BoneNameSet = blender::Set<std::string>;
  */
 BoneNameSet BKE_armature_find_selected_bone_names(const bArmature *armature);
 
+BoneNameSet BKE_pose_channel_find_selected_names(const Object *object);
 };  // namespace blender::bke
