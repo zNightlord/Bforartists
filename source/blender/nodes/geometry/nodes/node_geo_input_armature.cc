@@ -6,6 +6,7 @@
 
 #include "BKE_pointcloud.hh"
 
+#include "UI_interface_layout.hh"
 #include "UI_interface.hh"
 #include "UI_resources.hh"
 
@@ -16,7 +17,7 @@ namespace blender::nodes::node_geo_input_armature_cc {
 static void node_declare(NodeDeclarationBuilder &b)
 {
   b.add_input<decl::Object>("Armature").custom_draw([](CustomSocketDrawParams &params) {
-    params.layout.alignment_set(blender::ui::LayoutAlign::Expand);
+    params.layout.alignment_set(ui::LayoutAlign::Expand);
     params.layout.prop(&params.node_ptr, "armature", UI_ITEM_NONE, "", ICON_NONE);
   });
   ;
