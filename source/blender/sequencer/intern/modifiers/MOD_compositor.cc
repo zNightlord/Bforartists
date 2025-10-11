@@ -154,7 +154,6 @@ class CompositorContext : public compositor::Context {
     return strip_;
   }
 
-
   bool use_gpu() const override
   {
     return false;
@@ -208,8 +207,6 @@ static void compositor_modifier_apply(ModifierApplyContext &context,
                                       StripModifierData *strip_modifier_data,
                                       ImBuf *mask)
 {
-  // strip_modifier_data->start_frame = strip->start;
-  // strip_modifier_data->end_frame = strip->enddisp;
   const SequencerCompositorModifierData *modifier_data =
       reinterpret_cast<SequencerCompositorModifierData *>(strip_modifier_data);
   if (!modifier_data->node_group) {
