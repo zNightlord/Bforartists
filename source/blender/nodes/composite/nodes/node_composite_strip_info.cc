@@ -39,7 +39,7 @@ class StripInfoOperation : public NodeOperation {
     result_end.allocate_single_value();
 
     Strip strip = context().get_strip();
-    result_start.set_single_value(static_cast<int>(strip.start));
+    result_start.set_single_value(static_cast<int>(strip.start + strip.startofs));
     result_end.set_single_value(strip.enddisp);
   }
 };
