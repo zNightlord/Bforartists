@@ -20,8 +20,8 @@ namespace blender::nodes::node_composite_strip_info_cc {
 
 static void cmp_node_strip_info_declare(NodeDeclarationBuilder &b)
 {
-  b.add_output<decl::Int>("Start").default_value(0);
-  b.add_output<decl::Int>("End").default_value(0);
+  b.add_output<decl::Int>("Start Frame").default_value(0);
+  b.add_output<decl::Int>("End Frame").default_value(0);
 }
 
 using namespace blender::compositor;
@@ -32,8 +32,8 @@ class StripInfoOperation : public NodeOperation {
 
   void execute() override
   {
-    Result &result_start = get_result("Start");
-    Result &result_end = get_result("End");
+    Result &result_start = get_result("Start Frame");
+    Result &result_end = get_result("End Frame");
 
     result_start.allocate_single_value();
     result_end.allocate_single_value();
