@@ -61,7 +61,7 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.use_custom_socket_order();
   b.allow_any_socket_order();
 
-  b.add_input<decl::Object>("Armature Object").hide_label();
+  b.add_input<decl::Object>("Armature Object");
 
   b.add_input<decl::Bool>("Preserve Volume")
       .default_value(false)
