@@ -97,6 +97,7 @@ set(SRC
   nodes/node_composite_setalpha.cc
   nodes/node_composite_split.cc
   nodes/node_composite_stabilize2d.cc
+  nodes/node_composite_strip_info.cc
   nodes/node_composite_switch.cc
   nodes/node_composite_switchview.cc
   nodes/node_composite_tonemap.cc
@@ -106,7 +107,6 @@ set(SRC
   nodes/node_composite_val_to_rgb.cc
   nodes/node_composite_vec_blur.cc
   nodes/node_composite_viewer.cc
-  nodes/node_composite_strip_info.cc
 
   node_composite_tree.cc
   node_composite_util.cc
