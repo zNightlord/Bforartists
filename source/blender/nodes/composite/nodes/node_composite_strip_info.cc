@@ -12,6 +12,8 @@
 
 #include "COM_node_operation.hh"
 
+#include "SEQ_time.hh"
+
 #include "node_composite_util.hh"
 
 namespace blender::nodes::node_composite_strip_info_cc {
@@ -38,13 +40,15 @@ class StripInfoOperation : public NodeOperation {
     Result &start_frame_result = this->get_result("Start Frame");
     if (start_frame_result.should_compute()) {
       start_frame_result.allocate_single_value();
-      start_frame_result.set_single_value(static_cast<int>(strip.start + strip.startofs));
+      start_frame_result.set_single_value(
+          seq::time_left_handle_frame_get(&context().get_scene(), &strip));
     }
 
     Result &end_frame_result = this->get_result("End Frame");
     if (end_frame_result.should_compute()) {
       end_frame_result.allocate_single_value();
-      end_frame_result.set_single_value(strip.enddisp);
+      end_frame_result.set_single_value(
+          seq::time_right_handle_frame_get(&context().get_scene(), &strip));
     }
 
     Result &location_result = this->get_result("Location");
