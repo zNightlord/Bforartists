@@ -33,11 +33,11 @@ class StripInfoOperation : public NodeOperation {
 
   void execute() override
   {
-    Result &result_start = get_result("Start Frame");
-    Result &result_end = get_result("End Frame");
-    Result &result_position = get_result("Position");
-    Result &result_rotation = get_result("Rotation");
-    Result &result_scale = get_result("Scale");
+    Result &result_start = this->get_result("Start Frame");
+    Result &result_end = this->get_result("End Frame");
+    Result &result_position = this->get_result("Position");
+    Result &result_rotation = this->get_result("Rotation");
+    Result &result_scale = this->get_result("Scale");
 
     result_start.allocate_single_value();
     result_end.allocate_single_value();
