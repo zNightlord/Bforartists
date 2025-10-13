@@ -14,8 +14,6 @@
 
 #include "node_composite_util.hh"
 
-/* **************** Strip Info ******************** */
-
 namespace blender::nodes::node_composite_strip_info_cc {
 
 static void cmp_node_strip_info_declare(NodeDeclarationBuilder &b)
