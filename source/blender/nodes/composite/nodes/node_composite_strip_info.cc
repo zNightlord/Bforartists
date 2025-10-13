@@ -33,27 +33,27 @@ class StripInfoOperation : public NodeOperation {
 
   void execute() override
   {
-    Result &result_start = this->get_result("Start Frame");
-    Result &result_end = this->get_result("End Frame");
-    Result &result_position = this->get_result("Position");
-    Result &result_rotation = this->get_result("Rotation");
-    Result &result_scale = this->get_result("Scale");
+    Result &start_frame_result = this->get_result("Start Frame");
+    Result &end_frame_result = this->get_result("End Frame");
+    Result &location_result = this->get_result("Position");
+    Result &rotation_result = this->get_result("Rotation");
+    Result &scale_result = this->get_result("Scale");
 
-    result_start.allocate_single_value();
-    result_end.allocate_single_value();
-    result_position.allocate_single_value();
-    result_rotation.allocate_single_value();
-    result_scale.allocate_single_value();
+    start_frame_result.allocate_single_value();
+    end_frame_result.allocate_single_value();
+    location_result.allocate_single_value();
+    rotation_result.allocate_single_value();
+    scale_result.allocate_single_value();
 
     Strip strip = context().get_strip();
 
-    result_start.set_single_value(static_cast<int>(strip.start + strip.startofs));
-    result_end.set_single_value(strip.enddisp);
+    start_frame_result.set_single_value(static_cast<int>(strip.start + strip.startofs));
+    end_frame_result.set_single_value(strip.enddisp);
 
-    result_position.set_single_value(
+    location_result.set_single_value(
         float2(strip.data->transform->xofs, strip.data->transform->yofs));
-    result_rotation.set_single_value(strip.data->transform->rotation);
-    result_scale.set_single_value(
+    rotation_result.set_single_value(strip.data->transform->rotation);
+    scale_result.set_single_value(
         float2(strip.data->transform->scale_x, strip.data->transform->scale_y));
   }
 };
