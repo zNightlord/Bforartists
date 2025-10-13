@@ -20,7 +20,7 @@ static void cmp_node_strip_info_declare(NodeDeclarationBuilder &b)
 {
   b.add_output<decl::Int>("Start Frame").default_value(0);
   b.add_output<decl::Int>("End Frame").default_value(0);
-  b.add_output<decl::Vector>("Position").default_value({0, 0});
+  b.add_output<decl::Vector>("Location").default_value({0, 0});
   b.add_output<decl::Float>("Rotation").default_value(0.0);
   b.add_output<decl::Vector>("Scale").default_value({0, 0});
 }
@@ -35,7 +35,7 @@ class StripInfoOperation : public NodeOperation {
   {
     Result &start_frame_result = this->get_result("Start Frame");
     Result &end_frame_result = this->get_result("End Frame");
-    Result &location_result = this->get_result("Position");
+    Result &location_result = this->get_result("Location");
     Result &rotation_result = this->get_result("Rotation");
     Result &scale_result = this->get_result("Scale");
 
