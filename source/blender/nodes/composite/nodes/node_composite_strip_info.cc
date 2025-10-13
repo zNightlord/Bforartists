@@ -33,29 +33,40 @@ class StripInfoOperation : public NodeOperation {
 
   void execute() override
   {
-    Result &start_frame_result = this->get_result("Start Frame");
-    Result &end_frame_result = this->get_result("End Frame");
-    Result &location_result = this->get_result("Location");
-    Result &rotation_result = this->get_result("Rotation");
-    Result &scale_result = this->get_result("Scale");
-
-    start_frame_result.allocate_single_value();
-    end_frame_result.allocate_single_value();
-    location_result.allocate_single_value();
-    rotation_result.allocate_single_value();
-    scale_result.allocate_single_value();
-
     Strip strip = context().get_strip();
 
-    start_frame_result.set_single_value(static_cast<int>(strip.start + strip.startofs));
-    end_frame_result.set_single_value(strip.enddisp);
+    Result &start_frame_result = this->get_result("Start Frame");
+    if (start_frame_result.should_compute()) {
+      start_frame_result.allocate_single_value();
+      start_frame_result.set_single_value(static_cast<int>(strip.start + strip.startofs));
+    }
 
-    location_result.set_single_value(
-        float2(strip.data->transform->xofs, strip.data->transform->yofs));
-    rotation_result.set_single_value(strip.data->transform->rotation);
-    scale_result.set_single_value(
-        float2(strip.data->transform->scale_x, strip.data->transform->scale_y));
-  }
+    Result &end_frame_result = this->get_result("End Frame");
+    if (end_frame_result.should_compute()) {
+      end_frame_result.allocate_single_value();
+      end_frame_result.set_single_value(strip.enddisp);
+    }
+
+    Result &location_result = this->get_result("Location");
+    if (location_result.should_compute()) {
+      location_result.allocate_single_value();
+      location_result.set_single_value(
+          float2(strip.data->transform->xofs, strip.data->transform->yofs));
+    }
+
+    Result &rotation_result = this->get_result("Rotation");
+    if (rotation_result.should_compute()) {
+      rotation_result.allocate_single_value();
+      rotation_result.set_single_value(strip.data->transform->rotation);
+    }
+
+    Result &scale_result = this->get_result("Scale");
+    if (scale_result.should_compute()) {
+      scale_result.allocate_single_value();
+      scale_result.set_single_value(
+          float2(strip.data->transform->scale_x, strip.data->transform->scale_y));
+    }
+  };
 };
 
 static NodeOperation *get_compositor_operation(Context &context, DNode node)
