@@ -255,7 +255,6 @@
 #define CMP_NODE_SEPARATE_COLOR 333
 #define CMP_NODE_IMAGE_INFO 334
 #define CMP_NODE_CONVERT_TO_DISPLAY 335
-#define CMP_NODE_STRIP_INFO 336
 
 /* channel toggles */
 #define CMP_CHAN_RGB 1

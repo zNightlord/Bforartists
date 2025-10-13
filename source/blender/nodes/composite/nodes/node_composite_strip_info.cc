@@ -73,7 +73,7 @@ static void register_node_type_cmp_strip_info()
 
   static blender::bke::bNodeType ntype;
 
-  cmp_node_type_base(&ntype, "CompositorNodeStripInfo", CMP_NODE_STRIP_INFO);
+  cmp_node_type_base(&ntype, "CompositorNodeStripInfo");
   ntype.ui_name = "Strip Info";
   ntype.ui_description = "Retrieve information about the strip";
   ntype.enum_name_legacy = "Strip Info";
