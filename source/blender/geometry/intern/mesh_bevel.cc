@@ -550,6 +550,15 @@ class BevelState {
     return bevedge_is_beveled_[be];
   }
 
+  /** Return the number of beveled eddges attached to \a bv. */
+  int bevvert_beveled_edges_num(const int bv) const
+  {
+    Span<int> bes = bevvert_bevedges_[bv];
+    return std::accumulate(bes.begin(), bes.end(), 0, [this](int sum, int be) {
+      return sum + bevedge_is_beveled_[be];
+    });
+  }
+
   /** Return the next bevedge position around bevvert \a bv after \a edge_pos. */
   int next_edge_pos(const int bv, const int edge_pos) const
   {
@@ -4670,7 +4679,8 @@ void BevelState::determine_needed_attribute_data()
       uv_attributes_.append(Array<float2>(newcorners_num, float2(0.0f, 0.0f)));
     }
   }
-  bke::AttributeReader<int> mat_reader = attrs.lookup<int>("material_index", bke::AttrDomain::Face);
+  bke::AttributeReader<int> mat_reader = attrs.lookup<int>("material_index",
+                                                           bke::AttrDomain::Face);
   if (mat_reader) {
     VArraySpan<int> vmat(mat_reader.varray);
     materials_ = Array<int>(vmat);
@@ -4702,19 +4712,6 @@ void BevelState::build_newface(const int f, Span<int> verts, Span<int> edges)
   }
 }
 
-static float3 face_center(const int face, const Mesh &mesh)
-{
-  float3 ans(0.0f, 0.0f, 0.0f);
-  for (const int vert : mesh.corner_verts().slice(mesh.faces()[face])) {
-    ans += mesh.vert_positions()[vert];
-  }
-  int nv = mesh.faces()[face].size();
-  if (nv > 0) {
-    ans = (1.0f / float(nv)) * ans;
-  }
-  return ans;
-}
-
 static int choose_face_rep(Span<int> faces, const BevelState &bs)
 {
   /* The tie breaking values are, in order:
@@ -4725,6 +4722,9 @@ static int choose_face_rep(Span<int> faces, const BevelState &bs)
    *  + y component of face center
    * We want the face that has the lexicographically lowest value of these.
    */
+  if (faces.size() == 1) {
+    return faces[0];
+  }
   const int value_len = bs.uvmaps_num + 4;
   const int numf = faces.size();
   using ValueVec = Array<float, 6>;
@@ -4741,16 +4741,17 @@ static int choose_face_rep(Span<int> faces, const BevelState &bs)
       values[i][value_index++] = float(bs.uv_map_info(j).component_id(f));
     }
     values[i][value_index++] = bs.material(f);
-    float3 center = face_center(f, mesh);
+    float3 center = bke::mesh::face_center_calc(mesh.vert_positions(),
+                                                mesh.corner_verts().slice(mesh.faces()[f]));
     values[i][value_index++] = center[2];
     values[i][value_index++] = center[0];
     values[i][value_index++] = center[1];
     BLI_assert(value_index == value_len);
   }
-  auto it = std::min_element(values.begin(), values.end(),
-                             [](const ValueVec &a, const ValueVec &b) {
-    return std::lexicographical_compare(a.begin(), a.end(), b.begin(), b.end());
-  });
+  auto it = std::min_element(
+      values.begin(), values.end(), [](const ValueVec &a, const ValueVec &b) {
+        return std::lexicographical_compare(a.begin(), a.end(), b.begin(), b.end());
+      });
   if (it != values.end()) {
     return faces[std::distance(values.begin(), it)];
   }
@@ -4770,16 +4771,126 @@ static void find_anchor_face_reps(const int bv, Array<int, 20> &reps, const Beve
   }
 }
 
-/** Pick a good original face representative for the center polygon for bevvert \a bv. */
-static int find_center_face_rep(const int bv, const Array<int, 20> &reps, const BevelState &bs)
+/** Return the two edges incident on vertex \a v in face \a f in \a mesh. */
+int2 get_incident_edges(int f, int v, const Mesh &mesh)
 {
-  /* Placeholder logic. Just use the first one that is non-negative. */
-  for (const int f : reps) {
-    if (f != -1) {
-      return f;
+  int2 ans(-1, -1);
+  const int corner = bke::mesh::face_find_corner_from_vert(
+      mesh.faces()[f], mesh.corner_verts(), v);
+  ans[0] = mesh.corner_edges()[corner];
+  const int corner_prev = bke::mesh::face_corner_prev(mesh.faces()[f], corner);
+  ans[1] = mesh.corner_edges()[corner_prev];
+  return ans;
+}
+
+/**
+ * If we make a poly out of anchor verts around \a bv, snapping to face \a f,
+ * will uv poly have zero area?
+ * The uv poly is made by snapping all outside-of-f vertices to the closest edge in \a f.
+ * Sometimes this results in a zero or very small area polygon, which translates to a zero
+ * or very small area polygon in UV space -- not good for interpolating textures.
+ */
+static bool is_bad_uv_poly(const int bv, const int f, const BevelState &bs)
+{
+  const Mesh &mesh = bs.mesh_info.mesh;
+  Span<float3> vert_positions = mesh.vert_positions();
+  Span<int> corner_verts = mesh.corner_verts();
+  float3x3 axis_mat;
+  /* Project the vertices of f to 2d along its dominant axis. */
+  const int mesh_v = bs.bevvert_mesh_verts()[bv];
+  axis_dominant_v3_to_m3(axis_mat.ptr(), mesh.face_normals()[f]);
+  IndexRange face = mesh.faces()[f];
+  Array<float2, 20> face_co_proj(face.size());
+  for (const int i : face_co_proj.index_range()) {
+    const float3 co = vert_positions[corner_verts.slice(face)[i]];
+    face_co_proj[i] = float2(transform_point(axis_mat, co));
+  }
+  /* Find the adjacent edges to bv, and the positions of their ends. */
+  int2 v_edges = get_incident_edges(f, mesh_v, mesh);
+  float3 v_edge_ends[2][2];
+  for (const int i : IndexRange(2)) {
+    const int2 e = mesh.edges()[i];
+    for (const int j : IndexRange(2)) {
+      v_edge_ends[i][j] = vert_positions[e[j]];
     }
   }
-  return -1;
+  /* Project the anchor verts for bv onto the same 3d plane.
+   * If the projection isn't inside the projected face, snap to an
+   * edge first and then reproject.
+   */
+  const MeshPattern pat = bs.bevvert_meshpatterns()[bv];
+  Array<float2, 20> anchor_co_proj(pat.num_anchors);
+  const int first_newv = bs.bevvert_newverts()[bv][0];
+  for (int a : IndexRange(pat.num_anchors)) {
+    const int a_newv = first_newv + pat.anchor_vert(a);
+    float3 anchor_co = bs.newvert_positions()[a_newv];
+    anchor_co_proj[a] = float2(transform_point(axis_mat, anchor_co));
+    if (!isect_point_poly_v2(anchor_co_proj[a],
+                             reinterpret_cast<const float (*)[2]>(face_co_proj.data()),
+                             pat.num_anchors))
+    {
+      /* Need to snap anchor_co to the nearest incident edge. */
+      float3 snap1, snap2;
+      closest_to_line_segment_v3(snap1, anchor_co, v_edge_ends[0][0], v_edge_ends[0][1]);
+      closest_to_line_segment_v3(snap1, anchor_co, v_edge_ends[0][0], v_edge_ends[0][1]);
+      const float d1_sq = distance_squared(snap1, anchor_co);
+      const float d2_sq = distance_squared(snap2, anchor_co);
+      if (d1_sq <= d2_sq) {
+        anchor_co_proj[a] = float2(transform_point(axis_mat, snap1));
+      }
+      else {
+        anchor_co_proj[a] = float2(transform_point(axis_mat, snap2));
+      }
+    }
+  }
+  const float area = area_poly_v2(reinterpret_cast<const float (*)[2]>(anchor_co_proj.data()),
+                                  anchor_co_proj.size());
+  return area < geom::bevel_epsilon_big;
+}
+
+/**
+ * Pick a good face from all the faces around \a bv to use for
+ * a representative face, using choose_rep_face.
+ * We want to choose from among the faces that would be
+ * chosen for a single-segment edge polygon between two successive
+ * anchor verts.
+ * But the single beveled edge is a special case,
+ * where we also want to consider the third face (else can get
+ * zero-area UV interpolated face).
+ *
+ * If there are uv maps, then don't include faces that would result
+ * in zero-area UV polygons if chosen as the rep.
+ */
+static int find_center_face_rep(const int bv, const BevelState &bs)
+{
+  int any_face = -1;
+  bool consider_all_faces = bs.bevvert_beveled_edges_num(bv) == 1;
+  Span<int> bes = bs.bevvert_bevedges()[bv];
+  const int edge_count = bes.size();
+  VectorSet<int, 20> fchoices;
+  for (const int epos : IndexRange(edge_count)) {
+    if (!bs.bevedge_is_beveled(bes[epos]) && !consider_all_faces) {
+      continue;
+    }
+    const int f1 = bs.face_prev(bv, epos);
+    const int f2 = bs.face_next(bv, epos);
+    if (f1 == -1 && f2 == -2) {
+      continue;
+    }
+    Array<int, 2> ftwo = {f1, f2};
+    const int f = choose_face_rep(ftwo.as_span(), bs);
+    if (any_face == -1) {
+      any_face = f;
+    }
+    if (bs.uvmaps_num > 0 && is_bad_uv_poly(bv, f, bs)) {
+      continue;
+    }
+    fchoices.add(f);
+  }
+  if (fchoices.size() == 0) {
+    return any_face;
+  }
+  return choose_face_rep(fchoices.as_span(), bs);
 }
 
 /** Set representative original elements to copy attributes from for new elements. */
@@ -4824,7 +4935,7 @@ static void set_vertex_mesh_reps(const int bv,
     Array<int, 20> anchor_face_reps(pat.num_anchors, -1);
     find_anchor_face_reps(bv, anchor_face_reps, bs);
     const int center_frep = ((pat.num_segs % 2) == 1 || pat.kind != MeshKind::Adj) ?
-                                find_center_face_rep(bv, anchor_face_reps, bs) :
+                                find_center_face_rep(bv, bs) :
                                 -1;
     switch (pat.kind) {
       case MeshKind::Adj: {
