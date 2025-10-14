@@ -593,6 +593,12 @@ class BevelState {
     return uv_map_infos_[uv_map_index];
   }
 
+  /** Return the material index for face \a f. */
+  int material(const int f) const
+  {
+    return materials_.size() > f ? materials_[f] : -1;
+  }
+
  private:
   IndexMaskMemory memory_;
   IndexMask bevedges_mask_;
@@ -643,6 +649,8 @@ class BevelState {
 
   Vector<UVMapInfo> uv_map_infos_;
   Vector<Array<float2>> uv_attributes_;
+
+  Array<int> materials_;
 };
 
 MeshInfo::MeshInfo(const Mesh &mesh) : mesh(mesh)
@@ -4653,11 +4661,19 @@ void BevelState::determine_needed_attribute_data()
   if (any_corner_attributes) {
     newcorner_repcorners_.fill(-1);
   }
+  /* When choosing face representatives, we need access
+   * to uv map components and material indices, as tie breakers.
+   */
   if (uvmaps_num > 0) {
     for (int i = 0; i < uvmaps_num; i++) {
       uv_map_infos_[i].find_components(mesh_info);
       uv_attributes_.append(Array<float2>(newcorners_num, float2(0.0f, 0.0f)));
     }
+  }
+  bke::AttributeReader<int> mat_reader = attrs.lookup<int>("material_index", bke::AttrDomain::Face);
+  if (mat_reader) {
+    VArraySpan<int> vmat(mat_reader.varray);
+    materials_ = Array<int>(vmat);
   }
 }
 
@@ -4684,6 +4700,61 @@ void BevelState::build_newface(const int f, Span<int> verts, Span<int> edges)
     newcorner_verts_[c] = v;
     newcorner_edges_[c] = e;
   }
+}
+
+static float3 face_center(const int face, const Mesh &mesh)
+{
+  float3 ans(0.0f, 0.0f, 0.0f);
+  for (const int vert : mesh.corner_verts().slice(mesh.faces()[face])) {
+    ans += mesh.vert_positions()[vert];
+  }
+  int nv = mesh.faces()[face].size();
+  if (nv > 0) {
+    ans = (1.0f / float(nv)) * ans;
+  }
+  return ans;
+}
+
+static int choose_face_rep(Span<int> faces, const BevelState &bs)
+{
+  /* The tie breaking values are, in order:
+   *  + component id of face in each uv_map, in the order we found them
+   *  + material index
+   *  + z component of face center
+   *  + x component of face center
+   *  + y component of face center
+   * We want the face that has the lexicographically lowest value of these.
+   */
+  const int value_len = bs.uvmaps_num + 4;
+  const int numf = faces.size();
+  using ValueVec = Array<float, 6>;
+  Array<ValueVec, 20> values(numf, ValueVec(value_len));
+  const Mesh &mesh = bs.mesh_info.mesh;
+  for (const int i : IndexRange(numf)) {
+    const int f = faces[i];
+    if (f == -1) {
+      values[i][0] = 1e10f;
+      continue;
+    }
+    int value_index = 0;
+    for (int j : IndexRange(bs.uvmaps_num)) {
+      values[i][value_index++] = float(bs.uv_map_info(j).component_id(f));
+    }
+    values[i][value_index++] = bs.material(f);
+    float3 center = face_center(f, mesh);
+    values[i][value_index++] = center[2];
+    values[i][value_index++] = center[0];
+    values[i][value_index++] = center[1];
+    BLI_assert(value_index == value_len);
+  }
+  auto it = std::min_element(values.begin(), values.end(),
+                             [](const ValueVec &a, const ValueVec &b) {
+    return std::lexicographical_compare(a.begin(), a.end(), b.begin(), b.end());
+  });
+  if (it != values.end()) {
+    return faces[std::distance(values.begin(), it)];
+  }
+  return 0;
 }
 
 /** Find the face representatives to use for each anchor position. */
