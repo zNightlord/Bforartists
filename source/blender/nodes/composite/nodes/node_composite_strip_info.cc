@@ -35,7 +35,7 @@ class StripInfoOperation : public NodeOperation {
 
   void execute() override
   {
-    Strip strip = context().get_strip();
+    Strip &strip = context().get_strip();
 
     Result &start_frame_result = this->get_result("Start Frame");
     if (start_frame_result.should_compute()) {

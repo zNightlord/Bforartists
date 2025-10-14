@@ -141,9 +141,10 @@ StaticCacheManager &Context::cache_manager()
   return cache_manager_;
 }
 
-Strip Context::get_strip() const
+Strip &Context::get_strip()
 {
-  return {};
+  static Strip return_strip;
+  return return_strip;
 }
 
 }  // namespace blender::compositor

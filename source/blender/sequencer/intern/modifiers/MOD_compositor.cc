@@ -149,7 +149,7 @@ class CompositorContext : public compositor::Context {
     return result;
   }
 
-  Strip get_strip() const override
+  Strip &get_strip() override
   {
     return strip_;
   }

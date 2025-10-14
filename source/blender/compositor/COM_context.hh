@@ -80,8 +80,8 @@ class Context {
   /* True if the compositor should use GPU acceleration. */
   virtual bool use_gpu() const = 0;
 
-  /* Get the modifier data of the strips compositing modifier. */
-  virtual Strip get_strip() const;
+  /* Get the strip that the compositing modifier is applied to. */
+  virtual Strip &get_strip();
 
   /* Get the result where the given pass is stored. */
   virtual Result get_pass(const Scene *scene, int view_layer, const char *name);
