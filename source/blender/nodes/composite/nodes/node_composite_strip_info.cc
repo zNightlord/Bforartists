@@ -6,13 +6,20 @@
  * \ingroup cmpnodes
  */
 
+#include "BKE_context.hh"
+
 #include "BLI_math_vector_types.hh"
 
 #include "DNA_node_types.h"
+#include "DNA_space_types.h"
 
 #include "COM_node_operation.hh"
 
+#include "NOD_node_extra_info.hh"
+
 #include "SEQ_time.hh"
+
+#include "UI_resources.hh"
 
 #include "node_composite_util.hh"
 
@@ -73,6 +80,18 @@ class StripInfoOperation : public NodeOperation {
   };
 };
 
+static void node_extra_info(NodeExtraInfoParams &parameters)
+{
+  SpaceNode *space_node = CTX_wm_space_node(&parameters.C);
+  if (space_node->node_tree_sub_type != SNODE_COMPOSITOR_SEQUENCER) {
+    NodeExtraInfoRow row;
+    row.text = RPT_("Node Unsupported");
+    row.tooltip = TIP_("The Strip Info node is only supported for sequencer compositing");
+    row.icon = ICON_ERROR;
+    parameters.rows.append(std::move(row));
+  }
+}
+
 static NodeOperation *get_compositor_operation(Context &context, DNode node)
 {
   return new StripInfoOperation(context, node);
@@ -92,6 +111,7 @@ static void register_node_type_cmp_strip_info()
   ntype.nclass = NODE_CLASS_INPUT;
   ntype.declare = file_ns::cmp_node_strip_info_declare;
   ntype.get_compositor_operation = file_ns::get_compositor_operation;
+  ntype.get_extra_info = file_ns::node_extra_info;
 
   blender::bke::node_register_type(ntype);
 }
