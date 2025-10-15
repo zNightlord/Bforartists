@@ -4758,6 +4758,18 @@ static int choose_face_rep(Span<int> faces, const BevelState &bs)
   return 0;
 }
 
+/**
+ * Return a good representative face (for materials, etc.) for faces
+ * created around/near anchor \a anchor of bevvert \a bv.
+ * Sometimes care about a second choice, if there is one.
+ * If r_fother parameter is non-nullptr and there is another, different,
+ * possible frep, return the other one in that parameter.
+ */
+static int anchor_rep_face(const int bv, const int anchor, int *r_fother)
+{
+  return -1;
+}
+
 /** Find the face representatives to use for each anchor position. */
 static void find_anchor_face_reps(const int bv, Array<int, 20> &reps, const BevelState &bs)
 {
@@ -4809,7 +4821,7 @@ static bool is_bad_uv_poly(const int bv, const int f, const BevelState &bs)
   int2 v_edges = get_incident_edges(f, mesh_v, mesh);
   float3 v_edge_ends[2][2];
   for (const int i : IndexRange(2)) {
-    const int2 e = mesh.edges()[i];
+    const int2 e = mesh.edges()[v_edges[i]];
     for (const int j : IndexRange(2)) {
       v_edge_ends[i][j] = vert_positions[e[j]];
     }
