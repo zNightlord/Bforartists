@@ -94,6 +94,11 @@ class MeshPattern {
   /** Return the vertex index of the give anchor vertex. */
   int anchor_vert(const int anchor_index) const;
 
+  /** Return the anchor index corresponding to the given vertex index,
+   * assuming \a v is a vertex that is also an anchor (on the outer boundary).
+   */
+  int vert_to_anchor(const int v) const;
+
   /** Return arrays of the verts and edges for pattern face \a face,
    * where \a first_v and \a first_e give the offsets to add to pattern space indices.
    */
@@ -591,7 +596,7 @@ class BevelState {
     return bevvert_mesh_verts_[bv] == mesh_info.mesh.edges()[bevedge_mesh_edges_[be]][0] ? 0 : 1;
   }
 
-  /** Return the bevedge poisition of the last bevedge attached to newvert, or -1 if none. */
+  /** Return the bevedge position of the last bevedge attached to newvert, or -1 if none. */
   int last_attached_bevedge_pos(const int bv, const int newvert) const;
 
   /** Return the edge position for bevedge \a be around bevvert \a bv. */
@@ -3147,6 +3152,33 @@ int MeshPattern::anchor_vert(int anchor_index) const
   return ans;
 }
 
+/** Inverse of #anchor_vert. Return -1 if there is no such anchor vert. */
+int MeshPattern::vert_to_anchor(const int v) const
+{
+  int ans;
+  BLI_assert(0 <= v && v < this->num_elements()[0]);
+  switch (this->kind) {
+    case MeshKind::Adj:
+      const int ring = adj::v_num_rings(this->num_segs) - 1;
+      const int ringstart = adj::v_ringstart(ring, this->num_anchors, this->num_segs);
+      const int k = v - ringstart;
+      const int div = adj::v_anchor_div(ring, this->num_anchors, this->num_segs);
+      ans = (k < 0 || (k % div) != 0) ? -1 : k / div;
+      break;
+    case MeshKind::TerminalPoly:
+    case MeshKind::TriFan:
+      ans = v == 0 ? 0 : (v > this->num_segs ? v - this->num_segs : -1);
+      break;
+    case MeshKind::Cutoff:
+      /* TODO */
+      BLI_assert(false);
+    default:
+      ans = -1;
+      break
+  }
+  return ans;
+}
+
 /** Return arrays of the verts and edges for pattern face \a face,
  * where \a first_v and \a first_e give the offsets to add to pattern space indices.
  */
@@ -4767,6 +4799,7 @@ static int choose_face_rep(Span<int> faces, const BevelState &bs)
  */
 static int anchor_rep_face(const int bv, const int anchor, int *r_fother)
 {
+  /* make an analog of the code in bmesh_bevel.c, boundvert_rep_face() */
   return -1;
 }
 
