@@ -81,7 +81,8 @@ class StripInfoOperation : public NodeOperation {
       scale_result.set_single_value(
           float2(strip->data->transform->scale_x, strip->data->transform->scale_y));
     }
-  };
+  }
+
   void execute_invalid()
   {
     Result &start_frame_result = this->get_result("Start Frame");
