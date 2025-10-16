@@ -84,7 +84,6 @@ class StripInfoOperation : public NodeOperation {
   };
   void execute_invalid()
   {
-
     Result &start_frame_result = this->get_result("Start Frame");
     if (start_frame_result.should_compute()) {
       start_frame_result.allocate_invalid();
