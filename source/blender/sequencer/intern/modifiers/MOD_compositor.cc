@@ -45,7 +45,7 @@ class CompositorContext : public compositor::Context {
   ImBuf *mask_buffer_;
   float3x3 xform_;
   float2 result_translation_ = float2(0, 0);
-  Strip strip_;
+  const Strip *strip_;
 
  public:
   CompositorContext(const RenderData &render_data,
@@ -59,7 +59,7 @@ class CompositorContext : public compositor::Context {
         image_buffer_(image_buffer),
         mask_buffer_(mask_buffer),
         xform_(float3x3::identity()),
-        strip_(strip)
+        strip_(&strip)
   {
     if (mask_buffer) {
       /* Note: do not use passed transform matrix since compositor coordinate
@@ -149,7 +149,7 @@ class CompositorContext : public compositor::Context {
     return result;
   }
 
-  Strip &get_strip() override
+  const Strip *get_strip() const override
   {
     return strip_;
   }

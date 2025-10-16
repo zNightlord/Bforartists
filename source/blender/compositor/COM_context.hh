@@ -81,7 +81,7 @@ class Context {
   virtual bool use_gpu() const = 0;
 
   /* Get the strip that the compositing modifier is applied to. */
-  virtual Strip &get_strip();
+  virtual const Strip *get_strip() const;
 
   /* Get the result where the given pass is stored. */
   virtual Result get_pass(const Scene *scene, int view_layer, const char *name);
