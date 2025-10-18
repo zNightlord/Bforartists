@@ -6,7 +6,7 @@ from typing import Any, Callable, Optional, Union, Type
 
 import bpy
 
-from bfa_3Dsequencer.utils import register_classes, unregister_classes
+from ..utils import register_classes, unregister_classes
 
 
 SequenceType = Type[bpy.types.Strip]
@@ -66,7 +66,7 @@ class TimelineSyncSettings(bpy.types.PropertyGroup):
     )
 
     bidirectional: bpy.props.BoolProperty(
-        name="Bidirectional",
+        name="Bidirectional (Scrubbing only)",
         description=(
             "Whether changing the active scene's time should update "
             "the Timeline Scene's current frame in the Sequencer\n"

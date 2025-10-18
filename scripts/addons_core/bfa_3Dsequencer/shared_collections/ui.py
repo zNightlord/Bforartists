@@ -5,12 +5,12 @@
 
 import bpy
 
-from bfa_3Dsequencer.shared_collections.core import (
+from ..shared_collections.core import (
     get_active_shared_folder,
     get_scene_users,
     get_shared_collections_root_collection,
 )
-from bfa_3Dsequencer.utils import register_classes, unregister_classes
+from ..utils import register_classes, unregister_classes
 
 
 class COLLECTION_UL_shared_collections(bpy.types.UIList):
@@ -55,7 +55,7 @@ class COLLECTION_UL_shared_collections(bpy.types.UIList):
 
 
 class BASE_PT_SharedFoldersPanel(bpy.types.Panel):
-    bl_label = "shared collections"
+    bl_label = "Shared collections"
     bl_category = "Sequencer"
     bl_region_type = "UI"
     bl_options = {"DEFAULT_CLOSED"}

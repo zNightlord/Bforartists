@@ -604,8 +604,7 @@ static void initTranslation(TransInfo *t, wmOperator * /*op*/)
     aspect[1] = UI_view2d_grid_resolution_y__values(v2d, 10);
   }
 
-  t->increment = t->snap_spatial * aspect;
-  t->increment_precision = t->snap_spatial_precision;
+  initSnapMoveIncrements(t);
 
   copy_v3_fl(t->num.val_inc, t->increment[0]);
   t->num.unit_sys = t->scene->unit.system;

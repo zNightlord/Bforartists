@@ -5,8 +5,8 @@ from typing import Callable
 
 import bpy
 
-from bfa_3Dsequencer.preferences import get_addon_prefs
-from bfa_3Dsequencer.sync.core import (
+from ..preferences import get_addon_prefs
+from ..sync.core import (
     get_sync_settings,
     remap_frame_value,
 )
@@ -631,22 +631,6 @@ def slip_shot_content(
     strip.frame_final_duration = frame_final_duration
     adapt_scene_range(strip)
 
-
-def get_valid_shot_scenes() -> list[bpy.types.Scene]:
-    """Return the list of scenes considered as usable by a scene strip."""
-    prefs = get_addon_prefs()
-    return [
-        scene
-        for scene in bpy.data.scenes
-        if (
-            # Discard template scenes.
-            not scene.name.startswith(prefs.shot_template_prefix)
-            # Discard master sync scene.
-            and scene != get_sync_settings().master_scene
-            # Discard empty scenes.
-            and len(scene.collection.all_objects)
-        )
-    ]
 
 
 def get_scene_cameras(scene: bpy.types.Scene) -> list[bpy.types.Object]:

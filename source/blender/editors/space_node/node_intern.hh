@@ -284,7 +284,15 @@ std::array<float2, 4> node_link_bezier_points_dragged(const SpaceNode &snode,
 void node_link_bezier_points_evaluated(const bNodeLink &link,
                                        std::array<float2, NODE_LINK_RESOL + 1> &coords);
 
-std::optional<float2> link_path_intersection(const bNodeLink &link, Span<float2> path);
+struct bNodeLinkPaths {
+  Map<const bNodeLink *, Vector<float2>> paths;
+};
+
+bNodeLinkPaths get_node_link_paths(const SpaceNode &snode);
+
+std::optional<float2> link_path_intersection(const bNodeLinkPaths &link_paths,
+                                             const bNodeLink &link,
+                                             Span<float2> path);
 
 void draw_nodespace_back_pix(const bContext &C,
                              ARegion &region,
@@ -418,6 +426,7 @@ void NODE_GGT_backdrop_corner_pin(wmGizmoGroupType *gzgt);
 void NODE_GGT_backdrop_box_mask(wmGizmoGroupType *gzgt);
 void NODE_GGT_backdrop_ellipse_mask(wmGizmoGroupType *gzgt);
 void NODE_GGT_backdrop_split(wmGizmoGroupType *gzgt);
+void NODE_GGT_backdrop_gradient(wmGizmoGroupType *gzgt);
 
 /* `node_geometry_attribute_search.cc` */
 

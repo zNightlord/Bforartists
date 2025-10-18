@@ -33,6 +33,7 @@ struct rcti;
 struct rctf;
 struct NodesModifierData;
 struct uiLayout;
+struct bNodeLink;
 
 namespace blender::bke {
 class bNodeTreeZone;
@@ -81,6 +82,9 @@ void node_draw_nodesocket(const rctf *rect,
                           float outline_thickness,
                           int shape,
                           float aspect);
+float2 socket_link_connection_location(const bNode &node,
+                                       const bNodeSocket &socket,
+                                       const bNodeLink &link);
 
 void std_node_socket_colors_get(int socket_type, float *r_color);
 

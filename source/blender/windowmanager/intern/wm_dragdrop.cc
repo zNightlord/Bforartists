@@ -754,6 +754,7 @@ ID *WM_drag_asset_id_import(const bContext *C, wmDragAsset *asset_drag, const in
                                     name,
                                     flag | (use_relative_path ? FILE_RELPATH : 0));
     case ASSET_IMPORT_PACK:
+      printf("Packed?\n");
       return WM_file_link_datablock(bmain,
                                     scene,
                                     view_layer,
@@ -788,6 +789,7 @@ ID *WM_drag_asset_id_import(const bContext *C, wmDragAsset *asset_drag, const in
     case ASSET_IMPORT_LINK_OVERRIDE:
       // Since node group is handled override differently, required to be import as linked
       if (idtype == ID_NT) {
+        printf("Nodetree?\n");
         return WM_file_link_datablock(bmain,
                                     scene,
                                     view_layer,

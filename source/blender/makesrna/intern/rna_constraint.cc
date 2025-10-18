@@ -170,7 +170,7 @@ const EnumPropertyItem rna_enum_constraint_type_items[] = {
      ICON_CON_SHRINKWRAP,
      "Shrinkwrap",
      "Restrict movements to surface of target mesh"},
-    {0, nullptr, 0, nullptr, nullptr},
+     {0, nullptr, 0, nullptr, nullptr},
 };
 
 static const EnumPropertyItem target_space_pchan_items[] = {

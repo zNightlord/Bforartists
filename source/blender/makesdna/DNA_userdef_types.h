@@ -840,7 +840,8 @@ typedef enum eUserpref_UI_Flag2 {
   USER_ALWAYS_SHOW_NUMBER_ARROWS = (1 << 0), /* cleared */
   USER_REGION_OVERLAP = (1 << 1),
   USER_NODE_AUTOPOSITION_VIEWER = (1 << 2), /*BFA - Toggle Viewer Auto-Positioning*/
-  USER_UIFLAG2_UNUSED_3 = (1 << 3), /* dirty */
+  USER_ASSETSHELF_TOP = (1 << 3), /* dirty */
+  USER_REGION_OVERLAP_BAR = (1 << 4), /* dirty */
 } eUserpref_UI_Flag2;
 
 /** #UserDef.gpu_flag */

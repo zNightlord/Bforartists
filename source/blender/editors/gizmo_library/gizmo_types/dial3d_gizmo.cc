@@ -518,14 +518,23 @@ static wmOperatorStatus gizmo_dial_modal(bContext *C,
 
   dial_ghostarc_get_angles(
       gz, event, CTX_wm_region(C), gz->matrix_basis, co_outer, &angle_ofs, &angle_delta);
-
+  RegionView3D *view3d = CTX_wm_region_view3d(C);
+  ToolSettings *ts = CTX_data_tool_settings(C);
   if (tweak_flag & WM_GIZMO_TWEAK_SNAP) {
-    angle_increment = RNA_float_get(gz->ptr, "incremental_angle");
+    if (view3d) {
+      angle_increment = ts->snap_angle_increment_3d;
+    } else {
+      angle_increment = ts->snap_angle_increment_2d;
+    }
     angle_delta = roundf(double(angle_delta) / angle_increment) * angle_increment;
   }
   if (tweak_flag & WM_GIZMO_TWEAK_PRECISE) {
-    angle_increment *= 0.2f;
-    angle_delta *= 0.2f;
+    if (view3d) {
+      angle_increment = CTX_data_tool_settings(C)->snap_angle_increment_3d_precision;
+    } else {
+      angle_increment = CTX_data_tool_settings(C)->snap_angle_increment_2d_precision;
+    }
+    angle_delta = roundf(double(angle_delta) / angle_increment) * angle_increment;
   }
   if (angle_delta != 0.0f) {
     inter->has_drag = true;

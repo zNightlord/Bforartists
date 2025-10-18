@@ -3,17 +3,17 @@
 
 import bpy
 
-from bfa_3Dsequencer.scene.core import (
+from ..scene.core import (
     get_scene_cameras,
     get_valid_shot_scenes,
 )
 
-from bfa_3Dsequencer.sync.core import (
+from ..sync.core import (
     get_sync_master_strip,
     get_sync_settings,
 )
 
-from bfa_3Dsequencer.utils import register_classes, unregister_classes
+from ..utils import register_classes, unregister_classes
 
 
 class DOPESHEET_PT_Sequence(bpy.types.Panel):
@@ -115,7 +115,7 @@ class SEQUENCE_UL_shot(bpy.types.UIList):
 
 class VIEW3D_PT_sequence(bpy.types.Panel):
     bl_label = "Sequencer Sync"
-    bl_category = "View"
+    bl_category = "Sequencer"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
 

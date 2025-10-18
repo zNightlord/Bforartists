@@ -3,8 +3,8 @@
 
 import bpy
 
-from bfa_3Dsequencer.shared_collections import core
-from bfa_3Dsequencer.utils import register_classes, unregister_classes
+from ..shared_collections import core
+from ..utils import register_classes, unregister_classes
 
 
 class COLLECTION_OT_shared_folder_from_collection(bpy.types.Operator):

@@ -267,6 +267,7 @@ class NODE_MT_gn_geometry_operations_base(node_add_menu.NodeMenu):
 
     def draw(self, _context):
         layout = self.layout
+        self.node_operator(layout, "GeometryNodeArmatureDeform")
         self.node_operator(layout, "GeometryNodeBake")
         self.node_operator(layout, "GeometryNodeBoundBox")
         self.node_operator(layout, "GeometryNodeConvexHull")
@@ -371,6 +372,7 @@ class NODE_MT_gn_input_scene_base(node_add_menu.NodeMenu):
                 "Orthographic Scale",
             ],
         )
+        self.node_operator(layout, "GeometryNodeBoneInfo")
         self.node_operator(layout, "GeometryNodeCollectionInfo")
         self.node_operator(layout, "GeometryNodeImageInfo")
         self.node_operator(layout, "GeometryNodeIsViewport")
@@ -387,7 +389,7 @@ class NODE_MT_gn_input_scene_base(node_add_menu.NodeMenu):
                 context, layout, "GeometryNodeViewportTransform",
                 ["Projection", "View", "Is Orthographic"],
             )
-
+        self.node_operator(layout, "GeometryNodeInputArmature")
         self.draw_assets_for_catalog(layout, self.menu_path)
 
 

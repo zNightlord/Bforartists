@@ -736,6 +736,7 @@ class IMAGE_MT_uvs(Menu):
 
         layout.operator_context = "EXEC_REGION_WIN"
         layout.operator("uv.average_islands_scale", icon="AVERAGEISLANDSCALE")
+        layout.operator("uv.arrange_islands")
         layout.operator("uv.minimize_stretch", icon="MINIMIZESTRETCH")
 
         layout.operator_context = 'INVOKE_REGION_WIN'

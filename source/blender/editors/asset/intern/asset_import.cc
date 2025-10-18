@@ -30,9 +30,14 @@ ID *asset_local_id_ensure_imported(Main &bmain,
   if (blend_path.empty()) {
     return nullptr;
   }
-
+  const ID_Type idtype = asset.get_id_type(); // bfa 
   const eAssetImportMethod method = [&]() {
     const bool no_packing = U.experimental.no_data_block_packing;
+    // if (idtype == ID_MA) {
+    //   // bfa material id should not use pack for now
+    //   return ASSET_IMPORT_APPEND_REUSE;
+    // }
+
     if (import_method) {
       return (no_packing && *import_method == ASSET_IMPORT_PACK) ? ASSET_IMPORT_APPEND_REUSE :
                                                                    *import_method;
@@ -89,7 +94,6 @@ ID *asset_local_id_ensure_imported(Main &bmain,
                                           (asset.get_use_relative_path() ? FILE_RELPATH : 0));
     // bfa asset override
     case ASSET_IMPORT_LINK_OVERRIDE:
-      const ID_Type idtype = asset.get_id_type();
       if (idtype == ID_NT) {
         return WM_file_link_datablock(&bmain,
                                       nullptr,

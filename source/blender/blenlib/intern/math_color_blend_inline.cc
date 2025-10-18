@@ -14,6 +14,7 @@
 
 #include "BLI_math_color.h"
 #include "BLI_math_vector.h"
+#include "../../../../extern/mixbox/mixbox.h"
 
 #ifndef __MATH_COLOR_BLEND_INLINE_C__
 #  define __MATH_COLOR_BLEND_INLINE_C__
@@ -95,6 +96,38 @@ MINLINE void blend_color_sub_byte(uchar dst[4], const uchar src1[4], const uchar
     dst[1] = (uchar)max_ii(divide_round_i(tmp[1], 255), 0);
     dst[2] = (uchar)max_ii(divide_round_i(tmp[2], 255), 0);
     dst[3] = src1[3];
+  }
+  else {
+    /* no op */
+    copy_v4_v4_uchar(dst, src1);
+  }
+}
+
+MINLINE void blend_color_sub_mix_byte(uchar dst[4], const uchar src1[4], const uchar src2[4])
+{
+  if (src2[3] != 0) {
+    /* straight over operation */
+    const int t = src2[3];
+    const int mt = 255 - t;
+    int tmp[4];
+    uchar r, g, b;
+
+    tmp[3] = (mt * src1[3]) + (t * 255);
+    uchar alpha = (uchar)divide_round_i(tmp[3], 255);
+    mixbox_lerp(src1[0] * 255, src1[1] * 255, src1[2] * 255,  // first color
+              t * 255 * src2[0], t * 255 * src2[1], t * 255 * src2[2],  // second color
+              (float)alpha,           // mixing ratio
+              &r, &g, &b); // result
+        
+    tmp[0] = r;
+    tmp[1] = g;
+    tmp[2] = b;
+    
+
+    dst[0] = (uchar)divide_round_i(tmp[0], tmp[3]);
+    dst[1] = (uchar)divide_round_i(tmp[1], tmp[3]);
+    dst[2] = (uchar)divide_round_i(tmp[2], tmp[3]);
+    dst[3] = alpha;
   }
   else {
     /* no op */
@@ -636,6 +669,33 @@ MINLINE void blend_color_sub_float(float dst[4], const float src1[4], const floa
     dst[1] = max_ff(src1[1] - src2[1] * src1[3], 0.0f);
     dst[2] = max_ff(src1[2] - src2[2] * src1[3], 0.0f);
     dst[3] = src1[3];
+  }
+  else {
+    /* no op */
+    copy_v4_v4(dst, src1);
+  }
+}
+
+MINLINE void blend_color_sub_mix_float(float dst[4], const float src1[4], const float src2[4])
+{
+  if (src2[3] != 0.0f) {
+    /* Pre-multiply over operation. */
+    const float t = src2[3];
+    const float mt = 1.0f - t;
+    unsigned char r, g, b;
+
+    mixbox_lerp(
+          mt * src1[0], 
+          mt * src1[1], 
+          mt * src1[2],  // first color
+          src2[0], src2[1], src2[2],  // second color
+          t,           // mixing ratio
+          &r, &g, &b); // result
+
+    dst[0] = r + src2[0];
+    dst[1] = g + src2[1];
+    dst[2] = b + src2[2];
+    dst[3] = mt * src1[3] + t;
   }
   else {
     /* no op */

@@ -392,10 +392,14 @@ static void view3d_ob_drop_copy_external_asset(bContext *C, wmDrag *drag, wmDrop
   BKE_view_layer_base_deselect_all(scene, view_layer);
   /* start bfa asset shelf props*/
   bool use_override = false;
+  printf("shelf browser? %d \n", asset_drag->import_settings.is_from_browser);
   if (!asset_drag->import_settings.is_from_browser) {
+    printf("shelf\n");
     AssetShelf *active_shelf = blender::ed::asset::shelf::active_shelf_from_area(CTX_wm_area(C));
     if (active_shelf) {
       eAssetImportMethod import_method_prop = eAssetImportMethod(active_shelf->settings.import_method);
+      printf("import method %d \n", active_shelf->settings.import_method);
+      printf("import method prop %d \n",import_method_prop);
       asset_drag->import_settings.method = import_method_prop;
       use_override = import_method_prop == ASSET_IMPORT_LINK_OVERRIDE;
     }
@@ -502,6 +506,7 @@ static void view3d_collection_drop_copy_external_asset(bContext *C, wmDrag *drag
   bool use_instance, use_override, drop_instances_to_origin;
 
   // use is_from_browser to differentiate between asset browser and asset shelf drag.
+  printf("shelf browser? %d \n", asset_drag->import_settings.is_from_browser);
   if (!asset_drag->import_settings.is_from_browser) {
     AssetShelf *active_shelf = blender::ed::asset::shelf::active_shelf_from_area(CTX_wm_area(C));
     if (active_shelf) {
@@ -585,8 +590,38 @@ static void view3d_geometry_nodes_drop_copy(bContext *C, wmDrag *drag, wmDropBox
 
 static void view3d_id_drop_copy_with_type(bContext *C, wmDrag *drag, wmDropBox *drop)
 {
-  ID *id = WM_drag_get_local_ID_or_import_from_asset(C, drag, 0);
-
+  ID *id;
+  if (ELEM(drag->type, WM_DRAG_ASSET)) {
+    wmDragAsset *asset_drag = WM_drag_get_asset_data(drag, 0);
+    if (!asset_drag) {
+      return;
+    }
+    if (!asset_drag->import_settings.is_from_browser) {
+      printf("shelf 2 \n");
+      AssetShelf *active_shelf = blender::ed::asset::shelf::active_shelf_from_area(CTX_wm_area(C));
+      if (active_shelf) {
+        eAssetImportMethod import_method_prop = eAssetImportMethod(active_shelf->settings.import_method);
+        printf("import method 2 %d \n", active_shelf->settings.import_method);
+        printf("import method prop 2 %d \n",import_method_prop);
+        if (asset_drag->asset->get_id_type() == ID_MA && 
+            ELEM(import_method_prop,
+                  ASSET_IMPORT_LINK,
+                  ASSET_IMPORT_APPEND, 
+                  ASSET_IMPORT_APPEND_REUSE, 
+                  ASSET_IMPORT_PACK)
+           )
+        {
+          printf("is material drag\n");
+          asset_drag->import_settings.method = import_method_prop;
+        } else {
+          asset_drag->import_settings.method = ASSET_IMPORT_APPEND_REUSE;
+        }
+      }
+    }
+    id = WM_drag_asset_id_import(C, asset_drag, 0);
+  } else {
+    id = WM_drag_get_local_ID_or_import_from_asset(C, drag, 0); // original drag
+  }
   RNA_enum_set(drop->ptr, "type", GS(id->name));
   WM_operator_properties_id_lookup_set_from_id(drop->ptr, id);
 }

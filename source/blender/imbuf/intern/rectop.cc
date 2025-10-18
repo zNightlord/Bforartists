@@ -40,6 +40,9 @@ void IMB_blend_color_byte(uchar dst[4],
     case IMB_BLEND_SUB:
       blend_color_sub_byte(dst, src1, src2);
       break;
+    case IMB_BLEND_MIX_SUBTRACT:
+      blend_color_sub_mix_byte(dst, src1, src2);
+      break;
     case IMB_BLEND_MUL:
       blend_color_mul_byte(dst, src1, src2);
       break;
@@ -127,6 +130,9 @@ void IMB_blend_color_float(float dst[4],
       break;
     case IMB_BLEND_SUB:
       blend_color_sub_float(dst, src1, src2);
+      break;
+    case IMB_BLEND_MIX_SUBTRACT:
+      blend_color_sub_mix_float(dst, src1, src2);
       break;
     case IMB_BLEND_MUL:
       blend_color_mul_float(dst, src1, src2);
@@ -643,6 +649,10 @@ void IMB_rectblend(ImBuf *dbuf,
       case IMB_BLEND_SUB:
         func = blend_color_sub_byte;
         func_float = blend_color_sub_float;
+        break;
+      case IMB_BLEND_MIX_SUBTRACT:
+        func = blend_color_sub_mix_byte;
+        func_float = blend_color_sub_mix_float;
         break;
       case IMB_BLEND_MUL:
         func = blend_color_mul_byte;

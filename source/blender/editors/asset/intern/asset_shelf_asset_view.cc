@@ -413,7 +413,10 @@ void *AssetDragController::create_drag_data() const
   }
 
   eAssetImportMethod import_method = asset_.get_import_method().value_or(ASSET_IMPORT_PACK);
-  if (U.experimental.no_data_block_packing && import_method == ASSET_IMPORT_PACK) {
+  if (U.experimental.no_data_block_packing && import_method == ASSET_IMPORT_PACK 
+  // || asset.get_id_type() == ID_MA // bfa material id should not use pack for now
+  ) 
+  {
     import_method = ASSET_IMPORT_APPEND_REUSE;
   }
 

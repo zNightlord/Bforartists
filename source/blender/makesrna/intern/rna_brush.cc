@@ -2151,6 +2151,7 @@ static void rna_def_brush(BlenderRNA *brna)
 
   static const EnumPropertyItem prop_blend_items[] = {
       {IMB_BLEND_MIX, "MIX", 0, "Mix", "Use Mix blending mode while painting"},
+      {IMB_BLEND_MIX_SUBTRACT, "MIX_SUBTRACT", 0, "Mix Subtract", "Use Mix subtracted blending mode while painting"},
       RNA_ENUM_ITEM_SEPR,
       {IMB_BLEND_DARKEN, "DARKEN", 0, "Darken", "Use Darken blending mode while painting"},
       {IMB_BLEND_MUL, "MUL", 0, "Multiply", "Use Multiply blending mode while painting"},
