@@ -208,7 +208,13 @@ class MeshInfo {
 class UVMapInfo {
  public:
   std::string uv_attr_name;
-  UVMapInfo(const std::string &uv_attr_name) : uv_attr_name(uv_attr_name) {}
+  UVMapInfo(const std::string &uv_attr_name, const Mesh &mesh);
+
+  /** Return the UV Map value at the \a corner. */
+  float2 value(const int corner) const
+  {
+    return values_[corner];
+  }
 
   /** Which connected component is a given Mesh face in?
    * Only valid after find_components() has been called. */
@@ -222,6 +228,7 @@ class UVMapInfo {
 
  private:
   Array<int> face_to_component_id_;
+  Array<float2> values_;
 };
 
 /** Bevel parameters and state.
@@ -588,12 +595,25 @@ class BevelState {
     return bevvert_faces_[bv][prev_edge_pos(bv, edge_pos)];
   }
 
+  /** Return the left and right anchors for the edge at position \a edge_pos of bevvert \a bv.
+   * These will be the same if the edge isn't beveled. If it is beveled, the first  of the pair is
+   * the anchor position where the left side of the edge (looking towards bv) is attached and the
+   * second of the pair is where the right end is atttached. */
+  int2 bevedge_anchors(const int bv, const int edge_pos) const;
+
   /** Return the end of the bevedge \a be edge that the bevvert \a bv is
    * on: 0 if it is at the start of the edge, 1 if it is at the end.
    */
   int bevedge_vert_end(const int bv, const int be) const
   {
     return bevvert_mesh_verts_[bv] == mesh_info.mesh.edges()[bevedge_mesh_edges_[be]][0] ? 0 : 1;
+  }
+
+  /** Return the two bevverts associated with bevedge \a be. Near end first, then far end. */
+  int2 bevedge_bevverts(const int be) const
+  {
+    const int2 vs = mesh_info.mesh.edges()[bevedge_mesh_edges_[be]];
+    return int2(vert_bevverts_[vs[0]], vert_bevverts_[vs[1]]);
   }
 
   /** Return the bevedge position of the last bevedge attached to newvert, or -1 if none. */
@@ -606,6 +626,14 @@ class BevelState {
   {
     return uv_map_infos_[uv_map_index];
   }
+
+  /** Return true if all uv's in the given uv_map are contiguous at bevvert \a bv.
+   * If \a uv_map_index is -1, return true if all uv_maps are contiguous there.  */
+  bool bevvert_is_uv_contiguous(const int bv, const int uv_map_index) const;
+
+  /** Return true if all uv's in the given uv_map are contiguous at both ends of  \a be.
+   * If \a uv_map_index is -1, return true if all uv_maps are contiguous at both ends.  */
+  bool bevedge_is_uv_contiguous(const int be, const int uv_map_index) const;
 
   /** Return the material index for face \a f. */
   int material(const int f) const
@@ -1348,11 +1376,11 @@ static bool try_offset_meet_edge(const int bv,
 {
   BLI_assert(e1_spec_r == 0.0f || e2_spec_l == 0.0f);
   float ang = angle_between_edges(bv, e1_pos, e2_pos, bs);
-  if (math::abs(ang) < good_angle || math::numbers::pi - ang < good_angle) {
-    return false;
-  }
   if (r_angle) {
     *r_angle = ang;
+  }
+  if (math::abs(ang) < good_angle || math::numbers::pi - ang < good_angle) {
+    return false;
   }
   if (r_co == nullptr) {
     return true;
@@ -2985,27 +3013,48 @@ static void interp_adj(AdjVerts &adjverts,
 
 namespace uv {
 
-static Array<int> find_uv_components(const MeshInfo &mesh_info, const std::string &uv_attr_name)
+void calculate_vertex_mesh_face_uvs(const int bevvert,
+                                    const int face_pattern_index,
+                                    const int uv_map_index,
+                                    const BevelState &bs)
 {
-  const Mesh &mesh = mesh_info.mesh;
-  Array<int> components(mesh.faces_num, -1);
-  if (mesh.faces_num == 0) {
-    return components;
+  const UVMapInfo &uv_map_info = bs.uv_map_info(uv_map_index);
+  const MeshPattern &pat = bs.bevvert_meshpatterns()[bevvert];
+  bool odd_segs = (pat.num_segs % 2) == 1;
+  if (pat.kind == MeshKind::Adj) {
+    int4 nums = pat.num_elements();
+    if (odd_segs && face_pattern_index == 0) {
+      /* Handle center polygon. */
+    }
+    else {
+      /* Handle non-center polygon, which will be a quad. */
+    }
   }
+}
 
+}  // end namespace uv
+
+UVMapInfo::UVMapInfo(const std::string &uv_attr_name, const Mesh &mesh)
+    : uv_attr_name(uv_attr_name)
+{
   const bke::AttributeAccessor attrs = mesh.attributes();
-
   const bke::AttributeReader<float2> uv_reader = attrs.lookup<float2>(uv_attr_name,
                                                                       bke::AttrDomain::Corner);
-  if (!uv_reader) {
-    /* Attribute not found. Just have all components be -1. */
-    return components;
+  if (uv_reader) {
+    values_ = Array<float2>(mesh.corners_num);
+    uv_reader.varray.materialize(values_.as_mutable_span());
+  }
+}
+
+void UVMapInfo::find_components(const MeshInfo &mesh_info)
+{
+  const Mesh &mesh = mesh_info.mesh;
+  face_to_component_id_ = Array<int>(mesh.faces_num, -1);
+  if (mesh.faces_num == 0) {
+    return;
   }
 
-  VArraySpan<float2> uv{uv_reader.varray};
-
   GroupedSpan<int> vert_to_corners = mesh_info.vert_corners();
-
   AtomicDisjointSet dsu(mesh.faces_num);
 
   threading::parallel_for(IndexRange(mesh.verts_num), 5000, [&](IndexRange range) {
@@ -3023,7 +3072,7 @@ static Array<int> find_uv_components(const MeshInfo &mesh_info, const std::strin
       };
       Array<CornerUV> corner_uvs(corners.size());
       for (const int i : corners.index_range()) {
-        corner_uvs[i] = {uv[corners[i]], corners[i]};
+        corner_uvs[i] = {values_[corners[i]], corners[i]};
       }
 
       std::sort(corner_uvs.begin(), corner_uvs.end(), [](const CornerUV &a, const CornerUV &b) {
@@ -3053,35 +3102,7 @@ static Array<int> find_uv_components(const MeshInfo &mesh_info, const std::strin
   });
 
   /* Normalize component IDs. */
-  dsu.calc_reduced_ids(components.as_mutable_span());
-
-  return components;
-}
-
-void calculate_vertex_mesh_face_uvs(const int bevvert,
-                                    const int face_pattern_index,
-                                    const int uv_map_index,
-                                    const BevelState &bs)
-{
-  const UVMapInfo &uv_map_info = bs.uv_map_info(uv_map_index);
-  const MeshPattern &pat = bs.bevvert_meshpatterns()[bevvert];
-  bool odd_segs = (pat.num_segs % 2) == 1;
-  if (pat.kind == MeshKind::Adj) {
-    int4 nums = pat.num_elements();
-    if (odd_segs && face_pattern_index == 0) {
-      /* Handle center polygon. */
-    }
-    else {
-      /* Handle non-center polygon, which will be a quad. */
-    }
-  }
-}
-
-}  // end namespace uv
-
-void UVMapInfo::find_components(const MeshInfo &mesh_info)
-{
-  face_to_component_id_ = uv::find_uv_components(mesh_info, this->uv_attr_name);
+  dsu.calc_reduced_ids(face_to_component_id_.as_mutable_span());
 }
 
 /** Return a 4-tuple with the number of vertices, edges, faces, corners.  */
@@ -3158,13 +3179,14 @@ int MeshPattern::vert_to_anchor(const int v) const
   int ans;
   BLI_assert(0 <= v && v < this->num_elements()[0]);
   switch (this->kind) {
-    case MeshKind::Adj:
+    case MeshKind::Adj: {
       const int ring = adj::v_num_rings(this->num_segs) - 1;
       const int ringstart = adj::v_ringstart(ring, this->num_anchors, this->num_segs);
       const int k = v - ringstart;
       const int div = adj::v_anchor_div(ring, this->num_anchors, this->num_segs);
       ans = (k < 0 || (k % div) != 0) ? -1 : k / div;
       break;
+    }
     case MeshKind::TerminalPoly:
     case MeshKind::TriFan:
       ans = v == 0 ? 0 : (v > this->num_segs ? v - this->num_segs : -1);
@@ -3174,7 +3196,7 @@ int MeshPattern::vert_to_anchor(const int v) const
       BLI_assert(false);
     default:
       ans = -1;
-      break
+      break;
   }
   return ans;
 }
@@ -4469,6 +4491,57 @@ int BevelState::bevedge_pos(const int be, const int bv) const
   return -1;
 }
 
+/** Return the left and right anchors for the edge at position \a edge_pos of bevvert \a bv.
+ * These will be the same if the edge isn't beveled. If it is beveled, the first  of the pair is
+ * the anchor position where the left side of the edge (looking towards bv) is attached and the
+ * second of the pair is where the right end is atttached. */
+int2 BevelState::bevedge_anchors(const int bv, const int edge_pos) const
+{
+  const int be = bevvert_bevedges_[bv][edge_pos];
+  const int be_end = bevedge_vert_end(bv, be);
+  const int attach_vert = bevedge_attach_verts_[be][be_end];
+  const MeshPattern &pat = bevvert_meshpatterns_[bv];
+  const int attach_anchor = pat.vert_to_anchor(attach_vert);
+  if (bevedge_is_beveled_[be]) {
+    const int next_attach_anchor = (attach_anchor + 1) % pat.num_anchors;
+    return int2(attach_anchor, next_attach_anchor);
+  }
+  return int2(attach_anchor, attach_anchor);
+}
+
+/** Return true if all uv's in the given uv_map are contiguous at bevvert \a bv.
+ * If \a uv_map_index is -1, return true if all uv_maps are contiguous there.  */
+bool BevelState::bevvert_is_uv_contiguous(const int bv, const int uv_map_index) const
+{
+  const int mesh_v = bevvert_mesh_verts_[bv];
+  for (const int i : IndexRange(uvmaps_num)) {
+    if (uv_map_index != -1 && i != uv_map_index) {
+      continue;
+    }
+    const UVMapInfo &info = uv_map_info(uv_map_index);
+    Span<int> corners = mesh_info.vert_corners()[mesh_v];
+    if (corners.size() == 0) {
+      continue;
+    }
+    float2 first_val = info.value(corners[0]);
+    for (int i = 1; i < corners.size(); i++) {
+      if (info.value(corners[i]) != first_val) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+/** Return true if all uv's in the given uv_map are contiguous at both ends of  \a be.
+ * If \a uv_map_index is -1, return true if all uv_maps are contiguous at both ends.  */
+bool BevelState::bevedge_is_uv_contiguous(const int be, const int uv_map_index) const
+{
+  const int2 bvs = bevedge_bevverts(be);
+  return bevvert_is_uv_contiguous(bvs[0], uv_map_index) &&
+         bevvert_is_uv_contiguous(bvs[1], uv_map_index);
+}
+
 /** Initialize the part of the state related to the profile curves that will be used in the
  * non-custom shapes of multisegment bevels.
  */
@@ -4675,7 +4748,7 @@ void BevelState::determine_needed_attribute_data()
       case bke::AttrDomain::Corner:
         if (iter.data_type == bke::AttrType::Float2) {
           /* Assume this is a UV map attribute. */
-          this->uv_map_infos_.append(UVMapInfo(iter.name));
+          this->uv_map_infos_.append(UVMapInfo(iter.name, mesh));
           this->uvmaps_num++;
         }
         else {
