@@ -576,21 +576,8 @@ static void view3d_collection_drop_copy_external_asset(bContext *C, wmDrag *drag
 
 static void view3d_id_drop_copy(bContext *C, wmDrag *drag, wmDropBox *drop)
 {
-  ID *id = WM_drag_get_local_ID_or_import_from_asset(C, drag, 0);
-
-  WM_operator_properties_id_lookup_set_from_id(drop->ptr, id);
-  RNA_boolean_set(drop->ptr, "show_datablock_in_modifier", (drag->type != WM_DRAG_ASSET));
-}
-
-static void view3d_geometry_nodes_drop_copy(bContext *C, wmDrag *drag, wmDropBox *drop)
-{
-  view3d_id_drop_copy(C, drag, drop);
-  RNA_boolean_set(drop->ptr, "show_datablock_in_modifier", (drag->type != WM_DRAG_ASSET));
-}
-
-static void view3d_id_drop_copy_with_type(bContext *C, wmDrag *drag, wmDropBox *drop)
-{
   ID *id;
+  bool show_datablock = true;
   if (ELEM(drag->type, WM_DRAG_ASSET)) {
     wmDragAsset *asset_drag = WM_drag_get_asset_data(drag, 0);
     if (!asset_drag) {
@@ -603,25 +590,44 @@ static void view3d_id_drop_copy_with_type(bContext *C, wmDrag *drag, wmDropBox *
         eAssetImportMethod import_method_prop = eAssetImportMethod(active_shelf->settings.import_method);
         printf("import method 2 %d \n", active_shelf->settings.import_method);
         printf("import method prop 2 %d \n",import_method_prop);
-        if (asset_drag->asset->get_id_type() == ID_MA && 
-            ELEM(import_method_prop,
-                  ASSET_IMPORT_LINK,
-                  ASSET_IMPORT_APPEND, 
-                  ASSET_IMPORT_APPEND_REUSE, 
-                  ASSET_IMPORT_PACK)
-           )
-        {
+        if (asset_drag->asset->get_id_type() == ID_MA){
           printf("is material drag\n");
-          asset_drag->import_settings.method = import_method_prop;
-        } else {
-          asset_drag->import_settings.method = ASSET_IMPORT_APPEND_REUSE;
+          show_datablock = false;
+          if (ELEM(import_method_prop,
+                   ASSET_IMPORT_LINK,
+                   ASSET_IMPORT_APPEND, 
+                   ASSET_IMPORT_APPEND_REUSE, 
+                   ASSET_IMPORT_PACK)) 
+          {
+            asset_drag->import_settings.method = import_method_prop;
+          } else {
+            asset_drag->import_settings.method = ASSET_IMPORT_APPEND_REUSE;
+          }
         }
       }
     }
     id = WM_drag_asset_id_import(C, asset_drag, 0);
   } else {
-    id = WM_drag_get_local_ID_or_import_from_asset(C, drag, 0); // original drag
+      id = WM_drag_get_local_ID_or_import_from_asset(C, drag, 0); // original drag
   }
+  
+
+  WM_operator_properties_id_lookup_set_from_id(drop->ptr, id);
+  if (show_datablock) {
+    RNA_boolean_set(drop->ptr, "show_datablock_in_modifier", (drag->type != WM_DRAG_ASSET));
+  }
+}
+
+static void view3d_geometry_nodes_drop_copy(bContext *C, wmDrag *drag, wmDropBox *drop)
+{
+  view3d_id_drop_copy(C, drag, drop);
+  RNA_boolean_set(drop->ptr, "show_datablock_in_modifier", (drag->type != WM_DRAG_ASSET));
+}
+
+static void view3d_id_drop_copy_with_type(bContext *C, wmDrag *drag, wmDropBox *drop)
+{
+  ID *id = WM_drag_get_local_ID_or_import_from_asset(C, drag, 0);
+
   RNA_enum_set(drop->ptr, "type", GS(id->name));
   WM_operator_properties_id_lookup_set_from_id(drop->ptr, id);
 }
