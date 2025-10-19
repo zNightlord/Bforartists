@@ -137,9 +137,9 @@ static void register_node_type_cmp_strip_info()
 
   static blender::bke::bNodeType ntype;
 
-  cmp_node_type_base(&ntype, "CompositorNodeStripInfo");
-  ntype.ui_name = "Strip Info";
-  ntype.ui_description = "Retrieve information about the strip";
+  cmp_node_type_base(&ntype, "CompositorNodeSequencerStripInfo");
+  ntype.ui_name = "Sequencer Strip Info";
+  ntype.ui_description = "Returns information about the active strip of the modifier";
   ntype.nclass = NODE_CLASS_INPUT;
   ntype.declare = file_ns::cmp_node_strip_info_declare;
   ntype.get_compositor_operation = file_ns::get_compositor_operation;
