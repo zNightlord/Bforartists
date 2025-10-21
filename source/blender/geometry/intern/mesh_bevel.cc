@@ -76,6 +76,16 @@ enum class MeshKind {
   Cutoff,       /* A triangulated face at the end of each profile. */
 };
 
+/** Different kinds of vertices in an Adj Mesh. Relevant for attribute assignment. */
+enum class AdjVertKind {
+  Interior,           /* Unambiguously inside the vertices for a given anchor. */
+  CenterLineNear,     /* On center line after anchor (near side, if odd segs). */
+  CenterLineFar,      /* On center line after anchor (far side, if odd segs). */
+  PrevCenterLineNear, /* Like CenterLineNear, but before anchor. */
+  PrevCenterLineFar,  /* Like CenterLineFar, but before anchor. */
+ Center,              /* The center vertex (even segs) or in center poly (odd segs). */
+};
+
 class MeshPattern {
  public:
   MeshKind kind;
@@ -147,6 +157,10 @@ class MeshPattern {
    * This will only be non-empty for Adj with odd segments, and excludes the center polygon.
    */
   Array<int, 20> faces_for_centerline(const int first_anchor) const;
+
+  /** Return the AdjVertKind for pattern vert \a v relative to anchor \a anchor.
+   * Return Interior if not an Adj kind. */
+  AdjVertKind adj_vert_kind(const int v, const int anchor) const;
 };
 
 /** Helper for keeping track of angle kind. */
@@ -3439,6 +3453,40 @@ Array<int, 20> MeshPattern::faces_for_centerline(const int first_anchor) const
     ans[r - 1] = v;
   }
   return ans;
+}
+
+AdjVertKind MeshPattern::adj_vert_kind(const int v, const int anchor) const
+{
+  if (kind != MeshKind::Adj) {
+    return AdjVertKind::Interior;
+  }
+  int3 rao = adj::v_ring_anchor_offset(v, num_anchors, num_segs);
+  const int ring = rao[0];
+  const int a = rao[1];
+  const int offset = rao[2];
+  const int floor_n2 = num_segs / 2;
+  if (num_segs % 2 == 1) {
+    if (v == 0) {
+      return AdjVertKind::Center;
+    }
+    if (v < floor_n2 || v > floor_n2) {
+      return AdjVertKind::Interior;
+    }
+    return a == anchor ? AdjVertKind::CenterLineNear : AdjVertKind::PrevCenterLineNear;
+  }
+  else {
+    if (ring == 0) {
+      return AdjVertKind::Center;
+    }
+    const int ceil_n2 = (num_segs + 1) / 2;
+    if (v < floor_n2 || v > ceil_n2) {
+      return AdjVertKind::Interior;
+    }
+    if (v == floor_n2) {
+      return a == anchor ? AdjVertKind::CenterLineNear : AdjVertKind::PrevCenterLineNear;
+    }
+    return a == anchor ? AdjVertKind::CenterLineFar : AdjVertKind::PrevCenterLineFar;
+  }
 }
 
 /** Return a 4-tuple with the number of vertices, edges, faces, corners needed for edge mesh. */
