@@ -86,6 +86,8 @@ enum class AdjVertKind {
  Center,              /* The center vertex (even segs) or in center poly (odd segs). */
 };
 
+/** An Array<int> with an inline capacity big enough to hold the number of vertices, etc. */
+using SmallIntArray = Array<int, 20>;
 class MeshPattern {
  public:
   MeshKind kind;
@@ -124,7 +126,7 @@ class MeshPattern {
   /** Return arrays of the verts and edges for pattern face \a face,
    * where \a first_v and \a first_e give the offsets to add to pattern space indices.
    */
-  std::pair<Array<int, 20>, Array<int, 20>> face_verts_and_edges(const int face,
+  std::pair<SmallIntArray, SmallIntArray> face_verts_and_edges(const int face,
                                                                  const int first_v,
                                                                  const int first_e) const;
 
@@ -145,22 +147,29 @@ class MeshPattern {
    * trace the boundary between those positions (inclusive), where \a first_v
    * and \a first_e give the offsets to add to pattern space indices.
    */
-  std::pair<Array<int, 20>, Array<int, 20>> boundary_vert_and_edges(const int firstpos,
+  std::pair<SmallIntArray, SmallIntArray> boundary_vert_and_edges(const int firstpos,
                                                                     const int lastpos,
                                                                     const int first_v,
                                                                     const int first_e) const;
 
   /** Return the face indices (if any) that are unabiguously closested to anchor. */
-  Array<int, 20> faces_for_anchor(const int anchor) const;
+  SmallIntArray faces_for_anchor(const int anchor) const;
 
   /** Return the face indices on the center line between first_anchor and the one after that.
    * This will only be non-empty for Adj with odd segments, and excludes the center polygon.
    */
-  Array<int, 20> faces_for_centerline(const int first_anchor) const;
+  SmallIntArray faces_for_centerline(const int first_anchor) const;
 
   /** Return the AdjVertKind for pattern vert \a v relative to anchor \a anchor.
    * Return Interior if not an Adj kind. */
   AdjVertKind adj_vert_kind(const int v, const int anchor) const;
+
+  /** Return the anchor that owns (is nearest to) \a v (in pattern space).
+   * For faces on the mid-strip (when odd segments), assign the next lower
+   * anchor as owner.
+   * For the center polygon (when odd segments), assign 0 as the owner.
+   */
+  int face_anchor_owner(const int f) const;
 };
 
 /** Helper for keeping track of angle kind. */
@@ -656,14 +665,6 @@ class BevelState {
   {
     return uv_map_infos_[uv_map_index];
   }
-
-  /** Return true if all uv's in the given uv_map are contiguous at bevvert \a bv.
-   * If \a uv_map_index is -1, return true if all uv_maps are contiguous there.  */
-  bool bevvert_is_uv_contiguous(const int bv, const int uv_map_index) const;
-
-  /** Return true if all uv's in the given uv_map are contiguous at both ends of  \a be.
-   * If \a uv_map_index is -1, return true if all uv_maps are contiguous at both ends.  */
-  bool bevedge_is_uv_contiguous(const int be, const int uv_map_index) const;
 
   /** Return the material index for face \a f. */
   int material(const int f) const
@@ -3041,23 +3042,325 @@ static void interp_adj(AdjVerts &adjverts,
 
 }  // namespace adj
 
+namespace facerep {
+
+static int choose_face_rep(Span<int> faces, const BevelState &bs)
+{
+  /* The tie breaking values are, in order:
+   *  + component id of face in each uv_map, in the order we found them
+   *  + material index
+   *  + z component of face center
+   *  + x component of face center
+   *  + y component of face center
+   * We want the face that has the lexicographically lowest value of these.
+   */
+  if (faces.size() == 1) {
+    return faces[0];
+  }
+  const int value_len = bs.uvmaps_num + 4;
+  const int numf = faces.size();
+  using ValueVec = Array<float, 6>;
+  Array<ValueVec, 20> values(numf, ValueVec(value_len));
+  const Mesh &mesh = bs.mesh_info.mesh;
+  for (const int i : IndexRange(numf)) {
+    const int f = faces[i];
+    if (f == -1) {
+      values[i][0] = 1e10f;
+      continue;
+    }
+    int value_index = 0;
+    for (int j : IndexRange(bs.uvmaps_num)) {
+      values[i][value_index++] = float(bs.uv_map_info(j).component_id(f));
+    }
+    values[i][value_index++] = bs.material(f);
+    float3 center = bke::mesh::face_center_calc(mesh.vert_positions(),
+                                                mesh.corner_verts().slice(mesh.faces()[f]));
+    values[i][value_index++] = center[2];
+    values[i][value_index++] = center[0];
+    values[i][value_index++] = center[1];
+    BLI_assert(value_index == value_len);
+  }
+  auto it = std::min_element(
+      values.begin(), values.end(), [](const ValueVec &a, const ValueVec &b) {
+        return std::lexicographical_compare(a.begin(), a.end(), b.begin(), b.end());
+      });
+  if (it != values.end()) {
+    return faces[std::distance(values.begin(), it)];
+  }
+  return faces[0];
+}
+
+/**
+ * Return a good representative face (for materials, etc.) for faces
+ * created around/near anchor \a anchor of bevvert \a bv.
+ * Sometimes care about a second choice, if there is one.
+ * If r_fother parameter is non-nullptr and there is another, different,
+ * possible frep, return the other one in that parameter.
+ *
+ * This code copies the old BMesh bevel boundvert_rep_face()
+ * but I don't think it is particularly "right".  TODO: look again.
+ */
+static int anchor_rep_face(const int bv, const int anchor, int *r_fother, const BevelState &bs)
+{
+  /* make an analog of the code in bmesh_bevel.c, boundvert_rep_face() */
+  int frep = -1;
+  /* Get positions of first and last edges attached to anchor. */
+  const int2 edge_positions = bs.anchor_bevedge_positions(bv, anchor);
+  const int pos_first = edge_positions[0];
+  const int pos_last = edge_positions[1];
+  const int be_last = bs.bevvert_bevedges()[bv][pos_last];
+  if (pos_first != -1) {
+    BLI_assert(pos_last != -1);
+    if (bs.bevedge_is_beveled(be_last)) {
+      frep = bs.face_prev(bv, pos_last);
+    }
+    else {
+      frep = bs.face_prev(bv, pos_first);
+      if (frep == -1) {
+        frep = bs.face_next(bv, pos_first);
+        if (frep == -1) {
+          frep = bs.face_prev(bv, pos_last);
+        }
+      }
+    }
+  }
+  else {
+    const int anchor_prev = bs.bevvert_meshpatterns()[bv].prev_anchor(anchor);
+    const int2 prev_edge_positions = bs.anchor_bevedge_positions(bv, anchor_prev);
+    frep = bs.face_next(bv, prev_edge_positions[1]);
+    if (frep == -1) {
+      const int anchor_next = bs.bevvert_meshpatterns()[bv].next_anchor(anchor);
+      const int2 next_edge_positions = bs.anchor_bevedge_positions(bv, anchor_next);
+      frep = bs.face_prev(bv, next_edge_positions[0]);
+    }
+  }
+  if (r_fother && frep != -1) {
+    int frep_other = -1;
+    if (pos_first != -1) {
+      if (bs.bevedge_is_beveled(be_last)) {
+        frep_other = bs.face_prev(bv, pos_first);
+      }
+      else {
+        frep_other = bs.face_next(bv, pos_last);
+        if (frep_other == -1 || frep_other == frep) {
+          frep_other = bs.face_next(bv, pos_first);
+        }
+        if (frep_other == -1 || frep_other == frep) {
+          frep_other = bs.face_prev(bv, pos_first);
+        }
+      }
+    }
+    else {
+      const int anchor_next = bs.bevvert_meshpatterns()[bv].next_anchor(anchor);
+      const int2 next_edge_positions = bs.anchor_bevedge_positions(bv, anchor_next);
+      if (next_edge_positions[0] != -1) {
+        frep_other = bs.face_prev(bv, next_edge_positions[0]);
+      }
+    }
+    *r_fother = frep_other == frep ? -1 : frep_other;
+  }
+  return frep;
+}
+
+/** Return the two edges incident on vertex \a v in face \a f in \a mesh. */
+static int2 get_incident_edges(int f, int v, const Mesh &mesh)
+{
+  int2 ans(-1, -1);
+  const int corner = bke::mesh::face_find_corner_from_vert(
+      mesh.faces()[f], mesh.corner_verts(), v);
+  ans[0] = mesh.corner_edges()[corner];
+  const int corner_prev = bke::mesh::face_corner_prev(mesh.faces()[f], corner);
+  ans[1] = mesh.corner_edges()[corner_prev];
+  return ans;
+}
+
+/**
+ * If we make a poly out of anchor verts around \a bv, snapping to face \a f,
+ * will uv poly have zero area?
+ * The uv poly is made by snapping all outside-of-f vertices to the closest edge in \a f.
+ * Sometimes this results in a zero or very small area polygon, which translates to a zero
+ * or very small area polygon in UV space -- not good for interpolating textures.
+ */
+static bool is_bad_uv_poly(const int bv, const int f, const BevelState &bs)
+{
+  const Mesh &mesh = bs.mesh_info.mesh;
+  Span<float3> vert_positions = mesh.vert_positions();
+  Span<int> corner_verts = mesh.corner_verts();
+  float3x3 axis_mat;
+  /* Project the vertices of f to 2d along its dominant axis. */
+  const int mesh_v = bs.bevvert_mesh_verts()[bv];
+  axis_dominant_v3_to_m3(axis_mat.ptr(), mesh.face_normals()[f]);
+  IndexRange face = mesh.faces()[f];
+  Array<float2, 20> face_co_proj(face.size());
+  for (const int i : face_co_proj.index_range()) {
+    const float3 co = vert_positions[corner_verts.slice(face)[i]];
+    face_co_proj[i] = float2(transform_point(axis_mat, co));
+  }
+  /* Find the adjacent edges to bv, and the positions of their ends. */
+  int2 v_edges = get_incident_edges(f, mesh_v, mesh);
+  float3 v_edge_ends[2][2];
+  for (const int i : IndexRange(2)) {
+    const int2 e = mesh.edges()[v_edges[i]];
+    for (const int j : IndexRange(2)) {
+      v_edge_ends[i][j] = vert_positions[e[j]];
+    }
+  }
+  /* Project the anchor verts for bv onto the same 3d plane.
+   * If the projection isn't inside the projected face, snap to an
+   * edge first and then reproject.
+   */
+  const MeshPattern pat = bs.bevvert_meshpatterns()[bv];
+  Array<float2, 20> anchor_co_proj(pat.num_anchors);
+  const int first_newv = bs.bevvert_newverts()[bv][0];
+  for (int a : IndexRange(pat.num_anchors)) {
+    const int a_newv = first_newv + pat.anchor_vert(a);
+    float3 anchor_co = bs.newvert_positions()[a_newv];
+    anchor_co_proj[a] = float2(transform_point(axis_mat, anchor_co));
+    if (!isect_point_poly_v2(anchor_co_proj[a],
+                             reinterpret_cast<const float (*)[2]>(face_co_proj.data()),
+                             pat.num_anchors))
+    {
+      /* Need to snap anchor_co to the nearest incident edge. */
+      float3 snap1, snap2;
+      closest_to_line_segment_v3(snap1, anchor_co, v_edge_ends[0][0], v_edge_ends[0][1]);
+      closest_to_line_segment_v3(snap1, anchor_co, v_edge_ends[0][0], v_edge_ends[0][1]);
+      const float d1_sq = distance_squared(snap1, anchor_co);
+      const float d2_sq = distance_squared(snap2, anchor_co);
+      if (d1_sq <= d2_sq) {
+        anchor_co_proj[a] = float2(transform_point(axis_mat, snap1));
+      }
+      else {
+        anchor_co_proj[a] = float2(transform_point(axis_mat, snap2));
+      }
+    }
+  }
+  const float area = area_poly_v2(reinterpret_cast<const float (*)[2]>(anchor_co_proj.data()),
+                                  anchor_co_proj.size());
+  return area < geom::bevel_epsilon_big;
+}
+
+/**
+ * Pick a good face from all the faces around \a bv to use for
+ * a representative face, using choose_rep_face.
+ * We want to choose from among the faces that would be
+ * chosen for a single-segment edge polygon between two successive
+ * anchor verts.
+ * But if \a for_interp is true, we also want to make sure it will
+ * make an acceptable polygon in UV space if we interpolate here.
+ *
+ * The single beveled edge is a special case,
+ * where we also want to consider the third face (else can get
+ * zero-area UV interpolated face).
+ *
+ * If there are uv maps, then don't include faces that would result
+ * in zero-area UV polygons if chosen as the rep.
+ */
+static int find_center_face_rep(const int bv, const bool for_interp, const BevelState &bs)
+{
+  int any_face = -1;
+  bool consider_all_faces = for_interp && bs.bevvert_beveled_edges_num(bv) == 1;
+  Span<int> bes = bs.bevvert_bevedges()[bv];
+  const int edge_count = bes.size();
+  VectorSet<int, 20> fchoices;
+  for (const int epos : IndexRange(edge_count)) {
+    if (!bs.bevedge_is_beveled(bes[epos]) && !consider_all_faces) {
+      continue;
+    }
+    const int f1 = bs.face_prev(bv, epos);
+    const int f2 = bs.face_next(bv, epos);
+    if (f1 == -1 && f2 == -1) {
+      continue;
+    }
+    Array<int, 2> ftwo = {f1, f2};
+    const int f = choose_face_rep(ftwo.as_span(), bs);
+    if (any_face == -1) {
+      any_face = f;
+    }
+    if (for_interp && bs.uvmaps_num > 0 && is_bad_uv_poly(bv, f, bs)) {
+      continue;
+    }
+    fchoices.add(f);
+  }
+  if (fchoices.size() == 0) {
+    return any_face;
+  }
+  return choose_face_rep(fchoices.as_span(), bs);
+}
+
+}  // namespace facerep
+
 namespace uv {
 
-void calculate_vertex_mesh_face_uvs(const int bevvert,
-                                    const int face_pattern_index,
+/** Return true if all uv's in the given uv_map are contiguous at bevvert \a bv.
+ * If \a uv_map_index is -1, return true if all uv_maps are contiguous there.  */
+static bool bevvert_is_uv_contiguous(const int bv, const int uv_map_index, const BevelState &bs)
+{
+  const int mesh_v = bs.bevvert_mesh_verts()[bv];
+  for (const int i : IndexRange(bs.uvmaps_num)) {
+    if (uv_map_index != -1 && i != uv_map_index) {
+      continue;
+    }
+    const UVMapInfo &info = bs.uv_map_info(uv_map_index);
+    Span<int> corners = bs.mesh_info.vert_corners()[mesh_v];
+    if (corners.size() == 0) {
+      continue;
+    }
+    float2 first_val = info.value(corners[0]);
+    for (int i = 1; i < corners.size(); i++) {
+      if (info.value(corners[i]) != first_val) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+/** Return true if all uv's in the given uv_map are contiguous at both ends of  \a be.
+ * If \a uv_map_index is -1, return true if all uv_maps are contiguous at both ends.  */
+static bool bevedge_is_uv_contiguous(const int be, const int uv_map_index, const BevelState &bs)
+{
+  const int2 bvs = bs.bevedge_bevverts(be);
+  return bevvert_is_uv_contiguous(bvs[0], uv_map_index, bs) &&
+         bevvert_is_uv_contiguous(bvs[1], uv_map_index, bs);
+}
+
+
+static void calculate_vertex_mesh_face_uvs(const int bevvert,
                                     const int uv_map_index,
                                     const BevelState &bs)
 {
   const UVMapInfo &uv_map_info = bs.uv_map_info(uv_map_index);
   const MeshPattern &pat = bs.bevvert_meshpatterns()[bevvert];
   bool odd_segs = (pat.num_segs % 2) == 1;
+  SmallIntArray rep_faces(pat.num_anchors);
+  for (const int i : rep_faces.index_range()) {
+    rep_faces[i] = facerep::anchor_rep_face(bevvert, i, nullptr, bs);
+  }
+  const int center_face_rep = odd_segs ? facerep::find_center_face_rep(bevvert, true, bs) : -1;
   if (pat.kind == MeshKind::Adj) {
     int4 nums = pat.num_elements();
-    if (odd_segs && face_pattern_index == 0) {
-      /* Handle center polygon. */
-    }
-    else {
-      /* Handle non-center polygon, which will be a quad. */
+    for (const int f : IndexRange(nums[2])) {
+      const int anchor = pat.face_anchor_owner(f);
+      std::pair<SmallIntArray, SmallIntArray> v_and_e = pat.face_verts_and_edges(f, 0, 0);
+      SmallIntArray &face_verts = v_and_e.first;
+      SmallIntArray interp_face(face_verts.size(), rep_faces[anchor]);
+      SmallIntArray snap_edge(face_verts.size(), -1);
+      if (odd_segs && f == 0) {
+        /* Handle center polygon. */
+      }
+      else {
+        /* Handle non-center polygon, which will be a quad. */
+        BLI_assert(face_verts.size() == 4);
+        for (const int i : face_verts.index_range()) {
+          const AdjVertKind avk = pat.adj_vert_kind(face_verts[i], anchor);
+          if (odd_segs) {
+
+          }
+          else {
+
+          }
+        }
+      }
     }
   }
 }
@@ -3234,14 +3537,14 @@ int MeshPattern::vert_to_anchor(const int v) const
 /** Return arrays of the verts and edges for pattern face \a face,
  * where \a first_v and \a first_e give the offsets to add to pattern space indices.
  */
-std::pair<Array<int, 20>, Array<int, 20>> MeshPattern::face_verts_and_edges(
+std::pair<SmallIntArray, SmallIntArray> MeshPattern::face_verts_and_edges(
     const int face, const int first_v, const int first_e) const
 {
   int4 vefc_nums = this->num_elements();
   BLI_assert(0 <= face && face < vefc_nums[2]);
-  std::pair<Array<int, 20>, Array<int, 20>> ans;
-  Array<int, 20> &ans_verts = ans.first;
-  Array<int, 20> &ans_edges = ans.second;
+  std::pair<SmallIntArray, SmallIntArray> ans;
+  SmallIntArray &ans_verts = ans.first;
+  SmallIntArray &ans_edges = ans.second;
   switch (this->kind) {
     case MeshKind::TerminalPoly: {
       /* There is only one face. */
@@ -3310,14 +3613,14 @@ std::pair<Array<int, 20>, Array<int, 20>> MeshPattern::face_verts_and_edges(
  * edges array will not be used, as the final edge of a face reconstruction leaves
  * the bevvert rather than continuing around it.
  */
-std::pair<Array<int, 20>, Array<int, 20>> MeshPattern::boundary_vert_and_edges(
+std::pair<SmallIntArray, SmallIntArray> MeshPattern::boundary_vert_and_edges(
     const int firstpos, const int lastpos, const int first_v, const int first_e) const
 {
   int4 vefc_nums = this->num_elements();
   const int v_num = vefc_nums[0];
-  std::pair<Array<int, 20>, Array<int, 20>> ans;
-  Array<int, 20> &ans_verts = ans.first;
-  Array<int, 20> &ans_edges = ans.second;
+  std::pair<SmallIntArray, SmallIntArray> ans;
+  SmallIntArray &ans_verts = ans.first;
+  SmallIntArray &ans_edges = ans.second;
   switch (this->kind) {
     case MeshKind::TerminalPoly: {
       const int ans_size = (firstpos - lastpos + 1 + v_num) % v_num;
@@ -3410,15 +3713,15 @@ std::pair<Array<int, 20>, Array<int, 20>> MeshPattern::boundary_vert_and_edges(
 }
 
 /** Return the faces (in pattern space) that are unambiguously nearest to \a anchor. */
-Array<int, 20> MeshPattern::faces_for_anchor(const int anchor) const
+SmallIntArray MeshPattern::faces_for_anchor(const int anchor) const
 {
   if (num_segs <= 1 || kind != MeshKind::Adj) {
-    return Array<int, 20>(0);
+    return SmallIntArray(0);
   }
   const int floor_n2 = num_segs / 2;
   const bool ns_odd = (num_segs % 2) == 1;
   const int num_face_rings = adj::f_num_rings(num_segs);
-  Array<int, 20> ans(floor_n2 * floor_n2);
+  SmallIntArray ans(floor_n2 * floor_n2);
   int ans_pos = 0;
   for (int r = ns_odd ? 1 : 0; r < num_face_rings; r++) {
     const int ring_side = adj::f_ringlen(r, num_anchors, num_segs) / num_anchors + 1;
@@ -3437,14 +3740,14 @@ Array<int, 20> MeshPattern::faces_for_anchor(const int anchor) const
 
 /** Return the faces (in pattern space) that are on the centerline between \a first_anchor
  * and its successor. Don't include the center face, for odd number of segments. */
-Array<int, 20> MeshPattern::faces_for_centerline(const int first_anchor) const
+SmallIntArray MeshPattern::faces_for_centerline(const int first_anchor) const
 {
   if (kind != MeshKind::Adj || num_segs <= 1 || (num_segs % 2) == 0) {
-    return Array<int, 20>(0);
+    return SmallIntArray(0);
   }
   const int floor_n2 = num_segs / 2;
   const int num_face_rings = adj::f_num_rings(num_segs);
-  Array<int, 20> ans(floor_n2);
+  SmallIntArray ans(floor_n2);
   BLI_assert(num_face_rings == floor_n2 + 1);
   for (int r = 1; r < num_face_rings; r++) {
     const int ring_side = adj::f_ringlen(r, num_anchors, num_segs) / num_anchors + 1;
@@ -3465,7 +3768,7 @@ AdjVertKind MeshPattern::adj_vert_kind(const int v, const int anchor) const
   const int a = rao[1];
   const int offset = rao[2];
   const int floor_n2 = num_segs / 2;
-  if (num_segs % 2 == 1) {
+  if (num_segs % 2 == 0) {
     if (v == 0) {
       return AdjVertKind::Center;
     }
@@ -3488,6 +3791,31 @@ AdjVertKind MeshPattern::adj_vert_kind(const int v, const int anchor) const
     return a == anchor ? AdjVertKind::CenterLineFar : AdjVertKind::PrevCenterLineFar;
   }
 }
+
+/** Return the anchor that owns (is nearest to) \a v (in pattern space).
+  * For faces on the mid-strip (when odd segments), assign the next lower
+  * anchor as owner.
+  * For the center polygon (when odd segments), assign 0 as the owner.
+  */
+int MeshPattern::face_anchor_owner(const int f) const
+{
+  if (kind != MeshKind::Adj) {
+    return 0;
+  }
+  int3 rao = adj::f_ring_anchor_offset(f, num_anchors, num_segs);
+  const int ring = rao[0];
+  const int a = rao[1];
+  const int offset = rao[2];
+  const int floor_n2 = num_segs / 2;
+  if (num_segs % 2 == 0) {
+    return offset < floor_n2 ? a : next_anchor(a);
+  }
+  if (f == 0) {
+    return 0;
+  }
+  return offset <= floor_n2 ? a : next_anchor(a);
+}
+
 
 /** Return a 4-tuple with the number of vertices, edges, faces, corners needed for edge mesh. */
 static int4 bevedge_num_elements(const int be, const BevelState &bs)
@@ -3904,7 +4232,7 @@ static bool try_all_manifold_order(MutableSpan<int> edges, const BevelState &bs)
  */
 static void bevvert_order_edges(BevelState &bs, MutableSpan<int> bevedges, MutableSpan<int> faces)
 {
-  Array<int, 20> edges(bevedges.size());
+  SmallIntArray edges(bevedges.size());
   for (const int i : bevedges.index_range()) {
     edges[i] = bs.bevedge_mesh_edges()[bevedges[i]];
   }
@@ -4596,39 +4924,6 @@ int2 BevelState::anchor_bevedge_positions(const int bv, const int anchor) const
   return ans;
 }
 
-/** Return true if all uv's in the given uv_map are contiguous at bevvert \a bv.
- * If \a uv_map_index is -1, return true if all uv_maps are contiguous there.  */
-bool BevelState::bevvert_is_uv_contiguous(const int bv, const int uv_map_index) const
-{
-  const int mesh_v = bevvert_mesh_verts_[bv];
-  for (const int i : IndexRange(uvmaps_num)) {
-    if (uv_map_index != -1 && i != uv_map_index) {
-      continue;
-    }
-    const UVMapInfo &info = uv_map_info(uv_map_index);
-    Span<int> corners = mesh_info.vert_corners()[mesh_v];
-    if (corners.size() == 0) {
-      continue;
-    }
-    float2 first_val = info.value(corners[0]);
-    for (int i = 1; i < corners.size(); i++) {
-      if (info.value(corners[i]) != first_val) {
-        return false;
-      }
-    }
-  }
-  return true;
-}
-
-/** Return true if all uv's in the given uv_map are contiguous at both ends of  \a be.
- * If \a uv_map_index is -1, return true if all uv_maps are contiguous at both ends.  */
-bool BevelState::bevedge_is_uv_contiguous(const int be, const int uv_map_index) const
-{
-  const int2 bvs = bevedge_bevverts(be);
-  return bevvert_is_uv_contiguous(bvs[0], uv_map_index) &&
-         bevvert_is_uv_contiguous(bvs[1], uv_map_index);
-}
-
 /** Initialize the part of the state related to the profile curves that will be used in the
  * non-custom shapes of multisegment bevels.
  */
@@ -4904,249 +5199,6 @@ void BevelState::build_newface(const int f, Span<int> verts, Span<int> edges)
   }
 }
 
-static int choose_face_rep(Span<int> faces, const BevelState &bs)
-{
-  /* The tie breaking values are, in order:
-   *  + component id of face in each uv_map, in the order we found them
-   *  + material index
-   *  + z component of face center
-   *  + x component of face center
-   *  + y component of face center
-   * We want the face that has the lexicographically lowest value of these.
-   */
-  if (faces.size() == 1) {
-    return faces[0];
-  }
-  const int value_len = bs.uvmaps_num + 4;
-  const int numf = faces.size();
-  using ValueVec = Array<float, 6>;
-  Array<ValueVec, 20> values(numf, ValueVec(value_len));
-  const Mesh &mesh = bs.mesh_info.mesh;
-  for (const int i : IndexRange(numf)) {
-    const int f = faces[i];
-    if (f == -1) {
-      values[i][0] = 1e10f;
-      continue;
-    }
-    int value_index = 0;
-    for (int j : IndexRange(bs.uvmaps_num)) {
-      values[i][value_index++] = float(bs.uv_map_info(j).component_id(f));
-    }
-    values[i][value_index++] = bs.material(f);
-    float3 center = bke::mesh::face_center_calc(mesh.vert_positions(),
-                                                mesh.corner_verts().slice(mesh.faces()[f]));
-    values[i][value_index++] = center[2];
-    values[i][value_index++] = center[0];
-    values[i][value_index++] = center[1];
-    BLI_assert(value_index == value_len);
-  }
-  auto it = std::min_element(
-      values.begin(), values.end(), [](const ValueVec &a, const ValueVec &b) {
-        return std::lexicographical_compare(a.begin(), a.end(), b.begin(), b.end());
-      });
-  if (it != values.end()) {
-    return faces[std::distance(values.begin(), it)];
-  }
-  return faces[0];
-}
-
-/**
- * Return a good representative face (for materials, etc.) for faces
- * created around/near anchor \a anchor of bevvert \a bv.
- * Sometimes care about a second choice, if there is one.
- * If r_fother parameter is non-nullptr and there is another, different,
- * possible frep, return the other one in that parameter.
- *
- * This code copies the old BMesh bevel boundvert_rep_face()
- * but I don't think it is particularly "right".  TODO: look again.
- */
-static int anchor_rep_face(const int bv, const int anchor, int *r_fother, const BevelState &bs)
-{
-  /* make an analog of the code in bmesh_bevel.c, boundvert_rep_face() */
-  int frep = -1;
-  /* Get positions of first and last edges attached to anchor. */
-  const int2 edge_positions = bs.anchor_bevedge_positions(bv, anchor);
-  const int pos_first = edge_positions[0];
-  const int pos_last = edge_positions[1];
-  const int be_last = bs.bevvert_bevedges()[bv][pos_last];
-  if (pos_first != -1) {
-    BLI_assert(pos_last != -1);
-    if (bs.bevedge_is_beveled(be_last)) {
-      frep = bs.face_prev(bv, pos_last);
-    }
-    else {
-      frep = bs.face_prev(bv, pos_first);
-      if (frep == -1) {
-        frep = bs.face_next(bv, pos_first);
-        if (frep == -1) {
-          frep = bs.face_prev(bv, pos_last);
-        }
-      }
-    }
-  }
-  else {
-    const int anchor_prev = bs.bevvert_meshpatterns()[bv].prev_anchor(anchor);
-    const int2 prev_edge_positions = bs.anchor_bevedge_positions(bv, anchor_prev);
-    frep = bs.face_next(bv, prev_edge_positions[1]);
-    if (frep == -1) {
-      const int anchor_next = bs.bevvert_meshpatterns()[bv].next_anchor(anchor);
-      const int2 next_edge_positions = bs.anchor_bevedge_positions(bv, anchor_next);
-      frep = bs.face_prev(bv, next_edge_positions[0]);
-    }
-  }
-  if (r_fother && frep != -1) {
-    int frep_other = -1;
-    if (pos_first != -1) {
-      if (bs.bevedge_is_beveled(be_last)) {
-        frep_other = bs.face_prev(bv, pos_first);
-      }
-      else {
-        frep_other = bs.face_next(bv, pos_last);
-        if (frep_other == -1 || frep_other == frep) {
-          frep_other = bs.face_next(bv, pos_first);
-        }
-        if (frep_other == -1 || frep_other == frep) {
-          frep_other = bs.face_prev(bv, pos_first);
-        }
-      }
-    }
-    else {
-      const int anchor_next = bs.bevvert_meshpatterns()[bv].next_anchor(anchor);
-      const int2 next_edge_positions = bs.anchor_bevedge_positions(bv, anchor_next);
-      if (next_edge_positions[0] != -1) {
-        frep_other = bs.face_prev(bv, next_edge_positions[0]);
-      }
-    }
-    *r_fother = frep_other == frep ? -1 : frep_other;
-  }
-  return frep;
-}
-
-/** Return the two edges incident on vertex \a v in face \a f in \a mesh. */
-int2 get_incident_edges(int f, int v, const Mesh &mesh)
-{
-  int2 ans(-1, -1);
-  const int corner = bke::mesh::face_find_corner_from_vert(
-      mesh.faces()[f], mesh.corner_verts(), v);
-  ans[0] = mesh.corner_edges()[corner];
-  const int corner_prev = bke::mesh::face_corner_prev(mesh.faces()[f], corner);
-  ans[1] = mesh.corner_edges()[corner_prev];
-  return ans;
-}
-
-/**
- * If we make a poly out of anchor verts around \a bv, snapping to face \a f,
- * will uv poly have zero area?
- * The uv poly is made by snapping all outside-of-f vertices to the closest edge in \a f.
- * Sometimes this results in a zero or very small area polygon, which translates to a zero
- * or very small area polygon in UV space -- not good for interpolating textures.
- */
-static bool is_bad_uv_poly(const int bv, const int f, const BevelState &bs)
-{
-  const Mesh &mesh = bs.mesh_info.mesh;
-  Span<float3> vert_positions = mesh.vert_positions();
-  Span<int> corner_verts = mesh.corner_verts();
-  float3x3 axis_mat;
-  /* Project the vertices of f to 2d along its dominant axis. */
-  const int mesh_v = bs.bevvert_mesh_verts()[bv];
-  axis_dominant_v3_to_m3(axis_mat.ptr(), mesh.face_normals()[f]);
-  IndexRange face = mesh.faces()[f];
-  Array<float2, 20> face_co_proj(face.size());
-  for (const int i : face_co_proj.index_range()) {
-    const float3 co = vert_positions[corner_verts.slice(face)[i]];
-    face_co_proj[i] = float2(transform_point(axis_mat, co));
-  }
-  /* Find the adjacent edges to bv, and the positions of their ends. */
-  int2 v_edges = get_incident_edges(f, mesh_v, mesh);
-  float3 v_edge_ends[2][2];
-  for (const int i : IndexRange(2)) {
-    const int2 e = mesh.edges()[v_edges[i]];
-    for (const int j : IndexRange(2)) {
-      v_edge_ends[i][j] = vert_positions[e[j]];
-    }
-  }
-  /* Project the anchor verts for bv onto the same 3d plane.
-   * If the projection isn't inside the projected face, snap to an
-   * edge first and then reproject.
-   */
-  const MeshPattern pat = bs.bevvert_meshpatterns()[bv];
-  Array<float2, 20> anchor_co_proj(pat.num_anchors);
-  const int first_newv = bs.bevvert_newverts()[bv][0];
-  for (int a : IndexRange(pat.num_anchors)) {
-    const int a_newv = first_newv + pat.anchor_vert(a);
-    float3 anchor_co = bs.newvert_positions()[a_newv];
-    anchor_co_proj[a] = float2(transform_point(axis_mat, anchor_co));
-    if (!isect_point_poly_v2(anchor_co_proj[a],
-                             reinterpret_cast<const float (*)[2]>(face_co_proj.data()),
-                             pat.num_anchors))
-    {
-      /* Need to snap anchor_co to the nearest incident edge. */
-      float3 snap1, snap2;
-      closest_to_line_segment_v3(snap1, anchor_co, v_edge_ends[0][0], v_edge_ends[0][1]);
-      closest_to_line_segment_v3(snap1, anchor_co, v_edge_ends[0][0], v_edge_ends[0][1]);
-      const float d1_sq = distance_squared(snap1, anchor_co);
-      const float d2_sq = distance_squared(snap2, anchor_co);
-      if (d1_sq <= d2_sq) {
-        anchor_co_proj[a] = float2(transform_point(axis_mat, snap1));
-      }
-      else {
-        anchor_co_proj[a] = float2(transform_point(axis_mat, snap2));
-      }
-    }
-  }
-  const float area = area_poly_v2(reinterpret_cast<const float (*)[2]>(anchor_co_proj.data()),
-                                  anchor_co_proj.size());
-  return area < geom::bevel_epsilon_big;
-}
-
-/**
- * Pick a good face from all the faces around \a bv to use for
- * a representative face, using choose_rep_face.
- * We want to choose from among the faces that would be
- * chosen for a single-segment edge polygon between two successive
- * anchor verts.
- * But if \a for_interp is true, we also want to make sure it will
- * make an acceptable polygon in UV space if we interpolate here.
- *
- * The single beveled edge is a special case,
- * where we also want to consider the third face (else can get
- * zero-area UV interpolated face).
- *
- * If there are uv maps, then don't include faces that would result
- * in zero-area UV polygons if chosen as the rep.
- */
-static int find_center_face_rep(const int bv, const bool for_interp, const BevelState &bs)
-{
-  int any_face = -1;
-  bool consider_all_faces = for_interp && bs.bevvert_beveled_edges_num(bv) == 1;
-  Span<int> bes = bs.bevvert_bevedges()[bv];
-  const int edge_count = bes.size();
-  VectorSet<int, 20> fchoices;
-  for (const int epos : IndexRange(edge_count)) {
-    if (!bs.bevedge_is_beveled(bes[epos]) && !consider_all_faces) {
-      continue;
-    }
-    const int f1 = bs.face_prev(bv, epos);
-    const int f2 = bs.face_next(bv, epos);
-    if (f1 == -1 && f2 == -1) {
-      continue;
-    }
-    Array<int, 2> ftwo = {f1, f2};
-    const int f = choose_face_rep(ftwo.as_span(), bs);
-    if (any_face == -1) {
-      any_face = f;
-    }
-    if (for_interp && bs.uvmaps_num > 0 && is_bad_uv_poly(bv, f, bs)) {
-      continue;
-    }
-    fchoices.add(f);
-  }
-  if (fchoices.size() == 0) {
-    return any_face;
-  }
-  return choose_face_rep(fchoices.as_span(), bs);
-}
-
 /** Set representative original elements to copy attributes from for new elements. */
 static void set_vertex_mesh_reps(const int bv,
                                  MutableSpan<int> repverts,
@@ -5185,10 +5237,10 @@ static void set_vertex_mesh_reps(const int bv,
   }
   const int num_faces = pat.num_elements()[2];
   if (bs.any_face_attributes && num_faces > 0) {
-    Array<int, 20> anchor_face_reps(pat.num_anchors);
-    Array<int, 20> face_rep_tiebreaks(pat.num_anchors);
+    SmallIntArray anchor_face_reps(pat.num_anchors);
+    SmallIntArray face_rep_tiebreaks(pat.num_anchors);
     for (const int a : IndexRange(pat.num_anchors)) {
-      anchor_face_reps[a] = anchor_rep_face(bv, a, nullptr, bs);
+      anchor_face_reps[a] = facerep::anchor_rep_face(bv, a, nullptr, bs);
     }
     const bool odd = (pat.num_segs % 2) == 1;
     int center_frep = -1;
@@ -5196,9 +5248,9 @@ static void set_vertex_mesh_reps(const int bv,
       for (const int a : IndexRange(pat.num_anchors)) {
         const int anext = pat.next_anchor(a);
         Array<int, 2> fchoices({anchor_face_reps[a], anchor_face_reps[anext]});
-        face_rep_tiebreaks[a] = choose_face_rep(fchoices.as_span(), bs);
+        face_rep_tiebreaks[a] = facerep::choose_face_rep(fchoices.as_span(), bs);
       }
-      center_frep = find_center_face_rep(bv, false, bs) ;
+      center_frep = facerep::find_center_face_rep(bv, false, bs) ;
     }
     switch (pat.kind) {
       case MeshKind::Adj: {
@@ -5208,12 +5260,12 @@ static void set_vertex_mesh_reps(const int bv,
           repfaces[0] = center_frep;
         }
         for (const int a : IndexRange(pat.num_anchors)) {
-          Array<int, 20> afaces = pat.faces_for_anchor(a);
+          SmallIntArray afaces = pat.faces_for_anchor(a);
           for (const int f : afaces) {
             repfaces[f] = anchor_face_reps[a];
           }
           if (odd) {
-            Array<int, 20> clinefaces = pat.faces_for_centerline(a);
+            SmallIntArray clinefaces = pat.faces_for_centerline(a);
             for (const int f : clinefaces) {
               repfaces[f] = face_rep_tiebreaks[a];
             }
@@ -5395,8 +5447,8 @@ void BevelState::build_face_meshes()
       const int newf = bevface_newfaces_[bf][0];
       const int meshf = bevface_mesh_faces_[bf];
       IndexRange newcorners = newface_faces_face_[newf];
-      Array<int, 20> nverts(newcorners.size());
-      Array<int, 20> nedges(newcorners.size());
+      SmallIntArray nverts(newcorners.size());
+      SmallIntArray nedges(newcorners.size());
       IndexRange origcorners = mesh.faces()[meshf];
       int newc = 0;
       int meshe_prev = mesh.corner_edges()[origcorners.last()];
