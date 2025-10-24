@@ -83,7 +83,7 @@ enum class AdjVertKind {
   CenterLineFar,      /* On center line after anchor (far side, if odd segs). */
   PrevCenterLineNear, /* Like CenterLineNear, but before anchor. */
   PrevCenterLineFar,  /* Like CenterLineFar, but before anchor. */
- Center,              /* The center vertex (even segs) or in center poly (odd segs). */
+  Center,             /* The center vertex (even segs) or in center poly (odd segs). */
 };
 
 /** An Array<int> with an inline capacity big enough to hold the number of vertices, etc. */
@@ -127,8 +127,8 @@ class MeshPattern {
    * where \a first_v and \a first_e give the offsets to add to pattern space indices.
    */
   std::pair<SmallIntArray, SmallIntArray> face_verts_and_edges(const int face,
-                                                                 const int first_v,
-                                                                 const int first_e) const;
+                                                               const int first_v,
+                                                               const int first_e) const;
 
   /** Assuming \a v is a vert on the outer boundary, return the boundary vert that is \a delta away
    * in the ccw direction along the boundary.
@@ -148,9 +148,9 @@ class MeshPattern {
    * and \a first_e give the offsets to add to pattern space indices.
    */
   std::pair<SmallIntArray, SmallIntArray> boundary_vert_and_edges(const int firstpos,
-                                                                    const int lastpos,
-                                                                    const int first_v,
-                                                                    const int first_e) const;
+                                                                  const int lastpos,
+                                                                  const int first_v,
+                                                                  const int first_e) const;
 
   /** Return the face indices (if any) that are unabiguously closested to anchor. */
   SmallIntArray faces_for_anchor(const int anchor) const;
@@ -3271,8 +3271,7 @@ static int find_center_face_rep(const int bv, const bool for_interp, const Bevel
     if (f1 == -1 && f2 == -1) {
       continue;
     }
-    Array<int, 2> ftwo = {f1, f2};
-    const int f = choose_face_rep(ftwo.as_span(), bs);
+    const int f = choose_face_rep({f1, f2}, bs);
     if (any_face == -1) {
       any_face = f;
     }
@@ -3324,10 +3323,9 @@ static bool bevedge_is_uv_contiguous(const int be, const int uv_map_index, const
          bevvert_is_uv_contiguous(bvs[1], uv_map_index, bs);
 }
 
-
 static void calculate_vertex_mesh_face_uvs(const int bevvert,
-                                    const int uv_map_index,
-                                    const BevelState &bs)
+                                           const int uv_map_index,
+                                           const BevelState &bs)
 {
   const UVMapInfo &uv_map_info = bs.uv_map_info(uv_map_index);
   const MeshPattern &pat = bs.bevvert_meshpatterns()[bevvert];
@@ -3336,17 +3334,45 @@ static void calculate_vertex_mesh_face_uvs(const int bevvert,
   for (const int i : rep_faces.index_range()) {
     rep_faces[i] = facerep::anchor_rep_face(bevvert, i, nullptr, bs);
   }
-  const int center_face_rep = odd_segs ? facerep::find_center_face_rep(bevvert, true, bs) : -1;
+  SmallIntArray rep_face_choices(pat.num_anchors);
+  for (const int i : rep_faces.index_range()) {
+    const int inext = pat.next_anchor(i);
+    rep_face_choices[i] = facerep::choose_face_rep({rep_faces[i], rep_faces[inext]}, bs);
+  }
+  Span<int> bevedges = bs.bevvert_bevedges()[bevvert];
   if (pat.kind == MeshKind::Adj) {
     int4 nums = pat.num_elements();
     for (const int f : IndexRange(nums[2])) {
       const int anchor = pat.face_anchor_owner(f);
+      const int anchor_next = pat.next_anchor(anchor);
+      const int anchor_prev = pat.prev_anchor(anchor);
+      const int frep_a = rep_faces[anchor];
+      const int frep_anext = rep_faces[anchor_next];
+      const int frep_aprev = rep_faces[anchor_prev];
+      const int frep_choice = rep_face_choices[anchor];
       std::pair<SmallIntArray, SmallIntArray> v_and_e = pat.face_verts_and_edges(f, 0, 0);
       SmallIntArray &face_verts = v_and_e.first;
       SmallIntArray interp_face(face_verts.size(), rep_faces[anchor]);
       SmallIntArray snap_edge(face_verts.size(), -1);
+      const int2 e_first_and_last = bs.anchor_bevedge_positions(bevvert, anchor);
+      const int2 eprev_first_and_last = bs.anchor_bevedge_positions(bevvert, anchor_prev);
+      const int2 enext_first_and_last = bs.anchor_bevedge_positions(bevvert, anchor_next);
+      const int be_last = bevedges[e_first_and_last[1]];
+      const int be = be_last != -1 && bs.bevedge_is_beveled(be_last) ? be_last : -1;
+      const int be_prev_last = bevedges[eprev_first_and_last[1]];
+      const int be_prev = be_prev_last != -1 && bs.bevedge_is_beveled(be_prev_last) ?
+                              be_prev_last :
+                              -1;
+      const int be_next_last = bevedges[enext_first_and_last[1]];
+      const int be_next = be_next_last != -1 && bs.bevedge_is_beveled(be_next_last) ?
+                              be_next_last :
+                              -1;
       if (odd_segs && f == 0) {
+        int center_face_rep = -1;
         /* Handle center polygon. */
+        if (!bevvert_is_uv_contiguous(bevvert, -1, bs)) {
+          center_face_rep = facerep::find_center_face_rep(bevvert, true, bs);
+        }
       }
       else {
         /* Handle non-center polygon, which will be a quad. */
@@ -3354,10 +3380,8 @@ static void calculate_vertex_mesh_face_uvs(const int bevvert,
         for (const int i : face_verts.index_range()) {
           const AdjVertKind avk = pat.adj_vert_kind(face_verts[i], anchor);
           if (odd_segs) {
-
           }
           else {
-
           }
         }
       }
@@ -3537,8 +3561,9 @@ int MeshPattern::vert_to_anchor(const int v) const
 /** Return arrays of the verts and edges for pattern face \a face,
  * where \a first_v and \a first_e give the offsets to add to pattern space indices.
  */
-std::pair<SmallIntArray, SmallIntArray> MeshPattern::face_verts_and_edges(
-    const int face, const int first_v, const int first_e) const
+std::pair<SmallIntArray, SmallIntArray> MeshPattern::face_verts_and_edges(const int face,
+                                                                          const int first_v,
+                                                                          const int first_e) const
 {
   int4 vefc_nums = this->num_elements();
   BLI_assert(0 <= face && face < vefc_nums[2]);
@@ -3793,10 +3818,10 @@ AdjVertKind MeshPattern::adj_vert_kind(const int v, const int anchor) const
 }
 
 /** Return the anchor that owns (is nearest to) \a v (in pattern space).
-  * For faces on the mid-strip (when odd segments), assign the next lower
-  * anchor as owner.
-  * For the center polygon (when odd segments), assign 0 as the owner.
-  */
+ * For faces on the mid-strip (when odd segments), assign the next lower
+ * anchor as owner.
+ * For the center polygon (when odd segments), assign 0 as the owner.
+ */
 int MeshPattern::face_anchor_owner(const int f) const
 {
   if (kind != MeshKind::Adj) {
@@ -3815,7 +3840,6 @@ int MeshPattern::face_anchor_owner(const int f) const
   }
   return offset <= floor_n2 ? a : next_anchor(a);
 }
-
 
 /** Return a 4-tuple with the number of vertices, edges, faces, corners needed for edge mesh. */
 static int4 bevedge_num_elements(const int be, const BevelState &bs)
@@ -5247,10 +5271,10 @@ static void set_vertex_mesh_reps(const int bv,
     if (odd || pat.kind != MeshKind::Adj) {
       for (const int a : IndexRange(pat.num_anchors)) {
         const int anext = pat.next_anchor(a);
-        Array<int, 2> fchoices({anchor_face_reps[a], anchor_face_reps[anext]});
-        face_rep_tiebreaks[a] = facerep::choose_face_rep(fchoices.as_span(), bs);
+        face_rep_tiebreaks[a] = facerep::choose_face_rep(
+            {anchor_face_reps[a], anchor_face_reps[anext]}, bs);
       }
-      center_frep = facerep::find_center_face_rep(bv, false, bs) ;
+      center_frep = facerep::find_center_face_rep(bv, false, bs);
     }
     switch (pat.kind) {
       case MeshKind::Adj: {
