@@ -3339,6 +3339,10 @@ static void calculate_vertex_mesh_face_uvs(const int bevvert,
     const int inext = pat.next_anchor(i);
     rep_face_choices[i] = facerep::choose_face_rep({rep_faces[i], rep_faces[inext]}, bs);
   }
+  int center_face_rep = -1;
+  if (odd_segs) {
+    center_face_rep = facerep::find_center_face_rep(bevvert, true, bs);
+  }
   Span<int> bevedges = bs.bevvert_bevedges()[bevvert];
   if (pat.kind == MeshKind::Adj) {
     int4 nums = pat.num_elements();
@@ -3347,7 +3351,6 @@ static void calculate_vertex_mesh_face_uvs(const int bevvert,
       const int anchor_next = pat.next_anchor(anchor);
       const int anchor_prev = pat.prev_anchor(anchor);
       const int frep_a = rep_faces[anchor];
-      const int frep_anext = rep_faces[anchor_next];
       const int frep_aprev = rep_faces[anchor_prev];
       const int frep_choice = rep_face_choices[anchor];
       std::pair<SmallIntArray, SmallIntArray> v_and_e = pat.face_verts_and_edges(f, 0, 0);
@@ -3368,20 +3371,55 @@ static void calculate_vertex_mesh_face_uvs(const int bevvert,
                               be_next_last :
                               -1;
       if (odd_segs && f == 0) {
-        int center_face_rep = -1;
         /* Handle center polygon. */
         if (!bevvert_is_uv_contiguous(bevvert, -1, bs)) {
-          center_face_rep = facerep::find_center_face_rep(bevvert, true, bs);
         }
       }
       else {
         /* Handle non-center polygon, which will be a quad. */
         BLI_assert(face_verts.size() == 4);
+        const int be_prev_if_seam = be_prev != -1 && !bevedge_is_uv_contiguous(be_prev, -1, bs) ? be_prev : -1;
+        const int be_if_seam = be != -1 && !bevedge_is_uv_contiguous(be, -1,  bs) ? be : -1;
+        const int be_next_if_seam = be_next != -1 && !bevedge_is_uv_contiguous(be_next, -1, bs) ? be_next : -1;
         for (const int i : face_verts.index_range()) {
-          const AdjVertKind avk = pat.adj_vert_kind(face_verts[i], anchor);
           if (odd_segs) {
+            switch (pat.adj_vert_kind(face_verts[i], anchor)) {
+            case AdjVertKind::Interior:
+              /* No snap. */
+              break;
+            case AdjVertKind::CenterLineNear:
+            case AdjVertKind::CenterLineFar:
+              if (frep_choice == frep_a) {
+                snap_edge[i] = be_if_seam;
+              }
+              break;
+            case AdjVertKind::PrevCenterLineNear:
+            case AdjVertKind::PrevCenterLineFar:
+              if (frep_choice == frep_aprev) {
+                snap_edge[i] = be_prev_if_seam;
+              }
+              break;
+            case AdjVertKind::Center:
+                if (rep_face_choices[anchor_prev] == frep_aprev && rep_faces[anchor_prev] == center_face_rep) {
+                  snap_edge[i] = be;
+                }
+                else if (frep_choice == frep_a && rep_faces[anchor_next] == center_face_rep) {
+                  snap_edge[i] = be_next;
+                }
+              break;
+            }
           }
           else {
+            /* Even number of segments. */
+            const AdjVertKind avk = pat.adj_vert_kind(face_verts[i], anchor);
+            if (ELEM(i, 1, 2) && ELEM(avk, AdjVertKind::CenterLineNear, AdjVertKind::Center)) {
+              snap_edge[i] = be;
+            }
+            if (ELEM(i, 2, 3) && ELEM(avk, AdjVertKind::PrevCenterLineNear, AdjVertKind::Center)) {
+              if (snap_edge[i] == -1) {
+                snap_edge[i] = be_prev;
+              }
+            }
           }
         }
       }
