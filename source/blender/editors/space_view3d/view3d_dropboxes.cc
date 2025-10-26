@@ -609,9 +609,6 @@ static void view3d_id_drop_copy(bContext *C, wmDrag *drag, wmDropBox *drop)
   }
 
   WM_operator_properties_id_lookup_set_from_id(drop->ptr, id);
-  if (show_datablock) {
-    RNA_boolean_set(drop->ptr, "show_datablock_in_modifier", (drag->type != WM_DRAG_ASSET));
-  }
 }
 
 static void view3d_geometry_nodes_drop_copy(bContext *C, wmDrag *drag, wmDropBox *drop)
