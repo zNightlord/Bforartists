@@ -1483,7 +1483,7 @@ bool ED_region_is_overlap(const int spacetype, const int regiontype)
   if ((U.uiflag2 & USER_REGION_OVERLAP) == 0) {
     return false;
   }
-
+  const bool asset_shelf_top = !((U.uiflag2 & USER_ASSETSHELF_TOP) && (U.uiflag2 & USER_REGION_OVERLAP_BAR));
   switch (spacetype) {
     case SPACE_NODE:
       return ELEM(regiontype,
@@ -1493,7 +1493,6 @@ bool ED_region_is_overlap(const int spacetype, const int regiontype)
                   RGN_TYPE_ASSET_SHELF_HEADER);
 
     case SPACE_VIEW3D:
-       const bool asset_shelf_top = !((U.uiflag2 & USER_ASSETSHELF_TOP) && (U.uiflag2 & USER_REGION_OVERLAP_BAR));
       if (regiontype == RGN_TYPE_HEADER  && asset_shelf_top) {
         /* Only treat as overlapped if there is transparency. */
         bTheme *theme = UI_GetTheme();
