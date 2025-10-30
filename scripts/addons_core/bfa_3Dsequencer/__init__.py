@@ -56,8 +56,9 @@ packages = (
 
 
 def register():
+    debug_mode = False
     for package in packages:
-        if preferences.get_addon_prefs().debug_mode:
+        if debug_mode:
             if package.__name__ in ("shared_collections", "editorial", "keymaps", "render"):
                 continue
         package.register()

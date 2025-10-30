@@ -632,6 +632,22 @@ def slip_shot_content(
     adapt_scene_range(strip)
 
 
+def get_valid_shot_scenes() -> list[bpy.types.Scene]:
+    """Return the list of scenes considered as usable by a scene strip."""
+    prefs = get_addon_prefs()
+    return [
+        scene
+        for scene in bpy.data.scenes
+        if (
+            # Discard template scenes.
+            not scene.name.startswith(prefs.shot_template_prefix)
+            # Discard master sync scene.
+            and scene != get_sync_settings().master_scene
+            # Discard empty scenes.
+            and len(scene.collection.all_objects)
+        )
+    ]
+
 
 def get_scene_cameras(scene: bpy.types.Scene) -> list[bpy.types.Object]:
     """Return the list of cameras available in `scene`."""
