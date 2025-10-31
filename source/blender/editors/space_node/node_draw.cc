@@ -2830,7 +2830,7 @@
      rgba_float_args_set(color_header, node.color[0], node.color[1], node.color[2], 1.0f);
    }
    else {
-     UI_GetThemeColor4fv(color_id, color_header);
+     UI_GetThemeColorBlend4f(TH_NODE, color_id, 0.4f, color_header);
    }
 
    /* Draw selected nodes fully opaque. */
