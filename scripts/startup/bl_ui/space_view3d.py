@@ -3421,7 +3421,7 @@ class VIEW3D_MT_lattice_add(Menu):
         layout.operator_context = 'INVOKE_REGION_WIN'
 
         layout.operator("object.add", text="Lattice", icon='OUTLINER_OB_LATTICE').type = 'LATTICE'
-        layout.operator("object.lattice_add_to_selected", text="Lattice Deform Selected", icon='OUTLINER_OB_LATTICE')
+        layout.operator("object.lattice_add_to_selected", text="Lattice Deform Selected", icon='OBJECT_LATTICE')
 
 
 class VIEW3D_MT_empty_add(Menu):
@@ -3487,7 +3487,8 @@ class VIEW3D_MT_add(Menu):
         else:
             layout.operator("object.armature_add", text="Armature", icon="OUTLINER_OB_ARMATURE")
 
-        layout.operator("object.add", text="Lattice", icon="OUTLINER_OB_LATTICE").type = "LATTICE"
+        layout.menu("VIEW3D_MT_lattice_add")
+
         layout.separator()
 
         layout.menu("VIEW3D_MT_empty_add", icon="OUTLINER_OB_EMPTY")
@@ -5899,7 +5900,7 @@ class VIEW3D_MT_pose(Menu):
         layout.menu("VIEW3D_MT_bone_options_toggle", text="Bone Settings")
 
         layout.separator()
-        layout.operator("POSELIB.create_pose_asset")
+        layout.operator("POSELIB.create_pose_asset", icon="ASSET_MANAGER")
 
 
 class VIEW3D_MT_pose_transform(Menu):
@@ -6162,32 +6163,33 @@ class VIEW3D_MT_pose_context_menu(Menu):
 class BoneOptions:
     def draw(self, context):
         layout = self.layout
-
+        # BFA - added icons
         options = [
-            "show_wire",
-            "use_deform",
-            "use_envelope_multiply",
-            "use_inherit_rotation",
+            ("show_wire", "NODE_WIREFRAME"),
+            ("use_deform", "MOD_SIMPLEDEFORM"),
+            ("use_envelope_multiply", "MOD_ENVELOPE"),
+            ("use_inherit_rotation", "CLEARROTATE"),
         ]
 
         if context.mode == "EDIT_ARMATURE":
             bone_props = bpy.types.EditBone.bl_rna.properties
             data_path_iter = "selected_bones"
             opt_suffix = ""
-            options.append("lock")
+            options.append(("lock", "LOCKED"))
         else:  # pose-mode
             bone_props = bpy.types.Bone.bl_rna.properties
             data_path_iter = "selected_pose_bones"
             opt_suffix = "bone."
 
-        for opt in options:
+        for opt_name, icon in options:
             props = layout.operator(
                 "wm.context_collection_boolean_set",
-                text=bone_props[opt].name,
+                text=bone_props[opt_name].name,
                 text_ctxt=i18n_contexts.default,
+                icon=icon,
             )
             props.data_path_iter = data_path_iter
-            props.data_path_item = opt_suffix + opt
+            props.data_path_item = opt_suffix + opt_name
             props.type = self.type
 
 
@@ -8121,7 +8123,7 @@ class VIEW3D_MT_edit_curves(Menu):
         layout.separator()
         layout.operator_menu_enum("curves.curve_type_set", text="Set Spline Type",
                                   property="type")  # BFA - made title consistent
-        layout.operator_menu_enum("curves.handle_type_set", "type")
+        # layout.operator_menu_enum("curves.handle_type_set", "type") # BFA - hide, as already exposed in header
         layout.operator("curves.attribute_set", icon="NODE_ATTRIBUTE")
         layout.operator("curves.cyclic_toggle", icon="TOGGLE_CYCLIC")
         layout.template_node_operator_asset_menu_items(catalog_path=self.bl_label)
@@ -8179,18 +8181,18 @@ class VIEW3D_MT_edit_curves_context_menu(Menu):
         layout.operator_menu_enum("curves.curve_type_set", text="Set Spline Type",
                                   property="type")  # BFA - made title consistent
         layout.operator_menu_enum("curves.handle_type_set", "type")
-        layout.operator("curves.cyclic_toggle")
-        layout.operator("curves.switch_direction")
+        layout.operator("curves.cyclic_toggle", icon="TOGGLE_CYCLIC")
+        layout.operator("curves.switch_direction", icon="SWITCH_DIRECTION")
 
         layout.separator()
 
         # Removal Operators
-        layout.operator("curves.separate")
-        layout.operator("curves.delete")
+        layout.operator("curves.separate", icon="SEPARATE")
+        layout.operator("curves.delete", icon="DELETE")
 
         layout.separator()
 
-        layout.operator("curves.split")
+        layout.operator("curves.split", icon='SPLIT')
 
 
 class VIEW3D_MT_edit_pointcloud(Menu):
@@ -9615,10 +9617,6 @@ class VIEW3D_PT_overlay_object(Panel):
         else:
             col.label(icon="DISCLOSURE_TRI_RIGHT")
 
-        if shading.type == "WIREFRAME" or shading.show_xray:
-            layout.separator()
-            layout.prop(overlay, "bone_wire_alpha")
-
 
 class VIEW3D_PT_overlay_geometry(Panel):
     bl_space_type = "VIEW_3D"
@@ -10181,7 +10179,7 @@ class VIEW3D_PT_overlay_bones(Panel):
     bl_space_type = "VIEW_3D"
     bl_region_type = "HEADER"
     bl_label = "Bones"
-    bl_ui_units_x = 14
+    bl_ui_units_x = 18 # BFA - made wider for the label
 
     @staticmethod
     def is_using_wireframe(context):
@@ -10238,7 +10236,8 @@ class VIEW3D_PT_overlay_bones(Panel):
             row.separator()
             row.prop(overlay, "show_xray_bone")
             row = col.row()
-            row.active = shading.type == "WIREFRAME"
+            #row.active = shading.type == "WIREFRAME" # BFA - WIP - you can tune this always?
+            row.use_property_split = True # BFA
             row.prop(overlay, "bone_wire_alpha")
 
 

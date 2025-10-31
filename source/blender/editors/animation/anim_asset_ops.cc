@@ -29,6 +29,7 @@
 #include "ED_asset_shelf.hh"
 #include "ED_fileselect.hh"
 #include "ED_screen.hh"
+#include "ED_undo.hh"
 
 #include "UI_interface_icons.hh"
 #include "UI_resources.hh"
@@ -424,7 +425,7 @@ static void visit_library_prop_catalogs_catalog_for_search_fn(
 
 void POSELIB_OT_create_pose_asset(wmOperatorType *ot)
 {
-  ot->name = "Create Pose Asset...";
+  ot->name = "Create Pose Asset";
   ot->description = "Create a new asset from the selected bones in the scene";
   ot->idname = "POSELIB_OT_create_pose_asset";
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
@@ -666,6 +667,10 @@ static wmOperatorStatus pose_asset_modify_exec(bContext *C, wmOperator *op)
     /* Not needed for local assets. */
     bke::asset_edit_id_save(*bmain, action->id, *op->reports);
   }
+  else {
+    /* Only create undo-step for local actions. Undoing external files isn't supported. */
+    ED_undo_push_op(C, op);
+  }
 
   asset::refresh_asset_library_from_asset(C, *asset);
   WM_main_add_notifier(NC_ASSET | ND_ASSET_LIST | NA_EDITED, nullptr);
@@ -773,6 +778,8 @@ static wmOperatorStatus pose_asset_delete_exec(bContext *C, wmOperator *op)
   }
   else {
     asset::clear_id(&action->id);
+    /* Only create undo-step for local actions. Undoing external files isn't supported. */
+    ED_undo_push_op(C, op);
   }
 
   asset::refresh_asset_library(C, library_ref.value());
