@@ -10332,6 +10332,10 @@ class VIEW3D_PT_overlay_weight_paint(Panel):
         row.prop(overlay, "show_wpaint_contours")
         row = col.row()
         row.separator()
+        row.prop(overlay, "show_wpaint_colored")
+
+        row = col.row()
+        row.separator()
         row.prop(overlay, "show_paint_wire")
 
 

@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "infos/overlay_paint_infos.hh"
+#include "gpu_shader_common_hash.glsl"
 
 FRAGMENT_SHADER_CREATE_INFO(overlay_paint_weight)
 
@@ -68,7 +69,12 @@ float4 contour_grid(float weight, float weight_gradient)
 float4 apply_color_fac(float4 color_in)
 {
   float4 color = color_in;
-  color.rgb = max(float3(0.005f), color_in.rgb) * color_fac;
+  if (draw_colored) {
+    float3 color_id = hash_float_to_vec3(color_hash);
+    color.rgb = max(float3(0.005f), color_id) * color_fac;
+  } else {
+    color.rgb = max(float3(0.005f), color_in.rgb) * color_fac;
+  }
   return color;
 }
 
@@ -85,6 +91,9 @@ void main()
   else {
     float weight = weight_interp.x;
     float4 weight_color = texture(colorramp, weight);
+    if (draw_colored) {
+      weight_color = vec4(weight, weight, weight, 1.0);
+    }
     weight_color = apply_color_fac(weight_color);
 
     /* Contour display */

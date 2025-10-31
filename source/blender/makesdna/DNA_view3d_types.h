@@ -695,6 +695,7 @@ enum {
 /** #View3DOverlay.wpaint_flag */
 enum {
   V3D_OVERLAY_WPAINT_CONTOURS = (1 << 0),
+  V3D_OVERLAY_WPAINT_COLORED = (1 << 1),
 };
 
 /** #View3D.around */

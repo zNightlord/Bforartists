@@ -104,6 +104,7 @@ CREATE_INFO_VARIANT(overlay_paint_texture_clipped, overlay_paint_texture, drw_cl
 GPU_SHADER_INTERFACE_INFO(overlay_paint_weight_iface)
 SMOOTH(float2, weight_interp) /* (weight, alert) */
 SMOOTH(float, color_fac)
+SMOOTH(float, color_hash)
 GPU_SHADER_INTERFACE_END()
 
 GPU_SHADER_CREATE_INFO(overlay_paint_weight)
@@ -115,6 +116,7 @@ VERTEX_OUT(overlay_paint_weight_iface)
 SAMPLER(0, sampler1D, colorramp)
 PUSH_CONSTANT(float, opacity)      /* `1.0f` by default. */
 PUSH_CONSTANT(bool, draw_contours) /* `false` by default. */
+PUSH_CONSTANT(bool, draw_colored) /* `false` by default. */
 FRAGMENT_OUT(0, float4, frag_color)
 FRAGMENT_OUT(1, float4, line_output)
 VERTEX_SOURCE("overlay_paint_weight_vert.glsl")
