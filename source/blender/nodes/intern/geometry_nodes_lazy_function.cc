@@ -20,6 +20,7 @@
  * complexity. So far, this does not seem to be a performance issue.
  */
 
+#include "NOD_expression_to_nodes.hh"
 #include "NOD_geo_viewer.hh"
 #include "NOD_geometry_exec.hh"
 #include "NOD_geometry_nodes_lazy_function.hh"
@@ -51,6 +52,7 @@
 
 #include "ED_node.hh"
 
+#include "FN_lazy_function_execute.hh"
 #include "FN_lazy_function_graph_executor.hh"
 
 #include "DEG_depsgraph_query.hh"
@@ -1521,6 +1523,169 @@ class LazyFunctionForSimulationZone : public LazyFunction {
   }
 };
 
+class LazyFunctionForExpressionNode : public LazyFunction {
+ private:
+  const bNode &bnode_;
+  const NodeExpression &bnode_storage_;
+  const int expr_index_;
+  const int variables_num_;
+  const NodeExpressionItem &expr_item_;
+
+  int expression_input_i_;
+  int expression_usage_output_i_;
+  int result_output_i_;
+  int result_usage_input_i_;
+  IndexRange variable_inputs_;
+  IndexRange variable_usage_outputs_;
+
+  friend struct GeometryNodesLazyFunctionBuilder;
+
+  struct EvalStorage {
+    ResourceScope scope;
+    std::shared_ptr<expression::ExpressionNodeGroup> expression_node_group;
+    const GeometryNodesLazyFunctionGraphInfo *group_graph_info = nullptr;
+    void *group_storage = nullptr;
+    Vector<int> inputs_index_map;
+    Vector<int> output_index_map;
+    bool multi_threading_enabled = false;
+  };
+
+ public:
+  LazyFunctionForExpressionNode(const bNode &bnode, const int expr_index)
+      : bnode_(bnode),
+        bnode_storage_(*static_cast<const NodeExpression *>(bnode_.storage)),
+        expr_index_(expr_index),
+        variables_num_(bnode_storage_.input_items.items_num),
+        expr_item_(bnode_storage_.expression_items.items[expr_index_])
+  {
+    /* Add variable inputs and their usage outputs. */
+    for (const int i : IndexRange(variables_num_)) {
+      const NodeExpressionInputItem &item = bnode_storage_.input_items.items[i];
+      const bke::bNodeSocketType *socket_type = bke::node_socket_type_find_static(
+          item.socket_type);
+      BLI_assert(socket_type);
+      inputs_.append_as(item.name, CPPType::get<SocketValueVariant>(), lf::ValueUsage::Maybe);
+      outputs_.append_as("Usage", CPPType::get<bool>());
+    }
+    variable_inputs_ = IndexRange(variables_num_);
+    variable_usage_outputs_ = IndexRange(variables_num_);
+
+    /* Add expression input and its usage output. */
+    expression_input_i_ = inputs_.append_and_get_index_as(
+        "Expression", CPPType::get<SocketValueVariant>(), lf::ValueUsage::Used);
+    expression_usage_output_i_ = outputs_.append_and_get_index_as("Expression Usage",
+                                                                  CPPType::get<bool>());
+
+    /* Add result output and its input usage. */
+    result_output_i_ = outputs_.append_and_get_index_as(expr_item_.name,
+                                                        CPPType::get<SocketValueVariant>());
+    result_usage_input_i_ = inputs_.append_and_get_index_as(
+        "Usage", CPPType::get<bool>(), lf::ValueUsage::Maybe);
+  }
+
+  void execute_impl(lf::Params &params, const lf::Context &context) const override
+  {
+    GeoNodesUserData &user_data = *static_cast<GeoNodesUserData *>(context.user_data);
+
+    EvalStorage &eval_storage = *static_cast<EvalStorage *>(context.storage);
+    if (!eval_storage.expression_node_group) {
+      const std::string expression =
+          params.get_input<SocketValueVariant>(expression_input_i_).get<std::string>();
+      eval_storage.expression_node_group = expression::expression_node_to_group(
+          bnode_, bnode_.owner_tree().idname, {expression}, {expr_index_});
+      /* Check if creating the node group failed. */
+      if (!eval_storage.expression_node_group->tree) {
+        this->output_fallbacks(params);
+        this->log_error(context, eval_storage.expression_node_group->error);
+        return;
+      }
+
+      eval_storage.group_graph_info = ensure_geometry_nodes_lazy_function_graph(
+          *eval_storage.expression_node_group->tree);
+      if (!eval_storage.group_graph_info) {
+        this->output_fallbacks(params);
+        this->log_error(context, "Invalid expression");
+        return;
+      }
+
+      const GeometryNodesGroupFunction &group_fn = eval_storage.group_graph_info->function;
+
+      /* Types containing referenced data are not supported yet. */
+      BLI_assert(group_fn.inputs.references_to_propagate.range.is_empty());
+
+      eval_storage.group_storage = group_fn.function->init_storage(eval_storage.scope.allocator());
+
+      eval_storage.inputs_index_map.reinitialize(inputs_.size() - 1);
+      eval_storage.output_index_map.reinitialize(outputs_.size());
+      for (const int i : variable_inputs_.index_range()) {
+        eval_storage.inputs_index_map[group_fn.inputs.main[i]] = variable_inputs_[i];
+        eval_storage.output_index_map[group_fn.outputs.input_usages[i]] =
+            variable_usage_outputs_[i];
+      }
+      eval_storage.inputs_index_map[group_fn.inputs.output_usages[0]] = result_usage_input_i_;
+      eval_storage.output_index_map[group_fn.outputs.main[0]] = result_output_i_;
+    }
+
+    bke::ExpressionNodeOutputComputeContext compute_context{
+        user_data.compute_context, bnode_.identifier, expr_index_, &bnode_.owner_tree()};
+
+    GeoNodesUserData group_user_data = user_data;
+    group_user_data.compute_context = &compute_context;
+    group_user_data.log_socket_values = should_log_socket_values_for_context(
+        user_data, compute_context.hash());
+
+    GeoNodesLocalUserData group_local_user_data{group_user_data};
+    lf::Context group_context{
+        eval_storage.group_storage, &group_user_data, &group_local_user_data};
+
+    lf::RemappedParams group_params{*eval_storage.group_graph_info->function.function,
+                                    params,
+                                    eval_storage.inputs_index_map,
+                                    eval_storage.output_index_map,
+                                    eval_storage.multi_threading_enabled};
+
+    ScopedComputeContextTimer timer(group_context);
+    eval_storage.group_graph_info->function.function->execute(group_params, group_context);
+  }
+
+  void output_fallbacks(lf::Params &params) const
+  {
+    set_default_value_for_output_socket(
+        params, result_output_i_, bnode_.output_socket(expr_index_));
+    for (const int lf_i : variable_usage_outputs_) {
+      params.set_output(lf_i, false);
+    }
+  }
+
+  void log_error(const lf::Context &context, const StringRef error) const
+  {
+    GeoNodesUserData &user_data = *static_cast<GeoNodesUserData *>(context.user_data);
+    GeoNodesLocalUserData &local_user_data = *static_cast<GeoNodesLocalUserData *>(
+        context.local_user_data);
+
+    if (geo_eval_log::GeoTreeLogger *tree_logger = local_user_data.try_get_tree_logger(user_data))
+    {
+      tree_logger->node_warnings.append(*tree_logger->allocator,
+                                        {bnode_.identifier, {NodeWarningType::Error, error}});
+    }
+  }
+
+  void *init_storage(LinearAllocator<> &allocator) const override
+  {
+    return allocator.construct<EvalStorage>().release();
+  }
+
+  void destruct_storage(void *storage) const override
+  {
+    EvalStorage *eval_storage = static_cast<EvalStorage *>(storage);
+    if (eval_storage->group_storage) {
+      eval_storage->group_graph_info->function.function->destruct_storage(
+          eval_storage->group_storage);
+    }
+    std::destroy_at(eval_storage);
+  }
+};
+
 void report_from_multi_function(const mf::Context &context,
                                 NodeWarningType type,
                                 std::string message)
@@ -2885,6 +3050,10 @@ struct GeometryNodesLazyFunctionBuilder {
           this->build_enable_output_node(bnode, graph_params);
           break;
         }
+        if (bnode.is_type("NodeExpression")) {
+          this->build_expression_node(bnode, graph_params);
+          break;
+        }
         if (bnode.is_undefined()) {
           this->build_undefined_node(bnode, graph_params);
           break;
@@ -2993,6 +3162,7 @@ struct GeometryNodesLazyFunctionBuilder {
     for (const int i : btree_.interface_outputs().index_range()) {
       const bNodeTreeInterfaceSocket &interface_output = *btree_.interface_outputs()[i];
       const bNodeSocket &bsocket = bnode.input_socket(i);
+      /* TODO: Fix: only add group outputs for main output. */
       lf::GraphOutputSocket &lf_socket = graph_params.lf_graph.add_output(
           CPPType::get<SocketValueVariant>(), interface_output.name ? interface_output.name : "");
       lf_graph_outputs.append(&lf_socket);
@@ -3495,6 +3665,68 @@ struct GeometryNodesLazyFunctionBuilder {
     graph_params.lf_inputs_by_bsocket.add(&enable_bsocket, &lf_node.input(0));
     graph_params.usage_by_bsocket.add(&enable_bsocket, output_is_used_socket);
     graph_params.usage_by_bsocket.add(&value_input_bsocket, &lf_node.output(0));
+  }
+
+  void build_expression_node(const bNode &bnode, BuildGraphParams &graph_params)
+  {
+    const NodeExpression &storage = *static_cast<const NodeExpression *>(bnode.storage);
+    const Span<const bNodeSocket *> expr_input_bsockets = bnode.input_sockets().take_front(
+        storage.expression_items.items_num);
+    const Span<const bNodeSocket *> variable_input_bsockets =
+        bnode.input_sockets().drop_front(storage.expression_items.items_num + 1).drop_back(1);
+    const Span<const bNodeSocket *> expr_output_bsockets = bnode.output_sockets().drop_back(1);
+
+    Vector<lf::FunctionNode *> lf_expr_nodes;
+
+    for (const int expr_index : IndexRange(storage.expression_items.items_num)) {
+      const bNodeSocket &expr_bsocket = *expr_input_bsockets[expr_index];
+      const bNodeSocket &result_bsocket = *expr_output_bsockets[expr_index];
+
+      auto &expr_fn = scope_.construct<LazyFunctionForExpressionNode>(bnode, expr_index);
+      lf::FunctionNode &lf_node = graph_params.lf_graph.add_function(expr_fn);
+      lf_expr_nodes.append(&lf_node);
+      lf::InputSocket &lf_expr_input = lf_node.input(expr_fn.expression_input_i_);
+      lf::OutputSocket &lf_result_output = lf_node.output(expr_fn.result_output_i_);
+      lf::InputSocket &lf_result_usage_input = lf_node.input(expr_fn.result_usage_input_i_);
+
+      graph_params.lf_inputs_by_bsocket.add(&expr_bsocket, &lf_expr_input);
+      graph_params.lf_output_by_bsocket.add(&result_bsocket, &lf_result_output);
+      mapping_->bsockets_by_lf_socket_map.add(&lf_expr_input, &expr_bsocket);
+      graph_params.socket_usage_inputs.add(&lf_node.input(expr_fn.result_usage_input_i_));
+      graph_params.usage_by_bsocket.add(&expr_bsocket,
+                                        &lf_node.output(expr_fn.expression_usage_output_i_));
+
+      if (lf::OutputSocket *lf_result_is_used = graph_params.usage_by_bsocket.lookup_default(
+              &result_bsocket, nullptr))
+      {
+        graph_params.lf_graph.add_link(*lf_result_is_used, lf_result_usage_input);
+      }
+      else {
+        static const bool static_false = false;
+        lf_result_usage_input.set_default_value(&static_false);
+      }
+
+      for (const int variable_i : IndexRange(storage.input_items.items_num)) {
+        const bNodeSocket &variable_bsocket = *variable_input_bsockets[variable_i];
+        lf::InputSocket &lf_variable_input = lf_node.input(expr_fn.variable_inputs_[variable_i]);
+        graph_params.lf_inputs_by_bsocket.add(&variable_bsocket, &lf_variable_input);
+        mapping_->bsockets_by_lf_socket_map.add(&lf_variable_input, &variable_bsocket);
+      }
+    }
+
+    for (const int variable_i : IndexRange(storage.input_items.items_num)) {
+      const bNodeSocket &variable_bsocket = *variable_input_bsockets[variable_i];
+      Vector<lf::OutputSocket *> lf_variable_usages;
+      for (lf::FunctionNode *lf_expr_node : lf_expr_nodes) {
+        const auto &expr_fn = static_cast<const LazyFunctionForExpressionNode &>(
+            lf_expr_node->function());
+        lf_variable_usages.append(
+            &lf_expr_node->output(expr_fn.variable_usage_outputs_[variable_i]));
+      }
+      lf::OutputSocket *lf_combined_usage = this->or_socket_usages(lf_variable_usages,
+                                                                   graph_params);
+      graph_params.usage_by_bsocket.add(&variable_bsocket, lf_combined_usage);
+    }
   }
 
   void build_index_switch_node(const bNode &bnode, BuildGraphParams &graph_params)
