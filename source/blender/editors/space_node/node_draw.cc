@@ -3430,31 +3430,6 @@
    /* Body. */
    ColorTheme4f color = node_header_color_get(ntree, node, color_id);
    {
-     if (node_undefined_or_unsupported(ntree, node)) {
-       /* Use warning color to indicate undefined types. */
-       UI_GetThemeColorBlendShade4fv(TH_REDALERT, color_id, 0.1f, -40, color);
-     }
-     else if (node.is_muted()) {
-       /* Muted nodes get a mix of the background with the node color. */
-       UI_GetThemeColorBlendShade4fv(TH_BACK, color_id, 0.4f, 0, color);
-     }
-     else if (node.flag & NODE_CUSTOM_COLOR) {
-       rgba_float_args_set(color, node.color[0], node.color[1], node.color[2], 1.0f);
-     }
-     else {
-       UI_GetThemeColor4fv(color_id, color);
-     }
-
-     /* Draw selected nodes fully opaque. */
-     if (node.flag & SELECT) {
-       color[3] = 1.0f;
-     }
-
-     /* Draw muted nodes slightly transparent so the wires inside are visible. */
-     if (node.is_muted()) {
-       color[3] -= 0.2f;
-     }
-
      /* BFA - Group background for collapsed nodes (drawn behind everything). */
      if (node.type_legacy == NODE_GROUP && draw_node_details(snode)) {
        const float group_padding = 5.0f * UI_SCALE_FAC;
