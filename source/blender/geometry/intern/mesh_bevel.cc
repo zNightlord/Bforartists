@@ -993,7 +993,7 @@ namespace geom {
 /** Functions and data for geometric calculations. */
 
 constexpr double bevel_epsilon_d = 1e-6;
-constexpr float bevel_epsilon = 1e-6f;
+// constexpr float bevel_epsilon = 1e-6f;
 constexpr float bevel_epsilon_sq = 1e-12f;
 constexpr float bevel_epsilon_big = 1e-4f;
 // constexpr float bevel_epsilon_big_sq = 1e-8f;
@@ -1018,7 +1018,7 @@ static float3 edge_dir(const int bv, const int epos, const BevelState &bs)
 }
 
 /** Return the length of the edge for bevvert \a bv and position \a epos. */
-static float edge_length(const int bv, const int epos, const BevelState &bs)
+[[maybe_unused]] static float edge_length(const int bv, const int epos, const BevelState &bs)
 {
   return math::length(edge_dir(bv, epos, bs));
 }
@@ -1078,7 +1078,7 @@ static bool nearly_parallel_normalized(const float3 d1, const float3 d2)
 /** Return the angle between the two faces adjacent to the bevedge that
  * is at position \a edge_pos of bevvert \a bv.
  * If there are not two, return 0. */
-static float edge_face_angle(const int bv, const int edge_pos, const BevelState &bs)
+[[maybe_unused]] static float edge_face_angle(const int bv, const int edge_pos, const BevelState &bs)
 {
   const int face_next = bs.face_next(bv, edge_pos);
   const int face_prev = bs.face_prev(bv, edge_pos);
@@ -1093,7 +1093,7 @@ static float edge_face_angle(const int bv, const int edge_pos, const BevelState 
 /** Find the center axis of the given bevel vert, for use in vertex beveling.
  * Note; Don't use the vertex normal -- it can give unwanted results.
  */
-static float3 bevvert_axis(const int bv, const BevelState &bs)
+[[maybe_unused]] static float3 bevvert_axis(const int bv, const BevelState &bs)
 {
   float3 vert_axis(0.0f, 0.0f, 0.0f);
   Span<int> edges = bs.bevvert_bevedges()[bv];
@@ -1217,7 +1217,7 @@ static float3 offset_bevedge(
  * of the lines whose intersection defines the boundary point between e1 and e2 with common
  * vert v, as defined in the parameters of offset_meet.
  */
-static void offset_meet_lines_percent_or_absolute(const int /*bv*/,
+[[maybe_unused]] static void offset_meet_lines_percent_or_absolute(const int /*bv*/,
                                                   const int /*e1_pos*/,
                                                   const int /*e2_pos*/,
                                                   MutableSpan<float3> /*pts*/,
@@ -1473,7 +1473,7 @@ static bool try_offset_meet_edge(const int bv,
  * would put it. This means that neither side sees a reflex angle or too close to a straight
  * angle.
  */
-static bool good_slide(const int bv,
+[[maybe_unused]] static bool good_slide(const int bv,
                        const int e1_pos,
                        const int e2_pos,
                        const int eslide_pos,
@@ -3318,7 +3318,7 @@ namespace uv {
 
 /** Return true if all uv's in the given uv_map are contiguous at bevvert \a bv.
  * If \a uv_map_index is -1, return true if all uv_maps are contiguous there.  */
-static bool bevvert_is_uv_contiguous(const int bv, const int uv_map_index, const BevelState &bs)
+[[maybe_unused]] static bool bevvert_is_uv_contiguous(const int bv, const int uv_map_index, const BevelState &bs)
 {
   const int mesh_v = bs.bevvert_mesh_verts()[bv];
   for (const int i : IndexRange(bs.uvmaps_num)) {
@@ -3340,43 +3340,35 @@ static bool bevvert_is_uv_contiguous(const int bv, const int uv_map_index, const
   return true;
 }
 
-/** Return true if all uv's in the given uv_map are contiguous at the end \a end of bevedge \a be.
- * This means that the two faces (prev and next) have corners at that end with equal UV values.  */
-static bool bevedge_is_uv_contiguous_at_end(const int be, const int end, const int uv_map_index, const BevelState &bs)
+/** Return a pair of bools, where says whether the edge at position \a epos of bevvert \a bv
+ * has contiguous UVs for the UV map \a uv_map_index, at the near and far ends, respectively..
+ * This means that the two faces (prev and next) have corners at corresponding end with equal UV values.  */
+static std::pair<bool, bool> uv_contiguousness(const int bv, const int epos, const int uv_map_index, const BevelState &bs)
 {
-  const int bv = bs.bevedge_bevverts(be)[end];
-  /* It is possible that bv is -1, if be is a non-beveled edge
-   * and only one end is bevel-involved.*/
-  int mesh_v;
-  if (bv != -1) {
-    mesh_v = bs.bevvert_mesh_verts()[bv];
-  }
-  else {
-    const int mesh_e = bs.bevedge_mesh_edges()[bv];
-    mesh_v = bs.mesh_info.mesh.edges()[mesh_e][end];
-  }
-  const UVMapInfo &info = bs.uv_map_info(uv_map_index);
-  Span<int> corners = bs.mesh_info.vert_corners()[mesh_v];
-  if (corners.size() == 0) {
-    return false;
-  }
-  const int epos = bs.bevedge_pos(be, bv);
   const int fprev = bs.face_prev(bv, epos);
   const int fnext = bs.face_next(bv, epos);
-  if (fnext == -1 || fprev == -1) {
-    return false;
+  if (fprev == -1 || fnext == -1) {
+    return {false, false};
   }
+  const int be = bs.bevvert_bevedges()[bv][epos];
+  const int mesh_e = bs.bevedge_mesh_edges()[be];
+  const int2 mesh_e_verts = bs.mesh_info.mesh.edges()[mesh_e];
+  const int end = bs.bevedge_vert_end(bv, be);
+  const int other_end = 1 - end;
+  const int2 mesh_vs = {mesh_e_verts[end], mesh_e_verts[other_end]};
+  const UVMapInfo &info = bs.uv_map_info(uv_map_index);
   OffsetIndices<int> faces = bs.mesh_info.mesh.faces();
   Span<int> corner_verts = bs.mesh_info.mesh.corner_verts();
-  const int cprev = bke::mesh::face_find_corner_from_vert(faces[fprev], corner_verts, mesh_v);
-  const int cnext = bke::mesh::face_find_corner_from_vert(faces[fnext], corner_verts, mesh_v);
-  BLI_assert(cprev != -1 && cnext != -1);
-  float2 uvprev = info.value(cprev);
-  float2 uvnext = info.value(cnext);
-  if (uvprev == uvnext) {
-    return true;
+  Array<bool, 2> ans(2);
+  for (const int i : IndexRange(2)) {
+    const int cprev = bke::mesh::face_find_corner_from_vert(faces[fprev], corner_verts, mesh_vs[i]);
+    const int cnext = bke::mesh::face_find_corner_from_vert(faces[fnext], corner_verts, mesh_vs[i]);
+    BLI_assert(cprev != -1 && cnext != -1);
+    float2 uvprev = info.value(cprev);
+    float2 uvnext = info.value(cnext);
+    ans[i] = uvprev == uvnext;
   }
-  return false;
+  return std::pair<bool, bool>(ans[0], ans[1]);
 }
 
 enum class UVGapKind {
@@ -3400,10 +3392,9 @@ static Array<UVGapKind, 20> bevvert_bevedge_uv_gaps(const int bv, const int uv_m
   Span<int> bevedges = bs.bevvert_bevedges()[bv];
   Array<UVGapKind, 20> ans(bevedges.size(), UVGapKind::UnknownGap);
   for (const int epos : bevedges.index_range()) {
-    const int be = bevedges[epos];
-    const int end = bs.bevedge_vert_end(bv, be);
-    if (bevedge_is_uv_contiguous_at_end(be, end, uv_map_index, bs)) {
-      if (bevedge_is_uv_contiguous_at_end(be, 1 - end, uv_map_index, bs)) {
+    std::pair<bool, bool> uv_contigs = uv_contiguousness(bv, epos, uv_map_index, bs);
+    if (uv_contigs.first) {
+      if (uv_contigs.second) {
         ans[epos] = UVGapKind::NoGap;
       }
       else {
@@ -3418,33 +3409,81 @@ static Array<UVGapKind, 20> bevvert_bevedge_uv_gaps(const int bv, const int uv_m
   return ans;
 }
 
+/* Project \a pos onto face \a f of mesh \a mesh.
+ * Return true if the result is inside or on the perimeter the face (within tolerance).
+ * Return the projected point in \a *r_projected_pos. */
+static bool project_to_face(const float3 pos, const int f, const Mesh &mesh, int *r_projected_pos)
+{
+  // TODO:
+  // find the plane containing the face
+  // use closest_to_plane_v3 to get the point on the plane
+  // project the face vertices onto a 2d plane, and the point just found
+  // use isect_point_poly_v2 to see if it is inside or not.
+  // See e.g., BM_face_point_inside_test
+  return false;
+}
+
+static void find_over_faces(const float3 &pos, const int bv, const BevelState &bs, int *r_best_face,
+                            float3 *r_best_pos, int *r_alt_face, float3 *r_alt_pos)
+{
+  Span<int> bv_faces = bs.bevvert_faces()[bv];
+  const Mesh &mesh = bs.mesh_info.mesh;
+  for (const int i : bv_faces.index_range()) {
+    const int mesh_f = bv_faces[i];
+    if (mesh_f == -1) {
+      continue;
+    }
+  }
+}
+
+static void calculate_adj_face_uvs(const int f,
+                                   const int bv,
+                                   const Array<UVGapKind, 20> &gaps,
+                                   const int uv_map_index,
+                                   const BevelState &bs)
+{
+  const MeshPattern &pat = bs.bevvert_meshpatterns()[bv];
+  std::pair<SmallIntArray, SmallIntArray> vs_and_es = pat.face_verts_and_edges(f, 0, 0);
+  SmallIntArray &vs = vs_and_es.first;
+  const int num_vs = vs.size();
+  //DEBUG!!
+  fmt::println("calculate_adj_face_uvs, bv={}, f={}", bv, f);
+  print_span(vs.as_span(), "vs");
+  const IndexRange newverts_range = bs.bevvert_newverts()[bv];
+  const Span<float3> vs_pos = bs.newvert_positions().slice(newverts_range);
+  print_float3_span(vs_pos, "vs positions");
+  SmallIntArray best_over_face(num_vs);
+  SmallIntArray alt_over_face(num_vs);
+  Array<float3, 20> best_over_pos(num_vs);
+  Array<float3, 20> alt_over_pos(num_vs);
+  for (const int i : vs.index_range()) {
+    const float3 pos = vs_pos[i];
+    find_over_faces(pos, bv, bs, &best_over_face[i], &best_over_pos[i], &alt_over_face[i], &alt_over_pos[i]);
+  }
+}
+
 static void calculate_vertex_mesh_face_uvs(const int bevvert,
                                            const int uv_map_index,
                                            const BevelState &bs)
 {
-  return;
   //DEBUG!!
   fmt::println("calculate vertex mesh uvs for bevvert {}, uv map {}", bevvert, uv_map_index);
-  //const MeshPattern &pat = bs.bevvert_meshpatterns()[bevvert];
   Array<UVGapKind, 20> gaps = bevvert_bevedge_uv_gaps(bevvert, uv_map_index, bs);
-  //DEBUG!!
-  fmt::println("gaps for bevvert {}, vert {}", bevvert, bs.bevvert_mesh_verts()[bevvert]);
-  for (const int i : gaps.index_range()) {
-    const int be = bs.bevvert_bevedges()[bevvert][i];
-    const int e = bs.bevedge_mesh_edges()[be];
-    fmt::print("{}: be={}, e={}", i, be, e);
-    switch (gaps[i]) {
-      case UVGapKind::NoGap:
-        fmt::println("NoGap");
-        break;
-      case UVGapKind::WedgeGap:
-        fmt::println("WedgeGap");
-        break;
-      case UVGapKind::WideGap:
-        fmt::println("WideGap");
-        break;
-      default:
-        fmt::println("UnknownGap");
+  const MeshPattern &pat = bs.bevvert_meshpatterns()[bevvert];
+  int4 nums = pat.num_elements();
+  switch (pat.kind) {
+    case MeshKind::Adj: {
+      for (const int f : IndexRange(nums[2])) {
+        calculate_adj_face_uvs(f, bevvert, gaps, uv_map_index, bs);
+      }
+      break;
+    }
+    case MeshKind::Line: {
+      break;
+    }
+    default: {
+      // TODO
+      fmt::println("Implement me: other cases in calculate_vertex_mesh_face_uvs");
     }
   }
 }
@@ -3851,7 +3890,6 @@ AdjVertKind MeshPattern::adj_vert_kind(const int v, const int anchor) const
   int3 rao = adj::v_ring_anchor_offset(v, num_anchors, num_segs);
   const int ring = rao[0];
   const int a = rao[1];
-  const int offset = rao[2];
   const int floor_n2 = num_segs / 2;
   if (num_segs % 2 == 0) {
     if (v == 0) {
@@ -3888,7 +3926,6 @@ int MeshPattern::face_anchor_owner(const int f) const
     return 0;
   }
   int3 rao = adj::f_ring_anchor_offset(f, num_anchors, num_segs);
-  const int ring = rao[0];
   const int a = rao[1];
   const int offset = rao[2];
   const int floor_n2 = num_segs / 2;
