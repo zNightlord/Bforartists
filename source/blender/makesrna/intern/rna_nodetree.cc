@@ -10026,9 +10026,9 @@ static void rna_def_nodes(BlenderRNA *brna)
   define(brna, "NodeInternal", "NodeClosureInput", def_closure_input, ICON_NODE_CLOSURE);
   define(brna, "NodeInternal", "NodeClosureOutput", def_closure_output, ICON_NODE_CLOSURE);
   define(brna, "NodeInternal", "NodeCombineBundle", def_combine_bundle, ICON_NODE_BUNDLE_COMBINE);
-  define(brna, "NodeInternal", "NodeEnableOutput", nullptr, ICON_NONE);
+  define(brna, "NodeInternal", "NodeEnableOutput", nullptr, ICON_NODE_ENABLE_OUTPUT);
   define(brna, "NodeInternal", "NodeEvaluateClosure", def_evaluate_closure, ICON_NODE_CLOSURE_EVALUATE);
-  define(brna, "NodeInternal", "NodeJoinBundle", nullptr, ICON_NONE);
+  define(brna, "NodeInternal", "NodeJoinBundle", nullptr, ICON_NODE_BUNDLE_JOIN);
   define(brna, "NodeInternal", "NodeSeparateBundle", def_separate_bundle, ICON_NODE_BUNDLE_SEPARATE);
   define(brna, "NodeInternal", "NodeExpression", def_expression, ICON_NONE);
 
@@ -10335,7 +10335,7 @@ static void rna_def_nodes(BlenderRNA *brna)
   define(brna, "GeometryNode", "GeometryNodeCurveToPoints", nullptr, ICON_POINTCLOUD_DATA);
   define(brna, "GeometryNode", "GeometryNodeDeformCurvesOnSurface", nullptr, ICON_DEFORM_CURVES);
   define(brna, "GeometryNode", "GeometryNodeDeleteGeometry", nullptr, ICON_DELETE);
-  define(brna, "GeometryNode", "GeometryNodeDistributePointsInGrid", nullptr, ICON_NONE);
+  define(brna, "GeometryNode", "GeometryNodeDistributePointsInGrid", nullptr, ICON_NODE_DISTRIBUTEPOINTSINGRID);
   define(brna, "GeometryNode", "GeometryNodeDistributePointsInVolume", nullptr, ICON_VOLUME_DISTRIBUTE);
   define(brna, "GeometryNode", "GeometryNodeDistributePointsOnFaces", def_geo_distribute_points_on_faces, ICON_POINT_DISTRIBUTE);
   define(brna, "GeometryNode", "GeometryNodeDualMesh", nullptr, ICON_DUAL_MESH);
@@ -10359,7 +10359,7 @@ static void rna_def_nodes(BlenderRNA *brna)
   define(brna, "GeometryNode", "GeometryNodeForeachGeometryElementInput", def_geo_foreach_geometry_element_input, ICON_FOR_EACH);
   define(brna, "GeometryNode", "GeometryNodeForeachGeometryElementOutput", def_geo_foreach_geometry_element_output, ICON_FOR_EACH);
   define(brna, "GeometryNode", "GeometryNodeGeometryToInstance", nullptr, ICON_GEOMETRY_INSTANCE);
-  define(brna, "GeometryNode", "GeometryNodeGetNamedGrid", nullptr, ICON_NONE);
+  define(brna, "GeometryNode", "GeometryNodeGetNamedGrid", nullptr, ICON_NODE_GET_NAMED_GRID);
   define(brna, "GeometryNode", "GeometryNodeGizmoDial", nullptr, ICON_DIAL_GIZMO);
   define(brna, "GeometryNode", "GeometryNodeGizmoLinear", nullptr, ICON_LINEAR_GIZMO);
   define(brna, "GeometryNode", "GeometryNodeGizmoTransform", rna_def_geo_gizmo_transform, ICON_TRANSFORM_GIZMO);
@@ -10368,7 +10368,7 @@ static void rna_def_nodes(BlenderRNA *brna)
   define(brna, "GeometryNode", "GeometryNodeGridCurl", nullptr, ICON_NONE);
   define(brna, "GeometryNode", "GeometryNodeGridDivergence", nullptr, ICON_NONE);
   define(brna, "GeometryNode", "GeometryNodeGridGradient", nullptr, ICON_NONE);
-  define(brna, "GeometryNode", "GeometryNodeGridInfo", nullptr, ICON_NONE);
+  define(brna, "GeometryNode", "GeometryNodeGridInfo", nullptr, ICON_NODE_GRID_INFO);
   define(brna, "GeometryNode", "GeometryNodeGridLaplacian", nullptr, ICON_NONE);
   define(brna, "GeometryNode", "GeometryNodeGridPrune", nullptr, ICON_NONE);
   define(brna, "GeometryNode", "GeometryNodeGridToMesh", nullptr, ICON_NONE);
@@ -10418,7 +10418,7 @@ static void rna_def_nodes(BlenderRNA *brna)
   define(brna, "GeometryNode", "GeometryNodeInputSplineCyclic", nullptr, ICON_IS_SPLINE_CYCLIC);
   define(brna, "GeometryNode", "GeometryNodeInputSplineResolution", nullptr, ICON_SPLINE_RESOLUTION);
   define(brna, "GeometryNode", "GeometryNodeInputTangent", nullptr, ICON_CURVE_TANGENT);
-  define(brna, "GeometryNode", "GeometryNodeInputVoxelIndex", nullptr, ICON_NONE);
+  define(brna, "GeometryNode", "GeometryNodeInputVoxelIndex", nullptr, ICON_NODE_VOXEL_INDEX);
   define(brna, "GeometryNode", "GeometryNodeInstanceOnPoints", nullptr, ICON_POINT_INSTANCE);
   define(brna, "GeometryNode", "GeometryNodeInstancesToPoints", nullptr, ICON_INSTANCES_TO_POINTS);
   define(brna, "GeometryNode", "GeometryNodeInstanceTransform", nullptr, ICON_INSTANCE_TRANSFORM_GET);
@@ -10442,9 +10442,9 @@ static void rna_def_nodes(BlenderRNA *brna)
   define(brna, "GeometryNode", "GeometryNodeMeshIcoSphere", nullptr, ICON_MESH_ICOSPHERE);
   define(brna, "GeometryNode", "GeometryNodeMeshLine", nullptr, ICON_MESH_LINE);
   define(brna, "GeometryNode", "GeometryNodeMeshToCurve", nullptr, ICON_OUTLINER_OB_CURVE);
-  define(brna, "GeometryNode", "GeometryNodeMeshToDensityGrid", nullptr, ICON_NONE);
+  define(brna, "GeometryNode", "GeometryNodeMeshToDensityGrid", nullptr, ICON_NODE_MESHTODENSITYGRID);
   define(brna, "GeometryNode", "GeometryNodeMeshToPoints", nullptr, ICON_MESH_TO_POINTS);
-  define(brna, "GeometryNode", "GeometryNodeMeshToSDFGrid", nullptr, ICON_NONE);
+  define(brna, "GeometryNode", "GeometryNodeMeshToSDFGrid", nullptr, ICON_NODE_MESHTOSDFGRID);
   define(brna, "GeometryNode", "GeometryNodeMeshToVolume", nullptr, ICON_MESH_TO_VOLUME);
   define(brna, "GeometryNode", "GeometryNodeMeshUVSphere", nullptr, ICON_MESH_UVSPHERE);
   define(brna, "GeometryNode", "GeometryNodeObjectInfo", nullptr, ICON_NODE_OBJECTINFO);
@@ -10453,7 +10453,7 @@ static void rna_def_nodes(BlenderRNA *brna)
   define(brna, "GeometryNode", "GeometryNodePoints", nullptr, ICON_DECORATE);
   define(brna, "GeometryNode", "GeometryNodePointsOfCurve", nullptr, ICON_POINT_OF_CURVE);
   define(brna, "GeometryNode", "GeometryNodePointsToCurves", nullptr, ICON_POINTS_TO_CURVES);
-  define(brna, "GeometryNode", "GeometryNodePointsToSDFGrid", nullptr, ICON_NONE);
+  define(brna, "GeometryNode", "GeometryNodePointsToSDFGrid", nullptr, ICON_NODE_POINTSTOSDFGRID);
   define(brna, "GeometryNode", "GeometryNodePointsToVertices", nullptr, ICON_POINTS_TO_VERTICES);
   define(brna, "GeometryNode", "GeometryNodePointsToVolume", nullptr, ICON_POINT_TO_VOLUME);
   define(brna, "GeometryNode", "GeometryNodeProximity", nullptr, ICON_GEOMETRY_PROXIMITY);

@@ -437,15 +437,17 @@ static void add_attribute_search_or_value_buttons(
     name_row->label(IFACE_(socket_name), ICON_NONE);
     prop_row = &split->row(true);
     add_attribute_search_button(ctx, prop_row, rna_path_attribute_name, socket);
+    ctx.draw_attribute_toggle_fn(*prop_row, ICON_SPREADSHEET, socket); /*BFA - move toggle button besides property */
     layout->label("", ICON_BLANK1);
   }
   else {
     const char *name = IFACE_(socket_name.c_str());
     prop_row->prop(ctx.properties_ptr, rna_path, UI_ITEM_NONE, name, ICON_NONE);
-    layout->decorator(ctx.properties_ptr, rna_path.c_str(), -1);
+    ctx.draw_attribute_toggle_fn(*prop_row, ICON_SPREADSHEET, socket); /*BFA - move toggle button besides property */
+    prop_row->decorator(ctx.properties_ptr, rna_path.c_str(), -1); /* BFA - draw inside prop_row */
   }
-
-  ctx.draw_attribute_toggle_fn(*prop_row, ICON_SPREADSHEET, socket);
+  /*BFA - disable this & move button besides property */
+  /*ctx.draw_attribute_toggle_fn(*prop_row, ICON_SPREADSHEET, socket);*/ 
 }
 
 static NodesModifierPanel *find_panel_by_id(NodesModifierData &nmd, const int id)
@@ -511,27 +513,35 @@ static void draw_property_for_socket(DrawGroupInputsContext &ctx,
 
   switch (type) {
     case SOCK_OBJECT: {
+      row->use_property_split_set(false); /*BFA - made this wide*/
       row->prop_search(
           ctx.properties_ptr, rna_path, ctx.bmain_ptr, "objects", name, ICON_OBJECT_DATA);
+      row->label("", ICON_BLANK1); /* BFA - added blank label for consistent alignment */
       break;
     }
     case SOCK_COLLECTION: {
+      row->use_property_split_set(false); /*BFA - made this wide*/
       row->prop_search(ctx.properties_ptr,
                        rna_path,
                        ctx.bmain_ptr,
                        "collections",
                        name,
                        ICON_OUTLINER_COLLECTION);
+      row->label("", ICON_BLANK1); /* BFA - added blank label for consistent alignment */
       break;
     }
     case SOCK_MATERIAL: {
+      row->use_property_split_set(false); /*BFA - made this wide*/
       row->prop_search(
           ctx.properties_ptr, rna_path, ctx.bmain_ptr, "materials", name, ICON_MATERIAL);
+      row->label("", ICON_BLANK1); /* BFA - added blank label for consistent alignment */
       break;
     }
     case SOCK_TEXTURE: {
+      row->use_property_split_set(false); /*BFA - made this wide*/
       row->prop_search(
           ctx.properties_ptr, rna_path, ctx.bmain_ptr, "textures", name, ICON_TEXTURE);
+      row->label("", ICON_BLANK1); /* BFA - added blank label for consistent alignment */
       break;
     }
     case SOCK_IMAGE: {
@@ -553,9 +563,11 @@ static void draw_property_for_socket(DrawGroupInputsContext &ctx,
          * pointers in strings currently. */
         row->prop_search(ctx.properties_ptr, rna_path, ctx.bmain_ptr, "images", name, ICON_IMAGE);
       }
+      row->label("", ICON_BLANK1); /* BFA - added blank label for consistent alignment */
       break;
     }
     case SOCK_MENU: {
+      row->use_property_split_set(false); /*BFA - made this wide*/
       if (socket.flag & NODE_INTERFACE_SOCKET_MENU_EXPANDED) {
         /* Use a single space when the name is empty to work around a bug with expanded enums. Also
          * see #ui_item_enum_expand_exec. */
@@ -568,6 +580,7 @@ static void draw_property_for_socket(DrawGroupInputsContext &ctx,
       else {
         row->prop(ctx.properties_ptr, rna_path, UI_ITEM_NONE, name, ICON_NONE);
       }
+      row->label("", ICON_BLANK1); /* BFA - added blank label for consistent alignment */
       break;
     }
     case SOCK_BOOLEAN: {
@@ -588,8 +601,48 @@ static void draw_property_for_socket(DrawGroupInputsContext &ctx,
         switch (type) {
           case SOCK_FLOAT:
           case SOCK_INT: {
+            row->use_property_decorate_set(false);
             row->prop(ctx.properties_ptr, rna_path, UI_ITEM_NONE, name, ICON_NONE);
             row->label("", ICON_BLANK1); /* BFA - added blank label so int sliders are aligned correctly */
+            row->decorator(ctx.properties_ptr, rna_path.c_str(), -1);
+            break;
+          }
+          case SOCK_VECTOR: {
+            /* BFA - Special handling for transform sockets */
+            if (identifier == "translation" || identifier == "scale" || identifier == "rotation") {
+              /* BFA - Two-row layout for transform properties - use property split for proper XYZ layout */
+              row->use_property_decorate_set(false);
+
+              /* BFA - First row: Just the label */
+              uiLayout *name_row = &row->row(true);
+              name_row->alignment_set(ui::LayoutAlign::Left); /* BFA - align left */
+              name_row->label(name, ICON_NONE);
+
+              /* BFA - Second row: Use property split for proper vector component layout with decorator */
+              uiLayout *channels_row = &row->row(true);
+              channels_row->use_property_split_set(true); /* Enable property split for XYZ labels */
+              channels_row->prop(ctx.properties_ptr, rna_path, UI_ITEM_NONE, "", ICON_NONE);
+              /* BFA - Ensure decorators are shown for animation */
+              channels_row->decorator(ctx.properties_ptr, rna_path.c_str(), -1);
+            }
+            else {
+              /* BFA - For normal vectors, use property split to show XYZ labels */
+              row->use_property_decorate_set(false);
+              row->use_property_split_set(true); /* Enable property split for XYZ labels */
+              row->prop(ctx.properties_ptr, rna_path, UI_ITEM_NONE, name, ICON_NONE);
+              /* BFA - Ensure decorators are shown for animation */
+              row->decorator(ctx.properties_ptr, rna_path.c_str(), -1);
+            }
+            break;
+          }
+          case SOCK_RGBA:
+          case SOCK_ROTATION: {
+            /* BFA - Use property split for proper component layout and alignment */
+            row->use_property_decorate_set(false);
+            row->use_property_split_set(true); /* Enable property split for component labels */
+            row->prop(ctx.properties_ptr, rna_path, UI_ITEM_NONE, name, ICON_NONE);
+            /* BFA - Add decorator manually even with property split to ensure animation indicators */
+            row->decorator(ctx.properties_ptr, rna_path.c_str(), -1);
             break;
           }
           default: {

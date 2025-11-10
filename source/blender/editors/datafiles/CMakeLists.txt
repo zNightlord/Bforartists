@@ -39,6 +39,9 @@ set_property(GLOBAL PROPERTY ICON_GEOM_NAMES
   brush.paint_vertex.average
   brush.paint_vertex.blur
   brush.paint_vertex.smear
+  brush.paint_weight.average
+  brush.paint_weight.blur
+  brush.paint_weight.smear
   brush.particle.add
   brush.particle.comb
   brush.particle.cut
@@ -1208,6 +1211,7 @@ if(WITH_BLENDER)
       node_brick
       node_bump
       node_bundle_combine
+      node_bundle_join
       node_bundle_separate
       node_channel
       node_checker
@@ -1235,10 +1239,12 @@ if(WITH_BLENDER)
       node_despeckle
       node_diffuseshader
       node_direcitonalblur
+      node_distributepointsingrid
       node_doubleedgemask
       node_editgroup
       node_ellipsemask
       node_emission
+      node_enable_output
       node_environment
       node_erode
       node_fileoutput
@@ -1246,11 +1252,13 @@ if(WITH_BLENDER)
       node_fresnel
       node_gamma
       node_geometry
+      node_get_named_grid
       node_glare
       node_glasshader
       node_glossyshader
       node_gradient
       node_groupinsert
+      node_grid_info
       node_hairinfo
       node_holdoutshader
       node_huesaturation
@@ -1273,6 +1281,8 @@ if(WITH_BLENDER)
       node_mapping
       node_material
       node_math
+      node_meshtodensitygrid
+      node_meshtosdfgrid
       node_mix
       node_mixrgb
       node_mixshader
@@ -1285,6 +1295,7 @@ if(WITH_BLENDER)
       node_pixelated
       node_planetrackdeform
       node_pointcloud
+      node_pointstosdfgrid
       node_principled
       node_radial_array
       node_range
@@ -1333,6 +1344,7 @@ if(WITH_BLENDER)
       node_volumeabsorption
       node_volumeprincipled
       node_volumescatter
+      node_voxel_index
       node_wavelength
       node_waves
       node_white_noise
