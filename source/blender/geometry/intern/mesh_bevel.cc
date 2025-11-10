@@ -19,6 +19,7 @@
 #include "BLI_math_base.h"
 #include "BLI_math_base.hh"
 #include "BLI_math_geom.h"
+#include "BLI_math_matrix.h"
 #include "BLI_math_matrix.hh"
 #include "BLI_math_numbers.hh"
 #include "BLI_math_vector.h"
@@ -3423,15 +3424,80 @@ static bool project_to_face(const float3 pos, const int f, const Mesh &mesh, int
   return false;
 }
 
-static void find_over_faces(const float3 &pos, const int bv, const BevelState &bs, int *r_best_face,
-                            float3 *r_best_pos, int *r_alt_face, float3 *r_alt_pos)
+static void find_over_faces(const float3 &pos,
+                            const int bv,
+                            const BevelState &bs,
+                            int *r_best_face,
+                            float3 *r_best_pos,
+                            int *r_alt_face,
+                            float3 *r_alt_pos)
 {
   Span<int> bv_faces = bs.bevvert_faces()[bv];
   const Mesh &mesh = bs.mesh_info.mesh;
-  for (const int i : bv_faces.index_range()) {
-    const int mesh_f = bv_faces[i];
+
+  *r_best_face = -1;
+  if (r_alt_face) {
+    *r_alt_face = -1;
+  }
+
+  float best_dist_sq = FLT_MAX;
+  float alt_dist_sq = FLT_MAX;
+
+  for (const int mesh_f : bv_faces) {
     if (mesh_f == -1) {
       continue;
+    }
+
+    const float3 &face_no = mesh.face_normals()[mesh_f];
+    const IndexRange face_corners_indices = mesh.faces()[mesh_f];
+    if (face_corners_indices.is_empty()) {
+      continue;
+    }
+    const int first_vert_index = mesh.corner_verts()[face_corners_indices[0]];
+    const float3 face_co = mesh.vert_positions()[first_vert_index];
+    float4 plane;
+    plane_from_point_normal_v3(plane, face_co, face_no);
+
+    float3 projected_pos;
+    closest_to_plane_normalized_v3(projected_pos, plane, pos);
+
+    float3x3 axis_mat;
+    axis_dominant_v3_to_m3(axis_mat.ptr(), face_no);
+
+    const int face_len = face_corners_indices.size();
+    Array<float2, 20> poly_2d(face_len);
+
+    for (int i = 0; i < face_len; i++) {
+      const int v_idx = mesh.corner_verts()[face_corners_indices[i]];
+      mul_v2_m3v3(poly_2d[i], axis_mat.ptr(), mesh.vert_positions()[v_idx]);
+    }
+
+    float2 p_2d;
+    mul_v2_m3v3(p_2d, axis_mat.ptr(), projected_pos);
+
+    if (isect_point_poly_v2(p_2d, (const float(*)[2])poly_2d.data(), face_len)) {
+      const float dist_sq = math::distance_squared(pos, projected_pos);
+      if (dist_sq < best_dist_sq) {
+        if (*r_best_face != -1) {
+          alt_dist_sq = best_dist_sq;
+          *r_alt_face = *r_best_face;
+          if (r_alt_pos) {
+            *r_alt_pos = *r_best_pos;
+          }
+        }
+        best_dist_sq = dist_sq;
+        *r_best_face = mesh_f;
+        if (r_best_pos) {
+          *r_best_pos = projected_pos;
+        }
+      }
+      else if (dist_sq < alt_dist_sq) {
+        alt_dist_sq = dist_sq;
+        *r_alt_face = mesh_f;
+        if (r_alt_pos) {
+          *r_alt_pos = projected_pos;
+        }
+      }
     }
   }
 }
@@ -3459,10 +3525,13 @@ static void calculate_adj_face_uvs(const int f,
   for (const int i : vs.index_range()) {
     const float3 pos = vs_pos[i];
     find_over_faces(pos, bv, bs, &best_over_face[i], &best_over_pos[i], &alt_over_face[i], &alt_over_pos[i]);
+    //DEBUG!!
+    fmt::println("i={}, over_f={}, over_pos=({},{},{})", i, best_over_face[i], best_over_pos[i][0], best_over_pos[i][1], best_over_pos[i][2]);
   }
 }
 
-static void calculate_vertex_mesh_face_uvs(const int bevvert,
+static void 
+calculate_vertex_mesh_face_uvs(const int bevvert,
                                            const int uv_map_index,
                                            const BevelState &bs)
 {
