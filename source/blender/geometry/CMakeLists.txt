@@ -6,6 +6,8 @@ set(INC
   PUBLIC .
   ../makesrna
   ../../../intern/eigen
+  ../draw/intern
+  ../gpu
 )
 
 set(INC_SYS
@@ -24,6 +26,7 @@ set(SRC
   intern/join_geometries.cc
   intern/merge_curves.cc
   intern/merge_layers.cc
+  intern/mesh_bevel.cc
   intern/mesh_boolean.cc
   intern/mesh_boolean_manifold.cc
   intern/mesh_copy_selection.cc
@@ -69,6 +72,7 @@ set(SRC
   GEO_join_geometries.hh
   GEO_merge_curves.hh
   GEO_merge_layers.hh
+  GEO_mesh_bevel.hh
   GEO_mesh_boolean.hh
   GEO_mesh_copy_selection.hh
   GEO_mesh_merge_by_distance.hh
