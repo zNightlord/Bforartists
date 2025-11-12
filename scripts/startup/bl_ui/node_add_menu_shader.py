@@ -118,6 +118,7 @@ class NODE_MT_shader_node_input_base(node_add_menu.NodeMenu):
             ["Position", "Radius", "Random"],
         )
         self.node_operator(layout, "ShaderNodeRGB")
+        self.node_operator(layout, "ShaderNodeRaycast")
         self.node_operator(layout, "ShaderNodeTangent")
         self.node_operator_with_outputs(
             context, layout, "ShaderNodeTexCoord",

@@ -285,6 +285,24 @@ float ambient_occlusion_eval(float3 normal,
 #endif
 }
 
+void raycast_eval(float3 position,
+                  float3 direction,
+                  float length,
+                  out bool is_hit,
+                  out float3 hit_position,
+                  out float hit_distance)
+{
+#if defined(GPU_FRAGMENT_SHADER) && !defined(MAT_DEPTH) && !defined(MAT_SHADOW)
+  is_hit = false;
+  hit_position = position;
+  hit_distance = 0;
+#else
+  is_hit = false;
+  hit_position = position;
+  hit_distance = 0;
+#endif
+}
+
 #ifndef GPU_METAL
 Closure nodetree_surface(float closure_rand);
 Closure nodetree_volume();
