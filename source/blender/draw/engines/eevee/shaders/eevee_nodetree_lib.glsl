@@ -9,12 +9,15 @@
 
 SHADER_LIBRARY_CREATE_INFO(eevee_global_ubo)
 SHADER_LIBRARY_CREATE_INFO(eevee_utility_texture)
+SHADER_LIBRARY_CREATE_INFO(eevee_hiz_data)
 
 #include "draw_model_lib.glsl"
 #include "draw_object_infos_lib.glsl"
 #include "draw_view_lib.glsl"
 #include "eevee_nodetree_closures_lib.glsl"
+#include "eevee_ray_trace_screen_lib.glsl"
 #include "eevee_renderpass_lib.glsl"
+#include "eevee_sampling_lib.glsl"
 #include "eevee_utility_tx_lib.glsl"
 #include "gpu_shader_codegen_lib.glsl"
 #include "gpu_shader_math_base_lib.glsl"
@@ -292,14 +295,35 @@ void raycast_eval(float3 position,
                   out float3 hit_position,
                   out float hit_distance)
 {
-#if defined(GPU_FRAGMENT_SHADER) && !defined(MAT_DEPTH) && !defined(MAT_SHADOW)
   is_hit = false;
-  hit_position = position;
-  hit_distance = 0;
-#else
-  is_hit = false;
-  hit_position = position;
-  hit_distance = 0;
+  hit_position = position + direction * length;
+  hit_distance = length;
+
+#if defined(GPU_FRAGMENT_SHADER) && (defined(MAT_DEFERRED) || defined(MAT_FORWARD))
+  Ray ray;
+  ray.origin = transform_point(drw_view().viewmat, position);
+  ray.direction = transform_direction(drw_view().viewmat, direction);
+  ray.max_time = length;
+
+  float noise_offset = sampling_rng_1D_get(SAMPLING_RAYTRACE_W);
+  float rand_trace = interleaved_gradient_noise(gl_FragCoord.xy, 1.0f, noise_offset);
+
+  ScreenTraceHitData hit;
+  hit.valid = false;
+
+  raytrace_screen(uniform_buf.raytrace,
+                  uniform_buf.hiz,
+                  hiz_tx,
+                  rand_trace,
+                  0.0f,
+                  false, /* discard_backface */
+                  true,  /* allow_self_intersection */
+                  ray);
+
+  is_hit = hit.valid;
+  if (hit.valid) {
+    hit_position = position + direction * hit.time;
+  }
 #endif
 }
 
