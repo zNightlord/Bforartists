@@ -296,8 +296,8 @@ void raycast_eval(float3 position,
                   inout float hit_distance)
 {
   is_hit = false;
-  hit_position = position + direction * length;
-  hit_distance = length;
+  hit_position = position;
+  hit_distance = 0.0f;
 
 #if defined(GPU_FRAGMENT_SHADER) && (defined(MAT_DEFERRED) || defined(MAT_FORWARD))
 #  if 1
