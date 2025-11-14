@@ -291,22 +291,34 @@ float ambient_occlusion_eval(float3 normal,
 void raycast_eval(float3 position,
                   float3 direction,
                   float length,
-                  out bool is_hit,
-                  out float3 hit_position,
-                  out float hit_distance)
+                  inout bool is_hit,
+                  inout float3 hit_position,
+                  inout float hit_distance)
 {
   is_hit = false;
   hit_position = position + direction * length;
   hit_distance = length;
 
 #if defined(GPU_FRAGMENT_SHADER) && (defined(MAT_DEFERRED) || defined(MAT_FORWARD))
-  Ray ray;
-  ray.origin = transform_point(drw_view().viewmat, position);
-  ray.direction = transform_direction(drw_view().viewmat, direction);
-  ray.max_time = length;
-
+#  if 1
+  /* Just sample the end point for now. */
+  float3 target = position + direction * length;
+  target = drw_point_world_to_screen(target);
+  float depth = texelFetch(hiz_tx, int2(target.xy * uniform_buf.film.extent), 0).r;
+  is_hit = depth < target.z;
+  if (is_hit) {
+    hit_distance = length;
+    hit_position = drw_point_screen_to_world(
+        float3(gl_FragCoord.xy / uniform_buf.film.extent, depth));
+  }
+#  else
   float noise_offset = sampling_rng_1D_get(SAMPLING_RAYTRACE_W);
   float rand_trace = interleaved_gradient_noise(gl_FragCoord.xy, 1.0f, noise_offset);
+
+  Ray ray;
+  ray.origin = drw_point_world_to_view(position);
+  ray.direction = drw_normal_world_to_view(direction);
+  ray.max_time = length;
 
   ScreenTraceHitData hit;
   hit.valid = false;
@@ -324,6 +336,7 @@ void raycast_eval(float3 position,
   if (hit.valid) {
     hit_position = position + direction * hit.time;
   }
+#  endif
 #endif
 }
 
