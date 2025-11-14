@@ -304,6 +304,7 @@ void raycast_eval(float3 position,
   /* Just sample the end point for now. */
   float3 target = position + direction * length;
   target = drw_point_world_to_screen(target);
+  target = clamp(target, vec3(0.0), vec3(1.0));
   float depth = texelFetch(hiz_tx, int2(target.xy * uniform_buf.film.extent), 0).r;
   is_hit = depth < target.z;
   if (is_hit) {
