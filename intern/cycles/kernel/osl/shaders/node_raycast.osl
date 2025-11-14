@@ -1,0 +1,15 @@
+/* SPDX-FileCopyrightText: 2011-2022 Blender Foundation
+ *
+ * SPDX-License-Identifier: Apache-2.0 */
+
+#include "stdcycles.h"
+
+shader node_raycast(point Position = P,
+                  normal Direction = N,
+                  float Distance = 1.0,
+                  output float IsHit = 0.0,
+                  output point HitPosition = Position,
+                  output float HitDistance = 0.0)
+{
+  /* TODO */
+}

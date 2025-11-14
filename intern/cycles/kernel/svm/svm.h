@@ -455,6 +455,10 @@ ccl_device void svm_eval_nodes(KernelGlobals kg,
       SVM_CASE(NODE_AMBIENT_OCCLUSION)
       svm_node_ao<node_feature_mask>(kg, state, sd, stack, node);
       break;
+      SVM_CASE(NODE_RAYCAST)
+      // TODO
+      // svm_node_raycast<node_feature_mask>(kg, state, sd, stack, node);
+      break;
 #endif
       SVM_CASE(NODE_AOV_START)
       if (!svm_node_aov_check(path_flag, render_buffer)) {

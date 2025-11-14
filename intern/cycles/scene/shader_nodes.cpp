@@ -7988,4 +7988,33 @@ void VectorDisplacementNode::compile(OSLCompiler &compiler)
   compiler.add(this, "node_vector_displacement");
 }
 
+/* Raycast */
+
+NODE_DEFINE(RaycastNode)
+{
+  NodeType *type = NodeType::add("raycast", create, NodeType::SHADER);
+
+  SOCKET_IN_POINT(position, "Position", zero_float3());
+  SOCKET_IN_NORMAL(direction, "Direction", zero_float3());
+  SOCKET_IN_FLOAT(distance, "Distance", 1.0f);
+
+  SOCKET_OUT_FLOAT(is_hit, "Is Hit");
+  SOCKET_OUT_POINT(hit_position, "Hit Position");
+  SOCKET_OUT_FLOAT(hit_distance, "Hit Distance");
+
+  return type;
+}
+
+RaycastNode::RaycastNode() : ShaderNode(get_node_type()) {}
+
+void RaycastNode::compile(SVMCompiler & /*compiler*/)
+{
+  /* TODO */
+}
+
+void RaycastNode::compile(OSLCompiler &compiler)
+{
+  compiler.add(this, "node_raycast");
+}
+
 CCL_NAMESPACE_END
