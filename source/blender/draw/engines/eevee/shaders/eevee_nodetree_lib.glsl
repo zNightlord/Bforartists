@@ -296,8 +296,8 @@ void raycast_eval(float3 position,
                   inout float hit_distance)
 {
   is_hit = false;
-  hit_position = position;
-  hit_distance = 0.0f;
+  hit_position = float3(0.0f);
+  hit_distance = length;
 
 #if defined(GPU_FRAGMENT_SHADER) && (defined(MAT_DEFERRED) || defined(MAT_FORWARD))
 #  if 1
@@ -336,6 +336,7 @@ void raycast_eval(float3 position,
   is_hit = hit.valid;
   if (hit.valid) {
     hit_position = position + direction * hit.time;
+    hit_distance = hit.time;
   }
 #  endif
 #endif
