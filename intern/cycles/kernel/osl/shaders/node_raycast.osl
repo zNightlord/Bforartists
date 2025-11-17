@@ -5,11 +5,20 @@
 #include "stdcycles.h"
 
 shader node_raycast(point Position = P,
-                  normal Direction = N,
-                  float Distance = 1.0,
-                  output float IsHit = 0.0,
-                  output point HitPosition = Position,
-                  output float HitDistance = 0.0)
+                    normal Direction = N,
+                    float Distance = 1.0,
+                    output float IsHit = 0.0,
+                    output point HitPosition = point(0.0,0.0,0.0),
+                    output float HitDistance = Distance)
 {
-  /* TODO */
+  int result = trace(Position, Direction, "maxdist", Distance);
+  IsHit = result;
+  if (IsHit) {
+    getmessage("trace", "hitdist", HitDistance);
+    HitPosition = Position + Direction * HitDistance;
+  }
+  else{
+    HitPosition = point(0.0,0.0,0.0);
+    HitDistance = Distance;
+  }
 }
