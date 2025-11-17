@@ -8026,9 +8026,22 @@ NODE_DEFINE(RaycastNode)
 
 RaycastNode::RaycastNode() : ShaderNode(get_node_type()) {}
 
-void RaycastNode::compile(SVMCompiler & /*compiler*/)
+void RaycastNode::compile(SVMCompiler &compiler)
 {
-  /* TODO */
+  ShaderInput *position_in = input("Position");
+  ShaderInput *direction_in = input("Direction");
+  ShaderInput *distance_in = input("Distance");
+  ShaderOutput *is_hit_out = output("Is Hit");
+  ShaderOutput *hit_position_out = output("Hit Position");
+  ShaderOutput *hit_distance_out = output("Hit Distance");
+
+  compiler.add_node(NODE_RAYCAST,
+                    compiler.encode_uchar4(compiler.stack_assign(position_in),
+                                           compiler.stack_assign(direction_in),
+                                           compiler.stack_assign(distance_in),
+                                           compiler.stack_assign(is_hit_out)),
+                    compiler.encode_uchar4(compiler.stack_assign(hit_position_out),
+                                           compiler.stack_assign(hit_distance_out)));
 }
 
 void RaycastNode::compile(OSLCompiler &compiler)
