@@ -42,6 +42,9 @@ ccl_device float svm_raycast(
     return 0.0f;
   }
 
+  /* TODO: Expose? */
+  const bool avoid_self_intersection = false;
+
   /* Create ray. */
   Ray ray;
   ray.P = position;
@@ -49,8 +52,8 @@ ccl_device float svm_raycast(
   ray.tmin = 0.0f;
   ray.tmax = distance;
   ray.time = sd->time;
-  ray.self.object = sd->object;
-  ray.self.prim = sd->prim;
+  ray.self.object = avoid_self_intersection ? sd->object : OBJECT_NONE;
+  ray.self.prim = avoid_self_intersection ? sd->prim : PRIM_NONE;
   ray.self.light_object = OBJECT_NONE;
   ray.self.light_prim = PRIM_NONE;
   ray.dP = differential_zero_compact();
