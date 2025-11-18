@@ -6,12 +6,12 @@
 
 shader node_raycast(point Position = P,
                     normal Direction = N,
-                    float Distance = 1.0,
+                    float Length = 1.0,
                     output float IsHit = 0.0,
                     output point HitPosition = point(0.0,0.0,0.0),
-                    output float HitDistance = Distance)
+                    output float HitDistance = Length)
 {
-  int result = trace(Position, Direction, "maxdist", Distance);
+  int result = trace(Position, Direction, "maxdist", Length);
   IsHit = result;
   if (IsHit) {
     getmessage("trace", "hitdist", HitDistance);
@@ -19,6 +19,6 @@ shader node_raycast(point Position = P,
   }
   else{
     HitPosition = point(0.0,0.0,0.0);
-    HitDistance = Distance;
+    HitDistance = Length;
   }
 }
