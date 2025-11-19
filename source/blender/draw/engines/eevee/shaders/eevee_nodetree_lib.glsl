@@ -299,8 +299,10 @@ void raycast_eval(float3 position,
   hit_position = float3(0.0f);
   hit_distance = length;
 
+  direction = normalize(direction);
+
 #if defined(GPU_FRAGMENT_SHADER) && (defined(MAT_DEFERRED) || defined(MAT_FORWARD))
-#  if 1
+#  if 0
   /* Just sample the end point for now. */
   float3 target = position + direction * length;
   target = drw_point_world_to_screen(target);
@@ -321,21 +323,19 @@ void raycast_eval(float3 position,
   ray.direction = drw_normal_world_to_view(direction);
   ray.max_time = length;
 
-  ScreenTraceHitData hit;
-  hit.valid = false;
+  ScreenTraceHitData hit = raytrace_screen(uniform_buf.raytrace,
+                                           uniform_buf.hiz,
+                                           hiz_tx,
+                                           rand_trace,
+                                           0.0f,
+                                           false, /* discard_backface */
+                                           true,  /* allow_self_intersection */
+                                           ray);
 
-  raytrace_screen(uniform_buf.raytrace,
-                  uniform_buf.hiz,
-                  hiz_tx,
-                  rand_trace,
-                  0.0f,
-                  false, /* discard_backface */
-                  true,  /* allow_self_intersection */
-                  ray);
-
-  is_hit = hit.valid;
   if (hit.valid) {
-    hit_position = position + direction * hit.time;
+    is_hit = true;
+    hit_position = position + (direction * hit.time);
+    // hit_position = drw_point_view_to_world(hit.v_hit_P); // Not the same?!?!?
     hit_distance = hit.time;
   }
 #  endif
