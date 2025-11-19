@@ -42,8 +42,7 @@ ccl_device float svm_raycast(
     return 0.0f;
   }
 
-  /* TODO: Expose? */
-  const bool avoid_self_intersection = false;
+  const bool avoid_self_intersection = position == sd->P;
 
   /* Create ray. */
   Ray ray;
