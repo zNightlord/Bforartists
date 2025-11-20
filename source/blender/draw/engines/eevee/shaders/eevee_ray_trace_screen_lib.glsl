@@ -480,7 +480,6 @@ bool raytrace_screen_2(float3 vs_origin,
   }
 
   /* note: q was q0.. but we use q variable - adapt to q ensure q.xy is updated. */
-  p.xy += d_q.xy * step_count;
   q.xy += d_q.xy * step_count;
   vs_hit_point = q * (1.0 / k);
 
