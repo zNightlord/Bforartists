@@ -231,47 +231,49 @@ Ray raytrace_thickness_ray_amend(Ray ray, ClosureUndetermined cl, float3 V, floa
  * \param vs_origin: Camera-space ray origin, which must be within the view volume and must have
  *                   z < -0.01 and project within the valid screen rectangle.
  * \param vs_direction: Unit length camera-space ray direction.
- * \param view_to_pixel_mat: A projection matrix that maps to pixel coordinates (not [-1, +1]
- *                           normalized device coordinates).
+ * \param max_raytrace_distance: Maximum camera-space distance to trace before returning a miss.
  * \param hiz_tx: The depth Z buffer.
- * \param hiz_tx_size: Dimensions of hiz_tx.
  * \param thickness: Camera space thickness to ascribe to each pixel in the depth buffer.
- * \param near_z_plane: Negative number. Doesn't have to be THE actual near plane, just a
- *                      reasonable value for clipping rays headed towards the camera.
  * \param stride: Step in horizontal or vertical pixels between samples. This is a float because
  *                integer math is slow on GPUs, but should be set to an integer >= 1.
  * \param jitter_fraction: Number between 0 and 1 for how far to bump the ray in stride units to
  *                         conceal banding artifacts, plus the stride ray offset. It is recommended
  *                         to set this to at least 1.0 to avoid self-intersection artifacts. Using
- *                         1 + float((int(gl_FragCoord.x) + int(gl_FragCoord.y.y)) & 1) * 0.5 gives
+ *                         1 + float((int(gl_FragCoord.x) + int(gl_FragCoord.y)) & 1) * 0.5 gives
  *                         a nice dither pattern when stride is > 1.0.
  * \param max_steps: Maximum number of iterations. Higher gives better images but may be slow.
- * \param max_raytrace_distance: Maximum camera-space distance to trace before returning a miss.
  * \param vs_hit_point: Camera space location of the ray hit.
  */
 bool raytrace_screen_2(float3 vs_origin,
                        float3 vs_direction,
                        float max_raytrace_distance,
-                       float4x4 view_to_pixel_mat,
                        sampler2D hiz_tx,
-                       float2 hiz_tx_size,
                        float thickness,
-                       float near_z_plane,
                        float stride,
                        float jitter_fraction,
                        float max_steps,
                        out float3 vs_hit_point,
                        out float3 debug_color)
 {
-  /* Clip ray to a near plane in 3D. */
-  float ray_length = ((vs_origin.z + vs_direction.z * max_raytrace_distance) > near_z_plane) ?
-                         (near_z_plane - vs_origin.z) / vs_direction.z :
-                         max_raytrace_distance;
-  float3 vs_end_point = vs_direction * ray_length + vs_origin;
+  if (drw_view_is_perspective()) {
+    /* Negative number. Doesn't have to be THE actual near plane, just a reasonable value for
+     * clipping rays headed towards the camera. */
+    const float near_z_plane = drw_view_near();
+    /* Clip ray to a near plane in 3D. */
+    if ((vs_origin.z + vs_direction.z * max_raytrace_distance) > near_z_plane) {
+      max_raytrace_distance = abs((near_z_plane - vs_origin.z) / vs_direction.z);
+    }
+  }
 
-  /* Project into screen space. */
-  float4 h0 = view_to_pixel_mat * float4(vs_origin, 1.0);
-  float4 h1 = view_to_pixel_mat * float4(vs_end_point, 1.0);
+  float3 vs_end_point = vs_origin + vs_direction * max_raytrace_distance;
+
+  float2 half_extent = float2(uniform_buf.film.render_extent) / 2.0f;
+
+  /* Project into screen (pixel) space. */
+  float4 h0 = drw_point_view_to_homogenous(vs_origin);
+  h0.xy += half_extent;
+  float4 h1 = drw_point_view_to_homogenous(vs_end_point);
+  h1.xy += half_extent;
 
   /* There are a lot of divisions by w that can be turned into multiplications at some minor
    * precision loss... and we need to interpolate these 1/w values anyway.
@@ -289,12 +291,12 @@ bool raytrace_screen_2(float3 vs_origin,
   float2 p1 = h1.xy * k1;
 
   /* Optional clipping to frustum sides. */
-  const bool do_clip = true;
+  const bool do_clip = false;
   if (do_clip) {
     float x_min = 0.5;
-    float x_max = hiz_tx_size.x - 0.5;
+    float x_max = float(uniform_buf.film.render_extent.x) - 0.5;
     float y_min = 0.5;
-    float y_max = hiz_tx_size.y - 0.5;
+    float y_max = float(uniform_buf.film.render_extent.y) - 0.5;
     float alpha = 0.0;
 
     /* Assume p0 is in the viewport (p1 - p0 is never zero when clipping) */
