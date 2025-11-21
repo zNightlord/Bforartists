@@ -314,7 +314,7 @@ void raycast_eval(float3 position,
     hit_position = drw_point_screen_to_world(
         float3(gl_FragCoord.xy / uniform_buf.film.extent, depth));
   }
-#  else
+#  elif 0
   float noise_offset = sampling_rng_1D_get(SAMPLING_RAYTRACE_W);
   float rand_trace = interleaved_gradient_noise(gl_FragCoord.xy, 1.0f, noise_offset);
 
@@ -337,6 +337,20 @@ void raycast_eval(float3 position,
     hit_position = position + (direction * hit.time);
     // hit_position = drw_point_view_to_world(hit.v_hit_P); // Not the same?!?!?
     hit_distance = hit.time;
+  }
+#  else
+  float3 vs_hit_position;
+  is_hit = raytrace_screen_2(drw_point_world_to_view(position),
+                             drw_normal_world_to_view(direction),
+                             length,
+                             hiz_tx,
+                             1.0f,
+                             64,
+                             1.0f,
+                             vs_hit_position);
+  if (is_hit) {
+    hit_position = drw_point_view_to_world(vs_hit_position);
+    hit_distance = distance(position, hit_position);
   }
 #  endif
 #endif
