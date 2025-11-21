@@ -222,6 +222,11 @@ Ray raytrace_thickness_ray_amend(Ray ray, ClosureUndetermined cl, float3 V, floa
   return ray;
 }
 
+float4 hs_interpolation(float4 a, float4 b, float t)
+{
+  return mix(a * a.w, b * b.w, t);
+}
+
 bool raytrace_screen_2(float3 vs_origin,
                        float3 vs_direction,
                        float max_distance,
@@ -241,9 +246,6 @@ bool raytrace_screen_2(float3 vs_origin,
   /* Convert xy coordinates to pixel space (cartesian/non-homogeneous). */
   start.xy = (start.xy / start.w) * half_extent + half_extent;
   end.xy = (end.xy / end.w) * half_extent + half_extent;
-  /* Convert w to reciprocal to avoid divisions inside the loop. */
-  start.w = 1.0f / start.w;
-  end.w = 1.0f / end.w;
 
   float4 delta = end - start;
 
@@ -251,14 +253,13 @@ bool raytrace_screen_2(float3 vs_origin,
   int steps = int(max(abs(delta.x), abs(delta.y)));
   /* Clamp to the desired range. */
   steps = clamp(steps, 1, max_steps);
-  // TODO: float stride = total_steps / max_steps;
-
+  /* And scale steps accordingly. */
   float4 delta_step = delta / float(steps);
 
   for (int i = 1; i <= steps; i++) {
     float4 step = start + (delta_step * float(i));
     /* Convert to fragment coordinates. */
-    step.z = step.z * step.w * 0.5f + 0.5f;
+    step.z = (step.z / step.w) * 0.5f + 0.5f;
 
     float screen_depth = texelFetch(hiz_tx, int2(step.xy), 0).r;
 
