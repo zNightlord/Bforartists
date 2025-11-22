@@ -53,7 +53,6 @@ set(INC
   intern
   shader
   texture
-  function/include
   geometry/include
   ../animrig
   ../editors/include
@@ -63,17 +62,13 @@ set(INC
 
   # RNA_prototypes.hh
   ${CMAKE_BINARY_DIR}/source/blender/makesrna
-  )
+)
 
-  set(INC_SYS
-  ../../../extern/fast_float
+set(INC_SYS
 )
 
 set(SRC
   intern/derived_node_tree.cc
-  intern/expression_ast.cc
-  intern/expression_parse.cc
-  intern/expression_to_nodes.cc
   intern/geometry_nodes_bundle.cc
   intern/geometry_nodes_caller_ui.cc
   intern/geometry_nodes_closure.cc
@@ -102,7 +97,6 @@ set(SRC
   intern/node_util.cc
   intern/partial_eval.cc
   intern/shader_nodes_inline.cc
-  intern/socket_items_name_util.cc
   intern/socket_search_link.cc
   intern/socket_usage_inference.cc
   intern/socket_value_inference.cc
@@ -114,8 +108,6 @@ set(SRC
   NOD_common.hh
   NOD_composite.hh
   NOD_derived_node_tree.hh
-  NOD_expression_ast.hh
-  NOD_expression_parse.hh
   NOD_geometry.hh
   NOD_geometry_exec.hh
   NOD_geometry_nodes_bundle.hh
@@ -156,7 +148,6 @@ set(SRC
   NOD_socket_declarations_geometry.hh
   NOD_socket_items.hh
   NOD_socket_items_blend.hh
-  NOD_socket_items_name_util.hh
   NOD_socket_items_ops.hh
   NOD_socket_items_ui.hh
   NOD_socket_search_link.hh
@@ -168,7 +159,6 @@ set(SRC
   NOD_trace_values.hh
   NOD_value_elem.hh
   NOD_value_elem_eval.hh
-  intern/expression_parse.hh
   intern/list_function_eval.hh
   intern/node_common.h
   intern/node_exec.hh
@@ -254,7 +244,6 @@ if(WITH_GTESTS)
   set(TEST_INC
   )
   set(TEST_SRC
-    intern/expression_parse_tests.cc
     intern/geometry_nodes_bundle_tests.cc
     intern/node_iterator_tests.cc
   )

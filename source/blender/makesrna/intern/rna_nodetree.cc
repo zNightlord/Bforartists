@@ -8140,93 +8140,6 @@ static void def_separate_bundle(BlenderRNA *brna, StructRNA *srna)
   RNA_def_property_update(prop, NC_NODE, "rna_Node_update");
 }
 
-static void rna_def_expression_input_item(BlenderRNA *brna)
-{
-  StructRNA *srna;
-
-  srna = RNA_def_struct(brna, "NodeExpressionInputItem", nullptr);
-  RNA_def_struct_ui_text(srna, "Expression Input Item", "");
-  RNA_def_struct_sdna(srna, "NodeExpressionInputItem");
-
-  rna_def_node_item_array_socket_item_common(srna, "ExpressionInputItemsAccessor", true);
-}
-
-static void rna_def_expression_input_items(BlenderRNA *brna)
-{
-  StructRNA *srna;
-
-  srna = RNA_def_struct(brna, "NodeExpressionInputItems", nullptr);
-  RNA_def_struct_sdna(srna, "bNode");
-  RNA_def_struct_ui_text(srna, "Input Items", "Collection of input items");
-
-  rna_def_node_item_array_new_with_socket_and_name(
-      srna, "NodeExpressionInputItem", "ExpressionInputItemsAccessor");
-  rna_def_node_item_array_common_functions(
-      srna, "NodeExpressionInputItem", "ExpressionInputItemsAccessor");
-}
-
-static void rna_def_expression_item(BlenderRNA *brna)
-{
-  StructRNA *srna;
-
-  srna = RNA_def_struct(brna, "NodeExpressionItem", nullptr);
-  RNA_def_struct_ui_text(srna, "Expression Output Item", "");
-  RNA_def_struct_sdna(srna, "NodeExpressionItem");
-
-  rna_def_node_item_array_socket_item_common(srna, "ExpressionItemsAccessor", true);
-}
-
-static void rna_def_expression_items(BlenderRNA *brna)
-{
-  StructRNA *srna;
-
-  srna = RNA_def_struct(brna, "NodeExpressionItems", nullptr);
-  RNA_def_struct_sdna(srna, "bNode");
-  RNA_def_struct_ui_text(srna, "Expression Items", "Collection of expression items");
-
-  rna_def_node_item_array_new_with_socket_and_name(
-      srna, "NodeExpressionItem", "ExpressionItemsAccessor");
-  rna_def_node_item_array_common_functions(srna, "NodeExpressionItem", "ExpressionItemsAccessor");
-}
-
-static void def_expression(BlenderRNA *brna, StructRNA *srna)
-{
-  PropertyRNA *prop;
-
-  rna_def_expression_input_item(brna);
-  rna_def_expression_input_items(brna);
-
-  rna_def_expression_item(brna);
-  rna_def_expression_items(brna);
-
-  RNA_def_struct_sdna_from(srna, "NodeExpression", "storage");
-
-  prop = RNA_def_property(srna, "input_items", PROP_COLLECTION, PROP_NONE);
-  RNA_def_property_collection_sdna(prop, nullptr, "input_items.items", "input_items.items_num");
-  RNA_def_property_struct_type(prop, "NodeExpressionInputItem");
-  RNA_def_property_srna(prop, "NodeExpressionInputItems");
-
-  prop = RNA_def_property(srna, "expression_items", PROP_COLLECTION, PROP_NONE);
-  RNA_def_property_collection_sdna(
-      prop, nullptr, "expression_items.items", "expression_items.items_num");
-  RNA_def_property_struct_type(prop, "NodeExpressionItem");
-  RNA_def_property_srna(prop, "NodeExpressionItems");
-
-  prop = RNA_def_property(srna, "active_input_index", PROP_INT, PROP_UNSIGNED);
-  RNA_def_property_int_sdna(prop, nullptr, "input_items.active_index");
-  RNA_def_property_ui_text(prop, "Active Input Index", "Index of the active input item");
-  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
-  RNA_def_property_flag(prop, PROP_NO_DEG_UPDATE);
-  RNA_def_property_update(prop, NC_NODE, nullptr);
-
-  prop = RNA_def_property(srna, "active_expression_index", PROP_INT, PROP_UNSIGNED);
-  RNA_def_property_int_sdna(prop, nullptr, "expression_items.active_index");
-  RNA_def_property_ui_text(prop, "Active Expression Index", "Index of the active expression item");
-  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
-  RNA_def_property_flag(prop, PROP_NO_DEG_UPDATE);
-  RNA_def_property_update(prop, NC_NODE, nullptr);
-}
-
 static void rna_def_index_switch_item(BlenderRNA *brna)
 {
   PropertyRNA *prop;
@@ -10030,7 +9943,6 @@ static void rna_def_nodes(BlenderRNA *brna)
   define(brna, "NodeInternal", "NodeEvaluateClosure", def_evaluate_closure, ICON_NODE_CLOSURE_EVALUATE);
   define(brna, "NodeInternal", "NodeJoinBundle", nullptr, ICON_NODE_BUNDLE_JOIN);
   define(brna, "NodeInternal", "NodeSeparateBundle", def_separate_bundle, ICON_NODE_BUNDLE_SEPARATE);
-  define(brna, "NodeInternal", "NodeExpression", def_expression, ICON_NONE);
 
   define(brna, "ShaderNode", "ShaderNodeAddShader", nullptr, ICON_NODE_ADD_SHADER);
   define(brna, "ShaderNode", "ShaderNodeAmbientOcclusion", def_sh_ambient_occlusion, ICON_NODE_AMBIENT_OCCLUSION);
