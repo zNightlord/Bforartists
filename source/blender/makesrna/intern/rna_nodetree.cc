@@ -10351,7 +10351,7 @@ define(brna, "GeometryNode", "GeometryNodeMeshBevel", nullptr, ICON_NONE);
   define(brna, "GeometryNode", "GeometryNodeMeshGrid", nullptr, ICON_MESH_GRID);
   define(brna, "GeometryNode", "GeometryNodeMeshIcoSphere", nullptr, ICON_MESH_ICOSPHERE);
   define(brna, "GeometryNode", "GeometryNodeMeshLine", nullptr, ICON_MESH_LINE);
-  define(brna, "GeometryNode", "GeometryNodeMeshMonkey", nullptr, ICON_NONE);
+  define(brna, "GeometryNode", "GeometryNodeMeshMonkey", nullptr, ICON_MESH_MONKEY);
   define(brna, "GeometryNode", "GeometryNodeMeshToCurve", nullptr, ICON_OUTLINER_OB_CURVE);
   define(brna, "GeometryNode", "GeometryNodeMeshToDensityGrid", nullptr, ICON_NODE_MESHTODENSITYGRID);
   define(brna, "GeometryNode", "GeometryNodeMeshToPoints", nullptr, ICON_MESH_TO_POINTS);
