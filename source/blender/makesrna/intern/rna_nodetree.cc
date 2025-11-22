@@ -629,7 +629,6 @@ static const EnumPropertyItem node_cryptomatte_layer_name_items[] = {
 #  include "NOD_geo_bundle.hh"
 #  include "NOD_geo_capture_attribute.hh"
 #  include "NOD_geo_closure.hh"
-#  include "NOD_geo_expression.hh"
 #  include "NOD_geo_field_to_grid.hh"
 #  include "NOD_geo_foreach_geometry_element.hh"
 #  include "NOD_geo_index_switch.hh"
@@ -664,8 +663,6 @@ using blender::nodes::ClosureOutputItemsAccessor;
 using blender::nodes::CombineBundleItemsAccessor;
 using blender::nodes::EvaluateClosureInputItemsAccessor;
 using blender::nodes::EvaluateClosureOutputItemsAccessor;
-using blender::nodes::ExpressionInputItemsAccessor;
-using blender::nodes::ExpressionItemsAccessor;
 using blender::nodes::FieldToGridItemsAccessor;
 using blender::nodes::FileOutputItemsAccessor;
 using blender::nodes::ForeachGeometryElementGenerationItemsAccessor;
@@ -10213,13 +10210,13 @@ static void rna_def_nodes(BlenderRNA *brna)
   define(brna, "FunctionNode", "FunctionNodeTransposeMatrix", nullptr, ICON_TRANSPOSE_MATRIX);
   define(brna, "FunctionNode", "FunctionNodeValueToString", nullptr, ICON_VALUE_TO_STRING);
 
-  define(brna, "GeometryNode", "GeometryNodeArmatureDeform", nullptr, ICON_NONE);
+define(brna, "GeometryNode", "GeometryNodeArmatureDeform", nullptr, ICON_NONE);
   define(brna, "GeometryNode", "GeometryNodeAccumulateField", nullptr, ICON_ACCUMULATE);
   define(brna, "GeometryNode", "GeometryNodeAttributeDomainSize", nullptr, ICON_DOMAIN_SIZE);
   define(brna, "GeometryNode", "GeometryNodeAttributeStatistic", nullptr, ICON_ATTRIBUTE_STATISTIC);
   define(brna, "GeometryNode", "GeometryNodeBake", rna_def_geo_bake, ICON_BAKE);
   define(brna, "GeometryNode", "GeometryNodeBlurAttribute", nullptr, ICON_BLUR_ATTRIBUTE);
-  define(brna, "GeometryNode", "GeometryNodeBoneInfo", nullptr, ICON_NONE);
+define(brna, "GeometryNode", "GeometryNodeBoneInfo", nullptr, ICON_NONE);
   define(brna, "GeometryNode", "GeometryNodeBoundBox", nullptr, ICON_PIVOT_BOUNDBOX);
   define(brna, "GeometryNode", "GeometryNodeCameraInfo", nullptr, ICON_CAMERA_DATA);
   define(brna, "GeometryNode", "GeometryNodeCaptureAttribute", rna_def_geo_capture_attribute, ICON_ATTRIBUTE_CAPTURE);
@@ -10344,7 +10341,7 @@ static void rna_def_nodes(BlenderRNA *brna)
   define(brna, "GeometryNode", "GeometryNodeMenuSwitch", def_geo_menu_switch, ICON_MENU_SWITCH);
   define(brna, "GeometryNode", "GeometryNodeMergeByDistance", nullptr, ICON_REMOVE_DOUBLES);
   define(brna, "GeometryNode", "GeometryNodeMergeLayers", nullptr, ICON_MERGE);
-  define(brna, "GeometryNode", "GeometryNodeMeshBevel", nullptr, ICON_NONE);
+define(brna, "GeometryNode", "GeometryNodeMeshBevel", nullptr, ICON_NONE);
   define(brna, "GeometryNode", "GeometryNodeMeshBoolean", nullptr, ICON_MOD_BOOLEAN);
   define(brna, "GeometryNode", "GeometryNodeMeshCircle", nullptr, ICON_MESH_CIRCLE);
   define(brna, "GeometryNode", "GeometryNodeMeshCone", nullptr, ICON_MESH_CONE);
@@ -10354,6 +10351,7 @@ static void rna_def_nodes(BlenderRNA *brna)
   define(brna, "GeometryNode", "GeometryNodeMeshGrid", nullptr, ICON_MESH_GRID);
   define(brna, "GeometryNode", "GeometryNodeMeshIcoSphere", nullptr, ICON_MESH_ICOSPHERE);
   define(brna, "GeometryNode", "GeometryNodeMeshLine", nullptr, ICON_MESH_LINE);
+  define(brna, "GeometryNode", "GeometryNodeMeshMonkey", nullptr, ICON_NONE);
   define(brna, "GeometryNode", "GeometryNodeMeshToCurve", nullptr, ICON_OUTLINER_OB_CURVE);
   define(brna, "GeometryNode", "GeometryNodeMeshToDensityGrid", nullptr, ICON_NODE_MESHTODENSITYGRID);
   define(brna, "GeometryNode", "GeometryNodeMeshToPoints", nullptr, ICON_MESH_TO_POINTS);
