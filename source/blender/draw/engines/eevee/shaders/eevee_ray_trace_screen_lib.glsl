@@ -227,7 +227,7 @@ float4 hs_interpolation(float4 a, float4 b, float t)
   return mix(a * a.w, b * b.w, t);
 }
 
-bool raytrace_screen_2(float3 vs_start,
+bool raytrace_screen_2(float3 vs_origin,
                        float3 vs_direction,
                        float max_distance,
                        sampler2D hiz_tx,
@@ -237,17 +237,9 @@ bool raytrace_screen_2(float3 vs_start,
                        out float3 vs_hit_point)
 {
   // TODO: Clip and discard if fully out of frustum.
-  float3 vs_end = vs_start + vs_direction * max_distance;
 
-  /* Start and end point in homogeneous (clip-space) coordinated. */
-  float4 start = drw_point_view_to_homogenous(vs_start);
-  float4 end = drw_point_view_to_homogenous(vs_end);
-
-  /* Start and end points offseted by thickness towards the view origin. */
-  float3 start_vV = drw_view_is_perspective() ? -normalize(vs_start) : float3(0.0f, 0.0f, 1.0f);
-  float3 end_vV = drw_view_is_perspective() ? -normalize(vs_end) : float3(0.0f, 0.0f, 1.0f);
-  float4 start_T = drw_point_view_to_homogenous(vs_start + start_vV * thickness);
-  float4 end_T = drw_point_view_to_homogenous(vs_end + end_vV * thickness);
+  float4 start = drw_point_view_to_homogenous(vs_origin);
+  float4 end = drw_point_view_to_homogenous(vs_origin + vs_direction * max_distance);
 
   float2 half_extent = float2(uniform_buf.film.render_extent) / 2.0f;
 
@@ -255,11 +247,7 @@ bool raytrace_screen_2(float3 vs_start,
   start.xy = (start.xy / start.w) * half_extent + half_extent;
   end.xy = (end.xy / end.w) * half_extent + half_extent;
 
-  start_T.xy = start.xy;
-  end_T.xy = end.xy;
-
   float4 delta = end - start;
-  float4 delta_T = end_T - start_T;
 
   /* Number of steps required to trace a fully contiguous line. */
   int steps = int(max(abs(delta.x), abs(delta.y))) + 1;
@@ -267,26 +255,23 @@ bool raytrace_screen_2(float3 vs_start,
   steps = min(steps, max_steps);
   /* And scale steps accordingly. */
   float4 delta_step = delta / float(steps);
-  float4 delta_step_T = delta_T / float(steps);
 
   /* Skip the first step to avoid self-occlusion. But iterate at least once. */
   for (int i = 1; i < steps || i == 1; i++) {
     float4 step = start + (delta_step * (float(i) + jitter));
-    float4 step_T = start_T + (delta_step_T * (float(i) + jitter));
     /* Convert to fragment coordinates. */
     step.z = (step.z / step.w) * 0.5f + 0.5f;
-    step_T.z = (step_T.z / step_T.w) * 0.5f + 0.5f;
 
     float screen_depth = texelFetch(hiz_tx, int2(step.xy), 0).r;
 
-    if (step.z > screen_depth && step_T.z < screen_depth) {
+    if (step.z > screen_depth) {
       float3 ndc_hit_point;
       ndc_hit_point.xy = (step.xy - half_extent) / half_extent;
       ndc_hit_point.z = screen_depth * 2.0 - 1.0;
       vs_hit_point = drw_point_ndc_to_view(ndc_hit_point);
       /* Project the hit point into the ray. */
-      float hit_distance = dot(vs_hit_point - vs_start, vs_direction);
-      vs_hit_point = vs_start + vs_direction * hit_distance;
+      float hit_distance = dot(vs_hit_point - vs_origin, vs_direction);
+      vs_hit_point = vs_origin + vs_direction * hit_distance;
       return true;
     }
   }
