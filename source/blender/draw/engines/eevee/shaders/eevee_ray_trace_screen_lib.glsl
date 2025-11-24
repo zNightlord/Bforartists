@@ -250,14 +250,15 @@ bool raytrace_screen_2(float3 vs_origin,
   float4 delta = end - start;
 
   /* Number of steps required to trace a fully contiguous line. */
-  int steps = int(max(abs(delta.x), abs(delta.y)));
-  /* Clamp to the desired range. */
-  steps = clamp(steps, 1, max_steps);
+  int steps = int(max(abs(delta.x), abs(delta.y))) + 1;
+  /* Limit to max steps. */
+  steps = min(steps, max_steps);
   /* And scale steps accordingly. */
   float4 delta_step = delta / float(steps);
 
-  for (int i = 1; i <= steps; i++) {
-    float4 step = start + (delta_step * float(i));
+  /* Skip the first step to avoid self-occlusion. But iterate at least once. */
+  for (int i = 1; i < steps || i == 1; i++) {
+    float4 step = start + (delta_step * (float(i) + jitter));
     /* Convert to fragment coordinates. */
     step.z = (step.z / step.w) * 0.5f + 0.5f;
 
