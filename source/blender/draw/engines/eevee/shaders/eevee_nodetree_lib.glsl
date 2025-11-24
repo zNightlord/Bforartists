@@ -348,13 +348,17 @@ void raycast_eval(float3 position,
   else {
     float noise_offset = sampling_rng_1D_get(SAMPLING_RAYTRACE_W);
     float jitter = interleaved_gradient_noise(gl_FragCoord.xy, 1.0f, noise_offset);
+    float thickness_noise_offset = sampling_rng_1D_get(SAMPLING_RAYTRACE_X);
+    float thickness_jitter =
+        interleaved_gradient_noise(gl_FragCoord.xy, 1.0f, thickness_noise_offset) * 0.5f + 0.5f;
+    float thickness = uniform_buf.raytrace.thickness * thickness_jitter;
 
     float3 vs_hit_position;
     is_hit = raytrace_screen_2(drw_point_world_to_view(position),
                                drw_normal_world_to_view(direction),
                                length,
                                hiz_tx,
-                               uniform_buf.raytrace.thickness,
+                               thickness,
                                64,
                                jitter,
                                vs_hit_position);
