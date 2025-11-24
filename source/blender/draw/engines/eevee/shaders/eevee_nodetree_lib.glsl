@@ -314,43 +314,54 @@ void raycast_eval(float3 position,
     hit_position = drw_point_screen_to_world(
         float3(gl_FragCoord.xy / uniform_buf.film.extent, depth));
   }
-#  elif 0
-  float noise_offset = sampling_rng_1D_get(SAMPLING_RAYTRACE_W);
-  float rand_trace = interleaved_gradient_noise(gl_FragCoord.xy, 1.0f, noise_offset);
-
-  Ray ray;
-  ray.origin = drw_point_world_to_view(position);
-  ray.direction = drw_normal_world_to_view(direction);
-  ray.max_time = length;
-
-  ScreenTraceHitData hit = raytrace_screen(uniform_buf.raytrace,
-                                           uniform_buf.hiz,
-                                           hiz_tx,
-                                           rand_trace,
-                                           0.0f,
-                                           false, /* discard_backface */
-                                           true,  /* allow_self_intersection */
-                                           ray);
-
-  if (hit.valid) {
-    is_hit = true;
-    hit_position = position + (direction * hit.time);
-    // hit_position = drw_point_view_to_world(hit.v_hit_P); // Not the same?!?!?
-    hit_distance = hit.time;
-  }
 #  else
-  float3 vs_hit_position;
-  is_hit = raytrace_screen_2(drw_point_world_to_view(position),
-                             drw_normal_world_to_view(direction),
-                             length,
-                             hiz_tx,
-                             1.0f,
-                             64,
-                             1.0f,
-                             vs_hit_position);
-  if (is_hit) {
-    hit_position = drw_point_view_to_world(vs_hit_position);
-    hit_distance = distance(position, hit_position);
+  if (int(gl_FragCoord.x) < uniform_buf.film.render_extent.x / 2) {
+    float noise_offset = sampling_rng_1D_get(SAMPLING_RAYTRACE_W);
+    float rand_trace = interleaved_gradient_noise(gl_FragCoord.xy, 1.0f, noise_offset);
+
+    Ray ray;
+    ray.origin = drw_point_world_to_view(position);
+    ray.direction = drw_normal_world_to_view(direction);
+    ray.max_time = length;
+
+    ScreenTraceHitData hit = raytrace_screen(uniform_buf.raytrace,
+                                             uniform_buf.hiz,
+                                             hiz_tx,
+                                             rand_trace,
+                                             0.0f,
+                                             false, /* discard_backface */
+                                             true,  /* allow_self_intersection */
+                                             ray);
+
+    if (hit.valid) {
+      is_hit = true;
+      hit_position = position + (direction * hit.time);
+// hit_position = drw_point_view_to_world(hit.v_hit_P); // Not the same?!?!?
+#    if 0
+    /* Project the hit point into the ray. */
+    hit_distance = dot(hit.v_hit_P - ray.origin, ray.direction);
+    hit_position = drw_point_view_to_world(position + direction * hit_distance);
+#    endif
+      hit_distance = hit.time;
+    }
+  }
+  else {
+    float noise_offset = sampling_rng_1D_get(SAMPLING_RAYTRACE_W);
+    float jitter = interleaved_gradient_noise(gl_FragCoord.xy, 1.0f, noise_offset);
+
+    float3 vs_hit_position;
+    is_hit = raytrace_screen_2(drw_point_world_to_view(position),
+                               drw_normal_world_to_view(direction),
+                               length,
+                               hiz_tx,
+                               uniform_buf.raytrace.thickness,
+                               64,
+                               jitter,
+                               vs_hit_position);
+    if (is_hit) {
+      hit_position = drw_point_view_to_world(vs_hit_position);
+      hit_distance = distance(position, hit_position);
+    }
   }
 #  endif
 #endif
