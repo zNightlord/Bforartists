@@ -256,6 +256,8 @@ bool raytrace_screen_2(float3 vs_origin,
   /* And scale steps accordingly. */
   float4 delta_step = delta / float(steps);
 
+  float previous_step_depth = (start.z / start.w) * 0.5f + 0.5f;
+
   /* Skip the first step to avoid self-occlusion. But iterate at least once. */
   for (int i = 1; i < steps || i == 1; i++) {
     /* Ensure we don't go past ray end. */
@@ -269,7 +271,12 @@ bool raytrace_screen_2(float3 vs_origin,
 
     float screen_depth = texelFetch(hiz_tx, int2(step.xy), 0).r;
 
-    if (step.z > screen_depth) {
+    /* Take thickness into account, but ensure it's not lower than the step depth. */
+    float min_depth = min(previous_step_depth,
+                          drw_depth_view_to_screen(drw_depth_screen_to_view(step.z) + thickness));
+
+    if (step.z > screen_depth && screen_depth > min_depth) {
+      /* We have a hit. Compute the hit point. */
       float3 ndc_hit_point;
       ndc_hit_point.xy = (step.xy - half_extent) / half_extent;
       ndc_hit_point.z = screen_depth * 2.0 - 1.0;
@@ -279,6 +286,8 @@ bool raytrace_screen_2(float3 vs_origin,
       vs_hit_point = vs_origin + vs_direction * hit_distance;
       return true;
     }
+
+    previous_step_depth = step.z;
   }
 
   return false;
