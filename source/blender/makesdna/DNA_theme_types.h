@@ -142,7 +142,7 @@ typedef struct ThemeCommonAnim {
 
   unsigned char channels[4], channels_sub[4];
   unsigned char channel_group[4], channel_group_active[4];
-  unsigned char channel[4], channel_selected[4];
+  unsigned char channel[4], channel_selected[4], channel_selected_overlay[4];
 
   /** Key-types. */
   unsigned char keyframe[4], keyframe_extreme[4], keyframe_breakdown[4], keyframe_jitter[4],
@@ -153,7 +153,7 @@ typedef struct ThemeCommonAnim {
   unsigned char long_key[4], long_key_selected[4];
 
   unsigned char scene_strip_range[4];
-  char _pad0[4];
+  // char _pad0[4];
 } ThemeCommonAnim;
 
 typedef struct ThemeCommonCurves {

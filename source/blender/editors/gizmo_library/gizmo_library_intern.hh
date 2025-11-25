@@ -7,6 +7,7 @@
  */
 
 #pragma once
+#include "BLI_compiler_compat.h"
 
 #include "DNA_userdef_types.h"
 
@@ -58,6 +59,17 @@ struct GizmoInteraction {
    * Needed to allow toggling precision on/off without causing jumps */
   float precision_offset;
 };
+
+float gizmo_value_from_offset_constr(const float range_fac,
+                                     const float min,
+                                     const float range,
+                                     const float value,
+                                     const bool inverted);
+float gizmo_value_from_offset_constr(const float range_fac,
+                                     const float min,
+                                     const float range,
+                                     const float value,
+                                     const bool inverted);
 
 float gizmo_offset_from_value(GizmoCommonData *data, float value, bool constrained, bool inverted);
 float gizmo_value_from_offset(GizmoCommonData *data,

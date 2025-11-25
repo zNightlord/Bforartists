@@ -3785,6 +3785,26 @@ void blo_do_versions_500(FileData *fd, Library * /*lib*/, Main *bmain)
     FOREACH_NODETREE_END;
   }
 
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 50)) {
+    LISTBASE_FOREACH (Scene *, scene, &bmain->scenes) {
+      const float default_snap_move_increment = 1.0f;
+      const float default_snap_move_increment_precision = 0.1f;
+      scene->toolsettings->snap_move_increment_2d = default_snap_move_increment;
+      scene->toolsettings->snap_move_increment_3d = default_snap_move_increment;
+      scene->toolsettings->snap_move_increment_2d_precision =
+          default_snap_move_increment_precision;
+      scene->toolsettings->snap_move_increment_3d_precision =
+          default_snap_move_increment_precision;
+      const float default_snap_scale_increment = 0.1f;
+      const float default_snap_scale_increment_precision = 0.01f;
+      scene->toolsettings->snap_scale_increment_2d = default_snap_scale_increment;
+      scene->toolsettings->snap_scale_increment_3d = default_snap_scale_increment;
+      scene->toolsettings->snap_scale_increment_2d_precision =
+          default_snap_scale_increment_precision;
+      scene->toolsettings->snap_scale_increment_3d_precision = default_snap_scale_increment_precision;
+    }
+  }
+
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 500, 65)) {
     LISTBASE_FOREACH (Brush *, brush, &bmain->brushes) {
       srgb_to_linearrgb_v3_v3(brush->color, brush->rgb);

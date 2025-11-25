@@ -45,6 +45,7 @@ void GeometryNodesEvalDependencies::add_object(Object *object,
   deps.geometry |= object_deps.geometry;
   deps.transform |= object_deps.transform;
   deps.camera_parameters |= object_deps.camera_parameters;
+  deps.pose |= object_deps.pose;
 }
 
 void GeometryNodesEvalDependencies::merge(const GeometryNodesEvalDependencies &other)
@@ -125,6 +126,14 @@ static void add_eval_dependencies_from_node_data(const bNodeTree &tree,
     }
     deps.add_generic_id(node->id);
   }
+  for (const bNode *node : tree.nodes_by_type("GeometryNodeInputArmature")) {
+    if (node->is_muted()) {
+      continue;
+    }
+    GeometryNodesEvalDependencies::ObjectDependencyInfo armature_deps;
+    armature_deps.pose = true;
+    deps.add_object(reinterpret_cast<Object *>(node->id), armature_deps);
+  }
 }
 
 static bool has_enabled_nodes_of_type(const bNodeTree &tree,
@@ -167,6 +176,47 @@ static void add_own_transform_dependencies(const bNodeTree &tree,
   deps.needs_own_transform |= needs_own_transform;
 }
 
+static void add_object_socket_pose_dependency(const bNodeSocket &socket,
+                                              GeometryNodesEvalDependencies &deps)
+{
+  if (socket.is_input()) {
+    if (socket.is_logically_linked()) {
+      return;
+    }
+  }
+
+  if (socket.type == SOCK_OBJECT) {
+    if (Object *object = static_cast<bNodeSocketValueObject *>(socket.default_value)->value) {
+      if (object->type == OB_ARMATURE) {
+
+        deps.add_object(object);
+
+        int session_uid = object->id.session_uid;
+        if (deps.objects_info.contains(session_uid)) {
+          auto &info = deps.objects_info.lookup(session_uid);
+          info.pose = true;
+        }
+      }
+    }
+  }
+}
+
+static void add_bone_pose_dependencies(const bNodeTree &tree, GeometryNodesEvalDependencies &deps)
+{
+  for (const bNode *node : tree.nodes_by_type("GeometryNodeArmatureDeform")) {
+    if (node->is_muted()) {
+      continue;
+    }
+
+    for (const bNodeSocket *socket : node->input_sockets()) {
+      if (STREQ(socket->name, "Armature Object")) {
+        add_object_socket_pose_dependency(*socket, deps);
+        break;
+      }
+    }
+  }
+}
+
 static bool needs_scene_render_params(const bNodeTree &ntree)
 {
   for (const bNode *node : ntree.nodes_by_type("GeometryNodeCameraInfo")) {
@@ -197,6 +247,7 @@ static void gather_geometry_nodes_eval_dependencies(
 
   add_eval_dependencies_from_node_data(ntree, deps);
   add_own_transform_dependencies(ntree, deps);
+  add_bone_pose_dependencies(ntree, deps);
 
   for (const bNode *node : ntree.group_nodes()) {
     if (!node->id) {

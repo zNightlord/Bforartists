@@ -185,11 +185,32 @@ static void acf_generic_channel_color(bAnimContext *ac, bAnimListElem *ale, floa
 {
   const bAnimChannelType *acf = ANIM_channel_get_typeinfo(ale);
   short indent = (acf->get_indent_level) ? acf->get_indent_level(ac, ale) : 0;
+  short selected;
 
   /* FIXME: what happens when the indentation is 1 greater than what it should be
    * (due to grouping)? */
   const int colorOffset = 10 - 10 * indent;
   UI_GetThemeColorShade3fv(TH_CHANNEL, colorOffset, r_color);
+
+  if (acf->has_setting(ac, ale, ACHANNEL_SETTING_SELECT)) {
+    selected = ANIM_channel_setting_get(ac, ale, ACHANNEL_SETTING_SELECT);
+  }
+  else {
+    selected = 0;
+  }
+
+  if (selected) {
+    float color_backdrop[4];
+    float color_blend[4];
+    float color_background[3];
+    copy_v3_v3(r_color, color_background);
+    UI_GetThemeColorShade4fv(TH_CHANNEL_SELECT_BACKDROP, 20, color_backdrop);
+    color_blend[0] = color_backdrop[0];
+    color_blend[1] = color_backdrop[1];
+    color_blend[2] = color_backdrop[2];
+  
+    interp_v3_v3v3(r_color, color_background, color_blend, color_backdrop[3]);
+  }
 }
 
 /* backdrop for generic channels */

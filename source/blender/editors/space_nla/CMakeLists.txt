@@ -3,6 +3,8 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 set(INC
+  # bfa added asset
+  ../asset 
   ../include
   ../../makesrna
 
@@ -28,6 +30,7 @@ set(SRC
 set(LIB
   PRIVATE bf::blenkernel
   PRIVATE bf::animrig
+  PRIVATE bf::asset_system
   PRIVATE bf::blenlib
   PRIVATE bf::blenloader
   PRIVATE bf::blentranslation

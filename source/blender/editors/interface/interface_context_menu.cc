@@ -1277,6 +1277,14 @@ bool ui_popup_context_menu_for_button(bContext *C, uiBut *but, const wmEvent *ev
     wmOperatorType *ot = WM_operatortype_find("VIEW2D_OT_reset", true);
     if (ot) {
       layout->separator();
+      if (!ELEM(region->regiontype, RGN_TYPE_ASSET_SHELF_HEADER, RGN_TYPE_ASSET_SHELF)) {
+        const short region_alignment = RGN_ALIGN_ENUM_FROM_MASK(region->alignment);
+        const char *but_flip_str = region_alignment == RGN_ALIGN_LEFT   ? IFACE_("Flip to Right") :
+                                  region_alignment == RGN_ALIGN_RIGHT  ? IFACE_("Flip to Left") :
+                                  region_alignment == RGN_ALIGN_BOTTOM ? IFACE_("Flip to Top") :
+                                                                          IFACE_("Flip to Bottom");
+        layout->op("SCREEN_OT_region_flip", but_flip_str, ICON_FLIP, blender::wm::OpCallContext::InvokeDefault, UI_ITEM_NONE); /*BFA - icon added*/
+      }
       layout->op("VIEW2D_OT_reset", IFACE_("Reset Panel Zoom"), ICON_ZOOM_RESET, blender::wm::OpCallContext::InvokeDefault, UI_ITEM_NONE);
       layout->separator();
     }

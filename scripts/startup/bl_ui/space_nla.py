@@ -594,8 +594,19 @@ class NLA_MT_channel_context_menu(Menu):
         layout.operator("anim.channels_clean_empty", icon="CLEAN_CHANNELS")
 
 
+class NLA_AST_nonlinear(bpy.types.AssetShelf):
+    bl_space_type = 'NLA_EDITOR'
+    bl_region_type = 'UI'
+
+    @classmethod
+    def asset_poll(cls, asset):
+        return asset.id_type == 'ACTION'
+
+
 classes = (
     ANIM_OT_switch_editors_in_nla, # BFA - menu
+    # ALL_MT_editormenu_nla, # BFA - menu
+    NLA_AST_nonlinear, # bfa asset shelf
     NLA_HT_header,
     NLA_HT_playback_controls,
     NLA_MT_editor_menus,

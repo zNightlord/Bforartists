@@ -3662,6 +3662,69 @@ static void rna_def_tool_settings(BlenderRNA *brna)
   RNA_def_property_ui_range(prop, DEG2RADF(0.1f), DEG2RADF(180.0f), 10.0f, 3);
   RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, nullptr); /* header redraw */
 
+  prop = RNA_def_property(srna, "snap_move_increment_3d", PROP_FLOAT, PROP_DISTANCE);
+  RNA_def_property_float_sdna(prop, nullptr, "snap_move_increment_3d");
+  RNA_def_property_ui_text(
+      prop, "Move Increment", "Value used for move increments in 3D editors");
+  RNA_def_property_range(prop, 0, FLT_MAX);
+  RNA_def_property_ui_range(prop, 0, FLT_MAX, 100.0f, 2);
+  RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, nullptr); /* header redraw */
+  prop = RNA_def_property(srna, "snap_move_increment_3d_precision", PROP_FLOAT, PROP_DISTANCE);
+  RNA_def_property_float_sdna(prop, nullptr, "snap_move_increment_3d_precision");
+  RNA_def_property_ui_text(prop,
+                           "Move Precision Increment",
+                           "Precision value used for move increments in 3D editors");
+  RNA_def_property_range(prop, 0, FLT_MAX);
+  RNA_def_property_ui_range(prop, 0, FLT_MAX, 10.0f, 3);
+  RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, nullptr); /* header redraw */
+  
+  prop = RNA_def_property(srna, "snap_move_increment_2d", PROP_FLOAT, PROP_DISTANCE);
+  RNA_def_property_float_sdna(prop, nullptr, "snap_move_increment_2d");
+  RNA_def_property_ui_text(
+      prop, "Move Increment", "Value used for move increments in 2D editors");
+  RNA_def_property_range(prop, 0, FLT_MAX);
+  RNA_def_property_ui_range(prop, 0, FLT_MAX, 100.0f, 2);
+  RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, nullptr); /* header redraw */
+  prop = RNA_def_property(srna, "snap_move_increment_2d_precision", PROP_FLOAT, PROP_DISTANCE);
+  RNA_def_property_float_sdna(prop, nullptr, "snap_move_increment_2d_precision");
+  RNA_def_property_ui_text(prop,
+                           "Move Precision Increment",
+                           "Precision value used for move increments in 2D editors");
+  RNA_def_property_range(prop, 0, FLT_MAX);
+  RNA_def_property_ui_range(prop, 0, FLT_MAX, 10.0f, 3);
+  RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, nullptr); /* header redraw */
+
+  prop = RNA_def_property(srna, "snap_scale_increment_3d", PROP_FLOAT, PROP_NONE);
+  RNA_def_property_float_sdna(prop, nullptr, "snap_scale_increment_3d");
+  RNA_def_property_ui_text(
+      prop, "Scale Increment", "Value used for scale increments in 3D editors");
+  RNA_def_property_range(prop, 0, FLT_MAX);
+  RNA_def_property_ui_range(prop, 0, FLT_MAX, 100.0f, 2);
+  RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, nullptr); /* header redraw */
+  prop = RNA_def_property(srna, "snap_scale_increment_3d_precision", PROP_FLOAT, PROP_NONE);
+  RNA_def_property_float_sdna(prop, nullptr, "snap_scale_increment_3d_precision");
+  RNA_def_property_ui_text(prop,
+                           "Scale Precision Increment",
+                           "Precision value used for scale increments in 3D editors");
+  RNA_def_property_range(prop, 0, FLT_MAX);
+  RNA_def_property_ui_range(prop, 0, FLT_MAX, 10.0f, 3);
+  RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, nullptr); /* header redraw */
+  prop = RNA_def_property(srna, "snap_scale_increment_2d", PROP_FLOAT, PROP_NONE);
+  RNA_def_property_float_sdna(prop, nullptr, "snap_scale_increment_2d");
+  RNA_def_property_ui_text(
+      prop, "Scale Increment", "Value used for scale increments in 2D editors");
+  RNA_def_property_range(prop, 0, FLT_MAX);
+  RNA_def_property_ui_range(prop, 0, FLT_MAX, 100.0f, 2);
+  RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, nullptr); /* header redraw */
+  prop = RNA_def_property(srna, "snap_scale_increment_2d_precision", PROP_FLOAT, PROP_NONE);
+  RNA_def_property_float_sdna(prop, nullptr, "snap_scale_increment_2d_precision");
+  RNA_def_property_ui_text(prop,
+                           "Scale Precision Increment",
+                           "Precision value used for scale increments in 2D editors");
+  RNA_def_property_range(prop, 0, FLT_MAX);
+  RNA_def_property_ui_range(prop, 0, FLT_MAX, 10.0f, 3);
+  RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, nullptr); /* header redraw */
+
   prop = RNA_def_property(srna, "snap_angle_increment_3d", PROP_FLOAT, PROP_ANGLE);
   RNA_def_property_float_sdna(prop, nullptr, "snap_angle_increment_3d");
   RNA_def_property_ui_text(

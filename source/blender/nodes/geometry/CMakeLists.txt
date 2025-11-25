@@ -29,11 +29,13 @@ set(INC_SYS
 
 set(SRC
   nodes/node_geo_accumulate_field.cc
+  nodes/node_geo_armature_deform.cc
   nodes/node_geo_attribute_capture.cc
   nodes/node_geo_attribute_domain_size.cc
   nodes/node_geo_attribute_statistic.cc
   nodes/node_geo_bake.cc
   nodes/node_geo_blur_attribute.cc
+  nodes/node_geo_bone_info.cc
   nodes/node_geo_boolean.cc
   nodes/node_geo_bounding_box.cc
   nodes/node_geo_camera_info.cc
@@ -117,6 +119,7 @@ set(SRC
   nodes/node_geo_index_of_nearest.cc
   nodes/node_geo_index_switch.cc
   nodes/node_geo_input_active_camera.cc
+  nodes/node_geo_input_armature.cc
   nodes/node_geo_input_collection.cc
   nodes/node_geo_input_curve_handles.cc
   nodes/node_geo_input_curve_tilt.cc
@@ -173,6 +176,7 @@ set(SRC
   nodes/node_geo_mesh_primitive_grid.cc
   nodes/node_geo_mesh_primitive_ico_sphere.cc
   nodes/node_geo_mesh_primitive_line.cc
+  nodes/node_geo_mesh_primitive_monkey.cc
   nodes/node_geo_mesh_primitive_uv_sphere.cc
   nodes/node_geo_mesh_subdivide.cc
   nodes/node_geo_mesh_to_curve.cc

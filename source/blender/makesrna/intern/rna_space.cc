@@ -314,7 +314,7 @@ const EnumPropertyItem rna_enum_space_image_mode_all_items[] = {
 /* BFA - removes a warning*/
 static const EnumPropertyItem rna_enum_space_image_mode_ui_items[] = {
     SI_ITEM_VIEW("VIEW", "View", ICON_FILE_IMAGE),
-    SI_ITEM_UV,
+    // SI_ITEM_UV,
     SI_ITEM_PAINT,
     SI_ITEM_MASK,
     {0, nullptr, 0, nullptr, nullptr},
@@ -4965,7 +4965,7 @@ static void rna_def_space_view3d_shading(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Shadow Intensity", "Darkness of shadows");
   RNA_def_property_range(prop, 0.0f, 1.0f);
   RNA_def_property_ui_range(prop, 0.00f, 1.0f, 1, 3);
-  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
+  // RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
   RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D | NS_VIEW3D_SHADING, nullptr);
 
   prop = RNA_def_property(srna, "render_pass", PROP_ENUM, PROP_NONE);
@@ -5265,6 +5265,14 @@ static void rna_def_space_view3d_overlay(BlenderRNA *brna)
       prop,
       "Show Weight Contours",
       "Show contour lines formed by points with the same interpolated weight");
+  RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, nullptr);
+
+   prop = RNA_def_property(srna, "show_wpaint_colored", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "overlay.wpaint_flag", V3D_OVERLAY_WPAINT_COLORED);
+  RNA_def_property_ui_text(
+      prop,
+      "Show Weight Colored",
+      "Show colored weight based on vertex groups id");
   RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, nullptr);
 
   prop = RNA_def_property(srna, "show_weight", PROP_BOOLEAN, PROP_NONE);

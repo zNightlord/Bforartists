@@ -337,6 +337,7 @@ static wmOperatorStatus gizmo_arrow_modal(bContext *C,
   GizmoInteraction *inter = static_cast<GizmoInteraction *>(gz->interaction_data);
   ARegion *region = CTX_wm_region(C);
   RegionView3D *rv3d = static_cast<RegionView3D *>(region->regiondata);
+  ToolSettings *ts = CTX_data_tool_settings(C);
 
   float offset[3];
   float facdir = 1.0f;
@@ -396,9 +397,39 @@ static wmOperatorStatus gizmo_arrow_modal(bContext *C,
     const int transform_flag = RNA_enum_get(arrow->gizmo.ptr, "transform");
     const bool constrained = (transform_flag & ED_GIZMO_ARROW_XFORM_FLAG_CONSTRAINED) != 0;
     const bool inverted = (transform_flag & ED_GIZMO_ARROW_XFORM_FLAG_INVERTED) != 0;
-    const bool use_precision = (tweak_flag & WM_GIZMO_TWEAK_PRECISE) != 0;
-    float value = gizmo_value_from_offset(
-        data, inter, ofs_new, constrained, inverted, use_precision);
+
+    float value, snap_increment;
+    float tweak_offset = ofs_new;
+
+    const float max = data->min + data->range;
+
+    if (tweak_flag & WM_GIZMO_TWEAK_SNAP) {
+      snap_increment = ts->snap_move_increment_3d;
+      inter->precision_offset += ofs_new - inter->prev_offset;
+      tweak_offset = ofs_new - snap_increment * roundf(inter->precision_offset / snap_increment);
+    }
+
+    if (tweak_flag & WM_GIZMO_TWEAK_PRECISE) {
+      snap_increment = ts->snap_move_increment_3d_precision;
+      /* add delta offset of this step to total precision_offset */
+      inter->precision_offset += ofs_new - inter->prev_offset;
+      tweak_offset = ofs_new - inter->precision_offset * snap_increment;
+    }
+    inter->prev_offset = ofs_new;
+
+    float ofs_snap = inter->init_offset + tweak_offset;
+    if (constrained) {
+      value = gizmo_value_from_offset_constr(
+          data->range_fac, data->min, data->range, ofs_snap, inverted);
+    }
+    else {
+      value = ofs_snap;
+    }
+
+    /* clamp to custom range */
+    if (data->is_custom_range_set) {
+      CLAMP(value, data->min, max);
+    }
 
     WM_gizmo_target_property_float_set(C, gz, gz_prop, value);
     /* get clamped value */

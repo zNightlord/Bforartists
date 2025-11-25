@@ -327,8 +327,7 @@ static void initResize(TransInfo *t, wmOperator *op)
 
   t->idx_max = 2;
   t->num.idx_max = 2;
-  t->increment = float3(0.1f);
-  t->increment_precision = 0.1f;
+  initSnapScaleIncrements(t);
 
   copy_v3_fl(t->num.val_inc, t->increment[0]);
   t->num.unit_sys = t->scene->unit.system;

@@ -470,12 +470,29 @@ static void blo_update_defaults_scene(Main *bmain, Scene *scene)
   ts->uv_flag |= UV_FLAG_SELECT_SYNC;
 
   /* Default Rotate Increment. */
+  const float default_snap_move_increment = 1.0f;
+  ts->snap_move_increment_2d = default_snap_move_increment;
+  ts->snap_move_increment_3d = default_snap_move_increment;
+  const float default_snap_move_increment_precision = 0.1f;
+  ts->snap_move_increment_2d_precision = default_snap_move_increment_precision;
+  ts->snap_move_increment_3d_precision = default_snap_move_increment_precision;
+
+  /* Default Rotate Increment. */
   const float default_snap_angle_increment = DEG2RADF(5.0f);
   ts->snap_angle_increment_2d = default_snap_angle_increment;
   ts->snap_angle_increment_3d = default_snap_angle_increment;
   const float default_snap_angle_increment_precision = DEG2RADF(1.0f);
   ts->snap_angle_increment_2d_precision = default_snap_angle_increment_precision;
   ts->snap_angle_increment_3d_precision = default_snap_angle_increment_precision;
+
+
+   /* Default Rotate Increment. */
+  const float default_snap_scale_increment = 0.1f;
+  ts->snap_move_increment_2d = default_snap_scale_increment;
+  ts->snap_scale_increment_3d = default_snap_scale_increment;
+  const float default_snap_scale_increment_precision = 0.01f;
+  ts->snap_scale_increment_2d_precision = default_snap_move_increment_precision;
+  ts->snap_scale_increment_3d_precision = default_snap_move_increment_precision;
 
   /* Be sure `curfalloff` and primitive are initialized. */
   if (ts->gp_sculpt.cur_falloff == nullptr) {

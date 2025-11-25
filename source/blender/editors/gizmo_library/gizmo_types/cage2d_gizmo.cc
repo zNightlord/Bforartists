@@ -1059,6 +1059,7 @@ struct RectTransformInteraction {
   float orig_matrix_final_no_offset[4][4];
   Dial *dial;
   bool use_temp_uniform;
+  float increment_step;
 };
 
 }  // namespace
@@ -1157,7 +1158,7 @@ static void gizmo_pivot_from_scale_part(int part, float r_pt[2])
 static wmOperatorStatus gizmo_cage2d_modal(bContext *C,
                                            wmGizmo *gz,
                                            const wmEvent *event,
-                                           eWM_GizmoFlagTweak /*tweak_flag*/)
+                                           eWM_GizmoFlagTweak tweak_flag)
 {
   RectTransformInteraction *data = static_cast<RectTransformInteraction *>(gz->interaction_data);
   int transform_flag = RNA_enum_get(gz->ptr, "transform");
@@ -1206,13 +1207,28 @@ static wmOperatorStatus gizmo_cage2d_modal(bContext *C,
     WM_gizmo_target_property_float_get_array(gz, gz_prop, &gz->matrix_offset[0][0]);
   }
 
+  float increment_value = 1.0f;
+  RegionView3D *view3d = CTX_wm_region_view3d(C);
+  ToolSettings *ts = CTX_data_tool_settings(C);
+
   if (gz->highlight_part == ED_GIZMO_CAGE2D_PART_TRANSLATE) {
+    if (view3d) {
+      increment_value = ts->snap_move_increment_3d;
+    }
+    else {
+      increment_value = ts->snap_move_increment_2d;
+    }
     /* do this to prevent clamping from changing size */
     copy_m4_m4(gz->matrix_offset, data->orig_matrix_offset);
-    gz->matrix_offset[3][0] = data->orig_matrix_offset[3][0] +
-                              (point_local[0] - data->orig_mouse[0]);
-    gz->matrix_offset[3][1] = data->orig_matrix_offset[3][1] +
-                              (point_local[1] - data->orig_mouse[1]);
+
+    float translate_x = data->orig_matrix_offset[3][0] + (point_local[0] - data->orig_mouse[0]);
+    float translate_y = data->orig_matrix_offset[3][1] + (point_local[1] - data->orig_mouse[1]);
+    if (tweak_flag & WM_GIZMO_TWEAK_SNAP) {
+      translate_x = increment_value * roundf(translate_x / increment_value);
+      translate_y = increment_value * roundf(translate_y / increment_value);
+    }
+    gz->matrix_offset[3][0] = translate_x;
+    gz->matrix_offset[3][1] = translate_y;
   }
   else if (gz->highlight_part == ED_GIZMO_CAGE2D_PART_ROTATE) {
 
@@ -1312,6 +1328,16 @@ static wmOperatorStatus gizmo_cage2d_modal(bContext *C,
         size_new[i] = delta_curr / (signf(delta_orig) * 0.5f * dims[i] - pivot[i]);
       }
     }
+    if (view3d) {
+      increment_value = ts->snap_scale_increment_3d;
+    }
+    else {
+      increment_value = ts->snap_scale_increment_2d;
+    }
+
+    if (transform_flag & ED_GIZMO_CAGE_XFORM_FLAG_SCALE_UNIFORM) {
+      increment_value = increment_value * 2.0f;
+    }
 
     float scale[2] = {1.0f, 1.0f};
     for (int i = 0; i < 2; i++) {
@@ -1319,7 +1345,10 @@ static wmOperatorStatus gizmo_cage2d_modal(bContext *C,
         size_orig[i] = 1.0f;
         gz->matrix_offset[i][i] = 1.0f;
       }
-      scale[i] = size_new[i] / size_orig[i];
+      scale[i] = (tweak_flag & WM_GIZMO_TWEAK_SNAP ?
+                      increment_value * roundf(size_new[i] / increment_value) :
+                      size_new[i]) /
+                 size_orig[i];
     }
 
     if (transform_flag & ED_GIZMO_CAGE_XFORM_FLAG_SCALE_UNIFORM) {

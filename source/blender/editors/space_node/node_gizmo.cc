@@ -1135,4 +1135,131 @@ void NODE_GGT_backdrop_split(wmGizmoGroupType *gzgt)
 
 /** \} */
 
+/* -------------------------------------------------------------------- */
+/** \name Gradient Texture
+ * \{ */
+
+struct NodeGradientWidgetGroup {
+  wmGizmo *gizmos[2];
+
+  struct {
+    float2 dims;
+    float2 offset;
+  } state;
+};
+
+static bool WIDGETGROUP_node_gradient_poll(const bContext *C, wmGizmoGroupType * /*gzgt*/)
+{
+  if (!node_gizmo_is_set_visible(C)) {
+    return false;
+  }
+
+  SpaceNode *snode = CTX_wm_space_node(C);
+  bNode *node = bke::node_get_active(*snode->edittree);
+
+  if ((node && node->is_type("CompositorNodeGroup")) && STR_ELEM(node->name, "Gradient"))
+  {
+    snode->edittree->ensure_topology_cache();
+    LISTBASE_FOREACH (bNodeSocket *, input, &node->inputs) {
+      if (STR_ELEM(input->name, "Start", "End") && input->is_directly_linked()) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  return false;
+}
+
+static void WIDGETGROUP_node_gradient_setup(const bContext * /*C*/, wmGizmoGroup *gzgroup)
+{
+  NodeGradientWidgetGroup *gradient_group = MEM_mallocN<NodeGradientWidgetGroup>(__func__);
+  const wmGizmoType *gzt_move_3d = WM_gizmotype_find("GIZMO_GT_move_3d", false);
+
+  for (int i = 0; i < 2; i++) {
+    gradient_group->gizmos[i] = WM_gizmo_new_ptr(gzt_move_3d, gzgroup, nullptr);
+    wmGizmo *gz = gradient_group->gizmos[i];
+
+    RNA_enum_set(gz->ptr, "draw_style", ED_GIZMO_MOVE_STYLE_RING_2D);
+
+    gz->scale_basis = 0.05f / 75.0;
+  }
+
+  gzgroup->customdata = gradient_group;
+}
+
+static void WIDGETGROUP_node_gradient_draw_prepare(const bContext *C, wmGizmoGroup *gzgroup)
+{
+  NodeGradientWidgetGroup *gradient_group = (NodeGradientWidgetGroup *)gzgroup->customdata;
+  ARegion *region = CTX_wm_region(C);
+
+  SpaceNode *snode = CTX_wm_space_node(C);
+
+  float matrix_space[4][4];
+  node_gizmo_calc_matrix_space_with_image_dims(
+      snode, region, gradient_group->state.dims, gradient_group->state.offset, matrix_space);
+
+  for (int i = 0; i < 2; i++) {
+    wmGizmo *gz = gradient_group->gizmos[i];
+    copy_m4_m4(gz->matrix_space, matrix_space);
+  }
+}
+
+static void WIDGETGROUP_node_gradient_refresh(const bContext *C, wmGizmoGroup *gzgroup)
+{
+  Main *bmain = CTX_data_main(C);
+  NodeGradientWidgetGroup *gradient_group = (NodeGradientWidgetGroup *)gzgroup->customdata;
+
+  void *lock;
+  Image *ima = BKE_image_ensure_viewer(bmain, IMA_TYPE_COMPOSITE, "Viewer Node");
+  ImBuf *ibuf = BKE_image_acquire_ibuf(ima, nullptr, &lock);
+
+  if (UNLIKELY(ibuf == nullptr)) {
+    for (int i = 0; i < 2; i++) {
+      wmGizmo *gz = gradient_group->gizmos[i];
+      WM_gizmo_set_flag(gz, WM_GIZMO_HIDDEN, true);
+    }
+    BKE_image_release_ibuf(ima, ibuf, lock);
+    return;
+  }
+
+  gradient_group->state.dims = node_gizmo_safe_calc_dims(ibuf, GIZMO_NODE_DEFAULT_DIMS);
+  copy_v2_v2(gradient_group->state.offset, ima->runtime->backdrop_offset);
+
+  SpaceNode *snode = CTX_wm_space_node(C);
+  bNode *node = bke::node_get_active(*snode->edittree);
+
+  /* Need to set property here for undo. TODO: would prefer to do this in _init. */
+  int i = 0;
+  for (bNodeSocket *sock = (bNodeSocket *)node->inputs.first; sock && i < 2; sock = sock->next) {
+    if (sock->type == SOCK_VECTOR && STR_ELEM(sock->name, "Start", "End")) {
+      wmGizmo *gz = gradient_group->gizmos[i++];
+
+      PointerRNA sockptr = RNA_pointer_create_discrete(
+          (ID *)snode->edittree, &RNA_NodeSocket, sock);
+      WM_gizmo_target_property_def_rna(gz, "offset", &sockptr, "default_value", -1);
+
+      WM_gizmo_set_flag(gz, WM_GIZMO_DRAW_MODAL, true);
+    }
+  }
+
+  BKE_image_release_ibuf(ima, ibuf, lock);
+}
+
+void NODE_GGT_backdrop_gradient(wmGizmoGroupType *gzgt)
+{
+  gzgt->name = "Gradient Widget";
+  gzgt->idname = "NODE_GGT_gradient";
+
+  gzgt->flag |= WM_GIZMOGROUPTYPE_PERSISTENT;
+
+  gzgt->poll = WIDGETGROUP_node_gradient_poll;
+  gzgt->setup = WIDGETGROUP_node_gradient_setup;
+  gzgt->setup_keymap = WM_gizmogroup_setup_keymap_generic_maybe_drag;
+  gzgt->draw_prepare = WIDGETGROUP_node_gradient_draw_prepare;
+  gzgt->refresh = WIDGETGROUP_node_gradient_refresh;
+}
+
+/** \} */
+
 }  // namespace blender::ed::space_node

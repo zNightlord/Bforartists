@@ -157,6 +157,7 @@ enum ThemeColorID {
 
   TH_CHANNEL,
   TH_CHANNEL_SELECT,
+  TH_CHANNEL_SELECT_BACKDROP,
 
   TH_LONGKEY,
   TH_LONGKEY_SELECT,
@@ -368,6 +369,7 @@ enum ThemeColorID {
   TH_SEAM,
   TH_SHARP,
   TH_FREESTYLE,
+  TH_NODE_COLOR_BLEND, // bfa node color blend
 };
 
 /* Specific defines per space should have higher define values. */

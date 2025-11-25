@@ -501,6 +501,9 @@ const uchar *UI_ThemeGetColorPtr(bTheme *btheme, int spacetype, int colorid)
         case TH_CHANNEL_SELECT:
           cp = btheme->common.anim.channel_selected;
           break;
+        case TH_CHANNEL_SELECT_BACKDROP:
+          cp = btheme->common.anim.channel_selected_overlay;
+          break;
         case TH_KEYTYPE_KEYFRAME:
           cp = btheme->common.anim.keyframe;
           break;

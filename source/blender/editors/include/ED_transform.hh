@@ -207,6 +207,8 @@ int calc_gizmo_stats(const bContext *C,
                      TransformBounds *tbounds,
                      RegionView3D *rv3d);
 
+void gizmo_init_snap(const bContext *C);
+
 /**
  * Iterates over all the strips and finds the closest snapping candidate of either \a frame_1 or \a
  * frame_2. The closest snapping candidate will be the closest start or end frame of an existing

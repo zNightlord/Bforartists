@@ -10323,6 +10323,10 @@ class VIEW3D_PT_overlay_weight_paint(Panel):
         row.prop(overlay, "show_wpaint_contours")
         row = col.row()
         row.separator()
+        row.prop(overlay, "show_wpaint_colored")
+
+        row = col.row()
+        row.separator()
         row.prop(overlay, "show_paint_wire")
 
 
@@ -10421,11 +10425,31 @@ class VIEW3D_PT_snapping(Panel):
             text_ctxt=i18n_contexts.operator_default,
             toggle=True,
         )
-        col.label(text="Rotation Increment")
-        row = col.row(align=True)
-        row.prop(tool_settings, "snap_angle_increment_3d", text="")
-        row.prop(tool_settings, "snap_angle_increment_3d_precision", text="")
-
+        if 'INCREMENT' in tool_settings.snap_elements_base:
+            row = col.row(align=True)
+#            split = row.split()
+#            for i in range(11):
+#                row.separator()
+            row.label(text="Increment")
+            
+            col = col.column(align=True)
+            row = col.row(align=True)
+            split = row.split(factor=0.7)
+            split.label(text="Move")
+            row.prop(tool_settings, "snap_move_increment_3d", text="")
+            row.prop(tool_settings, "snap_move_increment_3d_precision", text="")
+            
+            row = col.row(align=True)
+            split = row.split(factor=0.7)
+            split.label(text="Rotation")
+            row.prop(tool_settings, "snap_angle_increment_3d", text="")
+            row.prop(tool_settings, "snap_angle_increment_3d_precision", text="")
+            
+            row = col.row(align=True)
+            split = row.split(factor=0.7)
+            split.label(text="Scale")
+            row.prop(tool_settings, "snap_scale_increment_3d", text="")
+            row.prop(tool_settings, "snap_scale_increment_3d_precision", text="")
 
 class VIEW3D_PT_sculpt_snapping(Panel):
     bl_space_type = "VIEW_3D"

@@ -1304,6 +1304,11 @@ static void gizmo_3d_dial_matrixbasis_calc(const ARegion *region,
   r_mat_basis[3][3] = 1.0f;
 }
 
+void gizmo_init_snap(const bContext *C){
+  TransInfo t = {nullptr};
+  initSnapping(&t, nullptr);
+}
+
 /** \} */
 
 /* -------------------------------------------------------------------- */

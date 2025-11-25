@@ -41,6 +41,8 @@ void transform_snap_reset_from_mode(TransInfo *t, wmOperator *op);
 void initSnapping(TransInfo *t, wmOperator *op);
 void freeSnapping(TransInfo *t);
 void initSnapAngleIncrements(TransInfo *t);
+void initSnapMoveIncrements(TransInfo *t);
+void initSnapScaleIncrements(TransInfo *t);
 bool transform_snap_project_individual_is_active(const TransInfo *t);
 void transform_snap_project_individual_apply(TransInfo *t);
 void transform_snap_mixed_apply(TransInfo *t, float *vec);

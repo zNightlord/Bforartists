@@ -346,6 +346,8 @@ class USERPREF_PT_interface_editors(InterfacePanel, CenterAlignMixIn, Panel):
         flow.row().prop(view, "header_align")
         flow.prop(view, "factor_display_type")
 
+        flow.prop(system, "use_region_overlap_bar")
+        flow.prop(system, "use_asset_shelf_top")
 
 class USERPREF_PT_interface_temporary_windows(InterfacePanel, CenterAlignMixIn, Panel):
     bl_label = "Temporary Editors"

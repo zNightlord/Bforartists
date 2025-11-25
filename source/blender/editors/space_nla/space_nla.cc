@@ -20,11 +20,16 @@
 #include "BLI_string_utf8.h"
 #include "BLI_utildefines.h"
 
+#include "BLT_translation.hh"
+
+#include "AS_asset_representation.hh"
+
 #include "BKE_context.hh"
 #include "BKE_lib_query.hh"
 #include "BKE_lib_remap.hh"
 #include "BKE_screen.hh"
 
+#include "ED_asset_shelf.hh"
 #include "ED_anim_api.hh"
 #include "ED_markers.hh"
 #include "ED_screen.hh"
@@ -76,6 +81,19 @@ static SpaceLink *nla_create(const ScrArea *area, const Scene *scene)
   region->regiontype = RGN_TYPE_FOOTER;
   region->alignment = (U.uiflag & USER_HEADER_BOTTOM) ? RGN_ALIGN_TOP : RGN_ALIGN_BOTTOM;
   region->flag = RGN_FLAG_HIDDEN;
+
+  /* asset shelf */
+  region = BKE_area_region_new();
+  BLI_addtail(&snla->regionbase, region);
+  region->regiontype = RGN_TYPE_ASSET_SHELF;
+  region->alignment = RGN_ALIGN_BOTTOM;
+  region->flag |= RGN_FLAG_HIDDEN;
+
+  /* asset shelf header */
+  region = BKE_area_region_new();
+  BLI_addtail(&snla->regionbase, region);
+  region->regiontype = RGN_TYPE_ASSET_SHELF_HEADER;
+  region->alignment = RGN_ALIGN_BOTTOM | RGN_ALIGN_HIDE_WITH_PREV;
 
   /* track list region */
   region = BKE_area_region_new();
@@ -653,8 +671,91 @@ static void nla_space_blend_write(BlendWriter *writer, SpaceLink *sl)
   }
 }
 
+// bfa nla asset shelf
+static void nla_asset_shelf_region_init(wmWindowManager *wm, ARegion *region)
+{
+  using namespace blender::ed;
+  wmKeyMap *keymap = WM_keymap_ensure(
+      wm->runtime->defaultconf, "NLA Generic", SPACE_NLA, RGN_TYPE_WINDOW);
+  WM_event_add_keymap_handler(&region->runtime->handlers, keymap);
+  asset::shelf::region_init(wm, region);
+}
+
+// 
+static bool nla_drop_in_main_region_poll(bContext *C, const wmEvent *event)
+{
+  ScrArea *area = CTX_wm_area(C);
+  return ED_region_overlap_isect_any_xy(area, event->xy) == false;
+}
+
+static ID_Type nla_drop_id_in_main_region_poll_get_id_type(bContext *C,
+                                                              wmDrag *drag,
+                                                              const wmEvent *event)
+{
+  const ScrArea *area = CTX_wm_area(C);
+
+  if (ED_region_overlap_isect_any_xy(area, event->xy)) {
+    return ID_Type(0);
+  }
+  if (!nla_drop_in_main_region_poll(C, event)) {
+    return ID_Type(0);
+  }
+
+  ID *local_id = WM_drag_get_local_ID(drag, 0);
+  if (local_id) {
+    return GS(local_id->name);
+  }
+
+  wmDragAsset *asset_drag = WM_drag_get_asset_data(drag, 0);
+  if (asset_drag) {
+    return asset_drag->asset->get_id_type();
+  }
+
+  return ID_Type(0);
+}
+
+static bool nla_action_data_drop_poll(bContext *C, wmDrag *drag, const wmEvent *event)
+{
+  ID_Type id_type = nla_drop_id_in_main_region_poll_get_id_type(C, drag, event);
+  if (id_type && id_type == ID_AC) {
+    return true;
+  }
+  return false;
+}
+
+static std::string nla_action_data_drop_tooltip(bContext * /*C*/,
+                                                   wmDrag * /*drag*/,
+                                                   const int /*xy*/[2],
+                                                   wmDropBox * /*drop*/)
+{
+  return TIP_("Add NLA strip from action");
+}
+
+static void nla_id_drop_copy_with_type(bContext *C, wmDrag *drag, wmDropBox *drop)
+{
+  ID *id = WM_drag_get_local_ID_or_import_from_asset(C, drag, 0);
+
+  RNA_enum_set(drop->ptr, "type", GS(id->name));
+  WM_operator_properties_id_lookup_set_from_id(drop->ptr, id);
+}
+
+void nla_dropboxes()
+{
+  ListBase *lb = WM_dropboxmap_find("NLA", SPACE_NLA, RGN_TYPE_WINDOW);
+
+  wmDropBox *drop;
+  WM_dropbox_add(lb,
+                 "NLA_OT_actionclip_add",
+                 nla_action_data_drop_poll,
+                 nla_id_drop_copy_with_type,
+                 WM_drag_free_imported_drag_ID,
+                 nla_action_data_drop_tooltip);
+
+}
+
 void ED_spacetype_nla()
 {
+  using namespace blender::ed;
   std::unique_ptr<SpaceType> st = std::make_unique<SpaceType>();
   ARegionType *art;
 
@@ -668,6 +769,7 @@ void ED_spacetype_nla()
   st->operatortypes = nla_operatortypes;
   st->listener = nla_listener;
   st->keymap = nla_keymap;
+  st->dropboxes = nla_dropboxes;
   st->id_remap = nla_id_remap;
   st->foreach_id = nla_foreach_id;
   st->blend_read_data = nla_space_blend_read_data;
@@ -696,6 +798,36 @@ void ED_spacetype_nla()
   art->draw = nla_header_region_draw;
 
   BLI_addhead(&st->regiontypes, art);
+
+   /* regions: asset shelf */
+  art = MEM_callocN<ARegionType>("spacetype nla asset shelf region");
+  art->regionid = RGN_TYPE_ASSET_SHELF;
+  art->keymapflag = ED_KEYMAP_UI | ED_KEYMAP_ASSET_SHELF | ED_KEYMAP_FRAMES;
+  art->duplicate = asset::shelf::region_duplicate;
+  art->free = asset::shelf::region_free;
+  art->on_poll_success = asset::shelf::region_on_poll_success;
+  art->listener = asset::shelf::region_listen;
+  art->message_subscribe = asset::shelf::region_message_subscribe;
+  art->poll = asset::shelf::regions_poll;
+  art->snap_size = asset::shelf::region_snap;
+  art->on_user_resize = asset::shelf::region_on_user_resize;
+  art->context = asset::shelf::context;
+  art->init = nla_asset_shelf_region_init;
+  art->layout = asset::shelf::region_layout;
+  art->draw = asset::shelf::region_draw;
+  BLI_addhead(&st->regiontypes, art);
+
+  /* regions: asset shelf header */
+  art = MEM_callocN<ARegionType>("spacetype nla asset shelf header region");
+  art->regionid = RGN_TYPE_ASSET_SHELF_HEADER;
+  art->keymapflag = ED_KEYMAP_UI | ED_KEYMAP_ASSET_SHELF | ED_KEYMAP_VIEW2D | ED_KEYMAP_FOOTER;
+  art->init = asset::shelf::header_region_init;
+  art->poll = asset::shelf::regions_poll;
+  art->draw = asset::shelf::header_region;
+  art->listener = asset::shelf::header_region_listen;
+  art->context = asset::shelf::context;
+  BLI_addhead(&st->regiontypes, art);
+  asset::shelf::types_register(art, SPACE_NLA);
 
   /* regions: footer */
   art = MEM_callocN<ARegionType>("spacetype nla region");

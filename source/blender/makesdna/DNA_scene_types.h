@@ -1887,11 +1887,23 @@ typedef struct ToolSettings {
   char use_plane_axis_auto;
   char _pad7[2];
 
+   /** Move Angle snapping amount */
+  float snap_move_increment_2d;
+  float snap_move_increment_2d_precision;
+  float snap_move_increment_3d;
+  float snap_move_increment_3d_precision;
+
   /** Rotation Angle snapping amount */
   float snap_angle_increment_2d;
   float snap_angle_increment_2d_precision;
   float snap_angle_increment_3d;
   float snap_angle_increment_3d_precision;
+
+  /** Scale Angle snapping amount */
+  float snap_scale_increment_2d;
+  float snap_scale_increment_2d_precision;
+  float snap_scale_increment_3d;
+  float snap_scale_increment_3d_precision;
 
   int16_t snap_step_seconds;
   int16_t snap_step_frames;

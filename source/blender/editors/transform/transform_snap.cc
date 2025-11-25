@@ -1056,6 +1056,31 @@ void freeSnapping(TransInfo *t)
   }
 }
 
+void initSnapMoveIncrements(TransInfo *t)
+{
+  /* The final value of increment with precision is `t->increment[0] * t->increment_precision`.
+   * Therefore, we divide `snap_angle_increment_*_precision` by `snap_angle_increment_*`
+   * to compute `increment_precision`. */
+  float increment;
+  float increment_precision;
+  if (t->spacetype == SPACE_VIEW3D) {
+    increment = t->settings->snap_move_increment_3d;
+    increment_precision = t->settings->snap_move_increment_3d_precision;
+  }
+  else {
+    increment = t->settings->snap_move_increment_2d;
+    increment_precision = t->settings->snap_move_increment_2d_precision;
+  }
+
+  t->increment = float3(increment);
+  if (increment != 0.0f) {
+    t->increment_precision = float(double(increment_precision) / double(increment));
+  }
+  else {
+    t->increment_precision = 1.0f;
+  }
+}
+
 void initSnapAngleIncrements(TransInfo *t)
 {
   /* The final value of increment with precision is `t->increment[0] * t->increment_precision`.
@@ -1078,6 +1103,31 @@ void initSnapAngleIncrements(TransInfo *t)
   }
   else {
     t->increment_precision = 1.0f;
+  }
+}
+
+void initSnapScaleIncrements(TransInfo *t)
+{
+  /* The final value of increment with precision is `t->increment[0] * t->increment_precision`.
+   * Therefore, we divide `snap_angle_increment_*_precision` by `snap_angle_increment_*`
+   * to compute `increment_precision`. */
+  float increment;
+  float increment_precision;
+  if (t->spacetype == SPACE_VIEW3D) {
+    increment = t->settings->snap_scale_increment_3d;
+    increment_precision = t->settings->snap_scale_increment_3d_precision;
+  }
+  else {
+    increment = t->settings->snap_scale_increment_2d;
+    increment_precision = t->settings->snap_scale_increment_2d_precision;
+  }
+
+  t->increment = float3(increment);
+  if (increment != 0.0f) {
+    t->increment_precision = float(double(increment_precision) / double(increment));
+  }
+  else {
+    t->increment_precision = 0.1f;
   }
 }
 
