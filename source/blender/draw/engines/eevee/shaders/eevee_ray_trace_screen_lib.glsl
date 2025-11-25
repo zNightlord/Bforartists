@@ -241,7 +241,8 @@ bool raytrace_screen_2(float3 vs_origin,
   float4 start = drw_point_view_to_homogenous(vs_origin);
   float4 end = drw_point_view_to_homogenous(vs_origin + vs_direction * max_distance);
 
-  float2 half_extent = float2(uniform_buf.film.render_extent) / 2.0f;
+  float2 extent = float2(uniform_buf.film.render_extent);
+  float2 half_extent = extent / 2.0f;
 
   /* Convert xy coordinates to pixel space (cartesian/non-homogeneous). */
   start.xy = (start.xy / start.w) * half_extent + half_extent;
@@ -268,6 +269,14 @@ bool raytrace_screen_2(float3 vs_origin,
     float4 step = start + (delta_step * (float(i) + step_jitter));
     /* Convert to fragment coordinates. */
     step.z = (step.z / step.w) * 0.5f + 0.5f;
+
+    // TODO: Clip the rays at the function start.
+    if (any(lessThan(step.xyz, float3(0.0f))) ||
+        any(greaterThan(step.xyz, float3(extent.x, extent.y, 1.0f))))
+    {
+      previous_step_depth = clamp(step.z, 0.0f, 1.0f);
+      continue;
+    }
 
     float screen_depth = texelFetch(hiz_tx, int2(step.xy), 0).r;
 
