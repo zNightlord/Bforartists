@@ -258,7 +258,12 @@ bool raytrace_screen_2(float3 vs_origin,
 
   /* Skip the first step to avoid self-occlusion. But iterate at least once. */
   for (int i = 1; i < steps || i == 1; i++) {
-    float4 step = start + (delta_step * (float(i) + jitter));
+    /* Ensure we don't go past ray end. */
+    bool is_last_step = i + 1 >= steps;
+    float step_jitter = is_last_step ? 0.0f : jitter;
+
+    /* Compute the position of the current step. */
+    float4 step = start + (delta_step * (float(i) + step_jitter));
     /* Convert to fragment coordinates. */
     step.z = (step.z / step.w) * 0.5f + 0.5f;
 
