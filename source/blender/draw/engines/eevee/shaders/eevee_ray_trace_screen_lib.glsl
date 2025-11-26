@@ -227,22 +227,63 @@ float4 hs_interpolation(float4 a, float4 b, float t)
   return mix(a * a.w, b * b.w, t);
 }
 
-bool raytrace_screen_2(float3 vs_origin,
-                       float3 vs_direction,
-                       float max_distance,
-                       sampler2D hiz_tx,
-                       float thickness,
-                       int max_steps,
-                       float jitter,
-                       out float3 vs_hit_point)
+bool clip_ray(inout float3 start,
+              inout float3 end,
+              const float3 direction,
+              const float max_distance,
+              const float4 frustum_planes[6])
 {
-  // TODO: Clip and discard if fully out of frustum.
+  float min_t = 0.0f;
+  float max_t = max_distance;
 
+  for (int i = 0; i < 6; i++) {
+    /* Make normals point outwards.
+     * This way xyz * w represents a point in the plane surface. */
+    float3 plane_normal = -frustum_planes[i].xyz;
+    float plane_distance = frustum_planes[i].w;
+
+    float NoR = dot(plane_normal, direction);
+    float NoS = dot(plane_normal, start);
+
+    if (abs(NoR) < 1e-6f) {
+      /* Parallel ray. */
+      if (NoS > plane_distance) {
+        /* Fully outside the Frustum. */
+        return false;
+      }
+      continue;
+    }
+
+    float plane_t = (plane_distance - NoS) / NoR;
+
+    if (NoR > 0.0f) {
+      /* Ray going outside. */
+      max_t = min(max_t, plane_t);
+    }
+    else {
+      /* Ray going inside. */
+      min_t = max(min_t, plane_t);
+    }
+  }
+
+  end = start + direction * max_t;
+  start = start + direction * min_t;
+
+  return max_t > min_t;
+}
+
+float raytrace_screen_2(float3 vs_origin,
+                        float3 vs_end,
+                        float3 vs_direction,
+                        sampler2D hiz_tx,
+                        float thickness,
+                        int max_steps,
+                        float jitter)
+{
   float4 start = drw_point_view_to_homogenous(vs_origin);
-  float4 end = drw_point_view_to_homogenous(vs_origin + vs_direction * max_distance);
+  float4 end = drw_point_view_to_homogenous(vs_end);
 
-  float2 extent = float2(uniform_buf.film.render_extent);
-  float2 half_extent = extent / 2.0f;
+  float2 half_extent = float2(uniform_buf.film.render_extent) / 2.0f;
 
   /* Convert xy coordinates to pixel space (cartesian/non-homogeneous). */
   start.xy = (start.xy / start.w) * half_extent + half_extent;
@@ -270,14 +311,6 @@ bool raytrace_screen_2(float3 vs_origin,
     /* Convert to fragment coordinates. */
     step.z = (step.z / step.w) * 0.5f + 0.5f;
 
-    // TODO: Clip the rays at the function start.
-    if (any(lessThan(step.xyz, float3(0.0f))) ||
-        any(greaterThan(step.xyz, float3(extent.x, extent.y, 1.0f))))
-    {
-      previous_step_depth = clamp(step.z, 0.0f, 1.0f);
-      continue;
-    }
-
     float screen_depth = texelFetch(hiz_tx, int2(step.xy), 0).r;
 
     /* Take thickness into account, but ensure it's not lower than the step depth. */
@@ -285,19 +318,17 @@ bool raytrace_screen_2(float3 vs_origin,
                           drw_depth_view_to_screen(drw_depth_screen_to_view(step.z) + thickness));
 
     if (step.z > screen_depth && screen_depth > min_depth) {
-      /* We have a hit. Compute the hit point. */
+      /* We have a hit. Compute the distance. */
       float3 ndc_hit_point;
       ndc_hit_point.xy = (step.xy - half_extent) / half_extent;
       ndc_hit_point.z = screen_depth * 2.0 - 1.0;
-      vs_hit_point = drw_point_ndc_to_view(ndc_hit_point);
-      /* Project the hit point into the ray. */
-      float hit_distance = dot(vs_hit_point - vs_origin, vs_direction);
-      vs_hit_point = vs_origin + vs_direction * hit_distance;
-      return true;
+      float3 vs_hit_point = drw_point_ndc_to_view(ndc_hit_point);
+      /* Hit point projection along the ray. */
+      return dot(vs_hit_point - vs_origin, vs_direction);
     }
 
     previous_step_depth = step.z;
   }
 
-  return false;
+  return -1.0f;
 }

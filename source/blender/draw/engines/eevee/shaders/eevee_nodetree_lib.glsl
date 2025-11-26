@@ -14,6 +14,9 @@ SHADER_LIBRARY_CREATE_INFO(eevee_hiz_data)
 #include "draw_model_lib.glsl"
 #include "draw_object_infos_lib.glsl"
 #include "draw_view_lib.glsl"
+#ifdef DRW_VIEW_CULLING_INFO
+#  include "draw_intersect_lib.glsl"
+#endif
 #include "eevee_nodetree_closures_lib.glsl"
 #include "eevee_ray_trace_screen_lib.glsl"
 #include "eevee_renderpass_lib.glsl"
@@ -290,27 +293,27 @@ float ambient_occlusion_eval(float3 normal,
 
 void raycast_eval(float3 position,
                   float3 direction,
-                  float length,
+                  float max_distance,
                   inout bool is_hit,
                   inout float3 hit_position,
                   inout float hit_distance)
 {
   is_hit = false;
   hit_position = float3(0.0f);
-  hit_distance = length;
+  hit_distance = max_distance;
 
   direction = normalize(direction);
 
 #if defined(GPU_FRAGMENT_SHADER) && (defined(MAT_DEFERRED) || defined(MAT_FORWARD))
 #  if 0
   /* Just sample the end point for now. */
-  float3 target = position + direction * length;
+  float3 target = position + direction * max_distance;
   target = drw_point_world_to_screen(target);
   target = clamp(target, vec3(0.0), vec3(1.0));
   float depth = texelFetch(hiz_tx, int2(target.xy * uniform_buf.film.extent), 0).r;
   is_hit = depth < target.z;
   if (is_hit) {
-    hit_distance = length;
+    hit_distance = max_distance;
     hit_position = drw_point_screen_to_world(
         float3(gl_FragCoord.xy / uniform_buf.film.extent, depth));
   }
@@ -322,7 +325,7 @@ void raycast_eval(float3 position,
     Ray ray;
     ray.origin = drw_point_world_to_view(position);
     ray.direction = drw_normal_world_to_view(direction);
-    ray.max_time = length;
+    ray.max_time = max_distance;
 
     ScreenTraceHitData hit = raytrace_screen(uniform_buf.raytrace,
                                              uniform_buf.hiz,
@@ -346,6 +349,16 @@ void raycast_eval(float3 position,
     }
   }
   else {
+    float3 ws_start = position;
+    float3 ws_end = position + direction * max_distance;
+#    if 1
+    if (!clip_ray(
+            ws_start, ws_end, direction, max_distance, drw_view_culling().frustum_planes.planes))
+    {
+      return;
+    }
+#    endif
+
     float noise_offset = sampling_rng_1D_get(SAMPLING_RAYTRACE_W);
     float jitter = interleaved_gradient_noise(gl_FragCoord.xy, 1.0f, noise_offset);
     float thickness_noise_offset = sampling_rng_1D_get(SAMPLING_RAYTRACE_X);
@@ -353,18 +366,17 @@ void raycast_eval(float3 position,
         interleaved_gradient_noise(gl_FragCoord.xy, 1.0f, thickness_noise_offset) * 0.5f + 0.5f;
     float thickness = uniform_buf.raytrace.thickness * thickness_jitter;
 
-    float3 vs_hit_position;
-    is_hit = raytrace_screen_2(drw_point_world_to_view(position),
-                               drw_normal_world_to_view(direction),
-                               length,
-                               hiz_tx,
-                               thickness,
-                               64,
-                               jitter,
-                               vs_hit_position);
-    if (is_hit) {
-      hit_position = drw_point_view_to_world(vs_hit_position);
-      hit_distance = distance(position, hit_position);
+    float result = raytrace_screen_2(drw_point_world_to_view(ws_start),
+                                     drw_point_world_to_view(ws_end),
+                                     drw_normal_world_to_view(direction),
+                                     hiz_tx,
+                                     thickness,
+                                     64,
+                                     jitter);
+    if (result >= 0.0f) {
+      is_hit = true;
+      hit_distance = result;
+      hit_position = position + direction * hit_distance;
     }
   }
 #  endif
