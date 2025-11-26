@@ -351,13 +351,11 @@ void raycast_eval(float3 position,
   else {
     float3 ws_start = position;
     float3 ws_end = position + direction * max_distance;
-#    if 1
     if (!clip_ray(
             ws_start, ws_end, direction, max_distance, drw_view_culling().frustum_planes.planes))
     {
       return;
     }
-#    endif
 
     float noise_offset = sampling_rng_1D_get(SAMPLING_RAYTRACE_W);
     float jitter = interleaved_gradient_noise(gl_FragCoord.xy, 1.0f, noise_offset);
@@ -375,8 +373,8 @@ void raycast_eval(float3 position,
                                      jitter);
     if (result >= 0.0f) {
       is_hit = true;
-      hit_distance = result;
-      hit_position = position + direction * hit_distance;
+      hit_position = ws_start + direction * result;
+      hit_distance = dot(direction, hit_position - position);
     }
   }
 #  endif
