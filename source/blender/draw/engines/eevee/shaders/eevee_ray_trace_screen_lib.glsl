@@ -323,16 +323,18 @@ float raytrace_screen_2(float3 vs_origin,
     float hit_depth = texelFetch(hiz_tx, int2(step.xy * half_extent + half_extent), 0).r;
     float hit_z = drw_depth_screen_to_view(hit_depth);
 
+    /* Take thickness into account, but ensure it's not lower than the step delta. */
+    float max_thickness = max(abs(step.z - previous_step_z), thickness);
+    previous_step_z = step.z;
+
     /* Note that camera forward is -Z. */
-    if (hit_z > step.z && hit_z < step.z + thickness) {
+    if (hit_z > step.z && hit_z < step.z + max_thickness) {
       /* We have a hit. Compute the distance. */
       float3 ndc_hit_point = float3(step.xy, hit_depth * 2.0f - 1.0f);
       float3 vs_hit_point = drw_point_ndc_to_view(ndc_hit_point);
       /* Hit point projection along the ray. */
       return dot(vs_hit_point - vs_origin, vs_direction);
     }
-
-    previous_step_z = step.z;
   }
 
   return -1.0f;
