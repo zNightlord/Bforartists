@@ -30,7 +30,7 @@ static int node_shader_gpu_raycast(GPUMaterial *mat,
 NODE_SHADER_MATERIALX_BEGIN
 #ifdef WITH_MATERIALX
 {
-  // TODO: ???
+  return get_output_default(socket_out_->identifier, NodeItem::Type::Any);
 }
 #endif
 NODE_SHADER_MATERIALX_END
