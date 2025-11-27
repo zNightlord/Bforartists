@@ -305,79 +305,33 @@ void raycast_eval(float3 position,
   direction = normalize(direction);
 
 #if defined(GPU_FRAGMENT_SHADER) && (defined(MAT_DEFERRED) || defined(MAT_FORWARD))
-#  if 0
-  /* Just sample the end point for now. */
-  float3 target = position + direction * max_distance;
-  target = drw_point_world_to_screen(target);
-  target = clamp(target, vec3(0.0), vec3(1.0));
-  float depth = texelFetch(hiz_tx, int2(target.xy * uniform_buf.film.extent), 0).r;
-  is_hit = depth < target.z;
-  if (is_hit) {
-    hit_distance = max_distance;
-    hit_position = drw_point_screen_to_world(
-        float3(gl_FragCoord.xy / uniform_buf.film.extent, depth));
+  float3 ws_start = position;
+  float3 ws_end = position + direction * max_distance;
+  if (!clip_ray(
+          ws_start, ws_end, direction, max_distance, drw_view_culling().frustum_planes.planes))
+  {
+    return;
   }
-#  else
-  if (int(gl_FragCoord.x) < uniform_buf.film.render_extent.x / 2) {
-    float noise_offset = sampling_rng_1D_get(SAMPLING_RAYTRACE_W);
-    float rand_trace = interleaved_gradient_noise(gl_FragCoord.xy, 1.0f, noise_offset);
 
-    Ray ray;
-    ray.origin = drw_point_world_to_view(position);
-    ray.direction = drw_normal_world_to_view(direction);
-    ray.max_time = max_distance;
+  float noise_offset = sampling_rng_1D_get(SAMPLING_RAYTRACE_W);
+  float jitter = interleaved_gradient_noise(gl_FragCoord.xy, 1.0f, noise_offset);
+  float thickness_noise_offset = sampling_rng_1D_get(SAMPLING_RAYTRACE_X);
+  float thickness_jitter =
+      interleaved_gradient_noise(gl_FragCoord.xy, 1.0f, thickness_noise_offset) * 0.5f + 0.5f;
+  float thickness = uniform_buf.raytrace.thickness * thickness_jitter;
 
-    ScreenTraceHitData hit = raytrace_screen(uniform_buf.raytrace,
-                                             uniform_buf.hiz,
-                                             hiz_tx,
-                                             rand_trace,
-                                             0.0f,
-                                             false, /* discard_backface */
-                                             true,  /* allow_self_intersection */
-                                             ray);
-
-    if (hit.valid) {
-      is_hit = true;
-      hit_position = position + (direction * hit.time);
-// hit_position = drw_point_view_to_world(hit.v_hit_P); // Not the same?!?!?
-#    if 0
-    /* Project the hit point into the ray. */
-    hit_distance = dot(hit.v_hit_P - ray.origin, ray.direction);
-    hit_position = drw_point_view_to_world(position + direction * hit_distance);
-#    endif
-      hit_distance = hit.time;
-    }
+  float result = raytrace_screen_2(drw_point_world_to_view(ws_start),
+                                   drw_point_world_to_view(ws_end),
+                                   drw_normal_world_to_view(direction),
+                                   hiz_tx,
+                                   thickness,
+                                   64,
+                                   jitter);
+  if (result >= 0.0f) {
+    is_hit = true;
+    hit_position = ws_start + direction * result;
+    hit_distance = dot(direction, hit_position - position);
   }
-  else {
-    float3 ws_start = position;
-    float3 ws_end = position + direction * max_distance;
-    if (!clip_ray(
-            ws_start, ws_end, direction, max_distance, drw_view_culling().frustum_planes.planes))
-    {
-      return;
-    }
-
-    float noise_offset = sampling_rng_1D_get(SAMPLING_RAYTRACE_W);
-    float jitter = interleaved_gradient_noise(gl_FragCoord.xy, 1.0f, noise_offset);
-    float thickness_noise_offset = sampling_rng_1D_get(SAMPLING_RAYTRACE_X);
-    float thickness_jitter =
-        interleaved_gradient_noise(gl_FragCoord.xy, 1.0f, thickness_noise_offset) * 0.5f + 0.5f;
-    float thickness = uniform_buf.raytrace.thickness * thickness_jitter;
-
-    float result = raytrace_screen_2(drw_point_world_to_view(ws_start),
-                                     drw_point_world_to_view(ws_end),
-                                     drw_normal_world_to_view(direction),
-                                     hiz_tx,
-                                     thickness,
-                                     64,
-                                     jitter);
-    if (result >= 0.0f) {
-      is_hit = true;
-      hit_position = ws_start + direction * result;
-      hit_distance = dot(direction, hit_position - position);
-    }
-  }
-#  endif
 #endif
 }
 
