@@ -280,54 +280,66 @@ float raytrace_screen_2(float3 vs_origin,
                         int max_steps,
                         float jitter)
 {
-  float4 start = drw_point_view_to_homogenous(vs_origin);
-  float4 end = drw_point_view_to_homogenous(vs_end);
 
+  float2 extent = float2(uniform_buf.film.render_extent);
   float2 half_extent = float2(uniform_buf.film.render_extent) / 2.0f;
 
-  /* Convert xy coordinates to pixel space (cartesian/non-homogeneous). */
-  start.xy = (start.xy / start.w) * half_extent + half_extent;
-  end.xy = (end.xy / end.w) * half_extent + half_extent;
+  /* Project into clip space. */
+  float4 H0 = drw_point_view_to_homogenous(vs_origin);
+  float4 H1 = drw_point_view_to_homogenous(vs_end);
 
-  float4 delta = end - start;
+  float k0 = 1.0 / H0.w;
+  float k1 = 1.0 / H1.w;
+  float3 Q0 = vs_origin * k0;
+  float3 Q1 = vs_end * k1;
+
+  /* NDC coordinates. */
+  float2 P0 = H0.xy * k0;
+  float2 P1 = H1.xy * k1;
+
+  float2 pixel_delta = (P1 - P0) * extent;
 
   /* Number of steps required to trace a fully contiguous line. */
-  int steps = int(max(abs(delta.x), abs(delta.y))) + 1;
+  int steps = int(max(abs(pixel_delta.x), abs(pixel_delta.y))) + 1;
   /* Limit to max steps. */
-  steps = min(steps, max_steps);
-  /* And scale steps accordingly. */
-  float4 delta_step = delta / float(steps);
+  // steps = min(steps, max_steps);
+  float steps_inv = 1.0f / steps;
 
-  float previous_step_depth = (start.z / start.w) * 0.5f + 0.5f;
+  /* Track per-step derivatives. */
+  float3 dQ = (Q1 - Q0) * steps_inv;
+  float dk = (k1 - k0) * steps_inv;
+  float2 dP = (P1 - P0) * steps_inv;
+
+  float max_t = float(steps - 1);
+
+  float previous_step_z = Q0.z;
 
   /* Skip the first step to avoid self-occlusion. But iterate at least once. */
   for (int i = 1; i < steps || i == 1; i++) {
     /* Ensure we don't go past ray end. */
-    bool is_last_step = i + 1 >= steps;
-    float step_jitter = is_last_step ? 0.0f : jitter;
+    float step_t = min(float(i) + jitter, max_t);
 
-    /* Compute the position of the current step. */
-    float4 step = start + (delta_step * (float(i) + step_jitter));
-    /* Convert to fragment coordinates. */
-    step.z = (step.z / step.w) * 0.5f + 0.5f;
+    float2 P = P0 + dP * step_t;
+    float3 Q = Q0 + dQ * step_t;
+    float k = k0 + dk * step_t;
 
-    float screen_depth = texelFetch(hiz_tx, int2(step.xy), 0).r;
+    float z = Q.z / k;
 
-    /* Take thickness into account, but ensure it's not lower than the step depth. */
-    float min_depth = min(previous_step_depth,
-                          drw_depth_view_to_screen(drw_depth_screen_to_view(step.z) + thickness));
+    float screen_depth = texelFetch(hiz_tx, int2(P * half_extent + half_extent), 0).r;
+    float screen_z = drw_depth_screen_to_view(screen_depth);
 
-    if (step.z > screen_depth && screen_depth > min_depth) {
+    /* Note that camera forward is -Z. */
+    if (screen_z > z && screen_z < z + thickness) {
       /* We have a hit. Compute the distance. */
       float3 ndc_hit_point;
-      ndc_hit_point.xy = (step.xy - half_extent) / half_extent;
+      ndc_hit_point.xy = P;
       ndc_hit_point.z = screen_depth * 2.0 - 1.0;
       float3 vs_hit_point = drw_point_ndc_to_view(ndc_hit_point);
       /* Hit point projection along the ray. */
       return dot(vs_hit_point - vs_origin, vs_direction);
     }
 
-    previous_step_depth = step.z;
+    previous_step_z = z;
   }
 
   return -1.0f;
