@@ -315,17 +315,25 @@ float raytrace_screen_2(float3 vs_origin,
     /* Convert z to camera space. */
     step.z /= step.w;
 
-    float hit_depth = texelFetch(hiz_tx, int2(step.xy * half_extent + half_extent), 0).r;
-    float hit_z = drw_depth_screen_to_view(hit_depth);
+    /* Trick to prevent depth aliasing,
+     * from "Rendering Tiny Glades With Entirely Too Much Ray Marching":
+     * - Fetch depth using both point and linear sampling.
+     * - Use the furthest one for intersection check.
+     * - Use the closest one for thickness check. */
+    float hit_depth_point = texelFetch(hiz_tx, int2(step.xy * half_extent + half_extent), 0).r;
+    float hit_depth_linear =
+        textureLod(hiz_tx, (step.xy * 0.5f + 0.5f) * uniform_buf.hiz.uv_scale, 0).r;
+    float hit_near_z = drw_depth_screen_to_view(min(hit_depth_point, hit_depth_linear));
+    float hit_far_z = drw_depth_screen_to_view(max(hit_depth_point, hit_depth_linear));
 
     /* Take thickness into account, but ensure it's not lower than the step delta. */
     float max_thickness = max(abs(step.z - previous_step_z), thickness);
     previous_step_z = step.z;
 
     /* Note that camera forward is -Z. */
-    if (hit_z > step.z && hit_z < step.z + max_thickness) {
+    if (step.z < hit_far_z && step.z + thickness > hit_near_z) {
       /* We have a hit. Compute the distance. */
-      float3 ndc_hit_point = float3(step.xy, hit_depth * 2.0f - 1.0f);
+      float3 ndc_hit_point = float3(step.xy, hit_depth_point * 2.0f - 1.0f);
       float3 vs_hit_point = drw_point_ndc_to_view(ndc_hit_point);
       /* Hit point projection along the ray. */
       return dot(vs_hit_point - vs_origin, vs_direction);
