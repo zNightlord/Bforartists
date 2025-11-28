@@ -222,11 +222,6 @@ Ray raytrace_thickness_ray_amend(Ray ray, ClosureUndetermined cl, float3 V, floa
   return ray;
 }
 
-float4 hs_interpolation(float4 a, float4 b, float t)
-{
-  return mix(a * a.w, b * b.w, t);
-}
-
 bool clip_ray(inout float3 start,
               inout float3 end,
               const float3 direction,
