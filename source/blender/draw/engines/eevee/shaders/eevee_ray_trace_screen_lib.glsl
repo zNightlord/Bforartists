@@ -299,10 +299,9 @@ float raytrace_screen_2(float3 vs_origin,
   int steps = int(max(total_pixel_delta.x, total_pixel_delta.y)) + 1;
   /* Limit to max steps. */
   steps = min(steps, max_steps);
-  float steps_inv = 1.0f / steps;
 
   /* Per-step delta. */
-  float4 delta = (end - start) * steps_inv;
+  float4 delta = (end - start) / float(steps);
 
   float max_t = max(steps - 1, 1);
   float previous_step_z = vs_origin.z;
