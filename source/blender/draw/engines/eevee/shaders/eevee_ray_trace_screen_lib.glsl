@@ -319,9 +319,14 @@ float raytrace_screen_2(float3 vs_origin,
      * - Fetch depth using both point and linear sampling.
      * - Use the furthest one for intersection check.
      * - Use the closest one for thickness check. */
-    float hit_depth_point = texelFetch(hiz_tx, int2(step.xy * half_extent + half_extent), 0).r;
-    float hit_depth_linear =
-        textureLod(hiz_tx, (step.xy * 0.5f + 0.5f) * uniform_buf.hiz.uv_scale, 0).r;
+    float2 texel = step.xy * half_extent + half_extent;
+    float hit_depth_point = texelFetch(hiz_tx, int2(texel), 0).r;
+    float2 uv = (step.xy * 0.5f + 0.5f) * uniform_buf.hiz.uv_scale;
+    float4 depth4 = textureGather(hiz_tx, uv, 0);
+    float2 bilinear_coords = fract(texel - 0.5f);
+    float hit_depth_linear = mix(mix(depth4.w, depth4.z, bilinear_coords.x),
+                                 mix(depth4.x, depth4.y, bilinear_coords.x),
+                                 bilinear_coords.y);
     float hit_near_z = drw_depth_screen_to_view(min(hit_depth_point, hit_depth_linear));
     float hit_far_z = drw_depth_screen_to_view(max(hit_depth_point, hit_depth_linear));
 
