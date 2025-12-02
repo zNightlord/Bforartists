@@ -9,12 +9,18 @@
 
 SHADER_LIBRARY_CREATE_INFO(eevee_global_ubo)
 SHADER_LIBRARY_CREATE_INFO(eevee_utility_texture)
+SHADER_LIBRARY_CREATE_INFO(eevee_hiz_data)
 
 #include "draw_model_lib.glsl"
 #include "draw_object_infos_lib.glsl"
 #include "draw_view_lib.glsl"
+#ifdef DRW_VIEW_CULLING_INFO
+#  include "draw_intersect_lib.glsl"
+#endif
 #include "eevee_nodetree_closures_lib.glsl"
+#include "eevee_ray_trace_screen_lib.glsl"
 #include "eevee_renderpass_lib.glsl"
+#include "eevee_sampling_lib.glsl"
 #include "eevee_utility_tx_lib.glsl"
 #include "gpu_shader_codegen_lib.glsl"
 #include "gpu_shader_math_base_lib.glsl"
@@ -282,6 +288,50 @@ float ambient_occlusion_eval(float3 normal,
 #  endif
 #else
   return 1.0f;
+#endif
+}
+
+void raycast_eval(float3 position,
+                  float3 direction,
+                  float max_distance,
+                  inout bool is_hit,
+                  inout float3 hit_position,
+                  inout float hit_distance)
+{
+  is_hit = false;
+  hit_position = float3(0.0f);
+  hit_distance = max_distance;
+
+  direction = normalize(direction);
+
+#if defined(GPU_FRAGMENT_SHADER) && (defined(MAT_DEFERRED) || defined(MAT_FORWARD))
+  float3 ws_start = position;
+  float3 ws_end = position + direction * max_distance;
+  if (!clip_ray(
+          ws_start, ws_end, direction, max_distance, drw_view_culling().frustum_planes.planes))
+  {
+    return;
+  }
+
+  float noise_offset = sampling_rng_1D_get(SAMPLING_RAYTRACE_W);
+  float jitter = interleaved_gradient_noise(gl_FragCoord.xy, 1.0f, noise_offset);
+  float thickness_noise_offset = sampling_rng_1D_get(SAMPLING_RAYTRACE_X);
+  float thickness_jitter =
+      interleaved_gradient_noise(gl_FragCoord.xy, 1.0f, thickness_noise_offset) * 0.5f + 0.5f;
+  float thickness = uniform_buf.raytrace.thickness * thickness_jitter;
+
+  float result = raytrace_screen_2(drw_point_world_to_view(ws_start),
+                                   drw_point_world_to_view(ws_end),
+                                   drw_normal_world_to_view(direction),
+                                   hiz_tx,
+                                   thickness,
+                                   64,
+                                   jitter);
+  if (result >= 0.0f) {
+    is_hit = true;
+    hit_position = ws_start + direction * result;
+    hit_distance = dot(direction, hit_position - position);
+  }
 #endif
 }
 

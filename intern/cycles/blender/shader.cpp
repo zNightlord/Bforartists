@@ -1126,6 +1126,9 @@ static ShaderNode *add_node(Scene *scene,
     aov->set_name(ustring(b_aov_node.aov_name()));
     node = aov;
   }
+  else if (b_node.is_a(&RNA_ShaderNodeRaycast)) {
+    node = graph->create_node<RaycastNode>();
+  }
 
   if (node) {
     node->name = b_node.name();
