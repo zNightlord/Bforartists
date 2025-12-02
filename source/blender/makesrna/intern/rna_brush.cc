@@ -2469,7 +2469,7 @@ static void rna_def_brush(BlenderRNA *brna)
 
   static const EnumPropertyItem brush_pose_deform_type_items[] = {
       {BRUSH_POSE_DEFORM_ROTATE_TWIST, "ROTATE_TWIST", 0, "Rotate/Twist", ""},
-      {BRUSH_POSE_DEFORM_SCALE_TRASLATE, "SCALE_TRANSLATE", 0, "Scale/Translate", ""},
+      {BRUSH_POSE_DEFORM_SCALE_TRANSLATE, "SCALE_TRANSLATE", 0, "Scale/Translate", ""},
       {BRUSH_POSE_DEFORM_SQUASH_STRETCH, "SQUASH_STRETCH", 0, "Squash & Stretch", ""},
       {0, nullptr, 0, nullptr, nullptr},
   };
@@ -2485,12 +2485,12 @@ static void rna_def_brush(BlenderRNA *brna)
        "FACE_SETS",
        0,
        "Face Sets",
-       "Creates a pose segment per face sets, starting from the active face set"},
+       "Creates a pose segment per face set, starting from the active face set"},
       {BRUSH_POSE_ORIGIN_FACE_SETS_FK,
        "FACE_SETS_FK",
        0,
        "Face Sets FK",
-       "Simulates an FK deformation using the Face Set under the cursor as control"},
+       "Simulates an FK deformation using the face set under the cursor as control"},
       {0, nullptr, 0, nullptr, nullptr},
   };
 

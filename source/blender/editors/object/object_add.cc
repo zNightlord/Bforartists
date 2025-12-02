@@ -68,9 +68,9 @@
 #include "BKE_geometry_set.hh"
 #include "BKE_geometry_set_instances.hh"
 #include "BKE_grease_pencil.hh"
+#include "BKE_idtype.hh"  // bfa override asset
 #include "BKE_key.hh"
 #include "BKE_lattice.hh"
-#include "BKE_idtype.hh" // bfa override asset
 #include "BKE_layer.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_lib_override.hh"
@@ -107,6 +107,7 @@
 #include "RNA_define.hh"
 #include "RNA_enum_types.hh"
 
+#include "UI_interface_icons.hh"
 #include "UI_interface_layout.hh"
 
 #include "WM_api.hh"
@@ -128,8 +129,8 @@
 #include "ED_screen.hh"
 #include "ED_select_utils.hh"
 #include "ED_transform.hh"
+#include "ED_undo.hh"  // bfa override asset
 #include "ED_view3d.hh"
-#include "ED_undo.hh" // bfa override asset
 
 #include "ANIM_bone_collections.hh"
 
@@ -878,13 +879,25 @@ static wmOperatorStatus lattice_add_to_selected_exec(bContext *C, wmOperator *op
       BLI_assert(ob != ob_lattice);
       BLI_assert(object_can_have_lattice_modifier(ob));
 
-      LatticeModifierData *lmd = (LatticeModifierData *)modifier_add(
-          op->reports, bmain, scene, ob, nullptr, eModifierType_Lattice);
-      if (UNLIKELY(lmd == nullptr)) {
-        continue;
-      }
+      if (ob->type == OB_GREASE_PENCIL) {
+        GreasePencilLatticeModifierData *lmd = reinterpret_cast<GreasePencilLatticeModifierData *>(
+            modifier_add(
+                op->reports, bmain, scene, ob, nullptr, eModifierType_GreasePencilLattice));
+        if (UNLIKELY(lmd == nullptr)) {
+          continue;
+        }
 
-      lmd->object = ob_lattice;
+        lmd->object = ob_lattice;
+      }
+      else {
+        LatticeModifierData *lmd = reinterpret_cast<LatticeModifierData *>(
+            modifier_add(op->reports, bmain, scene, ob, nullptr, eModifierType_Lattice));
+        if (UNLIKELY(lmd == nullptr)) {
+          continue;
+        }
+
+        lmd->object = ob_lattice;
+      }
       DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
       WM_main_add_notifier(NC_OBJECT | ND_MODIFIER, ob);
     }
@@ -2047,7 +2060,15 @@ static bool make_override_library_object_overridable_check(Main *bmain, Object *
   return false;
 }
 
-static bool create_override(Main *bmain, Scene *scene, ViewLayer *view_layer, ID *id_root, ID *id_root_override, Object *obact, GSet *user_overrides_objects_uids, bool is_override_instancing_object , const bool do_fully_editable)
+static bool create_override(Main *bmain,
+                            Scene *scene,
+                            ViewLayer *view_layer,
+                            ID *id_root,
+                            ID *id_root_override,
+                            Object *obact,
+                            GSet *user_overrides_objects_uids,
+                            bool is_override_instancing_object,
+                            const bool do_fully_editable)
 {
   const bool success = BKE_lib_override_library_create(bmain,
                                                        scene,
@@ -2242,7 +2263,15 @@ static wmOperatorStatus collection_drop_override(bContext *C, wmOperator *op)
   }
   ID *id_root_override = nullptr;
   bool success = false;
-  success = create_override(bmain, scene, view_layer, id_root, id_root_override, obact, user_overrides_objects_uids, is_override_instancing_object, do_fully_editable);
+  success = create_override(bmain,
+                            scene,
+                            view_layer,
+                            id_root,
+                            id_root_override,
+                            obact,
+                            user_overrides_objects_uids,
+                            is_override_instancing_object,
+                            do_fully_editable);
 
   DEG_id_tag_update(&CTX_data_scene(C)->id, ID_RECALC_BASE_FLAGS | ID_RECALC_SYNC_TO_EVAL);
   WM_event_add_notifier(C, NC_WINDOW, nullptr);
@@ -2282,7 +2311,8 @@ static wmOperatorStatus collection_drop_exec(bContext *C, wmOperator *op)
   if (!add_info) {
     return OPERATOR_CANCELLED;
   }
-  const bool use_override = RNA_boolean_get(op->ptr, "use_override"); // bfa use override for linked data-block
+  const bool use_override = RNA_boolean_get(
+      op->ptr, "use_override");  // bfa use override for linked data-block
   if (use_override || RNA_boolean_get(op->ptr, "use_instance")) {
     BKE_collection_child_remove(bmain, active_collection->collection, add_info->collection);
     DEG_id_tag_update(&active_collection->collection->id, ID_RECALC_SYNC_TO_EVAL);
@@ -2322,10 +2352,10 @@ static wmOperatorStatus collection_drop_exec(bContext *C, wmOperator *op)
 
   // bfa asset override, default fall back for adding override
   wmOperatorStatus r = OPERATOR_FINISHED;
-  if (use_override){
-      r = collection_drop_override(C, op);
+  if (use_override) {
+    r = collection_drop_override(C, op);
   }
-  return r; // bfa end return OPERATOR_FINISHED;
+  return r;  // bfa end return OPERATOR_FINISHED;
 }
 
 void OBJECT_OT_collection_external_asset_drop(wmOperatorType *ot)
@@ -2795,7 +2825,7 @@ static wmOperatorStatus object_delete_invoke(bContext *C,
                                   IFACE_("Delete selected objects?"),
                                   nullptr,
                                   IFACE_("Delete"),
-                                  ALERT_ICON_NONE,
+                                  ui::AlertIcon::None,
                                   false);
   }
   return object_delete_exec(C, op);
@@ -2882,21 +2912,22 @@ static void copy_object_set_idnew(bContext *C)
  * In other words, we consider each group of objects from a same item as being
  * the 'local group' where to check for parents.
  */
-static uint dupliobject_hash(const void *ptr)
-{
-  const DupliObject *dob = static_cast<const DupliObject *>(ptr);
-  uint hash = BLI_ghashutil_ptrhash(dob->ob);
+struct DupliObjectHash {
+  uint64_t operator()(const DupliObject *dob) const
+  {
+    uint hash = BLI_ghashutil_ptrhash(dob->ob);
 
-  if (dob->type == OB_DUPLICOLLECTION) {
-    for (int i = 1; (i < MAX_DUPLI_RECUR) && dob->persistent_id[i] != INT_MAX; i++) {
-      hash ^= (dob->persistent_id[i] ^ i);
+    if (dob->type == OB_DUPLICOLLECTION) {
+      for (int i = 1; (i < MAX_DUPLI_RECUR) && dob->persistent_id[i] != INT_MAX; i++) {
+        hash ^= (dob->persistent_id[i] ^ i);
+      }
     }
+    else {
+      hash ^= (dob->persistent_id[0] ^ 0);
+    }
+    return hash;
   }
-  else {
-    hash ^= (dob->persistent_id[0] ^ 0);
-  }
-  return hash;
-}
+};
 
 /**
  * \note regarding hashing dupli-objects when using OB_DUPLICOLLECTION,
@@ -2904,70 +2935,69 @@ static uint dupliobject_hash(const void *ptr)
  * since its a unique index and we only want to know if the group objects are from the same
  * dupli-group instance.
  */
-static uint dupliobject_instancer_hash(const void *ptr)
-{
-  const DupliObject *dob = static_cast<const DupliObject *>(ptr);
-  uint hash = BLI_ghashutil_inthash(dob->persistent_id[0]);
-  for (int i = 1; (i < MAX_DUPLI_RECUR) && dob->persistent_id[i] != INT_MAX; i++) {
-    hash ^= (dob->persistent_id[i] ^ i);
+struct DupliObjectInstancerHash {
+  uint64_t operator()(const DupliObject *dob) const
+  {
+    uint hash = BLI_ghashutil_inthash(dob->persistent_id[0]);
+    for (int i = 1; (i < MAX_DUPLI_RECUR) && dob->persistent_id[i] != INT_MAX; i++) {
+      hash ^= (dob->persistent_id[i] ^ i);
+    }
+    return hash;
   }
-  return hash;
-}
+};
 
 /**
- * Compare function that matches #dupliobject_hash.
+ * Compare function that matches #DupliObjectHash.
  */
-static bool dupliobject_cmp(const void *a_, const void *b_)
-{
-  const DupliObject *a = static_cast<const DupliObject *>(a_);
-  const DupliObject *b = static_cast<const DupliObject *>(b_);
+struct DupliObjectEq {
+  bool operator()(const DupliObject *a, const DupliObject *b) const
+  {
+    if (a->ob != b->ob) {
+      return false;
+    }
 
-  if (a->ob != b->ob) {
+    if (a->type != b->type) {
+      return false;
+    }
+
+    if (a->type == OB_DUPLICOLLECTION) {
+      for (int i = 1; (i < MAX_DUPLI_RECUR); i++) {
+        if (a->persistent_id[i] != b->persistent_id[i]) {
+          return false;
+        }
+        if (a->persistent_id[i] == INT_MAX) {
+          break;
+        }
+      }
+    }
+    else {
+      if (a->persistent_id[0] != b->persistent_id[0]) {
+        return false;
+      }
+    }
+
+    /* matching */
     return true;
   }
+};
 
-  if (a->type != b->type) {
-    return true;
-  }
-
-  if (a->type == OB_DUPLICOLLECTION) {
-    for (int i = 1; (i < MAX_DUPLI_RECUR); i++) {
+/* Compare function that matches DupliObjectInstancerHash. */
+struct DupliObjectInstancerEq {
+  bool operator()(const DupliObject *a, const DupliObject *b) const
+  {
+    for (int i = 0; (i < MAX_DUPLI_RECUR); i++) {
       if (a->persistent_id[i] != b->persistent_id[i]) {
-        return true;
+        return false;
       }
       if (a->persistent_id[i] == INT_MAX) {
         break;
       }
     }
+
+    /* matching */
+    return true;
   }
-  else {
-    if (a->persistent_id[0] != b->persistent_id[0]) {
-      return true;
-    }
-  }
-
-  /* matching */
-  return false;
-}
-
-/* Compare function that matches dupliobject_instancer_hash. */
-static bool dupliobject_instancer_cmp(const void *a_, const void *b_)
-{
-  const DupliObject *a = static_cast<const DupliObject *>(a_);
-  const DupliObject *b = static_cast<const DupliObject *>(b_);
-
-  for (int i = 0; (i < MAX_DUPLI_RECUR); i++) {
-    if (a->persistent_id[i] != b->persistent_id[i]) {
-      return true;
-    }
-    if (a->persistent_id[i] == INT_MAX) {
-      break;
-    }
-  }
-
-  /* matching */
-  return false;
-}
+};
 
 static void make_object_duplilist_real(bContext *C,
                                        Depsgraph *depsgraph,
@@ -2978,7 +3008,16 @@ static void make_object_duplilist_real(bContext *C,
 {
   Main *bmain = CTX_data_main(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  GHash *parent_gh = nullptr, *instancer_gh = nullptr;
+  using ParentMap =
+      Map<DupliObject *, Object *, 4, DefaultProbingStrategy, DupliObjectHash, DupliObjectEq>;
+  using InstancerMap = Map<DupliObject *,
+                           Object *,
+                           4,
+                           DefaultProbingStrategy,
+                           DupliObjectInstancerHash,
+                           DupliObjectInstancerEq>;
+  ParentMap *parent_gh = nullptr;
+  InstancerMap *instancer_gh = nullptr;
 
   Object *object_eval = DEG_get_evaluated(depsgraph, base->object);
 
@@ -2997,11 +3036,10 @@ static void make_object_duplilist_real(bContext *C,
 
   blender::Map<const DupliObject *, Object *> dupli_map;
   if (use_hierarchy) {
-    parent_gh = BLI_ghash_new(dupliobject_hash, dupliobject_cmp, __func__);
+    parent_gh = MEM_new<ParentMap>(__func__);
 
     if (use_base_parent) {
-      instancer_gh = BLI_ghash_new(
-          dupliobject_instancer_hash, dupliobject_instancer_cmp, __func__);
+      instancer_gh = MEM_new<InstancerMap>(__func__);
     }
   }
 
@@ -3047,19 +3085,14 @@ static void make_object_duplilist_real(bContext *C,
     dupli_map.add(&dob, ob_dst);
 
     if (parent_gh) {
-      void **val;
       /* Due to nature of hash/comparison of this ghash, a lot of duplis may be considered as
        * 'the same', this avoids trying to insert same key several time and
        * raise asserts in debug builds... */
-      if (!BLI_ghash_ensure_p(parent_gh, &dob, &val)) {
-        *val = ob_dst;
-      }
+      parent_gh->add(&dob, ob_dst);
 
       if (is_dupli_instancer && instancer_gh) {
         /* Same as above, we may have several 'hits'. */
-        if (!BLI_ghash_ensure_p(instancer_gh, &dob, &val)) {
-          *val = ob_dst;
-        }
+        instancer_gh->add(&dob, ob_dst);
       }
     }
   }
@@ -3093,7 +3126,7 @@ static void make_object_duplilist_real(bContext *C,
         else {
           dob_key.persistent_id[0] = dob.persistent_id[0];
         }
-        ob_dst_par = static_cast<Object *>(BLI_ghash_lookup(parent_gh, &dob_key));
+        ob_dst_par = parent_gh->lookup_default(&dob_key, nullptr);
       }
 
       if (ob_dst_par) {
@@ -3122,7 +3155,7 @@ static void make_object_duplilist_real(bContext *C,
         memcpy(&dob_key.persistent_id[0],
                &dob.persistent_id[1],
                sizeof(dob_key.persistent_id[0]) * (MAX_DUPLI_RECUR - 1));
-        ob_dst_par = static_cast<Object *>(BLI_ghash_lookup(instancer_gh, &dob_key));
+        ob_dst_par = instancer_gh->lookup_default(&dob_key, nullptr);
       }
 
       if (ob_dst_par == nullptr) {
@@ -3152,12 +3185,8 @@ static void make_object_duplilist_real(bContext *C,
   base_select(base, BA_DESELECT);
   DEG_id_tag_update(&base->object->id, ID_RECALC_SELECT);
 
-  if (parent_gh) {
-    BLI_ghash_free(parent_gh, nullptr, nullptr);
-  }
-  if (instancer_gh) {
-    BLI_ghash_free(instancer_gh, nullptr, nullptr);
-  }
+  MEM_delete(parent_gh);
+  MEM_delete(instancer_gh);
 
   BKE_main_id_newptr_and_tag_clear(bmain);
 
@@ -4744,23 +4773,23 @@ static wmOperatorStatus object_convert_exec(bContext *C, wmOperator *op)
 
 static void object_convert_ui(bContext * /*C*/, wmOperator *op)
 {
-  uiLayout *layout = op->layout;
+  ui::Layout &layout = *op->layout;
 
-  layout->use_property_decorate_set(false); /*bfa - checkboxes, don't split*/
+  layout.use_property_decorate_set(false); /*bfa - checkboxes, don't split*/
 
-  layout->prop(op->ptr, "target", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-  layout->prop(op->ptr, "keep_original", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  layout.prop(op->ptr, "target", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  layout.prop(op->ptr, "keep_original", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 
   const int target = RNA_enum_get(op->ptr, "target");
   if (target == OB_MESH) {
-    layout->prop(op->ptr, "merge_customdata", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    layout.prop(op->ptr, "merge_customdata", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   }
   else if (target == OB_GREASE_PENCIL) {
-    layout->use_property_split_set(true); /*bfa - split*/
-    layout->prop(op->ptr, "thickness", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-    layout->prop(op->ptr, "offset", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-    layout->use_property_split_set(false); /*bfa - boolean, don't split*/
-    layout->prop(op->ptr, "faces", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    layout.use_property_split_set(true); /*bfa - split*/
+    layout.prop(op->ptr, "thickness", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    layout.prop(op->ptr, "offset", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    layout.use_property_split_set(false); /*bfa - boolean, don't split*/
+    layout.prop(op->ptr, "faces", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   }
 }
 
