@@ -190,6 +190,7 @@ void operatortypes_object()
   WM_operatortype_append(CONSTRAINT_OT_followpath_path_animate);
 
   WM_operatortype_append(OBJECT_OT_vertex_group_add);
+  WM_operatortype_append(OBJECT_OT_vertex_group_group_add);
   WM_operatortype_append(OBJECT_OT_vertex_group_remove);
   WM_operatortype_append(OBJECT_OT_vertex_group_assign);
   WM_operatortype_append(OBJECT_OT_vertex_group_assign_new);
@@ -216,6 +217,8 @@ void operatortypes_object()
   WM_operatortype_append(OBJECT_OT_vertex_weight_set_active);
   WM_operatortype_append(OBJECT_OT_vertex_weight_normalize_active_vertex);
   WM_operatortype_append(OBJECT_OT_vertex_weight_copy);
+  WM_operatortype_append(OBJECT_OT_vertex_group_collection_layer_toggle);
+  WM_operatortype_append(OBJECT_OT_vertex_group_collection_layer_bake);
 
   WM_operatortype_append(TRANSFORM_OT_vertex_warp);
 

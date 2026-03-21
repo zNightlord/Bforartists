@@ -569,6 +569,9 @@ bool iter_other(Main *bmain,
  */
 bool multires_update_totlevels(Object *ob, void *totlevel_v);
 
+/* object_Vgroup.cc */
+bool object_defgroup_move(Object *ob, int from_index, int to_index); 
+
 /* `object_shader_fx.cc` */
 
 ShaderFxData *shaderfx_add(

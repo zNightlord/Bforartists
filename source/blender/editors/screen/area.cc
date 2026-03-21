@@ -1629,7 +1629,7 @@ static void region_rect_recursive(
   int prefsizey;
 
   if (region->regiontype == RGN_TYPE_HEADER) {
-    prefsizey = ED_area_headersize();
+    prefsizey = ED_area_headersize() * (area->spacetype == SPACE_TOOLBAR ? 2 : 1);
   }
   else if (region->regiontype == RGN_TYPE_TOOL_HEADER) {
     prefsizey = ED_area_headersize();

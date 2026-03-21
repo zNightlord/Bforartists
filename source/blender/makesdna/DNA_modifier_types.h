@@ -1592,6 +1592,8 @@ enum WeigthVGEditModifierEditFlags {
   MOD_WVG_EDIT_ADD2VG = (1 << 3),
   /** Remove vertices with lower weight than threshold from vgroup. */
   MOD_WVG_EDIT_REMFVG = (1 << 4),
+  /** use DG_COLLECTION_LAYER instead of vertex group */
+  MOD_WVG_EDIT_COLLECTION_MODE = (1 << 5)
 };
 
 /** #WeightVGMixModifierData.mix_mode (how second vgroup's weights affect first ones). */
@@ -1688,6 +1690,12 @@ enum WeightVGProximityModifierMaskTexChannel {
   MOD_WVG_MASK_TEX_USE_ALPHA = 8,
 };
 
+/* WeightVGEditModifierData.mode */
+enum {
+  MOD_WVG_EDIT_MODE_VERTEX_GROUP = 0, /* existing */
+  MOD_WVG_EDIT_MODE_COLLECTION   = 1, /* new — layer mask collection */
+};
+
 struct WeightVGEditModifierData {
   ModifierData modifier;
 
@@ -1727,6 +1735,9 @@ struct WeightVGEditModifierData {
   int mask_tex_mapping = MOD_DISP_MAP_LOCAL;
   /** Name of the UV map. */
   char mask_tex_uvlayer_name[/*MAX_CUSTOMDATA_LAYER_NAME*/ 68] = "";
+
+  int mode = MOD_WVG_EDIT_MODE_VERTEX_GROUP; /* MOD_WVG_EDIT_MODE_* */
+  char _pad[4];
 
   /* Padding... */
   void *_pad1 = nullptr;
@@ -3574,6 +3585,10 @@ struct GreasePencilTextureModifierData {
   /* Dot texture rotation. */
   float alignment_rotation = 0;
   char _pad[4] = {};
+};
+
+struct VertexGroupLayerMaskModifierData {
+  ModifierData modifier;
 };
 
 }  // namespace blender

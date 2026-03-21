@@ -30,6 +30,7 @@
 #include "BKE_lib_query.hh"
 #include "BKE_mesh.hh"
 #include "BKE_modifier.hh"
+#include "BKE_object_deform.h"
 #include "BKE_texture.h" /* Texture masking. */
 
 #include "UI_interface.hh"
@@ -58,7 +59,8 @@ namespace blender {
 static void init_data(ModifierData *md)
 {
   WeightVGEditModifierData *wmd = reinterpret_cast<WeightVGEditModifierData *>(md);
-  INIT_DEFAULT_STRUCT_AFTER(wmd, modifier);
+  /* Struct uses C++ default member initializers — no INIT_DEFAULT_STRUCT_AFTER needed. */
+  // INIT_DEFAULT_STRUCT_AFTER(wmd, modifier);
 
   wmd->cmap_curve = BKE_curvemapping_add(1, 0.0, 0.0, 1.0, 1.0);
   BKE_curvemapping_init(wmd->cmap_curve);
@@ -144,8 +146,12 @@ static void update_depsgraph(ModifierData *md, const ModifierUpdateDepsgraphCont
 static bool is_disabled(const Scene * /*scene*/, ModifierData *md, bool /*use_render_params*/)
 {
   WeightVGEditModifierData *wmd = reinterpret_cast<WeightVGEditModifierData *>(md);
-  /* If no vertex group, bypass. */
-  return (wmd->defgrp_name[0] == '\0');
+  if (wmd->edit_flags & MOD_WVG_EDIT_COLLECTION_MODE) {
+    /* Never self-disables — applies whatever DG_COLLECTION_LAYER collections exist.
+     * The user can still disable the modifier via the modifier stack toggle. */
+    return false;
+  }
+  return wmd->defgrp_name[0] == '\0';
 }
 
 static Mesh *modify_mesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh *mesh)
@@ -153,6 +159,80 @@ static Mesh *modify_mesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh 
   BLI_assert(mesh != nullptr);
 
   WeightVGEditModifierData *wmd = reinterpret_cast<WeightVGEditModifierData *>(md);
+
+  /* -------------------------------------------------------------------- */
+  /* Collection layer mask mode — applies all DG_COLLECTION_LAYER          */
+  /* collections non-destructively: member_weight *= mask_weight.          */
+
+  if (wmd->edit_flags & MOD_WVG_EDIT_COLLECTION_MODE) {
+    MDeformVert *dverts = mesh->deform_verts_for_write().data();
+    if (dverts == nullptr) {
+      return mesh;
+    }
+
+    /* ctx->object is the evaluated copy — defbase pointers differ from the
+     * original object's col->representative_dg and m->dg. Look up by name. */
+    bool any_applied = false;
+
+    for (bDeformGroupCollection *col = static_cast<bDeformGroupCollection *>(
+             ctx->object->defgroup_collections.first);
+         col;
+         col = col->next)
+    {
+      if (!(col->flag & DG_COLLECTION_LAYER)) {
+        continue;
+      }
+      if (col->representative_dg == nullptr) {
+        continue;
+      }
+
+      const int mask_index = BKE_id_defgroup_name_index(&mesh->id,
+                                                         col->representative_dg->name);
+      if (mask_index == -1) {
+        continue;
+      }
+
+      blender::Vector<int> member_indices;
+      for (bDeformGroupMember *m = static_cast<bDeformGroupMember *>(col->members.first);
+           m;
+           m = m->next)
+      {
+        if (m->dg == nullptr) {
+          continue;
+        }
+        const int idx = BKE_id_defgroup_name_index(&mesh->id, m->dg->name);
+        if (idx != -1) {
+          member_indices.append(idx);
+        }
+      }
+      if (member_indices.is_empty()) {
+        continue;
+      }
+
+      for (int vi = 0; vi < mesh->verts_num; vi++) {
+        MDeformVert &dv = dverts[vi];
+        const float mask_w = BKE_defvert_find_weight(&dv, mask_index);
+        if (mask_w >= 1.0f) {
+          continue;
+        }
+        for (const int mi : member_indices) {
+          MDeformWeight *dw = BKE_defvert_find_index(&dv, mi);
+          if (dw) {
+            dw->weight *= mask_w;
+          }
+        }
+      }
+      any_applied = true;
+    }
+
+    if (any_applied) {
+      mesh->runtime->is_original_bmesh = false;
+    }
+    return mesh;
+  }
+
+  /* -------------------------------------------------------------------- */
+  /* Vertex group mode — existing implementation.                          */
 
   MDeformWeight **dw = nullptr;
   float *org_w; /* Array original weights. */
@@ -293,6 +373,20 @@ static void panel_draw(const bContext * /*C*/, Panel *panel)
   layout.use_property_split_set(true);
 
   col = &layout.column(true);
+
+  /* Collection mode toggle — expanded so it renders as two side-by-side buttons. */
+  {
+    ui::Layout &mode_row = col->row(true);
+    mode_row.use_property_split_set(false);
+    mode_row.prop(ptr, "use_collection_mode", ui::ITEM_R_EXPAND, std::nullopt, ICON_NONE);
+  }
+
+  if (RNA_boolean_get(ptr, "use_collection_mode")) {
+    layout.label(TIP_("Applies all Layer Mask collections on this object"), ICON_INFO);
+    modifier_error_message_draw(layout, ptr);
+    return;
+  }
+
   col->prop_search(ptr, "vertex_group", &ob_ptr, "vertex_groups", std::nullopt, ICON_GROUP_VERTEX);
 
   layout.prop(ptr, "default_weight", ui::ITEM_R_SLIDER, std::nullopt, ICON_NONE);
@@ -348,6 +442,9 @@ static void falloff_panel_draw(const bContext * /*C*/, Panel *panel)
   PointerRNA ob_ptr;
   PointerRNA *ptr = modifier_panel_get_property_pointers(panel, &ob_ptr);
 
+  /* Grey out when in collection mode — falloff has no effect. */
+  layout.active_set(!RNA_boolean_get(ptr, "use_collection_mode"));
+
   layout.use_property_split_set(true);
 
   ui::Layout &row = layout.row(true);
@@ -366,6 +463,9 @@ static void influence_panel_draw(const bContext *C, Panel *panel)
 
   PointerRNA ob_ptr;
   PointerRNA *ptr = modifier_panel_get_property_pointers(panel, &ob_ptr);
+
+  /* Grey out when in collection mode — influence has no effect. */
+  layout.active_set(!RNA_boolean_get(ptr, "use_collection_mode"));
 
   weightvg_ui_common(C, &ob_ptr, ptr, layout);
 }
