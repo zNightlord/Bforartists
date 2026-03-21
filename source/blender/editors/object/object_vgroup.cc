@@ -23,6 +23,7 @@
 #include "BLI_bitmap.h"
 #include "BLI_listbase.h"
 #include "BLI_string.h"
+#include "BLI_string_utils.hh"
 #include "BLI_string_utf8.h"
 #include "BLI_utildefines.h"
 #include "BLI_utildefines_stack.h"
@@ -2662,6 +2663,55 @@ void OBJECT_OT_vertex_group_add(wmOperatorType *ot)
 /** \} */
 
 /* -------------------------------------------------------------------- */
+/** \name Vertex Group Collection Add Operator
+ * \{ */
+
+static wmOperatorStatus vertex_group_group_add_exec(bContext *C, wmOperator * /*op*/)
+{
+  Object *ob = context_object(C);
+
+  bDeformGroupCollection *col = MEM_new<bDeformGroupCollection>("VertexGroupCollection");
+  col->flag = DG_COLLECTION_EXPANDED;
+
+  STRNCPY(col->name, DATA_("Collection"));
+  BLI_uniquename(&ob->defgroup_collections,
+                 col,
+                 DATA_("Collection"),
+                 '.',
+                 offsetof(bDeformGroupCollection, name),
+                 sizeof(col->name));
+
+  /* Create the representative vertex group that holds this collection's
+   * own weight data. Lives in defbase so actdef, MDeformVert indices,
+   * and all weight paint operators work without special casing.
+   * Named with a ".col:" prefix so it can be filtered from the flat list. */
+  char rep_name[MAX_NAME];
+  SNPRINTF(rep_name, "col:%s", col->name);
+  col->representative_dg = BKE_object_defgroup_new(ob, rep_name);
+
+  BLI_addtail(&ob->defgroup_collections, col);
+
+  DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
+  WM_event_add_notifier(C, NC_GEOM | ND_VERTEX_GROUP, ob);
+
+  return OPERATOR_FINISHED;
+}
+
+void OBJECT_OT_vertex_group_group_add(wmOperatorType *ot)
+{
+  ot->name = "Add Vertex Group Collection";
+  ot->idname = "OBJECT_OT_vertex_group_group_add";
+  ot->description = "Add a collection to logically group vertex groups";
+
+  ot->poll = vertex_group_supported_poll;
+  ot->exec = vertex_group_group_add_exec;
+
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
 /** \name Vertex Group Remove Operator
  * \{ */
 
@@ -2712,13 +2762,82 @@ static void grease_pencil_clear_from_all_vgroup(Scene &scene,
   }
 }
 
+static void vertex_group_remove_post_sync(bContext *C, Object *ob)
+{
+  const ListBaseT<bDeformGroup> *defbase = BKE_object_defgroup_list(ob);
+  const int total = BLI_listbase_count(defbase);
+  int actdef = BKE_object_defgroup_active_index_get(ob);
+  bool found = false;
+ 
+  for (int i = 0; i < total; i++) {
+    const int idx = (actdef > 0) ? ((actdef - 1 + i) % total) : i;
+    const bDeformGroup *dg = static_cast<const bDeformGroup *>(BLI_findlink(defbase, idx));
+    if (dg && !STRPREFIX(dg->name, "col:")) {
+      BKE_object_defgroup_active_index_set(ob, idx + 1);
+      found = true;
+      break;
+    }
+  }
+ 
+  if (!found) {
+    /* Only col: groups remain — clear actdef and activate first collection. */
+    BKE_object_defgroup_active_index_set(ob, 0);
+    for (bDeformGroupCollection *col = static_cast<bDeformGroupCollection *>(
+             ob->defgroup_collections.first);
+         col;
+         col = col->next)
+    {
+      col->flag &= ~DG_COLLECTION_ACTIVE;
+    }
+    if (bDeformGroupCollection *first = static_cast<bDeformGroupCollection *>(
+            ob->defgroup_collections.first))
+    {
+      first->flag |= DG_COLLECTION_ACTIVE;
+    }
+  }
+ 
+  DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
+  WM_event_add_notifier(C, NC_GEOM | ND_VERTEX_GROUP, ob);
+}
+
+bDeformGroupMember *collection_find_member(const bDeformGroupCollection *col,
+                                           const bDeformGroup *dg)
+{
+  for (bDeformGroupMember *m = static_cast<bDeformGroupMember *>(col->members.first); m;
+       m = m->next)
+  {
+    if (m->dg == dg) {
+      return m;
+    }
+  }
+  return nullptr;
+}
+ 
+void defgroup_remove_from_all_collections(Object *object, bDeformGroup *dg)
+{
+  for (bDeformGroupCollection *col = static_cast<bDeformGroupCollection *>(
+           object->defgroup_collections.first);
+       col;
+       col = col->next)
+  {
+    bDeformGroupMember *m = collection_find_member(col, dg);
+    if (m) {
+      BLI_remlink(&col->members, m);
+      MEM_delete(m);
+    }
+    if (col->representative_dg == dg) {
+      col->representative_dg = nullptr;
+    }
+  }
+}
+ 
 static wmOperatorStatus vertex_group_remove_exec(bContext *C, wmOperator *op)
 {
   Object *ob = context_object(C);
   Scene &scene = *CTX_data_scene(C);
   const bool all_vgroup = RNA_boolean_get(op->ptr, "all");
   const bool only_unlocked = RNA_boolean_get(op->ptr, "all_unlocked");
-
+ 
   if (ob->type == OB_GREASE_PENCIL) {
     if (all_vgroup || only_unlocked) {
       grease_pencil_clear_from_all_vgroup(scene, *ob, false, true, only_unlocked);
@@ -2727,7 +2846,7 @@ static wmOperatorStatus vertex_group_remove_exec(bContext *C, wmOperator *op)
       const ListBaseT<bDeformGroup> *defbase = BKE_object_defgroup_list(ob);
       bDeformGroup *dg = static_cast<bDeformGroup *>(
           BLI_findlink(defbase, BKE_object_defgroup_active_index_get(ob) - 1));
-
+ 
       if (!dg) {
         return OPERATOR_CANCELLED;
       }
@@ -2739,14 +2858,69 @@ static wmOperatorStatus vertex_group_remove_exec(bContext *C, wmOperator *op)
       BKE_object_defgroup_remove_all_ex(ob, only_unlocked);
     }
     else {
-      vgroup_delete_active(ob);
+      /* If a collection is active, remove it instead of the vertex group. */
+      bDeformGroupCollection *active_col = nullptr;
+      for (bDeformGroupCollection *col = static_cast<bDeformGroupCollection *>(
+               ob->defgroup_collections.first);
+           col;
+           col = col->next)
+      {
+        if (col->flag & DG_COLLECTION_ACTIVE) {
+          active_col = col;
+          break;
+        }
+      }
+ 
+      if (active_col != nullptr) {
+        /* Free membership links — member groups stay in defbase untouched. */
+        for (bDeformGroupMember *m = static_cast<bDeformGroupMember *>(
+                 active_col->members.first);
+             m;)
+        {
+          bDeformGroupMember *next = m->next;
+          MEM_delete(m);
+          m = next;
+        }
+        if (active_col->representative_dg != nullptr) {
+          BKE_object_defgroup_remove(ob, active_col->representative_dg);
+        }
+        BLI_remlink(&ob->defgroup_collections, active_col);
+        MEM_delete(active_col);
+      }
+       else {
+        /* Collect all DG_SEL groups first — cannot remove while iterating. */
+        const ListBaseT<bDeformGroup> *defbase = BKE_object_defgroup_list(ob);
+        blender::Vector<bDeformGroup *> to_remove;
+ 
+        for (bDeformGroup *dg = static_cast<bDeformGroup *>(defbase->first); dg;
+             dg = dg->next)
+        {
+          if (STRPREFIX(dg->name, "col:")) {
+            continue;
+          }
+          if (dg->flag & DG_SEL) {
+            to_remove.append(dg);
+          }
+        }
+ 
+        /* Fall back to active group if nothing is selected. */
+        if (to_remove.is_empty()) {
+          bDeformGroup *active_dg = static_cast<bDeformGroup *>(
+              BLI_findlink(defbase, BKE_object_defgroup_active_index_get(ob) - 1));
+          if (active_dg && !STRPREFIX(active_dg->name, "col:")) {
+            to_remove.append(active_dg);
+          }
+        }
+ 
+        for (bDeformGroup *dg : to_remove) {
+          defgroup_remove_from_all_collections(ob, dg);
+          BKE_object_defgroup_remove(ob, dg);
+        }
+      }
     }
   }
 
-  DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
-  DEG_relations_tag_update(CTX_data_main(C));
-  WM_event_add_notifier(C, NC_GEOM | ND_VERTEX_GROUP, ob->data);
-  WM_event_add_notifier(C, NC_OBJECT | ND_DRAW, ob);
+  vertex_group_remove_post_sync(C, ob);  // replace DEG tag + notifier at the end
 
   return OPERATOR_FINISHED;
 }
@@ -4079,60 +4253,131 @@ void OBJECT_OT_vertex_group_sort(wmOperatorType *ot)
 /** \name Vertex Group Move Operator
  * \{ */
 
-static wmOperatorStatus vgroup_move_exec(bContext *C, wmOperator *op)
+bool object_defgroup_move(Object *ob, int from_index, int to_index)
 {
-  Object *ob = context_object(C);
-  bDeformGroup *def;
-  char *name_array;
-  int dir = RNA_enum_get(op->ptr, "direction");
-  wmOperatorStatus ret = OPERATOR_FINISHED;
-
-  ListBaseT<bDeformGroup> *defbase = BKE_object_defgroup_list_mutable(ob);
-
-  def = static_cast<bDeformGroup *>(
-      BLI_findlink(defbase, BKE_object_defgroup_active_index_get(ob) - 1));
-  if (!def) {
-    return OPERATOR_CANCELLED;
+  if (from_index == to_index) {
+    return false;
   }
 
-  name_array = vgroup_init_remap(ob);
+  ListBaseT<bDeformGroup> *defbase = BKE_object_defgroup_list_mutable(ob);
+  bDeformGroup *def = static_cast<bDeformGroup *>(BLI_findlink(defbase, from_index));
+  if (!def) {
+    return false;
+  }
 
-  if (BLI_listbase_link_move(defbase, def, dir)) {
-    ret = vgroup_do_remap(ob, name_array, op);
+  char *name_array = vgroup_init_remap(ob);
+  const bool moved = BLI_listbase_link_move(defbase, def, to_index - from_index);
 
-    if (ret != OPERATOR_CANCELLED) {
-      DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
-      WM_event_add_notifier(C, NC_GEOM | ND_VERTEX_GROUP, ob);
-    }
+  if (moved) {
+    vgroup_do_remap(ob, name_array, nullptr);
   }
 
   if (name_array) {
     MEM_delete(name_array);
   }
 
-  return ret;
+  return moved;
+}
+
+enum VertexGroupMove {
+  VG_MOVE_TOP = -2,
+  VG_MOVE_UP = -1,
+  VG_MOVE_DOWN = 1,
+  VG_MOVE_BOTTOM = 2,
+};
+
+static wmOperatorStatus vertex_group_move_exec(bContext *C, wmOperator *op)
+{
+  Object *ob = context_object(C);
+
+  const VertexGroupMove type = VertexGroupMove(RNA_enum_get(op->ptr, "direction"));
+  const ListBaseT<bDeformGroup> *defbase = BKE_object_defgroup_list(ob);
+  const int totgroup = BKE_object_defgroup_count(ob);
+  int new_index = 0;
+  bool changed = false;
+
+  if (type < 0) { /* Moving upwards. */
+    int top_index = 0;
+    for (int index = 0; index < totgroup; index++) {
+      const bDeformGroup &dg = *static_cast<bDeformGroup *>(BLI_findlink(defbase, index));
+      if (!(dg.flag & DG_SEL)) {
+        continue;
+      }
+      switch (type) {
+        case VG_MOVE_TOP:
+          new_index = top_index;
+          break;
+        case VG_MOVE_UP:
+          new_index = max_ii(index - 1, top_index);
+          break;
+        case VG_MOVE_BOTTOM:
+        case VG_MOVE_DOWN:
+          BLI_assert_unreachable();
+          break;
+      }
+      top_index++;
+      changed |= object_defgroup_move(ob, index, new_index);
+    }
+  }
+  else { /* Moving downwards. */
+    int bottom_index = totgroup - 1;
+    for (int index = totgroup - 1; index >= 0; index--) {
+      const bDeformGroup &dg = *static_cast<bDeformGroup *>(BLI_findlink(defbase, index));
+      if (!(dg.flag & DG_SEL)) {
+        continue;
+      }
+      switch (type) {
+        case VG_MOVE_BOTTOM:
+          new_index = bottom_index;
+          break;
+        case VG_MOVE_DOWN:
+          new_index = min_ii(index + 1, bottom_index);
+          break;
+        case VG_MOVE_TOP:
+        case VG_MOVE_UP:
+          BLI_assert_unreachable();
+          break;
+      }
+      bottom_index--;
+      changed |= object_defgroup_move(ob, index, new_index);
+    }
+  }
+
+  if (!changed) {
+    return OPERATOR_CANCELLED;
+  }
+
+  DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
+  WM_event_add_notifier(C, NC_GEOM | ND_VERTEX_GROUP, ob);
+
+  return OPERATOR_FINISHED;
 }
 
 void OBJECT_OT_vertex_group_move(wmOperatorType *ot)
 {
   static const EnumPropertyItem vgroup_slot_move[] = {
-      {-1, "UP", 0, "Up", ""},
-      {1, "DOWN", 0, "Down", ""},
+      {VG_MOVE_TOP, "TOP", 0, "Top", "Top of the list"},
+      {VG_MOVE_UP, "UP", 0, "Up", ""},
+      {VG_MOVE_DOWN, "DOWN", 0, "Down", ""},
+      {VG_MOVE_BOTTOM, "BOTTOM", 0, "Bottom", "Bottom of the list"},
       {0, nullptr, 0, nullptr, nullptr},
   };
 
   /* identifiers */
   ot->name = "Move Vertex Group";
   ot->idname = "OBJECT_OT_vertex_group_move";
-  ot->description = "Move the active vertex group up/down in the list";
+  ot->description = "Move selected vertex groups up/down in the list";
 
   /* API callbacks. */
   ot->poll = vertex_group_poll;
-  ot->exec = vgroup_move_exec;
+  ot->exec = vertex_group_move_exec;
 
   /* flags */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
+  /* Keep `direction` as property name so existing bpy scripts using
+   * bpy.ops.object.vertex_group_move(direction='UP'/'DOWN') still work.
+   * TOP and BOTTOM are new additions. */
   RNA_def_enum(ot->srna,
                "direction",
                vgroup_slot_move,
@@ -4444,6 +4689,179 @@ void OBJECT_OT_vertex_weight_copy(wmOperatorType *ot)
   /* flags */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Layer Toggle Operator
+ * \{ */
+ 
+static wmOperatorStatus vertex_group_collection_layer_toggle_exec(bContext *C,
+                                                                   wmOperator * /*op*/)
+{
+  Object *ob = context_object(C);
+  for (bDeformGroupCollection *col = static_cast<bDeformGroupCollection *>(
+           ob->defgroup_collections.first);
+       col;
+       col = col->next)
+  {
+    if (col->flag & DG_COLLECTION_ACTIVE) {
+      col->flag ^= DG_COLLECTION_LAYER;
+      DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
+      WM_event_add_notifier(C, NC_GEOM | ND_VERTEX_GROUP, ob);
+      return OPERATOR_FINISHED;
+    }
+  }
+  return OPERATOR_CANCELLED;
+}
+ 
+void OBJECT_OT_vertex_group_collection_layer_toggle(wmOperatorType *ot)
+{
+  ot->name = "Toggle Layer Mask";
+  ot->idname = "OBJECT_OT_vertex_group_collection_layer_toggle";
+  ot->description = "Toggle layer mask mode on the active vertex group collection";
+  ot->poll = vertex_group_supported_poll;
+  ot->exec = vertex_group_collection_layer_toggle_exec;
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+}
+ 
+/** \} */
+ 
+/* -------------------------------------------------------------------- */
+/** \name Layer Bake Operator
+ *
+ * Bakes the active DG_COLLECTION_LAYER collection into new BAKE- prefixed
+ * vertex groups (member_weight x mask_weight per vertex).
+ * Original groups are untouched.
+ * \{ */
+ 
+static wmOperatorStatus vertex_group_collection_layer_bake_exec(bContext *C, wmOperator *op)
+{
+  Object *ob = context_object(C);
+ 
+  if (ob->type != OB_MESH) {
+    BKE_report(op->reports, RPT_ERROR, "Only mesh objects are supported");
+    return OPERATOR_CANCELLED;
+  }
+ 
+  /* Find active DG_COLLECTION_LAYER collection. */
+  bDeformGroupCollection *col = nullptr;
+  for (bDeformGroupCollection *c = static_cast<bDeformGroupCollection *>(
+           ob->defgroup_collections.first);
+       c;
+       c = c->next)
+  {
+    if ((c->flag & DG_COLLECTION_ACTIVE) && (c->flag & DG_COLLECTION_LAYER)) {
+      col = c;
+      break;
+    }
+  }
+ 
+  if (col == nullptr) {
+    BKE_report(op->reports,
+               RPT_ERROR,
+               "Active collection is not a layer mask collection "
+               "(enable DG_COLLECTION_LAYER first)");
+    return OPERATOR_CANCELLED;
+  }
+ 
+  if (col->representative_dg == nullptr) {
+    BKE_report(op->reports, RPT_ERROR, "Collection has no mask group");
+    return OPERATOR_CANCELLED;
+  }
+ 
+  Mesh *mesh = reinterpret_cast<Mesh *>(ob->data);
+  MDeformVert *dverts = mesh->deform_verts_for_write().data();
+  if (dverts == nullptr) {
+    BKE_report(op->reports, RPT_ERROR, "Mesh has no vertex weight data");
+    return OPERATOR_CANCELLED;
+  }
+ 
+  const ListBaseT<bDeformGroup> *defbase = BKE_object_defgroup_list(ob);
+  const int mask_index = BLI_findindex(defbase, col->representative_dg);
+  if (mask_index < 0) {
+    BKE_report(op->reports, RPT_ERROR, "Mask group not found in defbase");
+    return OPERATOR_CANCELLED;
+  }
+ 
+  const int verts_num = mesh->verts_num;
+  int baked_count = 0;
+ 
+  for (bDeformGroupMember *m = static_cast<bDeformGroupMember *>(col->members.first); m;
+       m = m->next)
+  {
+    if (m->dg == nullptr) {
+      continue;
+    }
+    const int member_index = BLI_findindex(defbase, m->dg);
+    if (member_index < 0) {
+      continue;
+    }
+ 
+    /* Create or find the BAKE- group. */
+    char bake_name[MAX_NAME];
+    SNPRINTF(bake_name, "BAKE-%s", m->dg->name);
+ 
+    bDeformGroup *bake_dg = static_cast<bDeformGroup *>(
+        BLI_findstring(defbase, bake_name, offsetof(bDeformGroup, name)));
+    if (bake_dg == nullptr) {
+      bake_dg = BKE_object_defgroup_new(ob, bake_name);
+    }
+ 
+    const int bake_index = BLI_findindex(BKE_object_defgroup_list(ob), bake_dg);
+ 
+    /* Write masked weights per vertex. */
+    for (int v = 0; v < verts_num; v++) {
+      MDeformVert *dvert = &dverts[v];
+      const float mask_weight = BKE_defvert_find_weight(dvert, mask_index);
+      const float member_weight = BKE_defvert_find_weight(dvert, member_index);
+      const float baked_weight = blender::math::clamp(
+          member_weight * mask_weight, 0.0f, 1.0f);
+ 
+      if (baked_weight > 0.0f) {
+        MDeformWeight *dw_bake = BKE_defvert_ensure_index(dvert, bake_index);
+        dw_bake->weight = baked_weight;
+      }
+      else {
+        /* Remove zero-weight entry to keep dvert clean. */
+        MDeformWeight *dw = BKE_defvert_find_index(dvert, bake_index);
+        if (dw != nullptr) {
+          BKE_defvert_remove_group(dvert, dw);
+        }
+      }
+    }
+ 
+    baked_count++;
+  }
+ 
+  if (baked_count == 0) {
+    BKE_report(op->reports, RPT_WARNING, "No member groups to bake");
+    return OPERATOR_CANCELLED;
+  }
+ 
+  BKE_reportf(op->reports, RPT_INFO, "Baked %d vertex group(s)", baked_count);
+ 
+  DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
+  WM_event_add_notifier(C, NC_GEOM | ND_VERTEX_GROUP, ob);
+ 
+  return OPERATOR_FINISHED;
+}
+ 
+void OBJECT_OT_vertex_group_collection_layer_bake(wmOperatorType *ot)
+{
+  ot->name = "Bake Vertex Group Layer Mask";
+  ot->idname = "OBJECT_OT_vertex_group_collection_layer_bake";
+  ot->description =
+      "Bake the active layer mask collection into new BAKE- prefixed vertex groups "
+      "(member_weight x mask_weight per vertex). Originals are untouched";
+ 
+  ot->poll = vertex_group_supported_poll;
+  ot->exec = vertex_group_collection_layer_bake_exec;
+ 
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+}
+ 
+/** \} */
 
 /** \} */
 

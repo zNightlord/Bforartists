@@ -54,6 +54,7 @@ struct bFaceMap;
 /** #bDeformGroup::flag */
 enum {
   DG_LOCK_WEIGHT = 1,
+  DG_SEL = 2,
 };
 
 /* **************** BASE ********************* */
@@ -326,6 +327,31 @@ struct bDeformGroup {
   char flag = 0, _pad0[7] = {};
 };
 
+struct bDeformGroupMember {
+  struct bDeformGroupMember *next = nullptr, *prev = nullptr;
+  /** Pointer to the actual group in Object.defbase. Never freed with this struct. */
+  struct bDeformGroup *dg = nullptr;
+};
+
+struct bDeformGroupCollection {
+  struct bDeformGroupCollection *next = nullptr, *prev = nullptr;
+  char name[/*MAX_VGROUP_NAME*/ 64] = "";
+  /** #bDeformGroup children belonging to this collection. */
+  ListBaseT<bDeformGroupMember> members = {nullptr,
+                                     nullptr};
+   struct bDeformGroup *representative_dg = nullptr;
+  int flag = 0;
+  char _pad[4] = {};
+};
+
+/** #bDeformGroupCollection::flag */
+enum {
+  DG_COLLECTION_EXPANDED = (1 << 0),
+  DG_COLLECTION_SEL      = (1 << 1),
+  DG_COLLECTION_ACTIVE   = (1 << 2),
+  DG_COLLECTION_LAYER    = (1 << 3),
+};
+
 #ifdef DNA_DEPRECATED_ALLOW
 struct bFaceMap {
   struct bFaceMap *next = nullptr, *prev = nullptr;
@@ -486,6 +512,9 @@ struct Object {
   bMotionPath *mpath = nullptr;
 
   ListBaseT<Effect> effect = {nullptr, nullptr}; /* XXX deprecated... keep for readfile */
+  bDeformGroupCollection *root_group = nullptr;
+  ListBaseT<bDeformGroupCollection> defgroup_collections =  {nullptr,
+                                     nullptr}; /* bDeformGroupCollection */
   ListBaseT<bDeformGroup> defbase = {nullptr,
                                      nullptr}; /* Only for versioning, moved to object data. */
   ListBaseT<bFaceMap> fmaps = {nullptr,

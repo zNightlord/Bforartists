@@ -466,6 +466,67 @@ void rna_Object_internal_update_data_dependency(Main *bmain, Scene * /*scene*/, 
   rna_Object_internal_update_data_impl(ptr);
 }
 
+/**
+ * Find the collection whose representative_dg is dg, or nullptr.
+ */
+static bDeformGroupCollection *defgroup_find_representative_collection(const Object *ob,
+                                                                        const bDeformGroup *dg)
+{
+  for (bDeformGroupCollection *col = static_cast<bDeformGroupCollection *>(
+           ob->defgroup_collections.first);
+       col;
+       col = col->next)
+  {
+    if (col->representative_dg == dg) {
+      return col;
+    }
+  }
+  return nullptr;
+}
+ 
+/**
+ * Propagate lock_weight from a collection's representative_dg to all members.
+ * Called from the RNA update so the members always mirror the collection lock.
+ */
+static void defgroup_collection_lock_members_update(Object *ob,
+                                                     bDeformGroupCollection *col)
+{
+  if (col->representative_dg == nullptr) {
+    return;
+  }
+  const bool is_locked = col->representative_dg->flag & DG_LOCK_WEIGHT;
+  for (bDeformGroupMember *m = static_cast<bDeformGroupMember *>(col->members.first); m;
+       m = m->next)
+  {
+    if (m->dg) {
+      SET_FLAG_FROM_TEST(m->dg->flag, is_locked, DG_LOCK_WEIGHT);
+    }
+  }
+}
+ 
+/**
+ * RNA update callback for VertexGroup.lock_weight.
+ *
+ * If the group being changed is a collection representative, propagate the
+ * new lock state to all member groups in that collection.
+ */
+static void rna_Object_vertex_group_lock_update(Main * /*bmain*/,
+                                                Scene * /*scene*/,
+                                                PointerRNA *ptr)
+{
+  Object *ob = reinterpret_cast<Object *>(ptr->owner_id);
+  bDeformGroup *dg = static_cast<bDeformGroup *>(ptr->data);
+ 
+  bDeformGroupCollection *col = defgroup_find_representative_collection(ob, dg);
+  if (col != nullptr) {
+    defgroup_collection_lock_members_update(ob, col);
+  }
+ 
+  DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
+  WM_main_add_notifier(NC_GEOM | ND_VERTEX_GROUP, ob);
+  rna_Object_internal_update_data_impl(ptr);
+}
+
 static void rna_Object_active_shape_update(Main *bmain, Scene * /*scene*/, PointerRNA *ptr)
 {
   Object *ob = reinterpret_cast<Object *>(ptr->owner_id);
@@ -2345,9 +2406,9 @@ static void rna_def_vertex_group(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "lock_weight", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_ui_text(prop, "", "Maintain the relative weights for the group");
-  RNA_def_property_boolean_sdna(prop, nullptr, "flag", 0);
+  RNA_def_property_boolean_sdna(prop, nullptr, "flag", DG_LOCK_WEIGHT);
   /* update data because modifiers may use #24761. */
-  RNA_def_property_update(prop, NC_GEOM | ND_DATA | NA_RENAME, "rna_Object_internal_update_data");
+  RNA_def_property_update(prop, NC_GEOM | ND_DATA | NA_RENAME, "rna_Object_vertex_group_lock_update");
 
   prop = RNA_def_property(srna, "index", PROP_INT, PROP_UNSIGNED);
   RNA_def_property_clear_flag(prop, PROP_EDITABLE);
@@ -2379,6 +2440,26 @@ static void rna_def_vertex_group(BlenderRNA *brna)
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
   parm = RNA_def_float(func, "weight", 0, 0.0f, 1.0f, "", "Vertex weight", 0.0f, 1.0f);
   RNA_def_function_return(func, parm);
+
+  srna = RNA_def_struct(brna, "VertexGroupGROUP", nullptr);
+  RNA_def_struct_sdna(srna, "bDeformGroupCollection");
+  RNA_def_struct_ui_text(
+      srna, "Vertex Group Group", "Group of vertex group");
+  RNA_def_struct_ui_icon(srna, ICON_GROUP_VERTEX);
+
+  prop = RNA_def_property(srna, "name", PROP_STRING, PROP_NONE);
+  RNA_def_property_ui_text(prop, "Name", "Vertex group group name");
+  RNA_def_struct_name_property(srna, prop);
+  // RNA_def_property_string_funcs(prop, nullptr, nullptr, "rna_VertexGroup_name_set");
+  /* update data because modifiers may use #24761. */
+  RNA_def_property_update(
+      prop, NC_GEOM | ND_DATA | NA_RENAME, "rna_Object_internal_update_data_dependency");
+
+  prop = RNA_def_property(srna, "layer_mode", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_ui_text(prop, "", "Layer masked mode");
+  RNA_def_property_boolean_sdna(prop, nullptr, "flag", DG_COLLECTION_LAYER);
+  /* update data because modifiers may use #24761. */
+  RNA_def_property_update(prop, NC_GEOM | ND_DATA | NA_RENAME, "rna_Object_internal_update_data");
 }
 
 static void rna_def_material_slot(BlenderRNA *brna)

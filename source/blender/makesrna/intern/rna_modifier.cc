@@ -6088,6 +6088,14 @@ static void rna_def_modifier_weightvgedit(BlenderRNA *brna)
                            "to be removed from the vgroup");
   RNA_def_property_update(prop, 0, "rna_Modifier_update");
 
+  prop = RNA_def_property(srna, "use_collection_mode", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "edit_flags", MOD_WVG_EDIT_COLLECTION_MODE);
+  RNA_def_property_ui_text(prop,
+                          "Collection Mode",
+                          "Apply layer mask to all DG_COLLECTION_LAYER collections "
+                          "instead of a single vertex group");
+  RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
   RNA_define_lib_overridable(false);
 
   /* Common masking properties. */

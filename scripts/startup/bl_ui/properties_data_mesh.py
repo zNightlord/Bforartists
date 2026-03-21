@@ -220,6 +220,9 @@ class DATA_PT_vertex_groups(MeshButtonsPanel, Panel):
         ob = context.object
         group = ob.vertex_groups.active
 
+        row = layout.row()
+        row.template_vertex_group_tree()
+
         rows = 3
         if group:
             rows = 5
@@ -227,9 +230,12 @@ class DATA_PT_vertex_groups(MeshButtonsPanel, Panel):
         row = layout.row()
         row.template_list("MESH_UL_vgroups", "", ob, "vertex_groups", ob.vertex_groups, "active_index", rows=rows)
 
+
         col = row.column(align=True)
 
         col.operator("object.vertex_group_add", icon="ADD", text="")
+        col.operator("object.vertex_group_group_add", icon="COLLECTION_NEW", text="")
+
         props = col.operator("object.vertex_group_remove", icon="REMOVE", text="")
         props.all_unlocked = props.all = False
 
