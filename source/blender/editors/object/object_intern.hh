@@ -22,6 +22,9 @@ struct wmKeyConfig;
 struct wmOperator;
 struct wmOperatorType;
 
+struct bDeformGroup;
+struct bDeformGroupCollection;
+struct bDeformGroupMember;
 namespace ed::object {
 
 /* add hook menu */
@@ -319,10 +322,6 @@ void OBJECT_OT_vertex_weight_normalize_active_vertex(wmOperatorType *ot);
 void OBJECT_OT_vertex_weight_copy(wmOperatorType *ot);
 void OBJECT_OT_vertex_group_collection_layer_toggle(wmOperatorType *ot);
 void OBJECT_OT_vertex_group_collection_layer_bake(wmOperatorType *ot);
-
-struct bDeformGroup;
-struct bDeformGroupCollection;
-struct bDeformGroupMember;
 
 bDeformGroupMember *collection_find_member(const bDeformGroupCollection *col,
                                            const bDeformGroup *dg);
