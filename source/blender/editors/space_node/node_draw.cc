@@ -579,7 +579,7 @@ static bool node_update_basis_socket(TreeDrawContext &tree_draw_ctx,
                                         0,
                                         ui::style_get_dpi());
 
-  if (is_in_minimap_rect(snode, region, loc.x + NODE_DYS, dy, NODE_DYS)) {
+  if (is_in_minimap_rect(snode, region, locx + NODE_DYS, locy, NODE_DYS)) {
     layout.enabled_set(false);
   }
 
