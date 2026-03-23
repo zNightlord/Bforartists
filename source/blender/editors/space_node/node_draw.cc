@@ -392,10 +392,19 @@ static rctf get_minimap_rect(const SpaceNode &snode, ARegion &region)
   return minimap_rect;
 }
 
-static bool is_in_minimap_rect(const SpaceNode &snode, ARegion &region, const float x, const float y)
+static bool is_in_minimap_rect(const SpaceNode &snode,
+                                ARegion &region,
+                                const float view_x,
+                                const float view_y,
+                                const float padding = 0.8f)
 {
-  const rctf rect = get_minimap_rect(snode, region);
-  return BLI_rctf_isect_pt(&rect, x, y);
+  rctf rect = get_minimap_rect(snode, region);
+  BLI_rctf_pad(&rect, padding, padding);
+
+  float screen_x, screen_y;
+  ui::view2d_view_to_region_fl(&region.v2d, view_x, view_y, &screen_x, &screen_y);
+
+  return BLI_rctf_isect_pt(&rect, screen_x, screen_y);
 }
 
 /* Draw UI for options, buttons, and previews. */
@@ -422,13 +431,6 @@ static bool node_update_basis_buttons(const bContext &C,
   SpaceNode &snode = *CTX_wm_space_node(&C);
   ARegion &region = *CTX_wm_region(&C);
 
-  /* Do minimap select. */
-  const rctf minimap_rect = get_minimap_rect(snode, region);
-  printf("Minimap %f, %f, %f, %f Node pos %f, %f \n", minimap_rect.xmin, minimap_rect.xmax, minimap_rect.ymin, minimap_rect.ymax, loc.x + NODE_DYS, dy);
-  if (is_in_minimap_rect(snode, region, loc.x + NODE_DYS, dy)) {
-    printf("In buttons \n");
-    return false;
-  }
 
   ui::Layout &layout = ui::block_layout(&block,
                                         ui::LayoutDirection::Vertical,
@@ -440,6 +442,9 @@ static bool node_update_basis_buttons(const bContext &C,
                                         0,
                                         ui::style_get_dpi());
 
+  if (is_in_minimap_rect(snode, region, loc.x + NODE_DYS, dy, NODE_DYS)) {
+    layout.enabled_set(false);
+  }
   if (node.is_muted()) {
     layout.active_set(false);
   }
@@ -564,13 +569,6 @@ static bool node_update_basis_socket(TreeDrawContext &tree_draw_ctx,
                                               0.0f;
   locy -= multi_input_socket_offset * 0.5f;
 
-  const rctf minimap_rect = get_minimap_rect(snode, region);
-  printf("sockets Minimap %f, %f, %f, %f Node pos %f, %f \n", minimap_rect.xmin, minimap_rect.xmax, minimap_rect.ymin, minimap_rect.ymax, locx + NODE_DYS, locy);
-  if (is_in_minimap_rect(snode, region, locx + NODE_DYS, locy)) {
-    printf("In sockets \n");
-    return false;
-  }
-
   ui::Layout &layout = ui::block_layout(&block,
                                         ui::LayoutDirection::Vertical,
                                         ui::LayoutType::Panel,
@@ -581,10 +579,14 @@ static bool node_update_basis_socket(TreeDrawContext &tree_draw_ctx,
                                         0,
                                         ui::style_get_dpi());
 
+  if (is_in_minimap_rect(snode, region, loc.x + NODE_DYS, dy, NODE_DYS)) {
+    layout.enabled_set(false);
+  }
+
   if (node.is_muted()) {
     layout.active_set(false);
   }
-  if (!ID_IS_EDITABLE(&ntree.id) || ) {
+  if (!ID_IS_EDITABLE(&ntree.id)) {
     layout.enabled_set(false);
   }
 
