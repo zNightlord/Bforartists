@@ -17,6 +17,11 @@
 
 namespace blender::draw {
 
+struct DominantGroup {
+  int index;
+  float weight;
+};
+
 static float evaluate_vertex_weight(const MDeformVert *dvert, const DRW_MeshWeightState *wstate)
 {
   /* Error state. */
@@ -113,10 +118,10 @@ static void extract_weights_bm(const MeshRenderData &mr,
   });
 }
 
-static int dominant_vertex_group(const MDeformVert *dvert)
+static DominantGroup dominant_vertex_group(const MDeformVert *dvert)
 {
   if (!dvert || dvert->totweight == 0) {
-    return -1;
+    return {-1, 0.0f};
   }
   int best_group = dvert->dw[0].def_nr;
   float best_weight = dvert->dw[0].weight;
@@ -126,26 +131,32 @@ static int dominant_vertex_group(const MDeformVert *dvert)
       best_group = dvert->dw[i].def_nr;
     }
   }
-  return best_group;
+  return {best_group, best_weight};
 }
 
 static void extract_weight_vgroup_index_mesh(const MeshRenderData &mr,
-                                             MutableSpan<int> vbo_data)
+                                             MutableSpan<int> index_data,
+                                             MutableSpan<float> weight_data)
 {
   const Mesh &mesh = *mr.mesh;
   const Span<MDeformVert> dverts = mesh.deform_verts();
   if (dverts.is_empty()) {
-    vbo_data.fill(-1);
+    index_data.fill(-1);
+    weight_data.fill(0.0f);
     return;
   }
 
   Array<int> indices(dverts.size());
+  Array<float> weights(dverts.size());
   threading::parallel_for(indices.index_range(), 1024, [&](const IndexRange range) {
     for (const int vert : range) {
-      indices[vert] = dominant_vertex_group(&dverts[vert]);
+      DominantGroup dg = dominant_vertex_group(&dverts[vert]);
+      indices[vert] = dg.index;
+      weights[vert] = dg.weight;
     }
   });
-  array_utils::gather(indices.as_span(), mr.corner_verts, vbo_data);
+  array_utils::gather(indices.as_span(), mr.corner_verts, index_data);
+  array_utils::gather(weights.as_span(), mr.corner_verts, weight_data);
 }
 
 static void extract_weight_vgroup_index_bm(const MeshRenderData &mr,
@@ -216,18 +227,46 @@ gpu::VertBufPtr extract_weight_vgroup_index(const MeshRenderData &mr,
 {
   static GPUVertFormat format = GPU_vertformat_from_attribute(
       "vertex_group_index", gpu::VertAttrType::SINT_32);
-
   gpu::VertBufPtr vbo = gpu::VertBufPtr(GPU_vertbuf_create_with_format(format));
   GPU_vertbuf_data_alloc(*vbo, mr.corners_num);
-  MutableSpan<int> vbo_data = vbo->data<int>();
+  /* dominant weight vbo built together */
+  return vbo;
+}
+
+gpu::VertBufPtr extract_weight_vgroup_dominant_weight(const MeshRenderData &mr,
+                                                      const MeshBatchCache & /*cache*/)
+{
+  static GPUVertFormat format = GPU_vertformat_from_attribute(
+      "vertex_group_dominant_weight", gpu::VertAttrType::SFLOAT_32);
+  gpu::VertBufPtr vbo = gpu::VertBufPtr(GPU_vertbuf_create_with_format(format));
+  GPU_vertbuf_data_alloc(*vbo, mr.corners_num);
+  return vbo;
+}
+
+void extract_weight_vgroup_all(const MeshRenderData &mr,
+                               const MeshBatchCache &cache,
+                               gpu::VertBufPtr &r_index_vbo,
+                               gpu::VertBufPtr &r_weight_vbo)
+{
+  static GPUVertFormat index_format = GPU_vertformat_from_attribute(
+      "vertex_group_index", gpu::VertAttrType::SINT_32);
+  static GPUVertFormat weight_format = GPU_vertformat_from_attribute(
+      "vertex_group_dominant_weight", gpu::VertAttrType::SFLOAT_32);
+
+  r_index_vbo = gpu::VertBufPtr(GPU_vertbuf_create_with_format(index_format));
+  r_weight_vbo = gpu::VertBufPtr(GPU_vertbuf_create_with_format(weight_format));
+  GPU_vertbuf_data_alloc(*r_index_vbo, mr.corners_num);
+  GPU_vertbuf_data_alloc(*r_weight_vbo, mr.corners_num);
+
+  MutableSpan<int> index_data = r_index_vbo->data<int>();
+  MutableSpan<float> weight_data = r_weight_vbo->data<float>();
 
   if (mr.extract_type == MeshExtractType::Mesh) {
-    extract_weight_vgroup_index_mesh(mr, vbo_data);
+    extract_weight_vgroup_index_mesh(mr, index_data, weight_data);
   }
   else {
-    extract_weight_vgroup_index_bm(mr, vbo_data);
+    extract_weight_vgroup_index_bm(mr, index_data, weight_data);
   }
-  return vbo;
 }
 
 }  // namespace blender::draw

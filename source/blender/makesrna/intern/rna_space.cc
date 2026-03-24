@@ -5412,11 +5412,35 @@ static void rna_def_space_view3d_overlay(BlenderRNA *brna)
       "Show contour lines formed by points with the same interpolated weight");
   RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, nullptr);
 
-  prop = RNA_def_property(srna, "show_wpaint_vgroup_colors", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, nullptr, "overlay.wpaint_flag",
-                                V3D_OVERLAY_WPAINT_VGROUP_COLORS);
-  RNA_def_property_ui_text(prop, "Vertex Group Colors",
-                            "Color each vertex by its dominant vertex group index");
+  static const EnumPropertyItem overlay_wpaint_vgroup_color_mode_items[] = {
+    {V3D_OVERLAY_WPAINT_VGROUP_COLOR_NONE,
+     "NONE",
+     0,
+     "None",
+     "Use standard weight color ramp"},
+    {V3D_OVERLAY_WPAINT_VGROUP_COLOR_SINGLE,
+     "SINGLE",
+     0,
+     "Single",
+     "Color the active vertex group with a hashed color"},
+    {V3D_OVERLAY_WPAINT_VGROUP_COLOR_ALL,
+     "ALL",
+     0,
+     "All",
+     "Color each vertex by its dominant vertex group"},
+    {0, nullptr, 0, nullptr, nullptr},
+};
+
+  prop = RNA_def_property(srna, "wpaint_vgroup_color_mode", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, nullptr, "overlay.wpaint_vgroup_color_mode");
+  RNA_def_property_enum_items(prop, overlay_wpaint_vgroup_color_mode_items);
+  RNA_def_property_ui_text(prop, "Vertex Group Color Mode", "How to colorize vertex groups in weight paint");
+  RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, nullptr);
+
+  prop = RNA_def_property(srna, "wpaint_vgroup_color_random_id", PROP_INT, PROP_NONE);
+  RNA_def_property_int_sdna(prop, nullptr, "overlay.wpaint_vgroup_color_random_id");
+  RNA_def_property_range(prop, 0, INT_MAX);
+  RNA_def_property_ui_text(prop, "Randomize ID", "Offset applied to group index before hashing to shift all colors");
   RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, nullptr);
 
   prop = RNA_def_property(srna, "show_weight", PROP_BOOLEAN, PROP_NONE);

@@ -10470,6 +10470,14 @@ class VIEW3D_PT_overlay_weight_paint(Panel):
 
         row = col.row()
         row.separator()
+        col.prop(overlay, "wpaint_vgroup_color_mode")  # new
+
+        row = col.row()
+        row.separator()
+        col.prop(overlay, "wpaint_vgroup_color_random_id")  # new
+
+        row = col.row()
+        row.separator()
         row.label(text="Opacity")
         row.prop(overlay, "weight_paint_mode_opacity", text="")
         row = col.split(factor=0.36)
@@ -10480,10 +10488,6 @@ class VIEW3D_PT_overlay_weight_paint(Panel):
         row = col.row()
         row.separator()
         row.prop(overlay, "show_wpaint_contours")
-
-        row = col.row()
-        row.separator()
-        col.prop(overlay, "show_wpaint_vgroup_colors")  # new
 
         row = col.row()
         row.separator()
