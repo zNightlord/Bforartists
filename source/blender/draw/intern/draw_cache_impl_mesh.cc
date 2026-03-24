@@ -461,6 +461,7 @@ static void mesh_batch_cache_check_vertex_group(MeshBatchCache &cache,
   if (!drw_mesh_weight_state_compare(&cache.weight_state, wstate)) {
     FOREACH_MESH_BUFFER_CACHE (cache, mbc) {
       mbc->buff.vbos.remove(VBOType::VertexGroupWeight);
+      mbc->buff.vbos.remove(VBOType::VertexGroupIndex);
     }
     GPU_BATCH_CLEAR_SAFE(cache.batch.surface_weights);
 
@@ -1323,7 +1324,7 @@ void DRW_mesh_batch_cache_create_requested(TaskGraph &task_graph,
                          GPU_PRIM_TRIS,
                          list,
                          IBOType::Tris,
-                         {VBOType::Position, VBOType::CornerNormal, VBOType::VertexGroupWeight}});
+                         {VBOType::Position, VBOType::CornerNormal, VBOType::VertexGroupWeight, VBOType::VertexGroupIndex}});
     }
     if (batches_to_create & MBC_PAINT_OVERLAY_WIRE_LOOPS) {
       batch_info.append({*cache.batch.paint_overlay_wire_loops,

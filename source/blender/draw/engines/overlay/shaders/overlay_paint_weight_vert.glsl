@@ -10,10 +10,24 @@ VERTEX_SHADER_CREATE_INFO(overlay_paint_weight)
 #include "draw_view_clipping_lib.glsl"
 #include "draw_view_lib.glsl"
 
+/* Integer hash → pseudo-random RGB */
+vec3 vgroup_index_to_color(int idx)
+{
+  uint h = uint(idx);
+  h ^= h >> 16u;
+  h *= 0x45d9f3bu;
+  h ^= h >> 16u;
+  return vec3(float( h        & 0xFFu),
+              float((h >>  8u)& 0xFFu),
+              float((h >> 16u)& 0xFFu)) / 255.0;
+}
+
 void main()
 {
   float3 world_pos = drw_point_object_to_world(pos);
   gl_Position = drw_point_world_to_homogenous(world_pos);
+
+  vgroup_color = vgroup_index_to_color(vertex_group_index);  /* new */
 
   /* Separate actual weight and alerts for independent interpolation */
   weight_interp = max(float2(weight, -weight), 0.0f);

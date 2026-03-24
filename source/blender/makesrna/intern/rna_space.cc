@@ -5412,6 +5412,13 @@ static void rna_def_space_view3d_overlay(BlenderRNA *brna)
       "Show contour lines formed by points with the same interpolated weight");
   RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, nullptr);
 
+  prop = RNA_def_property(srna, "show_wpaint_vgroup_colors", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "overlay.wpaint_flag",
+                                V3D_OVERLAY_WPAINT_VGROUP_COLORS);
+  RNA_def_property_ui_text(prop, "Vertex Group Colors",
+                            "Color each vertex by its dominant vertex group index");
+  RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, nullptr);
+
   prop = RNA_def_property(srna, "show_weight", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "overlay.edit_flag", V3D_OVERLAY_EDIT_WEIGHT);
   RNA_def_property_ui_text(prop, "Show Weights", "Display weights in editmode");
