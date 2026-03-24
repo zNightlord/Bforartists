@@ -113,6 +113,65 @@ static void extract_weights_bm(const MeshRenderData &mr,
   });
 }
 
+static int dominant_vertex_group(const MDeformVert *dvert)
+{
+  if (!dvert || dvert->totweight == 0) {
+    return -1;
+  }
+  int best_group = dvert->dw[0].def_nr;
+  float best_weight = dvert->dw[0].weight;
+  for (int i = 1; i < dvert->totweight; i++) {
+    if (dvert->dw[i].weight > best_weight) {
+      best_weight = dvert->dw[i].weight;
+      best_group = dvert->dw[i].def_nr;
+    }
+  }
+  return best_group;
+}
+
+static void extract_weight_vgroup_index_mesh(const MeshRenderData &mr,
+                                             MutableSpan<int> vbo_data)
+{
+  const Mesh &mesh = *mr.mesh;
+  const Span<MDeformVert> dverts = mesh.deform_verts();
+  if (dverts.is_empty()) {
+    vbo_data.fill(-1);
+    return;
+  }
+
+  Array<int> indices(dverts.size());
+  threading::parallel_for(indices.index_range(), 1024, [&](const IndexRange range) {
+    for (const int vert : range) {
+      indices[vert] = dominant_vertex_group(&dverts[vert]);
+    }
+  });
+  array_utils::gather(indices.as_span(), mr.corner_verts, vbo_data);
+}
+
+static void extract_weight_vgroup_index_bm(const MeshRenderData &mr,
+                                           MutableSpan<int> vbo_data)
+{
+  const BMesh &bm = *mr.bm;
+  const int offset = CustomData_get_offset(&bm.vdata, CD_MDEFORMVERT);
+  if (offset == -1) {
+    vbo_data.fill(-1);
+    return;
+  }
+
+  threading::parallel_for(IndexRange(bm.totface), 2048, [&](const IndexRange range) {
+    for (const int face_index : range) {
+      const BMFace &face = *BM_face_at_index(&const_cast<BMesh &>(bm), face_index);
+      const BMLoop *loop = BM_FACE_FIRST_LOOP(&face);
+      for ([[maybe_unused]] const int i : IndexRange(face.len)) {
+        const int index = BM_elem_index_get(loop);
+        vbo_data[index] = dominant_vertex_group(
+            static_cast<const MDeformVert *>(BM_ELEM_CD_GET_VOID_P(loop->v, offset)));
+        loop = loop->next;
+      }
+    }
+  });
+}
+
 gpu::VertBufPtr extract_weights(const MeshRenderData &mr, const MeshBatchCache &cache)
 {
   static GPUVertFormat format = GPU_vertformat_from_attribute("weight",
@@ -149,6 +208,25 @@ gpu::VertBufPtr extract_weights_subdiv(const MeshRenderData &mr,
 
   gpu::VertBufPtr coarse_weights = extract_weights(mr, cache);
   draw_subdiv_interp_custom_data(subdiv_cache, *coarse_weights, *vbo, GPU_COMP_F32, 1, 0);
+  return vbo;
+}
+
+gpu::VertBufPtr extract_weight_vgroup_index(const MeshRenderData &mr,
+                                            const MeshBatchCache & /*cache*/)
+{
+  static GPUVertFormat format = GPU_vertformat_from_attribute(
+      "vertex_group_index", gpu::VertAttrType::SINT_32);
+
+  gpu::VertBufPtr vbo = gpu::VertBufPtr(GPU_vertbuf_create_with_format(format));
+  GPU_vertbuf_data_alloc(*vbo, mr.corners_num);
+  MutableSpan<int> vbo_data = vbo->data<int>();
+
+  if (mr.extract_type == MeshExtractType::Mesh) {
+    extract_weight_vgroup_index_mesh(mr, vbo_data);
+  }
+  else {
+    extract_weight_vgroup_index_bm(mr, vbo_data);
+  }
   return vbo;
 }
 
