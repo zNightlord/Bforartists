@@ -11,13 +11,13 @@ VERTEX_SHADER_CREATE_INFO(overlay_paint_weight)
 #include "draw_view_lib.glsl"
 
 /* Integer hash → pseudo-random RGB */
-vec3 vgroup_index_to_color(int idx)
+float3 vgroup_index_to_color(int idx)
 {
   uint h = uint(idx);
   h ^= h >> 16u;
   h *= 0x45d9f3bu;
   h ^= h >> 16u;
-  return vec3(float( h        & 0xFFu),
+  return float3(float( h        & 0xFFu),
               float((h >>  8u)& 0xFFu),
               float((h >> 16u)& 0xFFu)) / 255.0;
 }
