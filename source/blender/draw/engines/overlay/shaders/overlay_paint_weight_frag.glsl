@@ -103,6 +103,7 @@ void main()
   }
 
   if (draw_vgroup_colors) {
+    float intensity = clamp(weight_interp.x, 0.0f, 1.0f);
     frag_color = float4(vgroup_color * intensity, opacity);
   } else {
     frag_color = float4(color.rgb, opacity);
