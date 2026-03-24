@@ -102,6 +102,10 @@ void main()
     color = mix(weight_color, color_unreferenced, alert * alert);
   }
 
-  frag_color = float4(color.rgb, opacity);
+  if (draw_vgroup_colors) {
+    frag_color = float4(vgroup_color * intensity, opacity);
+  } else {
+    frag_color = float4(color.rgb, opacity);
+  }
   line_output = float4(0.0f);
 }
