@@ -328,6 +328,12 @@ gpu::VertBufPtr extract_weights_subdiv(const MeshRenderData &mr,
                                        const DRWSubdivCache &subdiv_cache,
                                        const MeshBatchCache &cache);
 gpu::VertBufPtr extract_weight_vgroup_index(const MeshRenderData &mr, const MeshBatchCache &cache); /* new */
+gpu::VertBufPtr extract_weight_vgroup_dominant_weight(const MeshRenderData &mr, const MeshBatchCache &cache); /* new */
+void extract_weight_vgroup_all(const MeshRenderData &mr,
+                               const MeshBatchCache &cache,
+                               gpu::VertBufPtr &r_index_vbo,
+                               gpu::VertBufPtr &r_weight_vbo);
+
 
 gpu::IndexBufPtr extract_face_dots(const MeshRenderData &mr);
 

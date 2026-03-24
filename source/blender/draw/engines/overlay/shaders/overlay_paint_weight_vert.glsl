@@ -13,13 +13,13 @@ VERTEX_SHADER_CREATE_INFO(overlay_paint_weight)
 /* Integer hash → pseudo-random RGB */
 float3 vgroup_index_to_color(int idx)
 {
-  uint h = uint(idx);
+  uint h = uint(idx + vgroup_color_random_id);
   h ^= h >> 16u;
   h *= 0x45d9f3bu;
   h ^= h >> 16u;
-  return float3(float( h        & 0xFFu),
-              float((h >>  8u)& 0xFFu),
-              float((h >> 16u)& 0xFFu)) / 255.0;
+  return float3(float( h         & 0xFFu),
+                float((h >>  8u) & 0xFFu),
+                float((h >> 16u) & 0xFFu)) / 255.0f;
 }
 
 void main()
@@ -27,7 +27,20 @@ void main()
   float3 world_pos = drw_point_object_to_world(pos);
   gl_Position = drw_point_world_to_homogenous(world_pos);
 
-  vgroup_color = vgroup_index_to_color(vertex_group_index);  /* new */
+  if (vgroup_color_mode == 1) {
+    /* SINGLE: whole mesh gets one color based on active group index.
+     * vertex_group_index per vertex is ignored — use the active index
+     * passed via vgroup_color_random_id offset trick or a separate constant.
+     * Simplest: color is uniform, computed from 0 + random_id. */
+    vgroup_color = vgroup_index_to_color(0);
+  }
+  else if (vgroup_color_mode == 2) {
+    vgroup_color = vgroup_index_to_color(vertex_group_index);
+    weight_interp = max(float2(vertex_group_dominant_weight, -vertex_group_dominant_weight), 0.0f);
+  }
+  else {
+    vgroup_color = float3(0.0f);
+  }
 
   /* Separate actual weight and alerts for independent interpolation */
   weight_interp = max(float2(weight, -weight), 0.0f);
