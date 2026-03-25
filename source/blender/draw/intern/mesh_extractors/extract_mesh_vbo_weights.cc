@@ -17,21 +17,45 @@
 
 namespace blender::draw {
 
+/* -------------------------------------------------------------------- */
+/** \name Dominant Group
+ * \{ */
+
 struct DominantGroup {
   int index;
   float weight;
 };
 
+static DominantGroup dominant_vertex_group(const MDeformVert *dvert)
+{
+  if (!dvert || dvert->totweight == 0) {
+    return {-1, 0.0f};
+  }
+  int best_group = dvert->dw[0].def_nr;
+  float best_weight = dvert->dw[0].weight;
+  for (int i = 1; i < dvert->totweight; i++) {
+    if (dvert->dw[i].weight > best_weight) {
+      best_weight = dvert->dw[i].weight;
+      best_group = dvert->dw[i].def_nr;
+    }
+  }
+  return {best_group, best_weight};
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Active Weight Extraction (existing)
+ * \{ */
+
 static float evaluate_vertex_weight(const MDeformVert *dvert, const DRW_MeshWeightState *wstate)
 {
-  /* Error state. */
   if ((wstate->defgroup_active < 0) && (wstate->defgroup_len > 0)) {
     return -2.0f;
   }
 
   float input = 0.0f;
   if (wstate->flags & DRW_MESH_WEIGHT_STATE_MULTIPAINT) {
-    /* Multi-Paint feature */
     bool is_normalized = (wstate->flags & (DRW_MESH_WEIGHT_STATE_AUTO_NORMALIZE |
                                            DRW_MESH_WEIGHT_STATE_LOCK_RELATIVE));
     input = BKE_defvert_multipaint_collective_weight(dvert,
@@ -39,13 +63,11 @@ static float evaluate_vertex_weight(const MDeformVert *dvert, const DRW_MeshWeig
                                                      wstate->defgroup_sel,
                                                      wstate->defgroup_sel_count,
                                                      is_normalized);
-    /* make it black if the selected groups have no weight on a vertex */
     if (input == 0.0f) {
       return -1.0f;
     }
   }
   else {
-    /* default, non tricky behavior */
     input = BKE_defvert_find_weight(dvert, wstate->defgroup_active);
 
     if (input == 0.0f) {
@@ -62,7 +84,6 @@ static float evaluate_vertex_weight(const MDeformVert *dvert, const DRW_MeshWeig
     }
   }
 
-  /* Lock-Relative: display the fraction of current weight vs total unlocked weight. */
   if (wstate->flags & DRW_MESH_WEIGHT_STATE_LOCK_RELATIVE) {
     input = BKE_defvert_lock_relative_weight(
         input, dvert, wstate->defgroup_len, wstate->defgroup_locked, wstate->defgroup_unlocked);
@@ -72,31 +93,24 @@ static float evaluate_vertex_weight(const MDeformVert *dvert, const DRW_MeshWeig
   return input;
 }
 
-static void extract_weight_vgroup_index_mesh(const MeshRenderData &mr,
-                                             MutableSpan<int> index_data,
-                                             MutableSpan<float> weight_data)
+static void extract_weights_mesh(const MeshRenderData &mr,
+                                 const DRW_MeshWeightState &weight_state,
+                                 MutableSpan<float> vbo_data)
 {
   const Mesh &mesh = *mr.mesh;
   const Span<MDeformVert> dverts = mesh.deform_verts();
   if (dverts.is_empty()) {
-    index_data.fill(-1);
-    weight_data.fill(0.0f);
+    vbo_data.fill(weight_state.alert_mode == OB_DRAW_GROUPUSER_NONE ? 0.0f : -1.0f);
     return;
   }
 
-  Array<int> indices(dverts.size());
   Array<float> weights(dverts.size());
-
-  threading::parallel_for(indices.index_range(), 1024, [&](const IndexRange range) {
+  threading::parallel_for(weights.index_range(), 1024, [&](const IndexRange range) {
     for (const int vert : range) {
-      DominantGroup dg = dominant_vertex_group(&dverts[vert]);
-      indices[vert] = dg.index;    /* split into separate arrays */
-      weights[vert] = dg.weight;
+      weights[vert] = evaluate_vertex_weight(&dverts[vert], &weight_state);
     }
   });
-
-  array_utils::gather(indices.as_span(), mr.corner_verts, index_data);
-  array_utils::gather(weights.as_span(), mr.corner_verts, weight_data);
+  array_utils::gather(weights.as_span(), mr.corner_verts, vbo_data);
 }
 
 static void extract_weights_bm(const MeshRenderData &mr,
@@ -125,21 +139,11 @@ static void extract_weights_bm(const MeshRenderData &mr,
   });
 }
 
-static DominantGroup dominant_vertex_group(const MDeformVert *dvert)
-{
-  if (!dvert || dvert->totweight == 0) {
-    return {-1, 0.0f};
-  }
-  int best_group = dvert->dw[0].def_nr;
-  float best_weight = dvert->dw[0].weight;
-  for (int i = 1; i < dvert->totweight; i++) {
-    if (dvert->dw[i].weight > best_weight) {
-      best_weight = dvert->dw[i].weight;
-      best_group = dvert->dw[i].def_nr;
-    }
-  }
-  return {best_group, best_weight};
-}
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Dominant Group Extraction (new)
+ * \{ */
 
 static void extract_weight_vgroup_index_mesh(const MeshRenderData &mr,
                                              MutableSpan<int> index_data,
@@ -194,6 +198,12 @@ static void extract_weight_vgroup_index_bm(const MeshRenderData &mr,
   });
 }
 
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Public API
+ * \{ */
+
 gpu::VertBufPtr extract_weights(const MeshRenderData &mr, const MeshBatchCache &cache)
 {
   static GPUVertFormat format = GPU_vertformat_from_attribute("weight",
@@ -233,29 +243,8 @@ gpu::VertBufPtr extract_weights_subdiv(const MeshRenderData &mr,
   return vbo;
 }
 
-gpu::VertBufPtr extract_weight_vgroup_index(const MeshRenderData &mr,
-                                            const MeshBatchCache & /*cache*/)
-{
-  static GPUVertFormat format = GPU_vertformat_from_attribute(
-      "vertex_group_index", gpu::VertAttrType::SINT_32);
-  gpu::VertBufPtr vbo = gpu::VertBufPtr(GPU_vertbuf_create_with_format(format));
-  GPU_vertbuf_data_alloc(*vbo, mr.corners_num);
-  /* dominant weight vbo built together */
-  return vbo;
-}
-
-gpu::VertBufPtr extract_weight_vgroup_dominant_weight(const MeshRenderData &mr,
-                                                      const MeshBatchCache & /*cache*/)
-{
-  static GPUVertFormat format = GPU_vertformat_from_attribute(
-      "vertex_group_dominant_weight", gpu::VertAttrType::SFLOAT_32);
-  gpu::VertBufPtr vbo = gpu::VertBufPtr(GPU_vertbuf_create_with_format(format));
-  GPU_vertbuf_data_alloc(*vbo, mr.corners_num);
-  return vbo;
-}
-
 void extract_weight_vgroup_all(const MeshRenderData &mr,
-                               const MeshBatchCache &cache,
+                               const MeshBatchCache & /*cache*/,
                                gpu::VertBufPtr &r_index_vbo,
                                gpu::VertBufPtr &r_weight_vbo)
 {
@@ -279,5 +268,7 @@ void extract_weight_vgroup_all(const MeshRenderData &mr,
     extract_weight_vgroup_index_bm(mr, index_data, weight_data);
   }
 }
+
+/** \} */
 
 }  // namespace blender::draw
