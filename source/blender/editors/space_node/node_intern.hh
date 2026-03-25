@@ -375,6 +375,8 @@ float2 node_to_view(const float2 &co);
 void node_to_updated_rect(const bNode &node, rctf &r_rect);
 float2 node_from_view(const float2 &co);
 
+rctf get_minimap_rect(const SpaceNode &snode, ARegion &region);
+
 /* `node_ops.cc` */
 
 void node_operatortypes();

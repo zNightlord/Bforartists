@@ -357,7 +357,7 @@ static bool is_node_panels_supported(const bNode &node)
   return node.declaration() && node.declaration()->use_custom_socket_order;
 }
 
-static rctf get_minimap_rect(const SpaceNode &snode, ARegion &region)
+rctf get_minimap_rect(const SpaceNode &snode, ARegion &region)
 {
   float minimap_overlay_scale = snode.minimap_scale;
   float minimap_size = 150.0f * minimap_overlay_scale * UI_SCALE_FAC;
@@ -3731,6 +3731,17 @@ static const bNode *find_node_under_cursor(SpaceNode &snode, const float2 &curso
 
 void node_set_cursor(wmWindow &win, ARegion &region, SpaceNode &snode, const float2 &cursor)
 {
+  /* If cursor is over the minimap, suppress all resize cursor hints. */
+  {
+    float screen_x, screen_y;
+    ui::view2d_view_to_region_fl(&region.v2d, cursor.x, cursor.y, &screen_x, &screen_y);
+    const rctf minimap_rect = get_minimap_rect(snode, region);
+    if (BLI_rctf_isect_pt(&minimap_rect, screen_x, screen_y)) {
+      WM_cursor_set(&win, WM_CURSOR_DEFAULT);
+      return;
+    }
+  }
+
   const bNodeTree *ntree = snode.edittree;
   if (ntree == nullptr) {
     WM_cursor_set(&win, WM_CURSOR_DEFAULT);
