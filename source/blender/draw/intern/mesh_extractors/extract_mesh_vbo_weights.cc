@@ -72,24 +72,31 @@ static float evaluate_vertex_weight(const MDeformVert *dvert, const DRW_MeshWeig
   return input;
 }
 
-static void extract_weights_mesh(const MeshRenderData &mr,
-                                 const DRW_MeshWeightState &weight_state,
-                                 MutableSpan<float> vbo_data)
+static void extract_weight_vgroup_index_mesh(const MeshRenderData &mr,
+                                             MutableSpan<int> index_data,
+                                             MutableSpan<float> weight_data)
 {
   const Mesh &mesh = *mr.mesh;
   const Span<MDeformVert> dverts = mesh.deform_verts();
   if (dverts.is_empty()) {
-    vbo_data.fill(weight_state.alert_mode == OB_DRAW_GROUPUSER_NONE ? 0.0f : -1.0f);
+    index_data.fill(-1);
+    weight_data.fill(0.0f);
     return;
   }
 
+  Array<int> indices(dverts.size());
   Array<float> weights(dverts.size());
-  threading::parallel_for(weights.index_range(), 1024, [&](const IndexRange range) {
+
+  threading::parallel_for(indices.index_range(), 1024, [&](const IndexRange range) {
     for (const int vert : range) {
-      weights[vert] = evaluate_vertex_weight(&dverts[vert], &weight_state);
+      DominantGroup dg = dominant_vertex_group(&dverts[vert]);
+      indices[vert] = dg.index;    /* split into separate arrays */
+      weights[vert] = dg.weight;
     }
   });
-  array_utils::gather(weights.as_span(), mr.corner_verts, vbo_data);
+
+  array_utils::gather(indices.as_span(), mr.corner_verts, index_data);
+  array_utils::gather(weights.as_span(), mr.corner_verts, weight_data);
 }
 
 static void extract_weights_bm(const MeshRenderData &mr,
@@ -160,12 +167,14 @@ static void extract_weight_vgroup_index_mesh(const MeshRenderData &mr,
 }
 
 static void extract_weight_vgroup_index_bm(const MeshRenderData &mr,
-                                           MutableSpan<int> vbo_data)
+                                           MutableSpan<int> index_data,
+                                           MutableSpan<float> weight_data)
 {
   const BMesh &bm = *mr.bm;
   const int offset = CustomData_get_offset(&bm.vdata, CD_MDEFORMVERT);
   if (offset == -1) {
-    vbo_data.fill(-1);
+    index_data.fill(-1);
+    weight_data.fill(0.0f);
     return;
   }
 
@@ -175,8 +184,10 @@ static void extract_weight_vgroup_index_bm(const MeshRenderData &mr,
       const BMLoop *loop = BM_FACE_FIRST_LOOP(&face);
       for ([[maybe_unused]] const int i : IndexRange(face.len)) {
         const int index = BM_elem_index_get(loop);
-        vbo_data[index] = dominant_vertex_group(
+        DominantGroup dg = dominant_vertex_group(
             static_cast<const MDeformVert *>(BM_ELEM_CD_GET_VOID_P(loop->v, offset)));
+        index_data[index] = dg.index;
+        weight_data[index] = dg.weight;
         loop = loop->next;
       }
     }
