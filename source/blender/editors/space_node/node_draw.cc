@@ -392,19 +392,25 @@ static rctf get_minimap_rect(const SpaceNode &snode, ARegion &region)
   return minimap_rect;
 }
 
-static bool is_in_minimap_rect(const SpaceNode &snode,
-                                ARegion &region,
-                                const float view_x,
-                                const float view_y,
-                                const float padding = 0.8f)
+static bool view_rect_intersects_minimap(const SpaceNode &snode,
+                                          ARegion &region,
+                                          const float view_xmin,
+                                          const float view_ymax,
+                                          const float view_xmax,
+                                          const float view_ymin,
+                                          const float padding = 0.1f)
 {
-  rctf rect = get_minimap_rect(snode, region);
-  BLI_rctf_pad(&rect, padding, padding);
+  rctf minimap = get_minimap_rect(snode, region);
+  BLI_rctf_pad(&minimap, padding, padding);
 
-  float screen_x, screen_y;
-  ui::view2d_view_to_region_fl(&region.v2d, view_x, view_y, &screen_x, &screen_y);
+  float screen_xmin, screen_ymin, screen_xmax, screen_ymax;
+  ui::view2d_view_to_region_fl(&region.v2d, view_xmin, view_ymin, &screen_xmin, &screen_ymin);
+  ui::view2d_view_to_region_fl(&region.v2d, view_xmax, view_ymax, &screen_xmax, &screen_ymax);
 
-  return BLI_rctf_isect_pt(&rect, screen_x, screen_y);
+  rctf button_rect;
+  BLI_rctf_init(&button_rect, screen_xmin, screen_xmax, screen_ymin, screen_ymax);
+
+  return BLI_rctf_isect(&minimap, &button_rect, nullptr);
 }
 
 /* Draw UI for options, buttons, and previews. */
@@ -442,9 +448,12 @@ static bool node_update_basis_buttons(const bContext &C,
                                         0,
                                         ui::style_get_dpi());
 
-  if (is_in_minimap_rect(snode, region, loc.x + NODE_DYS, dy, NODE_DYS)) {
+  if (view_rect_intersects_minimap(snode, region,
+                                  loc.x + NODE_DYS, dy,
+                                  loc.x + NODE_WIDTH(node) - NODE_DYS, dy - NODE_DY,
+                                  NODE_DYS)) {
     layout.enabled_set(false);
-  }
+  } 
   if (node.is_muted()) {
     layout.active_set(false);
   }
@@ -579,7 +588,10 @@ static bool node_update_basis_socket(TreeDrawContext &tree_draw_ctx,
                                         0,
                                         ui::style_get_dpi());
 
-  if (is_in_minimap_rect(snode, region, locx + NODE_DYS, locy, NODE_DYS)) {
+  if (view_rect_intersects_minimap(snode, region,
+                                  locx + NODE_DYS, locy,
+                                  locx + NODE_WIDTH(node) - NODE_DYS, locy - NODE_DY,
+                                  NODE_DYS)) {
     layout.enabled_set(false);
   }
 
