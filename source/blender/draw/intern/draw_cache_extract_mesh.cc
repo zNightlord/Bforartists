@@ -168,6 +168,21 @@ void mesh_buffer_cache_create_requested(TaskGraph & /*task_graph*/,
                     cache.no_loose_wire);
     }
   }
+  {
+    const bool need_index = vbos_to_create.contains(VBOType::VertexGroupIndex);
+    const bool need_weight = vbos_to_create.contains(VBOType::VertexGroupDominantWeight);
+    if (need_index || need_weight) {
+      gpu::VertBufPtr index_vbo;
+      gpu::VertBufPtr weight_vbo;
+      extract_weight_vgroup_all(mr, cache, index_vbo, weight_vbo);
+      if (need_index) {
+        buffers.vbos.add_new(VBOType::VertexGroupIndex, std::move(index_vbo));
+      }
+      if (need_weight) {
+        buffers.vbos.add_new(VBOType::VertexGroupDominantWeight, std::move(weight_vbo));
+      }
+    }
+  }
 
   threading::parallel_for_each(ibos_to_create.index_range(), [&](const int i) {
     switch (ibos_to_create[i]) {
@@ -316,7 +331,8 @@ void mesh_buffer_cache_create_requested(TaskGraph & /*task_graph*/,
         created_vbos[i] = extract_paint_overlay_flags(mr);
         break;
       case VBOType::VertexGroupIndex:
-        created_vbos[i] = extract_weight_vgroup_index(mr, cache);
+      case VBOType::VertexGroupDominantWeight:
+        /* Handled as a special case above. */
         break;
     }
   });
@@ -326,6 +342,11 @@ void mesh_buffer_cache_create_requested(TaskGraph & /*task_graph*/,
   }
   for (const int i : vbos_to_create.index_range()) {
     buffers.vbos.add_new(vbos_to_create[i], std::move(created_vbos[i]));
+  }
+  for (const int i : vbos_to_create.index_range()) {
+    if (created_vbos[i]) {  /* skip nulls from special-cased types */
+      buffers.vbos.add_new(vbos_to_create[i], std::move(created_vbos[i]));
+    }
   }
 }
 
