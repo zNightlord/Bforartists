@@ -113,6 +113,7 @@ enum class VBOType : int8_t {
   VertexNormal,
   PaintOverlayFlag,
   VertexGroupIndex,
+  VertexGroupDominantWeight
 };
 
 /**
