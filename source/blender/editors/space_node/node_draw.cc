@@ -418,14 +418,6 @@ std::optional<rctf> get_minimap_rect(const SpaceNode &snode, ARegion &region)
     return std::nullopt;
   }
 
-  /* Turn off minimap if the current view is larger than the entire node graph. */
-  if ((snode.gizmo_flag & SNODE_GIZMO_MINIMAP_AUTO_HIDE) &&
-      BLI_rctf_size_x(&v2d.cur) >= nodes_width && 
-      BLI_rctf_size_y(&v2d.cur) >= nodes_height) 
-  {
-    return std::nullopt;
-  }
-
   rctf minimap_rect;
   BLI_rctf_init(&minimap_rect,
                 viewport_width - padding - minimap_width,
@@ -444,11 +436,11 @@ static bool view_rect_intersects_minimap(const SpaceNode &snode,
                                           const float view_ymin,
                                           const float padding = 0.1f)
 {
-  std::optional<rctf> minimap_rect = get_minimap_rect(*snode, *region);
-
-  if (!minimap_rect.has_value()) {
+  const std::optional<rctf> minimap_opt = get_minimap_rect(snode, region);
+  if (!minimap_opt.has_value()) {
     return false;
   }
+  rctf minimap = minimap_opt.value();
   BLI_rctf_pad(&minimap, padding, padding);
 
   float screen_xmin, screen_ymin, screen_xmax, screen_ymax;
@@ -3779,16 +3771,11 @@ static const bNode *find_node_under_cursor(SpaceNode &snode, const float2 &curso
 
 void node_set_cursor(wmWindow &win, ARegion &region, SpaceNode &snode, const float2 &cursor)
 {
-  /* If cursor is over the minimap, suppress all resize cursor hints. */
-  {
+  const std::optional<rctf> minimap_rect = get_minimap_rect(snode, region);
+  if (minimap_rect.has_value()) {
     float screen_x, screen_y;
     ui::view2d_view_to_region_fl(&region.v2d, cursor.x, cursor.y, &screen_x, &screen_y);
-    std::optional<rctf> minimap_rect = get_minimap_rect(*snode, *region);
-
-    if (!minimap_rect.has_value()) {
-      return; // Minimap is hidden or node tree is empty
-    }
-    if (BLI_rctf_isect_pt(&minimap_rect, screen_x, screen_y)) {
+    if (BLI_rctf_isect_pt(&minimap_rect.value(), screen_x, screen_y)) {
       WM_cursor_set(&win, WM_CURSOR_DEFAULT);
       return;
     }
@@ -5124,12 +5111,11 @@ static void draw_node_minimap(const bContext &C, TreeDrawContext &tree_draw_ctx,
   const float minimap_space_width = BLI_rctf_size_x(&minimap_space);
   const float minimap_space_height = BLI_rctf_size_y(&minimap_space);
 
-  std::optional<rctf> minimap_rect = get_minimap_rect(*snode, *region);
-
-  // 2. Check if the optional contains a value
-  if (!minimap_rect.has_value()) {
-    return; // Minimap is hidden or node tree is empty
+  const std::optional<rctf> minimap_rect_opt = get_minimap_rect(*snode, region);
+  if (!minimap_rect_opt.has_value()) {
+    return;
   }
+  rctf minimap_rect = minimap_rect_opt.value();
 
   /* Initialize the minimap data. */
   MinimapDraw minimap_data;
