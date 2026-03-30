@@ -1661,6 +1661,20 @@ static wmOperatorStatus node_link_invoke(bContext *C, wmOperator *op, const wmEv
   SpaceNode &snode = *CTX_wm_space_node(C);
   ARegion &region = *CTX_wm_region(C);
 
+  // bfa node minimap 
+  float screen_x, screen_y;
+  ui::view2d_view_to_region_fl(&region->v2d,
+                                event->mval[0], event->mval[1],
+                                &screen_x, &screen_y);
+  std::optional<rctf> minimap_rect = get_minimap_rect(*snode, *region);
+
+  if (!minimap_rect.has_value()) {
+    return OPERATOR_CANCELLED | OPERATOR_PASS_THROUGH;
+  }
+  if (BLI_rctf_isect_pt(&*minimap_rect, mouse_x, mouse_y)) {
+    return OPERATOR_CANCELLED | OPERATOR_PASS_THROUGH;
+  }
+
   bool detach = RNA_boolean_get(op->ptr, "detach");
 
   int2 mval;
@@ -2410,6 +2424,22 @@ static wmOperatorStatus node_attach_invoke(bContext *C, wmOperator * /*op*/, con
   ARegion &region = *CTX_wm_region(C);
   SpaceNode &snode = *CTX_wm_space_node(C);
   bNodeTree &ntree = *snode.edittree;
+
+  // bfa node minimap
+  float screen_x, screen_y;
+  ui::view2d_view_to_region_fl(&region->v2d,
+                                event->mval[0], event->mval[1],
+                                &screen_x, &screen_y);
+  std::optional<rctf> minimap_rect = get_minimap_rect(*snode, *region);
+
+  // 2. Check if the optional contains a value
+  if (!minimap_rect.has_value()) {
+    return OPERATOR_CANCELLED | OPERATOR_PASS_THROUGH;
+  }
+  if (BLI_rctf_isect_pt(&*minimap_rect, mouse_x, mouse_y)) {
+    return OPERATOR_CANCELLED | OPERATOR_PASS_THROUGH;
+  }
+
   bNode *frame = node_find_frame_to_attach(region, ntree, event->mval);
   if (frame == nullptr) {
     /* Return "finished" so that auto offset operator macros can work. */
