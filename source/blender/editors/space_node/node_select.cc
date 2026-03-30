@@ -833,6 +833,24 @@ static wmOperatorStatus node_select_exec(bContext *C, wmOperator *op)
 
 static wmOperatorStatus node_select_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
+  // bfa node minimap
+  ARegion *region = CTX_wm_region(C);
+  SpaceNode *snode = CTX_wm_space_node(C);
+
+  float screen_x, screen_y;
+  ui::view2d_view_to_region_fl(&region->v2d,
+                                event->mval[0], event->mval[1],
+                                &screen_x, &screen_y);
+  std::optional<rctf> minimap_rect = get_minimap_rect(*snode, *region);
+
+  // 2. Check if the optional contains a value
+  if (!minimap_rect.has_value()) {
+    return OPERATOR_CANCELLED | OPERATOR_PASS_THROUGH;
+  }
+  if (BLI_rctf_isect_pt(&*minimap_rect, mouse_x, mouse_y)) {
+    return OPERATOR_CANCELLED | OPERATOR_PASS_THROUGH;
+  }
+
   RNA_int_set_array(op->ptr, "location", event->mval);
 
   const wmOperatorStatus retval = node_select_exec(C, op);

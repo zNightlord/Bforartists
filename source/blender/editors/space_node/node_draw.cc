@@ -357,7 +357,7 @@ static bool is_node_panels_supported(const bNode &node)
   return node.declaration() && node.declaration()->use_custom_socket_order;
 }
 
-rctf get_minimap_rect(const SpaceNode &snode, ARegion &region)
+std::optional<rctf> get_minimap_rect(const SpaceNode &snode, ARegion &region)
 {
   float minimap_overlay_scale = snode.minimap_scale;
   float minimap_size = 150.0f * minimap_overlay_scale * UI_SCALE_FAC;
@@ -367,20 +367,63 @@ rctf get_minimap_rect(const SpaceNode &snode, ARegion &region)
 
   float minimap_width = minimap_size * minimap_aspect_ratio;
   float minimap_height = minimap_size;
-  if (minimap_aspect_ratio > 1) {
+  if (minimap_aspect_ratio > 1.0f) {
     minimap_width = minimap_size;
     minimap_height = minimap_size / minimap_aspect_ratio;
   }
 
   const rcti *rect_visible = ED_region_visible_rect(&region);
-  const float viewport_height = BLI_rcti_size_y(&region.v2d.mask);
-  float viewport_width = BLI_rcti_size_x(&region.v2d.mask);
+  View2D &v2d = region.v2d;
+  const float viewport_height = BLI_rcti_size_y(&v2d.mask);
+  float viewport_width = BLI_rcti_size_x(&v2d.mask);
+  
+  /* Calculate offset based on header/footer visibility. */
   float tile_height = viewport_height - BLI_rcti_size_y(rect_visible);
   float padding_top = padding;
+
   if (snode.gizmo_flag & SNODE_GIZMO_MINIMAP_MOVE_TO_TOP) {
     viewport_width = BLI_rcti_size_x(rect_visible);
     tile_height = 0;
     padding_top = viewport_height - minimap_height - padding;
+  }
+
+  /* Get the overall area, size of the minimap. */
+  float min[2], max[2];
+  INIT_MINMAX2(min, max);
+
+  // Using your preferred loop style
+  // Note: ensure node_tree is accessible (e.g., bNodeTree *node_tree = snode.nodetree;)
+  bNodeTree *node_tree = snode.nodetree;
+  if (!node_tree) {
+    return std::nullopt;
+  }
+
+  for (bNode &node : node_tree->nodes) {
+    float pos_min[2] = {node.runtime->draw_bounds.xmin, node.runtime->draw_bounds.ymin};
+    float pos_max[2] = {node.runtime->draw_bounds.xmax, node.runtime->draw_bounds.ymax};
+    minmax_v2v2_v2(min, max, pos_min);
+    minmax_v2v2_v2(min, max, pos_max);
+  }
+
+  rctf nodes_bounds;
+  BLI_rctf_init(&nodes_bounds, min[0], max[0], min[1], max[1]);
+  const float nodes_width = BLI_rctf_size_x(&nodes_bounds);
+  const float nodes_height = BLI_rctf_size_y(&nodes_bounds);
+
+  /* Turn off minimap if view is large enough and auto-hide is enabled. */
+  if ((snode.gizmo_flag & SNODE_GIZMO_MINIMAP_AUTO_HIDE) &&
+      BLI_rctf_size_x(&v2d.cur) >= nodes_width && 
+      BLI_rctf_size_y(&v2d.cur) >= nodes_height) 
+  {
+    return std::nullopt;
+  }
+
+  /* Turn off minimap if the current view is larger than the entire node graph. */
+  if ((snode.gizmo_flag & SNODE_GIZMO_MINIMAP_AUTO_HIDE) &&
+      BLI_rctf_size_x(&v2d.cur) >= nodes_width && 
+      BLI_rctf_size_y(&v2d.cur) >= nodes_height) 
+  {
+    return std::nullopt;
   }
 
   rctf minimap_rect;
@@ -389,6 +432,7 @@ rctf get_minimap_rect(const SpaceNode &snode, ARegion &region)
                 viewport_width - padding,
                 padding_top + tile_height,
                 padding_top + minimap_height + tile_height);
+
   return minimap_rect;
 }
 
@@ -400,7 +444,11 @@ static bool view_rect_intersects_minimap(const SpaceNode &snode,
                                           const float view_ymin,
                                           const float padding = 0.1f)
 {
-  rctf minimap = get_minimap_rect(snode, region);
+  std::optional<rctf> minimap_rect = get_minimap_rect(*snode, *region);
+
+  if (!minimap_rect.has_value()) {
+    return false;
+  }
   BLI_rctf_pad(&minimap, padding, padding);
 
   float screen_xmin, screen_ymin, screen_xmax, screen_ymax;
@@ -3735,7 +3783,11 @@ void node_set_cursor(wmWindow &win, ARegion &region, SpaceNode &snode, const flo
   {
     float screen_x, screen_y;
     ui::view2d_view_to_region_fl(&region.v2d, cursor.x, cursor.y, &screen_x, &screen_y);
-    const rctf minimap_rect = get_minimap_rect(snode, region);
+    std::optional<rctf> minimap_rect = get_minimap_rect(*snode, *region);
+
+    if (!minimap_rect.has_value()) {
+      return; // Minimap is hidden or node tree is empty
+    }
     if (BLI_rctf_isect_pt(&minimap_rect, screen_x, screen_y)) {
       WM_cursor_set(&win, WM_CURSOR_DEFAULT);
       return;
@@ -5066,14 +5118,12 @@ static void draw_node_minimap(const bContext &C, TreeDrawContext &tree_draw_ctx,
   const float minimap_space_width = BLI_rctf_size_x(&minimap_space);
   const float minimap_space_height = BLI_rctf_size_y(&minimap_space);
 
-  /* Turn off minimap if big enough*/
-  if (BLI_rctf_size_x(&v2d.cur) >= minimap_space_width && BLI_rctf_size_y(&v2d.cur) >= minimap_space_height &&
-      snode->gizmo_flag & SNODE_GIZMO_MINIMAP_AUTO_HIDE
-  ) {
-    return;
-  }
+  std::optional<rctf> minimap_rect = get_minimap_rect(*snode, *region);
 
-  rctf minimap_rect = get_minimap_rect(*snode, region);
+  // 2. Check if the optional contains a value
+  if (!minimap_rect.has_value()) {
+    return; // Minimap is hidden or node tree is empty
+  }
 
   /* Initialize the minimap data. */
   MinimapDraw minimap_data;
