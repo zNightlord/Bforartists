@@ -1662,11 +1662,11 @@ static wmOperatorStatus node_link_invoke(bContext *C, wmOperator *op, const wmEv
   ARegion &region = *CTX_wm_region(C);
 
   // bfa node minimap 
-  const std::optional<rctf> minimap_opt = ed::space_node::get_minimap_rect(*snode, *region);
+  const std::optional<rctf> minimap_opt = ed::space_node::get_minimap_rect(snode, region);
   if (minimap_opt.has_value()) {
     const rctf &minimap_rect = minimap_opt.value();
     float screen_x, screen_y;
-    ui::view2d_view_to_region_fl(&region->v2d,
+    ui::view2d_view_to_region_fl(&region.v2d,   // . not ->
                                   float(event->mval[0]),
                                   float(event->mval[1]),
                                   &screen_x, &screen_y);
@@ -2426,11 +2426,11 @@ static wmOperatorStatus node_attach_invoke(bContext *C, wmOperator * /*op*/, con
   bNodeTree &ntree = *snode.edittree;
 
   // bfa node minimap
-  const std::optional<rctf> minimap_opt = ed::space_node::get_minimap_rect(*snode, *region);
+  const std::optional<rctf> minimap_opt = ed::space_node::get_minimap_rect(snode, region);
   if (minimap_opt.has_value()) {
     const rctf &minimap_rect = minimap_opt.value();
     float screen_x, screen_y;
-    ui::view2d_view_to_region_fl(&region->v2d,
+    ui::view2d_view_to_region_fl(&region.v2d, 
                                   float(event->mval[0]),
                                   float(event->mval[1]),
                                   &screen_x, &screen_y);

@@ -5072,7 +5072,6 @@ static void draw_node_minimap(const bContext &C, TreeDrawContext &tree_draw_ctx,
 
   const float minimap_size = 150.0f * minimap_overlay_scale * UI_SCALE_FAC;
   const float minimap_border_radius = BASIS_RAD + 0.5f;
-  const float padding = 10.0f * UI_SCALE_FAC;
   const float inner_padding = 10.0f * UI_SCALE_FAC;
 
   const float minimap_aspect_ratio = snode->minimap_aspect_ratio;
@@ -5086,9 +5085,6 @@ static void draw_node_minimap(const bContext &C, TreeDrawContext &tree_draw_ctx,
   const float minimap_width_without_padding = minimap_width - inner_padding * 2;
   const float minimap_height_without_padding = minimap_height - inner_padding * 2;
 
-  const rcti *rect_visible = ED_region_visible_rect(&region);
-  const float viewport_height = BLI_rcti_size_y(&v2d.mask);
-  float viewport_width = BLI_rcti_size_x(&v2d.mask);
 
   /* Get the overall area, size of the minimap. */
   float min[2], max[2];
