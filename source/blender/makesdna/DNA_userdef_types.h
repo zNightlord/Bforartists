@@ -62,6 +62,8 @@ enum eUserPref_Flag {
   USER_FLAG_DISABLE_SEARCH_ON_KEYPRESS = (1 << 29),
   /* bfa - gooengine disable material icon rendering */
   USER_DISABLE_MATERIAL_ICON = (1 << 30),
+  /* bfa - flip navigation gizmo toolbar */
+  USER_FLIP_NAVIGATION_TOOLBAR = (1 << 31),
 };
 
 /** #UserDef.extension_flag */
