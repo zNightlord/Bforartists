@@ -13,7 +13,7 @@ VERTEX_SHADER_CREATE_INFO(overlay_paint_weight)
 /* Integer hash → pseudo-random RGB */
 float3 vgroup_index_to_color(int idx)
 {
-  uint h = uint(idx + vgroup_color_random_id);
+  uint h = uint(idx + vgroup_color_random_id + 1);
   h ^= h >> 16u;
   h *= 0x45d9f3bu;
   h ^= h >> 16u;
@@ -28,15 +28,11 @@ void main()
   gl_Position = drw_point_world_to_homogenous(world_pos);
 
   if (vgroup_color_mode == 1) {
-    /* SINGLE: whole mesh gets one color based on active group index.
-     * vertex_group_index per vertex is ignored — use the active index
-     * passed via vgroup_color_random_id offset trick or a separate constant.
-     * Simplest: color is uniform, computed from 0 + random_id. */
-    vgroup_color = vgroup_index_to_color(0);
+    vgroup_color = vgroup_index_to_color(vgroup_active_index);
   }
   else if (vgroup_color_mode == 2) {
-    vgroup_color = vgroup_index_to_color(vertex_group_index);
-    weight_interp = max(float2(vertex_group_dominant_weight, -vertex_group_dominant_weight), 0.0f);
+    /* ALL: blended color already computed per vertex on CPU */
+    vgroup_color = vertex_group_blended_color;
   }
   else {
     vgroup_color = float3(0.0f);
