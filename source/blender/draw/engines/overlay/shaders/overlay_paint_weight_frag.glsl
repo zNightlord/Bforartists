@@ -87,7 +87,8 @@ void main()
     float4 weight_color = texture(colorramp, weight);
     weight_color = apply_color_fac(weight_color);
     if (vgroup_color_mode > 0) {
-      weight_color = float4(vgroup_color * weight, 1.0f);
+      float intensity = (vgroup_color_mode == 2) ? 1.0f : clamp(weight_interp.x, 0.0f, 1.0f);
+      weight_color = float4(vgroup_color * intensity * color_fac, 1.0f); 
     }
 
     /* Contour display */
