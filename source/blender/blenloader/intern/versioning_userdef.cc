@@ -1841,7 +1841,7 @@ void blo_do_versions_userdef(UserDef *userdef)
   }
 
   // BFA navigation gizmo toolbar
-  if (!USER_VERSION_ATLEAST(bmain, 502, 15)) {
+  if (!USER_VERSION_ATLEAST(502, 15)) {
     userdef->flag |= USER_FLIP_NAVIGATION_TOOLBAR;
   }
 
