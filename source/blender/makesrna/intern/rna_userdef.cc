@@ -417,7 +417,6 @@ static void rna_userdef_translation_update(Main *bmain, Scene * /*scene*/, Point
   BKE_callback_exec_null(bmain, BKE_CB_EVT_TRANSLATION_UPDATE_POST);
   WM_main_add_notifier(NC_WINDOW, nullptr);
   USERDEF_TAG_DIRTY;
-}
 
 static void rna_userdef_asset_library_name_set(PointerRNA *ptr, const char *value)
 {
