@@ -355,6 +355,13 @@ static void WIDGETGROUP_navigate_draw_prepare(const bContext *C, wmGizmoGroup *g
     WM_gizmo_set_flag(gz, WM_GIZMO_HIDDEN, false);
   }
 
+  const float flip_offsetx = U.flag & USER_FLIP_NAVIGATION_TOOLBAR ?
+                                 -(icon_offset_mini * icon_mini_slot++) :
+                                 0;
+  const float flip_offsety = U.flag & USER_FLIP_NAVIGATION_TOOLBAR ?
+                                 0 :
+                                 -(icon_offset_mini * icon_mini_slot++);
+
   if (show_navigate) {
     int icon_mini_slot = 0;
     /* bfa - optional helper to changed back navigation buttons to vertical*/
@@ -385,11 +392,6 @@ static void WIDGETGROUP_navigate_draw_prepare(const bContext *C, wmGizmoGroup *g
       gz = navgroup
                ->gz_array[(rv3d->persp == RV3D_CAMOB) ? GZ_INDEX_CAMERA_ON : GZ_INDEX_CAMERA_OFF];
       apply_gizmo_pos(gz, icon_mini_slot++);
-      WM_gizmo_set_flag(gz, WM_GIZMO_HIDDEN, false);
-
-      if (navgroup->state.rv3d.is_camera == false) {
-        gz = navgroup->gz_array[rv3d->is_persp ? GZ_INDEX_PERSP : GZ_INDEX_ORTHO];
-        apply_gizmo_pos(gz, icon_mini_slot++);
         WM_gizmo_set_flag(gz, WM_GIZMO_HIDDEN, false);
       }
     }
