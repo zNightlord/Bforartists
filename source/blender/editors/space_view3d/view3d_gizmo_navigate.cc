@@ -355,8 +355,6 @@ static void WIDGETGROUP_navigate_draw_prepare(const bContext *C, wmGizmoGroup *g
     WM_gizmo_set_flag(gz, WM_GIZMO_HIDDEN, false);
   }
 
-
-
   if (show_navigate) {
     int icon_mini_slot = 0;
     /* bfa - optional helper to changed back navigation buttons to vertical*/
