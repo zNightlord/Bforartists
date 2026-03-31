@@ -355,12 +355,7 @@ static void WIDGETGROUP_navigate_draw_prepare(const bContext *C, wmGizmoGroup *g
     WM_gizmo_set_flag(gz, WM_GIZMO_HIDDEN, false);
   }
 
-  const float flip_offsetx = U.flag & USER_FLIP_NAVIGATION_TOOLBAR ?
-                                 -(icon_offset_mini * icon_mini_slot++) :
-                                 0;
-  const float flip_offsety = U.flag & USER_FLIP_NAVIGATION_TOOLBAR ?
-                                 0 :
-                                 -(icon_offset_mini * icon_mini_slot++);
+
 
   if (show_navigate) {
     int icon_mini_slot = 0;
