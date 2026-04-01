@@ -327,10 +327,8 @@ gpu::VertBufPtr extract_weights(const MeshRenderData &mr, const MeshBatchCache &
 gpu::VertBufPtr extract_weights_subdiv(const MeshRenderData &mr,
                                        const DRWSubdivCache &subdiv_cache,
                                        const MeshBatchCache &cache);
-void extract_weight_vgroup_all(const MeshRenderData &mr,
-                               const MeshBatchCache &cache,
-                               gpu::VertBufPtr &r_index_vbo,
-                               gpu::VertBufPtr &r_weight_vbo);
+gpu::VertBufPtr extract_weight_vgroup_blended_color(const MeshRenderData &mr,
+                                                    const MeshBatchCache &cache)
 
 gpu::IndexBufPtr extract_face_dots(const MeshRenderData &mr);
 
