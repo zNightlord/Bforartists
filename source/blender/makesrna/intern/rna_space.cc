@@ -5412,6 +5412,37 @@ static void rna_def_space_view3d_overlay(BlenderRNA *brna)
       "Show contour lines formed by points with the same interpolated weight");
   RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, nullptr);
 
+  static const EnumPropertyItem overlay_wpaint_vgroup_color_mode_items[] = {
+    {V3D_OVERLAY_WPAINT_VGROUP_COLOR_NONE,
+     "NONE",
+     0,
+     "None",
+     "Use standard weight color ramp"},
+    {V3D_OVERLAY_WPAINT_VGROUP_COLOR_SINGLE,
+     "SINGLE",
+     0,
+     "Single",
+     "Color the active vertex group with a hashed color"},
+    {V3D_OVERLAY_WPAINT_VGROUP_COLOR_ALL,
+     "ALL",
+     0,
+     "All",
+     "Color each vertex by its dominant vertex group"},
+    {0, nullptr, 0, nullptr, nullptr},
+};
+
+  prop = RNA_def_property(srna, "wpaint_vgroup_color_mode", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, nullptr, "overlay.wpaint_vgroup_color_mode");
+  RNA_def_property_enum_items(prop, overlay_wpaint_vgroup_color_mode_items);
+  RNA_def_property_ui_text(prop, "Vertex Group Color Mode", "How to colorize vertex groups in weight paint");
+  RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, nullptr);
+
+  prop = RNA_def_property(srna, "wpaint_vgroup_color_random_id", PROP_INT, PROP_NONE);
+  RNA_def_property_int_sdna(prop, nullptr, "overlay.wpaint_vgroup_color_random_id");
+  RNA_def_property_range(prop, 0, INT_MAX);
+  RNA_def_property_ui_text(prop, "Randomize ID", "Offset applied to group index before hashing to shift all colors");
+  RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, nullptr);
+
   prop = RNA_def_property(srna, "show_weight", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "overlay.edit_flag", V3D_OVERLAY_EDIT_WEIGHT);
   RNA_def_property_ui_text(prop, "Show Weights", "Display weights in editmode");
@@ -8826,6 +8857,54 @@ static void rna_def_space_node(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Toolshelf Tabs", "Show tabs in the toolbar");
   RNA_def_property_update(
       prop, NC_SPACE | ND_SPACE_NODE, "rna_SpaceNodeEditor_show_toolshelf_tabs_update");
+ 
+  /* Gizmo Node Minimap. */
+  prop = RNA_def_property(srna, "minimap_aspect_ratio", PROP_FLOAT, PROP_NONE);
+  RNA_def_property_float_sdna(prop, nullptr, "minimap_aspect_ratio");
+  RNA_def_property_float_default(prop, 1.5f);
+  RNA_def_property_range(prop, 0.5f, 2.0f);
+  RNA_def_property_ui_text(prop, "Aspect Ratio", "Sets the aspect ratio of the minimap");
+  RNA_def_property_update(prop, NC_SPACE | ND_SPACE_NODE_VIEW, nullptr);
+
+  prop = RNA_def_property(srna, "minimap_scale", PROP_FLOAT, PROP_NONE);
+  RNA_def_property_float_sdna(prop, nullptr, "minimap_scale");
+  RNA_def_property_float_default(prop, 1.5f);
+  RNA_def_property_range(prop, 1.0f, 4.0f);
+  RNA_def_property_ui_text(prop, "Minimap scale", "Sets the scale of the minimap");
+  RNA_def_property_update(prop, NC_SPACE | ND_SPACE_NODE_VIEW, nullptr);
+
+  prop = RNA_def_property(srna, "show_minimap", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "gizmo_flag", SNODE_GIZMO_SHOW_MINIMAP);
+  RNA_def_property_ui_text(prop, "Show", "Display minimap widget");
+  RNA_def_property_update(prop, NC_SPACE | ND_SPACE_NODE_VIEW, nullptr);
+
+  prop = RNA_def_property(srna, "use_node_colors", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "gizmo_flag", SNODE_GIZMO_MINIMAP_USE_NODE_COLORS);
+  RNA_def_property_ui_text(
+      prop, "Colored Nodes", "Display nodes in minimap with their category color");
+  RNA_def_property_update(prop, NC_SPACE | ND_SPACE_NODE_VIEW, nullptr);
+
+  prop = RNA_def_property(srna, "use_frame_colors", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "gizmo_flag", SNODE_GIZMO_MINIMAP_USE_FRAME_COLORS);
+  RNA_def_property_ui_text(
+      prop, "Colored Frames", "Display frames in the minimap with their custom color");
+  RNA_def_property_update(prop, NC_SPACE | ND_SPACE_NODE_VIEW, nullptr);
+
+  prop = RNA_def_property(srna, "show_nodes_in_frame", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(
+      prop, nullptr, "gizmo_flag", SNODE_GIZMO_MINIMAP_SHOW_NODES_IN_FRAME);
+  RNA_def_property_ui_text(prop, "Nodes in Frame", "Display minimap nodes contained by frames");
+  RNA_def_property_update(prop, NC_SPACE | ND_SPACE_NODE_VIEW, nullptr);
+
+  prop = RNA_def_property(srna, "minimap_top", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "gizmo_flag", SNODE_GIZMO_MINIMAP_MOVE_TO_TOP);
+  RNA_def_property_ui_text(prop, "Minimap top", "Move the minimap to top right");
+  RNA_def_property_update(prop, NC_SPACE | ND_SPACE_NODE_VIEW, nullptr);
+
+  prop = RNA_def_property(srna, "minimap_auto_hide", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "gizmo_flag", SNODE_GIZMO_MINIMAP_AUTO_HIDE);
+  RNA_def_property_ui_text(prop, "Minimap auto hide", "Auto hide the minimap when zoom out full");
+  RNA_def_property_update(prop, NC_SPACE | ND_SPACE_NODE_VIEW, nullptr);
 
   /* Overlays */
   prop = RNA_def_property(srna, "overlay", PROP_POINTER, PROP_NONE);

@@ -615,6 +615,23 @@ static wmOperatorStatus node_resize_invoke(bContext *C, wmOperator *op, const wm
   ARegion *region = CTX_wm_region(C);
   const bNode *node = bke::node_get_active(*snode->edittree);
 
+  float screen_x, screen_y;
+  ui::view2d_view_to_region_fl(&region->v2d,
+                                event->mval[0], event->mval[1],
+                                &screen_x, &screen_y);
+  const std::optional<rctf> minimap_rect = ed::space_node::get_minimap_rect(*snode, *region);
+  if (minimap_rect.has_value()) {
+    float screen_x, screen_y;
+    ui::view2d_view_to_region_fl(&region->v2d,
+                                  float(event->mval[0]),
+                                  float(event->mval[1]),
+                                  &screen_x, &screen_y);
+    if (BLI_rctf_isect_pt(&minimap_rect.value(), screen_x, screen_y)) {
+      return OPERATOR_CANCELLED | OPERATOR_PASS_THROUGH;
+    }
+  }
+
+
   if (node == nullptr) {
     return OPERATOR_CANCELLED | OPERATOR_PASS_THROUGH;
   }

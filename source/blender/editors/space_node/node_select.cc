@@ -623,6 +623,41 @@ static bool node_mouse_select(bContext *C,
   float2 cursor;
   ui::view2d_region_to_view(&region.v2d, mval.x, mval.y, &cursor.x, &cursor.y);
 
+  /* Do minimap select. */
+  float minimap_overlay_scale = snode.minimap_scale;
+  float minimap_size = 150.0f * minimap_overlay_scale * UI_SCALE_FAC;
+  float padding = 10.0f * UI_SCALE_FAC;
+
+  float minimap_aspect_ratio = snode.minimap_aspect_ratio;
+
+  float minimap_width = minimap_size * minimap_aspect_ratio;
+  float minimap_height = minimap_size;
+  if (minimap_aspect_ratio > 1) {
+    minimap_width = minimap_size;
+    minimap_height = minimap_size / minimap_aspect_ratio;
+  }
+
+  const rcti *rect_visible = ED_region_visible_rect(&region);
+  const float viewport_height = BLI_rcti_size_y(&region.v2d.mask);
+  float viewport_width = BLI_rcti_size_x(&region.v2d.mask);
+  float tile_height = viewport_height - BLI_rcti_size_y(rect_visible);
+  float padding_top = padding;
+  if (snode.gizmo_flag & SNODE_GIZMO_MINIMAP_MOVE_TO_TOP) {
+    viewport_width = BLI_rcti_size_x(rect_visible);
+    tile_height = 0;
+    padding_top = viewport_height - minimap_height - padding;
+  }
+
+  rctf minimap_rect;
+  BLI_rctf_init(&minimap_rect,
+                viewport_width - padding - minimap_width,
+                viewport_width - padding,
+                padding_top + tile_height,
+                padding_top + minimap_height + tile_height);
+  if (BLI_rctf_isect_pt(&minimap_rect, mval.x, mval.y)) {
+    return false;
+  }
+
   /* First do socket selection, these generally overlap with nodes. */
   if (socket_select) {
     /* NOTE: unlike nodes #SelectPick_Params isn't fully supported. */
@@ -798,6 +833,23 @@ static wmOperatorStatus node_select_exec(bContext *C, wmOperator *op)
 
 static wmOperatorStatus node_select_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
+  // bfa node minimap
+  ARegion *region = CTX_wm_region(C);
+  SpaceNode *snode = CTX_wm_space_node(C);
+
+  const std::optional<rctf> minimap_opt = ed::space_node::get_minimap_rect(*snode, *region);
+  if (minimap_opt.has_value()) {
+    const rctf &minimap_rect = minimap_opt.value();
+    float screen_x, screen_y;
+    ui::view2d_view_to_region_fl(&region->v2d,
+                                  float(event->mval[0]),
+                                  float(event->mval[1]),
+                                  &screen_x, &screen_y);
+    if (BLI_rctf_isect_pt(&minimap_rect, screen_x, screen_y)) {
+      return OPERATOR_CANCELLED | OPERATOR_PASS_THROUGH;
+    }
+  }
+
   RNA_int_set_array(op->ptr, "location", event->mval);
 
   const wmOperatorStatus retval = node_select_exec(C, op);
@@ -907,6 +959,19 @@ static wmOperatorStatus node_box_select_exec(bContext *C, wmOperator *op)
 static wmOperatorStatus node_box_select_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
   const bool tweak = RNA_boolean_get(op->ptr, "tweak");
+  // bfa node minimap 
+  const std::optional<rctf> minimap_opt = ed::space_node::get_minimap_rect(snode, region);
+  if (minimap_opt.has_value()) {
+    const rctf &minimap_rect = minimap_opt.value();
+    float screen_x, screen_y;
+    ui::view2d_view_to_region_fl(&region.v2d,   // . not ->
+                                  float(event->mval[0]),
+                                  float(event->mval[1]),
+                                  &screen_x, &screen_y);
+    if (BLI_rctf_isect_pt(&minimap_rect, screen_x, screen_y)) {
+      return OPERATOR_CANCELLED | OPERATOR_PASS_THROUGH;
+    }
+  }
 
   if (tweak && is_event_over_node_or_socket(*C, *event)) {
     return OPERATOR_CANCELLED | OPERATOR_PASS_THROUGH;

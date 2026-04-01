@@ -383,6 +383,7 @@ static void link_drag_search_exec_fn(bContext *C, void *arg1, void *arg2)
   bNodeTree &node_tree = *snode.edittree;
   LinkDragSearchStorage &storage = *static_cast<LinkDragSearchStorage *>(arg1);
   SocketLinkOperation *item = static_cast<SocketLinkOperation *>(arg2);
+
   if (item == nullptr) {
     return;
   }

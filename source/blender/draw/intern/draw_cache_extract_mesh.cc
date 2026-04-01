@@ -315,6 +315,9 @@ void mesh_buffer_cache_create_requested(TaskGraph & /*task_graph*/,
       case VBOType::PaintOverlayFlag:
         created_vbos[i] = extract_paint_overlay_flags(mr);
         break;
+      case VBOType::VertexGroupBlendedColor:
+        created_vbos[i] = extract_weight_vgroup_blended_color(mr, cache);
+        break;
     }
   });
 

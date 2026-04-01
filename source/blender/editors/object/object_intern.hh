@@ -22,6 +22,9 @@ struct wmKeyConfig;
 struct wmOperator;
 struct wmOperatorType;
 
+struct bDeformGroup;
+struct bDeformGroupCollection;
+struct bDeformGroupMember;
 namespace ed::object {
 
 /* add hook menu */
@@ -290,6 +293,7 @@ void CONSTRAINT_OT_followpath_path_animate(wmOperatorType *ot);
 /* object_vgroup.cc */
 
 void OBJECT_OT_vertex_group_add(wmOperatorType *ot);
+void OBJECT_OT_vertex_group_group_add(wmOperatorType *ot);
 void OBJECT_OT_vertex_group_remove(wmOperatorType *ot);
 void OBJECT_OT_vertex_group_assign(wmOperatorType *ot);
 void OBJECT_OT_vertex_group_assign_new(wmOperatorType *ot);
@@ -316,6 +320,13 @@ void OBJECT_OT_vertex_weight_delete(wmOperatorType *ot);
 void OBJECT_OT_vertex_weight_set_active(wmOperatorType *ot);
 void OBJECT_OT_vertex_weight_normalize_active_vertex(wmOperatorType *ot);
 void OBJECT_OT_vertex_weight_copy(wmOperatorType *ot);
+void OBJECT_OT_vertex_group_collection_layer_toggle(wmOperatorType *ot);
+void OBJECT_OT_vertex_group_collection_layer_bake(wmOperatorType *ot);
+
+bDeformGroupMember *collection_find_member(const bDeformGroupCollection *col,
+                                           const bDeformGroup *dg);
+ 
+void defgroup_remove_from_all_collections(Object *object, bDeformGroup *dg);
 
 /* `object_warp.cc` */
 

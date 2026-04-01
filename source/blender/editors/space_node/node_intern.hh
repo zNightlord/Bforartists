@@ -375,6 +375,8 @@ float2 node_to_view(const float2 &co);
 void node_to_updated_rect(const bNode &node, rctf &r_rect);
 float2 node_from_view(const float2 &co);
 
+std::optional<rctf> get_minimap_rect(const SpaceNode &snode, ARegion &region);
+
 /* `node_ops.cc` */
 
 void node_operatortypes();
@@ -604,6 +606,8 @@ void NODE_GGT_backdrop_corner_pin(wmGizmoGroupType *gzgt);
 void NODE_GGT_backdrop_box_mask(wmGizmoGroupType *gzgt);
 void NODE_GGT_backdrop_ellipse_mask(wmGizmoGroupType *gzgt);
 void NODE_GGT_backdrop_split(wmGizmoGroupType *gzgt);
+void NODE_GT_minimap(wmGizmoType *gzt);
+void NODE_GGT_minimap(wmGizmoGroupType *gzgt);
 
 /* `node_geometry_attribute_search.cc` */
 

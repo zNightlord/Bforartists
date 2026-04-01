@@ -106,6 +106,8 @@ class Paints : Overlay {
                                      !state.xray_enabled;
       const bool shadeless = shading_type == OB_WIRE;
       const bool draw_contours = state.overlay.wpaint_flag & V3D_OVERLAY_WPAINT_CONTOURS;
+      const int vgroup_color_mode = state.overlay.wpaint_vgroup_color_mode;
+      const int vgroup_color_random_id = state.overlay.wpaint_vgroup_color_random_id;
 
       auto &pass = weight_ps_;
       pass.bind_ubo(OVERLAY_GLOBALS_SLOT, &res.globals_buf);
@@ -117,6 +119,8 @@ class Paints : Overlay {
                                    res.shaders->paint_weight_fake_shading.get());
         sub.bind_texture("colorramp", &res.weight_ramp_tx);
         sub.push_constant("draw_contours", draw_contours);
+        sub.push_constant("vgroup_color_mode", vgroup_color_mode);
+        sub.push_constant("vgroup_color_random_id", vgroup_color_random_id);
         sub.push_constant("opacity", state.overlay.weight_paint_mode_opacity);
         if (!shadeless) {
           /* Arbitrary light to give a hint of the geometry behind the weights. */
