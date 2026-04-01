@@ -22,9 +22,9 @@ namespace blender::draw {
 /** \name Dominant Group
  * \{ */
 
-static float3 hash_group_color(int def_nr)
+static float3 hash_group_color(int def_nr, int random_id)
 {
-  return blender::noise::hash_float_to_float3(float(def_nr));
+  return blender::noise::hash_float_to_float3(float(def_nr + random_id));
 }
 
 static float3 blended_vgroup_color(const MDeformVert *dvert,
@@ -40,7 +40,7 @@ static float3 blended_vgroup_color(const MDeformVert *dvert,
     if (mode == 1 && dvert->dw[i].def_nr != active_index) {
       continue;  /* SINGLE: only contribute active group */
     }
-    result += hash_group_color(dvert->dw[i].def_nr, random_id) * dvert->dw[i].weight;
+    result += hash_group_color(dvert->dw[i].def_nr, random_id) * float(dvert->dw[i].weight);
   }
   return result;
 }
@@ -190,9 +190,8 @@ gpu::VertBufPtr extract_weights_subdiv(const MeshRenderData &mr,
 gpu::VertBufPtr extract_weight_vgroup_blended_color(const MeshRenderData &mr,
                                                     const MeshBatchCache &cache)
 {
-  GPUVertFormat format{};
-  GPU_vertformat_attr_add(
-      &format, "vertex_group_blended_color", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
+  static GPUVertFormat format = GPU_vertformat_from_attribute(
+    "vertex_group_blended_color", gpu::VertAttrType::SFLOAT_32_32_32);
 
   gpu::VertBufPtr vbo = gpu::VertBufPtr(GPU_vertbuf_create_with_format(format));
   GPU_vertbuf_data_alloc(*vbo, mr.corners_num);
