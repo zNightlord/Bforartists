@@ -112,7 +112,8 @@ DO_STATIC_COMPILATION()
 VERTEX_IN(0, float, weight)
 VERTEX_IN(1, float3, pos)
 VERTEX_IN(2, float3, nor)
-VERTEX_IN(3, float3, vertex_group_blended_color)
+VERTEX_IN(3, int, vertex_group_index)  /* new */
+VERTEX_IN(4, float3, vertex_group_blended_color)
 VERTEX_OUT(overlay_paint_weight_iface)
 SAMPLER(0, sampler1D, colorramp)
 PUSH_CONSTANT(float, opacity)      /* `1.0f` by default. */

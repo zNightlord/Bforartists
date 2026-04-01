@@ -10,36 +10,22 @@ VERTEX_SHADER_CREATE_INFO(overlay_paint_weight)
 #include "draw_view_clipping_lib.glsl"
 #include "draw_view_lib.glsl"
 
-/* Integer hash → pseudo-random RGB */
-float3 vgroup_index_to_color(int idx)
-{
-  uint h = uint(idx + vgroup_color_random_id + 1);
-  h ^= h >> 16u;
-  h *= 0x45d9f3bu;
-  h ^= h >> 16u;
-  return float3(float( h         & 0xFFu),
-                float((h >>  8u) & 0xFFu),
-                float((h >> 16u) & 0xFFu)) / 255.0f;
-}
-
 void main()
 {
   float3 world_pos = drw_point_object_to_world(pos);
   gl_Position = drw_point_world_to_homogenous(world_pos);
 
-  if (vgroup_color_mode == 1) {
-    vgroup_color = vgroup_index_to_color(vgroup_active_index);
-  }
-  else if (vgroup_color_mode == 2) {
-    /* ALL: blended color already computed per vertex on CPU */
+  /* Set the color and separate actual weight and alerts for independent interpolation */
+  if (vgroup_color_mode != 0) {
     vgroup_color = vertex_group_blended_color;
+    weight_interp = float2(1.0f, 0.0f);
   }
   else {
     vgroup_color = float3(0.0f);
+    weight_interp = max(float2(weight, -weight), 0.0f);
   }
 
-  /* Separate actual weight and alerts for independent interpolation */
-  weight_interp = max(float2(weight, -weight), 0.0f);
+  
 
   /* Saturate the weight to give a hint of the geometry behind the weights. */
 #ifdef FAKE_SHADING
