@@ -22,41 +22,24 @@ namespace blender::draw {
 /** \name Dominant Group
  * \{ */
 
-struct DominantGroup {
-  int index;
-  float weight;
-};
-
-static DominantGroup dominant_vertex_group(const MDeformVert *dvert)
-{
-  if (!dvert || dvert->totweight == 0) {
-    return {-1, 0.0f};
-  }
-  int best_group = dvert->dw[0].def_nr;
-  float best_weight = dvert->dw[0].weight;
-  for (int i = 1; i < dvert->totweight; i++) {
-    if (dvert->dw[i].weight > best_weight) {
-      best_weight = dvert->dw[i].weight;
-      best_group = dvert->dw[i].def_nr;
-    }
-  }
-  return {best_group, best_weight};
-}
-
-using namespace blender;
-
 static float3 hash_group_color(int def_nr)
 {
   return blender::noise::hash_float_to_float3(float(def_nr));
 }
 
-static float3 blended_vgroup_color(const MDeformVert *dvert, int random_id)
+static float3 blended_vgroup_color(const MDeformVert *dvert,
+                                   int random_id,
+                                   int mode,
+                                   int active_index)
 {
   if (!dvert || dvert->totweight == 0) {
     return float3(0.0f);
   }
   float3 result(0.0f);
   for (int i = 0; i < dvert->totweight; i++) {
+    if (mode == 1 && dvert->dw[i].def_nr != active_index) {
+      continue;  /* SINGLE: only contribute active group */
+    }
     result += hash_group_color(dvert->dw[i].def_nr, random_id) * dvert->dw[i].weight;
   }
   return result;
@@ -162,65 +145,6 @@ static void extract_weights_bm(const MeshRenderData &mr,
 /** \} */
 
 /* -------------------------------------------------------------------- */
-/** \name Dominant Group Extraction (new)
- * \{ */
-
-static void extract_weight_vgroup_index_mesh(const MeshRenderData &mr,
-                                             MutableSpan<int> index_data,
-                                             MutableSpan<float> weight_data)
-{
-  const Mesh &mesh = *mr.mesh;
-  const Span<MDeformVert> dverts = mesh.deform_verts();
-  if (dverts.is_empty()) {
-    index_data.fill(-1);
-    weight_data.fill(0.0f);
-    return;
-  }
-
-  Array<int> indices(dverts.size());
-  Array<float> weights(dverts.size());
-  threading::parallel_for(indices.index_range(), 1024, [&](const IndexRange range) {
-    for (const int vert : range) {
-      DominantGroup dg = dominant_vertex_group(&dverts[vert]);
-      indices[vert] = dg.index;
-      weights[vert] = dg.weight;
-    }
-  });
-  array_utils::gather(indices.as_span(), mr.corner_verts, index_data);
-  array_utils::gather(weights.as_span(), mr.corner_verts, weight_data);
-}
-
-static void extract_weight_vgroup_index_bm(const MeshRenderData &mr,
-                                           MutableSpan<int> index_data,
-                                           MutableSpan<float> weight_data)
-{
-  const BMesh &bm = *mr.bm;
-  const int offset = CustomData_get_offset(&bm.vdata, CD_MDEFORMVERT);
-  if (offset == -1) {
-    index_data.fill(-1);
-    weight_data.fill(0.0f);
-    return;
-  }
-
-  threading::parallel_for(IndexRange(bm.totface), 2048, [&](const IndexRange range) {
-    for (const int face_index : range) {
-      const BMFace &face = *BM_face_at_index(&const_cast<BMesh &>(bm), face_index);
-      const BMLoop *loop = BM_FACE_FIRST_LOOP(&face);
-      for ([[maybe_unused]] const int i : IndexRange(face.len)) {
-        const int index = BM_elem_index_get(loop);
-        DominantGroup dg = dominant_vertex_group(
-            static_cast<const MDeformVert *>(BM_ELEM_CD_GET_VOID_P(loop->v, offset)));
-        index_data[index] = dg.index;
-        weight_data[index] = dg.weight;
-        loop = loop->next;
-      }
-    }
-  });
-}
-
-/** \} */
-
-/* -------------------------------------------------------------------- */
 /** \name Public API
  * \{ */
 
@@ -263,41 +187,26 @@ gpu::VertBufPtr extract_weights_subdiv(const MeshRenderData &mr,
   return vbo;
 }
 
-void extract_weight_vgroup_all(const MeshRenderData &mr,
-                               const MeshBatchCache & /*cache*/,
-                               gpu::VertBufPtr &r_index_vbo,
-                               gpu::VertBufPtr &r_weight_vbo)
-{
-  static GPUVertFormat index_format = GPU_vertformat_from_attribute(
-      "vertex_group_index", gpu::VertAttrType::SINT_32);
-  static GPUVertFormat weight_format = GPU_vertformat_from_attribute(
-      "vertex_group_dominant_weight", gpu::VertAttrType::SFLOAT_32);
-
-  r_index_vbo = gpu::VertBufPtr(GPU_vertbuf_create_with_format(index_format));
-  r_weight_vbo = gpu::VertBufPtr(GPU_vertbuf_create_with_format(weight_format));
-  GPU_vertbuf_data_alloc(*r_index_vbo, mr.corners_num);
-  GPU_vertbuf_data_alloc(*r_weight_vbo, mr.corners_num);
-
-  MutableSpan<int> index_data = r_index_vbo->data<int>();
-  MutableSpan<float> weight_data = r_weight_vbo->data<float>();
-
-  if (mr.extract_type == MeshExtractType::Mesh) {
-    extract_weight_vgroup_index_mesh(mr, index_data, weight_data);
-  }
-  else {
-    extract_weight_vgroup_index_bm(mr, index_data, weight_data);
-  }
-}
-
 gpu::VertBufPtr extract_weight_vgroup_blended_color(const MeshRenderData &mr,
-                                                    const MeshBatchCache & /*cache*/)
+                                                    const MeshBatchCache &cache)
 {
   GPUVertFormat format{};
-  GPU_vertformat_attr_add(&format, "vertex_group_blended_color", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
+  GPU_vertformat_attr_add(
+      &format, "vertex_group_blended_color", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
 
   gpu::VertBufPtr vbo = gpu::VertBufPtr(GPU_vertbuf_create_with_format(format));
   GPU_vertbuf_data_alloc(*vbo, mr.corners_num);
   MutableSpan<float3> vbo_data = vbo->data<float3>();
+
+  const DRW_MeshWeightState &weight_state = cache.weight_state;
+  const int mode = weight_state.vgroup_color_mode;
+  const int random_id = weight_state.vgroup_color_random_id;
+  const int active_index = weight_state.defgroup_active;
+
+  if (mode == 0) {
+    vbo_data.fill(float3(0.0f));
+    return vbo;
+  }
 
   if (mr.extract_type == MeshExtractType::Mesh) {
     const Mesh &mesh = *mr.mesh;
@@ -309,7 +218,7 @@ gpu::VertBufPtr extract_weight_vgroup_blended_color(const MeshRenderData &mr,
     Array<float3> colors(dverts.size());
     threading::parallel_for(colors.index_range(), 1024, [&](const IndexRange range) {
       for (const int vert : range) {
-        colors[vert] = blended_vgroup_color(&dverts[vert]);
+        colors[vert] = blended_vgroup_color(&dverts[vert], random_id + 1, mode, active_index);
       }
     });
     array_utils::gather(colors.as_span(), mr.corner_verts, vbo_data);
@@ -328,7 +237,10 @@ gpu::VertBufPtr extract_weight_vgroup_blended_color(const MeshRenderData &mr,
         for ([[maybe_unused]] const int i : IndexRange(face.len)) {
           const int index = BM_elem_index_get(loop);
           vbo_data[index] = blended_vgroup_color(
-              static_cast<const MDeformVert *>(BM_ELEM_CD_GET_VOID_P(loop->v, offset)));
+              static_cast<const MDeformVert *>(BM_ELEM_CD_GET_VOID_P(loop->v, offset)),
+              random_id,
+              mode,
+              active_index);
           loop = loop->next;
         }
       }
