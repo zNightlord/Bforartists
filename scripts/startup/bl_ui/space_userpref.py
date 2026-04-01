@@ -360,6 +360,8 @@ class USERPREF_PT_interface_editors(InterfacePanel, CenterAlignMixIn, Panel):
         flow.prop(view, "color_picker_type")
         flow.row().prop(view, "header_align")
         flow.prop(view, "factor_display_type")
+        # bfa - navigation gizmo toolbar
+        flow.prop(prefs, "flip_navigation_vertical", text="Vertical Navigation Gizmos Alignment")
 
 class USERPREF_PT_interface_temporary_windows(InterfacePanel, CenterAlignMixIn, Panel):
     bl_label = "Temporary Editors"
