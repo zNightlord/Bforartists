@@ -383,21 +383,6 @@ static void link_drag_search_exec_fn(bContext *C, void *arg1, void *arg2)
   bNodeTree &node_tree = *snode.edittree;
   LinkDragSearchStorage &storage = *static_cast<LinkDragSearchStorage *>(arg1);
   SocketLinkOperation *item = static_cast<SocketLinkOperation *>(arg2);
-  ARegion &region = *CTX_wm_region(C);
-
-  // bfa node minimap 
-  const std::optional<rctf> minimap_opt = ed::space_node::get_minimap_rect(snode, region);
-  if (minimap_opt.has_value()) {
-    const rctf &minimap_rect = minimap_opt.value();
-    float screen_x, screen_y;
-    ui::view2d_view_to_region_fl(&region.v2d,   // . not ->
-                                  float(event->mval[0]),
-                                  float(event->mval[1]),
-                                  &screen_x, &screen_y);
-    if (BLI_rctf_isect_pt(&minimap_rect, screen_x, screen_y)) {
-      return;
-    }
-  }
 
   if (item == nullptr) {
     return;

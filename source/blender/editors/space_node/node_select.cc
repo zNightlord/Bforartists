@@ -959,6 +959,19 @@ static wmOperatorStatus node_box_select_exec(bContext *C, wmOperator *op)
 static wmOperatorStatus node_box_select_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
   const bool tweak = RNA_boolean_get(op->ptr, "tweak");
+  // bfa node minimap 
+  const std::optional<rctf> minimap_opt = ed::space_node::get_minimap_rect(snode, region);
+  if (minimap_opt.has_value()) {
+    const rctf &minimap_rect = minimap_opt.value();
+    float screen_x, screen_y;
+    ui::view2d_view_to_region_fl(&region.v2d,   // . not ->
+                                  float(event->mval[0]),
+                                  float(event->mval[1]),
+                                  &screen_x, &screen_y);
+    if (BLI_rctf_isect_pt(&minimap_rect, screen_x, screen_y)) {
+      return OPERATOR_CANCELLED | OPERATOR_PASS_THROUGH;
+    }
+  }
 
   if (tweak && is_event_over_node_or_socket(*C, *event)) {
     return OPERATOR_CANCELLED | OPERATOR_PASS_THROUGH;
