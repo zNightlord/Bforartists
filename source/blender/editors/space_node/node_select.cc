@@ -959,6 +959,8 @@ static wmOperatorStatus node_box_select_exec(bContext *C, wmOperator *op)
 static wmOperatorStatus node_box_select_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
   const bool tweak = RNA_boolean_get(op->ptr, "tweak");
+  ARegion &region = *CTX_wm_region(C);
+  SpaceNode &snode = *CTX_wm_space_node(C);
   // bfa node minimap 
   const std::optional<rctf> minimap_opt = ed::space_node::get_minimap_rect(snode, region);
   if (minimap_opt.has_value()) {

@@ -385,6 +385,11 @@ static void WIDGETGROUP_navigate_draw_prepare(const bContext *C, wmGizmoGroup *g
       gz = navgroup
                ->gz_array[(rv3d->persp == RV3D_CAMOB) ? GZ_INDEX_CAMERA_ON : GZ_INDEX_CAMERA_OFF];
       apply_gizmo_pos(gz, icon_mini_slot++);
+      WM_gizmo_set_flag(gz, WM_GIZMO_HIDDEN, false);
+
+      if (navgroup->state.rv3d.is_camera == false) {
+        gz = navgroup->gz_array[rv3d->is_persp ? GZ_INDEX_PERSP : GZ_INDEX_ORTHO];
+        apply_gizmo_pos(gz, icon_mini_slot++);
         WM_gizmo_set_flag(gz, WM_GIZMO_HIDDEN, false);
       }
     }
