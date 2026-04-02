@@ -200,6 +200,12 @@ class Paints : Overlay {
 
     switch (state.ctx_mode) {
       case CTX_MODE_PAINT_WEIGHT: {
+        Mesh &mesh = DRW_object_get_data_for_drawing<Mesh>(*ob_ref.object);
+        MeshBatchCache *batch_cache = mesh.runtime->batch_cache;
+        if (batch_cache) {
+          batch_cache->weight_state.vgroup_color_mode = state.overlay.wpaint_vgroup_color_mode;
+          batch_cache->weight_state.vgroup_color_random_id = state.overlay.wpaint_vgroup_color_random_id;
+        }
         gpu::Batch *geom = DRW_cache_mesh_surface_weights_get(ob_ref.object);
         if (masked_transparency_support_ && ob_ref.object->dt >= OB_SOLID) {
           weight_masked_transparency_ps_->draw(geom, manager.unique_handle(ob_ref));

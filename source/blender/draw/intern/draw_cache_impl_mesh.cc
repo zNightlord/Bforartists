@@ -1093,6 +1093,11 @@ void DRW_mesh_batch_cache_create_requested(TaskGraph &task_graph,
     if ((cache.batch.surface_weights != nullptr) && (ts != nullptr)) {
       DRW_MeshWeightState wstate;
       BLI_assert(ob.type == OB_MESH);
+
+      /* Copy color fields from cache into wstate BEFORE compare */
+      wstate.vgroup_color_mode = cache.weight_state.vgroup_color_mode;
+      wstate.vgroup_color_random_id = cache.weight_state.vgroup_color_random_id;
+      
       drw_mesh_weight_state_extract(ob, mesh, *ts, is_paint_mode, &wstate);
       mesh_batch_cache_check_vertex_group(cache, &wstate);
       drw_mesh_weight_state_copy(&cache.weight_state, &wstate);
