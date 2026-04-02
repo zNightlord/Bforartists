@@ -309,6 +309,8 @@ static bool drw_mesh_weight_state_compare(const DRW_MeshWeightState *a,
   return a->defgroup_active == b->defgroup_active && a->defgroup_len == b->defgroup_len &&
          a->flags == b->flags && a->alert_mode == b->alert_mode &&
          a->defgroup_sel_count == b->defgroup_sel_count &&
+         a->vgroup_color_mode == b->vgroup_color_mode &&
+         a->vgroup_color_random_id == b->vgroup_color_random_id &&
          drw_mesh_flags_equal(a->defgroup_sel, b->defgroup_sel, a->defgroup_len) &&
          drw_mesh_flags_equal(a->defgroup_locked, b->defgroup_locked, a->defgroup_len) &&
          drw_mesh_flags_equal(a->defgroup_unlocked, b->defgroup_unlocked, a->defgroup_len);
@@ -1093,12 +1095,12 @@ void DRW_mesh_batch_cache_create_requested(TaskGraph &task_graph,
     if ((cache.batch.surface_weights != nullptr) && (ts != nullptr)) {
       DRW_MeshWeightState wstate;
       BLI_assert(ob.type == OB_MESH);
+      drw_mesh_weight_state_extract(ob, mesh, *ts, is_paint_mode, &wstate);
 
       /* Copy color fields from cache into wstate BEFORE compare */
       wstate.vgroup_color_mode = cache.weight_state.vgroup_color_mode;
       wstate.vgroup_color_random_id = cache.weight_state.vgroup_color_random_id;
 
-      drw_mesh_weight_state_extract(ob, mesh, *ts, is_paint_mode, &wstate);
       mesh_batch_cache_check_vertex_group(cache, &wstate);
       drw_mesh_weight_state_copy(&cache.weight_state, &wstate);
       drw_mesh_weight_state_clear(&wstate);
