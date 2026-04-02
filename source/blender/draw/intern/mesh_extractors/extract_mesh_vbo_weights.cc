@@ -24,7 +24,7 @@ namespace blender::draw {
 
 static float3 hash_group_color(int def_nr, int random_id)
 {
-  return blender::noise::hash_float_to_float3(float(def_nr + random_id));
+  return blender::noise::hash_float_to_float3(float(def_nr + random_id + 1));
 }
 
 static float3 blended_vgroup_color(const MDeformVert *dvert,
@@ -217,7 +217,7 @@ gpu::VertBufPtr extract_weight_vgroup_blended_color(const MeshRenderData &mr,
     Array<float3> colors(dverts.size());
     threading::parallel_for(colors.index_range(), 1024, [&](const IndexRange range) {
       for (const int vert : range) {
-        colors[vert] = blended_vgroup_color(&dverts[vert], random_id + 1, mode, active_index);
+        colors[vert] = blended_vgroup_color(&dverts[vert], random_id, mode, active_index);
       }
     });
     array_utils::gather(colors.as_span(), mr.corner_verts, vbo_data);
