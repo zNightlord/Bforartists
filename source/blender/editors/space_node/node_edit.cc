@@ -627,7 +627,7 @@ static wmOperatorStatus node_resize_invoke(bContext *C, wmOperator *op, const wm
                                   float(event->mval[1]),
                                   &screen_x, &screen_y);
     if (BLI_rctf_isect_pt(&minimap_rect.value(), screen_x, screen_y)) {
-      return OPERATOR_CANCELLED | OPERATOR_PASS_THROUGH;
+      return OPERATOR_CANCELLED;
     }
   }
 

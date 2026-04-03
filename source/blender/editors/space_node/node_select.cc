@@ -840,13 +840,14 @@ static wmOperatorStatus node_select_invoke(bContext *C, wmOperator *op, const wm
   const std::optional<rctf> minimap_opt = ed::space_node::get_minimap_rect(*snode, *region);
   if (minimap_opt.has_value()) {
     const rctf &minimap_rect = minimap_opt.value();
+    BLI_rctf_pad(minimap_rect, 0.1f, 0.1f);
     float screen_x, screen_y;
     ui::view2d_view_to_region_fl(&region->v2d,
                                   float(event->mval[0]),
                                   float(event->mval[1]),
                                   &screen_x, &screen_y);
     if (BLI_rctf_isect_pt(&minimap_rect, screen_x, screen_y)) {
-      return OPERATOR_CANCELLED | OPERATOR_PASS_THROUGH;
+      return OPERATOR_CANCELLED;
     }
   }
 
@@ -965,13 +966,14 @@ static wmOperatorStatus node_box_select_invoke(bContext *C, wmOperator *op, cons
   const std::optional<rctf> minimap_opt = ed::space_node::get_minimap_rect(snode, region);
   if (minimap_opt.has_value()) {
     const rctf &minimap_rect = minimap_opt.value();
+    BLI_rctf_pad(minimap_rect, 0.1f, 0.1f);
     float screen_x, screen_y;
     ui::view2d_view_to_region_fl(&region.v2d,   // . not ->
                                   float(event->mval[0]),
                                   float(event->mval[1]),
                                   &screen_x, &screen_y);
     if (BLI_rctf_isect_pt(&minimap_rect, screen_x, screen_y)) {
-      return OPERATOR_CANCELLED | OPERATOR_PASS_THROUGH;
+      return OPERATOR_CANCELLED;
     }
   }
 
