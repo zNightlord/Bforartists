@@ -1779,11 +1779,11 @@ void DRW_mesh_batch_cache_set_vgroup_color_mode(Mesh &mesh,
   cache->weight_state.vgroup_color_random_id = random_id;
 
   if (changed) {
-    FOREACH_MESH_BUFFER_CACHE(*cache, mbc) {
+    for (MeshBufferCache *mbc : {&cache->final, &cache->cage, &cache->uv_cage}) {
       mbc->buff.vbos.remove(VBOType::VertexGroupBlendedColor);
     }
     GPU_BATCH_CLEAR_SAFE(cache->batch.surface_weights);
-    cache->batch_ready &= ~MBC_SURFACE_WEIGHTS;
+    cache->batch_ready &= ~MBC_SURFACE_WEIGHTS
   }
 }
 
