@@ -1785,7 +1785,7 @@ void DRW_mesh_batch_cache_set_vgroup_color_mode(Mesh &mesh,
       mbc->buff.vbos.remove(VBOType::VertexGroupBlendedColor);
     }
     GPU_BATCH_CLEAR_SAFE(cache->batch.surface_weights);
-    cache->batch_ready &= ~MBC_SURFACE_WEIGHTS
+    cache->batch_ready &= ~MBC_SURFACE_WEIGHTS;
   }
 }
 
