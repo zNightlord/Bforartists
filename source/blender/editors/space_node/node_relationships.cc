@@ -2430,6 +2430,7 @@ static wmOperatorStatus node_attach_invoke(bContext *C, wmOperator * /*op*/, con
   // bfa node minimap
   const std::optional<rctf> minimap_opt = ed::space_node::get_minimap_rect(snode, region);
   if (minimap_opt.has_value()) {
+    printf("Attach \n");
     const rctf &minimap_rect = minimap_opt.value();
     float screen_x, screen_y;
     ui::view2d_view_to_region_fl(&region.v2d, 
@@ -2437,7 +2438,7 @@ static wmOperatorStatus node_attach_invoke(bContext *C, wmOperator * /*op*/, con
                                   float(event->mval[1]),
                                   &screen_x, &screen_y);
     if (BLI_rctf_isect_pt(&minimap_rect, screen_x, screen_y)) {
-      printf("Attach mini\n")
+      printf("Attach mini\n");
       return OPERATOR_CANCELLED | OPERATOR_PASS_THROUGH;
     }
   }
