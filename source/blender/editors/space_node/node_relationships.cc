@@ -1666,7 +1666,7 @@ static wmOperatorStatus node_link_invoke(bContext *C, wmOperator *op, const wmEv
   if (minimap_opt.has_value()) {
     printf("Trigger \n");
     const rctf &minimap_rect = minimap_opt.value();
-    BLI_rctf_pad(minimap_rect, 0.1f, 0.1f);
+    BLI_rctf_pad(&minimap_rect, 0.1f, 0.1f);
     float screen_x, screen_y;
     ui::view2d_view_to_region_fl(&region.v2d,   // . not ->
                                   float(event->mval[0]),
@@ -2433,7 +2433,7 @@ static wmOperatorStatus node_attach_invoke(bContext *C, wmOperator * /*op*/, con
   if (minimap_opt.has_value()) {
     printf("Attach \n");
     const rctf &minimap_rect = minimap_opt.value();
-    BLI_rctf_pad(minimap_rect, 0.1f, 0.1f);
+    BLI_rctf_pad(&minimap_rect, 0.1f, 0.1f);
     float screen_x, screen_y;
     ui::view2d_view_to_region_fl(&region.v2d, 
                                   float(event->mval[0]),
