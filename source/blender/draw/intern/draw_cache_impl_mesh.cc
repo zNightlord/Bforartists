@@ -1772,8 +1772,19 @@ void DRW_mesh_batch_cache_set_vgroup_color_mode(Mesh &mesh,
   if (!cache) {
     return;
   }
+  const bool changed = cache->weight_state.vgroup_color_mode != mode ||
+                       cache->weight_state.vgroup_color_random_id != random_id;
+
   cache->weight_state.vgroup_color_mode = mode;
   cache->weight_state.vgroup_color_random_id = random_id;
+
+  if (changed) {
+    FOREACH_MESH_BUFFER_CACHE(*cache, mbc) {
+      mbc->buff.vbos.remove(VBOType::VertexGroupBlendedColor);
+    }
+    GPU_BATCH_CLEAR_SAFE(cache->batch.surface_weights);
+    cache->batch_ready &= ~MBC_SURFACE_WEIGHTS;
+  }
 }
 
 }  // namespace blender::draw
