@@ -839,7 +839,7 @@ static wmOperatorStatus node_select_invoke(bContext *C, wmOperator *op, const wm
 
   const std::optional<rctf> minimap_opt = ed::space_node::get_minimap_rect(*snode, *region);
   if (minimap_opt.has_value()) {
-    const rctf &minimap_rect = minimap_opt.value();
+    rctf &minimap_rect = minimap_opt.value();
     BLI_rctf_pad(&minimap_rect, 0.1f, 0.1f);
     float screen_x, screen_y;
     ui::view2d_view_to_region_fl(&region->v2d,
@@ -965,7 +965,7 @@ static wmOperatorStatus node_box_select_invoke(bContext *C, wmOperator *op, cons
   // bfa node minimap 
   const std::optional<rctf> minimap_opt = ed::space_node::get_minimap_rect(snode, region);
   if (minimap_opt.has_value()) {
-    const rctf &minimap_rect = minimap_opt.value();
+    rctf &minimap_rect = minimap_opt.value();
     BLI_rctf_pad(&minimap_rect, 0.1f, 0.1f);
     float screen_x, screen_y;
     ui::view2d_view_to_region_fl(&region.v2d,   // . not ->
