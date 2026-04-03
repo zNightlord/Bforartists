@@ -2431,6 +2431,7 @@ static wmOperatorStatus node_attach_invoke(bContext *C, wmOperator * /*op*/, con
   // bfa node minimap
   const std::optional<rctf> minimap_opt = ed::space_node::get_minimap_rect(snode, region);
   if (minimap_opt.has_value()) {
+    printf("Attach \n");
     const rctf &minimap_rect = minimap_opt.value();
     BLI_rctf_pad(minimap_rect, 0.1f, 0.1f);
     float screen_x, screen_y;
