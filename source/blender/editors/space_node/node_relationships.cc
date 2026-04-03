@@ -2440,7 +2440,7 @@ static wmOperatorStatus node_attach_invoke(bContext *C, wmOperator * /*op*/, con
                                   float(event->mval[1]),
                                   &screen_x, &screen_y);
     if (BLI_rctf_isect_pt(&minimap_rect, screen_x, screen_y)) {
-      printf("Attach mini\n")
+      printf("Attach mini\n");
       return OPERATOR_CANCELLED;
     }
   }
