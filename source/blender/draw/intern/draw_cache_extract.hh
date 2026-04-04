@@ -53,6 +53,7 @@ struct DRW_MeshWeightState {
   /* Set of all locked and unlocked deform bones for Lock Relative mode. */
   bool *defgroup_locked;   /* #defgroup_len */
   bool *defgroup_unlocked; /* #defgroup_len */
+  bool *defgroup_validmap;     /* new — true if group is used by a deform bone */
 
   int vgroup_color_mode;      /* new */
   int vgroup_color_random_id; /* new */

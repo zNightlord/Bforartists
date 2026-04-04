@@ -10471,13 +10471,17 @@ class VIEW3D_PT_overlay_weight_paint(Panel):
         col = layout.column()
         col.active = display_all
 
-        row = col.row()
-        row.separator()
-        col.prop(overlay, "wpaint_vgroup_color_mode")  # new
+        ob = context.active_object
 
-        row = col.row()
-        row.separator()
-        col.prop(overlay, "wpaint_vgroup_color_random_id")  # new
+        # Vertex group color section
+        vg_col = col.column()
+        vg_col.active = display_all 
+
+        sub = vg_col.row()
+        sub.prop(overlay, "wpaint_vgroup_color_mode", text="", expand=True)
+
+        row = vg_col.row()
+        row.prop(overlay, "wpaint_vgroup_color_random_id", text="Random ID")
 
         row = col.row()
         row.separator()
