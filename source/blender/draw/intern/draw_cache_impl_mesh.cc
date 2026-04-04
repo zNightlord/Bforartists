@@ -266,6 +266,7 @@ static void drw_mesh_weight_state_clear(DRW_MeshWeightState *wstate)
   MEM_SAFE_DELETE(wstate->defgroup_sel);
   MEM_SAFE_DELETE(wstate->defgroup_locked);
   MEM_SAFE_DELETE(wstate->defgroup_unlocked);
+  MEM_SAFE_DELETE(wstate->defgroup_validmap);
 
   memset(wstate, 0, sizeof(*wstate));
 
@@ -279,6 +280,8 @@ static void drw_mesh_weight_state_copy(DRW_MeshWeightState *wstate_dst,
   MEM_SAFE_DELETE(wstate_dst->defgroup_sel);
   MEM_SAFE_DELETE(wstate_dst->defgroup_locked);
   MEM_SAFE_DELETE(wstate_dst->defgroup_unlocked);
+  MEM_SAFE_DELETE(wstate_dst->defgroup_validmap);  /* new */
+
 
   memcpy(wstate_dst, wstate_src, sizeof(*wstate_dst));
 
@@ -291,6 +294,10 @@ static void drw_mesh_weight_state_copy(DRW_MeshWeightState *wstate_dst,
   if (wstate_src->defgroup_unlocked) {
     wstate_dst->defgroup_unlocked = static_cast<bool *>(
         MEM_dupalloc(wstate_src->defgroup_unlocked));
+  }
+  if (wstate_src->defgroup_validmap) {
+    wstate_dst->defgroup_validmap = static_cast<bool *>(  /* new */
+        MEM_dupalloc(wstate_src->defgroup_validmap));
   }
 }
 
@@ -311,7 +318,8 @@ static bool drw_mesh_weight_state_compare(const DRW_MeshWeightState *a,
          a->vgroup_color_random_id == b->vgroup_color_random_id &&
          drw_mesh_flags_equal(a->defgroup_sel, b->defgroup_sel, a->defgroup_len) &&
          drw_mesh_flags_equal(a->defgroup_locked, b->defgroup_locked, a->defgroup_len) &&
-         drw_mesh_flags_equal(a->defgroup_unlocked, b->defgroup_unlocked, a->defgroup_len);
+         drw_mesh_flags_equal(a->defgroup_unlocked, b->defgroup_unlocked, a->defgroup_len) &&
+         drw_mesh_flags_equal(a->defgroup_validmap, b->defgroup_validmap, a->defgroup_len);
 }
 
 static void drw_mesh_weight_state_extract(
@@ -324,6 +332,11 @@ static void drw_mesh_weight_state_extract(
   wstate->defgroup_len = BLI_listbase_count(&mesh.vertex_group_names);
 
   wstate->alert_mode = ts.weightuser;
+
+  /* Get valid deform groups (used by deform bones). */
+  if (wstate->defgroup_len > 0) {
+    wstate->defgroup_validmap = BKE_object_defgroup_validmap_get(&ob, wstate->defgroup_len);
+  }
 
   if (paint_mode && ts.multipaint) {
     /* Multi-paint needs to know all selected bones, not just the active group.

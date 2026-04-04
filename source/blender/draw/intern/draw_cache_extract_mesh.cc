@@ -436,6 +436,10 @@ void mesh_buffer_cache_create_requested_subdiv(MeshBatchCache &cache,
     buffers.vbos.add_new(VBOType::VertexGroupWeight,
                          extract_weights_subdiv(mr, subdiv_cache, cache));
   }
+  if (vbos_to_create.contains(VBOType::VertexGroupBlendedColor)) {  /* new */
+    buffers.vbos.add_new(VBOType::VertexGroupBlendedColor,
+                        extract_weight_vgroup_blended_color_subdiv(mr, subdiv_cache, cache));
+  }
   if (vbos_to_create.contains(VBOType::FaceDotNormal) ||
       vbos_to_create.contains(VBOType::FaceDotPosition) ||
       ibos_to_create.contains(IBOType::FaceDots))

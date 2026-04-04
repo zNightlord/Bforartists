@@ -30,17 +30,31 @@ static float3 hash_group_color(int def_nr, int random_id)
 static float3 blended_vgroup_color(const MDeformVert *dvert,
                                    int random_id,
                                    int mode,
-                                   int active_index)
+                                   int active_index,
+                                   const bool *validmap,
+                                   int defgroup_len)
 {
   if (!dvert || dvert->totweight == 0) {
     return float3(0.0f);
   }
   float3 result(0.0f);
   for (int i = 0; i < dvert->totweight; i++) {
-    if (mode == 1 && dvert->dw[i].def_nr != active_index) {
-      continue;  /* SINGLE: only contribute active group */
+    const int def_nr = dvert->dw[i].def_nr;
+
+    /* Skip groups outside valid range */
+    if (def_nr < 0 || def_nr >= defgroup_len) {
+      continue;
     }
-    result += hash_group_color(dvert->dw[i].def_nr, random_id) * float(dvert->dw[i].weight);
+    /* Skip non-deform groups if validmap is available */
+    if (validmap && !validmap[def_nr]) {
+      continue;
+    }
+    /* SINGLE mode: only active group */
+    if (mode == 1 && def_nr != active_index) {
+      continue;
+    }
+
+    result += hash_group_color(def_nr, random_id) * float(dvert->dw[i].weight);
   }
   return result;
 }
@@ -201,6 +215,8 @@ gpu::VertBufPtr extract_weight_vgroup_blended_color(const MeshRenderData &mr,
   const int mode = weight_state.vgroup_color_mode;
   const int random_id = weight_state.vgroup_color_random_id;
   const int active_index = weight_state.defgroup_active;
+  const bool *validmap = weight_state.defgroup_validmap;
+  const int defgroup_len = weight_state.defgroup_len;
 
   if (mode == 0) {
     vbo_data.fill(float3(0.0f));
@@ -217,7 +233,8 @@ gpu::VertBufPtr extract_weight_vgroup_blended_color(const MeshRenderData &mr,
     Array<float3> colors(dverts.size());
     threading::parallel_for(colors.index_range(), 1024, [&](const IndexRange range) {
       for (const int vert : range) {
-        colors[vert] = blended_vgroup_color(&dverts[vert], random_id, mode, active_index);
+        colors[vert] = blended_vgroup_color(
+            &dverts[vert], random_id, mode, active_index, validmap, defgroup_len);
       }
     });
     array_utils::gather(colors.as_span(), mr.corner_verts, vbo_data);
@@ -239,7 +256,9 @@ gpu::VertBufPtr extract_weight_vgroup_blended_color(const MeshRenderData &mr,
               static_cast<const MDeformVert *>(BM_ELEM_CD_GET_VOID_P(loop->v, offset)),
               random_id,
               mode,
-              active_index);
+              active_index,
+              validmap,
+              defgroup_len);
           loop = loop->next;
         }
       }
@@ -249,5 +268,24 @@ gpu::VertBufPtr extract_weight_vgroup_blended_color(const MeshRenderData &mr,
 }
 
 /** \} */
+
+gpu::VertBufPtr extract_weight_vgroup_blended_color_subdiv(
+    const MeshRenderData &mr,
+    const DRWSubdivCache &subdiv_cache,
+    const MeshBatchCache &cache)
+{
+  GPUVertFormat format{};
+  GPU_vertformat_attr_add(
+      &format, "vertex_group_blended_color", gpu::VertAttrType::SFLOAT_32, 3);
+
+  gpu::VertBufPtr vbo = gpu::VertBufPtr(
+      GPU_vertbuf_create_on_device(format, subdiv_cache.num_subdiv_loops));
+
+  /* Compute coarse colors first then interpolate across subdivision */
+  gpu::VertBufPtr coarse_colors = extract_weight_vgroup_blended_color(mr, cache);
+  draw_subdiv_interp_custom_data(subdiv_cache, *coarse_colors, *vbo, GPU_COMP_F32, 3, 0);
+
+  return vbo;
+}
 
 }  // namespace blender::draw
