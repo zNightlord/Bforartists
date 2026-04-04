@@ -116,7 +116,6 @@ enum class VBOType : int8_t {
   AttrViewer,
   VertexNormal,
   PaintOverlayFlag,
-  VertexGroupIndex,
   VertexGroupBlendedColor
 };
 
