@@ -276,7 +276,7 @@ gpu::VertBufPtr extract_weight_vgroup_blended_color_subdiv(
 {
   GPUVertFormat format{};
   GPU_vertformat_attr_add(
-      &format, "vertex_group_blended_color", gpu::VertAttrType::SFLOAT_32, 3);
+      &format, "vertex_group_blended_color", gpu::VertAttrType::SFLOAT_32_32_32);
 
   gpu::VertBufPtr vbo = gpu::VertBufPtr(
       GPU_vertbuf_create_on_device(format, subdiv_cache.num_subdiv_loops));
