@@ -204,7 +204,7 @@ static wmOperatorStatus gizmo_minimap_modal(bContext *C,
     int screen_delta_x = (int)(delta_x * zoom);
     int screen_delta_y = (int)(delta_y * zoom);
 
-    printf("Double clicked at %f %f, move %f %f %d %d,\n", mval[0], mval[1], delta_x, delta_y, screen_delta_x, screen_delta_y);
+    // printf("Double clicked at %f %f, move %f %f %d %d,\n", mval[0], mval[1], delta_x, delta_y, screen_delta_x, screen_delta_y);
 
 
     /* Pan view to clicked position */
@@ -235,9 +235,6 @@ static wmOperatorStatus gizmo_minimap_modal(bContext *C,
   if (event->type != MOUSEMOVE || event->prev_type != LEFTMOUSE) {
     return OPERATOR_RUNNING_MODAL;
   }
-
-  printf("Drag\n");
-
   ARegion *region = CTX_wm_region(C);
 
   RNA_int_set(gz->ptr, "interaction_state", 1);

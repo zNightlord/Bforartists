@@ -1667,12 +1667,8 @@ static wmOperatorStatus node_link_invoke(bContext *C, wmOperator *op, const wmEv
     printf("Trigger \n");
     rctf minimap_rect = minimap_opt.value();
     BLI_rctf_pad(&minimap_rect, 0.1f, 0.1f);
-    float screen_x, screen_y;
-    ui::view2d_view_to_region_fl(&region.v2d,   // . not ->
-                                  float(event->mval[0]),
-                                  float(event->mval[1]),
-                                  &screen_x, &screen_y);
-    if (BLI_rctf_isect_pt(&minimap_rect, screen_x, screen_y)) {
+    if (BLI_rctf_isect_pt(&minimap_rect, float(event->mval[0]),
+                          float(event->mval[1]))) {
       printf("Trigger inside \n");
       return OPERATOR_CANCELLED;
     }
@@ -2434,12 +2430,8 @@ static wmOperatorStatus node_attach_invoke(bContext *C, wmOperator * /*op*/, con
     printf("Attach \n");
     rctf minimap_rect = minimap_opt.value();
     BLI_rctf_pad(&minimap_rect, 0.1f, 0.1f);
-    float screen_x, screen_y;
-    ui::view2d_view_to_region_fl(&region.v2d, 
-                                  float(event->mval[0]),
-                                  float(event->mval[1]),
-                                  &screen_x, &screen_y);
-    if (BLI_rctf_isect_pt(&minimap_rect, screen_x, screen_y)) {
+    if (BLI_rctf_isect_pt(&minimap_rect, float(event->mval[0]),
+                          float(event->mval[1]))) {
       printf("Attach mini\n");
       return OPERATOR_CANCELLED;
     }
