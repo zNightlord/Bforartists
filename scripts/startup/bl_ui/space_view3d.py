@@ -10470,26 +10470,30 @@ class VIEW3D_PT_overlay_weight_paint(Panel):
 
         ob = context.active_object
 
-        # Vertex group color section
-        vg_col = col.column()
-        vg_col.active = display_all 
-
-        sub = vg_col.row()
-        sub.prop(overlay, "wpaint_vgroup_color_mode", text="", expand=True)
-
-        row = vg_col.row()
-        row.prop(overlay, "wpaint_vgroup_color_random_id", text="Random ID")
-
         row = col.row()
         row.separator()
         row.label(text="Opacity")
         row.prop(overlay, "weight_paint_mode_opacity", text="")
+
+        row = col.split(factor=0.36)
+        row.label(text="     Colored Weights")
+        sub = row.row()
+        sub.p.prop(overlay, "wpaint_vgroup_color_mode", text="", expand=True)
+
+        row = col.row()
+        row.separator()
+        row.active = overlay.wpaint_vgroup_color_mode != 'NONE'
+        row.prop(overlay, "wpaint_vgroup_color_random_id", text="Random ID")
+
+        col = col.column()
+        col.active = overlay.wpaint_vgroup_color_mode != 0
         row = col.split(factor=0.36)
         row.label(text="     Zero Weights")
         sub = row.row()
         sub.prop(tool_settings, "vertex_group_user", expand=True)
 
         row = col.row()
+        row.active = overlay.wpaint_vgroup_color_mode < 2
         row.separator()
         row.prop(overlay, "show_wpaint_contours")
 

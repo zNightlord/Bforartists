@@ -18,12 +18,11 @@ void main()
   /* Set the color and separate actual weight and alerts for independent interpolation */
   if (vgroup_color_mode != 0) {
     vgroup_color = vertex_group_blended_color;
-    weight_interp = float2(1.0f, 0.0f);
   }
   else {
     vgroup_color = float3(0.0f);
-    weight_interp = max(float2(weight, -weight), 0.0f);
   }
+  weight_interp = max(float2(weight, -weight), 0.0f);
 
   
 
