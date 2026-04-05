@@ -10472,32 +10472,38 @@ class VIEW3D_PT_overlay_weight_paint(Panel):
 
         row = col.row()
         row.separator()
-        row.label(text="Opacity")
+        row.label(text=" Opacity")
         row.prop(overlay, "weight_paint_mode_opacity", text="")
 
-        row = col.split(factor=0.36)
+        col.separator()
+        row = col.split(factor=0.425)
         row.label(text="     Colored Weights")
+        row = col.row()
+        row.separator()
         sub = row.row()
-        sub.p.prop(overlay, "wpaint_vgroup_color_mode", text="", expand=True)
+        sub.prop(overlay, "wpaint_vgroup_color_mode", expand=True)
 
         row = col.row()
         row.separator()
         row.active = overlay.wpaint_vgroup_color_mode != 'NONE'
         row.prop(overlay, "wpaint_vgroup_color_random_id", text="Random ID")
 
-        col = col.column()
-        col.active = overlay.wpaint_vgroup_color_mode != 0
-        row = col.split(factor=0.36)
+        col.separator()
+        col_group = col.column()
+        row = col_group.split(factor=0.425)
+        col_group.active = overlay.wpaint_vgroup_color_mode == 'NONE'
         row.label(text="     Zero Weights")
+        row = col_group.row()
+        row.separator()
         sub = row.row()
         sub.prop(tool_settings, "vertex_group_user", expand=True)
 
         row = col.row()
-        row.active = overlay.wpaint_vgroup_color_mode < 2
+        row.active = overlay.wpaint_vgroup_color_mode in {'NONE', 'ACTIVE'}
         row.separator()
         row.prop(overlay, "show_wpaint_contours")
 
-        row = col.row()
+        row = layout.row()
         row.separator()
         row.prop(overlay, "show_paint_wire")
 
