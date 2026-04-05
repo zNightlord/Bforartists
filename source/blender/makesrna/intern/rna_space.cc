@@ -5428,7 +5428,6 @@ static void rna_def_space_view3d_overlay(BlenderRNA *brna)
      0,
      "Deform",
      "Color each deform vertex group"},
-    {0, nullptr, 0, nullptr, nullptr},
     {V3D_OVERLAY_WPAINT_VGROUP_COLOR_ALL,
      "ALL",
      0,
