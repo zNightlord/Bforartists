@@ -97,17 +97,7 @@ void main()
 
       float4 grid = contour_grid(weight, weight_gradient);
 
-      if (vgroup_color_mode != 0) {
-        /* In color mode use dark/black contour lines for visibility
-         * against the hashed colors. Boost alpha for clarity. */
-        float4 dark_grid = float4(0.0f, 0.0f, 0.0f, grid.a * 2.0f);
-        dark_grid.a = clamp(dark_grid.a, 0.0f, 1.0f);
-        /* Only do contour in  Colored Single Mode*/
-        if (vgroup_color_mode == 1) {
-          weight_color = mix(weight_color, dark_grid, dark_grid.a);
-        }
-      }
-      else {
+      if (vgroup_color_mode < 2) {
         weight_color = grid + weight_color * (1.0f - grid.a);
       }
     }
