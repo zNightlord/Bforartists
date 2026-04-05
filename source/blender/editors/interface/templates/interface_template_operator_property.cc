@@ -380,6 +380,7 @@ void template_collection_importer(Layout *layout, bContext *C)
   }
 
   col.op("COLLECTION_OT_importer_remove", std::nullopt, ICON_REMOVE);
+  col.op("COLLECTION_OT_importer_import", std::nullopt, ICON_IMPORT);
 
   /* Draw the importer. */
   PointerRNA importer_ptr = RNA_pointer_create_discrete(
