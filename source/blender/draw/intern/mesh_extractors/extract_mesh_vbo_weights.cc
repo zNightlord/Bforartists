@@ -41,16 +41,15 @@ static float3 blended_vgroup_color(const MDeformVert *dvert,
   for (int i = 0; i < dvert->totweight; i++) {
     const int def_nr = dvert->dw[i].def_nr;
 
-    /* Skip groups outside valid range */
     if (def_nr < 0 || def_nr >= defgroup_len) {
       continue;
     }
-    /* Skip non-deform groups if validmap is available */
-    if (validmap && !validmap[def_nr]) {
+
+    if (mode == 1 && def_nr != active_index) {
       continue;
     }
-    /* SINGLE mode: only active group */
-    if (mode == 1 && def_nr != active_index) {
+
+    if (mode == 2 && validmap && !validmap[def_nr]) {
       continue;
     }
 
