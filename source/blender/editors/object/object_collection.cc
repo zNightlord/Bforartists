@@ -654,7 +654,7 @@ static void COLLECTION_OT_importer_import(wmOperatorType *ot)
 
   /* api callbacks */
   ot->exec = collection_importer_import_exec;
-  ot->poll = collection_importer_add_poll;
+  // ot->poll = collection_importer_add_poll;
 
   /* flags */
   ot->flag = 0;
