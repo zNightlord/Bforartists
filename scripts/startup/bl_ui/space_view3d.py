@@ -7748,19 +7748,20 @@ class VIEW3D_PT_overlay_weight_paint(Panel):
         col.active = display_all
 
         col.prop(overlay, "weight_paint_mode_opacity", text="Opacity")
-
+        
         col.separator()
-        row = col.split(factor=0.425)
-        row.label(text="     Colored Weights")
-        sub = row.row()
+        ccol = col.column(align=True)
+        row = ccol.row()
+        row.label(text="Colored Weights")
+        sub = ccol.row()
         sub.prop(overlay, "wpaint_vgroup_color_mode", expand=True)
 
-        row = col.row()
-        row.separator()
+        row = ccol.row()
         row.active = overlay.wpaint_vgroup_color_mode != 'NONE'
         row.prop(overlay, "wpaint_vgroup_color_random_id", text="Random ID")
-
-        row = col.split(factor=0.425)
+        
+        col.separator()
+        row = col.split(factor=0.33)
         row.active = overlay.wpaint_vgroup_color_mode == 'NONE'
         row.label(text="Zero Weights")
         sub = row.row()
