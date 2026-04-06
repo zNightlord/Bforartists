@@ -78,7 +78,7 @@ void main()
   float4 color;
 
   /* Missing vertex group alert color. Uniform in practice. */
-  if (alert > 1.1f && vgroup_color_mode != 0) {
+  if (alert > 1.1f && vgroup_color_mode == 0) {
     color = apply_color_fac(theme.colors.vert_missing_data);
   }
   /* Weights are available. */
