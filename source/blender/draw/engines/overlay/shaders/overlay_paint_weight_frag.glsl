@@ -78,23 +78,26 @@ void main()
   float4 color;
 
   /* Missing vertex group alert color. Uniform in practice. */
-  if (alert > 1.1f) {
+  if (alert > 1.1f && vgroup_color_mode != 0) {
     color = apply_color_fac(theme.colors.vert_missing_data);
   }
-  /* Weights are available */
+  /* Weights are available. */
   else {
     float weight = weight_interp.x;
     float4 weight_color = texture(colorramp, weight);
     weight_color = apply_color_fac(weight_color);
+    if (vgroup_color_mode != 0) {
+      weight_color = apply_color_fac(float4(vgroup_color, 1.0f));
+    }
 
-    /* Contour display */
-    if (draw_contours) {
-      /* This must be executed uniformly for all fragments */
+    /* Contour display, only in non color and active color.*/
+    if (draw_contours && vgroup_color_mode < 2) {
+      /* This must be executed uniformly for all fragments. */
       float weight_gradient = length(float2(gpu_dfdx(weight), gpu_dfdy(weight)));
 
       float4 grid = contour_grid(weight, weight_gradient);
 
-      weight_color = grid + weight_color * (1 - grid.a);
+      weight_color = grid + weight_color * (1.0f - grid.a);
     }
 
     /* Zero weight alert color. Nonlinear blend to reduce impact. */

@@ -3967,6 +3967,22 @@ static IDFilterEnumPropertyItem rna_enum_space_file_id_filter_categories[] = {
     {0, nullptr, 0, nullptr, nullptr},
 };
 
+static const EnumPropertyItem overlay_wpaint_vgroup_color_mode_items[] = {
+    {V3D_OVERLAY_WPAINT_VGROUP_COLOR_NONE, "NONE", 0, "None", "Use standard weight color ramp"},
+    {V3D_OVERLAY_WPAINT_VGROUP_COLOR_ACTIVE,
+     "ACTIVE",
+     0,
+     "Active",
+     "Color the active vertex group with a random color"},
+    {V3D_OVERLAY_WPAINT_VGROUP_COLOR_DEFORM,
+     "DEFORM",
+     0,
+     "Deform",
+     "Color each vertex group use in deformation with random color.\nRequires armature modifier."},
+    {V3D_OVERLAY_WPAINT_VGROUP_COLOR_ALL, "ALL", 0, "All", "Color all vertex groups with random color"},
+    {0, nullptr, 0, nullptr, nullptr},
+};
+
 static void rna_def_space_generic_show_region_toggles(StructRNA *srna, int region_type_mask)
 {
   PropertyRNA *prop;
@@ -5156,6 +5172,21 @@ static void rna_def_space_view3d_overlay(BlenderRNA *brna)
       prop,
       "Show Weight Contours",
       "Show contour lines formed by points with the same interpolated weight");
+  RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, nullptr);
+
+  prop = RNA_def_property(srna, "wpaint_vgroup_color_mode", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, nullptr, "overlay.wpaint_vgroup_color_mode");
+  RNA_def_property_enum_items(prop, overlay_wpaint_vgroup_color_mode_items);
+  RNA_def_property_ui_text(
+      prop, "Vertex Group Color Mode", "How to colorize vertex groups in weight paint");
+  RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, nullptr);
+
+  prop = RNA_def_property(srna, "wpaint_vgroup_color_random_id", PROP_INT, PROP_NONE);
+  RNA_def_property_int_sdna(prop, nullptr, "overlay.wpaint_vgroup_color_random_id");
+  RNA_def_property_range(prop, 0, INT_MAX);
+  RNA_def_property_ui_text(prop,
+                           "Randomize offset",
+                           "Offset applied to group index before hashing to shift all colors");
   RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, nullptr);
 
   prop = RNA_def_property(srna, "show_weight", PROP_BOOLEAN, PROP_NONE);

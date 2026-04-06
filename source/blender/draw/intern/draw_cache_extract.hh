@@ -53,6 +53,10 @@ struct DRW_MeshWeightState {
   /* Set of all locked and unlocked deform bones for Lock Relative mode. */
   bool *defgroup_locked;   /* #defgroup_len */
   bool *defgroup_unlocked; /* #defgroup_len */
+  bool *defgroup_validmap; /* #defgroup_len */
+
+  int vgroup_color_mode;
+  int vgroup_color_random_id;
 };
 
 /* DRW_MeshWeightState.flags */
@@ -112,6 +116,7 @@ enum class VBOType : int8_t {
   AttrViewer,
   VertexNormal,
   PaintOverlayFlag,
+  VertexGroupBlendedColor,
 };
 
 /**
