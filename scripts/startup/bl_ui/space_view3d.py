@@ -7750,13 +7750,13 @@ class VIEW3D_PT_overlay_weight_paint(Panel):
         col.prop(overlay, "weight_paint_mode_opacity", text="Opacity")
         
         col.separator()
-        ccol = col.column(align=True)
-        row = ccol.row()
+        col_color = col.column(align=True)
+        row = col_color.row()
         row.label(text="Colored Weights")
-        sub = ccol.row()
+        sub = col_color.row()
         sub.prop(overlay, "wpaint_vgroup_color_mode", expand=True)
 
-        row = ccol.row()
+        row = col_color.row()
         row.active = overlay.wpaint_vgroup_color_mode != 'NONE'
         row.prop(overlay, "wpaint_vgroup_color_random_id", text="Random ID")
         
@@ -7771,6 +7771,7 @@ class VIEW3D_PT_overlay_weight_paint(Panel):
         col_contour.active = overlay.wpaint_vgroup_color_mode in {'NONE', 'ACTIVE'}
         col_contour.prop(overlay, "show_wpaint_contours")
         col.prop(overlay, "show_paint_wire")
+
 
 class VIEW3D_PT_snapping(Panel):
     bl_space_type = 'VIEW_3D'
