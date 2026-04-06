@@ -9,6 +9,7 @@
 #include "DNA_meshdata_types.h"
 
 #include "BLI_array_utils.hh"
+#include "BLI_noise.hh"
 
 #include "BKE_deform.hh"
 
@@ -16,6 +17,42 @@
 #include "extract_mesh.hh"
 
 namespace blender::draw {
+
+static float3 hash_group_color(int def_nr, int random_id)
+{
+  return blender::noise::hash_float_to_float3(float(def_nr + random_id + 1));
+}
+
+static float3 blended_vgroup_color(const MDeformVert *dvert,
+                                   int random_id,
+                                   int mode,
+                                   int active_index,
+                                   const bool *validmap,
+                                   int defgroup_len)
+{
+  if (!dvert || dvert->totweight == 0) {
+    return float3(0.0f);
+  }
+  float3 result(0.0f);
+  for (int i = 0; i < dvert->totweight; i++) {
+    const int def_nr = dvert->dw[i].def_nr;
+
+    if (def_nr < 0 || def_nr >= defgroup_len) {
+      continue;
+    }
+
+    if (mode == 1 && def_nr != active_index) {
+      continue;
+    }
+
+    if (mode == 2 && validmap && !validmap[def_nr]) {
+      continue;
+    }
+
+    result += hash_group_color(def_nr, random_id) * float(dvert->dw[i].weight);
+  }
+  return result;
+}
 
 static float evaluate_vertex_weight(const MDeformVert *dvert, const DRW_MeshWeightState *wstate)
 {
@@ -149,6 +186,89 @@ gpu::VertBufPtr extract_weights_subdiv(const MeshRenderData &mr,
 
   gpu::VertBufPtr coarse_weights = extract_weights(mr, cache);
   draw_subdiv_interp_custom_data(subdiv_cache, *coarse_weights, *vbo, GPU_COMP_F32, 1, 0);
+  return vbo;
+}
+
+gpu::VertBufPtr extract_weight_vgroup_blended_color(const MeshRenderData &mr,
+                                                    const MeshBatchCache &cache)
+{
+  static GPUVertFormat format = GPU_vertformat_from_attribute("vgroup_color_blended",
+                                                              gpu::VertAttrType::SFLOAT_32_32_32);
+
+  gpu::VertBufPtr vbo = gpu::VertBufPtr(GPU_vertbuf_create_with_format(format));
+  GPU_vertbuf_data_alloc(*vbo, mr.corners_num);
+  MutableSpan<float3> vbo_data = vbo->data<float3>();
+
+  const DRW_MeshWeightState &weight_state = cache.weight_state;
+  const int mode = weight_state.vgroup_color_mode;
+  const int random_id = weight_state.vgroup_color_random_id;
+  const int active_index = weight_state.defgroup_active;
+  const bool *validmap = weight_state.defgroup_validmap;
+  const int defgroup_len = weight_state.defgroup_len;
+
+  if (mode == 0) {
+    vbo_data.fill(float3(0.0f));
+    return vbo;
+  }
+
+  /* Handles Mesh or BMesh API cases.*/
+  if (mr.extract_type == MeshExtractType::Mesh) {
+    const Mesh &mesh = *mr.mesh;
+    const Span<MDeformVert> dverts = mesh.deform_verts();
+    if (dverts.is_empty()) {
+      vbo_data.fill(float3(0.0f));
+      return vbo;
+    }
+    Array<float3> colors(dverts.size());
+    threading::parallel_for(colors.index_range(), 1024, [&](const IndexRange range) {
+      for (const int vert : range) {
+        colors[vert] = blended_vgroup_color(
+            &dverts[vert], random_id, mode, active_index, validmap, defgroup_len);
+      }
+    });
+    array_utils::gather(colors.as_span(), mr.corner_verts, vbo_data);
+  }
+  else {
+    const BMesh &bm = *mr.bm;
+    const int offset = CustomData_get_offset(&bm.vdata, CD_MDEFORMVERT);
+    if (offset == -1) {
+      vbo_data.fill(float3(0.0f));
+      return vbo;
+    }
+    threading::parallel_for(IndexRange(bm.totface), 2048, [&](const IndexRange range) {
+      for (const int face_index : range) {
+        const BMFace &face = *BM_face_at_index(&const_cast<BMesh &>(bm), face_index);
+        const BMLoop *loop = BM_FACE_FIRST_LOOP(&face);
+        for ([[maybe_unused]] const int i : IndexRange(face.len)) {
+          const int index = BM_elem_index_get(loop);
+          vbo_data[index] = blended_vgroup_color(
+              static_cast<const MDeformVert *>(BM_ELEM_CD_GET_VOID_P(loop->v, offset)),
+              random_id,
+              mode,
+              active_index,
+              validmap,
+              defgroup_len);
+          loop = loop->next;
+        }
+      }
+    });
+  }
+  return vbo;
+}
+
+gpu::VertBufPtr extract_weight_vgroup_blended_color_subdiv(const MeshRenderData &mr,
+                                                           const DRWSubdivCache &subdiv_cache,
+                                                           const MeshBatchCache &cache)
+{
+  GPUVertFormat format{};
+  GPU_vertformat_attr_add(&format, "vgroup_color_blended", gpu::VertAttrType::SFLOAT_32_32_32);
+
+  gpu::VertBufPtr vbo = gpu::VertBufPtr(
+      GPU_vertbuf_create_on_device(format, subdiv_cache.num_subdiv_loops));
+
+  gpu::VertBufPtr coarse_colors = extract_weight_vgroup_blended_color(mr, cache);
+  draw_subdiv_interp_custom_data(subdiv_cache, *coarse_colors, *vbo, GPU_COMP_F32, 3, 0);
+
   return vbo;
 }
 
