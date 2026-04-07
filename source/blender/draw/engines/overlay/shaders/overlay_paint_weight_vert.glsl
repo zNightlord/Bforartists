@@ -18,7 +18,12 @@ void main()
   /* Set the color for colored mode. */
   vgroup_color = mix(float3(0.0), vgroup_color_blended, float(vgroup_color_mode != 0));
   /* Separate actual weight and alerts for independent interpolation */
-  weight_interp = max(float2(weight, -weight), 0.0f);
+  if (vgroup_color_mode > 1) {
+    weight_interp = max(float2(weight, 0.0f), 0.0f);
+  }
+  else {
+    weight_interp = max(float2(weight, -weight), 0.0f);
+  }
 
   /* Saturate the weight to give a hint of the geometry behind the weights. */
 #ifdef FAKE_SHADING
