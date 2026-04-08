@@ -128,8 +128,8 @@ set_property(GLOBAL PROPERTY ICON_GEOM_NAMES
   ops.mesh.primitive_cone_add_gizmo
   ops.mesh.primitive_cube_add_gizmo
   ops.mesh.primitive_cylinder_add_gizmo
-  ops.mesh.primitive_icosphere_add_gizmo
   ops.mesh.primitive_grid_add_gizmo
+  ops.mesh.primitive_icosphere_add_gizmo
   ops.mesh.primitive_sphere_add_gizmo
   ops.mesh.primitive_torus_add_gizmo
   ops.mesh.rip
