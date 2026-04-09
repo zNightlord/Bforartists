@@ -525,8 +525,9 @@ struct wmGizmoGroup {
  * Pass a value of this enum to #WM_gizmomap_draw to tell it what to draw.
  */
 enum eWM_GizmoFlagMapDrawStep {
+  WM_GIZMOMAP_DRAWSTEP_2D_UI = 0,
   /** Draw 2D gizmo-groups (#WM_GIZMOGROUPTYPE_3D not set). */
-  WM_GIZMOMAP_DRAWSTEP_2D = 0,
+  WM_GIZMOMAP_DRAWSTEP_2D,
   /** Draw 3D gizmo-groups (#WM_GIZMOGROUPTYPE_3D set). */
   WM_GIZMOMAP_DRAWSTEP_3D,
 };
