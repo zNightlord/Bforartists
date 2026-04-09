@@ -240,7 +240,7 @@ void NODE_GGT_minimap(wmGizmoGroupType *gzgt)
   gzgt->name = "Minimap Widget";
   gzgt->idname = "NODE_GGT_minimap";
 
-  gzgt->flag |= (WM_GIZMOGROUPTYPE_PERSISTENT | WM_GIZMOMAP_DRAWSTEP_2D_UI);
+  gzgt->flag |= (WM_GIZMOGROUPTYPE_PERSISTENT | WM_GIZMOGROUPTYPE_2D_UI);
 
   gzgt->poll = WIDGETGROUP_node_minimap_poll;
   gzgt->setup = WIDGETGROUP_node_minimap_setup;
