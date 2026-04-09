@@ -307,6 +307,8 @@ eWM_GizmoFlagMapDrawStep WM_gizmomap_drawstep_from_gizmo_group(const wmGizmoGrou
   if (gzgroup->type->flag & WM_GIZMOGROUPTYPE_3D) {
     step = WM_GIZMOMAP_DRAWSTEP_3D;
   }
+  else if (gzgroup->type->flag & WM_GIZMOGROUPTYPE_2D_UI) {
+    step = WM_GIZMOMAP_DRAWSTEP_2D_UI;
   else {
     step = WM_GIZMOMAP_DRAWSTEP_2D;
   }
