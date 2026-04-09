@@ -159,7 +159,7 @@ enum eWM_GizmoFlagGroupTypeFlag {
    * however for VR it's sometimes needed.
    */
   WM_GIZMOGROUPTYPE_VR_REDRAWS = (1 << 10),
-  WM_GIZMOGROUPTYPE_2D_TOOL = (1 << 11),
+  WM_GIZMOGROUPTYPE_2D_UI = (1 << 11),
 };
 
 ENUM_OPERATORS(eWM_GizmoFlagGroupTypeFlag);
