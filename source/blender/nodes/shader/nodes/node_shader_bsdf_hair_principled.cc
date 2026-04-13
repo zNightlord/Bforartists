@@ -237,7 +237,18 @@ static int node_shader_gpu_hair_principled(GPUMaterial *mat,
                                            GPUNodeStack *in,
                                            GPUNodeStack *out)
 {
-  GPU_material_flag_set(mat, GPU_MATFLAG_DIFFUSE);
+  /* Normals */
+  GPUNodeLink *N;
+  GPU_link(mat, "world_normals_get", &N);
+
+  /* Hair info */
+  GPUNodeLink *is_strand, *intercept, *thickness, *T, *hair_random;
+  GPU_link(mat, "node_hair_info", &is_strand, &intercept, &thickness, &T, &hair_random);
+
+  if (!in[12].link) {
+    in[12].link = hair_random;
+  }
+  GPU_material_flag_set(mat, GPU_MATFLAG_DIFFUSE | GPU_MATFLAG_GLOSSY);
 
   return GPU_stack_link(mat, node, "node_bsdf_hair_principled", in, out);
 }
@@ -258,7 +269,7 @@ void register_node_type_sh_bsdf_hair_principled()
   ntype.nclass = NODE_CLASS_SHADER;
   ntype.declare = file_ns::node_declare;
   ntype.gather_link_search_ops = search_link_ops_for_shader_bsdf_node;
-  ntype.add_ui_poll = object_cycles_shader_nodes_poll;
+  ntype.add_ui_poll = object_shader_nodes_poll;
   ntype.draw_buttons = file_ns::node_shader_buts_principled_hair;
   bke::node_type_size_preset(ntype, bke::eNodeSizePreset::Large);
   ntype.initfunc = file_ns::node_shader_init_hair_principled;
