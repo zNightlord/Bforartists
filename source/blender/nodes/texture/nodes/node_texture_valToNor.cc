@@ -66,7 +66,7 @@ void register_node_type_tex_valtonor()
 {
   static bke::bNodeType ntype;
 
-  tex_node_type_base(&ntype, "TextureNodeValToNor", TEX_NODE_VALTONOR);
+  tex_node_type_base(&ntype, "TextureNodeValToNor"_ustr, TEX_NODE_VALTONOR);
   ntype.ui_name = "Value to Normal";
   ntype.ui_description = "Compute a normal map from the given black-and-white values";
   ntype.enum_name_legacy = "VALTONOR";

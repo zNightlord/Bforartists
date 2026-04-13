@@ -150,6 +150,8 @@ class EEVEE_MATERIAL_PT_context_material(MaterialButtonsPanel, Panel):
             if ob.mode == 'EDIT':
                 row = layout.row(align=True)
                 row.operator("object.material_slot_assign", text="Assign", icon='CHECKMARK') # BFA - icon   
+                if ob.type == 'FONT':
+                    return
                 row.operator("object.material_slot_select", text="Select", icon='RESTRICT_SELECT_OFF') # BFA - icon
                 row.operator("object.material_slot_deselect", text="Deselect", icon='RESTRICT_SELECT_ON') # BFA - icon
 

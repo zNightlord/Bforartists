@@ -56,7 +56,7 @@ void register_node_type_tex_checker()
 {
   static bke::bNodeType ntype;
 
-  tex_node_type_base(&ntype, "TextureNodeChecker", TEX_NODE_CHECKER);
+  tex_node_type_base(&ntype, "TextureNodeChecker"_ustr, TEX_NODE_CHECKER);
   ntype.ui_name = "Checker";
   ntype.ui_description = "Generate a checkerboard texture";
   ntype.enum_name_legacy = "CHECKER";

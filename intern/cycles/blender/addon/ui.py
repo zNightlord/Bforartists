@@ -2164,10 +2164,9 @@ class CYCLES_WORLD_PT_settings_surface(CyclesButtonsPanel, Panel):
         subsub = sub.row(align=True)
         if cworld.sampling_method == "MANUAL":
             subsub.prop(cworld, "sample_map_resolution")
-        if cworld.sampling_method != "NONE":
-            sub.prop(cworld, "max_bounces")
-            sub.use_property_split = False
-            sub.prop(cworld, "is_caustics_light", text="Shadow Caustics")
+        sub.prop(cworld, "max_bounces")
+        sub.use_property_split = False
+        sub.prop(cworld, "is_caustics_light", text="Shadow Caustics")
 
 
 class CYCLES_WORLD_PT_settings_volume(CyclesButtonsPanel, Panel):

@@ -1061,7 +1061,7 @@ class VIEW3D_HT_header(Header):
             layout.popover(
                 panel="VIEW3D_PT_sculpt_automasking",
                 text="",
-                icon=VIEW3D_HT_header._sculpt_automasking_icon(tool_settings.sculpt),
+                icon=VIEW3D_HT_header._mesh_paint_automasking_icon(tool_settings.sculpt),
             )
 
         elif object_mode == "VERTEX_PAINT":
@@ -1171,16 +1171,16 @@ class VIEW3D_HT_header(Header):
         sub.popover(panel="VIEW3D_PT_shading", text="")
 
     @staticmethod
-    def _sculpt_automasking_icon(sculpt):
+    def _mesh_paint_automasking_icon(paint):
         automask_enabled = (
-            sculpt.use_automasking_topology
-            or sculpt.use_automasking_face_sets
-            or sculpt.use_automasking_boundary_edges
-            or sculpt.use_automasking_boundary_face_sets
-            or sculpt.use_automasking_cavity
-            or sculpt.use_automasking_cavity_inverted
-            or sculpt.use_automasking_start_normal
-            or sculpt.use_automasking_view_normal
+            paint.mesh_automasking_settings.use_automasking_topology or
+            paint.mesh_automasking_settings.use_automasking_face_sets or
+            paint.mesh_automasking_settings.use_automasking_boundary_edges or
+            paint.mesh_automasking_settings.use_automasking_boundary_face_sets or
+            paint.mesh_automasking_settings.use_automasking_cavity or
+            paint.mesh_automasking_settings.use_automasking_cavity_inverted or
+            paint.mesh_automasking_settings.use_automasking_start_normal or
+            paint.mesh_automasking_settings.use_automasking_view_normal
         )
 
         return "MOD_MASK" if automask_enabled else "MOD_MASK_OFF"  # BFA - mask icon
@@ -8523,16 +8523,18 @@ class VIEW3D_MT_sculpt_automasking_pie(Menu):
         pie = layout.menu_pie()
 
         tool_settings = context.tool_settings
-        sculpt = tool_settings.sculpt
+        paint = tool_settings.sculpt
 
-        pie.prop(sculpt, "use_automasking_topology", text="Topology")
-        pie.prop(sculpt, "use_automasking_face_sets", text="Face Sets")
-        pie.prop(sculpt, "use_automasking_boundary_edges", text="Mesh Boundary")
-        pie.prop(sculpt, "use_automasking_boundary_face_sets", text="Face Sets Boundary")
-        pie.prop(sculpt, "use_automasking_cavity", text="Cavity")
-        pie.prop(sculpt, "use_automasking_cavity_inverted", text="Cavity (Inverted)")
-        pie.prop(sculpt, "use_automasking_start_normal", text="Area Normal")
-        pie.prop(sculpt, "use_automasking_view_normal", text="View Normal")
+        settings = paint.mesh_automasking_settings
+
+        pie.prop(settings, "use_automasking_topology", text="Topology")
+        pie.prop(settings, "use_automasking_face_sets", text="Face Sets")
+        pie.prop(settings, "use_automasking_boundary_edges", text="Mesh Boundary")
+        pie.prop(settings, "use_automasking_boundary_face_sets", text="Face Sets Boundary")
+        pie.prop(settings, "use_automasking_cavity", text="Cavity")
+        pie.prop(settings, "use_automasking_cavity_inverted", text="Cavity (Inverted)")
+        pie.prop(settings, "use_automasking_start_normal", text="Area Normal")
+        pie.prop(settings, "use_automasking_view_normal", text="View Normal")
 
 
 class VIEW3D_MT_grease_pencil_sculpt_automasking_pie(Menu):
@@ -11731,7 +11733,9 @@ class VIEW3D_PT_sculpt_automasking(Panel):
         layout.use_property_decorate = False  # No animation.
 
         tool_settings = context.tool_settings
-        sculpt = tool_settings.sculpt
+        paint = tool_settings.sculpt
+
+        settings = paint.mesh_automasking_settings
         layout.label(text="Global Auto Masking")
         layout.label(text="Overrides brush settings", icon="QUESTION")
 
@@ -11741,12 +11745,12 @@ class VIEW3D_PT_sculpt_automasking(Panel):
         col.use_property_split = False
         row = col.row()
         row.separator()
-        row.prop(sculpt, "use_automasking_topology")
+        row.prop(settings, "use_automasking_topology")
 
         # face masks automasking
         row = col.row()
         row.separator()
-        row.prop(sculpt, "use_automasking_face_sets")
+        row.prop(settings, "use_automasking_face_sets")
 
         col = layout.column(align=True)
         col.use_property_split = False
@@ -11756,9 +11760,9 @@ class VIEW3D_PT_sculpt_automasking(Panel):
         split.use_property_split = False
         row = split.row()
         row.separator()
-        row.prop(sculpt, "use_automasking_boundary_edges", text="Mesh Boundary")
+        row.prop(settings, "use_automasking_boundary_edges", text="Mesh Boundary")
 
-        if sculpt.use_automasking_boundary_edges or sculpt.use_automasking_boundary_face_sets:
+        if settings.use_automasking_boundary_edges or settings.use_automasking_boundary_face_sets:
             split.label(icon="DISCLOSURE_TRI_DOWN")
         else:
             split.label(icon="DISCLOSURE_TRI_RIGHT")
@@ -11768,28 +11772,28 @@ class VIEW3D_PT_sculpt_automasking(Panel):
         split.use_property_split = False
         row = split.row()
         row.separator()
-        row.prop(sculpt, "use_automasking_boundary_face_sets", text="Face Sets Boundary")
+        row.prop(settings, "use_automasking_boundary_face_sets", text="Face Sets Boundary")
 
-        if sculpt.use_automasking_boundary_edges or sculpt.use_automasking_boundary_face_sets:
+        if settings.use_automasking_boundary_edges or settings.use_automasking_boundary_face_sets:
             split.label(icon="DISCLOSURE_TRI_DOWN")
         else:
             split.label(icon="DISCLOSURE_TRI_RIGHT")
 
-        if sculpt.use_automasking_boundary_edges or sculpt.use_automasking_boundary_face_sets:
+        if settings.use_automasking_boundary_edges or settings.use_automasking_boundary_face_sets:
             col = layout.column()
             col.use_property_split = True
             row = col.row()
             row.separator(factor=3.5)
-            row.prop(sculpt, "automasking_boundary_edges_propagation_steps", text="Steps")
+            row.prop(settings, "boundary_edges_propagation_steps", text="Steps")
 
         col = layout.column()
         split = col.split(factor=0.9)
         split.use_property_split = False
         row = split.row()
         row.separator()
-        row.prop(sculpt, "use_automasking_cavity", text="Cavity")
+        row.prop(settings, "use_automasking_cavity", text="Cavity")
 
-        is_cavity_active = sculpt.use_automasking_cavity or sculpt.use_automasking_cavity_inverted
+        is_cavity_active = settings.use_automasking_cavity or settings.use_automasking_cavity_inverted
 
         if is_cavity_active:
             props = row.operator("sculpt.mask_from_cavity", text="Create Mask")
@@ -11802,9 +11806,9 @@ class VIEW3D_PT_sculpt_automasking(Panel):
         split.use_property_split = False
         row = split.row()
         row.separator()
-        row.prop(sculpt, "use_automasking_cavity_inverted", text="Cavity (Inverted)")  # BFA - Capitalize label
+        row.prop(settings, "use_automasking_cavity_inverted", text="Cavity (Inverted)")  # BFA - Capitalize label
 
-        is_cavity_active = sculpt.use_automasking_cavity or sculpt.use_automasking_cavity_inverted
+        is_cavity_active = settings.use_automasking_cavity or settings.use_automasking_cavity_inverted
 
         if is_cavity_active:
             split.label(icon="DISCLOSURE_TRI_DOWN")
@@ -11819,69 +11823,69 @@ class VIEW3D_PT_sculpt_automasking(Panel):
             props.settings_source = "SCENE"
             row = col.row()
             row.separator(factor=3.5)
-            row.prop(sculpt, "automasking_cavity_factor", text="Factor")
+            row.prop(settings, "cavity_factor", text="Factor")
             row = col.row()
             row.separator(factor=3.5)
-            row.prop(sculpt, "automasking_cavity_blur_steps", text="Blur")
+            row.prop(settings, "cavity_blur_steps", text="Blur")
 
             col = layout.column()
             col.use_property_split = False
             row = col.row()
             row.separator(factor=3.5)
-            row.prop(sculpt, "use_automasking_custom_cavity_curve", text="Custom Curve")
+            row.prop(settings, "use_automasking_custom_cavity_curve", text="Custom Curve")
 
-            if sculpt.use_automasking_custom_cavity_curve:
-                col.template_curve_mapping(sculpt, "automasking_cavity_curve", brush=True)
+            if settings.use_automasking_custom_cavity_curve:
+                col.template_curve_mapping(settings, "cavity_curve", brush=True)
 
         col = layout.column()
         split = col.split(factor=0.9)
         split.use_property_split = False
         row = split.row()
         row.separator()
-        row.prop(sculpt, "use_automasking_view_normal", text="View Normal")
+        row.prop(settings, "use_automasking_view_normal", text="View Normal")
 
-        if sculpt.use_automasking_view_normal:
+        if settings.use_automasking_view_normal:
             split.label(icon="DISCLOSURE_TRI_DOWN")
         else:
             split.label(icon="DISCLOSURE_TRI_RIGHT")
 
-        if sculpt.use_automasking_view_normal:
+        if settings.use_automasking_view_normal:
             row = col.row()
             row.use_property_split = False
             row.separator(factor=3.5)
-            row.prop(sculpt, "use_automasking_view_occlusion", text="Occlusion")
+            row.prop(settings, "use_automasking_view_occlusion", text="Occlusion")
             subcol = col.column(align=True)
-            if not sculpt.use_automasking_view_occlusion:
+            if not settings.use_automasking_view_occlusion:
                 subcol.use_property_split = True
                 row = subcol.row()
                 row.separator(factor=3.5)
-                row.prop(sculpt, "automasking_view_normal_limit", text="Limit")
+                row.prop(settings, "start_normal_limit", text="Limit")
                 row = subcol.row()
                 row.separator(factor=3.5)
-                row.prop(sculpt, "automasking_view_normal_falloff", text="Falloff")
+                row.prop(settings, "start_normal_falloff", text="Falloff")
 
         # col = layout.column()
         split = col.split(factor=0.9)
         split.use_property_split = False
         row = split.row()
         row.separator()
-        row.prop(sculpt, "use_automasking_start_normal", text="Area Normal")
+        row.prop(settings, "use_automasking_start_normal", text="Area Normal")
 
-        if sculpt.use_automasking_start_normal:
+        if settings.use_automasking_start_normal:
             split.label(icon="DISCLOSURE_TRI_DOWN")
         else:
             split.label(icon="DISCLOSURE_TRI_RIGHT")
 
-        if sculpt.use_automasking_start_normal:
+        if settings.use_automasking_start_normal:
             col = layout.column(align=True)
             row = col.row()
             row.use_property_split = True  # BFA - label outside
             row.separator(factor=3.5)
-            row.prop(sculpt, "automasking_start_normal_limit", text="Limit")
+            row.prop(settings, "start_normal_limit", text="Limit")
             row = col.row()
             row.use_property_split = True  # BFA - label outside
             row.separator(factor=3.5)
-            row.prop(sculpt, "automasking_start_normal_falloff", text="Falloff")
+            row.prop(settings, "start_normal_falloff", text="Falloff")
             col.separator()
 
 

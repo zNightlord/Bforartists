@@ -285,8 +285,8 @@ static void rna_NodeTreeInterfaceSocket_init_socket_custom(
 
   ParameterList list;
   RNA_parameter_list_create(&list, &ptr, func);
-  RNA_parameter_set_lookup(&list, "node", node);
-  RNA_parameter_set_lookup(&list, "socket", socket);
+  RNA_parameter_set_lookup(&list, "node", &node);
+  RNA_parameter_set_lookup(&list, "socket", &socket);
   RNA_parameter_set_lookup(&list, "data_path", &data_path);
   typeinfo->ext_interface.call(nullptr, &ptr, func, &list);
 
@@ -319,8 +319,8 @@ static void rna_NodeTreeInterfaceSocket_from_socket_custom(
 
   ParameterList list;
   RNA_parameter_list_create(&list, &ptr, func);
-  RNA_parameter_set_lookup(&list, "node", node);
-  RNA_parameter_set_lookup(&list, "socket", socket);
+  RNA_parameter_set_lookup(&list, "node", &node);
+  RNA_parameter_set_lookup(&list, "socket", &socket);
   typeinfo->ext_interface.call(nullptr, &ptr, func, &list);
 
   RNA_parameter_list_free(&list);
@@ -866,6 +866,7 @@ static const EnumPropertyItem *rna_NodeTreeInterfaceSocketFloat_subtype_itemf(
                                    PROP_WAVELENGTH,
                                    PROP_COLOR_TEMPERATURE,
                                    PROP_FREQUENCY,
+                                   PROP_PIXEL,
                                    PROP_NONE},
                                   r_free);
 }
@@ -893,7 +894,7 @@ static const EnumPropertyItem *rna_NodeTreeInterfaceSocketInt_subtype_itemf(bCon
                                                                             PropertyRNA * /*prop*/,
                                                                             bool *r_free)
 {
-  return rna_subtype_filter_itemf({PROP_PERCENTAGE, PROP_FACTOR, PROP_NONE}, r_free);
+  return rna_subtype_filter_itemf({PROP_PERCENTAGE, PROP_FACTOR, PROP_PIXEL, PROP_NONE}, r_free);
 }
 
 void rna_NodeTreeInterfaceSocketInt_default_value_range(
@@ -925,6 +926,7 @@ static const EnumPropertyItem *rna_NodeTreeInterfaceSocketVector_subtype_itemf(
                                    PROP_ACCELERATION,
                                    PROP_EULER,
                                    PROP_XYZ,
+                                   PROP_PIXEL,
                                    PROP_NONE},
                                   r_free);
 }
@@ -932,8 +934,8 @@ static const EnumPropertyItem *rna_NodeTreeInterfaceSocketVector_subtype_itemf(
 static const EnumPropertyItem *rna_NodeTreeInterfaceSocketIntVector_subtype_itemf(
     bContext * /*C*/, PointerRNA * /*ptr*/, PropertyRNA * /*prop*/, bool *r_free)
 {
-  return rna_subtype_filter_itemf({PROP_UNSIGNED, PROP_FACTOR, PROP_PERCENTAGE, PROP_NONE},
-                                  r_free);
+  return rna_subtype_filter_itemf(
+      {PROP_UNSIGNED, PROP_FACTOR, PROP_PERCENTAGE, PROP_PIXEL, PROP_NONE}, r_free);
 }
 
 void rna_NodeTreeInterfaceSocketVector_default_value_range(
