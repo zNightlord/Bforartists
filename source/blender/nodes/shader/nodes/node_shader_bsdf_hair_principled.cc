@@ -163,6 +163,9 @@ static void node_declare(NodeDeclarationBuilder &b)
           "component is oriented approximately around the incoming direction, and picks up the "
           "color of the pigment inside the hair. Keep this 1.0 for physical correctness")
       .make_available(set_model_huang);
+  b.add_input<decl::Float>("Do Diffuse").default_value(0.0f).min(0.0f).max(1.0f);
+  b.add_input<decl::Float>("Do Reflection").default_value(1.0f).min(0.0f).max(1.0f);
+  b.add_input<decl::Float>("Do Transmission").default_value(1.0f).min(0.0f).max(1.0f);
   b.add_output<decl::Shader>("BSDF"_ustr);
 }
 
@@ -190,6 +193,7 @@ static void node_shader_update_hair_principled(bNodeTree *ntree, bNode *node)
 
   int parametrization = data->parametrization;
   int model = data->model;
+
 
   for (bNodeSocket &sock : node->inputs) {
     if (STREQ(sock.name, "Color")) {
@@ -248,7 +252,7 @@ static int node_shader_gpu_hair_principled(GPUMaterial *mat,
   if (!in[12].link) {
     in[12].link = hair_random;
   }
-  GPU_material_flag_set(mat, GPU_MATFLAG_DIFFUSE | GPU_MATFLAG_GLOSSY);
+  GPU_material_flag_set(mat, GPU_MATFLAG_DIFFUSE);
 
   return GPU_stack_link(mat, node, "node_bsdf_hair_principled", in, out);
 }
