@@ -163,9 +163,9 @@ static void node_declare(NodeDeclarationBuilder &b)
           "component is oriented approximately around the incoming direction, and picks up the "
           "color of the pigment inside the hair. Keep this 1.0 for physical correctness")
       .make_available(set_model_huang);
-  b.add_input<decl::Float>("Do Diffuse").default_value(0.0f).min(0.0f).max(1.0f);
-  b.add_input<decl::Float>("Do Reflection").default_value(1.0f).min(0.0f).max(1.0f);
-  b.add_input<decl::Float>("Do Transmission").default_value(1.0f).min(0.0f).max(1.0f);
+  b.add_input<decl::Float>("Do Diffuse"_ustr).default_value(0.0f).min(0.0f).max(1.0f);
+  b.add_input<decl::Float>("Do Reflection"_ustr).default_value(1.0f).min(0.0f).max(1.0f);
+  b.add_input<decl::Float>("Do Transmission"_ustr).default_value(1.0f).min(0.0f).max(1.0f);
   b.add_output<decl::Shader>("BSDF"_ustr);
 }
 
