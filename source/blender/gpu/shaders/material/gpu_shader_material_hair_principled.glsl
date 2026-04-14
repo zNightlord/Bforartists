@@ -15,19 +15,19 @@
 #define SHD_PRINCIPLED_HAIR_PIGMENT_CONCENTRATION 1
 #define SHD_PRINCIPLED_HAIR_DIRECT_ABSORPTION     2
 
-vec3 hair_sigma_from_concentration(float eumelanin, float pheomelanin)
+float3 hair_sigma_from_concentration(float eumelanin, float pheomelanin)
 {
   /* Fitted coefficients from Donner & Jensen 2006. */
-  return eumelanin  * vec3(0.506, 0.841, 1.653)
-       + pheomelanin * vec3(0.343, 0.733, 1.924);
+  return eumelanin  * float3(0.506, 0.841, 1.653)
+       + pheomelanin * float3(0.343, 0.733, 1.924);
 }
 
-vec3 hair_sigma_from_reflectance(vec3 c, float azimuthal_roughness)
+float3 hair_sigma_from_reflectance(float3 c, float azimuthal_roughness)
 {
   float x = azimuthal_roughness;
   /* Polynomial fit mapping roughness → sigma scaling factor. */
   float b = (((((0.245 * x) + 5.574) * x - 10.73) * x + 2.532) * x - 0.215) * x + 5.969;
-  vec3 s = log(max(c, vec3(1e-5))) / b;
+  float3 s = log(max(c, float3(1e-5))) / b;
   return s * s;
 }
 
@@ -68,11 +68,11 @@ float hair_effective_roughness(float rough_long, float rough_azim)
 
 [[node]]
 void node_bsdf_hair_principled(
-    vec4  color,
+    float4  color,
     float melanin,
     float melanin_redness,
-    vec4  tint,
-    vec3  absorption_coefficient,
+    float4  tint,
+    float3  absorption_coefficient,
     float roughness,
     float radial_roughness,
     float coat,
@@ -82,7 +82,7 @@ void node_bsdf_hair_principled(
     float random_roughness,
     float random_value,
     float weight,
-    vec3  N,
+    float3  N,
     float parametrization,
     const float do_diffuse,   /* always 0 for hair – kept for uniform node signature */
     const float do_reflection,
@@ -94,7 +94,7 @@ void node_bsdf_hair_principled(
   /* ------------------------------------------------------------------ */
   /* 1. Resolve absorption coefficient σ from chosen parametrization.   */
   /* ------------------------------------------------------------------ */
-  vec3 sigma;
+  float3 sigma;
 
   if (parametrization == SHD_PRINCIPLED_HAIR_DIRECT_ABSORPTION) {
     sigma = absorption_coefficient;
@@ -105,8 +105,8 @@ void node_bsdf_hair_principled(
     melanin  = -log(max(1.0 - melanin, 1e-4));
     float pheomelanin = melanin * melanin_redness;
     float eumelanin   = melanin - pheomelanin;
-    vec3 melanin_sigma = hair_sigma_from_concentration(eumelanin, pheomelanin);
-    vec3 tint_sigma    = hair_sigma_from_reflectance(tint.rgb, radial_roughness);
+    float3 melanin_sigma = hair_sigma_from_concentration(eumelanin, pheomelanin);
+    float3 tint_sigma    = hair_sigma_from_reflectance(tint.rgb, radial_roughness);
     sigma = melanin_sigma + tint_sigma;
   }
   else if (parametrization == SHD_PRINCIPLED_HAIR_REFLECTANCE) {
@@ -146,14 +146,14 @@ void node_bsdf_hair_principled(
   /* ------------------------------------------------------------------ */
   /* 3. Geometry: derive axial direction and cross-section vectors.      */
   /* ------------------------------------------------------------------ */
-  vec3 V = normalize(cameraVec(g_data.P));   /* EEVEE Next: g_data.P */
+  float3 V = normalize(cameraVec(g_data.P));   /* EEVEE Next: g_data.P */
   N = normalize(N);
 
 #ifdef HAIR_SHADER
-  vec3 T = normalize(hairTangent);           /* curve tangent from attr */
+  float3 T = normalize(hairTangent);           /* curve tangent from attr */
 #else
   /* Fallback for mesh previews: reconstruct from V × N. */
-  vec3 T = normalize(cross(V, N));
+  float3 T = normalize(cross(V, N));
 #endif
 
   float sin_off = sin(offset_angle);
@@ -161,7 +161,7 @@ void node_bsdf_hair_principled(
 
   /* Decompose V into axial (∥ T) and cross-section (⊥ T) parts. */
   float cos_theta = dot(V, T);              /* longitudinal cosine */
-  vec3  Vp = V - T * cos_theta;            /* projection onto cross-section plane */
+  float3  Vp = V - T * cos_theta;            /* projection onto cross-section plane */
   float sin_theta = length(Vp);            /* = cos of incidence angle in cross-sec */
   Vp = Vp / max(sin_theta, 1e-5);         /* unit vector in cross-section plane */
 
@@ -171,39 +171,39 @@ void node_bsdf_hair_principled(
   float NdotVp  = dot(N, Vp);
 
   /* R: specular reflection off cuticle surface. */
-  vec3 N_R  = N;
-  vec3 R_dir = 2.0 * NdotVp * N - Vp;          /* reflected in cross-section */
+  float3 N_R  = N;
+  float3 R_dir = 2.0 * NdotVp * N - Vp;          /* reflected in cross-section */
 
   /* Refracted direction into the fiber. */
-  vec3  T_refr  = normalize((NdotVp * N - Vp) / ior - N);
+  float3  T_refr  = normalize((NdotVp * N - Vp) / ior - N);
   float T_dist  = -2.0 * dot(T_refr, N) / max(sqrt(1.0 - sqr(cos_theta / ior)), 1e-5);
 
   /* TT: transmission through fiber. */
-  vec3 N_TT  = N - 2.0 * dot(T_refr, N) * T_refr;
-  vec3 V_TT  = R_dir - 2.0 * dot(T_refr, R_dir) * T_refr;
+  float3 N_TT  = N - 2.0 * dot(T_refr, N) * T_refr;
+  float3 V_TT  = R_dir - 2.0 * dot(T_refr, R_dir) * T_refr;
 
   /* TRT: back-scatter (two refractions + one internal reflection). */
   float VTT_dot_Vp = dot(V_TT, Vp);
-  vec3 N_TRT = 2.0 * VTT_dot_Vp * N_TT - N;
-  vec3 V_TRT = 2.0 * VTT_dot_Vp * V_TT - Vp;
+  float3 N_TRT = 2.0 * VTT_dot_Vp * N_TT - N;
+  float3 V_TRT = 2.0 * VTT_dot_Vp * V_TT - Vp;
 
   /* ------------------------------------------------------------------ */
   /* 5. Lobe colors from absorption + Fresnel.                          */
   /* ------------------------------------------------------------------ */
   float fresnel    = btdf_lut(NdotVp, roughness, ior).y;
-  vec3  span_col   = exp(-T_dist * sigma);
-  vec3  TT_col     = sqr(1.0 - fresnel) * span_col;
-  vec3  TRT_col    = TT_col * fresnel * span_col;
+  float3  span_col   = exp(-T_dist * sigma);
+  float3  TT_col     = sqr(1.0 - fresnel) * span_col;
+  float3  TRT_col    = TT_col * fresnel * span_col;
   /* TRRT+ isotropic residual (energy conservation tail). */
-  vec3  denom_safe = max(vec3(1.0) - fresnel * span_col, vec3(1e-5));
-  vec3  iso_col    = TRT_col * fresnel * span_col / denom_safe;
+  float3  denom_safe = max(float3(1.0) - fresnel * span_col, float3(1e-5));
+  float3  iso_col    = TRT_col * fresnel * span_col / denom_safe;
 
   /* ------------------------------------------------------------------ */
   /* 6. Tilted lobe normals                                              */
   /* ------------------------------------------------------------------ */
-  vec3 eff_N_R   = N       * cos_off + hair_T * sin_off;
-  vec3 eff_N_TT  = N_TT   * cos_off + hair_T * sin_off;
-  vec3 eff_N_TRT = N_TRT  * cos_off + hair_T * sin_off;
+  float3 eff_N_R   = N       * cos_off + hair_T * sin_off;
+  float3 eff_N_TT  = N_TT   * cos_off + hair_T * sin_off;
+  float3 eff_N_TRT = N_TRT  * cos_off + hair_T * sin_off;
 
   /* The anisotropy tangent for each lobe lives in the cross-section
    * plane perpendicular to hair_T.  For a proper anisotropic GGX we
@@ -223,9 +223,9 @@ void node_bsdf_hair_principled(
   /* ------------------------------------------------------------------ */
   /* 6. Effective normals with longitudinal tilt (offset_angle).        */
   /* ------------------------------------------------------------------ */
-  vec3 eff_N_R   = N_R   * cos_off + T * sin_off;
-  vec3 eff_N_TT  = N_TT  * cos_off + T * sin_off;
-  vec3 eff_N_TRT = N_TRT * cos_off + T * sin_off;
+  float3 eff_N_R   = N_R   * cos_off + T * sin_off;
+  float3 eff_N_TT  = N_TT  * cos_off + T * sin_off;
+  float3 eff_N_TRT = N_TRT * cos_off + T * sin_off;
 
   /* ------------------------------------------------------------------ */
   /* 7. Build ClosureReflection for each lobe and accumulate.           */
@@ -240,7 +240,7 @@ void node_bsdf_hair_principled(
 
     /* BRDFmulti-scatter energy compensation (EEVEE Next LUT). */
     vec2 split_sum = brdf_lut(NdotVp, lobe_R.roughness);
-    lobe_R.color  *= F_brdf_multi_scatter(vec3(1.0), vec3(1.0), split_sum);
+    lobe_R.color  *= F_brdf_multi_scatter(float3(1.0), float3(1.0), split_sum);
 
     /* Write to result – primary SSR lobe. */
     closure_load_reflection_data(lobe_R, result);
