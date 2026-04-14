@@ -5622,7 +5622,8 @@ void node_draw_space(const bContext &C, ARegion &region)
         GPU_matrix_projection_set(original_proj);
       }
 
-      draw_nodetree(C, region, *ntree, path->parent_key);
+      draw_node_gizmos(C, region, WM_GIZMOMAP_DRAWSTEP_2D);
+      draw_nodetree(C, region, *ntree, tree_draw_ctx, path->parent_key);
       draw_node_gizmos(C, region, WM_GIZMOMAP_DRAWSTEP_2D_UI);
     }
 
