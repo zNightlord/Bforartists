@@ -7038,6 +7038,7 @@ static void texture_paint_add_texture_paint_slot_ui(bContext *C, wmOperator *op)
       ui::Layout &col = layout.column(true);
       col.prop(op->ptr, "width", UI_ITEM_NONE, std::nullopt, ICON_NONE);
       col.prop(op->ptr, "height", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+      const int gen_type = RNA_enum_get(op->ptr, "generated_type");
       ui::Layout &color_col = col.column(false);
       if (gen_type == IMA_GENTYPE_BLANK) {
         color_col.prop(op->ptr, "color", UI_ITEM_NONE, std::nullopt, ICON_NONE);
