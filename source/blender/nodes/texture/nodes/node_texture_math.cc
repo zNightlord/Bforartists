@@ -388,7 +388,7 @@ void register_node_type_tex_math()
 {
   static bke::bNodeType ntype;
 
-  tex_node_type_base(&ntype, "TextureNodeMath", TEX_NODE_MATH);
+  tex_node_type_base(&ntype, "TextureNodeMath"_ustr, TEX_NODE_MATH);
   ntype.ui_name = "Math";
   ntype.ui_description = "Perform math operations";
   ntype.enum_name_legacy = "MATH";

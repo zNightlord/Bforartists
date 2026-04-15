@@ -505,7 +505,17 @@ class CYCLES_RENDER_PT_sampling_advanced(CyclesButtonsPanel, Panel):
         row.prop(cscene, "use_animated_seed", text="", icon="TIME")
 
         layout.separator()
+
         col = layout.column(align=True)  # BFA
+
+        prefs = context.preferences
+        use_debug = prefs.experimental.use_cycles_debug and prefs.view.show_developer_ui
+        if use_debug:
+            row = layout.row(align=True)
+            row.prop(cscene, "use_pixel_jitter")
+
+        layout.separator()
+
         # Tabulated Sobol is used when the debug UI is turned off.
         col.active = cscene.sampling_pattern == "TABULATED_SOBOL"
         col.label(text="Scrambling Distance")
@@ -2162,13 +2172,13 @@ class CYCLES_WORLD_PT_settings_surface(CyclesButtonsPanel, Panel):
         col.prop(cworld, "sampling_method", text="Sampling")
 
         sub = col.column()
+        sub.active = cworld.sampling_method != 'NONE'
         subsub = sub.row(align=True)
-        if cworld.sampling_method == "MANUAL":
-            subsub.prop(cworld, "sample_map_resolution")
-        if cworld.sampling_method != "NONE":
-            sub.prop(cworld, "max_bounces")
-            sub.use_property_split = False
-            sub.prop(cworld, "is_caustics_light", text="Shadow Caustics")
+        subsub.active = cworld.sampling_method == 'MANUAL'
+        subsub.prop(cworld, "sample_map_resolution")
+        sub.prop(cworld, "max_bounces")
+        sub.prop(cworld, "is_caustics_light", text="Shadow Caustics")
+        sub.prop(cworld, "use_shadows", text="Cast Shadow")
 
 
 class CYCLES_WORLD_PT_settings_volume(CyclesButtonsPanel, Panel):
