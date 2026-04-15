@@ -58,11 +58,9 @@
 
 #include <fmt/format.h>
 
-namespace blender {
+namespace blender::ui {
 
 static CLG_LogRef LOG = {"ui.icon"};
-
-namespace ui {
 
 struct IconImage {
   int w;
@@ -2438,5 +2436,4 @@ ImBuf *icon_alert_imbuf_get(AlertIcon icon, float size)
 #endif
 }
 
-}  // namespace ui
-}  // namespace blender
+}  // namespace blender::ui

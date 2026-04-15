@@ -56,10 +56,10 @@ namespace blender {
 /** \name Splash Screen
  * \{ */
 
-static void wm_block_splash_close(bContext *C, void *arg_block, void * /*arg*/)
+static void wm_block_splash_close(bContext *C, ui::Block *block)
 {
   wmWindow *win = CTX_wm_window(C);
-  popup_block_close(C, win, static_cast<ui::Block *>(arg_block));
+  popup_block_close(C, win, block);
 }
 
 /* BFA - wm_block_splash_add_label - removed! */
@@ -242,7 +242,7 @@ static void wm_block_splash_close_on_fileselect(bContext *C, void *arg1, void * 
   }
 
   if (has_fileselect) {
-    wm_block_splash_close(C, arg1, nullptr);
+    wm_block_splash_close(C, static_cast<ui::Block *>(arg1));
   }
 }
 
@@ -293,7 +293,7 @@ static ui::Block *wm_block_splash_create(bContext *C, ARegion *region, void * /*
     ui::Button *but = uiDefButImage(
         block, ibuf, 0, 0.5f * U.widget_unit, splash_width, splash_height, nullptr);
 
-    button_func_set(but, wm_block_splash_close, block, nullptr);
+    button_func_set(but, [block](bContext &C) { wm_block_splash_close(&C, block); });
 
     /* BFA - wm_block_splash_add_label - removed! */
   }
@@ -309,7 +309,7 @@ static ui::Block *wm_block_splash_create(bContext *C, ARegion *region, void * /*
     ui::Button *banner_but = uiDefButImage(
         block, bannerbuf, 0, 0.5f * U.widget_unit, banner_width, banner_height, nullptr);
 
-    button_func_set(banner_but, wm_block_splash_close, block, nullptr);
+    button_func_set(banner_but, [block](bContext &C) { wm_block_splash_close(&C, block); });
   }
 
   const int layout_margin_x = UI_SCALE_FAC * 26;

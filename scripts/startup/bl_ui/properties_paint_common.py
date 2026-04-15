@@ -1575,17 +1575,18 @@ def brush_settings_advanced(layout, context, settings, brush, popover=False):
 
         col = layout.column(align=True)
         col.label(text="Auto Masking")
+        automasking = brush.mesh_automasking_settings
 
         # topology automasking
         col.use_property_split = False
         row = col.row()
         row.separator()
-        row.prop(brush, "use_automasking_topology")
+        row.prop(automasking, "use_automasking_topology", text="Topology")
 
         # face masks automasking
         row = col.row()
         row.separator()
-        row.prop(brush, "use_automasking_face_sets")
+        row.prop(automasking, "use_automasking_face_sets", text="Face Sets")
 
         col = layout.column(align=True)
         col.use_property_split = False
@@ -1595,40 +1596,46 @@ def brush_settings_advanced(layout, context, settings, brush, popover=False):
         split.use_property_split = False
         row = split.row()
         row.separator()
-        row.prop(brush, "use_automasking_boundary_edges", text="Mesh Boundary")
+        row.prop(automasking, "use_automasking_boundary_edges", text="Mesh Boundary")
 
-        if brush.use_automasking_boundary_edges or brush.use_automasking_boundary_face_sets:
+        if automasking.use_automasking_boundary_edges or automasking.use_automasking_boundary_face_sets:
             split.label(icon="DISCLOSURE_TRI_DOWN")
         else:
             split.label(icon="DISCLOSURE_TRI_RIGHT")
 
         # col = layout.column()
+        
         split = col.split(factor=0.9)
         split.use_property_split = False
         row = split.row()
         row.separator()
-        row.prop(brush, "use_automasking_boundary_face_sets", text="Face Sets Boundary")
+        row.prop(automasking, "use_automasking_boundary_face_sets", text="Face Sets Boundary")
 
-        if brush.use_automasking_boundary_edges or brush.use_automasking_boundary_face_sets:
+        if automasking.use_automasking_boundary_edges or automasking.use_automasking_boundary_face_sets:
             split.label(icon="DISCLOSURE_TRI_DOWN")
         else:
             split.label(icon="DISCLOSURE_TRI_RIGHT")
 
-        if brush.use_automasking_boundary_edges or brush.use_automasking_boundary_face_sets:
+        if automasking.use_automasking_boundary_face_sets:
+            props = row.operator("sculpt.mask_from_boundary", text="Create Mask")
+            props.settings_source = 'BRUSH'
+            props.boundary_mode = 'FACE_SETS'
+
+        if automasking.use_automasking_boundary_edges or automasking.use_automasking_boundary_face_sets:
             col = layout.column()
             col.use_property_split = True
             row = col.row()
             row.separator(factor=3.5)
-            row.prop(brush, "automasking_boundary_edges_propagation_steps", text="Steps")
+            row.prop(automasking, "boundary_edges_propagation_steps", text="Steps")
 
         col = layout.column()
         split = col.split(factor=0.9)
         split.use_property_split = False
         row = split.row()
         row.separator()
-        row.prop(brush, "use_automasking_cavity", text="Cavity")
+        row.prop(automasking, "use_automasking_cavity", text="Cavity")
 
-        is_cavity_active = brush.use_automasking_cavity or brush.use_automasking_cavity_inverted
+        is_cavity_active = automasking.use_automasking_cavity or automasking.use_automasking_cavity_inverted
 
         if is_cavity_active:
             props = row.operator("sculpt.mask_from_cavity", text="Create Mask")
@@ -1642,9 +1649,9 @@ def brush_settings_advanced(layout, context, settings, brush, popover=False):
         split.use_property_split = False
         row = split.row()
         row.separator()
-        row.prop(brush, "use_automasking_cavity_inverted", text="Cavity (Inverted)")  # BFA - Capitalize label
+        row.prop(automasking, "use_automasking_cavity_inverted", text="Cavity (Inverted)")  # BFA - Capitalize label
 
-        is_cavity_active = brush.use_automasking_cavity or brush.use_automasking_cavity_inverted
+        is_cavity_active = automasking.use_automasking_cavity or automasking.use_automasking_cavity_inverted
 
         if is_cavity_active:
             split.label(icon="DISCLOSURE_TRI_DOWN")
@@ -1659,28 +1666,28 @@ def brush_settings_advanced(layout, context, settings, brush, popover=False):
             props.settings_source = "BRUSH"
             row = col.row()
             row.separator(factor=3.5)
-            row.prop(brush, "automasking_cavity_factor", text="Factor")
+            row.prop(automasking, "cavity_factor", text="Factor")
             row = col.row()
             row.separator(factor=3.5)
-            row.prop(brush, "automasking_cavity_blur_steps", text="Blur")
+            row.prop(automasking, "cavity_blur_steps", text="Blur")
 
             col = layout.column()
             col.use_property_split = False
             row = col.row()
             row.separator(factor=3.5)
-            row.prop(brush, "use_automasking_custom_cavity_curve", text="Custom Curve")
+            row.prop(automasking, "use_automasking_custom_cavity_curve", text="Custom Curve")
 
-            if brush.use_automasking_custom_cavity_curve:
-                col.template_curve_mapping(brush, "automasking_cavity_curve", brush=True, show_presets=True)
+            if automasking.use_automasking_custom_cavity_curve:
+                col.template_curve_mapping(automasking, "automasking_cavity_curve", brush=True, show_presets=True)
 
         col = layout.column()
         split = col.split(factor=0.9)
         split.use_property_split = False
         row = split.row()
         row.separator()
-        row.prop(brush, "use_automasking_view_normal", text="View Normal")
+        row.prop(automasking, "use_automasking_view_normal", text="View Normal")
 
-        if brush.use_automasking_view_normal:
+        if automasking.use_automasking_view_normal:
             split.label(icon="DISCLOSURE_TRI_DOWN")
         else:
             split.label(icon="DISCLOSURE_TRI_RIGHT")
@@ -1689,37 +1696,37 @@ def brush_settings_advanced(layout, context, settings, brush, popover=False):
             row = col.row()
             row.use_property_split = False
             row.separator(factor=3.5)
-            row.prop(brush, "use_automasking_view_occlusion", text="Occlusion")
+            row.prop(automasking, "use_automasking_view_occlusion", text="Occlusion")
             subcol = col.column(align=True)
             if not brush.use_automasking_view_occlusion:
                 subcol.use_property_split = True
                 row = subcol.row()
                 row.separator(factor=3.5)
-                row.prop(brush, "automasking_view_normal_limit", text="Limit")
+                row.prop(automasking, "automasking_view_normal_limit", text="Limit")
                 row = subcol.row()
                 row.separator(factor=3.5)
-                row.prop(brush, "automasking_view_normal_falloff", text="Falloff")
+                row.prop(automasking, "automasking_view_normal_falloff", text="Falloff")
 
         # col = layout.column()
         split = col.split(factor=0.9)
         split.use_property_split = False
         row = split.row()
         row.separator()
-        row.prop(brush, "use_automasking_start_normal", text="Area Normal")
+        row.automasking(brush, "use_automasking_start_normal", text="Area Normal")
 
-        if brush.use_automasking_start_normal:
+        if automasking.use_automasking_start_normal:
             split.label(icon="DISCLOSURE_TRI_DOWN")
         else:
             split.label(icon="DISCLOSURE_TRI_RIGHT")
 
-        if brush.use_automasking_start_normal:
+        if is_cavity_active:
             col = layout.column(align=True)
             row = col.row()
             row.separator(factor=3.5)
-            row.prop(brush, "automasking_start_normal_limit", text="Limit")
+            row.prop(automasking, "automasking_start_normal_limit", text="Limit")
             row = col.row()
             row.separator(factor=3.5)
-            row.prop(brush, "automasking_start_normal_falloff", text="Falloff")
+            row.prop(automasking, "automasking_start_normal_falloff", text="Falloff")
             col.separator()
 
         layout.separator()
