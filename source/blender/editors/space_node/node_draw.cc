@@ -488,12 +488,6 @@ static bool node_update_basis_buttons(const bContext &C,
                                         0,
                                         ui::style_get_dpi());
 
-  if (view_rect_intersects_minimap(snode, region,
-                                  loc.x + NODE_DYS, dy,
-                                  loc.x + NODE_WIDTH(node) - NODE_DYS, dy - NODE_DY,
-                                  NODE_DYS)) {
-    layout.enabled_set(false);
-  } 
   if (node.is_muted()) {
     layout.active_set(false);
   }
@@ -627,13 +621,6 @@ static bool node_update_basis_socket(TreeDrawContext &tree_draw_ctx,
                                         NODE_DY,
                                         0,
                                         ui::style_get_dpi());
-
-  if (view_rect_intersects_minimap(snode, region,
-                                  locx + NODE_DYS, locy,
-                                  locx + NODE_WIDTH(node) - NODE_DYS, locy - NODE_DY,
-                                  NODE_DYS)) {
-    layout.enabled_set(false);
-  }
 
   if (node.is_muted()) {
     layout.active_set(false);
