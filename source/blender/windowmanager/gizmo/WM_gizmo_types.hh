@@ -160,6 +160,7 @@ enum eWM_GizmoFlagGroupTypeFlag {
    */
   WM_GIZMOGROUPTYPE_VR_REDRAWS = (1 << 10),
   WM_GIZMOGROUPTYPE_2D_UI = (1 << 11),
+  WM_GIZMOGROUPTYPE_2D= (1 << 12),
 };
 
 ENUM_OPERATORS(eWM_GizmoFlagGroupTypeFlag);
