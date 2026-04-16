@@ -249,7 +249,7 @@ static int node_shader_gpu_hair_principled(GPUMaterial *mat,
   if (!in[12].link) {
     in[12].link = hair_random;
   }
-  GPU_material_flag_set(mat, GPU_MATFLAG_DIFFUSE);
+  GPU_material_flag_set(mat, GPU_MATFLAG_DIFFUSE | GPU_MATFLAG_HAIR);
 
   return GPU_stack_link(mat, node, "node_bsdf_hair_principled", in, out);
 }
