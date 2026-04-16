@@ -249,11 +249,11 @@ class NODE_MT_shader_node_shader_base(node_add_menu.NodeMenu):
             "ShaderNodeBsdfGlass",
             poll=object_material_shader_nodes_poll(context),
         )
-        self.node_operator(
-            layout,
-            "ShaderNodeBsdfGlossy",
-            poll=object_material_shader_nodes_poll(context),
-        )
+        # self.node_operator(
+        #     layout,
+        #     "ShaderNodeBsdfGlossy",
+        #     poll=object_material_shader_nodes_poll(context),
+        # )
         self.node_operator(
             layout,
             "ShaderNodeBsdfHair",

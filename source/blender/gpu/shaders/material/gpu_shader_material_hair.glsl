@@ -96,6 +96,7 @@ void node_bsdf_hair_principled(float4 color,
                                float random_roughness,
                                float random,
                                float weight,
+                               float parametrization,
                                Closure &result)
 {
 #if 0
