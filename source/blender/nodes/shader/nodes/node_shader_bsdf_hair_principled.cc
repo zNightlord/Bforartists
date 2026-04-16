@@ -191,7 +191,6 @@ static void node_shader_update_hair_principled(bNodeTree *ntree, bNode *node)
   int parametrization = data->parametrization;
   int model = data->model;
 
-
   for (bNodeSocket &sock : node->inputs) {
     if (STREQ(sock.name, "Color")) {
       bke::node_set_socket_availability(
@@ -249,9 +248,12 @@ static int node_shader_gpu_hair_principled(GPUMaterial *mat,
   if (!in[12].link) {
     in[12].link = hair_random;
   }
-  GPU_material_flag_set(mat, GPU_MATFLAG_DIFFUSE | GPU_MATFLAG_HAIR);
+  GPU_material_flag_set(mat, GPU_MATFLAG_GLOSSY | GPU_MATFLAG_HAIR);
 
-  return GPU_stack_link(mat, node, "node_bsdf_hair_principled", in, out);
+  float parametrization = node->custom1;
+
+  return GPU_stack_link(
+      mat, node, "node_bsdf_hair_principled", in, out, N, GPU_constant(&parametrization));
 }
 
 }  // namespace nodes::node_shader_bsdf_hair_principled_cc
