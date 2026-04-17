@@ -377,7 +377,6 @@ static std::optional<rctf> get_minimap_rect(const SpaceNode &snode, ARegion &reg
   View2D &v2d = region.v2d;
   const float viewport_height = BLI_rcti_size_y(&v2d.mask);
   float viewport_width = BLI_rcti_size_x(&v2d.mask);
-
   /* Calculate offset based on header/footer visibility. */
   float tile_height = viewport_height - BLI_rcti_size_y(rect_visible);
   float padding_top = padding;
