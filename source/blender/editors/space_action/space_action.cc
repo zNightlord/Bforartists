@@ -290,6 +290,7 @@ static void action_main_region_draw(const bContext *C, ARegion *region)
 
   /* gizmos */
   WM_gizmomap_draw(region->runtime->gizmo_map, C, WM_GIZMOMAP_DRAWSTEP_2D);
+  WM_gizmomap_draw(region->runtime->gizmo_map, C, WM_GIZMOMAP_DRAWSTEP_2D_UI);
 
   /* scrubbing region */
   const int fps = round_db_to_int(scene->frames_per_second());
