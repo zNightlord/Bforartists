@@ -34,5 +34,13 @@ void main()
     final_color = float4(vg_col.rgb, 0.3f);
   }
 
+  if (vgroup_color_mode == 4) {
+    /* VERTEX mode: replace base color with blended group color,
+     * but preserve selection tint by mixing over the top. */
+    float4 vg_col = float4(vertex_group_blended_color, 1.0f);
+
+    final_color = mix(vg_col, final_color, 0.4f);
+  }
+
   view_clipping_distances(world_pos);
 }
