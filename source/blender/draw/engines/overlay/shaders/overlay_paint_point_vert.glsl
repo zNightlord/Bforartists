@@ -26,6 +26,10 @@ void main()
   }
 
   final_color = (is_select) ? float4(1.0f) : theme.colors.wire;
+  if (vgroup_color_mode == 4) {
+    float4 vg_col = float4(vertex_group_blended_color, 1.0f);
+    final_color = mix(vg_col, final_color, 0.4f);
+  }
   final_color.a = float(paint_overlay_flag);
 
   gl_PointSize = theme.sizes.vert * 2.0f;

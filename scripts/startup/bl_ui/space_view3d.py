@@ -7752,7 +7752,7 @@ class VIEW3D_PT_overlay_weight_paint(Panel):
         col.separator()
         ccol = col.column(align=True)
         row = ccol.row()
-        row.label(text="Colored Weights")
+        row.label(text="Color")
         sub = ccol.row()
         sub.prop(overlay, "wpaint_vgroup_color_mode", expand=True)
 

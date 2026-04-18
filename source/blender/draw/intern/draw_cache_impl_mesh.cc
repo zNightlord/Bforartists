@@ -1312,7 +1312,7 @@ void DRW_mesh_batch_cache_create_requested(TaskGraph &task_graph,
                          GPU_PRIM_POINTS,
                          list,
                          std::nullopt,
-                         {VBOType::Position, VBOType::PaintOverlayFlag}});
+                         {VBOType::Position, VBOType::PaintOverlayFlag, VBOType::VertexGroupBlendedColor}});
     }
     if (batches_to_create & MBC_SCULPT_OVERLAYS) {
       batch_info.append({*cache.batch.sculpt_overlays,
@@ -1354,7 +1354,7 @@ void DRW_mesh_batch_cache_create_requested(TaskGraph &task_graph,
                          GPU_PRIM_LINES,
                          list,
                          IBOType::LinesPaintMask,
-                         {VBOType::Position, VBOType::PaintOverlayFlag}});
+                         {VBOType::Position, VBOType::PaintOverlayFlag, VBOType::VertexGroupBlendedColor}});
     }
     if (batches_to_create & MBC_WIRE_EDGES) {
       batch_info.append({*cache.batch.wire_edges,
@@ -1797,7 +1797,11 @@ void DRW_mesh_batch_cache_set_vgroup_color_mode(Mesh &mesh, int mode, int random
       mbc->buff.vbos.remove(VBOType::VertexGroupBlendedColor);
     }
     GPU_BATCH_CLEAR_SAFE(cache->batch.surface_weights);
+    GPU_BATCH_CLEAR_SAFE(cache->batch.paint_overlay_verts);
+    GPU_BATCH_CLEAR_SAFE(cache->batch.paint_overlay_wire_loops);
     cache->batch_ready &= ~MBC_SURFACE_WEIGHTS;
+    cache->batch_ready &= ~MBC_PAINT_OVERLAY_VERTS;
+    cache->batch_ready &= ~MBC_PAINT_OVERLAY_WIRE_LOOPS;
   }
 }
 

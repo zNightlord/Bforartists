@@ -3968,7 +3968,7 @@ static IDFilterEnumPropertyItem rna_enum_space_file_id_filter_categories[] = {
 };
 
 static const EnumPropertyItem overlay_wpaint_vgroup_color_mode_items[] = {
-    {V3D_OVERLAY_WPAINT_VGROUP_COLOR_NONE, "NONE", 0, "None", "Use standard weight color ramp"},
+    {V3D_OVERLAY_WPAINT_VGROUP_COLOR_NONE, "NONE", 0, "None", "Use standard weight color ramp display"},
     {V3D_OVERLAY_WPAINT_VGROUP_COLOR_ACTIVE,
      "ACTIVE",
      0,
@@ -3979,7 +3979,16 @@ static const EnumPropertyItem overlay_wpaint_vgroup_color_mode_items[] = {
      0,
      "Deform",
      "Color each vertex group use in deformation with random color.\nRequires armature modifier."},
-    {V3D_OVERLAY_WPAINT_VGROUP_COLOR_ALL, "ALL", 0, "All", "Color all vertex groups with random color"},
+    {V3D_OVERLAY_WPAINT_VGROUP_COLOR_ALL,
+     "ALL",
+     0,
+     "All",
+     "Color all vertex groups with random color"},
+    {V3D_OVERLAY_WPAINT_VGROUP_COLOR_VERTEX,
+     "VERTEX",
+     0,
+     "Vertex",
+     "Color vertex dots by blended group influence, surface uses standard weight display"},
     {0, nullptr, 0, nullptr, nullptr},
 };
 
