@@ -47,7 +47,7 @@ static float3 blended_vgroup_color(const MDeformVert *dvert,
       continue;
     }
 
-    if (mode == 2 && validmap && !validmap[def_nr]) {
+    if ((mode == 2 || mode == 4) && validmap && !validmap[def_nr]) {
       continue;
     }
 
