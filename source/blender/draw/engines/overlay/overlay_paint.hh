@@ -65,6 +65,7 @@ class Paints : Overlay {
 
     show_weight_ = state.ctx_mode == CTX_MODE_PAINT_WEIGHT;
     show_wires_ = state.overlay.paint_flag & V3D_OVERLAY_PAINT_WIRE;
+    const int vgroup_color_mode = state.overlay.wpaint_vgroup_color_mode;
 
     {
       auto &pass = paint_region_ps_;
@@ -108,7 +109,6 @@ class Paints : Overlay {
                                      !state.xray_enabled;
       const bool shadeless = shading_type == OB_WIRE;
       const bool draw_contours = state.overlay.wpaint_flag & V3D_OVERLAY_WPAINT_CONTOURS;
-      const int vgroup_color_mode = state.overlay.wpaint_vgroup_color_mode;
       const int vgroup_color_random_id = state.overlay.wpaint_vgroup_color_random_id;
       const int surface_vgroup_mode = (vgroup_color_mode == V3D_OVERLAY_WPAINT_VGROUP_COLOR_VERTEX) ?
                                     V3D_OVERLAY_WPAINT_VGROUP_COLOR_NONE :
