@@ -29,9 +29,9 @@ void main()
   if (vgroup_color_mode == 4) {
     float4 vg_col = float4(vertex_group_blended_color, 1.0f);
     final_color = mix(vg_col, final_color, 0.05f);
+  } else {
+    final_color.a = float(paint_overlay_flag);
   }
-  final_color.a = float(paint_overlay_flag);
-
   gl_PointSize = theme.sizes.vert * 2.0f;
 
   view_clipping_distances(world_pos);
