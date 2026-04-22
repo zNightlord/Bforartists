@@ -3974,6 +3974,11 @@ static const EnumPropertyItem overlay_wpaint_vgroup_color_mode_items[] = {
      0,
      "Active",
      "Color the active vertex group with a random color"},
+    {V3D_OVERLAY_WPAINT_VGROUP_COLOR_VERTEX,
+     "VERTEX",
+     0,
+     "Vertex",
+     "Color vertex dots by blended group influence, surface uses standard weight display"},
     {V3D_OVERLAY_WPAINT_VGROUP_COLOR_DEFORM,
      "DEFORM",
      0,
@@ -3984,11 +3989,6 @@ static const EnumPropertyItem overlay_wpaint_vgroup_color_mode_items[] = {
      0,
      "All",
      "Color all vertex groups with random color"},
-    {V3D_OVERLAY_WPAINT_VGROUP_COLOR_VERTEX,
-     "VERTEX",
-     0,
-     "Vertex",
-     "Color vertex dots by blended group influence, surface uses standard weight display"},
     {0, nullptr, 0, nullptr, nullptr},
 };
 
