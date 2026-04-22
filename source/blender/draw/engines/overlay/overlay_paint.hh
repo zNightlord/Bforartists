@@ -245,6 +245,8 @@ class Paints : Overlay {
       /* Texture paint mode only draws the face selection without wires or vertices as we don't
        * draw on the geometry data directly. */
       const bool in_texture_paint_mode = state.ctx_mode == CTX_MODE_PAINT_TEXTURE;
+      const bool vertex_color_mode = (state.overlay.wpaint_vgroup_color_mode ==
+                                V3D_OVERLAY_WPAINT_VGROUP_COLOR_VERTEX);
 
       if ((use_face_selection || show_wires_) && !in_texture_paint_mode) {
         gpu::Batch *geom = DRW_cache_mesh_paint_overlay_edges_get(ob_ref.object);
@@ -255,7 +257,7 @@ class Paints : Overlay {
         gpu::Batch *geom = DRW_cache_mesh_paint_overlay_surface_get(ob_ref.object);
         paint_region_face_ps_->draw(geom, manager.unique_handle(ob_ref));
       }
-      if (use_vert_selection && !in_texture_paint_mode) {
+      if ((use_vert_selection || vertex_color_mode) && !in_texture_paint_mode) {
         gpu::Batch *geom = DRW_cache_mesh_paint_overlay_verts_get(ob_ref.object);
         paint_region_vert_ps_->draw(geom, manager.unique_handle(ob_ref));
       }
