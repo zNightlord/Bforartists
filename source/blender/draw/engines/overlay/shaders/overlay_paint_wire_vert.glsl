@@ -24,7 +24,7 @@ void main()
   if (is_hidden) {
     gl_Position = float4(-2.0f, -2.0f, -2.0f, 1.0f);
   }
-  float4 vg_col = (vgroup_color_mode == 2) ? float4(vertex_group_blended_color, 0.9f) : theme.colors.wire;
+  float4 vg_col = (vgroup_color_mode == 2) ? float4(vgroup_color_blended, 0.9f) : theme.colors.wire;
   float4 colSel = mix(vg_col, float4(1.0f), 0.15f);
 
   final_color = (is_select) ? colSel : vg_col;

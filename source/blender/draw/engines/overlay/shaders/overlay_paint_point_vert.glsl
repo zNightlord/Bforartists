@@ -25,7 +25,7 @@ void main()
     gl_Position = float4(-2.0f, -2.0f, -2.0f, 1.0f);
   }
   
-  float4 vg_col = (vgroup_color_mode == 2) ? float4(vertex_group_blended_color, 0.9f): theme.colors.wire;
+  float4 vg_col = (vgroup_color_mode == 2) ? float4(vgroup_color_blended, 0.9f): theme.colors.wire;
   final_color = (is_select) ? float4(1.0f) : vg_col;
   
    final_color.a = float(paint_overlay_flag);

@@ -124,10 +124,9 @@ class Paints : Overlay {
                                    res.shaders->paint_weight_fake_shading.get());
         sub.bind_texture("colorramp", &res.weight_ramp_tx);
         sub.push_constant("draw_contours", draw_contours);
-        sub.push_constant("vgroup_color_mode", vgroup_color_mode);
+        sub.push_constant("vgroup_color_mode", surface_vgroup_mode);
         sub.push_constant("vgroup_color_random_id", vgroup_color_random_id);
         sub.push_constant("opacity", state.overlay.weight_paint_mode_opacity);
-        sub.push_constant("vgroup_color_mode", surface_vgroup_mode);
         if (!shadeless) {
           /* Arbitrary light to give a hint of the geometry behind the weights. */
           sub.push_constant("light_dir", math::normalize(float3(0.0f, 0.5f, 0.86602f)));
