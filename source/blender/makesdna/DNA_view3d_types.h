@@ -638,7 +638,7 @@ struct View3DOverlay {
   int wpaint_flag = 0;
 
   /* eV3D_Overlay_WPaint_VGroupColorMode. */
-  int wpaint_vgroup_color_mode = V3D_OVERLAY_WPAINT_VGROUP_COLOR_NONE;
+  int wpaint_vgroup_colored_mode = V3D_OVERLAY_WPAINT_VGROUP_COLOR_NONE;
   int wpaint_vgroup_color_random_id = 1;
 
   /** Alpha for texture, weight, vertex paint overlay. */
