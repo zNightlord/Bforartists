@@ -3974,7 +3974,7 @@ static const EnumPropertyItem overlay_wpaint_vgroup_color_mode_items[] = {
      0,
      "Active",
      "Show random color of the active vertex group"},
-    {V3D_OVERLAY_WPAINT_VGROUP_COLOR_DEFORM,
+    {V3D_OVERLAY_WPAINT_VGROUP_COLOR_ALL,
      "ALL",
      0,
      "All",
