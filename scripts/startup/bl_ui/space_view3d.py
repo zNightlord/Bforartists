@@ -7750,12 +7750,15 @@ class VIEW3D_PT_overlay_weight_paint(Panel):
         col.prop(overlay, "weight_paint_mode_opacity", text="Opacity")
         
         col.separator()
-        ccol = col.column(align=True)
+        ccol = col.column()
         row = ccol.row()
         row.label(text="Color")
         sub = ccol.row()
+        sub.prop(overlay, "show_wpaint_colored_vertex", expand=True)
+        sub = ccol.row()
+        sub.label(text="Mode")
+        sub = row.row()
         sub.prop(overlay, "wpaint_vgroup_color_mode", expand=True)
-
         row = ccol.row()
         row.active = overlay.wpaint_vgroup_color_mode != 'NONE'
         row.prop(overlay, "wpaint_vgroup_color_random_id", text="Random ID")

@@ -34,7 +34,6 @@ static float3 blended_vgroup_color(const MDeformVert *dvert,
     return float3(0.0f);
   }
   float3 result(0.0f);
-  // float total_weight = 0.0f;
 
   for (int i = 0; i < dvert->totweight; i++) {
     const int def_nr = dvert->dw[i].def_nr;
@@ -42,22 +41,19 @@ static float3 blended_vgroup_color(const MDeformVert *dvert,
     if (def_nr < 0 || def_nr >= defgroup_len) {
       continue;
     }
-
+    
+    /* Active color mode. */
     if (mode == 1 && def_nr != active_index) {
       continue;
     }
 
-    if ((mode == 2 || mode == 3) && validmap && !validmap[def_nr]) {
+    if (validmap && !validmap[def_nr]) {
       continue;
     }
 
     const float w = float(dvert->dw[i].weight);
     result += hash_group_color(def_nr, random_id) * w;
-    // total_weight += w;
   }
-  // if (total_weight > 0.0f) {
-  //   result /= total_weight;
-  // }
   return result;
 }
 
