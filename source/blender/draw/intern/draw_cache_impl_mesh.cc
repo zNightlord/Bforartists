@@ -19,6 +19,7 @@
 #include "BLI_string_ref.hh"
 
 #include "DNA_mesh_types.h"
+#include "DNA_modifier_types.h"
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 #include "DNA_userdef_types.h"
@@ -343,7 +344,7 @@ static void drw_mesh_weight_state_extract(
   }
 
   /* Get valid deform groups (used by deform bones). */
-  if (wstate->defgroup_len > 0 && (wstate->flag & DRW_MESH_WEIGHT_STATE_HAS_ARMATURE)) {
+  if (wstate->defgroup_len > 0 && (wstate->flags & DRW_MESH_WEIGHT_STATE_HAS_ARMATURE)) {
     wstate->defgroup_validmap = BKE_object_defgroup_validmap_get(&ob, wstate->defgroup_len);
   }
 
