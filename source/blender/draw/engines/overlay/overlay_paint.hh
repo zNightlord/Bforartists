@@ -204,7 +204,7 @@ class Paints : Overlay {
       case CTX_MODE_PAINT_WEIGHT: {
         Mesh &mesh = DRW_object_get_data_for_drawing<Mesh>(*ob_ref.object);
         DRW_mesh_batch_cache_set_vgroup_color_mode(mesh,
-                                                   state.overlay.wpaint_vgroup_color_mode,
+                                                   state.overlay.wpaint_vgroup_colored_mode,
                                                    state.overlay.wpaint_vgroup_color_random_id);
         gpu::Batch *geom = DRW_cache_mesh_surface_weights_get(ob_ref.object);
         if (masked_transparency_support_ && ob_ref.object->dt >= OB_SOLID) {
@@ -241,7 +241,7 @@ class Paints : Overlay {
       /* Texture paint mode only draws the face selection without wires or vertices as we don't
        * draw on the geometry data directly. */
       const bool in_texture_paint_mode = state.ctx_mode == CTX_MODE_PAINT_TEXTURE;
-      const bool vertex_color_mode = (state.overlay.wpaint_vgroup_color_mode ==
+      const bool vertex_color_mode = (state.overlay.wpaint_vgroup_colored_mode ==
                                 V3D_OVERLAY_WPAINT_VGROUP_COLOR_VERTEX);
 
       if ((use_face_selection || show_wires_) && !in_texture_paint_mode) {
