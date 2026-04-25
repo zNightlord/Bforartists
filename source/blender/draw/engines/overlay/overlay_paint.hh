@@ -108,7 +108,7 @@ class Paints : Overlay {
                                      !state.xray_enabled;
       const bool shadeless = shading_type == OB_WIRE;
       const bool draw_contours = state.overlay.wpaint_flag & V3D_OVERLAY_WPAINT_CONTOURS;
-      const int vgroup_color_mode = state.overlay.wpaint_vgroup_color_mode;
+      const int vgroup_color_mode = state.overlay.wpaint_vgroup_colored_mode;
       const int vgroup_color_random_id = state.overlay.wpaint_vgroup_color_random_id;
 
       auto &pass = weight_ps_;
