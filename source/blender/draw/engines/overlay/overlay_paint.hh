@@ -110,9 +110,6 @@ class Paints : Overlay {
       const bool draw_contours = state.overlay.wpaint_flag & V3D_OVERLAY_WPAINT_CONTOURS;
       const int vgroup_color_mode = state.overlay.wpaint_vgroup_colored_mode;
       const int vgroup_color_random_id = state.overlay.wpaint_vgroup_color_random_id;
-      const int surface_vgroup_mode = (vgroup_color_mode == V3D_OVERLAY_WPAINT_VGROUP_COLOR_VERTEX) ?
-                                    V3D_OVERLAY_WPAINT_VGROUP_COLOR_NONE :
-                                    vgroup_color_mode;
 
       auto &pass = weight_ps_;
       pass.bind_ubo(OVERLAY_GLOBALS_SLOT, &res.globals_buf);
@@ -127,7 +124,6 @@ class Paints : Overlay {
         sub.push_constant("vgroup_color_mode", vgroup_color_mode);
         sub.push_constant("vgroup_color_random_id", vgroup_color_random_id);
         sub.push_constant("opacity", state.overlay.weight_paint_mode_opacity);
-        sub.push_constant("vgroup_color_mode", surface_vgroup_mode);
         if (!shadeless) {
           /* Arbitrary light to give a hint of the geometry behind the weights. */
           sub.push_constant("light_dir", math::normalize(float3(0.0f, 0.5f, 0.86602f)));

@@ -91,7 +91,7 @@ void main()
     }
 
     /* Contour display, only in non color and active color.*/
-    if (draw_contours && vgroup_color_mode < 2) {
+    if (draw_contours && vgroup_color_mode < 3) {
       /* This must be executed uniformly for all fragments. */
       float weight_gradient = length(float2(gpu_dfdx(weight), gpu_dfdy(weight)));
 
