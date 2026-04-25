@@ -334,10 +334,10 @@ static void drw_mesh_weight_state_extract(
 
   wstate->alert_mode = ts.weightuser;
 
-  wstate->flag &= ~DRW_MESH_WEIGHT_STATE_HAS_ARMATURE;
+  wstate->flags &= ~DRW_MESH_WEIGHT_STATE_HAS_ARMATURE;
   for (ModifierData &md : ob.modifiers) {
     if (md.type == eModifierType_Armature) {
-      wstate->flag |= DRW_MESH_WEIGHT_STATE_HAS_ARMATURE;
+      wstate->flags |= DRW_MESH_WEIGHT_STATE_HAS_ARMATURE;
       break;
     }
   }
