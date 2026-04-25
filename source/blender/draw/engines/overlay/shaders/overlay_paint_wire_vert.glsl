@@ -24,23 +24,14 @@ void main()
   if (is_hidden) {
     gl_Position = float4(-2.0f, -2.0f, -2.0f, 1.0f);
   }
+  float4 vg_col = use_colored_vertex ? float4(vgroup_color_blended, 1.0f) : theme.colors.wire;
+  float4 colSel = mix(vg_col, float4(1.0f), 0.15f);
 
-  constexpr float4 colSel = float4(1.0f);
+  final_color = (is_select) ? colSel : vg_col;
 
-  final_color = (is_select) ? colSel : theme.colors.wire;
-
-  /* Weight paint needs a light color to contrasts with dark weights. */
-  
+  /* Weight paint needs a light color to contrasts with dark weights. */  
   if (!use_select) {
-    final_color = float4(1.0f, 1.0f, 1.0f, 0.3f);
-  }
-
-  if (vgroup_color_mode == 4) {
-    /* VERTEX mode: replace base color with blended group color,
-     * but preserve selection tint by mixing over the top. */
-    float4 vg_col = float4(vertex_group_blended_color, 1.0f);
-
-    final_color = mix(vg_col, final_color, 0.4f);
+    final_color = float4(vg_col.rgb, 0.3f);
   }
 
   view_clipping_distances(world_pos);

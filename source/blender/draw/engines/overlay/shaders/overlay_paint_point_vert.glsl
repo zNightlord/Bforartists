@@ -24,14 +24,16 @@ void main()
   if (is_hidden) {
     gl_Position = float4(-2.0f, -2.0f, -2.0f, 1.0f);
   }
-
-  final_color = (is_select) ? float4(1.0f) : theme.colors.wire;
-  if (vgroup_color_mode == 4) {
-    float4 vg_col = float4(vertex_group_blended_color, 1.0f);
-    final_color = mix(vg_col, final_color, 0.4f);
+  
+ 
+  if (use_colored_vertex) {
+    float4 vg_col = float4(vgroup_color_blended, 1.0f);
+    final_color = (is_select) ? mix(vg_col, float4(1.0f, 1.0f, 1.0f, 1.0f), 0.8f) : mix(vg_col, float4(0.15f, 0.15f, 0.15f, 1.0f), 0.8f); 
+  } else {
+     final_color = (is_select) ? float4(1.0f) : theme.colors.wire;
   }
   final_color.a = float(paint_overlay_flag);
-
+  
   gl_PointSize = theme.sizes.vert * 2.0f;
 
   view_clipping_distances(world_pos);

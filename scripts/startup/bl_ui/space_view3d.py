@@ -7750,25 +7750,29 @@ class VIEW3D_PT_overlay_weight_paint(Panel):
         col.prop(overlay, "weight_paint_mode_opacity", text="Opacity")
         
         col.separator()
-        ccol = col.column(align=True)
+        ccol = col.column()
         row = ccol.row()
         row.label(text="Color")
         sub = ccol.row()
-        sub.prop(overlay, "wpaint_vgroup_color_mode", expand=True)
-
+        sub.prop(overlay, "show_wpaint_colored_vertex", expand=True)
+        ccol = ccol.column(align=True)
+        row = ccol.split(factor=0.33)
+        row.label(text="Mode")
+        sub = row.row()
+        sub.prop(overlay, "wpaint_vgroup_colored_mode", expand=True)
         row = ccol.row()
-        row.active = overlay.wpaint_vgroup_color_mode != 'NONE'
+        row.active = overlay.wpaint_vgroup_colored_mode != 'NONE'
         row.prop(overlay, "wpaint_vgroup_color_random_id", text="Random ID")
         
         col.separator()
         row = col.split(factor=0.33)
-        row.active = overlay.wpaint_vgroup_color_mode == 'NONE'
+        row.active = overlay.wpaint_vgroup_colored_mode == 'NONE'
         row.label(text="Zero Weights")
         sub = row.row()
         sub.prop(tool_settings, "vertex_group_user", expand=True)
 
         col_contour = col.column()
-        col_contour.active = overlay.wpaint_vgroup_color_mode in {'NONE', 'ACTIVE'}
+        col_contour.active = overlay.wpaint_vgroup_colored_mode in {'NONE', 'ACTIVE'}
         col_contour.prop(overlay, "show_wpaint_contours")
         col.prop(overlay, "show_paint_wire")
 
