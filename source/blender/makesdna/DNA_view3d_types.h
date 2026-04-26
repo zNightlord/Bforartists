@@ -351,15 +351,14 @@ ENUM_OPERATORS(eView3DOverlay_PaintFlag)
 /** #View3DOverlay.wpaint_flag */
 enum eView3DOverlay_WPaintFlag : int {
   V3D_OVERLAY_WPAINT_CONTOURS = (1 << 0),
-  V3D_OVERLAY_WPAINT_VGROUP_COLORS = (1 << 1),
+  V3D_OVERLAY_WPAINT_COLORED_VERTEX = (1 << 1),
 };
 
 /** #View3DOverlay.wpaint_vgroup_color_mode */
 enum eV3D_Overlay_WPaint_VGroupColorMode {
   V3D_OVERLAY_WPAINT_VGROUP_COLOR_NONE = 0,
   V3D_OVERLAY_WPAINT_VGROUP_COLOR_ACTIVE = 1,
-  V3D_OVERLAY_WPAINT_VGROUP_COLOR_DEFORM = 2,
-  V3D_OVERLAY_WPAINT_VGROUP_COLOR_ALL = 3,
+  V3D_OVERLAY_WPAINT_VGROUP_COLOR_ALL = 2,
 };
 ENUM_OPERATORS(eView3DOverlay_WPaintFlag)
 
@@ -666,7 +665,7 @@ struct View3DOverlay {
   eView3DOverlay_WPaintFlag wpaint_flag = {};
 
   /* eV3D_Overlay_WPaint_VGroupColorMode. */
-  int wpaint_vgroup_color_mode = V3D_OVERLAY_WPAINT_VGROUP_COLOR_NONE;
+  int wpaint_vgroup_colored_mode = V3D_OVERLAY_WPAINT_VGROUP_COLOR_NONE;
   int wpaint_vgroup_color_random_id = 1;
 
   /** Alpha for texture, weight, vertex paint overlay. */

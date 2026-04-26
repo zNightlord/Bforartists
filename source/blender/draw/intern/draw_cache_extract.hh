@@ -57,6 +57,7 @@ struct DRW_MeshWeightState {
 
   int vgroup_color_mode;
   int vgroup_color_random_id;
+  bool colored_vertex;
 };
 
 /* DRW_MeshWeightState.flags */
@@ -64,6 +65,7 @@ enum {
   DRW_MESH_WEIGHT_STATE_MULTIPAINT = (1 << 0),
   DRW_MESH_WEIGHT_STATE_AUTO_NORMALIZE = (1 << 1),
   DRW_MESH_WEIGHT_STATE_LOCK_RELATIVE = (1 << 2),
+  DRW_MESH_WEIGHT_STATE_HAS_ARMATURE = (1 << 3),
 };
 
 /**

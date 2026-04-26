@@ -19,6 +19,7 @@
 #include "BLI_string_ref.hh"
 
 #include "DNA_mesh_types.h"
+#include "DNA_modifier_types.h"
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 #include "DNA_userdef_types.h"
@@ -273,6 +274,7 @@ static void drw_mesh_weight_state_clear(DRW_MeshWeightState *wstate)
   memset(wstate, 0, sizeof(*wstate));
 
   wstate->defgroup_active = -1;
+  wstate->colored_vertex = false;
 }
 
 /** Copy selection data from one structure to another, including heap memory. */
@@ -317,6 +319,7 @@ static bool drw_mesh_weight_state_compare(const DRW_MeshWeightState *a,
          a->defgroup_sel_count == b->defgroup_sel_count &&
          a->vgroup_color_mode == b->vgroup_color_mode &&
          a->vgroup_color_random_id == b->vgroup_color_random_id &&
+         a->colored_vertex == b->colored_vertex &&
          drw_mesh_flags_equal(a->defgroup_sel, b->defgroup_sel, a->defgroup_len) &&
          drw_mesh_flags_equal(a->defgroup_locked, b->defgroup_locked, a->defgroup_len) &&
          drw_mesh_flags_equal(a->defgroup_unlocked, b->defgroup_unlocked, a->defgroup_len) &&
@@ -333,8 +336,17 @@ static void drw_mesh_weight_state_extract(
   wstate->defgroup_len = BLI_listbase_count(&mesh.vertex_group_names);
 
   wstate->alert_mode = ts.weightuser;
+
+  wstate->flags &= ~DRW_MESH_WEIGHT_STATE_HAS_ARMATURE;
+  for (ModifierData &md : ob.modifiers) {
+    if (md.type == eModifierType_Armature) {
+      wstate->flags |= DRW_MESH_WEIGHT_STATE_HAS_ARMATURE;
+      break;
+    }
+  }
+
   /* Get valid deform groups (used by deform bones). */
-  if (wstate->defgroup_len > 0) {
+  if (wstate->defgroup_len > 0 && (wstate->flags & DRW_MESH_WEIGHT_STATE_HAS_ARMATURE)) {
     wstate->defgroup_validmap = BKE_object_defgroup_validmap_get(&ob, wstate->defgroup_len);
   }
 
@@ -1312,7 +1324,7 @@ void DRW_mesh_batch_cache_create_requested(TaskGraph &task_graph,
                          GPU_PRIM_POINTS,
                          list,
                          std::nullopt,
-                         {VBOType::Position, VBOType::PaintOverlayFlag}});
+                         {VBOType::Position, VBOType::PaintOverlayFlag, VBOType::VertexGroupBlendedColor}});
     }
     if (batches_to_create & MBC_SCULPT_OVERLAYS) {
       batch_info.append({*cache.batch.sculpt_overlays,
@@ -1354,7 +1366,7 @@ void DRW_mesh_batch_cache_create_requested(TaskGraph &task_graph,
                          GPU_PRIM_LINES,
                          list,
                          IBOType::LinesPaintMask,
-                         {VBOType::Position, VBOType::PaintOverlayFlag}});
+                         {VBOType::Position, VBOType::PaintOverlayFlag, VBOType::VertexGroupBlendedColor}});
     }
     if (batches_to_create & MBC_WIRE_EDGES) {
       batch_info.append({*cache.batch.wire_edges,
@@ -1780,24 +1792,33 @@ void DRW_mesh_batch_cache_create_requested(TaskGraph &task_graph,
 
 /** \} */
 
-void DRW_mesh_batch_cache_set_vgroup_color_mode(Mesh &mesh, int mode, int random_id)
+void DRW_mesh_batch_cache_set_vgroup_color_mode(Mesh &mesh,
+                                                int mode,
+                                                int random_id,
+                                                bool colored_vertex)
 {
   MeshBatchCache *cache = mesh_batch_cache_get(mesh);
   if (!cache) {
     return;
   }
   const bool changed = cache->weight_state.vgroup_color_mode != mode ||
-                       cache->weight_state.vgroup_color_random_id != random_id;
+                       cache->weight_state.vgroup_color_random_id != random_id ||
+                       cache->weight_state.colored_vertex != colored_vertex;
 
   cache->weight_state.vgroup_color_mode = mode;
   cache->weight_state.vgroup_color_random_id = random_id;
+  cache->weight_state.colored_vertex = colored_vertex;
 
   if (changed) {
     for (MeshBufferCache *mbc : {&cache->final, &cache->cage, &cache->uv_cage}) {
       mbc->buff.vbos.remove(VBOType::VertexGroupBlendedColor);
     }
     GPU_BATCH_CLEAR_SAFE(cache->batch.surface_weights);
+    GPU_BATCH_CLEAR_SAFE(cache->batch.paint_overlay_verts);
+    GPU_BATCH_CLEAR_SAFE(cache->batch.paint_overlay_wire_loops);
     cache->batch_ready &= ~MBC_SURFACE_WEIGHTS;
+    cache->batch_ready &= ~MBC_PAINT_OVERLAY_VERTS;
+    cache->batch_ready &= ~MBC_PAINT_OVERLAY_WIRE_LOOPS;
   }
 }
 

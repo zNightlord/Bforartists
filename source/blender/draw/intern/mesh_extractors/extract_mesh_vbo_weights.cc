@@ -25,7 +25,7 @@ static float3 hash_group_color(int def_nr, int random_id)
 
 static float3 blended_vgroup_color(const MDeformVert *dvert,
                                    int random_id,
-                                   int mode,
+                                   int effective_mode,
                                    int active_index,
                                    const bool *validmap,
                                    int defgroup_len)
@@ -42,12 +42,14 @@ static float3 blended_vgroup_color(const MDeformVert *dvert,
     if (def_nr < 0 || def_nr >= defgroup_len) {
       continue;
     }
-
-    if (mode == 1 && def_nr != active_index) {
+    /* Filter by deform bones when armature exists. */
+    if (validmap && !validmap[def_nr]) {
       continue;
     }
-
-    if (mode == 2 && validmap && !validmap[def_nr]) {
+    /* ACTIVE mode: only contribute the active group.
+     * When effective_mode is ALL (including colored_vertex override),
+     * this filter is skipped so all groups contribute to vertex dot color. */
+    if (effective_mode == 1 && def_nr != active_index) {
       continue;
     }
 
@@ -55,9 +57,13 @@ static float3 blended_vgroup_color(const MDeformVert *dvert,
     result += hash_group_color(def_nr, random_id) * w;
     // total_weight += w;
   }
-  // if (total_weight > 0.0f) {
+
+  /* Normalize for ALL mode so colors show proportional group influence.
+   * ACTIVE mode stays un-normalized — intensity encodes weight magnitude. */
+  // if (effective_mode != VGROUP_COLOR_ACTIVE && total_weight > 0.0f) {
   //   result /= total_weight;
   // }
+
   return result;
 }
 
@@ -207,18 +213,25 @@ gpu::VertBufPtr extract_weight_vgroup_blended_color(const MeshRenderData &mr,
   MutableSpan<float3> vbo_data = vbo->data<float3>();
 
   const DRW_MeshWeightState &weight_state = cache.weight_state;
-  const int mode = weight_state.vgroup_color_mode;
   const int random_id = weight_state.vgroup_color_random_id;
   const int active_index = weight_state.defgroup_active;
   const bool *validmap = weight_state.defgroup_validmap;
   const int defgroup_len = weight_state.defgroup_len;
+  const bool colored_vertex = weight_state.colored_vertex;
 
-  if (mode == 0) {
+  /* When colored_vertex is on but surface mode is NONE,
+   * treat as ALL for VBO computation — point shader uses the color,
+   * surface shader ignores it via its own push constant. */
+  const int effective_mode = colored_vertex ?
+                                 V3D_OVERLAY_WPAINT_VGROUP_COLOR_ALL :
+                                 weight_state.vgroup_color_mode;
+
+  /* Nothing to compute */
+  if (effective_mode == 0) {
     vbo_data.fill(float3(0.0f));
     return vbo;
   }
 
-  /* Handles Mesh or BMesh API cases.*/
   if (mr.extract_type == MeshExtractType::Mesh) {
     const Mesh &mesh = *mr.mesh;
     const Span<MDeformVert> dverts = mesh.deform_verts();
@@ -230,7 +243,7 @@ gpu::VertBufPtr extract_weight_vgroup_blended_color(const MeshRenderData &mr,
     threading::parallel_for(colors.index_range(), 1024, [&](const IndexRange range) {
       for (const int vert : range) {
         colors[vert] = blended_vgroup_color(
-            &dverts[vert], random_id, mode, active_index, validmap, defgroup_len);
+            &dverts[vert], random_id, effective_mode, active_index, validmap, defgroup_len);
       }
     });
     array_utils::gather(colors.as_span(), mr.corner_verts, vbo_data);
@@ -251,7 +264,7 @@ gpu::VertBufPtr extract_weight_vgroup_blended_color(const MeshRenderData &mr,
           vbo_data[index] = blended_vgroup_color(
               static_cast<const MDeformVert *>(BM_ELEM_CD_GET_VOID_P(loop->v, offset)),
               random_id,
-              mode,
+              effective_mode,
               active_index,
               validmap,
               defgroup_len);
