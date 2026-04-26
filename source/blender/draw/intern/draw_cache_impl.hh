@@ -213,7 +213,7 @@ gpu::Batch *DRW_mesh_batch_cache_get_surface_sculpt(Object &object, Mesh &mesh);
 gpu::Batch *DRW_mesh_batch_cache_get_surface_weights(Mesh &mesh);
 gpu::Batch *DRW_mesh_batch_cache_get_sculpt_overlays(Mesh &mesh);
 gpu::Batch *DRW_mesh_batch_cache_get_surface_viewer_attribute(Mesh &mesh);
-void DRW_mesh_batch_cache_set_vgroup_color_mode(Mesh &mesh, int mode, int random_id);
+void DRW_mesh_batch_cache_set_vgroup_color_mode(Mesh &mesh, int mode, int random_id, bool colored_vertex);
 
 /** \} */
 
