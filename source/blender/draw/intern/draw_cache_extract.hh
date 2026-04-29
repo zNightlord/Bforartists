@@ -55,9 +55,9 @@ struct DRW_MeshWeightState {
   bool *defgroup_unlocked; /* #defgroup_len */
   bool *defgroup_validmap; /* #defgroup_len */
 
-  int vgroup_color_mode;
-  int vgroup_color_random_id;
-  bool colored_vertex;
+  /* Multi colored. */
+  bool draw_multi_colored;
+  int weight_paint_mutli_colored_random;
 };
 
 /* DRW_MeshWeightState.flags */

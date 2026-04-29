@@ -119,8 +119,8 @@ VERTEX_OUT(overlay_paint_weight_iface)
 SAMPLER(0, sampler1D, colorramp)
 PUSH_CONSTANT(float, opacity)      /* `1.0f` by default. */
 PUSH_CONSTANT(bool, draw_contours) /* `false` by default. */
-PUSH_CONSTANT(int,  vgroup_color_mode)
-PUSH_CONSTANT(int,  vgroup_color_random_id)
+PUSH_CONSTANT(bool,  draw_multi_colored)
+PUSH_CONSTANT(int,  weight_paint_mutli_colored_random)
 FRAGMENT_OUT(0, float4, frag_color)
 FRAGMENT_OUT(1, float4, line_output)
 VERTEX_SOURCE("overlay_paint_weight_vert.glsl")

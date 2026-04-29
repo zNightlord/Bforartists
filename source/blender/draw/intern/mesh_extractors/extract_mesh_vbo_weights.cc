@@ -25,8 +25,6 @@ static float3 hash_group_color(int def_nr, int random_id)
 
 static float3 blended_vgroup_color(const MDeformVert *dvert,
                                    int random_id,
-                                   int effective_mode,
-                                   int active_index,
                                    const bool *validmap,
                                    int defgroup_len)
 {
@@ -43,12 +41,6 @@ static float3 blended_vgroup_color(const MDeformVert *dvert,
     }
     /* Filter by deform bones when armature exists. */
     if (validmap && !validmap[def_nr]) {
-      continue;
-    }
-    /* ACTIVE mode: only contribute the active group.
-     * When effective_mode is ALL (including colored_vertex override),
-     * this filter is skipped so all groups contribute to vertex dot color. */
-    if (effective_mode == 1 && def_nr != active_index) {
       continue;
     }
 
@@ -211,21 +203,13 @@ gpu::VertBufPtr extract_weight_vgroup_blended_color(const MeshRenderData &mr,
   MutableSpan<float3> vbo_data = vbo->data<float3>();
 
   const DRW_MeshWeightState &weight_state = cache.weight_state;
-  const int random_id = weight_state.vgroup_color_random_id;
+  const int random_id = weight_state.weight_paint_mutli_colored_random;
   const int active_index = weight_state.defgroup_active;
   const bool *validmap = weight_state.defgroup_validmap;
   const int defgroup_len = weight_state.defgroup_len;
-  const bool colored_vertex = weight_state.colored_vertex;
-
-  /* When colored_vertex is on but surface mode is NONE,
-   * treat as ALL for VBO computation — point shader uses the color,
-   * surface shader ignores it via its own push constant. */
-  const int effective_mode = colored_vertex ?
-                                 V3D_OVERLAY_WPAINT_VGROUP_COLOR_ALL :
-                                 weight_state.vgroup_color_mode;
 
   /* Nothing to compute */
-  if (effective_mode == 0) {
+  if (!weight_state.draw_multi_colored) {
     vbo_data.fill(float3(0.0f));
     return vbo;
   }
@@ -241,7 +225,7 @@ gpu::VertBufPtr extract_weight_vgroup_blended_color(const MeshRenderData &mr,
     threading::parallel_for(colors.index_range(), 1024, [&](const IndexRange range) {
       for (const int vert : range) {
         colors[vert] = blended_vgroup_color(
-            &dverts[vert], random_id, effective_mode, active_index, validmap, defgroup_len);
+            &dverts[vert], random_id, validmap, defgroup_len);
       }
     });
     array_utils::gather(colors.as_span(), mr.corner_verts, vbo_data);
@@ -262,8 +246,6 @@ gpu::VertBufPtr extract_weight_vgroup_blended_color(const MeshRenderData &mr,
           vbo_data[index] = blended_vgroup_color(
               static_cast<const MDeformVert *>(BM_ELEM_CD_GET_VOID_P(loop->v, offset)),
               random_id,
-              effective_mode,
-              active_index,
               validmap,
               defgroup_len);
           loop = loop->next;

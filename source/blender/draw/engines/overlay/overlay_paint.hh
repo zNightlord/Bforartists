@@ -67,6 +67,7 @@ class Paints : Overlay {
     show_wires_ = state.overlay.paint_flag & V3D_OVERLAY_PAINT_WIRE;
 
     {
+      const bool vgroup_colored_vertex = state.overlay.wpaint_flag & V3D_OVERLAY_WPAINT_COLORED_MULTI_VERTEX;
       auto &pass = paint_region_ps_;
       pass.bind_ubo(OVERLAY_GLOBALS_SLOT, &res.globals_buf);
       pass.bind_ubo(DRW_CLIPPING_UBO_SLOT, &res.clip_planes_buf);
@@ -85,7 +86,7 @@ class Paints : Overlay {
                           DRW_STATE_BLEND_ALPHA,
                       state.clipping_plane_count);
         sub.shader_set(res.shaders->paint_region_edge.get());
-        sub.push_constant("use_colored_vertex", state.overlay.wpaint_flag & V3D_OVERLAY_WPAINT_COLORED_VERTEX);
+        sub.push_constant("use_colored_vertex", vgroup_colored_vertex);
         paint_region_edge_ps_ = &sub;
       }
       {
@@ -93,7 +94,7 @@ class Paints : Overlay {
         sub.state_set(DRW_STATE_WRITE_COLOR | DRW_STATE_WRITE_DEPTH | DRW_STATE_DEPTH_LESS_EQUAL,
                       state.clipping_plane_count);
         sub.shader_set(res.shaders->paint_region_vert.get());
-        sub.push_constant("use_colored_vertex", state.overlay.wpaint_flag & V3D_OVERLAY_WPAINT_COLORED_VERTEX);
+        sub.push_constant("use_colored_vertex", vgroup_colored_vertex);
         paint_region_vert_ps_ = &sub;
       }
     }
@@ -108,8 +109,8 @@ class Paints : Overlay {
                                      !state.xray_enabled;
       const bool shadeless = shading_type == OB_WIRE;
       const bool draw_contours = state.overlay.wpaint_flag & V3D_OVERLAY_WPAINT_CONTOURS;
-      const int vgroup_color_mode = state.overlay.wpaint_vgroup_colored_mode;
-      const int vgroup_color_random_id = state.overlay.wpaint_vgroup_color_random_id;
+      const bool vgroup_colored = state.overlay.wpaint_flag & V3D_OVERLAY_WPAINT_COLORED_MULTI;
+      const int vgroup_color_random = state.overlay.weight_paint_mutli_colored_random;
 
       auto &pass = weight_ps_;
       pass.bind_ubo(OVERLAY_GLOBALS_SLOT, &res.globals_buf);
@@ -121,8 +122,8 @@ class Paints : Overlay {
                                    res.shaders->paint_weight_fake_shading.get());
         sub.bind_texture("colorramp", &res.weight_ramp_tx);
         sub.push_constant("draw_contours", draw_contours);
-        sub.push_constant("vgroup_color_mode", vgroup_color_mode);
-        sub.push_constant("vgroup_color_random_id", vgroup_color_random_id);
+        sub.push_constant("draw_multi_colored", vgroup_colored);
+        sub.push_constant("weight_paint_mutli_colored_random", vgroup_color_random);
         sub.push_constant("opacity", state.overlay.weight_paint_mode_opacity);
         if (!shadeless) {
           /* Arbitrary light to give a hint of the geometry behind the weights. */
@@ -203,10 +204,10 @@ class Paints : Overlay {
     switch (state.ctx_mode) {
       case CTX_MODE_PAINT_WEIGHT: {
         Mesh &mesh = DRW_object_get_data_for_drawing<Mesh>(*ob_ref.object);
-        DRW_mesh_batch_cache_set_vgroup_color_mode(mesh,
-                                                   state.overlay.wpaint_vgroup_colored_mode,
-                                                   state.overlay.wpaint_vgroup_color_random_id,
-                                                   state.overlay.wpaint_flag & V3D_OVERLAY_WPAINT_COLORED_VERTEX);
+        DRW_mesh_batch_cache_set_draw_multi_colored(mesh,
+                                                   state.overlay.wpaint_flag & (V3D_OVERLAY_WPAINT_COLORED_MULTI | V3D_OVERLAY_WPAINT_COLORED_MULTI_VERTEX),
+                                                   state.overlay.weight_paint_mutli_colored_random,
+                                                   );
         gpu::Batch *geom = DRW_cache_mesh_surface_weights_get(ob_ref.object);
         if (masked_transparency_support_ && ob_ref.object->dt >= OB_SOLID) {
           weight_masked_transparency_ps_->draw(geom, manager.unique_handle(ob_ref));
@@ -242,7 +243,7 @@ class Paints : Overlay {
       /* Texture paint mode only draws the face selection without wires or vertices as we don't
        * draw on the geometry data directly. */
       const bool in_texture_paint_mode = state.ctx_mode == CTX_MODE_PAINT_TEXTURE;
-      const bool vertex_color_mode = (state.overlay.wpaint_flag & V3D_OVERLAY_WPAINT_COLORED_VERTEX);
+      const bool vertex_color_mode = (state.overlay.wpaint_flag & V3D_OVERLAY_WPAINT_COLORED_MULTI_VERTEX);
 
       if ((use_face_selection || show_wires_) && !in_texture_paint_mode) {
         gpu::Batch *geom = DRW_cache_mesh_paint_overlay_edges_get(ob_ref.object);
