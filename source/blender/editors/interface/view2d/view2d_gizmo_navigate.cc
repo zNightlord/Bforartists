@@ -151,7 +151,7 @@ static bool WIDGETGROUP_navigate_poll(const bContext *C, wmGizmoGroupType * /*gz
     }
     case SPACE_NODE: {
       const SpaceNode *snode = static_cast<const SpaceNode *>(area->spacedata.first);
-      if (snode->gizmo_flag & (SNODE_GIZMO_HIDE | SNODE_GIZMO_HIDE_NAVIGATE))
+      if (snode->gizmo_flag & (SNODE_GIZMO_HIDE))
         return false;
     } break;
   }

@@ -160,7 +160,7 @@ enum eWM_GizmoFlagGroupTypeFlag {
    */
   WM_GIZMOGROUPTYPE_VR_REDRAWS = (1 << 10),
   WM_GIZMOGROUPTYPE_2D_UI = (1 << 11),
-  WM_GIZMOGROUPTYPE_2D= (1 << 12),
+  WM_GIZMOGROUPTYPE_2D_TOOL = (1 << 12),
 };
 
 ENUM_OPERATORS(eWM_GizmoFlagGroupTypeFlag);
@@ -533,6 +533,6 @@ enum eWM_GizmoFlagMapDrawStep {
   /** Draw 3D gizmo-groups (#WM_GIZMOGROUPTYPE_3D set). */
   WM_GIZMOMAP_DRAWSTEP_3D,
 };
-#define WM_GIZMOMAP_DRAWSTEP_MAX 2
+#define WM_GIZMOMAP_DRAWSTEP_MAX 3
 
 }  // namespace blender
