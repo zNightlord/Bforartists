@@ -28,6 +28,7 @@ void main()
   if (use_colored_vertex) {
     float4 vg_col = float4(vgroup_color_blended, 1.0f);
     final_color = (is_select) ? mix(vg_col, float4(1.0f, 1.0f, 1.0f, 1.0f), 0.8f) : mix(vg_col, float4(0.15f, 0.15f, 0.15f, 1.0f), 0.1f); 
+    final_color.a = opacity;
   } else {
     final_color = (is_select) ? float4(1.0f) : theme.colors.wire;
   }

@@ -86,6 +86,7 @@ class Paints : Overlay {
                           DRW_STATE_BLEND_ALPHA,
                       state.clipping_plane_count);
         sub.shader_set(res.shaders->paint_region_edge.get());
+        sub.push_constant("opacity", state.overlay.weight_paint_mode_opacity);
         sub.push_constant("use_colored_vertex", vgroup_colored_vertex);
         paint_region_edge_ps_ = &sub;
       }
@@ -94,6 +95,7 @@ class Paints : Overlay {
         sub.state_set(DRW_STATE_WRITE_COLOR | DRW_STATE_WRITE_DEPTH | DRW_STATE_DEPTH_LESS_EQUAL,
                       state.clipping_plane_count);
         sub.shader_set(res.shaders->paint_region_vert.get());
+        sub.push_constant("opacity", state.overlay.weight_paint_mode_opacity);
         sub.push_constant("use_colored_vertex", vgroup_colored_vertex);
         paint_region_vert_ps_ = &sub;
       }

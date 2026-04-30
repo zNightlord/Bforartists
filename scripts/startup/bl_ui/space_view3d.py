@@ -7760,20 +7760,20 @@ class VIEW3D_PT_overlay_weight_paint(Panel):
         sub = ccol.row()
         sub.prop(overlay, "show_wpaint_colored_vertex")
         sub = ccol.row()
-        sub.prop(overlay, "wpaint_vgroup_colored_mode")
+        sub.prop(overlay, "show_weight_multi_colored")
         sub = ccol.row()
-        sub.active = overlay.wpaint_vgroup_colored_mode
+        sub.active = overlay.show_weight_multi_colored
         sub.prop(overlay, "wpaint_weight_paint_mutli_colored_random", text="Random ID")
         
         col.separator()
         row = col.split(factor=0.33)
-        row.active = not overlay.wpaint_vgroup_colored_mode
+        row.active = not overlay.show_weight_multi_colored
         row.label(text="Zero Weights")
         sub = row.row()
         sub.prop(tool_settings, "vertex_group_user", expand=True)
 
         col_contour = col.column()
-        col_contour.active = not overlay.wpaint_vgroup_colored_mode
+        col_contour.active = not overlay.show_weight_multi_colored
         col_contour.prop(overlay, "show_wpaint_contours")
         col.prop(overlay, "show_paint_wire")
 
