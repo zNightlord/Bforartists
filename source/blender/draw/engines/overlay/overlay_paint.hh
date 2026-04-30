@@ -206,7 +206,7 @@ class Paints : Overlay {
         Mesh &mesh = DRW_object_get_data_for_drawing<Mesh>(*ob_ref.object);
         DRW_mesh_batch_cache_set_draw_multi_colored(mesh,
                                                    state.overlay.wpaint_flag & (V3D_OVERLAY_WPAINT_COLORED_MULTI | V3D_OVERLAY_WPAINT_COLORED_MULTI_VERTEX),
-                                                   state.overlay.weight_paint_mutli_colored_random,
+                                                   state.overlay.weight_paint_mutli_colored_random
                                                    );
         gpu::Batch *geom = DRW_cache_mesh_surface_weights_get(ob_ref.object);
         if (masked_transparency_support_ && ob_ref.object->dt >= OB_SOLID) {
