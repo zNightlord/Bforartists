@@ -31,8 +31,8 @@ void main()
     final_color.a = opacity;
   } else {
     final_color = (is_select) ? float4(1.0f) : theme.colors.wire;
+    final_color.a = float(paint_overlay_flag);
   }
-  final_color.a = float(paint_overlay_flag);
   
   gl_PointSize = theme.sizes.vert * 2.0f;
 

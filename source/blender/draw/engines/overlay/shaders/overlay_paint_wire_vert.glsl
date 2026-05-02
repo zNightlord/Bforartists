@@ -28,13 +28,13 @@ void main()
   float4 colSel = mix(vg_col, float4(1.0f), 0.8f);
 
   final_color = (is_select) ? colSel : vg_col;
-  if (use_colored_vertex) {
-    final_color.a = opacity;
-  }
 
   /* Weight paint needs a light color to contrasts with dark weights. */  
   if (!use_select) {
     final_color = float4(vg_col.rgb, 0.3f);
+  }
+  if (use_colored_vertex) {
+    final_color.a = opacity;
   }
 
   if (vgroup_color_mode == 4) {
