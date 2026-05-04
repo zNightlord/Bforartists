@@ -92,7 +92,8 @@ class Paints : Overlay {
       }
       {
         auto &sub = pass.sub("Vert");
-        sub.state_set(DRW_STATE_WRITE_COLOR | DRW_STATE_WRITE_DEPTH | DRW_STATE_DEPTH_LESS_EQUAL,
+        sub.state_set(DRW_STATE_WRITE_COLOR | DRW_STATE_WRITE_DEPTH | DRW_STATE_DEPTH_LESS_EQUAL |
+                          DRW_STATE_BLEND_ALPHA,
                       state.clipping_plane_count);
         sub.shader_set(res.shaders->paint_region_vert.get());
         sub.push_constant("opacity", state.overlay.weight_paint_mode_opacity);
