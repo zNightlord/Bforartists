@@ -240,7 +240,7 @@ void Instance::ensure_prop_edit_ramp_texture()
   };
 
   if (!is_equal(resources.prop_edit_ramp_copy, U.coba_prop)) {
-    resources.prop_edit_ramp_copy = *cband;
+    resources.prop_edit_ramp_copy = U.coba_prop;
     resources.prop_edit_ramp_tx.free();
   }
 
