@@ -1584,6 +1584,8 @@ UserDef *BKE_blendfile_userdef_from_defaults()
 
   /* Init weight paint range. */
   BKE_colorband_init(&userdef->coba_weight, true);
+  BKE_colorband_init(&userdef->coba_prop, true);
+
 
   /* Default studio light. */
   BKE_studiolight_default(userdef->light_param, userdef->light_ambient);

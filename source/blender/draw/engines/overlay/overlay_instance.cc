@@ -132,6 +132,7 @@ void Instance::init()
   resources.update_clip_planes(state);
 
   ensure_weight_ramp_texture();
+  ensure_prop_edit_ramp_texture(); 
 
   {
     eGPUTextureUsage usage = GPU_TEXTURE_USAGE_SHADER_READ;
@@ -218,6 +219,49 @@ void Instance::ensure_weight_ramp_texture()
   resources.weight_ramp_tx.ensure_1d(
       gpu::TextureFormat::SRGBA_8_8_8_8, res, GPU_TEXTURE_USAGE_SHADER_READ);
   GPU_texture_update(resources.weight_ramp_tx, GPU_DATA_UBYTE, pixels_ubyte);
+}
+
+void Instance::ensure_prop_edit_ramp_texture()
+{
+  /* Same equality check pattern as ensure_weight_ramp_texture */
+  auto is_equal = [](const ColorBand &a, const ColorBand &b) {
+    if (a.tot != b.tot || a.ipotype != b.ipotype || a.color_mode != b.color_mode) {
+      return false;
+    }
+    for (int i = 0; i < ARRAY_SIZE(a.data); i++) {
+      const CBData &da = a.data[i];
+      const CBData &db = b.data[i];
+      if (da.r != db.r || da.g != db.g || da.b != db.b ||
+          da.a != db.a || da.pos != db.pos) {
+        return false;
+      }
+    }
+    return true;
+  };
+
+  if (!is_equal(resources.prop_edit_ramp_copy, U.coba_prop)) {
+    resources.prop_edit_ramp_copy = U.coba_prop;
+    resources.prop_edit_ramp_tx.free();
+  }
+
+  if (resources.prop_edit_ramp_tx.is_valid()) {
+    return;
+  }
+
+  constexpr int res = 256;
+  float pixels[res][4];
+  for (int i = 0; i < res; i++) {
+    BKE_colorband_evaluate(&U.coba_prop, float(i) / float(res - 1), pixels[i]);
+  }
+
+  uchar4 pixels_ubyte[res];
+  for (int i = 0; i < res; i++) {
+    unit_float_to_uchar_clamp_v4(pixels_ubyte[i], pixels[i]);
+  }
+
+  resources.prop_edit_ramp_tx.ensure_1d(
+      gpu::TextureFormat::SRGBA_8_8_8_8, res, GPU_TEXTURE_USAGE_SHADER_READ);
+  GPU_texture_update(resources.prop_edit_ramp_tx, GPU_DATA_UBYTE, pixels_ubyte);
 }
 
 void Resources::update_clip_planes(const State &state)

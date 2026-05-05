@@ -63,6 +63,13 @@ void main()
 
   bool occluded = test_occlusion();
 
+  /* Proportional editing influence overlay */
+  if (prop_weight >= 0.0f) {
+    float4 ramp_col = texture(weight_ramp, prop_weight);
+    final_color.rgb = mix(final_color.rgb, ramp_col.rgb, ramp_col.a);
+    gl_PointSize *= 1.4f;
+  }
+
 #elif defined(EDGE)
 #  ifdef FLAT
   final_color = EDIT_MESH_edge_color_inner(m_data.y);

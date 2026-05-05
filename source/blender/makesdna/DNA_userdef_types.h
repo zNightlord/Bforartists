@@ -62,6 +62,7 @@ enum eUserPref_Flag {
   USER_FLAG_DISABLE_SEARCH_ON_KEYPRESS = (1 << 29),
   /* bfa - gooengine disable material icon rendering */
   USER_DISABLE_MATERIAL_ICON = (1 << 30),
+  USER_PROP_EDIT_CUSTOM_RANGE = (1 << 31),
 };
 
 /** #UserDef.extension_flag */
@@ -1184,6 +1185,8 @@ struct UserDef {
 
   /** From texture.h. */
   struct ColorBand coba_weight;
+  struct ColorBand coba_prop;
+
 
   float sculpt_paint_overlay_col[3] = {0, 0, 0};
   /** Default color for newly created Grease Pencil layers. */

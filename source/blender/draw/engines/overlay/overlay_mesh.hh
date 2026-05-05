@@ -66,6 +66,8 @@ class Meshes : Overlay {
   /* Depth pre-pass to cull edit cage in case the object is not opaque. */
   PassSimple edit_mesh_prepass_ps_ = {"Prepass"};
 
+  bool show_prop_weight_ = false;                         /* NEW */
+
   bool xray_enabled_ = false;
   bool xray_flag_enabled_ = false;
 
@@ -118,6 +120,9 @@ class Meshes : Overlay {
     show_mesh_analysis_ = (edit_flag & V3D_OVERLAY_EDIT_STATVIS);
     show_face_overlay_ = (edit_flag & V3D_OVERLAY_EDIT_FACES);
     show_weight_ = (edit_flag & V3D_OVERLAY_EDIT_WEIGHT);
+
+    show_prop_weight_ = (G.moving & G_TRANSFORM_EDIT) &&
+                    edit_flag & V3D_OVERLAY_EDIT_PROPORTIONAL_EDITING;
 
     const bool show_face_nor = (edit_flag & V3D_OVERLAY_EDIT_FACE_NORMALS);
     const bool show_loop_nor = (edit_flag & V3D_OVERLAY_EDIT_LOOP_NORMALS);
@@ -234,6 +239,9 @@ class Meshes : Overlay {
       pass.push_constant("ndc_offset_factor", &state.ndc_offset_factor);
       pass.push_constant("ndc_offset", ndc_offset);
       pass.push_constant("data_mask", int4(data_mask));
+      if (show_prop_weight_) {
+        pass.bind_texture("weight_ramp", &res.prop_edit_ramp_tx);
+      }
       pass.bind_ubo(OVERLAY_GLOBALS_SLOT, &res.globals_buf);
       pass.bind_ubo(DRW_CLIPPING_UBO_SLOT, &res.clip_planes_buf);
     };
@@ -363,6 +371,54 @@ class Meshes : Overlay {
     if (select_vert_) {
       gpu::Batch *geom = DRW_mesh_batch_cache_get_edit_vertices(mesh);
       edit_mesh_verts_ps_.draw(geom, res_handle);
+    }
+    if (show_prop_weight_) {
+      if (BMEditMesh *em = mesh.runtime->edit_mesh.get()) {
+        BMesh *bm = em->bm;
+        const ToolSettings *ts = state.scene->toolsettings;
+        const float prop_size = ts->proportional_size;
+        const short prop_mode = ts->prop_mode;
+
+        /* Selection center in object space */
+        float3 center(0.0f);
+        int sel_count = 0;
+        BMVert *v;
+        BMIter iter;
+        BM_ITER_MESH(v, &iter, bm, BM_VERTS_OF_MESH) {
+          if (BM_elem_flag_test(v, BM_ELEM_SELECT)) {
+            center += float3(v->co);
+            sel_count++;
+          }
+        }
+        if (sel_count > 0) {
+          center /= float(sel_count);
+        }
+
+        BM_mesh_elem_index_ensure(bm, BM_VERT);
+        Array<float> weights(bm->totvert);
+        int i = 0;
+        BM_ITER_MESH_INDEX(v, &iter, bm, BM_VERTS_OF_MESH, i) {
+          if (BM_elem_flag_test(v, BM_ELEM_SELECT)) {
+            weights[i] = 1.0f;
+          }
+          else {
+            float dist = math::distance(float3(v->co), center);
+            weights[i] = prop_edit_falloff(dist, prop_size, prop_mode);
+          }
+        }
+
+        GPUVertFormat fmt = {0};
+        GPU_vertformat_attr_add(&fmt, "prop_weight", gpu::VertAttrType::SFLOAT_32);
+        gpu::VertBuf *vbo = GPU_vertbuf_create_with_format_ex(fmt, GPU_USAGE_STREAM);
+        GPU_vertbuf_data_alloc(*vbo, bm->totvert);
+        GPU_vertbuf_update_data(*vbo, 0, bm->totvert, weights.data());
+
+        PassSimple::Sub &sub = edit_mesh_verts_ps_.sub("PropWeight");
+        sub.bind_texture("weight_ramp", &res.prop_edit_ramp_tx);
+        gpu::Batch *geom = DRW_mesh_batch_cache_get_edit_vertices(mesh);
+        sub.draw(geom, res_handle);
+        GPU_vertbuf_discard(vbo);
+      }
     }
     if (select_face_dots_) {
       gpu::Batch *geom = DRW_mesh_batch_cache_get_edit_facedots(mesh);
@@ -799,6 +855,25 @@ class MeshUVs : Overlay {
     if (show_face_overlay_ && has_active_object_uvmap && space_image->uv_face_opacity > 0.0f) {
       gpu::Batch *geom = DRW_mesh_batch_cache_get_uv_faces(*ob, mesh);
       faces_ps_.draw(geom, res_handle);
+    }
+  }
+
+  static float prop_edit_falloff(float dist, float prop_size, short prop_mode)
+  {
+    if (dist >= prop_size) {
+      return -1.0f;
+    }
+    float fac = (prop_size - dist) / prop_size;
+    fac = math::max(fac, 0.0f);
+    switch (prop_mode) {
+      case PROP_SMOOTH:    return 3.0f*fac*fac - 2.0f*fac*fac*fac;
+      case PROP_SPHERE:    return sqrtf(2.0f*fac - fac*fac);
+      case PROP_ROOT:      return sqrtf(fac);
+      case PROP_SHARP:     return fac*fac;
+      case PROP_LIN:       return fac;
+      case PROP_CONST:     return 1.0f;
+      case PROP_INVSQUARE: return fac*(2.0f - fac);
+      default:             return fac;
     }
   }
 

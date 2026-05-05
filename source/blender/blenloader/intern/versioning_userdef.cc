@@ -806,6 +806,25 @@ static void keymap_update_mesh_texture_paint_brushes(wmKeyMap *keymap)
   keymap_update_brushes(keymap, asset_prefix, tool_property, tool_tool_map, {}, id_asset_map);
 }
 
+static float prop_edit_falloff(float dist, float prop_size, short prop_mode)
+  {
+    if (dist >= prop_size) {
+      return -1.0f;
+    }
+    float fac = (prop_size - dist) / prop_size;
+    fac = math::max(fac, 0.0f);
+    switch (prop_mode) {
+      case PROP_SMOOTH:    return 3.0f*fac*fac - 2.0f*fac*fac*fac;
+      case PROP_SPHERE:    return sqrtf(2.0f*fac - fac*fac);
+      case PROP_ROOT:      return sqrtf(fac);
+      case PROP_SHARP:     return fac*fac;
+      case PROP_LIN:       return fac;
+      case PROP_CONST:     return 1.0f;
+      case PROP_INVSQUARE: return fac*(2.0f - fac);
+      default:             return fac;
+    }
+  }
+
 void blo_do_versions_userdef(UserDef *userdef)
 {
   UserDef U_default = {};
@@ -1863,6 +1882,11 @@ void blo_do_versions_userdef(UserDef *userdef)
 
   if (!USER_VERSION_ATLEAST(502, 13)) {
     userdef->geometry_nodes_stack_limit = 100;
+  }
+
+  if (!USER_VERSION_ATLEAST(502, 13)) {
+    /* Init colorbands that didn't exist before */
+    prop_edit_colorband_default(&userdef->coba_prop);
   }
 
   /**
