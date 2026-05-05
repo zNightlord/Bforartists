@@ -666,9 +666,13 @@ struct Resources : public select::SelectMap {
 
   /** Copy of the settings the current texture was generated with. Used to detect updates. */
   bool weight_ramp_custom = false;
+  bool prop_edit_ramp_custom = false;
+
   ColorBand weight_ramp_copy = {};
+  ColorBand prop_edit_ramp_copy = {};
   /** Baked color ramp texture from theme and user settings. Maps weight [0..1] to color. */
   Texture weight_ramp_tx = {"weight_ramp"};
+  Texture prop_edit_ramp_tx = {"prop_edit_ramp"};
 
   Vector<MovieClip *> bg_movie_clips;
 

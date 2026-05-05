@@ -1865,6 +1865,38 @@ void blo_do_versions_userdef(UserDef *userdef)
     userdef->geometry_nodes_stack_limit = 100;
   }
 
+  static void prop_edit_colorband_default(ColorBand *coba)
+  {
+    /* Yellow → Orange → Red → Black */
+    coba->data[0].r = 1.0f; coba->data[0].g = 1.0f; coba->data[0].b = 0.0f;
+    coba->data[0].a = 1.0f; coba->data[0].pos = 0.0f;
+
+    coba->data[1].r = 1.0f; coba->data[1].g = 0.5f; coba->data[1].b = 0.0f;
+    coba->data[1].a = 1.0f; coba->data[1].pos = 0.33f;
+
+    coba->data[2].r = 1.0f; coba->data[2].g = 0.0f; coba->data[2].b = 0.0f;
+    coba->data[2].a = 1.0f; coba->data[2].pos = 0.66f;
+
+    coba->data[3].r = 0.0f; coba->data[3].g = 0.0f; coba->data[3].b = 0.0f;
+    coba->data[3].a = 1.0f; coba->data[3].pos = 1.0f;
+
+    /* Fill remaining slots same as BKE_colorband_init */
+    for (int a = 4; a < MAXCOLORBAND; a++) {
+      coba->data[a].r = 0.5f; coba->data[a].g = 0.5f; coba->data[a].b = 0.5f;
+      coba->data[a].a = 1.0f; coba->data[a].pos = 0.5f;
+    }
+
+    coba->tot = 4;
+    coba->cur = 0;
+    coba->color_mode = COLBAND_BLEND_RGB;
+    coba->ipotype = COLBAND_INTERP_LINEAR;
+  }
+
+  if (!USER_VERSION_ATLEAST(502, 13)) {
+    /* Init colorbands that didn't exist before */
+    prop_edit_colorband_default(&userdef->coba_prop);
+  }
+
   /**
    * Always bump subversion in BKE_blender_version.h when adding versioning
    * code here, and wrap it inside a USER_VERSION_ATLEAST check.

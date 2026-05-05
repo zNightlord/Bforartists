@@ -157,6 +157,7 @@ class Instance : public DrawEngine {
   void draw_text(Framebuffer &framebuffer);
 
   void ensure_weight_ramp_texture();
+  void ensure_prop_edit_ramp_texture();
 };
 
 }  // namespace blender::draw::overlay
