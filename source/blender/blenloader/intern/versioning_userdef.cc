@@ -806,6 +806,25 @@ static void keymap_update_mesh_texture_paint_brushes(wmKeyMap *keymap)
   keymap_update_brushes(keymap, asset_prefix, tool_property, tool_tool_map, {}, id_asset_map);
 }
 
+static float prop_edit_falloff(float dist, float prop_size, short prop_mode)
+  {
+    if (dist >= prop_size) {
+      return -1.0f;
+    }
+    float fac = (prop_size - dist) / prop_size;
+    fac = math::max(fac, 0.0f);
+    switch (prop_mode) {
+      case PROP_SMOOTH:    return 3.0f*fac*fac - 2.0f*fac*fac*fac;
+      case PROP_SPHERE:    return sqrtf(2.0f*fac - fac*fac);
+      case PROP_ROOT:      return sqrtf(fac);
+      case PROP_SHARP:     return fac*fac;
+      case PROP_LIN:       return fac;
+      case PROP_CONST:     return 1.0f;
+      case PROP_INVSQUARE: return fac*(2.0f - fac);
+      default:             return fac;
+    }
+  }
+
 void blo_do_versions_userdef(UserDef *userdef)
 {
   UserDef U_default = {};
@@ -1863,33 +1882,6 @@ void blo_do_versions_userdef(UserDef *userdef)
 
   if (!USER_VERSION_ATLEAST(502, 13)) {
     userdef->geometry_nodes_stack_limit = 100;
-  }
-
-  static void prop_edit_colorband_default(ColorBand *coba)
-  {
-    /* Yellow → Orange → Red → Black */
-    coba->data[0].r = 1.0f; coba->data[0].g = 1.0f; coba->data[0].b = 0.0f;
-    coba->data[0].a = 1.0f; coba->data[0].pos = 0.0f;
-
-    coba->data[1].r = 1.0f; coba->data[1].g = 0.5f; coba->data[1].b = 0.0f;
-    coba->data[1].a = 1.0f; coba->data[1].pos = 0.33f;
-
-    coba->data[2].r = 1.0f; coba->data[2].g = 0.0f; coba->data[2].b = 0.0f;
-    coba->data[2].a = 1.0f; coba->data[2].pos = 0.66f;
-
-    coba->data[3].r = 0.0f; coba->data[3].g = 0.0f; coba->data[3].b = 0.0f;
-    coba->data[3].a = 1.0f; coba->data[3].pos = 1.0f;
-
-    /* Fill remaining slots same as BKE_colorband_init */
-    for (int a = 4; a < MAXCOLORBAND; a++) {
-      coba->data[a].r = 0.5f; coba->data[a].g = 0.5f; coba->data[a].b = 0.5f;
-      coba->data[a].a = 1.0f; coba->data[a].pos = 0.5f;
-    }
-
-    coba->tot = 4;
-    coba->cur = 0;
-    coba->color_mode = COLBAND_BLEND_RGB;
-    coba->ipotype = COLBAND_INTERP_LINEAR;
   }
 
   if (!USER_VERSION_ATLEAST(502, 13)) {
