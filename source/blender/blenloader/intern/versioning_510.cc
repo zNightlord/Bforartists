@@ -923,7 +923,7 @@ void blo_do_versions_510(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
     }
   }
 
-  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 501, 27)) {
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 502, 21)) {
     for (bScreen &screen : bmain->screens) {
       for (ScrArea &area : screen.areabase) {
         for (SpaceLink &space : area.spacedata) {
