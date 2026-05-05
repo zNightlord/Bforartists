@@ -408,13 +408,13 @@ class Meshes : Overlay {
         }
 
         GPUVertFormat fmt = {0};
-        GPU_vertformat_attr_add(&fmt, "prop_weight", GPU_COMP_F32, 1, GPU_FETCH_FLOAT);
+        GPU_vertformat_attr_add(&fmt, "prop_weight", gpu::VertAttrType::SFLOAT_32);
         gpu::VertBuf *vbo = GPU_vertbuf_create_with_format_ex(fmt, GPU_USAGE_STREAM);
         GPU_vertbuf_data_alloc(*vbo, bm->totvert);
         GPU_vertbuf_update_data(*vbo, 0, bm->totvert, weights.data());
 
         PassSimple::Sub &sub = edit_mesh_verts_ps_.sub("PropWeight");
-        sub.bind_texture("colorramp", &res.prop_edit_ramp_tx);
+        sub.bind_texture("weight_ramp", &res.prop_edit_ramp_tx);
         gpu::Batch *geom = DRW_mesh_batch_cache_get_edit_vertices(mesh);
         sub.draw(geom, res_handle);
         GPU_vertbuf_discard(vbo);
