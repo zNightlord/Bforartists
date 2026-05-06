@@ -93,6 +93,21 @@ class Meshes : Overlay {
    * retopology offset. */
   View view_edit_cage_ = {"view_edit_cage"};
   View::OffsetData offset_data_;
+static float prop_edit_falloff(float dist, float prop_size, short prop_mode)
+  {
+    if (dist >= prop_size) return -1.0f;
+    float fac = math::max((prop_size - dist) / prop_size, 0.0f);
+    switch (prop_mode) {
+      case PROP_SMOOTH:    return 3.0f*fac*fac - 2.0f*fac*fac*fac;
+      case PROP_SPHERE:    return sqrtf(2.0f*fac - fac*fac);
+      case PROP_ROOT:      return sqrtf(fac);
+      case PROP_SHARP:     return fac*fac;
+      case PROP_LIN:       return fac;
+      case PROP_CONST:     return 1.0f;
+      case PROP_INVSQUARE: return fac*(2.0f - fac);
+      default:             return fac;
+    }
+  }
 
  public:
   void begin_sync(Resources &res, const State &state) final
