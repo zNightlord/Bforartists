@@ -433,7 +433,6 @@ static float prop_edit_falloff(float dist, float prop_size, short prop_mode)
         gpu::Batch *geom = DRW_mesh_batch_cache_get_edit_vertices(mesh);
         GPU_batch_vertbuf_add(geom, vbo.get(), false);
         sub.draw(geom, res_handle);
-        GPU_vertbuf_discard(vbo);
       }
     }
     if (select_face_dots_) {
