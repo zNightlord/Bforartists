@@ -422,9 +422,8 @@ static float prop_edit_falloff(float dist, float prop_size, short prop_mode)
           }
         }
 
-        GPUVertFormat fmt = {0};
-        GPU_vertformat_attr_add(&fmt, "prop_weight", gpu::VertAttrType::SFLOAT_32);
-        gpu::VertBuf *vbo = GPU_vertbuf_create_with_format_ex(fmt, GPU_USAGE_STREAM);
+        static GPUVertFormat format = GPU_vertformat_from_attribute("prop_weight", gpu::VertAttrType::SFLOAT_32);
+        gpu::VertBufPtr vbo = gpu::VertBufPtr(GPU_vertbuf_create_with_format(format));
         GPU_vertbuf_data_alloc(*vbo, bm->totvert);
         GPU_vertbuf_update_data(*vbo, 0, bm->totvert, weights.data());
 
