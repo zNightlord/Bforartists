@@ -399,6 +399,7 @@ static std::optional<rctf> get_minimap_rect(const SpaceNode &snode, ARegion &reg
   }
 
   for (bNode &node : node_tree->nodes) {
+    if (!node.runtime) continue;
     float pos_min[2] = {node.runtime->draw_bounds.xmin, node.runtime->draw_bounds.ymin};
     float pos_max[2] = {node.runtime->draw_bounds.xmax, node.runtime->draw_bounds.ymax};
     minmax_v2v2_v2(min, max, pos_min);
@@ -5067,6 +5068,7 @@ static void draw_node_minimap(const bContext &C,
   float min[2], max[2];
   INIT_MINMAX2(min, max);
   for (bNode &node : node_tree->nodes) {
+    if (!node.runtime) continue;
     float pos_min[2] = {node.runtime->draw_bounds.xmin, node.runtime->draw_bounds.ymin};
     float pos_max[2] = {node.runtime->draw_bounds.xmax, node.runtime->draw_bounds.ymax};
     minmax_v2v2_v2(min, max, pos_min);
