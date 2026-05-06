@@ -323,7 +323,7 @@ static float prop_edit_falloff(float dist, float prop_size, short prop_mode)
 
   void edit_object_sync(Manager &manager,
                         const ObjectRef &ob_ref,
-                        Resources & /*res*/,
+                        Resources &res,
                         const State &state) final
   {
     if (!enabled_) {
@@ -425,7 +425,7 @@ static float prop_edit_falloff(float dist, float prop_size, short prop_mode)
         static GPUVertFormat format = GPU_vertformat_from_attribute("prop_weight", gpu::VertAttrType::SFLOAT_32);
         gpu::VertBufPtr vbo = gpu::VertBufPtr(GPU_vertbuf_create_with_format(format));
         GPU_vertbuf_data_alloc(*vbo, bm->totvert);
-        GPU_vertbuf_update_data(*vbo, 0, bm->totvert, weights.data());
+        vbo->data<float>().copy_from(weights);
 
         PassSimple::Sub &sub = edit_mesh_verts_ps_.sub("PropWeight");
         sub.bind_texture("weight_ramp", &res.prop_edit_ramp_tx);
