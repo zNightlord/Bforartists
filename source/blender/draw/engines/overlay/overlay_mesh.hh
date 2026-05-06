@@ -422,14 +422,16 @@ static float prop_edit_falloff(float dist, float prop_size, short prop_mode)
           }
         }
 
-        static GPUVertFormat format = GPU_vertformat_from_attribute("prop_weight", gpu::VertAttrType::SFLOAT_32);
-        gpu::VertBufPtr vbo = gpu::VertBufPtr(GPU_vertbuf_create_with_format(format));
+        static GPUVertFormat format = GPU_vertformat_from_attribute(
+            "prop_weight", gpu::VertAttrType::SFLOAT_32);
+        gpu::VertBufPtr vbo(GPU_vertbuf_create_with_format(format));
         GPU_vertbuf_data_alloc(*vbo, bm->totvert);
         vbo->data<float>().copy_from(weights);
 
         PassSimple::Sub &sub = edit_mesh_verts_ps_.sub("PropWeight");
         sub.bind_texture("weight_ramp", &res.prop_edit_ramp_tx);
         gpu::Batch *geom = DRW_mesh_batch_cache_get_edit_vertices(mesh);
+        GPU_batch_vertbuf_add(geom, vbo.get(), false);
         sub.draw(geom, res_handle);
         GPU_vertbuf_discard(vbo);
       }
