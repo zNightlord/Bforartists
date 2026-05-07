@@ -66,6 +66,8 @@ class Meshes : Overlay {
   /* Depth pre-pass to cull edit cage in case the object is not opaque. */
   PassSimple edit_mesh_prepass_ps_ = {"Prepass"};
 
+  gpu::VertBufPtr prop_weight_vbo_;
+
   bool show_prop_weight_ = false;                         /* NEW */
 
   bool xray_enabled_ = false;
@@ -137,7 +139,7 @@ static float prop_edit_falloff(float dist, float prop_size, short prop_mode)
     show_weight_ = (edit_flag & V3D_OVERLAY_EDIT_WEIGHT);
 
     show_prop_weight_ = (G.moving & G_TRANSFORM_EDIT) &&
-                    edit_flag & V3D_OVERLAY_EDIT_PROPORTIONAL_EDITING;
+                    (tsettings->proportional_edit & PROP_EDIT_USE) && tsettings->proportional_draw_gradient;
 
     const bool show_face_nor = (edit_flag & V3D_OVERLAY_EDIT_FACE_NORMALS);
     const bool show_loop_nor = (edit_flag & V3D_OVERLAY_EDIT_LOOP_NORMALS);
@@ -243,6 +245,10 @@ static float prop_edit_falloff(float dist, float prop_size, short prop_mode)
       pass.bind_texture("weight_tx", res.weight_ramp_tx);
     }
 
+    if (!show_prop_weight_) {
+      prop_weight_vbo_.reset();s
+    }
+
     auto mesh_edit_common_resource_bind = [&](PassSimple &pass, float alpha, float ndc_offset) {
       pass.bind_texture("depth_tx", depth_tex);
       /* TODO(fclem): UBO. */
@@ -254,6 +260,7 @@ static float prop_edit_falloff(float dist, float prop_size, short prop_mode)
       pass.push_constant("ndc_offset_factor", &state.ndc_offset_factor);
       pass.push_constant("ndc_offset", ndc_offset);
       pass.push_constant("data_mask", int4(data_mask));
+      pass.push_constant("use_prop_weight", show_prop_weight_);
       if (show_prop_weight_) {
         pass.bind_texture("weight_ramp", &res.prop_edit_ramp_tx);
       }
@@ -424,14 +431,15 @@ static float prop_edit_falloff(float dist, float prop_size, short prop_mode)
 
         static GPUVertFormat format = GPU_vertformat_from_attribute(
             "prop_weight", gpu::VertAttrType::SFLOAT_32);
-        gpu::VertBufPtr vbo(GPU_vertbuf_create_with_format(format));
-        GPU_vertbuf_data_alloc(*vbo, bm->totvert);
-        vbo->data<float>().copy_from(weights);
+        prop_weight_vbo_.reset(GPU_vertbuf_create_with_format(format));
+        GPU_vertbuf_data_alloc(*prop_weight_vbo_, bm->totvert);
+        prop_weight_vbo_->data<float>().copy_from(weights);
+        
 
         PassSimple::Sub &sub = edit_mesh_verts_ps_.sub("PropWeight");
         sub.bind_texture("weight_ramp", &res.prop_edit_ramp_tx);
         gpu::Batch *geom = DRW_mesh_batch_cache_get_edit_vertices(mesh);
-        GPU_batch_vertbuf_add(geom, vbo.get(), false);
+        GPU_batch_vertbuf_add(geom, prop_weight_vbo_.get(), false);
         sub.draw(geom, res_handle);
       }
     }

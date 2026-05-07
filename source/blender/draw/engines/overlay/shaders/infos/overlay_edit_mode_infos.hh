@@ -59,6 +59,7 @@ PUSH_CONSTANT(bool, select_edge)
 PUSH_CONSTANT(float, alpha)
 PUSH_CONSTANT(float, retopology_offset)
 PUSH_CONSTANT(int4, data_mask)
+PUSH_CONSTANT(bool, use_prop_weight)
 ADDITIONAL_INFO(draw_globals)
 GPU_SHADER_CREATE_END()
 
