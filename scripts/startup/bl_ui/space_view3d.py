@@ -9961,6 +9961,9 @@ class VIEW3D_PT_overlay_edit_mesh(Panel):
         row.active = is_any_solid_shading
         row.prop(overlay, "show_face_center", text="Center")  # BFA - our layout
 
+        row = col.row()
+        row.prop(overlay, "show_proportional_edit")
+
         row = col.row()  # BFA - our layout
         row.separator()
         row.prop(overlay, "show_extra_indices", text="Indices")
