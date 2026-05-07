@@ -65,7 +65,7 @@ void main()
 
   /* Proportional editing influence overlay */
   if (use_prop_weight && prop_weight >= 0.0f) {
-    float4 ramp_col = texture(colorramp, prop_weight);
+    float4 ramp_col = texture(weight_ramp, prop_weight);
     final_color.rgb = mix(final_color.rgb, ramp_col.rgb, ramp_col.a);
     gl_PointSize *= 1.4f;
   }
