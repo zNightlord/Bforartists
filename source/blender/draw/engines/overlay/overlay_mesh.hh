@@ -139,7 +139,7 @@ static float prop_edit_falloff(float dist, float prop_size, short prop_mode)
     show_weight_ = (edit_flag & V3D_OVERLAY_EDIT_WEIGHT);
 
     show_prop_weight_ = (G.moving & G_TRANSFORM_EDIT) &&
-                    (tsettings->proportional_edit & PROP_EDIT_USE) && tsettings->proportional_draw_gradient;
+                    (tsettings->proportional_edit & PROP_EDIT_USE) && (edit_flag & V3D_OVERLAY_EDIT_PROPORTIONAL_EDITING);
 
     const bool show_face_nor = (edit_flag & V3D_OVERLAY_EDIT_FACE_NORMALS);
     const bool show_loop_nor = (edit_flag & V3D_OVERLAY_EDIT_LOOP_NORMALS);
