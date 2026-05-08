@@ -246,7 +246,7 @@ static float prop_edit_falloff(float dist, float prop_size, short prop_mode)
     }
 
     if (!show_prop_weight_) {
-      prop_weight_vbo_.reset();s
+      prop_weight_vbo_.reset();
     }
 
     auto mesh_edit_common_resource_bind = [&](PassSimple &pass, float alpha, float ndc_offset) {
