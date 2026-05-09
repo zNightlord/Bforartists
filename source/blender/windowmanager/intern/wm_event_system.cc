@@ -3306,29 +3306,29 @@ static eHandlerActionFlag wm_handlers_do_gizmo_handler(bContext *C,
     WM_tooltip_clear(C, CTX_wm_window(C));
   }
 
-  /* Needed so UI blocks over gizmos don't let events fall through to the gizmos,s
+  /* Needed so UI blocks over gizmos don't let events fall through to the gizmos,
    * noticeable for the node editor - where dragging on a node should move it, see: #73212.
    * note we still allow for starting the gizmo drag outside, then travel 'inside' the node. */
   // bfa node minimap
-  if (region->runtime->type->clip_gizmo_events_by_ui) {
-    if (ui::region_block_find_mouse_over(region, event->xy, true)) {
-      if (gz != nullptr && event->type != EVT_GIZMO_UPDATE) {
-        /* Only block tool gizmos, let UI-step gizmos (minimap) through. */
-        const eWM_GizmoFlagMapDrawStep step = WM_gizmomap_drawstep_from_gizmo_group(
-            gz->parent_gzgroup);
-        if (step != WM_GIZMOMAP_DRAWSTEP_2D_UI) {
-          if (restore_highlight_unless_activated == false) {
-            WM_tooltip_clear(C, CTX_wm_window(C));
-            wm_gizmomap_highlight_set(gzmap, C, nullptr, 0);
-          }
-          return action;
-        }
-      }
-      else {
-        return action;  /* No gizmo active, block normally. */
-      }
-    }
-  }
+  // if (region->runtime->type->clip_gizmo_events_by_ui) {
+  //   if (ui::region_block_find_mouse_over(region, event->xy, true)) {
+  //     if (gz != nullptr && event->type != EVT_GIZMO_UPDATE) {
+  //       /* Only block tool gizmos, let UI-step gizmos (minimap) through. */
+  //       const eWM_GizmoFlagMapDrawStep step = WM_gizmomap_drawstep_from_gizmo_group(
+  //           gz->parent_gzgroup);
+  //       if (step != WM_GIZMOMAP_DRAWSTEP_2D_UI) {
+  //         if (restore_highlight_unless_activated == false) {
+  //           WM_tooltip_clear(C, CTX_wm_window(C));
+  //           wm_gizmomap_highlight_set(gzmap, C, nullptr, 0);
+  //         }
+  //         return action;
+  //       }
+  //     }
+  //     else {
+  //       return action;  /* No gizmo active, block normally. */
+  //     }
+  //   }
+  // }
   struct PrevGizmoData {
     wmGizmo *gz_modal;
     wmGizmo *gz;
