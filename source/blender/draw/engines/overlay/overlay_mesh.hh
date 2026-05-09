@@ -67,6 +67,7 @@ class Meshes : Overlay {
   PassSimple edit_mesh_prepass_ps_ = {"Prepass"};
 
   gpu::VertBufPtr prop_weight_vbo_;
+  gpu::Texture *prop_weight_tx_ = nullptr;
 
   bool show_prop_weight_ = false;                         /* NEW */
 
@@ -247,6 +248,7 @@ static float prop_edit_falloff(float dist, float prop_size, short prop_mode)
 
     if (!show_prop_weight_) {
       prop_weight_vbo_.reset();
+      GPU_TEXTURE_FREE_SAFE(prop_weight_tx_);
     }
 
     auto mesh_edit_common_resource_bind = [&](PassSimple &pass, float alpha, float ndc_offset) {
@@ -398,10 +400,7 @@ static float prop_edit_falloff(float dist, float prop_size, short prop_mode)
       if (BMEditMesh *em = mesh.runtime->edit_mesh.get()) {
         BMesh *bm = em->bm;
         const ToolSettings *ts = state.scene->toolsettings;
-        const float prop_size = ts->proportional_size;
-        const short prop_mode = ts->prop_mode;
 
-        /* Selection center in object space */
         float3 center(0.0f);
         int sel_count = 0;
         BMVert *v;
@@ -420,26 +419,22 @@ static float prop_edit_falloff(float dist, float prop_size, short prop_mode)
         Array<float> weights(bm->totvert);
         int i = 0;
         BM_ITER_MESH_INDEX(v, &iter, bm, BM_VERTS_OF_MESH, i) {
-          if (BM_elem_flag_test(v, BM_ELEM_SELECT)) {
-            weights[i] = 1.0f;
-          }
-          else {
-            float dist = math::distance(float3(v->co), center);
-            weights[i] = prop_edit_falloff(dist, prop_size, prop_mode);
-          }
+          weights[i] = BM_elem_flag_test(v, BM_ELEM_SELECT) ?
+                          1.0f :
+                          prop_edit_falloff(math::distance(float3(v->co), center),
+                                            ts->proportional_size,
+                                            ts->prop_mode);
         }
 
-        static GPUVertFormat format = GPU_vertformat_from_attribute(
-            "prop_weight", gpu::VertAttrType::SFLOAT_32);
-        prop_weight_vbo_.reset(GPU_vertbuf_create_with_format(format));
-        GPU_vertbuf_data_alloc(*prop_weight_vbo_, bm->totvert);
-        prop_weight_vbo_->data<float>().copy_from(weights);
-        
+        GPU_TEXTURE_FREE_SAFE(prop_weight_tx_);
+        prop_weight_tx_ = GPU_texture_create_1d(
+            "prop_weight_tx", bm->totvert, 1,
+            GPU_R32F, GPU_TEXTURE_USAGE_SHADER_READ, weights.data());
 
         PassSimple::Sub &sub = edit_mesh_verts_ps_.sub("PropWeight");
+        sub.bind_texture("prop_weight_tx", prop_weight_tx_);
         sub.bind_texture("weight_ramp", &res.prop_edit_ramp_tx);
         gpu::Batch *geom = DRW_mesh_batch_cache_get_edit_vertices(mesh);
-        GPU_batch_vertbuf_add(geom, prop_weight_vbo_.get(), false);
         sub.draw(geom, res_handle);
       }
     }

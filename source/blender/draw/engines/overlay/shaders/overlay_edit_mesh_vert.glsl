@@ -64,10 +64,13 @@ void main()
   bool occluded = test_occlusion();
 
   /* Proportional editing influence overlay */
-  if (use_prop_weight && prop_weight >= 0.0f) {
-    float4 ramp_col = texture(weight_ramp, prop_weight);
-    final_color.rgb = mix(final_color.rgb, ramp_col.rgb, ramp_col.a);
-    gl_PointSize *= 1.4f;
+  if (use_prop_weight) {
+    float prop_w = texelFetch(prop_weight_tx, int(gl_VertexID), 0).r;
+    if (prop_w >= 0.0f) {
+      float4 ramp_col = texture(weight_ramp, prop_w);
+      final_color.rgb = mix(final_color.rgb, ramp_col.rgb, ramp_col.a);
+      gl_PointSize *= 1.4f;
+    }
   }
 
 #elif defined(EDGE)
