@@ -263,6 +263,7 @@ class NODE_MT_gn_geometry_write_base(node_add_menu.NodeMenu):
         self.node_operator(layout, "GeometryNodeSetGeometryName")
         self.node_operator(layout, "GeometryNodeSetID")
         self.node_operator(layout, "GeometryNodeSetPosition", search_weight=1.0)
+        self.node_operator(layout, "GeometryNodeMeshDeformCage")
         if context.space_data.node_tree_sub_type == 'TOOL':
             self.node_operator(layout, "GeometryNodeToolSetSelection")
 
