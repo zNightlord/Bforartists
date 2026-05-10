@@ -429,7 +429,7 @@ static float prop_edit_falloff(float dist, float prop_size, short prop_mode)
         GPU_TEXTURE_FREE_SAFE(prop_weight_tx_);
         prop_weight_tx_ = GPU_texture_create_1d(
             "prop_weight_tx", bm->totvert, 1,
-            GPU_R32F, GPU_TEXTURE_USAGE_SHADER_READ, weights.data());
+            TextureFormat::SFLOAT_32, GPU_TEXTURE_USAGE_SHADER_READ, weights.data());
 
         PassSimple::Sub &sub = edit_mesh_verts_ps_.sub("PropWeight");
         sub.bind_texture("prop_weight_tx", prop_weight_tx_);
