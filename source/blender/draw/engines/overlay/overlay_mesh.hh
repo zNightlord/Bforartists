@@ -400,14 +400,16 @@ static float prop_edit_falloff(float dist, float prop_size, short prop_mode)
       if (BMEditMesh *em = mesh.runtime->edit_mesh.get()) {
         BMesh *bm = em->bm;
         const ToolSettings *ts = state.scene->toolsettings;
+        const float4x4 &obmat = ob->object_to_world();
 
+        /* Compute selection center in world space */
         float3 center(0.0f);
         int sel_count = 0;
-        BMVert *v;
+        BMVert *v;s
         BMIter iter;
         BM_ITER_MESH(v, &iter, bm, BM_VERTS_OF_MESH) {
           if (BM_elem_flag_test(v, BM_ELEM_SELECT)) {
-            center += float3(v->co);
+            center += math::transform_point(obmat, float3(v->co));
             sel_count++;
           }
         }
@@ -419,11 +421,15 @@ static float prop_edit_falloff(float dist, float prop_size, short prop_mode)
         Array<float> weights(bm->totvert);
         int i = 0;
         BM_ITER_MESH_INDEX(v, &iter, bm, BM_VERTS_OF_MESH, i) {
-          weights[i] = BM_elem_flag_test(v, BM_ELEM_SELECT) ?
-                          1.0f :
-                          prop_edit_falloff(math::distance(float3(v->co), center),
-                                            ts->proportional_size,
-                                            ts->prop_mode);
+          if (BM_elem_flag_test(v, BM_ELEM_SELECT)) {
+            weights[i] = 1.0f;
+          }
+          else {
+            /* Distance in world space to match proportional_size */
+            float3 world_co = math::transform_point(obmat, float3(v->co));
+            float dist = math::distance(world_co, center);
+            weights[i] = prop_edit_falloff(dist, ts->proportional_size, ts->prop_mode);
+          }
         }
 
         GPU_TEXTURE_FREE_SAFE(prop_weight_tx_);
