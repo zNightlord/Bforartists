@@ -405,7 +405,7 @@ static float prop_edit_falloff(float dist, float prop_size, short prop_mode)
         /* Compute selection center in world space */
         float3 center(0.0f);
         int sel_count = 0;
-        BMVert *v;s
+        BMVert *v;
         BMIter iter;
         BM_ITER_MESH(v, &iter, bm, BM_VERTS_OF_MESH) {
           if (BM_elem_flag_test(v, BM_ELEM_SELECT)) {
