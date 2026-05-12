@@ -397,52 +397,74 @@ static float prop_edit_falloff(float dist, float prop_size, short prop_mode)
       edit_mesh_verts_ps_.draw(geom, res_handle);
     }
     if (show_prop_weight_) {
-      if (BMEditMesh *em = mesh.runtime->edit_mesh.get()) {
-        BMesh *bm = em->bm;
-        const ToolSettings *ts = state.scene->toolsettings;
-        const float4x4 &obmat = ob->object_to_world();
+  if (BMEditMesh *em = mesh.runtime->edit_mesh.get()) {
+    BMesh *bm = em->bm;
+    const ToolSettings *ts = state.scene->toolsettings;
+    const float prop_size = ts->proportional_size;
+    const short prop_mode = ts->prop_mode;
+    const float4x4 &obmat = ob->object_to_world();
 
-        /* Compute selection center in world space */
-        float3 center(0.0f);
-        int sel_count = 0;
-        BMVert *v;
-        BMIter iter;
-        BM_ITER_MESH(v, &iter, bm, BM_VERTS_OF_MESH) {
-          if (BM_elem_flag_test(v, BM_ELEM_SELECT)) {
-            center += math::transform_point(obmat, float3(v->co));
-            sel_count++;
-          }
-        }
-        if (sel_count > 0) {
-          center /= float(sel_count);
-        }
-
-        BM_mesh_elem_index_ensure(bm, BM_VERT);
-        Array<float> weights(bm->totvert);
-        int i = 0;
-        BM_ITER_MESH_INDEX(v, &iter, bm, BM_VERTS_OF_MESH, i) {
-          if (BM_elem_flag_test(v, BM_ELEM_SELECT)) {
-            weights[i] = 1.0f;
-          }
-          else {
-            /* Distance in world space to match proportional_size */
-            float3 world_co = math::transform_point(obmat, float3(v->co));
-            float dist = math::distance(world_co, center);
-            weights[i] = prop_edit_falloff(dist, ts->proportional_size, ts->prop_mode);
-          }
-        }
-
-        GPU_TEXTURE_FREE_SAFE(prop_weight_tx_);
-        prop_weight_tx_ = GPU_texture_create_1d(
-            "prop_weight_tx", bm->totvert, 1,
-            gpu::TextureFormat::SFLOAT_32, GPU_TEXTURE_USAGE_SHADER_READ, weights.data());
-
-        PassSimple::Sub &sub = edit_mesh_verts_ps_.sub("PropWeight");
-        sub.bind_texture("prop_weight_tx", prop_weight_tx_);
-        sub.bind_texture("weight_ramp", &res.prop_edit_ramp_tx);
-        gpu::Batch *geom = DRW_mesh_batch_cache_get_edit_vertices(mesh);
-        sub.draw(geom, res_handle);
+    /* Collect selected vertex world positions — mirrors how rdist is computed */
+    Vector<float3> sel_positions;
+    BMVert *v;
+    BMIter iter;
+    BM_ITER_MESH(v, &iter, bm, BM_VERTS_OF_MESH) {
+      if (BM_elem_flag_test(v, BM_ELEM_SELECT)) {
+        sel_positions.append(math::transform_point(obmat, float3(v->co)));
       }
+    }
+
+    BM_mesh_elem_index_ensure(bm, BM_VERT);
+    Array<float> weights(bm->totvert);
+    int i = 0;
+    BM_ITER_MESH_INDEX(v, &iter, bm, BM_VERTS_OF_MESH, i) {
+      if (BM_elem_flag_test(v, BM_ELEM_SELECT)) {
+        weights[i] = 1.0f;
+      }
+      else if (sel_positions.is_empty()) {
+        weights[i] = -1.0f;
+      }
+      else {
+        /* Same as calculatePropRatio: use distance to nearest selected vertex (rdist) */
+        float3 world_co = math::transform_point(obmat, float3(v->co));
+        float rdist = FLT_MAX;
+        for (const float3 &sp : sel_positions) {
+          rdist = math::min(rdist, math::distance(world_co, sp));
+        }
+
+        if (rdist >= prop_size) {
+          weights[i] = -1.0f;
+        }
+        else {
+          /* Mirror calculatePropRatio exactly */
+          float dist = std::max((prop_size - rdist) / prop_size, 0.0f);
+          switch (prop_mode) {
+            case PROP_SHARP:     weights[i] = dist * dist; break;
+            case PROP_SMOOTH:    weights[i] = std::min(1.0f, 3.0f*dist*dist - 2.0f*dist*dist*dist); break;
+            case PROP_ROOT:      weights[i] = sqrtf(dist); break;
+            case PROP_LIN:       weights[i] = dist; break;
+            case PROP_CONST:     weights[i] = 1.0f; break;
+            case PROP_SPHERE:    weights[i] = sqrtf(2.0f*dist - dist*dist); break;
+            case PROP_INVSQUARE: weights[i] = dist * (2.0f - dist); break;
+            default:             weights[i] = dist; break;
+          }
+        }
+      }
+    }
+
+    GPU_TEXTURE_FREE_SAFE(prop_weight_tx_);
+    prop_weight_tx_ = GPU_texture_create_1d(
+        "prop_weight_tx", bm->totvert, 1,
+        gpu::TextureFormat::SFLOAT_32, GPU_TEXTURE_USAGE_SHADER_READ, weights.data());
+    GPU_texture_update(prop_weight_tx_, GPU_DATA_FLOAT, weights.data());
+
+
+    PassSimple::Sub &sub = edit_mesh_verts_ps_.sub("PropWeight");
+    sub.bind_texture("prop_weight_tx", prop_weight_tx_);
+    sub.bind_texture("weight_ramp", &res.prop_edit_ramp_tx);
+    gpu::Batch *geom = DRW_mesh_batch_cache_get_edit_vertices(mesh);
+    sub.draw(geom, res_handle);
+  }
     }
     if (select_face_dots_) {
       gpu::Batch *geom = DRW_mesh_batch_cache_get_edit_facedots(mesh);
