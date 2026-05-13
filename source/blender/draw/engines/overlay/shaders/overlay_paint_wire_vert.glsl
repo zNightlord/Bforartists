@@ -37,10 +37,10 @@ void main()
     final_color.a = opacity;
   }
 
-  if (vgroup_color_mode == 4) {
+  if (use_colored_vertex) {
     /* VERTEX mode: replace base color with blended group color,
      * but preserve selection tint by mixing over the top. */
-    float4 vg_col = float4(vertex_group_blended_color, 1.0f);
+    float4 vg_col = float4(float4(vgroup_color_blended, 1.0f);
 
     final_color = mix(vg_col, final_color, 0.4f);
   }
