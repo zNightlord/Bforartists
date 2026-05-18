@@ -3514,6 +3514,47 @@ static void rna_Image_Node_update_id(Main *bmain, Scene *scene, PointerRNA *ptr)
   rna_Node_update_relations(bmain, scene, ptr);
 }
 
+/* The shader Image Texture node stores its #ImageUser nested inside #NodeTexImage,
+ * so the layer enum cannot share the compositor callbacks which cast node->storage
+ * directly to #ImageUser. */
+static int rna_ShaderNodeTexImage_layer_get(PointerRNA *ptr)
+{
+  const bNode *node = ptr->data_as<bNode>();
+  const NodeTexImage *tex = static_cast<const NodeTexImage *>(node->storage);
+  return tex->iuser.layer;
+}
+
+static void rna_ShaderNodeTexImage_layer_set(PointerRNA *ptr, int value)
+{
+  bNode *node = ptr->data_as<bNode>();
+  NodeTexImage *tex = static_cast<NodeTexImage *>(node->storage);
+  tex->iuser.layer = short(value);
+}
+
+static void rna_ShaderNodeTexImage_layer_update(Main *bmain, Scene *scene, PointerRNA *ptr)
+{
+  bNode *node = ptr->data_as<bNode>();
+  Image *ima = reinterpret_cast<Image *>(node->id);
+  NodeTexImage *tex = static_cast<NodeTexImage *>(node->storage);
+
+  if (ima) {
+    BKE_image_user_resolve_from_index(ima, &tex->iuser);
+  }
+  /* Force the declaration to rebuild so the per-pass output sockets follow the
+   * newly selected layer (design §15a). */
+  bke::node_tag_update_id(*node);
+  rna_Node_update_relations(bmain, scene, ptr);
+}
+
+/* Like rna_Node_tex_image_update, but additionally tags NODE_UPDATE_ID so the
+ * declaration rebuilds and follows a newly assigned multi-layer image. */
+static void rna_ShaderNodeTexImage_image_update(Main *bmain, Scene *scene, PointerRNA *ptr)
+{
+  bNode *node = ptr->data_as<bNode>();
+  bke::node_tag_update_id(*node);
+  rna_Node_tex_image_update(bmain, scene, ptr);
+}
+
 /* --------------------------------------------------------------------
  * White Balance Node.
  */
@@ -5942,7 +5983,7 @@ static void def_sh_tex_image(BlenderRNA *brna, StructRNA *srna)
   RNA_def_property_flag(prop, PROP_EDITABLE);
   RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
   RNA_def_property_ui_text(prop, "Image", "");
-  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_tex_image_update");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_ShaderNodeTexImage_image_update");
   RNA_def_property_pointer_funcs(
       prop, nullptr, nullptr, nullptr, "rna_Image_no_renderresult_or_viewer_poll");
 
@@ -5972,6 +6013,24 @@ static void def_sh_tex_image(BlenderRNA *brna, StructRNA *srna)
       prop, "Extension", "How the image is extrapolated past its original bounds");
   RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_ID_IMAGE);
   RNA_def_property_update(prop, 0, "rna_Node_update");
+
+  /* Layer selection for multi-layer images. The enum is redefined at node level
+   * (rather than relying on the nested image_user) so that changing it triggers
+   * a node update and rebuilds the per-pass output sockets (design §15a). */
+  prop = RNA_def_property(srna, "layer", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_items(prop, prop_image_layer_items);
+  RNA_def_property_enum_funcs(prop,
+                              "rna_ShaderNodeTexImage_layer_get",
+                              "rna_ShaderNodeTexImage_layer_set",
+                              "rna_Node_image_layer_itemf");
+  RNA_def_property_flag(prop, PROP_ENUM_NO_TRANSLATE);
+  RNA_def_property_ui_text(prop, "Layer", "");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_ShaderNodeTexImage_layer_update");
+
+  prop = RNA_def_property(srna, "has_layers", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_funcs(prop, "rna_Node_image_has_layers_get", nullptr);
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_ui_text(prop, "Has Layers", "True if this image has any named layer");
 
   prop = RNA_def_property(srna, "image_user", PROP_POINTER, PROP_NONE);
   RNA_def_property_flag(prop, PROP_NEVER_NULL);

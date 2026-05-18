@@ -371,13 +371,19 @@ static void node_shader_buts_tex_image(ui::Layout &layout, bContext *C, PointerR
 
   layout.prop(ptr, "extension", DEFAULT_FLAGS, "", ICON_NONE);
 
+  /* Layer selection for multi-layer images. The "layer" property is redefined on
+   * the node (see def_sh_tex_image) so changing it rebuilds the per-pass output
+   * sockets (design §15a). */
+  if (imaptr.data && RNA_enum_get(&imaptr, "type") == IMA_TYPE_MULTILAYER &&
+      RNA_boolean_get(ptr, "has_layers"))
+  {
+    layout.prop(ptr, "layer", DEFAULT_FLAGS, std::nullopt, ICON_NONE);
+  }
+
   /* NOTE: image user properties used directly here, unlike compositor image node,
    * which redefines them in the node struct RNA to get proper updates.
-   * Show the layer enum for multi-layer EXR images. Pass selection is exposed
-   * via multiple output sockets on the node (matching the compositor), so no
-   * pass enum is needed here.
    */
-  node_buts_image_user(layout, C, &iuserptr, &imaptr, &iuserptr, true, true);
+  node_buts_image_user(layout, C, &iuserptr, &imaptr, &iuserptr, false, true);
 }
 
 static void node_shader_buts_tex_image_ex(ui::Layout &layout, bContext *C, PointerRNA *ptr)
@@ -397,7 +403,7 @@ static void node_shader_buts_tex_environment(ui::Layout &layout, bContext *C, Po
   layout.prop(ptr, "interpolation", DEFAULT_FLAGS, "", ICON_NONE);
   layout.prop(ptr, "projection", DEFAULT_FLAGS, "", ICON_NONE);
 
-  node_buts_image_user(layout, C, &iuserptr, &imaptr, &iuserptr, true, true);
+  node_buts_image_user(layout, C, &iuserptr, &imaptr, &iuserptr, false, true);
 }
 
 static void node_shader_buts_tex_environment_ex(ui::Layout &layout, bContext *C, PointerRNA *ptr)
