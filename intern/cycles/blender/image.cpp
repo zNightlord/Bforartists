@@ -258,6 +258,9 @@ string BlenderImageLoader::name() const
 bool BlenderImageLoader::equals(const ImageLoader &other) const
 {
   const BlenderImageLoader &other_loader = (const BlenderImageLoader &)other;
+  /* The layer/pass/view must be compared too: two single-pass copies of one
+   * multi-layer image (produced by shader node inlining) share the same image
+   * datablock but resolve to different passes. */
   return b_image == other_loader.b_image && b_iuser.framenr == other_loader.b_iuser.framenr &&
          b_iuser.tile == other_loader.b_iuser.tile &&
          strcmp(b_iuser.layer_name, other_loader.b_iuser.layer_name) == 0 &&

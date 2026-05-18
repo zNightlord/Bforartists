@@ -6,6 +6,7 @@
 #include <variant>
 
 #include "BKE_compute_context_cache.hh"
+#include "BKE_image.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_node.hh"
 #include "BKE_node_tree_zones.hh"
@@ -1830,28 +1831,67 @@ class ShaderNodesInliner {
   }
 
   /**
+   * The multi-layer catalog (#Image.layers) is built lazily on first image
+   * acquire and is not persisted in the blend file, so a freshly-loaded image
+   * has an empty catalog until something acquires it. In a background render
+   * nothing does before inlining runs, and the pass lookup below would then fail
+   * and wrongly fall back to a single-pass node. Force the catalog to build, the
+   * same way the node declaration's prepare_image() does.
+   */
+  static void ensure_multilayer_catalog(Image &image, const ImageUser &iuser)
+  {
+    if (!BLI_listbase_is_empty(&image.layers)) {
+      return;
+    }
+    ImageUser local_iuser = iuser;
+    local_iuser.framenr = BKE_image_sequence_guess_offset(&image);
+    ImBuf *ibuf = BKE_image_acquire_ibuf(&image, &local_iuser, nullptr);
+    BKE_image_release_ibuf(&image, ibuf, nullptr);
+  }
+
+  /**
    * True for an Image Texture node assigned a multi-layer image, which declares
-   * one output socket per pass instead of the fixed Color/Alpha pair.
+   * one output socket per pass instead of the fixed Color/Alpha pair. Mirrors
+   * the gate used by the declaration (see node_shader_tex_image.cc): both must
+   * agree on which nodes are multi-pass.
    */
   static bool is_multi_pass_image_node(const NodeInContext &node)
   {
     if (!node->is_type("ShaderNodeTexImage"_ustr)) {
       return false;
     }
-    if (node->id == nullptr) {
+    Image *image = reinterpret_cast<Image *>(node->id);
+    if (image == nullptr) {
       return false;
     }
     const NodeTexImage *tex = static_cast<const NodeTexImage *>(node->storage);
     if (tex == nullptr || (tex->flag & SHD_TEX_IMAGE_SINGLE_PASS)) {
       return false;
     }
-    /* A single-layer Image Texture node always declares "Color" first; a
-     * multi-pass one declares the first pass instead. */
-    const bNodeSocket *first_output = static_cast<const bNodeSocket *>(node->outputs.first);
-    return first_output != nullptr && !STREQ(first_output->name, "Color");
+    if (!BKE_image_is_multilayer(image)) {
+      return false;
+    }
+    ensure_multilayer_catalog(*image, tex->iuser);
+    /* The declaration falls back to single-layer Color/Alpha when the layer
+     * index doesn't resolve; match that fallback here too. */
+    return BLI_findlink(&image->layers, tex->iuser.layer) != nullptr;
   }
 
   void handle_output_socket__multi_pass_image(const SocketInContext &socket)
+  {
+    /* The Bundle output collects every pass; a regular output is a single pass. */
+    if (socket->type == SOCK_BUNDLE) {
+      this->handle_output_socket__multi_pass_image_bundle(socket);
+      return;
+    }
+    this->store_socket_value(socket, this->resolve_multi_pass_output(socket));
+  }
+
+  /**
+   * Resolves one per-pass output socket of a multi-pass Image Texture node to a
+   * single-pass copy's Color/Alpha output (design phase 16).
+   */
+  SocketValue resolve_multi_pass_output(const SocketInContext &socket)
   {
     const NodeInContext node = socket.owner_node();
     const Image *image = reinterpret_cast<const Image *>(node->id);
@@ -1882,7 +1922,27 @@ class ShaderNodesInliner {
     const UString output_identifier = is_synthetic_alpha ? "Alpha"_ustr : "Color"_ustr;
     bNodeSocket *copied_output = bke::node_find_socket(copied_node, SOCK_OUT, output_identifier);
     BLI_assert(copied_output != nullptr);
-    this->store_socket_value(socket, {LinkedSocketValue{&copied_node, copied_output}});
+    return {LinkedSocketValue{&copied_node, copied_output}};
+  }
+
+  /**
+   * Builds a bundle of every pass of a multi-layer Image Texture node, one named
+   * item per pass output, for use with a Separate Bundle node (design phase 15b).
+   */
+  void handle_output_socket__multi_pass_image_bundle(const SocketInContext &socket)
+  {
+    const NodeInContext node = socket.owner_node();
+    auto bundle_value = std::make_shared<BundleSocketValue>();
+    for (const bNodeSocket *output : node->output_sockets()) {
+      if (output->type == SOCK_BUNDLE || !output->is_available()) {
+        continue;
+      }
+      const SocketInContext pass_socket = {node.context, output};
+      bundle_value->items.append({std::string(output->name),
+                                  this->resolve_multi_pass_output(pass_socket),
+                                  output->typeinfo});
+    }
+    this->store_socket_value(socket, {std::move(bundle_value)});
   }
 
   bNode &get_or_create_single_pass_image_copy(const NodeInContext &node,
@@ -1931,14 +1991,15 @@ class ShaderNodesInliner {
     return copied_node;
   }
 
-  /** Sets the copied node's #ImageUser to select the named pass of its layer. */
+  /** Sets the copied node's #ImageUser to select the named pass of its layer.
+   * The integer indices and the name fields are written together, so the iuser
+   * never ends up with a name that doesn't match its index. */
   void pin_image_user_to_pass(bNode &copied_node, const std::string &pass_name)
   {
     const Image *image = reinterpret_cast<const Image *>(copied_node.id);
     NodeTexImage &tex = *static_cast<NodeTexImage *>(copied_node.storage);
     ImageUser &iuser = tex.iuser;
 
-    STRNCPY(iuser.pass_name, pass_name.c_str());
     const ImageLayer *layer = static_cast<const ImageLayer *>(
         BLI_findlink(&image->layers, iuser.layer));
     if (layer == nullptr) {
@@ -1948,6 +2009,8 @@ class ShaderNodesInliner {
     for (const ImagePass &pass : layer->passes) {
       if (pass_name == pass.name) {
         iuser.pass = short(pass_index);
+        STRNCPY(iuser.pass_name, pass_name.c_str());
+        STRNCPY(iuser.layer_name, layer->name);
         return;
       }
       pass_index++;

@@ -63,13 +63,14 @@ static void declare_pass(NodeDeclarationBuilder &b, const ImagePass &pass)
 }
 
 /* Declares one output socket per pass of the selected layer, plus a synthetic
- * Alpha output when the layer has none of its own (design §15a). */
-static void declare_multi_layer(NodeDeclarationBuilder &b, Image *image, const ImageUser *iuser)
+ * Alpha output when the layer has none of its own, and a Bundle output carrying
+ * every pass (design §15a, §15b). Returns false when the layer is unknown, in
+ * which case the caller falls back to the single-layer declaration. */
+static bool declare_multi_layer(NodeDeclarationBuilder &b, Image *image, const ImageUser *iuser)
 {
   ImageLayer *layer = static_cast<ImageLayer *>(BLI_findlink(&image->layers, iuser->layer));
   if (!layer) {
-    declare_single_layer(b);
-    return;
+    return false;
   }
 
   bool has_alpha_pass = false;
@@ -91,6 +92,10 @@ static void declare_multi_layer(NodeDeclarationBuilder &b, Image *image, const I
       b.add_output<decl::Float>("Alpha"_ustr).no_muted_links();
     }
   }
+
+  /* Bundle of every pass, extracted downstream with a Separate Bundle node. */
+  b.add_output<decl::Bundle>("Passes"_ustr);
+  return true;
 }
 
 /* Re-declares the outputs that already exist on the node. Used when the
@@ -122,44 +127,59 @@ static void prepare_image(Image *image, const ImageUser *iuser)
   BKE_image_release_ibuf(image, ibuf, nullptr);
 }
 
+/* A multi-pass node carries a Bundle output, which is not valid on a function
+ * node (whose sockets are all forced to a dynamic structure type). So a node is
+ * only declared as a function node when it exposes the plain Color/Alpha pair. */
+static void declare_single_layer_function(NodeDeclarationBuilder &b)
+{
+  b.is_function_node();
+  declare_single_layer(b);
+}
+
 static void sh_node_tex_image_declare(NodeDeclarationBuilder &b)
 {
   b.add_input<decl::Vector>("Vector"_ustr).default_input_type(NODE_DEFAULT_INPUT_POSITION_FIELD);
 
   const bNode *node = b.node_or_null();
   if (!node) {
-    declare_single_layer(b);
+    declare_single_layer_function(b);
     return;
   }
 
   Image *image = reinterpret_cast<Image *>(node->id);
   const NodeTexImage *tex = static_cast<const NodeTexImage *>(node->storage);
   if (!image || !tex) {
-    declare_single_layer(b);
+    declare_single_layer_function(b);
     return;
   }
 
   /* A single-pass node (produced by shader node inlining) always exposes the
    * standard Color/Alpha outputs; its pass is pinned in iuser (design §16). */
   if (tex->flag & SHD_TEX_IMAGE_SINGLE_PASS) {
-    declare_single_layer(b);
+    declare_single_layer_function(b);
     return;
   }
 
   /* Only the Image/Image User data affects the declared sockets. */
   if (!(node->runtime->update & NODE_UPDATE_ID)) {
+    /* Keep the function-node flag consistent with the existing sockets: a
+     * multi-pass node must not be a function. Use the same structural gate as
+     * the multi-pass declaration path below, so both agree. */
+    const bool is_multi_pass = BKE_image_is_multilayer(image) &&
+                               BLI_findlink(&image->layers, tex->iuser.layer) != nullptr;
+    if (!is_multi_pass) {
+      b.is_function_node();
+    }
     declare_existing(b, *node);
     return;
   }
 
   prepare_image(image, &tex->iuser);
 
-  if (!BKE_image_is_multilayer(image)) {
-    declare_single_layer(b);
+  if (!BKE_image_is_multilayer(image) || !declare_multi_layer(b, image, &tex->iuser)) {
+    declare_single_layer_function(b);
     return;
   }
-
-  declare_multi_layer(b, image, &tex->iuser);
 }
 
 static void node_shader_init_tex_image(bNodeTree * /*ntree*/, bNode *node)
