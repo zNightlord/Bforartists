@@ -16,7 +16,9 @@
 #include "BLI_stack.hh"
 #include "BLI_string.hh"
 
+#include "DNA_image_types.h"
 #include "DNA_material_types.h"
+#include "DNA_node_types.h"
 
 #include "NOD_layer_stack.hh"
 #include "NOD_menu_value.hh"
@@ -24,6 +26,7 @@
 #include "NOD_node_declaration.hh"
 #include "NOD_node_in_compute_context.hh"
 #include "NOD_shader_nodes_inline.hh"
+#include "NOD_socket.hh"
 #include "NOD_texture_channel.hh"
 #include "NOD_texture_stack.hh"
 
@@ -225,6 +228,12 @@ class ShaderNodesInliner {
   Map<NodeInContext, StackCompositionState> stack_states_;
   /* Closure-layer contexts whose closure-input values have been seeded. */
   Set<const ComputeContext *> seeded_closure_layer_contexts_;
+  /**
+   * Single-pass Image Texture node copies created when inlining a multi-pass
+   * Image Texture node, deduplicated per (source node, pass name) so that a pass
+   * socket and its synthetic Alpha share one copy (design phase 16).
+   */
+  Map<NodeInContext, Map<std::string, bNode *>> single_pass_image_copies_;
   /** Knows how to compute between different data types. */
   const bke::DataTypeConversions &data_type_conversions_;
   /** This is used to generate unique names and ids. */
@@ -1809,8 +1818,140 @@ class ShaderNodesInliner {
       this->handle_output_socket__eval_multi_function(node);
       return;
     }
+    if (is_multi_pass_image_node(node)) {
+      /* Expand a multi-pass Image Texture node into single-pass copies, one per
+       * used pass, so the render engine only ever sees ordinary single-pass
+       * Image Texture nodes (design phase 16). */
+      this->handle_output_socket__multi_pass_image(socket);
+      return;
+    }
     /* The node can't be constant-folded. So copy it to the destination tree instead. */
     this->handle_output_socket__eval_copy_node(node);
+  }
+
+  /**
+   * True for an Image Texture node assigned a multi-layer image, which declares
+   * one output socket per pass instead of the fixed Color/Alpha pair.
+   */
+  static bool is_multi_pass_image_node(const NodeInContext &node)
+  {
+    if (!node->is_type("ShaderNodeTexImage"_ustr)) {
+      return false;
+    }
+    if (node->id == nullptr) {
+      return false;
+    }
+    const NodeTexImage *tex = static_cast<const NodeTexImage *>(node->storage);
+    if (tex == nullptr || (tex->flag & SHD_TEX_IMAGE_SINGLE_PASS)) {
+      return false;
+    }
+    /* A single-layer Image Texture node always declares "Color" first; a
+     * multi-pass one declares the first pass instead. */
+    const bNodeSocket *first_output = static_cast<const bNodeSocket *>(node->outputs.first);
+    return first_output != nullptr && !STREQ(first_output->name, "Color");
+  }
+
+  void handle_output_socket__multi_pass_image(const SocketInContext &socket)
+  {
+    const NodeInContext node = socket.owner_node();
+    const Image *image = reinterpret_cast<const Image *>(node->id);
+    const NodeTexImage *tex = static_cast<const NodeTexImage *>(node->storage);
+
+    /* Determine which pass this output socket represents. A socket named "Alpha"
+     * is the synthetic alpha generated from the Combined pass unless the layer
+     * has a real pass of that name. */
+    const StringRefNull socket_name = socket->name;
+    const ImageLayer *layer = static_cast<const ImageLayer *>(
+        BLI_findlink(&image->layers, tex->iuser.layer));
+    bool layer_has_socket_pass = false;
+    if (layer != nullptr) {
+      for (const ImagePass &pass : layer->passes) {
+        if (socket_name == pass.name) {
+          layer_has_socket_pass = true;
+          break;
+        }
+      }
+    }
+    const bool is_synthetic_alpha = socket_name == "Alpha" && !layer_has_socket_pass;
+    const std::string pass_name = is_synthetic_alpha ? std::string("Combined") :
+                                                       std::string(socket_name);
+
+    bNode &copied_node = this->get_or_create_single_pass_image_copy(node, pass_name);
+    /* The synthetic alpha uses the copy's Alpha output; every real pass uses its
+     * Color output, with the inliner's implicit conversion bridging the type. */
+    const UString output_identifier = is_synthetic_alpha ? "Alpha"_ustr : "Color"_ustr;
+    bNodeSocket *copied_output = bke::node_find_socket(copied_node, SOCK_OUT, output_identifier);
+    BLI_assert(copied_output != nullptr);
+    this->store_socket_value(socket, {LinkedSocketValue{&copied_node, copied_output}});
+  }
+
+  bNode &get_or_create_single_pass_image_copy(const NodeInContext &node,
+                                              const std::string &pass_name)
+  {
+    Map<std::string, bNode *> &copies_by_pass = single_pass_image_copies_.lookup_or_add_default(
+        node);
+    if (bNode *const *existing = copies_by_pass.lookup_ptr(pass_name)) {
+      return **existing;
+    }
+
+    Map<const bNodeSocket *, bNodeSocket *> socket_map;
+    bNode &copied_node = *bke::node_copy_with_mapping(&dst_tree_,
+                                                      *node.node,
+                                                      this->node_copy_flag(),
+                                                      std::nullopt,
+                                                      this->get_next_node_identifier(),
+                                                      socket_map);
+    copied_node.parent = nullptr;
+
+    /* Pin the copy to the single pass and force the standard Color/Alpha
+     * declaration. */
+    NodeTexImage &tex = *static_cast<NodeTexImage *>(copied_node.storage);
+    tex.flag |= SHD_TEX_IMAGE_SINGLE_PASS;
+    this->pin_image_user_to_pass(copied_node, pass_name);
+    /* node_copy_with_mapping copies the source (multi-pass) sockets verbatim, so
+     * rebuild the declaration now that the single-pass flag is set. */
+    update_node_declaration_and_sockets(dst_tree_, copied_node);
+
+    /* Wire the input sockets, mirroring handle_output_socket__eval_copy_node. */
+    for (const bNodeSocket *src_input_socket : node->input_sockets()) {
+      if (!src_input_socket->is_available()) {
+        continue;
+      }
+      bNodeSocket *dst_input_socket = bke::node_find_socket(
+          copied_node, SOCK_IN, UString(src_input_socket->identifier));
+      if (dst_input_socket == nullptr) {
+        continue;
+      }
+      const SocketInContext input_socket_ctx = {node.context, src_input_socket};
+      const SocketValue &value = value_by_socket_.lookup(input_socket_ctx);
+      this->set_input_socket_value(*node.node, copied_node, *dst_input_socket, value);
+    }
+
+    copies_by_pass.add_new(pass_name, &copied_node);
+    return copied_node;
+  }
+
+  /** Sets the copied node's #ImageUser to select the named pass of its layer. */
+  void pin_image_user_to_pass(bNode &copied_node, const std::string &pass_name)
+  {
+    const Image *image = reinterpret_cast<const Image *>(copied_node.id);
+    NodeTexImage &tex = *static_cast<NodeTexImage *>(copied_node.storage);
+    ImageUser &iuser = tex.iuser;
+
+    STRNCPY(iuser.pass_name, pass_name.c_str());
+    const ImageLayer *layer = static_cast<const ImageLayer *>(
+        BLI_findlink(&image->layers, iuser.layer));
+    if (layer == nullptr) {
+      return;
+    }
+    int pass_index = 0;
+    for (const ImagePass &pass : layer->passes) {
+      if (pass_name == pass.name) {
+        iuser.pass = short(pass_index);
+        return;
+      }
+      pass_index++;
+    }
   }
 
   struct EnsureInputsResult {

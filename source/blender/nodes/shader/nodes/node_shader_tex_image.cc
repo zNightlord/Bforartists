@@ -139,6 +139,13 @@ static void sh_node_tex_image_declare(NodeDeclarationBuilder &b)
     return;
   }
 
+  /* A single-pass node (produced by shader node inlining) always exposes the
+   * standard Color/Alpha outputs; its pass is pinned in iuser (design §16). */
+  if (tex->flag & SHD_TEX_IMAGE_SINGLE_PASS) {
+    declare_single_layer(b);
+    return;
+  }
+
   /* Only the Image/Image User data affects the declared sockets. */
   if (!(node->runtime->update & NODE_UPDATE_ID)) {
     declare_existing(b, *node);

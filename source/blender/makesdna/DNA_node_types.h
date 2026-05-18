@@ -2673,7 +2673,19 @@ struct NodeTexImage {
   float projection_blend = 0;
   int interpolation = 0;
   int extension = 0;
-  char _pad[4] = {};
+  /** #NodeTexImage flag values. */
+  int flag = 0;
+};
+
+/** #NodeTexImage.flag */
+enum {
+  /**
+   * Sample a single pass of a multi-layer image, with the layer/pass pinned in
+   * #NodeTexImage.iuser, declaring the standard Color/Alpha outputs. Set by
+   * shader node inlining on the single-pass copies it produces (design phase
+   * 16); never set on user-authored nodes.
+   */
+  SHD_TEX_IMAGE_SINGLE_PASS = (1 << 0),
 };
 
 struct NodeTexChecker {
