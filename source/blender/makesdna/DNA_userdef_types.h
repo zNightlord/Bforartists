@@ -184,6 +184,7 @@ enum eUserpref_UI_Flag2 {
   USER_UIFLAG2_PANEL_TABS_COMPACT = (1 << 5),
   /* bfa - flip navigation gizmo toolbar */
   USER_VERTICAL_NAVIGATION_GIZMOS = (1 << 6),
+  USER_ASSETSHELF_TOP = (1 << 7), /* Bfa */
 };
 
 /** #UserDef.gpu_flag */
