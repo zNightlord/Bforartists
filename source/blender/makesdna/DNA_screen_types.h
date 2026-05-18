@@ -603,6 +603,7 @@ enum {
   AREA_FLAG_OFFSCREEN = (1 << 9),
   /* bfa - show hide the editorsmenu */
   HEADER_NO_EDITORTYPEMENU = (1 << 10),
+  ASSET_SHELF_TOP = (1 << 11),
 };
 
 /** #ScrArea.toolbar_flag - dedicated toolbar flags to avoid 16-bit limitations */
