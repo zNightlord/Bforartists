@@ -766,6 +766,51 @@ bool ED_operator_camera_poll(bContext *C)
   return (cam != nullptr && ID_IS_EDITABLE(cam));
 }
 
+/**
+ * Set asset shelf position for an area, reordering regionbase list and
+ * alignment flags so the header is always adjacent to the correct edge.
+ * Safe to call from both the flip operator and area init.
+ */
+void ED_area_asset_shelf_set_top(ScrArea *area, const bool top)
+{
+  ARegion *shelf_rgn = nullptr;
+  ARegion *shelf_header_rgn = nullptr;
+
+  LISTBASE_FOREACH (ARegion *, region, &area->regionbase) {
+    if (region->regiontype == RGN_TYPE_ASSET_SHELF) {
+      shelf_rgn = region;
+    }
+    else if (region->regiontype == RGN_TYPE_ASSET_SHELF_HEADER) {
+      shelf_header_rgn = region;
+    }
+  }
+
+  if (!shelf_rgn || !shelf_header_rgn) {
+    return;
+  }
+
+  if (top) {
+    area->flag |= ASSET_SHELF_TOP;
+
+    /* List order: [header, shelf] — header flush to top edge, shelf below it. */
+    BLI_remlink(&area->regionbase, shelf_header_rgn);
+    BLI_insertlinkbefore(&area->regionbase, shelf_rgn, shelf_header_rgn);
+
+    shelf_header_rgn->alignment = RGN_ALIGN_TOP;
+    shelf_rgn->alignment        = RGN_ALIGN_TOP | RGN_ALIGN_HIDE_WITH_PREV;
+  }
+  else {
+    area->flag &= ~ASSET_SHELF_TOP;
+
+    /* List order: [shelf, header] — shelf above, header at very bottom. */
+    BLI_remlink(&area->regionbase, shelf_header_rgn);
+    BLI_insertlinkafter(&area->regionbase, shelf_rgn, shelf_header_rgn);
+
+    shelf_rgn->alignment        = RGN_ALIGN_BOTTOM;
+    shelf_header_rgn->alignment = RGN_ALIGN_BOTTOM | RGN_ALIGN_HIDE_WITH_PREV;
+  }
+}
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
