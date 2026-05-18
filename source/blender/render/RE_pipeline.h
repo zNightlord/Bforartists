@@ -24,7 +24,6 @@ namespace bke {
 class BlenderProject;
 }
 
-struct ExrReadHandle;
 struct ImBuf;
 struct Image;
 struct ImageFormatData;
@@ -418,9 +417,6 @@ void RE_PreviewRender(struct Render *re, struct Main *bmain, struct Scene *scene
  * Only the temp file!
  */
 bool RE_ReadRenderResult(struct Scene *scene, struct Scene *scenode);
-
-struct RenderResult *RE_MultilayerConvert(
-    ExrReadHandle *exrhandle, const char *colorspace, bool predivide, int rectx, int recty);
 
 /**
  * Display, event callbacks and GPU contexts

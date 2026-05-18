@@ -261,12 +261,6 @@ bool RE_HasSingleLayer(Render *re)
   return (re->r.scemode & R_SINGLE_LAYER);
 }
 
-RenderResult *RE_MultilayerConvert(
-    ExrReadHandle *exrhandle, const char *colorspace, bool predivide, int rectx, int recty)
-{
-  return render_result_new_from_exr(exrhandle, colorspace, predivide, rectx, recty);
-}
-
 RenderLayer *render_get_single_layer(Render *re, RenderResult *rr)
 {
   if (re->single_view_layer[0]) {

@@ -124,7 +124,7 @@ namespace blender {
 static CLG_LogRef LOG = {"image"};
 
 static void image_init(Image *ima, eImageSource source, eImageType type);
-static void image_free_layers(ListBaseT<ImageLayer> *layers);
+static void image_free_layers(Image *ima);
 static const ImagePass *image_user_resolve_pass(const Image *ima, ImageUser *iuser);
 static int image_effective_view(Image *ima, const ImageUser *iuser);
 static void image_free_packedfiles(Image *ima);
@@ -217,7 +217,7 @@ static void image_free_data(ID *id)
 
   image->tiles.free_no_destruct();
 
-  image_free_layers(&image->layers);
+  image_free_layers(image);
   MEM_delete(image->runtime);
 }
 
@@ -817,13 +817,46 @@ static ImageTile *imagetile_alloc(int tile_number)
   return tile;
 }
 
-/* Free a catalog layer list and all owned passes. */
-static void image_free_layers(ListBaseT<ImageLayer> *layers)
+/**
+ * Free the image's layer/pass catalog, first evicting any cache buffer keyed by
+ * one of its passes.
+ *
+ * The cache key holds a raw #ImagePass pointer, so an entry outliving its
+ * pass would dangle — and could later silently alias a different pass
+ * reallocated at the same address. Evicting here makes that an invariant of
+ * freeing the catalog rather than something each call site must remember to do
+ * by flushing buffers first (one #IMA_SIGNAL_RELOAD path, a packed image that
+ * fails to repack, skipped the flush).
+ *
+ * The image keys catalog buffers by a non-null pass and everything else (plain,
+ * UDIM-GPU and viewer buffers) by a null pass, and an image has a single
+ * catalog, so every non-null-pass entry belongs to the catalog being freed. The
+ * caller holds `cache_mutex` (as for #image_free_cached_frames) or, for a
+ * render-result viewer, runs on the main thread that owns its cache.
+ */
+static void image_free_layers(Image *ima)
 {
-  for (ImageLayer &layer : *layers) {
+  if (ima->runtime->cache != nullptr) {
+    Vector<ImageCacheKey> stale_keys;
+    ImBufCacheIter *iter = IMB_cacheIter_new(ima->runtime->cache);
+    while (!IMB_cacheIter_done(iter)) {
+      const ImageCacheKey *key = static_cast<const ImageCacheKey *>(
+          IMB_cacheIter_getUserKey(iter));
+      if (key->pass != nullptr) {
+        stale_keys.append(*key);
+      }
+      IMB_cacheIter_step(iter);
+    }
+    IMB_cacheIter_free(iter);
+    for (const ImageCacheKey &key : stale_keys) {
+      imagecache_remove(ima, key);
+    }
+  }
+
+  for (ImageLayer &layer : ima->layers) {
     BLI_freelistN(&layer.passes);
   }
-  BLI_freelistN(layers);
+  BLI_freelistN(&ima->layers);
 }
 
 /**
@@ -833,9 +866,9 @@ static void image_free_layers(ListBaseT<ImageLayer> *layers)
  */
 static void image_reset_multilayer_catalog(Image *ima)
 {
-  image_free_layers(&ima->layers);
+  image_free_layers(ima);
   ima->runtime->multilayer_catalog_loaded = false;
-  ima->runtime->multilayer_framenr = 0;
+  ima->runtime->multilayer_catalog_framenr = 0;
 }
 
 /* only image block itself */
@@ -3596,8 +3629,6 @@ static const ImagePass *image_user_resolve_pass(const Image *ima, ImageUser *ius
     iuser->view = 0;
   }
 
-  iuser->multi_index = image_user_view_index(ima, iuser);
-
   return pass;
 }
 
@@ -4241,7 +4272,7 @@ void BKE_image_sync_render_catalog(Scene *scene, Image *ima)
     return;
   }
 
-  image_free_layers(&ima->layers);
+  image_free_layers(ima);
   if (rr != nullptr) {
     image_copy_render_catalog(ima, rr);
   }
@@ -4344,98 +4375,245 @@ static void image_add_view(Image *ima, const char *viewname, const char *filepat
 }
 
 /**
- * After an EXR-handle #ImBuf load, build the #Image.layers catalog from the
- * file header and move the file's pixel buffers into the per-Image keyed cache
- * (design §3 case A, §4.3). The catalog and buffers replace whatever was loaded
- * before; \a key carries the cache slot (frame or UDIM tile) the buffers belong to.
+ * Build #Image.views from the unique view names in a multi-layer EXR pass list.
+ * Mirrors #image_init_multilayer_multiview's behavior: only replace the existing
+ * views if the count or names have actually changed.
  */
-static void image_create_multilayer(Image *ima,
-                                    ImBuf *ibuf,
-                                    ExrReadHandle *handle,
-                                    ImageCacheKey key)
+static void image_init_multilayer_views(Image *ima, const Vector<ExrPassInfo> &passes)
 {
-  const char *colorspace = ima->colorspace_settings.name;
-  const bool predivide = (ima->alpha_mode == IMA_ALPHA_PREMUL);
+  Vector<std::string> names;
+  for (const ExrPassInfo &info : passes) {
+    const std::string view(info.view);
+    if (std::find(names.begin(), names.end(), view) == names.end()) {
+      names.append(view);
+    }
+  }
+  if (names.is_empty()) {
+    names.append("");
+  }
 
-  /* The #Image.layers catalog (layer/pass structure and order) is built from the EXR
-   * header, so it follows the file's own layer/pass order rather than the render-pass
-   * order the temporary render result is sorted into. */
+  if (ima->views.count() == int(names.size())) {
+    ImageView *iv = static_cast<ImageView *>(ima->views.first);
+    bool modified = false;
+    for (const std::string &name : names) {
+      if (!STREQ(iv->name, name.c_str())) {
+        modified = true;
+        break;
+      }
+      iv = iv->next;
+    }
+    if (!modified) {
+      return;
+    }
+  }
+
+  BKE_image_free_views(ima);
+  for (const std::string &name : names) {
+    ImageView *iv = MEM_new<ImageView>("Multilayer Image View");
+    STRNCPY_UTF8(iv->name, name.c_str());
+    BLI_addtail(&ima->views, iv);
+  }
+}
+
+/**
+ * Build the #Image.layers / #Image.views catalog of a multi-layer EXR from the
+ * file header. The catalog (layer/pass/view structure) is frame-independent, so
+ * it is built only once and kept until reload; the per-frame, per-pass pixel
+ * buffers are read on demand into #cache. The handle stays open and owned by the
+ * caller; \a key carries the cache slot (frame or UDIM tile) the catalog was
+ * built from.
+ */
+static void image_create_multilayer(Image *ima, ExrReadHandle *handle, const ImageCacheKey &key)
+{
   const Vector<ExrPassInfo> passes = IMB_exr_get_passes(handle);
-
-  /* Decode the EXR into a temporary render result; its pixel buffers are then moved
-   * into the cache, keyed by the matching catalog pass. The handle is owned by this
-   * function. */
-  RenderResult *rr = RE_MultilayerConvert(handle, colorspace, predivide, ibuf->x, ibuf->y);
-
-  if (rr == nullptr) {
-    IMB_exr_close(handle);
+  if (passes.is_empty()) {
     return;
   }
 
-  /* Replace any previous catalog and cached buffers. */
+  /* The catalog is built once and shared across all frames of a sequence;
+   * subsequent frames (and the per-view files of a multi-view-individual load)
+   * reuse it. It only gets discarded on an explicit reload. */
+  if (ima->runtime->multilayer_catalog_loaded) {
+    return;
+  }
+
+  /* First build: clear any stale pre-catalog buffers (none of the per-frame pass
+   * buffers exist yet), then build the view-independent catalog from the header. */
   image_free_cached_frames(ima);
-  image_free_layers(&ima->layers);
+  image_free_layers(ima);
+  image_init_multilayer_views(ima, passes);
 
-  /* Build the image views from the render views. */
-  image_init_multilayer_multiview(ima, rr);
-
-  /* Build the view-independent #Image.layers catalog from the EXR header (file order). */
   for (const ExrPassInfo &info : passes) {
     const std::string layer_name(info.layer);
     ImageLayer *layer = static_cast<ImageLayer *>(
         BLI_findstring(&ima->layers, layer_name.c_str(), offsetof(ImageLayer, name)));
     if (layer == nullptr) {
-      layer = MEM_new<ImageLayer>(__func__);
-      STRNCPY(layer->name, layer_name.c_str());
-      BLI_addtail(&ima->layers, layer);
+      layer = image_catalog_add_layer(ima, layer_name.c_str());
     }
     const std::string pass_name(info.pass);
     if (BLI_findstring(&layer->passes, pass_name.c_str(), offsetof(ImagePass, name)) != nullptr) {
       continue;
     }
-    ImagePass *pass = MEM_new<ImagePass>(__func__);
-    STRNCPY(pass->name, pass_name.c_str());
-    STRNCPY(pass->chan_id, std::string(info.chan_id).c_str());
-    pass->channels_num = info.channels;
-    BLI_addtail(&layer->passes, pass);
+    image_layer_add_pass(
+        layer, pass_name.c_str(), std::string(info.chan_id).c_str(), info.channels);
   }
 
-  /* The catalog is built; the EXR header data (which the #ExrPassInfo names point into)
-   * is no longer needed. */
-  IMB_exr_close(handle);
+  ima->runtime->multilayer_catalog_framenr = key.frame;
+  ima->runtime->multilayer_catalog_loaded = true;
+}
 
-  /* Move each render pass's pixel buffer into the per-Image keyed cache, keyed by the
-   * matching catalog pass (design §3 case A, §4.3). */
-  for (const RenderLayer &rl : rr->layers) {
-    ImageLayer *layer = static_cast<ImageLayer *>(
-        BLI_findstring(&ima->layers, rl.name, offsetof(ImageLayer, name)));
-    if (layer == nullptr) {
+/**
+ * A cached pass buffer of the same frame whose EXR-header metadata a newly read
+ * pass can share. The header is file-level, so every pass of the frame carries
+ * the same metadata; sharing it (implicit sharing) avoids re-reading or
+ * duplicating it per pass and ties its lifetime to the cached buffers. Returns
+ * null when no pass of this frame is cached yet. The caller holds `cache_mutex`.
+ */
+static const ImBuf *image_multilayer_metadata_sibling(Image *ima, const int frame)
+{
+  if (ima->runtime->cache == nullptr) {
+    return nullptr;
+  }
+  const ImBuf *sibling = nullptr;
+  ImBufCacheIter *iter = IMB_cacheIter_new(ima->runtime->cache);
+  while (!IMB_cacheIter_done(iter)) {
+    const ImageCacheKey *key = static_cast<const ImageCacheKey *>(IMB_cacheIter_getUserKey(iter));
+    ImBuf *cached = IMB_cacheIter_getImBuf(iter);
+    if (key->pass != nullptr && key->frame == frame && cached != nullptr &&
+        cached->metadata_ptr != nullptr && cached->metadata_sharing_info)
+    {
+      sibling = cached;
+      break;
+    }
+    IMB_cacheIter_step(iter);
+  }
+  IMB_cacheIter_free(iter);
+  return sibling;
+}
+
+/**
+ * Load the pass selected by \a iuser into the per-Image keyed cache, reading
+ * only the EXR part backing that pass.
+ *
+ * The EXR header metadata is attached to the pass buffer (shared via implicit
+ * sharing): from a sibling pass of the same frame if one is already cached,
+ * otherwise from \a metadata_ibuf — the info ImBuf that the regular file load
+ * read the header into (passed by the eager load; null on the on-demand path,
+ * which only runs once a sibling exists).
+ */
+static void image_load_multilayer_pass_on_demand(Image *ima,
+                                                 ImageUser *iuser,
+                                                 ExrReadHandle *handle,
+                                                 const ImageCacheKey &key,
+                                                 int view_id_hint,
+                                                 const ImBuf *metadata_ibuf)
+{
+  const char *colorspace = ima->colorspace_settings.name;
+  const bool predivide = (ima->alpha_mode == IMA_ALPHA_PREMUL);
+
+  const ImagePass *pass = image_user_resolve_pass(ima, iuser);
+  if (pass == nullptr) {
+    return;
+  }
+  const int view_id = (view_id_hint >= 0) ? view_id_hint : (iuser ? iuser->view : 0);
+
+  /* The layer owning the resolved pass, to disambiguate files where the same
+   * pass name occurs in several layers. */
+  const ImageLayer *pass_layer = nullptr;
+  for (const ImageLayer &layer : ima->layers) {
+    if (BLI_findindex(&layer.passes, pass) != -1) {
+      pass_layer = &layer;
+      break;
+    }
+  }
+
+  /* Find the matching pass in the file and read only that one. #IMB_exr_read_passes
+   * reads just the EXR parts backing the requested entries, so a single-entry
+   * request decodes only the selected pass's part. */
+  const Vector<ExrPassInfo> file_passes = IMB_exr_get_passes(handle);
+  const ImageView *view = static_cast<const ImageView *>(BLI_findlink(&ima->views, view_id));
+  const char *view_name = view ? view->name : "";
+
+  const ExrPassInfo *match = nullptr;
+  for (const ExrPassInfo &info : file_passes) {
+    if (info.pass != pass->name) {
       continue;
     }
-    for (const RenderPass &rp : rl.passes) {
-      ImagePass *pass = static_cast<ImagePass *>(
-          BLI_findstring(&layer->passes, rp.name, offsetof(ImagePass, name)));
-      if (pass == nullptr || rp.ibuf == nullptr) {
-        continue;
-      }
-      BKE_imbuf_stamp_info(rr, rp.ibuf);
-      /* The cache takes its own reference; the render result still owns the
-       * buffer until it is freed below. */
-      ImageCacheKey put_key = key;
-      put_key.pass = pass;
-      /* Match the view keying of #image_effective_view: a numeric view for a
-       * multi-view image, #IMA_NO_VIEW for a single-view one. */
-      put_key.view = BKE_image_is_multiview(ima) ? rp.view_id : IMA_NO_VIEW;
-      imagecache_put(ima, put_key, rp.ibuf);
+    if (pass_layer != nullptr && !info.layer.is_empty() && info.layer != pass_layer->name) {
+      continue;
+    }
+    if (!info.view.is_empty() && info.view != view_name) {
+      continue;
+    }
+    match = &info;
+    if (info.view == view_name) {
+      break;
     }
   }
+  if (match == nullptr) {
+    return;
+  }
 
-  /* For animated multi-layer EXR the catalog and cache belong to a specific frame; static
-   * (or tiled) sources use 0. */
-  ima->runtime->multilayer_framenr = key.frame;
-  ima->runtime->multilayer_catalog_loaded = true;
+  ExrPassInfo request = *match;
+  request.ibuf = nullptr;
+  IMB_exr_read_passes(handle, {&request, 1}, colorspace, predivide);
+  if (request.ibuf == nullptr) {
+    return;
+  }
 
-  RE_FreeRenderResult(rr);
+  /* Attach the EXR-header metadata, shared from a sibling pass of the same frame
+   * if one is cached, else from the info ImBuf the file load read it into. */
+  const ImBuf *metadata_src = image_multilayer_metadata_sibling(ima, key.frame);
+  if (metadata_src == nullptr) {
+    metadata_src = metadata_ibuf;
+  }
+  if (metadata_src != nullptr && metadata_src->metadata_ptr != nullptr &&
+      metadata_src->metadata_sharing_info)
+  {
+    request.ibuf->assign_metadata(metadata_src->metadata_ptr, metadata_src->metadata_sharing_info);
+  }
+
+  ImageCacheKey put_key = key;
+  put_key.pass = pass;
+  /* Match the view keying of #image_effective_view: a numeric view for a
+   * multi-view image, #IMA_NO_VIEW for a single-view one. */
+  put_key.view = BKE_image_is_multiview(ima) ? view_id : IMA_NO_VIEW;
+  imagecache_put(ima, put_key, request.ibuf);
+  /* The cache took its own reference; drop ours. */
+  IMB_freeImBuf(request.ibuf);
+}
+
+/**
+ * Open the multi-layer EXR backing \a ima (on disk or packed) for the view
+ * selected by \a iuser. Returns null if the file is missing or is not a
+ * multi-layer EXR. The caller owns the returned handle.
+ */
+static ExrReadHandle *image_multilayer_open_handle(Image *ima, ImageUser *iuser, bool is_sequence)
+{
+  const int view_id = iuser ? iuser->view : 0;
+  const int tile_number = image_get_tile_number_from_iuser(ima, iuser);
+
+  if (BKE_image_has_packedfile(ima) && !is_sequence) {
+    for (ImagePackedFile &imapf : ima->packedfiles) {
+      if (imapf.view == view_id && imapf.tile_number == tile_number && imapf.packedfile) {
+        const uchar *data = static_cast<const uchar *>(imapf.packedfile->data);
+        return IMB_exr_open_multilayer_from_memory(data, imapf.packedfile->size);
+      }
+    }
+    return nullptr;
+  }
+
+  char filepath[FILE_MAX];
+  ImageUser iuser_t{};
+  if (iuser) {
+    iuser_t = *iuser;
+  }
+  else {
+    iuser_t.framenr = ima->lastframe;
+  }
+  iuser_t.view = view_id;
+  BKE_image_user_file_path(&iuser_t, ima, filepath);
+  return IMB_exr_open_multilayer(filepath);
 }
 
 /** Common stuff to do with images after loading. */
@@ -4488,43 +4666,59 @@ static int image_num_viewfiles(Image *ima)
   return ima->views.count();
 }
 
-static ImBuf *image_load_sequence_multilayer(Image *ima,
-                                             ImageUser *iuser,
-                                             ImageCacheKey key,
-                                             int frame)
+/**
+ * Fetch the buffer of a loaded multi-layer EXR (its catalog on #Image.layers)
+ * for the pass/view selected by \a iuser. The catalog is built once, on first
+ * access, and is frame-independent; the per-frame, per-pass pixel buffers are
+ * read on demand and cached, so several frames can be cached at once. \a key
+ * carries the cache slot (frame / UDIM tile); \a is_sequence is true for
+ * sequence and tiled sources, false for a single file.
+ *
+ * Like every other image source, the catalog refreshes from disk only on an
+ * explicit reload (#IMA_SIGNAL_RELOAD), not by polling the file.
+ */
+static ImBuf *image_load_multilayer(
+    Image *ima, ImageUser *iuser, ImageCacheKey key, int frame, bool is_sequence)
 {
-  ImBuf *ibuf = nullptr;
-
-  /* (Re)build the Image.layers catalog and cache from the EXR file when it is
-   * not yet loaded, or when an animated EXR has moved to a different frame. */
-  const bool need_load = !ima->runtime->multilayer_catalog_loaded ||
-                         (ima->source == IMA_SRC_SEQUENCE &&
-                          ima->runtime->multilayer_framenr != frame);
-  if (need_load) {
-    ibuf = image_load_image_file(ima, iuser, key, frame, true);
-
-    if (ibuf) { /* actually an error */
+  /* Build the catalog once, from the first frame ever accessed. This also
+   * handles the not-actually-a-multi-layer-EXR fallback (a returned error ImBuf),
+   * and eagerly loads the selected pass for this frame with its metadata. */
+  if (!ima->runtime->multilayer_catalog_loaded) {
+    ImBuf *err_ibuf = image_load_image_file(ima, iuser, key, frame, is_sequence);
+    if (err_ibuf) { /* actually an error: not a multi-layer EXR after all. */
       ima->type = IMA_TYPE_IMAGE;
       printf("error, multi is normal image\n");
+      return err_ibuf;
+    }
+    if (!ima->runtime->multilayer_catalog_loaded) {
+      return nullptr;
     }
   }
 
-  if (ima->runtime->multilayer_catalog_loaded) {
-    const ImagePass *pass = image_user_resolve_pass(ima, iuser);
-    ImageCacheKey lookup_key = key;
-    lookup_key.pass = pass;
-    ibuf = imagecache_get(ima, lookup_key, nullptr);
-    if (ibuf == nullptr && !need_load) {
-      /* The catalog is loaded but the buffers were evicted from the cache;
-       * reload them from the file (mirrors #image_get_ibuf_multilayer). */
-      image_load_image_file(ima, iuser, key, frame, true);
-      pass = image_user_resolve_pass(ima, iuser);
-      lookup_key.pass = pass;
-      ibuf = imagecache_get(ima, lookup_key, nullptr);
+  const ImagePass *pass = image_user_resolve_pass(ima, iuser);
+  key.pass = pass;
+  ImBuf *ibuf = imagecache_get(ima, key, nullptr);
+  if (ibuf == nullptr) {
+    /* The catalog is loaded but this pass's buffer is not. If no pass of this
+     * frame is cached yet (a frame not touched since the catalog was built, or
+     * all its buffers evicted), load it through the file path so the info ImBuf's
+     * header metadata rides onto the buffer. Otherwise read just this pass and
+     * share the cached sibling's metadata; the focused single-part reader skips
+     * both the EXR catalog parse and the bulk decompress. */
+    if (image_multilayer_metadata_sibling(ima, frame) == nullptr) {
+      image_load_image_file(ima, iuser, key, frame, is_sequence);
     }
-    if (ibuf) {
-      image_init_after_load(ima, iuser, ibuf);
+    else if (ExrReadHandle *handle = image_multilayer_open_handle(ima, iuser, is_sequence)) {
+      const int view_id = iuser ? iuser->view : 0;
+      image_load_multilayer_pass_on_demand(ima, iuser, handle, key, view_id, nullptr);
+      IMB_exr_close(handle);
     }
+    pass = image_user_resolve_pass(ima, iuser);
+    key.pass = pass;
+    ibuf = imagecache_get(ima, key, nullptr);
+  }
+  if (ibuf) {
+    image_init_after_load(ima, iuser, ibuf);
   }
 
   return ibuf;
@@ -4636,9 +4830,10 @@ static ImBuf *load_image_single(Image *ima,
 {
   char filepath[FILE_MAX];
   ImBuf *ibuf = nullptr;
+  /* Multi-layer EXR handle, opened separately from the same source the buffer
+   * was loaded from (#IMB_exr_open_multilayer). Null unless a multi-layer EXR. */
   ExrReadHandle *exr_handle = nullptr;
-  ImBufFlags flag = ImBufFlags::ByteData | ImBufFlags::MultiLayer | ImBufFlags::Metadata |
-                    imbuf_alpha_flags_for_image(ima);
+  ImBufFlags flag = ImBufFlags::ByteData | ImBufFlags::Metadata | imbuf_alpha_flags_for_image(ima);
 
   *r_cache_ibuf = true;
   const int tile_number = image_get_tile_number_from_iuser(ima, iuser);
@@ -4655,7 +4850,7 @@ static ImBuf *load_image_single(Image *ima,
                                             "<packed data>",
                                             nullptr,
                                             ima->colorspace_settings.name);
-          if (ibuf && flag_is_set(ibuf->flags, ImBufFlags::MultiLayer)) {
+          if (ibuf && ibuf->ftype == IMB_FTYPE_OPENEXR) {
             exr_handle = IMB_exr_open_multilayer_from_memory(data, imapf.packedfile->size);
           }
         }
@@ -4688,20 +4883,21 @@ static ImBuf *load_image_single(Image *ima,
 
     /* read ibuf */
     ibuf = IMB_load_image_from_filepath(filepath, flag, ima->colorspace_settings.name);
-    if (ibuf && flag_is_set(ibuf->flags, ImBufFlags::MultiLayer)) {
+    if (ibuf && ibuf->ftype == IMB_FTYPE_OPENEXR) {
       exr_handle = IMB_exr_open_multilayer(filepath);
     }
   }
 
   if (ibuf) {
-    if (flag_is_set(ibuf->flags, ImBufFlags::MultiLayer)) {
+    if (exr_handle) {
       /* Handle multilayer and multiview cases, don't assign ibuf here: the
-       * multi-layer pixels are loaded into the Image.layers catalog cache. The
-       * loaded ibuf only contains metadata, so it is discarded here. */
-      if (exr_handle) {
-        image_create_multilayer(ima, ibuf, exr_handle, key);
-        ima->type = IMA_TYPE_MULTILAYER;
-      }
+       * multi-layer pixels are loaded into the Image.layers catalog cache.
+       * The catalog is built (once) from the file header; only the requested
+       * pass is read here, taking its header metadata from the info ImBuf. */
+      image_create_multilayer(ima, exr_handle, key);
+      image_load_multilayer_pass_on_demand(ima, iuser, exr_handle, key, view_id, ibuf);
+      IMB_exr_close(exr_handle);
+      ima->type = IMA_TYPE_MULTILAYER;
       IMB_freeImBuf(ibuf);
       ibuf = nullptr;
       /* Null ibuf in the cache means the image failed to load. For multi-layer
@@ -4864,40 +5060,6 @@ void BKE_image_populate_cache_from_autosave(Image *ima)
   }
 
   BKE_image_clear_autosave(ima);
-}
-
-/* Fetch the buffer of a loaded multi-layer EXR file from the Image.layers cache,
- * (re)building the catalog and cache from the file when needed (design §4.3). */
-static ImBuf *image_get_ibuf_multilayer(Image *ima, ImageUser *iuser)
-{
-  /* The catalog is loaded; try the cache first. */
-  if (ima->runtime->multilayer_catalog_loaded) {
-    const ImagePass *pass = image_user_resolve_pass(ima, iuser);
-    ImBuf *ibuf = imagecache_get(
-        ima, ImageCacheKey{.pass = pass, .view = image_effective_view(ima, iuser)}, nullptr);
-    if (ibuf) {
-      return ibuf;
-    }
-    /* Buffers were evicted from the cache; fall through to reload them. */
-  }
-
-  ImBuf *ibuf = image_load_image_file(ima, iuser, ImageCacheKey{}, 0, false);
-  if (ibuf) {
-    /* Not a multi-layer EXR after all. */
-    ima->type = IMA_TYPE_IMAGE;
-    return ibuf;
-  }
-
-  if (ima->runtime->multilayer_catalog_loaded) {
-    const ImagePass *pass = image_user_resolve_pass(ima, iuser);
-    ibuf = imagecache_get(
-        ima, ImageCacheKey{.pass = pass, .view = image_effective_view(ima, iuser)}, nullptr);
-    if (ibuf) {
-      image_init_after_load(ima, iuser, ibuf);
-    }
-  }
-
-  return ibuf;
 }
 
 /* showing RGBA result itself (from compo/sequence) or
@@ -5189,7 +5351,7 @@ static ImBuf *image_acquire_ibuf(Image *ima,
       /* no else; on load the ima type can change */
       if (ima->type == IMA_TYPE_MULTILAYER) {
         /* Only 1 layer/pass stored in imbufs, no EXR-handle anim storage, no saving. */
-        ibuf = image_load_sequence_multilayer(ima, iuser, key, key.frame);
+        ibuf = image_load_multilayer(ima, iuser, key, key.frame, true);
       }
     }
     else if (ima->source == IMA_SRC_TILED) {
@@ -5207,7 +5369,7 @@ static ImBuf *image_acquire_ibuf(Image *ima,
         /* no else; on load the ima type can change */
         if (ima->type == IMA_TYPE_MULTILAYER) {
           /* Only 1 layer/pass stored in imbufs, no EXR-handle anim storage, no saving. */
-          ibuf = image_load_sequence_multilayer(ima, iuser, key, 0);
+          ibuf = image_load_multilayer(ima, iuser, key, 0, true);
         }
       }
     }
@@ -5219,8 +5381,8 @@ static ImBuf *image_acquire_ibuf(Image *ima,
       }
       /* no else; on load the ima type can change */
       if (ima->type == IMA_TYPE_MULTILAYER) {
-        /* keeps render result, stores ibufs in listbase, allows saving */
-        ibuf = image_get_ibuf_multilayer(ima, iuser);
+        /* Stores pass ibufs in the per-Image cache, allows saving. */
+        ibuf = image_load_multilayer(ima, iuser, key, key.frame, false);
       }
     }
     else if (ima->source == IMA_SRC_GENERATED) {

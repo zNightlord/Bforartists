@@ -75,15 +75,24 @@ struct ImageRuntime {
   float view_zoom = 1.0f;
 
   /* Loaded multi-layer EXR catalog. The Image.layers / Image.views catalog is built from the
-   * file header; the buffers live in #cache. These fields are the catalog-level state that has
+   * file header once; the per-frame, per-pass pixel buffers live in #cache, each carrying its
+   * own (implicitly shared) header metadata. The catalog is the only catalog-level state with
    * no per-buffer home. */
 
-  /** Frame whose multi-layer catalog and buffers are currently loaded (sequence EXRs). */
-  int multilayer_framenr = 0;
-  /** True once the catalog has been built from the file; cleared on reload to force a rebuild. */
+  /**
+   * True once the catalog has been built from the file; cleared on reload to
+   * force a rebuild. This alone gates the (single, frame-independent) catalog
+   * build — it is not rebuilt per frame.
+   */
   bool multilayer_catalog_loaded = false;
+  /**
+   * Frame the catalog was built from (sequence EXRs), recorded for diagnostics.
+   * It does *not* gate the per-frame pixel buffers, which the #cache holds for
+   * multiple frames at once.
+   */
+  int multilayer_catalog_framenr = 0;
 
-  /* Render-result viewer catalog copy (design §9). When Image.layers holds a copy of a
+  /* Render-result viewer catalog copy. When Image.layers holds a copy of a
    * RenderResult's catalog, this records the #RenderResult::catalog_version it was copied
    * from, so a stale copy can be detected and re-synced. catalog_version is a process-global
    * monotonic stamp, so it uniquely identifies the catalog state. */
