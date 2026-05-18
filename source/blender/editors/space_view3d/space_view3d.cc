@@ -122,7 +122,7 @@ bool ED_view3d_area_user_region(const ScrArea *area, const View3D *v3d, ARegion 
   return false;
 }
 
-void ED_view3d_init_mats_rv3d(const Object *ob, RegionView3D *rv3d)
+void ED__mats_rv3d(const Object *ob, RegionView3D *rv3d)
 {
   /* local viewmat and persmat, to calculate projections */
   mul_m4_m4m4(rv3d->viewmatob, rv3d->viewmat, ob->object_to_world().ptr());
@@ -132,9 +132,9 @@ void ED_view3d_init_mats_rv3d(const Object *ob, RegionView3D *rv3d)
   ED_view3d_clipping_local(rv3d, ob->object_to_world().ptr());
 }
 
-void ED_view3d_init_mats_rv3d_gl(const Object *ob, RegionView3D *rv3d)
+void ED__mats_rv3d_gl(const Object *ob, RegionView3D *rv3d)
 {
-  ED_view3d_init_mats_rv3d(ob, rv3d);
+  ED__mats_rv3d(ob, rv3d);
 
   /* We have to multiply instead of loading `viewmatob` to make
    * it work with duplis using display-lists, otherwise it will
@@ -287,7 +287,18 @@ static void view3d_free(SpaceLink *sl)
 }
 
 /* spacetype; init callback */
-static void view3d_init(wmWindowManager * /*wm*/, ScrArea * /*area*/) {}
+static void view3d_init(wmWindowManager * /*wm*/, ScrArea *area) {
+  /* Apply asset shelf default position from user preferences, but only for
+   * freshly created areas. Existing areas loaded from .blend already have
+   * their region order and flag serialized — don't overwrite them. */
+  const bool pref_top = (U.uiflag2 & USER_ASSETSHELF_TOP) != 0;
+  const bool flag_top = (area->flag & ASSET_SHELF_TOP) != 0;
+
+  if (pref_top != flag_top) {
+    /* area->flag not yet set means this is a new area — apply the pref. */
+    ED_area_asset_shelf_set_top(area, pref_top);
+  }
+}
 
 static void view3d_exit(wmWindowManager * /*wm*/, ScrArea *area)
 {
