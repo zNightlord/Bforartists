@@ -264,4 +264,6 @@ void SCREEN_OT_screenshot_area(wmOperatorType *ot);
 
 bool workspace_layout_set_poll(const WorkSpaceLayout *layout);
 
+void ED_area_asset_shelf_set_top(ScrArea *area, const bool top);
+
 }  // namespace blender
