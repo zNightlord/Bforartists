@@ -136,14 +136,6 @@ static void copy_image_packedfiles(ListBaseT<ImagePackedFile> *lb_dst,
 /** \name Image #IDTypeInfo API
  * \{ */
 
-static void image_runtime_free_data(Image *image)
-{
-  if (image->runtime->stamp_data != nullptr) {
-    BKE_stamp_data_free(image->runtime->stamp_data);
-    image->runtime->stamp_data = nullptr;
-  }
-}
-
 static void image_init_data(ID *id)
 {
   Image *image = id_cast<Image *>(id);
@@ -226,7 +218,6 @@ static void image_free_data(ID *id)
   image->tiles.free_no_destruct();
 
   image_free_layers(&image->layers);
-  image_runtime_free_data(image);
   MEM_delete(image->runtime);
 }
 
@@ -845,10 +836,6 @@ static void image_reset_multilayer_catalog(Image *ima)
   image_free_layers(&ima->layers);
   ima->runtime->multilayer_catalog_loaded = false;
   ima->runtime->multilayer_framenr = 0;
-  if (ima->runtime->stamp_data != nullptr) {
-    BKE_stamp_data_free(ima->runtime->stamp_data);
-    ima->runtime->stamp_data = nullptr;
-  }
 }
 
 /* only image block itself */
@@ -4392,9 +4379,6 @@ static void image_create_multilayer(Image *ima,
   /* Build the image views from the render views. */
   image_init_multilayer_multiview(ima, rr);
 
-  /* Catalog-level metadata from the EXR header (design §5). */
-  BKE_stamp_info_from_imbuf(rr, ibuf);
-
   /* Build the view-independent #Image.layers catalog from the EXR header (file order). */
   for (const ExrPassInfo &info : passes) {
     const std::string layer_name(info.layer);
@@ -4445,13 +4429,6 @@ static void image_create_multilayer(Image *ima,
       imagecache_put(ima, put_key, rp.ibuf);
     }
   }
-
-  /* Steal the metadata; the rest of the temporary render result is discarded. */
-  if (ima->runtime->stamp_data != nullptr) {
-    BKE_stamp_data_free(ima->runtime->stamp_data);
-  }
-  ima->runtime->stamp_data = rr->stamp_data;
-  rr->stamp_data = nullptr;
 
   /* For animated multi-layer EXR the catalog and cache belong to a specific frame; static
    * (or tiled) sources use 0. */

@@ -8,11 +8,13 @@
 
 #include "BKE_cryptomatte.h"
 #include "BKE_cryptomatte.hh"
+#include "BKE_idprop.hh"
 #include "BKE_image.hh"
 #include "BKE_layer.hh"
 #include "BKE_main.hh"
 #include "BKE_material.hh"
 
+#include "DNA_ID.h"
 #include "DNA_layer_types.h"
 #include "DNA_material_types.h"
 #include "DNA_node_types.h"
@@ -24,6 +26,8 @@
 #include "BLI_listbase.hh"
 #include "BLI_string.hh"
 #include "BLI_string_utf8.hh"
+
+#include "IMB_imbuf_types.hh"
 
 #include "RE_pipeline.h"
 
@@ -37,6 +41,10 @@
 
 namespace blender {
 
+namespace bke::cryptomatte::manifest {
+static bool from_manifest(CryptomatteLayer &layer, StringRefNull manifest);
+}  // namespace bke::cryptomatte::manifest
+
 struct CryptomatteSession {
   Map<std::string, bke::cryptomatte::CryptomatteLayer> layers;
   /* Layer names in order of creation. */
@@ -44,7 +52,7 @@ struct CryptomatteSession {
 
   CryptomatteSession() = default;
   CryptomatteSession(const Main *bmain);
-  CryptomatteSession(StampData *stamp_data);
+  CryptomatteSession(const IDProperty *metadata);
   CryptomatteSession(const ViewLayer *view_layer);
   CryptomatteSession(const Scene *scene, bool build_meta_data = false);
   void init(const ViewLayer *view_layer, bool build_meta_data = false);
@@ -80,19 +88,46 @@ CryptomatteSession::CryptomatteSession(const Main *bmain)
   }
 }
 
-CryptomatteSession::CryptomatteSession(StampData *stamp_data)
+CryptomatteSession::CryptomatteSession(const IDProperty *metadata)
 {
-  bke::cryptomatte::CryptomatteStampDataCallbackData callback_data;
-  callback_data.session = this;
-  BKE_stamp_info_callback(&callback_data,
-                          stamp_data,
-                          bke::cryptomatte::CryptomatteStampDataCallbackData::extract_layer_names,
-                          false);
-  BKE_stamp_info_callback(
-      &callback_data,
-      stamp_data,
-      bke::cryptomatte::CryptomatteStampDataCallbackData::extract_layer_manifest,
-      false);
+  if (metadata == nullptr) {
+    return;
+  }
+
+  /* Cryptomatte metadata is stored as string properties keyed
+   * "cryptomatte/{layer_hash}/{attribute}".
+   *
+   * Two passes: layer names must be collected before the manifests are resolved.
+   * Only string properties carry cryptomatte stamp data; skip anything else so
+   * an unrelated non-string entry in the metadata group cannot trip the type
+   * assert in #IDP_string_get. */
+  Map<StringRef, StringRefNull> hash_to_layer_name;
+  for (const IDProperty &prop : metadata->data.group) {
+    if (prop.type != IDP_STRING) {
+      continue;
+    }
+    const StringRefNull key(prop.name);
+    if (key.startswith("cryptomatte/") && key.endswith("/name")) {
+      hash_to_layer_name.add(bke::cryptomatte::cryptomatte_extract_layer_hash(key),
+                             IDP_string_get(&prop));
+    }
+  }
+  for (const IDProperty &prop : metadata->data.group) {
+    if (prop.type != IDP_STRING) {
+      continue;
+    }
+    const StringRefNull key(prop.name);
+    if (!key.startswith("cryptomatte/") || !key.endswith("/manifest")) {
+      continue;
+    }
+    const StringRefNull *layer_name = hash_to_layer_name.lookup_ptr(
+        bke::cryptomatte::cryptomatte_extract_layer_hash(key));
+    if (layer_name == nullptr) {
+      continue;
+    }
+    bke::cryptomatte::CryptomatteLayer &layer = add_layer(*layer_name);
+    bke::cryptomatte::manifest::from_manifest(layer, IDP_string_get(&prop));
+  }
 }
 
 CryptomatteSession::CryptomatteSession(const ViewLayer *view_layer)
@@ -191,10 +226,9 @@ CryptomatteSession *BKE_cryptomatte_init()
   return session;
 }
 
-CryptomatteSession *BKE_cryptomatte_init_from_image(const Image *image)
+CryptomatteSession *BKE_cryptomatte_init_from_imbuf(const ImBuf *ibuf)
 {
-  CryptomatteSession *session = new CryptomatteSession(image->runtime->stamp_data);
-  return session;
+  return new CryptomatteSession(ibuf ? ibuf->metadata() : nullptr);
 }
 
 CryptomatteSession *BKE_cryptomatte_init_from_scene(const Scene *scene, bool build_meta_data)
@@ -593,7 +627,7 @@ std::string CryptomatteLayer::manifest() const
   return bke::cryptomatte::manifest::to_manifest(this);
 }
 
-StringRef CryptomatteStampDataCallbackData::extract_layer_hash(StringRefNull key)
+StringRef cryptomatte_extract_layer_hash(StringRefNull key)
 {
   BLI_assert(key.startswith("cryptomatte/"));
 
@@ -609,48 +643,6 @@ StringRef CryptomatteStampDataCallbackData::extract_layer_hash(StringRefNull key
     return "";
   }
   return key.substr(start_index + 1, end_index - start_index - 1);
-}
-
-void CryptomatteStampDataCallbackData::extract_layer_names(void *_data,
-                                                           const char *propname,
-                                                           char *propvalue,  // NOLINT
-                                                           int /*propvalue_maxncpy*/)
-{
-  CryptomatteStampDataCallbackData *data = static_cast<CryptomatteStampDataCallbackData *>(_data);
-
-  StringRefNull key(propname);
-  if (!key.startswith("cryptomatte/")) {
-    return;
-  }
-  if (!key.endswith("/name")) {
-    return;
-  }
-  StringRef layer_hash = extract_layer_hash(key);
-  data->hash_to_layer_name.add(layer_hash, propvalue);
-}
-
-void CryptomatteStampDataCallbackData::extract_layer_manifest(void *_data,
-                                                              const char *propname,
-                                                              char *propvalue,  // NOLINT
-                                                              int /*propvalue_maxncpy*/)
-{
-  CryptomatteStampDataCallbackData *data = static_cast<CryptomatteStampDataCallbackData *>(_data);
-
-  StringRefNull key(propname);
-  if (!key.startswith("cryptomatte/")) {
-    return;
-  }
-  if (!key.endswith("/manifest")) {
-    return;
-  }
-  StringRef layer_hash = extract_layer_hash(key);
-  if (!data->hash_to_layer_name.contains(layer_hash)) {
-    return;
-  }
-
-  StringRef layer_name = data->hash_to_layer_name.lookup(layer_hash);
-  bke::cryptomatte::CryptomatteLayer &layer = data->session->add_layer(layer_name);
-  bke::cryptomatte::manifest::from_manifest(layer, propvalue);
 }
 
 const Vector<std::string> &BKE_cryptomatte_layer_names_get(const CryptomatteSession &session)

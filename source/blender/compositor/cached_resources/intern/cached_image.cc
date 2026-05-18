@@ -290,11 +290,10 @@ CachedImage::CachedImage(Context &context,
     this->result.set_type(get_pass_type(render_pass));
   }
 
-  this->populate_cryptomatte_meta_data(&image, image_user_for_pass);
-
   ImBuf *image_buffer = BKE_image_acquire_ibuf(&image, &image_user_for_pass, nullptr);
   ImBuf *linear_image_buffer = compute_linear_buffer(image_buffer);
 
+  this->populate_cryptomatte_meta_data(&image, image_user_for_pass, image_buffer);
   this->populate_meta_data(image_buffer);
 
   const bool use_half_float = linear_image_buffer->foptions.flag & OPENEXR_HALF;
@@ -344,9 +343,11 @@ CachedImage::CachedImage(Context &context,
   BKE_image_release_ibuf(&image, image_buffer, nullptr);
 }
 
-void CachedImage::populate_cryptomatte_meta_data(const Image *image, const ImageUser &image_user)
+void CachedImage::populate_cryptomatte_meta_data(const Image *image,
+                                                 const ImageUser &image_user,
+                                                 const ImBuf *image_buffer)
 {
-  if (image->runtime->stamp_data == nullptr) {
+  if (image_buffer == nullptr || image_buffer->metadata() == nullptr) {
     return;
   }
 
@@ -373,12 +374,11 @@ void CachedImage::populate_cryptomatte_meta_data(const Image *image, const Image
     compositor::MetaData *meta_data;
   };
 
-  /* Go over the stamp data and add any Cryptomatte related meta data. */
+  /* Go over the image metadata and add any Cryptomatte related meta data. */
   StampCallbackData callback_data = {cryptomatte_layer_name, &this->result.meta_data};
-  BKE_stamp_info_callback(
-      &callback_data,
-      image->runtime->stamp_data,
-      [](void *user_data, const char *key, char *value, int /*value_length*/) {
+  IMB_metadata_foreach(
+      image_buffer,
+      [](const char *key, const char *value, void *user_data) {
         StampCallbackData *data = static_cast<StampCallbackData *>(user_data);
 
         const std::string manifest_key = bke::cryptomatte::BKE_cryptomatte_meta_data_key(
@@ -399,7 +399,7 @@ void CachedImage::populate_cryptomatte_meta_data(const Image *image, const Image
           data->meta_data->cryptomatte.conversion = value;
         }
       },
-      false);
+      &callback_data);
 }
 
 void CachedImage::populate_meta_data(const ImBuf *image_buffer)

@@ -1126,9 +1126,6 @@ static bool image_save_multilayer_exr_file(ReportList *reports,
     STRNCPY(rv->name, view_name);
     BLI_addtail(&rr->views, rv);
   }
-  /* Borrowed, detached again before the render result is freed. */
-  rr->stamp_data = ima->runtime->stamp_data;
-
   ImBuf *first_ibuf = nullptr;
   for (ImageLayer &layer : ima->layers) {
     RenderLayer *rl = MEM_new<RenderLayer>("multilayer exr save layer");
@@ -1185,6 +1182,9 @@ static bool image_save_multilayer_exr_file(ReportList *reports,
     rr->recty = first_ibuf->y;
     copy_v2_v2_db(rr->ppm, first_ibuf->ppm);
 
+    /* Metadata for the EXR header is taken from the shared pass-buffer metadata. */
+    BKE_stamp_info_from_imbuf(rr, first_ibuf);
+
     /* A multi-layer EXR writes every layer; a single-layer EXR writes only the
      * #ImageUser's selected layer. */
     const bool is_multilayer = (imf->imtype == R_IMF_IMTYPE_MULTILAYER);
@@ -1209,15 +1209,14 @@ static bool image_save_multilayer_exr_file(ReportList *reports,
     }
   }
 
-  /* Release the borrowed cache references and detach the borrowed stamp data
-   * before freeing the temporary render result. */
+  /* Release the borrowed cache references before freeing the temporary render
+   * result. The stamp data is owned by the render result and freed with it. */
   for (RenderLayer &rl : rr->layers) {
     for (RenderPass &rpass : rl.passes) {
       BKE_image_release_ibuf(ima, rpass.ibuf, nullptr);
       rpass.ibuf = nullptr;
     }
   }
-  rr->stamp_data = nullptr;
   RE_FreeRenderResult(rr);
 
   return ok;

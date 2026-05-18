@@ -78,8 +78,6 @@ struct ImageRuntime {
    * file header; the buffers live in #cache. These fields are the catalog-level state that has
    * no per-buffer home. */
 
-  /** Catalog-level metadata read from the EXR header (design §5). Owned. */
-  StampData *stamp_data = nullptr;
   /** Frame whose multi-layer catalog and buffers are currently loaded (sequence EXRs). */
   int multilayer_framenr = 0;
   /** True once the catalog has been built from the file; cleared on reload to force a rebuild. */

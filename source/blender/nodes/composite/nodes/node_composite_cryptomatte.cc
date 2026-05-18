@@ -86,9 +86,12 @@ static bke::cryptomatte::CryptomatteSessionPtr cryptomatte_init_from_node_image(
     image_user.framenr = BKE_image_sequence_guess_offset(image);
   }
 
+  /* The Cryptomatte manifest lives in the multi-layer EXR header, which is
+   * attached to every pass buffer as it loads, so read it from the acquired
+   * buffer of the selected pass. */
   ImBuf *ibuf = BKE_image_acquire_ibuf(image, &image_user, nullptr);
-  if (BKE_image_has_layer_catalog(image)) {
-    session = bke::cryptomatte::CryptomatteSessionPtr(BKE_cryptomatte_init_from_image(image));
+  if (ibuf && BKE_image_has_layer_catalog(image)) {
+    session = bke::cryptomatte::CryptomatteSessionPtr(BKE_cryptomatte_init_from_imbuf(ibuf));
   }
   BKE_image_release_ibuf(image, ibuf, nullptr);
   return session;

@@ -105,28 +105,12 @@ struct CryptomatteLayer {
   std::optional<std::string> operator[](float encoded_hash) const;
 };
 
-struct CryptomatteStampDataCallbackData {
-  CryptomatteSession *session;
-  Map<std::string, std::string> hash_to_layer_name;
-
-  /**
-   * Extract the hash from a stamp data key.
-   *
-   * Cryptomatte keys are formatted as "cryptomatte/{layer_hash}/{attribute}".
-   */
-  static StringRef extract_layer_hash(StringRefNull key);
-
-  /* C type callback function (StampCallback). */
-  static void extract_layer_names(void *_data,
-                                  const char *propname,
-                                  char *propvalue,
-                                  int propvalue_maxncpy);
-  /* C type callback function (StampCallback). */
-  static void extract_layer_manifest(void *_data,
-                                     const char *propname,
-                                     char *propvalue,
-                                     int propvalue_maxncpy);
-};
+/**
+ * Extract the layer hash from a cryptomatte metadata key.
+ *
+ * Cryptomatte keys are formatted as "cryptomatte/{layer_hash}/{attribute}".
+ */
+StringRef cryptomatte_extract_layer_hash(StringRefNull key);
 
 const Vector<std::string> &BKE_cryptomatte_layer_names_get(const CryptomatteSession &session);
 CryptomatteLayer *BKE_cryptomatte_layer_get(CryptomatteSession &session, StringRef layer_name);
