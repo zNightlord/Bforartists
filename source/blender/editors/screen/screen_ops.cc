@@ -6424,6 +6424,32 @@ static void SCREEN_OT_header_topbar_misc(wmOperatorType *ot)
   ot->poll = ED_operator_areaactive;
   ot->flag = 0;
 }
+
+static int assetshelf_flip_exec(bContext *C, wmOperator *)
+{
+  ScrArea *area = CTX_wm_area(C);
+  const bool now_top = !(area->flag & ASSET_SHELF_TOP);
+
+  ED_area_asset_shelf_set_top(area, now_top);
+
+  ED_area_tag_redraw(area);
+  WM_event_add_notifier(C, NC_SCREEN | NA_EDITED, nullptr);
+  return OPERATOR_FINISHED;
+}
+
+static void SCREEN_OT_assetshelf_flip(wmOperatorType *ot)
+{
+  /* identifiers */
+  ot->name = "Flip asset shelf";
+  ot->idname = "SCREEN_OT_assetshelf_flip";
+  ot->description = "Flip the asset shelf to top or bottom";
+
+  /* api callbacks */
+  ot->exec = assetshelf_flip_exec;
+  ot->poll = ED_operator_areaactive;
+  ot->flag = 0;
+}
+
 /*--------------- bfa end -------------------------------------*/
 
 void ED_screens_header_tools_menu_create(bContext *C, ui::Layout *layout, void * /*arg*/)
@@ -6615,6 +6641,7 @@ static void SCREEN_OT_topbar_toolbox(wmOperatorType *ot)
   /* api callbacks */
   ot->invoke = topbar_toolbox_invoke;
 }
+
 /*----------------------------------------------------*/
 
 void ED_screens_footer_tools_menu_create(bContext *C, ui::Layout *layout, void * /*arg*/)
@@ -8207,6 +8234,7 @@ void ED_operatortypes_screen()
   WM_operatortype_append(SCREEN_OT_header_topbar_misc);  // bfa - show hide the primitives topbar
   WM_operatortype_append(
       SCREEN_OT_topbar_toolbox);  // bfa - topbar types menu in the topbar editor
+  WM_operatortype_append(SCREEN_OT_assetshelf_flip);
   WM_operatortype_append(SCREEN_OT_region_context_menu);
   WM_operatortype_append(SCREEN_OT_screen_set);
   WM_operatortype_append(SCREEN_OT_screen_full_area);
