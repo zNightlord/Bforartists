@@ -45,6 +45,8 @@
 #include "transform_orientations.hh"
 #include "transform_snap.hh"
 
+#include "ED_pose_anim_motion_curve.hh"
+
 /* Own include. */
 #include "transform_convert.hh"
 
@@ -302,6 +304,7 @@ static short pose_grab_with_ik(Main *bmain, Object *ob)
           /* Rule: go over the children and add IK to the tips. */
           tot_ik += pose_grab_with_ik_children(ob->pose, pchan_bone);
         }
+        POSE_motion_curve_auto_ik_begin(ob, &pchan);
       }
     }
   }
@@ -1740,6 +1743,8 @@ static void special_aftertrans_update__pose(bContext *C, TransInfo *t)
 
       if (t->mode == TFM_TRANSLATION) {
         Main *bmain = CTX_data_main(t->context);
+        // const bool is_cancelled = (t->state == TRANS_CANCEL);
+        POSE_motion_curve_auto_ik_end(canceled);
         pose_grab_with_ik_clear(bmain, ob);
       }
 
