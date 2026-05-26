@@ -24,6 +24,7 @@
 #include "BLI_listbase.hh"
 
 #include "BKE_duplilist.hh"
+#include "BKE_image.hh"
 #include "BKE_node.hh"
 #include "BKE_node_runtime.hh"
 
@@ -107,6 +108,31 @@ static ImageAlphaType get_image_alpha_type(blender::Image &b_image)
 {
   const int value = b_image.alpha_mode;
   return (ImageAlphaType)validate_enum_value(value, IMAGE_ALPHA_NUM_TYPES, IMAGE_ALPHA_AUTO);
+}
+
+/* Compose an OpenImageIO subimage name from the multi-layer EXR pass selection
+ * stored on the ImageUser, "<layer>.<pass>". Returns empty when neither the
+ * layer nor pass selection resolves (non-multilayer image, or no pass pinned).
+ *
+ * Names are authoritative when set; otherwise we resolve from the integer
+ * indices against the Image.layers catalog. A freshly-created node has empty
+ * names — they're only populated when a pass is pinned (by shader node
+ * inlining) or the layer is explicitly chosen via UI/RNA. */
+static ustring compose_subimage_name(blender::Image &b_image, const blender::ImageUser &b_iuser)
+{
+  blender::ImageUser resolved = b_iuser;
+  if (resolved.layer_name[0] == '\0' || resolved.pass_name[0] == '\0') {
+    blender::BKE_image_user_resolve_from_index(&b_image, &resolved);
+  }
+  const bool has_layer = resolved.layer_name[0] != '\0';
+  const bool has_pass = resolved.pass_name[0] != '\0';
+  if (!has_layer && !has_pass) {
+    return ustring();
+  }
+  if (has_layer && has_pass) {
+    return ustring(string(resolved.layer_name) + "." + resolved.pass_name);
+  }
+  return ustring(has_layer ? resolved.layer_name : resolved.pass_name);
 }
 
 /* Attribute name translation utilities */
@@ -914,6 +940,12 @@ static ShaderNode *add_node(Scene *scene,
       image->set_animated(is_image_animated(b_image_source, b_image_user));
       image->set_alpha_type(get_image_alpha_type(*b_image));
 
+      /* Compose the OpenImageIO subimage name from the pinned pass selection.
+       * Shader node inlining pins pass_name on its single-pass copies of a
+       * multi-layer image; on other nodes it stays empty and the file's
+       * default subimage is read. */
+      image->set_subimage_name(compose_subimage_name(*b_image, b_image_user));
+
       if (b_image_source == blender::IMA_SRC_TILED) {
         array<int> tiles;
         for (blender::ImageTile &b_tile : b_image->tiles) {
@@ -986,6 +1018,8 @@ static ShaderNode *add_node(Scene *scene,
       env->set_colorspace(ustring(b_image->colorspace_settings.name));
       env->set_animated(is_image_animated(b_image_source, b_image_user));
       env->set_alpha_type(get_image_alpha_type(*b_image));
+
+      env->set_subimage_name(compose_subimage_name(*b_image, b_image_user));
 
       const bool is_builtin = image_is_builtin(*b_image, b_engine);
 

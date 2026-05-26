@@ -135,6 +135,9 @@ class ImageTextureNode : public ImageSlotTextureNode {
   NODE_SOCKET_API(bool, animated)
   NODE_SOCKET_API(float3, vector)
   NODE_SOCKET_API_ARRAY(array<int>, tiles)
+  /* OpenImageIO subimage name; selects a layer/pass of a multi-layer EXR.
+   * Empty for single-layer images. */
+  NODE_SOCKET_API(ustring, subimage_name)
 
  protected:
   void cull_tiles(Scene *scene, ShaderGraph *graph);
@@ -173,6 +176,9 @@ class EnvironmentTextureNode : public ImageSlotTextureNode {
   NODE_SOCKET_API(InterpolationType, interpolation)
   NODE_SOCKET_API(bool, animated)
   NODE_SOCKET_API(float3, vector)
+  /* OpenImageIO subimage name; selects a layer/pass of a multi-layer EXR.
+   * Empty for single-layer images. */
+  NODE_SOCKET_API(ustring, subimage_name)
 };
 
 class SkyTextureNode : public TextureNode {

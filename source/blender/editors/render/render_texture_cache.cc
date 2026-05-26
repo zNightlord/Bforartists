@@ -18,10 +18,12 @@
 #  include "MEM_guardedalloc.h"
 
 #  include "DNA_image_types.h"
+#  include "DNA_node_types.h"
 #  include "DNA_userdef_types.h"
 #  include "DNA_windowmanager_enums.h"
 
 #  include "BLI_fileops.hh"
+#  include "BLI_hash.hh"
 #  include "BLI_listbase.hh"
 #  include "BLI_path_utils.hh"
 #  include "BLI_set.hh"
@@ -37,6 +39,7 @@
 #  include "BKE_lib_query.hh"
 #  include "BKE_main.hh"
 #  include "BKE_node.hh"
+#  include "BKE_node_runtime.hh"
 #  include "BKE_report.hh"
 
 #  include "BLT_translation.hh"
@@ -58,42 +61,92 @@ namespace blender {
 /** \name Texture Cache Image Gathering
  * \{ */
 
-/* Gather all images referenced by shader node trees. */
-static Set<const Image *> gather_cache_images(Main *bmain)
+/* An image plus the multi-layer EXR subimage (layer/pass) selected by a shader
+ * node. For non-multilayer images the subimage name stays empty and the legacy
+ * single-buffer .tx is used. For multilayer EXRs we only cache the (layer, pass)
+ * combinations that some shader node selected, not the cartesian product of the
+ * whole catalog. The OpenImageIO subimage name is composed as "<layer>.<pass>"
+ * to match Blender's multi-part EXR writer. */
+struct ImageCacheRef {
+  const Image *image;
+  std::string subimage_name;
+
+  bool operator==(const ImageCacheRef &other) const
+  {
+    return image == other.image && subimage_name == other.subimage_name;
+  }
+  uint64_t hash() const
+  {
+    return get_default_hash(image, subimage_name);
+  }
+};
+
+/* A source image file to cache, tagged with its selected subimage. */
+struct ImageCacheFile {
+  const Image *image;
+  std::string filepath;
+  std::string subimage_name;
+};
+
+/* Compose the OpenImageIO subimage name "<layer>.<pass>" from a resolved
+ * ImageUser, or just one half when the other is empty, or empty for a
+ * non-multilayer image. */
+static std::string compose_subimage_name(const ImageUser &iuser)
 {
-  Set<const Image *> images;
+  const bool has_layer = iuser.layer_name[0] != '\0';
+  const bool has_pass = iuser.pass_name[0] != '\0';
+  if (!has_layer && !has_pass) {
+    return std::string();
+  }
+  if (has_layer && has_pass) {
+    return std::string(iuser.layer_name) + "." + iuser.pass_name;
+  }
+  return std::string(has_layer ? iuser.layer_name : iuser.pass_name);
+}
+
+/* Gather (image, subimage) pairs actually referenced by shader node trees. */
+static Set<ImageCacheRef> gather_cache_images(Main *bmain)
+{
+  Set<ImageCacheRef> image_refs;
 
   FOREACH_NODETREE_BEGIN (bmain, ntree, id) {
     if (ntree->type != NTREE_SHADER) {
       continue;
     }
-    BKE_library_foreach_ID_link(
-        bmain,
-        &ntree->id,
-        [&](LibraryIDLinkCallbackData *cb_data) {
-          ID *image_id = *cb_data->id_pointer;
-          if (image_id && GS(image_id->name) == ID_IM) {
-            Image *image = blender::id_cast<Image *>(image_id);
-            images.add(image);
-          }
-          return IDWALK_RET_NOP;
-        },
-        nullptr,
-        IDWALK_READONLY);
+    for (bNode *node : ntree->all_nodes()) {
+      Image *image = nullptr;
+      ImageUser *iuser = nullptr;
+      if (node->is_type("ShaderNodeTexImage"_ustr)) {
+        image = blender::id_cast<Image *>(node->id);
+        iuser = &static_cast<NodeTexImage *>(node->storage)->iuser;
+      }
+      else if (node->is_type("ShaderNodeTexEnvironment"_ustr)) {
+        image = blender::id_cast<Image *>(node->id);
+        iuser = &static_cast<NodeTexEnvironment *>(node->storage)->iuser;
+      }
+      if (!image || !iuser) {
+        continue;
+      }
+
+      ImageUser local_iuser = *iuser;
+      BKE_image_user_resolve_from_names(image, &local_iuser);
+      image_refs.add({image, compose_subimage_name(local_iuser)});
+    }
   }
   FOREACH_NODETREE_END;
 
-  return images;
+  return image_refs;
 }
 
 /* Gather all source image files to the texture cache, expanding UDIM tiles and
  * optionally image sequences. */
-static Vector<std::pair<const Image *, std::string>> gather_cache_filepaths(
-    Main *bmain, const bool include_sequences)
+static Vector<ImageCacheFile> gather_cache_filepaths(Main *bmain, const bool include_sequences)
 {
-  Vector<std::pair<const Image *, std::string>> filepaths;
+  Vector<ImageCacheFile> filepaths;
 
-  for (const Image *image : gather_cache_images(bmain)) {
+  for (const ImageCacheRef &ref : gather_cache_images(bmain)) {
+    const Image *image = ref.image;
+    const std::string &subimage_name = ref.subimage_name;
     if (ELEM(image->source, IMA_SRC_MOVIE, IMA_SRC_GENERATED, IMA_SRC_VIEWER)) {
       continue;
     }
@@ -121,7 +174,7 @@ static Vector<std::pair<const Image *, std::string>> gather_cache_filepaths(
           BKE_image_set_filepath_from_tile_number(
               tile_filepath, udim_pattern, tile_format, tile.tile_number);
           if (BLI_is_file(tile_filepath)) {
-            filepaths.append({image, tile_filepath});
+            filepaths.append({image, tile_filepath, subimage_name});
           }
         }
         MEM_delete(udim_pattern);
@@ -133,7 +186,7 @@ static Vector<std::pair<const Image *, std::string>> gather_cache_filepaths(
     if (image->source == IMA_SRC_SEQUENCE) {
       if (include_sequences) {
         BKE_bpath_sequence_filepaths_foreach(filepath, [&](StringRef frame_filepath) {
-          filepaths.append({image, frame_filepath});
+          filepaths.append({image, std::string(frame_filepath), subimage_name});
         });
       }
       continue;
@@ -141,7 +194,7 @@ static Vector<std::pair<const Image *, std::string>> gather_cache_filepaths(
 
     /* Handle regular image. */
     if (BLI_is_file(filepath)) {
-      filepaths.append({image, filepath});
+      filepaths.append({image, filepath, subimage_name});
     }
   }
 
@@ -168,17 +221,19 @@ static void generate_texture_cache(Main *bmain,
                                    const bool include_sequences,
                                    wmJobWorkerStatus *worker_status = nullptr)
 {
-  const Vector<std::pair<const Image *, std::string>> filepaths = gather_cache_filepaths(
-      bmain, include_sequences);
+  const Vector<ImageCacheFile> filepaths = gather_cache_filepaths(bmain, include_sequences);
 
   /* Determine which texture cache files need to be generated. */
   Set<std::string> found_tx;
   int uptodate_num = 0;
-  Vector<std::pair<const Image *, std::string>> outdated;
-  for (const auto &item : filepaths) {
+  Vector<ImageCacheFile> outdated;
+  for (const ImageCacheFile &item : filepaths) {
     std::string tx_filepath;
-    const bool up_to_date = CCL_resolve_texture_cache(
-        item.first, item.second.c_str(), U.texture_cachedir, tx_filepath);
+    const bool up_to_date = CCL_resolve_texture_cache(item.image,
+                                                      item.filepath.c_str(),
+                                                      U.texture_cachedir,
+                                                      item.subimage_name.c_str(),
+                                                      tx_filepath);
     if (tx_filepath.empty() || !found_tx.add(tx_filepath)) {
       continue;
     }
@@ -195,7 +250,7 @@ static void generate_texture_cache(Main *bmain,
   std::atomic<int> failed_num = 0;
   std::mutex reports_mutex;
 
-  blender::threading::parallel_for_each(outdated, [&](const auto &item) {
+  blender::threading::parallel_for_each(outdated, [&](const ImageCacheFile &item) {
     if (worker_status) {
       if (G.is_break || worker_status->stop) {
         return;
@@ -204,13 +259,15 @@ static void generate_texture_cache(Main *bmain,
       worker_status->do_update = true;
     }
 
-    if (CCL_generate_texture_cache(item.first, item.second.c_str(), U.texture_cachedir)) {
+    if (CCL_generate_texture_cache(
+            item.image, item.filepath.c_str(), U.texture_cachedir, item.subimage_name.c_str()))
+    {
       completed_num++;
     }
     else {
       std::scoped_lock lock(reports_mutex);
       BKE_reportf(
-          reports, RPT_ERROR, "Failed to generate texture cache for: %s", item.second.c_str());
+          reports, RPT_ERROR, "Failed to generate texture cache for: %s", item.filepath.c_str());
       failed_num++;
     }
   });
@@ -287,13 +344,15 @@ static wmOperatorStatus generate_texture_cache_invoke(bContext *C,
   int uptodate_num = 0;
 
   const bool include_sequences = true;
-  const Vector<std::pair<const Image *, std::string>> filepaths = gather_cache_filepaths(
-      bmain, include_sequences);
-  for (const auto &item : filepaths) {
-    const bool is_sequence = item.first->source == IMA_SRC_SEQUENCE;
+  const Vector<ImageCacheFile> filepaths = gather_cache_filepaths(bmain, include_sequences);
+  for (const ImageCacheFile &item : filepaths) {
+    const bool is_sequence = item.image->source == IMA_SRC_SEQUENCE;
     std::string tx_filepath;
-    const bool up_to_date = CCL_resolve_texture_cache(
-        item.first, item.second.c_str(), U.texture_cachedir, tx_filepath);
+    const bool up_to_date = CCL_resolve_texture_cache(item.image,
+                                                      item.filepath.c_str(),
+                                                      U.texture_cachedir,
+                                                      item.subimage_name.c_str(),
+                                                      tx_filepath);
     if (tx_filepath.empty() || !found_tx.add(tx_filepath)) {
       continue;
     }
@@ -401,17 +460,16 @@ static Set<std::string> gather_clear_tx_files(Main *bmain)
   Set<std::string> tx_files;
 
   const bool include_sequences = true;
-  const Vector<std::pair<const Image *, std::string>> filepaths = gather_cache_filepaths(
-      bmain, include_sequences);
+  const Vector<ImageCacheFile> filepaths = gather_cache_filepaths(bmain, include_sequences);
 
   Set<std::string> source_filepaths;
-  for (const auto &item : filepaths) {
-    source_filepaths.add(item.second);
+  for (const ImageCacheFile &item : filepaths) {
+    source_filepaths.add(item.filepath);
   }
 
-  for (const auto &item : filepaths) {
+  for (const ImageCacheFile &item : filepaths) {
     BKE_image_texture_cache_filepaths_foreach(
-        item.second.c_str(), U.texture_cachedir, [&](StringRef cache_filepath) {
+        item.filepath.c_str(), U.texture_cachedir, [&](StringRef cache_filepath) {
           /* Defensive check just in case a tx file was referenced directly even
            * though this should not be done. */
           if (source_filepaths.contains(cache_filepath)) {

@@ -286,18 +286,22 @@ void ImageManager::load_image_metadata(ImageSingle *img, Progress &progress)
   });
 }
 
-ImageHandle ImageManager::add_image(const string &filename, const ImageParams &params)
+ImageHandle ImageManager::add_image(const string &filename,
+                                    const ImageParams &params,
+                                    const string &subimage_name)
 {
-  ImageSingle *image = add_image_texture(make_unique<OIIOImageLoader>(filename), params, false);
+  ImageSingle *image = add_image_texture(
+      make_unique<OIIOImageLoader>(filename, subimage_name), params, false);
   return ImageHandle(image, this);
 }
 
 ImageHandle ImageManager::add_image(const string &filename,
                                     const ImageParams &params,
-                                    const array<int> &tiles)
+                                    const array<int> &tiles,
+                                    const string &subimage_name)
 {
   if (tiles.empty()) {
-    return add_image(filename, params);
+    return add_image(filename, params, subimage_name);
   }
 
   vector<std::pair<int, ImageHandle>> udim_tiles;
@@ -313,7 +317,7 @@ ImageHandle ImageManager::add_image(const string &filename,
     string_replace(tile_filename, "<UVTILE>", string_printf("u%d_v%d", u + 1, v + 1));
 
     ImageSingle *image = add_image_texture(
-        make_unique<OIIOImageLoader>(tile_filename), params, false);
+        make_unique<OIIOImageLoader>(tile_filename, subimage_name), params, false);
     udim_tiles.emplace_back(tile, ImageHandle(image, this));
   }
 

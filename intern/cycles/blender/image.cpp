@@ -3,8 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0 */
 
 #include <algorithm>
+#include <cstring>
 
 #include "DNA_image_types.h"
+#include "DNA_scene_types.h"
 
 #include "IMB_imbuf_types.hh"
 
@@ -17,6 +19,28 @@
 #include "util/types_float4.h"
 
 CCL_NAMESPACE_BEGIN
+
+/* Acquire ImBuf for the loader's image+user, routing through the multi-layer
+ * pass acquire when the Image has a layer/pass catalog. The multi-layer path
+ * also handles the channel-name encoding used by older Blender versions
+ * (multi-channel single-part EXRs), which the OIIO file path in
+ * OIIOImageLoader does not. */
+static blender::ImBuf *acquire_ibuf_for_loader(blender::Image *b_image,
+                                               blender::ImageUser &b_iuser,
+                                               void **r_lock)
+{
+  if (blender::BKE_image_is_multilayer(b_image)) {
+    /* The multilayer acquire only consults render_data for non-multilayer
+     * multi-view resolution, which doesn't apply here, so a stack-local
+     * default value is safe. Cycles image textures are single-view, so an empty
+     * view name resolves to the default view. */
+    blender::RenderData render_data{};
+    *r_lock = nullptr;
+    return blender::BKE_image_acquire_multilayer_view_ibuf(
+        render_data, *b_image, b_iuser, b_iuser.pass_name, "");
+  }
+  return blender::BKE_image_acquire_ibuf(b_image, &b_iuser, r_lock);
+}
 
 /* Packed Images */
 
@@ -52,7 +76,7 @@ bool BlenderImageLoader::load_metadata(ImageMetaData &metadata,
 
   {
     void *lock;
-    blender::ImBuf *ibuf = BKE_image_acquire_ibuf(b_image, &b_iuser, &lock);
+    blender::ImBuf *ibuf = acquire_ibuf_for_loader(b_image, b_iuser, &lock);
     if (ibuf) {
       is_float = ibuf->float_data() != nullptr;
       is_data = ibuf->colorspace_is_data();
@@ -194,7 +218,7 @@ static void load_byte_pixels(const blender::ImBuf *ibuf,
 bool BlenderImageLoader::load_pixels(const ImageMetaData &metadata, void *out_pixels)
 {
   void *lock;
-  blender::ImBuf *ibuf = BKE_image_acquire_ibuf(b_image, &b_iuser, &lock);
+  blender::ImBuf *ibuf = acquire_ibuf_for_loader(b_image, b_iuser, &lock);
 
   /* Image changed since we requested metadata, assume we'll get a signal to reload it later. */
   const bool mismatch = (ibuf == nullptr || ibuf->x != metadata.width ||
@@ -236,6 +260,9 @@ bool BlenderImageLoader::equals(const ImageLoader &other) const
   const BlenderImageLoader &other_loader = (const BlenderImageLoader &)other;
   return b_image == other_loader.b_image && b_iuser.framenr == other_loader.b_iuser.framenr &&
          b_iuser.tile == other_loader.b_iuser.tile &&
+         strcmp(b_iuser.layer_name, other_loader.b_iuser.layer_name) == 0 &&
+         strcmp(b_iuser.pass_name, other_loader.b_iuser.pass_name) == 0 &&
+         b_iuser.view == other_loader.b_iuser.view &&
          cached_update_count == other_loader.cached_update_count;
 }
 

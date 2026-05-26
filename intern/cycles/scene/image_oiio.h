@@ -15,7 +15,10 @@ CCL_NAMESPACE_BEGIN
 
 class OIIOImageLoader : public ImageLoader {
  public:
-  OIIOImageLoader(const string &filepath);
+  /* The optional subimage_name selects one OpenImageIO subimage of the source,
+   * used to read a single layer/pass of a multi-layer EXR. Resolved to an
+   * integer index in load_metadata and cached on the ImageMetaData. */
+  OIIOImageLoader(const string &filepath, const string &subimage_name = "");
   ~OIIOImageLoader() override;
 
   bool load_metadata(ImageMetaData &metadata,
@@ -44,6 +47,11 @@ class OIIOImageLoader : public ImageLoader {
   const string &get_filepath() const;
 
   string original_filepath_;
+  /* Name of the OIIO subimage to read. Empty for plain (single-image) files;
+   * non-empty selects a layer/pass of a multi-layer EXR. The name applies only
+   * to the original file; a .tx cache is always single-subimage so the
+   * resolved index is 0 once #texture_cache_filepath_ is in use. */
+  string subimage_name_;
   string texture_cache_filepath_;
   CacheHandle<ImageInput> texture_cache_file_handle;
   bool texture_cache_file_handle_failed = false;

@@ -344,6 +344,7 @@ static std::string unique_filename_tx(const string &filepath,
                                       ustring colorspace,
                                       const ImageAlphaType alpha_type,
                                       const ImageFormatType format_type,
+                                      const string &subimage_name,
                                       const bool absolute_texture_cache)
 {
   /* NOTE: Be careful not to change existing hashes if at all possible, as this
@@ -362,6 +363,12 @@ static std::string unique_filename_tx(const string &filepath,
   md5.append("alpha:" + alpha_type_string(alpha_type));
 
   md5.append("format:" + format_tyoe_string(format_type));
+
+  /* Subimage, so each layer/pass of a multi-layer EXR gets its own .tx file.
+   * Only appended when set, to keep existing single-image hashes unchanged. */
+  if (!subimage_name.empty()) {
+    md5.append("subimage:" + subimage_name);
+  }
 
   /* For absolute texture cache path, include the full file path. This requires
    * a matching directory structure though. */
@@ -382,6 +389,7 @@ bool resolve_tx(const string &filepath,
                 ustring colorspace,
                 const ImageAlphaType alpha_type,
                 const ImageFormatType format_type,
+                const string &subimage_name,
                 string &out_filepath,
                 ImageMetaData &out_metadata)
 {
@@ -396,8 +404,13 @@ bool resolve_tx(const string &filepath,
   /* Check the specified directory if one is given. */
   if (!texture_cache_path.empty()) {
     const bool absolute_cache_path = !path_is_relative(texture_cache_path);
-    const string tx_filename = unique_filename_tx(
-        filepath, texture_cache_path, colorspace, alpha_type, format_type, absolute_cache_path);
+    const string tx_filename = unique_filename_tx(filepath,
+                                                  texture_cache_path,
+                                                  colorspace,
+                                                  alpha_type,
+                                                  format_type,
+                                                  subimage_name,
+                                                  absolute_cache_path);
     const string tx_filepath = path_join(
         absolute_cache_path ? string(texture_cache_path) : path_join(filedir, texture_cache_path),
         tx_filename);
@@ -415,7 +428,7 @@ bool resolve_tx(const string &filepath,
   const char *default_texture_cache_dir = "blender_tx";
   if (texture_cache_path != default_texture_cache_dir) {
     const string tx_filename = unique_filename_tx(
-        filepath, texture_cache_path, colorspace, alpha_type, format_type, false);
+        filepath, texture_cache_path, colorspace, alpha_type, format_type, subimage_name, false);
     const string tx_default_filepath = path_join(path_join(filedir, default_texture_cache_dir),
                                                  tx_filename);
     if (!texture_cache_file_outdated(filepath, tx_default_filepath)) {
@@ -431,10 +444,14 @@ bool resolve_tx(const string &filepath,
   }
 
   /* If it's already a tx, tiff or exr file, we can use it directly as well. But it's
-   * preferable to use a Cycles native tx file for performance. */
-  if (out_metadata.oiio_load_metadata(filepath) && out_metadata.is_tx_file) {
-    out_filepath = filepath;
-    return true;
+   * preferable to use a Cycles native tx file for performance. Only when no
+   * subimage selection is requested — otherwise we must generate a
+   * pass-specific tx file. */
+  if (subimage_name.empty()) {
+    if (out_metadata.oiio_load_metadata(filepath) && out_metadata.is_tx_file) {
+      out_filepath = filepath;
+      return true;
+    }
   }
 
   return false;
@@ -879,7 +896,8 @@ bool make_tx(const string &filepath,
              const string &out_filepath,
              ustring colorspace,
              const ImageAlphaType alpha_type,
-             const ImageFormatType format_type)
+             const ImageFormatType format_type,
+             const string &subimage_name)
 {
   LOG_INFO << "Generating tx file for: " << filepath;
 
@@ -891,7 +909,7 @@ bool make_tx(const string &filepath,
   ImageMetaData metadata;
   ImageSpec spec;
   metadata.colorspace = colorspace;
-  if (!metadata.oiio_load_metadata(filepath, &spec)) {
+  if (!metadata.oiio_load_metadata(filepath, subimage_name, &spec)) {
     LOG_WARNING << "Failed to load metadata for " << filepath;
     return false;
   }

@@ -20,11 +20,15 @@ CCL_NAMESPACE_BEGIN
 
 #define TX_FILE_FORMAT_VERSION 0
 
+/* The optional subimage_name selects one OpenImageIO subimage of the source,
+ * used to give each layer/pass of a multi-layer EXR its own .tx file. The
+ * name becomes part of the .tx cache hash. */
 bool resolve_tx(const string &filepath,
                 const string &texture_cache_path,
                 ustring colorspace,
                 const ImageAlphaType alpha_type,
                 const ImageFormatType format_type,
+                const string &subimage_name,
                 std::string &out_filepath,
                 ImageMetaData &out_metadata);
 
@@ -32,7 +36,8 @@ bool make_tx(const string &filepath,
              const string &out_filepath,
              ustring colorspace,
              const ImageAlphaType alpha_type,
-             const ImageFormatType format_type);
+             const ImageFormatType format_type,
+             const string &subimage_name);
 
 ustring make_tx_get_file_colorspace(const ImageMetaData &metadata);
 

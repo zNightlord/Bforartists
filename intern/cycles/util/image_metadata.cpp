@@ -339,7 +339,7 @@ void ImageMetaData::detect_tiles(ImageInput &input,
 
   if (has_tiles_and_mipmaps) {
     for (int miplevel = 0;; miplevel++) {
-      if (!input.seek_subimage(0, miplevel)) {
+      if (!input.seek_subimage(this->subimage, miplevel)) {
         LOG_DEBUG << "Image " << OIIO::Filesystem::filename(filepath)
                   << " has tiles, but missing mip levels";
         has_tiles_and_mipmaps = false;
@@ -353,7 +353,7 @@ void ImageMetaData::detect_tiles(ImageInput &input,
       }
     }
 
-    input.seek_subimage(0, 0);
+    input.seek_subimage(this->subimage, 0);
   }
 
   /* Tiled tx files need to either have mipmaps, or be small enough not to need mipmaps. */
@@ -362,7 +362,9 @@ void ImageMetaData::detect_tiles(ImageInput &input,
   }
 }
 
-bool ImageMetaData::oiio_load_metadata(OIIO::string_view filepath, OIIO::ImageSpec *r_spec)
+bool ImageMetaData::oiio_load_metadata(OIIO::string_view filepath,
+                                       OIIO::string_view subimage_name,
+                                       OIIO::ImageSpec *r_spec)
 {
   /* Perform preliminary checks, with meaningful logging. */
   if (!OIIO::Filesystem::exists(filepath)) {
@@ -389,6 +391,31 @@ bool ImageMetaData::oiio_load_metadata(OIIO::string_view filepath, OIIO::ImageSp
   if (!in->open(filepath, spec, config)) {
     LOG_WARNING << "Image file " << filepath << " failed to open.";
     return false;
+  }
+
+  /* Resolve the named subimage, used to read one layer/pass of a multi-layer
+   * EXR. Match against either of the two attributes EXR writers use to identify
+   * a part. An unknown name falls back to subimage 0.
+   *
+   * TODO: This only resolves multi-part EXRs (current Blender default and most
+   * third-party multi-layer EXRs). Older Blender versions wrote multi-layer
+   * EXRs as a single-part file with "Layer.Pass.Channel" channel naming inside
+   * subimage 0; for those, load the image via a Blender Image datablock so
+   * BlenderImageLoader can hand off to BKE_image_acquire_multilayer_view_ibuf
+   * which understands the channel-name encoding. */
+  subimage = 0;
+  if (!subimage_name.empty()) {
+    for (int s = 0; in->seek_subimage(s, 0); s++) {
+      const ImageSpec &sub_spec = in->spec();
+      if (sub_spec.get_string_attribute("oiio:subimagename") == subimage_name ||
+          sub_spec.get_string_attribute("name") == subimage_name)
+      {
+        subimage = s;
+        break;
+      }
+    }
+    in->seek_subimage(subimage, 0);
+    spec = in->spec();
   }
 
   if (spec.depth > 1) {
@@ -679,7 +706,7 @@ static bool load_pixels_oiio(const ImageMetaData &metadata,
     readpixels = &tmppixels[0];
   }
 
-  if (!in->read_image(0,
+  if (!in->read_image(metadata.subimage,
                       0,
                       0,
                       channels,
@@ -730,6 +757,15 @@ bool ImageMetaData::oiio_load_pixels(OIIO::string_view filepath,
 
   if (!in->open(filepath, spec, config)) {
     return false;
+  }
+
+  /* Subimage was resolved by oiio_load_metadata and stored on #subimage. */
+  if (subimage != 0) {
+    if (!in->seek_subimage(subimage, 0)) {
+      LOG_ERROR << "Image file " << filepath << " has no subimage " << subimage;
+      return false;
+    }
+    spec = in->spec();
   }
 
   if (spec.depth > 1) {
