@@ -16,9 +16,9 @@ void main()
   gl_Position = drw_point_world_to_homogenous(world_pos);
 
   /* Set the color for colored mode. */
-  vgroup_color = mix(float3(0.0), vgroup_color_blended, float(vgroup_color_mode != 0));
+  vgroup_color = mix(float3(0.0), vgroup_color_blended, float(draw_multi_colored));
   /* Separate actual weight and alerts for independent interpolation */
-  if (vgroup_color_mode > 1) {
+  if (draw_multi_colored) {
     weight_interp = max(float2(weight, 0.0f), 0.0f);
   }
   else {
