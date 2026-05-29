@@ -68,7 +68,7 @@ class Paints : Overlay {
 
     {
       const bool colored_vertex = state.overlay.wpaint_flag & V3D_OVERLAY_WPAINT_COLORED_MULTI_VERTEX;
-      const float colored_opacity = show_wires_ ? 1.0f : state.overlay.weight_paint_colored_opacity;
+      const float colored_opacity = colored_vertex ? state.overlay.weight_paint_colored_opacity : 1.0f;
       auto &pass = paint_region_ps_;
       pass.bind_ubo(OVERLAY_GLOBALS_SLOT, &res.globals_buf);
       pass.bind_ubo(DRW_CLIPPING_UBO_SLOT, &res.clip_planes_buf);
