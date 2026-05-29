@@ -88,7 +88,6 @@ void main()
     weight_color = apply_color_fac(weight_color);
     if (draw_multi_colored) {
       weight_color = apply_color_fac(float4(vgroup_color, 1.0f));
-      weight_color.a = colored_opacity;
     }
 
     /* Contour display, only in non color and active color.*/

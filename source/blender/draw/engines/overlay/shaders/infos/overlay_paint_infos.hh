@@ -119,7 +119,6 @@ VERTEX_IN(3, float3, vgroup_color_blended)
 VERTEX_OUT(overlay_paint_weight_iface)
 SAMPLER(0, sampler1D, colorramp)
 PUSH_CONSTANT(float, opacity)      /* `1.0f` by default. */
-PUSH_CONSTANT(float, colored_opacity)      /* `1.0f` by default. */
 PUSH_CONSTANT(bool, draw_contours) /* `false` by default. */
 PUSH_CONSTANT(bool,  draw_multi_colored)
 PUSH_CONSTANT(int,  weight_paint_mutli_colored_random)

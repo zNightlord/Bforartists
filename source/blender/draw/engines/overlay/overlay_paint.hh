@@ -65,10 +65,10 @@ class Paints : Overlay {
 
     show_weight_ = state.ctx_mode == CTX_MODE_PAINT_WEIGHT;
     show_wires_ = state.overlay.paint_flag & V3D_OVERLAY_PAINT_WIRE;
-    const float colored_opacity = state.overlay.weight_paint_colored_opacity;
 
     {
       const bool colored_vertex = state.overlay.wpaint_flag & V3D_OVERLAY_WPAINT_COLORED_MULTI_VERTEX;
+      const float colored_opacity = show_wires_ ? 1.0f : state.overlay.weight_paint_colored_opacity;
       auto &pass = paint_region_ps_;
       pass.bind_ubo(OVERLAY_GLOBALS_SLOT, &res.globals_buf);
       pass.bind_ubo(DRW_CLIPPING_UBO_SLOT, &res.clip_planes_buf);
@@ -128,7 +128,6 @@ class Paints : Overlay {
         sub.push_constant("draw_contours", draw_contours);
         sub.push_constant("draw_multi_colored", vgroup_colored);
         sub.push_constant("weight_paint_mutli_colored_random", vgroup_color_random);
-        sub.push_constant("colored_opacity", colored_opacity);
         sub.push_constant("opacity", state.overlay.weight_paint_mode_opacity);
         if (!shadeless) {
           /* Arbitrary light to give a hint of the geometry behind the weights. */
