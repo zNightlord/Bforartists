@@ -7761,6 +7761,8 @@ class VIEW3D_PT_overlay_weight_paint(Panel):
         
         sub = ccol.row(align=True)
         sub.prop(overlay, "show_weight_colored_vertex",text="")
+        sub = sub.row()
+        sub.active = overlay.show_weight_colored_vertex
         sub.prop(overlay, "weight_paint_colored_opacity", text="Colored Vertex")
         sub = ccol.row()
         sub.prop(overlay, "show_weight_colored_multi")

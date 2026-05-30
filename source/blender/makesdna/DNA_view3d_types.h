@@ -657,8 +657,6 @@ struct View3DOverlay {
 
   /** Weight paint mode settings. */
   eView3DOverlay_WPaintFlag wpaint_flag = {};
-
-  /* eV3D_Overlay_WPaint_VGroupColorMode. */
   int weight_paint_mutli_colored_random = 1;
 
   /** Alpha for texture, weight, vertex paint overlay. */
