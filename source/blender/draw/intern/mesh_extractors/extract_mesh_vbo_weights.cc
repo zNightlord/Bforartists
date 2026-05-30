@@ -31,27 +31,34 @@ static float3 blended_vgroup_color(const MDeformVert *dvert,
   if (!dvert || dvert->totweight == 0) {
     return float3(0.0f);
   }
-  float3 result(0.0f);
+
+  /* If validmap exists but has no active entries (disabled armature / no deform bones),
+   * ignore it entirely and draw all groups. */
+  bool use_validmap = false;
+  if (validmap) {
+    for (int i = 0; i < defgroup_len; i++) {
+      if (validmap[i]) {
+        use_validmap = true;
+        break;
+      }
+    }
+  }
+
+  float3 result = float3(0.0f);
   for (int i = 0; i < dvert->totweight; i++) {
     const int def_nr = dvert->dw[i].def_nr;
 
     if (def_nr < 0 || def_nr >= defgroup_len) {
       continue;
     }
-    /* Filter by deform bones when armature exists. */
-    if (validmap && !validmap[def_nr]) {
+    /* Filter by deform bones only when validmap has entries. */
+    if (use_validmap && !validmap[def_nr]) {
       continue;
     }
 
     const float w = float(dvert->dw[i].weight);
     result += hash_group_color(def_nr, random_id) * w;
   }
-
-  /* Normalize for ALL mode so colors show proportional group influence.
-   * ACTIVE mode stays un-normalized — intensity encodes weight magnitude. */
-  // if (effective_mode != VGROUP_COLOR_ACTIVE && total_weight > 0.0f) {
-  //   result /= total_weight;
-  // }
 
   return result;
 }
@@ -224,8 +231,7 @@ gpu::VertBufPtr extract_weight_vgroup_blended_color(const MeshRenderData &mr,
     Array<float3> colors(dverts.size());
     threading::parallel_for(colors.index_range(), 1024, [&](const IndexRange range) {
       for (const int vert : range) {
-        colors[vert] = blended_vgroup_color(
-            &dverts[vert], random_id, validmap, defgroup_len);
+        colors[vert] = blended_vgroup_color(&dverts[vert], random_id, validmap, defgroup_len);
       }
     });
     array_utils::gather(colors.as_span(), mr.corner_verts, vbo_data);
