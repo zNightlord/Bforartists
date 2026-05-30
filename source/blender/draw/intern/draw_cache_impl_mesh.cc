@@ -339,19 +339,6 @@ static void drw_mesh_weight_state_extract(
     wstate->defgroup_validmap = BKE_object_defgroup_validmap_get(&ob, wstate->defgroup_len);
   }
 
-  wstate->flags &= ~DRW_MESH_WEIGHT_STATE_HAS_ARMATURE;
-  for (ModifierData &md : ob.modifiers) {
-    if (md.type == eModifierType_Armature) {
-      wstate->flags |= DRW_MESH_WEIGHT_STATE_HAS_ARMATURE;
-      break;
-    }
-  }
-
-  /* Get valid deform groups (used by deform bones). */
-  if (wstate->defgroup_len > 0 && (wstate->flags & DRW_MESH_WEIGHT_STATE_HAS_ARMATURE)) {
-    wstate->defgroup_validmap = BKE_object_defgroup_validmap_get(&ob, wstate->defgroup_len);
-  }
-
   if (paint_mode && ts.multipaint) {
     /* Multi-paint needs to know all selected bones, not just the active group.
      * This is actually a relatively expensive operation, but caching would be difficult. */
