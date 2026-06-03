@@ -4038,22 +4038,6 @@ static IDFilterEnumPropertyItem rna_enum_space_file_id_filter_categories[] = {
     {0, nullptr, 0, nullptr, nullptr},
 };
 
-static const EnumPropertyItem overlay_wpaint_vgroup_color_mode_items[] = {
-    {V3D_OVERLAY_WPAINT_VGROUP_COLOR_NONE, "NONE", 0, "None", "Use standard weight color ramp"},
-    {V3D_OVERLAY_WPAINT_VGROUP_COLOR_ACTIVE,
-     "ACTIVE",
-     0,
-     "Active",
-     "Color the active vertex group with a random color"},
-    {V3D_OVERLAY_WPAINT_VGROUP_COLOR_DEFORM,
-     "DEFORM",
-     0,
-     "Deform",
-     "Color each vertex group use in deformation with random color.\nRequires armature modifier."},
-    {V3D_OVERLAY_WPAINT_VGROUP_COLOR_ALL, "ALL", 0, "All", "Color all vertex groups with random color"},
-    {0, nullptr, 0, nullptr, nullptr},
-};
-
 static void rna_def_space_generic_show_region_toggles(StructRNA *srna, int region_type_mask)
 {
   PropertyRNA *prop;
