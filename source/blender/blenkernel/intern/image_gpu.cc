@@ -60,14 +60,14 @@ static ImBuf *image_udim_gpu_cache_get(Image *image, ImageCacheKey key)
   return ibuf;
 }
 
-static ImBuf *image_udim_gpu_ibuf_get(Image *ima, const int udim_index)
+static ImBuf *image_udim_gpu_ibuf_get(Image *ima, const ImageUDIMTexture udim_type)
 {
-  return image_udim_gpu_cache_get(ima, ImageCacheKey{.index = udim_index});
+  return image_udim_gpu_cache_get(ima, ImageCacheKey{.udim_type = udim_type});
 }
 
-static ImBuf *image_udim_gpu_ibuf_ensure(Image *ima, const int udim_index)
+static ImBuf *image_udim_gpu_ibuf_ensure(Image *ima, const ImageUDIMTexture udim_type)
 {
-  ImageCacheKey key = {.index = udim_index};
+  ImageCacheKey key = {.udim_type = udim_type};
   ImBuf *ibuf = image_udim_gpu_cache_get(ima, key);
   if (ibuf == nullptr) {
     ibuf = IMB_allocImBuf(1, 1, ImBufFlags::Zero);
@@ -76,12 +76,12 @@ static ImBuf *image_udim_gpu_ibuf_ensure(Image *ima, const int udim_index)
   return ibuf;
 }
 
-static void image_udim_gpu_ibuf_remove(Image *ima, const int udim_index)
+static void image_udim_gpu_ibuf_remove(Image *ima, const ImageUDIMTexture udim_type)
 {
   if (ima->runtime->cache == nullptr) {
     return;
   }
-  ImageCacheKey key{.index = udim_index};
+  ImageCacheKey key{.udim_type = udim_type};
   IMB_cache_remove(ima->runtime->cache, &key);
 }
 
@@ -442,7 +442,7 @@ static void image_gpu_atlas_try_partial_update(Image *image, ImageUser *iuser)
   if (image->source != IMA_SRC_TILED) {
     return;
   }
-  ImBuf *atlas_ibuf = image_udim_gpu_ibuf_get(image, IMA_INDEX_UDIM_ATLAS);
+  ImBuf *atlas_ibuf = image_udim_gpu_ibuf_get(image, ImageUDIMTexture::Atlas);
   if (atlas_ibuf == nullptr) {
     return;
   }
@@ -527,8 +527,8 @@ static ImageGPUTextures image_get_gpu_texture_tiled(Image *ima,
   ImBuf *atlas_ibuf, *mapping_ibuf;
   {
     std::scoped_lock lock(ima->runtime->cache_mutex);
-    atlas_ibuf = image_udim_gpu_ibuf_ensure(ima, IMA_INDEX_UDIM_ATLAS);
-    mapping_ibuf = image_udim_gpu_ibuf_ensure(ima, IMA_INDEX_UDIM_TILE_MAPPING);
+    atlas_ibuf = image_udim_gpu_ibuf_ensure(ima, ImageUDIMTexture::Atlas);
+    mapping_ibuf = image_udim_gpu_ibuf_ensure(ima, ImageUDIMTexture::TileMapping);
   }
 
   /* Update time for garbage collection. */
@@ -791,8 +791,8 @@ void BKE_image_ensure_gpu_material_texture(Image *image,
 
 void BKE_image_free_gpu_udim_textures(Image *ima)
 {
-  image_udim_gpu_ibuf_remove(ima, IMA_INDEX_UDIM_ATLAS);
-  image_udim_gpu_ibuf_remove(ima, IMA_INDEX_UDIM_TILE_MAPPING);
+  image_udim_gpu_ibuf_remove(ima, ImageUDIMTexture::Atlas);
+  image_udim_gpu_ibuf_remove(ima, ImageUDIMTexture::TileMapping);
 }
 
 void BKE_image_free_gpu_texture_caches(Image *ima)
@@ -861,7 +861,7 @@ void BKE_image_paint_set_mipmap(Main *bmain, bool mipmap)
       const ImageCacheKey *key = static_cast<const ImageCacheKey *>(
           IMB_cacheIter_getUserKey(iter));
       if (ibuf != nullptr && ibuf->gpu.texture != nullptr &&
-          key->index != IMA_INDEX_UDIM_TILE_MAPPING)
+          key->udim_type != ImageUDIMTexture::TileMapping)
       {
         if (ibuf->gpu.flag & IMB_GPU_MIPMAP_COMPLETE) {
           GPU_texture_mipmap_mode(ibuf->gpu.texture, mipmap, true);
