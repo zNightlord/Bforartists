@@ -1993,12 +1993,7 @@ static void rna_SpaceImageEditor_show_stereo_update(Main * /*bmain*/,
   Image *ima = sima->image;
 
   if (ima) {
-    if (ima->rr) {
-      BKE_image_multilayer_index(ima->rr, &sima->iuser);
-    }
-    else {
-      BKE_image_multiview_index(ima, &sima->iuser);
-    }
+    BKE_image_user_resolve_from_names(ima, &sima->iuser);
   }
 }
 
@@ -2205,14 +2200,7 @@ static void rna_SpaceImageEditor_image_update(Main * /*bmain*/, Scene * /*scene*
 
   /* make sure all the iuser settings are valid for the sima image */
   if (ima) {
-    if (ima->rr) {
-      if (BKE_image_multilayer_index(sima->image->rr, &sima->iuser) == nullptr) {
-        BKE_image_init_imageuser(sima->image, &sima->iuser);
-      }
-    }
-    else {
-      BKE_image_multiview_index(ima, &sima->iuser);
-    }
+    BKE_image_user_resolve_from_names(ima, &sima->iuser);
   }
 }
 

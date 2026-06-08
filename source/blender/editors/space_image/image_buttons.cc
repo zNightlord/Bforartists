@@ -16,7 +16,6 @@
 
 #include "BLI_listbase.hh"
 #include "BLI_path_utils.hh"
-#include "BLI_string.hh"
 #include "BLI_string_utf8.hh"
 #include "BLI_utildefines.hh"
 
@@ -133,22 +132,6 @@ static bool ui_imageuser_slot_menu_step(bContext *C, int direction, void *image_
   return true;
 }
 
-static const char *ui_imageuser_layer_fake_name(RenderResult *rr)
-{
-  RenderView *rv = RE_RenderViewGetById(rr, 0);
-  ImBuf *ibuf = rv->ibuf;
-  if (!ibuf) {
-    return nullptr;
-  }
-  if (ibuf->float_data()) {
-    return IFACE_("Composite");
-  }
-  if (ibuf->byte_data()) {
-    return IFACE_("Sequence");
-  }
-  return nullptr;
-}
-
 /* workaround for passing many args */
 struct ImageUI_Data {
   Image *image;
@@ -163,44 +146,53 @@ static ImageUI_Data *ui_imageuser_data_copy(const ImageUI_Data *rnd_pt_src)
   return rnd_pt_dst;
 }
 
+static const ListBaseT<ImageLayer> *ui_image_menu_layers(Image *image)
+{
+  return (BKE_image_has_layer_catalog(image)) ? &image->layers : nullptr;
+}
+
+static bool ui_image_layer_show_passes_menu(const ImageLayer *layer)
+{
+  for (const ImagePass &pass : layer->passes) {
+    if (!STREQ(pass.name, RE_PASSNAME_COMBINED)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Display name for a catalog layer. The synthetic combined-layer names
+ * ("Composite" / "Sequence") are UI strings and are translated; real layer
+ * names from a file are data and shown verbatim (and pass through #IFACE_
+ * unchanged, not being in the translation catalog).
+ */
+static const char *ui_image_layer_display_name(const char *name)
+{
+  return IFACE_(name);
+}
+
 static void ui_imageuser_layer_menu(bContext * /*C*/, ui::Layout *layout, void *rnd_pt)
 {
   ImageUI_Data *rnd_data = static_cast<ImageUI_Data *>(rnd_pt);
   ui::Block *block = layout->block();
   Image *image = rnd_data->image;
   ImageUser *iuser = rnd_data->iuser;
-  Scene *scene = iuser->scene;
 
-  /* May have been freed since drawing. */
-  RenderResult *rr = BKE_image_acquire_renderresult(scene, image);
-  if (rr == nullptr) [[unlikely]] {
-    BKE_image_release_renderresult(scene, image, rr);
+  const ListBaseT<ImageLayer> *layers = ui_image_menu_layers(image);
+  if (layers == nullptr) [[unlikely]] {
     return;
   }
 
   layout->column(false);
 
-  const char *fake_name = ui_imageuser_layer_fake_name(rr);
-  if (fake_name) {
+  int nr = 0;
+  for (const ImageLayer *rl = static_cast<const ImageLayer *>(layers->first); rl;
+       rl = rl->next, nr++)
+  {
     ui::Button *but = uiDefButV(block,
                                 ui::ButtonType::ButMenu,
-                                fake_name,
-                                0,
-                                0,
-                                UI_UNIT_X * 5,
-                                UI_UNIT_X,
-                                &iuser->layer,
-                                0.0,
-                                0.0,
-                                "");
-    button_enum_prop_value_set(but, 0);
-  }
-
-  int nr = fake_name ? 1 : 0;
-  for (RenderLayer *rl = static_cast<RenderLayer *>(rr->layers.first); rl; rl = rl->next, nr++) {
-    ui::Button *but = uiDefButV(block,
-                                ui::ButtonType::ButMenu,
-                                rl->name,
+                                ui_image_layer_display_name(rl->name),
                                 0,
                                 0,
                                 UI_UNIT_X * 5,
@@ -224,8 +216,6 @@ static void ui_imageuser_layer_menu(bContext * /*C*/, ui::Layout *layout, void *
            0.0,
            0.0,
            "");
-
-  BKE_image_release_renderresult(scene, image, rr);
 }
 
 static void ui_imageuser_pass_menu(bContext * /*C*/, ui::Layout *layout, void *rnd_pt)
@@ -234,22 +224,18 @@ static void ui_imageuser_pass_menu(bContext * /*C*/, ui::Layout *layout, void *r
   ui::Block *block = layout->block();
   Image *image = rnd_data->image;
   ImageUser *iuser = rnd_data->iuser;
-  /* (rpass_index == -1) means composite result */
+  /* Index of the layer whose passes this menu lists. */
   const int rpass_index = rnd_data->rpass_index;
-  Scene *scene = iuser->scene;
-  RenderResult *rr;
-  RenderLayer *rl;
-  RenderPass *rpass;
+  const ImageLayer *rl;
+  const ImagePass *rpass;
   int nr;
 
-  /* may have been freed since drawing */
-  rr = BKE_image_acquire_renderresult(scene, image);
-  if (rr == nullptr) [[unlikely]] {
-    BKE_image_release_renderresult(scene, image, rr);
+  const ListBaseT<ImageLayer> *layers = ui_image_menu_layers(image);
+  if (layers == nullptr) [[unlikely]] {
     return;
   }
 
-  rl = static_cast<RenderLayer *>(BLI_findlink(&rr->layers, rpass_index));
+  rl = static_cast<const ImageLayer *>(BLI_findlink(layers, rpass_index));
 
   layout->column(false);
 
@@ -260,14 +246,14 @@ static void ui_imageuser_pass_menu(bContext * /*C*/, ui::Layout *layout, void *r
 
   /* rendered results don't have a Combined pass */
   /* multiview: the ordering must be ascending, so the left-most pass is always the one picked */
-  for (rpass = static_cast<RenderPass *>(rl ? rl->passes.first : nullptr); rpass;
+  for (rpass = static_cast<const ImagePass *>(rl ? rl->passes.first : nullptr); rpass;
        rpass = rpass->next, nr++)
   {
     /* just show one pass of each kind */
     if (BLI_findstring_ptr(&added_passes, rpass->name, offsetof(LinkData, data))) {
       continue;
     }
-    BLI_addtail(&added_passes, BLI_genericNodeN(rpass->name));
+    BLI_addtail(&added_passes, BLI_genericNodeN(const_cast<char *>(rpass->name)));
 
     ui::Button *but = uiDefButV(block,
                                 ui::ButtonType::ButMenu,
@@ -297,8 +283,6 @@ static void ui_imageuser_pass_menu(bContext * /*C*/, ui::Layout *layout, void *r
            "");
 
   added_passes.free_no_destruct();
-
-  BKE_image_release_renderresult(scene, image, rr);
 }
 
 /**************************** view menus *****************************/
@@ -308,15 +292,9 @@ static void ui_imageuser_view_menu_rr(bContext * /*C*/, ui::Layout *layout, void
   ui::Block *block = layout->block();
   Image *image = rnd_data->image;
   ImageUser *iuser = rnd_data->iuser;
-  RenderResult *rr;
-  RenderView *rview;
-  int nr;
-  Scene *scene = iuser->scene;
 
-  /* may have been freed since drawing */
-  rr = BKE_image_acquire_renderresult(scene, image);
-  if (rr == nullptr) [[unlikely]] {
-    BKE_image_release_renderresult(scene, image, rr);
+  const ListBaseT<ImageLayer> *layers = ui_image_menu_layers(image);
+  if (layers == nullptr) [[unlikely]] {
     return;
   }
 
@@ -336,13 +314,15 @@ static void ui_imageuser_view_menu_rr(bContext * /*C*/, ui::Layout *layout, void
 
   layout->separator();
 
-  nr = (rr ? rr->views.count() : 0) - 1;
-  for (rview = static_cast<RenderView *>(rr ? rr->views.last : nullptr); rview;
-       rview = rview->prev, nr--)
+  /* Image.views is kept in sync with the render result. The ordering must be
+   * ascending, so walk the list back to front. */
+  int nr = BLI_listbase_count(&image->views) - 1;
+  for (const ImageView *iview = static_cast<const ImageView *>(image->views.last); iview;
+       iview = iview->prev, nr--)
   {
     ui::Button *but = uiDefButV(block,
                                 ui::ButtonType::ButMenu,
-                                IFACE_(rview->name),
+                                IFACE_(iview->name),
                                 0,
                                 0,
                                 UI_UNIT_X * 5,
@@ -353,8 +333,6 @@ static void ui_imageuser_view_menu_rr(bContext * /*C*/, ui::Layout *layout, void
                                 "");
     button_enum_prop_value_set(but, nr);
   }
-
-  BKE_image_release_renderresult(scene, image, rr);
 }
 
 static void ui_imageuser_view_menu_multiview(bContext * /*C*/, ui::Layout *layout, void *rnd_pt)
@@ -402,30 +380,20 @@ static void ui_imageuser_view_menu_multiview(bContext * /*C*/, ui::Layout *layou
 /* 5 layer button callbacks... */
 static void image_multi_cb(bContext *C, void *rnd_pt, void * /*unused*/)
 {
-  Scene *scene = CTX_data_scene(C);
   ImageUI_Data *rnd_data = static_cast<ImageUI_Data *>(rnd_pt);
-  Image *image = rnd_data->image;
-  ImageUser *iuser = rnd_data->iuser;
-
-  RenderResult *rr = BKE_image_acquire_renderresult(scene, image);
-  BKE_image_multilayer_index(rr, iuser);
-  BKE_image_release_renderresult(scene, image, rr);
-
+  BKE_image_user_resolve_from_index(rnd_data->image, rnd_data->iuser);
   WM_event_add_notifier(C, NC_IMAGE | ND_DRAW, nullptr);
 }
 
 static bool ui_imageuser_layer_menu_step(bContext *C, int direction, void *rnd_pt)
 {
-  Scene *scene = CTX_data_scene(C);
   ImageUI_Data *rnd_data = static_cast<ImageUI_Data *>(rnd_pt);
   Image *image = rnd_data->image;
   ImageUser *iuser = rnd_data->iuser;
-  RenderResult *rr;
   bool changed = false;
 
-  rr = BKE_image_acquire_renderresult(scene, image);
-  if (rr == nullptr) [[unlikely]] {
-    BKE_image_release_renderresult(scene, image, rr);
+  const ListBaseT<ImageLayer> *layers = ui_image_menu_layers(image);
+  if (layers == nullptr) [[unlikely]] {
     return false;
   }
 
@@ -436,11 +404,7 @@ static bool ui_imageuser_layer_menu_step(bContext *C, int direction, void *rnd_p
     }
   }
   else if (direction == 1) {
-    int tot = rr->layers.count();
-
-    if (RE_HasCombinedLayer(rr)) {
-      tot++; /* fake compo/sequencer layer */
-    }
+    const int tot = layers->count();
 
     if (iuser->layer < tot - 1) {
       iuser->layer++;
@@ -452,51 +416,40 @@ static bool ui_imageuser_layer_menu_step(bContext *C, int direction, void *rnd_p
   }
 
   if (changed) {
-    BKE_image_multilayer_index(rr, iuser);
+    BKE_image_user_resolve_from_index(image, iuser);
     WM_event_add_notifier(C, NC_IMAGE | ND_DRAW, nullptr);
   }
-
-  BKE_image_release_renderresult(scene, image, rr);
 
   return changed;
 }
 
 static bool ui_imageuser_pass_menu_step(bContext *C, int direction, void *rnd_pt)
 {
-  Scene *scene = CTX_data_scene(C);
   ImageUI_Data *rnd_data = static_cast<ImageUI_Data *>(rnd_pt);
   Image *image = rnd_data->image;
   ImageUser *iuser = rnd_data->iuser;
-  RenderResult *rr;
   bool changed = false;
-  int layer = iuser->layer;
-  RenderLayer *rl;
-  RenderPass *rpass;
+  const int layer = iuser->layer;
+  const ImageLayer *rl;
+  const ImagePass *rpass;
 
-  rr = BKE_image_acquire_renderresult(scene, image);
-  if (rr == nullptr) [[unlikely]] {
-    BKE_image_release_renderresult(scene, image, rr);
+  const ListBaseT<ImageLayer> *layers = ui_image_menu_layers(image);
+  if (layers == nullptr) [[unlikely]] {
     return false;
   }
 
-  if (RE_HasCombinedLayer(rr)) {
-    layer -= 1;
-  }
-
-  rl = static_cast<RenderLayer *>(BLI_findlink(&rr->layers, layer));
+  rl = static_cast<const ImageLayer *>(BLI_findlink(layers, layer));
   if (rl == nullptr) {
-    BKE_image_release_renderresult(scene, image, rr);
     return false;
   }
 
-  rpass = static_cast<RenderPass *>(BLI_findlink(&rl->passes, iuser->pass));
+  rpass = static_cast<const ImagePass *>(BLI_findlink(&rl->passes, iuser->pass));
   if (rpass == nullptr) {
-    BKE_image_release_renderresult(scene, image, rr);
     return false;
   }
 
   if (direction == 1) {
-    RenderPass *rp;
+    const ImagePass *rp;
     int rp_index = iuser->pass + 1;
 
     for (rp = rpass->next; rp; rp = rp->next, rp_index++) {
@@ -508,15 +461,14 @@ static bool ui_imageuser_pass_menu_step(bContext *C, int direction, void *rnd_pt
     }
   }
   else if (direction == -1) {
-    RenderPass *rp;
+    const ImagePass *rp;
     int rp_index = 0;
 
     if (iuser->pass == 0) {
-      BKE_image_release_renderresult(scene, image, rr);
       return false;
     }
 
-    for (rp = static_cast<RenderPass *>(rl->passes.first); rp; rp = rp->next, rp_index++) {
+    for (rp = static_cast<const ImagePass *>(rl->passes.first); rp; rp = rp->next, rp_index++) {
       if (STREQ(rp->name, rpass->name)) {
         iuser->pass = rp_index - 1;
         changed = true;
@@ -529,11 +481,9 @@ static bool ui_imageuser_pass_menu_step(bContext *C, int direction, void *rnd_pt
   }
 
   if (changed) {
-    BKE_image_multilayer_index(rr, iuser);
+    BKE_image_user_resolve_from_index(image, iuser);
     WM_event_add_notifier(C, NC_IMAGE | ND_DRAW, nullptr);
   }
-
-  BKE_image_release_renderresult(scene, image, rr);
 
   return changed;
 }
@@ -545,29 +495,27 @@ static void image_multiview_cb(bContext *C, void *rnd_pt, void * /*arg_v*/)
   Image *ima = rnd_data->image;
   ImageUser *iuser = rnd_data->iuser;
 
-  BKE_image_multiview_index(ima, iuser);
+  BKE_image_user_resolve_from_index(ima, iuser);
   WM_event_add_notifier(C, NC_IMAGE | ND_DRAW, nullptr);
 }
 
-static void uiblock_layer_pass_buttons(ui::Layout &layout,
-                                       Image *image,
-                                       RenderResult *rr,
-                                       ImageUser *iuser,
-                                       int w,
-                                       const short *render_slot)
+static void uiblock_layer_pass_buttons(
+    ui::Layout &layout, Image *image, ImageUser *iuser, int w, const short *render_slot)
 {
   ImageUI_Data rnd_pt_local, *rnd_pt = nullptr;
   ui::Block *block = layout.block();
   ui::Button *but;
-  RenderLayer *rl = nullptr;
+  ImageLayer *rl = nullptr;
   int wmenu1, wmenu2, wmenu3, wmenu4;
-  const char *fake_name;
   const char *display_name = "";
   const bool show_stereo = (iuser->flag & IMA_SHOW_STEREO) != 0;
 
   if (iuser->scene == nullptr) {
     return;
   }
+
+  /* Re-resolve indices from names for indexing in menus. */
+  BKE_image_user_resolve_from_names(image, iuser);
 
   layout.row(true);
 
@@ -601,19 +549,17 @@ static void uiblock_layer_pass_buttons(ui::Layout &layout,
     rnd_pt = nullptr;
   }
 
-  if (rr) {
-    RenderPass *rpass;
-    RenderView *rview;
-    int rpass_index;
+  const ListBaseT<ImageLayer> *layers = ui_image_menu_layers(image);
+
+  if (layers != nullptr) {
+    ImagePass *rpass;
 
     /* layer */
-    fake_name = ui_imageuser_layer_fake_name(rr);
-    rpass_index = iuser->layer - (fake_name ? 1 : 0);
-    rl = static_cast<RenderLayer *>(BLI_findlink(&rr->layers, rpass_index));
-    rnd_pt_local.rpass_index = rpass_index;
+    rl = static_cast<ImageLayer *>(BLI_findlink(layers, iuser->layer));
+    rnd_pt_local.rpass_index = iuser->layer;
 
-    if (RE_layers_have_name(rr)) {
-      display_name = rl ? rl->name : (fake_name ? fake_name : "");
+    if (BKE_image_layers_have_name(image)) {
+      display_name = rl ? ui_image_layer_display_name(rl->name) : "";
       rnd_pt = ui_imageuser_data_copy(&rnd_pt_local);
       but = uiDefMenuBut(block,
                          ui_imageuser_layer_menu,
@@ -631,9 +577,9 @@ static void uiblock_layer_pass_buttons(ui::Layout &layout,
     }
 
     /* pass */
-    rpass = static_cast<RenderPass *>(rl ? BLI_findlink(&rl->passes, iuser->pass) : nullptr);
+    rpass = static_cast<ImagePass *>(rl ? BLI_findlink(&rl->passes, iuser->pass) : nullptr);
 
-    if (rl && RE_passes_have_name(rl)) {
+    if (rl && ui_image_layer_show_passes_menu(rl)) {
       display_name = rpass ? rpass->name : "";
       rnd_pt = ui_imageuser_data_copy(&rnd_pt_local);
       but = uiDefMenuBut(block,
@@ -652,11 +598,11 @@ static void uiblock_layer_pass_buttons(ui::Layout &layout,
     }
 
     /* view */
-    if (BLI_listbase_count_at_most(&rr->views, 2) > 1 &&
-        ((!show_stereo) || !RE_RenderResult_is_stereo(rr)))
-    {
-      rview = static_cast<RenderView *>(BLI_findlink(&rr->views, iuser->view));
-      display_name = rview ? rview->name : "";
+    const int views_count = BLI_listbase_count(&image->views);
+    const bool is_stereo_image = BKE_image_is_stereo(image);
+    if (views_count > 1 && ((!show_stereo) || !is_stereo_image)) {
+      const ImageView *iview = static_cast<ImageView *>(BLI_findlink(&image->views, iuser->view));
+      display_name = iview ? iview->name : "";
 
       rnd_pt = ui_imageuser_data_copy(&rnd_pt_local);
       but = uiDefMenuBut(block,
@@ -786,14 +732,10 @@ void uiTemplateImage(ui::Layout *layout,
     }
     else if (ima->type == IMA_TYPE_R_RESULT) {
       /* browse layer/passes */
-      RenderResult *rr;
       const float dpi_fac = UI_SCALE_FAC;
       const int menus_width = 230 * dpi_fac;
 
-      /* Use #BKE_image_acquire_renderresult so we get the correct slot in the menu. */
-      rr = BKE_image_acquire_renderresult(scene, ima);
-      uiblock_layer_pass_buttons(*layout, ima, rr, iuser, menus_width, &ima->render_slot);
-      BKE_image_release_renderresult(scene, ima, rr);
+      uiblock_layer_pass_buttons(*layout, ima, iuser, menus_width, &ima->render_slot);
     }
 
     return;
@@ -880,11 +822,11 @@ void uiTemplateImage(ui::Layout *layout,
   else if (compact == 0) {
     uiTemplateImageInfo(layout, C, ima, iuser);
   }
-  if (ima->type == IMA_TYPE_MULTILAYER && ima->rr) {
+  if (ima->type == IMA_TYPE_MULTILAYER && BKE_image_has_layer_catalog(ima)) {
     layout->separator();
 
     const float dpi_fac = UI_SCALE_FAC;
-    uiblock_layer_pass_buttons(*layout, ima, ima->rr, iuser, 230 * dpi_fac, nullptr);
+    uiblock_layer_pass_buttons(*layout, ima, iuser, 230 * dpi_fac, nullptr);
   }
 
   if (BKE_image_is_animated(ima)) {
@@ -1180,22 +1122,16 @@ void uiTemplateImageFormatViews(ui::Layout *layout, PointerRNA *imfptr, PointerR
   }
 }
 
-void uiTemplateImageLayers(ui::Layout *layout, bContext *C, Image *ima, ImageUser *iuser)
+void uiTemplateImageLayers(ui::Layout *layout, bContext * /*C*/, Image *ima, ImageUser *iuser)
 {
-  Scene *scene = CTX_data_scene(C);
-
   /* render layers and passes */
   if (ima && iuser) {
-    RenderResult *rr;
     const float dpi_fac = UI_SCALE_FAC;
     const int menus_width = 160 * dpi_fac;
     const bool is_render_result = (ima->type == IMA_TYPE_R_RESULT);
 
-    /* Use BKE_image_acquire_renderresult so we get the correct slot in the menu. */
-    rr = BKE_image_acquire_renderresult(scene, ima);
     uiblock_layer_pass_buttons(
-        *layout, ima, rr, iuser, menus_width, is_render_result ? &ima->render_slot : nullptr);
-    BKE_image_release_renderresult(scene, ima, rr);
+        *layout, ima, iuser, menus_width, is_render_result ? &ima->render_slot : nullptr);
   }
 }
 

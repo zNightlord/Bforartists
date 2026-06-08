@@ -211,9 +211,7 @@ static int rna_Image_gl_load(
   iuser.framenr = frame;
   iuser.layer = layer_index;
   iuser.pass = pass_index;
-  if (image->rr != nullptr) {
-    BKE_image_multilayer_index(image->rr, &iuser);
-  }
+  BKE_image_user_resolve_from_index(image, &iuser);
 
   gpu::Texture *tex = BKE_image_acquire_gpu_texture(image, &iuser);
 

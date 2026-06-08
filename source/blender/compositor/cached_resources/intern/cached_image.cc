@@ -63,47 +63,39 @@ bool operator==(const CachedImageKey &a, const CachedImageKey &b)
  * Cached Image.
  */
 
-/* Get the render layer in the given render result specified by the given image user. Returns
- * nullptr if not found. */
-static RenderLayer *get_render_layer(const RenderResult *render_result,
-                                     const ImageUser &image_user)
+/* Get the layer in the given image's catalog specified by the given image user. Returns nullptr
+ * if not found. */
+static ImageLayer *get_image_layer(const Image *image, const ImageUser &image_user)
 {
-  const ListBaseT<RenderLayer> *layers = &render_result->layers;
-  return static_cast<RenderLayer *>(BLI_findlink(layers, image_user.layer));
+  return BKE_image_user_layer(image, &image_user);
 }
 
-/* Get the index of the pass with the given name in the render layer specified by the given image
- * user in the given render result. Returns -1 if not found. */
-static int get_pass_index(const RenderResult *render_result,
-                          const ImageUser &image_user,
-                          const char *name)
+/* Get the index of the pass with the given name in the layer specified by the given image user
+ * in the given image's catalog. Returns -1 if not found. */
+static int get_pass_index(const Image *image, const ImageUser &image_user, const char *name)
 {
-  const RenderLayer *render_layer = get_render_layer(render_result, image_user);
+  const ImageLayer *render_layer = get_image_layer(image, image_user);
   if (!render_layer) {
     return -1;
   }
-  return BLI_findstringindex(&render_layer->passes, name, offsetof(RenderPass, name));
+  return BLI_findstringindex(&render_layer->passes, name, offsetof(ImagePass, name));
 }
 
-/* Get the render pass in the given render layer specified by the given image user. */
-static RenderPass *get_render_pass(const RenderLayer *render_layer, const ImageUser &image_user)
+/* Get the render pass in the given layer specified by the given image user. */
+static ImagePass *get_image_pass(const ImageLayer *render_layer, const ImageUser &image_user)
 {
-  return static_cast<RenderPass *>(BLI_findlink(&render_layer->passes, image_user.pass));
+  return static_cast<ImagePass *>(BLI_findlink(&render_layer->passes, image_user.pass));
 }
 
-/* Get the render pass in the given render result specified by the given image user. */
-static RenderPass *get_render_pass(const RenderResult *render_result, const ImageUser &image_user)
+/* Get the render pass in the given image's catalog specified by the given image user. */
+static ImagePass *get_render_pass(const Image *image, const ImageUser &image_user)
 {
-  if (!render_result) {
-    return nullptr;
-  }
-
-  const RenderLayer *render_layer = get_render_layer(render_result, image_user);
+  const ImageLayer *render_layer = get_image_layer(image, image_user);
   if (!render_layer) {
     return nullptr;
   }
 
-  return get_render_pass(render_layer, image_user);
+  return get_image_pass(render_layer, image_user);
 }
 
 /* Get the index of the view selected in the image user. If the image is not a multi-view image
@@ -114,17 +106,10 @@ static RenderPass *get_render_pass(const RenderResult *render_result, const Imag
  * whose name matches the view currently being rendered. It follows that the views are then
  * indexed starting from 1. So for non zero view values, the actual index of the view is the
  * value of the view member of the image user minus 1. */
-static int get_view_index(const Context &context,
-                          const RenderResult *render_result,
-                          const ImageUser &image_user)
+static int get_view_index(const Context &context, const Image *image, const ImageUser &image_user)
 {
-  /* The image is not a multi-view image, so just return zero. */
-  if (!render_result) {
-    return 0;
-  }
-
-  const ListBaseT<RenderView> *views = &render_result->views;
-  /* There is only one view and its index is 0. */
+  const ListBaseT<ImageView> *views = &image->views;
+  /* The image is not a multi-view image or has only one view, its index is 0. */
   if (BLI_listbase_count_at_most(views, 2) < 2) {
     return 0;
   }
@@ -139,7 +124,7 @@ static int get_view_index(const Context &context,
   /* Otherwise, the view value is zero, denoting the special mode of operation "All", which finds
    * the index of the view whose name matches the view currently being rendered. */
   const char *view_name = context.get_view_name().data();
-  const int matched_view = BLI_findstringindex(views, view_name, offsetof(RenderView, name));
+  const int matched_view = BLI_findstringindex(views, view_name, offsetof(ImageView, name));
 
   /* No view matches the view currently being rendered, so fallback to the first view. */
   if (matched_view == -1) {
@@ -151,28 +136,23 @@ static int get_view_index(const Context &context,
 
 /* Get a copy of the image user that is appropriate to retrieve the needed image buffer from the
  * image. This essentially sets the appropriate frame, pass, and view that corresponds to the
- * given context and pass name. If the image is a multi-layer image, then the render_result
- * argument should be set, otherwise, it is ignored. The image user will have a pass index of -1 if
- * the pass/later were not found in the image for multi-layer images. */
+ * given context and pass name. The image user will have a pass index of -1 if the pass/layer were
+ * not found in the image for multi-layer images. */
 static ImageUser compute_image_user_for_pass(const Context &context,
                                              const Image &image,
-                                             const RenderResult *render_result,
                                              const ImageUser &image_user,
                                              const char *pass_name)
 {
   ImageUser image_user_for_pass = image_user;
 
   /* Set the needed view. */
-  image_user_for_pass.view = get_view_index(context, render_result, image_user_for_pass);
+  image_user_for_pass.view = get_view_index(context, &image, image_user_for_pass);
 
   /* Set the needed pass. */
   if (BKE_image_is_multilayer(&image)) {
-    image_user_for_pass.pass = get_pass_index(render_result, image_user_for_pass, pass_name);
-    BKE_image_multilayer_index(const_cast<RenderResult *>(render_result), &image_user_for_pass);
+    image_user_for_pass.pass = get_pass_index(&image, image_user_for_pass, pass_name);
   }
-  else {
-    BKE_image_multiview_index(&image, &image_user_for_pass);
-  }
+  BKE_image_user_resolve_from_index(&image, &image_user_for_pass);
 
   return image_user_for_pass;
 }
@@ -249,9 +229,9 @@ static ResultType float_type(const int channels_count)
  * the channels count of the buffer for simple images, while channel IDs are also considered for
  * multi-layer images since 3-channel passes can be RGB without alpha and 4-channel passes can be
  * XYZW 4D vectors. */
-static ResultType get_pass_type(const RenderPass *render_pass)
+static ResultType get_pass_type(const ImagePass *render_pass)
 {
-  switch (render_pass->channels) {
+  switch (render_pass->channels_num) {
     case 1:
       return ResultType::Float;
     case 2:
@@ -297,25 +277,20 @@ CachedImage::CachedImage(Context &context,
     return;
   }
 
-  RenderResult *render_result = BKE_image_acquire_renderresult(nullptr, &image);
-
   ImageUser image_user_for_pass = compute_image_user_for_pass(
-      context, image, render_result, image_user, pass_name);
+      context, image, image_user, pass_name);
 
   /* Pass or layer were not found. */
   if (BKE_image_is_multilayer(&image) && image_user_for_pass.pass == -1) {
-    BKE_image_release_renderresult(nullptr, &image, render_result);
     return;
   }
 
   if (BKE_image_is_multilayer(&image)) {
-    const RenderPass *render_pass = get_render_pass(render_result, image_user_for_pass);
+    const ImagePass *render_pass = get_render_pass(&image, image_user_for_pass);
     this->result.set_type(get_pass_type(render_pass));
   }
 
-  this->populate_cryptomatte_meta_data(render_result, image_user_for_pass);
-
-  BKE_image_release_renderresult(nullptr, &image, render_result);
+  this->populate_cryptomatte_meta_data(&image, image_user_for_pass);
 
   ImBuf *image_buffer = BKE_image_acquire_ibuf(&image, &image_user_for_pass, nullptr);
   ImBuf *linear_image_buffer = compute_linear_buffer(image_buffer);
@@ -369,28 +344,27 @@ CachedImage::CachedImage(Context &context,
   BKE_image_release_ibuf(&image, image_buffer, nullptr);
 }
 
-void CachedImage::populate_cryptomatte_meta_data(const RenderResult *render_result,
-                                                 const ImageUser &image_user)
+void CachedImage::populate_cryptomatte_meta_data(const Image *image, const ImageUser &image_user)
 {
-  if (!render_result) {
+  if (image->runtime->stamp_data == nullptr) {
     return;
   }
 
-  const RenderLayer *render_layer = get_render_layer(render_result, image_user);
-  if (!render_layer) {
+  const ImageLayer *image_layer = get_image_layer(image, image_user);
+  if (!image_layer) {
     return;
   }
 
-  const RenderPass *render_pass = get_render_pass(render_layer, image_user);
-  if (!render_pass) {
+  const ImagePass *image_pass = get_image_pass(image_layer, image_user);
+  if (!image_pass) {
     return;
   }
 
   /* We assume the given pass is a Cryptomatte pass and retrieve its full name. If it wasn't a
    * Cryptomatte pass, the checks below will fail anyways. */
-  const bool is_named_layer = render_layer->name[0] != '\0';
-  const std::string layer_prefix = is_named_layer ? std::string(render_layer->name) + "." : "";
-  const std::string combined_pass_name = layer_prefix + render_pass->name;
+  const bool is_named_layer = image_layer->name[0] != '\0';
+  const std::string layer_prefix = is_named_layer ? std::string(image_layer->name) + "." : "";
+  const std::string combined_pass_name = layer_prefix + image_pass->name;
   StringRef cryptomatte_layer_name = bke::cryptomatte::BKE_cryptomatte_extract_layer_name(
       combined_pass_name);
 
@@ -403,7 +377,7 @@ void CachedImage::populate_cryptomatte_meta_data(const RenderResult *render_resu
   StampCallbackData callback_data = {cryptomatte_layer_name, &this->result.meta_data};
   BKE_stamp_info_callback(
       &callback_data,
-      render_result->stamp_data,
+      image->runtime->stamp_data,
       [](void *user_data, const char *key, char *value, int /*value_length*/) {
         StampCallbackData *data = static_cast<StampCallbackData *>(user_data);
 

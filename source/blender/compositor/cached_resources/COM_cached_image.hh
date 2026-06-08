@@ -64,8 +64,7 @@ class CachedImage : public CachedResource {
 
  private:
   /* Populates the Cryptomatte meta data of the image. */
-  void populate_cryptomatte_meta_data(const RenderResult *render_result,
-                                      const ImageUser &image_user);
+  void populate_cryptomatte_meta_data(const Image *image, const ImageUser &image_user);
 
   /* Populates the meta data of the image. */
   void populate_meta_data(const ImBuf *image_buffer);

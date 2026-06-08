@@ -12,6 +12,7 @@
 #include "BLI_fileops.hh"
 #include "BLI_index_range.hh"
 #include "BLI_listbase.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_path_utils.hh"
 #include "BLI_string_ref.hh"
 #include "BLI_string_utf8.hh"
@@ -328,6 +329,14 @@ static void imbuf_save_post(ImBuf *ibuf, ImBuf *colormanaged_ibuf)
   }
 }
 
+/* Save a loaded multi-layer EXR file (its catalog on Image.layers) as a
+ * multi-layer EXR. Defined after the EXR writer below. */
+static bool image_save_multilayer_exr_file(ReportList *reports,
+                                           Image *ima,
+                                           ImageUser *iuser,
+                                           const ImageSaveOptions *opts,
+                                           bool *r_colorspace_changed);
+
 /**
  * \return success.
  * \note `ima->filepath` and `ibuf->filepath` will reference the same path
@@ -354,6 +363,15 @@ static bool image_save_single(ReportList *reports,
   const bool save_copy = opts->save_copy;
   const bool save_as_render = opts->save_as_render;
   const ImageFormatData *imf = &opts->im_format;
+
+  /* A loaded multi-layer EXR keeps its catalog on Image.layers, with no
+   * RenderResult; writing it to an EXR goes through the catalog. */
+  if (ima->type == IMA_TYPE_MULTILAYER && BKE_image_has_layer_catalog(ima) &&
+      ELEM(imf->imtype, R_IMF_IMTYPE_OPENEXR, R_IMF_IMTYPE_MULTILAYER))
+  {
+    BKE_image_release_ibuf(ima, ibuf, lock);
+    return image_save_multilayer_exr_file(reports, ima, iuser, opts, r_colorspace_changed);
+  }
 
   if (ima->type == IMA_TYPE_R_RESULT) {
     /* enforce user setting for RGB or RGBA, but skip BW */
@@ -515,12 +533,7 @@ static bool image_save_single(ReportList *reports,
         view_iuser.view = i;
         view_iuser.flag &= ~IMA_SHOW_STEREO;
 
-        if (rr) {
-          BKE_image_multilayer_index(rr, &view_iuser);
-        }
-        else {
-          BKE_image_multiview_index(ima, &view_iuser);
-        }
+        BKE_image_user_resolve_from_index(ima, &view_iuser);
 
         ibuf = BKE_image_acquire_ibuf(ima, &view_iuser, &lock);
         ibuf->color_mode = color_mode;
@@ -577,14 +590,12 @@ static bool image_save_single(ReportList *reports,
         view_iuser.flag &= ~IMA_SHOW_STEREO;
 
         if (rr) {
-          int id = BLI_findstringindex(&rr->views, names[i], offsetof(RenderView, name));
-          view_iuser.view = id;
-          BKE_image_multilayer_index(rr, &view_iuser);
+          view_iuser.view = BLI_findstringindex(&rr->views, names[i], offsetof(RenderView, name));
         }
         else {
           view_iuser.view = i;
-          BKE_image_multiview_index(ima, &view_iuser);
         }
+        BKE_image_user_resolve_from_index(ima, &view_iuser);
 
         ibuf = BKE_image_acquire_ibuf(ima, &view_iuser, &lock);
 
@@ -1076,6 +1087,140 @@ bool BKE_image_render_write_exr(ReportList *reports,
   }
 
   return success;
+}
+
+static bool image_save_multilayer_exr_file(ReportList *reports,
+                                           Image *ima,
+                                           ImageUser *iuser,
+                                           const ImageSaveOptions *opts,
+                                           bool *r_colorspace_changed)
+{
+  const ImageFormatData *imf = &opts->im_format;
+  const bool save_as_render = opts->save_as_render;
+
+  if (imf->views_format == R_IMF_VIEWS_STEREO_3D && !BKE_image_is_stereo(ima)) {
+    BKE_reportf(reports,
+                RPT_ERROR,
+                R"(Did not write, the image doesn't have a "%s" and "%s" views)",
+                STEREO_LEFT_NAME,
+                STEREO_RIGHT_NAME);
+    return false;
+  }
+
+  /* View names; always at least one entry. */
+  Vector<const char *> view_names;
+  for (const ImageView &view : ima->views) {
+    view_names.append(view.name);
+  }
+  if (view_names.is_empty()) {
+    view_names.append("");
+  }
+  const int num_views = view_names.size();
+
+  /* Build a temporary #RenderResult from the #Image.layers catalog, borrowing
+   * the pixel buffers from the per-Image cache, so the loaded multi-layer image
+   * can be written through the regular EXR writer. */
+  RenderResult *rr = MEM_new<RenderResult>("multilayer exr save");
+  for (const char *view_name : view_names) {
+    RenderView *rv = MEM_new<RenderView>("multilayer exr save view");
+    STRNCPY(rv->name, view_name);
+    BLI_addtail(&rr->views, rv);
+  }
+  /* Borrowed, detached again before the render result is freed. */
+  rr->stamp_data = ima->runtime->stamp_data;
+
+  ImBuf *first_ibuf = nullptr;
+  for (ImageLayer &layer : ima->layers) {
+    RenderLayer *rl = MEM_new<RenderLayer>("multilayer exr save layer");
+    STRNCPY(rl->name, layer.name);
+    BLI_addtail(&rr->layers, rl);
+
+    for (ImagePass &pass : layer.passes) {
+      for (int view_id = 0; view_id < num_views; view_id++) {
+        ImageUser view_iuser;
+        if (iuser) {
+          view_iuser = *iuser;
+        }
+        else {
+          BKE_imageuser_default(&view_iuser);
+        }
+        /* Select this layer/pass by name and the view by its (positional) index. */
+        STRNCPY(view_iuser.layer_name, layer.name);
+        STRNCPY(view_iuser.pass_name, pass.name);
+        view_iuser.view = view_id;
+        view_iuser.flag &= ~IMA_SHOW_STEREO;
+
+        ImBuf *pass_ibuf = BKE_image_acquire_ibuf(ima, &view_iuser, nullptr);
+        if (pass_ibuf == nullptr) {
+          continue;
+        }
+        if (first_ibuf == nullptr) {
+          first_ibuf = pass_ibuf;
+        }
+
+        RenderPass *rpass = MEM_new<RenderPass>("multilayer exr save pass");
+        STRNCPY(rpass->name, pass.name);
+        STRNCPY(rpass->chan_id, pass.chan_id);
+        STRNCPY(rpass->view, view_names[view_id]);
+        rpass->channels = pass.channels_num;
+        rpass->rectx = pass_ibuf->x;
+        rpass->recty = pass_ibuf->y;
+        rpass->view_id = view_id;
+        /* The cache reference is borrowed by the render pass; it is released in
+         * the loop below before the render result is freed. */
+        rpass->ibuf = pass_ibuf;
+        RE_render_result_full_channel_name(
+            rpass->fullname, nullptr, rpass->name, rpass->view, rpass->chan_id, -1);
+        BLI_addtail(&rl->passes, rpass);
+      }
+    }
+  }
+
+  bool ok = false;
+  if (first_ibuf == nullptr) {
+    BKE_report(reports, RPT_ERROR, "Did not write, no Multilayer Image");
+  }
+  else {
+    rr->rectx = first_ibuf->x;
+    rr->recty = first_ibuf->y;
+    copy_v2_v2_db(rr->ppm, first_ibuf->ppm);
+
+    /* A multi-layer EXR writes every layer; a single-layer EXR writes only the
+     * #ImageUser's selected layer. */
+    const bool is_multilayer = (imf->imtype == R_IMF_IMTYPE_MULTILAYER);
+    const int layer = (iuser && !is_multilayer) ? iuser->layer : -1;
+    if (imf->views_format == R_IMF_VIEWS_INDIVIDUAL && num_views > 1) {
+      ok = true;
+      for (const char *view : view_names) {
+        char filepath[FILE_MAX];
+        BKE_scene_multiview_view_filepath_get(&opts->scene->r, opts->filepath, view, filepath);
+        const bool ok_view = BKE_image_render_write_exr(
+            reports, rr, filepath, imf, save_as_render, view, layer);
+        image_save_post(
+            reports, ima, first_ibuf, ok_view, opts, true, filepath, r_colorspace_changed);
+        ok &= ok_view;
+      }
+    }
+    else {
+      ok = BKE_image_render_write_exr(
+          reports, rr, opts->filepath, imf, save_as_render, nullptr, layer);
+      image_save_post(
+          reports, ima, first_ibuf, ok, opts, true, opts->filepath, r_colorspace_changed);
+    }
+  }
+
+  /* Release the borrowed cache references and detach the borrowed stamp data
+   * before freeing the temporary render result. */
+  for (RenderLayer &rl : rr->layers) {
+    for (RenderPass &rpass : rl.passes) {
+      BKE_image_release_ibuf(ima, rpass.ibuf, nullptr);
+      rpass.ibuf = nullptr;
+    }
+  }
+  rr->stamp_data = nullptr;
+  RE_FreeRenderResult(rr);
+
+  return ok;
 }
 
 /* Render output. */

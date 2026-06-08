@@ -6,6 +6,7 @@
  * \ingroup render
  */
 
+#include <atomic>
 #include <cerrno>
 #include <cstdio>
 #include <cstdlib>
@@ -45,6 +46,17 @@
 #include "render_types.h"
 
 namespace blender {
+
+/* Process-global monotonic counter stamped onto #RenderResult::catalog_version
+ * on every catalog mutation. A cached catalog copy (a render-result viewer's
+ * #Image.layers) can then detect staleness with a single version compare:
+ * because the counter never repeats, distinct render results never collide
+ * even when the allocator reuses a freed #RenderResult address. */
+static int render_result_catalog_version_next()
+{
+  static std::atomic<int> counter = 0;
+  return ++counter;
+}
 
 /* -------------------------------------------------------------------- */
 /** \name Free
@@ -241,6 +253,9 @@ RenderPass *render_layer_add_pass(RenderResult *rr,
       rpass->fullname, nullptr, rpass->name, rpass->view, rpass->chan_id, -1);
 
   BLI_addtail(&rl->passes, rpass);
+
+  /* A layer/pass was added: let a cached catalog copy detect it is stale. */
+  rr->catalog_version = render_result_catalog_version_next();
 
   if (allocate) {
     render_layer_allocate_pass(rr, rpass);
@@ -855,6 +870,9 @@ void render_result_single_layer_end(Render *re)
         }
       }
     }
+
+    /* The layer set of re->result changed; invalidate any cached catalog copy. */
+    re->result->catalog_version = render_result_catalog_version_next();
   }
 
   RE_FreeRenderResult(re->pushedresult);

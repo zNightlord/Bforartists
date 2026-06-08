@@ -38,7 +38,7 @@ class Images {
     if (BKE_image_is_stereo(ima)) {
       iuser->flag |= IMA_SHOW_STEREO;
       iuser->multiview_eye = images_stereo_eye(scene, v3d);
-      BKE_image_multiview_index(ima, iuser);
+      BKE_image_user_resolve_from_index(ima, iuser);
     }
     else {
       iuser->flag &= ~IMA_SHOW_STEREO;

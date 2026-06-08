@@ -4,6 +4,8 @@
 
 #include "testing/testing.h"
 
+#include "DNA_image_types.h"
+
 #include "BKE_cryptomatte.h"
 #include "BKE_cryptomatte.hh"
 #include "BKE_gtest_base.hh"
@@ -143,7 +145,12 @@ TEST_F(CryptomatteTest, session_from_stamp_data)
   BKE_render_result_stamp_data(render_result, "cryptomatte/uiop/name", "layer2");
   BKE_render_result_stamp_data(
       render_result, "cryptomatte/uiop/manifest", R"({"Object2":"87654321"})");
-  CryptomatteSessionPtr session(BKE_cryptomatte_init_from_render_result(render_result));
+  /* Expose the stamp data through an Image and build the session from it. */
+  Image image = {};
+  ImageRuntime image_runtime;
+  image.runtime = &image_runtime;
+  image.runtime->stamp_data = render_result->stamp_data;
+  CryptomatteSessionPtr session(BKE_cryptomatte_init_from_image(&image));
   EXPECT_NE(session.get(), nullptr);
   RE_FreeRenderResult(render_result);
 

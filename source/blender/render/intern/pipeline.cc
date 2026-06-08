@@ -2856,8 +2856,6 @@ RenderPass *RE_create_gp_pass(RenderResult *rr, const char *layername, const cha
     rl = MEM_new<RenderLayer>(layername);
     BLI_addtail(&rr->layers, rl);
     STRNCPY(rl->name, layername);
-    rl->layflag = SCE_LAY_SOLID;
-    rl->passflag = SCE_PASS_COMBINED;
     rl->rectx = rr->rectx;
     rl->recty = rr->recty;
   }

@@ -224,12 +224,7 @@ class Instance : public DrawEngine {
     space_->release_buffer(state.image, image_buffer, lock);
 
     ImageUser *iuser = space_->get_image_user();
-    if (state.image->rr != nullptr) {
-      BKE_image_multilayer_index(state.image->rr, iuser);
-    }
-    else {
-      BKE_image_multiview_index(state.image, iuser);
-    }
+    BKE_image_user_resolve_from_names(state.image, iuser);
   }
 
   void object_sync(ObjectRef & /*obref*/, Manager & /*manager*/) final {}

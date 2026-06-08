@@ -25,7 +25,6 @@ enum class ImageUDIMTexture {
   TileMapping,
 };
 
-#define IMA_NO_INDEX 0x7FEFEFEF
 #define IMA_NO_VIEW 0x7FEFEFEF
 
 struct ImageCacheKey {
@@ -39,13 +38,11 @@ struct ImageCacheKey {
   int frame = 0;
   /** Multiview. */
   int view = IMA_NO_VIEW;
-  /** Multilayer. */
-  int multi_index = IMA_NO_INDEX;
 
   friend bool operator==(const ImageCacheKey &a, const ImageCacheKey &b)
   {
     return a.udim_type == b.udim_type && a.pass == b.pass && a.frame == b.frame &&
-           a.tile_number == b.tile_number && a.view == b.view && a.multi_index == b.multi_index;
+           a.tile_number == b.tile_number && a.view == b.view;
   }
 };
 

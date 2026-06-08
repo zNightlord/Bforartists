@@ -1636,7 +1636,7 @@ void *paint_2d_new_stroke(bContext *C, wmOperator *op, const BrushStrokeMode mod
     MEM_delete(s);
     return nullptr;
   }
-  if (BKE_image_has_packedfile(s->image) && s->image->rr != nullptr) {
+  if (BKE_image_has_packedfile(s->image) && s->image->type == IMA_TYPE_MULTILAYER) {
     BKE_report(op->reports, RPT_WARNING, "Packed MultiLayer files cannot be painted");
     MEM_delete(s);
     return nullptr;

@@ -15,6 +15,7 @@ namespace blender {
 
 /* Forward declarations. */
 struct CryptomatteSession;
+struct Image;
 struct Main;
 struct Material;
 struct Object;
@@ -22,8 +23,8 @@ struct RenderResult;
 struct Scene;
 
 struct CryptomatteSession *BKE_cryptomatte_init();
-struct CryptomatteSession *BKE_cryptomatte_init_from_render_result(
-    const struct RenderResult *render_result);
+/* Initialize a cryptomatte session from a multi-layer image's catalog metadata. */
+struct CryptomatteSession *BKE_cryptomatte_init_from_image(const struct Image *image);
 /* Initializes a cryptomatte session from the view layers of the given scene. If build_meta_data is
  * true, the object and material IDs in the view layer will be hashed and added to the Cryptomatte
  * layers, allowing hash-name lookups. */

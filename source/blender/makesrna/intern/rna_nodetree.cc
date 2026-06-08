@@ -3313,13 +3313,13 @@ static void rna_Node_image_layer_view_update(Main *bmain, Scene *scene, PointerR
     return;
   }
 
-  BKE_image_multilayer_index(ima->rr, iuser);
+  BKE_image_user_resolve_from_index(ima, iuser);
   BKE_image_signal(bmain, ima, iuser, IMA_SIGNAL_SRC_CHANGE);
 
   rna_Node_update(bmain, scene, ptr);
 }
 
-static const EnumPropertyItem *renderresult_layers_add_enum(RenderLayer *rl)
+template<typename LayerT> static const EnumPropertyItem *renderresult_layers_add_enum(LayerT *rl)
 {
   EnumPropertyItem *item = nullptr;
   EnumPropertyItem tmp = {0};
@@ -3374,7 +3374,6 @@ static const EnumPropertyItem *rna_Node_image_layer_itemf(bContext * /*C*/,
   bNode *node = ptr->data_as<bNode>();
   Image *ima = reinterpret_cast<Image *>(node->id);
   const EnumPropertyItem *item = nullptr;
-  RenderLayer *rl;
 
   if (node->type_legacy == CMP_NODE_CRYPTOMATTE &&
       node->custom1 != CMP_NODE_CRYPTOMATTE_SOURCE_IMAGE)
@@ -3382,13 +3381,12 @@ static const EnumPropertyItem *rna_Node_image_layer_itemf(bContext * /*C*/,
     return rna_enum_dummy_NULL_items;
   }
 
-  if (ima == nullptr || ima->rr == nullptr) {
+  if (ima == nullptr || !BKE_image_has_layer_catalog(ima)) {
     *r_free = false;
     return rna_enum_dummy_NULL_items;
   }
 
-  rl = static_cast<RenderLayer *>(ima->rr->layers.first);
-  item = renderresult_layers_add_enum(rl);
+  item = renderresult_layers_add_enum(static_cast<ImageLayer *>(ima->layers.first));
 
   *r_free = true;
 
@@ -3406,11 +3404,11 @@ static bool rna_Node_image_has_layers_get(PointerRNA *ptr)
     return false;
   }
 
-  if (!ima || !(ima->rr)) {
+  if (!ima || !BKE_image_has_layer_catalog(ima)) {
     return false;
   }
 
-  return RE_layers_have_name(ima->rr);
+  return BKE_image_layers_have_name(ima);
 }
 
 static bool rna_Node_image_has_views_get(PointerRNA *ptr)
@@ -3424,14 +3422,14 @@ static bool rna_Node_image_has_views_get(PointerRNA *ptr)
     return false;
   }
 
-  if (!ima || !(ima->rr)) {
+  if (!ima || !BKE_image_has_layer_catalog(ima)) {
     return false;
   }
 
-  return BLI_listbase_count_at_most(&ima->rr->views, 2) > 1;
+  return BLI_listbase_count_at_most(&ima->views, 2) > 1;
 }
 
-static const EnumPropertyItem *renderresult_views_add_enum(RenderView *rv)
+template<typename ViewT> static const EnumPropertyItem *renderresult_views_add_enum(ViewT *rv)
 {
   EnumPropertyItem *item = nullptr;
   EnumPropertyItem tmp = {0, "ALL", 0, "All", ""};
@@ -3468,7 +3466,6 @@ static const EnumPropertyItem *rna_Node_image_view_itemf(bContext * /*C*/,
   bNode *node = ptr->data_as<bNode>();
   Image *ima = reinterpret_cast<Image *>(node->id);
   const EnumPropertyItem *item = nullptr;
-  RenderView *rv;
 
   if (node->type_legacy == CMP_NODE_CRYPTOMATTE &&
       node->custom1 != CMP_NODE_CRYPTOMATTE_SOURCE_IMAGE)
@@ -3476,13 +3473,12 @@ static const EnumPropertyItem *rna_Node_image_view_itemf(bContext * /*C*/,
     return rna_enum_dummy_NULL_items;
   }
 
-  if (ima == nullptr || ima->rr == nullptr) {
+  if (ima == nullptr || !BKE_image_has_layer_catalog(ima)) {
     *r_free = false;
     return rna_enum_dummy_NULL_items;
   }
 
-  rv = static_cast<RenderView *>(ima->rr->views.first);
-  item = renderresult_views_add_enum(rv);
+  item = renderresult_views_add_enum(static_cast<ImageView *>(ima->views.first));
 
   *r_free = true;
 
@@ -3497,15 +3493,13 @@ static const EnumPropertyItem *rna_Node_view_layer_itemf(bContext * /*C*/,
   bNode *node = ptr->data_as<bNode>();
   Scene *sce = reinterpret_cast<Scene *>(node->id);
   const EnumPropertyItem *item = nullptr;
-  RenderLayer *rl;
 
   if (sce == nullptr) {
     *r_free = false;
     return rna_enum_dummy_NULL_items;
   }
 
-  rl = static_cast<RenderLayer *>(sce->view_layers.first);
-  item = renderresult_layers_add_enum(rl);
+  item = renderresult_layers_add_enum(static_cast<ViewLayer *>(sce->view_layers.first));
 
   *r_free = true;
 

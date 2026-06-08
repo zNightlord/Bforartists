@@ -19,8 +19,6 @@ namespace blender {
 
 namespace bke {
 struct ImageRuntime;
-struct ImageLayer_Runtime;
-struct ImagePass_Runtime;
 }  // namespace bke
 
 struct ImBufCache;
@@ -140,6 +138,15 @@ struct ImageUser {
   /** Listbase indices, for menu browsing or retrieve buffer. */
   short multi_index = 0, view = 0, layer = 0;
   eImageUser_Flag flag = {};
+
+  /**
+   * Name-based layer/pass selection. These are the persistent identity of the
+   * selection; the #layer / #pass integer indices above are kept only as a
+   * runtime-resolved cache (for positional UI menus) and as a versioning
+   * fallback for files saved before names existed.
+   */
+  char layer_name[/*MAX_NAME*/ 64] = "";
+  char pass_name[/*MAX_NAME*/ 64] = "";
 };
 
 struct ImageAnim {
@@ -197,25 +204,22 @@ struct ImageTile {
 struct ImagePass {
   struct ImagePass *next = nullptr, *prev = nullptr;
 
-  /** Name. */
+  /** Pass name, e.g. "Combined", "Depth", "AO", "Roughness". */
   char name[/*MAX_NAME*/ 64] = "";
   /** Channels IDs (like RGBA or XYZ). */
   char chan_id[24] = "";
   /** Number of channels. */
   int channels_num = 0;
   char _pad[4] = {};
-
-  bke::ImagePass_Runtime *runtime = nullptr;
 };
 
 struct ImageLayer {
   struct ImageLayer *next = nullptr, *prev = nullptr;
 
+  /** Layer name. */
   char name[/*MAX_NAME*/ 64] = "";
 
   ListBaseT<ImagePass> passes = {nullptr, nullptr};
-
-  bke::ImageLayer_Runtime *runtime = nullptr;
 };
 
 struct Image {
@@ -232,7 +236,6 @@ struct Image {
 
   /* sources from: */
   ListBaseT<ImageAnim> anims = {nullptr, nullptr};
-  struct RenderResult *rr = nullptr;
 
   ListBaseT<RenderSlot> renderslots = {nullptr, nullptr};
   short render_slot = 0, last_render_slot = 0;

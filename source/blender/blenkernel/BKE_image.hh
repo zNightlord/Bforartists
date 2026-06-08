@@ -73,13 +73,27 @@ struct ImageRuntime {
 
   float view_offset[2] = {};
   float view_zoom = 1.0f;
+
+  /* Loaded multi-layer EXR catalog. The Image.layers / Image.views catalog is built from the
+   * file header; the buffers live in #cache. These fields are the catalog-level state that has
+   * no per-buffer home. */
+
+  /** Catalog-level metadata read from the EXR header (design §5). Owned. */
+  StampData *stamp_data = nullptr;
+  /** Frame whose multi-layer catalog and buffers are currently loaded (sequence EXRs). */
+  int multilayer_framenr = 0;
+  /** True once the catalog has been built from the file; cleared on reload to force a rebuild. */
+  bool multilayer_catalog_loaded = false;
+
+  /* Render-result viewer catalog copy (design §9). When Image.layers holds a copy of a
+   * RenderResult's catalog, this records the #RenderResult::catalog_version it was copied
+   * from, so a stale copy can be detected and re-synced. catalog_version is a process-global
+   * monotonic stamp, so it uniquely identifies the catalog state. */
+  int synced_catalog_version = 0;
+  /** Name of the synthetic combined layer at the last sync ("" if none); part of the
+   * staleness key because the combined buffer is not tracked by catalog_version. */
+  char synced_combined_name[/*MAX_NAME*/ 64] = "";
 };
-
-/** Runtime-only data of an #ImagePass. */
-struct ImagePass_Runtime {};
-
-/** Runtime-only data of an #ImageLayer. */
-struct ImageLayer_Runtime {};
 
 }  // namespace bke
 /**
@@ -127,10 +141,6 @@ void BKE_stamp_info_callback(void *data,
                              StampData *stamp_data,
                              StampCallback callback,
                              bool noskip);
-void BKE_image_multilayer_stamp_info_callback(void *data,
-                                              const Image &image,
-                                              StampCallback callback,
-                                              bool noskip);
 void BKE_render_result_stamp_data(RenderResult *rr, const char *key, const char *value);
 StampData *BKE_stamp_data_copy(const StampData *stamp_data);
 void BKE_stamp_data_free(StampData *stamp_data);
@@ -177,7 +187,6 @@ MovieReader *openanim_noload(const char *filepath,
 /* should be used in conjunction with an ID * to Image. */
 struct ImageUser;
 struct RenderData;
-struct RenderPass;
 struct RenderResult;
 
 /* signals */
@@ -359,15 +368,51 @@ bool BKE_image_user_id_has_animation(ID *id);
 void BKE_image_user_id_eval_animation(Depsgraph *depsgraph, ID *id);
 
 /**
- * Sets index offset for multi-layer files and because rendered results use fake layer/passes,
- * don't correct for wrong indices here.
+ * Resolve an #ImageUser's selection against an image. The stored layer/pass
+ * *names* are authoritative; the view is selected by its integer index (views
+ * are positional). This is the canonical way to bind a selection. For a
+ * multi-layer image (a loaded multi-layer EXR or a render-result viewer) the
+ * layer/pass names are resolved against the #Image.layers catalog and their
+ * integer indices re-synced from them; for any other image only the view is
+ * resolved.
+ *
+ * #BKE_image_acquire_ibuf resolves internally, so most callers only need to set
+ * the layer/pass names (#ImageUser.layer_name / #ImageUser.pass_name) and
+ * acquire. Call this directly to revalidate a selection without acquiring, e.g.
+ * before drawing the layer/pass menus.
  */
-RenderPass *BKE_image_multilayer_index(RenderResult *rr, ImageUser *iuser);
+void BKE_image_user_resolve_from_names(const Image *ima, ImageUser *iuser);
 
 /**
- * Sets index offset for multi-view files.
+ * Resolve an #ImageUser's selection from its integer layer/pass/view *indices*,
+ * overwriting the name-based selection from them. This is the positional /
+ * legacy-input adapter — for the image-editor menus and node RNA enums, which
+ * supply an index from a positional widget, and as the old-file fallback before
+ * names existed. New code should prefer name-based selection (set
+ * #ImageUser.layer_name / #ImageUser.pass_name and #BKE_image_user_resolve_from_names).
  */
-void BKE_image_multiview_index(const Image *ima, ImageUser *iuser);
+void BKE_image_user_resolve_from_index(const Image *ima, ImageUser *iuser);
+
+/**
+ * Whether the image exposes a layer/pass catalog on #Image.layers to read: a
+ * loaded multi-layer EXR, or a render-result viewer whose catalog is the synced
+ * copy of the render result.
+ */
+bool BKE_image_has_layer_catalog(const Image *ima);
+
+/**
+ * Whether the layer/pass catalog on #Image.layers has meaningful layer names to
+ * show in a layer menu: more than one layer, or a single layer with a non-empty
+ * name. A single unnamed layer (a bare multi-layer EXR) has nothing to browse.
+ */
+bool BKE_image_layers_have_name(const Image *ima);
+
+/**
+ * The catalog #ImageLayer that \a iuser selects from #Image.layers, by name (the
+ * integer #ImageUser.layer index is only a fallback for files written before the
+ * layer name existed). Null if not found.
+ */
+ImageLayer *BKE_image_user_layer(const Image *ima, const ImageUser *iuser);
 
 /**
  * For multi-layer images as well as for render-viewer
@@ -390,6 +435,21 @@ bool BKE_image_is_stereo(const Image *ima);
  */
 RenderResult *BKE_image_acquire_renderresult(Scene *scene, Image *ima);
 void BKE_image_release_renderresult(Scene *scene, Image *ima, RenderResult *render_result);
+
+/**
+ * Refresh the #Image.layers catalog copy of a render-result viewer from its
+ * active #RenderResult. Cheap and idempotent: the copy is only rebuilt when the
+ * result identity or its #RenderResult::catalog_version changed. Must be called
+ * on the main thread.
+ */
+void BKE_image_sync_render_catalog(Scene *scene, Image *ima);
+
+/**
+ * Refresh the catalog copy of every render-result viewer image against \a scene.
+ * Called centrally as a render progresses and when it finishes, so consumers
+ * (image editor, compositor) can read #Image.layers without syncing themselves.
+ */
+void BKE_image_sync_render_catalogs(Main *bmain, Scene *scene);
 
 /**
  * For multi-layer images as well as for single-layer.
@@ -449,11 +509,6 @@ bool BKE_image_autosave_memorypack(Image *ima);
  * Prints memory statistics for images.
  */
 void BKE_image_print_memlist(Main *bmain);
-
-/**
- * Merge source into `dest`, and free `source`.
- */
-void BKE_image_merge(Main *bmain, Image *dest, Image *source);
 
 /**
  * Scale the image.
