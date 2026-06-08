@@ -3510,52 +3510,6 @@ void BKE_image_signal(Main *bmain, Image *ima, ImageUser *iuser, int signal)
 }
 
 /**
- * \return render-pass for a given pass index and active view.
- * fall back to available if there are missing passes for active view.
- */
-static RenderPass *image_render_pass_get(RenderLayer *rl,
-                                         const int pass,
-                                         const int view,
-                                         int *r_passindex)
-{
-  RenderPass *rpass_ret = nullptr;
-  RenderPass *rpass;
-
-  int rp_index = 0;
-  const char *rp_name = "";
-
-  for (rpass = static_cast<RenderPass *>(rl->passes.first); rpass; rpass = rpass->next, rp_index++)
-  {
-    if (rp_index == pass) {
-      rpass_ret = rpass;
-      if (view == 0) {
-        /* no multiview or left eye */
-        break;
-      }
-
-      rp_name = rpass->name;
-    }
-    /* multiview */
-    else if (rp_name[0] && STREQ(rpass->name, rp_name) && (rpass->view_id == view)) {
-      rpass_ret = rpass;
-      break;
-    }
-  }
-
-  /* fall back to the first pass in the layer */
-  if (rpass_ret == nullptr) {
-    rp_index = 0;
-    rpass_ret = static_cast<RenderPass *>(rl->passes.first);
-  }
-
-  if (r_passindex) {
-    *r_passindex = (rpass == rpass_ret ? rp_index : pass);
-  }
-
-  return rpass_ret;
-}
-
-/**
  * Resolve one catalog axis (layer, pass or view) against \a list: by the stored
  * name first, then by the integer \a index as an old-file fallback, then the
  * first entry. Catalog names are unique by construction (passes are de-duplicated
@@ -4988,10 +4942,14 @@ static ImBuf *image_get_render_result(Image *ima, ImageUser *iuser, void **r_loc
     return nullptr;
   }
 
+  /* Resolve the name-based layer/pass/view selection against the synced
+   * #Image.layers catalog, writing back the integer indices, so acquiring a
+   * render result is self-resolving like a file multi-layer image. The lookups
+   * below then match the live #RenderResult by name. */
+  image_user_resolve_pass(ima, iuser);
+
   Render *re = RE_GetSceneRender(iuser->scene);
 
-  const int layer = iuser->layer;
-  const int pass = iuser->pass;
   int actview = iuser->view;
 
   if (BKE_image_is_stereo(ima) && (iuser->flag & IMA_SHOW_STEREO)) {
@@ -5005,7 +4963,6 @@ static ImBuf *image_get_render_result(Image *ima, ImageUser *iuser, void **r_loc
   }
   else if ((slot = BKE_image_get_renderslot(ima, ima->render_slot))->render) {
     rres = *(slot->render);
-    rres.have_combined = (static_cast<RenderView *>(rres.views.first))->ibuf != nullptr;
   }
 
   if (!(rres.rectx > 0 && rres.recty > 0)) {
@@ -5038,23 +4995,31 @@ static ImBuf *image_get_render_result(Image *ima, ImageUser *iuser, void **r_loc
 
   dither = iuser->scene->r.dither_intensity;
 
-  /* combined layer gets added as first layer */
-  if (rres.have_combined && layer == 0) {
-    /* pass */
-  }
-  else if (pass_ibuf && pass_ibuf->byte_data() && layer == 0) {
-    /* pass */
-  }
-  else if (rres.layers.first) {
-    RenderLayer *rl = static_cast<RenderLayer *>(
-        BLI_findlink(&rres.layers, layer - (rres.have_combined ? 1 : 0)));
-    if (rl) {
-      RenderPass *rpass = image_render_pass_get(rl, pass, actview, nullptr);
-      if (rpass) {
-        pass_ibuf = rpass->ibuf;
-        if (pass != 0) {
-          dither = 0.0f; /* don't dither passes */
-        }
+  /* The compositor / sequencer combined buffer has no render layer of its own;
+   * it is exposed as a synthetic catalog layer ("Composite" / "Sequence"). When
+   * that synthetic layer is selected — or nothing is selected yet — the combined
+   * buffer already held in pass_ibuf is shown. Otherwise resolve the selected
+   * layer and pass by name, so the displayed buffer follows a re-render that
+   * reorders or adds/removes layers/passes. */
+  const char *combined_name = image_render_combined_layer_name(&rres);
+  const bool want_combined = (combined_name != nullptr) &&
+                             (iuser->layer_name[0] == '\0' ||
+                              STREQ(iuser->layer_name, combined_name));
+
+  if (!want_combined && rres.layers.first) {
+    RenderLayer *rl = RE_GetRenderLayer(&rres, iuser->layer_name);
+    if (rl == nullptr) {
+      rl = static_cast<RenderLayer *>(rres.layers.first);
+    }
+    const char *viewname = rv ? rv->name : "";
+    RenderPass *rpass = RE_pass_find_by_name(rl, iuser->pass_name, viewname);
+    if (rpass == nullptr) {
+      rpass = static_cast<RenderPass *>(rl->passes.first);
+    }
+    if (rpass) {
+      pass_ibuf = rpass->ibuf;
+      if (!STREQ(rpass->name, RE_PASSNAME_COMBINED)) {
+        dither = 0.0f; /* don't dither passes */
       }
     }
   }

@@ -1985,18 +1985,6 @@ static bool rna_SpaceImageEditor_show_stereo_get(PointerRNA *ptr)
   return (sima->iuser.flag & IMA_SHOW_STEREO) != 0;
 }
 
-static void rna_SpaceImageEditor_show_stereo_update(Main * /*bmain*/,
-                                                    Scene * /*scene*/,
-                                                    PointerRNA *ptr)
-{
-  SpaceImage *sima = static_cast<SpaceImage *>(ptr->data);
-  Image *ima = sima->image;
-
-  if (ima) {
-    BKE_image_user_resolve_from_names(ima, &sima->iuser);
-  }
-}
-
 static void rna_SpaceImageEditor_show_sequencer_scene_set(PointerRNA *ptr, bool value)
 {
   SpaceImage *sima = ptr->data_as<SpaceImage>();
@@ -2190,17 +2178,6 @@ static void rna_SpaceImageEditor_cursor_location_set(PointerRNA *ptr, const floa
 
     sima->cursor[0] = values[0] / w;
     sima->cursor[1] = values[1] / h;
-  }
-}
-
-static void rna_SpaceImageEditor_image_update(Main * /*bmain*/, Scene * /*scene*/, PointerRNA *ptr)
-{
-  SpaceImage *sima = static_cast<SpaceImage *>(ptr->data);
-  Image *ima = sima->image;
-
-  /* make sure all the iuser settings are valid for the sima image */
-  if (ima) {
-    BKE_image_user_resolve_from_names(ima, &sima->iuser);
   }
 }
 
@@ -6368,10 +6345,7 @@ static void rna_def_space_image(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Image", "Image displayed and edited in this space");
   RNA_def_property_flag(prop, PROP_EDITABLE);
   RNA_def_property_clear_flag(prop, PROP_ID_REFCOUNT);
-  RNA_def_property_update(
-      prop,
-      NC_GEOM | ND_DATA,
-      "rna_SpaceImageEditor_image_update"); /* is handled in image editor too */
+  RNA_def_property_update(prop, NC_GEOM | ND_DATA, nullptr);
 
   prop = RNA_def_property(srna, "image_user", PROP_POINTER, PROP_NONE);
   RNA_def_property_flag(prop, PROP_NEVER_NULL);
@@ -6444,8 +6418,7 @@ static void rna_def_space_image(BlenderRNA *brna)
       prop, "rna_SpaceImageEditor_show_stereo_get", "rna_SpaceImageEditor_show_stereo_set");
   RNA_def_property_ui_text(prop, "Show Stereo", "Display the image in Stereo 3D");
   RNA_def_property_ui_icon(prop, ICON_CAMERA_STEREO, 0);
-  RNA_def_property_update(
-      prop, NC_SPACE | ND_SPACE_IMAGE, "rna_SpaceImageEditor_show_stereo_update");
+  RNA_def_property_update(prop, NC_SPACE | ND_SPACE_IMAGE, nullptr);
 
   prop = RNA_def_property(srna, "show_sequencer_scene", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_funcs(prop,

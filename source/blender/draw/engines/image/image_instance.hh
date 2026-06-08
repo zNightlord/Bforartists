@@ -222,9 +222,6 @@ class Instance : public DrawEngine {
     const Scene *scene = DRW_context_get()->scene;
     state.sh_params.update(space_.get(), scene, state.image, image_buffer);
     space_->release_buffer(state.image, image_buffer, lock);
-
-    ImageUser *iuser = space_->get_image_user();
-    BKE_image_user_resolve_from_names(state.image, iuser);
   }
 
   void object_sync(ObjectRef & /*obref*/, Manager & /*manager*/) final {}
