@@ -45,7 +45,7 @@ static MaterialPool *gpencil_material_pool_add(Instance *inst)
 
 static gpu::Texture *gpencil_image_texture_get(blender::Image *image, bool *r_alpha_premult)
 {
-  ImageUser iuser = {nullptr};
+  ImageUser iuser = {};
   gpu::Texture *gpu_tex = nullptr;
 
   gpu_tex = BKE_image_acquire_gpu_texture(image, &iuser);

@@ -245,7 +245,7 @@ static void rna_Image_views_format_update(Main *bmain, Scene *scene, PointerRNA 
   ibuf = BKE_image_acquire_ibuf(ima, nullptr, &lock);
 
   if (ibuf) {
-    ImageUser iuser = {nullptr};
+    ImageUser iuser = {};
     iuser.scene = scene;
     BKE_image_signal(bmain, ima, &iuser, IMA_SIGNAL_FREE);
   }

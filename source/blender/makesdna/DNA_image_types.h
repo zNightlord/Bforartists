@@ -113,40 +113,58 @@ enum eImageAlphaMode : char {
 };
 
 /**
- * ImageUser is in Texture, in Nodes, Background Image, Image Window, ...
- * should be used in conjunction with an ID * to Image.
+ * ImageUser determines which specific image buffer to use for an Image,
+ * selecting a specific layer, pass, view, frame and tile.
+ *
+ * It is saved persistently in DNA along side Image ID pointers, for the
+ * image editor, image nodes, background image, etc.
+ *
+ * It is also used at runtime for acquiring a more specific image, for example
+ * a UDIM tile or animation frame based on context.
  */
 struct ImageUser {
-  /** To retrieve render result. */
-  struct Scene *scene = nullptr;
+  /********************************* Saved Data ******************************/
 
-  /** Movies, sequences: current to display. */
-  int framenr = 0;
-  /** Total amount of frames to use. */
-  int frames = 0;
-  /** Offset within movie, start frame in global time. */
-  int offset = 0, sfra = 0;
-  /** Cyclic flag. */
-  char cycl = 0;
-
-  /** Multiview current eye - for internal use of drawing routines. */
-  char multiview_eye = 0;
-  short pass = 0;
-
-  int tile = 0;
-
-  /** Listbase indices, for menu browsing or retrieve buffer. */
-  short multi_index = 0, view = 0, layer = 0;
-  eImageUser_Flag flag = {};
-
-  /**
-   * Name-based layer/pass selection. These are the persistent identity of the
-   * selection; the #layer / #pass integer indices above are kept only as a
-   * runtime-resolved cache (for positional UI menus) and as a versioning
-   * fallback for files saved before names existed.
-   */
+  /** Layer and pass selection.
+   *
+   * The names have priority if they are non-empty. The indices exist for backwards
+   * compatibility in blend files and APIs, and temporary usage in UI menus. */
   char layer_name[/*MAX_NAME*/ 64] = "";
   char pass_name[/*MAX_NAME*/ 64] = "";
+  short layer = 0;
+  short pass = 0;
+
+  /** Multi-view selection. */
+  short view = 0;
+  short _pad0 = 0;
+
+  /** UDIM tile selection. */
+  int tile = 0;
+
+  /* Animation settings. */
+
+  /** Total amount of frames of the sequence/movie to use. */
+  int frames = 0;
+  /** Frame offset, and start frame in global (scene) time. */
+  int offset = 0, sfra = 0;
+  /** Cyclic: loop the frame range. */
+  char cycl = 0;
+  char _pad1 = 0;
+
+  /* General Settings. */
+  eImageUser_Flag flag = {};
+
+  /****************************** Runtime Data ********************************/
+
+  /** Resolved frame number, computed from animation settings and scene current frame. */
+  int framenr = 0;
+
+  /** Current scene for acquiring a render result or viewer. */
+  struct Scene *scene = nullptr;
+
+  /** Multi-view eye to draw, for stereo drawing. */
+  char multiview_eye = 0;
+  char _pad2[7] = {};
 };
 
 struct ImageAnim {
