@@ -144,6 +144,11 @@ StampData *BKE_stamp_info_from_scene_static(const Scene *scene);
 bool BKE_stamp_is_known_field(const char *field_name);
 void BKE_imbuf_stamp_info(const RenderResult *rr, ImBuf *ibuf);
 void BKE_stamp_info_from_imbuf(RenderResult *rr, ImBuf *ibuf);
+/**
+ * Allocate stamp data and fill it from an image buffer's metadata. The caller is
+ * responsible for freeing it with #BKE_stamp_data_free.
+ */
+StampData *BKE_stamp_info_from_imbuf_alloc(ImBuf *ibuf);
 void BKE_stamp_info_callback(void *data,
                              StampData *stamp_data,
                              StampCallback callback,

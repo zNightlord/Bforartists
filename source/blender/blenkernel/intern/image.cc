@@ -2702,18 +2702,21 @@ void BKE_stamp_info_callback(void *data,
 #undef CALL
 }
 
-void BKE_render_result_stamp_data(RenderResult *rr, const char *key, const char *value)
+static void stampdata_add_custom_field(StampData *stamp_data, const char *key, const char *value)
 {
-  StampData *stamp_data;
-  if (rr->stamp_data == nullptr) {
-    rr->stamp_data = MEM_new_zeroed<StampData>("RenderResult.stamp_data");
-  }
-  stamp_data = rr->stamp_data;
   StampDataCustomField *field = MEM_new_uninitialized<StampDataCustomField>(
       "StampData Custom Field");
   STRNCPY_UTF8(field->key, key);
   field->value = BLI_strdup(value);
   BLI_addtail(&stamp_data->custom_fields, field);
+}
+
+void BKE_render_result_stamp_data(RenderResult *rr, const char *key, const char *value)
+{
+  if (rr->stamp_data == nullptr) {
+    rr->stamp_data = MEM_new_zeroed<StampData>("RenderResult.stamp_data");
+  }
+  stampdata_add_custom_field(rr->stamp_data, key, value);
 }
 
 StampData *BKE_stamp_data_copy(const StampData *stamp_data)
@@ -2771,13 +2774,13 @@ void BKE_imbuf_stamp_info(const RenderResult *rr, ImBuf *ibuf)
   BKE_stamp_info_callback(ibuf, stamp_data, metadata_set_field, false);
 }
 
-static void metadata_copy_custom_fields(const char *field, const char *value, void *rr_v)
+static void metadata_copy_custom_fields(const char *field, const char *value, void *stamp_v)
 {
   if (BKE_stamp_is_known_field(field)) {
     return;
   }
-  RenderResult *rr = static_cast<RenderResult *>(rr_v);
-  BKE_render_result_stamp_data(rr, field, value);
+  StampData *stamp_data = static_cast<StampData *>(stamp_v);
+  stampdata_add_custom_field(stamp_data, field, value);
 }
 
 void BKE_stamp_info_from_imbuf(RenderResult *rr, ImBuf *ibuf)
@@ -2785,10 +2788,18 @@ void BKE_stamp_info_from_imbuf(RenderResult *rr, ImBuf *ibuf)
   if (rr->stamp_data == nullptr) {
     rr->stamp_data = MEM_new_zeroed<StampData>("RenderResult.stamp_data");
   }
-  StampData *stamp_data = rr->stamp_data;
+  BKE_stamp_info_callback(ibuf, rr->stamp_data, metadata_get_field, true);
+  /* Copy render engine specific settings. */
+  IMB_metadata_foreach(ibuf, metadata_copy_custom_fields, rr->stamp_data);
+}
+
+StampData *BKE_stamp_info_from_imbuf_alloc(ImBuf *ibuf)
+{
+  StampData *stamp_data = MEM_new_zeroed<StampData>("StampData");
   BKE_stamp_info_callback(ibuf, stamp_data, metadata_get_field, true);
   /* Copy render engine specific settings. */
-  IMB_metadata_foreach(ibuf, metadata_copy_custom_fields, rr);
+  IMB_metadata_foreach(ibuf, metadata_copy_custom_fields, stamp_data);
+  return stamp_data;
 }
 
 bool BKE_imbuf_alpha_test(ImBuf *ibuf)
