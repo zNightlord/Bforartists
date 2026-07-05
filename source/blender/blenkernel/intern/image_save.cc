@@ -796,112 +796,20 @@ static float *image_exr_opaque_alpha_buffer(int width,
   return alpha_output;
 }
 
-static void add_exr_compositing_result(ExrWriteHandle *exr_handle,
-                                       const RenderResult *render_result,
-                                       const ImageFormatData *imf,
-                                       bool save_as_render,
-                                       const char *view_name,
-                                       int layer,
-                                       Vector<float *> &temporary_buffers)
-{
-  /* Render result has no compositing result. */
-  if (!render_result->have_combined) {
-    return;
-  }
-
-  /* Skip compositing result if we are saving a single layer EXR that is not the compositing
-   * layer, which always has the layer index of 0. */
-  const bool is_multi_layer = !(imf && imf->imtype == R_IMF_IMTYPE_OPENEXR);
-  if (!is_multi_layer && layer != 0) {
-    return;
-  }
-
-  /* Write the compositing result for the view with the given view name, or for all views if no
-   * view name is given. */
-  for (RenderView &render_view : render_result->views) {
-    if (!render_view.ibuf || !render_view.ibuf->float_data()) {
-      continue;
-    }
-
-    /* If a view name is given, then we skip views that do not match the given view name.
-     * Otherwise, we always add the views. */
-    if (view_name && !STREQ(view_name, render_view.name)) {
-      continue;
-    }
-
-    /* If a view name is given, that means we are writing a single view, so no need to identify the
-     * channel by the view name, and we supply an empty view to the rest of the code. */
-    const char *render_view_name = view_name ? "" : render_view.name;
-
-    /* Compositing results is always a 4-channel RGBA. */
-    const int channels_count_in_buffer = 4;
-    const float *output_buffer = render_view.ibuf->float_data();
-    StringRefNull colorspace = IMB_colormanagement_role_colorspace_name_get(
-        COLOR_ROLE_SCENE_LINEAR);
-
-    if (save_as_render) {
-      output_buffer = image_exr_from_scene_linear_to_output(output_buffer,
-                                                            render_result->rectx,
-                                                            render_result->recty,
-                                                            channels_count_in_buffer,
-                                                            imf,
-                                                            temporary_buffers,
-                                                            colorspace);
-    }
-
-    /* For multi-layer EXRs, we write the buffer as is with all its 4 channels. */
-    const bool half_float = (imf && imf->depth == R_IMF_CHAN_DEPTH_16);
-    if (is_multi_layer) {
-      IMB_exr_write_pass(exr_handle,
-                         "Composite.Combined",
-                         "RGBA",
-                         render_view_name,
-                         colorspace,
-                         channels_count_in_buffer,
-                         channels_count_in_buffer * render_result->rectx,
-                         output_buffer,
-                         half_float);
-      continue;
-    }
-
-    /* For single layer EXR, we only add the channels specified in the image format and do any
-     * needed color format conversion.
-     *
-     * In case of a single required channel, we need to do RGBA to BW conversion. */
-
-    const ImColorMode color_mode = imf ? imf->color_mode : ImColorMode::RGBA;
-    if (color_mode == ImColorMode::BW) {
-      const float *gray_scale_output = image_exr_from_rgb_to_bw(output_buffer,
-                                                                render_result->rectx,
-                                                                render_result->recty,
-                                                                channels_count_in_buffer,
-                                                                temporary_buffers);
-      IMB_exr_write_pass(exr_handle,
-                         "",
-                         "V",
-                         render_view_name,
-                         colorspace,
-                         1,
-                         render_result->rectx,
-                         gray_scale_output,
-                         half_float);
-      continue;
-    }
-
-    /* Add RGB[A] channels. This will essentially skip the alpha channel if only three channels
-     * were required. */
-    StringRefNull channelnames = color_mode == ImColorMode::RGBA ? "RGBA" : "RGB";
-    IMB_exr_write_pass(exr_handle,
-                       "",
-                       channelnames,
-                       render_view_name,
-                       colorspace,
-                       channels_count_in_buffer,
-                       channels_count_in_buffer * render_result->rectx,
-                       output_buffer,
-                       half_float);
-  }
-}
+/* A single layer/pass/view pixel buffer to be written to an EXR file. Both the
+ * render result and the image save path express their contents as a list of these
+ * and share the writing code below. */
+struct ExrSavePass {
+  const char *layer_name;
+  const char *pass_name;
+  const char *chan_id;
+  int channels;
+  /* View name to qualify the channels with, or "" for none. */
+  const char *view_name;
+  const float *pixels;
+  int rectx;
+  int recty;
+};
 
 /* Write a single layer/pass buffer to the EXR handle, doing color space conversion and channel
  * selection based on the image format. Shared by the render result and image save paths. */
@@ -910,16 +818,18 @@ static void image_exr_write_pass(ExrWriteHandle *exrhandle,
                                  const bool multi_layer,
                                  const bool has_multiple_layers,
                                  const bool save_as_render,
-                                 const char *layer_name,
-                                 const char *pass_name,
-                                 const char *chan_id,
-                                 const int channels,
-                                 const float *pass_rect,
-                                 const int rectx,
-                                 const int recty,
-                                 const char *viewname,
+                                 const ExrSavePass &pass,
                                  Vector<float *> &tmp_output_rects)
 {
+  const char *layer_name = pass.layer_name;
+  const char *pass_name = pass.pass_name;
+  const char *chan_id = pass.chan_id;
+  const int channels = pass.channels;
+  const float *pass_rect = pass.pixels;
+  const int rectx = pass.rectx;
+  const int recty = pass.recty;
+  const char *viewname = pass.view_name;
+
   /* We only store RGBA passes as half float, for
    * others precision loss can be problematic. */
   const bool pass_RGBA = IMB_chan_id_is_color(chan_id);
@@ -1011,6 +921,63 @@ static void image_exr_write_pass(ExrWriteHandle *exrhandle,
   }
 }
 
+/* Write a list of layer/pass/view buffers to an EXR file. Shared by the render
+ * result and image save paths, which each build the pass list and supply the
+ * overall image size, pixel density and metadata. When a single view name is
+ * given, only that view's views entry is written. */
+static bool image_write_exr(ReportList *reports,
+                            const char *filepath,
+                            const ImageFormatData *imf,
+                            const bool save_as_render,
+                            const bool multi_layer,
+                            const bool has_multiple_layers,
+                            const Vector<const char *> &view_names,
+                            const char *view,
+                            const Vector<ExrSavePass> &passes,
+                            const int rectx,
+                            const int recty,
+                            const double ppm[2],
+                            const StampData *stamp)
+{
+  const int write_multipart = (imf ? imf->exr_flag & R_IMF_EXR_FLAG_MULTIPART : true);
+  ExrWriteHandle *exrhandle = IMB_exr_write_begin(write_multipart);
+
+  /* First add views since IMB_exr_add_channels checks number of views. A single
+   * unnamed view is not written as a view. */
+  if (view_names.size() > 1 || view_names[0][0] != '\0') {
+    for (const char *view_name : view_names) {
+      if (!view || STREQ(view, view_name)) {
+        IMB_exr_write_view(exrhandle, view_name);
+      }
+    }
+  }
+
+  Vector<float *> tmp_output_rects;
+  for (const ExrSavePass &pass : passes) {
+    image_exr_write_pass(
+        exrhandle, imf, multi_layer, has_multiple_layers, save_as_render, pass, tmp_output_rects);
+  }
+
+  errno = 0;
+  BLI_file_ensure_parent_dir_exists(filepath);
+
+  const int compress = (imf ? imf->exr_codec : 0);
+  const int quality = (imf ? imf->quality : 90);
+  const bool success = IMB_exr_write_end(
+      exrhandle, filepath, rectx, recty, ppm, compress, quality, stamp);
+  if (!success) {
+    /* TODO: get the error from openexr's exception. */
+    BKE_reportf(
+        reports, RPT_ERROR, "Error writing render result, %s (see console)", strerror(errno));
+  }
+
+  for (float *rect : tmp_output_rects) {
+    MEM_delete(rect);
+  }
+
+  return success;
+}
+
 bool BKE_image_render_write_exr(ReportList *reports,
                                 const RenderResult *rr,
                                 const char *filepath,
@@ -1019,8 +986,6 @@ bool BKE_image_render_write_exr(ReportList *reports,
                                 const char *view,
                                 int layer)
 {
-  const int write_multipart = (imf ? imf->exr_flag & R_IMF_EXR_FLAG_MULTIPART : true);
-  ExrWriteHandle *exrhandle = IMB_exr_write_begin(write_multipart);
   const bool multi_layer = !(imf && imf->imtype == R_IMF_IMTYPE_OPENEXR);
 
   /* Write first layer if not multilayer and no layer was specified. */
@@ -1028,24 +993,47 @@ bool BKE_image_render_write_exr(ReportList *reports,
     layer = 0;
   }
 
-  /* First add views since IMB_exr_add_channels checks number of views. */
+  /* View names; always at least one entry. A single unnamed view stays as "". */
+  Vector<const char *> view_names;
   const RenderView *first_rview = static_cast<const RenderView *>(rr->views.first);
   if (first_rview && (first_rview->next || first_rview->name[0])) {
     for (RenderView &rview : rr->views) {
-      if (!view || STREQ(view, rview.name)) {
-        IMB_exr_write_view(exrhandle, rview.name);
+      view_names.append(rview.name);
+    }
+  }
+  if (view_names.is_empty()) {
+    view_names.append("");
+  }
+
+  Vector<ExrSavePass> passes;
+
+  /* The compositing result has no render layer of its own; write it as a synthetic
+   * "Composite" layer. It counts as layer index 0 for single-layer selection. */
+  if (rr->have_combined && (multi_layer || layer == 0)) {
+    for (RenderView &rview : rr->views) {
+      if (!rview.ibuf || !rview.ibuf->float_data()) {
+        continue;
       }
+      if (view && !STREQ(view, rview.name)) {
+        continue;
+      }
+      const char *view_name = view ? "" : rview.name;
+      passes.append({"Composite",
+                     RE_PASSNAME_COMBINED,
+                     "RGBA",
+                     4,
+                     view_name,
+                     rview.ibuf->float_data(),
+                     rr->rectx,
+                     rr->recty});
     }
   }
 
-  Vector<float *> tmp_output_rects;
-  add_exr_compositing_result(exrhandle, rr, imf, save_as_render, view, layer, tmp_output_rects);
-
-  /* Other render layers. */
+  /* Render layers. */
   int nr = (rr->have_combined) ? 1 : 0;
   const bool has_multiple_layers = BLI_listbase_count_at_most(&rr->layers, 2) > 1;
   for (RenderLayer &rl : rr->layers) {
-    /* Skip other render layers if requested. */
+    /* Skip other render layers if a single layer was requested. */
     if (!multi_layer && nr != layer) {
       nr++;
       continue;
@@ -1059,51 +1047,38 @@ bool BKE_image_render_write_exr(ReportList *reports,
       }
 
       /* Skip pass if it does not match the requested view(s). */
-      const char *viewname = render_pass.view;
+      const char *view_name = render_pass.view;
       if (view) {
-        if (!STREQ(view, viewname)) {
+        if (!STREQ(view, view_name)) {
           continue;
         }
-
-        viewname = "";
+        view_name = "";
       }
 
-      image_exr_write_pass(exrhandle,
-                           imf,
-                           multi_layer,
-                           has_multiple_layers,
-                           save_as_render,
-                           rl.name,
-                           render_pass.name,
-                           render_pass.chan_id,
-                           render_pass.channels,
-                           render_pass.ibuf->float_data(),
-                           rr->rectx,
-                           rr->recty,
-                           viewname,
-                           tmp_output_rects);
+      passes.append({rl.name,
+                     render_pass.name,
+                     render_pass.chan_id,
+                     render_pass.channels,
+                     view_name,
+                     render_pass.ibuf->float_data(),
+                     rr->rectx,
+                     rr->recty});
     }
   }
 
-  errno = 0;
-
-  BLI_file_ensure_parent_dir_exists(filepath);
-
-  const int compress = (imf ? imf->exr_codec : 0);
-  const int quality = (imf ? imf->quality : 90);
-  bool success = IMB_exr_write_end(
-      exrhandle, filepath, rr->rectx, rr->recty, rr->ppm, compress, quality, rr->stamp_data);
-  if (!success) {
-    /* TODO: get the error from openexr's exception. */
-    BKE_reportf(
-        reports, RPT_ERROR, "Error writing render result, %s (see console)", strerror(errno));
-  }
-
-  for (float *rect : tmp_output_rects) {
-    MEM_delete(rect);
-  }
-
-  return success;
+  return image_write_exr(reports,
+                         filepath,
+                         imf,
+                         save_as_render,
+                         multi_layer,
+                         has_multiple_layers,
+                         view_names,
+                         view,
+                         passes,
+                         rr->rectx,
+                         rr->recty,
+                         rr->ppm,
+                         rr->stamp_data);
 }
 
 /* Write the #Image.layers catalog to an EXR file, acquiring the pixel buffers from
@@ -1141,15 +1116,8 @@ static bool image_save_exr(ReportList *reports,
 
   /* Acquire the pixel buffer for every layer/pass/view to be written, borrowing the
    * references from the per-Image cache. They are released after the file is written. */
-  struct SavePass {
-    const char *layer_name;
-    const char *pass_name;
-    const char *chan_id;
-    int channels;
-    const char *view_name;
-    ImBuf *ibuf;
-  };
-  Vector<SavePass> save_passes;
+  Vector<ExrSavePass> passes;
+  Vector<ImBuf *> acquired_ibufs;
   ImBuf *first_ibuf = nullptr;
 
   int nr = 0;
@@ -1199,8 +1167,15 @@ static bool image_save_exr(ReportList *reports,
         if (first_ibuf == nullptr) {
           first_ibuf = pass_ibuf;
         }
-        save_passes.append(
-            {image_layer.name, pass.name, pass.chan_id, pass.channels_num, view_name, pass_ibuf});
+        acquired_ibufs.append(pass_ibuf);
+        passes.append({image_layer.name,
+                       pass.name,
+                       pass.chan_id,
+                       pass.channels_num,
+                       view_name,
+                       pass_ibuf->float_data(),
+                       pass_ibuf->x,
+                       pass_ibuf->y});
       }
     }
   }
@@ -1210,67 +1185,28 @@ static bool image_save_exr(ReportList *reports,
     BKE_report(reports, RPT_ERROR, "Did not write, no Multilayer Image");
   }
   else {
-    const int write_multipart = (imf ? imf->exr_flag & R_IMF_EXR_FLAG_MULTIPART : true);
-    ExrWriteHandle *exrhandle = IMB_exr_write_begin(write_multipart);
-
-    /* First add views since IMB_exr_add_channels checks number of views. */
-    if (num_views > 1 || view_names[0][0] != '\0') {
-      for (const char *view_name : view_names) {
-        if (!view || STREQ(view, view_name)) {
-          IMB_exr_write_view(exrhandle, view_name);
-        }
-      }
-    }
-
-    Vector<float *> tmp_output_rects;
-    for (const SavePass &save_pass : save_passes) {
-      image_exr_write_pass(exrhandle,
-                           imf,
-                           multi_layer,
-                           has_multiple_layers,
-                           save_as_render,
-                           save_pass.layer_name,
-                           save_pass.pass_name,
-                           save_pass.chan_id,
-                           save_pass.channels,
-                           save_pass.ibuf->float_data(),
-                           save_pass.ibuf->x,
-                           save_pass.ibuf->y,
-                           save_pass.view_name,
-                           tmp_output_rects);
-    }
-
-    errno = 0;
-    BLI_file_ensure_parent_dir_exists(filepath);
-
-    /* Metadata for the EXR header is taken from the shared pass-buffer metadata. */
+    /* Image size, pixel density and metadata for the EXR header are taken from the
+     * shared pass buffers. */
     StampData *stamp_data = BKE_stamp_info_from_imbuf_alloc(first_ibuf);
-
-    const int compress = (imf ? imf->exr_codec : 0);
-    const int quality = (imf ? imf->quality : 90);
-    ok = IMB_exr_write_end(exrhandle,
-                           filepath,
-                           first_ibuf->x,
-                           first_ibuf->y,
-                           first_ibuf->ppm,
-                           compress,
-                           quality,
-                           stamp_data);
-    if (!ok) {
-      /* TODO: get the error from openexr's exception. */
-      BKE_reportf(
-          reports, RPT_ERROR, "Error writing render result, %s (see console)", strerror(errno));
-    }
-
+    ok = image_write_exr(reports,
+                         filepath,
+                         imf,
+                         save_as_render,
+                         multi_layer,
+                         has_multiple_layers,
+                         view_names,
+                         view,
+                         passes,
+                         first_ibuf->x,
+                         first_ibuf->y,
+                         first_ibuf->ppm,
+                         stamp_data);
     BKE_stamp_data_free(stamp_data);
-    for (float *rect : tmp_output_rects) {
-      MEM_delete(rect);
-    }
   }
 
   /* Release the borrowed cache references. */
-  for (const SavePass &save_pass : save_passes) {
-    BKE_image_release_ibuf(ima, save_pass.ibuf, nullptr);
+  for (ImBuf *pass_ibuf : acquired_ibufs) {
+    BKE_image_release_ibuf(ima, pass_ibuf, nullptr);
   }
 
   return ok;
