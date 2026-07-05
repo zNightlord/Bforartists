@@ -19,6 +19,8 @@ namespace blender {
 
 namespace bke {
 struct ImageRuntime;
+struct ImageLayer_Runtime;
+struct ImagePass_Runtime;
 }  // namespace bke
 
 struct ImBufCache;
@@ -192,6 +194,30 @@ struct ImageTile {
   char label[64] = "";
 };
 
+struct ImagePass {
+  struct ImagePass *next = nullptr, *prev = nullptr;
+
+  /** Name. */
+  char name[/*MAX_NAME*/ 64] = "";
+  /** Channels IDs (like RGBA or XYZ). */
+  char chan_id[24] = "";
+  /** Number of channels. */
+  int channels_num = 0;
+  char _pad[4] = {};
+
+  bke::ImagePass_Runtime *runtime = nullptr;
+};
+
+struct ImageLayer {
+  struct ImageLayer *next = nullptr, *prev = nullptr;
+
+  char name[/*MAX_NAME*/ 64] = "";
+
+  ListBaseT<ImagePass> passes = {nullptr, nullptr};
+
+  bke::ImageLayer_Runtime *runtime = nullptr;
+};
+
 struct Image {
 #ifdef __cplusplus
   /** See #ID_Type comment for why this is here. */
@@ -255,6 +281,8 @@ struct Image {
   /* ImageTile list for UDIMs. */
   int active_tile_index = 0;
   ListBaseT<ImageTile> tiles = {nullptr, nullptr};
+
+  ListBaseT<ImageLayer> layers = {nullptr, nullptr};
 
   ListBaseT<ImageView> views = {nullptr, nullptr};
   struct Stereo3dFormat *stereo3d_format = nullptr;

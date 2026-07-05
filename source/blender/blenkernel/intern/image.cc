@@ -124,6 +124,7 @@ namespace blender {
 static CLG_LogRef LOG = {"image"};
 
 static void image_init(Image *ima, eImageSource source, eImageType type);
+static void image_free_layers(ListBaseT<ImageLayer> *layers);
 static int image_effective_view(Image *ima, const ImageUser *iuser);
 static void image_free_packedfiles(Image *ima);
 static void image_free_autosave_packedfiles(Image *ima);
@@ -175,6 +176,18 @@ static void image_copy_data(Main * /*bmain*/,
 
   BLI_duplicatelist(&image_dst->tiles, &image_src->tiles);
 
+  BLI_duplicatelist(&image_dst->layers, &image_src->layers);
+  {
+    ImageLayer *layer_dst = static_cast<ImageLayer *>(image_dst->layers.first);
+    for (const ImageLayer &layer_src : image_src->layers) {
+      BLI_duplicatelist(&layer_dst->passes, &layer_src.passes);
+      for (ImagePass &pass_dst : layer_dst->passes) {
+        pass_dst.runtime = MEM_new<bke::ImagePass_Runtime>(__func__);
+      }
+      layer_dst = layer_dst->next;
+    }
+  }
+
   if ((flag & LIB_ID_COPY_NO_PREVIEW) == 0) {
     BKE_previewimg_id_copy(&image_dst->id, &image_src->id);
   }
@@ -209,6 +222,7 @@ static void image_free_data(ID *id)
 
   image->tiles.free_no_destruct();
 
+  image_free_layers(&image->layers);
   MEM_delete(image->runtime);
 }
 
@@ -372,6 +386,15 @@ static void image_foreach_path(ID *id, BPathForeachPathData *bpath_data)
   }
 }
 
+/**
+ * Test if image layers should be written to the blend file,
+ * Always false for now until layer and pass editing is supported.
+ */
+static bool image_layers_do_blend_write(const Image * /*ima*/)
+{
+  return false;
+}
+
 static void image_blend_write(BlendWriter *writer, ID *id, const void *id_address)
 {
   Image *ima = id_cast<Image *>(id);
@@ -423,6 +446,16 @@ static void image_blend_write(BlendWriter *writer, ID *id, const void *id_addres
 
   writer->write_struct_list(&ima->tiles);
 
+  if (image_layers_do_blend_write(ima)) {
+    writer->write_struct_list(&ima->layers);
+    for (ImageLayer &layer : ima->layers) {
+      writer->write_struct_list(&layer.passes);
+    }
+  }
+  else {
+    BLI_listbase_clear(&ima->layers);
+  }
+
   ima->packedfile = nullptr;
 
   writer->write_struct_list(&ima->renderslots);
@@ -432,6 +465,14 @@ static void image_blend_read_data(BlendDataReader *reader, ID *id)
 {
   Image *ima = id_cast<Image *>(id);
   BLO_read_struct_list(reader, ImageTile, &ima->tiles);
+
+  BLO_read_struct_list(reader, ImageLayer, &ima->layers);
+  for (ImageLayer &layer : ima->layers) {
+    BLO_read_struct_list(reader, ImagePass, &layer.passes);
+    for (ImagePass &pass : layer.passes) {
+      pass.runtime = MEM_new<bke::ImagePass_Runtime>(__func__);
+    }
+  }
 
   BLO_read_struct_list(reader, RenderSlot, &(ima->renderslots));
   if (!BLO_read_data_is_undo(reader)) {
@@ -546,8 +587,8 @@ static void image_add_view(Image *ima, const char *viewname, const char *filepat
 static uint imagecache_hashhash(const void *key_v)
 {
   const ImageCacheKey *key = static_cast<const ImageCacheKey *>(key_v);
-  return uint(
-      get_default_hash(key->udim_type, key->frame, key->tile_number, key->view, key->multi_index));
+  return uint(get_default_hash(
+      key->udim_type, key->pass, key->frame, key->tile_number, key->view, key->multi_index));
 }
 
 static bool imagecache_hashcmp(const void *a_v, const void *b_v)
@@ -786,6 +827,17 @@ static ImageTile *imagetile_alloc(int tile_number)
   tile->gen_y = 1024;
   tile->gen_type = IMA_GENTYPE_GRID;
   return tile;
+}
+
+static void image_free_layers(ListBaseT<ImageLayer> *layers)
+{
+  for (ImageLayer &layer : *layers) {
+    for (ImagePass &pass : layer.passes) {
+      MEM_delete(pass.runtime);
+    }
+    BLI_freelistN(&layer.passes);
+  }
+  BLI_freelistN(layers);
 }
 
 /* only image block itself */

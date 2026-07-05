@@ -38,6 +38,8 @@ struct ImBufCache;
 struct MovieReader;
 struct Image;
 struct ImageFormatData;
+struct ImageLayer;
+struct ImagePass;
 struct ImagePool;
 struct ImageTile;
 struct ImbFormatOptions;
@@ -72,6 +74,12 @@ struct ImageRuntime {
   float view_offset[2] = {};
   float view_zoom = 1.0f;
 };
+
+/** Runtime-only data of an #ImagePass. */
+struct ImagePass_Runtime {};
+
+/** Runtime-only data of an #ImageLayer. */
+struct ImageLayer_Runtime {};
 
 }  // namespace bke
 /**

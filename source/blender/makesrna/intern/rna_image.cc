@@ -1111,6 +1111,50 @@ static void rna_def_udim_tiles(BlenderRNA *brna, PropertyRNA *cprop)
   RNA_def_parameter_clear_flags(parm, PROP_THICK_WRAP, ParameterFlag(0));
 }
 
+static void rna_def_image_pass(BlenderRNA *brna)
+{
+  StructRNA *srna;
+  PropertyRNA *prop;
+
+  srna = RNA_def_struct(brna, "ImagePass", nullptr);
+  RNA_def_struct_sdna(srna, "ImagePass");
+  RNA_def_struct_ui_text(srna, "Image Pass", "Single pass within an image layer");
+
+  prop = RNA_def_property(srna, "name", PROP_STRING, PROP_NONE);
+  RNA_def_property_ui_text(prop, "Name", "Name of the pass");
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_struct_name_property(srna, prop);
+
+  prop = RNA_def_property(srna, "channels", PROP_INT, PROP_UNSIGNED);
+  RNA_def_property_int_sdna(prop, nullptr, "channels_num");
+  RNA_def_property_ui_text(prop, "Channels", "Number of channels in the pass");
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+
+  prop = RNA_def_property(srna, "channel_ids", PROP_STRING, PROP_NONE);
+  RNA_def_property_string_sdna(prop, nullptr, "chan_id");
+  RNA_def_property_ui_text(prop, "Channel IDs", "Per-channel identifiers of the pass");
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+}
+
+static void rna_def_image_layer(BlenderRNA *brna)
+{
+  StructRNA *srna;
+  PropertyRNA *prop;
+
+  srna = RNA_def_struct(brna, "ImageLayer", nullptr);
+  RNA_def_struct_sdna(srna, "ImageLayer");
+  RNA_def_struct_ui_text(srna, "Image Layer", "Layer of an image, containing one or more passes");
+
+  prop = RNA_def_property(srna, "name", PROP_STRING, PROP_NONE);
+  RNA_def_property_ui_text(prop, "Name", "Name of the layer");
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_struct_name_property(srna, prop);
+
+  prop = RNA_def_property(srna, "passes", PROP_COLLECTION, PROP_NONE);
+  RNA_def_property_struct_type(prop, "ImagePass");
+  RNA_def_property_ui_text(prop, "Passes", "Passes of the layer");
+}
+
 static void rna_def_image(BlenderRNA *brna)
 {
   StructRNA *srna;
@@ -1308,6 +1352,10 @@ static void rna_def_image(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Image Tiles", "Tiles of the image");
   rna_def_udim_tiles(brna, prop);
 
+  prop = RNA_def_property(srna, "layers", PROP_COLLECTION, PROP_NONE);
+  RNA_def_property_struct_type(prop, "ImageLayer");
+  RNA_def_property_ui_text(prop, "Layers", "Layer/pass catalog of the image");
+
   prop = RNA_def_property(srna, "has_data", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_funcs(prop, "rna_Image_has_data_get", nullptr);
   RNA_def_property_clear_flag(prop, PROP_EDITABLE);
@@ -1426,6 +1474,8 @@ void RNA_def_image(BlenderRNA *brna)
 {
   rna_def_render_slot(brna);
   rna_def_udim_tile(brna);
+  rna_def_image_pass(brna);
+  rna_def_image_layer(brna);
   rna_def_image(brna);
   rna_def_imageuser(brna);
   rna_def_image_packed_files(brna);

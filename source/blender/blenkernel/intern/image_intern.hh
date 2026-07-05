@@ -14,6 +14,7 @@ namespace blender {
 
 struct Image;
 struct ImBuf;
+struct ImagePass;
 
 enum class ImageUDIMTexture {
   /** Not a UDIM aggregate. */
@@ -30,6 +31,8 @@ enum class ImageUDIMTexture {
 struct ImageCacheKey {
   /** UDIM buffer type. */
   ImageUDIMTexture udim_type = ImageUDIMTexture::None;
+  /** Image layer/pass. */
+  const ImagePass *pass = nullptr;
   /* UDIM tile number. */
   int tile_number = 0;
   /** Image sequence frame. */
@@ -41,8 +44,8 @@ struct ImageCacheKey {
 
   friend bool operator==(const ImageCacheKey &a, const ImageCacheKey &b)
   {
-    return a.udim_type == b.udim_type && a.frame == b.frame && a.tile_number == b.tile_number &&
-           a.view == b.view && a.multi_index == b.multi_index;
+    return a.udim_type == b.udim_type && a.pass == b.pass && a.frame == b.frame &&
+           a.tile_number == b.tile_number && a.view == b.view && a.multi_index == b.multi_index;
   }
 };
 
