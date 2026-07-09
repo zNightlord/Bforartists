@@ -1624,4 +1624,44 @@ void ARMATURE_OT_reveal(wmOperatorType *ot)
 
 /** \} */
 
+/* -------------------------------------------------------------------- */
+/** \name Recalculate Armature deform bone weight colors
+ * \{ */
+
+static bool active_armature_poll(bContext *C)
+{
+  Object *ob = CTX_data_active_object(C);
+  if (!ob) {
+    return false;
+  }
+  if (ob->type != OB_ARMATURE) {
+    return false;
+  }
+}
+
+static wmOperatorStatus armature_assign_weight_colors_exec(bContext *C, wmOperator * /*op*/)
+{
+  Object *ob = CTX_data_active_object(C);
+  if (!ob || ob->type != OB_ARMATURE) {
+    return OPERATOR_CANCELLED;
+  }
+
+  BKE_armature_assign_weight_colors(reinterpret_cast<bArmature *>(ob->data));
+  DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
+  WM_event_add_notifier(C, NC_OBJECT | ND_BONE_COLLECTION, ob);
+  return OPERATOR_FINISHED;
+}
+
+void ARMATURE_OT_assign_weight_colors(wmOperatorType *ot)
+{
+  ot->name = "Assign Weight Colors";
+  ot->idname = "ARMATURE_OT_assign_weight_colors";
+  ot->description = "Assign display colors to bones based on hierarchy for weight paint overlay";
+  ot->exec = armature_assign_weight_colors_exec;
+  ot->poll = active_armature_poll;
+}
+
+/** \} */
+
+
 }  // namespace blender

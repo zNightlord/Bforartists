@@ -86,12 +86,12 @@ void main()
     float weight = weight_interp.x;
     float4 weight_color = texture(colorramp, weight);
     weight_color = apply_color_fac(weight_color);
-    if (draw_multi_colored) {
+    if (vgroup_color_mode != 0) {
       weight_color = apply_color_fac(float4(vgroup_color, 1.0f));
     }
 
     /* Contour display, only in non color and active color.*/
-    if (draw_contours && !draw_multi_colored) {
+    if (draw_contours && vgroup_color_mode < 2) {
       /* This must be executed uniformly for all fragments. */
       float weight_gradient = length(float2(gpu_dfdx(weight), gpu_dfdy(weight)));
 

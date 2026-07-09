@@ -4292,6 +4292,9 @@ class VIEW3D_MT_pose(Menu):
         layout.separator()
         layout.operator("POSELIB.create_pose_asset")
 
+        layout.separator()
+        layout.operator("armature.assign_weight_colors", text="Reassign All Weight Colors")
+
 
 class VIEW3D_MT_pose_transform(Menu):
     bl_label = "Clear Transform"
@@ -4480,6 +4483,8 @@ class VIEW3D_MT_pose_context_menu(Menu):
 
         layout.operator("pose.user_transforms_clear")
 
+        layout.separator()
+        layout.operator("armature.assign_weight_colors", text="Reassign All Weight Colors", icon='COLOR')
 
 class BoneOptions:
     def draw(self, context):
@@ -5696,6 +5701,7 @@ class VIEW3D_MT_edit_armature(Menu):
 
         layout.menu("VIEW3D_MT_edit_armature_delete")
 
+        layout.operator("armature.assign_weight_colors", text="Reassign All Weight Colors")
 
 class VIEW3D_MT_armature_context_menu(Menu):
     bl_label = "Armature"
@@ -5740,6 +5746,7 @@ class VIEW3D_MT_armature_context_menu(Menu):
         layout.operator("armature.dissolve")
         layout.operator("armature.delete", icon='X')
 
+        layout.operator("armature.assign_weight_colors", text="Reassign All Weight Colors", icon='COLOR')
 
 class VIEW3D_MT_edit_armature_names(Menu):
     bl_label = "Names"
@@ -7787,30 +7794,20 @@ class VIEW3D_PT_overlay_weight_paint(Panel):
         col.prop(overlay, "weight_paint_mode_opacity", text="Opacity")
         
         col.separator()
-        ccol = col.column()
-        row = ccol.row()
-        row.label(text="Color")
-        
-        sub = ccol.row(align=True)
-        sub.prop(overlay, "show_weight_colored_vertex",text="")
-        sub = sub.row()
-        sub.active = overlay.show_weight_colored_vertex
-        sub.prop(overlay, "weight_paint_colored_opacity", text="Colored Vertex")
-        sub = ccol.row()
-        sub.prop(overlay, "show_weight_colored_multi")
-        sub = ccol.row()
-        sub.active = overlay.show_weight_colored_multi or overlay.show_weight_colored_vertex
-        sub.prop(overlay, "weight_paint_colored_multi_random", text="Random ID")
+        row = col.split(factor=0.33)
+        row.label(text="Colored")
+        sub = row.row()
+        sub.prop(overlay, "wpaint_vgroup_color_mode", text="", expand=True)
 
         col.separator()
         row = col.split(factor=0.33)
-        row.active = not overlay.show_weight_colored_multi
+        row.active = overlay.wpaint_vgroup_color_mode != 2
         row.label(text="Zero Weights")
         sub = row.row()
         sub.prop(tool_settings, "vertex_group_user", expand=True)
 
         col_contour = col.column()
-        col_contour.active = not overlay.show_weight_colored_multi
+        col_contour.active = overlay.wpaint_vgroup_color_mode != 2
         col_contour.prop(overlay, "show_wpaint_contours")
         col.prop(overlay, "show_paint_wire")
 
@@ -8929,6 +8926,8 @@ class VIEW3D_PT_paint_weight_context_menu(Panel):
             pressure_name="use_pressure_strength",
             slider=True,
         )
+
+        layout.operator("armature.assign_weight_colors", text="Reassign All Weight Colors", icon='COLOR')
 
 
 class VIEW3D_PT_mesh_paint_automasking(Panel):

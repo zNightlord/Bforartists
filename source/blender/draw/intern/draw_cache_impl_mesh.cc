@@ -15,20 +15,26 @@
 
 #include "BLI_index_range.hh"
 #include "BLI_listbase.hh"
+#include "BLI_math_vector_c.hh"
+#include "BLI_noise.hh"
 #include "BLI_span.hh"
 #include "BLI_string_ref.hh"
 
+#include "DNA_armature_types.h"
 #include "DNA_mesh_types.h"
 #include "DNA_modifier_types.h"
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 #include "DNA_userdef_types.h"
 
+#include "BKE_armature.hh"
 #include "BKE_attribute.hh"
 #include "BKE_customdata.hh"
+#include "BKE_deform.hh"
 #include "BKE_editmesh.hh"
 #include "BKE_material.hh"
 #include "BKE_mesh.hh"
+#include "BKE_modifier.hh"
 #include "BKE_object.hh"
 #include "BKE_object_deform.h"
 #include "BKE_paint.hh"
@@ -270,6 +276,7 @@ static void drw_mesh_weight_state_clear(DRW_MeshWeightState *wstate)
   MEM_SAFE_DELETE(wstate->defgroup_locked);
   MEM_SAFE_DELETE(wstate->defgroup_unlocked);
   MEM_SAFE_DELETE(wstate->defgroup_validmap);
+  MEM_SAFE_DELETE(wstate->defgroup_colors);
 
   memset(wstate, 0, sizeof(*wstate));
 
@@ -284,6 +291,7 @@ static void drw_mesh_weight_state_copy(DRW_MeshWeightState *wstate_dst,
   MEM_SAFE_DELETE(wstate_dst->defgroup_locked);
   MEM_SAFE_DELETE(wstate_dst->defgroup_unlocked);
   MEM_SAFE_DELETE(wstate_dst->defgroup_validmap);
+  MEM_SAFE_DELETE(wstate_dst->defgroup_colors);
 
   memcpy(wstate_dst, wstate_src, sizeof(*wstate_dst));
 
@@ -301,6 +309,9 @@ static void drw_mesh_weight_state_copy(DRW_MeshWeightState *wstate_dst,
     wstate_dst->defgroup_validmap = static_cast<bool *>(
         MEM_dupalloc(wstate_src->defgroup_validmap));
   }
+  if (wstate_src->defgroup_colors) {
+    wstate_dst->defgroup_colors = MEM_dupalloc(wstate_src->defgroup_colors);
+  }
 }
 
 static bool drw_mesh_flags_equal(const bool *array1, const bool *array2, int size)
@@ -316,8 +327,12 @@ static bool drw_mesh_weight_state_compare(const DRW_MeshWeightState *a,
   return a->defgroup_active == b->defgroup_active && a->defgroup_len == b->defgroup_len &&
          a->flags == b->flags && a->alert_mode == b->alert_mode &&
          a->defgroup_sel_count == b->defgroup_sel_count &&
-         a->draw_multi_colored == b->draw_multi_colored &&
-         a->weight_paint_mutli_colored_random == b->weight_paint_mutli_colored_random &&
+         ((!a->defgroup_colors && !b->defgroup_colors) ||
+         (a->defgroup_colors && b->defgroup_colors &&
+         memcmp(a->defgroup_colors,
+                b->defgroup_colors,
+                a->defgroup_len * sizeof(float[3])) == 0)) && 
+         a->vgroup_color_mode == b->vgroup_color_mode &&
          drw_mesh_flags_equal(a->defgroup_sel, b->defgroup_sel, a->defgroup_len) &&
          drw_mesh_flags_equal(a->defgroup_locked, b->defgroup_locked, a->defgroup_len) &&
          drw_mesh_flags_equal(a->defgroup_unlocked, b->defgroup_unlocked, a->defgroup_len) &&
@@ -334,18 +349,58 @@ static void drw_mesh_weight_state_extract(
   wstate->defgroup_len = mesh.vertex_group_names.count();
 
   wstate->alert_mode = ts.weightuser;
-  /* Get valid deform groups (used by deform bones). */
+  /* Validmap — only when armature modifier is enabled in viewport */
   if (wstate->defgroup_len > 0) {
-    wstate->defgroup_validmap = BKE_object_defgroup_validmap_get(&ob, wstate->defgroup_len);
-  }
-
-  /* Get validmap deform groups when armature modifier is enabled in viewport.
-   * Disabled modifier uses all groups contribute. */
-  if (wstate->defgroup_len > 0) {
-    for (ModifierData &md : ob.modifiers) {
-      if (md.type == eModifierType_Armature && (md.mode & eModifierMode_Realtime)) {
+    for (ModifierData *md = static_cast<ModifierData *>(ob.modifiers.first);
+         md != nullptr;
+         md = md->next)
+    {
+      if (md->type == eModifierType_Armature && (md->mode & eModifierMode_Realtime)) {
         wstate->defgroup_validmap = BKE_object_defgroup_validmap_get(&ob, wstate->defgroup_len);
         break;
+      }
+    }
+  }
+
+  /* Per-group colors from bone weight_color, fallback to hash */
+  if (wstate->defgroup_len > 0) {
+    wstate->defgroup_colors = MEM_new_array_zeroed<float3>(wstate->defgroup_len, __func__);
+
+    /* Hash fallback for all groups first */
+    for (int i = 0; i < wstate->defgroup_len; i++) {
+      wstate->defgroup_colors[i] = blender::noise::hash_float_to_float3(float(i + 1));
+    }
+
+    /* Override with bone weight_color by matching vertex group name to bone name */
+    Object *arm_ob = BKE_modifiers_is_deformed_by_armature(&ob);
+    if (arm_ob) {
+      printf("Enter working\n");
+      bArmature *arm = BKE_armature_from_object(arm_ob);
+      const ListBaseT<bDeformGroup> *defbase = BKE_object_defgroup_list(&ob);
+      int i = 0;
+      for (bDeformGroup &dg : *defbase) 
+      {
+        printf("Bone, %s\n", dg.name);
+        const Bone *bone = BKE_armature_find_bone_name(
+            arm, dg.name);
+        printf("Has bone %s", bone ? "True" : "False");
+        if (bone) {
+          printf("Enter bone, %s\n", dg.name);
+          printf("bone %s weight_color: %.2f %.2f %.2f\n",
+                  dg.name,
+                  bone ? bone->weight_color[0] : -1.0f,
+                  bone ? bone->weight_color[1] : -1.0f,
+                  bone ? bone->weight_color[2] : -1.0f);
+          wstate->defgroup_colors[i] = float3(bone->weight_color[0],
+                                              bone->weight_color[1],
+                                              bone->weight_color[2]);
+          printf("[EXTRACT] group %s → color %.2f %.2f %.2f\n",
+                 dg.name,
+                 wstate->defgroup_colors[i].x,
+                 wstate->defgroup_colors[i].y,
+                 wstate->defgroup_colors[i].z);
+        }
+        i++;
       }
     }
   }
@@ -1147,9 +1202,7 @@ void DRW_mesh_batch_cache_create_requested(TaskGraph &task_graph,
       drw_mesh_weight_state_extract(ob, mesh, *ts, is_paint_mode, &wstate);
 
       /* Copy color fields from cache into wstate BEFORE compare */
-      wstate.draw_multi_colored = cache.weight_state.draw_multi_colored;
-      wstate.weight_paint_mutli_colored_random =
-          cache.weight_state.weight_paint_mutli_colored_random;
+      wstate.vgroup_color_mode = cache.weight_state.vgroup_color_mode;
 
       mesh_batch_cache_check_vertex_group(cache, &wstate);
       drw_mesh_weight_state_copy(&cache.weight_state, &wstate);
@@ -1830,29 +1883,22 @@ void DRW_mesh_batch_cache_create_requested(TaskGraph &task_graph,
 /** \} */
 
 void DRW_mesh_batch_cache_set_draw_multi_colored(Mesh &mesh,
-                                                 bool draw_multi_colored,
-                                                 int random_id)
+                                                int mode)
 {
   MeshBatchCache *cache = mesh_batch_cache_get(mesh);
   if (!cache) {
     return;
   }
-  const bool changed = cache->weight_state.draw_multi_colored != draw_multi_colored ||
-                       cache->weight_state.weight_paint_mutli_colored_random != random_id;
 
-  cache->weight_state.draw_multi_colored = draw_multi_colored;
-  cache->weight_state.weight_paint_mutli_colored_random = random_id;
+  const bool mode_changed = cache->weight_state.vgroup_color_mode != mode;
+  cache->weight_state.vgroup_color_mode = mode;
 
-  if (changed) {
+  if (mode_changed) {
     for (MeshBufferCache *mbc : {&cache->final, &cache->cage, &cache->uv_cage}) {
       mbc->buff.vbos.remove(VBOType::VertexGroupBlendedColor);
     }
     GPU_BATCH_CLEAR_SAFE(cache->batch.surface_weights);
-    GPU_BATCH_CLEAR_SAFE(cache->batch.paint_overlay_verts);
-    GPU_BATCH_CLEAR_SAFE(cache->batch.paint_overlay_wire_loops);
     cache->batch_ready &= ~MBC_SURFACE_WEIGHTS;
-    cache->batch_ready &= ~MBC_PAINT_OVERLAY_VERTS;
-    cache->batch_ready &= ~MBC_PAINT_OVERLAY_WIRE_LOOPS;
   }
 }
 

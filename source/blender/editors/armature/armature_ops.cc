@@ -62,6 +62,8 @@ void ED_operatortypes_armature()
   WM_operatortype_append(ARMATURE_OT_autoside_names);
   WM_operatortype_append(ARMATURE_OT_flip_names);
 
+  WM_operatortype_append(ARMATURE_OT_assign_weight_colors);
+
   WM_operatortype_append(ARMATURE_OT_collection_add);
   WM_operatortype_append(ARMATURE_OT_collection_remove);
   WM_operatortype_append(ARMATURE_OT_collection_move);

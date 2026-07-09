@@ -7,14 +7,18 @@
  */
 
 #define DNA_DEPRECATED_ALLOW
+#define DNA_GENFILE_VERSIONING_MACROS
 
+#include "DNA_genfile.h"
 #include "DNA_ID.h"
 #include "DNA_brush_types.h"
 #include "DNA_scene_types.h"
+#undef DNA_GENFILE_VERSIONING_MACROS
 
 #include "BLI_listbase_iterator.hh"
 #include "BLI_sys_types.hh"
 
+#include "BKE_armature.hh"
 #include "BKE_main.hh"
 #include "BKE_node.hh"
 #include "BKE_node_runtime.hh"
@@ -41,7 +45,7 @@ void do_versions_after_linking_530(FileData * /*fd*/, Main * /*bmain*/)
    */
 }
 
-void blo_do_versions_530(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
+void blo_do_versions_530(FileData *fd, Library * /*lib*/, Main *bmain)
 {
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 1)) {
     for (Scene &scene : bmain->scenes) {
@@ -124,6 +128,17 @@ void blo_do_versions_530(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
       for (ViewLayer &view_layer : scene.view_layers) {
         view_layer.eevee.denoising_pass_flags =
             EEVEE_DENOISING_PASS_USE_ALBEDO_ROUGHNESS_WEIGHTING;
+      }
+    }
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 7)) {
+    if (!DNA_struct_member_exists(fd->filesdna, "Bone", "float", "weight_color")) {
+      for (bArmature *arm = static_cast<bArmature *>(bmain->armatures.first);
+          arm != nullptr;
+          arm = static_cast<bArmature *>(arm->id.next))
+      {
+        BKE_armature_assign_weight_colors(arm);
       }
     }
   }
