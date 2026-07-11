@@ -324,7 +324,7 @@ struct Rows {
         if (source == first_source) {
           continue;
         }
-        int pixel_index = sy * resolution.y + sx;
+        int pixel_index = sy * resolution.x + sx;
         if (pixels[pixel_index].type != PixelType::Brush) {
           continue;
         }
@@ -530,7 +530,7 @@ void copy_update(bke::pbvh::Tree &pbvh,
     rows.find_copy_source(selected_pixels, tile_edges);
     rows.pack_into(selected_pixels, copy_tile);
 
-    copy_tile.print_compression_rate();
+    // copy_tile.print_compression_rate();
     pbvh_data.tiles_copy_pixels.tiles.append(copy_tile);
   }
 }

@@ -24,6 +24,7 @@ struct MeshBatchCache;
 };
 namespace gpu {
 class Batch;
+class BottomLevelAS;
 class UniformBuf;
 class VertBuf;
 }  // namespace gpu
@@ -214,6 +215,8 @@ gpu::Batch *DRW_mesh_batch_cache_get_surface_weights(Mesh &mesh);
 gpu::Batch *DRW_mesh_batch_cache_get_sculpt_overlays(Mesh &mesh);
 gpu::Batch *DRW_mesh_batch_cache_get_surface_viewer_attribute(Mesh &mesh);
 void DRW_mesh_batch_cache_set_draw_multi_colored(Mesh &mesh, bool draw_multi_colored, int random_id);
+
+gpu::BottomLevelAS *DRW_mesh_batch_cache_get_surface_blas(Mesh &mesh);
 
 /** \} */
 
