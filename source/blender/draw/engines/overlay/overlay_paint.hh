@@ -248,7 +248,7 @@ class Paints : Overlay {
         gpu::Batch *geom = DRW_cache_mesh_paint_overlay_surface_get(ob_ref.object);
         paint_region_face_ps_->draw(geom, manager.unique_handle(ob_ref));
       }
-      if ((use_vert_selection && !in_texture_paint_mode) {
+      if (use_vert_selection && !in_texture_paint_mode) {
         gpu::Batch *geom = DRW_cache_mesh_paint_overlay_verts_get(ob_ref.object);
         paint_region_vert_ps_->draw(geom, manager.unique_handle(ob_ref));
       }

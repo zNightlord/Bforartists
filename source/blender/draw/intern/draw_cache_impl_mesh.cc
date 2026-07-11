@@ -348,7 +348,7 @@ static void drw_mesh_weight_state_extract(
   wstate->defgroup_len = mesh.vertex_group_names.count();
 
   wstate->alert_mode = ts.weightuser;
-  /* Validmap — only when armature modifier is enabled in viewport */
+  /* Validmap — only when armature modifier is enabled in viewport. */
   if (wstate->defgroup_len > 0) {
     for (ModifierData *md = static_cast<ModifierData *>(ob.modifiers.first); md != nullptr;
          md = md->next)
@@ -360,7 +360,7 @@ static void drw_mesh_weight_state_extract(
     }
   }
 
-  /* Per-group colors from bone weight_color, fallback to hash */
+  /* Per-group colors from bone weight_color, fallback to hash. */
   if (wstate->defgroup_len > 0) {
     wstate->defgroup_colors = MEM_new_array_zeroed<float3>(wstate->defgroup_len, __func__);
 
@@ -369,7 +369,7 @@ static void drw_mesh_weight_state_extract(
       wstate->defgroup_colors[i] = blender::noise::hash_float_to_float3(float(i + 1));
     }
 
-    /* Override with bone weight_color by matching vertex group name to bone name */
+    /* Override with bone weight_color by matching vertex group name to bone name. */
     Object *arm_ob = BKE_modifiers_is_deformed_by_armature(&ob);
     if (arm_ob) {
       bArmature *arm = BKE_armature_from_object(arm_ob);
@@ -1182,7 +1182,7 @@ void DRW_mesh_batch_cache_create_requested(TaskGraph &task_graph,
       BLI_assert(ob.type == OB_MESH);
       drw_mesh_weight_state_extract(ob, mesh, *ts, is_paint_mode, &wstate);
 
-      /* Copy color fields from cache into wstate BEFORE compare */
+      /* Copy color fields from cache into wstate before compare to prevent rebuild. */
       wstate.vgroup_color_mode = cache.weight_state.vgroup_color_mode;
 
       mesh_batch_cache_check_vertex_group(cache, &wstate);
