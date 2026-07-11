@@ -394,7 +394,6 @@ struct Bone {
   eBone_BBoneFlag bbone_flag = {};
   eBone_BBoneHandleFlag bbone_prev_flag = {};
   eBone_BBoneHandleFlag bbone_next_flag = {};
-
   /** Next/prev bones to use as handle references when calculating bbones (optional). */
   struct Bone *bbone_prev = nullptr;
   struct Bone *bbone_next = nullptr;
