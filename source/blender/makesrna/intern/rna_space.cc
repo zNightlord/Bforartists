@@ -5041,7 +5041,7 @@ static void rna_def_space_view3d_overlay(BlenderRNA *brna)
 
   static const EnumPropertyItem overlay_wpaint_vgroup_color_items[] = {
     {V3D_OVERLAY_WPAINT_VGROUP_COLOR_OFF,
-     "OFF", 0, "Off", "Use standard weight color ramp"},
+     "DEFAULT", 0, "Default", "Use default weight user preferences colorramp"},
     {V3D_OVERLAY_WPAINT_VGROUP_COLOR_ACTIVE,
      "ACTIVE", 0, "Active", "Display the active vertex group using the deform armature bone weight color"},
     {V3D_OVERLAY_WPAINT_VGROUP_COLOR_ALL,
@@ -5323,14 +5323,7 @@ static void rna_def_space_view3d_overlay(BlenderRNA *brna)
   prop = RNA_def_property(srna, "wpaint_vgroup_color_mode", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_sdna(prop, nullptr, "overlay.wpaint_vgroup_color_mode");
   RNA_def_property_enum_items(prop, overlay_wpaint_vgroup_color_items);
-  RNA_def_property_ui_text(prop, "Vertex Group Color Mode", "How to colorize vertex groups");
-  RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, nullptr);
-
-  prop = RNA_def_property(srna, "weight_paint_colored_opacity", PROP_FLOAT, PROP_FACTOR);
-  RNA_def_property_float_sdna(prop, nullptr, "overlay.weight_paint_colored_opacity");
-  RNA_def_property_range(prop, 0.0f, 1.0f);
-  RNA_def_property_ui_text(prop, "Colored Opacity",
-                            "Opacity of the colored display");
+  RNA_def_property_ui_text(prop, "Vertex Group Color Mode", "Display vertex groups color as");
   RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, nullptr);
 
   prop = RNA_def_property(srna, "show_weight", PROP_BOOLEAN, PROP_NONE);

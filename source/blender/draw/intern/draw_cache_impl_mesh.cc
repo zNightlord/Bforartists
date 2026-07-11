@@ -328,10 +328,9 @@ static bool drw_mesh_weight_state_compare(const DRW_MeshWeightState *a,
          a->flags == b->flags && a->alert_mode == b->alert_mode &&
          a->defgroup_sel_count == b->defgroup_sel_count &&
          ((!a->defgroup_colors && !b->defgroup_colors) ||
-         (a->defgroup_colors && b->defgroup_colors &&
-         memcmp(a->defgroup_colors,
-                b->defgroup_colors,
-                a->defgroup_len * sizeof(float[3])) == 0)) && 
+          (a->defgroup_colors && b->defgroup_colors &&
+           memcmp(a->defgroup_colors, b->defgroup_colors, a->defgroup_len * sizeof(float[3])) ==
+               0)) &&
          a->vgroup_color_mode == b->vgroup_color_mode &&
          drw_mesh_flags_equal(a->defgroup_sel, b->defgroup_sel, a->defgroup_len) &&
          drw_mesh_flags_equal(a->defgroup_locked, b->defgroup_locked, a->defgroup_len) &&
@@ -351,8 +350,7 @@ static void drw_mesh_weight_state_extract(
   wstate->alert_mode = ts.weightuser;
   /* Validmap — only when armature modifier is enabled in viewport */
   if (wstate->defgroup_len > 0) {
-    for (ModifierData *md = static_cast<ModifierData *>(ob.modifiers.first);
-         md != nullptr;
+    for (ModifierData *md = static_cast<ModifierData *>(ob.modifiers.first); md != nullptr;
          md = md->next)
     {
       if (md->type == eModifierType_Armature && (md->mode & eModifierMode_Realtime)) {
@@ -374,31 +372,14 @@ static void drw_mesh_weight_state_extract(
     /* Override with bone weight_color by matching vertex group name to bone name */
     Object *arm_ob = BKE_modifiers_is_deformed_by_armature(&ob);
     if (arm_ob) {
-      printf("Enter working\n");
       bArmature *arm = BKE_armature_from_object(arm_ob);
       const ListBaseT<bDeformGroup> *defbase = BKE_object_defgroup_list(&ob);
       int i = 0;
-      for (bDeformGroup &dg : *defbase) 
-      {
-        printf("Bone, %s\n", dg.name);
-        const Bone *bone = BKE_armature_find_bone_name(
-            arm, dg.name);
-        printf("Has bone %s", bone ? "True" : "False");
+      for (bDeformGroup &dg : *defbase) {
+        const Bone *bone = BKE_armature_find_bone_name(arm, dg.name);
         if (bone) {
-          printf("Enter bone, %s\n", dg.name);
-          printf("bone %s weight_color: %.2f %.2f %.2f\n",
-                  dg.name,
-                  bone ? bone->weight_color[0] : -1.0f,
-                  bone ? bone->weight_color[1] : -1.0f,
-                  bone ? bone->weight_color[2] : -1.0f);
-          wstate->defgroup_colors[i] = float3(bone->weight_color[0],
-                                              bone->weight_color[1],
-                                              bone->weight_color[2]);
-          printf("[EXTRACT] group %s → color %.2f %.2f %.2f\n",
-                 dg.name,
-                 wstate->defgroup_colors[i].x,
-                 wstate->defgroup_colors[i].y,
-                 wstate->defgroup_colors[i].z);
+          wstate->defgroup_colors[i] = float3(
+              bone->weight_color[0], bone->weight_color[1], bone->weight_color[2]);
         }
         i++;
       }
@@ -1882,8 +1863,7 @@ void DRW_mesh_batch_cache_create_requested(TaskGraph &task_graph,
 
 /** \} */
 
-void DRW_mesh_batch_cache_set_draw_multi_colored(Mesh &mesh,
-                                                int mode)
+void DRW_mesh_batch_cache_set_draw_multi_colored(Mesh &mesh, int mode)
 {
   MeshBatchCache *cache = mesh_batch_cache_get(mesh);
   if (!cache) {

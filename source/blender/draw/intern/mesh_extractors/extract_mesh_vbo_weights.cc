@@ -23,7 +23,7 @@ static float3 get_group_color(int def_nr, const float3 *defgroup_colors, int def
   if (defgroup_colors && def_nr >= 0 && def_nr < defgroup_len) {
     return defgroup_colors[def_nr];
   }
-  
+
   return blender::noise::hash_float_to_float3(float(def_nr + 1));
 }
 

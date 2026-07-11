@@ -1663,5 +1663,4 @@ void ARMATURE_OT_assign_weight_colors(wmOperatorType *ot)
 
 /** \} */
 
-
 }  // namespace blender

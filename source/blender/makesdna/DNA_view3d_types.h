@@ -668,7 +668,6 @@ struct View3DOverlay {
   float texture_paint_mode_opacity = 1.0f;
   float vertex_paint_mode_opacity = 1.0f;
   float weight_paint_mode_opacity = 1.0f;
-  float weight_paint_colored_opacity = 1.0f;
   float sculpt_mode_mask_opacity = 0.75f;
   float sculpt_mode_face_sets_opacity = 1.0f;
   float viewer_attribute_opacity = 1.0f;
