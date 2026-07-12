@@ -8,9 +8,15 @@
 
 #define DNA_DEPRECATED_ALLOW
 
+/* Define macros in `DNA_genfile.h`. */
+#define DNA_GENFILE_VERSIONING_MACROS
+
+#include "DNA_genfile.h"
 #include "DNA_ID.h"
 #include "DNA_brush_types.h"
 #include "DNA_scene_types.h"
+
+#undef DNA_GENFILE_VERSIONING_MACROS
 
 #include "BLI_listbase_iterator.hh"
 #include "BLI_sys_types.hh"

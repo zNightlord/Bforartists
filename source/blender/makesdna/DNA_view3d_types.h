@@ -702,6 +702,8 @@ struct View3DOverlay {
 
   /** Curves sculpt mode settings. */
   float sculpt_curves_cage_opacity = 0;
+
+  char _pad[4] = {};
 };
 
 struct View3D_Runtime {
