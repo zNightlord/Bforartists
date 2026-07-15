@@ -18,9 +18,10 @@
 #include "BLI_assert.hh"
 #include "BLI_bounds.hh"
 #include "BLI_ghash.hh"
+#include "BLI_hash_c.hh"
 #include "BLI_listbase.hh"
-#include "BLI_math_geom_c.hh"
 #include "BLI_math_color_c.hh"
+#include "BLI_math_geom_c.hh"
 #include "BLI_math_matrix.hh"
 #include "BLI_math_matrix_c.hh"
 #include "BLI_math_rotation_c.hh"
@@ -3555,7 +3556,7 @@ void BKE_armature_foreach_bone(const bArmature &armature, const ForeachBoneFn ca
 
 void BKE_armature_assign_weight_colors(bArmature *arm)
 {
-  /* Count total deform bones */
+  /* Count total deform bones. */
   int total = 0;
   BKE_armature_foreach_bone(*arm, [&](const int /*index*/, const Bone &bone) {
     if (!(bone.flag & BONE_NO_DEFORM)) {
@@ -3567,8 +3568,8 @@ void BKE_armature_assign_weight_colors(bArmature *arm)
     return;
   }
 
-  /* Assign hue by depth-first traversal order so the full 0→1
-   * gradient is used and every bone differs from its parent */
+  /* Assign hue by depth-first traversal order so the full 0 to 1
+   * gradient is used and every bone differs from its parent. */
   int di = 0;
   BKE_armature_foreach_bone(*arm, [&](const int /*index*/, const Bone &bone_const) {
     if (bone_const.flag & BONE_NO_DEFORM) {
@@ -3576,10 +3577,8 @@ void BKE_armature_assign_weight_colors(bArmature *arm)
     }
     Bone &bone = const_cast<Bone &>(bone_const);
     float hue = (total > 1) ? float(di) / float(total) : 0.0f;
-    hsv_to_rgb(hue, 0.85f, 0.9f,
-               &bone.weight_color[0],
-               &bone.weight_color[1],
-               &bone.weight_color[2]);
+    hsv_to_rgb(
+        hue, 0.85f, 0.9f, &bone.weight_color[0], &bone.weight_color[1], &bone.weight_color[2]);
     di++;
   });
 }

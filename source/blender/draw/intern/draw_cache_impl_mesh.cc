@@ -26,6 +26,7 @@
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 #include "DNA_userdef_types.h"
+#include "DNA_view3d_types.h"
 
 #include "BKE_armature.hh"
 #include "BKE_attribute.hh"
@@ -369,7 +370,8 @@ static void drw_mesh_weight_state_extract(
       wstate->defgroup_colors[i] = blender::noise::hash_float_to_float3(float(i + 1));
     }
 
-    /* Override with bone weight_color by matching vertex group name to bone name. */
+    /* Override with bone weight_color by matching vertex group name to bone name which used in
+     * deformation. */
     Object *arm_ob = BKE_modifiers_is_deformed_by_armature(&ob);
     if (arm_ob) {
       bArmature *arm = BKE_armature_from_object(arm_ob);
@@ -377,10 +379,11 @@ static void drw_mesh_weight_state_extract(
       int i = 0;
       for (bDeformGroup &dg : *defbase) {
         const Bone *bone = BKE_armature_find_bone_name(arm, dg.name);
-        if (bone) {
-          wstate->defgroup_colors[i] = float3(
-              bone->weight_color[0], bone->weight_color[1], bone->weight_color[2]);
+        if (bone == nullptr || (bone->flag & BONE_NO_DEFORM)) {
+          continue;
         }
+        wstate->defgroup_colors[i] = {
+            bone->weight_color[0], bone->weight_color[1], bone->weight_color[2]};
         i++;
       }
     }
@@ -1870,8 +1873,11 @@ void DRW_mesh_batch_cache_set_draw_multi_colored(Mesh &mesh, int mode)
     return;
   }
 
-  const bool mode_changed = cache->weight_state.vgroup_color_mode != mode;
-  cache->weight_state.vgroup_color_mode = mode;
+  const eV3D_Overlay_WPaint_VGroupColorMode current_mode = eV3D_Overlay_WPaint_VGroupColorMode(
+      mode);
+
+  const bool mode_changed = cache->weight_state.vgroup_color_mode != current_mode;
+  cache->weight_state.vgroup_color_mode = current_mode;
 
   if (mode_changed) {
     for (MeshBufferCache *mbc : {&cache->final, &cache->cage, &cache->uv_cage}) {

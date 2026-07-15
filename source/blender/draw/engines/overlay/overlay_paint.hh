@@ -82,15 +82,15 @@ class Paints : Overlay {
       }
       {
         auto &sub = pass.sub("Edge");
-        sub.state_set(DRW_STATE_WRITE_COLOR | DRW_STATE_WRITE_DEPTH | DRW_STATE_DEPTH_LESS_EQUAL,
+        sub.state_set(DRW_STATE_WRITE_COLOR | DRW_STATE_WRITE_DEPTH | DRW_STATE_DEPTH_LESS_EQUAL |
+                          DRW_STATE_BLEND_ALPHA,
                       state.clipping_plane_count);
         sub.shader_set(res.shaders->paint_region_edge.get());
         paint_region_edge_ps_ = &sub;
       }
       {
         auto &sub = pass.sub("Vert");
-        sub.state_set(DRW_STATE_WRITE_COLOR | DRW_STATE_WRITE_DEPTH | DRW_STATE_DEPTH_LESS_EQUAL |
-                          DRW_STATE_BLEND_ALPHA,
+        sub.state_set(DRW_STATE_WRITE_COLOR | DRW_STATE_WRITE_DEPTH | DRW_STATE_DEPTH_LESS_EQUAL,
                       state.clipping_plane_count);
         sub.shader_set(res.shaders->paint_region_vert.get());
         paint_region_vert_ps_ = &sub;

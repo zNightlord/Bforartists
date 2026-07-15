@@ -5040,15 +5040,23 @@ static void rna_def_space_view3d_overlay(BlenderRNA *brna)
   PropertyRNA *prop;
 
   static const EnumPropertyItem overlay_wpaint_vgroup_color_items[] = {
-    {V3D_OVERLAY_WPAINT_VGROUP_COLOR_OFF,
-     "DEFAULT", 0, "Default", "Use default weight user preferences colorramp"},
-    {V3D_OVERLAY_WPAINT_VGROUP_COLOR_ACTIVE,
-     "ACTIVE", 0, "Active", "Display the active vertex group using the deform armature bone weight color"},
-    {V3D_OVERLAY_WPAINT_VGROUP_COLOR_ALL,
-     "ALL", 0, "All", "Display all the vertex groups of deform armature bones weight color"},
-    {0, nullptr, 0, nullptr, nullptr},
+      {V3D_OVERLAY_WPAINT_VGROUP_COLOR_OFF,
+       "DEFAULT",
+       0,
+       "Default",
+       "Use default weight user preferences colorramp"},
+      {V3D_OVERLAY_WPAINT_VGROUP_COLOR_ACTIVE,
+       "ACTIVE",
+       0,
+       "Active",
+       "Display the active vertex group using the deform armature bone weight color"},
+      {V3D_OVERLAY_WPAINT_VGROUP_COLOR_ALL,
+       "ALL",
+       0,
+       "All",
+       "Display all the vertex groups of deform armature bones weight color"},
+      {0, nullptr, 0, nullptr, nullptr},
   };
-
 
   srna = RNA_def_struct(brna, "View3DOverlay", nullptr);
   RNA_def_struct_sdna(srna, "View3D");

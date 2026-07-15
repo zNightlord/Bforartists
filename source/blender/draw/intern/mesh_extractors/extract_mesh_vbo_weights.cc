@@ -18,30 +18,30 @@
 
 namespace blender::draw {
 
-static float3 get_group_color(int def_nr, const float3 *defgroup_colors, int defgroup_len)
+static float3 get_group_color(int def_nr, Span<float3> defgroup_colors)
 {
-  if (defgroup_colors && def_nr >= 0 && def_nr < defgroup_len) {
-    return defgroup_colors[def_nr];
+  const float3 &col = defgroup_colors[def_nr];
+  if (col.x > 0.0f || col.y > 0.0f || col.z > 0.0f) {
+    return col;
   }
-
   return blender::noise::hash_float_to_float3(float(def_nr + 1));
 }
 
 static float3 blended_vgroup_color(const MDeformVert *dvert,
-                                   const float3 *defgroup_colors,
-                                   const bool *validmap,
-                                   int defgroup_len,
-                                   int mode,
+                                   const Span<float3> defgroup_colors,
+                                   const Span<bool> validmap,
+                                   eV3D_Overlay_WPaint_VGroupColorMode mode,
                                    int active_index)
 {
   if (!dvert || dvert->totweight == 0) {
     return float3(0.0f);
   }
+  const int defgroup_len = defgroup_colors.size();
 
   bool use_validmap = false;
-  if (validmap) {
-    for (int i = 0; i < defgroup_len; i++) {
-      if (validmap[i]) {
+  if (!validmap.is_empty()) {
+    for (const bool valid : validmap) {
+      if (valid) {
         use_validmap = true;
         break;
       }
@@ -49,6 +49,7 @@ static float3 blended_vgroup_color(const MDeformVert *dvert,
   }
 
   float3 result(0.0f);
+  float total_weight = 0.0f;
 
   for (int i = 0; i < dvert->totweight; i++) {
     const int def_nr = dvert->dw[i].def_nr;
@@ -66,7 +67,12 @@ static float3 blended_vgroup_color(const MDeformVert *dvert,
     }
 
     const float w = float(dvert->dw[i].weight);
-    result += get_group_color(def_nr, defgroup_colors, defgroup_len) * w;
+    result += get_group_color(def_nr, defgroup_colors) * w;
+    total_weight += w;
+  }
+
+  if (mode == V3D_OVERLAY_WPAINT_VGROUP_COLOR_ALL && total_weight > 1.0f) {
+    result /= total_weight;
   }
 
   return result;
@@ -218,17 +224,18 @@ gpu::VertBufPtr extract_weight_vgroup_blended_color(const MeshRenderData &mr,
   MutableSpan<float3> vbo_data = vbo->data<float3>();
 
   const DRW_MeshWeightState &weight_state = cache.weight_state;
-  const float3 *defgroup_colors = weight_state.defgroup_colors;
   const int active_index = weight_state.defgroup_active;
-  const int mode = weight_state.vgroup_color_mode;
-  const bool *validmap = weight_state.defgroup_validmap;
-  const int defgroup_len = weight_state.defgroup_len;
+  const eV3D_Overlay_WPaint_VGroupColorMode mode = weight_state.vgroup_color_mode;
 
   /* Nothing to compute */
-  if (mode == 0) {
+  if (mode == V3D_OVERLAY_WPAINT_VGROUP_COLOR_OFF) {
     vbo_data.fill(float3(0.0f));
     return vbo;
   }
+
+  const Span<float3> defgroup_colors(weight_state.defgroup_colors, weight_state.defgroup_len);
+  const Span<bool> validmap(weight_state.defgroup_validmap,
+                            weight_state.defgroup_validmap ? weight_state.defgroup_len : 0);
 
   /* Handles Mesh or BMesh API cases.*/
   if (mr.extract_type == MeshExtractType::Mesh) {
@@ -242,7 +249,7 @@ gpu::VertBufPtr extract_weight_vgroup_blended_color(const MeshRenderData &mr,
     threading::parallel_for(colors.index_range(), 1024, [&](const IndexRange range) {
       for (const int vert : range) {
         colors[vert] = blended_vgroup_color(
-            &dverts[vert], defgroup_colors, validmap, defgroup_len, mode, active_index);
+            &dverts[vert], defgroup_colors, validmap, mode, active_index);
       }
     });
     array_utils::gather(colors.as_span(), mr.corner_verts, vbo_data);
@@ -264,7 +271,6 @@ gpu::VertBufPtr extract_weight_vgroup_blended_color(const MeshRenderData &mr,
               static_cast<const MDeformVert *>(BM_ELEM_CD_GET_VOID_P(loop->v, offset)),
               defgroup_colors,
               validmap,
-              defgroup_len,
               mode,
               active_index);
           loop = loop->next;

@@ -7800,7 +7800,7 @@ class VIEW3D_PT_overlay_weight_paint(Panel):
         row = col.split(factor=0.33)
         row.label(text="Colored")
         sub = row.row()
-        sub.prop(overlay, "wpaint_vgroup_color_mode", text="", expand=True)
+        sub.prop(overlay, "wpaint_vgroup_color_mode", expand=True)
 
         col.separator()
         row = col.split(factor=0.33)

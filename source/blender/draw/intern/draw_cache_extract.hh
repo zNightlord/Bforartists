@@ -14,6 +14,7 @@
 #include "BLI_math_matrix_types.hh"
 
 #include "DNA_view3d_enums.h"
+#include "DNA_view3d_types.h"
 
 #include "GPU_index_buffer.hh"
 #include "GPU_ray_tracing.hh"
@@ -58,7 +59,7 @@ struct DRW_MeshWeightState {
 
   /* Multi colored. */
   float3 *defgroup_colors;
-  int vgroup_color_mode;
+  eV3D_Overlay_WPaint_VGroupColorMode vgroup_color_mode;
 };
 
 /* DRW_MeshWeightState.flags */
