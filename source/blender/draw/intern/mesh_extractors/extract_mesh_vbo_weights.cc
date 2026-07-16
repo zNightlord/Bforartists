@@ -61,7 +61,7 @@ static float3 blended_vgroup_color(const MDeformVert *dvert,
       continue;
     }
 
-    /* ACTIVE mode: only contribute the active group */
+    /* Active mode only contribute the current active vertex group. */
     if (mode == V3D_OVERLAY_WPAINT_VGROUP_COLOR_ACTIVE && def_nr != active_index) {
       continue;
     }
@@ -227,7 +227,7 @@ gpu::VertBufPtr extract_weight_vgroup_blended_color(const MeshRenderData &mr,
   const int active_index = weight_state.defgroup_active;
   const eV3D_Overlay_WPaint_VGroupColorMode mode = weight_state.vgroup_color_mode;
 
-  /* Nothing to compute */
+  /* Nothing to compute. */
   if (mode == V3D_OVERLAY_WPAINT_VGROUP_COLOR_OFF) {
     vbo_data.fill(float3(0.0f));
     return vbo;

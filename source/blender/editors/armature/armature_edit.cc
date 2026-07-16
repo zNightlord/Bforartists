@@ -1639,14 +1639,16 @@ static bool active_armature_poll(bContext *C)
   }
 }
 
-static wmOperatorStatus armature_assign_weight_colors_exec(bContext *C, wmOperator * /*op*/)
+static wmOperatorStatus armature_assign_weight_colors_exec(bContext *C, wmOperator * op)
 {
   Object *ob = CTX_data_active_object(C);
   if (!ob || ob->type != OB_ARMATURE) {
     return OPERATOR_CANCELLED;
   }
 
-  BKE_armature_assign_weight_colors(reinterpret_cast<bArmature *>(ob->data));
+  const float hue_offset = RNA_float_get(op->ptr, "hue_offset");
+
+  BKE_armature_assign_weight_colors(reinterpret_cast<bArmature *>(ob->data), hue_offset);
   DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
   WM_event_add_notifier(C, NC_OBJECT | ND_BONE_COLLECTION, ob);
   return OPERATOR_FINISHED;
@@ -1659,6 +1661,17 @@ void ARMATURE_OT_assign_weight_colors(wmOperatorType *ot)
   ot->description = "Assign display colors to bones based on hierarchy for weight paint overlay";
   ot->exec = armature_assign_weight_colors_exec;
   ot->poll = active_armature_poll;
+  ot->flag  = OPTYPE_REGISTER | OPTYPE_UNDO;
+
+  RNA_def_float(ot->srna,
+                "hue_offset",
+                0.0f,
+                0.0f,
+                1.0f,
+                "Hue Offset",
+                "Shift the entire color palette around the hue wheel",
+                0.0f,
+                1.0f);
 }
 
 /** \} */

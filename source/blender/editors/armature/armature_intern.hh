@@ -66,7 +66,6 @@ void ARMATURE_OT_symmetrize(wmOperatorType *ot);
 void ARMATURE_OT_extrude(wmOperatorType *ot);
 void ARMATURE_OT_hide(wmOperatorType *ot);
 void ARMATURE_OT_reveal(wmOperatorType *ot);
-void ARMATURE_OT_assign_weight_colors(wmOperatorType *ot);
 void ARMATURE_OT_click_extrude(wmOperatorType *ot);
 void ARMATURE_OT_fill(wmOperatorType *ot);
 void ARMATURE_OT_separate(wmOperatorType *ot);
@@ -87,6 +86,8 @@ void ARMATURE_OT_collection_deselect(wmOperatorType *ot);
 
 void ARMATURE_OT_move_to_collection(wmOperatorType *ot);
 void ARMATURE_OT_assign_to_collection(wmOperatorType *ot);
+
+void ARMATURE_OT_assign_weight_colors(wmOperatorType *ot);
 
 /** \} */
 

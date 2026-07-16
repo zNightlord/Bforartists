@@ -3554,7 +3554,7 @@ void BKE_armature_foreach_bone(const bArmature &armature, const ForeachBoneFn ca
   BLI_assert(bone_index == BKE_armature_bonelist_count(&armature.bonebase));
 }
 
-void BKE_armature_assign_weight_colors(bArmature *arm)
+void BKE_armature_assign_weight_colors(bArmature *arm, float hue_offset)
 {
   /* Count total deform bones. */
   int total = 0;
@@ -3576,7 +3576,7 @@ void BKE_armature_assign_weight_colors(bArmature *arm)
       return;
     }
     Bone &bone = const_cast<Bone &>(bone_const);
-    float hue = (total > 1) ? float(di) / float(total) : 0.0f;
+    const float hue = fmodf(((total > 1) ? float(di) / float(total) : 0.0f) + hue_offset, 1.0f);
     hsv_to_rgb(
         hue, 0.85f, 0.9f, &bone.weight_color[0], &bone.weight_color[1], &bone.weight_color[2]);
     di++;

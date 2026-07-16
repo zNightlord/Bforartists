@@ -62,8 +62,6 @@ void ED_operatortypes_armature()
   WM_operatortype_append(ARMATURE_OT_autoside_names);
   WM_operatortype_append(ARMATURE_OT_flip_names);
 
-  WM_operatortype_append(ARMATURE_OT_assign_weight_colors);
-
   WM_operatortype_append(ARMATURE_OT_collection_add);
   WM_operatortype_append(ARMATURE_OT_collection_remove);
   WM_operatortype_append(ARMATURE_OT_collection_move);
@@ -127,6 +125,8 @@ void ED_operatortypes_armature()
   WM_operatortype_append(POSE_OT_blend_with_rest);
   WM_operatortype_append(POSE_OT_breakdown);
   WM_operatortype_append(POSE_OT_blend_to_neighbors);
+
+  WM_operatortype_append(ARMATURE_OT_assign_weight_colors);
 }
 
 void ED_operatormacros_armature()
