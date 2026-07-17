@@ -1961,6 +1961,8 @@ class CYCLES_MATERIAL_PT_surface(CyclesButtonsPanel, Panel):
 
     @classmethod
     def poll(cls, context):
+        if context.preferences.experimental.use_texture_layers:
+            return False
         mat = context.material
         return mat and (not mat.grease_pencil) and CyclesButtonsPanel.poll(context)
 
@@ -1982,6 +1984,8 @@ class CYCLES_MATERIAL_PT_volume(CyclesButtonsPanel, Panel):
 
     @classmethod
     def poll(cls, context):
+        if context.preferences.experimental.use_texture_layers:
+            return False
         mat = context.material
         return mat and (not mat.grease_pencil) and mat.node_tree and CyclesButtonsPanel.poll(context)
 
@@ -2002,6 +2006,8 @@ class CYCLES_MATERIAL_PT_displacement(CyclesButtonsPanel, Panel):
 
     @classmethod
     def poll(cls, context):
+        if context.preferences.experimental.use_texture_layers:
+            return False
         mat = context.material
         return mat and (not mat.grease_pencil) and mat.node_tree and CyclesButtonsPanel.poll(context)
 

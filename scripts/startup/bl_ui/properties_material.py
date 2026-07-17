@@ -165,6 +165,13 @@ class EEVEE_MATERIAL_PT_surface(MaterialButtonsPanel, Panel):
     bl_context = "material"
     COMPAT_ENGINES = {'BLENDER_EEVEE'}
 
+    @classmethod
+    def poll(cls, context):
+        if context.preferences.experimental.use_texture_layers:
+            return False
+        mat = context.material
+        return mat and (context.engine in cls.COMPAT_ENGINES) and not mat.grease_pencil
+
     def draw(self, context):
         layout = self.layout
 
@@ -183,6 +190,8 @@ class EEVEE_MATERIAL_PT_volume(MaterialButtonsPanel, Panel):
 
     @classmethod
     def poll(cls, context):
+        if context.preferences.experimental.use_texture_layers:
+            return False
         engine = context.engine
         mat = context.material
         return mat and (engine in cls.COMPAT_ENGINES) and not mat.grease_pencil
@@ -205,6 +214,8 @@ class EEVEE_MATERIAL_PT_displacement(MaterialButtonsPanel, Panel):
 
     @classmethod
     def poll(cls, context):
+        if context.preferences.experimental.use_texture_layers:
+            return False
         engine = context.engine
         mat = context.material
         return mat and (engine in cls.COMPAT_ENGINES) and not mat.grease_pencil
