@@ -2331,6 +2331,12 @@ void node_update_asset_metadata(bNodeTree &node_tree)
                                    node_tree.compositor_node_asset_traits->flag);
     BKE_asset_metadata_idprop_ensure(asset_data, property.release());
   }
+  if (node_tree.type == NTREE_SHADER) {
+    BKE_asset_metadata_idprop_ensure(
+        asset_data, idprop::create("shader_usage", node_tree.shader_usage).release());
+    BKE_asset_metadata_idprop_ensure(
+        asset_data, idprop::create("mask_blend_type", node_tree.default_mask_blend).release());
+  }
 }
 
 static void node_tree_asset_pre_save(void *asset_ptr, AssetMetaData * /*asset_data*/)

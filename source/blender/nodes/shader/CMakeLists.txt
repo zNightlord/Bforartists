@@ -98,6 +98,8 @@ set(SRC
   nodes/node_shader_tex_voronoi.cc
   nodes/node_shader_tex_wave.cc
   nodes/node_shader_tex_white_noise.cc
+  nodes/node_shader_mask_stack.cc
+  nodes/node_shader_texture_layer_stack.cc
   nodes/node_shader_uv_along_stroke.cc
   nodes/node_shader_uvmap.cc
   nodes/node_shader_value.cc
@@ -122,6 +124,7 @@ set(SRC
   node_shader_util.hh
 
   include/NOD_shader_raycast.hh
+  include/NOD_sh_layer_stack.hh
 )
 
 set(LIB

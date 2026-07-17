@@ -335,6 +335,26 @@ enum CompositorNodeAssetTraitFlag {
 };
 ENUM_OPERATORS(CompositorNodeAssetTraitFlag);
 
+/** Role a shader node tree plays. Stored as int bitflag on #bNodeTree::shader_usage,
+ * meaningful only for shader trees. A node group asset can be tagged with multiple
+ * usages — for example a single-channel generator can be both a Texture Generator
+ * and a Mask Generator. */
+enum eShaderNodeTreeUsage {
+  /** Material — contains a Material Output. Default for top-level material trees. */
+  SHADER_NODE_TREE_USAGE_MATERIAL = (1 << 0),
+  /** Generic shader node group — has Group Input/Output sockets. */
+  SHADER_NODE_TREE_USAGE_GROUP = (1 << 1),
+  /** Outputs a bundle of channels to be used as a layer source. */
+  SHADER_NODE_TREE_USAGE_TEXTURE_GENERATOR = (1 << 2),
+  /** Takes a bundle as input and outputs a bundle. */
+  SHADER_NODE_TREE_USAGE_TEXTURE_ADJUSTMENT = (1 << 3),
+  /** Outputs a single float to be used as a mask. */
+  SHADER_NODE_TREE_USAGE_MASK_GENERATOR = (1 << 4),
+  /** Takes a float as input and outputs a float, used as a mask filter. */
+  SHADER_NODE_TREE_USAGE_MASK_ADJUSTMENT = (1 << 5),
+};
+ENUM_OPERATORS(eShaderNodeTreeUsage)
+
 /* Data structs, for `node->storage`. */
 
 enum CMPNodeMaskType {
@@ -1960,6 +1980,15 @@ struct bNodeTree {
 
   struct GeometryNodeAssetTraits *geometry_node_asset_traits = nullptr;
   struct CompositorNodeAssetTraits *compositor_node_asset_traits = nullptr;
+
+  /** #eShaderNodeTreeUsage. Only meaningful for shader trees; ignored otherwise. */
+  int shader_usage = 0;
+  /**
+   * Blend mode (MA_RAMP_*) a mask layer driven by this group gets by default,
+   * e.g. Multiply for an occlusion mask. Only meaningful for shader trees
+   * with a mask usage; 0 is the regular Mix.
+   */
+  int default_mask_blend = 0;
 
   /** Image representing what the node group does. */
   struct PreviewImage *preview = nullptr;
@@ -3879,6 +3908,67 @@ struct NodeShaderMix {
   int8_t clamp_result = 0;
   int8_t blend_type = 0;
   char _pad[2] = {};
+};
+
+/** Bit flags for #NodeShaderLayerStackItem::flag. */
+enum eShaderLayerStackItemFlag {
+  /** Skip this layer entirely during shader inlining. */
+  SHADER_LAYER_STACK_ITEM_MUTED = 1 << 0,
+};
+
+/** #NodeShaderLayerStackItem::item_type: what kind of input the layer takes. */
+enum eShaderLayerStackItemType {
+  /** No input linked yet; the layer socket is a hollow extend socket. */
+  SHADER_LAYER_STACK_ITEM_UNSET = 0,
+  /** Generator layer: the input is a Bundle of channels (or a Float for masks). */
+  SHADER_LAYER_STACK_ITEM_BUNDLE = 1,
+  /** Adjustment layer: the input is a Closure, evaluated during inlining with
+   * the accumulated stack below the layer as its bundle input. */
+  SHADER_LAYER_STACK_ITEM_CLOSURE = 2,
+};
+
+/** A channel (bundle key) reference on a #NodeShaderLayerStackItem. */
+struct NodeShaderLayerStackChannel {
+  char *name;
+};
+
+/** A single layer in a #NodeShaderLayerStack. Texture layer stacks compose
+ * bundles of channels, mask stacks compose floats; both share this item. */
+struct NodeShaderLayerStackItem {
+  char *name;
+  /** Stable id used to derive the per-item socket identifiers. */
+  int identifier;
+  /** Blend mode, using the MA_RAMP_* values from DNA_material_types.h.
+   * Ignored for the last (bottom) item, which is the base layer and is not blended. */
+  int blend_type;
+  /** #eShaderLayerStackItemFlag. */
+  int flag;
+  /** #eShaderLayerStackItemType. Only used by the Texture Layer Stack; mask
+   * stack items are always float-typed. */
+  int item_type;
+  /** Channels (bundle keys) this layer does not contribute to during stack
+   * composition. Empty means all channels are enabled. Texture layers only. */
+  NodeShaderLayerStackChannel *disabled_channels;
+  int disabled_channels_num;
+  char _pad[4];
+};
+
+/** Storage shared by the Texture Layer Stack and Mask Stack shader nodes. */
+struct NodeShaderLayerStack {
+  DNA_DEFINE_CXX_METHODS(NodeShaderLayerStack)
+
+  NodeShaderLayerStackItem *items;
+  int items_num;
+  int active_index;
+  /** Identifier to give to the next item added. */
+  int next_identifier;
+  /** Reserved for future flags. */
+  int flag;
+
+#ifdef __cplusplus
+  Span<NodeShaderLayerStackItem> items_span() const;
+  MutableSpan<NodeShaderLayerStackItem> items_span();
+#endif
 };
 
 struct NodeGeometryLinearGizmo {

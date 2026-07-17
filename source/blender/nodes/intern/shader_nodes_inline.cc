@@ -7,6 +7,7 @@
 
 #include "BKE_compute_context_cache.hh"
 #include "BKE_lib_id.hh"
+#include "BKE_node.hh"
 #include "BKE_node_tree_zones.hh"
 #include "BKE_type_conversions.hh"
 
@@ -15,10 +16,13 @@
 #include "BLI_stack.hh"
 #include "BLI_string.hh"
 
+#include "DNA_material_types.h"
+
 #include "NOD_menu_value.hh"
 #include "NOD_multi_function.hh"
 #include "NOD_node_declaration.hh"
 #include "NOD_node_in_compute_context.hh"
+#include "NOD_sh_layer_stack.hh"
 #include "NOD_shader_nodes_inline.hh"
 
 namespace blender::nodes {
@@ -207,6 +211,18 @@ class ShaderNodesInliner {
   Map<NodeInContext, PreservedZone> copied_zone_by_zone_output_node_;
   /** Sockets that still have to be evaluated. */
   Stack<SocketInContext> scheduled_sockets_stack_;
+  /* Running composition state per #ShaderNodeTextureLayerStack invocation.
+   * Closure-typed layers evaluate their body asynchronously, so composition
+   * can span multiple handler invocations; tracking progress here ensures
+   * each layer's Mix nodes are emitted exactly once. */
+  struct StackCompositionState {
+    /* Number of layers already composed, counting from the base upwards. */
+    int layers_done = 0;
+    BundleSocketValuePtr accumulator;
+  };
+  Map<NodeInContext, StackCompositionState> stack_states_;
+  /* Closure-layer contexts whose closure-input values have been seeded. */
+  Set<const ComputeContext *> seeded_closure_layer_contexts_;
   /** Knows how to compute between different data types. */
   const bke::DataTypeConversions &data_type_conversions_;
   /** This is used to generate unique names and ids. */
@@ -573,6 +589,14 @@ class ShaderNodesInliner {
     }
     if (node->is_type("NodeJoinBundle"_ustr)) {
       this->handle_output_socket__join_bundle(socket);
+      return;
+    }
+    if (node->is_type("ShaderNodeTextureLayerStack"_ustr)) {
+      this->handle_output_socket__texture_layer_stack(socket);
+      return;
+    }
+    if (node->is_type("ShaderNodeMaskStack"_ustr)) {
+      this->handle_output_socket__mask_stack(socket);
       return;
     }
     if (node->is_type("NodeImplicitConversion"_ustr)) {
@@ -1050,6 +1074,526 @@ class ShaderNodesInliner {
       }
     }
     this->store_socket_value(socket, {BundleSocketValuePtr{joined_bundle}});
+  }
+
+  /* Emit a uniform-factor Mix node of the given data type mixing #b over
+   * #a and return its Result output. #blend_type applies to color mixes.
+   * When #a_type / #b_type are given, the inputs are implicitly converted
+   * to the Mix node's socket type first. */
+  SocketValue emit_mix(const bNode &owner_node,
+                       const eNodeSocketDatatype type,
+                       const int blend_type,
+                       const SocketValue &a,
+                       const SocketValue &b,
+                       const SocketValue &factor,
+                       const bke::bNodeSocketType *a_type = nullptr,
+                       const bke::bNodeSocketType *b_type = nullptr)
+  {
+    bNode *mix_node = this->add_node("ShaderNodeMix"_ustr);
+    auto &mix_storage = *static_cast<NodeShaderMix *>(mix_node->storage);
+    mix_storage.data_type = type;
+    mix_storage.factor_mode = NODE_MIX_MODE_UNIFORM;
+    mix_storage.clamp_factor = 0;
+    mix_storage.clamp_result = 0;
+    mix_storage.blend_type = (type == SOCK_RGBA) ? blend_type : MA_RAMP_BLEND;
+    if (mix_node->typeinfo->updatefunc) {
+      mix_node->typeinfo->updatefunc(&dst_tree_, mix_node);
+    }
+
+    UString a_identifier;
+    UString b_identifier;
+    UString result_identifier;
+    switch (type) {
+      case SOCK_FLOAT:
+        a_identifier = "A_Float"_ustr;
+        b_identifier = "B_Float"_ustr;
+        result_identifier = "Result_Float"_ustr;
+        break;
+      case SOCK_VECTOR:
+        a_identifier = "A_Vector"_ustr;
+        b_identifier = "B_Vector"_ustr;
+        result_identifier = "Result_Vector"_ustr;
+        break;
+      case SOCK_RGBA:
+        a_identifier = "A_Color"_ustr;
+        b_identifier = "B_Color"_ustr;
+        result_identifier = "Result_Color"_ustr;
+        break;
+      default:
+        BLI_assert_unreachable();
+    }
+
+    bNodeSocket *mix_factor = bke::node_find_socket(*mix_node, SOCK_IN, "Factor_Float"_ustr);
+    bNodeSocket *mix_a = bke::node_find_socket(*mix_node, SOCK_IN, a_identifier);
+    bNodeSocket *mix_b = bke::node_find_socket(*mix_node, SOCK_IN, b_identifier);
+    bNodeSocket *mix_result = bke::node_find_socket(*mix_node, SOCK_OUT, result_identifier);
+
+    const SocketValue a_converted = a_type ? this->handle_implicit_conversion(
+                                                 a, *a_type, *mix_a->typeinfo) :
+                                             a;
+    const SocketValue b_converted = b_type ? this->handle_implicit_conversion(
+                                                 b, *b_type, *mix_b->typeinfo) :
+                                             b;
+
+    this->set_input_socket_value(owner_node, *mix_node, *mix_a, a_converted);
+    this->set_input_socket_value(owner_node, *mix_node, *mix_b, b_converted);
+    this->set_input_socket_value(owner_node, *mix_node, *mix_factor, factor);
+
+    return SocketValue{LinkedSocketValue{mix_node, mix_result}};
+  }
+
+  /* Blend two bundles channel-by-channel, with the #top bundle composited
+   * over the #base bundle using #blend_factor as the per-channel weight and
+   * #blend_type as the color blend mode. Returns the resulting bundle as a
+   * BundleSocketValue. Channels present on only one side pass through. */
+  BundleSocketValuePtr blend_layer_bundles(const bNode &owner_node,
+                                           const BundleSocketValue &base,
+                                           const BundleSocketValue &top,
+                                           const SocketValue &blend_factor,
+                                           const int blend_type)
+  {
+    Map<StringRef, const BundleSocketValue::Item *> top_items_by_key;
+    for (const BundleSocketValue::Item &item : top.items) {
+      top_items_by_key.add(item.key, &item);
+    }
+
+    auto result_bundle = std::make_shared<BundleSocketValue>();
+    Set<StringRef> handled_keys;
+
+    for (const BundleSocketValue::Item &base_item : base.items) {
+      handled_keys.add(base_item.key);
+      const BundleSocketValue::Item *const *top_lookup = top_items_by_key.lookup_ptr(
+          base_item.key);
+      if (!top_lookup) {
+        result_bundle->items.append(base_item);
+        continue;
+      }
+      const BundleSocketValue::Item &top_item = **top_lookup;
+
+      const eNodeSocketDatatype type = eNodeSocketDatatype(base_item.socket_type->type);
+      if (!ELEM(type, SOCK_FLOAT, SOCK_VECTOR, SOCK_RGBA)) {
+        result_bundle->items.append(base_item);
+        continue;
+      }
+
+      const SocketValue mixed = this->emit_mix(owner_node,
+                                               type,
+                                               blend_type,
+                                               base_item.value,
+                                               top_item.value,
+                                               blend_factor,
+                                               base_item.socket_type,
+                                               top_item.socket_type);
+      const LinkedSocketValue &linked = std::get<LinkedSocketValue>(mixed.value);
+      result_bundle->items.append({base_item.key, mixed, linked.socket->typeinfo});
+    }
+
+    /* Pass through items only in the top bundle. */
+    for (const BundleSocketValue::Item &top_item : top.items) {
+      if (!handled_keys.contains(top_item.key)) {
+        result_bundle->items.append(top_item);
+      }
+    }
+
+    return BundleSocketValuePtr{result_bundle};
+  }
+
+  /* Ensure all input socket values of #node are computed. Returns true if
+   * any were missing and had to be scheduled — the caller should return and
+   * wait to be re-run. */
+  bool schedule_missing_inputs(const NodeInContext &node)
+  {
+    bool missing_input = false;
+    for (const bNodeSocket *bsock : node->input_sockets()) {
+      const SocketInContext s = {node.context, bsock};
+      if (!value_by_socket_.lookup_ptr(s)) {
+        this->schedule_socket(s);
+        missing_input = true;
+      }
+    }
+    return missing_input;
+  }
+
+  /* Evaluate a closure-typed layer: run the closure body with #accumulator
+   * as its bundle input, in a compute context unique to this stack/layer pair
+   * so multiple closure layers do not collide. Returns false when the body
+   * had to be scheduled — the caller must return and resume when the handler
+   * re-runs. On success #r_result holds the closure's output bundle, or
+   * null when the closure is unusable and the layer should pass through. */
+  bool evaluate_closure_layer(const NodeInContext &stack_node,
+                              const NodeShaderLayerStackItem &item,
+                              const ClosureZoneValue &closure_value,
+                              const BundleSocketValuePtr &accumulator,
+                              BundleSocketValuePtr *r_result)
+  {
+    *r_result = {};
+    const bNode *closure_output_node = closure_value.zone->output_node();
+    const bNode *closure_input_node = closure_value.zone->input_node();
+    if (!closure_output_node || !closure_input_node) {
+      return true;
+    }
+    const auto &closure_storage = *static_cast<const NodeClosureOutput *>(
+        closure_output_node->storage);
+
+    /* The closure is expected to take and produce a bundle; further items are
+     * ignored and receive fallback values. */
+    int bundle_in_index = -1;
+    for (const int i : IndexRange(closure_storage.input_items.items_num)) {
+      if (closure_storage.input_items.items[i].socket_type == SOCK_BUNDLE) {
+        bundle_in_index = i;
+        break;
+      }
+    }
+    int bundle_out_index = -1;
+    for (const int i : IndexRange(closure_storage.output_items.items_num)) {
+      if (closure_storage.output_items.items[i].socket_type == SOCK_BUNDLE) {
+        bundle_out_index = i;
+        break;
+      }
+    }
+    if (bundle_out_index == -1) {
+      params_.r_error_messages.append(
+          {&*stack_node, TIP_("Adjustment closure has no bundle output")});
+      return true;
+    }
+
+    const ClosureSourceLocation source_location{
+        &closure_output_node->owner_tree(),
+        closure_output_node->identifier,
+        closure_value.closure_creation_context ? closure_value.closure_creation_context->hash() :
+                                                 ComputeContextHash{},
+        closure_value.closure_creation_context};
+    const bke::ClosureLayerComputeContext &ctx = compute_context_cache_.for_closure_layer(
+        stack_node.context,
+        stack_node->identifier,
+        item.identifier,
+        &stack_node->owner_tree(),
+        source_location);
+
+    if (ctx.is_recursive()) {
+      params_.r_error_messages.append(
+          {&*stack_node, TIP_("Recursive closures are not supported")});
+      return true;
+    }
+
+    if (seeded_closure_layer_contexts_.add(&ctx)) {
+      parent_zone_contexts_.add(&ctx, closure_value.closure_creation_context);
+      /* Seed every output of the zone's input node before anything inside the
+       * closure body is scheduled: the bundle input receives the running
+       * accumulator, everything else its fallback. This must cover all
+       * outputs so #handle_output_socket__closure_input never runs in this
+       * context — that handler expects an Evaluate Closure node as the
+       * context node, but here it is the stack node. */
+      for (const int i : closure_input_node->output_sockets().index_range()) {
+        const SocketInContext out_socket{&ctx, &closure_input_node->output_socket(i)};
+        if (i == bundle_in_index) {
+          BundleSocketValuePtr input_bundle = accumulator;
+          if (!input_bundle) {
+            input_bundle = BundleSocketValuePtr{std::make_shared<BundleSocketValue>()};
+          }
+          this->store_socket_value(out_socket, {input_bundle});
+        }
+        else {
+          this->store_socket_value_fallback(out_socket);
+        }
+      }
+    }
+
+    const SocketInContext body_result{&ctx, &closure_output_node->input_socket(bundle_out_index)};
+    const SocketValue *value = value_by_socket_.lookup_ptr(body_result);
+    if (!value) {
+      this->schedule_socket(body_result);
+      return false;
+    }
+    if (const auto *bundle = std::get_if<BundleSocketValuePtr>(&value->value)) {
+      *r_result = *bundle;
+    }
+    return true;
+  }
+
+  void handle_output_socket__texture_layer_stack(const SocketInContext &socket)
+  {
+    const NodeInContext node = socket.owner_node();
+    const NodeShaderLayerStack &storage = nodes::layer_stack_storage(*node);
+    const int items_num = storage.items_num;
+
+    if (items_num == 0) {
+      this->store_socket_value_fallback(socket);
+      return;
+    }
+
+    /* Sockets are declared per item: for items 0..N-2 the order is
+     * Layer, Opacity, Mask. The last item (N-1, base layer) only declares
+     * Layer. */
+    if (this->schedule_missing_inputs(node)) {
+      return;
+    }
+
+    /* Gather per-item socket values from the declaration order. Muted items
+     * have their bundle dropped so they pass the accumulator through unchanged. */
+    struct Layer {
+      const BundleSocketValue *bundle = nullptr;
+      std::optional<ClosureZoneValue> closure;
+      SocketValue opacity{};
+      SocketValue mask{};
+      int blend_type = MA_RAMP_BLEND;
+    };
+    Vector<Layer> layers(items_num);
+    int sock_index = 0;
+    for (const int i : IndexRange(items_num)) {
+      const SocketInContext layer_sock = node.input_socket(sock_index++);
+      const SocketValue &layer_value = value_by_socket_.lookup(layer_sock);
+      const bool is_muted = (storage.items[i].flag & SHADER_LAYER_STACK_ITEM_MUTED) != 0;
+      if (!is_muted) {
+        if (const auto *bp = std::get_if<BundleSocketValuePtr>(&layer_value.value)) {
+          if (*bp) {
+            layers[i].bundle = bp->get();
+          }
+        }
+        else if (const auto *cz = std::get_if<ClosureZoneValue>(&layer_value.value)) {
+          if (cz->zone) {
+            layers[i].closure = *cz;
+          }
+        }
+      }
+      layers[i].blend_type = storage.items[i].blend_type;
+      const bool is_base = (i == items_num - 1);
+      if (!is_base) {
+        const SocketInContext opacity_sock = node.input_socket(sock_index++);
+        const SocketInContext mask_sock = node.input_socket(sock_index++);
+        layers[i].opacity = value_by_socket_.lookup(opacity_sock);
+        layers[i].mask = value_by_socket_.lookup(mask_sock);
+      }
+    }
+
+    /* Compose the final result. Start from the base layer at the bottom,
+     * then composite each layer above it using opacity * mask as the
+     * per-channel weight.
+     * Closure-typed layers evaluate their body with the running accumulator
+     * as its bundle input, which may require scheduling the body and
+     * resuming later — the state records progress across handler runs. */
+    StackCompositionState &state = stack_states_.lookup_or_add_default(node);
+    while (state.layers_done < items_num) {
+      const int i = items_num - 1 - state.layers_done;
+      const Layer &layer = layers[i];
+
+      const BundleSocketValue *layer_bundle = layer.bundle;
+      BundleSocketValuePtr closure_result;
+      if (layer.closure) {
+        if (!this->evaluate_closure_layer(
+                node, storage.items[i], *layer.closure, state.accumulator, &closure_result))
+        {
+          /* The closure body was scheduled; resume on the next handler run. */
+          return;
+        }
+        layer_bundle = closure_result.get();
+      }
+
+      state.layers_done++;
+      if (!layer_bundle) {
+        /* This layer is empty: pass the accumulator through. */
+        continue;
+      }
+      /* Drop the channels the user disabled on this layer, so it only
+       * contributes to the enabled ones. */
+      BundleSocketValuePtr filtered_holder;
+      if (storage.items[i].disabled_channels_num > 0) {
+        auto filtered = std::make_shared<BundleSocketValue>();
+        for (const BundleSocketValue::Item &bundle_item : layer_bundle->items) {
+          if (!nodes::layer_stack_channel_disabled(storage.items[i], bundle_item.key)) {
+            filtered->items.append(bundle_item);
+          }
+        }
+        filtered_holder = BundleSocketValuePtr{filtered};
+        layer_bundle = filtered_holder.get();
+      }
+      if (!state.accumulator) {
+        /* No base bundle yet: this layer becomes the start of the stack. */
+        state.accumulator = BundleSocketValuePtr{
+            std::make_shared<BundleSocketValue>(*layer_bundle)};
+        continue;
+      }
+      const SocketValue blend_factor_value = this->multiply_float_socket_values(
+          *node.node, layer.opacity, layer.mask);
+      state.accumulator = this->blend_layer_bundles(
+          *node.node, *state.accumulator, *layer_bundle, blend_factor_value, layer.blend_type);
+    }
+
+    const BundleSocketValuePtr accumulator = state.accumulator;
+    stack_states_.remove(node);
+    if (!accumulator) {
+      this->store_socket_value_fallback(socket);
+      return;
+    }
+    this->store_socket_value(socket, {accumulator});
+  }
+
+  void handle_output_socket__mask_stack(const SocketInContext &socket)
+  {
+    const NodeInContext node = socket.owner_node();
+    const NodeShaderLayerStack &storage = nodes::layer_stack_storage(*node);
+    const int items_num = storage.items_num;
+
+    if (items_num == 0) {
+      /* An empty Mask Stack contributes no mask. Like the all-muted case below, it must act as
+       * fully unmasked (1.0), not the socket default of 0.0 which would hide the consuming
+       * layer entirely. */
+      this->store_socket_value(socket, {PrimitiveSocketValue{1.0f}});
+      return;
+    }
+
+    /* Sockets are declared per item: for items 0..N-2 the order is Mask,
+     * Opacity. The last item (N-1, base) only declares Mask. */
+    if (this->schedule_missing_inputs(node)) {
+      return;
+    }
+
+    struct Layer {
+      SocketValue value{};
+      bool has_value = false;
+      SocketValue opacity{};
+      int blend_type = MA_RAMP_BLEND;
+    };
+    Vector<Layer> layers(items_num);
+    int sock_index = 0;
+    for (const int i : IndexRange(items_num)) {
+      const SocketInContext mask_sock = node.input_socket(sock_index++);
+      const bool is_muted = (storage.items[i].flag & SHADER_LAYER_STACK_ITEM_MUTED) != 0;
+      if (!is_muted) {
+        layers[i].value = value_by_socket_.lookup(mask_sock);
+        layers[i].has_value = true;
+      }
+      layers[i].blend_type = storage.items[i].blend_type;
+      const bool is_base = (i == items_num - 1);
+      if (!is_base) {
+        const SocketInContext opacity_sock = node.input_socket(sock_index++);
+        layers[i].opacity = value_by_socket_.lookup(opacity_sock);
+      }
+    }
+
+    /* Start at the base mask, then composite each layer above using opacity
+     * as the per-mask weight and the layer's blend_type as the operation. */
+    SocketValue accumulator{};
+    bool have_acc = false;
+    if (layers.last().has_value) {
+      accumulator = layers.last().value;
+      have_acc = true;
+    }
+
+    for (int i = items_num - 2; i >= 0; --i) {
+      const Layer &layer = layers[i];
+      if (!layer.has_value) {
+        continue;
+      }
+      if (!have_acc) {
+        accumulator = layer.value;
+        have_acc = true;
+        continue;
+      }
+      accumulator = this->blend_mask_floats(
+          *node.node, accumulator, layer.value, layer.opacity, layer.blend_type);
+    }
+
+    if (!have_acc) {
+      /* Every mask layer is muted, so the stack contributes no mask. A muted
+       * mask must act as if it were not there, which for the consuming layer
+       * means fully unmasked (1.0), not the socket default of 0.0 (which would
+       * hide the layer entirely). */
+      this->store_socket_value(socket, {PrimitiveSocketValue{1.0f}});
+      return;
+    }
+    this->store_socket_value(socket, accumulator);
+  }
+
+  /* Composite #top onto #base using #factor and #blend_type. Generic
+   * formula:
+   *     blended = blend_op(base, top)   (blend_op is identity for MIX)
+   *     result  = mix(base, blended, factor)
+   * which expands the four blend modes the design calls out (Mix, Add,
+   * Multiply, Subtract) into 0–1 Math nodes plus 1 Mix(Float) node. Other
+   * MA_RAMP_* modes fall back to plain Mix — they don't have a clean float
+   * meaning and the user can model them via dedicated math nodes when needed. */
+  SocketValue blend_mask_floats(const bNode &owner_node,
+                                const SocketValue &base,
+                                const SocketValue &top,
+                                const SocketValue &factor,
+                                const int blend_type)
+  {
+    SocketValue blended = top;
+    if (blend_type == MA_RAMP_ADD || blend_type == MA_RAMP_SUB || blend_type == MA_RAMP_MULT ||
+        blend_type == MA_RAMP_DIV)
+    {
+      bNode *math_node = this->add_node("ShaderNodeMath"_ustr);
+      switch (blend_type) {
+        case MA_RAMP_ADD:
+          math_node->custom1 = NODE_MATH_ADD;
+          break;
+        case MA_RAMP_SUB:
+          math_node->custom1 = NODE_MATH_SUBTRACT;
+          break;
+        case MA_RAMP_MULT:
+          math_node->custom1 = NODE_MATH_MULTIPLY;
+          break;
+        case MA_RAMP_DIV:
+          math_node->custom1 = NODE_MATH_DIVIDE;
+          break;
+      }
+      bNodeSocket *in_a = static_cast<bNodeSocket *>(math_node->inputs.first);
+      bNodeSocket *in_b = in_a->next;
+      bNodeSocket *out = static_cast<bNodeSocket *>(math_node->outputs.first);
+      this->set_input_socket_value(owner_node, *math_node, *in_a, base);
+      this->set_input_socket_value(owner_node, *math_node, *in_b, top);
+      blended = SocketValue{LinkedSocketValue{math_node, out}};
+    }
+
+    return this->emit_mix(owner_node, SOCK_FLOAT, MA_RAMP_BLEND, base, blended, factor);
+  }
+
+  /* Multiply two float-valued socket values. Collapses to a literal when both
+   * sides are known constants (or defaults on unlinked sockets), skips the
+   * multiplication entirely on identity (×1) or zero (×0) shortcuts, and
+   * otherwise inserts a single Math Multiply node. */
+  SocketValue multiply_float_socket_values(const bNode &owner_node,
+                                           const SocketValue &a,
+                                           const SocketValue &b)
+  {
+    auto as_float = [](const SocketValue &v) -> std::optional<float> {
+      if (const auto *prim = std::get_if<PrimitiveSocketValue>(&v.value)) {
+        if (const float *f = std::get_if<float>(&prim->value)) {
+          return *f;
+        }
+      }
+      if (const auto *isv = std::get_if<InputSocketValue>(&v.value)) {
+        if (isv->socket->type == SOCK_FLOAT) {
+          return isv->socket->default_value_typed<bNodeSocketValueFloat>()->value;
+        }
+      }
+      return std::nullopt;
+    };
+
+    const std::optional<float> a_f = as_float(a);
+    const std::optional<float> b_f = as_float(b);
+    if (a_f && b_f) {
+      return SocketValue{PrimitiveSocketValue{*a_f * *b_f}};
+    }
+    if ((a_f && *a_f == 0.0f) || (b_f && *b_f == 0.0f)) {
+      return SocketValue{PrimitiveSocketValue{0.0f}};
+    }
+    if (a_f && *a_f == 1.0f) {
+      return b;
+    }
+    if (b_f && *b_f == 1.0f) {
+      return a;
+    }
+
+    bNode *math_node = this->add_node("ShaderNodeMath"_ustr);
+    math_node->custom1 = NODE_MATH_MULTIPLY;
+    bNodeSocket *in_a = static_cast<bNodeSocket *>(math_node->inputs.first);
+    bNodeSocket *in_b = in_a->next;
+    bNodeSocket *out = static_cast<bNodeSocket *>(math_node->outputs.first);
+    this->set_input_socket_value(owner_node, *math_node, *in_a, a);
+    this->set_input_socket_value(owner_node, *math_node, *in_b, b);
+    return SocketValue{LinkedSocketValue{math_node, out}};
   }
 
   void handle_output_socket__menu_switch(const SocketInContext &socket)
