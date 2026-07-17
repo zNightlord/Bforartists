@@ -4,8 +4,11 @@
 
 #pragma once
 
+#include "BLI_listbase_iterator.hh"
+
 #include "DNA_node_types.h"
 
+#include "NOD_socket.hh"
 #include "NOD_socket_items.hh"
 
 namespace blender::nodes {
@@ -44,15 +47,30 @@ struct CombineBundleItemsAccessor : public socket_items::SocketItemsAccessorDefa
     return {&storage->items, &storage->items_num, &storage->active_index};
   }
 
+  /** Socket types whose UI (subtype, soft range, default) a Combine Bundle item mirrors, stored in
+   * #NodeCombineBundleItem::socket_data. Limited to plain value types with a slider, which never
+   * hold ID pointers, so the data needs no ID user-count management. */
+  static bool item_stores_socket_data(const eNodeSocketDatatype socket_type)
+  {
+    return ELEM(socket_type, SOCK_FLOAT, SOCK_INT, SOCK_VECTOR, SOCK_RGBA);
+  }
+
   static void copy_item(const ItemT &src, ItemT &dst)
   {
     dst = src;
     dst.name = BLI_strdup_null(dst.name);
+    dst.socket_data = nullptr;
+    if (src.socket_data) {
+      node_socket_init_default_value_data(src.socket_type, 0, &dst.socket_data);
+      node_socket_copy_default_value_data(src.socket_type, dst.socket_data, src.socket_data);
+    }
   }
 
   static void destruct_item(ItemT *item)
   {
     MEM_SAFE_DELETE(item->name);
+    node_socket_free_default_value_data(item->socket_type, item->socket_data);
+    item->socket_data = nullptr;
   }
 
   static void blend_write_item(BlendWriter *writer, const ItemT &item);
@@ -81,6 +99,9 @@ struct CombineBundleItemsAccessor : public socket_items::SocketItemsAccessorDefa
     auto *storage = static_cast<NodeCombineBundle *>(node.storage);
     item.socket_type = socket_type;
     item.identifier = storage->next_identifier++;
+    /* #socket_data stays null until captured from a source (see
+     * #combine_bundle_item_copy_socket_data); null means the item uses the type's own default UI.
+     */
     socket_items::set_item_name_and_make_unique<CombineBundleItemsAccessor>(node, item, name);
   }
 
@@ -172,5 +193,32 @@ struct SeparateBundleItemsAccessor : public socket_items::SocketItemsAccessorDef
 };
 
 std::optional<StringRefNull> combine_bundle_node_type(const bNodeTree &tree, const bNode &node);
+
+/** Copy a source socket's default value and UI (subtype, soft range, hide) onto a Combine Bundle
+ * item's #socket_data, so the item's own input socket mirrors that source's slider instead of a
+ * bare value. Used to propagate the UI of the value a bundle channel ultimately feeds (e.g. a BSDF
+ * input). */
+void combine_bundle_item_copy_socket_data(NodeCombineBundleItem &item, const bNodeSocket &source);
+
+/** First Bundle input/output socket in #node's raw socket list, or null.
+ * Cache-independent, so usable on a node whose topology cache may be stale. */
+inline bNodeSocket *first_bundle_input(bNode &node)
+{
+  for (bNodeSocket &sock : node.inputs) {
+    if (sock.type == SOCK_BUNDLE) {
+      return &sock;
+    }
+  }
+  return nullptr;
+}
+inline bNodeSocket *first_bundle_output(bNode &node)
+{
+  for (bNodeSocket &sock : node.outputs) {
+    if (sock.type == SOCK_BUNDLE) {
+      return &sock;
+    }
+  }
+  return nullptr;
+}
 
 }  // namespace blender::nodes

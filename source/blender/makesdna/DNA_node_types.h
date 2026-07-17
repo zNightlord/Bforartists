@@ -3919,12 +3919,25 @@ struct NodeGeometryBake {
   char _pad[4] = {};
 };
 
+/** Bit flags for #NodeCombineBundleItem::flag. */
+enum NodeCombineBundleItemFlag {
+  /** Hide the item's input value in the UI, mirroring a source socket's #SOCK_HIDE_VALUE. */
+  NODE_COMBINE_BUNDLE_ITEM_HIDE_VALUE = 1 << 0,
+};
+
 struct NodeCombineBundleItem {
   char *name = nullptr;
+  /** Default value and UI (subtype, soft range) for this item's input socket, stored as the socket
+   * value struct (e.g. #bNodeSocketValueFloat) matching #socket_type, the same representation node
+   * sockets and node group interface sockets use. Null for types that carry no such data. */
+  void *socket_data = nullptr;
   int identifier = 0;
   eNodeSocketDatatype socket_type = {};
   NodeSocketInterfaceStructureType structure_type = NodeSocketInterfaceStructureType::Auto;
   char _pad[1] = {};
+  /** #NodeCombineBundleItemFlag. */
+  int16_t flag = 0;
+  char _pad2[6] = {};
 };
 
 struct NodeCombineBundle {

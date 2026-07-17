@@ -334,6 +334,11 @@ void sync_sockets_combine_bundle(SpaceNode &snode,
         nodes ::CombineBundleItemsAccessor>(
         *snode.edittree, combine_bundle_node, item.type->type, item.key.c_str());
     new_item.structure_type = item.structure_type;
+    /* Mirror the UI of the socket this channel ultimately feeds, so the combine input shows the
+     * same slider instead of a bare value. */
+    if (item.ui_source) {
+      nodes::combine_bundle_item_copy_socket_data(new_item, *item.ui_source);
+    }
     if (const std::optional<int> old_identifier = old_identifiers.lookup_try(item.key)) {
       new_item.identifier = *old_identifier;
     }

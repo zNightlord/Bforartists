@@ -2,8 +2,12 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+#include <algorithm>
+#include <limits>
+
 #include "NOD_geo_bundle.hh"
 #include "NOD_geometry_nodes_bundle.hh"
+#include "NOD_socket.hh"
 #include "NOD_socket_items_blend.hh"
 #include "NOD_socket_items_ops.hh"
 #include "NOD_socket_items_ui.hh"
@@ -61,6 +65,13 @@ static void node_declare(NodeDeclarationBuilder &b)
         if (const SocketDeclaration *src_decl = flat_bundle_type->find_decl(name)) {
           decl.try_copy_ui_data(*src_decl);
         }
+      }
+
+      if (item.flag & NODE_COMBINE_BUNDLE_ITEM_HIDE_VALUE) {
+        decl.hide_value();
+      }
+      if (item.socket_data) {
+        decl.default_value_data(item.socket_data);
       }
 
       if (i == 0 && socket_type == SOCK_STRING && name == Bundle::type_item_name.ustr()) {
@@ -238,11 +249,13 @@ StructRNA **CombineBundleItemsAccessor::item_srna = &RNA_NodeCombineBundleItem;
 void CombineBundleItemsAccessor::blend_write_item(BlendWriter *writer, const ItemT &item)
 {
   writer->write_string(item.name);
+  node_socket_blend_write_default_value_data(writer, item.socket_type, item.socket_data);
 }
 
 void CombineBundleItemsAccessor::blend_read_data_item(BlendDataReader *reader, ItemT &item)
 {
   BLO_read_string(reader, &item.name);
+  node_socket_blend_read_default_value_data(reader, item.socket_type, &item.socket_data);
 }
 
 std::string CombineBundleItemsAccessor::validate_name(const StringRef name)
@@ -273,6 +286,24 @@ std::string CombineBundleItemsAccessor::validate_name(const StringRef name)
   }
   BLI_assert(BundleKey::is_valid_key(result));
   return result;
+}
+
+void combine_bundle_item_copy_socket_data(NodeCombineBundleItem &item, const bNodeSocket &source)
+{
+  SET_FLAG_FROM_TEST(
+      item.flag, source.flag & SOCK_HIDE_VALUE, NODE_COMBINE_BUNDLE_ITEM_HIDE_VALUE);
+  if (source.default_value == nullptr || source.type != item.socket_type ||
+      !CombineBundleItemsAccessor::item_stores_socket_data(item.socket_type))
+  {
+    return;
+  }
+  /* Allocate on first capture: a null socket_data means "use the type's own default UI", so it is
+   * only populated once an actual source (e.g. a BSDF input) is mirrored. */
+  if (item.socket_data == nullptr) {
+    node_socket_init_default_value_data(item.socket_type, 0, &item.socket_data);
+  }
+  node_socket_copy_default_value_data(
+      eNodeSocketDatatype(item.socket_type), item.socket_data, source.default_value);
 }
 
 std::optional<StringRefNull> combine_bundle_node_type(const bNodeTree & /*tree*/,
