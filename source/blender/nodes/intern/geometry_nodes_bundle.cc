@@ -419,7 +419,11 @@ BundleSignature BundleSignature::from_separate_bundle_node(const bNode &node,
       const NodeSocketInterfaceStructureType structure_type =
           get_structure_type_for_bundle_signature(
               socket, item.structure_type, allow_auto_structure_type);
-      signature.items.add({item.name, stype, structure_type});
+      /* The value of this channel ultimately feeds this output's consumer (e.g. a BSDF input);
+       * carry its socket so a synced Combine Bundle can mirror that slider. */
+      const Span<const bNodeSocket *> targets = socket.directly_linked_sockets();
+      const bNodeSocket *ui_source = targets.is_empty() ? nullptr : targets.first();
+      signature.items.add({item.name, stype, structure_type, ui_source});
     }
   }
   return signature;

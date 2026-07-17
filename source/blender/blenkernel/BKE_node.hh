@@ -460,6 +460,14 @@ struct bNodeType {
    */
   bool (*can_sync_sockets)(const bContext &C, const bNodeTree &tree, const bNode &node) = nullptr;
 
+  /**
+   * True when the node joins several input bundles into one output bundle, its first bundle
+   * output. Bundle value tracing routes any bundle input of such a node to that output, so a
+   * consumer downstream sees the joined bundle. Used e.g. by the Texture Layer Stack, without the
+   * generic bundle code depending on a specific node type.
+   */
+  bool is_bundle_join = false;
+
   /* RNA integration */
   ExtensionRNA rna_ext = {};
 
@@ -566,6 +574,17 @@ struct bNodeTreeType {
 
   /* Check if the socket type is valid for this tree type. */
   bool (*valid_socket_type)(bNodeTreeType *ntreetype, bNodeSocketType *socket_type) = nullptr;
+
+  /**
+   * Called when a link is inserted from a Separate Bundle output socket to a consumer node in a
+   * tree of this type. Lets a tree type react to a bundle channel being routed somewhere (the
+   * shader tree enables the matching texture layer channel and seeds its base value), without the
+   * generic Separate Bundle node depending on that tree type's module. Null when the tree type
+   * does not react.
+   */
+  void (*separate_bundle_output_linked)(bNodeTree &ntree,
+                                        bNode &node,
+                                        const bNodeLink &link) = nullptr;
 
   /**
    * If true, then some UI elements related to building node groups will be hidden.

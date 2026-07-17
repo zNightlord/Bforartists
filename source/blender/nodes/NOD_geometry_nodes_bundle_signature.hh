@@ -17,8 +17,16 @@ struct BundleSignature {
     std::string key;
     const bke::bNodeSocketType *type = nullptr;
     NodeSocketInterfaceStructureType structure_type;
+    /** Socket whose UI (subtype, soft range, default) this item's value ultimately feeds, e.g. a
+     * BSDF input behind a Texture Layer Stack. Rides along so sync can mirror that slider onto a
+     * Combine Bundle, but is non-identifying: it never affects whether signatures match. Only
+     * valid for the duration of the signature; not stored. */
+    const bNodeSocket *ui_source = nullptr;
 
-    friend bool operator==(const Item &a, const Item &b) = default;
+    friend bool operator==(const Item &a, const Item &b)
+    {
+      return a.key == b.key && a.type == b.type && a.structure_type == b.structure_type;
+    }
   };
 
   struct ItemKeyGetter {
