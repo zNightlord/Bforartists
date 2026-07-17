@@ -519,6 +519,17 @@ enum {
 
   /** Draw icon inverted to indicate a special state. */
   BUT_ICON_INVERT = 1 << 27,
+
+  /** Box button draws alternating row backgrounds for the rows it contains. */
+  BUT_VIEW_ALTERNATE_ROWS = 1 << 28,
+  /** Row button at an odd position; the enclosing box draws a stripe behind it. */
+  BUT_ALTERNATE_ROW = 1 << 29,
+  /**
+   * Box button drawn flat: its background fills a square rectangle with no outline or rounded
+   * corners. Used for full-width views that should back their rows (darker background, alternating
+   * backgrounds and full-width highlights) without looking like an inset, rounded box.
+   */
+  BUT_VIEW_FLAT_BOX = 1 << 30,
 };
 
 enum class ButPointerType : uint8_t {

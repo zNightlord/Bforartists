@@ -358,6 +358,7 @@ const bTheme U_theme_default = {
     .outline_width = 1,
     .facedot_size = 4,
     .match = RGBA(0x4772b3ff),
+    .row_alternate = RGBA(0xffffff04),
   },
   .space_view3d = {
     .back = RGBA(0x3d3d3dff),
@@ -425,6 +426,7 @@ const bTheme U_theme_default = {
     .gp_vertex = RGBA(0x000000ff),
     .gp_vertex_select = RGBA(0xff8500ff),
     .skin_root = RGBA(0xb44d4dff),
+    .row_alternate = RGBA(0xffffff04),
   },
   .space_file = {
     .back = RGBA(0x28282800),
@@ -658,6 +660,7 @@ const bTheme U_theme_default = {
     .gp_vertex_size = 3,
     .gp_vertex = RGBA(0x97979700),
     .gp_vertex_select = RGBA(0xff8500ff),
+    .row_alternate = RGBA(0xffffff04),
   },
   .space_preferences = {
     .back = RGBA(0x30303000),

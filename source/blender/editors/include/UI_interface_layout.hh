@@ -308,8 +308,24 @@ struct Layout : public Item, NonCopyable, NonMovable {
   Layout &grid_flow(
       bool row_major, int columns_len, bool even_columns, bool even_rows, bool align);
 
-  /** Add a new list box sub-layout. */
-  Layout &list_box(uiList *ui_list, PointerRNA *actptr, PropertyRNA *actprop);
+  /**
+   * Add a new list box sub-layout. With #alternate_rows, the list draws alternating row
+   * backgrounds (zebra striping) and full-width row highlights behind its items.
+   */
+  Layout &list_box(uiList *ui_list,
+                   PointerRNA *actptr,
+                   PropertyRNA *actprop,
+                   bool alternate_rows = false);
+
+  /**
+   * Add a box sub-layout that spans the full width and draws no border or background of its own,
+   * only backing the rows it contains (alternating backgrounds and full-width highlights). Used by
+   * views that should not look like they sit inside a box.
+   *
+   * Assumes the box sits at the top of a panel: its background bleeds out over the panel margins
+   * and up under the header. Do not use mid-panel or in popups, where it would overdraw neighbors.
+   */
+  Layout &flat_box();
 
   /**
    * Add a pie menu layout, buttons are arranged around a center.

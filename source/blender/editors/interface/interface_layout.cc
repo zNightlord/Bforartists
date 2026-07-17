@@ -279,6 +279,8 @@ struct LayoutItemGridFlow : public Layout {
 
 struct LayoutItemBx : public LayoutColumn {
   Button *roundbox = nullptr;
+  /* Skip the box padding, so contents span the full width. */
+  bool no_padding = false;
   LayoutItemBx() : LayoutColumn(ItemType::LayoutBox, nullptr) {}
 
   void estimate_impl() override;
@@ -4357,7 +4359,7 @@ void LayoutItemBx::estimate_impl()
   LayoutColumn::estimate_impl();
 
   int boxspace = style->boxspace;
-  if (this->root()->type == LayoutType::Header) {
+  if (this->root()->type == LayoutType::Header || this->no_padding) {
     boxspace = 0;
   }
   w_ += 2 * boxspace;
@@ -4369,7 +4371,7 @@ void LayoutItemBx::resolve_impl()
   const uiStyle *style = this->root()->style;
 
   int boxspace = style->boxspace;
-  if (this->root()->type == LayoutType::Header) {
+  if (this->root()->type == LayoutType::Header || this->no_padding) {
     boxspace = 0;
   }
 
@@ -4404,6 +4406,16 @@ void LayoutItemBx::resolve_impl()
   but->rect.ymin = y_;
   but->rect.xmax = x_ + w_;
   but->rect.ymax = y_ + h_;
+
+  /* A flat box bleeds over the panel's margins, so its background (and the row bands that follow
+   * it) span the full panel width and tuck up under the panel header, instead of leaving the
+   * standard empty margin around it. The contents stay inside the margin. Assumes the box sits at
+   * the top of the panel, as the shader layers view does. */
+  if (but->drawflag & BUT_VIEW_FLAT_BOX) {
+    but->rect.xmin -= UI_PANEL_MARGIN_X;
+    but->rect.xmax += UI_PANEL_MARGIN_X;
+    but->rect.ymax += this->root()->style->panelspace;
+  }
 }
 
 void LayoutItemBx::resolve_dynamic_height()
@@ -5314,6 +5326,16 @@ Layout &Layout::box()
   return *layout_box(this, ButtonType::Roundbox);
 }
 
+Layout &Layout::flat_box()
+{
+  LayoutItemBx *item_box = layout_box(this, ButtonType::Roundbox);
+  item_box->no_padding = true;
+  /* Fill the background flat with no outline or rounded corners, and draw alternating row
+   * backgrounds (zebra striping) behind the contained rows. */
+  item_box->roundbox->drawflag |= BUT_VIEW_FLAT_BOX | BUT_VIEW_ALTERNATE_ROWS;
+  return *item_box;
+}
+
 void layout_list_set_labels_active(Layout *layout)
 {
   for (Item *item : layout->items()) {
@@ -5329,12 +5351,19 @@ void layout_list_set_labels_active(Layout *layout)
   }
 }
 
-Layout &Layout::list_box(uiList *ui_list, PointerRNA *actptr, PropertyRNA *actprop)
+Layout &Layout::list_box(uiList *ui_list,
+                         PointerRNA *actptr,
+                         PropertyRNA *actprop,
+                         const bool alternate_rows)
 {
   LayoutItemBx *item_box = layout_box(this, ButtonType::ListBox);
   Button *but = item_box->roundbox;
 
   but->custom_data = ui_list;
+
+  if (alternate_rows) {
+    but->drawflag |= BUT_VIEW_ALTERNATE_ROWS;
+  }
 
   but->rnapoin = *actptr;
   but->rnaprop = actprop;
