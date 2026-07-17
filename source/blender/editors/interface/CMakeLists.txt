@@ -8,6 +8,7 @@ set(INC
   ../include
   ../../animrig
   ../../makesrna
+  ../../nodes/shader/include
   ../../python
   ../../../../intern/ghost
   # RNA_prototypes.hh

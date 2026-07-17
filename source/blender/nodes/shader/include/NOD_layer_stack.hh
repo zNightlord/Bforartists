@@ -7,10 +7,15 @@
 /** \file
  * \ingroup nodes
  *
- * Shared storage access, socket-item accessors and node callbacks for the
- * Texture Layer Stack and Mask Stack shader nodes. Both nodes store a
- * #NodeShaderLayerStack and differ only in the socket types they declare
- * and in how their layers are composited during shader node inlining.
+ * Storage shared by the Texture Layer Stack and Mask Stack shader nodes. Both
+ * nodes store a #NodeShaderLayerStack and differ only in the socket types they
+ * declare and in how their layers are composited during shader node inlining.
+ * This header provides typed storage access, the common part of their
+ * socket-item accessors, the node-type callbacks they share, and layer-array
+ * operations that work on either node kind.
+ *
+ * The per-node-kind APIs build on this: #NOD_texture_stack.hh and
+ * #NOD_mask_stack.hh.
  */
 
 #include <algorithm>
@@ -27,22 +32,23 @@
 #include "NOD_socket_items.hh"
 #include "NOD_socket_items_blend.hh"
 
-namespace blender::nodes {
+struct Main;
+
+namespace blender::nodes::layer_stack {
 
 /** Typed access to the storage shared by the layer stack shader nodes. */
-inline NodeShaderLayerStack &layer_stack_storage(bNode &node)
+inline NodeShaderLayerStack &storage(bNode &node)
 {
   return *static_cast<NodeShaderLayerStack *>(node.storage);
 }
-inline const NodeShaderLayerStack &layer_stack_storage(const bNode &node)
+inline const NodeShaderLayerStack &storage(const bNode &node)
 {
   return *static_cast<const NodeShaderLayerStack *>(node.storage);
 }
 
 /** True when #channel is on #item's disabled channels list, i.e. the
  * layer does not contribute to it during stack composition. */
-inline bool layer_stack_channel_disabled(const NodeShaderLayerStackItem &item,
-                                         const StringRef channel)
+inline bool channel_disabled(const NodeShaderLayerStackItem &item, const StringRef channel)
 {
   for (const int i : IndexRange(item.disabled_channels_num)) {
     const char *name = item.disabled_channels[i].name;
@@ -55,11 +61,11 @@ inline bool layer_stack_channel_disabled(const NodeShaderLayerStackItem &item,
 
 /** Add or remove #channel from #item's disabled channels list. The caller
  * is responsible for tagging the node tree for updates. */
-inline void layer_stack_channel_set_disabled(NodeShaderLayerStackItem &item,
-                                             const StringRef channel,
-                                             const bool disabled)
+inline void set_channel_disabled(NodeShaderLayerStackItem &item,
+                                 const StringRef channel,
+                                 const bool disabled)
 {
-  if (disabled == layer_stack_channel_disabled(item, channel)) {
+  if (disabled == channel_disabled(item, channel)) {
     return;
   }
   if (disabled) {
@@ -96,15 +102,15 @@ inline void layer_stack_channel_set_disabled(NodeShaderLayerStackItem &item,
  * and #default_item_name (name for items created via the extend socket).
  */
 template<typename Derived>
-struct LayerStackItemsAccessorBase : public socket_items::SocketItemsAccessorDefaults {
+struct ItemsAccessorBase : public socket_items::SocketItemsAccessorDefaults {
   using ItemT = NodeShaderLayerStackItem;
   static constexpr bool has_type = false;
   static constexpr bool has_name = true;
 
   static socket_items::SocketItemsRef<NodeShaderLayerStackItem> get_items_from_node(bNode &node)
   {
-    NodeShaderLayerStack &storage = layer_stack_storage(node);
-    return {&storage.items, &storage.items_num, &storage.active_index};
+    NodeShaderLayerStack &data = storage(node);
+    return {&data.items, &data.items_num, &data.active_index};
   }
 
   static void copy_item(const NodeShaderLayerStackItem &src, NodeShaderLayerStackItem &dst)
@@ -157,8 +163,8 @@ struct LayerStackItemsAccessorBase : public socket_items::SocketItemsAccessorDef
 
   static void init_with_name(bNode &node, NodeShaderLayerStackItem &item, const char *name)
   {
-    NodeShaderLayerStack &storage = layer_stack_storage(node);
-    item.identifier = storage.next_identifier++;
+    NodeShaderLayerStack &data = storage(node);
+    item.identifier = data.next_identifier++;
     item.blend_type = MA_RAMP_BLEND;
     item.item_type = SHADER_LAYER_STACK_ITEM_BUNDLE;
     socket_items::set_item_name_and_make_unique<Derived>(node, item, name);
@@ -175,77 +181,8 @@ struct LayerStackItemsAccessorBase : public socket_items::SocketItemsAccessorDef
   }
 };
 
-struct TextureLayerStackItemsAccessor
-    : public LayerStackItemsAccessorBase<TextureLayerStackItemsAccessor> {
-  static StructRNA **item_srna;
-  static constexpr StringRefNull node_idname = "ShaderNodeTextureLayerStack";
-  static constexpr const char *socket_prefix = "Layer_";
-  static constexpr const char *default_item_name = "Layer";
-  static constexpr bool has_default_item_name = true;
-  /** Layers are Bundle-typed (generators) or Closure-typed (adjustments); the
-   * type is set from the linked socket when extending the stack. */
-  static constexpr bool has_type = true;
-  struct operator_idnames {
-    static constexpr StringRefNull add_item = "NODE_OT_texture_layer_stack_item_add";
-    static constexpr StringRefNull remove_item = "NODE_OT_texture_layer_stack_item_remove";
-    static constexpr StringRefNull move_item = "NODE_OT_texture_layer_stack_item_move";
-  };
-  struct ui_idnames {
-    static constexpr StringRefNull list = "NODE_UL_texture_layer_stack_items";
-  };
-  struct rna_names {
-    static constexpr StringRefNull items = "layer_items";
-    static constexpr StringRefNull active_index = "active_index";
-  };
-
-  static std::string mask_socket_identifier_for_item(const NodeShaderLayerStackItem &item)
-  {
-    return "Mask_" + std::to_string(item.identifier);
-  }
-
-  static eNodeSocketDatatype get_socket_type(const NodeShaderLayerStackItem &item)
-  {
-    return item.item_type == SHADER_LAYER_STACK_ITEM_CLOSURE ? SOCK_CLOSURE : SOCK_BUNDLE;
-  }
-
-  static bool supports_socket_type(const eNodeSocketDatatype socket_type, const int /*ntree_type*/)
-  {
-    return ELEM(socket_type, SOCK_BUNDLE, SOCK_CLOSURE);
-  }
-
-  static void init_with_socket_type_and_name(bNode &node,
-                                             NodeShaderLayerStackItem &item,
-                                             const eNodeSocketDatatype socket_type,
-                                             const char *name)
-  {
-    init_with_name(node, item, name);
-    item.item_type = (socket_type == SOCK_CLOSURE) ? SHADER_LAYER_STACK_ITEM_CLOSURE :
-                                                     SHADER_LAYER_STACK_ITEM_BUNDLE;
-  }
-};
-
-struct MaskStackItemsAccessor : public LayerStackItemsAccessorBase<MaskStackItemsAccessor> {
-  static StructRNA **item_srna;
-  static constexpr StringRefNull node_idname = "ShaderNodeMaskStack";
-  static constexpr const char *socket_prefix = "Mask_";
-  static constexpr const char *default_item_name = "Mask";
-  static constexpr bool has_default_item_name = true;
-  struct operator_idnames {
-    static constexpr StringRefNull add_item = "NODE_OT_mask_stack_item_add";
-    static constexpr StringRefNull remove_item = "NODE_OT_mask_stack_item_remove";
-    static constexpr StringRefNull move_item = "NODE_OT_mask_stack_item_move";
-  };
-  struct ui_idnames {
-    static constexpr StringRefNull list = "NODE_UL_mask_stack_items";
-  };
-  struct rna_names {
-    static constexpr StringRefNull items = "mask_items";
-    static constexpr StringRefNull active_index = "active_index";
-  };
-};
-
-/** Node-type callbacks shared by both layer stack nodes. */
-namespace layer_stack {
+/* -------------------------------------------------------------------- */
+/* Node-type callbacks shared by both layer stack nodes. */
 
 inline void node_init(bNodeTree * /*tree*/, bNode *node)
 {
@@ -261,7 +198,7 @@ template<typename Accessor> void node_free_storage(bNode *node)
 template<typename Accessor>
 void node_copy_storage(bNodeTree * /*dst_tree*/, bNode *dst_node, const bNode *src_node)
 {
-  const NodeShaderLayerStack &src_storage = layer_stack_storage(*src_node);
+  const NodeShaderLayerStack &src_storage = storage(*src_node);
   dst_node->storage = MEM_new<NodeShaderLayerStack>(__func__, dna::shallow_copy(src_storage));
   socket_items::copy_array<Accessor>(*src_node, *dst_node);
 }
@@ -296,7 +233,7 @@ template<typename Accessor> bool node_insert_link(bke::NodeInsertLinkParams &par
   if (new_item) {
     socket_items::set_item_name_and_make_unique<Accessor>(
         params.node, *new_item, Accessor::default_item_name);
-    layer_stack_storage(params.node).active_index = layer_stack_storage(params.node).items_num - 1;
+    storage(params.node).active_index = storage(params.node).items_num - 1;
     return true;
   }
   if constexpr (Accessor::has_type) {
@@ -325,5 +262,23 @@ template<typename Accessor> bool node_insert_link(bke::NodeInsertLinkParams &par
   return keep_link;
 }
 
-}  // namespace layer_stack
-}  // namespace blender::nodes
+/* -------------------------------------------------------------------- */
+/* Layer-array operations that work on either layer stack node kind. */
+
+/** The active layer index when it is a valid item, or -1. */
+int active_index_in_range(const bNode &stack_node);
+
+/** Append a new layer named #name and move it to #target (clamped).
+ * Returns the layer's final index. Does not change the active index.
+ * #stack_node may be a Texture Layer Stack or a Mask Stack node. */
+int add_layer_at(Main &bmain, bNodeTree &ntree, bNode &stack_node, const char *name, int target);
+
+/** Add a new layer above the active one on either stack node kind and make it
+ * active. Returns the new layer's index. */
+int add_layer_above_active(Main &bmain, bNodeTree &ntree, bNode &stack_node, const char *name);
+
+/** Remove layer #index from #stack_node, destructing it and updating the
+ * tree. #stack_node may be either layer stack node kind. */
+void remove_layer(Main &bmain, bNodeTree &ntree, bNode &stack_node, int index);
+
+}  // namespace blender::nodes::layer_stack

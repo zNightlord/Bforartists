@@ -818,6 +818,27 @@ const bNode &node_find_node(const bNodeTree &ntree, const bNodeSocket &socket);
  */
 bNode *node_find_node_by_name(bNodeTree &ntree, StringRefNull name);
 
+/**
+ * Finds a node based on its persistent identifier (#bNode::identifier).
+ * Walks the raw node list, so it is usable while the tree is being edited.
+ */
+bNode *node_find_node_by_identifier(bNodeTree &ntree, int32_t identifier);
+
+/**
+ * The link feeding #socket (an input socket), or null. Walks the raw link
+ * list instead of the topology cache, so it is usable while the tree is being
+ * edited.
+ */
+const bNodeLink *node_find_incoming_link(const bNodeTree &ntree, const bNodeSocket &socket);
+
+/**
+ * The node feeding #socket via direct links, following through reroute
+ * nodes, or null (also when the chain ends in an unlinked reroute). Walks the
+ * raw link list, so it is usable while the tree is being edited. Muted nodes
+ * and links are treated like regular ones.
+ */
+bNode *node_find_source_node(const bNodeTree &ntree, const bNodeSocket &socket);
+
 /** Try to find an input item with the given identifier in the entire node interface tree. */
 const bNodeTreeInterfaceSocket *node_find_interface_input_by_identifier(const bNodeTree &ntree,
                                                                         StringRef identifier);
@@ -838,6 +859,13 @@ bool node_set_selected(bNode &node, bool select);
  * Two active flags, ID nodes have special flag for buttons display.
  */
 void node_set_active(bNodeTree &ntree, bNode &node);
+/**
+ * Make the node the active texture / paint canvas without making it the active
+ * node, for when the active node must stay elsewhere (e.g. a texture layer
+ * stack whose selected layer's image should become the paint target). Does
+ * nothing when the node supports neither flag.
+ */
+void node_set_active_texture(bNodeTree &ntree, bNode &node);
 bNode *node_get_active(bNodeTree &ntree);
 void node_clear_active(bNodeTree &ntree);
 /**

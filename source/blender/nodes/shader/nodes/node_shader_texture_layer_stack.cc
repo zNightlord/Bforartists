@@ -6,9 +6,9 @@
  * \ingroup shdnodes
  */
 
-#include "NOD_sh_layer_stack.hh"
 #include "NOD_socket_items_ops.hh"
 #include "NOD_socket_items_ui.hh"
+#include "NOD_texture_stack.hh"
 
 #include "RNA_prototypes.hh"
 
@@ -24,12 +24,12 @@ static void node_declare(NodeDeclarationBuilder &b)
   const bNodeTree *tree = b.tree_or_null();
   const bNode *node = b.node_or_null();
   if (node) {
-    const NodeShaderLayerStack &storage = layer_stack_storage(*node);
+    const NodeShaderLayerStack &storage = layer_stack::storage(*node);
     const int last_index = storage.items_num - 1;
     for (const int i : IndexRange(storage.items_num)) {
       const NodeShaderLayerStackItem &item = storage.items[i];
       const UString name = item.name ? UString(item.name) : ""_ustr;
-      const UString layer_id(TextureLayerStackItemsAccessor::socket_identifier_for_item(item));
+      const UString layer_id(texture_stack::ItemsAccessor::socket_identifier_for_item(item));
       /* Closure-typed layers (adjustments) take a Closure that the inliner
        * evaluates with the accumulated stack below as its bundle input;
        * Bundle-typed layers (generators) take the bundle directly. Untyped
@@ -51,7 +51,7 @@ static void node_declare(NodeDeclarationBuilder &b)
       }
       if (tree) {
         layer_decl->socket_name_ptr(
-            &tree->id, *TextureLayerStackItemsAccessor::item_srna, &item, "name");
+            &tree->id, *texture_stack::ItemsAccessor::item_srna, &item, "name");
       }
       /* Non-base layers expose Opacity and Mask. The base (last) layer has no
        * Opacity (nothing below it to blend over), but still exposes a Mask so
@@ -59,7 +59,7 @@ static void node_declare(NodeDeclarationBuilder &b)
        * blends between the plain pre-stack value and this layer. */
       if (i != last_index) {
         const UString opacity_id(
-            TextureLayerStackItemsAccessor::opacity_socket_identifier_for_item(item));
+            texture_stack::ItemsAccessor::opacity_socket_identifier_for_item(item));
         b.add_input<decl::Float>("Opacity"_ustr, opacity_id)
             .default_value(1.0f)
             .min(0.0f)
@@ -67,7 +67,7 @@ static void node_declare(NodeDeclarationBuilder &b)
             .subtype(PROP_FACTOR)
             .description("Opacity of this layer over the layers below");
       }
-      const UString mask_id(TextureLayerStackItemsAccessor::mask_socket_identifier_for_item(item));
+      const UString mask_id(texture_stack::ItemsAccessor::mask_socket_identifier_for_item(item));
       b.add_input<decl::Float>("Mask"_ustr, mask_id)
           .default_value(1.0f)
           .min(0.0f)
@@ -87,7 +87,7 @@ static void node_declare(NodeDeclarationBuilder &b)
    * the end, so it becomes the new base and the previously-last item gains its
    * blend-weight sockets. */
   b.add_input<decl::Extend>(""_ustr, "__extend__"_ustr)
-      .custom_draw(socket_items::ui::draw_extend_socket_fn<TextureLayerStackItemsAccessor>());
+      .custom_draw(socket_items::ui::draw_extend_socket_fn<texture_stack::ItemsAccessor>());
   b.add_output<decl::Bundle>("Result"_ustr).structure_type(StructureType::Single);
 }
 
@@ -104,12 +104,11 @@ static void node_declare(NodeDeclarationBuilder &b)
  * and the refresh migrates links onto the re-built socket. */
 static void node_update(bNodeTree *ntree, bNode *node)
 {
-  NodeShaderLayerStack &storage = layer_stack_storage(*node);
+  NodeShaderLayerStack &storage = layer_stack::storage(*node);
   bool changed = false;
   for (const int i : IndexRange(storage.items_num)) {
     NodeShaderLayerStackItem &item = storage.items[i];
-    const std::string identifier = TextureLayerStackItemsAccessor::socket_identifier_for_item(
-        item);
+    const std::string identifier = texture_stack::ItemsAccessor::socket_identifier_for_item(item);
     /* Walk the links directly: the topology cache may be dirty here. */
     const bNodeSocket *from_socket = nullptr;
     for (const bNodeLink &link : ntree->links) {
@@ -147,7 +146,7 @@ static void node_update(bNodeTree *ntree, bNode *node)
 
 static void node_operators()
 {
-  socket_items::ops::make_common_operators<TextureLayerStackItemsAccessor>();
+  socket_items::ops::make_common_operators<texture_stack::ItemsAccessor>();
 }
 
 /* Sidebar layout: the layer items list with add/remove/move, plus blend mode
@@ -156,10 +155,10 @@ static void node_layout_ex(ui::Layout &layout, bContext *C, PointerRNA *node_ptr
 {
   bNodeTree &ntree = *reinterpret_cast<bNodeTree *>(node_ptr->owner_id);
   const bNode &node = *static_cast<const bNode *>(node_ptr->data);
-  socket_items::ui::draw_items_list_with_operators<TextureLayerStackItemsAccessor>(
+  socket_items::ui::draw_items_list_with_operators<texture_stack::ItemsAccessor>(
       C, &layout, ntree, node);
-  const NodeShaderLayerStack &storage = layer_stack_storage(node);
-  socket_items::ui::draw_active_item_props<TextureLayerStackItemsAccessor>(
+  const NodeShaderLayerStack &storage = layer_stack::storage(node);
+  socket_items::ui::draw_active_item_props<texture_stack::ItemsAccessor>(
       ntree, node, [&](PointerRNA *item_ptr) {
         layout.use_property_split_set(true);
         layout.use_property_decorate_set(false);
@@ -175,7 +174,7 @@ static void node_layout_ex(ui::Layout &layout, bContext *C, PointerRNA *node_ptr
 void register_node_type_sh_texture_layer_stack()
 {
   namespace file_ns = nodes::node_shader_texture_layer_stack_cc;
-  using Accessor = nodes::TextureLayerStackItemsAccessor;
+  using Accessor = nodes::texture_stack::ItemsAccessor;
 
   static bke::bNodeType ntype;
   common_node_type_base(&ntype, "ShaderNodeTextureLayerStack"_ustr, SH_NODE_TEXTURE_LAYER_STACK);
@@ -205,7 +204,7 @@ void register_node_type_sh_texture_layer_stack()
 
 namespace nodes {
 
-StructRNA **TextureLayerStackItemsAccessor::item_srna = &RNA_ShaderTextureLayerStackItem;
+StructRNA **texture_stack::ItemsAccessor::item_srna = &RNA_ShaderTextureLayerStackItem;
 
 }  // namespace nodes
 

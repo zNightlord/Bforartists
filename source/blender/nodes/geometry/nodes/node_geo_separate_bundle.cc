@@ -91,8 +91,20 @@ static bool node_insert_link(bke::NodeInsertLinkParams &params)
     }
     return true;
   }
-  return socket_items::try_add_item_via_any_extend_socket<SeparateBundleItemsAccessor>(
-      params.ntree, params.node, params.node, params.link);
+  if (!socket_items::try_add_item_via_any_extend_socket<SeparateBundleItemsAccessor>(
+          params.ntree, params.node, params.node, params.link))
+  {
+    return false;
+  }
+  /* Let the tree type react to a bundle channel being routed out of this node (the shader tree
+   * enables a texture layer channel and seeds its base value so the render does not change). The
+   * tree-type callback keeps this geometry node from depending on any specific tree's module. */
+  if (params.link.fromnode == &params.node && params.ntree.typeinfo &&
+      params.ntree.typeinfo->separate_bundle_output_linked)
+  {
+    params.ntree.typeinfo->separate_bundle_output_linked(params.ntree, params.node, params.link);
+  }
+  return true;
 }
 
 static void node_layout_ex(ui::Layout &layout, bContext *C, PointerRNA *node_ptr)

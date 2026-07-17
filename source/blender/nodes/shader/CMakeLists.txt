@@ -6,6 +6,7 @@ set(INC
   .
   ..
   PUBLIC include
+  PRIVATE ../geometry/include
   PRIVATE ../intern
   PRIVATE ../../editors/include
   PRIVATE ../../makesrna
@@ -116,15 +117,24 @@ set(SRC
   nodes/node_shader_wavelength.cc
   nodes/node_shader_wireframe.cc
 
+  node_closure_zone.cc
+  node_layer_stack.cc
+  node_mask_stack.cc
   node_shader_register.cc
   node_shader_tree.cc
   node_shader_util.cc
+  node_texture_channel.cc
+  node_texture_stack.cc
 
   node_shader_register.hh
   node_shader_util.hh
 
+  include/NOD_closure_zone.hh
+  include/NOD_layer_stack.hh
+  include/NOD_mask_stack.hh
   include/NOD_shader_raycast.hh
-  include/NOD_sh_layer_stack.hh
+  include/NOD_texture_channel.hh
+  include/NOD_texture_stack.hh
 )
 
 set(LIB

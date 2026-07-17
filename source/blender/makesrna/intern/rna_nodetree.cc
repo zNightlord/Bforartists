@@ -694,13 +694,15 @@ static const EnumPropertyItem node_cryptomatte_layer_name_items[] = {
 #  include "NOD_geo_viewer.hh"
 #  include "NOD_geometry.hh"
 #  include "NOD_geometry_nodes_lazy_function.hh"
+#  include "NOD_layer_stack.hh"
+#  include "NOD_mask_stack.hh"
 #  include "NOD_rna_define.hh"
-#  include "NOD_sh_layer_stack.hh"
 #  include "NOD_shader.h"
 #  include "NOD_shader_raycast.hh"
 #  include "NOD_socket.hh"
 #  include "NOD_socket_items.hh"
 #  include "NOD_texture.h"
+#  include "NOD_texture_stack.hh"
 
 #  include "RE_engine.h"
 #  include "RE_pipeline.h"
@@ -732,14 +734,14 @@ using nodes::ForeachGeometryElementMainItemsAccessor;
 using nodes::FormatStringItemsAccessor;
 using nodes::GeoViewerItemsAccessor;
 using nodes::IndexSwitchItemsAccessor;
-using nodes::MaskStackItemsAccessor;
+using MaskStackItemsAccessor = nodes::mask_stack::ItemsAccessor;
 using nodes::MenuSwitchItemsAccessor;
 using nodes::RasterizePointsItemsAccessor;
 using nodes::RaycastSampleAttributeItemsAccessor;
 using nodes::RepeatItemsAccessor;
 using nodes::SeparateBundleItemsAccessor;
 using nodes::SimulationItemsAccessor;
-using nodes::TextureLayerStackItemsAccessor;
+using TextureLayerStackItemsAccessor = nodes::texture_stack::ItemsAccessor;
 
 extern FunctionRNA *rna_NodeTree_poll_func;
 extern FunctionRNA *rna_NodeTree_update_func;
@@ -3883,20 +3885,71 @@ static void rna_Node_ItemArray_item_name_set(PointerRNA *ptr, const char *value)
   nodes::socket_items::set_item_name_and_make_unique<Accessor>(*node, item, value);
 }
 
+static bNode *rna_shader_layer_stack_node_for_item(bNodeTree &ntree,
+                                                   NodeShaderLayerStackItem &item)
+{
+  using namespace blender;
+  if (bNode *node = nodes::socket_items::find_node_by_item<TextureLayerStackItemsAccessor>(ntree,
+                                                                                           item))
+  {
+    return node;
+  }
+  return nodes::socket_items::find_node_by_item<MaskStackItemsAccessor>(ntree, item);
+}
+
+static bNodeSocket *rna_shader_layer_stack_item_opacity_socket(PointerRNA *ptr)
+{
+  using namespace blender;
+  NodeShaderLayerStackItem &item = *static_cast<NodeShaderLayerStackItem *>(ptr->data);
+  bNodeTree &ntree = *reinterpret_cast<bNodeTree *>(ptr->owner_id);
+  bNode *node = rna_shader_layer_stack_node_for_item(ntree, item);
+  if (node == nullptr) {
+    return nullptr;
+  }
+  const NodeShaderLayerStack &storage = nodes::layer_stack::storage(*node);
+  for (const int i : blender::IndexRange(storage.items_num)) {
+    if (&storage.items[i] == &item) {
+      return nodes::texture_stack::StackLayer{&ntree, node, i}.opacity_socket();
+    }
+  }
+  return nullptr;
+}
+
+/* Opacity as an editable percentage; the underlying socket stores a 0..1 factor. */
+static float rna_ShaderLayerStackItem_opacity_get(PointerRNA *ptr)
+{
+  const bNodeSocket *sock = rna_shader_layer_stack_item_opacity_socket(ptr);
+  if (sock == nullptr) {
+    return 100.0f;
+  }
+  return sock->default_value_typed<bNodeSocketValueFloat>()->value * 100.0f;
+}
+
+static void rna_ShaderLayerStackItem_opacity_set(PointerRNA *ptr, float value)
+{
+  bNodeSocket *sock = rna_shader_layer_stack_item_opacity_socket(ptr);
+  if (sock == nullptr) {
+    return;
+  }
+  sock->default_value_typed<bNodeSocketValueFloat>()->value = std::clamp(value, 0.0f, 100.0f) /
+                                                              100.0f;
+  BKE_ntree_update_tag_socket_property(reinterpret_cast<bNodeTree *>(ptr->owner_id), sock);
+}
+
 static bool rna_ShaderTextureLayerStackItem_channel_enabled(NodeShaderLayerStackItem *item,
                                                             const char *channel)
 {
-  return !blender::nodes::layer_stack_channel_disabled(*item, channel);
+  return !blender::nodes::layer_stack::channel_disabled(*item, channel);
 }
 
 static void rna_ShaderTextureLayerStackItem_channel_set_enabled(
     ID *id, NodeShaderLayerStackItem *item, Main *bmain, const char *channel, const bool enabled)
 {
   using namespace blender;
-  nodes::layer_stack_channel_set_disabled(*item, channel, !enabled);
+  nodes::layer_stack::set_channel_disabled(*item, channel, !enabled);
   bNodeTree *ntree = reinterpret_cast<bNodeTree *>(id);
-  bNode *node = nodes::socket_items::find_node_by_item<nodes::TextureLayerStackItemsAccessor>(
-      *ntree, *item);
+  bNode *node = nodes::socket_items::find_node_by_item<TextureLayerStackItemsAccessor>(*ntree,
+                                                                                       *item);
   if (node) {
     BKE_ntree_update_tag_node_property(ntree, node);
   }
@@ -5134,6 +5187,25 @@ static void rna_def_sh_layer_stack_item(BlenderRNA *brna, const ShaderLayerStack
   prop = RNA_def_property(srna, "mute", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "flag", SHADER_LAYER_STACK_ITEM_MUTED);
   RNA_def_property_ui_text(prop, "Mute", mute_description);
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, item_update_func);
+
+  /* Collapse state of the item's row in the Texture Layers list. Stored here so
+   * it survives undo and save/load; a plain redraw is enough (no tree update). */
+  prop = RNA_def_property(srna, "show_expanded", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_negative_sdna(prop, nullptr, "flag", SHADER_LAYER_STACK_ITEM_COLLAPSED);
+  RNA_def_property_ui_text(
+      prop, "Expanded", "Show the item's mask and group child rows in the Texture Layers list");
+  RNA_def_property_update(prop, NC_NODE, nullptr);
+
+  /* Editable percentage view of the item's Opacity socket (stored as a 0..1 factor). */
+  prop = RNA_def_property(srna, "opacity", PROP_FLOAT, PROP_PERCENTAGE);
+  RNA_def_property_float_funcs(prop,
+                               "rna_ShaderLayerStackItem_opacity_get",
+                               "rna_ShaderLayerStackItem_opacity_set",
+                               nullptr);
+  RNA_def_property_range(prop, 0.0f, 100.0f);
+  RNA_def_property_ui_range(prop, 0.0f, 100.0f, 1.0f, 0);
+  RNA_def_property_ui_text(prop, "Opacity", "Opacity of this layer over the layers below");
   RNA_def_property_update(prop, NC_NODE | NA_EDITED, item_update_func);
 
   prop = RNA_def_property(srna, "identifier", PROP_INT, PROP_NONE);

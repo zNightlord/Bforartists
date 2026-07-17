@@ -1113,6 +1113,14 @@ class NODE_PT_node_tree_properties(Panel):
             if body:
                 col = body.column(align=True)
                 col.prop(group, "is_strip_modifier")
+        elif group.bl_idname == "ShaderNodeTree":
+            if context.preferences.experimental.use_texture_layers:
+                header, body = col.panel("group_usage")
+                header.label(text="Usage")
+                if body:
+                    # Bitflag enum: drawn as one toggle per usage, so a group
+                    # can be marked e.g. Texture Generator + Mask Generator.
+                    body.column().prop(group, "usage")
 
 
 class NODE_PT_node_tree_animation(Panel):

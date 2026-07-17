@@ -2599,6 +2599,16 @@ void RNA_api_ui_layout(StructRNA *srna)
   parm = RNA_def_pointer(func, "node", "Node", "Node", "Display inputs of this node");
   RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED | PARM_RNAPTR);
 
+  func = RNA_def_function(srna, "template_shader_layers", "template_shader_layers");
+  RNA_def_function_ui_description(
+      func,
+      "Show all shader leaves (BSDFs) in the shader node tree as root items, with their "
+      "texture layer stacks nested underneath");
+  RNA_def_function_flag(func, FUNC_USE_CONTEXT);
+  parm = RNA_def_pointer(
+      func, "node_tree", "ShaderNodeTree", "Node Tree", "Shader node tree to display");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED | PARM_RNAPTR);
+
   func = RNA_def_function(srna, "template_asset_shelf_popover", "rna_uiTemplateAssetShelfPopover");
   RNA_def_function_ui_description(func, "Create a button to open an asset shelf in a popover");
   RNA_def_function_flag(func, FUNC_USE_CONTEXT);

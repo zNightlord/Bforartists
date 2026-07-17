@@ -78,6 +78,7 @@
 #include "NOD_shader.h"
 #include "NOD_socket.hh"
 #include "NOD_texture.h"
+#include "NOD_texture_stack.hh"
 #include "node_intern.hh" /* own include */
 
 namespace blender {
@@ -266,6 +267,16 @@ void ED_node_set_active(
 
   /* Tree specific activate calls. */
   if (ntree->type == NTREE_SHADER) {
+    /* Texture layers: the active node is what identifies the active layer to the
+     * Shader Layers tree view and the layer operators, so selecting one of a
+     * layer's nodes here makes that layer active. Nodes outside a layer stack
+     * leave the active layer alone. */
+    if (const std::optional<nodes::texture_stack::StackLayer> layer =
+            nodes::texture_stack::layer_for_node(*ntree, *node))
+    {
+      nodes::layer_stack::storage(*layer->stack).active_index = layer->index;
+    }
+
     if (ELEM(node->type_legacy,
              SH_NODE_OUTPUT_MATERIAL,
              SH_NODE_OUTPUT_WORLD,

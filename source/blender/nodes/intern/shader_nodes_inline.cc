@@ -18,12 +18,14 @@
 
 #include "DNA_material_types.h"
 
+#include "NOD_layer_stack.hh"
 #include "NOD_menu_value.hh"
 #include "NOD_multi_function.hh"
 #include "NOD_node_declaration.hh"
 #include "NOD_node_in_compute_context.hh"
-#include "NOD_sh_layer_stack.hh"
 #include "NOD_shader_nodes_inline.hh"
+#include "NOD_texture_channel.hh"
+#include "NOD_texture_stack.hh"
 
 namespace blender::nodes {
 namespace {
@@ -1311,10 +1313,92 @@ class ShaderNodesInliner {
     return true;
   }
 
+  /* Build the plain (pre-stack) value bundle for a Texture Layer Stack: the
+   * BSDF's input default for each channel the base layer carries. Null when
+   * the stack is not a root (its Result does not feed the BSDF's Separate
+   * Bundle), reaches no BSDF, or none of the base channels map to a fillable
+   * BSDF input. Only a root stack has a meaningful plain value: nested group
+   * stacks contribute a bundle, not the material's pre-stack channel values. */
+  BundleSocketValuePtr build_stack_plain_bundle(const NodeInContext &node,
+                                                const BundleSocketValue *base_bundle)
+  {
+    if (base_bundle == nullptr) {
+      return nullptr;
+    }
+    bNode &stack_bnode = const_cast<bNode &>(*node.node);
+    /* Only for a root stack, whose Result feeds a Separate Bundle. */
+    bool is_root = false;
+    if (bNodeSocket *result = bke::node_find_socket(stack_bnode, SOCK_OUT, "Result"_ustr)) {
+      for (const bNodeSocket *target : result->directly_linked_sockets()) {
+        if (texture_channel::is_separate_bundle(target->owner_node())) {
+          is_root = true;
+          break;
+        }
+      }
+    }
+    if (!is_root) {
+      return nullptr;
+    }
+    bNode *bsdf = texture_stack::bsdf_for(stack_bnode.owner_tree(), stack_bnode);
+    if (bsdf == nullptr) {
+      return nullptr;
+    }
+    auto plain = std::make_shared<BundleSocketValue>();
+    for (const BundleSocketValue::Item &base_item : base_bundle->items) {
+      for (bNodeSocket &sock : bsdf->inputs) {
+        if (base_item.key != sock.name || !texture_channel::is_fillable_input(sock)) {
+          continue;
+        }
+        std::optional<PrimitiveSocketValue> prim;
+        switch (sock.type) {
+          case SOCK_FLOAT:
+            prim = PrimitiveSocketValue{sock.default_value_typed<bNodeSocketValueFloat>()->value};
+            break;
+          case SOCK_VECTOR:
+            prim = PrimitiveSocketValue{
+                float3(sock.default_value_typed<bNodeSocketValueVector>()->value)};
+            break;
+          case SOCK_RGBA:
+            prim = PrimitiveSocketValue{
+                ColorGeometry4f(sock.default_value_typed<bNodeSocketValueRGBA>()->value)};
+            break;
+          default:
+            break;
+        }
+        if (prim) {
+          plain->items.append({base_item.key, SocketValue{*prim}, base_item.socket_type});
+        }
+        break;
+      }
+    }
+    if (plain->items.is_empty()) {
+      return nullptr;
+    }
+    return BundleSocketValuePtr{plain};
+  }
+
+  /* Whether #value is a constant 1.0 (a primitive or an unlinked socket's
+   * default), used to skip the base layer's plain-value blend when its mask has
+   * no effect. */
+  static bool socket_value_is_one(const SocketValue &value)
+  {
+    if (const auto *prim = std::get_if<PrimitiveSocketValue>(&value.value)) {
+      if (const float *f = std::get_if<float>(&prim->value)) {
+        return *f == 1.0f;
+      }
+    }
+    if (const auto *isv = std::get_if<InputSocketValue>(&value.value)) {
+      if (isv->socket->type == SOCK_FLOAT) {
+        return isv->socket->default_value_typed<bNodeSocketValueFloat>()->value == 1.0f;
+      }
+    }
+    return false;
+  }
+
   void handle_output_socket__texture_layer_stack(const SocketInContext &socket)
   {
     const NodeInContext node = socket.owner_node();
-    const NodeShaderLayerStack &storage = nodes::layer_stack_storage(*node);
+    const NodeShaderLayerStack &storage = nodes::layer_stack::storage(*node);
     const int items_num = storage.items_num;
 
     if (items_num == 0) {
@@ -1364,7 +1448,19 @@ class ShaderNodesInliner {
         layers[i].opacity = value_by_socket_.lookup(opacity_sock);
         layers[i].mask = value_by_socket_.lookup(mask_sock);
       }
+      else {
+        /* The base layer has a Mask but no Opacity socket. */
+        const SocketInContext mask_sock = node.input_socket(sock_index++);
+        layers[i].mask = value_by_socket_.lookup(mask_sock);
+      }
     }
+
+    /* Plain (pre-stack) values for the base channels, read from the BSDF's
+     * input defaults. The base layer blends over these by its Mask, so a
+     * masked-out or disabled base channel reveals the plain value instead of
+     * the socket type's default (black). */
+    const BundleSocketValuePtr plain_bundle = this->build_stack_plain_bundle(node,
+                                                                             layers.last().bundle);
 
     /* Compose the final result. Start from the base layer at the bottom,
      * then composite each layer above it using opacity * mask as the
@@ -1400,7 +1496,7 @@ class ShaderNodesInliner {
       if (storage.items[i].disabled_channels_num > 0) {
         auto filtered = std::make_shared<BundleSocketValue>();
         for (const BundleSocketValue::Item &bundle_item : layer_bundle->items) {
-          if (!nodes::layer_stack_channel_disabled(storage.items[i], bundle_item.key)) {
+          if (!nodes::layer_stack::channel_disabled(storage.items[i], bundle_item.key)) {
             filtered->items.append(bundle_item);
           }
         }
@@ -1408,9 +1504,35 @@ class ShaderNodesInliner {
         layer_bundle = filtered_holder.get();
       }
       if (!state.accumulator) {
-        /* No base bundle yet: this layer becomes the start of the stack. */
-        state.accumulator = BundleSocketValuePtr{
-            std::make_shared<BundleSocketValue>(*layer_bundle)};
+        /* This layer becomes the start of the stack. When it is the base layer
+         * and the plain bundle is known, reveal the plain pre-stack value where
+         * the base does not fully cover it. With a constant 1.0 mask the base
+         * fully covers its channels, so only the channels it drops (disabled or
+         * not carried) fall back to the plain value — no Mix nodes needed.
+         * Otherwise blend the base over the plain values by its mask. */
+        if (i == items_num - 1 && plain_bundle) {
+          if (socket_value_is_one(layer.mask)) {
+            auto merged = std::make_shared<BundleSocketValue>(*layer_bundle);
+            Set<StringRef> keys;
+            for (const BundleSocketValue::Item &it : merged->items) {
+              keys.add(it.key);
+            }
+            for (const BundleSocketValue::Item &plain_item : plain_bundle->items) {
+              if (!keys.contains(plain_item.key)) {
+                merged->items.append(plain_item);
+              }
+            }
+            state.accumulator = BundleSocketValuePtr{merged};
+          }
+          else {
+            state.accumulator = this->blend_layer_bundles(
+                *node.node, *plain_bundle, *layer_bundle, layer.mask, MA_RAMP_BLEND);
+          }
+        }
+        else {
+          state.accumulator = BundleSocketValuePtr{
+              std::make_shared<BundleSocketValue>(*layer_bundle)};
+        }
         continue;
       }
       const SocketValue blend_factor_value = this->multiply_float_socket_values(
@@ -1431,7 +1553,7 @@ class ShaderNodesInliner {
   void handle_output_socket__mask_stack(const SocketInContext &socket)
   {
     const NodeInContext node = socket.owner_node();
-    const NodeShaderLayerStack &storage = nodes::layer_stack_storage(*node);
+    const NodeShaderLayerStack &storage = nodes::layer_stack::storage(*node);
     const int items_num = storage.items_num;
 
     if (items_num == 0) {
@@ -1442,8 +1564,7 @@ class ShaderNodesInliner {
       return;
     }
 
-    /* Sockets are declared per item: for items 0..N-2 the order is Mask,
-     * Opacity. The last item (N-1, base) only declares Mask. */
+    /* Sockets are declared per item, each item declaring Mask then Opacity. */
     if (this->schedule_missing_inputs(node)) {
       return;
     }
@@ -1464,19 +1585,20 @@ class ShaderNodesInliner {
         layers[i].has_value = true;
       }
       layers[i].blend_type = storage.items[i].blend_type;
-      const bool is_base = (i == items_num - 1);
-      if (!is_base) {
-        const SocketInContext opacity_sock = node.input_socket(sock_index++);
-        layers[i].opacity = value_by_socket_.lookup(opacity_sock);
-      }
+      const SocketInContext opacity_sock = node.input_socket(sock_index++);
+      layers[i].opacity = value_by_socket_.lookup(opacity_sock);
     }
 
     /* Start at the base mask, then composite each layer above using opacity
-     * as the per-mask weight and the layer's blend_type as the operation. */
+     * as the per-mask weight and the layer's blend_type as the operation.
+     * The base's own opacity blends it between fully unmasked (1.0) and its
+     * mask value, so the last mask can be faded out like the ones above it. */
     SocketValue accumulator{};
     bool have_acc = false;
     if (layers.last().has_value) {
-      accumulator = layers.last().value;
+      const SocketValue unmasked{PrimitiveSocketValue{1.0f}};
+      accumulator = this->blend_mask_floats(
+          *node.node, unmasked, layers.last().value, layers.last().opacity, MA_RAMP_BLEND);
       have_acc = true;
     }
 

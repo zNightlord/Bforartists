@@ -80,6 +80,9 @@ struct wmWindow;
 namespace ed::asset {
 struct AssetFilterSettings;
 }
+namespace nodes {
+class PanelDeclaration;
+}
 
 namespace ui {
 class AbstractView;
@@ -2781,12 +2784,26 @@ void template_light_linking_collection(
 
 void template_bone_collection_tree(Layout *layout, bContext *C);
 void template_grease_pencil_layer_tree(Layout *layout, bContext *C);
+void template_shader_layers(Layout *layout, bContext *C, PointerRNA *ptr);
 
 void template_tree_interface(Layout *layout, const bContext *C, PointerRNA *ptr);
 /**
  * Draw all node buttons and socket default values with the same panel structure used by the node.
  */
 void template_node_inputs(Layout *layout, bContext *C, PointerRNA *ptr);
+
+/**
+ * Draw the input sockets of a node declaration panel #panel_decl (recursively, including nested
+ * panels and layout items), calling #draw_socket for each input socket so callers can customize
+ * how individual sockets are drawn. Used by #template_node_inputs and the Texture Layers panel.
+ */
+void draw_node_inputs_recursive(
+    bContext *C,
+    Layout &layout,
+    bNode &node,
+    PointerRNA *node_ptr,
+    const blender::nodes::PanelDeclaration &panel_decl,
+    FunctionRef<void(Layout &layout, bNodeSocket &socket)> draw_socket);
 
 void template_collection_importer(Layout *layout, bContext *C);
 void template_collection_exporters(Layout *layout, bContext *C);

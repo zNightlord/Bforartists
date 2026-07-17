@@ -3820,6 +3820,47 @@ bNode *node_find_node_by_name(bNodeTree &ntree, const StringRefNull name)
       BLI_findstring(&ntree.nodes, name.c_str(), offsetof(bNode, name)));
 }
 
+bNode *node_find_node_by_identifier(bNodeTree &ntree, const int32_t identifier)
+{
+  for (bNode &node : ntree.nodes) {
+    if (node.identifier == identifier) {
+      return &node;
+    }
+  }
+  return nullptr;
+}
+
+const bNodeLink *node_find_incoming_link(const bNodeTree &ntree, const bNodeSocket &socket)
+{
+  for (const bNodeLink &link : ntree.links) {
+    if (link.tosock == &socket) {
+      return &link;
+    }
+  }
+  return nullptr;
+}
+
+bNode *node_find_source_node(const bNodeTree &ntree, const bNodeSocket &socket)
+{
+  const bNodeSocket *current = &socket;
+  /* Guard against reroute cycles, which can exist as invalid links. */
+  Set<const bNode *> visited;
+  while (const bNodeLink *link = node_find_incoming_link(ntree, *current)) {
+    bNode *source = link->fromnode;
+    if (source == nullptr || !source->is_reroute()) {
+      return source;
+    }
+    if (!visited.add(source)) {
+      return nullptr;
+    }
+    current = static_cast<const bNodeSocket *>(source->inputs.first);
+    if (current == nullptr) {
+      return nullptr;
+    }
+  }
+  return nullptr;
+}
+
 bNode &node_find_node(bNodeTree &ntree, bNodeSocket &socket)
 {
   ntree.ensure_topology_cache();
@@ -5274,6 +5315,24 @@ void node_set_active(bNodeTree &ntree, bNode &node)
   SET_FLAG_FROM_TEST(flags_to_set, is_texture_class, NODE_ACTIVE_TEXTURE);
 
   /* Make sure only one node is active per node tree. */
+  for (bNode *tnode : ntree.all_nodes()) {
+    tnode->flag &= ~flags_to_set;
+  }
+  node.flag |= flags_to_set;
+}
+
+void node_set_active_texture(bNodeTree &ntree, bNode &node)
+{
+  const bool is_paint_canvas = node_supports_active_flag(node, NODE_ACTIVE_PAINT_CANVAS);
+  const bool is_texture_class = node_supports_active_flag(node, NODE_ACTIVE_TEXTURE);
+  eNode_Flag flags_to_set = eNode_Flag(0);
+  SET_FLAG_FROM_TEST(flags_to_set, is_paint_canvas, NODE_ACTIVE_PAINT_CANVAS);
+  SET_FLAG_FROM_TEST(flags_to_set, is_texture_class, NODE_ACTIVE_TEXTURE);
+  if (flags_to_set == 0) {
+    return;
+  }
+
+  /* Make sure only one node holds these flags per node tree. */
   for (bNode *tnode : ntree.all_nodes()) {
     tnode->flag &= ~flags_to_set;
   }

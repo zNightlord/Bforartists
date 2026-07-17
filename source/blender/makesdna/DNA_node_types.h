@@ -3914,6 +3914,10 @@ struct NodeShaderMix {
 enum eShaderLayerStackItemFlag {
   /** Skip this layer entirely during shader inlining. */
   SHADER_LAYER_STACK_ITEM_MUTED = 1 << 0,
+  /** The item's row is collapsed in the Texture Layers tree view (its mask and
+   * group child rows are hidden). UI state, persisted so it survives undo and
+   * save/load. */
+  SHADER_LAYER_STACK_ITEM_COLLAPSED = 1 << 1,
 };
 
 /** #NodeShaderLayerStackItem::item_type: what kind of input the layer takes. */
