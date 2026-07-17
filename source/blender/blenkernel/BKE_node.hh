@@ -280,6 +280,20 @@ struct bNodeType {
   short nclass = 0;
   eNode_Flag flag = {};
 
+  /**
+   * For shader nodes: #eShaderNodeTreeUsage flags describing how this node
+   * type can act as a texture layer source. Node types with a generator or
+   * mask flag are listed directly in the material Texture Layers add menus,
+   * next to the node group assets carrying the same usage (experimental
+   * Texture Layers feature).
+   */
+  eShaderNodeTreeUsage texture_layer_usage = eShaderNodeTreeUsage(0);
+  /**
+   * Blend mode (MA_RAMP_*) a mask layer driven by this node type gets by
+   * default, e.g. Multiply for Ambient Occlusion. 0 is the regular Mix.
+   */
+  int texture_layer_mask_blend = 0;
+
   /* templates for static sockets */
   bNodeSocketTemplate *inputs = nullptr, *outputs = nullptr;
 

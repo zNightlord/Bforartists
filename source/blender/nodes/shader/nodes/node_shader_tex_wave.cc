@@ -364,6 +364,8 @@ void register_node_type_sh_tex_wave()
   ntype.ui_description = "Generate procedural bands or rings with noise";
   ntype.enum_name_legacy = "TEX_WAVE";
   ntype.nclass = NODE_CLASS_TEXTURE;
+  ntype.texture_layer_usage = SHADER_NODE_TREE_USAGE_TEXTURE_GENERATOR |
+                              SHADER_NODE_TREE_USAGE_MASK_GENERATOR;
   ntype.declare = file_ns::sh_node_tex_wave_declare;
   ntype.draw_buttons = file_ns::node_shader_buts_tex_wave;
   ntype.default_width = bke::NodeWidth::_160;
