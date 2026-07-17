@@ -1226,6 +1226,9 @@ class ShaderLayerDropTarget : public TreeViewItemDropTarget {
       RNA_boolean_set(&props, "as_mask", true);
     }
     else {
+      /* Activate the target stack so the operator poll (which resolves the active stack)
+       * succeeds even when an unrelated node was active at drop time. */
+      bke::node_set_active(ntree_, *parent_stack_);
       const int to_index = (drag_info.drop_location == DropLocation::After) ? parent_index_ + 1 :
                                                                               parent_index_;
       RNA_string_set(&props, "to_stack", parent_stack_->name);

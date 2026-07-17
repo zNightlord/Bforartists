@@ -87,7 +87,12 @@ void set_layer_blend(bNode &mask_stack_node, int layer_index, int blend_type);
 
 /** Pick #group_node's output that should feed a mask: prefer a SOCK_FLOAT
  * output (single-channel mask), else fall back to a SOCK_BUNDLE output that
- * is split via a Separate Bundle node, picking the most likely channel. */
-bNodeSocket *find_source_output(Main &bmain, bNodeTree &ntree, bNode &group_node);
+ * is split via a Separate Bundle node, picking the most likely channel.
+ * #r_source_node is set to the node owning the returned socket (the group
+ * node or the created Separate Bundle), or null when none is found. */
+bNodeSocket *find_source_output(Main &bmain,
+                                bNodeTree &ntree,
+                                bNode &group_node,
+                                bNode **r_source_node);
 
 }  // namespace blender::nodes::mask_stack

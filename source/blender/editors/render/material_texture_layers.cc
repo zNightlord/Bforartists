@@ -713,15 +713,19 @@ static wmOperatorStatus texture_layer_add_paint_mask_exec(bContext *C, wmOperato
   if (image_node == nullptr) {
     return OPERATOR_CANCELLED;
   }
-  bNodeSocket *alpha_out = bke::node_find_socket(*image_node, SOCK_OUT, "Alpha"_ustr);
-  if (alpha_out == nullptr) {
-    /* Should not happen (an Image Texture always has an Alpha output); clean up the freshly
+  /* The painted mask value is the image's Color, as for an Image Texture added
+   * from the mask menu. */
+  bNode *mask_source = nullptr;
+  bNodeSocket *mask_out = mask_stack::find_source_output(
+      *CTX_data_main(C), *ntree, *image_node, &mask_source);
+  if (mask_out == nullptr) {
+    /* Should not happen (an Image Texture always has a Color output); clean up the freshly
      * added node rather than leave it orphaned in the tree. */
     bke::node_remove_node(CTX_data_main(C), *ntree, *image_node, true);
     return OPERATOR_CANCELLED;
   }
   const int index = mask_stack::add_layer_from_source(
-      *CTX_data_main(C), *ntree, *mask_stack_node, "Paint", *image_node, *alpha_out);
+      *CTX_data_main(C), *ntree, *mask_stack_node, "Paint", *mask_source, *mask_out);
   /* Placed once the mask layer exists, so it lands in that layer's slot. */
   texture_stack::place_layer_source(*image_node, {ntree, mask_stack_node, index}, 320.0f);
   set_active_layer(*ntree, *mask_stack_node, index);

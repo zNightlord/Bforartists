@@ -178,28 +178,49 @@ void set_layer_blend(bNode &mask_stack_node, const int layer_index, const int bl
   data.items[layer_index].blend_type = blend_type;
 }
 
-bNodeSocket *find_source_output(Main &bmain, bNodeTree &ntree, bNode &group_node)
+/* The output of #node that best stands in for a mask when it has no float
+ * output of its own: a color or vector output, implicitly converted (an Image
+ * Texture's Color), and only then a companion Alpha. */
+static bNodeSocket *direct_source_output(bNode &node, bNode **r_source_node)
 {
+  bNodeSocket *sock = texture_stack::preferred_source_output(node, SOCK_FLOAT);
+  if (sock == nullptr) {
+    return nullptr;
+  }
+  *r_source_node = &node;
+  return sock;
+}
+
+bNodeSocket *find_source_output(Main &bmain,
+                                bNodeTree &ntree,
+                                bNode &group_node,
+                                bNode **r_source_node)
+{
+  *r_source_node = nullptr;
+  /* A float output is the mask value itself. An Alpha output is not: it
+   * accompanies the node's Color rather than being its value, so it comes after
+   * the channel and color outputs below (see #texture_stack::preferred_source_output). */
   for (bNodeSocket &sock : group_node.outputs) {
-    if (sock.type == SOCK_FLOAT) {
+    if (sock.type == SOCK_FLOAT && !texture_stack::is_companion_output(sock)) {
+      *r_source_node = &group_node;
       return &sock;
     }
   }
   /* No float output — extract a channel via Separate Bundle. */
   bNodeSocket *bundle_out = first_bundle_output(group_node);
   if (!bundle_out) {
-    return nullptr;
+    return direct_source_output(group_node, r_source_node);
   }
   bNode *separate = bke::node_add_node(nullptr, ntree, "NodeSeparateBundle"_ustr);
   if (!separate) {
-    return nullptr;
+    return direct_source_output(group_node, r_source_node);
   }
   separate->location[0] = group_node.location[0] + 200.0f;
   separate->location[1] = group_node.location[1];
   bNodeSocket *separate_in = first_bundle_input(*separate);
   if (!separate_in) {
     bke::node_remove_node(&bmain, ntree, *separate, true);
-    return nullptr;
+    return direct_source_output(group_node, r_source_node);
   }
   bke::node_add_link(ntree, group_node, *bundle_out, *separate, *separate_in);
   /* Triggering an update populates the Separate Bundle's output sockets from
@@ -213,6 +234,7 @@ bNodeSocket *find_source_output(Main &bmain, bNodeTree &ntree, bNode &group_node
       continue;
     }
     if (sock.identifier == StringRef("Mask") || sock.identifier == StringRef("Alpha")) {
+      *r_source_node = separate;
       return &sock;
     }
     if (!fallback) {
@@ -222,7 +244,9 @@ bNodeSocket *find_source_output(Main &bmain, bNodeTree &ntree, bNode &group_node
   if (!fallback) {
     /* No float channel to extract a mask from: don't leave the Separate Bundle orphaned. */
     bke::node_remove_node(&bmain, ntree, *separate, true);
+    return direct_source_output(group_node, r_source_node);
   }
+  *r_source_node = separate;
   return fallback;
 }
 

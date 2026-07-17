@@ -214,9 +214,14 @@ bool contains(bNodeTree &ntree, bNode &outer, const bNode &inner);
 
 /** Output socket of #node best matching a channel of type #channel_type:
  * an exact type match first, then any color/float/vector output. Outputs that
- * accompany another one (an Image Texture's Alpha) are only used when nothing
+ * accompany another one (see #is_companion_output) are only used when nothing
  * else is available, so e.g. a float channel takes the image's Color. */
 bNodeSocket *preferred_source_output(bNode &node, eNodeSocketDatatype channel_type);
+
+/** True for an output that accompanies another output rather than carrying the
+ * node's own value: an Image Texture's Alpha next to its Color. Driving a
+ * channel or a mask from one is rarely what the user wants. */
+bool is_companion_output(const bNodeSocket &socket);
 
 /** Delete #source and any nodes it transitively owns: #nodes_for_layer's walk
  * restricted to nodes nothing outside the layer uses (a shared Combine Bundle,

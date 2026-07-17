@@ -350,10 +350,7 @@ bool contains(bNodeTree &ntree, bNode &outer, const bNode &inner)
   return contains_impl(ntree, outer, inner, visited);
 }
 
-/* Output that accompanies another output rather than carrying the node's own
- * value: an Image Texture's Alpha next to its Color. Driving a channel from it
- * is rarely what the user wants, so it is only used as a last resort. */
-static bool is_companion_output(const bNodeSocket &socket)
+bool is_companion_output(const bNodeSocket &socket)
 {
   return StringRef(socket.name) == "Alpha";
 }

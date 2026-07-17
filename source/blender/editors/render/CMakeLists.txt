@@ -16,6 +16,7 @@ set(INC_SYS
 )
 
 set(SRC
+  material_texture_layer_assets.cc
   material_texture_layers.cc
   material_texture_layers_ui.cc
   render_internal.cc
