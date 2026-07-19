@@ -6,6 +6,7 @@
  * \ingroup nodes
  */
 
+#include <algorithm>
 #include <climits>
 
 #include <fmt/format.h>
@@ -46,6 +47,8 @@
 #include "RNA_define.hh"
 #include "RNA_enum_types.hh"
 #include "RNA_prototypes.hh"
+
+#include "BLO_read_write.hh"
 
 #include "MEM_guardedalloc.h"
 
@@ -234,6 +237,12 @@ static void refresh_node_socket(bNodeTree &ntree,
     /* Create a completely new socket. */
     new_socket = &socket_decl.build(ntree, node);
     SET_FLAG_FROM_TEST(new_socket->flag, hide_new_sockets, SOCK_HIDDEN);
+    /* A new socket takes both its value and UI from the stored value struct. */
+    if (socket_decl.default_value_data && new_socket->default_value) {
+      node_socket_copy_default_value_data(eNodeSocketDatatype(new_socket->type),
+                                          new_socket->default_value,
+                                          socket_decl.default_value_data);
+    }
   }
   else {
     STRNCPY_UTF8(old_socket_with_same_identifier->name, socket_decl.name.c_str());
@@ -245,6 +254,12 @@ static void refresh_node_socket(bNodeTree &ntree,
       /* Clear out identifier to avoid name collisions when a new socket is created. */
       old_socket_with_same_identifier->identifier[0] = '\0';
       new_socket = &socket_decl.update_or_build(ntree, node, *old_socket_with_same_identifier);
+      /* An existing socket keeps its edited value; only refresh the UI from the stored struct. */
+      if (socket_decl.default_value_data && new_socket->default_value) {
+        node_socket_copy_default_value_ui_data(eNodeSocketDatatype(new_socket->type),
+                                               new_socket->default_value,
+                                               socket_decl.default_value_data);
+      }
 
       if (new_socket == old_socket_with_same_identifier) {
         /* The existing socket has been updated, set the correct identifier again. */
@@ -1034,6 +1049,307 @@ void node_socket_copy_default_value_data(eNodeSocketDatatype datatype, void *to,
     case SOCK_SHADER:
     case SOCK_BUNDLE:
     case SOCK_CLOSURE:
+      break;
+  }
+}
+
+void node_socket_copy_default_value_ui_data(const eNodeSocketDatatype datatype,
+                                            void *to,
+                                            const void *from)
+{
+  /* Refresh the UI (subtype, soft range) from `from` while keeping `to`'s current value: do the
+   * full copy, then restore the value fields. Only the value types with a slider carry such UI;
+   * the others have nothing to refresh. */
+  switch (datatype) {
+    case SOCK_FLOAT: {
+      const float value = static_cast<bNodeSocketValueFloat *>(to)->value;
+      node_socket_copy_default_value_data(datatype, to, from);
+      static_cast<bNodeSocketValueFloat *>(to)->value = value;
+      break;
+    }
+    case SOCK_INT: {
+      const int value = static_cast<bNodeSocketValueInt *>(to)->value;
+      node_socket_copy_default_value_data(datatype, to, from);
+      static_cast<bNodeSocketValueInt *>(to)->value = value;
+      break;
+    }
+    case SOCK_VECTOR: {
+      bNodeSocketValueVector *dst = static_cast<bNodeSocketValueVector *>(to);
+      float value[4];
+      std::copy_n(dst->value, 4, value);
+      node_socket_copy_default_value_data(datatype, to, from);
+      std::copy_n(value, 4, dst->value);
+      break;
+    }
+    case SOCK_INT_VECTOR: {
+      bNodeSocketValueIntVector *dst = static_cast<bNodeSocketValueIntVector *>(to);
+      int value[3];
+      std::copy_n(dst->value, 3, value);
+      node_socket_copy_default_value_data(datatype, to, from);
+      std::copy_n(value, 3, dst->value);
+      break;
+    }
+    default:
+      break;
+  }
+}
+
+void node_socket_free_default_value_data(const eNodeSocketDatatype datatype, void *data)
+{
+  if (data == nullptr) {
+    return;
+  }
+  /* Frees the memory only. ID user counts (for ID-typed data) are the caller's responsibility, as
+   * they may be kept when the data is moved rather than released. */
+  switch (datatype) {
+    case SOCK_FLOAT:
+      MEM_delete(static_cast<bNodeSocketValueFloat *>(data));
+      break;
+    case SOCK_VECTOR:
+      MEM_delete(static_cast<bNodeSocketValueVector *>(data));
+      break;
+    case SOCK_RGBA:
+      MEM_delete(static_cast<bNodeSocketValueRGBA *>(data));
+      break;
+    case SOCK_BOOLEAN:
+      MEM_delete(static_cast<bNodeSocketValueBoolean *>(data));
+      break;
+    case SOCK_INT:
+      MEM_delete(static_cast<bNodeSocketValueInt *>(data));
+      break;
+    case SOCK_STRING:
+      MEM_delete(static_cast<bNodeSocketValueString *>(data));
+      break;
+    case SOCK_OBJECT:
+      MEM_delete(static_cast<bNodeSocketValueObject *>(data));
+      break;
+    case SOCK_IMAGE:
+      MEM_delete(static_cast<bNodeSocketValueImage *>(data));
+      break;
+    case SOCK_COLLECTION:
+      MEM_delete(static_cast<bNodeSocketValueCollection *>(data));
+      break;
+    case SOCK_TEXTURE:
+      MEM_delete(static_cast<bNodeSocketValueTexture *>(data));
+      break;
+    case SOCK_MATERIAL:
+      MEM_delete(static_cast<bNodeSocketValueMaterial *>(data));
+      break;
+    case SOCK_FONT:
+      MEM_delete(static_cast<bNodeSocketValueFont *>(data));
+      break;
+    case SOCK_SCENE:
+      MEM_delete(static_cast<bNodeSocketValueScene *>(data));
+      break;
+    case SOCK_TEXT_ID:
+      MEM_delete(static_cast<bNodeSocketValueText *>(data));
+      break;
+    case SOCK_MASK:
+      MEM_delete(static_cast<bNodeSocketValueMask *>(data));
+      break;
+    case SOCK_SOUND:
+      MEM_delete(static_cast<bNodeSocketValueSound *>(data));
+      break;
+    case SOCK_ROTATION:
+      MEM_delete(static_cast<bNodeSocketValueRotation *>(data));
+      break;
+    case SOCK_INT_VECTOR:
+      MEM_delete(static_cast<bNodeSocketValueIntVector *>(data));
+      break;
+    case SOCK_MENU: {
+      auto *value = static_cast<bNodeSocketValueMenu *>(data);
+      if (value->enum_items) {
+        /* Release shared data pointer. */
+        value->enum_items->remove_user_and_delete_if_last();
+      }
+      MEM_delete(value);
+      break;
+    }
+    case SOCK_MATRIX:
+    case SOCK_CUSTOM:
+    case SOCK_SHADER:
+    case SOCK_GEOMETRY:
+    case SOCK_BUNDLE:
+    case SOCK_CLOSURE:
+      MEM_delete_void(data);
+      break;
+  }
+}
+
+void node_socket_blend_write_default_value_data(BlendWriter *writer,
+                                                const eNodeSocketDatatype datatype,
+                                                const void *data)
+{
+  if (data == nullptr) {
+    return;
+  }
+  switch (datatype) {
+    case SOCK_FLOAT:
+      writer->write_struct_cast<bNodeSocketValueFloat>(data);
+      break;
+    case SOCK_VECTOR:
+      writer->write_struct_cast<bNodeSocketValueVector>(data);
+      break;
+    case SOCK_RGBA:
+      writer->write_struct_cast<bNodeSocketValueRGBA>(data);
+      break;
+    case SOCK_BOOLEAN:
+      writer->write_struct_cast<bNodeSocketValueBoolean>(data);
+      break;
+    case SOCK_INT:
+      writer->write_struct_cast<bNodeSocketValueInt>(data);
+      break;
+    case SOCK_STRING:
+      writer->write_struct_cast<bNodeSocketValueString>(data);
+      break;
+    case SOCK_OBJECT:
+      writer->write_struct_cast<bNodeSocketValueObject>(data);
+      break;
+    case SOCK_IMAGE:
+      writer->write_struct_cast<bNodeSocketValueImage>(data);
+      break;
+    case SOCK_COLLECTION:
+      writer->write_struct_cast<bNodeSocketValueCollection>(data);
+      break;
+    case SOCK_TEXTURE:
+      writer->write_struct_cast<bNodeSocketValueTexture>(data);
+      break;
+    case SOCK_MATERIAL:
+      writer->write_struct_cast<bNodeSocketValueMaterial>(data);
+      break;
+    case SOCK_FONT:
+      writer->write_struct_cast<bNodeSocketValueFont>(data);
+      break;
+    case SOCK_SCENE:
+      writer->write_struct_cast<bNodeSocketValueScene>(data);
+      break;
+    case SOCK_TEXT_ID:
+      writer->write_struct_cast<bNodeSocketValueText>(data);
+      break;
+    case SOCK_MASK:
+      writer->write_struct_cast<bNodeSocketValueMask>(data);
+      break;
+    case SOCK_SOUND:
+      writer->write_struct_cast<bNodeSocketValueSound>(data);
+      break;
+    case SOCK_ROTATION:
+      writer->write_struct_cast<bNodeSocketValueRotation>(data);
+      break;
+    case SOCK_MENU:
+      writer->write_struct_cast<bNodeSocketValueMenu>(data);
+      break;
+    case SOCK_INT_VECTOR:
+      writer->write_struct_cast<bNodeSocketValueIntVector>(data);
+      break;
+    case SOCK_MATRIX:
+    case SOCK_CUSTOM:
+      /* No default value, or stored via custom properties. */
+      break;
+    case SOCK_SHADER:
+    case SOCK_GEOMETRY:
+    case SOCK_BUNDLE:
+    case SOCK_CLOSURE:
+      BLI_assert_unreachable();
+      break;
+  }
+}
+
+void node_socket_blend_read_default_value_data(BlendDataReader *reader,
+                                               const eNodeSocketDatatype datatype,
+                                               void **data)
+{
+  switch (datatype) {
+    case SOCK_FLOAT:
+      BLO_read_struct(
+          reader, bNodeSocketValueFloat, reinterpret_cast<bNodeSocketValueFloat **>(data));
+      break;
+    case SOCK_VECTOR:
+      BLO_read_struct(
+          reader, bNodeSocketValueVector, reinterpret_cast<bNodeSocketValueVector **>(data));
+      break;
+    case SOCK_RGBA:
+      BLO_read_struct(
+          reader, bNodeSocketValueRGBA, reinterpret_cast<bNodeSocketValueRGBA **>(data));
+      break;
+    case SOCK_BOOLEAN:
+      BLO_read_struct(
+          reader, bNodeSocketValueBoolean, reinterpret_cast<bNodeSocketValueBoolean **>(data));
+      break;
+    case SOCK_INT:
+      BLO_read_struct(reader, bNodeSocketValueInt, reinterpret_cast<bNodeSocketValueInt **>(data));
+      break;
+    case SOCK_STRING:
+      BLO_read_struct(
+          reader, bNodeSocketValueString, reinterpret_cast<bNodeSocketValueString **>(data));
+      break;
+    case SOCK_OBJECT:
+      BLO_read_struct(
+          reader, bNodeSocketValueObject, reinterpret_cast<bNodeSocketValueObject **>(data));
+      break;
+    case SOCK_IMAGE:
+      BLO_read_struct(
+          reader, bNodeSocketValueImage, reinterpret_cast<bNodeSocketValueImage **>(data));
+      break;
+    case SOCK_COLLECTION:
+      BLO_read_struct(reader,
+                      bNodeSocketValueCollection,
+                      reinterpret_cast<bNodeSocketValueCollection **>(data));
+      break;
+    case SOCK_TEXTURE:
+      BLO_read_struct(
+          reader, bNodeSocketValueTexture, reinterpret_cast<bNodeSocketValueTexture **>(data));
+      break;
+    case SOCK_MATERIAL:
+      BLO_read_struct(
+          reader, bNodeSocketValueMaterial, reinterpret_cast<bNodeSocketValueMaterial **>(data));
+      break;
+    case SOCK_FONT:
+      BLO_read_struct(
+          reader, bNodeSocketValueFont, reinterpret_cast<bNodeSocketValueFont **>(data));
+      break;
+    case SOCK_SCENE:
+      BLO_read_struct(
+          reader, bNodeSocketValueScene, reinterpret_cast<bNodeSocketValueScene **>(data));
+      break;
+    case SOCK_TEXT_ID:
+      BLO_read_struct(
+          reader, bNodeSocketValueText, reinterpret_cast<bNodeSocketValueText **>(data));
+      break;
+    case SOCK_MASK:
+      BLO_read_struct(
+          reader, bNodeSocketValueMask, reinterpret_cast<bNodeSocketValueMask **>(data));
+      break;
+    case SOCK_SOUND:
+      BLO_read_struct(
+          reader, bNodeSocketValueSound, reinterpret_cast<bNodeSocketValueSound **>(data));
+      break;
+    case SOCK_ROTATION:
+      BLO_read_struct(
+          reader, bNodeSocketValueRotation, reinterpret_cast<bNodeSocketValueRotation **>(data));
+      break;
+    case SOCK_INT_VECTOR:
+      BLO_read_struct(
+          reader, bNodeSocketValueIntVector, reinterpret_cast<bNodeSocketValueIntVector **>(data));
+      break;
+    case SOCK_MENU:
+      BLO_read_struct(
+          reader, bNodeSocketValueMenu, reinterpret_cast<bNodeSocketValueMenu **>(data));
+      if (*data) {
+        auto *value = static_cast<bNodeSocketValueMenu *>(*data);
+        /* Clear runtime data. */
+        value->enum_items = nullptr;
+        value->runtime_flag = 0;
+      }
+      break;
+    case SOCK_MATRIX:
+    case SOCK_CUSTOM:
+      /* No default value, or stored via custom properties. */
+      break;
+    case SOCK_SHADER:
+    case SOCK_GEOMETRY:
+    case SOCK_BUNDLE:
+    case SOCK_CLOSURE:
+      BLI_assert_unreachable();
       break;
   }
 }

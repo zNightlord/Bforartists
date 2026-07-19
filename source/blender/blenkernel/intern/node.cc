@@ -1150,81 +1150,8 @@ static void pixel_subtype_forward_compat(BlendWriter *writer, const bNodeSocket 
 
 static void write_node_socket_default_value(BlendWriter *writer, const bNodeSocket *sock)
 {
-  if (sock->default_value == nullptr) {
-    return;
-  }
-
-  switch (sock->type) {
-    case SOCK_FLOAT:
-      writer->write_struct_cast<bNodeSocketValueFloat>(sock->default_value);
-      break;
-    case SOCK_VECTOR:
-      writer->write_struct_cast<bNodeSocketValueVector>(sock->default_value);
-      break;
-    case SOCK_RGBA:
-      writer->write_struct_cast<bNodeSocketValueRGBA>(sock->default_value);
-      break;
-    case SOCK_BOOLEAN:
-      writer->write_struct_cast<bNodeSocketValueBoolean>(sock->default_value);
-      break;
-    case SOCK_INT:
-      writer->write_struct_cast<bNodeSocketValueInt>(sock->default_value);
-      break;
-    case SOCK_STRING:
-      writer->write_struct_cast<bNodeSocketValueString>(sock->default_value);
-      break;
-    case SOCK_OBJECT:
-      writer->write_struct_cast<bNodeSocketValueObject>(sock->default_value);
-      break;
-    case SOCK_IMAGE:
-      writer->write_struct_cast<bNodeSocketValueImage>(sock->default_value);
-      break;
-    case SOCK_COLLECTION:
-      writer->write_struct_cast<bNodeSocketValueCollection>(sock->default_value);
-      break;
-    case SOCK_TEXTURE:
-      writer->write_struct_cast<bNodeSocketValueTexture>(sock->default_value);
-      break;
-    case SOCK_MATERIAL:
-      writer->write_struct_cast<bNodeSocketValueMaterial>(sock->default_value);
-      break;
-    case SOCK_FONT:
-      writer->write_struct_cast<bNodeSocketValueFont>(sock->default_value);
-      break;
-    case SOCK_SCENE:
-      writer->write_struct_cast<bNodeSocketValueScene>(sock->default_value);
-      break;
-    case SOCK_TEXT_ID:
-      writer->write_struct_cast<bNodeSocketValueText>(sock->default_value);
-      break;
-    case SOCK_MASK:
-      writer->write_struct_cast<bNodeSocketValueMask>(sock->default_value);
-      break;
-    case SOCK_SOUND:
-      writer->write_struct_cast<bNodeSocketValueSound>(sock->default_value);
-      break;
-    case SOCK_ROTATION:
-      writer->write_struct_cast<bNodeSocketValueRotation>(sock->default_value);
-      break;
-    case SOCK_MENU:
-      writer->write_struct_cast<bNodeSocketValueMenu>(sock->default_value);
-      break;
-    case SOCK_INT_VECTOR:
-      writer->write_struct_cast<bNodeSocketValueIntVector>(sock->default_value);
-      break;
-    case SOCK_MATRIX:
-      /* Matrix sockets currently have no default value. */
-      break;
-    case SOCK_CUSTOM:
-      /* Custom node sockets where default_value is defined use custom properties for storage. */
-      break;
-    case SOCK_SHADER:
-    case SOCK_GEOMETRY:
-    case SOCK_BUNDLE:
-    case SOCK_CLOSURE:
-      BLI_assert_unreachable();
-      break;
-  }
+  node_socket_blend_write_default_value_data(
+      writer, eNodeSocketDatatype(sock->type), sock->default_value);
 }
 
 static void write_node_socket(BlendWriter *writer, const bNodeSocket *sock)
@@ -1630,75 +1557,8 @@ static void direct_link_node_socket_default_value(BlendDataReader *reader, bNode
       versioning_internal::MIN_BLENDFILE_VERSION_FOR_MODERN_NODE_SOCKET_DEFAULT_VALUE_READING)
   {
     /* Modern, standard DNA-typed reading of sockets default values. */
-    switch (sock->type) {
-      case SOCK_FLOAT:
-        BLO_read_struct(reader, bNodeSocketValueFloat, &sock->default_value);
-        break;
-      case SOCK_VECTOR:
-        BLO_read_struct(reader, bNodeSocketValueVector, &sock->default_value);
-        break;
-      case SOCK_RGBA:
-        BLO_read_struct(reader, bNodeSocketValueRGBA, &sock->default_value);
-        break;
-      case SOCK_BOOLEAN:
-        BLO_read_struct(reader, bNodeSocketValueBoolean, &sock->default_value);
-        break;
-      case SOCK_INT:
-        BLO_read_struct(reader, bNodeSocketValueInt, &sock->default_value);
-        break;
-      case SOCK_STRING:
-        BLO_read_struct(reader, bNodeSocketValueString, &sock->default_value);
-        break;
-      case SOCK_OBJECT:
-        BLO_read_struct(reader, bNodeSocketValueObject, &sock->default_value);
-        break;
-      case SOCK_IMAGE:
-        BLO_read_struct(reader, bNodeSocketValueImage, &sock->default_value);
-        break;
-      case SOCK_COLLECTION:
-        BLO_read_struct(reader, bNodeSocketValueCollection, &sock->default_value);
-        break;
-      case SOCK_TEXTURE:
-        BLO_read_struct(reader, bNodeSocketValueTexture, &sock->default_value);
-        break;
-      case SOCK_MATERIAL:
-        BLO_read_struct(reader, bNodeSocketValueMaterial, &sock->default_value);
-        break;
-      case SOCK_FONT:
-        BLO_read_struct(reader, bNodeSocketValueFont, &sock->default_value);
-        break;
-      case SOCK_SCENE:
-        BLO_read_struct(reader, bNodeSocketValueScene, &sock->default_value);
-        break;
-      case SOCK_TEXT_ID:
-        BLO_read_struct(reader, bNodeSocketValueText, &sock->default_value);
-        break;
-      case SOCK_MASK:
-        BLO_read_struct(reader, bNodeSocketValueMask, &sock->default_value);
-        break;
-      case SOCK_SOUND:
-        BLO_read_struct(reader, bNodeSocketValueSound, &sock->default_value);
-        break;
-      case SOCK_ROTATION:
-        BLO_read_struct(reader, bNodeSocketValueRotation, &sock->default_value);
-        break;
-      case SOCK_MENU:
-        BLO_read_struct(reader, bNodeSocketValueMenu, &sock->default_value);
-        break;
-      case SOCK_INT_VECTOR:
-        BLO_read_struct(reader, bNodeSocketValueIntVector, &sock->default_value);
-        break;
-      case SOCK_MATRIX:
-        /* Matrix sockets currently have no default value. */
-      case SOCK_CUSTOM:
-        /* Custom node sockets where default_value is defined use custom properties for storage. */
-      case SOCK_SHADER:
-      case SOCK_GEOMETRY:
-      case SOCK_BUNDLE:
-      case SOCK_CLOSURE:
-        BLI_assert_unreachable();
-        break;
-    }
+    node_socket_blend_read_default_value_data(
+        reader, eNodeSocketDatatype(sock->type), &sock->default_value);
   }
   else {
     /* Legacy-compatible, raw-buffer-based reading of sockets default values. */
@@ -3197,84 +3057,10 @@ static void node_socket_free_default_value(bNodeSocket *sock, const bool do_id_u
   if (sock->default_value == nullptr) {
     return;
   }
-
   if (do_id_user) {
     socket_id_user_decrement(sock);
   }
-
-  switch (sock->type) {
-    case SOCK_FLOAT:
-      MEM_delete(sock->default_value_typed<bNodeSocketValueFloat>());
-      break;
-    case SOCK_VECTOR:
-      MEM_delete(sock->default_value_typed<bNodeSocketValueVector>());
-      break;
-    case SOCK_RGBA:
-      MEM_delete(sock->default_value_typed<bNodeSocketValueRGBA>());
-      break;
-    case SOCK_BOOLEAN:
-      MEM_delete(sock->default_value_typed<bNodeSocketValueBoolean>());
-      break;
-    case SOCK_INT:
-      MEM_delete(sock->default_value_typed<bNodeSocketValueInt>());
-      break;
-    case SOCK_STRING:
-      MEM_delete(sock->default_value_typed<bNodeSocketValueString>());
-      break;
-    case SOCK_OBJECT:
-      MEM_delete(sock->default_value_typed<bNodeSocketValueObject>());
-      break;
-    case SOCK_IMAGE:
-      MEM_delete(sock->default_value_typed<bNodeSocketValueImage>());
-      break;
-    case SOCK_COLLECTION:
-      MEM_delete(sock->default_value_typed<bNodeSocketValueCollection>());
-      break;
-    case SOCK_TEXTURE:
-      MEM_delete(sock->default_value_typed<bNodeSocketValueTexture>());
-      break;
-    case SOCK_MATERIAL:
-      MEM_delete(sock->default_value_typed<bNodeSocketValueMaterial>());
-      break;
-    case SOCK_FONT:
-      MEM_delete(sock->default_value_typed<bNodeSocketValueFont>());
-      break;
-    case SOCK_SCENE:
-      MEM_delete(sock->default_value_typed<bNodeSocketValueScene>());
-      break;
-    case SOCK_TEXT_ID:
-      MEM_delete(sock->default_value_typed<bNodeSocketValueText>());
-      break;
-    case SOCK_MASK:
-      MEM_delete(sock->default_value_typed<bNodeSocketValueMask>());
-      break;
-    case SOCK_SOUND:
-      MEM_delete(sock->default_value_typed<bNodeSocketValueSound>());
-      break;
-    case SOCK_ROTATION:
-      MEM_delete(sock->default_value_typed<bNodeSocketValueRotation>());
-      break;
-    case SOCK_MENU: {
-      auto &default_value_menu = *sock->default_value_typed<bNodeSocketValueMenu>();
-      if (default_value_menu.enum_items) {
-        /* Release shared data pointer. */
-        default_value_menu.enum_items->remove_user_and_delete_if_last();
-      }
-      MEM_delete(&default_value_menu);
-      break;
-    }
-    case SOCK_INT_VECTOR:
-      MEM_delete(sock->default_value_typed<bNodeSocketValueIntVector>());
-      break;
-    case SOCK_MATRIX:
-    case SOCK_CUSTOM:
-    case SOCK_SHADER:
-    case SOCK_GEOMETRY:
-    case SOCK_BUNDLE:
-    case SOCK_CLOSURE:
-      MEM_delete_void(sock->default_value);
-      break;
-  }
+  node_socket_free_default_value_data(eNodeSocketDatatype(sock->type), sock->default_value);
   sock->default_value = nullptr;
 }
 

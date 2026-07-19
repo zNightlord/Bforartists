@@ -275,28 +275,20 @@ static void *make_socket_data(const StringRef socket_type)
 /** \name Free Allocated Socket Data
  * \{ */
 
-template<typename T> void socket_data_free_impl(T *data, const bool /*do_id_user*/)
-{
-  MEM_delete(data);
-}
-template<> void socket_data_free_impl(bNodeSocketValueMenu *data, const bool /*do_id_user*/)
-{
-  if (data->enum_items) {
-    /* Release shared data pointer. */
-    data->enum_items->remove_user_and_delete_if_last();
-  }
-  MEM_delete(data);
-}
-
 static void socket_data_free(bNodeTreeInterfaceSocket &socket, const bool do_id_user)
 {
-  socket_data_to_static_type(socket.socket_type, [&]<typename SocketDataType>() {
-    if (do_id_user) {
+  const bke::bNodeSocketType *typeinfo = socket.socket_typeinfo();
+  if (typeinfo == nullptr) {
+    return;
+  }
+  if (do_id_user) {
+    socket_data_to_static_type(socket.socket_type, [&]<typename SocketDataType>() {
       socket_data_id_user_decrement(get_socket_data_as<SocketDataType>(socket));
-    }
-    socket_data_free_impl(&get_socket_data_as<SocketDataType>(socket), do_id_user);
-    socket.socket_data = nullptr;
-  });
+    });
+  }
+  /* The value struct free is shared with node sockets; ID user counts are handled above. */
+  node_socket_free_default_value_data(eNodeSocketDatatype(typeinfo->type), socket.socket_data);
+  socket.socket_data = nullptr;
 }
 
 /** \} */
@@ -359,90 +351,12 @@ static void socket_data_copy_ptr(bNodeTreeInterfaceSocket &dst,
 /** \name Write Socket Data to Blend File
  * \{ */
 
-/* NOTE: no default implementation, every used type must write at least the base struct. */
-
-inline void socket_data_write_impl(BlendWriter *writer, bNodeSocketValueFloat &data)
-{
-  writer->write_struct(&data);
-}
-inline void socket_data_write_impl(BlendWriter *writer, bNodeSocketValueInt &data)
-{
-  writer->write_struct(&data);
-}
-inline void socket_data_write_impl(BlendWriter *writer, bNodeSocketValueBoolean &data)
-{
-  writer->write_struct(&data);
-}
-inline void socket_data_write_impl(BlendWriter *writer, bNodeSocketValueRotation &data)
-{
-  writer->write_struct(&data);
-}
-inline void socket_data_write_impl(BlendWriter *writer, bNodeSocketValueVector &data)
-{
-  writer->write_struct(&data);
-}
-inline void socket_data_write_impl(BlendWriter *writer, bNodeSocketValueRGBA &data)
-{
-  writer->write_struct(&data);
-}
-inline void socket_data_write_impl(BlendWriter *writer, bNodeSocketValueString &data)
-{
-  writer->write_struct(&data);
-}
-inline void socket_data_write_impl(BlendWriter *writer, bNodeSocketValueObject &data)
-{
-  writer->write_struct(&data);
-}
-inline void socket_data_write_impl(BlendWriter *writer, bNodeSocketValueImage &data)
-{
-  writer->write_struct(&data);
-}
-inline void socket_data_write_impl(BlendWriter *writer, bNodeSocketValueCollection &data)
-{
-  writer->write_struct(&data);
-}
-inline void socket_data_write_impl(BlendWriter *writer, bNodeSocketValueTexture &data)
-{
-  writer->write_struct(&data);
-}
-inline void socket_data_write_impl(BlendWriter *writer, bNodeSocketValueMaterial &data)
-{
-  writer->write_struct(&data);
-}
-inline void socket_data_write_impl(BlendWriter *writer, bNodeSocketValueFont &data)
-{
-  writer->write_struct(&data);
-}
-inline void socket_data_write_impl(BlendWriter *writer, bNodeSocketValueScene &data)
-{
-  writer->write_struct(&data);
-}
-inline void socket_data_write_impl(BlendWriter *writer, bNodeSocketValueText &data)
-{
-  writer->write_struct(&data);
-}
-inline void socket_data_write_impl(BlendWriter *writer, bNodeSocketValueMask &data)
-{
-  writer->write_struct(&data);
-}
-inline void socket_data_write_impl(BlendWriter *writer, bNodeSocketValueSound &data)
-{
-  writer->write_struct(&data);
-}
-inline void socket_data_write_impl(BlendWriter *writer, bNodeSocketValueMenu &data)
-{
-  writer->write_struct(&data);
-}
-inline void socket_data_write_impl(BlendWriter *writer, bNodeSocketValueIntVector &data)
-{
-  writer->write_struct(&data);
-}
-
 static void socket_data_write(BlendWriter *writer, bNodeTreeInterfaceSocket &socket)
 {
-  socket_data_to_static_type(socket.socket_type, [&]<typename SocketDataType>() {
-    socket_data_write_impl(writer, get_socket_data_as<SocketDataType>(socket));
-  });
+  if (const bke::bNodeSocketType *typeinfo = socket.socket_typeinfo()) {
+    node_socket_blend_write_default_value_data(
+        writer, eNodeSocketDatatype(typeinfo->type), socket.socket_data);
+  }
 }
 
 /** \} */
@@ -450,18 +364,6 @@ static void socket_data_write(BlendWriter *writer, bNodeTreeInterfaceSocket &soc
 /* -------------------------------------------------------------------- */
 /** \name Read Socket Data from Blend File
  * \{ */
-
-template<typename T> void socket_data_read_data_impl(BlendDataReader *reader, T **data)
-{
-  BLO_read_struct(reader, T, data);
-}
-template<> void socket_data_read_data_impl(BlendDataReader *reader, bNodeSocketValueMenu **data)
-{
-  BLO_read_struct(reader, bNodeSocketValueMenu, data);
-  /* Clear runtime data. */
-  (*data)->enum_items = nullptr;
-  (*data)->runtime_flag = 0;
-}
 
 static const Map<StringRef, StringRef> &subtype_none_to_pixel()
 {
@@ -480,7 +382,9 @@ static void socket_data_read_data(BlendDataReader *reader, bNodeTreeInterfaceSoc
 {
   bool data_read = false;
   socket_data_to_static_type(socket.socket_type, [&]<typename SocketDataType>() {
-    socket_data_read_data_impl(reader, reinterpret_cast<SocketDataType **>(&socket.socket_data));
+    /* Value struct read is shared with node sockets (also clears Menu runtime data). */
+    node_socket_blend_read_default_value_data(
+        reader, eNodeSocketDatatype(socket.socket_typeinfo()->type), &socket.socket_data);
 
     /* Pixel subtype was set to None to ensure forward compatibility.
      * So the pixel subtype is restored here. */
