@@ -27,6 +27,7 @@
 #include "BLI_fileops.hh"
 #include "BLI_hash.hh"
 #include "BLI_listbase.hh"
+#include "BLI_map.hh"
 #include "BLI_path_utils.hh"
 #include "BLI_rect.hh"
 #include "BLI_string.hh"
@@ -124,7 +125,15 @@ namespace blender {
 static CLG_LogRef LOG = {"image"};
 
 static void image_init(Image *ima, eImageSource source, eImageType type);
+static void image_free_cached_pass_buffers(Image *ima);
 static void image_free_layers(Image *ima);
+static void imagecache_remove(Image *image, ImageCacheKey key);
+static ImBuf *imagecache_get(Image *image, ImageCacheKey key, bool *r_is_cached_empty);
+static ImageLayer *image_catalog_add_layer(Image *ima, const char *name);
+static ImagePass *image_layer_add_pass(ImageLayer *layer,
+                                       const char *name,
+                                       const char *chan_id,
+                                       int channels_num);
 static const ImagePass *image_user_resolve_pass(const Image *ima, ImageUser *iuser);
 static int image_effective_view(Image *ima, const ImageUser *iuser);
 static void image_free_packedfiles(Image *ima);
@@ -379,12 +388,24 @@ static void image_foreach_path(ID *id, BPathForeachPathData *bpath_data)
 }
 
 /**
- * Test if image layers should be written to the blend file,
- * Always false for now until layer and pass editing is supported.
+ * True when #Image.layers is authored user data rather than a mirror of an
+ * external source: a generated multi-layer image, whose pass list defines the
+ * paintable per-pass buffers. Such a catalog is written to the blend file and
+ * must not be discarded when signals rebuild file-based catalogs.
  */
-static bool image_layers_do_blend_write(const Image * /*ima*/)
+static bool image_has_authored_catalog(const Image *ima)
 {
-  return false;
+  return ima->source == IMA_SRC_GENERATED && ima->type == IMA_TYPE_MULTILAYER;
+}
+
+/**
+ * Test if image layers should be written to the blend file. Only when they are
+ * authored user data; the catalog of a loaded multi-layer EXR or a render
+ * result is rebuilt from its source instead.
+ */
+static bool image_layers_do_blend_write(const Image *ima)
+{
+  return image_has_authored_catalog(ima);
 }
 
 static void image_blend_write(BlendWriter *writer, ID *id, const void *id_address)
@@ -524,6 +545,67 @@ static void image_blend_read_after_liblink(BlendLibReader * /*reader*/, ID *id)
   }
 }
 
+static void image_blend_read_undo_preserve(BlendLibReader * /*reader*/, ID *id_new, ID *id_old)
+{
+  if (id_new == id_old) {
+    /* The ID was re-used unchanged from the old bmain; its catalog and cache
+     * keys are still consistent. */
+    return;
+  }
+  Image *ima_new = id_cast<Image *>(id_new);
+  const Image *ima_old = id_cast<const Image *>(id_old);
+  if (ima_new->runtime->cache == nullptr) {
+    return;
+  }
+
+  /* The restored cache (kept across undo) keys pass buffers by pointers into
+   * the old image's layer/pass catalog, while this image's catalog was re-read
+   * with freshly allocated pass structs. Re-key each entry onto the new pass of
+   * the same layer/pass name, so painted pass buffers survive the undo step.
+   * Entries without a match are dropped: they would dangle, and a future pass
+   * allocation could alias their key. (A non-authored catalog is not written to
+   * the blend file, so its entries are all dropped here and the buffers reload
+   * from their file, as before.) */
+  Map<const ImagePass *, const ImagePass *> pass_map;
+  for (const ImageLayer &layer_old : ima_old->layers) {
+    const ImageLayer *layer_new = static_cast<const ImageLayer *>(
+        BLI_findstring(&ima_new->layers, layer_old.name, offsetof(ImageLayer, name)));
+    for (const ImagePass &pass_old : layer_old.passes) {
+      const ImagePass *pass_new = layer_new ? static_cast<const ImagePass *>(
+                                                  BLI_findstring(&layer_new->passes,
+                                                                 pass_old.name,
+                                                                 offsetof(ImagePass, name))) :
+                                              nullptr;
+      pass_map.add(&pass_old, pass_new);
+    }
+  }
+
+  std::scoped_lock lock(ima_new->runtime->cache_mutex);
+
+  Vector<ImageCacheKey> old_keys;
+  ImBufCacheIter *iter = IMB_cacheIter_new(ima_new->runtime->cache);
+  while (!IMB_cacheIter_done(iter)) {
+    const ImageCacheKey *key = static_cast<const ImageCacheKey *>(IMB_cacheIter_getUserKey(iter));
+    if (key->pass != nullptr) {
+      old_keys.append(*key);
+    }
+    IMB_cacheIter_step(iter);
+  }
+  IMB_cacheIter_free(iter);
+
+  for (const ImageCacheKey &key : old_keys) {
+    const ImagePass *pass_new = pass_map.lookup_default(key.pass, nullptr);
+    ImBuf *ibuf = (pass_new != nullptr) ? imagecache_get(ima_new, key, nullptr) : nullptr;
+    imagecache_remove(ima_new, key);
+    if (ibuf != nullptr) {
+      ImageCacheKey key_new = key;
+      key_new.pass = pass_new;
+      imagecache_put(ima_new, key_new, ibuf);
+      IMB_freeImBuf(ibuf);
+    }
+  }
+}
+
 IDTypeInfo IDType_ID_IM = {
     .id_code = Image::id_type,
     .id_filter = FILTER_ID_IM,
@@ -550,7 +632,7 @@ IDTypeInfo IDType_ID_IM = {
     .blend_read_data = image_blend_read_data,
     .blend_read_after_liblink = image_blend_read_after_liblink,
 
-    .blend_read_undo_preserve = nullptr,
+    .blend_read_undo_preserve = image_blend_read_undo_preserve,
 
     .lib_override_apply_post = nullptr,
 };
@@ -818,40 +900,47 @@ static ImageTile *imagetile_alloc(int tile_number)
 }
 
 /**
- * Free the image's layer/pass catalog, first evicting any cache buffer keyed by
- * one of its passes.
+ * Evict every cache buffer keyed by a pass of the image's layer/pass catalog.
  *
  * The cache key holds a raw #ImagePass pointer, so an entry outliving its
  * pass would dangle — and could later silently alias a different pass
- * reallocated at the same address. Evicting here makes that an invariant of
- * freeing the catalog rather than something each call site must remember to do
- * by flushing buffers first (one #IMA_SIGNAL_RELOAD path, a packed image that
- * fails to repack, skipped the flush).
+ * reallocated at the same address. This must run whenever the catalog's pass
+ * structs are freed or replaced.
  *
  * The image keys catalog buffers by a non-null pass and everything else (plain,
  * UDIM-GPU and viewer buffers) by a null pass, and an image has a single
- * catalog, so every non-null-pass entry belongs to the catalog being freed. The
+ * catalog, so every non-null-pass entry belongs to the current catalog. The
  * caller holds `cache_mutex` (as for #image_free_cached_frames) or, for a
  * render-result viewer, runs on the main thread that owns its cache.
  */
+static void image_free_cached_pass_buffers(Image *ima)
+{
+  if (ima->runtime->cache == nullptr) {
+    return;
+  }
+  Vector<ImageCacheKey> stale_keys;
+  ImBufCacheIter *iter = IMB_cacheIter_new(ima->runtime->cache);
+  while (!IMB_cacheIter_done(iter)) {
+    const ImageCacheKey *key = static_cast<const ImageCacheKey *>(IMB_cacheIter_getUserKey(iter));
+    if (key->pass != nullptr) {
+      stale_keys.append(*key);
+    }
+    IMB_cacheIter_step(iter);
+  }
+  IMB_cacheIter_free(iter);
+  for (const ImageCacheKey &key : stale_keys) {
+    imagecache_remove(ima, key);
+  }
+}
+
+/**
+ * Free the image's layer/pass catalog, first evicting the cache buffers keyed
+ * by its passes so no entry is left dangling (see
+ * #image_free_cached_pass_buffers). Same locking rules as that function.
+ */
 static void image_free_layers(Image *ima)
 {
-  if (ima->runtime->cache != nullptr) {
-    Vector<ImageCacheKey> stale_keys;
-    ImBufCacheIter *iter = IMB_cacheIter_new(ima->runtime->cache);
-    while (!IMB_cacheIter_done(iter)) {
-      const ImageCacheKey *key = static_cast<const ImageCacheKey *>(
-          IMB_cacheIter_getUserKey(iter));
-      if (key->pass != nullptr) {
-        stale_keys.append(*key);
-      }
-      IMB_cacheIter_step(iter);
-    }
-    IMB_cacheIter_free(iter);
-    for (const ImageCacheKey &key : stale_keys) {
-      imagecache_remove(ima, key);
-    }
-  }
+  image_free_cached_pass_buffers(ima);
 
   for (ImageLayer &layer : ima->layers) {
     BLI_freelistN(&layer.passes);
@@ -862,10 +951,15 @@ static void image_free_layers(Image *ima)
 /**
  * Discard a loaded multi-layer EXR catalog so the next access rebuilds it from
  * the file. Used on reload and source changes; harmless for plain images, whose
- * catalog is empty and whose buffers are keyed by a null pass.
+ * catalog is empty and whose buffers are keyed by a null pass. An authored
+ * catalog is kept: it is user data with no file to rebuild from (the cached
+ * pass buffers were still freed with the rest of the cache).
  */
 static void image_reset_multilayer_catalog(Image *ima)
 {
+  if (image_has_authored_catalog(ima)) {
+    return;
+  }
   image_free_layers(ima);
   ima->runtime->multilayer_catalog_loaded = false;
   ima->runtime->multilayer_catalog_framenr = 0;
@@ -1312,7 +1406,7 @@ static void image_buf_fill_isolated(void *usersata_v)
   }
 }
 
-static ImBuf *add_ibuf_for_tile(Image *ima, ImageTile *tile)
+static ImBuf *add_ibuf_for_tile(Image *ima, ImageTile *tile, const ImagePass *pass = nullptr)
 {
   ImBuf *ibuf;
   uchar *rect = nullptr;
@@ -1337,7 +1431,12 @@ static ImBuf *add_ibuf_for_tile(Image *ima, ImageTile *tile)
       IMB_colormanagement_assign_float_colorspace(ibuf, ima->colorspace_settings.name);
     }
 
-    if (IMB_colormanagement_space_name_is_data(ima->colorspace_settings.name)) {
+    if (pass != nullptr) {
+      /* A per-pass fill color is stored in the image's colorspace, so data
+       * passes (roughness, normals, ...) fill with their exact values. */
+      copy_v4_v4(fill_color, pass->gen_color);
+    }
+    else if (IMB_colormanagement_space_name_is_data(ima->colorspace_settings.name)) {
       copy_v4_v4(fill_color, tile->gen_color);
     }
     else {
@@ -1362,7 +1461,7 @@ static ImBuf *add_ibuf_for_tile(Image *ima, ImageTile *tile)
       IMB_colormanagement_assign_byte_colorspace(ibuf, ima->colorspace_settings.name);
     }
 
-    copy_v4_v4(fill_color, tile->gen_color);
+    copy_v4_v4(fill_color, pass ? pass->gen_color : tile->gen_color);
   }
 
   if (!ibuf) {
@@ -1450,6 +1549,43 @@ Image *BKE_image_add_generated(Main *bmain,
     }
 
     image_add_view(ima, names[view_id], "");
+  }
+
+  return ima;
+}
+
+Image *BKE_image_add_generated_multilayer(Main *bmain,
+                                          const uint width,
+                                          const uint height,
+                                          const char *name,
+                                          const Span<ImageGeneratedPass> passes)
+{
+  Image *ima = image_alloc(bmain, std::nullopt, name, IMA_SRC_GENERATED, IMA_TYPE_MULTILAYER);
+  if (ima == nullptr) {
+    return nullptr;
+  }
+
+  ImageTile *tile = static_cast<ImageTile *>(ima->tiles.first);
+  tile->gen_x = width;
+  tile->gen_y = height;
+  tile->gen_type = IMA_GENTYPE_BLANK;
+  tile->gen_flag |= IMA_GEN_FLOAT;
+  tile->gen_depth = 32;
+  if (!passes.is_empty()) {
+    copy_v4_v4(tile->gen_color, passes[0].color);
+  }
+
+  /* A single unnamed layer, like a single-part multi-layer EXR. The per-pass
+   * pixel buffers are not created here: #image_acquire_ibuf generates each on
+   * first acquire and caches it under its resolved pass, filled with the
+   * pass's own color. */
+  ImageLayer *layer = image_catalog_add_layer(ima, "");
+  for (const ImageGeneratedPass &pass : passes) {
+    ImagePass *ipass = image_layer_add_pass(layer,
+                                            std::string(pass.name).c_str(),
+                                            std::string(pass.chan_id).c_str(),
+                                            pass.channels_num);
+    copy_v4_v4(ipass->gen_color, pass.color);
   }
 
   return ima;
@@ -3985,7 +4121,8 @@ void BKE_image_set_filepath_from_tile_number(char *filepath,
  */
 bool BKE_image_has_layer_catalog(const Image *ima)
 {
-  return ima->runtime->multilayer_catalog_loaded || ima->type == IMA_TYPE_R_RESULT;
+  return ima->runtime->multilayer_catalog_loaded || ima->type == IMA_TYPE_R_RESULT ||
+         image_has_authored_catalog(ima);
 }
 
 bool BKE_image_layers_have_name(const Image *ima)
@@ -4088,6 +4225,9 @@ bool BKE_image_is_multilayer(const Image *ima)
     if (ima->type == IMA_TYPE_R_RESULT) {
       return true;
     }
+  }
+  else if (image_has_authored_catalog(ima)) {
+    return true;
   }
   return false;
 }
@@ -5409,7 +5549,9 @@ static ImBuf *image_acquire_ibuf(Image *ima,
       if (base_tile->gen_depth == 0) {
         base_tile->gen_depth = 24;
       }
-      ibuf = add_ibuf_for_tile(ima, base_tile);
+      /* An authored multi-layer catalog generates one buffer per pass, each
+       * filled with the pass's own color. */
+      ibuf = add_ibuf_for_tile(ima, base_tile, key.pass);
       imagecache_put(ima, key, ibuf);
     }
     else if (ima->source == IMA_SRC_VIEWER) {
@@ -5520,7 +5662,10 @@ ImBuf *BKE_image_acquire_multilayer_view_ibuf(const RenderData &render_data,
   if (BKE_image_is_multilayer(&image)) {
     BLI_assert(pass_name);
 
-    if (!image.runtime->multilayer_catalog_loaded) {
+    /* An authored catalog (a generated multi-layer image) and a render result
+     * resolve without a file ever being loaded, so test the catalog itself
+     * rather than the multi-layer EXR load state. */
+    if (!BKE_image_has_layer_catalog(&image)) {
       return nullptr;
     }
 

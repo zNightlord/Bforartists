@@ -12,6 +12,7 @@
 #include "BLI_compiler_attrs.hh"
 #include "BLI_function_ref.hh"
 #include "BLI_mutex.hh"
+#include "BLI_span.hh"
 #include "BLI_string_ref.hh"
 
 #include "IMB_imbuf_enums.h"
@@ -316,6 +317,30 @@ Image *BKE_image_add_generated(Main *bmain,
                                bool stereo3d,
                                bool is_data,
                                bool tiled);
+
+/** Channel layout and initial fill of one pass of a generated multi-layer image. */
+struct ImageGeneratedPass {
+  StringRef name;
+  /** Channel IDs, e.g. "RGBA" or "XYZ". */
+  StringRef chan_id;
+  int channels_num = 0;
+  /** Fill color of the pass's generated buffer, in the image's colorspace
+   * (typically scene linear; no sRGB conversion is applied on fill). */
+  float color[4] = {0.0f, 0.0f, 0.0f, 1.0f};
+};
+
+/**
+ * Adds a new generated multi-layer image block: a single unnamed layer with the
+ * given passes. The per-pass pixel buffers are created on demand from the
+ * generation settings (a blank 32-bit float fill of each pass's own color), so
+ * each pass is paintable like any generated image. The pass list is authored
+ * user data, saved with the blend file.
+ */
+Image *BKE_image_add_generated_multilayer(Main *bmain,
+                                          unsigned int width,
+                                          unsigned int height,
+                                          const char *name,
+                                          Span<ImageGeneratedPass> passes);
 /**
  * Create an image from ibuf. The reference-count of ibuf is increased,
  * caller should take care to drop its reference by calling #IMB_freeImBuf if needed.

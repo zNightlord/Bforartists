@@ -229,6 +229,9 @@ struct ImagePass {
   /** Number of channels. */
   int channels_num = 0;
   char _pad[4] = {};
+  /** Solid fill of a generated pass buffer (authored catalogs only), stored in
+   * the image's colorspace (no sRGB conversion on fill). */
+  float gen_color[4] = {};
 };
 
 struct ImageLayer {
