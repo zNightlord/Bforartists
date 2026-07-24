@@ -256,6 +256,7 @@ class MATERIAL_MT_texture_layer_add_generator(Menu):
     def draw(self, _context):
         layout = self.layout
         layout.operator("material.texture_layer_add_fill", text="Fill", icon='SHADING_SOLID')
+        layout.operator("material.texture_layer_add_paint", text="Paint", icon='BRUSH_DATA')
         layout.separator()
         # Asset entries are populated by the C-side menu, which iterates the
         # full asset library and filters shader node groups whose usage flag

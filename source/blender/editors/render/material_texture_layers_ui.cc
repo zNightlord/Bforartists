@@ -770,6 +770,10 @@ class ShaderLayerItem : public AbstractTreeViewItem {
   int generator_icon() const
   {
     bNode *source = texture_stack::StackLayer{&ntree_, node_, item_index_}.source();
+    if (source && source->is_type("ShaderNodeTexImage"_ustr)) {
+      /* A Paint layer: an Image Texture bundle feeding the layer directly. */
+      return ICON_IMAGE_DATA;
+    }
     if (source && source->is_type("NodeCombineBundle"_ustr)) {
       const VectorSet<bNode *> generators = combine_bundle_generators(ntree_, *source);
       for (const bNode *generator : generators) {

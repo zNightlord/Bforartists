@@ -15,6 +15,7 @@
  */
 
 #include <algorithm>
+#include <climits>
 
 #include "BLI_listbase_iterator.hh"
 #include "BLI_string_ref.hh"
@@ -23,11 +24,14 @@
 #include "BLI_vector_set.hh"
 
 #include "DNA_array_utils.hh"
+#include "DNA_image_types.h"
 #include "DNA_material_types.h"
 #include "DNA_node_types.h"
 #include "DNA_userdef_types.h"
 
 #include "BKE_context.hh"
+#include "BKE_image.hh"
+#include "BKE_lib_id.hh"
 #include "BKE_library.hh"
 #include "BKE_main.hh"
 #include "BKE_main_invariants.hh"
@@ -640,6 +644,148 @@ static void MATERIAL_OT_texture_layer_add_fill(wmOperatorType *ot)
   ot->exec = texture_layer_add_fill_exec;
   ot->poll = active_stack_poll;
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Add Paint Layer
+ * \{ */
+
+/* Channel layout and initial fill of the image pass backing #channel. The pass
+ * names are the channel names, so the Image Texture node's Passes bundle
+ * output feeds the stack's channels directly. The fill mirrors a Fill layer:
+ * the BSDF input's default value (in linear space, matching the float image's
+ * colorspace), so a fresh Paint layer carries the channel defaults until
+ * painted. */
+static ImageGeneratedPass image_pass_for_channel(bNode *bsdf, const FillChannel &channel)
+{
+  ImageGeneratedPass pass;
+  pass.name = channel.name;
+  switch (channel.type) {
+    case SOCK_FLOAT:
+      pass.chan_id = "X";
+      pass.channels_num = 1;
+      break;
+    case SOCK_VECTOR:
+      pass.chan_id = "XYZ";
+      pass.channels_num = 3;
+      break;
+    default:
+      pass.chan_id = "RGBA";
+      pass.channels_num = 4;
+      break;
+  }
+
+  if (bsdf == nullptr) {
+    return pass;
+  }
+  for (bNodeSocket &sock : bsdf->inputs) {
+    if (StringRef(sock.name) != channel.name || !texture_channel::is_fillable_input(sock)) {
+      continue;
+    }
+    switch (sock.type) {
+      case SOCK_FLOAT: {
+        const float value = sock.default_value_typed<bNodeSocketValueFloat>()->value;
+        pass.color[0] = pass.color[1] = pass.color[2] = value;
+        pass.color[3] = 1.0f;
+        break;
+      }
+      case SOCK_VECTOR: {
+        const float *value = sock.default_value_typed<bNodeSocketValueVector>()->value;
+        pass.color[0] = value[0];
+        pass.color[1] = value[1];
+        pass.color[2] = value[2];
+        pass.color[3] = 1.0f;
+        break;
+      }
+      case SOCK_RGBA: {
+        const float *value = sock.default_value_typed<bNodeSocketValueRGBA>()->value;
+        pass.color[0] = value[0];
+        pass.color[1] = value[1];
+        pass.color[2] = value[2];
+        pass.color[3] = value[3];
+        break;
+      }
+      default:
+        break;
+    }
+    break;
+  }
+  return pass;
+}
+
+static wmOperatorStatus texture_layer_add_paint_exec(bContext *C, wmOperator *op)
+{
+  Main &bmain = *CTX_data_main(C);
+  const std::optional<ActiveStackContext> ctx = resolve_active_stack(*C);
+  if (!ctx) {
+    return OPERATOR_CANCELLED;
+  }
+  bNodeTree &ntree = *ctx->ntree;
+  bNode &stack = *ctx->stack;
+
+  const Vector<FillChannel> channels = fill_layer_channels(ntree, stack);
+  bNode *bsdf = texture_stack::bsdf_for(ntree, stack);
+  Vector<ImageGeneratedPass> passes;
+  for (const FillChannel &channel : channels) {
+    passes.append(image_pass_for_channel(bsdf, channel));
+  }
+
+  char name[MAX_NAME];
+  RNA_string_get(op->ptr, "name", name);
+
+  /* One multi-layer image whose passes are the layer's channels: each pass is
+   * its own paintable buffer, created on first use. */
+  Image *image = BKE_image_add_generated_multilayer(
+      &bmain, RNA_int_get(op->ptr, "width"), RNA_int_get(op->ptr, "height"), name, passes);
+  if (image == nullptr) {
+    return OPERATOR_CANCELLED;
+  }
+
+  const int index = texture_stack::add_layer(bmain, ntree, stack, name);
+
+  bNode *image_node = bke::node_add_node(C, ntree, "ShaderNodeTexImage"_ustr);
+  if (image_node == nullptr) {
+    layer_stack::remove_layer(bmain, ntree, stack, index);
+    BKE_id_delete(&bmain, image);
+    return OPERATOR_CANCELLED;
+  }
+  /* The image's initial user from creation becomes the node's user. */
+  image_node->id = &image->id;
+  STRNCPY_UTF8(image_node->label, name);
+
+  /* Rebuild the node's declaration for the newly assigned multi-layer image,
+   * so the per-pass outputs and the Passes bundle output exist to connect. */
+  bke::node_tag_update_id(*image_node);
+  BKE_ntree_update_tag_node_property(&ntree, image_node);
+  BKE_main_ensure_invariants(bmain, ntree.id);
+  texture_stack::place_layer_source(*image_node, {&ntree, &stack, index}, 320.0f);
+
+  texture_stack::connect_bundle({&ntree, &stack, index}, *image_node, "Passes");
+  set_active_layer(ntree, stack, index);
+  /* Make the fresh image the paint target right away (the tree view keeps it
+   * in sync when other layers are selected). */
+  bke::node_set_active_texture(ntree, *image_node);
+  tree_changed(*C, ntree, ctx->material);
+  return OPERATOR_FINISHED;
+}
+
+static void MATERIAL_OT_texture_layer_add_paint(wmOperatorType *ot)
+{
+  ot->name = "Add Paint Layer";
+  ot->description =
+      "Add a texture layer backed by a new multi-layer image with a paintable image pass "
+      "for each of the layer's channels";
+  ot->idname = "MATERIAL_OT_texture_layer_add_paint";
+
+  ot->exec = texture_layer_add_paint_exec;
+  ot->poll = active_stack_poll;
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+
+  RNA_def_string(ot->srna, "name", "Paint", MAX_NAME, "Name", "Name of the new layer and image");
+  RNA_def_int(ot->srna, "width", 1024, 1, INT_MAX, "Width", "Image width", 1, 16384);
+  RNA_def_int(ot->srna, "height", 1024, 1, INT_MAX, "Height", "Image height", 1, 16384);
 }
 
 /** \} */
@@ -1292,6 +1438,7 @@ void material_texture_layers_register()
   WM_operatortype_append(MATERIAL_OT_texture_layer_remove);
   WM_operatortype_append(MATERIAL_OT_texture_channel_toggle);
   WM_operatortype_append(MATERIAL_OT_texture_layer_add_fill);
+  WM_operatortype_append(MATERIAL_OT_texture_layer_add_paint);
   WM_operatortype_append(MATERIAL_OT_texture_layer_add_white_mask);
   WM_operatortype_append(MATERIAL_OT_texture_layer_add_black_mask);
   WM_operatortype_append(MATERIAL_OT_texture_layer_add_paint_mask);
