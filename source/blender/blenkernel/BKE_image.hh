@@ -438,6 +438,13 @@ void BKE_image_user_resolve_from_index(const Image *ima, ImageUser *iuser);
 bool BKE_image_has_layer_catalog(const Image *ima);
 
 /**
+ * Whether the layer/pass catalog on #Image.layers is authored user data (a
+ * generated multi-layer image, see #BKE_image_add_generated_multilayer) rather
+ * than a mirror of a file or render result.
+ */
+bool BKE_image_has_authored_catalog(const Image *ima);
+
+/**
  * Whether the layer/pass catalog on #Image.layers has meaningful layer names to
  * show in a layer menu: more than one layer, or a single layer with a non-empty
  * name. A single unnamed layer (a bare multi-layer EXR) has nothing to browse.

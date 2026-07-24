@@ -83,6 +83,7 @@
 #include "BKE_image.hh"
 #include "BKE_image_format.hh"
 #include "BKE_image_gpu.hh"
+#include "BKE_image_save.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_library.hh"
 #include "BKE_main.hh"
@@ -1688,8 +1689,81 @@ static bool image_memorypack_imbuf(
   return true;
 }
 
+/**
+ * Encode a multi-layer image's catalog as a single multi-part EXR in memory
+ * and return it as a packed-file entry (not yet linked into a list), or null
+ * on failure. Shared by user packing and autosave packing.
+ */
+static ImagePackedFile *image_multilayer_memorypack_entry(Image *ima)
+{
+  Vector<uint8_t> encoded;
+  if (!BKE_image_save_multilayer_to_memory(ima, encoded)) {
+    CLOG_STR_ERROR(&LOG, "memory save for multi-layer pack error");
+    return nullptr;
+  }
+
+  auto *shared_data = new ImplicitSharedValue<Vector<uint8_t>>(std::move(encoded));
+  PackedFile *pf = BKE_packedfile_new_from_memory(
+      shared_data->data.data(), int(shared_data->data.size()), shared_data);
+
+  ImagePackedFile *imapf = MEM_new<ImagePackedFile>("Image PackedFile");
+  /* The packed-file lookup for a multi-layer image matches the base tile
+   * number and view 0 (see #image_multilayer_open_handle). */
+  const ImageTile *base_tile = static_cast<const ImageTile *>(ima->tiles.first);
+  imapf->view = 0;
+  imapf->tile_number = base_tile->tile_number;
+  if (ima->filepath[0] != '\0') {
+    STRNCPY(imapf->filepath, ima->filepath);
+  }
+  else {
+    /* A generated image has no path yet; name the packed file after the image
+     * so unpacking has a meaningful destination. */
+    SNPRINTF(imapf->filepath, "//%s.exr", ima->id.name + 2);
+  }
+  imapf->packedfile = pf;
+  return imapf;
+}
+
+/**
+ * Pack a multi-layer image (its catalog on #Image.layers) as a single
+ * multi-part EXR in memory, holding every layer/pass/view. The image then
+ * behaves like a packed multi-layer EXR file: its catalog and pass buffers
+ * reload from the packed data on the next acquire.
+ */
+static bool image_memorypack_multilayer(Image *ima)
+{
+  image_free_packedfiles(ima);
+
+  ImagePackedFile *imapf = image_multilayer_memorypack_entry(ima);
+  if (imapf == nullptr) {
+    return false;
+  }
+  BLI_addtail(&ima->packedfiles, imapf);
+
+  if (ima->source == IMA_SRC_GENERATED) {
+    ima->source = IMA_SRC_FILE;
+    if (ima->filepath[0] == '\0') {
+      STRNCPY(ima->filepath, imapf->filepath);
+    }
+  }
+  for (ImageTile &tile : ima->tiles) {
+    tile.gen_flag &= ~IMA_GEN_TILE;
+  }
+
+  /* Rebuild the catalog (and reload the pass buffers) from the packed EXR on
+   * the next acquire, as for a freshly packed file. */
+  image_reset_multilayer_catalog(ima);
+  BKE_image_clear_autosave(ima);
+
+  return true;
+}
+
 bool BKE_image_memorypack(Image *ima)
 {
+  if (BKE_image_is_multilayer(ima) && BKE_image_has_layer_catalog(ima)) {
+    return image_memorypack_multilayer(ima);
+  }
+
   bool ok = true;
 
   image_free_packedfiles(ima);
@@ -1787,6 +1861,22 @@ static bool image_memorypack_imbuf_for_autosave(
 
 bool BKE_image_autosave_memorypack(Image *ima)
 {
+  /* A multi-layer image autosaves its whole catalog as one multi-part EXR,
+   * like #image_memorypack_multilayer, but into the autosave slot and without
+   * changing the image's source or clearing its dirty state. */
+  if (BKE_image_is_multilayer(ima) && BKE_image_has_layer_catalog(ima)) {
+    image_free_autosave_packedfiles(ima);
+
+    ImagePackedFile *imapf = image_multilayer_memorypack_entry(ima);
+    if (imapf == nullptr) {
+      return false;
+    }
+    BLI_addtail(&ima->autosave_packedfiles, imapf);
+
+    ima->flag |= IMA_AUTOSAVE_TEMPPACK;
+    return true;
+  }
+
   bool ok = true;
 
   image_free_autosave_packedfiles(ima);
@@ -1935,7 +2025,9 @@ void BKE_image_packfile_ensure(
     memcpy(data_dup, data, size_t(data_len));
     BKE_image_packfiles_from_mem(reports, image, data_dup, size_t(data_len));
   }
-  else if (is_dirty) {
+  else if (is_dirty || image->source == IMA_SRC_GENERATED) {
+    /* A generated image has no file to pack from, even when none of its
+     * buffers were painted yet; pack the (generated) buffers themselves. */
     BKE_image_memorypack(image);
   }
   else {
@@ -4125,6 +4217,11 @@ bool BKE_image_has_layer_catalog(const Image *ima)
          image_has_authored_catalog(ima);
 }
 
+bool BKE_image_has_authored_catalog(const Image *ima)
+{
+  return image_has_authored_catalog(ima);
+}
+
 bool BKE_image_layers_have_name(const Image *ima)
 {
   switch (BLI_listbase_count_at_most(&ima->layers, 2)) {
@@ -5177,9 +5274,76 @@ static int image_effective_view(Image *ima, const ImageUser *iuser)
   return image_user_view_index(ima, iuser);
 }
 
+/**
+ * Restore the pass buffers of a multi-layer image from its autosave packed
+ * file: a single multi-part EXR holding every layer/pass/view (see
+ * #BKE_image_autosave_memorypack). The buffers are marked dirty again, as they
+ * held unsaved edits when the autosave was written.
+ */
+static void image_populate_cache_from_autosave_multilayer(Image *ima)
+{
+  const ImagePackedFile *imapf = static_cast<const ImagePackedFile *>(
+      ima->autosave_packedfiles.first);
+  if (imapf == nullptr || imapf->packedfile == nullptr) {
+    return;
+  }
+  ExrReadHandle *handle = IMB_exr_open_multilayer_from_memory(
+      static_cast<const uchar *>(imapf->packedfile->data), imapf->packedfile->size);
+  if (handle == nullptr) {
+    return;
+  }
+
+  std::scoped_lock lock(ima->runtime->cache_mutex);
+
+  /* A loaded (non-authored) multi-layer EXR has no catalog yet at this point;
+   * build it from the autosave file, which mirrors the original's structure.
+   * An authored catalog was read from the blend file and is kept: rebuilding
+   * would discard its per-pass fill colors. */
+  if (!BKE_image_has_layer_catalog(ima)) {
+    image_create_multilayer(ima, handle, ImageCacheKey{});
+  }
+
+  const int views_num = std::max(1, BLI_listbase_count(&ima->views));
+  for (const ImageLayer &layer : ima->layers) {
+    for (const ImagePass &pass : layer.passes) {
+      for (int view_id = 0; view_id < views_num; view_id++) {
+        ImageUser iuser;
+        BKE_imageuser_default(&iuser);
+        STRNCPY(iuser.layer_name, layer.name);
+        STRNCPY(iuser.pass_name, pass.name);
+        iuser.view = view_id;
+        image_load_multilayer_pass_on_demand(
+            ima, &iuser, handle, ImageCacheKey{}, view_id, nullptr);
+      }
+    }
+  }
+  IMB_exr_close(handle);
+
+  /* Every pass buffer restored above held unsaved edits at autosave time. */
+  if (ima->runtime->cache != nullptr) {
+    ImBufCacheIter *iter = IMB_cacheIter_new(ima->runtime->cache);
+    while (!IMB_cacheIter_done(iter)) {
+      const ImageCacheKey *key = static_cast<const ImageCacheKey *>(
+          IMB_cacheIter_getUserKey(iter));
+      ImBuf *ibuf = IMB_cacheIter_getImBuf(iter);
+      if (key->pass != nullptr && ibuf != nullptr) {
+        ibuf->userflags |= IB_BITMAPDIRTY;
+      }
+      IMB_cacheIter_step(iter);
+    }
+    IMB_cacheIter_free(iter);
+  }
+}
+
 void BKE_image_populate_cache_from_autosave(Image *ima)
 {
   if (!(ima->flag & IMA_AUTOSAVE_TEMPPACK)) {
+    return;
+  }
+
+  if (BKE_image_is_multilayer(ima)) {
+    image_populate_cache_from_autosave_multilayer(ima);
+    BKE_image_clear_autosave(ima);
     return;
   }
 

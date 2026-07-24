@@ -91,8 +91,15 @@ bool BKE_image_save_options_init(ImageSaveOptions *opts,
     }
     else {
       BKE_image_format_from_imbuf(&opts->im_format, ibuf);
-      if (ima->source == IMA_SRC_GENERATED &&
-          !IMB_colormanagement_space_name_is_data(ima_colorspace))
+      if (BKE_image_has_authored_catalog(ima)) {
+        /* Only a multi-layer EXR can hold every pass of an authored catalog.
+         * Default to full float, matching the generated pass buffers, so a
+         * save/reload roundtrip of painted data is lossless. */
+        opts->im_format.imtype = R_IMF_IMTYPE_MULTILAYER;
+        opts->im_format.depth = R_IMF_CHAN_DEPTH_32;
+      }
+      else if (ima->source == IMA_SRC_GENERATED &&
+               !IMB_colormanagement_space_name_is_data(ima_colorspace))
       {
         ima_colorspace = IMB_colormanagement_role_colorspace_name_get(COLOR_ROLE_DEFAULT_BYTE);
       }
@@ -276,7 +283,11 @@ static void image_save_post(ReportList *reports,
   }
   if (ELEM(ima->source, IMA_SRC_GENERATED, IMA_SRC_VIEWER)) {
     ima->source = IMA_SRC_FILE;
-    ima->type = IMA_TYPE_IMAGE;
+    /* A generated multi-layer image saved as a multi-layer EXR stays
+     * multi-layer; its catalog now reloads from the file like a loaded EXR. */
+    if (!(ima->type == IMA_TYPE_MULTILAYER && opts->im_format.imtype == R_IMF_IMTYPE_MULTILAYER)) {
+      ima->type = IMA_TYPE_IMAGE;
+    }
     ImageTile *base_tile = BKE_image_get_tile(ima, 0);
     base_tile->gen_flag &= ~IMA_GEN_TILE;
   }
@@ -360,7 +371,13 @@ static bool image_save_single(ReportList *reports,
   }
 
   ImBuf *colormanaged_ibuf = nullptr;
-  const bool save_copy = opts->save_copy;
+  /* A non-EXR format can only hold the selected pass of an authored multi-layer
+   * catalog, so such a save behaves like Save a Copy: the image keeps its
+   * passes rather than rebinding to a file that dropped them. */
+  const bool save_copy = opts->save_copy ||
+                         (BKE_image_has_authored_catalog(ima) && !ELEM(opts->im_format.imtype,
+                                                                       R_IMF_IMTYPE_OPENEXR,
+                                                                       R_IMF_IMTYPE_MULTILAYER));
   const bool save_as_render = opts->save_as_render;
   const ImageFormatData *imf = &opts->im_format;
 
@@ -937,7 +954,8 @@ static bool image_write_exr(ReportList *reports,
                             const int rectx,
                             const int recty,
                             const double ppm[2],
-                            const StampData *stamp)
+                            const StampData *stamp,
+                            Vector<uint8_t> *r_encoded = nullptr)
 {
   const int write_multipart = (imf ? imf->exr_flag & R_IMF_EXR_FLAG_MULTIPART : true);
   ExrWriteHandle *exrhandle = IMB_exr_write_begin(write_multipart);
@@ -959,12 +977,18 @@ static bool image_write_exr(ReportList *reports,
   }
 
   errno = 0;
-  BLI_file_ensure_parent_dir_exists(filepath);
 
   const int compress = (imf ? imf->exr_codec : 0);
   const int quality = (imf ? imf->quality : 90);
-  const bool success = IMB_exr_write_end(
-      exrhandle, filepath, rectx, recty, ppm, compress, quality, stamp);
+  bool success;
+  if (r_encoded) {
+    success = IMB_exr_write_end_to_memory(
+        exrhandle, *r_encoded, rectx, recty, ppm, compress, quality, stamp);
+  }
+  else {
+    BLI_file_ensure_parent_dir_exists(filepath);
+    success = IMB_exr_write_end(exrhandle, filepath, rectx, recty, ppm, compress, quality, stamp);
+  }
   if (!success) {
     /* TODO: get the error from openexr's exception. */
     BKE_reportf(
@@ -1095,7 +1119,8 @@ static bool image_save_exr(ReportList *reports,
                            const ImageFormatData *imf,
                            const bool save_as_render,
                            const char *view,
-                           int layer)
+                           int layer,
+                           Vector<uint8_t> *r_encoded = nullptr)
 {
   const bool multi_layer = !(imf && imf->imtype == R_IMF_IMTYPE_OPENEXR);
 
@@ -1200,7 +1225,8 @@ static bool image_save_exr(ReportList *reports,
                          first_ibuf->x,
                          first_ibuf->y,
                          first_ibuf->ppm,
-                         stamp_data);
+                         stamp_data,
+                         r_encoded);
     BKE_stamp_data_free(stamp_data);
   }
 
@@ -1249,6 +1275,14 @@ static bool image_save_multilayer_exr_file(ReportList *reports,
     return false;
   }
 
+  /* A loaded multi-layer EXR keeps pointing at its original file (Save As acts
+   * like Save a Copy); an authored (generated) multi-layer image saved as a
+   * multi-layer EXR rebinds to the newly written file like any generated image,
+   * keeping its multi-layer type. Its catalog and pass buffers then reload from
+   * the file on the next acquire. */
+  const bool save_copy = opts->save_copy ||
+                         !(is_multilayer && BKE_image_has_authored_catalog(ima));
+
   bool ok;
   if (imf->views_format == R_IMF_VIEWS_INDIVIDUAL && ima->views.count() > 1) {
     ok = true;
@@ -1258,17 +1292,45 @@ static bool image_save_multilayer_exr_file(ReportList *reports,
           &opts->scene->r, opts->filepath, image_view.name, filepath);
       const bool ok_view = image_save_exr(
           reports, ima, iuser, filepath, imf, save_as_render, image_view.name, layer);
-      image_save_post(reports, ima, ibuf, ok_view, opts, true, filepath, r_colorspace_changed);
+      image_save_post(
+          reports, ima, ibuf, ok_view, opts, save_copy, filepath, r_colorspace_changed);
       ok &= ok_view;
     }
   }
   else {
     ok = image_save_exr(reports, ima, iuser, opts->filepath, imf, save_as_render, nullptr, layer);
-    image_save_post(reports, ima, ibuf, ok, opts, true, opts->filepath, r_colorspace_changed);
+    image_save_post(reports, ima, ibuf, ok, opts, save_copy, opts->filepath, r_colorspace_changed);
   }
 
   BKE_image_release_ibuf(ima, ibuf, nullptr);
 
+  if (ok && !save_copy) {
+    /* The image rebound from generated to the newly written file: it needs a
+     * file path even when the caller did not request one (a generated image
+     * has none to keep), and its catalog and (dirty) generated pass buffers
+     * are dropped so both reload from that file like a loaded EXR. */
+    if (ima->filepath[0] == '\0') {
+      STRNCPY(ima->filepath, opts->filepath);
+    }
+    BKE_image_signal(opts->bmain, ima, iuser, IMA_SIGNAL_RELOAD);
+  }
+
+  return ok;
+}
+
+bool BKE_image_save_multilayer_to_memory(Image *ima, Vector<uint8_t> &r_encoded)
+{
+  /* Lossless defaults for packing: full float, ZIP compressed, multi-part. */
+  ImageFormatData imf;
+  BKE_image_format_init(&imf);
+  imf.imtype = R_IMF_IMTYPE_MULTILAYER;
+  imf.depth = R_IMF_CHAN_DEPTH_32;
+  imf.exr_codec = R_IMF_EXR_CODEC_ZIP;
+  imf.exr_flag |= R_IMF_EXR_FLAG_MULTIPART;
+
+  const bool ok = image_save_exr(nullptr, ima, nullptr, "", &imf, false, nullptr, -1, &r_encoded);
+
+  BKE_image_format_free(&imf);
   return ok;
 }
 

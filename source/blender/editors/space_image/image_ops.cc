@@ -3513,7 +3513,9 @@ static wmOperatorStatus image_pack_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
 
-  if (BKE_image_is_dirty(ima)) {
+  if (BKE_image_is_dirty(ima) || ima->source == IMA_SRC_GENERATED) {
+    /* A generated image has no file to pack from, even when none of its
+     * buffers were painted yet; pack the (generated) buffers themselves. */
     BKE_image_memorypack(ima);
   }
   else {

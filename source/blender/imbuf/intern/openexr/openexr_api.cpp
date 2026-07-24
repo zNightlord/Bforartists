@@ -848,7 +848,7 @@ struct ExrReadHandle {
 };
 
 struct ExrWriteHandle {
-  OFileStream *ofile_stream = nullptr;
+  Imf::OStream *ofile_stream = nullptr;
   MultiPartOutputFile *mpofile = nullptr;
   OutputFile *ofile = nullptr;
 
@@ -1015,14 +1015,18 @@ static void openexr_header_metadata_multi(ExrWriteHandle *handle,
       false);
 }
 
-bool IMB_exr_write_end(ExrWriteHandle *handle,
-                       const char *filepath,
-                       int width,
-                       int height,
-                       const double ppm[2],
-                       int compress,
-                       int quality,
-                       const StampData *stamp)
+/* Shared implementation of #IMB_exr_write_end and #IMB_exr_write_end_to_memory:
+ * writes to \a filepath, or when \a r_encoded is given, to a memory stream whose
+ * buffer is moved into it on success. */
+static bool imb_exr_write_end_ex(ExrWriteHandle *handle,
+                                 const char *filepath,
+                                 Vector<uint8_t> *r_encoded,
+                                 int width,
+                                 int height,
+                                 const double ppm[2],
+                                 int compress,
+                                 int quality,
+                                 const StampData *stamp)
 {
   if (handle->channels.is_empty()) {
     CLOG_ERROR(&LOG, "Attempt to save MultiLayer without layers.");
@@ -1101,7 +1105,8 @@ bool IMB_exr_write_end(ExrWriteHandle *handle,
     BLI_assert(!(handle->write_multipart == false && part_headers.size() > 1));
 
     /* Manually create `ofstream`, so we can handle UTF8 file-paths on windows. */
-    handle->ofile_stream = new OFileStream(filepath);
+    handle->ofile_stream = r_encoded ? static_cast<Imf::OStream *>(new OMemStream()) :
+                                       new OFileStream(filepath);
     if (handle->write_multipart) {
       handle->mpofile = new MultiPartOutputFile(
           *(handle->ofile_stream), part_headers.data(), part_headers.size());
@@ -1121,13 +1126,44 @@ bool IMB_exr_write_end(ExrWriteHandle *handle,
     ok = false;
   }
 
+  /* The output file destructors flush any remaining data to the stream. */
   delete handle->ofile;
   delete handle->mpofile;
+
+  if (ok && r_encoded) {
+    *r_encoded = std::move(static_cast<OMemStream *>(handle->ofile_stream)->buffer);
+  }
   delete handle->ofile_stream;
 
   MEM_delete(handle);
 
   return ok;
+}
+
+bool IMB_exr_write_end(ExrWriteHandle *handle,
+                       const char *filepath,
+                       int width,
+                       int height,
+                       const double ppm[2],
+                       int compress,
+                       int quality,
+                       const StampData *stamp)
+{
+  return imb_exr_write_end_ex(
+      handle, filepath, nullptr, width, height, ppm, compress, quality, stamp);
+}
+
+bool IMB_exr_write_end_to_memory(ExrWriteHandle *handle,
+                                 Vector<uint8_t> &r_encoded,
+                                 int width,
+                                 int height,
+                                 const double ppm[2],
+                                 int compress,
+                                 int quality,
+                                 const StampData *stamp)
+{
+  return imb_exr_write_end_ex(
+      handle, nullptr, &r_encoded, width, height, ppm, compress, quality, stamp);
 }
 
 ExrReadHandle *IMB_exr_open(const char *filepath)
