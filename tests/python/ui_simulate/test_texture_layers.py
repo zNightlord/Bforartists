@@ -226,6 +226,177 @@ def test_texture_layers_add_fill():
     t.assertEqual(layer_socket.links[0].from_node, fill)
 
 
+def test_texture_layers_add_paint():
+    """material.texture_layer_add_paint inserts a layer wired to an Image
+    Texture node with a new generated multi-layer image, whose passes are the
+    layer's channels."""
+    import bpy
+
+    _, t, window = ui.test_window()
+    bpy.context.preferences.experimental.use_texture_layers = True
+
+    mat, _bsdf, stack, _sep = _build_shader_tree_with_layers()
+    mat.node_tree.nodes.active = stack
+    yield
+
+    bpy.context.view_layer.objects.active = bpy.context.active_object
+    bpy.context.object.active_material = mat
+    properties_area = ui.get_window_area_by_type(window, 'PROPERTIES')
+    properties_area.spaces.active.context = 'MATERIAL'
+    yield
+
+    initial_count = len(stack.layer_items)
+
+    with bpy.context.temp_override(window=window, area=properties_area):
+        bpy.ops.material.texture_layer_add_paint()
+    yield
+
+    t.assertEqual(len(stack.layer_items), initial_count + 1)
+    image_nodes = [n for n in mat.node_tree.nodes if n.bl_idname == 'ShaderNodeTexImage']
+    t.assertEqual(len(image_nodes), 1)
+    image_node = image_nodes[0]
+    image = image_node.image
+    t.assertIsNotNone(image)
+    t.assertEqual(image.source, 'GENERATED')
+    t.assertEqual(image.type, 'MULTILAYER')
+    # A single unnamed image layer whose passes are the default channels.
+    t.assertEqual(len(image.layers), 1)
+    pass_names = [p.name for p in image.layers[0].passes]
+    t.assertIn("Base Color", pass_names)
+    t.assertIn("Roughness", pass_names)
+    # The node exposes per-pass outputs plus the Passes bundle output, which
+    # feeds the new layer's Bundle input.
+    output_names = [s.name for s in image_node.outputs]
+    t.assertIn("Passes", output_names)
+    for name in pass_names:
+        t.assertIn(name, output_names)
+    new_item = stack.layer_items[stack.active_index]
+    layer_socket = next(s for s in stack.inputs if s.identifier == "Layer_" + str(new_item.identifier))
+    t.assertTrue(layer_socket.is_linked)
+    t.assertEqual(layer_socket.links[0].from_node, image_node)
+    t.assertEqual(layer_socket.links[0].from_socket.name, "Passes")
+
+
+def test_texture_layers_select_activates_paint_image():
+    """Selecting an image-backed layer row in the tree view makes its Image
+    Texture node the active paint canvas, so the texture paint slot follows
+    the selected layer."""
+    import bpy
+
+    e, t, window = ui.test_window()
+    bpy.context.preferences.experimental.use_texture_layers = True
+
+    # A material whose stack is fully wired into the BSDF (bootstrapped by the
+    # operator), so the tree view lists the layer rows.
+    mat = bpy.data.materials.new("PaintSelMat")
+    mat.use_nodes = True
+    bpy.ops.mesh.primitive_cube_add()
+    bpy.context.active_object.data.materials.append(mat)
+
+    # Use the largest area for the tree view, so the click targets are big.
+    properties_area = ui.largest_area(window.screen)
+    properties_area.type = 'PROPERTIES'
+    properties_area.spaces.active.context = 'MATERIAL'
+    yield
+
+    with bpy.context.temp_override(window=window, area=properties_area):
+        bpy.ops.material.texture_layer_add_default()
+        bpy.ops.material.texture_layer_add_paint(name="PaintA", width=8, height=8)
+        bpy.ops.material.texture_layer_add_paint(name="PaintB", width=8, height=8)
+    yield
+    stack = next(n for n in mat.node_tree.nodes
+                 if n.bl_idname == 'ShaderNodeTextureLayerStack')
+
+    image_a = bpy.data.images["PaintA"]
+    image_b = bpy.data.images["PaintB"]
+
+    # Texture paint mode builds the paint slots from the active paint canvas.
+    bpy.ops.object.mode_set(mode='TEXTURE_PAINT')
+    yield
+    # Dismiss the "Failed to load using Vulkan" fallback dialog that can pop up
+    # on headless configurations and would swallow the clicks below.
+    e.ret.tap()
+    yield
+
+    def active_paint_image():
+        m = bpy.data.materials["PaintSelMat"]
+        if not m.texture_paint_images:
+            return None
+        return m.texture_paint_images[m.paint_active_slot]
+
+    # The most recently added Paint layer is the paint target.
+    t.assertEqual(active_paint_image(), image_b)
+
+    # Click down the tree view rows (BSDF row, then PaintB / PaintA / Fill);
+    # whenever a Paint layer row becomes the active layer, the paint slot must
+    # have followed its image. The scan band covers the rows below the panels
+    # above the tree (material slots, ID template, Preview and Surface panel
+    # headers), without reaching any other widgets.
+    layer_images = {"PaintA": image_a, "PaintB": image_b}
+    seen = set()
+    x = properties_area.x + 200
+    area_top = properties_area.y + properties_area.height
+    for i, y in enumerate(range(area_top - 245, area_top - 350, -8)):
+        # Alternate the click x position so consecutive clicks are never within
+        # the double-click distance (a double-click would start renaming).
+        e.cursor_position_set(x + (60 if i % 2 else 0), y, move=True)
+        yield
+        e.leftmouse.tap()
+        yield
+        if stack.active_index < 0 or stack.active_index >= len(stack.layer_items):
+            continue
+        name = stack.layer_items[stack.active_index].name
+        if name in layer_images:
+            seen.add(name)
+            t.assertEqual(active_paint_image(), layer_images[name])
+    # The scan must have hit both paint layers for the test to mean anything.
+    t.assertEqual(seen, {"PaintA", "PaintB"})
+
+
+def test_texture_layers_paint_undo_keeps_pixels():
+    """Painted pass buffers survive a memfile undo that re-reads the Image ID:
+    the preserved cache entries are re-keyed onto the re-read pass structs."""
+    import bpy
+
+    _, t, window = ui.test_window()
+    bpy.context.preferences.experimental.use_texture_layers = True
+
+    mat, _bsdf, stack, _sep = _build_shader_tree_with_layers()
+    mat.node_tree.nodes.active = stack
+    yield
+
+    bpy.context.view_layer.objects.active = bpy.context.active_object
+    bpy.context.object.active_material = mat
+    properties_area = ui.get_window_area_by_type(window, 'PROPERTIES')
+    properties_area.spaces.active.context = 'MATERIAL'
+    yield
+
+    with bpy.context.temp_override(window=window, area=properties_area):
+        bpy.ops.material.texture_layer_add_paint(width=8, height=8)
+    yield
+
+    image = next(n.image for n in mat.node_tree.nodes if n.bl_idname == 'ShaderNodeTexImage')
+
+    # Paint the first pass (Base Color); this only touches the cached buffer.
+    image.pixels = [0.25, 0.5, 0.75, 1.0] * 64
+    yield
+
+    # A DNA change to the image plus undo forces the Image ID to be re-read
+    # from the memfile, while the buffer cache is preserved across the step.
+    with bpy.context.temp_override(window=window):
+        bpy.ops.ed.undo_push(message="Before rename")
+    image.name = "Renamed"
+    with bpy.context.temp_override(window=window):
+        bpy.ops.ed.undo_push(message="Rename image")
+        bpy.ops.ed.undo()
+    yield
+
+    image = bpy.data.images.get("Paint")
+    t.assertIsNotNone(image)
+    for value, expected in zip(image.pixels[0:4], (0.25, 0.5, 0.75, 1.0)):
+        t.assertAlmostEqual(value, expected, places=3)
+
+
 def test_texture_layers_groups():
     """Adding a Group creates a nested Texture Layer Stack, and the reparent
     operator can move layers in and out of the group (= drag/drop semantics)."""
