@@ -22,6 +22,7 @@
 
 #include "BLI_fileops.hh"
 #include "BLI_listbase.hh"
+#include "BLI_math_color_c.hh"
 #include "BLI_path_utils.hh"
 #include "BLI_set.hh"
 #include "BLI_string.hh"
@@ -2729,21 +2730,36 @@ static wmOperatorStatus image_new_exec(bContext *C, wmOperator *op)
   stereo3d = RNA_boolean_get(op->ptr, "use_stereo_3d");
   bool tiled = RNA_boolean_get(op->ptr, "tiled");
 
-  if (!alpha) {
-    color[3] = 1.0f;
-  }
+  if (RNA_boolean_get(op->ptr, "multilayer")) {
+    /* A single layer with one color pass, to be built up from the image
+     * editor's Layers panel. Every pass is a full float RGBA buffer, so the
+     * alpha option does not apply and the fill is stored linear, like
+     * #BKE_image_add_generated converts it for a float image. */
+    ImageGeneratedPass pass;
+    pass.name = RE_PASSNAME_COMBINED;
+    pass.chan_id = "RGBA";
+    pass.channels_num = 4;
+    srgb_to_linearrgb_v4(pass.color, color);
 
-  ima = BKE_image_add_generated(bmain,
-                                width,
-                                height,
-                                name,
-                                alpha ? 32 : 24,
-                                floatbuf,
-                                gen_type,
-                                color,
-                                stereo3d,
-                                false,
-                                tiled);
+    ima = BKE_image_add_generated_multilayer(bmain, width, height, name, {pass});
+  }
+  else {
+    if (!alpha) {
+      color[3] = 1.0f;
+    }
+
+    ima = BKE_image_add_generated(bmain,
+                                  width,
+                                  height,
+                                  name,
+                                  alpha ? 32 : 24,
+                                  floatbuf,
+                                  gen_type,
+                                  color,
+                                  stereo3d,
+                                  false,
+                                  tiled);
+  }
 
   if (!ima) {
     image_new_free(op);
@@ -2812,18 +2828,28 @@ static void image_new_draw(bContext * /*C*/, wmOperator *op)
   dim_col.prop(op->ptr, "width", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   dim_col.prop(op->ptr, "height", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 
+  /* A multi-layer image is always a blank fill of full float RGBA buffers, one
+   * per pass, so the options that describe a single buffer do not apply. */
+  const bool multilayer = RNA_boolean_get(op->ptr, "multilayer");
+
   ui::Layout &col = layout.column(false);
-  col.prop(op->ptr, "generated_type", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  ui::Layout &gen_type_row = col.row(false);
+  gen_type_row.active_set(!multilayer);
+  gen_type_row.prop(op->ptr, "generated_type", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 
   const int gen_type = RNA_enum_get(op->ptr, "generated_type");
   ui::Layout &color_col = col.column(false);
-  if (gen_type == IMA_GENTYPE_BLANK) {
+  if (multilayer || gen_type == IMA_GENTYPE_BLANK) {
     color_col.prop(op->ptr, "color", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   }
 
-  col.prop(op->ptr, "alpha", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-  col.prop(op->ptr, "float", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-  col.prop(op->ptr, "tiled", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  ui::Layout &buffer_col = col.column(false);
+  buffer_col.active_set(!multilayer);
+  buffer_col.prop(op->ptr, "alpha", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  buffer_col.prop(op->ptr, "float", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  buffer_col.prop(op->ptr, "tiled", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+
+  col.prop(op->ptr, "multilayer", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 }
 
 static void image_new_cancel(bContext * /*C*/, wmOperator *op)
@@ -2878,6 +2904,13 @@ void IMAGE_OT_new(wmOperatorType *ot)
       ot->srna, "use_stereo_3d", false, "Stereo 3D", "Create an image with left and right views");
   RNA_def_property_flag(prop, PROP_SKIP_SAVE | PROP_HIDDEN);
   prop = RNA_def_boolean(ot->srna, "tiled", false, "Tiled", "Create a tiled image");
+  RNA_def_property_flag(prop, PROP_SKIP_SAVE);
+  prop = RNA_def_boolean(ot->srna,
+                         "multilayer",
+                         false,
+                         "Multi-Layer",
+                         "Create an image with layers and passes, each pass a full float buffer "
+                         "of its own that can be painted on");
   RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 }
 
