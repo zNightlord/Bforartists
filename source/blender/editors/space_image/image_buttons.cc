@@ -41,6 +41,7 @@
 #include "ED_screen.hh"
 
 #include "RNA_access.hh"
+#include "RNA_prototypes.hh"
 
 #include "WM_api.hh"
 #include "WM_types.hh"
@@ -1132,6 +1133,76 @@ void uiTemplateImageLayers(ui::Layout *layout, bContext * /*C*/, Image *ima, Ima
 
     uiblock_layer_pass_buttons(
         *layout, ima, iuser, menus_width, is_render_result ? &ima->render_slot : nullptr);
+  }
+}
+
+void uiTemplateImageCatalog(ui::Layout *layout,
+                            bContext *C,
+                            PointerRNA *imaptr,
+                            PointerRNA *iuserptr)
+{
+  Image *ima = static_cast<Image *>(imaptr->data);
+  ImageUser *iuser = static_cast<ImageUser *>(iuserptr->data);
+  if (ima == nullptr || iuser == nullptr || !BKE_image_has_layer_catalog(ima)) {
+    return;
+  }
+
+  /* The lists select by index, so make the indices match the stored names,
+   * which take priority. */
+  BKE_image_user_resolve_from_names(ima, iuser);
+
+  /* The layer and pass operators act on the image and user drawn here, which
+   * may not be the ones the editor around the panel provides. */
+  layout->context_ptr_set("edit_image", imaptr);
+  layout->context_ptr_set("edit_image_user", iuserptr);
+
+  /* The layer list is unlabeled: the panel around it names it. */
+  {
+    ui::Layout &row = layout->row(false);
+    ui::template_uilist(&row,
+                        C,
+                        UI_UL_DEFAULT_CLASS_NAME,
+                        "image_layers",
+                        imaptr,
+                        "layers",
+                        iuserptr,
+                        "multilayer_layer",
+                        nullptr,
+                        3,
+                        5,
+                        UILST_LAYOUT_DEFAULT,
+                        ui::TEMPLATE_LIST_FLAG_NONE);
+    ui::Layout &col = row.column(true);
+    col.op("IMAGE_OT_layer_add", "", ICON_ADD);
+    col.op("IMAGE_OT_layer_remove", "", ICON_REMOVE);
+  }
+
+  ImageLayer *layer = BKE_image_user_layer(ima, iuser);
+  if (layer == nullptr) {
+    return;
+  }
+
+  ui::Layout &passes_col = layout->column(false);
+  passes_col.label(IFACE_("Passes"), ICON_NONE);
+  {
+    PointerRNA layerptr = RNA_pointer_create_discrete(&ima->id, RNA_ImageLayer, layer);
+    ui::Layout &row = passes_col.row(false);
+    ui::template_uilist(&row,
+                        C,
+                        UI_UL_DEFAULT_CLASS_NAME,
+                        "image_passes",
+                        &layerptr,
+                        "passes",
+                        iuserptr,
+                        "multilayer_pass",
+                        nullptr,
+                        3,
+                        5,
+                        UILST_LAYOUT_DEFAULT,
+                        ui::TEMPLATE_LIST_FLAG_NONE);
+    ui::Layout &col = row.column(true);
+    col.op("IMAGE_OT_pass_add", "", ICON_ADD);
+    col.op("IMAGE_OT_pass_remove", "", ICON_REMOVE);
   }
 }
 

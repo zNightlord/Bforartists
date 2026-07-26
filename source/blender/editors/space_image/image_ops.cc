@@ -47,7 +47,9 @@
 #include "BKE_lib_id.hh"
 #include "BKE_library.hh"
 #include "BKE_main.hh"
+#include "BKE_main_invariants.hh"
 #include "BKE_mask.hh"
+#include "BKE_node_tree_update.hh"
 #include "BKE_packedFile.hh"
 #include "BKE_report.hh"
 #include "BKE_scene.hh"
@@ -4644,6 +4646,229 @@ void IMAGE_OT_tile_fill(wmOperatorType *ot)
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
   def_fill_tile(ot->srna);
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Image Layer and Pass Operators
+ * \{ */
+
+/* Channel layout of a new pass, matching the layouts the Image Texture node
+ * declares an output socket for. */
+static const EnumPropertyItem image_pass_type_items[] = {
+    {4, "COLOR", 0, "Color", "Color pass with an alpha channel"},
+    {1, "VALUE", 0, "Value", "Single channel pass"},
+    {3, "VECTOR", 0, "Vector", "Three channel pass"},
+    {0, nullptr, 0, nullptr, nullptr},
+};
+
+static const char *image_pass_type_chan_id(const int channels_num)
+{
+  switch (channels_num) {
+    case 1:
+      return "X";
+    case 3:
+      return "XYZ";
+    default:
+      return "RGBA";
+  }
+}
+
+/* Only an authored catalog is user data; the layers and passes of a multi-layer
+ * EXR or a render result mirror their source. */
+static bool image_catalog_poll(bContext *C)
+{
+  const Image *ima = image_from_context(C);
+  return ima != nullptr && BKE_image_has_authored_catalog(ima);
+}
+
+/* The catalog defines the per-pass outputs of the Image Texture nodes using the
+ * image, and the buffers the image editor can display. */
+static void image_catalog_changed(bContext *C, Image *ima, ImageUser *iuser)
+{
+  Main *bmain = CTX_data_main(C);
+
+  if (iuser != nullptr) {
+    BKE_image_user_resolve_from_index(ima, iuser);
+  }
+
+  BKE_ntree_update_tag_id_changed(bmain, &ima->id);
+  BKE_main_ensure_invariants(*bmain);
+  DEG_id_tag_update(&ima->id, 0);
+  WM_event_add_notifier(C, NC_IMAGE | ND_DRAW, ima);
+}
+
+static wmOperatorStatus image_layer_add_exec(bContext *C, wmOperator *op)
+{
+  Image *ima = image_from_context(C);
+  ImageUser *iuser = image_user_from_context(C);
+
+  char name[MAX_NAME];
+  RNA_string_get(op->ptr, "name", name);
+
+  const ImageLayer *layer = BKE_image_layer_add(ima, name);
+
+  if (iuser != nullptr) {
+    /* Select the new layer and its only pass. */
+    iuser->layer = BLI_findindex(&ima->layers, layer);
+    iuser->pass = 0;
+  }
+  image_catalog_changed(C, ima, iuser);
+
+  return OPERATOR_FINISHED;
+}
+
+void IMAGE_OT_layer_add(wmOperatorType *ot)
+{
+  ot->name = "Add Image Layer";
+  ot->description = "Add a layer to the image";
+  ot->idname = "IMAGE_OT_layer_add";
+
+  ot->poll = image_catalog_poll;
+  ot->exec = image_layer_add_exec;
+
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+
+  RNA_def_string(ot->srna, "name", "Layer", MAX_NAME, "Name", "Name of the new layer");
+}
+
+static bool image_layer_remove_poll(bContext *C)
+{
+  const Image *ima = image_from_context(C);
+  return ima != nullptr && BKE_image_has_authored_catalog(ima) && !ima->layers.is_single();
+}
+
+static wmOperatorStatus image_layer_remove_exec(bContext *C, wmOperator *op)
+{
+  Image *ima = image_from_context(C);
+  ImageUser *iuser = image_user_from_context(C);
+
+  ImageLayer *layer = BKE_image_user_layer(ima, iuser);
+  const int index = BLI_findindex(&ima->layers, layer);
+  if (!BKE_image_layer_remove(ima, layer)) {
+    BKE_report(op->reports, RPT_ERROR, "Could not remove image layer");
+    return OPERATOR_CANCELLED;
+  }
+
+  if (iuser != nullptr) {
+    iuser->layer = std::max(index - 1, 0);
+    iuser->pass = 0;
+  }
+  image_catalog_changed(C, ima, iuser);
+
+  return OPERATOR_FINISHED;
+}
+
+void IMAGE_OT_layer_remove(wmOperatorType *ot)
+{
+  ot->name = "Remove Image Layer";
+  ot->description = "Remove the active layer and its passes from the image";
+  ot->idname = "IMAGE_OT_layer_remove";
+
+  ot->poll = image_layer_remove_poll;
+  ot->exec = image_layer_remove_exec;
+
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+}
+
+static wmOperatorStatus image_pass_add_exec(bContext *C, wmOperator *op)
+{
+  Image *ima = image_from_context(C);
+  ImageUser *iuser = image_user_from_context(C);
+
+  ImageLayer *layer = BKE_image_user_layer(ima, iuser);
+  if (layer == nullptr) {
+    BKE_report(op->reports, RPT_ERROR, "No active image layer");
+    return OPERATOR_CANCELLED;
+  }
+
+  char name[MAX_NAME];
+  RNA_string_get(op->ptr, "name", name);
+  const int channels_num = RNA_enum_get(op->ptr, "type");
+  float color[4];
+  RNA_float_get_array(op->ptr, "color", color);
+
+  const ImagePass *pass = BKE_image_pass_add(
+      layer, name, image_pass_type_chan_id(channels_num), channels_num, color);
+
+  if (iuser != nullptr) {
+    iuser->pass = BLI_findindex(&layer->passes, pass);
+  }
+  image_catalog_changed(C, ima, iuser);
+
+  return OPERATOR_FINISHED;
+}
+
+void IMAGE_OT_pass_add(wmOperatorType *ot)
+{
+  ot->name = "Add Image Pass";
+  ot->description = "Add a pass to the active layer of the image";
+  ot->idname = "IMAGE_OT_pass_add";
+
+  ot->poll = image_catalog_poll;
+  ot->exec = image_pass_add_exec;
+  ot->invoke = WM_operator_props_popup_confirm;
+
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+
+  RNA_def_string(ot->srna, "name", "Pass", MAX_NAME, "Name", "Name of the new pass");
+  RNA_def_enum(ot->srna, "type", image_pass_type_items, 4, "Type", "Channel layout of the pass");
+  static const float default_color[4] = {0.0f, 0.0f, 0.0f, 1.0f};
+  RNA_def_float_color(ot->srna,
+                      "color",
+                      4,
+                      default_color,
+                      0.0f,
+                      FLT_MAX,
+                      "Color",
+                      "Color the pass buffer is filled with",
+                      0.0f,
+                      1.0f);
+}
+
+static bool image_pass_remove_poll(bContext *C)
+{
+  const Image *ima = image_from_context(C);
+  if (ima == nullptr || !BKE_image_has_authored_catalog(ima)) {
+    return false;
+  }
+  const ImageLayer *layer = BKE_image_user_layer(ima, image_user_from_context(C));
+  return layer != nullptr && !layer->passes.is_single();
+}
+
+static wmOperatorStatus image_pass_remove_exec(bContext *C, wmOperator *op)
+{
+  Image *ima = image_from_context(C);
+  ImageUser *iuser = image_user_from_context(C);
+
+  ImageLayer *layer = BKE_image_user_layer(ima, iuser);
+  ImagePass *pass = static_cast<ImagePass *>(
+      BLI_findlink(&layer->passes, iuser ? iuser->pass : 0));
+  const int index = BLI_findindex(&layer->passes, pass);
+  if (!BKE_image_pass_remove(ima, layer, pass)) {
+    BKE_report(op->reports, RPT_ERROR, "Could not remove image pass");
+    return OPERATOR_CANCELLED;
+  }
+
+  if (iuser != nullptr) {
+    iuser->pass = std::max(index - 1, 0);
+  }
+  image_catalog_changed(C, ima, iuser);
+
+  return OPERATOR_FINISHED;
+}
+
+void IMAGE_OT_pass_remove(wmOperatorType *ot)
+{
+  ot->name = "Remove Image Pass";
+  ot->description = "Remove the active pass from the active layer of the image";
+  ot->idname = "IMAGE_OT_pass_remove";
+
+  ot->poll = image_pass_remove_poll;
+  ot->exec = image_pass_remove_exec;
+
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
 
 /** \} */

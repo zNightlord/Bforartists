@@ -1164,6 +1164,22 @@ class IMAGE_PT_view_display(Panel):
             col.prop(uvedit, "show_pixel_coords", text="Pixel Coordinates")
 
 
+class IMAGE_PT_image_layers(Panel):
+    bl_space_type = 'IMAGE_EDITOR'
+    bl_region_type = 'UI'
+    bl_category = "Image"
+    bl_label = "Layers"
+
+    @classmethod
+    def poll(cls, context):
+        sima = context.space_data
+        return sima and sima.image and sima.image.layers
+
+    def draw(self, context):
+        sima = context.space_data
+        self.layout.template_image_catalog(sima.image, sima.image_user)
+
+
 class IMAGE_UL_render_slots(UIList):
     def draw_item(self, _context, layout, _data, item, _icon, _active_data, _active_propname, _index):
         slot = item
@@ -1873,6 +1889,7 @@ classes = (
     IMAGE_PT_snapping,
     IMAGE_PT_proportional_edit,
     IMAGE_PT_image_properties,
+    IMAGE_PT_image_layers,
     IMAGE_UL_render_slots,
     IMAGE_PT_render_slots,
     IMAGE_UL_udim_tiles,

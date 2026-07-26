@@ -27,6 +27,7 @@
 #include "BKE_asset.hh"
 #include "BKE_context.hh"
 #include "BKE_idprop.hh"
+#include "BKE_image.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_main.hh"
 #include "BKE_main_invariants.hh"
@@ -624,6 +625,33 @@ void draw_texture_mapping_panel(Layout &layout,
     body.prop(&mapping, "rotation", UI_ITEM_NONE, std::nullopt, ICON_NONE);
     body.prop(&mapping, "scale", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   }
+}
+
+/* Layers and passes of the image behind a Paint layer's Image Texture node. Its
+ * passes are the layer's channels, so adding, removing or renaming one changes
+ * which channels the layer drives. */
+void draw_image_catalog_panel(Layout &layout, bContext *C, bNodeTree &ntree, bNode &source)
+{
+  if (!source.is_type("ShaderNodeTexImage"_ustr)) {
+    return;
+  }
+  const Image *image = reinterpret_cast<const Image *>(source.id);
+  if (image == nullptr || !BKE_image_has_layer_catalog(image)) {
+    return;
+  }
+
+  PanelLayout panel = layout.panel(C, "texture_layer_image_layers", false);
+  panel.header->label(IFACE_("Image Layers"), ICON_NONE);
+  if (!panel.body) {
+    return;
+  }
+
+  PointerRNA node_ptr = RNA_pointer_create_discrete(&ntree.id, RNA_Node, &source);
+  PointerRNA image_ptr = RNA_pointer_get(&node_ptr, "image");
+  PointerRNA iuser_ptr = RNA_pointer_get(&node_ptr, "image_user");
+
+  panel.body->use_property_split_set(false);
+  uiTemplateImageCatalog(panel.body, C, &image_ptr, &iuser_ptr);
 }
 
 /* The nodes in a layer's source whose own properties the layer layout leaves
@@ -1534,6 +1562,8 @@ void template_shader_layers(Layout *layout, bContext *C, PointerRNA *ptr)
       PointerRNA src_ptr = RNA_pointer_create_discrete(&ntree->id, RNA_Node, source);
       draw_node_inputs(*layout, C, &src_ptr);
     }
+
+    draw_image_catalog_panel(*layout, C, *ntree, *source);
 
     /* Texture Mapping: the built-in texture coordinate mapping of the texture
      * nodes behind the row, above the Influence panel. */

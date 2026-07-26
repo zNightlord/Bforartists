@@ -2636,6 +2636,14 @@ void uiTemplateImageStereo3d(ui::Layout *layout, PointerRNA *stereo3d_format_ptr
 void uiTemplateImageViews(ui::Layout *layout, PointerRNA *imaptr);
 void uiTemplateImageFormatViews(ui::Layout *layout, PointerRNA *imfptr, PointerRNA *ptr);
 void uiTemplateImageLayers(ui::Layout *layout, bContext *C, Image *ima, ImageUser *iuser);
+/**
+ * Lists to add, remove, rename and select the layers and passes of an image,
+ * the selection being the one \a iuserptr reads.
+ */
+void uiTemplateImageCatalog(ui::Layout *layout,
+                            bContext *C,
+                            PointerRNA *imaptr,
+                            PointerRNA *iuserptr);
 void uiTemplateImageInfo(ui::Layout *layout, bContext *C, Image *ima, ImageUser *iuser);
 
 namespace ui {

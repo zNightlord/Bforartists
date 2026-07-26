@@ -269,6 +269,11 @@ static void image_operatortypes()
   WM_operatortype_append(IMAGE_OT_tile_add);
   WM_operatortype_append(IMAGE_OT_tile_remove);
   WM_operatortype_append(IMAGE_OT_tile_fill);
+
+  WM_operatortype_append(IMAGE_OT_layer_add);
+  WM_operatortype_append(IMAGE_OT_layer_remove);
+  WM_operatortype_append(IMAGE_OT_pass_add);
+  WM_operatortype_append(IMAGE_OT_pass_remove);
 }
 
 static void image_keymap(wmKeyConfig *keyconf)

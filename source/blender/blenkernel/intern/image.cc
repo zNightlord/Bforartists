@@ -4249,6 +4249,179 @@ ImageLayer *BKE_image_user_layer(const Image *ima, const ImageUser *iuser)
   return static_cast<ImageLayer *>(BLI_findlink(&ima->layers, iuser ? iuser->layer : 0));
 }
 
+ImageLayer *BKE_image_pass_layer(const Image *ima, const ImagePass *pass)
+{
+  for (ImageLayer *layer = static_cast<ImageLayer *>(ima->layers.first); layer;
+       layer = layer->next)
+  {
+    if (BLI_findindex(&layer->passes, pass) != -1) {
+      return layer;
+    }
+  }
+  return nullptr;
+}
+
+/* Evict the cached pixel buffers of a single catalog pass, of any tile, view or
+ * frame. Leaving one behind would dangle: the cache key holds a raw #ImagePass
+ * pointer (see #image_free_cached_pass_buffers). */
+static void image_free_cached_pass_buffer(Image *ima, const ImagePass *pass)
+{
+  std::scoped_lock lock(ima->runtime->cache_mutex);
+  if (ima->runtime->cache == nullptr) {
+    return;
+  }
+  Vector<ImageCacheKey> stale_keys;
+  ImBufCacheIter *iter = IMB_cacheIter_new(ima->runtime->cache);
+  while (!IMB_cacheIter_done(iter)) {
+    const ImageCacheKey *key = static_cast<const ImageCacheKey *>(IMB_cacheIter_getUserKey(iter));
+    if (key->pass == pass) {
+      stale_keys.append(*key);
+    }
+    IMB_cacheIter_step(iter);
+  }
+  IMB_cacheIter_free(iter);
+  for (const ImageCacheKey &key : stale_keys) {
+    imagecache_remove(ima, key);
+  }
+}
+
+/* Make the name of \a item unique among the other items of \a list, in place. */
+template<typename T> static void image_catalog_name_make_unique(ListBaseT<T> &list, T *item)
+{
+  BLI_uniquename_cb(
+      [&](const StringRefNull check_name) {
+        for (T &other : list) {
+          if (&other != item && check_name == other.name) {
+            return true;
+          }
+        }
+        return false;
+      },
+      "",
+      '.',
+      item->name,
+      sizeof(item->name));
+}
+
+ImageLayer *BKE_image_layer_add(Image *ima, const char *name)
+{
+  ImageLayer *layer = image_catalog_add_layer(ima, name);
+  image_catalog_name_make_unique(ima->layers, layer);
+
+  /* A layer with no pass has no pixels to select, so start with a color pass. */
+  const float color[4] = {0.0f, 0.0f, 0.0f, 1.0f};
+  BKE_image_pass_add(layer, RE_PASSNAME_COMBINED, "RGBA", 4, color);
+
+  return layer;
+}
+
+bool BKE_image_layer_remove(Image *ima, ImageLayer *layer)
+{
+  if (layer == nullptr || ima->layers.is_single()) {
+    return false;
+  }
+
+  for (ImagePass &pass : layer->passes) {
+    image_free_cached_pass_buffer(ima, &pass);
+  }
+  BLI_freelistN(&layer->passes);
+  BLI_remlink(&ima->layers, layer);
+  MEM_delete(layer);
+
+  return true;
+}
+
+ImagePass *BKE_image_pass_add(ImageLayer *layer,
+                              const char *name,
+                              const char *chan_id,
+                              const int channels_num,
+                              const float color[4])
+{
+  ImagePass *pass = image_layer_add_pass(layer, name, chan_id, channels_num);
+  image_catalog_name_make_unique(layer->passes, pass);
+  copy_v4_v4(pass->gen_color, color);
+
+  return pass;
+}
+
+bool BKE_image_pass_remove(Image *ima, ImageLayer *layer, ImagePass *pass)
+{
+  if (layer == nullptr || pass == nullptr || layer->passes.is_single()) {
+    return false;
+  }
+
+  image_free_cached_pass_buffer(ima, pass);
+  BLI_remlink(&layer->passes, pass);
+  MEM_delete(pass);
+
+  return true;
+}
+
+/* Retarget the layer or pass name of every #ImageUser of \a ima that selected
+ * the renamed item, so its selection follows the rename instead of silently
+ * falling back to the first layer or pass. */
+struct ImageCatalogRenameData {
+  const Image *ima;
+  /* Layer the renamed item belongs to, null when the layer itself is renamed. */
+  const ImageLayer *layer;
+  const char *old_name;
+  const char *new_name;
+};
+
+static void image_user_retarget_name(Image *ima, ID * /*iuser_id*/, ImageUser *iuser, void *cd)
+{
+  const ImageCatalogRenameData &data = *static_cast<const ImageCatalogRenameData *>(cd);
+  if (ima != data.ima) {
+    return;
+  }
+  if (data.layer == nullptr) {
+    if (STREQ(iuser->layer_name, data.old_name)) {
+      STRNCPY(iuser->layer_name, data.new_name);
+    }
+    return;
+  }
+  if (STREQ(iuser->layer_name, data.layer->name) && STREQ(iuser->pass_name, data.old_name)) {
+    STRNCPY(iuser->pass_name, data.new_name);
+  }
+}
+
+static void image_catalog_renamed(Main *bmain, Image *ima, ImageCatalogRenameData &data)
+{
+  BKE_image_walk_all_users(bmain, &data, image_user_retarget_name);
+
+  /* An Image Texture node derives its per-pass sockets from the catalog. */
+  BKE_ntree_update_tag_id_changed(bmain, &ima->id);
+}
+
+void BKE_image_layer_rename(Main *bmain, Image *ima, ImageLayer *layer, const char *name)
+{
+  char old_name[MAX_NAME];
+  STRNCPY(old_name, layer->name);
+
+  STRNCPY_UTF8(layer->name, name);
+  image_catalog_name_make_unique(ima->layers, layer);
+
+  ImageCatalogRenameData data = {ima, nullptr, old_name, layer->name};
+  image_catalog_renamed(bmain, ima, data);
+}
+
+void BKE_image_pass_rename(Main *bmain, Image *ima, ImagePass *pass, const char *name)
+{
+  ImageLayer *layer = BKE_image_pass_layer(ima, pass);
+  if (layer == nullptr) {
+    return;
+  }
+
+  char old_name[MAX_NAME];
+  STRNCPY(old_name, pass->name);
+
+  STRNCPY_UTF8(pass->name, name);
+  image_catalog_name_make_unique(layer->passes, pass);
+
+  ImageCatalogRenameData data = {ima, layer, old_name, pass->name};
+  image_catalog_renamed(bmain, ima, data);
+}
+
 /* Validate the view axis for non-catalog images: reset an out-of-range
  * non-stereo view index to the first view. The view-only resolve. */
 static void image_user_resolve_view(const Image *ima, ImageUser *iuser)

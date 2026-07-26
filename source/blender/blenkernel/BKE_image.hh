@@ -459,6 +459,47 @@ bool BKE_image_layers_have_name(const Image *ima);
 ImageLayer *BKE_image_user_layer(const Image *ima, const ImageUser *iuser);
 
 /**
+ * The catalog #ImageLayer that \a pass belongs to, or null if the pass is not
+ * part of the image's catalog.
+ */
+ImageLayer *BKE_image_pass_layer(const Image *ima, const ImagePass *pass);
+
+/* Editing of an authored layer/pass catalog (see #BKE_image_has_authored_catalog).
+ * Only such a catalog is user data; the catalog of a multi-layer EXR or a render
+ * result mirrors its source and must not be edited. */
+
+/**
+ * Append a layer with a single RGBA color pass, the name made unique among the
+ * existing layers.
+ */
+ImageLayer *BKE_image_layer_add(Image *ima, const char *name);
+/**
+ * Remove a layer, its passes and their cached pixel buffers. The last remaining
+ * layer is kept, in which case false is returned.
+ */
+bool BKE_image_layer_remove(Image *ima, ImageLayer *layer);
+/**
+ * Append a pass to \a layer, the name made unique among the layer's passes. Its
+ * pixel buffer is generated on first use, filled with \a color (given in the
+ * image's colorspace, like #ImagePass.gen_color).
+ */
+ImagePass *BKE_image_pass_add(ImageLayer *layer,
+                              const char *name,
+                              const char *chan_id,
+                              int channels_num,
+                              const float color[4]);
+/**
+ * Remove a pass and its cached pixel buffer. The last remaining pass of a layer
+ * is kept, in which case false is returned.
+ */
+bool BKE_image_pass_remove(Image *ima, ImageLayer *layer, ImagePass *pass);
+
+/* Renaming keeps the selection of every #ImageUser that referenced the old name
+ * pointing at the same layer or pass. */
+void BKE_image_layer_rename(Main *bmain, Image *ima, ImageLayer *layer, const char *name);
+void BKE_image_pass_rename(Main *bmain, Image *ima, ImagePass *pass, const char *name);
+
+/**
  * For multi-layer images as well as for render-viewer
  * and because rendered results use fake layer/passes, don't correct for wrong indices here.
  */

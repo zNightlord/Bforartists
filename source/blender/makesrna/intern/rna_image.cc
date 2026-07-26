@@ -277,10 +277,80 @@ static void rna_ImageUser_update(Main *bmain, Scene *scene, PointerRNA *ptr)
   }
 }
 
+/* The image an #ImageUser belongs to. Only the user is reachable from the RNA
+ * pointer (its owner is the node tree, screen, ... holding it), so it is found
+ * by matching against every image user in the file. */
+static Image *rna_image_from_image_user(Main *bmain, const ImageUser *iuser)
+{
+  struct SearchData {
+    const ImageUser *iuser;
+    Image *result;
+  } data = {iuser, nullptr};
+
+  BKE_image_walk_all_users(
+      bmain, &data, [](Image *ima, ID * /*iuser_id*/, ImageUser *iuser, void *customdata) {
+        SearchData &data = *static_cast<SearchData *>(customdata);
+        if (iuser == data.iuser) {
+          data.result = ima;
+        }
+      });
+
+  return data.result;
+}
+
+/* The layer/pass indices are a positional selection: write the names they
+ * resolve to, which have priority. */
+static void rna_ImageUser_multilayer_index_update(Main *bmain, Scene *scene, PointerRNA *ptr)
+{
+  ImageUser *iuser = static_cast<ImageUser *>(ptr->data);
+
+  if (Image *ima = rna_image_from_image_user(bmain, iuser)) {
+    BKE_image_user_resolve_from_index(ima, iuser);
+  }
+
+  rna_ImageUser_update(bmain, scene, ptr);
+}
+
 static void rna_ImageUser_relations_update(Main *bmain, Scene *scene, PointerRNA *ptr)
 {
   rna_ImageUser_update(bmain, scene, ptr);
   DEG_relations_tag_update(bmain);
+}
+
+/* Only an authored catalog is user data; the layers and passes of a multi-layer
+ * EXR or a render result mirror their source. */
+static int rna_ImageCatalog_editable(const PointerRNA *ptr, const char **r_info)
+{
+  const Image *ima = id_cast<const Image *>(ptr->owner_id);
+  if (!BKE_image_has_authored_catalog(ima)) {
+    *r_info = N_("Layers and passes of this image are defined by its source");
+    return 0;
+  }
+  return PROP_EDITABLE;
+}
+
+static void rna_ImageLayer_name_set(PointerRNA *ptr, const char *value)
+{
+  Image *ima = id_cast<Image *>(ptr->owner_id);
+  ImageLayer *layer = static_cast<ImageLayer *>(ptr->data);
+  BLI_assert(BKE_id_is_in_global_main(&ima->id));
+  BKE_image_layer_rename(G_MAIN, ima, layer, value);
+}
+
+static void rna_ImagePass_name_set(PointerRNA *ptr, const char *value)
+{
+  Image *ima = id_cast<Image *>(ptr->owner_id);
+  ImagePass *pass = static_cast<ImagePass *>(ptr->data);
+  BLI_assert(BKE_id_is_in_global_main(&ima->id));
+  BKE_image_pass_rename(G_MAIN, ima, pass, value);
+}
+
+static void rna_ImageCatalog_update(Main *bmain, Scene * /*scene*/, PointerRNA *ptr)
+{
+  Image *ima = id_cast<Image *>(ptr->owner_id);
+  BKE_main_ensure_invariants(*bmain);
+  DEG_id_tag_update(&ima->id, 0);
+  WM_main_add_notifier(NC_IMAGE | ND_DRAW, ima);
 }
 
 static std::optional<std::string> rna_ImageUser_path(const PointerRNA *ptr)
@@ -864,15 +934,19 @@ static void rna_def_imageuser(BlenderRNA *brna)
   RNA_def_property_update(prop, 0, "rna_ImageUser_update");
   RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
 
+  /* Setting an index selects positionally; the resolved names, which have
+   * priority, are written back by the update function. */
   prop = RNA_def_property(srna, "multilayer_layer", PROP_INT, PROP_UNSIGNED);
   RNA_def_property_int_sdna(prop, nullptr, "layer");
-  RNA_def_property_clear_flag(prop, PROP_EDITABLE); /* image_multi_cb */
   RNA_def_property_ui_text(prop, "Layer", "Layer in multilayer image");
+  RNA_def_property_update(prop, NC_IMAGE | ND_DRAW, "rna_ImageUser_multilayer_index_update");
+  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
 
   prop = RNA_def_property(srna, "multilayer_pass", PROP_INT, PROP_UNSIGNED);
   RNA_def_property_int_sdna(prop, nullptr, "pass");
-  RNA_def_property_clear_flag(prop, PROP_EDITABLE); /* image_multi_cb */
   RNA_def_property_ui_text(prop, "Pass", "Pass in multilayer image");
+  RNA_def_property_update(prop, NC_IMAGE | ND_DRAW, "rna_ImageUser_multilayer_index_update");
+  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
 
   prop = RNA_def_property(srna, "multilayer_view", PROP_INT, PROP_UNSIGNED);
   RNA_def_property_int_sdna(prop, nullptr, "view");
@@ -1132,7 +1206,9 @@ static void rna_def_image_pass(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "name", PROP_STRING, PROP_NONE);
   RNA_def_property_ui_text(prop, "Name", "Name of the pass");
-  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_string_funcs(prop, nullptr, nullptr, "rna_ImagePass_name_set");
+  RNA_def_property_editable_func(prop, "rna_ImageCatalog_editable");
+  RNA_def_property_update(prop, 0, "rna_ImageCatalog_update");
   RNA_def_struct_name_property(srna, prop);
 
   prop = RNA_def_property(srna, "channels", PROP_INT, PROP_UNSIGNED);
@@ -1157,7 +1233,9 @@ static void rna_def_image_layer(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "name", PROP_STRING, PROP_NONE);
   RNA_def_property_ui_text(prop, "Name", "Name of the layer");
-  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_string_funcs(prop, nullptr, nullptr, "rna_ImageLayer_name_set");
+  RNA_def_property_editable_func(prop, "rna_ImageCatalog_editable");
+  RNA_def_property_update(prop, 0, "rna_ImageCatalog_update");
   RNA_def_struct_name_property(srna, prop);
 
   prop = RNA_def_property(srna, "passes", PROP_COLLECTION, PROP_NONE);
