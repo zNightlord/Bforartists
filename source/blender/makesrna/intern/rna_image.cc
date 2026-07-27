@@ -317,12 +317,10 @@ static void rna_ImageUser_relations_update(Main *bmain, Scene *scene, PointerRNA
   DEG_relations_tag_update(bmain);
 }
 
-/* Only an authored catalog is user data; the layers and passes of a multi-layer
- * EXR or a render result mirror their source. */
 static int rna_ImageCatalog_editable(const PointerRNA *ptr, const char **r_info)
 {
   const Image *ima = id_cast<const Image *>(ptr->owner_id);
-  if (!BKE_image_has_authored_catalog(ima)) {
+  if (!BKE_image_has_editable_catalog(ima)) {
     *r_info = N_("Layers and passes of this image are defined by its source");
     return 0;
   }

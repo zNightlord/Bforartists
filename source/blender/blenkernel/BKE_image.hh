@@ -101,6 +101,15 @@ struct ImageRuntime {
   /** Name of the synthetic combined layer at the last sync ("" if none); part of the
    * staleness key because the combined buffer is not tracked by catalog_version. */
   char synced_combined_name[/*MAX_NAME*/ 64] = "";
+
+  /**
+   * The layer/pass catalog of a file-backed multi-layer image was edited and is
+   * no longer what its file holds. Runtime only: like a painted pixel buffer,
+   * the edit is persisted by saving or packing the image, not by the blend file.
+   */
+  bool catalog_dirty = false;
+  /** Pixel size the catalog's passes were read at, for buffers with no file data. */
+  int catalog_size[2] = {0, 0};
 };
 
 }  // namespace bke
@@ -464,9 +473,25 @@ ImageLayer *BKE_image_user_layer(const Image *ima, const ImageUser *iuser);
  */
 ImageLayer *BKE_image_pass_layer(const Image *ima, const ImagePass *pass);
 
-/* Editing of an authored layer/pass catalog (see #BKE_image_has_authored_catalog).
- * Only such a catalog is user data; the catalog of a multi-layer EXR or a render
- * result mirrors its source and must not be edited. */
+/**
+ * Whether the layer/pass catalog on #Image.layers may be edited: an authored
+ * catalog, or that of a loaded multi-layer EXR. The latter is not saved with the
+ * blend file, so an edit lives in memory until the image is saved or packed,
+ * like painted pixels; see #BKE_image_catalog_is_dirty.
+ *
+ * A render result mirrors live render data, and an EXR *sequence* has a catalog
+ * per frame, so neither is editable.
+ */
+bool BKE_image_has_editable_catalog(const Image *ima);
+
+/**
+ * Whether the layer/pass catalog holds edits that are not in the image's file
+ * yet. Only meaningful for a file-backed catalog; an authored catalog is saved
+ * with the blend file and so is never dirty in this sense.
+ */
+bool BKE_image_catalog_is_dirty(const Image *ima);
+
+/* Editing of a layer/pass catalog (see #BKE_image_has_editable_catalog). */
 
 /**
  * Append a layer with a single RGBA color pass, the name made unique among the
@@ -483,7 +508,8 @@ bool BKE_image_layer_remove(Image *ima, ImageLayer *layer);
  * pixel buffer is generated on first use, filled with \a color (given in the
  * image's colorspace, like #ImagePass.gen_color).
  */
-ImagePass *BKE_image_pass_add(ImageLayer *layer,
+ImagePass *BKE_image_pass_add(Image *ima,
+                              ImageLayer *layer,
                               const char *name,
                               const char *chan_id,
                               int channels_num,

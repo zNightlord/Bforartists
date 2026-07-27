@@ -648,6 +648,7 @@ static ImBuf *image_acquire_ibuf(Image *ima,
                                  const bool ensure_host_buffer,
                                  bool *r_load_failed = nullptr);
 static void image_update_views_format(Image *ima, ImageUser *iuser);
+static ImageCacheKey image_get_cache_key(Image *ima, ImageUser *iuser);
 static void image_add_view(Image *ima, const char *viewname, const char *filepath);
 
 /** \} */
@@ -964,6 +965,7 @@ static void image_reset_multilayer_catalog(Image *ima)
   image_free_layers(ima);
   ima->runtime->multilayer_catalog_loaded = false;
   ima->runtime->multilayer_catalog_framenr = 0;
+  ima->runtime->catalog_dirty = false;
 }
 
 /* only image block itself */
@@ -4222,6 +4224,35 @@ bool BKE_image_has_authored_catalog(const Image *ima)
   return image_has_authored_catalog(ima);
 }
 
+/* A loaded multi-layer EXR: a single file whose whole catalog is in memory, so
+ * an edit can be written back by saving or packing it. A sequence has a catalog
+ * per frame and a render result mirrors live render data, so neither qualifies. */
+static bool image_has_file_catalog(const Image *ima)
+{
+  return ima->source == IMA_SRC_FILE && ima->type == IMA_TYPE_MULTILAYER &&
+         ima->runtime->multilayer_catalog_loaded;
+}
+
+bool BKE_image_has_editable_catalog(const Image *ima)
+{
+  return image_has_authored_catalog(ima) || image_has_file_catalog(ima);
+}
+
+bool BKE_image_catalog_is_dirty(const Image *ima)
+{
+  return ima->runtime->catalog_dirty;
+}
+
+/* An edit of a file-backed catalog only lives in memory; mark it so the image
+ * reports as modified and the user is offered to save or pack it. An authored
+ * catalog is saved with the blend file and so is never dirty. */
+static void image_catalog_tag_dirty(Image *ima)
+{
+  if (image_has_file_catalog(ima)) {
+    ima->runtime->catalog_dirty = true;
+  }
+}
+
 bool BKE_image_layers_have_name(const Image *ima)
 {
   switch (BLI_listbase_count_at_most(&ima->layers, 2)) {
@@ -4303,6 +4334,62 @@ template<typename T> static void image_catalog_name_make_unique(ListBaseT<T> &li
       sizeof(item->name));
 }
 
+/*
+ * Materialize and pin the pixel buffers of \a pass, so a catalog edit does not
+ * lose them.
+ *
+ * A file-backed pass is read from the EXR by layer and pass name, so once either
+ * name is changed - or the pass was never in the file to begin with - its pixels
+ * can no longer be fetched. Loading them while the names still match (or
+ * generating a blank buffer when there is nothing to load) and marking them
+ * dirty keeps them: the cache does not evict dirty buffers, and the image
+ * reports as modified until it is saved or packed.
+ *
+ * Call before renaming, after adding. A no-op for an authored catalog, whose
+ * buffers are generated from the pass itself and need no file.
+ */
+static void image_catalog_pin_pass(Image *ima, const ImageLayer *layer, ImagePass *pass)
+{
+  if (!image_has_file_catalog(ima)) {
+    return;
+  }
+
+  const int views_num = std::max(ima->views.count(), 1);
+  for (const int view : IndexRange(views_num)) {
+    ImageUser iuser;
+    BKE_imageuser_default(&iuser);
+    STRNCPY(iuser.layer_name, layer->name);
+    STRNCPY(iuser.pass_name, pass->name);
+    iuser.view = view;
+
+    ImBuf *ibuf = BKE_image_acquire_ibuf(ima, &iuser, nullptr);
+
+    if (ibuf == nullptr) {
+      /* Nothing to read: a pass added to the catalog. A blank buffer of the size
+       * the catalog was read at, filled with the pass's own color. */
+      const int width = ima->runtime->catalog_size[0];
+      const int height = ima->runtime->catalog_size[1];
+      if (width <= 0 || height <= 0) {
+        continue;
+      }
+      ibuf = IMB_allocImBuf(width, height, ImBufFlags::FloatData);
+      if (ibuf == nullptr) {
+        continue;
+      }
+      ibuf->color_mode = ImColorMode::RGBA;
+      IMB_colormanagement_assign_float_colorspace(ibuf, ima->colorspace_settings.name);
+      BKE_image_buf_fill_color(
+          nullptr, ibuf->float_data_for_write(), width, height, pass->gen_color);
+
+      std::scoped_lock lock(ima->runtime->cache_mutex);
+      imagecache_put(ima, image_get_cache_key(ima, &iuser), ibuf);
+    }
+
+    ibuf->userflags |= IB_BITMAPDIRTY;
+    BKE_image_release_ibuf(ima, ibuf, nullptr);
+  }
+}
+
 ImageLayer *BKE_image_layer_add(Image *ima, const char *name)
 {
   ImageLayer *layer = image_catalog_add_layer(ima, name);
@@ -4310,7 +4397,9 @@ ImageLayer *BKE_image_layer_add(Image *ima, const char *name)
 
   /* A layer with no pass has no pixels to select, so start with a color pass. */
   const float color[4] = {0.0f, 0.0f, 0.0f, 1.0f};
-  BKE_image_pass_add(layer, RE_PASSNAME_COMBINED, "RGBA", 4, color);
+  BKE_image_pass_add(ima, layer, RE_PASSNAME_COMBINED, "RGBA", 4, color);
+
+  image_catalog_tag_dirty(ima);
 
   return layer;
 }
@@ -4328,10 +4417,13 @@ bool BKE_image_layer_remove(Image *ima, ImageLayer *layer)
   BLI_remlink(&ima->layers, layer);
   MEM_delete(layer);
 
+  image_catalog_tag_dirty(ima);
+
   return true;
 }
 
-ImagePass *BKE_image_pass_add(ImageLayer *layer,
+ImagePass *BKE_image_pass_add(Image *ima,
+                              ImageLayer *layer,
                               const char *name,
                               const char *chan_id,
                               const int channels_num,
@@ -4340,6 +4432,9 @@ ImagePass *BKE_image_pass_add(ImageLayer *layer,
   ImagePass *pass = image_layer_add_pass(layer, name, chan_id, channels_num);
   image_catalog_name_make_unique(layer->passes, pass);
   copy_v4_v4(pass->gen_color, color);
+
+  image_catalog_tag_dirty(ima);
+  image_catalog_pin_pass(ima, layer, pass);
 
   return pass;
 }
@@ -4353,6 +4448,8 @@ bool BKE_image_pass_remove(Image *ima, ImageLayer *layer, ImagePass *pass)
   image_free_cached_pass_buffer(ima, pass);
   BLI_remlink(&layer->passes, pass);
   MEM_delete(pass);
+
+  image_catalog_tag_dirty(ima);
 
   return true;
 }
@@ -4389,6 +4486,8 @@ static void image_catalog_renamed(Main *bmain, Image *ima, ImageCatalogRenameDat
 {
   BKE_image_walk_all_users(bmain, &data, image_user_retarget_name);
 
+  image_catalog_tag_dirty(ima);
+
   /* An Image Texture node derives its per-pass sockets from the catalog. */
   BKE_ntree_update_tag_id_changed(bmain, &ima->id);
 }
@@ -4397,6 +4496,11 @@ void BKE_image_layer_rename(Main *bmain, Image *ima, ImageLayer *layer, const ch
 {
   char old_name[MAX_NAME];
   STRNCPY(old_name, layer->name);
+
+  /* The layer name is half of the file lookup of every pass below it. */
+  for (ImagePass &pass : layer->passes) {
+    image_catalog_pin_pass(ima, layer, &pass);
+  }
 
   STRNCPY_UTF8(layer->name, name);
   image_catalog_name_make_unique(ima->layers, layer);
@@ -4414,6 +4518,8 @@ void BKE_image_pass_rename(Main *bmain, Image *ima, ImagePass *pass, const char 
 
   char old_name[MAX_NAME];
   STRNCPY(old_name, pass->name);
+
+  image_catalog_pin_pass(ima, layer, pass);
 
   STRNCPY_UTF8(pass->name, name);
   image_catalog_name_make_unique(layer->passes, pass);
@@ -4879,6 +4985,9 @@ static void image_create_multilayer(Image *ima, ExrReadHandle *handle, const Ima
         layer, pass_name.c_str(), std::string(info.chan_id).c_str(), info.channels);
   }
 
+  const int2 size = IMB_exr_get_size(handle);
+  ima->runtime->catalog_size[0] = size.x;
+  ima->runtime->catalog_size[1] = size.y;
   ima->runtime->multilayer_catalog_framenr = key.frame;
   ima->runtime->multilayer_catalog_loaded = true;
 }
@@ -6588,8 +6697,11 @@ bool BKE_image_has_multiple_ibufs(Image *image)
 
 bool BKE_image_is_dirty_writable(Image *image, bool *r_is_writable)
 {
-  bool is_dirty = false;
-  bool is_writable = false;
+  /* A catalog edit changes no pixel buffer, but still has to be saved or packed
+   * to persist, so it makes the image modified on its own. It can only be
+   * written as a multi-layer EXR, which is always writable. */
+  bool is_dirty = image->runtime->catalog_dirty;
+  bool is_writable = is_dirty;
 
   std::scoped_lock lock(image->runtime->cache_mutex);
   if (image->runtime->cache != nullptr) {

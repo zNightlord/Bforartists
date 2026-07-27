@@ -98,6 +98,12 @@ bool BKE_image_save_options_init(ImageSaveOptions *opts,
         opts->im_format.imtype = R_IMF_IMTYPE_MULTILAYER;
         opts->im_format.depth = R_IMF_CHAN_DEPTH_32;
       }
+      else if (ima->type == IMA_TYPE_MULTILAYER && BKE_image_has_layer_catalog(ima)) {
+        /* A loaded multi-layer image: the format of the selected pass's buffer
+         * is a single-layer EXR, which would flatten the image to that one pass
+         * and silently drop the rest of its catalog. Keep its bit depth. */
+        opts->im_format.imtype = R_IMF_IMTYPE_MULTILAYER;
+      }
       else if (ima->source == IMA_SRC_GENERATED &&
                !IMB_colormanagement_space_name_is_data(ima_colorspace))
       {
@@ -237,6 +243,21 @@ static void image_save_update_filepath(Image *ima,
       BLI_path_rel(ima->filepath, relbase); /* only after saving */
     }
   }
+}
+
+/* Whether the save wrote over the image's own file, so that what is in memory
+ * and what is on disk agree again afterwards. */
+static bool image_saved_in_place(const Image *ima, const ImageSaveOptions *opts)
+{
+  if (!BKE_image_has_filepath(ima)) {
+    return false;
+  }
+
+  char filepath[FILE_MAX];
+  STRNCPY(filepath, ima->filepath);
+  BLI_path_abs(filepath, ID_BLEND_PATH(opts->bmain, &ima->id));
+
+  return BLI_path_cmp(filepath, opts->filepath) == 0;
 }
 
 static void image_save_post(ReportList *reports,
@@ -1312,6 +1333,12 @@ static bool image_save_multilayer_exr_file(ReportList *reports,
     if (ima->filepath[0] == '\0') {
       STRNCPY(ima->filepath, opts->filepath);
     }
+    BKE_image_signal(opts->bmain, ima, iuser, IMA_SIGNAL_RELOAD);
+  }
+  else if (ok && !opts->save_copy && image_saved_in_place(ima, opts)) {
+    /* A loaded multi-layer EXR written back over its own file: its edited
+     * catalog and painted buffers are now what the file holds, so drop them and
+     * let both reload from it. The image stops reporting as modified. */
     BKE_image_signal(opts->bmain, ima, iuser, IMA_SIGNAL_RELOAD);
   }
 

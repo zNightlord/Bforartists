@@ -4708,12 +4708,10 @@ static const char *image_pass_type_chan_id(const int channels_num)
   }
 }
 
-/* Only an authored catalog is user data; the layers and passes of a multi-layer
- * EXR or a render result mirror their source. */
 static bool image_catalog_poll(bContext *C)
 {
   const Image *ima = image_from_context(C);
-  return ima != nullptr && BKE_image_has_authored_catalog(ima);
+  return ima != nullptr && BKE_image_has_editable_catalog(ima);
 }
 
 /* The catalog defines the per-pass outputs of the Image Texture nodes using the
@@ -4769,7 +4767,7 @@ void IMAGE_OT_layer_add(wmOperatorType *ot)
 static bool image_layer_remove_poll(bContext *C)
 {
   const Image *ima = image_from_context(C);
-  return ima != nullptr && BKE_image_has_authored_catalog(ima) && !ima->layers.is_single();
+  return ima != nullptr && BKE_image_has_editable_catalog(ima) && !ima->layers.is_single();
 }
 
 static wmOperatorStatus image_layer_remove_exec(bContext *C, wmOperator *op)
@@ -4823,7 +4821,7 @@ static wmOperatorStatus image_pass_add_exec(bContext *C, wmOperator *op)
   RNA_float_get_array(op->ptr, "color", color);
 
   const ImagePass *pass = BKE_image_pass_add(
-      layer, name, image_pass_type_chan_id(channels_num), channels_num, color);
+      ima, layer, name, image_pass_type_chan_id(channels_num), channels_num, color);
 
   if (iuser != nullptr) {
     iuser->pass = BLI_findindex(&layer->passes, pass);
@@ -4863,7 +4861,7 @@ void IMAGE_OT_pass_add(wmOperatorType *ot)
 static bool image_pass_remove_poll(bContext *C)
 {
   const Image *ima = image_from_context(C);
-  if (ima == nullptr || !BKE_image_has_authored_catalog(ima)) {
+  if (ima == nullptr || !BKE_image_has_editable_catalog(ima)) {
     return false;
   }
   const ImageLayer *layer = BKE_image_user_layer(ima, image_user_from_context(C));
