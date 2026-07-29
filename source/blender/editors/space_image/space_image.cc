@@ -274,6 +274,7 @@ static void image_operatortypes()
   WM_operatortype_append(IMAGE_OT_layer_remove);
   WM_operatortype_append(IMAGE_OT_pass_add);
   WM_operatortype_append(IMAGE_OT_pass_remove);
+  WM_operatortype_append(IMAGE_OT_layers_detect);
 }
 
 static void image_keymap(wmKeyConfig *keyconf)

@@ -4687,27 +4687,6 @@ void IMAGE_OT_tile_fill(wmOperatorType *ot)
 /** \name Image Layer and Pass Operators
  * \{ */
 
-/* Channel layout of a new pass, matching the layouts the Image Texture node
- * declares an output socket for. */
-static const EnumPropertyItem image_pass_type_items[] = {
-    {4, "COLOR", 0, "Color", "Color pass with an alpha channel"},
-    {1, "VALUE", 0, "Value", "Single channel pass"},
-    {3, "VECTOR", 0, "Vector", "Three channel pass"},
-    {0, nullptr, 0, nullptr, nullptr},
-};
-
-static const char *image_pass_type_chan_id(const int channels_num)
-{
-  switch (channels_num) {
-    case 1:
-      return "X";
-    case 3:
-      return "XYZ";
-    default:
-      return "RGBA";
-  }
-}
-
 static bool image_catalog_poll(bContext *C)
 {
   const Image *ima = image_from_context(C);
@@ -4821,7 +4800,7 @@ static wmOperatorStatus image_pass_add_exec(bContext *C, wmOperator *op)
   RNA_float_get_array(op->ptr, "color", color);
 
   const ImagePass *pass = BKE_image_pass_add(
-      ima, layer, name, image_pass_type_chan_id(channels_num), channels_num, color);
+      ima, layer, name, BKE_image_pass_channel_ids(channels_num), channels_num, color);
 
   if (iuser != nullptr) {
     iuser->pass = BLI_findindex(&layer->passes, pass);
@@ -4844,7 +4823,8 @@ void IMAGE_OT_pass_add(wmOperatorType *ot)
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
   RNA_def_string(ot->srna, "name", "Pass", MAX_NAME, "Name", "Name of the new pass");
-  RNA_def_enum(ot->srna, "type", image_pass_type_items, 4, "Type", "Channel layout of the pass");
+  RNA_def_enum(
+      ot->srna, "type", rna_enum_image_pass_type_items, 4, "Type", "Channel layout of the pass");
   static const float default_color[4] = {0.0f, 0.0f, 0.0f, 1.0f};
   RNA_def_float_color(ot->srna,
                       "color",
@@ -4898,6 +4878,62 @@ void IMAGE_OT_pass_remove(wmOperatorType *ot)
 
   ot->poll = image_pass_remove_poll;
   ot->exec = image_pass_remove_exec;
+
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Detect Image Layers Operator
+ * \{ */
+
+static bool image_layers_detect_poll(bContext *C)
+{
+  const Image *ima = image_from_context(C);
+  return ima != nullptr && ELEM(ima->source, IMA_SRC_FILE, IMA_SRC_TILED) &&
+         BKE_image_filepath_has_layer_pass_token(ima->filepath);
+}
+
+static wmOperatorStatus image_layers_detect_exec(bContext *C, wmOperator *op)
+{
+  Main *bmain = CTX_data_main(C);
+  Image *ima = image_from_context(C);
+  ImageUser *iuser = image_user_from_context(C);
+
+  const int passes_num = BKE_image_multifile_detect_layers(bmain, ima);
+  if (passes_num < 0) {
+    BKE_report(op->reports,
+               RPT_ERROR,
+               "Layers can only be detected for a single image or UDIM tiles whose file path "
+               "contains a <LAYER> or <PASS> token");
+    return OPERATOR_CANCELLED;
+  }
+  if (passes_num == 0) {
+    BKE_reportf(op->reports, RPT_WARNING, "No file matching '%s' found", ima->filepath);
+    return OPERATOR_CANCELLED;
+  }
+
+  if (iuser != nullptr) {
+    iuser->layer = 0;
+    iuser->pass = 0;
+  }
+  image_catalog_changed(C, ima, iuser);
+  BKE_reportf(op->reports, RPT_INFO, "Detected %d passes", passes_num);
+
+  return OPERATOR_FINISHED;
+}
+
+void IMAGE_OT_layers_detect(wmOperatorType *ot)
+{
+  ot->name = "Detect Image Layers";
+  ot->description =
+      "Replace the layers and passes of the image by the files matching the <LAYER> and <PASS> "
+      "tokens of its file path";
+  ot->idname = "IMAGE_OT_layers_detect";
+
+  ot->poll = image_layers_detect_poll;
+  ot->exec = image_layers_detect_exec;
 
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }

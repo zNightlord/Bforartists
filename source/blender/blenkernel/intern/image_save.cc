@@ -91,14 +91,19 @@ bool BKE_image_save_options_init(ImageSaveOptions *opts,
     }
     else {
       BKE_image_format_from_imbuf(&opts->im_format, ibuf);
-      if (BKE_image_has_authored_catalog(ima)) {
+      /* A `<LAYER>` / `<PASS>` path writes every pass to an ordinary image file
+       * of its own, so no single-file format has to hold the whole catalog. */
+      const bool is_multi_file = BKE_image_filepath_has_layer_pass_token(ima->filepath);
+      if (!is_multi_file && BKE_image_has_authored_catalog(ima)) {
         /* Only a multi-layer EXR can hold every pass of an authored catalog.
          * Default to full float, matching the generated pass buffers, so a
          * save/reload roundtrip of painted data is lossless. */
         opts->im_format.imtype = R_IMF_IMTYPE_MULTILAYER;
         opts->im_format.depth = R_IMF_CHAN_DEPTH_32;
       }
-      else if (ima->type == IMA_TYPE_MULTILAYER && BKE_image_has_layer_catalog(ima)) {
+      else if (!is_multi_file && ima->type == IMA_TYPE_MULTILAYER &&
+               BKE_image_has_layer_catalog(ima))
+      {
         /* A loaded multi-layer image: the format of the selected pass's buffer
          * is a single-layer EXR, which would flatten the image to that one pass
          * and silently drop the rest of its catalog. Keep its bit depth. */
@@ -108,6 +113,14 @@ bool BKE_image_save_options_init(ImageSaveOptions *opts,
                !IMB_colormanagement_space_name_is_data(ima_colorspace))
       {
         ima_colorspace = IMB_colormanagement_role_colorspace_name_get(COLOR_ROLE_DEFAULT_BYTE);
+      }
+
+      /* The format of the acquired pass buffer is the right default for the
+       * files of a multi-file image, but a generated buffer has none of its own.
+       * Default those to PNG, the common texture format, rather than to the
+       * generic fallback of #BKE_image_format_from_imbuf. */
+      if (is_multi_file && ibuf->ftype == IMB_FTYPE_NONE) {
+        BKE_image_format_set(&opts->im_format, &ima->id, R_IMF_IMTYPE_PNG);
       }
 
       /* use the multiview image settings as the default */
@@ -127,7 +140,7 @@ bool BKE_image_save_options_init(ImageSaveOptions *opts,
 
     /* Compute filepath, but don't resolve multiview and UDIM which are handled
      * by the image saving code itself. */
-    BKE_image_user_file_path_ex(bmain, iuser, ima, opts->filepath, false, false);
+    BKE_image_user_file_path_ex(bmain, iuser, ima, opts->filepath, false, false, false);
 
     /* For movies, replace extension and add the frame number to avoid writing over the movie file
      * itself and provide a good default file path. */
@@ -304,9 +317,14 @@ static void image_save_post(ReportList *reports,
   }
   if (ELEM(ima->source, IMA_SRC_GENERATED, IMA_SRC_VIEWER)) {
     ima->source = IMA_SRC_FILE;
-    /* A generated multi-layer image saved as a multi-layer EXR stays
-     * multi-layer; its catalog now reloads from the file like a loaded EXR. */
-    if (!(ima->type == IMA_TYPE_MULTILAYER && opts->im_format.imtype == R_IMF_IMTYPE_MULTILAYER)) {
+    /* A generated multi-layer image stays multi-layer when the save wrote all of
+     * its passes: into one multi-layer EXR, whose catalog now reloads from the
+     * file like a loaded EXR, or into one file per pass at a `<LAYER>`/`<PASS>`
+     * path, whose catalog stays authored user data. */
+    const bool wrote_every_pass = ima->type == IMA_TYPE_MULTILAYER &&
+                                  (opts->im_format.imtype == R_IMF_IMTYPE_MULTILAYER ||
+                                   BKE_image_filepath_has_layer_pass_token(filepath));
+    if (!wrote_every_pass) {
       ima->type = IMA_TYPE_IMAGE;
     }
     ImageTile *base_tile = BKE_image_get_tile(ima, 0);
@@ -368,6 +386,176 @@ static bool image_save_multilayer_exr_file(ReportList *reports,
                                            ImageUser *iuser,
                                            const ImageSaveOptions *opts,
                                            bool *r_colorspace_changed);
+
+/**
+ * Write one pass of a multi-file image to \a filepath. The pass buffer is
+ * acquired through the catalog like any other, and written as an ordinary
+ * single image: its channel layout follows the pass type, and a data pass
+ * (value or vector) is written without a color transform.
+ */
+static bool image_save_multifile_pass(ReportList *reports,
+                                      Image *ima,
+                                      ImageUser *iuser,
+                                      const ImageSaveOptions *opts,
+                                      const ImagePass *pass,
+                                      const char *filepath)
+{
+  ImBuf *ibuf = BKE_image_acquire_ibuf(ima, iuser, nullptr);
+  if (ibuf == nullptr || (!ibuf->byte_data() && !ibuf->float_data())) {
+    BKE_reportf(reports, RPT_ERROR, "Did not write, no buffer for pass \"%s\"", pass->name);
+    BKE_image_release_ibuf(ima, ibuf, nullptr);
+    return false;
+  }
+
+  /* Shallow copy: only read from, never freed (as for the per-tile options in
+   * #BKE_image_save). */
+  ImageFormatData imf = opts->im_format;
+  /* A pass is a single image, so a multi-layer EXR is written as a plain one. */
+  if (imf.imtype == R_IMF_IMTYPE_MULTILAYER) {
+    imf.imtype = R_IMF_IMTYPE_OPENEXR;
+  }
+  imf.color_mode = (pass->channels_num == 1) ? ImColorMode::BW :
+                   (pass->channels_num == 3) ? ImColorMode::RGB :
+                                               ImColorMode::RGBA;
+  const bool is_data = pass->channels_num != 4;
+  if (is_data) {
+    STRNCPY_UTF8(imf.linear_colorspace_settings.name,
+                 IMB_colormanagement_role_colorspace_name_get(COLOR_ROLE_DATA));
+  }
+
+  ImBuf *colormanaged_ibuf = IMB_colormanagement_imbuf_for_write(
+      ibuf, opts->save_as_render && !is_data, true, &imf);
+  const bool ok = BKE_imbuf_write_as(colormanaged_ibuf, filepath, &imf, opts->save_copy);
+  imbuf_save_post(ibuf, colormanaged_ibuf);
+
+  if (ok) {
+    if (!opts->save_copy) {
+      ibuf->userflags &= ~IB_BITMAPDIRTY;
+      ibuf->filepath = filepath;
+    }
+  }
+  else {
+    BKE_reportf(reports,
+                RPT_ERROR,
+                "Could not write image: %s",
+                errno ? strerror(errno) : "internal error, see console");
+  }
+
+  BKE_image_release_ibuf(ima, ibuf, nullptr);
+  return ok;
+}
+
+/**
+ * Save a multi-layer image as one file per layer and pass, the `<LAYER>` and
+ * `<PASS>` tokens of the path naming each. This is how a multi-file image is
+ * written: afterwards it reads its passes back from exactly these files, its
+ * catalog staying authored user data in the blend file.
+ */
+static bool image_save_multifile(ReportList *reports,
+                                 Image *ima,
+                                 ImageUser *iuser,
+                                 const ImageSaveOptions *opts,
+                                 bool *r_colorspace_changed)
+{
+  if (BLI_listbase_is_empty(&ima->layers)) {
+    BKE_report(reports, RPT_ERROR, "Did not write, image has no layers");
+    return false;
+  }
+  if (strstr(opts->filepath, "<LAYER>") == nullptr && !ima->layers.is_single()) {
+    BKE_report(reports,
+               RPT_ERROR,
+               "When saving several layers to individual files, the path must contain a <LAYER> "
+               "token to tell them apart");
+    return false;
+  }
+
+  /* UDIM tiles multiply the files written, like for a single image. */
+  eUDIM_TILE_FORMAT tile_format = UDIM_TILE_FORMAT_NONE;
+  char *udim_pattern = nullptr;
+  if (ima->source == IMA_SRC_TILED) {
+    udim_pattern = BKE_image_get_tile_strformat(opts->filepath, &tile_format);
+    if (tile_format == UDIM_TILE_FORMAT_NONE) {
+      BKE_reportf(reports,
+                  RPT_ERROR,
+                  "When saving a tiled image, the path '%s' must contain a valid UDIM marker",
+                  opts->filepath);
+      return false;
+    }
+  }
+
+  const bool is_multiview = BKE_image_is_multiview(ima) && opts->scene != nullptr;
+  const int views_num = is_multiview ? ima->views.count() : 1;
+
+  ImageUser pass_iuser = *iuser;
+  pass_iuser.flag &= ~IMA_SHOW_STEREO;
+
+  bool ok = true;
+  for (const ImageLayer &layer : ima->layers) {
+    for (const ImagePass &pass : layer.passes) {
+      STRNCPY(pass_iuser.layer_name, layer.name);
+      STRNCPY(pass_iuser.pass_name, pass.name);
+
+      for (const int view : IndexRange(views_num)) {
+        pass_iuser.view = view;
+
+        for (ImageTile &tile : ima->tiles) {
+          pass_iuser.tile = tile.tile_number;
+          BKE_image_user_resolve_from_names(ima, &pass_iuser);
+
+          char filepath[FILE_MAX];
+          STRNCPY(filepath, opts->filepath);
+          if (udim_pattern != nullptr) {
+            BKE_image_set_filepath_from_tile_number(
+                filepath, udim_pattern, tile_format, tile.tile_number);
+          }
+          BKE_image_set_filepath_from_layer_pass(filepath, sizeof(filepath), &layer, &pass);
+          if (is_multiview) {
+            char view_filepath[FILE_MAX];
+            const ImageView *image_view = static_cast<const ImageView *>(
+                BLI_findlink(&ima->views, view));
+            BKE_scene_multiview_view_filepath_get(
+                &opts->scene->r, filepath, image_view->name, view_filepath);
+            STRNCPY(filepath, view_filepath);
+          }
+
+          ok &= image_save_multifile_pass(reports, ima, &pass_iuser, opts, &pass, filepath);
+
+          if (udim_pattern == nullptr) {
+            break;
+          }
+        }
+      }
+    }
+  }
+  MEM_SAFE_DELETE(udim_pattern);
+
+  if (!ok) {
+    return false;
+  }
+
+  /* The image now reads its passes back from the files just written. The
+   * representative buffer is only used for the post-save bookkeeping; every
+   * pass buffer was already cleaned up by #image_save_multifile_pass. */
+  ImBuf *ibuf = BKE_image_acquire_ibuf(ima, iuser, nullptr);
+  if (ibuf != nullptr) {
+    image_save_post(
+        reports, ima, ibuf, ok, opts, opts->save_copy, opts->filepath, r_colorspace_changed);
+    BKE_image_release_ibuf(ima, ibuf, nullptr);
+  }
+
+  if (!opts->save_copy) {
+    /* #image_save_post leaves the path of a tiled image to its caller, and a
+     * generated image has none of its own to keep. */
+    if (ima->source == IMA_SRC_TILED || ima->filepath[0] == '\0') {
+      image_save_update_filepath(ima, opts->filepath, opts);
+      if (ima->filepath[0] == '\0') {
+        STRNCPY(ima->filepath, opts->filepath);
+      }
+    }
+  }
+
+  return ok;
+}
 
 /**
  * \return success.
@@ -701,6 +889,21 @@ bool BKE_image_save(
 
   bool colorspace_changed = false;
 
+  /* A `<LAYER>` / `<PASS>` path writes one file per layer and pass, and makes
+   * the image read them back that way. */
+  if (ima->type == IMA_TYPE_MULTILAYER && BKE_image_has_layer_catalog(ima) &&
+      BKE_image_filepath_has_layer_pass_token(opts->filepath))
+  {
+    const bool ok = image_save_multifile(reports, ima, iuser, opts, &colorspace_changed);
+    if (ok && (ima->flag & IMA_AUTOSAVE_TEMPPACK)) {
+      BKE_image_clear_autosave(ima);
+    }
+    if (colorspace_changed) {
+      BKE_image_signal(bmain, ima, nullptr, IMA_SIGNAL_COLORMANAGE);
+    }
+    return ok;
+  }
+
   eUDIM_TILE_FORMAT tile_format;
   char *udim_pattern = nullptr;
 
@@ -813,6 +1016,33 @@ static const float *image_exr_from_rgb_to_bw(const float *input_buffer,
   });
 
   return gray_scale_output;
+}
+
+/**
+ * Copy the leading \a channels_num channels of a wider interleaved buffer into a
+ * tightly packed one, as EXR channels are written.
+ */
+static const float *image_exr_pack_channels(const float *input_buffer,
+                                            const int width,
+                                            const int height,
+                                            const int input_channels,
+                                            const int channels_num,
+                                            Vector<float *> &temporary_buffers)
+{
+  const int64_t pixels_num = int64_t(width) * int64_t(height);
+  float *output = MEM_new_array_uninitialized<float>(pixels_num * int64_t(channels_num),
+                                                     "Packed Channel Buffer For EXR");
+  temporary_buffers.append(output);
+
+  threading::parallel_for(IndexRange(pixels_num), 4096, [&](const IndexRange range) {
+    for (const int64_t i : range) {
+      for (const int64_t c : IndexRange(channels_num)) {
+        output[i * channels_num + c] = input_buffer[i * input_channels + c];
+      }
+    }
+  });
+
+  return output;
 }
 
 static float *image_exr_opaque_alpha_buffer(int width,
@@ -1164,6 +1394,7 @@ static bool image_save_exr(ReportList *reports,
    * references from the per-Image cache. They are released after the file is written. */
   Vector<ExrSavePass> passes;
   Vector<ImBuf *> acquired_ibufs;
+  Vector<float *> packed_rects;
   ImBuf *first_ibuf = nullptr;
 
   int nr = 0;
@@ -1210,16 +1441,36 @@ static bool image_save_exr(ReportList *reports,
         if (pass_ibuf == nullptr) {
           continue;
         }
+        /* EXR channels are float; a pass read from a byte format file (a
+         * multi-file image) has no float buffer of its own yet. */
+        if (pass_ibuf->float_data() == nullptr) {
+          IMB_float_from_byte(pass_ibuf);
+        }
+        if (pass_ibuf->float_data() == nullptr) {
+          BKE_image_release_ibuf(ima, pass_ibuf, nullptr);
+          continue;
+        }
         if (first_ibuf == nullptr) {
           first_ibuf = pass_ibuf;
         }
         acquired_ibufs.append(pass_ibuf);
+
+        /* EXR channels are written tightly packed, but a pass of fewer channels
+         * than its buffer has is a slice of it — a generated or byte format
+         * buffer is always RGBA, whatever the type of the pass it holds. */
+        const int channels_num = std::min(pass.channels_num, pass_ibuf->channels);
+        const float *pixels = pass_ibuf->float_data();
+        if (channels_num != pass_ibuf->channels) {
+          pixels = image_exr_pack_channels(
+              pixels, pass_ibuf->x, pass_ibuf->y, pass_ibuf->channels, channels_num, packed_rects);
+        }
+
         passes.append({image_layer.name,
                        pass.name,
                        pass.chan_id,
-                       pass.channels_num,
+                       channels_num,
                        view_name,
-                       pass_ibuf->float_data(),
+                       pixels,
                        pass_ibuf->x,
                        pass_ibuf->y});
       }
@@ -1254,6 +1505,9 @@ static bool image_save_exr(ReportList *reports,
   /* Release the borrowed cache references. */
   for (ImBuf *pass_ibuf : acquired_ibufs) {
     BKE_image_release_ibuf(ima, pass_ibuf, nullptr);
+  }
+  for (float *packed_rect : packed_rects) {
+    MEM_delete(packed_rect);
   }
 
   return ok;

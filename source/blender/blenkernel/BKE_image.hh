@@ -399,11 +399,18 @@ int BKE_image_user_frame_get(const ImageUser *iuser, int cfra, bool *r_is_in_ran
  */
 bool BKE_image_user_match(const ImageUser &a, const ImageUser &b);
 void BKE_image_user_file_path(const ImageUser *iuser, const Image *ima, char *filepath);
+/**
+ * The file path an #ImageUser reads from, made absolute. Each token of the
+ * image's path is substituted by what the user selects only when its
+ * `resolve_` argument is true; keeping a token lets the caller expand that axis
+ * itself, e.g. to write every UDIM tile from one pattern.
+ */
 void BKE_image_user_file_path_ex(const Main *bmain,
                                  const ImageUser *iuser,
                                  const Image *ima,
                                  char *filepath,
                                  const bool resolve_udim,
+                                 const bool resolve_layer_pass,
                                  const bool resolve_multiview);
 void BKE_image_editors_update_frame(const Main *bmain, int cfra);
 
@@ -524,6 +531,15 @@ bool BKE_image_pass_remove(Image *ima, ImageLayer *layer, ImagePass *pass);
  * pointing at the same layer or pass. */
 void BKE_image_layer_rename(Main *bmain, Image *ima, ImageLayer *layer, const char *name);
 void BKE_image_pass_rename(Main *bmain, Image *ima, ImagePass *pass, const char *name);
+
+/** The channel IDs of a pass of the given channel count: `RGBA`, `XYZ` or `X`. */
+const char *BKE_image_pass_channel_ids(int channels_num);
+
+/**
+ * Set the channel layout of a pass — the type the user gave it — to a number of
+ * channels and the channel IDs that go with it.
+ */
+void BKE_image_pass_set_channels(Image *ima, ImagePass *pass, int channels_num);
 
 /**
  * For multi-layer images as well as for render-viewer
@@ -699,6 +715,61 @@ void BKE_image_set_filepath_from_tile_number(char *filepath,
                                              const char *pattern,
                                              eUDIM_TILE_FORMAT tile_format,
                                              int tile_number);
+
+/* Multi-file images: one file per layer/pass, selected by `<LAYER>` and
+ * `<PASS>` tokens in the image's file path. */
+
+/**
+ * Whether the file-name component of \a filepath contains a `<LAYER>` or
+ * `<PASS>` token.
+ */
+bool BKE_image_filepath_has_layer_pass_token(const char *filepath);
+
+/**
+ * Whether each layer/pass of the image is a file of its own, its file path
+ * containing `<LAYER>` / `<PASS>` tokens. Such an image is multi-layer with its
+ * catalog authored by the user (#BKE_image_has_authored_catalog) rather than
+ * read back from a file header, since no single file holds the mapping.
+ */
+bool BKE_image_is_multifile(const Image *ima);
+
+/**
+ * The value a layer or pass substitutes for its file-name token: its
+ * #ImageLayer.token / #ImagePass.token if set, its name otherwise.
+ */
+const char *BKE_image_layer_token(const ImageLayer *layer);
+const char *BKE_image_pass_token(const ImagePass *pass);
+
+/**
+ * Replace the `<LAYER>` and `<PASS>` tokens in \a filepath by the token values
+ * of \a layer and \a pass. A null layer or pass substitutes an empty string.
+ */
+void BKE_image_set_filepath_from_layer_pass(char *filepath,
+                                            size_t filepath_maxncpy,
+                                            const ImageLayer *layer,
+                                            const ImagePass *pass);
+
+/**
+ * The colorspace the buffer selected by \a iuser is stored in: the image's own
+ * colorspace, except for a value or vector pass of a multi-file image, which
+ * holds data and is read and written without color management.
+ */
+const char *BKE_image_user_colorspace(const Image *ima, const ImageUser *iuser);
+
+/**
+ * Rebuild the catalog of a multi-file image from the files on disk: scan the
+ * directory of its tokenized file path and add a layer and pass for every
+ * distinct `<LAYER>` / `<PASS>` token value found. Existing layers and passes
+ * whose token value is still on disk are kept as they are, so their name,
+ * channel layout and custom token survive; the rest are removed.
+ *
+ * There is no automatic synchronization: like UDIM tiles, the catalog is user
+ * data and only this explicit operation reconciles it with disk.
+ *
+ * \return the number of passes in the resulting catalog, or -1 when the image
+ * has no `<LAYER>` / `<PASS>` token to match files against.
+ */
+int BKE_image_multifile_detect_layers(Main *bmain, Image *ima);
 
 ImageTile *BKE_image_get_tile(Image *ima, int tile_number);
 ImageTile *BKE_image_get_tile_from_iuser(Image *ima, const ImageUser *iuser);

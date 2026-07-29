@@ -1173,7 +1173,11 @@ class IMAGE_PT_image_layers(Panel):
     @classmethod
     def poll(cls, context):
         sima = context.space_data
-        return sima and sima.image and sima.image.layers
+        if not (sima and sima.image):
+            return False
+        # A tokenized file path has layers and passes to detect on disk, even
+        # before the image has a catalog of its own.
+        return bool(sima.image.layers) or sima.image.has_layer_tokens
 
     def draw(self, context):
         sima = context.space_data

@@ -102,6 +102,7 @@ void IMAGE_OT_layer_add(wmOperatorType *ot);
 void IMAGE_OT_layer_remove(wmOperatorType *ot);
 void IMAGE_OT_pass_add(wmOperatorType *ot);
 void IMAGE_OT_pass_remove(wmOperatorType *ot);
+void IMAGE_OT_layers_detect(wmOperatorType *ot);
 
 /**
  * Gets active viewer user.

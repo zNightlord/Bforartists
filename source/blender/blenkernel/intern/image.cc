@@ -126,7 +126,11 @@ namespace blender {
 static CLG_LogRef LOG = {"image"};
 
 static void image_init(Image *ima, eImageSource source, eImageType type);
+static bool image_is_multifile(const Image *ima);
 static void image_free_cached_pass_buffers(Image *ima);
+static void image_free_cached_pass_buffer(Image *ima,
+                                          const ImagePass *pass,
+                                          bool keep_dirty = false);
 static void image_free_layers(Image *ima);
 static void imagecache_remove(Image *image, ImageCacheKey key);
 static ImBuf *imagecache_get(Image *image, ImageCacheKey key, bool *r_is_cached_empty);
@@ -311,6 +315,38 @@ static void image_foreach_path(ID *id, BPathForeachPathData *bpath_data)
     BLI_path_abs(abs_filepath, ID_BLEND_PATH(bpath_data->bmain, &ima->id));
   }
 
+  if (image_is_multifile(ima) && (flag & BKE_BPATH_FOREACH_PATH_EXPAND_TOKENS)) {
+    /* Expand the file of every layer/pass, and of every UDIM tile of each. */
+    eUDIM_TILE_FORMAT tile_format = UDIM_TILE_FORMAT_NONE;
+    char *udim_pattern = (ima->source == IMA_SRC_TILED) ?
+                             BKE_image_get_tile_strformat(abs_filepath, &tile_format) :
+                             nullptr;
+    for (const ImageLayer &layer : ima->layers) {
+      for (const ImagePass &pass : layer.passes) {
+        for (const ImageTile &tile : ima->tiles) {
+          char pass_filepath[FILE_MAX];
+          if (udim_pattern != nullptr) {
+            BKE_image_set_filepath_from_tile_number(
+                pass_filepath, udim_pattern, tile_format, tile.tile_number);
+          }
+          else {
+            STRNCPY(pass_filepath, abs_filepath);
+          }
+          BKE_image_set_filepath_from_layer_pass(
+              pass_filepath, sizeof(pass_filepath), &layer, &pass);
+          if (BLI_is_file(pass_filepath)) {
+            image_foreach_expanded_path(bpath_data, pass_filepath, flag);
+          }
+          if (udim_pattern == nullptr) {
+            break;
+          }
+        }
+      }
+    }
+    MEM_SAFE_DELETE(udim_pattern);
+    return;
+  }
+
   if (ima->source == IMA_SRC_TILED && (flag & BKE_BPATH_FOREACH_PATH_EXPAND_TOKENS)) {
     /* Expand all UDIM tiles. */
     eUDIM_TILE_FORMAT tile_format;
@@ -339,22 +375,31 @@ static void image_foreach_path(ID *id, BPathForeachPathData *bpath_data)
     return;
   }
 
-  /* If this is a tiled image, and we're asked to resolve the tokens in the virtual
-   * filepath, use the first tile to generate a concrete path for use during processing. */
+  /* If the file path is a virtual one, and we're asked to resolve its tokens,
+   * use the first tile and the first layer/pass to generate a concrete path for
+   * use during processing. */
+  const bool has_tokens = (ima->source == IMA_SRC_TILED) || image_is_multifile(ima);
   bool result = false;
-  if (ima->source == IMA_SRC_TILED && (flag & BKE_BPATH_FOREACH_PATH_RESOLVE_TOKEN) != 0) {
+  if (has_tokens && (flag & BKE_BPATH_FOREACH_PATH_RESOLVE_TOKEN) != 0) {
     char temp_path[FILE_MAX], orig_file[FILE_MAXFILE];
     STRNCPY(temp_path, ima->filepath);
     BLI_path_split_file_part(temp_path, orig_file, sizeof(orig_file));
 
-    eUDIM_TILE_FORMAT tile_format;
-    char *udim_pattern = BKE_image_get_tile_strformat(temp_path, &tile_format);
-    BKE_image_set_filepath_from_tile_number(
-        temp_path,
-        udim_pattern,
-        tile_format,
-        (static_cast<ImageTile *>(ima->tiles.first))->tile_number);
-    MEM_SAFE_DELETE(udim_pattern);
+    if (ima->source == IMA_SRC_TILED) {
+      eUDIM_TILE_FORMAT tile_format;
+      char *udim_pattern = BKE_image_get_tile_strformat(temp_path, &tile_format);
+      BKE_image_set_filepath_from_tile_number(
+          temp_path,
+          udim_pattern,
+          tile_format,
+          (static_cast<ImageTile *>(ima->tiles.first))->tile_number);
+      MEM_SAFE_DELETE(udim_pattern);
+    }
+    const ImageLayer *layer = static_cast<const ImageLayer *>(ima->layers.first);
+    const ImagePass *pass = (layer != nullptr) ?
+                                static_cast<const ImagePass *>(layer->passes.first) :
+                                nullptr;
+    BKE_image_set_filepath_from_layer_pass(temp_path, sizeof(temp_path), layer, pass);
 
     result = BKE_bpath_foreach_path_fixed_process(bpath_data, temp_path, sizeof(temp_path));
     if (result) {
@@ -388,15 +433,44 @@ static void image_foreach_path(ID *id, BPathForeachPathData *bpath_data)
   }
 }
 
+static bool image_filepath_has_layer_pass_token(const char *filepath)
+{
+  const char *filename = BLI_path_basename(filepath);
+  return strstr(filename, "<LAYER>") != nullptr || strstr(filename, "<PASS>") != nullptr;
+}
+
+/**
+ * True when each layer/pass of the image is its own file on disk, its filepath
+ * carrying `<LAYER>` / `<PASS>` tokens. The mapping of the catalog onto file
+ * names exists in no single file, so the catalog itself is authored user data.
+ */
+static bool image_is_multifile(const Image *ima)
+{
+  return ima->type == IMA_TYPE_MULTILAYER && ELEM(ima->source, IMA_SRC_FILE, IMA_SRC_TILED) &&
+         image_filepath_has_layer_pass_token(ima->filepath);
+}
+
 /**
  * True when #Image.layers is authored user data rather than a mirror of an
  * external source: a generated multi-layer image, whose pass list defines the
- * paintable per-pass buffers. Such a catalog is written to the blend file and
- * must not be discarded when signals rebuild file-based catalogs.
+ * paintable per-pass buffers, or a multi-file image, whose layers and passes
+ * name the files it is stored in. Such a catalog is written to the blend file
+ * and must not be discarded when signals rebuild file-based catalogs.
  */
 static bool image_has_authored_catalog(const Image *ima)
 {
-  return ima->source == IMA_SRC_GENERATED && ima->type == IMA_TYPE_MULTILAYER;
+  return (ima->source == IMA_SRC_GENERATED && ima->type == IMA_TYPE_MULTILAYER) ||
+         image_is_multifile(ima);
+}
+
+/** Total number of passes over all layers of the image's catalog. */
+static int image_catalog_passes_num(const Image *ima)
+{
+  int passes_num = 0;
+  for (const ImageLayer &layer : ima->layers) {
+    passes_num += layer.passes.count();
+  }
+  return passes_num;
 }
 
 /**
@@ -1760,8 +1834,72 @@ static bool image_memorypack_multilayer(Image *ima)
   return true;
 }
 
+/**
+ * Pack a multi-file image as one packed file per layer/pass, and per view and
+ * UDIM tile, each recording the path it was packed from. That path is what the
+ * loader resolves for the pass, so the pass finds its packed data again, and an
+ * unpack writes every file back where it came from.
+ */
+static bool image_memorypack_multifile(Image *ima)
+{
+  image_free_packedfiles(ima);
+
+  const int views_num = image_num_viewfiles(ima);
+
+  ImageUser iuser;
+  BKE_imageuser_default(&iuser);
+
+  bool ok = true;
+  for (const ImageLayer &layer : ima->layers) {
+    for (const ImagePass &pass : layer.passes) {
+      STRNCPY(iuser.layer_name, layer.name);
+      STRNCPY(iuser.pass_name, pass.name);
+
+      for (const int view : IndexRange(views_num)) {
+        iuser.view = view;
+
+        for (const ImageTile &tile : ima->tiles) {
+          iuser.tile = tile.tile_number;
+          BKE_image_user_resolve_from_names(ima, &iuser);
+
+          ImBuf *ibuf = BKE_image_acquire_ibuf(ima, &iuser, nullptr);
+          if (ibuf == nullptr) {
+            image_free_packedfiles(ima);
+            return false;
+          }
+
+          char filepath[FILE_MAX];
+          BKE_image_user_file_path(&iuser, ima, filepath);
+          ok = image_memorypack_imbuf(ima, ibuf, view, tile.tile_number, filepath);
+          BKE_image_release_ibuf(ima, ibuf, nullptr);
+
+          if (!ok) {
+            /* #image_memorypack_imbuf dropped the entries packed so far. */
+            return false;
+          }
+          if (ima->source != IMA_SRC_TILED) {
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  if (ok) {
+    for (ImageTile &tile : ima->tiles) {
+      tile.gen_flag &= ~IMA_GEN_TILE;
+    }
+    BKE_image_clear_autosave(ima);
+  }
+
+  return ok;
+}
+
 bool BKE_image_memorypack(Image *ima)
 {
+  if (image_is_multifile(ima)) {
+    return image_memorypack_multifile(ima);
+  }
   if (BKE_image_is_multilayer(ima) && BKE_image_has_layer_catalog(ima)) {
     return image_memorypack_multilayer(ima);
   }
@@ -3873,6 +4011,27 @@ static const ImagePass *image_user_resolve_pass(const Image *ima, ImageUser *ius
   return pass;
 }
 
+/**
+ * The catalog layer and pass \a iuser selects, resolved by name first like
+ * #image_user_resolve_pass but without writing the resolution back into the
+ * user. For callers that only need to read the selection.
+ */
+static void image_user_catalog_selection(const Image *ima,
+                                         const ImageUser *iuser,
+                                         const ImageLayer **r_layer,
+                                         const ImagePass **r_pass)
+{
+  bool by_name;
+  *r_layer = image_resolve_catalog_axis<ImageLayer>(
+      &ima->layers, iuser ? iuser->layer_name : "", iuser ? iuser->layer : 0, &by_name);
+  *r_pass = (*r_layer == nullptr) ?
+                nullptr :
+                image_resolve_catalog_axis<ImagePass>(&(*r_layer)->passes,
+                                                      iuser ? iuser->pass_name : "",
+                                                      iuser ? iuser->pass : 0,
+                                                      &by_name);
+}
+
 int BKE_image_get_tile_label(const Image *ima,
                              const ImageTile *tile,
                              char *label,
@@ -4208,6 +4367,265 @@ void BKE_image_set_filepath_from_tile_number(char *filepath,
   }
 }
 
+bool BKE_image_filepath_has_layer_pass_token(const char *filepath)
+{
+  return image_filepath_has_layer_pass_token(filepath);
+}
+
+bool BKE_image_is_multifile(const Image *ima)
+{
+  return image_is_multifile(ima);
+}
+
+/* The value a layer or pass substitutes for its filename token: the token the
+ * user gave it, or its name when there is none. */
+template<typename T> static const char *image_catalog_token(const T *item)
+{
+  if (item == nullptr) {
+    return "";
+  }
+  return item->token[0] != '\0' ? item->token : item->name;
+}
+
+const char *BKE_image_layer_token(const ImageLayer *layer)
+{
+  return image_catalog_token(layer);
+}
+
+const char *BKE_image_pass_token(const ImagePass *pass)
+{
+  return image_catalog_token(pass);
+}
+
+void BKE_image_set_filepath_from_layer_pass(char *filepath,
+                                            const size_t filepath_maxncpy,
+                                            const ImageLayer *layer,
+                                            const ImagePass *pass)
+{
+  const char *tokens[2] = {"<LAYER>", "<PASS>"};
+  const char *values[2] = {image_catalog_token(layer), image_catalog_token(pass)};
+
+  for (const int i : IndexRange(2)) {
+    if (strstr(filepath, tokens[i]) == nullptr) {
+      continue;
+    }
+    char *replaced = BLI_string_replaceN(filepath, tokens[i], values[i]);
+    BLI_strncpy(filepath, replaced, filepath_maxncpy);
+    MEM_delete(replaced);
+  }
+}
+
+/**
+ * Translate a tokenized file name into a regular expression matching the files
+ * it stands for, with a capture group for the value of each `<LAYER>` and
+ * `<PASS>` token (their 1-based group numbers are returned, 0 when the token is
+ * absent). UDIM tokens match without capturing: a tile is a separate axis, so
+ * every tile of a pass maps to the same catalog entry.
+ *
+ * Token values are captured non-greedily, so with `tex_<LAYER>_<PASS>.png` the
+ * file `tex_body_base_color.png` reads as layer "body", pass "base_color".
+ */
+static std::string image_multifile_filename_regex(const StringRef filename,
+                                                  int *r_layer_group,
+                                                  int *r_pass_group)
+{
+  struct TokenPattern {
+    StringRef token;
+    StringRef regex;
+    int *r_group;
+  };
+  *r_layer_group = 0;
+  *r_pass_group = 0;
+  const TokenPattern token_patterns[] = {{"<LAYER>", "(.+?)", r_layer_group},
+                                         {"<PASS>", "(.+?)", r_pass_group},
+                                         {"<UDIM>", "\\d{4}", nullptr},
+                                         {"<UVTILE>", "u\\d+_v\\d+", nullptr}};
+
+  std::string pattern = "^";
+  int groups_num = 0;
+  for (int64_t at = 0; at < filename.size();) {
+    const TokenPattern *matched = nullptr;
+    for (const TokenPattern &token_pattern : token_patterns) {
+      if (filename.substr(at).startswith(token_pattern.token)) {
+        matched = &token_pattern;
+        break;
+      }
+    }
+    if (matched == nullptr) {
+      const char c = filename[at];
+      if (strchr(".^$|()[]{}*+?\\", c) != nullptr) {
+        pattern += '\\';
+      }
+      pattern += c;
+      at++;
+      continue;
+    }
+    pattern += matched->regex;
+    if (matched->r_group != nullptr) {
+      groups_num++;
+      /* A token repeated in one name is rare; take its value from the first. */
+      if (*matched->r_group == 0) {
+        *matched->r_group = groups_num;
+      }
+    }
+    at += matched->token.size();
+  }
+  pattern += "$";
+
+  return pattern;
+}
+
+/* Find the layer or pass of \a list whose token value is \a token, or null. */
+template<typename T> static T *image_catalog_find_by_token(ListBaseT<T> &list, const char *token)
+{
+  for (T &item : list) {
+    if (STREQ(image_catalog_token(&item), token)) {
+      return &item;
+    }
+  }
+  return nullptr;
+}
+
+int BKE_image_multifile_detect_layers(Main *bmain, Image *ima)
+{
+  /* Only a single-file or UDIM-tiled image reads its passes as individual files;
+   * a sequence or a movie has no place for a `<LAYER>` / `<PASS>` axis. */
+  if (!ELEM(ima->source, IMA_SRC_FILE, IMA_SRC_TILED) ||
+      !image_filepath_has_layer_pass_token(ima->filepath))
+  {
+    return -1;
+  }
+
+  char filepath[FILE_MAX];
+  STRNCPY(filepath, ima->filepath);
+  BLI_path_abs(filepath, ID_BLEND_PATH(bmain, &ima->id));
+
+  char dirname[FILE_MAXDIR], filename[FILE_MAXFILE];
+  BLI_path_split_dir_file(filepath, dirname, sizeof(dirname), filename, sizeof(filename));
+
+  int layer_group, pass_group;
+  const std::string pattern = image_multifile_filename_regex(filename, &layer_group, &pass_group);
+  std::regex regex;
+  try {
+    regex = std::regex(pattern);
+  }
+  catch (const std::regex_error &) {
+    return -1;
+  }
+
+  /* The distinct `<LAYER>` values on disk, in the order the directory listing
+   * gives them, each with the distinct `<PASS>` values found next to it. */
+  Vector<std::string> layer_tokens;
+  Vector<Vector<std::string>> layer_pass_tokens;
+
+  direntry *dirs;
+  const uint dirs_num = BLI_filelist_dir_contents(dirname, &dirs);
+  for (const int i : IndexRange(int(dirs_num))) {
+    if (!(dirs[i].type & S_IFREG)) {
+      continue;
+    }
+    std::cmatch match;
+    if (!std::regex_match(dirs[i].relname, match, regex)) {
+      continue;
+    }
+
+    const std::string layer_token = (layer_group > 0) ? match[layer_group].str() : "";
+    const std::string pass_token = (pass_group > 0) ? match[pass_group].str() : "";
+
+    int64_t layer_index = layer_tokens.first_index_of_try(layer_token);
+    if (layer_index == -1) {
+      layer_index = layer_tokens.append_and_get_index(layer_token);
+      layer_pass_tokens.append(Vector<std::string>());
+    }
+    if (!layer_pass_tokens[layer_index].contains(pass_token)) {
+      layer_pass_tokens[layer_index].append(pass_token);
+    }
+  }
+  BLI_filelist_free(dirs, dirs_num);
+
+  if (layer_tokens.is_empty()) {
+    return 0;
+  }
+
+  /* The image reads its passes from the individual files from now on, so its
+   * previous buffers — of a plain image, or of layers that are gone — are all
+   * stale. */
+  {
+    std::scoped_lock lock(ima->runtime->cache_mutex);
+    BKE_image_free_buffers(ima);
+  }
+  ima->type = IMA_TYPE_MULTILAYER;
+
+  /* Rebuild the catalog, keeping every layer and pass whose token is still on
+   * disk so its name, channel layout and custom token survive. */
+  ListBaseT<ImageLayer> unused_layers = ima->layers;
+  BLI_listbase_clear(&ima->layers);
+
+  for (const int64_t layer_index : layer_tokens.index_range()) {
+    const std::string &layer_token = layer_tokens[layer_index];
+    ImageLayer *layer = image_catalog_find_by_token(unused_layers, layer_token.c_str());
+    if (layer != nullptr) {
+      BLI_remlink(&unused_layers, layer);
+    }
+    else {
+      layer = MEM_new<ImageLayer>(__func__);
+      STRNCPY_UTF8(layer->name, layer_token.c_str());
+    }
+    BLI_addtail(&ima->layers, layer);
+
+    ListBaseT<ImagePass> unused_passes = layer->passes;
+    BLI_listbase_clear(&layer->passes);
+
+    for (const std::string &pass_token : layer_pass_tokens[layer_index]) {
+      ImagePass *pass = image_catalog_find_by_token(unused_passes, pass_token.c_str());
+      if (pass != nullptr) {
+        BLI_remlink(&unused_passes, pass);
+      }
+      else {
+        pass = MEM_new<ImagePass>(__func__);
+        /* An unnamed pass would have nothing to show in the pass list; a path
+         * without a `<PASS>` token gives every layer a single combined pass. */
+        STRNCPY_UTF8(pass->name, pass_token.empty() ? RE_PASSNAME_COMBINED : pass_token.c_str());
+        STRNCPY(pass->chan_id, "RGBA");
+        pass->channels_num = 4;
+        pass->gen_color[3] = 1.0f;
+      }
+      BLI_addtail(&layer->passes, pass);
+    }
+
+    for (ImagePass &pass : unused_passes.items_mutable()) {
+      image_free_cached_pass_buffer(ima, &pass);
+      MEM_delete(&pass);
+    }
+    BLI_listbase_clear(&unused_passes);
+  }
+
+  for (ImageLayer &layer : unused_layers.items_mutable()) {
+    for (ImagePass &pass : layer.passes) {
+      image_free_cached_pass_buffer(ima, &pass);
+    }
+    BLI_freelistN(&layer.passes);
+    MEM_delete(&layer);
+  }
+  BLI_listbase_clear(&unused_layers);
+
+  /* Passes added later have no file yet, and are generated at the size the
+   * files on disk have. */
+  ImageUser iuser;
+  BKE_imageuser_default(&iuser);
+  BKE_image_user_resolve_from_index(ima, &iuser);
+  if (ImBuf *ibuf = BKE_image_acquire_ibuf(ima, &iuser, nullptr)) {
+    ImageTile *base_tile = static_cast<ImageTile *>(ima->tiles.first);
+    base_tile->gen_x = ibuf->x;
+    base_tile->gen_y = ibuf->y;
+    BKE_image_release_ibuf(ima, ibuf, nullptr);
+  }
+
+  BKE_ntree_update_tag_id_changed(bmain, &ima->id);
+
+  return image_catalog_passes_num(ima);
+}
+
 /**
  * True when the image's layer/pass selection resolves against #Image.layers: a
  * loaded multi-layer EXR, or a render-result viewer whose catalog is the synced
@@ -4226,11 +4644,14 @@ bool BKE_image_has_authored_catalog(const Image *ima)
 
 /* A loaded multi-layer EXR: a single file whose whole catalog is in memory, so
  * an edit can be written back by saving or packing it. A sequence has a catalog
- * per frame and a render result mirrors live render data, so neither qualifies. */
+ * per frame and a render result mirrors live render data, so neither qualifies;
+ * neither does a multi-file image, whose catalog is authored and saved with the
+ * blend file (it may carry a stale flag from before it was saved to one file per
+ * pass). */
 static bool image_has_file_catalog(const Image *ima)
 {
   return ima->source == IMA_SRC_FILE && ima->type == IMA_TYPE_MULTILAYER &&
-         ima->runtime->multilayer_catalog_loaded;
+         ima->runtime->multilayer_catalog_loaded && !image_is_multifile(ima);
 }
 
 bool BKE_image_has_editable_catalog(const Image *ima)
@@ -4294,8 +4715,10 @@ ImageLayer *BKE_image_pass_layer(const Image *ima, const ImagePass *pass)
 
 /* Evict the cached pixel buffers of a single catalog pass, of any tile, view or
  * frame. Leaving one behind would dangle: the cache key holds a raw #ImagePass
- * pointer (see #image_free_cached_pass_buffers). */
-static void image_free_cached_pass_buffer(Image *ima, const ImagePass *pass)
+ * pointer (see #image_free_cached_pass_buffers). Buffers holding unsaved edits
+ * are kept when \a keep_dirty, for evictions that only want the pass re-read
+ * from its file. */
+static void image_free_cached_pass_buffer(Image *ima, const ImagePass *pass, const bool keep_dirty)
 {
   std::scoped_lock lock(ima->runtime->cache_mutex);
   if (ima->runtime->cache == nullptr) {
@@ -4305,7 +4728,9 @@ static void image_free_cached_pass_buffer(Image *ima, const ImagePass *pass)
   ImBufCacheIter *iter = IMB_cacheIter_new(ima->runtime->cache);
   while (!IMB_cacheIter_done(iter)) {
     const ImageCacheKey *key = static_cast<const ImageCacheKey *>(IMB_cacheIter_getUserKey(iter));
-    if (key->pass == pass) {
+    const ImBuf *ibuf = IMB_cacheIter_getImBuf(iter);
+    const bool is_dirty = ibuf != nullptr && (ibuf->userflags & IB_BITMAPDIRTY) != 0;
+    if (key->pass == pass && !(keep_dirty && is_dirty)) {
       stale_keys.append(*key);
     }
     IMB_cacheIter_step(iter);
@@ -4452,6 +4877,36 @@ bool BKE_image_pass_remove(Image *ima, ImageLayer *layer, ImagePass *pass)
   image_catalog_tag_dirty(ima);
 
   return true;
+}
+
+const char *BKE_image_pass_channel_ids(const int channels_num)
+{
+  switch (channels_num) {
+    case 1:
+      return "X";
+    case 3:
+      return "XYZ";
+    default:
+      return "RGBA";
+  }
+}
+
+void BKE_image_pass_set_channels(Image *ima, ImagePass *pass, const int channels_num)
+{
+  if (pass->channels_num == channels_num) {
+    return;
+  }
+  pass->channels_num = channels_num;
+  STRNCPY(pass->chan_id, BKE_image_pass_channel_ids(channels_num));
+
+  /* A pass of a multi-file image reads its file as color or as data depending on
+   * its type, so a buffer loaded under the previous type has the wrong
+   * colorspace and is re-read. Unsaved edits are kept over that. */
+  if (image_is_multifile(ima)) {
+    image_free_cached_pass_buffer(ima, pass, /*keep_dirty*/ true);
+  }
+
+  image_catalog_tag_dirty(ima);
 }
 
 /* Retarget the layer or pass name of every #ImageUser of \a ima that selected
@@ -5349,6 +5804,61 @@ static ImBuf *image_load_movie_file(Image *ima, ImageUser *iuser, int frame)
   return ibuf;
 }
 
+/**
+ * Whether a pass of a multi-file image holds data rather than color, following
+ * the type the user gave it: a value or vector pass (roughness, normals, ...)
+ * must not be color managed, a color pass follows the image's colorspace.
+ */
+static bool image_multifile_pass_is_data(const ImagePass *pass)
+{
+  return pass != nullptr && pass->channels_num != 4;
+}
+
+/** The colorspace a pass of a multi-file image is stored in. */
+static const char *image_multifile_pass_colorspace(const Image *ima, const ImagePass *pass)
+{
+  return image_multifile_pass_is_data(pass) ?
+             IMB_colormanagement_role_colorspace_name_get(COLOR_ROLE_DATA) :
+             ima->colorspace_settings.name;
+}
+
+const char *BKE_image_user_colorspace(const Image *ima, const ImageUser *iuser)
+{
+  if (image_is_multifile(ima)) {
+    const ImageLayer *layer;
+    const ImagePass *pass;
+    image_user_catalog_selection(ima, iuser, &layer, &pass);
+    return image_multifile_pass_colorspace(ima, pass);
+  }
+  return ima->colorspace_settings.name;
+}
+
+/**
+ * Stand-in buffer for a pass of a multi-file image that has no file on disk: a
+ * pass just added to the catalog, or a file that is missing. Blank at the
+ * image's generated size and filled with the pass's own color, so the pass can
+ * be painted on and is written out by the next save.
+ */
+static ImBuf *image_multifile_generate_ibuf(Image *ima, const ImagePass *pass)
+{
+  const ImageTile *base_tile = static_cast<const ImageTile *>(ima->tiles.first);
+  const int width = (base_tile != nullptr && base_tile->gen_x > 0) ? base_tile->gen_x : 1024;
+  const int height = (base_tile != nullptr && base_tile->gen_y > 0) ? base_tile->gen_y : 1024;
+
+  ImBuf *ibuf = IMB_allocImBuf(width, height, ImBufFlags::FloatData);
+  if (ibuf == nullptr) {
+    return nullptr;
+  }
+  ibuf->color_mode = ImColorMode::RGBA;
+  IMB_colormanagement_assign_float_colorspace(ibuf, image_multifile_pass_colorspace(ima, pass));
+
+  const float black[4] = {0.0f, 0.0f, 0.0f, 1.0f};
+  BKE_image_buf_fill_color(
+      nullptr, ibuf->float_data_for_write(), width, height, pass ? pass->gen_color : black);
+
+  return ibuf;
+}
+
 static ImBuf *load_image_single(Image *ima,
                                 ImageUser *iuser,
                                 int cfra,
@@ -5358,7 +5868,7 @@ static ImBuf *load_image_single(Image *ima,
                                 const bool is_sequence,
                                 bool *r_cache_ibuf)
 {
-  char filepath[FILE_MAX];
+  char filepath[FILE_MAX] = "";
   ImBuf *ibuf = nullptr;
   /* Multi-layer EXR handle, opened separately from the same source the buffer
    * was loaded from (#IMB_exr_open_multilayer). Null unless a multi-layer EXR. */
@@ -5368,24 +5878,51 @@ static ImBuf *load_image_single(Image *ima,
   *r_cache_ibuf = true;
   const int tile_number = image_get_tile_number_from_iuser(ima, iuser);
 
+  /* A multi-file image loads the file of the layer/pass being keyed. Its files
+   * are ordinary images, never a multi-layer EXR to expand into a catalog. */
+  const bool is_multifile = image_is_multifile(ima);
+  const ImagePass *pass = is_multifile ? key.pass : nullptr;
+
+  /* In/out: the loader takes the image colorspace as a hint and reports back the
+   * one it used. A data pass of a multi-file image loads as data instead, and
+   * leaves the image colorspace — that of its color passes — untouched. */
+  char data_colorspace[sizeof(ima->colorspace_settings.name)];
+  char *colorspace = ima->colorspace_settings.name;
+  if (image_multifile_pass_is_data(pass)) {
+    STRNCPY(data_colorspace, IMB_colormanagement_role_colorspace_name_get(COLOR_ROLE_DATA));
+    colorspace = data_colorspace;
+  }
+
   /* is there a PackedFile with this image ? */
   if (has_packed && !is_sequence) {
-    for (ImagePackedFile &imapf : ima->packedfiles) {
-      if (imapf.view == view_id && imapf.tile_number == tile_number) {
-        if (imapf.packedfile) {
-          uchar *data = static_cast<uchar *>(const_cast<void *>(imapf.packedfile->data));
-          ibuf = IMB_load_image_from_memory(data,
-                                            imapf.packedfile->size,
-                                            flag,
-                                            "<packed data>",
-                                            nullptr,
-                                            ima->colorspace_settings.name);
-          if (ibuf && ibuf->ftype == IMB_FTYPE_OPENEXR) {
-            exr_handle = IMB_exr_open_multilayer_from_memory(data, imapf.packedfile->size);
-          }
-        }
-        break;
+    /* Each layer/pass of a multi-file image packs separately, told apart by the
+     * path it was packed from. */
+    char pass_filepath[FILE_MAX] = "";
+    if (is_multifile) {
+      ImageUser iuser_t{};
+      if (iuser) {
+        iuser_t = *iuser;
       }
+      iuser_t.view = view_id;
+      BKE_image_user_file_path(&iuser_t, ima, pass_filepath);
+    }
+
+    for (ImagePackedFile &imapf : ima->packedfiles) {
+      if (imapf.view != view_id || imapf.tile_number != tile_number) {
+        continue;
+      }
+      if (is_multifile && BLI_path_cmp(imapf.filepath, pass_filepath) != 0) {
+        continue;
+      }
+      if (imapf.packedfile) {
+        uchar *data = static_cast<uchar *>(const_cast<void *>(imapf.packedfile->data));
+        ibuf = IMB_load_image_from_memory(
+            data, imapf.packedfile->size, flag, "<packed data>", nullptr, colorspace);
+        if (ibuf && ibuf->ftype == IMB_FTYPE_OPENEXR && !is_multifile) {
+          exr_handle = IMB_exr_open_multilayer_from_memory(data, imapf.packedfile->size);
+        }
+      }
+      break;
     }
   }
   else {
@@ -5412,10 +5949,22 @@ static ImBuf *load_image_single(Image *ima,
     BKE_image_user_file_path(&iuser_t, ima, filepath);
 
     /* read ibuf */
-    ibuf = IMB_load_image_from_filepath(filepath, flag, ima->colorspace_settings.name);
-    if (ibuf && ibuf->ftype == IMB_FTYPE_OPENEXR) {
+    ibuf = IMB_load_image_from_filepath(filepath, flag, colorspace);
+    if (ibuf && ibuf->ftype == IMB_FTYPE_OPENEXR && !is_multifile) {
       exr_handle = IMB_exr_open_multilayer(filepath);
     }
+  }
+
+  if (ibuf == nullptr && is_multifile) {
+    /* No file for this pass yet: a stand-in to paint on and write out on save. */
+    ibuf = image_multifile_generate_ibuf(ima, pass);
+    if (ibuf != nullptr) {
+      if (filepath[0] != '\0') {
+        ibuf->filepath = filepath;
+      }
+      image_init_after_load(ima, iuser, ibuf);
+    }
+    return ibuf;
   }
 
   if (ibuf) {
@@ -5474,18 +6023,24 @@ static ImBuf *image_load_image_file(
   const int tot_viewfiles = image_num_viewfiles(ima);
   bool has_packed = BKE_image_has_packedfile(ima);
 
-  /* Buffers loaded here always belong to the image's own catalog pass (null for
-   * multi-layer EXR, whose per-pass buffers are keyed in #image_create_multilayer). */
-  key.pass = nullptr;
+  /* A multi-file image loads one pass at a time into its own catalog slot, so
+   * the pass stays part of the key and the buffers of the other passes must
+   * survive. Buffers of any other image belong to no catalog pass (a multi-layer
+   * EXR keys its per-pass buffers in #image_create_multilayer instead). */
+  const bool is_multifile = image_is_multifile(ima);
+  if (!is_multifile) {
+    key.pass = nullptr;
 
-  if (!(is_sequence || is_tiled)) {
-    /* ensure clean ima */
-    BKE_image_free_buffers(ima);
+    if (!(is_sequence || is_tiled)) {
+      /* ensure clean ima */
+      BKE_image_free_buffers(ima);
+    }
   }
 
   /* this should never happen, but just playing safe */
   if (!is_sequence && has_packed) {
-    const int totfiles = tot_viewfiles * ima->tiles.count();
+    const int totfiles = tot_viewfiles * ima->tiles.count() *
+                         (is_multifile ? image_catalog_passes_num(ima) : 1);
     if (!BLI_listbase_count_is_equal_to(&ima->packedfiles, totfiles)) {
       image_free_packedfiles(ima);
       has_packed = false;
@@ -5955,8 +6510,12 @@ static ImBuf *image_acquire_ibuf(Image *ima,
       /* Nothing was cached. Check to see if the tile should be generated. */
       ImageTile *tile = BKE_image_get_tile(ima, key.tile_number);
       if ((tile->gen_flag & IMA_GEN_TILE) != 0) {
-        ibuf = add_ibuf_for_tile(ima, tile);
-        imagecache_put(ima, ImageCacheKey{.tile_number = key.tile_number, .view = key.view}, ibuf);
+        ibuf = add_ibuf_for_tile(ima, tile, key.pass);
+        imagecache_put(ima, key, ibuf);
+      }
+      else if (image_is_multifile(ima)) {
+        /* One file per layer/pass, each cached under its own catalog pass. */
+        ibuf = image_load_image_file(ima, iuser, key, 0, false);
       }
       else {
         if (ima->type == IMA_TYPE_IMAGE) {
@@ -5971,15 +6530,20 @@ static ImBuf *image_acquire_ibuf(Image *ima,
       }
     }
     else if (ima->source == IMA_SRC_FILE) {
-
-      if (ima->type == IMA_TYPE_IMAGE) {
-        /* cfra only for '#', this global is OK */
-        ibuf = image_load_image_file(ima, iuser, ImageCacheKey{}, key.frame, false);
+      if (image_is_multifile(ima)) {
+        /* One file per layer/pass, each cached under its own catalog pass. */
+        ibuf = image_load_image_file(ima, iuser, key, key.frame, false);
       }
-      /* no else; on load the ima type can change */
-      if (ima->type == IMA_TYPE_MULTILAYER) {
-        /* Stores pass ibufs in the per-Image cache, allows saving. */
-        ibuf = image_load_multilayer(ima, iuser, key, key.frame, false);
+      else {
+        if (ima->type == IMA_TYPE_IMAGE) {
+          /* cfra only for '#', this global is OK */
+          ibuf = image_load_image_file(ima, iuser, ImageCacheKey{}, key.frame, false);
+        }
+        /* no else; on load the ima type can change */
+        if (ima->type == IMA_TYPE_MULTILAYER) {
+          /* Stores pass ibufs in the per-Image cache, allows saving. */
+          ibuf = image_load_multilayer(ima, iuser, key, key.frame, false);
+        }
       }
     }
     else if (ima->source == IMA_SRC_GENERATED) {
@@ -6498,7 +7062,7 @@ void BKE_image_user_id_eval_animation(Depsgraph *depsgraph, ID *id)
 
 void BKE_image_user_file_path(const ImageUser *iuser, const Image *ima, char *filepath)
 {
-  BKE_image_user_file_path_ex(G_MAIN, iuser, ima, filepath, true, true);
+  BKE_image_user_file_path_ex(G_MAIN, iuser, ima, filepath, true, true, true);
 }
 
 void BKE_image_user_file_path_ex(const Main *bmain,
@@ -6506,6 +7070,7 @@ void BKE_image_user_file_path_ex(const Main *bmain,
                                  const Image *ima,
                                  char *filepath,
                                  const bool resolve_udim,
+                                 const bool resolve_layer_pass,
                                  const bool resolve_multiview)
 {
   if (resolve_multiview && BKE_image_is_multiview(ima)) {
@@ -6539,6 +7104,14 @@ void BKE_image_user_file_path_ex(const Main *bmain,
       BKE_image_set_filepath_from_tile_number(filepath, udim_pattern, tile_format, index);
       MEM_SAFE_DELETE(udim_pattern);
     }
+  }
+
+  /* Each layer/pass of a multi-file image is a file of its own. */
+  if (resolve_layer_pass && image_is_multifile(ima)) {
+    const ImageLayer *layer;
+    const ImagePass *pass;
+    image_user_catalog_selection(ima, iuser, &layer, &pass);
+    BKE_image_set_filepath_from_layer_pass(filepath, FILE_MAX, layer, pass);
   }
 
   BLI_path_abs(filepath, ID_BLEND_PATH(bmain, &ima->id));

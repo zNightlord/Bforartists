@@ -232,6 +232,9 @@ struct ImagePass {
   /** Solid fill of a generated pass buffer (authored catalogs only), stored in
    * the image's colorspace (no sRGB conversion on fill). */
   float gen_color[4] = {};
+  /** Value substituted for the `<PASS>` token of a multi-file image path,
+   * empty to use #name. */
+  char token[/*MAX_NAME*/ 64] = "";
 };
 
 struct ImageLayer {
@@ -239,6 +242,9 @@ struct ImageLayer {
 
   /** Layer name. */
   char name[/*MAX_NAME*/ 64] = "";
+  /** Value substituted for the `<LAYER>` token of a multi-file image path,
+   * empty to use #name. */
+  char token[/*MAX_NAME*/ 64] = "";
 
   ListBaseT<ImagePass> passes = {nullptr, nullptr};
 };

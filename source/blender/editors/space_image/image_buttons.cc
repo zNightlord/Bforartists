@@ -1143,7 +1143,21 @@ void uiTemplateImageCatalog(ui::Layout *layout,
 {
   Image *ima = static_cast<Image *>(imaptr->data);
   ImageUser *iuser = static_cast<ImageUser *>(iuserptr->data);
-  if (ima == nullptr || iuser == nullptr || !BKE_image_has_layer_catalog(ima)) {
+  if (ima == nullptr || iuser == nullptr) {
+    return;
+  }
+
+  /* The layer and pass operators act on the image and user drawn here, which
+   * may not be the ones the editor around the panel provides. */
+  layout->context_ptr_set("edit_image", imaptr);
+  layout->context_ptr_set("edit_image_user", iuserptr);
+
+  if (!BKE_image_has_layer_catalog(ima)) {
+    /* A path with `<LAYER>` / `<PASS>` tokens has layers and passes to find on
+     * disk, even though the image has no catalog yet. */
+    if (BKE_image_filepath_has_layer_pass_token(ima->filepath)) {
+      layout->op("IMAGE_OT_layers_detect", std::nullopt, ICON_FILE_REFRESH);
+    }
     return;
   }
 
@@ -1151,10 +1165,9 @@ void uiTemplateImageCatalog(ui::Layout *layout,
    * which take priority. */
   BKE_image_user_resolve_from_names(ima, iuser);
 
-  /* The layer and pass operators act on the image and user drawn here, which
-   * may not be the ones the editor around the panel provides. */
-  layout->context_ptr_set("edit_image", imaptr);
-  layout->context_ptr_set("edit_image_user", iuserptr);
+  /* Each layer and pass of a multi-file image is a file of its own, named by the
+   * token it substitutes into the image file path. */
+  const bool is_multifile = BKE_image_is_multifile(ima);
 
   /* The layer list is unlabeled: the panel around it names it. */
   {
@@ -1181,11 +1194,17 @@ void uiTemplateImageCatalog(ui::Layout *layout,
   if (layer == nullptr) {
     return;
   }
+  PointerRNA layerptr = RNA_pointer_create_discrete(&ima->id, RNA_ImageLayer, layer);
+
+  if (is_multifile) {
+    ui::Layout &col = layout->column(false);
+    col.use_property_split_set(true);
+    col.prop(&layerptr, "token", UI_ITEM_NONE, IFACE_("Layer Token"), ICON_NONE);
+  }
 
   ui::Layout &passes_col = layout->column(false);
   passes_col.label(IFACE_("Passes"), ICON_NONE);
   {
-    PointerRNA layerptr = RNA_pointer_create_discrete(&ima->id, RNA_ImageLayer, layer);
     ui::Layout &row = passes_col.row(false);
     ui::template_uilist(&row,
                         C,
@@ -1203,6 +1222,22 @@ void uiTemplateImageCatalog(ui::Layout *layout,
     ui::Layout &col = row.column(true);
     col.op("IMAGE_OT_pass_add", "", ICON_ADD);
     col.op("IMAGE_OT_pass_remove", "", ICON_REMOVE);
+  }
+
+  if (ImagePass *pass = static_cast<ImagePass *>(BLI_findlink(&layer->passes, iuser->pass))) {
+    PointerRNA passptr = RNA_pointer_create_discrete(&ima->id, RNA_ImagePass, pass);
+
+    ui::Layout &col = layout->column(false);
+    col.use_property_split_set(true);
+    col.prop(&passptr, "type", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+    if (is_multifile) {
+      col.prop(&passptr, "token", UI_ITEM_NONE, IFACE_("Pass Token"), ICON_NONE);
+    }
+  }
+
+  if (BKE_image_filepath_has_layer_pass_token(ima->filepath)) {
+    layout->separator();
+    layout->op("IMAGE_OT_layers_detect", std::nullopt, ICON_FILE_REFRESH);
   }
 }
 

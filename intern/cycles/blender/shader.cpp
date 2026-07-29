@@ -936,15 +936,18 @@ static ShaderNode *add_node(Scene *scene,
     if (b_image) {
       const blender::eImageSource b_image_source = blender::eImageSource(b_image->source);
       blender::PointerRNA image_rna_ptr = RNA_id_pointer_create(&b_image->id);
-      image->set_colorspace(ustring(b_image->colorspace_settings.name));
+      image->set_colorspace(ustring(blender::BKE_image_user_colorspace(b_image, &b_image_user)));
       image->set_animated(is_image_animated(b_image_source, b_image_user));
       image->set_alpha_type(get_image_alpha_type(*b_image));
 
       /* Compose the OpenImageIO subimage name from the pinned pass selection.
        * Shader node inlining pins pass_name on its single-pass copies of a
        * multi-layer image; on other nodes it stays empty and the file's
-       * default subimage is read. */
-      image->set_subimage_name(compose_subimage_name(*b_image, b_image_user));
+       * default subimage is read. A multi-file image instead selects its pass
+       * through the file path, so every file has just the one subimage. */
+      if (!blender::BKE_image_is_multifile(b_image)) {
+        image->set_subimage_name(compose_subimage_name(*b_image, b_image_user));
+      }
 
       if (b_image_source == blender::IMA_SRC_TILED) {
         array<int> tiles;
