@@ -1,0 +1,77 @@
+name: Android
+
+on:
+  push:
+    branches: [  android ]
+
+permissions: {}
+
+env:
+  ANDROID_SDK_ROOT: /home/runner/android-sdk
+  ANDROID_NDK_VERSION: "27.2.12479018"   # verify against Bforartists' current pin before relying on this
+  CMDLINE_TOOLS_VERSION: "11076708"
+  REPO_PARENT: /home/runner/bforartistsrepo
+  HOST_DEPS_DIR: /home/runner/bforartistsrepo/build_linux/deps_x64
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create Android SDK folder
+        run: mkdir -p "$ANDROID_SDK_ROOT/cmdline-tools"
+
+      - name: Install Android cmdline-tools
+        run: |
+          cd "$ANDROID_SDK_ROOT/cmdline-tools"
+          curl -fsSL -o cmdline-tools.zip \
+            "https://dl.google.com/android/repository/commandlinetools-linux-${CMDLINE_TOOLS_VERSION}_latest.zip"
+          unzip -q cmdline-tools.zip
+          rm cmdline-tools.zip
+          mv cmdline-tools latest
+
+      - name: Install NDK
+        run: |
+          SDKMGR="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMGR" --sdk_root="$ANDROID_SDK_ROOT" --licenses > /dev/null
+          "$SDKMGR" --sdk_root="$ANDROID_SDK_ROOT" "ndk;${ANDROID_NDK_VERSION}"
+          echo "ANDROID_NDK_ROOT=$ANDROID_SDK_ROOT/ndk/${ANDROID_NDK_VERSION}" >> "$GITHUB_ENV"
+
+      - name: Verify NDK toolchain file exists
+        run: |
+          test -f "$ANDROID_NDK_ROOT/build/cmake/android.toolchain.cmake" || {
+            echo "::error::android.toolchain.cmake not found under $ANDROID_NDK_ROOT"
+            exit 1
+          }
+
+      - name: Clone Bforartists
+        run: |
+          mkdir -p "$REPO_PARENT"
+          cd "$REPO_PARENT"
+          git clone https://github.com/Bforartists/Bforartists
+          cd Bforartists
+          sudo apt update
+          sudo apt install -y python3 git git-lfs
+          ./build_files/build_environment/install_linux_packages.py
+          ./build_files/utils/make_update.py --use-linux-libraries
+
+      # - name: Build host deps
+      #   working-directory: ${{ env.REPO_PARENT }}/Bforartists
+      #   run: make deps
+
+      # - name: Build Android deps
+      #   working-directory: ${{ env.REPO_PARENT }}/Bforartists
+      #   run: make android deps HOST_DEPS_BUILD_DIR="$HOST_DEPS_DIR"
+
+      - name: Build Blender for Android
+        working-directory: ${{ env.REPO_PARENT }}/Bforartists
+        run: make android
+
+      - name: Locate build output
+        working-directory: ${{ env.REPO_PARENT }}
+        run: find . -maxdepth 2 -iname '*android*' -type d
+
+      - name: Upload Build
+        uses: actions/upload-artifact@v4
+        with:
+          name: Bforartists-Android-${{ runner.os }}
+          path: ${{ env.REPO_PARENT }}/bfa_build_android/bin/
