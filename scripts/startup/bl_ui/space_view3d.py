@@ -4268,9 +4268,6 @@ class VIEW3D_MT_pose(Menu):
         layout.separator()
         layout.operator("POSELIB.create_pose_asset")
 
-        layout.separator()
-        layout.operator("armature.assign_weight_colors", text="Reassign All Weight Colors")
-
 
 class VIEW3D_MT_pose_transform(Menu):
     bl_label = "Clear Transform"
@@ -4459,8 +4456,6 @@ class VIEW3D_MT_pose_context_menu(Menu):
 
         layout.operator("pose.user_transforms_clear")
 
-        layout.separator()
-        layout.operator("armature.assign_weight_colors", text="Reassign All Weight Colors", icon='COLOR')
 
 class BoneOptions:
     def draw(self, context):
@@ -5677,7 +5672,6 @@ class VIEW3D_MT_edit_armature(Menu):
 
         layout.menu("VIEW3D_MT_edit_armature_delete")
 
-        layout.operator("armature.assign_weight_colors", text="Reassign All Weight Colors")
 
 class VIEW3D_MT_armature_context_menu(Menu):
     bl_label = "Armature"
@@ -5722,7 +5716,6 @@ class VIEW3D_MT_armature_context_menu(Menu):
         layout.operator("armature.dissolve")
         layout.operator("armature.delete", icon='X')
 
-        layout.operator("armature.assign_weight_colors", text="Reassign All Weight Colors", icon='COLOR')
 
 class VIEW3D_MT_edit_armature_names(Menu):
     bl_label = "Names"

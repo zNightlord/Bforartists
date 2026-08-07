@@ -18,9 +18,7 @@
 #include "BLI_assert.hh"
 #include "BLI_bounds.hh"
 #include "BLI_ghash.hh"
-#include "BLI_hash_c.hh"
 #include "BLI_listbase.hh"
-#include "BLI_math_color_c.hh"
 #include "BLI_math_geom_c.hh"
 #include "BLI_math_matrix.hh"
 #include "BLI_math_matrix_c.hh"
@@ -3602,64 +3600,4 @@ void BKE_armature_foreach_bone(const bArmature &armature, const ForeachBoneFn ca
   BLI_assert(bone_index == BKE_armature_bonelist_count(&armature.bonebase));
 }
 
-void BKE_armature_assign_weight_colors(bArmature *arm,
-                                       eAssignWeightColorType type,
-                                       bool selected_only,
-                                       float hue_offset,
-                                       int random_id)
-{
-  if (type == ASSIGN_WEIGHT_COLOR_HIERARCHY_HUE) {
-    /* Do hue spacing by counting all the deform bones, ignore selected_only keep their position in
-     * the gradient. */
-    int total = 0;
-    BKE_armature_foreach_bone(*arm, [&](const int /*index*/, const Bone &bone) {
-      if (!(bone.flag & BONE_NO_DEFORM)) {
-        total++;
-      }
-    });
-
-    if (total == 0) {
-      return;
-    }
-
-    /* Assign hue by traversal index — skip non-deform, but only
-     * write color when selected_only condition is met. */
-    int di = 0;
-    BKE_armature_foreach_bone(*arm, [&](const int /*index*/, const Bone &bone_const) {
-      if (bone_const.flag & BONE_NO_DEFORM) {
-        return;
-      }
-      const float hue = fmodf(((total > 1) ? float(di) / float(total) : 0.0f) + hue_offset, 1.0f);
-      di++;
-
-      if (selected_only) {
-        bool is_selected = (bone_const.flag & BONE_SELECTED) != 0;
-        if (!is_selected) {
-          return;
-        }
-      }
-      Bone &bone = const_cast<Bone &>(bone_const);
-      hsv_to_rgb(
-          hue, 0.85f, 0.9f, &bone.weight_color[0], &bone.weight_color[1], &bone.weight_color[2]);
-    });
-  }
-  else {
-    /* Do randomized. */
-    BKE_armature_foreach_bone(*arm, [&](const int /*index*/, const Bone &bone_const) {
-      if (bone_const.flag & BONE_NO_DEFORM) {
-        return;
-      }
-      if (selected_only && !(bone_const.flag & BONE_SELECTED)) {
-        return;
-      }
-      Bone &bone = const_cast<Bone &>(bone_const);
-      const float key = float(BLI_hash_string(bone.name) + uint32_t(random_id));
-      const float3 col = blender::noise::hash_float_to_float3(key);
-      float hue, sat, val;
-      rgb_to_hsv(col.x, col.y, col.z, &hue, &sat, &val);
-      hsv_to_rgb(
-          hue, 0.85f, 0.9f, &bone.weight_color[0], &bone.weight_color[1], &bone.weight_color[2]);
-    });
-  }
-}
 }  // namespace blender

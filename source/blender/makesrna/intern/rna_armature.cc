@@ -1561,7 +1561,7 @@ static void rna_def_bone_common(StructRNA *srna, int editbone)
   RNA_def_property_array(prop, 3);
   RNA_def_property_range(prop, 0.0f, 1.0f);
   RNA_def_property_ui_text(
-      prop, "Weight Color", "Color used to display bone influence in weight paint overlay");
+      prop, "Override Weight Color", "Color used to override the display bone influence in weight paint overlay");
   RNA_def_property_update(prop, 0, "rna_Armature_update_data");
 
   /* b-bones deform settings */

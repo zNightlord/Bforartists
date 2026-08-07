@@ -509,12 +509,6 @@ void ED_object_vgroup_calc_from_armature(ReportList *reports,
      */
     add_verts_to_dgroups(reports, scene, ob, par, (mode == ARM_GROUPS_AUTO), mirror);
   }
-  /* Calculate armature bones weight colors. */
-  if (par->type == OB_ARMATURE) {
-    bArmature *arm = reinterpret_cast<bArmature *>(par->data);
-    BKE_armature_assign_weight_colors(arm);
-    DEG_id_tag_update(&arm->id, ID_RECALC_GEOMETRY);
-  }
 }
 
 }  // namespace blender
