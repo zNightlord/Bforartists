@@ -8,6 +8,7 @@
  */
 
 #include "DNA_armature_types.h"
+#include "DNA_modifier_types.h"
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 
@@ -35,6 +36,8 @@
 #include "RNA_prototypes.hh"
 
 #include "UI_interface_icons.hh"
+#include "UI_interface_layout.hh"
+#include "UI_resources.hh"
 
 #include "WM_api.hh"
 #include "WM_types.hh"
@@ -1628,29 +1631,117 @@ void ARMATURE_OT_reveal(wmOperatorType *ot)
 /** \name Recalculate Armature deform bone weight colors
  * \{ */
 
-static bool active_armature_poll(bContext *C)
+static const EnumPropertyItem prop_assign_weight_color_types[] = {
+    {ASSIGN_WEIGHT_COLOR_HIERARCHY_HUE,
+     "HIERARCHY_HUE",
+     0,
+     "Hierarchy Hue",
+     "Evenly spread hues across full 0 to 1 range in depth-first order"},
+    {ASSIGN_WEIGHT_COLOR_RANDOMIZED,
+     "RANDOMIZED",
+     0,
+     "Randomized",
+     "Assign stable random colors per bone name, offset by Random ID"},
+    {0, nullptr, 0, nullptr, nullptr},
+};
+
+static void armature_assign_weight_colors_draw(bContext * /*C*/, wmOperator *op)
+{
+  ui::Layout &layout = *op->layout;
+  const int type = RNA_enum_get(op->ptr, "type");
+
+  layout.prop(op->ptr, "type", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  layout.prop(op->ptr, "selected_only", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  if (type == ASSIGN_WEIGHT_COLOR_HIERARCHY_HUE) {
+    layout.prop(op->ptr, "hue_offset", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  }
+  else if (type == ASSIGN_WEIGHT_COLOR_RANDOMIZED) {
+    layout.prop(op->ptr, "random_id", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  }
+}
+
+static bool armature_assign_weight_colors_poll(bContext *C)
 {
   Object *ob = CTX_data_active_object(C);
   if (!ob) {
     return false;
   }
-  if (ob->type != OB_ARMATURE) {
-    return false;
+
+  /* Allow from armature context */
+  if (ob->type == OB_ARMATURE) {
+    return true;
   }
+
+  /* Allow from mesh context when armature modifier exists */
+  if (ob->type == OB_MESH) {
+    for (ModifierData *md = static_cast<ModifierData *>(ob->modifiers.first);
+         md != nullptr;
+         md = md->next)
+    {
+      if (md->type == eModifierType_Armature) {
+        ArmatureModifierData *amd = reinterpret_cast<ArmatureModifierData *>(md);
+        if (amd->object && amd->object->type == OB_ARMATURE) {
+          return true;
+        }
+      }
+    }
+  }
+
+  return false;
 }
 
-static wmOperatorStatus armature_assign_weight_colors_exec(bContext *C, wmOperator * op)
+static wmOperatorStatus armature_assign_weight_colors_exec(bContext *C, wmOperator *op)
 {
+  const eAssignWeightColorType type = eAssignWeightColorType(
+      RNA_enum_get(op->ptr, "type"));
+  const bool selected_only = RNA_boolean_get(op->ptr, "selected_only");
+  const float hue_offset   = RNA_float_get(op->ptr, "hue_offset");
+  const int random_id      = RNA_int_get(op->ptr, "random_id");
+
   Object *ob = CTX_data_active_object(C);
-  if (!ob || ob->type != OB_ARMATURE) {
+  if (!ob) {
     return OPERATOR_CANCELLED;
   }
 
-  const float hue_offset = RNA_float_get(op->ptr, "hue_offset");
+  /* Collect armatures to process */
+  Vector<bArmature *> armatures;
 
-  BKE_armature_assign_weight_colors(reinterpret_cast<bArmature *>(ob->data), hue_offset);
-  DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
-  WM_event_add_notifier(C, NC_OBJECT | ND_BONE_COLLECTION, ob);
+  if (ob->type == OB_ARMATURE) {
+    /* Direct armature context */
+    armatures.append(reinterpret_cast<bArmature *>(ob->data));
+  }
+  else if (ob->type == OB_MESH) {
+    /* Mesh context — weight paint mode or object mode.
+     * Walk modifiers to find all armature deformers. */
+    for (ModifierData *md = static_cast<ModifierData *>(ob->modifiers.first);
+         md != nullptr;
+         md = md->next)
+    {
+      if (md->type != eModifierType_Armature) {
+        continue;
+      }
+      ArmatureModifierData *amd = reinterpret_cast<ArmatureModifierData *>(md);
+      if (amd->object && amd->object->type == OB_ARMATURE) {
+        bArmature *arm = reinterpret_cast<bArmature *>(amd->object->data);
+        /* Avoid duplicates if same armature referenced multiple times */
+        if (!armatures.contains(arm)) {
+          armatures.append(arm);
+        }
+      }
+    }
+  }
+
+  if (armatures.is_empty()) {
+    BKE_report(op->reports, RPT_ERROR, "No armature found");
+    return OPERATOR_CANCELLED;
+  }
+
+  for (bArmature *arm : armatures) {
+    BKE_armature_assign_weight_colors(arm, type, selected_only, hue_offset, random_id);
+    DEG_id_tag_update(&arm->id, ID_RECALC_GEOMETRY);
+    WM_event_add_notifier(C, NC_OBJECT | ND_POSE, ob);
+  }
+
   return OPERATOR_FINISHED;
 }
 
@@ -1658,10 +1749,20 @@ void ARMATURE_OT_assign_weight_colors(wmOperatorType *ot)
 {
   ot->name = "Assign Weight Colors";
   ot->idname = "ARMATURE_OT_assign_weight_colors";
-  ot->description = "Assign display colors to bones based on hierarchy for weight paint overlay";
+  ot->description = "Assign display colors to bones for weight paint overlay";
+
   ot->exec = armature_assign_weight_colors_exec;
-  ot->poll = active_armature_poll;
-  ot->flag  = OPTYPE_REGISTER | OPTYPE_UNDO;
+  ot->ui = armature_assign_weight_colors_draw;
+  ot->poll = armature_assign_weight_colors_poll;
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+
+  ot->prop = RNA_def_enum(ot->srna,
+                          "type",
+                          prop_assign_weight_color_types,
+                          ASSIGN_WEIGHT_COLOR_HIERARCHY_HUE,
+                          "Type",
+                          "Method used to assign colors to bones");
+  RNA_def_boolean(ot->srna, "selected_only", false, "Selected", "Affect selected only bones");
 
   RNA_def_float(ot->srna,
                 "hue_offset",
@@ -1669,9 +1770,19 @@ void ARMATURE_OT_assign_weight_colors(wmOperatorType *ot)
                 0.0f,
                 1.0f,
                 "Hue Offset",
-                "Shift the entire color palette around the hue wheel",
+                "Shift the entire color palette around the hue wheel (Hierarchy Hue only)",
                 0.0f,
                 1.0f);
+
+  RNA_def_int(ot->srna,
+              "random_id",
+              0,
+              0,
+              INT_MAX,
+              "Random ID",
+              "Offset applied before hashing to shift all random colors (Randomized only)",
+              0,
+              1000);
 }
 
 /** \} */

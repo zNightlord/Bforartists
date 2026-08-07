@@ -15,6 +15,7 @@
 
 #include "BLI_index_range.hh"
 #include "BLI_listbase.hh"
+#include "BLI_math_color_c.hh"
 #include "BLI_math_vector_c.hh"
 #include "BLI_noise.hh"
 #include "BLI_span.hh"
@@ -365,27 +366,60 @@ static void drw_mesh_weight_state_extract(
   if (wstate->defgroup_len > 0) {
     wstate->defgroup_colors = MEM_new_array_zeroed<float3>(wstate->defgroup_len, __func__);
 
-    /* Hash fallback for all groups first */
-    for (int i = 0; i < wstate->defgroup_len; i++) {
-      wstate->defgroup_colors[i] = blender::noise::hash_float_to_float3(float(i + 1));
+    Object *arm_ob = BKE_modifiers_is_deformed_by_armature(&ob);
+    bArmature *arm = arm_ob ? BKE_armature_from_object(arm_ob) : nullptr;
+
+    /* Count total deform bones for auto-hue spacing */
+    int total_deform = 0;
+    if (arm) {
+      BKE_armature_foreach_bone(*arm, [&](const int /*index*/, const Bone &bone) {
+        if (!(bone.flag & BONE_NO_DEFORM)) {
+          total_deform++;
+        }
+      });
     }
 
-    /* Override with bone weight_color by matching vertex group name to bone name which used in
-     * deformation. */
-    Object *arm_ob = BKE_modifiers_is_deformed_by_armature(&ob);
-    if (arm_ob) {
-      bArmature *arm = BKE_armature_from_object(arm_ob);
-      const ListBaseT<bDeformGroup> *defbase = BKE_object_defgroup_list(&ob);
-      int i = 0;
-      for (bDeformGroup &dg : *defbase) {
+    /* Fill per-group colors */
+    const ListBaseT<bDeformGroup> *defbase = BKE_object_defgroup_list(&ob);
+    int di = 0;
+    for (const bDeformGroup &dg : *defbase) {
+      if (di >= wstate->defgroup_len) {
+        break;
+      }
+
+      if (arm) {
         const Bone *bone = BKE_armature_find_bone_name(arm, dg.name);
-        if (bone == nullptr || (bone->flag & BONE_NO_DEFORM)) {
+        if (bone && !(bone->flag & BONE_NO_DEFORM)) {
+          const float3 stored(bone->weight_color[0],
+                              bone->weight_color[1],
+                              bone->weight_color[2]);
+          if (stored.x > 0.0f || stored.y > 0.0f || stored.z > 0.0f) {
+            /* User override — use stored color directly */
+            wstate->defgroup_colors[di] = stored;
+          }
+          else {
+            /* Auto hue — evenly spaced 0→1 by traversal index */
+            const float hue = (total_deform > 1) ?
+                                  float(di) / float(total_deform) :
+                                  0.0f;
+            float r, g, b;
+            hsv_to_rgb(hue, 0.85f, 0.9f, &r, &g, &b);
+            wstate->defgroup_colors[di] = float3(r, g, b);
+          }
+          di++;
           continue;
         }
-        wstate->defgroup_colors[i] = {
-            bone->weight_color[0], bone->weight_color[1], bone->weight_color[2]};
-        i++;
       }
+
+      /* Non-bone group or no armature — stable hash fallback,
+       * lower saturation to visually distinguish from deform groups */
+      const float3 hash_col = blender::noise::hash_float_to_float3(float(di + 1));
+      float hue, sat, val;
+      rgb_to_hsv(hash_col.x, hash_col.y, hash_col.z, &hue, &sat, &val);
+      float r, g, b;
+      hsv_to_rgb(hue, 0.5f, 0.75f, &r, &g, &b);
+      wstate->defgroup_colors[di] = float3(r, g, b);
+      di++;
     }
   }
 

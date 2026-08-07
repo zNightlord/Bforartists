@@ -161,7 +161,13 @@ bArmature *BKE_armature_add(Main *bmain, const char *name);
 bArmature *BKE_armature_from_object(Object *ob);
 int BKE_armature_bonelist_count(const ListBaseT<Bone> *lb);
 void BKE_armature_bonelist_free(ListBaseT<Bone> *lb, bool do_id_user);
-void BKE_armature_assign_weight_colors(bArmature *arm, float hue_offset = 0.0f);
+void BKE_armature_assign_weight_colors(
+    bArmature *arm,
+    eAssignWeightColorType type = ASSIGN_WEIGHT_COLOR_HIERARCHY_HUE,
+    bool selected_only = false,
+    float hue_offset = 0.0f,
+    int random_id = 0);
+
 void BKE_armature_editbonelist_free(ListBaseT<EditBone> *lb, bool do_id_user);
 
 void BKE_armature_copy_bone_transforms(bArmature *armature_dst, const bArmature *armature_src);

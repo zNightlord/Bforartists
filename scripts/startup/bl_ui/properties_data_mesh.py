@@ -52,6 +52,10 @@ class MESH_MT_vertex_group_context_menu(Menu):
         props = layout.operator("object.vertex_group_lock", text="Lock Invert All")
         props.action, props.mask = 'INVERT', 'ALL'
 
+        layout.operator("armature.assign_weight_colors",
+                         text="Reassign Weight Colors",
+                         icon='COLOR')
+
 
 class MESH_MT_shape_key_context_menu(Menu):
     bl_label = "Shape Key Specials"

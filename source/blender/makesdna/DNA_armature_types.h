@@ -101,6 +101,11 @@ enum eArmature_PathFlag : short {
 };
 #endif
 
+ enum eAssignWeightColorType : int {
+  ASSIGN_WEIGHT_COLOR_HIERARCHY_HUE = 0,
+  ASSIGN_WEIGHT_COLOR_RANDOMIZED    = 1,
+};
+
 /* bone->flag */
 enum eBone_Flag : int {
   /**
