@@ -8,7 +8,7 @@ permissions: {}
 
 env:
   ANDROID_SDK_ROOT: /home/runner/android-sdk
-  ANDROID_NDK_VERSION: "27.2.12479018"   # verify against Bforartists' current pin before relying on this
+  ANDROID_NDK_VERSION: "27.2.12479018"
   CMDLINE_TOOLS_VERSION: "11076708"
   REPO_PARENT: /home/runner/bforartistsrepo
   HOST_DEPS_DIR: /home/runner/bforartistsrepo/build_linux/deps_x64
