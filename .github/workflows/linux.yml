@@ -65,6 +65,12 @@ jobs:
             https://projects.blender.org/Brainzman/lib-android_arm64.git
           GIT_LFS_SKIP_SMUDGE=1 git submodule update --init --progress lib/android_arm64
 
+      - name: Fetch LFS content for android_arm64 libs
+        working-directory: lib/android_arm64
+        run: |
+          git lfs install
+          git lfs pull
+
       # - name: Build host deps
       #   run: make deps
       # - name: Build Android deps
@@ -83,7 +89,7 @@ jobs:
           CC: gcc-14
           CXX: g++-14
         run: |
-          make android lite BUILD_CMAKE_ARGS="-DTEST_PYTHON_EXE=$(command -v python3) -DCMAKE_CXX_FLAGS=-I$HOME/vulkan-headers/include -DCMAKE_C_FLAGS=-I$HOME/vulkan-headers/include"
+          make android lite ninja BUILD_CMAKE_ARGS="-DTEST_PYTHON_EXE=$(command -v python3) -DCMAKE_CXX_FLAGS=-I$HOME/vulkan-headers/include -DCMAKE_C_FLAGS=-I$HOME/vulkan-headers/include"
 
       # - name: Check
       #   run: |
