@@ -47,7 +47,7 @@ jobs:
         run: |
           mkdir -p "$REPO_PARENT"
           cd "$REPO_PARENT"
-          git clone https://github.com/Bforartists/Bforartists
+          git clone https://github.com/Bforartists/Bforartists -b android
           cd Bforartists
           sudo apt update
           sudo apt install -y python3 git git-lfs
