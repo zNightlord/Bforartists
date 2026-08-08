@@ -51,7 +51,7 @@ jobs:
           cd Bforartists
           sudo apt update
           sudo apt install -y python3 git git-lfs
-          ./build_files/build_environment/install_linux_packages.py
+          ./build_files/linux/install_linux_packages.py
           ./build_files/utils/make_update.py --use-linux-libraries
 
       # - name: Build host deps
