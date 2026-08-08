@@ -74,16 +74,20 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y gcc-14 g++-14
 
+      - name: Fetch upstream Vulkan-Headers (NDK's copy is stale)
+        run: |
+          git clone --depth 1 https://github.com/KhronosGroup/Vulkan-Headers "$HOME/vulkan-headers"
+
       - name: Build Blender for Android
-        continue-on-error: true
         env:
           CC: gcc-14
           CXX: g++-14
-        run: make android lite BUILD_CMAKE_ARGS="-DTEST_PYTHON_EXE=$(command -v python3)"
-
-      - name: Check
         run: |
-          grep -r "vulkan" build_android_lite/CMakeCache.txt | grep -i include
+          make android lite BUILD_CMAKE_ARGS="-DTEST_PYTHON_EXE=$(command -v python3) -DCMAKE_CXX_FLAGS=-I$HOME/vulkan-headers/include -DCMAKE_C_FLAGS=-I$HOME/vulkan-headers/include"
+
+      # - name: Check
+      #   run: |
+      #     grep -r "vulkan" build_android_lite/CMakeCache.txt | grep -i include
 
       - name: Locate build output
         run: find . -maxdepth 2 -iname '*android*' -type d
