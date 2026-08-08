@@ -64,7 +64,7 @@ jobs:
       #   run: make android deps HOST_DEPS_BUILD_DIR="$HOST_DEPS_DIR"
 
       - name: Build Blender for Android
-        run: make android lite
+        run: make android lite BUILD_CMAKE_ARGS="-DTEST_PYTHON_EXE=$(command -v python3)"
 
       - name: Locate build output
         run: find . -maxdepth 2 -iname '*android*' -type d
