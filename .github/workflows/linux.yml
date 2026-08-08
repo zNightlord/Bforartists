@@ -42,6 +42,7 @@ jobs:
           }
 
       - name: Install build dependencies
+        continue-on-error: true
         run: |
           sudo apt update
           sudo apt install -y python3 git git-lfs
@@ -50,6 +51,12 @@ jobs:
           ls -la build_files/linux/install_linux_packages.py
           python3 ./build_files/linux/install_linux_packages.py
           python3 ./build_files/utils/make_update.py
+
+      - name: Fix lib/android_arm64 submodule (SSH -> HTTPS)
+        run: |
+          git config submodule.lib/android_arm64.url \
+            https://projects.blender.org/Brainzman/lib-android_arm64.git
+          GIT_LFS_SKIP_SMUDGE=1 git submodule update --init --progress lib/android_arm64
 
       # - name: Build host deps
       #   run: make deps
