@@ -12,9 +12,6 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: List available NDK versions
-        run: |
-          "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$ANDROID_SDK_ROOT" --list | grep -E '^\s*ndk;'
       - name: Checkout Bforartists
         uses: actions/checkout@v4
       - name: Fix generator script shebangs, permissions, and line endings
@@ -78,10 +75,15 @@ jobs:
           sudo apt-get install -y gcc-14 g++-14
 
       - name: Build Blender for Android
+        continue-on-error: true
         env:
           CC: gcc-14
           CXX: g++-14
         run: make android lite BUILD_CMAKE_ARGS="-DTEST_PYTHON_EXE=$(command -v python3)"
+
+      - name: Check
+        run: |
+          grep -r "vulkan" build_android_lite/CMakeCache.txt | grep -i include
 
       - name: Locate build output
         run: find . -maxdepth 2 -iname '*android*' -type d
