@@ -14,10 +14,14 @@ jobs:
     steps:
       - name: Checkout Bforartists
         uses: actions/checkout@v4
-      - name: Ensure generator scripts are executable
+      - name: Normalize line endings for generator scripts
         run: |
-          find build_files source -type f -name '*.py' ! -perm -u+x -print -exec chmod +x {} +
-
+          find build_files source -type f -name '*.py' -exec sed -i 's/\r$//' {} +
+      - name: Fix generator script permissions and line endings
+        run: |
+          find build_files source -type f -name '*.py' \
+            -exec sed -i 's/\r$//' {} \; \
+            ! -perm -u+x -exec chmod +x {} +
       - name: Create Android SDK folder
         run: mkdir -p "$ANDROID_SDK_ROOT/cmdline-tools"
 
