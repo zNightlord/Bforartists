@@ -1,22 +1,20 @@
 name: Android
-
 on:
   push:
-    branches: [  android ]
-
+    branches: [ android ]
 permissions: {}
-
 env:
   ANDROID_SDK_ROOT: /home/runner/android-sdk
   ANDROID_NDK_VERSION: "27.2.12479018"
   CMDLINE_TOOLS_VERSION: "11076708"
-  REPO_PARENT: /home/runner/bforartistsrepo
-  HOST_DEPS_DIR: /home/runner/bforartistsrepo/build_linux/deps_x64
-
+  HOST_DEPS_DIR: ${{ github.workspace }}/build_linux/deps_x64
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout Bforartists
+        uses: actions/checkout@v4
+
       - name: Create Android SDK folder
         run: mkdir -p "$ANDROID_SDK_ROOT/cmdline-tools"
 
@@ -43,39 +41,29 @@ jobs:
             exit 1
           }
 
-      - name: Clone Bforartists
+      - name: Install build dependencies
         run: |
-          mkdir -p "$REPO_PARENT"
-          cd "$REPO_PARENT"
-          git clone https://github.com/zNightlord/Bforartists -b android
-          cd Bforartists
           sudo apt update
           sudo apt install -y python3 git git-lfs
           echo "--- sanity check ---"
           pwd
           ls -la build_files/linux/install_linux_packages.py
-
           python3 ./build_files/linux/install_linux_packages.py
           python3 ./build_files/utils/make_update.py
 
       # - name: Build host deps
-      #   working-directory: ${{ env.REPO_PARENT }}/Bforartists
       #   run: make deps
-
       # - name: Build Android deps
-      #   working-directory: ${{ env.REPO_PARENT }}/Bforartists
       #   run: make android deps HOST_DEPS_BUILD_DIR="$HOST_DEPS_DIR"
 
       - name: Build Blender for Android
-        working-directory: ${{ env.REPO_PARENT }}/Bforartists
         run: make android
 
       - name: Locate build output
-        working-directory: ${{ env.REPO_PARENT }}
         run: find . -maxdepth 2 -iname '*android*' -type d
 
       - name: Upload Build
         uses: actions/upload-artifact@v4
         with:
           name: Bforartists-Android-${{ runner.os }}
-          path: ${{ env.REPO_PARENT }}/bfa_build_android/bin/
+          path: ${{ github.workspace }}/bfa_build_android/bin/
