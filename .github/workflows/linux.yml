@@ -5,7 +5,7 @@ on:
 permissions: {}
 env:
   ANDROID_SDK_ROOT: /home/runner/android-sdk
-  ANDROID_NDK_VERSION: "27.2.12479018"
+  ANDROID_NDK_VERSION: "28.0.13004108"
   CMDLINE_TOOLS_VERSION: "11076708"
   HOST_DEPS_DIR: ${{ github.workspace }}/build_linux/deps_x64
 jobs:
