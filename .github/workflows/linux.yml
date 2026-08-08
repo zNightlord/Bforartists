@@ -51,8 +51,13 @@ jobs:
           cd Bforartists
           sudo apt update
           sudo apt install -y python3 git git-lfs
-          ./build_files/linux/install_linux_packages.py
-          ./build_files/utils/make_update.py --use-linux-libraries
+          echo "--- sanity check ---"
+          pwd
+          ls -la build_files/linux/install_linux_packages.py
+
+          python3 ./build_files/linux/install_linux_packages.py
+          ./build_files/utils/make_update.py --use-linux-libraries \
+            || python3 ./build_files/utils/make_update.py --use-linux-libraries
 
       # - name: Build host deps
       #   working-directory: ${{ env.REPO_PARENT }}/Bforartists
