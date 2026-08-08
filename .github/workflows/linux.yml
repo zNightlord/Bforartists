@@ -62,6 +62,10 @@ jobs:
       #   run: make deps
       # - name: Build Android deps
       #   run: make android deps HOST_DEPS_BUILD_DIR="$HOST_DEPS_DIR"
+      - name: Install GCC 14
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-14 g++-14
 
       - name: Build Blender for Android
         run: make android lite BUILD_CMAKE_ARGS="-DTEST_PYTHON_EXE=$(command -v python3)"
