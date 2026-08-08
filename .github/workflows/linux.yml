@@ -12,6 +12,9 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      - name: List available NDK versions
+        run: |
+          "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$ANDROID_SDK_ROOT" --list | grep -E '^\s*ndk;'
       - name: Checkout Bforartists
         uses: actions/checkout@v4
       - name: Fix generator script shebangs, permissions, and line endings
