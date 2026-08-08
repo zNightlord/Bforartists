@@ -68,6 +68,9 @@ jobs:
           sudo apt-get install -y gcc-14 g++-14
 
       - name: Build Blender for Android
+        env:
+          CC: gcc-14
+          CXX: g++-14
         run: make android lite BUILD_CMAKE_ARGS="-DTEST_PYTHON_EXE=$(command -v python3)"
 
       - name: Locate build output
