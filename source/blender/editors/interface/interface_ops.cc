@@ -1773,7 +1773,7 @@ int paste_property_drivers(Span<FCurve *> src_drivers,
 
     /* Create the new driver. */
     FCurve *new_driver = BKE_fcurve_copy(src_drivers[i]);
-    BKE_fcurve_rnapath_set(*new_driver, dst_path.value());
+    new_driver->rna_path_set(dst_path.value());
     BLI_addtail(&dst_adt->drivers, new_driver);
 
     paste_count++;
@@ -2580,10 +2580,12 @@ static wmOperatorStatus uilist_start_filter_invoke(bContext *C,
   BLI_assert(list != nullptr);
 
   if (uilist_unhide_filter_options(list)) {
-    ED_region_tag_redraw(region);
+    region_redraw_immediately(C, region);
   }
-  const ui::Button *but = listbox_find_mouse_over(region, event);
-  ED_region_activate_rna_prop(C, region, list, "filter_name", but->block->name);
+
+  if (!textbutton_activate_rna(C, region, list, "filter_name")) {
+    return OPERATOR_CANCELLED;
+  }
 
   return OPERATOR_FINISHED;
 }
