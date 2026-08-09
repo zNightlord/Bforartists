@@ -5,7 +5,7 @@ on:
 permissions: {}
 env:
   ANDROID_SDK_ROOT: /home/runner/android-sdk
-  ANDROID_NDK_VERSION: "29.0.14033849"
+  ANDROID_NDK_VERSION: "30.0.14904198"
   CMDLINE_TOOLS_VERSION: "11076708"
 
 jobs:
