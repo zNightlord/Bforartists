@@ -369,7 +369,7 @@ static void drw_mesh_weight_state_extract(
     Object *arm_ob = BKE_modifiers_is_deformed_by_armature(&ob);
     bArmature *arm = arm_ob ? BKE_armature_from_object(arm_ob) : nullptr;
 
-    /* Count total deform bones for auto-hue spacing */
+    /* Count total deform bones for hue spacing. */
     int total_deform = 0;
     if (arm) {
       BKE_armature_foreach_bone(*arm, [&](const int /*index*/, const Bone &bone) {
@@ -379,7 +379,7 @@ static void drw_mesh_weight_state_extract(
       });
     }
 
-    /* Fill per-group colors */
+    /* Fill per group colors. */
     const ListBaseT<bDeformGroup> *defbase = BKE_object_defgroup_list(&ob);
     int di = 0;
     for (const bDeformGroup &dg : *defbase) {
@@ -396,7 +396,7 @@ static void drw_mesh_weight_state_extract(
             wstate->defgroup_colors[di] = stored;
           }
           else {
-            /* Auto hue — evenly spaced 0→1 by traversal index. */
+            /* Hue — evenly spaced 0 to 1 by traversal index. */
             const float hue = (total_deform > 1) ? float(di) / float(total_deform) : 0.0f;
             float r, g, b;
             hsv_to_rgb(hue, 0.85f, 0.9f, &r, &g, &b);
@@ -408,7 +408,7 @@ static void drw_mesh_weight_state_extract(
       }
 
       /* Non-bone group or no armature — stable hash fallback,
-       * lower saturation to visually distinguish from deform groups */
+       * lower saturation to visually distinguish from deform groups. */
       const float3 hash_col = blender::noise::hash_float_to_float3(float(di + 1));
       float hue, sat, val;
       rgb_to_hsv(hash_col.x, hash_col.y, hash_col.z, &hue, &sat, &val);
