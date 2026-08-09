@@ -8,7 +8,6 @@
  */
 
 #include "DNA_armature_types.h"
-#include "DNA_modifier_types.h"
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 
@@ -36,8 +35,6 @@
 #include "RNA_prototypes.hh"
 
 #include "UI_interface_icons.hh"
-#include "UI_interface_layout.hh"
-#include "UI_resources.hh"
 
 #include "WM_api.hh"
 #include "WM_types.hh"

@@ -125,7 +125,6 @@ void ED_operatortypes_armature()
   WM_operatortype_append(POSE_OT_blend_with_rest);
   WM_operatortype_append(POSE_OT_breakdown);
   WM_operatortype_append(POSE_OT_blend_to_neighbors);
-
 }
 
 void ED_operatormacros_armature()
