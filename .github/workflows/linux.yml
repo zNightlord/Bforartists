@@ -98,13 +98,15 @@ jobs:
           CC: gcc-14
           CXX: g++-14
         run: |
-          make android lite ninja BUILD_CMAKE_ARGS="-DTEST_PYTHON_EXE=$(command -v python3) -DCMAKE_CXX_FLAGS=-I$HOME/vulkan-headers/include -DCMAKE_C_FLAGS=-I$HOME/vulkan-headers/include"
+          make android release ninja BUILD_CMAKE_ARGS="-DTEST_PYTHON_EXE=$(command -v python3) -DCMAKE_CXX_FLAGS=-I$HOME/vulkan-headers/include -DCMAKE_C_FLAGS=-I$HOME/vulkan-headers/include"
 
-      - name: Locate build output
-        run: find . -maxdepth 2 -iname '*android*' -type d
-
+      # - name: Locate and verify build output
+      #   run: |
+      #     find /home/runner/work/Bforartists -maxdepth 3 -iname '*android*' -type d
+      #     ls -la /home/runner/work/Bforartists/build_android_lite/bin/5.3/ || true
+          
       - name: Upload Build
         uses: actions/upload-artifact@v4
         with:
           name: Bforartists-Android-${{ runner.os }}
-          path: ${{ github.workspace }}/bfa_build_android_lite/bin/
+          path: ${{ github.workspace }}/../bfa_build_android_*/bin
