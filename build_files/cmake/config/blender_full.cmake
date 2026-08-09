@@ -96,7 +96,7 @@ set(WITH_HYDRA                ON  CACHE BOOL "" FORCE)
 
 # ---------------------------------------------------------------------------
 # Rendering (Cycles)
-set(WITH_CYCLES_OSL           ON  CACHE BOOL "" FORCE)
+set(WITH_CYCLES_OSL           OFF  CACHE BOOL "" FORCE)
 set(WITH_CYCLES_EMBREE        ON  CACHE BOOL "" FORCE)
 set(WITH_CYCLES_PATH_GUIDING  ON  CACHE BOOL "" FORCE)
 # Cycles CPU-only: every GPU compute backend forced OFF. None of
