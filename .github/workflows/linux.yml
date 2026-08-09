@@ -98,7 +98,7 @@ jobs:
           CC: gcc-14
           CXX: g++-14
         run: |
-          make android release ninja BUILD_CMAKE_ARGS="-DTEST_PYTHON_EXE=$(command -v python3) -DCMAKE_CXX_FLAGS=-I$HOME/vulkan-headers/include -DCMAKE_C_FLAGS=-I$HOME/vulkan-headers/include"
+          make android full ninja BUILD_CMAKE_ARGS="-DTEST_PYTHON_EXE=$(command -v python3) -DCMAKE_CXX_FLAGS=-I$HOME/vulkan-headers/include -DCMAKE_C_FLAGS=-I$HOME/vulkan-headers/include"
 
       # - name: Locate and verify build output
       #   run: |
