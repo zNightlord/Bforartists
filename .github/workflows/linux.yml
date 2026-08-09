@@ -47,6 +47,7 @@ jobs:
       - name: Install GCC 14 and set as default
         run: |
           sudo apt-get update
+          sudo apt-get install -y libtbb12
           sudo apt-get install -y gcc-14 g++-14
           sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 100
           sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 100
@@ -109,4 +110,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Bforartists-Android-${{ runner.os }}
-          path: ${{ github.workspace }}/../bfa_build_android_*/bin
+          path: ${{ github.workspace }}/bfa_build_android_*/bin
