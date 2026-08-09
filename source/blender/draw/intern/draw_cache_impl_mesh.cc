@@ -390,18 +390,14 @@ static void drw_mesh_weight_state_extract(
       if (arm) {
         const Bone *bone = BKE_armature_find_bone_name(arm, dg.name);
         if (bone && !(bone->flag & BONE_NO_DEFORM)) {
-          const float3 stored(bone->weight_color[0],
-                              bone->weight_color[1],
-                              bone->weight_color[2]);
+          const float3 stored(bone->weight_color[0], bone->weight_color[1], bone->weight_color[2]);
           if (stored.x > 0.0f || stored.y > 0.0f || stored.z > 0.0f) {
-            /* User override — use stored color directly */
+            /* User override — use stored color directly.*/
             wstate->defgroup_colors[di] = stored;
           }
           else {
-            /* Auto hue — evenly spaced 0→1 by traversal index */
-            const float hue = (total_deform > 1) ?
-                                  float(di) / float(total_deform) :
-                                  0.0f;
+            /* Auto hue — evenly spaced 0→1 by traversal index. */
+            const float hue = (total_deform > 1) ? float(di) / float(total_deform) : 0.0f;
             float r, g, b;
             hsv_to_rgb(hue, 0.85f, 0.9f, &r, &g, &b);
             wstate->defgroup_colors[di] = float3(r, g, b);
