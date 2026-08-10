@@ -55,9 +55,9 @@ struct DRW_MeshWeightState {
   /* Set of all locked and unlocked deform bones for Lock Relative mode. */
   bool *defgroup_locked;   /* #defgroup_len */
   bool *defgroup_unlocked; /* #defgroup_len */
-  bool *defgroup_validmap; /* #defgroup_len */
 
-  /* Multi colored. */
+  /* Multi colored display. */
+  bool *defgroup_validmap; /* #defgroup_len */
   float3 *defgroup_colors;
   eV3D_Overlay_WPaint_VGroupColorMode vgroup_color_mode;
 };
