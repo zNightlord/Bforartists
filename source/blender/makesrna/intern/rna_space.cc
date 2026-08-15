@@ -5076,6 +5076,11 @@ static void rna_def_space_view3d_overlay(BlenderRNA *brna)
        0,
        "All",
        "Display all the vertex groups of deform armature bones weight color"},
+       {V3D_OVERLAY_WPAINT_VGROUP_COLOR_ALL_RANDOM,
+       "RANDOM",
+       0,
+       "All Random",
+       "Display all the vertex groups of deform armature bones weight color"},
       {0, nullptr, 0, nullptr, nullptr},
   };
 

@@ -18,15 +18,6 @@
 
 namespace blender::draw {
 
-static float3 get_group_color(int def_nr, Span<float3> defgroup_colors)
-{
-  const float3 &col = defgroup_colors[def_nr];
-  if (col.x > 0.0f || col.y > 0.0f || col.z > 0.0f) {
-    return col;
-  }
-  return blender::noise::hash_float_to_float3(float(def_nr + 1));
-}
-
 static float3 blended_vgroup_color(const MDeformVert *dvert,
                                    const Span<float3> defgroup_colors,
                                    const Span<bool> validmap,
@@ -67,12 +58,12 @@ static float3 blended_vgroup_color(const MDeformVert *dvert,
     }
 
     const float w = float(dvert->dw[i].weight);
-    result += get_group_color(def_nr, defgroup_colors) * w;
+    result += defgroup_colors[def_nr] * w;
     total_weight += w;
   }
 
   if (mode == V3D_OVERLAY_WPAINT_VGROUP_COLOR_ALL && total_weight > 1.0f) {
-    result /= total_weight;
+    // result /= total_weight;
   }
 
   return result;

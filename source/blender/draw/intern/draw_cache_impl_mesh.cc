@@ -379,12 +379,14 @@ static void drw_mesh_weight_state_extract(
     }
 
     /* Fill per group colors. */
+    constexpr float GOLDEN_RATIO = 0.38196601f;
     const ListBaseT<bDeformGroup> *defbase = BKE_object_defgroup_list(&ob);
     int di = 0;
     for (const bDeformGroup &dg : *defbase) {
       if (di >= wstate->defgroup_len) {
         break;
       }
+      
 
       if (arm) {
         const Bone *bone = BKE_armature_find_bone_name(arm, dg.name);
@@ -396,7 +398,7 @@ static void drw_mesh_weight_state_extract(
           }
           else {
             /* Hue — evenly spaced 0 to 1 by traversal index. */
-            const float hue = (total_deform > 1) ? float(di) / float(total_deform) : 0.0f;
+            const float hue = fmodf(float(di) * GOLDEN_RATIO, 1.0f);
             float r, g, b;
             hsv_to_rgb(hue, 0.85f, 0.9f, &r, &g, &b);
             wstate->defgroup_colors[di] = float3(r, g, b);
