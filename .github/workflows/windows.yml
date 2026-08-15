@@ -2,7 +2,7 @@ name: Windows
 
 on:
   push:
-    branches: [  node-draw-lod ]
+    branches: [  bfa-blender-build ]
   schedule:
     - cron: 0 0 * * 1
   # pull_request:
