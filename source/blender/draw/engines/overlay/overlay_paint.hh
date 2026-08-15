@@ -107,6 +107,7 @@ class Paints : Overlay {
                                      !state.xray_enabled;
       const bool shadeless = shading_type == OB_WIRE;
       const bool draw_contours = state.overlay.wpaint_flag & V3D_OVERLAY_WPAINT_CONTOURS;
+      const int vgroup_color_mode = state.overlay.wpaint_vgroup_color_mode;
 
       auto &pass = weight_ps_;
       pass.bind_ubo(OVERLAY_GLOBALS_SLOT, &res.globals_buf);
@@ -118,6 +119,7 @@ class Paints : Overlay {
                                    res.shaders->paint_weight_fake_shading.get());
         sub.bind_texture("colorramp", &res.weight_ramp_tx);
         sub.push_constant("draw_contours", draw_contours);
+        sub.push_constant("vgroup_color_mode", vgroup_color_mode);
         sub.push_constant("opacity", state.overlay.weight_paint_mode_opacity);
         if (!shadeless) {
           /* Arbitrary light to give a hint of the geometry behind the weights. */
@@ -199,6 +201,8 @@ class Paints : Overlay {
 
     switch (state.ctx_mode) {
       case CTX_MODE_PAINT_WEIGHT: {
+        Mesh &mesh = DRW_object_get_data_for_drawing<Mesh>(*ob_ref.object);
+        DRW_mesh_batch_cache_set_draw_multi_colored(mesh, state.overlay.wpaint_vgroup_color_mode);
         gpu::Batch *geom = DRW_cache_mesh_surface_weights_get(ob_ref.object);
         if (masked_transparency_support_ && ob_ref.object->dt >= OB_SOLID) {
           weight_masked_transparency_ps_->draw(geom, manager.unique_handle(ob_ref));

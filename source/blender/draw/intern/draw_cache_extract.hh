@@ -14,6 +14,7 @@
 #include "BLI_math_matrix_types.hh"
 
 #include "DNA_view3d_enums.h"
+#include "DNA_view3d_types.h"
 
 #include "GPU_index_buffer.hh"
 #include "GPU_ray_tracing.hh"
@@ -54,6 +55,11 @@ struct DRW_MeshWeightState {
   /* Set of all locked and unlocked deform bones for Lock Relative mode. */
   bool *defgroup_locked;   /* #defgroup_len */
   bool *defgroup_unlocked; /* #defgroup_len */
+
+  /* Multi colored display. */
+  bool *defgroup_validmap; /* #defgroup_len */
+  float3 *defgroup_colors;
+  eV3D_Overlay_WPaint_VGroupColorMode vgroup_color_mode;
 };
 
 /* DRW_MeshWeightState.flags */
@@ -113,6 +119,7 @@ enum class VBOType : int8_t {
   AttrViewer,
   VertexNormal,
   PaintOverlayFlag,
+  VertexGroupBlendedColor,
 };
 
 /**

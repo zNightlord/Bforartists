@@ -7753,7 +7753,7 @@ class VIEW3D_PT_overlay_weight_paint(Panel):
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'HEADER'
     bl_label = "Weight Paint"
-    bl_ui_units_x = 12
+    bl_ui_units_x = 14
 
     @classmethod
     def poll(cls, context):
@@ -7772,12 +7772,23 @@ class VIEW3D_PT_overlay_weight_paint(Panel):
         col.active = display_all
 
         col.prop(overlay, "weight_paint_mode_opacity", text="Opacity")
+
+        col.separator()
         row = col.split(factor=0.33)
+        row.label(text="Colored")
+        sub = row.row()
+        sub.prop(overlay, "wpaint_vgroup_color_mode", expand=True)
+
+        col.separator()
+        row = col.split(factor=0.33)
+        row.active = overlay.wpaint_vgroup_color_mode != 'ALL'
         row.label(text="Zero Weights")
         sub = row.row()
         sub.prop(tool_settings, "vertex_group_user", expand=True)
 
-        col.prop(overlay, "show_wpaint_contours")
+        col_contour = col.column()
+        col_contour.active = overlay.wpaint_vgroup_color_mode != 'ALL'
+        col_contour.prop(overlay, "show_wpaint_contours")
         col.prop(overlay, "show_paint_wire")
 
 

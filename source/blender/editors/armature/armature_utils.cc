@@ -523,6 +523,7 @@ static EditBone *make_boneList_recursive(ListBaseT<EditBone> *edbo,
     eBone->bbone_next_flag = curBone.bbone_next_flag;
 
     eBone->color = curBone.color;
+    copy_v3_v3(eBone->weight_color, curBone.weight_color);
     copy_bonecollection_membership(eBone, &curBone);
 
     if (curBone.prop) {
@@ -784,6 +785,7 @@ void ED_armature_from_edit(Main *bmain, bArmature *arm)
     newBone->bbone_next_flag = eBone.bbone_next_flag;
 
     newBone->color = eBone.color;
+    copy_v3_v3(newBone->weight_color, eBone.weight_color);
 
     for (BoneCollectionReference &ref : eBone.bone_collections) {
       BoneCollectionReference *newBoneRef = MEM_new<BoneCollectionReference>(
