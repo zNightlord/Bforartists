@@ -20,6 +20,7 @@
  * #lazy_function::Graph is build that can be used when evaluating the graph (e.g. for logging).
  */
 
+#include <atomic>
 #include <variant>
 
 #include "FN_lazy_function_graph.hh"
@@ -205,6 +206,18 @@ struct GeoNodesOperatorData {
   int active_edge_index = -1;
   int active_face_index = -1;
   int active_layer_index = -1;
+
+  /**
+   * True if this execution was started by the timer of a modal node tool instead of by user input.
+   * This is the value of the "Event" output of the Modal Timer node.
+   */
+  bool is_timer_event = false;
+  /**
+   * Set to true by enabled Modal Timer nodes during evaluation. The operator keeps running modally
+   * as long as at least one Modal Timer node requests it. Multiple nodes may write to this from
+   * different threads, and the same flag is shared by the evaluations for all edited objects.
+   */
+  std::atomic<bool> *modal_requested = nullptr;
 };
 
 struct GeoNodesCallData {
@@ -477,6 +490,8 @@ std::unique_ptr<LazyFunction> get_menu_switch_node_boolean_outputs_lazy_function
 std::unique_ptr<LazyFunction> get_menu_switch_node_socket_usage_lazy_function(const bNode &node);
 std::unique_ptr<LazyFunction> get_warning_node_lazy_function(const bNode &node);
 std::unique_ptr<LazyFunction> get_enable_output_node_lazy_function(
+    const bNode &node, GeometryNodesLazyFunctionGraphInfo &own_lf_graph_info);
+std::unique_ptr<LazyFunction> get_modal_timer_node_lazy_function(
     const bNode &node, GeometryNodesLazyFunctionGraphInfo &own_lf_graph_info);
 
 /**

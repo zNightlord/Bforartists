@@ -2575,6 +2575,27 @@ struct GeometryNodesLazyFunctionBuilder {
       const lf::FunctionNode &lf_node = static_cast<const lf::FunctionNode &>(lf_socket->node());
       local_side_effect_nodes.append(&lf_node);
     }
+    for (const bNode *bnode : btree_.nodes_by_type("GeometryNodeModalTimer"_ustr)) {
+      if (bnode->is_muted()) {
+        /* A muted node should not keep the tool running. */
+        continue;
+      }
+      if (tree_zones_->get_zone_by_node(bnode->identifier)) {
+        /* Modal timer nodes in zones are not supported yet, because zones build their own
+         * graph executor which does not know about these side-effect nodes. */
+        continue;
+      }
+      /* The modal timer node has to be evaluated whenever the node group is evaluated, because it
+       * controls whether the tool keeps running. */
+      const Span<lf::InputSocket *> lf_sockets =
+          root_graph_build_params_->lf_inputs_by_bsocket.lookup(&bnode->input_socket(0));
+      if (lf_sockets.is_empty()) {
+        continue;
+      }
+      const lf::FunctionNode &lf_node = static_cast<const lf::FunctionNode &>(
+          lf_sockets[0]->node());
+      local_side_effect_nodes.append(&lf_node);
+    }
 
     function.function = &scope_.construct<lf::GraphExecutor>(
         lf_graph_info_->graph,
@@ -2986,6 +3007,10 @@ struct GeometryNodesLazyFunctionBuilder {
         }
         if (bnode.is_type("NodeEnableOutput"_ustr)) {
           this->build_enable_output_node(bnode, graph_params);
+          break;
+        }
+        if (bnode.is_type("GeometryNodeModalTimer"_ustr)) {
+          this->build_modal_timer_node(bnode, graph_params);
           break;
         }
         if (bnode.is_undefined()) {
@@ -3571,6 +3596,32 @@ struct GeometryNodesLazyFunctionBuilder {
     graph_params.lf_inputs_by_bsocket.add(&enable_bsocket, &lf_node.input(0));
     graph_params.usage_by_bsocket.add(&enable_bsocket, output_is_used_socket);
     graph_params.usage_by_bsocket.add(&value_input_bsocket, &lf_node.output(0));
+  }
+
+  void build_modal_timer_node(const bNode &bnode, BuildGraphParams &graph_params)
+  {
+    std::unique_ptr<LazyFunction> lazy_function = get_modal_timer_node_lazy_function(
+        bnode, *lf_graph_info_);
+    lf::FunctionNode &lf_node = graph_params.lf_graph.add_function(*lazy_function);
+    scope_.add(std::move(lazy_function));
+
+    this->add_to_socket_map(graph_params, bnode.input_socket(0), lf_node.input(0));
+    this->add_to_socket_map(graph_params, bnode.output_socket(0), lf_node.output(0));
+
+    lf::OutputSocket *lf_usage = nullptr;
+    if (tree_zones_->get_zone_by_node(bnode.identifier)) {
+      /* In zones the node is not a side-effect node (see #build_root_graph), so it is only
+       * evaluated when its output is used. */
+      lf_usage = graph_params.usage_by_bsocket.lookup_default(&bnode.output_socket(0), nullptr);
+    }
+    else {
+      /* The node is evaluated whenever the node group is evaluated, so the "Enable" input is used
+       * whenever any group output is used. */
+      lf_usage = this->or_socket_usages(group_output_used_sockets_, graph_params);
+    }
+    if (lf_usage) {
+      graph_params.usage_by_bsocket.add(&bnode.input_socket(0), lf_usage);
+    }
   }
 
   void build_index_switch_node(const bNode &bnode, BuildGraphParams &graph_params)

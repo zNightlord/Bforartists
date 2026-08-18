@@ -11,6 +11,7 @@
 #include "BLI_listbase.hh"
 #include "BLI_rect.hh"
 #include "BLI_string_utf8.hh"
+#include "BLI_time.hh"
 
 #include "DNA_key_types.h"
 #include "ED_curves.hh"
@@ -29,6 +30,7 @@
 #include "BKE_curves.hh"
 #include "BKE_customdata.hh"
 #include "BKE_editmesh.hh"
+#include "BKE_geometry_nodes_reference_set.hh"
 #include "BKE_geometry_set.hh"
 #include "BKE_global.hh"
 #include "BKE_grease_pencil.hh"
@@ -64,6 +66,8 @@
 
 #include "UI_interface_layout.hh"
 #include "UI_resources.hh"
+
+#include "FN_lazy_function_execute.hh"
 
 #include "ED_asset.hh"
 #include "ED_asset_menu_utils.hh"
@@ -933,7 +937,77 @@ static void store_input_node_values_rna_props(const bContext &C,
   RNA_boolean_set(op.ptr, "viewport_is_perspective", rv3d ? bool(rv3d->is_persp) : true);
 }
 
-static wmOperatorStatus run_node_group_exec(bContext *C, wmOperator *op)
+struct DataPerZone {
+  nodes::SimulationZoneBehavior behavior;
+  std::optional<bke::bake::BakeValues> state;
+};
+
+struct NodeOperatorCustomData {
+  double last_time;
+  Array<Map<int, std::unique_ptr<DataPerZone>>> simulation_data_by_zone;
+  wmTimer *timer = nullptr;
+  NodeOperatorCustomData() : last_time(BLI_time_now_seconds()) {}
+  Set<StringRef> currently_pressed_keys;
+};
+
+class NodeOperatorSimulationParams : public nodes::GeoNodesSimulationParams {
+ private:
+  mutable std::mutex mutex_;
+  mutable Map<int, nodes::SimulationZoneBehavior *> behaviors_;
+  Map<int, std::unique_ptr<DataPerZone>> &data_by_zone_;
+
+ public:
+  float delta_time = 0.0f;
+
+  NodeOperatorSimulationParams(Map<int, std::unique_ptr<DataPerZone>> &data_by_zone,
+                               const float delta_time)
+      : data_by_zone_{data_by_zone}, delta_time(delta_time)
+  {
+  }
+
+  nodes::SimulationZoneBehavior *get(const int zone_id) const override
+  {
+    std::lock_guard lock{mutex_};
+    return behaviors_.lookup_or_add_cb(zone_id, [&]() {
+      DataPerZone &data = *data_by_zone_.lookup_or_add_cb(
+          zone_id,
+          [&]() -> std::unique_ptr<DataPerZone> { return std::make_unique<DataPerZone>(); });
+      if (data.state.has_value()) {
+        auto input = nodes::sim_input::UseCache();
+        input.values = std::move(*data.state);
+        input.delta_time = this->delta_time;
+        data.behavior.input = std::move(input);
+      }
+      else {
+        data.behavior.input = nodes::sim_input::PassThrough();
+      }
+
+      data.behavior.output = nodes::sim_output::StoreNewState{
+          [&data](bke::bake::BakeValues values) { data.state = std::move(values); }};
+      return &data.behavior;
+    });
+  }
+};
+
+static void run_node_group_end(bContext &C, wmOperator &op)
+{
+  NodeOperatorCustomData *op_data = static_cast<NodeOperatorCustomData *>(op.customdata);
+  if (!op_data) {
+    return;
+  }
+  if (op_data->timer) {
+    WM_event_timer_remove(CTX_wm_manager(&C), op_data->timer->win, op_data->timer);
+  }
+  MEM_delete(op_data);
+  op.customdata = nullptr;
+}
+
+static void run_node_group_cancel(bContext *C, wmOperator *op)
+{
+  run_node_group_end(*C, *op);
+}
+
+static wmOperatorStatus run_node_group_execute(bContext *C, wmOperator *op, const wmEvent *event)
 {
   Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
@@ -943,9 +1017,47 @@ static wmOperatorStatus run_node_group_exec(bContext *C, wmOperator *op)
   }
   const eObjectMode mode = active_object->mode;
 
+  if (!op->customdata) {
+    op->customdata = MEM_new<NodeOperatorCustomData>(__func__);
+  }
+  NodeOperatorCustomData &op_data = *static_cast<NodeOperatorCustomData *>(op->customdata);
+
+  /* The event is null when the operator is redone from the redo panel or called from a script.
+   * Then the previously stored properties are reused and the operator can't run modally. */
+  const bool can_run_modal = event != nullptr;
+  if (event) {
+    store_input_node_values_rna_props(*C, *op, *event);
+  }
+
+  /* Only this operator's timer should trigger execution. */
+  const bool is_timer_event = event && event->type == TIMER && op_data.timer &&
+                              event->customdata == op_data.timer;
+
   const bNodeTree *node_tree_orig = get_node_group(*C, *op->type, op->reports);
   if (!node_tree_orig) {
+    run_node_group_end(*C, *op);
     return OPERATOR_CANCELLED;
+  }
+
+  if (event) {
+    if (event->type == EVT_ESCKEY) {
+      run_node_group_end(*C, *op);
+      return OPERATOR_CANCELLED;
+    }
+    if (op_data.timer && ISTIMER(event->type) && !is_timer_event) {
+      /* Timers from other parts of Blender should not trigger another execution. */
+      return OPERATOR_RUNNING_MODAL;
+    }
+    // TODO: REPLACE THIS WITH THE MODAL EVENT NODE
+    const char *identifier = nullptr;
+    if (RNA_enum_identifier(rna_enum_event_type_items, event->type, &identifier)) {
+      if (event->val == KM_PRESS) {
+        op_data.currently_pressed_keys.add_as(identifier);
+      }
+      else if (event->val == KM_RELEASE) {
+        op_data.currently_pressed_keys.remove_as(identifier);
+      }
+    }
   }
 
   const Vector<Object *> objects = gather_supported_objects(*C, *bmain, mode);
@@ -973,24 +1085,32 @@ static wmOperatorStatus run_node_group_exec(bContext *C, wmOperator *op)
   else {
     node_tree = node_tree_orig;
   }
+  node_tree->ensure_interface_cache();
+  const Span<const bNodeTreeInterfaceSocket *> interface_inputs = node_tree->interface_inputs();
+  const Span<const bNodeTreeInterfaceSocket *> interface_outputs = node_tree->interface_outputs();
 
   const nodes::GeometryNodesLazyFunctionGraphInfo *lf_graph_info =
       nodes::ensure_geometry_nodes_lazy_function_graph(*node_tree).get();
   if (lf_graph_info == nullptr) {
     BKE_report(op->reports, RPT_ERROR, "Cannot evaluate node group");
+    run_node_group_end(*C, *op);
     return OPERATOR_CANCELLED;
   }
 
   if (!node_tree->group_output_node()) {
     BKE_report(op->reports, RPT_ERROR, "Node group must have a group output node");
+    run_node_group_end(*C, *op);
     return OPERATOR_CANCELLED;
   }
-  if (node_tree->interface_outputs().is_empty() ||
-      !STREQ(node_tree->interface_outputs()[0]->socket_type, "NodeSocketGeometry"))
+  if (interface_outputs.is_empty() ||
+      !STREQ(interface_outputs[0]->socket_type, "NodeSocketGeometry"))
   {
     BKE_report(op->reports, RPT_ERROR, "Node group's first output must be a geometry");
+    run_node_group_end(*C, *op);
     return OPERATOR_CANCELLED;
   }
+
+  PointerRNA inputs_ptr = RNA_pointer_get(op->ptr, "inputs");
 
   bke::OperatorComputeContext compute_context;
   Set<ComputeContextHash> verbose_log_contexts;
@@ -1003,11 +1123,22 @@ static wmOperatorStatus run_node_group_exec(bContext *C, wmOperator *op)
   const RegionView3D *rv3d = CTX_wm_region_view3d(C);
   Vector<MeshState> orig_mesh_states;
 
-  for (Object *object : objects) {
+  const double now = BLI_time_now_seconds();
+  const float delta_time = float(now - op_data.last_time);
+  op_data.last_time = now;
+  op_data.simulation_data_by_zone.reinitialize(objects.size());
+
+  /* The operator keeps running if one of the evaluations has an enabled Modal Timer node. */
+  std::atomic<bool> modal_requested = false;
+
+  for (const int object_i : objects.index_range()) {
+    Object &object = *objects[object_i];
     nodes::GeoNodesOperatorData operator_eval_data{};
     operator_eval_data.mode = mode;
+    operator_eval_data.is_timer_event = is_timer_event;
+    operator_eval_data.modal_requested = &modal_requested;
     operator_eval_data.depsgraphs = &depsgraphs;
-    operator_eval_data.self_object_orig = object;
+    operator_eval_data.self_object_orig = &object;
     operator_eval_data.scene_orig = scene;
     operator_eval_data.input_ids = &input_ids;
     RNA_int_get_array(op->ptr, "mouse_position", operator_eval_data.mouse_position);
@@ -1021,23 +1152,116 @@ static wmOperatorStatus run_node_group_exec(bContext *C, wmOperator *op)
     operator_eval_data.viewport_is_perspective = RNA_boolean_get(op->ptr,
                                                                  "viewport_is_perspective");
 
+    NodeOperatorSimulationParams simulation_params(op_data.simulation_data_by_zone[object_i],
+                                                   delta_time);
+
     nodes::GeoNodesCallData call_data{};
     call_data.operator_data = &operator_eval_data;
+    call_data.simulation_params = &simulation_params;
     call_data.eval_log = eval_log.log.get();
-    if (object == active_object) {
+    if (&object == active_object) {
       /* Only log values from the active object. */
       call_data.verbose_log_contexts = &verbose_log_contexts;
     }
 
     bke::GeometrySet geometry_orig = get_original_geometry_eval_copy(
-        *depsgraph_active, *object, operator_eval_data, orig_mesh_states);
+        *depsgraph_active, object, operator_eval_data, orig_mesh_states);
 
-    bke::GeometrySet new_geometry = nodes::execute_geometry_nodes_on_geometry(
-        *node_tree, *op->ptr, compute_context, call_data, std::move(geometry_orig));
+    const nodes::GeometryNodesLazyFunctionGraphInfo &lf_graph_info =
+        *nodes::ensure_geometry_nodes_lazy_function_graph(*node_tree);
+    const nodes::GeometryNodesGroupFunction &function = lf_graph_info.function;
+    const lf::LazyFunction &lazy_function = *function.function;
+    const int num_inputs = lazy_function.inputs().size();
+    const int num_outputs = lazy_function.outputs().size();
+
+    nodes::GeoNodesUserData user_data;
+    user_data.call_data = &call_data;
+    call_data.root_ntree = node_tree;
+
+    user_data.compute_context = &compute_context;
+
+    ResourceScope scope;
+    LinearAllocator<> &allocator = scope.allocator();
+
+    /* Prepare main inputs. */
+    Array<GMutablePointer> param_inputs(num_inputs);
+    for (const int i : interface_inputs.index_range()) {
+      const bNodeTreeInterfaceSocket &interface_socket = *interface_inputs[i];
+      const bke::bNodeSocketType *typeinfo = interface_socket.socket_typeinfo();
+      const eNodeSocketDatatype socket_type = typeinfo ? typeinfo->type : SOCK_CUSTOM;
+      if (socket_type == SOCK_GEOMETRY && i == 0) {
+        bke::SocketValueVariant &value = scope.construct<bke::SocketValueVariant>();
+        value.set(std::move(geometry_orig));
+        param_inputs[function.inputs.main[0]] = &value;
+        continue;
+      }
+
+      PointerRNA input_props_ptr = RNA_pointer_get(&inputs_ptr, interface_socket.identifier);
+      bke::SocketValueVariant value = init_socket_cpp_value(
+          &call_data, &input_props_ptr, *node_tree, interface_socket);
+      param_inputs[function.inputs.main[i]] = &scope.construct<bke::SocketValueVariant>(
+          std::move(value));
+    }
+
+    /* Prepare used-outputs inputs. */
+    Array<bool> output_used_inputs(interface_outputs.size(), true);
+    for (const int i : interface_outputs.index_range()) {
+      param_inputs[function.inputs.output_usages[i]] = &output_used_inputs[i];
+    }
+
+    /* No anonymous attributes have to be propagated. */
+    Array<bke::GeometryNodesReferenceSet> references_to_propagate(
+        function.inputs.references_to_propagate.geometry_outputs.size());
+    for (const int i : references_to_propagate.index_range()) {
+      param_inputs[function.inputs.references_to_propagate.range[i]] = &references_to_propagate[i];
+    }
+
+    /* Prepare memory for output values. */
+    Array<GMutablePointer> param_outputs(num_outputs);
+    for (const int i : IndexRange(num_outputs)) {
+      const lf::Output &lf_output = lazy_function.outputs()[i];
+      const CPPType &type = *lf_output.type;
+      void *buffer = allocator.allocate(type);
+      param_outputs[i] = {type, buffer};
+    }
+
+    /* We want to evaluate the main outputs, but don't care about which inputs are used for now. */
+    Array<lf::ValueUsage> param_output_usages(num_outputs);
+    param_output_usages.as_mutable_span().slice(function.outputs.main).fill(lf::ValueUsage::Used);
+    param_output_usages.as_mutable_span()
+        .slice(function.outputs.input_usages)
+        .fill(lf::ValueUsage::Unused);
+
+    nodes::GeoNodesLocalUserData local_user_data(user_data);
+
+    lf::Context lf_context(lazy_function.init_storage(allocator), &user_data, &local_user_data);
+    Array<std::optional<lf::ValueUsage>> param_input_usages(num_inputs);
+    Array<bool> param_set_outputs(num_outputs, false);
+    lf::BasicParams lf_params{lazy_function,
+                              param_inputs,
+                              param_outputs,
+                              param_input_usages,
+                              param_output_usages,
+                              param_set_outputs};
+    {
+      nodes::ScopedComputeContextTimer timer{lf_context};
+      lazy_function.execute(lf_params, lf_context);
+    }
+    lazy_function.destruct_storage(lf_context.storage);
+
+    bke::GeometrySet new_geometry =
+        param_outputs[0].get<bke::SocketValueVariant>()->extract<bke::GeometrySet>();
+
+    for (const int i : IndexRange(num_outputs)) {
+      if (param_set_outputs[i]) {
+        GMutablePointer &ptr = param_outputs[i];
+        ptr.destruct();
+      }
+    }
 
     store_result_geometry(
-        *C, *op, *depsgraph_active, *bmain, *scene, *object, rv3d, std::move(new_geometry));
-    WM_event_add_notifier(C, NC_GEOM | ND_DATA, object->data);
+        *C, *op, *depsgraph_active, *bmain, *scene, object, rv3d, std::move(new_geometry));
+    WM_event_add_notifier(C, NC_GEOM | ND_DATA, object.data);
   }
 
   nodes::eval_log::NodeTreeLog &tree_log = eval_log.log->get_tree_log(compute_context.hash());
@@ -1051,7 +1275,32 @@ static wmOperatorStatus run_node_group_exec(bContext *C, wmOperator *op)
     }
   }
 
-  return OPERATOR_FINISHED;
+  wmWindow *window = CTX_wm_window(C);
+  if (!can_run_modal || !modal_requested || !window) {
+    /* No Modal Timer node asked to keep running, so this was a single execution. */
+    run_node_group_end(*C, *op);
+    return OPERATOR_FINISHED;
+  }
+  if (ELEM(event->type, EVT_PADENTER, EVT_RETKEY)) {
+    /* Hard-coded "end" key. Let the evaluation happen first though, unlike "escape." */
+    run_node_group_end(*C, *op);
+    return OPERATOR_FINISHED;
+  }
+
+  if (!op_data.timer) {
+    op_data.timer = WM_event_timer_add(CTX_wm_manager(C), window, TIMER, 1.0 / 100.0);
+  }
+  return OPERATOR_RUNNING_MODAL;
+}
+
+static wmOperatorStatus run_node_group_exec(bContext *C, wmOperator *op)
+{
+  return run_node_group_execute(C, op, nullptr);
+}
+
+static wmOperatorStatus run_node_group_modal(bContext *C, wmOperator *op, const wmEvent *event)
+{
+  return run_node_group_execute(C, op, event);
 }
 
 static wmOperatorStatus run_node_group_invoke(bContext *C, wmOperator *op, const wmEvent *event)
@@ -1061,9 +1310,11 @@ static wmOperatorStatus run_node_group_invoke(bContext *C, wmOperator *op, const
     return OPERATOR_CANCELLED;
   }
 
-  store_input_node_values_rna_props(*C, *op, *event);
-
-  return run_node_group_exec(C, op);
+  const wmOperatorStatus retval = run_node_group_execute(C, op, event);
+  if (retval & OPERATOR_RUNNING_MODAL) {
+    WM_event_add_modal_handler(C, op);
+  }
+  return retval;
 }
 
 static void run_node_group_ui(bContext *C, wmOperator *op)
@@ -1419,6 +1670,8 @@ static void register_node_tool(wmOperatorType *ot,
   ot->pyop_poll = run_node_group_poll;
   ot->invoke = run_node_group_invoke;
   ot->exec = run_node_group_exec;
+  ot->modal = run_node_group_modal;
+  ot->cancel = run_node_group_cancel;
   ot->ui = run_node_group_ui;
   ot->ui_poll = run_node_ui_poll;
 
