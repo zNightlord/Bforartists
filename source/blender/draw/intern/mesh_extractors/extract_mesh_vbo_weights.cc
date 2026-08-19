@@ -9,7 +9,6 @@
 #include "DNA_meshdata_types.h"
 
 #include "BLI_array_utils.hh"
-#include "BLI_noise.hh"
 
 #include "BKE_deform.hh"
 
@@ -63,7 +62,7 @@ static float3 blended_vgroup_color(const MDeformVert *dvert,
   }
 
   if (mode == V3D_OVERLAY_WPAINT_VGROUP_COLOR_ALL && total_weight > 1.0f) {
-    // result /= total_weight;
+    result /= total_weight;
   }
 
   return result;

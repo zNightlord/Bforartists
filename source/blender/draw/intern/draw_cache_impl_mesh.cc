@@ -349,7 +349,7 @@ static void drw_mesh_weight_state_extract(
   wstate->defgroup_len = mesh.vertex_group_names.count();
 
   wstate->alert_mode = ts.weightuser;
-  /* Validmap — only when armature modifier is enabled in viewport. */
+  /* Create validmap for deform vertex groups when armature modifier is enabled in viewport. */
   if (wstate->defgroup_len > 0) {
     for (ModifierData *md = static_cast<ModifierData *>(ob.modifiers.first); md != nullptr;
          md = md->next)
@@ -368,37 +368,26 @@ static void drw_mesh_weight_state_extract(
     Object *arm_ob = BKE_modifiers_is_deformed_by_armature(&ob);
     bArmature *arm = arm_ob ? BKE_armature_from_object(arm_ob) : nullptr;
 
-    /* Count total deform bones for hue spacing. */
-    int total_deform = 0;
-    if (arm) {
-      BKE_armature_foreach_bone(*arm, [&](const int /*index*/, const Bone &bone) {
-        if (!(bone.flag & BONE_NO_DEFORM)) {
-          total_deform++;
-        }
-      });
-    }
-
     /* Fill per group colors. */
-    constexpr float GOLDEN_RATIO = 0.38196601f;
+    constexpr float GOLDEN_ANGLE = 0.618f;
     const ListBaseT<bDeformGroup> *defbase = BKE_object_defgroup_list(&ob);
     int di = 0;
     for (const bDeformGroup &dg : *defbase) {
       if (di >= wstate->defgroup_len) {
         break;
       }
-      
-
+      /* Prioritize armature first then fallback when no armature found. */
       if (arm) {
         const Bone *bone = BKE_armature_find_bone_name(arm, dg.name);
         if (bone && !(bone->flag & BONE_NO_DEFORM)) {
           const float3 stored(bone->weight_color[0], bone->weight_color[1], bone->weight_color[2]);
           if (stored.x > 0.0f || stored.y > 0.0f || stored.z > 0.0f) {
-            /* User override — use stored color directly.*/
+            /* User override, use the override weight color directly. */
             wstate->defgroup_colors[di] = stored;
           }
           else {
-            /* Hue — evenly spaced 0 to 1 by traversal index. */
-            const float hue = fmodf(float(di) * GOLDEN_RATIO, 1.0f);
+            /* Hue uses golden angle to assign the hue between bones. */
+            const float hue = fmodf(float(di) * GOLDEN_ANGLE, 1.0f);
             float r, g, b;
             hsv_to_rgb(hue, 0.85f, 0.9f, &r, &g, &b);
             wstate->defgroup_colors[di] = float3(r, g, b);
@@ -408,8 +397,8 @@ static void drw_mesh_weight_state_extract(
         }
       }
 
-      /* Non-bone group or no armature — stable hash fallback,
-       * lower saturation to visually distinguish from deform groups. */
+      /* Non armature, stable hash fallback
+       * Lower saturation to visually distinguish from deform groups. */
       const float3 hash_col = blender::noise::hash_float_to_float3(float(di + 1));
       float hue, sat, val;
       rgb_to_hsv(hash_col.x, hash_col.y, hash_col.z, &hue, &sat, &val);
