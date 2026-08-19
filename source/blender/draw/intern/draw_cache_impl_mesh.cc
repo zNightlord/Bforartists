@@ -370,7 +370,7 @@ static void drw_mesh_weight_state_extract(
     /* Fill per group colors. */
     constexpr float GOLDEN_ANGLE = 0.618f;
     const ListBaseT<bDeformGroup> *defbase = BKE_object_defgroup_list(&ob);
-    uint di = 0;
+    int di = 0;
     for (const bDeformGroup &dg : *defbase) {
       if (di >= wstate->defgroup_len) {
         break;
