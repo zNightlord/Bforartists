@@ -16,7 +16,6 @@
 #include "BLI_index_range.hh"
 #include "BLI_listbase.hh"
 #include "BLI_math_color_c.hh"
-#include "BLI_noise.hh"
 #include "BLI_span.hh"
 #include "BLI_string_ref.hh"
 
@@ -371,7 +370,7 @@ static void drw_mesh_weight_state_extract(
     /* Fill per group colors. */
     constexpr float GOLDEN_ANGLE = 0.618f;
     const ListBaseT<bDeformGroup> *defbase = BKE_object_defgroup_list(&ob);
-    int di = 0;
+    uint di = 0;
     for (const bDeformGroup &dg : *defbase) {
       if (di >= wstate->defgroup_len) {
         break;
@@ -397,11 +396,9 @@ static void drw_mesh_weight_state_extract(
         }
       }
 
-      /* Non armature, stable hash fallback
+      /* Non armature, deform vertex groups fallback.
        * Lower saturation to visually distinguish from deform groups. */
-      const float3 hash_col = blender::noise::hash_float_to_float3(float(di + 1));
-      float hue, sat, val;
-      rgb_to_hsv(hash_col.x, hash_col.y, hash_col.z, &hue, &sat, &val);
+      const float hue = fmodf(float(di) * GOLDEN_RATIO, 1.0f);
       float r, g, b;
       hsv_to_rgb(hue, 0.5f, 0.75f, &r, &g, &b);
       wstate->defgroup_colors[di] = float3(r, g, b);

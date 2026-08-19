@@ -7753,7 +7753,7 @@ class VIEW3D_PT_overlay_weight_paint(Panel):
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'HEADER'
     bl_label = "Weight Paint"
-    bl_ui_units_x = 14
+    bl_ui_units_x = 12
 
     @classmethod
     def poll(cls, context):

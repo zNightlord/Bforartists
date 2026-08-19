@@ -26,7 +26,7 @@ static float3 blended_vgroup_color(const MDeformVert *dvert,
   if (!dvert || dvert->totweight == 0) {
     return float3(0.0f);
   }
-  const int defgroup_len = defgroup_colors.size();
+  const uint defgroup_len = uint(defgroup_colors.size());
 
   bool use_validmap = false;
   if (!validmap.is_empty()) {
@@ -42,11 +42,12 @@ static float3 blended_vgroup_color(const MDeformVert *dvert,
   float total_weight = 0.0f;
 
   for (int i = 0; i < dvert->totweight; i++) {
-    const int def_nr = dvert->dw[i].def_nr;
+    const uint def_nr = uint(dvert->dw[i].def_nr);
 
-    if (def_nr < 0 || def_nr >= defgroup_len) {
+    if (def_nr >= defgroup_len) {
       continue;
     }
+    /* Skip non deform vertex groups. */
     if (use_validmap && !validmap[def_nr]) {
       continue;
     }
