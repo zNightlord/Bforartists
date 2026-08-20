@@ -319,6 +319,7 @@ wmDrag *WM_drag_data_create(bContext *C, int icon, eWM_DragDataType type, void *
       }
       break;
     case WM_DRAG_GREASE_PENCIL_LAYER:
+    case WM_DRAG_TEXTURE_LAYER:
     case WM_DRAG_ASSET:
     case WM_DRAG_ASSET_CATALOG:
       /* Move ownership of poin to wmDrag. */

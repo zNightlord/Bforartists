@@ -72,6 +72,19 @@ bool IMB_exr_write_end(ExrWriteHandle *handle,
                        int quality,
                        const StampData *stamp);
 
+/**
+ * Same as #IMB_exr_write_end, but writes the encoded file contents into
+ * \a r_encoded instead of a file (for packing).
+ */
+bool IMB_exr_write_end_to_memory(ExrWriteHandle *handle,
+                                 Vector<uint8_t> &r_encoded,
+                                 int width,
+                                 int height,
+                                 const double ppm[2],
+                                 int compress,
+                                 int quality,
+                                 const StampData *stamp);
+
 /** \} */
 
 /* -------------------------------------------------------------------- */

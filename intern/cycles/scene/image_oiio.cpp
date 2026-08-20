@@ -24,7 +24,10 @@ CCL_NAMESPACE_BEGIN
  * need careful testing as other parts of the software uses file handles too. */
 static CacheLimiter<ImageInput> cache_limiter_image_input(128);
 
-OIIOImageLoader::OIIOImageLoader(const string &filepath) : original_filepath_(filepath) {}
+OIIOImageLoader::OIIOImageLoader(const string &filepath, const string &subimage_name)
+    : original_filepath_(filepath), subimage_name_(subimage_name)
+{
+}
 
 OIIOImageLoader::~OIIOImageLoader() = default;
 
@@ -39,6 +42,7 @@ bool OIIOImageLoader::load_metadata(ImageMetaData &metadata,
                                   params.colorspace,
                                   params.alpha_type,
                                   IMAGE_FORMAT_PLAIN,
+                                  subimage_name_,
                                   texture_cache_filepath_,
                                   metadata);
 
@@ -53,7 +57,8 @@ bool OIIOImageLoader::load_metadata(ImageMetaData &metadata,
                    texture_cache_filepath_,
                    params.colorspace,
                    params.alpha_type,
-                   IMAGE_FORMAT_PLAIN))
+                   IMAGE_FORMAT_PLAIN,
+                   subimage_name_))
       {
         texture_cache_filepath_.clear();
         params.tx_failure_num++;
@@ -64,7 +69,11 @@ bool OIIOImageLoader::load_metadata(ImageMetaData &metadata,
     }
   }
 
-  if (!metadata.oiio_load_metadata(get_filepath())) {
+  /* The subimage name only applies to the original multi-layer EXR. A .tx
+   * cache file is always single-subimage, so pass an empty name in that case. */
+  if (!metadata.oiio_load_metadata(get_filepath(),
+                                   texture_cache_filepath_.empty() ? subimage_name_ : ""))
+  {
     params.load_failure_num++;
     return false;
   }
@@ -85,6 +94,7 @@ bool OIIOImageLoader::load_pixels(const ImageMetaData &metadata, void *pixels)
 template<typename StorageType>
 static bool oiio_load_pixels_tile(const unique_ptr<ImageInput> &in,
                                   const ImageMetaData &metadata,
+                                  const int subimage,
                                   const int miplevel,
                                   const int64_t x,
                                   const int64_t y,
@@ -108,7 +118,7 @@ static bool oiio_load_pixels_tile(const unique_ptr<ImageInput> &in,
     read_y_stride = w * channels * sizeof(StorageType);
   }
 
-  if (!in->read_tiles(0,
+  if (!in->read_tiles(subimage,
                       miplevel,
                       x,
                       x + w,
@@ -156,6 +166,7 @@ static bool oiio_load_pixels_tile(const unique_ptr<ImageInput> &in,
 static bool oiio_load_pixels_tile(const unique_ptr<ImageInput> &in,
                                   const ImageMetaData &metadata,
                                   const int64_t /*height*/,
+                                  const int subimage,
                                   const int miplevel,
                                   const int64_t x,
                                   const int64_t y,
@@ -168,12 +179,23 @@ static bool oiio_load_pixels_tile(const unique_ptr<ImageInput> &in,
   switch (metadata.type) {
     case IMAGE_DATA_TYPE_BYTE:
     case IMAGE_DATA_TYPE_BYTE4:
-      return oiio_load_pixels_tile<uint8_t>(
-          in, metadata, miplevel, x, y, w, h, TypeDesc::UINT8, x_stride, y_stride, pixels);
+      return oiio_load_pixels_tile<uint8_t>(in,
+                                            metadata,
+                                            subimage,
+                                            miplevel,
+                                            x,
+                                            y,
+                                            w,
+                                            h,
+                                            TypeDesc::UINT8,
+                                            x_stride,
+                                            y_stride,
+                                            pixels);
     case IMAGE_DATA_TYPE_USHORT:
     case IMAGE_DATA_TYPE_USHORT4:
       return oiio_load_pixels_tile<uint16_t>(in,
                                              metadata,
+                                             subimage,
                                              miplevel,
                                              x,
                                              y,
@@ -188,6 +210,7 @@ static bool oiio_load_pixels_tile(const unique_ptr<ImageInput> &in,
     case IMAGE_DATA_TYPE_HALF4:
       return oiio_load_pixels_tile<half>(in,
                                          metadata,
+                                         subimage,
                                          miplevel,
                                          x,
                                          y,
@@ -201,6 +224,7 @@ static bool oiio_load_pixels_tile(const unique_ptr<ImageInput> &in,
     case IMAGE_DATA_TYPE_FLOAT4:
       return oiio_load_pixels_tile<float>(in,
                                           metadata,
+                                          subimage,
                                           miplevel,
                                           x,
                                           y,
@@ -227,6 +251,7 @@ static bool oiio_load_pixels_tile_adjacent(const unique_ptr<ImageInput> &in,
                                            const ImageMetaData &metadata,
                                            const int64_t width,
                                            const int64_t height,
+                                           const int subimage,
                                            const int miplevel,
                                            const int64_t x,
                                            const int64_t y,
@@ -324,6 +349,7 @@ static bool oiio_load_pixels_tile_adjacent(const unique_ptr<ImageInput> &in,
   if (!oiio_load_pixels_tile(in,
                              metadata,
                              height,
+                             subimage,
                              miplevel,
                              x_new,
                              y_new,
@@ -366,7 +392,9 @@ bool OIIOImageLoader::load_pixels_tile(const ImageMetaData &metadata,
     return false;
   }
 
-  /* Create cached file handle if it was not created yet or it was deleted by the cache limiter. */
+  /* Create cached file handle if it was not created yet or it was deleted by the cache limiter.
+   * A .tx file is always single-subimage, so subimage applies only to the source EXR. */
+  const int subimage = texture_cache_filepath_.empty() ? metadata.subimage : 0;
   CacheHandleGuard<ImageInput> file_handle_user = texture_cache_file_handle.acquire(
       cache_limiter_image_input, [&]() {
         const string &filepath = get_filepath();
@@ -385,6 +413,11 @@ bool OIIOImageLoader::load_pixels_tile(const ImageMetaData &metadata,
           return std::unique_ptr<ImageInput>();
         }
 
+        if (subimage != 0 && !in->seek_subimage(subimage, 0)) {
+          texture_cache_file_handle_failed = true;
+          return std::unique_ptr<ImageInput>();
+        }
+
         return in;
       });
 
@@ -399,6 +432,7 @@ bool OIIOImageLoader::load_pixels_tile(const ImageMetaData &metadata,
   bool ok = oiio_load_pixels_tile(file_handle_user.get(),
                                   metadata,
                                   height,
+                                  subimage,
                                   miplevel,
                                   x,
                                   y,
@@ -419,6 +453,7 @@ bool OIIOImageLoader::load_pixels_tile(const ImageMetaData &metadata,
                                              metadata,
                                              width,
                                              height,
+                                             subimage,
                                              miplevel,
                                              x,
                                              y,
@@ -451,7 +486,8 @@ const string &OIIOImageLoader::get_filepath() const
 bool OIIOImageLoader::equals(const ImageLoader &other) const
 {
   const OIIOImageLoader &other_loader = (const OIIOImageLoader &)other;
-  return original_filepath_ == other_loader.original_filepath_;
+  return original_filepath_ == other_loader.original_filepath_ &&
+         subimage_name_ == other_loader.subimage_name_;
 }
 
 CCL_NAMESPACE_END

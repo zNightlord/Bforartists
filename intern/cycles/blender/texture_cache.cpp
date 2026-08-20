@@ -15,6 +15,7 @@ namespace blender {
 bool CCL_resolve_texture_cache(const Image *image,
                                const char *filepath,
                                const char *texture_cache_directory,
+                               const char *subimage_name,
                                std::string &r_tx_filepath)
 {
   ccl::ImageMetaData tx_metadata;
@@ -23,14 +24,18 @@ bool CCL_resolve_texture_cache(const Image *image,
                          ccl::ustring(image->colorspace_settings.name),
                          ccl::ImageAlphaType(image->alpha_mode),
                          ccl::IMAGE_FORMAT_PLAIN,
+                         subimage_name ? subimage_name : "",
                          r_tx_filepath,
                          tx_metadata);
 }
 
 bool CCL_generate_texture_cache(const Image *image,
                                 const char *filepath,
-                                const char *texture_cache_directory)
+                                const char *texture_cache_directory,
+                                const char *subimage_name)
 {
+  const std::string subimage(subimage_name ? subimage_name : "");
+
   std::string tx_filepath;
   ccl::ImageMetaData tx_metadata;
   const bool is_valid = ccl::resolve_tx(filepath,
@@ -38,6 +43,7 @@ bool CCL_generate_texture_cache(const Image *image,
                                         ccl::ustring(image->colorspace_settings.name),
                                         ccl::ImageAlphaType(image->alpha_mode),
                                         ccl::IMAGE_FORMAT_PLAIN,
+                                        subimage,
                                         tx_filepath,
                                         tx_metadata);
 
@@ -53,7 +59,8 @@ bool CCL_generate_texture_cache(const Image *image,
                  tx_filepath,
                  ccl::ustring(image->colorspace_settings.name),
                  ccl::ImageAlphaType(image->alpha_mode),
-                 ccl::IMAGE_FORMAT_PLAIN);
+                 ccl::IMAGE_FORMAT_PLAIN,
+                 subimage);
 }
 
 }  // namespace blender

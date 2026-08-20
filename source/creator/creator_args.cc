@@ -44,6 +44,7 @@
 #  include "BKE_context.hh"
 
 #  include "BKE_global.hh"
+#  include "BKE_image.hh"
 #  include "BKE_image_format.hh"
 #  include "BKE_lib_id.hh"
 #  include "BKE_main.hh"
@@ -2554,6 +2555,7 @@ static int arg_handle_render_frame(int argc, const char **argv, void *data)
           RE_RenderAnim(re, bmain, scene, nullptr, nullptr, frame, frame, scene->r.frame_step);
         }
       }
+      BKE_image_sync_render_catalogs(bmain, scene);
       RE_SetReports(re, nullptr);
       BKE_reports_free(&reports);
       MEM_delete(frame_range_arr);
@@ -2596,6 +2598,7 @@ static int arg_handle_render_animation(int /*argc*/, const char ** /*argv*/, voi
 
     RE_RenderAnim(
         re, bmain, scene, nullptr, nullptr, scene->r.sfra, scene->r.efra, scene->r.frame_step);
+    BKE_image_sync_render_catalogs(bmain, scene);
     RE_SetReports(re, nullptr);
     BKE_reports_free(&reports);
   }

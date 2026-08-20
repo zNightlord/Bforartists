@@ -45,6 +45,9 @@ class ComputeContextCache {
       foreach_geometry_element_zone_contexts_cache_;
   Map<std::pair<const ComputeContext *, int32_t>, const EvaluateClosureComputeContext *>
       evaluate_closure_contexts_cache_;
+  Map<std::pair<const ComputeContext *, std::pair<int32_t, int>>,
+      const ClosureLayerComputeContext *>
+      closure_layer_contexts_cache_;
 
  public:
   const DataBlockComputeContext &for_data_block(const ComputeContext *parent,
@@ -86,6 +89,13 @@ class ComputeContextCache {
   const EvaluateClosureComputeContext &for_evaluate_closure(
       const ComputeContext *parent,
       int32_t node_id,
+      const bNodeTree *tree = nullptr,
+      const std::optional<nodes::ClosureSourceLocation> &closure_source_location = std::nullopt);
+
+  const ClosureLayerComputeContext &for_closure_layer(
+      const ComputeContext *parent,
+      int32_t node_id,
+      int item_identifier,
       const bNodeTree *tree = nullptr,
       const std::optional<nodes::ClosureSourceLocation> &closure_source_location = std::nullopt);
 

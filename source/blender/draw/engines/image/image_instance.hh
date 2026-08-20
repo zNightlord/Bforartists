@@ -222,14 +222,6 @@ class Instance : public DrawEngine {
     const Scene *scene = DRW_context_get()->scene;
     state.sh_params.update(space_.get(), scene, state.image, image_buffer);
     space_->release_buffer(state.image, image_buffer, lock);
-
-    ImageUser *iuser = space_->get_image_user();
-    if (state.image->rr != nullptr) {
-      BKE_image_multilayer_index(state.image->rr, iuser);
-    }
-    else {
-      BKE_image_multiview_index(state.image, iuser);
-    }
   }
 
   void object_sync(ObjectRef & /*obref*/, Manager & /*manager*/) final {}

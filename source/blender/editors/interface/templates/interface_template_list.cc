@@ -757,6 +757,11 @@ static void template_uilist_layout_draw(const bContext *C,
             button_func_tooltip_set(but, uilist_item_tooltip_func, dyntip_data, MEM_delete_void);
           }
 
+          /* Odd rows get an alternating background (zebra striping). */
+          if (i % 2 == 1) {
+            but->drawflag |= BUT_ALTERNATE_ROW;
+          }
+
           Layout &item_row = overlap->row(true);
 
           uiLayoutListItemAddPadding(&item_row);
@@ -794,6 +799,10 @@ static void template_uilist_layout_draw(const bContext *C,
       /* add dummy buttons to fill space */
       for (; i < visual_info.start_idx + visual_info.visual_items; i++) {
         col->label("", ICON_NONE);
+        /* Keep the alternating row background going over the empty rows. */
+        if (i % 2 == 1) {
+          col->block()->buttons_ptrs.last()->drawflag |= BUT_ALTERNATE_ROW;
+        }
       }
 
       /* Add scroll-bar. */

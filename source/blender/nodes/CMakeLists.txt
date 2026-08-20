@@ -99,6 +99,7 @@ set(SRC
   intern/node_exec.cc
   intern/node_geometry_exec.cc
   intern/node_multi_function.cc
+  intern/node_placement.cc
   intern/node_register.cc
   intern/node_rna_define.cc
   intern/node_socket.cc
@@ -156,6 +157,7 @@ set(SRC
   NOD_nested_node_id.hh
   NOD_node_declaration.hh
   NOD_node_extra_info.hh
+  NOD_node_placement.hh
   NOD_node_in_compute_context.hh
   NOD_nodes_srna.hh
   NOD_partial_eval.hh

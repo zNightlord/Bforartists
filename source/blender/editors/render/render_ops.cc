@@ -89,6 +89,12 @@ void ED_operatortypes_render()
 
   /* `render_opengl.cc` */
   WM_operatortype_append(RENDER_OT_opengl);
+
+  /* `material_texture_layer_assets.cc` */
+  ed::render::material_texture_layer_assets_register();
+
+  /* `material_texture_layers.cc` */
+  ed::render::material_texture_layers_register();
 }
 
 }  // namespace blender

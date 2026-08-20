@@ -1174,6 +1174,7 @@ static void rna_def_render_layer(BlenderRNA *brna)
   PropertyRNA *parm;
 
   srna = RNA_def_struct(brna, "RenderLayer", nullptr);
+  RNA_def_struct_sdna(srna, "RenderLayer");
   RNA_def_struct_ui_text(srna, "Render Layer", "");
 
   func = RNA_def_function(srna, "load_from_file", "RE_layer_load_from_file");
@@ -1209,7 +1210,11 @@ static void rna_def_render_layer(BlenderRNA *brna)
 
   RNA_define_verify_sdna(false);
 
-  rna_def_view_layer_common(brna, srna, false);
+  prop = RNA_def_property(srna, "name", PROP_STRING, PROP_NONE);
+  RNA_def_property_string_sdna(prop, nullptr, "name");
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_ui_text(prop, "Name", "Render layer name");
+  RNA_def_struct_name_property(srna, prop);
 
   prop = RNA_def_property(srna, "passes", PROP_COLLECTION, PROP_NONE);
   RNA_def_property_struct_type(prop, "RenderPass");

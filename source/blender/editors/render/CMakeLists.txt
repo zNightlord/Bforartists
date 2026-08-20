@@ -5,6 +5,9 @@
 set(INC
   ../include
   ../../makesrna
+  ../../nodes
+  ../../nodes/geometry/include
+  ../../nodes/shader/include
   # RNA_prototypes.hh
   ${CMAKE_BINARY_DIR}/source/blender/makesrna
 )
@@ -13,6 +16,9 @@ set(INC_SYS
 )
 
 set(SRC
+  material_texture_layer_assets.cc
+  material_texture_layers.cc
+  material_texture_layers_ui.cc
   render_internal.cc
   render_opengl.cc
   render_ops.cc
@@ -26,6 +32,7 @@ set(SRC
 )
 
 set(LIB
+  PRIVATE bf::asset_system
   PRIVATE bf::blenkernel
   PRIVATE bf::blenlib
   PRIVATE bf::blenloader

@@ -5080,6 +5080,25 @@ static void widget_menu_pie_itembut(Button *but,
   widgetbase_draw(&wtb, wcol);
 }
 
+/* Find the box button enclosing a tree-view or list row. Looked up live in the
+ * row's block each draw: a stored pointer would dangle, since
+ * #block_update_from_old may free and rebuild buttons between layout and draw. */
+static const Button *ui_alternate_row_box(const Button *row_but)
+{
+  for (const Button &but : row_but->block->buttons()) {
+    if (ELEM(but.type, ButtonType::Roundbox, ButtonType::ListBox) &&
+        (but.drawflag & BUT_VIEW_ALTERNATE_ROWS) && but.rect.ymin <= row_but->rect.ymin + 1.0f &&
+        but.rect.ymax >= row_but->rect.ymax - 1.0f &&
+        /* Horizontally contain the row too, so two boxes side by side at overlapping
+         * heights don't cross-match. */
+        but.rect.xmin <= row_but->rect.xmin + 1.0f && but.rect.xmax >= row_but->rect.xmax - 1.0f)
+    {
+      return &but;
+    }
+  }
+  return nullptr;
+}
+
 static void widget_list_itembut(Button *but,
                                 uiWidgetColors *wcol,
                                 rcti *rect,
@@ -5089,6 +5108,8 @@ static void widget_list_itembut(Button *but,
 {
   rcti draw_rect = *rect;
   bool is_selected = state->but_flag & UI_SELECT;
+  bool full_width_band = false;
+  bool in_flat_box = false;
 
   if (but->type == ButtonType::ViewItem) {
     ButtonViewItem *item_but = static_cast<ButtonViewItem *>(but);
@@ -5107,15 +5128,42 @@ static void widget_list_itembut(Button *but,
     }
   }
 
+  /* Tree-view and list rows in a box: draw the highlight as a full-width band
+   * spanning the box, matching the alternating row backgrounds. Only look up the
+   * enclosing box when the row actually draws a background (selected, hovered, or a
+   * themed non-transparent inner), to avoid an O(rows) block scan for plain rows. */
+  if (ELEM(but->type, ButtonType::ViewItem, ButtonType::ListRow) &&
+      (is_selected || (state->but_flag & UI_HOVER) || wcol->inner[3] != 0))
+  {
+    const Button *box = ui_alternate_row_box(but);
+    if (box) {
+      in_flat_box = (box->drawflag & BUT_VIEW_FLAT_BOX) != 0;
+      if (BLI_rctf_size_x(&but->rect) > 0.0f) {
+        const float scale_x = BLI_rcti_size_x(rect) / BLI_rctf_size_x(&but->rect);
+        draw_rect.xmin = rect->xmin + int((box->rect.xmin - but->rect.xmin) * scale_x);
+        draw_rect.xmax = rect->xmin + int((box->rect.xmax - but->rect.xmin) * scale_x);
+        full_width_band = true;
+      }
+    }
+  }
+
   WidgetBase wtb;
   widget_init(&wtb);
 
-  const float rad = widget_radius_from_zoom(zoom, wcol);
+  /* Full-width row bands are drawn square, with no outline or emboss, so they
+   * read as a continuous background band like the zebra striping. */
+  const float rad = full_width_band ? 0.0f : widget_radius_from_zoom(zoom, wcol);
+  if (full_width_band) {
+    wtb.draw_outline = false;
+    wtb.draw_emboss = false;
+  }
   round_box_edges(&wtb, CNR_ALL, &draw_rect, rad);
 
   if (state->but_flag & UI_HOVER) {
     color_blend_v3_v3(wcol->inner, wcol->text, 0.2);
-    wcol->inner[3] = is_selected ? 255 : 20;
+    /* In a flat box the rows sit over the panel-blended background, where the normal hover already
+     * reads close to the panel color; halve it so a hovered row stays distinct. */
+    wcol->inner[3] = is_selected ? 255 : (in_flat_box ? 10 : 20);
   }
 
   widgetbase_draw(&wtb, wcol);
@@ -5243,6 +5291,61 @@ static void widget_radiobut(uiWidgetColors *wcol,
   widgetbase_draw(&wtb, wcol);
 }
 
+/* Draw alternating row backgrounds (zebra striping) behind the rows contained
+ * in a box, for boxes flagged with #BUT_VIEW_ALTERNATE_ROWS (tree views and
+ * lists). Each stripe spans the full width of the box, so it reads as a
+ * continuous background band rather than a per-row highlight. */
+static void widget_box_alternate_rows(const Button *box_but,
+                                      const uiWidgetColors *wcol,
+                                      const rcti *rect)
+{
+  /* The same themable color the outliner uses for its zebra striping. */
+  uchar col[4];
+  theme::get_color_4ubv(TH_ROW_ALTERNATE, col);
+  if (col[3] == 0) {
+    return;
+  }
+
+  const float box_h = BLI_rctf_size_y(&box_but->rect);
+  if (box_h <= 0.0f) {
+    return;
+  }
+  /* Row buttons store their rects in block space; map their vertical extent
+   * into the draw-space #rect using the box button's own block-to-pixel
+   * transform (both share the same block, so the transform is identical). */
+  const float scale_y = BLI_rcti_size_y(rect) / box_h;
+
+  uiWidgetColors wcol_band = *wcol;
+  copy_v4_v4_uchar(wcol_band.inner, col);
+
+  for (const Button &but : box_but->block->buttons()) {
+    if (!(but.drawflag & BUT_ALTERNATE_ROW)) {
+      continue;
+    }
+    /* Only stripe rows that belong to this box, vertically and horizontally, so a box does
+     * not stripe rows of another box beside it at an overlapping height. */
+    if (but.rect.ymin < box_but->rect.ymin - 1.0f || but.rect.ymax > box_but->rect.ymax + 1.0f) {
+      continue;
+    }
+    if (but.rect.xmin < box_but->rect.xmin - 1.0f || but.rect.xmax > box_but->rect.xmax + 1.0f) {
+      continue;
+    }
+
+    rcti band;
+    band.xmin = rect->xmin;
+    band.xmax = rect->xmax;
+    band.ymin = rect->ymin + int((but.rect.ymin - box_but->rect.ymin) * scale_y);
+    band.ymax = rect->ymin + int((but.rect.ymax - box_but->rect.ymin) * scale_y);
+
+    WidgetBase wtb;
+    widget_init(&wtb);
+    wtb.draw_outline = false;
+    wtb.draw_emboss = false;
+    round_box_edges(&wtb, 0, &band, 0.0f);
+    widgetbase_draw(&wtb, &wcol_band);
+  }
+}
+
 static void widget_box(Button *but,
                        uiWidgetColors *wcol,
                        rcti *rect,
@@ -5264,12 +5367,22 @@ static void widget_box(Button *but,
     wcol->inner[3] = but->col[3];
   }
 
-  const float rad = widget_radius_from_zoom(zoom, wcol);
+  /* Flat box (full-width views): fill a square rectangle with no outline or rounded corners, so it
+   * backs the rows with a darker background without looking like an inset, rounded box. */
+  const bool flat = but != nullptr && (but->drawflag & BUT_VIEW_FLAT_BOX);
+  const float rad = flat ? 0.0f : widget_radius_from_zoom(zoom, wcol);
   round_box_edges(&wtb, roundboxalign, rect, rad);
-  wtb.draw_emboss = draw_emboss(but);
+  wtb.draw_outline = !flat;
+  wtb.draw_emboss = flat ? false : draw_emboss(but);
   widgetbase_draw(&wtb, wcol);
 
   copy_v3_v3_uchar(wcol->inner, old_col);
+
+  /* Alternating row backgrounds, drawn over the box background and behind the
+   * row contents (the box button is created before its contents). */
+  if (but != nullptr && (but->drawflag & BUT_VIEW_ALTERNATE_ROWS)) {
+    widget_box_alternate_rows(but, wcol, rect);
+  }
 
   /* Flush the cache so that we don't draw over contents. #125035 */
   GPU_blend(GPU_BLEND_ALPHA);

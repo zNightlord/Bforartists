@@ -253,17 +253,41 @@ OSL::TextureSystem::TextureHandle *OSLRenderServices::get_texture_handle(
 }
 
 OSL::TextureSystem::TextureHandle *OSLRenderServices::get_texture_handle(
-    OSL::ustring filename, OSL::ShadingContext * /*context*/, const OSL::TextureOpt * /*options*/)
+    OSL::ustring filename, OSL::ShadingContext * /*context*/, const OSL::TextureOpt *options)
 {
+  /* Read OSL's standard `"subimage"` option (which accepts either an int index
+   * or a string subimage name, the latter typically "Layer.Pass") so a
+   * hand-written OSL shader can address a specific pass of a multi-layer EXR.
+   * The selection becomes part of the handle key, so distinct (filename,
+   * subimage) tuples get distinct kernel images. */
+  std::string subimage_name;
+  std::string handle_suffix;
+  if (options) {
+    const std::string subimagename = options->subimagename.string();
+    if (!subimagename.empty()) {
+      subimage_name = subimagename;
+      handle_suffix = "?subimagename=" + subimagename;
+    }
+    else if (options->subimage != 0) {
+      /* Integer subimage indices pass straight through to OIIO and aren't
+       * resolved as a name here. */
+      handle_suffix = "?subimage=" + std::to_string(options->subimage);
+    }
+  }
+  const OSL::ustring handle_key = handle_suffix.empty() ?
+                                      filename :
+                                      OSL::ustring(filename.string() + handle_suffix);
+
   /* Note the mutex lock in find_or_insert() is not so bad for performance because
    * this function only gets called once per texture handle to create it, not for
    * every texture access. */
-  auto [it, inserted] = textures.find_or_insert(filename,
+  auto [it, inserted] = textures.find_or_insert(handle_key,
                                                 OSLTextureHandle(OSLTextureHandleType::IMAGE));
 
   if (inserted) {
     /* Add new texture to image manager. */
-    const ImageHandle handle = image_manager->add_image(filename.string(), ImageParams());
+    const ImageHandle handle = image_manager->add_image(
+        filename.string(), ImageParams(), subimage_name);
     OSLTextureHandle *texture_handle = const_cast<OSLTextureHandle *>(&it->second);
     *texture_handle = OSLTextureHandle(handle);
   }

@@ -631,6 +631,12 @@ BaseSocketDeclarationBuilder &BaseSocketDeclarationBuilder::hide_value(bool valu
   return *this;
 }
 
+BaseSocketDeclarationBuilder &BaseSocketDeclarationBuilder::default_value_data(const void *data)
+{
+  decl_base_->default_value_data = data;
+  return *this;
+}
+
 BaseSocketDeclarationBuilder &BaseSocketDeclarationBuilder::multi_input(bool value)
 {
   BLI_assert(this->is_input());

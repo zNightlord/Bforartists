@@ -80,6 +80,9 @@ struct wmWindow;
 namespace ed::asset {
 struct AssetFilterSettings;
 }
+namespace nodes {
+class PanelDeclaration;
+}
 
 namespace ui {
 class AbstractView;
@@ -519,6 +522,17 @@ enum {
 
   /** Draw icon inverted to indicate a special state. */
   BUT_ICON_INVERT = 1 << 27,
+
+  /** Box button draws alternating row backgrounds for the rows it contains. */
+  BUT_VIEW_ALTERNATE_ROWS = 1 << 28,
+  /** Row button at an odd position; the enclosing box draws a stripe behind it. */
+  BUT_ALTERNATE_ROW = 1 << 29,
+  /**
+   * Box button drawn flat: its background fills a square rectangle with no outline or rounded
+   * corners. Used for full-width views that should back their rows (darker background, alternating
+   * backgrounds and full-width highlights) without looking like an inset, rounded box.
+   */
+  BUT_VIEW_FLAT_BOX = 1 << 30,
 };
 
 enum class ButPointerType : uint8_t {
@@ -2627,6 +2641,14 @@ void uiTemplateImageStereo3d(ui::Layout *layout, PointerRNA *stereo3d_format_ptr
 void uiTemplateImageViews(ui::Layout *layout, PointerRNA *imaptr);
 void uiTemplateImageFormatViews(ui::Layout *layout, PointerRNA *imfptr, PointerRNA *ptr);
 void uiTemplateImageLayers(ui::Layout *layout, bContext *C, Image *ima, ImageUser *iuser);
+/**
+ * Lists to add, remove, rename and select the layers and passes of an image,
+ * the selection being the one \a iuserptr reads.
+ */
+void uiTemplateImageCatalog(ui::Layout *layout,
+                            bContext *C,
+                            PointerRNA *imaptr,
+                            PointerRNA *iuserptr);
 void uiTemplateImageInfo(ui::Layout *layout, bContext *C, Image *ima, ImageUser *iuser);
 
 namespace ui {
@@ -2775,6 +2797,7 @@ void template_light_linking_collection(
 
 void template_bone_collection_tree(Layout *layout, bContext *C);
 void template_grease_pencil_layer_tree(Layout *layout, bContext *C);
+void template_shader_layers(Layout *layout, bContext *C, PointerRNA *ptr);
 
 void template_tree_interface(Layout *layout, const bContext *C, PointerRNA *ptr);
 /**
@@ -2786,6 +2809,19 @@ void template_node_inputs(Layout *layout, bContext *C, PointerRNA *ptr);
  * Draw the node group inputs for a compositor effect strip.
  */
 void template_compositor_strip_inputs(Layout *layout, bContext *C, PointerRNA *ptr);
+
+/**
+ * Draw the input sockets of a node declaration panel #panel_decl (recursively, including nested
+ * panels and layout items), calling #draw_socket for each input socket so callers can customize
+ * how individual sockets are drawn. Used by #template_node_inputs and the Texture Layers panel.
+ */
+void draw_node_inputs_recursive(
+    bContext *C,
+    Layout &layout,
+    bNode &node,
+    PointerRNA *node_ptr,
+    const blender::nodes::PanelDeclaration &panel_decl,
+    FunctionRef<void(Layout &layout, bNodeSocket &socket)> draw_socket);
 
 void template_collection_importer(Layout *layout, bContext *C);
 void template_collection_exporters(Layout *layout, bContext *C);

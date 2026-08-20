@@ -1842,9 +1842,11 @@ class NodeTreeMainUpdater {
           }
 
           /* The Image Texture node has a special case. The behavior of the color output changes
-           * depending on whether the Alpha output is linked. */
-          if (node.is_type("ShaderNodeTexImage"_ustr) && socket.index() == 0) {
-            BLI_assert(STREQ(socket.name, "Color"));
+           * depending on whether the Alpha output is linked. This only applies to the standard
+           * Color/Alpha output pair; a multi-layer image declares per-pass outputs instead. */
+          if (node.is_type("ShaderNodeTexImage"_ustr) && socket.index() == 0 &&
+              STREQ(socket.name, "Color"))
+          {
             const bNodeSocket &alpha_socket = node.output_socket(1);
             BLI_assert(STREQ(alpha_socket.name, "Alpha"));
             if (alpha_socket.is_directly_linked()) {

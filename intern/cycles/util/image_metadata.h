@@ -28,6 +28,10 @@ class ImageMetaData {
   int64_t width = 0, height = 0;
   ImageDataType type = IMAGE_DATA_NUM_TYPES;
 
+  /* OpenImageIO subimage to read, resolved from a subimage name by
+   * oiio_load_metadata. A multi-layer EXR exposes one subimage per layer/pass. */
+  int subimage = 0;
+
   /* Input colorspace hints. */
   string colorspace_file_hint;
   const char *colorspace_file_format = "";
@@ -71,8 +75,15 @@ class ImageMetaData {
   size_t memory_size() const;
   size_t pixel_memory_size() const;
 
-  /* OpenImageIO metadata and pixel loading. */
-  bool oiio_load_metadata(OIIO::string_view filepath, OIIO::ImageSpec *r_spec = nullptr);
+  /* OpenImageIO metadata and pixel loading.
+   *
+   * A non-empty subimage_name selects one OpenImageIO subimage (a layer/pass of
+   * a multi-layer EXR); the matching subimage is resolved against the source
+   * file's `name`/`oiio:subimagename` attributes, stored on #subimage, and used
+   * by #oiio_load_pixels. An unknown name falls back to subimage 0. */
+  bool oiio_load_metadata(OIIO::string_view filepath,
+                          OIIO::string_view subimage_name = "",
+                          OIIO::ImageSpec *r_spec = nullptr);
   bool oiio_load_pixels(OIIO::string_view filepath, void *pixels, const bool flip_y = true) const;
 
   /* Change data type to float. */

@@ -1151,81 +1151,8 @@ static void pixel_subtype_forward_compat(BlendWriter *writer, const bNodeSocket 
 
 static void write_node_socket_default_value(BlendWriter *writer, const bNodeSocket *sock)
 {
-  if (sock->default_value == nullptr) {
-    return;
-  }
-
-  switch (sock->type) {
-    case SOCK_FLOAT:
-      writer->write_struct_cast<bNodeSocketValueFloat>(sock->default_value);
-      break;
-    case SOCK_VECTOR:
-      writer->write_struct_cast<bNodeSocketValueVector>(sock->default_value);
-      break;
-    case SOCK_RGBA:
-      writer->write_struct_cast<bNodeSocketValueRGBA>(sock->default_value);
-      break;
-    case SOCK_BOOLEAN:
-      writer->write_struct_cast<bNodeSocketValueBoolean>(sock->default_value);
-      break;
-    case SOCK_INT:
-      writer->write_struct_cast<bNodeSocketValueInt>(sock->default_value);
-      break;
-    case SOCK_STRING:
-      writer->write_struct_cast<bNodeSocketValueString>(sock->default_value);
-      break;
-    case SOCK_OBJECT:
-      writer->write_struct_cast<bNodeSocketValueObject>(sock->default_value);
-      break;
-    case SOCK_IMAGE:
-      writer->write_struct_cast<bNodeSocketValueImage>(sock->default_value);
-      break;
-    case SOCK_COLLECTION:
-      writer->write_struct_cast<bNodeSocketValueCollection>(sock->default_value);
-      break;
-    case SOCK_TEXTURE:
-      writer->write_struct_cast<bNodeSocketValueTexture>(sock->default_value);
-      break;
-    case SOCK_MATERIAL:
-      writer->write_struct_cast<bNodeSocketValueMaterial>(sock->default_value);
-      break;
-    case SOCK_FONT:
-      writer->write_struct_cast<bNodeSocketValueFont>(sock->default_value);
-      break;
-    case SOCK_SCENE:
-      writer->write_struct_cast<bNodeSocketValueScene>(sock->default_value);
-      break;
-    case SOCK_TEXT_ID:
-      writer->write_struct_cast<bNodeSocketValueText>(sock->default_value);
-      break;
-    case SOCK_MASK:
-      writer->write_struct_cast<bNodeSocketValueMask>(sock->default_value);
-      break;
-    case SOCK_SOUND:
-      writer->write_struct_cast<bNodeSocketValueSound>(sock->default_value);
-      break;
-    case SOCK_ROTATION:
-      writer->write_struct_cast<bNodeSocketValueRotation>(sock->default_value);
-      break;
-    case SOCK_MENU:
-      writer->write_struct_cast<bNodeSocketValueMenu>(sock->default_value);
-      break;
-    case SOCK_INT_VECTOR:
-      writer->write_struct_cast<bNodeSocketValueIntVector>(sock->default_value);
-      break;
-    case SOCK_MATRIX:
-      /* Matrix sockets currently have no default value. */
-      break;
-    case SOCK_CUSTOM:
-      /* Custom node sockets where default_value is defined use custom properties for storage. */
-      break;
-    case SOCK_SHADER:
-    case SOCK_GEOMETRY:
-    case SOCK_BUNDLE:
-    case SOCK_CLOSURE:
-      BLI_assert_unreachable();
-      break;
-  }
+  node_socket_blend_write_default_value_data(
+      writer, eNodeSocketDatatype(sock->type), sock->default_value);
 }
 
 static void write_node_socket(BlendWriter *writer, const bNodeSocket *sock)
@@ -1631,75 +1558,8 @@ static void direct_link_node_socket_default_value(BlendDataReader *reader, bNode
       versioning_internal::MIN_BLENDFILE_VERSION_FOR_MODERN_NODE_SOCKET_DEFAULT_VALUE_READING)
   {
     /* Modern, standard DNA-typed reading of sockets default values. */
-    switch (sock->type) {
-      case SOCK_FLOAT:
-        BLO_read_struct(reader, bNodeSocketValueFloat, &sock->default_value);
-        break;
-      case SOCK_VECTOR:
-        BLO_read_struct(reader, bNodeSocketValueVector, &sock->default_value);
-        break;
-      case SOCK_RGBA:
-        BLO_read_struct(reader, bNodeSocketValueRGBA, &sock->default_value);
-        break;
-      case SOCK_BOOLEAN:
-        BLO_read_struct(reader, bNodeSocketValueBoolean, &sock->default_value);
-        break;
-      case SOCK_INT:
-        BLO_read_struct(reader, bNodeSocketValueInt, &sock->default_value);
-        break;
-      case SOCK_STRING:
-        BLO_read_struct(reader, bNodeSocketValueString, &sock->default_value);
-        break;
-      case SOCK_OBJECT:
-        BLO_read_struct(reader, bNodeSocketValueObject, &sock->default_value);
-        break;
-      case SOCK_IMAGE:
-        BLO_read_struct(reader, bNodeSocketValueImage, &sock->default_value);
-        break;
-      case SOCK_COLLECTION:
-        BLO_read_struct(reader, bNodeSocketValueCollection, &sock->default_value);
-        break;
-      case SOCK_TEXTURE:
-        BLO_read_struct(reader, bNodeSocketValueTexture, &sock->default_value);
-        break;
-      case SOCK_MATERIAL:
-        BLO_read_struct(reader, bNodeSocketValueMaterial, &sock->default_value);
-        break;
-      case SOCK_FONT:
-        BLO_read_struct(reader, bNodeSocketValueFont, &sock->default_value);
-        break;
-      case SOCK_SCENE:
-        BLO_read_struct(reader, bNodeSocketValueScene, &sock->default_value);
-        break;
-      case SOCK_TEXT_ID:
-        BLO_read_struct(reader, bNodeSocketValueText, &sock->default_value);
-        break;
-      case SOCK_MASK:
-        BLO_read_struct(reader, bNodeSocketValueMask, &sock->default_value);
-        break;
-      case SOCK_SOUND:
-        BLO_read_struct(reader, bNodeSocketValueSound, &sock->default_value);
-        break;
-      case SOCK_ROTATION:
-        BLO_read_struct(reader, bNodeSocketValueRotation, &sock->default_value);
-        break;
-      case SOCK_MENU:
-        BLO_read_struct(reader, bNodeSocketValueMenu, &sock->default_value);
-        break;
-      case SOCK_INT_VECTOR:
-        BLO_read_struct(reader, bNodeSocketValueIntVector, &sock->default_value);
-        break;
-      case SOCK_MATRIX:
-        /* Matrix sockets currently have no default value. */
-      case SOCK_CUSTOM:
-        /* Custom node sockets where default_value is defined use custom properties for storage. */
-      case SOCK_SHADER:
-      case SOCK_GEOMETRY:
-      case SOCK_BUNDLE:
-      case SOCK_CLOSURE:
-        BLI_assert_unreachable();
-        break;
-    }
+    node_socket_blend_read_default_value_data(
+        reader, eNodeSocketDatatype(sock->type), &sock->default_value);
   }
   else {
     /* Legacy-compatible, raw-buffer-based reading of sockets default values. */
@@ -2471,6 +2331,12 @@ void node_update_asset_metadata(bNodeTree &node_tree)
     auto property = idprop::create("compositor_node_asset_traits_flag",
                                    node_tree.compositor_node_asset_traits->flag);
     BKE_asset_metadata_idprop_ensure(asset_data, property.release());
+  }
+  if (node_tree.type == NTREE_SHADER) {
+    BKE_asset_metadata_idprop_ensure(
+        asset_data, idprop::create("shader_usage", node_tree.shader_usage).release());
+    BKE_asset_metadata_idprop_ensure(
+        asset_data, idprop::create("mask_blend_type", node_tree.default_mask_blend).release());
   }
 }
 
@@ -4041,6 +3907,47 @@ bNode *node_find_node_by_name(bNodeTree &ntree, const StringRefNull name)
       BLI_findstring(&ntree.nodes, name.c_str(), offsetof(bNode, name)));
 }
 
+bNode *node_find_node_by_identifier(bNodeTree &ntree, const int32_t identifier)
+{
+  for (bNode &node : ntree.nodes) {
+    if (node.identifier == identifier) {
+      return &node;
+    }
+  }
+  return nullptr;
+}
+
+const bNodeLink *node_find_incoming_link(const bNodeTree &ntree, const bNodeSocket &socket)
+{
+  for (const bNodeLink &link : ntree.links) {
+    if (link.tosock == &socket) {
+      return &link;
+    }
+  }
+  return nullptr;
+}
+
+bNode *node_find_source_node(const bNodeTree &ntree, const bNodeSocket &socket)
+{
+  const bNodeSocket *current = &socket;
+  /* Guard against reroute cycles, which can exist as invalid links. */
+  Set<const bNode *> visited;
+  while (const bNodeLink *link = node_find_incoming_link(ntree, *current)) {
+    bNode *source = link->fromnode;
+    if (source == nullptr || !source->is_reroute()) {
+      return source;
+    }
+    if (!visited.add(source)) {
+      return nullptr;
+    }
+    current = static_cast<const bNodeSocket *>(source->inputs.first);
+    if (current == nullptr) {
+      return nullptr;
+    }
+  }
+  return nullptr;
+}
+
 bNode &node_find_node(bNodeTree &ntree, bNodeSocket &socket)
 {
   ntree.ensure_topology_cache();
@@ -5485,6 +5392,24 @@ void node_set_active(bNodeTree &ntree, bNode &node)
   SET_FLAG_FROM_TEST(flags_to_set, is_texture_class, NODE_ACTIVE_TEXTURE);
 
   /* Make sure only one node is active per node tree. */
+  for (bNode *tnode : ntree.all_nodes()) {
+    tnode->flag &= ~flags_to_set;
+  }
+  node.flag |= flags_to_set;
+}
+
+void node_set_active_texture(bNodeTree &ntree, bNode &node)
+{
+  const bool is_paint_canvas = node_supports_active_flag(node, NODE_ACTIVE_PAINT_CANVAS);
+  const bool is_texture_class = node_supports_active_flag(node, NODE_ACTIVE_TEXTURE);
+  eNode_Flag flags_to_set = eNode_Flag(0);
+  SET_FLAG_FROM_TEST(flags_to_set, is_paint_canvas, NODE_ACTIVE_PAINT_CANVAS);
+  SET_FLAG_FROM_TEST(flags_to_set, is_texture_class, NODE_ACTIVE_TEXTURE);
+  if (flags_to_set == 0) {
+    return;
+  }
+
+  /* Make sure only one node holds these flags per node tree. */
   for (bNode *tnode : ntree.all_nodes()) {
     tnode->flag &= ~flags_to_set;
   }

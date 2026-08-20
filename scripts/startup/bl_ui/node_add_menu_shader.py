@@ -397,6 +397,17 @@ class NODE_MT_shader_node_texture_base(node_add_menu.NodeMenu):
         self.draw_assets_for_catalog(layout, self.bl_label)
 
 
+class NODE_MT_shader_node_texture_bundle_base(node_add_menu.NodeMenu):
+    bl_label = "Texture Bundle"
+
+    def draw(self, _context):
+        layout = self.layout
+
+        self.node_operator(layout, "ShaderNodeTextureLayerStack")
+
+        self.draw_assets_for_catalog(layout, self.bl_label)
+
+
 class NODE_MT_shader_node_vector_base(node_add_menu.NodeMenu):
     bl_label = "Vector"
     menu_path = "Utilities/Vector"
@@ -509,7 +520,6 @@ class NODE_MT_shader_node_all_base(node_add_menu.NodeMenu):
     # & Swap menus can share the same layout while each using their
     # corresponding menus
     def draw(self, context):
-        del context
         layout = self.layout
         self.draw_menu(layout, "Input")
         self.draw_menu(layout, "Output")
@@ -520,6 +530,8 @@ class NODE_MT_shader_node_all_base(node_add_menu.NodeMenu):
         layout.separator()
         self.draw_menu(layout, "Color")
         self.draw_menu(layout, "Texture")
+        if context.preferences.experimental.use_texture_layers:
+            self.draw_menu(layout, "Texture Bundle")
         self.draw_menu(layout, "Utilities")
         layout.separator()
         self.draw_root_assets(layout)
@@ -536,6 +548,7 @@ add_menus = {
     "NODE_MT_category_shader_color": NODE_MT_shader_node_color_base,
     "NODE_MT_category_shader_shader": NODE_MT_shader_node_shader_base,
     "NODE_MT_category_shader_texture": NODE_MT_shader_node_texture_base,
+    "NODE_MT_category_shader_texture_bundle": NODE_MT_shader_node_texture_bundle_base,
     "NODE_MT_category_shader_displacement": NODE_MT_shader_node_displacement_base,
     "NODE_MT_category_shader_vector": NODE_MT_shader_node_vector_base,
     "NODE_MT_category_shader_math": NODE_MT_shader_node_math_base,
@@ -557,6 +570,7 @@ swap_menus = {
     "NODE_MT_shader_node_color_swap": NODE_MT_shader_node_color_base,
     "NODE_MT_shader_node_shader_swap": NODE_MT_shader_node_shader_base,
     "NODE_MT_shader_node_texture_swap": NODE_MT_shader_node_texture_base,
+    "NODE_MT_shader_node_texture_bundle_swap": NODE_MT_shader_node_texture_bundle_base,
     "NODE_MT_shader_node_displacement_swap": NODE_MT_shader_node_displacement_base,
     "NODE_MT_shader_node_vector_swap": NODE_MT_shader_node_vector_base,
     "NODE_MT_shader_node_math_swap": NODE_MT_shader_node_math_base,

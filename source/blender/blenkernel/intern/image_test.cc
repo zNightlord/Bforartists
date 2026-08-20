@@ -220,7 +220,7 @@ TEST_F(UdimTest, image_set_filepath_from_tile_number)
 class ImageTest : public BlenderGTestBase {
   Main *bmain_ = nullptr;
 
-  RenderResult *get_image_render_result(Image &image)
+  const ListBaseT<ImageLayer> *get_image_layers(Image &image)
   {
     ImageUser iuser{};
     BKE_imageuser_default(&iuser);
@@ -228,7 +228,7 @@ class ImageTest : public BlenderGTestBase {
     ImBuf *temp_ibuf = BKE_image_acquire_ibuf(&image, &iuser, nullptr);
     BKE_image_release_ibuf(&image, temp_ibuf, nullptr);
 
-    return image.rr;
+    return BKE_image_has_layer_catalog(&image) ? &image.layers : nullptr;
   }
 
  protected:
@@ -252,14 +252,14 @@ class ImageTest : public BlenderGTestBase {
 
   Vector<std::string> get_image_layer_names(Image &image)
   {
-    RenderResult *render_result = get_image_render_result(image);
-    if (!render_result) {
-      ADD_FAILURE() << "Missing image RenderResult";
+    const ListBaseT<ImageLayer> *layers = get_image_layers(image);
+    if (!layers) {
+      ADD_FAILURE() << "Missing image layer catalog";
       return {};
     }
 
     Vector<std::string> layer_names;
-    for (const RenderLayer &layer : render_result->layers) {
+    for (const ImageLayer &layer : *layers) {
       layer_names.append(layer.name);
     }
 
@@ -268,16 +268,16 @@ class ImageTest : public BlenderGTestBase {
 
   Vector<std::string> get_image_pass_names_for_layer(Image &image, StringRefNull layer_name)
   {
-    RenderResult *render_result = get_image_render_result(image);
-    if (!render_result) {
-      ADD_FAILURE() << "Missing image RenderResult";
+    const ListBaseT<ImageLayer> *layers = get_image_layers(image);
+    if (!layers) {
+      ADD_FAILURE() << "Missing image layer catalog";
       return {};
     }
 
-    for (const RenderLayer &layer : render_result->layers) {
+    for (const ImageLayer &layer : *layers) {
       if (layer.name == layer_name) {
         Vector<std::string> pass_names;
-        for (const RenderPass &pass : layer.passes) {
+        for (const ImagePass &pass : layer.passes) {
           pass_names.append(pass.name);
         }
         return pass_names;
@@ -319,8 +319,9 @@ TEST_F(ImageTest, multilayer)
   }
 
   /* Multi-layer file from another DCC originally reported as #124217.
-   * The expected passes are obtained from Blender 4.2 Beta f069692caf8, with the
-   * !118867 reverted. File test.exr from the report was used. */
+   * Passes follow the layer/pass order stored in the EXR file itself, since the
+   * #Image.layers catalog is built directly from the file (the passes of an
+   * arbitrary multi-layer EXR need not map to render passes). */
   {
     Image *image = load_image("multilayer" SEP_STR "124217.exr");
     ASSERT_NE(image, nullptr);
@@ -329,9 +330,9 @@ TEST_F(ImageTest, multilayer)
     EXPECT_THAT(get_image_pass_names_for_layer(*image, ""),
                 Pointwise(Eq(),
                           {"Combined",
-                           "Depth",
                            "AO",
                            "ID",
+                           "Depth",
                            "crypto_material",
                            "crypto_material00",
                            "crypto_material01",
@@ -355,15 +356,14 @@ TEST_F(ImageTest, multilayer)
   }
 
   /* Multi-part file from another DCC, originally reported as #101227.
-   * The expected passes are obtained from Blender 4.2 Beta f069692caf8, with the
-   * !118867 landed. */
+   * Passes follow the EXR file's own part order (see #124217 note above). */
   {
     Image *image = load_image("multilayer" SEP_STR "101227.exr");
     ASSERT_NE(image, nullptr);
 
     EXPECT_THAT(get_image_layer_names(*image), Pointwise(Eq(), {""}));
     EXPECT_THAT(get_image_pass_names_for_layer(*image, ""),
-                Pointwise(Eq(), {"C", "N", "albedo", "depth"}));
+                Pointwise(Eq(), {"C", "albedo", "depth", "N"}));
   }
 }
 

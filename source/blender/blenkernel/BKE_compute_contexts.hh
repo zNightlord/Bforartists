@@ -214,6 +214,43 @@ class EvaluateClosureComputeContext : public NodeComputeContext {
   bool is_recursive() const;
 };
 
+/**
+ * Evaluation of a closure-typed layer of a Texture Layer Stack shader node
+ * (the node id is the stack node's). Unlike #EvaluateClosureComputeContext,
+ * whose hash only covers the evaluating node, the hash includes the layer
+ * item, so multiple closure layers on one stack node get distinct contexts.
+ *
+ * Beware that this derives from #EvaluateClosureComputeContext, so a
+ * dynamic_cast to that type also matches it. Code that
+ * serializes and later reconstructs a context path by that cast (viewer paths,
+ * modifier evaluation, evaluation logging) would rebuild it as a plain
+ * #EvaluateClosureComputeContext, dropping #item_identifier_ and changing its
+ * hash. That is currently unreachable (the only producer is the shader tree),
+ * but reconstruction must be taught about this type before it is used anywhere
+ * those round-trips apply.
+ */
+class ClosureLayerComputeContext : public EvaluateClosureComputeContext {
+ private:
+  int item_identifier_;
+
+ public:
+  ClosureLayerComputeContext(
+      const ComputeContext *parent,
+      int32_t node_id,
+      int item_identifier,
+      const bNodeTree *tree = nullptr,
+      const std::optional<nodes::ClosureSourceLocation> &closure_source_location = std::nullopt);
+
+  int item_identifier() const
+  {
+    return item_identifier_;
+  }
+
+ private:
+  ComputeContextHash compute_hash() const override;
+  void print_current_in_line(std::ostream &stream) const override;
+};
+
 class ClosureToListComputeContext : public NodeComputeContext {
  private:
   int32_t node_id_;

@@ -127,6 +127,8 @@ struct bContext;
 struct bContextStore;
 struct GreasePencil;
 struct GreasePencilLayerTreeNode;
+struct bNode;
+struct bNodeTree;
 struct ReportList;
 struct wmDrag;
 struct wmDropBox;
@@ -1296,6 +1298,7 @@ enum eWM_DragDataType : int8_t {
   WM_DRAG_NODE_TREE_INTERFACE,
   WM_DRAG_BONE_COLLECTION,
   WM_DRAG_SHAPE_KEY,
+  WM_DRAG_TEXTURE_LAYER,
 };
 
 enum eWM_DragFlags {
@@ -1352,6 +1355,12 @@ struct wmDragPath {
 struct wmDragGreasePencilLayer {
   GreasePencil *grease_pencil;
   GreasePencilLayerTreeNode *node;
+};
+
+struct wmDragTextureLayer {
+  bNodeTree *ntree;
+  bNode *stack_node;
+  int item_index;
 };
 
 using WMDropboxTooltipFunc = std::string (*)(bContext *C,

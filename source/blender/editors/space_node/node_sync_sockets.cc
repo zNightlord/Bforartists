@@ -31,8 +31,10 @@ namespace blender::ed::space_node {
 
 static Vector<bNode *> get_nodes_to_sync(bContext &C, PointerRNA *ptr)
 {
-  SpaceNode &snode = *CTX_wm_space_node(&C);
-  if (!snode.edittree) {
+  /* The operator button may be drawn (and its tooltip queried) outside the
+   * node editor, e.g. in the Properties editor. */
+  SpaceNode *snode = CTX_wm_space_node(&C);
+  if (!snode || !snode->edittree) {
     return {};
   }
 
@@ -43,7 +45,7 @@ static Vector<bNode *> get_nodes_to_sync(bContext &C, PointerRNA *ptr)
   }
 
   Vector<bNode *> nodes_to_sync;
-  bNodeTree &tree = *snode.edittree;
+  bNodeTree &tree = *snode->edittree;
   for (bNode *node : tree.all_nodes()) {
     if (node_name.has_value()) {
       if (node->name != node_name) {

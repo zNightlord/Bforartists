@@ -207,6 +207,13 @@ class SocketDeclaration : public ItemDeclaration {
 
   StructureType structure_type = StructureType::Single;
 
+  /** When set, the built socket's default value and UI (subtype, soft range) are taken from this
+   * raw socket value struct (for #socket_type), overriding the declaration's own typed default.
+   * Lets a node store its default value generically (e.g. Combine Bundle items via socket_data)
+   * instead of a per-type declaration. Only valid for the lifetime of the declaration; the user's
+   * edited value on an existing socket is preserved (only the UI is refreshed). */
+  const void *default_value_data = nullptr;
+
  private:
   CompositorInputRealizationMode compositor_realization_mode_ =
       CompositorInputRealizationMode::OperationDomain;
@@ -300,6 +307,11 @@ class BaseSocketDeclarationBuilder {
   BaseSocketDeclarationBuilder &optional_label(bool value = true);
 
   BaseSocketDeclarationBuilder &hide_value(bool value = true);
+
+  /** Take the socket's default value and UI from #data (a socket value struct for the socket type)
+   * rather than the declaration's own typed default. See #SocketDeclaration::default_value_data.
+   */
+  BaseSocketDeclarationBuilder &default_value_data(const void *data);
 
   BaseSocketDeclarationBuilder &multi_input(bool value = true);
 

@@ -7,6 +7,7 @@ set(INC
   ..
   include
   ../intern
+  ../shader/include
   ../../editors/include
   ../../compositor
   ../../makesrna

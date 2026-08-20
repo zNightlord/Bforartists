@@ -261,12 +261,6 @@ bool RE_HasSingleLayer(Render *re)
   return (re->r.scemode & R_SINGLE_LAYER);
 }
 
-RenderResult *RE_MultilayerConvert(
-    ExrReadHandle *exrhandle, const char *colorspace, bool predivide, int rectx, int recty)
-{
-  return render_result_new_from_exr(exrhandle, colorspace, predivide, rectx, recty);
-}
-
 RenderLayer *render_get_single_layer(Render *re, RenderResult *rr)
 {
   if (re->single_view_layer[0]) {
@@ -2856,8 +2850,6 @@ RenderPass *RE_create_gp_pass(RenderResult *rr, const char *layername, const cha
     rl = MEM_new<RenderLayer>(layername);
     BLI_addtail(&rr->layers, rl);
     STRNCPY(rl->name, layername);
-    rl->layflag = SCE_LAY_SOLID;
-    rl->passflag = SCE_PASS_COMBINED;
     rl->rectx = rr->rectx;
     rl->recty = rr->recty;
   }

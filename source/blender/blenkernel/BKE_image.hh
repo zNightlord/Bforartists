@@ -12,6 +12,7 @@
 #include "BLI_compiler_attrs.hh"
 #include "BLI_function_ref.hh"
 #include "BLI_mutex.hh"
+#include "BLI_span.hh"
 #include "BLI_string_ref.hh"
 
 #include "IMB_imbuf_enums.h"
@@ -38,6 +39,8 @@ struct ImBufCache;
 struct MovieReader;
 struct Image;
 struct ImageFormatData;
+struct ImageLayer;
+struct ImagePass;
 struct ImagePool;
 struct ImageTile;
 struct ImbFormatOptions;
@@ -71,6 +74,42 @@ struct ImageRuntime {
 
   float view_offset[2] = {};
   float view_zoom = 1.0f;
+
+  /* Loaded multi-layer EXR catalog. The Image.layers / Image.views catalog is built from the
+   * file header once; the per-frame, per-pass pixel buffers live in #cache, each carrying its
+   * own (implicitly shared) header metadata. The catalog is the only catalog-level state with
+   * no per-buffer home. */
+
+  /**
+   * True once the catalog has been built from the file; cleared on reload to
+   * force a rebuild. This alone gates the (single, frame-independent) catalog
+   * build — it is not rebuilt per frame.
+   */
+  bool multilayer_catalog_loaded = false;
+  /**
+   * Frame the catalog was built from (sequence EXRs), recorded for diagnostics.
+   * It does *not* gate the per-frame pixel buffers, which the #cache holds for
+   * multiple frames at once.
+   */
+  int multilayer_catalog_framenr = 0;
+
+  /* Render-result viewer catalog copy. When Image.layers holds a copy of a
+   * RenderResult's catalog, this records the #RenderResult::catalog_version it was copied
+   * from, so a stale copy can be detected and re-synced. catalog_version is a process-global
+   * monotonic stamp, so it uniquely identifies the catalog state. */
+  int synced_catalog_version = 0;
+  /** Name of the synthetic combined layer at the last sync ("" if none); part of the
+   * staleness key because the combined buffer is not tracked by catalog_version. */
+  char synced_combined_name[/*MAX_NAME*/ 64] = "";
+
+  /**
+   * The layer/pass catalog of a file-backed multi-layer image was edited and is
+   * no longer what its file holds. Runtime only: like a painted pixel buffer,
+   * the edit is persisted by saving or packing the image, not by the blend file.
+   */
+  bool catalog_dirty = false;
+  /** Pixel size the catalog's passes were read at, for buffers with no file data. */
+  int catalog_size[2] = {0, 0};
 };
 
 }  // namespace bke
@@ -115,14 +154,15 @@ StampData *BKE_stamp_info_from_scene_static(const Scene *scene);
 bool BKE_stamp_is_known_field(const char *field_name);
 void BKE_imbuf_stamp_info(const RenderResult *rr, ImBuf *ibuf);
 void BKE_stamp_info_from_imbuf(RenderResult *rr, ImBuf *ibuf);
+/**
+ * Allocate stamp data and fill it from an image buffer's metadata. The caller is
+ * responsible for freeing it with #BKE_stamp_data_free.
+ */
+StampData *BKE_stamp_info_from_imbuf_alloc(ImBuf *ibuf);
 void BKE_stamp_info_callback(void *data,
                              StampData *stamp_data,
                              StampCallback callback,
                              bool noskip);
-void BKE_image_multilayer_stamp_info_callback(void *data,
-                                              const Image &image,
-                                              StampCallback callback,
-                                              bool noskip);
 void BKE_render_result_stamp_data(RenderResult *rr, const char *key, const char *value);
 StampData *BKE_stamp_data_copy(const StampData *stamp_data);
 void BKE_stamp_data_free(StampData *stamp_data);
@@ -169,7 +209,6 @@ MovieReader *openanim_noload(const char *filepath,
 /* should be used in conjunction with an ID * to Image. */
 struct ImageUser;
 struct RenderData;
-struct RenderPass;
 struct RenderResult;
 
 /* signals */
@@ -287,6 +326,30 @@ Image *BKE_image_add_generated(Main *bmain,
                                bool stereo3d,
                                bool is_data,
                                bool tiled);
+
+/** Channel layout and initial fill of one pass of a generated multi-layer image. */
+struct ImageGeneratedPass {
+  StringRef name;
+  /** Channel IDs, e.g. "RGBA" or "XYZ". */
+  StringRef chan_id;
+  int channels_num = 0;
+  /** Fill color of the pass's generated buffer, in the image's colorspace
+   * (typically scene linear; no sRGB conversion is applied on fill). */
+  float color[4] = {0.0f, 0.0f, 0.0f, 1.0f};
+};
+
+/**
+ * Adds a new generated multi-layer image block: a single unnamed layer with the
+ * given passes. The per-pass pixel buffers are created on demand from the
+ * generation settings (a blank 32-bit float fill of each pass's own color), so
+ * each pass is paintable like any generated image. The pass list is authored
+ * user data, saved with the blend file.
+ */
+Image *BKE_image_add_generated_multilayer(Main *bmain,
+                                          unsigned int width,
+                                          unsigned int height,
+                                          const char *name,
+                                          Span<ImageGeneratedPass> passes);
 /**
  * Create an image from ibuf. The reference-count of ibuf is increased,
  * caller should take care to drop its reference by calling #IMB_freeImBuf if needed.
@@ -336,11 +399,18 @@ int BKE_image_user_frame_get(const ImageUser *iuser, int cfra, bool *r_is_in_ran
  */
 bool BKE_image_user_match(const ImageUser &a, const ImageUser &b);
 void BKE_image_user_file_path(const ImageUser *iuser, const Image *ima, char *filepath);
+/**
+ * The file path an #ImageUser reads from, made absolute. Each token of the
+ * image's path is substituted by what the user selects only when its
+ * `resolve_` argument is true; keeping a token lets the caller expand that axis
+ * itself, e.g. to write every UDIM tile from one pattern.
+ */
 void BKE_image_user_file_path_ex(const Main *bmain,
                                  const ImageUser *iuser,
                                  const Image *ima,
                                  char *filepath,
                                  const bool resolve_udim,
+                                 const bool resolve_layer_pass,
                                  const bool resolve_multiview);
 void BKE_image_editors_update_frame(const Main *bmain, int cfra);
 
@@ -351,15 +421,125 @@ bool BKE_image_user_id_has_animation(ID *id);
 void BKE_image_user_id_eval_animation(Depsgraph *depsgraph, ID *id);
 
 /**
- * Sets index offset for multi-layer files and because rendered results use fake layer/passes,
- * don't correct for wrong indices here.
+ * Resolve an #ImageUser's selection against an image. The stored layer/pass
+ * *names* are authoritative; the view is selected by its integer index (views
+ * are positional). This is the canonical way to bind a selection. For a
+ * multi-layer image (a loaded multi-layer EXR or a render-result viewer) the
+ * layer/pass names are resolved against the #Image.layers catalog and their
+ * integer indices re-synced from them; for any other image only the view is
+ * resolved.
+ *
+ * #BKE_image_acquire_ibuf resolves internally, so most callers only need to set
+ * the layer/pass names (#ImageUser.layer_name / #ImageUser.pass_name) and
+ * acquire. Call this directly to revalidate a selection without acquiring, e.g.
+ * before drawing the layer/pass menus.
  */
-RenderPass *BKE_image_multilayer_index(RenderResult *rr, ImageUser *iuser);
+void BKE_image_user_resolve_from_names(const Image *ima, ImageUser *iuser);
 
 /**
- * Sets index offset for multi-view files.
+ * Resolve an #ImageUser's selection from its integer layer/pass/view *indices*,
+ * overwriting the name-based selection from them. This is the positional /
+ * legacy-input adapter — for the image-editor menus and node RNA enums, which
+ * supply an index from a positional widget, and as the old-file fallback before
+ * names existed. New code should prefer name-based selection (set
+ * #ImageUser.layer_name / #ImageUser.pass_name and #BKE_image_user_resolve_from_names).
  */
-void BKE_image_multiview_index(const Image *ima, ImageUser *iuser);
+void BKE_image_user_resolve_from_index(const Image *ima, ImageUser *iuser);
+
+/**
+ * Whether the image exposes a layer/pass catalog on #Image.layers to read: a
+ * loaded multi-layer EXR, or a render-result viewer whose catalog is the synced
+ * copy of the render result.
+ */
+bool BKE_image_has_layer_catalog(const Image *ima);
+
+/**
+ * Whether the layer/pass catalog on #Image.layers is authored user data (a
+ * generated multi-layer image, see #BKE_image_add_generated_multilayer) rather
+ * than a mirror of a file or render result.
+ */
+bool BKE_image_has_authored_catalog(const Image *ima);
+
+/**
+ * Whether the layer/pass catalog on #Image.layers has meaningful layer names to
+ * show in a layer menu: more than one layer, or a single layer with a non-empty
+ * name. A single unnamed layer (a bare multi-layer EXR) has nothing to browse.
+ */
+bool BKE_image_layers_have_name(const Image *ima);
+
+/**
+ * The catalog #ImageLayer that \a iuser selects from #Image.layers, by name (the
+ * integer #ImageUser.layer index is only a fallback for files written before the
+ * layer name existed). Null if not found.
+ */
+ImageLayer *BKE_image_user_layer(const Image *ima, const ImageUser *iuser);
+
+/**
+ * The catalog #ImageLayer that \a pass belongs to, or null if the pass is not
+ * part of the image's catalog.
+ */
+ImageLayer *BKE_image_pass_layer(const Image *ima, const ImagePass *pass);
+
+/**
+ * Whether the layer/pass catalog on #Image.layers may be edited: an authored
+ * catalog, or that of a loaded multi-layer EXR. The latter is not saved with the
+ * blend file, so an edit lives in memory until the image is saved or packed,
+ * like painted pixels; see #BKE_image_catalog_is_dirty.
+ *
+ * A render result mirrors live render data, and an EXR *sequence* has a catalog
+ * per frame, so neither is editable.
+ */
+bool BKE_image_has_editable_catalog(const Image *ima);
+
+/**
+ * Whether the layer/pass catalog holds edits that are not in the image's file
+ * yet. Only meaningful for a file-backed catalog; an authored catalog is saved
+ * with the blend file and so is never dirty in this sense.
+ */
+bool BKE_image_catalog_is_dirty(const Image *ima);
+
+/* Editing of a layer/pass catalog (see #BKE_image_has_editable_catalog). */
+
+/**
+ * Append a layer with a single RGBA color pass, the name made unique among the
+ * existing layers.
+ */
+ImageLayer *BKE_image_layer_add(Image *ima, const char *name);
+/**
+ * Remove a layer, its passes and their cached pixel buffers. The last remaining
+ * layer is kept, in which case false is returned.
+ */
+bool BKE_image_layer_remove(Image *ima, ImageLayer *layer);
+/**
+ * Append a pass to \a layer, the name made unique among the layer's passes. Its
+ * pixel buffer is generated on first use, filled with \a color (given in the
+ * image's colorspace, like #ImagePass.gen_color).
+ */
+ImagePass *BKE_image_pass_add(Image *ima,
+                              ImageLayer *layer,
+                              const char *name,
+                              const char *chan_id,
+                              int channels_num,
+                              const float color[4]);
+/**
+ * Remove a pass and its cached pixel buffer. The last remaining pass of a layer
+ * is kept, in which case false is returned.
+ */
+bool BKE_image_pass_remove(Image *ima, ImageLayer *layer, ImagePass *pass);
+
+/* Renaming keeps the selection of every #ImageUser that referenced the old name
+ * pointing at the same layer or pass. */
+void BKE_image_layer_rename(Main *bmain, Image *ima, ImageLayer *layer, const char *name);
+void BKE_image_pass_rename(Main *bmain, Image *ima, ImagePass *pass, const char *name);
+
+/** The channel IDs of a pass of the given channel count: `RGBA`, `XYZ` or `X`. */
+const char *BKE_image_pass_channel_ids(int channels_num);
+
+/**
+ * Set the channel layout of a pass — the type the user gave it — to a number of
+ * channels and the channel IDs that go with it.
+ */
+void BKE_image_pass_set_channels(Image *ima, ImagePass *pass, int channels_num);
 
 /**
  * For multi-layer images as well as for render-viewer
@@ -382,6 +562,21 @@ bool BKE_image_is_stereo(const Image *ima);
  */
 RenderResult *BKE_image_acquire_renderresult(Scene *scene, Image *ima);
 void BKE_image_release_renderresult(Scene *scene, Image *ima, RenderResult *render_result);
+
+/**
+ * Refresh the #Image.layers catalog copy of a render-result viewer from its
+ * active #RenderResult. Cheap and idempotent: the copy is only rebuilt when the
+ * result identity or its #RenderResult::catalog_version changed. Must be called
+ * on the main thread.
+ */
+void BKE_image_sync_render_catalog(Scene *scene, Image *ima);
+
+/**
+ * Refresh the catalog copy of every render-result viewer image against \a scene.
+ * Called centrally as a render progresses and when it finishes, so consumers
+ * (image editor, compositor) can read #Image.layers without syncing themselves.
+ */
+void BKE_image_sync_render_catalogs(Main *bmain, Scene *scene);
 
 /**
  * For multi-layer images as well as for single-layer.
@@ -441,11 +636,6 @@ bool BKE_image_autosave_memorypack(Image *ima);
  * Prints memory statistics for images.
  */
 void BKE_image_print_memlist(Main *bmain);
-
-/**
- * Merge source into `dest`, and free `source`.
- */
-void BKE_image_merge(Main *bmain, Image *dest, Image *source);
 
 /**
  * Scale the image.
@@ -525,6 +715,61 @@ void BKE_image_set_filepath_from_tile_number(char *filepath,
                                              const char *pattern,
                                              eUDIM_TILE_FORMAT tile_format,
                                              int tile_number);
+
+/* Multi-file images: one file per layer/pass, selected by `<LAYER>` and
+ * `<PASS>` tokens in the image's file path. */
+
+/**
+ * Whether the file-name component of \a filepath contains a `<LAYER>` or
+ * `<PASS>` token.
+ */
+bool BKE_image_filepath_has_layer_pass_token(const char *filepath);
+
+/**
+ * Whether each layer/pass of the image is a file of its own, its file path
+ * containing `<LAYER>` / `<PASS>` tokens. Such an image is multi-layer with its
+ * catalog authored by the user (#BKE_image_has_authored_catalog) rather than
+ * read back from a file header, since no single file holds the mapping.
+ */
+bool BKE_image_is_multifile(const Image *ima);
+
+/**
+ * The value a layer or pass substitutes for its file-name token: its
+ * #ImageLayer.token / #ImagePass.token if set, its name otherwise.
+ */
+const char *BKE_image_layer_token(const ImageLayer *layer);
+const char *BKE_image_pass_token(const ImagePass *pass);
+
+/**
+ * Replace the `<LAYER>` and `<PASS>` tokens in \a filepath by the token values
+ * of \a layer and \a pass. A null layer or pass substitutes an empty string.
+ */
+void BKE_image_set_filepath_from_layer_pass(char *filepath,
+                                            size_t filepath_maxncpy,
+                                            const ImageLayer *layer,
+                                            const ImagePass *pass);
+
+/**
+ * The colorspace the buffer selected by \a iuser is stored in: the image's own
+ * colorspace, except for a value or vector pass of a multi-file image, which
+ * holds data and is read and written without color management.
+ */
+const char *BKE_image_user_colorspace(const Image *ima, const ImageUser *iuser);
+
+/**
+ * Rebuild the catalog of a multi-file image from the files on disk: scan the
+ * directory of its tokenized file path and add a layer and pass for every
+ * distinct `<LAYER>` / `<PASS>` token value found. Existing layers and passes
+ * whose token value is still on disk are kept as they are, so their name,
+ * channel layout and custom token survive; the rest are removed.
+ *
+ * There is no automatic synchronization: like UDIM tiles, the catalog is user
+ * data and only this explicit operation reconciles it with disk.
+ *
+ * \return the number of passes in the resulting catalog, or -1 when the image
+ * has no `<LAYER>` / `<PASS>` token to match files against.
+ */
+int BKE_image_multifile_detect_layers(Main *bmain, Image *ima);
 
 ImageTile *BKE_image_get_tile(Image *ima, int tile_number);
 ImageTile *BKE_image_get_tile_from_iuser(Image *ima, const ImageUser *iuser);

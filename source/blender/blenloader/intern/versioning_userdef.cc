@@ -447,6 +447,13 @@ static void do_versions_theme(const UserDef *userdef, bTheme *btheme)
     FROM_DEFAULT_V4_UCHAR(tui.wcol_list_item.item);
   }
 
+  if (!USER_VERSION_ATLEAST(503, 9)) {
+    /* Alternating row colors were enabled for tree views in these editors. */
+    FROM_DEFAULT_V4_UCHAR(space_properties.row_alternate);
+    FROM_DEFAULT_V4_UCHAR(space_view3d.row_alternate);
+    FROM_DEFAULT_V4_UCHAR(space_node.row_alternate);
+  }
+
   /**
    * Always bump subversion in BKE_blender_version.h when adding versioning
    * code here, and wrap it inside a USER_VERSION_ATLEAST check.

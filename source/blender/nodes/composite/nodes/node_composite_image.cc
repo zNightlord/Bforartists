@@ -67,10 +67,10 @@ static void declare_existing(NodeDeclarationBuilder &b)
 }
 
 /* Declares an output that matches the type of the given pass. */
-static void declare_pass(NodeDeclarationBuilder &b, const RenderPass &pass)
+static void declare_pass(NodeDeclarationBuilder &b, const ImagePass &pass)
 {
   const UString name(pass.name);
-  switch (pass.channels) {
+  switch (pass.channels_num) {
     case 1:
       b.add_output<decl::Float>(name).structure_type(StructureType::Dynamic);
       return;
@@ -100,57 +100,31 @@ static void node_declare_multi_layer(NodeDeclarationBuilder &b,
                                      Image *image,
                                      const ImageUser *image_user)
 {
-  RenderResult *render_result = BKE_image_acquire_renderresult(nullptr, image);
-  BLI_SCOPED_DEFER([&]() { BKE_image_release_renderresult(nullptr, image, render_result); });
+  /* Both a loaded multi-layer EXR and a render-result viewer keep the catalog
+   * on Image.layers; the render-result copy is kept fresh centrally. */
+  ImageLayer *render_layer = BKE_image_user_layer(image, image_user);
 
-  if (!render_result) {
-    declare_existing(b);
-    return;
-  }
-
-  RenderLayer *render_layer = static_cast<RenderLayer *>(
-      BLI_findlink(&render_result->layers, image_user->layer));
   if (!render_layer) {
     declare_existing(b);
     return;
   }
 
   bool has_alpha_pass = false;
-  for (RenderPass &pass : render_layer->passes) {
+  for (ImagePass &pass : render_layer->passes) {
     if (StringRef(pass.name) == "Alpha") {
       has_alpha_pass = true;
       break;
     }
   }
 
-  /* The special 0 view in the image user denotes the view currently being composited, but since
-   * this is not known at declaration time, we add all passes regardless of their view. */
-  const bool should_add_all_views = image_user->view == 0;
-  /* If the special 0 value is not chosen, the selected view will be the image user view minus 1,
-   * to offset for the special value. */
-  const int selected_view = image_user->view - 1;
-
-  Set<StringRef> added_passes;
-  for (RenderPass &pass : render_layer->passes) {
-    if (should_add_all_views) {
-      /* Pass already added from another view. */
-      if (added_passes.contains(pass.name)) {
-        continue;
-      }
-      added_passes.add_new(pass.name);
-    }
-    else {
-      if (pass.view_id != selected_view) {
-        continue;
-      }
-    }
-
+  /* The pass catalog is view-independent, so every pass is declared once. */
+  for (ImagePass &pass : render_layer->passes) {
     declare_pass(b, pass);
 
     /* If the image does not have an alpha pass add an extra alpha pass that is generated based on
      * the combined pass, if the combined pass is an RGBA pass. */
-    if (!has_alpha_pass && StringRef(pass.name) == RE_PASSNAME_COMBINED && pass.channels == 4 &&
-        StringRef(pass.chan_id) == "RGBA")
+    if (!has_alpha_pass && StringRef(pass.name) == RE_PASSNAME_COMBINED &&
+        pass.channels_num == 4 && StringRef(pass.chan_id) == "RGBA")
     {
       b.add_output<decl::Float>("Alpha"_ustr).structure_type(StructureType::Dynamic);
     }
