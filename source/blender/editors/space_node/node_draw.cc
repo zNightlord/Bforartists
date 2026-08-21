@@ -475,7 +475,7 @@ static bool node_update_basis_buttons(const bContext &C,
   return true;
 }
 
-const char *node_socket_get_label(const bNodeSocket *socket, const char *panel_label, const bool use_long = false)
+const char *node_socket_get_label(const bNodeSocket *socket, const char *panel_label, const bool use_long)
 {
   /* Get the short label if possible. This is used when grouping sockets under panels,
    * to avoid redundancy in the label. */
