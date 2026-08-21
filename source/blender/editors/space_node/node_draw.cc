@@ -4670,9 +4670,9 @@ static void node_draw_socket_hover_label(const bContext &C,
                                          ARegion &region,
                                          const SpaceNode &snode)
 {
-  if (node_detail_level(snode) != NodeDetailLevel::CollapsedMinimized) {
-    return;
-  }
+  // if (node_detail_level(snode) != NodeDetailLevel::CollapsedMinimized) {
+  //   return;
+  // }
 
   const bNodeSocket *sock = snode.runtime->hovered_socket;
   if (!sock) {
