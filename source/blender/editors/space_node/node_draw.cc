@@ -4683,7 +4683,7 @@ static void node_draw_socket_hover_label(const bContext &C,
   if (label.is_empty()) {
     return;
   }
-  const char *label_str = label.c_str();
+  const char *sock_label = label.c_str();
 
   const uiStyle *style = ui::style_get_dpi();
   const int fontid = style->widget.uifont_id;
