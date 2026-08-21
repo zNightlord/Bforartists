@@ -1098,7 +1098,7 @@ class ShaderNodesInliner {
    * #a and return its Result output. #blend_type applies to color mixes.
    * When #a_type / #b_type are given, the inputs are implicitly converted
    * to the Mix node's socket type first. */
-  SocketValue emit_mix(const bNode &owner_node,
+  SocketValue emit_mix(const NodeInContext &owner_node,
                        const eNodeSocketDatatype type,
                        const int blend_type,
                        const SocketValue &a,
@@ -1164,7 +1164,7 @@ class ShaderNodesInliner {
    * over the #base bundle using #blend_factor as the per-channel weight and
    * #blend_type as the color blend mode. Returns the resulting bundle as a
    * BundleSocketValue. Channels present on only one side pass through. */
-  BundleSocketValuePtr blend_layer_bundles(const bNode &owner_node,
+  BundleSocketValuePtr blend_layer_bundles(const NodeInContext &owner_node,
                                            const BundleSocketValue &base,
                                            const BundleSocketValue &top,
                                            const SocketValue &blend_factor,
@@ -1542,7 +1542,7 @@ class ShaderNodesInliner {
           }
           else {
             state.accumulator = this->blend_layer_bundles(
-                *node.node, *plain_bundle, *layer_bundle, layer.mask, MA_RAMP_BLEND);
+                node, *plain_bundle, *layer_bundle, layer.mask, MA_RAMP_BLEND);
           }
         }
         else {
@@ -1552,9 +1552,9 @@ class ShaderNodesInliner {
         continue;
       }
       const SocketValue blend_factor_value = this->multiply_float_socket_values(
-          *node.node, layer.opacity, layer.mask);
+          node, layer.opacity, layer.mask);
       state.accumulator = this->blend_layer_bundles(
-          *node.node, *state.accumulator, *layer_bundle, blend_factor_value, layer.blend_type);
+          node, *state.accumulator, *layer_bundle, blend_factor_value, layer.blend_type);
     }
 
     const BundleSocketValuePtr accumulator = state.accumulator;
@@ -1614,7 +1614,7 @@ class ShaderNodesInliner {
     if (layers.last().has_value) {
       const SocketValue unmasked{PrimitiveSocketValue{1.0f}};
       accumulator = this->blend_mask_floats(
-          *node.node, unmasked, layers.last().value, layers.last().opacity, MA_RAMP_BLEND);
+          node, unmasked, layers.last().value, layers.last().opacity, MA_RAMP_BLEND);
       have_acc = true;
     }
 
@@ -1629,7 +1629,7 @@ class ShaderNodesInliner {
         continue;
       }
       accumulator = this->blend_mask_floats(
-          *node.node, accumulator, layer.value, layer.opacity, layer.blend_type);
+          node, accumulator, layer.value, layer.opacity, layer.blend_type);
     }
 
     if (!have_acc) {
@@ -1651,7 +1651,7 @@ class ShaderNodesInliner {
    * Multiply, Subtract) into 0–1 Math nodes plus 1 Mix(Float) node. Other
    * MA_RAMP_* modes fall back to plain Mix — they don't have a clean float
    * meaning and the user can model them via dedicated math nodes when needed. */
-  SocketValue blend_mask_floats(const bNode &owner_node,
+  SocketValue blend_mask_floats(const NodeInContext &owner_node,
                                 const SocketValue &base,
                                 const SocketValue &top,
                                 const SocketValue &factor,
@@ -1691,7 +1691,7 @@ class ShaderNodesInliner {
    * sides are known constants (or defaults on unlinked sockets), skips the
    * multiplication entirely on identity (×1) or zero (×0) shortcuts, and
    * otherwise inserts a single Math Multiply node. */
-  SocketValue multiply_float_socket_values(const bNode &owner_node,
+  SocketValue multiply_float_socket_values(const NodeInContext &owner_node,
                                            const SocketValue &a,
                                            const SocketValue &b)
   {
@@ -2251,7 +2251,7 @@ class ShaderNodesInliner {
       }
       const SocketInContext input_socket_ctx = {node.context, src_input_socket};
       const SocketValue &value = value_by_socket_.lookup(input_socket_ctx);
-      this->set_input_socket_value(*node.node, copied_node, *dst_input_socket, value);
+      this->set_input_socket_value(node, copied_node, *dst_input_socket, value);
     }
 
     copies_by_pass.add_new(pass_name, &copied_node);
