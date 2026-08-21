@@ -519,6 +519,20 @@ Vector<std::string> gather_bundle_paths_by_data_type(const Bundle &bundle,
   return paths;
 }
 
+Vector<std::string> gather_bundle_paths(const Bundle &bundle)
+{
+  Vector<std::string> paths;
+  foreach_nested_bundle_item(bundle,
+                             [&](const Span<BundleKey> path, const BundleItemValue & /*value*/) {
+                               paths.append(Bundle::combine_path(path));
+                             });
+
+  /* Make sure the order is deterministic and doesn't depend on hash tables in the bundle. */
+  std::ranges::sort(paths);
+
+  return paths;
+}
+
 std::optional<bke::SocketValueVariant> BundleItemValue::as_socket_value(
     const bke::bNodeSocketType &dst_socket_type) const
 {

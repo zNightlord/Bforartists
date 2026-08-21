@@ -30,6 +30,7 @@ struct PointCloud;
 struct Volume;
 struct GreasePencil;
 namespace bke {
+class SocketValueVariant;
 struct AttributeDomainAndType;
 class AttributeAccessor;
 struct AttributeMetaData;
@@ -456,6 +457,9 @@ struct GeometrySet {
 
   void copy_bundle_from(const GeometrySet &other);
   void merge_bundle_from(const GeometrySet &other);
+
+  Vector<std::string> gather_bundle_paths() const;
+  const SocketValueVariant *query_bundle_path(StringRef path);
 
   void set_name(std::string name);
   StringRefNull name() const;

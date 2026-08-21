@@ -190,7 +190,7 @@ class SocketValueVariant {
    */
   const void *get_single_ptr_raw() const;
 
-  /** Also see GeomtrySet::ensure_owns_direct_data. */
+  /** Also see GeometrySet::ensure_owns_direct_data. */
   void ensure_owns_direct_data();
   bool owns_direct_data() const;
 

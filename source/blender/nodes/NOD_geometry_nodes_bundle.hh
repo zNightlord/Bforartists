@@ -171,8 +171,6 @@ class Bundle : public ImplicitSharingMixin {
 
   void count_memory(MemoryCounter &memory) const;
 
-  Vector<std::string> gather_paths(FunctionRef<bool(const Bundle &bundle)> fn) const;
-
   /** Create the combined path by inserting '/' between each element. */
   static std::string combine_path(Span<StringRef> path);
   static std::string combine_path(Span<BundleKey> path);
@@ -195,6 +193,8 @@ Vector<std::string> gather_bundle_paths_by_data_type(const Bundle &bundle,
 void foreach_nested_bundle_item(
     const Bundle &bundle,
     FunctionRef<void(Span<BundleKey> path, const BundleItemValue &value)> fn);
+
+Vector<std::string> gather_bundle_paths(const Bundle &bundle);
 
 template<typename T>
 inline std::optional<T> BundleItemValue::as_socket_value(

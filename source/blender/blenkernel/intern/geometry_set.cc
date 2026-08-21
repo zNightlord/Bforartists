@@ -798,6 +798,25 @@ void GeometrySet::merge_bundle_from(const GeometrySet &other)
   }
 }
 
+Vector<std::string> GeometrySet::gather_bundle_paths() const
+{
+  return nodes::gather_bundle_paths(*bundle());
+}
+
+const SocketValueVariant *GeometrySet::query_bundle_path(blender::StringRef path)
+{
+  auto variant = bundle_.get()->lookup_path(path);
+  if (!variant) {
+    return nullptr;
+  }
+
+  auto value = std::get_if<nodes::BundleItemSocketValue>(&variant->value);
+  if (!value) {
+    return nullptr;
+  }
+  return &value->value;
+}
+
 void GeometrySet::set_name(std::string name)
 {
   name_ = std::move(name);
