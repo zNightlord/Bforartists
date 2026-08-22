@@ -325,14 +325,7 @@ static gpu::Texture *gpu_texture_create_tile_array(Image *ima, ImBuf *main_ibuf)
     BKE_image_release_ibuf(ima, ibuf, nullptr);
   }
 
-  if (!(main_ibuf->gpu.flag & IMB_GPU_DISABLE_MIPMAP_UPDATE)) {
-    GPU_texture_update_mipmap_chain(tex);
-    GPU_texture_mipmap_mode(tex, true, true);
-    main_ibuf->gpu.flag |= IMB_GPU_MIPMAP_COMPLETE;
-  }
-  else {
-    GPU_texture_mipmap_mode(tex, false, true);
-  }
+  GPU_texture_update_mipmap_chain(tex);
   GPU_texture_original_size_set(tex, main_ibuf->x, main_ibuf->y);
 
   return tex;
@@ -476,8 +469,6 @@ static void image_gpu_atlas_try_partial_update(Image *image, ImageUser *iuser)
   /* A resized tile invalidates the atlas packing and forces a rebuild of all tiles. */
   bool need_full_rebuild = false;
 
-  bool need_mipmap_update = false;
-
   ImageUser tile_user = {};
   if (iuser != nullptr) {
     tile_user = *iuser;
@@ -514,7 +505,6 @@ static void image_gpu_atlas_try_partial_update(Image *image, ImageUser *iuser)
                                                  tile.runtime.tilearray_layer,
                                                  int2(tile.runtime.tilearray_offset),
                                                  int2(tile.runtime.tilearray_size));
-            need_mipmap_update |= !(ibuf->gpu.flag & IMB_GPU_DISABLE_MIPMAP_UPDATE);
           }
           break;
         case Changes::Kind::None:
@@ -526,11 +516,6 @@ static void image_gpu_atlas_try_partial_update(Image *image, ImageUser *iuser)
     if (need_full_rebuild) {
       break;
     }
-  }
-
-  if (need_mipmap_update && !need_full_rebuild) {
-    GPU_texture_update_mipmap_chain(atlas_tex);
-    atlas_ibuf->gpu.flag |= IMB_GPU_MIPMAP_COMPLETE;
   }
 
   atlas_ibuf->gpu.partial_update_changeset = new_changeset_id;
