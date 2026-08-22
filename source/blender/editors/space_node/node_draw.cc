@@ -3713,22 +3713,22 @@ static void node_update_nodetree(const bContext &C,
                                                NodeDetailLevel::Collapsed,
                                                NodeDetailLevel::CollapsedMinimized))
       {
-        if (node_detail_level(*snode) == NodeDetailLevel::CollapsedMinimized) {
-          /* Reset panel runtime states from any previous full/reduced frame. */
-          for (bke::bNodePanelRuntime &panel_runtime : node.runtime->panels) {
-            panel_runtime.header_center_y.reset();
-            panel_runtime.content_extent.reset();
-            panel_runtime.input_socket = nullptr;
-          }
+        // if (node_detail_level(*snode) == NodeDetailLevel::CollapsedMinimized) {
+        //   /* Reset panel runtime states from any previous full/reduced frame. */
+        //   for (bke::bNodePanelRuntime &panel_runtime : node.runtime->panels) {
+        //     panel_runtime.header_center_y.reset();
+        //     panel_runtime.content_extent.reset();
+        //     panel_runtime.input_socket = nullptr;
+        //   }
 
-          /* Clear panel collapsed flags so all sockets are visible for position calculation. */
-          for (bNodeSocket *socket : node.input_sockets()) {
-            socket->flag &= ~SOCK_PANEL_COLLAPSED;
-          }
-          for (bNodeSocket *socket : node.output_sockets()) {
-            socket->flag &= ~SOCK_PANEL_COLLAPSED;
-          }
-        }
+        //   /* Clear panel collapsed flags so all sockets are visible for position calculation. */
+        //   for (bNodeSocket *socket : node.input_sockets()) {
+        //     socket->flag &= ~SOCK_PANEL_COLLAPSED;
+        //   }
+        //   for (bNodeSocket *socket : node.output_sockets()) {
+        //     socket->flag &= ~SOCK_PANEL_COLLAPSED;
+        //   }
+        // }
         node_update_collapsed(node, block);
       }
       else {
