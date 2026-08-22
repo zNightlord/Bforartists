@@ -3492,7 +3492,6 @@ void node_set_cursor(wmWindow &win, ARegion &region, SpaceNode &snode, const flo
     return;
   }
   /* Reset hover socket each cursor update. */
-  snode.runtime->hovered_socket = nullptr;
   const bNodeSocket *indicated = node_find_indicated_socket(
       snode, region, cursor, SOCK_IN | SOCK_OUT);
   
