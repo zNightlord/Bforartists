@@ -362,9 +362,6 @@ static bool is_node_panels_supported(const bNode &node)
 
 NodeDetailLevel node_detail_level(const SpaceNode &snode)
 {
-  if (snode.runtime && snode.runtime->force_full_update) {
-    return NodeDetailLevel::Full;
-  }
   const float scale = node_tree_view_scale(snode);
   const eSpaceNode_NodeDetailMode mode = eSpaceNode_NodeDetailMode(snode.node_detail_mode);
   switch (mode) {
