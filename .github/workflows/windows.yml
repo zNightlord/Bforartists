@@ -2,7 +2,7 @@ name: Windows
 
 on:
   push:
-    branches: [  node-draw-lod ]
+    branches: [  bfa-blender-build ]
   schedule:
     - cron: 0 0 * * 1
   # pull_request:
@@ -30,7 +30,7 @@ jobs:
       # Note that --config is needed because the default Windows generator is a multi-config generator (Visual Studio generator).
       shell: cmd
       run: |
-        make lite
+        make
     - name: Directory
       shell: cmd
       run: |
