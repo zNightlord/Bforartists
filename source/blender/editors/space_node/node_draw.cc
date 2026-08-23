@@ -360,19 +360,7 @@ static bool is_node_panels_supported(const bNode &node)
 //   return node_tree_view_scale(snode) > NODE_TREE_SCALE_SMALL * UI_INV_SCALE_FAC;
 // }
 
-enum class NodeDetailLevel {
-  /** Full: sockets, property UI, panels, extra info. */
-  Full,
-  FullOff,
-  /** Reduced: sockets and labels visible, property UI hidden. */
-  Reduced,
-  /** CollapsedMinimized: pill only, with sockets. */
-  CollapsedMinimized,
-  /** Collapsed: pill only and or no sockets drawn on body. */
-  Collapsed,
-};
-
-static NodeDetailLevel node_detail_level(const SpaceNode &snode)
+NodeDetailLevel node_detail_level(const SpaceNode &snode)
 {
   if (snode.runtime && snode.runtime->force_full_update) {
     return NodeDetailLevel::Full;

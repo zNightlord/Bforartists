@@ -329,6 +329,18 @@ enum NodeResizeDirection {
 };
 ENUM_OPERATORS(NodeResizeDirection);
 
+enum class NodeDetailLevel {
+  /** Full: sockets, property UI, panels, extra info. */
+  Full,
+  FullOff,
+  /** Reduced: sockets and labels visible, property UI hidden. */
+  Reduced,
+  /** CollapsedMinimized: pill only, with sockets. */
+  CollapsedMinimized,
+  /** Collapsed: pill only and or no sockets drawn on body. */
+  Collapsed,
+};
+
 /* Nodes draw without DPI - the view zoom is flexible. */
 #define BASIS_RAD (0.2f * U.widget_unit)
 #define NODE_DYS (U.widget_unit / 2)
@@ -387,6 +399,7 @@ float2 node_to_view(const float2 &co);
 void node_to_updated_rect(const bNode &node, rctf &r_rect);
 float2 node_from_view(const float2 &co);
 float node_tree_view_scale(const SpaceNode &snode);
+NodeDetailLevel node_detail_level(const SpaceNode &snode);
 
 /* `node_ops.cc` */
 
