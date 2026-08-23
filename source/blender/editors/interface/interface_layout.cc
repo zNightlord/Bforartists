@@ -5297,6 +5297,42 @@ Layout &Layout::column(bool align, const StringRef heading)
   return litem;
 }
 
+IndentedColumn Layout::indented_column(bool align, bool draw_body=true) /* BFA */
+{
+  Layout *col, *row;
+  IndentedColumn indented_column{};
+  
+  col = &this->column(true);
+  row = &col->row(false);
+
+  indented_column.header = row;
+
+  if (!draw_body){
+    indented_column.body = nullptr;
+    return indented_column;
+  }
+  
+  row = &col->row(false);
+  row->separator();
+  col = &row->column(align);
+  
+  indented_column.body = col;
+
+  return indented_column;
+}
+
+Layout &Layout::indented_column(bool align, StringRef heading) /* BFA */
+{
+  IndentedColumn indented_column = this->indented_column(align, true);
+  indented_column.header->label(heading, ICON_NONE);
+  
+  return *indented_column.body;
+}
+
+Layout &Layout::indented_column(bool align, const char *heading){ /* BFA */
+  return this->indented_column(align, StringRef{heading});
+}
+
 Layout &Layout::column_flow(int number, bool align)
 {
   LayoutItemFlow *flow = MEM_new<LayoutItemFlow>(__func__);

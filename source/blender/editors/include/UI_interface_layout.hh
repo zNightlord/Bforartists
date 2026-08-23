@@ -65,6 +65,11 @@ struct PanelLayout {
   Layout *body;
 };
 
+struct IndentedColumn {
+  Layout *header;
+  Layout *body;
+};
+
 struct Item {
 
   Item(ItemType type);
@@ -272,6 +277,14 @@ struct Layout : public Item, NonCopyable, NonMovable {
    * label column when there is no label defined.
    */
   Layout &column(bool align, StringRef heading);
+
+  /**
+   * Add a new indented column sub-layout, items placed in this sub-layout are added vertically one under
+   * each other in a column with left indentation.
+   */
+  IndentedColumn indented_column(bool align, bool draw_body); /* BFA */
+  Layout &indented_column(bool align, StringRef heading); /* BFA - simple case where header row is just text. */
+  Layout &indented_column(bool align, const char *heading);
 
   /**
    * Add a new row sub-layout, items placed in this sub-layout are added horizontally next to each
