@@ -1167,6 +1167,21 @@ static void tag_final_panel(bNode &node, const Span<FlatNodeItem> items)
   }
 }
 
+static void node_reset_state(bNode &node){
+  for (bke::bNodePanelRuntime &panel_runtime : node.runtime->panels) {
+    panel_runtime.header_center_y.reset();
+    panel_runtime.content_extent.reset();
+    panel_runtime.input_socket = nullptr;
+  }
+  
+  for (bNodeSocket *socket : node.input_sockets()) {
+    socket->flag &= ~SOCK_PANEL_COLLAPSED;
+  }
+  for (bNodeSocket *socket : node.output_sockets()) {
+    socket->flag &= ~SOCK_PANEL_COLLAPSED;
+  }
+}
+
 /* Advanced drawing with panels and arbitrary input/output ordering. */
 static void node_update_basis_from_declaration(TreeDrawContext &tree_draw_ctx,
                                                const bContext &C,
@@ -1183,19 +1198,8 @@ static void node_update_basis_from_declaration(TreeDrawContext &tree_draw_ctx,
   const bool is_reduced = draw_node_reduced(snode);
 
   /* Reset states. */
-  for (bke::bNodePanelRuntime &panel_runtime : node.runtime->panels) {
-    panel_runtime.header_center_y.reset();
-    panel_runtime.content_extent.reset();
-    panel_runtime.input_socket = nullptr;
-  }
-
   if (draw_node_details(snode)) {
-    for (bNodeSocket *socket : node.input_sockets()) {
-      socket->flag &= ~SOCK_PANEL_COLLAPSED;
-    }
-    for (bNodeSocket *socket : node.output_sockets()) {
-      socket->flag &= ~SOCK_PANEL_COLLAPSED;
-    }
+    node_reset_state(node);
   }
 
   /* Gather flattened list of items in the node. */
@@ -1444,10 +1448,17 @@ static void node_update_collapsed(bNode &node, ui::Block &block)
   node.runtime->draw_bounds.ymax = loc.y + height * 0.5f + offset;
   node.runtime->draw_bounds.ymin = loc.y - height * 0.5f + offset;
 
+  /* Clamp topmost socket to be at least NODE_SOCKSIZE below ymax
+   * so its full hit circle lies within the block bounds. */
+  const float top_socket_y = loc.y + dy * float(std::max(totin, totout) - 1) * 0.5f + offset;
+  const float ymax_safe    = node.runtime->draw_bounds.ymax - NODE_SOCKSIZE;
+  const float y_offset     = (top_socket_y > ymax_safe) ?
+                              (top_socket_y - ymax_safe) : 0.0f;
+
   /* Output sockets. */
   {
     const float x = node.runtime->draw_bounds.xmax;
-    float y = loc.y + dy * float(totout - 1) * 0.5f + offset;
+    float y = loc.y + dy * float(totout - 1) * 0.5f + offset - y_offset;
     for (bNodeSocket *socket : node.output_sockets()) {
       if (socket->is_visible()) {
         socket->runtime->location = {x, y};
@@ -1459,7 +1470,7 @@ static void node_update_collapsed(bNode &node, ui::Block &block)
   /* Input sockets. */
   {
     const float x = node.runtime->draw_bounds.xmin;
-    float y = loc.y + dy * float(totin - 1) * 0.5f + offset;
+    float y = loc.y + dy * float(totin - 1) * 0.5f + offset - y_offset;
     for (bNodeSocket *socket : node.input_sockets()) {
       if (socket->is_visible()) {
         socket->runtime->location = {x, y};
@@ -3713,22 +3724,9 @@ static void node_update_nodetree(const bContext &C,
                                                NodeDetailLevel::Collapsed,
                                                NodeDetailLevel::CollapsedMinimized))
       {
-        // if (node_detail_level(*snode) == NodeDetailLevel::CollapsedMinimized) {
-        //   /* Reset panel runtime states from any previous full/reduced frame. */
-        //   for (bke::bNodePanelRuntime &panel_runtime : node.runtime->panels) {
-        //     panel_runtime.header_center_y.reset();
-        //     panel_runtime.content_extent.reset();
-        //     panel_runtime.input_socket = nullptr;
-        //   }
-
-        //   /* Clear panel collapsed flags so all sockets are visible for position calculation. */
-        //   for (bNodeSocket *socket : node.input_sockets()) {
-        //     socket->flag &= ~SOCK_PANEL_COLLAPSED;
-        //   }
-        //   for (bNodeSocket *socket : node.output_sockets()) {
-        //     socket->flag &= ~SOCK_PANEL_COLLAPSED;
-        //   }
-        // }
+        if (node_detail_level(*snode) == NodeDetailLevel::CollapsedMinimized) {
+          node_reset_state(node);
+        }
         node_update_collapsed(node, block);
       }
       else {
@@ -4680,6 +4678,7 @@ static void node_draw_socket_hover_label(const bContext &C,
 
   const StringRefNull label = node_socket_get_label(sock, nullptr, true);
   if (label.is_empty()) {
+    printf("\n empty label");
     return;
   }
   const char *sock_label = label.c_str();
@@ -4775,8 +4774,6 @@ static void node_draw_nodetree(const bContext &C,
                                Span<bNode *> nodes,
                                Span<ui::Block *> blocks)
 {
-  /* Reset hover state each frame — button hover callbacks repopulate it. */
-  snode.runtime->hovered_socket = nullptr;
 #ifdef USE_DRAW_TOT_UPDATE
   BLI_rctf_init_minmax(&region.v2d.tot);
 #endif
