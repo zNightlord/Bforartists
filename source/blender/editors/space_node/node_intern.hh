@@ -282,7 +282,6 @@ struct SpaceNode_Runtime {
 
   /** Mouse position for drawing socket-less links and adding nodes. */
   float2 cursor;
-  bool force_full_update = false;
 
   const bNodeSocket *hovered_socket = nullptr;
 

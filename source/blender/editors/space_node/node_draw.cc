@@ -463,7 +463,9 @@ static bool node_update_basis_buttons(const bContext &C,
   return true;
 }
 
-const char *node_socket_get_label(const bNodeSocket *socket, const char *panel_label, const bool use_long)
+const char *node_socket_get_label(const bNodeSocket *socket,
+                                  const char *panel_label,
+                                  const bool use_long)
 {
   /* Get the short label if possible. This is used when grouping sockets under panels,
    * to avoid redundancy in the label. */
@@ -1155,13 +1157,14 @@ static void tag_final_panel(bNode &node, const Span<FlatNodeItem> items)
   }
 }
 
-static void node_reset_state(bNode &node){
+static void node_reset_state(bNode &node)
+{
   for (bke::bNodePanelRuntime &panel_runtime : node.runtime->panels) {
     panel_runtime.header_center_y.reset();
     panel_runtime.content_extent.reset();
     panel_runtime.input_socket = nullptr;
   }
-  
+
   for (bNodeSocket *socket : node.input_sockets()) {
     socket->flag &= ~SOCK_PANEL_COLLAPSED;
   }
@@ -1436,17 +1439,10 @@ static void node_update_collapsed(bNode &node, ui::Block &block)
   node.runtime->draw_bounds.ymax = loc.y + height * 0.5f + offset;
   node.runtime->draw_bounds.ymin = loc.y - height * 0.5f + offset;
 
-  /* Clamp topmost socket to be at least NODE_SOCKSIZE below ymax
-   * so its full hit circle lies within the block bounds. */
-  const float top_socket_y = loc.y + dy * float(std::max(totin, totout) - 1) * 0.5f + offset;
-  const float ymax_safe    = node.runtime->draw_bounds.ymax - NODE_SOCKSIZE;
-  const float y_offset     = (top_socket_y > ymax_safe) ?
-                              (top_socket_y - ymax_safe) : 0.0f;
-
   /* Output sockets. */
   {
     const float x = node.runtime->draw_bounds.xmax;
-    float y = loc.y + dy * float(totout - 1) * 0.5f + offset - y_offset;
+    float y = loc.y + dy * float(totout - 1) * 0.5f + offset;
     for (bNodeSocket *socket : node.output_sockets()) {
       if (socket->is_visible()) {
         socket->runtime->location = {x, y};
@@ -1458,7 +1454,7 @@ static void node_update_collapsed(bNode &node, ui::Block &block)
   /* Input sockets. */
   {
     const float x = node.runtime->draw_bounds.xmin;
-    float y = loc.y + dy * float(totin - 1) * 0.5f + offset - y_offset;
+    float y = loc.y + dy * float(totin - 1) * 0.5f + offset;
     for (bNodeSocket *socket : node.input_sockets()) {
       if (socket->is_visible()) {
         socket->runtime->location = {x, y};
@@ -3493,10 +3489,9 @@ void node_set_cursor(wmWindow &win, ARegion &region, SpaceNode &snode, const flo
   /* Reset hover socket each cursor update. */
   const bNodeSocket *indicated = node_find_indicated_socket(
       snode, region, cursor, SOCK_IN | SOCK_OUT);
-  
+  snode.runtime->hovered_socket = indicated;
+
   if (indicated) {
-    snode.runtime->hovered_socket = indicated;
-    printf("%s \n", indicated->name);
     WM_cursor_set(&win, WM_CURSOR_DEFAULT);
     return;
   }
