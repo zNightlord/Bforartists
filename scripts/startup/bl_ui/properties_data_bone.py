@@ -559,6 +559,9 @@ class BONE_PT_deform(BoneButtonsPanel, Panel):
         col.prop(bone, "head_radius", text="Radius Head")
         col.prop(bone, "tail_radius", text="Tail")
 
+        col = layout.column()
+        col.prop(bone, "weight_color")
+
 
 class BONE_PT_custom_props(BoneButtonsPanel, rna_prop_ui.PropertyPanel, Panel):
     _property_type = bpy.types.Bone, bpy.types.EditBone, bpy.types.PoseBone
