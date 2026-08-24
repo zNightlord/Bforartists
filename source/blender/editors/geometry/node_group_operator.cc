@@ -529,7 +529,6 @@ static void remove_shape_key_attributes(Mesh &mesh, const Key &key)
  */
 static bke::GeometrySet get_original_geometry_eval_copy(Depsgraph &depsgraph,
                                                         Object &object,
-                                                        nodes::GeoNodesOperatorData &operator_data,
                                                         Vector<MeshState> &orig_mesh_states)
 {
   switch (object.type) {
@@ -545,9 +544,6 @@ static bke::GeometrySet get_original_geometry_eval_copy(Depsgraph &depsgraph,
       Mesh *mesh = id_cast<Mesh *>(object.data);
 
       if (std::shared_ptr<BMEditMesh> &em = mesh->runtime->edit_mesh) {
-        operator_data.active_point_index = BM_mesh_active_vert_index_get(em->bm);
-        operator_data.active_edge_index = BM_mesh_active_edge_index_get(em->bm);
-        operator_data.active_face_index = BM_mesh_active_face_index_get(em->bm, false, true);
         EDBM_mesh_load_ex(DEG_get_bmain(&depsgraph), &object, true);
         EDBM_mesh_free_data(mesh->runtime->edit_mesh.get());
         /* Clear the edit-mesh entirely rather than just freeing its #BMesh. Leaving a #BMEditMesh
@@ -577,15 +573,54 @@ static bke::GeometrySet get_original_geometry_eval_copy(Depsgraph &depsgraph,
     }
     case OB_GREASE_PENCIL: {
       const GreasePencil *grease_pencil = id_cast<const GreasePencil *>(object.data);
-      if (const bke::greasepencil::Layer *active_layer = grease_pencil->get_active_layer()) {
-        operator_data.active_layer_index = *grease_pencil->get_layer_index(*active_layer);
-      }
       GreasePencil *grease_pencil_copy = BKE_grease_pencil_copy_for_eval(grease_pencil);
       grease_pencil_copy->runtime->eval_frame = int(DEG_get_ctime(&depsgraph));
       return bke::GeometrySet::from_grease_pencil(grease_pencil_copy);
     }
     default:
       return {};
+  }
+}
+
+static void store_mesh_state_for_comparison(Object &object, Vector<MeshState> &orig_mesh_states)
+{
+  switch (object.type) {
+    case OB_MESH: {
+      Mesh *mesh = id_cast<Mesh *>(object.data);
+      if (!mesh->runtime->edit_mesh) {
+        orig_mesh_states.append_as(*mesh);
+      }
+      break;
+    }
+    default: {
+      break;
+    }
+  }
+}
+
+static void get_geometry_active_indices(const Object &object,
+                                        nodes::GeoNodesOperatorData &operator_data)
+{
+  switch (object.type) {
+    case OB_MESH: {
+      const Mesh *mesh = id_cast<const Mesh *>(object.data);
+      if (std::shared_ptr<BMEditMesh> &em = mesh->runtime->edit_mesh) {
+        operator_data.active_point_index = BM_mesh_active_vert_index_get(em->bm);
+        operator_data.active_edge_index = BM_mesh_active_edge_index_get(em->bm);
+        operator_data.active_face_index = BM_mesh_active_face_index_get(em->bm, false, true);
+      }
+      break;
+    }
+    case OB_GREASE_PENCIL: {
+      const GreasePencil *grease_pencil = id_cast<const GreasePencil *>(object.data);
+      if (const bke::greasepencil::Layer *active_layer = grease_pencil->get_active_layer()) {
+        operator_data.active_layer_index = *grease_pencil->get_layer_index(*active_layer);
+      }
+      break;
+    }
+    default: {
+      break;
+    }
   }
 }
 
@@ -944,6 +979,7 @@ struct DataPerZone {
 
 struct NodeOperatorCustomData {
   double last_time;
+  Array<bke::GeometrySet> geometry_orig;
   Array<Map<int, std::unique_ptr<DataPerZone>>> simulation_data_by_zone;
   wmTimer *timer = nullptr;
   NodeOperatorCustomData() : last_time(BLI_time_now_seconds()) {}
@@ -1123,6 +1159,14 @@ static wmOperatorStatus run_node_group_execute(bContext *C, wmOperator *op, cons
   const RegionView3D *rv3d = CTX_wm_region_view3d(C);
   Vector<MeshState> orig_mesh_states;
 
+  if (op_data.geometry_orig.is_empty()) {
+    op_data.geometry_orig.reinitialize(objects.size());
+    for (const int object_i : objects.index_range()) {
+      op_data.geometry_orig[object_i] = get_original_geometry_eval_copy(
+          *depsgraph_active, *objects[object_i], orig_mesh_states);
+    }
+  }
+
   const double now = BLI_time_now_seconds();
   const float delta_time = float(now - op_data.last_time);
   op_data.last_time = now;
@@ -1151,6 +1195,7 @@ static wmOperatorStatus run_node_group_execute(bContext *C, wmOperator *op, cons
         op->ptr, "viewport_view_matrix", operator_eval_data.viewport_viewmat.base_ptr());
     operator_eval_data.viewport_is_perspective = RNA_boolean_get(op->ptr,
                                                                  "viewport_is_perspective");
+    get_geometry_active_indices(object, operator_eval_data);
 
     NodeOperatorSimulationParams simulation_params(op_data.simulation_data_by_zone[object_i],
                                                    delta_time);
@@ -1164,8 +1209,7 @@ static wmOperatorStatus run_node_group_execute(bContext *C, wmOperator *op, cons
       call_data.verbose_log_contexts = &verbose_log_contexts;
     }
 
-    bke::GeometrySet geometry_orig = get_original_geometry_eval_copy(
-        *depsgraph_active, object, operator_eval_data, orig_mesh_states);
+    store_mesh_state_for_comparison(object, orig_mesh_states);
 
     const nodes::GeometryNodesLazyFunctionGraphInfo &lf_graph_info =
         *nodes::ensure_geometry_nodes_lazy_function_graph(*node_tree);
@@ -1191,7 +1235,7 @@ static wmOperatorStatus run_node_group_execute(bContext *C, wmOperator *op, cons
       const eNodeSocketDatatype socket_type = typeinfo ? typeinfo->type : SOCK_CUSTOM;
       if (socket_type == SOCK_GEOMETRY && i == 0) {
         bke::SocketValueVariant &value = scope.construct<bke::SocketValueVariant>();
-        value.set(std::move(geometry_orig));
+        value.set(op_data.geometry_orig[object_i]);
         param_inputs[function.inputs.main[0]] = &value;
         continue;
       }
