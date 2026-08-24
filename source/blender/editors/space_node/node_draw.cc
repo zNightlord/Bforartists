@@ -351,15 +351,6 @@ static bool is_node_panels_supported(const bNode &node)
   return node.declaration() && node.declaration()->use_custom_socket_order;
 }
 
-/* Some elements of the node tree like labels or node sockets are hardly visible when zoomed
- * out and can slow down the drawing quite a bit.
- * This function can be used to check if it's worth to draw those details and return
- * early. */
-// static bool draw_node_details(const SpaceNode &snode)
-// {
-//   return node_tree_view_scale(snode) > NODE_TREE_SCALE_SMALL * UI_INV_SCALE_FAC;
-// }
-
 NodeDetailLevel node_detail_level(const SpaceNode &snode)
 {
   const float scale = node_tree_view_scale(snode);
@@ -4134,7 +4125,7 @@ static void reroute_node_draw(const bContext &C,
     return;
   }
 
-  if (draw_node_details(snode)) {
+  if (draw_node_indicator_sockets(snode)) {
     reroute_node_draw_label(tree_draw_ctx, snode, node, block);
   }
 
