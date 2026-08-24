@@ -543,7 +543,7 @@ static bke::GeometrySet get_original_geometry_eval_copy(Depsgraph &depsgraph,
     case OB_MESH: {
       Mesh *mesh = id_cast<Mesh *>(object.data);
 
-      if (std::shared_ptr<BMEditMesh> &em = mesh->runtime->edit_mesh) {
+      if (mesh->runtime->edit_mesh) {
         EDBM_mesh_load_ex(DEG_get_bmain(&depsgraph), &object, true);
         EDBM_mesh_free_data(mesh->runtime->edit_mesh.get());
         /* Clear the edit-mesh entirely rather than just freeing its #BMesh. Leaving a #BMEditMesh
@@ -1166,11 +1166,13 @@ static wmOperatorStatus run_node_group_execute(bContext *C, wmOperator *op, cons
           *depsgraph_active, *objects[object_i], orig_mesh_states);
     }
   }
+  if (op_data.simulation_data_by_zone.is_empty()) {
+    op_data.simulation_data_by_zone.reinitialize(objects.size());
+  }
 
   const double now = BLI_time_now_seconds();
   const float delta_time = float(now - op_data.last_time);
   op_data.last_time = now;
-  op_data.simulation_data_by_zone.reinitialize(objects.size());
 
   /* The operator keeps running if one of the evaluations has an enabled Modal Timer node. */
   std::atomic<bool> modal_requested = false;
