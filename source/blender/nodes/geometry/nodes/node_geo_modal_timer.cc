@@ -17,7 +17,7 @@ static void node_declare(NodeDeclarationBuilder &b)
       .structure_type(StructureType::Single)
       .description(
           "Keep the tool running so that it can react to more events instead of ending execution");
-  b.add_output<decl::Bool>("Event"_ustr)
+  b.add_output<decl::Bool>("Is Timer Event"_ustr)
       .structure_type(StructureType::Single)
       .description("True when this execution was started by the timer instead of by user input");
 }
@@ -33,7 +33,7 @@ class LazyFunctionForModalTimerNode : public LazyFunction {
     r_lf_index_by_bsocket[node.input_socket(0).index_in_tree()] = inputs_.append_and_get_index_as(
         "Enable", CPPType::get<SocketValueVariant>());
     r_lf_index_by_bsocket[node.output_socket(0).index_in_tree()] =
-        outputs_.append_and_get_index_as("Event", CPPType::get<SocketValueVariant>());
+        outputs_.append_and_get_index_as("Is Timer Event", CPPType::get<SocketValueVariant>());
   }
 
   void execute_impl(lf::Params &params, const lf::Context &context) const override
