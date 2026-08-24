@@ -982,9 +982,65 @@ struct NodeOperatorCustomData {
   Array<bke::GeometrySet> geometry_orig;
   Array<Map<int, std::unique_ptr<DataPerZone>>> simulation_data_by_zone;
   wmTimer *timer = nullptr;
-  Set<StringRef> currently_pressed_keys;
+  /**
+   * Names of all events defined by Modal Event nodes in the node group and its nested groups.
+   * Gathered once when the operator starts.
+   */
+  Set<std::string> modal_event_names;
   NodeOperatorCustomData() : last_time(BLI_time_now_seconds()) {}
 };
+
+/**
+ * Gather the events that the node group reacts to. Modal Event nodes in nested groups define
+ * events for the tool as a whole, and multiple nodes may define the same event by using the same
+ * name.
+ */
+static void gather_modal_event_names(const bNodeTree &node_tree,
+                                     Set<const bNodeTree *> &visited_trees,
+                                     Set<std::string> &r_names)
+{
+  if (!visited_trees.add(&node_tree)) {
+    return;
+  }
+  node_tree.ensure_topology_cache();
+  for (const bNode *node : node_tree.nodes_by_type("GeometryNodeModalEvent"_ustr)) {
+    if (node->is_muted()) {
+      continue;
+    }
+    const auto *storage = static_cast<const GeometryNodeModalEvent *>(node->storage);
+    if (storage->name && storage->name[0] != '\0') {
+      r_names.add_as(storage->name);
+    }
+  }
+  for (const bNode *node : node_tree.group_nodes()) {
+    if (const bNodeTree *group = id_cast<const bNodeTree *>(node->id)) {
+      gather_modal_event_names(*group, visited_trees, r_names);
+    }
+  }
+}
+
+/**
+ * \return The name of the event that Modal Event nodes use to react to this event, or none if the
+ * event cannot be handled by the node group at all.
+ * TODO: REPLACE WITH OPERATOR MODAL KEYMAP
+ */
+static std::optional<StringRefNull> modal_event_name_for_event(const wmEvent &event)
+{
+  if (ELEM(event.type, MOUSEMOVE, INBETWEEN_MOUSEMOVE)) {
+    /* TODO: Remove this special case once a default modal keymap is stored for the operator, so
+     * that mouse movement can be bound to an event like any other input. */
+    return StringRefNull("MOUSEMOVE");
+  }
+  if (event.val != KM_PRESS) {
+    /* Only key presses are supported until there is a modal keymap to map events to inputs. */
+    return std::nullopt;
+  }
+  const char *identifier = nullptr;
+  if (!RNA_enum_identifier(rna_enum_event_type_items, event.type, &identifier)) {
+    return std::nullopt;
+  }
+  return StringRefNull(identifier);
+}
 
 class NodeOperatorSimulationParams : public nodes::GeoNodesSimulationParams {
  private:
@@ -1062,7 +1118,10 @@ static void run_node_group_cancel(bContext *C, wmOperator *op)
   run_node_group_end(*C, *op);
 }
 
-static wmOperatorStatus run_node_group_execute(bContext *C, wmOperator *op, const wmEvent *event)
+static wmOperatorStatus run_node_group_execute(bContext *C,
+                                               wmOperator *op,
+                                               const wmEvent *event,
+                                               const bool is_invoke)
 {
   Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
@@ -1094,6 +1153,11 @@ static wmOperatorStatus run_node_group_execute(bContext *C, wmOperator *op, cons
     return OPERATOR_CANCELLED;
   }
 
+  if (is_invoke) {
+    Set<const bNodeTree *> visited_trees;
+    gather_modal_event_names(*node_tree_orig, visited_trees, op_data.modal_event_names);
+  }
+
   const Vector<Object *> objects = gather_supported_objects(*C, *bmain, mode);
 
   Depsgraph *depsgraph_active = CTX_data_ensure_evaluated_depsgraph(C);
@@ -1107,6 +1171,7 @@ static wmOperatorStatus run_node_group_execute(bContext *C, wmOperator *op, cons
     }
   }
 
+  StringRef active_event;
   if (event) {
     if (event->type == EVT_ESCKEY) {
       store_geometries(*C, *op, *depsgraph_active, objects, op_data.geometry_orig);
@@ -1117,15 +1182,17 @@ static wmOperatorStatus run_node_group_execute(bContext *C, wmOperator *op, cons
       /* Timers from other parts of Blender should not trigger another execution. */
       return OPERATOR_RUNNING_MODAL;
     }
-    // TODO: REPLACE THIS WITH THE MODAL EVENT NODE
-    const char *identifier = nullptr;
-    if (RNA_enum_identifier(rna_enum_event_type_items, event->type, &identifier)) {
-      if (event->val == KM_PRESS) {
-        op_data.currently_pressed_keys.add_as(identifier);
+    /* The keys that end the operator are reserved, so they can't be used for a Modal Event node.
+     * Unlike escape they still evaluate the node group one last time below. */
+    const bool is_end_key = ELEM(event->type, EVT_PADENTER, EVT_RETKEY);
+    if (!is_invoke && !is_timer_event && !is_end_key) {
+      /* Only process events that the node group defines with a Modal Event node. Evaluating the
+       * whole node group for events that it cannot react to would just be wasted work. */
+      const std::optional<StringRefNull> event_name = modal_event_name_for_event(*event);
+      if (!event_name || !op_data.modal_event_names.contains_as(*event_name)) {
+        return OPERATOR_RUNNING_MODAL;
       }
-      else if (event->val == KM_RELEASE) {
-        op_data.currently_pressed_keys.remove_as(identifier);
-      }
+      active_event = *event_name;
     }
   }
 
@@ -1178,14 +1245,12 @@ static wmOperatorStatus run_node_group_execute(bContext *C, wmOperator *op, cons
   /* May be null if operator called from outside 3D view context. */
   Vector<MeshState> orig_mesh_states;
 
-  if (op_data.geometry_orig.is_empty()) {
+  if (is_invoke) {
     op_data.geometry_orig.reinitialize(objects.size());
     for (const int object_i : objects.index_range()) {
       op_data.geometry_orig[object_i] = get_original_geometry_eval_copy(
           *depsgraph_active, *objects[object_i], orig_mesh_states);
     }
-  }
-  if (op_data.simulation_data_by_zone.is_empty()) {
     op_data.simulation_data_by_zone.reinitialize(objects.size());
   }
 
@@ -1193,8 +1258,10 @@ static wmOperatorStatus run_node_group_execute(bContext *C, wmOperator *op, cons
   const float delta_time = float(now - op_data.last_time);
   op_data.last_time = now;
 
-  /* The operator keeps running if one of the evaluations has an enabled Modal Timer node. */
+  /* The operator keeps running if one of the evaluations has an enabled Modal Timer or Modal Event
+   * node, but the timer is only added when a Modal Timer node asks for it. */
   std::atomic<bool> modal_requested = false;
+  std::atomic<bool> timer_requested = false;
 
   Array<bke::GeometrySet> output_geometries(objects.size());
   for (const int object_i : objects.index_range()) {
@@ -1202,7 +1269,9 @@ static wmOperatorStatus run_node_group_execute(bContext *C, wmOperator *op, cons
     nodes::GeoNodesOperatorData operator_eval_data{};
     operator_eval_data.mode = mode;
     operator_eval_data.is_timer_event = is_timer_event;
+    operator_eval_data.active_event = active_event;
     operator_eval_data.modal_requested = &modal_requested;
+    operator_eval_data.timer_requested = &timer_requested;
     operator_eval_data.depsgraphs = &depsgraphs;
     operator_eval_data.self_object_orig = &object;
     operator_eval_data.scene_orig = scene;
@@ -1341,7 +1410,6 @@ static wmOperatorStatus run_node_group_execute(bContext *C, wmOperator *op, cons
 
   wmWindow *window = CTX_wm_window(C);
   if (!can_run_modal || !modal_requested || !window) {
-    /* No Modal Timer node asked to keep running, so this was a single execution. */
     run_node_group_end(*C, *op);
     return OPERATOR_FINISHED;
   }
@@ -1351,20 +1419,24 @@ static wmOperatorStatus run_node_group_execute(bContext *C, wmOperator *op, cons
     return OPERATOR_FINISHED;
   }
 
-  if (!op_data.timer) {
+  if (timer_requested && !op_data.timer) {
     op_data.timer = WM_event_timer_add(CTX_wm_manager(C), window, TIMER, 1.0 / 100.0);
+  }
+  else if (!timer_requested && op_data.timer) {
+    WM_event_timer_remove(CTX_wm_manager(C), op_data.timer->win, op_data.timer);
+    op_data.timer = nullptr;
   }
   return OPERATOR_RUNNING_MODAL;
 }
 
 static wmOperatorStatus run_node_group_exec(bContext *C, wmOperator *op)
 {
-  return run_node_group_execute(C, op, nullptr);
+  return run_node_group_execute(C, op, nullptr, false);
 }
 
 static wmOperatorStatus run_node_group_modal(bContext *C, wmOperator *op, const wmEvent *event)
 {
-  return run_node_group_execute(C, op, event);
+  return run_node_group_execute(C, op, event, false);
 }
 
 static wmOperatorStatus run_node_group_invoke(bContext *C, wmOperator *op, const wmEvent *event)
@@ -1374,7 +1446,7 @@ static wmOperatorStatus run_node_group_invoke(bContext *C, wmOperator *op, const
     return OPERATOR_CANCELLED;
   }
 
-  const wmOperatorStatus retval = run_node_group_execute(C, op, event);
+  const wmOperatorStatus retval = run_node_group_execute(C, op, event, true);
   if (retval & OPERATOR_RUNNING_MODAL) {
     WM_event_add_modal_handler(C, op);
   }

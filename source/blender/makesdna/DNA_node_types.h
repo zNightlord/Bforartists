@@ -3805,6 +3805,17 @@ struct GeometryNodeClosureToList {
   int active_index = 0;
 };
 
+struct GeometryNodeModalEvent {
+  DNA_DEFINE_CXX_METHODS(GeometryNodeModalEvent)
+  /**
+   * Identifies the event within the node tool. All modal event nodes with the same name in the
+   * node group and its nested groups define the same event.
+   */
+  char *name = nullptr;
+  /** UI explanation of what the tool does when the event is processed. */
+  char *description = nullptr;
+};
+
 struct NodeGeometryDistributePointsInVolume {
   DNA_DEFINE_CXX_METHODS(NodeGeometryDistributePointsInVolume)
 

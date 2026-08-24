@@ -209,15 +209,27 @@ struct GeoNodesOperatorData {
 
   /**
    * True if this execution was started by the timer of a modal node tool instead of by user input.
-   * This is the value of the "Event" output of the Modal Timer node.
+   * This is the value of the "Is Timer Event" output of the Modal Timer node.
    */
   bool is_timer_event = false;
   /**
-   * Set to true by enabled Modal Timer nodes during evaluation. The operator keeps running modally
-   * as long as at least one Modal Timer node requests it. Multiple nodes may write to this from
-   * different threads, and the same flag is shared by the evaluations for all edited objects.
+   * Name of the event that is currently processed by the node tool, or empty if this execution was
+   * not started by an event that a Modal Event node defines. Modal Event nodes compare their own
+   * name with this to find out whether they are active.
+   */
+  StringRef active_event;
+  /**
+   * Set to true by enabled Modal Timer and Modal Event nodes during evaluation. The operator keeps
+   * running modally as long as at least one of the nodes requests it. Multiple nodes may write to
+   * this from different threads, and the same flag is shared by the evaluations for all edited
+   * objects.
    */
   std::atomic<bool> *modal_requested = nullptr;
+  /**
+   * Same as #modal_requested, but only set by enabled Modal Timer nodes. A node tool that only
+   * reacts to events does not need a timer running in the background.
+   */
+  std::atomic<bool> *timer_requested = nullptr;
 };
 
 struct GeoNodesCallData {
@@ -492,6 +504,8 @@ std::unique_ptr<LazyFunction> get_warning_node_lazy_function(const bNode &node);
 std::unique_ptr<LazyFunction> get_enable_output_node_lazy_function(
     const bNode &node, GeometryNodesLazyFunctionGraphInfo &own_lf_graph_info);
 std::unique_ptr<LazyFunction> get_modal_timer_node_lazy_function(
+    const bNode &node, GeometryNodesLazyFunctionGraphInfo &own_lf_graph_info);
+std::unique_ptr<LazyFunction> get_modal_event_node_lazy_function(
     const bNode &node, GeometryNodesLazyFunctionGraphInfo &own_lf_graph_info);
 
 /**

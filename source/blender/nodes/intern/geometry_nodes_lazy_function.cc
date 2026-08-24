@@ -2575,27 +2575,31 @@ struct GeometryNodesLazyFunctionBuilder {
       const lf::FunctionNode &lf_node = static_cast<const lf::FunctionNode &>(lf_socket->node());
       local_side_effect_nodes.append(&lf_node);
     }
-    for (const bNode *bnode : btree_.nodes_by_type("GeometryNodeModalTimer"_ustr)) {
-      if (bnode->is_muted()) {
-        /* A muted node should not keep the tool running. */
-        continue;
+    /* The modal nodes have to be evaluated whenever the node group is evaluated, because they
+     * control whether the tool keeps running. Their outputs are often unused. */
+    auto add_modal_side_effect_nodes = [&](const Span<const bNode *> bnodes) {
+      for (const bNode *bnode : bnodes) {
+        if (bnode->is_muted()) {
+          /* A muted node should not keep the tool running. */
+          continue;
+        }
+        if (tree_zones_->get_zone_by_node(bnode->identifier)) {
+          /* Modal nodes in zones are not supported yet, because zones build their own graph
+           * executor which does not know about these side-effect nodes. */
+          continue;
+        }
+        const Span<lf::InputSocket *> lf_sockets =
+            root_graph_build_params_->lf_inputs_by_bsocket.lookup(&bnode->input_socket(0));
+        if (lf_sockets.is_empty()) {
+          continue;
+        }
+        const lf::FunctionNode &lf_node = static_cast<const lf::FunctionNode &>(
+            lf_sockets[0]->node());
+        local_side_effect_nodes.append(&lf_node);
       }
-      if (tree_zones_->get_zone_by_node(bnode->identifier)) {
-        /* Modal timer nodes in zones are not supported yet, because zones build their own
-         * graph executor which does not know about these side-effect nodes. */
-        continue;
-      }
-      /* The modal timer node has to be evaluated whenever the node group is evaluated, because it
-       * controls whether the tool keeps running. */
-      const Span<lf::InputSocket *> lf_sockets =
-          root_graph_build_params_->lf_inputs_by_bsocket.lookup(&bnode->input_socket(0));
-      if (lf_sockets.is_empty()) {
-        continue;
-      }
-      const lf::FunctionNode &lf_node = static_cast<const lf::FunctionNode &>(
-          lf_sockets[0]->node());
-      local_side_effect_nodes.append(&lf_node);
-    }
+    };
+    add_modal_side_effect_nodes(btree_.nodes_by_type("GeometryNodeModalTimer"_ustr));
+    add_modal_side_effect_nodes(btree_.nodes_by_type("GeometryNodeModalEvent"_ustr));
 
     function.function = &scope_.construct<lf::GraphExecutor>(
         lf_graph_info_->graph,
@@ -3010,7 +3014,13 @@ struct GeometryNodesLazyFunctionBuilder {
           break;
         }
         if (bnode.is_type("GeometryNodeModalTimer"_ustr)) {
-          this->build_modal_timer_node(bnode, graph_params);
+          this->build_modal_node_tool_node(
+              bnode, get_modal_timer_node_lazy_function(bnode, *lf_graph_info_), graph_params);
+          break;
+        }
+        if (bnode.is_type("GeometryNodeModalEvent"_ustr)) {
+          this->build_modal_node_tool_node(
+              bnode, get_modal_event_node_lazy_function(bnode, *lf_graph_info_), graph_params);
           break;
         }
         if (bnode.is_undefined()) {
@@ -3598,10 +3608,15 @@ struct GeometryNodesLazyFunctionBuilder {
     graph_params.usage_by_bsocket.add(&value_input_bsocket, &lf_node.output(0));
   }
 
-  void build_modal_timer_node(const bNode &bnode, BuildGraphParams &graph_params)
+  /**
+   * The Modal Timer and Modal Event nodes have the same side effect logic: a single "Enable" input
+   * that has to be evaluated even when the single output is unused, because it controls whether
+   * the node tool keeps running.
+   */
+  void build_modal_node_tool_node(const bNode &bnode,
+                                  std::unique_ptr<LazyFunction> lazy_function,
+                                  BuildGraphParams &graph_params)
   {
-    std::unique_ptr<LazyFunction> lazy_function = get_modal_timer_node_lazy_function(
-        bnode, *lf_graph_info_);
     lf::FunctionNode &lf_node = graph_params.lf_graph.add_function(*lazy_function);
     scope_.add(std::move(lazy_function));
 
