@@ -1958,12 +1958,12 @@ class GeometryNodesLazyFunctionSideEffectProvider : public lf::GraphExecutor::Si
     GeoNodesUserData *user_data = dynamic_cast<GeoNodesUserData *>(context.user_data);
     BLI_assert(user_data != nullptr);
     const GeoNodesCallData &call_data = *user_data->call_data;
-    if (!call_data.side_effect_nodes) {
-      return {};
+    Vector<const lf::FunctionNode *> side_effect_nodes;
+    if (call_data.side_effect_nodes) {
+      const ComputeContextHash &context_hash = user_data->compute_context->hash();
+      side_effect_nodes = call_data.side_effect_nodes->nodes_by_context.lookup(context_hash);
     }
-    const ComputeContextHash &context_hash = user_data->compute_context->hash();
-    Vector<const lf::FunctionNode *> side_effect_nodes =
-        call_data.side_effect_nodes->nodes_by_context.lookup(context_hash);
+    /* Always add side effect nodes that aren't context dependent. */
     side_effect_nodes.extend(local_side_effect_nodes_);
     return side_effect_nodes;
   }
