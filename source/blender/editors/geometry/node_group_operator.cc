@@ -1038,6 +1038,25 @@ static void run_node_group_end(bContext &C, wmOperator &op)
   op.customdata = nullptr;
 }
 
+static void store_geometries(bContext &C,
+                             wmOperator &op,
+                             Depsgraph &depsgraph_active,
+                             const Span<Object *> objects,
+                             const Span<bke::GeometrySet> geometries)
+{
+  Main *bmain = CTX_data_main(&C);
+  Scene *scene = CTX_data_scene(&C);
+  RegionView3D *rv3d = CTX_wm_region_view3d(&C);
+  for (const int object_i : objects.index_range()) {
+    Object &object = *objects[object_i];
+    Vector<MeshState> orig_mesh_states;
+    store_mesh_state_for_comparison(object, orig_mesh_states);
+    store_result_geometry(
+        C, op, depsgraph_active, *bmain, *scene, object, rv3d, geometries[object_i]);
+    WM_event_add_notifier(&C, NC_GEOM | ND_DATA, object.data);
+  }
+}
+
 static void run_node_group_cancel(bContext *C, wmOperator *op)
 {
   run_node_group_end(*C, *op);
@@ -1075,9 +1094,23 @@ static wmOperatorStatus run_node_group_execute(bContext *C, wmOperator *op, cons
     return OPERATOR_CANCELLED;
   }
 
+  const Vector<Object *> objects = gather_supported_objects(*C, *bmain, mode);
+
+  Depsgraph *depsgraph_active = CTX_data_ensure_evaluated_depsgraph(C);
+  Set<ID *> extra_ids;
+  gather_node_group_ids(*node_tree_orig, extra_ids);
+  const Map<std::string, ID *> input_ids = gather_input_ids(*bmain, *node_tree_orig, *op->ptr);
+  for (ID *id : input_ids.values()) {
+    /* Skip IDs that are already fully evaluated in the active depsgraph. */
+    if (!DEG_id_is_fully_evaluated(depsgraph_active, id)) {
+      extra_ids.add(id);
+    }
+  }
+
   if (event) {
     if (event->type == EVT_ESCKEY) {
-      run_node_group_end(*C, *op);
+      store_geometries(*C, *op, *depsgraph_active, objects, op_data.geometry_orig);
+      run_node_group_cancel(C, op);
       return OPERATOR_CANCELLED;
     }
     if (op_data.timer && ISTIMER(event->type) && !is_timer_event) {
@@ -1093,19 +1126,6 @@ static wmOperatorStatus run_node_group_execute(bContext *C, wmOperator *op, cons
       else if (event->val == KM_RELEASE) {
         op_data.currently_pressed_keys.remove_as(identifier);
       }
-    }
-  }
-
-  const Vector<Object *> objects = gather_supported_objects(*C, *bmain, mode);
-
-  Depsgraph *depsgraph_active = CTX_data_ensure_evaluated_depsgraph(C);
-  Set<ID *> extra_ids;
-  gather_node_group_ids(*node_tree_orig, extra_ids);
-  const Map<std::string, ID *> input_ids = gather_input_ids(*bmain, *node_tree_orig, *op->ptr);
-  for (ID *id : input_ids.values()) {
-    /* Skip IDs that are already fully evaluated in the active depsgraph. */
-    if (!DEG_id_is_fully_evaluated(depsgraph_active, id)) {
-      extra_ids.add(id);
     }
   }
 
@@ -1156,7 +1176,6 @@ static wmOperatorStatus run_node_group_execute(bContext *C, wmOperator *op, cons
   find_verbose_log_contexts(*bmain, verbose_log_contexts);
 
   /* May be null if operator called from outside 3D view context. */
-  const RegionView3D *rv3d = CTX_wm_region_view3d(C);
   Vector<MeshState> orig_mesh_states;
 
   if (op_data.geometry_orig.is_empty()) {
@@ -1177,6 +1196,7 @@ static wmOperatorStatus run_node_group_execute(bContext *C, wmOperator *op, cons
   /* The operator keeps running if one of the evaluations has an enabled Modal Timer node. */
   std::atomic<bool> modal_requested = false;
 
+  Array<bke::GeometrySet> output_geometries(objects.size());
   for (const int object_i : objects.index_range()) {
     Object &object = *objects[object_i];
     nodes::GeoNodesOperatorData operator_eval_data{};
@@ -1295,7 +1315,7 @@ static wmOperatorStatus run_node_group_execute(bContext *C, wmOperator *op, cons
     }
     lazy_function.destruct_storage(lf_context.storage);
 
-    bke::GeometrySet new_geometry =
+    output_geometries[object_i] =
         param_outputs[0].get<bke::SocketValueVariant>()->extract<bke::GeometrySet>();
 
     for (const int i : IndexRange(num_outputs)) {
@@ -1304,11 +1324,9 @@ static wmOperatorStatus run_node_group_execute(bContext *C, wmOperator *op, cons
         ptr.destruct();
       }
     }
-
-    store_result_geometry(
-        *C, *op, *depsgraph_active, *bmain, *scene, object, rv3d, std::move(new_geometry));
-    WM_event_add_notifier(C, NC_GEOM | ND_DATA, object.data);
   }
+
+  store_geometries(*C, *op, *depsgraph_active, objects, output_geometries);
 
   nodes::eval_log::NodeTreeLog &tree_log = eval_log.log->get_tree_log(compute_context.hash());
   tree_log.ensure_node_warnings(*bmain);
