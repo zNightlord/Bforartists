@@ -982,8 +982,8 @@ struct NodeOperatorCustomData {
   Array<bke::GeometrySet> geometry_orig;
   Array<Map<int, std::unique_ptr<DataPerZone>>> simulation_data_by_zone;
   wmTimer *timer = nullptr;
-  NodeOperatorCustomData() : last_time(BLI_time_now_seconds()) {}
   Set<StringRef> currently_pressed_keys;
+  NodeOperatorCustomData() : last_time(BLI_time_now_seconds()) {}
 };
 
 class NodeOperatorSimulationParams : public nodes::GeoNodesSimulationParams {
@@ -1027,7 +1027,7 @@ class NodeOperatorSimulationParams : public nodes::GeoNodesSimulationParams {
 
 static void run_node_group_end(bContext &C, wmOperator &op)
 {
-  NodeOperatorCustomData *op_data = static_cast<NodeOperatorCustomData *>(op.customdata);
+  auto *op_data = static_cast<NodeOperatorCustomData *>(op.customdata);
   if (!op_data) {
     return;
   }
