@@ -325,14 +325,14 @@ class UnifiedPaintPanel:
         if not brush:
             return
         prop_owner = brush
-        if unified_name and getattr(ups, unified_name):
+        if unified_name and getattr(brush, unified_name):
             prop_owner = ups
 
         row.prop(prop_owner, prop_name, icon='NONE', text=text, slider=slider)
 
         if unified_name: # BFA - don't minimize for discoverability
             # NOTE: We don't draw UnifiedPaintSettings in the header to reduce clutter. D5928#136281
-            row.prop(ups, unified_name, text="", icon='BRUSHES_ALL')
+            row.prop(brush, unified_name, text="", icon='BRUSHES_ALL')
 
         if pressure_name:
             row.prop(brush, pressure_name, text="")
@@ -385,7 +385,7 @@ class UnifiedPaintPanel:
         if settings is None:  # BFA - Early return if settings is None for the Annotation tool
             return
         ups = settings.unified_paint_settings
-        prop_owner = ups if ups.use_unified_color else brush
+        prop_owner = ups if brush.use_unified_color else brush
         parent.prop(prop_owner, prop_name, text=text)
 
     @staticmethod
@@ -394,7 +394,7 @@ class UnifiedPaintPanel:
         if settings is None:  # BFA - Early return if settings is None for the Annotation tool
             return
         ups = settings.unified_paint_settings
-        prop_owner = ups if ups.use_unified_color else brush
+        prop_owner = ups if brush.use_unified_color else brush
         parent.template_color_picker(prop_owner, prop_name, value_slider=value_slider)
 
 
@@ -1212,8 +1212,8 @@ def brush_settings(layout, context, brush, popover=False):
             UnifiedPaintPanel.prop_unified_color(row, context, brush, "color", text="")
             UnifiedPaintPanel.prop_unified_color(row, context, brush, "secondary_color", text="")
             row.separator()
-            row.operator("paint.brush_colors_flip", icon="FILE_REFRESH", text="", emboss=False)
-            row.prop(ups, "use_unified_color", text="", icon="BRUSHES_ALL")
+            row.operator("paint.brush_colors_flip", icon='FILE_REFRESH', text="", emboss=False)
+            row.prop(brush, "use_unified_color", text="", icon='BRUSHES_ALL')
             layout.prop(brush, "blend", text="Blend Mode")
 
         # Per sculpt tool options.
@@ -1554,7 +1554,7 @@ def brush_shared_settings(layout, context, brush, popover=False):
             slider=True,
         )
 
-    size_owner = ups if ups.use_unified_size else brush
+    size_owner = ups if brush.use_unified_size else brush
     size_prop = "size"
     if size_mode and (size_owner.use_locked_size == "SCENE"):
         size_prop = "unprojected_size"
@@ -1638,7 +1638,7 @@ def draw_color_jitter_panel(layout, context, brush):
         return
     ups = settings.unified_paint_settings
 
-    prop_owner = ups if ups.use_unified_color else brush
+    prop_owner = ups if brush.use_unified_color else brush
     layout.use_property_split = False
 
     header, panel = layout.panel("color_jitter_panel", default_closed=True)
@@ -1904,7 +1904,7 @@ def draw_color_settings(context, layout, brush, color_type=False):
         UnifiedPaintPanel.prop_unified_color(row, context, brush, "secondary_color", text="")
         row.separator()
         row.operator("paint.brush_colors_flip", icon='FILE_REFRESH', text="", emboss=False)
-        row.prop(ups, "use_unified_color", text="", icon='BRUSHES_ALL')
+        row.prop(brush, "use_unified_color", text="", icon='BRUSHES_ALL')
 
         draw_color_jitter_panel(layout, context, brush)
 
