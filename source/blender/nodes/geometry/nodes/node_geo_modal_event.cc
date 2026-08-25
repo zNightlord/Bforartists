@@ -4,8 +4,6 @@
 
 #include "node_geometry_util.hh"
 
-#include <cstring>
-
 #include "BLI_string.hh"
 #include "BLI_string_utf8.hh"
 
@@ -14,9 +12,6 @@
 #include "BLO_read_write.hh"
 
 #include "NOD_geometry_nodes_lazy_function.hh"
-#include "NOD_rna_define.hh"
-
-#include "RNA_enum_types.hh"
 
 #include "UI_interface_layout.hh"
 #include "UI_resources.hh"
@@ -141,88 +136,6 @@ static void node_blend_read(bNodeTree & /*tree*/, bNode &node, BlendDataReader &
   BLO_read_string(&reader, &storage.description);
 }
 
-/**
- * The strings are stored as pointers in the node storage, so they need runtime accessors instead
- * of the DNA based ones.
- */
-template<char *GeometryNodeModalEvent::*member>
-static std::string storage_string_get(PointerRNA *ptr, PropertyRNA * /*prop*/)
-{
-  const bNode &node = *static_cast<const bNode *>(ptr->data);
-  const auto &storage = *static_cast<const GeometryNodeModalEvent *>(node.storage);
-  const char *value = storage.*member;
-  return value ? value : "";
-}
-
-template<char *GeometryNodeModalEvent::*member>
-static int storage_string_length(PointerRNA *ptr, PropertyRNA * /*prop*/)
-{
-  const bNode &node = *static_cast<const bNode *>(ptr->data);
-  const auto &storage = *static_cast<const GeometryNodeModalEvent *>(node.storage);
-  const char *value = storage.*member;
-  return value ? int(std::strlen(value)) : 0;
-}
-
-template<char *GeometryNodeModalEvent::*member>
-static void storage_string_set(PointerRNA *ptr, PropertyRNA * /*prop*/, const std::string &value)
-{
-  bNode &node = *static_cast<bNode *>(ptr->data);
-  auto &storage = *static_cast<GeometryNodeModalEvent *>(node.storage);
-  MEM_SAFE_DELETE(storage.*member);
-  storage.*member = BLI_strdupn(value.c_str(), value.size());
-}
-
-// TODO: REPLACE WITH OPERATOR MODAL KEYMAP
-static void event_name_search(const bContext * /*C*/,
-                              PointerRNA * /*ptr*/,
-                              PropertyRNA * /*prop*/,
-                              const char * /*edit_text*/,
-                              FunctionRef<void(StringPropertySearchVisitParams)> visit_fn)
-{
-  for (const EnumPropertyItem *item = rna_enum_event_type_items; item->identifier; item++) {
-    if (item->identifier[0] == '\0') {
-      /* Skip the separators between the event type categories. */
-      continue;
-    }
-    StringPropertySearchVisitParams params{};
-    params.text = item->identifier;
-    params.info = item->name;
-    visit_fn(params);
-  }
-}
-
-static void node_rna(StructRNA *srna)
-{
-  PropertyRNA *prop;
-
-  prop = RNA_def_property(srna, "event_name", PROP_STRING, PROP_NONE);
-  RNA_def_property_string_funcs_runtime(prop,
-                                        storage_string_get<&GeometryNodeModalEvent::name>,
-                                        storage_string_length<&GeometryNodeModalEvent::name>,
-                                        storage_string_set<&GeometryNodeModalEvent::name>,
-                                        nullptr,
-                                        nullptr);
-  RNA_def_property_string_search_func_runtime(
-      prop, event_name_search, PROP_STRING_SEARCH_SORT | PROP_STRING_SEARCH_SUGGESTION);
-  RNA_def_property_ui_text(
-      prop, "Name", "Name of the event that the node tool reacts to while it keeps running");
-  RNA_def_property_update_runtime(prop, rna_Node_update);
-  RNA_def_property_update_notifier(prop, NC_NODE | NA_EDITED);
-
-  prop = RNA_def_property(srna, "description", PROP_STRING, PROP_NONE);
-  RNA_def_property_string_funcs_runtime(
-      prop,
-      storage_string_get<&GeometryNodeModalEvent::description>,
-      storage_string_length<&GeometryNodeModalEvent::description>,
-      storage_string_set<&GeometryNodeModalEvent::description>,
-      nullptr,
-      nullptr);
-  RNA_def_property_ui_text(
-      prop, "Description", "Explanation of what the node tool does when the event is processed");
-  RNA_def_property_update_runtime(prop, rna_Node_update);
-  RNA_def_property_update_notifier(prop, NC_NODE | NA_EDITED);
-}
-
 static void node_register()
 {
   static bke::bNodeType ntype;
@@ -242,8 +155,6 @@ static void node_register()
   ntype.blend_data_read_storage_content = node_blend_read;
   ntype.gather_link_search_ops = search_link_ops_for_tool_node;
   bke::node_register_type(ntype);
-
-  node_rna(ntype.rna_ext.srna);
 }
 NOD_REGISTER_NODE(node_register)
 

@@ -86,6 +86,7 @@ set(SRC
   intern/geometry_nodes_gizmos.cc
   intern/geometry_nodes_lazy_function.cc
   intern/geometry_nodes_list.cc
+  intern/geometry_nodes_modal_events.cc
   intern/geometry_nodes_physics_bundles.cc
   intern/geometry_nodes_repeat_zone.cc
   intern/geometry_nodes_srna.cc
@@ -144,6 +145,7 @@ set(SRC
   NOD_geometry_nodes_lazy_function.hh
   NOD_geometry_nodes_list.hh
   NOD_geometry_nodes_list_fwd.hh
+  NOD_geometry_nodes_modal_events.hh
   NOD_geometry_nodes_physics_bundles.hh
   NOD_geometry_nodes_srna.hh
   NOD_geometry_nodes_values.hh

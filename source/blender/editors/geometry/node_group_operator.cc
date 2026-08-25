@@ -982,64 +982,35 @@ struct NodeOperatorCustomData {
   Array<bke::GeometrySet> geometry_orig;
   Array<Map<int, std::unique_ptr<DataPerZone>>> simulation_data_by_zone;
   wmTimer *timer = nullptr;
-  /**
-   * Names of all events defined by Modal Event nodes in the node group and its nested groups.
-   * Gathered once when the operator starts.
-   */
-  Set<std::string> modal_event_names;
   NodeOperatorCustomData() : last_time(BLI_time_now_seconds()) {}
 };
 
 /**
- * Gather the events that the node group reacts to. Modal Event nodes in nested groups define
- * events for the tool as a whole, and multiple nodes may define the same event by using the same
- * name.
+ * The window manager rewrites events that the operator's modal keymap matches, so the original
+ * event type has to be read from #wmEvent::prev_type in that case. Used for the keys that the
+ * operator handles itself that don't necessarily have modal events.
  */
-static void gather_modal_event_names(const bNodeTree &node_tree,
-                                     Set<const bNodeTree *> &visited_trees,
-                                     Set<std::string> &r_names)
+static wmEventType original_event_type(const wmEvent &event)
 {
-  if (!visited_trees.add(&node_tree)) {
-    return;
-  }
-  node_tree.ensure_topology_cache();
-  for (const bNode *node : node_tree.nodes_by_type("GeometryNodeModalEvent"_ustr)) {
-    if (node->is_muted()) {
-      continue;
-    }
-    const auto *storage = static_cast<const GeometryNodeModalEvent *>(node->storage);
-    if (storage->name && storage->name[0] != '\0') {
-      r_names.add_as(storage->name);
-    }
-  }
-  for (const bNode *node : node_tree.group_nodes()) {
-    if (const bNodeTree *group = id_cast<const bNodeTree *>(node->id)) {
-      gather_modal_event_names(*group, visited_trees, r_names);
-    }
-  }
+  return event.type == EVT_MODAL_MAP ? event.prev_type : event.type;
 }
 
 /**
  * \return The name of the event that Modal Event nodes use to react to this event, or none if the
- * event cannot be handled by the node group at all.
- * TODO: REPLACE WITH OPERATOR MODAL KEYMAP
+ * event isn't part of the tool's modal keymap.
  */
-static std::optional<StringRefNull> modal_event_name_for_event(const wmEvent &event)
+static std::optional<StringRef> modal_event_name_for_event(const wmOperatorType &ot,
+                                                           const wmEvent &event)
 {
-  if (ELEM(event.type, MOUSEMOVE, INBETWEEN_MOUSEMOVE)) {
-    /* TODO: Remove this special case once a default modal keymap is stored for the operator, so
-     * that mouse movement can be bound to an event like any other input. */
-    return StringRefNull("MOUSEMOVE");
-  }
-  if (event.val != KM_PRESS) {
-    /* Only key presses are supported until there is a modal keymap to map events to inputs. */
+  if (event.type != EVT_MODAL_MAP || !ot.modalkeymap || !ot.modalkeymap->modal_items) {
     return std::nullopt;
   }
+  const auto *items = static_cast<const EnumPropertyItem *>(ot.modalkeymap->modal_items);
   const char *identifier = nullptr;
-  if (!RNA_enum_identifier(rna_enum_event_type_items, event.type, &identifier)) {
+  if (!RNA_enum_identifier(items, event.val, &identifier)) {
     return std::nullopt;
   }
-  return StringRefNull(identifier);
+  return StringRef(identifier);
 }
 
 class NodeOperatorSimulationParams : public nodes::GeoNodesSimulationParams {
@@ -1153,11 +1124,6 @@ static wmOperatorStatus run_node_group_execute(bContext *C,
     return OPERATOR_CANCELLED;
   }
 
-  if (is_invoke) {
-    Set<const bNodeTree *> visited_trees;
-    gather_modal_event_names(*node_tree_orig, visited_trees, op_data.modal_event_names);
-  }
-
   const Vector<Object *> objects = gather_supported_objects(*C, *bmain, mode);
 
   Depsgraph *depsgraph_active = CTX_data_ensure_evaluated_depsgraph(C);
@@ -1173,26 +1139,24 @@ static wmOperatorStatus run_node_group_execute(bContext *C,
 
   StringRef active_event;
   if (event) {
-    if (event->type == EVT_ESCKEY) {
+    const wmEventType type = original_event_type(*event);
+    if (type == EVT_ESCKEY) {
       store_geometries(*C, *op, *depsgraph_active, objects, op_data.geometry_orig);
       run_node_group_cancel(C, op);
       return OPERATOR_CANCELLED;
     }
-    if (op_data.timer && ISTIMER(event->type) && !is_timer_event) {
+    if (op_data.timer && ISTIMER(type) && !is_timer_event) {
       /* Timers from other parts of Blender should not trigger another execution. */
       return OPERATOR_RUNNING_MODAL;
     }
-    /* The keys that end the operator are reserved, so they can't be used for a Modal Event node.
-     * Unlike escape they still evaluate the node group one last time below. */
-    const bool is_end_key = ELEM(event->type, EVT_PADENTER, EVT_RETKEY);
-    if (!is_invoke && !is_timer_event && !is_end_key) {
-      /* Only process events that the node group defines with a Modal Event node. Evaluating the
-       * whole node group for events that it cannot react to would just be wasted work. */
-      const std::optional<StringRefNull> event_name = modal_event_name_for_event(*event);
-      if (!event_name || !op_data.modal_event_names.contains_as(*event_name)) {
-        return OPERATOR_RUNNING_MODAL;
-      }
+    if (const std::optional<StringRef> event_name = modal_event_name_for_event(*op->type, *event))
+    {
       active_event = *event_name;
+    }
+    else if (!is_invoke && !is_timer_event && !ELEM(type, EVT_PADENTER, EVT_RETKEY)) {
+      /* The event is not part of the tool's modal keymap, so no Modal Event node can react to it.
+       * Evaluating the whole node group would just be wasted work. */
+      return OPERATOR_RUNNING_MODAL;
     }
   }
 
@@ -1413,7 +1377,7 @@ static wmOperatorStatus run_node_group_execute(bContext *C,
     run_node_group_end(*C, *op);
     return OPERATOR_FINISHED;
   }
-  if (ELEM(event->type, EVT_PADENTER, EVT_RETKEY)) {
+  if (ELEM(original_event_type(*event), EVT_PADENTER, EVT_RETKEY)) {
     /* Hard-coded "end" key. Let the evaluation happen first though, unlike "escape." */
     run_node_group_end(*C, *op);
     return OPERATOR_FINISHED;
@@ -1792,6 +1756,119 @@ static StructRNA *create_panels_srna(const IDProperty &properties,
   return srna;
 }
 
+/**
+ * The events and their default key bindings are read back from the asset meta-data properties,
+ * because those are available for both local node groups and assets that aren't loaded. Since the
+ * properties are part of #OperatorTypeData::hash, the modal keymap is only rebuilt when the events
+ * or their defaults actually changed.
+ */
+static bool is_valid_identifier(const StringRef name)
+{
+  if (name.is_empty()) {
+    return false;
+  }
+  if (!ELEM(name[0], '_') && !std::isalpha(uchar(name[0]))) {
+    return false;
+  }
+  return std::all_of(
+      name.begin(), name.end(), [](const char c) { return c == '_' || std::isalnum(uchar(c)); });
+}
+
+/** Build the modal keymap's item array from the events listed in the meta-data properties. */
+static Vector<EnumPropertyItem> modal_keymap_items_from_meta_data(const IDProperty &properties)
+{
+  Vector<EnumPropertyItem> items;
+  const IDProperty *events = IDP_GetPropertyFromGroup(&properties, "modal_events");
+  if (!events || events->type != IDP_GROUP) {
+    return items;
+  }
+  for (const IDProperty &event : events->data.group) {
+    if (event.type != IDP_STRING) {
+      continue;
+    }
+    if (!is_valid_identifier(event.name)) {
+      /* The name is used as a modal keymap item identifier, so it has to be a valid identifier.
+       * Events with other names simply can't be bound to a key. */
+      continue;
+    }
+    /* The strings stay owned by the meta-data properties. Those live as long as the operator type
+     * and therefore as long as the keymap that references this array. */
+    items.append({int(items.size()), event.name, 0, event.name, IDP_string_get(&event)});
+  }
+  if (!items.is_empty()) {
+    items.append({0, nullptr, 0, nullptr, nullptr});
+  }
+  return items;
+}
+
+static void add_default_modal_keymap_items(wmKeyMap &keymap,
+                                           const IDProperty &properties,
+                                           const Span<EnumPropertyItem> items)
+{
+  const IDProperty *keymap_props = IDP_GetPropertyFromGroup(&properties, "modal_keymap_default");
+  if (!keymap_props || keymap_props->type != IDP_GROUP) {
+    return;
+  }
+  for (const IDProperty &item_props : keymap_props->data.group) {
+    if (item_props.type != IDP_GROUP) {
+      continue;
+    }
+    /* The default keymap can be out of date when the Modal Event node that defined an event has
+     * been removed or renamed. That's not an error, the binding is just skipped. */
+    int propvalue;
+    if (!RNA_enum_value_from_id(items.data(), item_props.name, &propvalue)) {
+      continue;
+    }
+    KeyMapItem_Params params{};
+    params.type = IDP_group_lookup_int(item_props, "type").value_or(0);
+    params.value = IDP_group_lookup_int(item_props, "val").value_or(0);
+    params.direction = IDP_group_lookup_int(item_props, "direction").value_or(0);
+    params.modifier = 0;
+    if (IDP_group_lookup_int(item_props, "shift").value_or(0)) {
+      params.modifier |= KM_SHIFT;
+    }
+    if (IDP_group_lookup_int(item_props, "ctrl").value_or(0)) {
+      params.modifier |= KM_CTRL;
+    }
+    if (IDP_group_lookup_int(item_props, "alt").value_or(0)) {
+      params.modifier |= KM_ALT;
+    }
+    if (IDP_group_lookup_int(item_props, "oskey").value_or(0)) {
+      params.modifier |= KM_OSKEY;
+    }
+    if (IDP_group_lookup_int(item_props, "hyper").value_or(0)) {
+      params.modifier |= KM_HYPER;
+    }
+    params.keymodifier = IDP_group_lookup_int(item_props, "keymodifier").value_or(0);
+    /* Not #WM_modalkeymap_add_item_str: that stores the name for #wm_user_modal_keymap_set_items
+     * to resolve later, but it only does that for keymaps that don't have their items yet. */
+    WM_modalkeymap_add_item(&keymap, &params, propvalue);
+  }
+}
+
+static void register_node_tool_modal_keymap(wmOperatorType *ot, OperatorTypeData &type_data)
+{
+  const Vector<EnumPropertyItem> items = modal_keymap_items_from_meta_data(
+      *type_data.asset_meta_data_properties);
+  if (items.is_empty()) {
+    return;
+  }
+  wmWindowManager *wm = static_cast<wmWindowManager *>(G_MAIN->wm.first);
+  if (!wm || !wm->runtime->defaultconf) {
+    return;
+  }
+  /* The item array has to stay alive as long as the keymap references it. */
+  type_data.enum_item_storage.append(Array<EnumPropertyItem, 0>(items.as_span()));
+  const EnumPropertyItem *stored_items = type_data.enum_item_storage.last().data();
+
+  const std::string keymap_name = type_data.idname + " Modal Map";
+  wmKeyMap *keymap = WM_modalkeymap_ensure(
+      wm->runtime->defaultconf, keymap_name.c_str(), stored_items);
+  add_default_modal_keymap_items(*keymap, *type_data.asset_meta_data_properties, items.as_span());
+  /* #WM_modalkeymap_assign, cannot be used while registering an operator. */
+  ot->modalkeymap = keymap;
+}
+
 static void register_node_tool(wmOperatorType *ot,
                                std::unique_ptr<OperatorTypeData> &type_data_ptr)
 {
@@ -1886,6 +1963,8 @@ static void register_node_tool(wmOperatorType *ot,
   prop = RNA_def_boolean(
       ot->srna, "viewport_is_perspective", false, "Viewport Is Perspective", "");
   RNA_def_property_flag(prop, PROP_HIDDEN);
+
+  register_node_tool_modal_keymap(ot, type_data);
 }
 
 void ui_template_node_operator_registration_errors(ui::Layout &layout,

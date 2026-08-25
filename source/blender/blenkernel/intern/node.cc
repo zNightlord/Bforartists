@@ -101,6 +101,7 @@
 #include "NOD_geo_simulation.hh"
 #include "NOD_geometry_nodes_gizmos.hh"
 #include "NOD_geometry_nodes_lazy_function.hh"
+#include "NOD_geometry_nodes_modal_events.hh"
 #include "NOD_geometry_nodes_srna.hh"
 #include "NOD_menu_value.hh"
 #include "NOD_node_declaration.hh"
@@ -236,10 +237,17 @@ static void ntree_copy_data(Main * /*bmain*/,
       ntree_src->runtime->scene_compositor_effect_srna_data;
 
   if (ntree_src->geometry_node_asset_traits) {
-    ntree_dst->geometry_node_asset_traits = MEM_new<GeometryNodeAssetTraits>(
-        __func__, *ntree_src->geometry_node_asset_traits);
-    ntree_dst->geometry_node_asset_traits->node_tool_idname = BLI_strdup_null(
-        ntree_src->geometry_node_asset_traits->node_tool_idname);
+    const GeometryNodeAssetTraits &traits_src = *ntree_src->geometry_node_asset_traits;
+    GeometryNodeAssetTraits &traits_dst = *MEM_new<GeometryNodeAssetTraits>(__func__, traits_src);
+    ntree_dst->geometry_node_asset_traits = &traits_dst;
+    traits_dst.node_tool_idname = BLI_strdup_null(traits_src.node_tool_idname);
+    if (traits_src.modal_keymap_default) {
+      traits_dst.modal_keymap_default = MEM_dupalloc(traits_src.modal_keymap_default);
+      for (const int i : IndexRange(traits_src.modal_keymap_default_num)) {
+        traits_dst.modal_keymap_default[i].event_name = BLI_strdup_null(
+            traits_src.modal_keymap_default[i].event_name);
+      }
+    }
   }
   if (ntree_src->compositor_node_asset_traits) {
     ntree_dst->compositor_node_asset_traits = MEM_new<CompositorNodeAssetTraits>(
@@ -303,8 +311,13 @@ static void ntree_free_data(ID *id)
   }
 
   if (ntree->geometry_node_asset_traits) {
-    MEM_SAFE_DELETE(ntree->geometry_node_asset_traits->node_tool_idname);
-    MEM_delete(ntree->geometry_node_asset_traits);
+    GeometryNodeAssetTraits &traits = *ntree->geometry_node_asset_traits;
+    MEM_SAFE_DELETE(traits.node_tool_idname);
+    for (const int i : IndexRange(traits.modal_keymap_default_num)) {
+      MEM_SAFE_DELETE(traits.modal_keymap_default[i].event_name);
+    }
+    MEM_SAFE_DELETE(traits.modal_keymap_default);
+    MEM_delete(&traits);
   }
   if (ntree->compositor_node_asset_traits) {
     MEM_delete(ntree->compositor_node_asset_traits);
@@ -1414,7 +1427,12 @@ void node_tree_blend_write(BlendWriter *writer, bNodeTree *ntree)
 
   writer->write_struct(ntree->geometry_node_asset_traits);
   if (ntree->geometry_node_asset_traits) {
-    writer->write_string(ntree->geometry_node_asset_traits->node_tool_idname);
+    const GeometryNodeAssetTraits &traits = *ntree->geometry_node_asset_traits;
+    writer->write_string(traits.node_tool_idname);
+    writer->write_struct_array(traits.modal_keymap_default_num, traits.modal_keymap_default);
+    for (const int i : IndexRange(traits.modal_keymap_default_num)) {
+      writer->write_string(traits.modal_keymap_default[i].event_name);
+    }
   }
   writer->write_struct(ntree->compositor_node_asset_traits);
 
@@ -2179,7 +2197,13 @@ void node_tree_blend_read_data(BlendDataReader *reader, ID *owner_id, bNodeTree 
 
   BLO_read_struct(reader, GeometryNodeAssetTraits, &ntree->geometry_node_asset_traits);
   if (ntree->geometry_node_asset_traits) {
-    BLO_read_string(reader, &ntree->geometry_node_asset_traits->node_tool_idname);
+    GeometryNodeAssetTraits &traits = *ntree->geometry_node_asset_traits;
+    BLO_read_string(reader, &traits.node_tool_idname);
+    BLO_read_array_and_validate_size(
+        reader, &traits.modal_keymap_default, &traits.modal_keymap_default_num);
+    for (const int i : IndexRange(traits.modal_keymap_default_num)) {
+      BLO_read_string(reader, &traits.modal_keymap_default[i].event_name);
+    }
   }
   BLO_read_struct(reader, CompositorNodeAssetTraits, &ntree->compositor_node_asset_traits);
 
@@ -2445,6 +2469,49 @@ IDProperty *node_create_asset_meta_data_properties(const bNodeTree &node_tree)
     IDP_AddToGroup(output_sockets.get(), output.release());
   }
   IDP_AddToGroup(properties.get(), output_sockets.release());
+
+  if (node_tree.type == NTREE_GEOMETRY) {
+    /* The events a node tool reacts to, so that a modal keymap can be registered for its operator
+     * type without loading the node group. */
+    auto modal_events = idprop::create_group("modal_events");
+    /* This runs whenever node tool operator types are registered, so use the cache that the node
+     * tree update maintains instead of walking all nested groups again. */
+    nodes::ModalEvents events_storage;
+    if (!node_tree.runtime->modal_events) {
+      events_storage = nodes::gather_modal_events_recursive(node_tree);
+    }
+    const nodes::ModalEvents &events = node_tree.runtime->modal_events ?
+                                           *node_tree.runtime->modal_events :
+                                           events_storage;
+    for (const nodes::ModalEvent &event : events.events) {
+      IDP_AddToGroup(modal_events.get(), idprop::create(event.name, event.description).release());
+    }
+    IDP_AddToGroup(properties.get(), modal_events.release());
+
+    if (const GeometryNodeAssetTraits *traits = node_tree.geometry_node_asset_traits) {
+      auto keymap = idprop::create_group("modal_keymap_default");
+      for (const int i : IndexRange(traits->modal_keymap_default_num)) {
+        const GeometryNodeModalKeymapItem &item = traits->modal_keymap_default[i];
+        if (!item.event_name || item.event_name[0] == '\0') {
+          continue;
+        }
+        auto item_props = idprop::create_group(item.event_name);
+        IDP_AddToGroup(item_props.get(), idprop::create("type", int(item.type)).release());
+        IDP_AddToGroup(item_props.get(), idprop::create("val", int(item.val)).release());
+        IDP_AddToGroup(item_props.get(),
+                       idprop::create("direction", int(item.direction)).release());
+        IDP_AddToGroup(item_props.get(),
+                       idprop::create("keymodifier", int(item.keymodifier)).release());
+        IDP_AddToGroup(item_props.get(), idprop::create("shift", int(item.shift)).release());
+        IDP_AddToGroup(item_props.get(), idprop::create("ctrl", int(item.ctrl)).release());
+        IDP_AddToGroup(item_props.get(), idprop::create("alt", int(item.alt)).release());
+        IDP_AddToGroup(item_props.get(), idprop::create("oskey", int(item.oskey)).release());
+        IDP_AddToGroup(item_props.get(), idprop::create("hyper", int(item.hyper)).release());
+        IDP_AddToGroup(keymap.get(), item_props.release());
+      }
+      IDP_AddToGroup(properties.get(), keymap.release());
+    }
+  }
 
   return properties.release();
 }
