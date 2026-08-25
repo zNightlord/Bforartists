@@ -143,6 +143,7 @@ struct OperatorTypeData : public wmOperatorType::TypeData {
   std::unique_ptr<IDProperty, bke::idprop::IDPropertyDeleter> asset_meta_data_properties;
   Vector<StructRNA *> generated_structs;
   Vector<Array<EnumPropertyItem, 0>> enum_item_storage;
+  Array<EnumPropertyItem, 0> modal_keymap_items;
 
   struct LocalRef {
     uint32_t session_uid;
@@ -1813,10 +1814,15 @@ static void add_default_modal_keymap_items(wmKeyMap &keymap,
     if (item_props.type != IDP_GROUP) {
       continue;
     }
+    const std::optional<StringRefNull> event_name = IDP_group_lookup_string(item_props,
+                                                                            "event_name");
+    if (!event_name) {
+      continue;
+    }
     /* The default keymap can be out of date when the Modal Event node that defined an event has
      * been removed or renamed. That's not an error, the binding is just skipped. */
     int propvalue;
-    if (!RNA_enum_value_from_id(items.data(), item_props.name, &propvalue)) {
+    if (!RNA_enum_value_from_id(items.data(), event_name->c_str(), &propvalue)) {
       continue;
     }
     KeyMapItem_Params params{};
@@ -1846,27 +1852,35 @@ static void add_default_modal_keymap_items(wmKeyMap &keymap,
   }
 }
 
-static void register_node_tool_modal_keymap(wmOperatorType *ot, OperatorTypeData &type_data)
+/**
+ * Create the modal keymap of a node tool and fill it with the default bindings its node groups
+ * define. Called by the window manager whenever the default key configuration is created or
+ * re-created, and directly when the node group changed.
+ */
+static void node_tool_modal_keymap_ensure(wmOperatorType *ot, wmKeyConfig *keyconf)
 {
-  const Vector<EnumPropertyItem> items = modal_keymap_items_from_meta_data(
-      *type_data.asset_meta_data_properties);
-  if (items.is_empty()) {
-    return;
+  auto &type_data = static_cast<OperatorTypeData &>(*ot->custom_data);
+  if (type_data.modal_keymap_items.is_empty()) {
+    const Vector<EnumPropertyItem> items = modal_keymap_items_from_meta_data(
+        *type_data.asset_meta_data_properties);
+    if (items.is_empty()) {
+      return;
+    }
+    type_data.modal_keymap_items = Array<EnumPropertyItem, 0>(items.as_span());
   }
-  wmWindowManager *wm = static_cast<wmWindowManager *>(G_MAIN->wm.first);
-  if (!wm || !wm->runtime->defaultconf) {
-    return;
-  }
-  /* The item array has to stay alive as long as the keymap references it. */
-  type_data.enum_item_storage.append(Array<EnumPropertyItem, 0>(items.as_span()));
-  const EnumPropertyItem *stored_items = type_data.enum_item_storage.last().data();
-
-  const std::string keymap_name = type_data.idname + " Modal Map";
+  /* The keymap name is its identity, so the operator identifier is used rather than the tool name,
+   * which isn't unique. */
   wmKeyMap *keymap = WM_modalkeymap_ensure(
-      wm->runtime->defaultconf, keymap_name.c_str(), stored_items);
-  add_default_modal_keymap_items(*keymap, *type_data.asset_meta_data_properties, items.as_span());
-  /* #WM_modalkeymap_assign, cannot be used while registering an operator. */
+      keyconf, type_data.idname.c_str(), type_data.modal_keymap_items.data());
+  /* Not #WM_modalkeymap_assign, because that looks the operator type up by name and it is only
+   * added to the map after the registration callback returns (see #WM_operatortype_append_ptr). */
   ot->modalkeymap = keymap;
+
+  /* #WM_modalkeymap_ensure keeps the items of a keymap that already exists, so replace them
+   * instead of adding a second copy of every binding. */
+  WM_keymap_clear(keymap);
+  add_default_modal_keymap_items(
+      *keymap, *type_data.asset_meta_data_properties, type_data.modal_keymap_items.as_span());
 }
 
 static void register_node_tool(wmOperatorType *ot,
@@ -1887,6 +1901,7 @@ static void register_node_tool(wmOperatorType *ot,
   ot->cancel = run_node_group_cancel;
   ot->ui = run_node_group_ui;
   ot->ui_poll = run_node_ui_poll;
+  ot->modal_keymap_ensure = node_tool_modal_keymap_ensure;
 
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_NODE_TOOL;
   if (type_data.flag & GEO_NODE_ASSET_WAIT_FOR_CURSOR) {
@@ -1963,8 +1978,6 @@ static void register_node_tool(wmOperatorType *ot,
   prop = RNA_def_boolean(
       ot->srna, "viewport_is_perspective", false, "Viewport Is Perspective", "");
   RNA_def_property_flag(prop, PROP_HIDDEN);
-
-  register_node_tool_modal_keymap(ot, type_data);
 }
 
 void ui_template_node_operator_registration_errors(ui::Layout &layout,
@@ -2242,12 +2255,24 @@ void register_node_group_operators(const bContext &C)
   }
 
   Vector<std::unique_ptr<OperatorTypeData>> vector = types_to_register.extract_vector();
+  Vector<StringRefNull> registered_idnames;
   for (std::unique_ptr<OperatorTypeData> &type : vector) {
+    registered_idnames.append(type->idname);
     WM_operatortype_append_ptr(
         [](wmOperatorType *ot, void *user_data) {
           register_node_tool(ot, *static_cast<std::unique_ptr<OperatorTypeData> *>(user_data));
         },
         &type);
+  }
+
+  /* Build the modal keymaps of the tools that were just registered. Only those, so that editing
+   * one node group doesn't rebuild the keymaps of every other tool. */
+  if (wm.runtime->defaultconf) {
+    for (const StringRefNull idname : registered_idnames) {
+      if (wmOperatorType *ot = WM_operatortype_find(idname.c_str(), true)) {
+        WM_keyconfig_operator_modal_keymap_ensure(ot, wm.runtime->defaultconf);
+      }
+    }
   }
 
   registration_data.local_types.clear();

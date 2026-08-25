@@ -2186,7 +2186,7 @@ struct bNodeSocketValueMenu {
  */
 struct GeometryNodeModalKeymapItem {
   /** Name of the event, matching the name of a Modal Event node. See #nodes::ModalEvent. */
-  char *event_name;
+  char event_name[/*MAX_NAME*/ 64];
   /** #wmKeyMapItem.type. */
   wmEventType type;
   /** #wmKeyMapItem.keymodifier. */

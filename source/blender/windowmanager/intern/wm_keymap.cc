@@ -307,6 +307,28 @@ wmKeyConfig *WM_keyconfig_new(wmWindowManager *wm, const char *idname, bool user
   return keyconf;
 }
 
+void WM_keyconfig_operator_modal_keymap_ensure(wmOperatorType *ot, wmKeyConfig *keyconf)
+{
+  if (ot->modal_keymap_ensure == nullptr) {
+    return;
+  }
+  ot->modal_keymap_ensure(ot, keyconf);
+  if (ot->modalkeymap) {
+    ot->modalkeymap->flag |= KEYMAP_OPERATOR_MODAL;
+  }
+}
+
+void WM_keyconfig_operator_modal_keymaps_ensure(wmWindowManager *wm)
+{
+  wmKeyConfig *keyconf = wm->runtime->defaultconf;
+  if (keyconf == nullptr) {
+    return;
+  }
+  for (wmOperatorType *ot : WM_operatortypes_registered_get()) {
+    WM_keyconfig_operator_modal_keymap_ensure(ot, keyconf);
+  }
+}
+
 wmKeyConfig *WM_keyconfig_ensure(wmWindowManager *wm, const char *idname, bool user_defined)
 {
   wmKeyConfig *keyconf = static_cast<wmKeyConfig *>(
@@ -318,6 +340,7 @@ wmKeyConfig *WM_keyconfig_ensure(wmWindowManager *wm, const char *idname, bool u
       for (wmKeyMap &km : keyconf->keymaps) {
         WM_keymap_clear(&km);
       }
+      WM_keyconfig_operator_modal_keymaps_ensure(wm);
     }
     else {
       /* For user defined key configuration, clear all keymaps. */
@@ -480,6 +503,27 @@ void WM_keymap_remove(wmKeyConfig *keyconf, wmKeyMap *keymap)
   WM_keymap_clear(keymap);
   BLI_remlink(&keyconf->keymaps, keymap);
   MEM_delete(keymap);
+}
+
+void WM_keymap_modal_items_clear(wmKeyMap *keymap)
+{
+  keymap->modal_items = nullptr;
+  wmWindowManager *wm = static_cast<wmWindowManager *>(G_MAIN->wm.first);
+  if (wm == nullptr) {
+    return;
+  }
+  for (wmKeyConfig &keyconf : wm->runtime->keyconfigs) {
+    if (wmKeyMap *km = WM_keymap_list_find(
+            &keyconf.keymaps, keymap->idname, keymap->spaceid, keymap->regionid))
+    {
+      km->modal_items = nullptr;
+    }
+  }
+  if (wmKeyMap *km = WM_keymap_list_find(
+          &U.user_keymaps, keymap->idname, keymap->spaceid, keymap->regionid))
+  {
+    km->modal_items = nullptr;
+  }
 }
 
 bool WM_keymap_poll(bContext *C, wmKeyMap *keymap)

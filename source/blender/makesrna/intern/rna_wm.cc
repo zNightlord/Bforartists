@@ -3211,6 +3211,14 @@ static void rna_def_keyconfig(BlenderRNA *brna)
       "Modal Keymap",
       "Indicates that a keymap is used for translate modal events for an operator");
 
+  prop = RNA_def_property(srna, "is_operator_modal", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "flag", KEYMAP_OPERATOR_MODAL);
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_ui_text(prop,
+                           "Operator Modal Keymap",
+                           "Indicates that the keymap is defined by an operator type that is "
+                           "registered at runtime, instead of by a key configuration");
+
   prop = RNA_def_property(srna, "show_expanded_items", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "flag", KEYMAP_EXPANDED);
   RNA_def_property_ui_text(prop, "Items Expanded", "Expanded in the user interface");

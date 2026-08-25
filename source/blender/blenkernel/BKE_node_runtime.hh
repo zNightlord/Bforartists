@@ -36,7 +36,7 @@ struct bNodeTree;
 
 namespace nodes {
 struct EvalDependencies;
-struct ModalEvents;
+struct ModalEventsInfo;
 struct GeneratedTreeSrnaData;
 class NodeDeclaration;
 struct GeometryNodesLazyFunctionGraphInfo;
@@ -250,7 +250,7 @@ class bNodeTreeRuntime : NonCopyable, NonMovable {
   /**
    * Cache of the events that Modal Event nodes in this node tree and its nested groups define.
    */
-  std::unique_ptr<nodes::ModalEvents> modal_events;
+  std::unique_ptr<nodes::ModalEventsInfo> modal_events;
 
   /** Only valid when #topology_cache_is_dirty is false. */
   Vector<bNodeLink *> links;

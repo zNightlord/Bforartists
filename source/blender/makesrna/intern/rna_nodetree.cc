@@ -34,6 +34,7 @@
 #include "RNA_path.hh"
 
 #include "NOD_common.hh"
+#include "NOD_geometry_nodes_modal_events.hh"
 
 #include "rna_internal.hh"
 #include "rna_internal_types.hh"
@@ -1235,6 +1236,13 @@ static void rna_NodeTree_update_asset(Main *bmain, Scene *scene, PointerRNA *ptr
   rna_NodeTree_update(bmain, scene, ptr);
   WM_main_add_notifier(NC_NODE | ND_NODE_ASSET_DATA, nullptr);
   bke::node_update_asset_metadata(*reinterpret_cast<bNodeTree *>(ptr->owner_id));
+}
+
+static void rna_GeometryNodeModalKeymapItem_update(Main *bmain, Scene *scene, PointerRNA *ptr)
+{
+  bNodeTree *ntree = reinterpret_cast<bNodeTree *>(ptr->owner_id);
+  BKE_ntree_update_tag_modal_keymap(ntree);
+  rna_NodeTree_update_asset(bmain, scene, ptr);
 }
 
 static const EnumPropertyItem *rna_NodeTree_color_tag_itemf(bContext * /*C*/,
@@ -9264,28 +9272,28 @@ static void rna_def_geometry_node_modal_keymap_item(BlenderRNA *brna)
   RNA_def_property_string_sdna(prop, nullptr, "event_name");
   RNA_def_property_ui_text(
       prop, "Name", "Name of the event, matching the name of a Modal Event node");
-  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_NodeTree_update_asset");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_GeometryNodeModalKeymapItem_update");
 
   prop = RNA_def_property(srna, "type", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_sdna(prop, nullptr, "type");
   RNA_def_property_enum_items(prop, rna_enum_event_type_items);
   RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_UI_EVENTS);
   RNA_def_property_ui_text(prop, "Type", "Type of event that triggers this item by default");
-  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_NodeTree_update_asset");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_GeometryNodeModalKeymapItem_update");
 
   prop = RNA_def_property(srna, "value", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_sdna(prop, nullptr, "val");
   RNA_def_property_enum_items(prop, rna_enum_event_value_items);
   RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_UI_EVENTS);
   RNA_def_property_ui_text(prop, "Value", "");
-  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_NodeTree_update_asset");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_GeometryNodeModalKeymapItem_update");
 
   prop = RNA_def_property(srna, "key_modifier", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_sdna(prop, nullptr, "keymodifier");
   RNA_def_property_enum_items(prop, rna_enum_event_type_items);
   RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_UI_EVENTS);
   RNA_def_property_ui_text(prop, "Key Modifier", "Regular key pressed as a modifier");
-  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_NodeTree_update_asset");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_GeometryNodeModalKeymapItem_update");
 
   struct {
     const char *identifier;
@@ -9302,7 +9310,7 @@ static void rna_def_geometry_node_modal_keymap_item(BlenderRNA *brna)
     prop = RNA_def_property(srna, modifier.identifier, PROP_BOOLEAN, PROP_NONE);
     RNA_def_property_boolean_sdna(prop, nullptr, modifier.dna_name, KM_MOD_HELD);
     RNA_def_property_ui_text(prop, modifier.ui_name, "");
-    RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_NodeTree_update_asset");
+    RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_GeometryNodeModalKeymapItem_update");
   }
 }
 
