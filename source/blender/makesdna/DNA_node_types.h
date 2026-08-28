@@ -49,6 +49,11 @@ struct bNodeSocketType;
 namespace bke {
 struct RuntimeNodeEnumItems;
 }  // namespace bke
+
+#ifdef hyper /* MSVC defines. */
+#  undef hyper
+#endif
+
 enum wmEventType : int16_t;
 
 struct AnimData;
