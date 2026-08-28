@@ -504,12 +504,38 @@ static void object_overlay_mode_transfer_animation_start(bContext *C, Object *ob
 static bool object_transfer_mode_to_base(bContext *C,
                                          wmOperator *op,
                                          Scene *scene,
-                                         Object * /*ob_src*/,
+                                         Object *ob_src,
                                          Object *ob_dst,
                                          const eObjectMode mode_dst)
 {
   const Main *bmain = CTX_data_main(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
+
+  /* Store the armature that is also selected with ob_src in weight paint pose mode. */
+  Object *wpaint_arm_src = nullptr;
+  if (ELEM(mode_dst, OB_MODE_WEIGHT_PAINT, OB_MODE_WEIGHT_GREASE_PENCIL)) {
+    VirtualModifierData virtual_modifier_data;
+    ModifierData *md = BKE_modifiers_get_virtual_modifierlist(ob_src, &virtual_modifier_data);
+    for (; md; md = md->next) {
+      Object *ob_arm = nullptr;
+      if (md->type == eModifierType_Armature) {
+        ArmatureModifierData *amd = reinterpret_cast<ArmatureModifierData *>(md);
+        ob_arm = amd->object;
+      }
+      else if (md->type == eModifierType_GreasePencilArmature) {
+        GreasePencilArmatureModifierData *amd =
+            reinterpret_cast<GreasePencilArmatureModifierData *>(md);
+        ob_arm = amd->object;
+      }
+      if (ob_arm && ob_arm->pose) {
+        Base *arm_base = BKE_view_layer_base_find(view_layer, ob_arm);
+        if (arm_base && (arm_base->flag & BASE_SELECTED)) {
+          wpaint_arm_src = ob_arm;
+          break;
+        }
+      }
+    }
+  }
 
   /* Undo is handled manually here, such that the entry in the user-visible undo history is named
    * from the expected mode toggle operator name, and not the 'Transfer Mode' operator itself.
@@ -525,6 +551,43 @@ static bool object_transfer_mode_to_base(bContext *C,
     Base *base_dst = BKE_view_layer_base_find(view_layer, ob_dst);
     BKE_view_layer_base_deselect_all(*bmain, scene, view_layer);
     BKE_view_layer_base_select_and_set_active(view_layer, base_dst);
+
+    /* Restore the same armature selected with ob_src. 
+     * Find its modifier, select it and enter weight paint pose mode. */
+    if (ELEM(mode_dst, OB_MODE_WEIGHT_PAINT, OB_MODE_WEIGHT_GREASE_PENCIL) && wpaint_arm_src) {
+      bool dst_uses_src_arm = false;
+      VirtualModifierData virtual_modifier_data_dst;
+      ModifierData *md_dst = BKE_modifiers_get_virtual_modifierlist(ob_dst,
+                                                                    &virtual_modifier_data_dst);
+      for (; md_dst; md_dst = md_dst->next) {
+        Object *ob_arm = nullptr;
+        if (md_dst->type == eModifierType_Armature) {
+          ArmatureModifierData *amd = reinterpret_cast<ArmatureModifierData *>(md_dst);
+          ob_arm = amd->object;
+        }
+        else if (md_dst->type == eModifierType_GreasePencilArmature) {
+          GreasePencilArmatureModifierData *amd =
+              reinterpret_cast<GreasePencilArmatureModifierData *>(md_dst);
+          ob_arm = amd->object;
+        }
+        if (ob_arm == wpaint_arm_src) {
+          dst_uses_src_arm = true;
+          break;
+        }
+      }
+
+      if (dst_uses_src_arm) {
+        Base *arm_base = BKE_view_layer_base_find(view_layer, wpaint_arm_src);
+        if (arm_base) {
+          arm_base->flag |= BASE_SELECTED;
+        }
+        posemode_set_for_weight_paint(C, bmain, ob_dst, false);
+      }
+      else {
+        /* If ob_dst uses a different armature than ob_src, exit pose mode on ob_src armature. */
+        ED_object_posemode_exit_ex(bmain, wpaint_arm_src);
+      }
+    }
 
     /* Not entirely clear why, but this extra undo step (the two calls to #mode_set_ex should
      * already create their own) is required. Otherwise some mode switching does not work as
