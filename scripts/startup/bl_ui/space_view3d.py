@@ -9612,79 +9612,56 @@ class VIEW3D_PT_overlay_guides(Panel):
         overlay = view.overlay
         shading = view.shading
         display_all = overlay.show_overlays
-
-        col = layout.column()
+        
+        header, col = layout.indented_column(align=False)
+        
         col.active = display_all
 
         split = col.split()
-        sub = split.column()
+        col1 = split.column()
+        col2 = split.column()
 
         split = col.split()
         col = split.column()
         col.use_property_split = False
-        col.prop(overlay, "show_ortho_grid")
-        col = split.column()
-
-        if overlay.show_ortho_grid:
-            col.prop(
-                overlay,
-                "show_floor",
-                text="Floor",
-                text_ctxt=i18n_contexts.editor_view3d,
+        col1.prop(overlay, "show_ortho_grid", text="Grid")
+        col2.prop(overlay, "show_floor", text="Floor")
+        
+        if overlay.show_ortho_grid or overlay.show_floor:
+            col.use_property_split = True
+            col.use_property_decorate = False
+    
+            grid_active = bool(
+                view.region_quadviews or
+                (view.region_3d.is_orthographic_side_view and not view.region_3d.is_perspective)
             )
-        else:
-            col.label(icon="DISCLOSURE_TRI_RIGHT")
+            show_scale = (
+                (overlay.show_floor and not view.region_3d.is_orthographic_side_view) or
+                (overlay.show_ortho_grid and grid_active)
+            )
+            if show_scale:
+                col.prop(overlay, "grid_scale", text="Scale")
+            
+            if scene.unit_settings.system == "NONE":
+                col.prop(overlay, "grid_subdivisions", text="Subdivisions")
 
-        if overlay.show_ortho_grid:
-            col = layout.column(heading="Axes", align=False)
+        split = col.split(factor=0.4)
 
-            row = col.row()
-            row.use_property_split = True
-            row.use_property_decorate = False
-            row.separator()
-            row.prop(overlay, "show_axis_x", text="X", toggle=True)
-            row.prop(overlay, "show_axis_y", text="Y", toggle=True)
-            row.prop(overlay, "show_axis_z", text="Z", toggle=True)
+        col1 = split.column()
+        col1.label(text="Axes")
+        
+        col2 = split.column()
+        row = col2.row(align=True)
+        row.use_property_split = False
+        row.prop(overlay, "show_axis_x", text="X", toggle=True)
+        row.prop(overlay, "show_axis_y", text="Y", toggle=True)
+        row.prop(overlay, "show_axis_z", text="Z", toggle=True)
 
-            if overlay.show_floor:
-                col = layout.column()
-                col.use_property_split = True
-                col.use_property_decorate = False
-                row = col.row()
-                row.separator()
-                row.prop(overlay, "grid_scale", text="Grid Scale")
-                if scene.unit_settings.system == "NONE":
-                    col = layout.column()
-                    col.use_property_split = True
-                    col.use_property_decorate = False
-                    row = col.row()
-                    row.separator()
-                    row.prop(overlay, "grid_subdivisions", text="Subdivisions")
+        if view.region_3d.view_perspective == 'CAMERA':
+            col.prop(overlay, "show_camera_guides", text="Camera Guides")
 
-        # bfa - Camera and HDRi Preview options placed at the bottom,
-        # since they're only relevant in specific view modes.
-        if view.region_3d.view_perspective == "CAMERA" or shading.type == "MATERIAL":
-
-            layout.separator() # bfa - spacer
-
-            col = layout.column(align=True)
-            col.active = display_all
-            split = col.split()
-            sub = split.column(align=True)
-            row = sub.row()
-            row.separator()
-
-        if view.region_3d.view_perspective == "CAMERA":
-            layout.separator() # bfa - spacer
-
-            row.prop(overlay, "show_camera_guides", text="Camera Guides")
-
-        if shading.type == "MATERIAL":
-            layout.separator() # bfa - spacer
-
-            row = row if view.region_3d.view_perspective != "CAMERA" else row.row()
-            row.active = shading.render_pass == "COMBINED"
-            row.prop(overlay, "show_look_dev")
+        if (shading.type == 'MATERIAL') and (shading.render_pass == 'COMBINED'):
+            col.prop(overlay, "show_look_dev")
 
 
 class VIEW3D_PT_overlay_text(Panel): # bfa - options
@@ -9799,23 +9776,25 @@ class VIEW3D_PT_overlay_geometry(Panel):
         display_all = overlay.show_overlays
         is_wireframes = view.shading.type == "WIREFRAME"
 
-        col = layout.column(align=True)
+        _header, col = layout.indented_column()
+        
         col.active = display_all
-        split = col.split()
-        row = split.row()
-        row.separator()
-        row.prop(overlay, "show_wireframes")
-
-        row = split.row(align=True)
-        if overlay.show_wireframes or is_wireframes:
-            row.prop(overlay, "wireframe_threshold", text="")
-            row.prop(overlay, "wireframe_opacity", text="Opacity")
+        col.prop(overlay, "show_face_orientation") # BFA - Move above collapsible sections
+        
+        subheader, subcol = col.indented_column(draw_body=overlay.show_wireframes or is_wireframes) # BFA - indent
+        header_row = subheader.row()
+        header_row.alignment = 'LEFT'
+        header_row.prop(overlay, "show_wireframes")
+        
+        if subcol:
+            header_row.label(icon="DISCLOSURE_TRI_DOWN")
+            
+            subcol.use_property_split = True
+            subcol.use_property_decorate = False
+            subcol.prop(overlay, "wireframe_threshold", text="Threshold")
+            subcol.prop(overlay, "wireframe_opacity", text="Opacity")
         else:
-            row.label(icon="DISCLOSURE_TRI_RIGHT")
-
-        row = col.row()
-        row.separator()
-        row.prop(overlay, "show_face_orientation")
+            header_row.label(icon="DISCLOSURE_TRI_RIGHT")
 
         # These properties should be always available in the UI for all modes
         # other than Object.
@@ -9823,18 +9802,19 @@ class VIEW3D_PT_overlay_geometry(Panel):
         # current active object depending on its mode, it will always affect
         # the rest of the scene.
         if context.mode != "OBJECT":
-            col = layout.column(align=True)
-            col.active = display_all
-            split = col.split()
-            row = split.row()
-            row.separator()
-            row.prop(overlay, "show_fade_inactive")
+            subheader, subcol = col.indented_column(draw_body=overlay.show_fade_inactive) # BFA - indent
+            header_row = subheader.row()
+            header_row.alignment = 'LEFT'
+            header_row.prop(overlay, "show_fade_inactive")
 
-            row = split.row(align=True)
-            if overlay.show_fade_inactive:
-                row.prop(overlay, "fade_inactive_alpha", text="")
+            if subcol:
+                header_row.label(icon="DISCLOSURE_TRI_DOWN")
+            
+                subcol.use_property_split = True
+                subcol.use_property_decorate = False
+                subcol.prop(overlay, "fade_inactive_alpha")
             else:
-                row.label(icon="DISCLOSURE_TRI_RIGHT")
+                header_row.label(icon="DISCLOSURE_TRI_RIGHT")
 
         # sub.prop(overlay, "show_onion_skins")
 
@@ -9849,38 +9829,32 @@ class VIEW3D_PT_overlay_viewer_node(Panel):
     def draw(self, context):
         layout = self.layout
         view = context.space_data
+
         if not view.show_viewer:
-            layout.label(text="Viewer Nodes Overlay Is Disabled", icon="ERROR")
+            layout.label(text="Viewer Nodes Overlay is Disabled", icon="ERROR")
             return
 
         overlay = view.overlay
         display_all = overlay.show_overlays
-        col = layout.column(align=True)
-        col.active = display_all
-        split = col.split()
-        row = split.row()
-        row.separator()
-        row.prop(overlay, "show_viewer_attribute", text="Color Overlay")
+        
+        _header, col = layout.indented_column() # BFA - indent
+        
+        subheader, subcol = col.indented_column(draw_body=overlay.show_viewer_attribute) # BFA - indent
+        subrow = subheader.row()
+        subrow.alignment = 'LEFT'
+        subrow.prop(overlay, "show_viewer_attribute", text="Color Overlay")
 
-        row = split.row(align=True)
-        if not overlay.show_viewer_attribute:
-            row.label(icon="DISCLOSURE_TRI_RIGHT")
+        if subcol:
+            subrow.label(icon="DISCLOSURE_TRI_DOWN")
+            
+            subcol.use_property_split = True
+            subcol.use_property_decorate = False
+            subcol.prop(overlay, "viewer_attribute_opacity", text="Opacity")
         else:
-            row.label(icon="DISCLOSURE_TRI_DOWN")
-            split = col.split()
-            row = split.row()
-            row.separator()
-            col2 = row.column()
-            split = col2.split()
-            row = split.row()
-            row.separator()
-            row.use_property_split = True
-            row.prop(overlay, "viewer_attribute_opacity", text="Opacity")
+            subrow.label(icon="DISCLOSURE_TRI_RIGHT")
 
-        split = col.split()
-        row = split.row()
-        row.separator()
-        row.prop(overlay, "show_viewer_text", text="Attribute Text Overlay")  # BFA - made explicit
+        if overlay.show_text:
+            col.prop(overlay, "show_viewer_text", text="Attribute Text Overlay")  # BFA - made explicit
 
 
 class VIEW3D_PT_overlay_motion_tracking(Panel):
@@ -9897,13 +9871,7 @@ class VIEW3D_PT_overlay_motion_tracking(Panel):
         display_all = overlay.show_overlays
         layout.active = display_all
 
-        row = layout.row()
-        split = row.split()
-        split.prop(view, "show_reconstruction", text=self.bl_label)
-        if view.show_reconstruction:
-            split.label(icon="DISCLOSURE_TRI_DOWN")
-        else:
-            split.label(icon="DISCLOSURE_TRI_RIGHT")
+        layout.prop(view, "show_reconstruction", text=self.bl_label)
 
     def draw(self, context):
         layout = self.layout
@@ -9911,25 +9879,19 @@ class VIEW3D_PT_overlay_motion_tracking(Panel):
         overlay = view.overlay
         layout.active = overlay.show_overlays and view.show_reconstruction
 
-        col = layout.column()
+        _header, col = layout.indented_column() # BFA - indent
 
         split = col.split()
+        split.prop(view, "show_camera_path", text="Camera Path")
+        split.prop(view, "show_bundle_names", text="Marker Names")
 
-        sub = split.column(align=True)
-        row = sub.row()
-        row.separator()
-        row.prop(view, "show_camera_path", text="Camera Path")
-
-        sub = split.column()
-        sub.prop(view, "show_bundle_names", text="Marker Names")
-
-        col = layout.column()
-        col.active = display_all
-        col.label(text="Tracks")
-        row = col.row(align=True)
-        row.separator()
-        row.prop(view, "tracks_display_type", text="")
-        row.prop(view, "tracks_display_size", text="Size")
+        subheader, subcol = col.indented_column() # BFA - indent
+        subheader.label(text="Tracks")
+        
+        subcol.use_property_split = True
+        subcol.use_property_decorate = False
+        subcol.prop(view, "tracks_display_type", text="Display Type")
+        subcol.prop(view, "tracks_display_size", text="Size")
 
 
 class VIEW3D_PT_overlay_edit_mesh(Panel):
