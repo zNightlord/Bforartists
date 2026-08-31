@@ -1008,6 +1008,14 @@ static Layout *rna_uiLayoutColumnWithHeading(
   return &layout->column(align, text.value_or(""));
 }
 
+void rna_uiLayoutIndentedColumn(
+    Layout *layout, bool align, bool draw_body, Layout **r_layout_header, Layout **r_layout_body)
+{
+  ui::IndentedColumn indented_column = layout->indented_column(align, draw_body);
+  *r_layout_header = indented_column.header;
+  *r_layout_body = indented_column.body;
+}
+
 static Layout *rna_uiLayoutColumnFlow(Layout *layout, int number, bool align)
 {
   return &layout->column_flow(number, align);
@@ -1435,6 +1443,22 @@ void RNA_api_ui_layout(StructRNA *srna)
       "in a column.");
   RNA_def_boolean(func, "align", false, "", "Align buttons to each other");
   api_ui_item_common_heading(func);
+
+  func = RNA_def_function(srna, "indented_column", "rna_uiLayoutIndentedColumn");
+  RNA_def_function_ui_description(func,
+                                  "Sub-layout. Items placed in this sub-layout are placed under "
+                                  "each other in a column with left indentation.");
+  RNA_def_boolean(func, "align", false, "", "Align buttons to each other");
+  RNA_def_boolean(func, "draw_body", true, "", "Toggle whether the column body is drawn or not");
+  parm = RNA_def_pointer(func, "layout", "UILayout", "", "Sub-layout to put items in");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, ParameterFlag(0));
+  RNA_def_function_output(func, parm);
+  parm = RNA_def_pointer(func,
+                         "layout_body",
+                         "UILayout",
+                         "",
+                         "Sub-layout to put items in. Will be none if the panel is collapsed.");
+  RNA_def_function_output(func, parm);
 
   func = RNA_def_function(srna, "panel", "rna_uiLayoutPanel");
   RNA_def_function_ui_description(
