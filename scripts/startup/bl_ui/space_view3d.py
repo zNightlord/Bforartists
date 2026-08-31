@@ -3547,7 +3547,7 @@ class VIEW3D_MT_add(Menu):
         else:
             layout.operator("object.armature_add", text="Armature", icon="OUTLINER_OB_ARMATURE")
 
-        layout.menu("VIEW3D_MT_lattice_add")
+        layout.menu("VIEW3D_MT_lattice_add", icon="OUTLINER_OB_LATTICE")
 
         layout.separator()
 
