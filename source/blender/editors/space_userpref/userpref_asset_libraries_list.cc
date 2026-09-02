@@ -221,7 +221,7 @@ static void draw_active_library_settings(const bContext *C,
 
       if (ui::Layout *panel = layout.panel(C, "advanced", true, IFACE_("Advanced"))) {
         panel->use_property_split_set(true);
-        ui::Layout &col = panel->column(true, IFACE_("Authentication"));
+        ui::Layout &col = panel->indented_column(true, IFACE_("Authentication")); /* BFA */
         col.prop(&library_ptr, "use_auth_token", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 
         if (library.user_library->flag & ASSET_LIBRARY_USE_AUTH_TOKEN) {
