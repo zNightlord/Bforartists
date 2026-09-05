@@ -8,6 +8,8 @@
 
 #include "node_shader_util.hh"
 
+#include "DNA_material_types.h"
+
 #include "node_util.hh"
 
 #include "UI_interface_layout.hh"
@@ -159,6 +161,9 @@ void register_node_type_sh_attribute()
   ntype.ui_description = "Retrieve attributes attached to objects or geometry";
   ntype.enum_name_legacy = "ATTRIBUTE";
   ntype.nclass = NODE_CLASS_INPUT;
+  ntype.texture_layer_usage = SHADER_NODE_TREE_USAGE_TEXTURE_GENERATOR |
+                              SHADER_NODE_TREE_USAGE_MASK_GENERATOR;
+  ntype.texture_layer_mask_blend = MA_RAMP_ADD;
   ntype.declare = file_ns::node_declare;
   ntype.draw_buttons = file_ns::node_shader_buts_attribute;
   ntype.initfunc = file_ns::node_shader_init_attribute;

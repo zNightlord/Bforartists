@@ -502,6 +502,8 @@ void register_node_type_sh_tex_noise()
   ntype.ui_description = "Generate fractal Perlin noise";
   ntype.enum_name_legacy = "TEX_NOISE";
   ntype.nclass = NODE_CLASS_TEXTURE;
+  ntype.texture_layer_usage = SHADER_NODE_TREE_USAGE_TEXTURE_GENERATOR |
+                              SHADER_NODE_TREE_USAGE_MASK_GENERATOR;
   ntype.declare = file_ns::sh_node_tex_noise_declare;
   ntype.draw_buttons = file_ns::node_shader_buts_tex_noise;
   ntype.initfunc = file_ns::node_shader_init_tex_noise;

@@ -43,7 +43,9 @@
 
 #include "UI_resources.hh"
 
+#include "NOD_geo_bundle.hh"
 #include "NOD_shader.h"
+#include "NOD_texture_channel.hh"
 
 #include "node_common.h"
 #include "node_exec.hh"
@@ -206,6 +208,10 @@ void register_node_tree_type_sh()
   tt->valid_socket_type = shader_node_tree_socket_type_valid;
 
   tt->rna_ext.srna = RNA_ShaderNodeTree;
+
+  /* Enable texture layer channels when a Separate Bundle output is linked into the shader tree,
+   * without the geometry Separate Bundle node depending on the shader module. */
+  tt->separate_bundle_output_linked = nodes::texture_channel::handle_manual_link;
 
   bke::node_tree_type_add(*tt);
 }

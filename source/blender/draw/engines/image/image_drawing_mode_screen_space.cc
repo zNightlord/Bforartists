@@ -51,7 +51,7 @@ void ScreenSpaceDrawingMode::add_depth_shgroups(blender::Image *image, ImageUser
   float4x4 image_mat = float4x4::identity();
   ResourceHandleRange handle = instance_.manager->resource_handle(image_mat);
 
-  ImageUser tile_user = {nullptr};
+  ImageUser tile_user = {};
   if (image_user) {
     tile_user = *image_user;
   }
@@ -270,7 +270,7 @@ void ScreenSpaceDrawingMode::do_full_update_gpu_texture(TextureInfo &info,
   const int texture_width = GPU_texture_width(info.texture);
   const int texture_height = GPU_texture_height(info.texture);
   IMB_initImBuf(&texture_buffer, texture_width, texture_height, ImBufFlags::FloatData);
-  ImageUser tile_user = {nullptr};
+  ImageUser tile_user = {};
   if (image_user) {
     tile_user = *image_user;
   }

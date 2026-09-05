@@ -210,6 +210,8 @@ void register_node_type_sh_tex_magic()
   ntype.ui_description = "Generate a psychedelic color texture";
   ntype.enum_name_legacy = "TEX_MAGIC";
   ntype.nclass = NODE_CLASS_TEXTURE;
+  ntype.texture_layer_usage = SHADER_NODE_TREE_USAGE_TEXTURE_GENERATOR |
+                              SHADER_NODE_TREE_USAGE_MASK_GENERATOR;
   ntype.declare = file_ns::sh_node_tex_magic_declare;
   ntype.draw_buttons = file_ns::node_shader_buts_tex_magic;
   ntype.initfunc = file_ns::node_shader_init_tex_magic;

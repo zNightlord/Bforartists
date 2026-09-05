@@ -123,11 +123,13 @@ struct ImBufFloatBuffer {
 };
 
 enum ImBufGPUFlag : int {
-  /**
-   * GPU texture failed to be loaded onto the GPU, to distinguish a null
-   * texture between not yet loaded and failed to load.
-   */
-  IMB_GPU_LOAD_FAILED = (1 << 0),
+  /** Mipmap chain has been generated for the GPU texture. */
+  IMB_GPU_MIPMAP_COMPLETE = (1 << 0),
+  /** Disable mipmap updates, primarily used for texture painting. */
+  IMB_GPU_DISABLE_MIPMAP_UPDATE = (1 << 1),
+  /** GPU texture failed to be loaded onto the GPU, to distinguish a null
+   * texture between not yet loaded and failed to load. */
+  IMB_GPU_LOAD_FAILED = (1 << 2),
 };
 ENUM_OPERATORS(ImBufGPUFlag)
 

@@ -812,12 +812,13 @@ static PyObject *set_device_override_func(PyObject * /*self*/, PyObject *arg)
 static PyObject *maketx_func(PyObject * /*self*/, PyObject *args, PyObject *keywords)
 {
   static const char *keyword_list[] = {
-      "filepath", "colorspace", "alpha_type", "cache_dir", nullptr};
+      "filepath", "colorspace", "alpha_type", "cache_dir", "subimage", nullptr};
 
   const char *filepath = nullptr;
   const char *colorspace = "auto";
   const char *alpha_type_str = "auto";
   const char *cache_dir = "";
+  const char *subimage = "";
 
   if (!PyArg_ParseTupleAndKeywords(args,
                                    keywords,
@@ -825,12 +826,14 @@ static PyObject *maketx_func(PyObject * /*self*/, PyObject *args, PyObject *keyw
                                    "|" /* Optional arguments. */
                                    "s" /* `colorspace` */
                                    "s" /* `alpha_type` */
-                                   "s" /* `cache_dir` */,
+                                   "s" /* `cache_dir` */
+                                   "s" /* `subimage` */,
                                    (char **)keyword_list,
                                    &filepath,
                                    &colorspace,
                                    &alpha_type_str,
-                                   &cache_dir))
+                                   &cache_dir,
+                                   &subimage))
   {
     return nullptr;
   }
@@ -861,6 +864,8 @@ static PyObject *maketx_func(PyObject * /*self*/, PyObject *args, PyObject *keyw
   const ustring colorspace_ustring = (strcmp(colorspace, "auto") == 0) ? u_colorspace_auto :
                                                                          ustring(colorspace);
 
+  const string subimage_name(subimage);
+
   /* Resolve output path, and check if tx file is already up to date. */
   string out_filepath;
   ccl::ImageMetaData out_metadata;
@@ -869,6 +874,7 @@ static PyObject *maketx_func(PyObject * /*self*/, PyObject *args, PyObject *keyw
                                      colorspace_ustring,
                                      alpha_type,
                                      IMAGE_FORMAT_PLAIN,
+                                     subimage_name,
                                      out_filepath,
                                      out_metadata);
 
@@ -882,7 +888,8 @@ static PyObject *maketx_func(PyObject * /*self*/, PyObject *args, PyObject *keyw
   if (!up_to_date) {
     bool ok;
     Py_BEGIN_ALLOW_THREADS;
-    ok = make_tx(filepath, out_filepath, colorspace_ustring, alpha_type, IMAGE_FORMAT_PLAIN);
+    ok = make_tx(
+        filepath, out_filepath, colorspace_ustring, alpha_type, IMAGE_FORMAT_PLAIN, subimage_name);
     Py_END_ALLOW_THREADS;
 
     if (!ok) {

@@ -451,6 +451,11 @@ static void do_versions_theme(const UserDef *userdef, bTheme *btheme)
     /* Alpha is now used, but was hardcoded to be opaque before. */
     btheme->common.anim.playhead[3] = 255;
   }
+  if (!USER_VERSION_ATLEAST(503, 9)) {
+    /* Alternating row colors were enabled for tree views in these editors. */
+    FROM_DEFAULT_V4_UCHAR(space_properties.row_alternate);
+    FROM_DEFAULT_V4_UCHAR(space_view3d.row_alternate);
+  }
 
   /**
    * Always bump subversion in BKE_blender_version.h when adding versioning

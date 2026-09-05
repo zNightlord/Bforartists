@@ -105,6 +105,8 @@ void register_node_type_sh_tex_sky();
 void register_node_type_sh_tex_voronoi();
 void register_node_type_sh_tex_wave();
 void register_node_type_sh_tex_white_noise();
+void register_node_type_sh_texture_layer_stack();
+void register_node_type_sh_mask_stack();
 void register_node_type_sh_uvalongstroke();
 void register_node_type_sh_uvmap();
 void register_node_type_sh_valtorgb();

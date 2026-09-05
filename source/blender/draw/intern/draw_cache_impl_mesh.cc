@@ -396,7 +396,8 @@ static void drw_mesh_weight_state_extract(
         }
       }
 
-      /* Non armature, deform vertex groups fallback */
+      /* Non armature, deform vertex groups fallback.
+       * Lower saturation to visually distinguish from deform groups. */
       const float hue = fmodf(float(di) * GOLDEN_ANGLE, 1.0f);
       float r, g, b;
       hsv_to_rgb(hue, 0.85f, 0.9f, &r, &g, &b);

@@ -34,6 +34,13 @@ const EnumPropertyItem rna_enum_image_generated_type_items[] = {
     {0, nullptr, 0, nullptr, nullptr},
 };
 
+const EnumPropertyItem rna_enum_image_pass_type_items[] = {
+    {4, "COLOR", 0, "Color", "Color pass with an alpha channel"},
+    {1, "VALUE", 0, "Value", "Single channel pass, holding data rather than color"},
+    {3, "VECTOR", 0, "Vector", "Three channel pass, holding data rather than color"},
+    {0, nullptr, 0, nullptr, nullptr},
+};
+
 static const EnumPropertyItem image_source_items[] = {
     {IMA_SRC_FILE, "FILE", 0, "Single Image", "Single image file"},
     {IMA_SRC_SEQUENCE, "SEQUENCE", 0, "Image Sequence", "Multiple image files, as a sequence"},
@@ -245,7 +252,7 @@ static void rna_Image_views_format_update(Main *bmain, Scene *scene, PointerRNA 
   ibuf = BKE_image_acquire_ibuf(ima, nullptr, &lock);
 
   if (ibuf) {
-    ImageUser iuser = {nullptr};
+    ImageUser iuser = {};
     iuser.scene = scene;
     BKE_image_signal(bmain, ima, &iuser, IMA_SIGNAL_FREE);
   }
@@ -277,10 +284,124 @@ static void rna_ImageUser_update(Main *bmain, Scene *scene, PointerRNA *ptr)
   }
 }
 
+/* The image an #ImageUser belongs to. Only the user is reachable from the RNA
+ * pointer (its owner is the node tree, screen, ... holding it), so it is found
+ * by matching against every image user in the file. */
+static Image *rna_image_from_image_user(Main *bmain, const ImageUser *iuser)
+{
+  struct SearchData {
+    const ImageUser *iuser;
+    Image *result;
+  } data = {iuser, nullptr};
+
+  BKE_image_walk_all_users(
+      bmain, &data, [](Image *ima, ID * /*iuser_id*/, ImageUser *iuser, void *customdata) {
+        SearchData &data = *static_cast<SearchData *>(customdata);
+        if (iuser == data.iuser) {
+          data.result = ima;
+        }
+      });
+
+  return data.result;
+}
+
+/* The layer/pass indices are a positional selection: write the names they
+ * resolve to, which have priority. */
+static void rna_ImageUser_multilayer_index_update(Main *bmain, Scene *scene, PointerRNA *ptr)
+{
+  ImageUser *iuser = static_cast<ImageUser *>(ptr->data);
+
+  if (Image *ima = rna_image_from_image_user(bmain, iuser)) {
+    BKE_image_user_resolve_from_index(ima, iuser);
+  }
+
+  rna_ImageUser_update(bmain, scene, ptr);
+}
+
 static void rna_ImageUser_relations_update(Main *bmain, Scene *scene, PointerRNA *ptr)
 {
   rna_ImageUser_update(bmain, scene, ptr);
   DEG_relations_tag_update(bmain);
+}
+
+static int rna_ImageCatalog_editable(const PointerRNA *ptr, const char **r_info)
+{
+  const Image *ima = id_cast<const Image *>(ptr->owner_id);
+  if (!BKE_image_has_editable_catalog(ima)) {
+    *r_info = N_("Layers and passes of this image are defined by its source");
+    return 0;
+  }
+  return PROP_EDITABLE;
+}
+
+static void rna_ImageLayer_name_set(PointerRNA *ptr, const char *value)
+{
+  Image *ima = id_cast<Image *>(ptr->owner_id);
+  ImageLayer *layer = static_cast<ImageLayer *>(ptr->data);
+  BLI_assert(BKE_id_is_in_global_main(&ima->id));
+  BKE_image_layer_rename(G_MAIN, ima, layer, value);
+}
+
+static void rna_ImagePass_name_set(PointerRNA *ptr, const char *value)
+{
+  Image *ima = id_cast<Image *>(ptr->owner_id);
+  ImagePass *pass = static_cast<ImagePass *>(ptr->data);
+  BLI_assert(BKE_id_is_in_global_main(&ima->id));
+  BKE_image_pass_rename(G_MAIN, ima, pass, value);
+}
+
+static int rna_ImagePass_type_get(PointerRNA *ptr)
+{
+  const ImagePass *pass = static_cast<const ImagePass *>(ptr->data);
+  return pass->channels_num;
+}
+
+static void rna_ImagePass_type_set(PointerRNA *ptr, const int value)
+{
+  Image *ima = id_cast<Image *>(ptr->owner_id);
+  ImagePass *pass = static_cast<ImagePass *>(ptr->data);
+  BKE_image_pass_set_channels(ima, pass, value);
+}
+
+/* A pass read from a file may have a channel layout that is none of the types
+ * offered, e.g. a two channel EXR pass. Rather than show it as one of them, add
+ * an item standing for the layout it has. */
+static const EnumPropertyItem *rna_ImagePass_type_itemf(bContext * /*C*/,
+                                                        PointerRNA *ptr,
+                                                        PropertyRNA * /*prop*/,
+                                                        bool *r_free)
+{
+  const ImagePass *pass = static_cast<const ImagePass *>(ptr->data);
+  if (ELEM(pass->channels_num, 1, 3, 4)) {
+    *r_free = false;
+    return rna_enum_image_pass_type_items;
+  }
+
+  EnumPropertyItem *items = nullptr;
+  int items_num = 0;
+  for (const EnumPropertyItem *item = rna_enum_image_pass_type_items; item->identifier != nullptr;
+       item++)
+  {
+    RNA_enum_item_add(&items, &items_num, item);
+  }
+  const EnumPropertyItem other_item = {pass->channels_num,
+                                       "OTHER",
+                                       0,
+                                       N_("Other"),
+                                       N_("Channel layout that is none of the standard types")};
+  RNA_enum_item_add(&items, &items_num, &other_item);
+  RNA_enum_item_end(&items, &items_num);
+
+  *r_free = true;
+  return items;
+}
+
+static void rna_ImageCatalog_update(Main *bmain, Scene * /*scene*/, PointerRNA *ptr)
+{
+  Image *ima = id_cast<Image *>(ptr->owner_id);
+  BKE_main_ensure_invariants(*bmain);
+  DEG_id_tag_update(&ima->id, 0);
+  WM_main_add_notifier(NC_IMAGE | ND_DRAW, ima);
 }
 
 static std::optional<std::string> rna_ImageUser_path(const PointerRNA *ptr)
@@ -511,6 +632,13 @@ static bool rna_Image_has_data_get(PointerRNA *ptr)
   Image *image = static_cast<Image *>(ptr->data);
 
   return BKE_image_has_loaded_ibuf(image);
+}
+
+static bool rna_Image_has_layer_tokens_get(PointerRNA *ptr)
+{
+  const Image *image = static_cast<const Image *>(ptr->data);
+
+  return BKE_image_filepath_has_layer_pass_token(image->filepath);
 }
 
 static void rna_Image_size_get(PointerRNA *ptr, int *values)
@@ -864,20 +992,34 @@ static void rna_def_imageuser(BlenderRNA *brna)
   RNA_def_property_update(prop, 0, "rna_ImageUser_update");
   RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
 
+  /* Setting an index selects positionally; the resolved names, which have
+   * priority, are written back by the update function. */
   prop = RNA_def_property(srna, "multilayer_layer", PROP_INT, PROP_UNSIGNED);
   RNA_def_property_int_sdna(prop, nullptr, "layer");
-  RNA_def_property_clear_flag(prop, PROP_EDITABLE); /* image_multi_cb */
   RNA_def_property_ui_text(prop, "Layer", "Layer in multilayer image");
+  RNA_def_property_update(prop, NC_IMAGE | ND_DRAW, "rna_ImageUser_multilayer_index_update");
+  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
 
   prop = RNA_def_property(srna, "multilayer_pass", PROP_INT, PROP_UNSIGNED);
   RNA_def_property_int_sdna(prop, nullptr, "pass");
-  RNA_def_property_clear_flag(prop, PROP_EDITABLE); /* image_multi_cb */
   RNA_def_property_ui_text(prop, "Pass", "Pass in multilayer image");
+  RNA_def_property_update(prop, NC_IMAGE | ND_DRAW, "rna_ImageUser_multilayer_index_update");
+  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
 
   prop = RNA_def_property(srna, "multilayer_view", PROP_INT, PROP_UNSIGNED);
   RNA_def_property_int_sdna(prop, nullptr, "view");
   RNA_def_property_clear_flag(prop, PROP_EDITABLE); /* image_multi_cb */
   RNA_def_property_ui_text(prop, "View", "View in multilayer image");
+
+  prop = RNA_def_property(srna, "multilayer_layer_name", PROP_STRING, PROP_NONE);
+  RNA_def_property_string_sdna(prop, nullptr, "layer_name");
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE); /* image_multi_cb */
+  RNA_def_property_ui_text(prop, "Layer Name", "Name of the selected layer in a multilayer image");
+
+  prop = RNA_def_property(srna, "multilayer_pass_name", PROP_STRING, PROP_NONE);
+  RNA_def_property_string_sdna(prop, nullptr, "pass_name");
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE); /* image_multi_cb */
+  RNA_def_property_ui_text(prop, "Pass Name", "Name of the selected pass in a multilayer image");
 
   prop = RNA_def_property(srna, "tile", PROP_INT, PROP_UNSIGNED);
   RNA_def_property_int_sdna(prop, nullptr, "tile");
@@ -1112,6 +1254,81 @@ static void rna_def_udim_tiles(BlenderRNA *brna, PropertyRNA *cprop)
   RNA_def_parameter_clear_flags(parm, PROP_THICK_WRAP, ParameterFlag(0));
 }
 
+static void rna_def_image_pass(BlenderRNA *brna)
+{
+  StructRNA *srna;
+  PropertyRNA *prop;
+
+  srna = RNA_def_struct(brna, "ImagePass", nullptr);
+  RNA_def_struct_sdna(srna, "ImagePass");
+  RNA_def_struct_ui_text(srna, "Image Pass", "Single pass within an image layer");
+
+  prop = RNA_def_property(srna, "name", PROP_STRING, PROP_NONE);
+  RNA_def_property_ui_text(prop, "Name", "Name of the pass");
+  RNA_def_property_string_funcs(prop, nullptr, nullptr, "rna_ImagePass_name_set");
+  RNA_def_property_editable_func(prop, "rna_ImageCatalog_editable");
+  RNA_def_property_update(prop, 0, "rna_ImageCatalog_update");
+  RNA_def_struct_name_property(srna, prop);
+
+  prop = RNA_def_property(srna, "type", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_items(prop, rna_enum_image_pass_type_items);
+  RNA_def_property_enum_funcs(
+      prop, "rna_ImagePass_type_get", "rna_ImagePass_type_set", "rna_ImagePass_type_itemf");
+  RNA_def_property_ui_text(prop,
+                           "Type",
+                           "Channel layout of the pass. Value and vector passes hold data, and "
+                           "are read and written without color management");
+  RNA_def_property_editable_func(prop, "rna_ImageCatalog_editable");
+  RNA_def_property_update(prop, 0, "rna_ImageCatalog_update");
+
+  prop = RNA_def_property(srna, "token", PROP_STRING, PROP_NONE);
+  RNA_def_property_ui_text(prop,
+                           "Token",
+                           "Value substituted for the <PASS> token in the image file path, to "
+                           "match a file naming convention. The pass name is used when empty");
+  RNA_def_property_editable_func(prop, "rna_ImageCatalog_editable");
+  RNA_def_property_update(prop, 0, "rna_ImageCatalog_update");
+
+  prop = RNA_def_property(srna, "channels", PROP_INT, PROP_UNSIGNED);
+  RNA_def_property_int_sdna(prop, nullptr, "channels_num");
+  RNA_def_property_ui_text(prop, "Channels", "Number of channels in the pass");
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+
+  prop = RNA_def_property(srna, "channel_ids", PROP_STRING, PROP_NONE);
+  RNA_def_property_string_sdna(prop, nullptr, "chan_id");
+  RNA_def_property_ui_text(prop, "Channel IDs", "Per-channel identifiers of the pass");
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+}
+
+static void rna_def_image_layer(BlenderRNA *brna)
+{
+  StructRNA *srna;
+  PropertyRNA *prop;
+
+  srna = RNA_def_struct(brna, "ImageLayer", nullptr);
+  RNA_def_struct_sdna(srna, "ImageLayer");
+  RNA_def_struct_ui_text(srna, "Image Layer", "Layer of an image, containing one or more passes");
+
+  prop = RNA_def_property(srna, "name", PROP_STRING, PROP_NONE);
+  RNA_def_property_ui_text(prop, "Name", "Name of the layer");
+  RNA_def_property_string_funcs(prop, nullptr, nullptr, "rna_ImageLayer_name_set");
+  RNA_def_property_editable_func(prop, "rna_ImageCatalog_editable");
+  RNA_def_property_update(prop, 0, "rna_ImageCatalog_update");
+  RNA_def_struct_name_property(srna, prop);
+
+  prop = RNA_def_property(srna, "token", PROP_STRING, PROP_NONE);
+  RNA_def_property_ui_text(prop,
+                           "Token",
+                           "Value substituted for the <LAYER> token in the image file path, to "
+                           "match a file naming convention. The layer name is used when empty");
+  RNA_def_property_editable_func(prop, "rna_ImageCatalog_editable");
+  RNA_def_property_update(prop, 0, "rna_ImageCatalog_update");
+
+  prop = RNA_def_property(srna, "passes", PROP_COLLECTION, PROP_NONE);
+  RNA_def_property_struct_type(prop, "ImagePass");
+  RNA_def_property_ui_text(prop, "Passes", "Passes of the layer");
+}
+
 static void rna_def_image(BlenderRNA *brna)
 {
   StructRNA *srna;
@@ -1309,6 +1526,18 @@ static void rna_def_image(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Image Tiles", "Tiles of the image");
   rna_def_udim_tiles(brna, prop);
 
+  prop = RNA_def_property(srna, "layers", PROP_COLLECTION, PROP_NONE);
+  RNA_def_property_struct_type(prop, "ImageLayer");
+  RNA_def_property_ui_text(prop, "Layers", "Layer/pass catalog of the image");
+
+  prop = RNA_def_property(srna, "has_layer_tokens", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_funcs(prop, "rna_Image_has_layer_tokens_get", nullptr);
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_ui_text(prop,
+                           "Has Layer Tokens",
+                           "File path contains a <LAYER> or <PASS> token, so that every layer and "
+                           "pass of the image is a file of its own");
+
   prop = RNA_def_property(srna, "has_data", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_funcs(prop, "rna_Image_has_data_get", nullptr);
   RNA_def_property_clear_flag(prop, PROP_EDITABLE);
@@ -1427,6 +1656,8 @@ void RNA_def_image(BlenderRNA *brna)
 {
   rna_def_render_slot(brna);
   rna_def_udim_tile(brna);
+  rna_def_image_pass(brna);
+  rna_def_image_layer(brna);
   rna_def_image(brna);
   rna_def_imageuser(brna);
   rna_def_image_packed_files(brna);

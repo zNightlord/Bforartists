@@ -310,7 +310,7 @@ static inline string image_user_file_path(blender::Main &data,
 {
   char filepath[1024];
   BKE_image_user_frame_calc(&ima, &iuser, cfra);
-  BKE_image_user_file_path_ex(&data, &iuser, &ima, filepath, false, true);
+  BKE_image_user_file_path_ex(&data, &iuser, &ima, filepath, false, true, true);
 
   return string(filepath);
 }

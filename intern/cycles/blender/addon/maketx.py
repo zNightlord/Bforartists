@@ -54,6 +54,27 @@ def argparse_create():
         help="Output directory for tx files, relative to source image or absolute.",
     )
 
+    parser.add_argument(
+        "--layer",
+        dest="layer",
+        type=str,
+        default="",
+        help=(
+            "Layer name to extract from a multi-part EXR. Only used with a file path. "
+            "Multi-channel single-part EXRs (older Blender versions wrote multi-layer "
+            "EXRs in this form by default) are not supported here; for those, load "
+            "the image via a Blender Image datablock instead."
+        ),
+    )
+
+    parser.add_argument(
+        "--pass",
+        dest="pass_",
+        type=str,
+        default="",
+        help="Pass name to extract from a multi-part EXR. Only used with a file path.",
+    )
+
     return parser
 
 
@@ -72,12 +93,20 @@ def maketx_file(args):
 
     filepath = str(pathlib.Path(args.filepath).absolute())
 
+    # Compose the OpenImageIO subimage name from --layer / --pass. The convention
+    # is "<layer>.<pass>", with either half optional.
+    if args.layer and args.pass_:
+        subimage = args.layer + "." + args.pass_
+    else:
+        subimage = args.layer or args.pass_
+
     try:
         out_filepath = _cycles.maketx(
             filepath,
             colorspace=args.colorspace,
             alpha_type=args.alpha_type,
             cache_dir=args.cache_dir,
+            subimage=subimage,
         )
     except RuntimeError as ex:
         sys.stderr.write("Error: {:s}\n".format(str(ex)))
@@ -98,6 +127,11 @@ def maketx_blend(args, parser):
 
     if args.alpha_type != "auto":
         parser.error("--alpha-type is only used with an image file path argument.")
+
+    if args.layer:
+        parser.error("--layer is only used with an image file path argument.")
+    if args.pass_:
+        parser.error("--pass is only used with an image file path argument.")
 
     if args.cache_dir:
         bpy.context.preferences.filepaths.texture_cache_directory = args.cache_dir

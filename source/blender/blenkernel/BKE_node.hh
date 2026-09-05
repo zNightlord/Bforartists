@@ -281,6 +281,20 @@ struct bNodeType {
   short nclass = 0;
   eNode_Flag flag = {};
 
+  /**
+   * For shader nodes: #eShaderNodeTreeUsage flags describing how this node
+   * type can act as a texture layer source. Node types with a generator or
+   * mask flag are listed directly in the material Texture Layers add menus,
+   * next to the node group assets carrying the same usage (experimental
+   * Texture Layers feature).
+   */
+  eShaderNodeTreeUsage texture_layer_usage = eShaderNodeTreeUsage(0);
+  /**
+   * Blend mode (MA_RAMP_*) a mask layer driven by this node type gets by
+   * default, e.g. Multiply for Ambient Occlusion. 0 is the regular Mix.
+   */
+  int texture_layer_mask_blend = 0;
+
   /* templates for static sockets */
   bNodeSocketTemplate *inputs = nullptr, *outputs = nullptr;
 
@@ -461,6 +475,14 @@ struct bNodeType {
    */
   bool (*can_sync_sockets)(const bContext &C, const bNodeTree &tree, const bNode &node) = nullptr;
 
+  /**
+   * True when the node joins several input bundles into one output bundle, its first bundle
+   * output. Bundle value tracing routes any bundle input of such a node to that output, so a
+   * consumer downstream sees the joined bundle. Used e.g. by the Texture Layer Stack, without the
+   * generic bundle code depending on a specific node type.
+   */
+  bool is_bundle_join = false;
+
   /* RNA integration */
   ExtensionRNA rna_ext = {};
 
@@ -567,6 +589,17 @@ struct bNodeTreeType {
 
   /* Check if the socket type is valid for this tree type. */
   bool (*valid_socket_type)(bNodeTreeType *ntreetype, bNodeSocketType *socket_type) = nullptr;
+
+  /**
+   * Called when a link is inserted from a Separate Bundle output socket to a consumer node in a
+   * tree of this type. Lets a tree type react to a bundle channel being routed somewhere (the
+   * shader tree enables the matching texture layer channel and seeds its base value), without the
+   * generic Separate Bundle node depending on that tree type's module. Null when the tree type
+   * does not react.
+   */
+  void (*separate_bundle_output_linked)(bNodeTree &ntree,
+                                        bNode &node,
+                                        const bNodeLink &link) = nullptr;
 
   /**
    * If true, then some UI elements related to building node groups will be hidden.
@@ -786,6 +819,27 @@ const bNode &node_find_node(const bNodeTree &ntree, const bNodeSocket &socket);
  */
 bNode *node_find_node_by_name(bNodeTree &ntree, StringRefNull name);
 
+/**
+ * Finds a node based on its persistent identifier (#bNode::identifier).
+ * Walks the raw node list, so it is usable while the tree is being edited.
+ */
+bNode *node_find_node_by_identifier(bNodeTree &ntree, int32_t identifier);
+
+/**
+ * The link feeding #socket (an input socket), or null. Walks the raw link
+ * list instead of the topology cache, so it is usable while the tree is being
+ * edited.
+ */
+const bNodeLink *node_find_incoming_link(const bNodeTree &ntree, const bNodeSocket &socket);
+
+/**
+ * The node feeding #socket via direct links, following through reroute
+ * nodes, or null (also when the chain ends in an unlinked reroute). Walks the
+ * raw link list, so it is usable while the tree is being edited. Muted nodes
+ * and links are treated like regular ones.
+ */
+bNode *node_find_source_node(const bNodeTree &ntree, const bNodeSocket &socket);
+
 /** Try to find an input item with the given identifier in the entire node interface tree. */
 const bNodeTreeInterfaceSocket *node_find_interface_input_by_identifier(const bNodeTree &ntree,
                                                                         StringRef identifier);
@@ -806,6 +860,13 @@ bool node_set_selected(bNode &node, bool select);
  * Two active flags, ID nodes have special flag for buttons display.
  */
 void node_set_active(bNodeTree &ntree, bNode &node);
+/**
+ * Make the node the active texture / paint canvas without making it the active
+ * node, for when the active node must stay elsewhere (e.g. a texture layer
+ * stack whose selected layer's image should become the paint target). Does
+ * nothing when the node supports neither flag.
+ */
+void node_set_active_texture(bNodeTree &ntree, bNode &node);
 bNode *node_get_active(bNodeTree &ntree);
 void node_clear_active(bNodeTree &ntree);
 /**

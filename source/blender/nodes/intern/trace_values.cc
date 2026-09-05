@@ -168,6 +168,14 @@ static Vector<SocketInContext> find_target_sockets_through_contexts(
         }
         continue;
       }
+      if (node->typeinfo->is_bundle_join) {
+        /* Every input bundle is joined into the node's output bundle, so keep tracing forward from
+         * the output to reach a consuming Separate Bundle, even through reroutes or groups. */
+        if (socket->type == SOCK_BUNDLE) {
+          add_if_new(node.output_socket(0), bundle_path);
+        }
+        continue;
+      }
       if (node->is_type("NodeClosureOutput"_ustr)) {
         const auto &closure_storage = *static_cast<const NodeClosureOutput *>(node->storage);
         const StringRef key = closure_storage.output_items.items[socket->index()].name;

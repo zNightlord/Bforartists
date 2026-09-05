@@ -260,10 +260,10 @@ class Context : public compositor::Context {
   {
     Image *image = BKE_image_ensure_viewer(G.main, IMA_TYPE_COMPOSITE, "Viewer Node");
 
-    ImageUser image_user = {nullptr};
+    ImageUser image_user = {};
     const int view_identifier = BKE_scene_multiview_view_id_get(&input_data_.render_data,
                                                                 input_data_.view_name.c_str());
-    image_user.multi_index = view_identifier;
+    image_user.view = view_identifier;
 
     if (BKE_scene_multiview_is_render_view_first(&input_data_.render_data,
                                                  input_data_.view_name.c_str()))
@@ -662,8 +662,8 @@ class Context : public compositor::Context {
 
     Image *image = BKE_image_ensure_viewer(G.main, IMA_TYPE_COMPOSITE, "Viewer Node");
 
-    ImageUser image_user = {nullptr};
-    image_user.multi_index = view_identifier;
+    ImageUser image_user = {};
+    image_user.view = view_identifier;
 
     if (BKE_scene_multiview_is_render_view_first(&input_data_.render_data,
                                                  input_data_.view_name.c_str()))

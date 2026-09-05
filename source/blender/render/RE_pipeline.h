@@ -24,7 +24,6 @@ namespace bke {
 class BlenderProject;
 }
 
-struct ExrReadHandle;
 struct ImBuf;
 struct Image;
 struct ImageFormatData;
@@ -158,6 +157,11 @@ struct RenderResult {
   struct StampData *stamp_data = nullptr;
 
   bool passes_allocated = false;
+
+  /* Incremented whenever a layer or pass is added. Lets a cached catalog copy
+   * (the #Image.layers of a render-result viewer) detect that it is stale and
+   * needs to be re-copied. */
+  int catalog_version = 0;
 };
 
 struct RenderStats {
@@ -419,6 +423,7 @@ struct RenderResult *RE_MultilayerConvert(
     ExrReadHandle *exrhandle, const char *colorspace, bool predivide, int rectx, int recty);
 
 /*
+/**
  * Display, event callbacks and GPU contexts
  */
 

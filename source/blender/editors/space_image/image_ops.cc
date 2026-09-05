@@ -22,6 +22,7 @@
 
 #include "BLI_fileops.hh"
 #include "BLI_listbase.hh"
+#include "BLI_math_color_c.hh"
 #include "BLI_path_utils.hh"
 #include "BLI_set.hh"
 #include "BLI_string.hh"
@@ -47,7 +48,9 @@
 #include "BKE_lib_id.hh"
 #include "BKE_library.hh"
 #include "BKE_main.hh"
+#include "BKE_main_invariants.hh"
 #include "BKE_mask.hh"
+#include "BKE_node_tree_update.hh"
 #include "BKE_packedFile.hh"
 #include "BKE_report.hh"
 #include "BKE_scene.hh"
@@ -2729,21 +2732,36 @@ static wmOperatorStatus image_new_exec(bContext *C, wmOperator *op)
   stereo3d = RNA_boolean_get(op->ptr, "use_stereo_3d");
   bool tiled = RNA_boolean_get(op->ptr, "tiled");
 
-  if (!alpha) {
-    color[3] = 1.0f;
-  }
+  if (RNA_boolean_get(op->ptr, "multilayer")) {
+    /* A single layer with one color pass, to be built up from the image
+     * editor's Layers panel. Every pass is a full float RGBA buffer, so the
+     * alpha option does not apply and the fill is stored linear, like
+     * #BKE_image_add_generated converts it for a float image. */
+    ImageGeneratedPass pass;
+    pass.name = RE_PASSNAME_COMBINED;
+    pass.chan_id = "RGBA";
+    pass.channels_num = 4;
+    srgb_to_linearrgb_v4(pass.color, color);
 
-  ima = BKE_image_add_generated(bmain,
-                                width,
-                                height,
-                                name,
-                                alpha ? 32 : 24,
-                                floatbuf,
-                                gen_type,
-                                color,
-                                stereo3d,
-                                false,
-                                tiled);
+    ima = BKE_image_add_generated_multilayer(bmain, width, height, name, {pass});
+  }
+  else {
+    if (!alpha) {
+      color[3] = 1.0f;
+    }
+
+    ima = BKE_image_add_generated(bmain,
+                                  width,
+                                  height,
+                                  name,
+                                  alpha ? 32 : 24,
+                                  floatbuf,
+                                  gen_type,
+                                  color,
+                                  stereo3d,
+                                  false,
+                                  tiled);
+  }
 
   if (!ima) {
     image_new_free(op);
@@ -2812,18 +2830,28 @@ static void image_new_draw(bContext * /*C*/, wmOperator *op)
   dim_col.prop(op->ptr, "width", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   dim_col.prop(op->ptr, "height", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 
+  /* A multi-layer image is always a blank fill of full float RGBA buffers, one
+   * per pass, so the options that describe a single buffer do not apply. */
+  const bool multilayer = RNA_boolean_get(op->ptr, "multilayer");
+
   ui::Layout &col = layout.column(false);
-  col.prop(op->ptr, "generated_type", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  ui::Layout &gen_type_row = col.row(false);
+  gen_type_row.active_set(!multilayer);
+  gen_type_row.prop(op->ptr, "generated_type", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 
   const int gen_type = RNA_enum_get(op->ptr, "generated_type");
   ui::Layout &color_col = col.column(false);
-  if (gen_type == IMA_GENTYPE_BLANK) {
+  if (multilayer || gen_type == IMA_GENTYPE_BLANK) {
     color_col.prop(op->ptr, "color", UI_ITEM_NONE, std::nullopt, ICON_NONE);
   }
 
-  col.prop(op->ptr, "alpha", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-  col.prop(op->ptr, "float", UI_ITEM_NONE, std::nullopt, ICON_NONE);
-  col.prop(op->ptr, "tiled", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  ui::Layout &buffer_col = col.column(false);
+  buffer_col.active_set(!multilayer);
+  buffer_col.prop(op->ptr, "alpha", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  buffer_col.prop(op->ptr, "float", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+  buffer_col.prop(op->ptr, "tiled", UI_ITEM_NONE, std::nullopt, ICON_NONE);
+
+  col.prop(op->ptr, "multilayer", UI_ITEM_NONE, std::nullopt, ICON_NONE);
 }
 
 static void image_new_cancel(bContext * /*C*/, wmOperator *op)
@@ -2878,6 +2906,13 @@ void IMAGE_OT_new(wmOperatorType *ot)
       ot->srna, "use_stereo_3d", false, "Stereo 3D", "Create an image with left and right views");
   RNA_def_property_flag(prop, PROP_SKIP_SAVE | PROP_HIDDEN);
   prop = RNA_def_boolean(ot->srna, "tiled", false, "Tiled", "Create a tiled image");
+  RNA_def_property_flag(prop, PROP_SKIP_SAVE);
+  prop = RNA_def_boolean(ot->srna,
+                         "multilayer",
+                         false,
+                         "Multi-Layer",
+                         "Create an image with layers and passes, each pass a full float buffer "
+                         "of its own that can be painted on");
   RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 }
 
@@ -3520,7 +3555,9 @@ static wmOperatorStatus image_pack_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
 
-  if (BKE_image_is_dirty(ima)) {
+  if (BKE_image_is_dirty(ima) || ima->source == IMA_SRC_GENERATED) {
+    /* A generated image has no file to pack from, even when none of its
+     * buffers were painted yet; pack the (generated) buffers themselves. */
     BKE_image_memorypack(ima);
   }
   else {
@@ -4647,6 +4684,263 @@ void IMAGE_OT_tile_fill(wmOperatorType *ot)
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
   def_fill_tile(ot->srna);
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Image Layer and Pass Operators
+ * \{ */
+
+static bool image_catalog_poll(bContext *C)
+{
+  const Image *ima = image_from_context(C);
+  return ima != nullptr && BKE_image_has_editable_catalog(ima);
+}
+
+/* The catalog defines the per-pass outputs of the Image Texture nodes using the
+ * image, and the buffers the image editor can display. */
+static void image_catalog_changed(bContext *C, Image *ima, ImageUser *iuser)
+{
+  Main *bmain = CTX_data_main(C);
+
+  if (iuser != nullptr) {
+    BKE_image_user_resolve_from_index(ima, iuser);
+  }
+
+  BKE_ntree_update_tag_id_changed(bmain, &ima->id);
+  BKE_main_ensure_invariants(*bmain);
+  DEG_id_tag_update(&ima->id, 0);
+  WM_event_add_notifier(C, NC_IMAGE | ND_DRAW, ima);
+}
+
+static wmOperatorStatus image_layer_add_exec(bContext *C, wmOperator *op)
+{
+  Image *ima = image_from_context(C);
+  ImageUser *iuser = image_user_from_context(C);
+
+  char name[MAX_NAME];
+  RNA_string_get(op->ptr, "name", name);
+
+  const ImageLayer *layer = BKE_image_layer_add(ima, name);
+
+  if (iuser != nullptr) {
+    /* Select the new layer and its only pass. */
+    iuser->layer = BLI_findindex(&ima->layers, layer);
+    iuser->pass = 0;
+  }
+  image_catalog_changed(C, ima, iuser);
+
+  return OPERATOR_FINISHED;
+}
+
+void IMAGE_OT_layer_add(wmOperatorType *ot)
+{
+  ot->name = "Add Image Layer";
+  ot->description = "Add a layer to the image";
+  ot->idname = "IMAGE_OT_layer_add";
+
+  ot->poll = image_catalog_poll;
+  ot->exec = image_layer_add_exec;
+
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+
+  RNA_def_string(ot->srna, "name", "Layer", MAX_NAME, "Name", "Name of the new layer");
+}
+
+static bool image_layer_remove_poll(bContext *C)
+{
+  const Image *ima = image_from_context(C);
+  return ima != nullptr && BKE_image_has_editable_catalog(ima) && !ima->layers.is_single();
+}
+
+static wmOperatorStatus image_layer_remove_exec(bContext *C, wmOperator *op)
+{
+  Image *ima = image_from_context(C);
+  ImageUser *iuser = image_user_from_context(C);
+
+  ImageLayer *layer = BKE_image_user_layer(ima, iuser);
+  const int index = BLI_findindex(&ima->layers, layer);
+  if (!BKE_image_layer_remove(ima, layer)) {
+    BKE_report(op->reports, RPT_ERROR, "Could not remove image layer");
+    return OPERATOR_CANCELLED;
+  }
+
+  if (iuser != nullptr) {
+    iuser->layer = std::max(index - 1, 0);
+    iuser->pass = 0;
+  }
+  image_catalog_changed(C, ima, iuser);
+
+  return OPERATOR_FINISHED;
+}
+
+void IMAGE_OT_layer_remove(wmOperatorType *ot)
+{
+  ot->name = "Remove Image Layer";
+  ot->description = "Remove the active layer and its passes from the image";
+  ot->idname = "IMAGE_OT_layer_remove";
+
+  ot->poll = image_layer_remove_poll;
+  ot->exec = image_layer_remove_exec;
+
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+}
+
+static wmOperatorStatus image_pass_add_exec(bContext *C, wmOperator *op)
+{
+  Image *ima = image_from_context(C);
+  ImageUser *iuser = image_user_from_context(C);
+
+  ImageLayer *layer = BKE_image_user_layer(ima, iuser);
+  if (layer == nullptr) {
+    BKE_report(op->reports, RPT_ERROR, "No active image layer");
+    return OPERATOR_CANCELLED;
+  }
+
+  char name[MAX_NAME];
+  RNA_string_get(op->ptr, "name", name);
+  const int channels_num = RNA_enum_get(op->ptr, "type");
+  float color[4];
+  RNA_float_get_array(op->ptr, "color", color);
+
+  const ImagePass *pass = BKE_image_pass_add(
+      ima, layer, name, BKE_image_pass_channel_ids(channels_num), channels_num, color);
+
+  if (iuser != nullptr) {
+    iuser->pass = BLI_findindex(&layer->passes, pass);
+  }
+  image_catalog_changed(C, ima, iuser);
+
+  return OPERATOR_FINISHED;
+}
+
+void IMAGE_OT_pass_add(wmOperatorType *ot)
+{
+  ot->name = "Add Image Pass";
+  ot->description = "Add a pass to the active layer of the image";
+  ot->idname = "IMAGE_OT_pass_add";
+
+  ot->poll = image_catalog_poll;
+  ot->exec = image_pass_add_exec;
+  ot->invoke = WM_operator_props_popup_confirm;
+
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+
+  RNA_def_string(ot->srna, "name", "Pass", MAX_NAME, "Name", "Name of the new pass");
+  RNA_def_enum(
+      ot->srna, "type", rna_enum_image_pass_type_items, 4, "Type", "Channel layout of the pass");
+  static const float default_color[4] = {0.0f, 0.0f, 0.0f, 1.0f};
+  RNA_def_float_color(ot->srna,
+                      "color",
+                      4,
+                      default_color,
+                      0.0f,
+                      FLT_MAX,
+                      "Color",
+                      "Color the pass buffer is filled with",
+                      0.0f,
+                      1.0f);
+}
+
+static bool image_pass_remove_poll(bContext *C)
+{
+  const Image *ima = image_from_context(C);
+  if (ima == nullptr || !BKE_image_has_editable_catalog(ima)) {
+    return false;
+  }
+  const ImageLayer *layer = BKE_image_user_layer(ima, image_user_from_context(C));
+  return layer != nullptr && !layer->passes.is_single();
+}
+
+static wmOperatorStatus image_pass_remove_exec(bContext *C, wmOperator *op)
+{
+  Image *ima = image_from_context(C);
+  ImageUser *iuser = image_user_from_context(C);
+
+  ImageLayer *layer = BKE_image_user_layer(ima, iuser);
+  ImagePass *pass = static_cast<ImagePass *>(
+      BLI_findlink(&layer->passes, iuser ? iuser->pass : 0));
+  const int index = BLI_findindex(&layer->passes, pass);
+  if (!BKE_image_pass_remove(ima, layer, pass)) {
+    BKE_report(op->reports, RPT_ERROR, "Could not remove image pass");
+    return OPERATOR_CANCELLED;
+  }
+
+  if (iuser != nullptr) {
+    iuser->pass = std::max(index - 1, 0);
+  }
+  image_catalog_changed(C, ima, iuser);
+
+  return OPERATOR_FINISHED;
+}
+
+void IMAGE_OT_pass_remove(wmOperatorType *ot)
+{
+  ot->name = "Remove Image Pass";
+  ot->description = "Remove the active pass from the active layer of the image";
+  ot->idname = "IMAGE_OT_pass_remove";
+
+  ot->poll = image_pass_remove_poll;
+  ot->exec = image_pass_remove_exec;
+
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Detect Image Layers Operator
+ * \{ */
+
+static bool image_layers_detect_poll(bContext *C)
+{
+  const Image *ima = image_from_context(C);
+  return ima != nullptr && ELEM(ima->source, IMA_SRC_FILE, IMA_SRC_TILED) &&
+         BKE_image_filepath_has_layer_pass_token(ima->filepath);
+}
+
+static wmOperatorStatus image_layers_detect_exec(bContext *C, wmOperator *op)
+{
+  Main *bmain = CTX_data_main(C);
+  Image *ima = image_from_context(C);
+  ImageUser *iuser = image_user_from_context(C);
+
+  const int passes_num = BKE_image_multifile_detect_layers(bmain, ima);
+  if (passes_num < 0) {
+    BKE_report(op->reports,
+               RPT_ERROR,
+               "Layers can only be detected for a single image or UDIM tiles whose file path "
+               "contains a <LAYER> or <PASS> token");
+    return OPERATOR_CANCELLED;
+  }
+  if (passes_num == 0) {
+    BKE_reportf(op->reports, RPT_WARNING, "No file matching '%s' found", ima->filepath);
+    return OPERATOR_CANCELLED;
+  }
+
+  if (iuser != nullptr) {
+    iuser->layer = 0;
+    iuser->pass = 0;
+  }
+  image_catalog_changed(C, ima, iuser);
+  BKE_reportf(op->reports, RPT_INFO, "Detected %d passes", passes_num);
+
+  return OPERATOR_FINISHED;
+}
+
+void IMAGE_OT_layers_detect(wmOperatorType *ot)
+{
+  ot->name = "Detect Image Layers";
+  ot->description =
+      "Replace the layers and passes of the image by the files matching the <LAYER> and <PASS> "
+      "tokens of its file path";
+  ot->idname = "IMAGE_OT_layers_detect";
+
+  ot->poll = image_layers_detect_poll;
+  ot->exec = image_layers_detect_exec;
+
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
 
 /** \} */

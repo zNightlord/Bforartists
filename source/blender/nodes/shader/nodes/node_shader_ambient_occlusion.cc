@@ -8,6 +8,8 @@
 
 #include "node_shader_util.hh"
 
+#include "DNA_material_types.h"
+
 #include "BLI_math_base_c.hh"
 
 #include "UI_interface_layout.hh"
@@ -98,6 +100,9 @@ void register_node_type_sh_ambient_occlusion()
       "weathering effects to corners.\nNote: For Cycles, this may slow down renders significantly";
   ntype.enum_name_legacy = "AMBIENT_OCCLUSION";
   ntype.nclass = NODE_CLASS_INPUT;
+  ntype.texture_layer_usage = SHADER_NODE_TREE_USAGE_TEXTURE_GENERATOR |
+                              SHADER_NODE_TREE_USAGE_MASK_GENERATOR;
+  ntype.texture_layer_mask_blend = MA_RAMP_MULT;
   ntype.declare = file_ns::node_declare;
   ntype.draw_buttons = file_ns::node_shader_buts_ambient_occlusion;
   ntype.initfunc = file_ns::node_shader_init_ambient_occlusion;

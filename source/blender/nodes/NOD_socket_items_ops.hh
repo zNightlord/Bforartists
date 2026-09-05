@@ -198,6 +198,32 @@ inline void add_item(wmOperatorType *ot,
     const bool show_dialog = RNA_boolean_get(op->ptr, "show_dialog");
     const bool needs_dialog = Accessor::has_type || Accessor::has_name;
     if (show_dialog && needs_dialog) {
+      /* Give the dialog usable defaults instead of an empty name and an enum
+       * with nothing selected: the "socket_type" property's own RNA default
+       * (SOCK_FLOAT) may not pass this accessor's type filter. */
+      if constexpr (Accessor::has_name && Accessor::has_default_item_name) {
+        if (!RNA_struct_property_is_set(op->ptr, item_name_id)) {
+          RNA_string_set(op->ptr, item_name_id, Accessor::default_item_name);
+        }
+      }
+      if constexpr (Accessor::has_type) {
+        if (!RNA_struct_property_is_set(op->ptr, socket_type_id)) {
+          const SpaceNode *snode = CTX_wm_space_node(C);
+          if (snode && snode->edittree) {
+            for (const EnumPropertyItem *item = rna_enum_node_socket_data_type_items;
+                 item->identifier;
+                 item++)
+            {
+              if (Accessor::supports_socket_type(eNodeSocketDatatype(item->value),
+                                                 snode->edittree->type))
+              {
+                RNA_enum_set(op->ptr, socket_type_id, item->value);
+                break;
+              }
+            }
+          }
+        }
+      }
       return WM_operator_props_popup_confirm_ex(C, op, event, IFACE_("Add Item"));
     }
     return op->type->exec(C, op);

@@ -158,6 +158,12 @@ class AbstractTreeView : public AbstractView, public TreeViewItemContainer {
   std::shared_ptr<TreeViewSortOrder> invert_sort_type_ = std::make_shared<TreeViewSortOrder>(
       TreeViewSortOrder::None);
 
+  /** Optional callback drawing extra buttons in the bottom bar, see #set_footer_fn. */
+  std::function<void(Layout &layout)> footer_fn_;
+
+  /** Draw without a visible surrounding box, see #set_flat_box. */
+  bool flat_box_ = false;
+
   friend class AbstractTreeViewItem;
   friend class TreeViewBuilder;
   friend class TreeViewLayoutBuilder;
@@ -182,6 +188,12 @@ class AbstractTreeView : public AbstractView, public TreeViewItemContainer {
    * \note Value should be greater than #MIN_ROWS. This is to prevent resizing below certain
    * height. */
   void set_default_rows(int default_rows);
+  /** Set a callback to draw extra buttons right-aligned in the view's bottom bar (next to the
+   * search toggle and resize grip). Only shown when the bottom bar is present. */
+  void set_footer_fn(std::function<void(Layout &layout)> footer_fn);
+  /** Make the view span the full width without a visible surrounding box, while still striping and
+   * highlighting its rows. */
+  void set_flat_box(bool flat_box);
   TreeViewSortOrder invert_sort_type_get() const;
   /**
    * Scroll the view so the active item is visible.
@@ -367,7 +379,7 @@ class AbstractTreeViewItem : public AbstractViewItem, public TreeViewItemContain
    */
   bool set_state_active() final;
 
-  void add_treerow_button(Block &block);
+  void add_treerow_button(Block &block, bool is_alternate);
   int indent_width() const;
   void add_indent(Layout &row) const;
   void add_collapse_chevron(Block &block) const;

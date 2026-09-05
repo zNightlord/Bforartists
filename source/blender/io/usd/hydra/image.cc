@@ -94,7 +94,7 @@ std::string cache_or_get_image_file(Main *bmain, Scene *scene, Image *image, Ima
   }
   else {
     do_check_extension = true;
-    BKE_image_user_file_path_ex(bmain, iuser, image, str, false, true);
+    BKE_image_user_file_path_ex(bmain, iuser, image, str, false, true, true);
     file_path = str;
   }
 

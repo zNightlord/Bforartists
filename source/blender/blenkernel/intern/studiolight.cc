@@ -286,19 +286,20 @@ static void direction_to_equirect(float r[2], const float dir[3])
 }
 
 /**
- * Read a named pass from a multi-layer EXR and return a 4-channel float ImBuf.
+ * Read a named pass from a multi-layer EXR and return a 4-channel float ImBuf
+ * (expanding 1/3-channel passes to RGBA). Only the requested pass is read.
  * Returns null if the pass is not in the file.
  */
 static ImBuf *studiolight_read_matcap_pass(ExrReadHandle *handle, const char *pass_name)
 {
-  Vector<ExrPassInfo> passes = IMB_exr_get_passes(handle);
-  for (ExrPassInfo &info : passes) {
+  for (const ExrPassInfo &info : IMB_exr_get_passes(handle)) {
     if (info.pass != pass_name) {
       continue;
     }
-    MutableSpan<ExrPassInfo> single(&info, 1);
-    IMB_exr_read_passes(handle, single, nullptr, false);
-    ImBuf *pass_ibuf = info.ibuf;
+    ExrPassInfo request = info;
+    request.ibuf = nullptr;
+    IMB_exr_read_passes(handle, {&request, 1});
+    ImBuf *pass_ibuf = request.ibuf;
     if (pass_ibuf == nullptr || pass_ibuf->channels == 4) {
       return pass_ibuf;
     }

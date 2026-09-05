@@ -113,31 +113,58 @@ enum eImageAlphaMode : char {
 };
 
 /**
- * ImageUser is in Texture, in Nodes, Background Image, Image Window, ...
- * should be used in conjunction with an ID * to Image.
+ * ImageUser determines which specific image buffer to use for an Image,
+ * selecting a specific layer, pass, view, frame and tile.
+ *
+ * It is saved persistently in DNA along side Image ID pointers, for the
+ * image editor, image nodes, background image, etc.
+ *
+ * It is also used at runtime for acquiring a more specific image, for example
+ * a UDIM tile or animation frame based on context.
  */
 struct ImageUser {
-  /** To retrieve render result. */
-  struct Scene *scene = nullptr;
+  /********************************* Saved Data ******************************/
 
-  /** Movies, sequences: current to display. */
-  int framenr = 0;
-  /** Total amount of frames to use. */
-  int frames = 0;
-  /** Offset within movie, start frame in global time. */
-  int offset = 0, sfra = 0;
-  /** Cyclic flag. */
-  char cycl = 0;
-
-  /** Multiview current eye - for internal use of drawing routines. */
-  char multiview_eye = 0;
+  /** Layer and pass selection.
+   *
+   * The names have priority if they are non-empty. The indices exist for backwards
+   * compatibility in blend files and APIs, and temporary usage in UI menus. */
+  char layer_name[/*MAX_NAME*/ 64] = "";
+  char pass_name[/*MAX_NAME*/ 64] = "";
+  short layer = 0;
   short pass = 0;
 
+  /** Multi-view selection. */
+  short view = 0;
+  short _pad0 = 0;
+
+  /** UDIM tile selection. */
   int tile = 0;
 
-  /** Listbase indices, for menu browsing or retrieve buffer. */
-  short multi_index = 0, view = 0, layer = 0;
+  /* Animation settings. */
+
+  /** Total amount of frames of the sequence/movie to use. */
+  int frames = 0;
+  /** Frame offset, and start frame in global (scene) time. */
+  int offset = 0, sfra = 0;
+  /** Cyclic: loop the frame range. */
+  char cycl = 0;
+  char _pad1 = 0;
+
+  /* General Settings. */
   eImageUser_Flag flag = {};
+
+  /****************************** Runtime Data ********************************/
+
+  /** Resolved frame number, computed from animation settings and scene current frame. */
+  int framenr = 0;
+
+  /** Current scene for acquiring a render result or viewer. */
+  struct Scene *scene = nullptr;
+
+  /** Multi-view eye to draw, for stereo drawing. */
+  char multiview_eye = 0;
+  char _pad2[7] = {};
 };
 
 struct ImageAnim {
@@ -192,6 +219,36 @@ struct ImageTile {
   char label[64] = "";
 };
 
+struct ImagePass {
+  struct ImagePass *next = nullptr, *prev = nullptr;
+
+  /** Pass name, e.g. "Combined", "Depth", "AO", "Roughness". */
+  char name[/*MAX_NAME*/ 64] = "";
+  /** Channels IDs (like RGBA or XYZ). */
+  char chan_id[24] = "";
+  /** Number of channels. */
+  int channels_num = 0;
+  char _pad[4] = {};
+  /** Solid fill of a generated pass buffer (authored catalogs only), stored in
+   * the image's colorspace (no sRGB conversion on fill). */
+  float gen_color[4] = {};
+  /** Value substituted for the `<PASS>` token of a multi-file image path,
+   * empty to use #name. */
+  char token[/*MAX_NAME*/ 64] = "";
+};
+
+struct ImageLayer {
+  struct ImageLayer *next = nullptr, *prev = nullptr;
+
+  /** Layer name. */
+  char name[/*MAX_NAME*/ 64] = "";
+  /** Value substituted for the `<LAYER>` token of a multi-file image path,
+   * empty to use #name. */
+  char token[/*MAX_NAME*/ 64] = "";
+
+  ListBaseT<ImagePass> passes = {nullptr, nullptr};
+};
+
 struct Image {
 #ifdef __cplusplus
   /** See #ID_Type comment for why this is here. */
@@ -206,7 +263,6 @@ struct Image {
 
   /* sources from: */
   ListBaseT<ImageAnim> anims = {nullptr, nullptr};
-  struct RenderResult *rr = nullptr;
 
   ListBaseT<RenderSlot> renderslots = {nullptr, nullptr};
   short render_slot = 0, last_render_slot = 0;
@@ -255,6 +311,8 @@ struct Image {
   /* ImageTile list for UDIMs. */
   int active_tile_index = 0;
   ListBaseT<ImageTile> tiles = {nullptr, nullptr};
+
+  ListBaseT<ImageLayer> layers = {nullptr, nullptr};
 
   ListBaseT<ImageView> views = {nullptr, nullptr};
   struct Stereo3dFormat *stereo3d_format = nullptr;

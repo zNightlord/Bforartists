@@ -30,7 +30,6 @@
 #include "GHOST_ISystem.hh"
 
 #include "BLI_enum_flags.hh"
-#include "BLI_ghash.hh"
 #include "BLI_listbase.hh"
 #include "BLI_math_vector_c.hh"
 #include "BLI_string.hh"
@@ -42,6 +41,7 @@
 #include "BKE_global.hh"
 #include "BKE_id_hash.hh"
 #include "BKE_idprop.hh"
+#include "BKE_image.hh"
 #include "BKE_layer.hh"
 #include "BKE_lib_remap.hh"
 #include "BKE_library.hh"
@@ -832,6 +832,22 @@ void wm_event_do_notifiers(bContext *C)
   wm_event_do_refresh_wm_and_depsgraph(C);
 
   RE_FreeUnusedGPUResources();
+
+  /* Keep render-result viewer catalogs (Image.layers) in sync with the live
+   * render result, so the image editor and compositor can read them without
+   * acquiring the result themselves. Dedupe by active scene — many windows
+   * typically share a scene, and each sync acquires the render-result mutex for
+   * every render-result image. */
+  {
+    Main *bmain = CTX_data_main(C);
+    blender::VectorSet<Scene *> synced_scenes;
+    for (wmWindow &win : wm->windows) {
+      Scene *win_scene = WM_window_get_active_scene(&win);
+      if (win_scene != nullptr && synced_scenes.add(win_scene)) {
+        BKE_image_sync_render_catalogs(bmain, win_scene);
+      }
+    }
+  }
 
   /* Status bar. */
   if (wm->runtime->winactive) {

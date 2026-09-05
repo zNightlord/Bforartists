@@ -165,6 +165,13 @@ class EEVEE_MATERIAL_PT_surface(MaterialButtonsPanel, Panel):
     bl_context = "material"
     COMPAT_ENGINES = {'BLENDER_EEVEE'}
 
+    @classmethod
+    def poll(cls, context):
+        if context.preferences.experimental.use_texture_layers:
+            return False
+        mat = context.material
+        return mat and (context.engine in cls.COMPAT_ENGINES) and not mat.grease_pencil
+
     def draw(self, context):
         layout = self.layout
 
@@ -183,6 +190,8 @@ class EEVEE_MATERIAL_PT_volume(MaterialButtonsPanel, Panel):
 
     @classmethod
     def poll(cls, context):
+        if context.preferences.experimental.use_texture_layers:
+            return False
         engine = context.engine
         mat = context.material
         return mat and (engine in cls.COMPAT_ENGINES) and not mat.grease_pencil
@@ -205,6 +214,8 @@ class EEVEE_MATERIAL_PT_displacement(MaterialButtonsPanel, Panel):
 
     @classmethod
     def poll(cls, context):
+        if context.preferences.experimental.use_texture_layers:
+            return False
         engine = context.engine
         mat = context.material
         return mat and (engine in cls.COMPAT_ENGINES) and not mat.grease_pencil
@@ -217,6 +228,99 @@ class EEVEE_MATERIAL_PT_displacement(MaterialButtonsPanel, Panel):
         mat = context.material
 
         panel_node_draw(layout, mat.node_tree, 'OUTPUT_MATERIAL', "Displacement")
+
+
+class MATERIAL_MT_texture_layer_add(Menu):
+    bl_label = "Add Texture Layer"
+
+    def draw(self, _context):
+        layout = self.layout
+        # Generator/Adjustment/Mask/Group need an existing texture layer stack:
+        # hide them instead of showing them with all entries grayed out.
+        has_stack = bpy.ops.material.texture_layer_add_fill.poll()
+        if has_stack:
+            layout.menu("MATERIAL_MT_texture_layer_add_generator", text="Generator", icon='NODE_TEXTURE')
+            layout.menu("MATERIAL_MT_texture_layer_add_adjustment", text="Adjustment", icon='SHADERFX')
+            layout.menu("MATERIAL_MT_texture_layer_add_mask", text="Mask", icon='MOD_MASK')
+            layout.separator()
+        layout.operator("material.texture_layer_add", text="Empty Layer")
+        if has_stack:
+            layout.separator()
+            layout.operator("material.texture_layer_add_group", text="Generator Group", icon='FILE_FOLDER')
+            layout.operator("material.texture_layer_add_adjustment_group", text="Adjustment Group", icon='FILE_FOLDER')
+
+
+class MATERIAL_MT_texture_layer_add_generator(Menu):
+    bl_label = "Generator"
+
+    def draw(self, _context):
+        layout = self.layout
+        layout.operator("material.texture_layer_add_fill", text="Fill", icon='SHADING_SOLID')
+        layout.operator("material.texture_layer_add_paint", text="Paint", icon='BRUSH_DATA')
+        layout.separator()
+        # Asset entries are populated by the C-side menu, which iterates the
+        # full asset library and filters shader node groups whose usage flag
+        # includes Texture Generator.
+        layout.menu_contents("MATERIAL_MT_texture_layer_add_generator_assets")
+
+
+class MATERIAL_MT_texture_layer_add_adjustment(Menu):
+    bl_label = "Adjustment"
+
+    def draw(self, _context):
+        layout = self.layout
+        layout.menu_contents("MATERIAL_MT_texture_layer_add_adjustment_assets")
+
+
+class MATERIAL_MT_texture_layer_add_mask(Menu):
+    bl_label = "Mask"
+
+    def draw(self, _context):
+        layout = self.layout
+        layout.operator("material.texture_layer_add_white_mask", text="White Mask", icon='RESTRICT_COLOR_OFF')
+        layout.operator("material.texture_layer_add_black_mask", text="Black Mask", icon='RESTRICT_COLOR_ON')
+        layout.operator("material.texture_layer_add_paint_mask", text="Paint", icon='BRUSH_DATA')
+        layout.separator()
+        layout.menu_contents("MATERIAL_MT_texture_layer_add_mask_assets")
+
+
+class MATERIAL_MT_texture_layer_context(Menu):
+    bl_label = "Texture Layer Specials"
+
+    def draw(self, _context):
+        layout = self.layout
+        layout.operator("material.texture_layer_convert_to_group", icon='FILE_FOLDER')
+        layout.operator("material.texture_layer_ungroup", text="Ungroup")
+
+
+class MATERIAL_MT_texture_layer_mask_context(Menu):
+    bl_label = "Mask Layer Specials"
+
+    def draw(self, _context):
+        layout = self.layout
+        layout.operator("material.texture_layer_mask_remove", icon='REMOVE')
+
+
+class MATERIAL_PT_texture_layers_surface(MaterialButtonsPanel, Panel):
+    bl_label = "Surface"
+    bl_context = "material"
+    COMPAT_ENGINES = {'BLENDER_EEVEE', 'CYCLES'}
+
+    @classmethod
+    def poll(cls, context):
+        if not context.preferences.experimental.use_texture_layers:
+            return False
+        mat = context.material
+        return mat and (context.engine in cls.COMPAT_ENGINES) and not mat.grease_pencil
+
+    def draw(self, context):
+        layout = self.layout
+        mat = context.material
+        if mat.node_tree is None:
+            layout.label(text="No shader node tree")
+            return
+
+        layout.template_shader_layers(mat.node_tree)
 
 
 class EEVEE_MATERIAL_PT_thickness(MaterialButtonsPanel, Panel):
@@ -445,6 +549,13 @@ classes = (
     EEVEE_MATERIAL_PT_surface,
     EEVEE_MATERIAL_PT_volume,
     EEVEE_MATERIAL_PT_displacement,
+    MATERIAL_MT_texture_layer_add,
+    MATERIAL_MT_texture_layer_add_generator,
+    MATERIAL_MT_texture_layer_add_adjustment,
+    MATERIAL_MT_texture_layer_add_mask,
+    MATERIAL_MT_texture_layer_context,
+    MATERIAL_MT_texture_layer_mask_context,
+    MATERIAL_PT_texture_layers_surface,
     EEVEE_MATERIAL_PT_thickness,
     EEVEE_MATERIAL_PT_settings,
     EEVEE_MATERIAL_PT_settings_surface,

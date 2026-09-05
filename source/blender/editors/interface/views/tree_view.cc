@@ -239,6 +239,16 @@ void AbstractTreeView::set_default_rows(int default_rows)
   custom_height_ = std::make_unique<int>(default_rows * padded_item_height());
 }
 
+void AbstractTreeView::set_footer_fn(std::function<void(Layout &layout)> footer_fn)
+{
+  footer_fn_ = std::move(footer_fn);
+}
+
+void AbstractTreeView::set_flat_box(const bool flat_box)
+{
+  flat_box_ = flat_box;
+}
+
 std::optional<uiViewState> AbstractTreeView::persistent_state() const
 {
   uiViewState state{};
@@ -612,7 +622,7 @@ AbstractTreeViewItem::AbstractTreeViewItem()
   activate_for_context_menu_ = true;
 }
 
-void AbstractTreeViewItem::add_treerow_button(Block &block)
+void AbstractTreeViewItem::add_treerow_button(Block &block, const bool is_alternate)
 {
   /* For some reason a width > (UI_UNIT_X * 2) make the layout system use all available width. */
   view_item_but_ = reinterpret_cast<ButtonViewItem *>(uiDefBut(&block,
@@ -628,6 +638,9 @@ void AbstractTreeViewItem::add_treerow_button(Block &block)
                                                                ""));
 
   view_item_but_->view_item = this;
+  if (is_alternate) {
+    view_item_but_->drawflag |= BUT_ALTERNATE_ROW;
+  }
 }
 
 int AbstractTreeViewItem::indent_width() const
@@ -963,7 +976,7 @@ class TreeViewLayoutBuilder {
 
  public:
   void build_from_tree(AbstractTreeView &tree_view);
-  void build_row(AbstractTreeViewItem &item) const;
+  void build_row(AbstractTreeViewItem &item, int index) const;
 
   Block &block() const;
   Layout &current_layout() const;
@@ -995,7 +1008,15 @@ void TreeViewLayoutBuilder::build_from_tree(AbstractTreeView &tree_view)
   Layout &parent_layout = this->current_layout();
   Block *block = parent_layout.block();
 
-  Layout &col = (add_box_ ? parent_layout.box() : parent_layout).column(true);
+  Layout *box_layout = nullptr;
+  if (add_box_) {
+    /* A flat box spans the full width and draws no border/background of its own, so the view does
+     * not look boxed-in, while still backing its rows with alternating row backgrounds (zebra
+     * striping). A normal box draws no striping. */
+    box_layout = tree_view.flat_box_ ? &parent_layout.flat_box() : &parent_layout.box();
+  }
+
+  Layout &col = (box_layout ? *box_layout : parent_layout).column(true);
 
   /* Row for the tree-view and the scroll bar. */
   Layout &row = col.row(false);
@@ -1025,7 +1046,7 @@ void TreeViewLayoutBuilder::build_from_tree(AbstractTreeView &tree_view)
       [&, this](AbstractTreeViewItem &item) {
         if ((index >= first_visible_index) && (index <= max_visible_index)) {
           if (item.is_filtered_visible()) {
-            this->build_row(item);
+            this->build_row(item, index);
           }
         }
         index++;
@@ -1059,7 +1080,22 @@ void TreeViewLayoutBuilder::build_from_tree(AbstractTreeView &tree_view)
 
     block_layout_set_current(block, &col);
 
-    /* Bottom */
+    /* Bottom bar with the search toggle, resize grip and optional footer buttons. It is made a
+     * little taller when it hosts footer buttons so they fit at their normal height. */
+    const bool has_footer = bool(tree_view.footer_fn_);
+    const float bar_height = has_footer ? UI_UNIT_Y : UI_UNIT_Y * 0.5f;
+
+    /* Continue the alternating row background onto the bottom bar, so it shows the color the row
+     * after the last one would have, rather than matching the last row. Only for the full-width
+     * flat box; a normal box draws its own background there. The band spans the full box width and
+     * takes its height from a flagged button, so flag the (full-bar-height) search toggle. The
+     * index of the row after the last visible one is clamped to the item count, since when the
+     * tree does not fill the view the pattern ends at the last item, not the last slot. */
+    const int after_last_index = std::min(first_visible_index + visible_row_count.value_or(0),
+                                          tot_items);
+    const bool bar_alternate_row = tree_view.flat_box_ && visible_row_count &&
+                                   (after_last_index % 2 == 1);
+
     Layout &bottom = col.row(false);
     block_emboss_set(block, EmbossType::None);
     but = uiDefIconButBit(block,
@@ -1069,13 +1105,17 @@ void TreeViewLayoutBuilder::build_from_tree(AbstractTreeView &tree_view)
                           0,
                           0,
                           UI_UNIT_X,
-                          UI_UNIT_Y * 0.5,
+                          bar_height,
                           tree_view.show_display_options_.get(),
                           0,
                           0,
                           TIP_(""));
     button_flag_disable(but, BUT_UNDO);
+    if (bar_alternate_row) {
+      but->drawflag |= BUT_ALTERNATE_ROW;
+    }
     block_emboss_set(block, EmbossType::Emboss);
+    /* Grip in an expanding column, so it pushes any footer buttons to the right edge. */
     bottom.column(false);
 
     uiDefIconButV(block,
@@ -1084,11 +1124,21 @@ void TreeViewLayoutBuilder::build_from_tree(AbstractTreeView &tree_view)
                   0,
                   0,
                   UI_UNIT_X * 10,
-                  UI_UNIT_Y * 0.5f,
+                  bar_height,
                   tree_view.custom_height_.get(),
                   0,
                   0,
                   "");
+
+    if (has_footer) {
+      Layout &footer = bottom.row(true);
+      /* Draw the footer buttons without emboss, matching the search toggle and grip, so only their
+       * icons show. */
+      footer.emboss_set(EmbossType::None);
+      block_layout_set_current(block, &footer);
+      tree_view.footer_fn_(footer);
+      block_layout_set_current(block, &col);
+    }
 
     if (*tree_view.show_display_options_) {
       Layout &filter_layout = col.row(true);
@@ -1173,7 +1223,7 @@ void TreeViewLayoutBuilder::build_from_tree(AbstractTreeView &tree_view)
   block_layout_set_current(block, &parent_layout);
 }
 
-void TreeViewLayoutBuilder::build_row(AbstractTreeViewItem &item) const
+void TreeViewLayoutBuilder::build_row(AbstractTreeViewItem &item, const int index) const
 {
   Block &block_ = block();
 
@@ -1198,7 +1248,7 @@ void TreeViewLayoutBuilder::build_row(AbstractTreeViewItem &item) const
    * see: !160795 */
   row->emboss_set(item.is_interactive_ ? EmbossType::Emboss : EmbossType::None);
   /* Every item gets one! Other buttons can be overlapped on top. */
-  item.add_treerow_button(block_);
+  item.add_treerow_button(block_, (index % 2) == 1);
 
   /* After adding tree-row button (would disable hover highlighting). */
   block_emboss_set(&block_, EmbossType::NoneOrStatus);

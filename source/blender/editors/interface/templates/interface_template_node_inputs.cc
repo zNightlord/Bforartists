@@ -6,6 +6,7 @@
  * \ingroup edinterface
  */
 
+#include "BLI_function_ref.hh"
 #include "BLI_vector.hh"
 
 #include "BKE_context.hh"
@@ -97,17 +98,19 @@ static bool panel_has_used_inputs(const bNode &node, const PanelDeclaration &pan
   return false;
 }
 
-static void draw_node_inputs_recursive(bContext *C,
-                                       Layout &layout,
-                                       bNode &node,
-                                       PointerRNA *node_ptr,
-                                       const PanelDeclaration &panel_decl)
+}  // namespace nodes
+
+void draw_node_inputs_recursive(bContext *C,
+                                Layout &layout,
+                                bNode &node,
+                                PointerRNA *node_ptr,
+                                const PanelDeclaration &panel_decl,
+                                FunctionRef<void(Layout &layout, bNodeSocket &socket)> draw_socket)
 {
   /* TODO: Use flag on the panel state instead which is better for dynamic panel amounts. */
   const std::string panel_idname = "NodePanel" + std::to_string(panel_decl.identifier);
   PanelLayout panel = layout.panel(C, panel_idname, panel_decl.default_collapsed);
-  const bool has_used_inputs = panel_has_used_inputs(node, panel_decl);
-  panel.header->active_set(has_used_inputs);
+  panel.header->active_set(nodes::panel_has_used_inputs(node, panel_decl));
 
   const char *panel_translation_context = (panel_decl.translation_context.has_value() ?
                                                panel_decl.translation_context->c_str() :
@@ -119,11 +122,11 @@ static void draw_node_inputs_recursive(bContext *C,
   for (const ItemDeclaration *item_decl : panel_decl.items) {
     if (const auto *socket_decl = dynamic_cast<const SocketDeclaration *>(item_decl)) {
       if (socket_decl->in_out == SOCK_IN) {
-        draw_node_input(C, *panel.body, node_ptr, node.socket_by_decl(*socket_decl));
+        draw_socket(*panel.body, node.socket_by_decl(*socket_decl));
       }
     }
     else if (const auto *sub_panel_decl = dynamic_cast<const PanelDeclaration *>(item_decl)) {
-      draw_node_inputs_recursive(C, *panel.body, node, node_ptr, *sub_panel_decl);
+      draw_node_inputs_recursive(C, *panel.body, node, node_ptr, *sub_panel_decl, draw_socket);
     }
     else if (const auto *layout_decl = dynamic_cast<const LayoutDeclaration *>(item_decl)) {
       if (!layout_decl->is_default) {
@@ -133,8 +136,6 @@ static void draw_node_inputs_recursive(bContext *C,
     }
   }
 }
-
-}  // namespace nodes
 
 void template_node_inputs(Layout *layout, bContext *C, PointerRNA *ptr)
 {
@@ -157,7 +158,10 @@ void template_node_inputs(Layout *layout, bContext *C, PointerRNA *ptr)
     const NodeDeclaration &node_decl = *node.declaration();
     for (const ItemDeclaration *item_decl : node_decl.root_items) {
       if (const auto *panel_decl = dynamic_cast<const PanelDeclaration *>(item_decl)) {
-        nodes::draw_node_inputs_recursive(C, *layout, node, ptr, *panel_decl);
+        draw_node_inputs_recursive(
+            C, *layout, node, ptr, *panel_decl, [&](Layout &row, bNodeSocket &socket) {
+              nodes::draw_node_input(C, row, ptr, socket);
+            });
       }
       else if (const auto *socket_decl = dynamic_cast<const SocketDeclaration *>(item_decl)) {
         bNodeSocket &socket = node.socket_by_decl(*socket_decl);

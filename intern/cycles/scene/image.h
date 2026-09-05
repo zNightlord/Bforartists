@@ -151,10 +151,15 @@ class ImageManager {
   explicit ImageManager(const DeviceInfo &info, const SceneParams &params);
   ~ImageManager();
 
-  ImageHandle add_image(const string &filename, const ImageParams &params);
+  /* The optional subimage_name selects a named OpenImageIO subimage of the
+   * source file, used to read a specific layer/pass of a multi-layer EXR. */
   ImageHandle add_image(const string &filename,
                         const ImageParams &params,
-                        const array<int> &tiles);
+                        const string &subimage_name = "");
+  ImageHandle add_image(const string &filename,
+                        const ImageParams &params,
+                        const array<int> &tiles,
+                        const string &subimage_name = "");
   ImageHandle add_image(unique_ptr<ImageLoader> &&loader,
                         const ImageParams &params,
                         const bool builtin = true);

@@ -875,6 +875,11 @@ if(TEST_SRC_DIR_EXISTS)
   )
 
   add_blender_test(
+    bl_node_multilayer_image
+    --python ${CMAKE_CURRENT_LIST_DIR}/bl_node_multilayer_image.py
+  )
+
+  add_blender_test(
     bl_node_link_drag
     --python ${CMAKE_CURRENT_LIST_DIR}/bl_node_link_drag.py
     --
@@ -1752,7 +1757,6 @@ if(WITH_UI_TESTS)
     test_undo.view3d_sculpt_dyntopo_simple
     test_undo.view3d_sculpt_dyntopo_stroke_toggle
     test_undo.view3d_sculpt_with_memfile_step
-    test_undo.view3d_sculpt_with_empty_memfile_step
     test_undo.view3d_sculpt_trim
     test_undo.view3d_simple
     test_undo.view3d_texture_paint_complex
@@ -1832,6 +1836,17 @@ if(WITH_UI_TESTS)
     test_tool_activation.node_editor
     test_tool_activation.sequencer
     test_preferences_draw_all.test_preferences_draw_all
+    test_image_layers.test_image_layer_name_tracking
+    test_image_layers.test_multilayer_exr_save_roundtrip
+    test_image_layers.test_multiview_multilayer_exr_save_roundtrip
+    test_image_layers.test_image_catalog_operators
+    test_image_layers.test_image_catalog_rename
+    test_image_layers.test_image_catalog_read_only
+    test_image_layers.test_image_new_multilayer
+    test_image_layers.test_image_file_catalog_editing
+    test_image_layers.test_multifile_image_save_and_load
+    test_image_layers.test_multifile_image_detect_layers
+    test_image_layers.test_multifile_image_catalog_persists
   )
   foreach(ui_test ${_ui_tests})
     add_blender_test_ui(

@@ -221,77 +221,95 @@ static bool eyedropper_cryptomatte_sample_view3d_fl(bContext *C,
   return true;
 }
 
-static bool eyedropper_cryptomatte_sample_renderlayer_fl(RenderLayer *render_layer,
+/**
+ * Sample a Cryptomatte pass within one layer of an image's #Image.layers
+ * catalog, matching \a prefix against the layer and pass names. The pass buffer
+ * is acquired through the regular Image API.
+ */
+static bool eyedropper_cryptomatte_sample_image_layer_fl(Image *image,
+                                                         const ImageUser &iuser,
+                                                         const ImageLayer *layer,
                                                          const char *prefix,
                                                          const float fpos[2],
                                                          float r_col[3])
 {
-  if (!render_layer) {
-    return false;
-  }
-
-  const int render_layer_name_len = STRNLEN(render_layer->name);
-  if (strncmp(prefix, render_layer->name, render_layer_name_len) != 0) {
+  const int layer_name_len = STRNLEN(layer->name);
+  if (strncmp(prefix, layer->name, layer_name_len) != 0) {
     return false;
   }
 
   const int prefix_len = strlen(prefix);
-  if (prefix_len <= render_layer_name_len + 1) {
+  if (prefix_len <= layer_name_len + 1) {
     return false;
   }
 
-  /* RenderResult from images can have no render layer name. */
-  const char *render_pass_name_prefix = render_layer_name_len ?
-                                            prefix + 1 + render_layer_name_len :
-                                            prefix;
+  /* Multi-layer images can have an unnamed layer. */
+  const char *pass_name_prefix = layer_name_len ? prefix + 1 + layer_name_len : prefix;
 
-  for (RenderPass &render_pass : render_layer->passes) {
-    if (STRPREFIX(render_pass.name, render_pass_name_prefix) &&
-        !STREQLEN(render_pass.name, render_pass_name_prefix, sizeof(render_pass.name)))
+  for (const ImagePass &pass : layer->passes) {
+    if (STRPREFIX(pass.name, pass_name_prefix) &&
+        !STREQLEN(pass.name, pass_name_prefix, sizeof(pass.name)))
     {
-      BLI_assert(render_pass.channels == 4);
+      BLI_assert(pass.channels_num == 4);
 
-      /* Pass was allocated but not rendered yet. */
-      if (!render_pass.ibuf) {
-        return false;
+      /* Select this layer/pass by name and acquire its buffer through the Image
+       * API, keeping the incoming view selection. */
+      ImageUser pass_iuser = iuser;
+      STRNCPY(pass_iuser.layer_name, layer->name);
+      STRNCPY(pass_iuser.pass_name, pass.name);
+      void *lock;
+      ImBuf *pass_ibuf = BKE_image_acquire_ibuf(image, &pass_iuser, &lock);
+
+      bool success = false;
+      if (pass_ibuf && pass_ibuf->float_data()) {
+        const int x = int(fpos[0] * pass_ibuf->x);
+        const int y = int(fpos[1] * pass_ibuf->y);
+        const int offset = 4 * (y * pass_ibuf->x + x);
+        zero_v3(r_col);
+        r_col[0] = pass_ibuf->float_data()[offset];
+        success = true;
       }
-
-      const int x = int(fpos[0] * render_pass.rectx);
-      const int y = int(fpos[1] * render_pass.recty);
-      const int offset = 4 * (y * render_pass.rectx + x);
-      zero_v3(r_col);
-      r_col[0] = render_pass.ibuf->float_data()[offset];
-      return true;
+      BKE_image_release_ibuf(image, pass_ibuf, lock);
+      return success;
     }
   }
 
   return false;
 }
 
-static bool eyedropper_cryptomatte_sample_render_fl(const bNode *node,
-                                                    const char *prefix,
-                                                    const float fpos[2],
-                                                    float r_col[3])
+/**
+ * Sample a Cryptomatte pass of a multi-layer image, by matching \a prefix
+ * against the layer/pass names of the #Image.layers catalog. Works the same for
+ * a loaded multi-layer EXR and a render-result viewer.
+ */
+static bool eyedropper_cryptomatte_sample_image_catalog_fl(
+    Image *image, const ImageUser &iuser, const char *prefix, const float fpos[2], float r_col[3])
 {
-  bool success = false;
+  for (const ImageLayer &layer : image->layers) {
+    if (eyedropper_cryptomatte_sample_image_layer_fl(image, iuser, &layer, prefix, fpos, r_col)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+static bool eyedropper_cryptomatte_sample_render_fl(
+    bContext *C, const bNode *node, const char *prefix, const float fpos[2], float r_col[3])
+{
   Scene *scene = id_cast<Scene *>(node->id);
   BLI_assert(GS(scene->id.name) == ID_SCE);
-  Render *re = RE_GetSceneRender(scene);
 
-  if (re) {
-    RenderResult *rr = RE_AcquireResultRead(re);
-    if (rr) {
-      for (ViewLayer &view_layer : scene->view_layers) {
-        RenderLayer *render_layer = RE_GetRenderLayer(rr, view_layer.name);
-        success = eyedropper_cryptomatte_sample_renderlayer_fl(render_layer, prefix, fpos, r_col);
-        if (success) {
-          break;
-        }
-      }
-    }
-    RE_ReleaseResult(re);
-  }
-  return success;
+  /* The render result is exposed through its "Render Result" image, whose
+   * #Image.layers catalog mirrors the live render, so sampling goes through the
+   * Image API exactly like a loaded multi-layer EXR. */
+  Image *image = BKE_image_ensure_viewer(CTX_data_main(C), IMA_TYPE_R_RESULT, "Render Result");
+  BKE_image_sync_render_catalog(scene, image);
+
+  ImageUser iuser;
+  BKE_imageuser_default(&iuser);
+  iuser.scene = scene;
+
+  return eyedropper_cryptomatte_sample_image_catalog_fl(image, iuser, prefix, fpos, r_col);
 }
 
 static bool eyedropper_cryptomatte_sample_image_fl(bContext *C,
@@ -301,28 +319,20 @@ static bool eyedropper_cryptomatte_sample_image_fl(bContext *C,
                                                    const float fpos[2],
                                                    float r_col[3])
 {
-  bool success = false;
   Image *image = id_cast<Image *>(node->id);
   BLI_assert((image == nullptr) || (GS(image->id.name) == ID_IM));
+
+  if (!image || image->type != IMA_TYPE_MULTILAYER || !BKE_image_has_layer_catalog(image)) {
+    return false;
+  }
 
   /* Compute the effective frame number of the image if it was animated. */
   Scene *scene = CTX_data_scene(C);
   ImageUser image_user_for_frame = crypto->iuser;
   BKE_image_user_frame_calc(image, &image_user_for_frame, scene->r.cfra);
 
-  if (image && image->type == IMA_TYPE_MULTILAYER) {
-    ImBuf *ibuf = BKE_image_acquire_ibuf(image, &image_user_for_frame, nullptr);
-    if (image->rr) {
-      for (RenderLayer &render_layer : image->rr->layers) {
-        success = eyedropper_cryptomatte_sample_renderlayer_fl(&render_layer, prefix, fpos, r_col);
-        if (success) {
-          break;
-        }
-      }
-    }
-    BKE_image_release_ibuf(image, ibuf, nullptr);
-  }
-  return success;
+  return eyedropper_cryptomatte_sample_image_catalog_fl(
+      image, image_user_for_frame, prefix, fpos, r_col);
 }
 
 static bool eyedropper_cryptomatte_sample_fl(bContext *C,
@@ -430,7 +440,7 @@ static bool eyedropper_cryptomatte_sample_fl(bContext *C,
     return success;
   }
   if (node->custom1 == CMP_NODE_CRYPTOMATTE_SOURCE_RENDER) {
-    return eyedropper_cryptomatte_sample_render_fl(node, prefix, fpos, r_col);
+    return eyedropper_cryptomatte_sample_render_fl(C, node, prefix, fpos, r_col);
   }
   if (node->custom1 == CMP_NODE_CRYPTOMATTE_SOURCE_IMAGE) {
     return eyedropper_cryptomatte_sample_image_fl(C, node, crypto, prefix, fpos, r_col);

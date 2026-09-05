@@ -284,6 +284,8 @@ NODE_DEFINE(ImageTextureNode)
   SOCKET_INT_ARRAY(tiles, "Tiles", array<int>());
   SOCKET_BOOLEAN(animated, "Animated", false);
 
+  SOCKET_STRING(subimage_name, "Subimage Name", ustring());
+
   SOCKET_IN_POINT(vector, "Vector", zero_float3(), SocketType::LINK_TEXTURE_UV);
 
   SOCKET_OUT_COLOR(color, "Color");
@@ -413,12 +415,14 @@ void ImageTextureNode::update_images(const SVMCompiler &compiler)
       cull_tiles(compiler.scene, compiler.current_graph);
     }
 
-    handle = image_manager->add_image(filename.string(), image_params(), tiles);
+    handle = image_manager->add_image(
+        filename.string(), image_params(), tiles, subimage_name.string());
 
     if (use_cache && !tiles.empty() && !image_manager->get_auto_texture_cache()) {
       if (!handle.all_udim_tiled(compiler.progress)) {
         cull_tiles(compiler.scene, compiler.current_graph);
-        handle = image_manager->add_image(filename.string(), image_params(), tiles);
+        handle = image_manager->add_image(
+            filename.string(), image_params(), tiles, subimage_name.string());
       }
     }
   }
@@ -498,12 +502,14 @@ void ImageTextureNode::compile(OSLCompiler &compiler)
       cull_tiles(compiler.scene, compiler.current_graph);
     }
 
-    handle = image_manager->add_image(filename.string(), image_params(), tiles);
+    handle = image_manager->add_image(
+        filename.string(), image_params(), tiles, subimage_name.string());
 
     if (use_cache && !tiles.empty() && !image_manager->get_auto_texture_cache()) {
       if (!handle.all_udim_tiled(*compiler.progress)) {
         cull_tiles(compiler.scene, compiler.current_graph);
-        handle = image_manager->add_image(filename.string(), image_params(), tiles);
+        handle = image_manager->add_image(
+            filename.string(), image_params(), tiles, subimage_name.string());
       }
     }
   }
@@ -563,6 +569,8 @@ NODE_DEFINE(EnvironmentTextureNode)
 
   SOCKET_BOOLEAN(animated, "Animated", false);
 
+  SOCKET_STRING(subimage_name, "Subimage Name", ustring());
+
   SOCKET_IN_POINT(vector, "Vector", zero_float3(), SocketType::LINK_POSITION);
 
   SOCKET_OUT_COLOR(color, "Color");
@@ -612,7 +620,7 @@ void EnvironmentTextureNode::update_images(const SVMCompiler &compiler)
 {
   if (handle.empty()) {
     ImageManager *image_manager = compiler.scene->image_manager.get();
-    handle = image_manager->add_image(filename.string(), image_params());
+    handle = image_manager->add_image(filename.string(), image_params(), subimage_name.string());
   }
 
   const ImageMetaData metadata = handle.metadata(compiler.progress);
@@ -655,7 +663,7 @@ void EnvironmentTextureNode::compile(OSLCompiler &compiler)
 {
   if (handle.empty()) {
     ImageManager *image_manager = compiler.scene->image_manager.get();
-    handle = image_manager->add_image(filename.string(), image_params());
+    handle = image_manager->add_image(filename.string(), image_params(), subimage_name.string());
   }
 
   tex_mapping.compile(compiler);

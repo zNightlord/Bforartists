@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 #pragma once
 
+#include "BLI_vector.hh"
+
 #include "DNA_scene_types.h"
 
 namespace blender {
@@ -56,6 +58,13 @@ void BKE_image_save_options_free(ImageSaveOptions *opts);
 
 bool BKE_image_save(
     ReportList *reports, Main *bmain, Image *ima, ImageUser *iuser, const ImageSaveOptions *opts);
+
+/**
+ * Encode a multi-layer image (its catalog on #Image.layers) as a multi-part
+ * multi-layer EXR into \a r_encoded, for packing into memory. Every layer, pass
+ * and view is written; pass buffers are acquired on demand.
+ */
+bool BKE_image_save_multilayer_to_memory(Image *ima, Vector<uint8_t> &r_encoded);
 
 /* Render saving. */
 

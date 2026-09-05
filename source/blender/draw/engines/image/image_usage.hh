@@ -20,19 +20,26 @@ namespace blender::image_engine {
  * the texture slots.
  */
 struct ImageUsage {
-  /** Render pass of the image that is used. */
-  short pass = 0;
-  /** Layer of the image that is used. */
-  short layer = 0;
-  /** View of the image that is used. */
+  /**
+   * Layer/pass selection by name (the authoritative selection), and the view
+   * selection inputs (selected view, stereo eye, stereo-display flag). Storing
+   * the selection inputs rather than the resolved indices means any change that
+   * would change the displayed buffer is detected without depending on resolved
+   * runtime state.
+   */
+  char layer_name[/*MAX_NAME*/ 64] = "";
+  char pass_name[/*MAX_NAME*/ 64] = "";
   short view = 0;
   /** Render slot of the image that is displayed. */
   short render_slot = 0;
+  char multiview_eye = 0;
+  bool show_stereo = false;
 
-  ColorManagedColorspaceSettings colorspace_settings;
+  /** Colorspace name of the image (#ColorManagedColorspaceSettings::name). */
+  char colorspace_name[/*MAX_COLORSPACE_NAME*/ 64] = "";
   /** IMA_ALPHA_* */
-  char alpha_mode;
-  bool last_tile_drawing;
+  char alpha_mode = 0;
+  bool last_tile_drawing = false;
 
   const void *last_image = nullptr;
   const void *last_scene = nullptr;
@@ -42,25 +49,22 @@ struct ImageUsage {
              const blender::ImageUser *image_user,
              bool do_tile_drawing)
   {
-    pass = image_user ? image_user->pass : 0;
-    layer = image_user ? image_user->layer : 0;
-    view = image_user ? image_user->multi_index : 0;
-    render_slot = image->render_slot;
-    colorspace_settings = image->colorspace_settings;
+    if (image_user) {
+      memcpy(layer_name, image_user->layer_name, sizeof(layer_name));
+      memcpy(pass_name, image_user->pass_name, sizeof(pass_name));
+      view = image_user->view;
+      render_slot = image->render_slot;
+      multiview_eye = image_user->multiview_eye;
+      show_stereo = (image_user->flag & IMA_SHOW_STEREO) != 0;
+    }
+    memcpy(colorspace_name, image->colorspace_settings.name, sizeof(colorspace_name));
     alpha_mode = image->alpha_mode;
     last_image = static_cast<const void *>(image);
     last_scene = image_user ? static_cast<const void *>(image_user->scene) : nullptr;
     last_tile_drawing = do_tile_drawing;
   }
 
-  bool operator==(const ImageUsage &other) const
-  {
-    return memcmp(this, &other, sizeof(ImageUsage)) == 0;
-  }
-  bool operator!=(const ImageUsage &other) const
-  {
-    return !(*this == other);
-  }
+  bool operator==(const ImageUsage &other) const = default;
 };
 
 }  // namespace blender::image_engine

@@ -231,6 +231,34 @@ bool EvaluateClosureComputeContext::is_recursive() const
   return false;
 }
 
+ClosureLayerComputeContext::ClosureLayerComputeContext(
+    const ComputeContext *parent,
+    const int32_t node_id,
+    const int item_identifier,
+    const bNodeTree *tree,
+    const std::optional<nodes::ClosureSourceLocation> &closure_source_location)
+    : EvaluateClosureComputeContext(parent, node_id, tree, closure_source_location),
+      item_identifier_(item_identifier)
+{
+}
+
+ComputeContextHash ClosureLayerComputeContext::compute_hash() const
+{
+  return ComputeContextHash::from(
+      parent_, "TEXTURE_LAYER_CLOSURE", this->node_id(), item_identifier_);
+}
+
+void ClosureLayerComputeContext::print_current_in_line(std::ostream &stream) const
+{
+  if (const bNodeTree *tree = this->tree()) {
+    if (const bNode *node = this->node()) {
+      stream << "Node: " << node_label(*tree, *node) << " (layer " << item_identifier_ << ")";
+      return;
+    }
+  }
+  stream << "Node ID: " << this->node_id() << " (layer " << item_identifier_ << ")";
+}
+
 ClosureToListComputeContext::ClosureToListComputeContext(const ComputeContext *parent,
                                                          const int32_t node_id,
                                                          const int list_index)
@@ -439,6 +467,20 @@ const EvaluateClosureComputeContext &ComputeContextCache::for_evaluate_closure(
     return &this->for_any_uncached<EvaluateClosureComputeContext>(
         parent, node_id, tree, closure_source_location);
   });
+}
+
+const ClosureLayerComputeContext &ComputeContextCache::for_closure_layer(
+    const ComputeContext *parent,
+    const int32_t node_id,
+    const int item_identifier,
+    const bNodeTree *tree,
+    const std::optional<nodes::ClosureSourceLocation> &closure_source_location)
+{
+  return *closure_layer_contexts_cache_.lookup_or_add_cb(
+      std::pair{parent, std::pair{node_id, item_identifier}}, [&]() {
+        return &this->for_any_uncached<ClosureLayerComputeContext>(
+            parent, node_id, item_identifier, tree, closure_source_location);
+      });
 }
 
 }  // namespace blender::bke

@@ -288,6 +288,10 @@ static wmOperatorStatus screen_render_exec(bContext *C, wmOperator *op)
 
   WM_event_add_notifier(C, NC_SCENE | ND_RENDER_RESULT, scene);
 
+  /* Refresh render-result viewer catalogs before returning, so a script that
+   * renders and then inspects Image.layers sees the result. */
+  BKE_image_sync_render_catalogs(mainp, scene);
+
   if (cancelled) {
     return OPERATOR_CANCELLED;
   }

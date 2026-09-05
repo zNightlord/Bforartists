@@ -86,11 +86,12 @@ static bke::cryptomatte::CryptomatteSessionPtr cryptomatte_init_from_node_image(
     image_user.framenr = BKE_image_sequence_guess_offset(image);
   }
 
+  /* The Cryptomatte manifest lives in the multi-layer EXR header, which is
+   * attached to every pass buffer as it loads, so read it from the acquired
+   * buffer of the selected pass. */
   ImBuf *ibuf = BKE_image_acquire_ibuf(image, &image_user, nullptr);
-  RenderResult *render_result = image->rr;
-  if (render_result) {
-    session = bke::cryptomatte::CryptomatteSessionPtr(
-        BKE_cryptomatte_init_from_render_result(render_result));
+  if (ibuf && BKE_image_has_layer_catalog(image)) {
+    session = bke::cryptomatte::CryptomatteSessionPtr(BKE_cryptomatte_init_from_imbuf(ibuf));
   }
   BKE_image_release_ibuf(image, ibuf, nullptr);
   return session;
@@ -745,11 +746,9 @@ class CryptoMatteOperation : public BaseCryptoMatteOperation {
     ImageUser image_user_for_layer = this->get_image_user();
     ImBuf *image_buffer = BKE_image_acquire_ibuf(image, &image_user_for_layer, nullptr);
     BKE_image_release_ibuf(image, image_buffer, nullptr);
-    if (!image_buffer || !image->rr) {
+    if (!image_buffer || !BKE_image_has_layer_catalog(image)) {
       return layers;
     }
-
-    RenderResult *render_result = BKE_image_acquire_renderresult(nullptr, image);
 
     /* Gather all pass names first before retrieving the images because render layers might get
      * freed when retrieving the images. */
@@ -757,7 +756,7 @@ class CryptoMatteOperation : public BaseCryptoMatteOperation {
 
     int layer_index = 0;
     const std::string type_name = this->get_type_name();
-    for (RenderLayer &render_layer : render_result->layers) {
+    for (ImageLayer &render_layer : image->layers) {
       /* If the Cryptomatte type name doesn't start with the layer name, then it is not a
        * Cryptomatte layer. Unless it is an unnamed layer, in which case, we need to check its
        * passes. */
@@ -767,7 +766,7 @@ class CryptoMatteOperation : public BaseCryptoMatteOperation {
         continue;
       }
 
-      for (RenderPass &render_pass : render_layer.passes) {
+      for (ImagePass &render_pass : render_layer.passes) {
         /* If the combined pass name doesn't start with the Cryptomatte type name, then it is not a
          * Cryptomatte layer. Furthermore, if it is equal to the Cryptomatte type name with no
          * suffix, then it can be ignored, because it is a deprecated Cryptomatte preview layer
@@ -788,8 +787,9 @@ class CryptoMatteOperation : public BaseCryptoMatteOperation {
       layer_index++;
     }
 
-    BKE_image_release_renderresult(nullptr, image, render_result);
-
+    /* Select the Cryptomatte layer by index. The compositor image cache resolves
+     * the layer/pass/view from these indices (see #compute_image_user_for_pass),
+     * so the stale names left in the image user need not be cleared here. */
     image_user_for_layer.layer = layer_index;
     for (const std::string &pass_name : pass_names) {
       const Result &pass_result = context().cache_manager().cached_images.get(
@@ -809,7 +809,7 @@ class CryptoMatteOperation : public BaseCryptoMatteOperation {
 
   /* Returns the combined name of the render layer and pass using the EXR convention of a period
    * separator. */
-  std::string get_combined_layer_pass_name(RenderLayer *render_layer, RenderPass *render_pass)
+  std::string get_combined_layer_pass_name(ImageLayer *render_layer, ImagePass *render_pass)
   {
     if (render_layer->name[0] == '\0') {
       return std::string(render_pass->name);

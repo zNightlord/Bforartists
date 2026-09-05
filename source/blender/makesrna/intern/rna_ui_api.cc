@@ -2283,6 +2283,16 @@ void RNA_api_ui_layout(StructRNA *srna)
   parm = RNA_def_pointer(func, "image_user", "ImageUser", "", "Image user reading from the image");
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
 
+  func = RNA_def_function(srna, "template_image_catalog", "uiTemplateImageCatalog");
+  RNA_def_function_ui_description(
+      func, "Item. Lists to add, remove, rename and select the layers and passes of an image.");
+  RNA_def_function_flag(func, FUNC_USE_CONTEXT);
+  parm = RNA_def_pointer(func, "image", "Image", "", "Image data-block to edit the layers of");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED | PARM_RNAPTR);
+  parm = RNA_def_pointer(
+      func, "image_user", "ImageUser", "", "Image user whose layer and pass is selected");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED | PARM_RNAPTR);
+
   func = RNA_def_function(srna, "template_image", "uiTemplateImage");
   RNA_def_function_ui_description(
       func, "Item(s). User interface for selecting images and their source paths.");
@@ -2622,6 +2632,16 @@ void RNA_api_ui_layout(StructRNA *srna)
       func, "Show the compositor node group input values for a compositor effect strip");
   RNA_def_function_flag(func, FUNC_USE_CONTEXT);
   parm = RNA_def_pointer(func, "strip", "Strip", "Strip", "Compositor effect strip");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED | PARM_RNAPTR);
+
+  func = RNA_def_function(srna, "template_shader_layers", "template_shader_layers");
+  RNA_def_function_ui_description(
+      func,
+      "Show all shader leaves (BSDFs) in the shader node tree as root items, with their "
+      "texture layer stacks nested underneath");
+  RNA_def_function_flag(func, FUNC_USE_CONTEXT);
+  parm = RNA_def_pointer(
+      func, "node_tree", "ShaderNodeTree", "Node Tree", "Shader node tree to display");
   RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED | PARM_RNAPTR);
 
   func = RNA_def_function(srna, "template_asset_shelf_popover", "rna_uiTemplateAssetShelfPopover");

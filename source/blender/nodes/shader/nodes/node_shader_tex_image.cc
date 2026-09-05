@@ -9,9 +9,16 @@
 #include "node_shader_util.hh"
 #include "node_util.hh"
 
+#include "BLI_listbase.hh"
+#include "BLI_string.hh"
+#include "BLI_string_ref.hh"
+
 #include "BKE_image.hh"
 #include "BKE_node_runtime.hh"
 #include "BKE_texture.h"
+
+#include "DNA_image_types.h"
+#include "DNA_scene_enums.h"
 
 #include "IMB_colormanagement.hh"
 
@@ -21,12 +28,162 @@ namespace blender {
 
 namespace nodes::node_shader_tex_image_cc {
 
-static void sh_node_tex_image_declare(NodeDeclarationBuilder &b)
+/* Declares the fixed Color/Alpha outputs used for single-layer images and when
+ * no multi-layer image is assigned. */
+static void declare_single_layer(NodeDeclarationBuilder &b)
 {
-  b.is_function_node();
-  b.add_input<decl::Vector>("Vector"_ustr).default_input_type(NODE_DEFAULT_INPUT_POSITION_FIELD);
   b.add_output<decl::Color>("Color"_ustr).no_muted_links();
   b.add_output<decl::Float>("Alpha"_ustr).no_muted_links();
+}
+
+/* Declares an output that matches the type of the given pass. Mirrors the
+ * compositor Image node's per-pass declaration (design §15). */
+static void declare_pass(NodeDeclarationBuilder &b, const ImagePass &pass)
+{
+  const UString name(pass.name);
+  switch (pass.channels_num) {
+    case 1:
+      b.add_output<decl::Float>(name).no_muted_links();
+      return;
+    case 2:
+      b.add_output<decl::Vector>(name).dimensions(2).no_muted_links();
+      return;
+    case 3:
+      if (STR_ELEM(pass.chan_id, "RGB", "rgb")) {
+        b.add_output<decl::Color>(name).no_muted_links();
+        return;
+      }
+      b.add_output<decl::Vector>(name).dimensions(3).no_muted_links();
+      return;
+    case 4:
+      if (STR_ELEM(pass.chan_id, "RGBA", "rgba")) {
+        b.add_output<decl::Color>(name).no_muted_links();
+        return;
+      }
+      b.add_output<decl::Vector>(name).dimensions(4).no_muted_links();
+      return;
+  }
+  BLI_assert_unreachable();
+}
+
+/* Declares one output socket per pass of the selected layer, plus a synthetic
+ * Alpha output when the layer has none of its own, and a Bundle output carrying
+ * every pass (design §15a, §15b). Returns false when the layer is unknown, in
+ * which case the caller falls back to the single-layer declaration. */
+static bool declare_multi_layer(NodeDeclarationBuilder &b, Image *image, const ImageUser *iuser)
+{
+  ImageLayer *layer = static_cast<ImageLayer *>(BLI_findlink(&image->layers, iuser->layer));
+  if (!layer) {
+    return false;
+  }
+
+  bool has_alpha_pass = false;
+  for (const ImagePass &pass : layer->passes) {
+    if (StringRef(pass.name) == "Alpha") {
+      has_alpha_pass = true;
+      break;
+    }
+  }
+
+  for (const ImagePass &pass : layer->passes) {
+    declare_pass(b, pass);
+
+    /* Generate an Alpha output from the Combined pass when no dedicated Alpha
+     * pass exists, matching the compositor Image node. */
+    if (!has_alpha_pass && StringRef(pass.name) == RE_PASSNAME_COMBINED &&
+        pass.channels_num == 4 && StringRef(pass.chan_id) == "RGBA")
+    {
+      b.add_output<decl::Float>("Alpha"_ustr).no_muted_links();
+    }
+  }
+
+  /* Bundle of every pass, extracted downstream with a Separate Bundle node. */
+  b.add_output<decl::Bundle>("Passes"_ustr);
+  return true;
+}
+
+/* Re-declares the outputs that already exist on the node. Used when the
+ * declaration is rebuilt for a reason unrelated to the image data, so the
+ * existing sockets and their links are retained unchanged. */
+static void declare_existing(NodeDeclarationBuilder &b, const bNode &node)
+{
+  for (const bNodeSocket &output : node.outputs) {
+    if (output.type == SOCK_VECTOR) {
+      const int dimensions = output.default_value_typed<bNodeSocketValueVector>()->dimensions;
+      b.add_output<decl::Vector>(UString(output.name)).dimensions(dimensions).no_muted_links();
+    }
+    else {
+      b.add_output(eNodeSocketDatatype(output.type), UString(output.name)).no_muted_links();
+    }
+  }
+}
+
+/* The image structure of a multi-layer image is only known once an image buffer
+ * has been acquired. Acquire and immediately release a dummy buffer so the
+ * Image.layers catalog is populated as a side effect. */
+static void prepare_image(Image *image, const ImageUser *iuser)
+{
+  const int start_frame_offset = BKE_image_sequence_guess_offset(image);
+  ImageUser initial_frame_iuser = *iuser;
+  initial_frame_iuser.framenr = start_frame_offset;
+
+  ImBuf *ibuf = BKE_image_acquire_ibuf(image, &initial_frame_iuser, nullptr);
+  BKE_image_release_ibuf(image, ibuf, nullptr);
+}
+
+/* A multi-pass node carries a Bundle output, which is not valid on a function
+ * node (whose sockets are all forced to a dynamic structure type). So a node is
+ * only declared as a function node when it exposes the plain Color/Alpha pair. */
+static void declare_single_layer_function(NodeDeclarationBuilder &b)
+{
+  b.is_function_node();
+  declare_single_layer(b);
+}
+
+static void sh_node_tex_image_declare(NodeDeclarationBuilder &b)
+{
+  b.add_input<decl::Vector>("Vector"_ustr).default_input_type(NODE_DEFAULT_INPUT_POSITION_FIELD);
+
+  const bNode *node = b.node_or_null();
+  if (!node) {
+    declare_single_layer_function(b);
+    return;
+  }
+
+  Image *image = reinterpret_cast<Image *>(node->id);
+  const NodeTexImage *tex = static_cast<const NodeTexImage *>(node->storage);
+  if (!image || !tex) {
+    declare_single_layer_function(b);
+    return;
+  }
+
+  /* A single-pass node (produced by shader node inlining) always exposes the
+   * standard Color/Alpha outputs; its pass is pinned in iuser (design §16). */
+  if (tex->flag & SHD_TEX_IMAGE_SINGLE_PASS) {
+    declare_single_layer_function(b);
+    return;
+  }
+
+  /* Only the Image/Image User data affects the declared sockets. */
+  if (!(node->runtime->update & NODE_UPDATE_ID)) {
+    /* Keep the function-node flag consistent with the existing sockets: a
+     * multi-pass node must not be a function. Use the same structural gate as
+     * the multi-pass declaration path below, so both agree. */
+    const bool is_multi_pass = BKE_image_is_multilayer(image) &&
+                               BLI_findlink(&image->layers, tex->iuser.layer) != nullptr;
+    if (!is_multi_pass) {
+      b.is_function_node();
+    }
+    declare_existing(b, *node);
+    return;
+  }
+
+  prepare_image(image, &tex->iuser);
+
+  if (!BKE_image_is_multilayer(image) || !declare_multi_layer(b, image, &tex->iuser)) {
+    declare_single_layer_function(b);
+    return;
+  }
 }
 
 static void node_shader_init_tex_image(bNodeTree * /*ntree*/, bNode *node)
@@ -295,6 +452,8 @@ void register_node_type_sh_tex_image()
   ntype.ui_description = "Sample an image file as a texture";
   ntype.enum_name_legacy = "TEX_IMAGE";
   ntype.nclass = NODE_CLASS_TEXTURE;
+  ntype.texture_layer_usage = SHADER_NODE_TREE_USAGE_TEXTURE_GENERATOR |
+                              SHADER_NODE_TREE_USAGE_MASK_GENERATOR;
   ntype.declare = file_ns::sh_node_tex_image_declare;
   ntype.initfunc = file_ns::node_shader_init_tex_image;
   bke::node_type_storage(

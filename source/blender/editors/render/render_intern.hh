@@ -8,6 +8,10 @@
 
 #pragma once
 
+#include <optional>
+
+#include "DNA_node_types.h"
+
 namespace blender {
 
 struct ReportList;
@@ -78,6 +82,65 @@ void TEXTURE_OT_slot_move(wmOperatorType *ot);
 
 void RENDER_OT_generate_texture_cache(wmOperatorType *ot);
 void RENDER_OT_clear_texture_cache(wmOperatorType *ot);
+
+/* `material_texture_layer_assets.cc` */
+
+namespace asset_system {
+class AssetRepresentation;
+}
+
+namespace ed::render {
+/** The #eShaderNodeTreeUsage flags of a shader node group asset, from its
+ * metadata (0 when it is not a shader node group or carries no usage). */
+eShaderNodeTreeUsage asset_texture_layer_usage(const asset_system::AssetRepresentation &asset);
+void material_texture_layer_assets_register();
+}  // namespace ed::render
+
+/* `material_texture_layers.cc` */
+
+struct Material;
+
+namespace ed::render {
+/** The active material, its node tree and the active Texture Layer Stack in
+ * it, resolved from the context. All pointers are non-null. */
+struct ActiveStackContext {
+  Material *material;
+  bNodeTree *ntree;
+  bNode *stack;
+  /** The active layer of #stack, or -1. Resolved from the active node (which
+   * points at the layer, see #set_active_layer) rather than read from the
+   * stack, so it stays right when the active node changed without going
+   * through the layer operators. */
+  int layer_index;
+};
+std::optional<ActiveStackContext> resolve_active_stack(const bContext &C);
+
+/** The active material from the context, or null. */
+Material *active_material(const bContext &C);
+/** True when the active material's embedded node tree may be structurally edited (not linked or a
+ * library override). Gates the layer edit operators and tree-view callbacks. */
+bool active_material_editable(const bContext &C);
+/** Tag the tree as changed: ensure invariants and send node + material notifiers. */
+void tree_changed(bContext &C, bNodeTree &ntree, Material *mat);
+/**
+ * Make layer #index of #stack (a Texture Layer Stack or Mask Stack node) the
+ * active one: stores it on the stack, points the node editor's active node at
+ * the layer (see #layer_active_node) and selects the layer's nodes, so the
+ * node editor shows what the layer panel edits.
+ */
+void set_active_layer(bNodeTree &ntree, bNode &stack, int index);
+/** The node a layer is represented by in the node editor: the node whose
+ * properties the layer panel shows, or the stack node itself for a layer with
+ * no source and for a group layer (whose nested stack stands for its
+ * children). */
+bNode *layer_active_node(bNodeTree &ntree, bNode &stack, int index);
+/** Select the nodes making up layer #index of #stack, and deselect the rest. */
+void select_layer_nodes(bNodeTree &ntree, bNode &stack, int index);
+/** Ensure the active layer has a Mask Stack and return it, or null when there
+ * is no active layer to attach one to. */
+bNode *ensure_active_layer_mask_stack(bContext &C, bNodeTree &ntree);
+void material_texture_layers_register();
+}  // namespace ed::render
 
 /* `render_internal.cc` */
 
