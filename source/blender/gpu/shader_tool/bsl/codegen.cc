@@ -580,13 +580,13 @@ struct CodegenContext : NodeErrorHandler {
           skip_node(node);
           break;
         case NodeType::ForLoop:
-          for_loop(node, *symbol.scopes[to_string(local_scope_id++)]);
+          for_loop(node, *symbol.child_scope(local_scope_id++));
           break;
         case NodeType::WhileLoop:
-          while_loop(node, *symbol.scopes[to_string(local_scope_id++)]);
+          while_loop(node, *symbol.child_scope(local_scope_id++));
           break;
         case NodeType::DoWhileLoop:
-          do_while_loop(node, *symbol.scopes[to_string(local_scope_id++)]);
+          do_while_loop(node, *symbol.child_scope(local_scope_id++));
           break;
         case NodeType::SwitchStmt:
           switch_statement(node, symbol, local_scope_id);
@@ -613,7 +613,7 @@ struct CodegenContext : NodeErrorHandler {
           local_statement(node, symbol);
           break;
         case NodeType::LocalScope:
-          local_scope(LocalScope(node), *symbol.scopes[to_string(local_scope_id++)]);
+          local_scope(LocalScope(node), *symbol.child_scope(local_scope_id++));
           break;
         case NodeType::PipelineDecl:
           pipeline_decl(node, symbol);
@@ -814,12 +814,7 @@ struct CodegenContext : NodeErrorHandler {
             builder.curr = val.back().next();
           }
           match_if(Colon);
-          if (LocalScope body = switch_case.body(); body.front() == '{') {
-            local_scope(switch_case.body(), *scope.scopes[to_string(local_scope_id++)]);
-          }
-          else {
-            local_scope(switch_case.body(), *scope.scopes[to_string(local_scope_id++)]);
-          }
+          local_scope(switch_case.body(), *scope.child_scope(local_scope_id++));
           break;
         }
         case NodeType::Condition:
@@ -974,6 +969,13 @@ struct CodegenContext : NodeErrorHandler {
             return 0;
           }
 
+#ifdef _MSC_VER
+/* Silence warning about bool operand.
+ * They cannot happen because they are caught by the above check */
+#  pragma warning(push)
+#  pragma warning(disable : 4805)
+#endif
+
           /* Assign with the correct type cast. */
           switch (op.front().type()) {
             case Assign:
@@ -1008,6 +1010,9 @@ struct CodegenContext : NodeErrorHandler {
             default:
               break;
           }
+#ifdef _MSC_VER
+#  pragma warning(pop)
+#endif
         }
       }
     }
@@ -1333,7 +1338,7 @@ struct CodegenContext : NodeErrorHandler {
     size_t n = index + 1;
     while (n > 0) {
       n--; /* Map 0-25 to 'a'-'z'. */
-      name += static_cast<char>('a' + (n % 26));
+      name += char('a' + (n % 26));
       n /= 26;
     }
     return name;
@@ -1357,7 +1362,7 @@ struct CodegenContext : NodeErrorHandler {
               SymbolClass *type = id_type_lookup_resolved(decl.type().identifier(), cls);
               for (Declarator d : decl.children_of_type<Declarator>()) {
                 SymbolVariable *var = cls.lookup_variable(table, d.identifier());
-                if (var->is_static) {
+                if (var->is_static || var->bit_offset != 0) {
                   continue;
                 }
                 string access;
@@ -1694,6 +1699,7 @@ struct CodegenContext : NodeErrorHandler {
     /* Declare argument copies. */
     int arg_i = 0;
     Expr param = call.parameters().child_first();
+    vector<string> original_identifiers;
     for (FuncArg arg : fn->decl.arguments().children_range()) {
       SymbolVariable *var = fn->lookup_variable(table, arg.identifier());
 
@@ -1701,6 +1707,8 @@ struct CodegenContext : NodeErrorHandler {
         error(call, Diag::MissingParameterForCall, var->identifier);
         continue;
       }
+
+      original_identifiers.emplace_back(var->identifier);
 
       if (arg.is_reference() || var->type->is_opaque) {
         /* Check if reference has no side effect. */
@@ -1728,6 +1736,15 @@ struct CodegenContext : NodeErrorHandler {
     builder.ss << "} while (false);\n";
 
     inlining_stack.pop_back();
+
+    {
+      /* Restore argument identifiers. */
+      int arg_i = 0;
+      for (FuncArg arg : fn->decl.arguments().children_range()) {
+        SymbolVariable *var = fn->lookup_variable(table, arg.identifier());
+        var->identifier = original_identifiers[arg_i++];
+      }
+    }
 
     return ret_val;
   }
@@ -1974,10 +1991,14 @@ struct CodegenContext : NodeErrorHandler {
   void if_statement(Node decl,
                     SymbolScope &parent_scope,
                     int &local_scope_id,
-                    bool preceeded_by_true_if_constexpr = false,
-                    bool preceeded_by_regular_if = false)
+                    bool preceded_by_true_if_constexpr = false,
+                    bool preceded_by_regular_if = false)
   {
-    SymbolScope &scope = *parent_scope.scopes[to_string(local_scope_id++)];
+    SymbolScope *scope = parent_scope.child_scope(local_scope_id++);
+    if (scope == nullptr) {
+      error(decl, Diag::CompilerErrorChildScopeNotFound);
+      return;
+    }
 
     jump_to(decl.front());
 
@@ -1988,7 +2009,7 @@ struct CodegenContext : NodeErrorHandler {
     bool constexpr_value = true;
     if (cond.is_valid()) {
       LocalStmt stmt = cond.child_first();
-      auto result = table.expr_type_analysis(scope, stmt.expr().child_first()).unwrap(this);
+      auto result = table.expr_type_analysis(*scope, stmt.expr().child_first()).unwrap(this);
 
       constexpr_value = value_as<int>(result.value) != 0;
 
@@ -2009,7 +2030,7 @@ struct CodegenContext : NodeErrorHandler {
     /* Generate a 'else' statement only if there is a non-constexpr if above in the chain,
      * and if no 'if constexpr' evaluated to true above in the chain,
      * and if not a 'if constexpr' itself. */
-    if (preceeded_by_regular_if && !preceeded_by_true_if_constexpr &&
+    if (preceded_by_regular_if && !preceded_by_true_if_constexpr &&
         (!is_constexpr || constexpr_value == true))
     {
       match_if(Else);
@@ -2020,11 +2041,11 @@ struct CodegenContext : NodeErrorHandler {
 
     /* Generate a if statement only if this is not a 'if constexpr',
      * and if no 'if constexpr' evaluated to true above in the chain. */
-    if (!is_constexpr && !preceeded_by_true_if_constexpr) {
+    if (!is_constexpr && !preceded_by_true_if_constexpr) {
       match_if(If);
       skip_if(Constexpr);
       if (cond.is_valid()) {
-        condition(cond, scope, false, true);
+        condition(cond, *scope, false, true);
       }
     }
     else {
@@ -2035,8 +2056,8 @@ struct CodegenContext : NodeErrorHandler {
 
     LocalScope body = decl.child_last(NodeType::LocalScope);
 
-    if (!preceeded_by_true_if_constexpr && (!is_constexpr || constexpr_value == true)) {
-      local_scope(body, scope);
+    if (!preceded_by_true_if_constexpr && (!is_constexpr || constexpr_value == true)) {
+      local_scope(body, *scope);
     }
 
     /* Process preprocessor directive that can be added between if statements. */
@@ -2051,8 +2072,8 @@ struct CodegenContext : NodeErrorHandler {
       if_statement(next,
                    parent_scope,
                    local_scope_id,
-                   preceeded_by_true_if_constexpr || (is_constexpr && constexpr_value == true),
-                   preceeded_by_regular_if || !is_constexpr);
+                   preceded_by_true_if_constexpr || (is_constexpr && constexpr_value == true),
+                   preceded_by_regular_if || !is_constexpr);
     }
     else {
       jump_to(next.front());
@@ -2064,7 +2085,11 @@ struct CodegenContext : NodeErrorHandler {
                            int &local_scope_id,
                            bool first = true)
   {
-    SymbolScope &scope = *parent_scope.scopes[to_string(local_scope_id++)];
+    SymbolScope *scope = parent_scope.child_scope(local_scope_id++);
+    if (scope == nullptr) {
+      error(decl, Diag::CompilerErrorChildScopeNotFound);
+      return;
+    }
 
     Condition cond(decl.child_first());
 
@@ -2095,7 +2120,7 @@ struct CodegenContext : NodeErrorHandler {
     LocalScope body = decl.child_last(NodeType::LocalScope);
     jump_to(body.front());
 
-    local_scope(body, scope);
+    local_scope(body, *scope);
 
     /* Process preprocessor directive that can be added between if statements. */
     Node node = body.next();
@@ -2175,6 +2200,16 @@ struct CodegenContext : NodeErrorHandler {
       /* Local references are simply pasted. */
       skip_node(decl);
       return false;
+    }
+
+    if (decl.has_single_declarator()) {
+      Declarator d = decl.child_first(NodeType::Declarator);
+      SymbolVariable *var = scope.lookup_variable(table, d.identifier());
+      if (var->is_bitfield && var->bit_offset != 0) {
+        /* Only declare the first member of each field. */
+        skip_node(decl);
+        return false;
+      }
     }
 
     if (jump) {
@@ -2258,6 +2293,14 @@ struct CodegenContext : NodeErrorHandler {
     ArrayDecl array = decl.array();
     SymbolVariable *var = scope.lookup_variable(table, decl.identifier());
 
+    if (var->is_bitfield && var->bit_offset != 0) {
+      if (decl.prev().type() != NodeType::Declarator || decl.next().type() != NodeType::Declarator)
+      {
+        /* Omitting a declarator in a declarator sequence will create invalid codegen. */
+        error(decl, Diag::BitFieldNotSingleDeclarator);
+      }
+    }
+
     const bool par = match_if('(');
     if (var->type->is_srt()) {
       /* WORKAROUND: Do not pass SRT by reference because it causes issue on metal when the caller
@@ -2281,6 +2324,8 @@ struct CodegenContext : NodeErrorHandler {
     }
 
     array_decl(array, decl, scope);
+
+    skip_node(decl.bitfield());
 
     if (!var->is_error && var->is_constexpr) {
       builder.curr = decl.back();
