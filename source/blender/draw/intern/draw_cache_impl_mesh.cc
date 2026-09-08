@@ -1898,6 +1898,8 @@ void DRW_mesh_batch_cache_set_draw_multi_colored(Mesh &mesh, int mode)
       mbc->buff.vbos.remove(VBOType::VertexGroupBlendedColor);
     }
     GPU_BATCH_CLEAR_SAFE(cache->batch.surface_weights);
+    GPU_BATCH_CLEAR_SAFE(cache->batch.paint_overlay_wire_loops);
+    GPU_BATCH_CLEAR_SAFE(cache->batch.paint_overlay_verts);
     cache->batch_ready &= ~MBC_SURFACE_WEIGHTS;
   }
 }
