@@ -219,8 +219,7 @@ gpu::VertBufPtr extract_weight_vgroup_blended_color(const MeshRenderData &mr,
   const eV3D_Overlay_WPaint_VGroupColorMode mode = weight_state.vgroup_color_mode;
 
   /* Nothing to compute. */
-  if (mode == V3D_OVERLAY_WPAINT_VGROUP_COLOR_OFF ||
-    weight_state.defgroup_colors == nullptr) {
+  if (mode == V3D_OVERLAY_WPAINT_VGROUP_COLOR_OFF) {
     vbo_data.fill(float3(0.0f));
     return vbo;
   }
