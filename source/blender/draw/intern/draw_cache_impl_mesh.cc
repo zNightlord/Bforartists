@@ -350,10 +350,8 @@ static void drw_mesh_weight_state_extract(
   wstate->alert_mode = ts.weightuser;
   /* Create validmap for deform vertex groups when armature modifier is enabled in viewport. */
   if (wstate->defgroup_len > 0) {
-    for (ModifierData *md = static_cast<ModifierData *>(ob.modifiers.first); md != nullptr;
-         md = md->next)
-    {
-      if (md->type == eModifierType_Armature && (md->mode & eModifierMode_Realtime)) {
+    for (ModifierData &md : ob.modifiers) {
+      if (md.type == eModifierType_Armature && (md.mode & eModifierMode_Realtime)) {
         wstate->defgroup_validmap = BKE_object_defgroup_validmap_get(&ob, wstate->defgroup_len);
         break;
       }
@@ -1405,7 +1403,7 @@ void DRW_mesh_batch_cache_create_requested(TaskGraph &task_graph,
            GPU_PRIM_POINTS,
            list,
            std::nullopt,
-           {VBOType::Position, VBOType::PaintOverlayFlag, VBOType::VertexGroupBlendedColor}});
+           {VBOType::Position, VBOType::PaintOverlayFlag}});
     }
     if (batches_to_create & MBC_SCULPT_OVERLAYS) {
       batch_info.append({*cache.batch.sculpt_overlays,
@@ -1448,7 +1446,7 @@ void DRW_mesh_batch_cache_create_requested(TaskGraph &task_graph,
            GPU_PRIM_LINES,
            list,
            IBOType::LinesPaintMask,
-           {VBOType::Position, VBOType::PaintOverlayFlag, VBOType::VertexGroupBlendedColor}});
+           {VBOType::Position, VBOType::PaintOverlayFlag}});
     }
     if (batches_to_create & MBC_WIRE_EDGES) {
       batch_info.append({*cache.batch.wire_edges,
