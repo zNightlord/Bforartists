@@ -1199,8 +1199,14 @@ void DRW_mesh_batch_cache_create_requested(TaskGraph &task_graph,
       BLI_assert(ob.type == OB_MESH);
       drw_mesh_weight_state_extract(ob, mesh, *ts, is_paint_mode, &wstate);
 
-      /* Copy color fields from cache into wstate before compare to prevent rebuild. */
-      wstate.vgroup_color_mode = cache.weight_state.vgroup_color_mode;
+      /* Copy color fields from cache into wstate before compare to prevent rebuild.
+       * Ensure color mode should display in paint mode, not for edit mode show weight.*/
+      if (!is_paint_mode) {
+        wstate.vgroup_color_mode = V3D_OVERLAY_WPAINT_VGROUP_COLOR_OFF;
+      }
+      else {
+        wstate.vgroup_color_mode = cache.weight_state.vgroup_color_mode;
+      }
 
       mesh_batch_cache_check_vertex_group(cache, &wstate);
       drw_mesh_weight_state_copy(&cache.weight_state, &wstate);
