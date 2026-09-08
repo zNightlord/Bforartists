@@ -350,7 +350,7 @@ static void drw_mesh_weight_state_extract(
   wstate->alert_mode = ts.weightuser;
   /* Create validmap for deform vertex groups when armature modifier is enabled in viewport. */
   if (wstate->defgroup_len > 0) {
-    for (ModifierData *md = static_cast<ModifierData *>(ob.modifiers.first); md != nullptr;
+    for (ModifierData *md = ob.modifiers.first(); md != nullptr;
          md = md->next)
     {
       if (md->type == eModifierType_Armature && (md->mode & eModifierMode_Realtime)) {
