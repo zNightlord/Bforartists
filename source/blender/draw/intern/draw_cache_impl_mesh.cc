@@ -1201,12 +1201,7 @@ void DRW_mesh_batch_cache_create_requested(TaskGraph &task_graph,
 
       /* Copy color fields from cache into wstate before compare to prevent rebuild.
        * Ensure color mode should display in paint mode, not for edit mode show weight.*/
-      if (!is_paint_mode) {
-        wstate.vgroup_color_mode = V3D_OVERLAY_WPAINT_VGROUP_COLOR_OFF;
-      }
-      else {
-        wstate.vgroup_color_mode = cache.weight_state.vgroup_color_mode;
-      }
+      wstate.vgroup_color_mode = cache.weight_state.vgroup_color_mode;
 
       mesh_batch_cache_check_vertex_group(cache, &wstate);
       drw_mesh_weight_state_copy(&cache.weight_state, &wstate);
@@ -1437,16 +1432,14 @@ void DRW_mesh_batch_cache_create_requested(TaskGraph &task_graph,
                          {VBOType::Position}});
     }
     if (batches_to_create & MBC_SURFACE_WEIGHTS) {
-      blender::Vector<VBOType> attrs;
-      attrs.append(VBOType::Position);
-      attrs.append(VBOType::CornerNormal);
-      attrs.append(VBOType::VertexGroupWeight);
-
-      if (cache.weight_state.vgroup_color_mode != V3D_OVERLAY_WPAINT_VGROUP_COLOR_OFF) {
-        attrs.append(VBOType::VertexGroupBlendedColor);
-      }
-
-      batch_info.append({*cache.batch.surface_weights, GPU_PRIM_TRIS, list, IBOType::Tris, attrs});
+      batch_info.append({*cache.batch.surface_weights,
+                         GPU_PRIM_TRIS,
+                         list,
+                         IBOType::Tris,
+                         {VBOType::Position,
+                          VBOType::CornerNormal,
+                          VBOType::VertexGroupWeight,
+                          VBOType::VertexGroupBlendedColor}});
     }
     if (batches_to_create & MBC_PAINT_OVERLAY_WIRE_LOOPS) {
       batch_info.append(

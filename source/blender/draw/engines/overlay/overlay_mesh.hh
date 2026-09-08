@@ -333,6 +333,7 @@ class Meshes : Overlay {
     }
 
     if (show_weight_) {
+      DRW_mesh_batch_cache_set_draw_multi_colored(mesh, state.overlay.wpaint_vgroup_color_mode);
       gpu::Batch *geom = DRW_cache_mesh_surface_weights_get(ob);
       edit_mesh_weight_ps_.draw(geom, res_handle);
     }
