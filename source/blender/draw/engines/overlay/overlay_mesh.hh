@@ -209,7 +209,7 @@ class Meshes : Overlay {
       pass.bind_ubo(DRW_CLIPPING_UBO_SLOT, &res.clip_planes_buf);
       pass.bind_texture("colorramp", &res.weight_ramp_tx);
       pass.push_constant("draw_contours", false);
-      sub.push_constant("vgroup_color_mode", state.overlay.wpaint_vgroup_color_mode);
+      pass.push_constant("vgroup_color_mode", state.overlay.wpaint_vgroup_color_mode);
       pass.push_constant("opacity", state.overlay.weight_paint_mode_opacity);
       if (!shadeless) {
         /* Arbitrary light to give a hint of the geometry behind the weights. */
