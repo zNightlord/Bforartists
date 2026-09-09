@@ -7439,8 +7439,16 @@ class VIEW3D_PT_overlay_edit_mesh_shading(Panel):
 
         col.prop(overlay, "show_weight", text="Vertex Group Weights")
         if overlay.show_weight:
+            col.separator()
+            row = col.split(factor=0.33)
+            row.label(text="Colored")
+            sub = row.row()
+            sub.prop(overlay, "wpaint_vgroup_color_mode", expand=True)
+
+            col.separator()
             row = col.split(factor=0.33)
             row.label(text="Zero Weights")
+            row.active = overlay.wpaint_vgroup_color_mode not in {'ACTIVE', 'ALL'}
             sub = row.row()
             sub.prop(tool_settings, "vertex_group_user", expand=True)
 
@@ -7831,7 +7839,7 @@ class VIEW3D_PT_overlay_weight_paint(Panel):
 
         col.separator()
         row = col.split(factor=0.33)
-        row.active = overlay.wpaint_vgroup_color_mode != 'ALL'
+        row.active = overlay.wpaint_vgroup_color_mode not in {'ACTIVE', 'ALL'}
         row.label(text="Zero Weights")
         sub = row.row()
         sub.prop(tool_settings, "vertex_group_user", expand=True)
