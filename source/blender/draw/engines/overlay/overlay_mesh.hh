@@ -209,6 +209,7 @@ class Meshes : Overlay {
       pass.bind_ubo(DRW_CLIPPING_UBO_SLOT, &res.clip_planes_buf);
       pass.bind_texture("colorramp", &res.weight_ramp_tx);
       pass.push_constant("draw_contours", false);
+      pass.push_constant("vgroup_color_mode", state.overlay.wpaint_vgroup_color_mode);
       pass.push_constant("opacity", state.overlay.weight_paint_mode_opacity);
       if (!shadeless) {
         /* Arbitrary light to give a hint of the geometry behind the weights. */
@@ -333,6 +334,7 @@ class Meshes : Overlay {
     }
 
     if (show_weight_) {
+      DRW_mesh_batch_cache_set_draw_multi_colored(mesh, state.overlay.wpaint_vgroup_color_mode);
       gpu::Batch *geom = DRW_cache_mesh_surface_weights_get(ob);
       edit_mesh_weight_ps_.draw(geom, res_handle);
     }
