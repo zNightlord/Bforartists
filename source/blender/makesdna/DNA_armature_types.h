@@ -374,8 +374,10 @@ struct Bone {
   DNA_DEPRECATED float scale_out_z = 0;
   float scale_in[3] = {1.0f, 1.0f, 1.0f};
   float scale_out[3] = {1.0f, 1.0f, 1.0f};
-
+  /** Color for weight visualization. */
   float weight_color[3] = {};
+  char use_weight_color = 0;
+  char _pad_weight[3] = {};
 
   /** Patch for upward compatibility, UNUSED! */
   float size[3] = {};
@@ -385,7 +387,6 @@ struct Bone {
   short segments = 0;
   /** Vertex to segment mapping mode. */
   eBone_BBoneMappingMode bbone_mapping_mode = {};
-  char _pad2[3] = {};
 
   /** Type of next/prev bone handles. */
   eBone_BBoneHandleType bbone_prev_type = {};
@@ -394,6 +395,7 @@ struct Bone {
   eBone_BBoneFlag bbone_flag = {};
   eBone_BBoneHandleFlag bbone_prev_flag = {};
   eBone_BBoneHandleFlag bbone_next_flag = {};
+  char _pad2[4] = {};
   /** Next/prev bones to use as handle references when calculating bbones (optional). */
   struct Bone *bbone_prev = nullptr;
   struct Bone *bbone_next = nullptr;
