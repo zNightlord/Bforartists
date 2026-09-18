@@ -525,9 +525,9 @@ static EditBone *make_boneList_recursive(ListBaseT<EditBone> *edbo,
 
     eBone->color = curBone.color;
     eBone->use_weight_color = curBone.use_weight_color;
-    eBone->weight_color[0] = curBone.weight_color[0] * 255f;
-    eBone->weight_color[1] = curBone.weight_color[1] * 255f;
-    eBone->weight_color[2] = curBone.weight_color[2] * 255f;
+    eBone->weight_color[0] = curBone.weight_color[0] * 255.0f;
+    eBone->weight_color[1] = curBone.weight_color[1] * 255.0f;
+    eBone->weight_color[2] = curBone.weight_color[2] * 255.0f;
     copy_bonecollection_membership(eBone, &curBone);
 
     if (curBone.prop) {
@@ -790,9 +790,9 @@ void ED_armature_from_edit(Main *bmain, bArmature *arm)
 
     newBone->color = eBone.color;
     newBone->use_weight_color = eBone.use_weight_color;
-    newBone->weight_color[0] = eBone.weight_color[0] / 255f;
-    newBone->weight_color[1] = eBone.weight_color[1] / 255f;
-    newBone->weight_color[2] = eBone.weight_color[2] / 255f;
+    newBone->weight_color[0] = eBone.weight_color[0] / 255.0f;
+    newBone->weight_color[1] = eBone.weight_color[1] / 255.0f;
+    newBone->weight_color[2] = eBone.weight_color[2] / 255.0f;
 
     for (BoneCollectionReference &ref : eBone.bone_collections) {
       BoneCollectionReference *newBoneRef = MEM_new<BoneCollectionReference>(
