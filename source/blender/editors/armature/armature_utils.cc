@@ -12,6 +12,7 @@
 #include "MEM_guardedalloc.h"
 
 #include "BLI_listbase.hh"
+// #include "BLI_math_color_c.hh"
 #include "BLI_math_matrix_c.hh"
 #include "BLI_math_vector_c.hh"
 #include "BLI_string_utf8.hh"
@@ -523,7 +524,10 @@ static EditBone *make_boneList_recursive(ListBaseT<EditBone> *edbo,
     eBone->bbone_next_flag = curBone.bbone_next_flag;
 
     eBone->color = curBone.color;
-    copy_v3_v3(eBone->weight_color, curBone.weight_color);
+    eBone->use_weight_color = curBone.use_weight_color;
+    eBone->weight_color[0] = curBone.weight_color[0] * 255.0f;
+    eBone->weight_color[1] = curBone.weight_color[1] * 255.0f;
+    eBone->weight_color[2] = curBone.weight_color[2] * 255.0f;
     copy_bonecollection_membership(eBone, &curBone);
 
     if (curBone.prop) {
@@ -785,7 +789,10 @@ void ED_armature_from_edit(Main *bmain, bArmature *arm)
     newBone->bbone_next_flag = eBone.bbone_next_flag;
 
     newBone->color = eBone.color;
-    copy_v3_v3(newBone->weight_color, eBone.weight_color);
+    newBone->use_weight_color = eBone.use_weight_color;
+    newBone->weight_color[0] = eBone.weight_color[0] / 255.0f;
+    newBone->weight_color[1] = eBone.weight_color[1] / 255.0f;
+    newBone->weight_color[2] = eBone.weight_color[2] / 255.0f;
 
     for (BoneCollectionReference &ref : eBone.bone_collections) {
       BoneCollectionReference *newBoneRef = MEM_new<BoneCollectionReference>(
@@ -1004,6 +1011,14 @@ void ED_armature_ebone_select_set(EditBone *ebone, bool select)
   }
   ED_armature_ebone_selectflag_set(ebone, flag);
 }
+
+// void ED_armature_ebone_weight_color_set(ListBaseT<EditBone> *lb, EditBone *bone)
+// {
+//   /* Hue uses golden angle to assign the hue between bones. */
+//   const int count = BLI_listbase_count(lb);
+//   const float hue = fmodf(float(count) * 0.6180339887f, 1.0f);
+//   hsv_to_rgb(hue, 0.85f, 0.9f, &bone->weight_color[0], &bone->weight_color[1], &bone->weight_color[2]);
+// }
 
 /** \} */
 

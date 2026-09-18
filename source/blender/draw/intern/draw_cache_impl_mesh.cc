@@ -377,10 +377,9 @@ static void drw_mesh_weight_state_extract(
       if (arm) {
         const Bone *bone = BKE_armature_find_bone_name(arm, dg.name);
         if (bone && !(bone->flag & BONE_NO_DEFORM)) {
-          const float3 stored(bone->weight_color[0], bone->weight_color[1], bone->weight_color[2]);
-          if (stored.x > 0.0f || stored.y > 0.0f || stored.z > 0.0f) {
+          if (bone->use_weight_color) {
             /* User override, use the override weight color directly. */
-            wstate->defgroup_colors[di] = stored;
+            wstate->defgroup_colors[di] = float3(bone->weight_color);
           }
           else {
             /* Hue uses golden angle to assign the hue between bones. */
