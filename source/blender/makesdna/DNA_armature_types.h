@@ -391,12 +391,13 @@ struct Bone {
   /** Type of next/prev bone handles. */
   eBone_BBoneHandleType bbone_prev_type = {};
   eBone_BBoneHandleType bbone_next_type = {};
-  char _pad2[2] = {};
+  char _pad2[3] = {};
 
   /** B-Bone flags. */
   eBone_BBoneFlag bbone_flag = {};
   eBone_BBoneHandleFlag bbone_prev_flag = {};
   eBone_BBoneHandleFlag bbone_next_flag = {};
+  char _pad3[4] = {};
   /** Next/prev bones to use as handle references when calculating bbones (optional). */
   struct Bone *bbone_prev = nullptr;
   struct Bone *bbone_next = nullptr;
