@@ -100,6 +100,7 @@ EditBone *ED_armature_ebone_add(bArmature *arm, const char *name)
   copy_v3_fl(bone->scale_in, 1.0f);
   copy_v3_fl(bone->scale_out, 1.0f);
 
+  ED_armature_ebone_weight_color_set(arm->edbo, bone);
   return bone;
 }
 
@@ -1096,6 +1097,9 @@ EditBone *duplicateEditBoneObjects(EditBone *cur_bone,
   BLI_addtail(editbones, e_bone);
 
   copy_pchan(cur_bone, e_bone, src_ob, dst_ob);
+  e_bone->use_weight_color = 0;                
+  zero_v3(e_bone->weight_color);
+  ED_armature_ebone_weight_color_set(editbones, e_bone);  // generate new color
 
   return e_bone;
 }
@@ -1762,6 +1766,10 @@ static wmOperatorStatus armature_extrude_exec(bContext *C, wmOperator *op)
 
           copy_v3_v3(newbone->scale_in, ebone->scale_in);
           copy_v3_v3(newbone->scale_out, ebone->scale_out);
+
+          /* Weight color. */
+          newbone->use_weight_color = 0;
+          ED_armature_ebone_weight_color_set(arm->edbo, newbone);
 
           STRNCPY_UTF8(newbone->name, ebone->name);
 

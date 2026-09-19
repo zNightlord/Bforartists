@@ -12,7 +12,7 @@
 #include "MEM_guardedalloc.h"
 
 #include "BLI_listbase.hh"
-// #include "BLI_math_color_c.hh"
+#include "BLI_math_color_c.hh"
 #include "BLI_math_matrix_c.hh"
 #include "BLI_math_vector_c.hh"
 #include "BLI_string_utf8.hh"
@@ -1012,13 +1012,13 @@ void ED_armature_ebone_select_set(EditBone *ebone, bool select)
   ED_armature_ebone_selectflag_set(ebone, flag);
 }
 
-// void ED_armature_ebone_weight_color_set(ListBaseT<EditBone> *lb, EditBone *bone)
-// {
-//   /* Hue uses golden angle to assign the hue between bones. */
-//   const int count = BLI_listbase_count(lb);
-//   const float hue = fmodf(float(count) * 0.6180339887f, 1.0f);
-//   hsv_to_rgb(hue, 0.85f, 0.9f, &bone->weight_color[0], &bone->weight_color[1], &bone->weight_color[2]);
-// }
+void ED_armature_ebone_weight_color_set(ListBaseT<EditBone> *lb, EditBone *bone)
+{
+  /* Hue uses golden angle to assign the hue between bones. */
+  const int count = BLI_listbase_count(lb);
+  const float hue = fmodf(float(count) * 0.6180339887f, 1.0f);
+  hsv_to_rgb(hue, 0.85f, 0.9f, &bone->weight_color[0], &bone->weight_color[1], &bone->weight_color[2]);
+}
 
 /** \} */
 
