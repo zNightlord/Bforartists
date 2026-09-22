@@ -1,77 +1,118 @@
-name: Android
+name: Android Build (official)
 
 on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: "Which Android branch to build"
+        required: true
+        default: android
+        type: choice
+        options:
+          - android
+          - android-demo
+          - android-demo-with-files
   push:
-    branches: [  android ]
-
-permissions: {}
+    branches:
+      - android
 
 env:
-  ANDROID_SDK_ROOT: /home/runner/android-sdk
-  ANDROID_NDK_VERSION: "27.2.12479018"   # verify against Bforartists' current pin before relying on this
-  CMDLINE_TOOLS_VERSION: "11076708"
-  REPO_PARENT: /home/runner/bforartistsrepo
-  HOST_DEPS_DIR: /home/runner/bforartistsrepo/build_linux/deps_x64
+  ANDROID_NDK_VERSION: "27.2.12479018"   # adjust to match the NDK side-by-side version your source expects
+  ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
 
 jobs:
   build:
+    name: Build (${{ github.event.inputs.branch || 'android' }})
     runs-on: ubuntu-latest
+
     steps:
-      - name: Create Android SDK folder
-        run: mkdir -p "$ANDROID_SDK_ROOT/cmdline-tools"
+      # --- Checkout the right branch --------------------------------------
+      - name: Checkout (android branch)
+        if: github.event.inputs.branch == '' || github.event.inputs.branch == 'android'
+        uses: actions/checkout@v4
+        with:
+          ref: android
+          fetch-depth: 0
 
-      - name: Install Android cmdline-tools
-        run: |
-          cd "$ANDROID_SDK_ROOT/cmdline-tools"
-          curl -fsSL -o cmdline-tools.zip \
-            "https://dl.google.com/android/repository/commandlinetools-linux-${CMDLINE_TOOLS_VERSION}_latest.zip"
-          unzip -q cmdline-tools.zip
-          rm cmdline-tools.zip
-          mv cmdline-tools latest
+      - name: Checkout (android-demo / android-demo-with-files)
+        if: github.event.inputs.branch == 'android-demo' || github.event.inputs.branch == 'android-demo-with-files'
+        uses: actions/checkout@v4
+        with:
+          ref: android
+          fetch-depth: 0
 
-      - name: Install NDK
+      - name: Switch to demo branch
+        if: github.event.inputs.branch == 'android-demo' || github.event.inputs.branch == 'android-demo-with-files'
         run: |
-          SDKMGR="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
-          yes | "$SDKMGR" --sdk_root="$ANDROID_SDK_ROOT" --licenses > /dev/null
-          "$SDKMGR" --sdk_root="$ANDROID_SDK_ROOT" "ndk;${ANDROID_NDK_VERSION}"
+          git remote add brainzman https://projects.blender.org/Brainzman/blender.git
+          git fetch brainzman ${{ github.event.inputs.branch }}
+          git switch -c ${{ github.event.inputs.branch }} brainzman/${{ github.event.inputs.branch }}
+
+      # --- Install a modern JDK -------------------------------------------
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      # --- Install Android platform tools (adb) ---------------------------
+      - name: Install Android platform tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y android-tools-adb android-tools-fastboot
+
+      # --- Install Android NDK (headless equivalent of the Android Studio toggle) ---
+      - name: Install Android command-line tools + NDK
+        run: |
+          mkdir -p "$ANDROID_SDK_ROOT/cmdline-tools"
+          curl -sSL -o cmdline-tools.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+          unzip -q cmdline-tools.zip -d "$ANDROID_SDK_ROOT/cmdline-tools"
+          mv "$ANDROID_SDK_ROOT/cmdline-tools/cmdline-tools" "$ANDROID_SDK_ROOT/cmdline-tools/latest"
+          echo "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+          echo "$ANDROID_SDK_ROOT/platform-tools" >> "$GITHUB_PATH"
+
+      - name: Accept licenses and install NDK
+        run: |
+          yes | sdkmanager --sdk_root="$ANDROID_SDK_ROOT" --licenses || true
+          sdkmanager --sdk_root="$ANDROID_SDK_ROOT" "ndk;${ANDROID_NDK_VERSION}"
           echo "ANDROID_NDK_ROOT=$ANDROID_SDK_ROOT/ndk/${ANDROID_NDK_VERSION}" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/${ANDROID_NDK_VERSION}" >> "$GITHUB_ENV"
 
-      - name: Verify NDK toolchain file exists
+      # --- Build tooling used by Blender's make wrapper --------------------
+      - name: Install build tooling
         run: |
-          test -f "$ANDROID_NDK_ROOT/build/cmake/android.toolchain.cmake" || {
-            echo "::error::android.toolchain.cmake not found under $ANDROID_NDK_ROOT"
-            exit 1
-          }
+          sudo apt-get install -y ninja-build ccache cmake make
 
-      - name: Clone Bforartists
+      - name: Set up ccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: android-${{ github.event.inputs.branch || 'android' }}
+
+      # --- Pull the pre-compiled Android library submodule -----------------
+      - name: make update
+        run: make update
+
+      # --- Build Blender for Android ---------------------------------------
+      - name: make android release ninja ccache
+        run: make android release ninja ccache
+
+      # --- Assemble the APK (gradle_assemble; no device attached in CI) ----
+      - name: ninja gradle_assemble
+        working-directory: ../build_android_release
+        run: ninja gradle_assemble
+
+      - name: Locate built APK(s)
+        id: apk
+        working-directory: ../build_android_release
         run: |
-          mkdir -p "$REPO_PARENT"
-          cd "$REPO_PARENT"
-          git clone https://github.com/Bforartists/Bforartists
-          cd Bforartists
-          sudo apt update
-          sudo apt install -y python3 git git-lfs
-          ./build_files/build_environment/install_linux_packages.py
-          ./build_files/utils/make_update.py --use-linux-libraries
+          APK_DIR=$(mktemp -d)
+          find . -name "*.apk" -exec cp {} "$APK_DIR" \;
+          echo "dir=$APK_DIR" >> "$GITHUB_OUTPUT"
+          ls -la "$APK_DIR"
 
-      # - name: Build host deps
-      #   working-directory: ${{ env.REPO_PARENT }}/Bforartists
-      #   run: make deps
-
-      # - name: Build Android deps
-      #   working-directory: ${{ env.REPO_PARENT }}/Bforartists
-      #   run: make android deps HOST_DEPS_BUILD_DIR="$HOST_DEPS_DIR"
-
-      - name: Build Blender for Android
-        working-directory: ${{ env.REPO_PARENT }}/Bforartists
-        run: make android
-
-      - name: Locate build output
-        working-directory: ${{ env.REPO_PARENT }}
-        run: find . -maxdepth 2 -iname '*android*' -type d
-
-      - name: Upload Build
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Bforartists-Android-${{ runner.os }}
-          path: ${{ env.REPO_PARENT }}/bfa_build_android/bin/
+          name: blender-android-${{ github.event.inputs.branch || 'android' }}
+          path: ${{ steps.apk.outputs.dir }}/*.apk
+          if-no-files-found: error
