@@ -1102,7 +1102,7 @@ EditBone *duplicateEditBoneObjects(EditBone *cur_bone,
 
   copy_pchan(cur_bone, e_bone, src_ob, dst_ob);
   /* Weight color. */
-  e_bone->use_weight_color = 0;                
+  e_bone->use_weight_color = 0;
   ED_armature_ebone_weight_color_set(editbones, e_bone);
 
   return e_bone;

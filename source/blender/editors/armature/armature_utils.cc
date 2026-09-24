@@ -956,6 +956,27 @@ void ED_armature_ebone_listbase_temp_clear(ListBaseT<EditBone> *lb)
 /** \} */
 
 /* -------------------------------------------------------------------- */
+/** \name Set default weight color for edit bone
+ * \{ */
+void ED_armature_ebone_weight_color_set(ListBaseT<EditBone> *lb, EditBone *bone)
+{
+  /* Hue uses golden angle to assign the hue between bones.
+   * A bit of hack for some reason color hsv values in edit mode
+   * to pose mode needs 255 scale. */
+  int index = 0;
+  for (EditBone *ebone = lb->first(); ebone; ebone = ebone->next, index++) {
+    if (ebone == bone) {
+      break;
+    }
+  }
+  const float hue = fmodf(float(index) * 0.6180339887f, 1.0f);
+  hsv_to_rgb(
+      hue, 0.8f, 255.0f, &bone->weight_color[0], &bone->weight_color[1], &bone->weight_color[2]);
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
 /** \name Low Level Selection Functions
  *
  * which hide connected-parent flag behavior which gets tricky to handle in selection operators.
@@ -1013,21 +1034,6 @@ void ED_armature_ebone_select_set(EditBone *ebone, bool select)
     flag = eBone_Flag{};
   }
   ED_armature_ebone_selectflag_set(ebone, flag);
-}
-
-void ED_armature_ebone_weight_color_set(ListBaseT<EditBone> *lb, EditBone *bone)
-{
-  /* Hue uses golden angle to assign the hue between bones. 
-   * A bit of hack for some reason color hsv values in edit mode 
-   * to pose mode needs 255 scale. */
-  int index = 0;
-  for (EditBone *ebone = lb->first(); ebone; ebone = ebone->next, index++) {
-    if (ebone == bone) {
-      break;
-    }
-  }
-  const float hue = fmodf(float(index) * 0.6180339887f, 1.0f);
-  hsv_to_rgb(hue, 0.8f, 255.0f, &bone->weight_color[0], &bone->weight_color[1], &bone->weight_color[2]);
 }
 
 /** \} */

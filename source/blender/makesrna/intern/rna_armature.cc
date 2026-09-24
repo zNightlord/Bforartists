@@ -1558,9 +1558,10 @@ static void rna_def_bone_common(StructRNA *srna, int editbone)
 
   prop = RNA_def_property(srna, "use_weight_color", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "use_weight_color", 1);
-  RNA_def_property_ui_text(prop,
-                          "Use Weight Color",
-                          "Allow user to use custom color for bone in multi color weight paint overlay.");
+  RNA_def_property_ui_text(
+      prop,
+      "Use Weight Color",
+      "Allow user to use custom color for bone in multi color weight paint overlay.");
   RNA_def_property_update(prop, 0, "rna_Armature_update_data");
 
   prop = RNA_def_property(srna, "weight_color", PROP_FLOAT, PROP_COLOR);
