@@ -88,7 +88,10 @@ struct EditBone {
   float ease1 = 0, ease2 = 0;
   float scale_in[3] = {}, scale_out[3] = {};
 
+  /** Color for weight visualization. */
   float weight_color[3] = {};
+  char use_weight_color = 0;
+  char _pad_weight[3] = {};
 
   /** for envelope scaling */
   float oldlength = 0;

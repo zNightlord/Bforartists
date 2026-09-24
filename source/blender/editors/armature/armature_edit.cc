@@ -1624,4 +1624,52 @@ void ARMATURE_OT_reveal(wmOperatorType *ot)
 
 /** \} */
 
+/* -------------------------------------------------------------------- */
+/** \name Assign Weight Colors Operator
+ * \{ */
+
+static wmOperatorStatus armature_assign_weight_colors_exec(bContext *C, wmOperator * op)
+{
+  Object *ob = CTX_data_edit_object(C);
+  bArmature *arm = id_cast<bArmature *>(ob->data);
+  const bool only_selected = RNA_boolean_get(op->ptr, "only_selected");
+  bool changed = false;
+
+  for (EditBone &ebone : *arm->edbo) {
+    if (only_selected && !animrig::bone_is_selected(arm, &ebone)) {
+      continue;
+    }
+
+    ebone.use_weight_color = 0;
+    ED_armature_ebone_weight_color_set(arm->edbo, &ebone);
+    changed = true;
+  }
+
+  if (!changed) {
+    return OPERATOR_CANCELLED;
+  }
+
+  WM_event_add_notifier(C, NC_OBJECT | ND_ARMATURE_STRUCTURE, ob);
+  DEG_id_tag_update(&arm->id, ID_RECALC_SYNC_TO_EVAL);
+  return OPERATOR_FINISHED;
+}
+
+void ARMATURE_OT_assign_weight_colors(wmOperatorType *ot)
+{
+  ot->name = "Assign Weight Colors";
+  ot->idname = "ARMATURE_OT_assign_weight_colors";
+  ot->description = "Assign weight color to bones for weight paint overlay";
+  ot->exec = armature_assign_weight_colors_exec;
+  ot->poll = ED_operator_editarmature;
+  ot->flag  = OPTYPE_REGISTER | OPTYPE_UNDO;
+
+  RNA_def_boolean(ot->srna,
+                  "only_selected",
+                  false,
+                  "Only Selected",
+                  "Only assign on selected bones");
+}
+
+/** \} */
+
 }  // namespace blender
