@@ -358,15 +358,15 @@ static void drw_mesh_weight_state_extract(
     }
   }
 
-  /* Per-group colors from bone weight_color, fallback to hash. */
+  /* Armature deform vertex groups take priority: use each bone's weight_color so the
+   * overlay stays consistent with the interface.
+   * Non-deform / non-armature groups get a generated color as fallback. */
   if (wstate->defgroup_len > 0) {
     wstate->defgroup_colors = MEM_new_array_zeroed<float3>(wstate->defgroup_len, __func__);
 
     Object *arm_ob = BKE_modifiers_is_deformed_by_armature(&ob);
     bArmature *arm = arm_ob ? BKE_armature_from_object(arm_ob) : nullptr;
 
-    /* Fill per group colors. */
-    constexpr float GOLDEN_ANGLE = 0.618f;
     const ListBaseT<bDeformGroup> *defbase = BKE_object_defgroup_list(&ob);
     int di = 0;
     for (const bDeformGroup &dg : *defbase) {
@@ -383,8 +383,9 @@ static void drw_mesh_weight_state_extract(
         }
       }
 
-      /* Non armature, deform vertex groups fallback */
-      const float hue = fmodf(float(di) * GOLDEN_ANGLE, 1.0f);
+      /* Group without a deform bone still need a distinct hue color.
+       * Golden-angle spacing keeps neighboring groups from landing on similar hues. */
+      const float hue = fmodf(float(di) * 0.618f, 1.0f);
       float r, g, b;
       hsv_to_rgb(hue, 0.8f, 1.0f, &r, &g, &b);
       wstate->defgroup_colors[di] = float3(r, g, b);

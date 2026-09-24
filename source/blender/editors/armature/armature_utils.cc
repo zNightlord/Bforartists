@@ -956,11 +956,12 @@ void ED_armature_ebone_listbase_temp_clear(ListBaseT<EditBone> *lb)
 /** \} */
 
 /* -------------------------------------------------------------------- */
-/** \name Set default weight color for edit bone
+/** \name Set default weight color multi color for edit bone
  * \{ */
 void ED_armature_ebone_weight_color_set(ListBaseT<EditBone> *lb, EditBone *bone)
 {
   /* Hue uses golden angle to assign the hue between bones.
+   * Golden-angle spacing keeps neighboring bones from landing on similar hues.
    * A bit of hack for some reason color hsv values in edit mode
    * to pose mode needs 255 scale. */
   int index = 0;
