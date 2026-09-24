@@ -377,18 +377,7 @@ static void drw_mesh_weight_state_extract(
       if (arm) {
         const Bone *bone = BKE_armature_find_bone_name(arm, dg.name);
         if (bone && !(bone->flag & BONE_NO_DEFORM)) {
-          const float3 stored(bone->weight_color[0], bone->weight_color[1], bone->weight_color[2]);
-          if (stored.x > 0.0f || stored.y > 0.0f || stored.z > 0.0f) {
-            /* User override, use the override weight color directly. */
-            wstate->defgroup_colors[di] = stored;
-          }
-          else {
-            /* Hue uses golden angle to assign the hue between bones. */
-            const float hue = fmodf(float(di) * GOLDEN_ANGLE, 1.0f);
-            float r, g, b;
-            hsv_to_rgb(hue, 0.85f, 0.9f, &r, &g, &b);
-            wstate->defgroup_colors[di] = float3(r, g, b);
-          }
+          wstate->defgroup_colors[di] = float3(bone->weight_color);
           di++;
           continue;
         }
@@ -397,7 +386,7 @@ static void drw_mesh_weight_state_extract(
       /* Non armature, deform vertex groups fallback */
       const float hue = fmodf(float(di) * GOLDEN_ANGLE, 1.0f);
       float r, g, b;
-      hsv_to_rgb(hue, 0.85f, 0.9f, &r, &g, &b);
+      hsv_to_rgb(hue, 0.8f, 1.0f, &r, &g, &b);
       wstate->defgroup_colors[di] = float3(r, g, b);
       di++;
     }

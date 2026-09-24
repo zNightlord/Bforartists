@@ -264,6 +264,8 @@ void ED_armature_ebone_select_set(EditBone *ebone, bool select);
 void ED_armature_ebone_selectflag_enable(EditBone *ebone, eBone_Flag flag);
 void ED_armature_ebone_selectflag_disable(EditBone *ebone, eBone_Flag flag);
 
+void ED_armature_ebone_weight_color_set(ListBaseT<EditBone> *lb, EditBone *bone);
+
 /* `pose_edit.cc` */
 
 Object *ED_pose_object_from_context(bContext *C);

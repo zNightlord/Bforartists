@@ -5762,6 +5762,10 @@ class VIEW3D_MT_edit_armature(Menu):
         layout.menu("VIEW3D_MT_edit_armature_names")
 
         layout.separator()
+        
+        layout.operator("armature.assign_weight_colors")
+
+        layout.separator()
 
         layout.operator_context = 'INVOKE_DEFAULT'
         layout.operator("armature.move_to_collection", text="Move to Bone Collection")
@@ -5810,6 +5814,7 @@ class VIEW3D_MT_armature_context_menu(Menu):
         layout.operator("armature.symmetrize")
         layout.operator("armature.switch_direction", text="Switch Direction")
         layout.menu("VIEW3D_MT_edit_armature_names")
+        layout.operator("armature.assign_weight_colors")
 
         layout.separator()
 

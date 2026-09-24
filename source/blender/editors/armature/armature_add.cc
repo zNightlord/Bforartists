@@ -100,6 +100,7 @@ EditBone *ED_armature_ebone_add(bArmature *arm, const char *name)
   copy_v3_fl(bone->scale_in, 1.0f);
   copy_v3_fl(bone->scale_out, 1.0f);
 
+  ED_armature_ebone_weight_color_set(arm->edbo, bone);
   return bone;
 }
 
@@ -1100,6 +1101,9 @@ EditBone *duplicateEditBoneObjects(EditBone *cur_bone,
   BLI_addtail(editbones, e_bone);
 
   copy_pchan(cur_bone, e_bone, src_ob, dst_ob);
+  /* Weight color. */
+  e_bone->use_weight_color = 0;                
+  ED_armature_ebone_weight_color_set(editbones, e_bone);
 
   return e_bone;
 }
@@ -1767,6 +1771,10 @@ static wmOperatorStatus armature_extrude_exec(bContext *C, wmOperator *op)
           copy_v3_v3(newbone->scale_in, ebone->scale_in);
           copy_v3_v3(newbone->scale_out, ebone->scale_out);
 
+          /* Weight color. */
+          newbone->use_weight_color = 0;
+          ED_armature_ebone_weight_color_set(arm->edbo, newbone);
+
           STRNCPY_UTF8(newbone->name, ebone->name);
 
           if (flipbone && forked_iter) { /* only set if mirror edit */
@@ -2141,6 +2149,10 @@ static wmOperatorStatus armature_subdivide_exec(bContext *C, wmOperator *op)
         }
       }
       newbone->parent = ebone;
+
+      /* Weight color. */
+      newbone->use_weight_color = 0;
+      ED_armature_ebone_weight_color_set(arm->edbo, newbone);
 
       /* Copy bone collection membership. */
       BLI_duplicatelist(&newbone->bone_collections, &ebone->bone_collections);
