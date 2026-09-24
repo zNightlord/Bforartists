@@ -90,7 +90,7 @@ void main()
       weight_color = apply_color_fac(float4(vgroup_color, 1.0f));
     }
 
-    /* Contour display, only in non color and active color.*/
+    /* Contour display. Not used in multi color all mode. */
     if (draw_contours && vgroup_color_mode < 2) {
       /* This must be executed uniformly for all fragments. */
       float weight_gradient = length(float2(gpu_dfdx(weight), gpu_dfdy(weight)));
