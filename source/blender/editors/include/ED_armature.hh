@@ -258,13 +258,13 @@ void ED_armature_ebone_listbase_copy(ListBaseT<EditBone> *lb_dst,
                                      ListBaseT<EditBone> *lb_src,
                                      bool do_id_user);
 
+void ED_armature_ebone_weight_color_set(ListBaseT<EditBone> *lb, EditBone *bone);
+
 int ED_armature_ebone_selectflag_get(const EditBone *ebone);
 void ED_armature_ebone_selectflag_set(EditBone *ebone, eBone_Flag flag);
 void ED_armature_ebone_select_set(EditBone *ebone, bool select);
 void ED_armature_ebone_selectflag_enable(EditBone *ebone, eBone_Flag flag);
 void ED_armature_ebone_selectflag_disable(EditBone *ebone, eBone_Flag flag);
-
-void ED_armature_ebone_weight_color_set(ListBaseT<EditBone> *lb, EditBone *bone);
 
 /* `pose_edit.cc` */
 

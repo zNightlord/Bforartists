@@ -1387,12 +1387,11 @@ void DRW_mesh_batch_cache_create_requested(TaskGraph &task_graph,
           {*cache.batch.all_verts, GPU_PRIM_POINTS, list, std::nullopt, {VBOType::Position}});
     }
     if (batches_to_create & MBC_PAINT_OVERLAY_VERTS) {
-      batch_info.append(
-          {*cache.batch.paint_overlay_verts,
-           GPU_PRIM_POINTS,
-           list,
-           std::nullopt,
-           {VBOType::Position, VBOType::PaintOverlayFlag}});
+      batch_info.append({*cache.batch.paint_overlay_verts,
+                         GPU_PRIM_POINTS,
+                         list,
+                         std::nullopt,
+                         {VBOType::Position, VBOType::PaintOverlayFlag}});
     }
     if (batches_to_create & MBC_SCULPT_OVERLAYS) {
       batch_info.append({*cache.batch.sculpt_overlays,
@@ -1430,12 +1429,11 @@ void DRW_mesh_batch_cache_create_requested(TaskGraph &task_graph,
                           VBOType::VertexGroupBlendedColor}});
     }
     if (batches_to_create & MBC_PAINT_OVERLAY_WIRE_LOOPS) {
-      batch_info.append(
-          {*cache.batch.paint_overlay_wire_loops,
-           GPU_PRIM_LINES,
-           list,
-           IBOType::LinesPaintMask,
-           {VBOType::Position, VBOType::PaintOverlayFlag}});
+      batch_info.append({*cache.batch.paint_overlay_wire_loops,
+                         GPU_PRIM_LINES,
+                         list,
+                         IBOType::LinesPaintMask,
+                         {VBOType::Position, VBOType::PaintOverlayFlag}});
     }
     if (batches_to_create & MBC_WIRE_EDGES) {
       batch_info.append({*cache.batch.wire_edges,
