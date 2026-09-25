@@ -506,7 +506,7 @@ static bool object_transfer_mode_to_base(bContext *C,
                                          Object *ob_dst,
                                          const eObjectMode mode_dst)
 {
-  const Main *bmain = CTX_data_main(C);
+  Main *bmain = CTX_data_main(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
 
   /* Store the armature that is also selected with ob_src in weight paint pose mode. */
