@@ -557,6 +557,14 @@ static bool object_transfer_mode_to_base(bContext *C,
         /* ob_dst uses a different armature — exit pose mode on ob_src's
          * armature since it no longer belongs to this weight paint session. */
         ED_object_posemode_exit_ex(bmain, wpaint_arm_src);
+
+        if (wpaint_arm_dst) {
+          Base *arm_base_dst = BKE_view_layer_base_find(view_layer, wpaint_arm_dst);
+          if (arm_base_dst) {
+            arm_base_dst->flag |= BASE_SELECTED;
+          }
+          posemode_set_for_weight_paint(C, bmain, ob_dst, false);
+        }
       }
     }
 
