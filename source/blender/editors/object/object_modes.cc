@@ -539,11 +539,30 @@ static bool object_transfer_mode_to_base(bContext *C,
     /* Restore the same armature selected with ob_src. 
      * Find its modifier, select it and enter weight paint pose mode. */
     if (ELEM(mode_dst, OB_MODE_WEIGHT_PAINT, OB_MODE_WEIGHT_GREASE_PENCIL) && wpaint_arm_src) {
-      /* Check if ob_dst shares the same armature as ob_src. If so, re-select
-       * it so posemode_set_for_weight_paint enters pose mode on it, preserving
-       * bone selection. Use BKE_object_pose_armature_get_with_wpaint_check to
-       * get the preferred armature for ob_dst in the multi-armature case. */
-      Object *wpaint_arm_dst = BKE_object_pose_armature_get_with_wpaint_check(ob_dst);
+      /* Walk ob_dst's modifiers directly — cannot use
+       * BKE_object_pose_armature_get_with_wpaint_check here because ob_dst is
+       * not yet in weight paint mode (mode_set_ex runs after this block). */
+      Object *wpaint_arm_dst = nullptr;
+      VirtualModifierData virtual_modifier_data_dst;
+      ModifierData *md_dst = BKE_modifiers_get_virtual_modifierlist(
+          ob_dst, &virtual_modifier_data_dst);
+      for (; md_dst; md_dst = md_dst->next) {
+        Object *ob_arm = nullptr;
+        if (md_dst->type == eModifierType_Armature) {
+          ArmatureModifierData *amd = reinterpret_cast<ArmatureModifierData *>(md_dst);
+          ob_arm = amd->object;
+        }
+        else if (md_dst->type == eModifierType_GreasePencilArmature) {
+          GreasePencilArmatureModifierData *amd =
+              reinterpret_cast<GreasePencilArmatureModifierData *>(md_dst);
+          ob_arm = amd->object;
+        }
+        if (ob_arm && ob_arm->pose) {
+          wpaint_arm_dst = ob_arm;
+          break;
+        }
+      }
+
       bool dst_uses_src_arm = (wpaint_arm_dst == wpaint_arm_src);
 
       if (dst_uses_src_arm) {
@@ -554,8 +573,6 @@ static bool object_transfer_mode_to_base(bContext *C,
         posemode_set_for_weight_paint(C, bmain, ob_dst, false);
       }
       else {
-        /* ob_dst uses a different armature — exit pose mode on ob_src's
-         * armature since it no longer belongs to this weight paint session. */
         ED_object_posemode_exit_ex(bmain, wpaint_arm_src);
 
         if (wpaint_arm_dst) {
