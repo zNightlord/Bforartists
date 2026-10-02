@@ -75,7 +75,7 @@ void ED_operatortypes_armature()
   WM_operatortype_append(ARMATURE_OT_move_to_collection);
   WM_operatortype_append(ARMATURE_OT_assign_to_collection);
 
-  WM_operatortype_append(ARMATURE_OT_assign_weight_colors);
+  WM_operatortype_append(ARMATURE_OT_generate_weight_colors);
 
   /* POSE */
   WM_operatortype_append(POSE_OT_hide);

@@ -1628,7 +1628,7 @@ void ARMATURE_OT_reveal(wmOperatorType *ot)
 /** \name Assign Weight Colors Operator
  * \{ */
 
-static wmOperatorStatus armature_assign_weight_colors_exec(bContext *C, wmOperator *op)
+static wmOperatorStatus armature_generate_weight_colors_exec(bContext *C, wmOperator *op)
 {
   Object *ob = CTX_data_edit_object(C);
   bArmature *arm = id_cast<bArmature *>(ob->data);
@@ -1640,7 +1640,6 @@ static wmOperatorStatus armature_assign_weight_colors_exec(bContext *C, wmOperat
       continue;
     }
 
-    ebone.use_weight_color = 0;
     ED_armature_ebone_weight_color_set(arm->edbo, &ebone);
     changed = true;
   }
@@ -1654,17 +1653,17 @@ static wmOperatorStatus armature_assign_weight_colors_exec(bContext *C, wmOperat
   return OPERATOR_FINISHED;
 }
 
-void ARMATURE_OT_assign_weight_colors(wmOperatorType *ot)
+void ARMATURE_OT_generate_weight_colors(wmOperatorType *ot)
 {
-  ot->name = "Assign Weight Colors";
+  ot->name = "Generate Weight Colors";
   ot->idname = "ARMATURE_OT_assign_weight_colors";
-  ot->description = "Assign weight color to bones for weight paint overlay";
-  ot->exec = armature_assign_weight_colors_exec;
+  ot->description = "Automatically set distinct colors to bones for weight paint overlay";
+  ot->exec = armature_generate_weight_colors_exec;
   ot->poll = ED_operator_editarmature;
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
   RNA_def_boolean(
-      ot->srna, "only_selected", false, "Only Selected", "Only assign on selected bones");
+      ot->srna, "only_selected", true, "Only Selected", "Only generate on selected bones");
 }
 
 /** \} */

@@ -7491,7 +7491,7 @@ class VIEW3D_PT_overlay_edit_mesh_shading(Panel):
         if overlay.show_weight:
             col.separator()
             row = col.split(factor=0.33)
-            row.label(text="Colored")
+            row.label(text="Color Mode")
             sub = row.row()
             sub.prop(overlay, "wpaint_vgroup_color_mode", expand=True)
 
@@ -7883,7 +7883,7 @@ class VIEW3D_PT_overlay_weight_paint(Panel):
 
         col.separator()
         row = col.split(factor=0.33)
-        row.label(text="Colored")
+        row.label(text="Color Mode")
         sub = row.row()
         sub.prop(overlay, "wpaint_vgroup_color_mode", expand=True)
 

@@ -5205,10 +5205,12 @@ static void rna_def_space_view3d_overlay(BlenderRNA *brna)
 
   static const EnumPropertyItem overlay_wpaint_vgroup_color_items[] = {
       {V3D_OVERLAY_WPAINT_VGROUP_COLOR_OFF,
-       "DEFAULT",
+       "COLORRAMP",
        0,
-       "Default",
-       "Use default weight user preferences colorramp"},
+       "Ramp",
+       "Display the weights using a color ramp. "
+       "Color ramp can be edit in weight paint user preferences",
+      },
       {V3D_OVERLAY_WPAINT_VGROUP_COLOR_ACTIVE,
        "ACTIVE",
        0,

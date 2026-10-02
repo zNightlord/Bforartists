@@ -87,7 +87,7 @@ void ARMATURE_OT_collection_deselect(wmOperatorType *ot);
 void ARMATURE_OT_move_to_collection(wmOperatorType *ot);
 void ARMATURE_OT_assign_to_collection(wmOperatorType *ot);
 
-void ARMATURE_OT_assign_weight_colors(wmOperatorType *ot);
+void ARMATURE_OT_generate_weight_colors(wmOperatorType *ot);
 
 /** \} */
 

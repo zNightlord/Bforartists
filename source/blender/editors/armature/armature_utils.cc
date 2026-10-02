@@ -525,7 +525,6 @@ static EditBone *make_boneList_recursive(ListBaseT<EditBone> *edbo,
 
     eBone->color = curBone.color;
     /* Weight color, instead of copy_v3_v3, see ED_armature_ebone_weight_color_set. */
-    eBone->use_weight_color = curBone.use_weight_color;
     eBone->weight_color[0] = curBone.weight_color[0] * 255.0f;
     eBone->weight_color[1] = curBone.weight_color[1] * 255.0f;
     eBone->weight_color[2] = curBone.weight_color[2] * 255.0f;
@@ -792,7 +791,6 @@ void ED_armature_from_edit(Main *bmain, bArmature *arm)
 
     newBone->color = eBone.color;
     /* Weight color, instead of copy_v3_v3, see ED_armature_ebone_weight_color_set. */
-    newBone->use_weight_color = eBone.use_weight_color;
     newBone->weight_color[0] = eBone.weight_color[0] / 255.0f;
     newBone->weight_color[1] = eBone.weight_color[1] / 255.0f;
     newBone->weight_color[2] = eBone.weight_color[2] / 255.0f;
