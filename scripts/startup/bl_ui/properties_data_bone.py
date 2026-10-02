@@ -560,10 +560,7 @@ class BONE_PT_deform(BoneButtonsPanel, Panel):
         col.prop(bone, "head_radius", text="Radius Head")
         col.prop(bone, "tail_radius", text="Tail")
 
-        col = layout.column()
-        col.prop(bone, "use_weight_color")
-        col = layout.column()
-        col.enabled = bone.use_weight_color
+        col.separator()
         col.prop(bone, "weight_color")
 
 
