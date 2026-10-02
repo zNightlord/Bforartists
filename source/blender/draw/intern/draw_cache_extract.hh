@@ -270,6 +270,7 @@ struct SortedFaceData {
  * Data that are kept around between extractions to reduce rebuilding time.
  *
  * - Loose geometry.
+ * - Topology.
  */
 struct MeshBufferCache {
   MeshBufferList buff;
@@ -277,6 +278,13 @@ struct MeshBufferCache {
   MeshExtractLooseGeom loose_geom;
 
   SortedFaceData face_sorted;
+
+  /** #Mesh::corner_verts(), for gathering vertex data to corners. */
+  gpu::VertBufPtr corner_verts;
+  /** #Mesh::corner_edges(), for gathering edge data to corners. */
+  gpu::VertBufPtr corner_edges;
+  /** #Mesh::faces(), for gathering face data to corners. */
+  gpu::VertBufPtr face_offsets;
 };
 
 #define FOREACH_MESH_BUFFER_CACHE(batch_cache, mbc) \
