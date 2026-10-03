@@ -7732,7 +7732,7 @@ static void rna_def_space_graph(BlenderRNA *brna)
 
   rna_def_space_generic_show_region_toggles(srna,
                                             (1 << RGN_TYPE_FOOTER) | (1 << RGN_TYPE_UI) |
-                                                (1 << RGN_TYPE_HUD) | (1 << RGN_TYPE_CHANNELS));
+                                                (1 << RGN_TYPE_HUD) | (1 << RGN_TYPE_CHANNELS) |  (1 << RGN_TYPE_TOOL_HEADER));
 
   /* mode */
   prop = RNA_def_property(srna, "mode", PROP_ENUM, PROP_NONE);

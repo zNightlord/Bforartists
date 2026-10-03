@@ -97,6 +97,7 @@ enum eGraphKeys_ColumnSelect_Mode {
 /* ***************************************** */
 /* `graph_edit.cc` */
 
+bool graph_has_selected_keyframes(bAnimContext *ac, const bool include_handles);
 /**
  * Get the keyframe bounds, with added padding, to ensure that the bounds always have a size > 0.
  * \note it should return total bound-box, filter for selection only can be argument.

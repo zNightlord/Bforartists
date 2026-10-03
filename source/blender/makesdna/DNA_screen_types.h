@@ -826,6 +826,7 @@ enum eRegion_Flag : short {
   RGN_FLAG_INDICATE_OVERFLOW = (1 << 12),
   /** BFA - Hide category tabs in this region even if the type supports them */
   RGN_FLAG_HIDE_CATEGORY_TABS = (1 << 13),
+  RGN_FLAG_ICON_ONLY =  (1 << 14),
 };
 ENUM_OPERATORS(eRegion_Flag)
 

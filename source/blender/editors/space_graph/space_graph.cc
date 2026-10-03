@@ -35,6 +35,7 @@
 #include "ED_screen.hh"
 #include "ED_space_api.hh"
 #include "ED_time_scrub_ui.hh"
+#include "ED_transform.hh"
 
 #include "GPU_immediate.hh"
 #include "GPU_state.hh"
@@ -82,6 +83,13 @@ static SpaceLink *graph_create(const ScrArea * /*area*/, const Scene *scene)
   BLI_addtail(&sipo->regionbase, region);
   region->regiontype = RGN_TYPE_HEADER;
   region->alignment = (U.uiflag & USER_HEADER_BOTTOM) ? RGN_ALIGN_BOTTOM : RGN_ALIGN_TOP;
+
+  /* tool header */
+  region = BKE_area_region_new();
+  BLI_addtail(&sipo->regionbase, region);
+  region->regiontype = RGN_TYPE_TOOL_HEADER;
+  region->alignment = (U.uiflag & USER_HEADER_BOTTOM) ? RGN_ALIGN_BOTTOM : RGN_ALIGN_TOP;
+  region->flag = RGN_FLAG_HIDDEN | RGN_FLAG_HIDDEN_BY_USER;
 
   /* footer */
   region = BKE_area_region_new();
@@ -467,6 +475,16 @@ static void graph_channel_region_draw(const bContext *C, ARegion *region)
 static void graph_header_region_init(wmWindowManager * /*wm*/, ARegion *region)
 {
   ED_region_header_init(region);
+}
+
+static void graph_tool_header_region_draw(const bContext *C, ARegion *region)
+{
+  ED_region_header_with_button_sections(
+      C,
+      region,
+      (RGN_ALIGN_ENUM_FROM_MASK(region->alignment) == RGN_ALIGN_TOP) ?
+          ui::ButtonSectionsAlign::Top :
+          ui::ButtonSectionsAlign::Bottom);
 }
 
 static void graph_header_region_draw(const bContext *C, ARegion *region)
@@ -979,6 +997,43 @@ static bool action_region_poll_hide_in_driver_mode(const RegionPollParams *param
   return sipo->mode != SIPO_MODE_DRIVERS;
 }
 
+static void GRAPH_GGT_gizmo2d_translate(wmGizmoGroupType *gzgt)
+{
+  gzgt->name = "Keyframe Translate Gizmo";
+  gzgt->idname = "GRAPH_GGT_gizmo2d_translate";
+
+  gzgt->flag |= (WM_GIZMOGROUPTYPE_DRAW_MODAL_EXCLUDE | WM_GIZMOGROUPTYPE_TOOL_FALLBACK_KEYMAP |
+                 WM_GIZMOGROUPTYPE_DELAY_REFRESH_FOR_TWEAK | WM_GIZMOGROUPTYPE_2D_TOOL); // bfa node minimap rename with _TOOL
+
+  gzgt->gzmap_params.spaceid = SPACE_GRAPH;
+  gzgt->gzmap_params.regionid = RGN_TYPE_WINDOW;
+
+  ed::transform::ED_widgetgroup_gizmo2d_xform_no_cage_callbacks_set(gzgt);
+}
+
+static void GRAPH_GGT_gizmo2d_resize(wmGizmoGroupType *gzgt)
+{
+  gzgt->name = "Keyframe Transform Gizmo Resize";
+  gzgt->idname = "GRAPH_GGT_gizmo2d_resize";
+
+  gzgt->flag |= (WM_GIZMOGROUPTYPE_DRAW_MODAL_EXCLUDE | WM_GIZMOGROUPTYPE_TOOL_FALLBACK_KEYMAP |
+                 WM_GIZMOGROUPTYPE_DELAY_REFRESH_FOR_TWEAK | WM_GIZMOGROUPTYPE_2D_TOOL); // bfa node minimap rename with _TOOL
+
+  gzgt->gzmap_params.spaceid = SPACE_GRAPH;
+  gzgt->gzmap_params.regionid = RGN_TYPE_WINDOW;
+
+  ed::transform::ED_widgetgroup_gizmo2d_resize_callbacks_set(gzgt);
+}
+
+static void graph_widgets()
+{
+  const wmGizmoMapType_Params params{SPACE_GRAPH, RGN_TYPE_WINDOW};
+  wmGizmoMapType *gzmap_type = WM_gizmomaptype_ensure(&params);
+
+  WM_gizmogrouptype_append(GRAPH_GGT_gizmo2d_translate);
+  WM_gizmogrouptype_append(GRAPH_GGT_gizmo2d_resize);
+}
+
 void ED_spacetype_ipo()
 {
   std::unique_ptr<SpaceType> st = std::make_unique<SpaceType>();
@@ -995,6 +1050,7 @@ void ED_spacetype_ipo()
   st->keymap = graphedit_keymap;
   st->listener = graph_listener;
   st->refresh = graph_refresh;
+  st->gizmos = graph_widgets;
   st->id_remap = graph_id_remap;
   st->foreach_id = graph_foreach_id;
   st->space_subtype_item_extend = graph_space_subtype_item_extend;
@@ -1027,6 +1083,16 @@ void ED_spacetype_ipo()
   art->init = graph_header_region_init;
   art->draw = graph_header_region_draw;
 
+  BLI_addhead(&st->regiontypes, art);
+
+  /* regions: tool header */
+  art = MEM_new_zeroed<ARegionType>("spacetype graphedit tool header region");
+  art->regionid = RGN_TYPE_TOOL_HEADER;
+  art->prefsizey = 30 + HEADERY;
+  art->keymapflag = ED_KEYMAP_UI | ED_KEYMAP_VIEW2D | ED_KEYMAP_FRAMES | ED_KEYMAP_HEADER;
+  art->listener = graph_region_listener;
+  art->init = graph_header_region_init;   // reuse existing init, it's alignment-agnostic
+  art->draw = graph_tool_header_region_draw; // new — see below
   BLI_addhead(&st->regiontypes, art);
 
   /* regions: footer */

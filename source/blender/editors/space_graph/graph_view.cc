@@ -129,6 +129,22 @@ static bool calculate_keyframe_bounds(const ListBaseT<bAnimListElem> &anim_data,
   return BLI_rctf_is_valid(&r_bounds);
 }
 
+bool graph_has_selected_keyframes(bAnimContext *ac, const bool include_handles)
+{
+  ListBaseT<bAnimListElem> anim_data = ed::graph::get_editable_fcurves(*ac);
+  bool found = false;
+  for (bAnimListElem &ale : anim_data) {
+    FCurve *fcu = static_cast<FCurve *>(ale.key_data);
+    rctf dummy_bounds;
+    if (BKE_fcurve_calc_bounds(fcu, /*only_selected=*/true, include_handles, nullptr, &dummy_bounds)) {
+      found = true;
+      break;  // early-exit, cheaper than the full bounds pass
+    }
+  }
+  ANIM_animdata_freelist(&anim_data);
+  return found;
+}
+
 void get_graph_keyframe_extents(bAnimContext *ac,
                                 float *xmin,
                                 float *xmax,

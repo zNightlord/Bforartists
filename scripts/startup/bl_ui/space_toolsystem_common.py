@@ -687,7 +687,10 @@ class ToolSelectPanelHelper:
             "idname", None,
         )
 
-        if detect_layout:
+        if context.region.use_icon_only:
+            show_text = False
+            ui_gen = ToolSelectPanelHelper._layout_generator_single_column(layout, scale_y)
+        elif detect_layout:
             ui_gen, show_text = cls._layout_generator_detect_from_region(layout, context.region, scale_y)
         else:
             ui_gen = ToolSelectPanelHelper._layout_generator_single_column(layout, scale_y)

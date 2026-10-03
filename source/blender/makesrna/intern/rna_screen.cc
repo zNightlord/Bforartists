@@ -802,8 +802,12 @@ static void rna_def_region(BlenderRNA *brna)
       "support this feature (NOTE: these categories are generated at runtime, so list may be "
       "empty at initialization, before any drawing took place)");
 
-  rna_def_region_api(srna);
-}
+  prop = RNA_def_property(srna, "use_icon_only", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "flag", RGN_FLAG_ICON_ONLY);
+  RNA_def_property_ui_text(prop, "Icon Only", "Hide tool names, show icons only");
+  RNA_def_property_update(prop, NC_SCREEN | NA_EDITED, nullptr);
+    rna_def_region_api(srna);
+  }
 
 static void rna_def_screen(BlenderRNA *brna)
 {

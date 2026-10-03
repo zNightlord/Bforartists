@@ -36,6 +36,7 @@
 #include "WM_message.hh"
 #include "WM_types.hh"
 
+#include "ED_anim_api.hh"
 #include "ED_gizmo_library.hh"
 #include "ED_gizmo_utils.hh"
 #include "ED_image.hh"
@@ -50,6 +51,17 @@
 
 #include "transform.hh"
 #include "transform_gizmo.hh"
+
+namespace blender {
+bool graph_has_selected_keyframes(bAnimContext *ac, const bool include_handles);
+void get_graph_keyframe_extents(bAnimContext *ac,
+                                float *xmin,
+                                float *xmax,
+                                float *ymin,
+                                float *ymax,
+                                const bool do_sel_only,
+                                const bool include_handles);
+}  // namespace blender
 
 namespace blender::ed::transform {
 
@@ -300,6 +312,14 @@ static bool gizmo2d_calc_bounds(const bContext *C, float *r_center, float *r_min
       zero_v2(r_min);
       zero_v2(r_max);
       return has_select;
+    }
+  }
+  else if (area->spacetype == SPACE_GRAPH) {
+    bAnimContext ac;
+    if (ANIM_animdata_get_context(C, &ac)) {
+      has_select = graph_has_selected_keyframes(&ac, false);
+      get_graph_keyframe_extents(
+          &ac, &r_min[0], &r_max[0], &r_min[1], &r_max[1], /*do_sel_only=*/true, false);
     }
   }
 

@@ -1343,6 +1343,14 @@ bool popup_context_menu_for_button(bContext *C, Button *but, const wmEvent *even
     else if (region->regiontype == RGN_TYPE_FOOTER) {
       layout.menu_fn(IFACE_("Footer"), ICON_NONE, ED_screens_footer_tools_menu_create, nullptr);
     }
+    else if (region->regiontype == RGN_TYPE_TOOLS) {
+      ui::PopupMenu *pup = ui::popup_menu_begin(C, IFACE_("Toolbar"), ICON_NONE);
+      ui::Layout &layout = *ui::popup_menu_layout(pup);
+      PointerRNA region_ptr = RNA_pointer_create_discrete(nullptr, RNA_Region, (void *)region);
+      layout.prop(&region_ptr, "use_icon_only", UI_ITEM_NONE, IFACE_("Show Text"), ICON_NONE);
+      ED_screens_region_flip_menu_create(C, &layout, nullptr);
+      popup_menu_end(C, pup);
+    }
   }
 
   /* UI List item context menu. Scripts can add items to it, by default there's nothing shown. */

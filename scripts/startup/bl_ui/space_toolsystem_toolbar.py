@@ -3593,6 +3593,110 @@ class _defs_sequencer_select:
             draw_cursor=draw_cursor,
         )
 
+class _defs_graph_select:
+
+    @ToolDef.from_fn
+    def select():
+        return dict(
+            idname="builtin.select",
+            label="Tweak",
+            icon="ops.generic.select",
+            widget=None,
+            keymap=(),
+        )
+
+    @ToolDef.from_fn
+    def box():
+        def draw_settings(_context, layout, tool):
+            props = tool.operator_properties("graph.select_box")
+            row = layout.row()
+            row.use_property_split = False
+            row.prop(props, "mode", text="", expand=True, icon_only=True)
+        return dict(
+            idname="builtin.select_box",
+            label="Select Box",
+            icon="ops.generic.select_box",
+            widget=None,
+            keymap=(),
+            draw_settings=draw_settings,
+        )
+
+    @ToolDef.from_fn
+    def lasso():
+        def draw_settings(_context, layout, tool):
+            props = tool.operator_properties("graph.select_lasso")
+            row = layout.row()
+            row.use_property_split = False
+            row.prop(props, "mode", text="", expand=True, icon_only=True)
+        return dict(
+            idname="builtin.select_lasso",
+            label="Select Lasso",
+            icon="ops.generic.select_lasso",
+            widget=None,
+            keymap=(),
+            draw_settings=draw_settings,
+        )
+
+    @ToolDef.from_fn
+    def circle():
+        def draw_settings(_context, layout, tool):
+            props = tool.operator_properties("graph.select_circle")
+            row = layout.row()
+            row.use_property_split = False
+            row.prop(props, "mode", text="", expand=True, icon_only=True)
+            layout.prop(props, "radius")
+
+        def draw_cursor(_context, tool, xy):
+            from gpu_extras.presets import draw_circle_2d
+            props = tool.operator_properties("graph.select_circle")
+            radius = props.radius
+            draw_circle_2d(xy, (1.0,) * 4, radius, segments=32)
+
+        return dict(
+            idname="builtin.select_circle",
+            label="Select Circle",
+            icon="ops.generic.select_circle",
+            widget=None,
+            keymap=(),
+            draw_settings=draw_settings,
+            draw_cursor=draw_cursor,
+        )
+
+
+class _defs_graph_transform:
+
+    @ToolDef.from_fn
+    def translate():
+        return dict(
+            idname="builtin.move",
+            label="Move",
+            icon="ops.transform.translate",
+            widget="GRAPH_GGT_gizmo2d_translate",
+            operator="transform.translate",
+            keymap="Graph Editor Tool: Move",
+        )
+
+    @ToolDef.from_fn
+    def scale():
+        return dict(
+            idname="builtin.scale",
+            label="Scale",
+            icon="ops.transform.resize",
+            widget="GRAPH_GGT_gizmo2d_resize",
+            operator="transform.resize",
+            keymap="Graph Editor Tool: Scale",
+        )
+
+    @ToolDef.from_fn
+    def transform():
+        return dict(
+            idname="builtin.transform",
+            label="Transform",
+            description="Supports any combination of grab, rotate, and scale at once",
+            icon="ops.transform.transform",
+            widget="GRAPH_GGT_gizmo2d",
+            # No keymap default action, only for gizmo!
+        )
 
 # ------------------------------------------------- Image editor  -------------------------------------------------------
 
@@ -4346,6 +4450,28 @@ class SEQUENCER_PT_tools_active(ToolSelectPanelHelper, Panel):
         ],
     }
 
+class GRAPH_PT_tools_active(ToolSelectPanelHelper, Panel):
+    bl_space_type = 'GRAPH_EDITOR'
+    bl_region_type = 'TOOL_PROPS'
+    bl_options = {'HIDE_HEADER'}
+    keymap_prefix = "Graph Editor Tool:"
+    tool_fallback_id = "builtin.select"
+
+    @classmethod
+    def tools_from_context(cls, context, mode=None):
+        for tools in (cls._tools[None],):
+            for item in tools:
+                yield item
+
+    _tools = {
+        None: (
+            (_defs_graph_select.select, _defs_graph_select.box,
+             _defs_graph_select.circle, _defs_graph_select.lasso),
+              None,
+             _defs_graph_transform.translate,   # see part 3
+           
+        ),
+    }
 
 classes = (
     IMAGE_PT_tools_active,
