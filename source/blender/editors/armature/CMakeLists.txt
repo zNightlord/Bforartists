@@ -31,9 +31,11 @@ set(SRC
   pose_slide.cc
   pose_transform.cc
   pose_utils.cc
+  meshgvb.cc
 
   armature_intern.hh
   meshlaplacian.h
+  meshgvb.h
 )
 
 set(LIB

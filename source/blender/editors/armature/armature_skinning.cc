@@ -430,7 +430,7 @@ static void add_verts_to_dgroups(
   }
 
   /* compute the weights based on gathered vertices and bones */
-  if (heat) {
+  if (heat == ARM_GROUPS_AUTO) {
     const char *error = nullptr;
 
     heat_bone_weighting(ob,
@@ -446,8 +446,30 @@ static void add_verts_to_dgroups(
     if (error) {
       BKE_report(reports, RPT_WARNING, error);
     }
-  }
-  else {
+  } else if (heat == ARM_SKINNING_GVB) {
+    const char *gvb_error = nullptr;
+    const int gvb_res[3] = {GVB_DEFAULT_RES_X,
+                            GVB_DEFAULT_RES_Y,
+                            GVB_DEFAULT_RES_Z};
+
+    geodesic_voxel_bone_weighting(
+        ob,
+        mesh,
+        reinterpret_cast<float (*)[3]>(verts.data()),
+        numbones,
+        dgrouplist,
+        dgroupflip,
+        root,
+        tip,
+        selected,
+        GVB_DEFAULT_ALPHA,
+        gvb_res,
+        &gvb_error);
+
+    if (gvb_error) {
+      BKE_report(reports, RPT_WARNING, gvb_error);
+    } 
+  } else {
     envelope_bone_weighting(ob,
                             mesh,
                             verts,
@@ -500,12 +522,12 @@ void ED_object_vgroup_calc_from_armature(ReportList *reports,
       ed::object::vgroup_data_clamp_range(ob->data, defbase_tot);
     }
   }
-  else if (ELEM(mode, ARM_GROUPS_ENVELOPE, ARM_GROUPS_AUTO)) {
+  else if (ELEM(mode, ARM_GROUPS_ENVELOPE, ARM_GROUPS_AUTO, ARM_GROUPS_GVB)) {
     /* Traverse the bone list, trying to create vertex groups
      * that are populated with the vertices for which the
      * bone is closest.
      */
-    add_verts_to_dgroups(reports, scene, ob, par, (mode == ARM_GROUPS_AUTO), mirror);
+    add_verts_to_dgroups(reports, scene, ob, par, mode, mirror);
   }
 }
 
