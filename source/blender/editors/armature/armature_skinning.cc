@@ -447,27 +447,22 @@ static void add_verts_to_dgroups(
       BKE_report(reports, RPT_WARNING, error);
     }
   } else if (heat == ARM_SKINNING_GVB) {
-    const char *gvb_error = nullptr;
+    const char *error = nullptr;
     const int gvb_res[3] = {GVB_DEFAULT_RES_X,
                             GVB_DEFAULT_RES_Y,
                             GVB_DEFAULT_RES_Z};
 
     geodesic_voxel_bone_weighting(
-        ob,
-        mesh,
-        reinterpret_cast<float (*)[3]>(verts.data()),
-        numbones,
-        dgrouplist,
-        dgroupflip,
-        root,
-        tip,
-        selected,
-        GVB_DEFAULT_ALPHA,
-        gvb_res,
-        &gvb_error);
+      ob, mesh,
+      reinterpret_cast<float (*)[3]>(verts.data()),  /* same cast as heat */
+      numbones,
+      dgrouplist, dgroupflip,
+      root, tip,
+      selected,
+      &error);
 
-    if (gvb_error) {
-      BKE_report(reports, RPT_WARNING, gvb_error);
+    if (error) {
+      BKE_report(reports, RPT_WARNING, error);
     } 
   } else {
     envelope_bone_weighting(ob,
