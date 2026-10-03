@@ -1625,7 +1625,7 @@ void ARMATURE_OT_reveal(wmOperatorType *ot)
 /** \} */
 
 /* -------------------------------------------------------------------- */
-/** \name Assign Weight Colors Operator
+/** \name Generate Weight Colors Operator
  * \{ */
 
 static wmOperatorStatus armature_generate_weight_colors_exec(bContext *C, wmOperator *op)
@@ -1656,7 +1656,7 @@ static wmOperatorStatus armature_generate_weight_colors_exec(bContext *C, wmOper
 void ARMATURE_OT_generate_weight_colors(wmOperatorType *ot)
 {
   ot->name = "Generate Weight Colors";
-  ot->idname = "ARMATURE_OT_assign_weight_colors";
+  ot->idname = "ARMATURE_OT_generate_weight_colors";
   ot->description = "Automatically set distinct colors to bones for weight paint overlay";
   ot->exec = armature_generate_weight_colors_exec;
   ot->poll = ED_operator_editarmature;
