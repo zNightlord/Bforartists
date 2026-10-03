@@ -332,7 +332,7 @@ void mesh_buffer_cache_create_requested(TaskGraph & /*task_graph*/,
         created_vbos[i] = extract_paint_overlay_flags(mr);
         break;
       case VBOType::VertexGroupBlendedColor:
-        created_vbos[i] = extract_weight_vgroup_blended_color(mr, cache);
+        created_vbos[i] = extract_weight_vgroup_blended_color(mr, cache, mbc);
         break;
     }
   });
@@ -454,7 +454,7 @@ void mesh_buffer_cache_create_requested_subdiv(MeshBatchCache &cache,
   }
   if (vbos_to_create.contains(VBOType::VertexGroupBlendedColor)) {
     buffers.vbos.add_new(VBOType::VertexGroupBlendedColor,
-                         extract_weight_vgroup_blended_color_subdiv(mr, subdiv_cache, cache));
+                         extract_weight_vgroup_blended_color_subdiv(mr, subdiv_cache, cache, mbc));
   }
   if (vbos_to_create.contains(VBOType::FaceDotNormal) ||
       vbos_to_create.contains(VBOType::FaceDotPosition) ||

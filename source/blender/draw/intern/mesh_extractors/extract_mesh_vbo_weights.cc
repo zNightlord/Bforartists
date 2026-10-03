@@ -205,23 +205,23 @@ gpu::VertBufPtr extract_weights_subdiv(const MeshRenderData &mr,
 }
 
 gpu::VertBufPtr extract_weight_vgroup_blended_color(const MeshRenderData &mr,
-                                                    const MeshBatchCache &cache)
+                                                    const MeshBatchCache &batch_cache,
+                                                    MeshBufferCache &cache)
 {
   static GPUVertFormat format = GPU_vertformat_from_attribute("vgroup_color_blended",
                                                               gpu::VertAttrType::SFLOAT_32_32_32);
 
-  gpu::VertBufPtr vbo = gpu::VertBufPtr(GPU_vertbuf_create_with_format(format));
-  GPU_vertbuf_data_alloc(*vbo, mr.corners_num);
-  MutableSpan<float3> vbo_data = vbo->data<float3>();
+  gpu::VertBufPtr vert_vbo = gpu::VertBufPtr(GPU_vertbuf_create_with_format(format));
+  GPU_vertbuf_data_alloc(*vert_vbo, mr.verts_num);
+  MutableSpan<float3> vert_data = vert_vbo->data<float3>();
 
-  const DRW_MeshWeightState &weight_state = cache.weight_state;
+  const DRW_MeshWeightState &weight_state = batch_cache.weight_state;
   const int active_index = weight_state.defgroup_active;
   const eV3D_Overlay_WPaint_VGroupColorMode mode = weight_state.vgroup_color_mode;
-
   /* Nothing to compute. */
   if (mode == V3D_OVERLAY_WPAINT_VGROUP_COLOR_OFF) {
-    vbo_data.fill(float3(0.0f));
-    return vbo;
+    vert_data.fill(float3(0.0f));
+    return vert_vbo;
   }
 
   const Span<float3> defgroup_colors(weight_state.defgroup_colors, weight_state.defgroup_len);
@@ -233,58 +233,55 @@ gpu::VertBufPtr extract_weight_vgroup_blended_color(const MeshRenderData &mr,
     const Mesh &mesh = *mr.mesh;
     const Span<MDeformVert> dverts = mesh.deform_verts();
     if (dverts.is_empty()) {
-      vbo_data.fill(float3(0.0f));
-      return vbo;
+      vert_data.fill(float3(0.0f));
+      return vert_vbo;
     }
-    Array<float3> colors(dverts.size());
-    threading::parallel_for(colors.index_range(), 1024, [&](const IndexRange range) {
+
+    threading::parallel_for(vert_data.index_range(), 1024, [&](const IndexRange range) {
       for (const int vert : range) {
-        colors[vert] = blended_vgroup_color(
+        vert_data[vert] = blended_vgroup_color(
             &dverts[vert], defgroup_colors, validmap, mode, active_index);
       }
     });
-    array_utils::gather(colors.as_span(), mr.corner_verts, vbo_data);
   }
   else {
     const BMesh &bm = *mr.bm;
     const int offset = CustomData_get_offset(&bm.vdata, CD_MDEFORMVERT);
     if (offset == -1) {
-      vbo_data.fill(float3(0.0f));
-      return vbo;
+      vert_data.fill(float3(0.0f));
+      return vert_vbo;
     }
-    threading::parallel_for(IndexRange(bm.totface), 2048, [&](const IndexRange range) {
-      for (const int face_index : range) {
-        const BMFace &face = *BM_face_at_index(&const_cast<BMesh &>(bm), face_index);
-        const BMLoop *loop = BM_FACE_FIRST_LOOP(&face);
-        for ([[maybe_unused]] const int i : IndexRange(face.len)) {
-          const int index = BM_elem_index_get(loop);
-          vbo_data[index] = blended_vgroup_color(
-              static_cast<const MDeformVert *>(BM_ELEM_CD_GET_VOID_P(loop->v, offset)),
-              defgroup_colors,
-              validmap,
-              mode,
-              active_index);
-          loop = loop->next;
-        }
+    threading::parallel_for(IndexRange(bm.totvert), 2048, [&](const IndexRange range) {
+      for (const int vert_index : range) {
+        const BMVert &vert = *BM_vert_at_index(&const_cast<BMesh &>(bm), vert_index);
+        vert_data[vert_index] = blended_vgroup_color(
+            static_cast<const MDeformVert *>(BM_ELEM_CD_GET_VOID_P(&vert, offset)),
+            defgroup_colors,
+            validmap,
+            mode,
+            active_index);
       }
     });
   }
+
+  gpu::VertBufPtr vbo = gpu::VertBufPtr(GPU_vertbuf_create_on_device(format, mr.corners_num));
+  gather_vert_to_corner_gpu(mr, cache, *vert_vbo, *vbo);
   return vbo;
 }
 
 gpu::VertBufPtr extract_weight_vgroup_blended_color_subdiv(const MeshRenderData &mr,
                                                            const DRWSubdivCache &subdiv_cache,
-                                                           const MeshBatchCache &cache)
+                                                           const MeshBatchCache &batch_cache,
+                                                           MeshBufferCache &cache)
 {
-  GPUVertFormat format{};
-  GPU_vertformat_attr_add(&format, "vgroup_color_blended", gpu::VertAttrType::SFLOAT_32_32_32);
+  static GPUVertFormat format = GPU_vertformat_from_attribute("vgroup_color_blended",
+                                                              gpu::VertAttrType::SFLOAT_32_32_32);
 
   gpu::VertBufPtr vbo = gpu::VertBufPtr(
       GPU_vertbuf_create_on_device(format, subdiv_cache.num_subdiv_loops));
 
-  gpu::VertBufPtr coarse_colors = extract_weight_vgroup_blended_color(mr, cache);
-  draw_subdiv_interp_custom_data(subdiv_cache, *coarse_colors, *vbo, GPU_COMP_F32, 3, 0);
-
+  gpu::VertBufPtr coarse = extract_weight_vgroup_blended_color(mr, batch_cache, cache);
+  draw_subdiv_interp_custom_data(subdiv_cache, *coarse, *vbo, GPU_COMP_F32, 3, 0);
   return vbo;
 }
 
