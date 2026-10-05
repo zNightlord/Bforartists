@@ -87,9 +87,9 @@ struct EditBone {
   float curve_out_x = 0, curve_out_z = 0;
   float ease1 = 0, ease2 = 0;
   float scale_in[3] = {}, scale_out[3] = {};
-
   /** Color for weight visualization. */
   float weight_color[3] = {};
+  char _pad[4] = {};
 
   /** for envelope scaling */
   float oldlength = 0;
@@ -103,9 +103,6 @@ struct EditBone {
   eBone_BBoneFlag bbone_flag = {};
   eBone_BBoneHandleFlag bbone_prev_flag = {};
   eBone_BBoneHandleFlag bbone_next_flag = {};
-
-  char _pad3[4] = {};
-
   /** Next/prev bones to use as handle references when calculating bbones (optional) */
   EditBone *bbone_prev = nullptr;
   EditBone *bbone_next = nullptr;

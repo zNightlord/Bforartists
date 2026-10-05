@@ -5764,7 +5764,7 @@ class VIEW3D_MT_edit_armature(Menu):
 
         layout.separator()
         
-        layout.operator("armature.assign_weight_colors")
+        layout.operator("armature.generate_weight_colors")
 
         layout.separator()
 
@@ -5815,7 +5815,7 @@ class VIEW3D_MT_armature_context_menu(Menu):
         layout.operator("armature.symmetrize")
         layout.operator("armature.switch_direction", text="Switch Direction")
         layout.menu("VIEW3D_MT_edit_armature_names")
-        layout.operator("armature.assign_weight_colors")
+        layout.operator("armature.generate_weight_colors")
 
         layout.separator()
 
