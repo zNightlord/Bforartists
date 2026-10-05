@@ -554,9 +554,10 @@ static bool object_transfer_mode_to_base(bContext *C,
      * Find its modifier, select it and enter weight paint pose mode. */
     if (ELEM(mode_dst, OB_MODE_WEIGHT_PAINT, OB_MODE_WEIGHT_GREASE_PENCIL) && wpaint_arm_src) {
       bool dst_uses_src_arm = false;
+      Object *wpaint_arm_dst = nullptr;
       VirtualModifierData virtual_modifier_data_dst;
-      ModifierData *md_dst = BKE_modifiers_get_virtual_modifierlist(ob_dst,
-                                                                    &virtual_modifier_data_dst);
+      ModifierData *md_dst = BKE_modifiers_get_virtual_modifierlist(
+          ob_dst, &virtual_modifier_data_dst);
       for (; md_dst; md_dst = md_dst->next) {
         Object *ob_arm = nullptr;
         if (md_dst->type == eModifierType_Armature) {
@@ -568,9 +569,14 @@ static bool object_transfer_mode_to_base(bContext *C,
               reinterpret_cast<GreasePencilArmatureModifierData *>(md_dst);
           ob_arm = amd->object;
         }
-        if (ob_arm == wpaint_arm_src) {
-          dst_uses_src_arm = true;
-          break;
+        if (ob_arm && ob_arm->pose) {
+          /* Mirror BKE_modifiers_is_deformed_by_armature logic:
+           * prefer the same armature as ob_src if found, then keep
+           * updating wpaint_arm_dst so we fall back to the last one. */
+          wpaint_arm_dst = ob_arm;
+          if (ob_arm == wpaint_arm_src) {
+            break;
+          }
         }
       }
 
