@@ -376,7 +376,6 @@ struct Bone {
   float scale_out[3] = {1.0f, 1.0f, 1.0f};
   /** Color for weight visualization. */
   float weight_color[3] = {};
-  char _pad2[3] = {};
 
   /** Patch for upward compatibility, UNUSED! */
   float size[3] = {};
@@ -386,6 +385,7 @@ struct Bone {
   short segments = 0;
   /** Vertex to segment mapping mode. */
   eBone_BBoneMappingMode bbone_mapping_mode = {};
+  char _pad2[3] = {};
 
   /** Type of next/prev bone handles. */
   eBone_BBoneHandleType bbone_prev_type = {};
