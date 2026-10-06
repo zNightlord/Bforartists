@@ -542,6 +542,7 @@ static bool object_transfer_mode_to_base(bContext *C,
       /* Walk ob_dst's modifiers directly — cannot use
        * BKE_object_pose_armature_get_with_wpaint_check here because ob_dst is
        * not yet in weight paint mode (mode_set_ex runs after this block). */
+      bool dst_uses_src_arm = false;
       Object *wpaint_arm_dst = nullptr;
       VirtualModifierData virtual_modifier_data_dst;
       ModifierData *md_dst = BKE_modifiers_get_virtual_modifierlist(
@@ -565,8 +566,6 @@ static bool object_transfer_mode_to_base(bContext *C,
           }
         }
       }
-
-      bool dst_uses_src_arm = (wpaint_arm_dst == wpaint_arm_src);
 
       if (dst_uses_src_arm) {
         Base *arm_base = BKE_view_layer_base_find(view_layer, wpaint_arm_src);
