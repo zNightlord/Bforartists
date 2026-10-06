@@ -559,7 +559,10 @@ static bool object_transfer_mode_to_base(bContext *C,
         }
         if (ob_arm && ob_arm->pose) {
           wpaint_arm_dst = ob_arm;
-          break;
+          if (ob_arm == wpaint_arm_src) {
+            dst_uses_src_arm = true;
+            break;
+          }
         }
       }
 
