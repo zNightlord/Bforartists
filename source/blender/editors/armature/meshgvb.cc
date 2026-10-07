@@ -556,7 +556,7 @@ struct TriList {
   int size() const { return int(v0.size()); }
 };
 
-static TriList build_tris(const Mesh *mesh, Span<float3> world_verts)
+static TriList build_tris(Mesh *mesh, Span<float3> world_verts)
 {
   const Span<int>         corner_verts = mesh->corner_verts();
   const OffsetIndices<int> faces       = mesh->faces();
@@ -596,12 +596,12 @@ static TriList build_tris(const Mesh *mesh, Span<float3> world_verts)
 /** \name Public entry point
  * \{ */
 
-void geodesic_voxel_bone_weighting(Object *ob,
-                                   Mesh *mesh,
+void geodesic_voxel_bone_weighting(blender::Object *ob,
+                                   blender::Mesh *mesh,
                                    float (*verts)[3],
                                    int numbones,
-                                   bDeformGroup **dgrouplist,
-                                   bDeformGroup **dgroupflip,
+                                   blender::bDeformGroup **dgrouplist,
+                                   blender::bDeformGroup **dgroupflip,
                                    float (*root)[3],
                                    float (*tip)[3],
                                    const bool *selected,

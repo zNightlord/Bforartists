@@ -447,7 +447,7 @@ static void add_verts_to_dgroups(
     if (error) {
       BKE_report(reports, RPT_WARNING, error);
     }
-  } else if (heat == ARM_SKINNING_GVB) {
+  } else if (heat == ARM_GROUPS_GVB) {
     const char *error = nullptr;
     const int gvb_res[3] = {GVB_DEFAULT_RES_X,
                             GVB_DEFAULT_RES_Y,

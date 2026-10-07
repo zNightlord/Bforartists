@@ -193,7 +193,7 @@ bool ED_armature_edit_select_op_from_tagged(bArmature *arm, int sel_op);
 #define ARM_GROUPS_NAME 1
 #define ARM_GROUPS_ENVELOPE 2
 #define ARM_GROUPS_AUTO 3
-#define ARM_SKINNING_GVB 4
+#define ARM_GROUPS_GVB 4
 void ED_object_vgroup_calc_from_armature(ReportList *reports,
                                          Depsgraph *depsgraph,
                                          Scene *scene,

@@ -1,33 +1,22 @@
-/** \file
- * \ingroup edarmature
- *
- * Geodesic Voxel Binding — CPU implementation.
- * Reference: Dionne & de Lasa, "Geodesic Voxel Binding for Production
- * Character Meshes", SCA 2013.
- */
-
 #pragma once
 
-
+/* Forward-declare in blender:: to match what armature_skinning.cc sees */
+namespace blender {
 struct Object;
 struct Mesh;
 struct bDeformGroup;
+} /* namespace blender */
 
-/**
- * Default voxel grid resolution from the paper (Section 8).
- * 256×256×128 worked well for all 11 production test meshes.
- */
 #define GVB_DEFAULT_RES_X 256
 #define GVB_DEFAULT_RES_Y 256
 #define GVB_DEFAULT_RES_Z 128
-#define GVB_DEFAULT_ALPHA 0.7f
 
-void geodesic_voxel_bone_weighting(Object *ob,
-                                   Mesh *mesh,
+void geodesic_voxel_bone_weighting(blender::Object *ob,
+                                   blender::Mesh *mesh,
                                    float (*verts)[3],
                                    int numbones,
-                                   bDeformGroup **dgrouplist,
-                                   bDeformGroup **dgroupflip,
+                                   blender::bDeformGroup **dgrouplist,
+                                   blender::bDeformGroup **dgroupflip,
                                    float (*root)[3],
                                    float (*tip)[3],
                                    const bool *selected,
