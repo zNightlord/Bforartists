@@ -39,6 +39,7 @@
 #include "ANIM_bone_collections.hh"
 
 #include "armature_intern.hh"
+#include "meshgvb.h"
 #include "meshlaplacian.h"
 
 namespace blender {
