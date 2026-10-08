@@ -22,15 +22,22 @@
 #include "BKE_instances.hh"
 #include "BKE_lib_id.hh"
 #include "BKE_mesh_wrapper.hh"
+#include "BKE_node_socket_value.hh"
 #include "BKE_pointcloud.hh"
 
 #include "DEG_depsgraph_query.hh"
 
 #include "DNA_ID.h"
 #include "DNA_collection_types.h"
+#include "DNA_mask_types.h"
 #include "DNA_mesh_types.h"
 #include "DNA_object_types.h"
 #include "DNA_pointcloud_types.h"
+#include "DNA_sound_types.h"
+#include "DNA_text_types.h"
+#include "DNA_vfont_types.h"
+
+#include "NOD_menu_value.hh"
 
 #include "RNA_enum_types.hh"
 #include "RNA_prototypes.hh"
@@ -39,6 +46,7 @@
 #include "bpy_rna.hh"
 
 #include "../generic/py_capi_utils.hh"
+#include "../mathutils/mathutils.hh"
 
 namespace blender {
 
@@ -352,6 +360,172 @@ static PyObject *BPy_GeometrySet_get_grease_pencil(BPy_GeometrySet *self, void *
       reinterpret_cast<ID *>(self->geometry.get_grease_pencil_for_write()));
 }
 
+PyDoc_STRVAR(
+    /* Wrap. */
+    bpy_geometry_gather_bundle_paths_doc,
+    "Gather the list of paths stored in the geometry bundle.\n"
+    "\n"
+    "   :rtype: list[str]\n");
+static PyObject *BPy_GeometrySet_gather_bundle_paths(BPy_GeometrySet *self,
+                                                     PyObject * /*args*/,
+                                                     PyObject * /*kwds*/)
+{
+  auto paths = self->geometry.gather_bundle_paths();
+
+  PyObject *list = PyList_New(paths.size());
+  for (int i : paths.index_range()) {
+    PyObject *value = PyUnicode_FromString(paths[i].c_str());
+    PyList_SET_ITEM(list, i, value);
+  }
+  return list;
+}
+
+static PyObject *socket_value_to_bpy(const bke::SocketValueVariant *socket)
+{
+  switch (socket->socket_type()) {
+    case SOCK_FLOAT:
+      return PyFloat_FromDouble(socket->get<float>());
+    case SOCK_INT:
+      return PyLong_FromLong(socket->get<int>());
+    case SOCK_BOOLEAN:
+      return PyBool_FromLong(socket->get<bool>());
+    case SOCK_ROTATION: {
+      auto quat = socket->get<math::Quaternion>();
+      return Quaternion_CreatePyObject(quat.operator blender::VecBase<float, 4>(), nullptr);
+    }
+    case SOCK_STRING: {
+      auto str = socket->get<std::string>();
+      return PyUnicode_FromString(str.c_str());
+    }
+    case SOCK_MATRIX: {
+      auto matrix4x4 = socket->get<float4x4>();
+      return Matrix_CreatePyObject(matrix4x4.base_ptr(), 4, 4, nullptr);
+    }
+    case SOCK_VECTOR: {
+      auto vector3 = socket->get<float3>();
+      return Vector_CreatePyObject(vector3, 3, nullptr);
+    }
+    case SOCK_OBJECT: {
+      auto id = socket->get<Object *>();
+      return pyrna_id_CreatePyObject(&id->id);
+    }
+    case SOCK_COLLECTION: {
+      auto id = socket->get<Collection *>();
+      return pyrna_id_CreatePyObject(&id->id);
+    }
+    case SOCK_TEXTURE: {
+      auto id = socket->get<Tex *>();
+      return pyrna_id_CreatePyObject(&id->id);
+    }
+    case SOCK_IMAGE: {
+      auto id = socket->get<Image *>();
+      return pyrna_id_CreatePyObject(&id->id);
+    }
+    case SOCK_MATERIAL: {
+      auto id = socket->get<Material *>();
+      return pyrna_id_CreatePyObject(&id->id);
+    }
+    case SOCK_FONT: {
+      auto id = socket->get<VFont *>();
+      return pyrna_id_CreatePyObject(&id->id);
+    }
+    case SOCK_SCENE: {
+      auto id = socket->get<Scene *>();
+      return pyrna_id_CreatePyObject(&id->id);
+    }
+    case SOCK_TEXT_ID: {
+      auto id = socket->get<Text *>();
+      return pyrna_id_CreatePyObject(&id->id);
+    }
+    case SOCK_MASK: {
+      auto id = socket->get<Mask *>();
+      return pyrna_id_CreatePyObject(&id->id);
+    }
+    case SOCK_SOUND: {
+      auto id = socket->get<bSound *>();
+      return pyrna_id_CreatePyObject(&id->id);
+    }
+    case SOCK_GEOMETRY: {
+      auto geometry_set = socket->get<GeometrySet>();
+      auto bpy_geometry_set = python_object_from_geometry_set(geometry_set);
+      Py_INCREF(bpy_geometry_set);
+      return reinterpret_cast<PyObject *>(bpy_geometry_set);
+    }
+    case SOCK_MENU: {
+      auto menu = socket->get<nodes::MenuValue>();
+      return PyLong_FromLong(menu.value);
+    }
+    case SOCK_RGBA: {
+      /* Not using mathutils Color because it does not support alpha. */
+      auto color = socket->get<ColorGeometry4f>();
+      PyObject *color_tuple = PyTuple_New(4);
+      PyTuple_SET_ITEM(color_tuple, 0, PyFloat_FromDouble(color.r));
+      PyTuple_SET_ITEM(color_tuple, 1, PyFloat_FromDouble(color.g));
+      PyTuple_SET_ITEM(color_tuple, 2, PyFloat_FromDouble(color.b));
+      PyTuple_SET_ITEM(color_tuple, 3, PyFloat_FromDouble(color.a));
+      return color_tuple;
+    }
+    case SOCK_BUNDLE:
+      PyErr_SetString(PyExc_TypeError,
+                      "unable to return bundles directly. Use nested bundle paths instead.");
+      return nullptr;
+    case SOCK_INT_VECTOR: /* TODO */
+    case SOCK_CLOSURE:
+    case SOCK_SHADER:
+    case SOCK_CUSTOM:
+      break;
+  }
+
+  PyErr_SetString(PyExc_TypeError, "unsupported socket type");
+  return nullptr;
+}
+
+PyDoc_STRVAR(
+    /* Wrap. */
+    bpy_geometry_query_bundle_path_doc,
+    "Retrieve a geometry bundle item by its path.\n"
+    "Trying to query fields, grids, closures, bundles or geometry raises an error.\n"
+    "\n"
+    "   :param path: The bundle path to query. Supports slashes to retrieve items from nested "
+    "                bundles.\n"
+    "   :type path: str\n");
+static PyObject *BPy_GeometrySet_query_bundle_path(BPy_GeometrySet *self,
+                                                   PyObject *args,
+                                                   PyObject *kwds)
+{
+  PyC_UnicodeAsBytesAndSize_Data path_data = {nullptr};
+
+  static const char *_keywords[] = {
+      "path",
+      nullptr,
+  };
+  static _PyArg_Parser _parser = {
+      "O&" /* `filepath` */
+      ":path",
+      _keywords,
+      nullptr,
+  };
+  if (!_PyArg_ParseTupleAndKeywordsFast(
+          args, kwds, &_parser, PyC_ParseUnicodeAsBytesAndSize, &path_data))
+  {
+    return nullptr;
+  }
+
+  const std::string path = std::string(path_data.value, path_data.value_len);
+  auto socket = self->geometry.query_bundle_path(path);
+  if (!socket) {
+    return Py_None;
+  }
+
+  /* TODO: Support for lists. */
+  if (!socket->is_single()) {
+    PyErr_SetString(PyExc_TypeError, "only single value sockets are supported");
+    return nullptr;
+  }
+
+  return socket_value_to_bpy(socket);
+}
+
 static PyGetSetDef BPy_GeometrySet_getseters[] = {
     {
         "name",
@@ -429,6 +603,14 @@ static PyMethodDef BPy_GeometrySet_methods[] = {
      reinterpret_cast<PyCFunction>(BPy_GeometrySet_get_instance_references),
      METH_NOARGS,
      bpy_geometry_set_get_instance_references_doc},
+    {"gather_bundle_paths",
+     reinterpret_cast<PyCFunction>(BPy_GeometrySet_gather_bundle_paths),
+     METH_NOARGS,
+     bpy_geometry_gather_bundle_paths_doc},
+    {"query_bundle_path",
+     reinterpret_cast<PyCFunction>(BPy_GeometrySet_query_bundle_path),
+     METH_VARARGS | METH_KEYWORDS,
+     bpy_geometry_query_bundle_path_doc},
     {nullptr, nullptr, 0, nullptr},
 };
 

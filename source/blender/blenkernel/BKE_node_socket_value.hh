@@ -180,7 +180,30 @@ class SocketValueVariant {
    */
   bool is_list() const;
 
-  /** Also see GeomtrySet::ensure_owns_direct_data. */
+  /**
+   * Convert the stored value into a single value. For simple value access, this is not necessary,
+   * because #get does the conversion implicitly. However, it is necessary if one wants to use
+   * #get_single_ptr. Context-dependent fields or grids will just result in a fallback value.
+   *
+   * The caller has to make sure that the stored value is a single value, field or grid.
+   */
+  void convert_to_single();
+
+  /**
+   * Get a pointer to the embedded single value. The caller has to make sure that there actually is
+   * a single value stored, e.g. by calling #convert_to_single.
+   */
+  GPointer get_single_ptr() const;
+  GMutablePointer get_single_ptr();
+
+  /**
+   * Similar to #get_single_ptr, but returns an untyped pointer. This can only be used if the
+   * caller knows for sure which type is contained. In that case, it can be a bit faster though,
+   * because the corresponding #CPPType does not have to be looked up based on the socket type.
+   */
+  const void *get_single_ptr_raw() const;
+
+  /** Also see GeometrySet::ensure_owns_direct_data. */
   void ensure_owns_direct_data();
   bool owns_direct_data() const;
 
