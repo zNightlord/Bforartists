@@ -496,6 +496,7 @@ const EnumPropertyItem prop_make_parent_types[] = {
     {PAR_ARMATURE, "ARMATURE", 0, "Armature Deform", ""},
     {PAR_ARMATURE_NAME, "ARMATURE_NAME", 0, "   With Empty Groups", ""},
     {PAR_ARMATURE_AUTO, "ARMATURE_AUTO", 0, "   With Automatic Weights", ""},
+    {PAR_ARMATURE_GVB, "ARMATURE_GVB", 0, "   With Geodesic Voxel Weights", ""},
     {PAR_ARMATURE_ENVELOPE, "ARMATURE_ENVELOPE", 0, "   With Envelope Weights", ""},
     {PAR_BONE, "BONE", 0, "Bone", ""},
     {PAR_BONE_RELATIVE, "BONE_RELATIVE", 0, "Bone Relative", ""},
@@ -756,6 +757,12 @@ static bool parent_set_with_depsgraph(ReportList *reports,
       WM_cursor_wait(true);
       ED_object_vgroup_calc_from_armature(
           reports, depsgraph, scene, ob, par, ARM_GROUPS_AUTO, xmirror);
+      WM_cursor_wait(false);
+    }
+    else if (partype == PAR_ARMATURE_GVB) {
+      WM_cursor_wait(true);
+      ED_object_vgroup_calc_from_armature(
+          reports, depsgraph, scene, ob, par, ARM_GROUPS_GVB, xmirror);
       WM_cursor_wait(false);
     }
     /* Get corrected inverse. */
