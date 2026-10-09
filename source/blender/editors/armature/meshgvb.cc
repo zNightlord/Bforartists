@@ -415,7 +415,7 @@ static void dijkstra(const Grid &grid,
   /* Seed radius = half the voxel diagonal */
   const float seed_radius = math::length(grid.vsize) * 0.5f;
 
-  BLI_Heap *heap = BLI_heap_new();
+  Heap *heap = BLI_heap_new();
 
   for (int iz = 0; iz < grid.res.z; iz++) {
     for (int iy = 0; iy < grid.res.y; iy++) {
