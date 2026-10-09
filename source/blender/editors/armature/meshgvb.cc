@@ -438,8 +438,8 @@ static void dijkstra(const Grid &grid,
 
   /* Main Dijkstra loop — Algorithm 1 in the paper */
   while (!BLI_heap_is_empty(heap)) {
-    float cur_dist;
-    const int cur = POINTER_AS_INT(BLI_heap_pop_min(heap, &cur_dist));
+    const float cur_dist = BLI_heap_top_value(heap);
+    const int cur = POINTER_AS_INT(BLI_heap_pop_min(heap));
 
     if (cur_dist > dist[cur] + 1e-6f) continue; /* stale heap entry */
 
