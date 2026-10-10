@@ -467,6 +467,40 @@ static void dijkstra(const Grid &grid,
 
 /** \} */
 
+static int nearest_non_exterior_voxel(const Grid &grid, int start_idx)
+{
+  /* If start voxel is non-exterior, use it directly */
+  if (grid.state[start_idx] != VoxelState::Exterior) {
+    return start_idx;
+  }
+
+  /* BFS outward until we find interior or boundary */
+  int cx =  start_idx % grid.res.x;
+  int cy = (start_idx / grid.res.x) % grid.res.y;
+  int cz =  start_idx / (grid.res.x * grid.res.y);
+
+  /* Search expanding cubic shells — 3 shells covers any surface gap */
+  for (int r = 1; r <= 3; r++) {
+    for (int dz = -r; dz <= r; dz++) {
+      for (int dy = -r; dy <= r; dy++) {
+        for (int dx = -r; dx <= r; dx++) {
+          if (std::abs(dx) != r && std::abs(dy) != r && std::abs(dz) != r) {
+            continue; /* only the shell, not the interior */
+          }
+          const int3 nc = int3(cx + dx, cy + dy, cz + dz);
+          if (!grid.in_bounds(nc)) continue;
+          const int nidx = grid.idx(nc);
+          if (grid.state[nidx] != VoxelState::Exterior) {
+            return nidx;
+          }
+        }
+      }
+    }
+  }
+
+  return start_idx; /* fallback — distances will be FLT_MAX, vertex skipped */
+}
+
 /* -------------------------------------------------------------------- */
 /** \name Phase 4 — Weight computation (Section 6, Equations 7 & 8)
  * \{ */
@@ -487,24 +521,63 @@ static void assign_weights(Object *ob,
                             Span<Array<float>> bone_dists,
                             const Grid &grid)
 {
+  using namespace bke;
+
   const float inv_D = 1.0f / grid.diag;
   const float eps   = 1e-6f;
-
   constexpr float alpha = 0.7f;
 
   const bool use_topo_mirror = (mesh->editflag & ME_EDIT_MIRROR_TOPO) != 0;
 
+  /* --- Weight paint mask — mirrors heat_bone_weighting exactly --- */
+  const bool use_vert_sel = (mesh->editflag & ME_EDIT_PAINT_VERT_SEL) != 0;
+  const bool use_face_sel = (mesh->editflag & ME_EDIT_PAINT_FACE_SEL) != 0;
+
+  Array<bool> mask;   /* empty = no mask, all vertices active */
+
+  if ((ob->mode & OB_MODE_WEIGHT_PAINT) && (use_vert_sel || use_face_sel)) {
+    mask = Array<bool>(mesh->verts_num, false);
+
+    const AttributeAccessor attributes = mesh->attributes();
+    const OffsetIndices<int> faces    = mesh->faces();
+    const Span<int>      corner_verts = mesh->corner_verts();
+
+    if (use_vert_sel) {
+      const VArray select_vert = *attributes.lookup_or_default<bool>(
+          ".select_vert", AttrDomain::Point, false);
+      for (const int i : faces.index_range()) {
+        for (const int vert : corner_verts.slice(faces[i])) {
+          mask[vert] = select_vert[vert];
+        }
+      }
+    }
+    else if (use_face_sel) {
+      const VArray select_poly = *attributes.lookup_or_default<bool>(
+          ".select_poly", AttrDomain::Face, false);
+      for (const int i : faces.index_range()) {
+        if (select_poly[i]) {
+          for (const int vert : corner_verts.slice(faces[i])) {
+            mask[vert] = true;
+          }
+        }
+      }
+    }
+  }
+
   Array<float> weights(numbones);
 
   for (const int vi : IndexRange(mesh->verts_num)) {
-    const float3 &p_vert = world_verts[vi];
 
-    /* Locate voxel containing this vertex */
-    const int    vidx   = grid.world_to_idx(p_vert);
-    const float3 p_vox  = grid.voxel_center(vidx);
+    /* Skip masked vertices in weight paint mode */
+    if (!mask.is_empty() && !mask[vi]) {
+      continue;
+    }
 
-    /* Sub-voxel correction (Eq. 7): actual vertex–voxel-centre offset */
-    const float sub_vox = math::distance(p_vert, p_vox);
+    const float3 &p_vert     = world_verts[vi];
+    const int     vidx_raw   = grid.world_to_idx(p_vert);
+    const int     vidx        = nearest_non_exterior_voxel(grid, vidx_raw);
+    const float3  p_vox       = grid.voxel_center(vidx);
+    const float   sub_vox     = math::distance(p_vert, p_vox);
 
     float weight_sum = 0.0f;
     weights.fill(0.0f);
@@ -515,9 +588,7 @@ static void assign_weights(Object *ob,
       const float d_v = bone_dists[j][vidx];
       if (d_v < 0.0f || d_v == FLT_MAX) continue;
 
-      /* Eq. 7 — normalized distance */
       const float d     = std::max((d_v + sub_vox) * inv_D, eps);
-      /* Eq. 8 — falloff with alpha smoothness */
       const float inner = std::max((1.0f - alpha) * d + alpha * d * d, eps);
       const float w     = 1.0f / inner;
       weights[j]        = w * w;
@@ -526,20 +597,28 @@ static void assign_weights(Object *ob,
 
     if (weight_sum < 1e-10f) continue;
 
-    /* Find X-mirror vertex once per vertex (only if any flip groups exist) */
-    int vi_flip = -1;
-    if (dgroupflip) {
-      vi_flip = mesh_get_x_mirror_vert(ob, nullptr, vi, use_topo_mirror);
-    }
+    const int vi_flip = dgroupflip ?
+        mesh_get_x_mirror_vert(ob, nullptr, vi, use_topo_mirror) : -1;
 
     for (int j = 0; j < numbones; j++) {
       if (!dgrouplist[j] || weights[j] == 0.0f) continue;
 
       const float w = weights[j] / weight_sum;
-      blender::ed::object::vgroup_vert_add(ob, dgrouplist[j], vi, w, WEIGHT_REPLACE);
 
-      if (dgroupflip && dgroupflip[j] && vi_flip != -1) {
-        blender::ed::object::vgroup_vert_add(ob, dgroupflip[j], vi_flip, w, WEIGHT_REPLACE);
+      if (w > 0.0f) {
+        ed::object::vgroup_vert_add(ob, dgrouplist[j], vi, w, WEIGHT_REPLACE);
+      }
+      else {
+        ed::object::vgroup_vert_remove(ob, dgrouplist[j], vi);
+      }
+
+      if (dgroupflip && dgroupflip[j] && vi_flip >= 0) {
+        if (w > 0.0f) {
+          ed::object::vgroup_vert_add(ob, dgroupflip[j], vi_flip, w, WEIGHT_REPLACE);
+        }
+        else {
+          ed::object::vgroup_vert_remove(ob, dgroupflip[j], vi_flip);
+        }
       }
     }
   }

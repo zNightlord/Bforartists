@@ -1002,7 +1002,7 @@ static wmOperatorStatus parent_set_invoke_menu(bContext *C, wmOperatorType *ot)
   RNA_boolean_set(&op_ptr, "keep_transform", true);
 
   struct {
-    bool armature_deform, empty_groups, envelope_weights, automatic_weights, attach_surface;
+    bool armature_deform, empty_groups, envelope_weights, automatic_weights, geodesic_voxel, attach_surface;
   } can_support = {false};
 
   CTX_DATA_BEGIN (C, Object *, child, selected_editable_objects) {
@@ -1025,6 +1025,9 @@ static wmOperatorStatus parent_set_invoke_menu(bContext *C, wmOperatorType *ot)
     }
     if (ELEM(child->type, OB_MESH, OB_GREASE_PENCIL)) {
       can_support.automatic_weights = true;
+    }
+    if (ELEM(child->type, OB_MESH)) {
+      can_support.geodesic_voxel = true;
     }
     if (child->type == OB_CURVES) {
       can_support.attach_surface = true;
@@ -1049,6 +1052,10 @@ static wmOperatorStatus parent_set_invoke_menu(bContext *C, wmOperatorType *ot)
     if (can_support.automatic_weights) {
       op_ptr = layout.op(ot, IFACE_("   With Automatic Weights"), ICON_NONE);
       RNA_enum_set(&op_ptr, "type", PAR_ARMATURE_AUTO);
+    }
+    if (can_support.geodesic_voxel) {
+      op_ptr = layout.op(ot, IFACE_("   With Geodesic Voxel"), ICON_NONE);
+      RNA_enum_set(&op_ptr, "type", PAR_ARMATURE_GVB);
     }
     op_ptr = layout.op(ot, IFACE_("Bone"), ICON_BONE_DATA);
     RNA_enum_set(&op_ptr, "type", PAR_BONE);
