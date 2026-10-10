@@ -353,7 +353,7 @@ static void add_verts_to_dgroups(
     dgroup = dgrouplist[j];
 
     /* handle bbone */
-    if (heat) {
+    if (heat > 2) {
       if (segments == 0) {
         segments = 1;
         bbone = nullptr;

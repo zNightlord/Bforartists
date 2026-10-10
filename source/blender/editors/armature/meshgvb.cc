@@ -527,20 +527,41 @@ static void assign_weights(Object *ob,
   const float eps   = 1e-6f;
   constexpr float alpha = 0.7f;
 
-  const bool use_topo_mirror = (mesh->editflag & ME_EDIT_MIRROR_TOPO) != 0;
+  printf("[GVB] assign_weights: verts=%d  bones=%d  diag=%.4f\n",
+         mesh->verts_num, numbones, grid.diag);
 
-  /* --- Weight paint mask — mirrors heat_bone_weighting exactly --- */
+  /* --- Bone sanity check --- */
+  int bones_active = 0;
+  for (int j = 0; j < numbones; j++) {
+    const bool sel   = selected[j];
+    const bool has_g = (dgrouplist[j] != nullptr);
+    const bool has_d = !bone_dists[j].is_empty();
+    printf("[GVB]   bone[%d]: selected=%d  dgroup=%d  dist_field=%d\n",
+           j, (int)sel, (int)has_g, (int)has_d);
+    if (sel && has_g && has_d) bones_active++;
+  }
+  printf("[GVB] active bones (selected+group+dist): %d\n", bones_active);
+
+  if (bones_active == 0) {
+    printf("[GVB] ABORT: no active bones — nothing to assign\n");
+    return;
+  }
+
+  /* --- Mask build --- */
   const bool use_vert_sel = (mesh->editflag & ME_EDIT_PAINT_VERT_SEL) != 0;
   const bool use_face_sel = (mesh->editflag & ME_EDIT_PAINT_FACE_SEL) != 0;
+  const bool in_wpaint    = (ob->mode & OB_MODE_WEIGHT_PAINT) != 0;
 
-  Array<bool> mask;   /* empty = no mask, all vertices active */
+  printf("[GVB] mode: weight_paint=%d  vert_sel=%d  face_sel=%d\n",
+         (int)in_wpaint, (int)use_vert_sel, (int)use_face_sel);
 
-  if ((ob->mode & OB_MODE_WEIGHT_PAINT) && (use_vert_sel || use_face_sel)) {
+  Array<bool> mask;
+  if (in_wpaint && (use_vert_sel || use_face_sel)) {
     mask = Array<bool>(mesh->verts_num, false);
 
-    const AttributeAccessor attributes = mesh->attributes();
-    const OffsetIndices<int> faces    = mesh->faces();
-    const Span<int>      corner_verts = mesh->corner_verts();
+    const AttributeAccessor  attributes   = mesh->attributes();
+    const OffsetIndices<int> faces        = mesh->faces();
+    const Span<int>          corner_verts = mesh->corner_verts();
 
     if (use_vert_sel) {
       const VArray select_vert = *attributes.lookup_or_default<bool>(
@@ -562,22 +583,98 @@ static void assign_weights(Object *ob,
         }
       }
     }
+
+    int masked_count = 0;
+    for (int i = 0; i < mesh->verts_num; i++) {
+      if (mask[i]) masked_count++;
+    }
+    printf("[GVB] mask active: %d / %d vertices\n", masked_count, mesh->verts_num);
+
+    if (masked_count == 0) {
+      printf("[GVB] WARNING: mask built but zero vertices pass — "
+             "check selection in weight paint mode\n");
+    }
+  }
+  else {
+    printf("[GVB] no mask — all %d vertices eligible\n", mesh->verts_num);
   }
 
+  /* --- Per-voxel state counts — know what the grid looks like --- */
+  {
+    int n_ext = 0, n_int = 0, n_bnd = 0;
+    for (int i = 0; i < grid.total(); i++) {
+      switch (grid.state[i]) {
+        case VoxelState::Exterior: n_ext++; break;
+        case VoxelState::Interior: n_int++; break;
+        case VoxelState::Boundary: n_bnd++; break;
+      }
+    }
+    printf("[GVB] grid %dx%dx%d  exterior=%d  interior=%d  boundary=%d\n",
+           grid.res.x, grid.res.y, grid.res.z, n_ext, n_int, n_bnd);
+
+    if (n_int + n_bnd == 0) {
+      printf("[GVB] ABORT: voxelization produced zero non-exterior voxels — "
+             "check mesh normals / voting step\n");
+      return;
+    }
+  }
+
+  /* --- Per-bone reachability check --- */
+  for (int j = 0; j < numbones; j++) {
+    if (!selected[j] || !dgrouplist[j] || bone_dists[j].is_empty()) continue;
+
+    int reachable = 0;
+    float min_d = FLT_MAX, max_d = 0.0f;
+    for (int i = 0; i < grid.total(); i++) {
+      const float d = bone_dists[j][i];
+      if (d >= 0.0f && d < FLT_MAX) {
+        reachable++;
+        min_d = std::min(min_d, d);
+        max_d = std::max(max_d, d);
+      }
+    }
+    printf("[GVB]   bone[%d] dist field: reachable_voxels=%d  "
+           "min_dist=%.4f  max_dist=%.4f\n",
+           j, reachable, min_d, max_d);
+
+    if (reachable == 0) {
+      printf("[GVB]   bone[%d] WARNING: Dijkstra reached zero voxels — "
+             "bone may lie entirely outside the voxelized volume\n", j);
+    }
+  }
+
+  /* --- Main vertex loop with sample logging --- */
   Array<float> weights(numbones);
+
+  int verts_written    = 0;
+  int verts_no_weight  = 0;
+  int verts_masked     = 0;
+  int verts_exterior   = 0;
 
   for (const int vi : IndexRange(mesh->verts_num)) {
 
-    /* Skip masked vertices in weight paint mode */
     if (!mask.is_empty() && !mask[vi]) {
+      verts_masked++;
       continue;
     }
 
-    const float3 &p_vert     = world_verts[vi];
-    const int     vidx_raw   = grid.world_to_idx(p_vert);
-    const int     vidx        = nearest_non_exterior_voxel(grid, vidx_raw);
-    const float3  p_vox       = grid.voxel_center(vidx);
-    const float   sub_vox     = math::distance(p_vert, p_vox);
+    const float3 &p_vert   = world_verts[vi];
+    const int     vidx_raw = grid.world_to_idx(p_vert);
+    const int     vidx     = nearest_non_exterior_voxel(grid, vidx_raw);
+
+    if (grid.state[vidx] == VoxelState::Exterior) {
+      verts_exterior++;
+      /* Log first few exterior failures so we can see where they are */
+      if (verts_exterior <= 5) {
+        printf("[GVB]   vert[%d] stuck in exterior voxel  "
+               "pos=(%.3f %.3f %.3f)  vidx=%d\n",
+               vi, p_vert.x, p_vert.y, p_vert.z, vidx);
+      }
+      continue;
+    }
+
+    const float3 p_vox   = grid.voxel_center(vidx);
+    const float  sub_vox = math::distance(p_vert, p_vox);
 
     float weight_sum = 0.0f;
     weights.fill(0.0f);
@@ -595,8 +692,24 @@ static void assign_weights(Object *ob,
       weight_sum       += weights[j];
     }
 
-    if (weight_sum < 1e-10f) continue;
+    /* Log first few vertices so we can see actual weight values */
+    if (vi < 5) {
+      printf("[GVB]   vert[%d] vidx=%d  sub_vox=%.4f  weight_sum=%.6f\n",
+             vi, vidx, sub_vox, weight_sum);
+      for (int j = 0; j < numbones; j++) {
+        if (weights[j] > 0.0f) {
+          printf("[GVB]     bone[%d] raw_w=%.6f  d_v=%.4f\n",
+                 j, weights[j], bone_dists[j][vidx]);
+        }
+      }
+    }
 
+    if (weight_sum < 1e-10f) {
+      verts_no_weight++;
+      continue;
+    }
+
+    const bool use_topo_mirror = (mesh->editflag & ME_EDIT_MIRROR_TOPO) != 0;
     const int vi_flip = dgroupflip ?
         mesh_get_x_mirror_vert(ob, nullptr, vi, use_topo_mirror) : -1;
 
@@ -604,7 +717,6 @@ static void assign_weights(Object *ob,
       if (!dgrouplist[j] || weights[j] == 0.0f) continue;
 
       const float w = weights[j] / weight_sum;
-
       if (w > 0.0f) {
         ed::object::vgroup_vert_add(ob, dgrouplist[j], vi, w, WEIGHT_REPLACE);
       }
@@ -620,6 +732,31 @@ static void assign_weights(Object *ob,
           ed::object::vgroup_vert_remove(ob, dgroupflip[j], vi_flip);
         }
       }
+    }
+
+    verts_written++;
+  }
+
+  printf("[GVB] assign_weights done: written=%d  no_weight=%d  "
+         "masked=%d  exterior=%d\n",
+         verts_written, verts_no_weight, verts_masked, verts_exterior);
+
+  if (verts_written == 0) {
+    printf("[GVB] RESULT: zero vertices received weights.\n");
+    if (verts_exterior > 0) {
+      printf("[GVB]   -> %d verts stuck in exterior voxels. "
+             "Voxelization may have failed (all exterior). "
+             "Check mesh scale and normals.\n", verts_exterior);
+    }
+    if (verts_no_weight > 0) {
+      printf("[GVB]   -> %d verts had zero weight sum. "
+             "Dijkstra seeds may not overlap non-exterior voxels.\n",
+             verts_no_weight);
+    }
+    if (verts_masked > 0) {
+      printf("[GVB]   -> %d verts were masked out. "
+             "All vertices may be deselected in weight paint mode.\n",
+             verts_masked);
     }
   }
 }
@@ -689,58 +826,47 @@ void geodesic_voxel_bone_weighting(blender::Object *ob,
   using namespace blender;
   using namespace blender::ed::armature::gvb;
 
-  *r_error_str = nullptr;
+   *r_error_str = nullptr;
 
-  /* Reinterpret C arrays as typed spans — layout is identical */
-  const Span<float3> verts_span(reinterpret_cast<const float3 *>(verts),
-                                 mesh->verts_num);
-  const Span<float3> root_span(reinterpret_cast<const float3 *>(root), numbones);
-  const Span<float3> tip_span(reinterpret_cast<const float3 *>(tip),   numbones);
+  printf("[GVB] === geodesic_voxel_bone_weighting start ===\n");
+  printf("[GVB] verts_num=%d  numbones=%d\n", mesh->verts_num, numbones);
 
-  /* --- Build world-space AABB --- */
-  float3 bbox_min(FLT_MAX);
-  float3 bbox_max(-FLT_MAX);
+  /* ... AABB + grid init ... */
 
-  for (const float3 &v : verts_span) {
-    bbox_min = math::min(bbox_min, v);
-    bbox_max = math::max(bbox_max, v);
-  }
+  printf("[GVB] grid origin=(%.3f %.3f %.3f)  vsize=(%.4f %.4f %.4f)  diag=%.4f\n",
+         grid.origin.x, grid.origin.y, grid.origin.z,
+         grid.vsize.x,  grid.vsize.y,  grid.vsize.z,
+         grid.diag);
 
-  /* Pad by one voxel on every side so surface voxels are never on the face */
-  const int3    res    = int3(GVB_DEFAULT_RES_X, GVB_DEFAULT_RES_Y, GVB_DEFAULT_RES_Z);
-  const float3  pad    = (bbox_max - bbox_min) / float3(res) + float3(1e-4f);
-  bbox_min -= pad;
-  bbox_max += pad;
-
-  const float3 extent = bbox_max - bbox_min;
-
-  /* --- Initialize grid --- */
-  Grid grid;
-  grid.res    = res;
-  grid.origin = bbox_min;
-  grid.vsize  = extent / float3(res);
-  grid.diag   = math::length(extent); /* D in Eq. 7 */
-  grid.state  = Array<VoxelState>(grid.total(), VoxelState::Exterior);
-
-  /* Build triangle list once — shared by Phases 1 and 2 */
   const TriList tris = build_tris(mesh, verts_span);
+  printf("[GVB] triangles after fan triangulation: %d\n", tris.size());
 
   if (tris.size() == 0) {
+    printf("[GVB] ABORT: no triangles\n");
     *r_error_str = "GVB: mesh produced no triangles after fan triangulation";
     return;
   }
 
-  /* --- Phase 1: Majority-voting voxelization (Section 4, Eq. 5 & 6) --- */
+  /* Phase 1 */
+  printf("[GVB] Phase 1: voxelizing...\n");
   voxelize(grid, tris.v0, tris.v1, tris.v2);
+  printf("[GVB] Phase 1: done\n");
 
-  /* --- Phase 2: Boundary voxel extraction (Section 4 post-processing) --- */
+  /* Phase 2 */
+  printf("[GVB] Phase 2: marking boundary...\n");
   mark_boundary(grid, tris.v0, tris.v1, tris.v2);
+  printf("[GVB] Phase 2: done\n");
 
-  /* --- Phase 3: Per-bone Dijkstra, parallelized across bones (Section 5) --- */
+  /* Phase 3 */
+  printf("[GVB] Phase 3: Dijkstra per bone...\n");
   Array<Array<float>> bone_dists(numbones);
-
   for (int j = 0; j < numbones; j++) {
-    if (!selected[j] || !dgrouplist[j]) continue;
+    if (!selected[j] || !dgrouplist[j]) {
+      printf("[GVB]   bone[%d] skipped (selected=%d dgroup=%d)\n",
+             j, (int)selected[j], (int)(dgrouplist[j] != nullptr));
+      continue;
+    }
+    printf("[GVB]   bone[%d] running Dijkstra...\n", j);
     bone_dists[j] = Array<float>(grid.total(), 0.0f);
   }
 
@@ -748,13 +874,18 @@ void geodesic_voxel_bone_weighting(blender::Object *ob,
     for (const int j : range) {
       if (!selected[j] || !dgrouplist[j] || bone_dists[j].is_empty()) continue;
       dijkstra(grid, bone_dists[j], root_span[j], tip_span[j]);
+      printf("[GVB]   bone[%d] Dijkstra complete\n", j);
     }
   });
+  printf("[GVB] Phase 3: done\n");
 
-  /* --- Phase 4: Weight assignment (Section 6, Eq. 7 & 8) --- */
+  /* Phase 4 */
+  printf("[GVB] Phase 4: assigning weights...\n");
   assign_weights(ob, mesh, verts_span, numbones,
                  dgrouplist, dgroupflip, selected,
                  bone_dists, grid);
+  printf("[GVB] Phase 4: done\n");
+  printf("[GVB] === geodesic_voxel_bone_weighting end ===\n");
 }
 
 /** \} */
