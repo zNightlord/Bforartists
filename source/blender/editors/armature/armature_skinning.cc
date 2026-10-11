@@ -431,6 +431,7 @@ static void add_verts_to_dgroups(
   }
 
   /* compute the weights based on gathered vertices and bones */
+  printf("Start Weighting \n");
   if (heat == ARM_GROUPS_AUTO) {
     const char *error = nullptr;
 
@@ -449,6 +450,7 @@ static void add_verts_to_dgroups(
     }
   }
   else if (heat == ARM_GROUPS_GVB) {
+    printf("Do GVB \n");
     const char *error = nullptr;
     const int gvb_res[3] = {GVB_DEFAULT_RES_X, GVB_DEFAULT_RES_Y, GVB_DEFAULT_RES_Z};
 
