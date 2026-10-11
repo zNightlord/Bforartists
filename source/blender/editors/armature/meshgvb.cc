@@ -826,60 +826,137 @@ void geodesic_voxel_bone_weighting(blender::Object *ob,
   using namespace blender;
   using namespace blender::ed::armature::gvb;
 
-   *r_error_str = nullptr;
+  *r_error_str = nullptr;
 
+  /* --- printfs that only need mesh + numbones (declared above) --- */
   printf("[GVB] === geodesic_voxel_bone_weighting start ===\n");
   printf("[GVB] verts_num=%d  numbones=%d\n", mesh->verts_num, numbones);
 
-  /* ... AABB + grid init ... */
+  /* --- Span wrappers — declared here, printfs using them come after --- */
+  const Span<float3> verts_span(reinterpret_cast<const float3 *>(verts),
+                                 mesh->verts_num);
+  const Span<float3> root_span(reinterpret_cast<const float3 *>(root), numbones);
+  const Span<float3> tip_span(reinterpret_cast<const float3 *>(tip),   numbones);
 
+  /* --- AABB --- */
+  float3 bbox_min(FLT_MAX);
+  float3 bbox_max(-FLT_MAX);
+  for (const float3 &v : verts_span) {
+    bbox_min = math::min(bbox_min, v);
+    bbox_max = math::max(bbox_max, v);
+  }
+
+  const int3   res    = int3(GVB_DEFAULT_RES_X, GVB_DEFAULT_RES_Y, GVB_DEFAULT_RES_Z);
+  const float3 pad    = (bbox_max - bbox_min) / float3(res) + float3(1e-4f);
+  bbox_min -= pad;
+  bbox_max += pad;
+  const float3 extent = bbox_max - bbox_min;
+
+  /* --- Grid init — declared here --- */
+  Grid grid;
+  grid.res    = res;
+  grid.origin = bbox_min;
+  grid.vsize  = extent / float3(res);
+  grid.diag   = math::length(extent);
+  grid.state  = Array<VoxelState>(grid.total(), VoxelState::Exterior);
+
+  /* --- printfs that need grid — AFTER grid is declared --- */
+  printf("[GVB] bbox min=(%.3f %.3f %.3f)  max=(%.3f %.3f %.3f)\n",
+         bbox_min.x, bbox_min.y, bbox_min.z,
+         bbox_max.x, bbox_max.y, bbox_max.z);
   printf("[GVB] grid origin=(%.3f %.3f %.3f)  vsize=(%.4f %.4f %.4f)  diag=%.4f\n",
          grid.origin.x, grid.origin.y, grid.origin.z,
          grid.vsize.x,  grid.vsize.y,  grid.vsize.z,
          grid.diag);
 
+  /* --- Phase 1 --- */
+  printf("[GVB] Phase 1: building triangle list...\n");
   const TriList tris = build_tris(mesh, verts_span);
-  printf("[GVB] triangles after fan triangulation: %d\n", tris.size());
+  printf("[GVB] Phase 1: triangles=%d\n", tris.size());
 
   if (tris.size() == 0) {
-    printf("[GVB] ABORT: no triangles\n");
+    printf("[GVB] ABORT: no triangles after fan triangulation\n");
     *r_error_str = "GVB: mesh produced no triangles after fan triangulation";
     return;
   }
 
-  /* Phase 1 */
   printf("[GVB] Phase 1: voxelizing...\n");
   voxelize(grid, tris.v0, tris.v1, tris.v2);
-  printf("[GVB] Phase 1: done\n");
 
-  /* Phase 2 */
-  printf("[GVB] Phase 2: marking boundary...\n");
-  mark_boundary(grid, tris.v0, tris.v1, tris.v2);
-  printf("[GVB] Phase 2: done\n");
-
-  /* Phase 3 */
-  printf("[GVB] Phase 3: Dijkstra per bone...\n");
-  Array<Array<float>> bone_dists(numbones);
-  for (int j = 0; j < numbones; j++) {
-    if (!selected[j] || !dgrouplist[j]) {
-      printf("[GVB]   bone[%d] skipped (selected=%d dgroup=%d)\n",
-             j, (int)selected[j], (int)(dgrouplist[j] != nullptr));
-      continue;
+  /* Count voxel states after voxelization */
+  {
+    int n_ext = 0, n_int = 0, n_bnd = 0;
+    for (int i = 0; i < grid.total(); i++) {
+      switch (grid.state[i]) {
+        case VoxelState::Exterior: n_ext++; break;
+        case VoxelState::Interior: n_int++; break;
+        case VoxelState::Boundary: n_bnd++; break;
+      }
     }
-    printf("[GVB]   bone[%d] running Dijkstra...\n", j);
+    printf("[GVB] Phase 1 done: exterior=%d  interior=%d  boundary=%d\n",
+           n_ext, n_int, n_bnd);
+    if (n_int + n_bnd == 0) {
+      printf("[GVB] ABORT: voxelization produced zero non-exterior voxels\n");
+      *r_error_str = "GVB: voxelization failed — no interior voxels found";
+      return;
+    }
+  }
+
+  /* --- Phase 2 --- */
+  printf("[GVB] Phase 2: marking boundary voxels...\n");
+  mark_boundary(grid, tris.v0, tris.v1, tris.v2);
+
+  {
+    int n_bnd = 0;
+    for (int i = 0; i < grid.total(); i++) {
+      if (grid.state[i] == VoxelState::Boundary) n_bnd++;
+    }
+    printf("[GVB] Phase 2 done: boundary_voxels=%d\n", n_bnd);
+  }
+
+  /* --- Phase 3 — Dijkstra per bone --- */
+  printf("[GVB] Phase 3: allocating distance fields...\n");
+  Array<Array<float>> bone_dists(numbones);
+
+  for (int j = 0; j < numbones; j++) {
+    const bool sel   = selected[j];
+    const bool has_g = (dgrouplist[j] != nullptr);
+    printf("[GVB]   bone[%d]: selected=%d  dgroup=%d\n", j, (int)sel, (int)has_g);
+    if (!sel || !has_g) continue;
     bone_dists[j] = Array<float>(grid.total(), 0.0f);
   }
 
   threading::parallel_for(IndexRange(numbones), 1, [&](IndexRange range) {
     for (const int j : range) {
       if (!selected[j] || !dgrouplist[j] || bone_dists[j].is_empty()) continue;
+      printf("[GVB]   bone[%d] Dijkstra start  root=(%.3f %.3f %.3f)  tip=(%.3f %.3f %.3f)\n",
+             j,
+             root_span[j].x, root_span[j].y, root_span[j].z,
+             tip_span[j].x,  tip_span[j].y,  tip_span[j].z);
       dijkstra(grid, bone_dists[j], root_span[j], tip_span[j]);
-      printf("[GVB]   bone[%d] Dijkstra complete\n", j);
+
+      /* Count reachable voxels after Dijkstra */
+      int reachable = 0;
+      float min_d = FLT_MAX, max_d = 0.0f;
+      for (int i = 0; i < grid.total(); i++) {
+        const float d = bone_dists[j][i];
+        if (d >= 0.0f && d < FLT_MAX) {
+          reachable++;
+          min_d = std::min(min_d, d);
+          max_d = std::max(max_d, d);
+        }
+      }
+      printf("[GVB]   bone[%d] Dijkstra done: reachable=%d  min_d=%.4f  max_d=%.4f\n",
+             j, reachable, min_d, max_d);
+      if (reachable == 0) {
+        printf("[GVB]   bone[%d] WARNING: Dijkstra reached zero voxels — "
+               "bone may be outside the voxelized volume\n", j);
+      }
     }
   });
   printf("[GVB] Phase 3: done\n");
 
-  /* Phase 4 */
+  /* --- Phase 4 --- */
   printf("[GVB] Phase 4: assigning weights...\n");
   assign_weights(ob, mesh, verts_span, numbones,
                  dgrouplist, dgroupflip, selected,
