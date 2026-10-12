@@ -59,4 +59,19 @@ void rigid_deform_end(int cancel);
 
 /* ED_mesh_deform_bind_callback(...) defined in ED_armature.hh */
 
+#define GVB_DEFAULT_RES_X 256
+#define GVB_DEFAULT_RES_Y 256
+#define GVB_DEFAULT_RES_Z 128
+
+void geodesic_voxel_bone_weighting(struct Object *ob,
+                                   struct Mesh *mesh,
+                                   float (*verts)[3],
+                                   int numbones,
+                                   struct bDeformGroup **dgrouplist,
+                                   struct bDeformGroup **dgroupflip,
+                                   float (*root)[3],
+                                   float (*tip)[3],
+                                   const bool *selected,
+                                   const char **r_error_str);
+
 }  // namespace blender

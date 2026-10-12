@@ -39,7 +39,6 @@
 #include "ANIM_bone_collections.hh"
 
 #include "armature_intern.hh"
-#include "meshgvb.h"
 #include "meshlaplacian.h"
 
 namespace blender {
@@ -353,7 +352,7 @@ static void add_verts_to_dgroups(
     dgroup = dgrouplist[j];
 
     /* handle bbone */
-    if (heat > 2) {
+    if (heat == ARM_GROUPS_AUTO) {
       if (segments == 0) {
         segments = 1;
         bbone = nullptr;
