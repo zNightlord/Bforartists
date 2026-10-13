@@ -2575,7 +2575,7 @@ static TriList build_tris(Mesh *mesh, Span<float3> world_verts)
 
 /** \} */
 
-}  /* namespace blender::ed::armature::gvb */
+ /* namespace blender::ed::armature::gvb */
 
 /* -------------------------------------------------------------------- */
 /** \name Public entry point
