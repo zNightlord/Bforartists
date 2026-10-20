@@ -2,7 +2,7 @@ name: Windows
 
 on:
   push:
-    branches: [  treeview-quick-favorite ]
+    branches: [  wireless-node-prop ]
   schedule:
     - cron: 0 0 * * 1
   # pull_request:
