@@ -2512,7 +2512,7 @@ static NodeLinkDrawConfig nodelink_get_draw_config(const bContext &C,
   }
 
   /* Highlight links connected to selected nodes. */
-  if (selected && !wireless_link) {
+  if (selected) {
     ColorTheme4f color_selected;
     ui::theme::get_color_4fv(TH_EDGE_SELECT, color_selected);
     const float alpha = color_selected.a;
