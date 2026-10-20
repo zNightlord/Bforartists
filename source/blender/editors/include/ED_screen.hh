@@ -807,6 +807,9 @@ void ED_screen_user_menu_item_add_prop(const bContext *C,
 void ED_screen_user_menu_item_remove(ListBaseT<bUserMenuItem> *lb, bUserMenuItem *umi);
 void ED_screen_user_menu_item_move_up(ListBaseT<bUserMenuItem> *lb, bUserMenuItem *umi);
 void ED_screen_user_menu_item_move_down(ListBaseT<bUserMenuItem> *lb, bUserMenuItem *umi);
+namespace ed::screen {
+void template_quick_favorites(ui::Layout *layout, bContext *C);
+}
 void ED_screen_user_menu_register();
 
 /* Cache display helpers */

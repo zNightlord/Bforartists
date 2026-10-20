@@ -13,6 +13,8 @@
 
 #include "DNA_screen_types.h"
 
+#include "ED_screen.hh"
+
 #include "UI_interface.hh"
 #include "UI_interface_c.hh"
 #include "UI_interface_layout.hh"
@@ -2779,6 +2781,10 @@ void RNA_api_ui_layout(StructRNA *srna)
 
   func = RNA_def_function(srna, "template_shape_key_tree", "ed::object::shapekey::template_tree");
   RNA_def_function_ui_description(func, "Shape Key tree view");
+  RNA_def_function_flag(func, FUNC_USE_CONTEXT);
+
+  func = RNA_def_function(srna, "template_quick_favorites", "ed::screen::template_quick_favorites");
+  RNA_def_function_ui_description(func, "Editor for the Quick Favorites menu items");
   RNA_def_function_flag(func, FUNC_USE_CONTEXT);
 }
 

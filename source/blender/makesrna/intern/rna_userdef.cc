@@ -90,6 +90,7 @@ const EnumPropertyItem rna_enum_preference_section_items[] = {
      "Navigation",
      ""},                                                       /* BFA - Added Icons */
     {USER_SECTION_KEYMAP, "KEYMAP", ICON_MONKEY, "Keymap", ""}, /* BFA - Added Icons */
+    {USER_SECTION_QUICK_FAVORITE, "QUICK_FAVORITE", ICON_HEART, "Quick Favorite", ""}, /* BFA - Added Icons */
     RNA_ENUM_ITEM_SEPR,
     {USER_SECTION_SYSTEM, "SYSTEM", ICON_SYSTEM, "System", ""}, /* BFA - Added Icons */
     {USER_SECTION_SAVE_LOAD,

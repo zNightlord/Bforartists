@@ -3266,6 +3266,20 @@ class USERPREF_PT_experimental_tweaks(ExperimentalPanel, Panel):
         )
 
 """
+class QuickFavoritesPanel:
+    bl_space_type = 'PREFERENCES'
+    bl_region_type = 'WINDOW'
+    bl_context = "quick_favorite"
+
+
+class USERPREF_PT_quick_favorite(QuickFavoritesPanel, Panel):
+    bl_label = "Quick Favorite"
+
+    def draw(self, context):
+        layout = self.layout
+        col = layout.column()
+        col.template_quick_favorites()
+
 
 # -----------------------------------------------------------------------------
 # Class Registration
@@ -3367,6 +3381,7 @@ classes = (
     USERPREF_PT_navigation_fly_walk_gravity,
 
     USERPREF_PT_keymap,
+    USERPREF_PT_quick_favorite,
 
     USERPREF_PT_extensions,
     USERPREF_PT_addons,

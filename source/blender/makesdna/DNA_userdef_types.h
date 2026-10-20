@@ -863,6 +863,7 @@ enum eUserPref_Section : char {
   USER_SECTION_EXTENSIONS = 17,
   USER_SECTION_DEVELOPER_TOOLS = 18,
   USER_SECTION_ASSETS = 19,
+  USER_SECTION_QUICK_FAVORITE = 20,
 };
 
 /** #UserDef_SpaceData.flag (State of the user preferences UI). */
