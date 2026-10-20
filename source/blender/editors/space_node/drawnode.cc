@@ -2277,7 +2277,8 @@ static bool node_wireless_get(const bNode &node, NodeWireless &r_info)
   if (!p) {
     return false;
   }
-  r_info.id = (p->type == IDP_INT) ? IDP_Int(p) : 0;
+  const std::optional<int> id = IDP_group_lookup_int(*node.prop, "wireless");
+  r_info.id = id.value_or(0);
   r_info.input = node_has_prop(node, "input");
   r_info.output = node_has_prop(node, "output");
   return true;
@@ -2292,6 +2293,16 @@ static bool node_link_is_wireless(const bNodeLink &link)
   NodeWireless from_info, to_info;
   return node_wireless_get(*link.fromnode, from_info) &&
          node_wireless_get(*link.tonode, to_info) && from_info.output && to_info.input;
+}
+
+static const bNodeLink *first_wireless_link(const bNodeSocket &sock)
+{
+  for (const bNodeLink *other : sock.directly_linked_links()) {
+    if (node_link_is_wireless(*other)) {
+      return other;
+    }
+  }
+  return nullptr;
 }
 
 static bool node_wireless_id(const bNode &node, int &r_id)
