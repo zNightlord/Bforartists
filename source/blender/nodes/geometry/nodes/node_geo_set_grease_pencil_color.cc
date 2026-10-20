@@ -34,6 +34,7 @@ static void node_declare(NodeDeclarationBuilder &b)
       .evaluated_geometry_field();
   b.add_input<decl::Menu>("Mode"_ustr)
       .static_items(rna_enum_node_grease_pencil_stroke_type_items)
+      .translation_context(BLT_I18NCONTEXT_ID_GPENCIL)
       .optional_label();
   b.add_input<decl::Color>("Color"_ustr)
       .default_value(ColorGeometry4f(1.0f, 1.0f, 1.0f, 1.0f))
@@ -76,6 +77,9 @@ static void set_grease_pencil_color(GeometrySet &geometry_set,
       bke::CurvesGeometry &curves = drawing->strokes_for_write();
       bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
 
+      /* FIXME: The default float value is 0, while the default opacity should be 1. So we have
+       * to initialize the attribute manually.
+       * TODO: Avoid doing this if the selection is false. */
       if (!attributes.contains(opacity_attr)) {
         attributes.add<float>(opacity_attr, domain, bke::AttributeInitValue(1.0f));
       }

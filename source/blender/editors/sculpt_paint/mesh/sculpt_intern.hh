@@ -319,11 +319,6 @@ struct StrokeCache {
    * Transforms from model-space coords to local area coords.
    */
   float4x4 brush_local_mat = float4x4::zero();
-  /**
-   * The matrix from local area coords to model-space coords is used to calculate the vector
-   * displacement in area plane mode.
-   */
-  float4x4 brush_local_mat_inv = float4x4::zero();
 
   /* used to shift the plane around when doing tiled strokes */
   float3 plane_offset = float3(0);
@@ -635,8 +630,8 @@ void fake_neighbors_free(Object &ob);
  * \param tip_normal: Tip normal is the sculpt normal under spherical falloff, but when under
  * projected falloff, it is the view normal.
  */
-void calc_brush_local_mat(const float rotation,
-                          const float special_rotation,
+void calc_brush_local_mat(const float texture_rotation,
+                          const float tip_rotation,
                           const ViewContext &vc,
                           const Object &ob,
                           const float3 &tip_normal,
@@ -761,11 +756,11 @@ std::array<int, PAINT_SYMM_AREAS> find_all_symm_verts(
 bool node_fully_masked_or_hidden(const bke::pbvh::Node &node);
 bool node_in_sphere(const bke::pbvh::Node &node,
                     const float3 &location,
-                    float radius_sq,
+                    float radius,
                     bool original);
 bool node_in_cylinder(const DistRayAABB_Precalc &ray_dist_precalc,
                       const bke::pbvh::Node &node,
-                      float radius_sq,
+                      float radius,
                       bool original);
 /**
  * Calculates whether the node intersects a local-space volume.
@@ -792,13 +787,13 @@ IndexMask gather_nodes(const bke::pbvh::Tree &pbvh,
                        eBrushFalloffShape falloff_shape,
                        bool use_original,
                        const float3 &location,
-                       float radius_sq,
+                       float radius,
                        const std::optional<float3> &ray_direction,
                        IndexMaskMemory &memory);
 
 const float *brush_frontface_normal_from_falloff_shape(const SculptSession &ss,
                                                        char falloff_shape);
-void cube_tip_init(const Sculpt &sd, const Object &ob, const Brush &brush, float mat[4][4]);
+float4x4 cube_tip_init(const Sculpt &sd, const Object &ob, const Brush &brush);
 
 /** Sample the brush's texture value. */
 void apply_brush_texture(PaintMode paint_mode,
@@ -808,12 +803,6 @@ void apply_brush_texture(PaintMode paint_mode,
                          int thread_id,
                          float *r_value,
                          float4 &r_rgba);
-
-/**
- * Calculates the vertex offset for a single vertex depending on the brush setting rgb as vector
- * displacement.
- */
-void calc_vertex_displacement(const SculptSession &ss, const Brush &brush, float translation[3]);
 
 /**
  * Tilts a normal by the x and y tilt values using the view axis.

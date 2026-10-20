@@ -86,7 +86,7 @@ static ID *rna_property_override_property_real_id_owner(Main * /*bmain*/,
     switch (GS(id->name)) {
       case ID_KE:
         owner_id = (id_cast<Key *>(id))->from;
-        rna_path_prefix = "shape_keys.";
+        rna_path_prefix = "shape_keys";
         break;
       case ID_GR:
       case ID_NT:
@@ -104,7 +104,8 @@ static ID *rna_property_override_property_real_id_owner(Main * /*bmain*/,
 
   if (std::optional<std::string> rna_path = RNA_path_from_ID_to_property(ptr, prop)) {
     if (rna_path_prefix) {
-      r_rna_path->emplace(fmt::format("{}{}", rna_path_prefix, *rna_path));
+      r_rna_path->emplace(
+          fmt::format("{}{}{}", rna_path_prefix, (*rna_path)[0] == '[' ? "" : ".", *rna_path));
     }
     else {
       r_rna_path->emplace(std::move(*rna_path));

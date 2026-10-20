@@ -679,6 +679,10 @@ bool BKE_lib_id_make_local(Main *bmain, ID *id, const int flags)
     return false;
   }
 
+  if ((flags & LIB_ID_MAKELOCAL_LINKEDPACKED_KEEP) != 0 && ID_IS_PACKED(id)) {
+    return false;
+  }
+
   const IDTypeInfo *idtype_info = BKE_idtype_get_info_from_id(id);
 
   if (idtype_info == nullptr) {
@@ -2290,6 +2294,11 @@ void BKE_main_id_indirect_linked_update(Main &bmain, std::optional<Span<ID *>> l
     ID *id = *id_pointer;
 
     if (!id) {
+      return IDWALK_RET_NOP;
+    }
+    if (cb_data->cb_flag & IDWALK_CB_LOOPBACK) {
+      /* Loop-back usages (e.g. from shape-key to their mesh etc.) can be ignored in ID dependency
+       * processes. */
       return IDWALK_RET_NOP;
     }
     if (cb_data->cb_flag & (IDWALK_CB_EMBEDDED | IDWALK_CB_EMBEDDED_NOT_OWNING)) {

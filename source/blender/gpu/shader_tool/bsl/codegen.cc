@@ -29,6 +29,52 @@ static string to_uppercase(string str)
   return str;
 }
 
+static TokenType strip_assignment(TokenType tok)
+{
+  switch (tok) {
+    case AssignAdd:
+      return Plus;
+    case AssignSub:
+      return Minus;
+    case AssignMul:
+      return Multiply;
+    case AssignDiv:
+      return Divide;
+    case AssignLShift:
+      return LShift;
+    case AssignRShift:
+      return RShift;
+    default:
+      return Invalid;
+  }
+}
+
+static const char *to_token_string(TokenType tok)
+{
+  switch (tok) {
+    case Increment:
+      return "+1";
+    case Decrement:
+      return "-1";
+    case Plus:
+      return "+";
+    case Minus:
+      return "-";
+    case Multiply:
+      return "*";
+    case Divide:
+      return "/";
+    case LShift:
+      /* Add spaces to avoid parsing it as template. */
+      return " << ";
+    case RShift:
+      /* Add spaces to avoid parsing it as template. */
+      return " >> ";
+    default:
+      return "";
+  }
+}
+
 struct CodegenContext : NodeErrorHandler {
   SymbolTable &table;
   metadata::Source &metadata;
@@ -39,11 +85,15 @@ struct CodegenContext : NodeErrorHandler {
     SymbolClass *type;
     /* Array dimension of the current temporary. */
     int8_t array_dim = 0;
+    bool is_bitfield = false;
+    bool is_ptr = false;
 
     CodegenResult(SymbolVariable *var, const string &trivia)
         : str((var->is_constexpr ? var->value_str() : var->identifier) + trivia),
           type(var->type),
-          array_dim(var->array_dimensions)
+          array_dim(var->array_dimensions),
+          is_bitfield(var->is_bitfield),
+          is_ptr(var->is_ptr)
     {
     }
 
@@ -52,9 +102,33 @@ struct CodegenContext : NodeErrorHandler {
     {
     }
 
-    CodegenResult(const string &str, SymbolClass *cls, int8_t array_dim = 0)
-        : str(str), type(cls), array_dim(array_dim)
+    CodegenResult(const string &str,
+                  SymbolClass *cls,
+                  int8_t array_dim = 0,
+                  bool is_bitfield = false,
+                  bool is_ptr = false)
+        : str(str), type(cls), array_dim(array_dim), is_bitfield(is_bitfield), is_ptr(is_ptr)
     {
+    }
+
+    CodegenResult &cast(const SymbolClass *to, ast::Node node, NodeErrorHandler &err)
+    {
+      if (is_ptr && type && to) {
+        err.error(node, Diag::InvalidPointerCast, type->original, to->original);
+      }
+
+      /* Base class implicit conversions.
+       * Note that builtin conversions are handled at runtime by the final compiler. */
+      if (to && type && !to->is_builtin() && !type->is_builtin() && type != to) {
+        if (to->size > 0) {
+          str += "._" + to->identifier;
+        }
+        else {
+          /* Call constructor directly for empty types. */
+          str = to->identifier + "_ctor_()";
+        }
+      }
+      return *this;
     }
   };
 
@@ -126,24 +200,40 @@ struct CodegenContext : NodeErrorHandler {
       CodegenResult result = ctx.expr(ExprSub(t).expr(), scope);
       string front(t.front().str_with_whitespace());
       string back(t.back().str_with_whitespace());
-      return {front + result.str + back, result.type};
+      return {front + result.str + back,
+              result.type,
+              result.array_dim,
+              result.is_bitfield,
+              result.is_ptr};
     }
 
     CodegenResult member(CodegenResult left, const ast::Node &t)
     {
+      /* Replace `->` by `.` since `this` is converted into `self` semantic. */
+      string op_str = (t.type() == NodeType::OpDeref) ? "." + trivia(t) : string(t.str_full());
+
+      if (t.type() == ast::NodeType::OpDeref && !left.is_ptr) {
+        ctx.error(t, Diag::OperatorInvalidPointer, left.type->original);
+      }
+
       ast::Node right = consume();
       switch (right.type()) {
         case ast::NodeType::FuncCall: {
           CodegenResult rhs = function(right, *left.type);
-          return {left.str + string(t.str_full()) + rhs.str, rhs.type};
+          return {left.str + op_str + rhs.str, rhs.type};
         }
         case ast::NodeType::LocalVar: {
           CodegenResult rhs = variable(LocalVar(right).identifier(), *left.type);
           if (left.type->is_srt()) {
             /* Remove access to SRT type (makes the resource global). */
-            return {left.str + as_whitespace(t.str_full()) + rhs.str, rhs.type, rhs.array_dim};
+            return {as_whitespace(left.str + op_str) + rhs.str,
+                    rhs.type,
+                    rhs.array_dim,
+                    rhs.is_bitfield,
+                    rhs.is_ptr};
           }
-          return {left.str + string(t.str_full()) + rhs.str, rhs.type, rhs.array_dim};
+          return {
+              left.str + op_str + rhs.str, rhs.type, rhs.array_dim, rhs.is_bitfield, rhs.is_ptr};
         }
         default:
           return {t, ctx.table.err_cls};
@@ -190,19 +280,39 @@ struct CodegenContext : NodeErrorHandler {
     {
       using namespace builtin;
       TokenType op_type = t.front().type();
-      CodegenResult right = expr(p);
+      CodegenResult rhs = expr(p);
 
-      ClassId type = unary_prefix_operator_return_type(op_type, right.type);
-      return {string(t.str_full()) + right.str, ctx.table.to_class(type)};
+      if (op_type == '*') {
+        if (!rhs.is_ptr) {
+          /* Dereference operator is only used/allowed on this.
+           * Make it a noop since `this` is converted to a reference in codegen. */
+          ctx.error(t, Diag::OperatorInvalidIndirection, rhs.type->original);
+        }
+        rhs.is_ptr = false;
+        return rhs;
+      }
+      if (rhs.is_bitfield) {
+        if (op_type == Increment || op_type == Decrement) {
+          ctx.error(t, Diag::OperatorBitfieldInvalid);
+        }
+      }
+      ClassId type = unary_prefix_operator_return_type(op_type, rhs.type);
+      return {string(t.str_full()) + rhs.str, ctx.table.to_class(type)};
     }
 
-    CodegenResult suffix(CodegenResult left, const ast::Node &t)
+    CodegenResult suffix(CodegenResult lhs, const ast::Node &t)
     {
       using namespace builtin;
       TokenType op_type = t.front().type();
 
-      ClassId type = unary_suffix_operator_return_type(left.type, op_type);
-      return {left.str + string(t.str_full()), ctx.table.to_class(type)};
+      ClassId type = unary_suffix_operator_return_type(lhs.type, op_type);
+
+      if (lhs.is_bitfield) {
+        if (op_type == Increment || op_type == Decrement) {
+          ctx.error(t, Diag::OperatorBitfieldInvalid);
+        }
+      }
+      return {lhs.str + string(t.str_full()), ctx.table.to_class(type)};
     }
 
     CodegenResult comma(CodegenResult lhs, const ast::Node &t, BindingPower p)
@@ -220,6 +330,15 @@ struct CodegenContext : NodeErrorHandler {
       CodegenResult rhs = expr(p);
 
       ClassId type = binary_operator_return_type(lhs.type, op_type, rhs.type);
+
+      if (lhs.is_bitfield) {
+        if (TokenType sub_op = strip_assignment(op_type); sub_op != TokenType::Invalid) {
+          /* Bitfield need to be manually read and write. */
+          return {lhs.str + "=" + lhs.str + to_token_string(sub_op) + trivia(t) + rhs.str,
+                  ctx.table.to_class(type)};
+        }
+      }
+
 #if 0 /* Future operator overloading */
       if (true) {
         const string op_name = ctx.table.binary_type_to_id.find(op_type)->second;
@@ -245,7 +364,7 @@ struct CodegenContext : NodeErrorHandler {
 
     TokenType peek() const
     {
-      return node.is_valid() ? node.front().type() : Invalid;
+      return node.is_valid() ? to_type(node) : Invalid;
     }
 
     ast::Node consume()
@@ -258,11 +377,17 @@ struct CodegenContext : NodeErrorHandler {
     TokenType to_type(const ast::Node &t) const
     {
       ast::NodeType type = t.type();
-      return type != ast::NodeType::Invalid ?
-                 (type == ast::NodeType::IdQualified || type == ast::NodeType::FuncCall ?
-                      Word :
-                      t.front().type()) :
-                 Invalid;
+      switch (type) {
+        case ast::NodeType::Invalid:
+          return Invalid;
+        case ast::NodeType::IdQualified:
+        case ast::NodeType::FuncCall:
+          return Word;
+        case ast::NodeType::OpDeref:
+          return Deref;
+        default:
+          return t.front().type();
+      }
     }
 
     CodegenResult error(ErrorType err, lexit::TokenType type)
@@ -319,17 +444,18 @@ struct CodegenContext : NodeErrorHandler {
         bool followed_by_member_call = id.parent().next().next() == NodeType::FuncCall;
         if (followed_by_dot && !followed_by_member_call) {
           /* Remove access to SRT type (makes the resource global). */
-          return {as_whitespace(id.str_full()), var->type};
+          return {as_whitespace(id.str_full()), var->type, 0, false, var->is_ptr};
         }
         /* SRT type is used in an expression (likely as function argument). Call the ctor. */
-        return {var->type->identifier + "_ctor_()" + whitespace, var->type};
+        return {var->type->identifier + "_ctor_()" + whitespace, var->type, 0, false, var->is_ptr};
       }
 
       if (var->reference_value.is_valid()) {
         return ctx.expr(var->reference_value, scope);
       }
 
-      bool preceded_by_dot = id.front().prev() == '.';
+      bool preceded_by_dot = id.front().prev() == '.' ||
+                             id.parent().prev().type() == NodeType::OpDeref;
       if (!var->is_static && !preceded_by_dot && var->parent->as_class() != nullptr) {
         return {"this_." + var->identifier + whitespace, var->type, var->array_dimensions};
       }
@@ -349,19 +475,35 @@ struct CodegenContext : NodeErrorHandler {
       SymbolFunction *sym = ctx.id_func_resolved_lookup(
           id, call.parameters(), symbol_scope, scope, loc);
 
-      if (sym->is_error) {
+      if (sym == nullptr || sym->is_error) {
         ctx.error(call, Diag::UnknownFunction, string(id.str()));
-        return {"", sym->return_type};
+        return {"", ctx.table.err_cls};
       }
 
       if (sym->is_inline) {
         ctx.error(call, Diag::InvalidInlinedFunctionLocation);
       }
 
+      bool preceded_by_dot = call.prev().back() == '.' || call.prev().type() == NodeType::OpDeref;
       FuncParamList list = call.parameters();
       std::string params_str;
-      if (sym->fn_type == SymbolFunction::MEMBER && list.parent().prev().back() != '.') {
+      if (sym->fn_type == SymbolFunction::MEMBER && !preceded_by_dot) {
         params_str += "this_";
+
+        const SymbolFunction *method = sym->as_function();
+        const SymbolFunction *scope_fn = scope.parent_function();
+        if (scope_fn && scope_fn->fn_type == SymbolFunction::MEMBER) {
+          const SymbolClass *caller_class = scope_fn->parent_class();
+          const SymbolClass *callee_class = method->parent_class();
+          if (callee_class->size == 0) {
+            /* Call constructor for empty classes. */
+            params_str = caller_class->identifier + "_ctor_()";
+          }
+          else if (caller_class != callee_class) {
+            /* We need to figure out what inheritance path this function is visible in. */
+            params_str += caller_class->get_path_to_base_class(callee_class);
+          }
+        }
         if (!list.is_empty()) {
           params_str += ", ";
         }
@@ -369,7 +511,19 @@ struct CodegenContext : NodeErrorHandler {
 
       int param_count = 0;
       for (Expr param : list.children_of_type<Expr>()) {
-        params_str += ctx.expr(param, scope).str;
+        /* Builtin type constructors can have less parameter declared than allowed (e.g. overloads
+         * are implicit). In this case we cannot cast. */
+        if (!sym->is_builtin_ctor()) {
+          if (sym->arg_types.size() <= param_count) {
+            ctx.error(list, Diag::CompilerErrorInvalidFunctionLookup);
+            break;
+          }
+          const SymbolClass *arg_type = sym->arg_types[param_count];
+          params_str += ctx.expr(param, scope).cast(arg_type, param, ctx).str;
+        }
+        else {
+          params_str += ctx.expr(param, scope).str;
+        }
         params_str += ctx.opt_str(param.back().next(), Comma);
         ++param_count;
       }
@@ -818,7 +972,20 @@ struct CodegenContext : NodeErrorHandler {
           if (!switch_case.is_default_case()) {
             Node val = switch_case.value();
             if (val.type() == NodeType::IdQualified) {
-              id_var_resolved(val, scope);
+              IdQualified id = val;
+
+              assert(id.is_valid());
+              SymbolVariable *var = scope.lookup_variable(table, id);
+              if (var->is_error) {
+                error(id, Diag::UnknownVariable, string(id.str()));
+                builder << id;
+              }
+              else if (var->is_constexpr) {
+                builder.ss << var->value_str() + trivia(id);
+              }
+              else {
+                error(id, Diag::ExprNotIntegralConstant);
+              }
             }
             else {
               builder << val;
@@ -1070,13 +1237,23 @@ struct CodegenContext : NodeErrorHandler {
 
   void enum_decl(ClassDecl decl, SymbolScope &scope)
   {
-    SymbolScope &body_scope = *scope.scopes[string(decl.identifier().str())];
-    SymbolClass *enum_cls = body_scope.as_class();
+    /* Default to parent scope for anonymous enums. */
+    SymbolScope *body_scope = &scope;
+    const IdQualified id = decl.identifier();
+    if (id.is_valid()) {
+      auto it = scope.scopes.find(string(id.str()));
+      if (it == scope.scopes.end()) {
+        error(decl, Diag::CompilerErrorChildScopeNotFound);
+        return;
+      }
+      body_scope = it->second;
+    }
+    SymbolClass *enum_cls = id.is_valid() ? body_scope->as_class() : nullptr;
     LocalScope body = decl.body();
 
     IdQualified type = decl.parent_class();
 
-    if (enum_cls) {
+    if (enum_cls && id.is_valid()) {
       /* TODO(fclem): Remove. Compatibility with previous BSL version. */
       builder.ss << "\n#define " << enum_cls->identifier << " " << type.str() << "\n";
     }
@@ -1092,7 +1269,7 @@ struct CodegenContext : NodeErrorHandler {
       builder.ss << string(
           max(int64_t(1), int64_t(val.front().char_number()) - int64_t(type_str.size())), ' ');
 
-      SymbolVariable *var = id_var_decl_resolved(val.identifier(), body_scope);
+      SymbolVariable *var = id_var_decl_resolved(val.identifier(), *body_scope);
       builder << " = " + var->value_str();
       builder << string(";");
     }
@@ -1126,8 +1303,17 @@ struct CodegenContext : NodeErrorHandler {
 
     LocalScope body = decl.body();
 
+    /* Emit CRTP base class implicit instantiation. */
+    for (auto [id, base] : cls.base_classes) {
+      if (base->is_crtp) {
+        ClassDecl decl = base->template_data->decl.decl();
+        NOTE(id, Diag::NoteInstantiationClassTemplateRequested, base->identifier);
+        class_decl(decl, cls, 0, base);
+      }
+    }
+
     {
-      /* First emit nested classes. */
+      /* Emit nested classes. */
       int class_id = 0;
       for (ClassDecl decl : body.children_of_type<ClassDecl>()) {
         class_decl(decl, cls, class_id);
@@ -1188,21 +1374,63 @@ struct CodegenContext : NodeErrorHandler {
         builder.ss << union_getter(cls, *var) + "\n";
         builder.ss << union_setter(cls, *var) + "\n";
       }
+      return;
     }
-    else {
-      /* Emit function prototypes. */
-      if (body.child_first(NodeType::FuncDecl).is_valid()) {
-        /* Prototypes are not needed with MSL wrapper class. */
-        builder.ss << "\n#ifndef GPU_METAL\n";
-        for (FuncDecl decl : body.children_of_type<FuncDecl>()) {
-          func_forward_decl(decl, cls);
+
+    if (cls.is_crtp) {
+      /* Do not emit member functions for CRTP since they could reference the derived type (which
+       * is not yet defined). Instead we let the derived type handle the method instantiations. */
+      return;
+    }
+
+    /* Member functions. */
+
+    for (auto [id, base] : cls.base_classes) {
+      if (base->is_crtp) {
+        ClassDecl decl = base->template_data->decl.decl();
+        NOTE(id, Diag::NoteInstantiationClassTemplateRequested, base->identifier);
+        class_functions_prototypes(decl.body(), *base);
+      }
+    }
+    class_functions_prototypes(body, cls);
+
+    for (auto [id, base] : cls.base_classes) {
+      if (base->is_crtp) {
+        ClassDecl decl = base->template_data->decl.decl();
+        NOTE(id, Diag::NoteInstantiationClassTemplateRequested, base->identifier);
+        class_functions_decl(decl.body(), *base);
+      }
+    }
+    class_functions_decl(body, cls);
+  }
+
+  void class_functions_prototypes(LocalScope body, SymbolClass &cls)
+  {
+    if (!body.child_first(NodeType::FuncDecl).is_valid() &&
+        !body.child_first(NodeType::FuncForwardDecl).is_valid())
+    {
+      return;
+    }
+    /* Emit function prototypes. */
+    /* Prototypes are not needed with MSL wrapper class. */
+    builder.ss << "\n#ifndef GPU_METAL\n";
+    for (SymbolFunction *fn : cls.functions_in_declaration_order()) {
+      /* Filter inherited functions. */
+      if (fn->parent_class() == &cls && fn->template_data == nullptr) {
+        func_forward_decl(fn, false, false);
+        while ((fn = fn->overload_next)) {
+          func_forward_decl(fn, false, false);
         }
-        builder.ss << "#endif\n";
       }
-      /* Emit function members. */
-      for (FuncDecl decl : body.children_of_type<FuncDecl>()) {
-        func_decl(decl, cls);
-      }
+    }
+    builder.ss << "#endif\n";
+  }
+
+  void class_functions_decl(LocalScope body, SymbolClass &cls)
+  {
+    /* Emit function members. */
+    for (FuncDecl decl : body.children_of_type<FuncDecl>()) {
+      func_decl(decl, cls);
     }
   }
 
@@ -1212,6 +1440,12 @@ struct CodegenContext : NodeErrorHandler {
     /* Emit member variables. */
     int member_count = 0;
     int class_id = 0;
+    for (auto [_, cls] : cls.base_classes) {
+      if (cls->size > 0) {
+        builder.ss << cls->identifier << " _" << cls->identifier << "; ";
+        member_count++;
+      }
+    }
     for (Node node : body.children_range()) {
       switch (node.type()) {
         case NodeType::VarDecl: {
@@ -1382,6 +1616,11 @@ struct CodegenContext : NodeErrorHandler {
     }
     else {
       int class_id = 0;
+      for (auto [_, cls] : cls.base_classes) {
+        if (cls->size > 0) {
+          members += "r._" + cls->identifier + "=" + cls->identifier + "_ctor_();";
+        }
+      }
       for (Node node : decl.body().children_range()) {
         switch (node.type()) {
           case NodeType::VarDecl: {
@@ -1567,45 +1806,50 @@ struct CodegenContext : NodeErrorHandler {
     return "void " + fn_name + fn_args + " " + fn_body;
   };
 
-  void func_forward_decl(FuncDecl decl, SymbolScope &scope)
+  void func_forward_decl(FuncForwardDecl decl, SymbolScope &scope)
   {
-    string id(decl.identifier().str());
-    if (auto it = scope.functions.find(id); it != scope.functions.end()) {
-      SymbolScope &body_scope = *it->second.second;
-      // jump_to(decl.front()); /* Adds too many directives. */
-      builder.curr = decl.front();
-      skip_node(decl.attributes());
-      skip_if(Static);
-      id_type(decl.return_type(), scope);
-      id_func_resolved(decl.identifier(), decl.arguments(), scope, scope);
-      func_arg_list(decl.arguments(), body_scope, false, true);
-      builder << string(";\n");
+    SymbolFunction *fn =
+        scope.lookup_function(table, decl.identifier(), decl.arguments(), scope).unwrap(this);
+    if (fn->is_error) {
+      error(decl, Diag::UnknownFunction, decl.identifier().str());
+      return;
+    }
+
+    func_forward_decl(fn);
+  }
+
+  template<typename DeclT>
+  void func_forward_decl_impl(SymbolFunction *fn, DeclT decl, bool do_mtl_guard, bool do_jump_to)
+  {
+    if (do_mtl_guard) {
+      /* Prototypes are not needed with MSL wrapper class. */
+      builder.ss << "\n#ifndef GPU_METAL\n";
+    }
+    if (do_jump_to) {
+      jump_to(decl.front());
     }
     else {
-      assert(0);
+      builder.curr = decl.front();
+    }
+    skip_node(decl.attributes());
+    skip_if(Static);
+    id_type(decl.return_type(), *fn);
+    builder << fn->identifier + trivia(decl.identifier());
+    func_arg_list(decl.arguments(), *fn, false);
+    builder << string(";\n");
+    if (do_mtl_guard) {
+      builder.ss << "#endif\n";
     }
   }
 
-  void func_forward_decl(FuncForwardDecl decl, SymbolScope &scope)
+  void func_forward_decl(SymbolFunction *fn, bool do_mtl_guard = true, bool do_jump_to = true)
   {
-    /* Prototypes are not needed with MSL wrapper class. */
-    builder.ss << "\n#ifndef GPU_METAL\n";
-    string id(decl.identifier().str());
-    if (auto it = scope.functions.find(id); it != scope.functions.end()) {
-      SymbolScope &body_scope = *it->second.second;
-      jump_to(decl.front());
-      builder.curr = decl.front();
-      skip_node(decl.attributes());
-      skip_if(Static);
-      id_type(decl.return_type(), scope);
-      id_func_resolved(decl.identifier(), decl.arguments(), scope, scope);
-      func_arg_list(decl.arguments(), body_scope, false, true);
-      builder << string(";\n");
+    if (fn->decl.is_valid()) {
+      func_forward_decl_impl(fn, fn->decl, do_mtl_guard, do_jump_to);
     }
     else {
-      error(decl, Diag::UnknownFunction, id);
+      func_forward_decl_impl(fn, fn->fwd, do_mtl_guard, do_jump_to);
     }
-    builder.ss << "#endif\n";
   }
 
   string condition(const SymbolScope *scope)
@@ -1877,9 +2121,18 @@ struct CodegenContext : NodeErrorHandler {
         case ResourceType::BASE_INSTANCE:
         case ResourceType::NUM_WORK_GROUP:
         case ResourceType::INSTANCE_INDEX:
-        case ResourceType::STENCIL_REF:
-          create_info_decl += "BUILTINS(BuiltinBits::" + to_str(attr.res_type) + ")\n";
+        case ResourceType::STENCIL_REF: {
+          string res_condition_lambda = parse_condition_as_lambda(fn, arg.attributes());
+          create_info_decl += ".builtins(BuiltinBits::" + to_str(attr.res_type) +
+                              res_condition_lambda + ")\n";
           break;
+        }
+        case ResourceType::BARY_COORD: {
+          string res_condition_lambda = parse_condition_as_lambda(fn, arg.attributes());
+          create_info_decl += ".builtins(BuiltinBits::BARYCENTRIC_COORD" + res_condition_lambda +
+                              ")\n";
+          break;
+        }
         case ResourceType::FRAG_DEPTH:
           for (Attr attr : arg.attributes().children_of_type<Attr>()) {
             string_view id = attr.identifier().str();
@@ -1954,28 +2207,29 @@ struct CodegenContext : NodeErrorHandler {
     metadata.create_infos_declarations.emplace_back(create_info_decl);
   }
 
-  void func_arg_list(FuncArgList list,
-                     SymbolScope &scope,
-                     bool with_trivia = true,
-                     bool no_arg_name = false)
+  void func_arg_list(FuncArgList list, SymbolFunction &fn, bool with_trivia = true)
   {
+    builder.curr = list.front();
     match_if('(');
 
     FuncDecl decl = list.parent();
-    if (decl.is_method() && !decl.is_static()) {
-      ClassDecl cls = decl.parent_class();
+    if (fn.is_method() && !decl.is_static()) {
+      SymbolClass *cls = fn.parent_class();
+
       if (decl.is_const()) {
         builder.ss << "const ";
       }
-      SymbolClass *cls_resolved = id_type_resolved(cls.identifier(), scope);
-      if (cls_resolved->is_srt()) {
-        /* WORKAROUND: Do not pass SRT by reference otherwise we get a compilation error on metal
-         * we cannot bind to a temporary when the caller is just calling a constructor as the
-         * parameter. */
-        builder.ss << "this_";
+
+      builder.ss << cls->identifier;
+
+      if (cls->size == 0 || cls->is_srt()) {
+        /* WORKAROUND: Do not pass empty structure by reference otherwise we get a compilation
+         * error on metal we cannot bind to a temporary when the caller is just calling a
+         * constructor as the parameter. */
+        builder.ss << " this_";
       }
       else {
-        builder.ss << "&this_";
+        builder.ss << " &this_";
       }
 
       if (!list.is_empty()) {
@@ -1985,11 +2239,12 @@ struct CodegenContext : NodeErrorHandler {
     }
 
     if (builder.curr != ')') {
-      int i = 0;
       for (FuncArg arg : list.children_of_type<FuncArg>()) {
         skip_node(arg.attributes());
-        id_type(arg.type(), scope);
-        declarator(arg.declarator(), scope, true, no_arg_name ? i++ : -1);
+        SymbolClass *type = id_type(arg.type(), fn);
+
+        Declarator decl = arg.declarator();
+        declarator(type, decl, fn, true);
         match_if(',');
       }
     }
@@ -2470,28 +2725,30 @@ struct CodegenContext : NodeErrorHandler {
 
     skip_node(decl.attributes());
 
+    SymbolClass *cls;
     if (decl.type().identifier().str() == "auto") {
       Declarator d = decl.child_first(NodeType::Declarator);
-      auto *cls = table.resolve_auto_type(scope, d).unwrap(this);
+      cls = table.resolve_auto_type(scope, d).unwrap(this);
       builder << cls->identifier + trivia(decl.type().identifier());
     }
     else {
-      id_type(decl.type(), scope);
+      cls = id_type(decl.type(), scope);
     }
+
     for (Declarator d : decl.children_of_type<Declarator>()) {
-      declarator(d, scope);
+      declarator(cls, d, scope);
       match_if(',');
     }
     match_if(';');
     return true;
   }
 
-  void id_type(IdType type, SymbolScope &scope)
+  SymbolClass *id_type(IdType type, SymbolScope &scope)
   {
     match_if(Static);
     match_if(TokenType::Const, Constexpr);
     skip_if(Struct, Class, Enum);
-    id_type_resolved(type.identifier(), scope);
+    return id_type_resolved(type.identifier(), scope);
   }
 
   void array_decl(SymbolVariable &var, ArrayDecl array, Declarator decl, SymbolScope &scope)
@@ -2532,59 +2789,60 @@ struct CodegenContext : NodeErrorHandler {
     for (Subscript sub : array.children_of_type<Subscript>()) {
       if (sub.is_empty()) {
         error(decl, Diag::ArrayMultidimensionalImplicitSize);
+        continue;
       }
-      else {
-        auto [result, err] = table.expr_type_analysis(scope, sub.expr().child_first());
-        /* Note: Do not report error. The size might be defined by compilation constant. */
-        if (!err && result.is_constexpr()) {
-          if (result.value.comp_as<int>(0) <= 0) {
-            error(decl, Diag::ArraySizeMustBeGreaterThanZero);
-          }
+
+      auto [result, err] = table.expr_type_analysis(scope, sub.expr().child_first());
+      /* Note: Do not report error. The size might be defined by compilation constant. */
+      if (!err && result.is_constexpr()) {
+        int size = result.value.comp_as<int>(0);
+        if (size <= 0) {
+          error(decl, Diag::ArraySizeMustBeGreaterThanZero);
+        }
+        else {
+          builder.curr = sub.back();
+          builder << "[" + to_string(size) + "]" + trivia(sub);
         }
       }
-      builder << sub;
+      else {
+        builder << sub;
+      }
     }
   }
 
-  /* If skip_name_match_index is not -1, will not try to match the declared argument name and
-   * declare empty . */
-  void declarator(Declarator decl,
-                  SymbolScope &scope,
-                  bool skip_value = false,
-                  int skip_name_match_index = -1)
+  void declarator(SymbolClass *type, Declarator decl, SymbolScope &scope, bool skip_value = false)
   {
+    IdQualified id = decl.identifier();
     ArrayDecl array = decl.array();
-    SymbolVariable *var = scope.lookup_variable(table, decl.identifier());
+
+    SymbolVariable *var = (id.is_valid()) ? scope.lookup_variable(table, decl.identifier()) :
+                                            nullptr;
+
+    if (var == nullptr || var->is_error) {
+      error(id, Diag::UnknownVariable, string(id.str()));
+      return;
+    }
 
     if (var->is_bitfield && var->bit_offset != 0) {
-      if (decl.prev().type() != NodeType::Declarator || decl.next().type() != NodeType::Declarator)
-      {
-        /* Omitting a declarator in a declarator sequence will create invalid codegen. */
-        error(decl, Diag::BitFieldNotSingleDeclarator);
-      }
+      /* Single declarators are skipped by #var_decl. Reaching this point means the declarator is
+       * part of a sequence, where omitting it would create invalid codegen. */
+      error(decl, Diag::BitFieldNotSingleDeclarator);
     }
 
     const bool par = match_if('(');
 
     /* Lookup the type from the declaration as var might be ERROR_SYMBOL for forward declared
      * functions (because of name mismatch). */
-    SymbolClass *type = scope.lookup_class(table, decl.type().identifier()).unwrap(this);
-    if (type->is_srt()) {
-      /* WORKAROUND: Do not pass SRT by reference because it causes issue on metal when the caller
-       * is just calling the constructor in place. */
+    if (type->size == 0 || type->is_srt()) {
+      /* WORKAROUND: Do not pass empty struct by reference because it causes issue on metal when
+       * the caller is just calling the constructor in place. */
       skip_if('&');
     }
     else {
       match_if('&');
     }
 
-    if (skip_name_match_index != -1) {
-      /* Do not try to match the identifier for forward declarations. */
-      builder << "_" + to_string(skip_name_match_index);
-    }
-    else {
-      id_var_decl_resolved(decl.identifier(), scope);
-    }
+    id_var_decl_resolved(id, scope);
 
     if (par) {
       match_if(')');
@@ -2607,16 +2865,14 @@ struct CodegenContext : NodeErrorHandler {
       assignment(decl.initial_value(), scope, var);
     }
     else if (decl.initializer_list().is_valid()) {
-      builder.ss << "=" + initializer_list(
-                              decl.initializer_list(), scope, var->type, array.dimensions())
-                              .str;
+      builder.ss
+          << "=" + initializer_list(decl.initializer_list(), scope, type, array.dimensions()).str;
       builder.curr = decl.back().next();
     }
   }
 
   void assignment(AssignStmt stmt, SymbolScope &scope, SymbolVariable *var)
   {
-
     if (auto [fn, call] = get_inlined_function(stmt.expr(), scope); fn) {
       /* Check if this part of a declarator sequence before inlining. */
       if (Declarator d(stmt.parent()), d_next(d.next()); d_next.is_valid()) {
@@ -2650,7 +2906,7 @@ struct CodegenContext : NodeErrorHandler {
       return initializer_list(node, scope, cls, array_dim);
     }
     if (node == NodeType::Expr) {
-      return expr(node, scope);
+      return expr(node, scope).cast(cls, node, *this);
     }
     assert(0);
     return {"", cls};
@@ -2794,62 +3050,6 @@ struct CodegenContext : NodeErrorHandler {
   {
     assert(id.is_valid());
     return scope.lookup_function(table, id, params, param_scope, loc).unwrap(this);
-  }
-
-  template<typename ArgOrParamList>
-  SymbolFunction *id_func_resolved(IdQualified id,
-                                   ArgOrParamList params,
-                                   const SymbolScope &scope,
-                                   const SymbolScope &param_scope,
-                                   optional<SourceLocation> loc = nullopt)
-  {
-    SymbolFunction *func = id_func_resolved_lookup(id, params, scope, param_scope, loc);
-    builder.curr = id.back();
-    builder << func->identifier + trivia(id);
-    return func;
-  }
-
-  /* Resolve a variable in an expression. */
-  SymbolVariable *id_var_resolved(IdQualified id, const SymbolScope &scope)
-  {
-    assert(id.is_valid());
-    SymbolVariable *var = scope.lookup_variable(table, id);
-    if (var->is_error) {
-      error(id, Diag::UnknownVariable, string(id.str()));
-      builder << id;
-      return var;
-    }
-
-    if (var->is_constexpr) {
-      builder.ss << var->value_str() + trivia(id);
-      return var;
-    }
-
-    if (var->type->is_srt()) {
-      if (id.back().next() == TokenType::Dot && id.parent().next().next() != NodeType::FuncCall) {
-        /* Remove access to SRT type (makes the resource global). */
-        skip_node(id);
-      }
-      else {
-        /* SRT type is used in an expression (likely as function argument). Call the ctor. */
-        builder << var->type->identifier + "_ctor_()" + trivia(id);
-      }
-      return var;
-    }
-
-    if (var->reference_value.is_valid()) {
-      builder << string(var->reference_value.str()) + trivia(id);
-      return var;
-    }
-
-    bool preceded_by_dot = id.front().prev() == '.';
-    if (!var->is_static && !preceded_by_dot && var->parent->as_class() != nullptr) {
-      builder.ss << "this_.";
-    }
-
-    builder.curr = id.back();
-    builder << var->identifier + trivia(id);
-    return var;
   }
 
   /* Resolve a variable in a declaration. */
@@ -3080,6 +3280,15 @@ struct CodegenContext : NodeErrorHandler {
                 .res_type = string(attr.attr.identifier().str()),
                 .res_value = string(attr.param1.str()),
                 .res_condition = parse_condition(cls, attr.condition)};
+      case ResourceType::ACCELERATION_STRUCTURE:
+        return {.line = 0,
+                .var_type = type,
+                .var_name = name,
+                .var_array = array_size_to_string(array, cls),
+                .res_type = string(attr.attr.identifier().str()),
+                .res_slot = string(attr.param1.str()),
+                .res_condition = parse_condition(cls, attr.condition),
+                .res_frequency = parse_frequency(attr.frequency)};
       case ResourceType::SAMPLER:
         return {.line = 0,
                 .var_type = type,

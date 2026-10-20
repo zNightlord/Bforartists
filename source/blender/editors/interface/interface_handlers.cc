@@ -1205,6 +1205,13 @@ static void apply_but_funcs_after(bContext *C)
     }
 
     if (after.region_popup) {
+      /* The operator may have freed the popup, for example by loading a file. */
+      bScreen *screen = CTX_wm_screen(C);
+      if (region_popup_prev &&
+          !(screen && BLI_findindex(&screen->regionbase, region_popup_prev) != -1))
+      {
+        region_popup_prev = nullptr;
+      }
       CTX_wm_region_popup_set(C, region_popup_prev);
     }
 
@@ -4316,23 +4323,6 @@ static int do_but_textedit(
         retval = WM_UI_HANDLER_BREAK;
         break;
       }
-      case MOUSEPAN: {
-        if (textbox) {
-          int type = event->type;
-          int value = event->val;
-
-          pan_to_scroll(event, &type, &value);
-          int scroll_dir = 1;
-          if (event->flag & WM_EVENT_SCROLL_INVERT) {
-            scroll_dir = -1;
-          }
-          if (type != MOUSEPAN) {
-            textbox_add_scroll(textbox, (type == WHEELUPMOUSE ? -1 : 1) * scroll_dir);
-          }
-          retval = WM_UI_HANDLER_BREAK;
-        }
-        break;
-      }
       case WHEELDOWNMOUSE:
       case EVT_DOWNARROWKEY:
         if (data->searchbox) {
@@ -4894,7 +4884,7 @@ static void block_open_begin(bContext *C, Button *but, HandleButtonData *data)
     case ButtonType::Menu:
       BLI_assert(but->menu_create_func);
       if (button_menu_draw_as_popover(but)) {
-        const char *idname = static_cast<const char *>(but->func_argN);
+        const std::string &idname = *static_cast<const std::string *>(but->func_argN);
         popover_panel_type = WM_paneltype_find(idname, false);
       }
 
@@ -4917,7 +4907,7 @@ static void block_open_begin(bContext *C, Button *but, HandleButtonData *data)
       but->editvec = data->vec;
 
       if (button_menu_draw_as_popover(but)) {
-        const char *idname = static_cast<const char *>(but->func_argN);
+        const std::string &idname = *static_cast<const std::string *>(but->func_argN);
         popover_panel_type = WM_paneltype_find(idname, false);
       }
 
@@ -5488,6 +5478,21 @@ static int do_but_TEXTBOX(bContext *C,
   switch (data->state) {
     case BUTTON_STATE_TEXT_EDITING:
     case BUTTON_STATE_HIGHLIGHT: {
+      if (event->type == MOUSEPAN && textbox->last_total_lines > textbox->visible_lines()) {
+        int type = event->type;
+        int value = event->val;
+
+        pan_to_scroll(event, &type, &value);
+        int scroll_dir = 1;
+        if (event->flag & WM_EVENT_SCROLL_INVERT) {
+          scroll_dir = -1;
+        }
+        if (type != MOUSEPAN) {
+          textbox_add_scroll(textbox, (type == WHEELUPMOUSE ? -1 : 1) * scroll_dir);
+          ED_region_tag_redraw(data->region);
+        }
+        return WM_UI_HANDLER_BREAK;
+      }
       if (ELEM(event->type, WHEELUPMOUSE, WHEELDOWNMOUSE)) {
         if (textbox->last_total_lines > textbox->visible_lines()) {
           textbox_add_scroll(textbox, (event->type == WHEELUPMOUSE ? -1 : 1));
@@ -7217,7 +7222,7 @@ static bool numedit_but_UNITVEC(
 
 static void palette_set_active(ButtonColor *color_but)
 {
-  if (color_but->is_pallete_color) {
+  if (color_but->is_palette_color) {
     Palette *palette = id_cast<Palette *>(color_but->rnapoin.owner_id);
     const PaletteColor *color = static_cast<const PaletteColor *>(color_but->rnapoin.data);
     palette->active_color = BLI_findindex(&palette->colors, color);
@@ -7282,7 +7287,7 @@ static int do_but_COLOR(bContext *C, Button *but, HandleButtonData *data, const 
       apply_but(C, but->block, but, data, true);
       return WM_UI_HANDLER_BREAK;
     }
-    if (color_but->is_pallete_color && (event->type == EVT_DELKEY) && (event->val == KM_PRESS)) {
+    if (color_but->is_palette_color && (event->type == EVT_DELKEY) && (event->val == KM_PRESS)) {
       Palette *palette = id_cast<Palette *>(but->rnapoin.owner_id);
       PaletteColor *color = static_cast<PaletteColor *>(but->rnapoin.data);
 
@@ -7313,7 +7318,7 @@ static int do_but_COLOR(bContext *C, Button *but, HandleButtonData *data, const 
     }
 
     if (event->type == LEFTMOUSE && event->val == KM_RELEASE) {
-      if (color_but->is_pallete_color) {
+      if (color_but->is_palette_color) {
         if ((event->modifier & KM_CTRL) == 0) {
           float color[3];
           Paint *paint = BKE_paint_get_active_from_context(C);
@@ -8075,7 +8080,7 @@ static int do_but_HSVCIRCLE(
   return WM_UI_HANDLER_CONTINUE;
 }
 
-static bool numedit_but_COLORBAND(Button *but, HandleButtonData *data, int mx)
+static bool numedit_but_COLORBAND(Button *but, HandleButtonData *data, int mx, bool shift)
 {
   bool changed = false;
 
@@ -8088,11 +8093,19 @@ static bool numedit_but_COLORBAND(Button *but, HandleButtonData *data, int mx)
   }
 
   const float dx = float(mx - data->draglastx) / BLI_rctf_size_x(&but->rect);
-  data->dragcbd->pos += dx;
+  data->dragcbd->pos += dx * mouse_scale_warp_factor(shift);
   CLAMP(data->dragcbd->pos, 0.0f, 1.0f);
 
   BKE_colorband_update_sort(data->coba);
   data->dragcbd = data->coba->data + data->coba->cur; /* because qsort */
+
+#ifdef USE_CONT_MOUSE_CORRECT
+  if (button_is_cursor_warp(but)) {
+    data->ungrab_mval[0] = but->rect.xmin + data->dragcbd->pos * BLI_rctf_size_x(&but->rect);
+    data->ungrab_mval[1] = data->dragstarty;
+    BLI_rctf_clamp_pt_v(&but->rect, data->ungrab_mval);
+  }
+#endif
 
   data->draglastx = mx;
   changed = true;
@@ -8153,7 +8166,7 @@ static int do_but_COLORBAND(
   else if (data->state == BUTTON_STATE_NUM_EDITING) {
     if (event->type == MOUSEMOVE) {
       if (mx != data->draglastx || my != data->draglasty) {
-        if (numedit_but_COLORBAND(but, data, mx)) {
+        if (numedit_but_COLORBAND(but, data, mx, (event->modifier & KM_SHIFT))) {
           numedit_apply(C, block, but, data);
         }
       }
@@ -12795,8 +12808,13 @@ static int handle_menus_recursive(bContext *C,
       }
       else if (event->type == LEFTMOUSE || event->val != KM_DBL_CLICK) {
         bool handled = false;
-
-        if (Button *listbox = listbox_find_mouse_over(menu->region, event)) {
+        const Button *active_but = region_find_active_but(menu->region);
+        const bool is_actbut_in_modal_state = active_but &&
+                                              button_modal_state(active_but->active->state);
+        /* Handle uilist events if there not an active button in modal state. */
+        if (Button *listbox = listbox_find_mouse_over(menu->region, event);
+            listbox && !is_actbut_in_modal_state)
+        {
           const int retval_test = handle_uilist_event(C, event, menu->region, listbox);
           if (retval_test != WM_UI_HANDLER_CONTINUE) {
             retval = retval_test;

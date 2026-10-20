@@ -8,14 +8,10 @@
 
 #include "multires_reshape.hh"
 
-#include "MEM_guardedalloc.h"
-
 #include "DNA_mesh_types.h"
 
 #include "BLI_function_ref.hh"
 #include "BLI_math_matrix.hh"
-#include "BLI_math_matrix_c.hh"
-#include "BLI_math_vector_c.hh"
 #include "BLI_task.hh"
 #include "BLI_utildefines.hh"
 
@@ -721,7 +717,7 @@ static void geometry_init_loose_information(MultiresReshapeSmoothContext *reshap
   const Mesh *base_mesh = reshape_context->base_mesh;
 
   const IndexMask &loose_edges = base_mesh->loose_edges();
-  if (loose_edges.is_empty()) {
+  if (!loose_edges.is_empty()) {
     reshape_smooth_context->loose_base_edges.resize(base_mesh->edges_num);
     loose_edges.to_bits(reshape_smooth_context->loose_base_edges);
   }
@@ -775,11 +771,6 @@ static void geometry_create(MultiresReshapeSmoothContext *reshape_smooth_context
 /** \name Generation of OpenSubdiv evaluator for topology created form reshape level
  * \{ */
 
-static bool specifies_full_topology(const OpenSubdiv_Converter * /*converter*/)
-{
-  return false;
-}
-
 static void converter_init(const MultiresReshapeSmoothContext *reshape_smooth_context,
                            OpenSubdiv_Converter *converter)
 {
@@ -791,7 +782,6 @@ static void converter_init(const MultiresReshapeSmoothContext *reshape_smooth_co
       bke::subdiv::converter_vtx_boundary_interpolation_from_settings(&settings));
   converter->fvar_linear_interpolation = OpenSubdiv_FVarLinearInterpolation(
       bke::subdiv::converter_fvar_linear_from_settings(&settings));
-  converter->specifiesFullTopology = specifies_full_topology;
 
   converter->verts_num = reshape_smooth_context->geometry.vertices.size();
 
@@ -805,22 +795,6 @@ static void converter_init(const MultiresReshapeSmoothContext *reshape_smooth_co
   converter->edge_sharpness = reshape_smooth_context->geometry.edge_sharpness.as_span().take_front(
       edges_num);
   converter->vert_sharpness = reshape_smooth_context->geometry.vert_sharpness;
-
-  converter->getFaceEdges = nullptr;
-
-  converter->getNumEdgeFaces = nullptr;
-  converter->getEdgeFaces = nullptr;
-
-  converter->getNumVertexEdges = nullptr;
-  converter->getVertexEdges = nullptr;
-  converter->getNumVertexFaces = nullptr;
-  converter->getVertexFaces = nullptr;
-
-  converter->getNumUVLayers = nullptr;
-  converter->precalcUVLayer = nullptr;
-  converter->finishUVLayer = nullptr;
-  converter->getNumUVCoordinates = nullptr;
-  converter->getFaceCornerUVIndex = nullptr;
 
   converter->freeUserData = nullptr;
 
