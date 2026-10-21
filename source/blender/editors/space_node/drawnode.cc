@@ -2273,7 +2273,7 @@ static bool node_wireless_get(const bNode &node, NodeWireless &r_info)
   if (!node.prop || !IDP_GetPropertyFromGroup(node.prop, "wireless")) {
     return false;
   }
-  r_info.id = IDP_group_lookup_int(node.prop, "wireless").value_or(0);
+  r_info.id = IDP_group_lookup_int(*node.prop, "wireless").value_or(0);
   r_info.input = IDP_GetPropertyFromGroup(node.prop, "input") != nullptr;
   r_info.output = IDP_GetPropertyFromGroup(node.prop, "output") != nullptr;
   return true;
