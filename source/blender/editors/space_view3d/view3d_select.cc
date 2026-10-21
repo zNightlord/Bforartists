@@ -113,7 +113,6 @@ ViewContext ED_view3d_viewcontext_init(bContext *C, Depsgraph *depsgraph)
 {
   /* TODO: should return whether there is valid context to continue. */
   ViewContext vc = {};
-  vc.C = C;
   vc.region = CTX_wm_region(C);
   vc.bmain = CTX_data_main(C);
   vc.depsgraph = depsgraph;
@@ -121,6 +120,7 @@ ViewContext ED_view3d_viewcontext_init(bContext *C, Depsgraph *depsgraph)
   vc.view_layer = CTX_data_view_layer(C);
   vc.v3d = CTX_wm_view3d(C);
   vc.win = CTX_wm_window(C);
+  vc.wm = CTX_wm_manager(C);
   vc.rv3d = CTX_wm_region_view3d(C);
   vc.obact = CTX_data_active_object(C);
   vc.obedit = CTX_data_edit_object(C);
@@ -1351,7 +1351,7 @@ static bool do_lasso_select_paintvert(const ViewContext *vc,
       BKE_mesh_mselect_validate(mesh);
     }
     paintvert_flush_flags(ob);
-    paintvert_tag_select_update(vc->C, ob);
+    paintvert_tag_select_update(ob);
   }
 
   return changed;
@@ -1372,7 +1372,7 @@ static bool do_lasso_select_paintface(const ViewContext *vc,
   bool changed = false;
   if (SEL_OP_USE_PRE_DESELECT(sel_op)) {
     /* flush selection at the end */
-    changed |= paintface_deselect_all_visible(vc->C, ob, SEL_DESELECT, false);
+    changed |= paintface_deselect_all_visible(*vc->depsgraph, ob, SEL_DESELECT, false);
   }
 
   BLI_lasso_boundbox(&rect, mcoords);
@@ -1390,7 +1390,7 @@ static bool do_lasso_select_paintface(const ViewContext *vc,
   }
 
   if (changed) {
-    paintface_flush_flags(vc->C, ob, true, false);
+    paintface_flush_flags(*vc->depsgraph, ob, true, false);
   }
   return changed;
 }
@@ -3076,7 +3076,8 @@ static bool ed_wpaint_vertex_select_pick(bContext *C,
     }
     else if (found || params.deselect_all) {
       /* Deselect everything. */
-      changed |= paintface_deselect_all_visible(C, obact, SEL_DESELECT, false);
+      changed |= paintface_deselect_all_visible(
+          *CTX_data_ensure_evaluated_depsgraph(C), obact, SEL_DESELECT, false);
     }
   }
 
@@ -3124,7 +3125,7 @@ static bool ed_wpaint_vertex_select_pick(bContext *C,
   }
 
   if (changed) {
-    paintvert_tag_select_update(C, obact);
+    paintvert_tag_select_update(obact);
   }
 
   return changed || found;
@@ -3631,7 +3632,7 @@ static wmOperatorStatus view3d_select_exec(bContext *C, wmOperator *op)
     changed = PE_mouse_particles(C, mval, params);
   }
   else if (obact && BKE_paint_select_face_test(obact)) {
-    changed = paintface_mouse_select(C, mval, params, obact);
+    changed = paintface_mouse_select(C, *depsgraph, mval, params, obact);
   }
   else if (BKE_paint_select_vert_test(obact)) {
     changed = ed_wpaint_vertex_select_pick(C, mval, params, obact);
@@ -3841,7 +3842,7 @@ static bool do_paintvert_box_select(const ViewContext *vc,
       BKE_mesh_mselect_validate(mesh);
     }
     paintvert_flush_flags(vc->obact);
-    paintvert_tag_select_update(vc->C, vc->obact);
+    paintvert_tag_select_update(vc->obact);
   }
   return changed;
 }
@@ -3861,7 +3862,7 @@ static bool do_paintface_box_select(const ViewContext *vc,
 
   bool changed = false;
   if (SEL_OP_USE_PRE_DESELECT(sel_op)) {
-    changed |= paintface_deselect_all_visible(vc->C, vc->obact, SEL_DESELECT, false);
+    changed |= paintface_deselect_all_visible(*vc->depsgraph, vc->obact, SEL_DESELECT, false);
   }
 
   if (BLI_rcti_is_empty(rect)) {
@@ -3881,7 +3882,7 @@ static bool do_paintface_box_select(const ViewContext *vc,
   }
 
   if (changed) {
-    paintface_flush_flags(vc->C, vc->obact, true, false);
+    paintface_flush_flags(*vc->depsgraph, vc->obact, true, false);
   }
   return changed;
 }
@@ -4941,7 +4942,7 @@ static bool paint_facesel_circle_select(const ViewContext *vc,
   bool changed = false;
   if (SEL_OP_USE_PRE_DESELECT(sel_op)) {
     /* flush selection at the end */
-    changed |= paintface_deselect_all_visible(vc->C, ob, SEL_DESELECT, false);
+    changed |= paintface_deselect_all_visible(*vc->depsgraph, ob, SEL_DESELECT, false);
   }
 
   if (wm_userdata->data == nullptr) {
@@ -4960,7 +4961,7 @@ static bool paint_facesel_circle_select(const ViewContext *vc,
   }
 
   if (changed) {
-    paintface_flush_flags(vc->C, ob, true, false);
+    paintface_flush_flags(*vc->depsgraph, ob, true, false);
   }
   return changed;
 }
@@ -5040,7 +5041,7 @@ static bool paint_vertsel_circle_select(const ViewContext *vc,
       BKE_mesh_mselect_validate(mesh);
     }
     paintvert_flush_flags(ob);
-    paintvert_tag_select_update(vc->C, ob);
+    paintvert_tag_select_update(ob);
   }
   return changed;
 }

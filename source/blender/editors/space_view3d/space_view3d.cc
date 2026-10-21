@@ -685,6 +685,8 @@ static void view3d_main_region_listener(const wmRegionListenerParams *params)
           ED_region_tag_redraw(region);
           WM_gizmomap_tag_refresh(gzmap);
           break;
+        case ND_KEYINGSET:
+          ED_region_tag_redraw(region);
         case ND_WORLD:
           /* handled by space_view3d_listener() for v3d access */
           break;
@@ -1675,6 +1677,7 @@ void ED_spacetype_view3d()
 
   st->spaceid = SPACE_VIEW3D;
   STRNCPY_UTF8(st->name, "View3D");
+  st->struct_size = sizeof(View3D);
 
   st->create = view3d_create;
   st->free = view3d_free;

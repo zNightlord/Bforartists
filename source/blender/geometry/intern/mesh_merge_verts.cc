@@ -909,7 +909,7 @@ static void copy_and_mix_attributes(const bke::AttributeAccessor src_attributes,
     const GVArraySpan src_span(src_attr);
     bke::GSpanAttributeWriter dst_attr = dst_attributes.lookup_or_add_for_write_only_span(
         iter.name, iter.domain, iter.data_type);
-    bke::attribute_math::gather(src_span, map.dst_to_src.as_span(), dst_attr.span);
+    array_utils::gather(src_span, map.dst_to_src.as_span(), dst_attr.span);
     const GroupedSpan<int> mixed_groups = map.mixed_groups();
     bke::attribute_math::mix_groups(
         src_span, mixed_groups.offsets, mixed_groups.data, std::nullopt, map.mixed, dst_attr.span);
@@ -1288,7 +1288,7 @@ std::optional<Mesh *> mesh_merge_by_distance_all(const Mesh &mesh,
                                                  const bke::AttributeFilter &attribute_filter)
 {
   Array<int> vert_src_to_target(mesh.verts_num, OUT_OF_CONTEXT);
-  KDTreeNew<float3> tree(mesh.vert_positions(), selection);
+  KDTree<float3> tree(mesh.vert_positions(), selection);
   const int removed_verts_num = kdtree::calc_duplicates(
       tree, merge_distance, selection, vert_src_to_target);
   if (removed_verts_num == 0) {

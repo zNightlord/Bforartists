@@ -867,9 +867,6 @@ static SlotAllocator add_pipeline_create_info(gpu::shader::ShaderCreateInfo &inf
             info.fragment_source("eevee_surf_deferred.bsl.hh");
             info.fragment_function("eevee_surf_deferred");
           }
-          /* Enable the access to `nt.crypto_hash`.
-           * Necessary workaround for static shader compilation tests. */
-          info.define("CREATE_INFO_eevee_nodetree");
           break;
         case MAT_PIPE_FORWARD:
           pipeline_info_name = "eevee_surf_forward_infos_";
@@ -1161,22 +1158,10 @@ void ShaderModule::material_create_info_amend(GPUMaterial *gpumat, GPUCodegenOut
   info.compilation_constant(
       gpu::shader::Type::int_t, "light_closure_count_transmit", max(1, transmit_eval_count));
 
-  if (GPU_material_flag_get(gpumat, GPU_MATFLAG_BARYCENTRIC)) {
-    switch (geometry_type) {
-      case MAT_GEOM_MESH:
-        /* Support using gpu builtin barycentrics. */
-        info.define("USE_BARYCENTRICS");
-        info.builtins(BuiltinBits::BARYCENTRIC_COORD);
-        break;
-      case MAT_GEOM_CURVES:
-        /* Support using one float2 attribute. See #hair_get_barycentric(). */
-        info.define("USE_BARYCENTRICS");
-        break;
-      default:
-        /* No support */
-        break;
-    }
-  }
+  /* Enabling barycentric coordinate only works for triangle primitives. */
+  bool use_barycentric = GPU_material_flag_get(gpumat, GPU_MATFLAG_BARYCENTRIC) &&
+                         geometry_type == MAT_GEOM_MESH;
+  info.compilation_constant(gpu::shader::Type::bool_t, "use_barycentric", use_barycentric);
 
   /* Allow to use Reverse-Z on OpenGL. Does nothing in other backend. */
   info.builtins(BuiltinBits::CLIP_CONTROL);
@@ -1351,6 +1336,17 @@ void ShaderModule::material_create_info_amend(GPUMaterial *gpumat, GPUCodegenOut
                                          (displacement_type != MAT_DISPLACEMENT_BUMP) &&
                                          !ELEM(geometry_type, MAT_GEOM_WORLD, MAT_GEOM_VOLUME);
 
+    Vector<StringRefNull> dependencies = {};
+    /* Needed for KernelGlobals and ShadingData. */
+    dependencies.append("eevee_nodetree_lib.bsl.hh");
+
+    if (use_vertex_displacement) {
+      for (const auto &graph : codegen.material_functions) {
+        vert_gen << graph.serialized;
+        dependencies.extend(graph.dependencies);
+      }
+    }
+
     vert_gen << "#line 1 \"" __FILE__ "\"\n";
     vert_gen << "#line " STRINGIFY(__LINE__) "\n";
     vert_gen << "float3 nodetree_displacement(KernelGlobals kg, _ref(ShadingData, sd))\n";
@@ -1359,9 +1355,6 @@ void ShaderModule::material_create_info_amend(GPUMaterial *gpumat, GPUCodegenOut
                                              "return float3(0);\n");
     vert_gen << "}\n\n";
 
-    Vector<StringRefNull> dependencies = {};
-    /* Needed for KernelGlobals and ShadingData. */
-    dependencies.append("eevee_nodetree_lib.bsl.hh");
     if (use_vertex_displacement) {
       dependencies.append("eevee_geom_types_lib.bsl.hh");
       dependencies.extend(codegen.displacement.dependencies);
@@ -1386,8 +1379,8 @@ void ShaderModule::material_create_info_amend(GPUMaterial *gpumat, GPUCodegenOut
       /* Bump displacement. Needed to recompute normals after displacement. */
       info.define("MAT_DISPLACEMENT_BUMP");
 
-      vert_gen << "#line 1 \"" __FILE__ "\"\n";
-      vert_gen << "#line " STRINGIFY(__LINE__) "\n";
+      frag_gen << "#line 1 \"" __FILE__ "\"\n";
+      frag_gen << "#line " STRINGIFY(__LINE__) "\n";
       frag_gen << "float3 nodetree_displacement(KernelGlobals kg, _ref(ShadingData, sd))\n";
       frag_gen << "{\n";
       frag_gen << codegen.displacement.serialized;

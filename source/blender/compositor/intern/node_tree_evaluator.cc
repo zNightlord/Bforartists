@@ -16,6 +16,7 @@
 #include "BKE_node_runtime.hh"
 #include "BKE_node_tree_zones.hh"
 
+#include "COM_closure_zone_operation.hh"
 #include "COM_context.hh"
 #include "COM_domain.hh"
 #include "COM_group_node_operation.hh"
@@ -111,7 +112,8 @@ Result &NodeTreeEvaluator::get_result_from_output_socket(const bNodeSocket &outp
   }
 
   BLI_assert_unreachable();
-  return node_operation->get_result(output.identifier);
+  static Result unreachable_result = this->context().create_result(ResultType::Color);
+  return unreachable_result;
 }
 
 PixelCompileUnit &NodeTreeEvaluator::pixel_compile_unit()
@@ -329,6 +331,9 @@ ZoneOperation *NodeTreeEvaluator::create_zone_operation(const bke::bNodeTreeZone
 {
   if (zone.output_node()->is_type("GeometryNodeRepeatOutput"_ustr)) {
     return new RepeatZoneOperation(this->context(), zone, compute_context_);
+  }
+  if (zone.output_node()->is_type("NodeClosureOutput"_ustr)) {
+    return new ClosureZoneOperation(this->context(), zone, compute_context_);
   }
 
   BLI_assert_unreachable();

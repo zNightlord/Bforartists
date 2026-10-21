@@ -3,6 +3,11 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 set(INC
+  ../blender/compositor
+  ../blender/compositor/algorithms
+  ../blender/compositor/cached_resources
+  ../blender/compositor/derived_resources
+  ../blender/compositor/utilities
   ../blender/editors/include
   ../blender/io/usd
   ../blender/makesrna
@@ -12,6 +17,7 @@ set(LIB
   PRIVATE bf::blenkernel
   PRIVATE bf::blenlib
   PRIVATE bf::bmesh
+  bf_compositor
   PRIVATE bf::depsgraph
   PRIVATE bf::dna
   PRIVATE bf::functions
@@ -539,6 +545,19 @@ if(WITH_PYTHON)
     endif()
     install(
       PROGRAMS $<TARGET_FILE:bf_intern_meshopt_bridge>
+      DESTINATION ${GLTF_BRIDGE_INSTALL_DIR}
+    )
+  endif()
+
+  if(WITH_KTX)
+    if(GLTF_BRIDGE_RPATH)
+      set_target_properties(bf_intern_ktx_bridge PROPERTIES
+        BUILD_WITH_INSTALL_RPATH TRUE
+        INSTALL_RPATH "${GLTF_BRIDGE_RPATH}"
+      )
+    endif()
+    install(
+      PROGRAMS $<TARGET_FILE:bf_intern_ktx_bridge>
       DESTINATION ${GLTF_BRIDGE_INSTALL_DIR}
     )
   endif()
@@ -1717,6 +1736,11 @@ elseif(WIN32)
   windows_install_shared_manifest(
     FILES ${LIBDIR}/draco/bin/draco_d.dll
     DEBUG
+  )
+
+  windows_install_shared_manifest(
+    FILES ${LIBDIR}/ktx/bin/ktx.dll
+    ALL
   )
 
   windows_install_shared_manifest(

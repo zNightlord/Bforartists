@@ -224,6 +224,8 @@ if(WITH_BLENDER)
       axis_side
       axis_top
       back
+      backdrop_pan
+      backdrop_zoom
       blank1
       blender
       blender_logo_large
@@ -345,6 +347,7 @@ if(WITH_BLENDER)
       error
       experimental
       export
+      extension
       external_drive
       external_drive_large
       eyedropper

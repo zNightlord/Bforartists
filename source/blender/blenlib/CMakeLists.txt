@@ -195,6 +195,8 @@ set(SRC
   BLI_bounds_types.hh
   BLI_boxpack_2d.hh
   BLI_build_config.hh
+  BLI_bytes_type.hh
+  BLI_bytes_type_common.hh
   BLI_cache_mutex.hh
   BLI_color.hh
   BLI_color_mix.hh
@@ -270,9 +272,7 @@ set(SRC
   BLI_iterator.hh
   BLI_jitter_2d.hh
   BLI_kdopbvh.hh
-  BLI_kdtree.hh
   BLI_kdtree_new.hh
-  BLI_kdtree_types.hh
   BLI_lasso_2d.hh
   BLI_lazy_threading.hh
   BLI_length_parameterize.hh
@@ -603,6 +603,7 @@ if(WITH_GTESTS)
     tests/BLI_vector_list_test.cc
     tests/BLI_vector_set_test.cc
     tests/BLI_vector_test.cc
+    tests/BLI_virtual_array_exec_test.cc
     tests/BLI_virtual_array_test.cc
 
     tests/BLI_exception_safety_test_utils.hh

@@ -252,11 +252,7 @@ bUserAssetLibrary *ED_userpref_asset_library_new(const bContext *C,
   }
 
   /* Activate new library in the UI for further setup. */
-  if (const std::optional<int> new_active_idx =
-          userpref_ui_asset_libraries_index_from_user_library(*new_library))
-  {
-    U.active_asset_library = *new_active_idx;
-  }
+  ED_userpref_asset_library_active_set(*new_library);
 
   if (new_library->flag & ASSET_LIBRARY_USE_REMOTE_URL) {
     blender::asset_system::remote_library_request_download(*new_library);
@@ -530,6 +526,7 @@ void ED_spacetype_userpref()
 
   st->spaceid = SPACE_USERPREF;
   STRNCPY_UTF8(st->name, "Userpref");
+  st->struct_size = sizeof(SpaceUserPref);
 
   st->create = userpref_create;
   st->free = userpref_free;

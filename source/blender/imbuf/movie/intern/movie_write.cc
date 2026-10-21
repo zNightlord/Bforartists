@@ -33,6 +33,7 @@
 #  include "BLI_path_utils.hh"
 #  include "BLI_string.hh"
 #  include "BLI_string_utf8.hh"
+#  include "BLI_task.hh"
 #  include "BLI_utildefines.hh"
 
 #  include "BKE_blender_project.hh"
@@ -335,8 +336,12 @@ static void add_spherical_mapping_metadata(AVCodecParameters *codecpar, const Sc
 /* Write a frame to the output file */
 static bool write_video_frame(MovieWriter *context, AVFrame *frame, ReportList *reports)
 {
-  int ret, success = 1;
+  bool success = true;
   AVPacket *packet = av_packet_alloc();
+  if (packet == nullptr) {
+    BKE_report(reports, RPT_ERROR, "Could not allocate video packet");
+    return false;
+  }
 
   AVCodecContext *c = context->video_codec;
 
@@ -344,12 +349,12 @@ static bool write_video_frame(MovieWriter *context, AVFrame *frame, ReportList *
   context->video_time++;
 
   char error_str[AV_ERROR_MAX_STRING_SIZE];
-  ret = avcodec_send_frame(c, frame);
+  int ret = avcodec_send_frame(c, frame);
   if (ret < 0) {
     /* Can't send frame to encoder. This shouldn't happen. */
     av_make_error_string(error_str, AV_ERROR_MAX_STRING_SIZE, ret);
     CLOG_ERROR(&LOG, "Can't send video frame: %s", error_str);
-    success = -1;
+    success = false;
   }
 
   while (ret >= 0) {
@@ -362,6 +367,7 @@ static bool write_video_frame(MovieWriter *context, AVFrame *frame, ReportList *
     if (ret < 0) {
       av_make_error_string(error_str, AV_ERROR_MAX_STRING_SIZE, ret);
       CLOG_ERROR(&LOG, "Error encoding frame: %s", error_str);
+      success = false;
       break;
     }
 
@@ -371,15 +377,16 @@ static bool write_video_frame(MovieWriter *context, AVFrame *frame, ReportList *
     my_guess_pkt_duration(context->outfile, context->video_stream, packet);
 #  endif
 
-    if (av_interleaved_write_frame(context->outfile, packet) != 0) {
-      success = -1;
+    ret = av_interleaved_write_frame(context->outfile, packet);
+    if (ret < 0) {
+      success = false;
       break;
     }
   }
 
   if (!success) {
-    BKE_report(reports, RPT_ERROR, "Error writing frame");
     av_make_error_string(error_str, AV_ERROR_MAX_STRING_SIZE, ret);
+    BKE_reportf(reports, RPT_ERROR, "Error writing video frame: %s", error_str);
     CLOG_INFO(&LOG, "ffmpeg: error writing video frame: %s", error_str);
   }
 
@@ -440,6 +447,48 @@ static ImBuf *alloc_imbuf_for_colorspace_transform(const ImBuf *input_ibuf)
   return result_ibuf;
 }
 
+/* Convert interleaved RGBA floats to planar GBRA/GBR and flip vertically, since swscale does not
+ * support packed RGBA float input. Only preserve and un-premultiply alpha when needed. */
+static void float_interleaved_to_planar(const ImBuf *image, AVFrame *frame)
+{
+  const bool use_alpha = frame->format == AV_PIX_FMT_GBRAPF32LE;
+  const size_t linesize = frame->linesize[0];
+  BLI_assert(ELEM(frame->format, AV_PIX_FMT_GBRPF32LE, AV_PIX_FMT_GBRAPF32LE));
+  BLI_assert(frame->linesize[1] == linesize && frame->linesize[2] == linesize &&
+             (!use_alpha || frame->linesize[3] == linesize));
+  const float *pixels = image->float_data();
+  threading::parallel_for(IndexRange(frame->height), 64, [&](const IndexRange y_range) {
+    for (const int64_t y : y_range) {
+      const size_t dst_offset = linesize * (frame->height - y - 1);
+      float *dst_g = reinterpret_cast<float *>(frame->data[0] + dst_offset);
+      float *dst_b = reinterpret_cast<float *>(frame->data[1] + dst_offset);
+      float *dst_r = reinterpret_cast<float *>(frame->data[2] + dst_offset);
+      const float *src = pixels + int64_t(image->x) * y * 4;
+
+      if (use_alpha) {
+        float *dst_a = reinterpret_cast<float *>(frame->data[3] + dst_offset);
+        for (int x = 0; x < frame->width; x++) {
+          float tmp[4];
+          premul_to_straight_v4_v4(tmp, src);
+          *dst_r++ = tmp[0];
+          *dst_g++ = tmp[1];
+          *dst_b++ = tmp[2];
+          *dst_a++ = tmp[3];
+          src += 4;
+        }
+      }
+      else {
+        for (int x = 0; x < frame->width; x++) {
+          *dst_r++ = src[0];
+          *dst_g++ = src[1];
+          *dst_b++ = src[2];
+          src += 4;
+        }
+      }
+    }
+  });
+}
+
 /* read and encode a frame of video from the buffer */
 static AVFrame *generate_video_frame(MovieWriter *context, const ImBuf *input_ibuf)
 {
@@ -476,53 +525,18 @@ static AVFrame *generate_video_frame(MovieWriter *context, const ImBuf *input_ib
     rgb_frame = context->current_frame;
   }
 
-  /* Ensure frame is writable. Some video codecs might have made previous frame
-   * shared (i.e. not writable). */
-  av_frame_make_writable(rgb_frame);
-
-  const size_t linesize_dst = rgb_frame->linesize[0];
-  if (use_float) {
-    /* Float image: need to split up the image into a planar format,
-     * because `libswscale` does not support RGBA->YUV conversions from
-     * packed float formats.
-     * Un-premultiply the image if the output format supports alpha, to
-     * match the format of the byte image. */
-    BLI_assert_msg(rgb_frame->linesize[1] == linesize_dst &&
-                       rgb_frame->linesize[2] == linesize_dst &&
-                       rgb_frame->linesize[3] == linesize_dst,
-                   "ffmpeg frame should be 4 same size planes for a floating point image case");
-    for (int y = 0; y < height; y++) {
-      size_t dst_offset = linesize_dst * (height - y - 1);
-      float *dst_g = reinterpret_cast<float *>(rgb_frame->data[0] + dst_offset);
-      float *dst_b = reinterpret_cast<float *>(rgb_frame->data[1] + dst_offset);
-      float *dst_r = reinterpret_cast<float *>(rgb_frame->data[2] + dst_offset);
-      float *dst_a = reinterpret_cast<float *>(rgb_frame->data[3] + dst_offset);
-      const float *src = pixels_fl + image->x * y * 4;
-
-      if (MOV_codec_supports_alpha(context->ffmpeg_codec, context->ffmpeg_profile)) {
-        for (int x = 0; x < image->x; x++) {
-          float tmp[4];
-          premul_to_straight_v4_v4(tmp, src);
-          *dst_r++ = tmp[0];
-          *dst_g++ = tmp[1];
-          *dst_b++ = tmp[2];
-          *dst_a++ = tmp[3];
-          src += 4;
-        }
-      }
-      else {
-        for (int x = 0; x < image->x; x++) {
-          *dst_r++ = src[0];
-          *dst_g++ = src[1];
-          *dst_b++ = src[2];
-          *dst_a++ = src[3];
-          src += 4;
-        }
-      }
-    }
+  /* Ensure frame is writable when filling it. Byte input for swscale is borrowed directly
+   * from the ImBuf below. */
+  if (use_float || context->img_convert_frame == nullptr) {
+    av_frame_make_writable(rgb_frame);
   }
-  else {
+
+  if (use_float) {
+    float_interleaved_to_planar(image, rgb_frame);
+  }
+  else if (context->img_convert_frame == nullptr) {
     /* Byte image: flip the image vertically. */
+    const size_t linesize_dst = rgb_frame->linesize[0];
     const size_t linesize_src = rgb_frame->width * 4;
     for (int y = 0; y < height; y++) {
       uint8_t *target = rgb_frame->data[0] + linesize_dst * (height - y - 1);
@@ -536,10 +550,22 @@ static AVFrame *generate_video_frame(MovieWriter *context, const ImBuf *input_ib
 
   /* Convert to the output pixel format, if it's different that Blender's internal one. */
   if (context->img_convert_frame != nullptr) {
-    BLI_assert(context->img_convert_ctx != nullptr);
+    BLI_assert(context->sws_ctx != nullptr);
     /* Ensure the frame we are scaling to is writable as well. */
     av_frame_make_writable(context->current_frame);
-    ffmpeg_sws_scale_frame(context->img_convert_ctx, context->current_frame, rgb_frame);
+
+    uint8_t *rgb_data = rgb_frame->data[0];
+    const int rgb_linesize = rgb_frame->linesize[0];
+    if (!use_float) {
+      /* Convert directly from the ImBuf, flipping vertically via negative source stride.
+       * The borrowed pixels are only used during this conversion. */
+      const int linesize_src = image->x * 4;
+      rgb_frame->data[0] = const_cast<uint8_t *>(pixels) + size_t(height - 1) * linesize_src;
+      rgb_frame->linesize[0] = -linesize_src;
+    }
+    ffmpeg_sws_scale_frame(context->sws_ctx, context->current_frame, rgb_frame);
+    rgb_frame->data[0] = rgb_data;
+    rgb_frame->linesize[0] = rgb_linesize;
   }
 
   if (image != input_ibuf) {
@@ -591,70 +617,34 @@ static AVRational calc_time_base(uint den, double num, AVCodecID codec_id)
   return time_base;
 }
 
-static const AVCodec *get_av1_encoder(
-    MovieWriter *context, const RenderData *rd, AVDictionary **opts, int rectx, int recty)
+static const AVCodec *get_av1_encoder(MovieWriter *context,
+                                      const ImageFormatData *imf,
+                                      AVDictionary **opts)
 {
-  /* There are three possible encoders for AV1: `libaom-av1`, librav1e, and `libsvtav1`. librav1e
-   * tends to give the best compression quality while `libsvtav1` tends to be the fastest encoder.
-   * One of each will be picked based on the preset setting, and if a particular encoder is not
-   * available, then use the default returned by FFMpeg. */
-  const AVCodec *codec = nullptr;
-  switch (context->ffmpeg_preset) {
-    case FFM_PRESET_BEST:
-      /* `libaom-av1` may produce better VMAF-scoring videos in several cases, but there are cases
-       * where using a different encoder is desirable, such as in #103849. */
-      codec = avcodec_find_encoder_by_name("librav1e");
-      if (!codec) {
-        /* Fall back to `libaom-av1` if librav1e is not found. */
-        codec = avcodec_find_encoder_by_name("libaom-av1");
-      }
-      break;
-    case FFM_PRESET_REALTIME:
-      codec = avcodec_find_encoder_by_name("libsvtav1");
-      break;
-    case FFM_PRESET_GOOD:
-    default:
-      codec = avcodec_find_encoder_by_name("libaom-av1");
-      break;
-  }
+  /* We bundle two AV1 encoders:
+   * - `libaom-av1`: fully featured, produces smaller files, much slower.
+   * - `libsvtav1`: much faster to encode, can't do 4:4:4 or 12 bit.
+   *
+   * We prefer `libsvtav1`, since `libaom-av1` is just very slow, and
+   * also has "keyframes are worse quality" issues like #103849 on some content.
+   */
+  /* Lossless output uses 4:4:4, which requires libaom just like 12-bit output. */
+  const bool requires_libaom = imf->depth == R_IMF_CHAN_DEPTH_12 ||
+                               context->ffmpeg_crf == FFM_CRF_LOSSLESS;
+  const char *encoder_name = requires_libaom ? "libaom-av1" : "libsvtav1";
+  const AVCodec *codec = avcodec_find_encoder_by_name(encoder_name);
 
-  /* Use the default AV1 encoder if the specified encoder wasn't found. */
-  if (!codec) {
+  /* Custom/system FFmpeg builds may omit SVT. Keep the generic fallback for ordinary output,
+   * but do not fallback to encoder that lacks 12-bit or 4:4:4 support. */
+  if (!codec && !requires_libaom) {
     codec = avcodec_find_encoder(AV_CODEC_ID_AV1);
   }
 
   /* Apply AV1 encoder specific settings. */
   if (codec) {
-    if (STREQ(codec->name, "librav1e")) {
-      /* Set "tiles" to 8 to enable multi-threaded encoding. */
-      if (rd->threads > 8) {
-        ffmpeg_dict_set_int(opts, "tiles", rd->threads);
-      }
-      else {
-        ffmpeg_dict_set_int(opts, "tiles", 8);
-      }
-
-      /* Use a reasonable speed setting based on preset. Speed ranges from 0-10.
-       * Must check context->ffmpeg_preset again in case this encoder was selected due to the
-       * absence of another. */
-      switch (context->ffmpeg_preset) {
-        case FFM_PRESET_BEST:
-          ffmpeg_dict_set_int(opts, "speed", 4);
-          break;
-        case FFM_PRESET_REALTIME:
-          ffmpeg_dict_set_int(opts, "speed", 10);
-          break;
-        case FFM_PRESET_GOOD:
-        default:
-          ffmpeg_dict_set_int(opts, "speed", 6);
-          break;
-      }
-      /* Set gop_size as rav1e's "--keyint". */
-      char buffer[64];
-      SNPRINTF_UTF8(buffer, "keyint=%d", context->ffmpeg_gop_size);
-      av_dict_set(opts, "rav1e-params", buffer, 0);
-    }
-    else if (STREQ(codec->name, "libsvtav1")) {
+    if (STREQ(codec->name, "libsvtav1")) {
+      /* Tune for perceptual visual quality instead of PSNR. */
+      av_dict_set(opts, "svtav1-params", "tune=0", 0);
       /* Set preset value based on ffmpeg_preset.
        * Must check `context->ffmpeg_preset` again in case this encoder was selected due to the
        * absence of another. */
@@ -672,87 +662,11 @@ static const AVCodec *get_av1_encoder(
       }
     }
     else if (STREQ(codec->name, "libaom-av1")) {
-      /* Speed up libaom-av1 encoding by enabling multi-threading and setting tiles. */
+      /* Use structural similarity tuning for general visual quality. */
+      av_dict_set(opts, "tune", "ssim", 0);
+      /* Turn on auto-tiling and row threading. */
+      av_dict_set(opts, "aom-params", "auto-tiles=1", 0);
       ffmpeg_dict_set_int(opts, "row-mt", 1);
-      const char *tiles_string = nullptr;
-      bool tiles_string_is_dynamic = false;
-      if (rd->threads > 0) {
-        /* See if threads is a square. */
-        int threads_sqrt = sqrtf(rd->threads);
-        if (threads_sqrt < 4) {
-          /* Ensure a default minimum. */
-          threads_sqrt = 4;
-        }
-        if (is_power_of_2_i(threads_sqrt) && threads_sqrt * threads_sqrt == rd->threads) {
-          /* Is a square num, therefore just do "sqrt x sqrt" for tiles parameter. */
-          int digits = 0;
-          for (int t_sqrt_copy = threads_sqrt; t_sqrt_copy > 0; t_sqrt_copy /= 10) {
-            ++digits;
-          }
-          /* A char array need only an alignment of 1. */
-          char *tiles_string_mut = (char *)calloc(digits * 2 + 2, 1);
-          BLI_snprintf_utf8(tiles_string_mut, digits * 2 + 2, "%dx%d", threads_sqrt, threads_sqrt);
-          tiles_string_is_dynamic = true;
-          tiles_string = tiles_string_mut;
-        }
-        else {
-          /* Is not a square num, set greater side based on longer side, or use a square if both
-           * sides are equal. */
-          int sqrt_p2 = power_of_2_min_i(threads_sqrt);
-          if (sqrt_p2 < 2) {
-            /* Ensure a default minimum. */
-            sqrt_p2 = 2;
-          }
-          int sqrt_p2_next = power_of_2_min_i(int(rd->threads) / sqrt_p2);
-          if (sqrt_p2_next < 1) {
-            sqrt_p2_next = 1;
-          }
-          if (sqrt_p2 > sqrt_p2_next) {
-            /* Ensure sqrt_p2_next is greater or equal to sqrt_p2. */
-            int temp = sqrt_p2;
-            sqrt_p2 = sqrt_p2_next;
-            sqrt_p2_next = temp;
-          }
-          int combined_digits = 0;
-          for (int sqrt_p2_copy = sqrt_p2; sqrt_p2_copy > 0; sqrt_p2_copy /= 10) {
-            ++combined_digits;
-          }
-          for (int sqrt_p2_copy = sqrt_p2_next; sqrt_p2_copy > 0; sqrt_p2_copy /= 10) {
-            ++combined_digits;
-          }
-          /* A char array need only an alignment of 1. */
-          char *tiles_string_mut = (char *)calloc(combined_digits + 2, 1);
-          if (rectx > recty) {
-            BLI_snprintf_utf8(
-                tiles_string_mut, combined_digits + 2, "%dx%d", sqrt_p2_next, sqrt_p2);
-          }
-          else if (rectx < recty) {
-            BLI_snprintf_utf8(
-                tiles_string_mut, combined_digits + 2, "%dx%d", sqrt_p2, sqrt_p2_next);
-          }
-          else {
-            BLI_snprintf_utf8(tiles_string_mut, combined_digits + 2, "%dx%d", sqrt_p2, sqrt_p2);
-          }
-          tiles_string_is_dynamic = true;
-          tiles_string = tiles_string_mut;
-        }
-      }
-      else {
-        /* Thread count unknown, default to 8. */
-        if (rectx > recty) {
-          tiles_string = "4x2";
-        }
-        else if (rectx < recty) {
-          tiles_string = "2x4";
-        }
-        else {
-          tiles_string = "2x2";
-        }
-      }
-      av_dict_set(opts, "tiles", tiles_string, 0);
-      if (tiles_string_is_dynamic) {
-        free((void *)tiles_string);
-      }
       /* libaom-av1 uses "cpu-used" instead of "preset" for defining compression quality.
        * This value is in a range from 0-8. 0 and 8 are extremes, but we will allow 8.
        * Must check context->ffmpeg_preset again in case this encoder was selected due to the
@@ -775,27 +689,45 @@ static const AVCodec *get_av1_encoder(
   return codec;
 }
 
-/* Remap H.264 CRF to H.265 CRF: 17..32 range (23 default) to 20..37 range (28 default).
- * https://trac.ffmpeg.org/wiki/Encode/H.265 */
-static int remap_crf_to_h265_crf(int crf, bool is_10_or_12_bpp)
+/* Match the H.264 quality presets so they produce approximately the same PSNR/VMAF quality. */
+static int remap_crf_to_libaom_crf(int crf)
 {
-  /* 10/12 bit videos seem to need slightly lower CRF value for similar quality. */
-  const int bias = is_10_or_12_bpp ? -3 : 0;
   switch (crf) {
     case FFM_CRF_PERC_LOSSLESS:
-      return 20 + bias;
+      return 15;
     case FFM_CRF_HIGH:
-      return 24 + bias;
+      return 21;
     case FFM_CRF_MEDIUM:
-      return 28 + bias;
+      return 27;
     case FFM_CRF_LOW:
-      return 31 + bias;
+      return 33;
     case FFM_CRF_VERYLOW:
-      return 34 + bias;
+      return 38;
     case FFM_CRF_LOWEST:
-      return 37 + bias;
+      return 44;
+    default:
+      return crf;
   }
-  return crf;
+}
+
+static int remap_crf_to_svt_crf(int crf)
+{
+  switch (crf) {
+    case FFM_CRF_PERC_LOSSLESS:
+      return 17;
+    case FFM_CRF_HIGH:
+      return 25;
+    case FFM_CRF_MEDIUM:
+      return 31;
+    case FFM_CRF_LOW:
+      return 36;
+    case FFM_CRF_VERYLOW:
+      return 42;
+    case FFM_CRF_LOWEST:
+      return 49;
+    default:
+      return crf;
+  }
 }
 
 static const AVCodec *get_prores_encoder(const ImageFormatData *imf, int rectx, int recty)
@@ -809,15 +741,6 @@ static const AVCodec *get_prores_encoder(const ImageFormatData *imf, int rectx, 
     }
   }
   return avcodec_find_encoder_by_name("prores_aw");
-}
-
-/* 10bpp H264: remap 0..51 range to -12..51 range
- * https://trac.ffmpeg.org/wiki/Encode/H.264#a1.ChooseaCRFvalue */
-static int remap_crf_to_h264_10bpp_crf(int crf)
-{
-  crf = int(-12.0f + (crf / 51.0f) * 63.0f);
-  crf = max_ii(crf, 0);
-  return crf;
 }
 
 static void set_quality_rate_options(const MovieWriter *context,
@@ -842,9 +765,8 @@ static void set_quality_rate_options(const MovieWriter *context,
   c->bit_rate = 0;
 
   const bool is_10_bpp = imf->depth == R_IMF_CHAN_DEPTH_10;
-  const bool is_12_bpp = imf->depth == R_IMF_CHAN_DEPTH_12;
-  const bool av1_librav1e = codec_id == AV_CODEC_ID_AV1 && STREQ(c->codec->name, "librav1e");
   const bool av1_libsvtav1 = codec_id == AV_CODEC_ID_AV1 && STREQ(c->codec->name, "libsvtav1");
+  const bool av1_libaom = codec_id == AV_CODEC_ID_AV1 && STREQ(c->codec->name, "libaom-av1");
 
   /* Handle "lossless" case. */
   if (context->ffmpeg_crf == FFM_CRF_LOSSLESS) {
@@ -860,7 +782,7 @@ static void set_quality_rate_options(const MovieWriter *context,
       /* H.265 needs "lossless" in private params; also make it much less verbose. */
       av_dict_set(opts, "x265-params", "log-level=1:lossless=1", 0);
     }
-    else if (codec_id == AV_CODEC_ID_AV1 && (av1_librav1e || av1_libsvtav1)) {
+    else if (av1_libsvtav1) {
       /* AV1 in some encoders needs qp=0 for lossless. */
       ffmpeg_dict_set_int(opts, "qp", 0);
     }
@@ -873,31 +795,21 @@ static void set_quality_rate_options(const MovieWriter *context,
 
   /* Handle CRF setting cases. */
   int crf = context->ffmpeg_crf;
-
-  if (codec_id == AV_CODEC_ID_H264 && is_10_bpp) {
-    crf = remap_crf_to_h264_10bpp_crf(crf);
-  }
-  else if (codec_id == AV_CODEC_ID_H265) {
-    if (!context->custom_crf) {
-      crf = remap_crf_to_h265_crf(crf, is_10_bpp || is_12_bpp);
+  if (!context->custom_crf) {
+    if (av1_libaom) {
+      crf = remap_crf_to_libaom_crf(crf);
     }
+    else if (av1_libsvtav1) {
+      crf = remap_crf_to_svt_crf(crf);
+    }
+  }
+
+  if (codec_id == AV_CODEC_ID_H265) {
     /* Make H.265 much less verbose. */
     av_dict_set(opts, "x265-params", "log-level=1", 0);
   }
 
-  if (av1_librav1e) {
-    /* Remap crf 0..51 to qp 0..255 for AV1 librav1e. */
-    int qp = int(float(crf) / 51.0f * 255.0f);
-    qp = clamp_i(qp, 0, 255);
-    ffmpeg_dict_set_int(opts, "qp", qp);
-  }
-  else if (av1_libsvtav1) {
-    /* libsvtav1 used to take CRF as "qp" parameter, do that. */
-    ffmpeg_dict_set_int(opts, "qp", crf);
-  }
-  else {
-    ffmpeg_dict_set_int(opts, "crf", crf);
-  }
+  ffmpeg_dict_set_int(opts, "crf", crf);
 }
 
 static void set_colorspace_options(AVCodecContext *c, const ColorSpace *colorspace)
@@ -959,7 +871,7 @@ static AVStream *alloc_video_stream(MovieWriter *context,
   if (codec_id == AV_CODEC_ID_AV1) {
     /* Use get_av1_encoder() to get the ideal (hopefully) encoder for AV1 based
      * on given parameters, and also set up opts. */
-    codec = get_av1_encoder(context, rd, &opts, rectx, recty);
+    codec = get_av1_encoder(context, imf, &opts);
   }
   else if (codec_id == AV_CODEC_ID_PRORES) {
     codec = get_prores_encoder(imf, rectx, recty);
@@ -1013,7 +925,9 @@ static AVStream *alloc_video_stream(MovieWriter *context,
   st->time_base = c->time_base;
 
   c->gop_size = context->ffmpeg_gop_size;
-  c->max_b_frames = context->ffmpeg_max_b_frames;
+  if ((rd->ffcodecdata.flags & FFMPEG_USE_MAX_B_FRAMES) != 0) {
+    c->max_b_frames = context->ffmpeg_max_b_frames;
+  }
 
   set_quality_rate_options(context, codec_id, &rd->ffcodecdata, imf, &opts);
 
@@ -1252,26 +1166,29 @@ static AVStream *alloc_video_stream(MovieWriter *context,
   if (c->pix_fmt == AV_PIX_FMT_RGBA && ELEM(c->colorspace, AVCOL_SPC_RGB, AVCOL_SPC_UNSPECIFIED)) {
     /* Output pixel format and colorspace is the same we use internally, no conversion needed. */
     context->img_convert_frame = nullptr;
-    context->img_convert_ctx = nullptr;
+    context->sws_ctx = nullptr;
   }
   else {
     /* Output pixel format is different, allocate frame for conversion.
      * Setup RGB->YUV conversion with proper coefficients, depending on range and colorspace. */
-    const AVPixelFormat src_format = is_10_bpp || is_12_bpp || is_16_bpp ? AV_PIX_FMT_GBRAPF32LE :
-                                                                           AV_PIX_FMT_RGBA;
+    AVPixelFormat src_format = AV_PIX_FMT_RGBA;
+    if (is_10_bpp || is_12_bpp || is_16_bpp) {
+      src_format = MOV_codec_supports_alpha(context->ffmpeg_codec, context->ffmpeg_profile) ?
+                       AV_PIX_FMT_GBRAPF32LE :
+                       AV_PIX_FMT_GBRPF32LE;
+    }
     context->img_convert_frame = alloc_frame(src_format, c->width, c->height);
-    context->img_convert_ctx = ffmpeg_sws_get_context(
-        c->width,
-        c->height,
-        src_format,
-        true,
-        -1,
-        c->width,
-        c->height,
-        c->pix_fmt,
-        c->color_range == AVCOL_RANGE_JPEG,
-        c->colorspace != AVCOL_SPC_RGB ? c->colorspace : -1,
-        SWS_BICUBIC);
+    context->sws_ctx = ffmpeg_sws_get_context(c->width,
+                                              c->height,
+                                              src_format,
+                                              true,
+                                              -1,
+                                              c->width,
+                                              c->height,
+                                              c->pix_fmt,
+                                              c->color_range == AVCOL_RANGE_JPEG,
+                                              c->colorspace != AVCOL_SPC_RGB ? c->colorspace : -1,
+                                              SWS_BICUBIC);
   }
 
   avcodec_parameters_from_context(st->codecpar, c);
@@ -1833,9 +1750,9 @@ static void end_ffmpeg_impl(MovieWriter *context, bool is_autosplit)
     context->audio_deinterleave_buffer = nullptr;
   }
 
-  if (context->img_convert_ctx != nullptr) {
-    ffmpeg_sws_release_context(context->img_convert_ctx);
-    context->img_convert_ctx = nullptr;
+  if (context->sws_ctx != nullptr) {
+    ffmpeg_sws_release_context(context->sws_ctx);
+    context->sws_ctx = nullptr;
   }
 }
 
