@@ -2270,17 +2270,12 @@ struct NodeWireless {
  * Non-integer "wireless" values count as ID 0. */
 static bool node_wireless_get(const bNode &node, NodeWireless &r_info)
 {
-  if (!node.prop) {
+  if (!node.prop || !IDP_GetPropertyFromGroup(node.prop, "wireless")) {
     return false;
   }
-  const IDProperty *p = IDP_GetPropertyFromGroup(node.prop, "wireless");
-  if (!p) {
-    return false;
-  }
-  const std::optional<int> id = IDP_group_lookup_int(*node.prop, "wireless");
-  r_info.id = id.value_or(0);
-  r_info.input = node_has_prop(node, "input");
-  r_info.output = node_has_prop(node, "output");
+  r_info.id = IDP_group_lookup_int(node.prop, "wireless").value_or(0);
+  r_info.input = IDP_GetPropertyFromGroup(node.prop, "input") != nullptr;
+  r_info.output = IDP_GetPropertyFromGroup(node.prop, "output") != nullptr;
   return true;
 }
 
@@ -2648,7 +2643,7 @@ void node_draw_link(const bContext &C,
       const float gap = NODE_DY * 0.3f;
 
       NodeWireless info;
-      node_wireless_get(from, info);
+      node_wireless_get(to, info);
       const ColorTheme4f color = node_wireless_color(info.id);
 
       /* A reroute with wireless links on both sides points its arcs up, drawn once. */
@@ -2663,8 +2658,10 @@ void node_draw_link(const bContext &C,
 
       /* A single-input socket has one link. A multi-input socket draws arcs per link,
       * since each link ends at its own offset position. */
-      if (!skip_to) {
-        node_draw_wireless_arcs(points[3] - float2(gap, 0.0f), float2(-1.0f, 0.0f), color, selected, scale);
+      if (!skip_to && first_wireless_link(*link.tosock) == &link) {
+        const float2 in_pos = link.tosock->is_multi_input() ? float2(link.tosock->runtime->location) :
+                                                              points[3];
+        node_draw_wireless_arcs(in_pos - float2(gap, 0.0f), float2(-1.0f, 0.0f), color, selected, scale);
       }
     }
     if (!selected && !(link.flag & NODE_LINK_TEMP_HIGHLIGHT)) {
