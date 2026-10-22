@@ -218,50 +218,50 @@ gpu::VertBufPtr extract_weight_vgroup_blended_color(const MeshRenderData &mr,
   const DRW_MeshWeightState &weight_state = batch_cache.weight_state;
   const int active_index = weight_state.defgroup_active;
   const eV3D_Overlay_WPaint_VGroupColorMode mode = weight_state.vgroup_color_mode;
-  /* Nothing to compute. */
-  if (mode == V3D_OVERLAY_WPAINT_VGROUP_COLOR_OFF) {
-    vert_data.fill(float3(0.0f));
-    return vert_vbo;
-  }
 
   const Span<float3> defgroup_colors(weight_state.defgroup_colors, weight_state.defgroup_len);
   const Span<bool> validmap(weight_state.defgroup_validmap,
                             weight_state.defgroup_validmap ? weight_state.defgroup_len : 0);
 
-  /* Handles Mesh or BMesh API cases.*/
-  if (mr.extract_type == MeshExtractType::Mesh) {
+  /* Handles nothing, Mesh or BMesh API cases.*/
+  if (mode == V3D_OVERLAY_WPAINT_VGROUP_COLOR_OFF) {
+    vert_data.fill(float3(0.0f));
+  }
+  else if (mr.extract_type == MeshExtractType::Mesh) {
     const Mesh &mesh = *mr.mesh;
     const Span<MDeformVert> dverts = mesh.deform_verts();
     if (dverts.is_empty()) {
       vert_data.fill(float3(0.0f));
-      return vert_vbo;
     }
+    else {
 
-    threading::parallel_for(vert_data.index_range(), 1024, [&](const IndexRange range) {
-      for (const int vert : range) {
-        vert_data[vert] = blended_vgroup_color(
-            &dverts[vert], defgroup_colors, validmap, mode, active_index);
-      }
-    });
+      threading::parallel_for(vert_data.index_range(), 1024, [&](const IndexRange range) {
+        for (const int vert : range) {
+          vert_data[vert] = blended_vgroup_color(
+              &dverts[vert], defgroup_colors, validmap, mode, active_index);
+        }
+      });
+    }
   }
   else {
     const BMesh &bm = *mr.bm;
     const int offset = CustomData_get_offset(&bm.vdata, CD_MDEFORMVERT);
     if (offset == -1) {
       vert_data.fill(float3(0.0f));
-      return vert_vbo;
     }
-    threading::parallel_for(IndexRange(bm.totvert), 2048, [&](const IndexRange range) {
-      for (const int vert_index : range) {
-        const BMVert &vert = *BM_vert_at_index(&const_cast<BMesh &>(bm), vert_index);
-        vert_data[vert_index] = blended_vgroup_color(
-            static_cast<const MDeformVert *>(BM_ELEM_CD_GET_VOID_P(&vert, offset)),
-            defgroup_colors,
-            validmap,
-            mode,
-            active_index);
-      }
-    });
+    else {
+      threading::parallel_for(IndexRange(bm.totvert), 2048, [&](const IndexRange range) {
+        for (const int vert_index : range) {
+          const BMVert &vert = *BM_vert_at_index(&const_cast<BMesh &>(bm), vert_index);
+          vert_data[vert_index] = blended_vgroup_color(
+              static_cast<const MDeformVert *>(BM_ELEM_CD_GET_VOID_P(&vert, offset)),
+              defgroup_colors,
+              validmap,
+              mode,
+              active_index);
+        }
+      });
+    }
   }
 
   gpu::VertBufPtr vbo = gpu::VertBufPtr(GPU_vertbuf_create_on_device(format, mr.corners_num));

@@ -237,6 +237,8 @@ void mesh_buffer_cache_create_requested(TaskGraph & /*task_graph*/,
     }
     else if (type == VBOType::VertexGroupWeight) {
       created_vbos[i] = extract_weights(mr, cache, mbc);
+    } else if (type == VBOType::VertexGroupBlendedColor) {
+      created_vbos[i] = extract_weight_vgroup_blended_color(mr, cache, mbc);
     }
     else if (type == VBOType::Orco) {
       created_vbos[i] = extract_orco(mr, mbc);
@@ -331,9 +333,6 @@ void mesh_buffer_cache_create_requested(TaskGraph & /*task_graph*/,
         break;
       case VBOType::PaintOverlayFlag:
         created_vbos[i] = extract_paint_overlay_flags(mr);
-        break;
-      case VBOType::VertexGroupBlendedColor:
-        created_vbos[i] = extract_weight_vgroup_blended_color(mr, cache, mbc);
         break;
     }
   });
