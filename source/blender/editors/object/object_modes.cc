@@ -543,28 +543,9 @@ static bool object_transfer_mode_to_base(bContext *C,
        * BKE_object_pose_armature_get_with_wpaint_check here because ob_dst is
        * not yet in weight paint mode (mode_set_ex runs after this block). */
       bool dst_uses_src_arm = false;
-      Object *wpaint_arm_dst = nullptr;
-      VirtualModifierData virtual_modifier_data_dst;
-      ModifierData *md_dst = BKE_modifiers_get_virtual_modifierlist(
-          ob_dst, &virtual_modifier_data_dst);
-      for (; md_dst; md_dst = md_dst->next) {
-        Object *ob_arm = nullptr;
-        if (md_dst->type == eModifierType_Armature) {
-          ArmatureModifierData *amd = reinterpret_cast<ArmatureModifierData *>(md_dst);
-          ob_arm = amd->object;
-        }
-        else if (md_dst->type == eModifierType_GreasePencilArmature) {
-          GreasePencilArmatureModifierData *amd =
-              reinterpret_cast<GreasePencilArmatureModifierData *>(md_dst);
-          ob_arm = amd->object;
-        }
-        if (ob_arm && ob_arm->pose) {
-          wpaint_arm_dst = ob_arm;
-          if (ob_arm == wpaint_arm_src) {
-            dst_uses_src_arm = true;
-            break;
-          }
-        }
+      Object *wpaint_arm_dst = BKE_modifiers_is_deformed_by_armature(ob_dst);
+      if (wpaint_arm_dst) {
+          dst_uses_src_arm = true;
       }
 
       if (dst_uses_src_arm) {
