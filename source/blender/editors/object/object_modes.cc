@@ -539,13 +539,29 @@ static bool object_transfer_mode_to_base(bContext *C,
     /* Restore the same armature selected with ob_src. 
      * Find its modifier, select it and enter weight paint pose mode. */
     if (ELEM(mode_dst, OB_MODE_WEIGHT_PAINT, OB_MODE_WEIGHT_GREASE_PENCIL) && wpaint_arm_src) {
-      /* Walk ob_dst's modifiers directly — cannot use
-       * BKE_object_pose_armature_get_with_wpaint_check here because ob_dst is
-       * not yet in weight paint mode (mode_set_ex runs after this block). */
       bool dst_uses_src_arm = false;
-      Object *wpaint_arm_dst = BKE_modifiers_is_deformed_by_armature(ob_dst);
-      if (wpaint_arm_dst) {
-          dst_uses_src_arm = true;
+      Object *wpaint_arm_dst = nullptr;
+      VirtualModifierData virtual_modifier_data_dst;
+      ModifierData *md_dst = BKE_modifiers_get_virtual_modifierlist(
+          ob_dst, &virtual_modifier_data_dst);
+      for (; md_dst; md_dst = md_dst->next) {
+        Object *ob_arm = nullptr;
+        if (md_dst->type == eModifierType_Armature) {
+          ArmatureModifierData *amd = reinterpret_cast<ArmatureModifierData *>(md_dst);
+          ob_arm = amd->object;
+        }
+        else if (md_dst->type == eModifierType_GreasePencilArmature) {
+          GreasePencilArmatureModifierData *amd =
+              reinterpret_cast<GreasePencilArmatureModifierData *>(md_dst);
+          ob_arm = amd->object;
+        }
+        if (ob_arm && ob_arm->pose) {
+          wpaint_arm_dst = ob_arm;
+          if (ob_arm == wpaint_arm_src) {
+            dst_uses_src_arm = true;
+            break;
+          }
+        }
       }
 
       if (dst_uses_src_arm) {
@@ -556,6 +572,7 @@ static bool object_transfer_mode_to_base(bContext *C,
         posemode_set_for_weight_paint(C, bmain, ob_dst, false);
       }
       else {
+        /* If ob_dst uses a different armature than ob_src, exit pose mode on ob_src armature. */
         ED_object_posemode_exit_ex(bmain, wpaint_arm_src);
 
         if (wpaint_arm_dst) {
