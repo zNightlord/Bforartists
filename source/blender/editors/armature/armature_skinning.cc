@@ -502,6 +502,8 @@ void ED_object_vgroup_calc_from_armature(ReportList *reports,
                                          const int mode,
                                          const bool mirror)
 {
+  printf("[GVB] vgroup_calc_from_armature: mode=%d  AUTO=%d  GVB=%d\n",
+         mode, ARM_GROUPS_AUTO, ARM_GROUPS_GVB);
   /* Lets try to create some vertex groups
    * based on the bones of the parent armature.
    */
@@ -526,6 +528,7 @@ void ED_object_vgroup_calc_from_armature(ReportList *reports,
      * that are populated with the vertices for which the
      * bone is closest.
      */
+    printf("[GVB] calling add_verts_to_dgroups with mode=%d\n", mode);
     add_verts_to_dgroups(reports, scene, ob, par, mode, mirror);
   }
 }
