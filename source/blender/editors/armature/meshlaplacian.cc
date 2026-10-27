@@ -12,6 +12,7 @@
 #include "DNA_mesh_types.h"
 #include "DNA_object_types.h"
 
+#include "BLI_heap.hh"
 #include "BLI_map.hh"
 #include "BLI_math_geom_c.hh"
 #include "BLI_math_matrix_c.hh"
@@ -2585,7 +2586,7 @@ void geodesic_voxel_bone_weighting(Object *ob,
                                    Mesh *mesh,
                                    float (*verts)[3],
                                    int numbones,
-                                   DeformGroup **dgrouplist,
+                                   bDeformGroup **dgrouplist,
                                    bDeformGroup **dgroupflip,
                                    float (*root)[3],
                                    float (*tip)[3],
