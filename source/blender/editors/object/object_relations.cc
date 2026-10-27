@@ -721,7 +721,7 @@ static bool parent_set_with_depsgraph(ReportList *reports,
 
   /* Constraint and set parent inverse. */
   const bool is_armature_parent = ELEM(
-      partype, PAR_ARMATURE, PAR_ARMATURE_NAME, PAR_ARMATURE_ENVELOPE, PAR_ARMATURE_AUTO);
+      partype, PAR_ARMATURE, PAR_ARMATURE_NAME, PAR_ARMATURE_ENVELOPE, PAR_ARMATURE_AUTO, PAR_ARMATURE_GVB);
   if (partype == PAR_PATH_CONST) {
     bConstraint *con;
     bFollowPathConstraint *data;
