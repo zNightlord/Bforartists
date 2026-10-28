@@ -26,7 +26,7 @@
 #include "BLI_ordered_edge.hh"
 #include "BLI_string_utf8.hh"
 #include "BLI_task.hh"
-#include "BLI_timer.hh"
+#include "BLI_time.hh"
 
 #include "BLT_translation.hh"
 
@@ -2398,6 +2398,10 @@ static void process_bones_sequential(Object *ob,
       }
       else {
         ed::object::vgroup_vert_remove(ob, dgrouplist[j], vi);
+      }
+    }
+  }
+}
       }
     }
   }
